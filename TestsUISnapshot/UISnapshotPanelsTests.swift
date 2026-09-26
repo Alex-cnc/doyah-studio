@@ -226,6 +226,96 @@ final class UISnapshotPanelsTests: XCTestCase {
         }
     }
 
+    // MARK: - 第 3 批（队列 L-16，2026-09-27）
+
+    /// **第 3 批**（队列 L-16「其余面板空态」）：**执行计划 / Schema 对比 / 锁与阻塞 / MCP 审批**
+    /// —— 条目原文点名的第 3 批就是这四个（其余候选留给后续批次）。
+    ///
+    /// 四条途径各不相同，所以「空态怎么造」也各不相同：
+    ///   · **执行计划**（`FR-DIAG-01`）：面板读 `appState.executionPlan` —— 空态 = 没有计划 +
+    ///     没有错误 + 不在加载中（`planEmpty` 那一支）；ANALYZE 开关显式关掉（打开会多一行
+    ///     橙色警告，那是**另一张图**，不是空态）；
+    ///   · **Schema 对比**（`FR-DDL-04`）：两侧选择器是面板自持的 `@State`，`.onAppear` 会按
+    ///     `appState.connections` **预选** —— 连接为空时预选无事可做，于是停在
+    ///     「先选两侧连接」那一支（`schemaDiffPickConnections`，`Compare` 也灰着）；
+    ///   · **锁与阻塞**（`FR-DIAG-05`）：`.task { await load() }` 在离屏宿主里**会跑**
+    ///     （第 11 轮实测）—— 没选连接时它走 `catch`，于是图上**两样同时在**：
+    ///     ① 未选连接的提示 ② 空列表文案 `lockEmpty`。**如实说明**：这张图是「未选连接时的
+    ///     首次绘制」的**真运行态**；「连上服务器、这次 0 条等待」那个**纯空态**拍不到 ——
+    ///     `waits` 是私有 `@State`、打开即查库（与 `SessionPanel` 同一族）→ 该口子**并入 L-18 的范围**；
+    ///   · **MCP 审批**（`FR-AI-10` 的界面那一半）：面板读 `appState.mcpPendingApprovals` ——
+    ///     摆空即「没有待审批项」（`mcpApprovalEmpty`），另把坏行计数与消息一并清零。
+    ///
+    /// 纪律同第二/三批：**渲染前显式置空 + 渲染后再断言一遍**（离屏宿主里 `.task` / `onAppear` 会跑完）。
+    @MainActor
+    func testPanelEmptyStatesBatchThree() throws {
+        let host = makeEmptyHost()
+
+        // 前置：本批四张都是「什么都还没发生」的态；四句空态文案必须在语言表里。
+        XCTAssertTrue(host.state.connections.isEmpty, "本批要拍空态：不该有任何连接")
+        XCTAssertNil(host.state.selectedConnectionID, "本批要拍空态：不该有选中的连接")
+        XCTAssertFalse(L(.planEmpty).isEmpty, "空态文案缺失（语言表里没有 planEmpty）")
+        XCTAssertFalse(L(.lockEmpty).isEmpty, "空态文案缺失（语言表里没有 lockEmpty）")
+        XCTAssertFalse(L(.mcpApprovalEmpty).isEmpty, "空态文案缺失（语言表里没有 mcpApprovalEmpty）")
+        XCTAssertFalse(
+            L(.schemaDiffPickConnections).isEmpty,
+            "空态文案缺失（语言表里没有 schemaDiffPickConnections）"
+        )
+
+        // ① 执行计划空态（FR-DIAG-01）
+        host.state.executionPlan = nil
+        host.state.executionPlanError = nil
+        host.state.executionPlanIsLoading = false
+        host.state.planRunAnalyze = false
+        XCTAssertNil(host.state.executionPlan, "本张要拍空态：还没跑过执行计划")
+        try snapshotLightAndDark(
+            "execution-plan-empty",
+            size: CGSize(width: 720, height: 620),
+            host: host
+        ) {
+            ExecutionPlanPanel(tabID: UUID())
+        }
+        XCTAssertNil(host.state.executionPlan, "渲染期间执行计划被填上了 —— 空态没站稳")
+        XCTAssertNil(host.state.executionPlanError, "渲染期间执行计划报错被写入了 —— 空态没站稳")
+
+        // ② Schema 对比初始态（FR-DDL-04）：两侧都没得选（连接为空）
+        try snapshotLightAndDark(
+            "schema-diff-empty",
+            size: CGSize(width: 760, height: 700),
+            host: host
+        ) {
+            SchemaDiffPanel()
+        }
+        XCTAssertTrue(
+            host.state.connections.isEmpty,
+            "渲染期间连接被填上了 —— 面板的 .onAppear 会预选，这张图就不再是「两侧都空」"
+        )
+
+        // ③ 锁与阻塞空态（FR-DIAG-05）：见本方法开头的「如实说明」
+        try snapshotLightAndDark(
+            "lock-panel-empty",
+            size: CGSize(width: 760, height: 560),
+            host: host
+        ) {
+            LockPanel()
+        }
+        XCTAssertTrue(host.state.connections.isEmpty, "渲染期间连接被填上了 —— 锁面板的取数依赖选中连接")
+
+        // ④ MCP 审批空态（FR-AI-10 界面侧）：没有待审批项
+        host.state.mcpPendingApprovals = []
+        host.state.mcpApprovalBadLines = 0
+        host.state.mcpApprovalMessage = nil
+        XCTAssertTrue(host.state.mcpPendingApprovals.isEmpty, "本张要拍空态：不该有待审批项")
+        try snapshotLightAndDark(
+            "mcp-approval-empty",
+            size: CGSize(width: 720, height: 600),
+            host: host
+        ) {
+            MCPApprovalPanel()
+        }
+        XCTAssertTrue(host.state.mcpPendingApprovals.isEmpty, "渲染期间待审批项被填上了 —— 空态没站稳")
+    }
+
     // MARK: - 清单
 
     override class func tearDown() {
