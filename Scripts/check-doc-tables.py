@@ -20,12 +20,13 @@
     python3 Scripts/check-doc-tables.py                    # 本机默认清单（缺失的文档跳过并提示）
     python3 Scripts/check-doc-tables.py --require-all       # 缺失即红（主开发机 / CI 用）
     python3 Scripts/check-doc-tables.py <文件...>            # 显式点名：不存在即红
-    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（四例）
+    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（五例）
 
 **「文件不存在」的两种语义**（L-33，2026-09-27 第 29 轮；另一平台侧实测提出）：
 
-本清单里有 **5 份文档被 `.gitignore` 排除**（`兼容性矩阵` / `GBase-技术验证` / `测试用例` /
-`发布方案` / `手工验收运行手册` —— 见 `.gitignore` 第 27 行 `/Docs/*` 与白名单），它们只存在于
+本清单里有 **7 份文档被 `.gitignore` 排除**（`兼容性矩阵` / `GBase-技术验证` / `测试用例` /
+`发布方案` / `手工验收运行手册` / **`智能体助手-开发spec.md`** / **`design/开发循环-任务队列.md`**
+—— 见 `.gitignore` 第 27 行 `/Docs/*` 与白名单），它们只存在于
 macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平台（Windows）上跑这一项必然红，
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。现在：
 
@@ -36,6 +37,20 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 
 **跳过只覆盖「文档在不在」**：文档一旦存在，它的表格 / 派生数字 / 版本号判据一条都不放宽
 （跳过的永远是整份文档，不是文档里的某项检查）。
+
+**L-41（2026-09-27 第 35 轮）：覆盖范围补上「每轮必改的两份台账」** —— 此前清单只有 11 个文件，
+而循环**每轮都在改**的 `Docs/智能体助手-开发spec.md` 与 `Docs/design/开发循环-任务队列.md`
+**不在其中**（`AGENT-SPEC.md` §9 第 3 条如实写着「改这两份要自己数」）。独立探针实测存量：
+spec **87 处**（形态四类：7 行缺「编号」格 / 两处表头少「仓」列 / 1 行被拼成两行 / 1 行缺「状态」格）、
+队列 **2 处**（格内**裸**竖线 —— `||` 运算符与侧别别名 `apple|macos|ios`）⇒ 本轮**清零**，
+修法口径：**多数派为准**（两处表头按 64 / 14 行补列）、少数派**补齐格**、格内竖线一律写 `\|`。
+新增的负例见 `--self-test` **例 5**：把队列副本的一行写坏（多一格）⇒ 必须 `exit 1` 并**指名行号**。
+
+**第三份「每轮必改的台账」= 开发记录**（`Docs/开发记录-*.md`，L-41 同轮）：文件名带日期 ⇒
+放进 `DEFAULT_GLOBS` 用通配匹配，**每次都打印匹配份数**（`ℹ️ 本机台账通配：… → 本机 N 份`）。
+它里面正躺着同样形状的一处事故：第 34 轮**用「行前缀」替换长表格行**，把 v1.33 行劈成两半、
+后半粘在 v1.34 行尾（多出 2 格）—— 直到本轮独立探针才被发现，本轮已修（`开发记录:1921`）。
+⇒ **教训写成纪律**：改表格行**必须整行替换**（替换串要含行尾的 `|`），不许拿行前缀当锚点。
 """
 
 from __future__ import annotations
@@ -57,6 +72,20 @@ DEFAULT_TARGETS = [
     "Docs/概要设计.md",
     "Docs/发布方案.md",
     "Docs/手工验收运行手册.md",
+    # L-41（第 35 轮）：每轮必改的两份**本机台账**（`.gitignore` 排除，只在主开发机上）
+    # 此前不在清单里 ⇒ 它们的表格列数无人守（存量 89 处就是这么躺着的）。
+    "Docs/智能体助手-开发spec.md",
+    "Docs/design/开发循环-任务队列.md",
+]
+
+# L-41（第 35 轮）：**每轮必改的第三份台账** —— 开发记录。文件名带日期 ⇒ 用通配，
+# 否则换一天新开的记录又躲到门禁之外：第 34 轮那处「两行被拼成一行」（前一行被**前缀替换**
+# 劈成两半、后一行粘在后面，多出 2 格）在它里面躺到本轮才被独立探针发现 —— 正是本门禁
+# 要抓的形状。通配匹配 0 份**不判红**（干净克隆 / 另一平台必然 0 份，与「文档被删」区分不开），
+# 但每次运行都会**显式打印匹配份数**（`ℹ️ 本机台账通配：… → 本机 N 份`），
+# 主开发机上打到 0 就是异常信号。
+DEFAULT_GLOBS = [
+    "Docs/开发记录-*.md",
 ]
 
 
@@ -291,7 +320,13 @@ def main() -> int:
     arguments = [argument for argument in arguments if argument != "--require-all"]
     explicit = bool(arguments)
     strict = explicit or require_all
-    targets = arguments or DEFAULT_TARGETS
+    targets = list(arguments) if arguments else list(DEFAULT_TARGETS)
+    glob_notes: list[str] = []
+    if not explicit:
+        for pattern in DEFAULT_GLOBS:
+            matches = sorted(str(path) for path in pathlib.Path(".").glob(pattern))
+            glob_notes.append(f"{pattern} → 本机 {len(matches)} 份")
+            targets.extend(matches)
 
     problems: list[str] = []
     skipped: list[str] = []
@@ -312,6 +347,13 @@ def main() -> int:
     problems.extend(check_requirement_counts())
     problems.extend(check_section_heading_counts())
 
+    if glob_notes:
+        print(
+            "ℹ️ 本机台账通配："
+            + "；".join(glob_notes)
+            + "（干净克隆 / 另一平台匹配 0 份属正常；主开发机上 0 份 = 文件被删或路径写错）"
+        )
+
     if skipped:
         print(f"⚠ 跳过 {len(skipped)} 份不在本机的文档（不存在即跳过、不判红）：")
         for target in skipped:
@@ -330,10 +372,12 @@ def main() -> int:
     return 0
 
 
-# ── 门禁自己的证据（L-33）────────────────────────────────────────────────────
-# 四例，全部在**临时目录**里跑真实文档副本，末例核对真仓库逐字节未变。
+# ── 门禁自己的证据（L-33；L-41 补例 5）────────────────────────────────────────
+# 五例，全部在**临时目录**里跑真实文档副本，末例核对真仓库逐字节未变。
 # 关键一例是「干净克隆 / 另一平台」：只放**被版本控制跟踪的**那几份文档，
-# 5 份被 `.gitignore` 排除的缺席 —— 口径是**跳过 + 提示、exit 0**（原先必红的正是这一例）。
+# 7 份被 `.gitignore` 排除的缺席 —— 口径是**跳过 + 提示、exit 0**（原先必红的正是这一例）。
+# 例 5（L-41）= 负例：把**队列副本**的一行写坏（多一格）⇒ 必须 exit 1 并指名行号
+# （判据写完不对已知改动报红 = 没有判据）。
 
 SELF_TEST_TRACKED = [
     "Docs/需求规范书.md",
@@ -350,6 +394,8 @@ SELF_TEST_ABSENT = [
     "Docs/测试用例.md",
     "Docs/发布方案.md",
     "Docs/手工验收运行手册.md",
+    "Docs/智能体助手-开发spec.md",
+    "Docs/design/开发循环-任务队列.md",
 ]
 
 
@@ -386,15 +432,17 @@ def run_self_test() -> int:
             if any((clone / relative).exists() for relative in SELF_TEST_ABSENT):
                 failures.append("夹具准备失败：被 .gitignore 排除的文档不该出现在临时目录里")
 
-        # 例 1·干净克隆（默认清单，缺 5 份）→ exit 0 且**高声提示**、不得静默
+        # 例 1·干净克隆（默认清单，缺 7 份）→ exit 0 且**高声提示**、不得静默
         total += 1
         code, output = run([], clone)
         if code != 0:
             failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
-        elif "⚠ 跳过 5 份" not in output:
-            failures.append(f"例 1 失败：没有高声提示「跳过 5 份」（不得静默通过）\n{output}")
-        elif "✅ 表格校验通过（6 个文件，跳过 5 份）" not in output:
+        elif "⚠ 跳过 7 份" not in output:
+            failures.append(f"例 1 失败：没有高声提示「跳过 7 份」（不得静默通过）\n{output}")
+        elif "✅ 表格校验通过（6 个文件，跳过 7 份）" not in output:
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
+        elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
+            failures.append(f"例 1 失败：通配清单没有显式打印匹配份数（L-41）\n{output}")
 
         # 例 2·同一目录加 --require-all → exit 1（缺失即红）
         total += 1
@@ -412,6 +460,31 @@ def run_self_test() -> int:
         elif "文件不存在（显式点名 → 判红）" not in output:
             failures.append(f"例 3 失败：没有把「显式点名」与「默认清单」区分开\n{output}")
 
+        # 例 5（L-41）·负例：把**队列副本**的一行写坏（多一格）→ 必须 exit 1 并**指名行号**
+        # 判据全部落在临时副本上（真仓库那份一个字节都不动）。
+        # 编号 5 但排在例 4 之前跑 —— 例 4 故意留作末例（核对真仓库逐字节未变）。
+        total += 1
+        anchor = "| **L-54** |"
+        queue_source = repository / "Docs/design/开发循环-任务队列.md"
+        broken = queue_source.read_text()
+        if queue_source.read_text().count(anchor) != 1:
+            failures.append(f"例 5 准备失败：锚点 {anchor} 在队列里出现 {broken.count(anchor)} 次（应恰好 1 次）")
+        else:
+            broken = broken.replace(anchor, "| **L-54** | —— |", 1)
+            fixture = clone / "Docs/写坏一行-队列副本.md"
+            fixture.write_text(broken)
+            lineno = next(
+                number for number, line in enumerate(broken.splitlines(), 1) if line.startswith(anchor)
+            )
+            code, output = run([str(fixture.relative_to(clone))], clone)
+            if code == 0:
+                failures.append(f"例 5 失败：写坏一行（多一格）仍 exit 0 —— 判据是空的\n{output}")
+            elif f":{lineno}:" not in output or "列数" not in output:
+                failures.append(
+                    f"例 5 失败：报红了但没有指名列数不一致与行号（应为 {lineno}）\n{output}"
+                )
+            fixture.unlink()
+
         # 例 4·真仓库（本机）→ exit 0、跳过 0，且**末例核对真仓库逐字节未变**
         total += 1
         before = (repository / "Docs/概要设计.md").read_bytes()
@@ -420,7 +493,11 @@ def run_self_test() -> int:
         if code != 0:
             failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 11 份文档应全在（不得出现跳过行）\n{output}")
+            failures.append(f"例 4 失败：真仓库 13 份命名文档应全在（不得出现跳过行）\n{output}")
+        elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
+            failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
+        elif "✅ 表格校验通过（14 个文件）" not in output:
+            failures.append(f"例 4 失败：收尾行应为 14 个文件（13 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
     finally:
@@ -432,7 +509,7 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 5 份且 exit 0 / --require-all 判红 / 显式点名判红 / 真仓库无跳过")
+    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 7 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 真仓库 14 份无跳过")
     return 0
 
 
