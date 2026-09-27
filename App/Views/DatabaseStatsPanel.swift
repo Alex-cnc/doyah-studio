@@ -16,6 +16,26 @@ struct DatabaseStatsPanel: View {
     @State private var errorMessage: String?
     @State private var isLoading = false
 
+    /// 面板的**初始报告**（队列 L-18 的「可注入口子」；口子形状由 L-12 定）。
+    ///
+    /// 为什么需要它：`report` 是私有 `@State`、数据来自真库，没连库时 `.task` 走 `catch` ⇒
+    /// 离线拍到的是**失败文案**而不是四类指标；「连上了、四类都拿到了」与
+    /// 「连上了但这四类都没数据」两个态都拍不到（L-16 第 4 批实测）。
+    ///
+    /// 三条口径（与 `ERDiagramPanel(initialDiagram:)` 同源）：
+    ///   ① 只**给初值**，生产路径不传 ⇒ 行为逐字不变；
+    ///   ② 不是测试后门：没有「测试才走」的分支，只读、不连库、不写任何东西；
+    ///   ③ **只收非 `nil` 的报告**：`nil` 留给「没注入」（照旧去取）—— 于是 `Report?` 的两个取值
+    ///      各有确定含义，不会出现「注入了 `nil` 却分不清是没注入」这种含混。
+    ///      另：`load()` 里那条「四类全空 ⇒ 方言不支持」的双保险**不参与**注入路径
+    ///      （它是**取数**的结果判定），所以注入空报告看到的是四个空行，不是「不支持」。
+    private let injectedReport: DatabaseStats.Report?
+
+    init(initialReport: DatabaseStats.Report? = nil) {
+        self.injectedReport = initialReport
+        _report = State(initialValue: initialReport)
+    }
+
     private let limit = 20
 
     var body: some View {
@@ -27,7 +47,8 @@ struct DatabaseStatsPanel: View {
             footer
         }
         .frame(width: 660, height: 640)
-        .task { await load() }
+        // `injectedReport != nil` 是「给了初值就不去取」的**唯一**保证（见 `init(initialReport:)`）。
+        .task { if injectedReport == nil { await load() } }
     }
 
     // MARK: 头部

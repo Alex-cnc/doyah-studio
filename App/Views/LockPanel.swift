@@ -17,6 +17,25 @@ struct LockPanel: View {
     /// 「定位阻塞者」高亮的 pid。
     @State private var highlightedPid: Int?
 
+    /// 面板的**初始等待列表**（队列 L-18 的「可注入口子」；口子形状由 L-12 定）。
+    ///
+    /// 为什么需要它：`waits` 是私有 `@State`、`.task` 打开即查库，没选连接时走 `catch` ⇒
+    /// 离线只能拍到「未选连接提示 + 空列表文案**同屏**」那种真运行态；
+    /// 「连上了、这次 0 条等待」这个**纯空态**拍不到（L-16 第 3 批实测，与 `SessionPanel` 同族）。
+    ///
+    /// 三条口径（与 `ERDiagramPanel(initialDiagram:)` 同源）：
+    ///   ① 只**给初值**，生产路径不传 ⇒ 行为逐字不变；
+    ///   ② 不是测试后门：没有「测试才走」的分支，「定位阻塞者」按钮照样按数据灰着 / 亮着；
+    ///   ③ `nil` 与 `[]` 语义不同：`nil` = 没注入（照旧查库），`[]` = 注入「查过了，0 条」——
+    ///      同时把 `hasLoaded` 置真，于是画面停在 `lockEmpty` 那一支（而不是那个占位空格）。
+    private let injectedWaits: [LockWait]?
+
+    init(initialWaits: [LockWait]? = nil) {
+        self.injectedWaits = initialWaits
+        _waits = State(initialValue: initialWaits ?? [])
+        _hasLoaded = State(initialValue: initialWaits != nil)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -62,7 +81,9 @@ struct LockPanel: View {
         }
         .padding(20)
         .frame(width: 760, height: 560)
-        .task { await load() }
+        // `injectedWaits != nil` 是「给了初值就不去取」的**唯一**保证（见 `init(initialWaits:)`）：
+        // 去掉它，注入进来的空列表会被紧随其后的 `load()` 覆写成「未选连接」那一支。
+        .task { if injectedWaits == nil { await load() } }
     }
 
     // MARK: - 汇总

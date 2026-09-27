@@ -34,6 +34,27 @@ struct PrivilegePanel: View {
     @State private var grantee = ""
     @State private var withGrantOption = false
 
+    /// 面板的**初始角色与已授权限**（队列 L-18 的口子；L-16 第 6 批的前置就是它）。
+    ///
+    /// 为什么需要它：`role` / `privileges` 都是私有 `@State`、`.task` 打开即查库 ⇒
+    /// 没选连接时离线只能拍到「未选连接」那一支；「连上了、这个角色**一个对象权限都没有**」
+    /// 这个**纯空态**根本拍不到（L-16 第 5 批实测登记）。
+    ///
+    /// 三条口径：① 只给初值，生产路径不传（`role` 仍取当前连接用户名）⇒ 行为逐字不变；
+    /// ② 不是测试后门（`GRANT` / `REVOKE` 照样要预览 + 确认，不放行任何写动作）；
+    /// ③ `initialPrivileges` 为 `nil` 表示没注入 ⇒ 照旧查库；给了（哪怕是 `[]`）就**不去查**，
+    ///    并把 `hasLoaded` 置真 —— 于是画面停在 `privilegeEmpty` 那一支而不是占位空格。
+    private let injectedRole: String?
+    private let injectedPrivileges: [ObjectPrivilege]?
+
+    init(initialRole: String? = nil, initialPrivileges: [ObjectPrivilege]? = nil) {
+        self.injectedRole = initialRole
+        self.injectedPrivileges = initialPrivileges
+        _role = State(initialValue: initialRole ?? "")
+        _privileges = State(initialValue: initialPrivileges ?? [])
+        _hasLoaded = State(initialValue: initialPrivileges != nil)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -51,10 +72,14 @@ struct PrivilegePanel: View {
         .padding(20)
         .frame(width: 720, height: 620)
         .task {
-            if role.isEmpty {
-                role = appState.selectedConnection?.username ?? ""
+            // `injectedPrivileges != nil` = 注入过 ⇒ 这一遍不查库（唯一的「给了初值就不去取」保证，
+            // 见 `init(initialRole:initialPrivileges:)`）。
+            if injectedPrivileges == nil {
+                if role.isEmpty {
+                    role = appState.selectedConnection?.username ?? ""
+                }
+                await load()
             }
-            await load()
         }
     }
 

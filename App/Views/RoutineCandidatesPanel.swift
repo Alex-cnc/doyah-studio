@@ -17,7 +17,10 @@ import DoyahCore
 /// 重写就会出现两份互相漂移的规则，而这里漂移的代价是"我说了不记，它还是记了"。
 struct RoutineCandidatesPanel: View {
     /// 面板的两个页签。
-    private enum Tab: Hashable {
+    ///
+    /// 由 `private` 改为内部可见（队列 L-18）：口子要能**点名页签**，而页签类型不对外就没法传。
+    /// 它仍然只在这一处定义 —— 界面里没有第二个页签枚举。
+    enum Tab: Hashable {
         case candidates
         case memory
     }
@@ -26,6 +29,19 @@ struct RoutineCandidatesPanel: View {
     @EnvironmentObject private var appState: AppState
 
     @State private var tab: Tab = .candidates
+
+    /// 面板的**初始页签**（队列 L-18 的「可注入口子」；口子形状由 L-12 定）。
+    ///
+    /// 为什么需要它：`tab` 是私有 `@State`，默认落在「例行候选」页签 ⇒ 另一半
+    /// 「记忆治理」页签**从没被拍过**（L-12 收口时把这一处记成 L-18 的一半）。
+    ///
+    /// 三条口径：① 只给初值 —— 生产路径不传，打开仍是「例行候选」那一页，行为逐字不变；
+    /// ② 不是测试后门（不给任何页签开特权、不放行被禁动作，切页签的能力本来就属于用户）；
+    /// ③ 与 `.task` 的关系：这里的任务只刷新 **appState** 的报告，不写 `tab`，所以不需要
+    ///    「给了初值就不去取」那类守卫（与 `SessionPanel` / `LockPanel` 的形态不同，别照抄）。
+    init(initialTab: Tab = .candidates) {
+        _tab = State(initialValue: initialTab)
+    }
     /// 每条记忆选定的类别（键 = 粗指纹）。默认「例行」—— 与 CLI `memory --show` 的默认一致。
     @State private var kinds: [String: MemoryKind] = [:]
     /// 展开了解释的那条（一次只展开一条，否则面板会被理由文本淹掉）。

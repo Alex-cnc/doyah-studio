@@ -192,6 +192,19 @@ enum UISnapshot {
 
     // MARK: - 两种语言各一遍（队列 L-13）
 
+    /// 在**指定语言**的宿主语境里取一段文案（快照用例的判据用，队列 L-18）。
+    ///
+    /// 为什么需要它：判据要拿「这一句应该长什么样」去比渲染记录里的 `localizedStrings` ——
+    /// 而 `L(...)` 在没有宿主语境时按**用户偏好**出文案（本机是中文，别的机器可能不是），
+    /// 拿它当期望值会在其中一遍上错位。走 `beginHostLanguage` 之后取值，
+    /// 期望值与那一遍渲染**同一条路**，于是「中文那遍比中文期望值 / 英文那遍比英文期望值」成立。
+    @MainActor
+    static func localizedText(_ language: AppLanguage, _ body: () -> String) -> String {
+        _ = LocalizationManager.beginHostLanguage(language)
+        defer { LocalizationManager.endHostLanguage() }
+        return body()
+    }
+
     /// 一组「同一张图 · 两种语言」的产物。
     struct LanguagePair {
         /// 不带语言后缀的原名称（语言后缀由 `writeBothLanguages` 加）。

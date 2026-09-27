@@ -19,6 +19,25 @@ struct SessionPanel: View {
     /// 待确认的终止目标（`nil` = 没有待确认的操作）。
     @State private var pendingTerminate: ServerSession?
 
+    /// 面板的**初始会话列表**（队列 L-18 的「可注入口子」；口子形状由 L-12 定）。
+    ///
+    /// 为什么需要它：`sessions` 是私有 `@State`、`.task` 打开即 `await loadServerSessions()`，
+    /// 没选连接时只会抛 `notConnected` ⇒ 离线永远只能拍到「红字错误 + 空占位」那种**真运行态**，
+    /// 而「连上了、这次查到 0 条会话」这个**纯空态**在快照里根本不可达（L-11 第 11 轮实测）。
+    ///
+    /// 三条口径（与 `ERDiagramPanel(initialDiagram:)` 同源）：
+    ///   ① 它只**给初值**，不改任何行为分支 —— 生产路径（`MainWindow`）不传，行为与以前逐字一致；
+    ///   ② 它不是测试后门：没有「测试才走」的分支，也不放行被禁动作 ——
+    ///      终止 / 取消语句两个按钮照样按 `selectedPID` 灰着；
+    ///   ③ `nil` 与 `[]` **语义不同**：`nil` = 没注入（照旧去取），`[]` = 注入「取过了，就是 0 条」——
+    ///      这正是「拦下那次取数」能表达出来的原因（非可选的话两者分不开）。
+    private let injectedSessions: [ServerSession]?
+
+    init(initialSessions: [ServerSession]? = nil) {
+        self.injectedSessions = initialSessions
+        _sessions = State(initialValue: initialSessions ?? [])
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             HStack {
@@ -87,7 +106,9 @@ struct SessionPanel: View {
         }
         .padding(Spacing.l)
         .frame(width: 860, height: 520)
-        .task { await reload() }
+        // `injectedSessions != nil` 是「给了初值就不去取」的**唯一**保证（见 `init(initialSessions:)`）：
+        // 去掉它，注入进来的空列表会被紧随其后的 `reload()` 覆写成「红字错误 + 空占位」。
+        .task { if injectedSessions == nil { await reload() } }
         // 二次确认：终止会话会掐断连接，不能一键就做。
         .confirmationDialog(
             L(.sessionTerminateConfirmTitle, pendingTerminate?.pid ?? 0),

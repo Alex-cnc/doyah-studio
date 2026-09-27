@@ -115,6 +115,7 @@ final class UISnapshotPanelsTests: XCTestCase {
     /// 同一张图拍浅色 / 深色两遍：深色一遍看的是**对比度与动态色**（L-13 记的另一半：
     /// 语言遍地还没成对，那是 L-13 的范围，这里不做）。
     @MainActor
+    @discardableResult
     private func snapshotLightAndDark<V: View>(
         _ name: String,
         size: CGSize,
@@ -122,21 +123,25 @@ final class UISnapshotPanelsTests: XCTestCase {
             state: AppState, workspace: WorkspaceStore, tabs: WorkspaceTabsModel, terminal: TerminalModel
         ),
         @ViewBuilder content: () -> V
-    ) throws {
+    ) throws -> [UISnapshot.LanguagePair] {
+        var pairs: [UISnapshot.LanguagePair] = []
         for scheme in [ColorScheme.light, .dark] {
-            try UISnapshot.writeBothLanguages(
-                "\(name)\(scheme == .dark ? "-dark" : "")",
-                size: size,
-                scheme: scheme
-            ) {
-                content().snapshotEnvironment(
-                    state: host.state,
-                    workspace: host.workspace,
-                    tabs: host.tabs,
-                    terminal: host.terminal
-                )
-            }
+            pairs.append(
+                try UISnapshot.writeBothLanguages(
+                    "\(name)\(scheme == .dark ? "-dark" : "")",
+                    size: size,
+                    scheme: scheme
+                ) {
+                    content().snapshotEnvironment(
+                        state: host.state,
+                        workspace: host.workspace,
+                        tabs: host.tabs,
+                        terminal: host.terminal
+                    )
+                }
+            )
         }
+        return pairs
     }
 
     // MARK: - 一批四张（深浅各一）
@@ -502,6 +507,148 @@ final class UISnapshotPanelsTests: XCTestCase {
 
         // **本批未做（前置见方法开头）**：权限 / 服务器对象（等 L-18 的口子）、
         // 合成数据（列规格来自真库 ⇒ 只能拍错误支，不进「空态」这一批）。
+    }
+
+    // MARK: - L-18：可注入口子的其余面板（2026-09-27 第 39 轮）
+
+    /// **注入判据**（队列 L-18）：这一张图上必须出现**只有注入的数据才写得出来**的那句文案，
+    /// 且必须**没有**「没连库」那句 —— 两句一起判才说明面板这一遍**没去取数**。
+    ///
+    /// 为什么判文案而不是判「像素变了」：`Record.localizedStrings` 记的是**这一遍渲染里
+    /// `L(...)` 真正取到的文案**（L-13 那份基础设施），所以它是「渲染走的是哪一支」的机械证据；
+    /// 而「两张图不一样」在只有一张图可拍时无从比较。**如实说明局限**：它判的是**文案到了渲染上**，
+    /// 不是逐像素比对 —— 像素那一半由人眼读图（每张都读，见本方法的交付清单）。
+    @MainActor
+    private func assertInjectedCopy(
+        _ pairs: [UISnapshot.LanguagePair],
+        present: LKey,
+        absent: LKey?,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(pairs.count, 2, "浅色 / 深色两遍都要拍到", line: line)
+        for pair in pairs {
+            XCTAssertEqual(pair.records.count, 2, "\(pair.base)：中英两遍都要在", line: line)
+            for (index, language) in UISnapshot.coverageLanguages.enumerated() {
+                let record = pair.records[index]
+                let expected = UISnapshot.localizedText(language) { L(present) }
+                XCTAssertTrue(
+                    record.localizedStrings.contains(expected),
+                    "\(record.name)：\(record.language) 那遍没有出现「\(expected)」"
+                        + " —— 注入的态没走到渲染上（这一步是 L-18 的口子能作数的唯一证据）",
+                    line: line
+                )
+                if let absent {
+                    let forbidden = UISnapshot.localizedText(language) { L(absent) }
+                    XCTAssertFalse(
+                        record.localizedStrings.contains(forbidden),
+                        "\(record.name)：\(record.language) 那遍出现了「\(forbidden)」"
+                            + " —— 说明面板这一遍仍然去取了数（`.task` 的「给了初值就不去取」那道守卫没了？）",
+                        line: line
+                    )
+                }
+            }
+        }
+    }
+
+    /// **L-18 批**：`SessionPanel` / `LockPanel` / `DatabaseStatsPanel` / `RoutineCandidatesPanel`
+    /// 的**纯空态**（另有 `PrivilegePanel` / `ServerObjectsPanel` —— L-16 第 6 批的前置，见方法末）。
+    ///
+    /// 这四处此前**拍不到**，原因都是同一个：状态是**私有 `@State`**、`.task` 打开即查库，
+    /// 没选连接时离屏只能拿到**错误分支**（L-11 / L-16 四批实测逐条登记过）。第 39 轮给它们
+    /// 各开了一个**面板级注入**口子（形状由 L-12 定：只给初值 / 不是测试后门 / 生产路径不传），
+    /// 于是「连上了、这次就是 0 条」这一类态第一次可见。
+    ///
+    /// **判据分两层**（缺一层就是「图好看」而不是证据）：
+    ///   ① **渲染后断言**：注入的态在渲染后仍然成立（面板没把它取掉）—— 落在 `assertInjectedCopy`：
+    ///      空态文案**在**、未连接文案**不在**。为什么「不在」才是关键那条：`.task` 一旦跑了、
+    ///      抛了 `notConnected`，出问题的正是那句文案（L-11 第 11 轮那张 `session-empty` 图上
+    ///      两样东西同时出现过）；所以「不在」= 这次取数**真的被拦下了**。
+    ///   ② **人眼读图**：文案齐 ≠ 版面对（垂直居中、裁切、重叠都只有看图才知道，L-11 踩过）。
+    ///
+    /// 诚实边界：注入的是**面板级初值**，不是真库返回的 —— 它证明「拿到这样的数据时界面长什么样」，
+    /// 不证明「真库会返回这样的数据」。这条边界与 L-12 那批完全一致。
+    @MainActor
+    func testInjectedEmptyStatesBatchSix() throws {
+        let host = makeEmptyHost()
+        XCTAssertTrue(host.state.connections.isEmpty, "本批要拍空态：不该有任何连接")
+        XCTAssertNil(host.state.selectedConnectionID, "本批要拍空态：不该有选中的连接")
+
+        // ① 会话：**连上了、这次查到 0 条**（此前只有「未选连接」那种真运行态）
+        //    `SessionPanel` 自己钉了 `860×520`，所以宿主尺寸不会有「垂直居中」那条坑。
+        let sessions = try snapshotLightAndDark(
+            "session-connected-empty",
+            size: CGSize(width: 860, height: 520),
+            host: host
+        ) {
+            SessionPanel(initialSessions: [])
+        }
+        assertInjectedCopy(sessions, present: .sessionEmpty, absent: .errorNotConnected)
+        XCTAssertTrue(host.state.connections.isEmpty, "渲染期间连接被填上了 —— 这次取数没被拦下")
+
+        // ② 锁与阻塞：**连上了、这次 0 条等待**（L-16 第 3 批那张是「提示 + 空文案同屏」）
+        let locks = try snapshotLightAndDark(
+            "lock-panel-connected-empty",
+            size: CGSize(width: 760, height: 560),
+            host: host
+        ) {
+            LockPanel(initialWaits: [])
+        }
+        assertInjectedCopy(locks, present: .lockEmpty, absent: .errorNotConnected)
+
+        // ③ 数据库统计：**连上了、四类都取到了报告、但这四类各自都没有数据**
+        //    注入路径**不参与** `load()` 里「四类全空 ⇒ 方言不支持」那条双保险（那是**取数**的结果判定），
+        //    所以这一张看到的是四个空行，不是「不支持」—— 判据就用四个分节表头 + 空行文案：
+        //    它们在「错误分支」里一个都不会出现（`content` 先判 `errorMessage`，再判 `report`）。
+        let stats = try snapshotLightAndDark(
+            "database-stats-empty-report",
+            size: CGSize(width: 660, height: 640),
+            host: host
+        ) {
+            DatabaseStatsPanel(initialReport: DatabaseStats.Report())
+        }
+        assertInjectedCopy(stats, present: .databaseStatsEmptySection, absent: nil)
+        assertInjectedCopy(stats, present: .databaseStatsTableSizes, absent: nil)
+
+        // ④ 例行候选的**另一半**：记忆治理页签（面板默认落在「例行候选」页签 ⇒ 这一页从没被拍过）
+        //    页签只给初值；这里的 `.task` 刷的是 appState 的报告、不写 `tab`，所以没有「拦下取数」那回事
+        //    —— 反过来要**显式确认这一遍没有记忆可显示**，否则拍出来的不是空态。
+        //    高度按内容实测取 **312pt**：这一页比「例行候选」那一页高（多了归档开关说明 + 记录策略卡片），
+        //    而面板只钉了宽度 700 —— 宿主给多了 SwiftUI 会把内容**垂直居中**（第一版 420 实测顶部
+        //    凭空多出 54pt 留白，与 L-11 的 `routine-candidates` 踩的是同一个坑）。
+        let memory = try snapshotLightAndDark(
+            "routine-candidates-memory-empty",
+            size: CGSize(width: 700, height: 312),
+            host: host
+        ) {
+            RoutineCandidatesPanel(initialTab: .memory)
+        }
+        assertInjectedCopy(memory, present: .memoryGovernanceEmpty, absent: nil)
+        XCTAssertTrue(
+            host.state.queryMemoryIndex.memories.isEmpty,
+            "渲染期间记忆索引被填上了（`.task → refreshRoutineCandidates()` 读的是磁盘上的归档目录）"
+                + " —— 这张图不能当空态证据"
+        )
+
+        // ⑤⑥ L-16 第 6 批的前置（同一族：私有 `@State` + `.task` 打开即查库）：
+        //    **权限**（`FR-SESS-04`）与**服务器对象**（`FR-SESS-03`）。
+        //    面板各自钉了尺寸（720×620 / 720×700），所以宿主尺寸没有居中那类坑。
+        let privileges = try snapshotLightAndDark(
+            "privilege-panel-empty",
+            size: CGSize(width: 720, height: 620),
+            host: host
+        ) {
+            PrivilegePanel(initialRole: "app_readonly", initialPrivileges: [])
+        }
+        assertInjectedCopy(privileges, present: .privilegeEmpty, absent: .errorNotConnected)
+
+        let serverObjects = try snapshotLightAndDark(
+            "server-objects-empty",
+            size: CGSize(width: 720, height: 700),
+            host: host
+        ) {
+            ServerObjectsPanel(initialSections: [ServerObjectSection(kind: .role)])
+        }
+        assertInjectedCopy(serverObjects, present: .serverObjectsEmpty, absent: .errorNotConnected)
     }
 
     // MARK: - 清单

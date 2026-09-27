@@ -59,6 +59,23 @@ struct ServerObjectsPanel: View {
 
     private let limit = ServerObjects.defaultLimit
 
+    /// 面板的**初始分节**（队列 L-18 的口子；L-16 第 6 批的前置之一）。
+    ///
+    /// 为什么需要它：`sections` 是私有 `@State`、`.task { await load() }` 打开即查库 ⇒
+    /// 没选连接时离线只能拍到错误分支；「连上了、这一类**就是 0 个对象**」这个**纯空态**
+    /// 拍不到（L-16 第 5 批实测登记）。注入一份「只有分节、没有对象」的态就能拍到它 ——
+    /// 注意这与 `unsupportedReason`（方言不支持）是**两条不同的文案**，注入时给 `nil`。
+    ///
+    /// 三条口径：① 只给初值，生产路径不传 ⇒ 行为逐字不变；② 不是测试后门
+    /// （写操作照样要预览 + 确认 + 安全模式，不放行任何动作）；③ `nil` = 没注入 ⇒ 照旧查库，
+    /// 给了（哪怕是 `[]`）就不去查 —— 唯一的「给了初值就不去取」保证写在 `.task` 里。
+    private let injectedSections: [ServerObjectSection]?
+
+    init(initialSections: [ServerObjectSection]? = nil) {
+        self.injectedSections = initialSections
+        _sections = State(initialValue: initialSections ?? [])
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -72,7 +89,8 @@ struct ServerObjectsPanel: View {
             footer
         }
         .frame(width: 720, height: 700)
-        .task { await load() }
+        // `injectedSections != nil` 是「给了初值就不去取」的**唯一**保证（见 `init(initialSections:)`）。
+        .task { if injectedSections == nil { await load() } }
         .onChange(of: selectedKind) { _, _ in
             // 换了一类对象，选中项与预览都失效 —— 留着会让「删除选中」删掉另一类里的同名对象。
             selectedName = nil
