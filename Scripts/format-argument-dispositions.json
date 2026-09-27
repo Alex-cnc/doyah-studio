@@ -1,0 +1,404 @@
+{
+  "note": "语言表模板占位符 ↔ `L(...)` 调用点实参的对账台账（队列 L-46）。判据与用法见 Scripts/check-format-arguments.py 头部。shapes = 门禁**判不出类型**的实参形状，逐条登记：kind 只认有出处可引的（text / number，理由写清 file:line）；没有出处的一律 unverified —— unverified 不参与槽位交叉检查，只被形状与处数棘轮钉住，不是放行。",
+  "version": 1,
+  "unknownBudget": 115,
+  "shapes": [
+    {
+      "shape": "<reason>",
+      "kind": "unverified",
+      "maxSites": 12,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<name>",
+      "kind": "text",
+      "maxSites": 7,
+      "reason": "库名 / 表名：App/AppState.swift:2058 形参 `name: String`"
+    },
+    {
+      "shape": "<written>",
+      "kind": "number",
+      "maxSites": 6,
+      "reason": "App/AppState.swift:4316 `written = request.rows.count` ⇒ Int"
+    },
+    {
+      "shape": "<pid>",
+      "kind": "number",
+      "maxSites": 5,
+      "reason": "App/AppState.swift:4376 `func cancelSessionStatement(pid: Int)`"
+    },
+    {
+      "shape": "<detail>",
+      "kind": "unverified",
+      "maxSites": 4,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": ".column",
+      "kind": "unverified",
+      "maxSites": 3,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<column>",
+      "kind": "text",
+      "maxSites": 3,
+      "reason": "App/AppState.swift:171 `var column: String`（外键跳转的列名）"
+    },
+    {
+      "shape": "<duration>",
+      "kind": "text",
+      "maxSites": 3,
+      "reason": "App/AppState.swift:5598 `let duration = String(format: \"%.3f\", summary.duration)` ⇒ 已是 String（第 16 轮那族缺陷的同名变量在这里是字符串）"
+    },
+    {
+      "shape": "<message>",
+      "kind": "unverified",
+      "maxSites": 3,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<statementNumber>",
+      "kind": "unverified",
+      "maxSites": 3,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "appState.selectedConnection?.dbT",
+      "kind": "unverified",
+      "maxSites": 3,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "$0",
+      "kind": "unverified",
+      "maxSites": 2,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": ".line",
+      "kind": "unverified",
+      "maxSites": 2,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<affected>",
+      "kind": "unverified",
+      "maxSites": 2,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<failure>",
+      "kind": "unverified",
+      "maxSites": 2,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<filename>",
+      "kind": "unverified",
+      "maxSites": 2,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<number>",
+      "kind": "number",
+      "maxSites": 2,
+      "reason": "App/AppState.swift:3332 `func rollbackDataTask(taskID: UUID, to number: Int)`"
+    },
+    {
+      "shape": "<path>",
+      "kind": "unverified",
+      "maxSites": 2,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "tabs[index].title",
+      "kind": "unverified",
+      "maxSites": 2,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": ".defaultBrowseLimit",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": ".id",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "App/AppState.swift:6175 `task.id` 是 UUID：**「`%@` 收 UUID 会不会印 `(null)`」未经实测**（第 16 轮只实测过 Int）⇒ 不判，留待有实测再定"
+    },
+    {
+      "shape": ".mcpApprovalBadLines",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": ".value",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": ".version",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<artifactFailure>",
+      "kind": "text",
+      "maxSites": 1,
+      "reason": "App/AppState.swift:2745 `var artifactFailure: String?`"
+    },
+    {
+      "shape": "<checked>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<code>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<count>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<databaseName>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<feature>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<filePath>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<id>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<loadedRowCount>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<minutes>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<names>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<next>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<preview>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<previewLimit>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<problem>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<requestID>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<restoreJobs>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<resultCount>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<searched>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<skipped>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<statement>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<statementCount>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<targetDatabase>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<text>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<timeout>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<value>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "<versions>",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "ISO8601DateFormatter(…)",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "approval.record.connectionName ?",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "approved ? L(.mcpApprovalAllow) ",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "current.connectionName ?? \"—\"",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "directory.deletingLastPathComponent(…)",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "draft?.name ?? \"\"",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "engine.failure ?? \"\"",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "error.errorDescription ?? \"\\(err",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "fonts.resolution.effectiveFamily",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "migration.failure ?? \"\"",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "pendingConfirmation?.message ?? ",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "pendingTerminate?.database ?? \"?",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "pendingTerminate?.user ?? \"?\"",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "plan.refusals.first ?? \"\"",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "table.columns.count - visible",
+      "kind": "unverified",
+      "maxSites": 1,
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    }
+  ],
+  "exceptions": []
+}

@@ -10,6 +10,9 @@ set -euo pipefail
 #   2. Core 平台中立性（Core 里不得出现平台专属依赖 —— 否则 Linux 编译不过）
 #   3. 本地化：Core 展示文本棘轮（R-45：用户可见文案不得硬编码中文，只能比基线更少）
 #      + 「当前语言只有一个来源」（L-13：显式传语言必须走 `effectiveLanguage`）
+#      + 语言表**模板占位符 ↔ 调用点实参**对账（L-46：数字实参落 `%@` 槽 / 字符串落数字槽 /
+#        实参数 ≠ 占位符数 / 类型不明的实参逐条登记形状 + 双向棘轮，
+#        见 `check-format-arguments.py` 与 `format-argument-dispositions.json`）
 #   4. 文档表格列数与派生计数一致
 #      + 变更记录版本号唯一 / 头部版本格可判 / 队列条目号唯一（L-32）
 #   5. 需求状态一致性（§10.1 索引表 ↔ 正文定义行）
@@ -139,6 +142,17 @@ python3 Scripts/check-core-localization.py
 # 第 13 轮读图抓到的真缺陷就是它 —— 中文界面的行详情侧栏写着 `Text · 12 characters`。
 # 收成一个口子 `effectiveLanguage`（宿主语境优先），并把这个口径变成机械判据。
 python3 Scripts/check-effective-language.py
+# L-46（2026-09-27 第 37 轮）：上面两条只比**模板与模板**，没有人比过**模板与实参**。
+# 真缺陷就长在这条缝里（第 37 轮实测）：`App/Views/AboutLicenseSheet.swift` 三处
+# `L(.licAboutEdition)` / `L(.licAboutAppVersion)` / `L(.licAboutActivityItems)` 不传实参，
+# 而模板是 `当前版本：%@` —— `LocalizationManager.text` 在 `arguments.isEmpty` 时
+# **原样返回模板**，于是界面上印出的就是 `%@` 本身（中文英文都一样）。
+# 判据四条：A 数字实参落 `%@` 槽 / A′ 字符串字面量落 `%d` 槽 / B 实参数 ≠ 占位符数 /
+# C·D 类型不明的实参必须**逐条登记形状**（台账 `Scripts/format-argument-dispositions.json`）
+# 且命中处数只许不增（棘轮）。第二条是**门禁自己的证据**：9 例负例（A / A′ / B / C / D /
+# 例外陈旧 / 空跑不许通过 …，夹具一律在临时目录，末例核对真仓库文件逐字节未变）。
+python3 Scripts/check-format-arguments.py
+python3 Scripts/check-format-arguments.py --self-test
 
 echo "==> 4/18 文档表格与派生计数"
 # L-33（2026-09-27 第 29 轮）：本项的默认清单里有 **7 份被 `.gitignore` 排除的文档**
