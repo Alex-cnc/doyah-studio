@@ -1,5 +1,24 @@
 {
-  "_comment": "Linux 侧实现状态。只写与 default 不同的项；改完运行 python3 Scripts/gen-platform-parity.py 重写需求规范书 §10.10 的表格。状态含义见需求规范书 §0.4（✅ 已实现 / 🟡 部分或待验收 / ⬜ 未开始）。",
+  "_comment": "各平台实现状态登记处（只写与 default 不同的项）。macOS 是基线、状态取自《需求规范书》§10.1 索引，**不在这里登记** —— 同一件事只允许有一个真相。改完运行 python3 Scripts/gen-platform-parity.py 重写该文档 §10.10 的表格；闭环第 7 项用 --check 判定是否漂移（编号写错 / 状态取值非法 / 平台缺 label·role·owner 都会被门禁点名）。状态含义见 §0.4（✅ 已实现 / 🟡 部分或待验收 / ⬜ 未开始）。",
   "default": "⬜",
-  "linux": {}
+  "platforms": {
+    "linux": {
+      "label": "Linux",
+      "role": "自用第三端（只服务需求提出者；公司环境实现）",
+      "owner": "需求提出者（公司 Linux 环境）",
+      "overrides": {}
+    },
+    "windows": {
+      "label": "Windows",
+      "role": "对等目标端（与 macOS 完全一致）",
+      "owner": "小河马（Windows 侧开发助理）",
+      "overrides": {}
+    }
+  },
+  "notPlatforms": {
+    "mobile": {
+      "label": "移动端（鸿蒙 / 安卓 / iOS）",
+      "why": "移动端 = Doyah Notes（只有笔记），不是 Doyah Studio 的平台版本（§0.10 / 规划书 §4.13）⇒ 不在本矩阵设列，免得造出一列永远 ⬜ 的假进度。"
+    }
+  }
 }

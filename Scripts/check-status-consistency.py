@@ -69,12 +69,20 @@ def main() -> int:
             continue
         index[fields[0]] = (fields[3][0], offset)
 
-    # ── 正文定义行
+    # ── 正文定义行（**只扫 §1~§9 的正文，不扫 §10 附录**）
     #    FR 行 6 列：| ID | 描述 | 优先级 | 复杂度 | 状态 | 证据 |
     #    NFR 行 5 列：| ID | 描述 | 优先级 | 状态 | 证据 |   （NFR 没有"复杂度"）
     #    因此状态位置不固定：从第 4 列起找**第一个以状态符号开头**的列。
+    #
+    #    **为什么必须把范围限定在正文字（2026-09-27，队列 L-26 实测）**：§10.10 平台等价矩阵
+    #    同样是「FR 编号打头的多列表」。此前它恰好是 4 列，撞上下面 `len(fields) < 5` 就跳过了；
+    #    本轮它按平台数扩成 5 列（macOS / Linux / Windows），这些行立刻被当成定义行，
+    #    于是 176 条需求的 **Linux/Windows 状态（⬜）反过来覆盖了真正的定义行状态**，
+    #    门禁当场假红（报"定义行为 ⬜、索引表为 🟡"共 3 处）。判据不该依赖"某张表恰好只有 4 列"
+    #    这种巧合 —— 附录里的表与正文的定义行不是一回事，按位置切开才是稳的。
+    body_end = next((i for i, l in enumerate(lines) if l.startswith("## 10.")), len(lines))
     defined: dict[str, tuple[str, int]] = {}
-    for number, line in enumerate(lines, start=1):
+    for number, line in enumerate(lines[:body_end], start=1):
         fields = [f.strip() for f in line.strip().strip("|").split("|")]
         if len(fields) < 5 or not re.fullmatch(r"(FR|NFR)-[A-Z]+-\d+", fields[0]):
             continue
