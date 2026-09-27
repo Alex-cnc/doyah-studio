@@ -221,7 +221,10 @@ python3 Scripts/check-cli-failure-readability.py
 echo "==> 16/18 越界检查（三书独占节：改动不得落在对侧节内）"
 # 形态 A（2026-09-27 拍板）：三书单点定稿，但「平台实现」层按端独占 —— 标记 `[独占:macos]` /
 # `[独占:windows]` 的节只由该侧改；本机 = macOS 侧。判据与逃生门见脚本头注释。
+# 第二条是**门禁自己的证据**（L-42）：11 例负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——
+# 判据写完不对已知改动报红，等于没有。两个脚本对外只认退出码，`--self-test` 红了整项就红。
 python3 Scripts/check-exclusive-sections.py
+python3 Scripts/check-exclusive-sections.py --self-test
 
 echo "==> 17/18 vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例 + 现编现跑自证"
 # 为什么这三条必须一起跑（第 18 轮 L-25 第 1 批）：
