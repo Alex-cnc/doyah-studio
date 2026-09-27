@@ -1,10 +1,13 @@
 import XCTest
 @testable import DoyahCore
-import SQLiteKit
 
 // 这一组用例只经 `SQLiteKit`（绑定层）判错 —— **不 import C 模块**：
 // C 互操作集中在绑定层一个目标里，测试用它的语义判断（`isBusy` / `isConstraintViolation`…）
 // 与 `codeName` 反向钉住码表，比在测试里再抄一遍 C 常量更不容易漂。
+//
+// 第 21 轮（L-25 第 2 批）**接线**：绑定层从 `Docs/design/待接线-SQLiteKit/` 挪进 `Core/NoteStorage/`，
+// 于是它不再是独立模块 `SQLiteKit`，而是 `DoyahCore` 的一部分 —— 本文件由 `import SQLiteKit`
+// 改为只 `@testable import DoyahCore`（`SQLiteMacro` 是 internal，要 @testable 才看得见）。
 
 /// `SQLiteKit/SQLite.swift`（薄封装）+ vendored `sqlite3.c` 的机械证据（FR-PLUG-08 / Q23 拍板）。
 ///
@@ -16,7 +19,7 @@ import SQLiteKit
 ///   ② **五种存储类往返** —— NULL / 空串 / 0 / 零长 blob 不许被混为一谈；
 ///   ③ **并发与事务** —— WAL + `BEGIN IMMEDIATE` + 嵌套 `SAVEPOINT`（笔记库会多进程读写）；
 ///   ④ **失败要说清楚** —— 坏文件 / 锁竞争 / 用已关闭的连接：错误码与语义判断都在类型上。
-final class SQLiteTests: XCTestCase {
+final class SQLiteKitTests: XCTestCase {
 
     private var directory: URL!
 
@@ -92,14 +95,42 @@ final class SQLiteTests: XCTestCase {
         XCTAssertEqual(try connection.scalarText("SELECT 'ok'"), "ok")
     }
 
-    /// FTS5 不只是宏里有个 1 —— 真建虚拟表、真检索。
-    func testFTS5IsUsable() throws {
+    /// FTS5 不只是宏里有个 1 —— 真建虚拟表、真检索；而且**当成对判据**用：
+    /// 默认分词器 `unicode61` **不切中文**（第 18 轮实测：`MATCH '骑行'` 命中 0），
+    /// `tokenize='trigram'` 才按子串命中。同一行数据、同一句查询，两张表结果不同 —— 这才叫证据。
+    ///
+    /// （这条用例在第 21 轮接线时被改过：草稿写的是「建表 + `MATCH '全文'` 命中 1」，
+    /// 它从来没跑过，而按实测口径它**必然红** —— 中文两字查询在默认分词器下命中 0。）
+    func testFTS5IsUsableAndTrigramIsWhatMakesChineseSearchable() throws {
         let connection = try SQLiteConnection(path: databaseURL().path)
-        try connection.execute("CREATE VIRTUAL TABLE note_fts USING fts5(title, body);")
-        try connection.execute("INSERT INTO note_fts(title, body) VALUES (?, ?)", [.text("索引重建"), .text("VACUUM 之后的全文索引")])
-        try connection.execute("INSERT INTO note_fts(title, body) VALUES (?, ?)", [.text("别的"), .text("无关内容")])
-        let rows = try connection.query("SELECT title FROM note_fts WHERE note_fts MATCH ? ORDER BY title", [.text("全文")])
-        XCTAssertEqual(rows.compactMap { $0.text("title") }, ["索引重建"])
+        try connection.execute("CREATE VIRTUAL TABLE plain_fts USING fts5(title, body);")
+        try connection.execute("CREATE VIRTUAL TABLE trigram_fts USING fts5(title, body, tokenize = 'trigram');")
+        for table in ["plain_fts", "trigram_fts"] {
+            try connection.execute(
+                "INSERT INTO \(table)(title, body) VALUES (?, ?)",
+                [.text("索引重建"), .text("VACUUM 之后的全文索引重建与骑行")]
+            )
+            try connection.execute(
+                "INSERT INTO \(table)(title, body) VALUES (?, ?)",
+                [.text("别的"), .text("无关内容")]
+            )
+        }
+
+        func hits(_ table: String, _ needle: String) throws -> Int {
+            Int(try connection.scalarInt("SELECT count(*) FROM \(table) WHERE \(table) MATCH ?", [.text(needle)]) ?? 0)
+        }
+
+        // ① 三字以上中文：trigram 命中、默认分词器**命中 0**（对照）。
+        XCTAssertEqual(try hits("trigram_fts", "全文索引"), 1)
+        XCTAssertEqual(try hits("plain_fts", "全文索引"), 0)
+        // ② 两个字的中文：连 trigram 也命中 0（trigram 需要 ≥3 字）—— 所以生产检索对它走 LIKE 兜底。
+        XCTAssertEqual(try hits("trigram_fts", "骑行"), 0)
+        // ③ ASCII：默认分词器本来就能切，两张表都命中（说明 ① 的 0 是**分词语义**、不是索引坏了）。
+        XCTAssertEqual(
+            try connection.scalarInt("SELECT count(*) FROM plain_fts WHERE plain_fts MATCH ?", [.text("VACUUM")]),
+            1
+        )
+        XCTAssertEqual(try hits("trigram_fts", "VACUUM"), 1)
     }
 
     // MARK: - ② 五种存储类往返
@@ -252,14 +283,18 @@ final class SQLiteTests: XCTestCase {
 
     /// 坏文件（不是 SQLite 格式）要报成 NOTADB / CORRUPT，而不是一句「失败」——
     /// 这一条对应笔记库的「坏文件回退并如实报告」纪律。
-    func testNotADatabaseFileIsReported() throws {
+    ///
+    /// **第 21 轮接线时行为变严了一档**（草稿写的是"打开成功、查询时才报错"）：读写连接打开时会设
+    /// `PRAGMA journal_mode = WAL`，而对一个不是数据库的文件连这句都执行不了 ⇒ **打开就抛**。
+    /// 这是有意的：不给调用方一个"能连上、但什么也做不了"的连接 —— 坏库要在**最早的一步**被认出来，
+    /// 否则调用方会先拿到一个看似正常的对象，再在别处撞上莫名其妙的行为。
+    func testNotADatabaseFileIsRejectedAtOpen() throws {
         let url = databaseURL("broken.sqlite3")
         try Data("this is not a database, it is a text file".utf8).write(to: url)
-        let connection = try SQLiteConnection(path: url.path)
-        XCTAssertThrowsError(try connection.scalarInt("SELECT count(*) FROM sqlite_master")) { error in
+        XCTAssertThrowsError(try SQLiteConnection(path: url.path)) { error in
             let failure = error as? SQLiteFailure
             XCTAssertEqual(failure?.isNotADatabase, true, "实际错误：\(String(describing: failure))")
-            XCTAssertEqual(failure?.operation, .step)
+            XCTAssertTrue(failure?.message.contains("not a database") ?? false, "原话：\(failure?.message ?? "nil")")
         }
     }
 

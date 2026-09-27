@@ -66,13 +66,15 @@
     ],
     "publicHeadersPath": "include",
     "header": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
-    "consumer": "（待接线）Swift 侧的绑定层 `SQLiteKit` 因 SwiftPM 显式模块构建缺陷暂时未接入目标图 —— 症状是 `import CSQLite3` 不报错、所有声明都 「cannot find in scope」；草稿与排除过程见 Docs/design/待接线-SQLiteKit/ 与开发记录第 18 轮。"
+    "consumer": "`DoyahCore`（`Core/NoteStorage/`）—— **第 21 轮接线**：根 `Package.swift` 的 `DoyahCore` 目标加 `.product(name: \"CSQLite3\", package: \"sqlite3\")`，绑定层 `Core/NoteStorage/SQLiteKit.swift` 里 `import CSQLite3`（第 18 轮那份草稿当初因「显式模块构建下本地包 clang 模块不进模块表」未接线；本轮实测在 Core 目标里可编译、单测通过）。"
   },
   "wrapper": {
-    "source": "Docs/design/待接线-SQLiteKit/SQLite.swift",
-    "constants": "Docs/design/待接线-SQLiteKit/SQLiteConstants.swift（由同目录 gen-sqlite-constants.py 从 vendored 头文件生成）",
-    "tests": "Docs/design/待接线-SQLiteKit/SQLiteTests.swift",
-    "status": "draft-not-wired",
+    "source": "Core/NoteStorage/SQLiteKit.swift",
+    "constants": "Core/NoteStorage/SQLiteConstants.swift（由 Scripts/gen-sqlite-constants.py 从 vendored 头文件生成；`--check` 可核对，**当前未接进闭环**）",
+    "storage": "Core/NoteStorage/NoteDatabase.swift（schema v1 + 映射 + 检索 + VACUUM INTO 快照）",
+    "migration": "Core/NoteStorage/NoteLibraryMigration.swift（notes.json → notes.sqlite3 一次性迁移）",
+    "tests": "Tests/SQLiteKitTests.swift（绑定层）+ Tests/NoteStoreSQLiteTests.swift（存储层 / 迁移 / 快照）",
+    "status": "wired",
     "whyNotSystemLibrary": "口径：不许换系统自带 libsqlite3、也不许引第三方 Swift 封装（GRDB 官方仅 Apple+Linux、Windows 是社区探索；SwiftData / Core Data 为 Apple 独占），否则「Windows 与 macOS 完全一致」不成立。见 FR-PLUG-08。"
   },
   "wiring": {
@@ -122,6 +124,31 @@
         "file": "THIRD-PARTY-NOTICES.md",
         "anchor": "sqlite-amalgamation",
         "why": "第三方组件声明表里必须有这一行（用户看的是这一份文件，不是 Vendor/ 目录）"
+      },
+      {
+        "file": "Package.swift",
+        "anchor": ".product(name: \"CSQLite3\", package: \"sqlite3\")",
+        "why": "根包真的把 vendored SQLite 交给了 `DoyahCore` —— 这一行掉了，`import CSQLite3` 就编译不过（正是第 18 轮未接线的那个断点）"
+      },
+      {
+        "file": "Core/NoteStorage/SQLiteKit.swift",
+        "anchor": "sqlite3_open_v2(",
+        "why": "绑定层真的在产品源码里（C 互操作只在这一处，其余地方只经 Swift API）"
+      },
+      {
+        "file": "Core/NoteStorage/NoteDatabase.swift",
+        "anchor": "tokenize = 'trigram'",
+        "why": "中文检索口径落在**生产 schema** 上，而不只是 smoke 脚本里的实验（默认 unicode61 不切中文 —— 第 18 轮实测）"
+      },
+      {
+        "file": "Tests/NoteStoreSQLiteTests.swift",
+        "anchor": "testSnapshotIsReadableAndMatchesTheSource",
+        "why": "快照必须**读回来核对**（行数 + integrity_check + 索引可用）：备份没人验过等于没有备份"
+      },
+      {
+        "file": "Tests/NoteStoreSQLiteTests.swift",
+        "anchor": "testDeleteCascadesToTagsTimelineAndAttachments",
+        "why": "级联删除要真查孤儿行 —— SQLite 默认**关着**外键，这一条盯着「忘了 `PRAGMA foreign_keys = ON`」这类静默失效"
       }
     ]
   }

@@ -43,7 +43,8 @@ let package = Package(
             dependencies: [
                 .product(name: "PostgresNIO", package: "postgres-nio"),
                 .product(name: "MySQLNIO", package: "mysql-nio"),
-                .product(name: "Crypto", package: "swift-crypto")
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "CSQLite3", package: "sqlite3")
             ],
             path: "Core"
         ),

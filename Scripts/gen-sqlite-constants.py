@@ -27,20 +27,25 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 HEADER = REPO / "Vendor" / "sqlite3" / "Sources" / "CSQLite3" / "include" / "sqlite3.h"
-WRAPPER = REPO / "SQLiteKit" / "SQLite.swift"
-OUTPUT = REPO / "SQLiteKit" / "SQLiteConstants.swift"
+# 第 21 轮（L-25 第 2 批）接线：绑定层从 `Docs/design/待接线-SQLiteKit/` 挪进产品源码
+# `Core/NoteStorage/`，本脚本跟着挪进 `Scripts/`，路径同步更新。
+WRAPPER = REPO / "Core" / "NoteStorage" / "SQLiteKit.swift"
+OUTPUT = REPO / "Core" / "NoteStorage" / "SQLiteConstants.swift"
 
 # 取哪些常量：正文里用到的那些（按引用扫，不靠人记）——「生成的清单」与「实际用法」不许各说各话。
 USE_PATTERN = re.compile(r"\bSQLiteMacro\.([a-z0-9_]+)Macro\b")
 DEFINE_PATTERN = re.compile(r"^#\s*define\s+(SQLITE_[A-Z0-9_]+)\s+([^/\n]+?)\s*(?:/\*.*)?$")
 
 HEADER_NOTE = '''// ⚠️ 本文件由 `Scripts/gen-sqlite-constants.py` **生成**，不要手改。
-// 改了会在门禁 `Scripts/check-vendored-sqlite.py` 里报红（它会重跑生成器并逐字节比对）。
+// 重跑生成器即可；「生成物 ↔ 头文件」是否一致由 `python3 Scripts/gen-sqlite-constants.py --check` 判
+// （**当前未接进 `verify-all.sh`**，见队列条目 —— 别以为门禁替你看着）。
 //
-// 为什么要有这份「Swift 侧的常量表」：Swift 侧一旦大量引用 C 宏常量，绑定目标就会落进 SwiftPM 的
-// 显式模块构建档，而那一档下 vendored 的 clang 模块进不了模块表 —— 症状是 `import CSQLite3`
-// 不报错、但所有声明都 "cannot find in scope"（第 18 轮逐条排除过，见生成脚本的说明）。
+// 为什么有这份「Swift 侧的常量表」：第 18 轮实测，Swift 侧**大量**引用 C 宏常量会把绑定目标判进
+// SwiftPM 的显式模块构建档，而那一档下 vendored 的 clang 模块进不了模块表 —— 症状是
+// `import CSQLite3` 不报错、所有声明却「cannot find in scope」。
 // 口径因此是：**Swift 只调用 C 函数、不引用 C 宏**，宏的值从头文件生成。
+// 第 21 轮接线时 `import CSQLite3` 在 `DoyahCore` 目标里可用（Core 已编译通过、单测跑过）；
+// **宏引用的规模阈值本轮未再复测**，所以这条纪律照旧保留。
 //
 // 值来源：`Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h`（版本见 `Vendor/sqlite3/PROVENANCE.md`）。
 

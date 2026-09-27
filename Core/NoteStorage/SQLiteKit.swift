@@ -1,3 +1,7 @@
+// 第 21 轮（L-25 第 2 批）起**已接线**：本文件在 `Core/NoteStorage/` 下，属 `DoyahCore` 目标，
+// `import CSQLite3` 直接对 vendored amalgamation（第 18 轮那份草稿当初就是因为模块看不见而没接上，
+// 见 `Docs/开发记录-20260927-*.md`；本轮实测在 Core 目标里可编译、可跑）。
+import CSQLite3
 import Foundation
 // 这一层是 **C 绑定**，不是笔记逻辑：三端（macOS / Windows / Linux）共用同一份 vendored `sqlite3.c`
 // （见 `Vendor/sqlite3/PROVENANCE.md` 与 `Scripts/check-vendored-sqlite.py`）。
@@ -42,6 +46,8 @@ public enum SQLiteResultCode {
     public static let range: Int32 = 25
     public static let notADatabase: Int32 = 26
     public static let misuse: Int32 = 21
+    /// 数据类型或形状与预期不符（我们用它在"行里没有可用的 uuid"这种**库被外部写坏**的情形上报错）。
+    public static let mismatch: Int32 = 20
     public static let constraint: Int32 = 19
     /// `SQLITE_CONSTRAINT | (6 << 8)`：主键冲突（扩展码）。
     public static let constraintPrimaryKey: Int32 = 1555
@@ -131,40 +137,45 @@ public struct SQLiteFailure: Error, Equatable, CustomStringConvertible {
         self.extendedCode = extendedCode ?? code
     }
 
-    /// 驱动码的常见名字（认不出就只给数字，不猜）。
+    /// 驱动码的常见名字（`sqlite3.h` 里的宏名；认不出就只给数字，不猜）。
+    ///
+    /// 为什么用 C 宏名而不是 Swift 侧那套 `SQLiteMacro.*` 成员名：这句话会出现在日志、错误报告与
+    /// 用户的求助信息里，必须是能在 SQLite 文档与 `sqlite3.h` 里直接搜到的名字
+    /// （第 21 轮接线时发现草稿里返回的是 `SQLiteMacro.busyMacro` 这种**内部实现形状**，
+    /// 而同一份草稿的单测断言的是 `SQLITE_BUSY` —— 两边对不上，按单测（=文档口径）改实现）。
     public var codeName: String {
         switch code {
-        case SQLiteMacro.okMacro: return "SQLiteMacro.okMacro"
-        case SQLiteMacro.errorMacro: return "SQLiteMacro.errorMacro"
-        case SQLiteMacro.internalMacro: return "SQLiteMacro.internalMacro"
-        case SQLiteMacro.permMacro: return "SQLiteMacro.permMacro"
-        case SQLiteMacro.abortMacro: return "SQLiteMacro.abortMacro"
-        case SQLiteMacro.busyMacro: return "SQLiteMacro.busyMacro"
-        case SQLiteMacro.lockedMacro: return "SQLiteMacro.lockedMacro"
-        case SQLiteMacro.nomemMacro: return "SQLiteMacro.nomemMacro"
-        case SQLiteMacro.readonlyMacro: return "SQLiteMacro.readonlyMacro"
-        case SQLiteMacro.interruptMacro: return "SQLiteMacro.interruptMacro"
-        case SQLiteMacro.ioerrMacro: return "SQLiteMacro.ioerrMacro"
-        case SQLiteMacro.corruptMacro: return "SQLiteMacro.corruptMacro"
-        case SQLiteMacro.notfoundMacro: return "SQLiteMacro.notfoundMacro"
-        case SQLiteMacro.fullMacro: return "SQLiteMacro.fullMacro"
-        case SQLiteMacro.cantopenMacro: return "SQLiteMacro.cantopenMacro"
-        case SQLiteMacro.protocolMacro: return "SQLiteMacro.protocolMacro"
-        case SQLiteMacro.emptyMacro: return "SQLiteMacro.emptyMacro"
-        case SQLiteMacro.schemaMacro: return "SQLiteMacro.schemaMacro"
-        case SQLiteMacro.toobigMacro: return "SQLiteMacro.toobigMacro"
-        case SQLiteMacro.constraintMacro: return "SQLiteMacro.constraintMacro"
-        case SQLiteMacro.mismatchMacro: return "SQLiteMacro.mismatchMacro"
-        case SQLiteMacro.misuseMacro: return "SQLiteMacro.misuseMacro"
-        case SQLiteMacro.nolfsMacro: return "SQLiteMacro.nolfsMacro"
-        case SQLiteMacro.authMacro: return "SQLiteMacro.authMacro"
-        case SQLiteMacro.formatMacro: return "SQLiteMacro.formatMacro"
-        case SQLiteMacro.rangeMacro: return "SQLiteMacro.rangeMacro"
-        case SQLiteMacro.notadbMacro: return "SQLiteMacro.notadbMacro"
-        case SQLiteMacro.noticeMacro: return "SQLiteMacro.noticeMacro"
-        case SQLiteMacro.warningMacro: return "SQLiteMacro.warningMacro"
-        case SQLiteMacro.rowMacro: return "SQLiteMacro.rowMacro"
-        case SQLiteMacro.doneMacro: return "SQLiteMacro.doneMacro"
+        case SQLiteMacro.okMacro: return "SQLITE_OK"
+        case SQLiteMacro.errorMacro: return "SQLITE_ERROR"
+        case SQLiteMacro.internalMacro: return "SQLITE_INTERNAL"
+        case SQLiteMacro.permMacro: return "SQLITE_PERM"
+        case SQLiteMacro.abortMacro: return "SQLITE_ABORT"
+        case SQLiteMacro.busyMacro: return "SQLITE_BUSY"
+        case SQLiteMacro.lockedMacro: return "SQLITE_LOCKED"
+        case SQLiteMacro.nomemMacro: return "SQLITE_NOMEM"
+        case SQLiteMacro.readonlyMacro: return "SQLITE_READONLY"
+        case SQLiteMacro.interruptMacro: return "SQLITE_INTERRUPT"
+        case SQLiteMacro.ioerrMacro: return "SQLITE_IOERR"
+        case SQLiteMacro.corruptMacro: return "SQLITE_CORRUPT"
+        case SQLiteMacro.notfoundMacro: return "SQLITE_NOTFOUND"
+        case SQLiteMacro.fullMacro: return "SQLITE_FULL"
+        case SQLiteMacro.cantopenMacro: return "SQLITE_CANTOPEN"
+        case SQLiteMacro.protocolMacro: return "SQLITE_PROTOCOL"
+        case SQLiteMacro.emptyMacro: return "SQLITE_EMPTY"
+        case SQLiteMacro.schemaMacro: return "SQLITE_SCHEMA"
+        case SQLiteMacro.toobigMacro: return "SQLITE_TOOBIG"
+        case SQLiteMacro.constraintMacro: return "SQLITE_CONSTRAINT"
+        case SQLiteMacro.mismatchMacro: return "SQLITE_MISMATCH"
+        case SQLiteMacro.misuseMacro: return "SQLITE_MISUSE"
+        case SQLiteMacro.nolfsMacro: return "SQLITE_NOLFS"
+        case SQLiteMacro.authMacro: return "SQLITE_AUTH"
+        case SQLiteMacro.formatMacro: return "SQLITE_FORMAT"
+        case SQLiteMacro.rangeMacro: return "SQLITE_RANGE"
+        case SQLiteMacro.notadbMacro: return "SQLITE_NOTADB"
+        case SQLiteMacro.noticeMacro: return "SQLITE_NOTICE"
+        case SQLiteMacro.warningMacro: return "SQLITE_WARNING"
+        case SQLiteMacro.rowMacro: return "SQLITE_ROW"
+        case SQLiteMacro.doneMacro: return "SQLITE_DONE"
         default: return "code \(code)"
         }
     }
@@ -225,6 +236,15 @@ public final class SQLiteConnection {
         self.handle = handle
         self.path = path
         sqlite3_busy_timeout(handle, milliseconds)
+
+        // 读写连接默认开 **WAL**：本产品的存储口径就是「并发写 + 多进程读」（`FR-PLUG-08` 的判据之一），
+        // 而 `journal_mode` 是**库头里的一个开关**（设一次跟着库走），不是每连接的参数。
+        // 只读连接不开 —— 切换日志模式本身是一次写操作。
+        // 为什么放在绑定层的默认里而不是让每个调用方自己设：忘了设不会报错、只会在并发时
+        // 变成「database is locked」，是那类「不查到最后看不出哪里错」的缺陷。
+        if !readOnly {
+            try execute("PRAGMA journal_mode = WAL")
+        }
     }
 
     deinit { try? close() }
