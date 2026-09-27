@@ -32,7 +32,8 @@
     python3 Scripts/check-vendored-sqlite.py --self-test # 负例自检
 
 （历史：第 18 轮 L-25 第 1 批。Swift 侧的绑定层因工具链的显式模块构建缺陷暂时未接线，
- 证据与排除过程见 `Docs/开发记录-20260927-DoyahStudio.md` 第 18 轮。）
+ 证据与排除过程见 `Docs/开发记录-20260926-任务批.md` **§28**（该文件是开发循环的连续记录，
+ 文件名里的日期是它的起点日期）与 `Docs/design/待接线-SQLiteKit/读我.md`。）
 """
 
 from __future__ import annotations
