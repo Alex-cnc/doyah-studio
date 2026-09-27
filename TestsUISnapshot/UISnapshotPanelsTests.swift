@@ -411,6 +411,99 @@ final class UISnapshotPanelsTests: XCTestCase {
         XCTAssertTrue(host.state.connections.isEmpty, "渲染期间连接被填上了 —— 统计面板的取数依赖选中连接")
     }
 
+    // MARK: - 第 5 批（队列 L-16，2026-09-27）
+
+    /// **第 5 批**（队列 L-16「其余面板空态」）：**笔记（列表 + 正文）/ 统一外发日志**。
+    ///
+    /// 条目原文给的第 5 批候选有五个，本轮只做**能拍到真空态的两个**，另三个的前置如实登记在方法末 ——
+    /// 这一批的「每张图都是空态」是个判据，不能拿错误态来凑数：
+    ///   · **权限**（`FR-SESS-04`）/ **服务器对象**（`FR-SESS-03`）：`@State` 私有 + `.task` 打开即查库，
+    ///     没连接时离屏只能拿到错误分支 ⇒ 要 **L-18** 的面板级参数注入才能拍「连上了但 0 条」；
+    ///   · **合成数据**（`FR-AI-07`）：列规格来自真库结构 ⇒ 只能停在「取不到结构」那一支，
+    ///     那是**错误态不是空态**（混进来会让本批的空态判据失效）。
+    ///
+    /// 两处数据源都走**产品自带的正式覆盖口子**（不是测试后门），由 `Scripts/make-ui-snapshots.sh`
+    /// 指到一个**每轮清空**的临时目录：
+    ///   · 笔记 —— `DOYAH_NOTES_DIR`（`NoteLibrary.defaultDirectory` → `NoteStore.defaultDirectory`）；
+    ///   · 统一外发日志 —— `DOYAH_EGRESS_LOG_DIR`（`EgressLog.init`）。
+    /// 于是「一条都没有」是**每次都能复现的态**：本机真实数据里笔记有 1 条、外发日志 60 KB，
+    /// 不隔离就永远拍不到这两张空态（第 16 轮登记这条时就是这么判的）。
+    /// 两个一次性迁移在覆盖生效时都**主动让路**，所以这轮渲染不写用户的真实数据。
+    ///
+    /// 纪律同前几批：**渲染前显式置空 + 渲染后再断言一遍**（离屏宿主里 `.task` 会跑完）。
+    @MainActor
+    func testPanelEmptyStatesBatchFive() throws {
+        let host = makeEmptyHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+
+        // 笔记在 **Standard 档**下就是整个应用（`LicenseEdition.standard` → `.notesOnly`），
+        // 所以这两张图要在 Standard 下拍；档位没落到就说明拍的是别的档，图不作数。
+        let load = try UISnapshot.applyLicense(.standard, to: host.state)
+        XCTAssertEqual(load.entitlements.edition, .standard, "笔记区在 Standard 档下才是「整个应用」")
+        XCTAssertEqual(load.entitlements.basis, .licensed, "签名校验没通过（临时许可证链路断了）")
+        XCTAssertTrue(host.state.notesEnabled, "Standard 档必须带笔记能力（capabilities.notes）")
+
+        // 前置：这一批拍的都是「一条都没有」；两句空态文案必须在语言表里。
+        XCTAssertTrue(host.state.connections.isEmpty, "本批要拍空态：不该有任何连接")
+        XCTAssertTrue(
+            host.state.notes.isEmpty,
+            "本批要拍空态：笔记必须一条都没有（`DOYAH_NOTES_DIR` 指向每轮清空的临时目录）"
+        )
+        XCTAssertTrue(
+            host.state.egressEntries.isEmpty,
+            "本批要拍空态：外发日志必须为空（`DOYAH_EGRESS_LOG_DIR` 指向每轮清空的临时目录）"
+        )
+        XCTAssertFalse(L(.notesEmpty).isEmpty, "空态文案缺失（语言表里没有 notesEmpty）")
+        XCTAssertFalse(L(.egressEmpty).isEmpty, "空态文案缺失（语言表里没有 egressEmpty）")
+
+        // ① 笔记 · 列表空态（侧栏那一栏）：`notesEmpty` 那一支
+        try snapshotLightAndDark("notes-list-empty", size: sidebarSize, host: host) {
+            NotesListView()
+        }
+        XCTAssertTrue(host.state.visibleNotes.isEmpty, "渲染期间笔记被填上了 —— 空态没站稳")
+        XCTAssertTrue(host.state.notes.isEmpty, "渲染期间笔记被填上了 —— 空态没站稳")
+
+        // ② 笔记 · 正文空态（`.notes` 活动项下的右半边）：还没选中、也还没开始写。
+        //    面板的「选中了哪条」`noteBeingEdited` 是 `private`（`@testable` 也拿不到）——
+        //    所以这里断言的是**它对外露出的那三个初值**：标题 / 标签 / 正文都还空着。
+        XCTAssertTrue(host.state.noteEditorTitle.isEmpty, "没有选中的笔记 ⇒ 标题该是空的")
+        XCTAssertTrue(host.state.noteEditorTags.isEmpty, "没有选中的笔记 ⇒ 标签该是空的")
+        XCTAssertTrue(host.state.noteEditorBody.isEmpty, "没有选中的笔记 ⇒ 正文该是空的")
+        try snapshotLightAndDark(
+            "notes-editor-empty",
+            size: CGSize(width: 900, height: 560),
+            host: host
+        ) {
+            NotesEditorView()
+        }
+        XCTAssertTrue(host.state.noteEditorBody.isEmpty, "渲染期间正文被填上了 —— 空态没站稳")
+        XCTAssertTrue(host.state.noteEditorTitle.isEmpty, "渲染期间标题被填上了 —— 空态没站稳")
+
+        // ③ 统一外发日志空态（NFR-SEC-08）：**空态本身就是结论** ——「默认零外发」最直接的证据。
+        // 三个筛选选择器此时都没有可选项（`tabOptions` 由日志派生 ⇒ 空日志时禁用），
+        // 「清空」按钮也灰着（`disabled(appState.egressEntries.isEmpty)`）—— 这两点正是读图要看的东西。
+        host.state.egressEntries = []
+        host.state.egressError = nil
+        host.state.egressMessage = nil
+        try snapshotLightAndDark(
+            "egress-log-empty",
+            // sheet 自己钉的是 `minWidth: 760, minHeight: 480`；表头一行要放三个选择器 + 三个按钮，
+            // 760 会挤，所以宿主给 860×520（宽一点才是真机上的样子，高度按最小值再给余量）。
+            size: CGSize(width: 860, height: 520),
+            host: host
+        ) {
+            EgressLogSheet()
+        }
+        XCTAssertTrue(
+            host.state.egressEntries.isEmpty,
+            "渲染期间外发日志被读回来了 —— 空态没站稳（面板的 `.task` 会 `refreshEgressLog()`）"
+        )
+        XCTAssertNil(host.state.egressError, "渲染期间外发日志读出错 —— 空态没站稳")
+
+        // **本批未做（前置见方法开头）**：权限 / 服务器对象（等 L-18 的口子）、
+        // 合成数据（列规格来自真库 ⇒ 只能拍错误支，不进「空态」这一批）。
+    }
+
     // MARK: - 清单
 
     override class func tearDown() {

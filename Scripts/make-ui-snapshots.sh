@@ -31,6 +31,18 @@ export SWIFT_MODULE_CACHE_PATH="${SCRATCH}/swift-module-cache"
 export DOYAH_UI_SNAPSHOT=1
 mkdir -p "${SCRATCH}" "${CACHE}" "${CLANG_MODULE_CACHE_PATH}" "${SWIFT_MODULE_CACHE_PATH}" "${OUT}"
 
+# **快照与用户真实数据解耦**（队列 L-16 第 5 批）：笔记与统一外发日志各有一条
+# **产品自带的**数据家覆盖口子（不是测试后门），这里把两者指到一个**每轮清空**的临时目录 ——
+# 于是「一条都没有」是**每次都能复现的态**，而不是「本机这次凑巧没有」。
+# 实测动机：本机真实数据里笔记有 1 条、外发日志 60 KB，不隔离就**永远**拍不到这两张空态。
+# 两个一次性迁移在覆盖生效时都**主动让路**（`NoteStoreMigration` / `NoteLibraryMigration`），
+# 所以整轮渲染不写、也不读用户的真实笔记与本机外发日志。
+SNAPSHOT_DATA="${SCRATCH}/ui-snapshot-data"
+rm -rf "${SNAPSHOT_DATA}"
+mkdir -p "${SNAPSHOT_DATA}/notes" "${SNAPSHOT_DATA}/egress"
+export DOYAH_NOTES_DIR="${SNAPSHOT_DATA}/notes"
+export DOYAH_EGRESS_LOG_DIR="${SNAPSHOT_DATA}/egress"
+
 cd "${ROOT}"
 
 # 渲染前清一遍旧图：留着上一轮的文件，`ls` 会把"这次没渲染出来的"也列成绿。
