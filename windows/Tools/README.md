@@ -43,6 +43,7 @@ pwsh -File windows\Tools\verify-all.ps1 -Base HEAD~1                            
 | ④ 独占节越界 | `check-exclusive-sections.ps1` | ✅ 跑（显式 `--mine windows`，默认基线 `origin/master`） |
 | ⑤ 平台矩阵 | `check-platform-parity.ps1` | ✅ 跑（共享判据 + **本侧如实性判据**：未开工时台账不许有 overrides） |
 | （契约侧 L-45，第 22 轮新增）| `check-p-parity.ps1` | ✅ 跑（共享判据 `Scripts/check-p-parity.py`：`P-*` 双向覆盖 / 同号同物 / **§8.5.5 已落条未并入即判红**；`-SelfTest` = 8/8） |
+| （契约侧 L-46，第 23 轮判定 **本侧不编排**）| —— | ⏭ **平台不适用**：`Scripts/check-format-arguments.py` 判的是 `Core/Localization.swift` 语言表模板 ↔ `App/` `CLI/` 调用点实参（**Swift 源码**）；本端没有对应表层（`windows\Core` / `windows\App` 未建，且本端将来是 C# 本地化层）⇒ 硬套会因「零输入」而假红（该判据自己就带「空跑不许通过」）。**本侧义务**：本端本地化表层落地时按同规则名重建等价判据 —— **这条记在这里，别当成已跳过**。 |
 | ⑥ 一条命令跑全 | `verify-all.ps1` | ✅ 跑（12 项，第 22 轮由 11 项扩） |
 | （§8.3 平台中立性）| `check-platform-neutrality.ps1` | ✅ 跑 |
 | （§8.3 设计令牌棘轮）| `check-design-tokens.ps1` | ⚠ 判据①规则名对齐 + ②令牌源在盘 = ✅；③Windows 侧棘轮 ⏭ 跳过（`windows\App` 未建） |
@@ -71,11 +72,11 @@ pwsh -File windows\Tools\verify-all.ps1 -Base HEAD~1                            
 4. **从 MSYS bash 以路径直接调用 PowerShell 时，任意非零退出码会被压成 1**（实测 `exit 7` → `$?` = 1）⇒ 在那种调用方式下**别据退出码判强度**，看脚本的 `RESULT:` 行；PowerShell 会话内 / `-File` 形式下退出码正常，脚本内的父子汇总（`$LASTEXITCODE`）实测正常。
    **同族陷阱（第 22 轮实测）**：经 `.cmd` 包装调用时退出码也会丢 —— 包装脚本最后一条 `echo GATE_EXIT=%ERRORLEVEL%` 自己成功返回 ⇒ **cmd 的退出码恒为 0**。**判强度一律看脚本的 `RESULT:` 行**，不要看外层 shell 的 `$?`。
 5. **`-Base HEAD` 只在「没有待提交的 merge」时可信**：刚 merge 完对侧提交、merge 还没提交时，对侧刚合进来的契约层改动会被整批算成「本侧越界」（mac 侧实测 76 处假红）⇒ 推前姿势一律 `-Base origin/master`（本目录默认值）。
+6. **原生命令的 stderr 会把「退出码 0」的判据变成假红**（第 22 轮实测）：PowerShell 5.1 在 `$ErrorActionPreference = 'Stop'` 下，把**原生命令写到 stderr 的任意一行**当**终止错误**（`NativeCommandError`）⇒ 子闸门整项判红，而判据其实 `rc 0`。现场 = 对侧 `Scripts/check-doc-tables.py` 的 docstring 里一处无效转义（`\|`）每次运行都往 stderr 打 `SyntaxWarning`，本侧第 ③ 项于是报 `抛异常：…SyntaxWarning…`（判据真判是 `✅ 表格校验通过`）。
+   **口径**：**判红与否只由退出码决定**，stderr 照原样打印（不吞、不静默）—— `_common.ps1` 的 `Invoke-DoyahSharedGate` 已在调用原生命令时临时把 `$ErrorActionPreference` 降为 `Continue`。
 
 ## 维护
 
 - 新增 `.ps1` 后**必须**带 UTF-8 BOM，并把它挂进 `verify-all.ps1` 的项列表（否则它等于不在闭环里）；挂进去时**同步 `$total` 与每条 `Write-DoyahStep "N/$total"` 的步号**（第 22 轮实测：只改注释不改步号 ⇒ 打印出 `11/12`）。
 - 表示层（`windows\App`）落地时同时落 `windows\Tools\design-token-baseline.json`（棘轮基线，形态同 mac 侧 `Scripts/design-token-baseline.json`：`files → 文件 → 规则 → 上限`）。
-6. **原生命令的 stderr 会把「退出码 0」的判据变成假红**（第 22 轮实测）：PowerShell 5.1 在 `$ErrorActionPreference = 'Stop'` 下，把**原生命令写到 stderr 的任意一行**当**终止错误**（`NativeCommandError`）⇒ 子闸门整项判红，而判据其实 `rc 0`。现场 = 对侧 `Scripts/check-doc-tables.py` 的 docstring 里一处无效转义（`\|`）每次运行都往 stderr 打 `SyntaxWarning`，本侧第 ③ 项于是报 `抛异常：…SyntaxWarning…`（判据真判是 `✅ 表格校验通过`）。
-   **口径**：**判红与否只由退出码决定**，stderr 照原样打印（不吞、不静默）—— `_common.ps1` 的 `Invoke-DoyahSharedGate` 已在调用原生命令时临时把 `$ErrorActionPreference` 降为 `Continue`。
 - 判据侧（`Scripts/`）属对侧共享设施：本侧只调用、只提建议，不自己改。
