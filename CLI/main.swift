@@ -1497,9 +1497,11 @@ struct DoyahCLI {
     /// 所以要有一条能对着临时目录反复跑、能把结果打成 JSON 去断言的路。
     ///
     /// 用法：
-    ///   DoyahCLI notes path                                        # 笔记库位置（笔记自己的数据家）
+    ///   DoyahCLI notes path                                        # **笔记库**位置（换引擎之后 = 本地 SQLite 库文件）
+    ///   DoyahCLI notes json-path                                   # 旧格式 `notes.json` 的位置 —— 引擎迁移的输入
     ///   DoyahCLI notes legacy-path                                 # 整改前的位置（工程数据家里那个）
-    ///   DoyahCLI notes migrate [--legacy <文件>] [--target <目录>] [--json]
+    ///   DoyahCLI notes migrate [--legacy <文件>] [--target <目录>] [--json]   # FR-PLUG-04：搬数据家
+    ///   DoyahCLI notes engine-migrate [--source <文件>] [--target-file <库文件>] [--json]   # FR-PLUG-08：换引擎（`notes.json` → SQLite，幂等）
     ///
     /// 退出码：`0` = 没出岔子（含"不用搬""已有目标"），`1` = 需要人看一眼（旧文件读不出来 / 写不进去）。
     static func runNotesCommand(arguments: [String]) -> Int32 {
@@ -1511,6 +1513,9 @@ struct DoyahCLI {
 
         switch arguments.first {
         case "path":
+            print(NoteLibrary.defaultDatabaseURL(environment: environment).path)
+            return 0
+        case "json-path":
             print(NoteStore.defaultFileURL(environment: environment).path)
             return 0
         case "legacy-path":
@@ -1543,20 +1548,47 @@ struct DoyahCLI {
                 if let failure = report.failure { print("  原因：\(failure)") }
             }
             return report.needsAttention ? 1 : 0
+        case "engine-migrate":
+            // 与 `migrate` 同一条纪律：默认位置 = 产品真正会用的那两个；`--source` / `--target-file`
+            // 是给脚本用的（把两边指到临时目录，于是换引擎这件事能在沙盒里反复验，不碰真实数据目录）。
+            let jsonURL = value(of: "--source").map { URL(fileURLWithPath: $0) }
+                ?? NoteStore.defaultFileURL(environment: environment)
+            let databaseURL = value(of: "--target-file").map { URL(fileURLWithPath: $0) }
+                ?? NoteDatabase.defaultFileURL(environment: environment)
+            let report = NoteLibraryMigration.migrateIfNeeded(jsonURL: jsonURL, databaseURL: databaseURL)
+            if arguments.contains("--json") {
+                var fields = [
+                    "\"outcome\":\(jsonQuoted(report.outcome.rawValue))",
+                    "\"noteCount\":\(report.noteCount)",
+                    "\"json\":\(jsonQuoted(report.jsonURL.path))",
+                    "\"database\":\(jsonQuoted(report.databaseURL.path))",
+                    "\"backup\":\(report.backupURL.map { jsonQuoted($0.path) } ?? "null")"
+                ]
+                fields.append("\"failure\":\(report.failure.map(jsonQuoted) ?? "null")")
+                print("{" + fields.joined(separator: ",") + "}")
+            } else {
+                print("换引擎结果：\(report.outcome.rawValue)，条数：\(report.noteCount)")
+                print("  旧格式：\(report.jsonURL.path)")
+                print("  数据库：\(report.databaseURL.path)")
+                if let backup = report.backupURL { print("  旧文件备份：\(backup.path)") }
+                if let failure = report.failure { print("  原因：\(failure)") }
+            }
+            return report.needsAttention ? 1 : 0
         default:
             FileHandle.standardError.write(Data(
-                "用法：notes <path|legacy-path|migrate> [--legacy <文件>] [--target <目录>] [--json]\n".utf8
+                "用法：notes <path|json-path|legacy-path|migrate|engine-migrate> [--legacy <文件>] [--target <目录>] [--source <文件>] [--target-file <库文件>] [--json]\n".utf8
             ))
             return 2
         }
     }
 
     /// 笔记库位置：`DOYAH_NOTE_STORE` 可整体指到别处（脚本用临时文件，不碰真实数据目录）。
-    private static func noteStore() -> NoteStore {
+    /// `FR-PLUG-08` 第 3 批之后它指的是 **SQLite 库文件**（不再是 `notes.json`）—— 命令行与界面走同一个入口。
+    private static func noteLibrary() -> NoteLibrary {
         if let path = ProcessInfo.processInfo.environment["DOYAH_NOTE_STORE"], !path.isEmpty {
-            return NoteStore(fileURL: URL(fileURLWithPath: path))
+            return NoteLibrary(databaseURL: URL(fileURLWithPath: path))
         }
-        return NoteStore.defaultStore()
+        return NoteLibrary.defaultLibrary()
     }
 
     private static func splitIDs(_ text: String) -> [String] {
@@ -1701,7 +1733,7 @@ struct DoyahCLI {
             // 会退化成"开关存在但不生效"（上一版就是这么错的，已回退重做）。
             if arguments.contains("--save-note"), let report = adviceReport {
                 do {
-                    let store = noteStore()
+                    let store = noteLibrary()
                     let existing = try await store.load()
                     let draft = AICapture.diagnosisNote(
                         question: question,

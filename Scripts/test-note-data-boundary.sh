@@ -31,16 +31,25 @@ fi
 
 echo ""
 echo "== 1) 默认位置：在工程数据家之外 =="
-"$CLI" notes path > "$WORK/path.txt" 2>&1
-NOTES_PATH="$(cat "$WORK/path.txt")"
-echo "     笔记库：$NOTES_PATH"
-case "$NOTES_PATH" in
-    */DoyahNotes/notes.json) check "落在 DoyahNotes 目录下的 notes.json" 0 ;;
-    *) check "落在 DoyahNotes 目录下的 notes.json（实际 ${NOTES_PATH}）" 1 ;;
+# `FR-PLUG-08` 第 3 批之后：`notes path` 指的是**库**（本地 SQLite），
+# 旧格式的位置另开一条出口 `notes json-path`（它是引擎迁移的输入，FR-PLUG-04 搬的就是它）。
+"$CLI" notes path > "$WORK/library.txt" 2>&1
+LIBRARY_PATH="$(cat "$WORK/library.txt")"
+echo "     笔记库：$LIBRARY_PATH"
+case "$LIBRARY_PATH" in
+    */DoyahNotes/notes.sqlite3) check "笔记库落在 DoyahNotes 目录下的 notes.sqlite3" 0 ;;
+    *) check "笔记库落在 DoyahNotes 目录下的 notes.sqlite3（实际 ${LIBRARY_PATH}）" 1 ;;
 esac
+case "$LIBRARY_PATH" in
+    */DoyahStudio/*) check "笔记库不在工程数据家（DoyahStudio）里" 1 ;;
+    *) check "笔记库不在工程数据家（DoyahStudio）里" 0 ;;
+esac
+"$CLI" notes json-path > "$WORK/path.txt" 2>&1
+NOTES_PATH="$(cat "$WORK/path.txt")"
+echo "     旧格式：$NOTES_PATH"
 case "$NOTES_PATH" in
-    */DoyahStudio/*) check "不在工程数据家（DoyahStudio）里" 1 ;;
-    *) check "不在工程数据家（DoyahStudio）里" 0 ;;
+    */DoyahNotes/notes.json) check "旧格式落在 DoyahNotes 目录下的 notes.json" 0 ;;
+    *) check "旧格式落在 DoyahNotes 目录下的 notes.json（实际 ${NOTES_PATH}）" 1 ;;
 esac
 "$CLI" notes legacy-path > "$WORK/legacy-path.txt" 2>&1
 LEGACY_PATH="$(cat "$WORK/legacy-path.txt")"
@@ -122,9 +131,16 @@ grep -q '"outcome":"nothingToMigrate"' "$WORK/migrate5.json" && check "outcome=n
 
 echo ""
 echo "== 6) 生效的 DOYAH_NOTES_DIR 覆盖：迁移主动让路 =="
-DOYAH_NOTES_DIR="$WORK/override-home" "$CLI" notes path > "$WORK/path2.txt" 2>&1
-[ "$(cat "$WORK/path2.txt")" = "$WORK/override-home/notes.json" ] && check "覆盖生效：路径跟着环境变量走" 0 \
-    || check "覆盖生效：路径跟着环境变量走（实际 $(cat "${WORK}/path2.txt")）" 1
+# `FR-PLUG-08` 第 3 批之后：`notes path` = **库**（SQLite），`notes json-path` = 旧格式；
+# 两个出口都跟着覆盖变量走（否则脚本里的临时目录与真实数据目录会串）。
+DOYAH_NOTES_DIR="$WORK/override-home" "$CLI" notes json-path > "$WORK/path2.txt" 2>&1
+DOYAH_NOTES_DIR="$WORK/override-home" "$CLI" notes path > "$WORK/path3.txt" 2>&1
+if [ "$(cat "$WORK/path2.txt")" = "$WORK/override-home/notes.json" ] \
+    && [ "$(cat "$WORK/path3.txt")" = "$WORK/override-home/notes.sqlite3" ]; then
+    check "覆盖生效：旧格式与库两条路径都跟着环境变量走" 0
+else
+    check "覆盖生效：旧格式与库两条路径都跟着环境变量走（实际 $(cat "${WORK}/path2.txt") / $(cat "${WORK}/path3.txt")）" 1
+fi
 
 echo ""
 if [ "$fail" -eq 0 ]; then

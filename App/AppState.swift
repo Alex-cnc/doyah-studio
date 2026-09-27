@@ -5929,7 +5929,16 @@ final class AppState: ObservableObject {
         } else if migration.didMigrate {
             statusMessage = L(.notesDataMigrated, migration.noteCount)
         }
-        let outcome = await NoteStore.defaultStore().loadOutcome()
+        // 引擎迁移（FR-PLUG-08 第 3 批）：`notes.json` → `notes.sqlite3`。同样**幂等** ——
+        // 库已在就一个字节都不动，所以常态下这一步只是两次 fileExists 的开销。
+        // 顺序不能反：先把旧文件归位（上面那条），再把它搬进库。
+        let engine = NoteLibraryMigration.migrateIfNeeded()
+        if engine.needsAttention {
+            errorMessage = L(.notesMigrationNeedsAttention, engine.failure ?? "")
+        } else if engine.didMigrate {
+            statusMessage = L(.notesEngineMigrated, engine.noteCount)
+        }
+        let outcome = await NoteLibrary.defaultLibrary().loadOutcome()
         switch outcome {
         case .loaded(let loaded):
             notes = loaded
@@ -5970,7 +5979,7 @@ final class AppState: ObservableObject {
             source: NoteSource(kind: .manual)
         )
         do {
-            let store = NoteStore.defaultStore()
+            let store = NoteLibrary.defaultLibrary()
             if let id = noteBeingEdited {
                 // 编辑已有笔记：**保留原来源与创建时间**（来源是事实，不该因为改了几个字就丢掉）。
                 let existing = notes.first { $0.id == id }
@@ -5989,7 +5998,7 @@ final class AppState: ObservableObject {
 
     func deleteNote(id: UUID) async {
         do {
-            try await NoteStore.defaultStore().delete(id: id)
+            try await NoteLibrary.defaultLibrary().delete(id: id)
             if noteBeingEdited == id { beginNewNote() }
             await reloadNotes()
         } catch {
@@ -6124,7 +6133,7 @@ final class AppState: ObservableObject {
             return
         }
         do {
-            let store = NoteStore.defaultStore()
+            let store = NoteLibrary.defaultLibrary()
             let draft = AICapture.maintenanceNote(
                 planText: maintenancePlanText,
                 review: review,
@@ -6290,7 +6299,7 @@ final class AppState: ObservableObject {
             return
         }
         do {
-            let store = NoteStore.defaultStore()
+            let store = NoteLibrary.defaultLibrary()
             let existing = try await store.load()
             let draft = AICapture.diagnosisNote(
                 question: diagnosisQuestion,

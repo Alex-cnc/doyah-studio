@@ -156,6 +156,10 @@ public actor NoteStore {
             .appendingPathComponent(fileName, isDirectory: false)
     }
 
+    /// 旧引擎（JSON 文件）的默认入口。`FR-PLUG-08` 第 3 批之后**界面与 CLI 不再用它** ——
+    /// 它们走 `NoteLibrary`（本机 SQLite 库）；这里留着是给单测与脚本按老口径造一个 JSON 库出来
+    /// （引擎迁移 `NoteLibraryMigration` 的输入正是它）。这一条由 `Tests/NoteLibraryTests.swift`
+    /// 的源树判据机械守着。
     public static func defaultStore(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> NoteStore {
