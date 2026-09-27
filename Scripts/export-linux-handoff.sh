@@ -47,7 +47,7 @@ fi
   echo
   echo "三书最新版本（取变更记录最大值，用于确认拿到的是哪一版）："
   # 版本号取「文档内所有 **vX.Y** 的最大值」（变更记录行顺序不一定严格倒序，取最大值最稳）
-  newest() { grep -oE '\*\*v[0-9]+\.[0-9]+\*\*' "$1" 2>/dev/null | tr -d '*' | sort -t. -k1,1n -k2,2n | tail -1; }
+  newest() { grep -oE '\*\*v[0-9]+\.[0-9]+\*\*' "$1" 2>/dev/null | tr -d '*' | sed 's/^v//' | sort -t. -k1,1n -k2,2n | tail -1 | sed 's/^/v/'; }
   for f in "$ROOT/Docs/产品能力规划说明书.md" "$ROOT/Docs/需求规范书.md" "$ROOT/Docs/概要设计.md"; do
     [ -f "$f" ] && printf '  %s → %s\n' "$(basename "$f")" "$(newest "$f")"
   done
