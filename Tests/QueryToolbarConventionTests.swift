@@ -143,6 +143,45 @@ final class QueryToolbarConventionTests: XCTestCase {
         }
     }
 
+    // MARK: ⑥ 图标按钮的"名字"必须即时出现
+
+    /// 工具条按口径只放图标、不写字，按钮叫什么就**全靠提示**（2026-09-27 人工点验反馈原话：
+    /// 「工具栏上的按钮没有名称，鼠标放上去又没有tips，这太难用了」）。而 AppKit 的 tooltip 出厂要等 **2 秒**
+    /// —— 等不到就等于没有。所以：① 应用入口必须把 `NSInitialToolTipDelay` 压到 200ms 以内；
+    /// ② 图标条上的 `.help(` **不许被删**（棘轮：新增控件时把下限加上去）。
+    func testIconButtonNamesAppearInstantly() throws {
+        let app = try source("App/DoyahStudioApp.swift")
+        // 锚点认**注册处的写法**（["NSInitialToolTipDelay": 150]），别认注释里提到的那个键 ——
+        // 第一版判据就是栽在这里：匹配到注释里的「出厂值 2000」，把正确的代码判成红。
+        let pattern = "\"NSInitialToolTipDelay\":"
+        guard let found = app.range(of: pattern) else {
+            return XCTFail("应用入口必须注册 \(pattern)：否则全 app 的 .help 都要等 2 秒才出现，实测等于没有提示")
+        }
+        let tail = app[found.upperBound...].prefix(40)
+        let value = tail.components(separatedBy: CharacterSet.decimalDigits.inverted).compactMap(Int.init).first
+        guard let value else {
+            return XCTFail("\(pattern) 的值没读出来（应当写成明文毫秒数，便于这条判据核对）：\(tail)")
+        }
+        XCTAssertLessThanOrEqual(value, 200, "\(pattern) \(value)ms 太慢：图标不认识时用户只能干等")
+
+        // 棘轮：图标条上的名称提示不许被删（数字是 2026-09-27 的实测值）。
+        let ratchet: [String: Int] = [
+            "App/Views/QueryToolbar.swift": 14,
+            "App/Views/TransactionControl.swift": 3,
+            "App/Views/ActivityBarView.swift": 2,
+            "App/Views/ResultClientViewBar.swift": 6,
+            "App/Views/ResultPagerBar.swift": 4
+        ]
+        for (relative, minimum) in ratchet.sorted(by: { $0.key < $1.key }) {
+            let text = try source(relative)
+            let count = text.components(separatedBy: ".help(").count - 1
+            XCTAssertGreaterThanOrEqual(
+                count, minimum,
+                "\(relative) 的 .help( 只剩 \(count) 处（下限 \(minimum)）—— 图标按钮的名称提示被删了？"
+            )
+        }
+    }
+
     // MARK: ④ 末例：扫的真文件不是空的（路径写错时不许一路绿）
 
     func testTargetsExist() throws {

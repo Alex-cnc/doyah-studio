@@ -37,6 +37,20 @@ struct DoyahStudioApp: App {
             )
         }
         StartupLog.write("正常启动 pid=\(ProcessInfo.processInfo.processIdentifier)")
+        // **图标按钮的"名字"必须即时出现**（2026-09-27 人工点验发现）。
+        //
+        // 工具条按口径只放图标、不写字（`FR-EXEC-13` / `FR-EDIT-08`），于是按钮叫什么**全靠 tooltip**。
+        // 但 AppKit 的 tooltip 默认要等 **2 秒**（`NSInitialToolTipDelay` 的出厂值 2000，单位毫秒）——
+        // 实测反馈原话：「工具栏上的按钮没有名称，鼠标放上去又没有tips，这太难用了」：
+        // 等不到就等于没有，而图标不认识时用户只能猜。
+        //
+        // 所以在这里把它压到 150ms：**全 app 所有 `.help(...)` 一起变即时**，不必给每个按钮自绘提示。
+        // 为什么用系统 tooltip 而不是自己画：它渲染在**独立窗口**里，不会像视图树内的 overlay 那样
+        // 被后画的兄弟视图盖住（那正是 R-62）；自绘那条路只留给 tooltip 表达不了的东西（例如带条数的状态徽标）。
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 150])
+        StartupLog.write(
+            "tooltip 延迟 \(Int(UserDefaults.standard.double(forKey: "NSInitialToolTipDelay")))ms（出厂 2000ms）"
+        )
         MainMenuLocalizer.start()
     }
 
