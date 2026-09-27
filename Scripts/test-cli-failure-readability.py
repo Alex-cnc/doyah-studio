@@ -27,6 +27,8 @@ LEDGER_REL = "Scripts/cli-failure-readability.json"
 FILES = [
     "CLI/main.swift",
     "CLI/CLIFailureText.swift",
+    "App/Utilities/ErrorPresenter.swift",
+    "Core/ConnectionFailure.swift",
     "Scripts/test-cli-failure-readability.sh",
 ]
 
@@ -142,10 +144,10 @@ def main() -> int:
 
     def claim_connection(tree: Path) -> None:
         edit(tree, "CLI/CLIFailureText.swift", lambda text: text.replace(
-            "        // 认不出：**原样**返回，不猜测、不套方向结论（口径第 2 条）。\n        return raw",
+            "        // 认不出：**原样**返回，不猜测、不套方向结论（口径第 3 条）。\n        return raw",
             "        return \"连接数据库失败：\" + raw", 1))
 
-    expect("认不出却给方向结论 → 报红", claim_connection, "在")
+    expect("认不出却给方向结论 → 报红", claim_connection, "return raw")
 
     print("\n== F) 原始串的另一半被删：调试转储没了")
 
@@ -191,6 +193,56 @@ def main() -> int:
             "服务端把这次查询取消了", "（断言被删）"))
 
     expect("证据脚本缺关键断言 → 报红", drop_assertion, "断言不在位")
+
+    print("\n== L) 服务端原话那一档被摘（链里少了 describeServerSide —— 查询类错误又只剩英文串）")
+
+    def drop_server_side(tree: Path) -> None:
+        edit(tree, "CLI/CLIFailureText.swift", lambda text: text.replace(
+            "\n            ?? ConnectionFailure.describeServerSide(error)", "", 1))
+
+    expect("链里少了服务端原话那一档 → 报红", drop_server_side, "describeServerSide")
+
+    print("\n== M) 顺序写反：服务端原话排到「认不出就原样」之后（这一档永远走不到）")
+
+    def server_side_after_fallback(tree: Path) -> None:
+        def move(text: str) -> str:
+            call = "            ?? ConnectionFailure.describeServerSide(error)\n"
+            assert call in text, "夹具锚点没找到 —— 链的写法变了，先更新这条负例"
+            # 摘出来、挪到「认不出就原样」**之后**（顺序反了这一档永远走不到）
+            return text.replace(call, "", 1).replace(
+                "        return raw",
+                "        return raw\n" + call.rstrip("\n"), 1)
+
+        edit(tree, "CLI/CLIFailureText.swift", move)
+
+    expect("服务端原话排在兜底之后 → 报红", server_side_after_fallback, "顺序反了")
+
+    print("\n== N) 能力被削：那一档不再读服务端消息（serverInfo）")
+
+    def drop_server_info(tree: Path) -> None:
+        edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace(
+            "message: psql.serverInfo?[.message],", "message: nil,", 1))
+
+    expect("不读 serverInfo 的 message → 报红", drop_server_info, "serverInfo?[.message]")
+
+    print("\n== O) 界面侧没接：ErrorPresenter 少了这一档（英文译文只被中文语境引用）")
+
+    def drop_presenter(tree: Path) -> None:
+        edit(tree, "App/Utilities/ErrorPresenter.swift", lambda text: text.replace(
+            "ConnectionFailure.describeServerSide(error, language: LocalizationManager.shared.effectiveLanguage)",
+            "nil", 1))
+
+    expect("界面侧没接这一档 → 报红", drop_presenter, "ErrorPresenter")
+
+    print("\n== P) 主路里又抄一份可读化链（加一档要回来改多处）")
+
+    def copy_chain_back(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            "            print(CLIFailureText.block(error))",
+            "            if let neutral = ConnectionFailure.describeNonConnection(error) { print(neutral.fullText) }\n"
+            "            else { print(CLIFailureText.block(error)) }", 1))
+
+    expect("主路又抄一份链 → 报红", copy_chain_back, "又抄了一份")
 
     print("\n== K) 真仓库一个字节没动（负例都在副本上做）")
     changed = [rel for rel, digest in before.items() if hashlib.sha256((ROOT / rel).read_bytes()).hexdigest() != digest]

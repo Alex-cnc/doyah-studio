@@ -18,15 +18,21 @@
   ② **反向棘轮**：入口的调用处数不得少于台账写的 `minCallSites`（57）—— 只查「入口存在」的话，
      把调用删回去、或者只写一个不接线的 helper，门禁照样绿（L-04 / L-05 / 第 14 项都栽在
      「判据太松」上）。
-  ③ 入口自己的**三条口径**必须在位：连接类 → `describe`、驱动非连接类 → `describeNonConnection`、
-     认不出 → **原样返回**（不套方向结论）。顺序写反或把兜底改成「连接失败」都报红 ——
-     那正是 R-60（把猜测当结论）。
-  ④ **原始串不丢**的另一半：`String(reflecting: error)` 的调试转储不得少于台账记的处数
+  ③ 入口自己的**四档口径**必须在位：连接类 → `describe`、驱动非连接类 → `describeNonConnection`、
+     **服务端原话** → `describeServerSide`、认不出 → **原样返回**（不套方向结论）。顺序写反或把兜底
+     改成「连接失败」都报红 —— 那正是 R-60（把猜测当结论）。
+     **可读化链只许写一份**（`entryPoint.chainOnlyIn`）：CLI 主路里再抄一份 if/else 链 ⇒ 报红
+     （「加一档要回来改多处」正是 L-15 收掉的那种写法）。
+  ④ **服务端原话不许被丢**（`serverSideMessage`，队列 L-20 ③）：Core 里那一档必须真读
+     `serverInfo` 的两格、真经 `readableServerText`、真走语言表（`.serverSideSaid`）；入口必须在
+     「认不出就原样返回」**之前**调它（顺序反了 = 这一档永远走不到）；App 侧 `ErrorPresenter` 也要接
+     （否则英文译文只被 CLI 的中文语境引用 —— 正是 L-47 刚收掉的死译文形态）。
+  ⑤ **原始串不丢**的另一半：`String(reflecting: error)` 的调试转储不得少于台账记的处数
      （删了就只剩人话，排查拿不到原始报文）。
-  ⑤ 台账里登记的例外（`--json` 出口）与渠道字段（`plumbing`）**锚点必须还在** —— 陈旧条目报红。
-  ⑥ 已登记的**已知缺口**（`knownGaps`）只减不增：门禁把它们打出来（提醒别当没看见），
+  ⑥ 台账里登记的例外（`--json` 出口）与渠道字段（`plumbing`）**锚点必须还在** —— 陈旧条目报红。
+  ⑦ 已登记的**已知缺口**（`knownGaps`）只减不增：门禁把它们打出来（提醒别当没看见），
      条数比台账多就报红。
-  ⑦ 证据脚本里的关键断言（正面 + 反向）必须在位。
+  ⑧ 证据脚本里的关键断言（正面 + 反向）必须在位。
 
 用法：
     python3 Scripts/check-cli-failure-readability.py            # 人读结论，失败非零退出
@@ -109,6 +115,8 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
         return ["台账 `outputScan` 不完整（要有 files / printMarkers / rawMarker / jsonExemptMarkers）"], notes
 
     call = entry["call"]
+    alternates = entry.get("callAlternates") or []
+    entry_forms = [call] + [alt for alt in alternates if isinstance(alt, str) and alt]
 
     # ---- ① 每一处用户可见失败输出都必须经由入口 ------------------------------
     bare: list[str] = []
@@ -123,7 +131,7 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
             if any(marker in line for marker in json_markers):
                 json_exempt += 1
                 continue
-            if call in line:
+            if any(form in line for form in entry_forms):
                 via_entry += 1
                 continue
             bare.append(f"{rel}:{line_no}（{label_of(line)}）")
@@ -139,7 +147,7 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
     # ---- ② 反向棘轮：入口真的在接线（处数只增不减） --------------------------
     helper_text = read(helper_path)
     cli_text = "\n".join(read(root / rel) for rel in scan_files if (root / rel).exists())
-    actual_calls = cli_text.count(call)
+    actual_calls = sum(cli_text.count(form) for form in entry_forms)
     minimum = entry.get("minCallSites")
     if not isinstance(minimum, int) or minimum < 1:
         problems.append(
@@ -148,13 +156,13 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
         )
     elif actual_calls < minimum:
         problems.append(
-            f"入口 `{call}` 只剩 {actual_calls} 处调用，台账要求至少 {minimum} 处 —— "
+            f"入口只剩 {actual_calls} 处调用（{' / '.join(entry_forms)}），台账要求至少 {minimum} 处 —— "
             "少掉的路径已经退回英文调试串（这就是本条要挡的那件事）"
         )
     else:
-        notes.append(f"入口调用 {actual_calls} 处（台账下限 {minimum}）")
+        notes.append(f"入口调用 {actual_calls} 处（台账下限 {minimum}；记法 {' / '.join(entry_forms)}）")
 
-    # ---- ③ 入口自己的三条口径必须在位 ---------------------------------------
+    # ---- ③ 入口自己的四档口径必须在位 ---------------------------------------
     contract = entry.get("contract") or []
     if not contract:
         problems.append("台账没写 `entryPoint.contract`（入口该守哪几条口径）—— 没有判据可对账")
@@ -172,7 +180,80 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
                 "口径被改了或删了（这一条守的是「认得出就给方向、认不出就不猜」）"
             )
 
-    # ---- ④ 调试转储不得被删 ---------------------------------------------------
+    # ---- ③b 可读化链只写一份（加一档只改入口） --------------------------------
+    chain_function = entry.get("chainFunction", "")
+    chain_only_in = entry.get("chainOnlyIn", "")
+    if not chain_function or not chain_only_in:
+        problems.append(
+            "台账缺 `entryPoint.chainFunction` / `chainOnlyIn`（「可读化链只写一份」没有判据可对账）"
+        )
+    else:
+        chain_path = root / chain_only_in
+        if not chain_path.exists():
+            problems.append(f"可读化链的归属文件不存在：{chain_only_in}")
+        elif chain_function not in read(chain_path):
+            problems.append(f"可读化链没落在 {chain_only_in} 的 `{chain_function}` 里")
+        for rel in scan_files:
+            if rel == chain_only_in or not (root / rel).exists():
+                continue
+            text = read(root / rel)
+            for token in ("ConnectionFailure.describeNonConnection(", "ConnectionFailure.describeServerSide("):
+                if token in text:
+                    problems.append(
+                        f"{rel} 里又抄了一份可读化链（`{token}`）—— 口径只许写在 {chain_only_in}："
+                        "散在多处时「加一档」要回来改每一处，漏一处就是一处退化（L-15 收掉的就是这种写法）"
+                    )
+
+    # ---- ④ 服务端原话不许被丢（队列 L-20 ③） ----------------------------------
+    server_side = ledger.get("serverSideMessage") or {}
+    if not server_side:
+        problems.append(
+            "台账缺 `serverSideMessage`（「服务端原话不许被丢」这一档没有判据可对账）—— "
+            "那一档一旦被摘，带 SQLSTATE 的查询类错误又会只剩一句英文调试串"
+        )
+    else:
+        core_rel = server_side.get("coreFile", "")
+        core_path = root / core_rel if core_rel else None
+        if not core_rel or core_path is None or not core_path.exists():
+            problems.append(f"服务端原话：台账指向的 Core 文件不存在（{core_rel}）")
+        else:
+            core_text = read(core_path)
+            definition = server_side.get("definition", "")
+            if not definition or definition not in core_text:
+                problems.append(
+                    f"服务端原话：{core_rel} 里找不到那一档（`{definition}`）—— 摘掉就等于服务端原话又被丢"
+                )
+            for token in server_side.get("coreRequires") or []:
+                if token not in core_text:
+                    problems.append(
+                        f"服务端原话：{core_rel} 里找不到 `{token}` —— 这一档被削了"
+                        "（不读 serverInfo 的两格 / 不经可读化 / 不走语言表，任一条都会让它退化）"
+                    )
+        entry_file = server_side.get("entryFile", "")
+        entry_call = server_side.get("entryCall", "")
+        fallback = server_side.get("beforeFallback", "")
+        entry_path = root / entry_file if entry_file else None
+        if not entry_file or entry_path is None or not entry_path.exists():
+            problems.append(f"服务端原话：台账指向的入口不存在（{entry_file}）")
+        else:
+            entry_text = read(entry_path)
+            if entry_call not in entry_text:
+                problems.append(f"服务端原话：{entry_file} 里没调 `{entry_call}` —— 链里那一档被摘了")
+            elif fallback and entry_text.find(entry_call) > entry_text.find(fallback):
+                problems.append(
+                    f"服务端原话：`{entry_call}` 排在「{fallback}」**之后** —— 顺序反了这一档永远走不到"
+                )
+        for rel in server_side.get("otherCallers") or []:
+            path = root / rel
+            if not path.exists():
+                problems.append(f"服务端原话：台账登记的调用方 {rel} 不存在（登记陈了）")
+            elif entry_call not in read(path):
+                problems.append(
+                    f"服务端原话：{rel} 没接这一档 —— 界面在查询类错误上又会退回反射转储，"
+                    "而且这一档的英文译文只被 CLI 的中文语境引用（L-47 刚收掉的死译文形态）"
+                )
+
+    # ---- ⑤ 调试转储不得被删 ---------------------------------------------------
     dump = ledger.get("debugDumps") or {}
     dump_marker = dump.get("marker", "")
     dump_min = dump.get("minCount")
@@ -188,7 +269,7 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
         else:
             notes.append(f"调试转储 {found} 处（台账下限 {dump_min}）")
 
-    # ---- ⑤ 例外与渠道字段的锚点必须还在（陈旧条目报红） ----------------------
+    # ---- ⑥ 例外与渠道字段的锚点必须还在（陈旧条目报红） ----------------------
     for kind, items in (("例外", ledger.get("exemptions") or []), ("渠道字段", ledger.get("plumbing") or [])):
         for item in items:
             anchor = item.get("anchor", "")
@@ -210,14 +291,14 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
                     "处数对不上说明代码变了（多了要登记、少了要确认不是被误删）"
                 )
 
-    # ---- ⑥ 已知缺口只减不增 ---------------------------------------------------
+    # ---- ⑦ 已知缺口只减不增 ---------------------------------------------------
     gaps = ledger.get("knownGaps") or []
     notes.append(f"已登记缺口 {len(gaps)} 条（只减不增）")
     for gap in gaps:
         if len((gap or "").strip()) < 12:
             problems.append(f"已知缺口条目太短、等于没登记：{gap!r}")
 
-    # ---- ⑦ 证据脚本里的关键断言必须在位 -------------------------------------
+    # ---- ⑧ 证据脚本里的关键断言必须在位 -------------------------------------
     for marker in ledger.get("evidence") or []:
         path = root / marker.get("file", "")
         if not path.exists():

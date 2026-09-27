@@ -50,6 +50,15 @@ enum ErrorPresenter {
             return lines.joined(separator: "\n")
         }
 
+        // 服务端自己说了话（队列 L-20 ③）：带 SQLSTATE 的**查询类**错误（42P01 表不存在 /
+        // 42601 语法错…）前面两档都**有意不接**（那是调用方自己的路），于是以前这里只剩
+        // `PSQLError(…)` 的反射转储。这一档只端**服务端原话**，不翻译、不归类、不给方向结论。
+        if let serverSide = ConnectionFailure.describeServerSide(error, language: LocalizationManager.shared.effectiveLanguage) {
+            var lines = [serverSide.summary]
+            lines.append("（技术细节：\(String(reflecting: error))）")
+            return lines.joined(separator: "\n")
+        }
+
         let detail = String(reflecting: error)
         if detail.count > 800 {
             return String(detail.prefix(800)) + "…"

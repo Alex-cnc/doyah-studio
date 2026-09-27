@@ -56,11 +56,11 @@
   ],
   "neutralFallback": [
     {
-      "file": "CLI/main.swift",
+      "file": "CLI/CLIFailureText.swift",
       "call": "ConnectionFailure.describeNonConnection",
-      "minCallSites": 2,
+      "minCallSites": 1,
       "why": "命令行在 `describe` 说不清时以前只打 `简要信息：<error.localizedDescription>`——那是一句英文调试串（`The operation couldn't be completed…`），等于没说。现在这一档给中性归因（码 + 一句实话 + 建议），原始串仍在「调试详情」里",
-      "minCallSitesWhy": "**两处**：连接失败那条路（`catch` 里 `describe` 之后）与查询失败那条路（实测 `SELECT pg_cancel_backend(pg_backend_pid())` 走的就是它）。只查「出现过这个调用」时，删掉一处剩下的仍能顶数 —— 负例 K 就是这么把门禁骗绿的，所以处数要写进台账"
+      "minCallSitesWhy": "**第 47 轮（L-20）改了记法，处数从「2」变「1」**：CLI 的两条主路（连接失败 / 查询失败）原各写一遍 `describe ?? describeNonConnection ?? 简要信息`，加一档就得回来改两处 —— 第 47 轮把**链收进唯一出处** `CLIFailureText.description`，两条主路（+ 诊断那条）都走它，所以 CLI 侧现在只有**一处**调用这个出口。**不是少接了一条路**：`CLI/main.swift` 里若再出现这个调用，由 `Scripts/check-cli-failure-readability.py` 的「可读化链只写一份」判据当场报红（闭环第 15 项），两条口径互锁 —— 这里改记法而不加处数，是因为**数处数**在链被收成一份之后已经数不到「有没有少接一条路」了"
     },
     {
       "file": "App/Utilities/ErrorPresenter.swift",

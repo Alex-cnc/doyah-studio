@@ -197,3 +197,70 @@ final class ConnectionFailurePGHBATests: XCTestCase {
         XCTAssertEqual(ConnectionFailure.readableServerText("  "), "")
     }
 }
+
+/// **服务端原话**（队列 L-20 ③）：带 SQLSTATE 的查询类错误（42P01 表不存在 / 42601 语法错…）
+/// 不许只剩一句 `The operation couldn't be completed…` —— 服务端明明说清了原因。
+///
+/// 这一档的纪律与前面几档**不同**：它**不翻译、不归类、不给方向结论**（没有猜测，也就没有
+/// 「把猜测当结论」的风险），只把服务端原话端出来。所以这里的断言重点是：
+/// **原话在**（含对象名与 SQLSTATE）、**不给建议**、**缺码或缺话就不给这一档**（退回调用方原样输出）。
+final class ConnectionFailureServerSideTests: XCTestCase {
+
+    /// 服务端原话 + SQLSTATE 都要在，且**不给方向结论**。
+    func testServerSideMessageIsSurfaced() throws {
+        let described = try XCTUnwrap(
+            ConnectionFailure.describeServerSide(
+                sqlState: "42P01",
+                message: "relation \"doyah_probe_missing\" does not exist"
+            )
+        )
+        XCTAssertTrue(described.summary.contains("relation \"doyah_probe_missing\" does not exist"), described.summary)
+        XCTAssertTrue(described.summary.contains("SQLSTATE 42P01"), described.summary)
+        XCTAssertEqual(described.code, "42P01")
+        XCTAssertNil(described.suggestion, "这一档**不归类**，所以不给方向结论（口径：认不出就不猜）")
+    }
+
+    /// 语言跟着调用方走（L-47 同一条口径）：英文语境取英文文案，而且**客户端那句话**才换语言 ——
+    /// 服务端原话照抄（它本来就是服务端语言）。
+    func testServerSideMessageFollowsCallerLanguage() throws {
+        let described = try XCTUnwrap(
+            ConnectionFailure.describeServerSide(
+                sqlState: "42601",
+                message: "syntax error at or near \"FROM\"",
+                language: .english
+            )
+        )
+        XCTAssertTrue(described.summary.contains("The server said"), described.summary)
+        XCTAssertFalse(described.summary.contains("服务端说"), described.summary)
+        XCTAssertTrue(described.summary.contains("syntax error at or near"), described.summary)
+    }
+
+    /// 乱码消息走同一条可读化（先抽出能看懂的 ASCII，再明说中文读不出来）—— 不是另写一套。
+    func testServerSideMessageReusesReadableServerText() throws {
+        // 含 U+FFFD 的乱码（驱动已做过一次有损解码，坏字节变成替换字符）—— 用例里显式写出来，
+        // 免得靠"看起来像"的字符，测试失效了也没人发现。
+        let garbled = "û\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD} \u{FFFD}\u{FFFD} \"t\" does not exist"
+        let described = try XCTUnwrap(
+            ConnectionFailure.describeServerSide(sqlState: "42P01", message: garbled)
+        )
+        XCTAssertTrue(described.summary.contains("does not exist"), described.summary)
+        XCTAssertTrue(described.summary.contains("非 UTF-8"), "中文读不出来要如实说明：\(described.summary)")
+        XCTAssertFalse(described.summary.contains("\u{FFFD}"), "不该把替换字符原样留在给人看的文本里")
+    }
+
+    /// 缺码或缺话 ⇒ **不给这一档**（返回 `nil`，退回调用方的原样输出，与改动前逐字一致）。
+    func testServerSideNeedsBothCodeAndMessage() {
+        XCTAssertNil(ConnectionFailure.describeServerSide(sqlState: nil, message: "relation \"t\" does not exist"))
+        XCTAssertNil(ConnectionFailure.describeServerSide(sqlState: "42P01", message: nil))
+        XCTAssertNil(ConnectionFailure.describeServerSide(sqlState: "   ", message: "relation \"t\" does not exist"))
+        XCTAssertNil(ConnectionFailure.describeServerSide(sqlState: "42P01", message: "  "))
+    }
+
+    /// 非驱动错误（本地文件 / 编解码 / 包装错误）一律不给 —— 认不出就原样，不套方向结论。
+    func testServerSideIgnoresNonDriverErrors() {
+        struct Wrapper: LocalizedError {
+            var errorDescription: String? { "The file \"x.csv\" couldn't be opened." }
+        }
+        XCTAssertNil(ConnectionFailure.describeServerSide(Wrapper()))
+    }
+}

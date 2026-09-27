@@ -245,21 +245,14 @@ struct DoyahCLI {
         } catch {
             print("连接失败")
             print("")
-            // 可读化（R-46 / FR-META-10）：人话 + 建议 + 错误码；原始串留在下面的调试详情里，
-            // **不丢信息** —— 排查时"到底是哪个 SQLSTATE"才是关键。
-            let failure = ConnectionFailure.describe(
+            // 可读化（R-46 / FR-META-10）：人话 + 建议 + 错误码；驱动非连接类（R-60）走中性归因；
+            // 服务端原话（L-20）端出来；都认不出才退回「简要信息：<原样>」。
+            // **链只写一份**（`CLIFailureText.block`）：这里以前把 if/else 链抄了一遍，加一档就得回来改。
+            // 原始串照旧留在下面的调试详情里 —— 排查时"到底是哪个 SQLSTATE"才是关键。
+            print(CLIFailureText.block(
                 error,
                 target: ConnectionFailure.Target(host: host, port: port, database: database, username: username)
-            )
-            if let failure {
-                print(failure.fullText)
-            } else if let neutral = ConnectionFailure.describeNonConnection(error) {
-                // 驱动报的错、但**不是连接类**（R-60）：每个码一句自己的实话（用户取消 /
-                // 主动断开 / 协议层…），**不给「连接失败」那套方向**。原始串照旧在下面的调试详情里。
-                print(neutral.fullText)
-            } else {
-                print("简要信息：\(CLIFailureText.oneLine(error))")
-            }
+            ))
             print("")
             print("调试详情：")
             print(String(reflecting: error))
@@ -605,17 +598,13 @@ struct DoyahCLI {
         } catch {
             print("查询失败")
             print("")
-            // 可读化同连接那条路：连接类先说话；驱动报的错但不是连接类（R-60：查询被取消 /
-            // 我们主动断开 / 协议层…）由中性归因接手 —— 否则这里会打一句英文调试串
+            // 可读化同连接那条路（链只写一份：`CLIFailureText.block`）：连接类先说话；驱动报的错
+            // 但不是连接类（R-60：查询被取消 / 我们主动断开 / 协议层…）由中性归因接手；
+            // **带 SQLSTATE 的查询类错误**（L-20：42P01 表不存在…）把**服务端原话**端出来；
+            // 都认不出才退回原样 —— 否则这里会打一句英文调试串
             // （实测：`SELECT pg_cancel_backend(pg_backend_pid())` → `The operation couldn't be
             // completed. (PostgresNIO.PSQLError error 1.)`，看的人仍然不知道发生了什么）。
-            if let failure = ConnectionFailure.describe(error) {
-                print(failure.fullText)
-            } else if let neutral = ConnectionFailure.describeNonConnection(error) {
-                print(neutral.fullText)
-            } else {
-                print("简要信息：\(CLIFailureText.oneLine(error))")
-            }
+            print(CLIFailureText.block(error))
             print("")
             print("调试详情：")
             print(String(reflecting: error))

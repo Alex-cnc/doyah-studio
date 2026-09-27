@@ -556,6 +556,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case nonConnectionServerCancelledAdvice
     case nonConnectionUnclassified
     case nonConnectionUnclassifiedAdvice
+    /// 服务端原话（带 SQLSTATE 的查询类错误：表不存在 / 语法错…）—— **只端原话，不归类**。
+    case serverSideSaid
     case connectionFormCopyFullError
     case connectionFormErrorTruncated
 
@@ -2264,6 +2266,9 @@ public enum LocalizedStrings {
         .nonConnectionServerCancelledAdvice: [.simplifiedChinese: "取消不是连接问题，不必查网络与口令。可能是有人按了停止、服务端的 statement_timeout 到点，或管理员执行了 pg_cancel_backend —— 想区分的话看服务端日志", .english: "A cancel is not a connection problem, so there is nothing to chase in the network or the credentials. It may be a stop request, the server's statement_timeout firing, or an administrator running pg_cancel_backend — the server log tells them apart"],
         .nonConnectionUnclassified: [.simplifiedChinese: "数据库驱动报错（错误码 %@）—— 尚未归类", .english: "The database driver reported an error (code %@) — not classified yet"],
         .nonConnectionUnclassifiedAdvice: [.simplifiedChinese: "现有文案只对已确认的原因给结论，未知码不给方向判断（把它说成「连接失败」会把你引去查网络与口令）。完整详情见调试详情，请一并反馈以便登记它的处置", .english: "The wording only draws conclusions for confirmed causes, so an unknown code gets no direction verdict (calling it a connection failure would send you after the network and credentials). The full detail is below — please report it so this code can be classified"],
+        // 服务端原话：查询类错误（42P01 表不存在 / 42601 语法错…）由服务端自己说清了原因，
+        // 客户端**不翻译、不归类、不给方向结论** —— 只端原话（乱码先经 `readableServerText`）。
+        .serverSideSaid: [.simplifiedChinese: "服务端说：%@（SQLSTATE %@）", .english: "The server said: %@ (SQLSTATE %@)"],
         .connectionFormCopyFullError: [.simplifiedChinese: "复制完整错误", .english: "Copy the full error"],
         .connectionFormErrorTruncated: [.simplifiedChinese: "对话框里只显示了前一段，复制得到的是全文。", .english: "Only the first part is shown here; copying gives you the full text."],
 
