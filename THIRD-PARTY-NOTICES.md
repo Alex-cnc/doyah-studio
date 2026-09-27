@@ -12,6 +12,7 @@
 | 组件 | 版本 | 许可证 | 版权声明 |
 |---|---|---|---|
 | [postgres-nio](https://github.com/vapor/postgres-nio.git) | 1.33.1（随仓库 vendor） | MIT | Copyright (c) 2019 Tanner Nelson |
+| [sqlite-amalgamation](https://sqlite.org/2026/sqlite-amalgamation-3530400.zip) | 3.53.4（随仓库 vendor） | Public Domain | SQLite 的**可交付代码**已由作者捐献至公有领域；原文见 `Vendor/sqlite3/LICENSE.txt` |
 | [swift-asn1](https://github.com/apple/swift-asn1.git) | 1.7.3 | Apache License 2.0 | Copyright 2022 The SwiftASN1 Project |
 | [swift-async-algorithms](https://github.com/apple/swift-async-algorithms.git) | 1.1.4 | Apache License 2.0 + Runtime Library Exception | 见下方对应许可证全文 |
 | [swift-atomics](https://github.com/apple/swift-atomics.git) | 1.2.0 | Apache License 2.0 + Runtime Library Exception | 见下方对应许可证全文 |

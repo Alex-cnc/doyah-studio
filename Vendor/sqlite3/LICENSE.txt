@@ -1,0 +1,26 @@
+# SQLite 许可声明（public domain）
+
+本目录下的 `sqlite3.c` 与 `sqlite3.h` 取自 SQLite 官方 amalgamation（版本见 `PROVENANCE.md`）。
+
+SQLite 的**可交付代码**（deliverable code，即随应用一起分发的库源码与文档）已由作者**捐献到公有领域**
+（public domain）。以下两段引自官方 <https://sqlite.org/copyright.html>（2026-09-27 取回）：
+
+> All of the code and documentation in SQLite has been dedicated to the public domain
+> by the authors.
+
+> Anyone is free to copy, modify, publish, use, compile, sell, or distribute the original
+> SQLite code, either in source code form or as a compiled binary, for any purpose,
+> commercial or non-commercial, and by any means.
+
+对 Doyah Studio 的含义：
+
+- 随仓库带走源码、编译进产品、随产品分发，**都不需要额外授权，也无署名义务**；
+- 本文件与 `THIRD-PARTY-NOTICES.md` 里那一行仍然保留 —— 那是**我们**为了可追溯而写的记账，
+  不是许可证施加的义务（与 Apache-2.0 / MIT 那几项不同：它们的 NOTICE 与版权头是必须保留的）；
+- SQLite 的构建脚本（autoconf 生成的 `configure` 等）可能另有开源许可，但那些脚本
+  **不进最终交付物**；本目录只留 amalgamation 的两个交付文件，因此不涉及其它许可。
+
+> 口径：**不许把 SQLite 换成系统自带的 `libsqlite3` 或任何第三方 Swift 封装**。
+> 理由写在需求规范书 `FR-PLUG-08`：三端（macOS / Windows / Linux）要完全一致，
+> 而系统库版本随 OS 漂移、第三方封装（GRDB / SwiftData / Core Data）各有平台缺口。
+> 这条口径由 `Scripts/check-vendored-sqlite.py` 机械守住。

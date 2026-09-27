@@ -17,12 +17,27 @@ let package = Package(
         // 不因为上游发新版就把这个工程编不过。许可证随目录一起留档（都是 Apache-2.0）。
         .package(path: "Vendor/postgres-nio"),
         .package(path: "Vendor/mysql-nio"),
+        // SQLite 的 vendored amalgamation（公有领域，见 Vendor/sqlite3/LICENSE.txt）。
+        // 提供 `CSQLite3` 这个 clang 模块：三端共用**同一份** `sqlite3.c`，
+        // 系统 `libsqlite3` / 第三方 Swift 封装都不用（理由写在下面 DoyahCore 的注释里）。
+        // 台账在 `Scripts/vendored-sqlite.json`，门禁 `Scripts/check-vendored-sqlite.py`
+        // 逐字节核对；行为另由 `Scripts/smoke-vendored-sqlite.sh` 现编现跑证据。
+        .package(path: "Vendor/sqlite3"),
         // 许可校验要 Ed25519 签名（FR-LIC-01）：用 **swift-crypto** 而不是 Apple 的 CryptoKit ——
         // Core 要保持平台中立（同一个 Core 将来要给 Doyah Notes 的 Windows / 安卓 / 鸿蒙版复用）。
         // 它本来就在依赖树里（NIO SSL 用），这里只是**显式声明**，不新增依赖树。
         .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0")
     ],
     targets: [
+        // SQLite 的 vendored C 目标（FR-PLUG-08 / Q23 拍板：桌面各端笔记存储统一到本地 SQLite）。
+        //
+        // 为什么是**编进产品的一份源码**、而不是系统库或第三方 Swift 封装：
+        //   · 系统 `libsqlite3`（`import SQLite3`）版本随 OS 漂移，同一个构建在 macOS 14 与 26 上
+        //     是两个不同的 SQLite —— 「三端完全一致」当场不成立，Windows / Linux 更是没有它；
+        //   · GRDB 官方只支持 Apple + Linux，Windows 还是社区探索；SwiftData / Core Data 是 Apple 独占；
+        //   · 而 amalgamation 是**公有领域**：随仓库带走源码、编译进口、随产品分发都不需要额外授权。
+        // 编译宏在 `Vendor/sqlite3/Package.swift` 上（版本、来源、哈希见 `Vendor/sqlite3/PROVENANCE.md`），
+        // 由 `Scripts/check-vendored-sqlite.py` 逐个钉住 —— 宏掉了不会有任何症状，只有行为悄悄变掉。
         .target(
             name: "DoyahCore",
             dependencies: [

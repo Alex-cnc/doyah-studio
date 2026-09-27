@@ -1,0 +1,128 @@
+{
+  "comment": "Vendor/sqlite3 的台账：版本 / 来源 / 归档哈希 / 交付文件哈希 / 编译宏。门禁 Scripts/check-vendored-sqlite.py 拿它逐字节对账（文件内容、头文件里的版本字符串、Package.swift 里的编译宏、许可声明、第三方声明与接线），换版本必须同步本文件，否则报红。行为侧另由 Scripts/smoke-vendored-sqlite.py 现编现跑自证（不经过 SwiftPM，因此与绑定层的工具链缺陷无关）。",
+  "component": "sqlite-amalgamation",
+  "version": "3.53.4",
+  "versionNumber": 3053004,
+  "sourceID": "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc",
+  "downloadURL": "https://sqlite.org/2026/sqlite-amalgamation-3530400.zip",
+  "archiveSHA256": "1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d",
+  "fetchedAt": "2026-09-27",
+  "license": "public-domain",
+  "licenseFile": "Vendor/sqlite3/LICENSE.txt",
+  "files": [
+    {
+      "path": "Vendor/sqlite3/Sources/CSQLite3/sqlite3.c",
+      "origin": "upstream-amalgamation",
+      "bytes": 9515341,
+      "sha256": "b1dd5d74ec7f29055a6684fa06fb3c2f6821c87dd38f9a458dfd2e8a1db28189"
+    },
+    {
+      "path": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
+      "origin": "upstream-amalgamation",
+      "bytes": 690838,
+      "sha256": "919e7f2e8ed1d8f56ac17b412b8971c76aa5d1a879752cc6058f75e7d5910e1d"
+    },
+    {
+      "path": "Vendor/sqlite3/Sources/CSQLite3/include/CSQLite3.h",
+      "origin": "ours",
+      "why": "umbrella 头：SwiftPM 会按「公共头目录里有没有与目标同名的头」生成两种形状的模块图，写上它就走 umbrella header 那一档（显式、可预期）。",
+      "bytes": 1078,
+      "sha256": "e8ab16dceafdfebb8ea38204575276091ed9cb8464f9941eab01fab64848d8ad"
+    }
+  ],
+  "allowedExtras": [
+    "LICENSE.txt",
+    "PROVENANCE.md",
+    "Package.swift"
+  ],
+  "excludedFromArchive": {
+    "shell.c": "SQLite 自带的命令行工具，不是库的一部分；本产品的命令行是 DoyahCLI",
+    "sqlite3ext.h": "只有写可加载扩展才需要，而编译宏里 SQLITE_OMIT_LOAD_EXTENSION=1 关掉了扩展加载（sqlite3.c 也不引用它）"
+  },
+  "requiredCompileOptions": [
+    {
+      "define": "SQLITE_THREADSAFE=1",
+      "why": "序列化模式：宿主是多线程的，连接可能被多个线程碰到 —— 这一档不靠调用方自觉"
+    },
+    {
+      "define": "SQLITE_ENABLE_FTS5=1",
+      "why": "FR-PLUG-08 的四条判据之一就是「要按条件查与全文检索」，FTS5 不在默认编译里"
+    },
+    {
+      "define": "SQLITE_OMIT_LOAD_EXTENSION=1",
+      "why": "不需要动态扩展加载（少一个 dlopen 面），也就用不着 sqlite3ext.h"
+    },
+    {
+      "define": "SQLITE_DQS=0",
+      "why": "双引号不许当字符串字面量：把「列名写错」从静默当成字符串变成当场报错"
+    }
+  ],
+  "swiftTarget": {
+    "name": "CSQLite3",
+    "path": "Vendor/sqlite3",
+    "targetPath": "Sources/CSQLite3",
+    "sources": [
+      "Sources/CSQLite3/sqlite3.c"
+    ],
+    "publicHeadersPath": "include",
+    "header": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
+    "consumer": "（待接线）Swift 侧的绑定层 `SQLiteKit` 因 SwiftPM 显式模块构建缺陷暂时未接入目标图 —— 症状是 `import CSQLite3` 不报错、所有声明都 「cannot find in scope」；草稿与排除过程见 Docs/design/待接线-SQLiteKit/ 与开发记录第 18 轮。"
+  },
+  "wrapper": {
+    "source": "Docs/design/待接线-SQLiteKit/SQLite.swift",
+    "constants": "Docs/design/待接线-SQLiteKit/SQLiteConstants.swift（由同目录 gen-sqlite-constants.py 从 vendored 头文件生成）",
+    "tests": "Docs/design/待接线-SQLiteKit/SQLiteTests.swift",
+    "status": "draft-not-wired",
+    "whyNotSystemLibrary": "口径：不许换系统自带 libsqlite3、也不许引第三方 Swift 封装（GRDB 官方仅 Apple+Linux、Windows 是社区探索；SwiftData / Core Data 为 Apple 独占），否则「Windows 与 macOS 完全一致」不成立。见 FR-PLUG-08。"
+  },
+  "wiring": {
+    "gate": "Scripts/check-vendored-sqlite.py（--self-test 跑负例：篡改十种，门禁必须报红 —— 含证据锚点陈旧 / 闭环接线被删 / 闭环没跑负例 / 台账项号不符 / 项数声明漏改）",
+    "negativeCases": "Scripts/check-vendored-sqlite.py --self-test",
+    "smoke": "Scripts/smoke-vendored-sqlite.py（把 sqlite3.c 现编成可执行文件，跑版本 / 宏 / WAL / 参数化读写 / FTS5 与中文四条 / DQS=0 共 13 条断言）",
+    "acquisition": "Scripts/vendor-sqlite3.sh",
+    "inVerifyAll": "Scripts/verify-all.sh 第 17 项",
+    "evidenceAnchors": [
+      {
+        "file": "Scripts/smoke-vendored-sqlite.py",
+        "anchor": "sqlite3_libversion()",
+        "why": "版本自证：跑起来读的是**我们 vendor 的这一份**，不是系统 libsqlite3（系统库版本随 OS 漂移）"
+      },
+      {
+        "file": "Scripts/smoke-vendored-sqlite.py",
+        "anchor": "sqlite3_compileoption_used",
+        "why": "编译宏自证：四条宏在运行期自报生效，而不是写在 Package.swift 里没起作用"
+      },
+      {
+        "file": "Scripts/smoke-vendored-sqlite.py",
+        "anchor": "USING fts5(",
+        "why": "FTS5 可用的真证据：能建虚拟表并真检索（中文），不只是宏里写了个 1"
+      },
+      {
+        "file": "Scripts/smoke-vendored-sqlite.py",
+        "anchor": "tokenize='trigram'",
+        "why": "中文全文检索的真实口径（第 18 轮实测）：默认分词器 unicode61 **不切中文**（`MATCH '骑行'` 命中 0，同表 ASCII 1 作对照），要用 trigram 且**查询串 ≥3 字**（`'洞庭湖'` 1 命中 / 2 字 `'骑行'` 仍 0）—— FR-PLUG-08「按条件查与全文检索」必须按这个口径落实，四条断言成对钉住"
+      },
+      {
+        "file": "Scripts/smoke-vendored-sqlite.py",
+        "anchor": "journal_mode",
+        "why": "WAL 自证：并发写 + 多进程读是 FR-PLUG-08 的口径之一"
+      },
+      {
+        "file": "Scripts/verify-all.sh",
+        "anchor": "python3 Scripts/check-vendored-sqlite.py --self-test",
+        "why": "门禁与自证真的进了闭环 —— 不进闭环的门禁等于没有，且门禁自己是没被验过的"
+      },
+      {
+        "file": "Vendor/sqlite3/PROVENANCE.md",
+        "anchor": "1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d",
+        "why": "来源可复现：归档哈希写在来源说明里，换版本时两处必须同时改",
+        "syncWith": "Scripts/vendored-sqlite.json 的 archiveSHA256"
+      },
+      {
+        "file": "THIRD-PARTY-NOTICES.md",
+        "anchor": "sqlite-amalgamation",
+        "why": "第三方组件声明表里必须有这一行（用户看的是这一份文件，不是 Vendor/ 目录）"
+      }
+    ]
+  }
+}
