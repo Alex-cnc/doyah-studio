@@ -35,9 +35,10 @@ python3 Scripts/gen-platform-parity.py --check      # §10.10 等价矩阵与台
 python3 Scripts/gen-platform-parity.py --self-test  # 上一半自己的证据（11 例负例）
 python3 Scripts/check-platform-neutrality.py        # 需求书里的平台专属词汇不得比基线更差
 python3 Scripts/check-doc-tables.py                 # 表格列数与派生计数一致
+python3 Scripts/check-doc-versions.py               # 变更记录版本号唯一 / 头部版本格可判 / 队列条目号唯一（L-32）
 ```
 
-四项都已挂进 `Scripts/verify-all.sh`（第 4 / 7 / 8 项），改完文档跑它即可。
+五项都已挂进 `Scripts/verify-all.sh`（第 4 / 7 / 8 项），改完文档跑它即可。
 
 ## 产品文档
 

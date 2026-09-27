@@ -107,7 +107,7 @@ git fetch -q origin && git status --short          # 有没有别人的改动
 
 ### CMD-04 改文档
 - 三书里**每一个会漂移的数字都由脚本派生或校验**（闭环第 4 / 5 项）。改状态 → 四处一起改。
-- 变更记录**必须加一行**且版本号**唯一**（历史撞过两次号）；取号 = 现有最大 + 1。
+- 变更记录**必须加一行**且版本号**唯一**（历史撞过**三次**号）；取号**不许手抄** —— 跑 `python3 Scripts/next-doc-version.py <文档>` 拿 `max+1`（机械判据 = `Scripts/check-doc-versions.py`，闭环第 4 项）。
 - 改了 §10.10 相关的台账 → `python3 Scripts/gen-platform-parity.py` 重写表格（`--check` 是闭环第 7 项）。
 
 ### CMD-05 状态提级
@@ -168,7 +168,7 @@ git push origin master && git ls-remote origin master   # 复核远端哈希 == 
 ## 9. 常见坑（按被咬次数排序）
 
 1. **中文路径转义**：`git status` 默认 quotepath 会把路径写成 `\346\226\207`。看状态用 `git -c core.quotepath=false status`；提交信息本身无影响。
-2. **变更记录取号**：版本号必须**唯一**且升序（本仓撞过两次，靠手工 rebase 解）。取号前先 `grep` 最大号。
+2. **变更记录取号**：版本号必须**唯一**，且头部「版本 / 当前版本」格必须**可机械判定**（= 变更记录最高号，或带「基线 / 首版」标注并在标注里写出当前号）。取号**只能**跑 `python3 Scripts/next-doc-version.py <文档>`（按文档自己的系列取 `max+1`；队列条目号用 `--ids L`）—— **不许手抄**：撞过三次（概要设计 `v2.35` 与对侧同号、队列 `L-25`/`L-26`/`L-41` 同号、三书 `P-15` 同号不同物）。判据 = `Scripts/check-doc-versions.py`（闭环第 4 项，负例 10/10）。
 3. **表格列数**：`check-doc-tables.py` 只覆盖 **11 个白名单文件** —— `智能体助手-开发spec.md` 与 `design/开发循环-任务队列.md` **不在其中**（存量列数不一致已登记为队列 L-41）。改这两份要自己数。
 4. **`bash 3.2` 的多字节坑**：macOS 自带 bash 3.2，`echo "中文：$X）"` 会把 `$X` **静默展开成空**（`set -u` 下直接中止）。一律写 `${X}`；门禁第 12 项机械查。
 5. **两个循环撞车**：本仓只有本侧循环；**Notes / Retro 两仓有小河马的循环在跑** → 开工前先 `git fetch`，push 被拒就 `rebase` 重放。
