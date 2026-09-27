@@ -1,13 +1,16 @@
 # 文档（Docs）
 
+> **给新接手者**：先读仓库根目录的 [`AGENT-SPEC.md`](../AGENT-SPEC.md)（角色 / 边界 / 纪律 / 命令集 / 常见坑），再回到本文件看三书怎么用。
+
 本目录分两类：**三书（跨平台共享事实源）** 与 **产品文档**。其余工程内部文档
 （调研、测试用例、兼容性矩阵、发布方案、评审与过程记录）保存在开发者本地，不随仓库发布。
 
-## 三书：macOS 与 Linux 的共享事实源
+## 三书：跨平台的共享事实源
 
-macOS 版（本仓库）与 Linux 版（公司电脑）是**同一个产品的两个平台实现**，功能必须一致，
-只有平台与编程语言不同。所以这三份文档**必须入库**，用 GitHub 同步版本 —— 任何一侧改了
-契约，另一侧跟着改。
+**目标端（2026-09-26 口径）**：**macOS 与 Windows 版必须完全一致**（同一个产品的两个平台实现，
+只有平台与编程语言不同）；**Linux = 自用第三端**（只服务需求提出者，由需求提出者手工带三书到公司环境实现）；
+**移动端不属本工程**（移动端 = Doyah Notes）。三书**必须入库**，用 GitHub 同步版本 ——
+任何一侧改了契约，另一侧跟着改。
 
 | 文档 | 定位 | 变更规则 |
 |---|---|---|
@@ -28,12 +31,13 @@ macOS 版（本仓库）与 Linux 版（公司电脑）是**同一个产品的�
 ### 三书自动校验（与代码同一个验证闭环）
 
 ```bash
-python3 Scripts/gen-platform-parity.py --check      # §10.10 等价矩阵与 §10.1/§10.9 一致
+python3 Scripts/gen-platform-parity.py --check      # §10.10 等价矩阵与台账（Docs/平台实现状态.json）一致
+python3 Scripts/gen-platform-parity.py --self-test  # 上一半自己的证据（11 例负例）
 python3 Scripts/check-platform-neutrality.py        # 需求书里的平台专属词汇不得比基线更差
 python3 Scripts/check-doc-tables.py                 # 表格列数与派生计数一致
 ```
 
-三项都已挂进 `Scripts/verify-all.sh`，改完文档跑它即可。
+四项都已挂进 `Scripts/verify-all.sh`（第 4 / 7 / 8 项），改完文档跑它即可。
 
 ## 产品文档
 
