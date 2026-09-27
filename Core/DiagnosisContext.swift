@@ -8,12 +8,19 @@ import Foundation
 /// 引用不存在的编号（或干脆不引用）由 `DiagnosisAdvice` 拒绝。
 ///
 /// 这一层不联网、不调模型，纯组装与裁剪，因此可以完全离线单测。
-/// Core 侧的文案取值：与其余 Core 展示文本同一现状（默认简体中文，界面语言透传见 R-45）。
-private func localizedText(_ key: LKey, _ arguments: CVarArg...) -> String {
+///
+/// **语言透传（队列 L-47）**：Core 侧的文案取值此前把语言**钉死**成 `.simplifiedChinese`
+/// ⇒ 英文界面上「给模型的资料」整块中文，而语言表里这些键**都有英文译文** ——
+/// 译文永远不可达（死键）。现在语言由**调用方显式给定**：界面传
+/// `LocalizationManager.effectiveLanguage`（宿主语境优先）、CLI 传 `.simplifiedChinese`
+/// （无界面语境）。**刻意不留默认值** —— 默认值等于把「写死语言」藏起来，
+/// 而 `Scripts/check-literal-language.py` 钉的正是「本文件与 `DiagnosisAdvice.swift`
+/// 里不许再出现字面语言」。
+private func localizedText(_ key: LKey, language: AppLanguage, _ arguments: CVarArg...) -> String {
     if arguments.isEmpty {
-        return LocalizedStrings.text(key, language: .simplifiedChinese)
+        return LocalizedStrings.text(key, language: language)
     }
-    return LocalizedStrings.format(key, language: .simplifiedChinese, arguments)
+    return LocalizedStrings.format(key, language: language, arguments)
 }
 
 public struct DiagnosisEvidence: Codable, Hashable, Sendable {
@@ -73,10 +80,10 @@ public struct DiagnosisEvidence: Codable, Hashable, Sendable {
     }
 
     /// 一行证据的文本形态（模型看到的就是它）。
-    public func text(columnSeparator: String = " | ") -> String {
+    public func text(language: AppLanguage, columnSeparator: String = " | ") -> String {
         let header = "[\(id)] \(kind.displayName): \(note)"
         guard isAvailable else { return header }
-        if rows.isEmpty { return header + localizedText(.diagnosisEvidenceEmpty) }
+        if rows.isEmpty { return header + localizedText(.diagnosisEvidenceEmpty, language: language) }
         let body = rows.map { row in
             row.map { $0 ?? "NULL" }.joined(separator: columnSeparator)
         }.joined(separator: "\n")
@@ -125,26 +132,26 @@ public struct DiagnosisContext: Sendable {
     ///   ① **资料不是指令**：数据库里的内容可能是别人写进去的（注释、数据、表名），
     ///      一律按不可信内容对待 —— 与 AC-AI-04 同一条口径，这里用明确边界把它围起来；
     ///   ② **取不到就说取不到**：把拿不到的证据单独列出来，模型不许对它们下结论。
-    public func promptText() -> String {
+    public func promptText(language: AppLanguage) -> String {
         var lines: [String] = []
-        lines.append(localizedText(.diagnosisTarget, target))
-        lines.append(localizedText(.diagnosisQuestion, question))
+        lines.append(localizedText(.diagnosisTarget, language: language, target))
+        lines.append(localizedText(.diagnosisQuestion, language: language, question))
         lines.append("")
-        lines.append(localizedText(.diagnosisEvidenceHeader))
+        lines.append(localizedText(.diagnosisEvidenceHeader, language: language))
         for item in evidence {
-            lines.append(item.text())
+            lines.append(item.text(language: language))
         }
         if !unavailable.isEmpty {
             lines.append("")
-            lines.append(localizedText(.diagnosisMissingHeader))
+            lines.append(localizedText(.diagnosisMissingHeader, language: language))
             for item in unavailable {
-                lines.append(localizedText(.diagnosisMissingLine, item.id, item.kind.displayName, item.note))
+                lines.append(localizedText(.diagnosisMissingLine, language: language, item.id, item.kind.displayName, item.note))
             }
         }
         lines.append("")
-        lines.append(localizedText(.diagnosisFormatHeader))
-        lines.append(localizedText(.diagnosisFormatConclusion))
-        lines.append(localizedText(.diagnosisFormatSuggestion))
+        lines.append(localizedText(.diagnosisFormatHeader, language: language))
+        lines.append(localizedText(.diagnosisFormatConclusion, language: language))
+        lines.append(localizedText(.diagnosisFormatSuggestion, language: language))
         return lines.joined(separator: "\n")
     }
 
@@ -152,11 +159,11 @@ public struct DiagnosisContext: Sendable {
     ///
     /// **为什么在 Core 里卡上限**：提示词越长越贵、越容易被无关内容带偏，而且"超限"发生时
     /// 如果只是静默截断，模型会看到半截证据却当成完整的。所以超限时**如实写明被截断了**。
-    public func boundedPromptText(maxCharacters: Int = 12_000) -> String {
-        let text = promptText()
+    public func boundedPromptText(language: AppLanguage, maxCharacters: Int = 12_000) -> String {
+        let text = promptText(language: language)
         guard text.count > maxCharacters else { return text }
         let kept = String(text.prefix(maxCharacters))
-        return kept + localizedText(.diagnosisTruncatedNotice, String(text.count), String(maxCharacters))
+        return kept + localizedText(.diagnosisTruncatedNotice, language: language, String(text.count), String(maxCharacters))
     }
 }
 
@@ -219,6 +226,7 @@ public enum DiagnosisContextBuilder {
         kind: DiagnosisEvidence.Kind,
         sql: String,
         rows: [[String?]]?,
+        language: AppLanguage,
         failureReason: String? = nil
     ) -> DiagnosisEvidence {
         if let failureReason {
@@ -226,7 +234,7 @@ public enum DiagnosisContextBuilder {
                 id: id,
                 kind: kind,
                 sql: sql,
-                note: localizedText(.diagnosisEvidenceUnavailable, failureReason),
+                note: localizedText(.diagnosisEvidenceUnavailable, language: language, failureReason),
                 isAvailable: false
             )
         }
@@ -236,11 +244,11 @@ public enum DiagnosisContextBuilder {
         let note: String
         if all.isEmpty {
             // 注意：证据的 note 不带括号（它是正文），带括号的那份只用在行尾的补充说明里。
-            note = localizedText(.diagnosisEvidenceEmptyNote)
+            note = localizedText(.diagnosisEvidenceEmptyNote, language: language)
         } else if truncated {
-            note = localizedText(.diagnosisEvidenceTruncated, String(all.count), String(maxRowsPerEvidence))
+            note = localizedText(.diagnosisEvidenceTruncated, language: language, String(all.count), String(maxRowsPerEvidence))
         } else {
-            note = localizedText(.diagnosisEvidenceRows, String(all.count))
+            note = localizedText(.diagnosisEvidenceRows, language: language, String(all.count))
         }
         return DiagnosisEvidence(
             id: id,

@@ -10,11 +10,11 @@ final class AICaptureTests: XCTestCase {
             target: "postgres@192.168.5.217:5432/dsh_db（8.4.10）",
             evidence: [
                 DiagnosisContextBuilder.makeEvidence(
-                    id: "e1", kind: .statement, sql: "SELECT * FROM orders", rows: []
+                    id: "e1", kind: .statement, sql: "SELECT * FROM orders", rows: [], language: .simplifiedChinese
                 ),
                 DiagnosisContextBuilder.makeEvidence(
                     id: "e2", kind: .executionPlan, sql: "EXPLAIN SELECT * FROM orders",
-                    rows: [["Seq Scan on orders  (cost=0.00..431.00 rows=21 width=8)"], ["  Filter: (id > 1)"]]
+                    rows: [["Seq Scan on orders  (cost=0.00..431.00 rows=21 width=8)"], ["  Filter: (id > 1)"]], language: .simplifiedChinese
                 )
             ]
         )
@@ -23,7 +23,7 @@ final class AICaptureTests: XCTestCase {
     private func report() -> DiagnosisAdviceReport {
         DiagnosisAdvice.parse(
             reply: "结论: 全表扫描 [依据: e2]\n建议: CREATE INDEX ON orders (id)",
-            context: context()
+            context: context(), language: .simplifiedChinese
         )
     }
 
@@ -55,7 +55,7 @@ final class AICaptureTests: XCTestCase {
         XCTAssertEqual(first.source.fingerprint, second.source.fingerprint, "同一份产物必须算出同一个指纹")
         XCTAssertNotNil(first.source.fingerprint)
 
-        let other = DiagnosisAdvice.parse(reply: "结论: 换个说法 [依据: e2]", context: context())
+        let other = DiagnosisAdvice.parse(reply: "结论: 换个说法 [依据: e2]", context: context(), language: .simplifiedChinese)
         let third = AICapture.diagnosisNote(question: "q", target: context().target, context: context(), report: other)
         XCTAssertNotEqual(first.source.fingerprint, third.source.fingerprint, "结论不同就是另一份产物")
     }

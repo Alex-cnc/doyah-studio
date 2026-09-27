@@ -54,10 +54,10 @@
       "why": "**登记为已知缺口**：同上（`❌ <id> 失败：<detail>` 会打到用户眼前，且 detail 同时进 JSON）。归 **L-20**。"
     },
     {
-      "anchor": "rows: nil,\n                            failureReason: error.localizedDescription",
+      "anchor": "rows: nil,\n                            language: language,\n                            failureReason: error.localizedDescription",
       "count": 1,
       "reachesUser": false,
-      "why": "诊断取证里的字段：进**提示词上下文**与 JSON，给模型与脚本看。"
+      "why": "诊断取证里的字段：进**提示词上下文**与 JSON，给模型与脚本看。（L-47 把语言透传后，这一行中间多了一句 `language: language,` —— 锚点随之更新，别把它当成新增出口。）"
     },
     {
       "anchor": "record.record(success: false, at: Date(), failure: error.localizedDescription)",

@@ -6222,6 +6222,10 @@ final class AppState: ObservableObject {
         diagnosisMessage = nil
         defer { diagnosisIsGathering = false }
 
+        // 证据里的文案（「查到了，但没有行」这类标注）与提示词同一种语言：
+        // 取的是**当前界面语言**（宿主语境优先），队列 L-47 —— 此前 Core 写死中文，
+        // 英文界面上「给模型的资料」整块是中文。
+        let language = LocalizationManager.shared.effectiveLanguage
         let dialect = SQLDialectFactory.make(for: configuration.dbType)
         var collected: [DiagnosisEvidence] = []
         do {
@@ -6231,20 +6235,25 @@ final class AppState: ObservableObject {
                 let id = DiagnosisContextBuilder.evidenceID(index: index)
                 if item.kind == .statement {
                     collected.append(
-                        DiagnosisContextBuilder.makeEvidence(id: id, kind: .statement, sql: item.sql, rows: [])
+                        DiagnosisContextBuilder.makeEvidence(
+                            id: id, kind: .statement, sql: item.sql, rows: [], language: language
+                        )
                     )
                     continue
                 }
                 do {
                     let rows = try await runDiagnosisQuery(item.sql, on: service)
                     collected.append(
-                        DiagnosisContextBuilder.makeEvidence(id: id, kind: item.kind, sql: item.sql, rows: rows)
+                        DiagnosisContextBuilder.makeEvidence(
+                            id: id, kind: item.kind, sql: item.sql, rows: rows, language: language
+                        )
                     )
                 } catch {
                     // 取不到就是取不到：把服务端说的话带上（"扩展没装"和"权限不够"要分得开）。
                     collected.append(
                         DiagnosisContextBuilder.makeEvidence(
                             id: id, kind: item.kind, sql: item.sql, rows: nil,
+                            language: language,
                             failureReason: error.localizedDescription
                         )
                     )
@@ -6276,11 +6285,15 @@ final class AppState: ObservableObject {
     }
 
     /// 解读模型回答：采纳有依据的、拒绝没依据的（判据在 Core）。
+    ///
+    /// 语言与提示词**同一个值**（队列 L-47）：行格式的语法记号按语言取，
+    /// 英文提示词 + 中文语法记号会把整篇判成「没看懂」。
     func parseDiagnosisReply() {
         let configuration = selectedConnection
         diagnosisReport = DiagnosisAdvice.parse(
             reply: diagnosisReply,
             context: diagnosisContext,
+            language: LocalizationManager.shared.effectiveLanguage,
             databaseType: configuration?.dbType ?? .postgresql,
             policy: ExecutionSafetyPolicy.policy(
                 for: selectedConnection.map { ConnectionAppearance(environment: $0.environment, colorTag: $0.colorTag) } ?? ConnectionAppearance(),

@@ -1674,6 +1674,9 @@ struct DoyahCLI {
         let service = PostgresService(config: config, password: password)
         do {
             let info = try await service.connect()
+            // CLI 没有界面语境 ⇒ 一律简体中文（队列 L-47 的口径：语言**显式给定**，
+            // 「命令行输出用什么语言」不跟任何界面设置走）。
+            let language = AppLanguage.simplifiedChinese
             var evidence: [DiagnosisEvidence] = []
             let plan = DiagnosisContextBuilder.evidencePlan(for: sql, dialect: dialect)
             for (index, item) in plan.enumerated() {
@@ -1682,7 +1685,7 @@ struct DoyahCLI {
                     // 语句本身不是"跑出来的"证据，但它同样要有编号（模型要引用它）。
                     evidence.append(
                         DiagnosisContextBuilder.makeEvidence(
-                            id: id, kind: .statement, sql: item.sql, rows: []
+                            id: id, kind: .statement, sql: item.sql, rows: [], language: language
                         )
                     )
                     continue
@@ -1691,7 +1694,7 @@ struct DoyahCLI {
                     let rows = try await runDiagnoseQuery(service: service, sql: item.sql)
                     evidence.append(
                         DiagnosisContextBuilder.makeEvidence(
-                            id: id, kind: item.kind, sql: item.sql, rows: rows
+                            id: id, kind: item.kind, sql: item.sql, rows: rows, language: language
                         )
                     )
                 } catch {
@@ -1699,6 +1702,7 @@ struct DoyahCLI {
                     evidence.append(
                         DiagnosisContextBuilder.makeEvidence(
                             id: id, kind: item.kind, sql: item.sql, rows: nil,
+                            language: language,
                             failureReason: error.localizedDescription
                         )
                     )
@@ -1723,6 +1727,7 @@ struct DoyahCLI {
                 adviceReport = DiagnosisAdvice.parse(
                     reply: reply,
                     context: context,
+                    language: language,
                     databaseType: dialect.databaseType,
                     policy: policy
                 )
@@ -1804,7 +1809,7 @@ struct DoyahCLI {
                 json += "}"
                 print(json)
             } else {
-                print(context.boundedPromptText())
+                print(context.boundedPromptText(language: language))
                 if let adviceReport {
                     print("")
                     print("== 解析结果 ==")
