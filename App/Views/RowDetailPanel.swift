@@ -78,9 +78,13 @@ struct RowDetailPanel: View {
                 .imageScale(.large)
                 .foregroundStyle(Theme.text(.tertiary))
 
-            // 文案里带 `**` 强调：`Text(String)` **不解析** Markdown，会原样显示星号；
-            // 走 `LocalizedStringKey` 才会把强调渲染出来（译文字符串查不到就回落到它自己）。
-            Text(LocalizedStringKey(L(.rowDetailNoSelection)))
+            // L-19（口径 ②，2026-09-28 第 43 轮）：**文案即所见** —— 语言表里的文案**不写 markdown
+            // 标记**，渲染点一律走纯文本 `Text(String)`。原先这里走 `LocalizedStringKey` 是为了把
+            // `**重点**` 渲染成强调，但同一个键（以及另外 15 个键）还会流进**根本没有 markdown 这条路**
+            // 的地方 —— 状态栏那一行（`statusMessage` 是 `String`）、备份恢复的日志行（`[String]`）——
+            // 于是同一个键在两处显示不同。口径统一成纯文本后，`**` 这一族缺陷在结构上不再可能出现；
+            // 判据由 `Scripts/check-copy-emphasis.py` 每轮守着（闭环第 3 项）。
+            Text(L(.rowDetailNoSelection))
                 .font(Theme.font(.body))
                 .foregroundStyle(Theme.text(.secondary))
                 .multilineTextAlignment(.center)
