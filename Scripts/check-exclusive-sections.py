@@ -37,8 +37,11 @@ import sys
 MARKER_RE = re.compile(r"\[独占:([A-Za-z0-9_\-]+)\]")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
-ALLOW = "exclusive-allow"
-ALLOW_SECTION = "exclusive-allow-section"   # 放在独占节正文里 = 整节豁免（用于「首建占位节」等）
+ALLOW = "exclusive-allow"          # 独占节的显式豁免
+CONTRACT_TAG = "contract-change"    # 契约层的显式痕迹（等价豁免，但语义是「该动契约」）
+ALLOW_SECTION = "exclusive-allow-section"   # 独占节正文里的整节豁免（用于「首建占位节」等）
+OPEN_MARK = "[开放]"               # 开放节：任何一侧都可改（变更记录 / 索引这类台账节）
+DEFAULT_DOCS = ("概要设计", "需求规范书", "产品能力规划说明书")   # 契约锁定范围：三书
 
 
 def _unquote(p):
@@ -97,8 +100,45 @@ def parse_sections(lines):
 def section_of(sections, line0):
     for tok, _lv, s, e, title in sections:
         if s <= line0 <= e:
-            return tok, title
-    return None, None
+            return tok, title, (s, e)
+    return None, None, None
+
+
+def parse_all_sections(lines):
+    """所有标题（含无标记）→ [(idx0, level, title, tok, is_open)]。"""
+    heads = []
+    for i, line in enumerate(lines):
+        m = HEADING_RE.match(line)
+        if not m:
+            continue
+        title = m.group(2)
+        tok = MARKER_RE.search(title)
+        heads.append((i, len(m.group(1)), title, tok.group(1) if tok else None, OPEN_MARK in title))
+    return heads
+
+
+def kind_of(lines, line0):
+    """某行归属：('exclusive', tok) / ('open', None) / ('contract', None) / ('none', None)。
+
+    按「祖先链」判定：`[独占:X]` / `[开放]` 对**其全部子节**生效（与 parse_sections 一致），
+    外层标记优先于内层；一条链上都没有标记 → 契约层（锁定给 contract_owner）。
+    """
+    stack = []
+    for i, lv, title, tok, is_open in parse_all_sections(lines):
+        if i > line0:
+            break
+        while stack and stack[-1][0] >= lv:
+            stack.pop()
+        stack.append((lv, tok, is_open))
+    if not stack:
+        return ("none", None)
+    for _lv, tok, _o in stack:
+        if tok:
+            return ("exclusive", tok)
+    for _lv, _t, is_open in stack:
+        if is_open:
+            return ("open", None)
+    return ("contract", None)
 
 
 def read_lines_from_git(base, path):
@@ -142,6 +182,13 @@ def head_message():
     return r.stdout if r.returncode == 0 else ""
 
 
+TAGS = (ALLOW, CONTRACT_TAG)
+
+
+def has_tag(s):
+    return any(x in s for x in TAGS)
+
+
 def group_pairs(hunks):
     """把相邻的 -/+ 折叠成替换对：(idx_list, contents, allow) —— 替换的任一侧带豁免即整体豁免。"""
     pairs, i = [], 0
@@ -154,23 +201,27 @@ def group_pairs(hunks):
         else:
             items = [cur]
             i += 1
-        allow = any(ALLOW in it[3] for it in items)
+        allow = any(has_tag(it[3]) for it in items)
         pairs.append((items, allow))
     return pairs
 
 
-def check(files, mine, theirs, base, diff_text, quiet=False):
+def check(files, mine, theirs, base, diff_text, quiet=False, contract_owner="macos"):
     parsed = parse_diff(diff_text)
     if not parsed:
         if not quiet:
             print("✅ 越界检查：本次改动未涉及受检文档（或无可解析 diff）")
         return 0
     msg = head_message()
-    blanket = re.search(r"%s\s*:\s*(.+)" % ALLOW, msg)
+    blanket = None
+    for tag in TAGS:
+        blanket = re.search(r"%s\s*:\s*(.+)" % tag, msg)
+        if blanket:
+            break
     if blanket:
         print("⏭️  越界检查：HEAD 提交信息含豁免（理由：%s）—— 放行" % blanket.group(1).strip())
         return 0
-    violations, checked = [], 0
+    violations, checked, contracts = [], 0, []
     for path, hunks in sorted(parsed.items()):
         if files and path not in files:
             continue
@@ -207,14 +258,23 @@ def check(files, mine, theirs, base, diff_text, quiet=False):
                 prev = lines[line0 - 1] if line0 > 0 else ""
                 if ALLOW in prev:
                     continue
-                tok, title = section_of(secs, line0)
-                if tok is None:
+                tok, title, _rng = section_of(secs, line0)
+                if tok is not None:
+                    if any(tok == st and s <= line0 <= e for st, s, e in sect_allow):
+                        continue
+                    checked += 1
+                    if tok != mine:
+                        violations.append((path, line1, tok, title, content.strip()[:80]))
                     continue
-                if any(tok == st and s <= line0 <= e for st, s, e in sect_allow):
-                    continue
+                # 无独占标记 → 契约层（锁定给 contract_owner）或 [开放] 节
+                if not any(d in os.path.basename(path) for d in DEFAULT_DOCS):
+                    continue          # 非三书：不锁契约层（只保护独占节）
+                k, _ = kind_of(lines, line0)
+                if k != "contract":
+                    continue          # [开放] / 无标题：放行
                 checked += 1
-                if tok != mine:
-                    violations.append((path, line1, tok, title, content.strip()[:80]))
+                if mine != contract_owner:
+                    contracts.append((path, line1, title, content.strip()[:80]))
     # 去重：同一文件的同一节，同一处改动只报一次
     seen, uniq = set(), []
     for v in violations:
@@ -224,6 +284,14 @@ def check(files, mine, theirs, base, diff_text, quiet=False):
         seen.add(key)
         uniq.append(v)
     violations = uniq
+    seen2, uniq2 = set(), []
+    for v in contracts:
+        key = (v[0], v[1], v[2])
+        if key in seen2:
+            continue
+        seen2.add(key)
+        uniq2.append(v)
+    contracts = uniq2
     if violations:
         print("❌ 越界检查不通过：%d 处改动落在对侧独占节内（本侧=%s）" % (len(violations), mine))
         for path, ln, tok, title, snip in violations:
@@ -231,15 +299,25 @@ def check(files, mine, theirs, base, diff_text, quiet=False):
         print("   处理：① 交对侧来改；② 若确有必要，在该行或上一行注 `%s：理由`；"
               "③ 整批豁免用提交信息 `%s: 理由`。" % (ALLOW, ALLOW))
         return 1
-    print("✅ 越界检查通过：受检改动 %d 行，均不在对侧独占节内（本侧=%s）" % (checked, mine))
+    if contracts:
+        print("❌ 契约层锁定不通过：%d 处改动落在契约层（只允许 %s 侧修改，本侧=%s）"
+              % (len(contracts), contract_owner, mine))
+        for path, ln, title, snip in contracts:
+            print("   %s:%d 落在契约节『%s』：%s" % (path, ln, (title or "")[:40], snip))
+        print("   处理：① 契约层改动走提案，交 %s 侧落笔；② 确有必要时在该行或上一行注 "
+              "`%s：理由`，或提交信息 `%s: 理由`；③ 台账节请标 `%s`。" % (contract_owner, CONTRACT_TAG, CONTRACT_TAG, OPEN_MARK))
+        return 1
+    print("✅ 越界检查通过：受检改动 %d 行（含契约层），均合法（本侧=%s，契约层属 %s）"
+          % (checked, mine, contract_owner))
     return 0
 
 
-def collect_files(args):
+def collect_files(args, base=None):
     if args.files:
         return list(args.files)
-    if args.base:
-        r = subprocess.run(["git", "-c", "core.quotepath=false", "diff", "--name-only", args.base],
+    base = args.base or base          # ← 曾漏掉：不传 --base 时恒返回空 = 门禁空转（假绿）
+    if base:
+        r = subprocess.run(["git", "-c", "core.quotepath=false", "diff", "--name-only", base],
                            capture_output=True, text=True)
         if r.returncode == 0:
             return [x for x in r.stdout.split() if x.endswith(".md")]
@@ -273,36 +351,45 @@ Windows 实现细节：待补。
 ## 9. 已知边界（分平台）
 
 边界表格。
+
+## 10. 变更记录 [开放]
+
+台账行。
 """
     d = tempfile.mkdtemp()
     os.chdir(d)
     subprocess.run(["git", "init", "-q"], check=True)
     subprocess.run(["git", "config", "user.email", "t@t"], check=True)
     subprocess.run(["git", "config", "user.name", "t"], check=True)
-    path = "Doc.md"
+    path = "概要设计.md"   # 三书文件名 → 契约层锁定生效（非三书不锁契约层）
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(doc)
     subprocess.run(["git", "add", path], check=True)
     subprocess.run(["git", "commit", "-qm", "init"], check=True)
 
-    def run(edit_old, edit_new, label):
+    def run(edit_old, edit_new, label, mine="macos"):
         text = open(path, encoding="utf-8").read().replace(edit_old, edit_new, 1)
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(text)
-        diff = subprocess.run(["git", "diff", "--unified=0", "HEAD", "--", path],
+        diff = subprocess.run(["git", "-c", "core.quotepath=false", "diff", "--unified=0", "HEAD", "--", path],
                               capture_output=True, text=True).stdout
         subprocess.run(["git", "checkout", "-q", "--", path], check=True)
-        rc = check([path], "macos", ["windows"], "HEAD", diff, quiet=True)
-        ok = (rc == 1) if label == "应该报红" else (rc == 0)
+        rc = check([path], mine, ["windows" if mine == "macos" else "macos"], "HEAD", diff,
+                   quiet=True, contract_owner="macos")
+        ok = (rc == 1) if "应该报红" in label else (rc == 0)
         print("  自测[%s] %s → %s" % (label, edit_old[:22].strip() or "…", "✅" if ok else "❌ 不符预期"))
         return ok
 
-    a = run("Windows 实现细节：待补。", "Windows 实现细节：小河马补的。", "应该报红")
-    b = run("macOS 实现细节：SwiftUI / Keychain。", "macOS 实现细节：SwiftUI / Keychain / AppKit。", "应该通过")
-    c = run("契约正文，两侧都可改。", "契约正文，两侧都可改（第二版）。", "应该通过")
-    d2 = run("Windows 实现细节：待补。", "Windows 实现细节：小河马补的。 exclusive-allow：跨端联调需要", "应该通过")
-    print("自测汇总：%s" % ("全部通过" if all([a, b, c, d2]) else "有失败"))
-    return 0 if all([a, b, c, d2]) else 1
+    r = []
+    r.append(run("Windows 实现细节：待补。", "Windows 实现细节：macOS 侧越过界了。", "对侧改独占节 · 应该报红"))
+    r.append(run("macOS 实现细节：SwiftUI / Keychain。", "macOS 实现细节：SwiftUI / Keychain / AppKit。", "本侧改独占节 · 应该通过"))
+    r.append(run("契约正文，两侧都可改。", "契约正文（第二版）。", "契约所有者改契约节 · 应该通过"))
+    r.append(run("Windows 实现细节：待补。", "Windows 实现细节：小河马补的。 exclusive-allow：跨端联调需要", "独占节带豁免 · 应该通过"))
+    r.append(run("契约正文，两侧都可改。", "契约正文：Windows 侧直接改了。", "非所有者改契约节 · 应该报红", mine="windows"))
+    r.append(run("契约正文，两侧都可改。", "契约正文：带着痕迹改。 contract-change：跨端必须先改契约", "非所有者改契约节带痕迹 · 应该通过", mine="windows"))
+    r.append(run("台账行。", "台账行：小河马加了一行。", "改 [开放] 台账节 · 应该通过", mine="windows"))
+    print("自测汇总：%s（%d/%d）" % ("全部通过" if all(r) else "有失败", sum(r), len(r)))
+    return 0 if all(r) else 1
 
 
 def main():
@@ -314,6 +401,8 @@ def main():
     ap.add_argument("--diff-file", default=None, help="从文件读 diff（CI / 自测）")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--contract-owner", default="macos",
+                    help="契约层（无独占标记）的归属侧，默认 macos（大河马）")
     args = ap.parse_args()
 
     if args.self_test:
@@ -326,7 +415,8 @@ def main():
     if args.diff_file:
         with open(args.diff_file, encoding="utf-8") as fh:
             diff_text = fh.read()
-        return check(args.files or [], mine, theirs, args.base, diff_text, args.quiet)
+        return check(args.files or [], mine, theirs, args.base, diff_text, args.quiet,
+                     contract_owner=args.contract_owner)
 
     base = args.base
     if base is None:
@@ -339,7 +429,7 @@ def main():
     if base is None:
         print("⚠️  越界检查跳过：当前目录不是 git 仓库，且未指定 --base")
         return 0
-    files = collect_files(args)
+    files = collect_files(args, base)
     if not files:
         if not args.quiet:
             print("✅ 越界检查通过：基线 %s 起没有受检的 .md 改动" % base)
@@ -349,7 +439,7 @@ def main():
     if r.returncode != 0:
         print("⚠️  越界检查跳过：git diff 失败（%s）" % r.stderr.strip()[:120])
         return 0
-    return check(files, mine, theirs, base, r.stdout, args.quiet)
+    return check(files, mine, theirs, base, r.stdout, args.quiet, contract_owner=args.contract_owner)
 
 
 if __name__ == "__main__":
