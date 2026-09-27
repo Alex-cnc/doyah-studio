@@ -1,6 +1,7 @@
 // ⚠️ 本文件由 `Scripts/gen-sqlite-constants.py` **生成**，不要手改。
 // 重跑生成器即可；「生成物 ↔ 头文件」是否一致由 `python3 Scripts/gen-sqlite-constants.py --check` 判
-// （**当前未接进 `verify-all.sh`**，见队列条目 —— 别以为门禁替你看着）。
+// —— **已接进 `Scripts/verify-all.sh` 第 18 项**（与 `--self-test` 一起跑；队列 L-43、第 30 轮），
+// 生成物被手改一行、或头文件换版后没重生成，闭环当场报红并指名本文件。
 //
 // 为什么有这份「Swift 侧的常量表」：第 18 轮实测，Swift 侧**大量**引用 C 宏常量会把绑定目标判进
 // SwiftPM 的显式模块构建档，而那一档下 vendored 的 clang 模块进不了模块表 —— 症状是

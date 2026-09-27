@@ -70,15 +70,25 @@
   },
   "wrapper": {
     "source": "Core/NoteStorage/SQLiteKit.swift",
-    "constants": "Core/NoteStorage/SQLiteConstants.swift（由 Scripts/gen-sqlite-constants.py 从 vendored 头文件生成；`--check` 可核对，**当前未接进闭环**）",
+    "constants": "Core/NoteStorage/SQLiteConstants.swift（由 Scripts/gen-sqlite-constants.py 从 vendored 头文件生成；`--check` **已接进 `verify-all.sh` 第 18 项**，`--self-test` 五条篡改）",
     "storage": "Core/NoteStorage/NoteDatabase.swift（schema v1 + 映射 + 检索 + VACUUM INTO 快照）",
     "migration": "Core/NoteStorage/NoteLibraryMigration.swift（notes.json → notes.sqlite3 一次性迁移）",
     "tests": "Tests/SQLiteKitTests.swift（绑定层）+ Tests/NoteStoreSQLiteTests.swift（存储层 / 迁移 / 快照）",
     "status": "wired",
     "whyNotSystemLibrary": "口径：不许换系统自带 libsqlite3、也不许引第三方 Swift 封装（GRDB 官方仅 Apple+Linux、Windows 是社区探索；SwiftData / Core Data 为 Apple 独占），否则「Windows 与 macOS 完全一致」不成立。见 FR-PLUG-08。"
   },
+  "generator": {
+    "why": "Swift 侧不许引用 C 宏（第 18 轮实测：大量引用会把绑定目标判进 SwiftPM 的显式模块构建档，那一档下 vendored 的 clang 模块进不了模块表 ⇒ `import CSQLite3` 不报错但声明全都「cannot find in scope」）。所以宏的值**从头文件生成**成 Swift 常量 —— 于是多出一份**生成物**，而生成物漂移没有任何症状（编译照过、单测照绿，只有三端行为悄悄不一致）。本节点把「生成器 ↔ 生成物 ↔ vendored 头文件」三者的绑定写死，由本门禁对账。",
+    "script": "Scripts/gen-sqlite-constants.py",
+    "output": "Core/NoteStorage/SQLiteConstants.swift",
+    "header": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
+    "versionSource": "头文件里的 `SQLITE_VERSION` 与台账 version 同源（见本文件 version 字段）",
+    "inVerifyAll": "Scripts/verify-all.sh 第 18 项",
+    "negativeCases": "Scripts/gen-sqlite-constants.py --self-test（5 条篡改：手改生成物一行的值 / 生成物文件丢失 / 头文件宏值被改致生成物过期 / 头文件删掉正文在用的宏 / 正文引用头文件里没有的宏 —— 每条都要报红并指名出处；末例核对真仓库三份文件逐字节未变）",
+    "shapeLimit": "引用形状 = `SQLiteMacro.<小写>Macro`（成员名 `[a-z0-9_]`）。写成 camelCase 的引用生成器**看不见**，后果不是静默而是那个常量不生成 ⇒ Swift 编译报「cannot find in scope」（当场作响，故未做成机械判据）。"
+  },
   "wiring": {
-    "gate": "Scripts/check-vendored-sqlite.py（--self-test 跑负例：篡改十种，门禁必须报红 —— 含证据锚点陈旧 / 闭环接线被删 / 闭环没跑负例 / 台账项号不符 / 项数声明漏改）",
+    "gate": "Scripts/check-vendored-sqlite.py（--self-test 跑负例：篡改十三种，门禁必须报红 —— 含证据锚点陈旧 / 闭环接线被删 / 闭环没跑负例 / 台账项号不符（第 17 项与 generator 第 18 项两处都判）/ 项数声明漏改 / 生成器没进闭环）",
     "negativeCases": "Scripts/check-vendored-sqlite.py --self-test",
     "smoke": "Scripts/smoke-vendored-sqlite.py（把 sqlite3.c 现编成可执行文件，跑版本 / 宏 / WAL / 参数化读写 / FTS5 与中文四条 / DQS=0 共 13 条断言）",
     "acquisition": "Scripts/vendor-sqlite3.sh",
@@ -149,6 +159,26 @@
         "file": "Tests/NoteStoreSQLiteTests.swift",
         "anchor": "testDeleteCascadesToTagsTimelineAndAttachments",
         "why": "级联删除要真查孤儿行 —— SQLite 默认**关着**外键，这一条盯着「忘了 `PRAGMA foreign_keys = ON`」这类静默失效"
+      },
+      {
+        "file": "Scripts/gen-sqlite-constants.py",
+        "anchor": "DEFINE_PATTERN = re.compile",
+        "why": "宏值**从头文件读**（不手抄一张表）：这一行掉了，生成物就会变成一份没人维护的手抄副本 —— 而它照样能编译"
+      },
+      {
+        "file": "Scripts/gen-sqlite-constants.py",
+        "anchor": "python3 Scripts/gen-sqlite-constants.py --self-test",
+        "why": "生成器自己的负例入口（5 条篡改）—— 与门禁本身一样，「接线不进闭环就永远不跑」"
+      },
+      {
+        "file": "Core/NoteStorage/SQLiteConstants.swift",
+        "anchor": "本文件由 `Scripts/gen-sqlite-constants.py` **生成**",
+        "why": "生成物**自报生成者**（含「已接进第 18 项」与修法）—— 手改的人第一眼就该看见「别手改」，而不是靠别人记得"
+      },
+      {
+        "file": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
+        "anchor": "#define SQLITE_OK",
+        "why": "头文件是宏值的唯一来源（第 18 项逐字节比对的另一头）；这一行被改 ⇒ 生成物过期"
       }
     ]
   }

@@ -4,7 +4,7 @@ set -euo pipefail
 # 本工程的一条命令验证闭环。
 #
 # 拆开跑过很多次、也就漏跑过很多次（尤其是文档计数与设计令牌这两项），
-# 所以合成一条：**改完代码跑它，十七项全过才算完**。
+# 所以合成一条：**改完代码跑它，十八项全过才算完**。
 #
 #   1. Core 单测（SwiftPM，不需要数据库）+ 平台适配层单测
 #   2. Core 平台中立性（Core 里不得出现平台专属依赖 —— 否则 Linux 编译不过）
@@ -26,11 +26,20 @@ set -euo pipefail
 #  13. 脚本连接信息参数化（连真库的脚本不许写死端口 / 地址 / 账号，见 `check-script-env-parameterization.py`）
 #  14. 连接失败的文案覆盖面（驱动错误码 ↔ 文案台账，见 `check-connection-failure-coverage.py`）
 #  15. 命令行失败输出的可读化覆盖面（L-15：不许出现「有话说却直接打英文串」的 print，
+#      见 `check-cli-failure-readability.py`）
 #  16. 越界检查（分层的三书「形态 A」：一次改动不得落在**对侧独占节**内 ——
 #      `[独占:macos]` / `[独占:windows]` 标记的节各归其主，见 `check-exclusive-sections.py`）
-#      见 `check-cli-failure-readability.py`）
 #  17. vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例自检 + 现编现跑自证
 #      （`check-vendored-sqlite.py`｜`--self-test`｜`smoke-vendored-sqlite.py`）
+#  18. 生成物一致性（L-43，2026-09-27 第 30 轮）：`gen-sqlite-constants.py --check`
+#      （`Core/NoteStorage/SQLiteConstants.swift` 与 vendored 头文件逐字节一致）
+#      + `--self-test`（5 条篡改都要报红并指名出处）
+#
+# 第 18 项是 2026-09-27（队列 L-43）补的：生成器与 `--check` 早就写好，**脚本头部自己也写着
+# 「本 check 未接进 verify-all」** —— 有判据、没闭环，等于手改一行生成物、或头文件换版后忘了
+# 重生成，谁都不会报红（编译照过、单测照绿，只有三端行为悄悄不一致）。除接进闭环外，
+# 「生成器 ↔ 生成物 ↔ vendored 头文件」三者的绑定也登记进 `Scripts/vendored-sqlite.json`
+# 的 `generator` 节点，由第 17 项的台账门禁逐条对账（台账撒谎 / 接线被删照样报红）。
 #
 # 第 8 项是 2026-09-23 补的：那天发现命令面板有 9 条命令「设了标志位但没人读」，
 # 用户点了完全没反应，而当时已有的 7 项门禁**全部看不见**这类缺陷（编译、单测、
@@ -71,7 +80,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "${ROOT}"
 
 # ── 平台判定与「跳过」语义（L-33，开发循环第 29 轮）────────────────────────────
-# 十七项里有 **两项是 macOS 专属**：第 1 项（Core 单测）与第 11 项（打包 .app）——
+# 十八项里有 **两项是 macOS 专属**：第 1 项（Core 单测）与第 11 项（打包 .app）——
 # 两者都要 Xcode 工具链（`DEVELOPER_DIR` → `/Applications/Xcode.app/...`，见两份脚本的第 10 / 24 行）。
 # 在非 macOS 机器（另一平台 / Linux）上跑，原先会以「命令或路径不存在」的形式**硬失败**，
 # 看起来像门禁红了，其实只是平台不适用（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。
@@ -106,21 +115,21 @@ skip_step() {   # skip_step <项号> <说明>
   SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
   SKIPPED_ITEMS="${SKIPPED_ITEMS}   · 第 $1 项 ${2}
 "
-  echo "==> $1/17 ⏭ 跳过（平台不适用：PLATFORM=${PLATFORM}，缺 Xcode 工具链）—— ${2}"
+  echo "==> $1/18 ⏭ 跳过（平台不适用：PLATFORM=${PLATFORM}，缺 Xcode 工具链）—— ${2}"
   echo "    等价物见 Docs/概要设计.md §8.3（每端必需项清单）与 §8.5.3（另一平台的 PowerShell 版）"
 }
 
 if [ "${PLATFORM}" = "macos" ]; then
-  echo "==> 1/17 Core 与平台适配层单测"
+  echo "==> 1/18 Core 与平台适配层单测"
   ./Scripts/verify-core.sh
 else
   skip_step 1 "Core 与平台适配层单测（Scripts/verify-core.sh 要 Xcode 工具链的 swift）"
 fi
 
-echo "==> 2/17 Core 平台中立性"
+echo "==> 2/18 Core 平台中立性"
 python3 Scripts/check-core-portability.py
 
-echo "==> 3/17 本地化：Core 展示文本棘轮（R-45）+「当前语言只有一个来源」（L-13）"
+echo "==> 3/18 本地化：Core 展示文本棘轮（R-45）+「当前语言只有一个来源」（L-13）"
 python3 Scripts/check-core-localization.py
 # L-13：界面语言有两条路 —— `L(...)` 与**显式传语言下去**（`summary(language:)` 之类）。
 # 后者原先取的是**用户选择**（`LocalizationManager.shared.language`），绕过了渲染语境：
@@ -128,7 +137,7 @@ python3 Scripts/check-core-localization.py
 # 收成一个口子 `effectiveLanguage`（宿主语境优先），并把这个口径变成机械判据。
 python3 Scripts/check-effective-language.py
 
-echo "==> 4/17 文档表格与派生计数"
+echo "==> 4/18 文档表格与派生计数"
 # L-33（2026-09-27 第 29 轮）：本项的默认清单里有 **5 份被 `.gitignore` 排除的文档**
 # （兼容性矩阵 / GBase-技术验证 / 测试用例 / 发布方案 / 手工验收运行手册）—— 它们只在主开发机上，
 # 干净克隆与另一平台都没有。原先一律判红 ⇒ 那台机器上这一项**必红且与改动无关**（§8.5.6-4）。
@@ -151,13 +160,13 @@ python3 Scripts/check-doc-versions.py
 # 派生文件不得漂移：终端配色 JSON ↔ Core ↔ 人读文档三方一致（FR-EDIT-29 的跨平台交接物）
 python3 Scripts/check-terminal-palette.py
 
-echo "==> 5/17 需求状态一致性（索引表 ↔ 正文定义行）"
+echo "==> 5/18 需求状态一致性（索引表 ↔ 正文定义行）"
 python3 Scripts/check-status-consistency.py
 
-echo "==> 6/17 设计令牌棘轮"
+echo "==> 6/18 设计令牌棘轮"
 python3 Scripts/check-design-tokens.py
 
-echo "==> 7/17 平台等价矩阵"
+echo "==> 7/18 平台等价矩阵"
 # L-26（2026-09-27 第 25 轮）：这一项现在跑两条 ——
 # ① `--check`：SRS §10.10 的表是否与 `Docs/平台实现状态.json` 台账一致（列由台账决定，
 #    加平台 = 加台账里的一项，见脚本头注释）；
@@ -169,13 +178,13 @@ echo "==> 7/17 平台等价矩阵"
 python3 Scripts/gen-platform-parity.py --check
 python3 Scripts/gen-platform-parity.py --self-test
 
-echo "==> 8/17 平台中立性棘轮"
+echo "==> 8/18 平台中立性棘轮"
 python3 Scripts/check-platform-neutrality.py
 
-echo "==> 9/17 命令面板接线（FR-EDIT-25）"
+echo "==> 9/18 命令面板接线（FR-EDIT-25）"
 python3 Scripts/check-palette-wiring.py
 
-echo "==> 10/17 插件装配链（FR-PLUG-01~03 / 06 / 07 + ADR-35）"
+echo "==> 10/18 插件装配链（FR-PLUG-01~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py
 python3 Scripts/check-plugin-assembly.py
 # L-22：FR-PLUG-05 的「Linux 笔记＝本地离线、数据不外发（公司合规）」不能只是一句话 ——
@@ -186,22 +195,22 @@ python3 Scripts/check-plugin-assembly.py
 python3 Scripts/check-notes-offline.py
 
 if [ "${PLATFORM}" = "macos" ]; then
-  echo "==> 11/17 打包 .app（沙箱）"
+  echo "==> 11/18 打包 .app（沙箱）"
   ./Scripts/build-app.sh
 else
   skip_step 11 "打包 .app（Scripts/build-app.sh 走 xcodebuild，且产物是 .app 包）"
 fi
 
-echo "==> 12/17 脚本 shell 多字节安全（bash 3.2 变量名坑）"
+echo "==> 12/18 脚本 shell 多字节安全（bash 3.2 变量名坑）"
 python3 Scripts/check-shell-locale-safety.py
 
-echo "==> 13/17 脚本连接信息参数化（连真库的脚本不许写死端口 / 地址 / 账号）"
+echo "==> 13/18 脚本连接信息参数化（连真库的脚本不许写死端口 / 地址 / 账号）"
 python3 Scripts/check-script-env-parameterization.py
 
-echo "==> 14/17 连接失败的文案覆盖面（驱动错误码 ↔ 文案台账）"
+echo "==> 14/18 连接失败的文案覆盖面（驱动错误码 ↔ 文案台账）"
 python3 Scripts/check-connection-failure-coverage.py
 
-echo "==> 15/17 命令行失败输出的可读化覆盖面（L-15）"
+echo "==> 15/18 命令行失败输出的可读化覆盖面（L-15）"
 # L-15：CLI 有 57 处「把失败说给用户看」的输出原先各写各的（`print("…：\(error.localizedDescription)")`），
 # 打出来是 `The operation couldn't be completed. (PostgresNIO.PSQLError error 1.)` —— 既不是人话、
 # 也没给方向，而驱动其实说过原因（SQLSTATE / 驱动码），只是没人接。这一项把「每一处用户可见的
@@ -209,12 +218,12 @@ echo "==> 15/17 命令行失败输出的可读化覆盖面（L-15）"
 # 并把入口自己的三条口径（认得出给方向 / 中性归因 / 认不出原样）与调用处数棘轮一起钉住。
 python3 Scripts/check-cli-failure-readability.py
 
-echo "==> 16/17 越界检查（三书独占节：改动不得落在对侧节内）"
+echo "==> 16/18 越界检查（三书独占节：改动不得落在对侧节内）"
 # 形态 A（2026-09-27 拍板）：三书单点定稿，但「平台实现」层按端独占 —— 标记 `[独占:macos]` /
 # `[独占:windows]` 的节只由该侧改；本机 = macOS 侧。判据与逃生门见脚本头注释。
 python3 Scripts/check-exclusive-sections.py
 
-echo "==> 17/17 vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例 + 现编现跑自证"
+echo "==> 17/18 vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例 + 现编现跑自证"
 # 为什么这三条必须一起跑（第 18 轮 L-25 第 1 批）：
 #   · 这份 `sqlite3.c` 是 9.5 MB 的**生成文件**，换版本 / 手改一行 / 编译宏掉一个都**不会有症状**，
 #     只会让三端行为悄悄不一致（FR-PLUG-08 的口径是「三端同一份引擎，不许换系统 libsqlite3」）；
@@ -228,6 +237,20 @@ python3 Scripts/check-vendored-sqlite.py
 python3 Scripts/check-vendored-sqlite.py --self-test
 python3 Scripts/smoke-vendored-sqlite.py
 
+echo "==> 18/18 生成物一致性（L-43）：生成物 ↔ vendored 头文件逐字节"
+# 为什么这一项必须有（第 30 轮 L-43）：`Core/NoteStorage/SQLiteConstants.swift` 是**生成物**，
+# 生成器 `gen-sqlite-constants.py` 早就写好了 `--check`，**而且脚本头部自己就写着
+# 「本 check 未接进 verify-all.sh」** —— 有判据、没闭环。后果：手改生成物一行、
+# 或头文件换版后忘了重生成，编译照过、单测照绿、谁都不会报红（与第 17 项那个 9.5 MB
+# 生成文件同一族 —— 「生成文件没有症状」）。同理**不许拿「我重跑过生成器」当证据**：
+# 判据是逐字节比对，不是记忆。
+# 第二条是门禁自己的证据（5 条篡改：手改生成物一行 / 生成物丢失 / 改头文件宏值致生成物过期 /
+# 头文件删掉正文在用的宏 / 正文引用头文件里没有的宏 —— 每条都必须报红**并指名出处**），
+# 夹具一律在临时目录里（末例核对真仓库三份文件逐字节未变）。
+# 台账侧绑定见 `Scripts/vendored-sqlite.json` 的 `generator` 节点（第 17 项对账）。
+python3 Scripts/gen-sqlite-constants.py --check
+python3 Scripts/gen-sqlite-constants.py --self-test
+
 if [ "${REQUIRE_ALL}" = "1" ] && [ "${SKIPPED_COUNT}" -gt 0 ]; then
   echo "❌ 有 ${SKIPPED_COUNT} 项被跳过，而本次要求「跳过即红」（--require-all）："
   echo "${SKIPPED_ITEMS}"
@@ -235,9 +258,9 @@ if [ "${REQUIRE_ALL}" = "1" ] && [ "${SKIPPED_COUNT}" -gt 0 ]; then
 fi
 
 if [ "${SKIPPED_COUNT}" -gt 0 ]; then
-  echo "✅ 本平台（${PLATFORM}）可跑的项全部通过：十七项中跑 $((17 - SKIPPED_COUNT)) 项、跳过 ${SKIPPED_COUNT} 项"
+  echo "✅ 本平台（${PLATFORM}）可跑的项全部通过：十八项中跑 $((18 - SKIPPED_COUNT)) 项、跳过 ${SKIPPED_COUNT} 项"
   echo "   —— **跳过 ≠ 通过**，跳过的是平台不适用项，逐条如下（等价物见 §8.3 / §8.5.3）："
   echo "${SKIPPED_ITEMS}"
 else
-  echo "✅ 验证闭环全部通过（十七项）"
+  echo "✅ 验证闭环全部通过（十八项）"
 fi

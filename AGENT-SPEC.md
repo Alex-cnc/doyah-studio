@@ -91,7 +91,7 @@
 ```bash
 cd ~/.dsh/projects/DoyahStudio
 git fetch -q origin && git status --short          # 有没有别人的改动
-./Scripts/verify-all.sh                            # 十七项，先确认基线是绿的
+./Scripts/verify-all.sh                            # 十八项，先确认基线是绿的
 ```
 
 ### CMD-02 开工前
@@ -99,7 +99,7 @@ git fetch -q origin && git status --short          # 有没有别人的改动
 
 ### CMD-03 改代码（每一批都要走完）
 ```bash
-./Scripts/verify-all.sh        # 十七项；红了先修基线，别在红上叠改动
+./Scripts/verify-all.sh        # 十八项；红了先修基线，别在红上叠改动
 ./Scripts/verify-core.sh       # 只要 Core 单测（2026-09-27 实测：2003 tests / 0 failures）
 ./Scripts/build-app.sh         # 要跑终端 i 类功能用 DOYAH_NO_SANDBOX=1 版本
 ./Scripts/make-ui-snapshots.sh # 界面快照（当前 100 张 / 50 组：中英成对 + 深浅）
@@ -133,7 +133,7 @@ git push origin master && git ls-remote origin master   # 复核远端哈希 == 
 
 | 资产 | 位置 | 说明 |
 |---|---|---|
-| 一条命令闭环（**十七项**） | `Scripts/verify-all.sh` | Core 单测 / 平台中立性 / 本地化棘轮 / 文档表格与派生计数 / 状态一致性 / 设计令牌 / **平台等价矩阵 + 台账自检** / 平台中立性棘轮 / 命令面板接线 / 插件装配 + 零网络出口 / `.app` 打包 / shell 多字节 / 脚本参数化 / 连接失败文案 / CLI 失败可读化 / **独占节越界** / vendored SQLite |
+| 一条命令闭环（**十八项**） | `Scripts/verify-all.sh` | Core 单测 / 平台中立性 / 本地化棘轮 / 文档表格与派生计数 / 状态一致性 / 设计令牌 / **平台等价矩阵 + 台账自检** / 平台中立性棘轮 / 命令面板接线 / 插件装配 + 零网络出口 / `.app` 打包 / shell 多字节 / 脚本参数化 / 连接失败文案 / CLI 失败可读化 / **独占节越界** / vendored SQLite / **生成物一致性（生成物 ↔ vendored 头文件，L-43）** |
 | 界面快照 | `Scripts/make-ui-snapshots.sh` | 离屏渲染真视图树（中英 × 深浅）→ `.build/ui-snapshots/`；**快照本身不进闭环**（判据不足，见 spec 登记） |
 | 平台等价矩阵 | `Scripts/gen-platform-parity.py` | 列由 `Docs/平台实现状态.json` 的 `platforms.<名>` 决定；`--check` 判漂移、`--self-test` 11 例负例 |
 | CLI 证据脚本 | `Scripts/test-*.sh`（53 个）+ `Scripts/test-*.py`（9 个） | 真库类需环境（217 专用库 / 真实例），清单见 spec §5.3；连接信息一律走 `Scripts/lib/test-env.sh`（闭环第 13 项钉住不许写死） |
@@ -148,7 +148,7 @@ git push origin master && git ls-remote origin master   # 复核远端哈希 == 
 - **HEAD**：见 `git log -1`（本节每轮维护时更新；`本地 = 远端`）。
 - **需求**：FR **176** 条（✅ 120 / 🟡 56 / ⬜ 0）｜NFR 43（✅ 29 / 🟡 12 / ⬜ 2）｜AC 12（✅ 7 / 🟡 1 / ⬜ 4）。
 - **代码规模**：`Core/` 167 文件、`App/` 88 文件、`Tests/` 141 文件；CLI 与 `Platform/macOS/`。
-- **门禁**：`./Scripts/verify-all.sh` **十七项全绿**；Core 单测 **2003** 项 0 failures；界面快照 **100 张 / 50 组**。
+- **门禁**：`./Scripts/verify-all.sh` **十八项全绿**（第 18 项 = 生成物一致性，L-43 起）；Core 单测 **2003** 项 0 failures；界面快照 **100 张 / 50 组**。
 - **平台**：macOS 基线（现有）；**Windows 已开线**（2026-09-27）—— 机械设施已就位（§10.10 有 Windows 列），实现节见概要设计 §8.5（对侧）；Linux = 自用第三端。
 
 ---
@@ -176,6 +176,8 @@ git push origin master && git ls-remote origin master   # 复核远端哈希 == 
 7. **`Docs/` 多被 `.gitignore` 忽略**：spec / 队列 / 开发记录 / 大部分 `design/` **不入库**（靠微云备份），只有三书 + `平台实现状态.json` + `README.md` 入库。**所以「文档改了」不等于「远端有了」** —— 要看 `git status` 里它到底在不在暂存区。
 8. **SwiftPM 显式模块**：要 `import CSQLite3` 必须给目标加 `.product(name: "CSQLite3", package: "sqlite3")`（L-25 第 2 批实测；没有它会报「找不到声明」）。
 9. **平台差异不许只活在一句话里**：「完全一致」「数据不外发」这类承诺要么有 §10.9 / §10.10 的登记，要么有门禁，否则半年后一定变成「看起来一致」。
+10. **生成物不许手改**：`Core/NoteStorage/SQLiteConstants.swift` 由 `Scripts/gen-sqlite-constants.py` 生成（宏值读 vendored `sqlite3.h`）。手改一行、或头文件换版后忘了重生成 —— **不会有任何症状**（编译照过、单测照绿）。改法 = 重跑生成器；判据 = `--check`（闭环**第 18 项**，L-43 起）。同类形状（9.5 MB 的 `sqlite3.c`、各类派生的计数表）一律照此办。
+11. **「有判据」≠「有闭环」**：脚本写好了、`--check` 也有了，但没接进 `verify-all.sh` ⇒ 永远不跑。接进去之后还要有人判「台账写的项号 == 闭环实际项号」（第 17 项`check-vendored-sqlite.py` 会按项**块**判；`==> N/M` 的项数声明也会被判自洽）。
 
 ---
 
@@ -194,4 +196,4 @@ git push origin master && git ls-remote origin master   # 复核远端哈希 == 
 
 | 版本 | 日期 | 变更 | 作者 |
 |---|---|---|---|
-| v1.0 | 2026-09-27 | 首建（队列 **L-34**，演练缺口④）：角色与平台分工、三书分层形态 A 与契约层锁定、命令集 CMD-01~08、可复现资产、当前状态快照、未决清单、常见坑 9 条、启动流程 | 大河马（macOS 侧开发助理） |
+| v1.1 | 2026-09-27 | **闭环项数 17 → 18**（队列 **L-43**：生成物一致性接进闭环第 18 项）。同步处：§5 CMD-01 / CMD-03 注释、§6 资产表（补第 18 项说明）、§7 门禁行。**新坑一条进 §9**：生成物（`Core/NoteStorage/SQLiteConstants.swift`）改坏了不会有症状 —— 别手改，跑生成器；判断「生成物是否过期」的命令是 `python3 Scripts/gen-sqlite-constants.py --check`（已在闭环里）。 | 大河马（macOS 侧开发助理） |

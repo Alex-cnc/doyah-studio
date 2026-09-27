@@ -23,6 +23,11 @@
  10. `wiring.inVerifyAll` 里的项号与 `verify-all.sh` 实际的项号一致，且**闭环自己的项号是自洽的**
      （`==> N/M` 标记个数 == 声明的 M、项号连续 —— 「加了项忘了改计数」与先前的假绿同族）。
      第 9 / 10 条是第 18 轮补的：门禁与自证**不进闭环就永远不跑**，而这类「接线悄悄断掉」本身没有任何症状。
+ 11. `generator` 节点里的「生成器 ↔ 生成物 ↔ vendored 头文件」三份文件都在盘上，`verify-all.sh` 里
+     真的跑 `gen-sqlite-constants.py --check` 与 `--self-test`，且台账写的项号 == 闭环实际项号。
+     第 11 条是第 30 轮（L-43）补的：**生成物漂移没有任何症状** —— 手改一行生成物、或头文件换版后
+     忘了重生成，编译照过、单测照绿，只有三端行为悄悄不一致（`--check` 此前确实存在，
+     但生成器自己的头部就写着「未接进 verify-all」⇒ 有判据、没闭环）。
 
 负例（`--self-test`）：把上面几类篡改各造一遍，确认门禁**真的会红** —— 门禁自己也要有证据，
 否则它只是「看着在跑」。
@@ -57,14 +62,31 @@ VERIFY_ITEM = re.compile(r"==> (\d+)/(\d+) ")
 
 # 无依赖：只产出 `Vendor/sqlite3/{Package.swift,Sources/CSQLite3/**,LICENSE.txt,PROVENANCE.md}`。
 # 第 18 轮补了两份**接线与锚点所在**的文件：不把它们拷进负例沙箱，第 9 / 10 两条就验不了。
+# 第 30 轮（L-43）再补两份：生成器与它的生成物 —— 第 11 条（生成器绑定）读的就是这两份。
 SELF_TEST_TARGETS = [
     "Vendor/sqlite3",
     "Scripts/vendored-sqlite.json",
     "Scripts/smoke-vendored-sqlite.py",
     "Scripts/verify-all.sh",
+    "Scripts/gen-sqlite-constants.py",
+    "Core/NoteStorage/SQLiteConstants.swift",
     "THIRD-PARTY-NOTICES.md",
     "Package.swift",
 ]
+
+
+def item_blocks(script_text: str) -> dict[int, str]:
+    """`==> N/M` 项标记 → 该项自己的正文（到下一个标记为止）。
+
+    「接线在哪一项」这种判断必须按**块**来，不能全文搜一遍关键字 —— 否则把某条命令
+    贴在别项的注释里也能骗过门禁（第 18 轮那批负例就是冲这个形状去的）。
+    """
+    markers = [(match.start(), int(match.group(1)), int(match.group(2))) for match in VERIFY_ITEM.finditer(script_text)]
+    blocks: dict[int, str] = {}
+    for index, (start, number, _) in enumerate(markers):
+        end = markers[index + 1][0] if index + 1 < len(markers) else len(script_text)
+        blocks[number] = script_text[start:end]
+    return blocks
 
 
 class Gate:
@@ -236,15 +258,52 @@ class Gate:
         if not declared:
             self.fail("台账 wiring.inVerifyAll 里没写「第 N 项」（写了才判得出漂移）")
             return
-        blocks: dict[int, str] = {}
-        for index, (start, number, _) in enumerate(markers):
-            end = markers[index + 1][0] if index + 1 < len(markers) else len(text)
-            blocks[number] = text[start:end]
+        blocks = item_blocks(text)
         actual = next((number for number, block in blocks.items() if "smoke-vendored-sqlite.py" in block), None)
         if actual is None:
             self.fail("verify-all.sh 里 `smoke-vendored-sqlite.py` 不在任何一项的块内")
         elif actual != int(declared.group(1)):
             self.fail(f"台账项号与 verify-all.sh 不符：台账写第 {declared.group(1)} 项，实际在第 {actual} 项")
+
+    def check_generator_binding(self, ledger: dict) -> None:
+        """「生成器 ↔ 生成物 ↔ vendored 头文件」三者的绑定（第 11 条，L-43，第 30 轮）。
+
+        为什么单列一条：生成物漂移**没有任何症状** —— 手改一行生成物、或头文件换版后忘了
+        重生成，编译照过、单测照绿，只有三端行为悄悄不一致。而这条绑定此前只写在生成器
+        自己的 docstring 里（还没接进闭环），等于没人守。这里把「台账怎么写」与
+        「闭环里到底跑没跑、跑在第几项」变成可对账的两件事。
+        """
+        generator = ledger.get("generator")
+        if not generator:
+            self.fail("台账缺 `generator` 节点（生成器 ↔ 生成物 ↔ 头文件三者的绑定，L-43）")
+            return
+        for key in ("script", "output", "header", "inVerifyAll", "negativeCases"):
+            if not generator.get(key):
+                self.fail(f"台账 generator.{key} 为空 —— 绑定写不全就判不出漂移")
+        for key in ("script", "output", "header"):
+            relative = generator.get(key)
+            if relative and not (self.root / relative).exists():
+                self.fail(f"台账 generator.{key} 指向的文件不在盘上：{relative}")
+
+        script = self.root / "Scripts" / "verify-all.sh"
+        if not script.exists():
+            return  # 上一条已经报过
+        text = script.read_text(encoding="utf-8")
+        for command in ("python3 Scripts/gen-sqlite-constants.py --check",
+                        "python3 Scripts/gen-sqlite-constants.py --self-test"):
+            if command not in text:
+                self.fail(f"接线不在：verify-all.sh 里没有 `{command}`（不进闭环就永远不跑）")
+
+        declared = re.search(r"第\s*(\d+)\s*项", generator.get("inVerifyAll", ""))
+        if not declared:
+            self.fail("台账 generator.inVerifyAll 里没写「第 N 项」（写了才判得出漂移）")
+            return
+        blocks = item_blocks(text)
+        actual = next((number for number, block in blocks.items() if "gen-sqlite-constants.py" in block), None)
+        if actual is None:
+            self.fail("verify-all.sh 里 `gen-sqlite-constants.py` 不在任何一项的块内")
+        elif actual != int(declared.group(1)):
+            self.fail(f"台账 generator.inVerifyAll 与闭环不符：台账写第 {declared.group(1)} 项，实际在第 {actual} 项")
 
     def run(self) -> int:
         ledger = self.ledger()
@@ -258,6 +317,7 @@ class Gate:
         self.check_no_second_sqlite()
         self.check_evidence_anchors(ledger)
         self.check_verify_all_wiring(ledger)
+        self.check_generator_binding(ledger)
         if self.failures:
             print(f"❌ vendored SQLite 台账对账失败（{len(self.failures)} 处）：")
             for failure in self.failures:
@@ -306,9 +366,17 @@ def self_test() -> int:
         ("台账写的项号与闭环实际不符", lambda d: (d / "Scripts/vendored-sqlite.json").write_text(
             (d / "Scripts/vendored-sqlite.json").read_text(encoding="utf-8").replace(
                 "第 17 项", "第 16 项"), encoding="utf-8")),
-        ("闭环项数声明漏改（一项写 1/16、其余 17）", lambda d: (d / "Scripts/verify-all.sh").write_text(
+        ("闭环项数声明漏改（一项写 1/17、其余 18）", lambda d: (d / "Scripts/verify-all.sh").write_text(
             (d / "Scripts/verify-all.sh").read_text(encoding="utf-8").replace(
-                '==> 1/17 ', '==> 1/16 '), encoding="utf-8")),
+                '==> 1/18 ', '==> 1/17 '), encoding="utf-8")),
+        # 第 30 轮（L-43）：生成器绑定的两类篡改。生成物漂移没有症状，所以「绑定断了门禁会红」
+        # 与「生成物过期门禁会红」这两件事各自都要有证据（后者在生成器自己的 --self-test 里）。
+        ("生成器没进闭环（删掉 gen-sqlite-constants 的 --check）", lambda d: (d / "Scripts/verify-all.sh").write_text(
+            (d / "Scripts/verify-all.sh").read_text(encoding="utf-8").replace(
+                "python3 Scripts/gen-sqlite-constants.py --check\n", ""), encoding="utf-8")),
+        ("台账 generator 项号与闭环不符", lambda d: (d / "Scripts/vendored-sqlite.json").write_text(
+            (d / "Scripts/vendored-sqlite.json").read_text(encoding="utf-8").replace(
+                "第 18 项", "第 17 项"), encoding="utf-8")),
     ]
     failures: list[str] = []
     for index, (label, mutate) in enumerate(cases, start=1):
