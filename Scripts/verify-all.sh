@@ -221,8 +221,10 @@ python3 Scripts/check-cli-failure-readability.py
 echo "==> 16/18 越界检查（三书独占节：改动不得落在对侧节内）"
 # 形态 A（2026-09-27 拍板）：三书单点定稿，但「平台实现」层按端独占 —— 标记 `[独占:macos]` /
 # `[独占:windows]` 的节只由该侧改；本机 = macOS 侧。判据与逃生门见脚本头注释。
-# 第二条是**门禁自己的证据**（L-42）：11 例负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——
+# 第二条是**门禁自己的证据**（L-42）：**18 例**负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——
 # 判据写完不对已知改动报红，等于没有。两个脚本对外只认退出码，`--self-test` 红了整项就红。
+# 第 33 轮起本脚本是**三副本同源**的「并集」版（提案 0003 裁决：Notes 副本的侧别别名 / `--contract-docs` /
+# 拿不到基线退出 2 + 本侧未跟踪增量），`--base` 显式给了却解析不到**也退出 2**（不许静默放行）。
 python3 Scripts/check-exclusive-sections.py
 python3 Scripts/check-exclusive-sections.py --self-test
 
