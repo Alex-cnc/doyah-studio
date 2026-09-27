@@ -7,7 +7,7 @@
 | --- | --- |
 | 版本 | **v0.1.0-alpha** |
 | 日期 | 2026-09-28 |
-| 构建产物 | `dist/DoyahStudio.app`，`CFBundleShortVersionString` = **0.1.0**（构建脚本里的数值版本；发布标签 `v0.1.0-alpha` 是它的 alpha 标记） |
+| 构建产物 | `dist/DoyahStudio.app`，**release 构建**（`./Scripts/build-app.sh release`，131 s 编完），`CFBundleShortVersionString` = **0.1.0**（构建脚本里的数值版本；发布标签 `v0.1.0-alpha` 是它的 alpha 标记） |
 | 目标端 | macOS（沙箱构建 `dist/DoyahStudio.app`；非沙箱构建用 `DOYAH_NO_SANDBOX=1`） |
 | 范围 | **数据库模块**（工作区 / 笔记两块不在本版的判定范围） |
 | 判定口径 | `./Scripts/alpha-main-chain.sh` **本机段全绿 ⇒ alpha 功能面达成** |
