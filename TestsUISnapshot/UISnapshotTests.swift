@@ -104,7 +104,65 @@ final class UISnapshotTests: XCTestCase {
         UISnapshot.clearLicense(from: host.state)
     }
 
-    // MARK: - ③ 结果表（空态 + 有数据的密度）
+    // MARK: - ③ 工作区代码编辑器的行号列（FR-EDIT-36 的「编辑器行号列」，队列 L-64）
+
+    /// 快照用的样例文档。刻意挑了四种会出错的形态：
+    /// · **中英混排**（中文注释 + 代码）—— 行号按字符数就会偏；
+    /// · **一条长行**（第 2 行）—— 软换行后**不该**再补一个号（一个逻辑行一个号）；
+    /// · **跨过第 10 行** —— 行号列从 1 位变 2 位，图上要能看出列变宽；
+    /// · **末尾换行** —— 光标能停的那一行也要有号（口径 ②）。
+    static let editorDocument = """
+    // 行号列：一个逻辑行一个号；中英混排也不许偏
+    const 计划 = { 目标里程: 10000, 车型: "Versys 1100", 路线: ["长沙", "洞庭湖", "南太行", "云南", "沿海", "318", "317"] };
+
+    export function 摘要(计划) {
+      return 计划.车型 + " · " + 计划.目标里程 + " km";
+    }
+
+    export function 分段(路线) {
+      return 路线.map((站, 序号) => 序号 + ". " + 站);
+    }
+
+    console.log(摘要(计划));
+    console.log(分段(计划.路线).join("\\n"));
+
+    """
+
+    /// 行号列**必须先机械钉住、再看图**：机械半边管"哪一行算第几行"（`Core/CodeLines`），
+    /// 图管"数字有没有真的画上去、与内容对不对齐"—— 两者缺一半都不算证明。
+    @MainActor
+    func testWorkspaceCodeEditorLineNumbers() throws {
+        XCTAssertEqual(
+            CodeLines.digits(of: CodeLines.count(in: Self.editorDocument)), 2,
+            "样例文档要跨过第 10 行（行号列 1 位 → 2 位）"
+        )
+        XCTAssertGreaterThan(
+            CodeTextView.gutterWidth(digits: 2), CodeTextView.gutterWidth(digits: 1),
+            "两位数的行号列必须比一位数宽（列宽是按当前字体实量出来的，不是固定值）"
+        )
+
+        for scheme in [ColorScheme.light, .dark] {
+            let pair = try UISnapshot.writeBothLanguages(
+                "workspace-code-editor-line-numbers\(scheme == .dark ? "-dark" : "")",
+                size: CGSize(width: 560, height: 360),
+                scheme: scheme
+            ) {
+                CodeEditorView(
+                    tabID: UUID(),
+                    text: Self.editorDocument,
+                    language: .javascript,
+                    onTextChange: { _ in },
+                    onSave: {}
+                )
+            }
+            // 编辑器里没有一句文案（行号是数字、正文是样例代码）⇒ 中英两遍必须**逐字节相同**；
+            // 这条同时是 `Scripts/ui-snapshot-language-exemptions.json` 里注册的口径 ——
+            // 哪天它随语言变了，那份注册过期，语言门禁会在取证那一刻当场报红。
+            XCTAssertFalse(pair.textsDiffer, "代码编辑器不含文案 ⇒ 中英两遍应当逐字节相同（\(scheme)）")
+        }
+    }
+
+    // MARK: - ④ 结果表（空态 + 有数据的密度）
 
     @MainActor
     func testResultTableEmptyAndDense() throws {
