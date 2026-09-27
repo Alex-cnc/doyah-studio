@@ -33,7 +33,7 @@
 | 无扩展 | `FR-DIAG-03` 慢查询排行 | 本机 pgserver 精简构建**没有扩展目录**，`pg_stat_statements` 装不上 |
 | 沙箱限制 | `FR-CONN-18` SSH 隧道、`FR-IO-04` 备份恢复 | 沙箱下不能起子进程；放宽与否**待需求提出者拍板** |
 | vendor 未实现 | `FR-IO-02` `COPY … TO STDOUT`、`FR-DATA-05` 的 bytea 显示 | 需改 vendored 驱动，有回归风险，单列排期 |
-| 需 217 现场 | 对象 DDL、流式导出、表结构索引外键、数据库统计、服务器对象、维护任务 | 217 的 `pg_hba.conf` 未放行本机（`28000`），需 DBA 加一行 |
+| 需 217 现场 | **（本行已于 2026-09-28 循环 L-62 按实测修订）** 原列六项：对象 DDL / 流式导出 / 表结构索引外键 / 数据库统计 / 服务器对象 / 维护任务。**实测**：前三项对应的四条脚本（`test-object-ddl` / `test-cursor-export` / `test-table-index-fk` / `test-table-structure`）**已改走共用入口 ⇒ 本机档实跑全绿并进 alpha 主链本机段**（不再是「需 217 现场」）；后三项**本来就有本机档**（数据库统计 / 服务器对象在 `Scripts/run-real-db-evidence.sh` 的 `session` 档、维护任务在 alpha 主链本机段）⇒ 原行把它们算进来是**表述不准**。仍真正卡 217 / 实例的见上四行（无实例 / 无扩展 / 沙箱限制 / vendor 未实现）与「基线既定红」那一行 | ~~217 的 `pg_hba.conf` 未放行本机（`28000`），需 DBA 加一行~~ → 修订后**只剩上四行**才需要环境；本行不再单列 |
 | 基线既定红 | `object-search` / `session-management` / `schema-diff` | 实测即红且原因已登记在 `Scripts/real-db-evidence-baseline.json`，转绿要点名 |
 | 需求侧缺口 | NFR ⬜ 2 条、AC ⬜ 4 条 | 见 `Docs/需求规范书.md` §10 索引，alpha 后处理 |
 

@@ -13,8 +13,11 @@
 #     （`object-search` / `session-management` / `slow-queries` / `backup-restore`）⇒ 只登记，
 #     不判 alpha 红绿；**忽然转绿要点名**（该更新基线了）。
 #   · **环境段（ENV）**：需 217 / 真实例 / vendor 改动才能跑（本机跑必红：`pg_hba.conf` 未放行
-#     本机，或脚本要求显式远程凭据）⇒ **alpha 明确不含**，只登记。与
-#     `Docs/alpha-0.1.0-发布说明.md` §「alpha 明确不含」逐条对应。
+#     本机，或脚本要求显式远程凭据）⇒ **alpha 明确不含**，只登记。与仓根
+#     `RELEASE-0.1.0-alpha.md` §「alpha 明确不含」逐条对应。
+#     **2026-09-28 循环 L-62**：原先在环境段的四条（表结构-真库现场 / 对象树-DDL / 结果集-流式导出 /
+#     表结构-索引外键）改走 `Scripts/lib/test-env.sh` 的共用入口 ⇒ 本机档可跑，**已转入本机段**
+#     （环境段 7 → 3 条）。判断依据只有一条：**本机跑绿了才算转正**（不是「改完代码就算」）。
 #
 # ## 用法
 #   ./Scripts/alpha-main-chain.sh                       # 全跑，证据写 .build/alpha-0.1.0/
@@ -54,6 +57,10 @@ LOCAL_STEPS=(
   "1 连接-SSH 隧道|test-ssh-tunnel.sh|隧道配置与失败态（本机可跑部分）"
   "2 方言-MySQL|test-mysql-driver.sh|协议接线与方言生成"
   "5 ER 图|test-er-diagram.sh|实体关系取数与渲染输入"
+  "6 表结构-真库现场|test-table-structure.sh|默认值 / 主键 / 可空在真表上读得准（2026-09-28 循环 L-62 由环境段转正：脚本改走共用入口，本机档可跑）"
+  "2 对象树-DDL|test-object-ddl.sh|视图 / 函数定义体的取回与装配（含两个同名重载）"
+  "4 结果集-流式导出|test-cursor-export.sh|服务端游标逐页取 + 内存峰值不随结果集增长"
+  "6 表结构-索引外键|test-table-index-fk.sh|索引 / 外键 / 约束读得准 + 生成的变更语句能执行"
 )
 KNOWN_RED=(
   "2 对象树-搜索|test-object-search.sh|基线既定红（real-db-evidence-baseline.json）"
@@ -61,11 +68,7 @@ KNOWN_RED=(
   "6 Schema 对比|test-schema-diff.sh|基线既定红（同上）"
 )
 ENV_STEPS=(
-"环境 表结构-真库现场|test-table-structure.sh|脚本只连 217（pg_hba 未放行本机）；DDL 生成/变更集由 Tests/TableDesign*.swift 覆盖"
   "环境 连接-凭据|test-postgres-connection.sh|需显式远程凭据"
-  "环境 对象树-DDL|test-object-ddl.sh|现场在 217（pg_hba 未放行本机）"
-  "环境 结果集-流式导出|test-cursor-export.sh|需 217 专用库"
-  "环境 表结构-索引外键|test-table-index-fk.sh|需 217 专用库"
   "环境 慢查询排行|test-slow-queries.sh|需 pg_stat_statements（本机精简构建无扩展目录）"
   "环境 备份恢复|test-backup-restore.sh|需 217 / 沙箱放宽（FR-IO-04 待拍板）"
 )
@@ -83,7 +86,10 @@ run_group() {
     fi
     ( cd "${ROOT}" && bash "Scripts/${script}" ) >"${log}" 2>&1
     code=$?
-    count="$(python3 "${ROOT}/Scripts/count-evidence-assertions.py" "${log}" 2>/dev/null | grep -oE '[0-9]+' | tail -1)"
+    # 断言条数 = 计数器**首行**的「断言 N 项」（原先取的是整段输出里最后一个数字 ⇒ 拿到的是
+    # 末节的分节数，多节脚本被系统性少报：表结构实测 15 报成 1。2026-09-28 循环 L-62 修）。
+    count="$(python3 "${ROOT}/Scripts/count-evidence-assertions.py" "${log}" 2>/dev/null \
+             | head -1 | grep -oE '断言 [0-9]+ 项' | grep -oE '[0-9]+' | head -1)"
     [ -z "${count}" ] && count=0
     if [ "${code}" -eq 0 ] && [ "${count}" -gt 0 ]; then mark="✅"; else mark="❌"; fi
     printf '%s %-16s 退出码 %s 断言 %s\n' "${mark}" "${name}" "${code}" "${count}" >&2

@@ -3,24 +3,32 @@
 #
 # 验三件事：① 服务端游标逐页取（不是一次取回、也不是 OFFSET 翻页）；
 # ② 文件内容完整正确；③ **内存峰值不随结果集增长**（这是"不把全量结果驻留内存"的可测量形式）。
+#
+# 2026-09-28（循环 L-62）：本脚本原先**无条件**连 217 的业务库（`zxvmax`），本机跑必红
+# （`pg_hba` 未放行），于是 alpha 主链里「流式导出」这一段**没有本机证据**。现在改走共用入口：
+# 本机档 = 本机临时集群 + trust（无口令）；远程档 = 四项齐全的远程专用库。
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
 CLI=".build/debug/DoyahCLI"
-ACCOUNT="D264B21B-1880-4E73-A2D0-59A3F8E4D7EC"
 S="doyah_cursor_check"
 ROWS=1000000
 OUT="$(mktemp -t doyah-export).csv"
 
-# 本脚本不建集群、不建库，只对一台常驻实例做只读核对 —— 没有「迁移第 2 步」要改的段落
+# 本脚本不建库（临时对象全装在自己建的那个 schema 里），但**要先确保实例在跑** ——
+# 本机档由共用入口起集群（远程档是 no-op），退出时只关「本脚本起的」那一份。
 DOYAH_TEST_SCRIPT_READY_FOR_REMOTE=1
 # 连接信息（本机过渡集群 / 远程专用库）由共用入口决定 —— 三档端口与目录只写在它里面
 source "$(cd "$(dirname "$0")" && pwd)/lib/test-env.sh"
 doyah_test_env_summary
 
-export PGHOST="${DOYAH_TEST_REMOTE_HOST}" PGUSER="${DOYAH_TEST_REMOTE_USER}" PGDATABASE="${DOYAH_TEST_REMOTE_DATABASE}" PGSSLMODE="${DOYAH_TEST_PGSSLMODE}"
-PGPASSWORD="$("$CLI" secret get --id "$ACCOUNT")"
-export PGPASSWORD
+# 连接只走共用入口这一条路。**为什么改**：此前这里是写死 217 的旁路 + 「取密文口令」的第二种
+# 取法，于是本脚本**在业务库上建 schema**（还会建一张百万行的大表），而文件头注释自称
+# 「只读核对」（名实不符）；共用入口的远程档有安全闸，业务库直接拒绝（SRS §0.9 E3 / ADR-32）。
+doyah_test_env_start_cluster
+trap 'doyah_test_env_stop_cluster' EXIT
+doyah_test_env_export_connection
+export PGDATABASE="${DOYAH_TEST_PGDATABASE}"
 
 fail=0
 check() { if [ "$2" -eq 0 ]; then echo "  ✅ $1"; else echo "  ❌ $1"; fail=1; fi; }
