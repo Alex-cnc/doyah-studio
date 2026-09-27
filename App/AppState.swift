@@ -5489,6 +5489,12 @@ final class AppState: ObservableObject {
         updateTab(tabID) {
             $0.isExecuting = true
             $0.errorMessage = nil
+            // **Output 日志按「每次执行」重来**（2026-09-27 人工点验，需求提出者原话：
+            // 「Output 应该只有当前执行的 query 的结果，不能一直往后追加」）。
+            // ⚠️ 清空必须排在下一条 `statusMessage` 赋值**之前** —— `statusMessage` 的 `didSet`
+            // 会往日志里追加，顺序反了会把本次执行的第一行（"正在连接…"）也一起清掉。
+            // 交付的是**本次执行**的流水；跨执行的追溯交给查询历史与归档，不靠这块面板堆着。
+            $0.outputLog = []
             $0.statusMessage = L(.stateConnecting, configuration.endpointDescription, targetDatabase)
             $0.results = []
             $0.resultSummaries = []

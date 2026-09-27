@@ -41,8 +41,19 @@ struct SQLEditorView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
+        // **重建前先把「最近一次选区」取出来**（2026-09-27 人工点验，需求提出者原话：
+        // 「选择一段 SQL 执行之后，应该还在被选择态」）。
+        //
+        // 为什么会重建：执行时结果区先被清空（`showsResult` 变 false）再随结果出现（变 true），
+        // 上面那四种 `VSplitView` 分支因此**换两次**，SwiftUI 会重新构造编辑器子树 ——
+        // 拿到的是一个全新的 `NSTextView`，光标归 0，用户刚选中的那段 SQL 就"不见了"
+        // （而且**焦点**也跟着丢：旧的那个 text view 就是第一响应者）。
+        //
+        // 选区本身一直在 `EditorCommandCenter` 里（编辑器每次移动光标都会上报），所以这里读出来、稍后放回去。
+        // ⚠️ 必须在挂 `delegate` 之前读：新视图一旦挂上 delegate，会立刻上报一次 `(0,0)`，把记录冲掉。
+        let reportedSelection = commandCenter.selection(for: tabID)
+
         let textView = SQLTextView(frame: .zero)
-        textView.delegate = context.coordinator
         textView.isRichText = true
         textView.isEditable = true
         textView.isSelectable = true
@@ -70,6 +81,9 @@ struct SQLEditorView: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.lineFragmentPadding = 4
         textView.string = text
+        // delegate **在这里才挂**：新视图挂上 delegate 后会立刻上报一次 `(0,0)` 选区，
+        // 若在设置文本之前就挂上，会把上面刚读出来的「最近一次选区」冲掉（详见 `makeNSView` 顶部说明）。
+        textView.delegate = context.coordinator
 
         context.coordinator.textView = textView
         context.coordinator.applyHighlighting()
@@ -81,6 +95,24 @@ struct SQLEditorView: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
+
+        // **把选区放回去**（见 `makeNSView` 顶部的说明）。
+        // 只认**非空**选区：空选区就是光标，强行放回会跟"载入文件 / 切页签后光标归 0"的既有语义打架。
+        if let reportedSelection,
+           reportedSelection.length > 0,
+           NSMaxRange(reportedSelection) <= (textView.string as NSString).length {
+            textView.setSelectedRange(reportedSelection)
+            // 重建连**焦点**一起丢了（旧的 text view 就是第一响应者），不还回去的话
+            // 选区没有高亮 —— 而需求要的正是"还看得见刚选的那段"。窗口此时可能还没挂上，故延后一拍。
+            DispatchQueue.main.async {
+                guard let window = textView.window, window.firstResponder !== textView else { return }
+                window.makeFirstResponder(textView)
+            }
+            StartupLog.write(
+                "编辑器重建：恢复选区 \(reportedSelection.location)+\(reportedSelection.length)（页签 \(tabID.uuidString.prefix(8))）"
+            )
+        }
+
         return scrollView
     }
 
