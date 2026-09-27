@@ -109,6 +109,40 @@ final class QueryToolbarConventionTests: XCTestCase {
         XCTAssertEqual(violations(in: legitimate), [], "方法名里的子串不是文字控件，判据不许误伤")
     }
 
+    // MARK: ⑤ 工具条里的即时提示必须向上弹
+
+    /// 提示是**宿主视图树内的 overlay**：overlay 不改变绘制顺序，伸出宿主边界就会落到后面的兄弟视图之下。
+    /// 工具条下面是 SQL 编辑器（`NSTextView`，AppKit 承载）—— 2026-09-27 人工点验实测：提示出现了、但被编辑器挡住。
+    /// 所以工具条里的 `.hoverHint(` 必须显式给 `placement: .above`。
+    func testToolbarHoverHintsPointUpward() throws {
+        // 事务控件：必须至少有一处即时提示，且每一处都显式给了方向。
+        let control = try source("App/Views/TransactionControl.swift")
+        var index = control.startIndex
+        var calls = 0
+        while let found = control.range(of: ".hoverHint(", range: index..<control.endIndex) {
+            calls += 1
+            let following = control[found.upperBound...].prefix(160)
+            XCTAssertTrue(
+                following.contains("placement: .above"),
+                "工具条里的 .hoverHint( 必须显式给 placement: .above（向下弹会被编辑器盖住）"
+            )
+            index = found.upperBound
+        }
+        XCTAssertGreaterThan(calls, 0, "事务状态徽标应当保留即时提示 —— 不许靠删掉提示来过关")
+
+        // 工具条本体：现在没有提示，将来加的话同样必须显式给方向。
+        let toolbar = try source("App/Views/QueryToolbar.swift")
+        var cursor = toolbar.startIndex
+        while let found = toolbar.range(of: ".hoverHint(", range: cursor..<toolbar.endIndex) {
+            let following = toolbar[found.upperBound...].prefix(160)
+            XCTAssertTrue(
+                following.contains("placement:"),
+                "QueryToolbar 里的 .hoverHint( 必须显式给 placement"
+            )
+            cursor = found.upperBound
+        }
+    }
+
     // MARK: ④ 末例：扫的真文件不是空的（路径写错时不许一路绿）
 
     func testTargetsExist() throws {

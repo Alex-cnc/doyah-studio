@@ -159,6 +159,7 @@ struct TransactionControl: View {
                 .fill(tone.opacity(Theme.isDarkAppearance ? Overlay.Zebra.darkAlpha : Overlay.Zebra.lightAlpha))
         )
         .fixedSize()
-        .hoverHint(hint)
+        // 向上弹：工具条下面就是 SQL 编辑器（AppKit 承载），向下弹会被它盖住 —— 见 `HoverHintPlacement`。
+        .hoverHint(hint, placement: .above)
     }
 }
