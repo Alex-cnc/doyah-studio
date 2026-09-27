@@ -36,7 +36,7 @@ if [ -d "$NOTES" ]; then
     [ -f "$NOTES/tools/logic-check/$s" ] && cp "$NOTES/tools/logic-check/$s" "$OUT/Notes/tools/" || true
   done
 else
-  echo "  ⚠ 未找到 Notes 仓（$NOTES）；只打包 Studio 侧。可用 DOYAH_NOTES_DIR=... 指定"
+  echo "  ⚠ 未找到 Notes 仓（${NOTES}）；只打包 Studio 侧。可用 DOYAH_NOTES_DIR=... 指定"
 fi
 
 # 4) 快照信息（版本号 + 提交 SHA + 生成时间）—— 便于对方确认拿到的是哪一版
