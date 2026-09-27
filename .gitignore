@@ -21,7 +21,7 @@ xcuserdata/
 
 # Docs：对外发布的文档 + 三书（需求规范书 / 产品能力规划说明书 / 概要设计）。
 #
-# 三书必须入库：macOS 与 Linux 两个平台以它们为**唯一共享事实源**（SRS §0.8），
+# 三书必须入库：macOS 与 Windows 两个平台（Linux 为自用第三端）以它们为**唯一共享事实源**（SRS §0.8），
 # 靠 GitHub 同步版本。其余内部工程文档（调研 / 测试 / 发布 / 评审 / 过程记录）
 # 仍留在本地，不随仓库发布。新增对外文档时在这里加白名单。
 /Docs/*
@@ -32,6 +32,9 @@ xcuserdata/
 !/Docs/产品能力规划说明书.md
 !/Docs/概要设计.md
 !/Docs/平台实现状态.json
+# 提案通道（契约层改动的正式入口；必须入库，对侧靠 GitHub 读）
+!/Docs/proposals/
+!/Docs/proposals/*.md
 # 设计说明（浏览器页签等）也属于交接资料，随三书一起入库
 !/Docs/design/
 !/Docs/design/*.md
