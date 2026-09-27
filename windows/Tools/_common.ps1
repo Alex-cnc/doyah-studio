@@ -67,8 +67,18 @@ function Invoke-DoyahSharedGate {
   $argv += $Python.Pre
   $argv += $script
   $argv += $Arguments
-  $output = (& $Python.Exe @argv 2>&1 | Out-String)
-  $rc = $LASTEXITCODE
+  # 本机实测坑（第 22 轮）：PS 5.1 在 $ErrorActionPreference = 'Stop' 下，会把原生命令写到 **stderr** 的
+  # 任意一行变成**终止错误**（NativeCommandError）—— 判据明明「打印一条警告、退出码 0」，本侧闸门却整项判红。
+  # 实测现场：对侧 `Scripts/check-doc-tables.py` 的 docstring 里一处无效转义 ⇒ 每次运行都往 stderr 打
+  # SyntaxWarning ⇒ 本侧第 ③ 项假红（该项真判是 ✅、rc 0）。
+  # 口径：**判红与否只由退出码决定**；stderr 上的文字照原样打出来（不吞、不静默），但不许据此判红。
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $output = (& $Python.Exe @argv 2>&1 | Out-String)
+    $rc = $LASTEXITCODE
+  }
+  finally { $ErrorActionPreference = $prevEap }
   $trimmed = $output.TrimEnd()
   if ($trimmed) {
     foreach ($line in ($trimmed -split "`r?`n")) { Write-Host ("    | " + $line) }

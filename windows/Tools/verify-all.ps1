@@ -10,6 +10,8 @@
 # 等价物可以缺席，但缺席必须可见（§8.3.2）。
 #
 # 退出码：0 = 全绿 / 1 = 有红（含 -RequireAll 下的跳过）/ 2 = 没有任何一项被判红但存在跳过
+#
+# 第 22 轮：11 项 → 12 项（新增第 11 项 = `P-*` 平台差异登记两侧对账，接契约侧 L-45 的 `Scripts/check-p-parity.py`）
 
 param(
   [switch]$RequireAll,
@@ -23,7 +25,7 @@ $RepoRoot = Get-DoyahRepoRoot -ToolsDir $ToolsDir
 $ran = New-Object System.Collections.ArrayList
 $skipped = New-Object System.Collections.ArrayList
 $failed = New-Object System.Collections.ArrayList
-$total = 11
+$total = 12
 
 Write-Host "== Doyah Studio · Windows 侧闸门（§8.3.1 六项必需项 + §8.5.3 等价物）"
 Write-Host ("   仓库：{0}" -f $RepoRoot)
@@ -75,7 +77,7 @@ function Invoke-ChildGate {
   }
 }
 
-# ── 1/11 闸门脚本自身编码（本机实测坑：无 BOM 的 UTF-8 中文脚本在 PS 5.1 下一行都不执行） ──
+# ── 1/12 闸门脚本自身编码（本机实测坑：无 BOM 的 UTF-8 中文脚本在 PS 5.1 下一行都不执行） ──
 Write-DoyahStep "1/$total" "闸门脚本自身编码（UTF-8 带 BOM）"
 $badEncoding = New-Object System.Collections.ArrayList
 foreach ($file in @(Get-ChildItem -Path $ToolsDir -Filter '*.ps1' -File)) {
@@ -90,7 +92,7 @@ else {
   [void]$ran.Add("闸门脚本编码")
 }
 
-# ── 2/11 判据运行器（Python 3）──────────────────────────────────────────────
+# ── 2/12 判据运行器（Python 3）──────────────────────────────────────────────
 Write-DoyahStep "2/$total" "判据运行器：可用的 Python 3"
 $python = Find-DoyahPython
 $pythonSkipReason = ''
@@ -104,24 +106,26 @@ else {
   [void]$skipped.Add(("判据运行器：Python 3 —— {0}" -f $pythonSkipReason))
 }
 
-# ── 3/11 ① 构建入口 ─────────────────────────────────────────────────────────
+# ── 3/12 ① 构建入口 ─────────────────────────────────────────────────────────
 Invoke-ChildGate "3/$total" "① 构建入口（dotnet publish + 便携 zip）" 'build.ps1'
-# ── 4/11 ② 单测 ────────────────────────────────────────────────────────────
+# ── 4/12 ② 单测 ────────────────────────────────────────────────────────────
 Invoke-ChildGate "4/$total" "② 单测（dotnet test / xUnit）" 'test.ps1'
-# ── 5/11 领域层边界 ─────────────────────────────────────────────────────────
+# ── 5/12 领域层边界 ─────────────────────────────────────────────────────────
 Invoke-ChildGate "5/$total" "领域层边界（GUI 不得进入领域层）" 'check-core-boundary.ps1'
-# ── 6/11 ③ 文档计数与版本 ───────────────────────────────────────────────────
+# ── 6/12 ③ 文档计数与版本 ───────────────────────────────────────────────────
 Invoke-ChildGate "6/$total" "③ 文档计数与版本（表格 / 派生数字 / 版本号）" 'check-doc-tables.ps1' -SkipReason $pythonSkipReason
-# ── 7/11 设计令牌棘轮 ───────────────────────────────────────────────────────
+# ── 7/12 设计令牌棘轮 ───────────────────────────────────────────────────────
 Invoke-ChildGate "7/$total" "设计令牌棘轮（规则名对齐 + 取值单一来源 + Windows 侧棘轮）" 'check-design-tokens.ps1'
-# ── 8/11 平台中立性 ─────────────────────────────────────────────────────────
+# ── 8/12 平台中立性 ─────────────────────────────────────────────────────────
 Invoke-ChildGate "8/$total" "平台中立性（三书不得混入平台实现细节）" 'check-platform-neutrality.ps1' -SkipReason $pythonSkipReason
-# ── 9/11 ④ 独占节越界 ───────────────────────────────────────────────────────
+# ── 9/12 ④ 独占节越界 ───────────────────────────────────────────────────────
 Invoke-ChildGate "9/$total" "④ 独占节越界（本侧 = windows）" 'check-exclusive-sections.ps1' -SkipReason $pythonSkipReason -ChildArgs @{ Base = $Base }
-# ── 10/11 ⑤ 平台等价矩阵 ────────────────────────────────────────────────────
+# ── 10/12 ⑤ 平台等价矩阵 ────────────────────────────────────────────────────
 Invoke-ChildGate "10/$total" "⑤ 平台等价矩阵 + Windows 列如实性" 'check-platform-parity.ps1' -SkipReason $pythonSkipReason
-# ── 11/11 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
-Write-DoyahStep "11/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
+# ── 11/12 ⑦ `P-*` 平台差异登记两侧对账（队列 L-45）──────────────────────────
+Invoke-ChildGate "11/$total" "⑦ `P-*` 平台差异登记两侧对账（SRS §10.9 ↔ 概要设计 §4 + §8.5.5 已落条）" 'check-p-parity.ps1'
+# ── 12/12 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
+Write-DoyahStep "12/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
 Write-DoyahPass "本脚本即闭环入口；跳过的项已逐条列出（等价物可以缺席，缺席必须可见）"
 [void]$ran.Add("⑥ 一条命令跑全")
 
