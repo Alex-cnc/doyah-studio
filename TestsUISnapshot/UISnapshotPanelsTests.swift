@@ -316,6 +316,101 @@ final class UISnapshotPanelsTests: XCTestCase {
         XCTAssertTrue(host.state.mcpPendingApprovals.isEmpty, "渲染期间待审批项被填上了 —— 空态没站稳")
     }
 
+    // MARK: - 第 4 批（队列 L-16，2026-09-27）
+
+    /// **第 4 批**（队列 L-16「其余面板空态」）：**诊断 / 对象搜索 / 备份恢复 / 数据库统计**。
+    ///
+    /// 选这四个的理由：每个都正对着 spec §5.2 里一条**只差「有人点开看一眼」**的条目 ——
+    /// 诊断（第 3 条 / `FR-AI-03`）、对象搜索（第 29 条 / `FR-META-12`）、
+    /// 备份恢复（第 44 条 / `FR-IO-05`）、数据库统计四类指标（第 40 条 / `FR-DIAG-04`）。
+    /// 而它们的「空」来源各不相同，造法也就各不相同：
+    ///   · **诊断**（`FR-AI-03`）：四个 `@Published` 都还是 `AppState` 的初值（没跑过取证）→
+    ///     面板该显示「还没取证」+ 取证按钮**灰着**（语句框空 ⇒ 没有可诊断的对象，
+    ///     `.onAppear` 从当前页签取语句、没有页签就是空串）。这张图是「没有模型端点也能用」
+    ///     那条口径的另一半：先看**证据区**是什么样子。
+    ///   · **对象搜索**（`FR-META-12`）：关键词是面板自持的 `@State`，空关键词时
+    ///     `.task(id:)` **第一句就早退**（不发请求、不查库）→ 停在 `objectSearchHint` 那一支。
+    ///   · **备份恢复**（`FR-IO-05`）：面板自持表单 + `.onAppear` 的兜底（工具路径取默认值、
+    ///     目标库取当前库）—— 没连库、没选归档 ⇒ 预览给 `backupRestoreIncomplete`、
+    ///     执行按钮**灰着**（`isDraftRunnable == false`）。这是「刚打开、还没选文件」的真实态。
+    ///   · **数据库统计**（`FR-DIAG-04`）：`report` 是**私有 `@State`**、`.task` 打开即采数 →
+    ///     没连库时走 `catch`，图上是一条失败文案而不是四类指标。**如实说明**：这张图是
+    ///     「**未选连接**时打开统计面板」的**真运行态**；「连上服务器、四类指标都取到了」与
+    ///     「连上了但这四类都没数据」（`databaseStatsEmpty`）两个态**都拍不到** ——
+    ///     `report` 是私有 `@State`、数据来自真库，与 `LockPanel` / `SessionPanel` 同一族。
+    ///
+    /// 纪律同前几批：**渲染前显式置空 + 渲染后再断言一遍**（离屏宿主里 `.task` / `.onAppear` 会跑完）。
+    @MainActor
+    func testPanelEmptyStatesBatchFour() throws {
+        let host = makeEmptyHost()
+
+        XCTAssertTrue(host.state.connections.isEmpty, "本批要拍空态：不该有任何连接")
+        XCTAssertNil(host.state.selectedConnectionID, "本批要拍空态：不该有选中的连接")
+        XCTAssertFalse(L(.diagnosisEmpty).isEmpty, "空态文案缺失（语言表里没有 diagnosisEmpty）")
+        XCTAssertFalse(L(.objectSearchHint).isEmpty, "空态文案缺失（语言表里没有 objectSearchHint）")
+        XCTAssertFalse(L(.backupRestoreHint).isEmpty, "空态文案缺失（语言表里没有 backupRestoreHint）")
+        XCTAssertFalse(L(.databaseStatsEmpty).isEmpty, "空态文案缺失（语言表里没有 databaseStatsEmpty）")
+
+        // ① 诊断空态：没跑过取证（FR-AI-03）
+        host.state.diagnosisEvidence = []
+        host.state.diagnosisReport = nil
+        host.state.diagnosisMessage = nil
+        host.state.diagnosisQuestion = ""
+        host.state.diagnosisIsGathering = false
+        XCTAssertTrue(host.state.diagnosisEvidence.isEmpty, "本张要拍空态：还没取过证")
+        XCTAssertNil(host.state.diagnosisReport, "本张要拍空态：还没有模型给出的建议")
+        XCTAssertTrue(
+            host.state.diagnosisTargetSQL.isEmpty,
+            "语句框该是空的 —— 诊断面板 `.onAppear` 从当前页签取语句，没有页签就没有可诊断的对象"
+        )
+        try snapshotLightAndDark(
+            "diagnosis-empty",
+            size: CGSize(width: 760, height: 700),
+            host: host
+        ) {
+            DiagnosisPanel()
+        }
+        XCTAssertTrue(host.state.diagnosisEvidence.isEmpty, "渲染期间取证结果被填上了 —— 空态没站稳")
+        XCTAssertNil(host.state.diagnosisReport, "渲染期间建议被填上了 —— 空态没站稳")
+
+        // ② 对象搜索空态：还没输关键词（FR-META-12）
+        try snapshotLightAndDark(
+            "object-search-empty",
+            size: CGSize(width: 640, height: 480),
+            host: host
+        ) {
+            ObjectSearchPanel()
+        }
+        XCTAssertTrue(host.state.connections.isEmpty, "渲染期间连接被填上了 —— 搜索面板的取数依赖选中连接")
+
+        // ③ 备份恢复初始态（FR-IO-05）：还没选归档、还没连库
+        XCTAssertTrue(host.state.backupRestoreLog.isEmpty, "本张要拍空态：还没有备份 / 恢复日志")
+        XCTAssertFalse(host.state.isBackupRunning, "本张要拍空态：不该正在跑")
+        XCTAssertNil(host.state.selectedDatabase, "没连库 ⇒ 目标库兜底取不到值，归档路径也只能是空")
+        try snapshotLightAndDark(
+            "backup-restore-empty",
+            // 这张面板自己没有钉高度（内容 `.frame(width: 700, alignment: .leading)`），
+            // 所以宿主高度**按内容实测取**：给多了 SwiftUI 会把内容在宿主里垂直居中，
+            // 留白就不是真机比例了（L-11 的 `routine-candidates` 踩过同一坑，实测一次后收紧）。
+            size: CGSize(width: 700, height: 340),
+            host: host
+        ) {
+            BackupRestoreSheet()
+        }
+        XCTAssertTrue(host.state.backupRestoreLog.isEmpty, "渲染期间备份日志被写入了 —— 空态没站稳")
+        XCTAssertFalse(host.state.isBackupRunning, "渲染期间备份被启动了 —— 空态没站稳")
+
+        // ④ 数据库统计：见本方法开头的「如实说明」（未选连接 ⇒ 失败文案那一支，FR-DIAG-04）
+        try snapshotLightAndDark(
+            "database-stats-empty",
+            size: CGSize(width: 660, height: 640),
+            host: host
+        ) {
+            DatabaseStatsPanel()
+        }
+        XCTAssertTrue(host.state.connections.isEmpty, "渲染期间连接被填上了 —— 统计面板的取数依赖选中连接")
+    }
+
     // MARK: - 清单
 
     override class func tearDown() {
