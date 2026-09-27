@@ -1,32 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""越界检查：一次改动不得落在「对侧独占节」内（分层的三书形态 A，2026-09-27 拍板）。
+"""层级门禁：一次改动不得越界（三书分层形态 A + 契约层锁定，2026-09-27 拍板）。
 
-形态约定
---------
-三书里每个标题行（`#` ~ `######`）可以带一个独占标记：
+三类节 —— 标题行（`#`~`######`）可带标记，标记对**该节及其所有子节**生效：
 
-    ### 8.1 契约 → macOS 实现（现有）[独占:macos]
+  1. `[独占:X]`  —— **只有 X 侧**能改（例：`### 8.1 契约 → macOS 实现（现有）[独占:macos]`）
+  2. `[开放]`    —— 台账类节（变更记录 / 索引）：**任何一侧**都能追加，含自己平台的变更行
+  3. 无标记      —— **契约层**：**只有契约所有者**（`--contract-owner`，默认 `macos` = 大河马）能改；
+                    其他侧要么走提案，要么在改动行 / 提交信息注 `contract-change：理由` 留痕
 
-该节（含其所有子节）属于该标记的独占范围，**只有该侧有权改**。没有标记的节 = 契约层，
-两侧都必须实现、任何人都可改（改契约要走契约评审，不由本脚本判定）。
+契约层锁定只对**三书**生效（文件名含 `概要设计` / `需求规范书` / `产品能力规划说明书`）；
+其他 .md（开发记录、任务清单、附录等）只受独占节规则约束。
+
+逃生门（都会打印理由）：
+  · 行内或上一行注 `exclusive-allow：理由`（独占节）/ `contract-change：理由`（契约层）
+  · 提交信息整批 `exclusive-allow: 理由` / `contract-change: 理由`
+  · 独占节正文注 `exclusive-allow-section`（整节豁免，用于「首建占位节」）
+
+汇报：任一类违规 → 退出 1 并点名 `文件:行号`；全合法 → 退出 0（并打印受检行数）。
 
 用法
 ----
-    python3 check-exclusive-sections.py                    # 自动推断本侧，对照 origin/master 的改动
-    python3 check-exclusive-sections.py --mine macos       # 显式指定本侧标记
+    python3 check-exclusive-sections.py                       # 自动推断本侧，对照 origin/master 的改动
+    python3 check-exclusive-sections.py --mine macos          # 显式指定本侧标记
+    python3 check-exclusive-sections.py --contract-owner macos  # 契约层归属（默认 macos / 大河马）
     python3 check-exclusive-sections.py --base HEAD~1 --files Docs/概要设计.md
-    python3 check-exclusive-sections.py --diff-file d.patch   # 用现成 diff（CI / 自测）
-    python3 check-exclusive-sections.py --self-test           # 自测（不依赖仓库状态）
+    python3 check-exclusive-sections.py --diff-file d.patch    # 用现成 diff（CI / 自测）
+    python3 check-exclusive-sections.py --self-test            # 自测 7 例（不依赖仓库状态）
 
-本侧推断：darwin → macos，其它 → windows（可用 --mine 覆盖，例如 Apple 侧在 Notes 仓写作 apple）。
-
-逃生门（必须是显式的，且会打印理由）
-------------------------------------
-1. 该行本身或紧邻的上一行含 `exclusive-allow`（可在注释里写理由）；
-2. HEAD 提交信息含 `exclusive-allow:`（整批放行，打印理由）。
-
-退出码：0 通过（含无改动）｜1 越界｜2 用法或环境错误
+本侧推断：darwin → macos，其它 → windows（可用 --mine 覆盖，例如 Notes 仓写作 apple）。
 """
 import argparse
 import os
