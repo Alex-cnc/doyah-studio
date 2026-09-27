@@ -179,6 +179,91 @@ final class ERDiagramTests: XCTestCase {
         XCTAssertEqual(edge?.end.y, parent?.bottomY)
     }
 
+    // MARK: - 标签锚点（队列 L-17：两条 FK 标签叠在一处 ⇒ 两条都读不出来）
+
+    /// **互指的两位**（`departments ⇄ staff`，成环）＋ 一条自引用 —— 这就是
+    /// `er-diagram-populated-*` 快照里的形状（那两张图上「两条 FK 名字叠成一团」就是这么来的）。
+    private func mutualReferenceDiagram() -> ERDiagram {
+        ERDiagram.build(
+            tables: [
+                table("customers", columns: [("id", "int8", true)]),
+                table("staff", columns: [("id", "int8", true), ("department_id", "int8", false), ("manager_id", "int8", false)]),
+                table("departments", columns: [("id", "int8", true), ("head_id", "int8", false)]),
+            ],
+            relationships: [
+                relationship("staff", ["department_id"], to: "departments", ["id"], name: "staff_department_id_fkey"),
+                relationship("departments", ["head_id"], to: "staff", ["id"], name: "departments_head_id_fkey"),
+                relationship("staff", ["manager_id"], to: "staff", ["id"], name: "staff_manager_id_fkey"),
+            ]
+        )
+    }
+
+    /// 判据（与 `Layout.resolvingLabelOverlaps` 同一句话）：任意两个锚点要**横竖至少隔 `gap`**。
+    ///
+    /// 为什么是"横竖"而不是只看纵向：视图把标签**水平居中**画在锚点上（`.bottom` 对齐），
+    /// 所以两个锚点在**两个方向上都近**时，两行字才会真的叠在一起。
+    private func labelAnchorViolations(
+        _ anchors: [(x: Double, y: Double)],
+        gap: Double = ERDiagram.Layout.defaultLabelGap
+    ) -> [(lhs: Int, rhs: Int, dx: Double, dy: Double)] {
+        var found: [(lhs: Int, rhs: Int, dx: Double, dy: Double)] = []
+        for lhs in anchors.indices {
+            for rhs in anchors.indices.dropFirst(lhs + 1) {
+                let dx = abs(anchors[lhs].x - anchors[rhs].x)
+                let dy = abs(anchors[lhs].y - anchors[rhs].y)
+                if max(dx, dy) < gap { found.append((lhs, rhs, dx, dy)) }
+            }
+        }
+        return found
+    }
+
+    /// 每条边都要有锚点、两两不叠、且同一份输入连算两次逐字节一致。
+    func testEdgeLabelAnchorsNeverStackOnEachOther() throws {
+        let layout = mutualReferenceDiagram().layout()
+        XCTAssertEqual(layout.edges.count, 3, "夹具得真有三条 FK，否则这条判据是在空跑")
+        XCTAssertEqual(layout.cyclicTables, ["public.departments", "public.staff"], "夹具必须仍含成环的两张表")
+
+        let anchors = layout.edges.map { $0.labelAnchor }
+        let violations = labelAnchorViolations(anchors)
+        XCTAssertTrue(
+            violations.isEmpty,
+            "有 \(violations.count) 对标签锚点叠在一处（横竖都近于 \(ERDiagram.Layout.defaultLabelGap)）："
+                + violations.map { pair in
+                    let lhs = layout.edges[pair.lhs].label
+                    let rhs = layout.edges[pair.rhs].label
+                    return "\(lhs) × \(rhs)（|dx|=\(pair.dx) |dy|=\(pair.dy)）"
+                }.joined(separator: "；")
+        )
+
+        // 确定性：同一张图连算两次，锚点必须一模一样（否则每开一次面板标签就跳）。
+        let again = mutualReferenceDiagram().layout()
+        XCTAssertEqual(again.edges.map { $0.labelAnchor.x }, anchors.map { $0.x })
+        XCTAssertEqual(again.edges.map { $0.labelAnchor.y }, anchors.map { $0.y })
+    }
+
+    /// **棘轮（红例留在测试里）**：把锚点换回**旧口径**（视图原来自己算的 `waypoint.y - lift`）
+    /// 仍然会叠 —— 这条要是哪天变绿，说明夹具已经不构成 L-17 那个场景，
+    /// 上面那条判据就成了空跑（"通过"没有意义），所以这里必须红。
+    func testLegacyWaypointAnchorStillReproducesTheOverlap() {
+        let layout = mutualReferenceDiagram().layout()
+        let legacy = layout.edges.map { (x: $0.waypoint.x, y: $0.waypoint.y - ERDiagram.Layout.defaultLabelLift) }
+        let violations = labelAnchorViolations(legacy)
+        XCTAssertFalse(
+            violations.isEmpty,
+            "旧口径在这个夹具上不再叠字 ⇒ 夹具已不构成 L-17 场景，必须换夹具（否则新判据是空跑）"
+        )
+    }
+
+    /// 只往下推：去叠**不许动 x**，也不许把锚点推到它自己那段的另一头去。
+    func testLabelAnchorDeduplicationOnlyPushesDownAndStaysFinite() {
+        let layout = mutualReferenceDiagram().layout()
+        for edge in layout.edges {
+            XCTAssertEqual(edge.labelAnchor.x, edge.waypoint.x, "去叠只沿 +y 错开，x 必须不变")
+            XCTAssertGreaterThanOrEqual(edge.labelAnchor.y, edge.waypoint.y - ERDiagram.Layout.defaultLabelLift)
+            XCTAssertTrue(edge.labelAnchor.x.isFinite && edge.labelAnchor.y.isFinite)
+        }
+    }
+
     // MARK: - 导出
 
     func testMermaidExport() {

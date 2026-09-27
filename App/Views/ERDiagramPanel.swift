@@ -209,7 +209,10 @@ struct ERDiagramPanel: View {
             Text(edge.label)
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.tertiary)),
-            at: CGPoint(x: edge.waypoint.x, y: edge.waypoint.y - 6),
+            // 锚点由 Core 算（`RoutedEdge.labelAnchor`）：**去叠在布局里做**，视图只管画。
+            // 视图这边再算一次（原来写的是 `waypoint.y - 6`）就会让"两条标签印在同一个点上"
+            // 的缺陷没有地方判住（队列 L-17）。
+            at: CGPoint(x: edge.labelAnchor.x, y: edge.labelAnchor.y),
             anchor: .bottom
         )
     }

@@ -188,6 +188,17 @@ public struct ERDiagram: Equatable, Sendable {
         public static let defaultHorizontalGap: Double = 60
         public static let defaultVerticalGap: Double = 90
         public static let defaultMaximumVisibleColumns: Int = 12
+        /// 标签锚点相对折线中点往上抬的高度（视图用 `.bottom` 对齐画字 ⇒ 字落在锚点上方）。
+        /// 原先是视图里写死的 `waypoint.y - 6` —— 搬进布局是为了**同一个点只在一处算**。
+        public static let defaultLabelLift: Double = 6
+        /// 两个标签锚点的最小间距（抽象单位）＝ 一行行高。
+        ///
+        /// 为什么"抽象单位"能当阈值：视图在 `Canvas` 里对**几何与文字用同一个 `scaleBy`**
+        /// （`ERDiagramPanel.diagramCanvas`）⇒ 文字高与锚点间距**同比例缩放**，缩放比在判断里约掉。
+        /// 于是这个常量只需跟"一行行高"这把尺子对齐，不必知道当前缩放比，也不必真去量文字。
+        /// **它是"最低不叠"的底线，不是排版**：横向上两条长标签离得近仍可能挤（Core 量不到字宽）
+        /// —— 那部分留给人眼 + 界面快照，别把这里当成完整排版器。
+        public static let defaultLabelGap: Double = defaultRowHeight
 
         public struct Node: Equatable, Sendable {
             public var table: String
@@ -212,11 +223,18 @@ public struct ERDiagram: Equatable, Sendable {
             public var end: (x: Double, y: Double)
             /// 折线中间点（视图画曲线时当控制点用）。
             public var waypoint: (x: Double, y: Double)
+            /// **标签锚点**：文字画在这里（视图 `anchor: .bottom` ⇒ 字落在锚点上方、水平居中）。
+            ///
+            /// 为什么不让视图自己拿 `waypoint` 当锚点（2026-09-27 队列 L-17）：成环的两张表
+            /// （互相引用）算出的折线中点**几乎重合** ⇒ 两条 FK 标签叠在一处，两条都读不出来。
+            /// 去叠这件事必须发生在**布局**里（那里知道全部走线），不能在画的时候各画各的。
+            public var labelAnchor: (x: Double, y: Double)
             public var isSelfReference: Bool
 
             public static func == (lhs: RoutedEdge, rhs: RoutedEdge) -> Bool {
                 lhs.label == rhs.label && lhs.fromTable == rhs.fromTable && lhs.toTable == rhs.toTable
                     && lhs.start == rhs.start && lhs.end == rhs.end && lhs.waypoint == rhs.waypoint
+                    && lhs.labelAnchor == rhs.labelAnchor
                     && lhs.isSelfReference == rhs.isSelfReference
             }
         }
@@ -229,6 +247,51 @@ public struct ERDiagram: Equatable, Sendable {
         public var height: Double
 
         public func node(for table: String) -> Node? { nodes.first { $0.table == table } }
+
+        /// 把算到一处的标签锚点沿 **+y** 错开（队列 L-17：`departments ⇄ staff` 这类互指的两条边，
+        /// 折线中点几乎重合 ⇒ 两条 FK 标签叠着印，两条都读不出来）。
+        ///
+        /// 三条纪律：
+        /// - **只往下推**：`y` 单调增 ⇒ 不会震荡，也不会把已经放好的锚点再挪走；
+        /// - **顺序确定**：按 `(y, x, 原序)` 排 ⇒ 同一份输入必得同一份输出（布局要确定性，否则
+        ///   每开一次面板位置都不一样）；
+        /// - **与判据同一句话**：错开到「任意两个锚点**横竖至少隔 `gap`**」，与单测里那条判据
+        ///   逐字同源 —— 判据和实现两套写法迟早会分家。
+        static func resolvingLabelOverlaps(
+            _ anchors: [(x: Double, y: Double)],
+            gap: Double
+        ) -> [(x: Double, y: Double)] {
+            var resolved = anchors
+            var order = Array(anchors.indices)
+            order.sort { lhs, rhs in
+                if anchors[lhs].y != anchors[rhs].y { return anchors[lhs].y < anchors[rhs].y }
+                if anchors[lhs].x != anchors[rhs].x { return anchors[lhs].x < anchors[rhs].x }
+                return lhs < rhs
+            }
+            var placed: [(x: Double, y: Double)] = []
+            placed.reserveCapacity(anchors.count)
+            for index in order {
+                var y = anchors[index].y
+                var moved = true
+                var passes = 0
+                // 冲突时把 y 推到「冲突点 + gap」：因为冲突的判据是 |dy| < gap，推完必然严格变大，
+                // 所以每一趟至少推进一次、且上界是「当前最高点 + gap」⇒ 一定收敛。
+                // 趟数上界取 placed.count 只是保险（正常一两趟就干净）。
+                while moved, passes <= placed.count {
+                    moved = false
+                    passes += 1
+                    for other in placed
+                    where max(abs(other.x - anchors[index].x), abs(other.y - y)) < gap {
+                        y = other.y + gap
+                        moved = true
+                    }
+                }
+                let anchor = (x: anchors[index].x, y: y)
+                resolved[index] = anchor
+                placed.append(anchor)
+            }
+            return resolved
+        }
     }
 
     /// 计算布局。
@@ -238,6 +301,9 @@ public struct ERDiagram: Equatable, Sendable {
     ///   - headerHeight: 表头高度。
     ///   - rowHeight: 每列一行的高度。
     ///   - horizontalGap / verticalGap: 同层间距与层间距。
+    ///
+    /// 返回值里的 `RoutedEdge.labelAnchor` 是**已经去过叠**的标签锚点 —— 互指的两条边（成环）
+    /// 不会再把标签印在同一个点上（队列 L-17）。判据见 `Layout.resolvingLabelOverlaps`。
     public func layout(
         nodeWidth: Double = ERDiagram.Layout.defaultNodeWidth,
         headerHeight: Double = ERDiagram.Layout.defaultHeaderHeight,
@@ -343,9 +409,21 @@ public struct ERDiagram: Equatable, Sendable {
                     start: start,
                     end: end,
                     waypoint: waypoint,
+                    // 先按"折线中点上方一点"给初值，走完线再统一去叠（见下面第 4 步）。
+                    labelAnchor: (waypoint.x, waypoint.y - Layout.defaultLabelLift),
                     isSelfReference: from.table == to.table
                 )
             )
+        }
+
+        // 4) 标签锚点去叠：互指的两条边（成环）算出的中点几乎重合 ⇒ 两条标签叠在一处、
+        //    两条都读不出来（队列 L-17 的真缺陷）。这里统一错开，视图只管画。
+        let resolvedAnchors = Layout.resolvingLabelOverlaps(
+            edges.map { $0.labelAnchor },
+            gap: Layout.defaultLabelGap
+        )
+        for index in edges.indices {
+            edges[index].labelAnchor = resolvedAnchors[index]
         }
 
         let height = max(0, y - verticalGap)
