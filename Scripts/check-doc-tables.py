@@ -17,7 +17,25 @@
    第 2 节逐域计数）与由 SRS 索引派生出来的值一致。
 
 用法：
-    python3 Scripts/check-doc-tables.py [Docs/需求规范书.md ...]
+    python3 Scripts/check-doc-tables.py                    # 本机默认清单（缺失的文档跳过并提示）
+    python3 Scripts/check-doc-tables.py --require-all       # 缺失即红（主开发机 / CI 用）
+    python3 Scripts/check-doc-tables.py <文件...>            # 显式点名：不存在即红
+    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（四例）
+
+**「文件不存在」的两种语义**（L-33，2026-09-27 第 29 轮；另一平台侧实测提出）：
+
+本清单里有 **5 份文档被 `.gitignore` 排除**（`兼容性矩阵` / `GBase-技术验证` / `测试用例` /
+`发布方案` / `手工验收运行手册` —— 见 `.gitignore` 第 27 行 `/Docs/*` 与白名单），它们只存在于
+macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平台（Windows）上跑这一项必然红，
+而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。现在：
+
+- **默认清单里不存在** → **跳过 + 高声提示**（打印跳过的清单与条数；跳过 ≠ 通过，但不判红）；
+- **显式点名的文件不存在** → **判红**（你点名要看的东西没有）；
+- `--require-all` → 缺失一律判红；
+- **`Docs/需求规范书.md` 缺失始终判红**（它是本工程文档的单一来源，不在「可能没有」之列）。
+
+**跳过只覆盖「文档在不在」**：文档一旦存在，它的表格 / 派生数字 / 版本号判据一条都不放宽
+（跳过的永远是整份文档，不是文档里的某项检查）。
 """
 
 from __future__ import annotations
@@ -265,18 +283,41 @@ def check_requirement_counts() -> list[str]:
 
 
 def main() -> int:
-    targets = sys.argv[1:] or DEFAULT_TARGETS
+    arguments = sys.argv[1:]
+    if "--self-test" in arguments:
+        return run_self_test()
+
+    require_all = "--require-all" in arguments
+    arguments = [argument for argument in arguments if argument != "--require-all"]
+    explicit = bool(arguments)
+    strict = explicit or require_all
+    targets = arguments or DEFAULT_TARGETS
+
     problems: list[str] = []
+    skipped: list[str] = []
+    checked = 0
 
     for target in targets:
         path = pathlib.Path(target)
         if not path.exists():
-            problems.append(f"{target}: 文件不存在")
+            if strict:
+                origin = "显式点名" if explicit else "--require-all"
+                problems.append(f"{target}: 文件不存在（{origin} → 判红）")
+            else:
+                skipped.append(target)
             continue
+        checked += 1
         problems.extend(check(path))
 
     problems.extend(check_requirement_counts())
     problems.extend(check_section_heading_counts())
+
+    if skipped:
+        print(f"⚠ 跳过 {len(skipped)} 份不在本机的文档（不存在即跳过、不判红）：")
+        for target in skipped:
+            print(f"   · {target}")
+        print("   正常情形：干净克隆 / 另一平台（这 5 份被 .gitignore 排除，只在主开发机上）。")
+        print("   主开发机上出现 = 文档被删或路径写错，请人工确认；`--require-all` 可令其判红。")
 
     if problems:
         print(f"❌ 表格校验失败（{len(problems)} 处）：")
@@ -284,7 +325,114 @@ def main() -> int:
             print("   " + problem)
         return 1
 
-    print(f"✅ 表格校验通过（{len(targets)} 个文件）")
+    suffix = f"，跳过 {len(skipped)} 份" if skipped else ""
+    print(f"✅ 表格校验通过（{checked} 个文件{suffix}）")
+    return 0
+
+
+# ── 门禁自己的证据（L-33）────────────────────────────────────────────────────
+# 四例，全部在**临时目录**里跑真实文档副本，末例核对真仓库逐字节未变。
+# 关键一例是「干净克隆 / 另一平台」：只放**被版本控制跟踪的**那几份文档，
+# 5 份被 `.gitignore` 排除的缺席 —— 口径是**跳过 + 提示、exit 0**（原先必红的正是这一例）。
+
+SELF_TEST_TRACKED = [
+    "Docs/需求规范书.md",
+    "Docs/产品能力规划说明书.md",
+    "Docs/概要设计.md",
+    "Docs/README.md",
+    "Docs/功能清单（一页纸）.md",
+    "Docs/功能清单（管理视图）.md",
+]
+
+SELF_TEST_ABSENT = [
+    "Docs/兼容性矩阵.md",
+    "Docs/GBase-技术验证.md",
+    "Docs/测试用例.md",
+    "Docs/发布方案.md",
+    "Docs/手工验收运行手册.md",
+]
+
+
+def run_self_test() -> int:
+    import shutil
+    import subprocess
+    import tempfile
+
+    repository = pathlib.Path(__file__).resolve().parent.parent
+    failures: list[str] = []
+    total = 0
+
+    def run(arguments: list[str], cwd: pathlib.Path) -> tuple[int, str]:
+        completed = subprocess.run(
+            [sys.executable, str(cwd / "Scripts/check-doc-tables.py"), *arguments],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+        )
+        return completed.returncode, completed.stdout + completed.stderr
+
+    scratch = pathlib.Path(tempfile.mkdtemp(prefix="doyah-doc-tables-selftest-"))
+    try:
+        clone = scratch / "clone"
+        (clone / "Docs").mkdir(parents=True)
+        shutil.copytree(repository / "Scripts", clone / "Scripts")
+        for relative in SELF_TEST_TRACKED:
+            shutil.copy(repository / relative, clone / relative)
+        missing = [relative for relative in SELF_TEST_ABSENT if not (clone / relative).exists()]
+        if len(missing) != len(SELF_TEST_ABSENT):
+            failures.append(f"夹具准备失败：临时目录里应缺 {len(SELF_TEST_ABSENT)} 份，实际缺 {len(missing)} 份")
+        else:
+            total += 1
+            if any((clone / relative).exists() for relative in SELF_TEST_ABSENT):
+                failures.append("夹具准备失败：被 .gitignore 排除的文档不该出现在临时目录里")
+
+        # 例 1·干净克隆（默认清单，缺 5 份）→ exit 0 且**高声提示**、不得静默
+        total += 1
+        code, output = run([], clone)
+        if code != 0:
+            failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
+        elif "⚠ 跳过 5 份" not in output:
+            failures.append(f"例 1 失败：没有高声提示「跳过 5 份」（不得静默通过）\n{output}")
+        elif "✅ 表格校验通过（6 个文件，跳过 5 份）" not in output:
+            failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
+
+        # 例 2·同一目录加 --require-all → exit 1（缺失即红）
+        total += 1
+        code, output = run(["--require-all"], clone)
+        if code == 0:
+            failures.append(f"例 2 失败：--require-all 下缺 5 份仍 exit 0\n{output}")
+        elif "文件不存在（--require-all → 判红）" not in output:
+            failures.append(f"例 2 失败：没有逐份点名「文件不存在」\n{output}")
+
+        # 例 3·显式点名一份不存在的文件 → exit 1
+        total += 1
+        code, output = run(["Docs/不存在.md"], clone)
+        if code == 0:
+            failures.append(f"例 3 失败：显式点名缺失文件仍 exit 0\n{output}")
+        elif "文件不存在（显式点名 → 判红）" not in output:
+            failures.append(f"例 3 失败：没有把「显式点名」与「默认清单」区分开\n{output}")
+
+        # 例 4·真仓库（本机）→ exit 0、跳过 0，且**末例核对真仓库逐字节未变**
+        total += 1
+        before = (repository / "Docs/概要设计.md").read_bytes()
+        code, output = run([], repository)
+        after = (repository / "Docs/概要设计.md").read_bytes()
+        if code != 0:
+            failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
+        elif "跳过" in output:
+            failures.append(f"例 4 失败：真仓库 11 份文档应全在（不得出现跳过行）\n{output}")
+        if before != after:
+            failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+    if failures:
+        print(f"❌ 自检失败（{len(failures)}/{total}）：")
+        for failure in failures:
+            print("   " + failure)
+        return 1
+
+    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 5 份且 exit 0 / --require-all 判红 / 显式点名判红 / 真仓库无跳过")
     return 0
 
 

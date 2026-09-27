@@ -57,14 +57,65 @@ set -euo pipefail
 # 必须在 `nonConnectionKeys` 里逐条点名 + 给出语言表键，且**调用方真的接上了这一档**
 # （CLI / ErrorPresenter / 连接表单）—— 否则 `describe` 返回 nil 时用户只剩一句英文调试串。
 #
+# 平台口径（L-33，2026-09-27 第 29 轮）：本闭环**在非 macOS 机器上也能跑**，方式是——
+#   · **第 1 / 11 项（要 Xcode 工具链）按平台跳过 + 打印提示**，收尾行如实报「跑了几项 / 跳了几项」，
+#     **跳过 ≠ 通过**（逐条列出跳过的项，并指向 §8.3 / §8.5.3 的等价物）；
+#   · 第 4 项里 5 份被 `.gitignore` 排除的本地文档**不存在即跳过并提示**（显式点名 / `--require-all` 判红）；
+#   · `DOYAH_PLATFORM=macos|windows|linux` 显式声明平台（缺省按 `uname -s` 推断）；
+#   · `./Scripts/verify-all.sh --require-all` = **跳过即红**（主开发机上自我证明用）。
+#
 # 需要非沙箱构建（例如要跑 dsh-tui 的终端）时单独执行：
 #   DOYAH_NO_SANDBOX=1 ./Scripts/build-app.sh
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "${ROOT}"
 
-echo "==> 1/17 Core 与平台适配层单测"
-./Scripts/verify-core.sh
+# ── 平台判定与「跳过」语义（L-33，开发循环第 29 轮）────────────────────────────
+# 十七项里有 **两项是 macOS 专属**：第 1 项（Core 单测）与第 11 项（打包 .app）——
+# 两者都要 Xcode 工具链（`DEVELOPER_DIR` → `/Applications/Xcode.app/...`，见两份脚本的第 10 / 24 行）。
+# 在非 macOS 机器（另一平台 / Linux）上跑，原先会以「命令或路径不存在」的形式**硬失败**，
+# 看起来像门禁红了，其实只是平台不适用（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。
+# 现在的口径：**按平台跳过 + 打印提示**，且**跳过 ≠ 通过** —— 收尾行如实写「跑了几项 / 跳了几项」
+# 并逐条列出跳过的项；需要「跳过即红」（主开发机上自我证明）加 `--require-all`。
+# 平台取值：显式 `DOYAH_PLATFORM=macos|windows|linux` 优先，否则按 `uname -s` 推断。
+PLATFORM="$(uname -s)"
+case "${DOYAH_PLATFORM:-}" in
+  "") ;;
+  macos | darwin | Darwin | macOS) PLATFORM="macos" ;;
+  windows | Windows) PLATFORM="windows" ;;
+  linux | Linux) PLATFORM="linux" ;;
+  *) PLATFORM="${DOYAH_PLATFORM}" ;;
+esac
+case "${PLATFORM}" in
+  Darwin | darwin) PLATFORM="macos" ;;
+  MINGW* | MSYS* | CYGWIN* | Windows*) PLATFORM="windows" ;;
+  Linux | linux) PLATFORM="linux" ;;
+esac
+
+REQUIRE_ALL=0
+for argument in "$@"; do
+  if [ "${argument}" = "--require-all" ]; then
+    REQUIRE_ALL=1
+  fi
+done
+
+SKIPPED_COUNT=0
+SKIPPED_ITEMS=""
+
+skip_step() {   # skip_step <项号> <说明>
+  SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+  SKIPPED_ITEMS="${SKIPPED_ITEMS}   · 第 $1 项 ${2}
+"
+  echo "==> $1/17 ⏭ 跳过（平台不适用：PLATFORM=${PLATFORM}，缺 Xcode 工具链）—— ${2}"
+  echo "    等价物见 Docs/概要设计.md §8.3（每端必需项清单）与 §8.5.3（另一平台的 PowerShell 版）"
+}
+
+if [ "${PLATFORM}" = "macos" ]; then
+  echo "==> 1/17 Core 与平台适配层单测"
+  ./Scripts/verify-core.sh
+else
+  skip_step 1 "Core 与平台适配层单测（Scripts/verify-core.sh 要 Xcode 工具链的 swift）"
+fi
 
 echo "==> 2/17 Core 平台中立性"
 python3 Scripts/check-core-portability.py
@@ -78,7 +129,19 @@ python3 Scripts/check-core-localization.py
 python3 Scripts/check-effective-language.py
 
 echo "==> 4/17 文档表格与派生计数"
-python3 Scripts/check-doc-tables.py
+# L-33（2026-09-27 第 29 轮）：本项的默认清单里有 **5 份被 `.gitignore` 排除的文档**
+# （兼容性矩阵 / GBase-技术验证 / 测试用例 / 发布方案 / 手工验收运行手册）—— 它们只在主开发机上，
+# 干净克隆与另一平台都没有。原先一律判红 ⇒ 那台机器上这一项**必红且与改动无关**（§8.5.6-4）。
+# 现在：默认清单里不存在 → **跳过 + 高声提示**；显式点名 / `--require-all` → 判红。
+# 本闭环传不传 `--require-all` 由参数决定（主开发机上自我证明时加）。
+if [ "${REQUIRE_ALL}" = "1" ]; then
+  python3 Scripts/check-doc-tables.py --require-all
+else
+  python3 Scripts/check-doc-tables.py
+fi
+# 这一半是门禁自己的证据（L-33）：干净克隆跳过 5 份且 exit 0 / --require-all 判红 /
+# 显式点名判红 / 真仓库 11 份全在无跳过（**末例核对真仓库逐字节未变**）。
+python3 Scripts/check-doc-tables.py --self-test
 # L-32（2026-09-27 第 28 轮）：变更记录版本号**唯一**、头部版本格**可判**（= 变更记录最高号，
 # 或带「基线 / 首版」标注并在标注里写出当前号）、队列**定义行**条目号唯一。
 # 取号唯一来源 = `Scripts/next-doc-version.py`（max+1）—— 禁止手抄：撞过三次
@@ -122,8 +185,12 @@ python3 Scripts/check-plugin-assembly.py
 # `Scripts/notes-offline-gate.json`（关键令牌不许被拿掉、例外要写明理由且锚点陈旧报红）。
 python3 Scripts/check-notes-offline.py
 
-echo "==> 11/17 打包 .app（沙箱）"
-./Scripts/build-app.sh
+if [ "${PLATFORM}" = "macos" ]; then
+  echo "==> 11/17 打包 .app（沙箱）"
+  ./Scripts/build-app.sh
+else
+  skip_step 11 "打包 .app（Scripts/build-app.sh 走 xcodebuild，且产物是 .app 包）"
+fi
 
 echo "==> 12/17 脚本 shell 多字节安全（bash 3.2 变量名坑）"
 python3 Scripts/check-shell-locale-safety.py
@@ -161,4 +228,16 @@ python3 Scripts/check-vendored-sqlite.py
 python3 Scripts/check-vendored-sqlite.py --self-test
 python3 Scripts/smoke-vendored-sqlite.py
 
-echo "✅ 验证闭环全部通过（十七项）"
+if [ "${REQUIRE_ALL}" = "1" ] && [ "${SKIPPED_COUNT}" -gt 0 ]; then
+  echo "❌ 有 ${SKIPPED_COUNT} 项被跳过，而本次要求「跳过即红」（--require-all）："
+  echo "${SKIPPED_ITEMS}"
+  exit 1
+fi
+
+if [ "${SKIPPED_COUNT}" -gt 0 ]; then
+  echo "✅ 本平台（${PLATFORM}）可跑的项全部通过：十七项中跑 $((17 - SKIPPED_COUNT)) 项、跳过 ${SKIPPED_COUNT} 项"
+  echo "   —— **跳过 ≠ 通过**，跳过的是平台不适用项，逐条如下（等价物见 §8.3 / §8.5.3）："
+  echo "${SKIPPED_ITEMS}"
+else
+  echo "✅ 验证闭环全部通过（十七项）"
+fi
