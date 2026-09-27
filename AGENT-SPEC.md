@@ -108,7 +108,7 @@ git fetch -q origin && git status --short          # 有没有别人的改动
 ./Scripts/verify-all.sh        # 十八项；红了先修基线，别在红上叠改动
 ./Scripts/verify-core.sh       # 只要 Core 单测（2026-09-27 实测：2003 tests / 0 failures）
 ./Scripts/build-app.sh         # 要跑终端 i 类功能用 DOYAH_NO_SANDBOX=1 版本
-./Scripts/make-ui-snapshots.sh # 界面快照（当前 100 张 / 50 组：中英成对 + 深浅）
+./Scripts/make-ui-snapshots.sh # 界面快照（当前 136 张 / 68 组：中英成对 + 深浅）
 ```
 
 ### CMD-04 改文档
@@ -156,7 +156,7 @@ git push origin master && git ls-remote origin master   # 复核远端哈希 == 
 - **HEAD**：见 `git log -1`（本节每轮维护时更新；`本地 = 远端`）。
 - **需求**：FR **176** 条（✅ 120 / 🟡 56 / ⬜ 0）｜NFR 43（✅ 29 / 🟡 12 / ⬜ 2）｜AC 12（✅ 7 / 🟡 1 / ⬜ 4）。
 - **代码规模**：`Core/` 167 文件、`App/` 88 文件、`Tests/` 141 文件；CLI 与 `Platform/macOS/`。
-- **门禁**：`./Scripts/verify-all.sh` **十八项全绿**（第 18 项 = 生成物一致性，L-43 起）；Core 单测 **2006** 项 0 failures；界面快照 **136 张 / 68 组**（L-18 第 39 轮起；此前 112 张 / 56 组）。
+- **门禁**：`./Scripts/verify-all.sh` **十八项全绿**（第 18 项 = 生成物一致性，L-43 起）；Core 单测 **2017** 项 0 failures（第 41 轮实测；需求提出者 09-27 22:07~23:02 新增三个约定测试文件把它从 2006 顶到 2017）；界面快照 **136 张 / 68 组**（L-18 第 39 轮起；此前 112 张 / 56 组）。
 - **平台**：macOS 基线（现有）；**Windows 已开线**（2026-09-27）—— 机械设施已就位（§10.10 有 Windows 列），实现节见概要设计 §8.5（对侧）；Linux = 自用第三端。
 
 ---
@@ -195,6 +195,8 @@ git push origin master && git ls-remote origin master   # 复核远端哈希 == 
 
 16. **面板级注入口子必须带一句「给了初值就不去取」的守卫**：把初值注入面板（`SessionPanel(initialSessions:)` / `LockPanel(initialWaits:)` / `DatabaseStatsPanel(initialReport:)` / `PrivilegePanel(initialRole:initialPrivileges:)` / `ServerObjectsPanel(initialSections:)`）**只解决了一半** —— 面板的 `.task` 在离屏宿主里**真的会跑**（第 11 轮实测），它会用 `notConnected` 把注入的态当场覆盖成错误分支。所以每个口子都要配 `.task { if injectedX == nil { await … } }`，**`nil` = 没注入 ⇒ 照旧取数；给了（哪怕 `[]` / 空报告）⇒ 这一遍不去取**（非可选类型分不开这两件事，故口子一律用可选）。**判据不能只是「图好看」**：判「**该出现的文案在渲染记录里、不该出现的那句不在**」（`Record.localizedStrings`；`errorNotConnected` 是「这一遍没去取数」的机械证据），并**在真仓库做一次红/绿成对**（把守卫拿掉 ⇒ 断言必须红，第 39 轮实测 4 条断言逐字点名）。
 
+17. **面板根 `frame` 不写 `alignment` ⇒ 内容在自己那块尺寸里被垂直居中（顶上凭空一片空白）**：`.frame(width: W, height: H)` 只钉尺寸，**对齐取默认 `.center`** —— 面板根的 `VStack` 里若**没有一个可伸缩高度的子视图**（空态时往往只剩一两行文案），内容就整体落到正中：第 41 轮实测 `PrivilegePanel`，`privilege-panel-empty-zh` 上「权限」标题在 **y ≈ 420/1240pt**（图高 34%），改 `.top` 后 **≈ 65/1240pt**。**它的另一半**：内容**撑满时**居中与顶对齐**视觉等价**（`ServerObjectsPanel` 靠 `maxHeight: .infinity`、`DatabaseStatsPanel` 靠 `ScrollView`）⇒ 「有没有可伸缩高度的子视图」**静态查不出来**，所以这一类**只有读图能抓到**，别指望门禁。**口径**：面板根一律**显式写** `alignment:`；把它变成机械判据要先定「哪些是真面板根」（`App/Views/` 里固定尺寸 `.frame(width:height:)` 有 26 处，多数是面板根，另有 9×9 / 12×12 / 6×6 这类装饰小框）—— 第 41 轮登记为队列 `L-61`，**不半改**。
+
 ---
 
 ## 10. 启动流程（给「另一个 AI 助理」）
@@ -212,6 +214,7 @@ git push origin master && git ls-remote origin master   # 复核远端哈希 == 
 
 | 版本 | 日期 | 变更 | 作者 |
 |---|---|---|---|
+| v1.10 | 2026-09-28 | **L-16 第 6 批收口 + L-58 修掉（面板根顶对齐）**：L-16 的 13 个候选 **12 已覆盖 / 1 残项**（合成数据须先开面板级口子 + 定「什么算空」⇒ **转新条 `L-60`**）；「权限 / 服务器对象」两张纯空态图**逐张读图复核**（浅中 / 浅英 / 深中：空态文案到位、英文那遍无中文残留、控件状态正确、无裁切重叠）；`PrivilegePanel` 的 `.frame(width: 720, height: 620)` → 加 **`alignment: .top`**（默认 `.center` ⇒ 没有可伸缩高度子视图时内容被推到正中；读图同一张图 y 420 → 65pt）。证据：`./Scripts/make-ui-snapshots.sh` **exit 0（136 张 / 68 组，张数不变）** + 语言覆盖门禁 exit 0、`./Scripts/verify-all.sh` **exit 0 十八项**（Core 单测 **2017** 项 0 failures）。§5 命令注释与 §7 快照数字同步（陈旧值 100 张 / 50 组 → 136 张 / 68 组）；§9 新坑第 17 条。**同类问题登记为新条 `L-61`**（面板根对齐纪律 + 注册表双向棘轮）。 | 大河马（macOS 侧开发助理） |
 | v1.9 | 2026-09-27 | **可注入口子扩到六处 + 两张以前拍不到的纯空态（队列 L-18）**：六处面板级注入 —— `SessionPanel(initialSessions:)` / `LockPanel(initialWaits:)` / `DatabaseStatsPanel(initialReport:)` / `PrivilegePanel(initialRole:initialPrivileges:)` / `ServerObjectsPanel(initialSections:)` / `RoutineCandidatesPanel(initialTab:)`（最后一个是唯一不需要守卫的：它的 `.task` 只刷 `appState` 报告、不写 `tab`）。口径照 L-12（只给初值 / 不是测试后门 / 生产路径逐字不变），形态 = **`nil` 没注入 ⇒ 照旧取数；给了（哪怕 `[]` / 空报告）⇒ 这一遍不去取**。**判据两层**：渲染后断言（空态文案**在**渲染记录里 + `errorNotConnected` **不在** —— `Record.localizedStrings` 是「这一遍走哪一支」的机械证据；为此新增 `UISnapshot.localizedText(_:…)` 取**指定语言**的期望文案）+ 人眼读图。**红/绿成对**：把 `LockPanel` 守卫拿掉 ⇒ **4 条断言判红**、逐字点名中英两句未连接文案 ⇒ 还原后 exit 0。证据：`verify-all.sh` **exit 0 十八项**（Core 单测 2006 项 0 failures）、快照 **112 → 136 张 / 56 → 68 组**（语言覆盖门禁 exit 0）、读图 **7 张**。§9 新坑第 16 条；§7 快照数字同步。 | 大河马（macOS 侧开发助理） |
 | v1.8 | 2026-09-27 | **ER 图「两条 FK 标签印在同一个点上」修掉 + 判据落地（队列 L-17；无新脚本）**：互指的两张表（成环 `departments ⇄ staff`）算出的折线中点几乎重合 ⇒ 两条标签叠着印、**两条都读不出来**（真仓库实测 `departments_head_id_fkey` × `staff_department_id_fkey`：`\|dx\|=0 / \|dy\|=4.5`，抽象单位）。改法 = **标签锚点从视图搬进布局**：`RoutedEdge` 新增 `labelAnchor`，`Layout` 新增 `defaultLabelLift`（视图原先写死的 `- 6` 由此收进一处）与 `defaultLabelGap`（＝一行行高；`Canvas` 对几何与文字同一个 `scaleBy` ⇒ 缩放比在判断里约掉，不必量字宽），由 `resolvingLabelOverlaps` **只沿 +y、按 `(y, x, 原序)` 确定性错开**（同一份输入必得同一份输出）。判据 = `Tests/ERDiagramTests` **+3 例**：① 任意两锚点横或竖至少隔一行 ② **红例留档**（把锚点换回旧口径仍叠 ⇒ 夹具没失效，否则判据是空跑）③ 去叠只动 y。证据：Core 单测 **2003 → 2006** 项 0 failures；`./Scripts/verify-all.sh` **exit 0 十八项**；**红/绿成对**（在真仓库把去叠临时摘掉 ⇒ 新判据 `exit 1` 并点名那一对，还原后全绿）；快照重渲染 **112 张** + 语言覆盖门禁 exit 0 + **读图 3 张**（浅中 / 浅英 / 深中：两条标签分两行、均可读）。§9 新坑第 15 条。 | 大河马（macOS 侧开发助理） |
 | v1.7 | 2026-09-27 | **语言表模板占位符 ↔ 调用点实参的对账判据落地（队列 L-46；闭环第 3 项）**：新增 `Scripts/check-format-arguments.py` + 台账 `Scripts/format-argument-dispositions.json` —— 此前所有本地化判据（键数量 / 中英占位符一致性 / 语言门禁 / 状态一致性）只比**模板与模板**，没人比**模板与实参**：真缺陷因此长在缝里 —— `L(.licAboutEdition)` 不传实参而模板是 `当前版本：%@`，`text()` 原样返回模板 ⇒ 界面印 `%@`（第 37 轮实测 3 处，中英皆然）。判据 A 数字实参落 `%@` 槽 / A′ 字符串字面量落 `%d` 槽 / B 实参数 ≠ 占位符数 / C·D 类型不明的实参**逐条登记形状** + 处数棘轮 / E 台账双向对账 + **空跑不许通过**；`--self-test` **9 例**。性质：**裸标识符不做类型解析**（文件级索引会把 `let duration = String(format:)` 误判成数字 —— 实测假报红，故收窄），`unverified` 形状只被棘轮钉住、**不是放行**。产物：`Scripts/verify-all.sh` 第 3 项 + 头部清单（项数仍十八）、§6 资产表补该脚本、§9 新坑第 14 条。 | 大河马（macOS 侧开发助理） |

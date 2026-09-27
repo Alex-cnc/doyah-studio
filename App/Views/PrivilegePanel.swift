@@ -70,7 +70,14 @@ struct PrivilegePanel: View {
             composerSection
         }
         .padding(20)
-        .frame(width: 720, height: 620)
+        // **顶对齐**（队列 L-58）：`.frame(width:height:)` 不写 `alignment` 时 SwiftUI 按默认 `.center`
+        // 把内容摆在正中，而本面板的 `VStack` 里**没有一个可伸缩高度的子视图**（已授权限列表空着时
+        // 只有一行文案）⇒ 内容整体被推到中间：`privilege-panel-empty-zh` 实测「权限」标题落在
+        // y ≈ 420/1240pt 处、上下各一大片空白。同批另两块面板不这样 —— `ServerObjectsPanel` 的
+        // `content` 有 `.frame(maxHeight: .infinity)`、`DatabaseStatsPanel` 是 `ScrollView` 撑满，
+        // 两者都自然顶对齐。这里显式写 `.top` 让「有内容 / 空 / 加载中」三态用同一条口径
+        // （对齐落在**面板根**、与内容无关，所以三态一起正、不会改一处让另两态错位）。
+        .frame(width: 720, height: 620, alignment: .top)
         .task {
             // `injectedPrivileges != nil` = 注入过 ⇒ 这一遍不查库（唯一的「给了初值就不去取」保证，
             // 见 `init(initialRole:initialPrivileges:)`）。
