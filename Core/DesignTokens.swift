@@ -77,6 +77,26 @@ public enum Metrics {
     public static let activityIconSize: CGFloat = 20
     /// 列表 / 树的层级缩进步长（对象树、工作区文件树共用）。
     public static let listIndent: CGFloat = 14
+
+    // MARK: 面板尺寸（按内容算出来的那些）
+
+    /// 「执行计划」面板（FR-DIAG-01）的宽度 —— **高度不写死**，由内容决定。
+    ///
+    /// 2026-09-27 人工点验反馈：「Explain text 弹出对话框布局有问题，窗口特别高，
+    /// 上下两块很大的空白区域」。根因是这里原先把面板高写死 620、计划树 220、原始输出 110：
+    /// 内容只有几行时，两个框就是两大片空白，窗口再高也跟内容无关。
+    /// 现在两块区的高度一律**按行数算**（`行数 × 行高`，夹在 [min, max] 内），
+    /// 超过上限才滚动 —— 内容少时面板自然变矮。
+    public static let planPanelWidth: CGFloat = 720
+    /// 面板高度的下限（空态/报错时也留一点体面，但不再是 620 那种空高度）。
+    public static let planPanelMinHeight: CGFloat = 160
+    /// 计划树区：上下限 + 每行高度（与 `listRowHeight` 一致，树里就是列表行）。
+    public static let planTreeMinHeight: CGFloat = 56
+    public static let planTreeMaxHeight: CGFloat = 320
+    /// 原始输出区：上下限 + 每行高度（等宽小字）。
+    public static let planRawMinHeight: CGFloat = 48
+    public static let planRawMaxHeight: CGFloat = 260
+    public static let planRawLineHeight: CGFloat = 15
     /// 工具条上的图标按钮尺寸（28 × 22）。
     public static let toolbarButtonWidth: CGFloat = 28
     public static let toolbarButtonHeight: CGFloat = 22

@@ -23,9 +23,7 @@
       "bare-textstyle": 7
     },
     "App/Views/ConnectionFormView.swift": {
-      "bare-color": 1,
-      "bare-foreground": 1,
-      "bare-textstyle": 2
+      "bare-textstyle": 1
     },
     "App/Views/CreateDatabaseSheet.swift": {
       "bare-foreground": 1,
@@ -53,11 +51,6 @@
       "bare-foreground": 2,
       "bare-spacing": 1,
       "bare-textstyle": 5
-    },
-    "App/Views/ExecutionPlanPanel.swift": {
-      "bare-foreground": 5,
-      "bare-spacing": 3,
-      "bare-textstyle": 13
     },
     "App/Views/LockPanel.swift": {
       "bare-foreground": 6,
@@ -106,9 +99,9 @@
     }
   },
   "totals": {
-    "bare-color": 6,
-    "bare-foreground": 108,
-    "bare-spacing": 60,
-    "bare-textstyle": 203
+    "bare-color": 5,
+    "bare-foreground": 102,
+    "bare-spacing": 57,
+    "bare-textstyle": 189
   }
 }
