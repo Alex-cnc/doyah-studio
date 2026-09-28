@@ -182,6 +182,30 @@ final class QueryToolbarConventionTests: XCTestCase {
         }
     }
 
+    /// ③ 运行范围挡住执行时，文案要让人**能自救**。
+    ///
+    /// 2026-09-27 人工点验实测：需求提出者报「第 1 条不过，无法执行 delete 语句」，
+    /// 现场其实是运行范围停在「选中片段」、编辑器里没选内容 —— 代码按设计拒绝了（FR-EXEC-14：
+    /// **不静默降级**成跑整篇），但旧文案只说「先选中要执行的片段」，既没告诉人"也可以切换运行范围"，
+    /// 也没指出那个开关就在工具条上，于是人就卡住了。文案必须给下一步。
+    func testRunScopeMessagesTellHowToRecover() throws {
+        let text = try source("Core/Localization.swift")
+        for key in [".runScopeEmptySelection:", ".runScopeNoStatement:"] {
+            guard let start = text.range(of: key) else {
+                return XCTFail("找不到 \(key) —— 判据的锚点变了，请更新这条判据而不是删掉它")
+            }
+            let line = String(text[start.lowerBound...].split(separator: "\n", maxSplits: 1).first ?? "")
+            XCTAssertTrue(
+                line.contains("建议"),
+                "\(key) 要给出下一步怎么做：只说「先选中」会让人卡在这里（实测如此）"
+            )
+            XCTAssertTrue(
+                line.contains("运行范围"),
+                "\(key) 要指出这个开关在哪 —— 它就在工具条上，实测时需求提出者并不知道"
+            )
+        }
+    }
+
     // MARK: ④ 末例：扫的真文件不是空的（路径写错时不许一路绿）
 
     func testTargetsExist() throws {

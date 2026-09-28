@@ -172,11 +172,8 @@ struct QueryToolbar: View {
     }
 
     private var runScopeTitle: String {
-        switch appState.executionScope {
-        case .all: return L(.runScopeAll)
-        case .currentStatement: return L(.runScopeCurrentStatement)
-        case .selection: return L(.runScopeSelection)
-        }
+        // 档位名只有一个出处（`ExecutionScope.Mode.title`）：工具条菜单与执行日志取同一份。
+        appState.executionScope.title
     }
 
     private var runScopeSymbol: String {

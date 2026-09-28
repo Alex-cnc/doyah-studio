@@ -5468,12 +5468,24 @@ final class AppState: ObservableObject {
 
         // 运行范围控制（FR-EXEC-14）：先按当前模式抠出**真正要跑的那一段**，
         // 后续的连接、Safe Mode 判定、执行全都基于这一段。
+        //
+        // 选区取**显示中的编辑器**（`selectionForExecution`），不是那份缓存记录：
+        // 2026-09-27 人工点验现场 —— 需求提出者选中 `DELETE` 执行，到服务器的却是脚本里
+        // 第 1 条 `SELECT`（数据库侧 `n_tup_del = 0` 可证那条 DELETE 从未到达服务器），
+        // 缓存记录被重建 / 外部文本同步冲掉过。**用户眼里高亮的那一段才算数。**
         let resolution = ExecutionScope.resolve(
             text: tabs[tabIndex].sql,
             mode: executionScope,
-            selection: EditorCommandCenter.shared.selection(for: tabID),
+            selection: EditorCommandCenter.shared.selectionForExecution(tabID: tabID),
             databaseType: configuration.dbType
         )
+        if let mismatch = EditorCommandCenter.shared.lastSelectionMismatch {
+            // 判据看不见的时序，只能在现场留痕：缓存说 a+b，实际是 c+d。
+            StartupLog.write(
+                "选区缓存与编辑器实际不一致：缓存 \(mismatch.recorded.location)+\(mismatch.recorded.length)"
+                + " / 实际 \(mismatch.live.location)+\(mismatch.live.length) —— 已按实际执行"
+            )
+        }
         if let issue = resolution.issue {
             updateTab(tabID) {
                 $0.errorMessage = message(forRunScopeIssue: issue)
@@ -5538,6 +5550,24 @@ final class AppState: ObservableObject {
             $0.selectedResultIndex = 0
             $0.connectionID = configuration.id
             $0.database = targetDatabase
+        }
+
+        // **这一跑跑的是哪一段**必须写在明面上（2026-09-27 人工点验现场：需求提出者选中
+        // `delete` 执行，实际跑的是脚本第 1 条 `select`，而界面上没有一句话交代范围 ⇒
+        // 一次"静默跑错段落"没有任何痕迹）。三件事一起说清：范围、本次几条、脚本共几条。
+        let scopeSplitter = StatementSplitter(databaseType: configuration.dbType)
+        let scopeSummary = ExecutionScopeSummary(
+            scopeName: executionScope.title,
+            runningStatements: scopeSplitter.split(sql).count,
+            scriptStatements: scopeSplitter.split(tabs[tabIndex].sql).count
+        )
+        updateTab(tabID) {
+            $0.statusMessage = L(.stateRunScope, scopeSummary.scopeName, scopeSummary.runningStatements)
+        }
+        if scopeSummary.skipsStatements {
+            updateTab(tabID) {
+                $0.statusMessage = L(.stateRunScopeSkipped, scopeSummary.scriptStatements)
+            }
         }
 
         let executionStart = Date()
