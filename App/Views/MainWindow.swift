@@ -213,7 +213,7 @@ struct MainWindow: View {
             SafeModeConfirmSheet(
                 reasons: pending.reasons,
                 statements: pending.statements,
-                onConfirm: { Task { await appState.confirmPendingExecution() } },
+                onConfirm: { Task { await appState.confirmPendingExecution(pending) } },
                 onCancel: { appState.cancelPendingExecution() }
             )
         }
