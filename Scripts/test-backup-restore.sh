@@ -21,7 +21,11 @@ TOOL_DIR="${DOYAH_TEST_PG_BIN}"
 SRC="doyah_backup_src"
 DUMP="$(mktemp -t doyah-backup).dump"
 
-export PGHOST="${DOYAH_TEST_REMOTE_HOST}" PGUSER="${DOYAH_TEST_REMOTE_USER}" PGSSLMODE="${DOYAH_TEST_PGSSLMODE}"
+# 连 217 必须**带上库名**：它的 pg_hba 按 (库, 用户, 来源) 三元组匹配，本机只放行业务库
+# ${DOYAH_TEST_REMOTE_DATABASE}；不带库名会落到默认库（postgres）→ 直接被拒，而报出来的
+# 话术是「pg_hba 没有放行本机」，看着像环境变了（2026-09-28 实测澄清）。
+export PGHOST="${DOYAH_TEST_REMOTE_HOST}" PGUSER="${DOYAH_TEST_REMOTE_USER}" \
+       PGDATABASE="${DOYAH_TEST_REMOTE_DATABASE}" PGSSLMODE="${DOYAH_TEST_PGSSLMODE}"
 PGPASSWORD="$("$CLI" secret get --id "$ACCOUNT")"
 export PGPASSWORD
 
@@ -39,12 +43,25 @@ fi
 
 echo ""
 echo "== 1) 造现场：临时库 + 数据 =="
+# 217 上建了库**能不能连进去**由它的 pg_hba 决定：本机只放行业务库，自建的 $SRC 连不进去。
+# 所以这一段**失败不 exit** —— 下面 §4 的本机完整往返才是 FR-IO-04 的核心，不该被 217 的
+# 放行粒度连带跳过。失败就如实说，并在结论里点名。
+REMOTE_SCENE=1
 "$CLI" -c "DROP DATABASE IF EXISTS $SRC;" >/dev/null 2>&1
 "$CLI" -c "CREATE DATABASE $SRC;" >/dev/null 2>&1
-[ $? -eq 0 ] || { echo "  ❌ 建库失败"; exit 1; }
-PGDATABASE="$SRC" "$CLI" -c "CREATE TABLE t (id int primary key, note text);
+if [ $? -ne 0 ]; then
+    REMOTE_SCENE=0
+    echo "  ⚠️ 217 上建不了临时库（pg_hba 只放行库 ${DOYAH_TEST_REMOTE_DATABASE}）—— 跳过 217 现场"
+else
+    PGDATABASE="$SRC" "$CLI" -c "CREATE TABLE t (id int primary key, note text);
 INSERT INTO t SELECT g, 'note-' || g FROM generate_series(1, 500) g;" >/dev/null 2>&1
-[ $? -eq 0 ] && echo "  ✅ $SRC.t 已建好（500 行，与另一套基线数据分隔开）" || { echo "  ❌ 建表失败"; exit 1; }
+    if [ $? -eq 0 ]; then
+        echo "  ✅ $SRC.t 已建好（500 行，与另一套基线数据分隔开）"
+    else
+        REMOTE_SCENE=0
+        echo "  ⚠️ 217 上连不进 ${SRC}（pg_hba 未放行该库）—— 跳过 217 现场"
+    fi
+fi
 
 echo ""
 echo "== 2) --dry-run：只打印命令、不执行 =="
@@ -56,7 +73,10 @@ echo "$DRY_OUT" | grep -qv "$PGPASSWORD" && check "输出里没有真实密码" 
 
 echo ""
 echo "== 3) 217（服务端 18.6）+ 本机工具 16.2：**提前给出可读诊断**，而不是跑到一半才报错 =="
-MISMATCH_OUT="$("$CLI" backup --kind dump --database "$SRC" --out "$DUMP" --format custom --tool "$TOOL_DIR/pg_dump" 2>&1)"
+# 版本诊断只看「工具 16.2 vs 服务端 18.6」，不看库里的数据 —— 217 现场建不起来时退而用
+# **放行的那一个库**发起，诊断照样成立（实测退出码 65、不留半截文件）。
+DIAG_DB="$SRC"; [ "${REMOTE_SCENE:-1}" = "1" ] || DIAG_DB="${DOYAH_TEST_REMOTE_DATABASE}"
+MISMATCH_OUT="$("$CLI" backup --kind dump --database "$DIAG_DB" --out "$DUMP" --format custom --tool "$TOOL_DIR/pg_dump" 2>&1)"
 MISMATCH_CODE=$?
 echo "$MISMATCH_OUT" | grep -v "^PostgreSQL" | head -6 | sed 's/^/  /'
 [ "$MISMATCH_CODE" -eq 65 ] && check "提前拦下（退出码 65，不是跑到一半才失败）" 0 \
@@ -117,13 +137,18 @@ rm -f "$LOCAL_DUMP"
 echo ""
 echo "== 6) 清理现场 =="
 rm -f "$DUMP" /tmp/doyah-should-fail.dump
-"$CLI" -c "DROP DATABASE IF EXISTS $SRC;" >/dev/null 2>&1
-[ $? -eq 0 ] && echo "  ✅ 已删除临时库 $SRC" || { echo "  ❌ 清理失败（临时库还留着）"; fail=1; }
+# 连接在 §4 已经切回本机（doyah_test_env_export_connection），要在 217 上删临时库得显式指回去。
+PGHOST="${DOYAH_TEST_REMOTE_HOST}" PGUSER="${DOYAH_TEST_REMOTE_USER}" \
+PGDATABASE="${DOYAH_TEST_REMOTE_DATABASE}" PGSSLMODE="${DOYAH_TEST_PGSSLMODE}" \
+PGPASSWORD="$("$CLI" secret get --id "$ACCOUNT")" \
+    "$CLI" -c "DROP DATABASE IF EXISTS $SRC;" >/dev/null 2>&1
+[ $? -eq 0 ] && echo "  ✅ 已删除 217 上的临时库 $SRC" || echo "  ⚠️ 217 上没有临时库要删（本次没建成）"
 
 echo ""
 if [ "$fail" -eq 0 ]; then
     echo "通过：备份 / 恢复的完整往返（本机 16.2 服务端）与提前诊断（217 / 18.6）都成立，"
     echo "      密码不进 argv、--dry-run 不执行、失败路径有可读线索"
+    [ "${REMOTE_SCENE:-1}" = "1" ] || echo "      未覆盖：217 上造临时库这段（它的 pg_hba 只放行 ${DOYAH_TEST_REMOTE_DATABASE}，自建库连不进去）"
 else
     echo "有失败项，见上"
 fi
