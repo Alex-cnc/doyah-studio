@@ -1,14 +1,17 @@
 #!/bin/bash
 # 验证：全库对象搜索（FR-META-12）。
 #
-# 验四件事：① 跨 schema 的表 / 视图 / 列 / 函数**一次查询**都能搜到；
-# ② 列的命中形态是 `表.列`（搜列名能命中）；③ 排序合理（前缀优先）；④ 元数据上限会如实提示。
-# 本机 16.2 上造现场，217（18.6）上只做只读搜索。
+# 验五件事：① 跨 schema 的表 / 视图 / 列 / 函数**一次查询**都能搜到；
+# ② 列的命中形态是 `表.列`（搜列名能命中）；③ 排序合理（前缀优先）；④ 元数据上限会如实提示；
+# ⑤ 对象多的库上单次查询照样取回整库（`--limit` 只在客户端截断）。
+#
+# **全部在本机档造现场**（2026-09-28 循环 L-63 转正）：原先 §6 是「只读核对 217（18.6）上的既有对象」，
+# 而 217 的 `pg_hba` 未放行本机 ⇒ 这一段一直停在既定红、从没在这条证据链上跑过。
+# 转正后**不再对 18.6 做只读核对**（跨版本 / 真机覆盖见队列 L-09），换来的是本机可复跑。
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
 CLI=".build/debug/DoyahCLI"
-ACCOUNT="D264B21B-1880-4E73-A2D0-59A3F8E4D7EC"
 # 连接信息（本机过渡集群 / 远程专用库）由共用入口决定 —— 三档端口与目录只写在它里面
 source "$(cd "$(dirname "$0")" && pwd)/lib/test-env.sh"
 doyah_test_env_summary
@@ -83,16 +86,38 @@ NONE_CODE=$?
 [ "$NONE_CODE" -ne 0 ] && check "无命中返回非零（${NONE_CODE}）" 0 || check "无命中应返回非零" 1
 
 echo ""
-echo "== 6) 217（18.6）上只读搜索：一次查询在真机可用 =="
-# 切到 217 时**必须同时改 PGDATABASE**：否则还连着本机的临时库名（本轮就踩了这个，
-# 报错是 `database "doyah_search_check" does not exist` —— 脚本自己的疏漏，不是产品问题）。
-export PGHOST="${DOYAH_TEST_REMOTE_HOST}" PGPORT="${DOYAH_TEST_REMOTE_PORT}" PGUSER="${DOYAH_TEST_REMOTE_USER}" PGDATABASE="${DOYAH_TEST_REMOTE_DATABASE}" PGSSLMODE="${DOYAH_TEST_PGSSLMODE}"
-PGPASSWORD="$("$CLI" secret get --id "$ACCOUNT")"
-export PGPASSWORD
-REMOTE="$("$CLI" search-objects pg_ 2>&1)"
-echo "$REMOTE" | head -3 | sed 's/^/  /'
-echo "$REMOTE" | grep -q "在 .* 个对象里搜" && check "217 上单次元数据查询可用（未做任何写操作）" 0 \
-    || { check "217 搜索" 1; echo "$REMOTE" | tail -3; }
+echo "== 6) 对象多的库上，单次元数据查询照样跑得通（现场放大到 300 张表）=="
+# **本段原先只读核对 217（18.6）** —— 217 的 `pg_hba` 未放行本机 ⇒ 一直停在既定红。
+# 2026-09-28 循环 L-63 转正：改成在本机档造同形状的现场，把「对象数量」这一维**真的放大**
+# （300 张表 + 600 列）—— 验的是「一次元数据查询取回整个库、不因对象多而失败、也不悄悄截断」。
+BULK_SQL=""
+for _i in $(seq -w 0 299); do
+    BULK_SQL="${BULK_SQL}CREATE TABLE IF NOT EXISTS public.bulk_${_i} (id int, payload text);"
+done
+"$CLI" -c "${BULK_SQL}" >/dev/null 2>&1
+BULK_N="$("$CLI" -c "SELECT count(*) AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'bulk\\_%';" 2>&1 | awk '/^[0-9]+$/{print $1}' | head -1)"
+[ "${BULK_N:-0}" = "300" ] && check "现场放大到 300 张表（另加 600 列）" 0 \
+    || { check "应造出 300 张表" 1; echo "  实得：${BULK_N:-空}"; }
+
+BIG="$("$CLI" search-objects bulk_ 2>&1)"
+TOTAL=$(printf '%s\n' "${BIG}" | sed -n 's/^在 \([0-9][0-9]*\) 个对象里搜.*/\1/p' | head -1)
+# 900 = 300 张表 + 每张 2 列：**一次查询**要能把整库取回来（元数据上限是 10000 行，够不着）。
+if [ "${TOTAL:-0}" -ge 900 ] 2>/dev/null; then
+    check "单次元数据查询取回整个库（在 ${TOTAL} 个对象里搜，≥ 900）" 0
+else
+    check "单次查询应取回整个库（≥ 900 个对象）" 1
+    echo "  实得：${TOTAL:-空}"
+    printf '%s\n' "${BIG}" | head -3 | sed 's/^/  /'
+fi
+printf '%s\n' "${BIG}" | grep -q "元数据已达" && check "300 张表不该触发元数据上限提示" 1 \
+    || check "没到元数据上限，未出现「已达上限」提示" 0
+
+FIVE="$("$CLI" search-objects bulk_ --limit 5 2>&1)"
+FIVE_N=$(printf '%s\n' "${FIVE}" | grep -c $'\t')
+[ "${FIVE_N:-0}" = "5" ] && check "--limit 5 只列 5 条（截断在客户端）" 0 \
+    || { check "--limit 5 应只列 5 条" 1; echo "  实得：${FIVE_N:-空} 条"; }
+printf '%s\n' "${FIVE}" | grep -q "命中 5 条" && check "摘要如实报「命中 5 条」（不是 900）" 0 \
+    || { check "摘要应报命中 5 条" 1; printf '%s\n' "${FIVE}" | head -1 | sed 's/^/  /'; }
 
 echo ""
 echo "== 7) 清理现场 =="
