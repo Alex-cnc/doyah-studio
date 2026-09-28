@@ -1,6 +1,6 @@
 # `v0.2.0-alpha` 范围账 —— FR 🟡 逐条判定
 
-> **这份文件是什么**：`python3 Scripts/report-requirements.py` 盘点出的 **FR 🟡 51 条**，
+> **这份文件是什么**：`python3 Scripts/report-requirements.py` 盘点出的 **FR 🟡 50 条**，
 > 逐条给出「这条算不算 `v0.2.0-alpha` 的范围」的判定与理由。发布说明（仓根
 > `RELEASE-0.2.0-alpha.md` / `Docs/alpha-0.2.0-发布说明.md`）的「明确不做什么」一节**直接引用本表**，
 > 不再另抄一份。
@@ -18,15 +18,15 @@
 
 | 档位 | 条数 | 含义 |
 |---|---|---|
-| `ui-click` | **36** | 界面点击 / 观感只能人工 |
+| `ui-click` | **35** | 界面点击 / 观感只能人工 |
 | `environment` | **6** | 本机物理不可能 |
 | `device-instance` | **5** | 需真机 / 外部实例 / 外部软件 |
 | `not-implemented` | **2** | 本 alpha 明确不含的未做功能 |
 | `needs-decision` | **1** | 等需求提出者拍板 |
 | `open-defect` | **1** | 点验发现的缺陷（已开队列条） |
-| **合计** | **51** | = FR 🟡 51 条（`FR-DRV-09` 已 ✅，不在其中；`FR-EXEC-15` 2026-09-28 销账）|
+| **合计** | **50** | = FR 🟡 50 条（`FR-DRV-09` 已 ✅，不在其中；`FR-EXEC-15` / `FR-EXEC-17` 2026-09-28 销账）|
 
-> **2026-09-28 销账**：**`FR-EXEC-15`（事务回滚 / 提交）人工点验通过**（SRS **v3.268** 已由 🟡 转 ✅）⇒ 从本表与 `Scripts/alpha-fr-dispositions.json` 里**删除**（销账，不留陈旧条目）。本表 51 条、非环境 **46** 条；判据 `check-alpha-fr-dispositions.py` 会替我们把这件事判住（「修好了要销账」）。
+> **2026-09-28 销账**：**`FR-EXEC-15`（事务回滚 / 提交）与 `FR-EXEC-17`（参数绑定的注入面）人工点验通过**（SRS **v3.268 / v3.269** 已由 🟡 转 ✅）⇒ 从本表与 `Scripts/alpha-fr-dispositions.json` 里**删除**（销账，不留陈旧条目）。本表 50 条、非环境 **45** 条；判据 `check-alpha-fr-dispositions.py` 会替我们把这件事判住（「修好了要销账」）。
 
 > **如实记一处数字纠正**：队列 **L-69** 原文写「**46** 条非环境 🟡」—— 那是 52 − 6（含当时已 ✅ 的
 > `FR-DRV-09`）；按 🟡 实况算，带 `[alpha 不含]` 的只有 **5** 条 ⇒ **非环境 47 条**。本轮按实测走 **47**。
@@ -65,7 +65,6 @@
 | **FR-EDIT-34** | 3.2 SQL 编辑与执行 | GUI 点击与下载观感待人工点验 | `ui-click` | `Scripts/alpha-main-chain-v0.2.sh`、`Scripts/make-ui-snapshots.sh` |
 | **FR-EDIT-35** | 3.2 SQL 编辑与执行 | 界面切换与点击待人工点验 | `ui-click` | `Scripts/verify-core.sh` |
 | **FR-EDIT-36** | 3.2 SQL 编辑与执行 | 界面点击待人工点验 | `ui-click` | `Scripts/test-workspace-editor.sh`、`Scripts/verify-all.sh` |
-| **FR-EXEC-17** | 3.2 SQL 编辑与执行 | 界面点击待人工点验 | `ui-click` | `Scripts/test-query-parameters.sh` |
 | **FR-IO-02** | 3.9 导入导出与备份 | vendor 驱动只实现 CopyFrom，缺 COPY … TO STDOUT | `environment` | `Scripts/test-cursor-export.sh`、`Scripts/test-table-export.sh` |
 | **FR-IO-03** | 3.9 导入导出与备份 | 界面点击待人工点验 | `ui-click` | `Scripts/test-copy-import.sh`、`Scripts/test-data-import.sh` |
 | **FR-IO-04** | 3.9 导入导出与备份 | 沙箱下起子进程的临时例外待拍板（队列 L-10） | `needs-decision` | `Scripts/build-app.sh`、`Scripts/test-backup-restore.sh` |
