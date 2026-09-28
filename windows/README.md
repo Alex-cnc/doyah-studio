@@ -9,7 +9,7 @@
 
 | 目录 | 层 | 现状 |
 |---|---|---|
-| `Tools/` | 闸门（§8.3.1 六项必需项 + §8.5.6-3 基准项） | ✅ 13 项一条命令跑全（见 `Tools/README.md`） |
+| `Tools/` | 闸门（§8.3.1 六项必需项 + §8.5.6-3 基准项 + §8.3 的生成物一致性） | ✅ 14 项一条命令跑全（见 `Tools/README.md`） |
 | `Cargo.toml` / `Core/` | 领域层（Rust；零第三方依赖、零 UI / 平台依赖） | 🟡 首片已落地（合成数据集 / 排序筛选 / 窗口取数 / `grid-bench`；`cargo test` 15 例） |
 | `Bench/grid/` | 结果集网格压力基准台（Vue 3 + TS + Vite + TanStack Virtual） | 🟡 首片已落地（见 `Bench/grid/README.md`） |
 | `App/` | 表示层（Tauri 2 外壳 + Vue 3 + TS） | 🟡 首片已落地（外壳 + 结果网格走「Rust 侧切片」+ 令牌层；前端 `vitest` 24 例、本目录 Rust 8 例；见 `App/README.md`） |
@@ -21,7 +21,8 @@
 
 - ~~`Tools/check-core-boundary.ps1` 只认 C# 形态~~ ⇒ **已销账（第 25 轮）**：判据按 **Rust 形态**重建（`Cargo.toml` 依赖面 + `Core/**/*.rs` 源码面 + 空跑判红），判据与 **7 例自测**一次调用里都真跑，见 `Tools/README.md`。
 - ~~`Tools/check-design-tokens.ps1` 的 Windows 侧棘轮要等 `App/` 落地~~ ⇒ **已销账（第 26 轮）**：`App/` 落地后 ③ 交给表示层自己的 node 判据（`App/tools/gen-tokens.mjs --check` + `token-ratchet.mjs`），本项**不再有跳过档**（见 `Tools/README.md`）。
-- **`App/` 侧新账（如实登记，别当成已完成）**：① **版本号一致性没有网** —— `App/package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml` 三处版本号 + 与 mac 侧发布台账（`Scripts/release-version.json`）的对应关系**尚无判据**（下一轮按 `Scripts/check-release-version.py` 的规则名重建）；② **WebView2 + GPU 下的基准复测未做** —— `Bench/grid` 的读数是无头软件光栅、且不含 IPC 与 GPU 合成 ⇒ 三候选的取舍结论仍待复测（§8.5.6-3）。
+- ~~`App/` 侧的版本号一致性没有网~~ ⇒ **已销账（第 27 轮）**：发布产物版本号 `0.2.0`（三处逐字一致）由判据 `Tools/check-release-version.ps1` + 台账 `Tools/release-version.json` 机械判（闸门**第 13 项**）—— 三处各改一处都判红并点名、缺键也判红，另判**与 mac 侧发布台账同源**（不等即判红，对侧 `buildVersion` 不跟随）。
+- **仍未接网（如实登记，别当成已完成）**：① **WebView2 + GPU 下的基准复测未做** —— `Bench/grid` 的读数是无头软件光栅、且不含 IPC 与 GPU 合成 ⇒ 三候选的取舍结论仍待复测（§8.5.6-3）；② **装出来的 MSI / NSIS 里读到的版本号未实测** —— 本侧判据判的是**源**，要真跑一次 Tauri bundler 再读产物元数据；③ 本侧这个值三处**都是源**，仓内没有携带它的生成物（`dist/` 与 `target/` 都不入库）⇒「生成物 ↔ 源」那一半无对象。
 - 契约侧 **L-46**（语言表模板 ↔ 调用点实参）判的是 Swift 源码 ⇒ 本端等价判据待本地化层落地后按同规则名重建。
 
 ## 先跑闸门

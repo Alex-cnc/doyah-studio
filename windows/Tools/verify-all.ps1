@@ -13,6 +13,7 @@
 #
 # 第 22 轮：11 项 → 12 项（新增第 11 项 = `P-*` 平台差异登记两侧对账，接契约侧 L-45 的 `Scripts/check-p-parity.py`）
 # 第 24 轮：12 项 → 13 项（① ② 两项按 2026-09-28 开工令换栈：cargo/前端；新增第 12 项 = 结果网格压力基准可复跑）
+# 第 27 轮：13 项 → 14 项（新增第 13 项 = 生成物一致性「发布产物版本号一个值三处一致」，接契约侧 L-70 的 §8.3 闸门行）
 
 param(
   [switch]$RequireAll,
@@ -26,7 +27,7 @@ $RepoRoot = Get-DoyahRepoRoot -ToolsDir $ToolsDir
 $ran = New-Object System.Collections.ArrayList
 $skipped = New-Object System.Collections.ArrayList
 $failed = New-Object System.Collections.ArrayList
-$total = 13
+$total = 14
 
 Write-Host "== Doyah Studio · Windows 侧闸门（§8.3.1 六项必需项 + §8.5.3 等价物）"
 Write-Host ("   仓库：{0}" -f $RepoRoot)
@@ -78,7 +79,7 @@ function Invoke-ChildGate {
   }
 }
 
-# ── 1/12 闸门脚本自身编码（本机实测坑：无 BOM 的 UTF-8 中文脚本在 PS 5.1 下一行都不执行） ──
+# ── 1/14 闸门脚本自身编码（本机实测坑：无 BOM 的 UTF-8 中文脚本在 PS 5.1 下一行都不执行） ──
 Write-DoyahStep "1/$total" "闸门脚本自身编码（UTF-8 带 BOM）"
 $badEncoding = New-Object System.Collections.ArrayList
 foreach ($file in @(Get-ChildItem -Path $ToolsDir -Filter '*.ps1' -File)) {
@@ -93,7 +94,7 @@ else {
   [void]$ran.Add("闸门脚本编码")
 }
 
-# ── 2/12 判据运行器（Python 3）──────────────────────────────────────────────
+# ── 2/14 判据运行器（Python 3）──────────────────────────────────────────────
 Write-DoyahStep "2/$total" "判据运行器：可用的 Python 3"
 $python = Find-DoyahPython
 $pythonSkipReason = ''
@@ -107,28 +108,30 @@ else {
   [void]$skipped.Add(("判据运行器：Python 3 —— {0}" -f $pythonSkipReason))
 }
 
-# ── 3/12 ① 构建入口 ─────────────────────────────────────────────────────────
+# ── 3/14 ① 构建入口 ─────────────────────────────────────────────────────────
 Invoke-ChildGate "3/$total" "① 构建入口（cargo build + 前端 vite build）" 'build.ps1'
-# ── 4/12 ② 单测 ────────────────────────────────────────────────────────────
+# ── 4/14 ② 单测 ────────────────────────────────────────────────────────────
 Invoke-ChildGate "4/$total" "② 单测（cargo test + vitest）" 'test.ps1'
-# ── 5/12 领域层边界 ─────────────────────────────────────────────────────────
+# ── 5/14 领域层边界 ─────────────────────────────────────────────────────────
 Invoke-ChildGate "5/$total" "领域层边界（GUI 不得进入领域层）" 'check-core-boundary.ps1'
-# ── 6/12 ③ 文档计数与版本 ───────────────────────────────────────────────────
+# ── 6/14 ③ 文档计数与版本 ───────────────────────────────────────────────────
 Invoke-ChildGate "6/$total" "③ 文档计数与版本（表格 / 派生数字 / 版本号）" 'check-doc-tables.ps1' -SkipReason $pythonSkipReason
-# ── 7/12 设计令牌棘轮 ───────────────────────────────────────────────────────
+# ── 7/14 设计令牌棘轮 ───────────────────────────────────────────────────────
 Invoke-ChildGate "7/$total" "设计令牌棘轮（规则名对齐 + 取值单一来源 + Windows 侧棘轮）" 'check-design-tokens.ps1'
-# ── 8/12 平台中立性 ─────────────────────────────────────────────────────────
+# ── 8/14 平台中立性 ─────────────────────────────────────────────────────────
 Invoke-ChildGate "8/$total" "平台中立性（三书不得混入平台实现细节）" 'check-platform-neutrality.ps1' -SkipReason $pythonSkipReason
-# ── 9/12 ④ 独占节越界 ───────────────────────────────────────────────────────
+# ── 9/14 ④ 独占节越界 ───────────────────────────────────────────────────────
 Invoke-ChildGate "9/$total" "④ 独占节越界（本侧 = windows）" 'check-exclusive-sections.ps1' -SkipReason $pythonSkipReason -ChildArgs @{ Base = $Base }
-# ── 10/12 ⑤ 平台等价矩阵 ────────────────────────────────────────────────────
+# ── 10/14 ⑤ 平台等价矩阵 ────────────────────────────────────────────────────
 Invoke-ChildGate "10/$total" "⑤ 平台等价矩阵 + Windows 列如实性" 'check-platform-parity.ps1' -SkipReason $pythonSkipReason
-# ── 11/12 ⑦ `P-*` 平台差异登记两侧对账（队列 L-45）──────────────────────────
+# ── 11/14 ⑦ `P-*` 平台差异登记两侧对账（队列 L-45）──────────────────────────
 Invoke-ChildGate "11/$total" "⑦ `P-*` 平台差异登记两侧对账（SRS §10.9 ↔ 概要设计 §4 + §8.5.5 已落条）" 'check-p-parity.ps1'
-# ── 12/13 结果网格压力基准（§8.5.6-3 开工令的第一件事；数据侧可复跑）────────
+# ── 12/14 结果网格压力基准（§8.5.6-3 开工令的第一件事；数据侧可复跑）────────
 Invoke-ChildGate "12/$total" "结果网格压力基准（数据侧可复跑：grid-bench）" 'check-grid-bench.ps1'
-# ── 13/13 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
-Write-DoyahStep "13/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
+# ── 13/14 生成物一致性：发布产物版本号「一个值、三处逐字一致」（契约侧 L-70）────
+Invoke-ChildGate "13/$total" "生成物一致性：发布产物版本号一个值三处一致（+ 与 mac 侧发布台账同源）" 'check-release-version.ps1'
+# ── 14/14 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
+Write-DoyahStep "14/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
 Write-DoyahPass "本脚本即闭环入口；跳过的项已逐条列出（等价物可以缺席，缺席必须可见）"
 [void]$ran.Add("⑥ 一条命令跑全")
 
