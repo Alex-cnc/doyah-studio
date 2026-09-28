@@ -18,7 +18,7 @@
     { "name": "keepalive",            "script": "Scripts/test-keepalive.sh",           "expectExit": 0, "minAssertions": 9,  "profile": "session" },
     { "name": "local-query-path",     "script": "Scripts/test-local-query-path.sh",    "expectExit": 0, "minAssertions": 28, "profile": "querytest" },
     { "name": "maintenance",          "script": "Scripts/test-maintenance.sh",         "expectExit": 0, "minAssertions": 15, "profile": "session" },
-    { "name": "mcp",                  "script": "Scripts/test-mcp.sh",                 "expectExit": 0, "minAssertions": 19, "profile": "session" },
+    { "name": "mcp",                  "script": "Scripts/test-mcp.sh",                 "expectExit": 0, "minAssertions": 21, "profile": "session" },
     { "name": "object-ddl",           "script": "Scripts/test-object-ddl.sh",          "expectExit": 0, "minAssertions": 5,  "profile": "session" },
     { "name": "object-search",        "script": "Scripts/test-object-search.sh",       "expectExit": 1, "minAssertions": 9,  "profile": "session",   "knownRed": { "reason": "§6 对 217 的只读核对 —— 217 的 pg_hba 未放行本机", "logMustContain": "pg_hba.conf" } },
     { "name": "query-parameters",     "script": "Scripts/test-query-parameters.sh",    "expectExit": 0, "minAssertions": 12, "profile": "session" },

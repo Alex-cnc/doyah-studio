@@ -1,5 +1,35 @@
 import Foundation
 
+/// 一次 `tools/call` 的结果：**两半**（队列 L-66 ㈡，需求提出者 2026-09-28 拍板口径 ①）。
+///
+/// **为什么要一个类型而不是一个 `String`**：从前 `finish(_:text:isError:)` 收一个串，
+/// 而那个串既进机器载荷（MCP 客户端 / 脚本）又打在用户眼前 —— **一份值两处消费**，
+/// 于是「把失败说成人话」必然把机器载荷一起换成中文（可搜、可上报的口径就断了）。
+/// 两半收在同一个值上之后，**取哪一半必须在渲染点显式写出来**（`.raw` / `.readable`），
+/// 编译器与门禁都看得见。
+public struct MCPToolResult: Equatable, Sendable {
+
+    /// 机器那一半：**一字不变**的原始串（驱动 / 系统原话；可搜、可上报、口径稳定）。
+    public let raw: String
+
+    /// 人那一半：可读化入口渲染出来的人话（本机没有界面语境 ⇒ 简体中文）。
+    public let readable: String
+
+    public let isError: Bool
+
+    public init(raw: String, readable: String, isError: Bool) {
+        self.raw = raw
+        self.readable = readable
+        self.isError = isError
+    }
+
+    /// **本来就没有失败原串**的结果：成功载荷、以及「缺少参数」这类本地单语提示 ——
+    /// 两半同一份内容，但这是**显式写出来的选择**，不是默认值。
+    public static func single(_ text: String, isError: Bool = false) -> MCPToolResult {
+        MCPToolResult(raw: text, readable: text, isError: isError)
+    }
+}
+
 /// 我们**作为 MCP server** 的会话状态机（FR-AI-10 的 server 方向）。
 ///
 /// 纯逻辑：给一行报文，回一行（或零行）报文 + 一条审计。**不读 stdin、不连数据库** ——
@@ -255,33 +285,43 @@ public struct MCPServerSession: Sendable {
     }
 
     /// 调用方执行完（或失败）之后，把结果包成 MCP 的 `tools/call` 结果。
-    public mutating func finish(
-        _ invocation: Invocation,
-        text result: String,
-        isError: Bool = false
-    ) -> MCPMessage? {
+    ///
+    /// **载荷两半**（队列 L-66 ㈡）：同一条 text 内容里放**两个字段** —— `text` 取
+    /// `result.raw`（原串，**一字不变**）、`textHuman` 取 `result.readable`（人话，供 MCP
+    /// 客户端**可选**展示）。从前这里只有一个串，「让人话上屏」就必然把机器载荷一起换成中文；
+    /// 现在**取哪一半必须在这一行显式写出来**。
+    public mutating func finish(_ invocation: Invocation, result: MCPToolResult) -> MCPMessage? {
         guard let id = invocation.requestID else { return nil }
-        if isError {
+        if result.isError {
             audit.append(
                 MCPAuditEntry(client: clientName, tool: invocation.tool, argumentsSummary: "—", outcome: "failed")
             )
         }
-        let content: MCPValue = .object([
-            "content": .array([
-                .object(["type": .string("text"), "text": .string(result)])
-            ]),
-            "isError": .bool(isError),
-        ])
+        let content = textContent(raw: result.raw, human: result.readable, isError: result.isError)
         return .response(id: id, result: content)
     }
 
-    private func errorContent(_ message: String) -> MCPValue {
+    /// 载荷形状只写一份：**原串 + 人话成对**（`text` / `textHuman`）。
+    ///
+    /// 为什么把形状收进一个私有 helper：客户端要在两种载荷形状之间写两套代码是不可接受的
+    /// （拒绝、未暴露、无会话这些答复也走同一条），而「哪一半对哪个字段」写两遍就会漂。
+    private func textContent(raw: String, human: String, isError: Bool) -> MCPValue {
         .object([
             "content": .array([
-                .object(["type": .string("text"), "text": .string(message)])
+                .object([
+                    "type": .string("text"),
+                    "text": .string(raw),
+                    "textHuman": .string(human),
+                ])
             ]),
-            "isError": .bool(true),
+            "isError": .bool(isError),
         ])
+    }
+
+    /// 拒绝 / 未暴露 / 无会话这类**本来就没有失败原串**的答复：文案本身就是人话，
+    /// 两半同一份内容 —— 仍然显式写出来（形状统一，客户端不必分情况）。
+    private func errorContent(_ message: String) -> MCPValue {
+        textContent(raw: message, human: message, isError: true)
     }
 
     private func summarize(_ arguments: MCPValue) -> String {

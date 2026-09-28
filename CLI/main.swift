@@ -1117,9 +1117,7 @@ struct DoyahCLI {
                             let result = await runMCPInvocation(
                                 pendingInvocation(from: line), service: service, config: makeEnvironmentConfig(name: "CLI mcp")
                             )
-                            if let reply = session.finish(
-                                pendingInvocation(from: line), text: result.text, isError: result.isError
-                            ) {
+                            if let reply = session.finish(pendingInvocation(from: line), result: result) {
                                 print(reply.encode())
                                 fflush(stdout)
                             }
@@ -1127,7 +1125,7 @@ struct DoyahCLI {
                         } else {
                             // 拒绝 / 超时：**如实回一个错误内容**，不是静默不响应。
                             let text = LocalizedStrings.text(.mcpApprovalDenied, language: .simplifiedChinese)
-                            if let reply = session.finish(pendingInvocation(from: line), text: text, isError: true) {
+                            if let reply = session.finish(pendingInvocation(from: line), result: .single(text, isError: true)) {
                                 print(reply.encode())
                                 fflush(stdout)
                             }
@@ -1138,7 +1136,7 @@ struct DoyahCLI {
                 continue
             }
             let result = await runMCPInvocation(invocation, service: service, config: makeEnvironmentConfig(name: "CLI mcp"))
-            if let reply = session.finish(invocation, text: result.text, isError: result.isError) {
+            if let reply = session.finish(invocation, result: result) {
                 print(reply.encode())
                 fflush(stdout)
             }
@@ -1210,19 +1208,22 @@ struct DoyahCLI {
     }
 
     /// 执行一次工具调用（会话只决定"能不能"，执行在这里）。
+    ///
+    /// 返回 `MCPToolResult`（**两半**，队列 L-66 ㈡）：失败时 `raw` 是一字不变的原始串、
+    /// `readable` 是人话；成功与「缺少参数」这类本地单语提示走 `.single(...)`（两半同一份）。
     private static func runMCPInvocation(
         _ invocation: MCPServerSession.Invocation,
         service: PostgresService?,
         config: ConnectionConfig
-    ) async -> (text: String, isError: Bool) {
+    ) async -> MCPToolResult {
         guard let service else {
-            return ("当前没有已连接的会话：外部调用一律不另开连接", true)
+            return .single("当前没有已连接的会话：外部调用一律不另开连接", isError: true)
         }
         let arguments = invocation.arguments
         switch invocation.tool {
         case MCPToolCatalog.querySQL:
             guard let sql = arguments["sql"]?.stringValue else {
-                return ("缺少参数 sql", true)
+                return .single("缺少参数 sql", isError: true)
             }
             return await runMCPQuery(service: service, sql: sql)
 
@@ -1237,38 +1238,51 @@ struct DoyahCLI {
                 for database in databases.prefix(20) {
                     lines.append(database.name)
                 }
-                return (lines.joined(separator: "\n"), false)
+                return .single(lines.joined(separator: "\n"))
             } catch {
-                return (error.localizedDescription, true)
+                return mcpFailure(error)
             }
 
         case MCPToolCatalog.describeTable:
             guard let table = arguments["table"]?.stringValue else {
-                return ("缺少参数 table", true)
+                return .single("缺少参数 table", isError: true)
             }
             let sql = PostgresDialect().listColumnsQuery(table: table, schema: arguments["schema"]?.stringValue)
             return await runMCPQuery(service: service, sql: sql)
 
         case MCPToolCatalog.exportResult:
             guard let sql = arguments["sql"]?.stringValue, let path = arguments["path"]?.stringValue else {
-                return ("缺少参数 sql / path", true)
+                return .single("缺少参数 sql / path", isError: true)
             }
             let result = await runMCPQuery(service: service, sql: sql)
             guard !result.isError else { return result }
             do {
-                try result.text.write(toFile: path, atomically: true, encoding: .utf8)
-                let rows = result.text.split(separator: "\n").count
-                return ("已导出 \(rows) 行到 \(path)", false)
+                try result.raw.write(toFile: path, atomically: true, encoding: .utf8)
+                let rows = result.raw.split(separator: "\n").count
+                return .single("已导出 \(rows) 行到 \(path)")
             } catch {
-                return ("写文件失败：\(error.localizedDescription)", true)
+                return mcpFailure(error, context: "写文件失败")
             }
 
         default:
-            return ("没有暴露这个工具：\(invocation.tool)", true)
+            return .single("没有暴露这个工具：\(invocation.tool)", isError: true)
         }
     }
 
-    private static func runMCPQuery(service: PostgresService, sql: String) async -> (text: String, isError: Bool) {
+    /// MCP 工具载荷里的**失败那一份**（队列 L-66 ㈡，渠道字段两半）：
+    /// **原串留给程序**（`error.localizedDescription`，一字不变 —— 可搜、可上报）、
+    /// **人话另给**（同一个可读化入口 `CLIFailureText.oneLine`，不是另拼一句）。
+    ///
+    /// 为什么收成一个 helper：三处失败（对象树 / 查询 / 写文件）必须**同一口径**，
+    /// 而「原串 = 哪一半」写三遍就会漂（一处写 `localizedDescription`、一处写人话 ⇒
+    /// 机器载荷被换成中文，正是本条要挡的退化）。
+    private static func mcpFailure(_ error: any Error, context: String? = nil) -> MCPToolResult {
+        let raw = error.localizedDescription
+        let readable = context.map { "\($0)：\(CLIFailureText.oneLine(error))" } ?? CLIFailureText.oneLine(error)
+        return MCPToolResult(raw: raw, readable: readable, isError: true)
+    }
+
+    private static func runMCPQuery(service: PostgresService, sql: String) async -> MCPToolResult {
         do {
             var lines: [String] = []
             for try await event in service.execute(sql, options: .default) {
@@ -1284,9 +1298,9 @@ struct DoyahCLI {
                     }
                 }
             }
-            return (lines.isEmpty ? "（没有结果）" : lines.joined(separator: "\n"), false)
+            return .single(lines.isEmpty ? "（没有结果）" : lines.joined(separator: "\n"))
         } catch {
-            return (error.localizedDescription, true)
+            return mcpFailure(error)
         }
     }
 

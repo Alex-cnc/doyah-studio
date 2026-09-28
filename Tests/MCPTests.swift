@@ -216,11 +216,52 @@ final class MCPTests: XCTestCase {
             line: callLine(tool: MCPToolCatalog.listObjects, arguments: .object([:]), id: 9)
         )
         let invocation = try XCTUnwrap(outcome.invocation)
-        let reply = try XCTUnwrap(session.finish(invocation, text: "customers\norders"))
+        let reply = try XCTUnwrap(session.finish(invocation, result: .single("customers\norders")))
         guard case .response(let id, let result) = reply else { return XCTFail("应当回响应") }
         XCTAssertEqual(id, .number(9))
         XCTAssertEqual(result["content"]?.arrayValue?.first?["text"]?.stringValue, "customers\norders")
         XCTAssertEqual(result["isError"]?.boolValue, false)
+    }
+
+    /// 载荷两半（队列 L-66 ㈡）：**原串进 `text`、人话进 `textHuman`** —— 不许对调，
+    /// 也不许把两个字段并回一个。这一条是「机器载荷不被换语言」的最小判据：
+    /// 把 `text` 改成人话（或把人话字段摘掉）会在这里当场红。
+    func testToolPayloadCarriesRawAndReadableApart() throws {
+        var session = session()
+        _ = session.handle(line: initializeLine())
+        let outcome = session.handle(
+            line: callLine(tool: MCPToolCatalog.listObjects, arguments: .object([:]), id: 10)
+        )
+        let invocation = try XCTUnwrap(outcome.invocation)
+        let result = MCPToolResult(
+            raw: "The operation couldn't be completed. (PostgresNIO.PSQLError error 1.)",
+            readable: "服务端把这次查询取消了（SQLSTATE 57014）",
+            isError: true
+        )
+        let reply = try XCTUnwrap(session.finish(invocation, result: result))
+        guard case .response(_, let content) = reply else { return XCTFail("应当回响应") }
+        let item = try XCTUnwrap(content["content"]?.arrayValue?.first)
+        XCTAssertEqual(item["text"]?.stringValue, result.raw, "机器那一半必须是一字不变的原串")
+        XCTAssertEqual(item["textHuman"]?.stringValue, result.readable, "人那一半必须另给一个字段")
+        XCTAssertEqual(content["isError"]?.boolValue, true)
+        XCTAssertEqual(session.audit.last?.outcome, "failed")
+    }
+
+    /// 拒绝 / 未暴露 / 无会话这类答复**形状也要一样**（两半同一份内容）——
+    /// 否则客户端要为两种载荷形状写两套代码。
+    func testRefusalContentAlsoCarriesBothHalves() throws {
+        var session = session()
+        _ = session.handle(line: initializeLine())
+        let outcome = session.handle(
+            line: callLine(tool: "run_shell", arguments: .object([:]), id: 11)
+        )
+        XCTAssertNil(outcome.invocation)
+        let reply = try XCTUnwrap(outcome.replies.first)
+        guard case .response(_, let content) = reply else { return XCTFail("应当回响应") }
+        let item = try XCTUnwrap(content["content"]?.arrayValue?.first)
+        XCTAssertNotNil(item["text"]?.stringValue)
+        XCTAssertEqual(item["textHuman"]?.stringValue, item["text"]?.stringValue, "没有原串可拆时两半同一份内容")
+        XCTAssertEqual(content["isError"]?.boolValue, true)
     }
 
     // MARK: - 审计
