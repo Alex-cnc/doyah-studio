@@ -543,6 +543,36 @@
           "note": "§6 资产表「发布产物版本号三处一致」行"
         }
       ]
+    },
+    {
+      "key": "design-mock-tokens",
+      "script": "Scripts/check-design-mock-tokens.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 13,
+      "countRegex": "全部 (\\d+) 例达到预期",
+      "why": "队列 L-79 ㈡ / 闭环第 6 项（与设计令牌棘轮同项）：样张渲染脚本不许自带调色板、必须编译自真令牌、产品源码不许残留方案 D 之前的旧调色板值",
+      "anchors": [
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "L-79 ㈡ 的负例 \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "闭环第 6 项注释"
+        },
+        {
+          "file": "Scripts/check-design-mock-tokens.py",
+          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "脚本 docstring"
+        },
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "check-design-mock-tokens\\.py.{0,2400}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "§6 资产表新增行"
+        }
+      ]
     }
   ]
 }

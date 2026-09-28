@@ -321,8 +321,24 @@ python3 Scripts/check-status-consistency.py
 python3 Scripts/check-alpha-fr-dispositions.py
 python3 Scripts/check-alpha-fr-dispositions.py --self-test
 
-echo "==> 6/18 设计令牌棘轮"
+echo "==> 6/18 设计令牌棘轮 + 外观样张与产品同源"
 python3 Scripts/check-design-tokens.py
+# L-79 ㈡（2026-09-29 第 76 轮）：上面那条棘轮管的是 **App/ 里的裸颜色 / 裸字号 / 裸间距**，
+# 管不了「**样张到底是不是照着产品画的**」。真现场：`Scripts/design-mock.swift` 自带一份调色板
+# （头部注释写着「未来会变成 Core/DesignTokens.swift 的真身」）⇒ 方案 D 换值后，它照样出**旧配色**
+# 的图（深色中性灰 + 旧强调色），而逐屏复查 / 定调 / 跨端对照全都建立在这张图上。
+# 判据 `Scripts/check-design-mock-tokens.py`（项数仍十八）：
+#   A 渲染脚本里不许有色值字面量（只豁免 3 个 macOS 交通灯系统外壳色）+ 两条「第二份调色板形态」回归钉
+#   B 渲染脚本必须真的引用令牌（8 类符号，有处数下限 —— 引用被删光就是空跑）
+#   C 渲染入口 `Scripts/render-design-mock.sh` 必须把 `Core/DesignTokens.swift` 编进来
+#   D **逐屏复查**：产品源码（Core / App / Tests / CLI / Platform / Tools / TestsUISnapshot，
+#     现 417 个文件）里不许残留**方案 D 之前的旧调色板值**；豁免只有两处 —— `Core/AccentTheme.swift`
+#     与它的单测（交互强调色是**另一条轴**，用户可切的那三个候选本来就不在 D 的值表里）
+#   E **行为证据**：真跑一遍渲染入口（要求 exit 0 + 自检收尾行 + 张数下限），并判**深色样张的内容底
+#     必须带蓝调**（方案 D 深海军蓝实测 B−R ≈ 45；旧中性灰 ≈ 11 ⇒ 门槛 20）—— 非 macOS 跳过并高声提示
+# L-79 ㈡ 的负例 **13 例**（红/绿成对，夹具一律在临时目录，末例核对真仓库两份文件逐字节未变）。
+python3 Scripts/check-design-mock-tokens.py
+python3 Scripts/check-design-mock-tokens.py --self-test
 
 echo "==> 7/18 平台等价矩阵 + P-* 平台差异登记对账"
 # L-26（2026-09-27 第 25 轮）：这一项跑两条 ——

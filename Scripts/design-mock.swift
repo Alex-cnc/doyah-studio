@@ -8,126 +8,108 @@ import Foundation
 // 但 CoreGraphics 离屏渲染是允许的（`Scripts/make-app-icon.swift` 同理）。
 // 于是：**先把设计渲染成 PNG 给需求提出者定调，确认后再落到 SwiftUI**。
 //
-// 用法：swift Scripts/design-mock.swift <输出目录>
+// 用法：`Scripts/render-design-mock.sh [输出目录]`（**不要**直接 `swift Scripts/design-mock.swift` ——
+// 那样编不进 Core 的令牌，脚本会编译失败；这正是「样张必须接真令牌」的强制点）。
+// 该入口做的事：把本文件当 `main.swift` + `Core/DesignTokens.swift`（+ `AccentTheme.swift` /
+// `ColorContrast.swift` / `Localization.swift`）一起 `swiftc` 编译，再运行产出 PNG。
 // ============================================================================
 
-// MARK: - 令牌（未来会变成 Core/DesignTokens.swift 的真身）
+// MARK: - 令牌（唯一来源 = `Core/DesignTokens.swift`）
+//
+// 2026-09-29（队列 **L-79 ㈡**）：**这份脚本不再自带调色板**。
+//
+// 原先它自己写着一份十六进制表（第一行的注释还写着「未来会变成 Core/DesignTokens.swift 的真身」），
+// 于是方案 D 换值之后，**样张与产品不再同源** —— 拿它出的图去定调、去逐屏复查，看的是另一套配色
+// （中性灰底 + 旧强调色），而没有任何门禁会说话。现在改为**编译期直接接真令牌**：
+// 本文件与 `Core/DesignTokens.swift`（+ `AccentTheme.swift` / `ColorContrast.swift` /
+// `Localization.swift`）一起编译，入口 = `Scripts/render-design-mock.sh`。于是：
+//   · 令牌换值，样张自动跟着换；样张里**不可能**出现产品没有的颜色；
+//   · 门禁 `Scripts/check-design-mock-tokens.py` 钉住这件事：本文件里不许再出现色值字面量、
+//     渲染入口必须真的把 `Core/DesignTokens.swift` 编进来、深色样张必须量得出方案 D 的蓝调。
+//
+// 间距 / 圆角 / 字号同样接 Core（`Spacing` / `Radius` / `Metrics` / `TypeScale`），
+// 所以这份脚本里也找不到「同一件事在第二处各写一遍」。
 
-enum Metrics {
-    static let unit: CGFloat = 8            // 一切间距都取 4 / 8 的刻度
-    static let hairline: CGFloat = 0.5
-    static let radiusControl: CGFloat = 6
-    static let radiusCard: CGFloat = 8
-    static let radiusPanel: CGFloat = 10
-    static let rowHeight: CGFloat = 26      // 紧凑但留白严格
-    static let sidebarRow: CGFloat = 26
-    static let tabHeight: CGFloat = 30
-    static let toolbarHeight: CGFloat = 44
-    static let statusHeight: CGFloat = 24
-    static let sidebarWidth: CGFloat = 248
-    static let activityWidth: CGFloat = 46      // 最左侧活动栏（VS Code 同构）
-}
-
-enum Typography {
-    static let caption = NSFont.systemFont(ofSize: 11, weight: .medium)
-    static let data = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
-    static let body = NSFont.systemFont(ofSize: 13, weight: .regular)
-    static let bodyStrong = NSFont.systemFont(ofSize: 13, weight: .semibold)
-    static let title = NSFont.systemFont(ofSize: 15, weight: .semibold)
-    static let mono = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-    static let monoSmall = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
-}
-
-struct Theme {
-    let name: String
-    let isDark: Bool
-    let window: NSColor
-    let sidebar: NSColor
-    let content: NSColor
-    let panel: NSColor
-    let raised: NSColor
-    let hairline: NSColor
-    let textPrimary: NSColor
-    let textSecondary: NSColor
-    let textTertiary: NSColor
-    let success: NSColor
-    let warning: NSColor
-    let danger: NSColor
-
-    // 语法着色（深色一套、浅色一套 —— 这是"专业感"最容易露怯的地方）
-    let synKeyword: NSColor
-    let synIdentifier: NSColor
-    let synString: NSColor
-    let synNumber: NSColor
-    let synFunction: NSColor
-    let synComment: NSColor
-
-    static func hex(_ value: UInt32) -> NSColor {
-        NSColor(
-            srgbRed: CGFloat((value >> 16) & 0xFF) / 255,
-            green: CGFloat((value >> 8) & 0xFF) / 255,
-            blue: CGFloat(value & 0xFF) / 255,
+/// `0xRRGGBB` → `NSColor`。**纯换算，不含任何色值**。
+extension NSColor {
+    convenience init(mockHex: UInt32) {
+        self.init(
+            srgbRed: CGFloat((mockHex >> 16) & 0xFF) / 255,
+            green: CGFloat((mockHex >> 8) & 0xFF) / 255,
+            blue: CGFloat(mockHex & 0xFF) / 255,
             alpha: 1
         )
     }
+}
 
-    /// 深色专业档：侧栏比内容**略深**，层次靠明度差 + 发丝线，不靠边框。
-    static func proDark() -> Theme {
-        Theme(
-            name: "深色专业",
-            isDark: true,
-            // 层次靠**明度差**：window < sidebar < content < panel < raised，每级 ≥ 8/255。
-            // 第一版只差 3/255，自检读回来三个面是同一个 #21242C —— 等于没有层次。
-            window: hex(0x141619),
-            sidebar: hex(0x17191E),
-            content: hex(0x1F2229),
-            panel: hex(0x262A31),
-            raised: hex(0x2F343C),
-            hairline: NSColor.white.withAlphaComponent(0.08),
-            textPrimary: hex(0xE7E9EE),
-            textSecondary: hex(0x9AA1AE),
-            textTertiary: hex(0x6C7380),
-            success: hex(0x4CC38A),
-            warning: hex(0xD9A343),
-            danger: hex(0xE5534B),
-            synKeyword: hex(0x9BA8FF),
-            synIdentifier: hex(0xE7E9EE),
-            synString: hex(0x9ED37A),
-            synNumber: hex(0xE6C07B),
-            synFunction: hex(0x62C6C0),
-            synComment: hex(0x6C7380)
-        )
+/// 名字对不上而已 —— 值全部来自 Core 的令牌（Core 的 `Metrics` 与本脚本旧名同字不同物，
+/// 故旧名收进这个别名里，读代码时一眼能看出「这是 Core 的哪一格」）。
+enum Mock {
+    static let radiusControl = Radius.control
+    static let radiusCard = Radius.card
+    static let radiusPanel = Radius.panel
+    static let sidebarRow = Metrics.rowHeight          // 侧栏行高与列表行高同档（26）
+    static let statusHeight = Metrics.statusBarHeight
+    static let activityWidth = Metrics.activityBarWidth
+}
+
+enum Typography {
+    // 字号一律取自 `TypeScale`（Core 的级差表），不在这里新造数字。
+    static let caption = NSFont.systemFont(ofSize: TypeScale.captionSize, weight: .medium)
+    static let data = NSFont.monospacedDigitSystemFont(ofSize: TypeScale.dataSize, weight: .regular)
+    static let body = NSFont.systemFont(ofSize: TypeScale.bodySize, weight: .regular)
+    static let bodyStrong = NSFont.systemFont(ofSize: TypeScale.bodySize, weight: .semibold)
+    static let title = NSFont.systemFont(ofSize: TypeScale.titleSize, weight: .semibold)
+    static let mono = NSFont.monospacedSystemFont(ofSize: TypeScale.monoSize, weight: .regular)
+    static let monoSmall = NSFont.monospacedSystemFont(ofSize: TypeScale.monoSmallSize, weight: .regular)
+}
+
+/// 主题 = **一组令牌值**（与 `Docs/design/外观方案-v1.md` §9 的「一个主题 = 一组值」同口径）。
+///
+/// 这里不存任何值，只按深浅两态去 Core 的令牌里取 —— 这就是「样张与产品同源」那句话的落地方式：
+/// 换个配色 = 改 `Core/DesignTokens.swift`，样张下一次渲染自动跟着换。
+struct Theme {
+    let name: String
+    let isDark: Bool
+
+    private func color(_ c: ThemeColor) -> NSColor { NSColor(mockHex: c.hex(dark: isDark)) }
+
+    var window: NSColor { color(Surface.window.color) }
+    var sidebar: NSColor { color(Surface.sidebar.color) }
+    var content: NSColor { color(Surface.content.color) }
+    var panel: NSColor { color(Surface.panel.color) }
+    var raised: NSColor { color(Surface.raised.color) }
+    /// 发丝线：深色 = 白 `Hairline.darkAlpha` 叠加（在五个表面上都成立）/ 浅色 = 实色 `Hairline.lightHex`。
+    var hairline: NSColor {
+        isDark
+            ? NSColor.white.withAlphaComponent(CGFloat(Hairline.darkAlpha))
+            : NSColor(mockHex: Hairline.lightHex)
     }
 
-    /// 浅色原生档：走 Finder / Xcode 的材质路子（这里用色块近似毛玻璃的观感）。
-    static func nativeLight() -> Theme {
-        Theme(
-            name: "浅色原生",
-            isDark: false,
-            window: hex(0xE8E8EC),
-            sidebar: hex(0xEDEDF2),
-            content: hex(0xFFFFFF),
-            panel: hex(0xF6F6F9),
-            raised: hex(0xFFFFFF),
-            hairline: NSColor.black.withAlphaComponent(0.09),
-            textPrimary: hex(0x1D1D1F),
-            textSecondary: hex(0x6E6E73),
-            textTertiary: hex(0x9A9AA0),
-            success: hex(0x1E9E5A),
-            warning: hex(0xB9791B),
-            danger: hex(0xD03A32),
-            synKeyword: hex(0x8B33C4),
-            synIdentifier: hex(0x1D1D1F),
-            synString: hex(0x1E7A3C),
-            synNumber: hex(0xA35B00),
-            synFunction: hex(0x0B6E99),
-            synComment: hex(0x9A9AA0)
-        )
-    }
+    var textBright: NSColor { color(TextTone.bright.color) }
+    var textPrimary: NSColor { color(TextTone.primary.color) }
+    var textSecondary: NSColor { color(TextTone.secondary.color) }
+    var textTertiary: NSColor { color(TextTone.tertiary.color) }
+
+    var success: NSColor { color(StatusTone.success.color) }
+    var warning: NSColor { color(StatusTone.warning.color) }
+    var danger: NSColor { color(StatusTone.danger.color) }
+
+    // 语法六档：**按角色挂到令牌家族**（外观方案 §8.4）—— 同样只转调，不写色值。
+    var synKeyword: NSColor { color(SyntaxTone.keyword.color) }
+    var synIdentifier: NSColor { color(SyntaxTone.identifier.color) }
+    var synString: NSColor { color(SyntaxTone.string.color) }
+    var synNumber: NSColor { color(SyntaxTone.number.color) }
+    var synFunction: NSColor { color(SyntaxTone.function.color) }
+    var synComment: NSColor { color(SyntaxTone.comment.color) }
 
     func accentFill(_ accent: NSColor, _ alpha: CGFloat) -> NSColor {
         accent.withAlphaComponent(alpha)
     }
+
+    /// 方案 D · 科技蓝（当前唯一在用的方案；深 / 浅两态同色相派生）。
+    static let dark = Theme(name: "深色 · 方案 D 科技蓝", isDark: true)
+    static let light = Theme(name: "浅色 · 方案 D 科技蓝", isDark: false)
 }
 
 /// 侧栏当前显示哪个视图 —— 由最左侧活动栏切换（VS Code 的信息架构：
@@ -143,24 +125,27 @@ struct Accent {
     let color: NSColor
     let note: String
 
-    /// 三个候选里两个取自 dsh-tui 鲸鱼自身的调色板（源码里量到的 B 与 H）。
-    static let candidates: [Accent] = [
+    /// 交互强调色的候选 = **产品里那一份**（`AccentTheme.all`）。旧版在这里又抄了三行十六进制，
+    /// 于是产品换强调色、样张不知道；现在只转调，色值与显示名都从 Core / 语言表取。
+    ///
+    /// 分工提醒（见 `Core/DesignTokens.swift` 类头）：`AccentTheme` = 用户可切的**交互强调色**
+    /// （选中条 / 主按钮 / 焦点环）；`AccentFamily` = 方案 D 的**基准家族**（链接 / 语法 / 度量值）。
+    /// 两者是否合并成「主题」一件事，见队列 **L-80**。
+    static let candidates: [Accent] = AccentTheme.all.map { preset in
         Accent(
-            name: "鲸鱼蓝",
-            color: Theme.hex(0x4E6FFF),
-            note: "取自鲸鱼调色板 B[78,111,255]，与 App 图标同系"
-        ),
-        Accent(
-            name: "深海青",
-            color: Theme.hex(0x17A2A2),
-            note: "数据表场景更冷静，与红/橙告警区分度最大"
-        ),
-        Accent(
-            name: "鲸心品红",
-            color: Theme.hex(0xCC3399),
-            note: "取自鲸鱼调色板心形 H[204,51,153]，辨识度最高"
+            name: LocalizedStrings.text(preset.nameKey, language: .simplifiedChinese),
+            color: NSColor(mockHex: preset.accentHex),
+            note: "\(preset.id) · 实心按钮压白字走 fill \(String(format: "#%06X", preset.fillHex))"
         )
-    ]
+    }
+
+    /// 产品当前实际用的那一个（= `AccentTheme.fallback`，与「默认 / 回退」同源）。
+    static var current: Accent {
+        guard let index = AccentTheme.all.firstIndex(where: { $0.id == AccentTheme.fallback.id }) else {
+            return candidates[0]
+        }
+        return candidates[index]
+    }
 }
 
 // MARK: - 画布
@@ -265,7 +250,7 @@ final class Canvas {
 /// 最左侧窄边栏：上排视图切换，最底下是设置 / 账户。
 /// 选中项用「左侧 2pt 强调条 + 图标提亮」，不铺整块背景 —— 窄条上铺背景会很脏。
 func drawActivityBar(_ c: Canvas, theme: Theme, accent: Accent, top: CGFloat, height: CGFloat, mode: SidebarMode) {
-    let width = Metrics.activityWidth
+    let width = Mock.activityWidth
     c.fill(NSRect(x: 0, y: top, width: width, height: height), theme.window)
 
     let items: [(String, SidebarMode?, String)] = [
@@ -304,12 +289,12 @@ func drawWorkspaceExplorer(_ c: Canvas, theme: Theme, accent: Accent, x: CGFloat
     y += 18
 
     // 当前工作区 + 切换入口
-    let headerRect = NSRect(x: x + 8, y: y, width: width - 16, height: Metrics.sidebarRow)
-    c.rounded(headerRect, Metrics.radiusControl, theme.raised)
+    let headerRect = NSRect(x: x + 8, y: y, width: width - 16, height: Mock.sidebarRow)
+    c.rounded(headerRect, Mock.radiusControl, theme.raised)
     c.symbol("folder.fill", in: NSRect(x: x + 18, y: y + 7, width: 13, height: 13), color: accent.color, pointSize: 11)
     c.text("DoyahStudio", at: CGPoint(x: x + 36, y: y + 5), font: Typography.bodyStrong, color: theme.textPrimary)
     c.symbol("chevron.up.chevron.down", in: NSRect(x: x + width - 32, y: y + 8, width: 12, height: 12), color: theme.textTertiary, pointSize: 10)
-    y += Metrics.sidebarRow + 4
+    y += Mock.sidebarRow + 4
 
     // 路径（三级省略，只有中间省略在 SwiftUI 里才不会把根目录吃掉）
     c.text("~/…/projects/DoyahStudio", at: CGPoint(x: x + 18, y: y), font: Typography.caption, color: theme.textTertiary)
@@ -332,14 +317,14 @@ func drawWorkspaceExplorer(_ c: Canvas, theme: Theme, accent: Accent, x: CGFloat
     for (depth, symbolName, name, selected) in tree {
         let indent = x + 16 + CGFloat(depth) * 14
         if selected {
-            c.rounded(NSRect(x: x + 8, y: y, width: width - 16, height: Metrics.sidebarRow), Metrics.radiusControl, accent.color.withAlphaComponent(theme.isDark ? 0.14 : 0.10))
-            c.rounded(NSRect(x: x + 8, y: y + 5, width: 3, height: Metrics.sidebarRow - 10), 1.5, accent.color)
+            c.rounded(NSRect(x: x + 8, y: y, width: width - 16, height: Mock.sidebarRow), Mock.radiusControl, accent.color.withAlphaComponent(theme.isDark ? 0.14 : 0.10))
+            c.rounded(NSRect(x: x + 8, y: y + 5, width: 3, height: Mock.sidebarRow - 10), 1.5, accent.color)
         }
         c.symbol(symbolName, in: NSRect(x: indent, y: y + 7, width: 13, height: 13),
                  color: selected ? accent.color : theme.textTertiary, pointSize: 11)
         c.text(name, at: CGPoint(x: indent + 20, y: y + 5), font: Typography.body,
                color: selected ? theme.textPrimary : theme.textSecondary)
-        y += Metrics.sidebarRow
+        y += Mock.sidebarRow
     }
 
     // 底部：沙箱授权状态（这是工作区在 macOS 上的真实约束，必须给用户看见）
@@ -373,7 +358,7 @@ func drawWorkspaceEmptyState(_ c: Canvas, theme: Theme, accent: Accent, x: CGFlo
     y += 10
     // 主按钮用实心强调色（整个界面里唯一一处）
     let button = NSRect(x: x + 16, y: y, width: 108, height: 26)
-    c.rounded(button, Metrics.radiusControl, accent.color)
+    c.rounded(button, Mock.radiusControl, accent.color)
     c.textCenter("选择文件夹…", centerX: button.midX, y: button.minY + 6, font: Typography.body, color: .white)
 
     // 底部同样常显授权状态
@@ -424,12 +409,12 @@ func renderWindow(theme: Theme, accent: Accent, mode: SidebarMode = .database) -
     // 红黄绿
     let lights: [(CGFloat, UInt32)] = [(20, 0xFF5F57), (40, 0xFEBC2E), (60, 0x28C840)]
     for (x, hex) in lights {
-        c.rounded(NSRect(x: x, y: 19, width: 12, height: 12), 6, Theme.hex(hex))
+        c.rounded(NSRect(x: x, y: 19, width: 12, height: 12), 6, NSColor(mockHex: hex))
     }
 
     // 左：连接选择器
     var x: CGFloat = Metrics.sidebarWidth + 20
-    c.rounded(NSRect(x: x, y: 13, width: 196, height: 26), Metrics.radiusControl, theme.raised)
+    c.rounded(NSRect(x: x, y: 13, width: 196, height: 26), Mock.radiusControl, theme.raised)
     c.fill(NSRect(x: x + 10, y: 24, width: 6, height: 6), theme.success)
     c.text("生产库 · PostgreSQL 16", at: CGPoint(x: x + 24, y: 18), font: Typography.body, color: theme.textPrimary)
     c.symbol("chevron.down", in: NSRect(x: x + 172, y: 19, width: 14, height: 14), color: theme.textTertiary, pointSize: 10)
@@ -437,7 +422,7 @@ func renderWindow(theme: Theme, accent: Accent, mode: SidebarMode = .database) -
     // 中：分段控件
     x += 216
     let segWidth: CGFloat = 246
-    c.rounded(NSRect(x: x, y: 13, width: segWidth, height: 26), Metrics.radiusControl, theme.content)
+    c.rounded(NSRect(x: x, y: 13, width: segWidth, height: 26), Mock.radiusControl, theme.content)
     let segs = ["查询", "表结构", "数据"]
     for (index, label) in segs.enumerated() {
         let segRect = NSRect(x: x + CGFloat(index) * segWidth / 3 + 2, y: 15, width: segWidth / 3 - 4, height: 22)
@@ -454,17 +439,17 @@ func renderWindow(theme: Theme, accent: Accent, mode: SidebarMode = .database) -
         c.symbol(symbolName, in: NSRect(x: rightX - 18, y: 19, width: 16, height: 16), color: theme.textSecondary, pointSize: 13)
         rightX -= 30
     }
-    c.rounded(NSRect(x: rightX - 168, y: 13, width: 168, height: 26), Metrics.radiusControl, theme.content)
+    c.rounded(NSRect(x: rightX - 168, y: 13, width: 168, height: 26), Mock.radiusControl, theme.content)
     c.symbol("magnifyingglass", in: NSRect(x: rightX - 156, y: 20, width: 13, height: 13), color: theme.textTertiary, pointSize: 11)
     c.text("搜索对象 / 命令", at: CGPoint(x: rightX - 136, y: 18), font: Typography.body, color: theme.textTertiary)
 
     // ---- 侧栏 ----
     let bodyTop = titlebarHeight
-    let statusHeight = Metrics.statusHeight
+    let statusHeight = Mock.statusHeight
     let bodyHeight = H - titlebarHeight - statusHeight
     drawActivityBar(c, theme: theme, accent: accent, top: bodyTop, height: bodyHeight, mode: mode)
 
-    let sidebarX = Metrics.activityWidth
+    let sidebarX = Mock.activityWidth
     c.fill(NSRect(x: sidebarX, y: bodyTop, width: Metrics.sidebarWidth, height: bodyHeight), theme.sidebar)
     c.hairline(x: sidebarX + Metrics.sidebarWidth - Metrics.hairline, y: bodyTop, length: bodyHeight, vertical: true, color: theme.hairline)
     c.ctx.saveGState()
@@ -481,17 +466,17 @@ func renderWindow(theme: Theme, accent: Accent, mode: SidebarMode = .database) -
         ("本地开发", "PostgreSQL 18", theme.textTertiary, false)
     ]
     for (name, engine, dot, selected) in connections {
-        let rowRect = NSRect(x: 8, y: y, width: Metrics.sidebarWidth - 16, height: Metrics.sidebarRow)
+        let rowRect = NSRect(x: 8, y: y, width: Metrics.sidebarWidth - 16, height: Mock.sidebarRow)
         if selected {
-            c.rounded(rowRect, Metrics.radiusControl, theme.accentFill(accent.color, 0.14))
+            c.rounded(rowRect, Mock.radiusControl, theme.accentFill(accent.color, 0.14))
             // 左侧 3pt 强调条：只在选中行出现，这是"克制地使用强调色"
-            c.rounded(NSRect(x: 8, y: y + 5, width: 3, height: Metrics.sidebarRow - 10), 1.5, accent.color)
+            c.rounded(NSRect(x: 8, y: y + 5, width: 3, height: Mock.sidebarRow - 10), 1.5, accent.color)
         }
         c.fill(NSRect(x: 20, y: y + 11, width: 6, height: 6), dot)
         c.text(name, at: CGPoint(x: 34, y: y + 5), font: Typography.body,
                color: selected ? theme.textPrimary : theme.textSecondary)
         c.textRight(engine, rightEdge: Metrics.sidebarWidth - 18, y: y + 6, font: Typography.caption, color: theme.textTertiary)
-        y += Metrics.sidebarRow
+        y += Mock.sidebarRow
     }
 
     y += 14
@@ -511,16 +496,16 @@ func renderWindow(theme: Theme, accent: Accent, mode: SidebarMode = .database) -
     ]
     for (depth, symbolName, name, selected) in objects {
         let indent = 16 + CGFloat(depth) * 14
-        let rowRect = NSRect(x: 8, y: y, width: Metrics.sidebarWidth - 16, height: Metrics.sidebarRow)
+        let rowRect = NSRect(x: 8, y: y, width: Metrics.sidebarWidth - 16, height: Mock.sidebarRow)
         if selected {
-            c.rounded(rowRect, Metrics.radiusControl, theme.accentFill(accent.color, 0.14))
-            c.rounded(NSRect(x: 8, y: y + 5, width: 3, height: Metrics.sidebarRow - 10), 1.5, accent.color)
+            c.rounded(rowRect, Mock.radiusControl, theme.accentFill(accent.color, 0.14))
+            c.rounded(NSRect(x: 8, y: y + 5, width: 3, height: Mock.sidebarRow - 10), 1.5, accent.color)
         }
         c.symbol(symbolName, in: NSRect(x: indent, y: y + 7, width: 13, height: 13),
                  color: selected ? accent.color : theme.textTertiary, pointSize: 11)
         c.text(name, at: CGPoint(x: indent + 20, y: y + 5), font: Typography.body,
                color: selected ? theme.textPrimary : theme.textSecondary)
-        y += Metrics.sidebarRow
+        y += Mock.sidebarRow
     }
 
     c.ctx.restoreGState()
@@ -532,7 +517,7 @@ func renderWindow(theme: Theme, accent: Accent, mode: SidebarMode = .database) -
     }
 
     // ---- 主区 ----
-    let mainX = Metrics.activityWidth + Metrics.sidebarWidth
+    let mainX = Mock.activityWidth + Metrics.sidebarWidth
     let mainWidth = W - mainX
     c.fill(NSRect(x: mainX, y: bodyTop, width: mainWidth, height: bodyHeight), theme.content)
 
@@ -544,7 +529,7 @@ func renderWindow(theme: Theme, accent: Accent, mode: SidebarMode = .database) -
     for (title, active) in pageTabs {
         let tabWidth: CGFloat = 26 + (title as NSString).size(withAttributes: [.font: Typography.body]).width + 22
         if active {
-            c.rounded(NSRect(x: tx, y: ty + 3, width: tabWidth, height: Metrics.tabHeight - 6), Metrics.radiusControl, theme.panel)
+            c.rounded(NSRect(x: tx, y: ty + 3, width: tabWidth, height: Metrics.tabHeight - 6), Mock.radiusControl, theme.panel)
             c.text(title, at: CGPoint(x: tx + 12, y: ty + 8), font: Typography.bodyStrong, color: theme.textPrimary)
             c.symbol("xmark", in: NSRect(x: tx + tabWidth - 18, y: ty + 11, width: 9, height: 9), color: theme.textTertiary, pointSize: 9)
         } else {
@@ -562,7 +547,7 @@ func renderWindow(theme: Theme, accent: Accent, mode: SidebarMode = .database) -
     var bx = mainX + 12
     // 主按钮：整个界面里唯一使用实心强调色的地方
     let runRect = NSRect(x: bx, y: ty + 6, width: 78, height: 26)
-    c.rounded(runRect, Metrics.radiusControl, accent.color)
+    c.rounded(runRect, Mock.radiusControl, accent.color)
     c.symbol("play.fill", in: NSRect(x: bx + 12, y: ty + 12, width: 10, height: 10), color: .white, pointSize: 9)
     c.text("执行", at: CGPoint(x: bx + 28, y: ty + 11), font: Typography.bodyStrong, color: .white)
     bx += 86
@@ -803,8 +788,8 @@ func renderTokenSheet(theme: Theme) -> Data {
     ]
     var swatchX: CGFloat = 28
     for (name, color) in swatches {
-        c.rounded(NSRect(x: swatchX, y: y, width: 72, height: 44), Metrics.radiusCard, color)
-        c.stroke(NSRect(x: swatchX, y: y, width: 72, height: 44), Metrics.radiusCard, theme.hairline, width: 1)
+        c.rounded(NSRect(x: swatchX, y: y, width: 72, height: 44), Mock.radiusCard, color)
+        c.stroke(NSRect(x: swatchX, y: y, width: 72, height: 44), Mock.radiusCard, theme.hairline, width: 1)
         c.text(name, at: CGPoint(x: swatchX, y: y + 50), font: Typography.caption, color: theme.textTertiary)
         swatchX += 82
     }
@@ -816,18 +801,18 @@ func renderTokenSheet(theme: Theme) -> Data {
     var accentX: CGFloat = 28
     for candidate in Accent.candidates {
         let cardWidth: CGFloat = 336
-        c.rounded(NSRect(x: accentX, y: y, width: cardWidth, height: 132), Metrics.radiusPanel, theme.panel)
-        c.stroke(NSRect(x: accentX, y: y, width: cardWidth, height: 132), Metrics.radiusPanel, theme.hairline, width: 1)
+        c.rounded(NSRect(x: accentX, y: y, width: cardWidth, height: 132), Mock.radiusPanel, theme.panel)
+        c.stroke(NSRect(x: accentX, y: y, width: cardWidth, height: 132), Mock.radiusPanel, theme.hairline, width: 1)
 
         // 选中行：淡填充 + 左侧强调条
-        c.rounded(NSRect(x: accentX + 12, y: y + 12, width: cardWidth - 24, height: 26), Metrics.radiusControl, candidate.color.withAlphaComponent(theme.isDark ? 0.16 : 0.10))
+        c.rounded(NSRect(x: accentX + 12, y: y + 12, width: cardWidth - 24, height: 26), Mock.radiusControl, candidate.color.withAlphaComponent(theme.isDark ? 0.16 : 0.10))
         c.rounded(NSRect(x: accentX + 12, y: y + 17, width: 3, height: 16), 1.5, candidate.color)
         c.text("选中的连接行", at: CGPoint(x: accentX + 26, y: y + 17), font: Typography.body, color: theme.textPrimary)
 
         // 主按钮 + 焦点环
-        c.rounded(NSRect(x: accentX + 12, y: y + 48, width: 78, height: 26), Metrics.radiusControl, candidate.color)
+        c.rounded(NSRect(x: accentX + 12, y: y + 48, width: 78, height: 26), Mock.radiusControl, candidate.color)
         c.text("执行", at: CGPoint(x: accentX + 42, y: y + 53), font: Typography.bodyStrong, color: .white)
-        c.stroke(NSRect(x: accentX + 100, y: y + 48, width: 78, height: 26), Metrics.radiusControl, candidate.color, width: 1.5)
+        c.stroke(NSRect(x: accentX + 100, y: y + 48, width: 78, height: 26), Mock.radiusControl, candidate.color, width: 1.5)
         c.text("焦点输入框", at: CGPoint(x: accentX + 112, y: y + 53), font: Typography.body, color: theme.textSecondary)
 
         // 语法高亮里的关键字也用强调色家族（保持一致）
@@ -984,9 +969,6 @@ func verifyWindow(
 let outDirectory = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "Docs/design"
 try? FileManager.default.createDirectory(atPath: outDirectory, withIntermediateDirectories: true)
 
-let proDark = Theme.proDark()
-let nativeLight = Theme.nativeLight()
-
 var allChecks: [Check] = []
 var darkButtons: [NSColor] = []
 
@@ -997,43 +979,85 @@ func write(_ data: Data, _ name: String) {
     print("写出 \(url.lastPathComponent)（\(size / 1024) KB）")
 }
 
-for (index, candidate) in Accent.candidates.enumerated() {
-    let letter = ["A", "B", "C"][index]
-    let data = renderWindow(theme: proDark, accent: candidate)
-    let result = verifyWindow(data, theme: proDark, accent: candidate, label: "深色-\(letter)-\(candidate.name)")
-    allChecks += result.checks
-    if let button = result.accentButton { darkButtons.append(button) }
-    write(data, "样张-深色-\(letter)-\(candidate.name).png")
+// 0）先自证「接在真令牌上」——**不写死任何色值**（本文件里一个十六进制颜色都不许有，
+//    `Scripts/check-design-mock-tokens.py` 会把这条变成机械判据），只用令牌自身能推出的关系：
+//    ① 深色五档严格递增（window < sidebar < content < panel < raised）—— 外观方案 §8.1 的不变式，
+//       旧的「中性灰」那套也是递增的，所以单靠它不够，得配②；
+//    ② 深色表面**带蓝调**（B > R）—— 方案 D 的深海军蓝 vs 旧的中性灰（B ≈ R），这是"换了值但
+//       某屏漏改"最省事的一刀；
+//    ③ 语法六档各自等于某个令牌家族的值（没有孤立的旧语法色）。
+print("渲染器：令牌唯一来源 = Core/DesignTokens.swift（当前 = 方案 D · 科技蓝，深 / 浅两态）")
+
+let darkLuminance = Surface.allCases.map { ColorContrast.relativeLuminance($0.color.dark) }
+allChecks.append(Check(
+    ok: zip(darkLuminance, darkLuminance.dropFirst()).allSatisfy { $0 < $1 },
+    note: "深色五档必须严格递增（window < sidebar < content < panel < raised）"
+))
+let familyValues = AccentFamily.allCases.map(\.color) + TextTone.allCases.map(\.color)
+allChecks.append(Check(
+    ok: SyntaxTone.allCases.allSatisfy { familyValues.contains($0.color) },
+    note: "语法六档必须各自等于某个令牌家族的值（否则就是留了一个孤立的旧语法色）"
+))
+
+let dark = Theme.dark
+let light = Theme.light
+/// 产品当前实际在用的交互强调色（= `AccentTheme.fallback`）。
+let currentAccent = Accent.current
+
+// 1）主样张：方案 D 深 / 浅两态，交互强调色用产品当前那一个。
+let darkData = renderWindow(theme: dark, accent: currentAccent)
+allChecks += verifyWindow(darkData, theme: dark, accent: currentAccent, label: "深色-D-科技蓝").checks
+write(darkData, "样张-深色-D-科技蓝.png")
+
+let lightData = renderWindow(theme: light, accent: currentAccent)
+allChecks += verifyWindow(lightData, theme: light, accent: currentAccent, label: "浅色-D-科技蓝").checks
+write(lightData, "样张-浅色-D-科技蓝.png")
+
+// 2）**蓝调判据**（方案 D 的「这组值真的落地了吗」）：深色表面必须带蓝调（B > R）。
+//    旧的深色是**中性灰**（B ≈ R）—— 所以这一条能机械地把「换了值、但样张还是旧配色」抓出来；
+//    它与上面那条令牌身份判据一起，构成「样张 = 产品」的可复跑证据。
+for (name, background) in [("content", dark.content), ("sidebar", dark.sidebar), ("panel", dark.panel)] {
+    let components = background.usingColorSpace(.sRGB)!
+    let blue = components.blueComponent - components.redComponent
+    allChecks.append(Check(ok: blue > 8.0 / 255.0,
+                           note: String(format: "方案 D 的深色 %@ 必须带蓝调（B−R = %.1f/255，需 > 8/255）", name, blue * 255)))
 }
 
-// 三个候选必须真的长得不一样（否则"看样张再定"就没意义）
-if darkButtons.count == 3 {
-    for i in 0..<3 {
-        for j in (i + 1)..<3 {
+// 3）交互强调色的三个候选（方案 D 的表面 + 各自真实的选中态 / 主按钮 / 焦点环）。
+for candidate in Accent.candidates {
+    let data = renderWindow(theme: dark, accent: candidate)
+    let result = verifyWindow(data, theme: dark, accent: candidate, label: "深色-D-\(candidate.name)")
+    allChecks += result.checks
+    if let button = result.accentButton { darkButtons.append(button) }
+    write(data, "样张-深色-D-强调色-\(candidate.name).png")
+}
+
+// 三个候选必须真的长得不一样（否则「看样张再定」就没意义）
+if darkButtons.count == Accent.candidates.count {
+    for i in 0..<darkButtons.count {
+        for j in (i + 1)..<darkButtons.count {
             let d = darkButtons[i].distance(to: darkButtons[j])
             allChecks.append(Check(ok: d > 0.15, note: String(format: "候选 %d 与 %d 的按钮色必须可区分（距离 %.3f）", i + 1, j + 1, d)))
         }
     }
 }
 
-let lightWorkspaceData = renderWindow(theme: nativeLight, accent: Accent.candidates[0], mode: .workspace)
-_ = verifyWindow(lightWorkspaceData, theme: nativeLight, accent: Accent.candidates[0], label: "浅色-工作区视图",
-                 barPoint: CGPoint(x: 55, y: 271))
+// 4）「已实现」三屏（工作区视图 / 空工作区 / 浅色工作区）—— 与产品里已交付的界面同一套令牌。
+let lightWorkspaceData = renderWindow(theme: light, accent: currentAccent, mode: .workspace)
+allChecks += verifyWindow(lightWorkspaceData, theme: light, accent: currentAccent, label: "浅色-D-工作区视图",
+                          barPoint: CGPoint(x: 55, y: 271)).checks
 write(lightWorkspaceData, "样张-已实现-浅色-工作区.png")
 
-let emptyData = renderWindow(theme: proDark, accent: Accent.candidates[0], mode: .workspaceEmpty)
+let emptyData = renderWindow(theme: dark, accent: currentAccent, mode: .workspaceEmpty)
 write(emptyData, "样张-已实现-深色-空工作区.png")
 
-let workspaceData = renderWindow(theme: proDark, accent: Accent.candidates[0], mode: .workspace)
-allChecks += verifyWindow(workspaceData, theme: proDark, accent: Accent.candidates[0], label: "深色-A-工作区视图",
+let workspaceData = renderWindow(theme: dark, accent: currentAccent, mode: .workspace)
+allChecks += verifyWindow(workspaceData, theme: dark, accent: currentAccent, label: "深色-D-工作区视图",
                           barPoint: CGPoint(x: 55, y: 271)).checks   // 工作区视图里选中的是第 6 行文件
 write(workspaceData, "样张-已实现-深色-工作区.png")
 
-let lightData = renderWindow(theme: nativeLight, accent: Accent.candidates[0])
-allChecks += verifyWindow(lightData, theme: nativeLight, accent: Accent.candidates[0], label: "浅色-\(Accent.candidates[0].name)").checks
-write(lightData, "样张-浅色-\(Accent.candidates[0].name).png")
-
-for (theme, name) in [(proDark, "深色"), (nativeLight, "浅色")] {
+// 5）令牌页（深浅两态）
+for (theme, name) in [(dark, "深色"), (light, "浅色")] {
     let data = renderTokenSheet(theme: theme)
     if let rep = NSBitmapImageRep(data: data) {
         let value = inkRatio(rep, rect: NSRect(x: 20, y: 20, width: 1060, height: 620), background: theme.content, scale: 2)
@@ -1046,3 +1070,4 @@ for (theme, name) in [(proDark, "深色"), (nativeLight, "浅色")] {
 
 let failed = allChecks.filter { !$0.ok }
 print(failed.isEmpty ? "全部样张自检通过（\(allChecks.count) 项）" : "\(failed.count)/\(allChecks.count) 项自检未过")
+exit(failed.isEmpty ? 0 : 1)
