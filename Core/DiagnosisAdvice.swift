@@ -72,15 +72,20 @@ public enum DiagnosisAdvice {
     /// - Parameters:
     ///   - reply: 模型回复原文（按行解析）。
     ///   - context: 诊断上下文（提供**合法证据编号**）。
+    ///   - language: **与提示词同一种语言**（队列 L-47）—— 行格式的语法记号由语言表
+    ///     按这个值取（中文「结论:」/ 英文 `Conclusion:`），传错了会把整篇判成「没看懂」。
+    ///     界面传 `LocalizationManager.effectiveLanguage`、CLI 传 `.simplifiedChinese`。
     ///   - databaseType: 方言（影响 `ExecutionSafety` 的语句分类）。
     ///   - policy: 执行安全策略（只读连接 / 生产标签等由调用方给）。
     public static func parse(
         reply: String,
         context: DiagnosisContext,
+        language: AppLanguage,
         databaseType: DatabaseType = .postgresql,
         policy: ExecutionSafetyPolicy = .default
     ) -> DiagnosisAdviceReport {
         let validIDs = context.availableIDs
+        let tokens = grammarTokens(language: language)
         var items: [DiagnosisAdviceItem] = []
         var rejections: [DiagnosisAdviceReport.Rejection] = []
 
@@ -98,7 +103,7 @@ public enum DiagnosisAdvice {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.isEmpty { continue }
 
-            if let conclusion = parseConclusion(line) {
+            if let conclusion = parseConclusion(line, tokens: tokens) {
                 // 上一条结论（如果还没被拒绝）先落地。
                 flushPending()
                 switch validate(citations: conclusion.citations, validIDs: validIDs) {
@@ -112,7 +117,7 @@ public enum DiagnosisAdvice {
                 continue
             }
 
-            if let sql = parseSuggestion(line) {
+            if let sql = parseSuggestion(line, tokens: tokens) {
                 let text = pendingConclusion?.text ?? ""
                 let citations = pendingConclusion?.citations ?? []
                 let decision = ExecutionSafety.check(sql: sql, databaseType: databaseType, policy: policy)
@@ -143,9 +148,14 @@ public enum DiagnosisAdvice {
     /// 为什么这么做：提示词与解析器是同一份契约的两半 —— 两边各写一份「结论:」，
     /// 迟早会改了一边；而且这么写之后，Core 里**一个汉字字面量都不需要**
     /// （本地化棘轮守着这条：Core 的展示文本必须走语言表）。
-    static func grammarTokens() -> (conclusion: [String], evidence: [String], suggestion: [String]) {
-        let conclusionLine = LocalizedStrings.text(.diagnosisFormatConclusion, language: .simplifiedChinese)
-        let suggestionLine = LocalizedStrings.text(.diagnosisFormatSuggestion, language: .simplifiedChinese)
+    ///
+    /// **语言必须跟提示词同一种**（队列 L-47）：中文提示词写「结论:」、英文提示词写
+    /// `Conclusion:` —— 解析器若固定认中文，英文提示词回来的英文行会被整条判成
+    /// 「没看懂」（`unparsable`），用户看到的是「模型没说」而其实说了。
+    /// 所以 `language` 与 `DiagnosisContext.promptText(language:)` 传的是**同一个值**。
+    static func grammarTokens(language: AppLanguage) -> (conclusion: [String], evidence: [String], suggestion: [String]) {
+        let conclusionLine = LocalizedStrings.text(.diagnosisFormatConclusion, language: language)
+        let suggestionLine = LocalizedStrings.text(.diagnosisFormatSuggestion, language: language)
 
         func label(_ line: String) -> String {
             String(line.prefix { $0 != " " })
@@ -170,8 +180,7 @@ public enum DiagnosisAdvice {
     }
 
     /// `结论: <文本> [依据: e1,e2]`
-    static func parseConclusion(_ line: String) -> (text: String, citations: [String])? {
-        let tokens = grammarTokens()
+    static func parseConclusion(_ line: String, tokens: (conclusion: [String], evidence: [String], suggestion: [String])) -> (text: String, citations: [String])? {
         guard let body = firstValue(of: tokens.conclusion, in: line) else { return nil }
         var range: Range<String.Index>?
         for marker in tokens.evidence {
@@ -196,8 +205,8 @@ public enum DiagnosisAdvice {
     }
 
     /// `建议: <SQL>`
-    static func parseSuggestion(_ line: String) -> String? {
-        guard let body = firstValue(of: grammarTokens().suggestion, in: line) else { return nil }
+    static func parseSuggestion(_ line: String, tokens: (conclusion: [String], evidence: [String], suggestion: [String])) -> String? {
+        guard let body = firstValue(of: tokens.suggestion, in: line) else { return nil }
         let sql = body.trimmingCharacters(in: .whitespaces)
         return sql.isEmpty ? nil : sql
     }

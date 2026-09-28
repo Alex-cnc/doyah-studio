@@ -45,9 +45,15 @@ public enum LicenseLoader {
     /// 装载并判定。
     ///
     /// - Parameters:
+    ///   - language: **语言由调用方给定**（队列 L-47 / L-65 的口径）—— 坏文件的说明是一句
+    ///     **给人看的话**，它会随 `LoadResult.source` 一起被界面拿去显示，所以在这一层就得
+    ///     按调用方的语言渲染；界面传 `LocalizationManager.effectiveLanguage`、CLI 传简体中文。
+    ///     **刻意不留默认值**：默认值等于把「写死语言」藏起来，而
+    ///     `Scripts/check-literal-language.py` 钉的正是「不许写死」。
     ///   - url: 许可证位置（默认 `defaultLicenseURL()`，可被 `DOYAH_LICENSE_PATH` 覆盖）。
     ///   - verifier: 签名校验器（默认取 App 内置公钥；取不到就**无法校验** → 降级）。
     public static func load(
+        language: AppLanguage,
         from url: URL? = nil,
         verifier: Ed25519LicenseVerifier? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -69,7 +75,7 @@ public enum LicenseLoader {
             return LoadResult(
                 entitlements: LicenseGate.evaluate(nil, now: now),
                 license: nil,
-                source: .unreadable(licenseDecodeFailureHint)
+                source: .unreadable(licenseDecodeFailureHint(language: language))
             )
         }
         let entitlements = LicenseGate.evaluate(
@@ -82,42 +88,47 @@ public enum LicenseLoader {
         return LoadResult(entitlements: entitlements, license: license, source: .file(target))
     }
 
-    /// 坏文件时的说明（走语言表）。
-    static var licenseDecodeFailureHint: String {
-        LocalizedStrings.text(.licenseUnreadable, language: .simplifiedChinese)
+    /// 坏文件时的说明（走语言表，**语言由调用方给定**）。
+    static func licenseDecodeFailureHint(language: AppLanguage) -> String {
+        LocalizedStrings.text(.licenseUnreadable, language: language)
     }
 
     /// 供界面显示的一句话（**必须能区分"没放"与"坏了"**）。
-    public static func summary(for result: LoadResult) -> String {
+    ///
+    /// **语言透传（队列 L-65）**：这一句在界面与 CLI 上都会露出来 —— 此前它把语言写死成
+    /// 简体中文，于是界面即使切到英文，这一行仍是中文（而且 `.licenseUnreadableWithReason`
+    /// 的英文译文永远不可达）。语言改由调用方给定：界面传
+    /// `LocalizationManager.shared.effectiveLanguage`、CLI 传 `.simplifiedChinese`。
+    public static func summary(for result: LoadResult, language: AppLanguage) -> String {
         switch result.source {
         case .missing:
-            return LocalizedStrings.text(.licenseMissing, language: .simplifiedChinese)
+            return LocalizedStrings.text(.licenseMissing, language: language)
         case .unreadable(let reason):
-            return LocalizedStrings.format(.licenseUnreadableWithReason, language: .simplifiedChinese, reason)
+            return LocalizedStrings.format(.licenseUnreadableWithReason, language: language, reason)
         case .file:
             switch result.entitlements.basis {
             case .licensed:
                 // 档位名**不写进这一句**：档位在界面上是单独一行（`licAboutEdition`），
                 // 而且那一行要走 `LicensePresentation.displayNameKey` 才能跟着语言变。
-                return LocalizedStrings.text(.licenseActive, language: .simplifiedChinese)
+                return LocalizedStrings.text(.licenseActive, language: language)
             case .expired(let date):
                 return LocalizedStrings.format(
                     .licenseExpired,
-                    language: .simplifiedChinese,
+                    language: language,
                     ISO8601DateFormatter().string(from: date)
                 )
             case .invalidSignature:
-                return LocalizedStrings.text(.licenseInvalidSignature, language: .simplifiedChinese)
+                return LocalizedStrings.text(.licenseInvalidSignature, language: language)
             case .unsupportedVersion(let version):
                 return LocalizedStrings.format(
                     .licenseFromFuture,
-                    language: .simplifiedChinese,
+                    language: language,
                     String(version)
                 )
             case .unknownEdition:
-                return LocalizedStrings.text(.licenseUnknownEdition, language: .simplifiedChinese)
+                return LocalizedStrings.text(.licenseUnknownEdition, language: language)
             case .missingLicense:
-                return LocalizedStrings.text(.licenseMissing, language: .simplifiedChinese)
+                return LocalizedStrings.text(.licenseMissing, language: language)
             }
         }
     }

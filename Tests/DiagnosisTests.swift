@@ -17,20 +17,20 @@ final class DiagnosisTests: XCTestCase {
                     id: "e1",
                     kind: .statement,
                     sql: "SELECT * FROM orders WHERE created_at > now() - interval '1 day'",
-                    rows: []
+                    rows: [], language: .simplifiedChinese
                 ),
                 DiagnosisContextBuilder.makeEvidence(
                     id: "e2",
                     kind: .executionPlan,
                     sql: "EXPLAIN SELECT …",
-                    rows: [["Seq Scan on orders  (cost=0.00..431.00 rows=21 width=8)"]]
+                    rows: [["Seq Scan on orders  (cost=0.00..431.00 rows=21 width=8)"]], language: .simplifiedChinese
                 ),
                 DiagnosisContextBuilder.makeEvidence(
                     id: "e3",
                     kind: .slowQueries,
                     sql: "SELECT query, calls FROM pg_stat_statements …",
                     rows: nil,
-                    failureReason: "pg_stat_statements 未安装"
+                    language: .simplifiedChinese, failureReason: "pg_stat_statements 未安装"
                 ),
             ]
         )
@@ -41,17 +41,17 @@ final class DiagnosisTests: XCTestCase {
     /// 三种状态必须能被表达，而且**互相分得开**：取到了有行 / 取到了零行 / 根本没取到。
     func testEvidenceStatesAreDistinct() {
         let withRows = DiagnosisContextBuilder.makeEvidence(
-            id: "e1", kind: .tableStats, sql: "q", rows: [["a"], ["b"]]
+            id: "e1", kind: .tableStats, sql: "q", rows: [["a"], ["b"]], language: .simplifiedChinese
         )
         XCTAssertTrue(withRows.isAvailable)
         XCTAssertEqual(withRows.note, "共 2 行")
 
-        let empty = DiagnosisContextBuilder.makeEvidence(id: "e2", kind: .lockBlocking, sql: "q", rows: [])
+        let empty = DiagnosisContextBuilder.makeEvidence(id: "e2", kind: .lockBlocking, sql: "q", rows: [], language: .simplifiedChinese)
         XCTAssertTrue(empty.isAvailable, "“查到了但没有行”与“没查到”是两件事")
         XCTAssertEqual(empty.note, "查到了，但没有行")
 
         let missing = DiagnosisContextBuilder.makeEvidence(
-            id: "e3", kind: .slowQueries, sql: "q", rows: nil, failureReason: "扩展未安装"
+            id: "e3", kind: .slowQueries, sql: "q", rows: nil, language: .simplifiedChinese, failureReason: "扩展未安装"
         )
         XCTAssertFalse(missing.isAvailable)
         XCTAssertTrue(missing.note.contains("扩展未安装"))
@@ -59,7 +59,7 @@ final class DiagnosisTests: XCTestCase {
 
     func testEvidenceRowsAreBoundedAndTruncationIsStated() {
         let rows = (1...100).map { ["\($0)"] }
-        let evidence = DiagnosisContextBuilder.makeEvidence(id: "e1", kind: .tableStats, sql: "q", rows: rows)
+        let evidence = DiagnosisContextBuilder.makeEvidence(id: "e1", kind: .tableStats, sql: "q", rows: rows, language: .simplifiedChinese)
         XCTAssertEqual(evidence.rows.count, DiagnosisContextBuilder.maxRowsPerEvidence)
         XCTAssertTrue(evidence.isTruncated)
         XCTAssertTrue(evidence.note.contains("共 100 行"))
@@ -68,7 +68,7 @@ final class DiagnosisTests: XCTestCase {
 
     /// 取不到的证据必须在提示词里**单独点名**，并且提示词里写死"不许对它们下结论"。
     func testPromptListsUnavailableEvidenceExplicitly() {
-        let text = context().promptText()
+        let text = context().promptText(language: .simplifiedChinese)
         XCTAssertTrue(text.contains("没有拿到证据"))
         XCTAssertTrue(text.contains("e3"))
         XCTAssertTrue(text.contains("pg_stat_statements 未安装"))
@@ -82,11 +82,11 @@ final class DiagnosisTests: XCTestCase {
             evidence: [
                 DiagnosisContextBuilder.makeEvidence(
                     id: "e1", kind: .statement, sql: "q",
-                    rows: (1...40).map { _ in [String(repeating: "x", count: 400)] }
+                    rows: (1...40).map { _ in [String(repeating: "x", count: 400)] }, language: .simplifiedChinese
                 )
             ]
         )
-        let bounded = context.boundedPromptText(maxCharacters: 1_000)
+        let bounded = context.boundedPromptText(language: .simplifiedChinese, maxCharacters: 1_000)
         XCTAssertLessThanOrEqual(bounded.count, 1_000 + 120)
         XCTAssertTrue(bounded.contains("已截断"))
     }
@@ -125,7 +125,7 @@ final class DiagnosisTests: XCTestCase {
     func testCitedConclusionIsAccepted() {
         let report = DiagnosisAdvice.parse(
             reply: "结论: 全表扫描导致慢 [依据: e2]\n建议: CREATE INDEX ON orders (created_at)",
-            context: context()
+            context: context(), language: .simplifiedChinese
         )
         XCTAssertEqual(report.items.count, 1)
         XCTAssertEqual(report.items[0].citations, ["e2"])
@@ -136,7 +136,7 @@ final class DiagnosisTests: XCTestCase {
     func testConclusionWithoutCitationsIsRejected() {
         let report = DiagnosisAdvice.parse(
             reply: "结论: 应该是索引没建好",
-            context: context()
+            context: context(), language: .simplifiedChinese
         )
         XCTAssertTrue(report.items.isEmpty, "没有依据的结论不许被采纳")
         XCTAssertEqual(report.rejections.count, 1)
@@ -146,7 +146,7 @@ final class DiagnosisTests: XCTestCase {
     func testConclusionCitingUnknownEvidenceIsRejected() {
         let report = DiagnosisAdvice.parse(
             reply: "结论: 看上去是锁冲突 [依据: e9]",
-            context: context()
+            context: context(), language: .simplifiedChinese
         )
         XCTAssertTrue(report.items.isEmpty)
         XCTAssertEqual(report.rejections.first?.reason, .unknownCitation("e9"))
@@ -156,7 +156,7 @@ final class DiagnosisTests: XCTestCase {
     func testUnavailableEvidenceCannotBeCited() {
         let report = DiagnosisAdvice.parse(
             reply: "结论: 历史上一直很慢 [依据: e3]",
-            context: context()
+            context: context(), language: .simplifiedChinese
         )
         XCTAssertTrue(report.items.isEmpty, "未取到的证据不能作为依据")
         XCTAssertEqual(report.rejections.first?.reason, .unknownCitation("e3"))
@@ -165,7 +165,7 @@ final class DiagnosisTests: XCTestCase {
     func testUnparsableLinesAreKeptNotDropped() {
         let report = DiagnosisAdvice.parse(
             reply: "总之我觉得是磁盘慢\n结论: 全表扫描 [依据: e2]",
-            context: context()
+            context: context(), language: .simplifiedChinese
         )
         XCTAssertEqual(report.items.count, 1)
         XCTAssertEqual(report.rejections.count, 1)
@@ -180,7 +180,7 @@ final class DiagnosisTests: XCTestCase {
         let readOnly = ExecutionSafetyPolicy(isEnabled: true, isReadOnly: true)
         let report = DiagnosisAdvice.parse(
             reply: "结论: 表膨胀了 [依据: e1]\n建议: VACUUM FULL orders",
-            context: context(),
+            context: context(), language: .simplifiedChinese,
             policy: readOnly
         )
         guard case .refused = report.items[0].decision else {
@@ -192,7 +192,7 @@ final class DiagnosisTests: XCTestCase {
     func testHighRiskSuggestedSQLNeedsConfirmation() {
         let report = DiagnosisAdvice.parse(
             reply: "结论: 需要重建索引 [依据: e2]\n建议: DROP INDEX idx_orders_created",
-            context: context(),
+            context: context(), language: .simplifiedChinese,
             policy: ExecutionSafetyPolicy(isEnabled: true)
         )
         guard case .needsConfirmation = report.items[0].decision else {
@@ -204,7 +204,7 @@ final class DiagnosisTests: XCTestCase {
     func testFullWidthPunctuationIsAccepted() {
         let report = DiagnosisAdvice.parse(
             reply: "结论：全表扫描 [依据：e1，e2]\n建议：ANALYZE orders",
-            context: context()
+            context: context(), language: .simplifiedChinese
         )
         XCTAssertEqual(report.items.count, 1)
         XCTAssertEqual(report.items[0].citations, ["e1", "e2"])
@@ -220,11 +220,131 @@ final class DiagnosisTests: XCTestCase {
             结论: 第二条 [依据: e2]
             建议: SELECT 2
             """,
-            context: context()
+            context: context(), language: .simplifiedChinese
         )
         XCTAssertEqual(report.items.count, 2)
         XCTAssertEqual(report.items[0].suggestedSQL, "SELECT 1")
         XCTAssertEqual(report.items[1].suggestedSQL, "SELECT 2")
         XCTAssertEqual(report.items[0].citations, ["e1"])
+    }
+
+    // MARK: - 语言透传（队列 L-47：Core 不再把语言钉死成中文）
+
+    /// 一个字串里有没有汉字 —— 判「这份资料到底是哪种语言」的机械口径。
+    private func hasHan(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in (0x4E00...0x9FFF).contains(scalar.value) }
+    }
+
+    /// 采集证据时的语言**必须与提示词同一种**：这一份按英文采集。
+    private func englishContext() -> DiagnosisContext {
+        DiagnosisContext(
+            question: "Why is this query slow?",
+            target: "postgres@127.0.0.1:5432/analytics",
+            evidence: [
+                DiagnosisContextBuilder.makeEvidence(
+                    id: "e1", kind: .statement, sql: "SELECT 1", rows: [], language: .english
+                ),
+                DiagnosisContextBuilder.makeEvidence(
+                    id: "e2", kind: .executionPlan, sql: "EXPLAIN SELECT …",
+                    rows: [["Seq Scan on orders"]], language: .english
+                ),
+                DiagnosisContextBuilder.makeEvidence(
+                    id: "e3", kind: .slowQueries, sql: "SELECT … FROM pg_stat_statements",
+                    rows: nil, language: .english, failureReason: "extension not installed"
+                ),
+            ]
+        )
+    }
+
+    /// **死译文的判据**：语言表里这些键都有英文译文，此前 Core 把语言钉死成简体中文 ⇒
+    /// 英文界面上「给模型的资料」整块中文、译文永远不可达。现在语言由调用方给定。
+    func testPromptFollowsTheGivenLanguage() {
+        let zh = context().promptText(language: .simplifiedChinese)
+        let en = englishContext().promptText(language: .english)
+
+        XCTAssertTrue(zh.contains("结论: <一句话> [依据: e1,e2]"), "中文提示词要写中文行格式")
+        XCTAssertTrue(en.contains("conclusion: <one sentence> [evidence: e1,e2]"), "英文提示词要写英文行格式")
+        XCTAssertTrue(en.contains("== Evidence (ids must be cited in every conclusion) =="))
+        XCTAssertFalse(hasHan(en), "英文提示词里仍出现汉字 ⇒ 语言没有真的透传")
+        XCTAssertTrue(hasHan(zh))
+        XCTAssertNotEqual(zh, en)
+    }
+
+    /// 证据的三种状态标注（有行 / 零行 / 未取到）也跟语言走 —— 这三句此前同样写死中文。
+    func testEvidenceNotesFollowTheGivenLanguage() {
+        let rows = DiagnosisContextBuilder.makeEvidence(
+            id: "e1", kind: .tableStats, sql: "q", rows: [["a"], ["b"]], language: .english
+        )
+        XCTAssertEqual(rows.note, "2 rows")
+
+        let truncated = DiagnosisContextBuilder.makeEvidence(
+            id: "e2", kind: .tableStats, sql: "q",
+            rows: (1...100).map { ["\($0)"] }, language: .english
+        )
+        XCTAssertEqual(truncated.note, "100 rows; the first 40 are shown here")
+
+        let empty = DiagnosisContextBuilder.makeEvidence(
+            id: "e3", kind: .lockBlocking, sql: "q", rows: [], language: .english
+        )
+        XCTAssertEqual(empty.note, "queried, but no rows")
+
+        let missing = DiagnosisContextBuilder.makeEvidence(
+            id: "e4", kind: .slowQueries, sql: "q", rows: nil,
+            language: .english, failureReason: "extension not installed"
+        )
+        XCTAssertEqual(missing.note, "Not obtained: extension not installed")
+    }
+
+    /// 截断说明也跟语言走（超限时那句「已截断」此前同样写死中文）。
+    func testBoundedPromptTruncationNoticeFollowsLanguage() {
+        let context = DiagnosisContext(
+            question: "Why?",
+            target: "t",
+            evidence: [
+                DiagnosisContextBuilder.makeEvidence(
+                    id: "e1", kind: .statement, sql: "q",
+                    rows: (1...40).map { _ in [String(repeating: "x", count: 400)] },
+                    language: .english
+                )
+            ]
+        )
+        let bounded = context.boundedPromptText(language: .english, maxCharacters: 1_000)
+        XCTAssertTrue(bounded.contains("[Truncated:"))
+        XCTAssertFalse(hasHan(bounded), "被截断的提示词里仍出现汉字 ⇒ 截断说明没跟语言走")
+    }
+
+    /// **解析器的语法记号必须与提示词同一种语言**（提示词与解析器是同一份契约的两半）。
+    ///
+    /// 红例留档（本条的第二半）：**英文回复配中文语法** ⇒ 整条判成「没看懂」并**原样留着**
+    /// —— 不是静默采用，也不是丢掉；这条测试就是把「传错语言会怎样」钉住。
+    func testParserGrammarFollowsThePromptLanguage() {
+        let englishReply = """
+        conclusion: seq scan on orders [evidence: e2]
+        suggestion: CREATE INDEX ON orders (created_at)
+        """
+        let report = DiagnosisAdvice.parse(
+            reply: englishReply, context: englishContext(), language: .english
+        )
+        XCTAssertEqual(report.items.count, 1, "英文提示词回来的英文行必须被认出来")
+        XCTAssertEqual(report.items.first?.citations, ["e2"])
+        XCTAssertEqual(report.items.first?.suggestedSQL, "CREATE INDEX ON orders (created_at)")
+
+        let mismatched = DiagnosisAdvice.parse(
+            reply: "conclusion: seq scan on orders [evidence: e2]",
+            context: englishContext(), language: .simplifiedChinese
+        )
+        XCTAssertTrue(mismatched.items.isEmpty)
+        XCTAssertEqual(mismatched.rejections.count, 1)
+        XCTAssertEqual(mismatched.rejections.first?.reason, .unparsable)
+        XCTAssertEqual(mismatched.rejections.first?.line, "conclusion: seq scan on orders [evidence: e2]")
+    }
+
+    /// **如实登记一条已知边界**：证据的 `note` 是**采集那一刻**按当时的界面语言生成的
+    /// （它是存进 `DiagnosisEvidence` 的事实记录，不是渲染期模板）⇒ 采集后改语言，
+    /// 旧证据的标注仍是采集时那种语言。这不是缺陷、也不假装不存在。
+    func testEvidenceNotesKeepTheLanguageTheyWereGatheredWith() {
+        let mixed = context().promptText(language: .english)
+        XCTAssertTrue(hasHan(mixed), "中文采集的证据 + 英文提示词：标注保持采集时的语言（已知边界）")
+        XCTAssertTrue(mixed.contains("conclusion: <one sentence> [evidence: e1,e2]"), "模板仍按渲染语言取")
     }
 }

@@ -11,6 +11,7 @@
 #   §4 连接降级那条路（`mcp serve`）     → 也是人话
 #   §5 认不出就原样（本地错误）          → 与改动前**逐字一致**，不套方向结论
 #   §6 源码交叉核对：没有裸的英文失败输出（与门禁同一条判据，这里独立算一遍）
+#   §7 真 42P01：查一张不存在的表          → **服务端原话**端出来（队列 L-20 ③；以前只剩英文调试串）
 #
 # **如实登记（没有稳定现场的两条）**：`对象树加载失败`（外层 catch）与 `建库权限探测失败`
 # 两条路径**造不出稳定的真现场** —— 它们的查询是单条 syscache 快查询（1ms 超时不可靠地命中），
@@ -152,12 +153,45 @@ BARE_COUNT="$(wc -l < "${BARE_FILE}" | tr -d ' ')"
 [ "${BARE_COUNT}" = "0" ] \
     && check "打给用户看的失败行都经同一个入口（裸英文 ${BARE_COUNT} 处）" 0 \
     || { echo "    裸的：$(head -3 "${BARE_FILE}")"; check "打给用户看的失败行都经同一个入口" 1; }
-ENTRY_CALLS="$(grep -c "CLIFailureText.oneLine(error)" CLI/main.swift | tr -d ' ')"
+ENTRY_CALLS="$(grep -cE "CLIFailureText\.(oneLine|block)\(" CLI/main.swift | tr -d ' ')"
 [ "${ENTRY_CALLS}" -ge 57 ] \
     && check "入口真的在接线（${ENTRY_CALLS} 处 ≥ 57，反向棘轮）" 0 \
     || check "入口真的在接线（只剩 ${ENTRY_CALLS} 处）" 1
 grep -q "ConnectionFailure.describeNonConnection" CLI/CLIFailureText.swift \
     && check "入口里中性归因那一档在位" 0 || check "入口里中性归因那一档在位" 1
+grep -q "CLIFailureText\.\(describeNonConnection\|describeServerSide\)(" CLI/main.swift \
+    && { check "可读化链只写一份（主路里没再抄一份 if/else 链）" 1; grep -n "describeNonConnection\|describeServerSide" CLI/main.swift; } \
+    || check "可读化链只写一份（主路里没再抄一份 if/else 链）" 0
+
+echo ""
+echo "== 7) 查询类错误（真 42P01）：服务端说过的原话不许被丢掉（队列 L-20 ③）"
+# 为什么要有这一节：`describe`（连接类）与 `describeNonConnection`（驱动非连接类）**都有意不接**
+# 查询类错误（那是调用方自己的路 —— 把「表不存在」说成「连不上」会把排查带偏），于是以前这一路
+# 只剩 `简要信息：The operation couldn't be completed. (PostgresNIO.PSQLError error 1.)`，
+# 而服务端明明说清了 `relation "…" does not exist`。第 47 轮把**服务端原话**接成链的第三档。
+MISSING_TABLE="doyah_probe_missing_$$"
+OUT7="$(PGHOST=127.0.0.1 PGPORT="${DOYAH_TEST_PGPORT}" PGUSER="${DOYAH_TEST_PGUSER}" \
+    PGDATABASE="${SCRATCH}" PGSSLMODE=disable "${CLI}" -c "SELECT * FROM ${MISSING_TABLE}" 2>&1)"
+echo "${OUT7}" | grep -q "查询失败" \
+    && check "失败行还在（标签没丢）" 0 || { echo "${OUT7}" | head -5; check "失败行还在" 1; }
+echo "${OUT7}" | grep -q "^服务端说：" \
+    && check "服务端原话打头（不是反射转储打头）" 0 || { echo "${OUT7}" | head -5; check "服务端原话打头" 1; }
+echo "${OUT7}" | grep -q "SQLSTATE 42P01" \
+    && check "带上了 SQLSTATE（可搜、可查文档）" 0 || check "带上了 SQLSTATE" 1
+echo "${OUT7}" | grep -q "${MISSING_TABLE}" \
+    && check "原话里带着对象名（照抄就能核对）" 0 || check "原话里带着对象名" 1
+# 服务端消息按**服务端自己的语言**来（本机集群是英文 does not exist，中文集群是「不存在」）——
+# 绑死一种措辞等于把这条断言挂到集群的 lc_messages 上。
+echo "${OUT7}" | grep -qE "does not exist|不存在" \
+    && check "服务端原话真的端出来了（按服务端的语言）" 0 || check "服务端原话真的端出来了（按服务端的语言）" 1
+echo "${OUT7}" | grep -q "调试详情" && echo "${OUT7}" | grep -q "PSQLError" \
+    && check "原始串仍然保留（信息不丢）" 0 || check "原始串仍然保留（信息不丢）" 1
+echo "${OUT7}" | grep -q "建议：" \
+    && check "不给方向结论（这一档只端原话，反向断言）" 1 || check "不给方向结论（这一档只端原话，反向断言）" 0
+echo "${OUT7}" | grep -qE "连接数据库失败|确认主机 / 端口 / 库名 / 用户名" \
+    && check "不套「连接失败」那套方向（反向断言）" 1 || check "不套「连接失败」那套方向（反向断言）" 0
+echo "${OUT7}" | grep -q "简要信息：The operation" \
+    && check "不再只剩一句英文调试串（反向断言）" 1 || check "不再只剩一句英文调试串（反向断言）" 0
 
 echo ""
 if [ "${fail}" -eq 0 ]; then

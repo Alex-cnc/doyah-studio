@@ -13,6 +13,12 @@ set -euo pipefail
 #      + 语言表**模板占位符 ↔ 调用点实参**对账（L-46：数字实参落 `%@` 槽 / 字符串落数字槽 /
 #        实参数 ≠ 占位符数 / 类型不明的实参逐条登记形状 + 双向棘轮，
 #        见 `check-format-arguments.py` 与 `format-argument-dispositions.json`）
+#      + **文案即所见**（L-19：语言表里不得有 markdown 强调标记 `**`、渲染点不得再出现
+#        `LocalizedStringKey` —— 有 4 个键的文案会流进没有 markdown 的通道（状态栏 / 备份恢复日志
+#        / `Label` 的 `String` 重载），所以口径只能是纯文本；见 `check-copy-emphasis.py`）
+#      + **语言是传进来的，不是写死的**（L-47：写死语言的调用点逐条登记 + 死译文双向对账 +
+#        `DiagnosisContext` / `DiagnosisAdvice` 的文本出口必须带 `language:` 形参；见
+#        `check-literal-language.py` 与 `literal-language-dispositions.json`）
 #   4. 文档表格列数与派生计数一致
 #      + 变更记录版本号唯一 / 头部版本格可判 / 队列条目号唯一（L-32）
 #   5. 需求状态一致性（§10.1 索引表 ↔ 正文定义行）
@@ -135,7 +141,7 @@ fi
 echo "==> 2/18 Core 平台中立性"
 python3 Scripts/check-core-portability.py
 
-echo "==> 3/18 本地化：Core 展示文本棘轮（R-45）+「当前语言只有一个来源」（L-13）"
+echo "==> 3/18 本地化：Core 展示文本棘轮（R-45）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
 python3 Scripts/check-core-localization.py
 # L-13：界面语言有两条路 —— `L(...)` 与**显式传语言下去**（`summary(language:)` 之类）。
 # 后者原先取的是**用户选择**（`LocalizationManager.shared.language`），绕过了渲染语境：
@@ -153,6 +159,40 @@ python3 Scripts/check-effective-language.py
 # 例外陈旧 / 空跑不许通过 …，夹具一律在临时目录，末例核对真仓库文件逐字节未变）。
 python3 Scripts/check-format-arguments.py
 python3 Scripts/check-format-arguments.py --self-test
+# L-19（2026-09-28 第 43 轮）：上面几条比的都是「文案内部」（汉字棘轮 / 语言来源 / 模板与实参），
+# 谁都没管**文案与渲染口径**。真缺陷正长在这条缝里（第 13 轮读图 `routine-candidates-empty-zh`）：
+# 语言表里 17 个键写着 markdown 强调 `**…**`，其中 `routineCandidatesHint` **一个键同时被两条路用**
+# —— 面板里 `Text(L(...))`（`Text(String)` **不解析** markdown ⇒ 星号原样露出）与状态栏
+# `statusMessage`（`String`，markdown 在这个通道**结构上永远不生效**）；备份恢复的日志行
+# （`[String]`）、`Label(L(...), systemImage:)` 的 `String` 重载也是同一形状。
+# ⇒ 口径拍板为「**文案即所见**」（纯文本）：去掉 16 个键的标记、`RowDetailPanel` 那处
+# `LocalizedStringKey` 一并收口（**选 markdown 那条路修不干净** —— 有 4 个键的文案会流进
+# 没有 markdown 的通道，`routineCandidatesHint` 更是两处都走）。
+# 判据五条：A 语言表两语槽位不得含 `**`（密码掩码 `***` 按键登记例外）/ B 产品源文件不得再出现
+# `LocalizedStringKey` / C 解析条目数下限（正则失配 ⇒ 零命中假绿当场报红）/ D 例外两端对账
+# （条目陈旧报红）/ E 本门禁与它的负例必须在闭环里被真的跑到。负例 `test-copy-emphasis-gate.py`
+# 一律在临时副本上写坏，末例核对真仓库逐字节未变。
+python3 Scripts/check-copy-emphasis.py
+python3 Scripts/test-copy-emphasis-gate.py
+# L-47（2026-09-28 第 46 轮）：上面几条比的都是「文案怎么取」，谁都没管**语言从哪来**。
+# 真缺陷正长在这条缝里（第 46 轮读图 `diagnosis-empty-en`）：英文界面上界面文案都是英文，
+# 唯独「给模型的资料」整块中文 —— `Core/DiagnosisContext.swift` 的文件私有取值助手把
+# `language:` **钉死**成 `.simplifiedChinese`，而语言表里 `diagnosisTarget` /
+# `diagnosisFormatConclusion` … 这些键**都有英文译文**却只被这一处引用 ⇒ **英文译文永远
+# 不可达（死译文）**。R-45 的棘轮数的是「含**汉字**的字面量」（这里一个汉字都没有）、
+# `check-effective-language.py` 只扫 `App/` 且只禁「按用户选择取语言」⇒ 两边都没覆盖
+# 「把语言写成字面量」这个形状。
+# 判据四条：A 写死语言的调用点必须逐条登记（按文件，带 maxSites 与理由；`maxSites: 0` =
+# 回归钉）/ B 死译文双向对账（新增未登记的死键 ⇒ 红；修好不销账 ⇒ 红；包装函数
+# `func t(_ key: LKey …)` 的每个调用点都算写死语言）/ C 本轮修的那一族不许回退
+# （`DiagnosisContext` 的文本出口必须带 `language:` 形参、`DiagnosisAdvice.parse` 必须带、
+# 面板必须传 `effectiveLanguage` —— 只靠 A 挡不住「删掉形参再在函数体里写死」）/
+# D 空跑不许通过（语言表解析不到键、键引用为 0、扫到的文件过少都判红）。
+# 台账 `Scripts/literal-language-dispositions.json`；负例 `test-literal-language-gate.py`
+# 9 例（回归钉 / 未登记文件 / 新增死译 / 死键修好未销账 / 丢形参 / 面板脱钩 / 语言表消失 /
+# 干净副本前提自检 / 真仓库逐字节未变），一律在临时副本上写坏。
+python3 Scripts/check-literal-language.py
+python3 Scripts/test-literal-language-gate.py
 
 echo "==> 4/18 文档表格与派生计数"
 # L-33（2026-09-27 第 29 轮）：本项的默认清单里有 **7 份被 `.gitignore` 排除的文档**

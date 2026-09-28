@@ -95,6 +95,10 @@ struct DoyahStudioApp: App {
                 .frame(minWidth: 1_100, minHeight: 700)
                 // 语言切换时整棵视图树重建，保证所有文案立即刷新。
                 .id(localization.language)
+                // 许可证那一行是**装进 `licenseLoad` 的一句话**（在**装载那一刻**按当时的语言
+                // 渲染的），所以切语言后要重新装载一次才整行一致 —— `.id` 只重建视图，不重读文件。
+                // （队列 L-65：界面不再自己抄一份文案，代价是这句随装载体一起走。）
+                .onChange(of: localization.language) { _, _ in appState.reloadLicense() }
         }
         .windowStyle(.titleBar)
         // 菜单栏命令放进 `DoyahStudioCommands`：`.commands {}` 闭包只在场景建立时求值一次，

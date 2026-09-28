@@ -162,7 +162,12 @@ struct DiagnosisPanel: View {
     // MARK: 资料块（复制去问模型）
 
     private var promptSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.s) {
+        // 提示词的语言 = **当前界面语言**（宿主语境优先）：这段资料是给用户看的、也是
+        // 他要粘去问模型的，跟着界面走才不出现「英文界面上贴一段中文资料」（队列 L-47）。
+        let promptText = appState.diagnosisContext.boundedPromptText(
+            language: LocalizationManager.shared.effectiveLanguage
+        )
+        return VStack(alignment: .leading, spacing: Spacing.s) {
             Text(L(.diagnosisPromptSection))
                 .font(Theme.font(.title))
             Text(L(.diagnosisPromptHint))
@@ -172,12 +177,12 @@ struct DiagnosisPanel: View {
             HStack {
                 Button(L(.commonCopy)) {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(appState.diagnosisContext.boundedPromptText(), forType: .string)
+                    NSPasteboard.general.setString(promptText, forType: .string)
                 }
                 .disabled(appState.diagnosisEvidence.isEmpty)
                 Spacer()
             }
-            Text(appState.diagnosisContext.boundedPromptText())
+            Text(promptText)
                 .font(Theme.font(.mono))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)

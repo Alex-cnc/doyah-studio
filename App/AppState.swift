@@ -384,7 +384,8 @@ final class AppState: ObservableObject {
     ///
     /// 构造 `AppState` 时就同步读一次：读一个小文件而已，而"先按全量画出来、稍后再偷偷改掉"
     /// 会让用户在心里数过一遍的图标发生变化（启动瞬间闪出未授权的区，然后消失）。
-    @Published private(set) var licenseLoad: LicenseLoader.LoadResult = LicenseLoader.load()
+    @Published private(set) var licenseLoad: LicenseLoader.LoadResult =
+        LicenseLoader.load(language: LocalizationManager.shared.effectiveLanguage)
 
     /// 「版本与许可证」页的呈现开关。
     @Published var isAboutLicensePresented = false
@@ -429,36 +430,23 @@ final class AppState: ObservableObject {
 
     /// 重新读许可证 —— 用户刚把许可证文件放进去时用，**不用重启**。
     func reloadLicense() {
-        licenseLoad = LicenseLoader.load()
+        licenseLoad = LicenseLoader.load(language: LocalizationManager.shared.effectiveLanguage)
         ensureActivitySelectionVisible()
         statusMessage = licenseSummary
     }
 
-    /// 许可证状态的一句话，**按界面当前语言取键**。
+    /// 许可证状态的一句话。
     ///
-    /// 为什么不直接用 `LicenseLoader.summary(for:)`：那个 Core 函数固定中文，
-    /// 放在界面上就会"切到英文这一行还是中文"（R-45 记的就是这一类）。
-    /// 界面这一层一律走 `L(...)`；Core 那份留给日志 / CLI。
+    /// **不再自己抄一份**（队列 L-65）：此前这里是 `LicenseLoader.summary(for:)` 的**副本** ——
+    /// 因为那一份把语言写死成中文，界面上切到英文时这一行仍是中文。代价是**两份实现会漂移**，
+    /// 而且已经漂了：界面这份把 `.unreadable` 的**原因丢掉了**（只显示「读不出来」，
+    /// 不显示为什么），Core 那份（日志 / CLI）却说了原因。现在 Core 那份收 `language:`
+    /// （语言由调用方给定），界面直接用它 —— **一句话只有一个出处**。
     var licenseSummary: String {
-        if case .unreadable = licenseLoad.source {
-            // 文件在但读不出来：与"还没放"分开 —— 两者的用户动作完全不同（去拿 vs 重下）。
-            return L(.licenseUnreadable)
-        }
-        let entitlements = licenseLoad.entitlements
-        switch entitlements.basis {
-        case .licensed:
-            return L(.licenseActive)
-        case .missingLicense:
-            return L(.licenseMissing)
-        case .expired(let date):
-            return L(.licenseExpired, ISO8601DateFormatter().string(from: date))
-        case .invalidSignature:
-            return L(.licenseInvalidSignature)
-        case .unsupportedVersion(let version):
-            return L(.licenseFromFuture, String(version))
-        case .unknownEdition:
-            return L(.licenseUnknownEdition)
-        }
+        LicenseLoader.summary(
+            for: licenseLoad,
+            language: LocalizationManager.shared.effectiveLanguage
+        )
     }
 
     /// 「账户」占位说明（R-23：语义未定，只放占位不实现登录）。
@@ -6222,6 +6210,10 @@ final class AppState: ObservableObject {
         diagnosisMessage = nil
         defer { diagnosisIsGathering = false }
 
+        // 证据里的文案（「查到了，但没有行」这类标注）与提示词同一种语言：
+        // 取的是**当前界面语言**（宿主语境优先），队列 L-47 —— 此前 Core 写死中文，
+        // 英文界面上「给模型的资料」整块是中文。
+        let language = LocalizationManager.shared.effectiveLanguage
         let dialect = SQLDialectFactory.make(for: configuration.dbType)
         var collected: [DiagnosisEvidence] = []
         do {
@@ -6231,20 +6223,25 @@ final class AppState: ObservableObject {
                 let id = DiagnosisContextBuilder.evidenceID(index: index)
                 if item.kind == .statement {
                     collected.append(
-                        DiagnosisContextBuilder.makeEvidence(id: id, kind: .statement, sql: item.sql, rows: [])
+                        DiagnosisContextBuilder.makeEvidence(
+                            id: id, kind: .statement, sql: item.sql, rows: [], language: language
+                        )
                     )
                     continue
                 }
                 do {
                     let rows = try await runDiagnosisQuery(item.sql, on: service)
                     collected.append(
-                        DiagnosisContextBuilder.makeEvidence(id: id, kind: item.kind, sql: item.sql, rows: rows)
+                        DiagnosisContextBuilder.makeEvidence(
+                            id: id, kind: item.kind, sql: item.sql, rows: rows, language: language
+                        )
                     )
                 } catch {
                     // 取不到就是取不到：把服务端说的话带上（"扩展没装"和"权限不够"要分得开）。
                     collected.append(
                         DiagnosisContextBuilder.makeEvidence(
                             id: id, kind: item.kind, sql: item.sql, rows: nil,
+                            language: language,
                             failureReason: error.localizedDescription
                         )
                     )
@@ -6276,11 +6273,15 @@ final class AppState: ObservableObject {
     }
 
     /// 解读模型回答：采纳有依据的、拒绝没依据的（判据在 Core）。
+    ///
+    /// 语言与提示词**同一个值**（队列 L-47）：行格式的语法记号按语言取，
+    /// 英文提示词 + 中文语法记号会把整篇判成「没看懂」。
     func parseDiagnosisReply() {
         let configuration = selectedConnection
         diagnosisReport = DiagnosisAdvice.parse(
             reply: diagnosisReply,
             context: diagnosisContext,
+            language: LocalizationManager.shared.effectiveLanguage,
             databaseType: configuration?.dbType ?? .postgresql,
             policy: ExecutionSafetyPolicy.policy(
                 for: selectedConnection.map { ConnectionAppearance(environment: $0.environment, colorTag: $0.colorTag) } ?? ConnectionAppearance(),

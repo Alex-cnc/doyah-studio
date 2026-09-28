@@ -11,7 +11,9 @@
 #   ② **清单之外**的任何 `Scripts/*.sh`：不许出现本机集群 / 217 的连接字面量（新脚本一律直接连 217，
 #      或用 lib —— 前者要连库，后者才需要登记）；
 #   ③ lib 自己必须真的持有那三档与本机集群的默认值（否则「把字面量删掉」也能骗过 ① ②）；
-#   ④ 本清单与 `Scripts/real-db-evidence-baseline.json` 的条目对账（两份事实不许各说各话）。
+#   ④ 本清单与 `Scripts/real-db-evidence-baseline.json` 的条目对账（两份事实不许各说各话）；
+#   ⑤ **旁路专用的 `DOYAH_TEST_REMOTE_*`**（直接连 217 的第二条路）必须逐条登记在
+#      `Scripts/remote-bypass-scripts.json`（理由写清、改完正路要销账）—— 2026-09-28 循环 L-62 起。
 #
 # 门禁：`python3 Scripts/check-script-env-parameterization.py`（闭环第 13 项）
 # 负例：`python3 Scripts/test-script-env-gates.py`
@@ -19,6 +21,10 @@
 # 两类（判据一视同仁，分开只为记账）：
 #   [local-cluster] 本机过渡期要起一份本机集群（拿到 217 专用库后，这段会逐脚本消失）
 #   [remote-only]   不建集群、不建库，只对一台常驻实例做只读核对
+#
+# **2026-09-28 循环 L-62**：`[remote-only]` 原先那四条（表结构 / 对象 DDL / 流式导出 / 索引外键）
+# 已改走共用入口 —— 本机档起集群、远程档走四项齐全的专用库 ⇒ 转入 `[local-cluster]`，
+# 该组**暂时为空**（留着是因为它代表一种真实形态：不建集群、只对常驻实例做只读核对）。
 
 # [local-cluster]
 test-backup-restore
@@ -26,6 +32,7 @@ test-cli-failure-readability
 test-connection-errors
 test-copy-import
 test-csv-encoding
+test-cursor-export
 test-data-import
 test-database-stats
 test-diagnosis
@@ -36,6 +43,7 @@ test-keepalive
 test-local-query-path
 test-maintenance
 test-mcp
+test-object-ddl
 test-object-search
 test-query-parameters
 test-restore-resume
@@ -48,11 +56,9 @@ test-slow-queries
 test-ssh-tunnel
 test-synthetic-data
 test-table-export
+test-table-index-fk
+test-table-structure
 test-xlsx-export
 test-xlsx-import
 
 # [remote-only]
-test-cursor-export
-test-object-ddl
-test-table-index-fk
-test-table-structure

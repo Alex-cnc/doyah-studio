@@ -12,7 +12,9 @@
   ① 清单里的脚本：存在 + `source` 了 lib + 调了 `doyah_test_env_summary`；
   ② 清单之外的任何 `Scripts/*.sh`：不许出现连接字面量（新脚本要么用 lib、要么登记进清单）；
   ③ lib **自己**必须持有那三档集群与本机二进制路径的默认值（不许把字面量搬到"没有"里去）；
-  ④ 清单与 `Scripts/real-db-evidence-baseline.json` 对账（两份事实不许各说各话）。
+  ④ 清单与 `Scripts/real-db-evidence-baseline.json` 对账（两份事实不许各说各话）；
+  ⑤ **旁路**：`Scripts/*.sh` 里出现 `DOYAH_TEST_REMOTE_*`（直连 217 的第二条路）必须逐条登记在
+     `Scripts/remote-bypass-scripts.json`；登记了却已不再旁路 ⇒ 陈旧报红（改完正路要销账）；理由为空 ⇒ 报红。
 
 用法：
     python3 Scripts/check-script-env-parameterization.py            # 人读结论，失败非零退出
@@ -30,6 +32,10 @@ SCRIPTS = ROOT / "Scripts"
 LIB = SCRIPTS / "lib" / "test-env.sh"
 MANIFEST = SCRIPTS / "real-db-scripts.txt"
 BASELINE = SCRIPTS / "real-db-evidence-baseline.json"
+BYPASS_REGISTRY = SCRIPTS / "remote-bypass-scripts.json"
+
+# 旁路标记：只有 `DOYAH_TEST_REMOTE_*` 那一族（「只对 217 做只读核对」的第二条路）
+BYPASS_TOKEN = "DOYAH_TEST_REMOTE_"
 
 # 连接字面量：谁都不许在 lib 之外写
 FORBIDDEN_TOKENS = [
@@ -153,7 +159,52 @@ def check():
             problems.append("清单里的这些脚本既不在证据基线里、也没登记为环境跳过："
                             + "、".join(sorted(unaccounted)))
 
-    return problems, notes, names, groups
+    # ---- ⑤ 旁路 217（`DOYAH_TEST_REMOTE_*`）必须登记在册 ----
+    registered = []
+    if BYPASS_REGISTRY.exists():
+        try:
+            registry = json.loads(BYPASS_REGISTRY.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            problems.append(f"旁路台账 {BYPASS_REGISTRY.name} 不是合法 JSON：{error}")
+            registry = {}
+        entries = registry.get("entries", [])
+        if not isinstance(entries, list):
+            problems.append(f"旁路台账 {BYPASS_REGISTRY.name} 的 entries 不是列表")
+            entries = []
+        for entry in entries:
+            script = str(entry.get("script", "")).strip()
+            reason = str(entry.get("reason", "")).strip()
+            if not script:
+                problems.append("旁路台账里有一条没写 script")
+                continue
+            registered.append(script)
+            if not reason:
+                problems.append(f"旁路台账 {script} 没写理由（reason 空）—— 旁路是要解释的")
+    else:
+        problems.append(f"找不到旁路台账 {BYPASS_REGISTRY.name}（判据 ⑤ 要拿它跟事实对账）")
+
+    bypassing = []
+    for path in sorted(SCRIPTS.glob("*.sh")):
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.strip().startswith("#"):
+                continue
+            if BYPASS_TOKEN in line:
+                bypassing.append(path.name)
+                if path.name not in registered:
+                    problems.append(
+                        f"{path.name}:{i} 用了旁路 {BYPASS_TOKEN}*（直接连 217）却没登记在 "
+                        f"{BYPASS_REGISTRY.name} 里 —— 旁路要么改走共用入口，要么逐条写清理由"
+                    )
+                break
+    for script in registered:
+        if script not in bypassing:
+            problems.append(
+                f"旁路台账登记了 {script}，但它已经不再旁路（{BYPASS_TOKEN}*）—— 改走正路后要销账；"
+                f"陈旧登记与漏登记一样会让人误判现状"
+            )
+    notes.append(f"旁路 217 的脚本 {len(bypassing)} 个（逐条登记理由）：{'、'.join(bypassing) or '无'}")
+
+    return problems, notes, names, groups, bypassing, registered
 
 
 def main():
@@ -161,7 +212,7 @@ def main():
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    problems, notes, names, groups = check()
+    problems, notes, names, groups, bypassing, registered = check()
 
     if args.json:
         print(json.dumps({
@@ -170,6 +221,8 @@ def main():
             "notes": notes,
             "declared": names,
             "groups": groups,
+            "bypassing": bypassing,
+            "registeredBypass": registered,
         }, ensure_ascii=False, indent=2))
         return 1 if problems else 0
 

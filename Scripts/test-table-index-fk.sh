@@ -3,22 +3,30 @@
 #
 # 验两件事：① 代码里那两条元数据查询在真机上给对了清单（否则界面上的"删除"无从谈起）；
 # ② 生成出来的 CREATE INDEX / ADD CONSTRAINT / DROP 语句在真机上真的能执行。
+#
+# 2026-09-28（循环 L-62）：本脚本原先**无条件**连 217 的业务库（`zxvmax`），本机跑必红
+# （`pg_hba` 未放行），于是 alpha 主链里「表结构-索引外键」这一段**没有本机证据**。
+# 现在改走共用入口：本机档 = 本机临时集群 + trust（无口令）；远程档 = 远程专用库。
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
 CLI=".build/debug/DoyahCLI"
-ACCOUNT="D264B21B-1880-4E73-A2D0-59A3F8E4D7EC"
 S="doyah_idx_check"
 
-# 本脚本不建集群、不建库，只对一台常驻实例做只读核对 —— 没有「迁移第 2 步」要改的段落
+# 本脚本不建库（临时对象全装在自己建的那个 schema 里），但**要先确保实例在跑** ——
+# 本机档由共用入口起集群（远程档是 no-op），退出时只关「本脚本起的」那一份。
 DOYAH_TEST_SCRIPT_READY_FOR_REMOTE=1
 # 连接信息（本机过渡集群 / 远程专用库）由共用入口决定 —— 三档端口与目录只写在它里面
 source "$(cd "$(dirname "$0")" && pwd)/lib/test-env.sh"
 doyah_test_env_summary
 
-export PGHOST="${DOYAH_TEST_REMOTE_HOST}" PGUSER="${DOYAH_TEST_REMOTE_USER}" PGDATABASE="${DOYAH_TEST_REMOTE_DATABASE}" PGSSLMODE="${DOYAH_TEST_PGSSLMODE}"
-PGPASSWORD="$("$CLI" secret get --id "$ACCOUNT")"
-export PGPASSWORD
+# 连接只走共用入口这一条路。**为什么改**：此前这里是写死 217 的旁路 + 「取密文口令」的第二种
+# 取法，于是本脚本**在业务库上建 schema**，而文件头注释自称「只读核对」（名实不符）；
+# 共用入口的远程档有安全闸，业务库直接拒绝（SRS §0.9 E3 / ADR-32）。
+doyah_test_env_start_cluster
+trap 'doyah_test_env_stop_cluster' EXIT
+doyah_test_env_export_connection
+export PGDATABASE="${DOYAH_TEST_PGDATABASE}"
 
 fail=0
 check() { if [ "$2" -eq 0 ]; then echo "  ✅ $1"; else echo "  ❌ $1"; fail=1; fi; }

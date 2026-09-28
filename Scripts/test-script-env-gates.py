@@ -25,6 +25,7 @@ SCRIPTS = ROOT / "Scripts"
 GATE = SCRIPTS / "check-script-env-parameterization.py"
 LIB = SCRIPTS / "lib" / "test-env.sh"
 MANIFEST = SCRIPTS / "real-db-scripts.txt"
+BYPASS = SCRIPTS / "remote-bypass-scripts.json"
 
 SAMPLE = SCRIPTS / "test-er-diagram.sh"
 passed = []
@@ -114,6 +115,36 @@ def gate_negatives():
         expect_gate_red("N-07 清单登记了不存在的脚本 → 门禁报红", "不存在")
         MANIFEST.write_text(MANIFEST.read_text(encoding="utf-8").replace("test-no-such-script\n", ""),
                             encoding="utf-8")
+
+        # ---- 判据 ⑤（旁路 217 必须登记）：四条都要能红出来 ----
+        # N-08 新写一处旁路、却没进旁路台账（「悄悄扩散」那条路）
+        SAMPLE.write_text(text.replace('PORT="${DOYAH_TEST_PGPORT}"',
+                                       'PORT="${DOYAH_TEST_PGPORT}"\n'
+                                       'export PGHOST="${DOYAH_TEST_REMOTE_HOST}"'),
+                          encoding="utf-8")
+        expect_gate_red("N-08 脚本里新写一处 217 旁路（未登记）→ 门禁报红", "旁路")
+        SAMPLE.write_text(text, encoding="utf-8")
+
+        registry_text = BYPASS.read_text(encoding="utf-8")
+
+        # N-09 台账里登记一个**已经不再旁路**的脚本（陈旧登记 ⇒ 现状会被误判）
+        registry = json.loads(registry_text)
+        registry["entries"][0]["script"] = "test-er-diagram.sh"
+        BYPASS.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
+        expect_gate_red("N-09 旁路台账登记了已不再旁路的脚本 → 门禁报红（陈旧）", "销账")
+        BYPASS.write_text(registry_text, encoding="utf-8")
+
+        # N-10 台账里的理由写空（「登记了但没说为什么」= 没登记）
+        registry = json.loads(registry_text)
+        registry["entries"][0]["reason"] = "   "
+        BYPASS.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
+        expect_gate_red("N-10 旁路台账里理由写空 → 门禁报红", "没写理由")
+        BYPASS.write_text(registry_text, encoding="utf-8")
+
+        # N-11 台账本身写坏（不是合法 JSON）—— 不许静默通过
+        BYPASS.write_text("{ 这不是 JSON", encoding="utf-8")
+        expect_gate_red("N-11 旁路台账不是合法 JSON → 门禁报红（解析失败不静默）", "不是合法 JSON")
+        BYPASS.write_text(registry_text, encoding="utf-8")
 
     expect_gate_green("还原后门禁全绿")
 

@@ -221,6 +221,41 @@ public enum ConnectionFailure {
         )
     }
 
+    /// **服务端自己说了话**：查询类错误（SQLSTATE 42P01 表不存在 / 42601 语法错 / 42703 列不存在…）
+    /// 在 `describe` 里是**有意不说**的（那是调用方自己的路，不是连接问题），`describeNonConnection`
+    /// 也不接它们 ⇒ 调用方只剩一句 `The operation couldn't be completed…`，**服务端说过的原话被丢掉**
+    /// （队列 L-20 ③：`readableServerText` 早有这份能力，CLI 那一侧没接）。
+    ///
+    /// 这一档**不翻译、不归类、不给方向结论**（没有猜测，也就没有「把猜测当结论」的风险），
+    /// 只把**服务端原话**端出来（乱码经 `readableServerText` 处理），连同 SQLSTATE 一起 ——
+    /// 用户照着 `relation "t" does not exist` 就能看出是自己的表名写错，而不是网络或口令。
+    ///
+    /// **只在服务端确实给了 `sqlState` 与 `message` 时才有这一档**（缺一返回 `nil`，退回调用方的
+    /// 原样输出，与改动前**逐字一致**）：没有码就没有可搜的锚点，没有话就没有可说的内容。
+    public static func describeServerSide(_ error: any Error, language: AppLanguage = .simplifiedChinese) -> Description? {
+        guard let psql = error as? PSQLError else { return nil }
+        return describeServerSide(
+            sqlState: psql.serverInfo?[.sqlState],
+            message: psql.serverInfo?[.message],
+            language: language
+        )
+    }
+
+    /// 纯函数：服务端消息 → 「服务端说：…（SQLSTATE …）」（单测入口；不依赖驱动类型）。
+    public static func describeServerSide(
+        sqlState: String?,
+        message: String?,
+        language: AppLanguage = .simplifiedChinese
+    ) -> Description? {
+        guard let state = sqlState?.trimmingCharacters(in: .whitespacesAndNewlines), !state.isEmpty,
+              let raw = message?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty
+        else { return nil }
+        return Description(
+            summary: LocalizedStrings.format(.serverSideSaid, language: language, readableServerText(raw), state),
+            code: state
+        )
+    }
+
     /// 解析失败 → 「人话 + 建议 + 错误码」。`code` 用 `hostUnresolvable`（没有 SQLSTATE 可言）。
     static func describe(resolutionFailure failure: HostResolutionFailure, target: Target? = nil) -> Description {
         let address = target ?? Target(host: failure.host, port: failure.port)

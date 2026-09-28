@@ -36,6 +36,7 @@ FILES = [
     "App/Utilities/ErrorPresenter.swift",
     "App/Views/ConnectionFormView.swift",
     "CLI/main.swift",
+    "CLI/CLIFailureText.swift",
 ]
 
 passed: list[str] = []
@@ -225,18 +226,21 @@ def main() -> int:
     print("\n== K) 中性归因的出口断了（CLI 里不再接这一档）")
 
     def drop_cli_exit(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace(
-            "ConnectionFailure.describeNonConnection(error)", "", 1))
+        edit(tree, "CLI/CLIFailureText.swift", lambda text: text.replace(
+            "            ?? ConnectionFailure.describeNonConnection(error)\n", "", 1))
 
     expect("CLI 不接中性归因 → 报红（用户只剩英文调试串）", drop_cli_exit, "中性归因出口")
 
-    print("\n== M) 中性归因出口被全部删掉（两条路都不接了）")
+    print("\n== M) 台账还指着旧文件（链已收进 CLIFailureText，`CLI/main.swift` 里一处都没有）")
 
-    def drop_all_cli_exits(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace(
-            "ConnectionFailure.describeNonConnection(error)", ""))
+    def ledger_points_at_old_file(tree: Path) -> None:
+        data = ledger_of(tree)
+        for entry in data["neutralFallback"]:
+            if entry["file"] == "CLI/CLIFailureText.swift":
+                entry["file"] = "CLI/main.swift"
+        write_ledger(tree, data)
 
-    expect("CLI 两处出口都不在 → 报红", drop_all_cli_exits, "中性归因出口")
+    expect("台账指旧文件 → 报红（链已经不在那儿了）", ledger_points_at_old_file, "中性归因出口")
 
     print("\n== N) 台账没写「至少几处」（只登记「有这个调用」）")
 
@@ -253,11 +257,11 @@ def main() -> int:
     def ledger_overstates_sites(tree: Path) -> None:
         data = ledger_of(tree)
         for entry in data["neutralFallback"]:
-            if entry["file"] == "CLI/main.swift":
+            if entry["file"] == "CLI/CLIFailureText.swift":
                 entry["minCallSites"] = 3
         write_ledger(tree, data)
 
-    expect("台账写 3 处而代码只有 2 处 → 报红", ledger_overstates_sites, "中性归因出口")
+    expect("台账写 3 处而链里只有 1 处 → 报红", ledger_overstates_sites, "中性归因出口")
 
     print("\n== K'') 语言表整个读不到（那句话没地方放）")
 
