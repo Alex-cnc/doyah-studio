@@ -86,18 +86,6 @@ function Invoke-DoyahSharedGate {
   return $rc
 }
 
-function Get-DoyahDotnet {
-  # 本机实测：dotnet 可能**装了但没进 PATH**（C:\Program Files\dotnet\dotnet.exe）
-  $exe = $null
-  $command = Get-Command 'dotnet' -ErrorAction SilentlyContinue
-  if ($command) { $exe = $command.Source }
-  elseif (Test-Path 'C:\Program Files\dotnet\dotnet.exe') { $exe = 'C:\Program Files\dotnet\dotnet.exe' }
-  if (-not $exe) { return $null }
-  $sdks = @()
-  try { $sdks = @(& $exe '--list-sdks' 2>$null | Where-Object { $_ }) } catch { $sdks = @() }
-  return @{ Exe = $exe; Sdks = $sdks }
-}
-
 function Test-DoyahUtf8Bom {
   param([Parameter(Mandatory = $true)][string]$Path)
   $bytes = [System.IO.File]::ReadAllBytes($Path)

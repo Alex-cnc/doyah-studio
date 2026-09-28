@@ -19,7 +19,7 @@
 
 **未接网的账（如实登记，别当成已完成）**：
 
-- `Tools/check-core-boundary.ps1` 现只认 C# 形态（`.csproj` / `DllImport`）⇒ **换栈后需按 Rust 形态改写**（扫 `Cargo.toml` 依赖与源码里的 GUI / 平台 crate 名）。
+- ~~`Tools/check-core-boundary.ps1` 只认 C# 形态~~ ⇒ **已销账（第 25 轮）**：判据按 **Rust 形态**重建（`Cargo.toml` 依赖面 + `Core/**/*.rs` 源码面 + 空跑判红），判据与 **7 例自测**一次调用里都真跑，见 `Tools/README.md`。
 - `Tools/check-design-tokens.ps1` 的 Windows 侧棘轮要等 `App/` 落地（规则名对齐 + 令牌源在盘两项已 ✅）。
 - 契约侧 **L-46**（语言表模板 ↔ 调用点实参）判的是 Swift 源码 ⇒ 本端等价判据待本地化层落地后按同规则名重建。
 

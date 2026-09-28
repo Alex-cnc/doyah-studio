@@ -48,10 +48,11 @@ pwsh -File windows\Tools\verify-all.ps1 -Base HEAD~1                            
 | （§8.5.6-3 结果网格压力基准，2026-09-28 开工令）| `check-grid-bench.ps1` | ✅ 跑（4 万行缩规模实跑 `grid-bench` + **空跑不许通过**；全量读数见概要设计 §8.5.7 与 `Bench/grid/README.md`） |
 | （§8.3 平台中立性）| `check-platform-neutrality.ps1`
 | （§8.3 设计令牌棘轮）| `check-design-tokens.ps1` | ⚠ 判据①规则名对齐 + ②令牌源在盘 = ✅；③Windows 侧棘轮 ⏭ 跳过（`windows\App` 未建） |
-| （领域层边界）| `check-core-boundary.ps1` | ⏭ 跳过 —— **判据现只认 C# 形态**（`.csproj` / `DllImport`），而本侧已换栈为 Rust ⇒ **等价判据待按 Rust 形态改写**（登记在 `windows/README.md` 的未接网清单）|
+| （领域层边界）| `check-core-boundary.ps1` | ✅ 跑（**2026-09-28 第 25 轮按 Rust 形态重建** —— 旧判据只认 C# 形态，此前一直如实跳过）：`Core/Cargo.toml` 依赖面 + `Core/**/*.rs` 源码面（GUI / 平台 crate、平台专有 std、FFI 形状）+ **空跑不许通过**；**判据与它的 7 例自测在同一次调用里都真跑**（`-SkipSelfTest` 只给手工快跑）|
 
 本机实测（Windows 11 / Windows PowerShell 5.1.26100.9549 / `python` 探得 `py -3`）：
-`verify-all.ps1` = **13 项中跑 10 / 跳过 2 / 失败 1**（第 24 轮换栈后；**唯一判红 = 第 9 项独占节越界，原因是本地落后远端且尚未合并** ⇒ 合并后复跑见提交信息）；跳过 2 项 = 领域层边界 / 设计令牌棘轮（都因判据尚未按 Rust / 表示层形态改写）；加 `-RequireAll` = **判红（跳过即红）**。
+`verify-all.ps1` = **13 项中跑 12 / 跳过 1 / 失败 0**（第 25 轮实测，读数同时记在 `Docs/概要设计.md` §8.5.7）：**跳过 1 项 = 设计令牌棘轮**（等 `windows\App` 表示层落地；规则名对齐与令牌源两项已 ✅）。加 `-RequireAll` = **判红（跳过即红）**。
+第 24 轮换栈后的那一次读数（13 项中跑 10 / 跳过 2 / 失败 1）留痕在此：判红那一项 = 本地落后远端、merge 尚未提交时的独占节越界，合并后即绿；跳过第 2 项 = 领域层边界，第 25 轮已按 Rust 形态重建。
 第 22 轮另存一对前后证据：**修复前第 ③ 项假红**（判据 `rc 0` 但 stderr 有 `SyntaxWarning`）→ `_common.ps1` 加「只认退出码」护栏后 **跑 8 / 跳过 4 / 失败 0**（见坑 6）。
 
 ## 注入自证（2026-09-27，逐例：注入 → 红 → 还原 → 逐字节一致 → 绿）
@@ -61,7 +62,7 @@ pwsh -File windows\Tools\verify-all.ps1 -Base HEAD~1                            
 | 台账给 Windows 登记 1 条 overrides（工程未建）| 如实性判据点名判红 | ❌「未开工却登记了 1 条 overrides ⇒ 不如实」→ 还原后 RESULT: PASS |
 | `check-doc-tables.ps1 -RequireAll`（缺 5 份本地文档）| 跳过即红 | RESULT: FAIL |
 | 子闸门 `check-doc-tables.ps1` 去掉 UTF-8 BOM | verify-all 第 1 项判红 | 跑 5 / 跳过 4 / 失败 2 → RESULT: FAIL |
-| 夹具 `windows/Core` 开 `UseWPF` + 写 `DllImport` | 领域层边界判红并点名 | 两条都点名 → 还原后转绿 |
+| 第 25 轮（真仓库三例）：① `windows/Core/Cargo.toml` 的 `[dependencies]` 加 `tauri = "2"`；② `Core/src/lib.rs` 加 `use windows::core::*;`；③ 同文件加 `extern "C" { fn probe(); }` | 领域层边界判红并点名 `文件:行号` | 三例全中：`Cargo.toml:8 依赖面命中 GUI / 平台 crate：tauri` / `windows\Core\src\lib.rs:13 出现 use GUI / 平台 crate`（同行的 crate 路径规则亦命中）/ `lib.rs:13 出现 FFI：extern "C"` ⇒ 逐例**按原始字节还原**（sha256 一致）后净跑 `RESULT: PASS (exit 0)` |
 | 往 §8.5.5 加一条只在本节出现的 `P-26`（不写进 §4 / §10.9）| 第 11 项（`P-*` 对账）判红并点名该行 | ❌ `Docs/概要设计.md:1039：§8.5.5 已落条目 P-26，但它还没进 §10.9 / §4`、`RESULT: FAIL (exit 1)` ⇒ `git checkout HEAD --` 还原后**逐字节一致**、转绿 RC 0 |
 
 ## 六条实测坑（别重踩）
@@ -81,3 +82,5 @@ pwsh -File windows\Tools\verify-all.ps1 -Base HEAD~1                            
 - 新增 `.ps1` 后**必须**带 UTF-8 BOM，并把它挂进 `verify-all.ps1` 的项列表（否则它等于不在闭环里）；挂进去时**同步 `$total` 与每条 `Write-DoyahStep "N/$total"` 的步号**（第 22 轮实测：只改注释不改步号 ⇒ 打印出 `11/12`）。
 - 表示层（`windows\App`）落地时同时落 `windows\Tools\design-token-baseline.json`（棘轮基线，形态同 mac 侧 `Scripts/design-token-baseline.json`：`files → 文件 → 规则 → 上限`）。
 - 判据侧（`Scripts/`）属对侧共享设施：本侧只调用、只提建议，不自己改。
+
+- **换栈 / 换形态时，「跳过」不算完成**：判据形态对不上工程时（先例 = 第 24 轮换栈后 `check-core-boundary.ps1` 仍只认 C# 形态）必须**按新形态重建**，并把「已跳过 ⇒ 已重建」这一步同步进本文件与 `windows/README.md` 的未接网清单 —— 跳过只是**如实**，不是**已覆盖**。
