@@ -4107,6 +4107,16 @@ final class AppState: ObservableObject {
 
     /// 生成行（纯计算，不碰库）。
     func generateSyntheticRows(_ spec: SyntheticTableSpec) throws -> [[String?]] {
+        try Self.syntheticRows(for: spec)
+    }
+
+    /// 「规格 → 行」的**唯一出处**（纯计算，`nonisolated`：不碰任何实例状态）。
+    ///
+    /// 为什么要有它（队列 L-60）：合成数据面板的**注入那一路**要在 `init` 里就把行算好
+    /// （`@EnvironmentObject` 在 `init` 里还没有值 ⇒ 拿不到这个实例），查库那一路则在拿到结构之后
+    /// 算 —— 两处必须是同一份实现，否则「同一个规格、两条路给不同的行」（L-50 的病根就是两处各写一遍）。
+    /// 生成失败时的错误措辞也因此逐字一致。
+    nonisolated static func syntheticRows(for spec: SyntheticTableSpec) throws -> [[String?]] {
         let issues = SyntheticDataGenerator.issues(in: spec)
         guard issues.isEmpty else {
             throw AppError.invalidConfiguration(issues.joined(separator: "；"))

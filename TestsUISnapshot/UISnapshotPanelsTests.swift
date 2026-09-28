@@ -781,6 +781,144 @@ final class UISnapshotPanelsTests: XCTestCase {
         _ = seeded
     }
 
+    // MARK: - L-60：合成数据面板的纯空态（2026-09-28 第 63 轮）
+
+    /// **合成数据面板（`FR-AI-07`）的纯空态**（队列 L-60）。
+    ///
+    /// 为什么此前拍不到：`spec` 由 `.task` **从真库结构推**出来 ⇒ 离屏（没连库）只能停在
+    /// 「取不到结构」那一支，而那是**错误态不是空态**（L-16 第 5 批如实登记）。本轮给面板开了
+    /// **面板级注入口子**（`initialSpec`，形状照 L-12 / L-18），这个态才第一次可见。
+    ///
+    /// **「什么算空」的口径（本轮拍的那个量）**：面板按**一张表**打开（`object` 是入参）⇒
+    /// 「结构取到了、但一张表都没有」这一支**根本不存在**（这里没有「表列表」这种东西）——
+    /// 队列原文那句按实测纠正为「结构取到了、这一次**一行都没生成**」。真正可达的纯空态就这一个：
+    /// `rowCount = 0` ⇒ 生成器产出 0 行 ⇒ 预览区只剩表头那一行；此时「导出 / 写入」本来就灰着
+    /// （`.disabled(rows.isEmpty || spec == nil)`，与 §3.26「灰着」同族），缺的是**那句「为什么」**。
+    /// 「0 列」**不另开空态分支**：真表至少一列（`SyntheticSpecBuilder` 只是把空名字的列滤掉），
+    /// 本侧在真库上构造不出这一支 ⇒ 那一路仍走错误态（「至少要定义一列」），如实登记、不硬造分支。
+    ///
+    /// **三件要证明的事**：
+    ///   ① 空态那句文案**到了渲染上**（`Record.localizedStrings` 里有它）—— 注入的态没被 `.task`
+    ///      覆盖掉，且这一遍**没去查库**（`errorNotConnected` 不在）；
+    ///   ② **注入没有跳过生成**：同一个口子喂一份 `rowCount = 10` 的规格 ⇒ 空态那句**不再出现**。
+    ///      这一条只有在「注入的初值**第一遍渲染就位**」时才判得动（`Record.localizedStrings` 记的是
+    ///      整个渲染过程的**全部**文案，首帧画过的画面也会留在里面）—— 本轮第一版就是这么红的：
+    ///      注入只给了 `spec`、`rows` 留空，首帧画出「一行都没有」再被 `.task` 换成真行 ⇒ 记录里
+    ///      两遍文案都在、判据判不了「这一遍到底有没有生成」。修法 = 注入时把行也算好（见面板 `init`）。
+    ///      `rows` 只有 `AppState.syntheticRows(for:)` 一个写入点 ⇒「空态那句不在」= 生成真的跑出了行；
+    ///   ③ **前提自检**：同一份规格走**面板用的那个入口**在 Core 里 `0 → 0 行`、`10 → 10 行`
+    ///      （不是靠界面自己判空）。
+    ///
+    /// 诚实边界：注入的是**面板级初值**，不是真库返回的结构 —— 它证明「拿到这样的规格时界面长什么样」，
+    /// 不证明「真库会返回这样的结构」；真机上「0 行」由用户把行数填 0 触发。与 L-12 / L-18 同一条边界。
+    @MainActor
+    func testSyntheticDataPanelEmptyRows() throws {
+        let host = makeEmptyHost()
+        XCTAssertTrue(host.state.connections.isEmpty, "本批要拍空态：不该有任何连接")
+        XCTAssertNil(host.state.selectedConnectionID, "本批要拍空态：不该有选中的连接")
+
+        let table = DatabaseObject(
+            id: "table:public.orders",
+            name: "orders",
+            kind: .table,
+            detail: "table",
+            database: "postgres",
+            schema: "public"
+        )
+
+        /// 夹具：形状与真库推出来的相同（主键 → 序列、非空列不给 NULL、可空列 10% NULL）。
+        func spec(rowCount: Int) -> SyntheticTableSpec {
+            SyntheticSpecBuilder.spec(
+                table: "orders",
+                schema: "public",
+                columns: [
+                    SyntheticSpecBuilder.ColumnShape(
+                        name: "id", typeName: "int4", isNullable: false, isPrimaryKey: true
+                    ),
+                    SyntheticSpecBuilder.ColumnShape(name: "sku", typeName: "varchar(32)", isNullable: false),
+                    SyntheticSpecBuilder.ColumnShape(name: "placed_at", typeName: "timestamptz"),
+                ],
+                rowCount: rowCount,
+                seed: 7
+            )
+        }
+
+        // ③ 前提自检（先判前提，再谈图）：「0 行」这个态要成立，前提是**面板用的那个入口**
+        //     （`AppState.syntheticRows(for:)`）对 0 行规格真的产出 0 行。
+        let zero = spec(rowCount: 0)
+        XCTAssertEqual(
+            try AppState.syntheticRows(for: zero).count, 0,
+            "前提不成立：0 行的规格竟然生成出了行 —— 那「空」就不是生成出来的"
+        )
+        XCTAssertEqual(
+            try AppState.syntheticRows(for: spec(rowCount: 10)).count, 10,
+            "前提不成立：10 行的规格没生成出 10 行"
+        )
+
+        // ① 纯空态：行数 0 ⇒ 一行都没生成。
+        let empty = try snapshotLightAndDark(
+            "synthetic-data-empty-rows",
+            // 面板自己钉了 `760×620`；宿主给同尺寸（L-61 那类「被垂直居中」的前提是宿主给多了）。
+            size: CGSize(width: 760, height: 620),
+            host: host
+        ) {
+            SyntheticDataPanel(object: table, initialSpec: zero)
+        }
+        assertInjectedCopy(empty, present: .syntheticPreviewEmpty, absent: .errorNotConnected)
+
+        // ② 对照（同一个口子、有行）：空态那句必须**不在**，且这一遍同样没去查库。
+        let filled = try snapshotLightAndDark(
+            "synthetic-data-injected-rows",
+            size: CGSize(width: 760, height: 620),
+            host: host
+        ) {
+            SyntheticDataPanel(object: table, initialSpec: spec(rowCount: 10))
+        }
+        XCTAssertEqual(empty.count, 2, "浅色 / 深色两遍都要拍到")
+        XCTAssertEqual(filled.count, 2, "浅色 / 深色两遍都要拍到")
+        for pair in filled {
+            for (index, language) in UISnapshot.coverageLanguages.enumerated() {
+                let record = pair.records[index]
+                let forbidden = UISnapshot.localizedText(language) { L(.syntheticPreviewEmpty) }
+                XCTAssertFalse(
+                    record.localizedStrings.contains(forbidden),
+                    "\(record.name)：\(record.language) 那遍出现了空态那句 —— 注入这条路把生成跳过了？"
+                )
+                let unconnected = UISnapshot.localizedText(language) { L(.errorNotConnected) }
+                XCTAssertFalse(
+                    record.localizedStrings.contains(unconnected),
+                    "\(record.name)：\(record.language) 那遍出现了「未选连接」—— 说明这一遍仍然去取数了"
+                )
+            }
+        }
+        // ④ 读图产出的真缺陷，顺手钉住：英文界面上**列规则描述印着中文**（`text(8…24 字符)` /
+        //    `timestamp(近 365 天)`）—— 那几个词原先**写死在 `describe(_:)` 的字符串插值里**，
+        //    一个 `L(...)` 都没用，所以中英两遍印的是同一句中文。现在规则描述进语言表 ⇒
+        //    机械判「英文那遍出现英文那一份、且不含中文那一份」，不必靠人眼盯着看。
+        //    注意期望值要**按界面同样的方式取**：数字先格式化成字符串再过 `%@`
+        //    （直接传 `Int` 会印出 `(null)` —— 正是 L-46 那一条要防的形状）。
+        let ruleText = UISnapshot.localizedText(.simplifiedChinese) { L(.syntheticRuleText, "8", "24") }
+        XCTAssertFalse(ruleText.contains("null"), "取期望值的方式错了：模板的 `%@` 收到了 Int？")
+        for pair in empty {
+            for (index, language) in UISnapshot.coverageLanguages.enumerated() {
+                let record = pair.records[index]
+                let mine = UISnapshot.localizedText(language) { L(.syntheticRuleText, "8", "24") }
+                XCTAssertTrue(
+                    record.localizedStrings.contains(mine),
+                    "\(record.name)：\(record.language) 那遍没有出现列规则描述「\(mine)」"
+                )
+                let other = UISnapshot.localizedText(
+                    language == .english ? .simplifiedChinese : .english
+                ) { L(.syntheticRuleText, "8", "24") }
+                XCTAssertFalse(
+                    record.localizedStrings.contains(other),
+                    "\(record.name)：\(record.language) 那遍出现了另一种语言的规则描述「\(other)」"
+                        + " —— 规则描述又写死语言了？"
+                )
+            }
+        }
+    }
+
     // MARK: - 清单
 
     override class func tearDown() {

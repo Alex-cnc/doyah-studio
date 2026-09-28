@@ -756,6 +756,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case syntheticSeed
     case syntheticColumns
     case syntheticPreview
+    case syntheticPreviewEmpty
     case syntheticGenerate
     case syntheticExport
     case syntheticWrite
@@ -767,6 +768,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case syntheticSpecIssue
     case syntheticAutoSpecNote
     case syntheticOverwrite
+    /// 列规则的人话描述（队列 L-60 读图产出）：`describe(_:)` 原先把「字符 / 位 / 项 / 近 N 天」
+    /// **写死在 `App/` 的字符串插值里** ⇒ 英文界面上印出中文（`text(8…24 字符)`）。
+    /// 文案进语言表，规则名与括号形状各语言自己写。
+    case syntheticRuleDecimal
+    case syntheticRuleText
+    case syntheticRuleWeighted
+    case syntheticRuleDateWithin
+    case syntheticRuleTimestampWithin
     case sessionTitle
     case sessionRefresh
     case sessionPermissionNote
@@ -2452,6 +2461,7 @@ public enum LocalizedStrings {
         .syntheticSeed: [.simplifiedChinese: "随机种子", .english: "Seed"],
         .syntheticColumns: [.simplifiedChinese: "列与生成规则", .english: "Columns and rules"],
         .syntheticPreview: [.simplifiedChinese: "预览（前几行）", .english: "Preview (first rows)"],
+        .syntheticPreviewEmpty: [.simplifiedChinese: "这一次一行都没有生成 —— 上面「行数」填 0 时就是 0 行；改成正数再点「生成预览」。", .english: "This run produced no rows — a row count of 0 yields none; enter a positive count and generate again."],
         .syntheticGenerate: [.simplifiedChinese: "生成预览", .english: "Generate preview"],
         .syntheticExport: [.simplifiedChinese: "导出 INSERT 到编辑器", .english: "Export INSERT to editor"],
         .syntheticWrite: [.simplifiedChinese: "写入目标表…", .english: "Write to table…"],
@@ -2463,6 +2473,14 @@ public enum LocalizedStrings {
         .syntheticSpecIssue: [.simplifiedChinese: "规格问题：%@", .english: "Spec issue: %@"],
         .syntheticAutoSpecNote: [.simplifiedChinese: "规则按表结构自动推断：主键用序列、非空列不给 NULL —— 生成的数据应当能直接插入", .english: "Rules are inferred from the table: primary keys use a sequence and NOT NULL columns never get NULL, so the rows should insert cleanly"],
         .syntheticOverwrite: [.simplifiedChinese: "先清空目标表（TRUNCATE）", .english: "Truncate the target table first"],
+        // 列规则描述（队列 L-60）：规则名、序与量词（「字符」/「chars」、「位」/「digits」）各语言自己写。
+        // **数字槽一律是 `%@`**：数字在调用点先格式化成字符串再进来 —— 模板只管语序与量词，
+        // 槽位永远不会收到 `Int`（L-46 那一族「模板 `%@` 收整数 ⇒ 界面印 `(null)`」在这里不可能发生）。
+        .syntheticRuleDecimal: [.simplifiedChinese: "decimal(%@…%@, %@ 位)", .english: "decimal(%@…%@, %@ digits)"],
+        .syntheticRuleText: [.simplifiedChinese: "text(%@…%@ 字符)", .english: "text(%@…%@ chars)"],
+        .syntheticRuleWeighted: [.simplifiedChinese: "weighted(%@ 项)", .english: "weighted(%@ entries)"],
+        .syntheticRuleDateWithin: [.simplifiedChinese: "date(近 %@ 天)", .english: "date(within %@ days)"],
+        .syntheticRuleTimestampWithin: [.simplifiedChinese: "timestamp(近 %@ 天)", .english: "timestamp(within %@ days)"],
         .sessionTitle: [.simplifiedChinese: "服务器会话", .english: "Server Sessions"],
         .sessionRefresh: [.simplifiedChinese: "刷新", .english: "Refresh"],
         .sessionPermissionNote: [.simplifiedChinese: "普通用户只能操作自己的会话（PostgreSQL 需同用户或 pg_signal_backend 权限）；「终止会话」会掐断整条连接，不可恢复", .english: "You can only act on your own sessions (PostgreSQL requires the same user or pg_signal_backend); terminating drops the whole connection and cannot be undone"],
