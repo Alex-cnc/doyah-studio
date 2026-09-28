@@ -41,7 +41,8 @@ Rust 侧（在 `windows/` 下，工作区）：
 
 ```bash
 cargo test --workspace            # Core 15 例 + 本目录 query 6 例 + ipc_contract 2 例
-cargo build --release --workspace # 产物 windows/target/release/doyah-studio.exe
+cargo build --release --workspace \
+  --features doyah-studio-shell/custom-protocol # 产物 windows/target/release/doyah-studio.exe（**生产形态**：见下「设计要点」7）
 ```
 
 ## 设计要点（都是踩过才这么写的）
@@ -52,11 +53,12 @@ cargo build --release --workspace # 产物 windows/target/release/doyah-studio.e
 4. **前端不持有整份结果集**：只按可视窗口向 Rust 侧要 `len` 行（`grid/windowing.ts` 算窗口、`query.rs` 切片）。行高读 `--ds-metric-row-height`，**读不到就如实标「用了回退值」**。
 5. **IPC 双向判据**：`src-tauri/tests/ipc_contract.rs` 按文本判「前端 `COMMANDS` ⊆ 本层注册」且「本层注册的都被前端用」—— 前端 `invoke` 打错名字是**运行时静默失败**，没有东西会红。
 6. `npm run build` 必须**先于** `cargo build`：Tauri 在编译期把 `frontendDist` 嵌进产物（`Tools/build.ps1` 已按这个顺序编排）。
+7. **发布产物必须带 `custom-protocol` 特性**（`cargo build --release --workspace --features doyah-studio-shell/custom-protocol`）：Tauri 2 的 `build.rs` 里 `let dev = !custom_protocol;` ⇒ **不带它编出来的二进制会去连 `devUrl`**（`http://localhost:5274`），盘上没有 dev server 时就是**空窗口**，而闸门第 ① 项**照样通过**（实测第 28 轮：起该产物后页面 URL 是 `http://localhost:5274/`、基准仪器直接 `NO_PAGE`）。现由 `Tools/build.ps1` 在构建后机械核对「前端产物的文件名是否出现在二进制里」（生产形态命中、dev 形态 0 命中），注入自证见 `Docs/概要设计.md` §8.5.7。
 
 ## 现状（不半建）
 
 - ✅ 外壳 + 结果网格（走「Rust 侧切片喂前端」这条路）；令牌层与两条工具判据；图标生成。
 - ⬜ 侧栏其余分区（连接 / 笔记 / 设置）只有占位 —— 未开工。
 - ⬜ `Cli/`（无界面验证入口）与 `Platform/Windows/`（凭据 / ConPTY / 通知）未建。
-- ⬜ **WebView2 + GPU 下的基准复测未做**：`Bench/grid/README.md` 的读数是无头软件光栅 + 同一块 `ArrayBuffer` 切片，**不含 IPC 与 GPU 合成** ⇒ 三候选（TanStack Virtual / AG Grid Community / Rust 侧切片）的取舍结论**仍待复测**（§8.5.6-3）。
-- ⬜ 版本号一致性（`package.json` / `tauri.conf.json` / `Cargo.toml` 三处 + 与 mac 侧发布台账 `Scripts/release-version.json`）**尚无判据**，本轮如实登记为下一轮待办。
+- 🟡 **WebView2 + GPU 下的基准复测已做（第 28 轮），但没过**：仪器 `windows/Bench/webview2/` 在**真外壳 + 真 GPU**（ANGLE / Intel Iris Xe D3D11）下量得 —— 空转 16.7 ms（60 fps），而**滚动 40 万行 × 20 列 p50 50.1 ms（19.3 fps）**；**行数无关（5 万行 / 2 千行同为 ~49–50 ms）+ IPC 无关（传输换成立即返回仍 51.0 ms）**⇒ 瓶颈在「每帧重建可视行 DOM + 重排版 / 重绘」（布局 ~13.6 ms/帧、样式重算 ~4.2 ms/帧）。三候选（TanStack Virtual / AG Grid Community / Rust 侧切片）的取舍**仍待复测**（§8.5.6-3），本目录的网格实现**属未达标状态**。
+- ✅ ~~版本号一致性**尚无判据**~~ ⇒ **已销账（第 27 轮）**：判据 `windows/Tools/check-release-version.ps1` + 台账 `windows/Tools/release-version.json`（闸门第 13 项）—— 三处（`package.json` / `tauri.conf.json` / `Cargo.toml`）逐字一致 + 与 mac 侧发布台账同源，缺键 / 同名键第二处 / 任一处不同都判红并点名。

@@ -87,10 +87,15 @@ function Invoke-DoyahFrontend {
 Invoke-DoyahFrontend -Dir (Join-Path $windowsDir 'Bench\grid') -Label '基准台前端（Bench\grid）'
 Invoke-DoyahFrontend -Dir (Join-Path $windowsDir 'App') -Label '外壳前端（App）'
 
-Write-Host ("    $ cargo build --release --workspace（workdir={0}）" -f $windowsDir)
+Write-Host ("    $ cargo build --release --workspace --features doyah-studio-shell/custom-protocol（workdir={0}）" -f $windowsDir)
 Push-Location $windowsDir
 $env:RUSTUP_AUTO_INSTALL = '0'
-& $cargo build --release --workspace
+# **必须带 `custom-protocol` 特性**：Tauri 2 的 `build.rs` 里 `let dev = !custom_protocol;`
+# （源码依据 = tauri 2.x `build.rs`），不开它编出来的二进制**会去连 `devUrl`**（http://localhost:5274），
+# 盘上没有 dev server 时是空窗口 —— 即「构建入口产出了跑不起来的产物」。
+# 实测（2026-09-28 第 28 轮）：不带它编出来的 target\release\doyah-studio.exe，页面 URL 是
+# `http://localhost:5274/`（空）；带上之后是 `http://tauri.localhost/`（前端产物已嵌进二进制）。
+& $cargo build --release --workspace --features doyah-studio-shell/custom-protocol
 $rc = $LASTEXITCODE
 Pop-Location
 if ($rc -ne 0) {
@@ -102,6 +107,30 @@ if ($rc -ne 0) {
 $outDir = Join-Path $windowsDir 'target\release'
 $artifacts = @(Get-ChildItem -Path $outDir -Filter '*.exe' -File -ErrorAction SilentlyContinue)
 Write-DoyahPass ("Rust 产物目录：{0}（{1} 个可执行文件）" -f $outDir, $artifacts.Count)
+
+# 衍生判据：**产物是不是生产形态**。上面的特性开关一旦被丢掉（改脚本、换机器、抄命令），
+# 二进制照样编得出来，只是它里面没有前端产物 ⇒ 这里用「前端产物的文件名是否出现在二进制里」
+# 机械判（构建时资源名随资源一起进二进制；实测生产形态命中、dev 形态 0 命中）。
+$assetDir = Join-Path $windowsDir 'App\dist\assets'
+$shellExe = Join-Path $outDir 'doyah-studio.exe'
+if ((Test-Path $assetDir) -and (Test-Path $shellExe)) {
+  $assets = @(Get-ChildItem -Path $assetDir -File)
+  if ($assets.Count -eq 0) {
+    Write-DoyahFail "前端产物目录是空的（App\dist\assets 一份都没有）—— 构建顺序错了或 vite build 没跑"
+    Write-DoyahResult -Status FAIL -Code 1
+    exit 1
+  }
+  # Latin1 = 逐字节保真（不丢高位字节），二进制里搜 ASCII 文件名够用
+  $bytes = [System.IO.File]::ReadAllBytes($shellExe)
+  $text = [System.Text.Encoding]::GetEncoding(28591).GetString($bytes)
+  $missing = @($assets | Where-Object { $text.IndexOf($_.Name) -lt 0 } | ForEach-Object { $_.Name })
+  if ($missing.Count -gt 0) {
+    Write-DoyahFail ("产物不是生产形态：前端产物没被编进可执行文件（缺 {0}）—— 构建必须带 custom-protocol 特性" -f ($missing -join '、'))
+    Write-DoyahResult -Status FAIL -Code 1
+    exit 1
+  }
+  Write-DoyahPass ("生产形态核对：前端产物 {0} 份（{1}）已编进 {2}" -f $assets.Count, (($assets | ForEach-Object { $_.Name }) -join '、'), (Split-Path $shellExe -Leaf))
+}
 
 Write-DoyahResult -Status PASS -Code 0
 exit 0

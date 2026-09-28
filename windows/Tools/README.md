@@ -37,7 +37,7 @@ pwsh -File windows\Tools\verify-all.ps1 -Base HEAD~1                            
 
 | §8.3.1 | 本目录文件 | 现状（2026-09-27 实测） |
 |---|---|---|
-| ① 构建入口 | `build.ps1` | ✅ 跑（`cargo build --release` 工作区；前端 `vite build` 待 `windows\App` 落地） |
+| ① 构建入口 | `build.ps1` | ✅ 跑（`cargo build --release --workspace --features doyah-studio-shell/custom-protocol` + 两个前端 `vite build`；**第 28 轮补一条衍生判据**：前端产物的文件名必须出现在二进制里 ⇒ 拦「产出了 dev 形态、跑不起来的产物」，注入自证见 `Docs/概要设计.md` §8.5.7） |
 | ② 单测 | `test.ps1` | ✅ 跑（`cargo test --workspace`；前端 `vitest` 同链路） |
 | ③ 文档计数 | `check-doc-tables.ps1` | ✅ 跑（共享判据 + `--require-all` 透传） |
 | ④ 独占节越界 | `check-exclusive-sections.ps1` | ✅ 跑（显式 `--mine windows`，默认基线 `origin/master`） |
