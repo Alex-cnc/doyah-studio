@@ -40,6 +40,8 @@ xcuserdata/
 !/Docs/design/*.md
 # 主任侧运营文档（开发循环队列）：本地留存 + 微云备份，不推公开仓
 /Docs/design/开发循环-任务队列.md
+# alpha 发布说明（Docs 侧入口页）：与仓根 RELEASE-*.md 成对，入库以便公开仓里从 Docs 也能找到
+!/Docs/alpha-0.2.0-发布说明.md
 
 # 图标中间产物（可由 Scripts/make-app-icon.swift 从 AppIcon-source.png 重新生成）
 App/Resources/AppIcon-1024.png
