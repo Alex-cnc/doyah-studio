@@ -105,7 +105,7 @@ struct ObjectTreeView: View {
                 }
                 // 菜单**无条件**挂在这里（有条件挂 = 视图结构随悬停变，又会诱发上面那种循环），
                 // 内容在**呈现那一刻**按"鼠标底下那一行"算。
-                .contextMenu { menuItems(for: hoveredMenuObject) }
+                .contextMenu { menuItems(for: menuTargetObject) }
             }
         }
         // 这里**不要**再加 `.id(appState.selectedConnectionID)`：
@@ -302,6 +302,9 @@ struct ObjectTreeView: View {
                 guard !row.isGroupHeader else { return }
                 guard ObjectTreeActions.isAvailable(.browseRows, for: row.object.kind) else { return }
                 select(row.object)
+                // 点击本身就是「指针在这一行」的铁证：顺手写进悬停盒子 ——
+                // 重建补的那个假 mouseExited 会清空它，而指针不动就不会再来 mouseEntered。
+                hoverBox.rowID = row.object.id
                 Task { await appState.performTreeAction(.browseRows, on: row.object) }
             }
             .onTapGesture {
@@ -309,6 +312,8 @@ struct ObjectTreeView: View {
                 // 单击既"选中"也"展开"：表 / 视图这类节点本来就靠单击展开看列，
                 // 分两次点击才叫选中会让命令面板的目标变得不可预期。
                 select(row.object)
+                // 同上：点完立刻右键的人，菜单目标靠这一行（见 `menuTargetObject`）。
+                hoverBox.rowID = row.object.id
                 guard row.isExpandable else { return }
                 toggle(row.object)
             }
@@ -367,6 +372,27 @@ struct ObjectTreeView: View {
               !row.isGroupHeader,
               ObjectTreeActions.hasContextMenu(row.object.kind) else { return nil }
         return row.object
+    }
+
+    /// 菜单打开那一刻真正的目标行：**悬停行优先，悬停没命中就退回「刚点中的那一行」**。
+    ///
+    /// 为什么需要这个兜底（2026-09-28 需求提出者实测：「点一下鼠标要等一下才能选择对象，
+    /// 否则马上点右键就会报『这一行没有可用的操作』」）：`onHover` 是**视图级**的悬停状态，
+    /// 而单击会改 `selectedTreeObject` ⇒ 整棵树重算、行视图被重建 ⇒ SwiftUI 补一个
+    /// **假的 mouseExited**（指针其实没动），悬停盒子被清空；指针既然没动，新的 mouseEntered
+    /// 也不会来 —— 盒子就一直是空的，直到用户真的挪一下鼠标。于是"手快"的人（点完立刻右键）
+    /// 看到的是那张空菜单。
+    ///
+    /// 两条一起修：① 单击/双击时**顺手把悬停盒子写成被点的那一行**（点击本身就证明指针在它身上）；
+    /// ② 这里再加一道兜底 —— 盒子空时用「已选中那一行」，因为右键前必然是左键点过它。
+    /// 兜底只在盒子为空时生效：盒子有值时不抢（否则会退回老毛病「点数据库弹服务器菜单」）。
+    private var menuTargetObject: DatabaseObject? {
+        if let hovered = hoveredMenuObject { return hovered }
+        guard let selected = appState.selectedTreeObject,
+              let row = visibleRows.first(where: { $0.object.id == selected.id }),
+              !row.isGroupHeader,
+              ObjectTreeActions.hasContextMenu(selected.kind) else { return nil }
+        return selected
     }
 
     /// 右键菜单的内容：作用在**鼠标底下那一行**上；没有可作用对象时给一条说明，
