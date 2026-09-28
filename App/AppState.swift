@@ -337,6 +337,9 @@ final class AppState: ObservableObject {
     // 不是浮在上面的弹窗；两个入口并存会让人不确定"关掉这个窗口笔记还在不在"。
     @Published var notes: [Note] = []
     @Published var notesQuery = ""
+    /// **检索状态**（队列 L-44，2026-09-28）：界面检索改走库以后，「这一屏的结果是怎么来的」
+    /// 就成了必须有出处的一件事 —— 三种态各自对应一句如实话（见 `noteSearchHint`）。
+    @Published private(set) var noteSearchState: NoteSearchState = .idle
     @Published var noteEditorTitle = ""
     @Published var noteEditorBody = ""
     @Published var noteEditorTags = ""
@@ -5894,7 +5897,90 @@ final class AppState: ObservableObject {
 
     // MARK: - 笔记（DOYAH-01 / 03）
 
-    var visibleNotes: [Note] { NoteSearch.match(notes, query: notesQuery) }
+    /// 笔记检索的三种态（队列 L-44）。**为什么要显式分态**：以前界面在内存里过滤，
+    /// 「有结果 / 没结果」只有两种可能；改走库之后**走的是哪条路**本身成了用户该知道的事实
+    /// （全文检索 / 子串兜底），而「库读不出来」也必须与「没找到」分开 —— 后者是结论，
+    /// 前者是失败，混成一个空列表就等于把失败说成了结论。
+    enum NoteSearchState: Equatable {
+        /// **没有一次库检索发生**：搜索框是空的（显示已加载的列表），或库还不存在（检索不该顺手建库）。
+        case idle
+        /// 走库的结果 + 这条结果**走的是哪条路**（由 Core 给：全文检索 / 子串兜底）。
+        case library(route: NoteDatabase.SearchResult.Route, notes: [Note])
+        /// 库读不出来（打开 / 查询失败）：**不假装「没找到」** —— 如实说清原因，列表退回全部笔记。
+        case unavailable(failure: String)
+    }
+
+    /// 界面上这一屏要显示的笔记（队列 L-44）。
+    ///
+    /// **检索走库**：搜索框非空时显示的是 `NoteLibrary.search` 给的**库的结果**（库说什么就是什么）；
+    /// 空查询不是检索 —— 显示已加载的列表；库读不出来时显示**全部笔记**并在副行如实说明。
+    /// 排序口径：最近更新在前，同一时刻按标题定序（`sorted` 本身不稳定，不给第二关键字
+    /// 会让同一批数据两次渲染顺序可能不同）。
+    var visibleNotes: [Note] {
+        switch noteSearchState {
+        case .idle, .unavailable:
+            return Self.mostRecentlyUpdatedFirst(notes)
+        case .library(_, let results):
+            return results
+        }
+    }
+
+    /// 副行那一句如实话（`nil` = 这一屏没什么要补充的）。
+    ///
+    /// 文案键由 Core 的 `NoteSearchDisclosure` 给（路线 → 键是一处可单测的映射），
+    /// 界面只负责显示 —— 「哪条路要不要交代」不该由视图各自判断。
+    var noteSearchHint: String? {
+        switch noteSearchState {
+        case .idle:
+            return nil
+        case .library(let route, _):
+            return NoteSearchDisclosure.key(for: route).map { L($0) }
+        case .unavailable(let failure):
+            return L(.noteSearchUnavailable, failure)
+        }
+    }
+
+    /// **界面检索的唯一生产点**（队列 L-44）：搜索框里每变一个字就重算一次，
+    /// 结果与「所走路线」都从库来（`NoteLibrary` 是笔记库的唯一入口）。
+    ///
+    /// 三条与「如实」有关的口径：
+    /// ① **空查询不是检索**（`idle`）—— 显示已加载的列表，不编一次「查了个空串」；
+    /// ② **库不存在就不开库**（`idle`）：检索不该顺手建出一个空库来；
+    /// ③ **失败不说成「没找到」**（`unavailable`）：把原因照出来，列表退回全部笔记。
+    func searchNotes() async {
+        let query = notesQuery
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard notesEnabled, !trimmed.isEmpty else {
+            noteSearchState = .idle
+            return
+        }
+        let library = NoteLibrary.defaultLibrary()
+        guard FileManager.default.fileExists(atPath: library.fileURL.path) else {
+            // 库还没建（第一次用）：一条笔记都没有，别为了搜索把它建出来。
+            noteSearchState = .idle
+            return
+        }
+        do {
+            // **界面检索的唯一生产点**（门禁锚点，见 `Scripts/note-search-route.json`）：
+            // 结果与「走的哪条路」都从库里来 —— 界面不再拿已加载的列表自己过滤。
+            let result = try await NoteLibrary.defaultLibrary().search(trimmed)
+            // 打字比查库快：这一次的结果对应的已经不是搜索框里的词 ⇒ 丢掉，
+            // 别用旧结果覆盖新的（同时 `NotesListView` 的 `.task(id:)` 会取消上一次任务）。
+            guard query == notesQuery else { return }
+            noteSearchState = .library(route: result.route, notes: result.notes)
+        } catch {
+            guard query == notesQuery else { return }
+            noteSearchState = .unavailable(failure: String(describing: error))
+        }
+    }
+
+    /// 最近更新在前（同一时刻按标题定序）—— 与 `NoteSearch.match(_:query:)` 的空查询同一口径。
+    private static func mostRecentlyUpdatedFirst(_ notes: [Note]) -> [Note] {
+        notes.sorted { left, right in
+            if left.updatedAt != right.updatedAt { return left.updatedAt > right.updatedAt }
+            return left.title < right.title
+        }
+    }
 
     func openNotes() {
         // 笔记有了"活动栏那一栏"这个正式的家（以前只弹一个面板）：入口统一走切换视图，
@@ -5943,6 +6029,9 @@ final class AppState: ObservableObject {
             notes = []
             errorMessage = L(.notesFileUnreadable, failure)
         }
+        // 列表变了，正在跑的检索要跟着重算（队列 L-44）—— 否则刚存下的那条在搜索结果里
+        // 永远不出现、刚删掉的那条还在结果里。空查询时这一步只是把状态置回 `.idle`。
+        await searchNotes()
     }
 
     func beginNewNote() {

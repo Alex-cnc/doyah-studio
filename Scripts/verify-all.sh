@@ -33,6 +33,8 @@ set -euo pipefail
 #   9. 命令面板接线（清单 ↔ 分派器 ↔ 视图绑定；见脚本注释里的真实缺陷）
 #  10. 插件装配链（笔记模块解耦 FR-PLUG-07 + 装配与许可 FR-PLUG-01/02/03/06 + ADR-35）
 #      + 笔记模块的**零网络出口**（FR-PLUG-05 ②：数据不外发，见 `check-notes-offline.py`）
+#      + **界面检索走库 + 路线如实标注**（L-44：唯一生产点 / 视图不许内存过滤 /
+#        路线逐条登记 / 文案键在位且被引用，见 `check-note-search-route.py`）
 #  11. 打包 .app（沙箱构建）
 #  12. 脚本 shell 多字节安全（bash 3.2 的变量名坑，见 `check-shell-locale-safety.py`）
 #  13. 脚本连接信息参数化（连真库的脚本不许写死端口 / 地址 / 账号，见 `check-script-env-parameterization.py`）
@@ -259,6 +261,14 @@ python3 Scripts/check-plugin-assembly.py
 # 与上面那份解耦清单**两边对账**（漏登一个源文件也是红）。判据与台账见
 # `Scripts/notes-offline-gate.json`（关键令牌不许被拿掉、例外要写明理由且锚点陈旧报红）。
 python3 Scripts/check-notes-offline.py
+# L-44：界面检索**走库**（唯一生产点）+ **所走路线如实标注**（子串兜底 / 检索没跑成）——
+# 视图不许拿已加载的列表自己过滤；每条路线都要在台账里登记处置（给键或显式 nil）并与实现
+# 逐条相等；文案键要真的在语言表里（中英都在）且真的被引用（死键也判红）。判据与台账见
+# `Scripts/check-note-search-route.py` / `Scripts/note-search-route.json`；
+# 负例 `test-note-search-route.py`（11 例：生产点消失 / 第二条路 / 视图过滤 / 台账与实现不一致 /
+# 新增路线没登记 / 语言表缺中文 / 死键 / 两处空跑防护 / 真仓库逐字节未变）。
+python3 Scripts/check-note-search-route.py
+python3 Scripts/test-note-search-route.py
 
 if [ "${PLATFORM}" = "macos" ]; then
   echo "==> 11/18 打包 .app（沙箱）"

@@ -454,19 +454,31 @@ public final class NoteDatabase {
     /// 调用方需要能如实告诉用户"这两条是按子串匹配找的"。
     public struct SearchResult: Equatable, Sendable {
         public enum Route: String, Equatable, Sendable {
-            /// FTS5 trigram（查询串 ≥3 字）。
+            /// FTS5 trigram 命中（查询串 ≥3 字且短语在标题 / 正文里出现）。
+            /// **标签命中在这条路里作为补充一并并入**（`note_fts` 只索引标题与正文）——
+            /// 路线说的是「这次查询有没有走成全文检索」，不是「每条结果的每一个命中来源」。
             case fullText
-            /// 子串扫描兜底（查询串 < 3 字 —— trigram 不产出 token）。
+            /// 子串扫描兜底：全文索引**没命中**（查询串 < 3 字 —— trigram 不产出 token；
+            /// 或 ≥3 字的短语落了空），整条按子串扫标题 / 正文 / 标签。
             case substring
         }
         public var route: Route
         public var notes: [Note]
     }
 
-    /// 检索标题 / 正文（`FR-PLUG-08` 的「按条件查与全文检索」）。
+    /// 检索**标题 / 正文 / 标签**（`FR-PLUG-08` 的「按条件查与全文检索」）。
+    ///
+    /// **三个字段都要查**：界面搜索框的占位符写着「搜索标题 / 正文 / 标签」，而 `note_fts`
+    /// 只索引标题与正文 ⇒ 标签那一半必须在两条路里各补一次（队列 L-44 收口时实测到的
+    /// 「差一点」：界面检索从内存过滤改走库，标签命中会**静默丢掉**，占位符当场变成一句假话）。
+    /// 合并后的顺序按 `updated_at DESC, title ASC` **重排**（两次查询拼起来的数组不能各排各的），
+    /// 与 `notes()` 同一个口径。
     public func search(_ query: String, limit: Int = 200) throws -> SearchResult {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return SearchResult(route: .fullText, notes: try notes()) }
+
+        // `LIKE` 的模式串（`%` 包住的子串；转义见 `escapeLike`）—— 两条路都要用它，所以先算出来。
+        let pattern = "%" + Self.escapeLike(needle) + "%"
 
         // 口径：查询串按**字符**数（不是字节）判定 —— 中文一个字符三个字节，按字节判会让 1 个汉字过关、
         // 而 trigram 实际切不出 token，于是"检索得到但什么都没找到"。
@@ -487,20 +499,47 @@ public final class NoteDatabase {
             // 兜底判据：trigram 只覆盖 ≥3 字的**连续子串**，若查询串里含空格（"关于 骑行" 这类），
             // 短语匹配会空手而归 —— 这时退回子串扫描，宁可慢一点也不假装"没有"。
             if !rows.isEmpty {
-                return SearchResult(route: .fullText, notes: try materialize(rows))
+                // 标签补充：`note_fts` 里没有标签这一列，所以「只有标签命中」的那些要单独捞一次，
+                // 已经在全文结果里的不重复算（`id NOT IN (… MATCH …)`）。
+                let tagRows = try connection.query(
+                    """
+                    SELECT * FROM note
+                    WHERE id NOT IN (SELECT rowid FROM note_fts WHERE note_fts MATCH ?)
+                      AND EXISTS (
+                        SELECT 1 FROM note_tag
+                        WHERE note_tag.note_id = note.id AND note_tag.tag LIKE ? ESCAPE '\\'
+                      )
+                    ORDER BY updated_at DESC, title ASC
+                    LIMIT ?;
+                    """,
+                    [.text(phrase), .text(pattern), .integer(Int64(limit))]
+                )
+                let merged = try materialize(rows) + (try materialize(tagRows))
+                return SearchResult(route: .fullText, notes: Self.byRecency(merged))
             }
         }
-        let pattern = "%" + Self.escapeLike(needle) + "%"
         let rows = try connection.query(
             """
             SELECT * FROM note
             WHERE title LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\'
+               OR EXISTS (
+                 SELECT 1 FROM note_tag
+                 WHERE note_tag.note_id = note.id AND note_tag.tag LIKE ? ESCAPE '\\'
+               )
             ORDER BY updated_at DESC, title ASC
             LIMIT ?;
             """,
-            [.text(pattern), .text(pattern), .integer(Int64(limit))]
+            [.text(pattern), .text(pattern), .text(pattern), .integer(Int64(limit))]
         )
         return SearchResult(route: .substring, notes: try materialize(rows))
+    }
+
+    /// 合并结果的定序（与 `notes()` 同口径）：最近更新在前，同一时刻按标题。
+    private static func byRecency(_ notes: [Note]) -> [Note] {
+        notes.sorted { left, right in
+            if left.updatedAt != right.updatedAt { return left.updatedAt > right.updatedAt }
+            return left.title < right.title
+        }
     }
 
     /// `LIKE` 的转义（`%` / `_` / `\` 都要转，否则用户搜 `100%` 会匹配到一切）。

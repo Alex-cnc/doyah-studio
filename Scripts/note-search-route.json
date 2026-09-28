@@ -1,0 +1,38 @@
+{
+  "note": "「界面检索走库 + 所走路线如实标注」的对账台账（队列 L-44，2026-09-28）。判据与用法见 Scripts/check-note-search-route.py 头部：唯一生产点 / 视图不许内存过滤 / 路线逐条登记处置 / 文案键在位且真的被引用 / 内存检索的去向。",
+  "version": 1,
+  "uiCallSite": {
+    "file": "App/AppState.swift",
+    "snippet": "NoteLibrary.defaultLibrary().search(",
+    "maxSites": 1,
+    "reason": "界面检索的**唯一生产点**：`AppState.searchNotes()`（搜索框变一个字就重算一次，`.task(id:)` 触发）。0 处 = 悄悄退回内存过滤（L-44 之前的形状）；多出一处 = 出现第二条检索路，口径必须重新登记。"
+  },
+  "viewForbidden": {
+    "dir": "App/Views",
+    "snippet": "NoteSearch.match(",
+    "maxSites": 0,
+    "reason": "视图不许拿已加载的列表自己过滤 —— 「面板各查各的」正是这一族缺陷的复发形状（第 13 轮那类「同一个键两处显示不同」也是这么来的）。"
+  },
+  "routes": [
+    {
+      "route": "fullText",
+      "disclosure": null,
+      "reason": "全文检索命中（查询串 ≥3 字且短语在标题 / 正文里有）**是检索的正常结果**，不必额外解释 ⇒ `nil`。对照图 `notes-search-fulltext{,-dark}` 就是拍这一条：**那一屏一个 `L(...)` 都没进像素**（语言无关，已在 ui-snapshot-language-exemptions.json 登记）。"
+    },
+    {
+      "route": "substring",
+      "disclosure": "noteSearchSubstring",
+      "reason": "子串兜底（查询串 < 3 字 —— trigram 切不出 token；或 ≥3 字的短语在索引里落了空）：用户必须知道「这次不是全文检索」，否则会把兜底的脾气当成检索的全部脾气。"
+    }
+  ],
+  "failure": {
+    "key": "noteSearchUnavailable",
+    "callSite": "App/AppState.swift（`NoteSearchState.unavailable` → `noteSearchHint`）",
+    "reason": "库读不出来时**不假装「没找到」**：把原因照出来，列表退回全部笔记（用户至少还能看见自己的笔记）。带 `%@` 原因参数，占位符 ↔ 实参的登记见 Scripts/format-argument-dispositions.json。"
+  },
+  "inMemoryMatcher": {
+    "symbol": "NoteSearch.match(",
+    "allowedCallers": ["Tests/"],
+    "reason": "内存检索（`Core/Note.swift` 的 `NoteSearch`）在 L-44 之后**不再有界面调用者**：界面走库，它就是一份纯函数参考实现 + 一组单测（`Tests/NoteTests.swift` 5 条，钉住标签命中 / 大小写不敏感 / 空查询倒序这套语义）。保留而不是删掉的理由：语义仍要有人钉住（库那两条路必须与它对得上）；**若读者认为该删，删掉它也只需拆掉那份单测** —— 这件事已登记在开发记录里，不阻塞任何判据。"
+  }
+}

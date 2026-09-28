@@ -238,6 +238,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesEmpty
     /// 有笔记、但按当前搜索词一条都没命中（与"还没有笔记"是两件事：动作不同——改词 vs 新建）。
     case noteSearchNoMatch
+    /// **检索所走的路线**（队列 L-44）：这次是子串兜底而不是全文检索（查询串 < 3 字，
+    /// 或短语在全文索引里落空）—— 界面必须如实标出，不能把兜底当成「检索就是这样」。
+    case noteSearchSubstring
+    /// **检索没跑成**（队列 L-44）：库读不出来时不假装「没找到」，如实说清原因。
+    /// 带原因参数（列表会退回全部笔记 —— 用户至少还能看见自己的笔记）。
+    case noteSearchUnavailable
     case notesTagsPlaceholder
     case notesSourceHint
     case notesUntitled
@@ -1959,6 +1965,8 @@ public enum LocalizedStrings {
         .notesSearchPlaceholder: [.simplifiedChinese: "搜索标题 / 正文 / 标签", .english: "Search title, body or tags"],
         .notesEmpty: [.simplifiedChinese: "还没有笔记", .english: "No notes yet"],
         .noteSearchNoMatch: [.simplifiedChinese: "没有匹配的笔记（笔记还在，换个词试试）", .english: "No matching notes (they are still there — try another word)"],
+        .noteSearchSubstring: [.simplifiedChinese: "这次是子串匹配（全文检索需要 3 个字以上，或这一次没命中）", .english: "Matched as a substring this time (full-text search needs 3+ characters, or found nothing here)"],
+        .noteSearchUnavailable: [.simplifiedChinese: "检索没跑成：%@（下面列出的是全部笔记）", .english: "Search did not run: %@ (all notes are listed below)"],
         .notesTagsPlaceholder: [.simplifiedChinese: "标签（空格或逗号分开）", .english: "Tags (separate with spaces or commas)"],
         .notesSourceHint: [.simplifiedChinese: "来源由创建时记下，之后编辑不会改它", .english: "The source is recorded at creation and is not changed by later edits"],
         .notesUntitled: [.simplifiedChinese: "无标题", .english: "Untitled"],

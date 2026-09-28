@@ -651,6 +651,120 @@ final class UISnapshotPanelsTests: XCTestCase {
         assertInjectedCopy(serverObjects, present: .serverObjectsEmpty, absent: .errorNotConnected)
     }
 
+    // MARK: - L-44：界面检索走库（2026-09-28 第 54 轮）
+
+    /// **界面检索走库 + 所走路线如实标注**（队列 L-44）。
+    ///
+    /// 这一族图要证明三件事 —— 只有第一件靠读图，另两件在渲染记录与状态上：
+    ///   ① 副行真的写出了「这次是子串匹配」（渲染记录里必须有那句文案，中英各判各的）；
+    ///   ② 结果**来自库**：内存里的 `state.notes` 整段**一直是空的**，而 `visibleNotes` 有两条 ——
+    ///      「内存过滤」给不出这个组合（这正是 L-44 要改掉的那件事）；
+    ///   ③ **全文检索命中不挂那句话**（`fullText` 的交代是 `nil`）：否则「如实标注」就退化成
+    ///      「永远挂一行小字」，标了等于没标。第三张再拍**库读不出来**那一支 ——
+    ///      「检索没跑成」不许说成「没找到」，列表退回**全部笔记**。
+    ///
+    /// 数据走的是**产品自己的库**（`DOYAH_NOTES_DIR` 指向每轮清空的临时目录），不是测试后门；
+    /// 三条路都先把结果**算出来**再渲染（`.task(id:)` 在生产里负责这件事，图里不靠时间差）。
+    @MainActor
+    func testNoteSearchGoesThroughTheLibraryAndDisclosesTheRoute() async throws {
+        let host = makeEmptyHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        _ = try UISnapshot.applyLicense(.standard, to: host.state)
+        XCTAssertTrue(host.state.notesEnabled, "笔记区要在 Standard 档下才拍得到")
+
+        // 夹具：两条笔记进库（一条正文含「洞庭湖」与「骑行」，另一条只有标签）。
+        let library = NoteLibrary.defaultLibrary()
+        let seeded = [
+            try await library.upsert(
+                NoteDraft(title: "环洞庭湖", body: "洞庭湖骑行手记", tags: ["骑行"], source: NoteSource(kind: .manual))
+            ),
+            try await library.upsert(
+                NoteDraft(title: "南太行", body: "拉练前的准备清单", tags: ["骑行"], source: NoteSource(kind: .manual))
+            )
+        ]
+
+        // ① 两字查询（中文里最常见的长度）⇒ 库里只能走子串兜底，界面必须如实标出。
+        host.state.notesQuery = "骑行"
+        await host.state.searchNotes()
+        XCTAssertTrue(
+            host.state.notes.isEmpty,
+            "这一步不该往内存列表里塞东西 —— 下面那两条结果只能来自库（内存里是空的）"
+        )
+        XCTAssertEqual(host.state.visibleNotes.count, 2, "库里两条都命中「骑行」（正文 / 标签都算）")
+        let substringPairs = try snapshotLightAndDark("notes-search-substring", size: sidebarSize, host: host) {
+            NotesListView()
+        }
+        for pair in substringPairs {
+            for (index, language) in UISnapshot.coverageLanguages.enumerated() {
+                let record = pair.records[index]
+                let expected = UISnapshot.localizedText(language) { L(.noteSearchSubstring) }
+                XCTAssertTrue(
+                    record.localizedStrings.contains(expected),
+                    "\(record.name)：\(record.language) 那遍没有出现「\(expected)」"
+                        + " —— 子串兜底没被如实标出（这一句就是 L-44 的交付物）"
+                )
+            }
+        }
+
+        // ② 三字以上且命中全文索引 ⇒ **不挂那一行**（对照图：标了就等于没标）。
+        host.state.notesQuery = "洞庭湖"
+        await host.state.searchNotes()
+        XCTAssertEqual(host.state.visibleNotes.count, 1, "「洞庭湖」只有第一条正文里有")
+        XCTAssertNil(host.state.noteSearchHint, "全文检索命中是检索的正常结果，不该额外解释")
+        let fullTextPairs = try snapshotLightAndDark("notes-search-fulltext", size: sidebarSize, host: host) {
+            NotesListView()
+        }
+        for pair in fullTextPairs {
+            for (index, language) in UISnapshot.coverageLanguages.enumerated() {
+                let record = pair.records[index]
+                let forbidden = UISnapshot.localizedText(language) { L(.noteSearchSubstring) }
+                XCTAssertFalse(
+                    record.localizedStrings.contains(forbidden),
+                    "\(record.name)：\(record.language) 那遍出现了子串兜底那句 —— 全文检索命中不该有它"
+                )
+            }
+        }
+
+        // ③ 库读不出来：**失败不许说成「没找到」**。
+        //    先把列表读进内存（模拟应用已经打开过笔记），再把库文件换成一段垃圾 ——
+        //    这样「检索没跑成」与「列表退回全部笔记」两件事能同时被看到。
+        await host.state.reloadNotes()
+        XCTAssertEqual(host.state.notes.count, 2, "前置：内存列表里有两条（库还没坏的时候读的）")
+        try Data("not a sqlite database".utf8).write(to: library.fileURL)
+        host.state.notesQuery = "骑行"
+        await host.state.searchNotes()
+        guard case .unavailable = host.state.noteSearchState else {
+            XCTFail("库文件已经是垃圾了，这次检索该报「没跑成」，实际是 \(host.state.noteSearchState)")
+            return
+        }
+        XCTAssertEqual(host.state.visibleNotes.count, 2, "检索没跑成时列表退回**全部笔记**（不是空的「没找到」）")
+        let unavailablePairs = try snapshotLightAndDark("notes-search-unavailable", size: sidebarSize, host: host) {
+            NotesListView()
+        }
+        for pair in unavailablePairs {
+            for (index, language) in UISnapshot.coverageLanguages.enumerated() {
+                let record = pair.records[index]
+                let hint = UISnapshot.localizedText(language) { L(.noteSearchUnavailable, "…") }
+                // 文案里带原因（`%@`），所以判**前缀**：模板前半句必须在渲染记录里。
+                let head = String(hint.prefix(while: { $0 != "：" && $0 != ":" }))
+                XCTAssertTrue(
+                    record.localizedStrings.contains { $0.hasPrefix(head) },
+                    "\(record.name)：\(record.language) 那遍没有说话「检索没跑成」"
+                )
+                let noMatch = UISnapshot.localizedText(language) { L(.noteSearchNoMatch) }
+                XCTAssertFalse(
+                    record.localizedStrings.contains(noMatch),
+                    "\(record.name)：\(record.language) 那遍把「检索没跑成」说成了「没找到」"
+                )
+            }
+        }
+
+        // 收尾：把夹具清掉（库已损坏 ⇒ 直接删文件；迁移留档没参与过）。
+        try? FileManager.default.removeItem(at: library.fileURL)
+        try? FileManager.default.removeItem(at: library.fileURL.appendingPathExtension("wal"))
+        _ = seeded
+    }
+
     // MARK: - 清单
 
     override class func tearDown() {

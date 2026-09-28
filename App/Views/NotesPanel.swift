@@ -21,6 +21,17 @@ struct NotesListView: View {
             TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal, Spacing.s)
+            // **检索走库**（队列 L-44）：搜索框里变一个字就重算一次。`.task(id:)` 在 id 变化时
+            // 会取消上一次任务；`AppState.searchNotes()` 里还有一道「结果过期就丢」的守卫，
+            // 打字比查库快也不会把旧结果盖上来。
+            if let hint = appState.noteSearchHint {
+                // 这一行是**如实交代**：走的是子串兜底，还是检索压根没跑成 —— 两种都不是
+                // 「没找到」，所以不能只给一个空列表了事。
+                Text(hint)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .padding(.horizontal, Spacing.s)
+            }
             if appState.visibleNotes.isEmpty {
                 // 分两种"空"：一条笔记都没有，和"搜不到"—— 后者要提示改搜索词，
                 // 否则用户会以为笔记丢了。
@@ -57,6 +68,11 @@ struct NotesListView: View {
         }
         .padding(.vertical, Spacing.s)
         .accessibilityIdentifier("notes-list")
+        // 搜索框里的词一变就重算一次（与上面那条注释同源：`task(id:)` 会取消上一次任务）。
+        // 空查询进这里也只是把状态置回 `.idle` —— 不查库、不改列表。
+        .task(id: appState.notesQuery) {
+            await appState.searchNotes()
+        }
     }
 }
 
