@@ -7,7 +7,7 @@ final class NoteBodyTests: XCTestCase {
 
     func testMarkdownSubsetProjectsToSpans() {
         let body = NoteBody(markdown: "普通 **加粗** 与 *斜体* 还有 `code`")
-        let projection = NoteBodyProjection.toSpans(body)
+        let projection = NoteBodyProjection.toSpans(body, language: .simplifiedChinese)
         XCTAssertEqual(projection.spans.map(\.text), ["普通 ", "加粗", " 与 ", "斜体", " 还有 ", "code"])
         XCTAssertEqual(projection.spans[1].styles, [.bold])
         XCTAssertEqual(projection.spans[3].styles, [.italic])
@@ -15,10 +15,33 @@ final class NoteBodyTests: XCTestCase {
         XCTAssertTrue(projection.degradations.isEmpty)
     }
 
+    /// **语言由调用方给定**（队列 L-65）：同一处有损投影，中英各给一句 —— 此前这条降级说明
+    /// 写死简体中文 ⇒ 英文界面上它**永远是中文**，而语言表里这 4 个键的英文译文不可达（死译文）。
+    func testDegradationsFollowCallerLanguage() {
+        let body = NoteBody(markdown: "改写后的新句子", sidecar: [NoteSidecarStyle(text: "原来的句子", color: "#1E88E5")])
+        let zh = NoteBodyProjection.toSpans(body, language: .simplifiedChinese).degradations
+        let en = NoteBodyProjection.toSpans(body, language: .english).degradations
+        XCTAssertEqual(zh.count, 1)
+        XCTAssertEqual(en.count, 1)
+        XCTAssertNotEqual(zh[0], en[0], "两种语言必须给出不同的句子（否则英文译文不可达）")
+        XCTAssertTrue(en[0].contains("Sidecar style"), "英文那份要真的是英文：\(en[0])")
+        XCTAssertTrue(zh[0].contains("旁挂样式"), "中文那份要真的是中文：\(zh[0])")
+
+        // 导出降级报告同理（颜色 / 字号 / 整句三个键）
+        let exportBody = NoteBody(markdown: "正文", sidecar: [NoteSidecarStyle(text: "正文", color: "#E53935", size: 20)])
+        let exportZH = NoteBodyProjection.exportMarkdown(exportBody, language: .simplifiedChinese).degradations
+        let exportEN = NoteBodyProjection.exportMarkdown(exportBody, language: .english).degradations
+        XCTAssertEqual(exportZH.count, 1)
+        XCTAssertEqual(exportEN.count, 1)
+        XCTAssertTrue(exportZH[0].contains("颜色") && exportZH[0].contains("字号"))
+        XCTAssertTrue(exportEN[0].contains("color") && exportEN[0].contains("size"), "英文那份要真的是英文：\(exportEN[0])")
+        XCTAssertNotEqual(exportZH[0], exportEN[0])
+    }
+
     /// **Round-trip 无损**：编辑器里改过再存，粗体/斜体/代码不该变形。
     func testRoundTripKeepsMarkdownSubset() {
         let original = NoteBody(markdown: "a **b** c *d* e `f`")
-        let restored = NoteBodyProjection.fromSpans(NoteBodyProjection.toSpans(original).spans)
+        let restored = NoteBodyProjection.fromSpans(NoteBodyProjection.toSpans(original, language: .simplifiedChinese).spans)
         XCTAssertEqual(restored.markdown, original.markdown)
         XCTAssertTrue(restored.sidecar.isEmpty)
     }
@@ -33,7 +56,7 @@ final class NoteBodyTests: XCTestCase {
         XCTAssertEqual(body.markdown, "红色字普通字", "颜色与字号不进 Markdown 正文")
         XCTAssertEqual(body.sidecar, [NoteSidecarStyle(text: "红色字", occurrence: 0, color: "#E53935", size: 18)])
         // 再投影回来，样式还在
-        let back = NoteBodyProjection.toSpans(body)
+        let back = NoteBodyProjection.toSpans(body, language: .simplifiedChinese)
         XCTAssertEqual(back.spans[0].color, "#E53935")
         XCTAssertEqual(back.spans[0].size, 18)
         XCTAssertTrue(back.degradations.isEmpty)
@@ -43,7 +66,7 @@ final class NoteBodyTests: XCTestCase {
     /// 那时**如实降级**，不猜、不静默丢。
     func testSidecarDegradesWhenTextWasRewritten() {
         let body = NoteBody(markdown: "改写后的新句子", sidecar: [NoteSidecarStyle(text: "原来的句子", color: "#1E88E5")])
-        let projection = NoteBodyProjection.toSpans(body)
+        let projection = NoteBodyProjection.toSpans(body, language: .simplifiedChinese)
         XCTAssertEqual(projection.spans.map(\.text), ["改写后的新句子"])
         XCTAssertNil(projection.spans[0].color)
         XCTAssertEqual(projection.degradations.count, 1)
@@ -53,7 +76,7 @@ final class NoteBodyTests: XCTestCase {
     /// **有损的第三处**：导出 .md 文件时颜色/字号必然丢 —— 必须给人一份降级报告。
     func testExportReportsWhatItLoses() {
         let body = NoteBody(markdown: "正文", sidecar: [NoteSidecarStyle(text: "正文", color: "#E53935", size: 20)])
-        let export = NoteBodyProjection.exportMarkdown(body)
+        let export = NoteBodyProjection.exportMarkdown(body, language: .simplifiedChinese)
         XCTAssertEqual(export.markdown, "正文")
         XCTAssertEqual(export.degradations.count, 1)
         XCTAssertTrue(export.degradations[0].contains("颜色"))
@@ -63,7 +86,7 @@ final class NoteBodyTests: XCTestCase {
     /// **不解析的语法原样搬运**：标题 / 列表 / 链接这些我们不解析，但**不许破坏**（AI 写的排版不能被改坏）。
     func testUnsupportedMarkdownIsPassedThroughUnchanged() {
         let markdown = "# 标题\n- 列表项\n[链接](https://example.com)"
-        let projection = NoteBodyProjection.toSpans(NoteBody(markdown: markdown))
+        let projection = NoteBodyProjection.toSpans(NoteBody(markdown: markdown), language: .simplifiedChinese)
         XCTAssertEqual(projection.spans.map(\.text).joined(), markdown)
         XCTAssertTrue(projection.degradations.isEmpty, "不解析不等于降级")
     }
@@ -79,9 +102,9 @@ final class NoteBodyTests: XCTestCase {
 
     /// 空文档与坏数据都不要抛错（与富文本模型"容错"那条需求一致）。
     func testEmptyAndOddInputsAreTolerated() {
-        XCTAssertEqual(NoteBodyProjection.toSpans(NoteBody(markdown: "")).spans.map(\.text), [])
+        XCTAssertEqual(NoteBodyProjection.toSpans(NoteBody(markdown: ""), language: .simplifiedChinese).spans.map(\.text), [])
         // 未闭合的标记：整段当纯文本，不吞字
-        let odd = NoteBodyProjection.toSpans(NoteBody(markdown: "未闭合 **粗体"))
+        let odd = NoteBodyProjection.toSpans(NoteBody(markdown: "未闭合 **粗体"), language: .simplifiedChinese)
         XCTAssertEqual(odd.spans.map(\.text).joined(), "未闭合 **粗体")
         XCTAssertEqual(NoteBodyProjection.fromSpans([]).markdown, "")
     }

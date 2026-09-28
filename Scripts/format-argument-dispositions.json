@@ -1,7 +1,7 @@
 {
   "note": "语言表模板占位符 ↔ `L(...)` 调用点实参的对账台账（队列 L-46）。判据与用法见 Scripts/check-format-arguments.py 头部。shapes = 门禁**判不出类型**的实参形状，逐条登记：kind 只认有出处可引的（text / number，理由写清 file:line）；没有出处的一律 unverified —— unverified 不参与槽位交叉检查，只被形状与处数棘轮钉住，不是放行。",
   "version": 1,
-  "unknownBudget": 115,
+  "unknownBudget": 114,
   "shapes": [
     {
       "shape": "<reason>",
@@ -305,12 +305,6 @@
     },
     {
       "shape": "<versions>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "ISO8601DateFormatter(…)",
       "kind": "unverified",
       "maxSites": 1,
       "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"

@@ -145,10 +145,10 @@ final class LicenseLoaderTests: XCTestCase {
     }
 
     func testMissingFileMeansStandardWithItsOwnReason() {
-        let result = LicenseLoader.load(from: directory.appendingPathComponent("nope.doyahlicense"))
+        let result = LicenseLoader.load(language: .simplifiedChinese, from: directory.appendingPathComponent("nope.doyahlicense"))
         XCTAssertEqual(result.entitlements.edition, .standard)
         XCTAssertEqual(result.source, .missing)
-        XCTAssertFalse(LicenseLoader.summary(for: result).isEmpty, "要给一句人话（当前呈现 Standard）")
+        XCTAssertFalse(LicenseLoader.summary(for: result, language: .simplifiedChinese).isEmpty, "要给一句人话（当前呈现 Standard）")
     }
 
     /// `DOYAH_LICENSE_PATH` 能把"从哪儿读"指到别处 —— 验收三档时用它，
@@ -164,6 +164,7 @@ final class LicenseLoaderTests: XCTestCase {
         XCTAssertEqual(LicenseLoader.defaultLicenseURL(environment: environment), url)
 
         let result = LicenseLoader.load(
+            language: .simplifiedChinese,
             verifier: try XCTUnwrap(Ed25519LicenseVerifier(rawPublicKey: keys.publicKey)),
             environment: environment
         )
@@ -188,7 +189,7 @@ final class LicenseLoaderTests: XCTestCase {
         )
         let url = write(file.encoded())
         let verifier = try XCTUnwrap(Ed25519LicenseVerifier(rawPublicKey: keys.publicKey))
-        let result = LicenseLoader.load(from: url, verifier: verifier)
+        let result = LicenseLoader.load(language: .simplifiedChinese, from: url, verifier: verifier)
         XCTAssertEqual(result.entitlements.edition, .ultra)
         XCTAssertEqual(result.entitlements.basis, .licensed)
         XCTAssertEqual(result.source, .file(url))
@@ -198,10 +199,10 @@ final class LicenseLoaderTests: XCTestCase {
     /// **坏文件与"没放"要分开说**（这是本轮特意分开的两个 source）。
     func testCorruptFileIsDistinguishedFromMissing() {
         let url = write("DOYAH-LICENSE-1\n不是 base64\n也不是")
-        let result = LicenseLoader.load(from: url)
+        let result = LicenseLoader.load(language: .simplifiedChinese, from: url)
         XCTAssertEqual(result.entitlements.edition, .standard)
         guard case .unreadable = result.source else { return XCTFail("应当是 unreadable，实际 \(result.source)") }
-        XCTAssertFalse(LicenseLoader.summary(for: result).isEmpty)
+        XCTAssertFalse(LicenseLoader.summary(for: result, language: .simplifiedChinese).isEmpty)
     }
 
     func testTamperedFileDegradesAndSaysSignatureInvalid() throws {
@@ -214,7 +215,7 @@ final class LicenseLoaderTests: XCTestCase {
         lines[1] = Data(payload.utf8).base64EncodedString()
         let url = write(lines.joined(separator: "\n"))
         let verifier = try XCTUnwrap(Ed25519LicenseVerifier(rawPublicKey: keys.publicKey))
-        let result = LicenseLoader.load(from: url, verifier: verifier)
+        let result = LicenseLoader.load(language: .simplifiedChinese, from: url, verifier: verifier)
         XCTAssertEqual(result.entitlements.edition, .standard)
         XCTAssertEqual(result.entitlements.basis, .invalidSignature)
         // 许可证本身仍能被解析出来（数据没被动过），只是签名不过 —— 界面上要能同时说这两件事
@@ -229,9 +230,32 @@ final class LicenseLoaderTests: XCTestCase {
         )
         let url = write(file.encoded())
         let verifier = try XCTUnwrap(Ed25519LicenseVerifier(rawPublicKey: keys.publicKey))
-        let result = LicenseLoader.load(from: url, verifier: verifier, now: Date(timeIntervalSince1970: 5_000))
+        let result = LicenseLoader.load(language: .simplifiedChinese, from: url, verifier: verifier, now: Date(timeIntervalSince1970: 5_000))
         XCTAssertEqual(result.entitlements.edition, .standard)
         XCTAssertEqual(result.entitlements.basis, .expired(expired))
         XCTAssertNotNil(result.license, "到期只是降级：许可证与数据都还在")
+    }
+
+    /// **这一句跟着调用方的语言走**（队列 L-65）：它同时出现在界面、状态栏与日志上。
+    /// 此前 Core 把它写死成简体中文 ⇒ 界面切到英文这一行仍是中文（`.licenseUnreadableWithReason`
+    /// 的英文译文永远不可达）。**界面此前为此自己抄了一份**，而那份把「为什么读不出来」丢掉了 ——
+    /// 所以本轮除了透传语言，还要钉住「原因不许被丢」。
+    func testSummaryFollowsCallerLanguageAndKeepsReason() throws {
+        let missing = LicenseLoader.load(language: .english, from: directory.appendingPathComponent("nope.doyahlicense"))
+        XCTAssertEqual(missing.source, .missing)
+        let missingZH = LicenseLoader.summary(for: missing, language: .simplifiedChinese)
+        let missingEN = LicenseLoader.summary(for: missing, language: .english)
+        XCTAssertNotEqual(missingZH, missingEN, "两种语言必须给出不同的句子")
+        XCTAssertTrue(missingEN.contains("No license yet"), "英文那份要真的是英文：\(missingEN)")
+
+        // 坏文件：说的是「读不出来」+ **原因**（界面那份副本当年把原因丢了）
+        let broken = LicenseLoader.load(language: .english, from: write("DOYAH-LICENSE-1\n不是 base64\n也不是"))
+        guard case .unreadable(let reason) = broken.source else {
+            return XCTFail("应当是 unreadable，实际 \(broken.source)")
+        }
+        XCTAssertFalse(reason.isEmpty, "装载那一刻就要把原因说出来（它随 LoadResult 一起被界面显示）")
+        let brokenEN = LicenseLoader.summary(for: broken, language: .english)
+        XCTAssertTrue(brokenEN.contains(reason), "整句里必须带上原因，别把它丢掉：\(brokenEN)")
+        XCTAssertNotEqual(brokenEN, LicenseLoader.summary(for: broken, language: .simplifiedChinese))
     }
 }

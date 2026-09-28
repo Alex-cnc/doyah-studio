@@ -188,21 +188,35 @@ final class TableImportTests: XCTestCase {
 
     /// COPY 的可用性必须**带理由**：不可用时退回 INSERT，"为什么退"是用户必须看到的事实。
     func testCopySupportByDatabaseType() {
-        let postgres = TableImport.copySupport(databaseType: .postgresql)
+        let postgres = TableImport.copySupport(databaseType: .postgresql, language: .simplifiedChinese)
         XCTAssertTrue(postgres.isAvailable)
         XCTAssertNil(postgres.reason)
 
-        let gbase = TableImport.copySupport(databaseType: .gbase8a)
+        let gbase = TableImport.copySupport(databaseType: .gbase8a, language: .simplifiedChinese)
         XCTAssertFalse(gbase.isAvailable)
         XCTAssertNotNil(gbase.reason)
         XCTAssertTrue(gbase.reason?.contains("INSERT") == true, "理由要说清退回哪条路：\(gbase.reason ?? "")")
     }
 
-    func testPreferredWriteModeFollowsCopySupport() {
-        XCTAssertEqual(TableImport.preferredWriteMode(databaseType: .postgresql).mode, .copy)
-        XCTAssertNil(TableImport.preferredWriteMode(databaseType: .postgresql).reason)
+    /// **理由跟着调用方的语言走**（队列 L-65）：此前这条理由写死简体中文 ⇒ 英文界面上它仍是中文，
+    /// 而语言表里的英文译文**永远不可达**（死译文）。
+    func testCopySupportReasonFollowsCallerLanguage() throws {
+        let zh = TableImport.copySupport(databaseType: .mysql, language: .simplifiedChinese)
+        let en = TableImport.copySupport(databaseType: .mysql, language: .english)
+        XCTAssertFalse(zh.isAvailable)
+        XCTAssertFalse(en.isAvailable)
+        let chinese = try XCTUnwrap(zh.reason)
+        let english = try XCTUnwrap(en.reason)
+        XCTAssertNotEqual(chinese, english, "两种语言必须给出不同的理由（否则英文译文不可达）")
+        XCTAssertTrue(english.contains("COPY FROM STDIN"), "英文那份要说同一件事：\(english)")
+        XCTAssertFalse(english.contains("当前连接"), "英文那份不许混中文：\(english)")
+    }
 
-        let fallback = TableImport.preferredWriteMode(databaseType: .gbase8a)
+    func testPreferredWriteModeFollowsCopySupport() {
+        XCTAssertEqual(TableImport.preferredWriteMode(databaseType: .postgresql, language: .simplifiedChinese).mode, .copy)
+        XCTAssertNil(TableImport.preferredWriteMode(databaseType: .postgresql, language: .simplifiedChinese).reason)
+
+        let fallback = TableImport.preferredWriteMode(databaseType: .gbase8a, language: .simplifiedChinese)
         XCTAssertEqual(fallback.mode, .batchInsert)
         XCTAssertNotNil(fallback.reason)
     }

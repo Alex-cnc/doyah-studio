@@ -43,6 +43,13 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
   `boundedPromptText(language:maxCharacters:)` / `makeEvidence(…language:…)`），
   `DiagnosisAdvice.parse` 必须带 `language:`，`App/Views/DiagnosisPanel.swift` 必须把
   `effectiveLanguage` 传下去 —— 只靠 A 挡不住「删掉形参、在函数体里再写死一次」。
+  **L-65 第 1 批起**同一判据扩到三处同族出口：`Core/LicenseLoader.swift`（`load` /
+  `licenseDecodeFailureHint` / `summary`）、`Core/NoteBody.swift`（`toSpans` / `exportMarkdown`）、
+  `Core/TableImport.swift`（`copySupport` / `preferredWriteMode`）。
+* **C′（一句话只有一个出处）** `App/AppState.swift` 必须调 `LicenseLoader.summary(`，
+  且**不许**再出现 `L(.licenseActive)` —— 许可状态那一句当年因为 Core 写死中文被界面抄了一份，
+  而抄的那份**漂移了**（把 `.unreadable` 的原因丢掉）。判据 B 只看语言表看得见可达性，
+  看不见「同一句话两个实现」这个形状。
 * **D（空跑不许通过）** 语言表一个键都解析不到 / 一个键引用都没有 / 扫描到的 Swift 文件过少
   ⇒ **红**（判据取不到输入 = 假绿，本仓库踩过两次）。
 
@@ -353,6 +360,11 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
             )
 
     # 判据 C：本轮修的那一族不许回退（源树判据）
+    #
+    # 队列 L-65 第 1 批（2026-09-28 第 48 轮）把范围从 DiagnosisContext 一族扩到
+    # 许可 / 笔记正文 / 导入三处 —— 「删掉 `language:` 形参、在函数体里再写死一次」
+    # 只靠判据 A 挡不住（A 量的是「写死语言的调用点」，形参被删后**调用点也不写死了**，
+    # 而语言会从别的路径漏进来）。所以这三处的文本出口一律在这里钉形参。
     pinned_params = {
         "Core/DiagnosisContext.swift": [
             r"func\s+text\(language:",
@@ -361,6 +373,19 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
             r"func\s+makeEvidence\([\s\S]{0,400}?language:\s*AppLanguage",
         ],
         "Core/DiagnosisAdvice.swift": [r"func\s+parse\([\s\S]{0,300}?language:\s*AppLanguage"],
+        "Core/LicenseLoader.swift": [
+            r"func\s+load\([\s\S]{0,400}?language:\s*AppLanguage",
+            r"func\s+licenseDecodeFailureHint\(language:\s*AppLanguage",
+            r"func\s+summary\([\s\S]{0,200}?language:\s*AppLanguage",
+        ],
+        "Core/NoteBody.swift": [
+            r"func\s+toSpans\([^)]*language:\s*AppLanguage",
+            r"func\s+exportMarkdown\([^)]*language:\s*AppLanguage",
+        ],
+        "Core/TableImport.swift": [
+            r"func\s+copySupport\([^)]*language:\s*AppLanguage",
+            r"func\s+preferredWriteMode\([^)]*language:\s*AppLanguage",
+        ],
     }
     for rel, patterns in pinned_params.items():
         path = root / rel
@@ -376,6 +401,22 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
         failures.append("C 文件消失：App/Views/DiagnosisPanel.swift")
     elif "effectiveLanguage" not in read(panel):
         failures.append("C App/Views/DiagnosisPanel.swift 没把 effectiveLanguage 传下去（界面语言又会与提示词脱钩）")
+
+    # C′ **「一句话只有一个出处」**（队列 L-65 收掉的那处重复实现）：许可状态那一句
+    # 曾经在界面里被抄过一份（因为 Core 那份写死中文），而抄的那一份**会漂移** ——
+    # 实测它已经把 `.unreadable` 的**原因丢掉**了。这里钉死：界面必须调 Core 那一份。
+    app_state = root / "App/AppState.swift"
+    if not app_state.exists():
+        failures.append("C 文件消失：App/AppState.swift")
+    else:
+        text = read(app_state)
+        if "LicenseLoader.summary(" not in text:
+            failures.append("C App/AppState.swift 没有调 `LicenseLoader.summary(` —— 界面又自己抄了一份许可文案")
+        if "L(.licenseActive)" in text:
+            failures.append(
+                "C App/AppState.swift 又出现 `L(.licenseActive)` —— 许可状态那一句应当只有 "
+                "`LicenseLoader.summary(for:language:)` 一个出处（抄一份必然漂移）"
+            )
 
     if failures:
         print(f"✗ 语言透传门禁不通过（{len(failures)} 条）：")

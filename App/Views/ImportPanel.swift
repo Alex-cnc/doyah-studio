@@ -467,7 +467,10 @@ struct ImportPanel: View {
     /// 连接不给 COPY 时，**把理由记下来**并把选中项切回批量 INSERT。
     private func refreshWriteMode() {
         let databaseType = appState.selectedConnection?.dbType ?? .postgresql
-        let preferred = TableImport.preferredWriteMode(databaseType: databaseType)
+        let preferred = TableImport.preferredWriteMode(
+            databaseType: databaseType,
+            language: LocalizationManager.shared.effectiveLanguage
+        )
         copyReason = preferred.reason
         if preferred.reason != nil, mode == .copy {
             mode = .batchInsert

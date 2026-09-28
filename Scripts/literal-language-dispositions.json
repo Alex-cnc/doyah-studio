@@ -19,8 +19,8 @@
     },
     {
       "file": "Core/LicenseLoader.swift",
-      "maxSites": 9,
-      "reason": "许可校验的失败文案（读不到 / 签名不合法 / 未知版本）。同族欠账（队列 L-65）：调用点在 Core、经 `error.localizedDescription` 到界面，界面语言到不了这一层。"
+      "maxSites": 0,
+      "reason": "**回归钉（队列 L-65 第 1 批已透传）**：`load(language:)` / `licenseDecodeFailureHint(language:)` / `summary(for:language:)` 一律收调用方的语言（界面传 `effectiveLanguage`、CLI 传 `.simplifiedChinese`）—— 这里再出现字面语言即红。**顺带收掉一处重复实现**：`App/AppState.licenseSummary` 当年正是因为这一份写死中文才自己抄了一遍，而抄的那份把 `.unreadable` 的**原因丢掉了**；现在界面直接调 Core 这一份。"
     },
     {
       "file": "Core/SSHTunnelProcess.swift",
@@ -34,8 +34,8 @@
     },
     {
       "file": "Core/NoteBody.swift",
-      "maxSites": 4,
-      "reason": "笔记正文的降级提示（丢了颜色 / 字号；旁挂件丢失；导出降级）。同族欠账（队列 L-65）。"
+      "maxSites": 0,
+      "reason": "**回归钉（队列 L-65 第 1 批已透传）**：`NoteBodyProjection.toSpans(_:language:)` / `exportMarkdown(_:language:)` 收调用方的语言（降级说明是给人看的话）—— 这里再出现字面语言即红。"
     },
     {
       "file": "Core/AICapture.swift",
@@ -69,8 +69,8 @@
     },
     {
       "file": "Core/TableImport.swift",
-      "maxSites": 1,
-      "reason": "`importCopyUnsupportedMySQL`（导入复制在 MySQL 上不支持）。同族欠账（队列 L-65）。"
+      "maxSites": 0,
+      "reason": "**回归钉（队列 L-65 第 1 批已透传）**：`copySupport(databaseType:language:)` / `preferredWriteMode(databaseType:language:)` 的 `reason` 是要给用户看的一句话（界面在 `ImportPanel.refreshWriteMode()` 传 `effectiveLanguage`）—— 这里再出现字面语言即红。**注**：同函数里 `gbase8a` 那一支仍是**汉字字面量**（不是写死语言，属 R-45 棘轮名下已登记的债），不在本判据范围。"
     }
   ],
   "deadKeys": [
@@ -107,10 +107,6 @@
       "reason": "同族欠账（队列 L-65）：`Core/MySQLService.swift`。"
     },
     {
-      "key": "licenseUnreadableWithReason",
-      "reason": "同族欠账（队列 L-65）：`Core/LicenseLoader.swift` 的许可失败文案。"
-    },
-    {
       "key": "sshTunnelLaunchFailed",
       "reason": "同族欠账（队列 L-65）：`Core/SSHTunnelProcess.swift`。"
     },
@@ -129,26 +125,6 @@
     {
       "key": "sshTunnelPortInUse",
       "reason": "同族欠账（队列 L-65）：`Core/SSHTunnelProcess.swift`。"
-    },
-    {
-      "key": "noteSidecarLost",
-      "reason": "同族欠账（队列 L-65）：`Core/NoteBody.swift`（笔记旁挂件丢失的提示）。"
-    },
-    {
-      "key": "noteLostColor",
-      "reason": "同族欠账（队列 L-65）：`Core/NoteBody.swift`。"
-    },
-    {
-      "key": "noteLostSize",
-      "reason": "同族欠账（队列 L-65）：`Core/NoteBody.swift`。"
-    },
-    {
-      "key": "noteExportDegraded",
-      "reason": "同族欠账（队列 L-65）：`Core/NoteBody.swift`。"
-    },
-    {
-      "key": "importCopyUnsupportedMySQL",
-      "reason": "同族欠账（队列 L-65）：`Core/TableImport.swift`。"
     },
     {
       "key": "mcpApprovalDenied",

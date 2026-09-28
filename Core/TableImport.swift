@@ -388,14 +388,17 @@ public extension TableImport {
     /// 判据是"驱动有没有实现 `DatabaseService.copyFromText`"：PostgreSQL 实现了；
     /// GBase 8a 目前走 `NotImplementedDatabaseService`（其默认实现**抛「不支持」而不是
     /// 静默退回 INSERT**），所以在界面里就该把这条通道标成不可用并说明理由。
-    static func copySupport(databaseType: DatabaseType) -> CopySupport {
+    ///
+    /// **语言由调用方给定**（队列 L-47 / L-65）：`reason` 是要给用户看的一句话，
+    /// 此前写死简体中文 ⇒ `importCopyUnsupportedMySQL` 的英文译文永远不可达（死译文）。
+    static func copySupport(databaseType: DatabaseType, language: AppLanguage) -> CopySupport {
         switch databaseType {
         case .postgresql:
             return .available
         case .mysql:
             return CopySupport(
                 isAvailable: false,
-                reason: LocalizedStrings.text(.importCopyUnsupportedMySQL, language: .simplifiedChinese)
+                reason: LocalizedStrings.text(.importCopyUnsupportedMySQL, language: language)
             )
         case .gbase8a:
             return CopySupport(
@@ -406,8 +409,9 @@ public extension TableImport {
     }
 
     /// 默认选中的写入通道：能用 COPY 就用 COPY，否则退回批量 INSERT（并带上理由）。
-    static func preferredWriteMode(databaseType: DatabaseType) -> (mode: ImportWriteMode, reason: String?) {
-        let support = copySupport(databaseType: databaseType)
+    /// 语言透传同 `copySupport`（理由要给用户看，队列 L-65）。
+    static func preferredWriteMode(databaseType: DatabaseType, language: AppLanguage) -> (mode: ImportWriteMode, reason: String?) {
+        let support = copySupport(databaseType: databaseType, language: language)
         return support.isAvailable ? (.copy, nil) : (.batchInsert, support.reason)
     }
 

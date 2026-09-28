@@ -105,7 +105,12 @@ public enum NoteBodyProjection {
     // MARK: - 权威源 → span 树
 
     /// Markdown + 旁挂 → span 树。**解析不了的东西原样保留为纯文本**（不吞、不改写）。
-    public static func toSpans(_ body: NoteBody) -> NoteProjection {
+    ///
+    /// **语言由调用方给定**（队列 L-47 / L-65 的口径）：降级说明是**给人看的话**，
+    /// 界面要英文就传 `.english`。此前这里写死简体中文 ⇒ 语言表里
+    /// `noteSidecarLost` / `noteLostColor` / `noteLostSize` / `noteExportDegraded`
+    /// 的英文译文**永远不可达**（死译文）。**刻意不留默认值**：默认值等于把「写死语言」藏起来。
+    public static func toSpans(_ body: NoteBody, language: AppLanguage) -> NoteProjection {
         var spans: [NoteSpan] = []
         var degradations: [String] = []
         var remaining = Substring(body.markdown)
@@ -162,7 +167,7 @@ public enum NoteBodyProjection {
                 break
             }
             if !applied {
-                degradations.append(LocalizedStrings.format(.noteSidecarLost, language: .simplifiedChinese, String(style.occurrence + 1), style.text))
+                degradations.append(LocalizedStrings.format(.noteSidecarLost, language: language, String(style.occurrence + 1), style.text))
             }
         }
         return NoteProjection(spans: spans, degradations: degradations)
@@ -222,14 +227,14 @@ public enum NoteBodyProjection {
         public var degradations: [String]
     }
 
-    public static func exportMarkdown(_ body: NoteBody) -> ExportResult {
+    public static func exportMarkdown(_ body: NoteBody, language: AppLanguage) -> ExportResult {
         var degradations: [String] = []
         for style in body.sidecar {
             var lost: [String] = []
-            if let color = style.color { lost.append(LocalizedStrings.format(.noteLostColor, language: .simplifiedChinese, color)) }
-            if let size = style.size { lost.append(LocalizedStrings.format(.noteLostSize, language: .simplifiedChinese, String(size))) }
+            if let color = style.color { lost.append(LocalizedStrings.format(.noteLostColor, language: language, color)) }
+            if let size = style.size { lost.append(LocalizedStrings.format(.noteLostSize, language: language, String(size))) }
             if !lost.isEmpty {
-                degradations.append(LocalizedStrings.format(.noteExportDegraded, language: .simplifiedChinese, style.text, lost.joined(separator: " / ")))
+                degradations.append(LocalizedStrings.format(.noteExportDegraded, language: language, style.text, lost.joined(separator: " / ")))
             }
         }
         // 导出的是**权威源本身**（不重排、不美化）：AI 写进来的排版不该被我们改掉。
