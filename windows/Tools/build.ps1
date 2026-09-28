@@ -56,6 +56,37 @@ if (-not (Test-Path $manifest)) {
   exit 2
 }
 
+# 前端半（**必须在 cargo 之前**）：Tauri 在编译期把 `frontendDist`（= windows\App\dist）嵌进产物，
+# 前端产物不在盘上时 Rust 半会直接失败 ⇒ 顺序不能颠倒（实测：先 cargo 后 vite 会红在建产物这一步）。
+# 两个前端各自独立：Bench\grid = 压力基准台；App = 产品外壳。缺依赖可见、不判红（缺的是 npm install）。
+function Invoke-DoyahFrontend {
+  param([string]$Dir, [string]$Label)
+  if (-not (Test-Path (Join-Path $Dir 'package.json'))) { return }
+  if (-not (Test-Path (Join-Path $Dir 'node_modules'))) {
+    Write-Host ("    {0}：node_modules 未装 ⇒ 未构建（先 cd {1}; npm install）" -f $Label, $Dir)
+    return
+  }
+  $npm = Get-Command npm -ErrorAction SilentlyContinue
+  if (-not $npm) {
+    Write-Host ("    {0}：本机找不到 npm ⇒ 未构建" -f $Label)
+    return
+  }
+  Write-Host ("    $ npm run build（workdir={0}）" -f $Dir)
+  Push-Location $Dir
+  & $npm.Source run build
+  $rc = $LASTEXITCODE
+  Pop-Location
+  if ($rc -ne 0) {
+    Write-DoyahFail ("{0} 的 vite build 失败（退出码 {1}）" -f $Label, $rc)
+    Write-DoyahResult -Status FAIL -Code 1
+    exit 1
+  }
+  Write-DoyahPass ("{0} 产物：{1}" -f $Label, (Join-Path $Dir 'dist'))
+}
+
+Invoke-DoyahFrontend -Dir (Join-Path $windowsDir 'Bench\grid') -Label '基准台前端（Bench\grid）'
+Invoke-DoyahFrontend -Dir (Join-Path $windowsDir 'App') -Label '外壳前端（App）'
+
 Write-Host ("    $ cargo build --release --workspace（workdir={0}）" -f $windowsDir)
 Push-Location $windowsDir
 $env:RUSTUP_AUTO_INSTALL = '0'
@@ -71,33 +102,6 @@ if ($rc -ne 0) {
 $outDir = Join-Path $windowsDir 'target\release'
 $artifacts = @(Get-ChildItem -Path $outDir -Filter '*.exe' -File -ErrorAction SilentlyContinue)
 Write-DoyahPass ("Rust 产物目录：{0}（{1} 个可执行文件）" -f $outDir, $artifacts.Count)
-
-# 前端半：只有依赖已装才构建（缺依赖不是判红理由，但必须可见）
-$gridDir = Join-Path $windowsDir 'Bench\grid'
-if (Test-Path (Join-Path $gridDir 'package.json')) {
-  if (Test-Path (Join-Path $gridDir 'node_modules')) {
-    $npm = Get-Command npm -ErrorAction SilentlyContinue
-    if ($npm) {
-      Write-Host ("    $ npm run build（workdir={0}）" -f $gridDir)
-      Push-Location $gridDir
-      & $npm.Source run build
-      $rc2 = $LASTEXITCODE
-      Pop-Location
-      if ($rc2 -ne 0) {
-        Write-DoyahFail ("前端 vite build 失败（退出码 {0}）" -f $rc2)
-        Write-DoyahResult -Status FAIL -Code 1
-        exit 1
-      }
-      Write-DoyahPass ("前端产物：{0}" -f (Join-Path $gridDir 'dist'))
-    }
-    else {
-      Write-Host "    前端：本机找不到 npm ⇒ 前端半未构建（Rust 半已通过）"
-    }
-  }
-  else {
-    Write-Host "    前端：Bench\grid\node_modules 未装 ⇒ 前端半未构建（先 npm install；Rust 半已通过）"
-  }
-}
 
 Write-DoyahResult -Status PASS -Code 0
 exit 0

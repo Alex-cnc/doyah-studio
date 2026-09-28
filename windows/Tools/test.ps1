@@ -98,5 +98,27 @@ else {
   Write-Host "    前端：Bench\grid 依赖未装 ⇒ 前端单测未跑（先 npm install；Rust 半已通过）"
 }
 
+# 前端半 · 产品外壳（windows\App）：外壳自己的 vitest（含令牌生成器 / 棘轮的自测）
+$appDir = Join-Path $windowsDir 'App'
+if ((Test-Path (Join-Path $appDir 'package.json')) -and (Test-Path (Join-Path $appDir 'node_modules'))) {
+  $npm = Get-Command npm -ErrorAction SilentlyContinue
+  if ($npm) {
+    Push-Location $appDir
+    $out3 = & $npm.Source test 2>&1
+    $rc3 = $LASTEXITCODE
+    Pop-Location
+    $out3 | Select-Object -Last 8 | ForEach-Object { Write-Host ("    {0}" -f $_) }
+    if ($rc3 -ne 0) {
+      Write-DoyahFail ("外壳 vitest 失败（退出码 {0}）" -f $rc3)
+      Write-DoyahResult -Status FAIL -Code 1
+      exit 1
+    }
+    Write-DoyahPass "外壳单测：vitest run 全绿"
+  }
+}
+else {
+  Write-Host "    外壳前端：windows\App 依赖未装 ⇒ 外壳单测未跑（先 cd windows\App; npm install）"
+}
+
 Write-DoyahResult -Status PASS -Code 0
 exit 0

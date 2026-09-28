@@ -66,7 +66,10 @@ Tools/LicenseTool/keys/
 windows/target/
 target/
 node_modules/
+# 前端 dist 与 Rust target 一律不进版本库
 windows/Bench/**/dist/
+windows/App/dist/
+windows/App/src-tauri/gen/
 windows/Bench/grid/public/data/
 *.pyc
 __pycache__/

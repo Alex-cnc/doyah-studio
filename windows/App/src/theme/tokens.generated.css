@@ -1,0 +1,142 @@
+/*
+ * ⚠️ 生成物 —— 不许手改（改了下次生成即被覆盖，且 CI/闸门会判红）。
+ *
+ * 令牌取值的**单一来源** = macOS 侧 Core/DesignTokens.swift（§8.5.3「令牌取值」属「一样」的五项之一）。
+ * 重新生成：node windows/App/tools/gen-tokens.mjs（比对：--check）
+ * 源 sha256：409492c23239d19a49b3102478e4dda56a036a3e68dc332768b692dee9e28a06
+ */
+
+:root {
+  /* 间距刻度（Spacing） */
+  --ds-spacing-hair: 2px;
+  --ds-spacing-xs: 4px;
+  --ds-spacing-s: 8px;
+  --ds-spacing-m: 12px;
+  --ds-spacing-l: 16px;
+  --ds-spacing-xl: 24px;
+  --ds-spacing-xxl: 32px;
+  /* 圆角刻度（Radius） */
+  --ds-radius-hairline: 1px;
+  --ds-radius-badge: 4px;
+  --ds-radius-control: 6px;
+  --ds-radius-card: 8px;
+  --ds-radius-panel: 10px;
+  /* 度量（Metrics） */
+  --ds-metric-hairline: 0.5px;
+  --ds-metric-row-height: 26px;
+  --ds-metric-list-row-height: 20px;
+  --ds-metric-tab-height: 30px;
+  --ds-metric-toolbar-height: 44px;
+  --ds-metric-status-bar-height: 24px;
+  --ds-metric-control-height: 26px;
+  --ds-metric-sidebar-width: 248px;
+  --ds-metric-activity-bar-width: 46px;
+  --ds-metric-activity-icon-size: 20px;
+  --ds-metric-list-indent: 14px;
+  --ds-metric-plan-panel-width: 720px;
+  --ds-metric-plan-panel-min-height: 160px;
+  --ds-metric-plan-tree-min-height: 56px;
+  --ds-metric-plan-tree-max-height: 320px;
+  --ds-metric-plan-raw-min-height: 48px;
+  --ds-metric-plan-raw-max-height: 260px;
+  --ds-metric-plan-raw-line-height: 15px;
+  --ds-metric-toolbar-button-width: 28px;
+  --ds-metric-toolbar-button-height: 22px;
+  --ds-metric-min-column-width: 40px;
+  --ds-metric-max-column-width: 420px;
+  /* 排版级差（TypeScale） */
+  --ds-font-display-size: 17px;
+  --ds-font-title-size: 15px;
+  --ds-font-body-size: 13px;
+  --ds-font-data-size: 12px;
+  --ds-font-mono-size: 12px;
+  --ds-font-mono-small-size: 11px;
+  --ds-font-caption-size: 11px;
+  /* 叠加层透明度（Overlay；取值是 0..1 的数，不是色值） */
+  --ds-overlay-selection-dark-alpha: 0.14;
+  --ds-overlay-selection-light-alpha: 0.1;
+  --ds-overlay-zebra-dark-alpha: 0.02;
+  --ds-overlay-zebra-light-alpha: 0.015;
+  /* 发丝线透明度（Hairline） */
+  --ds-hairline-light-alpha: 0.09;
+  --ds-hairline-dark-alpha: 0.08;
+
+  /* 浅色档 */
+  /* 表面层次（明度由暗到亮：window → sidebar → content → panel → raised） */
+  --ds-color-surface-window: #E8E8EC;
+  --ds-color-surface-sidebar: #EDEDF2;
+  --ds-color-surface-content: #FFFFFF;
+  --ds-color-surface-panel: #F6F6F9;
+  --ds-color-surface-raised: #FFFFFF;
+  /* 文本层级 */
+  --ds-color-text-primary: #1D1D1F;
+  --ds-color-text-secondary: #6E6E73;
+  --ds-color-text-tertiary: #7C7C82;
+  --ds-color-text-disabled: #A8A8AE;
+  /* 状态色 */
+  --ds-color-status-success: #1E9E5A;
+  --ds-color-status-warning: #B9791B;
+  --ds-color-status-danger: #D03A32;
+  /* 分类色（身份色，不是状态色） */
+  --ds-color-categorical-blue: #3B57E0;
+  --ds-color-categorical-teal: #0F7F7F;
+  --ds-color-categorical-magenta: #B02A83;
+  --ds-color-categorical-amber: #B9791B;
+  /* 语法着色 */
+  --ds-color-syntax-keyword: #8B33C4;
+  --ds-color-syntax-string: #1E7A3C;
+  --ds-color-syntax-number: #A35B00;
+  --ds-color-syntax-function: #0B6E99;
+  --ds-color-syntax-comment: #7C7C82;
+}
+
+:root[data-theme='dark'] {
+  /* 深色档 */
+  --ds-color-surface-window: #141619;
+  --ds-color-surface-sidebar: #17191E;
+  --ds-color-surface-content: #1F2229;
+  --ds-color-surface-panel: #262A31;
+  --ds-color-surface-raised: #2F343C;
+  --ds-color-text-primary: #E7E9EE;
+  --ds-color-text-secondary: #9AA1AE;
+  --ds-color-text-tertiary: #6C7380;
+  --ds-color-text-disabled: #5A6069;
+  --ds-color-status-success: #4CC38A;
+  --ds-color-status-warning: #D9A343;
+  --ds-color-status-danger: #E5534B;
+  --ds-color-categorical-blue: #6E8BFF;
+  --ds-color-categorical-teal: #4FBDBD;
+  --ds-color-categorical-magenta: #D46FB0;
+  --ds-color-categorical-amber: #D9A343;
+  --ds-color-syntax-keyword: #9BA8FF;
+  --ds-color-syntax-string: #9ED37A;
+  --ds-color-syntax-number: #E6C07B;
+  --ds-color-syntax-function: #62C6C0;
+  --ds-color-syntax-comment: #6C7380;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    --ds-color-surface-window: #141619;
+    --ds-color-surface-sidebar: #17191E;
+    --ds-color-surface-content: #1F2229;
+    --ds-color-surface-panel: #262A31;
+    --ds-color-surface-raised: #2F343C;
+    --ds-color-text-primary: #E7E9EE;
+    --ds-color-text-secondary: #9AA1AE;
+    --ds-color-text-tertiary: #6C7380;
+    --ds-color-text-disabled: #5A6069;
+    --ds-color-status-success: #4CC38A;
+    --ds-color-status-warning: #D9A343;
+    --ds-color-status-danger: #E5534B;
+    --ds-color-categorical-blue: #6E8BFF;
+    --ds-color-categorical-teal: #4FBDBD;
+    --ds-color-categorical-magenta: #D46FB0;
+    --ds-color-categorical-amber: #D9A343;
+    --ds-color-syntax-keyword: #9BA8FF;
+    --ds-color-syntax-string: #9ED37A;
+    --ds-color-syntax-number: #E6C07B;
+    --ds-color-syntax-function: #62C6C0;
+    --ds-color-syntax-comment: #6C7380;
+  }
+}

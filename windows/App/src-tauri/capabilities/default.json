@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Windows 外壳的默认能力集：**最小面** —— 只有 core:default（窗口生命周期 / 事件）。本侧不引任何插件（凭据 / PTY / 通知在 Platform/Windows/ 落地时再逐项登记）。",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

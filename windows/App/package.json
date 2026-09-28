@@ -1,0 +1,29 @@
+{
+  "name": "doyah-studio-windows-shell",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Doyah Studio · Windows 侧表示层外壳（Tauri 2 外壳 + Vue 3 + TypeScript；Rust 领域层在 ../Core）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "tauri": "tauri",
+    "gen:tokens": "node tools/gen-tokens.mjs",
+    "check:tokens": "node tools/gen-tokens.mjs --check && node tools/token-ratchet.mjs"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@tauri-apps/api": "^2.9.0",
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.0",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}

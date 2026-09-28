@@ -47,11 +47,12 @@ pwsh -File windows\Tools\verify-all.ps1 -Base HEAD~1                            
 | ⑥ 一条命令跑全 | `verify-all.ps1` | ✅ 跑（**13 项**，第 22 轮由 11 项扩、第 24 轮 12 → 13 项） |
 | （§8.5.6-3 结果网格压力基准，2026-09-28 开工令）| `check-grid-bench.ps1` | ✅ 跑（4 万行缩规模实跑 `grid-bench` + **空跑不许通过**；全量读数见概要设计 §8.5.7 与 `Bench/grid/README.md`） |
 | （§8.3 平台中立性）| `check-platform-neutrality.ps1`
-| （§8.3 设计令牌棘轮）| `check-design-tokens.ps1` | ⚠ 判据①规则名对齐 + ②令牌源在盘 = ✅；③Windows 侧棘轮 ⏭ 跳过（`windows\App` 未建） |
+| （§8.3 设计令牌棘轮）| `check-design-tokens.ps1` | ✅ 跑（**2026-09-28 第 26 轮起三项都真跑**）：① 六条规则名与 mac 基线同名；② 令牌源 `Core/DesignTokens.swift` 在盘；③ 表示层自己的 node 判据 —— `windows/App/tools/gen-tokens.mjs --check`（**令牌生成物 ⇄ 源逐字一致**；分组条数写死在期望值里，对侧改名 / 删项 / 加项即非零退出）+ `windows/App/tools/token-ratchet.mjs`（**六条同名规则**的裸值棘轮，基线 `windows/Tools/design-token-baseline.json` 只降不升、**扫描集为空即判红**，外加**引用面 ⊆ 定义面**）。**本项自此没有「跳过」档** |
 | （领域层边界）| `check-core-boundary.ps1` | ✅ 跑（**2026-09-28 第 25 轮按 Rust 形态重建** —— 旧判据只认 C# 形态，此前一直如实跳过）：`Core/Cargo.toml` 依赖面 + `Core/**/*.rs` 源码面（GUI / 平台 crate、平台专有 std、FFI 形状）+ **空跑不许通过**；**判据与它的 7 例自测在同一次调用里都真跑**（`-SkipSelfTest` 只给手工快跑）|
 
 本机实测（Windows 11 / Windows PowerShell 5.1.26100.9549 / `python` 探得 `py -3`）：
-`verify-all.ps1` = **13 项中跑 12 / 跳过 1 / 失败 0**（第 25 轮实测，读数同时记在 `Docs/概要设计.md` §8.5.7）：**跳过 1 项 = 设计令牌棘轮**（等 `windows\App` 表示层落地；规则名对齐与令牌源两项已 ✅）。加 `-RequireAll` = **判红（跳过即红）**。
+`verify-all.ps1` = **13 项中跑 13 / 跳过 0 / 失败 0**（第 26 轮实测，读数同时记在 `Docs/概要设计.md` §8.5.7）：**设计令牌棘轮不再跳过**（`windows\App` 落地后 ③ 交给表示层自己的两个 node 判据，见上表）—— 本侧自此**没有「跳过」档**。加 `-RequireAll` = 跳过即红（现无跳过项）。
+上一轮的读数（第 25 轮，13 项中跑 12 / 跳过 1 / 失败 0）留痕在此：**跳过 1 项 = 设计令牌棘轮**（等 `windows\App` 表示层落地；规则名对齐与令牌源两项已 ✅）。
 第 24 轮换栈后的那一次读数（13 项中跑 10 / 跳过 2 / 失败 1）留痕在此：判红那一项 = 本地落后远端、merge 尚未提交时的独占节越界，合并后即绿；跳过第 2 项 = 领域层边界，第 25 轮已按 Rust 形态重建。
 第 22 轮另存一对前后证据：**修复前第 ③ 项假红**（判据 `rc 0` 但 stderr 有 `SyntaxWarning`）→ `_common.ps1` 加「只认退出码」护栏后 **跑 8 / 跳过 4 / 失败 0**（见坑 6）。
 
