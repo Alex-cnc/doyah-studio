@@ -20,6 +20,11 @@
      （`verify-all.sh` 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，
      判据如实报「跳过」而不是拿旧值当现状）；
    - `snapshot-manifest`：读 `.build/ui-snapshots/manifest.json` 数张数与组数。
+   - `doc-tables-lists` / `doc-tables-run`（第 65 轮 L-72 ㈡）：`check-doc-tables.py` 的**清单口径**
+     两个数 —— 「被 `.gitignore` 排除的份数」由**那个模块自己的** `gitignored_documents()` 算，
+     判据再用 `git check-ignore -z` 实测一遍（**不是**信它的自述）并与它的自检夹具
+     `SELF_TEST_ABSENT` / `SELF_TEST_TRACKED` 逐条对账；「受检文件数」= **真跑一遍那个脚本**
+     （默认清单），从它自己的收尾行抓。读不到模块 / 跑不过 / 抓不到收尾行都判红。
 3. **文档对账双向**：`anchors`（精确上下文正则 + 捕获组）每一处必须命中且值相等
    —— **写错判红 / 数字被删光也判红**；`reverseScans` 做有限反扫，在「现状口径」语境里
    凡出现的同类数字都必须是台账值（防「新增一处写错的数字」）。
@@ -40,7 +45,7 @@
 用法：
     python3 Scripts/check-doc-numbers.py                # 本仓（默认）
     python3 Scripts/check-doc-numbers.py --root <目录>   # 夹具仓（自测用）
-    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（10 例）
+    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（11 例）
 
 退出码：0 = 全绿；1 = 有判红项。**判红时空跑防护也一起报**（一处都没解析到 ⇒ 不许「零命中 = 通过」）。
 """
@@ -48,10 +53,12 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import pathlib
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -66,7 +73,7 @@ GATE_BLOCK = re.compile(r"==>\s*(\d+)/(\d+)")
 GATE_CLOSE = re.compile(r"\$\(\((\d+)\s*-\s*SKIPPED_COUNT\)\)")
 CHINESE_NUMERAL = re.compile(r"(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项")
 
-MEASURE_KINDS = {"gate-scan", "count-file", "snapshot-manifest"}
+MEASURE_KINDS = {"gate-scan", "count-file", "snapshot-manifest", "doc-tables-lists", "doc-tables-run"}
 CN_DIGITS = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 
 
@@ -167,6 +174,33 @@ def count_counterpart_lines(root: pathlib.Path, rel: str) -> int:
     return skipped
 
 
+def load_doc_tables_module(root: pathlib.Path, rel: str, key, problems: list):
+    """把 `Scripts/check-doc-tables.py` 当模块读进来 —— **清单口径的权威数据就写在那里**。
+
+    为什么读真模块而不是在本判据里复刻一份清单：复刻 = 两套清单，改了 A 忘了 B 谁都不知道
+    （本判据存在的理由就是这件事）。读不到 / 导入炸 ⇒ **判红**，不许静默跳过。
+    """
+    path = root / rel
+    if not path.exists():
+        problems.append(f"[{key}] 实测复核失败：找不到 {rel}（清单口径的权威数据在那里）")
+        return None
+    try:
+        module_spec = importlib.util.spec_from_file_location("doyah_check_doc_tables", path)
+        if module_spec is None or module_spec.loader is None:
+            problems.append(f"[{key}] 实测复核失败：{rel} 取不到模块规格（路径 / 权限异常）")
+            return None
+        module = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(module)
+    except Exception as error:  # noqa: BLE001 —— 模块级异常一律判红（「导入失败」也是证据坏了）
+        problems.append(f"[{key}] 实测复核失败：{rel} 导入失败（{type(error).__name__}: {error}）")
+        return None
+    for attribute in ("DEFAULT_TARGETS", "DEFAULT_GLOBS", "SELF_TEST_ABSENT", "SELF_TEST_TRACKED", "gitignored_documents"):
+        if not hasattr(module, attribute):
+            problems.append(f"[{key}] 实测复核失败：{rel} 里没有 {attribute}（清单口径的入口被改名 / 删掉了）")
+            return None
+    return module
+
+
 def measure(root: pathlib.Path, entry: dict, problems: list, notes: list):
     """实测复核：返回实测值列表，或 None（= 本机没有可实测的量 ⇒ 跳过，绝不拿台账自述当真）。"""
     spec = entry.get("measure") or {}
@@ -235,6 +269,60 @@ def measure(root: pathlib.Path, entry: dict, problems: list, notes: list):
             problems.append(f"[{key}] 实测复核失败：清单里一条快照都没有（零命中不许当通过）")
             return None
         return [len(snapshots), len(bases)]
+
+    if kind == "doc-tables-lists":
+        # `check-doc-tables` 的**清单口径**（第 65 轮 L-72 ㈡）：两个数都由真模块 + git 实测算出来，
+        # 并与自检夹具逐条对账 —— 清单改了没改夹具（或反过来）即判红。
+        module = load_doc_tables_module(root, spec["module"], key, problems)
+        if module is None:
+            return None
+        ignored = module.gitignored_documents()
+        named = list(module.DEFAULT_TARGETS)
+        if ignored is None:
+            ignored = list(module.SELF_TEST_ABSENT)
+            notes.append(
+                f"[{key}] git 侧复核**跳过**：`{root}` 不是 git 仓库（`git check-ignore` 判不了）—— "
+                f"「被 `.gitignore` 排除」这句在本轮**没有被实测**，只按模块里的清单计"
+            )
+        elif sorted(ignored) != sorted(module.SELF_TEST_ABSENT):
+            problems.append(
+                f"[{key}] 清单口径与自检夹具**脱钩**：`git check-ignore` 说被 `.gitignore` 排除的是 "
+                f"{len(ignored)} 份，而 `SELF_TEST_ABSENT` 写着 {len(module.SELF_TEST_ABSENT)} 份"
+                f"（两处必须逐条相同：夹具是「干净克隆」那一例的前提）"
+            )
+        tracked = [target for target in named if target not in set(ignored)]
+        if sorted(tracked) != sorted(module.SELF_TEST_TRACKED):
+            problems.append(
+                f"[{key}] 跟踪文档集合与 `SELF_TEST_TRACKED` 不一致：{len(tracked)} 份 vs "
+                f"{len(module.SELF_TEST_TRACKED)} 份"
+            )
+        return [len(ignored), len(tracked)]
+
+    if kind == "doc-tables-run":
+        # 真跑一遍 `check-doc-tables.py`（默认清单），拿它**自己的输出**当受检文件数 ——
+        # 跑不过 / 抓不到收尾行都判红（格式被改坏 = 证据坏了，不许拿台账自述当真）。
+        module = load_doc_tables_module(root, spec["module"], key, problems)
+        if module is None:
+            return None
+        completed = subprocess.run(
+            [sys.executable, str(root / spec["module"])],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        output = completed.stdout + completed.stderr
+        if completed.returncode != 0:
+            tail = output.strip().splitlines()[-1] if output.strip() else "无输出"
+            problems.append(f"[{key}] 实测复核失败：{spec['module']} 默认跑 exit {completed.returncode}（{tail}）")
+            return None
+        match = re.search(spec["regex"], output)
+        if not match:
+            problems.append(
+                f"[{key}] 实测复核失败：`{spec['module']}` 的输出里抓不到受检文件数"
+                f"（regex {spec['regex']!r} —— 收尾行格式变了）"
+            )
+            return None
+        return [int(match.group(1)), len(module.DEFAULT_TARGETS)]
 
     problems.append(f"[{key}] 台账的 measure.kind 不在词表内：{kind!r}（词表 {sorted(MEASURE_KINDS)}）")
     return None
@@ -606,6 +694,31 @@ def self_test() -> int:
         "⑨ 台账写坏（缺 anchors）⇒ 自洽判红",
         lambda b: build_fixture(b, ledger={**FIXTURE_LEDGER, "numbers": [{k: v for k, v in FIXTURE_LEDGER["numbers"][0].items() if k != "anchors"}]}),
         True,
+    )
+    run(
+        "⑩ 新 kind（`doc-tables-lists`）的模块不在盘上 ⇒ 判红，不许静默跳过",
+        lambda b: build_fixture(
+            b,
+            ledger={
+                **FIXTURE_LEDGER,
+                "numbers": [
+                    {
+                        "key": "doc-tables-lists",
+                        "label": "夹具：清单口径",
+                        "value": 1,
+                        "unit": "份",
+                        "measure": {
+                            "kind": "doc-tables-lists",
+                            "module": "Scripts/不存在-的-门禁.py",
+                            "expect": [1],
+                        },
+                        "anchors": [{"file": "AGENT-SPEC.md", "regex": "(夹具)入口", "minSites": 1}],
+                    }
+                ],
+            },
+        ),
+        True,
+        "找不到",
     )
 
     failures = []

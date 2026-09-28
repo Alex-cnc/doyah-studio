@@ -30,6 +30,12 @@
 macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平台（Windows）上跑这一项必然红，
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。现在：
 
+**这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 7 份** /
+**13 份命名 + 1 条通配 = 实跑 14 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
+`doc-tables-files`）；判据 `Scripts/check-doc-numbers.py` 每次**自己算一遍**（导入本模块读清单 +
+`git check-ignore` 实测 + 真跑本脚本）再与本文件 / `Scripts/verify-all.sh` / `AGENT-SPEC.md` 里每一处
+写法对账 —— 本文件里的数字都是**引用**，改口径改台账。
+
 - **默认清单里不存在** → **跳过 + 高声提示**（打印跳过的清单与条数；跳过 ≠ 通过，但不判红）；
 - **显式点名的文件不存在** → **判红**（你点名要看的东西没有）；
 - `--require-all` → 缺失一律判红；
@@ -57,6 +63,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import subprocess
 import sys
 from collections import Counter
 
@@ -87,6 +94,35 @@ DEFAULT_TARGETS = [
 DEFAULT_GLOBS = [
     "Docs/开发记录-*.md",
 ]
+
+
+def gitignored_documents() -> list[str] | None:
+    """默认清单里被 `.gitignore` 排除的文档 = **只在主开发机上**的那几份（干净克隆 / 另一平台必然没有）。
+
+    **这是「清单口径」的权威算法**（第 65 轮 L-72 ㈡）：本文件的人读输出与 `--self-test` 里的份数
+    都由它算出来；台账 `Scripts/doc-numbers.json` 的 `doc-tables-lists` 登记当前值，判据
+    `Scripts/check-doc-numbers.py` 每次自己跑一遍并与自检夹具 `SELF_TEST_ABSENT` **逐条对账**
+    —— 清单改了没改夹具（或反过来）即判红，不许两处各写一个数。
+
+    返回 `None` = 判不出来（不在 git 仓库里 / git 不可用）⇒ **调用方不许猜一个数字**，改口径说话。
+    """
+    try:
+        completed = subprocess.run(
+            # `-z`：输入与输出都按 NUL 分隔**且不做引号/八进制转义**（默认 `core.quotepath` 会把中文
+            # 路径写成 `"Docs/\346..."`，拿它去比对必然一个都对不上 —— 同一个坑 AGENT-SPEC §9 第 1 条
+            # 记过；`-z` 一旦生效，**输入也必须 NUL 分隔**，否则整串被当成一条路径）。
+            ["git", "check-ignore", "-z", "--stdin"],
+            input="\0".join(DEFAULT_TARGETS) + "\0",
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    # 0 = 有被忽略的；1 = 一个都没被忽略；128 = 不在 git 仓库里 / git 不可用。
+    if completed.returncode not in (0, 1):
+        return None
+    ignored = {path for path in completed.stdout.split("\0") if path}
+    return [target for target in DEFAULT_TARGETS if target in ignored]
 
 
 def split_row(line: str) -> list[str]:
@@ -358,7 +394,13 @@ def main() -> int:
         print(f"⚠ 跳过 {len(skipped)} 份不在本机的文档（不存在即跳过、不判红）：")
         for target in skipped:
             print(f"   · {target}")
-        print("   正常情形：干净克隆 / 另一平台（这 5 份被 .gitignore 排除，只在主开发机上）。")
+        ignored = gitignored_documents()
+        scope = (
+            f"本清单里被 `.gitignore` 排除的 {len(ignored)} 份"
+            if ignored is not None
+            else "本清单里被 `.gitignore` 排除的那几份"
+        )
+        print(f"   正常情形：干净克隆 / 另一平台（{scope}只在主开发机上）。")
         print("   主开发机上出现 = 文档被删或路径写错，请人工确认；`--require-all` 可令其判红。")
 
     if problems:
@@ -450,7 +492,9 @@ def run_self_test() -> int:
         total += 1
         code, output = run(["--require-all"], clone)
         if code == 0:
-            failures.append(f"例 2 失败：--require-all 下缺 5 份仍 exit 0\n{output}")
+            failures.append(
+                f"例 2 失败：--require-all 下缺 {len(SELF_TEST_ABSENT)} 份仍 exit 0\n{output}"
+            )
         elif "文件不存在（--require-all → 判红）" not in output:
             failures.append(f"例 2 失败：没有逐份点名「文件不存在」\n{output}")
 

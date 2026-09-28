@@ -112,7 +112,7 @@ set -euo pipefail
 # 平台口径（L-33，2026-09-27 第 29 轮）：本闭环**在非 macOS 机器上也能跑**，方式是——
 #   · **第 1 / 11 项（要 Xcode 工具链）按平台跳过 + 打印提示**，收尾行如实报「跑了几项 / 跳了几项」，
 #     **跳过 ≠ 通过**（逐条列出跳过的项，并指向 §8.3 / §8.5.3 的等价物）；
-#   · 第 4 项里 5 份被 `.gitignore` 排除的本地文档**不存在即跳过并提示**（显式点名 / `--require-all` 判红）；
+#   · 第 4 项里 7 份被 `.gitignore` 排除的本地文档**不存在即跳过并提示**（显式点名 / `--require-all` 判红）；
 #   · `DOYAH_PLATFORM=macos|windows|linux` 显式声明平台（缺省按 `uname -s` 推断）；
 #   · `./Scripts/verify-all.sh --require-all` = **跳过即红**（主开发机上自我证明用）。
 #
@@ -236,13 +236,18 @@ echo "==> 4/18 文档表格与派生计数"
 # 干净克隆与另一平台都没有。原先一律判红 ⇒ 那台机器上这一项**必红且与改动无关**（§8.5.6-4）。
 # 现在：默认清单里不存在 → **跳过 + 高声提示**；显式点名 / `--require-all` → 判红。
 # 本闭环传不传 `--require-all` 由参数决定（主开发机上自我证明时加）。
+# **口径的两个数不是这里说了算**（第 65 轮 L-72 ㈡）：`7 份被排除` / `13 份命名 + 1 条通配 =
+# 实跑 14 份` 由台账 `Scripts/doc-numbers.json`（`doc-tables-lists` / `doc-tables-files`）登记，
+# 判据 `Scripts/check-doc-numbers.py` 每次自己算一遍（导入 `check-doc-tables.py` 读清单 +
+# `git check-ignore` 实测 + 真跑它一遍）再与本文件 / 该脚本 / `AGENT-SPEC.md` 逐处对账。
 if [ "${REQUIRE_ALL}" = "1" ]; then
   python3 Scripts/check-doc-tables.py --require-all
 else
   python3 Scripts/check-doc-tables.py
 fi
 # 这一半是门禁自己的证据（L-33；L-41 补例 5）：干净克隆跳过 7 份且 exit 0 / --require-all 判红 /
-# 显式点名判红 / **写坏一行被判红并指名行号** / 真仓库 13 份全在无跳过（**末例核对真仓库逐字节未变**）。
+# 显式点名判红 / **写坏一行被判红并指名行号** / 真仓库 14 份受检无跳过（13 份命名 + 1 份通配；
+# **末例核对真仓库逐字节未变**）。
 python3 Scripts/check-doc-tables.py --self-test
 # L-32（2026-09-27 第 28 轮）：变更记录版本号**唯一**、头部版本格**可判**（= 变更记录最高号，
 # 或带「基线 / 首版」标注并在标注里写出当前号）、队列**定义行**条目号唯一。
