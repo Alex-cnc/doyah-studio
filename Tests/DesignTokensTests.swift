@@ -246,4 +246,88 @@ final class DesignTokensTests: XCTestCase {
             XCTAssertFalse(tokenHexes.contains(accent.accentHex), "\(accent.id) 被写死进了令牌层")
         }
     }
+
+    // MARK: 外观方案 D · 科技蓝（2026-09-29 登记，落地 = L-79）
+
+    /// 方案 D 的**关键值**先钉住几处（全量值见 `Docs/design/外观方案-v1.md` §8，那是文档侧的出处；
+    /// 这里只钉"改了要说一声"的几处，理由同 `testMetricsArePinned`）。
+    ///
+    /// 为什么只钉几处：令牌层的值是**唯一来源**，逐条抄一遍进测试等于把同一份数字写两遍
+    /// （L-55 的纪律）；钉住的是**身份值**（深色底、强调色、青绿 / 暖色点缀）——
+    /// 它们一改就是"换了一个方案"，不是微调。
+    func testTechBlueIdentityValuesArePinned() {
+        XCTAssertEqual(Surface.window.color.dark, 0x02070A, "方案 D 的窗口底（§8.1）")
+        XCTAssertEqual(Surface.content.color.dark, 0x0B1A2A, "方案 D 的内容底（§8.1）")
+        XCTAssertEqual(TextTone.primary.color.dark, 0xCAD0DC, "方案 D 的正文（§8.2）")
+        XCTAssertEqual(AccentFamily.accent.color.dark, 0x6EA8D0, "方案 D 的强调色（§8.3）")
+        XCTAssertEqual(AccentFamily.teal.color.dark, 0x94E2F8, "方案 D 的青绿点缀（§8.3）")
+        XCTAssertEqual(AccentFamily.warm.color.dark, 0xC7AF95, "方案 D 的暖色点缀（§8.3）")
+        XCTAssertEqual(TextTone.primary.color.light, 0x10243D, "方案 D 的浅色正文（§8.5）")
+    }
+
+    /// §8.6 的门槛是**产品要求**：正文 ≥4.5 / **强对比 ≥7** / 图标线 ≥3，**深浅两态都要过**。
+    /// 这条把"强对比"这一档也守起来（此前工程里没有这一档 —— 方案 D 带进来的）。
+    func testStrongContrastTierHoldsInBothThemes() {
+        for isDark in [true, false] {
+            let content = Surface.content.color.hex(dark: isDark)
+            let bright = TextTone.bright.color.hex(dark: isDark)
+            let ratio = ColorContrast.ratio(bright, content)
+            XCTAssertGreaterThanOrEqual(
+                ratio, thresholds.strongText,
+                "\(isDark ? "深色" : "浅色")主题的标题 / 关键数值只有 \(String(format: "%.2f", ratio))（需 ≥ \(thresholds.strongText)）"
+            )
+            // 标题比正文更强 —— 否则"bright"这个名字没有意义
+            XCTAssertGreaterThan(ratio, ColorContrast.ratio(TextTone.primary.color.hex(dark: isDark), content))
+        }
+    }
+
+    /// 强调色家族按 §8.3 写明**各自的用途**分别守：
+    /// `accentGlow` / `teal` / `warm` 会落到文字与链接上（≥4.5）；`accent` / `accentSoft`
+    /// 是非文本组件（≥3.0，且 §8.3 明写 `accentSoft`"只够图标线，不得用于正文"）。
+    func testAccentFamilyMeetsItsDocumentedRoles() {
+        for isDark in [true, false] {
+            // §8.2 / §8.5 的对比度基准：深色对 `window`、浅色对白底
+            let base = isDark ? Surface.window.color.dark : 0xFFFFFF
+            for tone in [AccentFamily.accentGlow, .teal, .warm] {
+                let ratio = ColorContrast.ratio(tone.color.hex(dark: isDark), base)
+                XCTAssertGreaterThanOrEqual(
+                    ratio, thresholds.bodyText,
+                    "\(isDark ? "深色" : "浅色")的 \(tone.rawValue) 做文字 / 链接只有 \(String(format: "%.2f", ratio))"
+                )
+            }
+            for tone in [AccentFamily.accent, .accentSoft] {
+                let ratio = ColorContrast.ratio(tone.color.hex(dark: isDark), base)
+                XCTAssertGreaterThanOrEqual(
+                    ratio, thresholds.component,
+                    "\(isDark ? "深色" : "浅色")的 \(tone.rawValue) 做图标线只有 \(String(format: "%.2f", ratio))"
+                )
+            }
+        }
+    }
+
+    /// 语法色六档**按角色**挂在令牌家族上（§8.4 的六档就是 §8.1~8.3 的角色表）。
+    /// 这条是防回潮：谁把某个语法色改回硬编码的十六进制，六档就会与家族脱钩 —— 当场报红。
+    func testSyntaxTonesAreBoundToAccentFamilyRoles() {
+        for isDark in [true, false] {
+            func hex(_ color: ThemeColor) -> UInt32 { color.hex(dark: isDark) }
+            XCTAssertEqual(hex(SyntaxTone.keyword.color), hex(AccentFamily.accentGlow.color))
+            XCTAssertEqual(hex(SyntaxTone.string.color), hex(AccentFamily.warm.color))
+            XCTAssertEqual(hex(SyntaxTone.number.color), hex(AccentFamily.teal.color))
+            XCTAssertEqual(hex(SyntaxTone.function.color), hex(AccentFamily.accent.color))
+            XCTAssertEqual(hex(SyntaxTone.identifier.color), hex(TextTone.primary.color))
+            XCTAssertEqual(hex(SyntaxTone.comment.color), hex(TextTone.tertiary.color))
+        }
+    }
+
+    /// 发丝线：深色 = 白 10%（§8.1），浅色 = 实色 `#D3DCE8`（§8.5）。
+    /// 浅色这一处是**唯一**不用"透明度叠加"的发丝线，故把值钉住并写明出处。
+    func testHairlineFollowsSchemeD() {
+        XCTAssertEqual(Hairline.darkAlpha, 0.10, "方案 D §8.1：白 10%")
+        XCTAssertEqual(Hairline.lightHex, 0xD3DCE8, "方案 D §8.5：浅色实色")
+        // 浅色实色必须比它要分隔的 content（白）暗 —— 亮的线在白底上等于没有
+        XCTAssertLessThan(
+            ColorContrast.relativeLuminance(Hairline.lightHex),
+            ColorContrast.relativeLuminance(Surface.content.color.light)
+        )
+    }
 }

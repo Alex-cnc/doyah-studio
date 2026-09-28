@@ -47,6 +47,9 @@ public enum ColorContrast {
     public enum Threshold {
         /// 正文（WCAG AA）。
         public static let bodyText = 4.5
+        /// **强对比**（WCAG AAA 档）：标题与关键数值（`TextTone.bright`）——
+        /// 2026-09-29 随方案 D 登记（§8.6「正文 ≥4.5 / 强对比 ≥7 / 图标线 ≥3，深浅两态都过」）。
+        public static let strongText = 7.0
         /// 大字号 / 次要信息。
         public static let largeText = 3.0
         /// 非文本的 UI 组件（图标、选中条、焦点环、状态点）。

@@ -87,9 +87,13 @@ final class AccentThemeTests: XCTestCase {
 
     /// 强调色作为 UI 组件（选中条 / 焦点环 / 图标）与两种表面比：**≥ 3.0** 即可（WCAG 对非文本）。
     func testAccentIsVisibleOnBothSurfaces() {
+        // 底色取自令牌，不写死十六进制 —— 否则换了配色（方案 D）这里还拿旧底色算，
+        // 判据看着是绿的、其实量的是另一个界面。
+        let darkContent = Surface.content.color.dark
+        let lightContent = Surface.content.color.light
         for theme in AccentTheme.all {
-            let onDark = AccentTheme.contrastRatio(theme.accentHex, 0x1F2229)   // 深色主题的内容底
-            let onLight = AccentTheme.contrastRatio(theme.accentHex, 0xFFFFFF)  // 浅色主题的内容底
+            let onDark = AccentTheme.contrastRatio(theme.accentHex, darkContent)
+            let onLight = AccentTheme.contrastRatio(theme.accentHex, lightContent)
             XCTAssertGreaterThanOrEqual(onDark, 3.0, "\(theme.id) 在深色底上只有 \(String(format: "%.2f", onDark))")
             XCTAssertGreaterThanOrEqual(onLight, 3.0, "\(theme.id) 在浅色底上只有 \(String(format: "%.2f", onLight))")
         }

@@ -53,7 +53,7 @@ enum Theme {
     static func hairline(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color.white.opacity(Hairline.darkAlpha)
-            : Color.black.opacity(Hairline.lightAlpha)
+            : Color(nsColor: nsColor(hex: Hairline.lightHex))
     }
 
     // MARK: 字体
@@ -114,7 +114,7 @@ enum Theme {
     static var hairlineNSColor: NSColor {
         isDarkAppearance
             ? NSColor.white.withAlphaComponent(Hairline.darkAlpha)
-            : NSColor.black.withAlphaComponent(Hairline.lightAlpha)
+            : nsColor(hex: Hairline.lightHex)
     }
 
     /// 当前绘图外观是否深色。
