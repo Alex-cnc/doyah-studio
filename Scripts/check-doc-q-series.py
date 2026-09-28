@@ -41,7 +41,7 @@ E 空跑防护（解析到的数据行 / 号数 / 对账对数低于下限即判
     python3 Scripts/check-doc-q-series.py                 # 本仓
     python3 Scripts/check-doc-q-series.py --root <目录>    # 夹具仓（自测用）
     python3 Scripts/check-doc-q-series.py --require-all    # 文件不在盘上 ⇒ 判红
-    python3 Scripts/check-doc-q-series.py --self-test      # 判据自己的证据（7 例 + 末例）
+    python3 Scripts/check-doc-q-series.py --self-test      # 判据自己的证据（8 例 + 末例）
 
 退出码：0 = 全绿（或按口径跳过）；1 = 有判红项（逐条点名 `文件:行号`）。
 """

@@ -26,6 +26,10 @@ set -euo pipefail
 #      + **§6 待拍板队列的编号与状态纪律**（L-56：编号唯一 / 状态只写词表词 / 与 §4 同源 ——
 #        这一节是探针「需用户介入」行的来源，`Q19` 曾因此每轮被报成待拍板项；
 #        见 `Scripts/check-doc-q-series.py`）
+#      + **门禁自己的证据：例数的唯一来源**（L-72 ㈠：27 族的负例 / 自检例数收进台账
+#        `Scripts/self-test-counts.json`，判据 `Scripts/check-self-test-counts.py` 把每一族 runner
+#        **真跑一遍**（要求 exit 0）、再与台账和文档里的现状声明逐处对账 —— 此前 `test-*.py`
+#        14 个里 **8 个根本没人跑**，其中一个已经坏在第 3 例而无人知）
 #   5. 需求状态一致性（§10.1 索引表 ↔ 正文定义行）
 #      + **alpha 范围账**（L-69 条件 ③）：FR 🟡 **逐条**判定 —— 能机器验的给可复跑证据指针、
 #        不能机器验的标 `[alpha 不含]`（状态格仍 🟡）。台账 `Scripts/alpha-fr-dispositions.json`，
@@ -209,9 +213,9 @@ python3 Scripts/test-copy-emphasis-gate.py
 # （`DiagnosisContext` 的文本出口必须带 `language:` 形参、`DiagnosisAdvice.parse` 必须带、
 # 面板必须传 `effectiveLanguage` —— 只靠 A 挡不住「删掉形参再在函数体里写死」）/
 # D 空跑不许通过（语言表解析不到键、键引用为 0、扫到的文件过少都判红）。
-# 台账 `Scripts/literal-language-dispositions.json`；负例 `test-literal-language-gate.py`
-# 9 例（回归钉 / 未登记文件 / 新增死译 / 死键修好未销账 / 丢形参 / 面板脱钩 / 语言表消失 /
-# 干净副本前提自检 / 真仓库逐字节未变），一律在临时副本上写坏。
+# 台账 `Scripts/literal-language-dispositions.json`；负例 `test-literal-language-gate.py` **14 例**
+# （第 46 轮落地时 9 例，L-65 第 2/3/4 批又各补了 1~3 例 —— 例数的唯一来源与逐处对账见
+# `Scripts/self-test-counts.json`，一律在临时副本上写坏）。
 python3 Scripts/check-literal-language.py
 python3 Scripts/test-literal-language-gate.py
 
@@ -262,13 +266,33 @@ python3 Scripts/check-doc-numbers.py --self-test
 # 判据 `Scripts/check-doc-q-series.py`：A 编号可判且唯一 / B 状态只写词表词 / C 关闭行成对 /
 # D §4 ↔ §6 同源（Q17~Q23 = Studio 号空间）/ E 空跑防护（行数 / 号数 / 对账对数下限）。
 # 该文件与 check-doc-tables 那份同属 `.gitignore` 内的本机台账 ⇒ 不在盘上时**跳过 + 高声提示**，
-# `--require-all` 判红；负例 `--self-test` 7 例 + 末例核对真仓库逐字节未变。
+# `--require-all` 判红；负例 `--self-test` **8 例** + 末例核对真仓库逐字节未变。
 if [ "${REQUIRE_ALL}" = "1" ]; then
   python3 Scripts/check-doc-q-series.py --require-all
 else
   python3 Scripts/check-doc-q-series.py
 fi
 python3 Scripts/check-doc-q-series.py --self-test
+# L-72 ㈠（2026-09-28 第 65 轮）：上面几条管的是**跨文档的工程设施数字**（闭环项数 / 单测数 /
+# 快照张数），管不了**逐族的负例例数**。真现场两件：① `AGENT-SPEC.md` §6 资产表里那三处 ——
+# 语言透传族的例数写着 10（实测 14）、待拍板队列族写着 7（实测 8）、本项第 17 条注释写着
+# 「共十类」篡改（实测 13 条）；② 更重的一条 —— `Scripts/test-*.py` 这
+# 14 个「门禁自己的证据」**没有任何门禁管**（`check-*.py` 有 doc-numbers 的「有判据、没闭环」
+# 对账，`test-*.py` 没有）⇒ 其中 **8 个根本没人跑**，而 `test-plugin-assembly-gates.py`
+# 已经坏在第 3 例（`Core/AICapture.swift` 的 `sqlNote` 签名改成多行 + 多一个 `tag:` 参数，
+# 夹具锚点还是老单行签名）无人知 —— 「判据写完不对已知改动报红，等于没有」。
+# 台账 `Scripts/self-test-counts.json`；判据 `Scripts/check-self-test-counts.py`：
+# A 台账结构（每族 key / script / cases / countRegex / why；没锚点必须写 noAnchorReason）
+# B **把每一族 runner 真跑一遍**（要求 exit 0 —— 崩了就是「这族的负例没跑」）并按各族登记的
+#   countRegex 抓例数，与台账逐族比对（抓不到 = 收尾行格式被改坏 = 判红，不许静默跳过）
+# C 文档锚点逐处对账（`AGENT-SPEC.md` §6 资产表 / `Scripts/verify-all.sh` 注释 / 脚本自己的
+#   docstring；写错、数字被删光都判红）+ D 可选静态棘轮（`sourceRatchet`：例数只在 runner 里用
+#   `len()` 算出来的族，另按正则数脚本里的用例条数）+ E 空跑防护（族数 / 例数合计 / 锚点命中
+#   处数三条下限）+ F 边界如实打印（无锚点但写了理由的族数）。
+# 负例 `--self-test` 11 例（好情况 / runner 非零退出 / 例数漂移 / 收尾行解析不到 / 锚点值写错 /
+# 锚点被删 / 台账结构错 / 空跑防护 / 静态棘轮 / 末例核对真仓库逐字节未变），夹具一律在临时目录。
+python3 Scripts/check-self-test-counts.py
+python3 Scripts/check-self-test-counts.py --self-test
 
 echo "==> 5/18 需求状态一致性（索引表 ↔ 正文定义行）+ alpha 范围账（FR 🟡 逐条判定）"
 python3 Scripts/check-status-consistency.py
@@ -403,7 +427,8 @@ echo "==> 17/18 vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例 + 
 #   · 这份 `sqlite3.c` 是 9.5 MB 的**生成文件**，换版本 / 手改一行 / 编译宏掉一个都**不会有症状**，
 #     只会让三端行为悄悄不一致（FR-PLUG-08 的口径是「三端同一份引擎，不许换系统 libsqlite3」）；
 #     所以第一条把每个事实（文件哈希 / 头文件版本串 / 宏 / 公共头目录 / 许可 / 来源 / 接线）都做成对账；
-#   · 第二条是**门禁自己的证据**（六类篡改 + 证据锚点 + 接线 + 项号自洽共十类，必须真的报红）；
+#   · 第二条是**门禁自己的证据**（**13 条**篡改全部要被抓到并指名出处 —— 六类篡改 + 证据锚点 +
+#     接线 + 项号自洽 + 台账空跑防护 …，必须真的报红）；
 #   · 第三条是**行为证据**：把 sqlite3.c 现编成可执行文件跑一遍 —— 版本 / 四条宏 / WAL / 参数化
 #     读写 / DQS=0 报错，以及 **FTS5 中文检索**（默认分词器 0 命中、trigram 3 字以上才命中，
 #     两条都钉住 —— 这是「笔记按条件查与全文检索」这条判据的真正口径）。

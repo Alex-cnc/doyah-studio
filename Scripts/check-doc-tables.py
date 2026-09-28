@@ -20,7 +20,7 @@
     python3 Scripts/check-doc-tables.py                    # 本机默认清单（缺失的文档跳过并提示）
     python3 Scripts/check-doc-tables.py --require-all       # 缺失即红（主开发机 / CI 用）
     python3 Scripts/check-doc-tables.py <文件...>            # 显式点名：不存在即红
-    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（五例）
+    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（6 例）
 
 **「文件不存在」的两种语义**（L-33，2026-09-27 第 29 轮；另一平台侧实测提出）：
 
@@ -373,7 +373,9 @@ def main() -> int:
 
 
 # ── 门禁自己的证据（L-33；L-41 补例 5）────────────────────────────────────────
-# 五例，全部在**临时目录**里跑真实文档副本，末例核对真仓库逐字节未变。
+# **6 例** = 5 个编号例子 + 1 条夹具准备自检（runner 的收尾行报「自检通过（6/6）」；
+# 文档里说「五例」指的是编号例子数 —— 例数的唯一来源与这处 1 之差见 `Scripts/self-test-counts.json`）。
+# 全部在**临时目录**里跑真实文档副本，末例核对真仓库逐字节未变。
 # 关键一例是「干净克隆 / 另一平台」：只放**被版本控制跟踪的**那几份文档，
 # 7 份被 `.gitignore` 排除的缺席 —— 口径是**跳过 + 提示、exit 0**（原先必红的正是这一例）。
 # 例 5（L-41）= 负例：把**队列副本**的一行写坏（多一格）⇒ 必须 exit 1 并指名行号

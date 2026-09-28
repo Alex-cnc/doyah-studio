@@ -40,7 +40,7 @@
 用法：
     python3 Scripts/check-doc-numbers.py                # 本仓（默认）
     python3 Scripts/check-doc-numbers.py --root <目录>   # 夹具仓（自测用）
-    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（9 例）
+    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（10 例）
 
 退出码：0 = 全绿；1 = 有判红项。**判红时空跑防护也一起报**（一处都没解析到 ⇒ 不许「零命中 = 通过」）。
 """
