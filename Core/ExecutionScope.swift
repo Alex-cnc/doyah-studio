@@ -1,152 +1,85 @@
 import Foundation
 
-/// 运行范围控制（FR-EXEC-14）：决定「这次到底跑哪一段」。
+/// 执行目标的判定（FR-EXEC-14）：**这次到底跑哪一段**。
 ///
-/// 三种范围：
-/// - `all`：整篇（原有行为）；
-/// - `currentStatement`：光标所在的那一条语句；
-/// - `selection`：编辑器里选中的片段。
+/// 口径（2026-09-27 需求提出者拍板）：
+/// - 编辑器里有选区 → **就跑选中的那一段**；
+/// - 没有选区 → **跑整篇**。
 ///
-/// **不静默降级**：如果用户选了「选中片段」却没选内容、或选了「光标所在语句」而光标不在
-/// 任何语句上，这里**不**偷偷改成「跑整篇」——那等于把一次小操作放大成整篇脚本，风险方向是错的。
-/// 此时返回空 SQL + 可读原因，由界面明确提示。
+/// **没有「运行范围」这个开关** —— 原来那三档（整篇 / 光标所在语句 / 选中片段）要用户先设一次，
+/// 需求提出者原话：「我期望的是，用户没有选择某条 SQL 时就执行编辑框里所有 SQL，否则就是执行
+/// 用户选择，并不需要用户还去设置一下是执行整个脚本还是只执行选择，这是多此一举」。
+/// `选中就跑选中、没选就跑全部` 本身就是所有 SQL 客户端的习惯，再挂一个开关只会多出
+/// 一个「设错了自己不知道」的失败面。
 ///
-/// 语句边界复用 `StatementSplitter`：它把每条语句存成**原文的逐字子串**且按顺序输出，
-/// 因此这里只要按顺序在原文里往后定位即可拿到 UTF-16 范围，无需改动既有拆分逻辑。
+/// **不静默放大**：选中的内容全是空白时**不**退回跑整篇 —— 那等于把一次小操作放大成整篇脚本，
+/// 风险方向是错的；此时如实报「没有可执行的内容」。
+///
+/// 选区由调用方给（编辑器里**显示中**那一段，见 `EditorCommandCenter.selectionForExecution`）。
 public enum ExecutionScope {
 
-    /// 运行范围模式。
-    public enum Mode: String, Codable, Sendable, CaseIterable {
-        case all
-        case currentStatement
+    /// 这次实际跑了哪一段（写进 Output，让「跑了什么」有据可查）。
+    public enum Source: String, Codable, Sendable, CaseIterable {
+        /// 编辑器里选了 → 只跑选中的那段。
         case selection
+        /// 没选 → 跑整个编辑器。
+        case wholeScript
     }
 
     /// 解析结果。
     public struct Resolution: Equatable, Sendable {
         /// 将要执行的 SQL；为空表示**没有可执行内容**（见 `issue`）。
         public var sql: String
-        public var mode: Mode
-        /// 命中的语句序号（1 起）；`all` 为 `nil`。
-        public var statementNumber: Int?
+        /// 这一段的来源（选中片段 / 整篇）。
+        public var source: Source
         /// 没有可执行内容时的可读原因。
         public var issue: Issue?
 
-        public init(sql: String, mode: Mode, statementNumber: Int? = nil, issue: Issue? = nil) {
+        public init(sql: String, source: Source, issue: Issue? = nil) {
             self.sql = sql
-            self.mode = mode
-            self.statementNumber = statementNumber
+            self.source = source
             self.issue = issue
         }
+    }
 
-        /// 无法按请求范围执行的原因。
-        public enum Issue: String, Equatable, Sendable {
-            /// 选了「选中片段」但没有选中内容。
-            case emptySelection
-            /// 光标不在任何语句上（空文件 / 只有空白）。
-            case noStatementAtCursor
-            /// 整篇为空。
-            case emptyText
-        }
+    /// 没有可执行内容的原因。
+    public enum Issue: String, Equatable, Sendable {
+        /// 选中的内容（去掉空白后）是空的。
+        case emptySelection
+        /// 编辑器里没有内容。
+        case emptyText
     }
 
     /// 解析出将要执行的 SQL。
     ///
-    /// - Parameters:
-    ///   - selection: 编辑器的选区（UTF-16，`NSRange` 语义）；`length == 0` 视为「没有选中内容」。
+    /// - Parameter selection: 编辑器的选区（UTF-16，`NSRange` 语义）；`length == 0` 视为「没有选区」。
+    ///   越界（理论上不该发生：它来自显示中的 `NSTextView`）按「没有选区」处理 ——
+    ///   宁可跑整篇，也不去猜一段可能的旧偏移。
     public static func resolve(
         text: String,
-        mode: Mode,
-        selection: NSRange? = nil,
-        databaseType: DatabaseType = .postgresql
+        selection: NSRange? = nil
     ) -> Resolution {
-        switch mode {
-        case .all:
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
-                return Resolution(sql: "", mode: .all, issue: .emptyText)
-            }
-            return Resolution(sql: text, mode: .all)
-
-        case .selection:
-            guard let selection, selection.length > 0 else {
-                return Resolution(sql: "", mode: .selection, issue: .emptySelection)
-            }
-            guard let range = clamp(selection, to: text) else {
-                return Resolution(sql: "", mode: .selection, issue: .emptySelection)
-            }
+        if let selection, selection.length > 0, let range = clamp(selection, to: text) {
             let selected = substring(text, range).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !selected.isEmpty else {
-                return Resolution(sql: "", mode: .selection, issue: .emptySelection)
+                // 选中的全是空白：**不**退回整篇（那是一次静默放大），如实报。
+                return Resolution(sql: "", source: .selection, issue: .emptySelection)
             }
-            return Resolution(sql: selected, mode: .selection)
-
-        case .currentStatement:
-            let cursor = selection?.location ?? 0
-            guard let hit = statement(containing: cursor, in: text, databaseType: databaseType) else {
-                return Resolution(sql: "", mode: .currentStatement, issue: .noStatementAtCursor)
-            }
-            let sql = substring(text, hit.range).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !sql.isEmpty else {
-                return Resolution(sql: "", mode: .currentStatement, issue: .noStatementAtCursor)
-            }
-            return Resolution(sql: sql, mode: .currentStatement, statementNumber: hit.index + 1)
-        }
-    }
-
-    /// 光标所在的语句范围（UTF-16）与序号（0 起）。
-    ///
-    /// 实现要点：`StatementSplitter` 返回的 `sql` 是原文的逐字子串且按出现顺序排列，
-    /// 所以从上一个语句的结尾往后做**顺序查找**即可稳定定位；找不到（理论上不该发生）
-    /// 则返回 `nil`，由调用方给出可读提示，而不是猜一个位置。
-    public static func statement(
-        containing location: Int,
-        in text: String,
-        databaseType: DatabaseType = .postgresql
-    ) -> (range: NSRange, index: Int)? {
-        let statements = StatementSplitter(databaseType: databaseType).split(text)
-        guard !statements.isEmpty else { return nil }
-
-        let nsText = text as NSString
-        var searchStart = 0
-
-        for (index, statement) in statements.enumerated() {
-            guard !statement.sql.isEmpty else { continue }
-
-            let found = nsText.range(
-                of: statement.sql,
-                options: [],
-                range: NSRange(location: searchStart, length: nsText.length - searchStart)
-            )
-            guard found.location != NSNotFound else { continue }
-
-            // 光标落在该语句范围内（含起点、含紧跟的分号位置）即算命中。
-            let end = found.location + found.length
-            if location >= found.location, location <= end {
-                return (found, index)
-            }
-            if location < found.location {
-                // 光标在两条语句之间的空白 / 注释里：归给**后面**那条更符合直觉。
-                return (found, index)
-            }
-            searchStart = end
+            return Resolution(sql: selected, source: .selection)
         }
 
-        // 光标在最后一条语句之后（尾部空白）：归给最后一条。
-        if let last = statements.last {
-            let range = nsText.range(of: last.sql, options: [.backwards])
-            if range.location != NSNotFound {
-                return (range, statements.count - 1)
-            }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return Resolution(sql: "", source: .wholeScript, issue: .emptyText)
         }
-        return nil
+        return Resolution(sql: text, source: .wholeScript)
     }
 
     // MARK: - 内部
 
     static func clamp(_ range: NSRange, to text: String) -> NSRange? {
         let length = (text as NSString).length
-        guard range.location <= length else { return nil }
+        guard range.location >= 0, range.location <= length else { return nil }
         let usable = min(range.length, length - range.location)
         guard usable > 0 else { return nil }
         return NSRange(location: range.location, length: usable)

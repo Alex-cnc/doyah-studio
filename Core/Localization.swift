@@ -1463,13 +1463,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case safetyConfirmCancel
 
     // 运行范围控制（FR-EXEC-14）
-    case toolbarRunScope
-    case runScopeAll
-    case runScopeCurrentStatement
-    case runScopeSelection
-    case runScopeHint
+    /// 这次跑的是哪一段（FR-EXEC-14，2026-09-27 口径变更后只剩这两种来源）。
+    case execSourceSelection
+    case execSourceWholeScript
     case runScopeEmptySelection
-    case runScopeNoStatement
     case runScopeEmptyText
 
     // 执行状态
@@ -2974,13 +2971,9 @@ public enum LocalizedStrings {
         .safetyConfirmMessage: [.simplifiedChinese: "以下是检测到的风险点：", .english: "Detected risks:"],
         .safetyConfirmRun: [.simplifiedChinese: "仍然执行", .english: "Run anyway"],
         .safetyConfirmCancel: [.simplifiedChinese: "取消", .english: "Cancel"],
-        .toolbarRunScope: [.simplifiedChinese: "运行范围", .english: "Run scope"],
-        .runScopeAll: [.simplifiedChinese: "整篇", .english: "Entire script"],
-        .runScopeCurrentStatement: [.simplifiedChinese: "光标所在语句", .english: "Statement at cursor"],
-        .runScopeSelection: [.simplifiedChinese: "选中片段", .english: "Selection only"],
-        .runScopeHint: [.simplifiedChinese: "选择执行时只跑哪一段；被 Safe Mode 拦下时也只检查这一段。", .english: "Which part to run; Safe mode only checks this part too."],
-        .runScopeEmptySelection: [.simplifiedChinese: "运行范围是「选中片段」，但编辑器里没有选中任何内容，所以这次没有执行。建议：① 先选中要执行的那段 SQL 再运行；② 或者把工具条上的「运行范围」菜单切到「整篇」/「光标所在语句」。", .english: "Nothing ran: the run scope is \"Selection only\" and nothing is selected. Try: (1) select the fragment you want to run, or (2) switch the toolbar's run-scope menu to \"Entire script\" / \"Statement at cursor\"."],
-        .runScopeNoStatement: [.simplifiedChinese: "运行范围是「光标所在语句」，但光标不在任何语句上，所以这次没有执行。建议：把光标放进要执行的那条语句里，或把工具条上的「运行范围」切到「整篇」。", .english: "Nothing ran: the run scope is \"Statement at cursor\" and the cursor is not on any statement. Try: put the cursor inside the statement you want to run, or switch the toolbar's run scope to \"Entire script\"."],
+        .execSourceSelection: [.simplifiedChinese: "选中片段", .english: "Selection only"],
+        .execSourceWholeScript: [.simplifiedChinese: "整篇", .english: "Entire script"],
+        .runScopeEmptySelection: [.simplifiedChinese: "选中的内容是空白（只有空格/换行），没有可执行的东西。建议：选中要执行的那段 SQL，或取消选中、直接跑整篇。", .english: "Nothing ran: what you selected contains only whitespace. Try selecting the SQL you want to run, or clear the selection to run the whole script."],
         .runScopeEmptyText: [.simplifiedChinese: "编辑器里还没有内容，所以这次没有执行。建议：先写一条 SQL 再运行。", .english: "Nothing ran: the editor is empty. Try: type a statement first."],
 
         .stateNotConnected: [.simplifiedChinese: "未连接", .english: "Not connected"],

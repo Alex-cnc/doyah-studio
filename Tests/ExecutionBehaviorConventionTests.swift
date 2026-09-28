@@ -114,7 +114,12 @@ final class ExecutionBehaviorConventionTests: XCTestCase {
         )
     }
 
-    /// ⑤ 「这一跑跑的是哪一段」必须写在 Output 里（静默跑错段落 = 这一族最坏的形状）。
+    /// ⑤ 「这一跑跑的是哪一段」必须写在 Output 里，而且**工具条上不许再有那个开关**。
+    ///
+    /// 口径（2026-09-27 需求提出者拍板）：有选区跑选中、没选区跑整篇，**自动判定**；
+    /// 「整篇 / 光标所在语句 / 选中片段」那种要用户先设一次的菜单是多此一举，已删。
+    /// 这条判据守住两件事：跑哪一段写在明面上（静默跑错段落 = 这一族最坏的形状），
+    /// 以及那个菜单不许以任何形式回来。
     func testRunScopeIsStatedInTheOutputLog() throws {
         let appState = try source("App/AppState.swift")
         XCTAssertTrue(
@@ -127,13 +132,26 @@ final class ExecutionBehaviorConventionTests: XCTestCase {
         )
 
         let toolbar = try source("App/Views/QueryToolbar.swift")
-        XCTAssertFalse(
-            toolbar.contains("case .all: return L(.runScopeAll)"),
-            "档位名的唯一出处是 `ExecutionScope.Mode.title` —— 工具条不许再自己 switch 一遍（两处迟早漂移）"
-        )
-        let titles = try source("App/ExecutionScopeTitle.swift")
-        for key in [".runScopeAll", ".runScopeCurrentStatement", ".runScopeSelection"] {
-            XCTAssertTrue(titles.contains(key), "档位名映射少了 \(key)")
+        for forbidden in ["runScopeMenu", "scopeButton", "executionScope"] {
+            XCTAssertFalse(
+                toolbar.contains(forbidden),
+                "工具条上不许再有「运行范围」这类开关（\(forbidden)）：有选区跑选中、没选区跑整篇，自动判定就够了"
+            )
         }
+
+        let labels = try source("App/ExecutionScopeTitle.swift")
+        XCTAssertTrue(
+            labels.contains("extension ExecutionScope.Source"),
+            "「跑的是哪一段」的说法要有一个唯一出处（ExecutionScope.Source.title）"
+        )
+        for key in [".execSourceSelection", ".execSourceWholeScript"] {
+            XCTAssertTrue(labels.contains(key), "来源名映射少了 \(key)")
+        }
+
+        // 判定只有一处实现：AppState 里不许再出现"按某个模式跑"的残留。
+        XCTAssertFalse(
+            appState.contains("executionScope."),
+            "执行路径不许再读一个用户设的「运行范围」状态"
+        )
     }
 }

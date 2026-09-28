@@ -785,11 +785,9 @@ final class AppState: ObservableObject {
     /// 被拦下、等待确认的执行请求；`nil` 表示没有待确认项。
     @Published var pendingExecution: PendingExecution?
 
-    /// 运行范围（FR-EXEC-14）：整篇 / 光标所在语句 / 选中片段。用 `UserDefaults` 记住。
-    @Published var executionScope: ExecutionScope.Mode =
-        ExecutionScope.Mode(rawValue: UserDefaults.standard.string(forKey: "execution.scope") ?? "") ?? .all {
-        didSet { UserDefaults.standard.set(executionScope.rawValue, forKey: "execution.scope") }
-    }
+    // 运行范围不再是一个用户设置（FR-EXEC-14，2026-09-27 需求提出者拍板）：
+    // **有选区就跑选中的那段，没选区就跑整篇** —— 由 `ExecutionScope.resolve` 自动判定，
+    // 工具条上那个三档菜单已删。原 `execution.scope` 这个 `UserDefaults` 键不再读取。
 
     // MARK: 下方面板（结果 / 问题 / 输出 / 终端 / 调试控制台）
 
@@ -1015,11 +1013,10 @@ final class AppState: ObservableObject {
         pendingExecution = nil
     }
 
-    /// 运行范围无法满足时的可读提示（不静默改成跑整篇）。
-    private func message(forRunScopeIssue issue: ExecutionScope.Resolution.Issue) -> String {
+    /// 判定不出可执行内容时的可读提示（**不静默改成跑整篇** —— 那等于把一次小操作放大）。
+    private func message(forRunScopeIssue issue: ExecutionScope.Issue) -> String {
         switch issue {
         case .emptySelection: return L(.runScopeEmptySelection)
-        case .noStatementAtCursor: return L(.runScopeNoStatement)
         case .emptyText: return L(.runScopeEmptyText)
         }
     }
@@ -5466,7 +5463,8 @@ final class AppState: ObservableObject {
             return
         }
 
-        // 运行范围控制（FR-EXEC-14）：先按当前模式抠出**真正要跑的那一段**，
+        // 执行目标判定（FR-EXEC-14，2026-09-27 需求提出者拍板的口径）：
+        // **有选区就跑选中的那段，没选区就跑整篇** —— 没有"运行范围"开关要用户先设一次。
         // 后续的连接、Safe Mode 判定、执行全都基于这一段。
         //
         // 选区取**显示中的编辑器**（`selectionForExecution`），不是那份缓存记录：
@@ -5475,9 +5473,7 @@ final class AppState: ObservableObject {
         // 缓存记录被重建 / 外部文本同步冲掉过。**用户眼里高亮的那一段才算数。**
         let resolution = ExecutionScope.resolve(
             text: tabs[tabIndex].sql,
-            mode: executionScope,
-            selection: EditorCommandCenter.shared.selectionForExecution(tabID: tabID),
-            databaseType: configuration.dbType
+            selection: EditorCommandCenter.shared.selectionForExecution(tabID: tabID)
         )
         if let mismatch = EditorCommandCenter.shared.lastSelectionMismatch {
             // 判据看不见的时序，只能在现场留痕：缓存说 a+b，实际是 c+d。
@@ -5557,7 +5553,7 @@ final class AppState: ObservableObject {
         // 一次"静默跑错段落"没有任何痕迹）。三件事一起说清：范围、本次几条、脚本共几条。
         let scopeSplitter = StatementSplitter(databaseType: configuration.dbType)
         let scopeSummary = ExecutionScopeSummary(
-            scopeName: executionScope.title,
+            scopeName: resolution.source.title,
             runningStatements: scopeSplitter.split(sql).count,
             scriptStatements: scopeSplitter.split(tabs[tabIndex].sql).count
         )

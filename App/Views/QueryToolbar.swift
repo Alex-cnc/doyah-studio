@@ -44,7 +44,6 @@ struct QueryToolbar: View {
                 .frame(height: 16)
 
             editMenu
-            runScopeMenu
             safetyMenu
             helpButton
 
@@ -131,58 +130,9 @@ struct QueryToolbar: View {
         return "\(mark) \(preview)"
     }
 
-    /// 运行范围菜单（FR-EXEC-14）：整篇 / 光标所在语句 / 选中片段。
-    private var runScopeMenu: some View {
-        Menu {
-            scopeButton(L(.runScopeAll), mode: .all, shortcut: .scopeAll)
-            scopeButton(L(.runScopeCurrentStatement), mode: .currentStatement, shortcut: .scopeCurrentStatement)
-            scopeButton(L(.runScopeSelection), mode: .selection, shortcut: .scopeSelection)
-
-            Divider()
-
-            Text(L(.runScopeHint))
-                .font(Theme.font(.caption))
-        } label: {
-            Label(runScopeTitle, systemImage: runScopeSymbol)
-                .labelStyle(.titleAndIcon)
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help(L(.toolbarRunScope) + "（" + AppShortcut.scopeAll.display + " / "
-              + AppShortcut.scopeCurrentStatement.display + " / "
-              + AppShortcut.scopeSelection.display + "）")
-    }
-
-    /// 运行范围的一个选项：显示当前是否生效 + 快捷键。
-    private func scopeButton(
-        _ title: String,
-        mode: ExecutionScope.Mode,
-        shortcut: AppShortcut
-    ) -> some View {
-        Button {
-            appState.executionScope = mode
-        } label: {
-            if appState.executionScope == mode {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
-        }
-        .keyboardShortcut(shortcut.key, modifiers: shortcut.modifiers)
-    }
-
-    private var runScopeTitle: String {
-        // 档位名只有一个出处（`ExecutionScope.Mode.title`）：工具条菜单与执行日志取同一份。
-        appState.executionScope.title
-    }
-
-    private var runScopeSymbol: String {
-        switch appState.executionScope {
-        case .all: return "doc.text"
-        case .currentStatement: return "text.cursor"
-        case .selection: return "selection.pin.in.out"
-        }
-    }
+    // 「运行范围」菜单已删（FR-EXEC-14，2026-09-27 需求提出者拍板）：
+    // **有选区跑选中、没选区跑整篇**，由 `ExecutionScope.resolve` 自动判定 ——
+    // 工具条上不再需要这个开关，也就不必先设一次「这次按哪种范围跑」。
 
     /// 高危语句保护开关（FR-EXEC-16）。
     ///
@@ -515,9 +465,6 @@ struct ShortcutHelpContent: View {
         (.editMenuSelectNextOccurrence, .selectNextOccurrence),
         (.editMenuAddCursorAbove, .addCursorAbove),
         (.editMenuAddCursorBelow, .addCursorBelow),
-        (.runScopeAll, .scopeAll),
-        (.runScopeCurrentStatement, .scopeCurrentStatement),
-        (.runScopeSelection, .scopeSelection),
         (.safetySafeMode, .safeMode),
         (.safetyConfirmAllWrites, .confirmAllWrites),
         (.menuAgentAudit, .agentAudit),
