@@ -14,6 +14,18 @@
  *   故先量「不滚动、只等帧」的节奏，再量三档行数（40 万 / 5 万 / 2 千）的滚动 —— 把
  *   「滚动高度 1000 万像素」这一因素与「每帧重建行 DOM」分开。
  *
+ * **消融档（ablation，2026-09-28 第 29 轮修）**：把滚动成本拆成两段 ——
+ *   ① 基线档（`scroll@400000`，步长 288px：窗口每帧都换）；
+ *   ② `+slow-scroll` 档（**步长 1px/帧**：240 帧只走 240px ⇒ 窗口每 ~26 帧才换一次，其余帧产品**照样**
+ *      每帧发窗口取数、照样跑响应式与 vnode 比对，而 DOM 文本不变）⇒ `① − ②` ≈ 每帧「重建可视行 DOM」
+ *      写下去的成本；`②` 本身 = IPC + 响应式 + diff + 滚动 + 宿主帧节奏的底噪。
+ *   **为什么不用「页面内替换 invoke」那种消融（第 28 轮的坑）**：宿主把 `__TAURI_INTERNALS__.invoke`
+ *   定义成**不可写且不可配置**（实测描述符 `writable:false, configurable:false`）⇒ 页面里既不能赋值
+ *   替换（sloppy mode **静默失效**、不抛错）也不能 `defineProperty`。第 28 轮那一档正是栽在这里：
+ *   它量的是与基线**完全相同**的东西，却报出「IPC 无关」的结论；铁证就在读数 JSON 里 ——
+ *   `cachedWindowCalls: 0`（产品一次都没命中补丁）。现在这条事实由 `probeInvokePatchability()`
+ *   **当场探一遍并进读数**（`invokePatchability`），换成任何别的消融设计都留下这条证据。
+ *
  * 注意：**本文件不是产品代码**，只在基准台运行时被 CDP 注入；产品形态里不存在它。
  */
 (function install() {
@@ -288,39 +300,90 @@
     }
   }
 
-  /** **隔离实验**：把 IPC 传输换成「缓存立即返回」，其余不变 —— 用来分开
-   *  「取数传输成本」与「渲染 / 布局成本」。只在本仪器里打补丁，产品代码不动。 */
-  async function scrollWithInstantIpc(rows) {
-    const target = rows === undefined ? CFG.rows : rows
-    const internals = window.__TAURI_INTERNALS__
-    if (!internals || typeof internals.invoke !== 'function') throw new Error('拿不到 __TAURI_INTERNALS__.invoke')
-    const original = internals.invoke
-    // 先真取一次（同一片），之后所有窗口请求立刻返回这一片 —— DOM 形状与真实一致
-    const sample = await original('grid_window', {
-      rows: target,
-      cols: CFG.cols,
-      seed: CFG.seed,
-      orderDesc: false,
-      start: 0,
-      len: CFG.windowRows,
-    })
-    let cached = 0
-    internals.invoke = async (cmd, args) => {
-      if (cmd === 'grid_window') {
-        cached += 1
-        return { total: target, start: args.start, cells: sample.cells }
-      }
-      return original(cmd, args)
-    }
+  /** 宿主把 `__TAURI_INTERNALS__.invoke` 定义成**不可写且不可配置**（第 29 轮实测描述符
+   *  `writable:false, configurable:false`）⇒ **在页面里替换它做不到**：sloppy mode 下直接赋值
+   *  **静默失效**、`defineProperty` 抛 `Cannot redefine property: invoke`。第 28 轮的「IPC 隔离档」
+   *  正是栽在这里（量了与基线完全一样的东西、却报出「IPC 无关」）。本函数把这条事实**当场探一遍**
+   *  并进读数 —— 以后换任何别的消融设计，这条证据都还在。 */
+  function probeInvokePatchability() {
+    const out = { target: '__TAURI_INTERNALS__.invoke', descriptor: null, definePropertyOk: null, restored: null, note: null }
     try {
-      const r = await scroll(target)
-      r.ipcMode = 'instant-cached'
-      r.cachedWindowCalls = cached
-      return r
-    } finally {
-      internals.invoke = original
+      const internals = window.__TAURI_INTERNALS__
+      const original = internals.invoke
+      const d = Object.getOwnPropertyDescriptor(internals, 'invoke') || {}
+      out.descriptor = {
+        writable: d.writable === undefined ? null : d.writable,
+        configurable: d.configurable === undefined ? null : d.configurable,
+        accessor: !!(d.get || d.set),
+      }
+      try {
+        Object.defineProperty(internals, 'invoke', { value: () => {}, configurable: true, writable: true })
+        out.definePropertyOk = true
+        Object.defineProperty(internals, 'invoke', { value: original, configurable: true, writable: true })
+        out.restored = Object.is(internals.invoke, original)
+        out.note = '宿主允许替换 ⇒ 理论上可做「本地立即返回」消融（本档没做，见 README）'
+      } catch (e) {
+        out.definePropertyOk = false
+        out.note =
+          '宿主不允许替换（' + String(e && e.message ? e.message : e) +
+          '）⇒ 页面内无法消融 IPC；要量 IPC 成本只能走「滚动距离」这类不改代码的对照，或另编一个变体'
+      }
+    } catch (e) {
+      out.note = '探测抛异常：' + String(e)
+    }
+    return out
+  }
+
+  /** **消融档：慢速滚动**（1px/帧，240 帧共 240px）。它不碰页面里的任何补丁（宿主不许），
+   *  只用「滚动距离」这一个可调项把**内容更新率**压到约 1/26：窗口每 ~26 帧才真的换一次
+   *  （`plan.start` 变化），其余帧产品**照样**每帧发一次窗口取数、照样跑响应式与 vnode 比对，
+   *  而 DOM 文本不变 ⇒ **IPC / 响应式 / diff / 滚动成本全在，DOM 写入基本没有**。
+   *  与同轮的基线档成对读：`基线 − 本档` ≈ 每帧把「重建好的可视行 DOM」写下去的成本。
+   *  **本档不参与协议常量对齐**（步长与基准台不同）—— 它只做同轮内的一对，不做跨台比较。 */
+  async function scrollSlow(rows) {
+    const target = rows === undefined ? CFG.rows : rows
+    const settle = await setRows(target)
+    const sc = scroller()
+    if (!sc) throw new Error('结果网格不在盘上（.results__scroller 消失）')
+    const deltas = []
+    let windowShifts = 0
+    let lastStart = null
+    let prev = now()
+    for (let i = 0; i < CFG.frames; i += 1) {
+      sc.scrollTop = i + 1
+      await nextFrame()
+      const t = now()
+      deltas.push(t - prev)
+      prev = t
+      const m = /窗口\s*(\d+)/.exec(metaText())
+      const s = m ? m[1] : null
+      if (s !== lastStart) {
+        windowShifts += 1
+        lastStart = s
+      }
+    }
+    return {
+      phase: 'scroll-slow',
+      rows: target,
+      settle,
+      stats: frameStats(deltas),
+      stepPx: 1,
+      scrollTopAfter: Math.round(sc.scrollTop),
+      windowShifts,
+      rowHeightPx: rowHeightPx(),
+      domRows: domRows(),
+      heapMB: heapMB(),
+      meta: metaText(),
+      notes: ['本档专用：步长 1px/帧（把内容更新率压到约 1/26），不参与协议常量对齐'],
     }
   }
 
-  globalThis.__DOYAH_WV2_BENCH__ = { config: CFG, setup, idle, scroll, scrollWithInstantIpc }
+  globalThis.__DOYAH_WV2_BENCH__ = {
+    config: CFG,
+    setup,
+    idle,
+    scroll,
+    scrollSlow,
+    probeInvokePatchability,
+  }
 })()

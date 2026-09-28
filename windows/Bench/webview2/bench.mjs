@@ -346,18 +346,27 @@ async function main() {
     phases.push(await phase('scroll@' + rows, 'globalThis.__DOYAH_WV2_BENCH__.scroll(' + rows + ')'))
   }
 
-  log('== ④ 隔离档：同样滚动 40 万行，但 IPC 传输换成「缓存立即返回」（分开传输成本与渲染成本）')
+  log('== ④ 消融档：慢速滚动（步长 1px/帧 ⇒ 窗口每 ~26 帧才换一次；IPC / 响应式 / diff 全在，DOM 写入基本没有）')
   phases.push(
-    await phase(
-      'scroll@' + setup.config.rows + '+instant-ipc',
-      'globalThis.__DOYAH_WV2_BENCH__.scrollWithInstantIpc(' + setup.config.rows + ')',
-    ),
+    await phase('scroll@' + setup.config.rows + '+slow-scroll', 'globalThis.__DOYAH_WV2_BENCH__.scrollSlow(' + setup.config.rows + ')'),
+  )
+
+  log('== ⑤ 基线复跑（同轮内对照 —— 单次读数的轮间波动可观，跨轮两个数相减不可信）')
+  phases.push(await phase('scroll@' + setup.config.rows + '+repeat', 'globalThis.__DOYAH_WV2_BENCH__.scroll(' + setup.config.rows + ')'))
+
+  // 页面内能否消融 IPC 路径：宿主把 `__TAURI_INTERNALS__.invoke` 定义为不可写 + 不可配置
+  // ⇒ 第 28 轮那种「替换 invoke」的消融**做不到**（赋值静默失效）。这条事实进读数，免得下一个人再试一次。
+  result.invokePatchability = await cdp.evaluate('globalThis.__DOYAH_WV2_BENCH__.probeInvokePatchability()')
+  log(
+    '   invoke 可替换性：descriptor=' + JSON.stringify(result.invokePatchability.descriptor) +
+      ' · definePropertyOk=' + result.invokePatchability.definePropertyOk,
   )
 
   result.phases = phases
   const scroll400k = phases.find((p) => p.label === 'scroll@' + setup.config.rows)
   const idle400k = phases.find((p) => p.label.startsWith('idle@'))
-  const instantIpc = phases.find((p) => p.label.endsWith('+instant-ipc'))
+  const slowScroll = phases.find((p) => p.label.endsWith('+slow-scroll'))
+  const repeatRun = phases.find((p) => p.label.endsWith('+repeat'))
   const smallest = phases.filter((p) => /^scroll@\d+$/.test(p.label)).slice(-1)[0]
 
   const mem = await sampler.finish()
@@ -381,7 +390,10 @@ async function main() {
       ' sort_ms=' + setup.sortSecondRunMs + ' tree_peak_mb=' + mem.peakMb +
       ' layout400k_ms=' + scroll400k.engine.layoutMs + ' recalc_style400k_ms=' + scroll400k.engine.recalcStyleMs +
       ' smallest_scroll_' + smallest.measured.rows + '_p50_ms=' + smallest.measured.stats.p50Ms +
-      ' instant_ipc400k_p50_ms=' + instantIpc.measured.stats.p50Ms +
+      ' slow_scroll400k_p50_ms=' + slowScroll.measured.stats.p50Ms +
+      ' slow_scroll_window_shifts=' + slowScroll.measured.windowShifts +
+      ' baseline_repeat400k_p50_ms=' + repeatRun.measured.stats.p50Ms +
+      ' invoke_patchable=' + result.invokePatchability.definePropertyOk +
       ' renderer=' + (setup.gpu && setup.gpu.renderer),
   )
 
