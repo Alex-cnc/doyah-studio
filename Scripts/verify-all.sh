@@ -42,6 +42,10 @@ set -euo pipefail
 #   8. 平台中立性棘轮（需求规范书里的平台专属词汇不得比基线更差）
 #   9. 命令面板接线（清单 ↔ 分派器 ↔ 视图绑定；见脚本注释里的真实缺陷）
 #      + 侧边栏折叠状态归属（L-59：状态住在 `AppState`、写入口唯一、默认全展开、未分组不给折叠）
+#      + **面板根固定尺寸 frame 的对齐纪律**（L-61：`App/Views/` 里每一处「宽高都是数字字面量」的
+#        `.frame(width:height:)` 都要在台账 `panel-root-frames.json` 里有处置；面板根必须**把意图
+#        写出来** —— 显式写 `alignment:` 或登记一个在该视图类型里真的存在的撑满令牌，
+#        见 `check-panel-root-frames.py`）
 #  10. 插件装配链（笔记模块解耦 FR-PLUG-07 + 装配与许可 FR-PLUG-01/02/03/06 + ADR-35）
 #      + 笔记模块的**零网络出口**（FR-PLUG-05 ②：数据不外发，见 `check-notes-offline.py`）
 #      + **界面检索走库 + 路线如实标注**（L-44：唯一生产点 / 视图不许内存过滤 /
@@ -325,6 +329,22 @@ python3 Scripts/test-sidebar-collapse-state.py
 # 判据两处定义 / 视图重新推导 / 台账陈旧 / 台账写坏 / 前提自检 / 真仓库逐字节未变）。
 python3 Scripts/check-empty-action-buttons.py
 python3 Scripts/test-empty-action-buttons.py
+# L-61（2026-09-28 第 64 轮）：上面两条管的是「按钮有没有说法」与「状态该活多久」，
+# 管不到**面板根自己的尺寸与对齐**。真现场（第 41 轮修 L-58 时实测）：`PrivilegePanel` 的
+# 内容在它自己的 `720×620` 里被**垂直居中**（顶上约 150pt 空白）—— `.frame(width:height:)`
+# 不写 `alignment:` ⇒ SwiftUI 取默认 `.center`，而那个 `VStack` 里没有可伸缩高度的子视图。
+# 当时编译过、Core 单测全绿、文档与快照门禁全绿（「内容在自己尺寸里浮着」没人看）。
+# 判据判的是**把意图写出来**（不判居中对不对 —— 静态查不出可伸缩子视图，docstring 里写清了）：
+# A 扫描完整性 · 双向对账（每一处「宽高都是数字字面量」的 `.frame` 恰好一条台账；新增没登记 /
+# 台账陈旧 / 处数不符都判红）/ B 面板根（width ≥ 台账门槛 400）与装饰的分类对账 /
+# C 面板根必须选一条路线并留下盘上锚点 —— `explicit-alignment`（源码**真的**写了 `alignment:`，
+# 值逐字对账）或 `content-stretches`（`stretchProbe` 取自台账 `probeVocab`，且在**该视图类型
+# 范围内真的存在**）/ D 理由不许空 / E 空跑防护（文件数 · 命中数 · 面板根数 · 台账数下限，
+# 台账声明的扫描事实与磁盘相等）/ F 范围外（用设计令牌 / 变量给尺寸的 `.frame`）**显式打印**数量。
+# 负例 `--self-test` 19 例（含「现造一块既没写 alignment、类型里又没有撑满容器的面板根 ⇒
+# 三条路线全红」这一组，与一条「显式对齐被删但登记还在」；夹具只拷 `App/`，末例核对真仓库逐字节未变）。
+python3 Scripts/check-panel-root-frames.py
+python3 Scripts/check-panel-root-frames.py --self-test
 
 echo "==> 10/18 插件装配链（FR-PLUG-01~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py

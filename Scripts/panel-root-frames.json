@@ -1,0 +1,336 @@
+{
+  "title": "面板根固定尺寸 `.frame(width:height:)` 的处置台账（队列 L-61）",
+  "scope": "App/Views/**/*.swift",
+  "panelRootMinWidth": 400,
+  "scannedFiles": 65,
+  "totals": {
+    "frames": 33,
+    "panelRoots": 21,
+    "ornaments": 12
+  },
+  "intentVocab": {
+    "content-stretches": "这个面板根里有能撑满高度的容器（`ScrollView` / `List` / `Table` / `Form`（滚动容器）/ `GeometryReader` / 显式的 `maxHeight: .infinity`）⇒ 内容本来就填满这个尺寸，**居中与顶对齐视觉等价**（`stretchProbe` 要在同一个视图类型里真的存在）",
+    "explicit-alignment": "源码里**显式写了** `alignment:` —— 意图写在代码里、一眼可见（写 `.top` / `.leading` / `.center` 都可能对，台账记下写的是哪个值并逐字对账）"
+  },
+  "probeVocab": {
+    "ScrollView {": "`ScrollView {` —— 纵向滚动容器，撑满高度",
+    "ScrollView(": "`ScrollView(`（带轴的构造），撑满高度",
+    "ScrollView([": "`ScrollView([.horizontal, .vertical])` 双向滚动，撑满高度",
+    "List {": "`List {` —— 列表容器，撑满高度",
+    "List(selection:": "`List(selection:)` —— 带选中的列表，撑满高度",
+    "Table(": "`Table(` —— 表格容器，撑满高度",
+    "GeometryReader": "`GeometryReader` —— 读取父级给它的尺寸，本身撑满",
+    "maxHeight: .infinity": "显式声明「高度吃满给到的空间」",
+    "formStyle(": "`Form { … }.formStyle(…)` —— macOS 上 `Form` 是**滚动容器**，吃满高度（连接表单那块就是它）"
+  },
+  "notes": [
+    "本判据判的是**把意图写出来**，不判居中**对不对**：SwiftUI 的尺寸协商要看运行期，「有没有可伸缩高度的子视图」静态查不出来（docstring 里写清了边界）。",
+    "两条路线都走不通的面板根过不去 —— 这正是 L-58 那个缺陷下一次会被挡住的地方。",
+    "范围：只判两个维度都是**数字字面量**的固定尺寸；用设计令牌 / 变量给尺寸的 `.frame(...)` 由闭环第 6 项管，每次显式打印数量。",
+    "装饰（width < 门槛）也一律登记 —— 目的是让「盘上出现了新的固定尺寸 frame」这件事**没有静默的入口**（处数按 `count` 对账）。",
+    "第 41 轮条目原文写「实测 26 处」，第 63 轮本判据按**完整口径**重测为 **33 处**（面板根 21 · 装饰 12）—— 差的 7 处里 3 处是**开了数字下划线分隔**的（`1_060` 那种）与**已显式写 alignment** 的写法，原先的探针正则漏了它们；本台账以**门禁实测**为准。"
+  ],
+  "items": [
+    {
+      "file": "App/Views/AboutLicenseSheet.swift",
+      "symbol": "AboutLicenseSheet",
+      "frame": "width: 620, height: 560",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "许可正文块是 `ScrollView`（正文可能长）⇒ 根 VStack 的高度被它吃满，居中≡顶对齐"
+    },
+    {
+      "file": "App/Views/AgentAuditPanel.swift",
+      "symbol": "AgentAuditPanel",
+      "frame": "width: 940, height: 790",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "记录列表段（`recordsSection`）是 `ScrollView` ⇒ 941×790 里高度吃满，无垂直留白"
+    },
+    {
+      "file": "App/Views/AgentSQLPanel.swift",
+      "symbol": "AgentSQLPanel",
+      "frame": "width: 760, height: 640",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "指令 / 载荷 / 结果三段里有 `ScrollView`（结果 SQL 可长）⇒ 撑满"
+    },
+    {
+      "file": "App/Views/AppearanceSheet.swift",
+      "symbol": "AccentOptionRow",
+      "frame": "width: 14, height: 14",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "主题行里的色块圆点（`Circle().fill(accentColor)`）—— 固定 14×14 是图标尺寸，不是面板根"
+    },
+    {
+      "file": "App/Views/AppearanceSheet.swift",
+      "symbol": "AccentOptionRow",
+      "frame": "width: 34, height: 18",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "预览里的「焦点环」示意（`RoundedRectangle().strokeBorder`）—— 固定尺寸是示意图形，不是面板根"
+    },
+    {
+      "file": "App/Views/AppearanceSheet.swift",
+      "symbol": "AccentOptionRow",
+      "frame": "width: 46, height: 14",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "预览里的「选中行」示意条（`RoundedRectangle` 填充）—— 固定尺寸是示意图形，不是面板根"
+    },
+    {
+      "file": "App/Views/CommandPaletteView.swift",
+      "symbol": "CommandPaletteView",
+      "frame": "width: 560, height: 420",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "maxHeight: .infinity",
+      "note": "结果区是 `ScrollViewReader { ScrollView { … } }`，且外层显式写了 `.frame(maxWidth: .infinity, maxHeight: .infinity)` ⇒ 高度吃满"
+    },
+    {
+      "file": "App/Views/ConnectionFormView.swift",
+      "symbol": "ConnectionFormView",
+      "frame": "width: 520, height: 600",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "formStyle(",
+      "note": "表单主体是 `Form { … }.formStyle(.grouped)`（macOS 上 `Form` 是**滚动容器**）＋ 末尾 `Divider()` + 按钮行都是固定高 ⇒ 高度被表单吃满（唯一一处靠 `Form` 撑满的面板，故给它单独一个令牌）"
+    },
+    {
+      "file": "App/Views/ConnectionListView.swift",
+      "symbol": "ConnectionRow",
+      "frame": "width: 9, height: 9",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "行首的方言色点（`Circle().fill(...)`）—— 9pt 圆点，不是面板根"
+    },
+    {
+      "file": "App/Views/DataTaskPanel.swift",
+      "symbol": "DataTaskPanel",
+      "frame": "width: 1060, height: 860",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "左栏任务列表与右栏说明区都是 `ScrollView` ⇒ 撑满（此处尺寸写作 `1_060`，数字下划线分隔）"
+    },
+    {
+      "file": "App/Views/DataTaskPanel.swift",
+      "symbol": "DataTaskPanel",
+      "frame": "width: 5, height: 5",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "「未保存草稿」小圆点（`Circle().fill(.orange)`）—— 5pt 指示点，不是面板根"
+    },
+    {
+      "file": "App/Views/DataTaskSpecSheet.swift",
+      "symbol": "DataTaskSpecSheet",
+      "frame": "width: 820, height: 720",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "规格表单区是 `ScrollView`（字段多、可滚）⇒ 撑满"
+    },
+    {
+      "file": "App/Views/DataTaskVersionSheet.swift",
+      "symbol": "DataTaskVersionSheet",
+      "frame": "width: 760, height: 640",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "explicit-alignment",
+      "alignment": ".leading",
+      "note": "源码显式写 `alignment: .leading` —— 版本对比是**左右分栏**，横向左对齐是有意的（内容不居中）"
+    },
+    {
+      "file": "App/Views/DatabaseStatsPanel.swift",
+      "symbol": "DatabaseStatsPanel",
+      "frame": "width: 660, height: 640",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "四类指标区（`content`）是 `ScrollView` 且显式 `.frame(maxHeight: .infinity, alignment: .topLeading)` ⇒ 撑满（L-58 当批抽查的同一块面板）"
+    },
+    {
+      "file": "App/Views/DiagnosisPanel.swift",
+      "symbol": "DiagnosisPanel",
+      "frame": "width: 760, height: 700",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "结论 / 建议正文是 `ScrollView`（诊断文本长）⇒ 撑满"
+    },
+    {
+      "file": "App/Views/ERDiagramPanel.swift",
+      "symbol": "ERDiagramPanel",
+      "frame": "width: 900, height: 720",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "GeometryReader",
+      "note": "画布区是 `GeometryReader`（按父级尺寸缩放平移）⇒ 高度吃满"
+    },
+    {
+      "file": "App/Views/ImportPanel.swift",
+      "symbol": "ImportPanel",
+      "frame": "width: 780, height: 760",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "explicit-alignment",
+      "alignment": ".leading",
+      "note": "源码显式写 `alignment: .leading` —— 导入向导是**左对齐的分步表单**，横向左对齐是有意的"
+    },
+    {
+      "file": "App/Views/LockPanel.swift",
+      "symbol": "LockPanel",
+      "frame": "width: 760, height: 560",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "等待列表段（`tableSection`）是 `ScrollView` ⇒ 撑满；空态那一支另有 `Spacer()` 顶住（L-16 第 3 批收口时定的）"
+    },
+    {
+      "file": "App/Views/MCPApprovalPanel.swift",
+      "symbol": "MCPApprovalPanel",
+      "frame": "width: 720, height: 600",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "待审批内容（参数 / 影响面）是 `ScrollView` ⇒ 撑满（L-58 当批抽查的同一块面板）"
+    },
+    {
+      "file": "App/Views/MainWindow.swift",
+      "symbol": "MainWindow",
+      "frame": "width: 0, height: 0",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "命令面板的**隐藏快捷键按钮**（`.opacity(0)` + `.accessibilityHidden(true)` + 0×0）—— 故意做成零尺寸，不是面板根"
+    },
+    {
+      "file": "App/Views/MaintenancePanel.swift",
+      "symbol": "MaintenancePanel",
+      "frame": "width: 760, height: 680",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "计划审阅区是 `ScrollView`（计划文本长）⇒ 撑满"
+    },
+    {
+      "file": "App/Views/ObjectSearchPanel.swift",
+      "symbol": "ObjectSearchPanel",
+      "frame": "width: 640, height: 480",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "结果区（`resultArea`）是 `ScrollView` + 显式 `.frame(maxHeight: .infinity)` ⇒ 撑满"
+    },
+    {
+      "file": "App/Views/ObjectTreeView.swift",
+      "symbol": "ObjectTreeView",
+      "frame": "width: 12, height: 12",
+      "count": 3,
+      "kind": "ornament",
+      "intent": "",
+      "note": "行首的展开箭头与两处占位（`Image(...)` 与 `Color.clear`）—— 12pt 图标格，三处同形，不是面板根"
+    },
+    {
+      "file": "App/Views/PrivilegePanel.swift",
+      "symbol": "PrivilegePanel",
+      "frame": "width: 720, height: 620",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "explicit-alignment",
+      "alignment": ".top",
+      "note": "**L-58 就是这一处** —— 内容在自身尺寸里被垂直居中（顶上约 150pt 空白），第 41 轮改成显式 `alignment: .top`；这也是本台账里「显式写意图」这一路线的样板"
+    },
+    {
+      "file": "App/Views/SchemaDiffPanel.swift",
+      "symbol": "SchemaDiffPanel",
+      "frame": "width: 760, height: 700",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "差异正文（`content`）是 `ScrollView` + 显式 `.frame(maxHeight: .infinity, alignment: .topLeading)` ⇒ 撑满"
+    },
+    {
+      "file": "App/Views/ServerObjectsPanel.swift",
+      "symbol": "ServerObjectsPanel",
+      "frame": "width: 720, height: 700",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "分节内容（`content`）是 `ScrollView` + `.frame(maxHeight: .infinity, alignment: .topLeading)` ⇒ 撑满（L-58 当批抽查的同一块面板）"
+    },
+    {
+      "file": "App/Views/SessionPanel.swift",
+      "symbol": "SessionPanel",
+      "frame": "width: 860, height: 520",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "List(selection:",
+      "note": "会话表是 `List(selection: $selectedPID)`（带选中的列表）⇒ 撑满"
+    },
+    {
+      "file": "App/Views/SyntheticDataPanel.swift",
+      "symbol": "SyntheticDataPanel",
+      "frame": "width: 760, height: 620",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "列规格 + 预览两处都是滚动容器（含 `ScrollView([.horizontal, .vertical])` 的宽表预览）⇒ 撑满"
+    },
+    {
+      "file": "App/Views/WorkspaceAreaView.swift",
+      "symbol": "WorkspaceAreaView",
+      "frame": "width: 6, height: 6",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "页签上的「未保存」小圆点（`Circle().fill(Theme.status(.warning))`）—— 6pt 指示点，不是面板根"
+    },
+    {
+      "file": "App/Views/WorkspaceExplorerView.swift",
+      "symbol": "WorkspaceExplorerView",
+      "frame": "width: 6, height: 6",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "目录授权状态的小圆点（`Circle().fill(statusTint)`）—— 6pt 指示点，不是面板根"
+    },
+    {
+      "file": "App/Views/WorkspaceExplorerView.swift",
+      "symbol": "WorkspaceExplorerView",
+      "frame": "width: 20, height: 20",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "小组件图标按钮的点击区（`iconButton`：`Image(...).frame(20×20).contentShape(Rectangle())`）—— 图标尺寸，不是面板根"
+    }
+  ],
+  "totalsNote": "`frames` / `panelRoots` / `ornaments` 都是**处数**（同一形状出现多次按处数记，例如对象树里三处 12×12 的形状算 3 处）；条目数另计（现 31 条）。"
+}
