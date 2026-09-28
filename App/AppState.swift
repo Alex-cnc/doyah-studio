@@ -198,6 +198,33 @@ enum TableImportStart {
 @MainActor
 final class AppState: ObservableObject {
     @Published var connections: [ConnectionConfig] = []
+
+    /// 侧边栏里**被折叠**的连接分组（FR-CONN-15）。
+    ///
+    /// **为什么这个状态归 `AppState`、不归视图**：侧栏内容由 `MainWindow.sidebarContent`
+    /// **按活动栏分支创建** —— 切到「工作区 / 笔记」再切回来，那个分支被整个重建，
+    /// 视图局部 `@State` 当场归零（人工点验批次 1 第 3 条实测：「折叠状态记不住」；队列 L-59）。
+    /// 折叠是**用户对分组做的决定**，不是这一次渲染的临时量，所以它得活在视图之外。
+    ///
+    /// 只存**被折叠的**那些组（默认全部展开）：一进来就把组都收起来，会让人以为连接没了。
+    /// 未分组那一段不参与（它是兜底容器，设计上不给折叠 —— 见 `ConnectionListView.sectionView`）。
+    @Published private(set) var collapsedConnectionGroups: Set<String> = []
+
+    /// 这一组现在是不是折叠的。
+    func isConnectionGroupCollapsed(_ group: String) -> Bool {
+        collapsedConnectionGroups.contains(group)
+    }
+
+    /// 折叠 / 展开一个分组。**写入口只有这一个**（集合本身是 `private(set)`）——
+    /// 视图、快捷键、命令面板要改都走它，免得几条路各写一份判断、口径再分叉。
+    func setConnectionGroup(_ group: String, collapsed: Bool) {
+        if collapsed {
+            collapsedConnectionGroups.insert(group)
+        } else {
+            collapsedConnectionGroups.remove(group)
+        }
+    }
+
     @Published var selectedConnectionID: ConnectionConfig.ID? {
         didSet {
             // 换连接 = 离开旧连接：旧连接上未提交的手工事务必须先结算（回滚并说明），
@@ -337,6 +364,9 @@ final class AppState: ObservableObject {
     // 不是浮在上面的弹窗；两个入口并存会让人不确定"关掉这个窗口笔记还在不在"。
     @Published var notes: [Note] = []
     @Published var notesQuery = ""
+    /// **检索状态**（队列 L-44，2026-09-28）：界面检索改走库以后，「这一屏的结果是怎么来的」
+    /// 就成了必须有出处的一件事 —— 三种态各自对应一句如实话（见 `noteSearchHint`）。
+    @Published private(set) var noteSearchState: NoteSearchState = .idle
     @Published var noteEditorTitle = ""
     @Published var noteEditorBody = ""
     @Published var noteEditorTags = ""
@@ -1048,6 +1078,15 @@ final class AppState: ObservableObject {
     /// 历史条数上限，避免长时间运行后无限增长。
     private static let historyLimit = 50
 
+    /// 启动链的句柄（连接 / 保存的查询 / 浏览器页签 / **笔记列表**）。
+    ///
+    /// 存这个句柄不是为了产品行为（它照旧不受启动链影响），而是为了**能让调用方等它落地**：
+    /// 链尾那一步会去读一次笔记库，而离屏快照测试会在建完 `AppState` 之后往库里播种夹具 ——
+    /// 不等就播种，那条后台读会**晚于**播种落地、把内存列表填成刚播下的那几条。
+    /// 第 59 轮实测到一次真实假红（`UISnapshotPanelsTests:702`「这一步不该往内存列表里塞东西」），
+    /// 就是这条抢跑：它**看运气**（读到库的时刻与播种时刻谁先谁后），不是每次必红。
+    private(set) var startupChain: Task<Void, Never>?
+
     init() {
         let firstTab = QueryTab(title: L(.workspaceTabTitle, tabNumbers.next()))
         tabs = [firstTab]
@@ -1064,7 +1103,7 @@ final class AppState: ObservableObject {
                 + " / 活动栏 [" + visibleActivityItems.map(\.rawValue).joined(separator: ",") + "]"
                 + " / " + licenseSummary
         )
-        Task {
+        startupChain = Task {
             await loadConnections()
             await loadSavedQueries()
             await restoreBrowserTabs()
@@ -4068,6 +4107,16 @@ final class AppState: ObservableObject {
 
     /// 生成行（纯计算，不碰库）。
     func generateSyntheticRows(_ spec: SyntheticTableSpec) throws -> [[String?]] {
+        try Self.syntheticRows(for: spec)
+    }
+
+    /// 「规格 → 行」的**唯一出处**（纯计算，`nonisolated`：不碰任何实例状态）。
+    ///
+    /// 为什么要有它（队列 L-60）：合成数据面板的**注入那一路**要在 `init` 里就把行算好
+    /// （`@EnvironmentObject` 在 `init` 里还没有值 ⇒ 拿不到这个实例），查库那一路则在拿到结构之后
+    /// 算 —— 两处必须是同一份实现，否则「同一个规格、两条路给不同的行」（L-50 的病根就是两处各写一遍）。
+    /// 生成失败时的错误措辞也因此逐字一致。
+    nonisolated static func syntheticRows(for spec: SyntheticTableSpec) throws -> [[String?]] {
         let issues = SyntheticDataGenerator.issues(in: spec)
         guard issues.isEmpty else {
             throw AppError.invalidConfiguration(issues.joined(separator: "；"))
@@ -5881,10 +5930,10 @@ final class AppState: ObservableObject {
             isPortOpen: { host, port in LocalPort.isOpen(host: host, port: port) }
         )
         do {
-            _ = try await tunnel.start()
+            _ = try await tunnel.start(language: LocalizationManager.shared.effectiveLanguage)
         } catch {
             // 隧道起不来就**别继续连**：直接连数据库会给出误导性的网络错误。
-            errorMessage = L(.sshTunnelFailed, tunnelConfig.displayName, error.localizedDescription)
+            errorMessage = L(.sshTunnelFailed, tunnelConfig.displayName, ErrorPresenter.message(for: error))
             throw error
         }
         sshTunnels[configuration.id] = tunnel
@@ -5894,7 +5943,90 @@ final class AppState: ObservableObject {
 
     // MARK: - 笔记（DOYAH-01 / 03）
 
-    var visibleNotes: [Note] { NoteSearch.match(notes, query: notesQuery) }
+    /// 笔记检索的三种态（队列 L-44）。**为什么要显式分态**：以前界面在内存里过滤，
+    /// 「有结果 / 没结果」只有两种可能；改走库之后**走的是哪条路**本身成了用户该知道的事实
+    /// （全文检索 / 子串兜底），而「库读不出来」也必须与「没找到」分开 —— 后者是结论，
+    /// 前者是失败，混成一个空列表就等于把失败说成了结论。
+    enum NoteSearchState: Equatable {
+        /// **没有一次库检索发生**：搜索框是空的（显示已加载的列表），或库还不存在（检索不该顺手建库）。
+        case idle
+        /// 走库的结果 + 这条结果**走的是哪条路**（由 Core 给：全文检索 / 子串兜底）。
+        case library(route: NoteDatabase.SearchResult.Route, notes: [Note])
+        /// 库读不出来（打开 / 查询失败）：**不假装「没找到」** —— 如实说清原因，列表退回全部笔记。
+        case unavailable(failure: String)
+    }
+
+    /// 界面上这一屏要显示的笔记（队列 L-44）。
+    ///
+    /// **检索走库**：搜索框非空时显示的是 `NoteLibrary.search` 给的**库的结果**（库说什么就是什么）；
+    /// 空查询不是检索 —— 显示已加载的列表；库读不出来时显示**全部笔记**并在副行如实说明。
+    /// 排序口径：最近更新在前，同一时刻按标题定序（`sorted` 本身不稳定，不给第二关键字
+    /// 会让同一批数据两次渲染顺序可能不同）。
+    var visibleNotes: [Note] {
+        switch noteSearchState {
+        case .idle, .unavailable:
+            return Self.mostRecentlyUpdatedFirst(notes)
+        case .library(_, let results):
+            return results
+        }
+    }
+
+    /// 副行那一句如实话（`nil` = 这一屏没什么要补充的）。
+    ///
+    /// 文案键由 Core 的 `NoteSearchDisclosure` 给（路线 → 键是一处可单测的映射），
+    /// 界面只负责显示 —— 「哪条路要不要交代」不该由视图各自判断。
+    var noteSearchHint: String? {
+        switch noteSearchState {
+        case .idle:
+            return nil
+        case .library(let route, _):
+            return NoteSearchDisclosure.key(for: route).map { L($0) }
+        case .unavailable(let failure):
+            return L(.noteSearchUnavailable, failure)
+        }
+    }
+
+    /// **界面检索的唯一生产点**（队列 L-44）：搜索框里每变一个字就重算一次，
+    /// 结果与「所走路线」都从库来（`NoteLibrary` 是笔记库的唯一入口）。
+    ///
+    /// 三条与「如实」有关的口径：
+    /// ① **空查询不是检索**（`idle`）—— 显示已加载的列表，不编一次「查了个空串」；
+    /// ② **库不存在就不开库**（`idle`）：检索不该顺手建出一个空库来；
+    /// ③ **失败不说成「没找到」**（`unavailable`）：把原因照出来，列表退回全部笔记。
+    func searchNotes() async {
+        let query = notesQuery
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard notesEnabled, !trimmed.isEmpty else {
+            noteSearchState = .idle
+            return
+        }
+        let library = NoteLibrary.defaultLibrary()
+        guard FileManager.default.fileExists(atPath: library.fileURL.path) else {
+            // 库还没建（第一次用）：一条笔记都没有，别为了搜索把它建出来。
+            noteSearchState = .idle
+            return
+        }
+        do {
+            // **界面检索的唯一生产点**（门禁锚点，见 `Scripts/note-search-route.json`）：
+            // 结果与「走的哪条路」都从库里来 —— 界面不再拿已加载的列表自己过滤。
+            let result = try await NoteLibrary.defaultLibrary().search(trimmed)
+            // 打字比查库快：这一次的结果对应的已经不是搜索框里的词 ⇒ 丢掉，
+            // 别用旧结果覆盖新的（同时 `NotesListView` 的 `.task(id:)` 会取消上一次任务）。
+            guard query == notesQuery else { return }
+            noteSearchState = .library(route: result.route, notes: result.notes)
+        } catch {
+            guard query == notesQuery else { return }
+            noteSearchState = .unavailable(failure: String(describing: error))
+        }
+    }
+
+    /// 最近更新在前（同一时刻按标题定序）—— 与 `NoteSearch.match(_:query:)` 的空查询同一口径。
+    private static func mostRecentlyUpdatedFirst(_ notes: [Note]) -> [Note] {
+        notes.sorted { left, right in
+            if left.updatedAt != right.updatedAt { return left.updatedAt > right.updatedAt }
+            return left.title < right.title
+        }
+    }
 
     func openNotes() {
         // 笔记有了"活动栏那一栏"这个正式的家（以前只弹一个面板）：入口统一走切换视图，
@@ -5943,6 +6075,9 @@ final class AppState: ObservableObject {
             notes = []
             errorMessage = L(.notesFileUnreadable, failure)
         }
+        // 列表变了，正在跑的检索要跟着重算（队列 L-44）—— 否则刚存下的那条在搜索结果里
+        // 永远不出现、刚删掉的那条还在结果里。空查询时这一步只是把状态置回 `.idle`。
+        await searchNotes()
     }
 
     func beginNewNote() {
@@ -5959,13 +6094,30 @@ final class AppState: ObservableObject {
         noteEditorTags = note.tags.joined(separator: " ")
     }
 
+    /// 「编辑器里到底有没有可保存的内容」（队列 **L-50**）。
+    ///
+    /// **唯一出处**：`NotesEditorView` 的「保存」按钮那一个 `.disabled` 与 `saveNoteFromEditor()`
+    /// 的这一句守卫**必须是同一条判断**。从前两处各写一遍、视图那侧干脆没写 ⇒ 标题与正文都空时
+    /// 「保存」满色可点，点下去静默 `return`（屏幕上什么都不发生、也没有一句解释 —— 用户会以为按钮坏了）。
+    ///
+    /// 口径 = **灰着**（取三者中最贴合产品现状的一档）：① 同一个动作族里已有的先例 ——
+    /// `SaveQuerySheet` 的「保存」在空名字时就是 `.disabled(trimmedName.isEmpty)`；
+    /// ② 外发日志的「清空」也是灰着（`.disabled(appState.egressEntries.isEmpty)`）；
+    /// ③ 而「导出」的「可点 + 给一句理由」（`egressExportEmpty`）是**有意为之的例外**，不是缺陷。
+    /// 判据逐条对账见 `Scripts/check-empty-action-buttons.py`（改口径要同时动台账与视图，不许半改）。
+    var noteEditorHasContent: Bool {
+        !noteEditorTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !noteEditorBody.isEmpty
+    }
+
     func saveNoteFromEditor() async {
         guard notesEnabled else {
             statusMessage = L(.licenseNotesNotIncluded)
             return
         }
+        // 许可那一档是**可点 + 给理由**（Pro 档要点得到「本档不含笔记」这句人话）；
+        // 内容为空那一档是**灰着** —— 两句守卫的处置不同，别合并。
+        guard noteEditorHasContent else { return }
         let title = noteEditorTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty || !noteEditorBody.isEmpty else { return }
         let draft = NoteDraft(
             title: title.isEmpty ? L(.notesUntitled) : title,
             body: noteEditorBody,
@@ -6091,7 +6243,9 @@ final class AppState: ObservableObject {
         let review = MaintenancePlanner.makePlan(
             from: maintenancePlanText,
             policy: maintenancePolicy,
-            databaseType: maintenanceDatabaseType
+            databaseType: maintenanceDatabaseType,
+            // 逐条「能不能跑 / 要不要审批」的理由是要显示给人看的（队列 L-65 第 3 批）。
+            language: LocalizationManager.shared.effectiveLanguage
         )
         maintenanceReview = review
         if review.tasks.isEmpty {
@@ -6131,7 +6285,8 @@ final class AppState: ObservableObject {
             let draft = AICapture.maintenanceNote(
                 planText: maintenancePlanText,
                 review: review,
-                target: selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? ""
+                target: selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? "",
+                language: LocalizationManager.shared.effectiveLanguage
             )
             let saved = try await store.upsert(draft)
             maintenanceMessage = L(.diagnosisNoteSaved, saved.title)
@@ -6165,8 +6320,14 @@ final class AppState: ObservableObject {
                     maintenanceMessage = L(.maintenanceExecutedOne, task.summary)
                 } catch {
                     if error is CancellationError { break }
-                    review = MaintenancePlanner.record(review, taskID: task.id, failureReason: error.localizedDescription)
-                    maintenanceMessage = L(.maintenanceFailedOne, task.id, error.localizedDescription)
+                    // 失败说明**两半**（队列 L-66 拍板口径 ①）：原串进机器载荷（JSON / 记录），
+                    // 人话进界面那一行 —— 从前两处共用一份值 ⇒ 原串直接打到用户眼前。
+                    let failure = MaintenanceTask.FailureNote(
+                        raw: error.localizedDescription,
+                        readable: ErrorPresenter.message(for: error)
+                    )
+                    review = MaintenancePlanner.record(review, taskID: task.id, failure: failure)
+                    maintenanceMessage = L(.maintenanceFailedOne, task.id, failure.readable)
                 }
                 maintenanceReview = review
             }
@@ -6312,7 +6473,8 @@ final class AppState: ObservableObject {
                 question: diagnosisQuestion,
                 target: selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? "",
                 context: diagnosisContext,
-                report: report
+                report: report,
+                language: LocalizationManager.shared.effectiveLanguage
             )
             let duplicate = draft.source.fingerprint.map { fingerprint in
                 existing.contains { $0.source.fingerprint == fingerprint }

@@ -26,6 +26,12 @@
 # 已改走共用入口 —— 本机档起集群、远程档走四项齐全的专用库 ⇒ 转入 `[local-cluster]`，
 # 该组**暂时为空**（留着是因为它代表一种真实形态：不建集群、只对常驻实例做只读核对）。
 
+# **2026-09-28 循环 L-63 ㈠**：`test-object-search` / `test-session-management` 的 §6（原「只读核对 217」）
+# 改成**在本机档造同形状的现场**（对象数量放大到 300 张表 / 600 列；另一条连接当「别人的会话」）
+# ⇒ 本机档 exit 0、`knownRed` 两条销账（`Scripts/remote-bypass-scripts.json` 4 条 → 2 条）。
+# **如实登记**：这两段不再对 18.6 做只读核对（跨版本覆盖见队列 L-09）。
+# 剩下两条仍卡在拍板（`FR-IO-04` / 217 专用库）与实例（`pg_stat_statements`）。
+
 # [local-cluster]
 test-backup-restore
 test-cli-failure-readability

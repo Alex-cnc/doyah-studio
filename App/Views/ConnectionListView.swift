@@ -9,12 +9,13 @@ struct ConnectionListView: View {
     /// 待确认删除的连接（FR-CONN-05 / R-09：删除必须二次确认）。
     @State private var pendingDeletion: ConnectionConfig?
 
-    /// 被折叠的分组（FR-CONN-15）。**默认全部展开** —— 折叠是"用户主动收起"的结果，
-    /// 一进来就把组都收起来会让人以为连接没了。
-    @State private var collapsedGroups: Set<String> = []
+    // **折叠状态刻意**不在这里**（FR-CONN-15 / 队列 L-59）：本视图由 `MainWindow.sidebarContent`
+    // 按活动栏分支创建 ⇒ 切到工作区 / 笔记再切回来，这个视图被整个重建，视图局部 `@State` 归零。
+    // 状态存在 `appState.collapsedConnectionGroups`，写入口 = `appState.setConnectionGroup(_:collapsed:)`。
 
-    /// 一个分组段：有组名时可折叠，未分组那段不给折叠 —— 它是兜底容器，
-    /// 折起来等于把没归类的连接藏了。
+    /// 一个分组段：有组名时可折叠，未分组那段**不给折叠** —— 它是兜底容器，
+    /// 折起来等于把没归类的连接藏了。（⇒ 人工点验那次「记不住」的只可能是**命名分组**：
+    /// 未分组这段根本没有可丢的折叠态。）
     @ViewBuilder
     private func sectionView(_ section: ConnectionGrouping.Section) -> some View {
         let title = section.group ?? ConnectionGrouping.ungroupedTitle
@@ -25,10 +26,8 @@ struct ConnectionListView: View {
             rows(section)
         } else {
             DisclosureGroup(isExpanded: Binding(
-                get: { !collapsedGroups.contains(section.id) },
-                set: { expanded in
-                    if expanded { collapsedGroups.remove(section.id) } else { collapsedGroups.insert(section.id) }
-                }
+                get: { !appState.isConnectionGroupCollapsed(section.id) },
+                set: { expanded in appState.setConnectionGroup(section.id, collapsed: !expanded) }
             )) {
                 rows(section)
             } label: {

@@ -46,6 +46,19 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
   **L-65 第 1 批起**同一判据扩到三处同族出口：`Core/LicenseLoader.swift`（`load` /
   `licenseDecodeFailureHint` / `summary`）、`Core/NoteBody.swift`（`toSpans` / `exportMarkdown`）、
   `Core/TableImport.swift`（`copySupport` / `preferredWriteMode`）。
+  **L-65 第 2 批**：`Core/SSHTunnelProcess.swift`（`start(...)` / `describe(language:)`）。
+  **L-65 第 3 / 4 批**再扩四族：`Core/AICapture.swift`（`skillNote` / `sqlNote`）、
+  `Core/AICaptureUltra.swift`（`diagnosisNote` / `maintenanceNote` / `stateText`）、
+  `Core/License.swift`（`features(language:)` / `items(for:language:)`）+
+  `Core/LicensePresentation.swift`（`upgradeLines(for:language:)`）、
+  `Core/MaintenancePlan.swift`（`review` / `makePlan`）、
+  `Core/MCPToolCatalog.swift`（`decision`）+ `Core/MCPSession.swift`（会话属性 `language`
+  与 `init(capabilities:language:)`）。
+  **同一判据最新加的一条是「调用方也要钉」**：形参留着还不够 —— 展示点不给语言，一样会退回
+  「Core 自己选」。所以 `App/AppState.swift`（维护 / 诊断两处捕获）、
+  `App/Views/AboutLicenseSheet.swift`（升级页）、`CLI/main.swift`（维护命令 / MCP 会话）
+  这些调用点的**实参里必须出现 `language:`**（在第 50 轮实测抓到过：`static let` 那类写法
+  改完形参、调用方不传也一样是死译文）。
 * **C′（一句话只有一个出处）** `App/AppState.swift` 必须调 `LicenseLoader.summary(`，
   且**不许**再出现 `L(.licenseActive)` —— 许可状态那一句当年因为 Core 写死中文被界面抄了一份，
   而抄的那份**漂移了**（把 `.unreadable` 的原因丢掉）。判据 B 只看语言表看得见可达性，
@@ -58,6 +71,13 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
 * 只认得**字面**键与**字面**语言。**动态键**（`LocalizedStrings.text(key, …)` 里 `key` 是变量，
   如 `MCPToolCatalog` / `AICapture` 的映射表）看不见 ⇒ 它背后那些键不会被判成死键
   —— 方向是**漏判**（少报），不是误报。
+* **短名取值助手这条漏判已于 L-65 第 4 批堵上**（`local_helpers`）：从前 `CALLEE_OK` 只认
+  `xxxText` / `xxxCopy` 这类**带后缀的长名**，于是本仓库常见的 `t(_ key: LKey …)` /
+  `text(_ key: LKey …)` **既不算「本地化取值入口」也不算引用** —— 它们背后的键在判据 B 里
+  完全看不见。实测代价：`mcpNeedsApproval` 明明被 `MCPToolCatalog` 引用过，判据 B 却只看得见
+  CLI 那一处（把它算成死键），修好之后也仍然算死键 ⇒ **台账里那条陈旧条目自己不会消失**。
+  现在：只要被调方是**本文件里形参含 `LKey` 的函数**，就按取值入口记账（是否「写死语言」仍由
+  「实参里有没有字面语言 / 函数体里有没有写死语言」判）。
 * 一个键**一处引用都没有**时不判（可能是被动态引用）——同理是漏判。
 * `Tests/` `TestsUISnapshot/` 不在扫描范围：那里有意构造中英两种取值。
 * 台账 `maxSites` 只判「不许增」，不像 L-46 那样把减少也要求同步登记（减少只打提示）。
@@ -200,6 +220,26 @@ def literal_sites(rel: str, text: str) -> list[dict]:
     return sites
 
 
+def local_helpers(text: str) -> set[str]:
+    """本文件里**取本地化文案的本地函数**名字（形参里有 `LKey`）。
+
+    为什么需要它：本仓库的取值助手常起短名（`t(_ key: LKey …)` / `text(_ key: LKey …)`），
+    而 `CALLEE_OK` 认的是 `xxxText` / `xxxCopy` 这类**带后缀的长名** —— 于是这些短名助手
+    一度**既不算「本地化取值入口」也不算引用**，它们背后的键在判据 B 里**完全看不见**
+    （第 4 批实测：`mcpNeedsApproval` 明明有了英文会话这条可达路径，却仍被算作死键）。
+    判据 B 的方向是**漏判**（少报），这里把这条漏判堵上。
+    """
+    names: set[str] = set()
+    for m in FUNC_DECL.finditer(text):
+        paren_open = m.end() - 1
+        paren_close = balanced(text, paren_open)
+        if paren_close is None:
+            continue
+        if TAKES_KEY.search(text[paren_open:paren_close]):
+            names.add(m.group(1))
+    return names
+
+
 def wrapper_names(text: str) -> set[str]:
     """文件私有的「写死语言取值助手」：形参里有 `LKey`、函数体里出现字面语言。"""
     names: set[str] = set()
@@ -223,6 +263,7 @@ def wrapper_names(text: str) -> set[str]:
 
 
 def key_references(rel: str, text: str, keys: dict[str, dict], wrappers: set[str]) -> list[dict]:
+    helpers = local_helpers(text)
     refs: list[dict] = []
     for m in re.finditer(r"\.([A-Za-z][A-Za-z0-9_]*)\b", text):
         name = m.group(1)
@@ -235,7 +276,9 @@ def key_references(rel: str, text: str, keys: dict[str, dict], wrappers: set[str
             continue
         segment = text[call[0]:call[1] + 1]
         callee = segment.split("(", 1)[0].strip()
-        if not CALLEE_OK.match(callee):
+        # 认两种取值入口：带后缀的长名（`LocalizedStrings.text` / `xxxText` / `xxxCopy`），
+        # 以及**本文件里形参含 `LKey` 的本地函数**（`t(` / `text(` 这类短名，见 `local_helpers`）。
+        if not CALLEE_OK.match(callee) and callee not in helpers:
             continue
         # 写死语言：调用点自带字面语言，或经过一个「函数体里写死语言」的文件私有助手。
         literal = bool(LITERAL.search(segment)) or callee in wrappers
@@ -386,6 +429,40 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
             r"func\s+copySupport\([^)]*language:\s*AppLanguage",
             r"func\s+preferredWriteMode\([^)]*language:\s*AppLanguage",
         ],
+        # L-65 第 2 批（2026-09-28 第 49 轮）：SSH 隧道那族 —— 失败文案的出入口都钉在这里。
+        # `describe(language:)` 是**人话的唯一出处**（`.portInUse` 只带端口号，语言只能从外面给），
+        # `start(...)` 必须收 `language:`；删掉任何一个都会让语言又变成「Core 自己选」。
+        "Core/SSHTunnelProcess.swift": [
+            r"func\s+start\([^)]*language:\s*AppLanguage",
+            r"func\s+describe\(language:\s*AppLanguage",
+        ],
+        # L-65 第 3 批（2026-09-28 第 50 轮）：**四族一起钉** —— AI 捕获（Ultra 侧两个出口 +
+        # `stateText`）、许可展示（`static let` → 函数）、维护计划的审阅理由、MCP 会话。
+        # **笔记侧（`Core/AICapture.swift`）例外**：它钉的不是 `language:` 而是**不许收语言**
+        # —— 见文件末尾那段「笔记侧只收文本与标识」的负向判据。
+        "Core/AICaptureUltra.swift": [
+            r"func\s+diagnosisNote\([\s\S]{0,500}?language:\s*AppLanguage",
+            r"func\s+maintenanceNote\([\s\S]{0,500}?language:\s*AppLanguage",
+            r"func\s+stateText\([^)]*language:\s*AppLanguage",
+        ],
+        "Core/License.swift": [
+            r"func\s+features\(language:\s*AppLanguage",
+            r"func\s+items\([^)]*language:\s*AppLanguage",
+        ],
+        "Core/LicensePresentation.swift": [
+            r"func\s+upgradeLines\([\s\S]{0,300}?language:\s*AppLanguage",
+        ],
+        "Core/MaintenancePlan.swift": [
+            r"func\s+review\([\s\S]{0,400}?language:\s*AppLanguage",
+            r"func\s+makePlan\([\s\S]{0,300}?language:\s*AppLanguage",
+        ],
+        "Core/MCPToolCatalog.swift": [
+            r"func\s+decision\([\s\S]{0,600}?language:\s*AppLanguage",
+        ],
+        "Core/MCPSession.swift": [
+            r"public\s+let\s+language:\s*AppLanguage",
+            r"init\([\s\S]{0,200}?language:\s*AppLanguage",
+        ],
     }
     for rel, patterns in pinned_params.items():
         path = root / rel
@@ -396,6 +473,65 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
         for pattern in patterns:
             if not re.search(pattern, text):
                 failures.append(f"C {rel} 的文本出口丢了 `language:` 形参（匹配不到：{pattern}）")
+    # 判据 C（L-65 第 3/4 批）：**调用方必须把语言传下去** —— 形参留着还不够，展示点不给语言
+    # 一样会退回「Core 自己选」。这里逐处找调用、在它的实参里找 `language:`。
+    call_sites = {
+        "App/AppState.swift": [
+            "MaintenancePlanner.makePlan(",
+            "AICapture.maintenanceNote(",
+            "AICapture.diagnosisNote(",
+        ],
+        "App/Views/AboutLicenseSheet.swift": ["LicensePresentation.upgradeLines("],
+        "CLI/main.swift": ["MaintenancePlanner.makePlan(", "MCPServerSession(capabilities:"],
+    }
+    for rel, needles in sorted(call_sites.items()):
+        path = root / rel
+        if not path.exists():
+            failures.append(f"C 文件消失：{rel}")
+            continue
+        text = read(path)
+        for needle in needles:
+            start = text.find(needle)
+            if start == -1:
+                failures.append(f"C {rel} 里找不到调用点 {needle}（改名了？）")
+                continue
+            paren = text.find("(", start)
+            end = balanced(text, paren) if paren != -1 else None
+            if end is None:
+                failures.append(f"C {rel} 的 {needle} 实参括号不配对 —— 判据取不到输入")
+                continue
+            if "language:" not in text[paren:end]:
+                failures.append(
+                    f"C {rel} 的 {needle} 没把语言传下去 —— Core 里那族又会退回「自己选语言」"
+                )
+
+    # 判据 C（L-65 第 3 批 · **负向的那一条**）：**笔记侧不许收语言**。
+    #
+    # `Core/AICapture.swift` 是笔记侧文件（要在「只有笔记」的构建里独立存在），它只许收
+    # **文本与标识** —— `Scripts/check-plugin-assembly.py` 判据 03 用类型白名单把这条契约钉住。
+    # 第一版把 `language: AppLanguage` 当形参加进 `skillNote`，被闭环第 10 项当场拦下。
+    # 这里再钉一条负向判据，免得日后「为了省一次渲染」又把语言塞回笔记侧（那样笔记侧就会
+    # 替宿主选语言，正是本判据要销掉的形状）。
+    note_side = root / "Core/AICapture.swift"
+    if not note_side.exists():
+        failures.append("C 文件消失：Core/AICapture.swift")
+    else:
+        note_text = read(note_side)
+        # **只看代码**：注释里会写到这条口径本身（「第一版把 `language: AppLanguage` 当形参…」），
+        # 把注释算进去等于判据自己踩自己。行尾注释一律剥掉再判。
+        note_code = "\n".join(line.split("//")[0] for line in note_text.splitlines())
+        if re.search(r"language:\s*AppLanguage", note_code) or LITERAL.search(note_code):
+            failures.append(
+                "C Core/AICapture.swift 又收起了语言（`language:` 形参或字面语言）—— "
+                "笔记侧只收文本与标识，语言由宿主渲染好再进来（FR-PLUG-03）"
+            )
+        for pattern, what in (
+            (r"func\s+skillNote\([\s\S]{0,500}?defaultTag:\s*String", "skillNote(defaultTag:)"),
+            (r"func\s+sqlNote\([\s\S]{0,400}?tag:\s*String", "sqlNote(tag:)"),
+        ):
+            if not re.search(pattern, note_text):
+                failures.append(f"C Core/AICapture.swift 的出口不再收「渲染好的标签文本」（{what}）")
+
     panel = root / "App/Views/DiagnosisPanel.swift"
     if not panel.exists():
         failures.append("C 文件消失：App/Views/DiagnosisPanel.swift")

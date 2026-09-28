@@ -194,6 +194,51 @@ echo "${OUT7}" | grep -q "简要信息：The operation" \
     && check "不再只剩一句英文调试串（反向断言）" 1 || check "不再只剩一句英文调试串（反向断言）" 0
 
 echo ""
+echo "== 8) 渠道字段两半：维护任务失败时，机器载荷保原串、人话打给人看（队列 L-66 口径 ①）"
+# 为什么要有这一节：这条口径的**两半**落在两个地方 —— JSON 的 `failureReason` / `detail`
+# （原串，一字不变、可搜可上报）与命令行那行 `❌ … 失败：…`（人话）。Core 单测跑不到 CLI 的
+# JSON 拼装与 `print`，所以现场要真跑一遍：造一条**注定失败**的维护任务（查一张不存在的表
+# ⇒ 服务端 42P01），分别用 `--json` 与不带 `--json` 跑。
+# 注意：这里连的是**默认测试库**（不是本脚本 §0 那个设了 1ms statement_timeout 的库）——
+# 那一档是给 §3 造 57014 用的，会把这一节的失败原因抢成「查询被取消」。
+MAINTAIN_PLAN="$(mktemp -t doyah-maintain-plan)"
+MISSING_MAINTAIN="doyah_probe_maint_missing_$$"
+{
+    echo "task: custom | 查一张不存在的表（故意失败） | sql: SELECT * FROM ${MISSING_MAINTAIN}"
+} > "${MAINTAIN_PLAN}"
+MAINTAIN_ENV="PGHOST=127.0.0.1 PGPORT=${DOYAH_TEST_PGPORT} PGUSER=${DOYAH_TEST_PGUSER} PGDATABASE=${DOYAH_TEST_PGDATABASE} PGSSLMODE=disable"
+OUT8="$(env ${MAINTAIN_ENV} "${CLI}" maintain --plan "${MAINTAIN_PLAN}" --approve all --execute 2>&1)"
+OUT8J="$(env ${MAINTAIN_ENV} "${CLI}" maintain --plan "${MAINTAIN_PLAN}" --approve all --execute --json 2>&1)"
+rm -f "${MAINTAIN_PLAN}"
+# 人话打头（从前这一行印的是 `The operation couldn't be completed…`）
+echo "${OUT8}" | grep -q "❌ m1 失败：服务端说：" \
+    && check "命令行那行**以人话打头**（服务端原话）" 0 \
+    || { echo "${OUT8}" | grep "失败" | head -3; check "命令行那行以人话打头" 1; }
+# 反向：**不再是**「原串当失败说明」那个形状（这正是本条要修的那件事）
+echo "${OUT8}" | grep -q "❌ m1 失败：The operation" \
+    && check "命令行那行不再以原串当失败说明（反向断言）" 1 \
+    || check "命令行那行不再以原串当失败说明（反向断言）" 0
+# 口径第 4 条（L-15）不变：认得出来时原串作为**可追溯的尾巴**保留
+echo "${OUT8}" | grep -q "（原始信息：" \
+    && check "原串作为可追溯的尾巴保留（口径第 4 条）" 0 || check "原串作为可追溯的尾巴保留" 1
+echo "${OUT8}" | grep -q "计划（1 条）" \
+    && check "同一份计划里失败态那一格也是人话（不走另一条路）" 0 || check "计划里失败态那一格" 1
+# JSON 两半成对：原串一字不变 + 新增人话字段（界面 / MCP 客户端可选展示）
+echo "${OUT8J}" | grep -q '"failureReason":"The operation' \
+    && check "JSON 的 failureReason 是**一字不变的原串**" 0 \
+    || { echo "${OUT8J}" | head -c 400; check "JSON 的 failureReason 是原串" 1; }
+echo "${OUT8J}" | grep -q '"failureReasonHuman":"服务端说：' \
+    && check "JSON 新增人话字段 failureReasonHuman" 0 || check "JSON 新增人话字段 failureReasonHuman" 1
+echo "${OUT8J}" | grep -q '"detail":"The operation' \
+    && check "JSON 的 detail 仍是原串（没被换成中文）" 0 || check "JSON 的 detail 仍是原串" 1
+echo "${OUT8J}" | grep -q '"detailHuman":"服务端说：' \
+    && check "JSON 的 detailHuman 是人话（新增字段）" 0 || check "JSON 的 detailHuman 是人话" 1
+echo "${OUT8J}" | grep -q "${MISSING_MAINTAIN}" \
+    && check "两侧都带着对象名（可核对，不是泛泛一句）" 0 || check "两侧都带着对象名" 1
+echo "${OUT8J}" | grep -q "SQLSTATE 42P01" \
+    && check "人话里带着 SQLSTATE（可搜的锚点还在）" 0 || check "人话里带着 SQLSTATE" 1
+
+echo ""
 if [ "${fail}" -eq 0 ]; then
     echo "全部通过：认得出就给方向（人话 + 建议 + 错误码）、认得出来时原始串仍保留、"
     echo "认不出就原样（本地错误逐字不变）；机器可读出口按口径保留原串。"

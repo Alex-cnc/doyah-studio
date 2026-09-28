@@ -1,6 +1,6 @@
 {
-  "note": "「语言是传进来的，不是写死的」台账（队列 L-47）。判据与用法见 Scripts/check-literal-language.py 头部。files = 把**字面语言**传给本地化取值入口的文件（maxSites 是登记时的实测处数，只判「不许增」；0 = 回归钉，本轮已把语言透传的文件钉在这里）。deadKeys = 「有英文译文、却只被写死语言的入口引用」的键 —— 这是**已登记的欠账**，不是放行；新增一个未登记的死键即判红，修好一个就要销账。",
-  "version": 1,
+  "note": "「语言是传进来的，不是写死的」台账（队列 L-47）。判据与用法见 Scripts/check-literal-language.py 头部。files = 把**字面语言**传给本地化取值入口的文件（maxSites 是登记时的实测处数，只判「不许增」；0 = 回归钉，本轮已把语言透传的文件钉在这里）。deadKeys = 「有英文译文、却只被写死语言的入口引用」的键 —— 这是**已登记的欠账**，不是放行；新增一个未登记的死键即判红，修好一个就要销账。 **版本 3（队列 L-65 第 3/4 批）**：六个文件（`AICapture` / `AICaptureUltra` / `License` / `MCPToolCatalog` / `MCPSession` / `MaintenancePlan`）的语言已透传 ⇒ `maxSites` 归零（回归钉）；死译文销掉 `mcpNeedsApproval`（会话语言可由创建者给定后它真的可达了）。余 14 处 = `MySQLService` 9（数据库侧冻结，ADR-25）+ `CLI/main.swift` 5（有意中文）。",
+  "version": 3,
   "files": [
     {
       "file": "Core/DiagnosisContext.swift",
@@ -24,13 +24,13 @@
     },
     {
       "file": "Core/SSHTunnelProcess.swift",
-      "maxSites": 5,
-      "reason": "SSH 隧道进程的失败文案（启动失败 / 进程退出 / 超时 / 端口被占）。同族欠账（队列 L-65）。"
+      "maxSites": 0,
+      "reason": "**回归钉（队列 L-65 第 2 批已透传）**：`start(timeout:language:)` 收调用方的语言（界面传 `effectiveLanguage`、命令行传 `.simplifiedChinese`、单测各传各的），失败文案由 `SSHTunnelError.describe(language:)` 这一**唯一出处**渲染 —— 这里再出现字面语言即红。**协议入口那处刻意不写死语言**：`LocalizedError.errorDescription` 不带语言语境，所以 `.portInUse` 在这一支给的是**技术串**（`SSH tunnel: local port N is already in use`），人话一律经 `describe(language:)`（界面走 `ErrorPresenter`、命令行走隧道命令那条 catch）。"
     },
     {
       "file": "CLI/main.swift",
       "maxSites": 5,
-      "reason": "**有意为之**：CLI 没有界面语境，语言就该是显式的中文（本轮 L-47 把诊断输出也改成显式传 `AppLanguage.simplifiedChinese`）；另两处是 MCP 审批载荷文案。代价是这两个键的英文译文当前不可达 ⇒ 已登记进 deadKeys，要不要给 CLI 加一个语言开关属新需求（不在本轮）。"
+      "reason": "**有意为之**：CLI 没有界面语境，语言就该是显式的中文（本轮 L-47 把诊断输出也改成显式传 `AppLanguage.simplifiedChinese`）；另两处是 MCP 审批载荷文案。代价是这两个键的英文译文当前不可达 ⇒ 已登记进 deadKeys，要不要给 CLI 加一个语言开关属新需求（不在本轮）。**L-65 第 2 批补记**：隧道命令那句是 `let language = AppLanguage.simplifiedChinese`（**赋值**，不进本台账的计数 —— 判据量的是 `language: .simplifiedChinese` 这种**传参**形状），随后 `start(language:)` 与 `describe(language:)` 都用它；**别把它当成「没写死」**，命令行说中文是有意的口径，不是遗漏。"
     },
     {
       "file": "Core/NoteBody.swift",
@@ -39,33 +39,33 @@
     },
     {
       "file": "Core/AICapture.swift",
-      "maxSites": 2,
-      "reason": "文件私有取值助手 `t(_ key: LKey …)` 把语言写死（笔记捕获的文案）。同族欠账（队列 L-65）：助手改成收 `language:` 即整族可达。"
+      "maxSites": 0,
+      "reason": "**笔记侧不收语言（队列 L-65 第 3 批，2026-09-28 第 50 轮）**：`skillNote` / `sqlNote` 收的是**已经渲染好的标签文本**（`defaultTag: String` / `tag: String`）—— 笔记侧只收文本与标识（`FR-PLUG-03` 的类型白名单，闭环第 10 项），**语言是宿主的事**。第一版把 `language: AppLanguage` 加进来被第 10 项当场拦下（判据是对的：语言进笔记侧 = 让笔记侧替宿主选语言，正是本轮要销掉的形状）。判据 C 对这条是**负向**的：这里再出现 `language:` 形参或字面语言即红。"
     },
     {
       "file": "Core/AICaptureUltra.swift",
-      "maxSites": 2,
-      "reason": "同 `AICapture.swift`：另一个文件私有的 `t(_ key: LKey …)`（两个文件的同名助手刻意互不冲突）。同族欠账（队列 L-65）。"
+      "maxSites": 0,
+      "reason": "**回归钉（队列 L-65 第 3 批已透传）**：`diagnosisNote` / `maintenanceNote` / `stateText(_:language:)` 收调用方的语言（两个文件各自的 `t(` 助手刻意互不冲突，现在各自转发语言）—— 这里再出现字面语言即红。"
     },
     {
       "file": "Core/MCPToolCatalog.swift",
-      "maxSites": 2,
-      "reason": "文件私有取值助手 `text(_ key: LKey …)`（MCP 工具目录的文案）—— 而且它的调用点是**动态键**（映射表传变量），门禁的死译文判定看不见那些键（漏判方向）。同族欠账（队列 L-65）。"
+      "maxSites": 0,
+      "reason": "**回归钉（队列 L-65 第 4 批已透传）**：`decision(…, language:)` 收调用方的语言（会话侧把会话语言传进来）—— 这里再出现字面语言即红。**注意**：本文件的调用点是**动态键 + 短名助手 `text(`**，门禁的两条判据对它都偏松（见 `check-literal-language.py` 的「已知局限」与 `local_helpers`）。"
     },
     {
       "file": "Core/MCPSession.swift",
-      "maxSites": 2,
-      "reason": "MCP 会话的载荷文案（含审批提示）。同族欠账（队列 L-65）。"
+      "maxSites": 0,
+      "reason": "**回归钉（队列 L-65 第 4 批已透传）**：`MCPServerSession.init(capabilities:language:)` 把语言存成会话属性（`public let language`），会话内的 `text(` 只是转发 —— 这里再出现字面语言即红。"
     },
     {
       "file": "Core/MaintenancePlan.swift",
-      "maxSites": 2,
-      "reason": "维护计划评审的文案。同族欠账（队列 L-65）。"
+      "maxSites": 0,
+      "reason": "**回归钉（队列 L-65 第 3 批已透传）**：`review(…, language:)` / `makePlan(…, language:)` 收调用方的语言（审阅理由是给人看的）—— 这里再出现字面语言即红。"
     },
     {
       "file": "Core/License.swift",
-      "maxSites": 1,
-      "reason": "文件私有取值助手 `t(_ key: LKey)`（许可展示文案）。同族欠账（队列 L-65）。"
+      "maxSites": 0,
+      "reason": "**回归钉（队列 L-65 第 3 批已透传）**：`LicenseEditionCatalog.features(language:)` / `items(for:language:)` 收调用方的语言（**从 `static let` 改成函数**：写成 `static let` 会在首次访问那一刻把语言钉死，同 `licenseLoad` 那类「字符串随装载体走」的写法）—— 这里再出现字面语言即红。"
     },
     {
       "file": "Core/TableImport.swift",
@@ -107,32 +107,8 @@
       "reason": "同族欠账（队列 L-65）：`Core/MySQLService.swift`。"
     },
     {
-      "key": "sshTunnelLaunchFailed",
-      "reason": "同族欠账（队列 L-65）：`Core/SSHTunnelProcess.swift`。"
-    },
-    {
-      "key": "sshTunnelProcessExited",
-      "reason": "同族欠账（队列 L-65）：`Core/SSHTunnelProcess.swift`。"
-    },
-    {
-      "key": "sshTunnelProcessExitedSilently",
-      "reason": "同族欠账（队列 L-65）：`Core/SSHTunnelProcess.swift`。"
-    },
-    {
-      "key": "sshTunnelTimedOut",
-      "reason": "同族欠账（队列 L-65）：`Core/SSHTunnelProcess.swift`。"
-    },
-    {
-      "key": "sshTunnelPortInUse",
-      "reason": "同族欠账（队列 L-65）：`Core/SSHTunnelProcess.swift`。"
-    },
-    {
       "key": "mcpApprovalDenied",
-      "reason": "**有意为之**：调用点只在 `CLI/main.swift`（命令行没有界面语境 ⇒ 中文是显式口径）；英文译文当前不可达 —— 要不要给 CLI 加语言开关属新需求，不在本轮。"
-    },
-    {
-      "key": "mcpNeedsApproval",
-      "reason": "**有意为之**：同 `mcpApprovalDenied`，调用点只在 `CLI/main.swift` 的审批载荷里。"
+      "reason": "**有意为之**：这处调用点只在 `CLI/main.swift`（命令行没有界面语境 ⇒ 中文是显式口径，同文件另一处隧道命令的 `let language = AppLanguage.simplifiedChinese`）。同理那一句的英文译文当前不可达 —— 要不要给 CLI 加语言开关属新需求，不在本轮。**L-65 第 4 批补记**：同一句在 Core 侧的 `MCPToolCatalog.decision(language:)` 现在按会话语言出，但门禁只对**CLI 这处**可见（短名助手那条漏判已在第 4 批修掉，见 `local_helpers`）。"
     }
   ]
 }

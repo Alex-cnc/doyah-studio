@@ -79,15 +79,21 @@ public final class SSHTunnelProcess: @unchecked Sendable {
 
     /// 建隧道并等它就绪；返回本地监听端口。
     ///
-    /// - Parameter isPortOpen: 就绪判定；传 `nil` 时退化为"进程活着就算就绪"
-    ///   （弱一些，仅在没有探测能力的调用方使用 —— 脚本里一律传真的探测）。
+    /// - Parameters:
+    ///   - timeout: 等多久判超时（`nil` 取配置里的连接超时）。
+    ///   - language: **失败文案的语言**（队列 L-65 第 2 批：语言由调用方给定，Core 不自己选）。
+    ///     界面传 `LocalizationManager.shared.effectiveLanguage`、命令行传 `.simplifiedChinese`、
+    ///     单测各传各的期望语言 —— 与 `LicenseLoader` / `NoteBody` / `TableImport` 同一口径，
+    ///     **一律不留默认值**（默认值等于把「写死语言」藏起来）。
+    ///   - isPortOpen: 就绪判定；传 `nil` 时退化为"进程活着就算就绪"
+    ///     （弱一些，仅在没有探测能力的调用方使用 —— 脚本里一律传真的探测）。
     @discardableResult
-    public func start(timeout: TimeInterval? = nil) async throws -> Int {
+    public func start(timeout: TimeInterval? = nil, language: AppLanguage) async throws -> Int {
         setState(.starting(localPort: localPort))
         // **先确认端口是空的**：否则"端口通"这件事会被别人占着的监听误导 ——
         // 我们自己的 ssh 建转发失败退出、探测却看到别人的端口，于是报"就绪"（实测踩到）。
         if let isPortOpen, isPortOpen("127.0.0.1", localPort) {
-            setState(.failed(SSHTunnelError.portInUse(localPort).localizedDescription))
+            setState(.failed(SSHTunnelError.portInUse(localPort).describe(language: language)))
             throw SSHTunnelError.portInUse(localPort)
         }
         try prepareKnownHostsDirectory()
@@ -125,7 +131,7 @@ public final class SSHTunnelProcess: @unchecked Sendable {
             try process.run()
         } catch {
             cleanUpTemporaryFiles()
-            let reason = LocalizedStrings.format(.sshTunnelLaunchFailed, language: .simplifiedChinese, error.localizedDescription)
+            let reason = LocalizedStrings.format(.sshTunnelLaunchFailed, language: language, error.localizedDescription)
             setState(.failed(reason))
             throw SSHTunnelError.launchFailed(reason)
         }
@@ -140,8 +146,8 @@ public final class SSHTunnelProcess: @unchecked Sendable {
             if !process.isRunning {
                 cleanUpTemporaryFiles()
                 let reason = diagnosticText.isEmpty
-                    ? LocalizedStrings.text(.sshTunnelProcessExitedSilently, language: .simplifiedChinese)
-                    : LocalizedStrings.format(.sshTunnelProcessExited, language: .simplifiedChinese, diagnosticText)
+                    ? LocalizedStrings.text(.sshTunnelProcessExitedSilently, language: language)
+                    : LocalizedStrings.format(.sshTunnelProcessExited, language: language, diagnosticText)
                 setState(.failed(reason))
                 throw SSHTunnelError.processExited(reason)
             }
@@ -165,7 +171,7 @@ public final class SSHTunnelProcess: @unchecked Sendable {
         cleanUpTemporaryFiles()
         stop()
         let seconds = Int(timeout ?? TimeInterval(config.connectTimeoutSeconds))
-        let reason = LocalizedStrings.format(.sshTunnelTimedOut, language: .simplifiedChinese, String(seconds))
+        let reason = LocalizedStrings.format(.sshTunnelTimedOut, language: language, String(seconds))
         setState(.failed(reason))
         throw SSHTunnelError.timedOut(reason)
     }
@@ -265,13 +271,35 @@ public enum SSHTunnelError: Error, Equatable, LocalizedError {
     case processExited(String)
     case timedOut(String)
 
+    /// **人话文案的唯一出处**（队列 L-65 第 2 批）。
+    ///
+    /// `.portInUse` 只带**端口号** ⇒ 这句话必须在**知道语言的地方**才拼得出来；
+    /// 另外三种失败的 payload 是 `start(timeout:language:)` 抛出时**已按调用方语言**渲染好的整句
+    /// （它们带着底层报错/`ssh` 的输出，重拼反而会丢信息）⇒ 这里原样返回。
+    ///
+    /// 语言**一律由调用方给**：界面经 `ErrorPresenter`（传 `effectiveLanguage`）、
+    /// 命令行的隧道命令传 `.simplifiedChinese`、单测各传各的期望语言。
+    public func describe(language: AppLanguage) -> String {
+        switch self {
+        case .portInUse(let port):
+            return LocalizedStrings.format(.sshTunnelPortInUse, language: language, String(port))
+        case .launchFailed(let reason), .processExited(let reason), .timedOut(let reason):
+            return reason
+        }
+    }
+
+    /// `LocalizedError` 协议**不带语言语境** ⇒ 这里给的是**技术串，不冒充人话**
+    /// （写死任何一种语言就等于把「Core 自己选语言」重新塞回来，那正是 L-47 要消掉的形状）。
+    ///
+    /// 人话一律由 `describe(language:)` 给，展示点已全部接上：
+    /// 界面走 `App/Utilities/ErrorPresenter.swift`，命令行走隧道命令那条 `catch`。
+    /// 三种带 payload 的失败**原样返回 payload**（不是兜底、也不丢信息）。
     public var errorDescription: String? {
         switch self {
         case .portInUse(let port):
-            return LocalizedStrings.format(.sshTunnelPortInUse, language: .simplifiedChinese, String(port))
-        case .launchFailed(let reason): return reason
-        case .processExited(let reason): return reason
-        case .timedOut(let reason): return reason
+            return "SSH tunnel: local port \(port) is already in use"
+        case .launchFailed(let reason), .processExited(let reason), .timedOut(let reason):
+            return reason
         }
     }
 }

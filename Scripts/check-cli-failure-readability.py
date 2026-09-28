@@ -33,6 +33,20 @@
   ⑦ 已登记的**已知缺口**（`knownGaps`）只减不增：门禁把它们打出来（提醒别当没看见），
      条数比台账多就报红。
   ⑧ 证据脚本里的关键断言（正面 + 反向）必须在位。
+  ⑨ **渠道字段两半**（`channelHalves`，队列 L-66）：失败原本是**一份值两处消费**
+     （既进 JSON 也打到用户眼前），于是「让人话上屏」必然把机器载荷也换成中文。现在两半收在
+     `MaintenanceTask.FailureNote`（`raw` / `readable`），判据钉三件事：
+     ① **类型两半都在**（`Core/MaintenancePlan.swift` 里 `raw` / `readable` 两个字段 + `case failed(FailureNote)`）；
+     ② **生产点各填一半**（界面填 `ErrorPresenter`、命令行填同一个可读化入口 —— 不是另拼一句）；
+     ③ **显示点只许取人话那一半**（取了 `.raw` 当场报红），机器载荷里原串字段与新增的人话字段成对在位
+     （写坏只会在编译过、单测也过的情况下悄悄退化 —— 单测跑不到 CLI 的 JSON 拼装与 `print`）。
+  ⑩ **MCP 工具载荷的「两半」**（`mcpHalves`，队列 L-66 ㈡）：同一条口径落在 MCP 这条渠道上 ——
+     载荷形状从前是 `(text, isError)` 这个元组（一个串既给机器又给人）。现在 `finish` 只收
+     `MCPToolResult`（`raw` / `readable`），载荷里 `text` = 原串、`textHuman` = 人话 **成对**；
+     三处失败（对象树 / 查询 / 写文件）必须都经同一个生产点 `mcpFailure(...)`。
+     判据钉四件事：① 类型两半与 `finish` 的形参；② 载荷里两半**不对调**（`"text": .string(human)`
+     出现即红）；③ 生产点原串与人话各取一处（原串 = `localizedDescription`、人话 = 同一个可读化入口）；
+     ④ **三处失败一处不少**（只查 helper 存在的话，某一处改回单串照样绿）。
 
 用法：
     python3 Scripts/check-cli-failure-readability.py            # 人读结论，失败非零退出
@@ -72,6 +86,21 @@ def output_sites(text: str, print_markers: list[str], raw_marker: str, call: str
             continue
         sites.append((index, line.strip()))
     return sites
+
+
+def line_containing(text: str, anchor: str) -> str | None:
+    """锚点所在的那一行（锚点写的是行内一段代码，不是整行）。找不到返回 None。
+
+    为什么按「行」判而不是按「文件里有这个串」判：显示点要判的是**这一行取了哪一半**
+    （`.raw` 还是 `.readable`）—— 只判「串在不在」的话，「显示点改回原串」这种写坏照样绿。
+    """
+    if not anchor:
+        return None
+    first = anchor.splitlines()[0]
+    for line in text.splitlines():
+        if first in line:
+            return line
+    return None
 
 
 def label_of(line: str) -> str:
@@ -298,7 +327,204 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
         if len((gap or "").strip()) < 12:
             problems.append(f"已知缺口条目太短、等于没登记：{gap!r}")
 
-    # ---- ⑧ 证据脚本里的关键断言必须在位 -------------------------------------
+    # ---- ⑨ 渠道字段两半（队列 L-66 口径 ①） -----------------------------------
+    halves = ledger.get("channelHalves") or {}
+    if not halves:
+        problems.append(
+            "台账缺 `channelHalves`（「渠道字段两半」没有判据可对账）—— 这个字段一次写入、两处消费："
+            "谁把显示点改回 `.raw`、或把 JSON 里的人话字段摘掉，编译过、Core 单测也过，"
+            "只有逐处对账看得见（第 52 轮落地 L-66 拍板口径 ①）"
+        )
+    else:
+        type_spec = halves.get("type") or {}
+        type_rel = type_spec.get("file", "")
+        type_path = root / type_rel if type_rel else None
+        if not type_rel or type_path is None or not type_path.exists():
+            problems.append(f"渠道字段两半：台账指向的类型文件不存在（{type_rel}）")
+        else:
+            type_text = read(type_path)
+            for token in type_spec.get("requires") or []:
+                if token not in type_text:
+                    problems.append(
+                        f"渠道字段两半：{type_rel} 里找不到 `{token}` —— 两半被并回一份、"
+                        "或失败态不再带值时，「取哪一半」就退回调用点自己记得"
+                    )
+
+        for item in halves.get("producers") or []:
+            rel = item.get("file", "")
+            anchor = item.get("anchor", "")
+            raw_token = item.get("rawToken", "")
+            path = root / rel if rel else None
+            if not rel or path is None or not path.exists():
+                problems.append(f"渠道字段两半：生产点台账指向的文件不存在（{rel}）")
+                continue
+            text = read(path)
+            if not anchor or anchor not in text:
+                problems.append(
+                    f"渠道字段两半：{rel} 里找不到生产点 `{anchor[:60]}` —— **人话那一半没人填**"
+                    "（显示点就只能拿到原串）"
+                )
+            if not raw_token or raw_token not in text:
+                problems.append(
+                    f"渠道字段两半：{rel} 里找不到原串那一半（`{raw_token[:44]}`）—— "
+                    "原串必须**一字不变**地进机器载荷（可搜、可上报）"
+                )
+
+        for item in halves.get("displaySites") or []:
+            rel = item.get("file", "")
+            template = item.get("template", "")
+            allowed = item.get("allowed") or []
+            path = root / rel if rel else None
+            if not rel or path is None or not path.exists():
+                problems.append(f"渠道字段两半：显示点台账指向的文件不存在（{rel}）")
+                continue
+            if not template or not allowed:
+                problems.append(f"渠道字段两半：{rel} 的显示点缺 `template` / `allowed`（没有判据可对账）")
+                continue
+            if "{half}" not in template:
+                problems.append(
+                    f"渠道字段两半：{rel} 的显示点模板里没有 `{{half}}` 占位符 —— 那样判不出"
+                    "「这一行取的是哪一半」（判据就退化成「串在不在」）"
+                )
+                continue
+            # 模板 → 「前缀 + 后缀」两段字面量（**不用正则**）：这一行的写法里全是 `\(` / `.`
+            # 这类需要在 JSON 里写四层转义的字符，第 52 轮实测「台账写正则」会写错一层变成
+            # 「门禁自己抛异常」；拆成两段字面量既读得懂、也不给转义留犯错空间。
+            prefix, _, suffix = template.partition("{half}")
+            text = read(path)
+            hits = [line for line in text.splitlines() if prefix in line and suffix in line]
+            if not hits:
+                problems.append(
+                    f"渠道字段两半：{rel} 里找不到显示点（形状变了或那处显示没了）—— 判据是 "
+                    f"`{template[:70]}`，改了形状要同步台账，否则这条判据守的是空气"
+                )
+                continue
+            if len(hits) > 1:
+                problems.append(
+                    f"渠道字段两半：{rel} 里同一个显示点模板匹配到 {len(hits)} 行 —— 判据分不清是哪一处"
+                    f"（`{template[:70]}`）"
+                )
+                continue
+            line = hits[0]
+            tail = line.split(prefix, 1)[1]
+            used = re.match(r"(?:\w+\.)*(\w+)", tail)
+            hit = used.group(1) if used else ""
+            allowed_text = " / ".join("." + half for half in allowed)
+            if hit not in allowed:
+                if hit == "raw":
+                    problems.append(
+                        f"渠道字段两半：{rel} 的显示点**又取回原串那一半**（`.raw`）—— "
+                        f"口径 ① 是「原串给机器、人话给人」，这一处只许取 {allowed_text}"
+                        f"（`{line.strip()[:96]}`）"
+                    )
+                else:
+                    problems.append(
+                        f"渠道字段两半：{rel} 的显示点取了 `.{hit}`（不在允许的两半里）—— "
+                        f"这一处只许取 {allowed_text}（`{line.strip()[:96]}`）"
+                    )
+
+        for item in halves.get("machineSites") or []:
+            rel = item.get("file", "")
+            anchor = item.get("anchor", "")
+            path = root / rel if rel else None
+            if not rel or path is None or not path.exists():
+                problems.append(f"渠道字段两半：机器载荷台账指向的文件不存在（{rel}）")
+                continue
+            if not anchor or anchor not in read(path):
+                problems.append(
+                    f"渠道字段两半：{rel} 里找不到机器载荷字段 `{anchor[:60]}` —— "
+                    "原串字段与人话字段必须成对（摘掉人话字段 = 口径 ① 只落了一半；"
+                    "摘掉原串字段 = 可搜可上报的锚点没了）"
+                )
+
+    # ---- ⑩ MCP 工具载荷的「两半」（队列 L-66 ㈡） ------------------------------
+    mcp = ledger.get("mcpHalves") or {}
+    if not mcp:
+        problems.append(
+            "台账缺 `mcpHalves`（MCP 载荷的「两半」没有判据可对账）—— 这个载荷也是一次写入、"
+            "两处消费（MCP 客户端里的程序与人）：谁把 `textHuman` 摘掉、或把 `text` 改成人话，"
+            "编译过、Core 单测也过（第 54 轮落地 L-66 ㈡）"
+        )
+    else:
+        for key in ("type", "payload", "producer", "sites"):
+            if not (mcp.get(key) or {}):
+                problems.append(f"MCP 载荷两半：台账缺 `{key}`（没有判据可对账）")
+
+        for key in ("type", "payload"):
+            spec = mcp.get(key) or {}
+            rel = spec.get("file", "")
+            path = root / rel if rel else None
+            if not rel or path is None or not path.exists():
+                problems.append(f"MCP 载荷两半：台账 `{key}` 指向的文件不存在（{rel}）")
+                continue
+            text = read(path)
+            for token in spec.get("requires") or []:
+                if token not in text:
+                    problems.append(
+                        f"MCP 载荷两半：{rel} 里找不到 `{token}` —— 两半被并回一份、"
+                        "或载荷里少了一个字段，「取哪一半」就退回调用点自己记得"
+                    )
+            for token in spec.get("forbidden") or []:
+                if token in text:
+                    problems.append(
+                        f"MCP 载荷两半：{rel} 里出现了 `{token}` —— **原串被换成了人话**"
+                        "（口径 ① 是「原串给机器、人话另给字段」，不是「把原串换成中文」）"
+                    )
+        payload = mcp.get("payload") or {}
+        if payload.get("anchor") and payload["file"]:
+            path = root / payload["file"]
+            if path.exists() and payload["anchor"] not in read(path):
+                problems.append(
+                    f"MCP 载荷两半：{payload['file']} 里找不到载荷字段 `{payload['anchor'][:60]}` —— "
+                    "**人话那一半必须真的出现在机器载荷里**（否则界面 / MCP 客户端想展示也没有可展示的）"
+                )
+
+        producer = mcp.get("producer") or {}
+        producer_file = producer.get("file", "")
+        producer_path = root / producer_file if producer_file else None
+        if not producer_file or producer_path is None or not producer_path.exists():
+            problems.append(f"MCP 载荷两半：生产点台账指向的文件不存在（{producer_file}）")
+        else:
+            text = read(producer_path)
+            if producer.get("anchor") and producer["anchor"] not in text:
+                problems.append(
+                    f"MCP 载荷两半：{producer_file} 里找不到生产点 "
+                    f"`{producer.get('anchor', '')[:60]}` —— 三处失败必须走同一个生产点"
+                )
+            if producer.get("rawToken") and producer["rawToken"] not in text:
+                problems.append(
+                    f"MCP 载荷两半：{producer_file} 里找不到原串那一半"
+                    f"（`{producer.get('rawToken', '')[:44]}`）—— 原串必须**一字不变**地进机器载荷"
+                )
+            if producer.get("readableToken") and producer["readableToken"] not in text:
+                problems.append(
+                    f"MCP 载荷两半：{producer_file} 里找不到人话那一半"
+                    f"（`{producer.get('readableToken', '')[:44]}`）—— 人话必须经同一个可读化入口"
+                )
+
+        sites = mcp.get("sites") or {}
+        sites_file = sites.get("file", "")
+        sites_path = root / sites_file if sites_file else None
+        if not sites_file or sites_path is None or not sites_path.exists():
+            problems.append(f"MCP 载荷两半：调用点台账指向的文件不存在（{sites_file}）")
+        else:
+            anchor = sites.get("anchor", "")
+            expected = sites.get("count")
+            found = read(sites_path).count(anchor) if anchor else 0
+            if not anchor:
+                problems.append("MCP 载荷两半：`sites` 没写 `anchor`（判据守的是空气）")
+            elif found == 0:
+                problems.append(
+                    f"MCP 载荷两半：{sites_file} 里一个失败生产点都找不到（`{anchor}`）—— "
+                    "那条路的失败又只剩原串、没有另一半"
+                )
+            elif isinstance(expected, int) and found != expected:
+                problems.append(
+                    f"MCP 载荷两半：失败生产点实际 {found} 处、台账写 {expected} 处 —— "
+                    "少一处就是那条路的失败退回单串（多一处要登记）"
+                )
+
+    # ---- ⑪ 证据脚本里的关键断言必须在位 -------------------------------------
     for marker in ledger.get("evidence") or []:
         path = root / marker.get("file", "")
         if not path.exists():

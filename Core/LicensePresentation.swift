@@ -49,8 +49,14 @@ public enum LicensePresentation {
     ///
     /// **只列比当前更高的档位**：Ultra 用户看到下面还有两档可"升级"是纯粹的噪音，
     /// 而 Pro 用户看到 Standard 更是向下推销（他要的是往上走）。排在当前档之前的都不列。
-    public static func upgradeLines(for current: LicenseEdition) -> [(edition: LicenseEdition, items: [String])] {
-        LicenseEditionCatalog.features
+    /// 语言**由调用方给**（队列 L-65 第 3 批）：这一页的几句功能名也有英文译文，
+    /// 从前 `LicenseEditionCatalog.features` 是 `static let`、语言在首次访问那一刻钉死，
+    /// 于是英文界面上这一页仍是中文。界面传 `effectiveLanguage`。
+    public static func upgradeLines(
+        for current: LicenseEdition,
+        language: AppLanguage
+    ) -> [(edition: LicenseEdition, items: [String])] {
+        LicenseEditionCatalog.features(language: language)
             .filter { $0.edition.rank > current.rank }
             .sorted { $0.edition.rank < $1.edition.rank }
     }

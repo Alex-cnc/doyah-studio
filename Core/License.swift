@@ -220,18 +220,28 @@ public enum LicenseEditionCatalog {
     }
 
     /// 逐条功能清单（顺序即界面顺序）。
-    public static let features: [(edition: LicenseEdition, items: [String])] = [
-        (.standard, [t(.licFeatureNotes), t(.licFeatureAICapture)]),
-        (.pro, [t(.licFeatureDatabase), t(.licFeatureWorkspace)]),
-        (.ultra, [t(.licFeatureAllStandard), t(.licFeatureAllPro), t(.licFeatureLink)])
-    ]
+    ///
+    /// **是函数不是 `static let`**（队列 L-65 第 3 批）：这几句是给人看的文案，写成 `static let`
+    /// 就会在**首次访问那一刻**把语言钉死（同 `licenseLoad` 那类「字符串随装载体走」的写法）——
+    /// 中英译文里只有一份能到达界面。语言由调用方给（界面传 `effectiveLanguage`）。
+    public static func features(language: AppLanguage) -> [(edition: LicenseEdition, items: [String])] {
+        [
+            (.standard, [t(.licFeatureNotes, language: language), t(.licFeatureAICapture, language: language)]),
+            (.pro, [t(.licFeatureDatabase, language: language), t(.licFeatureWorkspace, language: language)]),
+            (.ultra, [
+                t(.licFeatureAllStandard, language: language),
+                t(.licFeatureAllPro, language: language),
+                t(.licFeatureLink, language: language)
+            ])
+        ]
+    }
 
-    public static func items(for edition: LicenseEdition) -> [String] {
-        features.first { $0.edition == edition }?.items ?? []
+    public static func items(for edition: LicenseEdition, language: AppLanguage) -> [String] {
+        features(language: language).first { $0.edition == edition }?.items ?? []
     }
 }
 
-/// Core 侧文案（同文件内使用；语言透传见 R-45）。
-private func t(_ key: LKey) -> String {
-    LocalizedStrings.text(key, language: .simplifiedChinese)
+/// Core 侧文案（同文件内使用；**语言由调用方给定**，见 R-45 / 队列 L-65）。
+private func t(_ key: LKey, language: AppLanguage) -> String {
+    LocalizedStrings.text(key, language: language)
 }

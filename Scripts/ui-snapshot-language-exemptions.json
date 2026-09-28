@@ -16,6 +16,8 @@
     "activity-bar-ultra": "同 `activity-bar-standard`：Ultra 档位一样只有图标。",
     "activity-bar-ultra-dark": "同 `activity-bar-standard`：深色一遍同样只有图标（深色只影响图标配色，与语言无关）。",
     "workspace-code-editor-line-numbers": "代码编辑器里没有一句文案：左边是**数字行号**（`CodeLines` 算、`CodeTextView` 画），右边是**样例代码**（快照夹具写死的文本）。语言门禁按 `L(...)` 观测，这一张一条都没有 ⇒ 中英两遍逐字节相同是**正确的**，不是「语言没到像素上」。",
-    "workspace-code-editor-line-numbers-dark": "同 `workspace-code-editor-line-numbers`：深色一遍同样只有行号与样例代码，不含文案。"
+    "workspace-code-editor-line-numbers-dark": "同 `workspace-code-editor-line-numbers`：深色一遍同样只有行号与样例代码，不含文案。",
+    "notes-search-fulltext": "**全文检索命中那一屏只有数据**：列表是笔记标题 + 来源行（数据，不是文案），搜索框里**有词**⇒ 占位符根本不绘制 ⇒ 副行那一句也不挂（`fullText` 的交代是 `nil`，这正是 L-44 要的对照图）。一个 `L(...)` 都没进像素 ⇒ 中英两张逐字节相同是**正确的**，不是「语言没到像素上」。",
+    "notes-search-fulltext-dark": "同 `notes-search-fulltext`：深色一遍同样只有数据（深色只换配色，与语言无关）。"
   }
 }

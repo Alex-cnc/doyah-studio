@@ -121,12 +121,15 @@ public enum MCPToolCatalog {
     ///     `query_sql` 里塞一条 `DROP TABLE` 就是写操作）。
     ///   - isReadOnlyConnection: 当前连接是不是只读（它**不可绕过**，与 `ExecutionSafety` 同口径）。
     ///   - isApproved: 需要审批的工具，这一轮外部调用是否已获批。
+    /// - Parameter language: 拒绝 / 待审批那句「理由」的语言。**由调用方给**（队列 L-65 第 4 批）：
+    ///   这里写死一种语言，另一种语言的译文就永远不可达。会话侧把它作为会话的一个属性传下来。
     public static func decision(
         for tool: MCPTool,
         sql: String? = nil,
         databaseType: DatabaseType = .postgresql,
         isReadOnlyConnection: Bool = false,
-        isApproved: Bool = false
+        isApproved: Bool = false,
+        language: AppLanguage
     ) -> MCPToolDecision {
         // 语句内容优先：先看这条语句本身是什么性质（工具名只是入口，不是判据）。
         var access = tool.access
@@ -141,7 +144,7 @@ public enum MCPToolCatalog {
             switch decision {
             case .refused:
                 // 只读连接上的写语句：直接拒绝，**下面的审批也救不回来**。
-                return .refused(reason: text(.mcpRefusedReadOnly))
+                return .refused(reason: text(.mcpRefusedReadOnly, language: language))
             case .needsConfirmation:
                 access = .write
             case .allow:
@@ -154,11 +157,11 @@ public enum MCPToolCatalog {
         }
 
         if access.requiresApproval, !isApproved {
-            return .needsApproval(reason: text(.mcpNeedsApproval, tool.name))
+            return .needsApproval(reason: text(.mcpNeedsApproval, tool.name, language: language))
         }
         // 只读连接上，写工具一律拒绝 —— **审批也不能把它变成"可以"**。
         if access.requiresApproval, isReadOnlyConnection {
-            return .refused(reason: text(.mcpRefusedReadOnly))
+            return .refused(reason: text(.mcpRefusedReadOnly, language: language))
         }
         return .allowed(access: access, safety: safety)
     }
@@ -205,10 +208,13 @@ public struct MCPAuditEntry: Equatable, Sendable {
     }
 }
 
-/// Core 侧的文案取值（与其余 Core 展示文本同一现状：默认简体中文，界面语言透传见 R-45）。
-private func text(_ key: LKey, _ arguments: CVarArg...) -> String {
+/// Core 侧的文案取值（**语言由调用方给定**，见 R-45 / 队列 L-65 第 4 批）。
+///
+/// 这个助手从前把语言钉死成简体中文 ⇒ `mcpRefusedReadOnly` / `mcpNeedsApproval` 的英文译文
+/// **永远不可达**（门禁把它们记成「死译文」欠账）。现在语言一路从 `decision(...)` 传进来。
+private func text(_ key: LKey, _ arguments: CVarArg..., language: AppLanguage) -> String {
     if arguments.isEmpty {
-        return LocalizedStrings.text(key, language: .simplifiedChinese)
+        return LocalizedStrings.text(key, language: language)
     }
-    return LocalizedStrings.format(key, language: .simplifiedChinese, arguments)
+    return LocalizedStrings.format(key, language: language, arguments)
 }

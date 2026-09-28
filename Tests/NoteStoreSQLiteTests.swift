@@ -275,6 +275,43 @@ final class NoteStoreSQLiteTests: XCTestCase {
         XCTAssertTrue(try database.search("%%%").notes.isEmpty)
     }
 
+    /// **标签也检索**（队列 L-44）：界面搜索框承诺「搜索标题 / 正文 / 标签」，而 `note_fts`
+    /// 只索引标题与正文 ⇒ 标签命中要在**两条路里各补一次**，否则界面检索改走库之后
+    /// 标签那一半会静默消失（占位符当场变成一句假话）。
+    ///
+    /// 四条判据：① 2 字查询里标签命中在（子串路）；② 只有标签命中的 4 字查询也找得到
+    /// （`note_fts` 落空 ⇒ 退回子串路，路线如实报 `substring`）；③ 全文命中与标签命中
+    /// **同一次查询里都要在**（≥3 字：一条走索引、另一条走标签补充）；④ 合并后按
+    /// `updated_at DESC, title ASC` **重排**（两次查询拼起来的数组不能各排各的）。
+    func testSearchAlsoMatchesTagsInBothRoutes() throws {
+        let database = try makeDatabase()
+        let tagOnly = sampleNote(
+            title: "甲", body: "无关内容", tags: ["骑行装备"], updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        let bodyHit = sampleNote(
+            title: "乙", body: "洞庭湖与骑行", tags: [], updatedAt: Date(timeIntervalSince1970: 200)
+        )
+        let lakeTag = sampleNote(
+            title: "丙", body: "别的", tags: ["洞庭湖环湖"], updatedAt: Date(timeIntervalSince1970: 300)
+        )
+        for note in [tagOnly, bodyHit, lakeTag] { try database.upsert(note) }
+
+        // ① 2 字查询（全文索引不参与）：正文命中与标签命中都在，按更新时间倒序。
+        let twoChars = try database.search("骑行")
+        XCTAssertEqual(twoChars.route, .substring)
+        XCTAssertEqual(twoChars.notes.map(\.title), ["乙", "甲"], "标签命中不许被漏掉")
+
+        // ② 4 字查询只在标签里出现 ⇒ 索引落空、退回子串路，且路线如实报出来。
+        let tagOnlyHit = try database.search("骑行装备")
+        XCTAssertEqual(tagOnlyHit.route, .substring, "全文索引里没有它（标签不进 FTS）⇒ 只能是子串路")
+        XCTAssertEqual(tagOnlyHit.notes.map(\.title), ["甲"])
+
+        // ③④ 全文命中（乙的正文）+ 标签命中（丙的标签）合并，且按更新时间倒序重排。
+        let merged = try database.search("洞庭湖")
+        XCTAssertEqual(merged.route, .fullText)
+        XCTAssertEqual(merged.notes.map(\.title), ["丙", "乙"], "索引命中与标签补充要合并后统一排序")
+    }
+
     /// 索引与正文**结构性同步**（触发器），改标题后旧词查不到、新词查得到；删掉后查不到。
     func testFullTextIndexFollowsUpdatesAndDeletes() throws {
         let database = try makeDatabase()

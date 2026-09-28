@@ -21,7 +21,21 @@ set -euo pipefail
 #        `check-literal-language.py` 与 `literal-language-dispositions.json`）
 #   4. 文档表格列数与派生计数一致
 #      + 变更记录版本号唯一 / 头部版本格可判 / 队列条目号唯一（L-32）
+#      + **文档数字的唯一来源**（L-55：闭环项数 / 单测数 / 快照张数收进台账
+#        `Scripts/doc-numbers.json`，做「台账 ↔ 实测 ↔ 文档」三向对账 —— 见本项尾部注释）
+#      + **§6 待拍板队列的编号与状态纪律**（L-56：编号唯一 / 状态只写词表词 / 与 §4 同源 ——
+#        这一节是探针「需用户介入」行的来源，`Q19` 曾因此每轮被报成待拍板项；
+#        见 `Scripts/check-doc-q-series.py`）
+#      + **门禁自己的证据：例数的唯一来源**（L-72 ㈠：27 族的负例 / 自检例数收进台账
+#        `Scripts/self-test-counts.json`，判据 `Scripts/check-self-test-counts.py` 把每一族 runner
+#        **真跑一遍**（要求 exit 0）、再与台账和文档里的现状声明逐处对账 —— 此前 `test-*.py`
+#        14 个里 **8 个根本没人跑**，其中一个已经坏在第 3 例而无人知）
 #   5. 需求状态一致性（§10.1 索引表 ↔ 正文定义行）
+#      + **alpha 范围账**（L-69 条件 ③）：FR 🟡 **逐条**判定 —— 能机器验的给可复跑证据指针、
+#        不能机器验的标 `[alpha 不含]`（状态格仍 🟡）。台账 `Scripts/alpha-fr-dispositions.json`，
+#        判据 = 台账 ↔ SRS 双向对账 / 标记逐字对上 / 原因档在词表内 / 证据指针存在 / 空跑防护。
+#        为什么要有它：v0.1.0-alpha 那次 6 条环境项是**手加**的标记，此后 🟡 增删机器都不说话，
+#        发布说明「明确不做什么」那一节就会与文档事实脱节（见脚本头注释）。
 #   6. 设计令牌棘轮（App/ 里的裸颜色 / 裸字号 / 裸间距不得比基线更差）
 #   7. 平台等价矩阵（§10.10 ↔ `Docs/平台实现状态.json` 台账，列由台账决定）+ 台账校验自检
 #      + `P-*` 平台差异登记的两侧对账（§10.9 ↔ 概要设计 §4：双向覆盖 + 同号同物
@@ -31,8 +45,15 @@ set -euo pipefail
 #      补上第三个脚本后，这句话才成立；注释里的假话先被改正，判据随后补上）
 #   8. 平台中立性棘轮（需求规范书里的平台专属词汇不得比基线更差）
 #   9. 命令面板接线（清单 ↔ 分派器 ↔ 视图绑定；见脚本注释里的真实缺陷）
+#      + 侧边栏折叠状态归属（L-59：状态住在 `AppState`、写入口唯一、默认全展开、未分组不给折叠）
+#      + **面板根固定尺寸 frame 的对齐纪律**（L-61：`App/Views/` 里每一处「宽高都是数字字面量」的
+#        `.frame(width:height:)` 都要在台账 `panel-root-frames.json` 里有处置；面板根必须**把意图
+#        写出来** —— 显式写 `alignment:` 或登记一个在该视图类型里真的存在的撑满令牌，
+#        见 `check-panel-root-frames.py`）
 #  10. 插件装配链（笔记模块解耦 FR-PLUG-07 + 装配与许可 FR-PLUG-01/02/03/06 + ADR-35）
 #      + 笔记模块的**零网络出口**（FR-PLUG-05 ②：数据不外发，见 `check-notes-offline.py`）
+#      + **界面检索走库 + 路线如实标注**（L-44：唯一生产点 / 视图不许内存过滤 /
+#        路线逐条登记 / 文案键在位且被引用，见 `check-note-search-route.py`）
 #  11. 打包 .app（沙箱构建）
 #  12. 脚本 shell 多字节安全（bash 3.2 的变量名坑，见 `check-shell-locale-safety.py`）
 #  13. 脚本连接信息参数化（连真库的脚本不许写死端口 / 地址 / 账号，见 `check-script-env-parameterization.py`）
@@ -132,6 +153,10 @@ skip_step() {   # skip_step <项号> <说明>
 }
 
 if [ "${PLATFORM}" = "macos" ]; then
+  # 第 1 项之前先删掉单测数证据文件：留在盘上的旧值会被 Scripts/check-doc-numbers.py 当成
+  # 「这一轮的实测」（第 4 项那条判据只认同一次运行的数）。删掉之后，本轮没跑第 1 项时
+  # 判据会如实报「跳过实测」——而不是拿一个陈旧数字冒充现状。
+  rm -f .build/core-test-count.txt
   echo "==> 1/18 Core 与平台适配层单测"
   ./Scripts/verify-core.sh
 else
@@ -188,9 +213,9 @@ python3 Scripts/test-copy-emphasis-gate.py
 # （`DiagnosisContext` 的文本出口必须带 `language:` 形参、`DiagnosisAdvice.parse` 必须带、
 # 面板必须传 `effectiveLanguage` —— 只靠 A 挡不住「删掉形参再在函数体里写死」）/
 # D 空跑不许通过（语言表解析不到键、键引用为 0、扫到的文件过少都判红）。
-# 台账 `Scripts/literal-language-dispositions.json`；负例 `test-literal-language-gate.py`
-# 9 例（回归钉 / 未登记文件 / 新增死译 / 死键修好未销账 / 丢形参 / 面板脱钩 / 语言表消失 /
-# 干净副本前提自检 / 真仓库逐字节未变），一律在临时副本上写坏。
+# 台账 `Scripts/literal-language-dispositions.json`；负例 `test-literal-language-gate.py` **14 例**
+# （第 46 轮落地时 9 例，L-65 第 2/3/4 批又各补了 1~3 例 —— 例数的唯一来源与逐处对账见
+# `Scripts/self-test-counts.json`，一律在临时副本上写坏）。
 python3 Scripts/check-literal-language.py
 python3 Scripts/test-literal-language-gate.py
 
@@ -217,9 +242,69 @@ python3 Scripts/check-doc-tables.py --self-test
 python3 Scripts/check-doc-versions.py
 # 派生文件不得漂移：终端配色 JSON ↔ Core ↔ 人读文档三方一致（FR-EDIT-29 的跨平台交接物）
 python3 Scripts/check-terminal-palette.py
+# L-55（2026-09-28 第 61 轮）：上面几条管的是**表格结构**（列数 / 计数 / 版本号 / 派生计数），
+# 管不了「独立写在各处的**工程设施数字**」—— 闭环项数、单测数、快照张数。真现场：
+# `Docs/概要设计.md` §8.3 闸门表写着 `verify-core.sh`（**760** 项），实测 2056 项（那是 09-23 的旧值）；
+# `AGENT-SPEC.md` 跑法注释里写着 2046 tests / 快照 140 张 · 70 组，实测 2056 / 152 · 76。
+# 口径 = **唯一来源台账** `Scripts/doc-numbers.json`（照 `Scripts/vendored-sqlite.json` 的做法），
+# 判据 `Scripts/check-doc-numbers.py` 做**三向对账**：台账 ↔ 实测（能机械复算的必须复算：
+# 闭环项数从 `==> N/M` 项块数、单测数读 verify-core.sh **同一次运行**写下的计数文件、
+# 快照读 manifest）↔ 文档里每一处现状声明（精确锚点 + 有限反扫，写错 / 删光都判红）。
+# 它同时管住「有判据、没闭环」那一族：`Scripts/check-*.py` 每个都必须被本脚本引用，
+# 或在台账里逐条登记理由（现有 1 条豁免 = 快照语言覆盖门禁）。
+# 边界（如实登记，见脚本 docstring）：**不做全文反扫**（三书与开发记录里充满历史值），
+# **对侧独占节整段跳过**（红线第 6 条：本侧不改的也不拿它判红），**变更记录行整行跳过**。
+python3 Scripts/check-doc-numbers.py
+python3 Scripts/check-doc-numbers.py --self-test
+# L-56（2026-09-28 第 62 轮）：上面几条仍然管不到 **§6 待拍板队列的编号与状态**。真现场三类：
+# ① `Q28` 同号两条（Retro 技术栈 / 本仓与宿主的关系）—— 两条不同的问题共用一个号；
+# ② **8 行编号格是 L-41 修列数时补的 `——` 占位**（FR-IO-04 / FR-AI-12 / `.et` /
+#    NFR-COMP-03 / cua-driver 两个授权 / 本机模型凭据 / 环境类授权（9 项）/ 机器载荷失败原串）
+#    —— 表格结构合法了，但条目**无法被引用、无法被对账**；
+# ③ `Q19` 早已在 §4 记「已拍板（2026-09-27）」，§6 却一直挂着「⏳ 待拍板」⇒ **每轮探针都把它
+#    报成「待你拍板」**（同族另有 Q29 前提作废、Q34 / Q35 / Q36 / Q40 已随当日口径关闭）。
+# 判据 `Scripts/check-doc-q-series.py`：A 编号可判且唯一 / B 状态只写词表词 / C 关闭行成对 /
+# D §4 ↔ §6 同源（Q17~Q23 = Studio 号空间）/ E 空跑防护（行数 / 号数 / 对账对数下限）。
+# 该文件与 check-doc-tables 那份同属 `.gitignore` 内的本机台账 ⇒ 不在盘上时**跳过 + 高声提示**，
+# `--require-all` 判红；负例 `--self-test` **8 例** + 末例核对真仓库逐字节未变。
+if [ "${REQUIRE_ALL}" = "1" ]; then
+  python3 Scripts/check-doc-q-series.py --require-all
+else
+  python3 Scripts/check-doc-q-series.py
+fi
+python3 Scripts/check-doc-q-series.py --self-test
+# L-72 ㈠（2026-09-28 第 65 轮）：上面几条管的是**跨文档的工程设施数字**（闭环项数 / 单测数 /
+# 快照张数），管不了**逐族的负例例数**。真现场两件：① `AGENT-SPEC.md` §6 资产表里那三处 ——
+# 语言透传族的例数写着 10（实测 14）、待拍板队列族写着 7（实测 8）、本项第 17 条注释写着
+# 「共十类」篡改（实测 13 条）；② 更重的一条 —— `Scripts/test-*.py` 这
+# 14 个「门禁自己的证据」**没有任何门禁管**（`check-*.py` 有 doc-numbers 的「有判据、没闭环」
+# 对账，`test-*.py` 没有）⇒ 其中 **8 个根本没人跑**，而 `test-plugin-assembly-gates.py`
+# 已经坏在第 3 例（`Core/AICapture.swift` 的 `sqlNote` 签名改成多行 + 多一个 `tag:` 参数，
+# 夹具锚点还是老单行签名）无人知 —— 「判据写完不对已知改动报红，等于没有」。
+# 台账 `Scripts/self-test-counts.json`；判据 `Scripts/check-self-test-counts.py`：
+# A 台账结构（每族 key / script / cases / countRegex / why；没锚点必须写 noAnchorReason）
+# B **把每一族 runner 真跑一遍**（要求 exit 0 —— 崩了就是「这族的负例没跑」）并按各族登记的
+#   countRegex 抓例数，与台账逐族比对（抓不到 = 收尾行格式被改坏 = 判红，不许静默跳过）
+# C 文档锚点逐处对账（`AGENT-SPEC.md` §6 资产表 / `Scripts/verify-all.sh` 注释 / 脚本自己的
+#   docstring；写错、数字被删光都判红）+ D 可选静态棘轮（`sourceRatchet`：例数只在 runner 里用
+#   `len()` 算出来的族，另按正则数脚本里的用例条数）+ E 空跑防护（族数 / 例数合计 / 锚点命中
+#   处数三条下限）+ F 边界如实打印（无锚点但写了理由的族数）。
+# 负例 `--self-test` 11 例（好情况 / runner 非零退出 / 例数漂移 / 收尾行解析不到 / 锚点值写错 /
+# 锚点被删 / 台账结构错 / 空跑防护 / 静态棘轮 / 末例核对真仓库逐字节未变），夹具一律在临时目录。
+python3 Scripts/check-self-test-counts.py
+python3 Scripts/check-self-test-counts.py --self-test
 
-echo "==> 5/18 需求状态一致性（索引表 ↔ 正文定义行）"
+echo "==> 5/18 需求状态一致性（索引表 ↔ 正文定义行）+ alpha 范围账（FR 🟡 逐条判定）"
 python3 Scripts/check-status-consistency.py
+# L-69 ③（2026-09-28 第 56 轮）：上面那条管的是「索引 ↔ 定义行**状态一致**」，管不了
+# 「这条 🟡 到底算不算 alpha 范围」。v0.1.0-alpha 给 6 条环境项手加了 `[alpha 不含]`，
+# 此后 🟡 增删、标记被删、标记被挪格，机器一句都不说 ⇒ 发布说明「明确不做什么」写不出来。
+# 现在把它变成台账 + 双向判据（台账 `Scripts/alpha-fr-dispositions.json`）：
+# A 台账 ↔ SRS 双向对账（漏一条 / 留陈旧条目都红）；B 台账声明的标记必须逐字出现在定义行里，
+# 反向也判（手写标记绕不过对账）；C 原因档必须在词表内；D 每条至少一个**存在的**证据指针；
+# E 空跑防护。负例 `--self-test` 11 例，一律在临时副本上写坏，末例核对真仓库逐字节未变。
+python3 Scripts/check-alpha-fr-dispositions.py
+python3 Scripts/check-alpha-fr-dispositions.py --self-test
 
 echo "==> 6/18 设计令牌棘轮"
 python3 Scripts/check-design-tokens.py
@@ -247,8 +332,43 @@ python3 Scripts/check-p-parity.py --self-test
 echo "==> 8/18 平台中立性棘轮"
 python3 Scripts/check-platform-neutrality.py
 
-echo "==> 9/18 命令面板接线（FR-EDIT-25）"
+echo "==> 9/18 界面接线与状态归属（命令面板 FR-EDIT-25 / 侧边栏折叠 FR-CONN-15 / 空数据按钮 L-50）"
 python3 Scripts/check-palette-wiring.py
+# L-59：**侧边栏的折叠状态住在 `AppState`，不住在视图里** —— 人工点验批次 1 第 3 条实测为挂
+# （「记不住折叠状态」）：`ConnectionListView` 的局部 `@State` 随活动栏分支重建归零，而当时
+# 所有门禁全绿。判据 = 视图不许有局部折叠状态 / 状态必须是 `@State`-free 的 `AppState` 属性
+# 且 `private(set)`、写入口唯一、默认全展开 / 视图绑定必须经 appState / 未分组那一段不许有折叠 /
+# 空跑防护；台账式常量在脚本里，负例 `Scripts/test-sidebar-collapse-state.py`（11 例）。
+# 行为那一半（重建前后像素逐字节相同）在 `TestsUISnapshot/UISnapshotSidebarStateTests.swift`，
+# 按 L-01 的纪律不进每轮门禁（要 `DOYAH_UI_SNAPSHOT=1`）。
+python3 Scripts/check-sidebar-collapse-state.py
+python3 Scripts/test-sidebar-collapse-state.py
+# L-50：**空数据时按钮必须有个说法**（灰着 / 可点给理由 / 够不着按钮），不许「可点却静默无反应」。
+# 2026-09-26 读图在笔记编辑器上抓到过第三种（「保存」满色可点、点下去静默 return）。这一项把
+# `App/AppState.swift` 里每条「内容为空」守卫与它的处置逐条对账（双向：未登记 ⇒ 红、陈旧 ⇒ 红），
+# 并钉住 `view-disabled` 那一档的**唯一出处**（判据属性全局只定义一次 / 守卫必须用它 /
+# 指定视图必须真的 `.disabled` 它 / 视图不许再自己算一遍）。台账与词表见脚本 docstring，
+# 台账 `Scripts/empty-action-button-dispositions.json`；负例 `Scripts/test-empty-action-buttons.py`
+# 11 例（视图处置被删 / 守卫改回裸判断 / 新增未登记守卫 / explain 其实没话 / 视图本地锚点被删 /
+# 判据两处定义 / 视图重新推导 / 台账陈旧 / 台账写坏 / 前提自检 / 真仓库逐字节未变）。
+python3 Scripts/check-empty-action-buttons.py
+python3 Scripts/test-empty-action-buttons.py
+# L-61（2026-09-28 第 64 轮）：上面两条管的是「按钮有没有说法」与「状态该活多久」，
+# 管不到**面板根自己的尺寸与对齐**。真现场（第 41 轮修 L-58 时实测）：`PrivilegePanel` 的
+# 内容在它自己的 `720×620` 里被**垂直居中**（顶上约 150pt 空白）—— `.frame(width:height:)`
+# 不写 `alignment:` ⇒ SwiftUI 取默认 `.center`，而那个 `VStack` 里没有可伸缩高度的子视图。
+# 当时编译过、Core 单测全绿、文档与快照门禁全绿（「内容在自己尺寸里浮着」没人看）。
+# 判据判的是**把意图写出来**（不判居中对不对 —— 静态查不出可伸缩子视图，docstring 里写清了）：
+# A 扫描完整性 · 双向对账（每一处「宽高都是数字字面量」的 `.frame` 恰好一条台账；新增没登记 /
+# 台账陈旧 / 处数不符都判红）/ B 面板根（width ≥ 台账门槛 400）与装饰的分类对账 /
+# C 面板根必须选一条路线并留下盘上锚点 —— `explicit-alignment`（源码**真的**写了 `alignment:`，
+# 值逐字对账）或 `content-stretches`（`stretchProbe` 取自台账 `probeVocab`，且在**该视图类型
+# 范围内真的存在**）/ D 理由不许空 / E 空跑防护（文件数 · 命中数 · 面板根数 · 台账数下限，
+# 台账声明的扫描事实与磁盘相等）/ F 范围外（用设计令牌 / 变量给尺寸的 `.frame`）**显式打印**数量。
+# 负例 `--self-test` 19 例（含「现造一块既没写 alignment、类型里又没有撑满容器的面板根 ⇒
+# 三条路线全红」这一组，与一条「显式对齐被删但登记还在」；夹具只拷 `App/`，末例核对真仓库逐字节未变）。
+python3 Scripts/check-panel-root-frames.py
+python3 Scripts/check-panel-root-frames.py --self-test
 
 echo "==> 10/18 插件装配链（FR-PLUG-01~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py
@@ -259,6 +379,14 @@ python3 Scripts/check-plugin-assembly.py
 # 与上面那份解耦清单**两边对账**（漏登一个源文件也是红）。判据与台账见
 # `Scripts/notes-offline-gate.json`（关键令牌不许被拿掉、例外要写明理由且锚点陈旧报红）。
 python3 Scripts/check-notes-offline.py
+# L-44：界面检索**走库**（唯一生产点）+ **所走路线如实标注**（子串兜底 / 检索没跑成）——
+# 视图不许拿已加载的列表自己过滤；每条路线都要在台账里登记处置（给键或显式 nil）并与实现
+# 逐条相等；文案键要真的在语言表里（中英都在）且真的被引用（死键也判红）。判据与台账见
+# `Scripts/check-note-search-route.py` / `Scripts/note-search-route.json`；
+# 负例 `test-note-search-route.py`（11 例：生产点消失 / 第二条路 / 视图过滤 / 台账与实现不一致 /
+# 新增路线没登记 / 语言表缺中文 / 死键 / 两处空跑防护 / 真仓库逐字节未变）。
+python3 Scripts/check-note-search-route.py
+python3 Scripts/test-note-search-route.py
 
 if [ "${PLATFORM}" = "macos" ]; then
   echo "==> 11/18 打包 .app（沙箱）"
@@ -299,7 +427,8 @@ echo "==> 17/18 vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例 + 
 #   · 这份 `sqlite3.c` 是 9.5 MB 的**生成文件**，换版本 / 手改一行 / 编译宏掉一个都**不会有症状**，
 #     只会让三端行为悄悄不一致（FR-PLUG-08 的口径是「三端同一份引擎，不许换系统 libsqlite3」）；
 #     所以第一条把每个事实（文件哈希 / 头文件版本串 / 宏 / 公共头目录 / 许可 / 来源 / 接线）都做成对账；
-#   · 第二条是**门禁自己的证据**（六类篡改 + 证据锚点 + 接线 + 项号自洽共十类，必须真的报红）；
+#   · 第二条是**门禁自己的证据**（**13 条**篡改全部要被抓到并指名出处 —— 六类篡改 + 证据锚点 +
+#     接线 + 项号自洽 + 台账空跑防护 …，必须真的报红）；
 #   · 第三条是**行为证据**：把 sqlite3.c 现编成可执行文件跑一遍 —— 版本 / 四条宏 / WAL / 参数化
 #     读写 / DQS=0 报错，以及 **FTS5 中文检索**（默认分词器 0 命中、trigram 3 字以上才命中，
 #     两条都钉住 —— 这是「笔记按条件查与全文检索」这条判据的真正口径）。

@@ -6,8 +6,11 @@
 「删掉两处出口里的一处仍能顶数」），所以每条新门禁都配一组负例：**写坏 → 必须报红 → 点名哪一处**。
 
 **做法**：不改真仓库的文件，而是把**必要的几个文件**拷进临时目录，在副本上写坏、
-把门禁指过去（`--root`）。本轮这组负例要删调用、改兜底、写大处数 —— 一旦中途失败，
-真仓库会被留在半坏状态；副本上折腾没有这个代价（跑完断言真仓库一个字节没动）。
+把门禁指过去（`--root`）。本轮这组负例要删调用、改兜底、写大处数，还要把**渠道字段的两半**
+（队列 L-66 口径 ①）逐个写坏：显示点取回原串、JSON 里摘掉人话字段、两半被并回一份、
+生产点不填人话，以及 **MCP 载荷的两半**（队列 L-66 ㈡）写坏：载荷对调两半、摘掉人话字段、
+原串被人话顶替、三处失败少一处、`finish` 退回单串 —— 一旦中途失败，真仓库会被留在半坏状态；副本上折腾没有这个代价
+（跑完断言真仓库一个字节没动）。
 
 用法：`python3 Scripts/test-cli-failure-readability.py`
 """
@@ -28,7 +31,11 @@ FILES = [
     "CLI/main.swift",
     "CLI/CLIFailureText.swift",
     "App/Utilities/ErrorPresenter.swift",
+    "App/AppState.swift",
     "Core/ConnectionFailure.swift",
+    "Core/MaintenancePlan.swift",
+    "Core/MCPSession.swift",
+    "Core/AICaptureUltra.swift",
     "Scripts/test-cli-failure-readability.sh",
 ]
 
@@ -179,7 +186,7 @@ def main() -> int:
     def drift_plumbing(tree: Path) -> None:
         data = ledger_of(tree)
         for item in data["plumbing"]:
-            if item["anchor"].startswith("return (error.localizedDescription"):
+            if item["anchor"] == "raw: error.localizedDescription,":
                 item["count"] = 7
                 break
         write_ledger(tree, data)
@@ -243,6 +250,90 @@ def main() -> int:
             "            else { print(CLIFailureText.block(error)) }", 1))
 
     expect("主路又抄一份链 → 报红", copy_chain_back, "又抄了一份")
+
+    print("\n== Q) 渠道字段两半（队列 L-66）：命令行显示点又取回原串那一半")
+
+    def display_raw_again(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            'case .failed(let note): state = "失败（\\(note.readable)）"',
+            'case .failed(let note): state = "失败（\\(note.raw)）"', 1))
+
+    expect("CLI 显示点取原串 → 报红", display_raw_again, "原串那一半")
+
+    print("\n== R) 同题：界面失败提示行又取回原串那一半（界面这条路最容易被漏掉）")
+
+    def app_display_raw(tree: Path) -> None:
+        edit(tree, "App/AppState.swift", lambda text: text.replace(
+            "maintenanceMessage = L(.maintenanceFailedOne, task.id, failure.readable)",
+            "maintenanceMessage = L(.maintenanceFailedOne, task.id, failure.raw)", 1))
+
+    expect("界面显示点取原串 → 报红", app_display_raw, "原串那一半")
+
+    print("\n== S) 同题：机器载荷里的人话字段被摘掉（口径 ① 只落了一半）")
+
+    def drop_human_field(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            '+ "\\"failureReasonHuman\\":\\(jsonQuoted(note.readable))"', '+ ""', 1))
+
+    expect("JSON 少人话字段 → 报红", drop_human_field, "机器载荷字段")
+
+    print("\n== T) 同题：两半被并回一份（失败态不再带两半）")
+
+    def merge_halves(tree: Path) -> None:
+        edit(tree, "Core/MaintenancePlan.swift", lambda text: text.replace(
+            "public let readable: String", "public let human: String", 1))
+
+    expect("两半被并回一份 → 报红", merge_halves, "readable")
+
+    print("\n== U) 同题：生产点不再填人话（人话那一半没人算出来）")
+
+    def producer_without_human(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            "readable: CLIFailureText.oneLine(error)", "readable: error.localizedDescription", 1))
+
+    expect("生产点不填人话 → 报红", producer_without_human, "生产点")
+
+    print("\n== V) MCP 载荷两半（队列 L-66 ㈡）：载荷里 `text` 被换成人话（两半对调）")
+
+    def swap_payload_halves(tree: Path) -> None:
+        edit(tree, "Core/MCPSession.swift", lambda text: text.replace(
+            '"text": .string(raw),', '"text": .string(human),', 1))
+
+    expect("MCP 载荷对调两半 → 报红", swap_payload_halves, "原串被换成了人话")
+
+    print("\n== W) 同题：载荷里的人话字段被摘掉（口径 ① 只落了一半）")
+
+    def drop_payload_human(tree: Path) -> None:
+        edit(tree, "Core/MCPSession.swift", lambda text: text.replace(
+            '                    "textHuman": .string(human),\n', "", 1))
+
+    expect("MCP 载荷少人话字段 → 报红", drop_payload_human, "人话那一半必须真的出现在机器载荷里")
+
+    print("\n== X) 同题：生产点的原串那一半被人话顶替（机器载荷会跟着变中文）")
+
+    def producer_raw_becomes_human(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            "        let raw = error.localizedDescription", "        let raw = CLIFailureText.oneLine(error)", 1))
+
+    expect("MCP 生产点原串被顶替 → 报红", producer_raw_becomes_human, "原串那一半")
+
+    print("\n== Y) 同题：三处失败少一处（某一处改回单串）")
+
+    def one_site_back_to_single(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            "                return mcpFailure(error)\n",
+            "                return .single(error.localizedDescription, isError: true)\n", 1))
+
+    expect("MCP 失败生产点少一处 → 报红", one_site_back_to_single, "失败生产点实际")
+
+    print("\n== Z) 同题：载荷形状退回一个串（`finish` 又只收 `text`）")
+
+    def finish_back_to_single_string(tree: Path) -> None:
+        edit(tree, "Core/MCPSession.swift", lambda text: text.replace(
+            "finish(_ invocation: Invocation, result: MCPToolResult)",
+            "finish(_ invocation: Invocation, text result: String)", 1))
+
+    expect("MCP 载荷形状退回单串 → 报红", finish_back_to_single_string, "MCPToolResult")
 
     print("\n== K) 真仓库一个字节没动（负例都在副本上做）")
     changed = [rel for rel, digest in before.items() if hashlib.sha256((ROOT / rel).read_bytes()).hexdigest() != digest]

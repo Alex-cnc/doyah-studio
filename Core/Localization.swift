@@ -238,6 +238,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesEmpty
     /// 有笔记、但按当前搜索词一条都没命中（与"还没有笔记"是两件事：动作不同——改词 vs 新建）。
     case noteSearchNoMatch
+    /// **检索所走的路线**（队列 L-44）：这次是子串兜底而不是全文检索（查询串 < 3 字，
+    /// 或短语在全文索引里落空）—— 界面必须如实标出，不能把兜底当成「检索就是这样」。
+    case noteSearchSubstring
+    /// **检索没跑成**（队列 L-44）：库读不出来时不假装「没找到」，如实说清原因。
+    /// 带原因参数（列表会退回全部笔记 —— 用户至少还能看见自己的笔记）。
+    case noteSearchUnavailable
     case notesTagsPlaceholder
     case notesSourceHint
     case notesUntitled
@@ -750,6 +756,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case syntheticSeed
     case syntheticColumns
     case syntheticPreview
+    case syntheticPreviewEmpty
     case syntheticGenerate
     case syntheticExport
     case syntheticWrite
@@ -761,6 +768,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case syntheticSpecIssue
     case syntheticAutoSpecNote
     case syntheticOverwrite
+    /// 列规则的人话描述（队列 L-60 读图产出）：`describe(_:)` 原先把「字符 / 位 / 项 / 近 N 天」
+    /// **写死在 `App/` 的字符串插值里** ⇒ 英文界面上印出中文（`text(8…24 字符)`）。
+    /// 文案进语言表，规则名与括号形状各语言自己写。
+    case syntheticRuleDecimal
+    case syntheticRuleText
+    case syntheticRuleWeighted
+    case syntheticRuleDateWithin
+    case syntheticRuleTimestampWithin
     case sessionTitle
     case sessionRefresh
     case sessionPermissionNote
@@ -1959,6 +1974,8 @@ public enum LocalizedStrings {
         .notesSearchPlaceholder: [.simplifiedChinese: "搜索标题 / 正文 / 标签", .english: "Search title, body or tags"],
         .notesEmpty: [.simplifiedChinese: "还没有笔记", .english: "No notes yet"],
         .noteSearchNoMatch: [.simplifiedChinese: "没有匹配的笔记（笔记还在，换个词试试）", .english: "No matching notes (they are still there — try another word)"],
+        .noteSearchSubstring: [.simplifiedChinese: "这次是子串匹配（全文检索需要 3 个字以上，或这一次没命中）", .english: "Matched as a substring this time (full-text search needs 3+ characters, or found nothing here)"],
+        .noteSearchUnavailable: [.simplifiedChinese: "检索没跑成：%@（下面列出的是全部笔记）", .english: "Search did not run: %@ (all notes are listed below)"],
         .notesTagsPlaceholder: [.simplifiedChinese: "标签（空格或逗号分开）", .english: "Tags (separate with spaces or commas)"],
         .notesSourceHint: [.simplifiedChinese: "来源由创建时记下，之后编辑不会改它", .english: "The source is recorded at creation and is not changed by later edits"],
         .notesUntitled: [.simplifiedChinese: "无标题", .english: "Untitled"],
@@ -2444,6 +2461,7 @@ public enum LocalizedStrings {
         .syntheticSeed: [.simplifiedChinese: "随机种子", .english: "Seed"],
         .syntheticColumns: [.simplifiedChinese: "列与生成规则", .english: "Columns and rules"],
         .syntheticPreview: [.simplifiedChinese: "预览（前几行）", .english: "Preview (first rows)"],
+        .syntheticPreviewEmpty: [.simplifiedChinese: "这一次一行都没有生成 —— 上面「行数」填 0 时就是 0 行；改成正数再点「生成预览」。", .english: "This run produced no rows — a row count of 0 yields none; enter a positive count and generate again."],
         .syntheticGenerate: [.simplifiedChinese: "生成预览", .english: "Generate preview"],
         .syntheticExport: [.simplifiedChinese: "导出 INSERT 到编辑器", .english: "Export INSERT to editor"],
         .syntheticWrite: [.simplifiedChinese: "写入目标表…", .english: "Write to table…"],
@@ -2455,6 +2473,14 @@ public enum LocalizedStrings {
         .syntheticSpecIssue: [.simplifiedChinese: "规格问题：%@", .english: "Spec issue: %@"],
         .syntheticAutoSpecNote: [.simplifiedChinese: "规则按表结构自动推断：主键用序列、非空列不给 NULL —— 生成的数据应当能直接插入", .english: "Rules are inferred from the table: primary keys use a sequence and NOT NULL columns never get NULL, so the rows should insert cleanly"],
         .syntheticOverwrite: [.simplifiedChinese: "先清空目标表（TRUNCATE）", .english: "Truncate the target table first"],
+        // 列规则描述（队列 L-60）：规则名、序与量词（「字符」/「chars」、「位」/「digits」）各语言自己写。
+        // **数字槽一律是 `%@`**：数字在调用点先格式化成字符串再进来 —— 模板只管语序与量词，
+        // 槽位永远不会收到 `Int`（L-46 那一族「模板 `%@` 收整数 ⇒ 界面印 `(null)`」在这里不可能发生）。
+        .syntheticRuleDecimal: [.simplifiedChinese: "decimal(%@…%@, %@ 位)", .english: "decimal(%@…%@, %@ digits)"],
+        .syntheticRuleText: [.simplifiedChinese: "text(%@…%@ 字符)", .english: "text(%@…%@ chars)"],
+        .syntheticRuleWeighted: [.simplifiedChinese: "weighted(%@ 项)", .english: "weighted(%@ entries)"],
+        .syntheticRuleDateWithin: [.simplifiedChinese: "date(近 %@ 天)", .english: "date(within %@ days)"],
+        .syntheticRuleTimestampWithin: [.simplifiedChinese: "timestamp(近 %@ 天)", .english: "timestamp(within %@ days)"],
         .sessionTitle: [.simplifiedChinese: "服务器会话", .english: "Server Sessions"],
         .sessionRefresh: [.simplifiedChinese: "刷新", .english: "Refresh"],
         .sessionPermissionNote: [.simplifiedChinese: "普通用户只能操作自己的会话（PostgreSQL 需同用户或 pg_signal_backend 权限）；「终止会话」会掐断整条连接，不可恢复", .english: "You can only act on your own sessions (PostgreSQL requires the same user or pg_signal_backend); terminating drops the whole connection and cannot be undone"],

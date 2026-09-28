@@ -1072,7 +1072,9 @@ struct DoyahCLI {
             }
         }
 
-        var session = MCPServerSession(capabilities: capabilities)
+        // 本 server 的会话语言 = 启动它的这个进程（命令行 ⇒ 显式中文，口径同台账里那条）。
+        let sessionLanguage = AppLanguage.simplifiedChinese
+        var session = MCPServerSession(capabilities: capabilities, language: sessionLanguage)
         func audit(_ entry: MCPAuditEntry) {
             FileHandle.standardError.write(Data(("审计 \(entry.jsonText)\n").utf8))
             guard let auditPath else { return }
@@ -1115,9 +1117,7 @@ struct DoyahCLI {
                             let result = await runMCPInvocation(
                                 pendingInvocation(from: line), service: service, config: makeEnvironmentConfig(name: "CLI mcp")
                             )
-                            if let reply = session.finish(
-                                pendingInvocation(from: line), text: result.text, isError: result.isError
-                            ) {
+                            if let reply = session.finish(pendingInvocation(from: line), result: result) {
                                 print(reply.encode())
                                 fflush(stdout)
                             }
@@ -1125,7 +1125,7 @@ struct DoyahCLI {
                         } else {
                             // 拒绝 / 超时：**如实回一个错误内容**，不是静默不响应。
                             let text = LocalizedStrings.text(.mcpApprovalDenied, language: .simplifiedChinese)
-                            if let reply = session.finish(pendingInvocation(from: line), text: text, isError: true) {
+                            if let reply = session.finish(pendingInvocation(from: line), result: .single(text, isError: true)) {
                                 print(reply.encode())
                                 fflush(stdout)
                             }
@@ -1136,7 +1136,7 @@ struct DoyahCLI {
                 continue
             }
             let result = await runMCPInvocation(invocation, service: service, config: makeEnvironmentConfig(name: "CLI mcp"))
-            if let reply = session.finish(invocation, text: result.text, isError: result.isError) {
+            if let reply = session.finish(invocation, result: result) {
                 print(reply.encode())
                 fflush(stdout)
             }
@@ -1208,19 +1208,22 @@ struct DoyahCLI {
     }
 
     /// 执行一次工具调用（会话只决定"能不能"，执行在这里）。
+    ///
+    /// 返回 `MCPToolResult`（**两半**，队列 L-66 ㈡）：失败时 `raw` 是一字不变的原始串、
+    /// `readable` 是人话；成功与「缺少参数」这类本地单语提示走 `.single(...)`（两半同一份）。
     private static func runMCPInvocation(
         _ invocation: MCPServerSession.Invocation,
         service: PostgresService?,
         config: ConnectionConfig
-    ) async -> (text: String, isError: Bool) {
+    ) async -> MCPToolResult {
         guard let service else {
-            return ("当前没有已连接的会话：外部调用一律不另开连接", true)
+            return .single("当前没有已连接的会话：外部调用一律不另开连接", isError: true)
         }
         let arguments = invocation.arguments
         switch invocation.tool {
         case MCPToolCatalog.querySQL:
             guard let sql = arguments["sql"]?.stringValue else {
-                return ("缺少参数 sql", true)
+                return .single("缺少参数 sql", isError: true)
             }
             return await runMCPQuery(service: service, sql: sql)
 
@@ -1235,38 +1238,51 @@ struct DoyahCLI {
                 for database in databases.prefix(20) {
                     lines.append(database.name)
                 }
-                return (lines.joined(separator: "\n"), false)
+                return .single(lines.joined(separator: "\n"))
             } catch {
-                return (error.localizedDescription, true)
+                return mcpFailure(error)
             }
 
         case MCPToolCatalog.describeTable:
             guard let table = arguments["table"]?.stringValue else {
-                return ("缺少参数 table", true)
+                return .single("缺少参数 table", isError: true)
             }
             let sql = PostgresDialect().listColumnsQuery(table: table, schema: arguments["schema"]?.stringValue)
             return await runMCPQuery(service: service, sql: sql)
 
         case MCPToolCatalog.exportResult:
             guard let sql = arguments["sql"]?.stringValue, let path = arguments["path"]?.stringValue else {
-                return ("缺少参数 sql / path", true)
+                return .single("缺少参数 sql / path", isError: true)
             }
             let result = await runMCPQuery(service: service, sql: sql)
             guard !result.isError else { return result }
             do {
-                try result.text.write(toFile: path, atomically: true, encoding: .utf8)
-                let rows = result.text.split(separator: "\n").count
-                return ("已导出 \(rows) 行到 \(path)", false)
+                try result.raw.write(toFile: path, atomically: true, encoding: .utf8)
+                let rows = result.raw.split(separator: "\n").count
+                return .single("已导出 \(rows) 行到 \(path)")
             } catch {
-                return ("写文件失败：\(error.localizedDescription)", true)
+                return mcpFailure(error, context: "写文件失败")
             }
 
         default:
-            return ("没有暴露这个工具：\(invocation.tool)", true)
+            return .single("没有暴露这个工具：\(invocation.tool)", isError: true)
         }
     }
 
-    private static func runMCPQuery(service: PostgresService, sql: String) async -> (text: String, isError: Bool) {
+    /// MCP 工具载荷里的**失败那一份**（队列 L-66 ㈡，渠道字段两半）：
+    /// **原串留给程序**（`error.localizedDescription`，一字不变 —— 可搜、可上报）、
+    /// **人话另给**（同一个可读化入口 `CLIFailureText.oneLine`，不是另拼一句）。
+    ///
+    /// 为什么收成一个 helper：三处失败（对象树 / 查询 / 写文件）必须**同一口径**，
+    /// 而「原串 = 哪一半」写三遍就会漂（一处写 `localizedDescription`、一处写人话 ⇒
+    /// 机器载荷被换成中文，正是本条要挡的退化）。
+    private static func mcpFailure(_ error: any Error, context: String? = nil) -> MCPToolResult {
+        let raw = error.localizedDescription
+        let readable = context.map { "\($0)：\(CLIFailureText.oneLine(error))" } ?? CLIFailureText.oneLine(error)
+        return MCPToolResult(raw: raw, readable: readable, isError: true)
+    }
+
+    private static func runMCPQuery(service: PostgresService, sql: String) async -> MCPToolResult {
         do {
             var lines: [String] = []
             for try await event in service.execute(sql, options: .default) {
@@ -1282,9 +1298,9 @@ struct DoyahCLI {
                     }
                 }
             }
-            return (lines.isEmpty ? "（没有结果）" : lines.joined(separator: "\n"), false)
+            return .single(lines.isEmpty ? "（没有结果）" : lines.joined(separator: "\n"))
         } catch {
-            return (error.localizedDescription, true)
+            return mcpFailure(error)
         }
     }
 
@@ -1384,7 +1400,9 @@ struct DoyahCLI {
             isReadOnly: arguments.contains("--read-only"),
             isSandboxed: arguments.contains("--sandboxed")
         )
-        var review = MaintenancePlanner.makePlan(from: text, policy: policy)
+        // 命令行没有界面语境：语言是**显式的中文**（口径见台账 `CLI/main.swift` 那条）。
+        let language = AppLanguage.simplifiedChinese
+        var review = MaintenancePlanner.makePlan(from: text, policy: policy, language: language)
 
         if let rejectList = value(for: "--reject") {
             review = MaintenancePlanner.reject(review, ids: splitIDs(rejectList))
@@ -1394,7 +1412,9 @@ struct DoyahCLI {
             review = MaintenancePlanner.approve(review, ids: ids)
         }
 
-        var executed: [(id: String, ok: Bool, detail: String)] = []
+        // 执行结果：**原串与人话各一份**（队列 L-66 拍板口径 ① —— JSON 里保原串、
+        // 另加人话字段；命令行上打人话）。成功项的 `human` 是空串：没有失败要解释。
+        var executed: [(id: String, ok: Bool, detail: String, human: String)] = []
         if arguments.contains("--execute") {
             let service = PostgresService(config: makeEnvironmentConfig(name: "CLI maintain"), password: ProcessInfo.processInfo.environment["PGPASSWORD"])
             do {
@@ -1416,10 +1436,15 @@ struct DoyahCLI {
                         }
                     }
                     review = MaintenancePlanner.record(review, taskID: task.id)
-                    executed.append((task.id, true, sql))
+                    executed.append((task.id, true, sql, ""))
                 } catch {
-                    review = MaintenancePlanner.record(review, taskID: task.id, failureReason: error.localizedDescription)
-                    executed.append((task.id, false, error.localizedDescription))
+                    // 两半（队列 L-66）：原串走机器载荷，命令行这一行打人话。
+                    let failure = MaintenanceTask.FailureNote(
+                        raw: error.localizedDescription,
+                        readable: CLIFailureText.oneLine(error)
+                    )
+                    review = MaintenancePlanner.record(review, taskID: task.id, failure: failure)
+                    executed.append((task.id, false, failure.raw, failure.readable))
                 }
             }
             await service.disconnect()
@@ -1431,12 +1456,27 @@ struct DoyahCLI {
             json += ",\"tasks\":["
             json += review.tasks.map { task in
                 let state: String
+                // 失败那一格：**原串 + 人话两个字段**（队列 L-66 拍板口径 ①）——
+                // `failureReason` 是一字不变的原串（可搜、可上报），
+                // `failureReasonHuman` 是给界面 / MCP 客户端可选展示的人话。
+                let failureFields: String
                 switch task.state {
-                case .pending: state = "pending"
-                case .approved: state = "approved"
-                case .rejected: state = "rejected"
-                case .executed: state = "executed"
-                case .failed: state = "failed"
+                case .pending:
+                    state = "pending"
+                    failureFields = ""
+                case .approved:
+                    state = "approved"
+                    failureFields = ""
+                case .rejected:
+                    state = "rejected"
+                    failureFields = ""
+                case .executed:
+                    state = "executed"
+                    failureFields = ""
+                case .failed(let note):
+                    state = "failed"
+                    failureFields = ",\"failureReason\":\(jsonQuoted(note.raw)),"
+                        + "\"failureReasonHuman\":\(jsonQuoted(note.readable))"
                 }
                 let sql = task.sql.map(jsonQuoted) ?? "null"
                 let command = task.command.map(jsonQuoted) ?? "null"
@@ -1445,13 +1485,14 @@ struct DoyahCLI {
                     + "\"highCost\":\(task.isHighCost),\"needsApproval\":\(task.requiresApproval),"
                     + "\"state\":\(jsonQuoted(state)),\"sql\":\(sql),\"command\":\(command),"
                     + "\"executable\":\(task.isExecutable(isSandboxed: policy.isSandboxed)),"
-                    + "\"notes\":[" + task.reviewNotes.map(jsonQuoted).joined(separator: ",") + "]}"
+                    + "\"notes\":[" + task.reviewNotes.map(jsonQuoted).joined(separator: ",") + "]" + failureFields + "}"
             }.joined(separator: ",")
             json += "],\"unparsable\":[" + review.unparsableLines.map(jsonQuoted).joined(separator: ",") + "]"
             json += ",\"planNotes\":[" + review.notes.map(jsonQuoted).joined(separator: ",") + "]"
             json += ",\"executed\":["
             json += executed.map { item in
-                "{\"id\":\(jsonQuoted(item.id)),\"ok\":\(item.ok),\"detail\":\(jsonQuoted(item.detail))}"
+                "{\"id\":\(jsonQuoted(item.id)),\"ok\":\(item.ok),\"detail\":\(jsonQuoted(item.detail)),"
+                    + "\"detailHuman\":\(jsonQuoted(item.human))}"
             }.joined(separator: ",")
             json += "]}"
             print(json)
@@ -1464,7 +1505,7 @@ struct DoyahCLI {
                 case .approved: state = "已批准"
                 case .rejected: state = "已拒绝"
                 case .executed: state = "已执行"
-                case .failed(let reason): state = "失败（\(reason)）"
+                case .failed(let note): state = "失败（\(note.readable)）"
                 }
                 print("\(task.id) [\(task.kind.rawValue)] \(state) — \(task.summary)")
                 if let sql = task.sql { print("    SQL: \(sql)") }
@@ -1474,7 +1515,7 @@ struct DoyahCLI {
             for line in review.unparsableLines { print("✗ 没看懂：\(line)") }
             for note in review.notes { print("· \(note)") }
             for item in executed {
-                print(item.ok ? "✅ \(item.id) 已执行" : "❌ \(item.id) 失败：\(item.detail)")
+                print(item.ok ? "✅ \(item.id) 已执行" : "❌ \(item.id) 失败：\(item.human)")
             }
         }
         return 0
@@ -1733,7 +1774,8 @@ struct DoyahCLI {
                         question: question,
                         target: username + "@" + host + ":" + String(port) + "/" + database,
                         context: context,
-                        report: report
+                        report: report,
+                        language: language
                     )
                     let duplicate = draft.source.fingerprint.map { fingerprint in
                         existing.contains { $0.source.fingerprint == fingerprint }
@@ -2084,9 +2126,13 @@ struct DoyahCLI {
 
         let semaphore = DispatchSemaphore(value: 0)
         var exitCode: Int32 = 0
+        // 失败文案的语言：**命令行有意说简体中文**（与全仓 CLI 输出同一口径，见台账
+        // `Scripts/literal-language-dispositions.json` 里 `CLI/main.swift` 那条理由）。
+        // 队列 L-65 第 2 批起这句话不再由 Core 自己选 —— 每个调用方把它给下去。
+        let language = AppLanguage.simplifiedChinese
         Task {
             do {
-                try await tunnel.start()
+                try await tunnel.start(language: language)
                 if arguments.contains("--json") {
                     let payload: [String: Any] = [
                         "localPort": localPort,
@@ -2113,7 +2159,12 @@ struct DoyahCLI {
                 tunnel.stop()
                 semaphore.signal()
             } catch {
-                FileHandle.standardError.write(Data("隧道起不来：\(CLIFailureText.oneLine(error))\n".utf8))
+                // 隧道失败的人话在**有语言语境的地方**拼：`.portInUse` 只带端口号，
+                // 而 `LocalizedError` 协议入口（`localizedDescription`）不带语言 ⇒ 这一族走
+                // Core 的 `describe(language:)`；认不出的其余错误照旧走可读化链的唯一入口。
+                let reason = (error as? SSHTunnelError)?.describe(language: language)
+                    ?? CLIFailureText.oneLine(error)
+                FileHandle.standardError.write(Data("隧道起不来：\(reason)\n".utf8))
                 let diagnostics = tunnel.diagnosticText
                 if !diagnostics.isEmpty {
                     FileHandle.standardError.write(Data("ssh 输出：\n\(diagnostics)\n".utf8))

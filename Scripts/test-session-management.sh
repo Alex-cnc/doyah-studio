@@ -3,12 +3,15 @@
 #
 # 为什么用**本机 16.2 实例**而不是 217：这个脚本会真的取消一条正在跑的语句 ——
 # 在共享实例上做这件事是不礼貌的（可能中断别人），本机实例上做才是可复现的验收。
-# 217 那边只做**只读**的会话查询。
+#
+# **全部在本机档造现场**（2026-09-28 循环 L-63 转正）：原先 §6 是「217（18.6）只读核对」，
+# 而 217 的 `pg_hba` 未放行本机 ⇒ 这一段一直停在既定红、从没在这条证据链上跑过。
+# 转正后 §6 改成用**另一条不属于本进程的连接**当「别人的会话」（本机 16.2 上造），
+# **不再对 18.6 做只读核对**（跨版本 / 真机覆盖见队列 L-09），换来的是本机可复跑。
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
 CLI=".build/debug/DoyahCLI"
-ACCOUNT="D264B21B-1880-4E73-A2D0-59A3F8E4D7EC"
 # 连接信息（本机过渡集群 / 远程专用库）由共用入口决定 —— 三档端口与目录只写在它里面
 source "$(cd "$(dirname "$0")" && pwd)/lib/test-env.sh"
 doyah_test_env_summary
@@ -133,16 +136,31 @@ sleep 2
 PGPASSWORD="${DOYAH_TEST_PGPASSWORD}" "$PGBIN/psql" -h 127.0.0.1 -p "$PORT" -U postgres -d postgres -c "DROP ROLE IF EXISTS doyah_probe;" >/dev/null 2>&1
 
 echo ""
-echo "== 6) 217 只读核对：会话查询在 18.6 上同样可用 =="
-export PGHOST="${DOYAH_TEST_REMOTE_HOST}" PGPORT="${DOYAH_TEST_REMOTE_PORT}" PGUSER="${DOYAH_TEST_REMOTE_USER}" PGSSLMODE="${DOYAH_TEST_PGSSLMODE}"
-PGPASSWORD="$("$CLI" secret get --id "$ACCOUNT")"
-export PGPASSWORD
-OUT217="$("$CLI" -c "$QUERY" 2>&1)"
-echo "$OUT217" | grep -q "pid:" && check "217 上会话查询可用（未做任何取消 / 终止）" 0 || { check "217 会话查询" 1; echo "$OUT217" | tail -3; }
+echo "== 6) 另一条连接（别人的会话）在会话列表里看得见 =="
+# **本段原先只读核对 217（18.6）** —— 217 的 `pg_hba` 未放行本机 ⇒ 一直停在既定红。
+# 2026-09-28 循环 L-63 转正：改成在本机档造同形状的现场 —— 用一条**不属于本进程**的连接
+# （`psql`，带自己的 `application_name`）当「别人的会话」，验的是「会话列表真的看得见别的连接，
+# 且库名 / 应用名 / 状态如实」。
+PGAPPNAME="doyah_other_session" PGPASSWORD="${DOYAH_TEST_PGPASSWORD}" "${PGBIN}/psql" \
+    -h "${DOYAH_TEST_PGHOST}" -p "${DOYAH_TEST_PGPORT}" -U "${DOYAH_TEST_PGUSER}" -d "${DOYAH_TEST_ADMIN_DB}" \
+    -c "SELECT pg_sleep(30);" >/dev/null 2>&1 &
+OTHER=$!
+sleep 2
+OTHERS="$("$CLI" -c "${QUERY}" 2>&1)"
+printf '%s\n' "${OTHERS}" | grep "doyah_other_session" | head -2 | sed 's/^/  /'
+printf '%s\n' "${OTHERS}" | grep -q "doyah_other_session" && check "看得见另一条连接（application_name 原样）" 0 \
+    || { check "应看得见另一条连接" 1; printf '%s\n' "${OTHERS}" | head -3 | sed 's/^/  /'; }
+printf '%s\n' "${OTHERS}" | grep "doyah_other_session" | grep -q "active" && check "那条会话的状态如实（active）" 0 \
+    || check "状态应如实（active）" 1
+printf '%s\n' "${OTHERS}" | grep "doyah_other_session" | grep -q "${DOYAH_TEST_ADMIN_DB}" && check "库名如实（${DOYAH_TEST_ADMIN_DB}）" 0 \
+    || check "库名应如实（${DOYAH_TEST_ADMIN_DB}）" 1
+PGPASSWORD="${DOYAH_TEST_PGPASSWORD}" "${PGBIN}/psql" -h "${DOYAH_TEST_PGHOST}" -p "${DOYAH_TEST_PGPORT}" -U "${DOYAH_TEST_PGUSER}" -d "${DOYAH_TEST_ADMIN_DB}" \
+    -c "SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE application_name = 'doyah_other_session';" >/dev/null 2>&1
+wait "${OTHER}" 2>/dev/null
 
 echo ""
 if [ "$fail" -eq 0 ]; then
-    echo "通过：会话读取与取消语句在本机 16.2 上验证成立（权限不足时如实报 permission denied）；217 只做只读核对"
+    echo "通过：会话读取与取消语句在本机 16.2 上验证成立（权限不足时如实报 permission denied；别人的会话如实可见）"
 else
     echo "有失败项，见上"
 fi

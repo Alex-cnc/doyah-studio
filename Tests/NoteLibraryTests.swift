@@ -159,6 +159,33 @@ final class NoteLibraryTests: XCTestCase {
         XCTAssertTrue(missing.notes.isEmpty)
     }
 
+    // MARK: - 6b) 界面要说的那一句：路线 → 文案键是一处纯映射（队列 L-44）
+
+    func testSearchDisclosureMapsEveryRouteToItsCopy() throws {
+        // 界面上「这一次是按子串找到的」不是视图的自由发挥：路线来自 Core，
+        // 「哪条路要不要交代」也由 Core 说了算（`NoteSearchDisclosure`）。
+        XCTAssertNil(NoteSearchDisclosure.key(for: .fullText), "全文检索命中是检索的正常结果，不该额外解释")
+        XCTAssertEqual(NoteSearchDisclosure.key(for: .substring), .noteSearchSubstring)
+
+        // 两条交代必须在语言表里**中英都在**（语言表自己的门禁只管占位符对账，
+        // 「键有没有落进表」得有人管 —— 只加 case 不加文案，界面会静默显示成键名）。
+        for key in [LKey.noteSearchSubstring, .noteSearchUnavailable] {
+            for language in AppLanguage.allCases {
+                XCTAssertFalse(
+                    LocalizedStrings.text(key, language: language).isEmpty,
+                    "\(key) 缺 \(language.rawValue) 文案"
+                )
+            }
+        }
+        // 失效交代带原因参数：中英都必须留着那个 `%@`（丢了就永远印不出原因）。
+        for language in AppLanguage.allCases {
+            XCTAssertTrue(
+                LocalizedStrings.text(.noteSearchUnavailable, language: language).contains("%@"),
+                "noteSearchUnavailable 的 \(language.rawValue) 模板少了 %@ —— 原因就印不出来了"
+            )
+        }
+    }
+
     // MARK: - 7) 引擎迁移：旧格式搬进库、旧文件留档
 
     func testLegacyJSONIsImportedOnceAndKeptAsBackup() async throws {

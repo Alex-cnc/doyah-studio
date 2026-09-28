@@ -20,15 +20,16 @@ extension AICapture {
         question: String,
         target: String,
         context: DiagnosisContext,
-        report: DiagnosisAdviceReport
+        report: DiagnosisAdviceReport,
+        language: AppLanguage
     ) -> NoteDraft {
         var lines: [String] = []
-        lines.append(t(.aiNoteGoal, target))
-        lines.append(t(.aiNoteQuestion, question))
+        lines.append(t(.aiNoteGoal, target, language: language))
+        lines.append(t(.aiNoteQuestion, question, language: language))
         lines.append("")
         for item in report.items {
             lines.append("## \(item.conclusion)")
-            lines.append(t(.aiNoteEvidence, item.citations.joined(separator: ", ")))
+            lines.append(t(.aiNoteEvidence, item.citations.joined(separator: ", "), language: language))
             if let sql = item.suggestedSQL {
                 lines.append("")
                 lines.append("```sql")
@@ -37,16 +38,16 @@ extension AICapture {
             }
             lines.append("")
         }
-        lines.append(t(.aiNoteEvidenceSection))
+        lines.append(t(.aiNoteEvidenceSection, language: language))
         for evidence in context.evidence {
             // **只写"取了什么、取没取到"，不写行数据** —— 行数据属于结果集，不属于笔记。
-            lines.append(t(.aiNoteEvidenceLine, evidence.id, evidence.kind.displayName, evidence.note))
-            lines.append(t(.aiNoteEvidenceSQL, evidence.sql))
+            lines.append(t(.aiNoteEvidenceLine, evidence.id, evidence.kind.displayName, evidence.note, language: language))
+            lines.append(t(.aiNoteEvidenceSQL, evidence.sql, language: language))
         }
         return NoteDraft(
-            title: question.isEmpty ? t(.aiNoteDiagnosisTitle) : question,
+            title: question.isEmpty ? t(.aiNoteDiagnosisTitle, language: language) : question,
             body: lines.joined(separator: "\n"),
-            tags: [t(.aiNoteTagDiagnosis)],
+            tags: [t(.aiNoteTagDiagnosis, language: language)],
             source: NoteSource(
                 kind: .diagnosis,
                 connectionName: connectionName(from: target),
@@ -59,33 +60,34 @@ extension AICapture {
     public static func maintenanceNote(
         planText: String,
         review: MaintenancePlanReview,
-        target: String
+        target: String,
+        language: AppLanguage
     ) -> NoteDraft {
         var lines: [String] = []
-        lines.append(t(.aiNoteGoal, target))
+        lines.append(t(.aiNoteGoal, target, language: language))
         lines.append("")
         lines.append("```")
         lines.append(planText.trimmingCharacters(in: .whitespacesAndNewlines))
         lines.append("```")
         lines.append("")
-        lines.append(t(.aiNotePlanSection))
+        lines.append(t(.aiNotePlanSection, language: language))
         for task in review.tasks {
-            lines.append(t(.aiNotePlanLine, task.id, task.kind.rawValue, stateText(task.state), task.summary))
+            lines.append(t(.aiNotePlanLine, task.id, task.kind.rawValue, stateText(task.state, language: language), task.summary, language: language))
             for note in task.reviewNotes {
-                lines.append(t(.aiNotePlanReason, note))
+                lines.append(t(.aiNotePlanReason, note, language: language))
             }
         }
         if !review.unparsableLines.isEmpty {
             lines.append("")
-            lines.append(t(.aiNoteUnparsableSection))
+            lines.append(t(.aiNoteUnparsableSection, language: language))
             for line in review.unparsableLines {
-                lines.append(t(.aiNoteUnparsableLine, line))
+                lines.append(t(.aiNoteUnparsableLine, line, language: language))
             }
         }
         return NoteDraft(
-            title: t(.aiNotePlanTitle, String(review.tasks.count)),
+            title: t(.aiNotePlanTitle, String(review.tasks.count), language: language),
             body: lines.joined(separator: "\n"),
-            tags: [t(.aiNoteTagMaintenance)],
+            tags: [t(.aiNoteTagMaintenance, language: language)],
             source: NoteSource(kind: .maintenance, connectionName: connectionName(from: target))
         )
     }
@@ -104,20 +106,22 @@ extension AICapture {
     }
 
     /// 维护任务状态的人话（`MaintenanceTask.State` 同样是 Ultra 侧类型）。
-    static func stateText(_ state: MaintenanceTask.State) -> String {
+    static func stateText(_ state: MaintenanceTask.State, language: AppLanguage) -> String {
         switch state {
-        case .pending: return t(.aiNoteStatePending)
-        case .approved: return t(.aiNoteStateApproved)
-        case .rejected: return t(.aiNoteStateRejected)
-        case .executed: return t(.aiNoteStateExecuted)
-        case .failed(let reason): return t(.aiNoteStateFailed, reason)
+        case .pending: return t(.aiNoteStatePending, language: language)
+        case .approved: return t(.aiNoteStateApproved, language: language)
+        case .rejected: return t(.aiNoteStateRejected, language: language)
+        case .executed: return t(.aiNoteStateExecuted, language: language)
+        case .failed(let note): return t(.aiNoteStateFailed, note.readable, language: language)
         }
     }
 }
 
 /// 本文件自用的文案取值（文件级私有，避免与 `AICapture.swift` 里的同名助手冲突）。
-private func t(_ key: LKey, _ arguments: CVarArg...) -> String {
+///
+/// **语言由调用方给定**（R-45 / 队列 L-65）：这里写死一种语言，另一种语言的译文就永远不可达。
+private func t(_ key: LKey, _ arguments: CVarArg..., language: AppLanguage) -> String {
     arguments.isEmpty
-        ? LocalizedStrings.text(key, language: .simplifiedChinese)
-        : LocalizedStrings.format(key, language: .simplifiedChinese, arguments)
+        ? LocalizedStrings.text(key, language: language)
+        : LocalizedStrings.format(key, language: language, arguments)
 }

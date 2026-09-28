@@ -81,6 +81,9 @@ requests = [
     {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "run_shell", "arguments": {}}},
     # 我们不实现的方法
     {"jsonrpc": "2.0", "id": 6, "method": "prompts/list", "params": {}},
+    # 注定失败的只读查询：**载荷两半**的真现场（队列 L-66 ㈡）
+    {"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {
+        "name": "query_sql", "arguments": {"sql": "SELECT * FROM mcp_这张表不存在"}}},
     # 坏报文
     "这不是 JSON",
 ]
@@ -118,6 +121,19 @@ run_shell = by_id[5]["result"]
 assert run_shell["isError"] is True and "没有暴露" in run_shell["content"][0]["text"], run_shell
 print("  ✅ 没暴露的工具被拒")
 
+# 载荷两半（队列 L-66 ㈡）：失败答复里 text = 原串（一字不变）、textHuman = 人话（另给字段）。
+# 这里用的是**真库上注定失败的一条查询**（表不存在 ⇒ 42P01），所以打的是可读化链里
+# 「服务端原话」那一档；跑不出这个形状的机器（没有本机集群）会在上面第 0 步就先失败。
+bad_query = by_id[8]["result"]
+assert bad_query["isError"] is True, bad_query
+item = bad_query["content"][0]
+raw, human = item["text"], item["textHuman"]
+assert raw and "服务端说" not in raw, ("原串一字不变（没被换成人话）", item)
+assert human and human != raw, ("textHuman 也给了人话", item)
+assert raw in human, ("原串仍在人话里作可追溯尾巴（口径第 4 条）", item)
+print("  ✅ tools/call 的失败答复里 text 是原串、textHuman 也给了人话（载荷两半）")
+print("  ✅ 原串一字不变（没被换成人话）；人话那一半由同一个可读化入口给（服务端原话：%s）" % human[:36])
+
 unknown = [l for l in lines if l.get("id") == 6][0]["error"]
 assert unknown["code"] == -32601, unknown
 print("  ✅ 不实现的方法回 -32601（method not found）")
@@ -132,7 +148,7 @@ assert "initialize" in kinds and "query_sql" in kinds, kinds
 assert any("refused" not in a and "needs-approval" in a for a in audit), audit
 print("  ✅ 审计文件留下了每一次调用（%d 条）" % len(audit))
 PY
-[ $? -eq 0 ] && check "方向 A 七项（详见上）" 0 || check "方向 A 七项（详见上）" 1
+[ $? -eq 0 ] && check "方向 A 九项（详见上）" 0 || check "方向 A 九项（详见上）" 1
 
 echo ""
 echo "== 2) 方向 A：只读会话下写语句被拒（批准也不能绕过） =="

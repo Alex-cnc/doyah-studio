@@ -165,6 +165,81 @@ def main() -> int:
         if rc == 0 or "一个键都没解析到" not in out:
             failures.append(f"例 7（语言表消失 = 空跑）应判红，实测 rc={rc}：\n{out}")
 
+        # 例 8（判据 C · L-65 第 2 批钉的 SSH 隧道族）：把 `describe(language:)` 的形参删掉
+        # ——「人话在 Core 里自己拼」那条路一旦回来，英文译文又会变成死键。
+        copy = fresh()
+        cases += 1
+        patch(
+            copy / "Core/SSHTunnelProcess.swift",
+            "public func describe(language: AppLanguage) -> String {",
+            "public func describe() -> String { let language = AppLanguage.simplifiedChinese",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "SSHTunnelProcess.swift" not in out or "C " not in out:
+            failures.append(f"例 8（隧道族丢了 language: 形参）应判红且含 C 判据并点名该文件，实测 rc={rc}：\n{out}")
+
+        # 例 9（判据 C · L-65 第 3 批钉的四族）：把维护计划那两个出口的 `language:` 形参删掉
+        # ——「删形参、体内再写死」这条路必须当场报红。
+        copy = fresh()
+        cases += 1
+        patch(
+            copy / "Core/MaintenancePlan.swift",
+            "        databaseType: DatabaseType = .postgresql,\n        language: AppLanguage\n    ) -> MaintenancePlanReview {",
+            "        databaseType: DatabaseType = .postgresql\n    ) -> MaintenancePlanReview { let language = AppLanguage.simplifiedChinese",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "Core/MaintenancePlan.swift" not in out or "C " not in out:
+            failures.append(f"例 9（维护计划族丢了 language: 形参）应判红且含 C 判据，实测 rc={rc}：\n{out}")
+
+        # 例 10（判据 C · 调用方那一半）：Core 的形参都留着，但**展示点不把语言传下去** ——
+        # 语言会从「调用方给的」悄悄变回「Core 自己选的」，必须报红。
+        copy = fresh()
+        cases += 1
+        patch(
+            copy / "App/Views/AboutLicenseSheet.swift",
+            "                    language: LocalizationManager.shared.effectiveLanguage\n",
+            "",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "AboutLicenseSheet.swift" not in out:
+            failures.append(f"例 10（升级页不传语言）应判红并点名 AboutLicenseSheet.swift，实测 rc={rc}：\n{out}")
+
+        # 例 11（判据 B · 短名取值助手那条漏判，第 4 批修掉的那条）：本仓库最常见的取值助手是
+        # **短名** `t(_ key: LKey …)` / `text(_ key: LKey …)`，而入口识别原先只认带后缀的长名
+        # ⇒ 它们背后的键在判据 B 里**完全看不见**。把 `text(` 的语言写回字面量：经它引用的键
+        # **必须**被看见并判成未登记的死译文（修之前这一例报不出来）。
+        copy = fresh()
+        cases += 1
+        patch(
+            copy / "Core/MaintenancePlan.swift",
+            "        return LocalizedStrings.text(key, language: language)",
+            "        return LocalizedStrings.text(key, language: .simplifiedChinese)",
+        )
+        patch(
+            copy / "Core/MaintenancePlan.swift",
+            "    return LocalizedStrings.format(key, language: language, arguments)",
+            "    return LocalizedStrings.format(key, language: .simplifiedChinese, arguments)",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "B " not in out or "maintenanceRefusedReadOnly" not in out:
+            failures.append(
+                f"例 11（短名助手写死语言 ⇒ 它背后的键必须被判成死译文）应判红并点名 "
+                f"maintenanceRefusedReadOnly，实测 rc={rc}：\n{out}"
+            )
+
+        # 例 12（判据 C · 负向那条）：**笔记侧不许收语言** —— 把 `defaultTag: String` 换成
+        # `language: AppLanguage`（第一版就是这么写的，被闭环第 10 项拦下）⇒ 这里也必须判红。
+        copy = fresh()
+        cases += 1
+        patch(
+            copy / "Core/AICapture.swift",
+            "        defaultTag: String\n    ) -> NoteDraft {\n        NoteDraft(\n            title: title,\n            body: body,\n            tags: tags ?? [defaultTag],",
+            "        language: AppLanguage\n    ) -> NoteDraft {\n        NoteDraft(\n            title: title,\n            body: body,\n            tags: tags ?? [LocalizedStrings.text(.aiNoteTagSkill, language: language)],",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "Core/AICapture.swift" not in out or "笔记侧" not in out:
+            failures.append(f"例 12（笔记侧又收语言）应判红并点名 AICapture.swift，实测 rc={rc}：\n{out}")
+
     after = digest_tree()
     cases += 1
     if before != after:

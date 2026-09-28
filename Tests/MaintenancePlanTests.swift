@@ -17,7 +17,7 @@ final class MaintenancePlanTests: XCTestCase {
     """
 
     private func plan(policy: MaintenancePolicy = MaintenancePolicy()) -> MaintenancePlanReview {
-        MaintenancePlanner.makePlan(from: planText, policy: policy)
+        MaintenancePlanner.makePlan(from: planText, policy: policy, language: .simplifiedChinese)
     }
 
     // MARK: - 解析
@@ -108,7 +108,8 @@ final class MaintenancePlanTests: XCTestCase {
         // 单独一份"只有备份"的计划：上面那份里备份已被限流拒绝，测不到沙箱这条规则。
         let onlyBackup = MaintenancePlanner.makePlan(
             from: "task: backup | 备份 analytics 库 | command: pg_dump -Fc analytics",
-            policy: MaintenancePolicy(isSandboxed: true)
+            policy: MaintenancePolicy(isSandboxed: true),
+            language: .simplifiedChinese
         )
         let approved = MaintenancePlanner.approve(onlyBackup, ids: ["m1"])
         XCTAssertEqual(
@@ -136,22 +137,81 @@ final class MaintenancePlanTests: XCTestCase {
     func testExecutionRecordsSuccessAndFailureWithReasons() {
         var review = MaintenancePlanner.approve(plan(), ids: ["m1", "m2"])
         review = MaintenancePlanner.record(review, taskID: "m1")
-        review = MaintenancePlanner.record(review, taskID: "m2", failureReason: "锁等待超时")
+        review = MaintenancePlanner.record(
+            review, taskID: "m2",
+            failure: MaintenanceTask.FailureNote(raw: "canceling statement due to lock timeout", readable: "锁等待超时")
+        )
         XCTAssertEqual(review.tasks.first { $0.id == "m1" }?.state, .executed)
-        XCTAssertEqual(review.tasks.first { $0.id == "m2" }?.state, .failed(reason: "锁等待超时"))
+        XCTAssertEqual(
+            review.tasks.first { $0.id == "m2" }?.state,
+            .failed(MaintenanceTask.FailureNote(raw: "canceling statement due to lock timeout", readable: "锁等待超时"))
+        )
         // 失败的任务不能因为再批准一次就"复活"。
         let again = MaintenancePlanner.approve(review, ids: ["m2"])
-        XCTAssertEqual(again.tasks.first { $0.id == "m2" }?.state, .failed(reason: "锁等待超时"))
+        XCTAssertEqual(
+            again.tasks.first { $0.id == "m2" }?.state,
+            .failed(MaintenanceTask.FailureNote(raw: "canceling statement due to lock timeout", readable: "锁等待超时"))
+        )
+    }
+
+    /// 队列 L-66（拍板口径 ①）：失败说明是**渠道字段** —— 原串与人话各一份。
+    ///
+    /// 判据钉两件事，少一件这条口径就等于没落地：
+    ///   ① **原串一字不变**（可搜、可上报的锚点还在）—— 不是「原串被换成了中文」；
+    ///   ② **人话是另一份值**，且**取哪一半由渲染点显式写出**（`note.raw` / `note.readable`）。
+    func testFailureNoteKeepsRawAndReadableApart() {
+        let raw = "The operation couldn't be completed. (PostgresNIO.PSQLError error 1.)"
+        let note = MaintenanceTask.FailureNote(raw: raw, readable: "服务端说：relation \"orders\" does not exist（SQLSTATE 42P01）")
+        let review = MaintenancePlanner.record(plan(), taskID: "m1", failure: note)
+
+        guard case .failed(let stored)? = review.tasks.first(where: { $0.id == "m1" })?.state else {
+            return XCTFail("这一格该是失败态")
+        }
+        XCTAssertEqual(stored.raw, raw, "原串必须**一字不变**（机器载荷 / 上报 / 搜索都靠它）")
+        XCTAssertNotEqual(stored.readable, stored.raw, "人话必须是另一份值，不是同一份值的占位")
+        XCTAssertTrue(stored.readable.contains("SQLSTATE 42P01"), "人话要带上服务端说的可核对锚点")
+        // 原串里不含中文 ≠ 原串被换掉了：两条都在，只是**给的人和机器各一份**。
+        XCTAssertTrue(stored.raw.contains("PSQLError"))
+    }
+
+    /// 人话那一半进的是**给人看的地方**（存进笔记的正文），进的是 `.readable`。
+    ///
+    /// 为什么钉在 Core：这行正文由 `Core/AICaptureUltra.swift` 里的 `AICapture.stateText` 渲染 ——
+    /// 它一旦取了 `.raw`，英文调试串就会存进用户的笔记里（而笔记是要长期留着的产物）。
+    func testNoteStateTextUsesTheReadableHalf() {
+        let note = MaintenanceTask.FailureNote(raw: "raw-debug-string", readable: "锁等待超时")
+        for language in [AppLanguage.simplifiedChinese, .english] {
+            let text = AICapture.stateText(.failed(note), language: language)
+            XCTAssertTrue(text.contains("锁等待超时"), "笔记正文该印人话（\(language)）")
+            XCTAssertFalse(text.contains("raw-debug-string"), "笔记正文里不该出现原始调试串（\(language)）")
+        }
     }
 
     /// 危险语句走的是同一条护栏（`DROP` 的计划任务不该被当成"普通维护"）。
     func testDangerousStatementKeepsItsRiskFromGuardrail() {
         let text = "task: custom | 清掉旧数据 | sql: DELETE FROM public.audit_log"
-        let review = MaintenancePlanner.makePlan(from: text, policy: MaintenancePolicy())
+        let review = MaintenancePlanner.makePlan(from: text, policy: MaintenancePolicy(), language: .simplifiedChinese)
         XCTAssertEqual(review.tasks.first?.risk, .destructive, "无 WHERE 的 DELETE 是破坏性语句")
         XCTAssertTrue(review.tasks.first!.requiresApproval)
         XCTAssertTrue(
             review.tasks.first!.reviewNotes.contains { $0.contains("WHERE") || $0.contains("破坏") || $0.contains("无") }
         )
+    }
+
+    /// **逐条理由按给定语言给**（队列 L-65 第 3 批）：从前 Core 把这些句子写死成中文
+    /// ⇒ 这些键的英文译文永远不可达（门禁记成「死译文」欠账）。现在语言从 `makePlan` 一路传下来。
+    func testReviewNotesFollowTheGivenLanguage() {
+        let text = "task: backup | 备份 analytics 库 | command: pg_dump -Fc analytics"
+        let zh = MaintenancePlanner.makePlan(
+            from: text, policy: MaintenancePolicy(isSandboxed: true), language: .simplifiedChinese
+        )
+        let en = MaintenancePlanner.makePlan(
+            from: text, policy: MaintenancePolicy(isSandboxed: true), language: .english
+        )
+        let zhNotes = zh.tasks.flatMap(\.reviewNotes)
+        let enNotes = en.tasks.flatMap(\.reviewNotes)
+        XCTAssertTrue(zhNotes.contains { $0.contains("沙箱") }, "中文这一份仍然是中文")
+        XCTAssertTrue(enNotes.contains { $0.contains("the sandboxed build cannot do") }, "英文这一份真的出得来")
+        XCTAssertNotEqual(zhNotes, enNotes, "语言不是摆设")
     }
 }

@@ -21,7 +21,7 @@
     {
       "name": "mcp",
       "script": "Scripts/test-mcp.sh",
-      "minAssertions": 19,
+      "minAssertions": 21,
       "covers": ["FR-AI-10"],
       "documentedIn": "Docs/design/待人工验收清单.md §10.10"
     },
