@@ -17,6 +17,10 @@ export CLANG_MODULE_CACHE_PATH="${SCRATCH}/clang-module-cache"
 export SWIFT_MODULE_CACHE_PATH="${SCRATCH}/swift-module-cache"
 mkdir -p "${SCRATCH}" "${CACHE}" "${CLANG_MODULE_CACHE_PATH}" "${SWIFT_MODULE_CACHE_PATH}"
 
+# 「文档里的数字」台账（Scripts/doc-numbers.json）的 core-tests 那一项，证据落在下面两个文件里：
+TEST_LOG="${SCRATCH}/core-test.log"
+COUNT_FILE="${SCRATCH}/core-test-count.txt"
+
 cd "${ROOT}"
 
 "${SWIFT}" package \
@@ -27,10 +31,27 @@ cd "${ROOT}"
   --manifest-cache local \
   resolve
 
+set +e   # 这一段要自己收 swift 的退出码（PIPESTATUS），别让 set -e 抢在前头中止
 "${SWIFT}" test \
   --disable-sandbox \
   --package-path . \
   --cache-path "${CACHE}" \
   --scratch-path "${SCRATCH}" \
   --manifest-cache local \
-  -Xswiftc -disable-sandbox
+  -Xswiftc -disable-sandbox 2>&1 | tee "${TEST_LOG}"
+STATUS="${PIPESTATUS[0]}"
+set -e
+
+# 单测数是「文档里的数字」台账（Scripts/doc-numbers.json）里的 core-tests 那一项 ——
+# 它只认**同一次运行**跑出来的数，不认人的记忆、也不认上一轮的日志。
+# 纪律：解析不到就**删掉计数文件**（宁可让判据如实报「跳过」，也不许留一个陈旧值冒充现状）。
+COUNT="$(grep -Eo 'Executed [0-9][0-9]* tests?' "${TEST_LOG}" | tail -1 | grep -Eo '[0-9][0-9]*' || true)"
+if [ -n "${COUNT}" ]; then
+  printf '%s tests\n' "${COUNT}" > "${COUNT_FILE}"
+  echo "ℹ️ Core 单测 ${COUNT} 项（已写入 ${COUNT_FILE}，供 Scripts/check-doc-numbers.py 对账）"
+else
+  rm -f "${COUNT_FILE}"
+  echo "⚠️ 解析不出单测数（${TEST_LOG} 里没有「Executed N tests」这一行）—— 已删掉 ${COUNT_FILE}，判据会如实报「跳过」"
+fi
+
+exit "${STATUS}"

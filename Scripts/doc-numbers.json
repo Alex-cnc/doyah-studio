@@ -1,0 +1,183 @@
+{
+  "version": 1,
+  "purpose": "「文档里的数字」的唯一来源台账（队列 L-55）。凡『同一件事在好几处各写一遍』的数字，先在这里登记一次，再由 Scripts/check-doc-numbers.py 双向对账：台账值 ↔ 实测（能机械复算的必须复算）↔ 文档里写的每一处。",
+  "readingRules": [
+    "value = 权威值；spellout = 同一个值的中文写法（文档里写中文数字时用它比对）。",
+    "measure = 这个值怎么来的：kind 决定判据怎么『实测复核』，expect 是与 value/secondary 一致的那组实测值（不一致 = 台账自己写错）。",
+    "anchors = 文档里的『现状声明』落点（精确上下文正则 + 捕获组）：每一处捕获到的值必须 == 台账值；命中处数 < minSites 判红（数字被删光也算红）。",
+    "reverseScans = 有限反扫：在指定的『现状口径』语境里，凡出现的同类数字都必须等于台账值（防『新增一处写错的数字』）。",
+    "扫描范围遵守红线第 6 条：对侧独占节（[独占:windows] / [独占:linux]）内的行整段跳过 —— 本侧不改的那部分，本侧也不拿它判红；该处的陈旧值走提醒/提案。",
+    "变更记录行（`| v1.2x` / `| **v2.6x**`）整行跳过：历史值本来就该与当前值不同，那不是漂移。",
+    "skipSections = 整节按历史叙述跳过（现只有 AGENT-SPEC §9「常见坑」），理由随条目写在台账里。"
+  ],
+  "notCovered": [
+    "逐族负例例数（`test-*.py` 的 N/N、`--self-test` 的例数）：机械可得（跑一次或解析脚本内的用例表），但 20+ 族逐条登记 + 文档多处引用，单轮做不完 ⇒ 转队列 L-72。",
+    "check-doc-tables 的「跳过 7 份 / 14 个文件 / 例 5」三处重复：同一类问题（数字写在各处），随 L-72 一起收。",
+    "汉字棘轮基线（R-45）/ 设计令牌基线 / 形状台账处数：它们已是『棘轮基线文件』形态（各自有唯一出处），不在本条范围。"
+  ],
+  "checkScriptParity": {
+    "glob": "Scripts/check-*.py",
+    "mustBeReferencedIn": "Scripts/verify-all.sh",
+    "note": "『有判据、没闭环』那一族的机械防线：目录里的每个判据脚本都必须被闭环引用，或者在本台账里逐条登记理由。",
+    "exempt": [
+      {
+        "script": "Scripts/check-ui-snapshot-languages.py",
+        "reason": "随 ./Scripts/make-ui-snapshots.sh 的收尾跑（快照按 L-01 纪律不进每轮闭环）；`Docs/概要设计.md` §8.3 与本台账都指向它。"
+      }
+    ]
+  },
+  "numbers": [
+    {
+      "key": "gate-items",
+      "label": "闭环项数（Scripts/verify-all.sh 的项块数）",
+      "value": 18,
+      "unit": "项",
+      "spellout": "十八",
+      "measure": {
+        "kind": "gate-scan",
+        "script": "Scripts/verify-all.sh",
+        "expect": [
+          18
+        ]
+      },
+      "anchors": [
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "改完代码跑它，(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项全过才算完",
+          "minSites": 1,
+          "note": "头注释总述"
+        },
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "一条命令闭环（\\*\\*(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项\\*\\*）",
+          "minSites": 1,
+          "note": "§6 资产表"
+        },
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "verify-all\\.sh\\s+#\\s*(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项",
+          "minSites": 2,
+          "note": "§4/§5 的跑法注释（两处）"
+        },
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "\\*\\*(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项全绿\\*\\*",
+          "minSites": 1,
+          "note": "§7 门禁行"
+        },
+        {
+          "file": "Docs/概要设计.md",
+          "regex": "verify-all\\.sh`（(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项）",
+          "minSites": 1,
+          "note": "§8.3.2 一条命令跑全"
+        }
+      ],
+      "reverseScans": [
+        {
+          "file": "Scripts/verify-all.sh",
+          "contextRegex": "(verify-all|闭环)",
+          "numberRegex": "(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项",
+          "note": "闭环脚本自己：四处中文项数写法必须与项块数一致（含 skip_step 里写死的 N/18）"
+        },
+        {
+          "file": "AGENT-SPEC.md",
+          "contextRegex": "(verify-all|闭环)",
+          "numberRegex": "(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项",
+          "note": "入口文档：闭环语境里的中文项数一律等于台账值（§6 表里 10 行『项数仍十八』也被这一条钉住）"
+        }
+      ]
+    },
+    {
+      "key": "core-tests",
+      "label": "Core 单测项数（verify-core.sh 实测）",
+      "value": 2056,
+      "unit": "项",
+      "measure": {
+        "kind": "count-file",
+        "file": ".build/core-test-count.txt",
+        "regex": "(\\d+)",
+        "expect": [
+          2056
+        ],
+        "writtenBy": "Scripts/verify-core.sh（同一次运行写出；verify-all.sh 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，判据如实报『跳过』而不是拿旧值当现状）"
+      },
+      "anchors": [
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "Core 单测 \\*\\*(\\d{3,5})\\*\\* 项",
+          "minSites": 1,
+          "note": "§7 门禁行"
+        },
+        {
+          "file": "Docs/概要设计.md",
+          "regex": "verify-core\\.sh`（\\*{0,2}(\\d{3,5})\\*{0,2} 项",
+          "minSites": 1,
+          "note": "§8.3 闸门表（L-55 实测：此处长期停在 760）"
+        },
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "只要 Core 单测（(?:[^）]*?)(\\d{3,5}) tests",
+          "minSites": 1,
+          "note": "§4 跑法注释（同一个数字的另一种写法：`N tests`）"
+        }
+      ],
+      "reverseScans": [
+        {
+          "file": "AGENT-SPEC.md",
+          "contextRegex": "(单测|verify-core)",
+          "numberRegex": "(\\d{3,5})\\s*(?:项|tests)",
+          "note": "入口文档：凡『单测 N 项』的现状写法都必须等于台账值"
+        },
+        {
+          "file": "Docs/概要设计.md",
+          "contextRegex": "(单测|verify-core)",
+          "numberRegex": "(\\d{3,5})\\s*(?:项|tests)",
+          "note": "契约侧闸门表：同上"
+        }
+      ]
+    },
+    {
+      "key": "ui-snapshots",
+      "label": "界面快照张数",
+      "value": 152,
+      "unit": "张",
+      "secondary": {
+        "label": "组",
+        "value": 76
+      },
+      "measure": {
+        "kind": "snapshot-manifest",
+        "file": ".build/ui-snapshots/manifest.json",
+        "expect": [
+          152,
+          76
+        ],
+        "writtenBy": "./Scripts/make-ui-snapshots.sh（快照不进每轮闭环 ⇒ 本机没有清单时判据如实报『跳过』，不假装核过）"
+      },
+      "anchors": [
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "界面快照 \\*\\*(\\d+) 张 / (\\d+) 组\\*\\*",
+          "minSites": 1,
+          "note": "§7 门禁行"
+        }
+      ],
+      "reverseScans": [
+        {
+          "file": "AGENT-SPEC.md",
+          "contextRegex": "快照",
+          "numberRegex": "(\\d+)\\s*张\\s*/\\s*(\\d+)\\s*组",
+          "note": "入口文档：快照『张 / 组』的现状写法必须等于台账值（变更行里的历史值整行跳过）"
+        }
+      ]
+    }
+  ],
+  "skipSections": [
+    {
+      "file": "AGENT-SPEC.md",
+      "from": "^## 9\\.",
+      "to": "^## 10\\.",
+      "reason": "§9「常见坑」整节是**历史叙述**（每条坑都在讲过去发生过什么、当时的数字是多少），与变更记录行同规则跳过；否则「把这处旧值改成实测值」这类记录本身就会被反扫判红"
+    }
+  ]
+}

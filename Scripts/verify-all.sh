@@ -21,6 +21,8 @@ set -euo pipefail
 #        `check-literal-language.py` 与 `literal-language-dispositions.json`）
 #   4. 文档表格列数与派生计数一致
 #      + 变更记录版本号唯一 / 头部版本格可判 / 队列条目号唯一（L-32）
+#      + **文档数字的唯一来源**（L-55：闭环项数 / 单测数 / 快照张数收进台账
+#        `Scripts/doc-numbers.json`，做「台账 ↔ 实测 ↔ 文档」三向对账 —— 见本项尾部注释）
 #   5. 需求状态一致性（§10.1 索引表 ↔ 正文定义行）
 #      + **alpha 范围账**（L-69 条件 ③）：FR 🟡 **逐条**判定 —— 能机器验的给可复跑证据指针、
 #        不能机器验的标 `[alpha 不含]`（状态格仍 🟡）。台账 `Scripts/alpha-fr-dispositions.json`，
@@ -140,6 +142,10 @@ skip_step() {   # skip_step <项号> <说明>
 }
 
 if [ "${PLATFORM}" = "macos" ]; then
+  # 第 1 项之前先删掉单测数证据文件：留在盘上的旧值会被 Scripts/check-doc-numbers.py 当成
+  # 「这一轮的实测」（第 4 项那条判据只认同一次运行的数）。删掉之后，本轮没跑第 1 项时
+  # 判据会如实报「跳过实测」——而不是拿一个陈旧数字冒充现状。
+  rm -f .build/core-test-count.txt
   echo "==> 1/18 Core 与平台适配层单测"
   ./Scripts/verify-core.sh
 else
@@ -225,6 +231,20 @@ python3 Scripts/check-doc-tables.py --self-test
 python3 Scripts/check-doc-versions.py
 # 派生文件不得漂移：终端配色 JSON ↔ Core ↔ 人读文档三方一致（FR-EDIT-29 的跨平台交接物）
 python3 Scripts/check-terminal-palette.py
+# L-55（2026-09-28 第 61 轮）：上面几条管的是**表格结构**（列数 / 计数 / 版本号 / 派生计数），
+# 管不了「独立写在各处的**工程设施数字**」—— 闭环项数、单测数、快照张数。真现场：
+# `Docs/概要设计.md` §8.3 闸门表写着 `verify-core.sh`（**760** 项），实测 2056 项（那是 09-23 的旧值）；
+# `AGENT-SPEC.md` 跑法注释里写着 2046 tests / 快照 140 张 · 70 组，实测 2056 / 152 · 76。
+# 口径 = **唯一来源台账** `Scripts/doc-numbers.json`（照 `Scripts/vendored-sqlite.json` 的做法），
+# 判据 `Scripts/check-doc-numbers.py` 做**三向对账**：台账 ↔ 实测（能机械复算的必须复算：
+# 闭环项数从 `==> N/M` 项块数、单测数读 verify-core.sh **同一次运行**写下的计数文件、
+# 快照读 manifest）↔ 文档里每一处现状声明（精确锚点 + 有限反扫，写错 / 删光都判红）。
+# 它同时管住「有判据、没闭环」那一族：`Scripts/check-*.py` 每个都必须被本脚本引用，
+# 或在台账里逐条登记理由（现有 1 条豁免 = 快照语言覆盖门禁）。
+# 边界（如实登记，见脚本 docstring）：**不做全文反扫**（三书与开发记录里充满历史值），
+# **对侧独占节整段跳过**（红线第 6 条：本侧不改的也不拿它判红），**变更记录行整行跳过**。
+python3 Scripts/check-doc-numbers.py
+python3 Scripts/check-doc-numbers.py --self-test
 
 echo "==> 5/18 需求状态一致性（索引表 ↔ 正文定义行）+ alpha 范围账（FR 🟡 逐条判定）"
 python3 Scripts/check-status-consistency.py
