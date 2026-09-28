@@ -23,6 +23,9 @@ set -euo pipefail
 #      + 变更记录版本号唯一 / 头部版本格可判 / 队列条目号唯一（L-32）
 #      + **文档数字的唯一来源**（L-55：闭环项数 / 单测数 / 快照张数收进台账
 #        `Scripts/doc-numbers.json`，做「台账 ↔ 实测 ↔ 文档」三向对账 —— 见本项尾部注释）
+#      + **§6 待拍板队列的编号与状态纪律**（L-56：编号唯一 / 状态只写词表词 / 与 §4 同源 ——
+#        这一节是探针「需用户介入」行的来源，`Q19` 曾因此每轮被报成待拍板项；
+#        见 `Scripts/check-doc-q-series.py`）
 #   5. 需求状态一致性（§10.1 索引表 ↔ 正文定义行）
 #      + **alpha 范围账**（L-69 条件 ③）：FR 🟡 **逐条**判定 —— 能机器验的给可复跑证据指针、
 #        不能机器验的标 `[alpha 不含]`（状态格仍 🟡）。台账 `Scripts/alpha-fr-dispositions.json`，
@@ -245,6 +248,23 @@ python3 Scripts/check-terminal-palette.py
 # **对侧独占节整段跳过**（红线第 6 条：本侧不改的也不拿它判红），**变更记录行整行跳过**。
 python3 Scripts/check-doc-numbers.py
 python3 Scripts/check-doc-numbers.py --self-test
+# L-56（2026-09-28 第 62 轮）：上面几条仍然管不到 **§6 待拍板队列的编号与状态**。真现场三类：
+# ① `Q28` 同号两条（Retro 技术栈 / 本仓与宿主的关系）—— 两条不同的问题共用一个号；
+# ② **8 行编号格是 L-41 修列数时补的 `——` 占位**（FR-IO-04 / FR-AI-12 / `.et` /
+#    NFR-COMP-03 / cua-driver 两个授权 / 本机模型凭据 / 环境类授权（9 项）/ 机器载荷失败原串）
+#    —— 表格结构合法了，但条目**无法被引用、无法被对账**；
+# ③ `Q19` 早已在 §4 记「已拍板（2026-09-27）」，§6 却一直挂着「⏳ 待拍板」⇒ **每轮探针都把它
+#    报成「待你拍板」**（同族另有 Q29 前提作废、Q34 / Q35 / Q36 / Q40 已随当日口径关闭）。
+# 判据 `Scripts/check-doc-q-series.py`：A 编号可判且唯一 / B 状态只写词表词 / C 关闭行成对 /
+# D §4 ↔ §6 同源（Q17~Q23 = Studio 号空间）/ E 空跑防护（行数 / 号数 / 对账对数下限）。
+# 该文件与 check-doc-tables 那份同属 `.gitignore` 内的本机台账 ⇒ 不在盘上时**跳过 + 高声提示**，
+# `--require-all` 判红；负例 `--self-test` 7 例 + 末例核对真仓库逐字节未变。
+if [ "${REQUIRE_ALL}" = "1" ]; then
+  python3 Scripts/check-doc-q-series.py --require-all
+else
+  python3 Scripts/check-doc-q-series.py
+fi
+python3 Scripts/check-doc-q-series.py --self-test
 
 echo "==> 5/18 需求状态一致性（索引表 ↔ 正文定义行）+ alpha 范围账（FR 🟡 逐条判定）"
 python3 Scripts/check-status-consistency.py
