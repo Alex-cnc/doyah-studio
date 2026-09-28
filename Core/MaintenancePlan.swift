@@ -252,10 +252,13 @@ public enum MaintenancePlanner {
     /// 与 `ExecutionSafety` 的分工：后者判"这条语句该不该被拦"（只读 / 高危确认），
     /// 这里判"这条**维护任务**在编排层面该怎么对待"（限流、外部程序、审批必要性）。
     /// 两者都要过 —— 谁也不替代谁。
+    /// - Parameter language: 写进 `reviewNotes` 的那些理由（给人看的话）的语言。
+    ///   **由调用方给**（队列 L-65 第 3 批）：从前这里写死简体中文 ⇒ 这些键的英文译文不可达。
     public static func review(
         _ tasks: [MaintenanceTask],
         policy: MaintenancePolicy,
-        databaseType: DatabaseType = .postgresql
+        databaseType: DatabaseType = .postgresql,
+        language: AppLanguage
     ) -> MaintenancePlanReview {
         var reviewed: [MaintenanceTask] = []
         var notes: [String] = []
@@ -274,7 +277,7 @@ public enum MaintenancePlanner {
                 switch decision {
                 case .refused(let reasons, _):
                     task.reviewNotes.append(contentsOf: reasons)
-                    task.reviewNotes.append(text(.maintenanceRefusedReadOnly))
+                    task.reviewNotes.append(text(.maintenanceRefusedReadOnly, language: language))
                     // 只读连接上的写任务：**连批准都不允许**（不可绕过，与 `ExecutionSafety` 同口径）。
                     task.requiresApproval = true
                     task.state = .rejected
@@ -290,8 +293,8 @@ public enum MaintenancePlanner {
             if task.requiresApproval {
                 task.reviewNotes.append(
                     task.kind == .indexSuggestion
-                        ? text(.maintenanceNoApprovalNeeded)
-                        : text(.maintenanceNeedsApproval)
+                        ? text(.maintenanceNoApprovalNeeded, language: language)
+                        : text(.maintenanceNeedsApproval, language: language)
                 )
             }
 
@@ -299,7 +302,7 @@ public enum MaintenancePlanner {
                 highCostSeen += 1
                 if highCostSeen > policy.maxHighCostTasks, !policy.allowMultipleHighCost {
                     task.reviewNotes.append(
-                        text(.maintenanceHighCostRateLimited, String(policy.maxHighCostTasks))
+                        text(.maintenanceHighCostRateLimited, String(policy.maxHighCostTasks), language: language)
                     )
                     task.state = .rejected
                     reviewed.append(task)
@@ -308,17 +311,17 @@ public enum MaintenancePlanner {
             }
 
             if !task.kind.runsInProcess, policy.isSandboxed {
-                task.reviewNotes.append(text(.maintenanceSandboxedExternal))
+                task.reviewNotes.append(text(.maintenanceSandboxedExternal, language: language))
             }
 
             reviewed.append(task)
         }
 
         if reviewed.contains(where: { $0.isHighCost }) {
-            notes.append(text(.maintenanceHighCostCounted, String(highCostSeen)))
+            notes.append(text(.maintenanceHighCostCounted, String(highCostSeen), language: language))
         }
         if policy.isReadOnly {
-            notes.append(text(.maintenanceReadOnlyConnection))
+            notes.append(text(.maintenanceReadOnlyConnection, language: language))
         }
         return MaintenancePlanReview(tasks: reviewed, notes: notes, unparsableLines: [])
     }
@@ -327,10 +330,11 @@ public enum MaintenancePlanner {
     public static func makePlan(
         from text: String,
         policy: MaintenancePolicy,
-        databaseType: DatabaseType = .postgresql
+        databaseType: DatabaseType = .postgresql,
+        language: AppLanguage
     ) -> MaintenancePlanReview {
         let parsed = parse(text)
-        var review = review(parsed.tasks, policy: policy, databaseType: databaseType)
+        var review = review(parsed.tasks, policy: policy, databaseType: databaseType, language: language)
         review.unparsableLines = parsed.unparsable
         return review
     }
@@ -383,10 +387,10 @@ public enum MaintenancePlanner {
     }
 }
 
-/// Core 侧的文案取值（与其余 Core 展示文本同一现状：默认简体中文，界面语言透传见 R-45）。
-private func text(_ key: LKey, _ arguments: CVarArg...) -> String {
+/// Core 侧的文案取值（**语言由调用方给定**，见 R-45 / 队列 L-65 第 3 批）。
+private func text(_ key: LKey, _ arguments: CVarArg..., language: AppLanguage) -> String {
     if arguments.isEmpty {
-        return LocalizedStrings.text(key, language: .simplifiedChinese)
+        return LocalizedStrings.text(key, language: language)
     }
-    return LocalizedStrings.format(key, language: .simplifiedChinese, arguments)
+    return LocalizedStrings.format(key, language: language, arguments)
 }

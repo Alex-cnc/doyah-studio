@@ -52,8 +52,17 @@ public struct MCPServerSession: Sendable {
     public private(set) var audit: [MCPAuditEntry] = []
     public var capabilities: Capabilities
 
-    public init(capabilities: Capabilities) {
+    /// 本会话说哪种语言（**由创建会话的调用方给定**，队列 L-65 第 3 批）。
+    ///
+    /// 为什么是会话属性而不是每个方法的形参：这几句话（`mcpInitialized` / `mcpToolNotExposed` /
+    /// `mcpNoConnection` / 以及 `MCPToolCatalog.decision` 给出的拒绝理由）都挂在**同一次会话**上，
+    /// 由同一个人启动（CLI 进程或界面）—— 语言是「谁在用这个 server」，不是「这一次调用」。
+    /// 从前它在文件私有助手里被钉成简体中文 ⇒ 这些键的英文译文永远不可达。
+    public let language: AppLanguage
+
+    public init(capabilities: Capabilities, language: AppLanguage) {
         self.capabilities = capabilities
+        self.language = language
     }
 
     /// 处理一行报文。返回：要写回去的报文（通知不必回）+ 需要调用方执行的调用（可能没有）。
@@ -214,7 +223,8 @@ public struct MCPServerSession: Sendable {
             isReadOnlyConnection: capabilities.isReadOnly,
             isApproved: capabilities.approvedCalls.contains(
                 MCPToolCatalog.callFingerprint(tool: name, arguments: arguments)
-            )
+            ),
+            language: language
         )
         switch decision {
         case .refused(let reason):
@@ -278,6 +288,14 @@ public struct MCPServerSession: Sendable {
         // 审计里只留**参数摘要**：太长就截断（审计是给人看的，不是数据仓库）。
         let text = arguments.jsonText
         return text.count > 200 ? String(text.prefix(200)) + "…" : text
+    }
+
+    /// Core 侧文案（会话内使用；**语言取自会话属性 `language`**，由创建者给定，队列 L-65 第 3 批）。
+    private func text(_ key: LKey, _ arguments: CVarArg...) -> String {
+        if arguments.isEmpty {
+            return LocalizedStrings.text(key, language: language)
+        }
+        return LocalizedStrings.format(key, language: language, arguments)
     }
 }
 
@@ -393,12 +411,4 @@ public struct MCPClientSession: Sendable {
     }
 
     public func hasError() -> Bool { lastError != nil }
-}
-
-/// Core 侧文案（同文件内使用）。
-private func text(_ key: LKey, _ arguments: CVarArg...) -> String {
-    if arguments.isEmpty {
-        return LocalizedStrings.text(key, language: .simplifiedChinese)
-    }
-    return LocalizedStrings.format(key, language: .simplifiedChinese, arguments)
 }

@@ -6091,7 +6091,9 @@ final class AppState: ObservableObject {
         let review = MaintenancePlanner.makePlan(
             from: maintenancePlanText,
             policy: maintenancePolicy,
-            databaseType: maintenanceDatabaseType
+            databaseType: maintenanceDatabaseType,
+            // 逐条「能不能跑 / 要不要审批」的理由是要显示给人看的（队列 L-65 第 3 批）。
+            language: LocalizationManager.shared.effectiveLanguage
         )
         maintenanceReview = review
         if review.tasks.isEmpty {
@@ -6131,7 +6133,8 @@ final class AppState: ObservableObject {
             let draft = AICapture.maintenanceNote(
                 planText: maintenancePlanText,
                 review: review,
-                target: selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? ""
+                target: selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? "",
+                language: LocalizationManager.shared.effectiveLanguage
             )
             let saved = try await store.upsert(draft)
             maintenanceMessage = L(.diagnosisNoteSaved, saved.title)
@@ -6312,7 +6315,8 @@ final class AppState: ObservableObject {
                 question: diagnosisQuestion,
                 target: selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? "",
                 context: diagnosisContext,
-                report: report
+                report: report,
+                language: LocalizationManager.shared.effectiveLanguage
             )
             let duplicate = draft.source.fingerprint.map { fingerprint in
                 existing.contains { $0.source.fingerprint == fingerprint }

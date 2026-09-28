@@ -17,7 +17,7 @@ final class MaintenancePlanTests: XCTestCase {
     """
 
     private func plan(policy: MaintenancePolicy = MaintenancePolicy()) -> MaintenancePlanReview {
-        MaintenancePlanner.makePlan(from: planText, policy: policy)
+        MaintenancePlanner.makePlan(from: planText, policy: policy, language: .simplifiedChinese)
     }
 
     // MARK: - 解析
@@ -108,7 +108,8 @@ final class MaintenancePlanTests: XCTestCase {
         // 单独一份"只有备份"的计划：上面那份里备份已被限流拒绝，测不到沙箱这条规则。
         let onlyBackup = MaintenancePlanner.makePlan(
             from: "task: backup | 备份 analytics 库 | command: pg_dump -Fc analytics",
-            policy: MaintenancePolicy(isSandboxed: true)
+            policy: MaintenancePolicy(isSandboxed: true),
+            language: .simplifiedChinese
         )
         let approved = MaintenancePlanner.approve(onlyBackup, ids: ["m1"])
         XCTAssertEqual(
@@ -147,11 +148,28 @@ final class MaintenancePlanTests: XCTestCase {
     /// 危险语句走的是同一条护栏（`DROP` 的计划任务不该被当成"普通维护"）。
     func testDangerousStatementKeepsItsRiskFromGuardrail() {
         let text = "task: custom | 清掉旧数据 | sql: DELETE FROM public.audit_log"
-        let review = MaintenancePlanner.makePlan(from: text, policy: MaintenancePolicy())
+        let review = MaintenancePlanner.makePlan(from: text, policy: MaintenancePolicy(), language: .simplifiedChinese)
         XCTAssertEqual(review.tasks.first?.risk, .destructive, "无 WHERE 的 DELETE 是破坏性语句")
         XCTAssertTrue(review.tasks.first!.requiresApproval)
         XCTAssertTrue(
             review.tasks.first!.reviewNotes.contains { $0.contains("WHERE") || $0.contains("破坏") || $0.contains("无") }
         )
+    }
+
+    /// **逐条理由按给定语言给**（队列 L-65 第 3 批）：从前 Core 把这些句子写死成中文
+    /// ⇒ 这些键的英文译文永远不可达（门禁记成「死译文」欠账）。现在语言从 `makePlan` 一路传下来。
+    func testReviewNotesFollowTheGivenLanguage() {
+        let text = "task: backup | 备份 analytics 库 | command: pg_dump -Fc analytics"
+        let zh = MaintenancePlanner.makePlan(
+            from: text, policy: MaintenancePolicy(isSandboxed: true), language: .simplifiedChinese
+        )
+        let en = MaintenancePlanner.makePlan(
+            from: text, policy: MaintenancePolicy(isSandboxed: true), language: .english
+        )
+        let zhNotes = zh.tasks.flatMap(\.reviewNotes)
+        let enNotes = en.tasks.flatMap(\.reviewNotes)
+        XCTAssertTrue(zhNotes.contains { $0.contains("沙箱") }, "中文这一份仍然是中文")
+        XCTAssertTrue(enNotes.contains { $0.contains("the sandboxed build cannot do") }, "英文这一份真的出得来")
+        XCTAssertNotEqual(zhNotes, enNotes, "语言不是摆设")
     }
 }

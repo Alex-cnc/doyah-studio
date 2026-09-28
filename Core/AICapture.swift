@@ -13,26 +13,39 @@ import Foundation
 public enum AICapture {
 
     /// **skill 草稿**：AI 攒出来的提示词 / 步骤 / 写法（DOYAH-10 的核心场景）。
+    ///
+    /// - Parameter defaultTag: 调用方**没给 tags** 时用的那一个标签 —— **文本，不是语言**
+    ///   （队列 L-65 第 3 批 + `FR-PLUG-03`）：笔记侧**只收文本与标识**，语言是宿主的事，
+    ///   「这一族该显示成什么语言」由宿主渲染好再进来（判据 = `check-plugin-assembly.py`
+    ///   判据 03 的类型白名单：`String` / `String?` / `[String]` / `[String]?`）。
     public static func skillNote(
         title: String,
         body: String,
         connectionName: String? = nil,
-        tags: [String]? = nil
+        tags: [String]? = nil,
+        defaultTag: String
     ) -> NoteDraft {
         NoteDraft(
             title: title,
             body: body,
-            tags: tags ?? [t(.aiNoteTagSkill)],
+            tags: tags ?? [defaultTag],
             source: NoteSource(kind: .skill, connectionName: connectionName)
         )
     }
 
     /// 纯 SQL 收藏。
-    public static func sqlNote(sql: String, connectionName: String?, title: String? = nil) -> NoteDraft {
+    ///
+    /// - Parameter tag: 这条收藏的标签 —— 同上，**是文本不是语言**。
+    public static func sqlNote(
+        sql: String,
+        connectionName: String?,
+        title: String? = nil,
+        tag: String
+    ) -> NoteDraft {
         NoteDraft(
             title: title ?? firstLine(of: sql),
             body: "```sql\n\(sql)\n```",
-            tags: [t(.aiNoteTagSQL)],
+            tags: [tag],
             source: NoteSource(kind: .sql, connectionName: connectionName)
         )
     }
@@ -64,9 +77,8 @@ public enum AICapture {
     }
 }
 
-/// Core 侧文案（同文件内使用；语言透传见 R-45）。
-private func t(_ key: LKey, _ arguments: CVarArg...) -> String {
-    arguments.isEmpty
-        ? LocalizedStrings.text(key, language: .simplifiedChinese)
-        : LocalizedStrings.format(key, language: .simplifiedChinese, arguments)
-}
+// **本文件一个本地化取值入口都没有，这是有意的**（队列 L-65 第 3 批 + `FR-PLUG-03`）：
+// 笔记侧只收文本与标识 —— 要显示成什么语言是**宿主**的事，渲染好的文本再进来。
+// 第一版把 `language: AppLanguage` 当形参加进来，被 `check-plugin-assembly.py` 判据 03 当场拦下
+// （类型白名单只有 `String` / `String?` / `[String]` / `[String]?`）—— 那条判据是对的：
+// 语言进笔记侧，等于让笔记侧替宿主选语言，是本轮正在销掉的那个形状的另一种写法。

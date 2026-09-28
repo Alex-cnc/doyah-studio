@@ -9,7 +9,8 @@ final class MCPTests: XCTestCase {
     private func session(
         hasConnection: Bool = true,
         isReadOnly: Bool = false,
-        approved: Set<String> = []
+        approved: Set<String> = [],
+        language: AppLanguage = .simplifiedChinese
     ) -> MCPServerSession {
         MCPServerSession(
             capabilities: .init(
@@ -17,7 +18,8 @@ final class MCPTests: XCTestCase {
                 isReadOnly: isReadOnly,
                 target: "postgres@127.0.0.1:5432/analytics",
                 approvedCalls: approved
-            )
+            ),
+            language: language
         )
     }
 
@@ -306,5 +308,35 @@ final class MCPTests: XCTestCase {
         var client = MCPClientSession()
         XCTAssertFalse(client.receive(line: #"{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"Method not found"}}"#))
         XCTAssertEqual(client.lastError, "Method not found")
+    }
+
+    // MARK: - 会话语言（队列 L-65 第 3 批）
+
+    /// **本会话说哪种语言由创建者给**：这几句（握手说明 / 工具未暴露 / 拒绝理由）从前被文件私有
+    /// 助手写死成简体中文 ⇒ 英文译文永远不可达。现在 `language` 是会话的一个属性。
+    func testSessionSpeaksTheLanguageItWasGiven() {
+        var session = self.session(language: .english)
+        let initialized = session.handle(line: initializeLine())
+        guard case .response(_, let result) = initialized.replies[0] else { return XCTFail("应当回响应") }
+        XCTAssertTrue(
+            (result["instructions"]?.stringValue ?? "").contains("Ready:"),
+            "握手说明按会话语言给（从前写死中文）"
+        )
+
+        let notExposed = session.handle(line: callLine(tool: "run_shell", arguments: .object([:]), id: 3))
+        XCTAssertTrue(
+            notExposed.replies[0].encode().contains("This tool is not exposed"),
+            "工具未暴露那句也按会话语言给"
+        )
+
+        // 需要审批的写语句：拒绝理由走 `MCPToolCatalog.decision(language:)`，同样跟着会话语言走。
+        let needsApproval = session.handle(
+            line: callLine(tool: MCPToolCatalog.querySQL, arguments: .object(["sql": .string("DELETE FROM customers")]), id: 5)
+        )
+        XCTAssertEqual(session.audit.last?.outcome, "needs-approval")
+        XCTAssertTrue(
+            needsApproval.replies[0].encode().contains("needs approval"),
+            "审批理由按会话语言给（`mcpNeedsApproval` 的英文译文从前不可达）"
+        )
     }
 }

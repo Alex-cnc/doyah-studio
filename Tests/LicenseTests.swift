@@ -146,11 +146,22 @@ final class LicenseTests: XCTestCase {
     // MARK: 升级提示（Q11：逐条列出各版功能）
 
     func testEditionCatalogListsFeaturesPerEdition() {
-        XCTAssertTrue(LicenseEditionCatalog.items(for: .standard).contains { $0.contains("笔记") })
-        XCTAssertTrue(LicenseEditionCatalog.items(for: .pro).contains { $0.contains("数据库") })
-        let ultra = LicenseEditionCatalog.items(for: .ultra)
+        XCTAssertTrue(LicenseEditionCatalog.items(for: .standard, language: .simplifiedChinese).contains { $0.contains("笔记") })
+        XCTAssertTrue(LicenseEditionCatalog.items(for: .pro, language: .simplifiedChinese).contains { $0.contains("数据库") })
+        let ultra = LicenseEditionCatalog.items(for: .ultra, language: .simplifiedChinese)
         XCTAssertEqual(ultra.count, 3, "Ultra 要写明'含 Standard 与 Pro 的全部'再加联动能力")
-        XCTAssertEqual(LicenseEditionCatalog.features.count, 3)
+        XCTAssertEqual(LicenseEditionCatalog.features(language: .simplifiedChinese).count, 3)
+    }
+
+    /// **两份译文都能到达界面**（队列 L-65 第 3 批）：这一族从前是 `static let` + 写死中文
+    /// ⇒ 英文译文永远拿不到（门禁把它记成「死译文」）。现在语言是形参，英文真的出得来。
+    func testEditionCatalogIsReachableInBothLanguages() {
+        let zh = LicenseEditionCatalog.items(for: .standard, language: .simplifiedChinese)
+        let en = LicenseEditionCatalog.items(for: .standard, language: .english)
+        XCTAssertEqual(zh.count, en.count, "两种语言列的是同一批能力")
+        XCTAssertNotEqual(zh, en, "语言不是摆设：英文界面上这一页必须是英文")
+        XCTAssertTrue(en.contains { $0.contains("Notes") })
+        XCTAssertTrue(zh.contains { $0.contains("笔记") })
     }
 }
 
@@ -213,12 +224,20 @@ final class LicensePresentationTests: XCTestCase {
     }
 
     func testUpgradeLinesListTheOtherEditions() {
-        let lines = LicensePresentation.upgradeLines(for: .standard)
+        let lines = LicensePresentation.upgradeLines(for: .standard, language: .simplifiedChinese)
         XCTAssertEqual(lines.map(\.edition), [.pro, .ultra])
         XCTAssertTrue(lines.allSatisfy { !$0.items.isEmpty }, "每一版都要逐条列出功能（Q11 要求）")
-        XCTAssertTrue(LicensePresentation.upgradeLines(for: .ultra).isEmpty, "已是最高档就不推销")
+        XCTAssertTrue(
+            LicensePresentation.upgradeLines(for: .ultra, language: .simplifiedChinese).isEmpty,
+            "已是最高档就不推销"
+        )
         // Pro 只看得到往上那一档：**不能向下推销 Standard**（那是降级）。
-        XCTAssertEqual(LicensePresentation.upgradeLines(for: .pro).map(\.edition), [.ultra])
+        XCTAssertEqual(LicensePresentation.upgradeLines(for: .pro, language: .simplifiedChinese).map(\.edition), [.ultra])
+        // 迁移到英文界面时这一页跟着走（队列 L-65 第 3 批）。
+        XCTAssertTrue(
+            LicensePresentation.upgradeLines(for: .pro, language: .english)
+                .flatMap(\.items).contains { $0.contains("Database") }
+        )
     }
 
     /// 每档都要有一个能在界面上念出来的名字（只写 "Pro" 等于没说）。

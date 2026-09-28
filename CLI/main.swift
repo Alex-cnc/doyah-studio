@@ -1072,7 +1072,9 @@ struct DoyahCLI {
             }
         }
 
-        var session = MCPServerSession(capabilities: capabilities)
+        // 本 server 的会话语言 = 启动它的这个进程（命令行 ⇒ 显式中文，口径同台账里那条）。
+        let sessionLanguage = AppLanguage.simplifiedChinese
+        var session = MCPServerSession(capabilities: capabilities, language: sessionLanguage)
         func audit(_ entry: MCPAuditEntry) {
             FileHandle.standardError.write(Data(("审计 \(entry.jsonText)\n").utf8))
             guard let auditPath else { return }
@@ -1384,7 +1386,9 @@ struct DoyahCLI {
             isReadOnly: arguments.contains("--read-only"),
             isSandboxed: arguments.contains("--sandboxed")
         )
-        var review = MaintenancePlanner.makePlan(from: text, policy: policy)
+        // 命令行没有界面语境：语言是**显式的中文**（口径见台账 `CLI/main.swift` 那条）。
+        let language = AppLanguage.simplifiedChinese
+        var review = MaintenancePlanner.makePlan(from: text, policy: policy, language: language)
 
         if let rejectList = value(for: "--reject") {
             review = MaintenancePlanner.reject(review, ids: splitIDs(rejectList))
@@ -1733,7 +1737,8 @@ struct DoyahCLI {
                         question: question,
                         target: username + "@" + host + ":" + String(port) + "/" + database,
                         context: context,
-                        report: report
+                        report: report,
+                        language: language
                     )
                     let duplicate = draft.source.fingerprint.map { fingerprint in
                         existing.contains { $0.source.fingerprint == fingerprint }

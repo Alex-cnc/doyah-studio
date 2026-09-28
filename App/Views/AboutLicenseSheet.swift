@@ -111,7 +111,13 @@ struct AboutLicenseSheet: View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             Text(L(.licAboutUpgradeTitle))
                 .font(Theme.font(.bodyStrong))
-            ForEach(LicensePresentation.upgradeLines(for: entitlements.edition), id: \.edition) { entry in
+            ForEach(
+                LicensePresentation.upgradeLines(
+                    for: entitlements.edition,
+                    language: LocalizationManager.shared.effectiveLanguage
+                ),
+                id: \.edition
+            ) { entry in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L(LicensePresentation.displayNameKey(of: entry.edition)))
                         .font(Theme.font(.body))
