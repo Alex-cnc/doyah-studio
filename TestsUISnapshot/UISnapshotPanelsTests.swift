@@ -474,6 +474,18 @@ final class UISnapshotPanelsTests: XCTestCase {
         XCTAssertTrue(host.state.noteEditorTitle.isEmpty, "没有选中的笔记 ⇒ 标题该是空的")
         XCTAssertTrue(host.state.noteEditorTags.isEmpty, "没有选中的笔记 ⇒ 标签该是空的")
         XCTAssertTrue(host.state.noteEditorBody.isEmpty, "没有选中的笔记 ⇒ 正文该是空的")
+        // 空数据按钮的处置（队列 L-50）：这一遍渲染的空编辑器上，「保存」必须**灰着** ——
+        // 视图 `.disabled` 接的就是 `AppState.noteEditorHasContent` 这一个判据属性（唯一出处，
+        // 源码那一半由 `Scripts/check-empty-action-buttons.py` 钉住；这里钉住**这一遍渲染
+        // 走的就是那条判据**）。反向也要有一半：填进一个字之后它必须变真，否则「保存」会永远灰着。
+        XCTAssertFalse(
+            host.state.noteEditorHasContent,
+            "空编辑器上判据竟然为真 ⇒ 「保存」不会灰（L-50 的回归）"
+        )
+        host.state.noteEditorTitle = "临时"
+        XCTAssertTrue(host.state.noteEditorHasContent, "有内容时判据必须为真（否则保存永远灰着）")
+        host.state.noteEditorTitle = ""
+        XCTAssertFalse(host.state.noteEditorHasContent, "清空之后判据该回到假")
         try snapshotLightAndDark(
             "notes-editor-empty",
             size: CGSize(width: 900, height: 560),
@@ -671,6 +683,10 @@ final class UISnapshotPanelsTests: XCTestCase {
         defer { UISnapshot.clearLicense(from: host.state) }
         _ = try UISnapshot.applyLicense(.standard, to: host.state)
         XCTAssertTrue(host.state.notesEnabled, "笔记区要在 Standard 档下才拍得到")
+        // **先等启动链落地再播种**（第 59 轮实测到的抢跑）：`AppState.init` 起的那条链，
+        // 链尾要去库里读一次笔记；不等就播种，那条读会晚于播种落地、把内存列表填成刚播下的
+        // 两条 ⇒ 下面「结果只能来自库」那句断言会**看运气**地假红。机器证据不该看运气。
+        await host.state.startupChain?.value
 
         // 夹具：两条笔记进库（一条正文含「洞庭湖」与「骑行」，另一条只有标签）。
         let library = NoteLibrary.defaultLibrary()

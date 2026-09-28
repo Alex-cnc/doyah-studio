@@ -108,6 +108,10 @@ struct NotesEditorView: View {
                     Task { await appState.saveNoteFromEditor() }
                 }
                 .keyboardShortcut(.defaultAction)
+                // 空编辑器上不许「可点却静默无反应」（队列 L-50）：判据属性是**唯一出处**，
+                // 与 `saveNoteFromEditor()` 的第一句内容守卫同一条判断（口径 = 灰着）。
+                // 许可那一档故意不灰 —— Pro 档点下去要给「本档不含笔记」那句人话。
+                .disabled(!appState.noteEditorHasContent)
                 Text(L(.notesSourceHint))
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))

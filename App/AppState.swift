@@ -1078,6 +1078,15 @@ final class AppState: ObservableObject {
     /// 历史条数上限，避免长时间运行后无限增长。
     private static let historyLimit = 50
 
+    /// 启动链的句柄（连接 / 保存的查询 / 浏览器页签 / **笔记列表**）。
+    ///
+    /// 存这个句柄不是为了产品行为（它照旧不受启动链影响），而是为了**能让调用方等它落地**：
+    /// 链尾那一步会去读一次笔记库，而离屏快照测试会在建完 `AppState` 之后往库里播种夹具 ——
+    /// 不等就播种，那条后台读会**晚于**播种落地、把内存列表填成刚播下的那几条。
+    /// 第 59 轮实测到一次真实假红（`UISnapshotPanelsTests:702`「这一步不该往内存列表里塞东西」），
+    /// 就是这条抢跑：它**看运气**（读到库的时刻与播种时刻谁先谁后），不是每次必红。
+    private(set) var startupChain: Task<Void, Never>?
+
     init() {
         let firstTab = QueryTab(title: L(.workspaceTabTitle, tabNumbers.next()))
         tabs = [firstTab]
@@ -1094,7 +1103,7 @@ final class AppState: ObservableObject {
                 + " / 活动栏 [" + visibleActivityItems.map(\.rawValue).joined(separator: ",") + "]"
                 + " / " + licenseSummary
         )
-        Task {
+        startupChain = Task {
             await loadConnections()
             await loadSavedQueries()
             await restoreBrowserTabs()
@@ -6075,13 +6084,30 @@ final class AppState: ObservableObject {
         noteEditorTags = note.tags.joined(separator: " ")
     }
 
+    /// 「编辑器里到底有没有可保存的内容」（队列 **L-50**）。
+    ///
+    /// **唯一出处**：`NotesEditorView` 的「保存」按钮那一个 `.disabled` 与 `saveNoteFromEditor()`
+    /// 的这一句守卫**必须是同一条判断**。从前两处各写一遍、视图那侧干脆没写 ⇒ 标题与正文都空时
+    /// 「保存」满色可点，点下去静默 `return`（屏幕上什么都不发生、也没有一句解释 —— 用户会以为按钮坏了）。
+    ///
+    /// 口径 = **灰着**（取三者中最贴合产品现状的一档）：① 同一个动作族里已有的先例 ——
+    /// `SaveQuerySheet` 的「保存」在空名字时就是 `.disabled(trimmedName.isEmpty)`；
+    /// ② 外发日志的「清空」也是灰着（`.disabled(appState.egressEntries.isEmpty)`）；
+    /// ③ 而「导出」的「可点 + 给一句理由」（`egressExportEmpty`）是**有意为之的例外**，不是缺陷。
+    /// 判据逐条对账见 `Scripts/check-empty-action-buttons.py`（改口径要同时动台账与视图，不许半改）。
+    var noteEditorHasContent: Bool {
+        !noteEditorTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !noteEditorBody.isEmpty
+    }
+
     func saveNoteFromEditor() async {
         guard notesEnabled else {
             statusMessage = L(.licenseNotesNotIncluded)
             return
         }
+        // 许可那一档是**可点 + 给理由**（Pro 档要点得到「本档不含笔记」这句人话）；
+        // 内容为空那一档是**灰着** —— 两句守卫的处置不同，别合并。
+        guard noteEditorHasContent else { return }
         let title = noteEditorTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty || !noteEditorBody.isEmpty else { return }
         let draft = NoteDraft(
             title: title.isEmpty ? L(.notesUntitled) : title,
             body: noteEditorBody,

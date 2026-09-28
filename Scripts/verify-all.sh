@@ -264,7 +264,7 @@ python3 Scripts/check-p-parity.py --self-test
 echo "==> 8/18 平台中立性棘轮"
 python3 Scripts/check-platform-neutrality.py
 
-echo "==> 9/18 命令面板接线（FR-EDIT-25）+ 侧边栏折叠状态归属（FR-CONN-15）"
+echo "==> 9/18 界面接线与状态归属（命令面板 FR-EDIT-25 / 侧边栏折叠 FR-CONN-15 / 空数据按钮 L-50）"
 python3 Scripts/check-palette-wiring.py
 # L-59：**侧边栏的折叠状态住在 `AppState`，不住在视图里** —— 人工点验批次 1 第 3 条实测为挂
 # （「记不住折叠状态」）：`ConnectionListView` 的局部 `@State` 随活动栏分支重建归零，而当时
@@ -275,6 +275,16 @@ python3 Scripts/check-palette-wiring.py
 # 按 L-01 的纪律不进每轮门禁（要 `DOYAH_UI_SNAPSHOT=1`）。
 python3 Scripts/check-sidebar-collapse-state.py
 python3 Scripts/test-sidebar-collapse-state.py
+# L-50：**空数据时按钮必须有个说法**（灰着 / 可点给理由 / 够不着按钮），不许「可点却静默无反应」。
+# 2026-09-26 读图在笔记编辑器上抓到过第三种（「保存」满色可点、点下去静默 return）。这一项把
+# `App/AppState.swift` 里每条「内容为空」守卫与它的处置逐条对账（双向：未登记 ⇒ 红、陈旧 ⇒ 红），
+# 并钉住 `view-disabled` 那一档的**唯一出处**（判据属性全局只定义一次 / 守卫必须用它 /
+# 指定视图必须真的 `.disabled` 它 / 视图不许再自己算一遍）。台账与词表见脚本 docstring，
+# 台账 `Scripts/empty-action-button-dispositions.json`；负例 `Scripts/test-empty-action-buttons.py`
+# 11 例（视图处置被删 / 守卫改回裸判断 / 新增未登记守卫 / explain 其实没话 / 视图本地锚点被删 /
+# 判据两处定义 / 视图重新推导 / 台账陈旧 / 台账写坏 / 前提自检 / 真仓库逐字节未变）。
+python3 Scripts/check-empty-action-buttons.py
+python3 Scripts/test-empty-action-buttons.py
 
 echo "==> 10/18 插件装配链（FR-PLUG-01~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py
