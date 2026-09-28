@@ -9,7 +9,7 @@ import SwiftUI
 /// 选键原则：
 /// - 不占用系统级快捷键（⌘Q / ⌘W / ⌘H / ⌘M / ⌘,）；
 /// - 高频动作用最短的组合（执行 ⌘↩、停止 ⌘.、查找 ⌘F）；
-/// - 成组的动作用同一前缀（运行范围 ⌥⌘1/2/3、保存类 ⌘S / ⇧⌘S / ⌘D / ⇧⌘D）；
+/// - 成组的动作用同一前缀（保存类 ⌘S / ⇧⌘S / ⌘D / ⇧⌘D）；
 /// - ⌘K 归命令面板（FR-EDIT-25），登记为 `.commandPalette`，此处不得再占用。
 enum AppShortcut: CaseIterable {
     /// 执行查询（需求 FR-EDIT-08 / FR-EXEC-13 明确指定 ⌘↩）。
@@ -34,9 +34,6 @@ enum AppShortcut: CaseIterable {
     case clearEditor
     case format
 
-    case scopeAll
-    case scopeCurrentStatement
-    case scopeSelection
 
     case safeMode
     case confirmAllWrites
@@ -93,9 +90,6 @@ enum AppShortcut: CaseIterable {
         case .outdent: return "["
         case .clearEditor: return "k"
         case .format: return "f"
-        case .scopeAll: return "1"
-        case .scopeCurrentStatement: return "2"
-        case .scopeSelection: return "3"
         case .safeMode: return "s"
         case .confirmAllWrites: return "w"
         case .agentAudit: return "a"
@@ -120,7 +114,7 @@ enum AppShortcut: CaseIterable {
             return [.command]
         case .check, .executionPlan, .saveFileAs, .savedQueries, .history, .clearEditor, .format, .agentAudit, .egressLog, .newBrowserTab, .dataTask, .help, .terminal, .archive:
             return [.command, .shift]
-        case .replace, .scopeAll, .scopeCurrentStatement, .scopeSelection, .safeMode, .confirmAllWrites,
+        case .replace, .safeMode, .confirmAllWrites,
              .selectNextOccurrence, .addCursorAbove, .addCursorBelow:
             return [.command, .option]
         }

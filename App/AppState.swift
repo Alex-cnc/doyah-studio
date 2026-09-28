@@ -129,6 +129,10 @@ struct PendingExecution: Identifiable {
     let tabID: UUID
     let sql: String
     let decision: ExecutionSafety.Decision
+    /// 这一份 SQL 是从「选中片段 / 整篇」哪一段来的。
+    /// 用户批准后执行的是**这一份**，Output 里也要照实说这一份的来源，
+    /// 不能等到确认回来再从编辑器重新解析一遍（那时候选区可能已经变了）。
+    let source: ExecutionScope.Source
 
     var reasons: [String] {
         if case .needsConfirmation(let reasons, _, _) = decision { return reasons }
@@ -785,11 +789,9 @@ final class AppState: ObservableObject {
     /// 被拦下、等待确认的执行请求；`nil` 表示没有待确认项。
     @Published var pendingExecution: PendingExecution?
 
-    /// 运行范围（FR-EXEC-14）：整篇 / 光标所在语句 / 选中片段。用 `UserDefaults` 记住。
-    @Published var executionScope: ExecutionScope.Mode =
-        ExecutionScope.Mode(rawValue: UserDefaults.standard.string(forKey: "execution.scope") ?? "") ?? .all {
-        didSet { UserDefaults.standard.set(executionScope.rawValue, forKey: "execution.scope") }
-    }
+    // 运行范围不再是一个用户设置（FR-EXEC-14，2026-09-27 需求提出者拍板）：
+    // **有选区就跑选中的那段，没选区就跑整篇** —— 由 `ExecutionScope.resolve` 自动判定，
+    // 工具条上那个三档菜单已删。原 `execution.scope` 这个 `UserDefaults` 键不再读取。
 
     // MARK: 下方面板（结果 / 问题 / 输出 / 终端 / 调试控制台）
 
@@ -1004,10 +1006,28 @@ final class AppState: ObservableObject {
     }
 
     /// 用户点了「仍然执行」。
-    func confirmPendingExecution() async {
-        guard let pending = pendingExecution else { return }
+    ///
+    /// - Parameter pending: **确认过的那个待执行项**，由弹窗所在视图直接传进来。
+    ///
+    /// 两处不能再这么写（2026-09-27 人工点验实测：点「仍然执行」什么都不发生）：
+    /// ① **不读 `pendingExecution` 这个状态**。SwiftUI 的 `.sheet(item:)` 在关闭时会把绑定置空，
+    ///    而按钮的动作是「先 `onConfirm()`（起一个 `Task`）再 `dismiss()`」—— 等 `Task` 真跑起来，
+    ///    状态已经是 `nil`，`guard let … else { return }` 就**静默返回**了：既不执行，也不报错。
+    ///    服务器对象面板一直把 `pending.command` 直接传进闭包（正确形状），编辑器这条照它改。
+    /// ② **执行弹窗里确认过的那一份 SQL**（`sqlOverride`），不重新从编辑器解析一遍 ——
+    ///    用户在弹窗上看到并批准的是这几条，期间选区变了也不该换一份跑。
+    func confirmPendingExecution(_ pending: PendingExecution) async {
         pendingExecution = nil
-        await executeQuery(for: pending.tabID, bypassingSafetyCheck: true)
+        StartupLog.write(
+            "确认执行已批准的高危语句：\(pending.statements.count) 条"
+            + "（来源 \(pending.source.rawValue)，页签 \(pending.tabID.uuidString.prefix(8)))"
+        )
+        await executeQuery(
+            for: pending.tabID,
+            bypassingSafetyCheck: true,
+            sqlOverride: pending.sql,
+            runningSource: pending.source
+        )
     }
 
     /// 用户点了「取消」。
@@ -1015,11 +1035,10 @@ final class AppState: ObservableObject {
         pendingExecution = nil
     }
 
-    /// 运行范围无法满足时的可读提示（不静默改成跑整篇）。
-    private func message(forRunScopeIssue issue: ExecutionScope.Resolution.Issue) -> String {
+    /// 判定不出可执行内容时的可读提示（**不静默改成跑整篇** —— 那等于把一次小操作放大）。
+    private func message(forRunScopeIssue issue: ExecutionScope.Issue) -> String {
         switch issue {
         case .emptySelection: return L(.runScopeEmptySelection)
-        case .noStatementAtCursor: return L(.runScopeNoStatement)
         case .emptyText: return L(.runScopeEmptyText)
         }
     }
@@ -5450,10 +5469,14 @@ final class AppState: ObservableObject {
 
     /// - Parameter sqlOverride: 参数绑定后的语句（FR-EXEC-17）。传了就执行它，
     ///   **不改写编辑器** —— 占位符是可复用的模板，不该被一次取值覆盖掉。
+    /// - Parameter runningSource: 本次真的要跑的那一段的来源。只在高危确认回来时传
+    ///   （`sqlOverride` + 批准过的那一份），让 Output 的范围交代说的是**实际跑的这一份**，
+    ///   而不是此刻从编辑器重新解析出来的另一份。
     func executeQuery(
         for tabID: UUID,
         bypassingSafetyCheck: Bool = false,
-        sqlOverride: String? = nil
+        sqlOverride: String? = nil,
+        runningSource: ExecutionScope.Source? = nil
     ) async {
         guard let tabIndex = tabs.firstIndex(where: { $0.id == tabID }) else { return }
         guard !tabs[tabIndex].isExecuting else { return }
@@ -5466,14 +5489,25 @@ final class AppState: ObservableObject {
             return
         }
 
-        // 运行范围控制（FR-EXEC-14）：先按当前模式抠出**真正要跑的那一段**，
+        // 执行目标判定（FR-EXEC-14，2026-09-27 需求提出者拍板的口径）：
+        // **有选区就跑选中的那段，没选区就跑整篇** —— 没有"运行范围"开关要用户先设一次。
         // 后续的连接、Safe Mode 判定、执行全都基于这一段。
+        //
+        // 选区取**显示中的编辑器**（`selectionForExecution`），不是那份缓存记录：
+        // 2026-09-27 人工点验现场 —— 需求提出者选中 `DELETE` 执行，到服务器的却是脚本里
+        // 第 1 条 `SELECT`（数据库侧 `n_tup_del = 0` 可证那条 DELETE 从未到达服务器），
+        // 缓存记录被重建 / 外部文本同步冲掉过。**用户眼里高亮的那一段才算数。**
         let resolution = ExecutionScope.resolve(
             text: tabs[tabIndex].sql,
-            mode: executionScope,
-            selection: EditorCommandCenter.shared.selection(for: tabID),
-            databaseType: configuration.dbType
+            selection: EditorCommandCenter.shared.selectionForExecution(tabID: tabID)
         )
+        if let mismatch = EditorCommandCenter.shared.lastSelectionMismatch {
+            // 判据看不见的时序，只能在现场留痕：缓存说 a+b，实际是 c+d。
+            StartupLog.write(
+                "选区缓存与编辑器实际不一致：缓存 \(mismatch.recorded.location)+\(mismatch.recorded.length)"
+                + " / 实际 \(mismatch.live.location)+\(mismatch.live.length) —— 已按实际执行"
+            )
+        }
         if let issue = resolution.issue {
             updateTab(tabID) {
                 $0.errorMessage = message(forRunScopeIssue: issue)
@@ -5508,7 +5542,7 @@ final class AppState: ObservableObject {
                 policy: executionSafetyPolicy
             )
             if case .needsConfirmation = decision {
-                pendingExecution = PendingExecution(tabID: tabID, sql: sql, decision: decision)
+                pendingExecution = PendingExecution(tabID: tabID, sql: sql, decision: decision, source: resolution.source)
                 return
             }
             // 只读连接的拒绝**不走确认流程**：它不是"要不要冒险"，而是"这个连接不写"。
@@ -5538,6 +5572,24 @@ final class AppState: ObservableObject {
             $0.selectedResultIndex = 0
             $0.connectionID = configuration.id
             $0.database = targetDatabase
+        }
+
+        // **这一跑跑的是哪一段**必须写在明面上（2026-09-27 人工点验现场：需求提出者选中
+        // `delete` 执行，实际跑的是脚本第 1 条 `select`，而界面上没有一句话交代范围 ⇒
+        // 一次"静默跑错段落"没有任何痕迹）。三件事一起说清：范围、本次几条、脚本共几条。
+        let scopeSplitter = StatementSplitter(databaseType: configuration.dbType)
+        let scopeSummary = ExecutionScopeSummary(
+            scopeName: (runningSource ?? resolution.source).title,
+            runningStatements: scopeSplitter.split(sql).count,
+            scriptStatements: scopeSplitter.split(tabs[tabIndex].sql).count
+        )
+        updateTab(tabID) {
+            $0.statusMessage = L(.stateRunScope, scopeSummary.scopeName, scopeSummary.runningStatements)
+        }
+        if scopeSummary.skipsStatements {
+            updateTab(tabID) {
+                $0.statusMessage = L(.stateRunScopeSkipped, scopeSummary.scriptStatements)
+            }
         }
 
         let executionStart = Date()

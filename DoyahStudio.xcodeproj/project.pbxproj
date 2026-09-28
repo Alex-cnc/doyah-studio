@@ -254,6 +254,7 @@
 		90358A0919DD89A0A058DF36 /* SpecVersioningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EF6B16426409AF805BC9502 /* SpecVersioningTests.swift */; };
 		90552540FE15C3ECE1B8E828 /* NoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80A13B3F1B9B1D0B4BE7148 /* NoteTests.swift */; };
 		90BFF72E37D6D88B4E5A1DB6 /* TableDesignTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F104576928D1847B4D601E /* TableDesignTests.swift */; };
+		9105381804A85D2F9F2EE80E /* ExecutionScopeTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 859A23CF786D5A0C29A786AC /* ExecutionScopeTitle.swift */; };
 		926072FC6969B7EF58DF5E20 /* MCPApprovalQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = F595D662F0385DE07F8F6E70 /* MCPApprovalQueue.swift */; };
 		926331062DC98F6EF40FA381 /* EgressLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A836D6218D74876DC7863566 /* EgressLog.swift */; };
 		9365826B114A92AF87A7E628 /* SessionMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954706C0B4CCE24F0FF0EDCB /* SessionMonitorTests.swift */; };
@@ -745,6 +746,7 @@
 		84964F124D2EDE5A6775778E /* ERDiagram.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ERDiagram.swift; sourceTree = "<group>"; };
 		84F4D6D293EAA0FB6801986E /* StatementSplitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementSplitterTests.swift; sourceTree = "<group>"; };
 		853F2D56128CDAA5B95B5C2F /* SSHTunnelProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHTunnelProcess.swift; sourceTree = "<group>"; };
+		859A23CF786D5A0C29A786AC /* ExecutionScopeTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionScopeTitle.swift; sourceTree = "<group>"; };
 		86147C51C5A0090DF3A2B5AF /* ResultExportEncoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultExportEncoding.swift; sourceTree = "<group>"; };
 		86D957C3BF5E7A3ABAFF0FC6 /* MySQLService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySQLService.swift; sourceTree = "<group>"; };
 		876DF6256A868580CCA4BB0C /* ConnectionGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionGrouping.swift; sourceTree = "<group>"; };
@@ -1512,6 +1514,7 @@
 				DDFAC628E0B2AB245467C31B /* DoyahStudioApp.swift */,
 				EA373311C02C45DDB2F0D642 /* DoyahStudioCommands.swift */,
 				C6F6CBBEFA06F439E248CF32 /* EditorCommandCenter.swift */,
+				859A23CF786D5A0C29A786AC /* ExecutionScopeTitle.swift */,
 				E495362E0E72132E10C3DC93 /* FontManager.swift */,
 				4639027BACDCBC5209A2C6E6 /* LocalizationManager.swift */,
 				92A0A0D3BD53F37E0F1B88DA /* LocalPort.swift */,
@@ -1799,6 +1802,7 @@
 				7782307043A2E036D892038F /* EgressLogSheet.swift in Sources */,
 				AFF9533396F881ECE2308808 /* ErrorPresenter.swift in Sources */,
 				CE4E8D74E1E9B2E2A33A0067 /* ExecutionPlanPanel.swift in Sources */,
+				9105381804A85D2F9F2EE80E /* ExecutionScopeTitle.swift in Sources */,
 				C85FB15653ECA2622AD36E0F /* FontManager.swift in Sources */,
 				4B936931DA8B3A84021201B1 /* ForeignKeyJumpSheet.swift in Sources */,
 				709039ADC0BF7A709387F96B /* HoverHint.swift in Sources */,

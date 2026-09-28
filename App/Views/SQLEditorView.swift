@@ -51,7 +51,19 @@ struct SQLEditorView: NSViewRepresentable {
         //
         // 选区本身一直在 `EditorCommandCenter` 里（编辑器每次移动光标都会上报），所以这里读出来、稍后放回去。
         // ⚠️ 必须在挂 `delegate` 之前读：新视图一旦挂上 delegate，会立刻上报一次 `(0,0)`，把记录冲掉。
-        let reportedSelection = commandCenter.selection(for: tabID)
+        //
+        // ⚠️⚠️ 读出来之后**先验证它还没过期**（位置 / 长度 / **内容**都对得上）：2026-09-27 现场，
+        // 这里恢复的是 `21+22`，而那个偏移在文本改动之后已经不指向用户选的那段 —— 放回去等于
+        // 把高亮搬到别的语句上，而「选中片段」跑的正是高亮那段 ⇒ 用户点 delete，跑的是别的。
+        let reportedSelection = commandCenter.restorableSelection(tabID: tabID, in: text)
+        if reportedSelection == nil,
+           let recorded = commandCenter.selection(for: tabID),
+           recorded.length > 0 {
+            StartupLog.write(
+                "编辑器重建：选区记录已过期（\(recorded.location)+\(recorded.length)，"
+                + "当时是「\(commandCenter.recordedText(tabID: tabID) ?? "")」）⇒ 不恢复（页签 \(tabID.uuidString.prefix(8))）"
+            )
+        }
 
         let textView = SQLTextView(frame: .zero)
         textView.isRichText = true
@@ -86,6 +98,9 @@ struct SQLEditorView: NSViewRepresentable {
         textView.delegate = context.coordinator
 
         context.coordinator.textView = textView
+        // 登记「显示中的编辑器」：**执行时选区的唯一可信来源**（缓存记录会被重建 /
+        // 外部文本同步冲掉，见 `EditorCommandCenter.selectionForExecution` 的现场说明）。
+        commandCenter.register(textView: textView, for: tabID)
         context.coordinator.applyHighlighting()
 
         let scrollView = NSScrollView()
@@ -120,6 +135,8 @@ struct SQLEditorView: NSViewRepresentable {
         guard let textView = scrollView.documentView as? SQLTextView else { return }
 
         context.coordinator.parent = self
+        // 显示中的那个视图才算数（重建之后登记的必须是新的这个）。
+        commandCenter.register(textView: textView, for: tabID)
 
         // 只有「外部改动」（载入文件 / 切换页签 / 工具栏命令）才覆写编辑器内容。
         // 中文输入法组字期间绝不覆写：整段替换会重置 NSTextInputContext，
@@ -184,11 +201,18 @@ struct SQLEditorView: NSViewRepresentable {
         }
 
         /// 光标 / 选区变化时上报给命令通道（FR-EXEC-14「只跑光标所在语句」要用）。
+        /// 连**选中的那段文字**一起上报：重建后"放回选区"之前要拿它验证记录有没有过期
+        /// （只看位置和长度不够 —— 文本改动之后偏移就漂了）。
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView else { return }
+            let range = textView.selectedRange()
+            let selected = range.length > 0
+                ? (textView.string as NSString).substring(with: range)
+                : ""
             EditorCommandCenter.shared.reportSelection(
                 tabID: parent.tabID,
-                range: textView.selectedRange()
+                range: range,
+                text: selected
             )
         }
 

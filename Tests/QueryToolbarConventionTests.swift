@@ -166,7 +166,7 @@ final class QueryToolbarConventionTests: XCTestCase {
 
         // 棘轮：图标条上的名称提示不许被删（数字是 2026-09-27 的实测值）。
         let ratchet: [String: Int] = [
-            "App/Views/QueryToolbar.swift": 14,
+            "App/Views/QueryToolbar.swift": 13,
             "App/Views/TransactionControl.swift": 3,
             "App/Views/ActivityBarView.swift": 2,
             "App/Views/ResultClientViewBar.swift": 6,
@@ -180,6 +180,28 @@ final class QueryToolbarConventionTests: XCTestCase {
                 "\(relative) 的 .help( 只剩 \(count) 处（下限 \(minimum)）—— 图标按钮的名称提示被删了？"
             )
         }
+    }
+
+    /// ③ 「没有可执行内容」的文案要让人**能自救**（每一步都给出下一步）。
+    ///
+    /// 2026-09-27 人工点验实测：需求提出者报「第 1 条不过，无法执行 delete 语句」，
+    /// 现场是**选区记录过期**导致解析不出内容 —— 代码按设计拒绝了（FR-EXEC-14：**不静默放大**
+    /// 成跑整篇），但当时那句文案只说「先选中要执行的片段」，没给出任何下一步，人就卡住了。
+    /// 口径已改成「有选区跑选中、没选区跑整篇」（不再有那个「运行范围」开关），
+    /// 剩下的就是这两句「没有可执行内容」的话 —— 它们必须自己说清怎么走出去。
+    func testEmptyContentMessagesTellHowToRecover() throws {
+        let text = try source("Core/Localization.swift")
+        for key in [".runScopeEmptySelection:", ".runScopeEmptyText:"] {
+            guard let start = text.range(of: key) else {
+                return XCTFail("找不到 \(key) —— 判据的锚点变了，请更新这条判据而不是删掉它")
+            }
+            let line = String(text[start.lowerBound...].split(separator: "\n", maxSplits: 1).first ?? "")
+            XCTAssertTrue(line.contains("建议"), "\(key) 要给出下一步怎么做：只陈述现象会让人卡在这里（实测如此）")
+        }
+        // 选中全是空白这一条尤其要说清「取消选中就直接跑整篇」——那才是用户想做的事。
+        let selectionLine = String(text[text.range(of: ".runScopeEmptySelection:")!.lowerBound...]
+            .split(separator: "\n", maxSplits: 1).first ?? "")
+        XCTAssertTrue(selectionLine.contains("整篇"), "要指出另一条路（取消选中 → 跑整篇），否则用户不知道该干什么")
     }
 
     // MARK: ④ 末例：扫的真文件不是空的（路径写错时不许一路绿）

@@ -1463,13 +1463,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case safetyConfirmCancel
 
     // 运行范围控制（FR-EXEC-14）
-    case toolbarRunScope
-    case runScopeAll
-    case runScopeCurrentStatement
-    case runScopeSelection
-    case runScopeHint
+    /// 这次跑的是哪一段（FR-EXEC-14，2026-09-27 口径变更后只剩这两种来源）。
+    case execSourceSelection
+    case execSourceWholeScript
     case runScopeEmptySelection
-    case runScopeNoStatement
     case runScopeEmptyText
 
     // 执行状态
@@ -1491,6 +1488,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case stateAffectedRows
     case stateFinishedNoResult
     case stateFinishedMulti
+    /// 本次执行的**运行范围**（2026-09-27 人工点验现场：选中了 delete，实际到服务器的却是
+    /// 第 1 条 select，而界面上没有任何一句话交代"这一跑跑的是哪一段" ⇒ 范围进 Output）。
+    case stateRunScope
+    /// 脚本里还有没跑的语句（同上：跑到的那一条之外，其余必须**明说没跑**）。
+    case stateRunScopeSkipped
     case stateFinished
     case stateCancelled
     case stateCancelNotDelivered
@@ -2969,14 +2971,10 @@ public enum LocalizedStrings {
         .safetyConfirmMessage: [.simplifiedChinese: "以下是检测到的风险点：", .english: "Detected risks:"],
         .safetyConfirmRun: [.simplifiedChinese: "仍然执行", .english: "Run anyway"],
         .safetyConfirmCancel: [.simplifiedChinese: "取消", .english: "Cancel"],
-        .toolbarRunScope: [.simplifiedChinese: "运行范围", .english: "Run scope"],
-        .runScopeAll: [.simplifiedChinese: "整篇", .english: "Entire script"],
-        .runScopeCurrentStatement: [.simplifiedChinese: "光标所在语句", .english: "Statement at cursor"],
-        .runScopeSelection: [.simplifiedChinese: "选中片段", .english: "Selection only"],
-        .runScopeHint: [.simplifiedChinese: "选择执行时只跑哪一段；被 Safe Mode 拦下时也只检查这一段。", .english: "Which part to run; Safe mode only checks this part too."],
-        .runScopeEmptySelection: [.simplifiedChinese: "没有选中任何内容，请先选中要执行的片段。", .english: "Nothing is selected — select the fragment you want to run first."],
-        .runScopeNoStatement: [.simplifiedChinese: "光标不在任何语句上。", .english: "The cursor is not on any statement."],
-        .runScopeEmptyText: [.simplifiedChinese: "编辑器里还没有内容。", .english: "The editor is empty."],
+        .execSourceSelection: [.simplifiedChinese: "选中片段", .english: "Selection only"],
+        .execSourceWholeScript: [.simplifiedChinese: "整篇", .english: "Entire script"],
+        .runScopeEmptySelection: [.simplifiedChinese: "选中的内容是空白（只有空格/换行），没有可执行的东西。建议：选中要执行的那段 SQL，或取消选中、直接跑整篇。", .english: "Nothing ran: what you selected contains only whitespace. Try selecting the SQL you want to run, or clear the selection to run the whole script."],
+        .runScopeEmptyText: [.simplifiedChinese: "编辑器里还没有内容，所以这次没有执行。建议：先写一条 SQL 再运行。", .english: "Nothing ran: the editor is empty. Try: type a statement first."],
 
         .stateNotConnected: [.simplifiedChinese: "未连接", .english: "Not connected"],
         .stateNotExecuted: [.simplifiedChinese: "未执行", .english: "Not run"],
@@ -2996,6 +2994,8 @@ public enum LocalizedStrings {
         .stateAffectedRows: [.simplifiedChinese: "影响 %d 行", .english: "%d rows affected"],
         .stateFinishedNoResult: [.simplifiedChinese: "执行完成，无结果集，耗时 %@ 秒", .english: "Finished with no result set in %@ s"],
         .stateFinishedMulti: [.simplifiedChinese: "执行完成：%d 条语句 / %d 个结果集，耗时 %@ 秒", .english: "Finished: %d statement(s), %d result(s) in %@ s"],
+        .stateRunScope: [.simplifiedChinese: "运行范围：%@ · 本次执行 %d 条语句", .english: "Run scope: %@ · running %d statement(s)"],
+        .stateRunScopeSkipped: [.simplifiedChinese: "脚本共 %d 条，其余没有执行", .english: "Script has %d statement(s); the rest was not run"],
         .stateFinished: [.simplifiedChinese: "执行完成：%d 条语句，耗时 %@ 秒", .english: "Finished: %d statement(s) in %@ s"],
         .stateCancelled: [.simplifiedChinese: "已取消", .english: "Cancelled"],
         .stateCancelNotDelivered: [.simplifiedChinese: "停止未能下发到服务端：%@（该查询可能仍在运行）", .english: "Stop was not delivered to the server: %@ (the query may still be running)"],
