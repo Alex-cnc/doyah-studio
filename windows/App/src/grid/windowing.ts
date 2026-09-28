@@ -41,3 +41,34 @@ export function windowForScroll(
     hasMore: start + len < total,
   }
 }
+
+export interface PoolSlot {
+  /** 行节点在文档里的**固定槽位**（0..len-1）——它就是 `v-for` 的 key：**永不变化**。 */
+  slot: number
+  /** 该槽位当前显示的**绝对行号**。 */
+  row: number
+}
+
+/**
+ * 行池槽位分配（纯函数，可单测）。
+ *
+ * 由头（2026-09-29 第 30 轮实测）：旧写法的 key 是**绝对行号**（`plan.start + index`）⇒ 窗口一动，
+ * key 集合整体平移，Vue 只能靠**移动**节点来复用 —— 实测每帧 623 个节点被建 / 删、612 次属性写入，
+ * 真机帧耗时 p50 79 ms（8.5 fps），而消融档把成本钉在「写 DOM + 重排版 / 重绘」上。
+ *
+ * 本函数把「槽位」与「行号」解耦：槽位固定、按**行号对池长取模**轮转分配 ⇒ 窗口平移一行时
+ * **只有一个槽位换内容**（其余槽位内容原样不动，节点不移动、不重建）。性质由单测钉住：
+ * ① 覆盖 [start, start+len-1] 每行恰好一次；② `start → start+1` 时恰好 1 个槽位变化。
+ */
+export function poolSlots(start: number, len: number): PoolSlot[] {
+  if (len <= 0) return []
+  // 起点为负时轮转会把某个槽位映射到「行号 -1」这种不存在的行（实测：`poolSlots(-1, 4)` 的末槽是 -1）
+  // ——窗口起点由 `windowForScroll` 保证非负，这里直接拒，别让它静默渲染半行 / 空行。
+  if (start < 0) throw new Error('poolSlots 的 start 不能为负（窗口起点由 windowForScroll 保证非负）')
+  const off = ((start % len) + len) % len
+  const out: PoolSlot[] = []
+  for (let k = 0; k < len; k += 1) {
+    out.push({ slot: k, row: start + (((k - off) % len) + len) % len })
+  }
+  return out
+}

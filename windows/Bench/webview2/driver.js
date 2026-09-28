@@ -26,6 +26,13 @@
  *   `cachedWindowCalls: 0`（产品一次都没命中补丁）。现在这条事实由 `probeInvokePatchability()`
  *   **当场探一遍并进读数**（`invokePatchability`），换成任何别的消融设计都留下这条证据。
  *
+ *
+ * **样式消融档（ablation，2026-09-28 第 30 轮加）**：`scrollAblated(rows, css, label)` = 注入一段 CSS
+ * （动态带上产品 scoped 样式用的 `data-v-*` 属性，保证**同特异性、后置生效**）→ 跑**同一套**滚动协议
+ * （直接调 `scroll()`，不另抄一份协议）→ 还原样式；结果里带 `ablation.proof`（该行 / 该格的**计算后取值**：
+ * `contain` / `visibility` / `text-overflow`）。规矩同源：**消融没生效不许当读数** —— 取证靠实测计算值，
+ * 不靠「我注入了所以它该生效」。另加 `mutationProbe()`：在同一套协议下装 MutationObserver，数每帧 DOM
+ * 变异（新增 / 删除 / 文本 / 属性）—— 用来判「每帧到底写下去多少东西」，与布局 / 样式重算的引擎计数互证。
  * 注意：**本文件不是产品代码**，只在基准台运行时被 CDP 注入；产品形态里不存在它。
  */
 (function install() {
@@ -378,6 +385,129 @@
     }
   }
 
+  // ───────────────────── 样式消融档（第 30 轮加：不改产品代码的候选消融） ─────────────────────
+
+  const ABLATION_STYLE_ID = 'doyah-ablation'
+
+  /** 产品样式是 scoped 的（选择器带 `data-v-*` 属性）⇒ 注入的同名类选择器**特异性更低、不会生效**。
+   *  这里从真实节点的属性里**取**那个哈希，拼出同特异性选择器，再靠「注入的 `<style>` 后置」胜出。
+   *  取不到就退回类选择器（并在读数里体现：`ablation.proof` 会显示它到底生没生效）。 */
+  function scoped(sel) {
+    const el = document.querySelector(sel)
+    if (!el) return sel
+    for (const a of Array.from(el.attributes)) if (a.name.startsWith('data-v-')) return sel + '[' + a.name + ']'
+    return sel
+  }
+
+  /** 注入 / 清除消融样式（`css` 为 null 即清除）。返回注入文本，便于进读数。 */
+  function setAblation(css) {
+    const old = document.getElementById(ABLATION_STYLE_ID)
+    if (old) old.remove()
+    if (!css) return null
+    const style = document.createElement('style')
+    style.id = ABLATION_STYLE_ID
+    style.textContent = css
+    document.head.appendChild(style)
+    return css
+  }
+
+  /** 消融是否**真的**生效 —— 取**计算后取值**（不是「我注入了所以它该生效」）。
+   *  第 29 轮的教训：那一档「替换 invoke」从未生效、却出了读数；这一条就是防它重演。 */
+  function ablationProof() {
+    const row = document.querySelector('.results__row')
+    const cell = document.querySelector('.results__cell')
+    const g = (el, prop) => (el ? getComputedStyle(el).getPropertyValue(prop) : null)
+    return {
+      styleTagInDom: !!document.getElementById(ABLATION_STYLE_ID),
+      rowContain: g(row, 'contain'),
+      rowVisibility: g(row, 'visibility'),
+      rowTransform: g(row, 'transform'),
+      cellTextOverflow: g(cell, 'text-overflow'),
+      cellContain: g(cell, 'contain'),
+      cellsInRow: row ? row.children.length : null,
+      domRows: domRows(),
+    }
+  }
+
+  /** **样式消融档**：注入 css → 跑**同一套**滚动协议（直接调 `scroll()`，不另抄一份协议）→ 还原样式。
+   *  结果里带 `ablation.proof`（该行 / 该格的**计算后取值**）—— 消融没生效不许当读数。
+   *  口径：与同轮基线档成对读；本档只做同轮内的一对，不做跨台比较。 */
+  async function scrollAblated(rows, css, label) {
+    setAblation(css)
+    await nextFrame()
+    await nextFrame()
+    const proof = ablationProof()
+    let out = null
+    try {
+      out = await scroll(rows)
+    } finally {
+      setAblation(null)
+    }
+    out.phase = 'scroll-ablate'
+    out.ablation = { label, css, proof }
+    return out
+  }
+
+  /** **变异探针档**：同一套协议（同样调 `scroll()`）+ MutationObserver，数**每帧到底写下去多少**
+   *  （新增 / 删除 / 文本 / 属性）。它是「布局 / 样式重算引擎计数」的交叉印证：若每帧 DOM 变异极少
+   *  而布局照旧 20+ ms，那成本就不在「写 DOM」上。**本档自带观测开销**（如实记进 notes）——
+   *  故它的帧耗时只与同轮基线档比大小，不当成「去掉观测的纯值」。 */
+  async function mutationProbe(rows) {
+    const host = document.querySelector('.results__viewport') || document.body
+    const counts = { childList: 0, characterData: 0, attributes: 0, addedNodes: 0, removedNodes: 0, attributeNames: {} }
+    const addedByTag = {}
+    const removedByTag = {}
+    const targetsByClass = {}
+    const bump = (m, k) => {
+      m[k] = (m[k] || 0) + 1
+    }
+    const nameOf = (n) => (n.nodeType === 3 ? '#text' : n.nodeName)
+    const classOf = (el) => (el && el.className ? String(el.className).replace(/\s+/g, '.').slice(0, 40) : '(no-class)')
+    const obs = new MutationObserver((records) => {
+      for (const r of records) {
+        if (r.type === 'childList') {
+          counts.childList += 1
+          counts.addedNodes += r.addedNodes.length
+          counts.removedNodes += r.removedNodes.length
+          bump(targetsByClass, classOf(r.target))
+          for (const n of Array.from(r.addedNodes)) bump(addedByTag, nameOf(n))
+          for (const n of Array.from(r.removedNodes)) bump(removedByTag, nameOf(n))
+        } else if (r.type === 'characterData') {
+          counts.characterData += 1
+        } else if (r.type === 'attributes') {
+          counts.attributes += 1
+          const n = r.attributeName || '?'
+          counts.attributeNames[n] = (counts.attributeNames[n] || 0) + 1
+          bump(targetsByClass, classOf(r.target))
+        }
+      }
+    })
+    obs.observe(host, { childList: true, subtree: true, characterData: true, attributes: true })
+    let out = null
+    try {
+      out = await scroll(rows)
+    } finally {
+      obs.disconnect()
+    }
+    const f = CFG.warmup + (out.stats.frames || 0)
+    out.phase = 'mutations'
+    out.mutations = {
+      ...counts,
+      framesCounted: f,
+      addedByTag,
+      removedByTag,
+      targetsByClass,
+      perFrame: {
+        childList: +(counts.childList / f).toFixed(2),
+        addedNodes: +(counts.addedNodes / f).toFixed(2),
+        removedNodes: +(counts.removedNodes / f).toFixed(2),
+        characterData: +(counts.characterData / f).toFixed(2),
+        attributes: +(counts.attributes / f).toFixed(2),
+      },
+    }
+    out.notes.push('本档带 MutationObserver 观测开销（计 ' + f + ' 帧：预热 ' + CFG.warmup + ' + 测量 ' + out.stats.frames + '）')
+    return out
+  }
   globalThis.__DOYAH_WV2_BENCH__ = {
     config: CFG,
     setup,
@@ -385,5 +515,9 @@
     scroll,
     scrollSlow,
     probeInvokePatchability,
+    scrollAblated,
+    mutationProbe,
+    scoped,
+    ablationProof,
   }
 })()

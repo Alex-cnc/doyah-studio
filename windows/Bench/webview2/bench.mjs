@@ -35,12 +35,16 @@ function parseArgs(argv) {
     exe: resolve(HERE, '../../target/release/doyah-studio.exe'),
     out: resolve(HERE, '../../target/webview2-bench.json'),
     port: 9444,
+    quick: false,
   }
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i]
     if (a === '--exe') out.exe = resolve(argv[++i])
     else if (a === '--out') out.out = resolve(argv[++i])
     else if (a === '--port') out.port = Number(argv[++i])
+    // `--quick`：只跑「空转 + 基线滚动 + 基线复跑」——供**两个产物在同一轮里交替 A/B**（跨轮漂移 >50%，
+    // 见 README 限制 1 ⇒ 只有交替跑出来的成对数才可比）。
+    else if (a === '--quick') out.quick = true
     else throw new Error('未知参数：' + a)
   }
   return out
@@ -337,21 +341,45 @@ async function main() {
     return { label, measured: value, engine }
   }
 
+  if (ARGS.quick) log('   （--quick：只跑空转 + 基线滚动 + 基线复跑，供两个产物交替 A/B）')
+
   log('== ② 空转帧节奏（不滚动；对照档）')
   const phases = []
   phases.push(await phase('idle@400000', 'globalThis.__DOYAH_WV2_BENCH__.idle()'))
 
   log('== ③ 滚动 ' + setup.config.frames + ' 帧 × 三档行数（步长 ' + setup.config.stepPx + 'px，预热 ' + setup.config.warmup + ' 帧）')
   for (const rows of setup.config.scrollRows) {
+    if (ARGS.quick && rows !== setup.config.rows) continue
     phases.push(await phase('scroll@' + rows, 'globalThis.__DOYAH_WV2_BENCH__.scroll(' + rows + ')'))
   }
 
-  log('== ④ 消融档：慢速滚动（步长 1px/帧 ⇒ 窗口每 ~26 帧才换一次；IPC / 响应式 / diff 全在，DOM 写入基本没有）')
-  phases.push(
-    await phase('scroll@' + setup.config.rows + '+slow-scroll', 'globalThis.__DOYAH_WV2_BENCH__.scrollSlow(' + setup.config.rows + ')'),
-  )
+  /** 样式消融档：注入同特异性 CSS（页面里现取 `data-v-*` 拼选择器）→ 跑**同一套**协议（`scroll()` 本体） */
+  const ablate = (name, sel, decl) =>
+    phase(
+      'scroll@' + setup.config.rows + '+ablate:' + name,
+      'globalThis.__DOYAH_WV2_BENCH__.scrollAblated(' + setup.config.rows + ', ' +
+        "globalThis.__DOYAH_WV2_BENCH__.scoped('" + sel + "') + ' { " + decl + " }', '" + name + "')",
+    )
 
-  log('== ⑤ 基线复跑（同轮内对照 —— 单次读数的轮间波动可观，跨轮两个数相减不可信）')
+  if (!ARGS.quick) {
+    log('== ④ 样式消融档（不改产品代码：只注入 CSS；读数带 ablation.proof 的计算后取值当实证）')
+    phases.push(await ablate('contain-row', '.results__row', 'contain: layout paint'))
+    phases.push(await ablate('clip-cell', '.results__cell', 'text-overflow: clip'))
+    phases.push(await ablate('hidden-rows', '.results__row', 'visibility: hidden'))
+    phases.push(await ablate('contain-cell', '.results__cell', 'contain: layout paint'))
+  }
+
+  log('== ' + (ARGS.quick ? '④' : '⑤') + ' 变异探针档（同一套协议 + MutationObserver：数每帧到底写下去多少）')
+  phases.push(await phase('mutations@' + setup.config.rows, 'globalThis.__DOYAH_WV2_BENCH__.mutationProbe(' + setup.config.rows + ')'))
+
+  if (!ARGS.quick) {
+    log('== ⑥ 消融档：慢速滚动（步长 1px/帧 ⇒ 窗口每 ~26 帧才换一次；IPC / 响应式 / diff 全在，DOM 写入基本没有）')
+    phases.push(
+      await phase('scroll@' + setup.config.rows + '+slow-scroll', 'globalThis.__DOYAH_WV2_BENCH__.scrollSlow(' + setup.config.rows + ')'),
+    )
+  }
+
+  log('== ' + (ARGS.quick ? '④' : '⑦') + ' 基线复跑（同轮内对照 —— 单次读数的轮间波动可观，跨轮两个数相减不可信）')
   phases.push(await phase('scroll@' + setup.config.rows + '+repeat', 'globalThis.__DOYAH_WV2_BENCH__.scroll(' + setup.config.rows + ')'))
 
   // 页面内能否消融 IPC 路径：宿主把 `__TAURI_INTERNALS__.invoke` 定义为不可写 + 不可配置
@@ -381,21 +409,44 @@ async function main() {
 
   const s400 = scroll400k.measured.stats
   const idle = idle400k.measured.stats
-  log(
-    'WEBVIEW2_GRID_BENCH rows=' + setup.config.rows + ' cols=' + setup.config.cols +
-      ' idle400k_p50_ms=' + idle.p50Ms + ' scroll400k_p50_ms=' + s400.p50Ms + ' scroll400k_p95_ms=' + s400.p95Ms +
-      ' scroll400k_avg_ms=' + s400.avgMs + ' fps=' + s400.fps + ' over16=' + s400.over16ms + '/' + s400.frames +
-      ' dom_rows=' + scroll400k.measured.domRows + ' first_load_ms=' + setup.firstLoadMs +
-      ' ipc64_p50_ms=' + setup.windowIpc.p50Ms + ' ipc64_p95_ms=' + setup.windowIpc.p95Ms +
-      ' sort_ms=' + setup.sortSecondRunMs + ' tree_peak_mb=' + mem.peakMb +
-      ' layout400k_ms=' + scroll400k.engine.layoutMs + ' recalc_style400k_ms=' + scroll400k.engine.recalcStyleMs +
-      ' smallest_scroll_' + smallest.measured.rows + '_p50_ms=' + smallest.measured.stats.p50Ms +
-      ' slow_scroll400k_p50_ms=' + slowScroll.measured.stats.p50Ms +
-      ' slow_scroll_window_shifts=' + slowScroll.measured.windowShifts +
-      ' baseline_repeat400k_p50_ms=' + repeatRun.measured.stats.p50Ms +
-      ' invoke_patchable=' + result.invokePatchability.definePropertyOk +
-      ' renderer=' + (setup.gpu && setup.gpu.renderer),
-  )
+  // 汇总行按**实际跑过的档**拼（`--quick` 少了消融 / 慢速档 —— 缺档不许静默打印成 0）
+  const parts = [
+    'WEBVIEW2_GRID_BENCH rows=' + setup.config.rows + ' cols=' + setup.config.cols,
+    'idle400k_p50_ms=' + idle.p50Ms,
+    'scroll400k_p50_ms=' + s400.p50Ms,
+    'scroll400k_p95_ms=' + s400.p95Ms,
+    'scroll400k_avg_ms=' + s400.avgMs,
+    'fps=' + s400.fps,
+    'over16=' + s400.over16ms + '/' + s400.frames,
+    'dom_rows=' + scroll400k.measured.domRows,
+    'first_load_ms=' + setup.firstLoadMs,
+    'ipc64_p50_ms=' + setup.windowIpc.p50Ms,
+    'ipc64_p95_ms=' + setup.windowIpc.p95Ms,
+    'sort_ms=' + setup.sortSecondRunMs,
+    'tree_peak_mb=' + mem.peakMb,
+    'layout400k_ms=' + scroll400k.engine.layoutMs,
+    'recalc_style400k_ms=' + scroll400k.engine.recalcStyleMs,
+    'smallest_scroll_' + smallest.measured.rows + '_p50_ms=' + smallest.measured.stats.p50Ms,
+  ]
+  for (const p of phases.filter((x) => x.label.includes('+ablate:'))) {
+    parts.push('ablate_' + p.label.replace(/^.*\+ablate:/, '') + '_p50_ms=' + p.measured.stats.p50Ms)
+    parts.push('ablate_' + p.label.replace(/^.*\+ablate:/, '') + '_layout_ms=' + p.engine.layoutMs)
+  }
+  const mut = phases.find((p) => p.label.startsWith('mutations@'))
+  if (mut) {
+    parts.push('mutations_per_frame_added=' + mut.measured.mutations.perFrame.addedNodes)
+    parts.push('mutations_per_frame_chardata=' + mut.measured.mutations.perFrame.characterData)
+    parts.push('mutations_per_frame_attrs=' + mut.measured.mutations.perFrame.attributes)
+    parts.push('mutations_attr_names=' + JSON.stringify(mut.measured.mutations.attributeNames))
+  }
+  if (slowScroll) {
+    parts.push('slow_scroll400k_p50_ms=' + slowScroll.measured.stats.p50Ms)
+    parts.push('slow_scroll_window_shifts=' + slowScroll.measured.windowShifts)
+  }
+  if (repeatRun) parts.push('baseline_repeat400k_p50_ms=' + repeatRun.measured.stats.p50Ms)
+  parts.push('invoke_patchable=' + result.invokePatchability.definePropertyOk)
+  parts.push('renderer=' + (setup.gpu && setup.gpu.renderer))
+  log(parts.join(' '))
 
   // 收尾：先请页面自己关，关不掉再由本仪器按 pid 收 —— 只杀**本仪器起的那个进程**
   try {
