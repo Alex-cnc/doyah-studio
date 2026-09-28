@@ -15,7 +15,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "F9E82AFFB44017733F50966F"
+               BlueprintIdentifier = "0B70BEAD2E732107E54B929E"
                BuildableName = "DoyahStudio.app"
                BlueprintName = "DoyahStudio"
                ReferencedContainer = "container:DoyahStudio.xcodeproj">
@@ -32,7 +32,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "F9E82AFFB44017733F50966F"
+            BlueprintIdentifier = "0B70BEAD2E732107E54B929E"
             BuildableName = "DoyahStudio.app"
             BlueprintName = "DoyahStudio"
             ReferencedContainer = "container:DoyahStudio.xcodeproj">
@@ -55,7 +55,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "F9E82AFFB44017733F50966F"
+            BlueprintIdentifier = "0B70BEAD2E732107E54B929E"
             BuildableName = "DoyahStudio.app"
             BlueprintName = "DoyahStudio"
             ReferencedContainer = "container:DoyahStudio.xcodeproj">
@@ -74,7 +74,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "F9E82AFFB44017733F50966F"
+            BlueprintIdentifier = "0B70BEAD2E732107E54B929E"
             BuildableName = "DoyahStudio.app"
             BlueprintName = "DoyahStudio"
             ReferencedContainer = "container:DoyahStudio.xcodeproj">

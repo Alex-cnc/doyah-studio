@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "purpose": "发布产物版本号的唯一登记处（队列 L-70）。一个值（`0.2.0` / 构建号 `2`）同时出现在三处——发布产物的 Info.plist 模板、XcodeGen 源 `project.yml`、生成物 `.xcodeproj/project.pbxproj`——本台账登记「谁是权威、另外两处必须等于它、生成物由哪个工具哪个版本产出」，判据 `Scripts/check-release-version.py` 做**逐字一致**与**生成物不许漂移**两个方向的机械对账（接进闭环第 18 项）。",
+  "readingRules": [
+    "authority = 权威出处：发布产物实际携带这个值（组装 .app 时写进 Info.plist）⇒ 另外两处必须等于它，不是反过来。",
+    "marketingVersion / buildVersion = 当前值（字符串，逐字比对，不做语义化归一）。",
+    "mirrors = 必须等于权威值的镜像处（逐处写清是「源」还是「生成物」）；判据逐处解析并比对，解析不到 = 判红，不是跳过。",
+    "buildConfigurations = 生成物里该目标的构建配置必须齐全的那一组（少一个 = 判红：少一档就等于某一档没人守）。",
+    "generator = 生成物的产出工具与版本 —— **登记为快照，不判红**：工具链版本漂移（用户升级 xcodegen）不该把无关轮次的闭合门禁判红；「生成物是否过期」由 C1/C2/C3 的**内容**对账判定。",
+    "anchors = 文档里的「现状声明」落点（精确正则 + 捕获组）：每一处捕获到的值必须 == 本台账的值；命中处数 < minSites 判红（数字被删光也算红）。",
+    "notInScope = 本判据**明确不判**的东西，逐条写理由 —— 不写就是偷偷放过。"
+  ],
+  "authority": {
+    "path": "Scripts/build-app.sh",
+    "kind": "Info.plist 模板（`<<'PLIST'` heredoc，组装 `dist/DoyahStudio.app` 时写入）",
+    "keys": {
+      "marketingVersion": "CFBundleShortVersionString",
+      "buildVersion": "CFBundleVersion"
+    },
+    "evidence": "第 57 轮发布收口时用 `/usr/libexec/PlistBuddy -c \"Print :CFBundleShortVersionString\" dist/DoyahStudio.app/Contents/Info.plist` 实测产物 = `0.2.0` / `2`"
+  },
+  "marketingVersion": "0.2.0",
+  "buildVersion": "2",
+  "mirrors": [
+    {
+      "path": "project.yml",
+      "target": "DoyahStudio",
+      "kind": "XcodeGen 源（人改这里 ⇒ 必须重生成）",
+      "keys": {
+        "marketingVersion": "MARKETING_VERSION",
+        "buildVersion": "CURRENT_PROJECT_VERSION"
+      },
+      "note": "第 68 轮（队列 L-70）补上：此前应用目标**一个版本键都没有**（只有两个框架目标带 XcodeGen 默认的 `1.0`）"
+    },
+    {
+      "path": "DoyahStudio.xcodeproj/project.pbxproj",
+      "target": "DoyahStudio",
+      "kind": "XcodeGen 生成物（**不许手改**）",
+      "keys": {
+        "marketingVersion": "MARKETING_VERSION",
+        "buildVersion": "CURRENT_PROJECT_VERSION"
+      },
+      "note": "由 `xcodegen generate` 产出；手改 = 下次生成被覆盖，且 yml 与工程两处漂移"
+    }
+  ],
+  "buildConfigurations": ["Debug", "Release"],
+  "generator": {
+    "tool": "xcodegen",
+    "version": "2.46.0",
+    "command": "xcodegen generate",
+    "postGen": "project.yml 的 postGenCommand → `Scripts/patch-xcodeproj.sh`（补本地包 PostgresNIO 的 product 关联，FR-BLD-02）",
+    "regeneratedBy": "开发循环第 68 轮（2026-09-28，队列 L-70）",
+    "binarySource": "官方 release 产物 `xcodegen.zip`（yonaskolb/XcodeGen）解出的 CLI，落在 `/opt/homebrew/bin/xcodegen`。**如实登记**：本机 `brew install xcodegen` 走不通 —— `formulae.brew.sh` 取 API 失败（`curl (28) Operation too slow`），故改成经 https 代理直接取 release 包；`xcodegen --version` = `2.46.0`。",
+    "stalenessBefore": "第 57/67 轮之前生成物是**旧的**：入库的 `project.pbxproj` 只有 869 行、bundle id 仍是改名前的 `com.vnull.PostgresClient*`、且**没有 DoyahPlatform / DoyahPlatformTests 两个目标**（2026-09-22 改名与平台拆分之后就没再生成过）；`Docs/项目评审-2026-09-23.md` 早已把「生成物与源可能不同步」记成风险，但**没有任何门禁说话** ⇒ 本判据的 C1/C2/C3 就是这个缺口的机械判据。重生成后 2615 行、五个目标与 `studio.doyah.*` 标识一致。"
+  },
+  "structure": {
+    "sourceDirsFrom": "`project.yml` 里每个 target 的 `sources[].path`",
+    "compare": "该目录下（含子目录）`*.swift` 的**文件名集合** ↔ 生成物里该 target 的 `PBXSourcesBuildPhase` 引用的文件名集合，**双向**",
+    "whyFileNames": "各目标源目录之间**没有同名** `.swift`（判据每次实跑都会重新验这一条，出现同名即判红并提示改用路径口径）⇒ 文件名口径在本仓库是精确的；用路径口径要解析 PBXGroup 的目录继承，收益只有「防跨目录同名」，代价是一整套路径解析。",
+    "scopeOut": "`project.yml` 里 `DoyahStudio` 目标的 `sources.excludes`（`DoyahStudio.entitlements` + 两张 AppIcon PNG）都是**非 `.swift`**，不影响本口径 —— 每次实跑显式打印。"
+  },
+  "anchors": [
+    {
+      "path": "Docs/发布方案.md",
+      "regex": "^\\| `CFBundleShortVersionString` \\| `([^`]+)` \\|",
+      "captures": ["marketingVersion"],
+      "minSites": 1,
+      "note": "§2「版本与元数据」表的第一行"
+    },
+    {
+      "path": "Docs/发布方案.md",
+      "regex": "^\\| `CFBundleVersion` \\| `([^`]+)` \\|",
+      "captures": ["buildVersion"],
+      "minSites": 1,
+      "note": "§2 表的第二行"
+    },
+    {
+      "path": "AGENT-SPEC.md",
+      "regex": "产物版本唯一来源 = `Scripts/build-app\\.sh` 的 Info\\.plist 模板\\*\\*（本版 `([^`]+)` / 构建号 `([^`]+)`",
+      "captures": ["marketingVersion", "buildVersion"],
+      "minSites": 2,
+      "note": "§6 资产表「发布说明与产物版本」行 + §5 发布段各一处"
+    }
+  ],
+  "notInScope": [
+    "两个框架目标（`DoyahCore` / `DoyahPlatform`）的 `MARKETING_VERSION`（XcodeGen 默认 `1.0`）：它们是**内部框架**，不是发布产物的身份 —— 框架版本跟着 app 走没有意义，改它只是多一处漂移面。判据每次实跑**显式打印**这三处「范围外」值。",
+    "`Package.swift`（SwiftPM 清单）与 `dist/*.app`：前者是**另一条构建路线**（`build-app.sh` 走 `swift build`，根本不读 `.xcodeproj`），后者是产物、不进版本控制。",
+    "标签名（`v0.2.0-alpha`）与发布说明里的版本叙述：那是**发布记录**，不是「同一个值的多处副本」；历史行本来就该留着旧值（与 `doc-numbers.json` 对变更记录行的口径一致）。",
+    "`DoyahStudio.xcodeproj/xcshareddata/xcschemes/*.xcscheme`（生成物的一部分）：它们**由同一个 `xcodegen generate` 一起产出**，每次重生成里 `BlueprintIdentifier` 都会整体换号 —— 把它也纳入逐项对账，只会把**工具的每一次正常重生成都判成漂移**（判据会变成噪声、然后被人绕开）。判据只钉「应用目标 / 目标集合 / `Sources` 源文件集合 / bundle id / 版本键」这些**语义稳定**的对账点；scheme 只在 C1「目标集合」间接被覆盖。"
+  ]
+}

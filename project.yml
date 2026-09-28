@@ -10,6 +10,11 @@ options:
 
 settings:
   base:
+    # XcodeGen 2.46 **不写** PRODUCT_NAME（旧工程里有 `PRODUCT_NAME = "$(TARGET_NAME)"`，
+    # 而 Xcode 只会从工程里读到它 —— 缺了就解析成空串 ⇒ `xcodebuild` 报
+    # 「Multiple commands produce '.../Debug/.framework/Versions'」（名字是空的）。
+    # 2026-09-28 第 68 轮重生成工程时实测（队列 L-70）。
+    PRODUCT_NAME: "$(TARGET_NAME)"
     SWIFT_VERSION: "5.10"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     DEVELOPMENT_TEAM: ""
@@ -68,12 +73,25 @@ targets:
           # 原画与中间产物只用于重新生成图标，不打进 .app
           - "Resources/AppIcon-source.png"
           - "Resources/AppIcon-1024.png"
+          # hicolor 图标集是**给 Linux 的**（App/Resources/icons/README.md 第 1 行就写着
+          # 「仅 Linux」）：8 档尺寸同名 `doyahstudio.png`，进 macOS 包就是 8 条
+          # 「copy 到 Resources/doyahstudio.png」⇒ `xcodebuild` 报「Multiple commands produce」。
+          # macOS 用 AppIcon.icns，不需要它。
+          - "Resources/icons"
     dependencies:
       - target: DoyahCore
       - target: DoyahPlatform
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: studio.doyah.DoyahStudio
+        # 发布产物的版本号（队列 L-70，2026-09-28 第 68 轮）：
+        # **不要单独改这里** —— 这两个键必须与 `Scripts/build-app.sh` 的 Info.plist 模板
+        # （发布产物的唯一来源）以及生成物 `DoyahStudio.xcodeproj/project.pbxproj` 里的同名键
+        # 逐字一致；三处一致由 `Scripts/check-release-version.py` 机械判定（闭环第 18 项），
+        # 台账 = `Scripts/release-version.json`。改了这里就必须重跑
+        # `xcodegen generate`（postGenCommand 会带上 patch-xcodeproj.sh），否则 yml 与工程两处漂移。
+        MARKETING_VERSION: "0.2.0"
+        CURRENT_PROJECT_VERSION: "2"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Doyah Studio
         INFOPLIST_KEY_CFBundleIconFile: AppIcon

@@ -515,6 +515,34 @@
       "why": "队列 L-13（界面快照的中英成对 + 语言必须到像素上）",
       "noAnchorReason": "例数只在 runner 的收尾行里；它随 `Scripts/make-ui-snapshots.sh` 的收尾跑（快照按 L-01 纪律不进每轮闭环），文档里（`Docs/概要设计.md` §8.3 与 `doc-numbers.json` 的豁免条目）不写负例例数。",
       "note": "第 65 轮起由本判据**也**跑一遍：`check-*.py` 有 doc-numbers 的「有判据、没闭环」对账管着，而 `test-*.py` 此前**没有任何门禁管** ⇒ 8 个没人跑（其中一个已经坏了）。"
+    },
+    {
+      "key": "release-version",
+      "script": "Scripts/check-release-version.py",
+      "args": ["--self-test"],
+      "cases": 10,
+      "countRegex": "自测通过（(\\d+) 例）",
+      "why": "队列 L-70 / 闭环第 18 项（生成物一致性 · 族 ②：发布产物版本号三处一致 + Xcode 工程不许与 project.yml 漂移）",
+      "anchors": [
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "`--self-test`（(\\d+) 例：三处各改一处",
+          "minSites": 1,
+          "note": "闭环第 18 项注释（族 ② 的例数）"
+        },
+        {
+          "file": "Scripts/check-release-version.py",
+          "regex": "# 判据自己的证据（(\\d+) 例）",
+          "minSites": 1,
+          "note": "脚本自己的用法行"
+        },
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "check-release-version\\.py.{0,1200}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "§6 资产表「发布产物版本号三处一致」行"
+        }
+      ]
     }
   ]
 }

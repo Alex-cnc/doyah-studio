@@ -26,7 +26,7 @@ set -euo pipefail
 #      + **§6 待拍板队列的编号与状态纪律**（L-56：编号唯一 / 状态只写词表词 / 与 §4 同源 ——
 #        这一节是探针「需用户介入」行的来源，`Q19` 曾因此每轮被报成待拍板项；
 #        见 `Scripts/check-doc-q-series.py`）
-#      + **门禁自己的证据：例数的唯一来源**（L-72 ㈠：27 族的负例 / 自检例数收进台账
+#      + **门禁自己的证据：例数的唯一来源**（L-72 ㈠：28 族的负例 / 自检例数收进台账
 #        `Scripts/self-test-counts.json`，判据 `Scripts/check-self-test-counts.py` 把每一族 runner
 #        **真跑一遍**（要求 exit 0）、再与台账和文档里的现状声明逐处对账 —— 此前 `test-*.py`
 #        14 个里 **8 个根本没人跑**，其中一个已经坏在第 3 例而无人知）
@@ -64,9 +64,19 @@ set -euo pipefail
 #      `[独占:macos]` / `[独占:windows]` 标记的节各归其主，见 `check-exclusive-sections.py`）
 #  17. vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例自检 + 现编现跑自证
 #      （`check-vendored-sqlite.py`｜`--self-test`｜`smoke-vendored-sqlite.py`）
-#  18. 生成物一致性（L-43，2026-09-27 第 30 轮）：`gen-sqlite-constants.py --check`
-#      （`Core/NoteStorage/SQLiteConstants.swift` 与 vendored 头文件逐字节一致）
-#      + `--self-test`（5 条篡改都要报红并指名出处）
+#  18. 生成物一致性（两族）：**生成物不许手改、也不许过期**
+#      · 族 ①（L-43，2026-09-27 第 30 轮）：`gen-sqlite-constants.py --check`
+#        （`Core/NoteStorage/SQLiteConstants.swift` 与 vendored 头文件逐字节一致）
+#        + `--self-test`（5 条篡改都要报红并指名出处）
+#      · 族 ②（**L-70，2026-09-28 第 68 轮**）：`check-release-version.py`
+#        —— 发布产物版本号的**一个值、三处逐字一致**（`build-app.sh` 的 Info.plist 模板 = 权威／
+#        `project.yml` = 源／`.xcodeproj/project.pbxproj` = 生成物，台账 `Scripts/release-version.json`）
+#        + **生成物 ↔ 源不许漂移**（目标名 / 包标识 / 每个目标的 `*.swift` 文件名集合，双向）
+#        + `--self-test`（10 例：三处各改一处、台账改一处、生成物少目标 / 少源文件 / 被掏空、锚点写错
+#        都要报红；末例核对真仓库逐字节未变）。**为什么要有它**：`.xcodeproj` 在本仓**没有任何门禁**
+#        （`build-app.sh` 走 SwiftPM，根本不读它）⇒ 入库那份曾经 869 行、包标识还是改名前的
+#        `com.vnull.PostgresClient*`、且**少了两个目标**，从 2026-09-22 起就一直过期而无人知
+#        （`Docs/项目评审-2026-09-23.md` 把这条记成风险，但风险没有判据）。
 #
 # 第 18 项是 2026-09-27（队列 L-43）补的：生成器与 `--check` 早就写好，**脚本头部自己也写着
 # 「本 check 未接进 verify-all」** —— 有判据、没闭环，等于手改一行生成物、或头文件换版后忘了
@@ -450,6 +460,11 @@ echo "==> 18/18 生成物一致性（L-43）：生成物 ↔ vendored 头文件�
 # 台账侧绑定见 `Scripts/vendored-sqlite.json` 的 `generator` 节点（第 17 项对账）。
 python3 Scripts/gen-sqlite-constants.py --check
 python3 Scripts/gen-sqlite-constants.py --self-test
+# 族 ②：发布产物版本号的「一个值、三处逐字一致」+ Xcode 工程（生成物）不许与 project.yml 漂移
+# （L-70，第 68 轮）。它与上一族同属「生成文件没有症状」：`.xcodeproj` 在本仓**没有别的门禁**
+# （`build-app.sh` 走 `swift build`，不读工程文件）⇒ 过期了编译照过、单测照绿、发布照发。
+python3 Scripts/check-release-version.py
+python3 Scripts/check-release-version.py --self-test
 
 if [ "${REQUIRE_ALL}" = "1" ] && [ "${SKIPPED_COUNT}" -gt 0 ]; then
   echo "❌ 有 ${SKIPPED_COUNT} 项被跳过，而本次要求「跳过即红」（--require-all）："

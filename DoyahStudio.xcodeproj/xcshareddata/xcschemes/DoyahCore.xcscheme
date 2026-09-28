@@ -15,9 +15,23 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "814EEA159BE6A01C935B82E9"
+               BlueprintIdentifier = "7FCFBEA5281A662154C536BD"
                BuildableName = "DoyahCore.framework"
                BlueprintName = "DoyahCore"
+               ReferencedContainer = "container:DoyahStudio.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "12EAED48AF128B2B04C6AA73"
+               BuildableName = "DoyahPlatform.framework"
+               BlueprintName = "DoyahPlatform"
                ReferencedContainer = "container:DoyahStudio.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -29,7 +43,21 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A21FB6710A7F4557B2974425"
+               BlueprintIdentifier = "86237A0B8811F0030007B2FC"
+               BuildableName = "DoyahPlatformTests.xctest"
+               BlueprintName = "DoyahPlatformTests"
+               ReferencedContainer = "container:DoyahStudio.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E30D334226FD62D5DE733104"
                BuildableName = "DoyahStudioTests.xctest"
                BlueprintName = "DoyahStudioTests"
                ReferencedContainer = "container:DoyahStudio.xcodeproj">
@@ -46,7 +74,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "814EEA159BE6A01C935B82E9"
+            BlueprintIdentifier = "7FCFBEA5281A662154C536BD"
             BuildableName = "DoyahCore.framework"
             BlueprintName = "DoyahCore"
             ReferencedContainer = "container:DoyahStudio.xcodeproj">
@@ -58,9 +86,20 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A21FB6710A7F4557B2974425"
+               BlueprintIdentifier = "E30D334226FD62D5DE733104"
                BuildableName = "DoyahStudioTests.xctest"
                BlueprintName = "DoyahStudioTests"
+               ReferencedContainer = "container:DoyahStudio.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "86237A0B8811F0030007B2FC"
+               BuildableName = "DoyahPlatformTests.xctest"
+               BlueprintName = "DoyahPlatformTests"
                ReferencedContainer = "container:DoyahStudio.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -81,7 +120,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "814EEA159BE6A01C935B82E9"
+            BlueprintIdentifier = "7FCFBEA5281A662154C536BD"
             BuildableName = "DoyahCore.framework"
             BlueprintName = "DoyahCore"
             ReferencedContainer = "container:DoyahStudio.xcodeproj">
@@ -97,7 +136,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "814EEA159BE6A01C935B82E9"
+            BlueprintIdentifier = "7FCFBEA5281A662154C536BD"
             BuildableName = "DoyahCore.framework"
             BlueprintName = "DoyahCore"
             ReferencedContainer = "container:DoyahStudio.xcodeproj">
