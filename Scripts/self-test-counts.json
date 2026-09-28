@@ -132,7 +132,7 @@
       "key": "doc-versions",
       "script": "Scripts/check-doc-versions.py",
       "args": ["--self-test"],
-      "cases": 10,
+      "cases": 11,
       "countRegex": "负例 (\\d+)/\\d+ 达到预期",
       "why": "闭环第 4 项（变更记录版本号唯一 / 头部版本格 / 队列条目号唯一）",
       "noAnchorReason": "例数只在 runner 的收尾行输出里；脚本 docstring 与 §6 资产表都不写它（该行只写「取号唯一来源 = next-doc-version.py」）。"
