@@ -12,6 +12,7 @@
 # 退出码：0 = 全绿 / 1 = 有红（含 -RequireAll 下的跳过）/ 2 = 没有任何一项被判红但存在跳过
 #
 # 第 22 轮：11 项 → 12 项（新增第 11 项 = `P-*` 平台差异登记两侧对账，接契约侧 L-45 的 `Scripts/check-p-parity.py`）
+# 第 24 轮：12 项 → 13 项（① ② 两项按 2026-09-28 开工令换栈：cargo/前端；新增第 12 项 = 结果网格压力基准可复跑）
 
 param(
   [switch]$RequireAll,
@@ -25,7 +26,7 @@ $RepoRoot = Get-DoyahRepoRoot -ToolsDir $ToolsDir
 $ran = New-Object System.Collections.ArrayList
 $skipped = New-Object System.Collections.ArrayList
 $failed = New-Object System.Collections.ArrayList
-$total = 12
+$total = 13
 
 Write-Host "== Doyah Studio · Windows 侧闸门（§8.3.1 六项必需项 + §8.5.3 等价物）"
 Write-Host ("   仓库：{0}" -f $RepoRoot)
@@ -107,9 +108,9 @@ else {
 }
 
 # ── 3/12 ① 构建入口 ─────────────────────────────────────────────────────────
-Invoke-ChildGate "3/$total" "① 构建入口（dotnet publish + 便携 zip）" 'build.ps1'
+Invoke-ChildGate "3/$total" "① 构建入口（cargo build + 前端 vite build）" 'build.ps1'
 # ── 4/12 ② 单测 ────────────────────────────────────────────────────────────
-Invoke-ChildGate "4/$total" "② 单测（dotnet test / xUnit）" 'test.ps1'
+Invoke-ChildGate "4/$total" "② 单测（cargo test + vitest）" 'test.ps1'
 # ── 5/12 领域层边界 ─────────────────────────────────────────────────────────
 Invoke-ChildGate "5/$total" "领域层边界（GUI 不得进入领域层）" 'check-core-boundary.ps1'
 # ── 6/12 ③ 文档计数与版本 ───────────────────────────────────────────────────
@@ -124,8 +125,10 @@ Invoke-ChildGate "9/$total" "④ 独占节越界（本侧 = windows）" 'check-e
 Invoke-ChildGate "10/$total" "⑤ 平台等价矩阵 + Windows 列如实性" 'check-platform-parity.ps1' -SkipReason $pythonSkipReason
 # ── 11/12 ⑦ `P-*` 平台差异登记两侧对账（队列 L-45）──────────────────────────
 Invoke-ChildGate "11/$total" "⑦ `P-*` 平台差异登记两侧对账（SRS §10.9 ↔ 概要设计 §4 + §8.5.5 已落条）" 'check-p-parity.ps1'
-# ── 12/12 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
-Write-DoyahStep "12/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
+# ── 12/13 结果网格压力基准（§8.5.6-3 开工令的第一件事；数据侧可复跑）────────
+Invoke-ChildGate "12/$total" "结果网格压力基准（数据侧可复跑：grid-bench）" 'check-grid-bench.ps1'
+# ── 13/13 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
+Write-DoyahStep "13/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
 Write-DoyahPass "本脚本即闭环入口；跳过的项已逐条列出（等价物可以缺席，缺席必须可见）"
 [void]$ran.Add("⑥ 一条命令跑全")
 

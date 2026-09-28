@@ -58,3 +58,13 @@ App/Resources/AppIcon-1024.png
 issuer*.key
 *.doyahlicense
 Tools/LicenseTool/keys/
+
+# ── Windows 侧（小河马）：Rust / 前端 的构建产物与生成物 ──
+# 不进版本库的理由：一构建/一跑基准就产生 ⇒ 仓库长期 dirty（与「台账镜像必须被忽略」同源，见 windows/Tools/README.md）
+windows/target/
+target/
+node_modules/
+windows/Bench/**/dist/
+windows/Bench/grid/public/data/
+*.pyc
+__pycache__/

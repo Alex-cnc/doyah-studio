@@ -1,0 +1,11 @@
+[package]
+name = "doyah-studio-core"
+version = "0.1.0"
+edition = "2021"
+description = "Doyah Studio Windows 侧领域层（Rust，零第三方依赖、零 UI 依赖）"
+
+[dependencies]
+
+[[bin]]
+name = "grid-bench"
+path = "src/bin/grid_bench.rs"

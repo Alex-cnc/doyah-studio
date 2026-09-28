@@ -1,8 +1,8 @@
 ﻿# Doyah Studio · Windows 侧闸门 ② 单测（windows/Tools/test.ps1）
 #
-# 对应 §8.3.1 ②「单测」：另一平台要求 = `dotnet test`（xUnit），等价覆盖，
-# 且「GUI 框架不得进入领域层」（项目引用强制，见 check-core-boundary.ps1）。
-# 现阶段的诚实行为同 build.ps1：前置未就位 ⇒ 跳过 + 写明原因，不假装通过。
+# 对应 §8.3.1 ②「单测」：等价覆盖 + 「GUI / 平台依赖不得进入领域层」（见 check-core-boundary.ps1）。
+# 技术栈（2026-09-28 开工令换栈）：Rust 侧 cargo test（workspace）加前端 vitest run。
+# 前置未就位 ⇒ 跳过 + 写明原因，不假装通过。
 #
 # 退出码：0 = 全绿 / 1 = 判红（有失败用例）/ 2 = 跳过
 
@@ -15,45 +15,88 @@ $ToolsDir = $PSScriptRoot
 . (Join-Path $ToolsDir '_common.ps1')
 if (-not $RepoRoot) { $RepoRoot = Get-DoyahRepoRoot -ToolsDir $ToolsDir }
 
-Write-Host ("== ② 单测：dotnet test（{0}）" -f $RepoRoot)
+# 判红与否只由退出码决定（cargo / npm 的进度行走 stderr；PS 5.1 在 Stop 下会把它当终止错误 ⇒ 假红）
+$ErrorActionPreference = 'Continue'
 
-$dotnet = Get-DoyahDotnet
-if (-not $dotnet) {
-  Write-DoyahSkip -Text "单测：dotnet test（xUnit）" -Reason "本机找不到 dotnet（§8.5.1 栈 = C# / .NET 8）"
-  Write-DoyahResult -Status SKIP -Code 2
-  exit 2
+Write-Host ("== ② 单测：cargo test + vitest（{0}）" -f $RepoRoot)
+
+function Find-DoyahCargo {
+  $cands = @()
+  if ($env:CARGO_HOME) { $cands += (Join-Path $env:CARGO_HOME 'bin\cargo.exe') }
+  if ($env:USERPROFILE) { $cands += (Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe') }
+  $cands += 'C:\Users\Alex\.cargo\bin\cargo.exe'
+  foreach ($c in $cands) { if (Test-Path $c) { return $c } }
+  $cmd = Get-Command cargo -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+  return ''
 }
 
 $windowsDir = Join-Path $RepoRoot 'windows'
-$testProjects = @()
-$solutions = @()
-if (Test-Path $windowsDir) {
-  $testProjects = @(Get-ChildItem -Path $windowsDir -Filter '*.csproj' -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\Tests\\' })
-  $solutions = @(Get-ChildItem -Path $windowsDir -Include '*.sln', '*.slnx' -Recurse -File -ErrorAction SilentlyContinue)
-}
+$manifest = Join-Path $windowsDir 'Cargo.toml'
 
-if ($testProjects.Count -eq 0) {
-  Write-DoyahSkip -Text "单测：dotnet test（xUnit）" -Reason "Windows 测试工程未建（§8.5.1 工程结构 windows\Tests\；§8.5.7 ⬜ 未开工）"
+$cargo = Find-DoyahCargo
+if (-not $cargo) {
+  Write-DoyahSkip -Text "单测：cargo test" -Reason "本机找不到 cargo（§8.5.1 栈 = Rust；rustup 装在 %USERPROFILE%\.cargo\bin）"
+  Write-DoyahResult -Status SKIP -Code 2
+  exit 2
+}
+Write-Host ("    cargo：{0}" -f $cargo)
+
+if (-not (Test-Path $manifest)) {
+  Write-DoyahSkip -Text "单测：cargo test" -Reason "Windows 侧 Rust 工程未建（windows\Cargo.toml 不存在）"
   Write-DoyahResult -Status SKIP -Code 2
   exit 2
 }
 
-$hasSdk8 = @($dotnet.Sdks | Where-Object { $_ -match '^8\.' }).Count -gt 0
-if (-not $hasSdk8) {
-  Write-DoyahSkip -Text "单测：dotnet test（xUnit）" -Reason ("缺 .NET SDK 8；本机实测 SDK：{0}" -f (($dotnet.Sdks | ForEach-Object { ($_ -split ' ')[0] }) -join '、'))
-  Write-DoyahResult -Status SKIP -Code 2
-  exit 2
-}
-
-if ($solutions.Count -gt 0) { $target = $solutions[0].FullName } else { $target = $testProjects[0].FullName }
-Write-Host ("    $ dotnet test {0} -c {1}" -f $target, $Configuration)
-& $dotnet.Exe test $target -c $Configuration
-if ($LASTEXITCODE -ne 0) {
-  Write-DoyahFail ("dotnet test 失败（退出码 {0}）" -f $LASTEXITCODE)
+Push-Location $windowsDir
+$env:RUSTUP_AUTO_INSTALL = '0'
+$env:PYTHONDONTWRITEBYTECODE = '1'
+Write-Host ("    $ cargo test --workspace（workdir={0}）" -f $windowsDir)
+$out = & $cargo test --workspace 2>&1
+$rc = $LASTEXITCODE
+Pop-Location
+$out | Select-Object -Last 12 | ForEach-Object { Write-Host ("    {0}" -f $_) }
+if ($rc -ne 0) {
+  Write-DoyahFail ("cargo test 失败（退出码 {0}）" -f $rc)
   Write-DoyahResult -Status FAIL -Code 1
   exit 1
 }
 
-Write-DoyahPass ("dotnet test 全绿（{0} 个测试工程）" -f $testProjects.Count)
+$lines = @($out | Where-Object { $_ -match 'test result:' })
+$passed = 0
+$failedCount = 0
+foreach ($l in $lines) {
+  if ($l -match '(\d+) passed') { $passed += [int]$Matches[1] }
+  if ($l -match '(\d+) failed') { $failedCount += [int]$Matches[1] }
+}
+if ($passed -eq 0) {
+  Write-DoyahFail "cargo test 没有任何用例（空跑不许通过）"
+  Write-DoyahResult -Status FAIL -Code 1
+  exit 1
+}
+Write-DoyahPass ("Rust 单测：通过 {0} / 失败 {1}" -f $passed, $failedCount)
+
+# 前端半：依赖已装才跑（缺依赖可见、不判红）
+$gridDir = Join-Path $windowsDir 'Bench\grid'
+if ((Test-Path (Join-Path $gridDir 'package.json')) -and (Test-Path (Join-Path $gridDir 'node_modules'))) {
+  $npm = Get-Command npm -ErrorAction SilentlyContinue
+  if ($npm) {
+    Push-Location $gridDir
+    $out2 = & $npm.Source test 2>&1
+    $rc2 = $LASTEXITCODE
+    Pop-Location
+    $out2 | Select-Object -Last 6 | ForEach-Object { Write-Host ("    {0}" -f $_) }
+    if ($rc2 -ne 0) {
+      Write-DoyahFail ("vitest 失败（退出码 {0}）" -f $rc2)
+      Write-DoyahResult -Status FAIL -Code 1
+      exit 1
+    }
+    Write-DoyahPass "前端单测：vitest run 全绿"
+  }
+}
+else {
+  Write-Host "    前端：Bench\grid 依赖未装 ⇒ 前端单测未跑（先 npm install；Rust 半已通过）"
+}
+
 Write-DoyahResult -Status PASS -Code 0
 exit 0

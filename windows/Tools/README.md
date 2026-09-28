@@ -1,7 +1,7 @@
 # windows/Tools —— Windows 侧的闭环闸门（§8.3.1 / §8.5.3 的等价物）
 
-**状态**：⬜ 实现本体未开工，但**闸门已就位**（2026-09-27，Windows 侧第 21 轮）—— 口径是「先有闸门再有功能」。
-本目录只放闸门；实现代码（`Core/` `App/` `Cli/` `Platform/Windows/` `Tests/`）按 §8.5.1 另建。
+**状态**：🟡 实现本体**首片已落地**（`Core/`〔Rust〕+ `Bench/grid/`，2026-09-28 第 24 轮开工令换栈后）；**闸门 13 项已就位**（2026-09-27 第 21 轮起，第 24 轮由 12 项扩）—— 口径是「先有闸门再有功能」。
+本目录只放闸门；实现代码（`Cargo.toml` / `Core/`〔Rust〕/ `App/`〔Tauri 2 + Vue 3〕/ `Cli/` / `Platform/Windows/` / `Bench/`）按 §8.5.1 另建。
 
 ## 一条命令
 
@@ -37,20 +37,21 @@ pwsh -File windows\Tools\verify-all.ps1 -Base HEAD~1                            
 
 | §8.3.1 | 本目录文件 | 现状（2026-09-27 实测） |
 |---|---|---|
-| ① 构建入口 | `build.ps1` | ⏭ 跳过（本机 dotnet 6.0.402，缺 SDK 8；且 `windows\App` 未建） |
-| ② 单测 | `test.ps1` | ⏭ 跳过（`windows\Tests` 未建） |
+| ① 构建入口 | `build.ps1` | ✅ 跑（`cargo build --release` 工作区；前端 `vite build` 待 `windows\App` 落地） |
+| ② 单测 | `test.ps1` | ✅ 跑（`cargo test --workspace`；前端 `vitest` 同链路） |
 | ③ 文档计数 | `check-doc-tables.ps1` | ✅ 跑（共享判据 + `--require-all` 透传） |
 | ④ 独占节越界 | `check-exclusive-sections.ps1` | ✅ 跑（显式 `--mine windows`，默认基线 `origin/master`） |
 | ⑤ 平台矩阵 | `check-platform-parity.ps1` | ✅ 跑（共享判据 + **本侧如实性判据**：未开工时台账不许有 overrides） |
 | （契约侧 L-45，第 22 轮新增）| `check-p-parity.ps1` | ✅ 跑（共享判据 `Scripts/check-p-parity.py`：`P-*` 双向覆盖 / 同号同物 / **§8.5.5 已落条未并入即判红**；`-SelfTest` = 8/8） |
-| （契约侧 L-46，第 23 轮判定 **本侧不编排**）| —— | ⏭ **平台不适用**：`Scripts/check-format-arguments.py` 判的是 `Core/Localization.swift` 语言表模板 ↔ `App/` `CLI/` 调用点实参（**Swift 源码**）；本端没有对应表层（`windows\Core` / `windows\App` 未建，且本端将来是 C# 本地化层）⇒ 硬套会因「零输入」而假红（该判据自己就带「空跑不许通过」）。**本侧义务**：本端本地化表层落地时按同规则名重建等价判据 —— **这条记在这里，别当成已跳过**。 |
-| ⑥ 一条命令跑全 | `verify-all.ps1` | ✅ 跑（12 项，第 22 轮由 11 项扩） |
-| （§8.3 平台中立性）| `check-platform-neutrality.ps1` | ✅ 跑 |
+（本端本地化层在 Rust 侧、尚未落地）
+| ⑥ 一条命令跑全 | `verify-all.ps1` | ✅ 跑（**13 项**，第 22 轮由 11 项扩、第 24 轮 12 → 13 项） |
+| （§8.5.6-3 结果网格压力基准，2026-09-28 开工令）| `check-grid-bench.ps1` | ✅ 跑（4 万行缩规模实跑 `grid-bench` + **空跑不许通过**；全量读数见概要设计 §8.5.7 与 `Bench/grid/README.md`） |
+| （§8.3 平台中立性）| `check-platform-neutrality.ps1`
 | （§8.3 设计令牌棘轮）| `check-design-tokens.ps1` | ⚠ 判据①规则名对齐 + ②令牌源在盘 = ✅；③Windows 侧棘轮 ⏭ 跳过（`windows\App` 未建） |
-| （领域层边界）| `check-core-boundary.ps1` | ⏭ 跳过（`windows\Core` 未建；判据已就绪） |
+| （领域层边界）| `check-core-boundary.ps1` | ⏭ 跳过 —— **判据现只认 C# 形态**（`.csproj` / `DllImport`），而本侧已换栈为 Rust ⇒ **等价判据待按 Rust 形态改写**（登记在 `windows/README.md` 的未接网清单）|
 
 本机实测（Windows 11 / Windows PowerShell 5.1.26100.9549 / `python` 探得 `py -3`）：
-`verify-all.ps1` = **12 项中跑 8 / 跳过 4 / 失败 0**（第 22 轮；新增的第 11 项 = `P-*` 两侧对账，跑过）；加 `-RequireAll` = **判红（跳过即红）**。
+`verify-all.ps1` = **13 项中跑 10 / 跳过 2 / 失败 1**（第 24 轮换栈后；**唯一判红 = 第 9 项独占节越界，原因是本地落后远端且尚未合并** ⇒ 合并后复跑见提交信息）；跳过 2 项 = 领域层边界 / 设计令牌棘轮（都因判据尚未按 Rust / 表示层形态改写）；加 `-RequireAll` = **判红（跳过即红）**。
 第 22 轮另存一对前后证据：**修复前第 ③ 项假红**（判据 `rc 0` 但 stderr 有 `SyntaxWarning`）→ `_common.ps1` 加「只认退出码」护栏后 **跑 8 / 跳过 4 / 失败 0**（见坑 6）。
 
 ## 注入自证（2026-09-27，逐例：注入 → 红 → 还原 → 逐字节一致 → 绿）
