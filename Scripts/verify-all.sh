@@ -22,6 +22,11 @@ set -euo pipefail
 #   4. 文档表格列数与派生计数一致
 #      + 变更记录版本号唯一 / 头部版本格可判 / 队列条目号唯一（L-32）
 #   5. 需求状态一致性（§10.1 索引表 ↔ 正文定义行）
+#      + **alpha 范围账**（L-69 条件 ③）：FR 🟡 **逐条**判定 —— 能机器验的给可复跑证据指针、
+#        不能机器验的标 `[alpha 不含]`（状态格仍 🟡）。台账 `Scripts/alpha-fr-dispositions.json`，
+#        判据 = 台账 ↔ SRS 双向对账 / 标记逐字对上 / 原因档在词表内 / 证据指针存在 / 空跑防护。
+#        为什么要有它：v0.1.0-alpha 那次 6 条环境项是**手加**的标记，此后 🟡 增删机器都不说话，
+#        发布说明「明确不做什么」那一节就会与文档事实脱节（见脚本头注释）。
 #   6. 设计令牌棘轮（App/ 里的裸颜色 / 裸字号 / 裸间距不得比基线更差）
 #   7. 平台等价矩阵（§10.10 ↔ `Docs/平台实现状态.json` 台账，列由台账决定）+ 台账校验自检
 #      + `P-*` 平台差异登记的两侧对账（§10.9 ↔ 概要设计 §4：双向覆盖 + 同号同物
@@ -220,8 +225,17 @@ python3 Scripts/check-doc-versions.py
 # 派生文件不得漂移：终端配色 JSON ↔ Core ↔ 人读文档三方一致（FR-EDIT-29 的跨平台交接物）
 python3 Scripts/check-terminal-palette.py
 
-echo "==> 5/18 需求状态一致性（索引表 ↔ 正文定义行）"
+echo "==> 5/18 需求状态一致性（索引表 ↔ 正文定义行）+ alpha 范围账（FR 🟡 逐条判定）"
 python3 Scripts/check-status-consistency.py
+# L-69 ③（2026-09-28 第 56 轮）：上面那条管的是「索引 ↔ 定义行**状态一致**」，管不了
+# 「这条 🟡 到底算不算 alpha 范围」。v0.1.0-alpha 给 6 条环境项手加了 `[alpha 不含]`，
+# 此后 🟡 增删、标记被删、标记被挪格，机器一句都不说 ⇒ 发布说明「明确不做什么」写不出来。
+# 现在把它变成台账 + 双向判据（台账 `Scripts/alpha-fr-dispositions.json`）：
+# A 台账 ↔ SRS 双向对账（漏一条 / 留陈旧条目都红）；B 台账声明的标记必须逐字出现在定义行里，
+# 反向也判（手写标记绕不过对账）；C 原因档必须在词表内；D 每条至少一个**存在的**证据指针；
+# E 空跑防护。负例 `--self-test` 11 例，一律在临时副本上写坏，末例核对真仓库逐字节未变。
+python3 Scripts/check-alpha-fr-dispositions.py
+python3 Scripts/check-alpha-fr-dispositions.py --self-test
 
 echo "==> 6/18 设计令牌棘轮"
 python3 Scripts/check-design-tokens.py
