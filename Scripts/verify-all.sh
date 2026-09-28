@@ -36,6 +36,7 @@ set -euo pipefail
 #      补上第三个脚本后，这句话才成立；注释里的假话先被改正，判据随后补上）
 #   8. 平台中立性棘轮（需求规范书里的平台专属词汇不得比基线更差）
 #   9. 命令面板接线（清单 ↔ 分派器 ↔ 视图绑定；见脚本注释里的真实缺陷）
+#      + 侧边栏折叠状态归属（L-59：状态住在 `AppState`、写入口唯一、默认全展开、未分组不给折叠）
 #  10. 插件装配链（笔记模块解耦 FR-PLUG-07 + 装配与许可 FR-PLUG-01/02/03/06 + ADR-35）
 #      + 笔记模块的**零网络出口**（FR-PLUG-05 ②：数据不外发，见 `check-notes-offline.py`）
 #      + **界面检索走库 + 路线如实标注**（L-44：唯一生产点 / 视图不许内存过滤 /
@@ -263,8 +264,17 @@ python3 Scripts/check-p-parity.py --self-test
 echo "==> 8/18 平台中立性棘轮"
 python3 Scripts/check-platform-neutrality.py
 
-echo "==> 9/18 命令面板接线（FR-EDIT-25）"
+echo "==> 9/18 命令面板接线（FR-EDIT-25）+ 侧边栏折叠状态归属（FR-CONN-15）"
 python3 Scripts/check-palette-wiring.py
+# L-59：**侧边栏的折叠状态住在 `AppState`，不住在视图里** —— 人工点验批次 1 第 3 条实测为挂
+# （「记不住折叠状态」）：`ConnectionListView` 的局部 `@State` 随活动栏分支重建归零，而当时
+# 所有门禁全绿。判据 = 视图不许有局部折叠状态 / 状态必须是 `@State`-free 的 `AppState` 属性
+# 且 `private(set)`、写入口唯一、默认全展开 / 视图绑定必须经 appState / 未分组那一段不许有折叠 /
+# 空跑防护；台账式常量在脚本里，负例 `Scripts/test-sidebar-collapse-state.py`（11 例）。
+# 行为那一半（重建前后像素逐字节相同）在 `TestsUISnapshot/UISnapshotSidebarStateTests.swift`，
+# 按 L-01 的纪律不进每轮门禁（要 `DOYAH_UI_SNAPSHOT=1`）。
+python3 Scripts/check-sidebar-collapse-state.py
+python3 Scripts/test-sidebar-collapse-state.py
 
 echo "==> 10/18 插件装配链（FR-PLUG-01~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py

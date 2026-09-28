@@ -198,6 +198,33 @@ enum TableImportStart {
 @MainActor
 final class AppState: ObservableObject {
     @Published var connections: [ConnectionConfig] = []
+
+    /// 侧边栏里**被折叠**的连接分组（FR-CONN-15）。
+    ///
+    /// **为什么这个状态归 `AppState`、不归视图**：侧栏内容由 `MainWindow.sidebarContent`
+    /// **按活动栏分支创建** —— 切到「工作区 / 笔记」再切回来，那个分支被整个重建，
+    /// 视图局部 `@State` 当场归零（人工点验批次 1 第 3 条实测：「折叠状态记不住」；队列 L-59）。
+    /// 折叠是**用户对分组做的决定**，不是这一次渲染的临时量，所以它得活在视图之外。
+    ///
+    /// 只存**被折叠的**那些组（默认全部展开）：一进来就把组都收起来，会让人以为连接没了。
+    /// 未分组那一段不参与（它是兜底容器，设计上不给折叠 —— 见 `ConnectionListView.sectionView`）。
+    @Published private(set) var collapsedConnectionGroups: Set<String> = []
+
+    /// 这一组现在是不是折叠的。
+    func isConnectionGroupCollapsed(_ group: String) -> Bool {
+        collapsedConnectionGroups.contains(group)
+    }
+
+    /// 折叠 / 展开一个分组。**写入口只有这一个**（集合本身是 `private(set)`）——
+    /// 视图、快捷键、命令面板要改都走它，免得几条路各写一份判断、口径再分叉。
+    func setConnectionGroup(_ group: String, collapsed: Bool) {
+        if collapsed {
+            collapsedConnectionGroups.insert(group)
+        } else {
+            collapsedConnectionGroups.remove(group)
+        }
+    }
+
     @Published var selectedConnectionID: ConnectionConfig.ID? {
         didSet {
             // 换连接 = 离开旧连接：旧连接上未提交的手工事务必须先结算（回滚并说明），
