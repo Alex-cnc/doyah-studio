@@ -2084,9 +2084,13 @@ struct DoyahCLI {
 
         let semaphore = DispatchSemaphore(value: 0)
         var exitCode: Int32 = 0
+        // 失败文案的语言：**命令行有意说简体中文**（与全仓 CLI 输出同一口径，见台账
+        // `Scripts/literal-language-dispositions.json` 里 `CLI/main.swift` 那条理由）。
+        // 队列 L-65 第 2 批起这句话不再由 Core 自己选 —— 每个调用方把它给下去。
+        let language = AppLanguage.simplifiedChinese
         Task {
             do {
-                try await tunnel.start()
+                try await tunnel.start(language: language)
                 if arguments.contains("--json") {
                     let payload: [String: Any] = [
                         "localPort": localPort,
@@ -2113,7 +2117,12 @@ struct DoyahCLI {
                 tunnel.stop()
                 semaphore.signal()
             } catch {
-                FileHandle.standardError.write(Data("隧道起不来：\(CLIFailureText.oneLine(error))\n".utf8))
+                // 隧道失败的人话在**有语言语境的地方**拼：`.portInUse` 只带端口号，
+                // 而 `LocalizedError` 协议入口（`localizedDescription`）不带语言 ⇒ 这一族走
+                // Core 的 `describe(language:)`；认不出的其余错误照旧走可读化链的唯一入口。
+                let reason = (error as? SSHTunnelError)?.describe(language: language)
+                    ?? CLIFailureText.oneLine(error)
+                FileHandle.standardError.write(Data("隧道起不来：\(reason)\n".utf8))
                 let diagnostics = tunnel.diagnosticText
                 if !diagnostics.isEmpty {
                     FileHandle.standardError.write(Data("ssh 输出：\n\(diagnostics)\n".utf8))

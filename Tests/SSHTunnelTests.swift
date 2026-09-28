@@ -125,7 +125,7 @@ final class SSHTunnelTests: XCTestCase {
             isPortOpen: { _, _ in true }        // 假装端口已被占用
         )
         do {
-            _ = try await tunnel.start(timeout: 1)
+            _ = try await tunnel.start(timeout: 1, language: .simplifiedChinese)
             XCTFail("端口被占用时不该报成功")
         } catch let error as SSHTunnelError {
             XCTAssertEqual(error, .portInUse(55_777))
@@ -135,23 +135,72 @@ final class SSHTunnelTests: XCTestCase {
         XCTAssertEqual(tunnel.currentState, .failed("本地端口 55777 已被占用"))
     }
 
-    /// 可执行文件不存在 → 立刻给出"起 ssh 失败"，不静默挂着。
-    func testLaunchFailureIsReported() async {
-        let config = SSHTunnelConfig(host: "jump", username: "alice", authentication: .agent)
-        let tunnel = SSHTunnelProcess(
-            config: config,
-            target: SSHTunnelTarget(host: "10.0.0.9", port: 5432),
-            localPort: 55_778,
-            knownHostsPath: NSTemporaryDirectory() + "doyah-test-known-hosts",
-            executable: "/nonexistent/ssh",
-            isPortOpen: { _, _ in false }
-        )
-        do {
-            _ = try await tunnel.start(timeout: 1)
-            XCTFail("不该成功")
-        } catch {
-            XCTAssertTrue(tunnel.diagnosticText.isEmpty || !tunnel.diagnosticText.isEmpty)
+    /// **失败文案的语言跟着调用方走**（队列 L-65 第 2 批）。
+    ///
+    /// `.portInUse` 这个 case 只带**端口号** ⇒ 这句话以前只能在 Core 里写死简体中文，
+    /// 于是 `.sshTunnelPortInUse` 的英文译文**永远不可达**（英文界面上蹦出中文）。
+    /// 现在人话由 `describe(language:)` 在**有语言语境的地方**拼：
+    /// 同一个错误、同一份代码，调用方给英文就拿英文。
+    func testPortInUseMessageFollowsCallerLanguage() async {
+        func state(language: AppLanguage) async -> SSHTunnelProcess.State {
+            let tunnel = SSHTunnelProcess(
+                config: SSHTunnelConfig(host: "jump", username: "alice", authentication: .agent),
+                target: SSHTunnelTarget(host: "10.0.0.9", port: 5432),
+                localPort: 55_779,
+                knownHostsPath: NSTemporaryDirectory() + "doyah-test-known-hosts",
+                executable: "/usr/bin/true",
+                isPortOpen: { _, _ in true }        // 假装端口已被占用
+            )
+            _ = try? await tunnel.start(timeout: 1, language: language)
+            return tunnel.currentState
         }
+
+        let chinese = await state(language: .simplifiedChinese)
+        let english = await state(language: .english)
+        XCTAssertEqual(chinese, .failed("本地端口 55779 已被占用"))
+        XCTAssertEqual(english, .failed("Local port 55779 is already in use"))
+        XCTAssertNotEqual(chinese, english, "两种语言必须真的不同 —— 相同就说明语言又没跟着调用方走")
+
+        // 渲染器本身（界面经 `ErrorPresenter`、命令行走隧道命令那条 catch，都调它）。
+        XCTAssertEqual(
+            SSHTunnelError.portInUse(9).describe(language: .english),
+            "Local port 9 is already in use"
+        )
+        XCTAssertEqual(
+            SSHTunnelError.portInUse(9).describe(language: .simplifiedChinese),
+            "本地端口 9 已被占用"
+        )
+        // 另外三种失败的原话带着底层报错/`ssh` 输出 ⇒ 原样给，不重拼。
+        XCTAssertEqual(SSHTunnelError.launchFailed("起 ssh 失败：x").describe(language: .english), "起 ssh 失败：x")
+
+        // `LocalizedError` 协议入口**不带语言语境** ⇒ 它给的是技术串，不冒充人话
+        // （写死任何一种语言就等于把「Core 自己选语言」塞回来；人话一律走 `describe(language:)`）。
+        XCTAssertEqual(
+            SSHTunnelError.portInUse(9).errorDescription,
+            "SSH tunnel: local port 9 is already in use"
+        )
+    }
+
+    /// 可执行文件不存在 → 立刻给出"起 ssh 失败"，不静默挂着；**文案语言跟着调用方走**。
+    func testLaunchFailureIsReported() async {
+        func state(language: AppLanguage) async -> String? {
+            let tunnel = SSHTunnelProcess(
+                config: SSHTunnelConfig(host: "jump", username: "alice", authentication: .agent),
+                target: SSHTunnelTarget(host: "10.0.0.9", port: 5432),
+                localPort: 55_778,
+                knownHostsPath: NSTemporaryDirectory() + "doyah-test-known-hosts",
+                executable: "/nonexistent/ssh",
+                isPortOpen: { _, _ in false }
+            )
+            _ = try? await tunnel.start(timeout: 1, language: language)
+            if case .failed(let reason) = tunnel.currentState { return reason }
+            return nil
+        }
+
+        let chinese = await state(language: .simplifiedChinese)
+        let english = await state(language: .english)
+        XCTAssertTrue(chinese?.hasPrefix("起 ssh 失败：") == true, "中文语境应给中文前缀：\(chinese ?? "nil")")
+        XCTAssertTrue(english?.hasPrefix("Could not start ssh: ") == true, "英文语境应给英文前缀：\(english ?? "nil")")
     }
 
 }

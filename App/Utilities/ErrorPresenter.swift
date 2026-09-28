@@ -22,6 +22,13 @@ enum ErrorPresenter {
             }
         }
 
+        // SSH 隧道（队列 L-65 第 2 批）：`.portInUse` 只带**端口号** ⇒ 那句话只能在**有语言语境**
+        // 的地方拼（`LocalizedError` 协议入口不带语言）；另三支的 payload 已是调用方语言渲染好的整句。
+        // 放在「通用 LocalizedError」那一档**之前**，否则会先被 `errorDescription` 的技术串接走。
+        if let tunnel = error as? SSHTunnelError {
+            return tunnel.describe(language: LocalizationManager.shared.effectiveLanguage)
+        }
+
         // Core 里那些 `LocalizedError`（目录授权、任务执行、模型通道…）自带**可读说明**与
         // 补救建议；不取它而走反射，界面上就会出现 `bookmarkCreationFailed(reason: "…")`
         // 这种给不了用户任何帮助的东西。AppError 已在上面单独处理，不受影响。

@@ -5881,10 +5881,10 @@ final class AppState: ObservableObject {
             isPortOpen: { host, port in LocalPort.isOpen(host: host, port: port) }
         )
         do {
-            _ = try await tunnel.start()
+            _ = try await tunnel.start(language: LocalizationManager.shared.effectiveLanguage)
         } catch {
             // 隧道起不来就**别继续连**：直接连数据库会给出误导性的网络错误。
-            errorMessage = L(.sshTunnelFailed, tunnelConfig.displayName, error.localizedDescription)
+            errorMessage = L(.sshTunnelFailed, tunnelConfig.displayName, ErrorPresenter.message(for: error))
             throw error
         }
         sshTunnels[configuration.id] = tunnel

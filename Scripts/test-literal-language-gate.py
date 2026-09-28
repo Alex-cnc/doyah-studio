@@ -165,6 +165,19 @@ def main() -> int:
         if rc == 0 or "一个键都没解析到" not in out:
             failures.append(f"例 7（语言表消失 = 空跑）应判红，实测 rc={rc}：\n{out}")
 
+        # 例 8（判据 C · L-65 第 2 批钉的 SSH 隧道族）：把 `describe(language:)` 的形参删掉
+        # ——「人话在 Core 里自己拼」那条路一旦回来，英文译文又会变成死键。
+        copy = fresh()
+        cases += 1
+        patch(
+            copy / "Core/SSHTunnelProcess.swift",
+            "public func describe(language: AppLanguage) -> String {",
+            "public func describe() -> String { let language = AppLanguage.simplifiedChinese",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "SSHTunnelProcess.swift" not in out or "C " not in out:
+            failures.append(f"例 8（隧道族丢了 language: 形参）应判红且含 C 判据并点名该文件，实测 rc={rc}：\n{out}")
+
     after = digest_tree()
     cases += 1
     if before != after:

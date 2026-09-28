@@ -578,7 +578,7 @@ struct ConnectionFormView: View {
                 isPortOpen: { host, port in LocalPort.isOpen(host: host, port: port) }
             )
             do {
-                _ = try await tunnel.start()
+                _ = try await tunnel.start(language: LocalizationManager.shared.effectiveLanguage)
                 // 隧道就绪 ≠ 目标可达：再连一次本机转发端口，把 `ssh → 跳板机 → 数据库` 整条走通。
                 let reachable = LocalPort.isOpen(host: "127.0.0.1", port: localPort)
                 tunnel.stop()
@@ -595,7 +595,7 @@ struct ConnectionFormView: View {
             } catch {
                 tunnel.stop()
                 sshTestIsError = true
-                sshTestMessage = L(.sshTestFailed, error.localizedDescription)
+                sshTestMessage = L(.sshTestFailed, ErrorPresenter.message(for: error))
             }
         }
     }
@@ -686,9 +686,9 @@ struct ConnectionFormView: View {
                     isPortOpen: { host, port in LocalPort.isOpen(host: host, port: port) }
                 )
                 do {
-                    _ = try await started.start()
+                    _ = try await started.start(language: LocalizationManager.shared.effectiveLanguage)
                 } catch {
-                    bannerMessage = L(.sshTestFailed, error.localizedDescription)
+                    bannerMessage = L(.sshTestFailed, ErrorPresenter.message(for: error))
                     bannerCopyText = nil
                     return
                 }

@@ -386,6 +386,13 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
             r"func\s+copySupport\([^)]*language:\s*AppLanguage",
             r"func\s+preferredWriteMode\([^)]*language:\s*AppLanguage",
         ],
+        # L-65 第 2 批（2026-09-28 第 49 轮）：SSH 隧道那族 —— 失败文案的出入口都钉在这里。
+        # `describe(language:)` 是**人话的唯一出处**（`.portInUse` 只带端口号，语言只能从外面给），
+        # `start(...)` 必须收 `language:`；删掉任何一个都会让语言又变成「Core 自己选」。
+        "Core/SSHTunnelProcess.swift": [
+            r"func\s+start\([^)]*language:\s*AppLanguage",
+            r"func\s+describe\(language:\s*AppLanguage",
+        ],
     }
     for rel, patterns in pinned_params.items():
         path = root / rel
