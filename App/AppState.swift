@@ -6168,8 +6168,14 @@ final class AppState: ObservableObject {
                     maintenanceMessage = L(.maintenanceExecutedOne, task.summary)
                 } catch {
                     if error is CancellationError { break }
-                    review = MaintenancePlanner.record(review, taskID: task.id, failureReason: error.localizedDescription)
-                    maintenanceMessage = L(.maintenanceFailedOne, task.id, error.localizedDescription)
+                    // 失败说明**两半**（队列 L-66 拍板口径 ①）：原串进机器载荷（JSON / 记录），
+                    // 人话进界面那一行 —— 从前两处共用一份值 ⇒ 原串直接打到用户眼前。
+                    let failure = MaintenanceTask.FailureNote(
+                        raw: error.localizedDescription,
+                        readable: ErrorPresenter.message(for: error)
+                    )
+                    review = MaintenancePlanner.record(review, taskID: task.id, failure: failure)
+                    maintenanceMessage = L(.maintenanceFailedOne, task.id, failure.readable)
                 }
                 maintenanceReview = review
             }

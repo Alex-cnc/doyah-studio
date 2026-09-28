@@ -64,6 +64,25 @@ public enum MaintenanceTaskKind: String, Codable, Hashable, CaseIterable, Sendab
 /// 一条维护任务。
 public struct MaintenanceTask: Identifiable, Equatable, Sendable {
 
+    /// 失败说明的**两半**（队列 L-66；需求提出者 2026-09-28 拍板选 ①）。
+    ///
+    /// **为什么两半收在同一个值里**：这个字段是**渠道字段** —— 一次写入、两处消费
+    /// （机器载荷取原串；界面 / 命令行 / 笔记正文取人话）。只有一份值时，
+    /// 想让人话上屏就必然把 JSON 也换成中文，「可搜、可上报、口径稳定」的原串就没了。
+    /// 收进一个值之后两处各取所需，而且**取哪一半是显式写出来的** ——
+    /// 显示点错取了 `.raw` 会被闭环第 15 项门禁当场看见（第 52 轮起有判据）。
+    public struct FailureNote: Equatable, Sendable {
+        /// 原串（驱动 / 系统给出的那句话）：**一字不变**，机器载荷里给的就是它。
+        public let raw: String
+        /// 人话（调用方按自己的语言渲染好的那一句）：界面 / 命令行 / 笔记正文用这一半。
+        public let readable: String
+
+        public init(raw: String, readable: String) {
+            self.raw = raw
+            self.readable = readable
+        }
+    }
+
     public enum State: Equatable, Sendable {
         case pending
         /// 已批准（可以执行）。
@@ -71,7 +90,8 @@ public struct MaintenanceTask: Identifiable, Equatable, Sendable {
         /// 被用户拒绝（**保留在计划里**：拒绝了什么要看得见）。
         case rejected
         case executed
-        case failed(reason: String)
+        /// 失败：原串与人话**各一份**（见 `FailureNote`）。
+        case failed(FailureNote)
 
         public var isApproved: Bool { self == .approved }
         public var isFinished: Bool {
@@ -363,15 +383,17 @@ public enum MaintenancePlanner {
         return updated
     }
 
-    /// 记录执行结果（成功 / 失败）。失败要带**服务端说的话**。
+    /// 记录执行结果（成功 / 失败）。失败要带**服务端说的话** ——
+    /// 原串（`failure.raw`，进机器载荷）与人话（`failure.readable`，给人看）各一份，
+    /// 两半由调用方各按自己的渲染器填（队列 L-66 拍板口径 ①）。
     public static func record(
         _ review: MaintenancePlanReview,
         taskID: String,
-        failureReason: String? = nil
+        failure: MaintenanceTask.FailureNote? = nil
     ) -> MaintenancePlanReview {
         var updated = review
         for index in updated.tasks.indices where updated.tasks[index].id == taskID {
-            updated.tasks[index].state = failureReason.map { .failed(reason: $0) } ?? .executed
+            updated.tasks[index].state = failure.map { .failed($0) } ?? .executed
         }
         return updated
     }

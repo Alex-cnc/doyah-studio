@@ -6,8 +6,10 @@
 「删掉两处出口里的一处仍能顶数」），所以每条新门禁都配一组负例：**写坏 → 必须报红 → 点名哪一处**。
 
 **做法**：不改真仓库的文件，而是把**必要的几个文件**拷进临时目录，在副本上写坏、
-把门禁指过去（`--root`）。本轮这组负例要删调用、改兜底、写大处数 —— 一旦中途失败，
-真仓库会被留在半坏状态；副本上折腾没有这个代价（跑完断言真仓库一个字节没动）。
+把门禁指过去（`--root`）。本轮这组负例要删调用、改兜底、写大处数，还要把**渠道字段的两半**
+（队列 L-66 口径 ①）逐个写坏：显示点取回原串、JSON 里摘掉人话字段、两半被并回一份、
+生产点不填人话 —— 一旦中途失败，真仓库会被留在半坏状态；副本上折腾没有这个代价
+（跑完断言真仓库一个字节没动）。
 
 用法：`python3 Scripts/test-cli-failure-readability.py`
 """
@@ -28,7 +30,10 @@ FILES = [
     "CLI/main.swift",
     "CLI/CLIFailureText.swift",
     "App/Utilities/ErrorPresenter.swift",
+    "App/AppState.swift",
     "Core/ConnectionFailure.swift",
+    "Core/MaintenancePlan.swift",
+    "Core/AICaptureUltra.swift",
     "Scripts/test-cli-failure-readability.sh",
 ]
 
@@ -243,6 +248,48 @@ def main() -> int:
             "            else { print(CLIFailureText.block(error)) }", 1))
 
     expect("主路又抄一份链 → 报红", copy_chain_back, "又抄了一份")
+
+    print("\n== Q) 渠道字段两半（队列 L-66）：命令行显示点又取回原串那一半")
+
+    def display_raw_again(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            'case .failed(let note): state = "失败（\\(note.readable)）"',
+            'case .failed(let note): state = "失败（\\(note.raw)）"', 1))
+
+    expect("CLI 显示点取原串 → 报红", display_raw_again, "原串那一半")
+
+    print("\n== R) 同题：界面失败提示行又取回原串那一半（界面这条路最容易被漏掉）")
+
+    def app_display_raw(tree: Path) -> None:
+        edit(tree, "App/AppState.swift", lambda text: text.replace(
+            "maintenanceMessage = L(.maintenanceFailedOne, task.id, failure.readable)",
+            "maintenanceMessage = L(.maintenanceFailedOne, task.id, failure.raw)", 1))
+
+    expect("界面显示点取原串 → 报红", app_display_raw, "原串那一半")
+
+    print("\n== S) 同题：机器载荷里的人话字段被摘掉（口径 ① 只落了一半）")
+
+    def drop_human_field(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            '+ "\\"failureReasonHuman\\":\\(jsonQuoted(note.readable))"', '+ ""', 1))
+
+    expect("JSON 少人话字段 → 报红", drop_human_field, "机器载荷字段")
+
+    print("\n== T) 同题：两半被并回一份（失败态不再带两半）")
+
+    def merge_halves(tree: Path) -> None:
+        edit(tree, "Core/MaintenancePlan.swift", lambda text: text.replace(
+            "public let readable: String", "public let human: String", 1))
+
+    expect("两半被并回一份 → 报红", merge_halves, "readable")
+
+    print("\n== U) 同题：生产点不再填人话（人话那一半没人算出来）")
+
+    def producer_without_human(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            "readable: CLIFailureText.oneLine(error)", "readable: error.localizedDescription", 1))
+
+    expect("生产点不填人话 → 报红", producer_without_human, "生产点")
 
     print("\n== K) 真仓库一个字节没动（负例都在副本上做）")
     changed = [rel for rel, digest in before.items() if hashlib.sha256((ROOT / rel).read_bytes()).hexdigest() != digest]

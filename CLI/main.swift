@@ -1398,7 +1398,9 @@ struct DoyahCLI {
             review = MaintenancePlanner.approve(review, ids: ids)
         }
 
-        var executed: [(id: String, ok: Bool, detail: String)] = []
+        // 执行结果：**原串与人话各一份**（队列 L-66 拍板口径 ① —— JSON 里保原串、
+        // 另加人话字段；命令行上打人话）。成功项的 `human` 是空串：没有失败要解释。
+        var executed: [(id: String, ok: Bool, detail: String, human: String)] = []
         if arguments.contains("--execute") {
             let service = PostgresService(config: makeEnvironmentConfig(name: "CLI maintain"), password: ProcessInfo.processInfo.environment["PGPASSWORD"])
             do {
@@ -1420,10 +1422,15 @@ struct DoyahCLI {
                         }
                     }
                     review = MaintenancePlanner.record(review, taskID: task.id)
-                    executed.append((task.id, true, sql))
+                    executed.append((task.id, true, sql, ""))
                 } catch {
-                    review = MaintenancePlanner.record(review, taskID: task.id, failureReason: error.localizedDescription)
-                    executed.append((task.id, false, error.localizedDescription))
+                    // 两半（队列 L-66）：原串走机器载荷，命令行这一行打人话。
+                    let failure = MaintenanceTask.FailureNote(
+                        raw: error.localizedDescription,
+                        readable: CLIFailureText.oneLine(error)
+                    )
+                    review = MaintenancePlanner.record(review, taskID: task.id, failure: failure)
+                    executed.append((task.id, false, failure.raw, failure.readable))
                 }
             }
             await service.disconnect()
@@ -1435,12 +1442,27 @@ struct DoyahCLI {
             json += ",\"tasks\":["
             json += review.tasks.map { task in
                 let state: String
+                // 失败那一格：**原串 + 人话两个字段**（队列 L-66 拍板口径 ①）——
+                // `failureReason` 是一字不变的原串（可搜、可上报），
+                // `failureReasonHuman` 是给界面 / MCP 客户端可选展示的人话。
+                let failureFields: String
                 switch task.state {
-                case .pending: state = "pending"
-                case .approved: state = "approved"
-                case .rejected: state = "rejected"
-                case .executed: state = "executed"
-                case .failed: state = "failed"
+                case .pending:
+                    state = "pending"
+                    failureFields = ""
+                case .approved:
+                    state = "approved"
+                    failureFields = ""
+                case .rejected:
+                    state = "rejected"
+                    failureFields = ""
+                case .executed:
+                    state = "executed"
+                    failureFields = ""
+                case .failed(let note):
+                    state = "failed"
+                    failureFields = ",\"failureReason\":\(jsonQuoted(note.raw)),"
+                        + "\"failureReasonHuman\":\(jsonQuoted(note.readable))"
                 }
                 let sql = task.sql.map(jsonQuoted) ?? "null"
                 let command = task.command.map(jsonQuoted) ?? "null"
@@ -1449,13 +1471,14 @@ struct DoyahCLI {
                     + "\"highCost\":\(task.isHighCost),\"needsApproval\":\(task.requiresApproval),"
                     + "\"state\":\(jsonQuoted(state)),\"sql\":\(sql),\"command\":\(command),"
                     + "\"executable\":\(task.isExecutable(isSandboxed: policy.isSandboxed)),"
-                    + "\"notes\":[" + task.reviewNotes.map(jsonQuoted).joined(separator: ",") + "]}"
+                    + "\"notes\":[" + task.reviewNotes.map(jsonQuoted).joined(separator: ",") + "]" + failureFields + "}"
             }.joined(separator: ",")
             json += "],\"unparsable\":[" + review.unparsableLines.map(jsonQuoted).joined(separator: ",") + "]"
             json += ",\"planNotes\":[" + review.notes.map(jsonQuoted).joined(separator: ",") + "]"
             json += ",\"executed\":["
             json += executed.map { item in
-                "{\"id\":\(jsonQuoted(item.id)),\"ok\":\(item.ok),\"detail\":\(jsonQuoted(item.detail))}"
+                "{\"id\":\(jsonQuoted(item.id)),\"ok\":\(item.ok),\"detail\":\(jsonQuoted(item.detail)),"
+                    + "\"detailHuman\":\(jsonQuoted(item.human))}"
             }.joined(separator: ",")
             json += "]}"
             print(json)
@@ -1468,7 +1491,7 @@ struct DoyahCLI {
                 case .approved: state = "已批准"
                 case .rejected: state = "已拒绝"
                 case .executed: state = "已执行"
-                case .failed(let reason): state = "失败（\(reason)）"
+                case .failed(let note): state = "失败（\(note.readable)）"
                 }
                 print("\(task.id) [\(task.kind.rawValue)] \(state) — \(task.summary)")
                 if let sql = task.sql { print("    SQL: \(sql)") }
@@ -1478,7 +1501,7 @@ struct DoyahCLI {
             for line in review.unparsableLines { print("✗ 没看懂：\(line)") }
             for note in review.notes { print("· \(note)") }
             for item in executed {
-                print(item.ok ? "✅ \(item.id) 已执行" : "❌ \(item.id) 失败：\(item.detail)")
+                print(item.ok ? "✅ \(item.id) 已执行" : "❌ \(item.id) 失败：\(item.human)")
             }
         }
         return 0

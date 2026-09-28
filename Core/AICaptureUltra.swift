@@ -112,7 +112,7 @@ extension AICapture {
         case .approved: return t(.aiNoteStateApproved, language: language)
         case .rejected: return t(.aiNoteStateRejected, language: language)
         case .executed: return t(.aiNoteStateExecuted, language: language)
-        case .failed(let reason): return t(.aiNoteStateFailed, reason, language: language)
+        case .failed(let note): return t(.aiNoteStateFailed, note.readable, language: language)
         }
     }
 }

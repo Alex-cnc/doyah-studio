@@ -47,16 +47,16 @@
       "why": "同上（MCP 工具结果里的本地写文件失败）。同属 L-66 的确认范围。"
     },
     {
-      "anchor": "review = MaintenancePlanner.record(review, taskID: task.id, failureReason: error.localizedDescription)",
+      "anchor": "raw: error.localizedDescription,",
       "count": 1,
-      "reachesUser": true,
-      "why": "**登记为已知缺口**：这条 reason 既进 JSON 也进 `失败（reason）` 状态行（会打到用户眼前），但它是**渠道字段**（一次写入、两处消费），所以不在渠道里塞人话（改了会让 JSON 也变中文）。第 47 轮已把它转成**需拍板**项（spec §6 / 队列 **L-66**，建议 = 「JSON 里保原串 + 另加一个人类可读字段」而不是换值）—— **拍板前不动这里**。"
+      "reachesUser": false,
+      "why": "**渠道字段的生产点（原串那一半）**（队列 L-66，第 52 轮落地拍板口径 ①）：维护任务失败时把驱动 / 系统的原串放进 `MaintenanceTask.FailureNote.raw` —— 它只进机器载荷（`--json` 的 `failureReason` / `detail`）与记录，**不再直接打到用户眼前**；界面 / 命令行 / 笔记正文改读同一份值的 `.readable` 那一半。两半的逐处登记见本台账 `channelHalves`。"
     },
     {
-      "anchor": "executed.append((task.id, false, error.localizedDescription))",
+      "anchor": "executed.append((task.id, false, failure.raw, failure.readable))",
       "count": 1,
-      "reachesUser": true,
-      "why": "**登记为已知缺口**：同上（`❌ <id> 失败：<detail>` 会打到用户眼前，且 detail 同时进 JSON）—— 同属 L-66 的拍板范围，拍板前不动。"
+      "reachesUser": false,
+      "why": "同上（执行结果那一份）：`--json` 的 `detail` 取 `.raw`（一字不变、可搜可上报）、`detailHuman` 取 `.readable`；命令行那行 `❌ … 失败：…` 打的是 `.human`。**换值会让 JSON 消费方跟着变中文**，所以这里是**加字段**不是改值 —— 正是第 47 轮那条建议的落地。"
     },
     {
       "anchor": "rows: nil,\n                            language: language,\n                            failureReason: error.localizedDescription",
@@ -71,6 +71,76 @@
       "why": "保活心跳记录（`KeepAliveRecord`）：汇总行只报次数与健康度，失败原因留给记录本身。"
     }
   ],
+  "channelHalves": {
+    "why": "**「渠道字段两半」的判据**（队列 L-66；需求提出者 2026-09-28 拍板选 ①：机器载荷保原串一字不变、另加人话字段）。为什么必须机械判：这个字段**一次写入、两处消费** —— 谁把显示点改回 `.raw`、或把 JSON 里的人话字段摘掉，编译过、Core 单测也过（单测跑不到 CLI 的 JSON 拼装与 `print`），只有逐处对账看得见。",
+    "type": {
+      "file": "Core/MaintenancePlan.swift",
+      "requires": [
+        "public struct FailureNote: Equatable, Sendable",
+        "public let raw: String",
+        "public let readable: String",
+        "case failed(FailureNote)"
+      ],
+      "why": "两半必须是**同一个值的两个字段**（只有一份值时「让人话上屏」就必然把 JSON 也换成中文）；`case failed(FailureNote)` 保证**取哪一半必须在渲染点写出来**（`.raw` / `.readable`），编译器与门禁都看得见。"
+    },
+    "producers": [
+      {
+        "file": "App/AppState.swift",
+        "anchor": "readable: ErrorPresenter.message(for: error)",
+        "rawToken": "raw: error.localizedDescription,",
+        "why": "界面侧的生产点：原串 = `error.localizedDescription`（一字不变），人话 = `ErrorPresenter.message(for:)`（与界面同一种语言）。"
+      },
+      {
+        "file": "CLI/main.swift",
+        "anchor": "readable: CLIFailureText.oneLine(error)",
+        "rawToken": "raw: error.localizedDescription,",
+        "why": "命令行侧的生产点：人话走**同一个可读化入口**（四档链，不是另拼一句）；命令行没有界面语境 ⇒ 简体中文。"
+      }
+    ],
+    "displaySites": [
+      {
+        "file": "CLI/main.swift",
+        "template": "case .failed(let note): state = \"失败（\\({half})）\"",
+        "allowed": ["readable"],
+        "why": "计划列表里的失败态那一格（从前印的是原串）。判据是**带 `{half}` 占位符的模板**（门禁把它转成正则再判这一行取了哪一半）—— 写死整行文本的话，把它改回 `.raw` 会变成「锚点找不到」，判据就说不出真正的问题。"
+      },
+      {
+        "file": "CLI/main.swift",
+        "template": ": \"❌ \\(item.id) 失败：\\(item.{half})\")",
+        "allowed": ["human"],
+        "why": "执行结果那一行（从前印的是原串）。"
+      },
+      {
+        "file": "App/AppState.swift",
+        "template": "maintenanceMessage = L(.maintenanceFailedOne, task.id, failure.{half})",
+        "allowed": ["readable"],
+        "why": "界面底部的失败提示行（从前印的是原串）—— 界面这条路最容易被漏掉。"
+      },
+      {
+        "file": "Core/AICaptureUltra.swift",
+        "template": ".aiNoteStateFailed, note.{half}",
+        "allowed": ["readable"],
+        "why": "**存进笔记的正文**：这行是会长久留着的产物，原串写进去就再也挑不出来 ⇒ 必须是 `.readable`。"
+      }
+    ],
+    "machineSites": [
+      {
+        "file": "CLI/main.swift",
+        "anchor": "failureFields = \",\\\"failureReason\\\":\\(jsonQuoted(note.raw)),\"",
+        "why": "JSON 里的原串字段（**一字不变**：可搜、可上报、口径稳定）。"
+      },
+      {
+        "file": "CLI/main.swift",
+        "anchor": "\"\\\"failureReasonHuman\\\":\\(jsonQuoted(note.readable))\"",
+        "why": "JSON 里**新增**的人话字段（供界面 / MCP 客户端可选展示）—— 拍板口径 ① 的另一半。"
+      },
+      {
+        "file": "CLI/main.swift",
+        "anchor": "\"\\\"detailHuman\\\":\\(jsonQuoted(item.human))}\"",
+        "why": "执行结果数组里 `detail`（原串，不变）与人话 `detailHuman` 成对。"
+      }
+    ]
+  },
   "serverSideMessage": {
     "coreFile": "Core/ConnectionFailure.swift",
     "definition": "public static func describeServerSide(",
@@ -87,7 +157,7 @@
     "why": "调试转储（`调试详情：` 那一行）是「原始串不丢」的另一半，**保留**：连接失败 / 查询失败 / 对象树三条主路上都在。它是转储、不是给用户的结论 —— 所以不进「必须走入口」的判据，但**不许被删掉**（删了就只剩人话、排查时拿不到原始报文）。"
   },
   "knownGaps": [
-    "渠道字段里的两处（维护任务的 `failureReason` / `executed.detail`）会以裸串同时到用户眼前与 JSON —— 第 47 轮转成**需拍板**项（队列 **L-66** / spec §6）：JSON 里放人话还是放原串；建议「保原串 + 另加一个人类可读字段」（加字段不改值，别让现有 JSON 消费方被换语言）",
+    "**MCP 工具载荷里的三处原串仍未动**（`runMCPInvocation` 的 listObjects / `runMCPQuery` / exportResult 的写文件失败）—— 队列 **L-66 落点㈡**：拍板口径已有（**原串留给程序、人话另给**），落地要动 `(text, isError)` 这个载荷形状，故单独一批做（第 52 轮只落了㈠ 维护任务与 ㈢ 显示点）。**这不是放行**：三处仍登记在本台账 `plumbing` 里（`reachesUser: false`），处数对不上就报红。",
     "对象树外层那条 `对象树加载失败` 与 `建库权限探测失败` 两条路径**没有稳定的现场触发方式**（探测查询本身是单条 syscache 快查询；锁基础目录会先让**建连**失败）→ 由本门禁的机械对账覆盖，实证靠同形状的两条真现场（诊断路径的连接类 + `row` 路径的 57014）"
   ],
   "evidence": [
@@ -96,6 +166,9 @@
     { "file": "Scripts/test-cli-failure-readability.sh", "contains": "（原始信息：", "why": "口径第 3 条（认得出来时原始串也保留）要有现场断言" },
     { "file": "Scripts/test-cli-failure-readability.sh", "contains": "读取文件失败：The file", "why": "口径第 2 条（认不出就原样、不套方向结论）要有现场断言 —— 本地错误必须**逐字不变**" },
     { "file": "Scripts/test-cli-failure-readability.sh", "contains": "SQLSTATE 42P01", "why": "**服务端原话那一档**要有真现场（真库上查一张不存在的表）：`42P01` 是这一档的招牌码，断言它 == 断言「服务端原话没被丢」" },
-    { "file": "Scripts/test-cli-failure-readability.sh", "contains": "服务端原话真的端出来了", "why": "同上，且要按**服务端自己的语言**断言（本机集群是英文 `does not exist`，中文集群是「不存在」）—— 只断言中文措辞会绑死到集群的语言设置上" }
+    { "file": "Scripts/test-cli-failure-readability.sh", "contains": "服务端原话真的端出来了", "why": "同上，且要按**服务端自己的语言**断言（本机集群是英文 `does not exist`，中文集群是「不存在」）—— 只断言中文措辞会绑死到集群的语言设置上" },
+    { "file": "Scripts/test-cli-failure-readability.sh", "contains": "命令行那行不再以原串当失败说明（反向断言）", "why": "**渠道字段两半**（队列 L-66）要有现场：只断言「人话出现了」的话，「人话 + 原串照旧」也能骗过门禁 —— 必须反向钉住「原串不再是失败说明本身」" },
+    { "file": "Scripts/test-cli-failure-readability.sh", "contains": "JSON 的 detail 仍是原串（没被换成中文）", "why": "拍板口径 ① 的**另一条腿**：加字段不是改值（原串一字不变，现有 JSON 消费方不被换语言）" },
+    { "file": "Scripts/test-cli-failure-readability.sh", "contains": "JSON 新增人话字段 failureReasonHuman", "why": "同上：人话那一半必须真的出现在机器载荷里（否则界面 / MCP 客户端想展示也没有可展示的）" }
   ]
 }
