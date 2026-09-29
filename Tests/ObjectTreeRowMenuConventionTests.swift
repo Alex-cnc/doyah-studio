@@ -65,4 +65,16 @@ final class ObjectTreeRowMenuConventionTests: XCTestCase {
         XCTAssertTrue(helper.contains("func rowID(at point: CGPoint"),
                       "命中判定要抽成纯函数，判据才能直接断言")
     }
+    /// **坐标系换算**：`NSEvent.locationInWindow`（AppKit，原点左下）必须换算成 SwiftUI `.global`
+    /// （窗口内容坐标，原点左上）才能跟行框比较 —— 2026-09-29 第一次改漏了这一步，
+    /// 表现就是"右键什么也没发生"（命中永远不成立、还静静地不报错）。
+    func testRightClickConvertsToSwiftUICoordinates() throws {
+        let helper = try source("App/Views/ObjectTreeRightClick.swift")
+        XCTAssertTrue(helper.contains("static func swiftUIPoint(for event: NSEvent, in window: NSWindow)"),
+                      "换算必须是一个可断言的纯函数，别写成一串内联表达式")
+        XCTAssertTrue(helper.contains("height - inContent.y"),
+                      "必须做上下翻转（SwiftUI .global 原点在左上，AppKit 在左下）")
+        XCTAssertTrue(helper.contains("DOYAH_TREE_RIGHTCLICK_DEBUG"),
+                      "没有截图权限时的取证口子：环境变量打开才写 /tmp/doyah-tree-rightclick.log")
+    }
 }

@@ -94,10 +94,42 @@ struct RightClickRowSelector: NSViewRepresentable {
         deinit { detach() }
 
         private func handle(_ event: NSEvent) {
-            guard let view, let window = view.window, event.window === window else { return }
-            let point = event.locationInWindow
-            guard let id = Self.rowID(at: point, in: box?.frames ?? [:]) else { return }
+            log("monitor fired window=\(event.window != nil)")
+            guard let view, let window = view.window, event.window === window else {
+                log("skip: view/window 不匹配")
+                return
+            }
+            let point = Self.swiftUIPoint(for: event, in: window)
+            let frames = box?.frames ?? [:]
+            let id = Self.rowID(at: point, in: frames)
+            log("point(窗口内容·左上原点)=\(point) frames=\(frames.count) hit=\(id ?? "nil")")
+            guard let id else { return }
             onPick?(id)
+        }
+
+        /// **坐标系换算（这是 2026-09-29 第一次改漏的地方）**：
+        /// `NSEvent.locationInWindow` 是 AppKit 坐标（原点在**窗口左下**）；
+        /// SwiftUI 的 `.global` 是**窗口内容坐标、原点左上**。两者不做换算就直接比，
+        /// 命中判定永远不成立 —— 表现就是"右键什么也没发生"。
+        static func swiftUIPoint(for event: NSEvent, in window: NSWindow) -> CGPoint {
+            let content = window.contentView
+            let inContent = content?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow
+            let height = content?.bounds.height ?? window.frame.height
+            return CGPoint(x: inContent.x, y: height - inContent.y)
+        }
+
+        /// 调试日志（只在 `DOYAH_TREE_RIGHTCLICK_DEBUG=1` 时写；用来在**没有界面截图权限**的条件下取证）。
+        private func log(_ message: String) {
+            guard ProcessInfo.processInfo.environment["DOYAH_TREE_RIGHTCLICK_DEBUG"] == "1" else { return }
+            let line = "\(Date()) \(message)\n"
+            let path = "/tmp/doyah-tree-rightclick.log"
+            if let handle = FileHandle(forWritingAtPath: path) {
+                handle.seekToEndOfFile()
+                handle.write(Data(line.utf8))
+                try? handle.close()
+            } else {
+                try? line.write(toFile: path, atomically: true, encoding: .utf8)
+            }
         }
 
         /// 纯函数：指针在哪个行的框里（自上而下第一个命中；重叠时取靠下的那行 —— 行是顺序排布的，
