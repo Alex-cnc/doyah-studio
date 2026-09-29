@@ -460,13 +460,76 @@ final class SQLTextView: NSTextView {
     private(set) var isApplyingAttributes = false
     /// ⌥ 拖拽列选择时的起始文本偏移（nil = 当前不是列选择）。
     private var columnSelectionAnchor: Int?
+    /// **AppKit 收不下的那些裸光标**（零长度选区）—— 由本视图自己记住，见 `setRangeValues(_:)`。
+    private var rememberedCarets: [NSRange] = []
+    /// 设多选区期间置位。
+    ///
+    /// 为什么需要它：`super.setSelectedRanges` 内部还会唤回 `setSelectedRange`，
+    /// 而下面那两处"用户自己动光标就作废裸光标"的清理逻辑正好挂在那里 ——
+    /// 没有这个标志，我们自己刚设进去的多光标会被自己抹掉。
+    private var isApplyingMultiSelection = false
 
     /// `NSTextView.selectedRanges` 在 Swift 里是 `[NSValue]`（不是 `[NSRange]`），
     /// 而 Core 的多光标引擎按 `[NSRange]` 工作 —— 两处转换集中在这里，免得散落十几处。
-    private var rangeValues: [NSRange] { selectedRanges.map(\.rangeValue) }
-    private func setRangeValues(_ ranges: [NSRange]) {
-        selectedRanges = ranges.map { NSValue(range: $0) }
+    ///
+    /// ⚠️ 必须**并上 `rememberedCarets`**：AppKit 只留得住一条零长度选区（见 `setRangeValues(_:)`），
+    /// 光标集合的唯一出处其实是这两份的并集。
+    private var rangeValues: [NSRange] {
+        MultiCursor.normalized(
+            selectedRanges.map(\.rangeValue) + rememberedCarets,
+            textLength: (string as NSString).length
+        )
     }
+
+    /// 把一批选区设回去。
+    ///
+    /// ## 为什么不是一句 `selectedRanges = …`（2026-09-29 实测，macOS 27 / AppKit）
+    ///
+    /// `NSTextView` **只收得下第一个零长度选区**：设 `[{4,0}, {30,0}]` 读回来是 `[{4,0}]`
+    /// （`setSelectedRanges(_:affinity:stillSelecting:)`、`stillSelecting: true`、倒序、
+    /// 与零长度混着设 —— 各组合都试过，裸光标一律被丢；**非零长度**的多选区则原样收下，
+    /// `[{5,3}, {31,3}]` 回来还是两条）。
+    ///
+    /// 后果很实在：**`⌥⌘↑` / `⌥⌘↓` 加光标在真机上毫无反应** —— `selectedRanges` 恒为一条 ⇒
+    /// 打字 / 退格的多光标分支（`selectedRanges.count > 1`）与 `drawInsertionPoint` 里
+    /// 画次光标的那段**全是死代码**，而单测（`MultiCursorTests` 21 项，判的是 Core）照样全绿。
+    /// 所以零长度的那些由本视图自己记着（`rememberedCarets`）、AppKit 那边留**第一条** ——
+    /// `drawInsertionPoint` 的既有画法（`super` 画主光标 + 补画其余）正好与"留第一条"对上。
+    private func setRangeValues(_ ranges: [NSRange]) {
+        let normalized = MultiCursor.normalized(ranges, textLength: (string as NSString).length)
+        let selections = normalized.filter { $0.length > 0 }
+        let carets = normalized.filter { $0.length == 0 }
+        isApplyingMultiSelection = true
+        defer { isApplyingMultiSelection = false }
+        rememberedCarets = carets
+        super.setSelectedRanges(
+            (selections.isEmpty ? Array(carets.prefix(1)) : selections).map { NSValue(range: $0) },
+            affinity: .upstream,
+            stillSelecting: false
+        )
+    }
+
+    /// 用户自己动光标（点击 / 方向键 / ⌘A…）⇒ 之前记的裸光标必须作废。
+    ///
+    /// 否则会退回老毛病「看着只有一个光标、打字却在两处」（FR-EDIT-27 的可用性教训）。
+    override func setSelectedRange(_ charRange: NSRange) {
+        if !isApplyingMultiSelection { rememberedCarets = [] }
+        super.setSelectedRange(charRange)
+    }
+
+    override func setSelectedRanges(
+        _ ranges: [NSValue],
+        affinity: NSSelectionAffinity,
+        stillSelecting: Bool
+    ) {
+        if !isApplyingMultiSelection { rememberedCarets = [] }
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+    }
+
+    /// 当前选区集合（**含 AppKit 收不下的裸光标**）。
+    ///
+    /// 判据（探针 `MultiCursorProbeTests`）读的就是它 —— 界面上"到底有几个光标"的唯一出处。
+    var multiSelection: [NSRange] { rangeValues }
 
     /// 补全使用「SQL 标识符」范围：字母、数字、下划线，
     /// 这样 `my_table` 这类名字不会被系统按标点切成两段。
@@ -497,7 +560,7 @@ final class SQLTextView: NSTextView {
         }
         // Esc：**收敛多光标**。这是"我怎么会一次插两行"的出口 ——
         // 需求提出者实测踩到过：有个多余光标在同时打字，而它没被画出来（见 `drawInsertionPoint`）。
-        if event.keyCode == 53, selectedRanges.count > 1 {
+        if event.keyCode == 53, rangeValues.count > 1 {
             setRangeValues([selectedRange()])
             needsDisplay = true
             return
@@ -607,7 +670,7 @@ final class SQLTextView: NSTextView {
         let text = (insertString as? String)
             ?? (insertString as? NSAttributedString)?.string
             ?? ""
-        guard selectedRanges.count > 1, !text.isEmpty else {
+        guard rangeValues.count > 1, !text.isEmpty else {
             super.insertText(insertString, replacementRange: replacementRange)
             return
         }
@@ -621,7 +684,7 @@ final class SQLTextView: NSTextView {
     /// 而且容易出现"插入了一次但撤销要按两下"。走 Core 引擎则每个光标插一个换行、整批一次撤销 ——
     /// 与打字、退格完全一致。
     override func insertNewline(_ sender: Any?) {
-        guard selectedRanges.count > 1 else {
+        guard rangeValues.count > 1 else {
             super.insertNewline(sender)
             return
         }
@@ -631,7 +694,7 @@ final class SQLTextView: NSTextView {
 
     /// 多选区退格：每个光标删一个完整字符（emoji 的代理对一起删）。
     override func deleteBackward(_ sender: Any?) {
-        guard selectedRanges.count > 1 else {
+        guard rangeValues.count > 1 else {
             super.deleteBackward(sender)
             return
         }

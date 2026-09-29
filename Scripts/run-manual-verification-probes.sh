@@ -216,10 +216,13 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   ＋ 对象树四层（服务器 → Database → Table → Column，没有 schema 层）＋ 能查到数据）。
 # + `TerminalInteractionProbeTests`（L-90 ㈠：终端交互三面 —— 鼠标上报 / DECCKM / 右键归属。
 #   本批的**主入口**是 `Scripts/verify-ui-interactions.sh`（那份只跑一遍、判据与进程环境无关）；
+# + `MultiCursorProbeTests`（L-90 ㈡ 第 1 条：`FR-EDIT-27` 多光标与列编辑 —— ⌥⌘D 选下一处 /
+#   ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选，各判「打字与 ⌫ 逐个生效」「一次撤销全回退」「位置不漂」。
+#   本批的**主入口**同样是 `Scripts/verify-ui-interactions.sh`）
 #   这里同时挂上是为了那条「每个 `*ProbeTests.swift` 都得有入口」的判据
 #   `check-result-scroll-ledger.py` ⑤ —— 一处入口漏了就等于一个都跑不到（第 96 轮实测）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
