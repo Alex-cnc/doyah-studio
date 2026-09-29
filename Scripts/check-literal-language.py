@@ -292,7 +292,7 @@ def scan(root: pathlib.Path) -> dict:
     sites: list[dict] = []
     refs: list[dict] = []
     for path in files:
-        rel = str(path.relative_to(root))
+        rel = path.relative_to(root).as_posix()
         text = read(path)
         sites.extend(literal_sites(rel, text))
         refs.extend(key_references(rel, text, keys, wrapper_names(text)))

@@ -78,7 +78,7 @@ def check_01_single_process() -> list[str]:
     found: list[str] = []
     for directory in ("Core", "App", "CLI"):
         for path in sorted((REPO / directory).rglob("*.swift")):
-            relative = str(path.relative_to(REPO))
+            relative = path.relative_to(REPO).as_posix()
             for number, line in code_lines(relative):
                 for pattern, label in IPC_PATTERNS:
                     if re.search(pattern, line):
@@ -106,7 +106,7 @@ def check_02_visibility() -> list[str]:
     # 判可见性的只有 LicensePresentation 一处：全仓 `ActivityBarItem.allCases` 只许在 Core 里出现。
     for directory in ("App", "CLI"):
         for path in sorted((REPO / directory).rglob("*.swift")):
-            relative = str(path.relative_to(REPO))
+            relative = path.relative_to(REPO).as_posix()
             for number, line in code_lines(relative):
                 if "ActivityBarItem.allCases" in line:
                     found.append(
@@ -261,7 +261,7 @@ def check_adr35_single_write_entry() -> list[str]:
     for path in sorted((REPO / "App").rglob("*.swift")):
         if path.name == "AppState.swift":
             continue
-        for number, line in code_lines(str(path.relative_to(REPO))):
+        for number, line in code_lines(path.relative_to(REPO).as_posix()):
             if re.search(r"selectedActivityItem\s*=(?!=)", line):
                 found.append(
                     f"{path.relative_to(REPO)}:{number}: 在视图 / 命令层直接改了选中项 —— "

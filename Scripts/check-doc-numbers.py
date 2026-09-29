@@ -51,7 +51,7 @@
 用法：
     python3 Scripts/check-doc-numbers.py                # 本仓（默认）
     python3 Scripts/check-doc-numbers.py --root <目录>   # 夹具仓（自测用）
-    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（15 例）
+    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（16 例）
 
 退出码：0 = 全绿；1 = 有判红项。**判红时空跑防护也一起报**（一处都没解析到 ⇒ 不许「零命中 = 通过」）。
 """
@@ -457,6 +457,16 @@ def scan_reverse(root: pathlib.Path, entry: dict, problems: list) -> int:
     return hits
 
 
+def identity_text(value) -> str:
+    """把相对路径铸成**跨平台的稳定标识**（一律正斜杠）。
+
+    为什么不用裸 `str(path)`：Windows 上 `str(WindowsPath)` 给反斜杠形态，而台账键 / `verify-all.sh`
+    正文都写正斜杠 ⇒ 集合匹配**恒 False**，而 macOS 上 `os.sep` 就是 `/` ⇒ **只在那一台机器上红**
+    （提案 0005）。形状禁令见 `Scripts/check-script-portability.py`。
+    """
+    return str(value).replace("\\", "/")
+
+
 def check_script_parity(root: pathlib.Path, ledger: dict, problems: list, notes: list) -> int:
     parity = ledger.get("checkScriptParity") or {}
     glob = parity.get("glob")
@@ -476,7 +486,7 @@ def check_script_parity(root: pathlib.Path, ledger: dict, problems: list, notes:
     exempt = {item["script"]: item.get("reason", "") for item in parity.get("exempt") or []}
     exempt_seen = set()
     for script in scripts:
-        rel = str(script.relative_to(root))
+        rel = identity_text(script.relative_to(root))
         if rel in gate_text:
             continue
         if rel in exempt:
@@ -862,6 +872,22 @@ def self_test() -> int:
                 continue
             print(f"  ✅ {name}")
 
+        # 跨平台（提案 0005，第 91 轮）：本判据的「有判据、没闭环」对账把相对路径与 `verify-all.sh`
+        # 正文 / 台账 `exempt` 的键比对 —— 台账键与脚本正文都写正斜杠，而 Windows 上裸 `str(Path)`
+        # 给反斜杠 ⇒ 那些键在这台机器上匹配不上（只在那一台机器上红）。这里复现该形态。
+        windows_style = str(pathlib.PureWindowsPath("Scripts/check-doc-tables.py"))
+        cross_ok = (
+            windows_style != "Scripts/check-doc-tables.py"
+            and identity_text(windows_style) == "Scripts/check-doc-tables.py"
+            and identity_text(pathlib.Path("Scripts/check-doc-tables.py")) == "Scripts/check-doc-tables.py"
+        )
+        if cross_ok:
+            print("  ✅ 跨平台标识（Windows 形态的相对路径必须落回台账键写法）")
+        else:
+            failures.append(
+                f"跨平台标识：`identity_text({windows_style!r})` 给 {identity_text(windows_style)!r}，应落回台账键写法"
+            )
+
         # 末例：真仓库逐字节未变 + 真仓库实跑
         for rel, before in ((GATE_REL, real_gate), ("AGENT-SPEC.md", real_spec), (LEDGER_REL, real_ledger)):
             if (REPO / rel).read_bytes() != before:
@@ -877,7 +903,7 @@ def self_test() -> int:
         for item in failures:
             print(f"   · {item}")
         return 1
-    print(f"\n✅ 自测通过（{len(cases) + 1} 例）")
+    print(f"\n✅ 自测通过（{len(cases) + 2} 例）")
     return 0
 
 

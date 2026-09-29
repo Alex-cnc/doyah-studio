@@ -33,7 +33,7 @@ def digest_tree() -> dict[str, str]:
             continue
         for path in sorted(base.rglob("*")):
             if path.is_file():
-                rel = str(path.relative_to(REPO))
+                rel = path.relative_to(REPO).as_posix()
                 result[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
     return result
 

@@ -173,8 +173,18 @@ else
   skip_step 1 "Core 与平台适配层单测（Scripts/verify-core.sh 要 Xcode 工具链的 swift）"
 fi
 
-echo "==> 2/18 Core 平台中立性"
+echo "==> 2/18 平台中立性（Core 不含平台专属依赖 · 脚本不含平台专属路径标识）"
 python3 Scripts/check-core-portability.py
+# 第 91 轮（提案 0005 **采纳**）：第二条管的是 **`Scripts/*.py` 自己** ——
+# `Scripts/` 是**两侧都在跑**的判据（Windows 侧 `windows/Tools/verify-all.ps1` 第 ③ 项就是
+# `python Scripts/check-doc-tables.py` + `python Scripts/check-doc-versions.py`），而它们把相对路径
+# 铸成字符串（`str(path.relative_to(root))`）去和**手抄的正斜杠清单**比对时，Windows 上
+# `str(WindowsPath)` 给 `Docs\README.md` ⇒ **集合匹配恒 False**、凡命中扫描面的文档全部判红，
+# 而 macOS 上 `os.sep` 就是 `/` ⇒ **只在那一台机器上红**（对侧 2026-09-29 第 81 轮实测：
+# `check-doc-versions.py` 误报 6 份、`check-doc-tables.py` 误报 26 处，而 A/B/C 三档全过）。
+# 判据 A 禁这一形状（仓内 13 处已全部改 `.as_posix()`，其中第三处 `check-doc-numbers.py` 是本轮扫出来的）、
+# B 例外台账默认**空**、C 空跑防护、D 判据自己的证据（8 例）。样式见 `Docs/概要设计.md` §8.3。
+python3 Scripts/check-script-portability.py
 
 echo "==> 3/18 本地化：Core 展示文本棘轮（R-45）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
 python3 Scripts/check-core-localization.py

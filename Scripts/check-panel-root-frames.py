@@ -234,7 +234,7 @@ def scan(views: pathlib.Path, min_width: int) -> tuple[dict[tuple[str, str, str]
                 if i <= line_number - 1:
                     symbol, start = name, i
             end = next((i for i, _ in decls if i > start), len(lines))
-            relative = str(path.relative_to(views.parent.parent))
+            relative = path.relative_to(views.parent.parent).as_posix()
             if not (NUMBER.match(width_text) and NUMBER.match(height_text)):
                 key = (relative, symbol, f"width: {width_text}, height: {height_text}")
                 entry = token_entries.setdefault(key, Entry(relative, symbol, -1, -1, 0, parsed.get("alignment", "")))

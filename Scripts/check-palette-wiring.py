@@ -76,7 +76,7 @@ def flag_bindings(flag: str) -> list[str]:
         if path.name == "AppState.swift":
             continue
         if flag in path.read_text(encoding="utf-8"):
-            users.append(str(path.relative_to(ROOT)))
+            users.append(path.relative_to(ROOT).as_posix())
     return sorted(users)
 
 

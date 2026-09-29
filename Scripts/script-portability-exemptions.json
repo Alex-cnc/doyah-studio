@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "purpose": "`Scripts/check-script-portability.py` 的形状禁令（`str(<…>.relative_to(<…>))`）的例外台账。默认**空**：正确写法 `.as_posix()` 在 macOS 上逐字节不变、在 Windows 上把反斜杠归一成正斜杠，故「这一形状」一个都不该留。要留必须逐条写 `file` / `pattern` / `reason`，并**真的命中**（陈旧豁免判红）。",
+  "exemptions": []
+}

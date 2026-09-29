@@ -20,7 +20,7 @@
     python3 Scripts/check-doc-tables.py                    # 本机默认清单（缺失的文档跳过并提示）
     python3 Scripts/check-doc-tables.py --require-all       # 缺失即红（主开发机 / CI 用）
     python3 Scripts/check-doc-tables.py <文件...>            # 显式点名：不存在即红
-    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（7 例）
+    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（8 例）
 
 **「文件不存在」的两种语义**（L-33，2026-09-27 第 29 轮；另一平台侧实测提出）：
 
@@ -203,6 +203,18 @@ def has_table_row(path: pathlib.Path) -> bool:
     return any(line.startswith("|") for line in lines)
 
 
+def identity_text(value) -> str:
+    """把相对路径铸成**跨平台的稳定标识**（一律正斜杠）。
+
+    为什么不用裸 `str(path)`：Windows 上 `str(WindowsPath)` 给 `Docs\\README.md`，而清单 / glob /
+    台账键 / `verify-all.sh` 正文都写正斜杠 ⇒ 集合匹配**恒 False**，凡命中扫描面的文档**全部判红**，
+    而 macOS 上 `os.sep` 就是 `/` ⇒ **只在那一台机器上红**（提案 0005，对侧第 81 轮实测）。
+    本函数既吃 `Path` 也吃 `str` —— 自检用 `PureWindowsPath` 复现「那台机器会得到的标识」，
+    于是红 / 绿在 macOS 上就能成对。形状禁令见 `Scripts/check-script-portability.py`。
+    """
+    return str(value).replace("\\", "/")
+
+
 def coverage_problems() -> list[str]:
     """判据 E：`DISCOVERY_GLOBS` 面里**带表格**的文档必须在受检清单（或通配）里。
 
@@ -214,7 +226,7 @@ def coverage_problems() -> list[str]:
     problems: list[str] = []
     for pattern in DISCOVERY_GLOBS:
         for path in sorted(pathlib.Path(".").glob(pattern)):
-            relative = str(path.relative_to("."))
+            relative = identity_text(path.relative_to("."))
             if any(relative.startswith(prefix) for prefix in COVERAGE_EXEMPT):
                 continue
             if relative in listed or any(
@@ -520,8 +532,9 @@ def main() -> int:
 
 
 # ── 门禁自己的证据（L-33；L-41 补例 5）────────────────────────────────────────
-# **7 例** = 6 个编号例子 + 1 条夹具准备自检（runner 的收尾行报「自检通过（7/7）」；
-# 文档里说「五例」指的是编号例子数 —— 例数的唯一来源与这处 1 之差见 `Scripts/self-test-counts.json`）。
+# **8 例** = 6 个编号例子 + 1 条夹具准备自检 + 1 条跨平台标识（例 8，提案 0005，第 91 轮；
+# runner 的收尾行报「自检通过（8/8）」；文档里说「五例」指的是编号例子数 —— 例数的唯一来源与
+# 这处 1 之差见 `Scripts/self-test-counts.json`）。
 # 全部在**临时目录**里跑真实文档副本，末例核对真仓库逐字节未变。
 # 关键一例是「干净克隆 / 另一平台」：只放**被版本控制跟踪的**那几份文档，
 # 13 份被 `.gitignore` 排除的缺席 —— 口径是**跳过 + 提示、exit 0**（原先必红的正是这一例）。
@@ -666,7 +679,7 @@ def run_self_test() -> int:
             lineno = next(
                 number for number, line in enumerate(broken.splitlines(), 1) if line.startswith(anchor)
             )
-            code, output = run([str(fixture.relative_to(clone))], clone)
+            code, output = run([fixture.relative_to(clone).as_posix()], clone)
             if code == 0:
                 failures.append(f"例 5 失败：写坏一行（多一格）仍 exit 0 —— 判据是空的\n{output}")
             elif f":{lineno}:" not in output or "列数" not in output:
@@ -713,6 +726,22 @@ def run_self_test() -> int:
             failures.append(f"例 4 失败：收尾行应为 44 个文件（43 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
+
+        # 例 8（提案 0005，第 91 轮）·跨平台标识：判据 E 的立足点就是「磁盘上的相对路径 == 手抄清单里的写法」。
+        # Windows 上 `str(WindowsPath)` 给反斜杠（清单写正斜杠）⇒ 清单匹配**恒 False**、**只在那台机器上红**
+        # （对侧第 81 轮实测：26 处「有表格却不在受检清单里」）。这里在 macOS 上用 `PureWindowsPath`
+        # 复现「那台机器会得到的标识」，红 / 绿成对。
+        total += 1
+        windows_style = str(pathlib.PureWindowsPath("Docs/概要设计.md"))
+        if windows_style == "Docs/概要设计.md":
+            failures.append("例 8 失败：`PureWindowsPath` 在本机给出的形态与预期不符（夹具前提不成立）")
+        elif identity_text(windows_style) != "Docs/概要设计.md":
+            failures.append(
+                f"例 8 失败：`identity_text({windows_style!r})` 给 {identity_text(windows_style)!r}，"
+                "应落回清单写法（Windows 形态的相对路径必须归一到正斜杠）"
+            )
+        elif identity_text(pathlib.Path("Docs/概要设计.md")) != "Docs/概要设计.md":
+            failures.append("例 8 失败：本机形态（PosixPath）经 identity_text 后应逐字不变")
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
@@ -722,7 +751,7 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 13 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 真仓库 43 份无跳过")
+    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 13 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 跨平台标识（Windows 形态落回清单写法）/ 真仓库 43 份无跳过")
     return 0
 
 

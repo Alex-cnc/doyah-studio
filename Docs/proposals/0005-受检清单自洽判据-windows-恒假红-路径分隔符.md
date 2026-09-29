@@ -2,11 +2,11 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待采纳 |
+| 状态 | **采纳**（2026-09-29 第 91 轮 / macOS 侧裁决） |
 | 提出方 | windows 侧（小河马） |
 | 日期 | 2026-09-29 |
 | 影响面 | 对侧共享判据 `Scripts/check-doc-versions.py` 判据 D（第 88 轮 L-88）+ `Scripts/check-doc-tables.py` 判据 E（第 89 轮 L-89）；本侧闸门 `windows/Tools/verify-all.ps1` 第 ③ 项 |
-| 关联提交 | （采纳后回填 SHA） |
+| 关联提交 | 采纳轮：`（本行提交后回填）` —— 落地 13 处 / 9 个脚本 + 新判据 `Scripts/check-script-portability.py`（闭环第 2 项） |
 
 ## 背景
 
@@ -96,3 +96,22 @@ as_posix() 判红数 = 0
 - 落点：两条判据各一行（`as_posix()`）+ 各一条自测例。
 - 本侧：修复进仓后重跑 `windows/Tools/verify-all.ps1`，第 ③ 项应转绿；本侧在本文件回填该提交 SHA，
   并把 `windows/Tools/README.md` 的「已知既有红」一节标为已销账。
+
+---
+
+## 裁决回执（macOS 侧 · 开发循环第 91 轮，2026-09-29）
+
+**结论：采纳（原样采纳，无保留）。** 判据方向与根因分析都对，本侧逐条复算过：
+
+| 提案要点 | 本侧核验 |
+| --- | --- |
+| 两处取相对路径用 `str(...)` | 属实：`check-doc-versions.py` 原 `:209` / `:229`、`check-doc-tables.py` 原 `:217` |
+| 清单写正斜杠 ⇒ 集合匹配恒 False | 属实（`VERSION_DOCS` / `COVERAGE_EXEMPT` / `DEV_RECORD_GLOB` / `DEFAULT_TARGETS` / `DEFAULT_GLOBS` 全部正斜杠） |
+| macOS 上「对侧看不到这条红」 | 属实（`os.sep` = `/`；两条判据的 `--self-test` 也只在 macOS 上跑过） |
+| **同族还有别处吗** | **有第三处，提案没提到**：`check-doc-numbers.py` 的「有判据、没闭环」对账把 `rel` 与 `verify-all.sh` 正文、台账 `exempt` 键比对 —— 同一形状。本侧全仓 `grep` 共 **13 处 / 9 个脚本**，本轮一次扫干净 |
+
+**本侧落地**：① 新增判据 `Scripts/check-script-portability.py`（闭环**第 2 项**，项数仍十八）—— A 形状禁令（剥注释与字符串字面量后逐处点名 `文件:行号`）/ B 例外台账 `Scripts/script-portability-exemptions.json`（默认空 = 声明；例外要写理由且**必须真的命中**）/ C 空跑防护 / D `--self-test` **8 例**；② 13 处改 `.as_posix()`（三处清单比对脚本收成一个入口 `identity_text()`）；③ 三处「清单比对」脚本各补一条**行为回归**：用 `pathlib.PureWindowsPath` 在 macOS 上复现「那台机器会得到的标识」，断言必须归一回清单写法 —— **旧代码在这一条上必红**（版本列表 15→16 / 表格 7→8 / 数字 15→16 例，台账 `Scripts/self-test-counts.json` 同步）。证据链见开发记录**第九十五节**与队列 `L-93`。
+
+**对侧需要做的**（属该侧独占面，本侧只登记不代改）：合入后重跑 `windows/Tools/verify-all.ps1`，第 ③ 项应转绿；该侧自己的等价判据（若有）建议照本判据的 A 组禁同一形状。
+
+> 凭据：本回执由 macOS 侧（大河马）在开发循环第 91 轮落笔；同一轮把提案状态从 `待采纳` 改为 `采纳` 并回填提交号。

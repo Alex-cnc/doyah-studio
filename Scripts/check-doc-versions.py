@@ -48,7 +48,7 @@
     python3 Scripts/check-doc-versions.py --self-test     # 负例（临时目录里写坏，末条核对真仓库未动）
     python3 Scripts/check-doc-versions.py --quiet         # 只打印问题
 
-判据自己的证据（15 例）：`--self-test` 把 A/B/C 三档写坏 **11 例** + 判据 D「受检清单自洽」**4 例**
+判据自己的证据（16 例）：`--self-test` 把 A/B/C 三档写坏 **11 例** + 判据 D「受检清单自洽」**4 例** + **跨平台标识 1 例**（Windows 形态的相对路径必须落回清单写法，提案 0005）
 （未登记 ⇒ 判红 / 无变更记录节 ⇒ 不纳入 / 在清单里 ⇒ 放行 / `Docs/archive/` ⇒ 豁免）；
 例数的唯一来源 = `Scripts/self-test-counts.json`（本行由它机械对账）。
 
@@ -191,6 +191,18 @@ def check_queue(relative: str, root: pathlib.Path) -> tuple[list[str], str]:
     return problems, f"定义行 {len(definitions)} 个条目号"
 
 
+def identity_text(value) -> str:
+    """把相对路径铸成**跨平台的稳定标识**（一律正斜杠）。
+
+    为什么不用裸 `str(path)`：Windows 上 `str(WindowsPath)` 给 `Docs\\README.md`，而清单 / glob /
+    台账键 / `verify-all.sh` 正文都写正斜杠 ⇒ 集合匹配**恒 False**，凡命中扫描面的文档**全部判红**，
+    而 macOS 上 `os.sep` 就是 `/` ⇒ **只在那一台机器上红**（提案 0005，对侧第 81 轮实测）。
+    本函数既吃 `Path` 也吃 `str` —— 自检用 `PureWindowsPath` 复现「那台机器会得到的标识」，
+    于是红 / 绿在 macOS 上就能成对。形状禁令见 `Scripts/check-script-portability.py`。
+    """
+    return str(value).replace("\\", "/")
+
+
 def coverage_problems(root: pathlib.Path) -> list[str]:
     """判据 D：有「变更记录」节的文档必须在受检清单里（VERSION_DOCS ∪ 开发记录通配）。
 
@@ -206,7 +218,7 @@ def coverage_problems(root: pathlib.Path) -> list[str]:
     listed = {relative for relative, _ in VERSION_DOCS}
     problems: list[str] = []
     for path in sorted(root.glob(COVERAGE_ROOT_GLOB)):
-        relative = str(path.relative_to(root))
+        relative = identity_text(path.relative_to(root))
         if any(relative.startswith(prefix) for prefix in COVERAGE_EXEMPT):
             continue
         if relative in listed or pathlib.PurePath(relative).match(DEV_RECORD_GLOB):
@@ -226,7 +238,7 @@ def coverage_problems(root: pathlib.Path) -> list[str]:
 def collect_targets(root: pathlib.Path) -> list[tuple[str, bool]]:
     targets = list(VERSION_DOCS)
     for path in sorted(root.glob(DEV_RECORD_GLOB)):
-        targets.append((str(path.relative_to(root)), False))
+        targets.append((identity_text(path.relative_to(root)), False))
     return targets
 
 
@@ -409,6 +421,22 @@ def self_test() -> int:
             if not ok:
                 failures += 1
                 print(f"     报出：{chr(10).join(found) or '（无）'}")
+
+    # 跨平台（提案 0005，第 91 轮）：判据 D 的立足点就是「磁盘上的相对路径 == 手抄清单里的写法」。
+    # Windows 上 `str(WindowsPath)` 给反斜杠（清单写正斜杠）⇒ 清单匹配**恒 False**、**只在那台机器上红**；
+    # 本处在 macOS 上用 `PureWindowsPath` 复现「那台机器会得到的标识」，红 / 绿成对。
+    total += 1
+    windows_style = str(pathlib.PureWindowsPath("Docs/README.md"))
+    cross_ok = (
+        windows_style != "Docs/README.md"  # 先确证「不归一」会得到什么
+        and identity_text(windows_style) == "Docs/README.md"
+        and identity_text(pathlib.PureWindowsPath("Docs/README.md")) == "Docs/README.md"
+        and identity_text(pathlib.Path("Docs/README.md")) == "Docs/README.md"
+    )
+    print(f"{'✅' if cross_ok else '❌'} 负例 跨平台标识（Windows 形态的相对路径必须落回清单写法）")
+    if not cross_ok:
+        failures += 1
+        print(f"     str(PureWindowsPath) = {windows_style!r}；identity_text 给 {identity_text(windows_style)!r}")
 
     after = {}
     for relative, _ in collect_targets(real_root):

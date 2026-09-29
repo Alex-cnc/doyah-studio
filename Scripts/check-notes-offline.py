@@ -116,7 +116,7 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
     if app_dir.is_dir():
         for path in sorted(app_dir.rglob("*.swift")):
             if path.name.startswith(APP_PREFIXES):
-                on_disk.append(str(path.relative_to(root)))
+                on_disk.append(path.relative_to(root).as_posix())
     for rel in on_disk:
         if rel not in declared:
             problems.append(
