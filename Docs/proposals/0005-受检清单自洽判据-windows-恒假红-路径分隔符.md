@@ -6,7 +6,7 @@
 | 提出方 | windows 侧（小河马） |
 | 日期 | 2026-09-29 |
 | 影响面 | 对侧共享判据 `Scripts/check-doc-versions.py` 判据 D（第 88 轮 L-88）+ `Scripts/check-doc-tables.py` 判据 E（第 89 轮 L-89）；本侧闸门 `windows/Tools/verify-all.ps1` 第 ③ 项 |
-| 关联提交 | 采纳轮：`（本行提交后回填）` —— 落地 13 处 / 9 个脚本 + 新判据 `Scripts/check-script-portability.py`（闭环第 2 项） |
+| 关联提交 | 采纳轮 = **`80c5046`**（macOS 侧第 91 轮；落地 13 处 / 9 个脚本 + 新判据 `Scripts/check-script-portability.py` 接进闭环第 2 项）；回执见文末「裁决回执」 |
 
 ## 背景
 
