@@ -35,8 +35,6 @@ struct ObjectTreeView: View {
     /// 悬停状态来回翻，于是"鼠标停着不动，界面自己闪"。而这个盒子**没有任何观察者**：
     /// 写它不产生一次重绘，右键菜单在**呈现那一刻**读它即可。
     @State private var hoverBox = HoverBox()
-    /// 每行在窗口坐标里的框（右键按**指针位置**定位行，见 `ObjectTreeRightClick.swift`）。
-    @State private var framesBox = ObjectTreeFramesBox()
     @State private var isLoadingRoot = false
     @State private var rootError: String?
     // 注：所有「弹出面板」的目标与开关都**不在这里** —— 它们住在 `AppState`
@@ -103,7 +101,12 @@ struct ObjectTreeView: View {
                         // 记录决定，而 `onHover` 会在整树重算（选中态一变就重算）后被 SwiftUI 补一个
                         // 假的 `mouseExited` 清掉。行级菜单把这个不确定来源整个绕开。
                         rowView(row)
-                            .background(ObjectTreeRowFrameRecorder(id: row.id))
+                            // **每一行自己接右键**（不碰坐标）：先选中本行，再把事件交还系统弹菜单。
+                            .overlay(
+                                RowRightClickCatcher(tag: row.id) {
+                                    appState.selectTreeObject(row.object)
+                                }
+                            )
                             .contextMenu {
                                 ObjectTreeContextMenu.items(
                                     object: row.object,
@@ -117,14 +120,7 @@ struct ObjectTreeView: View {
                 // （本地事件监听，零授权；只读事件不改事件 ⇒ 系统照常弹菜单）。
                 // 这一步是"已选中 A 时右键 B 选不中 B"的修法：行级 hover 在整树重算后必被清空，
                 // 指针位置才是可靠事实。
-                .modifier(ObjectTreeFrameCollector(box: framesBox))
-                .background(
-                    RightClickRowSelector(box: framesBox) { id in
-                        if let row = visibleRows.first(where: { $0.id == id }) {
-                            appState.selectTreeObject(row.object)
-                        }
-                    }
-                )
+
                 // 整棵树这一份**保留**：只用于右键点到行之外的空白（内边距 / 底下空区），
                 // 内容仍按"鼠标底下那一行"算，没有就退回选中项。
                 .contextMenu {
