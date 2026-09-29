@@ -106,7 +106,7 @@ git fetch -q origin && git status --short          # 有没有别人的改动
 ### CMD-03 改代码（每一批都要走完）
 ```bash
 ./Scripts/verify-all.sh        # 十八项；红了先修基线，别在红上叠改动
-./Scripts/verify-core.sh       # 只要 Core 单测（2026-09-28 实测：2175 tests / 0 failures）
+./Scripts/verify-core.sh       # 只要 Core 单测（2026-09-29 实测：2175 tests / 0 failures）
 ./Scripts/build-app.sh         # 出非沙箱包（默认口径）；要试沙箱那一面用 DOYAH_SANDBOX=1
 ./Scripts/make-ui-snapshots.sh # 界面快照（当前 218 张 / 109 组：中英成对 + 深浅）
 ./Scripts/run-manual-verification-probes.sh # 清单 B 类条目的 App 内探针：

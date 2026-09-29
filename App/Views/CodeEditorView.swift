@@ -55,7 +55,7 @@ struct CodeEditorView: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.lineFragmentPadding = 4
         // 大文档（5,000 行 / 数万字符）下 `NSTextView` 默认要**整篇**布局：删一个字符也会触发
-        // 全文重排 —— 人工点验实测「删除时明显卡顿」（2026-09-28，NFR-PERF-05）。打开非连续布局，
+        // 全文重排 —— 人工点验实测「删除时明显卡顿」（2026-09-29，NFR-PERF-05）。打开非连续布局，
         // 布局管理器只铺可见范围，光标以外的段落延后算。
         textView.layoutManager?.allowsNonContiguousLayout = true
         textView.string = text
@@ -135,7 +135,7 @@ struct CodeEditorView: NSViewRepresentable {
         ///
         /// **这是真的 debounce，不是「扔到下一个 runloop」**：`DispatchQueue.main.async` 在连续
         /// 按键（尤其长按删除）时等于**每个键**都全量重新着色整篇文本（`apply(tokens:)` 先对全文
-        /// `setAttributes`），5,000 行文档上表现为「删除时明显卡顿」（2026-09-28 人工点验实测）。
+        /// `setAttributes`），5,000 行文档上表现为「删除时明显卡顿」（2026-09-29 人工点验实测）。
         /// 合并窗口按文档大小分档：大文档等更久，代价是高亮比光标慢一档，换来打字跟手。
         func scheduleHighlighting() {
             highlightWorkItem?.cancel()
