@@ -98,7 +98,7 @@ else {
   Write-Host "    前端：Bench\grid 依赖未装 ⇒ 前端单测未跑（先 npm install；Rust 半已通过）"
 }
 
-# 前端半 · 产品外壳（windows\App）：外壳自己的 vitest（含令牌生成器 / 棘轮的自测）
+# 前端半 · 产品外壳（windows\App）：外壳自己的 vitest（含令牌生成器 / 棘轮的自测）+ 类型检查
 $appDir = Join-Path $windowsDir 'App'
 if ((Test-Path (Join-Path $appDir 'package.json')) -and (Test-Path (Join-Path $appDir 'node_modules'))) {
   $npm = Get-Command npm -ErrorAction SilentlyContinue
@@ -114,6 +114,20 @@ if ((Test-Path (Join-Path $appDir 'package.json')) -and (Test-Path (Join-Path $a
       exit 1
     }
     Write-DoyahPass "外壳单测：vitest run 全绿"
+
+    # 类型检查（第 30 轮补）：`vite build` **不做类型检查**，`vitest` 只跑被 import 到的用例，
+    # 所以「一个 .vue/.ts 里的类型错误」此前能同时绕过 ① 与 ②（改坏了照样全绿）。判红仍只由退出码决定。
+    Push-Location $appDir
+    $out4 = & $npm.Source run typecheck 2>&1
+    $rc4 = $LASTEXITCODE
+    Pop-Location
+    $out4 | Select-Object -Last 8 | ForEach-Object { Write-Host ("    {0}" -f $_) }
+    if ($rc4 -ne 0) {
+      Write-DoyahFail ("外壳类型检查（tsc --noEmit）失败（退出码 {0}）" -f $rc4)
+      Write-DoyahResult -Status FAIL -Code 1
+      exit 1
+    }
+    Write-DoyahPass "外壳类型检查：tsc --noEmit 无错"
   }
 }
 else {

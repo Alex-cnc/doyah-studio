@@ -106,10 +106,21 @@ else {
     @{ Label = '裸值棘轮 + 引用面（token-ratchet）'; Args = @('tools/token-ratchet.mjs') }
   )
   foreach ($check in $tokenChecks) {
+    # 判红与否**只由退出码决定**：node 往 stderr 写的那行判红原因照原样打印，不许被 PS 5.1 的
+    # `$ErrorActionPreference = 'Stop'` 变成终止错误（同 `_common.ps1` 里记的那处坑 —— 第 30 轮实测：
+    # 判据明明「打印一条原因、退出码 1」，本侧闸门却整项报成「抛异常」，还因为半路抛出而漏掉 Pop-Location，
+    # 把后面的项全带跑在 windows/App 下）。
     Push-Location $appDir
-    $out = & $nodeExe @($check.Args) 2>&1
-    $rc = $LASTEXITCODE
-    Pop-Location
+    try {
+      $prevEap = $ErrorActionPreference
+      $ErrorActionPreference = 'Continue'
+      try {
+        $out = & $nodeExe @($check.Args) 2>&1
+        $rc = $LASTEXITCODE
+      }
+      finally { $ErrorActionPreference = $prevEap }
+    }
+    finally { Pop-Location }
     foreach ($line in $out) { Write-Host ("    {0}" -f $line) }
     if ($rc -ne 0) {
       Write-DoyahFail ("{0} 判红（退出码 {1}）" -f $check.Label, $rc)

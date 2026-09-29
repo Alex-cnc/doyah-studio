@@ -55,3 +55,48 @@ export function applyTheme(root: ThemeRoot, mode: ThemeMode): void {
   if (mode === 'system') root.removeAttribute('data-theme')
   else root.setAttribute('data-theme', mode)
 }
+
+// ── 配色方案（主题集；§9.2 / §9.4「候选同名同值」）───────────────────────────
+//
+// 三个主题的 **id / 默认主题 / 是否「推导草案」** 全部来自生成物 `themes.generated.ts`
+// （由 `tools/gen-tokens.mjs` 从 macOS 侧 `Core/DesignTheme.swift` 解析 —— 本侧不手抄，
+// 对侧改名 / 增删主题 / 值到位后不再是推导草案，这边 `--check` 就判红、跑一次生成即跟上）。
+// 这里只补两样生成物给不出的东西：**属性名**与**中文显示名**（显示名与 macOS 侧同口径：
+// 科技蓝 / 豆芽绿 / 玫瑰金；新增主题没配显示名 ⇒ `theme.test.ts` 判红，不会静默显示成 id）。
+
+import { THEME_SCHEMES, type ThemeSchemeId } from './themes.generated'
+
+export { THEME_SCHEMES, type ThemeSchemeId }
+export const SCHEME_ATTRIBUTE = 'data-theme-scheme'
+export const THEME_SCHEME_STORAGE_KEY = 'doyah-studio.windows.theme-scheme'
+
+/** 主题 id → 显示名（与 macOS 文案同名；`theme.test.ts` 保证「生成物里每个主题都有名字」）。 */
+export const THEME_SCHEME_LABELS: Record<string, string> = {
+  'tech-blue': '科技蓝',
+  'bean-green': '豆芽绿',
+  'rose-gold': '玫瑰金',
+}
+
+/**
+ * 非法 / 未知取值归一到默认主题（与 macOS 侧「未知 id 一律回退、不报错」同口径）：
+ * 配置文件被手改、或将来删掉某个主题时，界面都必须照常起来。
+ */
+export function normalizeScheme(value: string | null | undefined): string {
+  return THEME_SCHEMES.some((scheme) => scheme.id === value) ? (value as string) : DEFAULT_SCHEME
+}
+
+export function readStoredScheme(storage: { getItem(key: string): string | null }): string {
+  return normalizeScheme(storage.getItem(THEME_SCHEME_STORAGE_KEY))
+}
+
+export function storeScheme(storage: { setItem(key: string, value: string): void }, scheme: string): void {
+  storage.setItem(THEME_SCHEME_STORAGE_KEY, normalizeScheme(scheme))
+}
+
+/** 把主题落到根元素：`data-theme-scheme` 的取值必须是 `rawValue`（生成物里的 id，不是 Swift case 名）。 */
+export function applyScheme(root: ThemeRoot, scheme: string): void {
+  root.setAttribute(SCHEME_ATTRIBUTE, normalizeScheme(scheme))
+}
+
+/** 默认主题：生成物标着 `fallback: true` 的那一个（找不到就退第一个，保证一定有值）。 */
+export const DEFAULT_SCHEME: string = (THEME_SCHEMES.find((scheme) => scheme.fallback) ?? THEME_SCHEMES[0]).id

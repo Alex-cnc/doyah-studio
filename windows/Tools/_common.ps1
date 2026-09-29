@@ -72,13 +72,21 @@ function Invoke-DoyahSharedGate {
   # 实测现场：对侧 `Scripts/check-doc-tables.py` 的 docstring 里一处无效转义 ⇒ 每次运行都往 stderr 打
   # SyntaxWarning ⇒ 本侧第 ③ 项假红（该项真判是 ✅、rc 0）。
   # 口径：**判红与否只由退出码决定**；stderr 上的文字照原样打出来（不吞、不静默），但不许据此判红。
+  # 判据一律在**仓根**下跑：`Scripts/*.py` 按仓根相对路径读三书（实测：从别的目录跑会
+  # FileNotFoundError ⇒ 本侧闸门把「工作目录不对」报成「判据判红」）；跑完必须还原工作目录
+  # （子判据自己也可能 Push-Location，异常时不 Pop 就会把后面的项带偏 —— 第 30 轮实测）。
   $prevEap = $ErrorActionPreference
+  $cwdBefore = (Get-Location).Path
   $ErrorActionPreference = 'Continue'
   try {
+    if ($cwdBefore -ne $RepoRoot) { Set-Location -LiteralPath $RepoRoot }
     $output = (& $Python.Exe @argv 2>&1 | Out-String)
     $rc = $LASTEXITCODE
   }
-  finally { $ErrorActionPreference = $prevEap }
+  finally {
+    $ErrorActionPreference = $prevEap
+    if ((Get-Location).Path -ne $cwdBefore) { Set-Location -LiteralPath $cwdBefore }
+  }
   $trimmed = $output.TrimEnd()
   if ($trimmed) {
     foreach ($line in ($trimmed -split "`r?`n")) { Write-Host ("    | " + $line) }

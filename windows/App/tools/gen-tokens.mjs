@@ -2,18 +2,32 @@
 // Doyah Studio · Windows 侧表示层 · 设计令牌生成器（windows/App/tools/gen-tokens.mjs）
 //
 // 存在理由（§8.5.3 的「令牌取值单一来源」）：令牌取值属「一样」的五项之一，**不得各写一套**。
-// 权威源 = macOS 侧 `Core/DesignTokens.swift`（纯数据，无平台绑定）；本生成器把它翻译成
-// 前端能用的 CSS 变量 —— 于是「取值」只有一处，前端只是它的一个投影。
+// 权威源 = macOS 侧 `Core/`（纯数据、无平台绑定），**分成两个文件**（2026-09-29 L-80 ㈠ 起）：
+//   · `Core/DesignTokens.swift` —— **角色**（枚举 + case 名 + 用法规矩）＋ 数值刻度（Spacing / Radius /
+//     Metrics / Overlay / TypeScale）＋ `CategoricalTone`（唯一与主题无关的色，身份色）；
+//   · `Core/DesignTheme.swift`  —— **值表**：每主题一份 `ThemePalette`（18 个 `ThemeColor(light, dark)`
+//     ＋ `hairlineLight` ＋ `hairlineDarkAlpha`）。
+// 本生成器把这两份翻译成前端能用的 CSS 变量 —— 于是「取值」只有一处，前端只是它的一个投影。
 //
 // 用法：
-//   node tools/gen-tokens.mjs            写盘（生成物：src/theme/tokens.generated.css）
-//   node tools/gen-tokens.mjs --check    只比对，不写盘；有漂移即 exit 1（闸门用它）
+//   node tools/gen-tokens.mjs                     写盘（生成物：src/theme/tokens.generated.css）
+//   node tools/gen-tokens.mjs --check             只比对，不写盘；有漂移即 exit 1（闸门用它）
+//   node tools/gen-tokens.mjs --source <f> --palette-source <f> --out <f>   自测 / 手工排障
 //
-// 三条纪律（都是防「静默丢令牌」的）：
-//   1. 每个分组的条数写死在 EXPECTED 里 —— 对侧改名 / 删项 / 加项 ⇒ 非零退出，不静默少生成几条；
-//   2. 颜色枚举里出现「不是字面量 ThemeColor」的 case ⇒ 必须显式登记在 ALIASES 里，
-//      否则非零退出（例：SyntaxTone.identifier 指向 TextTone.primary）；
-//   3. 生成物头部写明「不许手改」，手改 ⇒ --check 判红。
+// 四条纪律（都是防「静默丢令牌 / 悄悄换来源」的）：
+//   1. 每个分组与**每个主题**的条数写死在 EXPECTED_* 里 —— 对侧改名 / 删项 / 加项 / 少一个主题
+//      ⇒ 非零退出，不静默少生成几条；
+//   2. 颜色角色一律从 `color(in: theme)` 的 `case .x: return palette.y` **解析出来**（不手抄映射），
+//      值表字段若没被任何角色引用、也不在 `PALETTE_CONSUMED_WITHOUT_ROLE` 里 ⇒ 判错
+//      （防「值表多了一个角色而本侧没生成」与「本侧生成的东西源里没有」两个方向）；
+//   3. `SyntaxTone` 这类「不是字面量」的 case 必须显式登记在 ALIASES 里并与源里解析出的映射逐条相符，
+//      否则非零退出（例：`SyntaxTone.identifier` 指向 `TextTone.primary`）；
+//   4. 生成物头部写明「不许手改」，手改 ⇒ --check 判红。
+//
+// 主题块约定（§9.2「每个主题一个变量块」；与 macOS 侧「主题自带配套强调色」口径同构）：
+//   `:root` / `:root[data-theme='dark']` / 系统跟随块 = **默认主题**（`DesignTheme.fallback`）的值；
+//   `:root[data-theme-scheme='<id>']`（+ `[data-theme='dark']`、+ 系统跟随块）= 该主题的值。
+//   属性选择器特异性高于 `:root`，所以「写了 data-theme-scheme」时一定压过默认块。
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve, relative, sep } from 'node:path'
@@ -26,32 +40,65 @@ const argValue = (name) => {
   const index = process.argv.indexOf(name)
   return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : null
 }
-// `--source` / `--out` 只服务自测（夹具放临时目录）与手工排障：默认仍是真仓库那一对。
-const swiftSource = resolve(argValue('--source') ?? resolve(repoRoot, 'Core/DesignTokens.swift'))
+// `--source` / `--palette-source` / `--out` 只服务自测（夹具放临时目录）与手工排障：默认仍是真仓库那一对。
+const roleSource = resolve(argValue('--source') ?? resolve(repoRoot, 'Core/DesignTokens.swift'))
+const paletteSource = resolve(argValue('--palette-source') ?? resolve(repoRoot, 'Core/DesignTheme.swift'))
 const outFile = resolve(argValue('--out') ?? resolve(appDir, 'src/theme/tokens.generated.css'))
+const themesFile = resolve(argValue('--themes-out') ?? resolve(appDir, 'src/theme/themes.generated.ts'))
 
-/** 分组 → { swift 声明所属的块, 期望条数 } */
-const EXPECTED = {
+/** 数值刻度：分组 → { swift 声明所属的块, 期望条数 } */
+const EXPECTED_NUMBERS = {
   spacing: { block: 'Spacing', count: 7 },
   radius: { block: 'Radius', count: 5 },
   metric: { block: 'Metrics', count: 22 },
   overlay: { block: 'Overlay', count: 4 }, // Selection + Zebra 各 2 条
-  hairline: { block: 'Hairline', count: 2 },
   font: { block: 'TypeScale', count: 7 },
-  surface: { block: 'Surface', count: 5 },
-  text: { block: 'TextTone', count: 4 },
-  status: { block: 'StatusTone', count: 3 },
-  categorical: { block: 'CategoricalTone', count: 4 },
-  syntax: { block: 'SyntaxTone', count: 5 }, // 5 条字面量 + identifier 走 ALIASES
 }
 
 /**
- * 颜色枚举里「不是字面量 ThemeColor」的 case —— 必须显式登记，否则生成器判错。
+ * 颜色枚举 → { css 分组, 期望条数, 取值来源 }：
+ *   `role`    = 值在主题值表里（`case .x: return palette.y`）⇒ 每主题一份；
+ *   `literal` = 值就写在角色枚举里（`case .x: return ThemeColor(light: …, dark: …)`）⇒ 与主题无关；
+ *   `alias`   = 值指向另一个角色（`case .x: return Enum.case.color(in: theme)`）⇒ 必须登记在 ALIASES。
+ */
+const EXPECTED_COLORS = {
+  Surface: { group: 'surface', count: 5, from: 'role' },
+  TextTone: { group: 'text', count: 5, from: 'role' },
+  StatusTone: { group: 'status', count: 3, from: 'role' },
+  AccentFamily: { group: 'accent', count: 5, from: 'role' },
+  CategoricalTone: { group: 'categorical', count: 4, from: 'literal' },
+  SyntaxTone: { group: 'syntax', count: 6, from: 'alias' },
+}
+
+/**
+ * 颜色枚举里「不是字面量」的 case 指向谁 —— 必须显式登记，且与源里解析出的映射**逐条相符**。
  * 键 = `枚举名.case`，值 = 它指向的 `枚举名.case`。
  */
 const ALIASES = {
+  'SyntaxTone.keyword': 'AccentFamily.accentGlow',
   'SyntaxTone.identifier': 'TextTone.primary',
+  'SyntaxTone.string': 'AccentFamily.warm',
+  'SyntaxTone.number': 'AccentFamily.teal',
+  'SyntaxTone.function': 'AccentFamily.accent',
+  'SyntaxTone.comment': 'TextTone.tertiary',
 }
+
+/**
+ * 值表里**不由颜色角色引用**的字段 —— 必须在这里逐条登记（登记即声明「本侧打算怎么用」）。
+ * 未登记又没被角色引用 ⇒ 判错：那说明源里多了个没人消费的角色，或本侧漏生成了一组变量。
+ * 每个主题必须出现的条数 = 18 色 + 这两个（由 EXPECTED_THEME 钉住）。
+ */
+const PALETTE_CONSUMED_WITHOUT_ROLE = {
+  id: '主题 id 自身（写进 `[data-theme-scheme="…"]` 选择器，不生成变量）',
+  hairlineLight: '浅色发丝线的**实色**（随主题）⇒ `--ds-color-hairline-light`',
+  hairlineDarkAlpha: '深色发丝线的白色透明度（随主题）⇒ `--ds-hairline-dark-alpha`',
+}
+
+/** 每个主题值表必须恰好这么多字段（id + 18 色 + 发丝线两参数）。 */
+const EXPECTED_THEME_FIELDS = Object.keys(PALETTE_CONSUMED_WITHOUT_ROLE).length + 18
+
+/** 每个主题的 CSS 块数（浅色 / 显式深色 / 系统跟随）。 */
+const THEME_BLOCK_FORMS = 3
 
 const CSS_PREFIX = '--ds'
 
@@ -60,17 +107,18 @@ function fail(message) {
   process.exit(1)
 }
 
-// ── 解析 Swift 源 ───────────────────────────────────────────────────────────
+// ── 解析：数值刻度 + 颜色角色的归属（Core/DesignTokens.swift）─────────────────
 
-function parseSwift(text) {
+function parseRoleSource(text) {
   const lines = text.split(/\r?\n/)
-  const numbers = new Map() // 分组 → [{name, value, note}]
-  const colors = new Map() // 枚举名 → [{name, light, dark}]
-  const aliasesSeen = new Set()
+  const numbers = new Map() // 分组 → [{name, value}]
+  const roles = new Map() // 枚举名 → Map(case → palette 字段)
+  const literals = new Map() // 枚举名 → [{name, light, dark}]
+  const aliasSeen = new Map() // `枚举.case` → `枚举.case`
 
   // 块栈：**按花括号深度**维护（不只看 `}` 行）—— Swift 里 `public var color: ThemeColor {`
   // 与 `switch self {` 也是花括号，只认「整行 `}`」会让枚举在第五行就被弹出（实测踩过）。
-  const stack = [] // 元素 = 块名（`public enum X {` 给名，其余为 null）
+  const stack = []
   let pendingName = null
 
   const numbersBlockOf = {
@@ -78,14 +126,6 @@ function parseSwift(text) {
     Radius: 'radius',
     Metrics: 'metric',
     TypeScale: 'font',
-    Hairline: 'hairline',
-  }
-  const colorBlockOf = {
-    Surface: 'surface',
-    TextTone: 'text',
-    StatusTone: 'status',
-    CategoricalTone: 'categorical',
-    SyntaxTone: 'syntax',
   }
 
   const namedBlocks = () => stack.filter((entry) => entry !== null)
@@ -95,8 +135,8 @@ function parseSwift(text) {
   for (let i = 0; i < lines.length; i += 1) {
     const rawLine = lines[i]
     const lineNo = i + 1
-    const braceSlashes = rawLine.indexOf('//')
-    const line = braceSlashes >= 0 ? rawLine.slice(0, braceSlashes) : rawLine
+    const commentStart = rawLine.indexOf('//')
+    const line = commentStart >= 0 ? rawLine.slice(0, commentStart) : rawLine
 
     const enumMatch = line.match(/public enum (\w+)[^{]*\{/)
     if (enumMatch) pendingName = enumMatch[1]
@@ -117,26 +157,42 @@ function parseSwift(text) {
         const block = innermost()
         const key = numbersBlockOf[block]
         if (!key) fail(`第 ${lineNo} 行：出现了本生成器没登记的数字声明块（${stack.join('.')} / ${name}）—— 先登记再生成`)
-        if (type === 'Double' && key !== 'hairline' && key !== 'overlay') {
+        if (type === 'Double' && key !== 'overlay') {
           fail(`第 ${lineNo} 行：${key} 组的 ${name} 是 Double（本生成器只认 CGFloat）—— 结构变过，先看一遍`)
         }
         push(numbers, key, name, value)
       }
     }
 
-    const colorMatch = rawLine.match(/^\s*case \.(\w+): return ThemeColor\(light: 0x([0-9A-Fa-f]{6}), dark: 0x([0-9A-Fa-f]{6})\)\s*$/)
-    if (colorMatch) {
-      const [, name, light, dark] = colorMatch
+    // 取值在主题值表里（`case .x: return palette.y`）—— 角色与值的接线由这一行给出。
+    const roleMatch = rawLine.match(/^\s*case \.(\w+): return palette\.(\w+)\s*$/)
+    if (roleMatch) {
+      const [, name, field] = roleMatch
       const enumName = innermost()
-      if (!colorBlockOf[enumName]) {
-        fail(`第 ${lineNo} 行：颜色落在没登记的枚举里（${enumName ?? '当前块无名字'}）`)
+      if (!enumName || !EXPECTED_COLORS[enumName] || EXPECTED_COLORS[enumName].from !== 'role') {
+        fail(`第 ${lineNo} 行：role 取色落在没登记的枚举里（${enumName ?? '当前块无名字'}）`)
       }
-      const list = colors.get(enumName) ?? []
-      list.push({ name, light: light.toUpperCase(), dark: dark.toUpperCase() })
-      colors.set(enumName, list)
+      const list = roles.get(enumName) ?? new Map()
+      if (list.has(name)) fail(`第 ${lineNo} 行：${enumName}.${name} 重复声明`)
+      list.set(name, field)
+      roles.set(enumName, list)
     }
 
-    const aliasMatch = rawLine.match(/^\s*case \.(\w+): return (\w+)\.(\w+)\.color\s*$/)
+    // 与主题无关的字面量取色（`CategoricalTone`）。
+    const literalMatch = rawLine.match(/^\s*case \.(\w+): return ThemeColor\(light: 0x([0-9A-Fa-f]{6}), dark: 0x([0-9A-Fa-f]{6})\)\s*$/)
+    if (literalMatch) {
+      const [, name, light, dark] = literalMatch
+      const enumName = innermost()
+      if (!enumName || !EXPECTED_COLORS[enumName] || EXPECTED_COLORS[enumName].from !== 'literal') {
+        fail(`第 ${lineNo} 行：字面量取色落在没登记的枚举里（${enumName ?? '当前块无名字'}）—— 若它本该随主题，请改走主题值表`)
+      }
+      const list = literals.get(enumName) ?? []
+      list.push({ name, light: light.toUpperCase(), dark: dark.toUpperCase() })
+      literals.set(enumName, list)
+    }
+
+    // 别名（指向另一个角色）—— 必须登记在 ALIASES。
+    const aliasMatch = rawLine.match(/^\s*case \.(\w+): return (\w+)\.(\w+)\.color\(in: theme\)\s*$/)
     if (aliasMatch) {
       const [, name, targetEnum, targetCase] = aliasMatch
       const enumName = innermost()
@@ -147,7 +203,7 @@ function parseSwift(text) {
             ' ⇒ 令牌取值可能已经换了来源，先核对再生成',
         )
       }
-      aliasesSeen.add(`${enumName}.${name}`)
+      aliasSeen.set(`${enumName}.${name}`, ref)
     }
 
     for (let n = 0; n < opens; n += 1) {
@@ -158,9 +214,9 @@ function parseSwift(text) {
   }
 
   for (const key of Object.keys(ALIASES)) {
-    if (!aliasesSeen.has(key)) fail(`ALIASES 里登记的 ${key} 在 Swift 源里没有出现（别名被删了？）`)
+    if (!aliasSeen.has(key)) fail(`ALIASES 里登记的 ${key} 在 Swift 源里没有出现（别名被删了，或写法变了）`)
   }
-  return { numbers, colors }
+  return { numbers, roles, literals }
 }
 
 function push(map, group, name, value) {
@@ -169,127 +225,324 @@ function push(map, group, name, value) {
   map.set(group, list)
 }
 
-// ── 形状校验（条数 / 期望块）────────────────────────────────────────────────
+// ── 解析：主题枚举的 id（Core/DesignTheme.swift）─────────────────────────────
+//
+// `ThemePalette` 的 `id:` 写的是**枚举 case 名**（`.techBlue`），而 CSS 里的取值必须是
+// `DesignTheme.rawValue`（`tech-blue`）—— 两者是两回事，硬把 case 名写进选择器会让前端
+// 永远匹配不上（属性选择器不报错，只是不生效：又一例「静默失效」）。
 
-function checkShape({ numbers, colors }) {
-  const problems = []
-  for (const [group, spec] of Object.entries(EXPECTED)) {
-    const isColor = ['surface', 'text', 'status', 'categorical', 'syntax'].includes(group)
-    const got = isColor
-      ? colors.get(spec.block)?.length ?? 0
-      : numbers.get(group)?.length ?? 0
-    if (got !== spec.count) {
-      problems.push(`${group}：期望 ${spec.count} 条，实际 ${got} 条（Swift 块 ${spec.block}）`)
+function parseThemeMeta(text) {
+  const enumMatch = text.match(/public enum DesignTheme: [^{]*\{/)
+  if (!enumMatch) fail('值表源里找不到 `public enum DesignTheme`（主题 id 的唯一来源）')
+  const body = text.slice(text.indexOf(enumMatch[0]))
+  const ids = new Map()
+  for (const line of body.split(/\r?\n/)) {
+    const match = line.match(/^\s*case (\w+) = "([^"]+)"\s*$/)
+    if (match) ids.set(match[1], match[2])
+  }
+  if (ids.size < 2) fail(`DesignTheme 只解析到 ${ids.size} 个主题 id（写法变了？）`)
+
+  const fallback = text.match(/public static let fallback = DesignTheme\.(\w+)/)
+  if (!fallback) fail('解析不到 `DesignTheme.fallback`（默认主题的唯一来源）—— 写法变了？')
+  const derived = text.match(/public var isDerivedDraft: Bool \{\s*self != \.(\w+)\s*\}/)
+  if (!derived) fail('解析不到 `isDerivedDraft` 的判定式（哪个主题还是「推导草案」的唯一来源）—— 写法变了？')
+
+  const nameKeys = new Map()
+  for (const line of body.split(/\r?\n/)) {
+    const match = line.match(/^\s*case \.(\w+): return \.(designTheme\w+)\s*$/)
+    if (match) nameKeys.set(match[1], match[2])
+  }
+  for (const caseName of ids.keys()) {
+    if (!nameKeys.has(caseName)) fail(`DesignTheme.${caseName} 没有 nameKey（显示名的唯一来源）—— 写法变了？`)
+  }
+
+  return { ids, fallbackCase: fallback[1], derivedBaselineCase: derived[1], nameKeys }
+}
+
+function resolveThemeIds(palettes, meta) {
+  if (!meta.ids.has(meta.fallbackCase)) fail(`fallback 指向的 ${meta.fallbackCase} 不在主题 case 列表里`)
+  for (const palette of palettes) {
+    const id = palette.fields.get('id')
+    const caseName = id?.value
+    const rawId = meta.ids.get(caseName)
+    if (!rawId) {
+      fail(`${palette.swiftName} 的 id 是 .${caseName ?? '（缺）'}，但 DesignTheme 里没有这个 case 的 rawValue（改名了？）`)
+    }
+    id.kind = 'themeId'
+    id.caseName = caseName
+    id.value = rawId
+    id.fallback = caseName === meta.fallbackCase
+    // 「推导草案」= 源里那条判定式（`self != .<baseline>`）—— 本侧不另抄一份，免得不一致时界面照旧标着推导值。
+    id.derivedDraft = caseName !== meta.derivedBaselineCase
+    id.nameKey = meta.nameKeys.get(caseName)
+  }
+}
+
+// ── 解析：主题值表（Core/DesignTheme.swift）──────────────────────────────────
+
+function parsePalettes(text) {
+  const lines = text.split(/\r?\n/)
+  const palettes = []
+  let current = null
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const rawLine = lines[i]
+    const lineNo = i + 1
+
+    if (!current) {
+      const open = rawLine.match(/public static let (\w+) = ThemePalette\(/)
+      if (open) current = { swiftName: open[1], lineNo, fields: new Map(), order: [] }
+      continue
+    }
+
+    if (/^\s*\)\s*$/.test(rawLine)) {
+      palettes.push(current)
+      current = null
+      continue
+    }
+
+    const idMatch = rawLine.match(/^\s*id: \.(\w+),?\s*$/)
+    if (idMatch) {
+      setField(current, 'id', { kind: 'themeId', value: idMatch[1] }, lineNo)
+      continue
+    }
+
+    const colorMatch = rawLine.match(/^\s*(\w+): ThemeColor\(light: 0x([0-9A-Fa-f]{6}), dark: 0x([0-9A-Fa-f]{6})\),?\s*$/)
+    if (colorMatch) {
+      const [, name, light, dark] = colorMatch
+      setField(current, name, { kind: 'color', light: light.toUpperCase(), dark: dark.toUpperCase() }, lineNo)
+      continue
+    }
+
+    const hexMatch = rawLine.match(/^\s*(\w+): 0x([0-9A-Fa-f]{6}),?\s*$/)
+    if (hexMatch) {
+      setField(current, hexMatch[1], { kind: 'hex', light: hexMatch[2].toUpperCase() }, lineNo)
+      continue
+    }
+
+    const numberMatch = rawLine.match(/^\s*(\w+): ([\d.]+),?\s*$/)
+    if (numberMatch) {
+      setField(current, numberMatch[1], { kind: 'number', value: Number(numberMatch[2]) }, lineNo)
+      continue
+    }
+
+    if (rawLine.trim() !== '') {
+      fail(`第 ${lineNo} 行：值表里出现了本生成器没认出的字段写法（${rawLine.trim()}）—— 先登记再生成`)
     }
   }
-  for (const group of numbers.keys()) if (!EXPECTED[group]) problems.push(`多出未登记的数字分组 ${group}`)
-  for (const enumName of colors.keys()) {
-    const group = Object.entries(EXPECTED).find(([, spec]) => spec.block === enumName)?.[0]
-    if (!group) problems.push(`多出未登记的颜色枚举 ${enumName}`)
+
+  if (current) fail(`值表第 ${current.lineNo} 行开始的主题没有收尾括号（括号深度变了？）`)
+  return palettes
+}
+
+function setField(palette, name, value, lineNo) {
+  if (palette.fields.has(name)) fail(`第 ${lineNo} 行：值表 ${palette.swiftName} 里 ${name} 重复声明`)
+  palette.fields.set(name, value)
+  palette.order.push(name)
+}
+
+// ── 形状校验（条数 / 期望块 / 未消费字段）──────────────────────────────────
+
+function checkShape({ numbers, roles, literals, palettes }) {
+  const problems = []
+
+  for (const [group, spec] of Object.entries(EXPECTED_NUMBERS)) {
+    const got = numbers.get(group)?.length ?? 0
+    if (got !== spec.count) problems.push(`${group}：期望 ${spec.count} 条，实际 ${got} 条（Swift 块 ${spec.block}）`)
   }
+  for (const group of numbers.keys()) if (!EXPECTED_NUMBERS[group]) problems.push(`多出未登记的数字分组 ${group}`)
+
+  if (palettes.length < 2) problems.push(`主题值表只解析到 ${palettes.length} 份（至少要有默认主题 + 一个备选；写法变了？）`)
+
+  const consumedFields = new Set()
+  for (const [enumName, spec] of Object.entries(EXPECTED_COLORS)) {
+    const got =
+      spec.from === 'role'
+        ? roles.get(enumName)?.size ?? 0
+        : spec.from === 'literal'
+          ? literals.get(enumName)?.length ?? 0
+          : Object.keys(ALIASES).filter((key) => key.startsWith(`${enumName}.`)).length
+    if (got !== spec.count) problems.push(`${spec.group}：期望 ${spec.count} 条，实际 ${got} 条（Swift 枚举 ${enumName}）`)
+    if (spec.from !== 'role') continue
+    for (const field of roles.get(enumName).values()) consumedFields.add(field)
+  }
+  for (const enumName of roles.keys()) if (!EXPECTED_COLORS[enumName]) problems.push(`多出未登记的颜色枚举 ${enumName}`)
+  for (const enumName of literals.keys()) if (!EXPECTED_COLORS[enumName]) problems.push(`多出未登记的颜色枚举 ${enumName}`)
+
+  for (const palette of palettes) {
+    if (palette.fields.size !== EXPECTED_THEME_FIELDS) {
+      problems.push(
+        `${palette.swiftName}：期望 ${EXPECTED_THEME_FIELDS} 个字段，实际 ${palette.fields.size} 个（18 色 + ${Object.keys(PALETTE_CONSUMED_WITHOUT_ROLE).length} 个非角色字段）`,
+      )
+    }
+    for (const field of palette.order) {
+      if (consumedFields.has(field) || PALETTE_CONSUMED_WITHOUT_ROLE[field]) continue
+      problems.push(`${palette.swiftName}.${field}：值表里多出一个没人消费的字段（颜色角色没引用它、也没登记进 PALETTE_CONSUMED_WITHOUT_ROLE）`)
+    }
+    for (const field of consumedFields) {
+      if (!palette.fields.has(field)) problems.push(`${palette.swiftName} 缺字段 ${field}（有颜色角色引用它）`)
+    }
+    const id = palette.fields.get('id')
+    if (!id || id.kind !== 'themeId') problems.push(`${palette.swiftName} 缺 id（主题选择器的取值来源）`)
+  }
+
+  const ids = palettes.map((palette) => palette.fields.get('id')?.value)
+  if (new Set(ids).size !== ids.length) problems.push(`主题 id 有重复：${ids.join(' / ')}`)
+
+  const fallbackCount = palettes.filter((palette) => palette.fields.get('id')?.fallback).length
+  if (fallbackCount !== 1) problems.push(`默认主题（DesignTheme.fallback）应当恰好一个，实际 ${fallbackCount} 个`)
+
   return problems
 }
 
 // ── 渲染 ────────────────────────────────────────────────────────────────────
 
 const numberVar = (group, name) => `${CSS_PREFIX}-${group}-${name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`
+const colorVar = (group, name) => `${CSS_PREFIX}-color-${group}-${name}`
 
-function render({ numbers, colors }, sourceInfo) {
+function render({ numbers, roles, literals, palettes }, sourceInfo) {
   const lines = []
+  const colorGroups = Object.entries(EXPECTED_COLORS)
+    .filter(([, spec]) => spec.from === 'role')
+    .map(([enumName, spec]) => [spec.group, enumName])
+  const categoricalEnum = Object.entries(EXPECTED_COLORS).find(([, spec]) => spec.from === 'literal')?.[0]
+
   lines.push('/*')
   lines.push(' * ⚠️ 生成物 —— 不许手改（改了下次生成即被覆盖，且 CI/闸门会判红）。')
   lines.push(' *')
-  lines.push(' * 令牌取值的**单一来源** = macOS 侧 Core/DesignTokens.swift（§8.5.3「令牌取值」属「一样」的五项之一）。')
+  lines.push(' * 令牌取值的**单一来源** = macOS 侧 Core/DesignTokens.swift（角色与刻度）')
+  lines.push(' *                        + Core/DesignTheme.swift（每主题一份值表；§8.5.3「令牌取值」属「一样」的五项之一）。')
   lines.push(' * 重新生成：node windows/App/tools/gen-tokens.mjs（比对：--check）')
-  lines.push(` * 源 sha256：${sourceInfo.sha256}`)
+  lines.push(` * 源 sha256：role ${sourceInfo.roleSha256.slice(0, 12)} / palette ${sourceInfo.paletteSha256.slice(0, 12)}`)
+  lines.push(' *')
+  lines.push(' * 主题块：`:root` 三态 = 默认主题的值；`[data-theme-scheme="<id>"]` 三态 = 该主题的值')
+  lines.push(' * （属性选择器特异性更高 ⇒ 写了 data-theme-scheme 时一定压过默认块）。')
   lines.push(' */')
   lines.push('')
   lines.push(':root {')
 
-  const emit = (group, comment) => {
+  const emitNumber = (group, comment) => {
     const list = numbers.get(group)
     if (!list) return
     lines.push(`  /* ${comment} */`)
     for (const { name, value } of list) lines.push(`  ${numberVar(group, name)}: ${value}px;`)
   }
 
-  emit('spacing', '间距刻度（Spacing）')
-  emit('radius', '圆角刻度（Radius）')
-  emit('metric', '度量（Metrics）')
-  emit('font', '排版级差（TypeScale）')
-
+  emitNumber('spacing', '间距刻度（Spacing）')
+  emitNumber('radius', '圆角刻度（Radius）')
+  emitNumber('metric', '度量（Metrics）')
+  emitNumber('font', '排版级差（TypeScale）')
   lines.push('  /* 叠加层透明度（Overlay；取值是 0..1 的数，不是色值） */')
   for (const { name, value } of numbers.get('overlay') ?? []) {
     lines.push(`  ${numberVar('overlay', name)}: ${value};`)
   }
-  lines.push('  /* 发丝线透明度（Hairline） */')
-  for (const { name, value } of numbers.get('hairline') ?? []) {
-    lines.push(`  ${numberVar('hairline', name)}: ${value};`)
-  }
   lines.push('')
 
-  // 颜色：浅色档写在 :root，深色档写在 [data-theme='dark'] 与系统跟随块里。
-  const colorVar = (group, name) => `${CSS_PREFIX}-color-${group}-${name}`
+  const categoricalEntries = literals.get(categoricalEnum) ?? []
 
-  const colorGroups = [
-    ['surface', 'Surface', '表面层次（明度由暗到亮：window → sidebar → content → panel → raised）'],
-    ['text', 'TextTone', '文本层级'],
-    ['status', 'StatusTone', '状态色'],
-    ['categorical', 'CategoricalTone', '分类色（身份色，不是状态色）'],
-    ['syntax', 'SyntaxTone', '语法着色'],
-  ]
-
-  lines.push('  /* 浅色档 */')
-  for (const [group, enumName, comment] of colorGroups) {
-    lines.push(`  /* ${comment} */`)
-    for (const { name, light } of colors.get(enumName) ?? []) {
-      const aliasTarget = ALIASES[`${enumName}.${name}`]
-      if (aliasTarget) {
-        const [targetEnum, targetCase] = aliasTarget.split('.')
-        const targetGroup = Object.entries(EXPECTED).find(([, spec]) => spec.block === targetEnum)?.[0]
-        lines.push(`  ${colorVar(group, name)}: var(${colorVar(targetGroup, targetCase)});`)
-        continue
+  const emitColors = (palette, mode, indent) => {
+    const pad = ' '.repeat(indent)
+    for (const [group, enumName] of colorGroups) {
+      const roleList = roles.get(enumName) ?? new Map()
+      for (const [name, field] of roleList) {
+        const value = palette.fields.get(field)
+        if (!value) fail(`${palette.swiftName} 缺字段 ${field}（角色 ${enumName}.${name} 引用它）`)
+        lines.push(`${pad}${colorVar(group, name)}: #${value[mode]};`)
       }
-      lines.push(`  ${colorVar(group, name)}: #${light};`)
+    }
+    // 语法六档：一律是别的角色的变量引用（取值不在这里，改一处两端同时变）。
+    for (const key of Object.keys(ALIASES)) {
+      const [enumName, name] = key.split('.')
+      if (enumName !== 'SyntaxTone') continue
+      const [targetEnum, targetCase] = ALIASES[key].split('.')
+      const targetGroup = EXPECTED_COLORS[targetEnum]?.group
+      if (!targetGroup) fail(`ALIASES 的 ${key} 指向没登记的分组（${targetEnum}）`)
+      lines.push(`${pad}${colorVar('syntax', name)}: var(${colorVar(targetGroup, targetCase)});`)
+    }
+    const hairlineLight = palette.fields.get('hairlineLight')
+    const hairlineDarkAlpha = palette.fields.get('hairlineDarkAlpha')
+    if (mode === 'light') {
+      lines.push(`${pad}${CSS_PREFIX}-color-hairline-light: #${hairlineLight.light};`)
+    } else {
+      lines.push(`${pad}${CSS_PREFIX}-hairline-dark-alpha: ${hairlineDarkAlpha.value};`)
     }
   }
+
+  const emitCategorical = (mode, indent) => {
+    const pad = ' '.repeat(indent)
+    for (const { name, light, dark } of categoricalEntries) {
+      lines.push(`${pad}${colorVar('categorical', name)}: #${mode === 'light' ? light : dark};`)
+    }
+  }
+
+  // ── 默认主题（DesignTheme.fallback）写在 `:root` 三态上 ──
+  const fallback = palettes[0]
+  lines.push('  /* 浅色档：默认主题（与下面 [data-theme-scheme] 的第一块同值） */')
+  emitCategorical('light', 2)
+  emitColors(fallback, 'light', 2)
   lines.push('}')
   lines.push('')
 
   lines.push(":root[data-theme='dark'] {")
-  lines.push('  /* 深色档 */')
-  for (const [group, enumName] of colorGroups) {
-    for (const { name, dark } of colors.get(enumName) ?? []) {
-      const aliasTarget = ALIASES[`${enumName}.${name}`]
-      if (aliasTarget) {
-        const [targetEnum, targetCase] = aliasTarget.split('.')
-        const targetGroup = Object.entries(EXPECTED).find(([, spec]) => spec.block === targetEnum)?.[0]
-        lines.push(`  ${colorVar(group, name)}: var(${colorVar(targetGroup, targetCase)});`)
-        continue
-      }
-      lines.push(`  ${colorVar(group, name)}: #${dark};`)
-    }
-  }
+  lines.push('  /* 深色档：默认主题 */')
+  emitCategorical('dark', 2)
+  emitColors(fallback, 'dark', 2)
   lines.push('}')
   lines.push('')
 
-  // 系统跟随：只在没有显式 data-theme 时生效（显式选择优先，口径与 macOS 侧一致）。
   lines.push('@media (prefers-color-scheme: dark) {')
   lines.push("  :root:not([data-theme='light']):not([data-theme='dark']) {")
-  for (const [group, enumName] of colorGroups) {
-    for (const { name, dark } of colors.get(enumName) ?? []) {
-      const aliasTarget = ALIASES[`${enumName}.${name}`]
-      if (aliasTarget) {
-        const [targetEnum, targetCase] = aliasTarget.split('.')
-        const targetGroup = Object.entries(EXPECTED).find(([, spec]) => spec.block === targetEnum)?.[0]
-        lines.push(`    ${colorVar(group, name)}: var(${colorVar(targetGroup, targetCase)});`)
-        continue
-      }
-      lines.push(`    ${colorVar(group, name)}: #${dark};`)
-    }
-  }
+  emitColors(fallback, 'dark', 4)
   lines.push('  }')
   lines.push('}')
+  lines.push('')
+
+  // ── 每个主题一个变量块（§9.2）──
+  for (const palette of palettes) {
+    const id = palette.fields.get('id').value
+    const caseName = palette.fields.get('id').caseName
+    lines.push(`/* 主题：${id}（${palette.swiftName} / DesignTheme.${caseName}）—— ${THEME_BLOCK_FORMS} 态 */`)
+    lines.push(`:root[data-theme-scheme='${id}'] {`)
+    emitCategorical('light', 2)
+    emitColors(palette, 'light', 2)
+    lines.push('}')
+    lines.push('')
+    lines.push(`:root[data-theme-scheme='${id}'][data-theme='dark'] {`)
+    emitColors(palette, 'dark', 2)
+    lines.push('}')
+    lines.push('')
+    lines.push('@media (prefers-color-scheme: dark) {')
+    lines.push(`  :root[data-theme-scheme='${id}']:not([data-theme='light']):not([data-theme='dark']) {`)
+    emitColors(palette, 'dark', 4)
+    lines.push('  }')
+    lines.push('}')
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
+// ── 渲染：主题集（供前端下拉用；同样是从源派生，不手抄）─────────────────────
+
+function renderThemeModule(palettes) {
+  const lines = []
+  lines.push('// ⚠️ 生成物 —— 不许手改（改了下次生成即被覆盖，且闸门会判红）。')
+  lines.push('//')
+  lines.push('// 主题集（§9.2「候选同名同值」）：id / 显示名键 / 是否「推导草案」/ 谁是默认主题')
+  lines.push('// 全部由 `tools/gen-tokens.mjs` 从 macOS 侧 Core/DesignTheme.swift 解析 —— 本侧不手抄，')
+  lines.push('// 免得对侧改了主题集（改名 / 增删 / 值到位后不再是推导草案）而这边照旧显示。')
+  lines.push('// 重新生成：node windows/App/tools/gen-tokens.mjs（比对：--check）')
+  lines.push('')
+  lines.push('export const THEME_SCHEMES = [')
+  for (const palette of palettes) {
+    const id = palette.fields.get('id')
+    lines.push(
+      `  { id: '${id.value}', swift: '${id.caseName}', nameKey: '${id.nameKey}', fallback: ${id.fallback}, derivedDraft: ${id.derivedDraft} },`,
+    )
+  }
+  lines.push('] as const')
+  lines.push('')
+  lines.push("export type ThemeSchemeId = (typeof THEME_SCHEMES)[number]['id']")
   lines.push('')
   return lines.join('\n')
 }
@@ -298,37 +551,65 @@ function render({ numbers, colors }, sourceInfo) {
 
 const { createHash } = await import('node:crypto')
 
-if (!existsSync(swiftSource)) {
-  fail(`权威令牌源不在盘上：${relative(repoRoot, swiftSource)}（§8.5.3：令牌取值没有基准 ⇒ 不许生成，更不许通过）`)
+for (const [label, path] of [
+  ['角色与刻度源', roleSource],
+  ['主题值表源', paletteSource],
+]) {
+  if (!existsSync(path)) {
+    fail(`${label}不在盘上：${relative(repoRoot, path)}（§8.5.3：令牌取值没有基准 ⇒ 不许生成，更不许通过）`)
+  }
 }
 
-const swiftText = readFileSync(swiftSource, 'utf8')
-const sha256 = createHash('sha256').update(swiftText, 'utf8').digest('hex')
-const parsed = parseSwift(swiftText)
+const roleText = readFileSync(roleSource, 'utf8')
+const paletteText = readFileSync(paletteSource, 'utf8')
+const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex')
+const sourceInfo = { roleSha256: sha256(roleText), paletteSha256: sha256(paletteText) }
+
+const parsed = {
+  ...parseRoleSource(roleText),
+  palettes: parsePalettes(paletteText),
+}
+resolveThemeIds(parsed.palettes, parseThemeMeta(paletteText))
 const problems = checkShape(parsed)
 if (problems.length > 0) {
   for (const problem of problems) process.stderr.write(`✗ ${problem}\n`)
-  fail('Swift 令牌源的形状与 EXPECTED 对不上（对侧改名 / 删项 / 加项）⇒ 先核对，别让前端悄悄少几个变量')
+  fail('Swift 令牌源的形状与 EXPECTED 对不上（对侧改名 / 删项 / 加项 / 值表换了结构）⇒ 先核对，别让前端悄悄少几个变量')
 }
 
-const output = render(parsed, { sha256 })
+const output = render(parsed, sourceInfo)
 const outRelative = relative(repoRoot, outFile).split(sep).join('/')
+const themesRelative = relative(repoRoot, themesFile).split(sep).join('/')
 const checkOnly = process.argv.includes('--check')
 
+// 两个生成物（CSS 变量 + 主题集 TS）同一套来源、同一套形状校验：比对 / 写盘都走这一张表。
+const artifacts = [
+  { file: outFile, relative: outRelative, label: 'CSS 变量', text: output },
+  { file: themesFile, relative: themesRelative, label: '主题集 TS', text: renderThemeModule(parsed.palettes) },
+]
+
 if (checkOnly) {
-  if (!existsSync(outFile)) fail(`生成物不在盘上：${outRelative}（跑一次 node tools/gen-tokens.mjs）`)
-  const onDisk = readFileSync(outFile, 'utf8')
-  if (onDisk !== output) {
-    fail(`生成物与 Swift 令牌源不一致：${outRelative} —— 手改过生成物，或改了源没重新生成`)
+  for (const artifact of artifacts) {
+    if (!existsSync(artifact.file)) {
+      fail(`生成物不在盘上：${artifact.relative}（跑一次 node tools/gen-tokens.mjs）`)
+    }
+    if (readFileSync(artifact.file, 'utf8') !== artifact.text) {
+      fail(`生成物与 Swift 令牌源不一致：${artifact.relative} —— 手改过生成物，或改了源没重新生成`)
+    }
   }
-  process.stdout.write(`✅ 令牌生成物与源一致（${outRelative}；源 sha256 ${sha256.slice(0, 12)}）\n`)
+  process.stdout.write(
+    `✅ 令牌生成物与源一致（${artifacts.length} 份；theme ${parsed.palettes.length} 个）\n`,
+  )
   process.exit(0)
 }
 
-mkdirSync(dirname(outFile), { recursive: true })
-writeFileSync(outFile, output, 'utf8')
+for (const artifact of artifacts) {
+  mkdirSync(dirname(artifact.file), { recursive: true })
+  writeFileSync(artifact.file, artifact.text, 'utf8')
+}
 const counts = [
   ...[...parsed.numbers.entries()].map(([group, list]) => `${group} ${list.length}`),
-  ...[...parsed.colors.entries()].map(([group, list]) => `${group} ${list.length}`),
+  ...[...parsed.roles.entries()].map(([enumName, list]) => `${EXPECTED_COLORS[enumName].group} ${list.size}`),
+  ...[...parsed.literals.entries()].map(([enumName, list]) => `${EXPECTED_COLORS[enumName].group} ${list.length}`),
+  `theme ${parsed.palettes.length}`,
 ].join(' / ')
-process.stdout.write(`✅ 已生成 ${outRelative}（${counts}；源 sha256 ${sha256.slice(0, 12)}）\n`)
+process.stdout.write(`✅ 已生成 ${outRelative} + ${themesRelative}（${counts}）\n`)

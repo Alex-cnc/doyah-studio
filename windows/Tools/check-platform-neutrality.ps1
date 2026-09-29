@@ -21,6 +21,19 @@ if (-not $python) {
   exit 1
 }
 
+# 空跑不许通过（第 30 轮实测）：工作目录不对时，`Scripts/check-platform-neutrality.py` 会把三书
+# **整批跳过**、照样退出 0 ⇒ 本侧闸门报「✅ 通过」，而它其实一本书都没读。受检输入是本侧能点名的
+# 东西：三书必须在盘上（缺一份就判红，不许把「没读」读成「合规」）。
+$missing = @()
+foreach ($doc in @('Docs\需求规范书.md', 'Docs\产品能力规划说明书.md', 'Docs\概要设计.md')) {
+  if (-not (Test-Path (Join-Path $RepoRoot $doc))) { $missing += $doc }
+}
+if ($missing.Count -gt 0) {
+  Write-DoyahFail ("受检输入不在盘上：{0} ⇒ 判据会整批跳过（空跑不许读成通过）" -f ($missing -join '、'))
+  Write-DoyahResult -Status FAIL -Code 1
+  exit 1
+}
+
 $rc = Invoke-DoyahSharedGate -RepoRoot $RepoRoot -Python $python -RelativeScript 'Scripts/check-platform-neutrality.py'
 
 if ($rc -ne 0) {

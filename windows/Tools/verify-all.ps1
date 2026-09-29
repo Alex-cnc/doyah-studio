@@ -60,6 +60,11 @@ function Invoke-ChildGate {
   }
   $splat = @{ RepoRoot = $RepoRoot }
   foreach ($key in $ChildArgs.Keys) { $splat[$key] = $ChildArgs[$key] }
+  # 工作目录隔离（第 30 轮实测）：子闸门是**同进程**调用的（`& $child`），它 Push-Location 之后
+  # 若在半路抛异常 / 提前 return，Pop-Location 就轮不到 ⇒ 后面所有项都在别人的目录里跑：
+  # `Scripts/gen-platform-parity.py` 这类按仓根相对路径读三书的判据当场 FileNotFoundError
+  # （报成「判据判红」），而 `check-platform-neutrality.py` 会**静默跳过三书、照样退出 0**（假绿）。
+  $cwdBefore = (Get-Location).Path
   try {
     & $child @splat
     $rc = $LASTEXITCODE
@@ -68,6 +73,13 @@ function Invoke-ChildGate {
     Write-DoyahFail ("子闸门抛异常：{0}" -f $_.Exception.Message)
     [void]$failed.Add(("{0} —— 抛异常：{1}" -f $Name, $_.Exception.Message))
     return
+  }
+  finally {
+    if ((Get-Location).Path -ne $cwdBefore) {
+      $leaked = (Get-Location).Path
+      Set-Location -LiteralPath $cwdBefore
+      Write-Host ("    ℹ️ 子闸门没有还原工作目录（跑在 {0}），本项已代为还原" -f $leaked)
+    }
   }
   switch ($rc) {
     0 { Write-DoyahPass $Name; [void]$ran.Add($Name) }
