@@ -124,3 +124,97 @@ final class CommandPaletteTests: XCTestCase {
         }
     }
 }
+
+/// **窗口标题与标题栏搜索栏**（FR-EDIT-37，2026-09-30 需求提出者）。
+///
+/// 需求两半：① 主界面标题跟着活动栏走（`Doyah Studio - <视图名>`）；② 标题后面居中放一个搜索栏。
+///
+/// 判据三层（照「用户可见的小行为也要判据」那套写法）：
+///  ① **拼装**：`WindowTitle.text` 是唯一出口，分隔符只在它那里；
+///  ② **派生**：每个活动栏项都有中英两份标题名（新增项不许悄悄没有标题）；
+///  ③ **接线（源锚点）**：`MainWindow` 真把标题交给 `navigationTitle`、把搜索栏放在工具条**
+///     正中**位（`.toolbarPrincipal`），并在回车时把词交给**命令面板**（不另做一套搜索）。
+final class WindowTitleConventionTests: XCTestCase {
+
+    private func source(_ relative: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
+    }
+
+    // MARK: ① 拼装
+
+    func testTitleIsBrandPlusViewName() {
+        XCTAssertEqual(WindowTitle.text(brand: "Doyah Studio", suffix: "Database"), "Doyah Studio - Database")
+        // 分隔符只有一处出处：两段之间恰好是这个串（换短横 / 改空格都要在这里改）。
+        XCTAssertEqual(WindowTitle.separator, " - ")
+    }
+
+    // MARK: ② 派生（逐个活动栏项，中英各一份）
+
+    func testEveryActivityItemHasBothLanguageTitles() {
+        let expected: [ActivityBarItem: (zh: String, en: String)] = [
+            .database: ("数据库", "Database"),
+            .workspace: ("工作区", "Workspace"),
+            .notes: ("笔记", "Notes"),
+        ]
+        for item in ActivityBarItem.allCases {
+            guard let names = expected[item] else {
+                return XCTFail("活动栏项 \(item.rawValue) 没有登记标题名 —— 新项要连标题一起加")
+            }
+            let zh = WindowTitle.text(
+                brand: LocalizedStrings.text(.appBrand, language: .simplifiedChinese),
+                suffix: LocalizedStrings.text(item.titleKey, language: .simplifiedChinese)
+            )
+            let en = WindowTitle.text(
+                brand: LocalizedStrings.text(.appBrand, language: .english),
+                suffix: LocalizedStrings.text(item.titleKey, language: .english)
+            )
+            XCTAssertEqual(zh, "Doyah Studio - \(names.zh)")
+            // 英文界面正是需求原话给的那组形状（`Doyah Studio - Database` 这种）。
+            XCTAssertEqual(en, "Doyah Studio - \(names.en)")
+        }
+    }
+
+    func testBrandIsNotTranslated() {
+        // 品牌名中英同值（产品名不翻译）。改这条要有意识：窗口标题与「关于」那类入口共用它。
+        XCTAssertEqual(LocalizedStrings.text(.appBrand, language: .simplifiedChinese), "Doyah Studio")
+        XCTAssertEqual(LocalizedStrings.text(.appBrand, language: .english), "Doyah Studio")
+        // 搜索栏的占位文案两种语言都得有（空串 = 界面上一个空白的搜索框）。
+        XCTAssertFalse(LocalizedStrings.text(.windowSearchPlaceholder, language: .simplifiedChinese).isEmpty)
+        XCTAssertFalse(LocalizedStrings.text(.windowSearchPlaceholder, language: .english).isEmpty)
+    }
+
+    // MARK: ③ 接线（源锚点）
+
+    func testMainWindowFeedsTitleAndCenteredSearchField() throws {
+        let text = try source("App/Views/MainWindow.swift")
+
+        guard text.contains(".navigationTitle(windowTitle)") else {
+            return XCTFail("窗口标题没有接到 `navigationTitle` —— 判据锚点变了，请更新这条判据而不是删掉它")
+        }
+        guard text.contains("private var windowTitle: String"), text.contains("WindowTitle.text(") else {
+            return XCTFail("标题不是由 `WindowTitle` 派生的（可能被写死成了另一份名字表）")
+        }
+        guard text.contains("appState.selectedActivityItem.titleKey") else {
+            return XCTFail("标题没有跟着活动栏项走（没有取 `selectedActivityItem.titleKey`）")
+        }
+        guard text.contains("placement: .toolbarPrincipal") else {
+            return XCTFail("搜索栏不在工具条的**正中**位（`.toolbarPrincipal`）—— 需求要的是「标题后面居中」")
+        }
+        guard text.contains("appState.presentCommandPalette(seed: appState.globalSearchQuery)") else {
+            return XCTFail("回车没有把词交给命令面板 —— 搜索栏成了摆设")
+        }
+    }
+
+    func testPaletteSeedsFromSearchFieldOnce() throws {
+        let text = try source("App/Views/CommandPaletteView.swift")
+        guard text.contains("appState.commandPaletteSeedQuery"), text.contains("query = seed") else {
+            return XCTFail("命令面板没有读标题栏搜索栏带进来的初始查询")
+        }
+        guard text.contains("appState.commandPaletteSeedQuery = nil") else {
+            return XCTFail("种子没有在面板退出时清掉 —— 下一次 ⌘K 会带着上一次的词")
+        }
+    }
+}

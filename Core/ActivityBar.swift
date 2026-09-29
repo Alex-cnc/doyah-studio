@@ -72,6 +72,29 @@ public enum ActivityBarItem: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
+/// **窗口标题**（FR-EDIT-37，2026-09-30 需求提出者）。
+///
+/// 需求原话：「软件主界面的标题就是一个 Doyah Studio 太浪费了，应该在活动栏来回切换时标题要跟着变
+/// 成 Doyah Studio - Workspace，Doyah Studio - Database，Doyah Studio - Notes，Doyah Studio - Retro
+/// 这种，标题后面居中可以放一个长长的搜索栏」。
+///
+/// 三条口径：
+///  ① **品牌段不翻译**（产品名），**视图名走语言表** ⇒ 中文界面出「Doyah Studio - 数据库」、
+///     英文界面出「Doyah Studio - Database」（他给的那组英文正是英文界面的形状）；
+///  ② **标题由活动栏项派生**（`ActivityBarItem.titleKey`），这里不另存一份视图名 ——
+///     将来 Retro 模块进活动栏那天，标题自动跟上，不需要再改这个文件；
+///  ③ 拼装在 Core 而**文案不在 Core**：两段都由调用方从语言表取（R-45 的棘轮压着 Core 里的中文字面量）。
+///
+/// 品牌名与视图名之间的分隔符也收在这里：两处各写一遍「 - 」迟早会漂。
+public enum WindowTitle {
+    public static let separator = " - "
+
+    /// `Doyah Studio - Database`。
+    public static func text(brand: String, suffix: String) -> String {
+        brand + separator + suffix
+    }
+}
+
 /// 活动栏底部的**动作**（不是视图）。
 public enum ActivityBarAction: String, CaseIterable, Sendable, Identifiable {
     case account

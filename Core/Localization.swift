@@ -205,6 +205,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case licenseMissing
     case activityNotes
     case menuViewNotes
+    /// 窗口标题里的品牌段（FR-EDIT-37）：产品名，中英同值。
+    case appBrand
+    /// 标题栏搜索栏的占位文案（FR-EDIT-37）。
+    case windowSearchPlaceholder
     case licenseUnreadable
     case licenseUnreadableWithReason
     case licenseActive
@@ -1976,6 +1980,9 @@ public enum LocalizedStrings {
         .licenseMissing: [.simplifiedChinese: "还没有放许可证（当前呈现 Standard）", .english: "No license yet (Standard is shown)"],
         .activityNotes: [.simplifiedChinese: "笔记", .english: "Notes"],
         .menuViewNotes: [.simplifiedChinese: "笔记", .english: "Notes"],
+        // 窗口标题与标题栏搜索栏（FR-EDIT-37）：品牌名中英同值；占位文案按语言各一份。
+        .appBrand: [.simplifiedChinese: "Doyah Studio", .english: "Doyah Studio"],
+        .windowSearchPlaceholder: [.simplifiedChinese: "搜索…", .english: "Search…"],
         .licenseUnreadable: [.simplifiedChinese: "许可证文件读不出来（格式不对或已损坏）", .english: "The license file cannot be read (bad format or corrupted)"],
         .licenseUnreadableWithReason: [.simplifiedChinese: "许可证读不出来：%@", .english: "Cannot read the license: %@"],
         .licenseActive: [.simplifiedChinese: "许可证有效", .english: "License is valid"],

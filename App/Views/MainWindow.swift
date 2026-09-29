@@ -55,6 +55,17 @@ struct MainWindow: View {
         }
     }
 
+    /// **窗口标题**（FR-EDIT-37）：`Doyah Studio - 数据库 / - 工作区 / - 笔记`。
+    ///
+    /// 由**活动栏项**派生（`ActivityBarItem.titleKey`）—— 以后 Retro 模块进活动栏，标题自动跟上；
+    /// 品牌段与视图名都从语言表取（`appBrand` / 视图名），所以中英界面各出各的形状。
+    private var windowTitle: String {
+        WindowTitle.text(
+            brand: L(.appBrand),
+            suffix: L(appState.selectedActivityItem.titleKey)
+        )
+    }
+
     /// **下方面板（问题 / 输出 / 终端 / 调试控制台）在「工作区」与「数据库」两段之间共享**
     /// （2026-09-30 需求提出者实测反馈：「数据库客户端界面的底部栏怎么只在数据库界面出现，到了工作区
     /// 就没有了呢…要不然主工作区下方啥也没有，要打开 terminal 开始工作还要先点击 database 活动栏」）。
@@ -106,6 +117,24 @@ struct MainWindow: View {
                 NotesEditorView()
             }
             }
+            // **窗口标题跟着活动栏走**（FR-EDIT-37，2026-09-30 需求提出者）：
+            // 原话「软件主界面的标题就是一个 Doyah Studio 太浪费了…标题要跟着变成
+            // Doyah Studio - Workspace / - Database / - Notes 这种」。
+            .navigationTitle(windowTitle)
+            // **标题后面居中的搜索栏**（FR-EDIT-37）：`.toolbarPrincipal` = 系统工具条的**正中**位
+            // （macOS 12+），宽度由系统给。要「更长」的自绘输入框得换成
+            // `ToolbarItem(placement: .principal)` + 自定宽度 —— 代价是与窗口标题抢同一块位置，
+            // 需要自己排布；先按系统原生形态落地，观感不合适再换（记在需求行的「仍未做」里）。
+            .searchable(
+                text: $appState.globalSearchQuery,
+                placement: .toolbarPrincipal,
+                prompt: Text(L(.windowSearchPlaceholder))
+            )
+            // 回车把词交给**命令面板**：搜索栏不另做一套搜索，`CommandPalette.search` 与
+            // `AppCommandCatalog` 仍是唯一来源（面板里能接着改词，体验与 ⌘K 一致）。
+            .onSubmit(of: .search) {
+                appState.presentCommandPalette(seed: appState.globalSearchQuery)
+            }
         }
         .sheet(item: $formMode) { mode in
             ConnectionFormView(
@@ -138,7 +167,7 @@ struct MainWindow: View {
         // 说明：本轮的快捷键**没有**登记进 `AppShortcut`（帮助面板因此还看不到它），
         // 这条缺口写在需求行的"仍未做"里，不假装已完成。
         .background(
-            Button("") { appState.isCommandPalettePresented = true }
+            Button("") { appState.presentCommandPalette() }
                 .keyboardShortcut("k", modifiers: .command)
                 .opacity(0)
                 .frame(width: 0, height: 0)

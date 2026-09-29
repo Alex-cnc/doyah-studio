@@ -3931,6 +3931,25 @@ final class AppState: ObservableObject {
 
     @Published var isCommandPalettePresented = false
 
+    /// 标题栏搜索栏的输入（FR-EDIT-37，2026-09-30 需求提出者「标题后面居中可以放一个长长的搜索栏」）。
+    ///
+    /// 搜索栏**不自己实现一套搜索**：回车把词交给命令面板当初始查询，
+    /// 匹配（`CommandPalette.search`）与命令清单（`AppCommandCatalog`）仍是唯一来源。
+    @Published var globalSearchQuery = ""
+
+    /// 命令面板的**初始查询**：标题栏搜索栏带进来的词；`nil` = 从 ⌘K 打开、不带词。
+    /// 面板进 `onAppear` 时读它一次，退出时清掉（否则下一次 ⌘K 会带着上一次的词）。
+    @Published var commandPaletteSeedQuery: String?
+
+    /// 打开命令面板（`seed` = 带一个初始查询词）。
+    ///
+    /// 两个入口共用这一处：⌘K 不带词，标题栏搜索栏带词 —— 免得两边各写一遍「置标志位」而后漂开。
+    func presentCommandPalette(seed: String? = nil) {
+        let trimmed = seed?.trimmingCharacters(in: .whitespacesAndNewlines)
+        commandPaletteSeedQuery = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        isCommandPalettePresented = true
+    }
+
     /// 执行命令面板选中的命令。
     ///
     /// 分派键是**稳定 id**（不是标题 —— 改文案就会把动作改没）。

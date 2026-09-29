@@ -72,7 +72,13 @@ struct CommandPaletteView: View {
         }
         .frame(width: 560, height: 420)
         .background(Theme.surface(.panel))
-        .onAppear { isSearchFocused = true }
+        .onAppear {
+            // 标题栏搜索栏带进来的词（FR-EDIT-37）：落在输入框里，之后就是普通的即时筛选。
+            if let seed = appState.commandPaletteSeedQuery, !seed.isEmpty { query = seed }
+            isSearchFocused = true
+        }
+        // 种子只生效一次：不在这里清掉的话，下一次用 ⌘K 打开会带着上一次的词。
+        .onDisappear { appState.commandPaletteSeedQuery = nil }
         // ↑↓ 与 Esc：面板自己的键盘语义，不走全局快捷键表。
         .onKeyPress(.downArrow) {
             selectedIndex = min(selectedIndex + 1, max(matches.count - 1, 0))

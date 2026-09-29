@@ -57,14 +57,18 @@ final class LocalizationTests: XCTestCase {
 
     // MARK: - 文案内容自洽（防「串位」与漏翻）
 
-    /// 语言中立的键：本来就是同一个串，或本来就不含汉字（URL / 模型名 / 通用术语）。
+    /// 语言中立的键：本来就是同一个串，或本来就不含汉字（URL / 模型名 / 通用术语 / **产品名**）。
     ///
-    /// 只有这三个键允许「中英同形」或「中文里没有汉字」，其余键都必须是真的中文，
+    /// 只有这四个键允许「中英同形」或「中文里没有汉字」，其余键都必须是真的中文，
     /// 否则就是「把英文抄进了中文槽位」。
+    ///
+    /// `appBrand`（窗口标题里的品牌段，FR-EDIT-37）：产品名**不该翻译** ——
+    /// 中文界面出「Doyah Studio - 数据库」、英文界面出「Doyah Studio - Database」。
     private static let languageNeutralKeys: Set<LKey> = [
         .agentEndpointPlaceholder,
         .agentModelPlaceholder,
-        .agentAPIKey
+        .agentAPIKey,
+        .appBrand
     ]
 
     /// 英文文案里不得残留汉字。
