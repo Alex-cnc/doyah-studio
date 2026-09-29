@@ -142,10 +142,17 @@
       "args": [
         "--self-test"
       ],
-      "cases": 11,
+      "cases": 15,
       "countRegex": "负例 (\\d+)/\\d+ 达到预期",
-      "why": "闭环第 4 项（变更记录版本号唯一 / 头部版本格 / 队列条目号唯一）",
-      "noAnchorReason": "例数只在 runner 的收尾行输出里；脚本 docstring 与 §6 资产表都不写它（该行只写「取号唯一来源 = next-doc-version.py」）。"
+      "why": "闭环第 4 项（变更记录版本号唯一 / 头部版本格 / 队列条目号唯一 / 受检清单自洽）",
+      "anchors": [
+        {
+          "file": "Scripts/check-doc-versions.py",
+          "regex": "判据自己的证据（(\\d+) 例）",
+          "minSites": 1,
+          "note": "脚本自己的用法行（第 88 轮 L-88 起：此前这族的例数**没有任何锚点**，只有一句 noAnchorReason）"
+        }
+      ]
     },
     {
       "key": "empty-action-buttons",
