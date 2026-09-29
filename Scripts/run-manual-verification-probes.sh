@@ -70,6 +70,19 @@ set -euo pipefail
 # `Scripts/check-result-scroll-ledger.py` 看着），文件里不写魔数。
 # 它跟着本脚本跑两遍（沙箱标记只影响界面文案，不影响这四条）。
 #
+# ## 第七批（队列 L-89 ㈡ ⑤，第 99 轮）：跨库浏览
+#
+# `TestsUISnapshot/CrossDatabaseBrowseProbeTests.swift` 判清单 §5 `FR-META-10` 那一行
+# 「展开非当前库的节点（对象树 / 服务器选择器）」→ 过 =「**按需建连**；失败时**给可读原因**」。
+# 判据观测的是**服务端**：被测那条走真 `AppState`（与界面同一条路），另一条连接查
+# `pg_stat_activity`，两条各打 `application_name` 标记 ⇒「本进程往哪个库开了几条后端」是
+# 服务端的事实，不是我们自己的计数器。三条：① 只展开服务器节点 ⇒ 非当前库后端 **0**（不全量预连）；
+# ② 展开非当前库的库 / schema 两级 ⇒ 该库后端恰好 **1** 条、子树里是**它自己的表**、重展开仍 1 条；
+# ③ 展开不存在的库 ⇒ `ErrorPresenter.message(for:)`（对象树显示失败的唯一收口点）是人话 + 给方向，
+# 而原始串确实是 `PSQLError(...)`（反向对照，防判据空转）。
+# **这一批要真集群**（`Scripts/lib/test-env.sh` 的本机档；下面会起库、建两个带标记表的临时库），
+# 并且**证据文件会被核对** —— 探针跳过 / 没挂上时文件不存在 ⇒ 本脚本判红（跳过 ≠ 通过）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -94,7 +107,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `AppearanceFontProbeTests`（㈡：主题与字体 —— 手输族之后界面说的话 + SQL 预览的字形）。
 # + `TerminalInterruptProbeTests`（L-92 ㈡①：终端 `⌃C` 打断前台 `sleep 30` —— 非沙箱包的作业控制）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -116,6 +129,48 @@ export DOYAH_EGRESS_LOG_DIR="${PROBE_DATA}/egress"
 
 mkdir -p "${CACHE}" "${SCRATCH}" "${CLANG_MODULE_CACHE_PATH}" "${SWIFT_MODULE_CACHE_PATH}"
 cd "${ROOT}"
+
+# ---- 跨库浏览那一批要的**真库**（第七批）------------------------------------
+#
+# 判据观测的是**服务端**（`pg_stat_activity`），所以要有真集群。连接信息不在这里手抄 ——
+# 走 `Scripts/lib/test-env.sh`（真库目标的唯一来源）：本机档会起集群，库名带 `doyah_probe_` 前缀，
+# 两个临时库各建一张**独有**的标记表 ——「跨库展开列出来的是不是它自己的表」才判得动。
+source "${ROOT}/Scripts/lib/test-env.sh"
+doyah_test_env_start_cluster
+echo
+echo "==> 跨库浏览判据的真库目标"
+doyah_test_env_summary
+
+PROBE_PG_CURRENT="$(doyah_test_env_scratch_name crossdb_main)"
+PROBE_PG_OTHER="$(doyah_test_env_scratch_name crossdb_side)"
+PROBE_PG_MISSING="$(doyah_test_env_scratch_name crossdb_missing)"
+PROBE_MARKER_CURRENT="crossdb_marker_main"
+PROBE_MARKER_OTHER="crossdb_marker_side"
+
+probe_psql() {  # $1 = 库；$2 = SQL（只跑一条；出错即停）
+    "${DOYAH_TEST_PG_BIN}/psql" -h "${DOYAH_TEST_PGHOST}" -p "${DOYAH_TEST_PGPORT}" \
+        -U "${DOYAH_TEST_PGUSER}" -d "$1" -q -v ON_ERROR_STOP=1 -c "$2" >/dev/null
+}
+
+# 建两个临时库（DROP + CREATE，幂等）+ 各自的标记表；第三个库**故意不建**（判失败态用）。
+doyah_test_env_scratch_db crossdb_main >/dev/null
+probe_psql "${PROBE_PG_CURRENT}" "CREATE TABLE ${PROBE_MARKER_CURRENT}(id int);"
+doyah_test_env_scratch_db crossdb_side >/dev/null
+probe_psql "${PROBE_PG_OTHER}" "CREATE TABLE ${PROBE_MARKER_OTHER}(id int);"
+"${DOYAH_TEST_PG_BIN}/psql" -h "${DOYAH_TEST_PGHOST}" -p "${DOYAH_TEST_PGPORT}" \
+    -U "${DOYAH_TEST_PGUSER}" -d "${DOYAH_TEST_ADMIN_DB}" -q \
+    -c "DROP DATABASE IF EXISTS \"${PROBE_PG_MISSING}\" WITH (FORCE);" >/dev/null 2>&1
+
+export DOYAH_PROBE_PGHOST="${DOYAH_TEST_PGHOST}"
+export DOYAH_PROBE_PGPORT="${DOYAH_TEST_PGPORT}"
+export DOYAH_PROBE_PGUSER="${DOYAH_TEST_PGUSER}"
+export DOYAH_PROBE_PGCURRENT="${PROBE_PG_CURRENT}"
+export DOYAH_PROBE_PGOTHER="${PROBE_PG_OTHER}"
+export DOYAH_PROBE_PGMISSING="${PROBE_PG_MISSING}"
+export DOYAH_PROBE_PGMARKER_CURRENT="${PROBE_MARKER_CURRENT}"
+export DOYAH_PROBE_PGMARKER_OTHER="${PROBE_MARKER_OTHER}"
+echo "  · 跨库探针：当前库 ${PROBE_PG_CURRENT}（有 ${PROBE_MARKER_CURRENT}）"
+echo "              非当前库 ${PROBE_PG_OTHER}（有 ${PROBE_MARKER_OTHER}）｜不存在的库 ${PROBE_PG_MISSING}"
 
 run_pass() {  # $1 = 输出目录；$2 = 该遍要设的 APP_SANDBOX_CONTAINER_ID（空 = 不设）
     local out="$1" mark="$2" label="$3"
@@ -199,6 +254,68 @@ print(f"✓ 本轮产出的快照：{len(sandbox)} 张（两遍各一份）")
 PY
 
 echo
+echo "==> 跨库浏览那条：两遍都**真跑过**了吗（跳过 ≠ 通过）"
+python3 - "${OUT_PLAIN}" "${OUT_SANDBOX}" <<'PY'
+import json
+import os
+import sys
+
+CASES = {
+    "serverNodeListing": [
+        ("currentBackends", 1),
+        ("otherBackends", 0),
+    ],
+    "crossDatabaseOnDemand": [
+        ("otherBackendsAfterListingDatabase", 1),
+        ("otherBackendsAfterSchema", 1),
+        ("otherBackendsAfterRepeat", 1),
+        ("otherTableMarkerSeen", True),
+        ("currentMarkerLeakedIntoOther", False),
+    ],
+    "missingDatabaseReadable": [
+        ("rawIsDriverDump", True),
+    ],
+}
+
+
+def load(directory, case):
+    path = os.path.join(directory, f"cross-database-evidence-{case}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+failures = []
+for directory in sys.argv[1:]:
+    for case, expectations in CASES.items():
+        payload = load(directory, case)
+        if payload is None:
+            failures.append(
+                f"{os.path.basename(directory)}：没有 {case} 的证据文件 —— 探针没真跑（跳过不算通过）"
+            )
+            continue
+        for key, expected in expectations:
+            actual = payload.get(key)
+            if actual != expected:
+                failures.append(f"{os.path.basename(directory)}/{case}：{key} 期望 {expected}、实测 {actual}")
+        if "databasesWithBackends" in payload and payload["databasesWithBackends"] != [payload["currentDatabase"]]:
+            failures.append(
+                f"{os.path.basename(directory)}/{case}：展开服务器节点后连过的库不止当前库："
+                f"{payload['databasesWithBackends']}"
+            )
+        shown = payload.get("shownMessage")
+        if shown is not None and ("PSQLError(" in shown or "serverInfo:" in shown):
+            failures.append(f"{os.path.basename(directory)}/{case}：界面那句话里出现了驱动转储：{shown!r}")
+
+if failures:
+    for item in failures:
+        print(f"✗ {item}")
+    sys.exit(1)
+print("✓ 两遍都真跑过：非当前库按需恰好 1 条 / 展开前 0 条 / 子树来自那个库 / 失败给可读原因")
+PY
+
+echo
 echo "==> 完成：证据在 ${OUT_BASE}/（每张图另有中英两份，逐张断言见 ManualVerificationProbeTests）"
 echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 R-53 SSL 收窄说明"
 echo "    ＋ §2 FR-EDIT-25 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
@@ -207,3 +324,4 @@ echo "    ＋ §0.3 第 3 条 终端 ⌃C（TerminalInterruptProbeTests：喂 0x
 echo "    ＋ §1 FR-EDIT-29 多会话那一行的版面与落点（TerminalTabsProbeTests 后三个用例：左半变 / 右四分之一逐像素不变、"
 echo "       右侧按钮按状态齐备、⌘1…9 与 ⌘⇧[ ⌘⇧] 与改名落到对的会话）"
 echo "    ＋ §4 FR-RES-07 大结果集滚动（LargeResultScrollProbeTests：虚拟化 / 帧在变 / 单帧成本不随总行数放大 / 内存不飙）"
+echo "    ＋ §5 FR-META-10 跨库浏览（CrossDatabaseBrowseProbeTests：按需建连 / 子树来自那个库 / 失败给可读原因）"
