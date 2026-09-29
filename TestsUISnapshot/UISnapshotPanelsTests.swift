@@ -39,6 +39,25 @@ final class UISnapshotPanelsTests: XCTestCase {
     /// 侧栏视图（连接列表 / 对象树）的面积：按侧栏真实宽度取，高度给足几个分组。
     private let sidebarSize = CGSize(width: 320, height: 560)
 
+    /// **往笔记库写夹具 / 断言「一条都没有」的用例必须先过这一关**（队列 `L-89` ㈡ 第 2 条同轮）。
+    ///
+    /// 笔记库的落点是**产品真实数据目录**（`<Application Support>/DoyahNotes/notes.sqlite3`），
+    /// 只有 `DOYAH_NOTES_DIR` 在场时才指向临时目录（`Scripts/make-ui-snapshots.sh` 会设）。
+    /// 而这一族快照是「显式打开才跑」的取证工具：**只要有人带着 `DOYAH_UI_SNAPSHOT=1` 却忘了那个变量**，
+    /// 夹具就会写进真实库（第 93 轮实测踩到：种子两条 + 把库文件写成垃圾那一步都落在真实目录上，
+    /// 同轮 `verify-all` 里那条 `notes.count == 2` 断言随即变成 3 而判红）。
+    /// 所以缺变量时**跳过并说清楚为什么**，绝不在真实数据家上留下测试痕迹。
+    private func requireIsolatedNotesDirectory() throws {
+        let environment = ProcessInfo.processInfo.environment
+        let override = environment["DOYAH_NOTES_DIR"] ?? ""
+        try XCTSkipIf(
+            override.isEmpty,
+            "本用例要往笔记库写夹具（还会把库文件写成垃圾看失败那一档）⇒ 必须在临时数据家里跑："
+                + "`DOYAH_NOTES_DIR` 没设就跳过 —— 绝不允许往真实用户数据目录里写测试夹具"
+                + "（用 `Scripts/make-ui-snapshots.sh` 或自己给一个临时目录）"
+        )
+    }
+
     /// 一个**空态**宿主：工作区历史指到临时文件，且**显式**把连接清空。
     ///
     /// **第 11 轮更正（实测推翻）**：这段原写的「测试体里没有 `await`，主线程上的加载任务
@@ -438,6 +457,7 @@ final class UISnapshotPanelsTests: XCTestCase {
     /// 纪律同前几批：**渲染前显式置空 + 渲染后再断言一遍**（离屏宿主里 `.task` 会跑完）。
     @MainActor
     func testPanelEmptyStatesBatchFive() throws {
+        try requireIsolatedNotesDirectory()   // 断言「一条都没有」⇒ 必须跑在临时数据家里
         let host = makeEmptyHost()
         defer { UISnapshot.clearLicense(from: host.state) }
 
@@ -679,6 +699,7 @@ final class UISnapshotPanelsTests: XCTestCase {
     /// 三条路都先把结果**算出来**再渲染（`.task(id:)` 在生产里负责这件事，图里不靠时间差）。
     @MainActor
     func testNoteSearchGoesThroughTheLibraryAndDisclosesTheRoute() async throws {
+        try requireIsolatedNotesDirectory()   // 种子两条 + 把库文件写坏 ⇒ 只能在临时数据家里做
         let host = makeEmptyHost()
         defer { UISnapshot.clearLicense(from: host.state) }
         _ = try UISnapshot.applyLicense(.standard, to: host.state)

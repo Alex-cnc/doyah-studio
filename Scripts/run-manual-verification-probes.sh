@@ -29,6 +29,16 @@ set -euo pipefail
 # 落点表与命令清单**双向对账**（新增命令没登记落点 ⇒ 判红）。
 # 它不渲染界面、也不连库，跟着本脚本跑两遍（两遍都应当绿）。
 #
+# ## 第三批（队列 L-89 ㈡ ②，第 93 轮）：主题与字体
+#
+# `TestsUISnapshot/AppearanceFontProbeTests.swift` 判清单 §2 `FR-EDIT-26` 的三条人话：
+# 手输一个已装的等宽族 ⇒ 生效且「当前使用」拼写正确（③）、手输非等宽 ⇒ **明确提示它不是等宽**
+# 而不是静默回落（④）、SQL 预览的字形跟着字体走（⑤）。
+# 造态走 `FontManager.beginHostPreference(_:)`（宿主语境覆盖，**不落盘**，与主题 / 语言同构）。
+# ⑤ 是**像素**判据：面板用 `.defaultScrollAnchor(.bottom)` 渲染，于是字体那一段（默认在折线以下）
+# 第一次进得了快照；判的是 SQL 预览那一行的**取样带**（`UISnapshot.band`）——
+# 换族必须变、同族重跑必须逐像素相同、上方只多一句提示时必须不变。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -49,8 +59,10 @@ OUT_SANDBOX="${OUT_BASE}/sandbox"
 SANDBOX_MARK="com.doyah.manual-verification-probe"
 
 # 默认两族都跑：`ManualVerificationProbeTests`（B 类 ㈠：隧道表单 / SSL 收窄 / 沙箱告知）
-# + `PaletteWiringProbeTests`（㈡：命令面板接线）。`--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests"
+# + `PaletteWiringProbeTests`（㈡：命令面板接线）
+# + `AppearanceFontProbeTests`（㈡：主题与字体 —— 手输族之后界面说的话 + SQL 预览的字形）。
+# `--filter` 传的是**正则**，所以这里用 `|` 连接。
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -158,3 +170,4 @@ echo
 echo "==> 完成：证据在 ${OUT_BASE}/（每张图另有中英两份，逐张断言见 ManualVerificationProbeTests）"
 echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 R-53 SSL 收窄说明"
 echo "    ＋ §2 FR-EDIT-25 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
+echo "    ＋ §2 FR-EDIT-26 主题与字体（AppearanceFontProbeTests：手输族的三档说法 + SQL 预览取样带）"

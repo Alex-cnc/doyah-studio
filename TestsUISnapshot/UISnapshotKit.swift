@@ -527,6 +527,108 @@ enum UISnapshot {
         (red: Int((hex >> 16) & 0xFF), green: Int((hex >> 8) & 0xFF), blue: Int(hex & 0xFF))
     }
 
+    // MARK: - 取样带（队列 L-89 ㈡：字形有没有跟着字体变）
+
+    /// 一张**已落盘** PNG 上「距图底 N 像素起、高 H 像素」的横向条带（RGBA，8 位/通道）。
+    ///
+    /// 为什么要有这个口子：「预览的字形跟着字体走」（清单 `FR-EDIT-26` ⑤）此前只能靠人看一眼图 ——
+    /// 而面板里**能吃的字体不止预览一处**（终端预览同样吃它），所以判据不能只比「两张图不一样」，
+    /// 得比**一个受控的条带**：这条带在换字体时该变、在上方文案增减时不该变（两个方向都由对照用例判）。
+    struct Band {
+        var width: Int
+        var height: Int
+        var bytes: [UInt8]
+        /// **背景色参照**（带内出现最多的那个像素值）：一条带上的颜色只有几种（框底色 / 字色 / 边框），
+        /// 众数就是底色。
+        var background: (UInt8, UInt8, UInt8, UInt8)
+        /// 与**底色**差 > 6 的像素数 —— 「这一带真的画了东西」的最小证据。
+        /// 为什么不用「左上角像素」当参照（`contentRatio` 那条路）：那一条的前提是**画的左上角一定是留白**，
+        /// 而取样带正落在文本框内部、左上角可能就是字（本轮实测：拿首像素当参照会数出 94% 的「墨迹」）。
+        var ink: Int
+
+        var pixelCount: Int { width * height }
+    }
+
+    static func band(ofPNGAt path: String, fromBottom: Int, height: Int) -> Band? {
+        guard let image = NSImage(contentsOfFile: path),
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.bitmapData else { return nil }
+        let width = rep.pixelsWide
+        let total = rep.pixelsHigh
+        let bytesPerPixel = max(1, rep.bitsPerPixel / 8)
+        let rowBytes = rep.bytesPerRow
+
+        // `NSBitmapImageRep` 的行序是**自上而下**（与 `sampledRGB` 的 `colorAt` 同一套坐标）。
+        let bottomEdge = min(max(fromBottom, 0), total)
+        let topEdge = min(max(bottomEdge + height, 0), total)
+        let startY = total - topEdge
+        let endY = total - bottomEdge
+        guard width > 0, endY > startY else { return nil }
+
+        var bytes = [UInt8](repeating: 0, count: width * (endY - startY) * 4)
+        for (row, y) in (startY..<endY).enumerated() {
+            for x in 0..<width {
+                let source = y * rowBytes + x * bytesPerPixel
+                let destination = (row * width + x) * 4
+                bytes[destination] = data[source]
+                bytes[destination + 1] = bytesPerPixel > 1 ? data[source + 1] : data[source]
+                bytes[destination + 2] = bytesPerPixel > 2 ? data[source + 2] : data[source]
+                bytes[destination + 3] = bytesPerPixel > 3 ? data[source + 3] : 255
+            }
+        }
+
+        var counts: [UInt32: Int] = [:]
+        for index in stride(from: 0, to: bytes.count, by: 4) {
+            counts[key(bytes, index), default: 0] += 1
+        }
+        let dominant = counts.max { $0.value < $1.value }?.key ?? 0
+        let background = (
+            UInt8((dominant >> 24) & 0xFF),
+            UInt8((dominant >> 16) & 0xFF),
+            UInt8((dominant >> 8) & 0xFF),
+            UInt8(dominant & 0xFF)
+        )
+        var ink = 0
+        for index in stride(from: 0, to: bytes.count, by: 4) where isDifferent(bytes, index, to: background) {
+            ink += 1
+        }
+        return Band(width: width, height: endY - startY, bytes: bytes, background: background, ink: ink)
+    }
+
+    private static func key(_ bytes: [UInt8], _ index: Int) -> UInt32 {
+        (UInt32(bytes[index]) << 24) | (UInt32(bytes[index + 1]) << 16)
+            | (UInt32(bytes[index + 2]) << 8) | UInt32(bytes[index + 3])
+    }
+
+    /// 两条带的**差异像素数**（任一通道差 > 6 即算差异）。尺寸不一致 ⇒ `nil`（不是「相同」）。
+    static func differingPixels(_ lhs: Band, _ rhs: Band) -> Int? {
+        guard lhs.width == rhs.width, lhs.height == rhs.height, lhs.bytes.count == rhs.bytes.count else {
+            return nil
+        }
+        var count = 0
+        for index in stride(from: 0, to: lhs.bytes.count, by: 4) where isDifferent(lhs.bytes, index, other: rhs.bytes) {
+            count += 1
+        }
+        return count
+    }
+
+    private static func isDifferent(
+        _ bytes: [UInt8], _ index: Int, to reference: (UInt8, UInt8, UInt8, UInt8)
+    ) -> Bool {
+        abs(Int(bytes[index]) - Int(reference.0)) > 6
+            || abs(Int(bytes[index + 1]) - Int(reference.1)) > 6
+            || abs(Int(bytes[index + 2]) - Int(reference.2)) > 6
+            || abs(Int(bytes[index + 3]) - Int(reference.3)) > 6
+    }
+
+    private static func isDifferent(_ lhs: [UInt8], _ index: Int, other rhs: [UInt8]) -> Bool {
+        for channel in 0..<4 where abs(Int(lhs[index + channel]) - Int(rhs[index + channel])) > 6 {
+            return true
+        }
+        return false
+    }
+
     // MARK: - 许可证（三档呈现要用真签名，不能"假装备注"）
 
     /// 临时密钥对（每次运行现生成，不落仓库）。

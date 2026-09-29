@@ -27,6 +27,19 @@ struct AppearanceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
+    /// **面板级初值注入**（队列 `L-89` ㈡；形状照 L-12：只给初值、不是测试后门、生产路径不传）。
+    ///
+    /// 为什么需要它：这块面板有五段、`ScrollView` 只给 560pt，**字体那一段（含 SQL 预览）默认
+    /// 落在折线以下** —— 用户滚一下就能看到，但**判据在离屏渲染里看不到**（只能拍到上面三段）。
+    /// 给了「初始滚动位置」之后，「折线以下那一段长什么样」第一次有了机器证据。
+    /// 生产路径（`MainWindow`）不传 ⇒ 停在顶部，与从前逐字一致
+    /// （第 93 轮实测：不传初值渲染出来的 PNG 与改前**逐字节相同**）。
+    private let initialScrollAnchor: UnitPoint
+
+    init(initialScrollAnchor: UnitPoint = .top) {
+        self.initialScrollAnchor = initialScrollAnchor
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -47,6 +60,7 @@ struct AppearanceSheet: View {
                 }
             }
             .frame(maxHeight: 560)
+            .defaultScrollAnchor(initialScrollAnchor)
             Divider()
             footer
         }
@@ -126,7 +140,7 @@ struct AppearanceSheet: View {
                 .foregroundStyle(Theme.text(.secondary))
 
             Stepper(
-                L(.appearanceMonoSize, fonts.preference.size),
+                L(.appearanceMonoSize, fonts.effectivePreference.size),
                 value: sizeBinding,
                 in: MonospaceFontSize.minimum...MonospaceFontSize.maximum
             )
@@ -208,16 +222,17 @@ struct AppearanceSheet: View {
     }
 
     /// 字体族绑定：`FontManager` 是 `private(set)`，改写走它的方法（也顺手落盘）。
+    /// 读的是**生效偏好**（宿主语境优先）—— 造态只覆盖这一段渲染，不碰用户的选择。
     private var familyBinding: Binding<String?> {
         Binding(
-            get: { fonts.preference.family },
+            get: { fonts.effectivePreference.family },
             set: { fonts.select(family: $0) }
         )
     }
 
     private var sizeBinding: Binding<Int> {
         Binding(
-            get: { fonts.preference.size },
+            get: { fonts.effectivePreference.size },
             set: { fonts.setSize($0) }
         )
     }

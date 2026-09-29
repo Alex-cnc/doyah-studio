@@ -19,6 +19,18 @@ final class FontManager: ObservableObject {
     /// 当前偏好（字号总是已夹取的合法值）。
     @Published private(set) var preference: MonospaceFontPreference
 
+    /// **宿主语境覆盖**（不落盘，与 `DesignThemeManager.beginHostTheme` /
+    /// `LocalizationManager.beginHostLanguage` 同构）。
+    ///
+    /// 为什么需要它（队列 `L-89` ㈡）：判据要看「同一块「外观」面板、**字体偏好不同** ⇒
+    /// 面板说的话与预览的字形不同」（清单 `FR-EDIT-26` 的 ③④⑤），而**造态不该改用户的偏好** ——
+    /// `select(family:)` 是**落盘**的那条路（它也正是用户在「应用」按钮上走的那条），
+    /// 所以只能另开一条**只覆盖、不落盘**的口子，与主题 / 语言那两处同一个口径。
+    @Published private(set) var hostOverride: MonospaceFontPreference?
+
+    /// 当前**生效**的偏好：判定、交付字体、界面显示一律看它（宿主覆盖优先）。
+    var effectivePreference: MonospaceFontPreference { hostOverride ?? preference }
+
     private init() {
         let defaults = UserDefaults.standard
         preference = MonospaceFontPreference.resolve(
@@ -49,7 +61,7 @@ final class FontManager: ObservableObject {
 
     /// 当前偏好的**完整判定**（系统等宽 / 命中 / 不存在 / 存在但非等宽）。
     var resolution: MonospaceFontResolution {
-        preference.resolution(
+        effectivePreference.resolution(
             availableMonospacedFamilies: Self.availableMonospacedFamilies,
             allFamilies: Self.availableAllFamilies
         )
@@ -60,6 +72,22 @@ final class FontManager: ObservableObject {
 
     /// 是否处于"选了但没生效"的状态（界面据此给一句可读提示）。
     var isFallingBack: Bool { resolution.needsWarning }
+
+    // MARK: 宿主语境（快照 / 探针用）
+
+    /// 进入宿主语境：返回进入前的那一个，调用方负责还原。
+    /// **刻意不写 `UserDefaults`** —— 它只能影响这一段渲染。
+    @discardableResult
+    func beginHostPreference(_ value: MonospaceFontPreference) -> MonospaceFontPreference? {
+        let previous = hostOverride
+        hostOverride = value
+        return previous
+    }
+
+    /// 退出宿主语境。
+    func endHostPreference() {
+        hostOverride = nil
+    }
 
     // MARK: 修改
 
@@ -86,8 +114,11 @@ final class FontManager: ObservableObject {
     /// 等宽 `NSFont`：族 + 字号；族不可用时回落系统等宽。
     ///
     /// - Parameter size: 传 `nil` 用偏好里的字号（终端会传自己的字号：它允许单独设得小一点）。
+    ///
+    /// 字号读的是**生效偏好**（宿主语境优先）—— 与 `resolution` 同一个口径：
+    /// 否则「注入了字号 15」只改界面上那行字、交出去的字体仍是 12pt（造态造了个假）。
     func monospaceNSFont(size: CGFloat? = nil) -> NSFont {
-        let pointSize = size ?? CGFloat(preference.size)
+        let pointSize = size ?? CGFloat(effectivePreference.size)
         guard let family = resolution.effectiveFamily,
               let font = NSFont(name: family, size: pointSize) else {
             return NSFont.monospacedSystemFont(ofSize: pointSize, weight: .regular)
