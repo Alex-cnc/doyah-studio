@@ -65,4 +65,28 @@ final class ObjectTreeRowMenuConventionTests: XCTestCase {
                       "选完必须交还系统：AppKit 沿视图链找到的菜单就是这一行的 .contextMenu")
         XCTAssertTrue(helper.contains("DOYAH_TREE_RIGHTCLICK_DEBUG"), "无界面权限时的取证口子")
     }
+    /// **行级跳过重算**（队列 `L-90` 未完成的那半，2026-09-29 需求提出者选定「B：彻底根治」）。
+    ///
+    /// 现场：**左键选中比右键还慢** —— 左键改选中态 ⇒ 整棵树重算，几十行全部重建 body。
+    /// 修法：行渲染抽成独立 `Equatable` 视图 + `.equatable()`（相等就不重算 body），
+    /// 并且 `==` 必须**排除闭包**（每次重建都是新闭包，比了就永远不相等 = 白优化）。
+    func testRowContentSkipsRebuildWhenUnchanged() throws {
+        let rows = try source("App/Views/ObjectTreeRows.swift")
+        XCTAssertTrue(rows.contains("struct ObjectTreeVisibleRow: Identifiable, Equatable"),
+                      "行模型要 Equatable —— 否则行渲染体没法做相等比较")
+        XCTAssertTrue(rows.contains("struct ObjectTreeRowContent: View, Equatable"),
+                      "行渲染体必须独立成 View 并 Equatable")
+        XCTAssertTrue(rows.contains("static func == (lhs: ObjectTreeRowContent, rhs: ObjectTreeRowContent) -> Bool"),
+                      "相等比较要显式写出来（默认合成会把闭包也比进去）")
+        XCTAssertTrue(rows.contains("`onToggle` 刻意不参与比较"),
+                      "闭包必须排除在相等比较之外，否则永远不相等、等于没优化")
+        XCTAssertTrue(rows.contains("bodyEvaluations"),
+                      "要留取证计数器：右键日志会打出「距上次右键重算了几次 body」")
+
+        let view = try source("App/Views/ObjectTreeView.swift")
+        XCTAssertTrue(view.contains("ObjectTreeRowContent(") && view.contains(".equatable()"),
+                      "行必须走 `ObjectTreeRowContent(...).equatable()`")
+        XCTAssertFalse(view.contains("private func color(for kind: DatabaseObject.Kind)"),
+                       "按类型上色已搬进行渲染体（`ObjectTreeRowContent.color`）—— 视图里不要再留一份")
+    }
 }

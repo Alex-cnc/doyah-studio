@@ -181,82 +181,38 @@ struct ObjectTreeView: View {
 
     private func rowView(_ row: ObjectTreeVisibleRow) -> some View {
         VStack(alignment: .leading, spacing: Spacing.hair) {
-            HStack(spacing: Spacing.s) {
-                if row.isGroupHeader {
-                    Color.clear.frame(width: 12, height: 12)
-                } else if row.isExpandable {
-                    Button {
-                        toggle(row.object)
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .imageScale(.small)
-                            .fontWeight(.bold)
-                            .foregroundStyle(Theme.text(.secondary))
-                            .rotationEffect(.degrees(row.isExpanded ? 90 : 0))
-                            .frame(width: 12, height: 12)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Color.clear.frame(width: 12, height: 12)
-                }
-
-                Image(systemName: row.object.symbolName)
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(color(for: row.object.kind))
-                    .frame(width: 14)
-
-                Text(row.object.name)
-                    .font(Theme.font(.caption))
-                    .fontWeight(row.isGroupHeader ? .semibold : .regular)
-                    .lineLimit(1)
-
-                if let detail = row.object.detail {
-                    Text(detail)
-                        .font(Theme.font(.caption))
-                        .foregroundStyle(Theme.text(.tertiary))
-                        .lineLimit(1)
-                }
-            }
-            .padding(.leading, CGFloat(row.depth) * Metrics.listIndent)
-            // 点击区**铺满整行**：默认只覆盖内容宽度 ⇒ 标签右边那一截空白点不到，
-            // 表现就是「经常选不中」（2026-09-29 需求提出者实测）。`maxWidth: .infinity`
-            // 之后 `contentShape` 覆盖的是整行，选中高亮也随之一整行铺开（树的常规做法）。
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            // 选中态要看得见：⌘K 里"浏览数据 / 查看 DDL / 合成数据"都作用在选中项上，
-            // 没有可见的选中标记时那句"请先在对象树里点选"会让人莫名其妙。
-            .background(
-                row.object.id == appState.selectedTreeObject?.id
-                    ? Theme.accentColor.opacity(
-                        Theme.isDarkAppearance ? Overlay.Selection.darkAlpha : Overlay.Selection.lightAlpha
-                    )
-                    : Color.clear
+            // **行渲染体单独成 View + Equatable**（队列 L-90 未完成的那半，2026-09-29 需求提出者选定「B：彻底根治」）：
+            // 选中态一变，以前整棵树每一行都重算 body；现在只有**真的变了的那一两行**重算。
+            // 相等比较的输入见 `ObjectTreeRowContent.==`（行模型 + 选中 + 空态文案 + 外观深浅）。
+            ObjectTreeRowContent(
+                row: row,
+                isSelected: row.object.id == appState.selectedTreeObject?.id,
+                emptyText: emptyText(for: row.object),
+                isDarkAppearance: Theme.isDarkAppearance,
+                onToggle: { toggle(row.object) }
             )
+            .equatable()
+            // 点击区**铺满整行**：默认只覆盖内容宽度 ⇒ 标签右边那一截空白点不到，
+            // 表现就是「经常选不中」（2026-09-29 需求提出者实测）。
+            .contentShape(Rectangle())
             // 双击表 / 视图 → 浏览前 N 行（FR-DATA-01）。
             // 双击手势必须写在单击之前，否则会被单击吞掉。
             .onTapGesture(count: 2) {
                 guard !row.isGroupHeader else { return }
                 guard ObjectTreeActions.isAvailable(.browseRows, for: row.object.kind) else { return }
                 appState.selectTreeObject(row.object)
-                // 点击本身就是「指针在这一行」的铁证：顺手写进悬停盒子 ——
-                // 重建补的那个假 mouseExited 会清空它，而指针不动就不会再来 mouseEntered。
                 hoverBox.rowID = row.object.id
                 Task { await appState.performTreeAction(.browseRows, on: row.object) }
             }
             .onTapGesture {
                 guard !row.isGroupHeader else { return }
-                // 单击既"选中"也"展开"：表 / 视图这类节点本来就靠单击展开看列，
-                // 分两次点击才叫选中会让命令面板的目标变得不可预期。
+                // 单击既「选中」也「展开」：表 / 视图这类节点本来就靠单击展开看列。
                 appState.selectTreeObject(row.object)
-                // 同上：点完立刻右键的人，菜单目标靠这一行（见 `menuTargetObject`）。
                 hoverBox.rowID = row.object.id
                 guard row.isExpandable else { return }
                 toggle(row.object)
             }
-            // 右键菜单**不再挂在每一行上**（原因见 `ObjectTreeMenuTarget.resolve`）：整棵树现在是一个 `List` 行，
-            // AppKit 按 List 行解析右键菜单、只会用找到的第一个 —— 那会让"点数据库弹出服务器菜单"。
-            // 这里只负责记下"鼠标在哪一行"，菜单由整块挂的那一个按它决定内容。
+            // 记「鼠标在哪一行」（右键菜单已按行挂，这里只服务"点完立刻操作"的悬停口径）。
             .onHover { hovering in
                 guard !row.isGroupHeader else { return }
                 if hovering {
@@ -504,26 +460,6 @@ struct ObjectTreeView: View {
         }
     }
 
-    private func color(for kind: DatabaseObject.Kind) -> Color {
-        switch kind {
-        case .server:
-            return .accentColor
-        case .database:
-            return .blue
-        case .schema:
-            return .purple
-        case .table:
-            return .green
-        case .view:
-            return .teal
-        case .column:
-            return .secondary
-        case .function:
-            return .orange
-        case .sequence:
-            return .indigo
-        }
-    }
 }
 
 /// 鼠标悬停行的**无观察者**小盒子（见 `ObjectTreeView.hoverBox` 的说明）。

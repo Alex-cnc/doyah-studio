@@ -2,7 +2,7 @@ import Foundation
 import DoyahCore
 
 /// 对象树里的一行：**真对象行**，或分组视图下的**虚拟类型表头**（FR-META-15）。
-struct ObjectTreeVisibleRow: Identifiable {
+struct ObjectTreeVisibleRow: Identifiable, Equatable {
     let object: DatabaseObject
     let depth: Int
     let isExpandable: Bool

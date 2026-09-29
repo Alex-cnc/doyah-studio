@@ -24,7 +24,11 @@ final class RowRightClickCatcherView: NSView {
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        ObjectTreeRightClickLog.append("catcher 命中 tag=\(debugTag)")
+        // 取证：距上一次右键，这一批行一共重算了几次 `body`
+        // （优化前 ≈ 行数（几十次）；优化后 ≈ 真的变了的那一两行）。
+        let evaluations = ObjectTreeRowContent.bodyEvaluations
+        ObjectTreeRowContent.bodyEvaluations = 0
+        ObjectTreeRightClickLog.append("catcher 命中 tag=\(debugTag)｜距上次右键，行 body 重算 \(evaluations) 次")
         onRightClick?(event)
         // 沿视图链往上找菜单：SwiftUI 的 `.contextMenu` 挂在"这一行"上 ⇒ 菜单必然对得上这一行。
         super.rightMouseDown(with: event)
