@@ -87,7 +87,7 @@ struct DatabasePropertiesSheet: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
-                    .background(Color(nsColor: .textBackgroundColor))
+                    .background(Theme.surface(.content))
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             } else {
                 Label(hint, systemImage: "exclamationmark.triangle.fill")

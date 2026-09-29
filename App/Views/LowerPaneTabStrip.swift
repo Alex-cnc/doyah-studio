@@ -27,7 +27,9 @@ struct LowerPaneTabStrip: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var terminal: TerminalModel
 
-    let tab: QueryTab
+    /// **查询页签（可空）** —— 与 `LowerPaneView` 同一条口径（2026-09-30：面板搬到段一级，
+    /// 工作区段没有查询上下文）。只有「问题 / 输出」两页与清空按钮会读它。
+    let tab: QueryTab?
 
     /// 实时语法诊断（只有「问题」页签的角标用得上）。
     /// 由 `LowerPaneView` 传进来而不是在这里再算一遍：同一帧里算两次是第二份真相的开头。
@@ -55,7 +57,8 @@ struct LowerPaneTabStrip: View {
 
             if appState.lowerPaneTab == .problem || appState.lowerPaneTab == .output {
                 iconButton("trash", help: L(.lowerPaneClear)) {
-                    appState.clearLowerPaneLog(for: tab.id)
+                    // 工作区段（无查询页签）没有可清的日志 —— 按钮如实无效，不假装清掉了什么。
+                    if let tab { appState.clearLowerPaneLog(for: tab.id) }
                 }
             }
 
@@ -166,7 +169,7 @@ struct LowerPaneTabStrip: View {
     /// Problem 页签上的角标：执行错误 + 语法诊断的条数。
     private func problemBadgeCount(for item: LowerPaneTab) -> Int {
         guard item == .problem else { return 0 }
-        let errors = tab.problemLog.filter { $0.severity == .error }.count
+        let errors = (tab?.problemLog ?? []).filter { $0.severity == .error }.count
         return errors + diagnostics.filter { $0.severity == .error }.count
     }
 }

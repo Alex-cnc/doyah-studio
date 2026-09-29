@@ -55,6 +55,34 @@ struct MainWindow: View {
         }
     }
 
+    /// **下方面板（问题 / 输出 / 终端 / 调试控制台）在「工作区」与「数据库」两段之间共享**
+    /// （2026-09-30 需求提出者实测反馈：「数据库客户端界面的底部栏怎么只在数据库界面出现，到了工作区
+    /// 就没有了呢…要不然主工作区下方啥也没有，要打开 terminal 开始工作还要先点击 database 活动栏」）。
+    ///
+    /// 三条落法：
+    ///  ① **只有一个实例** —— 终端会话活在 `TerminalModel` 上（L-84 ㈠ 的契约），
+    ///     两段各画一份会让同一个会话被渲染两次（屏幕缓冲/选区就成两份了）；
+    ///  ② **查询页签可空** —— 数据库段传当前页签（「问题 / 输出」有上下文），
+    ///     工作区段传 nil（那两页如实显示空态，终端照常可用）；
+    ///  ③ **最大化仍覆盖整段** —— 判在段一级，所以两段行为一致。
+    @ViewBuilder
+    private func sectionWithLowerPane<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            if appState.isLowerPaneVisible, appState.isLowerPaneMaximized {
+                LowerPaneView(tab: appState.selectedTab)
+            } else {
+                content()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Divider()
+                LowerPaneView(tab: appState.selectedTab, isCollapsed: !appState.isLowerPaneVisible)
+                    // 默认占一成多的高度（与 L-84 ㈠ 的「下方面板默认占 20%」同一条口径，
+                    // 折叠时由 `LowerPaneView` 自己按标题栏一行固定住）。
+                    .frame(minHeight: 90, idealHeight: 200)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // 活动栏在 `NavigationSplitView` **外面**：它是应用级 chrome，不属于可调宽的侧栏
@@ -71,9 +99,9 @@ struct MainWindow: View {
             // 需求提出者的原话是「点击工作区时，不应该还在数据库 SQL 查询界面，应该是新的 Tab 界面」。
             switch appState.selectedActivityItem {
             case .database:
-                QueryWorkspaceView()
+                sectionWithLowerPane { QueryWorkspaceView() }
             case .workspace:
-                WorkspaceAreaView()
+                sectionWithLowerPane { WorkspaceAreaView() }
             case .notes:
                 NotesEditorView()
             }

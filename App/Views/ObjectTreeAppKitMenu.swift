@@ -10,7 +10,9 @@ final class ClosureMenuItem: NSMenuItem {
         super.init(title: title, action: nil, keyEquivalent: "")
         target = self
         action = #selector(fire)
-        if isDestructive { attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor: NSColor.systemRed]) }
+        // 破坏性项的红色走**主题令牌**（`Theme.nsColor(.danger)`），不用 `NSColor.systemRed`：
+        // 后者与配色方案无关 —— 换主题时它一个人不变（设计令牌门禁 `check-design-tokens.py` 钉的就是这条）。
+        if isDestructive { attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor: Theme.nsColor(.danger)]) }
     }
 
     @available(*, unavailable)

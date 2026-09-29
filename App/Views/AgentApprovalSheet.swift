@@ -119,7 +119,7 @@ struct AgentApprovalSheet: View {
                 .padding(8)
         }
         .frame(height: 150)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Theme.surface(.content))
         .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 

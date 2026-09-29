@@ -206,6 +206,19 @@ set -euo pipefail
 #   ⇒ 菜单内容改成静态唯一入口、容器由判据那侧加（这条教训立进 `AGENT-SPEC.md` §9 第 85 条）。
 #   证据文件同样**会被核对**（跳过 ≠ 通过）。
 #
+# ## 第十四批（队列 L-89 ㈢ ①，第 112 轮）：空编辑器上「保存」灰否（渲染级）
+#
+# `TestsUISnapshot/NotesEditorSaveProbeTests.swift` 判清单那一行原先要人点三下的三态
+# （**空着灰 / 有内容亮 / 删回灰**）。模型那一半（`AppState.noteEditorHasContent` 三态）与源码
+# 那一半（`check-empty-action-buttons.py`）都已经在判，但两层合起来判不到「**渲染出来的那只按钮
+# 真的跟着变**」⇒ 本条在**像素**上补这一层：三态各渲染一遍真视图，
+# ① 空 ⇒ 按钮那一带只有灰墨水（最暗亮度 ≥ 80，实测 91）；
+# ② 有字 ⇒ 同一带出现深墨水（≤ 60，实测 34）且按钮带变了 ≥ 2000 像素（实测 5028）；
+# ③ 删回空 ⇒ 与空态**逐字节相同**（差异 0 像素）。
+# **边界（如实登记）**：实测这块 SwiftUI `Button` 在离屏宿主里**不落到 `NSButton`**、
+# 无障碍树在离屏时不构建 ⇒ 读不到 `isEnabled`，只能判像素；按钮落点/门槛按本机实测定。
+# 它不连库、也只渲染面板 ⇒ 跟着本脚本跑两遍（两遍都应当绿）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -241,10 +254,12 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   七类节点各自的菜单内容（动作项与 Core 的规则双向对账）/ 菜单作用在哪一行（悬停优先、
 #   盒子空退回选中项）/ 同一行两次逐字节一致、不同行必须画成两个样子。
 #   本批的**主入口**同样是 `Scripts/verify-ui-interactions.sh`）
+# + `NotesEditorSaveProbeTests`（L-89 ㈢ ①：空编辑器上「保存」灰否 —— 三态渲染 + 像素判据，
+#   见下面「第十四批」）。
 #   这里同时挂上是为了那条「每个 `*ProbeTests.swift` 都得有入口」的判据
 #   `check-result-scroll-ledger.py` ⑤ —— 一处入口漏了就等于一个都跑不到（第 96 轮实测）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

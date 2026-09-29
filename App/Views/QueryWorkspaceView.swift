@@ -14,17 +14,13 @@ struct QueryWorkspaceView: View {
                     BrowserTabView(page: browser)
                 }
             } else if let tab = appState.selectedTab {
-                if appState.isLowerPaneVisible, appState.isLowerPaneMaximized {
-                    // 最大化：**连查询页签条一起盖住** —— 上下文栏、工具栏、页签条全部让位，
-                    // 整个工作区看起来就是面板本身（终端占满时就是一个完整的终端界面）。
-                    // 恢复按钮在面板自己的页签条上，所以不会"盖住就出不来"。
-                    LowerPaneView(tab: tab)
-                } else {
-                    VStack(spacing: 0) {
-                        tabBar
-                        Divider()
-                        QueryEditorView(tab: tab)
-                    }
+                // **下方面板不在这里**（2026-09-30）：它搬到了 `MainWindow.sectionWithLowerPane`，
+                // 与「工作区」段共享同一个实例（需求提出者实测反馈：「带 terminal 的底部区域是在
+                // 两个功能中共享的」）。所以这一层只画页签条 + 编辑器，最大化也由那一层统一判。
+                VStack(spacing: 0) {
+                    tabBar
+                    Divider()
+                    QueryEditorView(tab: tab)
                 }
             } else {
                 ContentUnavailableView(
@@ -35,7 +31,10 @@ struct QueryWorkspaceView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .textBackgroundColor))
+        // **底色走主题令牌**（2026-09-30 需求提出者实测：数据库客户端与工作区配色差很大）。
+        // 原来写的是系统 `textBackgroundColor` —— 它跟 `DesignTheme` 无关，于是同一屏里
+        // 「工作区是科技蓝、数据库客户端是系统白」并存。令牌化后两段同一个底色家族。
+        .background(Theme.surface(.content))
     }
 
     private var tabBar: some View {
@@ -162,36 +161,20 @@ struct QueryEditorView: View {
             // ① **结果区默认不显示** —— 只有执行过、且确实有表格结果才出现，一上来空着会显得拥挤；
             // ② **下方面板默认占 20% 高度** —— 让人知道有这么个面板，又不至于把编辑区挤扁。
             // VSplitView 的子视图数量必须按分支固定，所以四种组合各写一条。
+            // **下方面板已搬到段一级**（2026-09-30，见 `MainWindow.sectionWithLowerPane`）——
+            // 这里只剩「编辑区 → 结果表」两块（`VSplitView` 的子视图数量必须按分支固定，所以两种组合各一条）。
             GeometryReader { geometry in
                 let total = geometry.size.height
-                let panelIdeal = max(110, total * 0.2)
-                let upperTotal = max(220, total - (appState.isLowerPaneVisible ? panelIdeal : 0))
-                let editorIdeal = showsResult ? upperTotal * 0.55 : upperTotal
-                let resultIdeal = upperTotal * 0.45
+                let editorIdeal = showsResult ? total * 0.55 : total
+                let resultIdeal = total * 0.45
 
                 Group {
-                    if showsResult, appState.isLowerPaneVisible {
+                    if showsResult {
                         VSplitView {
                             editorArea(diagnostics)
                                 .frame(minHeight: 100, idealHeight: editorIdeal)
                             resultArea
                                 .frame(minHeight: 100, idealHeight: resultIdeal)
-                            LowerPaneView(tab: tab)
-                                .frame(minHeight: 90, idealHeight: panelIdeal)
-                        }
-                    } else if showsResult {
-                        VSplitView {
-                            editorArea(diagnostics)
-                                .frame(minHeight: 100, idealHeight: editorIdeal)
-                            resultArea
-                                .frame(minHeight: 100, idealHeight: resultIdeal)
-                        }
-                    } else if appState.isLowerPaneVisible {
-                        VSplitView {
-                            editorArea(diagnostics)
-                                .frame(minHeight: 100, idealHeight: editorIdeal)
-                            LowerPaneView(tab: tab)
-                                .frame(minHeight: 90, idealHeight: panelIdeal)
                         }
                     } else {
                         editorArea(diagnostics)
@@ -206,10 +189,7 @@ struct QueryEditorView: View {
             // `GeometryReader` 的内容不负责纵向排布，`ViewBuilder` 里的第二个视图会跟第一个**重叠**在
             // 同一个原点，于是标题栏跑到顶部、盖住编辑器第一行。
             // 放到这里（外层 VStack 里 GeometryReader **之后**）才真的在底部。
-            if !appState.isLowerPaneVisible {
-                Divider()
-                LowerPaneView(tab: tab, isCollapsed: true)
-            }
+            // 折叠态标题栏也归段一级那一层（`sectionWithLowerPane` 传 `isCollapsed`）。
         }
         .sheet(isPresented: $isSaveQueryPresented) {
             SaveQuerySheet(

@@ -34,7 +34,7 @@ struct DropDatabaseSheet: View {
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
                         .padding(8)
-                        .background(Color(nsColor: .textBackgroundColor))
+                        .background(Theme.surface(.content))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
             }

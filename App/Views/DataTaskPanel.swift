@@ -604,7 +604,7 @@ struct DataTaskPanel: View {
                             .padding(6)
                     }
                     .frame(height: 96)
-                    .background(Color(nsColor: .textBackgroundColor))
+                    .background(Theme.surface(.content))
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
 

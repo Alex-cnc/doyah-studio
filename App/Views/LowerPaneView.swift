@@ -10,7 +10,13 @@ struct LowerPaneView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var terminal: TerminalModel
 
-    let tab: QueryTab
+    /// **查询页签（可空）** —— 2026-09-30 需求提出者实测反馈：「带 terminal 的底部区域是在两个功能中共享的」
+    /// ⇒ 这块面板从「只长在 SQL 查询界面里」搬到**段一级**（`MainWindow` 的 `sectionWithLowerPane`），
+    /// 数据库段传当前查询页签，**工作区段没有查询上下文，传 nil**。
+    ///
+    /// 可空之后只有「问题 / 输出」两个页签会读到它（那两页本来就是 SQL 上下文的东西）：
+    /// 没有页签时它们如实显示空态，而不是硬要造一个假页签出来。
+    let tab: QueryTab?
 
     /// 折叠态：**只画标题栏**（页签条 + 向上的展开箭头），不画内容。
     ///
@@ -25,7 +31,8 @@ struct LowerPaneView: View {
     ///
     /// 自己算而不是由编辑器传进来：最大化时编辑器整块被盖住，就没人为这里提供诊断了。
     private var diagnostics: [SQLDiagnostic] {
-        QueryDiagnostics.analyze(tab: tab, in: appState)
+        guard let tab else { return [] }   // 工作区段没有查询上下文 ⇒ 没有诊断（空态如实显示）
+        return QueryDiagnostics.analyze(tab: tab, in: appState)
     }
 
     var body: some View {
@@ -43,7 +50,9 @@ struct LowerPaneView: View {
         // 折叠态按**内容自己的理想高度**（标题栏一行）显示：不要让它被拉伸，
         // 也不要写死一个高度 —— 字号 / 语言变了它会自己跟着变。
         .fixedSize(horizontal: false, vertical: isCollapsed)
-        .background(.background)
+        // **根底色走主题令牌**（2026-09-30 实测反馈「数据库客户端和笔记的界面跟 workspace 相差很大，这不是一个配色方案吧」）：
+        // 原先写的是系统 `.background` ⇒ 整个下方面板（含终端）的底与主题无关，切主题时它一个人不变。
+        .background(Theme.surface(.panel))
         // 关页签前的**二次确认**（L-84 ㈡ 口径④）：前台还有别的程序在跑时先问一句。
         // 为什么挂在**这一层**而不是页签头上：折叠态 / 最大化时页签条可能不在视线里，
         // 而弹窗必须跟着命令走（判定在 Core 的 `closeDecision`，这里只负责问）。
@@ -90,7 +99,7 @@ struct LowerPaneView: View {
 
         case .output:
             logList(
-                tab.outputLog,
+                tab?.outputLog ?? [],
                 emptyText: L(.lowerPaneOutputEmpty)
             )
 
@@ -150,15 +159,18 @@ struct LowerPaneView: View {
 
     private var problemsContent: some View {
         // 语法诊断（编辑器实时算出来的）+ 执行期错误，按时间先后合并展示。
-        VStack(alignment: .leading, spacing: 0) {
+        // **没有查询页签时（工作区段）**：这一页没有可诊断的对象 —— `diagnostics` 与 `problemLog` 都为空，
+        // 于是走下面 `logList` 的空态文案，不硬造一个假页签。
+        let problemLog = tab?.problemLog ?? []
+        return VStack(alignment: .leading, spacing: 0) {
             // 超长跳过要显式说出来：否则空态读起来就是"检查过了，没问题"（欺骗性空态）。
-            if QueryDiagnostics.isRealtimeAnalysisSkipped(sql: tab.sql) {
+            if QueryDiagnostics.isRealtimeAnalysisSkipped(sql: tab?.sql ?? "") {
                 logRow(
                     severity: .warning,
                     timestamp: nil,
                     message: L(.lowerPaneProblemSkipped, "\(sqlRealtimeScanLimit)")
                 )
-                if !diagnostics.isEmpty || !tab.problemLog.isEmpty { Divider() }
+                if !diagnostics.isEmpty || !problemLog.isEmpty { Divider() }
             }
 
             if !diagnostics.isEmpty {
@@ -169,10 +181,10 @@ struct LowerPaneView: View {
                         message: "\(L(.lintLocation, diagnostic.line, diagnostic.column))：\(diagnostic.message)"
                     )
                 }
-                if !tab.problemLog.isEmpty { Divider() }
+                if !problemLog.isEmpty { Divider() }
             }
 
-            logList(tab.problemLog, emptyText: L(.lowerPaneProblemEmpty), showsEmpty: diagnostics.isEmpty)
+            logList(problemLog, emptyText: L(.lowerPaneProblemEmpty), showsEmpty: diagnostics.isEmpty)
         }
     }
 

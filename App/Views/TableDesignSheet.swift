@@ -141,7 +141,7 @@ struct TableDesignSheet: View {
                     .padding(8)
             }
             .frame(height: 120)
-            .background(Color(nsColor: .textBackgroundColor))
+            .background(Theme.surface(.content))
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
 
             Text(L(.tableDesignHint))

@@ -48,7 +48,7 @@ struct SafeModeConfirmSheet: View {
                     .padding(8)
                 }
                 .frame(height: 120)
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(Theme.surface(.content))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
 

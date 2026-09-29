@@ -320,7 +320,7 @@ struct AgentAuditPanel: View {
                 }
             }
             .frame(minHeight: 150)
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.4))
+            .background(Theme.surface(.content).opacity(0.4))
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
     }
@@ -429,7 +429,7 @@ struct AgentAuditPanel: View {
                     .padding(6)
                 }
                 .frame(height: 96)
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(Theme.surface(.content))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             } else {
                 Text(L(.agentAuditSelectHint))

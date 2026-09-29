@@ -67,7 +67,7 @@ struct DataTaskSpecSheet: View {
                         .padding(8)
                 }
                 .frame(height: 150)
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(Theme.surface(.content))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 Text(L(.agentSQLPayloadNote))
                     .font(.caption2)

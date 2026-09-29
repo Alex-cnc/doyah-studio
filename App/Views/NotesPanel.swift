@@ -68,6 +68,9 @@ struct NotesListView: View {
         }
         .padding(.vertical, Spacing.s)
         .accessibilityIdentifier("notes-list")
+        // 侧栏底色与工作区侧栏同一令牌（2026-09-30 实测反馈：笔记界面与工作区配色差很大）。
+        .scrollContentBackground(.hidden)
+        .background(Theme.surface(.sidebar))
         // 搜索框里的词一变就重算一次（与上面那条注释同源：`task(id:)` 会取消上一次任务）。
         // 空查询进这里也只是把状态置回 `.idle` —— 不查库、不改列表。
         .task(id: appState.notesQuery) {
@@ -120,5 +123,9 @@ struct NotesEditorView: View {
         }
         .padding(Spacing.l)
         .accessibilityIdentifier("notes-editor")
+        // 内容底色与工作区内容同一令牌（原来这一屏**没有任何根底色** ⇒ 直接用系统窗口底，
+        // 于是「工作区是科技蓝、笔记是系统色」并存）。
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.surface(.content))
     }
 }
