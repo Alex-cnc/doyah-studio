@@ -130,123 +130,41 @@ struct ObjectTreeView: View {
 
     // MARK: - 扁平化
 
-    private struct VisibleRow: Identifiable {
-        let object: DatabaseObject
-        let depth: Int
-        let isExpandable: Bool
-        let isExpanded: Bool
-        let isLoading: Bool
-        let error: String?
-        let children: [DatabaseObject]?
-        /// 分组视图下的虚拟类型表头（不是真实数据库对象）。
-        let isGroupHeader: Bool
-
-        var id: String { object.id }
-    }
-
-    private var visibleRows: [VisibleRow] {
-        var rows: [VisibleRow] = []
-
-        func visit(_ object: DatabaseObject, depth: Int) {
-            let isExpanded = expandedIDs.contains(object.id)
-            rows.append(
-                VisibleRow(
-                    object: object,
-                    depth: depth,
-                    isExpandable: object.isExpandable,
-                    isExpanded: isExpanded,
-                    isLoading: loadingIDs.contains(object.id),
-                    error: errors[object.id],
-                    children: childrenCache[object.id],
-                    isGroupHeader: false
-                )
-            )
-
-            if isExpanded, let children = childrenCache[object.id] {
-                if groupByType {
-                    // 分组只对**已缓存的子节点**做聚合，因此切换视图不触发重新查库。
-                    for group in ObjectTreeGrouping.groupedByType(
-                        children,
-                        parentID: object.id,
-                        language: LocalizationManager.shared.effectiveLanguage
-                    ) {
-                        rows.append(
-                            VisibleRow(
-                                object: DatabaseObject(
-                                    id: group.id,
-                                    name: group.title(language: LocalizationManager.shared.effectiveLanguage),
-                                    kind: ObjectTreeGrouping.headerKind(for: group.kind),
-                                    detail: "\(group.count)"
-                                ),
-                                depth: depth + 1,
-                                isExpandable: false,
-                                isExpanded: false,
-                                isLoading: false,
-                                error: nil,
-                                children: nil,
-                                isGroupHeader: true
-                            )
-                        )
-                        for child in group.objects {
-                            visit(child, depth: depth + 2)
-                        }
-                    }
-                } else {
-                    for child in children {
-                        visit(child, depth: depth + 1)
-                    }
-                }
-            }
-        }
-
-        for root in roots {
-            visit(root, depth: 0)
-        }
-        return rows
+    /// 可见行 = 「状态 → 行数组」的**纯函数**，住在 `App/Views/ObjectTreeRows.swift`。
+    ///
+    /// 为什么搬出去（队列 `L-89` ㈡ 第 6 条）：那一行的判据是「两种视图都能用；
+    /// 切换后选中项不丢」——判的正是那个函数的输出，而它原先在本文件里是 `private`
+    /// ⇒ 只能靠人眼看。搬出去之后 `TestsUISnapshot/GroupedViewProbeTests.swift`
+    /// 可以拿**真库读回来的对象**喂它。
+    private var visibleRows: [ObjectTreeVisibleRow] {
+        ObjectTreeRows.visibleRows(
+            roots: roots,
+            expandedIDs: expandedIDs,
+            childrenCache: childrenCache,
+            loadingIDs: loadingIDs,
+            errors: errors,
+            groupByType: groupByType,
+            language: LocalizationManager.shared.effectiveLanguage
+        )
     }
 
     // MARK: - 行渲染
 
-    /// 视图切换 + 刷新（FR-META-15 / FR-META-11）。
+    /// 视图切换 + 刷新（FR-META-15 / FR-META-12 / FR-META-11）—— 真视图在 `App/Views/ObjectTreeToolbar.swift`。
+    ///
+    /// 抽出来（与 `LowerPaneTabStrip` 同一个理由）是为了**能单独离屏渲染**：这一份 body 只有在
+    /// 「选中了连接、根节点也加载回来了」之后才画得出来，判据不该被异步加载的时序绑架。
+    /// 接线一字未改 —— `$groupByType` 还是这一个 `@State`。
     private var refreshRow: some View {
-        HStack(spacing: Spacing.s) {
-            Picker("", selection: $groupByType) {
-                Text(L(.treeGroupHierarchy)).tag(false)
-                Text(L(.treeGroupByType)).tag(true)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.mini)
-            .help(L(.treeGroupByType))
-
-            Spacer()
-
-            // 全库对象搜索（FR-META-12）：与 ⌘K 里那条命令打开**同一个**面板。
-            // 放这里是因为"找对象"是看着树时才有的念头，不必先想起来有命令面板。
-            Button {
-                appState.isObjectSearchPresented = true
-            } label: {
-                Image(systemName: "magnifyingglass")
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(Theme.text(.secondary))
-            }
-            .buttonStyle(.plain)
-            .help(L(.objectSearchTitle))
-
-            Button {
-                Task { await reloadRoot() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(Theme.text(.secondary))
-            }
-            .buttonStyle(.plain)
-            .help(L(.treeRefreshHelp))
-            .disabled(isLoadingRoot)
-        }
+        ObjectTreeToolbar(
+            groupByType: $groupByType,
+            isRefreshing: isLoadingRoot,
+            onSearch: { appState.isObjectSearchPresented = true },
+            onRefresh: { Task { await reloadRoot() } }
+        )
     }
 
-    private func rowView(_ row: VisibleRow) -> some View {
+    private func rowView(_ row: ObjectTreeVisibleRow) -> some View {
         VStack(alignment: .leading, spacing: Spacing.hair) {
             HStack(spacing: Spacing.s) {
                 if row.isGroupHeader {

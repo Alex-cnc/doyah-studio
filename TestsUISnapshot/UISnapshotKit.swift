@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import SwiftUI
 import XCTest
 
@@ -720,6 +721,165 @@ enum UISnapshot {
         unsetenv(LicenseLoader.licensePathEnvironmentKey)
         unsetenv("DOYAH_LICENSE_PUBLIC_KEY")
         state.reloadLicense()
+    }
+
+    // MARK: - 活宿主（同一份视图实例上：等状态 / 点控件 / 反复取图）
+
+    /// 一份**活着的**离屏宿主：视图实例一直不销毁，于是可以在它身上
+    /// ① 泵运行循环等异步加载落地、② 真点一下控件、③ 反复取图对比**切换前后**。
+    ///
+    /// ## 为什么 `write` / `writeBothLanguages` 够不着
+    ///
+    /// 那两个入口**每张图都重建视图树**（`@ViewBuilder` 闭包重新求值）—— 判「在同一个界面上
+    /// 点一下开关之后，原来选中的那一项还在不在」这类**跨时刻**的事时，"重建"这个动作本身
+    /// 就把被测的那件事抹掉了（重建的视图是一份全新的 `@State`）。队列 `L-89` ㈡ 第 6 条
+    /// （分组视图那一行的人话：「两种视图都能用；**切换后选中项不丢**」）正需要同一实例上的前后两态。
+    ///
+    /// ## 口径与 `write` 完全一致
+    ///
+    /// 渲染与落盘走的是同一套私有路径（`bitmap` / `hostDisplay` / PNG 编码 / `Record`），
+    /// 所以「非空白」判据、记录字段、清单写入口径都一样；窗口同样**不上屏**
+    /// （无人值守的机器上不该闪一下）。语言仍由**宿主语境**决定（调用方 `beginHostLanguage` 包住），
+    /// 观测到的文案由调用方从 `HostScope.observed` 传进来 —— 与 `write` 的取法同源。
+    @MainActor
+    final class LiveHost<V: View> {
+
+        let window: NSWindow
+        let hosting: NSHostingView<V>
+        private let size: CGSize
+
+        init(_ rootView: V, size: CGSize, scheme: ColorScheme = .light) {
+            let appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+            self.size = size
+            hosting = NSHostingView(rootView: rootView)
+            hosting.appearance = appearance
+            hosting.frame = CGRect(origin: .zero, size: size)
+
+            window = NSWindow(
+                contentRect: CGRect(origin: .zero, size: size),
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
+            window.appearance = appearance
+            window.isReleasedWhenClosed = false
+            window.contentView = hosting
+            settle()
+        }
+
+        /// 重排 + 重绘一次（泵循环里反复调它）。
+        func settle() {
+            window.layoutIfNeeded()
+            hosting.layoutSubtreeIfNeeded()
+            hosting.displayIfNeeded()
+        }
+
+        /// 泵运行循环直到 `condition` 成立或超时；返回是否成立。
+        ///
+        /// **异步加载必须等**（拉取元数据要走几趟数据库往返）：不等就取图，判的是
+        /// 「这台机器今天快不快」，而不是界面。（与第 99 轮那条「`断开` 是发出去就不管的异步 ⇒
+        /// 断言必须限时轮询」同一个教训。）
+        @discardableResult
+        func pump(until condition: () -> Bool, timeout: TimeInterval = 20, interval: TimeInterval = 0.05) -> Bool {
+            let deadline = Date().addingTimeInterval(timeout)
+            while Date() < deadline {
+                settle()
+                if condition() { return true }
+                RunLoop.current.run(until: Date().addingTimeInterval(interval))
+            }
+            settle()
+            return condition()
+        }
+
+        /// 泵固定时长（没有可判条件时用，例如「点完开关之后让渲染发生」）。
+        func pump(_ seconds: TimeInterval = 0.5) {
+            let deadline = Date().addingTimeInterval(seconds)
+            while Date() < deadline {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+                settle()
+            }
+        }
+
+        /// 这一次渲染的**内容指纹**（PNG 字节的 SHA256）。
+        ///
+        /// 用途：判「两档是不是真的画成了两个样子」时，不必落两份盘再比像素 —— 比指纹更快。
+        func signature() throws -> String {
+            settle()
+            let rep = try UISnapshot.bitmap(size: size, scale: 2)
+            UISnapshot.hostDisplay(hosting, into: rep)
+            let image = try UISnapshot.cgImage(from: rep, label: "LiveHost.signature")
+            guard let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
+                throw SnapshotError.encodeFailed("LiveHost.signature")
+            }
+            return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        }
+
+        /// 宿主视图树里的第一个 `NSSegmentedControl`。
+        ///
+        /// SwiftUI 的 `.pickerStyle(.segmented)` 在 macOS 上落到 `NSSegmentedControl`
+        /// 的子类（`SwiftUISegmentedControl`，实测 2026-09-29 / macOS 27）——于是
+        /// 「点一下这个开关」在**同进程内**做得到：`selectedSegment` + `sendAction` 就是真点击，
+        /// **不需要辅助功能授权**（合成事件只有跨进程才要授权）。
+        var firstSegmentedControl: NSSegmentedControl? {
+            Self.findSegmentedControl(in: hosting)
+        }
+
+        static func findSegmentedControl(in view: NSView) -> NSSegmentedControl? {
+            if let control = view as? NSSegmentedControl { return control }
+            for subview in view.subviews {
+                if let found = findSegmentedControl(in: subview) { return found }
+            }
+            return nil
+        }
+
+        /// 取一张图、落盘、把记录写进清单（口径与 `write` 相同）。
+        @MainActor
+        @discardableResult
+        func capture(
+            name: String,
+            scale: CGFloat = 2,
+            language: AppLanguage? = nil,
+            observed: Set<String> = []
+        ) throws -> Record {
+            settle()
+            let rep = try UISnapshot.bitmap(size: size, scale: scale)
+            UISnapshot.hostDisplay(hosting, into: rep)
+            let image = try UISnapshot.cgImage(from: rep, label: "LiveHost")
+            if let share = UISnapshot.placeholderShare(image) {
+                throw SnapshotError.blank(
+                    name,
+                    "LiveHost=不可渲染占位图（黄 \(String(format: "%.2f", share.yellow))/红 \(String(format: "%.2f", share.red))）"
+                )
+            }
+            let ratio = UISnapshot.contentRatio(of: image)
+            guard ratio >= 0.002 else {
+                throw SnapshotError.blank(name, "LiveHost=\(String(format: "%.3f", ratio))")
+            }
+            guard let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
+                throw SnapshotError.encodeFailed(name)
+            }
+            let directory = UISnapshot.outputDirectory
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appendingPathComponent("\(name).png", isDirectory: false)
+            try data.write(to: url, options: .atomic)
+
+            let record = Record(
+                name: name,
+                file: url.path,
+                width: image.width,
+                height: image.height,
+                scale: Double(scale),
+                scheme: "light",
+                bytes: data.count,
+                contentRatio: ratio,
+                renderer: "LiveHost（同一实例）",
+                language: (language ?? LocalizationManager.shared.language).rawValue,
+                localizedStrings: observed.sorted()
+            )
+            UISnapshot.records.append(record)
+            print("📷 \(name)  \(image.width)×\(image.height)px  \(data.count) B  内容占比 \(String(format: "%.3f", ratio))  [LiveHost]  \(record.language)  文案 \(record.localizedStrings.count) 条  → \(url.path)")
+            return record
+        }
     }
 }
 

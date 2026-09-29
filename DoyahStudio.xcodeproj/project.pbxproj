@@ -35,6 +35,8 @@
 		101327613587C75CCBDED62F /* MemoryGeneralStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42BE321F5914814D5B12837 /* MemoryGeneralStore.swift */; };
 		1030DEDF23D3CC96D6444821 /* KeychainAgentKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31480A2AFF1B065FCF924194 /* KeychainAgentKeyStore.swift */; };
 		10C269CDA7F38DE35637979D /* SavedQueryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EDB0CE8EAA3D92E8B9AECA1 /* SavedQueryStoreTests.swift */; };
+		11001E27AE9DADFFCBE9C3B6 /* ObjectTreeRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 891C58A5D0B425F0AF553B94 /* ObjectTreeRows.swift */; };
+		12D7A54275F25F258DA4FF4C /* ObjectTreeToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAB626B535EE491C93DBCB41 /* ObjectTreeToolbar.swift */; };
 		12E88071D96D1E1D162293C5 /* LicensePublicKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 827BFBC75132F11765F97263 /* LicensePublicKey.swift */; };
 		12FFB9DE406BF2B633A4D946 /* TerminalScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B1DE01A972FDCCEE802B6D /* TerminalScreenTests.swift */; };
 		130164AD5FB74234C8AAA7E1 /* SQLArchiveStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4AB8694B0050BC9FE4EC1E /* SQLArchiveStore.swift */; };
@@ -772,6 +774,7 @@
 		86D957C3BF5E7A3ABAFF0FC6 /* MySQLService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySQLService.swift; sourceTree = "<group>"; };
 		876DF6256A868580CCA4BB0C /* ConnectionGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionGrouping.swift; sourceTree = "<group>"; };
 		88B98C951F5916A3167EAEE3 /* ConnectionFailureNonConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionFailureNonConnectionTests.swift; sourceTree = "<group>"; };
+		891C58A5D0B425F0AF553B94 /* ObjectTreeRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeRows.swift; sourceTree = "<group>"; };
 		89234CFD939A7FB25EB09A52 /* DatabaseObjectRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseObjectRef.swift; sourceTree = "<group>"; };
 		8AE055D343CD018250E49117 /* ResultCollector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultCollector.swift; sourceTree = "<group>"; };
 		8AE4EDF77D18515395988BFC /* InlineEdit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineEdit.swift; sourceTree = "<group>"; };
@@ -878,6 +881,7 @@
 		C7913306A42F7A4B4584A497 /* LockMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockMonitorTests.swift; sourceTree = "<group>"; };
 		C8E04EF4EEEC4C09F5408DF4 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		C9AC01B639A4208385D1DB81 /* TextLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextLanguageTests.swift; sourceTree = "<group>"; };
+		CAB626B535EE491C93DBCB41 /* ObjectTreeToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeToolbar.swift; sourceTree = "<group>"; };
 		CB65FC24B68864F6845B85C6 /* SafeModeConfirmSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeModeConfirmSheet.swift; sourceTree = "<group>"; };
 		CC5750665C2BBAF68D3F4E86 /* BrowserTabStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserTabStore.swift; sourceTree = "<group>"; };
 		CCAA5487D12734A2F61B4AEB /* SQLEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLEditorView.swift; sourceTree = "<group>"; };
@@ -1490,6 +1494,8 @@
 				BDB21052F30097E679588FE2 /* MCPApprovalPanel.swift */,
 				4C604886B315DB3AEA77E165 /* NotesPanel.swift */,
 				3E6523603226B14944DB3254 /* ObjectSearchPanel.swift */,
+				891C58A5D0B425F0AF553B94 /* ObjectTreeRows.swift */,
+				CAB626B535EE491C93DBCB41 /* ObjectTreeToolbar.swift */,
 				DCCCBABF3F0170E23840194F /* ObjectTreeView.swift */,
 				0C55901A11B93F666427F859 /* PrivilegePanel.swift */,
 				F531012660AE649A3E60DE06 /* QueryContextBar.swift */,
@@ -1859,6 +1865,8 @@
 				632978A79C9F208CD1E77521 /* MaintenancePanel.swift in Sources */,
 				E82CFBAE23875685C0370117 /* NotesPanel.swift in Sources */,
 				42375BDC9F67BF7BC406ACB7 /* ObjectSearchPanel.swift in Sources */,
+				11001E27AE9DADFFCBE9C3B6 /* ObjectTreeRows.swift in Sources */,
+				12D7A54275F25F258DA4FF4C /* ObjectTreeToolbar.swift in Sources */,
 				F4EE71C4B14F01570C4CB528 /* ObjectTreeView.swift in Sources */,
 				76B21AF1FA00C06D9A10AE33 /* PrivilegePanel.swift in Sources */,
 				FC3F12236C57927E7AC91063 /* QueryContextBar.swift in Sources */,

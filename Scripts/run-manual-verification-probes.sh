@@ -83,6 +83,25 @@ set -euo pipefail
 # **这一批要真集群**（`Scripts/lib/test-env.sh` 的本机档；下面会起库、建两个带标记表的临时库），
 # 并且**证据文件会被核对** —— 探针跳过 / 没挂上时文件不存在 ⇒ 本脚本判红（跳过 ≠ 通过）。
 #
+# ## 第八批（队列 L-89 ㈡ 第 6 条，第 101 轮）：分组视图
+#
+# `TestsUISnapshot/GroupedViewProbeTests.swift` 判清单里 `FR-META-15 分组视图` 那一行
+# 「对象树顶部在「层级视图 / 按类型分组」之间切换」→ 过 =「**两种视图都能用**；**切换后选中项不丢**」。
+# 三件事：① 可见行模型（`App/Views/ObjectTreeRows.swift`，本轮从视图里搬出来的纯函数）在两种模式下
+# 各摊平一遍，输入是**真库读回来的对象** —— 层级面无表头、分组面表头齐、计数与真库对象数逐个相符、
+# 非表头行两面逐条相同；② **真点一下**那台分段选择器（`UISnapshot.LiveHost` 里的
+# `NSSegmentedControl`：同一进程内 `selectedSegment` + `sendAction` = 真点击，**不需要辅助功能授权**），
+# 点完绑定真的翻（两档都到得了），且两档画出来**不是一个样子**、标签跟着界面语言走（中英各一遍）；
+# ③ 选中项是**树里的同一个 id** ⇒ 两种行集合里都找得到那一行（「切换不丢选中」的模型侧）。
+# 序列 / 函数 / 「其他」三个桶用**合成夹具**补（PG 的 schema 子节点只有表与视图两类）。
+#
+# **如实登记的边界**：先试过「整棵 `ObjectTreeView` + 真库 + 真点击」那条更狠的路，**做不到**
+# —— 真对象树在离屏宿主里始终停在加载分支（画面近空白、工具条不在视图树里），而 `.task` 的异步
+# 本身是好的（临时诊断两条都绿、`AppState` 那条路也回得来）。于是「在真树上点一下、看选中高亮不丢」
+# 这一格**没有**机器判据，只到模型 + 工具栏粒度；`L-89` ㈡ 的开发记录里如实写了这条与复现证据。
+# 本批同样要真集群（下面第八批那段建临时库并注入 `DOYAH_PROBE_PGGROUP` 等），
+# 并且**证据文件会被核对**；源锚点另判三条：行模型是纯函数（不 import 驱动、不碰 `AppState`、不调 `loadMetadata*`）、视图里那台开关两档齐备、**以及视图那条调用点真的把这一台开关传给了模型**。最后这条是**注入实测逼出来的**：把 `groupByType: groupByType` 写死成 `false` 时，模型那一批与工具栏那一批**照样全绿**（探针只从两头取数、不经过那条调用点）—— 判据的覆盖面里当时缺着「模型与工具栏之间那根线」。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -107,7 +126,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `AppearanceFontProbeTests`（㈡：主题与字体 —— 手输族之后界面说的话 + SQL 预览的字形）。
 # + `TerminalInterruptProbeTests`（L-92 ㈡①：终端 `⌃C` 打断前台 `sleep 30` —— 非沙箱包的作业控制）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -171,6 +190,27 @@ export DOYAH_PROBE_PGMARKER_CURRENT="${PROBE_MARKER_CURRENT}"
 export DOYAH_PROBE_PGMARKER_OTHER="${PROBE_MARKER_OTHER}"
 echo "  · 跨库探针：当前库 ${PROBE_PG_CURRENT}（有 ${PROBE_MARKER_CURRENT}）"
 echo "              非当前库 ${PROBE_PG_OTHER}（有 ${PROBE_MARKER_OTHER}）｜不存在的库 ${PROBE_PG_MISSING}"
+
+# ---- 分组视图那一批要的**真库**（第八批）--------------------------------------
+#
+# 判据要「用真库读回来的对象喂可见行模型」，并且要判「表头上的条数与真库对象数逐个相符」——
+# 所以临时库里得有两种类型（表 / 视图）的对象，各带一个**独有**标记名（名字只有一处来源：
+# 这里建、经环境变量给探针；探针不手抄表名）。
+PROBE_PG_GROUP="$(doyah_test_env_scratch_name group_view)"
+PROBE_GROUP_TABLE_A="gv_marker_table_a"
+PROBE_GROUP_TABLE_B="gv_marker_table_b"
+PROBE_GROUP_VIEW="gv_marker_view"
+
+doyah_test_env_scratch_db group_view >/dev/null
+probe_psql "${PROBE_PG_GROUP}" "CREATE TABLE ${PROBE_GROUP_TABLE_A}(id int);"
+probe_psql "${PROBE_PG_GROUP}" "CREATE TABLE ${PROBE_GROUP_TABLE_B}(id int);"
+probe_psql "${PROBE_PG_GROUP}" "CREATE VIEW ${PROBE_GROUP_VIEW} AS SELECT id FROM ${PROBE_GROUP_TABLE_A};"
+
+export DOYAH_PROBE_PGGROUP="${PROBE_PG_GROUP}"
+export DOYAH_PROBE_PGTABLE_A="${PROBE_GROUP_TABLE_A}"
+export DOYAH_PROBE_PGTABLE_B="${PROBE_GROUP_TABLE_B}"
+export DOYAH_PROBE_PGVIEW="${PROBE_GROUP_VIEW}"
+echo "  · 分组视图探针：库 ${PROBE_PG_GROUP}（表 ${PROBE_GROUP_TABLE_A} / ${PROBE_GROUP_TABLE_B} + 视图 ${PROBE_GROUP_VIEW}）"
 
 run_pass() {  # $1 = 输出目录；$2 = 该遍要设的 APP_SANDBOX_CONTAINER_ID（空 = 不设）
     local out="$1" mark="$2" label="$3"
@@ -316,6 +356,153 @@ print("✓ 两遍都真跑过：非当前库按需恰好 1 条 / 展开前 0 条
 PY
 
 echo
+echo "==> 分组视图那条：两遍都**真跑过**了吗（跳过 ≠ 通过）"
+python3 - "${OUT_PLAIN}" "${OUT_SANDBOX}" <<'PY'
+import json
+import os
+import sys
+
+# 期望值只写「不变量」：与标记数/证据自洽的那些关系，而不是把探针里的数字再抄一遍
+# （抄一遍 = 两个真值来源，改一处漏一处）。
+def load(directory, case):
+    path = os.path.join(directory, f"grouped-view-evidence-{case}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+failures = []
+for directory in sys.argv[1:]:
+    base = os.path.basename(directory)
+
+    real = load(directory, "realObjects")
+    if real is None:
+        failures.append(f"{base}：没有 realObjects 的证据文件 —— 探针没真跑（跳过不算通过）")
+    else:
+        if real.get("hierarchyDepths") != [0, 1, 2, 3, 3, 3]:
+            failures.append(f"{base}/realObjects：层级面深度不对：{real.get('hierarchyDepths')}")
+        if real.get("groupedDepths") != [0, 1, 2, 3, 4, 5, 6, 6, 5, 6]:
+            failures.append(f"{base}/realObjects：分组面深度不对：{real.get('groupedDepths')}")
+        tables = real.get("tableCount")
+        views = real.get("viewCount")
+        # 每一层展开的容器都会被分组 ⇒ 容器层的库 / schema 各一个「其他」组（条数 1）
+        if real.get("headerCounts") != ["1", "1", str(tables), str(views)]:
+            failures.append(
+                f"{base}/realObjects：表头条数与真库对象数不符："
+                f"{real.get('headerCounts')} vs 表 {tables} / 视图 {views}"
+            )
+        if tables != len(real.get("markerTables") or []):
+            failures.append(f"{base}/realObjects：真库表数 {tables} 与标记数不符")
+        if views != 1:
+            failures.append(f"{base}/realObjects：真库视图数 {views} 不是 1")
+        for marker in (real.get("markerTables") or []) + [real.get("markerView")]:
+            if marker not in (real.get("realObjectNames") or []):
+                failures.append(f"{base}/realObjects：真库读回来的对象里没有标记对象 {marker}")
+
+    buckets = load(directory, "syntheticBuckets")
+    if buckets is None:
+        failures.append(f"{base}：没有 syntheticBuckets 的证据文件")
+    else:
+        if buckets.get("headerCounts") != ["2", "1", "1", "1", "1"]:
+            failures.append(f"{base}/syntheticBuckets：五个桶的条数不对：{buckets.get('headerCounts')}")
+        if len(buckets.get("headerTitles") or []) != 5:
+            failures.append(f"{base}/syntheticBuckets：桶的表头不是五个：{buckets.get('headerTitles')}")
+        if buckets.get("emptyChildrenRowCount") != 1:
+            failures.append(f"{base}/syntheticBuckets：空子节点产出了行：{buckets.get('emptyChildrenRowCount')}")
+
+    # 第三份：顶部那台开关的真点击（工具栏粒度）
+    toolbar = load(directory, "toolbarSwitch")
+    if toolbar is None:
+        failures.append(f"{base}：没有 toolbarSwitch 的证据文件 —— 真点击那条没跑（跳过不算通过）")
+    else:
+        if toolbar.get("segmentCount") != 2:
+            failures.append(f"{base}/toolbarSwitch：分段选择器不是两档：{toolbar.get('segmentCount')}")
+        if toolbar.get("history") != ["grouped", "hierarchy"]:
+            failures.append(
+                f"{base}/toolbarSwitch：点两档没把绑定翻过去：{toolbar.get('history')}"
+            )
+        if not (toolbar.get("toolbarDiffPixels") or 0) > 0:
+            failures.append(
+                f"{base}/toolbarSwitch：两档画出来逐像素相同（{toolbar.get('toolbarDiffPixels')}）"
+            )
+        for key in ("zhHierarchy", "zhGrouped", "enHierarchy", "enGrouped"):
+            if not (toolbar.get(key) or "").strip():
+                failures.append(f"{base}/toolbarSwitch：语言表里缺 {key}")
+        if (toolbar.get("zhHierarchy") or "") == (toolbar.get("enHierarchy") or ""):
+            failures.append(f"{base}/toolbarSwitch：中英两档文案一模一样，语言那一遍没起作用")
+
+if failures:
+    for item in failures:
+        print(f"✗ {item}")
+    sys.exit(1)
+print("✓ 两遍都真跑过：两种视图的行集合一致 / 计数与真库相符 / 真点击两档都到得了（中英各一遍）")
+PY
+
+echo
+echo "==> 分组视图那四条：源锚点（行模型是纯函数 / 分组只有一处来源 / 那台开关两档齐备 / **生产路径的接线本身**）"
+python3 - "${ROOT}" <<'PY'
+import os
+import re
+import sys
+
+root = sys.argv[1]
+
+
+def source(relative):
+    with open(os.path.join(root, relative), encoding="utf-8") as handle:
+        return handle.read()
+
+
+def code_only(text):
+    """只看代码，不看注释 —— 注释里写「不碰 AppState」这句话本身不该被判红。"""
+    return "\n".join(line for line in text.split("\n") if not line.strip().startswith("//"))
+
+
+rows = source("App/Views/ObjectTreeRows.swift")
+view = source("App/Views/ObjectTreeView.swift")
+toolbar = source("App/Views/ObjectTreeToolbar.swift")
+
+failures = []
+# ① 分组聚合**只有一处来源**：视图里自己再拼一份 = 两份口径迟早不一致
+for name, text in (("App/Views/ObjectTreeView.swift", view), ("App/Views/ObjectTreeToolbar.swift", toolbar)):
+    if "ObjectTreeGrouping.groupedByType(" in code_only(text):
+        failures.append(f"{name} 里自己拼了一份分组行 —— 分组只能由 ObjectTreeRows 出")
+if "ObjectTreeGrouping.groupedByType(" not in code_only(rows):
+    failures.append("ObjectTreeRows.swift 里没有调用分组聚合 —— 行模型被掏空了？")
+# ② 「切视图不重查库」的结构保证：行模型不许有任何取数能力
+for forbidden in ("AppState", "loadMetadata", "DatabaseService", "PostgresService", "MySQLService", "URLSession"):
+    if forbidden in code_only(rows):
+        failures.append(f"ObjectTreeRows.swift 里出现了 {forbidden} —— 行模型必须是纯函数（切视图不重查库）")
+# ③ 那台开关：两档齐备、且接的就是视图里那一个 @State
+if 'Picker("", selection: $groupByType)' not in code_only(toolbar):
+    failures.append("ObjectTreeToolbar.swift 里没有绑定 groupByType 的分段选择器")
+for key in (".treeGroupHierarchy", ".treeGroupByType"):
+    if key not in code_only(toolbar):
+        failures.append(f"分段选择器少了 {key} 那一档")
+if "ObjectTreeToolbar(" not in code_only(view):
+    failures.append("ObjectTreeView.swift 没有把那一行装回去（ObjectTreeToolbar 没被用上）")
+# ④ **生产路径的接线本身也要判**（第 101 轮注入实测补上的一格）：
+#    模型判住了、工具栏判住了，**它们之间那根线**当时没人判 —— 把
+#    `ObjectTreeView.swift` 里的 `groupByType: groupByType` 写死成 `false`（界面照旧能点、模型照旧对），
+#    两遍**全绿**（探针只从模型和工具栏两头取数，不经过那条调用点）。
+#    ⇒ 逐字（允许空白）要求那台开关传进模型：写死 `true` / `false` / 别的变量都判红。
+if "ObjectTreeRows.visibleRows(" not in code_only(view):
+    failures.append("ObjectTreeView.swift 没有调用行模型 ObjectTreeRows.visibleRows( —— 生产路径断了")
+elif not re.search(r"groupByType:\s*groupByType", code_only(view)):
+    failures.append(
+        "ObjectTreeView.swift 调行模型时没有把那一台开关传进去（groupByType: groupByType）"
+        " —— 模型与工具栏各自判得住，不等于它们之间接着线"
+    )
+
+if failures:
+    for item in failures:
+        print(f"✗ {item}")
+    sys.exit(1)
+print("✓ 分组只有一处来源（ObjectTreeRows）；行模型没有任何取数能力；开关两档齐备且接的是视图那一个 @State")
+PY
+
+echo
 echo "==> 完成：证据在 ${OUT_BASE}/（每张图另有中英两份，逐张断言见 ManualVerificationProbeTests）"
 echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 R-53 SSL 收窄说明"
 echo "    ＋ §2 FR-EDIT-25 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
@@ -325,3 +512,5 @@ echo "    ＋ §1 FR-EDIT-29 多会话那一行的版面与落点（TerminalTabs
 echo "       右侧按钮按状态齐备、⌘1…9 与 ⌘⇧[ ⌘⇧] 与改名落到对的会话）"
 echo "    ＋ §4 FR-RES-07 大结果集滚动（LargeResultScrollProbeTests：虚拟化 / 帧在变 / 单帧成本不随总行数放大 / 内存不飙）"
 echo "    ＋ §5 FR-META-10 跨库浏览（CrossDatabaseBrowseProbeTests：按需建连 / 子树来自那个库 / 失败给可读原因）"
+echo "    ＋ §5 FR-META-15 分组视图（GroupedViewProbeTests：两种视图的行集合一致 / 表头计数与真库相符 /"
+echo "       真点开关两档都到得了、两档不是一个样子（中英各一遍）；序列·函数·其他三个桶用合成夹具补）"
