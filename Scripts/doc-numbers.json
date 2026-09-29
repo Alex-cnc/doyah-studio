@@ -177,18 +177,18 @@
     {
       "key": "doc-tables-lists",
       "label": "check-doc-tables 默认清单里被 .gitignore 排除的文档份数（= 只在主开发机上的那几份）",
-      "value": 7,
+      "value": 13,
       "unit": "份",
       "secondary": {
         "label": "受版本控制的文档份数（自检夹具口径）",
-        "value": 6
+        "value": 29
       },
       "measure": {
         "kind": "doc-tables-lists",
         "module": "Scripts/check-doc-tables.py",
         "expect": [
-          7,
-          6
+          13,
+          29
         ],
         "note": "导入那个模块读它的清单（**权威算法是它自己的 `gitignored_documents()`**）+ `git check-ignore -z` 实测「被排除的确实是这 7 份」+ 与自检夹具 `SELF_TEST_ABSENT` / `SELF_TEST_TRACKED` **逐条**对账（清单改了没改夹具即判红）；不在 git 仓库里时 git 侧复核如实报「跳过」，不假装核过"
       },
@@ -197,7 +197,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "本清单里有 \\*\\*(\\d+) 份文档被",
           "expect": [
-            7
+            13
           ],
           "minSites": 1,
           "note": "docstring「文件不存在的两种语义」那一段"
@@ -206,7 +206,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "被 `\\.gitignore` 排除的 (\\d+) 份\\*\\* /",
           "expect": [
-            7
+            13
           ],
           "minSites": 1,
           "note": "docstring：本轮新增的「数字的唯一来源」段"
@@ -215,7 +215,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "# (\\d+) 份被 `\\.gitignore` 排除的缺席",
           "expect": [
-            7
+            13
           ],
           "minSites": 1,
           "note": "自检块头注释"
@@ -224,7 +224,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "⚠ 跳过 (\\d+) 份",
           "expect": [
-            7
+            13
           ],
           "minSites": 1,
           "note": "自检例 1：必须高声提示（不得静默通过）"
@@ -233,8 +233,8 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "表格校验通过（(\\d+) 个文件，跳过 (\\d+) 份）",
           "expect": [
-            6,
-            7
+            29,
+            13
           ],
           "minSites": 1,
           "note": "自检例 1：收尾行如实写出跳过数（6 = 夹具里在盘的那几份）"
@@ -243,7 +243,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "默认清单，缺 (\\d+) 份",
           "expect": [
-            7
+            13
           ],
           "minSites": 1,
           "note": "自检例 1 的注释（干净克隆口径）"
@@ -252,7 +252,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "干净克隆跳过 (\\d+) 份且 exit 0",
           "expect": [
-            7
+            13
           ],
           "minSites": 1,
           "note": "自检收尾行"
@@ -261,7 +261,7 @@
           "file": "Scripts/verify-all.sh",
           "regex": "本项的默认清单里有 \\*\\*(\\d+) 份被 `\\.gitignore` 排除的文档\\*\\*",
           "expect": [
-            7
+            13
           ],
           "minSites": 1,
           "note": "闭环第 4 项注释"
@@ -270,7 +270,7 @@
           "file": "Scripts/verify-all.sh",
           "regex": "干净克隆跳过 (\\d+) 份且 exit 0",
           "expect": [
-            7
+            13
           ],
           "minSites": 1,
           "note": "闭环第 4 项注释（门禁自己的证据那一半）"
@@ -279,7 +279,7 @@
           "file": "Scripts/verify-all.sh",
           "regex": "第 4 项里 (\\d+) 份被 `\\.gitignore` 排除的本地文档",
           "expect": [
-            7
+            13
           ],
           "minSites": 1,
           "note": "头注释「跳过 ≠ 通过」那一段（原文写 5 份 = 陈旧值，本轮改为算出来的）"
@@ -288,30 +288,30 @@
           "file": "AGENT-SPEC.md",
           "regex": "\\*\\*(\\d+) 份被 `\\.gitignore` 排除\\*\\*",
           "expect": [
-            7
+            13
           ],
           "minSites": 1,
           "note": "§6 资产表：文档数字那一行（本轮新增落点）"
         }
       ],
-      "note": "第 65 轮（L-72 ㈡）收口：同一件事此前写在各处、无人对账 —— 本轮实测两处**真陈旧**：`check-doc-tables.py` 的人读提示写着「这 5 份被 `.gitignore` 排除」（L-41 把清单从 5 份扩到 7 份后没跟上）、`Scripts/verify-all.sh:115` 同一句也写着 5 份；两处都改成由 `gitignored_documents()` 算出来，`--self-test` 例 2 的失败文案同族（原写「缺 5 份」）。"
+      "note": "第 65 轮（L-72 ㈡）收口：同一件事此前写在各处、无人对账 —— 本轮实测两处**真陈旧**：`check-doc-tables.py` 的人读提示写着「这 5 份被 `.gitignore` 排除」（L-41 把清单从 5 份扩到 7 份后没跟上）、`Scripts/verify-all.sh:115` 同一句也写着 5 份；两处都改成由 `gitignored_documents()` 算出来，`--self-test` 例 2 的失败文案同族（原写「缺 5 份」）。 第 89 轮（L-89）随清单扩容更新：**7 → 13 份**被排除、受控夹具 **6 → 29 份** —— 原因是清单从 13 份命名扩到 42 份（仓根 `*.md` + `Docs/**/*.md` 里带表格的文档全部纳入），新纳的 29 份里有 6 份同样被 `.gitignore` 排除。"
     },
     {
       "key": "doc-tables-files",
       "label": "check-doc-tables 在本机默认跑时受检的文件数",
-      "value": 14,
+      "value": 43,
       "unit": "份",
       "secondary": {
         "label": "清单里命名的文档份数",
-        "value": 13
+        "value": 42
       },
       "measure": {
         "kind": "doc-tables-run",
         "module": "Scripts/check-doc-tables.py",
         "regex": "✅ 表格校验通过（(\\d+) 个文件",
         "expect": [
-          14,
-          13
+          43,
+          42
         ],
         "note": "**真跑一遍**那个脚本（默认清单，cwd = 仓根），从它自己的收尾行抓受检文件数；跑不过 / 抓不到收尾行都判红（格式被改坏 = 证据坏了）。次值 = 清单里命名的份数（`len(DEFAULT_TARGETS)`，与 1 条通配合成 14）"
       },
@@ -320,9 +320,9 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "\\*\\*(\\d+) 份命名 \\+ (\\d+) 条通配 = 实跑 (\\d+) 份\\*\\*",
           "expect": [
-            13,
+            42,
             1,
-            14
+            43
           ],
           "minSites": 1,
           "note": "docstring：本轮新增的「数字的唯一来源」段"
@@ -331,7 +331,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "✅ 表格校验通过（(\\d+) 个文件）",
           "expect": [
-            14
+            43
           ],
           "minSites": 1,
           "note": "自检例 4：真仓库受检文件数"
@@ -340,7 +340,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "真仓库 (\\d+) 份无跳过",
           "expect": [
-            14
+            43
           ],
           "minSites": 1,
           "note": "自检收尾行"
@@ -349,8 +349,8 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "收尾行应为 (\\d+) 个文件（(\\d+) 份命名 \\+ (\\d+) 份通配）",
           "expect": [
-            14,
-            13,
+            43,
+            42,
             1
           ],
           "minSites": 1,
@@ -360,7 +360,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "真仓库 (\\d+) 份命名文档应全在",
           "expect": [
-            13
+            42
           ],
           "minSites": 1,
           "note": "自检例 4 的反向断言（真仓库不许出现跳过行）"
@@ -369,8 +369,8 @@
           "file": "Scripts/verify-all.sh",
           "regex": "真仓库 (\\d+) 份受检无跳过（(\\d+) 份命名 \\+ (\\d+) 份通配",
           "expect": [
-            14,
-            13,
+            43,
+            42,
             1
           ],
           "minSites": 1,
@@ -380,15 +380,15 @@
           "file": "AGENT-SPEC.md",
           "regex": "\\*\\*(\\d+) 份命名 \\+ (\\d+) 条通配 = 实跑 (\\d+) 份\\*\\*",
           "expect": [
-            13,
+            42,
             1,
-            14
+            43
           ],
           "minSites": 1,
           "note": "§6 资产表（本轮新增落点）"
         }
       ],
-      "note": "第 65 轮（L-72 ㈡）收口：这个数此前由 `--self-test` 自己钉着（例 4 断言收尾行 14 个文件），但**没有任何跨文档对账** —— 文档里写「14 个文件 / 13 份命名」的地方各自为政；现在实测 = 真跑一遍，文档每一处对账。边界：通配命中的份数不单独登记（它随当天日期变），只作为「13 + 1 = 14」的组成写在各处。"
+      "note": "第 65 轮（L-72 ㈡）收口：这个数此前由 `--self-test` 自己钉着（例 4 断言收尾行 14 个文件），但**没有任何跨文档对账** —— 文档里写「14 个文件 / 13 份命名」的地方各自为政；现在实测 = 真跑一遍，文档每一处对账。边界：通配命中的份数不单独登记（它随当天日期变），只作为「13 + 1 = 14」的组成写在各处。 第 89 轮（L-89）随清单扩容更新：**14 → 43 份**（命名 **13 → 42** 份 + 通配 1 份）—— 「带表格的文档全部纳入」；本轮同时新增判据 E（带表格却不在清单里即判红），清单此后**不可能**再静默漏掉带表格的文档。"
     },
     {
       "key": "panel-root-frames",

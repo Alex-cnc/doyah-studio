@@ -112,7 +112,7 @@ set -euo pipefail
 # 平台口径（L-33，2026-09-27 第 29 轮）：本闭环**在非 macOS 机器上也能跑**，方式是——
 #   · **第 1 / 11 项（要 Xcode 工具链）按平台跳过 + 打印提示**，收尾行如实报「跑了几项 / 跳了几项」，
 #     **跳过 ≠ 通过**（逐条列出跳过的项，并指向 §8.3 / §8.5.3 的等价物）；
-#   · 第 4 项里 7 份被 `.gitignore` 排除的本地文档**不存在即跳过并提示**（显式点名 / `--require-all` 判红）；
+#   · 第 4 项里 13 份被 `.gitignore` 排除的本地文档**不存在即跳过并提示**（显式点名 / `--require-all` 判红）；
 #   · `DOYAH_PLATFORM=macos|windows|linux` 显式声明平台（缺省按 `uname -s` 推断）；
 #   · `./Scripts/verify-all.sh --require-all` = **跳过即红**（主开发机上自我证明用）。
 #
@@ -230,14 +230,17 @@ python3 Scripts/check-literal-language.py
 python3 Scripts/test-literal-language-gate.py
 
 echo "==> 4/18 文档表格与派生计数"
-# L-33（2026-09-27 第 29 轮）：本项的默认清单里有 **7 份被 `.gitignore` 排除的文档**
+# L-33（2026-09-27 第 29 轮）：本项的默认清单里有 **13 份被 `.gitignore` 排除的文档**
 # （兼容性矩阵 / GBase-技术验证 / 测试用例 / 发布方案 / 手工验收运行手册 + **L-41 起纳入的
-# `智能体助手-开发spec.md` 与 `design/开发循环-任务队列.md`**）—— 它们只在主开发机上，
+# `智能体助手-开发spec.md` 与 `design/开发循环-任务队列.md`** + **L-89 起纳入的 6 份**：
+# `人工点验-单击清单-macOS-20260927.md` / `夜间开发记录_20260921-22.md` / `接管记录_v2.3.md` /
+# `调研书-AI智能体能力基线.md` / `调研书-主流数据库客户端基础功能.md` / `项目评审-2026-09-23.md`）
+# —— 它们只在主开发机上，
 # 干净克隆与另一平台都没有。原先一律判红 ⇒ 那台机器上这一项**必红且与改动无关**（§8.5.6-4）。
 # 现在：默认清单里不存在 → **跳过 + 高声提示**；显式点名 / `--require-all` → 判红。
 # 本闭环传不传 `--require-all` 由参数决定（主开发机上自我证明时加）。
-# **口径的两个数不是这里说了算**（第 65 轮 L-72 ㈡）：`7 份被排除` / `13 份命名 + 1 条通配 =
-# 实跑 14 份` 由台账 `Scripts/doc-numbers.json`（`doc-tables-lists` / `doc-tables-files`）登记，
+# **口径的两个数不是这里说了算**（第 65 轮 L-72 ㈡）：`13 份被排除` / `42 份命名 + 1 条通配 =
+# 实跑 43 份` 由台账 `Scripts/doc-numbers.json`（`doc-tables-lists` / `doc-tables-files`）登记，
 # 判据 `Scripts/check-doc-numbers.py` 每次自己算一遍（导入 `check-doc-tables.py` 读清单 +
 # `git check-ignore` 实测 + 真跑它一遍）再与本文件 / 该脚本 / `AGENT-SPEC.md` 逐处对账。
 if [ "${REQUIRE_ALL}" = "1" ]; then
@@ -245,8 +248,9 @@ if [ "${REQUIRE_ALL}" = "1" ]; then
 else
   python3 Scripts/check-doc-tables.py
 fi
-# 这一半是门禁自己的证据（L-33；L-41 补例 5）：干净克隆跳过 7 份且 exit 0 / --require-all 判红 /
-# 显式点名判红 / **写坏一行被判红并指名行号** / 真仓库 14 份受检无跳过（13 份命名 + 1 份通配；
+# 这一半是门禁自己的证据（L-33；L-41 补例 5；L-89 补例 6）：干净克隆跳过 13 份且 exit 0 /
+# --require-all 判红 / 显式点名判红 / **写坏一行被判红并指名行号** / **带表格却不在清单判红且归档豁免** /
+# 真仓库 43 份受检无跳过（42 份命名 + 1 份通配；
 # **末例核对真仓库逐字节未变**）。
 python3 Scripts/check-doc-tables.py --self-test
 # L-32（2026-09-27 第 28 轮）：变更记录版本号**唯一**、头部版本格**可判**（= 变更记录最高号，
