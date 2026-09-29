@@ -121,15 +121,6 @@ struct ObjectTreeView: View {
                 // 这一步是"已选中 A 时右键 B 选不中 B"的修法：行级 hover 在整树重算后必被清空，
                 // 指针位置才是可靠事实。
 
-                // 整棵树这一份**保留**：只用于右键点到行之外的空白（内边距 / 底下空区），
-                // 内容仍按"鼠标底下那一行"算，没有就退回选中项。
-                .contextMenu {
-                    ObjectTreeContextMenu.items(
-                        object: menuTargetObject,
-                        appState: appState,
-                        onEdit: onEdit
-                    )
-                }
             }
         }
         // 这里**不要**再加 `.id(appState.selectedConnectionID)`：
@@ -303,15 +294,6 @@ struct ObjectTreeView: View {
         .frame(height: Metrics.listRowHeight)
     }
 
-    /// 菜单打开那一刻真正的目标行（悬停优先、盒子空时退回选中项）——
-    /// 解析是**纯函数**（`ObjectTreeMenuTarget.resolve`，住在 `App/Views/ObjectTreeContextMenu.swift`）。
-    private var menuTargetObject: DatabaseObject? {
-        ObjectTreeMenuTarget.resolve(
-            hoveredRowID: hoverBox.rowID,
-            selected: appState.selectedTreeObject,
-            rows: visibleRows
-        )
-    }
 
     private func placeholderRow(
         text: String,

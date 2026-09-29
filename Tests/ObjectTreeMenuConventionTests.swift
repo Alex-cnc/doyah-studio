@@ -39,9 +39,17 @@ final class ObjectTreeMenuConventionTests: XCTestCase {
             text.contains("ObjectTreeContextMenu.items("),
             "菜单内容必须走 `ObjectTreeContextMenu.items(`（唯一出处）—— 视图里另写一份就会与判据漂移"
         )
+        // ② 菜单**挂在每一行上**（2026-09-29 需求提出者第三次投诉后的定案），
+        //    整树那份"兜底菜单"已删除：它按悬停/上次选中算目标，什么都没选时会弹出一张**错的**菜单
+        //    （需求提出者原话：「每次在没任何对象被选点情况点右键菜单，出来的是一个错误菜单，
+        //    只有点第二次还会正常出现右键菜单」）。行级菜单每行自带自己的对象 ⇒ 不存在"目标算错"这一说。
         XCTAssertTrue(
+            text.contains("object: row.object"),
+            "每一行的菜单内容必须直接用它自己的 `row.object`"
+        )
+        XCTAssertFalse(
             text.contains("object: menuTargetObject"),
-            "菜单目标必须走 `menuTargetObject`（悬停行 + 兜底）—— 只看悬停盒子的话，重建补的假 mouseExited 会让菜单变空"
+            "不许再有整树兜底菜单 —— 它就是「没选对象时弹出错菜单」的来源"
         )
         XCTAssertTrue(
             text.contains("ObjectTreeMenuTarget.resolve("),
