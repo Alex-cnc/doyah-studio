@@ -21,11 +21,15 @@ import Foundation
 //      这里只放**方案 D 的强调色家族**（`AccentFamily`）—— 它是**基准值**，用于装饰性 / 语义性着色
 //      （链接、语法、度量值、次级描边），不参与"用户换强调色"那条路。两条路各有单测把守。
 //
-// **色值来源（2026-09-29 起）= 外观方案 D · 科技蓝**：需求提出者提供参考图、逐像素统计取色，
-// 全量值与门槛见 `Docs/design/外观方案-v1.md` §8（契约登记：`Docs/概要设计.md` §3.9 / v2.74）。
-// 本文件里的每个色值都能在 §8 找到出处；§8 未给值的少数角色（浅色 `raised` / `disabled` /
-// `textBright` / `accentSoft` / 浅色 `window`）在各自位置逐条写明"为什么取这个值"，并如实登记
-// 为**推导值**（一句话可推翻）—— 不许出现第四条路：悄悄换掉一个没人记得的值。
+// **色值来源（2026-09-29 起）= 主题集**：默认主题「科技蓝」= 外观方案 D，需求提出者提供参考图、
+// 逐像素统计取色；另有两个主题（豆芽绿 / 玫瑰金）的推导草案。**值表在 `Core/DesignTheme.swift`**
+// （按主题分组，每个角色一份），本文件只留**角色与用法规矩**——「哪个角色长什么样」是另一条轴。
+// 全量值与门槛见 `Docs/design/外观方案-v1.md` §8 / §9（契约登记：`Docs/概要设计.md` §3.9）。
+// **取色必须带主题**：`Surface.panel.color(in: theme)` —— 去掉无参的 `color` 是有意的，
+// 让「这一屏跟的是哪个主题」在每一处调用点都写出来（编译器替我们守这条）。
+// §8 未给值的少数角色（浅色 `raised` / `disabled` / `textBright` / `accentSoft` / 浅色 `window`）
+// 在值表里各自写明「为什么取这个值」，并如实登记为**推导值**（一句话可推翻）——
+// 不许出现第四条路：悄悄换掉一个没人记得的值。
 
 /// 间距刻度（4 / 8 网格；`hair` 是唯一的例外，用于图标与文字之间的紧贴）。
 public enum Spacing {
@@ -151,10 +155,11 @@ public struct ThemeColor: Equatable, Sendable {
 /// 表面（层次由暗到亮：window → sidebar → content → panel → raised）。
 ///
 /// 语义而不是色值：视图里写 `Surface.panel` 而不是 `#15263A`，
-/// 这样换配色只改这一处，也不会出现"表头用了三个不同的灰"。
+/// 这样换配色只改值表，也不会出现"表头用了三个不同的灰"。
 ///
-/// 2026-09-29（L-79 ㈠）：深色由**中性灰**换成方案 D 的**深海军蓝**（§8.1），
-/// 浅色按同一套色相派生（§8.5）。深色五档的明度**严格递增**（这是不变式，有单测守着）。
+/// 2026-09-29（L-79 ㈠）：深色由**中性灰**换成方案 D 的**深海军蓝**（§8.1），浅色按同一套色相派生（§8.5）；
+/// 2026-09-29（L-80 ㈠）：值表按**主题**分组（`Core/DesignTheme.swift`），本枚举只留角色语义。
+/// 深色五档的明度**严格递增**（这是不变式，对**每个主题**都成立，有单测守着）。
 public enum Surface: String, CaseIterable, Sendable {
     case window
     case sidebar
@@ -162,22 +167,15 @@ public enum Surface: String, CaseIterable, Sendable {
     case panel
     case raised
 
-    public var color: ThemeColor {
+    /// 这一角色在**指定主题**下的取值。没有无参版本是有意的（见文件头）。
+    public func color(in theme: DesignTheme) -> ThemeColor {
+        let palette = theme.palette
         switch self {
-        // 深色五档 = §8.1 原值（逐像素统计取色）。
-        // 浅色档：
-        //   · sidebar / panel / content = §8.5 原值（content 白、sidebar 与 panel 同 #F4F7FB）；
-        //   · raised = #FFFFFF：**沿用既有规矩 3**（浅色下 raised 与 content 同为白，浮层靠发丝线 / 阴影
-        //     区分）；§8.5 没给 raised，改了反而会造出"浅色下浮层比内容还亮"的走样。
-        //   · window = #F1F5FA：**推导值，且是对 §8.5 的一处显式偏离** —— §8.5 写 window 与 content 同为
-        //     #FFFFFF，但既有判据要求"window 必须与 content 可区分"（距离 ≥0.02，见 §3.9 跨平台不变量），
-        //     两白相等会当场判红。取比 sidebar 再低一档的同色相浅蓝（距离 content 0.041、比 content 暗），
-        //     实际观感与白无异（window 在 chrome 铺满时本来就看不见）。一句话可推翻。
-        case .window: return ThemeColor(light: 0xF1F5FA, dark: 0x02070A)
-        case .sidebar: return ThemeColor(light: 0xF4F7FB, dark: 0x081420)
-        case .content: return ThemeColor(light: 0xFFFFFF, dark: 0x0B1A2A)
-        case .panel: return ThemeColor(light: 0xF4F7FB, dark: 0x15263A)
-        case .raised: return ThemeColor(light: 0xFFFFFF, dark: 0x1D3350)
+        case .window: return palette.window
+        case .sidebar: return palette.sidebar
+        case .content: return palette.content
+        case .panel: return palette.panel
+        case .raised: return palette.raised
         }
     }
 }
@@ -194,22 +192,20 @@ public enum TextTone: String, CaseIterable, Sendable {
     /// 但它**必须仍能看出"这里有个东西、只是现在不能用"**，所以有下限（见单测）。
     case disabled
 
-    public var color: ThemeColor {
+    /// 这一档文本在**指定主题**下的取值。
+    ///
+    /// 角色级规矩（对每个主题都成立）：
+    ///   · `tertiary` 是"辅助信息"那一档，**深浅同值**（它不是"两套色"，而是参考图里的中间调）；
+    ///   · `disabled` 比 `tertiary` 更淡（有单测守着顺序与下限）；
+    ///   · `bright` 是"强对比"档（≥7），只给标题与关键数值用。
+    public func color(in theme: DesignTheme) -> ThemeColor {
+        let palette = theme.palette
         switch self {
-        // 深色档全部 = §8.2 原值（含"参考图直接取到的 #415F86 只有 3.09、不够正文故上提"那条）。
-        // 浅色档 = §8.5 原值 **除** 两处推导值（逐条写在下面）。
-        case .bright: return ThemeColor(light: 0x061426, dark: 0xEFF8FA)
-        case .primary: return ThemeColor(light: 0x10243D, dark: 0xCAD0DC)
-        case .secondary: return ThemeColor(light: 0x45607F, dark: 0x8594B1)
-        // 辅助信息（表头 / 行号 / 状态栏）：**深浅同值** #5C7CA6 —— 它不是"两套色"，而是
-        // 参考图里那个中间调（§8.2 明写 `#415F86` 不够、上提到 #5C7CA6 的那一档）。
-        // 同一个中间调在白底上是 4.30、在深蓝底上是 4.09，两态都过 3.0 的辅助门槛，
-        // 故不再另造一个浅色值（§8.5 未给 textTertiary）。
-        case .tertiary: return ThemeColor(light: 0x5C7CA6, dark: 0x5C7CA6)
-        // 深色 = 参考图里**采样到的**中间调 #415F86（§8.2 提到它不够做正文，做"禁用"正合适：
-        // 2.68 > 1.5 的下限、且比三级文本淡）；
-        // 浅色 = 推导值 #A9B7CC（同色相的浅蓝灰：2.03，仍满足"比三级淡、又不至于看不见"）。
-        case .disabled: return ThemeColor(light: 0xA9B7CC, dark: 0x415F86)
+        case .bright: return palette.textBright
+        case .primary: return palette.textPrimary
+        case .secondary: return palette.textSecondary
+        case .tertiary: return palette.textTertiary
+        case .disabled: return palette.textDisabled
         }
     }
 }
@@ -223,11 +219,17 @@ public enum StatusTone: String, CaseIterable, Sendable {
     case warning
     case danger
 
-    public var color: ThemeColor {
+    /// 这一档状态色在**指定主题**下的取值。
+    ///
+    /// 角色级规矩：状态三色的**色相不随主题漂移**（成功是绿、警告是黄、危险是红）——
+    /// 语义色的任务是"一眼认出这是哪一类状态"，跟着主题换色相会把它变成装饰。
+    /// 三个主题目前共用同一组值（值表里逐主题写着）。
+    public func color(in theme: DesignTheme) -> ThemeColor {
+        let palette = theme.palette
         switch self {
-        case .success: return ThemeColor(light: 0x16704A, dark: 0x4ADE80)
-        case .warning: return ThemeColor(light: 0x92600B, dark: 0xFBBF24)
-        case .danger: return ThemeColor(light: 0xC2321F, dark: 0xF87171)
+        case .success: return palette.success
+        case .warning: return palette.warning
+        case .danger: return palette.danger
         }
     }
 }
@@ -241,9 +243,12 @@ public enum StatusTone: String, CaseIterable, Sendable {
 /// `Codable` 是 FR-CONN-16 需要：连接的**自选颜色**按**名字**存（`"teal"`），
 /// 不存具体色值 —— 色值随主题演化，存了它就要为"颜色改了、旧配置怎么办"再写一次迁移。
 ///
-/// **方案 D 未给分类色**（§8 只给了表面 / 文本 / 强调家族 / 语义 / 语法）：本轮**不动**，
+/// **方案 D 未给分类色**（§8 只给了表面 / 文本 / 强调家族 / 语义 / 语法）：**三个主题都不动它**，
 /// 实测这四色在 D 的 content（#0B1A2A）与 panel（#15263A）上仍 ≥3.0（深浅两态都够），
-/// 且彼此可分辨。要按 D 的色相重排是另一件事（会改用户"认引擎"的颜色），一行话可开条。
+/// 且彼此可分辨。要按主题色相重排是另一件事（会改用户"认引擎"的颜色），一行话可开条。
+///
+/// 取色**不带主题**是有意的（唯一的例外）：身份色表达的是"这是哪个引擎"，与用户选的配色无关 ——
+/// 跟着主题换会让"PostgreSQL 是蓝的"这件事不再成立。这条例外由单测钉住（它必须与主题无关）。
 public enum CategoricalTone: String, CaseIterable, Codable, Sendable {
     case blue
     case teal
@@ -276,13 +281,14 @@ public enum AccentFamily: String, CaseIterable, Sendable {
     case teal
     case warm
 
-    public var color: ThemeColor {
+    public func color(in theme: DesignTheme) -> ThemeColor {
+        let palette = theme.palette
         switch self {
-        case .accent: return ThemeColor(light: 0x2E6FA8, dark: 0x6EA8D0)
-        case .accentGlow: return ThemeColor(light: 0x1C63C4, dark: 0x7AB0FA)
-        case .accentSoft: return ThemeColor(light: 0x4C6C9B, dark: 0x4C6C9B)
-        case .teal: return ThemeColor(light: 0x0E7490, dark: 0x94E2F8)
-        case .warm: return ThemeColor(light: 0x8A6A3B, dark: 0xC7AF95)
+        case .accent: return palette.accent
+        case .accentGlow: return palette.accentGlow
+        case .accentSoft: return palette.accentSoft
+        case .teal: return palette.accentTeal
+        case .warm: return palette.accentWarm
         }
     }
 }
@@ -301,30 +307,36 @@ public enum SyntaxTone: String, CaseIterable, Sendable {
     case function
     case comment
 
-    public var color: ThemeColor {
+    public func color(in theme: DesignTheme) -> ThemeColor {
         switch self {
-        case .keyword: return AccentFamily.accentGlow.color
-        case .identifier: return TextTone.primary.color
-        case .string: return AccentFamily.warm.color
-        case .number: return AccentFamily.teal.color
-        case .function: return AccentFamily.accent.color
-        case .comment: return TextTone.tertiary.color
+        case .keyword: return AccentFamily.accentGlow.color(in: theme)
+        case .identifier: return TextTone.primary.color(in: theme)
+        case .string: return AccentFamily.warm.color(in: theme)
+        case .number: return AccentFamily.teal.color(in: theme)
+        case .function: return AccentFamily.accent.color(in: theme)
+        case .comment: return TextTone.tertiary.color(in: theme)
         }
     }
 }
 
 /// 发丝线颜色：不是固定的灰，而是"当前表面上的 1px 亮/暗线"。
 ///
-/// 深色 = 白 10% 叠加（§8.1 的值）；浅色 = **实色 `#D3DCE8`**（§8.5 的值）。
-/// 为什么浅色不用透明度：§8.5 给的是一个**带蓝调的实色**，用黑色透明度反算的话
-/// （黑 17% 叠在白上 ≈ #D3D3D3）会丢掉那点蓝（G/B 通道差 5~9/255），
-/// 而 方案 D 的浅色整套都是蓝调 —— 为省一个分支把色调丢掉不值。深色侧仍是叠加：
-/// 深色五个表面跨度大（#02070A → #1D3350），白色低透明度是唯一在五面上都成立的写法。
+/// 深色 = 白 `darkAlpha` 叠加（§8.1 的值，三个主题共用 10%）；浅色 = 各主题自己的**实色**
+/// （科技蓝 `#D3DCE8` / 豆芽绿 `#D5E3D9` / 玫瑰金 `#F0D9D5`）。
+/// 为什么浅色不用透明度：§8.5 给的是一个**带色相的实色**，用黑色透明度反算的话
+/// （黑 17% 叠在白上 ≈ #D3D3D3）会丢掉那点色相（G/B 通道差 5~9/255），
+/// 而每个主题的浅色整套都是同色相的 —— 为省一个分支把色调丢掉不值。深色侧仍是叠加：
+/// 深色五个表面跨度大（最暗 #02070A → 最亮 #42262E），白色低透明度是唯一在五面上都成立的写法。
 public enum Hairline {
-    /// 浅色档的实色（§8.5）。
-    public static let lightHex: UInt32 = 0xD3DCE8
-    /// 深色档的白色透明度（§8.1：白 10%）。
-    public static let darkAlpha: Double = 0.10
+    /// 浅色档的实色（随主题；见 `ThemePalette.hairlineLight`）。
+    public static func lightHex(in theme: DesignTheme) -> UInt32 {
+        theme.palette.hairlineLight
+    }
+
+    /// 深色档的白色透明度（§8.1：白 10%；三个主题共用）。
+    public static func darkAlpha(in theme: DesignTheme) -> Double {
+        theme.palette.hairlineDarkAlpha
+    }
 }
 
 // MARK: - 排版级差

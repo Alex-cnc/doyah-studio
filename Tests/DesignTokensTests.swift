@@ -6,6 +6,10 @@ import XCTest
 /// 这一层的价值不在"存了几个数字"，而在**它把品味变成了可校验的约束**：
 /// 间距必须在刻度上、表面之间必须能被看出来是两块、文字必须够对比度。
 /// 这些都是肉眼容易放过、但一旦放过就会累积成"看着不精致"的东西。
+///
+/// 2026-09-29（L-80 ㈠）：令牌值按**主题**分组（`Core/DesignTheme.swift`）⇒
+/// **每一条不变式都对 `DesignTheme.all` 里的每个主题跑一遍**，而不是只看默认主题。
+/// 这是"三选一"这件事真正要守的地方：新增一个主题只要有一档不过门槛，这里当场红。
 final class DesignTokensTests: XCTestCase {
 
     private let thresholds = ColorContrast.Threshold.self
@@ -53,136 +57,156 @@ final class DesignTokensTests: XCTestCase {
     // MARK: 表面层次（改造中修掉过两次真缺陷，这里守住）
 
     /// 内容区与侧栏必须能被看出来是两块 —— 第一版只差 3/255，等于没有层次。
-    func testContentAndSidebarAreDistinguishableInBothThemes() {
-        for isDark in [true, false] {
-            let content = Surface.content.color.hex(dark: isDark)
-            let sidebar = Surface.sidebar.color.hex(dark: isDark)
-            let distance = ColorContrast.distance(content, sidebar)
-            XCTAssertGreaterThanOrEqual(
-                distance, thresholds.surfaceSeparation,
-                "\(isDark ? "深色" : "浅色")主题里内容区与侧栏太接近（距离 \(String(format: "%.3f", distance))）"
-            )
-        }
-    }
-
-    func testPanelAndWindowAreDistinguishableFromContent() {
-        for isDark in [true, false] {
-            let content = Surface.content.color.hex(dark: isDark)
-            for surface in [Surface.panel, .window] {
-                let distance = ColorContrast.distance(content, surface.color.hex(dark: isDark))
+    func testContentAndSidebarAreDistinguishableInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                let content = Surface.content.color(in: theme).hex(dark: isDark)
+                let sidebar = Surface.sidebar.color(in: theme).hex(dark: isDark)
+                let distance = ColorContrast.distance(content, sidebar)
                 XCTAssertGreaterThanOrEqual(
                     distance, thresholds.surfaceSeparation,
-                    "\(isDark ? "深色" : "浅色")主题里 \(surface.rawValue) 与内容区太接近"
+                    "\(theme.id) 的\(isDark ? "深色" : "浅色")态里内容区与侧栏太接近（距离 \(String(format: "%.3f", distance))）"
                 )
             }
         }
     }
 
-    /// 深色主题靠**明度递增**表达层次：window < sidebar < content < panel < raised。
-    func testDarkSurfacesRiseInLightness() {
-        let order: [Surface] = [.window, .sidebar, .content, .panel, .raised]
-        let luminances = order.map { ColorContrast.relativeLuminance($0.color.dark) }
-        for index in 1..<luminances.count {
-            XCTAssertGreaterThan(
-                luminances[index], luminances[index - 1],
-                "深色主题里 \(order[index].rawValue) 不比 \(order[index - 1].rawValue) 亮"
-            )
-        }
-    }
-
-    /// 浅色主题的不变式不同：**内容区是最亮的**（面板与浮层靠描边 / 阴影区分，不靠更亮）。
-    func testLightContentIsTheBrightestSurface() {
-        let content = ColorContrast.relativeLuminance(Surface.content.color.light)
-        for surface in Surface.allCases where surface != .content {
-            XCTAssertLessThanOrEqual(
-                ColorContrast.relativeLuminance(surface.color.light), content,
-                "浅色主题里 \(surface.rawValue) 比内容区还亮"
-            )
-        }
-    }
-
-    // MARK: 对比度（这一层真正要守的）
-
-    /// 正文与次要信息：WCAG AA 4.5。
-    func testBodyAndSecondaryTextPassAAOnContent() {
-        for isDark in [true, false] {
-            let background = Surface.content.color.hex(dark: isDark)
-            for tone in [TextTone.primary, .secondary] {
-                let ratio = ColorContrast.ratio(tone.color.hex(dark: isDark), background)
-                XCTAssertGreaterThanOrEqual(
-                    ratio, thresholds.bodyText,
-                    "\(isDark ? "深色" : "浅色")主题的 \(tone.rawValue) 只有 \(String(format: "%.2f", ratio))"
-                )
-            }
-        }
-    }
-
-    /// 辅助信息（表头 / 行号）：按**非文本组件**的 3.0 守 —— 它刻意比正文轻，
-    /// 但要能看清。浅色档原来给 #9A9AA0 只有 2.80，已压到 #7C7C82。
-    func testTertiaryTextStaysReadable() {
-        for isDark in [true, false] {
-            let background = Surface.content.color.hex(dark: isDark)
-            let ratio = ColorContrast.ratio(TextTone.tertiary.color.hex(dark: isDark), background)
-            XCTAssertGreaterThanOrEqual(
-                ratio, thresholds.largeText,
-                "\(isDark ? "深色" : "浅色")主题的辅助文字只有 \(String(format: "%.2f", ratio))"
-            )
-        }
-    }
-
-    /// 禁用态：WCAG 不要求它达 AA（非活动控件），但**不能淡到看不见**，
-    /// 且必须比三级文本更淡 —— 这条顺序反了就会出现"能用的按钮看起来是禁用的"。
-    func testDisabledTextIsDimmerThanTertiaryButStillVisible() {
-        for isDark in [true, false] {
-            let background = Surface.content.color.hex(dark: isDark)
-            let disabled = ColorContrast.ratio(TextTone.disabled.color.hex(dark: isDark), background)
-            let tertiary = ColorContrast.ratio(TextTone.tertiary.color.hex(dark: isDark), background)
-            XCTAssertLessThan(disabled, tertiary, "\(isDark ? "深色" : "浅色")：禁用态应比三级文本淡")
-            XCTAssertGreaterThanOrEqual(disabled, 1.5, "\(isDark ? "深色" : "浅色")：禁用态淡到看不见了")
-        }
-    }
-
-    /// 状态色主要用作状态点（非文本组件）→ 3.0。
-    func testStatusColoursAreVisibleOnBothSurfaces() {
-        for isDark in [true, false] {
-            for background in [Surface.content, .panel] {
-                let hex = background.color.hex(dark: isDark)
-                for tone in StatusTone.allCases {
-                    let ratio = ColorContrast.ratio(tone.color.hex(dark: isDark), hex)
+    func testPanelAndWindowAreDistinguishableFromContentInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                let content = Surface.content.color(in: theme).hex(dark: isDark)
+                for surface in [Surface.panel, .window] {
+                    let distance = ColorContrast.distance(content, surface.color(in: theme).hex(dark: isDark))
                     XCTAssertGreaterThanOrEqual(
-                        ratio, thresholds.component,
-                        "\(isDark ? "深色" : "浅色")主题里 \(tone.rawValue) 在 \(background.rawValue) 上只有 \(String(format: "%.2f", ratio))"
+                        distance, thresholds.surfaceSeparation,
+                        "\(theme.id) 的\(isDark ? "深色" : "浅色")态里 \(surface.rawValue) 与内容区太接近"
                     )
                 }
             }
         }
     }
 
-    /// 代码要在编辑器里读得下去：除注释外都按正文 4.5 守。
-    func testSyntaxColoursAreReadableOnContent() {
-        for isDark in [true, false] {
-            let background = Surface.content.color.hex(dark: isDark)
-            for tone in SyntaxTone.allCases {
-                let ratio = ColorContrast.ratio(tone.color.hex(dark: isDark), background)
-                let required = tone == .comment ? thresholds.largeText : thresholds.bodyText
-                XCTAssertGreaterThanOrEqual(
-                    ratio, required,
-                    "\(isDark ? "深色" : "浅色")主题的 \(tone.rawValue) 只有 \(String(format: "%.2f", ratio))（需 ≥ \(required)）"
+    /// 深色主题靠**明度递增**表达层次：window < sidebar < content < panel < raised。
+    func testDarkSurfacesRiseInLightnessInEveryTheme() {
+        let order: [Surface] = [.window, .sidebar, .content, .panel, .raised]
+        for theme in DesignTheme.all {
+            let luminances = order.map { ColorContrast.relativeLuminance($0.color(in: theme).dark) }
+            for index in 1..<luminances.count {
+                XCTAssertGreaterThan(
+                    luminances[index], luminances[index - 1],
+                    "\(theme.id) 的深色态里 \(order[index].rawValue) 不比 \(order[index - 1].rawValue) 亮"
                 )
             }
         }
     }
 
+    /// 浅色主题的不变式不同：**内容区是最亮的**（面板与浮层靠描边 / 阴影区分，不靠更亮）。
+    func testLightContentIsTheBrightestSurfaceInEveryTheme() {
+        for theme in DesignTheme.all {
+            let content = ColorContrast.relativeLuminance(Surface.content.color(in: theme).light)
+            for surface in Surface.allCases where surface != .content {
+                XCTAssertLessThanOrEqual(
+                    ColorContrast.relativeLuminance(surface.color(in: theme).light), content,
+                    "\(theme.id) 的浅色态里 \(surface.rawValue) 比内容区还亮"
+                )
+            }
+        }
+    }
+
+    // MARK: 对比度（这一层真正要守的）
+
+    /// 正文与次要信息：WCAG AA 4.5。
+    func testBodyAndSecondaryTextPassAAOnContentInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                let background = Surface.content.color(in: theme).hex(dark: isDark)
+                for tone in [TextTone.primary, .secondary] {
+                    let ratio = ColorContrast.ratio(tone.color(in: theme).hex(dark: isDark), background)
+                    XCTAssertGreaterThanOrEqual(
+                        ratio, thresholds.bodyText,
+                        "\(theme.id) 的\(isDark ? "深色" : "浅色")态里 \(tone.rawValue) 只有 \(String(format: "%.2f", ratio))"
+                    )
+                }
+            }
+        }
+    }
+
+    /// 辅助信息（表头 / 行号）：按**非文本组件**的 3.0 守 —— 它刻意比正文轻，
+    /// 但要能看清。
+    func testTertiaryTextStaysReadableInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                let background = Surface.content.color(in: theme).hex(dark: isDark)
+                let ratio = ColorContrast.ratio(TextTone.tertiary.color(in: theme).hex(dark: isDark), background)
+                XCTAssertGreaterThanOrEqual(
+                    ratio, thresholds.largeText,
+                    "\(theme.id) 的\(isDark ? "深色" : "浅色")态里辅助文字只有 \(String(format: "%.2f", ratio))"
+                )
+            }
+        }
+    }
+
+    /// 禁用态：WCAG 不要求它达 AA（非活动控件），但**不能淡到看不见**，
+    /// 且必须比三级文本更淡 —— 这条顺序反了就会出现"能用的按钮看起来是禁用的"。
+    func testDisabledTextIsDimmerThanTertiaryButStillVisibleInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                let background = Surface.content.color(in: theme).hex(dark: isDark)
+                let disabled = ColorContrast.ratio(TextTone.disabled.color(in: theme).hex(dark: isDark), background)
+                let tertiary = ColorContrast.ratio(TextTone.tertiary.color(in: theme).hex(dark: isDark), background)
+                XCTAssertLessThan(disabled, tertiary, "\(theme.id) 的\(isDark ? "深色" : "浅色")态：禁用态应比三级文本淡")
+                XCTAssertGreaterThanOrEqual(disabled, 1.5, "\(theme.id) 的\(isDark ? "深色" : "浅色")态：禁用态淡到看不见了")
+            }
+        }
+    }
+
+    /// 状态色主要用作状态点（非文本组件）→ 3.0。
+    func testStatusColoursAreVisibleOnBothSurfacesInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                for background in [Surface.content, .panel] {
+                    let hex = background.color(in: theme).hex(dark: isDark)
+                    for tone in StatusTone.allCases {
+                        let ratio = ColorContrast.ratio(tone.color(in: theme).hex(dark: isDark), hex)
+                        XCTAssertGreaterThanOrEqual(
+                            ratio, thresholds.component,
+                            "\(theme.id) 的\(isDark ? "深色" : "浅色")态里 \(tone.rawValue) 在 \(background.rawValue) 上只有 \(String(format: "%.2f", ratio))"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// 代码要在编辑器里读得下去：除注释外都按正文 4.5 守。
+    func testSyntaxColoursAreReadableOnContentInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                let background = Surface.content.color(in: theme).hex(dark: isDark)
+                for tone in SyntaxTone.allCases {
+                    let ratio = ColorContrast.ratio(tone.color(in: theme).hex(dark: isDark), background)
+                    let required = tone == .comment ? thresholds.largeText : thresholds.bodyText
+                    XCTAssertGreaterThanOrEqual(
+                        ratio, required,
+                        "\(theme.id) 的\(isDark ? "深色" : "浅色")态里 \(tone.rawValue) 只有 \(String(format: "%.2f", ratio))（需 ≥ \(required)）"
+                    )
+                }
+            }
+        }
+    }
+
     /// 关键词与字符串、数字与函数之间必须分得开 —— 语法着色"糊成一片"就等于没有。
-    func testSyntaxColoursAreDistinctFromEachOther() {
-        for isDark in [true, false] {
-            let tones = SyntaxTone.allCases
-            for i in 0..<tones.count {
-                for j in (i + 1)..<tones.count {
-                    // identifier 就是正文色，与其它色当然不同；这里只要求"不完全相同"
-                    let a = tones[i].color.hex(dark: isDark)
-                    let b = tones[j].color.hex(dark: isDark)
-                    XCTAssertNotEqual(a, b, "\(tones[i].rawValue) 与 \(tones[j].rawValue) 用了同一个颜色")
+    func testSyntaxColoursAreDistinctFromEachOtherInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                let tones = SyntaxTone.allCases
+                for i in 0..<tones.count {
+                    for j in (i + 1)..<tones.count {
+                        // identifier 就是正文色，与其它色当然不同；这里只要求"不完全相同"
+                        let a = tones[i].color(in: theme).hex(dark: isDark)
+                        let b = tones[j].color(in: theme).hex(dark: isDark)
+                        XCTAssertNotEqual(a, b, "\(theme.id)：\(tones[i].rawValue) 与 \(tones[j].rawValue) 用了同一个颜色")
+                    }
                 }
             }
         }
@@ -215,6 +239,9 @@ final class DesignTokensTests: XCTestCase {
 
     /// 分类色必须**彼此可分辨**（徽标的任务就是一眼区分引擎），
     /// 且引擎映射是稳定的数据（改它等于改用户认引擎的方式）。
+    ///
+    /// L-80 ㈠ 补一条：分类色**不随主题变**（它是身份色，见 `CategoricalTone` 的注释）——
+    /// 这条断言是"有人顺手把它挂到主题上"的当场报红。
     func testCategoricalTonesAreDistinctAndMapped() {
         for isDark in [true, false] {
             let hexes = CategoricalTone.allCases.map { $0.color.hex(dark: isDark) }
@@ -235,19 +262,26 @@ final class DesignTokensTests: XCTestCase {
 
     /// 强调色**不属于**令牌层：它由用户配置（`AccentTheme`）。
     /// 这条测试是防"有人图省事把强调色写死进 DesignTokens"。
+    ///
+    /// L-80 ㈠ 起要**逐主题**判：三套表都不能藏着某个强调色的值。
     func testAccentIsNotHardCodedInTokens() {
-        let tokenHexes = Set(
-            Surface.allCases.map(\.color.light)
-                + Surface.allCases.map(\.color.dark)
-                + TextTone.allCases.map(\.color.light)
-                + TextTone.allCases.map(\.color.dark)
-        )
-        for accent in AccentTheme.all {
-            XCTAssertFalse(tokenHexes.contains(accent.accentHex), "\(accent.id) 被写死进了令牌层")
+        for theme in DesignTheme.all {
+            let tokenHexes = Set(
+                Surface.allCases.map { $0.color(in: theme).light }
+                    + Surface.allCases.map { $0.color(in: theme).dark }
+                    + TextTone.allCases.map { $0.color(in: theme).light }
+                    + TextTone.allCases.map { $0.color(in: theme).dark }
+            )
+            for accent in AccentTheme.all {
+                XCTAssertFalse(
+                    tokenHexes.contains(accent.accentHex),
+                    "\(accent.id) 被写死进了 \(theme.id) 的令牌层"
+                )
+            }
         }
     }
 
-    // MARK: 外观方案 D · 科技蓝（2026-09-29 登记，落地 = L-79）
+    // MARK: 外观方案 D · 科技蓝（2026-09-29 登记，落地 = L-79；L-80 起是**默认主题**）
 
     /// 方案 D 的**关键值**先钉住几处（全量值见 `Docs/design/外观方案-v1.md` §8，那是文档侧的出处；
     /// 这里只钉"改了要说一声"的几处，理由同 `testMetricsArePinned`）。
@@ -256,78 +290,95 @@ final class DesignTokensTests: XCTestCase {
     /// （L-55 的纪律）；钉住的是**身份值**（深色底、强调色、青绿 / 暖色点缀）——
     /// 它们一改就是"换了一个方案"，不是微调。
     func testTechBlueIdentityValuesArePinned() {
-        XCTAssertEqual(Surface.window.color.dark, 0x02070A, "方案 D 的窗口底（§8.1）")
-        XCTAssertEqual(Surface.content.color.dark, 0x0B1A2A, "方案 D 的内容底（§8.1）")
-        XCTAssertEqual(TextTone.primary.color.dark, 0xCAD0DC, "方案 D 的正文（§8.2）")
-        XCTAssertEqual(AccentFamily.accent.color.dark, 0x6EA8D0, "方案 D 的强调色（§8.3）")
-        XCTAssertEqual(AccentFamily.teal.color.dark, 0x94E2F8, "方案 D 的青绿点缀（§8.3）")
-        XCTAssertEqual(AccentFamily.warm.color.dark, 0xC7AF95, "方案 D 的暖色点缀（§8.3）")
-        XCTAssertEqual(TextTone.primary.color.light, 0x10243D, "方案 D 的浅色正文（§8.5）")
+        let techBlue = DesignTheme.techBlue
+        XCTAssertEqual(Surface.window.color(in: techBlue).dark, 0x02070A, "方案 D 的窗口底（§8.1）")
+        XCTAssertEqual(Surface.content.color(in: techBlue).dark, 0x0B1A2A, "方案 D 的内容底（§8.1）")
+        XCTAssertEqual(TextTone.primary.color(in: techBlue).dark, 0xCAD0DC, "方案 D 的正文（§8.2）")
+        XCTAssertEqual(AccentFamily.accent.color(in: techBlue).dark, 0x6EA8D0, "方案 D 的强调色（§8.3）")
+        XCTAssertEqual(AccentFamily.teal.color(in: techBlue).dark, 0x94E2F8, "方案 D 的青绿点缀（§8.3）")
+        XCTAssertEqual(AccentFamily.warm.color(in: techBlue).dark, 0xC7AF95, "方案 D 的暖色点缀（§8.3）")
+        XCTAssertEqual(TextTone.primary.color(in: techBlue).light, 0x10243D, "方案 D 的浅色正文（§8.5）")
     }
 
     /// §8.6 的门槛是**产品要求**：正文 ≥4.5 / **强对比 ≥7** / 图标线 ≥3，**深浅两态都要过**。
-    /// 这条把"强对比"这一档也守起来（此前工程里没有这一档 —— 方案 D 带进来的）。
-    func testStrongContrastTierHoldsInBothThemes() {
-        for isDark in [true, false] {
-            let content = Surface.content.color.hex(dark: isDark)
-            let bright = TextTone.bright.color.hex(dark: isDark)
-            let ratio = ColorContrast.ratio(bright, content)
-            XCTAssertGreaterThanOrEqual(
-                ratio, thresholds.strongText,
-                "\(isDark ? "深色" : "浅色")主题的标题 / 关键数值只有 \(String(format: "%.2f", ratio))（需 ≥ \(thresholds.strongText)）"
-            )
-            // 标题比正文更强 —— 否则"bright"这个名字没有意义
-            XCTAssertGreaterThan(ratio, ColorContrast.ratio(TextTone.primary.color.hex(dark: isDark), content))
+    /// L-80 ㈠ 起这条对**每个主题**都成立（"三选一"不能有一个选项偷偷不过门槛）。
+    func testStrongContrastTierHoldsInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                let content = Surface.content.color(in: theme).hex(dark: isDark)
+                let bright = TextTone.bright.color(in: theme).hex(dark: isDark)
+                let ratio = ColorContrast.ratio(bright, content)
+                XCTAssertGreaterThanOrEqual(
+                    ratio, thresholds.strongText,
+                    "\(theme.id) 的\(isDark ? "深色" : "浅色")态里标题 / 关键数值只有 \(String(format: "%.2f", ratio))（需 ≥ \(thresholds.strongText)）"
+                )
+                // 标题比正文更强 —— 否则"bright"这个名字没有意义
+                XCTAssertGreaterThan(
+                    ratio,
+                    ColorContrast.ratio(TextTone.primary.color(in: theme).hex(dark: isDark), content)
+                )
+            }
         }
     }
 
     /// 强调色家族按 §8.3 写明**各自的用途**分别守：
     /// `accentGlow` / `teal` / `warm` 会落到文字与链接上（≥4.5）；`accent` / `accentSoft`
     /// 是非文本组件（≥3.0，且 §8.3 明写 `accentSoft`"只够图标线，不得用于正文"）。
-    func testAccentFamilyMeetsItsDocumentedRoles() {
-        for isDark in [true, false] {
-            // §8.2 / §8.5 的对比度基准：深色对 `window`、浅色对白底
-            let base = isDark ? Surface.window.color.dark : 0xFFFFFF
-            for tone in [AccentFamily.accentGlow, .teal, .warm] {
-                let ratio = ColorContrast.ratio(tone.color.hex(dark: isDark), base)
-                XCTAssertGreaterThanOrEqual(
-                    ratio, thresholds.bodyText,
-                    "\(isDark ? "深色" : "浅色")的 \(tone.rawValue) 做文字 / 链接只有 \(String(format: "%.2f", ratio))"
-                )
-            }
-            for tone in [AccentFamily.accent, .accentSoft] {
-                let ratio = ColorContrast.ratio(tone.color.hex(dark: isDark), base)
-                XCTAssertGreaterThanOrEqual(
-                    ratio, thresholds.component,
-                    "\(isDark ? "深色" : "浅色")的 \(tone.rawValue) 做图标线只有 \(String(format: "%.2f", ratio))"
-                )
+    func testAccentFamilyMeetsItsDocumentedRolesInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                // §8.2 / §8.5 的对比度基准：深色对 `window`、浅色对白底
+                let base = isDark ? Surface.window.color(in: theme).dark : 0xFFFFFF
+                for tone in [AccentFamily.accentGlow, .teal, .warm] {
+                    let ratio = ColorContrast.ratio(tone.color(in: theme).hex(dark: isDark), base)
+                    XCTAssertGreaterThanOrEqual(
+                        ratio, thresholds.bodyText,
+                        "\(theme.id) 的\(isDark ? "深色" : "浅色")态里 \(tone.rawValue) 做文字 / 链接只有 \(String(format: "%.2f", ratio))"
+                    )
+                }
+                for tone in [AccentFamily.accent, .accentSoft] {
+                    let ratio = ColorContrast.ratio(tone.color(in: theme).hex(dark: isDark), base)
+                    XCTAssertGreaterThanOrEqual(
+                        ratio, thresholds.component,
+                        "\(theme.id) 的\(isDark ? "深色" : "浅色")态里 \(tone.rawValue) 做图标线只有 \(String(format: "%.2f", ratio))"
+                    )
+                }
             }
         }
     }
 
     /// 语法色六档**按角色**挂在令牌家族上（§8.4 的六档就是 §8.1~8.3 的角色表）。
     /// 这条是防回潮：谁把某个语法色改回硬编码的十六进制，六档就会与家族脱钩 —— 当场报红。
-    func testSyntaxTonesAreBoundToAccentFamilyRoles() {
-        for isDark in [true, false] {
-            func hex(_ color: ThemeColor) -> UInt32 { color.hex(dark: isDark) }
-            XCTAssertEqual(hex(SyntaxTone.keyword.color), hex(AccentFamily.accentGlow.color))
-            XCTAssertEqual(hex(SyntaxTone.string.color), hex(AccentFamily.warm.color))
-            XCTAssertEqual(hex(SyntaxTone.number.color), hex(AccentFamily.teal.color))
-            XCTAssertEqual(hex(SyntaxTone.function.color), hex(AccentFamily.accent.color))
-            XCTAssertEqual(hex(SyntaxTone.identifier.color), hex(TextTone.primary.color))
-            XCTAssertEqual(hex(SyntaxTone.comment.color), hex(TextTone.tertiary.color))
+    func testSyntaxTonesAreBoundToAccentFamilyRolesInEveryTheme() {
+        for theme in DesignTheme.all {
+            for isDark in [true, false] {
+                func hex(_ color: ThemeColor) -> UInt32 { color.hex(dark: isDark) }
+                XCTAssertEqual(hex(SyntaxTone.keyword.color(in: theme)), hex(AccentFamily.accentGlow.color(in: theme)))
+                XCTAssertEqual(hex(SyntaxTone.string.color(in: theme)), hex(AccentFamily.warm.color(in: theme)))
+                XCTAssertEqual(hex(SyntaxTone.number.color(in: theme)), hex(AccentFamily.teal.color(in: theme)))
+                XCTAssertEqual(hex(SyntaxTone.function.color(in: theme)), hex(AccentFamily.accent.color(in: theme)))
+                XCTAssertEqual(hex(SyntaxTone.identifier.color(in: theme)), hex(TextTone.primary.color(in: theme)))
+                XCTAssertEqual(hex(SyntaxTone.comment.color(in: theme)), hex(TextTone.tertiary.color(in: theme)))
+            }
         }
     }
 
-    /// 发丝线：深色 = 白 10%（§8.1），浅色 = 实色 `#D3DCE8`（§8.5）。
+    /// 发丝线：深色 = 白 10%（§8.1），浅色 = 各主题自己的实色。
     /// 浅色这一处是**唯一**不用"透明度叠加"的发丝线，故把值钉住并写明出处。
-    func testHairlineFollowsSchemeD() {
-        XCTAssertEqual(Hairline.darkAlpha, 0.10, "方案 D §8.1：白 10%")
-        XCTAssertEqual(Hairline.lightHex, 0xD3DCE8, "方案 D §8.5：浅色实色")
-        // 浅色实色必须比它要分隔的 content（白）暗 —— 亮的线在白底上等于没有
-        XCTAssertLessThan(
-            ColorContrast.relativeLuminance(Hairline.lightHex),
-            ColorContrast.relativeLuminance(Surface.content.color.light)
-        )
+    func testHairlineFollowsTheTheme() {
+        XCTAssertEqual(Hairline.darkAlpha(in: .techBlue), 0.10, "方案 D §8.1：白 10%")
+        XCTAssertEqual(Hairline.lightHex(in: .techBlue), 0xD3DCE8, "方案 D §8.5：浅色实色")
+        for theme in DesignTheme.all {
+            // 浅色实色必须比它要分隔的 content 暗 —— 亮的线在白底上等于没有
+            XCTAssertLessThan(
+                ColorContrast.relativeLuminance(Hairline.lightHex(in: theme)),
+                ColorContrast.relativeLuminance(Surface.content.color(in: theme).light),
+                "\(theme.id) 的浅色发丝线不比 content 暗"
+            )
+            // 深色透明度必须在一个"看得见但不刺眼"的区间里
+            let alpha = Hairline.darkAlpha(in: theme)
+            XCTAssertGreaterThanOrEqual(alpha, 0.05, "\(theme.id) 的深色发丝线太淡")
+            XCTAssertLessThanOrEqual(alpha, 0.20, "\(theme.id) 的深色发丝线太重")
+        }
     }
 }

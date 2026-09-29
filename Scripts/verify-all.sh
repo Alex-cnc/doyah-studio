@@ -321,7 +321,7 @@ python3 Scripts/check-status-consistency.py
 python3 Scripts/check-alpha-fr-dispositions.py
 python3 Scripts/check-alpha-fr-dispositions.py --self-test
 
-echo "==> 6/18 设计令牌棘轮 + 外观样张与产品同源"
+echo "==> 6/18 设计令牌棘轮 + 外观样张与产品同源 + 主题集（三选一）"
 python3 Scripts/check-design-tokens.py
 # L-79 ㈡（2026-09-29 第 76 轮）：上面那条棘轮管的是 **App/ 里的裸颜色 / 裸字号 / 裸间距**，
 # 管不了「**样张到底是不是照着产品画的**」。真现场：`Scripts/design-mock.swift` 自带一份调色板
@@ -339,6 +339,31 @@ python3 Scripts/check-design-tokens.py
 # L-79 ㈡ 的负例 **13 例**（红/绿成对，夹具一律在临时目录，末例核对真仓库两份文件逐字节未变）。
 python3 Scripts/check-design-mock-tokens.py
 python3 Scripts/check-design-mock-tokens.py --self-test
+# L-80 ㈠（2026-09-29 第 77 轮）：上面两条管的是**一套值**（方案 D = 默认主题）画出来的样子，
+# 管不了「**三套值**（主题三选一）各自成不成立」。真现场：需求提出者要「一个 theme 主题选项」，
+# Linux 版早有豆芽绿 / 玫瑰金 / 科技蓝三选一 ⇒ 令牌从一套变三套，而这件事有三个缝：
+#   ① 单测与值表**用同一份实现**算对比度（判据与被判对象同源）⇒ 新加一套表时，
+#      "漏了某个角色""某个值不过门槛"只会在同一个实现里红；
+#   ② 主题名要与 Linux 侧对齐、推导出来的两套值**不许静默当实际值**—— 这两件事单测根本看不见；
+#   ③ 「语法六档挂家族」这条口径在换表时最容易脱钩（有人直接把某个语法色写回十六进制）。
+# 判据 `Scripts/check-design-themes.py`（项数仍十八）：
+#   A 主题集 = 台账里那三个（id 与顺序），`DesignTheme.all` 不许漏列主题，`ThemePalette.of` 三支齐全
+#   B 每套值表必须含全部 20 个字段（18 色角色 + 发丝线两参数），缺一个即红
+#   C **独立复算**：本脚本自己重新实现 WCAG，从 Swift 源里解析出三套值，逐主题 × 深浅两态复算
+#     186 条门槛（正文 ≥4.5 / 强对比 ≥7 且强于正文 / 辅助 ≥3.0 / 禁用更淡且 ≥1.5 /
+#     状态色在两表面 ≥3.0 / 强调家族按角色 4.5 与 3.0 / 语法六档两两不同 / 深色五档明度递增 /
+#     浅色 content 最亮 / 表面距离 ≥0.02 / 浅色发丝线比 content 暗）
+#   D `SyntaxTone.color(in:)` 的六行映射逐行对账（keyword→accentGlow / string→warm / number→teal /
+#     function→accent / identifier→primary / comment→tertiary）
+#   E 名对齐（三个主题名 = Linux 侧的名，**认 §9 主题表里那一行**，正文提到不算）+
+#     推导主题 ↔ 待值登记成对（值表紧挨的注释块里必须有「推导草案」标记 +
+#     `Docs/发布计划.md` 的待输入表还登记着「豆芽绿 / 玫瑰金 色值（Linux 侧）」）
+#   F 空跑防护（主题数 / 字段数 / 复算条数 / 文档落点四条下限）
+# L-80 ㈠ 的负例 **16 例**（15 个红/绿成对 + 末例核对真仓库五份文件逐字节未变，
+# 夹具一律在临时目录）。**两条是自检当场抓出来的门禁太松**：⑨ 文档侧原先只查"正文里提过这个名"
+# ⇒ 表被改坏也放过；⑮ 推导标记原先只认"推导"两个字 ⇒ 抹掉标记行、说明段里的"推导口径"照样顶数。
+python3 Scripts/check-design-themes.py
+python3 Scripts/check-design-themes.py --self-test
 
 echo "==> 7/18 平台等价矩阵 + P-* 平台差异登记对账"
 # L-26（2026-09-27 第 25 轮）：这一项跑两条 ——

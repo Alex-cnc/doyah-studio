@@ -81,6 +81,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case accentWhaleBlue
     case accentDeepTeal
     case accentWhaleMagenta
+    /// 主题（配色方案）名：与 Linux 侧同名（需求提出者给的名），中英各一条。
+    case designThemeTechBlue
+    case designThemeBeanGreen
+    case designThemeRoseGold
+    /// 主题配套强调色的名字（`AccentTheme.nameKey` 与主题名分开：主题名是给用户看的，
+    /// 强调色名给"实心按钮上那两个字的缩写"用）。
+    case accentBeanGreen
+    case accentRoseGold
 
     // 表设计（FR-DDL-03）
     case tableDesignTitle
@@ -1833,6 +1841,11 @@ public enum LocalizedStrings {
         .accentWhaleBlue: [.simplifiedChinese: "鲸鱼蓝", .english: "Whale Blue"],
         .accentDeepTeal: [.simplifiedChinese: "深海青", .english: "Deep Teal"],
         .accentWhaleMagenta: [.simplifiedChinese: "鲸心品红", .english: "Whale Magenta"],
+        .designThemeTechBlue: [.simplifiedChinese: "科技蓝", .english: "Tech Blue"],
+        .designThemeBeanGreen: [.simplifiedChinese: "豆芽绿", .english: "Bean Sprout Green"],
+        .designThemeRoseGold: [.simplifiedChinese: "玫瑰金", .english: "Rose Gold"],
+        .accentBeanGreen: [.simplifiedChinese: "豆芽绿", .english: "Bean Sprout Green"],
+        .accentRoseGold: [.simplifiedChinese: "玫瑰金", .english: "Rose Gold"],
         .tableDesignAlterTitle: [.simplifiedChinese: "编辑表结构", .english: "Edit Table Structure"],
         .tableDesignApply: [.simplifiedChinese: "应用变更", .english: "Apply changes"],
         .tableDesignNoChanges: [.simplifiedChinese: "没有改动。", .english: "No changes."],

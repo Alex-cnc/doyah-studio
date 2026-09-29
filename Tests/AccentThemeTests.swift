@@ -9,18 +9,26 @@ final class AccentThemeTests: XCTestCase {
 
     // MARK: 候选集合
 
-    func testThreeCandidatesWithStableUniqueIdentifiers() {
-        XCTAssertEqual(AccentTheme.all.count, 3)
-        XCTAssertEqual(Set(AccentTheme.all.map(\.id)).count, 3)
+    /// 2026-09-29（L-80 ㈠）：候选从 3 个变 5 个 —— 新增的两个是**主题配套**的强调色
+    /// （豆芽绿 / 玫瑰金）。`all` 现在的用途有两处（见 `AccentTheme.all` 的注释）：
+    /// 解析旧配置 + 给"彼此可分辨"这类判据提供全集。
+    func testFiveCandidatesWithStableUniqueIdentifiers() {
+        XCTAssertEqual(AccentTheme.all.count, 5)
+        XCTAssertEqual(Set(AccentTheme.all.map(\.id)).count, 5)
         // id 是持久化用的，写死在这里防止有人顺手改名把用户的选择弄丢
-        XCTAssertEqual(AccentTheme.all.map(\.id), ["whale-blue", "deep-teal", "whale-magenta"])
+        XCTAssertEqual(
+            AccentTheme.all.map(\.id),
+            ["whale-blue", "deep-teal", "whale-magenta", "bean-green", "rose-gold"]
+        )
     }
 
     func testEachCandidateHasItsOwnNameKey() {
-        XCTAssertEqual(Set(AccentTheme.all.map(\.nameKey)).count, 3)
+        XCTAssertEqual(Set(AccentTheme.all.map(\.nameKey)).count, 5)
         XCTAssertEqual(AccentTheme.whaleBlue.nameKey, .accentWhaleBlue)
         XCTAssertEqual(AccentTheme.deepTeal.nameKey, .accentDeepTeal)
         XCTAssertEqual(AccentTheme.whaleMagenta.nameKey, .accentWhaleMagenta)
+        XCTAssertEqual(AccentTheme.beanGreen.nameKey, .accentBeanGreen)
+        XCTAssertEqual(AccentTheme.roseGold.nameKey, .accentRoseGold)
     }
 
     /// 两个候选取自 dsh-tui 鲸鱼自身的调色板：品牌同源的证据写进测试，免得日后被"优化"掉。
@@ -86,16 +94,20 @@ final class AccentThemeTests: XCTestCase {
     }
 
     /// 强调色作为 UI 组件（选中条 / 焦点环 / 图标）与两种表面比：**≥ 3.0** 即可（WCAG 对非文本）。
-    func testAccentIsVisibleOnBothSurfaces() {
-        // 底色取自令牌，不写死十六进制 —— 否则换了配色（方案 D）这里还拿旧底色算，
-        // 判据看着是绿的、其实量的是另一个界面。
-        let darkContent = Surface.content.color.dark
-        let lightContent = Surface.content.color.light
-        for theme in AccentTheme.all {
-            let onDark = AccentTheme.contrastRatio(theme.accentHex, darkContent)
-            let onLight = AccentTheme.contrastRatio(theme.accentHex, lightContent)
-            XCTAssertGreaterThanOrEqual(onDark, 3.0, "\(theme.id) 在深色底上只有 \(String(format: "%.2f", onDark))")
-            XCTAssertGreaterThanOrEqual(onLight, 3.0, "\(theme.id) 在浅色底上只有 \(String(format: "%.2f", onLight))")
+    ///
+    /// 底色取自令牌，不写死十六进制 —— 否则换了配色（方案 D）这里还拿旧底色算，
+    /// 判据看着是绿的、其实量的是另一个界面。L-80 ㈠ 起 `Surface` 的取色要带主题，
+    /// 这里对**每个主题**都用**它自己的**内容底算一遍（配套强调色必须在自己主题上看得清）。
+    func testAccentIsVisibleOnBothSurfacesInEveryTheme() {
+        for theme in DesignTheme.all {
+            let darkContent = Surface.content.color(in: theme).dark
+            let lightContent = Surface.content.color(in: theme).light
+            for accent in AccentTheme.all {
+                let onDark = AccentTheme.contrastRatio(accent.accentHex, darkContent)
+                let onLight = AccentTheme.contrastRatio(accent.accentHex, lightContent)
+                XCTAssertGreaterThanOrEqual(onDark, 3.0, "\(accent.id) 在 \(theme.id) 深色底上只有 \(String(format: "%.2f", onDark))")
+                XCTAssertGreaterThanOrEqual(onLight, 3.0, "\(accent.id) 在 \(theme.id) 浅色底上只有 \(String(format: "%.2f", onLight))")
+            }
         }
     }
 

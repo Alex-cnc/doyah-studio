@@ -66,50 +66,52 @@ enum Typography {
 
 /// 主题 = **一组令牌值**（与 `Docs/design/外观方案-v1.md` §9 的「一个主题 = 一组值」同口径）。
 ///
-/// 这里不存任何值，只按深浅两态去 Core 的令牌里取 —— 这就是「样张与产品同源」那句话的落地方式：
-/// 换个配色 = 改 `Core/DesignTokens.swift`，样张下一次渲染自动跟着换。
+/// 这里不存任何值，只按**主题 + 深浅两态**去 Core 的令牌里取 —— 这就是「样张与产品同源」的落地方式：
+/// 换个配色 = 改值表（`Core/DesignTheme.swift`），样张下一次渲染自动跟着换。
 struct Theme {
     let name: String
     let isDark: Bool
+    /// 这一张图用的是哪一组令牌值（L-80 ㈠ 起主题多了，样张必须说清自己用的是哪一组）。
+    let scheme: DesignTheme
 
     private func color(_ c: ThemeColor) -> NSColor { NSColor(mockHex: c.hex(dark: isDark)) }
 
-    var window: NSColor { color(Surface.window.color) }
-    var sidebar: NSColor { color(Surface.sidebar.color) }
-    var content: NSColor { color(Surface.content.color) }
-    var panel: NSColor { color(Surface.panel.color) }
-    var raised: NSColor { color(Surface.raised.color) }
+    var window: NSColor { color(Surface.window.color(in: scheme)) }
+    var sidebar: NSColor { color(Surface.sidebar.color(in: scheme)) }
+    var content: NSColor { color(Surface.content.color(in: scheme)) }
+    var panel: NSColor { color(Surface.panel.color(in: scheme)) }
+    var raised: NSColor { color(Surface.raised.color(in: scheme)) }
     /// 发丝线：深色 = 白 `Hairline.darkAlpha` 叠加（在五个表面上都成立）/ 浅色 = 实色 `Hairline.lightHex`。
     var hairline: NSColor {
         isDark
-            ? NSColor.white.withAlphaComponent(CGFloat(Hairline.darkAlpha))
-            : NSColor(mockHex: Hairline.lightHex)
+            ? NSColor.white.withAlphaComponent(CGFloat(Hairline.darkAlpha(in: scheme)))
+            : NSColor(mockHex: Hairline.lightHex(in: scheme))
     }
 
-    var textBright: NSColor { color(TextTone.bright.color) }
-    var textPrimary: NSColor { color(TextTone.primary.color) }
-    var textSecondary: NSColor { color(TextTone.secondary.color) }
-    var textTertiary: NSColor { color(TextTone.tertiary.color) }
+    var textBright: NSColor { color(TextTone.bright.color(in: scheme)) }
+    var textPrimary: NSColor { color(TextTone.primary.color(in: scheme)) }
+    var textSecondary: NSColor { color(TextTone.secondary.color(in: scheme)) }
+    var textTertiary: NSColor { color(TextTone.tertiary.color(in: scheme)) }
 
-    var success: NSColor { color(StatusTone.success.color) }
-    var warning: NSColor { color(StatusTone.warning.color) }
-    var danger: NSColor { color(StatusTone.danger.color) }
+    var success: NSColor { color(StatusTone.success.color(in: scheme)) }
+    var warning: NSColor { color(StatusTone.warning.color(in: scheme)) }
+    var danger: NSColor { color(StatusTone.danger.color(in: scheme)) }
 
     // 语法六档：**按角色挂到令牌家族**（外观方案 §8.4）—— 同样只转调，不写色值。
-    var synKeyword: NSColor { color(SyntaxTone.keyword.color) }
-    var synIdentifier: NSColor { color(SyntaxTone.identifier.color) }
-    var synString: NSColor { color(SyntaxTone.string.color) }
-    var synNumber: NSColor { color(SyntaxTone.number.color) }
-    var synFunction: NSColor { color(SyntaxTone.function.color) }
-    var synComment: NSColor { color(SyntaxTone.comment.color) }
+    var synKeyword: NSColor { color(SyntaxTone.keyword.color(in: scheme)) }
+    var synIdentifier: NSColor { color(SyntaxTone.identifier.color(in: scheme)) }
+    var synString: NSColor { color(SyntaxTone.string.color(in: scheme)) }
+    var synNumber: NSColor { color(SyntaxTone.number.color(in: scheme)) }
+    var synFunction: NSColor { color(SyntaxTone.function.color(in: scheme)) }
+    var synComment: NSColor { color(SyntaxTone.comment.color(in: scheme)) }
 
     func accentFill(_ accent: NSColor, _ alpha: CGFloat) -> NSColor {
         accent.withAlphaComponent(alpha)
     }
 
-    /// 方案 D · 科技蓝（当前唯一在用的方案；深 / 浅两态同色相派生）。
-    static let dark = Theme(name: "深色 · 方案 D 科技蓝", isDark: true)
-    static let light = Theme(name: "浅色 · 方案 D 科技蓝", isDark: false)
+    /// 默认主题「科技蓝」（外观方案 D）的深浅两态。
+    static let dark = Theme(name: "深色 · 方案 D 科技蓝", isDark: true, scheme: .techBlue)
+    static let light = Theme(name: "浅色 · 方案 D 科技蓝", isDark: false, scheme: .techBlue)
 }
 
 /// 侧栏当前显示哪个视图 —— 由最左侧活动栏切换（VS Code 的信息架构：
@@ -986,16 +988,16 @@ func write(_ data: Data, _ name: String) {
 //    ② 深色表面**带蓝调**（B > R）—— 方案 D 的深海军蓝 vs 旧的中性灰（B ≈ R），这是"换了值但
 //       某屏漏改"最省事的一刀；
 //    ③ 语法六档各自等于某个令牌家族的值（没有孤立的旧语法色）。
-print("渲染器：令牌唯一来源 = Core/DesignTokens.swift（当前 = 方案 D · 科技蓝，深 / 浅两态）")
+print("渲染器：令牌唯一来源 = Core/DesignTheme.swift（默认主题 = 科技蓝 / 方案 D，深 / 浅两态）")
 
-let darkLuminance = Surface.allCases.map { ColorContrast.relativeLuminance($0.color.dark) }
+let darkLuminance = Surface.allCases.map { ColorContrast.relativeLuminance($0.color(in: .techBlue).dark) }
 allChecks.append(Check(
     ok: zip(darkLuminance, darkLuminance.dropFirst()).allSatisfy { $0 < $1 },
     note: "深色五档必须严格递增（window < sidebar < content < panel < raised）"
 ))
-let familyValues = AccentFamily.allCases.map(\.color) + TextTone.allCases.map(\.color)
+let familyValues = AccentFamily.allCases.map { $0.color(in: .techBlue) } + TextTone.allCases.map { $0.color(in: .techBlue) }
 allChecks.append(Check(
-    ok: SyntaxTone.allCases.allSatisfy { familyValues.contains($0.color) },
+    ok: SyntaxTone.allCases.allSatisfy { familyValues.contains($0.color(in: .techBlue)) },
     note: "语法六档必须各自等于某个令牌家族的值（否则就是留了一个孤立的旧语法色）"
 ))
 

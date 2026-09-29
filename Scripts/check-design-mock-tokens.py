@@ -24,7 +24,8 @@ A. **渲染脚本里不许有调色板**：`Scripts/design-mock.swift` 里的 `0
 B. **必须真的接在真令牌上**：脚本必须引用 `Surface` / `TextTone` / `AccentFamily` / `SyntaxTone` /
    `Radius` / `TypeScale` / `Hairline`（命中处数有下限，防"引用被删光却照样绿"）。
 C. **渲染入口必须把令牌编进来**：`Scripts/render-design-mock.sh` 的 `swiftc` 行必须同时含
-   `main.swift`（脚本本体）与 `Core/DesignTokens.swift`；把令牌文件删掉即红。
+   `main.swift`（脚本本体）与 `Core/DesignTokens.swift`；**L-80 ㈠ 起还要含 `Core/DesignTheme.swift`**
+   （值表按主题分组后落在那一份里）；把令牌文件删掉即红。
 D. **逐屏复查（机械版）**：产品源码（`Core/` `App/` `Tests/` `CLI/` `Platform/` `Tools/`
    `TestsUISnapshot/`）里**不许残留方案 D 之前的旧调色板值**（`PRE_D_SWATCHES`）—— 这是
    「换了值但某屏漏改」的判据。豁免只有两处，都写在 `EXEMPT_FILES` 里并带理由：
@@ -182,6 +183,11 @@ def check_entry(root: pathlib.Path) -> list[Issue]:
     if "Core/DesignTokens.swift" not in text:
         issues.append(Issue(ENTRY, "swiftc 没有把 `Core/DesignTokens.swift` 编进来 —— "
                                    "那样样张就回到了「自带一份调色板」的老路"))
+    # L-80 ㈠：值表按主题分组后落到 `Core/DesignTheme.swift`（角色语义仍在 `Core/DesignTokens.swift`）
+    # ⇒ 少编哪一份，样张取到的都不是产品那套值。两台机器上都可判，故单列一条。
+    if "Core/DesignTheme.swift" not in text:
+        issues.append(Issue(ENTRY, "swiftc 没有把 `Core/DesignTheme.swift`（主题值表）编进来 —— "
+                                   "样张会退化成「默认主题之外什么都不认」"))
     if "main.swift" not in text:
         issues.append(Issue(ENTRY, "入口没有把渲染脚本当 `main.swift` 编译（swiftc 只在文件名叫 "
                                    "main.swift 时才允许顶层代码）"))

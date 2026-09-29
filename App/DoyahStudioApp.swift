@@ -10,6 +10,8 @@ struct DoyahStudioApp: App {
     @StateObject private var terminal = TerminalModel()
     /// 强调色（FR-EDIT-33）：可配置，通过根视图 `.tint` 下发到所有系统控件。
     @StateObject private var accent = AccentManager.shared
+    /// 主题（配色方案，FR-EDIT-33 扩写 / 队列 L-80）：一组令牌值 + 配套强调色；切主题要整树重建。
+    @StateObject private var designTheme = DesignThemeManager.shared
     /// 工作区（FR-EDIT-32）：终端启动目录等既有占位都以它为准。
     @StateObject private var workspace = WorkspaceStore.shared
     /// 工作区页签（FR-EDIT-35 / 36）：与数据库页签**并列**的另一套页签。
@@ -75,6 +77,7 @@ struct DoyahStudioApp: App {
                 .environmentObject(localization)
                 .environmentObject(terminal)
                 .environmentObject(accent)
+                .environmentObject(designTheme)
                 .environmentObject(workspace)
                 .environmentObject(workspaceTabs)
                 .task {
@@ -94,7 +97,11 @@ struct DoyahStudioApp: App {
                 .preferredColorScheme(appState.appearanceMode.forcedDark.map { $0 ? .dark : .light })
                 .frame(minWidth: 1_100, minHeight: 700)
                 // 语言切换时整棵视图树重建，保证所有文案立即刷新。
-                .id(localization.language)
+                //
+                // 2026-09-29（L-80 ㈠）：**主题也进这个 id** —— 令牌色是在各视图 body 里算出来的
+                // （`Theme.surface(...)` 当场解析成 NSColor），只建一次的话切主题会出现
+                // "一半新配色、一半旧配色"。重建的代价与切语言完全一样（终端会话在 App 层，不会被杀）。
+                .id("\(localization.language.rawValue)-\(designTheme.theme.id)")
                 // 许可证那一行是**装进 `licenseLoad` 的一句话**（在**装载那一刻**按当时的语言
                 // 渲染的），所以切语言后要重新装载一次才整行一致 —— `.id` 只重建视图，不重读文件。
                 // （队列 L-65：界面不再自己抄一份文案，代价是这句随装载体一起走。）
