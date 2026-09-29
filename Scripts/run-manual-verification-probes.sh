@@ -188,6 +188,24 @@ set -euo pipefail
 #   本批用第八批那个真库（`DOYAH_PROBE_PGGROUP`），证据文件同样**会被核对**（跳过 ≠ 通过）；
 #   闸门的接线另判源锚点（见下面「刷新重入那两条」那一段）。
 #
+# ## 第十三批（队列 L-90 ㈡ 第 2 条，第 110 轮）：对象树逐行右键
+#
+# `TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift` 判清单 §4 `FR-META-14` 那一行：
+#   ① **七类节点各渲一遍**（服务器 / 数据库 / schema / 表 / 视图 / 函数 / 列，各落一张图）——
+#      菜单里的**动作项**与 Core 的 `ObjectTreeActions.isAvailable` **双向**对账（少一项 / 多一项都判红），
+#      且**服务器那七项不许漏到别的行上**（「点数据库弹服务器菜单」那条老缺陷的回归钉）。
+#   ② **作用在哪一行**：悬停优先（哪怕选中的是另一行）/ 悬停没命中时兜底「刚点中的那一行」/
+#      两样都没有 ⇒ 一句说明（不是空菜单）/ 分组表头与「没有菜单的节点」拿到 nil。
+#   ③ **同一行两次渲染逐字节一致、不同行必须不同**（免得菜单其实是个跟行无关的常量）。
+#   探针按「内容 + 目标行」两件事判，**不吃鼠标事件、不要任何权限**；菜单内容与作用行解析
+#   本轮搬进 `App/Views/ObjectTreeContextMenu.swift`（静态 `@ViewBuilder` 入口 + 一个纯函数），
+#   生产路径与判据读的是同一个入口 —— 差别只有外面那层壳（`.contextMenu` 要兄弟节点、图要容器）。
+#   **边界（如实登记）**：判得到「这一行该有哪些项、作用在哪一行」，**判不到**「AppKit 把这份内容
+#   展成菜单项并在右键位置弹出」（那需要真点一次右键；归人工点验）。
+#   **同轮读图抓到的真问题**：先头那版图上七类菜单**叠成一行**（文案集合照样齐、三条用例照样绿）
+#   ⇒ 菜单内容改成静态唯一入口、容器由判据那侧加（这条教训立进 `AGENT-SPEC.md` §9 第 85 条）。
+#   证据文件同样**会被核对**（跳过 ≠ 通过）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -219,10 +237,14 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `MultiCursorProbeTests`（L-90 ㈡ 第 1 条：`FR-EDIT-27` 多光标与列编辑 —— ⌥⌘D 选下一处 /
 #   ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选，各判「打字与 ⌫ 逐个生效」「一次撤销全回退」「位置不漂」。
 #   本批的**主入口**同样是 `Scripts/verify-ui-interactions.sh`）
+# + `ObjectTreeContextMenuProbeTests`（L-90 ㈡ 第 2 条：`FR-META-14` 对象树逐行右键 ——
+#   七类节点各自的菜单内容（动作项与 Core 的规则双向对账）/ 菜单作用在哪一行（悬停优先、
+#   盒子空退回选中项）/ 同一行两次逐字节一致、不同行必须画成两个样子。
+#   本批的**主入口**同样是 `Scripts/verify-ui-interactions.sh`）
 #   这里同时挂上是为了那条「每个 `*ProbeTests.swift` 都得有入口」的判据
 #   `check-result-scroll-ledger.py` ⑤ —— 一处入口漏了就等于一个都跑不到（第 96 轮实测）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

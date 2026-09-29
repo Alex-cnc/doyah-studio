@@ -28,7 +28,7 @@ struct ObjectTreeView: View {
     @State private var expandedIDs: Set<String> = []
     @State private var loadingIDs: Set<String> = []
     @State private var errors: [String: String] = [:]
-    /// 鼠标当前在哪一行（右键菜单按它决定内容，见 `hoveredMenuObject`）。
+    /// 鼠标当前在哪一行（右键菜单按它决定内容，见 `ObjectTreeMenuTarget.resolve`）。
     ///
     /// **为什么用引用类型装、而不是 `@State`**（2026-09-24 需求提出者实测「鼠标放上去，对象数不停闪烁」）：
     /// `@State` 一写就让视图作废 → 整棵树重算 → 行视图被重建 → `onHover` 再触发一次 →
@@ -94,12 +94,31 @@ struct ObjectTreeView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     refreshRow
                     ForEach(visibleRows) { row in
+                        // **每行各自挂一份菜单**（FR-META-14）：右键命中的就是**指针底下这一行**，
+                        // 不再要求"先左键点一下把行钉进悬停记录"。
+                        // 2026-09-29 需求提出者实测原话：「直接点右键几乎无法选择任意对象，要先鼠标
+                        // 左键点一个对象才有几率右键打开」—— 根因是整棵树只有一份菜单、目标由悬停
+                        // 记录决定，而 `onHover` 会在整树重算（选中态一变就重算）后被 SwiftUI 补一个
+                        // 假的 `mouseExited` 清掉。行级菜单把这个不确定来源整个绕开。
                         rowView(row)
+                            .contextMenu {
+                                ObjectTreeContextMenu.items(
+                                    object: row.object,
+                                    appState: appState,
+                                    onEdit: onEdit
+                                )
+                            }
                     }
                 }
-                // 菜单**无条件**挂在这里（有条件挂 = 视图结构随悬停变，又会诱发上面那种循环），
-                // 内容在**呈现那一刻**按"鼠标底下那一行"算。
-                .contextMenu { menuItems(for: menuTargetObject) }
+                // 整棵树这一份**保留**：只用于右键点到行之外的空白（内边距 / 底下空区），
+                // 内容仍按"鼠标底下那一行"算，没有就退回选中项。
+                .contextMenu {
+                    ObjectTreeContextMenu.items(
+                        object: menuTargetObject,
+                        appState: appState,
+                        onEdit: onEdit
+                    )
+                }
             }
         }
         // 这里**不要**再加 `.id(appState.selectedConnectionID)`：
@@ -213,7 +232,7 @@ struct ObjectTreeView: View {
             .onTapGesture(count: 2) {
                 guard !row.isGroupHeader else { return }
                 guard ObjectTreeActions.isAvailable(.browseRows, for: row.object.kind) else { return }
-                select(row.object)
+                appState.selectTreeObject(row.object)
                 // 点击本身就是「指针在这一行」的铁证：顺手写进悬停盒子 ——
                 // 重建补的那个假 mouseExited 会清空它，而指针不动就不会再来 mouseEntered。
                 hoverBox.rowID = row.object.id
@@ -223,13 +242,13 @@ struct ObjectTreeView: View {
                 guard !row.isGroupHeader else { return }
                 // 单击既"选中"也"展开"：表 / 视图这类节点本来就靠单击展开看列，
                 // 分两次点击才叫选中会让命令面板的目标变得不可预期。
-                select(row.object)
+                appState.selectTreeObject(row.object)
                 // 同上：点完立刻右键的人，菜单目标靠这一行（见 `menuTargetObject`）。
                 hoverBox.rowID = row.object.id
                 guard row.isExpandable else { return }
                 toggle(row.object)
             }
-            // 右键菜单**不再挂在每一行上**（原因见 `hoveredMenuObject`）：整棵树现在是一个 `List` 行，
+            // 右键菜单**不再挂在每一行上**（原因见 `ObjectTreeMenuTarget.resolve`）：整棵树现在是一个 `List` 行，
             // AppKit 按 List 行解析右键菜单、只会用找到的第一个 —— 那会让"点数据库弹出服务器菜单"。
             // 这里只负责记下"鼠标在哪一行"，菜单由整块挂的那一个按它决定内容。
             .onHover { hovering in
@@ -269,232 +288,14 @@ struct ObjectTreeView: View {
         .frame(height: Metrics.listRowHeight)
     }
 
-    /// 右键菜单作用在**鼠标底下那一行**上。
-    ///
-    /// 为什么不是"每行各挂一个"（2026-09-24 实测缺陷）：为了让行距变紧，整棵树现在是**一个 `List` 行**
-    /// （见 `body` 里那个 `VStack` 的说明）。而 AppKit 的右键菜单是**按 List 行**解析的 ——
-    /// 一个行里挂若干 `.contextMenu` 时它只会用找到的第一个，于是右键点数据库弹出来的是
-    /// **服务器**那份菜单（需求提出者实测：「行距调整后，右键点击数据库菜单出错了，
-    /// 显示的是整个数据库服务器对象的右键菜单」）。
-    /// 现在整块只挂一个，内容由**悬停行**决定：鼠标在哪一行，菜单就是那一行的 ——
-    /// 与"每行自己挂"结果等价，但没有歧义。
-    private var hoveredMenuObject: DatabaseObject? {
-        guard let rowID = hoverBox.rowID,
-              let row = visibleRows.first(where: { $0.object.id == rowID }),
-              !row.isGroupHeader,
-              ObjectTreeActions.hasContextMenu(row.object.kind) else { return nil }
-        return row.object
-    }
-
-    /// 菜单打开那一刻真正的目标行：**悬停行优先，悬停没命中就退回「刚点中的那一行」**。
-    ///
-    /// 为什么需要这个兜底（2026-09-28 需求提出者实测：「点一下鼠标要等一下才能选择对象，
-    /// 否则马上点右键就会报『这一行没有可用的操作』」）：`onHover` 是**视图级**的悬停状态，
-    /// 而单击会改 `selectedTreeObject` ⇒ 整棵树重算、行视图被重建 ⇒ SwiftUI 补一个
-    /// **假的 mouseExited**（指针其实没动），悬停盒子被清空；指针既然没动，新的 mouseEntered
-    /// 也不会来 —— 盒子就一直是空的，直到用户真的挪一下鼠标。于是"手快"的人（点完立刻右键）
-    /// 看到的是那张空菜单。
-    ///
-    /// 两条一起修：① 单击/双击时**顺手把悬停盒子写成被点的那一行**（点击本身就证明指针在它身上）；
-    /// ② 这里再加一道兜底 —— 盒子空时用「已选中那一行」，因为右键前必然是左键点过它。
-    /// 兜底只在盒子为空时生效：盒子有值时不抢（否则会退回老毛病「点数据库弹服务器菜单」）。
+    /// 菜单打开那一刻真正的目标行（悬停优先、盒子空时退回选中项）——
+    /// 解析是**纯函数**（`ObjectTreeMenuTarget.resolve`，住在 `App/Views/ObjectTreeContextMenu.swift`）。
     private var menuTargetObject: DatabaseObject? {
-        if let hovered = hoveredMenuObject { return hovered }
-        guard let selected = appState.selectedTreeObject,
-              let row = visibleRows.first(where: { $0.object.id == selected.id }),
-              !row.isGroupHeader,
-              ObjectTreeActions.hasContextMenu(selected.kind) else { return nil }
-        return selected
-    }
-
-    /// 右键菜单的内容：作用在**鼠标底下那一行**上；没有可作用对象时给一条说明，
-    /// 而不是弹一个空菜单（空菜单比没有菜单更让人困惑）。
-    @ViewBuilder
-    private func menuItems(for object: DatabaseObject?) -> some View {
-        if let object {
-            if object.kind == .server {
-                serverContextMenu
-            } else {
-                objectContextMenu(for: object)
-            }
-        } else {
-            Text(L(.treeMenuEmpty))
-        }
-    }
-
-    /// 表 / 视图 / 列节点的右键菜单（FR-META-14）。
-    ///
-    /// 菜单项是否呈现**由 Core 的 `ObjectTreeActions.isAvailable` 决定**，
-    /// 不在视图里再写一份类型判断 —— 否则两处规则迟早不一致。
-    @ViewBuilder
-    private func objectContextMenu(for object: DatabaseObject) -> some View {
-        // 「新建表」（FR-DDL-03）：入口挂在**数据库 / schema** 节点上。
-        // 它原来嵌在下面"表相关动作"那一块里，而那一块整体被 `truncateTable` 的可用性挡着
-        // （只对 `.table` 为真）—— 于是这个按钮**从来没出现过**（2026-09-24 排查右键菜单时抓到）。
-        if object.kind == .database || object.kind == .schema {
-            Button(L(.tableDesignTitle)) {
-                appState.createTableTarget = object
-            }
-
-            Divider()
-        }
-
-        if ObjectTreeActions.isAvailable(.browseRows, for: object.kind) {
-            Button(L(.treeActionBrowseRows, ObjectTreeActions.defaultBrowseLimit)) {
-                runTreeAction(.browseRows, on: object)
-            }
-
-            Divider()
-
-            Button(L(.treeActionSelectTemplate)) {
-                runTreeAction(.selectTemplate, on: object)
-            }
-        }
-
-        if ObjectTreeActions.isAvailable(.insertTemplate, for: object.kind) {
-            Button(L(.treeActionInsertTemplate)) {
-                runTreeAction(.insertTemplate, on: object)
-            }
-        }
-
-        if ObjectTreeActions.isAvailable(.copyQualifiedName, for: object.kind) {
-            Button(L(.treeActionCopyQualifiedName)) {
-                runTreeAction(.copyQualifiedName, on: object)
-            }
-        }
-
-        if ObjectTreeActions.isAvailable(.copyColumnName, for: object.kind) {
-            Button(L(.treeActionCopyColumnName)) {
-                runTreeAction(.copyColumnName, on: object)
-            }
-        }
-
-        if ObjectTreeActions.isAvailable(.browseRows, for: object.kind) {
-            Button(L(.treeActionBrowseWithCondition)) {
-                // 先记下目标（面板读的就是它），再开面板 —— 与 ⌘K 那条命令同一个入口。
-                select(object)
-                appState.isBrowseRowsCommandPresented = true
-            }
-        }
-
-        // 合成数据（FR-AI-07）：只对表提供 —— 视图不可写，序列没有列。
-        if object.kind == .table {
-            Button(L(.syntheticGenerate) + "…") {
-                select(object)
-                appState.isSyntheticCommandPresented = true
-            }
-        }
-
-        if ObjectTreeActions.isAvailable(.viewDDL, for: object.kind) {
-            Divider()
-
-            Button(L(.treeActionViewDDL)) {
-                runTreeAction(.viewDDL, on: object)
-            }
-        }
-
-        if ObjectTreeActions.isAvailable(.truncateTable, for: object.kind) {
-            Divider()
-
-            if object.kind == .table {
-                Divider()
-                Button(L(.tableDesignAlterTitle)) {
-                    appState.alterTableTarget = object
-                }
-            }
-
-            Button(L(.treeActionTruncate), role: .destructive) {
-                runTreeAction(.truncateTable, on: object)
-            }
-        }
-
-        if ObjectTreeActions.isAvailable(.dropTable, for: object.kind) {
-            Button(L(.treeActionDrop), role: .destructive) {
-                runTreeAction(.dropTable, on: object)
-            }
-        }
-    }
-
-    private func runTreeAction(_ action: ObjectTreeAction, on object: DatabaseObject) {
-        Task { await appState.performTreeAction(action, on: object) }
-    }
-
-    /// 记下"这次操作针对谁"。右键菜单入口与 ⌘K 命令面板读的是**同一个**字段，
-    /// 这样"面板开了、对象却是上一个"这种漂移不可能发生。
-    private func select(_ object: DatabaseObject) {
-        appState.selectedTreeObject = object
-    }
-
-    /// 服务器节点的右键菜单（FR-META-11）。
-    ///
-    /// 本期只实现「服务器」节点：连接 / 断开 / 编辑连接，以及**依据登录用户权限**
-    /// 决定是否呈现「新建数据库」。数据库 / schema / 表等节点的菜单留待后续需求。
-    @ViewBuilder
-    private var serverContextMenu: some View {
-        let isConnected = appState.isObjectTreeConnected
-
-        Button(L(.objectTreeMenuConnect)) {
-            Task { await appState.connectObjectTree() }
-        }
-        .disabled(isConnected)
-
-        Button(L(.objectTreeMenuDisconnect)) {
-            Task { await appState.disconnectObjectTree() }
-        }
-        .disabled(!isConnected)
-
-        Divider()
-
-        Button(L(.objectTreeMenuEditConnection)) {
-            if let configuration = appState.selectedConnection {
-                onEdit?(configuration)
-            }
-        }
-        .disabled(appState.selectedConnection == nil)
-
-        Divider()
-
-        // 库级管理（FR-SESS-05）：目标是「当前正在用的库」，没连库时不呈现入口。
-        Button(L(.objectTreeMenuDatabaseProperties)) {
-            appState.isPropertiesPresented = true
-        }
-        .disabled(appState.adminTargetDatabase == nil)
-
-        Button(L(.objectTreeMenuDropDatabase)) {
-            appState.isDropDatabasePresented = true
-        }
-        .disabled(appState.adminTargetDatabase == nil)
-
-        Divider()
-
-        // 诊断与权限面板（FR-SESS-04 / FR-DIAG-05）；未连接时查询必然失败，故禁用。
-        Button(L(.objectTreeMenuPrivileges)) {
-            appState.isPrivilegePanelPresented = true
-        }
-        .disabled(!isConnected)
-
-        Button(L(.objectTreeMenuLocks)) {
-            appState.isLockCommandPresented = true
-        }
-        .disabled(!isConnected)
-
-        // 服务器会话（FR-SESS-01 / 02）。这个 builder 本来就是**服务器节点专用菜单**，
-        // 所以不需要再判节点类型 —— 会话是整个实例的概念（本轮我先多写了一次判断，编译才发现）。
-        Button(L(.sessionTitle) + "…") {
-            appState.isSessionCommandPresented = true
-        }
-        .disabled(!isConnected)
-
-        Divider()
-
-        // 权限未知（nil）或明确无权限（false）时不呈现入口，避免给出必然失败的按钮。
-        if appState.canCreateDatabase == true {
-            Divider()
-
-            Button(L(.objectTreeMenuCreateDatabase)) {
-                appState.isCreateDatabasePresented = true
-            }
-        }
+        ObjectTreeMenuTarget.resolve(
+            hoveredRowID: hoverBox.rowID,
+            selected: appState.selectedTreeObject,
+            rows: visibleRows
+        )
     }
 
     private func placeholderRow(
