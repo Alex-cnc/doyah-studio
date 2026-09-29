@@ -106,14 +106,20 @@ struct ObjectTreeView: View {
                                 RowRightClickCatcher(tag: row.id) {
                                     appState.selectTreeObject(row.object)
                                 }
+                                // 菜单挂到**这一行最深的视图**上（右键真正命中的那个 overlay 视图）：
+                                // AppKit 弹菜单时只问"命中视图及其祖先"，挂在这里找到的必然是这一行的菜单。
+                                // 挂在行容器上会被 `List`（树住在 `ConnectionListView` 的 sidebar List 里）
+                                // 提升/合并 ⇒ AppKit 只认找到的那一个 ⇒ 表现就是"**菜单都错了**"
+                                // （2026-09-29 需求提出者实测；同一机制 2026-09-28 已记档为
+                                //  "按 List 行解析右键菜单、只会用找到的第一个"）。
+                                .contextMenu {
+                                    ObjectTreeContextMenu.items(
+                                        object: row.object,
+                                        appState: appState,
+                                        onEdit: onEdit
+                                    )
+                                }
                             )
-                            .contextMenu {
-                                ObjectTreeContextMenu.items(
-                                    object: row.object,
-                                    appState: appState,
-                                    onEdit: onEdit
-                                )
-                            }
                     }
                 }
                 // 收每行的框 + **右键即选中**：指针在哪一行，右键就把那一行设为选中
