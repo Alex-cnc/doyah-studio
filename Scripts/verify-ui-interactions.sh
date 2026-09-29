@@ -42,6 +42,17 @@ set -euo pipefail
 # 而判 Core 的 `MultiCursorTests` 21 项照样全绿。修法：零长度那些由视图自己记
 # （`rememberedCarets`），选区集合取「AppKit 收下的 + 自己记的」两份并集。
 # 下面那两条源锚点盯的就是这个修法别再退回去。
+#
+# ## 第三批（L-90 ㈡ 第 2 条，第 110 轮）：对象树逐行右键
+#
+# `TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift` 判清单 §4 `FR-META-14` 那一行
+# （「依次右键表 / 视图 / 列 / 服务器 / 数据库 / schema / 函数」）：菜单**内容**与**作用在哪一行**
+# 两件事这一轮都搬进了 `App/Views/ObjectTreeContextMenu.swift`（一个静态 `@ViewBuilder` 入口 + 一个纯函数），
+# 于是不需要鼠标事件、也不需要任何权限 —— 每类节点渲染一遍、拿「这一遍取到的文案集合」与
+# `ObjectTreeActions.isAvailable` 的规则**双向**对账；作用行用产品自己摊平的
+# `ObjectTreeRows.visibleRows` 喂 `ObjectTreeMenuTarget.resolve`。
+# 老缺陷的回归钉 = 「非服务器那一行**不许**出现服务器菜单项」（点数据库弹服务器菜单那次）。
+# 下面三条源锚点盯的是：菜单仍由 Core 的规则决定、悬停行仍存进**无观察者**的盒子、菜单仍**无条件**挂。
 
 ROOT="$(cd "$(dirname "${0}")/.." && pwd -P)"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
@@ -49,7 +60,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -111,10 +122,10 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 6:
+    if int(total) < 9:
         failures.append(
-            f"只跑了 {total} 条 —— 两批六条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
-            " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选）应当都跑到"
+            f"只跑了 {total} 条 —— 三批九条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行）应当都跑到"
         )
 
 expected = [
@@ -124,6 +135,9 @@ expected = [
     "testOptionCommandDTypesInEveryOccurrenceAndOneUndoRevertsAll",
     "testOptionArrowMultipliesCaretsAndEditingHitsEveryCaret",
     "testOptionDragSelectsAColumnAcrossLinesWithoutCrossingThem",
+    "testEachRowKindGetsItsOwnMenuNotTheServersMenu",
+    "testMenuTargetFollowsTheRowUnderTheMouse",
+    "testMenuIsDeterministicAndFollowsTheRow",
 ]
 for name in expected:
     if name not in log:
@@ -138,7 +152,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print("✓ 六条都真跑过、都以 passed 收尾、没有跳过")
+print("✓ 九条都真跑过、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -176,6 +190,33 @@ anchors = {
         ("TerminalInput.mouseReport(", "鼠标上报字节不再经唯一出口"),
         ("TerminalInput.shouldReport(", "鼠标上报不再按模式过滤"),
     ),
+    "App/Views/ObjectTreeView.swift": (
+        ("@State private var hoverBox = HoverBox()",
+         "悬停行不再存进那个**无观察者**的盒子 ⇒ 鼠标停着不动界面会自己闪（2026-09-24 那次）"),
+        (".contextMenu {",
+         "整块上的那一个菜单不再挂着（内容会退回「别处按列表行解析」那种错行）"),
+        ("ObjectTreeMenuTarget.resolve(", "菜单作用在哪一行不再经那个纯函数解析"),
+        ("ObjectTreeContextMenu.items(",
+         "菜单内容不再由那一份唯一出处提供 —— 视图里会另写一份，两处迟早不一致"),
+    ),
+    "App/Views/ObjectTreeContextMenu.swift": (
+        ("static func items(",
+         "菜单内容不再有唯一入口（判据与界面读的会是两份东西）"),
+        ("ObjectTreeActions.isAvailable(.", "菜单项的呈现不再由 Core 的规则决定（视图里会另写一份类型判断）"),
+        ("ObjectTreeActions.hasContextMenu(row.object.kind)",
+         "「这一行有没有菜单」不再问 Core 的 `menuKinds`"),
+    ),
+    "TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift": (
+        ("VStack(alignment: .leading, spacing: 6) {",
+         "快照的容器不再由判据那一侧加 ⇒ 兄弟节点叠成一行，图上看着像「菜单只有一个条目」"),
+    ),
+    "App/Views/ObjectTreeRows.swift": (
+        ("static func visibleRows(", "可见行不再是产品自己摊平出来的那一份（探针拿它当输入）"),
+    ),
+    "Core/ObjectTreeActions.swift": (
+        ("public static let menuKinds: Set<DatabaseObject.Kind> = [",
+         "「哪些节点类型该有右键菜单」不再在 Core 里单点定义（漏一个就判不出来了）"),
+    ),
 }
 
 failures = []
@@ -189,7 +230,7 @@ for relative, needles in anchors.items():
         if needle not in text:
             failures.append(f"{relative} 里「{needle}」不见了：{why}")
 
-for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests"):
+for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -197,15 +238,19 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print("✓ 源锚点都在：路由判定在 Core、视图真的问过它、字节从 TerminalInput 出去、裸光标由视图自己记")
+print("✓ 源锚点都在：路由判定在 Core、视图真的问过它、字节从 TerminalInput 出去、裸光标由视图自己记、"
+      "菜单由 Core 的规则决定且悬停行存在无观察者的盒子里")
 PY
 
 echo
 echo "==> 完成：证据日志在 ${OUT}/"
-echo "    本入口判住的六条："
+echo "    本入口判住的九条："
 echo "    · §1 FR-EDIT-29 鼠标上报（真 PTY 上的 SGR 报文：右下角点击列行变大、拖动 32、滚轮 64、⌥ 归本机）"
 echo "    · §1 FR-EDIT-29 方向键 DECCKM（?1h 时 ^[OA、复位后 ^[[B）"
 echo "    · §1 FR-EDIT-29 右键菜单（五项齐备且指向产品自己的动作、接管 + ⌥ 时按钮码 10 转发）"
 echo "    · §3 FR-EDIT-27 ⌥⌘D 选下一处（三处同内容都进选区、打字三处一起改、一次撤销全回退、光标不漂）"
-echo "    · §3 FR-EDIT-27 ⌥⌘↑ / ↓ 加光标（本轮修的缺陷：加出来的光标必须真的在；打字 / ⌫ / 回车逐个生效；Esc 收敛）"
+echo "    · §3 FR-EDIT-27 ⌥⌘↑ / ↓ 加光标（第 109 轮修的缺陷：加出来的光标必须真的在；打字 / ⌫ / 回车逐个生效；Esc 收敛）"
 echo "    · §3 FR-EDIT-27 ⌥ 拖拽列选（逐行一段、短行夹到行尾、绝不跨换行、一次撤销）"
+echo "    · §4 FR-META-14 逐行菜单**内容**（七类节点各一张图；动作项与 Core 的规则双向对账；非服务器行不许出现服务器菜单项）"
+echo "    · §4 FR-META-14 菜单作用在**哪一行**（悬停优先 / 盒子空退回选中项 / 表头与无菜单节点 / 都不成立时的空菜单）"
+echo "    · §4 FR-META-14 菜单确定性与跟随行（同一行两次逐字节一致、不同行必须画成两个样子）"
