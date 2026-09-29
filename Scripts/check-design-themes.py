@@ -53,11 +53,11 @@ G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也
    语言那条路定过这个口径），而 `select(_:)` **必须**写盘。判点只看**那一段源码切片**，不看整文件
    （否则"别处写过一句"就顶数 —— 第 77 轮自检例 ⑨/⑮ 两次栽在这上面）。
 
-判据自己的证据：`--self-test` **22 例**（21 个红/绿成对 + 末例核对真仓库七份文件逐字节未变；夹具一律在临时目录）。
+判据自己的证据：`--self-test` **25 例**（24 个红/绿成对 + 末例核对真仓库十三份文件逐字节未变；夹具一律在临时目录）。
 
 用法：
     python3 Scripts/check-design-themes.py              # 校验（闭环第 6 项）
-    python3 Scripts/check-design-themes.py --self-test  # 门禁自己的证据（22 例）
+    python3 Scripts/check-design-themes.py --self-test  # 门禁自己的证据（25 例）
 """
 
 from __future__ import annotations
@@ -79,6 +79,45 @@ DESIGN_DOC = "Docs/design/外观方案-v1.md"
 RELEASE_PLAN = "Docs/发布计划.md"
 APPEARANCE_SWIFT = "App/Views/AppearanceSheet.swift"
 THEME_MANAGER_SWIFT = "App/DesignThemeManager.swift"
+
+# ---- 判据 H（两轴正交，队列 L-85）的台账（每条都带理由）-------------------------------------
+
+APPEARANCE_PREF_SWIFT = "Core/AppearancePreference.swift"     # 深浅轴（三态）的类型与落盘键
+APP_STATE_SWIFT = "App/AppState.swift"                        # 深浅档的写盘点
+AXES_TESTS_SWIFT = "Tests/AppearanceAxesTests.swift"          # 两轴的单测（真值表 / 正交 / 矩阵 / 门槛）
+AXES_PROBE_SWIFT = "TestsUISnapshot/AppearanceAxesProbeTests.swift"  # 真管理器 + 真 UserDefaults 上的探针
+SNAPSHOT_KIT_SWIFT = "TestsUISnapshot/UISnapshotKit.swift"    # 取色口子（像素断言）
+PANELS_TESTS_SWIFT = "TestsUISnapshot/UISnapshotPanelsTests.swift"   # 主题面板快照的角像素断言
+# 深浅轴的三态（顺序 = 界面上列出的顺序；与 `AppearancePreference` 的 case 名逐字相同）。
+AXIS_STATES = ("followSystem", "alwaysDark", "alwaysLight")
+# 系统当前深浅两态：`followSystem` 这一档必须在**两态**下都取得到值、都过门槛。
+AXIS_SYSTEM_STATES = (False, True)
+# 真值表：三态 → `resolvesToDark` 里那一行的返回表达式（逐格对账，不看注释）。
+AXIS_TRUTH_TABLE = (("followSystem", "systemIsDark"), ("alwaysDark", "true"), ("alwaysLight", "false"))
+# 未知偏好值的回落（偏好文件被手改 / 版本降级后读到新值都不该让界面起不来）。
+AXIS_FALLBACK = "else { return .followSystem }"
+AXIS_APPEARANCE_KEY = "appearance.mode"            # 深浅轴落盘键 = `AppearancePreference.Storage.appKey`
+AXIS_APPEARANCE_TERMINAL_KEY = "terminal.appearance"  # 终端的深浅档（第三个键：终端可单独覆盖）
+AXIS_THEME_KEY = "ui.designTheme"                  # 配色轴落盘键 = `DesignTheme.Storage.key`
+# 像素比对的容差：**实测出来的**（快照 PNG 往返把通道值偏移最多 4：深色 `window #02070A` 读回
+# `#02060A`、浅色 `#F1F5FA` 读回 `#F4F7FB`）⇒ 取 8。它必须小于「换一个主题」在这套值上的差异
+# （深色 `window` 三个主题实测 #02060A / #03160A / #1A070B，至少一个通道差 16 以上）。
+AXIS_PIXEL_TOLERANCE = 8
+# 取色口子的锚点（定义是 `sampledRGB(ofPNGAt path:…)`、调用点是 `sampledRGB(ofPNGAt: …)`）——
+# 取到「ofPNGAt」为止即可同时认这两处；带上冒号反而只认调用点（第 83 轮判据当场抓出来的）。
+AXIS_PIXEL_HOOK = "sampledRGB(ofPNGAt"
+AXIS_PROBE_CASE = "testSwitchingOneAxisNeverResetsTheOther"   # 探针里那条「切一轴不重置另一轴」
+AXIS_DOC_HEADING = "### 9.6 两轴正交"                # 文档落点（外观方案里的那一节）
+# 单测点名（少一条即红）——判据只认「这一条存在」，跑绿由 `swift test` 保证。
+AXIS_TEST_CASES = {
+    "testAppearanceTruthTableOverEveryStateAndSystemValue": "三态 × 系统两态 = 6 组真值表",
+    "testDarkResolutionIsIndependentOfTheme": "换主题不改深浅判定",
+    "testPaletteSelectionIsIndependentOfAppearanceAxis": "换深浅不改配色",
+    "testAxisMatrixCoversEveryCombinationExactlyOnce": "18 组组合不重不漏",
+    "testFollowSystemBothStatesClearThresholdsInEveryTheme": "跟随系统两态都过门槛",
+    "testStorageKeysAreSeparateAndNamespaced": "两轴落盘键分开",
+}
+MIN_AXIS_SITES = 30   # 判据 H：判点处数下限（空跑防护：扫描面被削即红）
 
 # ---- 台账式常量（每条都带理由；理由为空即红）-------------------------------------------------
 
@@ -592,6 +631,185 @@ def check_ui_entry(root: pathlib.Path) -> tuple[list[Issue], int]:
     return issues, sites
 
 
+def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
+    """外观的**两轴正交**：深浅轴（三态）× 配色轴（三主题）。队列 L-85。
+
+    与判据 C / G 的分工：C 管「值对不对」（独立复算门槛）、G 管「配色轴的入口在不在界面上」，
+    H 管的是**两轴之间**的规矩。四条都是「不做就是没做」：
+      ① 深浅轴三态齐全 + 真值表逐格 + 未知值回落「跟随系统」；
+      ② 两轴**互不读取**：两个落盘键分开，且各自的写盘点里不许出现对方的键
+         —— 串轴的表现是「切了主题，深浅档被顺手重置」，用户看不出原因；
+      ③ 组合**可达**：3 态 × 2 系统态 × 3 主题 = 18 组，且「跟随系统」在系统深浅两态下都有值
+         （只测一态时，另一态可能落在看不清的颜色上 —— 这正是「随系统主题」的全部风险）；
+      ④ 组合**到像素**：快照角像素（铺的 `window` 底）必须等于该主题该档的 `window` 值 ——
+         要有取色口子、有断言、有**实测出来的**容差（PNG 往返偏移 ≤4 ⇒ 8；不是拍脑袋定的）。
+    """
+    issues: list[Issue] = []
+    sites = 0
+    # ① 深浅轴：三态齐全 + 真值表逐格 + 未知值回落
+    pref_path = root / APPEARANCE_PREF_SWIFT
+    if not pref_path.exists():
+        issues.append(Issue(APPEARANCE_PREF_SWIFT, "深浅轴的类型不存在 —— 判据 H 的前提没了"))
+        return issues, sites
+    pref = pref_path.read_text(encoding="utf-8")
+
+    states = re.findall(r"^\s*case (followSystem|alwaysDark|alwaysLight)\s*$", pref, re.M)
+    sites += 1
+    for state in AXIS_STATES:
+        sites += 1
+        if state not in states:
+            issues.append(Issue(APPEARANCE_PREF_SWIFT, f"深浅轴少了一态 `{state}` —— 三态（跟随系统 /"
+                                                     f" 总是深色 / 总是浅色）是 FR-EDIT-26 的原话"))
+    sites += 1
+    if len(states) != len(AXIS_STATES):
+        issues.append(Issue(APPEARANCE_PREF_SWIFT,
+                            f"深浅轴有 {len(states)} 态，台账是 {len(AXIS_STATES)} 态 —— 多出来的态没有判据管"))
+
+    truth = _type_slice(pref, "func resolvesToDark(", closing="\n    }") or ""
+    sites += 1
+    if not truth:
+        issues.append(Issue(APPEARANCE_PREF_SWIFT, "找不到真值表 `resolvesToDark` —— 判据 H 的前提没了"))
+    for state, expected in AXIS_TRUTH_TABLE:
+        sites += 1
+        if not re.search(rf"case \.{state}: return {expected}", truth):
+            issues.append(Issue(APPEARANCE_PREF_SWIFT,
+                                f"真值表里 `{state}` 的落点不是 `{expected}` —— 这一格取不到值"))
+
+    sites += 1
+    if AXIS_FALLBACK not in pref:
+        issues.append(Issue(APPEARANCE_PREF_SWIFT, f"未知偏好值没有回落「跟随系统」（找不到 `{AXIS_FALLBACK}`）"
+                                                 f" —— 偏好文件被手改 / 版本降级后界面起不来"))
+    sites += 1
+    if "public var forcedDark: Bool?" not in pref:
+        issues.append(Issue(APPEARANCE_PREF_SWIFT, "少了给 SwiftUI 的出口 `forcedDark` ——"
+                                                 " 视图会自己再写一次 switch（写错就成「选跟随却锁死浅色」）"))
+    # ② 两轴互不读取：键分开 + 各自的写盘点里不许出现对方的键
+    themes_text = (root / THEMES_SWIFT).read_text(encoding="utf-8")
+    sites += 2
+    if f'public static let appKey = "{AXIS_APPEARANCE_KEY}"' not in pref:
+        issues.append(Issue(APPEARANCE_PREF_SWIFT, f"深浅轴的落盘键不是 `{AXIS_APPEARANCE_KEY}`"
+                                                  f" —— 键名是契约（改了等于让老用户的偏好失效）"))
+    if f'public static let key = "{AXIS_THEME_KEY}"' not in themes_text:
+        issues.append(Issue(THEMES_SWIFT, f"配色轴的落盘键不是 `{AXIS_THEME_KEY}`"))
+    sites += 1
+    if AXIS_APPEARANCE_KEY == AXIS_THEME_KEY:
+        issues.append(Issue(APPEARANCE_PREF_SWIFT, "两轴共用一个落盘键 —— 切一轴必然重置另一轴"))
+
+    manager_path = root / THEME_MANAGER_SWIFT
+    sites += 1
+    if not manager_path.exists():
+        issues.append(Issue(THEME_MANAGER_SWIFT, "配色轴的运行时对象不存在"))
+    else:
+        manager = manager_path.read_text(encoding="utf-8")
+        sites += 1
+        for leak in (AXIS_APPEARANCE_KEY, AXIS_APPEARANCE_TERMINAL_KEY):
+            if leak in manager:
+                issues.append(Issue(THEME_MANAGER_SWIFT, f"配色轴的运行时对象里出现了深浅轴的键 `{leak}`"
+                                                        f" —— 两轴串了：切主题会顺手改外观"))
+
+    app_state_path = root / APP_STATE_SWIFT
+    sites += 1
+    if not app_state_path.exists():
+        issues.append(Issue(APP_STATE_SWIFT, "根状态不存在 —— 判据 H 的前提没了"))
+    else:
+        app_state = app_state_path.read_text(encoding="utf-8")
+        sites += 2
+        if "Storage.appKey" not in app_state:
+            issues.append(Issue(APP_STATE_SWIFT, "深浅档没有落盘（找不到 `AppearancePreference.Storage.appKey`）"
+                                               " —— 重启就丢"))
+        if AXIS_THEME_KEY in app_state:
+            issues.append(Issue(APP_STATE_SWIFT, f"深浅档的写盘路径里出现了配色轴的键 `{AXIS_THEME_KEY}` —— 两轴串了"))
+    # ③ 组合可达：3 态 × 2 系统态 × 3 主题 = 18 组（「跟随系统」两态都要走一遍）
+    combos = len(AXIS_STATES) * len(AXIS_SYSTEM_STATES) * len(THEME_IDS)
+    axes_tests_path = root / AXES_TESTS_SWIFT
+    sites += 1
+    if not axes_tests_path.exists():
+        issues.append(Issue(AXES_TESTS_SWIFT, "两轴组合的单测不存在 —— 18 组组合无人走"))
+    else:
+        axes_tests = axes_tests_path.read_text(encoding="utf-8")
+        for anchor, why in (
+            ("AppearancePreference.allCases", "深浅轴的三态"),
+            ("DesignTheme.all", "配色轴的三主题"),
+            ("systemStates", "系统当前深浅两态"),
+        ):
+            sites += 1
+            if anchor not in axes_tests:
+                issues.append(Issue(AXES_TESTS_SWIFT, f"组合枚举里少了{why}（找不到 `{anchor}`）—— 18 组走不全"))
+        sites += 1
+        if str(combos) not in axes_tests:
+            issues.append(Issue(AXES_TESTS_SWIFT,
+                                f"单测里没有组合数 {combos}（3 态 × 2 系统态 × 3 主题）—— 少走几组也看不出来"))
+        for name, why in AXIS_TEST_CASES.items():
+            sites += 1
+            if f"func {name}(" not in axes_tests:
+                issues.append(Issue(AXES_TESTS_SWIFT, f"少了这条单测：`{name}`（{why}）"))
+
+    # ④ 组合到像素：取色口子 + 角像素断言 + 实测容差
+    kit_path = root / SNAPSHOT_KIT_SWIFT
+    sites += 1
+    if not kit_path.exists() or AXIS_PIXEL_HOOK not in kit_path.read_text(encoding="utf-8"):
+        issues.append(Issue(SNAPSHOT_KIT_SWIFT, f"快照套件里没有取色口子（`{AXIS_PIXEL_HOOK}`）——"
+                                              f" 「令牌到像素」只能靠人读图"))
+    panels_path = root / PANELS_TESTS_SWIFT
+    sites += 1
+    if not panels_path.exists():
+        issues.append(Issue(PANELS_TESTS_SWIFT, "面板快照用例不存在"))
+    else:
+        panels = panels_path.read_text(encoding="utf-8")
+        sites += 2
+        if AXIS_PIXEL_HOOK not in panels:
+            issues.append(Issue(PANELS_TESTS_SWIFT, "主题面板快照用例没有取角像素 ——"
+                                                  " 三个主题画成一样也照样绿"))
+        if f"let encodeTolerance = {AXIS_PIXEL_TOLERANCE}" not in panels:
+            issues.append(Issue(PANELS_TESTS_SWIFT, f"像素容差不是实测出来的那个值（{AXIS_PIXEL_TOLERANCE}）"
+                                                  f" —— 容差拍大了等于没判"))
+    probe_path = root / AXES_PROBE_SWIFT
+    sites += 1
+    if not probe_path.exists():
+        issues.append(Issue(AXES_PROBE_SWIFT, "两轴的 App 侧探针不存在 ——「切一轴不重置另一轴」"
+                                            " 只有在真管理器 + 真 UserDefaults 上才算数"))
+    else:
+        probe = probe_path.read_text(encoding="utf-8")
+        sites += 1
+        if AXIS_PROBE_CASE not in probe:
+            issues.append(Issue(AXES_PROBE_SWIFT, f"探针里没有「{AXIS_PROBE_CASE}」这一条"))
+
+    # ⑤ 文档登记：两轴的口径 + 两个落盘键（没有登记 = 下一个人不知道有两轴）
+    doc_path = root / DESIGN_DOC
+    sites += 1
+    if not doc_path.exists():
+        issues.append(Issue(DESIGN_DOC, "外观方案文档不存在"))
+    else:
+        doc = doc_path.read_text(encoding="utf-8")
+        for needle, why in ((AXIS_DOC_HEADING, "两轴正交这一节"),
+                            (AXIS_APPEARANCE_KEY, "深浅轴的落盘键"),
+                            (AXIS_THEME_KEY, "配色轴的落盘键")):
+            sites += 1
+            if needle not in doc:
+                issues.append(Issue(DESIGN_DOC, f"外观方案里没有登记{why}（找不到 `{needle}`）"))
+
+    # ⑤ 面板必须**显示当前深浅档**（L-85 判据 ④）：双向绑定 = 既显示当下这一档、又改得动。
+    #    只做「能改」是不够的 —— 用户打开面板要能看见现在是哪一档（跟系统还是被我锁死了）。
+    appearance_path = root / APPEARANCE_SWIFT
+    sites += 1
+    if not appearance_path.exists():
+        issues.append(Issue(APPEARANCE_SWIFT, "外观面板不存在 —— 判据 H 的前提没了"))
+    else:
+        appearance = appearance_path.read_text(encoding="utf-8")
+        for anchor, why in (
+            ("$appState.appearanceMode", "深浅档的双向绑定（绑上去才既显示又改得动）"),
+            ("ForEach(AppearancePreference.allCases", "三档逐个列出（少一档 = 有个档位选不到）"),
+        ):
+            sites += 1
+            if anchor not in appearance:
+                issues.append(Issue(APPEARANCE_SWIFT, f"外观面板少了{why}（找不到 `{anchor}`）"))
+
+    sites += 1
+    if sites < MIN_AXIS_SITES:
+        issues.append(Issue(APPEARANCE_PREF_SWIFT, f"判据 H 只判了 {sites} 处（下限 {MIN_AXIS_SITES}）"
+                                                  f" —— 扫描面被削过，不许通过"))
+    return issues, sites
+
 # ---------------------------------------------------------------- 自检
 
 def _sha(path: pathlib.Path) -> str:
@@ -599,9 +817,10 @@ def _sha(path: pathlib.Path) -> str:
 
 
 def _fixture(base: pathlib.Path) -> pathlib.Path:
-    """把判据要看的七份文件复制到临时目录（夹具一律在临时目录里写坏）。"""
+    """把判据要看的十三份文件复制到临时目录（夹具一律在临时目录里写坏）。"""
     for relative in (THEMES_SWIFT, TOKENS_SWIFT, LOCALIZATION_SWIFT, DESIGN_DOC, RELEASE_PLAN,
-                     APPEARANCE_SWIFT, THEME_MANAGER_SWIFT):
+                     APPEARANCE_SWIFT, THEME_MANAGER_SWIFT, APPEARANCE_PREF_SWIFT, APP_STATE_SWIFT,
+                     AXES_TESTS_SWIFT, AXES_PROBE_SWIFT, SNAPSHOT_KIT_SWIFT, PANELS_TESTS_SWIFT):
         target = base / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / relative, target)
@@ -617,7 +836,8 @@ def _patch(path: pathlib.Path, old: str, new: str) -> None:
 def self_test() -> int:
     cases: list[tuple[str, bool, list[Issue]]] = []
     watched = (THEMES_SWIFT, TOKENS_SWIFT, LOCALIZATION_SWIFT, DESIGN_DOC, RELEASE_PLAN,
-               APPEARANCE_SWIFT, THEME_MANAGER_SWIFT)
+               APPEARANCE_SWIFT, THEME_MANAGER_SWIFT, APPEARANCE_PREF_SWIFT, APP_STATE_SWIFT,
+               AXES_TESTS_SWIFT, AXES_PROBE_SWIFT, SNAPSHOT_KIT_SWIFT, PANELS_TESTS_SWIFT)
     before = {name: _sha(ROOT / name) for name in watched}
 
     def static_issues(fixture: pathlib.Path) -> list[Issue]:
@@ -627,6 +847,7 @@ def self_test() -> int:
         issues += check_syntax_binding(fixture)
         issues += check_names_and_pending(fixture)[0]
         issues += check_ui_entry(fixture)[0]
+        issues += check_two_axis(fixture)[0]
         return issues
 
     with tempfile.TemporaryDirectory(prefix="doyah-themes-selftest-") as tmp:
@@ -767,8 +988,31 @@ def self_test() -> int:
                "private struct ThemeRowPlaceholder: View {")
         cases.append(("主题行整块被删（空跑）", True, check_ui_entry(no_row)[0]))
 
+
+        # ⑯ 红：深浅轴少一态（三态变两态 ⇒ 真值表里总有一格取不到值）
+        two_state = _fixture(pathlib.Path(tmp) / "bad-axis-two-states")
+        _patch(two_state / APPEARANCE_PREF_SWIFT, "    case alwaysLight\n", "")
+        cases.append(("两轴：深浅轴少一态（红）", True, static_issues(two_state)))
+
+        # ⑰ 红：两轴串了（配色轴的运行时对象里出现深浅轴的键 ⇒ 切主题会顺手改外观）
+        crossed = _fixture(pathlib.Path(tmp) / "bad-axis-crossed")
+        leak = crossed / THEME_MANAGER_SWIFT
+        leak.write_text(leak.read_text(encoding="utf-8")
+                        + '\n// 串轴演示：配色轴的对象里出现深浅轴的键\nlet axisLeak = "appearance.mode"\n',
+                        encoding="utf-8")
+        cases.append(("两轴：串轴（红）", True, static_issues(crossed)))
+
+        # ⑱ 红：组合没到像素（面板快照不再取角像素 ⇒ 三个主题画成一样也绿）
+        no_pixel = _fixture(pathlib.Path(tmp) / "bad-axis-no-pixel")
+        _patch(no_pixel / PANELS_TESTS_SWIFT,
+               "UISnapshot.sampledRGB(ofPNGAt: record.file",
+               "UISnapshot.sampledRGBBROKEN(ofPNGAt: record.file")
+        cases.append(("两轴：组合没到像素（红）", True, static_issues(no_pixel)))
+
     failures = 0
-    for name, expect_red, issues in cases:
+    # 迭代**副本**：这个循环体里将来若有人再 `cases.append(...)`，迭代列表会一直变长
+    # ⇒ 自检永不结束（第 83 轮实测：3 例被重复打印 809 次、进程挂住）。
+    for name, expect_red, issues in list(cases):
         ok = bool(issues) == expect_red
         if not ok:
             failures += 1
@@ -776,11 +1020,12 @@ def self_test() -> int:
               f"（期望{'报红' if expect_red else '绿'}）"
               + (f" —— {issues[0]}" if issues and not expect_red else ""))
 
+
     after = {name: _sha(ROOT / name) for name in watched}
     unchanged = before == after
     if not unchanged:
         failures += 1
-    print(f"{'✅' if unchanged else '❌'} 真仓库七份文件逐字节未变")
+    print(f"{'✅' if unchanged else '❌'} 真仓库十三份文件逐字节未变")
     total = len(cases) + 1
     print(f"自测通过（{total} 例）" if failures == 0 else f"自测失败：{failures}/{total} 例不符")
     return 0 if failures == 0 else 1
@@ -803,6 +1048,8 @@ def main(argv: list[str]) -> int:
     issues += name_issues
     entry_issues, entry_sites = check_ui_entry(ROOT)
     issues += entry_issues
+    axis_issues, axis_sites = check_two_axis(ROOT)
+    issues += axis_issues
 
     print("==> 主题集（配色方案，队列 L-80 ㈠ ㈡）")
     print(f"    ① 主题集：{len(theme_ids_in_source(ROOT))} 个（台账 {len(THEME_IDS)} 个：{', '.join(THEME_IDS)}）")
@@ -812,6 +1059,9 @@ def main(argv: list[str]) -> int:
     print(f"    ⑤ 名对齐 / 待值登记：{sites} 处文档落点")
     print(f"    ⑥ 界面入口：{entry_sites} 处落点（主题列表 / 三个真实场景 / 推导逐条标注 /"
           f" 强调色入口 / 宿主覆盖不落盘）")
+    print(f"    ⑦ 两轴正交：{axis_sites} 处落点（深浅轴三态 / 两轴互不读取 / "
+          f"{len(AXIS_STATES) * len(AXIS_SYSTEM_STATES) * len(THEME_IDS)} 组组合可达 / 组合到像素 / "
+          f"面板显示当前深浅档）")
 
     if len(theme_ids_in_source(ROOT)) < MIN_THEMES:
         issues.append(Issue(THEMES_SWIFT, f"主题数 {len(theme_ids_in_source(ROOT))} < 下限 {MIN_THEMES}"))
@@ -830,7 +1080,8 @@ def main(argv: list[str]) -> int:
             print(f"   · {issue}")
         return 1
     print("\n✅ 主题集三选一：三套值表角色齐全、逐主题 × 深浅两态过门槛、名与 Linux 侧对齐、待值登记在位；"
-          "界面入口（主题列表 + 每主题三个真实场景 + 推导逐条标注）已接上")
+          "界面入口（主题列表 + 每主题三个真实场景 + 推导逐条标注）已接上；"
+          "两轴正交（深浅三态 × 配色三主题 = 18 组组合、跟随系统两态都过门槛、组合已到像素上）")
     return 0
 
 

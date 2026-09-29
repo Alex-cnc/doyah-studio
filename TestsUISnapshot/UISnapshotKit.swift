@@ -494,6 +494,39 @@ enum UISnapshot {
         return url
     }
 
+    // MARK: - 像素取色（队列 L-85：令牌必须到像素上）
+
+    /// 取一张**已落盘**的 PNG 上某一点的像素（sRGB，0~255 三通道）。
+    ///
+    /// 为什么要有这个口子：`Scripts/check-ui-snapshot-languages.py` 已经能机械判「**语言**有没有到像素上」
+    /// （比两张 PNG 的哈希），而「**令牌**有没有到像素上」此前只能靠人读图。两轴（深浅 × 配色）
+    /// 组合起来是 6 张图，人读得过来、但不该靠人读。
+    ///
+    /// **容差不是猜的**（实测，第 83 轮）：这张图从 `CGImage` → `NSBitmapImageRep` → PNG → 读回，
+    /// 通道值会偏移最多 4 —— 实测深色 `window #02070A` 读回 `#02060A`（G −1）、
+    /// 浅色 `window #F1F5FA` 读回 `#F4F7FB`（+3 / +2 / +1）。所以调用方比对时容差取 8：
+    /// 既容得下这条往返，又小于「换一个主题」在这套值上的差异（深色 `window` 三主题实测
+    /// #02060A / #03160A / #1A070B，至少有一个通道差 16 以上 ⇒ 拿错主题当场红）。
+    static func sampledRGB(ofPNGAt path: String, at point: CGPoint) -> (red: Int, green: Int, blue: Int)? {
+        guard let image = NSImage(contentsOfFile: path),
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        let x = min(max(Int(point.x.rounded()), 0), rep.pixelsWide - 1)
+        let y = min(max(Int(point.y.rounded()), 0), rep.pixelsHigh - 1)
+        guard let raw = rep.colorAt(x: x, y: y) else { return nil }
+        let color = raw.usingColorSpace(.sRGB) ?? raw
+        return (
+            red: Int((color.redComponent * 255).rounded()),
+            green: Int((color.greenComponent * 255).rounded()),
+            blue: Int((color.blueComponent * 255).rounded())
+        )
+    }
+
+    /// 把 0xRRGGBB 拆成三通道（与 `sampledRGB` 的形态对齐，供断言直接比）。
+    static func channels(of hex: UInt32) -> (red: Int, green: Int, blue: Int) {
+        (red: Int((hex >> 16) & 0xFF), green: Int((hex >> 8) & 0xFF), blue: Int(hex & 0xFF))
+    }
+
     // MARK: - 许可证（三档呈现要用真签名，不能"假装备注"）
 
     /// 临时密钥对（每次运行现生成，不落仓库）。

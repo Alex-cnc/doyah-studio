@@ -933,6 +933,9 @@ final class UISnapshotPanelsTests: XCTestCase {
     func testDesignThemeSwitcher() throws {
         let host = makeEmptyHost()
         let size = CGSize(width: 560, height: 700)
+        // 两轴证据的取样口（队列 L-85）：每张图的**画布角像素**（快照在最底层铺的是
+        // `Theme.surface(.window)` ⇒ 角上就是这一档的 `window` 值）。三主题 × 深浅两态 = 6 个样本。
+        var cornerSamples: [(theme: DesignTheme, scheme: ColorScheme, sample: (red: Int, green: Int, blue: Int), name: String)] = []
 
         for theme in DesignTheme.all {
             DesignThemeManager.shared.beginHostTheme(theme)
@@ -980,8 +983,74 @@ final class UISnapshotPanelsTests: XCTestCase {
                     }
                 }
             }
+
+            // ④ 两轴取样：本主题浅 / 深两遍的角像素（顺序由 `snapshotLightAndDark` 保证：[浅, 深]）。
+            for (schemeIndex, scheme) in [ColorScheme.light, .dark].enumerated() {
+                let record = pairs[schemeIndex].records[0]
+                guard let sample = UISnapshot.sampledRGB(ofPNGAt: record.file, at: CGPoint(x: 2, y: 2)) else {
+                    XCTFail("\(record.name)：读不出角像素（取色口子坏了？）")
+                    continue
+                }
+                cornerSamples.append((theme: theme, scheme: scheme, sample: sample, name: record.name))
+            }
         }
-        // 语境进出对称：defer 在本轮作用域结束执行 ⇒ 三遍跑完必须**一处覆盖都不剩**
+
+        // ⑤ **两条轴都要到像素上**（队列 L-85）—— 这是「主题 = 一组令牌值」在像素层的证据，
+        //    与判据 C（在 Swift 源上独立复算门槛）互补：那一条证明「值是对的」，
+        //    这一条证明「对的值真的画出来了」。看的是角像素（快照铺的 `window` 底），
+        //    因为它**唯一确定**：不依赖面板内部的排版。
+        func channelGap(
+            _ lhs: (red: Int, green: Int, blue: Int),
+            _ rhs: (red: Int, green: Int, blue: Int)
+        ) -> Int {
+            max(abs(lhs.red - rhs.red), abs(lhs.green - rhs.green), abs(lhs.blue - rhs.blue))
+        }
+        func describe(_ value: (red: Int, green: Int, blue: Int)) -> String {
+            String(format: "#%02X%02X%02X", value.red, value.green, value.blue)
+        }
+        /// PNG 往返的容差（实测最多 4，见 `UISnapshot.sampledRGB`）——**不是**视觉容差。
+        let encodeTolerance = 8
+
+        XCTAssertEqual(cornerSamples.count, 6, "三主题 × 深浅两态 = 6 张，一张不能少")
+        for theme in DesignTheme.all {
+            guard let light = cornerSamples.first(where: { $0.theme == theme && $0.scheme == .light }),
+                  let dark = cornerSamples.first(where: { $0.theme == theme && $0.scheme == .dark }) else {
+                XCTFail("\(theme.id)：浅 / 深两遍没齐")
+                continue
+            }
+            // 深浅轴：同一主题的两态必须**差得远**（阈值 40 —— 实测差 240 以上；拿容差当阈值等于没判）
+            XCTAssertGreaterThan(
+                channelGap(light.sample, dark.sample), 40,
+                "\(theme.id)：浅色 \(describe(light.sample)) 与深色 \(describe(dark.sample)) 几乎一样"
+                    + " —— 深浅轴没到像素上"
+            )
+            // 配色轴：角像素必须等于**这一主题这一档**的 `window` 值（拿错主题 / 拿错档当场红）
+            for (sample, expected) in [(light, theme.palette.window.light), (dark, theme.palette.window.dark)] {
+                let want = UISnapshot.channels(of: expected)
+                let gap = channelGap(sample.sample, want)
+                XCTAssertLessThanOrEqual(
+                    gap, encodeTolerance,
+                    "\(sample.name)：角像素 \(describe(sample.sample))，期望 \(describe(want))"
+                        + "（\(theme.id)/\(sample.scheme == .dark ? "深色" : "浅色") 的 window 值），差 \(gap)"
+                )
+            }
+        }
+        // 配色轴的另一半：三张**深色**图的角像素两两不同（否则三个主题在像素上是同一套配色）。
+        // 取深色那一档是因为它在三主题之间差得最开（浅色为了「专业感」刻意都接近白）。
+        let darks = DesignTheme.all.compactMap { theme in
+            cornerSamples.first { $0.theme == theme && $0.scheme == .dark }
+        }
+        XCTAssertEqual(darks.count, 3)
+        for (index, lhs) in darks.enumerated() {
+            for rhs in darks[(index + 1)...] {
+                XCTAssertGreaterThan(
+                    channelGap(lhs.sample, rhs.sample), encodeTolerance,
+                    "\(lhs.theme.id) 与 \(rhs.theme.id) 的深色角像素几乎一样"
+                        + "（\(describe(lhs.sample)) vs \(describe(rhs.sample))）—— 换主题没到像素上"
+                )
+            }
+        }
+
         XCTAssertNil(DesignThemeManager.shared.hostOverride,
                      "宿主语境退出后不该留着覆盖（三遍都该还原成用户选的那个）")
         XCTAssertEqual(DesignThemeManager.shared.theme, DesignThemeManager.shared.selected,
