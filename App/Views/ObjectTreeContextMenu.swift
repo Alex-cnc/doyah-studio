@@ -216,7 +216,6 @@ enum ObjectTreeContextMenu {
     /// 本期只实现「服务器」节点：连接 / 断开 / 编辑连接，以及**依据登录用户权限**
     /// 决定是否呈现「新建数据库」。数据库 / schema / 表等节点的菜单留待后续需求。
     @MainActor
-    @MainActor
     @ViewBuilder
     private static func serverContextMenu(
         appState: AppState,

@@ -217,6 +217,10 @@ struct ObjectTreeView: View {
                 }
             }
             .padding(.leading, CGFloat(row.depth) * Metrics.listIndent)
+            // 点击区**铺满整行**：默认只覆盖内容宽度 ⇒ 标签右边那一截空白点不到，
+            // 表现就是「经常选不中」（2026-09-29 需求提出者实测）。`maxWidth: .infinity`
+            // 之后 `contentShape` 覆盖的是整行，选中高亮也随之一整行铺开（树的常规做法）。
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             // 选中态要看得见：⌘K 里"浏览数据 / 查看 DDL / 合成数据"都作用在选中项上，
             // 没有可见的选中标记时那句"请先在对象树里点选"会让人莫名其妙。

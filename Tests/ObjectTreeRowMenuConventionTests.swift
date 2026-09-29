@@ -32,4 +32,15 @@ final class ObjectTreeRowMenuConventionTests: XCTestCase {
         XCTAssertTrue(body.contains("object: row.object"),
                       "行级菜单的目标必须是**这一行自己的对象**（`row.object`），不能是全局解析出来的目标")
     }
+    /// 点击区必须铺满整行 —— 只覆盖内容宽度时「标签右边那一截」点不到，表现就是「经常选不中」。
+    func testRowHitAreaSpansFullWidth() throws {
+        let text = try source("App/Views/ObjectTreeView.swift")
+
+        guard let shape = text.range(of: ".contentShape(Rectangle())", options: .backwards) else {
+            return XCTFail("找不到行的 `.contentShape(Rectangle())` —— 判据锚点变了")
+        }
+        let before = String(text[text.startIndex..<shape.lowerBound].suffix(400))
+        XCTAssertTrue(before.contains(".frame(maxWidth: .infinity"),
+                      "行的命中区要先铺满宽度（`maxWidth: .infinity`）再 `contentShape`，否则标签右侧的空白点不到")
+    }
 }
