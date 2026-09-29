@@ -51,6 +51,7 @@ pwsh -File windows\Tools\verify-all.ps1 -Base HEAD~1                            
 | （领域层边界）| `check-core-boundary.ps1` | ✅ 跑（**2026-09-28 第 25 轮按 Rust 形态重建** —— 旧判据只认 C# 形态，此前一直如实跳过）：`Core/Cargo.toml` 依赖面 + `Core/**/*.rs` 源码面（GUI / 平台 crate、平台专有 std、FFI 形状）+ **空跑不许通过**；**判据与它的 7 例自测在同一次调用里都真跑**（`-SkipSelfTest` 只给手工快跑）|
 | （§8.3 生成物一致性，契约侧 L-70，2026-09-28 第 27 轮落）| `check-release-version.ps1` | ✅ 跑（发布产物版本号「一个值、三处逐字一致」+ **与 mac 侧发布台账同源**；台账 `release-version.json`）：权威处 = `App/src-tauri/tauri.conf.json` 的 `version`（Tauri bundler 写进 MSI / NSIS 元数据），镜像 = `App/package.json` 与 `App/src-tauri/Cargo.toml` 的 `[package] version` —— **缺键 / 同一处第二个同名键 / 任一处值不同**都判红并点名；另判与 `Scripts/release-version.json` 同源（`policy = equal`，不等即判红；对侧 `buildVersion` 不跟随）；**判据自测 11 例**（基线 / 三处各改一处 / 缺键 / 同名键第二处 / 跨端不等 / 跨端独立策略放行 / 锚点写错 / 判据面缺失 / 末例核对真仓库逐字节未变）。**本项没有「跳过」档** |
 
+第 81 轮实测（合入对侧 `b4cd5c2` 后）：**14 项中跑 13 / 跳过 0 / 失败 1** —— 唯一失败项 = ③（对侧判据 D 在 Windows 上恒假红，见下节「已知既有红」）。
 本机实测（Windows 11 / Windows PowerShell 5.1.26100.9549 / `python` 探得 `py -3`）：
 `verify-all.ps1` = **14 项中跑 14 / 跳过 0 / 失败 0**（第 27 轮实测，读数同时记在 `Docs/概要设计.md` §8.5.7）：**设计令牌棘轮不再跳过**（`windows\App` 落地后 ③ 交给表示层自己的两个 node 判据，见上表）—— 本侧自此**没有「跳过」档**。加 `-RequireAll` = 跳过即红（现无跳过项）。
 更早的读数（第 26 轮 = 13 项中跑 13 / 跳过 0 / 失败 0；第 25 轮 = 13 项中跑 12 / 跳过 1 / 失败 0）留痕在此：**跳过 1 项 = 设计令牌棘轮**（等 `windows\App` 表示层落地；规则名对齐与令牌源两项已 ✅）。
@@ -87,3 +88,12 @@ pwsh -File windows\Tools\verify-all.ps1 -Base HEAD~1                            
 - 判据侧（`Scripts/`）属对侧共享设施：本侧只调用、只提建议，不自己改。
 
 - **换栈 / 换形态时，「跳过」不算完成**：判据形态对不上工程时（先例 = 第 24 轮换栈后 `check-core-boundary.ps1` 仍只认 C# 形态）必须**按新形态重建**，并把「已跳过 ⇒ 已重建」这一步同步进本文件与 `windows/README.md` 的未接网清单 —— 跳过只是**如实**，不是**已覆盖**。
+
+## 已知既有红（对侧共享设施 · Windows 平台特有）
+
+**第 ③ 项自合入对侧 `b4cd5c2`（第 88 轮 L-88）起恒红 —— 缺陷在对侧判据、不在本侧**（2026-09-29 第 81 轮实测）。
+
+- 现象：`Scripts/check-doc-versions.py` 判据 D 把**清单里的 6 份文档**全报成「有『变更记录』节却不在受检清单里」；同脚本 A/B/C 三档对同一批文档全绿（`✅ Docs/需求规范书.md —— 变更 293 行 / 最高 v3.277 / 头部 v3.28`）。
+- 根因：判据 D 的 `relative = str(path.relative_to(root))` 在 Windows 上给**反斜杠**，而 `VERSION_DOCS` / `COVERAGE_EXEMPT` / `DEV_RECORD_GLOB` 写的是**正斜杠** ⇒ 集合匹配恒 False（macOS 上 `os.sep` 就是 `/` ⇒ 对侧看不到）。本侧探针实测：raw 比较判红 6 处 / 改 `as_posix()` 判红 0 处。
+- 修法：`path.relative_to(root).as_posix()`（一行 + 一条在 Windows 上会红的自测例）。`Scripts/` 属对侧共享设施 ⇒ 本侧不动手，已挂提案 **`Docs/proposals/0005`**（待采纳）。
+- 本侧处置：**不**在本目录的包装脚本里放行该项 —— 放行等于让判据 D 的真实回归（新文档溜出受检清单）在本侧静默失效。该提案销账前，Studio 侧按「不绿不推」办。
