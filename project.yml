@@ -1,3 +1,8 @@
+# ⚠️ 本工程**不参与发布链**（2026-09-29 口径落档，队列 `L-75`）：发布走 `Scripts/build-app.sh` 的
+# ad-hoc 路径，本工程只作**给人用 IDE 打开的入口**。它与 `Package.swift` 的差异登记为**已知边界**
+# （`Docs/发布方案.md` §2）：`DoyahCore` 未声明 `MySQLNIO`（`Vendor/mysql-nio`）/ `CSQLite3`（`Vendor/sqlite3`）/
+# `Crypto`（`swift-crypto`），目标集合也不同（`Package.swift` 9 个 vs 这里 5 个）。
+# 改本文件后必须 `xcodegen generate`（生成物**不许手改**；版本号三处一致由 `Scripts/check-release-version.py` 判住）。
 name: DoyahStudio
 options:
   bundleIdPrefix: com.vnull
