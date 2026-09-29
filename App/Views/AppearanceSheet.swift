@@ -17,6 +17,10 @@ struct AppearanceSheet: View {
     @EnvironmentObject private var appState: AppState
     /// 订阅字体偏好（FR-EDIT-26）：改完立即反映到预览与界面。
     @ObservedObject private var fonts = FontManager.shared
+    /// 订阅**主题**偏好（FR-EDIT-33 扩写 · 队列 L-80 ㈡）：换主题整块面板立刻跟着换。
+    /// 用 `@ObservedObject` 订阅而不是在渲染时现取一次 —— 否则选了主题这张面板自己不会变
+    /// （其它面板会因为根视图重建而变，只有它自己被落在这句话上）。
+    @ObservedObject private var designTheme = DesignThemeManager.shared
     /// 手输的字体族（FR-EDIT-26 补充）：系统列表只列**等宽**族，但用户机器上
     /// 可能装了列表认不出来的等宽字体（字体元数据里 `isFixedPitch` 没标对），手输是唯一出路。
     @State private var typedFamily: String = ""
@@ -32,6 +36,8 @@ struct AppearanceSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     themeSection
+                    Divider()
+                    designThemeSection
                     Divider()
                     accentSection
                     Divider()
@@ -216,6 +222,48 @@ struct AppearanceSheet: View {
         )
     }
 
+    // MARK: 主题（配色方案三选一 · FR-EDIT-33 扩写 · 队列 L-80 ㈡）
+
+    /// 主题列表（**三选一 + 一键切换**）。
+    ///
+    /// 与上面那一段「跟随系统外观」不是一回事：那一段管**深浅**，这一段管**整套配色**
+    /// （底色基调 + 强调色家族 + 语法着色）。口径见 `Docs/design/外观方案-v1.md` §9。
+    ///
+    /// 每条都画出**三个真实场景**（选中行 / 主按钮 / 焦点环），而且画在**它自己的表面上**
+    /// —— 换主题不是"换一个色块"，用户要看的是"整块界面变过去之后长什么样"。
+    private var designThemeSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            Text(L(.appearanceDesignThemeSection))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+
+            ForEach(DesignTheme.all) { candidate in
+                DesignThemeOptionRow(
+                    theme: candidate,
+                    isSelected: candidate == designTheme.theme
+                ) {
+                    designTheme.select(candidate)
+                }
+            }
+
+            // 推导主题**必须如实标出来**（不许把推导值当实际值卖）：
+            // 值表旁标着、发布计划的待输入表登记着、这里也要让用户看见 —— 三处缺一即红。
+            if DesignTheme.all.contains(where: \.isDerivedDraft) {
+                Text(L(.appearanceDesignThemeDerivedNote))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.status(.warning))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text(L(.appearanceDesignThemeHint))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.tertiary))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, Spacing.l)
+        .padding(.vertical, Spacing.m)
+    }
+
     // MARK: 强调色
 
     private var accentSection: some View {
@@ -223,6 +271,11 @@ struct AppearanceSheet: View {
             Text(L(.appearanceAccentSection))
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.secondary))
+
+            Text(L(.appearanceAccentThemeNote))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.tertiary))
+                .fixedSize(horizontal: false, vertical: true)
 
             ForEach(AccentTheme.all) { theme in
                 AccentOptionRow(theme: theme, isSelected: theme == accent.theme) {
@@ -456,6 +509,137 @@ private struct AccentOptionRow: View {
                 .strokeBorder(accentColor, lineWidth: 1.5)
                 .frame(width: 34, height: 18)
         }
+        .opacity(0.95)
+    }
+}
+
+/// 一个**主题**候选（FR-EDIT-33 扩写 · 队列 L-80 ㈡）：名字 + 选中标记 + 该主题的**三个真实场景**。
+///
+/// 与 `AccentOptionRow` 的关键区别在"画在什么底上"：
+/// 强调色预览画在**当前界面**的表面上（因为强调色只管那几个点），
+/// 而主题预览必须画在**它自己的**表面上（`theme.palette.content` / `textPrimary`）——
+/// 否则"豆芽绿的底"完全看不到，用户只能凭想象。这也是"一个主题 = 一组令牌值"在界面上的证据。
+private struct DesignThemeOptionRow: View {
+
+    let theme: DesignTheme
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    /// 该主题**配套**的交互强调色（选中行 / 主按钮 / 焦点环的色）。
+    private var accentColor: Color { Color(nsColor: AccentManager.dynamic(theme.accent.accentHex)) }
+    private var fillColor: Color { Color(nsColor: AccentManager.dynamic(theme.accent.fillHex)) }
+    private var tintColor: Color { accentColor.opacity(scheme == .dark ? 0.16 : 0.11) }
+
+    /// 预览用**该主题自己**的底与字（深浅按当前外观取该主题的那一档）。
+    private var contentColor: Color { hexColor(scheme == .dark ? theme.palette.content.dark : theme.palette.content.light) }
+    private var textColor: Color { hexColor(scheme == .dark ? theme.palette.textPrimary.dark : theme.palette.textPrimary.light) }
+
+    /// 表面五档的小色阶：一眼看出"主题换的是一组值"，不是一块色卡。
+    private var surfaceRampColors: [UInt32] {
+        let palette = theme.palette
+        let ramp = [palette.window, palette.sidebar, palette.content, palette.panel, palette.raised]
+        return ramp.map { scheme == .dark ? $0.dark : $0.light }
+    }
+
+    private func hexColor(_ hex: UInt32) -> Color { Color(nsColor: Theme.nsColor(hex: hex)) }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(alignment: .center, spacing: Spacing.m) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(Theme.font(.body))
+                    .foregroundStyle(isSelected ? accentColor : Theme.text(.tertiary))
+
+                VStack(alignment: .leading, spacing: Spacing.hair) {
+                    HStack(spacing: Spacing.s) {
+                        Text(L(theme.nameKey))
+                            .font(isSelected ? Theme.font(.bodyStrong) : Theme.font(.body))
+                        // 推导主题**逐条**标出来：整段给一句提示还不够 —— 用户看到的是**哪一条**在待值。
+                        if theme.isDerivedDraft {
+                            Text(L(.appearanceDesignThemeDerived))
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.status(.warning))
+                        }
+                    }
+                    surfaceRamp
+                }
+                .frame(width: 168, alignment: .leading)
+
+                preview
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Spacing.m)
+            .padding(.vertical, Spacing.s)
+            .background(
+                RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                    .fill(isSelected ? tintColor : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? accentColor.opacity(0.55) : Theme.hairline(scheme),
+                        lineWidth: Metrics.hairline
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 表面五档（window → raised）：深色下是由暗到亮，浅色下是由灰白到纯白。
+    private var surfaceRamp: some View {
+        HStack(spacing: Spacing.hair) {
+            ForEach(Array(surfaceRampColors.enumerated()), id: \.offset) { _, hex in
+                RoundedRectangle(cornerRadius: Radius.badge, style: .continuous)
+                    .fill(hexColor(hex))
+                    .frame(width: 16, height: 10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radius.badge, style: .continuous)
+                            .strokeBorder(Theme.hairline(scheme), lineWidth: Metrics.hairline)
+                    )
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// 三个真实场景 —— 画在**该主题自己的内容底**上：选中行 / 主按钮 / 焦点环。
+    private var preview: some View {
+        HStack(spacing: Spacing.s) {
+            // 选中行：淡填充 + 左侧强调条
+            HStack(spacing: Spacing.hair) {
+                Rectangle()
+                    .fill(accentColor)
+                    .frame(width: Spacing.hair, height: 14)
+                RoundedRectangle(cornerRadius: Radius.badge, style: .continuous)
+                    .fill(tintColor)
+                    .frame(width: 46, height: 14)
+            }
+
+            // 主按钮：实心填充 + 白字（该主题配套的压暗档）
+            Text(L(theme.nameKey).prefix(2))
+                .font(Theme.font(.caption))
+                .foregroundStyle(.white)
+                .padding(.horizontal, Spacing.s)
+                .padding(.vertical, Spacing.hair)
+                .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(fillColor))
+
+            // 焦点环
+            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                .strokeBorder(accentColor, lineWidth: 1.5)
+                .frame(width: 34, height: 18)
+
+            // 一行正文：证明这个主题的字色与底色的关系（不是只有装饰）
+            Text(L(.appearanceDesignThemeSampleText))
+                .font(Theme.font(.caption))
+                .foregroundStyle(textColor)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, Spacing.xs)
+        .background(contentColor)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.badge, style: .continuous))
         .opacity(0.95)
     }
 }

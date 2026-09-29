@@ -41,12 +41,23 @@ E. **主题名与 Linux 侧对齐 + 待值登记成对**：
       （§9.1 的原话）② `Docs/发布计划.md` 的待输入表里登记着「豆芽绿 / 玫瑰金 色值（Linux 侧）」
       那件事 —— 推导值不许**静默变成**实际值。
 F. 空跑防护：主题数 / 角色数 / 实测对数 / 文档锚点处数四条下限，任何一条踩线即红。
+G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也能切了，但**用户手上那个入口**是另一件事
+   —— 三个主题里有没有人**选不到**、预览是不是只给一块色卡、推导值有没有在界面上**逐条**标出来、
+   以及"加了主题就把原来那个强调色入口删掉"这类**静默收功能**。判据：① 面板必须逐个列出主题集
+   （`ForEach(DesignTheme.all)`）且选主题走**唯一写入口** `select(_:)`，且**订阅**了主题管理器
+   （否则换了主题这块面板自己不跟着变）；② 主题行必须画出**三个真实场景**（选中行 / 主按钮 / 焦点环）
+   且预览画在**该主题自己**的表面上（`palette.content`）＋用**该主题配套**的强调色（`theme.accent`）；
+   ③ 推导主题必须**逐条**标注（行里问 `isDerivedDraft` + 画出标记键 + 语言表里有那句中文）；
+   ④ `AccentTheme.all` 入口不许消失（FR-EDIT-33 的「强调色可配置」是已交付能力，要收得先改 SRS 与判据）；
+   ⑤ 宿主语境覆盖（`beginHostTheme` / `endHostTheme`）**不许写盘**（拍一张快照不许改用户偏好 ——
+   语言那条路定过这个口径），而 `select(_:)` **必须**写盘。判点只看**那一段源码切片**，不看整文件
+   （否则"别处写过一句"就顶数 —— 第 77 轮自检例 ⑨/⑮ 两次栽在这上面）。
 
-判据自己的证据：`--self-test` **16 例**（15 个红/绿成对 + 末例核对真仓库五份文件逐字节未变；夹具一律在临时目录）。
+判据自己的证据：`--self-test` **22 例**（21 个红/绿成对 + 末例核对真仓库七份文件逐字节未变；夹具一律在临时目录）。
 
 用法：
     python3 Scripts/check-design-themes.py              # 校验（闭环第 6 项）
-    python3 Scripts/check-design-themes.py --self-test  # 门禁自己的证据（12 例）
+    python3 Scripts/check-design-themes.py --self-test  # 门禁自己的证据（22 例）
 """
 
 from __future__ import annotations
@@ -66,6 +77,8 @@ TOKENS_SWIFT = "Core/DesignTokens.swift"
 LOCALIZATION_SWIFT = "Core/Localization.swift"
 DESIGN_DOC = "Docs/design/外观方案-v1.md"
 RELEASE_PLAN = "Docs/发布计划.md"
+APPEARANCE_SWIFT = "App/Views/AppearanceSheet.swift"
+THEME_MANAGER_SWIFT = "App/DesignThemeManager.swift"
 
 # ---- 台账式常量（每条都带理由；理由为空即红）-------------------------------------------------
 
@@ -110,6 +123,25 @@ SURFACE_SEPARATION = 0.02
 MIN_THEMES = 3          # 判据 F：主题数下限
 MIN_ROLES = 20          # 判据 F：每套表的字段数下限
 MIN_CHECKS = 120        # 判据 F：实测对数下限（3 主题 × 2 态 × 每个角色若干条）
+
+# ---- 判据 G（界面入口）的对照表（每条都带理由）------------------------------------------------
+# 主题候选行必须画出的**三个真实场景** —— 缺一个就退化成"只给一块色卡"（用户只能凭想象选）。
+# 理由与 `AccentOptionRow` 同源（FR-EDIT-33 原文：选色不该靠想象），但主题要**多一层**：
+# 预览得画在该主题**自己**的表面上（见 `THEME_SURFACE_MARKER`）。
+SCENE_MARKERS = {
+    "选中行": ".fill(tintColor)",
+    "主按钮": ".foregroundStyle(.white)",
+    "焦点环": ".strokeBorder(accentColor, lineWidth: 1.5)",
+}
+# 预览的底必须来自**该主题的值表**（不是当前界面的表面）——
+# 少了它，"豆芽绿 / 玫瑰金 的底"在界面上一眼都看不到。
+THEME_SURFACE_MARKER = "palette.content"
+# 「推导草案」这句话在界面上的落点：行里要画出这个键，语言表里要有这句中文原话。
+DERIVED_MARKER_KEY = ".appearanceDesignThemeDerived"
+DERIVED_LKEY = "appearanceDesignThemeDerived"
+MIN_PANEL_LINES = 400   # 判据 G：面板文件行数下限（被掏空即红）
+MIN_ROW_CHARS = 1200    # 判据 G：主题行源码字符下限（被掏空即红）
+MIN_ENTRY_SITES = 12    # 判据 G：界面入口的判点处数下限（空跑防护）
 
 PALETTE_BLOCK = re.compile(r"public static let (\w+) = ThemePalette\((.*?)\n    \)", re.S)
 THEME_CASE = re.compile(r'^\s*case (\w+) = "([a-z-]+)"', re.M)
@@ -195,6 +227,22 @@ def palette_for(root: pathlib.Path, theme_id: str) -> dict | None:
 
 def theme_ids_in_source(root: pathlib.Path) -> list[str]:
     return [ident for _, ident in THEME_CASE.findall(theme_swift_text(root))]
+
+
+def _type_slice(text: str, marker: str, closing: str = "\n}") -> str | None:
+    """取**一段声明**的源码切片（从 `marker` 到它自己的收尾行）。
+
+    判据 G 要问的是「这一段里有没有画出那三个场景」，就必须只看**这一段**：
+    拿整个文件去 `in`，等于"别处写过一句也算"（第 77 轮自检例 ⑨/⑮ 两次栽在这上面）。
+    类型（`struct … {`）以列 0 的 `}` 收尾，函数以缩进四格的 `}` 收尾。
+    """
+    start = text.find(marker)
+    if start < 0:
+        return None
+    end = text.find(closing, start)
+    if end < 0:
+        return None
+    return text[start:end]
 
 
 # ---------------------------------------------------------------- 判据 A
@@ -445,6 +493,105 @@ def check_names_and_pending(root: pathlib.Path) -> tuple[list[Issue], int]:
     return issues, sites
 
 
+# ---------------------------------------------------------------- 判据 G
+
+def check_ui_entry(root: pathlib.Path) -> tuple[list[Issue], int]:
+    """界面入口：主题真的能被选到、每主题三个真实场景、推导值如实标注、强调色入口不许消失。"""
+    issues: list[Issue] = []
+    sites = 0
+    panel_path = root / APPEARANCE_SWIFT
+    if not panel_path.exists():
+        return [Issue(APPEARANCE_SWIFT, "「外观」面板文件不存在 —— 主题入口无处落地")], sites
+    panel = panel_path.read_text(encoding="utf-8")
+    line_count = len(panel.splitlines())
+    sites += 1
+    if line_count < MIN_PANEL_LINES:
+        issues.append(Issue(APPEARANCE_SWIFT, f"面板只有 {line_count} 行（下限 {MIN_PANEL_LINES}）"
+                                              f" —— 扫描面被削过，不许通过"))
+
+    # ① 入口：主题集必须被**逐个列出**（用户在面板上选得到），且选中走 `select(_:)`
+    #    —— 「换主题」这件事只有一个写入口，界面不许自己往 UserDefaults 里写。
+    sites += 1
+    if "ForEach(DesignTheme.all)" not in panel:
+        issues.append(Issue(APPEARANCE_SWIFT, "面板里没有逐个列出主题集（`ForEach(DesignTheme.all)`）"
+                                              " —— 三个主题里就有人选不到"))
+    sites += 1
+    if not re.search(r"designTheme\.select\(|DesignThemeManager\.shared\.select\(", panel):
+        issues.append(Issue(APPEARANCE_SWIFT, "面板里没有走 `select(_:)` 的选主题调用点"
+                                              " —— 换主题的唯一写入口在 `DesignThemeManager`（持久化也归它）"))
+    sites += 1
+    if "@ObservedObject" not in panel or "DesignThemeManager.shared" not in panel:
+        issues.append(Issue(APPEARANCE_SWIFT, "面板没有订阅主题管理器 ⇒ 换了主题这块面板自己不跟着变"
+                                              "（其它面板会因根视图重建而变，它是唯一漏网的那块）"))
+
+    # ② 主题行：三个**真实场景**必须画在**该主题自己的表面**上
+    row = _type_slice(panel, "struct DesignThemeOptionRow")
+    sites += 1
+    if row is None:
+        issues.append(Issue(APPEARANCE_SWIFT, "找不到主题候选行（`struct DesignThemeOptionRow`）"
+                                              " —— 主题列表画不出来"))
+    else:
+        if len(row) < MIN_ROW_CHARS:
+            issues.append(Issue(APPEARANCE_SWIFT, f"主题行只有 {len(row)} 字符（下限 {MIN_ROW_CHARS}）"
+                                                  f" —— 行被掏空，不许通过"))
+        for label, marker in SCENE_MARKERS.items():
+            sites += 1
+            if marker not in row:
+                issues.append(Issue(APPEARANCE_SWIFT,
+                                    f"主题行里没有「{label}」这个真实场景（缺标记 `{marker}`）"
+                                    f" —— 只给一块色卡，用户只能凭想象"))
+        sites += 1
+        if THEME_SURFACE_MARKER not in row:
+            issues.append(Issue(APPEARANCE_SWIFT,
+                                f"主题行的预览没有画在**该主题自己的表面**上（缺 `{THEME_SURFACE_MARKER}`）"
+                                f" —— 那样看到的还是当前界面的底，换主题等于没预览"))
+        sites += 1
+        if not re.search(r"theme\.accent", row):
+            issues.append(Issue(APPEARANCE_SWIFT, "主题行的三个场景没有用**该主题配套**的强调色"
+                                                  "（`theme.accent`）—— 预览会拿当前主题的色去画别人的场景"))
+        # ③ 推导值：逐条标注（不许把推导值当实际值卖）
+        sites += 2
+        if "isDerivedDraft" not in row:
+            issues.append(Issue(APPEARANCE_SWIFT, "主题行没有问 `isDerivedDraft`"
+                                                  " —— 待值的主题混在列表里、用户看不出来"))
+        if DERIVED_MARKER_KEY not in row:
+            issues.append(Issue(APPEARANCE_SWIFT, f"主题行没有画出推导标记（缺 `{DERIVED_MARKER_KEY}`）"))
+        localization = (root / LOCALIZATION_SWIFT).read_text(encoding="utf-8")
+        sites += 1
+        if not re.search(rf"\.{DERIVED_LKEY}: \[\.simplifiedChinese: \"推导草案\"", localization):
+            issues.append(Issue(LOCALIZATION_SWIFT, f"语言表里没有 `.{DERIVED_LKEY}` 的中文条目「推导草案」"
+                                                    f" —— 界面上那句话无处可取"))
+
+    # ④ 强调色入口不许**静默**消失（FR-EDIT-33 原文的「强调色可配置」是已交付能力）
+    sites += 1
+    if "AccentTheme.all" not in panel:
+        issues.append(Issue(APPEARANCE_SWIFT, "面板不再逐个列出强调色（`AccentTheme.all`）"
+                                              " —— 加了主题不等于可以删掉已交付的「强调色可配置」；"
+                                              "真要收掉，得先改 SRS 与判据、并把理由写进台账"))
+
+    # ⑤ 宿主覆盖（快照用）不落盘：拍一张图不许改用户偏好
+    manager_path = root / THEME_MANAGER_SWIFT
+    sites += 1
+    if not manager_path.exists():
+        issues.append(Issue(THEME_MANAGER_SWIFT, "主题运行时对象不存在"))
+    else:
+        manager = manager_path.read_text(encoding="utf-8")
+        sites += 2
+        if "func beginHostTheme(" not in manager or "func endHostTheme(" not in manager:
+            issues.append(Issue(THEME_MANAGER_SWIFT, "没有宿主语境的进入 / 退出接口"
+                                                    "（`beginHostTheme` / `endHostTheme`）—— 快照只能靠改用户偏好"))
+        body = _type_slice(manager, "func beginHostTheme(", closing="\n    }") or ""
+        sites += 1
+        if "UserDefaults" in body:
+            issues.append(Issue(THEME_MANAGER_SWIFT, "宿主语境覆盖里写了 `UserDefaults`"
+                                                    " —— 拍一张快照就把用户的偏好改了（语言那条路定过这个口径）"))
+        sites += 1
+        if "UserDefaults.standard.set" not in manager:
+            issues.append(Issue(THEME_MANAGER_SWIFT, "选主题没有落盘 （缺 `UserDefaults.standard.set`）"
+                                                    " —— 重启就丢"))
+    return issues, sites
+
+
 # ---------------------------------------------------------------- 自检
 
 def _sha(path: pathlib.Path) -> str:
@@ -452,8 +599,9 @@ def _sha(path: pathlib.Path) -> str:
 
 
 def _fixture(base: pathlib.Path) -> pathlib.Path:
-    """把判据要看的四份文件复制到临时目录（夹具一律在临时目录里写坏）。"""
-    for relative in (THEMES_SWIFT, TOKENS_SWIFT, LOCALIZATION_SWIFT, DESIGN_DOC, RELEASE_PLAN):
+    """把判据要看的七份文件复制到临时目录（夹具一律在临时目录里写坏）。"""
+    for relative in (THEMES_SWIFT, TOKENS_SWIFT, LOCALIZATION_SWIFT, DESIGN_DOC, RELEASE_PLAN,
+                     APPEARANCE_SWIFT, THEME_MANAGER_SWIFT):
         target = base / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / relative, target)
@@ -468,7 +616,8 @@ def _patch(path: pathlib.Path, old: str, new: str) -> None:
 
 def self_test() -> int:
     cases: list[tuple[str, bool, list[Issue]]] = []
-    watched = (THEMES_SWIFT, TOKENS_SWIFT, LOCALIZATION_SWIFT, DESIGN_DOC, RELEASE_PLAN)
+    watched = (THEMES_SWIFT, TOKENS_SWIFT, LOCALIZATION_SWIFT, DESIGN_DOC, RELEASE_PLAN,
+               APPEARANCE_SWIFT, THEME_MANAGER_SWIFT)
     before = {name: _sha(ROOT / name) for name in watched}
 
     def static_issues(fixture: pathlib.Path) -> list[Issue]:
@@ -477,6 +626,7 @@ def self_test() -> int:
         issues += check_thresholds(fixture)[0]
         issues += check_syntax_binding(fixture)
         issues += check_names_and_pending(fixture)[0]
+        issues += check_ui_entry(fixture)[0]
         return issues
 
     with tempfile.TemporaryDirectory(prefix="doyah-themes-selftest-") as tmp:
@@ -574,6 +724,49 @@ def self_test() -> int:
         (no_palette / THEMES_SWIFT).write_text(text, encoding="utf-8")
         cases.append(("值表被删光（空跑）", True, check_palette_shape(no_palette)[0]))
 
+        # ⑯ 红：面板不再逐个列出主题集（有人选不到）
+        no_entry = _fixture(pathlib.Path(tmp) / "bad-entry")
+        _patch(no_entry / APPEARANCE_SWIFT,
+               "ForEach(DesignTheme.all) { candidate in",
+               "ForEach(DesignTheme.all.prefix(1)) { candidate in")
+        cases.append(("面板不再列出主题集", True, check_ui_entry(no_entry)[0]))
+
+        # ⑰ 红：主题行少一个真实场景（只给一块色卡 —— 界面退化成"凭想象选"）
+        weak_row = _fixture(pathlib.Path(tmp) / "bad-row-scene")
+        _patch(weak_row / APPEARANCE_SWIFT,
+               "白字（该主题配套的压暗档）\n            Text(L(theme.nameKey).prefix(2))\n"
+               "                .font(Theme.font(.caption))\n                .foregroundStyle(.white)",
+               "白字（该主题配套的压暗档，场景被删）\n            Text(L(theme.nameKey).prefix(2))\n"
+               "                .font(Theme.font(.caption))\n                .foregroundStyle(.primary)")
+        cases.append(("主题行少一个真实场景", True, check_ui_entry(weak_row)[0]))
+
+        # ⑱ 红：推导主题在界面上不再标注（推导值当实际值卖）
+        unlabeled = _fixture(pathlib.Path(tmp) / "bad-label")
+        _patch(unlabeled / APPEARANCE_SWIFT, "if theme.isDerivedDraft {", "if false {")
+        cases.append(("推导主题在界面上不标注", True, check_ui_entry(unlabeled)[0]))
+
+        # ⑲ 红：加了主题就把已交付的「强调色可配置」删掉（静默收功能）
+        accent_gone = _fixture(pathlib.Path(tmp) / "bad-accent-entry")
+        _patch(accent_gone / APPEARANCE_SWIFT,
+               "ForEach(AccentTheme.all) { theme in", "ForEach([]) { theme in")
+        cases.append(("强调色入口被静默删除", True, check_ui_entry(accent_gone)[0]))
+
+        # ⑳ 红：宿主语境的覆盖写了盘（拍一张快照就改了用户的偏好）
+        persists = _fixture(pathlib.Path(tmp) / "bad-host-persist")
+        _patch(persists / THEME_MANAGER_SWIFT,
+               "    func beginHostTheme(_ theme: DesignTheme) -> DesignTheme? {\n        let previous = hostOverride",
+               "    func beginHostTheme(_ theme: DesignTheme) -> DesignTheme? {\n"
+               "        UserDefaults.standard.set(theme.id, forKey: DesignTheme.Storage.key)\n"
+               "        let previous = hostOverride")
+        cases.append(("宿主语境覆盖写了盘", True, check_ui_entry(persists)[0]))
+
+        # ㉑ 红：主题行整块被删（空跑）
+        no_row = _fixture(pathlib.Path(tmp) / "bad-no-row")
+        _patch(no_row / APPEARANCE_SWIFT,
+               "private struct DesignThemeOptionRow: View {",
+               "private struct ThemeRowPlaceholder: View {")
+        cases.append(("主题行整块被删（空跑）", True, check_ui_entry(no_row)[0]))
+
     failures = 0
     for name, expect_red, issues in cases:
         ok = bool(issues) == expect_red
@@ -587,7 +780,7 @@ def self_test() -> int:
     unchanged = before == after
     if not unchanged:
         failures += 1
-    print(f"{'✅' if unchanged else '❌'} 真仓库五份文件逐字节未变")
+    print(f"{'✅' if unchanged else '❌'} 真仓库七份文件逐字节未变")
     total = len(cases) + 1
     print(f"自测通过（{total} 例）" if failures == 0 else f"自测失败：{failures}/{total} 例不符")
     return 0 if failures == 0 else 1
@@ -608,13 +801,17 @@ def main(argv: list[str]) -> int:
     issues += check_syntax_binding(ROOT)
     name_issues, sites = check_names_and_pending(ROOT)
     issues += name_issues
+    entry_issues, entry_sites = check_ui_entry(ROOT)
+    issues += entry_issues
 
-    print("==> 主题集（配色方案，队列 L-80 ㈠）")
+    print("==> 主题集（配色方案，队列 L-80 ㈠ ㈡）")
     print(f"    ① 主题集：{len(theme_ids_in_source(ROOT))} 个（台账 {len(THEME_IDS)} 个：{', '.join(THEME_IDS)}）")
     print(f"    ② 值表角色：{role_total} 个字段（下限 {MIN_ROLES * MIN_THEMES}）")
     print(f"    ③ 独立复算：{checks} 条门槛（下限 {MIN_CHECKS}；本脚本自己实现 WCAG，与 Swift 单测互补）")
     print(f"    ④ 语法六档 ↔ 家族角色：{len(SYNTAX_BINDING)} 条映射对账")
     print(f"    ⑤ 名对齐 / 待值登记：{sites} 处文档落点")
+    print(f"    ⑥ 界面入口：{entry_sites} 处落点（主题列表 / 三个真实场景 / 推导逐条标注 /"
+          f" 强调色入口 / 宿主覆盖不落盘）")
 
     if len(theme_ids_in_source(ROOT)) < MIN_THEMES:
         issues.append(Issue(THEMES_SWIFT, f"主题数 {len(theme_ids_in_source(ROOT))} < 下限 {MIN_THEMES}"))
@@ -623,13 +820,17 @@ def main(argv: list[str]) -> int:
                                          f" —— 扫描面被削过，不许通过"))
     if checks < MIN_CHECKS:
         issues.append(Issue("复算", f"只跑了 {checks} 条门槛（下限 {MIN_CHECKS}）—— 空跑不许通过"))
+    if entry_sites < MIN_ENTRY_SITES:
+        issues.append(Issue(APPEARANCE_SWIFT, f"界面入口只判了 {entry_sites} 处（下限 {MIN_ENTRY_SITES}）"
+                                             f" —— 扫描面被削过，不许通过"))
 
     if issues:
         print(f"\n❌ {len(issues)} 处未过：")
         for issue in issues:
             print(f"   · {issue}")
         return 1
-    print("\n✅ 主题集三选一：三套值表角色齐全、逐主题 × 深浅两态过门槛、名与 Linux 侧对齐、待值登记在位")
+    print("\n✅ 主题集三选一：三套值表角色齐全、逐主题 × 深浅两态过门槛、名与 Linux 侧对齐、待值登记在位；"
+          "界面入口（主题列表 + 每主题三个真实场景 + 推导逐条标注）已接上")
     return 0
 
 

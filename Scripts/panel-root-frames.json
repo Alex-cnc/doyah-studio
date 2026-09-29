@@ -4,9 +4,9 @@
   "panelRootMinWidth": 400,
   "scannedFiles": 65,
   "totals": {
-    "frames": 33,
+    "frames": 36,
     "panelRoots": 21,
-    "ornaments": 12
+    "ornaments": 15
   },
   "intentVocab": {
     "content-stretches": "这个面板根里有能撑满高度的容器（`ScrollView` / `List` / `Table` / `Form`（滚动容器）/ `GeometryReader` / 显式的 `maxHeight: .infinity`）⇒ 内容本来就填满这个尺寸，**居中与顶对齐视觉等价**（`stretchProbe` 要在同一个视图类型里真的存在）",
@@ -28,7 +28,8 @@
     "两条路线都走不通的面板根过不去 —— 这正是 L-58 那个缺陷下一次会被挡住的地方。",
     "范围：只判两个维度都是**数字字面量**的固定尺寸；用设计令牌 / 变量给尺寸的 `.frame(...)` 由闭环第 6 项管，每次显式打印数量。",
     "装饰（width < 门槛）也一律登记 —— 目的是让「盘上出现了新的固定尺寸 frame」这件事**没有静默的入口**（处数按 `count` 对账）。",
-    "第 41 轮条目原文写「实测 26 处」，第 63 轮本判据按**完整口径**重测为 **33 处**（面板根 21 · 装饰 12）—— 差的 7 处里 3 处是**开了数字下划线分隔**的（`1_060` 那种）与**已显式写 alignment** 的写法，原先的探针正则漏了它们；本台账以**门禁实测**为准。"
+    "第 41 轮条目原文写「实测 26 处」，第 63 轮本判据按**完整口径**重测为 **33 处**（面板根 21 · 装饰 12）—— 差的 7 处里 3 处是**开了数字下划线分隔**的（`1_060` 那种）与**已显式写 alignment** 的写法，原先的探针正则漏了它们；本台账以**门禁实测**为准。",
+    "第 78 轮（L-80 ㈡）新增三条装饰：主题候选行（`DesignThemeOptionRow`）的表面五档色阶 + 两个示意图形 —— 装饰也登记，目的是让「盘上出现了新的固定尺寸 frame」这件事没有静默入口（处数按 `count` 对账）。"
   ],
   "items": [
     {
@@ -87,6 +88,33 @@
       "kind": "ornament",
       "intent": "",
       "note": "预览里的「选中行」示意条（`RoundedRectangle` 填充）—— 固定尺寸是示意图形，不是面板根"
+    },
+    {
+      "file": "App/Views/AppearanceSheet.swift",
+      "symbol": "DesignThemeOptionRow",
+      "frame": "width: 16, height: 10",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "主题行里的**表面五档色阶**小方块（window → raised 各一格，L-80 ㈡）—— 色阶格不是面板根"
+    },
+    {
+      "file": "App/Views/AppearanceSheet.swift",
+      "symbol": "DesignThemeOptionRow",
+      "frame": "width: 46, height: 14",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "主题行预览里的「选中行」示意条（淡填充）—— 示意图形，不是面板根"
+    },
+    {
+      "file": "App/Views/AppearanceSheet.swift",
+      "symbol": "DesignThemeOptionRow",
+      "frame": "width: 34, height: 18",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "主题行预览里的「焦点环」示意（`strokeBorder`）—— 示意图形，不是面板根"
     },
     {
       "file": "App/Views/CommandPaletteView.swift",

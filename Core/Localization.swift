@@ -89,6 +89,16 @@ public enum LKey: String, CaseIterable, Sendable {
     /// 强调色名给"实心按钮上那两个字的缩写"用）。
     case accentBeanGreen
     case accentRoseGold
+    /// 主题（配色方案三选一 · FR-EDIT-33 扩写 · 队列 L-80 ㈡）：面板上的那一段。
+    case appearanceDesignThemeSection
+    case appearanceDesignThemeHint
+    /// 推导草案的标记与说明（待 Linux 侧实际色值期间**如实标注**）。
+    case appearanceDesignThemeDerived
+    case appearanceDesignThemeDerivedNote
+    /// 预览里那一行正文（证明这个主题的字色与底色的关系）。
+    case appearanceDesignThemeSampleText
+    /// 强调色与主题的关系（强调色仍可单独覆盖）。
+    case appearanceAccentThemeNote
 
     // 表设计（FR-DDL-03）
     case tableDesignTitle
@@ -1846,6 +1856,12 @@ public enum LocalizedStrings {
         .designThemeRoseGold: [.simplifiedChinese: "玫瑰金", .english: "Rose Gold"],
         .accentBeanGreen: [.simplifiedChinese: "豆芽绿", .english: "Bean Sprout Green"],
         .accentRoseGold: [.simplifiedChinese: "玫瑰金", .english: "Rose Gold"],
+        .appearanceDesignThemeSection: [.simplifiedChinese: "主题（配色方案）", .english: "Theme (Color Scheme)"],
+        .appearanceDesignThemeHint: [.simplifiedChinese: "一个主题是一组令牌值（底色基调 + 强调色家族 + 语法着色），不是只换一个强调色；选定后立即生效并记住。", .english: "A theme is a whole set of token values (base surfaces + accent family + syntax colours), not just one accent colour; it takes effect immediately and is remembered."],
+        .appearanceDesignThemeDerived: [.simplifiedChinese: "推导草案", .english: "Derived draft"],
+        .appearanceDesignThemeDerivedNote: [.simplifiedChinese: "豆芽绿 / 玫瑰金 暂为推导草案：Linux 版的实际色值到位后整表替换（不留两套）。", .english: "Bean Sprout Green / Rose Gold are currently derived drafts: once the Linux build's real values arrive, the whole table is replaced (no two versions kept)."],
+        .appearanceDesignThemeSampleText: [.simplifiedChinese: "订单查询", .english: "Query orders"],
+        .appearanceAccentThemeNote: [.simplifiedChinese: "主题会同时套用它的配套强调色；这里可以单独覆盖（覆盖后不再跟随主题）。", .english: "A theme also applies its matching accent colour; you can override it here (it then stops following the theme)."],
         .tableDesignAlterTitle: [.simplifiedChinese: "编辑表结构", .english: "Edit Table Structure"],
         .tableDesignApply: [.simplifiedChinese: "应用变更", .english: "Apply changes"],
         .tableDesignNoChanges: [.simplifiedChinese: "没有改动。", .english: "No changes."],

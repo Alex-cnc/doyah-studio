@@ -919,6 +919,75 @@ final class UISnapshotPanelsTests: XCTestCase {
         }
     }
 
+    // MARK: - 主题（配色方案三选一 · L-80 ㈡）
+
+    /// **三个主题各拍一遍**：同一块「外观」面板、选择不同 ⇒ 三张图必须不一样。
+    ///
+    /// 造态靠**宿主语境覆盖**（`DesignThemeManager.beginHostTheme`，与第 13 轮为语言定的那条路同构：
+    /// 只覆盖、不落盘）—— 拍一张图不该改用户的偏好。
+    ///
+    /// 图里要能看见三件事：① 三条主题**各自画在它自己的面 / 字 / 强调色上**（同一屏里三套并排，
+    /// 就是"主题 = 一组令牌值"的直观证据）；② 两条推导主题**逐条标着「推导草案」**；
+    /// ③ 强调色那一段**还在**（FR-EDIT-33 的「强调色可配置」没有被静默收掉）。
+    @MainActor
+    func testDesignThemeSwitcher() throws {
+        let host = makeEmptyHost()
+        let size = CGSize(width: 560, height: 700)
+
+        for theme in DesignTheme.all {
+            DesignThemeManager.shared.beginHostTheme(theme)
+            defer { DesignThemeManager.shared.endHostTheme() }
+
+            let pairs = try snapshotLightAndDark(
+                "appearance-design-theme-\(theme.id)",
+                size: size,
+                host: host
+            ) {
+                AppearanceSheet()
+            }
+            XCTAssertEqual(pairs.count, 2, "浅色 / 深色两遍都要拍到")
+            XCTAssertEqual(DesignThemeManager.shared.theme, theme,
+                           "宿主覆盖没生效：面板看到的仍是 \(DesignThemeManager.shared.theme.id)")
+
+            for pair in pairs {
+                XCTAssertEqual(pair.records.count, 2, "\(pair.base)：中英两遍都要在")
+                for (index, language) in UISnapshot.coverageLanguages.enumerated() {
+                    let record = pair.records[index]
+                    // ① 三个主题名都在（列表逐个列出 —— 有一个选不到的话这里当场红）
+                    for candidate in DesignTheme.all {
+                        let label = UISnapshot.localizedText(language) { L(candidate.nameKey) }
+                        XCTAssertTrue(
+                            record.localizedStrings.contains(label),
+                            "\(record.name)：\(record.language) 那遍没有主题名「\(label)」"
+                                + " —— 面板没把三个主题都列出来？"
+                        )
+                    }
+                    // ② 推导主题逐条标注
+                    let draft = UISnapshot.localizedText(language) { L(.appearanceDesignThemeDerived) }
+                    XCTAssertTrue(
+                        record.localizedStrings.contains(draft),
+                        "\(record.name)：\(record.language) 那遍没有「\(draft)」标记"
+                            + " —— 推导值当实际值卖了？"
+                    )
+                    // ③ 强调色那一段还在（不静默收功能）
+                    for accent in AccentTheme.all {
+                        let label = UISnapshot.localizedText(language) { L(accent.nameKey) }
+                        XCTAssertTrue(
+                            record.localizedStrings.contains(label),
+                            "\(record.name)：\(record.language) 那遍少了强调色「\(label)」"
+                                + " —— 加了主题不等于可以删掉已交付的强调色入口"
+                        )
+                    }
+                }
+            }
+        }
+        // 语境进出对称：defer 在本轮作用域结束执行 ⇒ 三遍跑完必须**一处覆盖都不剩**
+        XCTAssertNil(DesignThemeManager.shared.hostOverride,
+                     "宿主语境退出后不该留着覆盖（三遍都该还原成用户选的那个）")
+        XCTAssertEqual(DesignThemeManager.shared.theme, DesignThemeManager.shared.selected,
+                       "宿主语境退出后，生效主题必须回到用户落盘选的那个")
+    }
+
     // MARK: - 清单
 
     override class func tearDown() {
