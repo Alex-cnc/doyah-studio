@@ -35,9 +35,21 @@ final class ObjectTreeMenuConventionTests: XCTestCase {
 
         // ① 菜单内容与作用行都走「那份唯一出处」，且目标必须经 `menuTargetObject`（悬停行 + 兜底）
         //    —— 只看悬停盒子的话，重建补的假 mouseExited 会让菜单变空。
+        // ① 菜单内容与可用性仍只认**一个出处**：SwiftUI 渲染（`ObjectTreeContextMenu.items`，
+        //    探针在渲染它）与 AppKit 渲染（`ObjectTreeAppKitMenu.build`，界面真正弹的那份）
+        //    都必须由 Core 的 `ObjectTreeActions.isAvailable` 决定项的出现与否。
+        let appKitMenu = try source("App/Views/ObjectTreeAppKitMenu.swift")
         XCTAssertTrue(
-            text.contains("ObjectTreeContextMenu.items("),
-            "菜单内容必须走 `ObjectTreeContextMenu.items(`（唯一出处）—— 视图里另写一份就会与判据漂移"
+            appKitMenu.contains("ObjectTreeActions.isAvailable("),
+            "AppKit 那份菜单必须问 Core 的 `ObjectTreeActions.isAvailable` —— 不许另写一套类型判断"
+        )
+        XCTAssertTrue(
+            text.contains("ObjectTreeAppKitMenu.build("),
+            "每一行都要把自己交给 AppKit 菜单构造器（界面真正弹的就是这一份）"
+        )
+        XCTAssertTrue(
+            try source("App/Views/ObjectTreeContextMenu.swift").contains("static func items("),
+            "SwiftUI 那份渲染（探针在用）必须保留 —— 它是菜单内容的可渲染判据"
         )
         // ② 菜单**挂在每一行上**（2026-09-29 需求提出者第三次投诉后的定案），
         //    整树那份"兜底菜单"已删除：它按悬停/上次选中算目标，什么都没选时会弹出一张**错的**菜单
@@ -50,6 +62,10 @@ final class ObjectTreeMenuConventionTests: XCTestCase {
         XCTAssertFalse(
             text.contains("object: menuTargetObject"),
             "不许再有整树兜底菜单 —— 它就是「没选对象时弹出错菜单」的来源"
+        )
+        XCTAssertTrue(
+            try source("App/Views/ObjectTreeRightClick.swift").contains("override func menu(for event: NSEvent) -> NSMenu?"),
+            "捕获器必须自己给出菜单（AppKit 取 superview 链上第一个非 nil 的 menu(for:)）"
         )
         XCTAssertTrue(
             text.contains("ObjectTreeMenuTarget.resolve("),

@@ -14,42 +14,51 @@ import SwiftUI
 /// - `rightMouseDown` 里先选中本行，再 `super.rightMouseDown(with:)`：AppKit 沿视图链往上找
 ///   `menu(for:)`，找到的就是**这一行**的 `.contextMenu`（绝对对得上，不用猜）。
 final class RowRightClickCatcherView: NSView {
-    var onRightClick: ((NSEvent) -> Void)?
     /// 取证用（只在 `DOYAH_TREE_RIGHTCLICK_DEBUG=1` 时写日志）。
     var debugTag: String = "?"
+    /// 右键即选中本行（菜单动作作用于选中项）。
+    var onSelect: (() -> Void)?
+    /// **本行自己的菜单**（由 SwiftUI 侧注入 `ObjectTreeAppKitMenu.build`）。
+    var makeMenu: (() -> NSMenu)?
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         // 只接右键；其余一律放行（返回 nil ⇒ AppKit 继续在下面的兄弟视图里找）。
         NSApp.currentEvent?.type == .rightMouseDown ? self : nil
     }
 
-    override func rightMouseDown(with event: NSEvent) {
-        // 取证：距上一次右键，这一批行一共重算了几次 `body`
-        // （优化前 ≈ 行数（几十次）；优化后 ≈ 真的变了的那一两行）。
+    /// **命中视图自己给出菜单**（2026-09-29 修「右键一个表却弹出断开连接那个菜单」）。
+    ///
+    /// AppKit 弹右键菜单的规则：从命中视图起沿 `superview` 链问 `menu(for:)`，
+    /// **第一个返回非 nil 的胜出**。我们是命中视图 ⇒ 只要这里返回本行的菜单，别人就抢不走
+    /// （原先这里没实现 ⇒ 返回 nil ⇒ 一路问到侧栏连接行那份「断开连接」）。
+    /// 顺带把"右键即选中"也放在这里 —— 它天然发生在菜单弹出**之前**，菜单动作因此作用于本行。
+    override func menu(for event: NSEvent) -> NSMenu? {
         let evaluations = ObjectTreeRowContent.bodyEvaluations
         ObjectTreeRowContent.bodyEvaluations = 0
         ObjectTreeRightClickLog.append("catcher 命中 tag=\(debugTag)｜距上次右键，行 body 重算 \(evaluations) 次")
-        onRightClick?(event)
-        // 沿视图链往上找菜单：SwiftUI 的 `.contextMenu` 挂在"这一行"上 ⇒ 菜单必然对得上这一行。
-        super.rightMouseDown(with: event)
+        onSelect?()
+        return makeMenu?()
     }
 }
 
 /// 挂在**每一行**上的右键捕获器（`overlay`，且只在右键时参与命中）。
 struct RowRightClickCatcher: NSViewRepresentable {
     let tag: String
-    let onRightClick: () -> Void
+    let onSelect: () -> Void
+    let makeMenu: () -> NSMenu
 
     func makeNSView(context: Context) -> RowRightClickCatcherView {
         let view = RowRightClickCatcherView()
         view.debugTag = tag
-        view.onRightClick = { _ in onRightClick() }
+        view.onSelect = onSelect
+        view.makeMenu = makeMenu
         return view
     }
 
     func updateNSView(_ nsView: RowRightClickCatcherView, context: Context) {
         nsView.debugTag = tag
-        nsView.onRightClick = { _ in onRightClick() }
+        nsView.onSelect = onSelect
+        nsView.makeMenu = makeMenu
     }
 }
 

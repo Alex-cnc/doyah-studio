@@ -50,8 +50,10 @@ final class ObjectTreeRowMenuConventionTests: XCTestCase {
     /// 结论：行的归属是 AppKit `hitTest` / `menu(for:)` 的本职，不要自己算。
     func testRightClickIsOwnedByEachRowNotByCoordinates() throws {
         let view = try source("App/Views/ObjectTreeView.swift")
-        XCTAssertTrue(view.contains("RowRightClickCatcher(tag: row.id)"),
+        XCTAssertTrue(view.contains("RowRightClickCatcher("),
                       "每一行都要挂自己的右键捕获器")
+        XCTAssertTrue(view.contains("ObjectTreeAppKitMenu.build("),
+                      "捕获器要注入按本行对象现建的 AppKit 菜单（`ObjectTreeAppKitMenu.build`）")
         XCTAssertTrue(view.contains("appState.selectTreeObject(row.object)"),
                       "捕获到右键就把那一行设为选中")
         XCTAssertFalse(view.contains("RightClickRowSelector("),
@@ -61,8 +63,10 @@ final class ObjectTreeRowMenuConventionTests: XCTestCase {
         XCTAssertTrue(helper.contains("override func hitTest"), "用 hitTest 精确控制「只接右键」")
         XCTAssertTrue(helper.contains("NSApp.currentEvent?.type == .rightMouseDown ? self : nil"),
                       "只认右键；左键必须返回 nil 放行给 SwiftUI，否则行选择与展开箭头全被挡")
-        XCTAssertTrue(helper.contains("super.rightMouseDown(with: event)"),
-                      "选完必须交还系统：AppKit 沿视图链找到的菜单就是这一行的 .contextMenu")
+        XCTAssertTrue(helper.contains("override func menu(for event: NSEvent) -> NSMenu?"),
+                      "命中视图必须**自己实现 menu(for:)** —— 否则 AppKit 会问到侧栏连接行那份「断开连接」")
+        XCTAssertTrue(helper.contains("return makeMenu?()"),
+                      "menu(for:) 必须返回本行的 NSMenu（不是 nil、也不是别人的）")
         XCTAssertTrue(helper.contains("DOYAH_TREE_RIGHTCLICK_DEBUG"), "无界面权限时的取证口子")
     }
     /// **行级跳过重算**（队列 `L-90` 未完成的那半，2026-09-29 需求提出者选定「B：彻底根治」）。

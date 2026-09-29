@@ -101,24 +101,23 @@ struct ObjectTreeView: View {
                         // 记录决定，而 `onHover` 会在整树重算（选中态一变就重算）后被 SwiftUI 补一个
                         // 假的 `mouseExited` 清掉。行级菜单把这个不确定来源整个绕开。
                         rowView(row)
-                            // **每一行自己接右键**（不碰坐标）：先选中本行，再把事件交还系统弹菜单。
+                            // **每一行自己接右键**（不碰坐标），并且**自己给出菜单**：
+                            // 先选中本行，再交出 `ObjectTreeAppKitMenu` 按本行对象现建的 `NSMenu`。
+                            // 菜单必须由命中视图给出 —— AppKit 沿 superview 链取第一个非 nil 的
+                            // `menu(for:)`，我们把菜单挂在下层时，它会被侧栏那份「断开连接」抢走
+                            // （2026-09-29 需求提出者实测）。
                             .overlay(
-                                RowRightClickCatcher(tag: row.id) {
-                                    appState.selectTreeObject(row.object)
-                                }
-                                // 菜单挂到**这一行最深的视图**上（右键真正命中的那个 overlay 视图）：
-                                // AppKit 弹菜单时只问"命中视图及其祖先"，挂在这里找到的必然是这一行的菜单。
-                                // 挂在行容器上会被 `List`（树住在 `ConnectionListView` 的 sidebar List 里）
-                                // 提升/合并 ⇒ AppKit 只认找到的那一个 ⇒ 表现就是"**菜单都错了**"
-                                // （2026-09-29 需求提出者实测；同一机制 2026-09-28 已记档为
-                                //  "按 List 行解析右键菜单、只会用找到的第一个"）。
-                                .contextMenu {
-                                    ObjectTreeContextMenu.items(
-                                        object: row.object,
-                                        appState: appState,
-                                        onEdit: onEdit
-                                    )
-                                }
+                                RowRightClickCatcher(
+                                    tag: row.id,
+                                    onSelect: { appState.selectTreeObject(row.object) },
+                                    makeMenu: {
+                                        ObjectTreeAppKitMenu.build(
+                                            object: row.object,
+                                            appState: appState,
+                                            onEdit: onEdit
+                                        )
+                                    }
+                                )
                             )
                     }
                 }
