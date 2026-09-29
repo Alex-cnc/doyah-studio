@@ -800,6 +800,24 @@ enum UISnapshot {
             }
         }
 
+        /// 泵固定时长 —— **让出主 actor** 的异步版本。
+        ///
+        /// 与上面那个同步 `pump(_:)`（`RunLoop.run`）的区别是**实打实的**，不是风格问题：
+        /// `RunLoop.run` 泵着的期间，「从别的线程跳回主 actor」的续体**落不了地** ——
+        /// 真库首连（`ensureService`）、建库权限探测、元数据往返都会**卡在那里不返回**
+        /// （第 101 轮实测把它误判成「整棵对象树在离屏宿主里做不到」，于是那一格被登记为「没有机器判据」；
+        /// 第 106 轮用这个 `Task.sleep` 版泵循环定位清楚：树**能**在活宿主里加载出来）。
+        ///
+        /// 所以口径是：**等真异步（数据库 / 网络往返）用这个；只等一次重排/重绘再用同步那个。**
+        func pumpAsync(seconds: Double, interval: Double = 0.05) async {
+            let deadline = Date().addingTimeInterval(seconds)
+            while Date() < deadline {
+                settle()
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            }
+            settle()
+        }
+
         /// 这一次渲染的**内容指纹**（PNG 字节的 SHA256）。
         ///
         /// 用途：判「两档是不是真的画成了两个样子」时，不必落两份盘再比像素 —— 比指纹更快。

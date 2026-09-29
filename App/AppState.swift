@@ -250,6 +250,15 @@ final class AppState: ObservableObject {
 
     /// 对象树刷新令牌：新建数据库等操作后自增，驱动的视图重新加载根节点。
     @Published var metadataRevision = 0
+
+    /// 「同一次刷新只许有一次在途」（队列 `L-96`）—— 根节点刷新的闸门。
+    ///
+    /// **为什么住在 `AppState` 上、不是视图的 `@State`**：视图被销毁重建时（`List` / `Section`
+    /// 重建等）`@State` 会归零，而 `RefreshKey`（连接 + 元数据版本）**一字不变** —— 闸门必须比
+    /// 视图活得久，新起来的那个实例才有东西可并；否则两次刷新就是各查一遍库。
+    ///
+    /// **不是 `@Published`**：写它**不该**触发一次重绘（它不参与画面）。
+    let objectTreeRefreshGate = ObjectTreeRefreshGate()
     /// 当前查询目标数据库（上下文栏选择）。
     @Published var selectedDatabase: String?
     /// 当前服务器上当前用户可连接的数据库列表。

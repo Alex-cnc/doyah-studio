@@ -95,10 +95,13 @@ set -euo pipefail
 # ③ 选中项是**树里的同一个 id** ⇒ 两种行集合里都找得到那一行（「切换不丢选中」的模型侧）。
 # 序列 / 函数 / 「其他」三个桶用**合成夹具**补（PG 的 schema 子节点只有表与视图两类）。
 #
-# **如实登记的边界**：先试过「整棵 `ObjectTreeView` + 真库 + 真点击」那条更狠的路，**做不到**
-# —— 真对象树在离屏宿主里始终停在加载分支（画面近空白、工具条不在视图树里），而 `.task` 的异步
-# 本身是好的（临时诊断两条都绿、`AppState` 那条路也回得来）。于是「在真树上点一下、看选中高亮不丢」
-# 这一格**没有**机器判据，只到模型 + 工具栏粒度；`L-89` ㈡ 的开发记录里如实写了这条与复现证据。
+# **边界（口径已于第 106 轮改正）**：先试过「整棵 `ObjectTreeView` + 真库 + 真点击」那条更狠的路，
+# 当时判成「做不到」（真对象树在离屏宿主里始终停在加载分支、工具条不在视图树里）。**第 106 轮（队列
+# `L-96`）把根因定死了**：不是树渲染不了，是那批用的**泵循环**（`RunLoop.run`）让「从别的线程跳回主
+# actor」的续体落不了地 —— 真库首连（`ensureService`）卡在那里 8 秒没有下一行；换
+# `UISnapshot.LiveHost.pumpAsync`（`Task.sleep` 让出主 actor）之后，整棵树在活宿主里**正常加载出来**
+# （第十二批就是这么判的）。所以本批这条边界现在只剩：**「在真树上点一下、切换后看选中高亮不丢」**
+# 仍是人工点验（切换不丢选中已由模型侧 + 工具栏侧判住），**不再是「整棵树判不了」**。
 # 本批同样要真集群（下面第八批那段建临时库并注入 `DOYAH_PROBE_PGGROUP` 等），
 # 并且**证据文件会被核对**；源锚点另判三条：行模型是纯函数（不 import 驱动、不碰 `AppState`、不调 `loadMetadata*`）、视图里那台开关两档齐备、**以及视图那条调用点真的把这一台开关传给了模型**。最后这条是**注入实测逼出来的**：把 `groupByType: groupByType` 写死成 `false` 时，模型那一批与工具栏那一批**照样全绿**（探针只从两头取数、不经过那条调用点）—— 判据的覆盖面里当时缺着「模型与工具栏之间那根线」。
 #
@@ -166,6 +169,25 @@ set -euo pipefail
 # **不声称覆盖**：真实例上的认证 / 类型 / 多版本窗口（归 `Scripts/test-mysql-real.sh`，217）。
 # 本批由脚本起假服务器并把地址经 `DOYAH_PROBE_MYSQL_*` 注入，证据文件同样**会被核对**（跳过 ≠ 通过）。
 #
+# ## 第十二批（队列 L-96，第 106 轮）：同一次刷新被连唤两次 / `reloadRoot` 重入
+#
+# `TestsUISnapshot/ObjectTreeRefreshProbeTests.swift` 判两件事（真库 + 真渲染 + 真 `ObjectTreeView`）：
+#   ① **整棵树在活宿主里真加载出来**：数据分支在场（那台「层级 / 分组」开关**只在「已加载」那一支里**
+#      画得出来）、加载分支退场（「正在加载对象…」不许还在画面上）、画面里真有那棵树
+#      （与「同一条连接指向一个不存在的库」那个失败态对照宿主比，视图树节点数必须多出来）。
+#      **这一格原来是「做不到」**（第 101 轮如实登记）——第 106 轮定位到根上：不是树渲染不了，
+#      是当时的泵循环用 `RunLoop.run`，期间「从别的线程跳回主 actor」的续体落不了地，
+#      真库**首连**就卡在那里不返回；换 `UISnapshot.LiveHost.pumpAsync`（`Task.sleep` 让出主 actor）
+#      之后树**正常加载出来**（那条入口的注释里也记着这条）。
+#   ② **同一把刷新键下的重入**：让子树在**上一发还在途**时消失再出现（同一连接、同一元数据版本 ⇒
+#      刷新键一字不变）⇒ ① 的结论照样成立（树不许留在加载态、不许掉成空树），且闸门收尾之后
+#      `inFlightCount == 0`（没有把键漏在在途表里）。
+#   **边界（如实登记）**：行内文字**读不出来**（SwiftUI 的行 `Text` 不落在 `NSTextField` /
+#      `NSTextView` / `NSButton` 上 —— 实测这台宿主里只读得到分段选择器的两档标签）⇒ 判到
+#      「树进了已加载那一支、画面里真有东西」，**判不到**「某个表名在第几行」（要判名字得走 AX 或像素）。
+#   本批用第八批那个真库（`DOYAH_PROBE_PGGROUP`），证据文件同样**会被核对**（跳过 ≠ 通过）；
+#   闸门的接线另判源锚点（见下面「刷新重入那两条」那一段）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -193,7 +215,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `MySQLFormProbeTests`（㈡ ⑩：MySQL 表单联动 —— 换方言当场换端口与 SSL 清单（真点那台下拉）
 #   ＋ 对象树四层（服务器 → Database → Table → Column，没有 schema 层）＋ 能查到数据）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -599,6 +621,112 @@ if failures:
         print(f"✗ {item}")
     sys.exit(1)
 print("✓ 分组只有一处来源（ObjectTreeRows）；行模型没有任何取数能力；开关两档齐备且接的是视图那一个 @State")
+PY
+
+echo
+echo "==> 刷新重入那两条：证据核对（跳过 ≠ 通过）+ 源锚点（生产路径真的过闸门）"
+python3 - "${OUT_PLAIN}" "${OUT_SANDBOX}" "${ROOT}" <<'PY'
+import json
+import os
+import re
+import sys
+
+plain, sandbox, root = sys.argv[1], sys.argv[2], sys.argv[3]
+failures = []
+
+
+def load(directory, case):
+    path = os.path.join(directory, "object-tree-refresh-evidence-%s.json" % case)
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+for directory in (plain, sandbox):
+    base = os.path.basename(directory)
+
+    tree = load(directory, "wholeTree")
+    if tree is None:
+        failures.append("%s：没有 wholeTree 的证据文件 —— 探针没真跑（跳过不算通过）" % base)
+    else:
+        if tree.get("toolbarPresent") is not True:
+            failures.append("%s/wholeTree：整棵树没进到「已加载」那一支" % base)
+        if tree.get("controlToolbarPresent") is not False:
+            failures.append(
+                "%s/wholeTree：对照宿主（不存在的库）里也有那台开关 —— 「开关在场」这个信号认不出失败态" % base
+            )
+        if tree.get("loadingTextPresent") is not False:
+            failures.append("%s/wholeTree：加载态没收干净（「正在加载对象…」还在画面上）" % base)
+        nodes, control = tree.get("nodesLoaded"), tree.get("nodesControl")
+        if not (isinstance(nodes, int) and isinstance(control, int) and nodes > control):
+            failures.append("%s/wholeTree：真库那棵树不比失败态多（%s vs %s）" % (base, nodes, control))
+        if tree.get("inFlightAfterSettle") != 0:
+            failures.append(
+                "%s/wholeTree：收尾之后还有键留在在途表里（%s）" % (base, tree.get("inFlightAfterSettle"))
+            )
+
+    reentry = load(directory, "reentry")
+    if reentry is None:
+        failures.append("%s：没有 reentry 的证据文件 —— 重入那条没跑（跳过不算通过）" % base)
+    else:
+        if reentry.get("toolbarAfterReentry") is not True:
+            failures.append("%s/reentry：重入之后树没回到「已加载」那一支" % base)
+        if reentry.get("loadingTextAfterReentry") is not False:
+            failures.append("%s/reentry：重入之后加载态没收干净" % base)
+        if reentry.get("inFlightAfterSettle") != 0:
+            failures.append("%s/reentry：重入之后还有键留在在途表里" % base)
+
+
+def source(relative):
+    with open(os.path.join(root, relative), encoding="utf-8") as handle:
+        return handle.read()
+
+
+def code_only(text):
+    """只看代码，不看注释 —— 注释里写「不许各拼一份」这句话本身不该被判红。"""
+    return "\n".join(line for line in text.split("\n") if not line.strip().startswith("//"))
+
+
+view = code_only(source("App/Views/ObjectTreeView.swift"))
+appstate = code_only(source("App/AppState.swift"))
+gate = code_only(source("Core/ObjectTreeRefreshGate.swift"))
+
+# ① 生产路径真的过闸门（抽了闸门而没人用 = 没抽，第 101 轮的教训）
+if "objectTreeRefreshGate.roots(" not in view:
+    failures.append("ObjectTreeView 取根节点没走闸门 —— 同一次刷新又会各查一遍库")
+# ② 闸门里那一次取数仍然是产品那条路（判据里不许另开一条取数口径）
+if "try await appState.loadMetadataRoot()" not in view:
+    failures.append("闸门里那一次取数不再是 AppState.loadMetadataRoot() —— 取数口径出现了第二处")
+# ③ 刷新键**只有一份**：视图里 `.task(id:)` 与闸门都必须是 ObjectTreeRefreshKey（连接 + 元数据版本）
+if "ObjectTreeRefreshKey(" not in view:
+    failures.append("ObjectTreeView 没有用 ObjectTreeRefreshKey —— 刷新键又变成各写一份")
+elif len(re.findall(r"ObjectTreeRefreshKey\(", view)) < 2:
+    failures.append("ObjectTreeView 里刷新键只出现一次 —— .task(id:) 与闸门用的不是同一把键")
+if not re.search(r"revision:\s*appState\.metadataRevision", view):
+    failures.append("刷新键里没有元数据版本 —— 「同一次刷新」判不准")
+if "struct RefreshKey" in view:
+    failures.append("ObjectTreeView 里又出现了私有的 RefreshKey —— 同一把键两个真值来源")
+# ④ 闸门住在 AppState（长命对象）上：视图销毁重建时 @State 会归零，闸门必须比它活得久
+if "let objectTreeRefreshGate = ObjectTreeRefreshGate()" not in appstate:
+    failures.append("闸门没挂在 AppState 上 —— 视图重建之后新实例没得可并（重入还是两次取数）")
+if "@State private var objectTreeRefreshGate" in view:
+    failures.append("闸门挂在视图的 @State 上 —— 视图重建会把它清零")
+# ⑤ 闸门下的取数**不受调用方取消影响** ⇒ 调用方必须自己问一句，否则切连接会把旧连接的数据糊上树
+if "guard !Task.isCancelled" not in view:
+    failures.append("取数回来没有问 Task.isCancelled —— 被取消的那一发会把上一个连接的数据写进树")
+# ⑥ 闸门本身不许退化：收尾必须挂在**这一发自己**身上（否则键会永久留在在途表里）
+if "defer { inFlight[key] = nil }" not in gate:
+    failures.append("ObjectTreeRefreshGate 收尾没挂在那一发自己身上 —— 键可能永远留在在途表里")
+if "inFlightCount" not in gate:
+    failures.append("ObjectTreeRefreshGate 没有 inFlightCount —— 判据读不到「还在途几个键」")
+
+if failures:
+    for item in failures:
+        print("✗ %s" % item)
+    sys.exit(1)
+print("✓ 两遍都真跑过：整棵树在活宿主里真加载出来（对照宿主认得出失败态）／重入之后照样「已加载」且没漏键")
+print("✓ 源锚点：生产路径过闸门 / 取数仍是那条路 / 刷新键只有一份 / 闸门挂在长命对象上 / 取消那一发不许写状态")
 PY
 
 echo

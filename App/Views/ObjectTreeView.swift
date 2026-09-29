@@ -50,12 +50,6 @@ struct ObjectTreeView: View {
     /// 是否按类型分组显示（FR-META-15）。切换只重新聚合缓存，不重新查库。
     @State private var groupByType = false
 
-    /// 对象树刷新键：连接变化或「新建数据库」等操作后重新加载根节点（FR-META-11）。
-    private struct RefreshKey: Hashable {
-        let connectionID: UUID?
-        let revision: Int
-    }
-
     var body: some View {
         Group {
             if appState.selectedConnection == nil {
@@ -113,7 +107,7 @@ struct ObjectTreeView: View {
         // 而下面 `.task(id:)` 已经会在连接变化时调 `reloadRoot()`，
         // 由它负责把缓存与展开状态清干净，效果一样但不会整块重建。
         .task(
-            id: RefreshKey(
+            id: ObjectTreeRefreshKey(
                 connectionID: appState.selectedConnectionID,
                 revision: appState.metadataRevision
             )
@@ -598,7 +592,23 @@ struct ObjectTreeView: View {
         do {
             // 先把新数据取回来，**再**清缓存与展开状态：否则请求往返期间树会先空掉一次，
             // 那也是一次可见的闪。
-            let newRoots = try await appState.loadMetadataRoot()
+            //
+            // **同一次刷新只许有一次在途**（队列 `L-96`）：这一发过闸门，键 = 连接 + 元数据版本，
+            // 与上面 `.task(id:)` 的 id 是**同一个类型、同一份取值**（不各拼一份）。
+            // 同键之下第二个来者（刷新按钮连点 / 重试按钮 / 视图重建后 `.task` 再跑一遍）
+            // **并到这一发上**，不再各查一遍库、也不会两份结果抢着落地。
+            let newRoots = try await appState.objectTreeRefreshGate.roots(
+                for: ObjectTreeRefreshKey(
+                    connectionID: appState.selectedConnectionID,
+                    revision: appState.metadataRevision
+                )
+            ) {
+                try await appState.loadMetadataRoot()
+            }
+            // 被取消的那一发**不许再写状态**：闸门下这一发的取数**不受调用方取消影响**
+            // （那一发可能正被并上来的新实例用着），所以这里要自己问一句 ——
+            // 否则切连接时上一个连接的数据会糊到眼前的树上。
+            guard !Task.isCancelled else { return }
             roots = newRoots
             loaded = newRoots
             // **与这份数据同时记下方言**：后面所有文案（空态等）只认它，
