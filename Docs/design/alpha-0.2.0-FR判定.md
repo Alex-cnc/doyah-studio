@@ -1,6 +1,6 @@
 # `v0.2.0-alpha` 范围账 —— FR 🟡 逐条判定
 
-> **这份文件是什么**：`python3 Scripts/report-requirements.py` 盘点出的 **FR 🟡 49 条**，
+> **这份文件是什么**：`python3 Scripts/report-requirements.py` 盘点出的 **FR 🟡 48 条**，
 > 逐条给出「这条算不算 `v0.2.0-alpha` 的范围」的判定与理由。发布说明（仓根
 > `RELEASE-0.2.0-alpha.md` / `Docs/alpha-0.2.0-发布说明.md`）的「明确不做什么」一节**直接引用本表**，
 > 不再另抄一份。
@@ -18,15 +18,15 @@
 
 | 档位 | 条数 | 含义 |
 |---|---|---|
-| `ui-click` | **34** | 界面点击 / 观感只能人工 |
+| `ui-click` | **33** | 界面点击 / 观感只能人工 |
 | `environment` | **6** | 本机物理不可能 |
 | `device-instance` | **6** | 需真机 / 外部实例 / 外部软件（`FR-IO-04` 2026-09-29 由 `needs-decision` 转入 —— 拍板已下，残项只剩 217 专用库的真实还原） |
 | `not-implemented` | **2** | 本 alpha 明确不含的未做功能 |
 | `needs-decision` | **0** | 等需求提出者拍板（唯一那条 `FR-IO-04` 于 2026-09-29 拍板「改非沙箱」后转入 `device-instance`） |
 | `open-defect` | **1** | 点验发现的缺陷（已开队列条） |
-| **合计** | **49** | = FR 🟡 49 条（`FR-DRV-09` 已 ✅，不在其中；`FR-EXEC-15` / `FR-EXEC-17` / `FR-DDL-05` 2026-09-28 销账）|
+| **合计** | **48** | = FR 🟡 48 条（`FR-DRV-09` 已 ✅，不在其中；`FR-EXEC-15` / `FR-EXEC-17` / `FR-DDL-05` / `FR-DATA-04` 2026-09-28 ~ 09-29 销账）|
 
-> **2026-09-28 销账**：**`FR-EXEC-15`（事务回滚 / 提交）、`FR-EXEC-17`（参数绑定的注入面）与 `FR-DDL-05`（ER 图面板观感）人工点验通过**（SRS **v3.268 / v3.269 / v3.270** 已由 🟡 转 ✅）⇒ 从本表与 `Scripts/alpha-fr-dispositions.json` 里**删除**（销账，不留陈旧条目）。本表 49 条、非环境 **44** 条；判据 `check-alpha-fr-dispositions.py` 会替我们把这件事判住（「修好了要销账」）。
+> **2026-09-28 销账**：**`FR-EXEC-15`（事务回滚 / 提交）、`FR-EXEC-17`（参数绑定的注入面）与 `FR-DDL-05`（ER 图面板观感）人工点验通过**（SRS **v3.268 / v3.269 / v3.270** 已由 🟡 转 ✅）⇒ 从本表与 `Scripts/alpha-fr-dispositions.json` 里**删除**（销账，不留陈旧条目）。本表 48 条、非环境 **43** 条；**2026-09-29 又销 `FR-DATA-04`**（结果集内联编辑，人工点验「过」）—— 合计 49 → 48、`ui-click` 34 → 33、非环境 44 → 43。判据 `check-alpha-fr-dispositions.py` 会替我们把这件事判住（「修好了要销账」）。
 
 > **如实记一处数字纠正**：队列 **L-69** 原文写「**46** 条非环境 🟡」—— 那是 52 − 6（含当时已 ✅ 的
 > `FR-DRV-09`）；按 🟡 实况算，带 `[alpha 不含]` 的只有 **5** 条 ⇒ **非环境 47 条**。本轮按实测走 **47**。
@@ -51,7 +51,6 @@
 | **FR-CONN-15** | 3.1 连接与凭据 | 2026-09-27 点验未过：折叠状态活不过一次活动栏切换，已开队列 L-59，修完复验 | `open-defect` | `Scripts/test-connection-groups.sh` |
 | **FR-CONN-18** | 3.1 连接与凭据 | 仅剩真跳板机的真实握手待环境（「沙箱下不能起 ssh」2026-09-29 随拍板消解：默认构建即非沙箱） | `environment` | `Scripts/test-ssh-tunnel.sh` |
 | **FR-DATA-02** | 3.5 数据编辑与写回 | 界面呈现待人工点验 | `ui-click` | `Scripts/test-table-structure.sh` |
-| **FR-DATA-04** | 3.5 数据编辑与写回 | 界面点击待人工点验 | `ui-click` | `Scripts/test-inline-edit.sh` |
 | **FR-DATA-05** | 3.5 数据编辑与写回 | 界面点击待人工点验 | `ui-click` | `Scripts/test-row-detail.sh` |
 | **FR-DATA-06** | 3.5 数据编辑与写回 | 界面点击待人工点验 | `ui-click` | `Scripts/test-fk-navigation.sh` |
 | **FR-DDL-03** | 3.6 表结构与 DDL | 界面呈现待人工点验 | `ui-click` | `Scripts/test-table-index-fk.sh` |

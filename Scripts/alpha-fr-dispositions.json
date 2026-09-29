@@ -165,19 +165,6 @@
       ]
     },
     {
-      "id": "FR-DATA-04",
-      "domain": "3.5 数据编辑与写回",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-inline-edit.sh"
-        }
-      ]
-    },
-    {
       "id": "FR-DATA-05",
       "domain": "3.5 数据编辑与写回",
       "reason": "ui-click",
