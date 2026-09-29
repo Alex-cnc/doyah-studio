@@ -292,6 +292,115 @@ extension TerminalTabsTests {
         XCTAssertEqual(tabs.count, 1)
     }
 
+    func testCloseAfterConfirmationActuallyCloses() {
+        var tabs = TerminalTabs(shellPath: shell)
+        _ = tabs.newTab(foregroundProcess: "/usr/local/bin/psql")
+        let id = tabs.activeID
+        // 没确认：一个字节都不动
+        XCTAssertFalse(tabs.close(id: id))
+        XCTAssertNotNil(tabs.tab(id: id))
+        // 确认过：**真的关** —— 这一条是「点了『关闭页签』却没反应」那个坑的回归钉
+        // （第 82 轮 App 侧探针先撞上它：`confirmClose()` 再走一次判定被挡回来）。
+        XCTAssertTrue(tabs.close(id: id, force: true))
+        XCTAssertNil(tabs.tab(id: id))
+        XCTAssertEqual(tabs.count, 1)
+    }
+
+    func testCloseForceStillRefusesTheLastTab() {
+        var tabs = TerminalTabs(shellPath: shell)
+        // 唯一一个页签、前台还挂着程序：**确认过也关不掉**（关掉它面板就成了空壳，
+        // 「收起终端」另有入口）。force 不是万能钥匙。
+        _ = tabs.setForegroundProcess("/usr/local/bin/psql", for: 1)
+        let before = tabs
+        XCTAssertFalse(tabs.close(id: 1, force: true))
+        XCTAssertEqual(tabs, before)
+    }
+
+    // MARK: - 按键 → 动作（㈡ 的界面把这一套判定当唯一入口）
+
+    func testCommandNewAndCloseTabs() {
+        XCTAssertEqual(TerminalTabs.command(key: "t", command: true, shift: false), .newTab)
+        XCTAssertEqual(TerminalTabs.command(key: "w", command: true, shift: false), .closeTab)
+    }
+
+    func testCommandAcceptsShiftedBracketsAsWellAsPlainOnes() {
+        // **真坑**：`charactersIgnoringModifiers` 会把 ⇧ 一起作用到字符上 —— 美式键盘上
+        // ⇧⌘[ 拿到的是 `{`。只认 `[` 的话「上一个页签」这个键**永远不会触发**，
+        // 而症状看起来像「快捷键没生效」，极难归因。
+        XCTAssertEqual(TerminalTabs.command(key: "[", command: true, shift: true), .previousTab)
+        XCTAssertEqual(TerminalTabs.command(key: "{", command: true, shift: true), .previousTab)
+        XCTAssertEqual(TerminalTabs.command(key: "]", command: true, shift: true), .nextTab)
+        XCTAssertEqual(TerminalTabs.command(key: "}", command: true, shift: true), .nextTab)
+    }
+
+    func testCommandSelectsNumberedTabsOneThroughNine() {
+        XCTAssertEqual(TerminalTabs.command(key: "1", command: true, shift: false), .selectTab(number: 1))
+        XCTAssertEqual(TerminalTabs.command(key: "9", command: true, shift: false), .selectTab(number: 9))
+        // ⌘0 不动（不是「第 10 个」），方向键一类的字符也认不出来。
+        XCTAssertNil(TerminalTabs.command(key: "0", command: true, shift: false))
+        XCTAssertNil(TerminalTabs.command(key: "\u{F701}", command: true, shift: false))
+    }
+
+    func testCommandRefusesOptionControlAndShiftedLetters() {
+        // ⌥ / ⌃ 参与就不认：⌥ 是终端里「把鼠标还给本机」那一族，⌃W 要**原样发给 shell** 删词。
+        XCTAssertNil(TerminalTabs.command(key: "t", command: true, shift: false, option: true))
+        XCTAssertNil(TerminalTabs.command(key: "w", command: true, shift: false, control: true))
+        // 没按 ⌘ 的普通字母不是页签动作。
+        XCTAssertNil(TerminalTabs.command(key: "t", command: false, shift: false))
+        XCTAssertNil(TerminalTabs.command(key: "w", command: false, shift: false))
+        // ⇧ + 其它键不许被页签偷走（⇧⌘T 已经归「数据任务」）。
+        XCTAssertNil(TerminalTabs.command(key: "t", command: true, shift: true))
+        XCTAssertNil(TerminalTabs.command(key: "w", command: true, shift: true))
+        XCTAssertNil(TerminalTabs.command(key: "1", command: true, shift: true))
+    }
+
+    func testPerformNewTabInsertsRightOfActive() {
+        var tabs = TerminalTabs(shellPath: shell)
+        _ = tabs.newTab()
+        _ = tabs.select(numbered: 1)
+        XCTAssertTrue(tabs.perform(.newTab))
+        // 新页签插在**当前**（第 1 个）右侧 —— 与 Core 的 `newTab()` 同一口径。
+        XCTAssertEqual(tabs.ids, [1, 3, 2])
+        XCTAssertEqual(tabs.activeID, 3)
+    }
+
+    func testPerformCloseTabRefusesTheLastOne() {
+        var tabs = TerminalTabs(shellPath: shell)
+        XCTAssertFalse(tabs.perform(.closeTab))
+        XCTAssertEqual(tabs.count, 1)
+    }
+
+    func testPerformCloseTabWaitsForConfirmationWhenProgramIsRunning() {
+        var tabs = TerminalTabs(shellPath: shell)
+        _ = tabs.newTab(foregroundProcess: "/usr/local/bin/psql")
+        XCTAssertEqual(tabs.closeDecision(for: tabs.activeID), .needsConfirmation)
+        let before = tabs
+        // `perform` **只做判定已经允许的那一步**：要确认的关闭它什么都不做（问一句是界面的事）。
+        XCTAssertFalse(tabs.perform(.closeTab))
+        XCTAssertEqual(tabs, before)
+    }
+
+    func testPerformSelectTabOutOfRangeChangesNothing() {
+        var tabs = TerminalTabs(shellPath: shell)
+        _ = tabs.newTab()
+        let before = tabs
+        XCTAssertFalse(tabs.perform(.selectTab(number: 5)))
+        XCTAssertEqual(tabs, before)
+        XCTAssertTrue(tabs.perform(.selectTab(number: 1)))
+        XCTAssertEqual(tabs.activeID, 1)
+    }
+
+    func testPerformNextAndPreviousWrapAround() {
+        var tabs = TerminalTabs(shellPath: shell)
+        _ = tabs.newTab()
+        _ = tabs.newTab()
+        XCTAssertEqual(tabs.ids, [1, 2, 3])
+        XCTAssertTrue(tabs.perform(.nextTab))
+        XCTAssertEqual(tabs.activeID, 1)          // 3 → 环绕到 1
+        XCTAssertTrue(tabs.perform(.previousTab))
+        XCTAssertEqual(tabs.activeID, 3)          // 1 → 环绕到 3
+    }
+
     // MARK: - 值语义
 
     func testTabsValueSemanticsKeepCopiesIndependent() {

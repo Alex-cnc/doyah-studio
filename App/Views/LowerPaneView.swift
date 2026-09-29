@@ -42,6 +42,37 @@ struct LowerPaneView: View {
         // 也不要写死一个高度 —— 字号 / 语言变了它会自己跟着变。
         .fixedSize(horizontal: false, vertical: isCollapsed)
         .background(.background)
+        // 关页签前的**二次确认**（L-84 ㈡ 口径④）：前台还有别的程序在跑时先问一句。
+        // 为什么挂在**这一层**而不是页签头上：折叠态 / 最大化时页签条可能不在视线里，
+        // 而弹窗必须跟着命令走（判定在 Core 的 `closeDecision`，这里只负责问）。
+        .alert(
+            L(.terminalTabCloseConfirmTitle),
+            isPresented: Binding(
+                get: { terminal.pendingCloseTab != nil },
+                set: { if !$0 { terminal.cancelClose() } }
+            )
+        ) {
+            Button(L(.terminalTabCloseConfirmAction), role: .destructive) { terminal.confirmClose() }
+            Button(L(.commonCancel), role: .cancel) { terminal.cancelClose() }
+        } message: {
+            Text(L(.terminalTabCloseConfirmMessage))
+        }
+        // 双击页签头 → 重命名（空着确定 = 清掉重命名，标题回落到前台进程名 —— 口径在 Core）。
+        .alert(
+            L(.terminalTabRename),
+            isPresented: Binding(
+                get: { terminal.renamingTab != nil },
+                set: { if !$0 { terminal.renamingTab = nil } }
+            )
+        ) {
+            TextField(L(.terminalTabRename), text: $terminal.renameDraft)
+            Button(L(.commonOk)) {
+                if let id = terminal.renamingTab { terminal.rename(id: id, to: terminal.renameDraft) }
+            }
+            Button(L(.commonCancel), role: .cancel) { terminal.renamingTab = nil }
+        } message: {
+            Text(L(.terminalTabRenameMessage))
+        }
         // 终端**不在这里启动**：`onAppear` 时视图还没布局，只能拿模型默认的 80×24，
         // 于是全屏 TUI 的第一帧就按错的列数排（`dsh-tui` 的 13×40 欢迎鲸鱼会挤在一起）。
         // 启动挪到 `TerminalHostView.layout()`，那里拿得到真实几何。
@@ -55,6 +86,15 @@ struct LowerPaneView: View {
                 tabButton(item)
             }
 
+            if appState.lowerPaneTab == .terminal {
+                // 终端多会话（L-84 ㈡）：**页签头落在工具条左侧** ——
+                // 四个下方面板页签之后、右侧那排按钮之前。
+                // 需求原话（2026-09-29）：「其顶部工具条右侧是常见操作按钮，但**左侧应该是空白，
+                // 可以实现 tab 头切换**，支持多 terminal 操作」⇒ 右侧那排按钮**一概不动**。
+                Divider().frame(maxHeight: 14).padding(.horizontal, Spacing.xs)
+                TerminalTabsBar(terminal: terminal)
+            }
+
             Spacer(minLength: 8)
 
             if appState.lowerPaneTab == .problem || appState.lowerPaneTab == .output {
@@ -64,21 +104,28 @@ struct LowerPaneView: View {
             }
 
             if appState.lowerPaneTab == .terminal {
-                if !terminal.isRunning {
-                    Text(L(.terminalStopped))
+                // 「这一步做不了」的说法（当前只有一种：**最后一个页签不许关**）。
+                // 为什么要有这一行：⌘W 在最后一个页签上什么都不会发生 —— 静默无反应会被读成
+                // 「这个软件的 ⌘W 坏了」（Core 只给枚举理由，人话在这里）。
+                if let refusalHint = terminal.refusalHint {
+                    Text(refusalHint)
                         .font(Theme.font(.caption))
                         .foregroundStyle(Theme.status(.warning))
-                        .padding(.trailing, 4)
-                }
-                if let errorText = terminal.errorText {
-                    Text(errorText)
-                        .font(Theme.font(.caption))
-                        .foregroundStyle(Theme.status(.danger))
                         .lineLimit(1)
-                        .padding(.trailing, 4)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 320, alignment: .trailing)
+                        .help(refusalHint)
                 }
+                // 当前页签的「已停止 / 出错」两行小字。观察的是 **pane 自己**（会话级的
+                // @Published），所以拆成一个小视图 —— 协调器不必把每个页签的字段都镜像一遍。
+                TerminalPaneStatus(pane: terminal.activePane)
                 iconButton("arrow.clockwise", help: L(.terminalRestart)) {
-                    terminal.restart(columns: terminal.screen.columns, rows: terminal.screen.rows)
+                    // **作用在当前页签上**：多会话之后「重启」不再指向唯一那个终端。
+                    terminal.restart(
+                        id: terminal.tabs.activeID,
+                        columns: terminal.activePane.screen.columns,
+                        rows: terminal.activePane.screen.rows
+                    )
                 }
             }
 
@@ -177,12 +224,18 @@ struct LowerPaneView: View {
 
         case .terminal:
             VStack(spacing: 0) {
+                // **每个页签一个自己的视图实例**（`.id` 挂在当前页签 id 上）：切页签 = 换一屏。
+                // 换掉的那一屏并没有丢 —— 它的屏幕缓冲、回滚位置、选区都在自己的 `TerminalPane` 里，
+                // 切回来原样还在。契约（L-84 ㈠）：折叠 / 最大化 / 隐藏 / 切语言 / 窗口重排
+                // **不许重启会话** —— 会话活在这个 pane 上，不活在这个视图里。
                 TerminalView(
-                    model: terminal,
+                    model: terminal.activePane,
+                    tabs: terminal,
                     appearance: appState.terminalAppearance,
                     fontSize: appState.terminalFontSize,
                     cursor: appState.terminalCursorPreference.appearance
                 )
+                .id(terminal.tabs.activeID)
                 Divider()
                 terminalShortcutBar
             }
@@ -205,6 +258,13 @@ struct LowerPaneView: View {
         HStack(spacing: Spacing.xs) {
             Image(systemName: "keyboard")
             Text(L(.terminalShortcutHint))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            // 页签快捷键也写在这里：⌘T / ⌘W / ⌘⇧[ ⌘⇧] / ⌘1…9 只在终端有焦点时生效
+            // （所以不进菜单栏 —— 进了就会把系统的 ⌘W「关闭窗口」全局改掉），
+            // 入口看不见就等于没有，于是把这一行摆在终端下面。
+            Text("·").foregroundStyle(Theme.text(.tertiary))
+            Text(L(.terminalTabShortcutHint))
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 0)
@@ -333,4 +393,31 @@ struct LowerPaneView: View {
         formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
+}
+
+// MARK: - 当前页签的状态小字
+
+/// 工具条右侧那两行小字：**已停止 / 出错**。
+///
+/// 为什么单独一个小视图：这两件事是**会话级**的（`TerminalPane` 自己的 `@Published`），
+/// 而工具条观察的是面板级模型（`TerminalModel`）。用小视图直接把 pane 观察起来，
+/// 协调器就不必把每个页签的 `isRunning` / `errorText` 再镜像一份 —— 镜像就是第二份真相。
+private struct TerminalPaneStatus: View {
+    @ObservedObject var pane: TerminalPane
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            if !pane.isRunning {
+                Text(L(.terminalStopped))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.status(.warning))
+            }
+            if let errorText = pane.errorText {
+                Text(errorText)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.status(.danger))
+                    .lineLimit(1)
+            }
+        }
+    }
 }

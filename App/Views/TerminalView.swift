@@ -5,225 +5,6 @@ import AppKit
 import SwiftUI
 import DoyahCore
 
-// MARK: - 模型
-
-/// 终端面板的状态：屏幕模型 + PTY 会话。
-///
-/// 视图（`TerminalHostView`）只负责画网格与把按键变成字节，所有状态在这里，
-/// 这样界面重建（例如语言切换导致整树重建）不会把 shell 弄丢——会话挂在 `@StateObject` 上。
-@MainActor
-final class TerminalModel: ObservableObject {
-    let screen: TerminalScreen
-    private let session = TerminalSession()
-
-    @Published private(set) var isRunning = false
-    @Published private(set) var errorText: String?
-
-    /// 屏幕内容变了要让视图重画；由视图注册。
-    private var requestRedraw: (() -> Void)?
-    private var didStart = false
-
-    init(columns: Int = 80, rows: Int = 24) {
-        screen = TerminalScreen(columns: columns, rows: rows)
-    }
-
-    func attach(redraw: @escaping () -> Void) {
-        requestRedraw = redraw
-    }
-
-    /// PTY 是否已经起过（视图用它决定"首次布局时用真实几何启动"）。
-    var hasStarted: Bool { didStart }
-
-    /// 工作区路径（FR-EDIT-32）：终端启动目录以它为准。
-    ///
-    /// 说明：**只在启动那一刻读取** —— 已经跑起来的 shell 不会被"换工作区"搬走
-    /// （与 VS Code 一致：换工作区是开新终端，而不是把正在跑的命令换目录）。
-    var workspacePath: String?
-
-    // MARK: 回滚区与选区
-
-    /// 回滚区显示偏移（0 = 实时画面）。
-    ///
-    /// 只要不为 0，新输出**不会**把视口拽回底部（终端惯例：用户翻上去看东西时不被踢下来）；
-    /// 按任意键 / ⌘↓ / ⌘End / 滚回底部才回到实时画面。
-    /// 说明：偏移是相对**缓冲区底部**算的，因此回滚区被裁剪时看到的还是"底部往上第 N 行"。
-    @Published private(set) var scrollOffset = 0
-
-    /// 当前鼠标选区（nil = 没有选中）。
-    @Published private(set) var selection: TerminalSelection?
-
-    var maxScrollOffset: Int { screen.maxScrollOffset }
-
-    /// 视图要画的那几行（已应用回滚偏移）。
-    func displayLines() -> [[TerminalCell]] {
-        screen.visibleLines(offset: scrollOffset, height: screen.rows)
-    }
-
-    func scroll(byLines delta: Int) {
-        let clamped = min(max(0, scrollOffset + delta), screen.maxScrollOffset)
-        guard clamped != scrollOffset else { return }
-        scrollOffset = clamped
-        requestRedraw?()
-    }
-
-    func scrollToBottom() {
-        guard scrollOffset != 0 else { return }
-        scrollOffset = 0
-        requestRedraw?()
-    }
-
-    /// 清空回滚区（右键菜单项）：只丢历史行，不动当前屏幕、光标与模式位。
-    func clearScrollback() {
-        screen.clearScrollback()
-        scrollOffset = 0
-        requestRedraw?()
-    }
-
-    func beginSelection(at raw: TerminalCellPosition) {
-        let position = TerminalSelection.snapped(raw, in: displayLines())
-        selection = TerminalSelection(anchor: position, focus: position)
-        requestRedraw?()
-    }
-
-    func extendSelection(to raw: TerminalCellPosition) {
-        guard var current = selection else { return }
-        current.focus = TerminalSelection.snapped(raw, in: displayLines())
-        selection = current
-        requestRedraw?()
-    }
-
-    func clearSelection() {
-        guard selection != nil else { return }
-        selection = nil
-        requestRedraw?()
-    }
-
-    /// 选区文本（没选中或选到空白时返回 nil）。取的是**当前显示的那几行**，
-    /// 所以"看到什么就复制什么"。
-    func selectedText() -> String? {
-        guard let selection else { return nil }
-        let text = selection.text(in: displayLines())
-        return text.isEmpty ? nil : text
-    }
-
-    /// ⌘C / 菜单「复制」：把选区写进系统剪贴板；没有选中时返回 false，让按键继续往下走。
-    @discardableResult
-    func copySelectionToPasteboard() -> Bool {
-        guard let text = selectedText() else { return false }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        return true
-    }
-
-    /// ⌘V / 菜单「粘贴」：读系统剪贴板并发给 shell。
-    ///
-    /// 走 `TerminalPaste`（Core 的纯函数）而不是直接 `session.write(text:)`：
-    /// 前台程序开了**括号粘贴**（SGR 2004）时必须把内容包起来，否则 vim 会逐行自动缩进、
-    /// 多行 SQL 可能被逐行提交。包装规则与换行处理都是纯逻辑，那边有单测。
-    @discardableResult
-    func pasteFromPasteboard() -> Bool {
-        guard let text = NSPasteboard.general.string(forType: .string), !text.isEmpty else { return false }
-        let payload = TerminalPaste.payload(
-            for: text,
-            isBracketedPasteEnabled: screen.isBracketedPasteEnabled
-        )
-        guard !payload.isEmpty else { return false }
-        send(payload)
-        return true
-    }
-
-    /// ⌘A：全选**当前显示的那几行**（含回滚区偏移后的视图）。
-    ///
-    /// 只选可见范围而不是整个回滚区：回滚区可能有上万行，全选之后复制会得到一个
-    /// 巨大字符串；终端惯例（Terminal.app / iTerm2）也是按可见范围来的。
-    func selectAllVisible() {
-        let lines = displayLines()
-        guard let last = lines.indices.last, lines[last].indices.last != nil else { return }
-        selection = TerminalSelection(
-            anchor: TerminalCellPosition(row: 0, column: 0),
-            focus: TerminalCellPosition(row: last, column: max(0, lines[last].count - 1))
-        )
-        requestRedraw?()
-    }
-
-    func startIfNeeded(columns: Int, rows: Int) {
-        guard !didStart else { return }
-        didStart = true
-        session.onOutput = { [weak self] data in
-            guard let self else { return }
-            self.screen.feed([UInt8](data))
-            // 设备查询应答（DA1 / DSR / DECRQM / XTVERSION）要**回给前台程序**：
-            // 不回话的话，vim / tmux 一类程序会一直等这一行，表现为"界面卡住"。
-            let responses = self.screen.drainResponses()
-            if !responses.isEmpty { self.session.write(responses) }
-            self.requestRedraw?()
-        }
-        session.onExit = { [weak self] code in
-            guard let self else { return }
-            self.isRunning = false
-            self.screen.feed(text: "\r\n[进程已退出，代码 \(code)]\r\n")
-            self.requestRedraw?()
-        }
-        screen.resize(columns: columns, rows: rows)
-        if session.start(columns: columns, rows: rows, workingDirectory: launchDirectory()) {
-            isRunning = true
-        } else {
-            isRunning = false
-            errorText = session.lastError
-        }
-        requestRedraw?()
-    }
-
-    func restart(columns: Int, rows: Int) {
-        session.terminate()
-        screen.reset()
-        scrollOffset = 0
-        selection = nil
-        didStart = false
-        errorText = nil
-        startIfNeeded(columns: columns, rows: rows)
-    }
-
-    func send(_ bytes: [UInt8]) {
-        session.write(bytes)
-    }
-
-    func send(text: String) {
-        session.write(text: text)
-    }
-
-    func resize(columns: Int, rows: Int) {
-        screen.resize(columns: columns, rows: rows)
-        session.resize(columns: columns, rows: rows)
-        requestRedraw?()
-    }
-
-    func stop() {
-        session.terminate()
-        isRunning = false
-    }
-
-    /// 终端启动目录：工作区（待 Explorer 接入）＞ 有意义的启动目录 ＞ 家目录。
-    ///
-    /// 实测：Finder 双击 / `open` 拉起时 `currentDirectoryPath` 是 `/`，直接继承会让
-    /// 终端一进去就是根目录；从命令行直接跑才是真正的"启动目录"。
-    private func launchDirectory() -> String {
-        let fileManager = FileManager.default
-        let isUsableDirectory: (String) -> Bool = { path in
-            var isDirectory: ObjCBool = false
-            let exists = fileManager.fileExists(atPath: path, isDirectory: &isDirectory)
-            return exists && isDirectory.boolValue && fileManager.isReadableFile(atPath: path)
-        }
-        return TerminalWorkingDirectory.resolve(
-            workspace: workspacePath,
-            launchDirectory: fileManager.currentDirectoryPath,
-            home: fileManager.homeDirectoryForCurrentUser.path,
-            isUsableDirectory: isUsableDirectory
-        )
-    }
-}
-
 // MARK: - 绘制 / 输入
 
 /// 终端视图：把字符网格画出来，把按键写成字节。
@@ -231,7 +12,13 @@ final class TerminalModel: ObservableObject {
 /// 按行拼 `NSAttributedString` 再整行绘制——比逐格绘制简单，80×24 这个量级完全够用。
 final class TerminalHostView: NSView, NSMenuItemValidation {
 
-    private let model: TerminalModel
+    private let model: TerminalPane
+    /// 面板级模型（多会话协调器）——`⌘T / ⌘W / ⌘1…9 / ⌘⇧[ ⌘⇧]` 这些**页签动作**要落到它上面。
+    ///
+    /// 为什么视图里要拿得到它：终端视图是按键的第一现场（前台程序还没收到键之前就经过这里），
+    /// 页签快捷键只有在这里截才既「只在终端有焦点时生效」（不抢系统 ⌘W 的「关闭窗口」），
+    /// 又不必给按键另开一条全局路径。**动作的判定仍然在 Core**（`TerminalTabs.command`）。
+    var tabs: TerminalModel?
     /// 外观偏好（可覆盖系统外观；解析在 Core 的 `TerminalAppearance`）。
     ///
     /// 名字不叫 `appearance`：那会和 `NSView.appearance`（`NSAppearance?`）撞名。
@@ -261,7 +48,7 @@ final class TerminalHostView: NSView, NSMenuItemValidation {
     private var markedText = ""
     private var markedSelection = NSRange(location: 0, length: 0)
 
-    init(model: TerminalModel, appearance: TerminalAppearance, fontSize: Int) {
+    init(model: TerminalPane, appearance: TerminalAppearance, fontSize: Int) {
         self.model = model
         self.appearancePreference = appearance
         let clamped = TerminalFontSize.clamped(fontSize)
@@ -835,6 +622,18 @@ final class TerminalHostView: NSView, NSMenuItemValidation {
 
     override func keyDown(with event: NSEvent) {
         if event.modifierFlags.contains(.command) {
+            // 页签动作优先（⌘T / ⌘W / ⌘1…9 / ⌘⇧[ ⌘⇧]）：判定在 Core（含「⇧⌘[ 实际给的是 `{`」
+            // 这个坑），这里只把按键交过去。认不出才继续往下走 —— 不许吞掉别人的键。
+            if let command = TerminalTabs.command(
+                key: event.charactersIgnoringModifiers ?? "",
+                command: true,
+                shift: event.modifierFlags.contains(.shift),
+                option: event.modifierFlags.contains(.option),
+                control: event.modifierFlags.contains(.control)
+            ) {
+                tabs?.perform(command)
+                return
+            }
             switch event.charactersIgnoringModifiers {
             // ⌘V 粘贴：整段文本喂给 shell（括号粘贴包装见 `pasteFromPasteboard`）。
             case "v":
@@ -1040,7 +839,10 @@ extension TerminalHostView: NSTextInputClient {
 // MARK: - SwiftUI 包装
 
 struct TerminalView: NSViewRepresentable {
-    @ObservedObject var model: TerminalModel
+    /// 这个页签自己的会话（屏幕 + PTY）。**不是**整个面板的模型 —— 多会话之后这两个概念分开了。
+    @ObservedObject var model: TerminalPane
+    /// 面板级模型（页签动作的落点）。
+    var tabs: TerminalModel?
     /// 订阅等宽字体偏好：族一变就重跑 `updateNSView` → 宿主换成新字体（FR-EDIT-26）。
     @ObservedObject private var fonts = FontManager.shared
     /// 外观偏好（跟随系统 / 总是深色 / 总是浅色），来自用户在「外观」面板里的选择。
@@ -1052,6 +854,7 @@ struct TerminalView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> TerminalHostView {
         let view = TerminalHostView(model: model, appearance: appearance, fontSize: fontSize)
+        view.tabs = tabs
         view.applyCursor(preference: cursor)
         model.attach { [weak view] in
             view?.needsDisplay = true
@@ -1061,6 +864,7 @@ struct TerminalView: NSViewRepresentable {
 
     func updateNSView(_ nsView: TerminalHostView, context: Context) {
         // 设置改了要**真的应用**（重建字体 / 换色板），不是只重画一次。
+        nsView.tabs = tabs
         nsView.apply(appearance: appearance, fontSize: fontSize)
         nsView.applyCursor(preference: cursor)
     }

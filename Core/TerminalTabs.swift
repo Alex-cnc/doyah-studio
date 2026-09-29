@@ -145,6 +145,27 @@ public enum TerminalTabCloseRefusal: Equatable, Sendable {
     case unknownTab
 }
 
+/// 一次按键解析出来的**页签动作**（队列 L-84 ㈡ 的口径②：「新建 ⌘T / 关闭 ⌘W /
+/// 切换（点击 · ⌘⇧[ ⌘⇧] · ⌘1…9）」）。
+///
+/// 为什么连「按键 → 动作」也放 Core：界面里的 `keyDown` 只拿得到一堆标志位
+/// （`charactersIgnoringModifiers` + `shift`），而**哪个组合算哪个动作**是纯逻辑 ——
+/// 里面还埋着一个真坑：**⇧⌘[ 在美式键盘上给的是 `{`**（`charactersIgnoringModifiers`
+/// 会把 ⇧ 一起作用到字符上），照 `[` 去比就永远不匹配。这类判断写在视图里就只能靠手按，
+/// 放在这里可以被单测穷举（`Tests/TerminalTabsTests.swift` 的「按键映射」组）。
+public enum TerminalTabCommand: Equatable, Sendable {
+    /// ⌘T：新建页签（插在当前页签右侧并激活）。
+    case newTab
+    /// ⌘W：关闭当前页签（最后一个页签不许关 —— 判定在 `closeDecision`）。
+    case closeTab
+    /// ⌘1…9：按显示顺序直选（1 基；越界不动）。
+    case selectTab(number: Int)
+    /// ⌘⇧]：下一个（环绕）。
+    case nextTab
+    /// ⌘⇧[：上一个（环绕）。
+    case previousTab
+}
+
 /// 终端面板的**页签集合** —— 纯逻辑（不碰 PTY、不碰界面）。
 ///
 /// 为什么单独一个值类型：多会话的坑几乎全在**顺序与归属**上 —— 新页签插在哪、
@@ -249,6 +270,65 @@ public struct TerminalTabs: Equatable, Sendable {
         return true
     }
 
+    // MARK: 按键 → 动作（㈡ 的界面接线只负责把按键交进来）
+
+    /// 把一次按键解析成页签动作；**认不出返回 nil**（键继续往下走，交给前台程序）。
+    ///
+    /// 口径（逐条有单测）：
+    /// · **必须按住 ⌘**，且**不许带 ⌥ / ⌃** —— 终端里的 ⌥ 是「把鼠标还给本机」那一族、
+    ///   ⌃ 是控制键（⌃W 要原样发给 shell 删词），被页签抢走就是坏功能；
+    /// · ⇧ 只与 `[` `]` 组合：**同时认 `{` `}`**（美式键盘上 ⇧⌘[ 实际给的是 `{`，
+    ///   这是实测过的坑，见 `TerminalTabCommand` 的说明）；
+    /// · ⇧ + 其它键（⇧⌘T / ⇧⌘W / ⇧⌘1）**一律不认** —— ⇧⌘T 已经归「数据任务」，
+    ///   页签不许偷别人的键；
+    /// · 数字只认 1…9（⌘0 不动、⌘⇧3 这类截图键更不许碰）。
+    public static func command(
+        key: String,
+        command: Bool,
+        shift: Bool,
+        option: Bool = false,
+        control: Bool = false
+    ) -> TerminalTabCommand? {
+        guard command, !option, !control else { return nil }
+        if shift {
+            switch key {
+            case "]", "}": return .nextTab
+            case "[", "{": return .previousTab
+            default: return nil
+            }
+        }
+        switch key {
+        case "t": return .newTab
+        case "w": return .closeTab
+        default:
+            guard let number = Int(key), (1...9).contains(number) else { return nil }
+            return .selectTab(number: number)
+        }
+    }
+
+    /// 执行一个动作（界面把按键 / 菜单 / 点击都收敛到这里）。
+    ///
+    /// **只做「判定已经允许」的那一步**：`closeTab` 走的是 `close(id:)` ——
+    /// 前台还有程序在跑时它**什么都不做并返回 false**（先问一句是界面的事，
+    /// 判定与确认的入口是 `closeDecision(for:)`）；最后一个页签同样返回 false，
+    /// 界面据此给用户一句说法，不许静默无反应。
+    @discardableResult
+    public mutating func perform(_ command: TerminalTabCommand) -> Bool {
+        switch command {
+        case .newTab:
+            newTab()
+            return true
+        case .closeTab:
+            return close(id: activeID)
+        case .selectTab(let number):
+            return select(numbered: number)
+        case .nextTab:
+            return selectNext()
+        case .previousTab:
+            return selectPrevious()
+        }
+    }
+
     // MARK: 名字
 
     /// 重命名（双击页签头进来的那条路）。
@@ -301,9 +381,27 @@ public struct TerminalTabs: Equatable, Sendable {
     /// 关闭页签（界面在 `closeDecision` 允许 / 用户确认之后调）。
     /// 关掉的若是当前页签，**右邻居接管**、没有右邻居则左邻居接管；
     /// 关不掉（最后一个 / id 不存在）时**集合一个字节都不动**并返回 false。
+    ///
+    /// - Parameter force: **用户已经在确认框里点过「关闭页签」**。
+    ///
+    ///   为什么必须有这个形参（第 82 轮 App 侧探针实测出来的缺口）：㈠ 只建模了**判定**
+    ///   （`needsConfirmation`），没建模「确认之后怎么走」—— 于是接线时 `confirmClose()`
+    ///   再调一次 `close(id:)`，判定**依旧**是要确认 ⇒ 用户点了「关闭页签」而页签**关不掉**
+    ///   （探针当场判红：`pendingCloseTab` 清掉了、集合里那一个还在）。
+    ///   一个布尔就够：它把「问过了、答案是关」这件事带进核心。
+    ///
+    ///   注意 `force` **不是万能钥匙**：最后一个页签、不存在的 id 仍然关不掉 ——
+    ///   那不是「确认一下就能解决」的事（前者要的是「收起面板」这个入口）。
     @discardableResult
-    public mutating func close(id: Int) -> Bool {
-        guard case .canClose = closeDecision(for: id) else { return false }
+    public mutating func close(id: Int, force: Bool = false) -> Bool {
+        switch closeDecision(for: id) {
+        case .canClose:
+            break
+        case .needsConfirmation where force:
+            break
+        case .needsConfirmation, .refuse:
+            return false
+        }
         guard let index = index(of: id) else { return false }
         tabs.remove(at: index)
         if id == activeID {

@@ -222,6 +222,26 @@ final class TerminalSession {
         write(Array(text.utf8))
     }
 
+    /// 前台进程组的**可执行文件路径**（页签标题的唯一来源；查不到 = nil）。
+    ///
+    /// 三步都靠系统给的答案，不猜：
+    /// ① `tcgetpgrp` 问 PTY「现在谁在前台」（拿到的是**进程组号**）；
+    /// ② `proc_pidpath` 拿那个进程的可执行路径；
+    /// ③ 交给 Core 的 `TerminalTabTitle.derive(fromExecutablePath:)` 取最后一段并清洗。
+    ///
+    /// 为什么问**前台进程组**而不是子进程：`dsh-tui` / `psql` / `vim` 都是 shell 的**子进程**，
+    /// 子进程号（shell 的 pid）永远不变 ⇒ 标题会永远是 `zsh`，页签就白开了。
+    /// 查不到（进程刚退出、权限不足、PTY 已关）**一律返回 nil** —— 上层不许拿兜底词硬凑。
+    func foregroundProcessPath() -> String? {
+        let descriptor = masterFD
+        guard descriptor >= 0 else { return nil }
+        let group = tcgetpgrp(descriptor)
+        guard group > 0 else { return nil }
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard proc_pidpath(group, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return String(cString: buffer)
+    }
+
     /// 把窗口尺寸告诉 PTY，shell 与全屏程序（vim / htop）才会按新宽度重排。
     func resize(columns: Int, rows: Int) {
         guard masterFD >= 0 else { return }
@@ -251,7 +271,7 @@ final class TerminalSession {
         }
     }
 
-    private static func defaultShell() -> String {
+    static func defaultShell() -> String {
         if let shell = ProcessInfo.processInfo.environment["SHELL"], !shell.isEmpty {
             return shell
         }

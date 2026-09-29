@@ -427,14 +427,16 @@ python3 Scripts/test-empty-action-buttons.py
 # 三条路线全红」这一组，与一条「显式对齐被删但登记还在」；夹具只拷 `App/`，末例核对真仓库逐字节未变）。
 python3 Scripts/check-panel-root-frames.py
 python3 Scripts/check-panel-root-frames.py --self-test
-# L-84 ㈠（2026-09-29 第 81 轮）：终端**多会话（页签）**的 **Core 侧**判据。需求提出者把它提为刚需
+# L-84 ㈠㈡（2026-09-29 第 81 / 82 轮）：终端**多会话（页签）**判据。需求提出者把它提为刚需
 # 时给的原话是「一个 terminal 在执行 dsh-tui，遇到要执行命令只能去开系统终端，违背了我这个软件的初衷」。
-# 判据判的是「新建 / 关闭 / 切换 / 标题推导 / 关闭确认」这**五组判断真的在 `Core/TerminalTabs.swift` 里**、
-# 且被 `Tests/TerminalTabsTests.swift` 逐组钉住（另加「Core 不出用户可见文案」与「页签文案键中英齐」）。
-# **界面那一半**（工具条左侧 tab 头 / ⌘T ⌘W / ⌘⇧[ ⌘⇧] / ⌘1…9 / 双击重命名 / 二次确认弹窗 / 已退出标记）
-# 在 ㈡（App 接线）落 —— 落完把界面锚点并进本判据；真人点验 = 主诉场景（一个页签跑 `dsh-tui`、
-# 另一个执行命令，互不干扰）。负例 `--self-test` **7 例**（红 / 绿成对，夹具一律在临时目录，
-# 末例核对真仓库五份文件逐字节未变）。
+# 判据判的是「新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射」这**六组判断真的在 `Core/TerminalTabs.swift` 里**、
+# 且被 `Tests/TerminalTabsTests.swift` 逐组钉住（另加「Core 不出用户可见文案」与「页签文案键中英齐」）；
+# **㈡ 起同一判据还判界面接线**（App 侧锚点 32 处）：页签头在工具条 `Spacer` **之前**（口径①「左侧」，
+# 位置也判）/ 右侧五个按钮一个不少（口径①「右侧不动」）/ 每页签一条独立会话（不是「一个模型切屏」）/
+# ⌘T ⌘W ⌘1…9 的接线点（判定仍只有 Core 一处）/ 双击重命名 / 二次确认 / 退出标记 / 重启作用在当前页签 /
+# App 侧探针三个用例锚点（`TestsUISnapshot/TerminalTabsProbeTests.swift`：真开 shell 验独立性与退出、确认链路）。
+# 真人点验 = 主诉场景（一个页签跑 `dsh-tui`、另一个执行命令，互不干扰）。
+# 负例 `--self-test` **12 例**（红 / 绿成对，夹具一律在临时目录，末例核对真仓库十二份文件逐字节未变）。
 python3 Scripts/check-terminal-tabs.py
 python3 Scripts/check-terminal-tabs.py --self-test
 

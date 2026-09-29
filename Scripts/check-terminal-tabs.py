@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""终端多会话（页签）的 **Core 侧**判据（队列 L-84 ㈠，闭环第 9 项）。
+"""终端多会话（页签）的判据（队列 L-84，闭环第 9 项）。
 
 存在的理由（真现场）
 --------------------
@@ -12,26 +12,34 @@ dsh-tui，遇到要执行命令只能去开系统终端，**违背了我这个�
 判据（任一不过即失败）
 ----------------------
 A. **Core 模型在位**：`Core/TerminalTabs.swift` 每个 API 锚点在盘上（逐条正则，少一条点名），
-   且**五个行为组**（新建 / 关闭 / 切换 / 标题推导 / 关闭确认）各自的方法一个不少。
+   且**六个行为组**（新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射）各自的方法一个不少。
 B. **Core 不出用户可见文案**：该文件的**代码行**里不许出现中文字面量（R-45：人话走语言表）。
 C. **文案键中英都在**：页签那一族键逐个在 `Core/Localization.swift` 的语言表里同时有简中与英文
    （少一个 = 英文界面掉回中文）。
-D. **单测逐组钉住**：`Tests/TerminalTabsTests.swift` 里五个行为组的用例锚点必须在，且用例总数
+D. **单测逐组钉住**：`Tests/TerminalTabsTests.swift` 里六个行为组的用例锚点必须在，且用例总数
    不低于下限（防「测试文件被掏空」）。
 E. **口径锚点**：需求提出者的原话场景（一个页签跑 `dsh-tui`、另一个执行命令）在
    `Docs/发布计划.md` 与队列 `L-84` 行里都在（口径被删 = 判据失去依据）。
+F. **㈡ 界面接线在位**（第 82 轮补）：这一半在 App 侧（`App/TerminalPane.swift` /
+   `App/TerminalTabsModel.swift` / `App/Views/TerminalTabsBar.swift` / `App/Views/LowerPaneView.swift` /
+   `App/Views/TerminalView.swift` / `App/TerminalSession.swift`），**逐条对应口径①②④⑤**：
+   每页签独立会话对象（不是「一个模型切屏」）、工具条**左侧**的页签头（在 `Spacer` 之前，
+   而右侧五个按钮一个不少）、⌘T ⌘W ⌘1…9/⌘⇧[ ⌘⇧] 的接线点（判定仍只有 Core 一处）、
+   双击重命名、关页签的二次确认、会话退出标记与「重启作用在当前页签上」。
+   **另外**：App 侧探针（`TestsUISnapshot/TerminalTabsProbeTests.swift`）三个用例的锚点必须在位
+   —— 那三个用例才是「真开 shell 的独立性与退出/确认链路」的证据。
 
-边界（如实登记）：本判据**不判界面** —— 工具条左侧 tab 头、⌘T/⌘W/⌘1…9、双击重命名、二次确认
-弹窗、「已退出」标记那一半在 **㈡（App 接线）** 落，落完把界面锚点并进本判据。真正的行为证据是
-`Tests/TerminalTabsTests.swift`（Core 纯逻辑穷举）+ 真人点验（主诉场景：一个页签跑 `dsh-tui`、
-另一个执行命令，互不干扰）。
+边界（如实登记）：本判据判的是**接线在位**（文件里有没有这条线、位置对不对），
+不等于「界面上点得动」—— 真开 PTY 的行为由 App 侧探针（`TerminalTabsProbeTests`，
+`DOYAH_UI_SNAPSHOT=1` 时跑）承担，观感由快照 `terminal-tabs-bar{,-dark}-{zh,en}` 读图承担，
+真人点验承担主诉场景（一个页签跑 `dsh-tui`、另一个执行命令，互不干扰）。
 
-判据自己的证据：`--self-test` **7 例**（红 / 绿成对；夹具一律在临时目录；末例核对真仓库五份文件
-逐字节未变）。
+判据自己的证据：`--self-test` **12 例**（红 / 绿成对；夹具一律在临时目录；末例核对真仓库十一份
+文件逐字节未变）。
 
 用法：
     python3 Scripts/check-terminal-tabs.py              # 校验（闭环第 9 项）
-    python3 Scripts/check-terminal-tabs.py --self-test  # 门禁自己的证据（**7 例**）
+    python3 Scripts/check-terminal-tabs.py --self-test  # 门禁自己的证据（**12 例**）
 """
 
 from __future__ import annotations
@@ -49,16 +57,27 @@ TESTS = "Tests/TerminalTabsTests.swift"
 PLAN = "Docs/发布计划.md"
 QUEUE = "Docs/design/开发循环-任务队列.md"
 
-# A：模型锚点。分五组，与 `FR-EDIT-29` 的判据逐条对应 —— 少一组就等于那条判据悬空。
+# F（㈡ 界面接线）：判据要盯的 App 侧文件。
+PANE = "App/TerminalPane.swift"
+SESSION = "App/TerminalSession.swift"
+TABS_MODEL = "App/TerminalTabsModel.swift"
+TABS_BAR = "App/Views/TerminalTabsBar.swift"
+LOWER_PANE = "App/Views/LowerPaneView.swift"
+TERMINAL_VIEW = "App/Views/TerminalView.swift"
+PROBE = "TestsUISnapshot/TerminalTabsProbeTests.swift"
+
+# A：模型锚点。分六组，与 `FR-EDIT-29` 的判据逐条对应 —— 少一组就等于那条判据悬空。
 API_ANCHORS = {
     "新建": ["public mutating func newTab"],
-    "关闭": ["public func closeDecision", "public mutating func close(id: Int)"],
+    "关闭": ["public func closeDecision", "public mutating func close(id: Int, force: Bool"],
     "切换": ["public mutating func select(id:", "public mutating func select(numbered",
              "public mutating func selectNext()", "public mutating func selectPrevious()"],
     "标题推导": ["public static func derive(fromExecutablePath", "public static func sanitize(",
                  "public var title: String?", "static let ellipsis"],
     "关闭确认": ["case needsConfirmation", "case canClose", "case lastTab", "case unknownTab",
                  "public var isShellInForeground"],
+    "按键映射": ["public enum TerminalTabCommand", "public static func command(",
+                 "public mutating func perform(_ command: TerminalTabCommand)"],
 }
 
 # D：单测锚点（每条一个行为组；用例总数下限）。
@@ -68,15 +87,66 @@ TEST_ANCHORS = {
     "切换": "testSelectNextAndPreviousWrapAround",
     "标题推导": "testDeriveTitleStripsLoginShellDash",
     "关闭确认": "testCloseDecisionNeedsConfirmationForRunningProgram",
+    "按键映射": "testCommandAcceptsShiftedBracketsAsWellAsPlainOnes",
 }
-TEST_FLOOR = 24
+TEST_FLOOR = 34
 
-# C：页签那一族文案键（㈠ 只登记，㈡ 界面直接用）。
+# C：页签那一族文案键（㈠ 登记、㈡ 使用）。
 KEYS = [
     "terminalTabNew", "terminalTabClose", "terminalTabRename", "terminalTabExited",
     "terminalTabUntitled", "terminalTabCloseConfirmTitle", "terminalTabCloseConfirmMessage",
-    "terminalTabCloseConfirmAction",
+    "terminalTabCloseConfirmAction", "terminalTabLastTabHint", "terminalTabExitedCode",
+    "terminalTabShortcutHint", "terminalTabRenameMessage",
 ]
+
+# F：㈡ 的界面接线锚点（文件 → 每条口径一个锚点；少一条点名）。
+APP_ANCHORS = {
+    PANE: [
+        ("每页签一个会话对象", "final class TerminalPane"),
+        ("退出事件回填给协调器", "var onExitDetected: ((Int32) -> Void)?"),
+        ("前台进程查询入口", "func foregroundProcessPath() -> String?"),
+    ],
+    SESSION: [
+        ("问 PTY 谁是前台", "tcgetpgrp("),
+        ("拿前台进程的可执行路径", "proc_pidpath("),
+    ],
+    TABS_MODEL: [
+        ("面板级模型", "final class TerminalModel"),
+        ("每个页签一条会话（切页签不动它）", "private var panes: [Int: TerminalPane]"),
+        ("⌘T 的落点", "func newTab() -> Int"),
+        ("关页签先过判定", "func requestClose(id: Int)"),
+        ("确认之后真的关（force）", "close(id: id, force: true)"),
+        ("双击重命名入口", "func beginRename(id: Int)"),
+        ("重启作用在当前页签上", "func restart(id: Int, columns: Int, rows: Int)"),
+        ("前台进程名轮询（标题来源）", "func refreshForegroundProcesses()"),
+    ],
+    TABS_BAR: [
+        ("页签头视图在", "struct TerminalTabsBar"),
+        ("双击在前、单击在后", ".onTapGesture(count: 2)"),
+        ("已退出是写出来的字", "L(.terminalTabExited)"),
+        ("最后一个页签的关闭按钮有说法", "L(.terminalTabLastTabHint)"),
+    ],
+    LOWER_PANE: [
+        ("页签头挂进工具条", "TerminalTabsBar(terminal: terminal)"),
+        ("每个页签一个视图身份", ".id(terminal.tabs.activeID)"),
+        ("关页签的二次确认挂在面板层", "terminal.pendingCloseTab"),
+        ("重命名弹窗", "terminal.renamingTab"),
+        ("重启按钮指向当前页签", "id: terminal.tabs.activeID"),
+    ],
+    TERMINAL_VIEW: [
+        ("按键交给 Core 判定", "TerminalTabs.command("),
+        ("判出来的动作落到协调器", "tabs?.perform(command)"),
+    ],
+    PROBE: [
+        ("主诉场景：两条独立会话 + 切页签不重启", "func testTwoTabsRunIndependentShellsAndSurviveTabSwitching"),
+        ("退出 / 重启 / 先问一句 / 最后一个不许关", "func testExitRestartConfirmationAndLastTabRefusal"),
+        ("页签头快照（已退出到像素上）", "func testTabStripSnapshotShowsThreeSessionsAndExitedMark"),
+    ],
+}
+
+# F：右侧那排按钮（口径①：右侧按钮一概不动）—— 少一个就是「顺手把它挪了」。
+RIGHT_SIDE_BUTTONS = ["rectangle.compress.vertical", "rectangle.expand.vertical",
+                      "chevron.down", "arrow.clockwise"]
 
 # E：口径锚点（需求提出者的原话场景 —— 判据的立足点）。
 PLAN_ANCHOR = r"一个页签跑\s*`?dsh-tui`?[^\n]{0,60}另一个页签执行命令"
@@ -130,6 +200,45 @@ def check_model(root: pathlib.Path) -> tuple[list[Issue], int]:
     return issues, sites
 
 
+def _entry_body(text: str, key: str) -> str | None:
+    """取出 `.key:` 后面那个数组字面量的内容（**按括号配对走、字符串里的括号不算**）。
+
+    为什么要自己配一遍括号：语言表里有些文案**本身带方括号** —— 页签快捷键那一句就写着
+    `⌘⇧[ / ⌘⇧]`。原来用非贪婪的 `\\[(.*?)\\]` 去切，会在文案里的 `]` 上提前收尾，
+    于是英文译文「看不见」⇒ 判据报一条**假红**（第 82 轮实测：`.terminalTabShortcutHint`，
+    它明明中英都在）。判据自己出错比漏判更糟 —— 所以这里改成能处理字符串字面量的扫描。
+    """
+    marker = "." + key + ":"
+    start = text.find(marker)
+    if start < 0:
+        return None
+    index = text.find("[", start + len(marker))
+    if index < 0:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for position in range(index, len(text)):
+        character = text[position]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character == "[":
+            depth += 1
+        elif character == "]":
+            depth -= 1
+            if depth == 0:
+                return text[index + 1:position]
+    return None
+
+
 def check_keys(root: pathlib.Path) -> tuple[list[Issue], int]:
     """C：页签那一族键在语言表里中英都在。"""
     issues: list[Issue] = []
@@ -138,11 +247,10 @@ def check_keys(root: pathlib.Path) -> tuple[list[Issue], int]:
         return [Issue(TABLE, "语言表不在盘上")], 0
     complete = 0
     for key in KEYS:
-        site = re.search(r"\." + re.escape(key) + r":\s*\[(.*?)\]", table)
-        if site is None:
+        body = _entry_body(table, key)
+        if body is None:
             issues.append(Issue(TABLE, f"语言表里没有 `.{key}`"))
             continue
-        body = site.group(1)
         missing = [name for name, token in (("简中", ".simplifiedChinese"), ("英文", ".english"))
                    if token not in body]
         if missing:
@@ -153,7 +261,7 @@ def check_keys(root: pathlib.Path) -> tuple[list[Issue], int]:
 
 
 def check_tests(root: pathlib.Path) -> tuple[list[Issue], int]:
-    """D：五个行为组各自的用例锚点 + 用例总数下限。"""
+    """D：六个行为组各自的用例锚点 + 用例总数下限。"""
     issues: list[Issue] = []
     tests = _read(root, TESTS)
     if not tests.strip():
@@ -165,6 +273,47 @@ def check_tests(root: pathlib.Path) -> tuple[list[Issue], int]:
     if count < TEST_FLOOR:
         issues.append(Issue(TESTS, f"用例只有 {count} 个、下限 {TEST_FLOOR} —— 测试被掏空了"))
     return issues, count
+
+
+def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
+    """F：㈡ 的界面接线。
+
+    除了逐文件锚点，还判两条**位置/口径**（光有锚点挡不住「挂在右边」或「顺手挪走按钮」）：
+    · 页签头必须在工具条的 `Spacer(minLength: 8)` **之前**（口径①「左侧」）；
+    · 右侧那排按钮（最大化 / 恢复 / 收起 / 重启 shell）**一个都不能少**。
+    """
+    issues: list[Issue] = []
+    sites = 0
+    for relative, anchors in APP_ANCHORS.items():
+        text = _read(root, relative)
+        if not text.strip():
+            issues.append(Issue(relative, "文件不在盘上（判据取不到输入，不许当通过）"))
+            continue
+        for label, anchor in anchors:
+            if anchor in text:
+                sites += 1
+            else:
+                issues.append(Issue(f"{relative}[{label}]", f"缺接线锚点 `{anchor}`"))
+
+    toolbar = _read(root, LOWER_PANE)
+    bar = toolbar.find("TerminalTabsBar(terminal: terminal)")
+    spacer = toolbar.find("Spacer(minLength: 8)")
+    if bar >= 0 and spacer >= 0 and bar > spacer:
+        issues.append(Issue(
+            f"{LOWER_PANE}[口径①左侧]",
+            "页签头画在了 `Spacer(minLength: 8)` **之后** —— 那是工具条右侧（口径①写死「左侧」）",
+        ))
+    elif bar >= 0 and spacer >= 0:
+        sites += 1
+    for symbol in RIGHT_SIDE_BUTTONS:
+        if symbol not in toolbar:
+            issues.append(Issue(
+                f"{LOWER_PANE}[口径①右侧按钮不动]",
+                f"右侧按钮 `{symbol}` 不见了 —— 口径①明说「右侧现有按钮一律不动」",
+            ))
+        else:
+            sites += 1
+    return issues, sites
 
 
 def check_docs(root: pathlib.Path) -> tuple[list[Issue], int]:
@@ -202,14 +351,21 @@ def run(root: pathlib.Path) -> tuple[list[Issue], dict[str, int]]:
     issues += test_issues
     stats["tests"] = tests
 
+    app_issues, app_sites = check_app(root)
+    issues += app_issues
+    stats["appSites"] = app_sites
+
     doc_issues, doc_hits = check_docs(root)
     issues += doc_issues
     stats["docHits"] = doc_hits
 
-    # F：空跑防护 —— 「判据自己失效」比「发现不了」更危险。
+    # G：空跑防护 —— 「判据自己失效」比「发现不了」更危险。
     expected_api = sum(len(group) for group in API_ANCHORS.values())
+    expected_app = sum(len(anchors) for anchors in APP_ANCHORS.values()) + len(RIGHT_SIDE_BUTTONS) + 1
     if stats["apiSites"] < expected_api:
         issues.append(Issue("空跑防护", f"API 锚点只命中 {stats['apiSites']}/{expected_api} 处"))
+    if stats["appSites"] < expected_app:
+        issues.append(Issue("空跑防护", f"界面接线锚点只命中 {stats['appSites']}/{expected_app} 处"))
     if stats["keys"] < len(KEYS):
         issues.append(Issue("空跑防护", f"文案键只有 {stats['keys']}/{len(KEYS)} 个中英齐"))
     if stats["docHits"] < 2:
@@ -217,7 +373,8 @@ def run(root: pathlib.Path) -> tuple[list[Issue], dict[str, int]]:
     return issues, stats
 
 
-FIXTURE_FILES = [MODEL, TABLE, TESTS, PLAN, QUEUE]
+FIXTURE_FILES = [MODEL, TABLE, TESTS, PLAN, QUEUE,
+                 PANE, SESSION, TABS_MODEL, TABS_BAR, LOWER_PANE, TERMINAL_VIEW, PROBE]
 
 
 def _digests(root: pathlib.Path) -> dict[str, str]:
@@ -226,7 +383,7 @@ def _digests(root: pathlib.Path) -> dict[str, str]:
 
 
 def _fixture(base: pathlib.Path) -> pathlib.Path:
-    """把判据盯着的五份文件原样拷进临时目录（**只在副本上写坏**）。"""
+    """把判据盯着的十二份文件原样拷进临时目录（**只在副本上写坏**）。"""
     temp = pathlib.Path(tempfile.mkdtemp(prefix="terminal-tabs-selftest-"))
     for relative in FIXTURE_FILES:
         target = temp / relative
@@ -297,9 +454,54 @@ def self_test(root: pathlib.Path) -> int:
            "例 6（E）队列里的需求原话被改写 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
     shutil.rmtree(with_fixture, ignore_errors=True)
 
-    # 例 7（反过来核一遍）：所有写坏都发生在副本上 —— 真仓库五份文件必须逐字节未变。
+    # 例 7（F · 红路）：把页签头挪到 `Spacer` **之后** —— 那它就落在工具条右侧了（口径①说左侧）。
+    with_fixture = _fixture(root)
+    bar_line = "                TerminalTabsBar(terminal: terminal)\n"
+    spacer_line = "            Spacer(minLength: 8)\n"
+    moved = _rewrite(with_fixture / LOWER_PANE, bar_line, "")
+    moved = moved and _rewrite(with_fixture / LOWER_PANE, spacer_line, spacer_line + bar_line)
+    issues, _ = run(with_fixture)
+    record(moved and any("口径①左侧" in str(issue) for issue in issues),
+           "例 7（F）页签头被挪到 Spacer 之后 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 8（F · 红路）：右侧那个「重启 shell」按钮被顺手换掉 ⇒ 报红（口径①：右侧按钮不动）。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / LOWER_PANE, 'iconButton("arrow.clockwise"', 'iconButton("arrow.triangle.2.circlepath"')
+    issues, _ = run(with_fixture)
+    record(any("右侧按钮" in str(issue) for issue in issues),
+           "例 8（F）右侧按钮被挪走 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 9（F · 红路）：协调器里「确认之后真的关」那条线被删 ⇒ 报红
+    # （这正是第 82 轮探针先撞上的坑：确认了却关不掉）。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / TABS_MODEL, "close(id: id, force: true)", "close(id: id)")
+    issues, _ = run(with_fixture)
+    record(any("force" in str(issue) for issue in issues),
+           "例 9（F）「确认之后真的关」被删 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 10（F · 红路）：App 侧探针的主诉场景用例被改名 ⇒ 报红（证据链断）。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / PROBE, "func testTwoTabsRunIndependentShellsAndSurviveTabSwitching",
+             "func testTwoTabs")
+    issues, _ = run(with_fixture)
+    record(any("主诉场景" in str(issue) for issue in issues),
+           "例 10（F）探针的主诉场景用例锚点被改名 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 11（F · 红路）：界面自己判定按键（不再交给 Core）⇒ 报红。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / TERMINAL_VIEW, "TerminalTabs.command(", "Self.tabCommandIgnoringCore(")
+    issues, _ = run(with_fixture)
+    record(any("Core 判定" in str(issue) for issue in issues),
+           "例 11（F）按键判定离开 Core ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 12（反过来核一遍）：所有写坏都发生在副本上 —— 真仓库十二份文件必须逐字节未变。
     after = _digests(root)
-    record(before == after, "例 7 真仓库五份文件逐字节未变",
+    record(before == after, "例 12 真仓库十二份文件逐字节未变",
            "；".join(f"{name} 变了" for name in after if before[name] != after[name]))
 
     for ok, label, detail in results:
@@ -323,11 +525,12 @@ def main(argv: list[str]) -> int:
     if issues:
         for issue in issues:
             print(issue)
-        print(f"❌ 终端多会话（页签）Core 侧判据不通过：{len(issues)} 条")
+        print(f"❌ 终端多会话（页签）判据不通过：{len(issues)} 条")
         return 1
     print(
-        "✅ 终端多会话（页签）Core 侧判据通过："
-        f"API 锚点 {stats['apiSites']} 处 / 文案键 {stats['keys']} 个（中英齐）"
+        "✅ 终端多会话（页签）判据通过："
+        f"Core API 锚点 {stats['apiSites']} 处 / 界面接线锚点 {stats['appSites']} 处"
+        f" / 文案键 {stats['keys']} 个（中英齐）"
         f" / 单测 {stats['tests']} 例 / 口径锚点 {stats['docHits']} 处"
     )
     return 0

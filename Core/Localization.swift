@@ -528,6 +528,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case terminalTabCloseConfirmTitle
     case terminalTabCloseConfirmMessage
     case terminalTabCloseConfirmAction
+    // ㈡（界面接线）新增的三句：最后一个页签不许关的说法 / 退出码 / 页签快捷键怎么念。
+    case terminalTabLastTabHint
+    case terminalTabExitedCode
+    case terminalTabShortcutHint
+    case terminalTabRenameMessage
 
     // 系统级菜单的语言需要重启才跟随（macOS 在进程启动时固定 AppKit 的本地化）
     case relaunchTitle
@@ -2277,6 +2282,10 @@ public enum LocalizedStrings {
         .terminalTabCloseConfirmTitle: [.simplifiedChinese: "这个页签里还有程序在运行", .english: "A program is still running"],
         .terminalTabCloseConfirmMessage: [.simplifiedChinese: "关闭页签会把里面正在运行的程序一起结束，而且不会再问第二次。要关闭吗？", .english: "Closing this tab terminates whatever is running in it, and will not ask again. Close it?"],
         .terminalTabCloseConfirmAction: [.simplifiedChinese: "关闭页签", .english: "Close Tab"],
+        .terminalTabLastTabHint: [.simplifiedChinese: "最后一个页签不能关闭 —— 想收起终端请点工具条右侧的收起箭头", .english: "The last tab cannot be closed — use the collapse arrow on the right of the toolbar to hide the terminal"],
+        .terminalTabExitedCode: [.simplifiedChinese: "已退出（代码 %@）", .english: "Exited (code %@)"],
+        .terminalTabShortcutHint: [.simplifiedChinese: "页签：⌘T 新建 · ⌘W 关闭 · ⌘⇧[ / ⌘⇧] 前后切换 · ⌘1…9 直选", .english: "Tabs: ⌘T new · ⌘W close · ⌘⇧[ / ⌘⇧] switch · ⌘1…9 jump"],
+        .terminalTabRenameMessage: [.simplifiedChinese: "这个名字只贴在页签上，不影响终端里跑的东西。留空确定 = 用前台进程名（跑什么就叫什么）。", .english: "This name only labels the tab; nothing inside the terminal is affected. Confirm with it empty to fall back to the foreground process name."],
         .relaunchTitle: [.simplifiedChinese: "重启应用", .english: "Relaunch the app"],
         .relaunchMessage: [.simplifiedChinese: "重启会关掉当前进程再打开一个：界面上的页签、光标位置与展开状态都会重来（连接与页签本身存在配置里，不会丢）。\n换语言不需要这一步 —— 语言是就地切换的，这个入口只服务\"我就是想重开一个进程\"。", .english: "Relaunching closes this process and starts a new one: on-screen tabs, cursor positions and expansion state start over (connections and tabs live in config, so they survive).\nSwitching language does not need this — the language switches in place; this entry is only for when you actually want a fresh process."],
         .relaunchMessageUnsaved: [.simplifiedChinese: "注意：还有 %d 个页签有未保存的改动，重启会丢失。", .english: "Note: %d tab(s) have unsaved changes that would be lost."],
