@@ -202,20 +202,29 @@ struct ObjectTreeView: View {
             .contentShape(Rectangle())
             // 双击表 / 视图 → 浏览前 N 行（FR-DATA-01）。
             // 双击手势必须写在单击之前，否则会被单击吞掉。
+            // **双击 = 展开**（2026-09-29 需求提出者定：展开只走双击与右箭头，绝不走单击）。
+            // 不可展开但可浏览的节点（若有）保留"浏览前 N 行"这条老行为，能力不丢；
+            // 可展开的节点（表 / 视图 / 库 / schema）双击只展开，浏览走右键菜单或 ⌘K。
             .onTapGesture(count: 2) {
                 guard !row.isGroupHeader else { return }
-                guard ObjectTreeActions.isAvailable(.browseRows, for: row.object.kind) else { return }
                 appState.selectTreeObject(row.object)
                 hoverBox.rowID = row.object.id
+                if row.isExpandable {
+                    toggle(row.object)
+                    return
+                }
+                guard ObjectTreeActions.isAvailable(.browseRows, for: row.object.kind) else { return }
                 Task { await appState.performTreeAction(.browseRows, on: row.object) }
             }
+            // **单击只选中**（2026-09-29 需求提出者原话：「单击选择某个对象时不要去查数据并自动展开下一级，
+            // 只有用户双击或选择前面的右箭头才展开，不然体验真的很差」）。
+            // 原先单击既选中又展开 ⇒ 每次点一下都要发一条元数据查询 + 整树重算 ⇒ 手感很差。
+            // 展开的唯一入口：双击上面的那段 + 行首那个 chevron 按钮。
             .onTapGesture {
                 guard !row.isGroupHeader else { return }
-                // 单击既「选中」也「展开」：表 / 视图这类节点本来就靠单击展开看列。
                 appState.selectTreeObject(row.object)
+                // 点完立刻右键的人，菜单目标是这一行（悬停盒子的口径，见 `HoverBox` 的说明）。
                 hoverBox.rowID = row.object.id
-                guard row.isExpandable else { return }
-                toggle(row.object)
             }
             // 记「鼠标在哪一行」（右键菜单已按行挂，这里只服务"点完立刻操作"的悬停口径）。
             .onHover { hovering in

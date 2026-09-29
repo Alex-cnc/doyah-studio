@@ -93,4 +93,25 @@ final class ObjectTreeRowMenuConventionTests: XCTestCase {
         XCTAssertFalse(view.contains("private func color(for kind: DatabaseObject.Kind)"),
                        "按类型上色已搬进行渲染体（`ObjectTreeRowContent.color`）—— 视图里不要再留一份")
     }
+    /// **展开只走双击与右箭头，绝不走单击**（2026-09-29 需求提出者原话）：
+    /// 「单击选择某个对象时不要去查数据并自动展开下一级，只有用户双击或选择前面的右箭头才展开，
+    /// 不然体验真的很差」。原先单击既选中又展开 ⇒ 每点一下都发一条元数据查询 + 整树重算。
+    func testSingleClickSelectsOnlyAndNeverExpands() throws {
+        let view = try source("App/Views/ObjectTreeView.swift")
+        guard let single = view.range(of: ".onTapGesture {") else {
+            return XCTFail("找不到单击手势 —— 判据锚点变了，请更新这条判据而不是删掉它")
+        }
+        let singleBody = String(view[single.lowerBound...].prefix(700))
+        XCTAssertTrue(singleBody.contains("appState.selectTreeObject(row.object)"),
+                      "单击必须选中")
+        XCTAssertFalse(singleBody.contains("toggle(row.object)"),
+                       "单击**不许**展开（会连带发元数据查询 + 整树重算）")
+
+        guard let double = view.range(of: ".onTapGesture(count: 2) {") else {
+            return XCTFail("找不到双击手势 —— 判据锚点变了，请更新这条判据而不是删掉它")
+        }
+        let doubleBody = String(view[double.lowerBound...].prefix(700))
+        XCTAssertTrue(doubleBody.contains("toggle(row.object)"),
+                      "双击必须展开（它是除右箭头之外的唯一展开入口）")
+    }
 }
