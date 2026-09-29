@@ -266,6 +266,7 @@
 		9105381804A85D2F9F2EE80E /* ExecutionScopeTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 859A23CF786D5A0C29A786AC /* ExecutionScopeTitle.swift */; };
 		926072FC6969B7EF58DF5E20 /* MCPApprovalQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = F595D662F0385DE07F8F6E70 /* MCPApprovalQueue.swift */; };
 		926331062DC98F6EF40FA381 /* EgressLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A836D6218D74876DC7863566 /* EgressLog.swift */; };
+		9347E8FC45E57883D752244F /* EgressTabOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEA837F70998F6AE9936F5F /* EgressTabOptions.swift */; };
 		9365826B114A92AF87A7E628 /* SessionMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954706C0B4CCE24F0FF0EDCB /* SessionMonitorTests.swift */; };
 		94F88C9BC426C894917472D6 /* LLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B1D06A03E84DFC10BB96BC /* LLMClient.swift */; };
 		965850E44C68CBA7DC264B16 /* InlineEditDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2C95AEA6EA2ED725F7B3D4 /* InlineEditDraft.swift */; };
@@ -782,6 +783,7 @@
 		8B0D182DB7668F8560FD1B1B /* ExplainPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExplainPlan.swift; sourceTree = "<group>"; };
 		8B10C18CB261D7B68CF112C2 /* SSHTunnelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHTunnelTests.swift; sourceTree = "<group>"; };
 		8BB8BE955D1E0A7B5F56977C /* MetadataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataService.swift; sourceTree = "<group>"; };
+		8BEA837F70998F6AE9936F5F /* EgressTabOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EgressTabOptions.swift; sourceTree = "<group>"; };
 		8CC0B057BD7792B8E86FB2EF /* MySQLDialectTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySQLDialectTests.swift; sourceTree = "<group>"; };
 		8E6B4EC19B05AD5676D576B7 /* SSLModeDialectTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSLModeDialectTests.swift; sourceTree = "<group>"; };
 		8EDB0CE8EAA3D92E8B9AECA1 /* SavedQueryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedQueryStoreTests.swift; sourceTree = "<group>"; };
@@ -1322,6 +1324,7 @@
 				E65BA9B67F01D433DA2A8BFA /* DoyahIdentity.swift */,
 				0AD5B59C3A066796F7699405 /* EditorTextSync.swift */,
 				A836D6218D74876DC7863566 /* EgressLog.swift */,
+				8BEA837F70998F6AE9936F5F /* EgressTabOptions.swift */,
 				84964F124D2EDE5A6775778E /* ERDiagram.swift */,
 				A9BDA94FA69744581377F725 /* ERDiagramSource.swift */,
 				ED607403CD8E32896432C6BE /* ExecutionRegistry.swift */,
@@ -1970,6 +1973,7 @@
 				DCC99BE05954AA7D4CA9CC3B /* ERDiagramSource.swift in Sources */,
 				B23D05DA7BBEE2BD0FDBE34C /* EditorTextSync.swift in Sources */,
 				926331062DC98F6EF40FA381 /* EgressLog.swift in Sources */,
+				9347E8FC45E57883D752244F /* EgressTabOptions.swift in Sources */,
 				7A883DD7E815C6EA168C0AB5 /* ExecutionRegistry.swift in Sources */,
 				786D356E5E5EA0281FB5A0E0 /* ExecutionSafety.swift in Sources */,
 				D40680E107E53EE35D362BFC /* ExecutionScope.swift in Sources */,

@@ -153,6 +153,15 @@ public actor EgressLog {
     }
 
     /// 追加一条记录（写入前统一脱敏，落盘失败不抛给调用方 —— 记日志失败不该打断用户的操作）。
+    ///
+    /// **重建这一条时字段必须一个不少**（2026-09-29 第 103 轮实测的真缺陷）：
+    /// 脱敏是**重建**一个 `EgressEntry`，此前那次重建漏了 `tabID` / `tabTitle` ——
+    /// 于是「按浏览器页签筛」这件事**在真机上永远筛不出来**：内存里那条带着页签身份，
+    /// 落盘时被抹掉，界面读的是盘上那份（`refreshEgressLog()`），
+    /// 页签下拉永远是空的、还灰着（`EgressLogSheet` 的 `.disabled(tabOptions.isEmpty)`）。
+    /// 它同时是"看起来像功能、其实从来没生效"的典型：单测当初用**内存里现造的** `EgressEntry`
+    /// 判筛选（`testTabFilterKeepsOnlyThatTab`），走不到这条落盘路径 ⇒ 全绿。
+    /// `tabTitle` 与 `origin` 同为用户可见文本，一并向脱敏看齐（页标题也可能带令牌）。
     public func append(_ entry: EgressEntry) {
         let sanitized = EgressEntry(
             id: entry.id,
@@ -161,7 +170,9 @@ public actor EgressLog {
             target: EgressTarget.sanitize(entry.target),
             origin: AgentAudit.redacted(entry.origin),
             outcome: entry.outcome,
-            detail: entry.detail.map { AgentAudit.redacted($0) }
+            detail: entry.detail.map { AgentAudit.redacted($0) },
+            tabID: entry.tabID,
+            tabTitle: entry.tabTitle.map { AgentAudit.redacted($0) }
         )
 
         do {

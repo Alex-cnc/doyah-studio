@@ -197,6 +197,58 @@ final class EgressLogTests: XCTestCase {
         XCTAssertEqual(Set(entries.map(\.outcome)), [.allowed, .failed])
         XCTAssertTrue(entries.contains { ($0.detail ?? "").contains("网络不可达") })
     }
+
+    // MARK: - 落盘的那份是「脱敏后的副本」（第 103 轮实测的真缺陷）
+
+    /// **真缺陷（2026-09-29 第 103 轮）**：`append` 落盘的不是传进来那个对象，而是
+    /// **脱敏重造的一份副本** —— 那次重建漏了 `tabID` / `tabTitle`，于是盘上每条浏览器记录
+    /// 都没有页签身份，「按页签筛」那台下拉永远空、永远灰（人手上点就是这个现象）。
+    ///
+    /// 上面那条编解码往返**摸不到这个重建**（它自己 encode / decode，不经过 `append`）
+    /// ⇒ 判据必须**从 `append` 进、从盘上出**，而且换一个实例读，别读内存。
+    func testAppendKeepsTabIdentityOnDisk() async throws {
+        let tab = UUID()
+        let log = makeLog()
+        await log.append(
+            EgressEntry(
+                kind: .browser,
+                target: "https://docs.example/a",
+                origin: "浏览器 · 页签",
+                outcome: .allowed,
+                detail: nil,
+                tabID: tab,
+                tabTitle: "文档"
+            )
+        )
+
+        let reread = try await makeLog().entries()   // 换一个实例：判据看盘，不看内存
+        XCTAssertEqual(reread.count, 1)
+        XCTAssertEqual(reread.first?.tabID, tab, "盘上那条没有页签 id ⇒ 按页签筛永远查不到它")
+        XCTAssertEqual(reread.first?.tabTitle, "文档", "盘上那条没有页签标题")
+    }
+
+    /// 脱敏**不许**把页签身份脱掉，同时**该脱的照脱**：目标仍要去 query、正文仍要脱敏。
+    func testAppendStillRedactsWhileKeepingTabIdentity() async throws {
+        let tab = UUID()
+        let log = makeLog()
+        await log.append(
+            EgressEntry(
+                kind: .browser,
+                target: "https://docs.example/a?token=sk-secret123",
+                origin: "浏览器 · 页签",
+                outcome: .allowed,
+                detail: "Authorization: Bearer sk-secret123",
+                tabID: tab,
+                tabTitle: "文档"
+            )
+        )
+
+        let entries = try await makeLog().entries()
+        let entry = try XCTUnwrap(entries.first)
+        XCTAssertEqual(entry.tabID, tab)
+        XCTAssertFalse(entry.target.contains("sk-secret123"), "目标里的 query 必须去掉")
+        XCTAssertFalse((entry.detail ?? "").contains("sk-secret123"), "正文里的密钥必须脱敏")
+    }
 }
 
 /// 统计被调用次数的假传输。
@@ -324,5 +376,118 @@ final class EgressFilterTests: XCTestCase {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(EgressEntry.self, from: data)
         XCTAssertEqual(decoded, original)
+    }
+}
+
+/// 「按浏览器页签筛」那台下拉的选项推导（FR-EDIT-34）——**第 103 轮从 `EgressLogSheet` 搬出来的**。
+///
+/// 为什么值得单独测：它从前是视图里的一个 `private var`，于是「日志里出现过的页签」
+/// **只有渲染出来才看得见** —— 而本机 SwiftUI 的 `Picker` 不落到 AppKit 控件（同轮实测：
+/// 离屏宿主里一个 `NSPopUpButton` 都没有），判据连控件都摸不到 ⇒ 搬成纯函数之后，
+/// 判据可以拿**盘上读回来的真记录**直接判它。
+final class EgressTabOptionsTests: XCTestCase {
+
+    private var directory: URL!
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EgressTabOptionsTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: directory)
+        directory = nil
+    }
+
+    private func tabEntry(_ tabID: UUID?, title: String?, target: String) -> EgressEntry {
+        EgressEntry(
+            kind: .browser,
+            target: target,
+            origin: "浏览器 · 页签",
+            outcome: .allowed,
+            detail: nil,
+            tabID: tabID,
+            tabTitle: title
+        )
+    }
+
+    /// 顺序 = 日志里**首次出现的顺序**（`entries()` 新的在前）；一个页签只出一个选项。
+    func testOptionsFollowLogOrderAndCollapseToOnePerTab() {
+        let first = UUID()
+        let second = UUID()
+        let entries = [
+            tabEntry(first, title: "文档", target: "https://docs.example/c"),
+            tabEntry(second, title: "工单", target: "https://tickets.example/b"),
+            tabEntry(first, title: "文档", target: "https://docs.example/a")
+        ]
+
+        let options = EgressTabOptions.options(from: entries)
+        XCTAssertEqual(options.map(\.id), [first, second])
+        XCTAssertEqual(options.map(\.label), ["文档", "工单"])
+    }
+
+    /// **这条就是那个真缺陷的行为面**：记录没有页签身份 ⇒ 下拉里一个选项都没有
+    /// （而脱敏重建漏字段时，盘上每条浏览器记录都长这样）。
+    func testEntriesWithoutTabIdentityProduceNoOptions() {
+        let entries = [
+            tabEntry(nil, title: nil, target: "https://docs.example/a"),
+            EgressEntry(kind: .agentModel, target: "https://api.example/v1", origin: "智能体 · 生成 SQL", outcome: .allowed)
+        ]
+        XCTAssertTrue(
+            EgressTabOptions.options(from: entries).isEmpty,
+            "没有页签身份的记录不该产出选项（下拉会永远空、永远灰）"
+        )
+    }
+
+    /// 缺标题时退回 id 前 8 位 —— 至少让人认得出「是同一个页签」，而不是给一个空标签。
+    func testLabelFallsBackToShortIDWhenTitleMissing() {
+        let tab = UUID()
+        let options = EgressTabOptions.options(from: [tabEntry(tab, title: nil, target: "https://docs.example/a")])
+        XCTAssertEqual(options.map(\.label), [String(tab.uuidString.prefix(8))])
+    }
+
+    /// 标题可能**先是「新页签」、后来才成真标题**：短标签允许被后来的标题替换；够长的就钉住。
+    /// （`entries()` 新的在前 ⇒ 数组里**索引越小越新**。）
+    func testShortPlaceholderLabelIsReplacedByLaterTitle() {
+        let tab = UUID()
+        let pinned = EgressTabOptions.options(from: [
+            tabEntry(tab, title: "文档仓库（很长的一个标题）", target: "https://docs.example/b"),
+            tabEntry(tab, title: "新页签", target: "https://docs.example/a")
+        ])
+        XCTAssertEqual(
+            pinned.map(\.label),
+            ["文档仓库（很长的一个标题）"],
+            "最新的标签够长（≥ \(EgressTabOptions.replaceableLabelLength) 字）⇒ 钉住，别被更早的占位标题顶掉"
+        )
+
+        let replaced = EgressTabOptions.options(from: [
+            tabEntry(tab, title: "新页签", target: "https://docs.example/a"),
+            tabEntry(tab, title: "文档", target: "https://docs.example/b")
+        ])
+        XCTAssertEqual(replaced.map(\.label), ["文档"], "最新那条还是占位标题（「新页签」）⇒ 允许被更早的真标题替换")
+    }
+
+    /// 端到端：**从 `append` 进、从盘上出**再算选项 —— 这是探针那条判据的单测版。
+    func testOptionsDerivedFromEntriesReadBackFromDisk() async throws {
+        let tab = UUID()
+        let log = EgressLog(directoryURL: directory)
+        await log.append(tabEntry(tab, title: "文档", target: "https://docs.example/a"))
+        await log.append(
+            EgressEntry(
+                kind: .browser,
+                target: "https://cdn.example/report.zip",
+                origin: "浏览器 · 下载",
+                outcome: .allowed,
+                detail: nil,
+                tabID: tab,
+                tabTitle: "文档"
+            )
+        )
+
+        let onDisk = try await EgressLog(directoryURL: directory).entries()
+        XCTAssertEqual(onDisk.count, 2)
+        XCTAssertEqual(EgressTabOptions.options(from: onDisk).map(\.id), [tab])
+        XCTAssertEqual(EgressTabOptions.options(from: onDisk).map(\.label), ["文档"])
     }
 }

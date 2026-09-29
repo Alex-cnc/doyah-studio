@@ -825,11 +825,36 @@ enum UISnapshot {
         }
 
         static func findSegmentedControl(in view: NSView) -> NSSegmentedControl? {
-            if let control = view as? NSSegmentedControl { return control }
             for subview in view.subviews {
+                if let control = subview as? NSSegmentedControl { return control }
                 if let found = findSegmentedControl(in: subview) { return found }
             }
             return nil
+        }
+
+        /// 宿主视图树里**所有**的弹窗按钮。
+        ///
+        /// SwiftUI 的 `Picker`（默认 `.menu` 档）在 macOS 上落到 `NSPopUpButton`（实测 2026-09-29 /
+        /// macOS 27）。为什么一次拿全部而不是「取第一个」：一个面板上常有好几台同形状的 `Picker`
+        /// （`EgressLogSheet` 就有三台：类别 / 结果 / **页签**）——「页签那一台在不在、可不可点、
+        /// 里面有没有那个页签」得先按**条目文案**把它们挑出来；取第一个只会在顺序变化时判错东西。
+        /// 读的是控件的 `itemTitles` / `isEnabled`，即**界面上的事实**，不是模型里的推断。
+        var popUpButtons: [NSPopUpButton] {
+            Self.findViews(ofType: NSPopUpButton.self, in: hosting)
+        }
+
+        /// 宿主视图树里**所有**的文本输入控件（地址栏那种）。
+        var textFields: [NSTextField] {
+            Self.findViews(ofType: NSTextField.self, in: hosting)
+        }
+
+        static func findViews<T: NSView>(ofType type: T.Type, in view: NSView) -> [T] {
+            var found: [T] = []
+            if let match = view as? T { found.append(match) }
+            for subview in view.subviews {
+                found.append(contentsOf: findViews(ofType: type, in: subview))
+            }
+            return found
         }
 
         /// 取一张图、落盘、把记录写进清单（口径与 `write` 相同）。

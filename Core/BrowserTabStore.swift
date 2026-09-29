@@ -23,6 +23,13 @@ public actor BrowserTabStore {
         let baseURL: URL
         if let directoryURL {
             baseURL = directoryURL
+        } else if let override = ProcessInfo.processInfo.environment["DOYAH_BROWSER_TABS_DIR"],
+                  !override.trimmingCharacters(in: .whitespaces).isEmpty {
+            // 目录可覆盖（与 `DOYAH_NOTES_DIR` / `DOYAH_EGRESS_LOG_DIR` 同一思路、同一理由）：
+            // 恢复 / 落盘这类行为**要能在受限环境里验证**，而验证不能往真实用户数据家写页签。
+            // `AppState` 用的是 `BrowserTabStore.shared`（没有注入口），所以探针能指的只有这里；
+            // 没设这个变量时行为与从前**逐字一致**。
+            baseURL = URL(fileURLWithPath: override, isDirectory: true)
         } else {
             let applicationSupport = FileManager.default.urls(
                 for: .applicationSupportDirectory,

@@ -54,6 +54,28 @@ final class BrowserTabStoreTests: XCTestCase {
         XCTAssertTrue(pages.isEmpty)
     }
 
+    /// **第 103 轮**：目录可经 `DOYAH_BROWSER_TABS_DIR` 覆盖。
+    ///
+    /// 为什么需要这个口子：`AppState` 用的 `.shared` 没有注入口，而探针要判「关掉应用、重开，
+    /// 页签还在、而且**没被加载**」—— 判据必须能把它指到探针自己的目录，
+    /// 否则会往真实用户数据家里写页签（验证动作污染用户数据）。
+    /// 口径与 `EgressLog` / 笔记库一致：**显式给的 `directoryURL` 优先于环境变量**。
+    func testEnvironmentOverrideRedirectsTheFile() async throws {
+        let override = directory.appendingPathComponent("override", isDirectory: true)
+        setenv("DOYAH_BROWSER_TABS_DIR", override.path, 1)
+        defer { unsetenv("DOYAH_BROWSER_TABS_DIR") }
+
+        let fromEnvironment = await BrowserTabStore().fileLocation()
+        XCTAssertEqual(fromEnvironment, override.appendingPathComponent("browser-tabs.json"))
+
+        let explicit = await BrowserTabStore(directoryURL: directory).fileLocation()
+        XCTAssertEqual(
+            explicit,
+            directory.appendingPathComponent("browser-tabs.json"),
+            "显式目录必须压过环境变量（不然探针之间会互相串目录）"
+        )
+    }
+
     /// 文件损坏要**如实抛错**，不能静默当成空 —— 静默吞掉会让「页签怎么没了」变成无解悬案。
     func testCorruptFileThrowsReadableError() async throws {
         let store = makeStore()

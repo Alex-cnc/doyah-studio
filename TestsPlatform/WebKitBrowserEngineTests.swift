@@ -48,7 +48,8 @@ final class WebKitBrowserEngineTests: XCTestCase {
     /// `javascript:` 被 Core 策略拒绝：**不加载**、页面停在原地、日志留下一条 `denied`。
     func testBlockedSchemeDoesNotNavigateAndIsRecorded() async throws {
         let log = EgressLog(directoryURL: directory)
-        let engine = WebKitBrowserEngine(pageID: UUID(), origin: "浏览器 · 页签 1", log: log)
+        let pageID = UUID()
+        let engine = WebKitBrowserEngine(pageID: pageID, origin: "浏览器 · 页签 1", log: log)
 
         var reported: BrowserPage?
         engine.setUpdateHandler { reported = $0 }
@@ -63,6 +64,25 @@ final class WebKitBrowserEngineTests: XCTestCase {
         XCTAssertEqual(entries.first?.kind, .browser)
         XCTAssertEqual(entries.first?.outcome, .denied)
         XCTAssertEqual(entries.first?.origin, "浏览器 · 页签 1")
+    }
+
+    /// **真缺陷（2026-09-29 第 103 轮）**：**地址栏导航**这条路原先漏了 `tabID` / `tabTitle`
+    /// ⇒ 它留下的每一条日志都没有页签身份，于是「按页签筛」那台下拉永远空（而页面内点击那条路
+    /// 一直带着身份 —— 同一个东西两种口径）。判据：**从地址栏发起**的导航，盘上那条要带页签身份。
+    ///
+    /// 标签此时是页面的默认标题（新建页签 = 「新页签」），真标题要等引擎回报 ——
+    /// 同一页签前后几条标签不一样是正常的，下拉那边靠「短标签允许被后来的标题替换」兜住。
+    func testAddressBarNavigationRecordsTabIdentity() async throws {
+        let log = EgressLog(directoryURL: directory)
+        let pageID = UUID()
+        let engine = WebKitBrowserEngine(pageID: pageID, origin: "浏览器 · 页签 1", log: log)
+
+        await engine.load(URL(string: "javascript:alert(1)")!)
+
+        let entries = try await log.entries()
+        let entry = try XCTUnwrap(entries.first)
+        XCTAssertEqual(entry.tabID, pageID, "地址栏导航那条没有页签 id ⇒ 按页签筛永远查不到它")
+        XCTAssertFalse(entry.tabTitle?.isEmpty ?? true, "标签为空 ⇒ 下拉里那一项认不出是哪个页签")
     }
 
     /// 空白页：不加载、也**不产生日志条目**（它没有出网）。

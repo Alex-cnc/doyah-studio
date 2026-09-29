@@ -39,19 +39,11 @@ struct EgressLogSheet: View {
 
     /// 日志里出现过的页签（最近出现的在前）——筛选项从**日志本身**派生，
     /// 而不是从"当前开着的页签"派生：关掉页签后那些记录仍然要能被筛出来。
-    private var tabOptions: [(id: UUID, label: String)] {
-        var seen: [UUID: String] = [:]
-        var order: [UUID] = []
-        for entry in appState.egressEntries {
-            guard let tabID = entry.tabID else { continue }
-            if seen[tabID] == nil {
-                order.append(tabID)
-                seen[tabID] = entry.tabTitle ?? String(tabID.uuidString.prefix(8))
-            } else if seen[tabID]?.count ?? 0 < 12, let title = entry.tabTitle, !title.isEmpty {
-                seen[tabID] = title
-            }
-        }
-        return order.map { (id: $0, label: seen[$0] ?? String($0.uuidString.prefix(8))) }
+    ///
+    /// 推导本身是 Core 里的**纯函数** `EgressTabOptions.options(from:)`（第 103 轮搬出去的）：
+    /// 本机 SwiftUI 的 `Picker` 不落到 AppKit 控件，判据点不到那台下拉 ⇒ 把它搬成能直接断言的东西。
+    private var tabOptions: [EgressTabOptions.TabOption] {
+        EgressTabOptions.options(from: appState.egressEntries)
     }
 
     // MARK: 头部

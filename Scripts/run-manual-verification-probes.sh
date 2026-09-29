@@ -120,6 +120,34 @@ set -euo pipefail
 # 这批**不需要任何环境**（真库 = 每轮清空的临时 `DOYAH_NOTES_DIR`），两遍都该绿；
 # 证据文件同样**会被核对**（跳过 ≠ 通过）。
 #
+# ## 第十批（队列 L-89 ㈡ 第 9 条，第 103 轮）：浏览器页签与下载
+#
+# `TestsUISnapshot/BrowserTabDownloadProbeTests.swift` 判清单 §10 `FR-EDIT-34` 那一行的三句人话：
+#   ① 「新建页签 → 打开一个站点 → 关掉重开应用看是否恢复地址」；
+#   ② 「看外发日志：按页签筛一次（下拉里应出现你刚浏览的那个页签）」；
+#   ③ 「找一个下载链接点一下 → 提示条『已下载到 <路径>』、文件真的在那个目录里、
+#      同名文件不会被覆盖（自动加 -1）」。
+#
+# **本批最要紧的结论：② 在真机上从来没生效过**（两处真缺陷，本批修掉）——
+#   · `EgressLog.append` 的脱敏是**重建**一条记录，那次重建漏了 `tabID` / `tabTitle`
+#     ⇒ 内存里有页签身份、**盘上没有**，而界面读的是盘上那份 ⇒ 页签下拉永远是空的、还灰着；
+#   · `WebKitBrowserEngine.navigate(to:)`（地址栏 / 后退 / 前进 / 刷新都走它）记日志时漏了 `tabID`
+#     ⇒ 只有「页面内点击」那条带着页签身份，两条路记出来的记录形状不一致。
+#
+# 判据从**盘上**读、从**界面控件**上读（真 `AppState` + 真页签库文件 + 真外发日志文件 +
+# 真授权书签 + 真 `EgressLogSheet` / `BrowserTabView` 渲染）：
+#   ① 重开之后地址回来了且**没被加载**（`isBrowserPagePristine`）+ 地址栏控件里的文本就是它；
+#   ② 盘上两条记录都带页签身份、`EgressFilter(tabID:)` 只留那一个、页签那台下拉里恰好一个页签且**可点**；
+#      反向对照 = 日志清空后同一台下拉是灰的（那条断言不是恒真的）；
+#   ③ 文件真落在授权目录、同名再来一次得到 `-1` 且第一份一个字节没动、提示条就是
+#      「已下载到 <路径>」、外发日志那条 `allowed` 也带页签身份、提示条在画面上（有/无逐字节不同）。
+#
+# **边界（如实登记）**：WebKit 的字节搬运那一步（`WKDownload` 的回调）**没有被驱动** ——
+# 判的是引擎之后的每一环（落盘命名 / 覆盖规避 / 提示条 / 留痕），都喂真文件、真目录；
+# 导航打在 `127.0.0.1:9`（discard 口），探针自己不产生真实出网。
+# 本批要 `DOYAH_BROWSER_TABS_DIR`（临时页签库）与 `DOYAH_EGRESS_LOG_DIR`（临时外发日志），
+# 证据文件同样**会被核对**（跳过 ≠ 通过）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -144,7 +172,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `AppearanceFontProbeTests`（㈡：主题与字体 —— 手输族之后界面说的话 + SQL 预览的字形）。
 # + `TerminalInterruptProbeTests`（L-92 ㈡①：终端 `⌃C` 打断前台 `sleep 30` —— 非沙箱包的作业控制）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -160,9 +188,12 @@ export DOYAH_UI_SNAPSHOT=1
 # 与用户真实数据解耦：笔记 / 统一外发日志指到每轮清空的临时目录。
 PROBE_DATA="${SCRATCH}/manual-verification-probe-data"
 rm -rf "${PROBE_DATA}"
-mkdir -p "${PROBE_DATA}/notes" "${PROBE_DATA}/egress"
+mkdir -p "${PROBE_DATA}/notes" "${PROBE_DATA}/egress" "${PROBE_DATA}/browser-tabs"
 export DOYAH_NOTES_DIR="${PROBE_DATA}/notes"
 export DOYAH_EGRESS_LOG_DIR="${PROBE_DATA}/egress"
+# 浏览器页签库（第十批）：`AppState` 用的是 `BrowserTabStore.shared`（没有注入口），
+# 所以恢复 / 落盘这类行为只能靠这个变量指到临时目录 —— 否则探针会往真实数据家写页签。
+export DOYAH_BROWSER_TABS_DIR="${PROBE_DATA}/browser-tabs"
 
 mkdir -p "${CACHE}" "${SCRATCH}" "${CLANG_MODULE_CACHE_PATH}" "${SWIFT_MODULE_CACHE_PATH}"
 cd "${ROOT}"
@@ -612,6 +643,109 @@ if failures:
     sys.exit(1)
 print("✓ 两遍都真跑过：查询还在时保存/删除当场生效；旧词的结果与失败都不落地；"
       "切换后没有一次落地来自旧词（终态 = 最后那个词）")
+PY
+
+echo "==> 浏览器页签与下载那条：两遍都**真跑过**了吗（跳过 ≠ 通过）"
+python3 - "${OUT_PLAIN}" "${OUT_SANDBOX}" "${ROOT}" <<'PY'
+import json
+import os
+import sys
+
+
+def load(directory, case):
+    path = os.path.join(directory, f"browser-tab-evidence-{case}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+failures = []
+plain, sandbox, root = sys.argv[1], sys.argv[2], sys.argv[3]
+for directory in (plain, sandbox):
+    base = os.path.basename(directory)
+    restored = load(directory, "restoredTab")
+    if restored is None:
+        failures.append(f"{base}：没有 restoredTab 的证据文件 —— 那条没跑（跳过不算通过）")
+    else:
+        if restored.get("restoredAddress") != restored.get("address"):
+            failures.append(
+                f"{base}/restoredTab：重开之后地址不是上次那个：{restored.get('restoredAddress')}"
+            )
+        if restored.get("pristineAfterRestart") is not True:
+            failures.append(f"{base}/restoredTab：恢复出来的页签被当成已加载（打开应用就出网了）")
+        if restored.get("address") not in (restored.get("addressFieldValues") or []):
+            failures.append(
+                f"{base}/restoredTab：地址栏里没有那个地址：{restored.get('addressFieldValues')}"
+            )
+
+    egress = load(directory, "egressByTab")
+    if egress is None:
+        failures.append(f"{base}：没有 egressByTab 的证据文件")
+    else:
+        ids = egress.get("entryTabIDs") or []
+        if len(ids) != 2 or any(value in (None, "", "nil") for value in ids):
+            failures.append(f"{base}/egressByTab：盘上那份记录没带页签身份：{ids}")
+        if ids and any(value != egress.get("tabA") for value in ids):
+            failures.append(f"{base}/egressByTab：记录的页签身份不是那个页签：{ids}")
+        origins = egress.get("entryOrigins") or []
+        for wanted in ("浏览器 · 页签", "浏览器 · 下载"):
+            if wanted not in origins:
+                failures.append(f"{base}/egressByTab：日志里没有「{wanted}」那条：{origins}")
+        if egress.get("filterCountForTabA") != 2:
+            failures.append(f"{base}/egressByTab：按那个页签筛出来的条数不是 2：{egress.get('filterCountForTabA')}")
+        if egress.get("filterCountForTabB") != 0:
+            failures.append(f"{base}/egressByTab：按没发过请求的页签筛出了记录：{egress.get('filterCountForTabB')}")
+        if (egress.get("tabPickerIDs") or []) != [egress.get("tabA")]:
+            failures.append(f"{base}/egressByTab：下拉里的页签不是恰好那一个：{egress.get('tabPickerIDs')}")
+        if (egress.get("tabPickerLabels") or []) != [egress.get("tabATitle")]:
+            failures.append(f"{base}/egressByTab：下拉里的显示名不对：{egress.get('tabPickerLabels')}")
+        if (egress.get("tabPickerLabelsWhenEmpty") or []) != []:
+            failures.append(
+                f"{base}/egressByTab：日志清空后还有页签选项（「可点」那条断言恒真了）："
+                f"{egress.get('tabPickerLabelsWhenEmpty')}"
+            )
+        if egress.get("sheetRenderedAllTabs") is not True:
+            failures.append(f"{base}/egressByTab：外发日志面板上没渲染出「页签」那台下拉")
+
+    landing = load(directory, "downloadLanding")
+    if landing is None:
+        failures.append(f"{base}：没有 downloadLanding 的证据文件")
+    else:
+        if landing.get("firstFile") != "report.zip":
+            failures.append(f"{base}/downloadLanding：第一份的文件名不是 report.zip：{landing.get('firstFile')}")
+        if landing.get("secondFile") != "report-1.zip":
+            failures.append(f"{base}/downloadLanding：同名那一份没加 -1（会覆盖）：{landing.get('secondFile')}")
+        if landing.get("firstUnchanged") is not True:
+            failures.append(f"{base}/downloadLanding：第二份把第一份写坏了")
+        if (landing.get("filesOnDisk") or []) != ["report-1.zip", "report.zip"]:
+            failures.append(f"{base}/downloadLanding：授权目录里的文件不对：{landing.get('filesOnDisk')}")
+        wanted_path = os.path.join(landing.get("authorizedDirectory") or "", landing.get("secondFile") or "")
+        if wanted_path and wanted_path not in (landing.get("notice") or ""):
+            failures.append(f"{base}/downloadLanding：提示条里没有那个路径：{landing.get('notice')}")
+        if landing.get("egressOutcome") != "allowed":
+            failures.append(f"{base}/downloadLanding：下载那条外发记录的结果不是 allowed：{landing.get('egressOutcome')}")
+        if landing.get("egressTabID") != landing.get("tabID"):
+            failures.append(f"{base}/downloadLanding：下载那条记录没带页签身份：{landing.get('egressTabID')}")
+
+# 源锚点：「视图用的就是那个纯函数」—— 纯函数抽出来而没人用等于没抽（第 101 轮的教训）
+with open(os.path.join(root, "App/Views/EgressLogSheet.swift"), encoding="utf-8") as handle:
+    sheet_text = handle.read()
+if "EgressTabOptions.options(from: appState.egressEntries)" not in sheet_text:
+    failures.append("EgressLogSheet 不再用 EgressTabOptions 推导选项（判据与界面脱钩了）")
+if ".disabled(tabOptions.isEmpty)" not in sheet_text:
+    failures.append("EgressLogSheet 里那条「没有页签就灰着」的接线不见了")
+if "for entry in appState.egressEntries" in sheet_text:
+    failures.append("EgressLogSheet 又在自己算一遍选项（同一口径出现了第二处）")
+if not os.path.exists(os.path.join(root, "Core/EgressTabOptions.swift")):
+    failures.append("Core/EgressTabOptions.swift 不在盘上")
+
+if failures:
+    for item in failures:
+        print(f"✗ {item}")
+    sys.exit(1)
+print("✓ 两遍都真跑过：重开地址还在（且没加载、地址栏里就是它）／盘上两份记录都带页签身份、"
+      "筛得出来、下拉里恰好那一个页签（清空即无）／下载落在授权目录、同名加 -1、提示条写着那个路径")
 PY
 
 echo

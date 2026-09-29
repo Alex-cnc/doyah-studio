@@ -132,7 +132,17 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
         page = transition.page
         publish()
 
-        await BrowserSession.record(transition, origin: origin, log: log)
+        // 页签身份**与代理那条路同一份口径**（2026-09-29 第 103 轮实测的真缺陷）：
+        // 这里原先漏了 `tabID` / `tabTitle` ⇒ **地址栏导航**留下的那一条日志没有页签身份，
+        // 于是清单 `FR-EDIT-34` 里「打开一个站点 → 按页签筛一次」在真机上筛不出来 ——
+        // 而"页面内点击"那条路（`decidePolicyFor`）是带着的，两条路记出来的记录形状不一致。
+        await BrowserSession.record(
+            transition,
+            origin: origin,
+            tabID: pageID,
+            tabTitle: tabLabel,
+            log: log
+        )
 
         guard let loadURL = transition.urlToLoad else { return }
         // 这一次 `view.load` 是"应用层已裁决过"的，代理里放行即可（一次标记，一次消费）。
@@ -143,6 +153,16 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
     private func publish() {
         updateHandler?(page)
     }
+
+    /// 日志那条记录上的**页签标签** = 页面当前的标题。
+    ///
+    /// 三处记录点共用这一份口径：同一个东西不许有两个说法 —— 两条路记出来的记录形状不一致，
+    /// 「按页签筛」就会漏（2026-09-29 第 103 轮实测：地址栏那条路原先连 `tabID` 都没带）。
+    ///
+    /// 注意新建页签的标题就是「新页签」那一档，真标题由引擎 `finishNavigation` 之后才回报
+    /// ⇒ **同一页签前后几条记录的标签会不一样**；所以「按页签筛」下拉那边的口径是
+    /// 「短标签允许被后来的标题替换」（`EgressTabOptions`）。
+    private var tabLabel: String { page.title }
 }
 
 // MARK: - WKNavigationDelegate
@@ -177,7 +197,7 @@ extension WebKitBrowserEngine: WKNavigationDelegate {
                 transition,
                 origin: origin,
                 tabID: pageID,
-                tabTitle: page.title ?? page.url?.absoluteString,
+                tabTitle: tabLabel,
                 log: log
             )
             return .download
@@ -198,7 +218,7 @@ extension WebKitBrowserEngine: WKNavigationDelegate {
             transition,
             origin: origin,
             tabID: pageID,
-            tabTitle: page.title ?? page.url?.absoluteString,
+            tabTitle: tabLabel,
             log: log
         )
 
