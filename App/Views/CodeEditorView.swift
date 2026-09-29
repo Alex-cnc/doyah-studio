@@ -54,6 +54,10 @@ struct CodeEditorView: NSViewRepresentable {
         textView.textContainer?.containerSize = NSSize(width: 600, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.lineFragmentPadding = 4
+        // 大文档（5,000 行 / 数万字符）下 `NSTextView` 默认要**整篇**布局：删一个字符也会触发
+        // 全文重排 —— 人工点验实测「删除时明显卡顿」（2026-09-28，NFR-PERF-05）。打开非连续布局，
+        // 布局管理器只铺可见范围，光标以外的段落延后算。
+        textView.layoutManager?.allowsNonContiguousLayout = true
         textView.string = text
         textView.onSave = onSave
         // 行号列的宽度由「行数位数」定（`textContainerInset.width` 就是它的宽度），
@@ -128,11 +132,18 @@ struct CodeEditorView: NSViewRepresentable {
         }
 
         /// 延后一次高亮：避免与输入法 / 文本编辑回调重入。
+        ///
+        /// **这是真的 debounce，不是「扔到下一个 runloop」**：`DispatchQueue.main.async` 在连续
+        /// 按键（尤其长按删除）时等于**每个键**都全量重新着色整篇文本（`apply(tokens:)` 先对全文
+        /// `setAttributes`），5,000 行文档上表现为「删除时明显卡顿」（2026-09-28 人工点验实测）。
+        /// 合并窗口按文档大小分档：大文档等更久，代价是高亮比光标慢一档，换来打字跟手。
         func scheduleHighlighting() {
             highlightWorkItem?.cancel()
+            let size = textView?.string.count ?? 0
+            let delay: TimeInterval = size > sqlRealtimeScanLimit ? 0.45 : 0.12
             let item = DispatchWorkItem { [weak self] in self?.applyHighlighting() }
             highlightWorkItem = item
-            DispatchQueue.main.async(execute: item)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
         }
 
         func applyHighlighting() {

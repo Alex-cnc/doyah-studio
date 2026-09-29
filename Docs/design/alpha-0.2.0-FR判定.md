@@ -1,6 +1,6 @@
 # `v0.2.0-alpha` 范围账 —— FR 🟡 逐条判定
 
-> **这份文件是什么**：`python3 Scripts/report-requirements.py` 盘点出的 **FR 🟡 50 条**，
+> **这份文件是什么**：`python3 Scripts/report-requirements.py` 盘点出的 **FR 🟡 49 条**，
 > 逐条给出「这条算不算 `v0.2.0-alpha` 的范围」的判定与理由。发布说明（仓根
 > `RELEASE-0.2.0-alpha.md` / `Docs/alpha-0.2.0-发布说明.md`）的「明确不做什么」一节**直接引用本表**，
 > 不再另抄一份。
@@ -18,15 +18,15 @@
 
 | 档位 | 条数 | 含义 |
 |---|---|---|
-| `ui-click` | **35** | 界面点击 / 观感只能人工 |
+| `ui-click` | **34** | 界面点击 / 观感只能人工 |
 | `environment` | **6** | 本机物理不可能 |
 | `device-instance` | **6** | 需真机 / 外部实例 / 外部软件（`FR-IO-04` 2026-09-29 由 `needs-decision` 转入 —— 拍板已下，残项只剩 217 专用库的真实还原） |
 | `not-implemented` | **2** | 本 alpha 明确不含的未做功能 |
 | `needs-decision` | **0** | 等需求提出者拍板（唯一那条 `FR-IO-04` 于 2026-09-29 拍板「改非沙箱」后转入 `device-instance`） |
 | `open-defect` | **1** | 点验发现的缺陷（已开队列条） |
-| **合计** | **50** | = FR 🟡 50 条（`FR-DRV-09` 已 ✅，不在其中；`FR-EXEC-15` / `FR-EXEC-17` 2026-09-28 销账）|
+| **合计** | **49** | = FR 🟡 49 条（`FR-DRV-09` 已 ✅，不在其中；`FR-EXEC-15` / `FR-EXEC-17` / `FR-DDL-05` 2026-09-28 销账）|
 
-> **2026-09-28 销账**：**`FR-EXEC-15`（事务回滚 / 提交）与 `FR-EXEC-17`（参数绑定的注入面）人工点验通过**（SRS **v3.268 / v3.269** 已由 🟡 转 ✅）⇒ 从本表与 `Scripts/alpha-fr-dispositions.json` 里**删除**（销账，不留陈旧条目）。本表 50 条、非环境 **45** 条；判据 `check-alpha-fr-dispositions.py` 会替我们把这件事判住（「修好了要销账」）。
+> **2026-09-28 销账**：**`FR-EXEC-15`（事务回滚 / 提交）、`FR-EXEC-17`（参数绑定的注入面）与 `FR-DDL-05`（ER 图面板观感）人工点验通过**（SRS **v3.268 / v3.269 / v3.270** 已由 🟡 转 ✅）⇒ 从本表与 `Scripts/alpha-fr-dispositions.json` 里**删除**（销账，不留陈旧条目）。本表 49 条、非环境 **44** 条；判据 `check-alpha-fr-dispositions.py` 会替我们把这件事判住（「修好了要销账」）。
 
 > **如实记一处数字纠正**：队列 **L-69** 原文写「**46** 条非环境 🟡」—— 那是 52 − 6（含当时已 ✅ 的
 > `FR-DRV-09`）；按 🟡 实况算，带 `[alpha 不含]` 的只有 **5** 条 ⇒ **非环境 47 条**。本轮按实测走 **47**。
@@ -56,7 +56,6 @@
 | **FR-DATA-06** | 3.5 数据编辑与写回 | 界面点击待人工点验 | `ui-click` | `Scripts/test-fk-navigation.sh` |
 | **FR-DDL-03** | 3.6 表结构与 DDL | 界面呈现待人工点验 | `ui-click` | `Scripts/test-table-index-fk.sh` |
 | **FR-DDL-04** | 3.6 表结构与 DDL | 界面点击待人工点验 | `ui-click` | `Scripts/test-schema-diff.sh` |
-| **FR-DDL-05** | 3.6 表结构与 DDL | 面板点击与观感待人工点验 | `ui-click` | `Scripts/test-er-diagram.sh` |
 | **FR-DIAG-03** | 3.7 性能与诊断 | 本机 pgserver 精简构建无扩展目录 → pg_stat_statements 装不上 | `environment` | `Scripts/test-slow-queries.sh` |
 | **FR-DIAG-04** | 3.7 性能与诊断 | 界面点击待人工点验 | `ui-click` | `Scripts/test-database-stats.sh` |
 | **FR-DRV-08** | 3.10 驱动与方言兼容 | 无 GBase 8a 实例（方言层与驱动已实现，未端到端验） | `environment` | `Scripts/test-mysql-driver.sh` |

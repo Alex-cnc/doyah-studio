@@ -230,19 +230,6 @@
       ]
     },
     {
-      "id": "FR-DDL-05",
-      "domain": "3.6 表结构与 DDL",
-      "reason": "ui-click",
-      "reasonText": "面板点击与观感待人工点验",
-      "marker": "**[alpha 不含]**（面板点击与观感待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-er-diagram.sh"
-        }
-      ]
-    },
-    {
       "id": "FR-DIAG-03",
       "domain": "3.7 性能与诊断",
       "reason": "environment",

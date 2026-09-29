@@ -276,6 +276,7 @@
 		96F10283D164671401068C7E /* WorkspaceHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0538856C2036A580994CCCE9 /* WorkspaceHistory.swift */; };
 		9752F8703B962B98E27D782F /* WebKitBrowserEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A53E8972A59570A0CAE6B887 /* WebKitBrowserEngine.swift */; };
 		97D228518C54168D9906D632 /* AgentActionGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF953EDD3AA3E8E6107C2AE /* AgentActionGateTests.swift */; };
+		9862CFEB72304807FA229C5A /* EditorResponsivenessConventionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAF1D00352F54AB959E0C2D0 /* EditorResponsivenessConventionTests.swift */; };
 		993D5E8DD3A8F375C62A693C /* orders.xlsx in Resources */ = {isa = PBXBuildFile; fileRef = 57F0C51D9015309551BFF869 /* orders.xlsx */; };
 		9B0148202D3B244638012BC0 /* TransactionControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 992A75252443C4E40D52E6FF /* TransactionControl.swift */; };
 		9D287090E567FE896A4CC5B4 /* AppRelauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E280BEEAB326D2D809430A /* AppRelauncher.swift */; };
@@ -983,6 +984,7 @@
 		F9183E8C677AB77024B04634 /* QueryDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryDiagnostics.swift; sourceTree = "<group>"; };
 		F95E1AB7B31AED8EC55C6A06 /* TerminalModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalModeTests.swift; sourceTree = "<group>"; };
 		FA4F503600026163E7F4B328 /* DataTaskVersionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataTaskVersionSheet.swift; sourceTree = "<group>"; };
+		FAF1D00352F54AB959E0C2D0 /* EditorResponsivenessConventionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorResponsivenessConventionTests.swift; sourceTree = "<group>"; };
 		FB06FA08DA478F5385B46065 /* DataTaskSpecSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataTaskSpecSheet.swift; sourceTree = "<group>"; };
 		FBE5308316B042A4E78A4DF1 /* NoteDataBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteDataBoundaryTests.swift; sourceTree = "<group>"; };
 		FD9874F27B81672A096337C6 /* WorkspaceTabTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTabTests.swift; sourceTree = "<group>"; };
@@ -1153,6 +1155,7 @@
 				AC9431167C0ABF30CB531D55 /* DesignTokensTests.swift */,
 				A4BC801E04F0ACE54EA2DDC9 /* DiagnosisTests.swift */,
 				803F662F018510B2DA3452D2 /* DialectTests.swift */,
+				FAF1D00352F54AB959E0C2D0 /* EditorResponsivenessConventionTests.swift */,
 				ED589BEB8A1F97CC6E523575 /* EditorTextSyncTests.swift */,
 				33452CC29410B46C886FE298 /* EgressLogTests.swift */,
 				A2942B5B7D2653D956CEB7C3 /* ERDiagramTests.swift */,
@@ -2156,6 +2159,7 @@
 				1B641F323C982F53167AB6D7 /* DiagnosisTests.swift in Sources */,
 				39272AAF348E938170D4586C /* DialectTests.swift in Sources */,
 				AF0156DBCA2A637AC61C0FEF /* ERDiagramTests.swift in Sources */,
+				9862CFEB72304807FA229C5A /* EditorResponsivenessConventionTests.swift in Sources */,
 				1FF4D2E7C72560420EFA9ED1 /* EditorTextSyncTests.swift in Sources */,
 				46F72A0D778E253D65D0B637 /* EgressLogTests.swift in Sources */,
 				FAAC82E4848B1C5A546BA83F /* ExecutionBehaviorConventionTests.swift in Sources */,
