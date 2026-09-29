@@ -59,7 +59,35 @@ public struct AccentTheme: Equatable, Sendable, Identifiable {
         fillHex: 0xB02A83
     )
 
-    public static let all: [AccentTheme] = [whaleBlue, deepTeal, whaleMagenta]
+    // MARK: 主题配套的两个（L-80 ㈠，**推导草案**）
+    //
+    // 主题「豆芽绿」「玫瑰金」各自要一个**同色相**的交互强调色（否则换主题只换了一半：
+    // 豆芽绿的界面里杵着一个鲸鱼蓝按钮）。Linux 侧的实际色值未到 ⇒ 这两个值也是推导值，
+    // 与那两个主题的值表**一起替换**。两者都过了"白字压填充 ≥4.5"与"在自身两态表面上 ≥3.0"。
+
+    /// 豆芽绿的配套强调色（嫩芽绿系，**推导值**）。
+    public static let beanGreen = AccentTheme(
+        id: "bean-green",
+        nameKey: .accentBeanGreen,
+        accentHex: 0x468C33,
+        fillHex: 0x347A28
+    )
+
+    /// 玫瑰金的配套强调色（暖粉金系，**推导值**）。
+    public static let roseGold = AccentTheme(
+        id: "rose-gold",
+        nameKey: .accentRoseGold,
+        accentHex: 0xBE6A62,
+        fillHex: 0x9C4A42
+    )
+
+    /// 全部候选。
+    ///
+    /// 界面不再逐条列强调色（「外观」面板的强调色列表**升格为主题下拉**，每个主题自带配套值，
+    /// 见 `DesignTheme.accent`）；这一份集合仍然要有两个用途：
+    ///   ① **解析旧配置** —— 用户以前挑过的 `deep-teal` / `whale-magenta` 得继续认得出来；
+    ///   ② 给「几个强调色彼此可分辨」「配套值不是随便挑的」这类判据提供全集。
+    public static let all: [AccentTheme] = [whaleBlue, deepTeal, whaleMagenta, beanGreen, roseGold]
 
     /// 默认与回退都是鲸鱼蓝（与 App 图标同系）。
     public static let fallback = AccentTheme.whaleBlue

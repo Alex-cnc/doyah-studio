@@ -42,7 +42,9 @@
     {
       "key": "alpha-fr-dispositions",
       "script": "Scripts/check-alpha-fr-dispositions.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 11,
       "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
       "why": "队列 L-69 ㈢ / 闭环第 5 项（FR 🟡 逐条判定的范围账）",
@@ -64,7 +66,9 @@
     {
       "key": "doc-numbers",
       "script": "Scripts/check-doc-numbers.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 11,
       "countRegex": "自测通过（(\\d+) 例）",
       "why": "队列 L-55 / 闭环第 4 项（文档数字的唯一来源）",
@@ -86,7 +90,9 @@
     {
       "key": "doc-q-series",
       "script": "Scripts/check-doc-q-series.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 8,
       "countRegex": "自测：(\\d+)/\\d+ 例符合预期",
       "why": "队列 L-56 / 闭环第 4 项（spec §6 待拍板队列的编号与状态纪律）",
@@ -114,7 +120,9 @@
     {
       "key": "doc-tables",
       "script": "Scripts/check-doc-tables.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 6,
       "countRegex": "自检通过（(\\d+)/\\d+）",
       "why": "闭环第 4 项（文档表格列数与派生计数）",
@@ -131,7 +139,9 @@
     {
       "key": "doc-versions",
       "script": "Scripts/check-doc-versions.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 11,
       "countRegex": "负例 (\\d+)/\\d+ 达到预期",
       "why": "闭环第 4 项（变更记录版本号唯一 / 头部版本格 / 队列条目号唯一）",
@@ -140,7 +150,9 @@
     {
       "key": "empty-action-buttons",
       "script": "Scripts/check-empty-action-buttons.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 11,
       "countRegex": "负例：(\\d+)/\\d+ 通过",
       "why": "队列 L-50 / 闭环第 9 项（空数据时按钮的处置）",
@@ -156,7 +168,9 @@
     {
       "key": "exclusive-sections",
       "script": "Scripts/check-exclusive-sections.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 18,
       "countRegex": "自测汇总：全部通过（(\\d+)/\\d+）",
       "why": "队列 L-42 / 闭环第 16 项（三书独占节越界）",
@@ -178,7 +192,9 @@
     {
       "key": "format-arguments",
       "script": "Scripts/check-format-arguments.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 9,
       "countRegex": "自检 (\\d+)/\\d+ 全过",
       "why": "队列 L-46 / 闭环第 3 项（语言表模板 ↔ 调用点实参对账）",
@@ -206,7 +222,9 @@
     {
       "key": "p-parity",
       "script": "Scripts/check-p-parity.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 8,
       "countRegex": "负例 (\\d+)/\\d+ 达到预期",
       "why": "队列 L-45 / 闭环第 7 项（§4 ↔ SRS §10.9 的 P-* 两侧对账）",
@@ -228,7 +246,9 @@
     {
       "key": "panel-root-frames",
       "script": "Scripts/check-panel-root-frames.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 19,
       "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
       "why": "队列 L-61 / 闭环第 9 项（面板根固定尺寸 frame 的对齐纪律）",
@@ -250,7 +270,9 @@
     {
       "key": "vendored-sqlite",
       "script": "Scripts/check-vendored-sqlite.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 13,
       "countRegex": "负例自检通过（(\\d+) 条篡改全部被抓）",
       "why": "队列 L-25 / 闭环第 17 项（vendored SQLite 台账对账 + 负例 + 现编现跑）",
@@ -266,7 +288,9 @@
     {
       "key": "platform-parity",
       "script": "Scripts/gen-platform-parity.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 11,
       "countRegex": "门禁自检通过（(\\d+)/\\d+",
       "why": "队列 L-26 / 闭环第 7 项（§10.10 ↔ Docs/平台实现状态.json 台账）",
@@ -294,7 +318,9 @@
     {
       "key": "sqlite-constants",
       "script": "Scripts/gen-sqlite-constants.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 5,
       "countRegex": "负例自检通过（(\\d+) 条篡改全部被抓",
       "why": "队列 L-43 / 闭环第 18 项（生成物 ↔ vendored 头文件逐字节）",
@@ -319,7 +345,10 @@
           "file": "AGENT-SPEC.md",
           "regex": "test-cli-failure-readability\\.py` \\*\\*(\\d+) → (\\d+) 例\\*\\*",
           "minSites": 1,
-          "expect": [17, 27],
+          "expect": [
+            17,
+            27
+          ],
           "note": "§6 资产表 CLI 失败可读化行（同一格写着历史值 17 与现状值 27 —— 这一条同时钉住两个数）"
         }
       ]
@@ -452,7 +481,9 @@
     {
       "key": "plugin-assembly",
       "script": "Scripts/test-plugin-assembly-gates.py",
-      "args": ["--check-anchors"],
+      "args": [
+        "--check-anchors"
+      ],
       "cases": 7,
       "countRegex": "全部 (\\d+) 个负例的夹具锚点都在位",
       "why": "队列 L-04 / 闭环第 10 项（插件装配链 + 笔记模块解耦）",
@@ -519,7 +550,9 @@
     {
       "key": "release-version",
       "script": "Scripts/check-release-version.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 10,
       "countRegex": "自测通过（(\\d+) 例）",
       "why": "队列 L-70 / 闭环第 18 项（生成物一致性 · 族 ②：发布产物版本号三处一致 + Xcode 工程不许与 project.yml 漂移）",
@@ -569,6 +602,36 @@
         {
           "file": "AGENT-SPEC.md",
           "regex": "check-design-mock-tokens\\.py.{0,2400}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "§6 资产表新增行"
+        }
+      ]
+    },
+    {
+      "key": "design-themes",
+      "script": "Scripts/check-design-themes.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 16,
+      "countRegex": "自测通过（(\\d+) 例）",
+      "why": "队列 L-80 ㈠ / 闭环第 6 项（与设计令牌棘轮同项）：主题三选一 —— 三套值表角色齐全 + 逐主题 × 深浅两态**独立复算**门槛（本脚本自己实现 WCAG，与 Swift 单测互补）+ 主题名与 Linux 侧对齐 + 推导值不许静默当实际值",
+      "anchors": [
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "L-80 ㈠ 的负例 \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "闭环第 6 项注释（例数）"
+        },
+        {
+          "file": "Scripts/check-design-themes.py",
+          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "脚本自己的 docstring"
+        },
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "check-design-themes\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
           "minSites": 1,
           "note": "§6 资产表新增行"
         }

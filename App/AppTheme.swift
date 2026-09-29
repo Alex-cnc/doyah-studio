@@ -25,25 +25,33 @@ enum Theme {
     }
 
     // MARK: 颜色
+    //
+    // 2026-09-29（L-80 ㈠）：令牌取色**一律带主题**（`color(in:)`）。主题从 `DesignThemeManager`
+    // 现取，与强调色同一个理由：缓存下来就会出现"换了主题但这一屏还是旧配色"。
+    // 视图里仍然只写 `Theme.surface(.panel)` —— "当前是哪个主题"这件事收在这一层，不在上百处调用点。
+
+    /// 当前主题（`ui.designTheme`）。
+    static var designTheme: DesignTheme { DesignThemeManager.shared.theme }
 
     static func surface(_ surface: Surface) -> Color {
-        Color(nsColor: nsColor(surface.color))
+        Color(nsColor: nsColor(surface.color(in: designTheme)))
     }
 
     static func text(_ tone: TextTone) -> Color {
-        Color(nsColor: nsColor(tone.color))
+        Color(nsColor: nsColor(tone.color(in: designTheme)))
     }
 
     static func status(_ tone: StatusTone) -> Color {
-        Color(nsColor: nsColor(tone.color))
+        Color(nsColor: nsColor(tone.color(in: designTheme)))
     }
 
+    /// 分类色：**不带主题**是有意的（身份色与配色无关，见 `CategoricalTone` 的注释）。
     static func categorical(_ tone: CategoricalTone) -> Color {
         Color(nsColor: nsColor(tone.color))
     }
 
     static func syntax(_ tone: SyntaxTone) -> Color {
-        Color(nsColor: nsColor(tone.color))
+        Color(nsColor: nsColor(tone.color(in: designTheme)))
     }
 
     /// 发丝线：不是固定的灰，而是"当前外观下的 1px 亮/暗线"。
@@ -52,8 +60,8 @@ enum Theme {
     /// 这样在 content / panel / sidebar 上都成立，不需要为每个表面各配一条线。
     static func hairline(_ scheme: ColorScheme) -> Color {
         scheme == .dark
-            ? Color.white.opacity(Hairline.darkAlpha)
-            : Color(nsColor: nsColor(hex: Hairline.lightHex))
+            ? Color.white.opacity(Hairline.darkAlpha(in: designTheme))
+            : Color(nsColor: nsColor(hex: Hairline.lightHex(in: designTheme)))
     }
 
     // MARK: 字体
@@ -113,8 +121,8 @@ enum Theme {
     /// 发丝线颜色（叠加在表面上，故用低透明度而不是不透明灰）。
     static var hairlineNSColor: NSColor {
         isDarkAppearance
-            ? NSColor.white.withAlphaComponent(Hairline.darkAlpha)
-            : nsColor(hex: Hairline.lightHex)
+            ? NSColor.white.withAlphaComponent(Hairline.darkAlpha(in: designTheme))
+            : nsColor(hex: Hairline.lightHex(in: designTheme))
     }
 
     /// 当前绘图外观是否深色。
@@ -160,10 +168,10 @@ enum Theme {
     // MARK: 底层
 
     // AppKit 视图（编辑器 / 结果网格 / 终端）需要 NSColor，这里给三个语义重载。
-    static func nsColor(_ surface: Surface) -> NSColor { nsColor(surface.color) }
-    static func nsColor(_ tone: TextTone) -> NSColor { nsColor(tone.color) }
-    static func nsColor(_ tone: SyntaxTone) -> NSColor { nsColor(tone.color) }
-    static func nsColor(_ tone: StatusTone) -> NSColor { nsColor(tone.color) }
+    static func nsColor(_ surface: Surface) -> NSColor { nsColor(surface.color(in: designTheme)) }
+    static func nsColor(_ tone: TextTone) -> NSColor { nsColor(tone.color(in: designTheme)) }
+    static func nsColor(_ tone: SyntaxTone) -> NSColor { nsColor(tone.color(in: designTheme)) }
+    static func nsColor(_ tone: StatusTone) -> NSColor { nsColor(tone.color(in: designTheme)) }
 
     /// 把一个令牌色解析成动态 `NSColor`（自动跟随系统外观）。
     static func nsColor(_ color: ThemeColor) -> NSColor {
