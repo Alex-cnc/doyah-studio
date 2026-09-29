@@ -25,6 +25,12 @@
      判据再用 `git check-ignore -z` 实测一遍（**不是**信它的自述）并与它的自检夹具
      `SELF_TEST_ABSENT` / `SELF_TEST_TRACKED` 逐条对账；「受检文件数」= **真跑一遍那个脚本**
      （默认清单），从它自己的收尾行抓。读不到模块 / 跑不过 / 抓不到收尾行都判红。
+   - `judge-output`（第 80 轮 L-72 ㈢）：**三书里「N 处 / N 条」类统计**的唯一来源 = 那个数
+     **本来就有判据在管**的门禁 —— 判据**真跑一遍**那个脚本（要求 `exit 0`，它自己不过就说明
+     证据坏了），再从它的**人读输出**里按正则抓值。现场：「面板根固定尺寸 36 处 = 面板根 21 ·
+     装饰 15」「范围外令牌尺寸 10 处」（`Scripts/check-panel-root-frames.py`）、
+     「依赖本机临时集群的脚本 33 个」（`Scripts/check-script-env-parameterization.py`）——
+     这些数写进三书时与门禁实测**已经漂了**（三书写 33 / 9 / 29），而没有任何一处会说话。
 3. **文档对账双向**：`anchors`（精确上下文正则 + 捕获组）每一处必须命中且值相等
    —— **写错判红 / 数字被删光也判红**；`reverseScans` 做有限反扫，在「现状口径」语境里
    凡出现的同类数字都必须是台账值（防「新增一处写错的数字」）。
@@ -45,7 +51,7 @@
 用法：
     python3 Scripts/check-doc-numbers.py                # 本仓（默认）
     python3 Scripts/check-doc-numbers.py --root <目录>   # 夹具仓（自测用）
-    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（11 例）
+    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（15 例）
 
 退出码：0 = 全绿；1 = 有判红项。**判红时空跑防护也一起报**（一处都没解析到 ⇒ 不许「零命中 = 通过」）。
 """
@@ -73,7 +79,7 @@ GATE_BLOCK = re.compile(r"==>\s*(\d+)/(\d+)")
 GATE_CLOSE = re.compile(r"\$\(\((\d+)\s*-\s*SKIPPED_COUNT\)\)")
 CHINESE_NUMERAL = re.compile(r"(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项")
 
-MEASURE_KINDS = {"gate-scan", "count-file", "snapshot-manifest", "doc-tables-lists", "doc-tables-run"}
+MEASURE_KINDS = {"gate-scan", "count-file", "snapshot-manifest", "doc-tables-lists", "doc-tables-run", "judge-output"}
 CN_DIGITS = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 
 
@@ -324,15 +330,52 @@ def measure(root: pathlib.Path, entry: dict, problems: list, notes: list):
             return None
         return [int(match.group(1)), len(module.DEFAULT_TARGETS)]
 
+    if kind == "judge-output":
+        # 三书里「N 处 / N 条」类统计（第 80 轮 L-72 ㈢）：这个数**本来就有判据在管** ⇒
+        # 唯一来源 = 那个判据自己的读数。判据**真跑一遍**（要求 `exit 0` —— 它自己不过，
+        # 说明这份证据坏了，它的输出不配当唯一来源），再从其**人读输出**里按正则抓值。
+        # 脚本不在盘 / 跑不过 / 抓不到收尾行 ⇒ 一律判红，不许静默跳过（跳过 ≠ 通过）。
+        rel = spec["script"]
+        path = root / rel
+        if not path.exists():
+            problems.append(f"[{key}] 实测复核失败：找不到判据脚本 {rel}（这个数字的唯一来源在那里）")
+            return None
+        completed = subprocess.run(
+            [sys.executable, str(path)],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        output = completed.stdout + completed.stderr
+        if completed.returncode != 0:
+            tail = output.strip().splitlines()[-1] if output.strip() else "无输出"
+            problems.append(
+                f"[{key}] 实测复核失败：{rel} exit {completed.returncode}（{tail}）"
+                f" —— 判据自己没过，它的输出不能当唯一来源"
+            )
+            return None
+        match = re.search(spec["regex"], output)
+        if not match:
+            problems.append(
+                f"[{key}] 实测复核失败：{rel} 的输出里抓不到数字"
+                f"（regex {spec['regex']!r} —— 人读行的格式变了，证据跟着坏）"
+            )
+            return None
+        return [int(g) for g in match.groups()]
+
     problems.append(f"[{key}] 台账的 measure.kind 不在词表内：{kind!r}（词表 {sorted(MEASURE_KINDS)}）")
     return None
 
 
 def expected_values(entry: dict) -> list:
+    """台账里登记的这组数（value → secondary → tertiary）：三条封顶 —— 再多就说明该拆成两条。"""
     values = [entry.get("value")]
     secondary = entry.get("secondary")
     if secondary:
         values.append(secondary.get("value"))
+    tertiary = entry.get("tertiary")
+    if tertiary:
+        values.append(tertiary.get("value"))
     return values
 
 
@@ -511,6 +554,10 @@ def check(root: pathlib.Path):
         measure_spec = entry.get("measure") or {}
         if measure_spec.get("kind") not in MEASURE_KINDS:
             problems.append(f"[{key}] measure.kind 缺失或不在词表内")
+        for slot in ("secondary", "tertiary"):
+            extra = entry.get(slot)
+            if extra is not None and (not extra.get("label") or not isinstance(extra.get("value"), int)):
+                problems.append(f"[{key}] {slot} 必须写 label 与整数 value（同 value 的写法）")
         if measure_spec.get("expect") != expected_values(entry):
             problems.append(
                 f"[{key}] measure.expect {measure_spec.get('expect')} 与 value/secondary "
@@ -594,8 +641,48 @@ FIXTURE_LEDGER = {
     ],
 }
 
+# ── `judge-output` 的夹具（第 80 轮 L-72 ㈢）：一个「判据脚本」，它的**人读输出**就是那个数的来源。
+FIXTURE_JUDGE_REL = "Scripts/check-fixture-judge.py"
+FIXTURE_JUDGE_REGEX = r"固定尺寸 frame (\d+) 处（面板根 (\d+) · 装饰 (\d+)）"
+FIXTURE_JUDGE_LINE = "（视图文件 65 个 / 固定尺寸 frame 36 处（面板根 21 · 装饰 15） / 台账 34 条）"
+FIXTURE_JUDGE_ENTRY = {
+    "key": "panel-root-frames",
+    "label": "夹具：判据输出里的「N 处」统计",
+    "value": 36,
+    "unit": "处",
+    "secondary": {"label": "面板根", "value": 21},
+    "tertiary": {"label": "装饰", "value": 15},
+    "measure": {
+        "kind": "judge-output",
+        "script": FIXTURE_JUDGE_REL,
+        "regex": FIXTURE_JUDGE_REGEX,
+        "expect": [36, 21, 15],
+    },
+    "anchors": [
+        {
+            "file": "AGENT-SPEC.md",
+            "regex": "夹具现状行：固定尺寸 \\*\\*(\\d+) 处\\*\\* / 面板根 \\*\\*(\\d+)\\*\\* / 装饰 \\*\\*(\\d+)\\*\\*",
+            "minSites": 1,
+            "note": "夹具里的现状声明行（三个数同源）",
+        }
+    ],
+}
 
-def build_fixture(base: pathlib.Path, ledger: dict | None = None, gate_items: int = 18, snapshots=(152, 76), count=2056):
+
+def judge_fixture_ledger() -> dict:
+    return {**FIXTURE_LEDGER, "numbers": [*FIXTURE_LEDGER["numbers"], FIXTURE_JUDGE_ENTRY]}
+
+
+def build_fixture(
+    base: pathlib.Path,
+    ledger: dict | None = None,
+    gate_items: int = 18,
+    snapshots=(152, 76),
+    count=2056,
+    judge_text: str | None = FIXTURE_JUDGE_LINE,
+    judge_exit: int = 0,
+    write_judge: bool = True,
+):
     shutil.rmtree(base, ignore_errors=True)
     (base / "Scripts").mkdir(parents=True)
     (base / "Docs").mkdir(parents=True)
@@ -618,6 +705,7 @@ def build_fixture(base: pathlib.Path, ledger: dict | None = None, gate_items: in
                 "| 一条命令闭环（**%s项**） | `Scripts/verify-all.sh` | 夹具行 |" % word,
                 "- **门禁**：`./Scripts/verify-all.sh` **%s项全绿**；Core 单测 **%d** 项 0 failures；界面快照 **%d 张 / %d 组**"
                 % (word, count, snapshots[0], snapshots[1]),
+                "- 夹具现状行：固定尺寸 **36 处** / 面板根 **21** / 装饰 **15**",
                 "| v1.1 | 2026-01-01 | 历史行：当时是 十七项、单测 1947 项、快照 19 张 / 10 组 |",
             ]
         )
@@ -635,8 +723,19 @@ def build_fixture(base: pathlib.Path, ledger: dict | None = None, gate_items: in
     )
     (base / "Scripts" / "check-fine.py").write_text("# fine\n", encoding="utf-8")
     (base / "Scripts" / "check-exempt.py").write_text("# exempt\n", encoding="utf-8")
+    if write_judge:
+        lines = ["import sys"]
+        if judge_text is not None:
+            lines.append("print(%r)" % judge_text)
+        lines.append("sys.exit(%d)" % judge_exit)
+        (base / "Scripts" / FIXTURE_JUDGE_REL.rsplit("/", 1)[1]).write_text(
+            "\n".join(lines) + "\n", encoding="utf-8"
+        )
     (base / "Scripts" / "verify-all.sh").write_text(
-        (base / GATE_REL).read_text(encoding="utf-8") + "python3 Scripts/check-fine.py\n", encoding="utf-8"
+        (base / GATE_REL).read_text(encoding="utf-8")
+        + "python3 Scripts/check-fine.py\n"
+        + "python3 %s\n" % FIXTURE_JUDGE_REL,
+        encoding="utf-8",
     )
     return base
 
@@ -719,6 +818,33 @@ def self_test() -> int:
         ),
         True,
         "找不到",
+    )
+    run(
+        "⑪ `judge-output`（第 80 轮新 kind）判据在盘、人读行正常 ⇒ 绿（三个数同源：36 = 面板根 21 + 装饰 15）",
+        lambda b: build_fixture(b, ledger=judge_fixture_ledger()),
+        False,
+    )
+    run(
+        "⑫ `judge-output` 的判据脚本不在盘上 ⇒ 判红并点名（不许静默跳过）",
+        lambda b: build_fixture(b, ledger=judge_fixture_ledger(), write_judge=False),
+        True,
+        "找不到判据脚本",
+    )
+    run(
+        "⑬ `judge-output` 的判据自己不过（exit 3）⇒ 判红（它不过，输出不配当唯一来源）",
+        lambda b: build_fixture(b, ledger=judge_fixture_ledger(), judge_exit=3),
+        True,
+        "判据自己没过",
+    )
+    run(
+        "⑭ `judge-output` 的人读行格式变了（抓不到数字）⇒ 判红（证据跟着坏）",
+        lambda b: build_fixture(
+            b,
+            ledger=judge_fixture_ledger(),
+            judge_text="（视图文件 65 个 / 固定尺寸 frame 处（面板根 · 装饰） / 台账 34 条）",
+        ),
+        True,
+        "抓不到数字",
     )
 
     failures = []

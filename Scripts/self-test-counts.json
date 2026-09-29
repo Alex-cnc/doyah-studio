@@ -69,7 +69,7 @@
       "args": [
         "--self-test"
       ],
-      "cases": 11,
+      "cases": 15,
       "countRegex": "自测通过（(\\d+) 例）",
       "why": "队列 L-55 / 闭环第 4 项（文档数字的唯一来源）",
       "anchors": [
