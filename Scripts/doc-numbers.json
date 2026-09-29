@@ -142,18 +142,18 @@
     {
       "key": "ui-snapshots",
       "label": "界面快照张数",
-      "value": 188,
+      "value": 208,
       "unit": "张",
       "secondary": {
         "label": "组",
-        "value": 94
+        "value": 104
       },
       "measure": {
         "kind": "snapshot-manifest",
         "file": ".build/ui-snapshots/manifest.json",
         "expect": [
-          188,
-          94
+          208,
+          104
         ],
         "writtenBy": "./Scripts/make-ui-snapshots.sh（快照不进每轮闭环 ⇒ 本机没有清单时判据如实报『跳过』，不假装核过）"
       },
