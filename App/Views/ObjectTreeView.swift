@@ -315,6 +315,8 @@ struct ObjectTreeView: View {
         do {
             let children = try await appState.loadMetadataChildren(of: object)
             childrenCache[object.id] = children
+            // 展开一层就顺手把**下一层**静默取回来（懒加载预取，见 `prefetchChildren`）。
+            await prefetchChildren(of: children)
             // **首连时序类的怪事只能靠日志说话**（2026-09-25 需求提出者两次报"点开没有 schema 的库
             // 会出错"，而 Core 那条路我单独跑过是干净的 —— 那就把"到底发生了什么"留下来）。
             // 两个方言都记：树上这份数据的方言 vs 当前选中连接的方言 ——
@@ -406,6 +408,54 @@ struct ObjectTreeView: View {
         // 自动展开到「看得见表」（FR-META-01）：放在收起"加载中"**之后** —— 这一步还要走两三次
         // 元数据往返，挂在首屏上会让人以为界面卡住。
         await autoExpandToTables(roots: loaded)
+
+        // **再多加载一个层级**（懒加载预取）：把刚展开到的那一层（表）的下一层（列）静默取回来，
+        // 用户点开某张表时直接用本地数据 —— 不再等一次往返。
+        await prefetchChildren(of: deepestLoadedChildren())
+    }
+
+    /// 当前已加载层级里**最靠下**的那一层（预取它的下一层就是"多加载一个层级"）。
+    ///
+    /// 取法：已展开节点里取「它自己的子节点已经加载过、而子节点的子节点还没加载」的那一层，
+    /// 也就是用户下一步最可能点开的那一批。
+    private func deepestLoadedChildren() -> [DatabaseObject] {
+        var result: [DatabaseObject] = []
+        for id in expandedIDs {
+            guard let children = childrenCache[id], !children.isEmpty else { continue }
+            if children.contains(where: { $0.isExpandable && childrenCache[$0.id] == nil }) {
+                result = children
+            }
+        }
+        return result
+    }
+
+    /// **预取下一层**（2026-09-29 需求提出者：「每次加载树的时候应该多加载一个层级，这样展开时直接用的
+    /// 本地数据，性能体验更好，所谓懒加载模式」）。
+    ///
+    /// 与"展开时加载"（`loadChildren`）的区别，三处都必须不同：
+    /// ① **安静**：不写 `loadingIDs`（不显示"正在加载…"那一行）、不写 `errors`（预取失败不该在界面上留红字）；
+    /// ② **失败不缓存**：出错就什么都不写 —— 写空数组会假装"查过了、没有子节点"，之后展开再也查不出来，
+    ///    那比慢更糟（`ObjectTreeReloadPolicy` 只认"缓存过"这一个事实）；
+    /// ③ **有预算、串行跑**：一层最多预取 `prefetchLimit` 个节点，避免一次把连接打满（列那么多，全预取是灾难）。
+    private func prefetchChildren(of objects: [DatabaseObject]) async {
+        var budget = ObjectTreePrefetchPolicy.limit
+        for object in objects {
+            guard budget > 0, !Task.isCancelled else { return }
+            guard object.isExpandable else { continue }
+            guard ObjectTreeReloadPolicy.shouldLoad(
+                cached: childrenCache[object.id],
+                isLoading: loadingIDs.contains(object.id)
+            ) else { continue }
+            budget -= 1
+            do {
+                let children = try await appState.loadMetadataChildren(of: object)
+                guard !Task.isCancelled else { return }
+                childrenCache[object.id] = children
+            } catch {
+                // 见 ②：预取失败什么都不写 —— 留给用户展开时正常报错、正常重试。
+                continue
+            }
+        }
     }
 
     /// 连上之后展开到表：服务器 → **连接自己那个库** → `public`。

@@ -114,4 +114,26 @@ final class ObjectTreeRowMenuConventionTests: XCTestCase {
         XCTAssertTrue(doubleBody.contains("toggle(row.object)"),
                       "双击必须展开（它是除右箭头之外的唯一展开入口）")
     }
+    /// **懒加载预取一层**（2026-09-29 需求提出者：「每次加载树的时候应该多加载一个层级，
+    /// 这样展开时直接用的本地数据，性能体验更好，所谓懒加载模式」）。
+    ///
+    /// 预取与「展开时加载」必须三处不同：① 安静（不写 `loadingIDs` / `errors`）；
+    /// ② 失败**不写缓存**；③ 有预算且串行（`ObjectTreePrefetchPolicy.limit`）。
+    func testPrefetchLoadsOneExtraLevelSilently() throws {
+        let view = try source("App/Views/ObjectTreeView.swift")
+        XCTAssertTrue(view.contains("private func prefetchChildren(of objects: [DatabaseObject]) async"),
+                      "预取必须有独立函数（复用展开加载会把「正在加载」与错误显示带出来）")
+        XCTAssertTrue(view.contains("ObjectTreePrefetchPolicy.limit"),
+                      "预取必须有预算上限（一层可能几百个节点，全预取会把连接打满）")
+        XCTAssertTrue(view.contains("await prefetchChildren(of: deepestLoadedChildren())"),
+                      "根加载后必须多加载一个层级")
+
+        guard let decl = view.range(of: "private func prefetchChildren(of objects: [DatabaseObject]) async") else {
+            return XCTFail("找不到预取函数 —— 判据锚点变了，请更新这条判据而不是删掉它")
+        }
+        let body = String(view[decl.lowerBound...].prefix(1_500))
+        XCTAssertFalse(body.contains("loadingIDs.insert"), "预取不许显示「正在加载…」")
+        XCTAssertFalse(body.contains("errors["), "预取失败不许在界面上留错误")
+        XCTAssertTrue(body.contains("catch"), "预取失败必须吞掉且什么都不写")
+    }
 }

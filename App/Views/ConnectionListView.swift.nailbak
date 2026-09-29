@@ -6,9 +6,6 @@ struct ConnectionListView: View {
     let onAdd: () -> Void
     let onEdit: (ConnectionConfig) -> Void
 
-    /// 负例注入：折叠状态退回**视图局部** `@State`（第 58 轮修之前的形状）。
-    @State private var collapsedGroups: Set<String> = []
-
     /// 待确认删除的连接（FR-CONN-05 / R-09：删除必须二次确认）。
     @State private var pendingDeletion: ConnectionConfig?
 
@@ -29,11 +26,8 @@ struct ConnectionListView: View {
             rows(section)
         } else {
             DisclosureGroup(isExpanded: Binding(
-                get: { !collapsedGroups.contains(section.id) },
-                set: { expanded in
-                    if expanded { collapsedGroups.remove(section.id) }
-                    else { collapsedGroups.insert(section.id) }
-                }
+                get: { !appState.isConnectionGroupCollapsed(section.id) },
+                set: { expanded in appState.setConnectionGroup(section.id, collapsed: !expanded) }
             )) {
                 rows(section)
             } label: {

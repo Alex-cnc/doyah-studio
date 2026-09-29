@@ -51,3 +51,15 @@ public enum ObjectTreeReloadPolicy {
         return cached.isEmpty
     }
 }
+
+/// 懒加载预取的预算（2026-09-29 需求提出者：「每次加载树的时候应该多加载一个层级，这样展开时
+/// 直接用的本地数据，性能体验更好，所谓懒加载模式」）。
+///
+/// 为什么要上限：一层里可能有成百上千个节点（一张 schema 下几百张表、一张表几十列），
+/// 全预取等于用几百条查询把连接打满 —— 那是"预取"变成"预堵"。
+/// 预取只覆盖**用户下一步最可能点开的那一批**（当前展开层里最靠下的一层，见
+/// `ObjectTreeView.deepestLoadedChildren`），并且**串行**跑。
+public enum ObjectTreePrefetchPolicy {
+    /// 一次预取最多几个节点。
+    public static let limit = 6
+}
