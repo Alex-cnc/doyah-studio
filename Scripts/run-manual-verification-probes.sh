@@ -59,6 +59,17 @@ set -euo pipefail
 #   ③ `⌘1…9` / `⌘⇧[ ⌘⇧]` / 双击改名落到**对的会话**，且**改名不动那条 PTY**（前台进程不许换人）。
 # 它跟着本脚本跑两遍（沙箱标记只影响界面文案，不影响这三条）。
 #
+# ## 第六批（队列 L-89 ㈡ ④，第 97 轮）：大结果集滚动
+#
+# `TestsUISnapshot/LargeResultScrollProbeTests.swift` 判清单 §4 `FR-RES-07` 那一行
+# 「查 1 万行 × 20 列，上下滚十几秒 ⇒ 不卡、内存不飙」里**能变成机器判据的那部分**：
+# ① 虚拟化（物化行视图数只跟可见区域有关，1 万行与 10 万行必须同量级）；
+# ② 滚动每一帧画面都在变（位置动了画面没动 = 卡死）且单帧 p50 在上界内；
+# ③ 单帧成本不随总行数放大（比值判据，机器无关）；④ 重复同一轮操作常驻内存不再增长。
+# 阈值全部读 `Scripts/result-scroll-baseline.json`（唯一来源，由
+# `Scripts/check-result-scroll-ledger.py` 看着），文件里不写魔数。
+# 它跟着本脚本跑两遍（沙箱标记只影响界面文案，不影响这四条）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -83,7 +94,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `AppearanceFontProbeTests`（㈡：主题与字体 —— 手输族之后界面说的话 + SQL 预览的字形）。
 # + `TerminalInterruptProbeTests`（L-92 ㈡①：终端 `⌃C` 打断前台 `sleep 30` —— 非沙箱包的作业控制）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -195,3 +206,4 @@ echo "    ＋ §2 FR-EDIT-26 主题与字体（AppearanceFontProbeTests：手输
 echo "    ＋ §0.3 第 3 条 终端 ⌃C（TerminalInterruptProbeTests：喂 0x03 看前台 sleep 让不让开）"
 echo "    ＋ §1 FR-EDIT-29 多会话那一行的版面与落点（TerminalTabsProbeTests 后三个用例：左半变 / 右四分之一逐像素不变、"
 echo "       右侧按钮按状态齐备、⌘1…9 与 ⌘⇧[ ⌘⇧] 与改名落到对的会话）"
+echo "    ＋ §4 FR-RES-07 大结果集滚动（LargeResultScrollProbeTests：虚拟化 / 帧在变 / 单帧成本不随总行数放大 / 内存不飙）"

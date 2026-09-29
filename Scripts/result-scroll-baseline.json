@@ -1,0 +1,25 @@
+{
+  "note": "「待人工验收清单」§4 FR-RES-07（大结果集滚动）的判据阈值 —— 唯一来源。探针 TestsUISnapshot/LargeResultScrollProbeTests.swift 读它、文件里不写魔数；本台账由 Scripts/check-result-scroll-ledger.py 看着（字段齐备 / 基线为正 / 上限对基线至少 3 倍余量 / 理由非空 / 探针真挂在取证脚本上）。",
+  "measuredOn": "2026-09-29",
+  "measuredBy": "开发循环第 97 轮 · 本机 macOS 27.0 / Apple Silicon · 离屏 NSWindow + displayIfNeeded / cacheDisplay（scale=1，画布 900×420 pt，24 个滚动位置取中位数）",
+  "smallRows": 10000,
+  "largeRows": 100000,
+  "columns": 20,
+  "scrollSteps": 24,
+  "frame": {
+    "floorMs": 5.0,
+    "p50MsLimit": 2.0,
+    "rasterMsLimit": 200.0,
+    "scaleRatioLimit": 3.0,
+    "measuredSmallP50Ms": 0.02,
+    "measuredLargeP50Ms": 0.02,
+    "measuredRasterSmallP50Ms": 28.3,
+    "measuredRasterLargeP50Ms": 28.4,
+    "rationale": "帧（脏区重画，`displayIfNeeded`）实测 0.02 ms —— AppKit 的拷贝滚动：滚动只把已有像素搬一下、再重画暴露的那一条带，与总行数无关；上限 2.0 ms = 实测的 100 倍，只拦「每帧把整表重画一遍」那种数量级退化。整幅重画（`cacheDisplay`，一屏要画的全部内容）实测 28.3 / 28.4 ms ⇒ 上限 200 ms ≈ 实测 7 倍：机器负载会让它上下浮动，但不许变成「每帧一秒」。`floorMs` 5.0 是比值判据的分母下限（整幅重画那一档），防止将来某次改动把耗时压到微秒级后比值失去意义。"
+  },
+  "memory": {
+    "residentLimitMB": 48.0,
+    "measuredDeltaMB": 0.1,
+    "rationale": "翻完 100 页 + 全表滚 24 帧，重复两轮：排空 autorelease 池后实测增量 0.0~0.1 MB（上限 48 MB）。为什么留这么宽的余量：不排池时同一份代码量到 83 MB 的假红（主线程没有运行循环 ⇒ autorelease 的对象不出池），也就是说这条判据的噪声来源是「有没有排池」；余量只用来拦真正会攒的那一族 —— 每翻一页 / 每滚一帧都留一份结果副本（1 万行 × 20 列一份副本就是十几 MB，两轮必超）。"
+  }
+}

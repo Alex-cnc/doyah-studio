@@ -461,6 +461,21 @@ python3 Scripts/check-panel-root-frames.py --self-test
 python3 Scripts/check-terminal-tabs.py
 python3 Scripts/check-terminal-tabs.py --self-test
 
+# L-89 ㈡ ④（第 97 轮）：**大结果集滚动**（清单 §4 FR-RES-07）那一行的阈值台账 ——
+# 探针 `TestsUISnapshot/LargeResultScrollProbeTests.swift` 的每一条上界都从
+# `Scripts/result-scroll-baseline.json` 读（容差必须有来源：基线实测值 + 倍数 + 理由），
+# 于是那份台账**本身就是判据的输入**，谁也不能悄悄改松它：
+#   · 字段齐备 / 规模对得上清单原文（≥ 1 万行 × 20 列）/ 基线是正数；
+#   · 每条上界对**实测基线**至少有 3 倍余量（不许紧到换台机器就红）、也不许松到没有意义；
+#   · 理由非空（改动必须说明为什么）；
+#   · **探针必须真挂在取证脚本上** —— 第 96 轮实测过「新用例没接进
+#     `run-manual-verification-probes.sh --filter` ⇒ 一个都跑不到」，所以这一条按
+#     「`TestsUISnapshot/` 里每个 `*ProbeTests.swift` 都得在 FILTER 里，否则要在豁免表里写明理由」
+#     逐文件对账（实测抓出 `AppearanceAxesProbeTests` 从 2026-09-29 起就没被任何脚本跑过）。
+# 自检用例 `--self-test` **11 例**（红 / 绿成对，夹具在临时目录，末例核对真仓库台账逐字节未变）。
+python3 Scripts/check-result-scroll-ledger.py
+python3 Scripts/check-result-scroll-ledger.py --self-test
+
 echo "==> 10/18 插件装配链（FR-PLUG-01~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py
 python3 Scripts/check-plugin-assembly.py

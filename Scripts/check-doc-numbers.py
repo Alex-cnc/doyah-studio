@@ -19,7 +19,13 @@
    - `count-file`：读 `Scripts/verify-core.sh` **同一次运行**写下的 `.build/core-test-count.txt`
      （`verify-all.sh` 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，
      判据如实报「跳过」而不是拿旧值当现状）；
-   - `snapshot-manifest`：读 `.build/ui-snapshots/manifest.json` 数张数与组数。
+   - `snapshot-manifest`：读**全量跑凭证** `.build/ui-snapshots/full-run/manifest.json` 数张数与组数，
+     并与同目录 `record.json` 逐项对账（张数 / 组数 / 清单 sha256 / 「这一份确实是全量跑写的」）。
+     **为什么不读 `.build/ui-snapshots/manifest.json`**（第 98 轮改的口径）：那是一份**共享产物** ——
+     本机人工点验会话与循环**交错跑**时，筛选跑会反复顶掉它（第 97 轮实测：16:04:34 / 16:08:19 /
+     16:12:04 / 16:15:30 四次写入 194 张 / 97 组，而全量跑三次都是 218 张 / 109 组）⇒
+     门禁第 4 项绿红反复、而**两边都没做错事**。纪律：**判据的输入必须只有一个写者**；
+     筛选跑的目录隔离（`filtered/<筛子>/`）只是止痛 —— 对方不走那个脚本就白搭。
    - `doc-tables-lists` / `doc-tables-run`（第 65 轮 L-72 ㈡）：`check-doc-tables.py` 的**清单口径**
      两个数 —— 「被 `.gitignore` 排除的份数」由**那个模块自己的** `gitignored_documents()` 算，
      判据再用 `git check-ignore -z` 实测一遍（**不是**信它的自述）并与它的自检夹具
@@ -51,7 +57,7 @@
 用法：
     python3 Scripts/check-doc-numbers.py                # 本仓（默认）
     python3 Scripts/check-doc-numbers.py --root <目录>   # 夹具仓（自测用）
-    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（16 例）
+    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（19 例）
 
 退出码：0 = 全绿；1 = 有判红项。**判红时空跑防护也一起报**（一处都没解析到 ⇒ 不许「零命中 = 通过」）。
 """
@@ -59,6 +65,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import pathlib
@@ -81,6 +88,14 @@ CHINESE_NUMERAL = re.compile(r"(?<![那这哪某每逐同第的])([一二三四�
 
 MEASURE_KINDS = {"gate-scan", "count-file", "snapshot-manifest", "doc-tables-lists", "doc-tables-run", "judge-output"}
 CN_DIGITS = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+
+# 「全量跑凭证」（第 98 轮）：**判据的输入必须只有一个写者**。这一条路径**两侧逐字对齐** ——
+# `Scripts/make-ui-snapshots.sh` 只在这三种条件同时成立时写它（不给窄筛子 + 渲染成功 + 语言覆盖过），
+# 判据也只读它。两处任何一处改名 ⇒ 判据当场点名（见下面的「脱钩」那一条），不许静默跳过。
+FULL_RUN_FILTER = "UISnapshotTests"
+FULL_RUN_DIR_TOKEN = "ui-snapshots/full-run"
+FULL_RUN_SCRIPT = "Scripts/make-ui-snapshots.sh"
+FULL_RUN_RECORD = "record.json"
 
 
 def cn_to_int(text: str) -> int | None:
@@ -251,11 +266,35 @@ def measure(root: pathlib.Path, entry: dict, problems: list, notes: list):
         return [int(g) for g in match.groups()]
 
     if kind == "snapshot-manifest":
+        # **测量源必须只有一个写者**（第 98 轮）：`.build/ui-snapshots/` 里那一份是全量跑的产物，
+        # 但**谁都能覆盖**（人工点验跑筛选子集时也往那儿写）⇒ 只认**全量跑凭证**并逐项对账。
+        script_path = root / FULL_RUN_SCRIPT
+        if not script_path.exists():
+            problems.append(f"[{key}] 落档脚本不在盘上：{FULL_RUN_SCRIPT} 找不到（这份凭证是谁写的？）")
+            return None
+        if FULL_RUN_DIR_TOKEN not in script_path.read_text(encoding="utf-8"):
+            problems.append(
+                f"[{key}] 判据读的路径与落档脚本**脱钩**：{FULL_RUN_SCRIPT} 里找不到 "
+                f"{FULL_RUN_DIR_TOKEN!r} ⇒ 这份凭证**没人写**（判据会永远静默跳过 = 零覆盖而全绿）"
+            )
+            return None
         path = root / spec["file"]
         if not path.exists():
             notes.append(
-                f"[{key}] 跳过实测：{spec['file']} 不在（本轮没出快照 —— {spec.get('writtenBy', '')}）"
+                f"[{key}] 跳过实测：{spec['file']} 不在（本机还没有全量快照的凭证 —— {spec.get('writtenBy', '')}）"
             )
+            return None
+        record_path = path.parent / FULL_RUN_RECORD
+        if not record_path.exists():
+            problems.append(
+                f"[{key}] 实测复核失败：{spec['file']} 在盘上，但同目录没有全量跑凭证 `record.json`"
+                f"（这份清单**来历证明不了** ⇒ 判红；它只该由 `Scripts/make-ui-snapshots.sh` 的全量跑写下）"
+            )
+            return None
+        try:
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            problems.append(f"[{key}] 实测复核失败：全量跑凭证不是合法 JSON（{error}）")
             return None
         try:
             manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -264,8 +303,8 @@ def measure(root: pathlib.Path, entry: dict, problems: list, notes: list):
             return None
         snapshots = manifest.get("snapshots") or []
         bases = set()
-        for record in snapshots:
-            name = record.get("name") or ""
+        for record_item in snapshots:
+            name = record_item.get("name") or ""
             for suffix in ("-zh", "-en"):
                 if name.endswith(suffix):
                     name = name[: -len(suffix)]
@@ -274,6 +313,27 @@ def measure(root: pathlib.Path, entry: dict, problems: list, notes: list):
         if not snapshots:
             problems.append(f"[{key}] 实测复核失败：清单里一条快照都没有（零命中不许当通过）")
             return None
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if record.get("filter") != FULL_RUN_FILTER:
+            problems.append(
+                f"[{key}] 实测复核失败：这份凭证说它是一次**筛选跑**"
+                f"（`filter = {record.get('filter')!r}`，全量跑的筛子是 `{FULL_RUN_FILTER}`）"
+                f"⇒ 窄筛子的张数不许当现状"
+            )
+            return None
+        if record.get("manifestSha256") != digest:
+            problems.append(
+                f"[{key}] 实测复核失败：凭证里记的清单 sha256 与盘上这份清单不符"
+                f"（清单被改过 / 凭证与清单不是同一次跑出来的）"
+            )
+            return None
+        for field, actual in (("snapshotCount", len(snapshots)), ("groupCount", len(bases))):
+            if record.get(field) != actual:
+                problems.append(
+                    f"[{key}] 实测复核失败：凭证 `{field}` = {record.get(field)!r}，实测 {actual}"
+                    f"（凭证与它那份清单必须逐项对得上）"
+                )
+                return None
         return [len(snapshots), len(bases)]
 
     if kind == "doc-tables-lists":
@@ -645,7 +705,7 @@ FIXTURE_LEDGER = {
             "value": 152,
             "unit": "张",
             "secondary": {"label": "组", "value": 76},
-            "measure": {"kind": "snapshot-manifest", "file": ".build/ui-snapshots/manifest.json", "expect": [152, 76]},
+            "measure": {"kind": "snapshot-manifest", "file": ".build/ui-snapshots/full-run/manifest.json", "expect": [152, 76]},
             "anchors": [{"file": "AGENT-SPEC.md", "regex": "快照 \\*\\*(\\d+) 张 / (\\d+) 组\\*\\*", "minSites": 1}],
         },
     ],
@@ -692,6 +752,8 @@ def build_fixture(
     judge_text: str | None = FIXTURE_JUDGE_LINE,
     judge_exit: int = 0,
     write_judge: bool = True,
+    write_full_run: bool = True,
+    record_overrides: dict | None = None,
 ):
     shutil.rmtree(base, ignore_errors=True)
     (base / "Scripts").mkdir(parents=True)
@@ -723,14 +785,39 @@ def build_fixture(
         encoding="utf-8",
     )
     (base / ".build" / "core-test-count.txt").write_text("%d tests\n" % count, encoding="utf-8")
+    # **共享产物**（筛选跑留在 `.build/ui-snapshots/` 那一份）：判据**不许**再读它（第 98 轮）。
+    # 夹具故意把它写成一份「筛选跑」的形状（只剩四分之一）⇒ 判据只要回过头去读它，① 例会当场判红。
     (base / ".build" / "ui-snapshots" / "manifest.json").write_text(
         json.dumps(
-            {"snapshots": [{"name": "panel-%d-zh" % i, "file": "x"} for i in range(snapshots[0] // 2)]
-             + [{"name": "panel-%d-en" % i, "file": "y"} for i in range(snapshots[0] // 2)]},
+            {"snapshots": [{"name": "panel-%d-zh" % i, "file": "x"} for i in range(snapshots[0] // 4)]},
             ensure_ascii=False,
         ),
         encoding="utf-8",
     )
+    # **全量跑凭证**（只有 `Scripts/make-ui-snapshots.sh` 的全量跑写它）：清单 + 记录，两项逐条对得上。
+    full_dir = base / ".build" / "ui-snapshots" / "full-run"
+    full_dir.mkdir(parents=True, exist_ok=True)
+    full_manifest = full_dir / "manifest.json"
+    snapshots_payload = [{"name": "panel-%d-zh" % i, "file": "x"} for i in range(snapshots[0] // 2)] + [
+        {"name": "panel-%d-en" % i, "file": "y"} for i in range(snapshots[0] // 2)
+    ]
+    full_manifest.write_text(json.dumps({"snapshots": snapshots_payload}, ensure_ascii=False), encoding="utf-8")
+    (base / FULL_RUN_SCRIPT).write_text(
+        "#!/bin/bash\n# 夹具里的落档脚本：全量跑把凭证写到 %s/\necho full-run\n" % FULL_RUN_DIR_TOKEN,
+        encoding="utf-8",
+    )
+    if write_full_run:
+        record = {
+            "writtenBy": "Scripts/make-ui-snapshots.sh（全量跑）",
+            "filter": FULL_RUN_FILTER,
+            "generatedAt": "2026-01-01T00:00:00+08:00",
+            "snapshotCount": len(snapshots_payload),
+            "groupCount": len({item["name"].rsplit("-", 1)[0] for item in snapshots_payload}),
+            "pngCount": len(snapshots_payload),
+            "manifestSha256": hashlib.sha256(full_manifest.read_bytes()).hexdigest(),
+        }
+        record.update(record_overrides or {})
+        (full_dir / FULL_RUN_RECORD).write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
     (base / "Scripts" / "check-fine.py").write_text("# fine\n", encoding="utf-8")
     (base / "Scripts" / "check-exempt.py").write_text("# exempt\n", encoding="utf-8")
     if write_judge:
@@ -855,6 +942,25 @@ def self_test() -> int:
         ),
         True,
         "抓不到数字",
+    )
+
+    run(
+        "⑮ 全量跑凭证缺失（只剩共享产物那一份）⇒ 判红：这份清单的**来历证明不了**",
+        lambda b: build_fixture(b, write_full_run=False),
+        True,
+        "record.json",
+    )
+    run(
+        "⑯ 凭证与它那份清单对不上（记录的 snapshotCount 被改）⇒ 判红",
+        lambda b: build_fixture(b, record_overrides={"snapshotCount": 999}),
+        True,
+        "snapshotCount",
+    )
+    run(
+        "⑰ 判据读的路径与落档脚本脱钩（脚本里没有那个目录串）⇒ 判红（否则会永远静默跳过 = 零覆盖而全绿）",
+        lambda b: _mutate(b, FULL_RUN_SCRIPT, FULL_RUN_DIR_TOKEN, "别处/的/目录"),
+        True,
+        "脱钩",
     )
 
     failures = []

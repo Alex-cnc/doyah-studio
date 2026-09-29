@@ -142,20 +142,20 @@
     {
       "key": "ui-snapshots",
       "label": "界面快照张数",
-      "value": 208,
+      "value": 218,
       "unit": "张",
       "secondary": {
         "label": "组",
-        "value": 104
+        "value": 109
       },
       "measure": {
         "kind": "snapshot-manifest",
-        "file": ".build/ui-snapshots/manifest.json",
+        "file": ".build/ui-snapshots/full-run/manifest.json",
         "expect": [
-          208,
-          104
+          218,
+          109
         ],
-        "writtenBy": "./Scripts/make-ui-snapshots.sh（快照不进每轮闭环 ⇒ 本机没有清单时判据如实报『跳过』，不假装核过）"
+        "writtenBy": "./Scripts/make-ui-snapshots.sh **全量跑**（只读全量跑凭证 `.build/ui-snapshots/full-run/`：`manifest.json` + `record.json`，判据与记录逐项对账；**不再读**共享产物 `.build/ui-snapshots/manifest.json` —— 第 97 轮实测它被人工点验的筛选跑反复顶掉（194/97 与 218/109 交替）⇒ 第 98 轮换测量源：判据的输入只能有一个写者。快照不进每轮闭环 ⇒ 本机连凭证都没有时判据如实报『跳过』，不假装核过）"
       },
       "anchors": [
         {
