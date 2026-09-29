@@ -214,8 +214,12 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `BrowserTabDownloadProbeTests`（㈡ ⑨：浏览器页签与下载）。
 # + `MySQLFormProbeTests`（㈡ ⑩：MySQL 表单联动 —— 换方言当场换端口与 SSL 清单（真点那台下拉）
 #   ＋ 对象树四层（服务器 → Database → Table → Column，没有 schema 层）＋ 能查到数据）。
+# + `TerminalInteractionProbeTests`（L-90 ㈠：终端交互三面 —— 鼠标上报 / DECCKM / 右键归属。
+#   本批的**主入口**是 `Scripts/verify-ui-interactions.sh`（那份只跑一遍、判据与进程环境无关）；
+#   这里同时挂上是为了那条「每个 `*ProbeTests.swift` 都得有入口」的判据
+#   `check-result-scroll-ledger.py` ⑤ —— 一处入口漏了就等于一个都跑不到（第 96 轮实测）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
