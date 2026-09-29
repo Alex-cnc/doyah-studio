@@ -101,15 +101,36 @@ struct ObjectTreeView: View {
                         // 记录决定，而 `onHover` 会在整树重算（选中态一变就重算）后被 SwiftUI 补一个
                         // 假的 `mouseExited` 清掉。行级菜单把这个不确定来源整个绕开。
                         rowView(row)
-                            // **每一行自己接右键**（不碰坐标），并且**自己给出菜单**：
-                            // 先选中本行，再交出 `ObjectTreeAppKitMenu` 按本行对象现建的 `NSMenu`。
-                            // 菜单必须由命中视图给出 —— AppKit 沿 superview 链取第一个非 nil 的
-                            // `menu(for:)`，我们把菜单挂在下层时，它会被侧栏那份「断开连接」抢走
-                            // （2026-09-29 需求提出者实测）。
+                            // **每一行自己接鼠标**（不碰坐标）：右键给本行菜单，左键给"零等待"的选中与展开。
+                            //
+                            // 两个根因都在这一个捕获器里收口（2026-09-29 需求提出者实测两轮）：
+                            // ① 「右键一个表却弹出断开连接那个菜单」—— AppKit 沿 superview 链取第一个
+                            //    非 nil 的 `menu(for:)`，菜单必须由**命中视图**给出；
+                            // ② 「同样选中一个对象，右键总比左键快」—— SwiftUI 同一行同时挂单击与双击
+                            //    手势时，**单击要等双击判定窗口（~250–300ms）过期**才触发，而 AppKit 的
+                            //    `clickCount` 是原生给的、零等待。行首 chevron 那一小块除外（放行给按钮）。
                             .overlay(
-                                RowRightClickCatcher(
+                                RowMouseCatcher(
                                     tag: row.id,
-                                    onSelect: { appState.selectTreeObject(row.object) },
+                                    chevronZone: chevronZone(for: row),
+                                    onSelect: {
+                                        guard !row.isGroupHeader else { return }
+                                        appState.selectTreeObject(row.object)
+                                        hoverBox.rowID = row.object.id
+                                    },
+                                    onDoubleClick: {
+                                        guard !row.isGroupHeader else { return }
+                                        appState.selectTreeObject(row.object)
+                                        hoverBox.rowID = row.object.id
+                                        // 双击 = 展开（可展开节点）；不可展开但可浏览的节点保留
+                                        // "浏览前 N 行"（FR-DATA-01），能力不丢。
+                                        if row.isExpandable {
+                                            toggle(row.object)
+                                            return
+                                        }
+                                        guard ObjectTreeActions.isAvailable(.browseRows, for: row.object.kind) else { return }
+                                        Task { await appState.performTreeAction(.browseRows, on: row.object) }
+                                    },
                                     makeMenu: {
                                         ObjectTreeAppKitMenu.build(
                                             object: row.object,
@@ -197,35 +218,8 @@ struct ObjectTreeView: View {
                 onToggle: { toggle(row.object) }
             )
             .equatable()
-            // 点击区**铺满整行**：默认只覆盖内容宽度 ⇒ 标签右边那一截空白点不到，
-            // 表现就是「经常选不中」（2026-09-29 需求提出者实测）。
-            .contentShape(Rectangle())
             // 双击表 / 视图 → 浏览前 N 行（FR-DATA-01）。
             // 双击手势必须写在单击之前，否则会被单击吞掉。
-            // **双击 = 展开**（2026-09-29 需求提出者定：展开只走双击与右箭头，绝不走单击）。
-            // 不可展开但可浏览的节点（若有）保留"浏览前 N 行"这条老行为，能力不丢；
-            // 可展开的节点（表 / 视图 / 库 / schema）双击只展开，浏览走右键菜单或 ⌘K。
-            .onTapGesture(count: 2) {
-                guard !row.isGroupHeader else { return }
-                appState.selectTreeObject(row.object)
-                hoverBox.rowID = row.object.id
-                if row.isExpandable {
-                    toggle(row.object)
-                    return
-                }
-                guard ObjectTreeActions.isAvailable(.browseRows, for: row.object.kind) else { return }
-                Task { await appState.performTreeAction(.browseRows, on: row.object) }
-            }
-            // **单击只选中**（2026-09-29 需求提出者原话：「单击选择某个对象时不要去查数据并自动展开下一级，
-            // 只有用户双击或选择前面的右箭头才展开，不然体验真的很差」）。
-            // 原先单击既选中又展开 ⇒ 每次点一下都要发一条元数据查询 + 整树重算 ⇒ 手感很差。
-            // 展开的唯一入口：双击上面的那段 + 行首那个 chevron 按钮。
-            .onTapGesture {
-                guard !row.isGroupHeader else { return }
-                appState.selectTreeObject(row.object)
-                // 点完立刻右键的人，菜单目标是这一行（悬停盒子的口径，见 `HoverBox` 的说明）。
-                hoverBox.rowID = row.object.id
-            }
             // 记「鼠标在哪一行」（右键菜单已按行挂，这里只服务"点完立刻操作"的悬停口径）。
             .onHover { hovering in
                 guard !row.isGroupHeader else { return }
@@ -284,6 +278,16 @@ struct ObjectTreeView: View {
                 .textSelection(.enabled)
         }
         .padding(.leading, CGFloat(depth) * Metrics.listIndent + Metrics.listIndent + Spacing.xs)
+    }
+
+    /// 行首 chevron 的横向范围（相对行左边）—— 左键落在这一段里**不拦**，放行给 SwiftUI 那个按钮。
+    ///
+    /// 其余整行的左键都由 `RowMouseCatcher` 处理（零等待的单击 / 双击）；
+    /// 只有这一小块必须留给 SwiftUI，否则展开箭头会被拦掉。
+    private func chevronZone(for row: ObjectTreeVisibleRow) -> ClosedRange<CGFloat> {
+        guard row.isExpandable, !row.isGroupHeader else { return 0 ... 0 }
+        let start = CGFloat(row.depth) * Metrics.listIndent
+        return start ... (start + 12 + Spacing.s)
     }
 
     // MARK: - 交互

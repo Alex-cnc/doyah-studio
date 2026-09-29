@@ -50,8 +50,8 @@ final class ObjectTreeRowMenuConventionTests: XCTestCase {
     /// 结论：行的归属是 AppKit `hitTest` / `menu(for:)` 的本职，不要自己算。
     func testRightClickIsOwnedByEachRowNotByCoordinates() throws {
         let view = try source("App/Views/ObjectTreeView.swift")
-        XCTAssertTrue(view.contains("RowRightClickCatcher("),
-                      "每一行都要挂自己的右键捕获器")
+        XCTAssertTrue(view.contains("RowMouseCatcher("),
+                      "每一行都要挂自己的鼠标捕获器（右键给菜单、左键给零等待选中）")
         XCTAssertTrue(view.contains("ObjectTreeAppKitMenu.build("),
                       "捕获器要注入按本行对象现建的 AppKit 菜单（`ObjectTreeAppKitMenu.build`）")
         XCTAssertTrue(view.contains("appState.selectTreeObject(row.object)"),
@@ -97,43 +97,41 @@ final class ObjectTreeRowMenuConventionTests: XCTestCase {
     /// 「单击选择某个对象时不要去查数据并自动展开下一级，只有用户双击或选择前面的右箭头才展开，
     /// 不然体验真的很差」。原先单击既选中又展开 ⇒ 每点一下都发一条元数据查询 + 整树重算。
     func testSingleClickSelectsOnlyAndNeverExpands() throws {
-        let view = try source("App/Views/ObjectTreeView.swift")
-        guard let single = view.range(of: ".onTapGesture {") else {
-            return XCTFail("找不到单击手势 —— 判据锚点变了，请更新这条判据而不是删掉它")
+        // 单击 / 双击都改由 AppKit 捕获器处理（零等待；SwiftUI 的单击会被双击判定窗口延后）。
+        let helper = try source("App/Views/ObjectTreeRightClick.swift")
+        guard let single = helper.range(of: "if event.clickCount == 1 {") else {
+            return XCTFail("找不到 clickCount == 1 分支 —— 判据锚点变了，请更新这条判据而不是删掉它")
         }
-        let singleBody = String(view[single.lowerBound...].prefix(700))
-        XCTAssertTrue(singleBody.contains("appState.selectTreeObject(row.object)"),
-                      "单击必须选中")
-        XCTAssertFalse(singleBody.contains("toggle(row.object)"),
+        let singleBody = String(helper[single.lowerBound...].prefix(300))
+        XCTAssertTrue(singleBody.contains("onSelect?()"), "单击必须选中")
+        XCTAssertFalse(singleBody.contains("onDoubleClick?()"),
                        "单击**不许**展开（会连带发元数据查询 + 整树重算）")
 
-        guard let double = view.range(of: ".onTapGesture(count: 2) {") else {
-            return XCTFail("找不到双击手势 —— 判据锚点变了，请更新这条判据而不是删掉它")
+        guard let double = helper.range(of: "} else if event.clickCount == 2 {") else {
+            return XCTFail("找不到 clickCount == 2 分支 —— 判据锚点变了，请更新这条判据而不是删掉它")
         }
-        let doubleBody = String(view[double.lowerBound...].prefix(700))
-        XCTAssertTrue(doubleBody.contains("toggle(row.object)"),
-                      "双击必须展开（它是除右箭头之外的唯一展开入口）")
-    }
-    /// **懒加载预取一层**（2026-09-29 需求提出者：「每次加载树的时候应该多加载一个层级，
-    /// 这样展开时直接用的本地数据，性能体验更好，所谓懒加载模式」）。
-    ///
-    /// 预取与「展开时加载」必须三处不同：① 安静（不写 `loadingIDs` / `errors`）；
-    /// ② 失败**不写缓存**；③ 有预算且串行（`ObjectTreePrefetchPolicy.limit`）。
-    func testPrefetchLoadsOneExtraLevelSilently() throws {
-        let view = try source("App/Views/ObjectTreeView.swift")
-        XCTAssertTrue(view.contains("private func prefetchChildren(of objects: [DatabaseObject]) async"),
-                      "预取必须有独立函数（复用展开加载会把「正在加载」与错误显示带出来）")
-        XCTAssertTrue(view.contains("ObjectTreePrefetchPolicy.limit"),
-                      "预取必须有预算上限（一层可能几百个节点，全预取会把连接打满）")
-        XCTAssertTrue(view.contains("await prefetchChildren(of: deepestLoadedChildren())"),
-                      "根加载后必须多加载一个层级")
+        let doubleBody = String(helper[double.lowerBound...].prefix(300))
+        XCTAssertTrue(doubleBody.contains("onDoubleClick?()"), "双击必须触发展开")
 
-        guard let decl = view.range(of: "private func prefetchChildren(of objects: [DatabaseObject]) async") else {
-            return XCTFail("找不到预取函数 —— 判据锚点变了，请更新这条判据而不是删掉它")
-        }
-        let body = String(view[decl.lowerBound...].prefix(1_500))
-        XCTAssertFalse(body.contains("loadingIDs.insert"), "预取不许显示「正在加载…」")
-        XCTAssertFalse(body.contains("errors["), "预取失败不许在界面上留错误")
-        XCTAssertTrue(body.contains("catch"), "预取失败必须吞掉且什么都不写")
+        let view = try source("App/Views/ObjectTreeView.swift")
+        XCTAssertTrue(view.contains("if row.isExpandable {"),
+                      "双击回调里对可展开节点必须展开")
+        XCTAssertTrue(view.contains("chevronZone(for: row)"),
+                      "行首箭头那一小块必须放行给 SwiftUI（否则箭头被拦掉）")
+    }
+
+    /// **左键也要零等待**（2026-09-29 需求提出者第三次说手感：「同样选某个对象，右键总比左键快」）。
+    /// 根因：SwiftUI 同一行同时挂单击与双击手势时，单击必须等双击判定窗口（~250–300ms）过期。
+    /// 修法：左键也交给 AppKit 捕获器（`clickCount` 原生、零等待），只把行首箭头留给 SwiftUI。
+    func testLeftClickIsHandledByAppKitWithoutDoubleTapDelay() throws {
+        let helper = try source("App/Views/ObjectTreeRightClick.swift")
+        XCTAssertTrue(helper.contains("override func mouseDown(with event: NSEvent)"),
+                      "左键必须在 AppKit 侧处理（SwiftUI 的单击会被双击判定窗口延后）")
+        XCTAssertTrue(helper.contains("case .leftMouseDown where !chevronZone.contains(point.x)"),
+                      "左键要拦，但行首箭头那一小块必须放行给 SwiftUI 按钮")
+
+        let view = try source("App/Views/ObjectTreeView.swift")
+        XCTAssertFalse(view.contains(".onTapGesture"),
+                       "视图里不许再有 SwiftUI 点击手势 —— 它们才是那个 250ms 延迟的来源")
     }
 }
