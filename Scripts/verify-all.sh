@@ -390,7 +390,7 @@ python3 Scripts/check-p-parity.py --self-test
 echo "==> 8/18 平台中立性棘轮"
 python3 Scripts/check-platform-neutrality.py
 
-echo "==> 9/18 界面接线与状态归属（命令面板 FR-EDIT-25 / 侧边栏折叠 FR-CONN-15 / 空数据按钮 L-50）"
+echo "==> 9/18 界面接线与状态归属（命令面板 FR-EDIT-25 / 侧边栏折叠 FR-CONN-15 / 空数据按钮 L-50 / 终端多会话页签 L-84）"
 python3 Scripts/check-palette-wiring.py
 # L-59：**侧边栏的折叠状态住在 `AppState`，不住在视图里** —— 人工点验批次 1 第 3 条实测为挂
 # （「记不住折叠状态」）：`ConnectionListView` 的局部 `@State` 随活动栏分支重建归零，而当时
@@ -427,6 +427,16 @@ python3 Scripts/test-empty-action-buttons.py
 # 三条路线全红」这一组，与一条「显式对齐被删但登记还在」；夹具只拷 `App/`，末例核对真仓库逐字节未变）。
 python3 Scripts/check-panel-root-frames.py
 python3 Scripts/check-panel-root-frames.py --self-test
+# L-84 ㈠（2026-09-29 第 81 轮）：终端**多会话（页签）**的 **Core 侧**判据。需求提出者把它提为刚需
+# 时给的原话是「一个 terminal 在执行 dsh-tui，遇到要执行命令只能去开系统终端，违背了我这个软件的初衷」。
+# 判据判的是「新建 / 关闭 / 切换 / 标题推导 / 关闭确认」这**五组判断真的在 `Core/TerminalTabs.swift` 里**、
+# 且被 `Tests/TerminalTabsTests.swift` 逐组钉住（另加「Core 不出用户可见文案」与「页签文案键中英齐」）。
+# **界面那一半**（工具条左侧 tab 头 / ⌘T ⌘W / ⌘⇧[ ⌘⇧] / ⌘1…9 / 双击重命名 / 二次确认弹窗 / 已退出标记）
+# 在 ㈡（App 接线）落 —— 落完把界面锚点并进本判据；真人点验 = 主诉场景（一个页签跑 `dsh-tui`、
+# 另一个执行命令，互不干扰）。负例 `--self-test` **7 例**（红 / 绿成对，夹具一律在临时目录，
+# 末例核对真仓库五份文件逐字节未变）。
+python3 Scripts/check-terminal-tabs.py
+python3 Scripts/check-terminal-tabs.py --self-test
 
 echo "==> 10/18 插件装配链（FR-PLUG-01~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py

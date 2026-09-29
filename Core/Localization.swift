@@ -518,6 +518,16 @@ public enum LKey: String, CaseIterable, Sendable {
     case terminalCursorBlinking
     case terminalCursorSteady
     case terminalStopped
+    // L-84（终端多会话 / 页签）：Core 只出逻辑、不出文案 —— 页签相关的每一句人话都在这里。
+    // ㈠（Core 侧）先把文案登记好，㈡（界面接线）直接用，避免界面侧出现裸字面量。
+    case terminalTabNew
+    case terminalTabClose
+    case terminalTabRename
+    case terminalTabExited
+    case terminalTabUntitled
+    case terminalTabCloseConfirmTitle
+    case terminalTabCloseConfirmMessage
+    case terminalTabCloseConfirmAction
 
     // 系统级菜单的语言需要重启才跟随（macOS 在进程启动时固定 AppKit 的本地化）
     case relaunchTitle
@@ -2259,6 +2269,14 @@ public enum LocalizedStrings {
         .terminalCursorBlinking: [.simplifiedChinese: "闪烁", .english: "blinking"],
         .terminalCursorSteady: [.simplifiedChinese: "稳定", .english: "steady"],
         .terminalStopped: [.simplifiedChinese: "已停止", .english: "Stopped"],
+        .terminalTabNew: [.simplifiedChinese: "新建终端页签", .english: "New Terminal Tab"],
+        .terminalTabClose: [.simplifiedChinese: "关闭终端页签", .english: "Close Terminal Tab"],
+        .terminalTabRename: [.simplifiedChinese: "重命名页签", .english: "Rename Tab"],
+        .terminalTabExited: [.simplifiedChinese: "已退出", .english: "Exited"],
+        .terminalTabUntitled: [.simplifiedChinese: "终端", .english: "Terminal"],
+        .terminalTabCloseConfirmTitle: [.simplifiedChinese: "这个页签里还有程序在运行", .english: "A program is still running"],
+        .terminalTabCloseConfirmMessage: [.simplifiedChinese: "关闭页签会把里面正在运行的程序一起结束，而且不会再问第二次。要关闭吗？", .english: "Closing this tab terminates whatever is running in it, and will not ask again. Close it?"],
+        .terminalTabCloseConfirmAction: [.simplifiedChinese: "关闭页签", .english: "Close Tab"],
         .relaunchTitle: [.simplifiedChinese: "重启应用", .english: "Relaunch the app"],
         .relaunchMessage: [.simplifiedChinese: "重启会关掉当前进程再打开一个：界面上的页签、光标位置与展开状态都会重来（连接与页签本身存在配置里，不会丢）。\n换语言不需要这一步 —— 语言是就地切换的，这个入口只服务\"我就是想重开一个进程\"。", .english: "Relaunching closes this process and starts a new one: on-screen tabs, cursor positions and expansion state start over (connections and tabs live in config, so they survive).\nSwitching language does not need this — the language switches in place; this entry is only for when you actually want a fresh process."],
         .relaunchMessageUnsaved: [.simplifiedChinese: "注意：还有 %d 个页签有未保存的改动，重启会丢失。", .english: "Note: %d tab(s) have unsaved changes that would be lost."],

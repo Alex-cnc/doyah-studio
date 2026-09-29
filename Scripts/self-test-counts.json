@@ -666,6 +666,36 @@
           "note": "§6 资产表新增行"
         }
       ]
+    },
+    {
+      "key": "terminal-tabs",
+      "script": "Scripts/check-terminal-tabs.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 7,
+      "countRegex": "自测通过（(\\d+) 例）",
+      "why": "队列 L-84 ㈠ / 闭环第 9 项（终端多会话页签的 Core 侧：五组判断真的在 Core 里、被单测逐组钉住；界面那一半在 ㈡）",
+      "anchors": [
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "负例 `--self-test` \\*\\*(\\d+) 例\\*\\*（红 / 绿成对",
+          "minSites": 1,
+          "note": "闭环第 9 项 L-84 注释"
+        },
+        {
+          "file": "Scripts/check-terminal-tabs.py",
+          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "脚本自己的 docstring"
+        },
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "check-terminal-tabs\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "§6 资产表新增行（随本轮一起落）"
+        }
+      ]
     }
   ]
 }

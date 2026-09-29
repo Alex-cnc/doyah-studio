@@ -1,7 +1,7 @@
 {
   "version": 1,
   "release": "v0.2.0-alpha",
-  "updatedAt": "2026-09-28",
+  "updatedAt": "2026-09-29",
   "rule": "FR 🟡 逐条判定（队列 L-69 条件 ③）：能机器验的补证据（脚本 + 断言数，可复跑）；不能机器验的（需人工点击 / 需真机 / 需外部实例）逐条标 [alpha 不含]，状态格仍 🟡 不改 ✅。",
   "reasonBranches": {
     "environment": "本机物理不可能：无实例 / 无扩展 / 无二进制 / 沙箱限制（v0.1.0-alpha 同一批，标记沿用）",
@@ -35,7 +35,7 @@
     {"id": "FR-EDIT-25", "domain": "3.2 SQL 编辑与执行", "reason": "ui-click", "reasonText": "界面点击待人工点验", "marker": "**[alpha 不含]**（界面点击待人工点验）", "markerPreExisting": false, "evidence": [{"path": "Scripts/check-palette-wiring.py"}, {"path": "Scripts/test-command-palette.sh"}]},
     {"id": "FR-EDIT-26", "domain": "3.2 SQL 编辑与执行", "reason": "ui-click", "reasonText": "主题三态 / 字体字号观感需人工看一眼", "marker": "**[alpha 不含]**（主题三态 / 字体字号观感需人工看一眼）", "markerPreExisting": false, "evidence": [{"path": "Scripts/alpha-main-chain-v0.2.sh"}, {"path": "Scripts/make-ui-snapshots.sh"}]},
     {"id": "FR-EDIT-27", "domain": "3.2 SQL 编辑与执行", "reason": "ui-click", "reasonText": "界面点击待人工点验", "marker": "**[alpha 不含]**（界面点击待人工点验）", "markerPreExisting": false, "evidence": [{"path": "Scripts/alpha-main-chain-v0.2.sh"}, {"path": "Scripts/make-ui-snapshots.sh"}]},
-    {"id": "FR-EDIT-29", "domain": "3.2 SQL 编辑与执行", "reason": "environment", "reasonText": "沙箱下 ^C / 作业控制不可靠（待 T-38 分发路线）；多会话与 sixel / kitty 图形未做；界面未人工验收", "marker": "**[alpha 不含]**（沙箱下 ^C / 作业控制不可靠（待 T-38 分发路线）；多会话与 sixel / kitty 图形未做；界面未人工验收）", "markerPreExisting": false, "evidence": [{"path": "Scripts/build-app.sh"}, {"path": "Scripts/test-terminal-modes.sh"}, {"path": "Scripts/test-terminal-palette.sh"}]},
+    {"id": "FR-EDIT-29", "domain": "3.2 SQL 编辑与执行", "reason": "environment", "reasonText": "沙箱下 ^C / 作业控制不可靠（待 T-38 分发路线）；多会话的界面那一半与 sixel / kitty 图形未做（Core 判定已落）；界面未人工验收", "marker": "**[alpha 不含]**（沙箱下 ^C / 作业控制不可靠（待 T-38 分发路线）；多会话的界面那一半与 sixel / kitty 图形未做（Core 判定已落）；界面未人工验收）", "markerPreExisting": false, "evidence": [{"path": "Scripts/build-app.sh"}, {"path": "Scripts/test-terminal-modes.sh"}, {"path": "Scripts/test-terminal-palette.sh"}]},
     {"id": "FR-EDIT-34", "domain": "3.2 SQL 编辑与执行", "reason": "ui-click", "reasonText": "GUI 点击与下载观感待人工点验", "marker": "**[alpha 不含]**（GUI 点击与下载观感待人工点验）", "markerPreExisting": false, "evidence": [{"path": "Scripts/alpha-main-chain-v0.2.sh"}, {"path": "Scripts/make-ui-snapshots.sh"}]},
     {"id": "FR-EDIT-35", "domain": "3.2 SQL 编辑与执行", "reason": "ui-click", "reasonText": "界面切换与点击待人工点验", "marker": "**[alpha 不含]**（界面切换与点击待人工点验）", "markerPreExisting": false, "evidence": [{"path": "Scripts/verify-core.sh"}]},
     {"id": "FR-EDIT-36", "domain": "3.2 SQL 编辑与执行", "reason": "ui-click", "reasonText": "界面点击待人工点验", "marker": "**[alpha 不含]**（界面点击待人工点验）", "markerPreExisting": false, "evidence": [{"path": "Scripts/test-workspace-editor.sh"}, {"path": "Scripts/verify-all.sh"}]},
