@@ -154,6 +154,7 @@
 		4CD7E348927E7B02DE60A812 /* MCPSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12AD10A94207DC07336F8AFE /* MCPSession.swift */; };
 		4D2B17E32213C219BD1C49EA /* BrowserContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4C19EA206CBA5D9F1856A3 /* BrowserContractTests.swift */; };
 		4D44F753795E7C2D7787DABA /* AgentQuotaSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E147F7A13B696E69F9A4B6B2 /* AgentQuotaSessionTests.swift */; };
+		4D568C5F4BBB74B79B5EEF2B /* ObjectTreeRightClick.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4B49FD28C3E7C592415C32 /* ObjectTreeRightClick.swift */; };
 		4DD9E3D7C69CD7BFCEAE9532 /* ConnectionConfigMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E949445CD5738E8F1C2DC8B /* ConnectionConfigMigrationTests.swift */; };
 		4DDA0D5D24ABA438A1731782 /* TransactionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10420ADC72B871F8350340C7 /* TransactionSession.swift */; };
 		4FDB2F4FDFBB65FC1B978D48 /* ObjectTreeAutoExpansionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1068C1A852D180C93CF037C3 /* ObjectTreeAutoExpansionTests.swift */; };
@@ -993,6 +994,7 @@
 		FAF1D00352F54AB959E0C2D0 /* EditorResponsivenessConventionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorResponsivenessConventionTests.swift; sourceTree = "<group>"; };
 		FB06FA08DA478F5385B46065 /* DataTaskSpecSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataTaskSpecSheet.swift; sourceTree = "<group>"; };
 		FBE5308316B042A4E78A4DF1 /* NoteDataBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteDataBoundaryTests.swift; sourceTree = "<group>"; };
+		FC4B49FD28C3E7C592415C32 /* ObjectTreeRightClick.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeRightClick.swift; sourceTree = "<group>"; };
 		FD9874F27B81672A096337C6 /* WorkspaceTabTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTabTests.swift; sourceTree = "<group>"; };
 		FE844E31078C7575E8CE56B3 /* MenuLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuLocalization.swift; sourceTree = "<group>"; };
 		FEA1616A8BDC09D3FC8101CC /* DiagnosisPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosisPanel.swift; sourceTree = "<group>"; };
@@ -1518,6 +1520,7 @@
 				4C604886B315DB3AEA77E165 /* NotesPanel.swift */,
 				3E6523603226B14944DB3254 /* ObjectSearchPanel.swift */,
 				301F4E6D7D02702F8786EEAD /* ObjectTreeContextMenu.swift */,
+				FC4B49FD28C3E7C592415C32 /* ObjectTreeRightClick.swift */,
 				891C58A5D0B425F0AF553B94 /* ObjectTreeRows.swift */,
 				CAB626B535EE491C93DBCB41 /* ObjectTreeToolbar.swift */,
 				DCCCBABF3F0170E23840194F /* ObjectTreeView.swift */,
@@ -1891,6 +1894,7 @@
 				E82CFBAE23875685C0370117 /* NotesPanel.swift in Sources */,
 				42375BDC9F67BF7BC406ACB7 /* ObjectSearchPanel.swift in Sources */,
 				D0811A31C309429ED03B7C3D /* ObjectTreeContextMenu.swift in Sources */,
+				4D568C5F4BBB74B79B5EEF2B /* ObjectTreeRightClick.swift in Sources */,
 				11001E27AE9DADFFCBE9C3B6 /* ObjectTreeRows.swift in Sources */,
 				12D7A54275F25F258DA4FF4C /* ObjectTreeToolbar.swift in Sources */,
 				F4EE71C4B14F01570C4CB528 /* ObjectTreeView.swift in Sources */,
