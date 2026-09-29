@@ -476,7 +476,7 @@ python3 Scripts/check-cli-failure-readability.py
 # 判据 = 台账 `Scripts/cell-decode-coverage.json` ↔ 源码双向对账（解了不登记 / 登记了没解都报红）
 # + 那条被禁的出口（`String(describing: buffer)`）不许在 `Core/` `App/` 的代码行里回来
 # + 诚实兜底（点名类型 + 字节数 + 十六进制预览）必须在位 + 单测逐型锚点 + 真机证据（证据脚本 §7
-# 与 psql 的文本形态逐条相等）。负例 **10 例**（一律只在临时副本上写坏，末例核对真仓库逐字节未变）。
+# 与 psql 的文本形态逐条相等）。L-74 的负例 **10 例**（一律只在临时副本上写坏，末例核对真仓库逐字节未变）。
 python3 Scripts/check-cell-decode-coverage.py
 python3 Scripts/check-cell-decode-coverage.py --self-test
 
