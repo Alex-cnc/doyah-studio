@@ -39,6 +39,15 @@ set -euo pipefail
 # 第一次进得了快照；判的是 SQL 预览那一行的**取样带**（`UISnapshot.band`）——
 # 换族必须变、同族重跑必须逐像素相同、上方只多一句提示时必须不变。
 #
+# ## 第四批（队列 L-92 ㈡①，第 95 轮）：终端 `⌃C`
+#
+# `TestsUISnapshot/TerminalInterruptProbeTests.swift` 判的是「**非沙箱包（现在的默认与交付口径）
+# 里 `⌃C` 能不能打断 `sleep 30`**」—— 清单 §0.3 第 3 条原先**要人点**，改默认非沙箱之后
+# 变成机器判得住：往 PTY 喂一个 `0x03` 字节，看前台进程（`tcgetpgrp`）是否真的让开，
+# 并要求它在 8 秒内发生（`⌃C` 没送到的话 `sleep` 会占满 30 秒 ⇒ 探针自己红）。
+# 它用真 `TerminalPane` + 真 `forkpty` 会话；两遍都跑（沙箱标记只影响界面文案，不影响这条）。
+# 边界：**没有**做「同一探针在沙箱里必红」的 A/B（见该文件头注释）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -61,8 +70,9 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # 默认两族都跑：`ManualVerificationProbeTests`（B 类 ㈠：隧道表单 / SSL 收窄 / 沙箱告知）
 # + `PaletteWiringProbeTests`（㈡：命令面板接线）
 # + `AppearanceFontProbeTests`（㈡：主题与字体 —— 手输族之后界面说的话 + SQL 预览的字形）。
+# + `TerminalInterruptProbeTests`（L-92 ㈡①：终端 `⌃C` 打断前台 `sleep 30` —— 非沙箱包的作业控制）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -171,3 +181,4 @@ echo "==> 完成：证据在 ${OUT_BASE}/（每张图另有中英两份，逐张
 echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 R-53 SSL 收窄说明"
 echo "    ＋ §2 FR-EDIT-25 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
 echo "    ＋ §2 FR-EDIT-26 主题与字体（AppearanceFontProbeTests：手输族的三档说法 + SQL 预览取样带）"
+echo "    ＋ §0.3 第 3 条 终端 ⌃C（TerminalInterruptProbeTests：喂 0x03 看前台 sleep 让不让开）"

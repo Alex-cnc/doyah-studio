@@ -178,7 +178,8 @@ final class TerminalStartupHintTests: XCTestCase {
         ]))
         XCTAssertTrue(notice.contains("沙箱"), notice)
         XCTAssertTrue(notice.contains("dsh-tui"), "要点名「命令找不到」这个直接症状")
-        XCTAssertTrue(notice.contains("DOYAH_NO_SANDBOX=1"), "要给出路（怎么拿到完整终端）")
+        XCTAssertTrue(notice.contains("./Scripts/build-app.sh"), "要给出路（怎么拿到完整终端）")
+        XCTAssertTrue(notice.contains("DOYAH_SANDBOX=1"), "要点明「沙箱是显式开关」——默认构建没有它")
         XCTAssertTrue(notice.contains("R-18"), "要能追到已登记的阻塞项")
 
         let english = try XCTUnwrap(TerminalStartupHint.sandboxNotice(
@@ -186,6 +187,7 @@ final class TerminalStartupHintTests: XCTestCase {
             language: .english
         ))
         XCTAssertTrue(english.contains("sandbox"))
-        XCTAssertTrue(english.contains("DOYAH_NO_SANDBOX=1"))
+        XCTAssertTrue(english.contains("./Scripts/build-app.sh"))
+        XCTAssertTrue(english.contains("DOYAH_SANDBOX=1"))
     }
 }

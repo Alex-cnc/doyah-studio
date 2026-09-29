@@ -116,8 +116,8 @@ set -euo pipefail
 #   · `DOYAH_PLATFORM=macos|windows|linux` 显式声明平台（缺省按 `uname -s` 推断）；
 #   · `./Scripts/verify-all.sh --require-all` = **跳过即红**（主开发机上自我证明用）。
 #
-# 需要非沙箱构建（例如要跑 dsh-tui 的终端）时单独执行：
-#   DOYAH_NO_SANDBOX=1 ./Scripts/build-app.sh
+# 默认就是非沙箱构建（交付口径）：./Scripts/build-app.sh
+# 要试沙箱那一面（上架只走沙箱）：DOYAH_SANDBOX=1 ./Scripts/build-app.sh
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "${ROOT}"

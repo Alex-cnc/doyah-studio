@@ -70,8 +70,10 @@ A fuller list (including what is **not** done yet) lives in
   the contract layer is specified, the implementation is still to be built.
 - **Known gaps**: SSH tunneling (FR-CONN-18), GBase / MySQL drivers, line numbers in the editor, and a few
   agent items that need a model endpoint.
-- **Sandboxed builds**: under the App Store sandbox child processes are restricted (`pg_dump` / `ssh` / `^C`
-  are unreliable). For the full feature set build with `DOYAH_NO_SANDBOX=1 ./Scripts/build-app.sh`.
+- **Sandbox**: the default build has **no** App Sandbox (decided 2026-09-29: the deliverable is an
+  unsandboxed ad-hoc bundle), so child-process features (`^C`, `pg_dump`, `ssh`) work. To exercise the
+  sandboxed side (which is the **only** road to the App Store) use `DOYAH_SANDBOX=1 ./Scripts/build-app.sh`;
+  there those three are unreliable and the UI says so.
 
 ## Internationalization
 

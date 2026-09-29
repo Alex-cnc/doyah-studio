@@ -20,9 +20,9 @@
 |---|---|---|
 | `ui-click` | **35** | 界面点击 / 观感只能人工 |
 | `environment` | **6** | 本机物理不可能 |
-| `device-instance` | **5** | 需真机 / 外部实例 / 外部软件 |
+| `device-instance` | **6** | 需真机 / 外部实例 / 外部软件（`FR-IO-04` 2026-09-29 由 `needs-decision` 转入 —— 拍板已下，残项只剩 217 专用库的真实还原） |
 | `not-implemented` | **2** | 本 alpha 明确不含的未做功能 |
-| `needs-decision` | **1** | 等需求提出者拍板 |
+| `needs-decision` | **0** | 等需求提出者拍板（唯一那条 `FR-IO-04` 于 2026-09-29 拍板「改非沙箱」后转入 `device-instance`） |
 | `open-defect` | **1** | 点验发现的缺陷（已开队列条） |
 | **合计** | **50** | = FR 🟡 50 条（`FR-DRV-09` 已 ✅，不在其中；`FR-EXEC-15` / `FR-EXEC-17` 2026-09-28 销账）|
 
@@ -33,6 +33,8 @@
 >
 > **沿用与新增**：环境档 5 条是 `v0.1.0-alpha` 那次（`v3.252`）手加的标记，本轮**沿用原文**；
 > 其余 **47 条**是本轮判定后新加（`FR-EDIT-29` 同时含沙箱限制与未做功能，归 `environment` 档并在标记里写明两因）。
+>
+> **2026-09-29 更新（开发循环第 95 轮，队列 `L-92`）**：需求提出者拍板「**改非沙箱，先验证功能**」⇒ 三条与沙箱绑定的残项**随拍板消解** —— `FR-CONN-18` 只剩真跳板机握手、`FR-EDIT-29` 去掉沙箱那一因（`^C` 另有机器判据）、`FR-IO-04` 由 `needs-decision` 转 `device-instance`（只剩 217 专用库的真实还原）。**条目数不变（50）**，变的是原因；`Docs/需求规范书.md` **v3.278** 三处状态格与台账 `Scripts/alpha-fr-dispositions.json` 已同步，判据 `check-alpha-fr-dispositions.py` 逐字对账通过。
 
 ## 逐条判定
 
@@ -47,7 +49,7 @@
 | **FR-AI-14** | 3.12 AI 智能体 | 界面点击待人工点验 | `ui-click` | `Scripts/test-routine-candidates.sh` |
 | **FR-AI-15** | 3.12 AI 智能体 | 界面点击待人工点验 | `ui-click` | `Scripts/test-memory-governance.sh` |
 | **FR-CONN-15** | 3.1 连接与凭据 | 2026-09-27 点验未过：折叠状态活不过一次活动栏切换，已开队列 L-59，修完复验 | `open-defect` | `Scripts/test-connection-groups.sh` |
-| **FR-CONN-18** | 3.1 连接与凭据 | 沙箱下不能起 ssh 子进程（仅非沙箱构建可用） | `environment` | `Scripts/test-ssh-tunnel.sh` |
+| **FR-CONN-18** | 3.1 连接与凭据 | 仅剩真跳板机的真实握手待环境（「沙箱下不能起 ssh」2026-09-29 随拍板消解：默认构建即非沙箱） | `environment` | `Scripts/test-ssh-tunnel.sh` |
 | **FR-DATA-02** | 3.5 数据编辑与写回 | 界面呈现待人工点验 | `ui-click` | `Scripts/test-table-structure.sh` |
 | **FR-DATA-04** | 3.5 数据编辑与写回 | 界面点击待人工点验 | `ui-click` | `Scripts/test-inline-edit.sh` |
 | **FR-DATA-05** | 3.5 数据编辑与写回 | 界面点击待人工点验 | `ui-click` | `Scripts/test-row-detail.sh` |
@@ -61,13 +63,13 @@
 | **FR-EDIT-25** | 3.2 SQL 编辑与执行 | 界面点击待人工点验 | `ui-click` | `Scripts/check-palette-wiring.py`、`Scripts/test-command-palette.sh` |
 | **FR-EDIT-26** | 3.2 SQL 编辑与执行 | 主题三态 / 字体字号观感需人工看一眼 | `ui-click` | `Scripts/alpha-main-chain-v0.2.sh`、`Scripts/make-ui-snapshots.sh` |
 | **FR-EDIT-27** | 3.2 SQL 编辑与执行 | 界面点击待人工点验 | `ui-click` | `Scripts/alpha-main-chain-v0.2.sh`、`Scripts/make-ui-snapshots.sh` |
-| **FR-EDIT-29** | 3.2 SQL 编辑与执行 | 沙箱下 ^C / 作业控制不可靠（待 T-38 分发路线）；多会话与 sixel / kitty 图形未做；界面未人工验收 | `environment` | `Scripts/build-app.sh`、`Scripts/test-terminal-modes.sh`、`Scripts/test-terminal-palette.sh` |
+| **FR-EDIT-29** | 3.2 SQL 编辑与执行 | sixel / kitty 图形未做；界面未人工验收（多会话页签的界面与判定均已交付、待点验）；「沙箱下 ^C 不可靠」2026-09-29 随拍板消解 —— 改成**机器判据**（`TestsUISnapshot/TerminalInterruptProbeTests.swift`） | `environment` | `Scripts/build-app.sh`、`Scripts/test-terminal-modes.sh`、`Scripts/test-terminal-palette.sh` |
 | **FR-EDIT-34** | 3.2 SQL 编辑与执行 | GUI 点击与下载观感待人工点验 | `ui-click` | `Scripts/alpha-main-chain-v0.2.sh`、`Scripts/make-ui-snapshots.sh` |
 | **FR-EDIT-35** | 3.2 SQL 编辑与执行 | 界面切换与点击待人工点验 | `ui-click` | `Scripts/verify-core.sh` |
 | **FR-EDIT-36** | 3.2 SQL 编辑与执行 | 界面点击待人工点验 | `ui-click` | `Scripts/test-workspace-editor.sh`、`Scripts/verify-all.sh` |
 | **FR-IO-02** | 3.9 导入导出与备份 | vendor 驱动只实现 CopyFrom，缺 COPY … TO STDOUT | `environment` | `Scripts/test-cursor-export.sh`、`Scripts/test-table-export.sh` |
 | **FR-IO-03** | 3.9 导入导出与备份 | 界面点击待人工点验 | `ui-click` | `Scripts/test-copy-import.sh`、`Scripts/test-data-import.sh` |
-| **FR-IO-04** | 3.9 导入导出与备份 | 沙箱下起子进程的临时例外待拍板（队列 L-10） | `needs-decision` | `Scripts/build-app.sh`、`Scripts/test-backup-restore.sh` |
+| **FR-IO-04** | 3.9 导入导出与备份 | 仅剩 217 专用库的真实还原待外部实例（「沙箱下起子进程的临时例外」2026-09-29 随拍板消解） | `device-instance` | `Scripts/build-app.sh`、`Scripts/test-backup-restore.sh` |
 | **FR-IO-05** | 3.9 导入导出与备份 | 界面点击待人工点验 | `ui-click` | `Scripts/test-restore-resume.sh` |
 | **FR-IO-06** | 3.9 导入导出与备份 | 界面点击待人工；真实软件（Excel / Numbers）产出的文件待人工 | `ui-click` | `Scripts/make-xlsx-fixtures.py`、`Scripts/test-data-import.sh`、`Scripts/test-xlsx-import.sh` |
 | **FR-META-02** | 3.4 对象浏览与元数据 | 无 GBase 8a 实例 → 端到端 0 次 | `environment` | `Scripts/alpha-main-chain-v0.2.sh` |

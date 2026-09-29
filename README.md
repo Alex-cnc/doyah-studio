@@ -55,8 +55,9 @@ macOS 上的**原生数据库工作台**（Swift / SwiftUI，无 JVM、无 Elect
   除智能体外的功能全部可用。
 - **平台**：macOS 14+（本仓库）。Linux 版是**同一个产品的另一实现**，契约层已定、实现待建。
 - **已知未做**：SSH 隧道（FR-CONN-18）、GBase / MySQL 驱动、编辑器行号列、部分智能体条目（需模型端点）。
-- **沙箱构建**：走 App Store 沙箱时子进程受限（`pg_dump` / `ssh` / `^C` 一类不可靠），
-  完整功能用 `DOYAH_NO_SANDBOX=1 ./Scripts/build-app.sh` 的构建。
+- **沙箱**：默认构建**不带** App 沙箱（2026-09-29 拍板：交付物 = 非沙箱 ad-hoc 包）——
+  终端 `^C` / `pg_dump` / `ssh` 这些子进程能力都可用。要试沙箱那一面（**上架只走沙箱**）
+  用 `DOYAH_SANDBOX=1 ./Scripts/build-app.sh`，此时上面三件不可靠（界面会如实说明）。
 
 ## 国际化（从一开始就是设计的一部分，不是后补的）
 

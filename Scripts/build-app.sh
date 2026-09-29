@@ -3,20 +3,30 @@ set -euo pipefail
 
 # 不依赖 Xcode GUI：用 SwiftPM 编译 App 源码，然后组装成 .app 包并做 ad-hoc 签名。
 #
-#   ./Scripts/build-app.sh            # Debug
+#   ./Scripts/build-app.sh            # Debug（默认 **非沙箱**）
 #   ./Scripts/build-app.sh release    # Release
 #
 #   DOYAH_ARCH=x86_64 ./Scripts/build-app.sh    # 单架构 Intel
 #   DOYAH_ARCH=universal ./Scripts/build-app.sh # 通用二进制（arm64 + x86_64）
+#
+#   DOYAH_SANDBOX=1 ./Scripts/build-app.sh      # 带 App 沙箱（**上架那一天才用**）
 #
 # 为什么需要架构选项（NFR-COMP-02）：默认产物是**单架构 arm64**，
 # 实测 `lipo -info` 为 `Non-fat file … arm64` —— 在 Intel 机上**根本起不来**。
 # 需求要求"支持 Apple Silicon 与 Intel"，所以构建侧必须能产出 x86_64 / universal。
 # Intel 实机与 Rosetta 的启动验证仍需真机（构建通过 ≠ 真机可跑）。
 #
+# **沙箱口径（2026-09-29 需求提出者拍板「改非沙箱，先验证功能」）**：
+# 默认出**非沙箱**包（`App/DoyahStudio-unsandboxed.entitlements`）—— 这是交付口径
+# （`Docs/发布计划.md` §1：交付物 = 非沙箱 ad-hoc 包）。沙箱下挡着三件事：终端作业控制
+# （⌃C）/ 导入导出起 `pg_dump`·`pg_restore` / SSH 隧道起 `ssh`（SRS R-18 路线③）。
+# 沙箱改为**显式开关**（两个 entitlements 文件都留在仓里）：
+#   · 上架那天切回 —— **Mac App Store 强制沙箱**，此时 `DOYAH_SANDBOX=1` 即得；
+#   · 旧的 `DOYAH_NO_SANDBOX=1` 仍然认（= 今天默认的那一面），只是不再有开关作用。
+#
 # 产物：dist/DoyahStudio.app
 #
-# 说明：ad-hoc 签名 + entitlements 足以在本机运行（App Sandbox + 网络客户端）。
+# 说明：ad-hoc 签名 + entitlements 足以在本机运行（网络客户端 + 默认不带 App Sandbox）。
 # 如果要分发或使用钥匙串的持久授权，请换用自己的开发者证书签名。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -173,13 +183,18 @@ fi
 echo "==> 附带第三方许可声明"
 cp "${ROOT}/THIRD-PARTY-NOTICES.md" "${APP}/Contents/Resources/THIRD-PARTY-NOTICES.md"
 
-# 是否带 App 沙箱：默认带。DOYAH_NO_SANDBOX=1 产出**本地用**的非沙箱构建，
-# 内嵌终端才是完整 shell（R-18 路线③的局部验证）；分发构建务必保持默认。
-if [ "${DOYAH_NO_SANDBOX:-0}" = "1" ]; then
-  ENTITLEMENTS="${ROOT}/App/DoyahStudio-unsandboxed.entitlements"
-  echo "==> 注意：本次为**非沙箱**构建（仅供本机使用，不要拿去分发）"
-else
+# ---- App 沙箱：默认**不带**；带了才是沙箱（上架那一天） ----
+# 交付口径 = 非沙箱包（见文件头与 Docs/发布计划.md §1）。沙箱路径**不许删** ——
+# 上架那天 `DOYAH_SANDBOX=1` 即可切回，两个 entitlements 文件都在仓里。
+if [ "${DOYAH_SANDBOX:-0}" = "1" ]; then
   ENTITLEMENTS="${ROOT}/App/DoyahStudio.entitlements"
+  echo "==> 本次为**沙箱**构建（上架那天才用：终端 ⌃C / pg_dump·pg_restore / ssh 三件不可用）"
+else
+  ENTITLEMENTS="${ROOT}/App/DoyahStudio-unsandboxed.entitlements"
+  echo "==> 本次为**非沙箱**构建（默认 · 交付口径）"
+  if [ "${DOYAH_NO_SANDBOX:-0}" = "1" ]; then
+    echo "    注意：DOYAH_NO_SANDBOX 已废弃 —— 不带任何开关时默认就是非沙箱，这一条不再需要"
+  fi
 fi
 
 echo "==> ad-hoc 签名"

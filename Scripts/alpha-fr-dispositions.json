@@ -142,8 +142,8 @@
       "id": "FR-CONN-18",
       "domain": "3.1 连接与凭据",
       "reason": "environment",
-      "reasonText": "沙箱下不能起 ssh 子进程（仅非沙箱构建可用）",
-      "marker": "**[alpha 不含]**（沙箱下不能起 ssh 子进程（仅非沙箱构建可用））",
+      "reasonText": "仅剩真跳板机的真实握手待环境（「沙箱下不能起 ssh」那条已随 2026-09-29 拍板消解）",
+      "marker": "**[alpha 不含]**（仅剩真跳板机的真实握手待环境）",
       "markerPreExisting": true,
       "evidence": [
         {
@@ -333,8 +333,8 @@
       "id": "FR-EDIT-29",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "environment",
-      "reasonText": "沙箱下 ^C / 作业控制不可靠（待 T-38 分发路线）；sixel / kitty 图形未做；界面未人工验收（多会话页签的界面与判定均已交付、待点验）",
-      "marker": "**[alpha 不含]**（沙箱下 ^C / 作业控制不可靠（待 T-38 分发路线）；sixel / kitty 图形未做；界面未人工验收（多会话页签的界面与判定均已交付、待点验））",
+      "reasonText": "sixel / kitty 图形未做；界面未人工验收（多会话页签的界面与判定均已交付、待点验）；「沙箱下 ^C 不可靠」那条已随 2026-09-29 拍板消解",
+      "marker": "**[alpha 不含]**（sixel / kitty 图形未做；界面未人工验收（多会话页签的界面与判定均已交付、待点验）；「沙箱下 ^C 不可靠」那条已随 2026-09-29 拍板消解）",
       "markerPreExisting": false,
       "evidence": [
         {
@@ -428,9 +428,9 @@
     {
       "id": "FR-IO-04",
       "domain": "3.9 导入导出与备份",
-      "reason": "needs-decision",
-      "reasonText": "沙箱下起子进程的临时例外待拍板（队列 L-10）",
-      "marker": "**[alpha 不含]**（沙箱下起子进程的临时例外待拍板（队列 L-10））",
+      "reason": "device-instance",
+      "reasonText": "仅剩 217 专用库的真实还原待外部实例（「沙箱下起子进程的临时例外待拍板」那条已随 2026-09-29 拍板消解）",
+      "marker": "**[alpha 不含]**（仅剩 217 专用库的真实还原待外部实例；「沙箱下起子进程的临时例外」那条已随 2026-09-29 拍板消解）",
       "markerPreExisting": false,
       "evidence": [
         {
