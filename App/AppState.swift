@@ -3865,7 +3865,21 @@ final class AppState: ObservableObject {
             errorMessage = L(.treeActionUnavailable)
             return
         }
-        openSQLInNewTab(sql)
+        // 「浏览前 N 行」= 对**这一张表**取前 N 行 ⇒ 页签必须记下来源表：结果格的内联编辑
+        // （FR-DATA-04）只认 `QueryTab.sourceTable`，没有它就会拒编辑并说「这个结果来自手写 SQL，
+        // 无法确定来源表」（2026-09-29 人工点验第 3 条抓到的真缺陷 —— 同一个动作走面板那条路
+        // 是带来源表的，只有右键这一条丢）。
+        // 模板类动作（生成 SELECT / INSERT 模板）**不带**来源表：执行 INSERT 的结果不是这张表的
+        // 行集，附上来源表反而会让结果格误判成可编辑。
+        if action == .browseRows {
+            openSQLInNewTab(
+                sql,
+                status: L(.browseSheetBrowsing),
+                source: DatabaseObjectRef(schema: object.schema, name: object.name)
+            )
+        } else {
+            openSQLInNewTab(sql)
+        }
     }
 
     /// 取视图 / 函数的 DDL 并**放进新页签**（不执行）。
