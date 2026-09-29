@@ -102,6 +102,24 @@ set -euo pipefail
 # 本批同样要真集群（下面第八批那段建临时库并注入 `DOYAH_PROBE_PGGROUP` 等），
 # 并且**证据文件会被核对**；源锚点另判三条：行模型是纯函数（不 import 驱动、不碰 `AppState`、不调 `loadMetadata*`）、视图里那台开关两档齐备、**以及视图那条调用点真的把这一台开关传给了模型**。最后这条是**注入实测逼出来的**：把 `groupByType: groupByType` 写死成 `false` 时，模型那一批与工具栏那一批**照样全绿**（探针只从两头取数、不经过那条调用点）—— 判据的覆盖面里当时缺着「模型与工具栏之间那根线」。
 #
+# ## 第九批（队列 L-89 ㈡ 第 7、8 条，第 102 轮）：笔记检索的两条「只能人工点」
+#
+# `TestsUISnapshot/NoteSearchProbeTests.swift` 判清单里那两行人话：
+#   · **「存完立刻搜」**（搜一个词 → 清空搜索框 → 新建一条带这个词的笔记 → 保存 → 再搜那个词
+#     ⇒ 过 = 刚存的那条在结果里）—— 判的是 `reloadNotes()` 末尾那次重算：
+#     查询还在搜索框里时保存 ⇒ 新笔记必须**当场**在结果里；删掉 ⇒ 当场消失；清单原文那两个顺序也各判一遍。
+#   · **「键盘快打」**（快速连续输入 ⇒ 过 = 结果不「倒回去」）—— 人手打字与查库谁快谁慢不可控，
+#     所以判据落在**唯一落地出口**（`AppState.settleNoteSearch(_:for:)`）：
+#     ① 一次**真实算出来的**旧词结果送到出口 ⇒ 不许落地（返回值 false + 状态一个字节不动），
+#        失败那一档同理；当前词的结果必须落得下去（否则判据会被一句「永远丢掉」骗过去）；
+#     ② **端到端**：一次带旧词的检索在途（`runSearch(_:for:)`），词换成新的之后它的结果才回来 ——
+#        订阅 `$noteSearchState` 记下每一次落地与那一刻搜索框里的词，不变量 =「没有一次落地是在
+#        词与结果对不上时发生的」（**只看最终状态判不出来**：切换后那次会落在它后面，终态一样）。
+#     **窗口不靠 sleep 去撞**：`Task { … }` 的函数体在**当前任务下一次挂起**才开始跑，
+#     而「把词换成新的」是同步的一句 ⇒ 那一次带旧词的检索**必定**在新词上屏之后才落地。
+# 这批**不需要任何环境**（真库 = 每轮清空的临时 `DOYAH_NOTES_DIR`），两遍都该绿；
+# 证据文件同样**会被核对**（跳过 ≠ 通过）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -126,7 +144,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `AppearanceFontProbeTests`（㈡：主题与字体 —— 手输族之后界面说的话 + SQL 预览的字形）。
 # + `TerminalInterruptProbeTests`（L-92 ㈡①：终端 `⌃C` 打断前台 `sleep 30` —— 非沙箱包的作业控制）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -503,6 +521,100 @@ print("✓ 分组只有一处来源（ObjectTreeRows）；行模型没有任何�
 PY
 
 echo
+echo "==> 笔记检索那两条：两遍都**真跑过**了吗（跳过 ≠ 通过）"
+python3 - "${OUT_PLAIN}" "${OUT_SANDBOX}" <<'PY'
+import json
+import os
+import sys
+
+# 期望值只写「不变量」：与证据自洽的关系，而不是把探针里的数字再抄一遍。
+def load(directory, case):
+    path = os.path.join(directory, f"note-search-evidence-{case}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+failures = []
+for directory in sys.argv[1:]:
+    base = os.path.basename(directory)
+
+    saved = load(directory, "saveThenSearch")
+    if saved is None:
+        failures.append(f"{base}：没有 saveThenSearch 的证据文件 —— 探针没真跑（跳过不算通过）")
+    else:
+        if saved.get("beforeSaveCount") != 0:
+            failures.append(f"{base}/saveThenSearch：保存前就已经有结果（前提不成立）：{saved.get('beforeSaveCount')}")
+        if saved.get("queryAfterSave") in (None, ""):
+            failures.append(f"{base}/saveThenSearch：保存之后搜索框是空的 —— 这条判据要的是「查询还在」")
+        if len(saved.get("afterSaveTitles") or []) != 1:
+            failures.append(
+                f"{base}/saveThenSearch：保存之后结果里应当**恰好**是刚存的那条，实测：{saved.get('afterSaveTitles')}"
+            )
+
+    deleted = load(directory, "deleteWhileSearching")
+    if deleted is None:
+        failures.append(f"{base}：没有 deleteWhileSearching 的证据文件")
+    else:
+        if deleted.get("beforeDeleteCount") != 2:
+            failures.append(f"{base}/deleteWhileSearching：删除前的结果数不是 2：{deleted.get('beforeDeleteCount')}")
+        if len(deleted.get("remainingTitles") or []) != 1:
+            failures.append(
+                f"{base}/deleteWhileSearching：删掉之后结果里应当只剩一条，实测：{deleted.get('remainingTitles')}"
+            )
+
+    cleared = load(directory, "clearSaveSearch")
+    if cleared is None:
+        failures.append(f"{base}：没有 clearSaveSearch 的证据文件")
+    elif (cleared.get("foundTitles") or []) != ["后来补的"]:
+        failures.append(
+            f"{base}/clearSaveSearch：按清单原文（清空 → 保存 → 再搜）没搜到刚存的那条：{cleared.get('foundTitles')}"
+        )
+
+    for case in ("lateResultDropped", "quickTyping"):
+        if load(directory, case) is None:
+            failures.append(f"{base}：没有 {case} 的证据文件 —— 「键盘快打」那条没跑（跳过不算通过）")
+
+    dropped = load(directory, "lateResultDropped")
+    if dropped is not None:
+        if dropped.get("staleResultApplied") is not False:
+            failures.append(f"{base}/lateResultDropped：旧词的结果落地了：{dropped.get('staleResultApplied')}")
+        if dropped.get("staleFailureApplied") is not False:
+            failures.append(f"{base}/lateResultDropped：旧词的失败落地了：{dropped.get('staleFailureApplied')}")
+        if dropped.get("appliedForCurrentWord") is not True:
+            failures.append(f"{base}/lateResultDropped：当前词的结果没落地 —— 判据空转")
+
+    typing = load(directory, "quickTyping")
+    if typing is not None:
+        # 不变量：切换之后**没有一次**落地带来的是旧词的结果。
+        if typing.get("staleLandingsAfterSwitch") != 0:
+            failures.append(
+                f"{base}/quickTyping：切换之后有 {typing.get('staleLandingsAfterSwitch')} 次落地来自旧词"
+                "（迟到的结果覆盖了新的）"
+            )
+        if not (typing.get("landingsAfterSwitch") or 0) >= 1:
+            failures.append(
+                f"{base}/quickTyping：切换之后一次落地都没有（{typing.get('landingsAfterSwitch')}）"
+                "—— 那说明新词那一次没跑，不变量是空的"
+            )
+        if (typing.get("finalTitles") or []) != ["山的那条"]:
+            failures.append(f"{base}/quickTyping：终态不是最后那个词的结果：{typing.get('finalTitles')}")
+        if typing.get("finalTitles") != typing.get("stateAfterLateArrival"):
+            failures.append(
+                f"{base}/quickTyping：旧词的结果晚到之后状态变了："
+                f"{typing.get('finalTitles')} → {typing.get('stateAfterLateArrival')}"
+            )
+
+if failures:
+    for item in failures:
+        print(f"✗ {item}")
+    sys.exit(1)
+print("✓ 两遍都真跑过：查询还在时保存/删除当场生效；旧词的结果与失败都不落地；"
+      "切换后没有一次落地来自旧词（终态 = 最后那个词）")
+PY
+
+echo
 echo "==> 完成：证据在 ${OUT_BASE}/（每张图另有中英两份，逐张断言见 ManualVerificationProbeTests）"
 echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 R-53 SSL 收窄说明"
 echo "    ＋ §2 FR-EDIT-25 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
@@ -514,3 +626,5 @@ echo "    ＋ §4 FR-RES-07 大结果集滚动（LargeResultScrollProbeTests：�
 echo "    ＋ §5 FR-META-10 跨库浏览（CrossDatabaseBrowseProbeTests：按需建连 / 子树来自那个库 / 失败给可读原因）"
 echo "    ＋ §5 FR-META-15 分组视图（GroupedViewProbeTests：两种视图的行集合一致 / 表头计数与真库相符 /"
 echo "       真点开关两档都到得了、两档不是一个样子（中英各一遍）；序列·函数·其他三个桶用合成夹具补）"
+echo "    ＋ 笔记检索「存完立刻搜」与「键盘快打」（NoteSearchProbeTests：查询还在时保存/删除当场生效 /"
+echo "       旧词的结果与失败都不许落地 / 切换后没有一次落地来自旧词 —— 真 AppState + 真库）"

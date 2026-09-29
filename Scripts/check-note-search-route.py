@@ -25,6 +25,17 @@
 允许的调用者只剩 `Tests/`（语义仍由单测钉着）—— `App/` 里命中即红，`Tests/` 里一处都没有
 也报红（那说明判据本身空转了）。
 
+**⑤「结果落地只有一个出口」（队列 `L-89` ㈡ 第 8 条 · 键盘快打竞态，2026-09-29 第 102 轮加）**：
+「迟到的查询结果不许覆盖新的」这件事，从前写成了 `searchNotes()` 里 `do` / `catch` **各一句**
+（同一个口径抄两遍，改一处漏一处），而且「判断到底在不在」**没有任何东西看得见**。
+现在它只有一个出口（`AppState.settleNoteSearch(_:for:)`），于是可以机械判：
+  ① 出口在（名字取自台账）、**词比对那一句在出口里**（删掉它 = 迟到结果会覆盖新的，当场报红）；
+  ② 两处**落地形状**（`noteSearchState = .library(` / `.unavailable(`）在 `AppState.swift` 里
+     各只出现一次，且都在那个出口体内（多一处 = 又开了一个绕开判断的入口）；
+  ③ `searchNotes()` 里不许有落地形状，且两条分支（成功 / 失败）都必须经出口；
+  ④ 查库那一步（`runSearch`）**不许读搜索框** —— 一次检索属于哪个词由调用方给（词是参数），
+     半路上搜索框变成别的词也改不了这一次的归属，于是「迟到」只可能发生在落地那一刻。
+
 用法：
     python3 Scripts/check-note-search-route.py             # 人读结论，失败非零退出
     python3 Scripts/check-note-search-route.py --json      # 机器读
@@ -112,6 +123,32 @@ def strip_comments(text: str) -> str:
     这是已知局限：本门禁找的都是**调用形状**，不会出现在字符串里）。"""
     without_block = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
     return re.sub(r"//[^\n]*", "", without_block)
+
+
+def function_body(text: str, name: str) -> str | None:
+    """取 `func <name>…` 的函数体（按花括号配平，含最外层那对）。
+
+    为什么不用正则：`func` 后面可能跟泛型 / 默认值 / `async throws`，而体内又有嵌套闭包 ——
+    配平比正则稳。已知局限：字符串字面量里的花括号会被当成真括号（本文件找的两个函数体内
+    没有这种字面量；真出现了会当场判红而不是静默通过）。
+    """
+    if not name:
+        return None
+    match = re.search(rf"func\s+{re.escape(name)}\s*[(<]", text)
+    if not match:
+        return None
+    start = text.find("{", match.end())
+    if start < 0:
+        return None
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return None
 
 
 def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
@@ -240,6 +277,88 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
             problems.append(f"{why}：`{key}` 在 `NoteSearchDisclosure` 与 `App/` 里都没有调用点 —— 死键")
         notes.append(f"文案键 `{key}`：{why}")
 
+    # ⑤ 结果落地只有一个出口（队列 L-89 ㈡ 第 8 条）：判断在位 / 落地只此一处 / 两条分支都走它 /
+    #    查库那一步不读搜索框。
+    landing = ledger.get("searchLanding") or {}
+    if not landing:
+        problems.append("台账 `searchLanding` 缺了一节（结果落地的唯一出口没人管）")
+    else:
+        ui_source = strip_comments(read(root / UI_STATE_FILE))
+        exit_body = function_body(ui_source, landing.get("exit", ""))
+        if exit_body is None:
+            problems.append(
+                f"{UI_STATE_FILE}：找不到落地出口 `{landing.get('exit')}` —— 0 处说明这条口径没有出口，"
+                "多出来一处说明落地又散开了"
+            )
+        else:
+            guard_snippet = landing.get("guard") or ""
+            if not guard_snippet:
+                problems.append("台账 `searchLanding.guard` 为空（判据没得查）")
+            elif guard_snippet not in exit_body:
+                problems.append(
+                    f"{UI_STATE_FILE}：落地出口里没有 `{guard_snippet}` —— "
+                    "判断不在，迟到的结果会覆盖新的（这就是「键盘快打」那一行要防的事）"
+                )
+            else:
+                notes.append(f"落地出口里的词比对在位：`{guard_snippet}`")
+            shapes: list[str] = []
+            for snippet in landing.get("assignments") or []:
+                if not snippet:
+                    problems.append("台账 `searchLanding.assignments` 里有空条目（判据没得查）")
+                    continue
+                total = count_occurrences(ui_source, snippet)
+                inside = exit_body.count(snippet)
+                shapes.append(f"{snippet}×{total}")
+                if total == 0:
+                    problems.append(
+                        f"{UI_STATE_FILE}：找不到落地形状 `{snippet}` —— 记法变了要同步台账"
+                    )
+                elif total != inside:
+                    problems.append(
+                        f"{UI_STATE_FILE}：落地形状 `{snippet}` 命中 {total} 处、其中 {inside} 处在出口体内 —— "
+                        "多出来的那些绕开了判断（迟到的结果可以从那里落地）"
+                    )
+            if shapes:
+                notes.append("落地形状：" + " / ".join(shapes))
+            caller = landing.get("caller") or ""
+            holder = function_body(ui_source, caller)
+            if not caller or holder is None:
+                problems.append(f"{UI_STATE_FILE}：找不到调用方 `{caller}`（空跑不许通过）")
+            else:
+                for name in landing.get("branches") or []:
+                    if name not in holder:
+                        problems.append(
+                            f"{UI_STATE_FILE}：`{caller}()` 里没有 `{name}` —— "
+                            "有一条分支绕过了唯一出口"
+                        )
+                for snippet in landing.get("assignments") or []:
+                    if snippet in holder:
+                        problems.append(
+                            f"{UI_STATE_FILE}：`{caller}()` 里自己做了落地（`{snippet}`）—— "
+                            "判断与落地必须都只在出口那一个地方"
+                        )
+            searcher = landing.get("searcher") or ""
+            search_body = function_body(ui_source, searcher)
+            if not searcher or search_body is None:
+                problems.append(f"{UI_STATE_FILE}：找不到查库那一步 `{searcher}`（空跑不许通过）")
+            elif "notesQuery" in search_body:
+                problems.append(
+                    f"{UI_STATE_FILE}：`{searcher}()` 里读了搜索框 —— 一次检索属于哪个词必须由调用方给定"
+                    "（词是参数），否则「这一次是哪个词的」在落地时就没法判"
+                )
+            else:
+                notes.append(f"查库那一步 `{searcher}()` 不读搜索框（词是参数）")
+            entry = landing.get("entry") or ""
+            entry_body = function_body(ui_source, entry)
+            if not entry or entry_body is None:
+                problems.append(f"{UI_STATE_FILE}：找不到入口 `{entry}`（空跑不许通过）")
+            elif f"{searcher}(" not in entry_body:
+                problems.append(
+                    f"{UI_STATE_FILE}：`{entry}()` 没有走查库那一步（`{searcher}`）—— 生产路径断了"
+                )
+            else:
+                notes.append(f"入口 `{entry}()` → 查库 `{searcher}()` → 出口 `{landing.get('exit')}()` 接通")
+
     # 内存检索的去向（L-44 的另一半）
     legacy = ledger.get("inMemoryMatcher") or {}
     symbol = legacy.get("symbol") or ""
@@ -280,7 +399,7 @@ def main() -> int:
                 print(f"   - {problem}")
         else:
             print("\n✅ 界面检索走库 + 路线如实标注：判据全过（唯一生产点 / 视图无内存过滤 / "
-                  "路线逐条有交代 / 文案键在位）")
+                  "路线逐条有交代 / 文案键在位 / 结果落地只有一个出口）")
     return 1 if problems else 0
 
 

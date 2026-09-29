@@ -6008,6 +6008,38 @@ final class AppState: ObservableObject {
         case unavailable(failure: String)
     }
 
+    /// 一次库检索的**结果**（成功 / 失败两档）—— 队列 `L-89` ㈡ 第 8 条（键盘快打竞态）。
+    ///
+    /// 为什么要有这个类型：落地这一步从前写在 `searchNotes()` 的 `do` / `catch` 两处，
+    /// **同一个口径抄了两遍**（「结果对应的还是不是搜索框里的词」），改一处漏一处；
+    /// 而且「判断到底在不在」这件事**没有任何东西看得见**。收成一个出入参之后，
+    /// 落地只有一个出口（`settleNoteSearch(_:for:)`），判断只有一份。
+    enum NoteSearchOutcome: Equatable {
+        /// 库给了结果（含它走的哪条路）。
+        case results(NoteDatabase.SearchResult)
+        /// 库没读出来（原因照原样留着，界面上如实说）。
+        case failure(String)
+    }
+
+    /// **检索结果的唯一落地出口**（队列 `L-89` ㈡ 第 8 条）。
+    ///
+    /// 打字比查库快：这一次的结果对应的**已经不是搜索框里的词** ⇒ 丢掉，绝不用旧结果覆盖新的。
+    /// 判断只在这一处：`searchNotes()` 的两条分支都走这里（从前各写一遍）。
+    ///
+    /// 返回值 = 这一次**到底落了没** —— 让「迟到的结果被丢掉」这件事可以直接被断言，
+    /// 而不必去撞时序窗口（竞态的窗口不可控，判据不该靠运气）。
+    @discardableResult
+    func settleNoteSearch(_ outcome: NoteSearchOutcome, for query: String) -> Bool {
+        guard query == notesQuery else { return false }
+        switch outcome {
+        case .results(let result):
+            noteSearchState = .library(route: result.route, notes: result.notes)
+        case .failure(let failure):
+            noteSearchState = .unavailable(failure: failure)
+        }
+        return true
+    }
+
     /// 界面上这一屏要显示的笔记（队列 L-44）。
     ///
     /// **检索走库**：搜索框非空时显示的是 `NoteLibrary.search` 给的**库的结果**（库说什么就是什么）；
@@ -6058,17 +6090,25 @@ final class AppState: ObservableObject {
             noteSearchState = .idle
             return
         }
+        await runSearch(trimmed, for: query)
+    }
+
+    /// **查一次库并把结果落到唯一出口**（队列 `L-89` ㈡ 第 8 条）。
+    ///
+    /// 词是**参数**：这一步不再读搜索框 —— 一次检索属于哪个词由调用方定，
+    /// 半路上搜索框变成别的词也改不了这一次的归属。于是「迟到」这件事只可能发生在
+    /// 落地那一刻，而落地只有一个出口（`settleNoteSearch`，判断也在那里）。
+    func runSearch(_ trimmed: String, for query: String) async {
         do {
             // **界面检索的唯一生产点**（门禁锚点，见 `Scripts/note-search-route.json`）：
             // 结果与「走的哪条路」都从库里来 —— 界面不再拿已加载的列表自己过滤。
             let result = try await NoteLibrary.defaultLibrary().search(trimmed)
             // 打字比查库快：这一次的结果对应的已经不是搜索框里的词 ⇒ 丢掉，
             // 别用旧结果覆盖新的（同时 `NotesListView` 的 `.task(id:)` 会取消上一次任务）。
-            guard query == notesQuery else { return }
-            noteSearchState = .library(route: result.route, notes: result.notes)
+            // 判断在**唯一落地出口**里 —— 与下面 catch 那一支同一个出口。
+            settleNoteSearch(.results(result), for: query)
         } catch {
-            guard query == notesQuery else { return }
-            noteSearchState = .unavailable(failure: String(describing: error))
+            settleNoteSearch(.failure(String(describing: error)), for: query)
         }
     }
 

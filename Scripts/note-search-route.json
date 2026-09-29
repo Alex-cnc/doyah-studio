@@ -34,5 +34,15 @@
     "symbol": "NoteSearch.match(",
     "allowedCallers": ["Tests/"],
     "reason": "内存检索（`Core/Note.swift` 的 `NoteSearch`）在 L-44 之后**不再有界面调用者**：界面走库，它就是一份纯函数参考实现 + 一组单测（`Tests/NoteTests.swift` 5 条，钉住标签命中 / 大小写不敏感 / 空查询倒序这套语义）。保留而不是删掉的理由：语义仍要有人钉住（库那两条路必须与它对得上）；**若读者认为该删，删掉它也只需拆掉那份单测** —— 这件事已登记在开发记录里，不阻塞任何判据。"
+  },
+  "searchLanding": {
+    "entry": "searchNotes",
+    "searcher": "runSearch",
+    "exit": "settleNoteSearch",
+    "caller": "runSearch",
+    "guard": "query == notesQuery",
+    "assignments": ["noteSearchState = .library(", "noteSearchState = .unavailable("],
+    "branches": ["settleNoteSearch(.results(", "settleNoteSearch(.failure("],
+    "reason": "「迟到的查询结果不许覆盖新的」（待人工验收清单「键盘快打」那一行）从前写成 `searchNotes()` 里 `do` / `catch` **各一句守卫** —— 同一个口径抄两遍，而且「判断到底在不在」没有东西看得见：把人手打字与查库的先后交给运气，屏幕上看起来只是「结果倒回去一下」。第 102 轮收成三段一条链：`searchNotes()`（决定要不要查、词是什么）→ `runSearch(_:for:)`（**词是参数、不读搜索框**；查库 + 把结果交给出口）→ `settleNoteSearch(_:for:)`（**唯一的落地出口**，词比对就在这一句里，并把「落了没」当返回值交出来）。判据只认这条链：出口里的词比对在位 / 两处落地形状各只出现一次且都在出口体内 / `runSearch()` 里两条分支都经出口且自己不做落地 / `runSearch()` 不读搜索框 / `searchNotes()` 真的走到 `runSearch()`。"
   }
 }

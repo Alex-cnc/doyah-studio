@@ -169,7 +169,70 @@ def main() -> int:
     code, output = run(tree)
     record(code != 0 and "空跑不许通过" in output, "台账 `routes` 清空 ⇒ 判红（空跑不许通过）", output.strip()[-300:])
 
-    # 10) 主仓库一个字节没动
+    # 10) 唯一落地出口里的词比对被删掉（迟到结果会覆盖新的 —— 「键盘快打」那一行）
+    tree = make_tree()
+    edit(
+        tree,
+        "App/AppState.swift",
+        "        guard query == notesQuery else { return false }",
+        "        _ = query   // 夹具：判断不在了",
+    )
+    code, output = run(tree)
+    record(
+        code != 0 and "落地出口里没有" in output,
+        "落地出口里的词比对被删 ⇒ 判红（迟到的结果会覆盖新的）",
+        output.strip()[-300:],
+    )
+
+    # 11) 一条分支绕过唯一出口（catch 那支自己落地）
+    tree = make_tree()
+    edit(
+        tree,
+        "App/AppState.swift",
+        "            settleNoteSearch(.failure(String(describing: error)), for: query)",
+        "            noteSearchState = .unavailable(failure: String(describing: error))",
+    )
+    code, output = run(tree)
+    record(
+        code != 0 and ("绕过" in output or "绕开了判断" in output),
+        "有一条分支绕过唯一出口 ⇒ 判红（点名哪一处）",
+        output.strip()[-300:],
+    )
+
+    # 12) 落地形状多出一处（又开了一个绕开判断的入口）
+    tree = make_tree()
+    edit(
+        tree,
+        "App/AppState.swift",
+        "    func searchNotes() async {",
+        "    func searchShortcut() async {\n"
+        "        noteSearchState = .library(route: .substring, notes: [])\n"
+        "    }\n\n    func searchNotes() async {",
+    )
+    code, output = run(tree)
+    record(
+        code != 0 and "绕开了判断" in output,
+        "落地形状多出一处（第二个入口）⇒ 判红",
+        output.strip()[-300:],
+    )
+
+    # 13) 查库那一步又去读搜索框（「这一次是哪个词的」判不动了）
+    tree = make_tree()
+    edit(
+        tree,
+        "App/AppState.swift",
+        "    func runSearch(_ trimmed: String, for query: String) async {",
+        "    func runSearch(_ trimmed: String, for query: String) async {\n"
+        "        let query = notesQuery   // 夹具：又去读搜索框",
+    )
+    code, output = run(tree)
+    record(
+        code != 0 and "读了搜索框" in output,
+        "查库那一步又读搜索框 ⇒ 判红",
+        output.strip()[-300:],
+    )
+
+    # 14) 主仓库一个字节没动
     after = {rel: digest(ROOT / rel) for rel in TREE_FILES}
     record(before == after, "跑完核对真仓库逐字节未变", "被改动的文件：" + "、".join(k for k in before if before[k] != after[k]))
 

@@ -436,7 +436,7 @@
    "key": "note-search-route",
    "script": "Scripts/test-note-search-route.py",
    "args": [],
-   "cases": 11,
+   "cases": 15,
    "countRegex": "结果：(\\d+) 通过 / 0 未达预期",
    "why": "队列 L-44 / 闭环第 10 项（界面检索走库 + 路线如实标注）",
    "anchors": [

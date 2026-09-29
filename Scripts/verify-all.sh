@@ -487,10 +487,14 @@ python3 Scripts/check-plugin-assembly.py
 python3 Scripts/check-notes-offline.py
 # L-44：界面检索**走库**（唯一生产点）+ **所走路线如实标注**（子串兜底 / 检索没跑成）——
 # 视图不许拿已加载的列表自己过滤；每条路线都要在台账里登记处置（给键或显式 nil）并与实现
-# 逐条相等；文案键要真的在语言表里（中英都在）且真的被引用（死键也判红）。判据与台账见
-# `Scripts/check-note-search-route.py` / `Scripts/note-search-route.json`；
-# 负例 `test-note-search-route.py`（11 例：生产点消失 / 第二条路 / 视图过滤 / 台账与实现不一致 /
-# 新增路线没登记 / 语言表缺中文 / 死键 / 两处空跑防护 / 真仓库逐字节未变）。
+# 逐条相等；文案键要真的在语言表里（中英都在）且真的被引用（死键也判红）。
+# L-89 ㈡ 第 8 条：**结果落地只有一个出口**（「键盘快打」那一行）—— 出口里的词比对在位 /
+# 两处落地形状各只出现一次且都在出口体内 / `runSearch()` 两条分支都经出口且不自己落地 /
+# `runSearch()` 不读搜索框（词是参数）/ `searchNotes()` 真的走到 `runSearch()`。
+# 判据与台账见 `Scripts/check-note-search-route.py` / `Scripts/note-search-route.json`；
+# 负例 `test-note-search-route.py`（15 例：生产点消失 / 第二条路 / 视图过滤 / 台账与实现不一致 /
+# 新增路线没登记 / 语言表缺中文 / 死键 / 两处空跑防护 / 落地出口的词比对被删 / 一条分支绕过出口 /
+# 落地形状多出一处 / 查库那一步又读搜索框 / 真仓库逐字节未变）。
 python3 Scripts/check-note-search-route.py
 python3 Scripts/test-note-search-route.py
 
