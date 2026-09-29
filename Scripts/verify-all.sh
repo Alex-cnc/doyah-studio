@@ -462,13 +462,23 @@ python3 Scripts/check-script-env-parameterization.py
 echo "==> 14/18 连接失败的文案覆盖面（驱动错误码 ↔ 文案台账）"
 python3 Scripts/check-connection-failure-coverage.py
 
-echo "==> 15/18 命令行失败输出的可读化覆盖面（L-15）"
+echo "==> 15/18 可读化覆盖面（L-15 命令行失败输出 + L-74 非文本类型那一格的值）"
 # L-15：CLI 有 57 处「把失败说给用户看」的输出原先各写各的（`print("…：\(error.localizedDescription)")`），
 # 打出来是 `The operation couldn't be completed. (PostgresNIO.PSQLError error 1.)` —— 既不是人话、
 # 也没给方向，而驱动其实说过原因（SQLSTATE / 驱动码），只是没人接。这一项把「每一处用户可见的
 # 失败输出都必须经同一个入口」变成**结构**判据（新增一处裸英文输出当场报红并指名行号），
 # 并把入口自己的三条口径（认得出给方向 / 中性归因 / 认不出原样）与调用处数棘轮一起钉住。
 python3 Scripts/check-cli-failure-readability.py
+# L-74（**2026-09-29 第 79 轮**）：同一条「可读化」的口径,这次管的是**值** ——
+# 驱动在扩展查询协议下给的是 binary，而 `Core/PostgresCellFormatter` 原先只覆盖文本 / 整型 /
+# 浮点 / numeric / 日期时间，其余类型落到 `String(describing: buffer)` ⇒ 用户拿到的不是值，
+# 是驱动内部对象的描述（现场：会话行的 `client_addr` 那一格印控制字符，CLI 表格当场被劈开）。
+# 判据 = 台账 `Scripts/cell-decode-coverage.json` ↔ 源码双向对账（解了不登记 / 登记了没解都报红）
+# + 那条被禁的出口（`String(describing: buffer)`）不许在 `Core/` `App/` 的代码行里回来
+# + 诚实兜底（点名类型 + 字节数 + 十六进制预览）必须在位 + 单测逐型锚点 + 真机证据（证据脚本 §7
+# 与 psql 的文本形态逐条相等）。负例 **10 例**（一律只在临时副本上写坏，末例核对真仓库逐字节未变）。
+python3 Scripts/check-cell-decode-coverage.py
+python3 Scripts/check-cell-decode-coverage.py --self-test
 
 echo "==> 16/18 越界检查（三书独占节：改动不得落在对侧节内）"
 # 形态 A（2026-09-27 拍板）：三书单点定稿，但「平台实现」层按端独占 —— 标记 `[独占:macos]` /

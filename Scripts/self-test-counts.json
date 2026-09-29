@@ -636,6 +636,36 @@
           "note": "§6 资产表新增行"
         }
       ]
+    },
+    {
+      "key": "cell-decode-coverage",
+      "script": "Scripts/check-cell-decode-coverage.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 10,
+      "countRegex": "自测通过（(\\d+) 例）",
+      "why": "队列 L-74 / 闭环第 15 项（与 L-15 同一句「可读化」口径，管的是值）：非文本类型那一格的解码 —— 台账 ↔ 源码双向对账 + 被禁出口（String(describing: buffer)）不许回来 + 诚实兜底在位 + 单测逐型锚点 + 真机证据（证据脚本 §7 与 psql 的文本形态逐条相等）",
+      "anchors": [
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "L-74（\\*\\*2026-09-29 第 79 轮\\*\\*）[\\s\\S]{0,2000}?负例 \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "闭环第 15 项注释（例数）"
+        },
+        {
+          "file": "Scripts/check-cell-decode-coverage.py",
+          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "脚本自己的 docstring"
+        },
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "check-cell-decode-coverage\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "§6 资产表新增行"
+        }
+      ]
     }
   ]
 }

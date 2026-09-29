@@ -361,8 +361,10 @@
 		CFD9BBEAE6EFD49C007C5184 /* SQLiteConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9DE32EB2842246933E6FD7 /* SQLiteConstants.swift */; };
 		D0024AAA06FD0FC11F6E95D7 /* AgentSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6DCCB6D442954E11D81E31 /* AgentSettingsSheet.swift */; };
 		D0126C6FB1F9F05093FF69BE /* SafeModeConfirmSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB65FC24B68864F6845B85C6 /* SafeModeConfirmSheet.swift */; };
+		D06F4EEA1D71559F155C9364 /* PostgresCellFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA4B5A826B1460A977C34D65 /* PostgresCellFormatterTests.swift */; };
 		D073904227215DE1A29C10A0 /* ObjectSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93025EA21B54F27CB5824A90 /* ObjectSearchTests.swift */; };
 		D0EB38B3700B115D97028DBE /* MaintenancePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291B34BCBD3A29B08FB7A73A /* MaintenancePlan.swift */; };
+		D0EB88A0BF0EC1D006D4D49A /* PostgresWireValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 437A0AA1D08D4EFBDE956A96 /* PostgresWireValue.swift */; };
 		D16EF4DA6A35073955BE4179 /* AccentThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F3F422CE5ABEABB3463B1B /* AccentThemeTests.swift */; };
 		D17FC22CD8A5A0F4DED93517 /* AgentAuditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000A8A7276965DF20C0647AE /* AgentAuditTests.swift */; };
 		D183A9749AD944AC26279A8E /* SchemaDiffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6064C5E1DBCEBB997A863C17 /* SchemaDiffTests.swift */; };
@@ -653,6 +655,7 @@
 		41F3F422CE5ABEABB3463B1B /* AccentThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccentThemeTests.swift; sourceTree = "<group>"; };
 		423479F60939BC40163E9BF9 /* GBaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GBaseService.swift; sourceTree = "<group>"; };
 		42D3471B13B6199D9ABFBF45 /* Inflate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Inflate.swift; sourceTree = "<group>"; };
+		437A0AA1D08D4EFBDE956A96 /* PostgresWireValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostgresWireValue.swift; sourceTree = "<group>"; };
 		448F3A6624D4F1F9BDAC1AF1 /* AgentPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPresentation.swift; sourceTree = "<group>"; };
 		45B99C971DED47BB56A504E0 /* TextLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextLanguage.swift; sourceTree = "<group>"; };
 		461A703EC21BA7F0C4351297 /* AppCommandCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommandCatalog.swift; sourceTree = "<group>"; };
@@ -923,6 +926,7 @@
 		E91B3156732FB0FE2648D66F /* TerminalWorkingDirectoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalWorkingDirectoryTests.swift; sourceTree = "<group>"; };
 		EA2FF271DF1C903E814B9111 /* LocalSecretStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSecretStoreTests.swift; sourceTree = "<group>"; };
 		EA373311C02C45DDB2F0D642 /* DoyahStudioCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoyahStudioCommands.swift; sourceTree = "<group>"; };
+		EA4B5A826B1460A977C34D65 /* PostgresCellFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostgresCellFormatterTests.swift; sourceTree = "<group>"; };
 		EB85E77B4D6F38AD8927C5DA /* DataTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataTask.swift; sourceTree = "<group>"; };
 		EC6CAAE796A311D7DDC637A5 /* ConnectionEnvironmentBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionEnvironmentBadge.swift; sourceTree = "<group>"; };
 		EC7FA41D01ABFD587BF546BA /* ConnectionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionListView.swift; sourceTree = "<group>"; };
@@ -1163,6 +1167,7 @@
 				1068C1A852D180C93CF037C3 /* ObjectTreeAutoExpansionTests.swift */,
 				8F8CA89F40C0640ED3C3B7D4 /* ObjectTreeGroupingTests.swift */,
 				DB4625DEF9E733412EF73BAD /* ObjectTreeMenuConventionTests.swift */,
+				EA4B5A826B1460A977C34D65 /* PostgresCellFormatterTests.swift */,
 				C6A05B98639B8833318F4201 /* PostgresServiceTests.swift */,
 				1BC38248EAE4B838A8592036 /* PrivilegeProbeTests.swift */,
 				620319668625E38EADD657CB /* QueryCompletionTests.swift */,
@@ -1344,6 +1349,7 @@
 				597E6BE3CE2FE46CDAE71714 /* ObjectTreeGrouping.swift */,
 				E53DCE8EEA4A67CBF1089CFA /* PostgresCellFormatter.swift */,
 				DB2565DCD6CF06E98BE41BD1 /* PostgresService.swift */,
+				437A0AA1D08D4EFBDE956A96 /* PostgresWireValue.swift */,
 				1053065542E38D0A6B38E9BE /* PrivilegeProbe.swift */,
 				188EFEA1CFEDF23DF05F8CA6 /* QueryCompletion.swift */,
 				A311326241D9B1B5036F0D96 /* QueryMemory.swift */,
@@ -1980,6 +1986,7 @@
 				6C06CE49293B4FAE9E76F908 /* ObjectTreeGrouping.swift in Sources */,
 				B790EC66E7E7142CECBBBF3F /* PostgresCellFormatter.swift in Sources */,
 				3602B608B9672763888D0768 /* PostgresService.swift in Sources */,
+				D0EB88A0BF0EC1D006D4D49A /* PostgresWireValue.swift in Sources */,
 				32F70A82D45C27C4D016C777 /* PrivilegeProbe.swift in Sources */,
 				80C4C178EF93680F0DF1F6F6 /* QueryCompletion.swift in Sources */,
 				FF92A3AC95ECD15E5FF9E46A /* QueryMemory.swift in Sources */,
@@ -2139,6 +2146,7 @@
 				4FDB2F4FDFBB65FC1B978D48 /* ObjectTreeAutoExpansionTests.swift in Sources */,
 				0850CB16FC9736EE8B894892 /* ObjectTreeGroupingTests.swift in Sources */,
 				1920D3096BF590A7FFB08234 /* ObjectTreeMenuConventionTests.swift in Sources */,
+				D06F4EEA1D71559F155C9364 /* PostgresCellFormatterTests.swift in Sources */,
 				1C32517CD1265B97DCD37767 /* PostgresServiceTests.swift in Sources */,
 				F990BDB03CB950995703DAA5 /* PrivilegeProbeTests.swift in Sources */,
 				1D1B52BA9110A91608596A52 /* QueryCompletionTests.swift in Sources */,

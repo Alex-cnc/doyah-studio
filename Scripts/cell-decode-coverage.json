@@ -1,0 +1,426 @@
+{
+  "version": 1,
+  "purpose": "非文本类型的值「可读 / 认不出要如实说」的台账（队列 L-74，闭环第 15 项）。判据 Scripts/check-cell-decode-coverage.py 拿它做双向对账：台账声明的一型，源码里必须真的解；源码里解了的型，台账里必须登记；没有登记也没有解码的，就只能走「认不出」标记（点名类型 + 字节数 + 十六进制预览），不许把驱动内部描述倒给用户。",
+  "sources": {
+    "formatter": "Core/PostgresCellFormatter.swift",
+    "wireValue": "Core/PostgresWireValue.swift",
+    "tests": "Tests/PostgresCellFormatterTests.swift",
+    "evidence": "Scripts/test-session-management.sh"
+  },
+  "bannedExits": [
+    "String(describing: buffer)",
+    "String(describing: cell.bytes)",
+    "String(describing: bytes)"
+  ],
+  "honestFallback": {
+    "anchor": "static func unreadable(",
+    "why": "认不出的类型：点名类型 + 字节数 + 十六进制预览（全语言中立，因为 Core 不知道用户选的语言；写死中文会撞 R-45 的棘轮）。改前那一句 String(describing: buffer) 把驱动内部对象的描述倒给用户，值里带控制字符 ⇒ CLI 表格排版被打断。",
+    "shapeLiteral": "[\\(type) \\(bytes.count)B] \\\\x\\(preview)\\(ellipsis)"
+  },
+  "formatterCases": [
+    ".inet",
+    ".cidr",
+    ".macaddr",
+    ".macaddr8",
+    ".bytea",
+    ".interval",
+    ".time",
+    ".timetz",
+    ".bit",
+    ".varbit",
+    ".money",
+    ".point",
+    ".box",
+    ".lseg",
+    ".line",
+    ".circle",
+    ".path",
+    ".polygon"
+  ],
+  "tables": {
+    "arrayElementOIDs": {
+      "source": "formatter",
+      "keys": 49,
+      "anchor": "static let arrayElementOIDs"
+    },
+    "rangeSubtypes": {
+      "source": "formatter",
+      "keys": 6,
+      "anchor": "static let rangeSubtypes"
+    },
+    "multirangeSubtypes": {
+      "source": "formatter",
+      "keys": 6,
+      "anchor": "static let multirangeSubtypes"
+    }
+  },
+  "floors": {
+    "types": 35,
+    "decoded": 28,
+    "testTokens": 28,
+    "formatterCases": 15,
+    "evidenceSameCases": 35,
+    "evidenceTokens": 15
+  },
+  "types": [
+    {
+      "name": "inet",
+      "oid": 869,
+      "disposition": "decoded",
+      "file": "wireValue",
+      "anchor": "static func networkAddress(",
+      "testToken": ".inet",
+      "why": "掩码位数单独一条规矩：inet 满位不写 /bits、cidr 一律写（psql 实测两种形态不一样）。"
+    },
+    {
+      "name": "cidr",
+      "oid": 650,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "case .cidr:",
+      "testToken": "testCidrAlwaysCarriesMask",
+      "why": "与 inet 同一份解码，只有掩码写法不同。"
+    },
+    {
+      "name": "macaddr",
+      "oid": 829,
+      "disposition": "decoded",
+      "file": "wireValue",
+      "anchor": "static func macAddress(",
+      "testToken": "testMacaddr",
+      "why": "6 字节 → 小写冒号分。"
+    },
+    {
+      "name": "macaddr8",
+      "oid": 774,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "case .macaddr, .macaddr8:",
+      "testToken": "testMacaddr8",
+      "why": "8 字节，与 macaddr 同一句。"
+    },
+    {
+      "name": "bytea",
+      "oid": 17,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "static func byteaText(",
+      "testToken": "testByteaOfInvalidUTF8IsHex",
+      "why": "合法 UTF-8 按文本（FR-DATA-05 已登记口径）、非法字节序列印 \\x 十六进制。"
+    },
+    {
+      "name": "interval",
+      "oid": 1186,
+      "disposition": "decoded",
+      "file": "wireValue",
+      "anchor": "static func interval(",
+      "testToken": ".interval",
+      "why": "年月日分开印、每段带自己的符号；天或月为负而时间为正时补 +（照 PG 的 EncodeInterval）。"
+    },
+    {
+      "name": "time",
+      "oid": 1083,
+      "disposition": "decoded",
+      "file": "wireValue",
+      "anchor": "static func timeOfDay(",
+      "testToken": "testTimeOfDay",
+      "why": "自午夜起的微秒；小数末尾去零。"
+    },
+    {
+      "name": "timetz",
+      "oid": 1266,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "case .timetz:",
+      "testToken": "testTimeWithZoneEastAndWest",
+      "why": "时区是西为正的秒数（+08:00 存 -28800）；分量 0 时只写小时（psql 里 -04）。"
+    },
+    {
+      "name": "bit",
+      "oid": 1560,
+      "disposition": "decoded",
+      "file": "wireValue",
+      "anchor": "static func bitString(",
+      "testToken": "testBitString",
+      "why": "位数 + 字节，高位在前。"
+    },
+    {
+      "name": "varbit",
+      "oid": 1562,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "case .bit, .varbit:",
+      "testToken": ".varbit",
+      "why": "与 bit 同一句。"
+    },
+    {
+      "name": "money",
+      "oid": 790,
+      "disposition": "decoded",
+      "file": "wireValue",
+      "anchor": "static func money(",
+      "testToken": "testMoneyKeepsCentsAndNoCurrencySymbol",
+      "why": "binary 里只有分；货币符号与千分位由服务端 lc_monetary 决定 ⇒ 只印数字（登记的有意不同）。"
+    },
+    {
+      "name": "point",
+      "oid": 600,
+      "disposition": "decoded",
+      "file": "wireValue",
+      "anchor": "static func point(",
+      "testToken": "testPoint",
+      "why": "两个 float8。"
+    },
+    {
+      "name": "box",
+      "oid": 603,
+      "disposition": "decoded",
+      "file": "wireValue",
+      "anchor": "static func box(",
+      "testToken": "testBoxPrintsHighCornerFirst",
+      "why": "四个 float8；文本形态是**高角在前**（psql 实测）。"
+    },
+    {
+      "name": "lseg",
+      "oid": 601,
+      "disposition": "decoded",
+      "file": "wireValue",
+      "anchor": "static func lseg(",
+      "testToken": "testSegmentLineAndCircle",
+      "why": "四个 float8。"
+    },
+    {
+      "name": "line",
+      "oid": 628,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "case .line:",
+      "testToken": "testSegmentLineAndCircle",
+      "why": "A/B/C 三个 float8。"
+    },
+    {
+      "name": "circle",
+      "oid": 718,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "case .circle:",
+      "testToken": "testSegmentLineAndCircle",
+      "why": "圆心 + 半径。"
+    },
+    {
+      "name": "path",
+      "oid": 602,
+      "disposition": "decoded",
+      "file": "wireValue",
+      "anchor": "static func path(",
+      "testToken": "testPathOpenClosedAndPolygon",
+      "why": "闭合用 ((…))、开放用 [(…)]。"
+    },
+    {
+      "name": "polygon",
+      "oid": 604,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "case .polygon:",
+      "testToken": "testPathOpenClosedAndPolygon",
+      "why": "点数 + 点列表。"
+    },
+    {
+      "name": "int4range",
+      "oid": 3904,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "3904: 23,",
+      "testToken": "3904",
+      "why": "范围头一个标志位字节 + 两端（长度前缀）；空范围印 empty。"
+    },
+    {
+      "name": "int8range",
+      "oid": 3926,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "3926: 20,",
+      "testToken": "3926",
+      "why": "子类型 int8 —— 大整数不许丢精度。"
+    },
+    {
+      "name": "numrange",
+      "oid": 3906,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "3906: 1700,",
+      "testToken": "3906",
+      "why": "子类型 numeric，交给驱动自己的 Decimal 解码器（不在这里重造一套）。"
+    },
+    {
+      "name": "daterange",
+      "oid": 3912,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "3912: 1082,",
+      "testToken": "daterange",
+      "why": "边界的时间写法沿用本产品既有的 ISO 8601（与 psql 不同，登记在证据脚本的有意不同表里）。"
+    },
+    {
+      "name": "tsrange",
+      "oid": 3908,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "3908: 1114,",
+      "testToken": "3908",
+      "why": "同上。"
+    },
+    {
+      "name": "tstzrange",
+      "oid": 3910,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "3910: 1184,",
+      "testToken": "tstzrange",
+      "why": "边界含空白 ⇒ 按 PG 的规矩给边界加引号。"
+    },
+    {
+      "name": "int4multirange",
+      "oid": 4451,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "4451: 23,",
+      "testToken": "4451",
+      "why": "段数 + 每段长度前缀；段与段之间**不加引号**（psql 实测）。"
+    },
+    {
+      "name": "nummultirange",
+      "oid": 4532,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "4532: 1700,",
+      "testToken": "4532",
+      "why": "同上。"
+    },
+    {
+      "name": "tsmultirange",
+      "oid": 4533,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "4533: 1114,",
+      "testToken": "4533",
+      "why": "同上。"
+    },
+    {
+      "name": "tstzmultirange",
+      "oid": 4534,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "4534: 1184,",
+      "testToken": "4534",
+      "why": "同上。"
+    },
+    {
+      "name": "datemultirange",
+      "oid": 4535,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "4535: 1082,",
+      "testToken": "4535",
+      "why": "同上。"
+    },
+    {
+      "name": "int8multirange",
+      "oid": 4536,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "4536: 20,",
+      "testToken": "4536",
+      "why": "同上。"
+    },
+    {
+      "name": "任意 *[] 数组",
+      "oid": null,
+      "disposition": "decoded",
+      "file": "formatter",
+      "anchor": "static let arrayElementOIDs",
+      "testToken": "testTwoDimensionalArray",
+      "why": "数组头自带元素类型 oid ⇒ 元素交给同一条解码链（numeric / uuid / 时间等都用驱动自己的解码器）；元素解不出时逐元素印「认不出」标记。多维数组按维数递归。"
+    },
+    {
+      "name": "tid",
+      "oid": 27,
+      "disposition": "honest-unknown",
+      "mustNotExist": "case .tid:",
+      "why": "行指针，本产品的界面里没有它的语义 ⇒ 不硬猜，印认不出标记（人名类型 + 字节数 + 十六进制）。"
+    },
+    {
+      "name": "xid",
+      "oid": 28,
+      "disposition": "honest-unknown",
+      "mustNotExist": "case .xid:",
+      "why": "事务号，同上。"
+    },
+    {
+      "name": "record（复合类型）",
+      "oid": 2249,
+      "disposition": "honest-unknown",
+      "mustNotExist": "case .record:",
+      "why": "复合类型的线格式是一串「属性 + 类型」的嵌套结构，字段名在客户端拿不到（要先查 pg_attribute）⇒ 这一轮不假装能解；数组里遇到它时逐元素印认不出标记。"
+    },
+    {
+      "name": "自定义枚举 / 域类型（oid 在表外）",
+      "oid": null,
+      "disposition": "text-when-readable",
+      "file": "formatter",
+      "anchor": "static func plainText(",
+      "testToken": "testUnrecognizedTypeWithTextPayloadShowsTheText",
+      "why": "这类类型的 binary 载荷**本身就是文本**（枚举标签）—— 载荷是合法 UTF-8 且无控制字符时原样显示（与 FR-DATA-05「合法 UTF-8 的 bytea 显示为文本」同口径）；否则走认不出标记。"
+    },
+    {
+      "name": "认不出的类型（兜底）",
+      "oid": null,
+      "disposition": "honest-unknown",
+      "file": "formatter",
+      "anchor": "static func unreadable(",
+      "testToken": "testUnrecognizedTypeNamesItselfInsteadOfDumpingInternals",
+      "why": "点名类型 + 字节数 + 十六进制预览（最多 16 字节 + …），全语言中立。"
+    },
+    {
+      "name": "载荷与类型声明不符（截断 / 畸形）",
+      "oid": null,
+      "disposition": "honest-unknown",
+      "file": "wireValue",
+      "anchor": "guard addressLength == 4 || addressLength == 16",
+      "testToken": "testMalformedNetworkIsNotGuessed",
+      "why": "长度对不上就返回 nil（交给认不出标记），绝不硬猜一个值出来。"
+    }
+  ],
+  "evidence": {
+    "file": "Scripts/test-session-management.sh",
+    "sectionAnchor": "== 7) 非文本类型的值真的可读",
+    "sameHeredoc": "L74_SAME",
+    "boundaryHeredoc": "L74_BOUNDARY",
+    "sameCases": 40,
+    "boundaryCases": 4,
+    "tokens": [
+      "inet",
+      "cidr",
+      "macaddr",
+      "macaddr8",
+      "bytea",
+      "interval",
+      "timetz",
+      "bit",
+      "varbit",
+      "point",
+      "box",
+      "lseg",
+      "line",
+      "circle",
+      "path",
+      "polygon",
+      "int4range",
+      "multirange",
+      "money",
+      "daterange",
+      "tstzrange"
+    ],
+    "why": "行为证据：同一条 SQL 字面量分别经 psql（文本形态）与我们的 CLI（binary 解码）印出，**逐条相等**才算过；再加「值里无控制字符」那一条。改前现场见 .build/l74-before.log。"
+  }
+}
