@@ -11,6 +11,8 @@
   · HandshakeResponse41 解析（用户名 / 库名）；
   · COM_QUERY：`SELECT …` 回结果集（含 NULL / 中文 / 数字），`INSERT/UPDATE` 回 OK + 影响行数，
     `SELECT CONNECTION_ID()` 等自省查询按真实语义回值；
+  · 元数据两条（对象树要用）：`SHOW DATABASES` / `SHOW TABLES`（`SHOW TABLES FROM `库`` 也命中）
+    与 `DESC `表``（**六列 Field/Type/Null/Key/Default/Extra** 都给齐，见 `handle_query`）；
   · 未知语句回 ERR 包（客户端必须能把它变成可读错误）；
   · COM_PING / COM_QUIT。
 
@@ -268,6 +270,26 @@ class Connection:
         elif upper.startswith("SHOW TABLES"):
             self.send_result_set(
                 [("Tables_in_testdb", FIELD_TYPE_VAR_STRING, 255)], [["customers"], ["orders"]]
+            )
+        elif upper.startswith("DESC ") or upper.startswith("DESCRIBE "):
+            # 表结构（客户端发的是 `DESC `表``）：真实 MySQL 的输出是**六列**
+            # （Field / Type / Null / Key / Default / Extra）。我们这一侧只读前两列（名 / 类型），
+            # 但六列都给齐 —— 少给一列会变成「因为缺列所以解析看着对」的假验证。
+            self.send_result_set(
+                [
+                    ("Field", FIELD_TYPE_VAR_STRING, 255),
+                    ("Type", FIELD_TYPE_VAR_STRING, 255),
+                    ("Null", FIELD_TYPE_VAR_STRING, 3),
+                    ("Key", FIELD_TYPE_VAR_STRING, 3),
+                    ("Default", FIELD_TYPE_VAR_STRING, 255),
+                    ("Extra", FIELD_TYPE_VAR_STRING, 255),
+                ],
+                [
+                    ["id", "bigint", "NO", "PRI", None, ""],
+                    ["name", "varchar(64)", "YES", "", None, ""],
+                    ["note", "varchar(255)", "YES", "", None, ""],
+                    ["amount", "decimal(10,2)", "YES", "", None, ""],
+                ],
             )
         else:
             # 未知语句**明确报错**，不静默成功 —— 静默成功是最坏的一种假验证。

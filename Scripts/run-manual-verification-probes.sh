@@ -148,6 +148,24 @@ set -euo pipefail
 # 本批要 `DOYAH_BROWSER_TABS_DIR`（临时页签库）与 `DOYAH_EGRESS_LOG_DIR`（临时外发日志），
 # 证据文件同样**会被核对**（跳过 ≠ 通过）。
 #
+# ## 第十一批（队列 L-89 ㈡ 第 10 条，第 105 轮）：MySQL 表单联动
+#
+# `TestsUISnapshot/MySQLFormProbeTests.swift` 判清单 §10.7 `FR-DRV-09` 界面那一行
+# （「新建连接 → 数据库类型选 MySQL → 端口应自动变成 3306、SSL 默认 prefer；连上后看对象树」）：
+#   · **A 组（界面联动）** —— **本机 SwiftUI 的 `Picker` 不落到 AppKit 控件**（第 105 轮实测：
+#     宿主视图树里没有 `NSPopUpButton`）⇒「点一下那台下拉」走不通，照 `EgressLogSheet` 当年的处置
+#     把联动搬成能直接断言的东西（`ConnectionDialectLinkage`，界面与判据读同一份）+ 一个把**产品那两个
+#     视图**接起来的夹具：改夹具里的 `dbType` 就等于在界面里换方言，断言读 ① 绑定侧 ② **界面上那一格
+#     真 `NSTextField` 的正文** ③ 真 `ConnectionFormView` 按各方言配置渲染时那一格的正文。
+#     三个方言各来一遍（PostgreSQL ⇄ MySQL ⇄ GBase 8a），**来回都判**（联动不是单向的）。
+#   · **B 组（对象树 + 数据）** —— 连 `Scripts/mysql-stub/fake_mysql_server.py`
+#     （**真跑 MySQL 线协议**，本机没有 mysql / mariadb 二进制），走产品自己的
+#     `DatabaseServiceFactory` + `MetadataService` 逐层展开 ⇒ 四层（服务器 → Database →
+#     Table → Column）、**没有 schema 节点**、列下面没有第 5 层；再走产品自己的查询入口取一次结果集。
+#
+# **不声称覆盖**：真实例上的认证 / 类型 / 多版本窗口（归 `Scripts/test-mysql-real.sh`，217）。
+# 本批由脚本起假服务器并把地址经 `DOYAH_PROBE_MYSQL_*` 注入，证据文件同样**会被核对**（跳过 ≠ 通过）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -171,8 +189,11 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `PaletteWiringProbeTests`（㈡：命令面板接线）
 # + `AppearanceFontProbeTests`（㈡：主题与字体 —— 手输族之后界面说的话 + SQL 预览的字形）。
 # + `TerminalInterruptProbeTests`（L-92 ㈡①：终端 `⌃C` 打断前台 `sleep 30` —— 非沙箱包的作业控制）。
+# + `BrowserTabDownloadProbeTests`（㈡ ⑨：浏览器页签与下载）。
+# + `MySQLFormProbeTests`（㈡ ⑩：MySQL 表单联动 —— 换方言当场换端口与 SSL 清单（真点那台下拉）
+#   ＋ 对象树四层（服务器 → Database → Table → Column，没有 schema 层）＋ 能查到数据）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -260,6 +281,35 @@ export DOYAH_PROBE_PGTABLE_A="${PROBE_GROUP_TABLE_A}"
 export DOYAH_PROBE_PGTABLE_B="${PROBE_GROUP_TABLE_B}"
 export DOYAH_PROBE_PGVIEW="${PROBE_GROUP_VIEW}"
 echo "  · 分组视图探针：库 ${PROBE_PG_GROUP}（表 ${PROBE_GROUP_TABLE_A} / ${PROBE_GROUP_TABLE_B} + 视图 ${PROBE_GROUP_VIEW}）"
+
+# ---- MySQL 表单联动那一批要的服务端（第十一批）----------------------------------
+#
+# 本机**没有** mysql / mariadb 二进制（清单 §10.7 与「卡环境」那一段都记着），所以这里起
+# `Scripts/mysql-stub/fake_mysql_server.py`（**真跑 MySQL 线协议**）。判的是「我们这一侧
+# 把四层树搭对没有、能不能查到数据」——**不声称覆盖真实例**（那归 `Scripts/test-mysql-real.sh`）。
+MYSQL_STUB_PORT=33097
+MYSQL_STUB_LOG="${SCRATCH}/fake-mysql-probe-$$.log"
+rm -f "${MYSQL_STUB_LOG}"
+python3 "${ROOT}/Scripts/mysql-stub/fake_mysql_server.py" --port "${MYSQL_STUB_PORT}" --log "${MYSQL_STUB_LOG}" &
+MYSQL_STUB_PID=$!
+# 两遍跑完（或中途红）都要把这个进程收掉，否则端口留着、下一轮起不来。
+mysql_stub_stop() { kill "${MYSQL_STUB_PID}" 2>/dev/null; wait 2>/dev/null; }
+trap mysql_stub_stop EXIT
+for _ in $(seq 1 30); do
+    grep -q "listening" "${MYSQL_STUB_LOG}" 2>/dev/null && break
+    sleep 0.2
+done
+if grep -q "listening" "${MYSQL_STUB_LOG}" 2>/dev/null; then
+    echo "==> 假 MySQL 服务器已在 127.0.0.1:${MYSQL_STUB_PORT} 上监听（第十一批）"
+else
+    echo "✗ 假 MySQL 服务器没起来（日志 ${MYSQL_STUB_LOG}）"
+    exit 1
+fi
+export DOYAH_PROBE_MYSQL_HOST="127.0.0.1"
+export DOYAH_PROBE_MYSQL_PORT="${MYSQL_STUB_PORT}"
+export DOYAH_PROBE_MYSQL_USER="root"
+export DOYAH_PROBE_MYSQL_PASSWORD="secret"
+export DOYAH_PROBE_MYSQL_DATABASE="testdb"
 
 run_pass() {  # $1 = 输出目录；$2 = 该遍要设的 APP_SANDBOX_CONTAINER_ID（空 = 不设）
     local out="$1" mark="$2" label="$3"
@@ -749,6 +799,120 @@ print("✓ 两遍都真跑过：重开地址还在（且没加载、地址栏里
 PY
 
 echo
+echo "==> MySQL 表单联动的证据核对（第十一批）"
+python3 - "${OUT_PLAIN}" "${OUT_SANDBOX}" "${ROOT}" <<'PY'
+import json
+import os
+import sys
+
+plain, sandbox, root = sys.argv[1], sys.argv[2], sys.argv[3]
+failures = []
+
+
+def load(directory, base, name):
+    path = os.path.join(directory, "mysql-form-evidence-%s.json" % name)
+    if not os.path.exists(path):
+        failures.append("%s：没有 %s 的证据文件 —— 探针没真跑（跳过不算通过）" % (base, name))
+        return {}
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+# 期望值只写「不变量」：与界面上那两台下拉自洽的关系，而不是把探针里的数字再抄一遍。
+for directory, base in ((plain, "普通那遍"), (sandbox, "带沙箱标记那遍")):
+    linkage = load(directory, base, "formLinkage")
+    if linkage:
+        if linkage.get("dialectItems") != ["PostgreSQL", "MySQL", "GBase 8a"]:
+            failures.append("%s/formLinkage：方言下拉的条目不对：%s" % (base, linkage.get("dialectItems")))
+        mysql_items = linkage.get("mysqlSSLItems") or []
+        if len(mysql_items) != 5:
+            failures.append("%s/formLinkage：MySQL 的 SSL 清单不是五项：%s" % (base, mysql_items))
+        if "Allow" in mysql_items:
+            failures.append("%s/formLinkage：MySQL 的 SSL 清单里还有 Allow（R-53 会复发）" % base)
+        if "Verify Identity" not in mysql_items:
+            failures.append("%s/formLinkage：MySQL 下没有 Verify Identity 那一档" % base)
+        pg_items = linkage.get("pgSSLItems") or []
+        if "Allow" not in pg_items or len(pg_items) != 6:
+            failures.append("%s/formLinkage：PG 的 SSL 清单不是六项含 Allow：%s" % (base, pg_items))
+        if linkage.get("mysqlSSLSelection") != "Prefer":
+            failures.append("%s/formLinkage：MySQL 的 SSL 选中项不是 Prefer：%s" % (base, linkage.get("mysqlSSLSelection")))
+        after_pg = linkage.get("fieldValuesAfterBackToPG") or []
+        if "5432" not in after_pg:
+            failures.append("%s/formLinkage：点回 PG 之后端口没回到 5432（联动是单向的？）" % base)
+        if "3306" in after_pg:
+            failures.append("%s/formLinkage：点回 PG 之后端口还留着 MySQL 的 3306" % base)
+
+    tree = load(directory, base, "treeLayers")
+    if tree:
+        layers = tree.get("layerKinds") or []
+        if len(layers) != 4:
+            failures.append("%s/treeLayers：展开出的层级不是四层：%s" % (base, layers))
+        else:
+            if layers[0] != ["server"]:
+                failures.append("%s/treeLayers：第 1 层不是服务器：%s" % (base, layers[0]))
+            if not layers[1] or any(kind != "database" for kind in layers[1]):
+                failures.append("%s/treeLayers：第 2 层不是库：%s" % (base, layers[1]))
+            if not layers[2] or any(kind not in ("table", "view") for kind in layers[2]):
+                failures.append("%s/treeLayers：第 3 层不是表 / 视图：%s" % (base, layers[2]))
+            if not layers[3] or any(kind != "column" for kind in layers[3]):
+                failures.append("%s/treeLayers：第 4 层不是列：%s" % (base, layers[3]))
+        if tree.get("schemaNodes") != 0:
+            failures.append("%s/treeLayers：树里出现了 schema 节点（MySQL 里库 = schema）" % base)
+        if tree.get("beyondColumnCount") != 0:
+            failures.append("%s/treeLayers：列下面还有子节点 ⇒ 不是四层" % base)
+        if not (tree.get("columnNames") or []):
+            failures.append("%s/treeLayers：一列都没展开出来（DESC 那条路）" % base)
+        if not any(detail for detail in (tree.get("columnDetails") or [])):
+            failures.append("%s/treeLayers：列的「类型」一个都没读到（只读到了列名）" % base)
+
+    rows_evidence = load(directory, base, "queryRows")
+    if rows_evidence:
+        if rows_evidence.get("columns") != ["id", "name", "note", "amount"]:
+            failures.append("%s/queryRows：回来的列名不对：%s" % (base, rows_evidence.get("columns")))
+        if (rows_evidence.get("rowCount") or 0) < 1:
+            failures.append("%s/queryRows：一条数据都没查回来" % base)
+
+# 源锚点：判据盯的必须是**产品那条联动线**（第 101 轮的教训：判据与界面脱钩就白判）。
+# 本机 SwiftUI 的 Picker 不落到 AppKit 控件 ⇒ 联动被搬进 `ConnectionDialectLinkage`，
+# 于是这里要钉住两头：**界面真的读了那一份**（表单把绑定交给那两个视图、视图真的调它），
+# 以及**那一份本身没被架空**（端口 / SSL 默认值 / 清单都取自方言自己）。
+anchors = {
+    "App/Views/ConnectionFormView.swift": (
+        ("ConnectionDialectPicker(", "表单不再用那两个视图了（联动与界面之间的线断了）"),
+        ("sslModeWasAdjusted: $sslModeWasAdjusted", "表单没把「收敛说明」那格交给视图"),
+        ("ConnectionSSLModeRow(", "SSL 那一行不再用那个视图了"),
+    ),
+    "App/Views/ConnectionDialectSection.swift": (
+        ("ForEach(ConnectionDialectLinkage.dialects)", "方言那一台不再读唯一出处里的条目清单"),
+        ("ConnectionDialectLinkage.adjustments(for: newValue)", "换方言那条回调不再走唯一出处"),
+        ("port = next.port", "换方言时端口不再跟着换"),
+        ("sslMode = next.sslMode", "换方言时 SSL 不再收敛到方言默认值"),
+        ("sslModeWasAdjusted = next.adjusted", "换方言时那条收敛说明不再清掉"),
+        ("ForEach(ConnectionDialectLinkage.adjustments(for: dbType).sslModes)", "SSL 那一台不再按方言列模式（Allow 会漏到 MySQL 上）"),
+        ("port: String(type.defaultPort)", "唯一出处里的端口不再取自方言"),
+        ("sslMode: type.defaultSSLMode", "唯一出处里的 SSL 默认值不再取自方言"),
+        ("sslModes: type.sslModes", "唯一出处里的清单不再取自方言"),
+    ),
+}
+for relative, needles in anchors.items():
+    with open(os.path.join(root, relative), encoding="utf-8") as handle:
+        anchor_text = handle.read()
+    for needle, why in needles:
+        if needle not in anchor_text:
+            failures.append("%s 里「%s」不见了：%s" % (relative, needle, why))
+if not os.path.exists(os.path.join(root, "TestsUISnapshot/MySQLFormProbeTests.swift")):
+    failures.append("TestsUISnapshot/MySQLFormProbeTests.swift 不在盘上")
+
+if failures:
+    for item in failures:
+        print("✗ %s" % item)
+    sys.exit(1)
+print("✓ 两遍都真跑过：换方言当场换端口（3306 / 5258）与 SSL 清单（五项、无 Allow、Verify Identity）；"
+      "对象树四层（服务器 → Database → Table → Column）、树里没有 schema 节点、列下面没有第 5 层；"
+      "同一路查询入口真的从服务端取回了那一份结果集")
+PY
+
+echo
 echo "==> 完成：证据在 ${OUT_BASE}/（每张图另有中英两份，逐张断言见 ManualVerificationProbeTests）"
 echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 R-53 SSL 收窄说明"
 echo "    ＋ §2 FR-EDIT-25 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
@@ -762,3 +926,7 @@ echo "    ＋ §5 FR-META-15 分组视图（GroupedViewProbeTests：两种视图
 echo "       真点开关两档都到得了、两档不是一个样子（中英各一遍）；序列·函数·其他三个桶用合成夹具补）"
 echo "    ＋ 笔记检索「存完立刻搜」与「键盘快打」（NoteSearchProbeTests：查询还在时保存/删除当场生效 /"
 echo "       旧词的结果与失败都不许落地 / 切换后没有一次落地来自旧词 —— 真 AppState + 真库）"
+echo "    ＋ §10 FR-EDIT-34 浏览器页签与下载（BrowserTabDownloadProbeTests：重开地址还在且没加载 /"
+echo "       盘上两条记录都带页签身份、筛得出来、下拉里恰好那一个 / 下载落在授权目录、同名加 -1）"
+echo "    ＋ §10.7 FR-DRV-09 MySQL 表单联动（MySQLFormProbeTests：换方言 ⇒ 端口当场变 3306、"
+echo "       SSL 清单五项无 Allow、来回都判；连假 MySQL 服务器逐层展开 ⇒ 四层树、无 schema 层、查得到数据）"

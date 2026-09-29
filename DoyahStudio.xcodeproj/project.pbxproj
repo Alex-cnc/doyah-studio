@@ -149,6 +149,7 @@
 		4B0C10F18539FB1C30671EC7 /* DataTaskPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A9A9528B3D7A9D86971AFF /* DataTaskPanel.swift */; };
 		4B936931DA8B3A84021201B1 /* ForeignKeyJumpSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95675405813217873D780D27 /* ForeignKeyJumpSheet.swift */; };
 		4C9F375C6A9B061C001E11EA /* SQLiteKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEEB21FB19E91FE9CEE711EB /* SQLiteKit.swift */; };
+		4CD5FF296A131A6E3963BF10 /* ConnectionDialectSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75AE2B08AEF3373CD6869FCB /* ConnectionDialectSection.swift */; };
 		4CD7E348927E7B02DE60A812 /* MCPSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12AD10A94207DC07336F8AFE /* MCPSession.swift */; };
 		4D2B17E32213C219BD1C49EA /* BrowserContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4C19EA206CBA5D9F1856A3 /* BrowserContractTests.swift */; };
 		4D44F753795E7C2D7787DABA /* AgentQuotaSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E147F7A13B696E69F9A4B6B2 /* AgentQuotaSessionTests.swift */; };
@@ -739,6 +740,7 @@
 		71790B01B0B2558912A92DCA /* NoteDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteDatabase.swift; sourceTree = "<group>"; };
 		73A06BFF6500910EC8404200 /* BackupToolCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupToolCheck.swift; sourceTree = "<group>"; };
 		73A0FA699B421CAEDD7E6EF7 /* MetadataServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataServiceTests.swift; sourceTree = "<group>"; };
+		75AE2B08AEF3373CD6869FCB /* ConnectionDialectSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionDialectSection.swift; sourceTree = "<group>"; };
 		778BACF0A39C8D5F3C8F9AD8 /* CellInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellInspector.swift; sourceTree = "<group>"; };
 		77C287E893A560BD09D297C3 /* AppearanceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSheet.swift; sourceTree = "<group>"; };
 		77E1C0743409AC3E6AAAAAF2 /* DatabaseAdminTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseAdminTests.swift; sourceTree = "<group>"; };
@@ -1470,6 +1472,7 @@
 				F298CC1043700F747085FDF9 /* BrowserTabView.swift */,
 				DDA5A3731B9B1EDF993EABA3 /* CodeEditorView.swift */,
 				02F350771F608C831EB1EFA1 /* CommandPaletteView.swift */,
+				75AE2B08AEF3373CD6869FCB /* ConnectionDialectSection.swift */,
 				EC6CAAE796A311D7DDC637A5 /* ConnectionEnvironmentBadge.swift */,
 				A60337209C66AC5DE283C27C /* ConnectionFormView.swift */,
 				EC7FA41D01ABFD587BF546BA /* ConnectionListView.swift */,
@@ -1830,6 +1833,7 @@
 				53AD3480F3A5576C8D344A1F /* BrowserTabView.swift in Sources */,
 				0857A493800E07E7CE43947A /* CodeEditorView.swift in Sources */,
 				C80AE41963387AF67D93AA89 /* CommandPaletteView.swift in Sources */,
+				4CD5FF296A131A6E3963BF10 /* ConnectionDialectSection.swift in Sources */,
 				E6E589926654EEE655D280CB /* ConnectionEnvironmentBadge.swift in Sources */,
 				ECC06AF93A1848D425AB2A2A /* ConnectionFormView.swift in Sources */,
 				5669F9E5BCC4D04B8CCC20DF /* ConnectionListView.swift in Sources */,

@@ -208,19 +208,12 @@ struct ConnectionFormView: View {
 
                 TextField(L(.connectionFormName), text: $name)
 
-                Picker(L(.connectionFormDbType), selection: $dbType) {
-                    ForEach(DatabaseType.allCases) { type in
-                        Text(type.displayName).tag(type)
-                    }
-                }
-                .onChange(of: dbType) { _, newValue in
-                    port = String(newValue.defaultPort)
-                    // 换方言 = 换一份支持清单（R-53）：`allow` 是 PG 专属，MySQL 没有它。
-                    // 无脑重置为方言默认值是**有意的**：把 PG 的 `allow` 原样带到 MySQL 上
-                    // 就是一个"标签撒谎"的组合（见 `DatabaseType.sslModes`）。
-                    sslMode = newValue.defaultSSLMode
-                    sslModeWasAdjusted = nil
-                }
+                ConnectionDialectPicker(
+                    dbType: $dbType,
+                    port: $port,
+                    sslMode: $sslMode,
+                    sslModeWasAdjusted: $sslModeWasAdjusted
+                )
 
                 TextField(L(.connectionFormHost), text: $host)
 
@@ -303,24 +296,11 @@ struct ConnectionFormView: View {
 
                 // SSL 模式**按方言列出**（R-53）：MySQL 系没有 PG 的 `allow`，
                 // 摊开六个选项等于让用户选一个我们不认识、也没法真的照做的模式。
-                VStack(alignment: .leading, spacing: 2) {
-                    Picker(L(.connectionFormSSLMode), selection: $sslMode) {
-                        ForEach(dbType.sslModes) { mode in
-                            Text(mode.displayName(for: dbType)).tag(mode)
-                        }
-                    }
-                    if let adjusted = sslModeWasAdjusted {
-                        Text(L(.connectionFormSSLModeAdjusted, adjusted.displayName, sslMode.displayName(for: dbType)))
-                            .font(Theme.font(.caption))
-                            .foregroundStyle(Theme.status(.warning))
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else if dbType.sslModes.count != SSLMode.allCases.count {
-                        Text(L(.connectionFormSSLModeNarrowed))
-                            .font(Theme.font(.caption))
-                            .foregroundStyle(Theme.text(.secondary))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                ConnectionSSLModeRow(
+                    dbType: dbType,
+                    sslMode: $sslMode,
+                    sslModeWasAdjusted: $sslModeWasAdjusted
+                )
 
                 Stepper(L(.connectionFormTimeout, timeout), value: $timeout, in: 1...60)
             }
