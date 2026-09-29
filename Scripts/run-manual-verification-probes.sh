@@ -19,6 +19,16 @@ set -euo pipefail
 # 本脚本负责把两遍串起来，并**跨清单再判一次** —— 防「两遍其实跑的是同一面」（那种情况下
 # 每遍自己都绿，而「环境决定界面」这件事根本没被验过）。
 #
+# ## 第二批（队列 L-89 ㈡，第 92 轮）：命令面板接线
+#
+# `TestsUISnapshot/PaletteWiringProbeTests.swift` 判的是清单里 `FR-EDIT-25` 那一句人话
+# 「**每个命令都真的打开了对应面板（不是点了没反应）**」—— 静态判据
+# （`Scripts/check-palette-wiring.py`：清单 id ↔ 分派器 case ↔ 标志位有没有视图读）判不住这件事，
+# 所以它拿真 `AppState` 把**每一条命令都点一遍**、断言登记在案的**落点**确实发生
+# （面板标志位 / 新页签 / 编辑器命令 / 状态栏说法 / 页签上的可读错误），
+# 落点表与命令清单**双向对账**（新增命令没登记落点 ⇒ 判红）。
+# 它不渲染界面、也不连库，跟着本脚本跑两遍（两遍都应当绿）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -38,7 +48,9 @@ OUT_PLAIN="${OUT_BASE}/plain"
 OUT_SANDBOX="${OUT_BASE}/sandbox"
 SANDBOX_MARK="com.doyah.manual-verification-probe"
 
-FILTER="ManualVerificationProbeTests"
+# 默认两族都跑：`ManualVerificationProbeTests`（B 类 ㈠：隧道表单 / SSL 收窄 / 沙箱告知）
+# + `PaletteWiringProbeTests`（㈡：命令面板接线）。`--filter` 传的是**正则**，所以这里用 `|` 连接。
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -144,4 +156,5 @@ PY
 
 echo
 echo "==> 完成：证据在 ${OUT_BASE}/（每张图另有中英两份，逐张断言见 ManualVerificationProbeTests）"
-echo "    「待人工验收清单」里被本轮机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 R-53 SSL 收窄说明"
+echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 R-53 SSL 收窄说明"
+echo "    ＋ §2 FR-EDIT-25 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
