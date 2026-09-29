@@ -447,12 +447,17 @@ python3 Scripts/check-panel-root-frames.py --self-test
 # 时给的原话是「一个 terminal 在执行 dsh-tui，遇到要执行命令只能去开系统终端，违背了我这个软件的初衷」。
 # 判据判的是「新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射」这**六组判断真的在 `Core/TerminalTabs.swift` 里**、
 # 且被 `Tests/TerminalTabsTests.swift` 逐组钉住（另加「Core 不出用户可见文案」与「页签文案键中英齐」）；
-# **㈡ 起同一判据还判界面接线**（App 侧锚点 32 处）：页签头在工具条 `Spacer` **之前**（口径①「左侧」，
-# 位置也判）/ 右侧五个按钮一个不少（口径①「右侧不动」）/ 每页签一条独立会话（不是「一个模型切屏」）/
+# **㈡ 起同一判据还判界面接线**（App 侧锚点 **41 处**，L-89 ㈡ ③ 第 96 轮扩）：页签头在工具条
+# `Spacer` **之前**（口径①「左侧」，位置也判）/ 右侧那排按钮**六个符号一个不少**（清单数的是五个动作，
+# 第 6 个是折叠态的展开箭头）**且新画的按钮必须登记**（反向对账棘轮 `RIGHT_SIDE_CALL_SITES` ——
+# 只判「登记过的还在」拦不住「新画一个没登记的」）/ 每页签一条独立会话（不是「一个模型切屏」）/
 # ⌘T ⌘W ⌘1…9 的接线点（判定仍只有 Core 一处）/ 双击重命名 / 二次确认 / 退出标记 / 重启作用在当前页签 /
-# App 侧探针三个用例锚点（`TestsUISnapshot/TerminalTabsProbeTests.swift`：真开 shell 验独立性与退出、确认链路）。
+# 工具条那一行是**独立视图** `LowerPaneTabStrip`（抽出来才能单独离屏渲染）。
+# App 侧探针**六个用例**锚点（`TestsUISnapshot/TerminalTabsProbeTests.swift`：前三个真开 shell 验
+# 独立性与退出、确认链路；后三个 = 版面（页签头在左 / 右侧按钮位置不动的**像素**判据）、按钮按状态齐备、
+# ⌘1…9 / ⌘⇧[ ⌘⇧] / 改名落到对的会话）。
 # 真人点验 = 主诉场景（一个页签跑 `dsh-tui`、另一个执行命令，互不干扰）。
-# 负例 `--self-test` **12 例**（红 / 绿成对，夹具一律在临时目录，末例核对真仓库十二份文件逐字节未变）。
+# 负例 `--self-test` **13 例**（红 / 绿成对，夹具一律在临时目录，末例核对真仓库十三份文件逐字节未变）。
 python3 Scripts/check-terminal-tabs.py
 python3 Scripts/check-terminal-tabs.py --self-test
 

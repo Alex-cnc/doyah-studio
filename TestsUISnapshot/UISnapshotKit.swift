@@ -549,28 +549,77 @@ enum UISnapshot {
         var pixelCount: Int { width * height }
     }
 
+    /// 一张**已落盘** PNG 上「距图顶 N 像素、高 H 像素」的横向条带。
+    ///
+    /// 与 `band(fromBottom:)` 同族，但**从上边量**：那条给"贴着面板底部"的元素用，
+    /// 这条给"贴着顶部"的工具条那一行用（下方面板的工具条就在图的顶部）。
+    /// 为什么非要一个"从上量"的口子：`NSBitmapImageRep` 的行序自上而下，从底量再换算回来，
+    /// 判据里就会到处出现 `总高 − 底 − 高` 这种算式 —— 算式写错一次就会静默判错地方。
+    static func topBand(ofPNGAt path: String, fromTop: Int = 0, height: Int) -> Band? {
+        guard let size = pixelSize(ofPNGAt: path) else { return nil }
+        return region(ofPNGAt: path, leading: 0, top: fromTop, width: size.width, height: height)
+    }
+
+    /// 一张**已落盘** PNG 上「距左边 N 像素、宽 W 像素」的竖直列带。
+    ///
+    /// 为什么要按列切：「页签头在**左侧**、右侧那排按钮**位置不动**」是**版面**判据 ——
+    /// 页签从 1 个变 3 个时，左半边必须变、右半边必须逐像素不变。只比整张图"有没有变"
+    /// 判不出"变在哪一侧"（页签头挂到右边同样会让整张图变）。
+    static func columnBand(ofPNGAt path: String, fromLeading: Int, width: Int) -> Band? {
+        guard let size = pixelSize(ofPNGAt: path) else { return nil }
+        return region(ofPNGAt: path, leading: fromLeading, top: 0, width: width, height: size.height)
+    }
+
+    /// 一张已落盘 PNG 的像素尺寸（给上面两个"按边切"的口子算另一边有多长）。
+    static func pixelSize(ofPNGAt path: String) -> (width: Int, height: Int)? {
+        guard let image = NSImage(contentsOfFile: path),
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        return (rep.pixelsWide, rep.pixelsHigh)
+    }
+
+    /// 「距图底 N 像素、高 H 像素」的横向条带（`FR-EDIT-26` ⑤ 那条判据用的口子）——
+    /// 现在只是 `region` 的一个薄包装。
     static func band(ofPNGAt path: String, fromBottom: Int, height: Int) -> Band? {
+        guard let size = pixelSize(ofPNGAt: path) else { return nil }
+        return region(
+            ofPNGAt: path,
+            leading: 0,
+            top: size.height - (fromBottom + height),
+            width: size.width,
+            height: height
+        )
+    }
+
+    /// 从一张已落盘 PNG 上取一块矩形（**像素坐标、左上为原点、自上而下**）。
+    ///
+    /// 三个口子（`band` / `topBand` / `columnBand`）共用这一套裁剪与统计：免得"带"的定义
+    /// （怎么裁、底色怎么定、墨迹怎么算）各写一遍 —— 那是第二份真相的开头（第 64 / 83 轮的旧账）。
+    /// 越界的部分按边界夹取；裁出来是空的 ⇒ `nil`（不是"零差异"）。
+    static func region(ofPNGAt path: String, leading: Int, top: Int, width: Int, height: Int) -> Band? {
         guard let image = NSImage(contentsOfFile: path),
               let tiff = image.tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff),
               let data = rep.bitmapData else { return nil }
-        let width = rep.pixelsWide
-        let total = rep.pixelsHigh
+        let pixelWidth = rep.pixelsWide
+        let pixelHeight = rep.pixelsHigh
         let bytesPerPixel = max(1, rep.bitsPerPixel / 8)
         let rowBytes = rep.bytesPerRow
 
-        // `NSBitmapImageRep` 的行序是**自上而下**（与 `sampledRGB` 的 `colorAt` 同一套坐标）。
-        let bottomEdge = min(max(fromBottom, 0), total)
-        let topEdge = min(max(bottomEdge + height, 0), total)
-        let startY = total - topEdge
-        let endY = total - bottomEdge
-        guard width > 0, endY > startY else { return nil }
+        // `NSBitmapImageRep` 的行序是**自上而下**（与 `sampledRGB` 的 `colorAt` 同一套坐标），
+        // 所以 `top` 直接就是行号。
+        let startY = min(max(top, 0), pixelHeight)
+        let endY = min(max(startY + height, 0), pixelHeight)
+        let startX = min(max(leading, 0), pixelWidth)
+        let endX = min(max(startX + width, 0), pixelWidth)
+        guard pixelWidth > 0, endY > startY, endX > startX else { return nil }
 
+        let width = endX - startX
         var bytes = [UInt8](repeating: 0, count: width * (endY - startY) * 4)
         for (row, y) in (startY..<endY).enumerated() {
-            for x in 0..<width {
+            for (column, x) in (startX..<endX).enumerated() {
                 let source = y * rowBytes + x * bytesPerPixel
-                let destination = (row * width + x) * 4
+                let destination = (row * width + column) * 4
                 bytes[destination] = data[source]
                 bytes[destination + 1] = bytesPerPixel > 1 ? data[source + 1] : data[source]
                 bytes[destination + 2] = bytesPerPixel > 2 ? data[source + 2] : data[source]

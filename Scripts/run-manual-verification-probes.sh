@@ -48,6 +48,17 @@ set -euo pipefail
 # 它用真 `TerminalPane` + 真 `forkpty` 会话；两遍都跑（沙箱标记只影响界面文案，不影响这条）。
 # 边界：**没有**做「同一探针在沙箱里必红」的 A/B（见该文件头注释）。
 #
+# ## 第五批（队列 L-89 ㈡ ③，第 96 轮）：终端多会话页签那一行
+#
+# `TestsUISnapshot/TerminalTabsProbeTests.swift` 新加的三个用例判的是清单 §1 `FR-EDIT-29`
+# 多会话那一行的**版面**与**落点**（前三个用例是它原有的「真开 shell 的独立性与退出 / 确认链路」）：
+#   ① 版面：渲染**真工具条**（`LowerPaneTabStrip` —— 从 `LowerPaneView` 抽出来的独立视图，
+#      抽出来就是为了能单独离屏渲染：整块面板一渲染会真开 shell），页签 1 个 → 3 个时
+#      **左半必须变、右四分之一逐像素不变** —— 这就是「页签头在左侧、右侧按钮位置不动」的像素版；
+#   ② 右侧那排按钮按**面板状态**齐备（终端 / 问题 / 折叠态三态：该有的有、**不该有的不许有**）；
+#   ③ `⌘1…9` / `⌘⇧[ ⌘⇧]` / 双击改名落到**对的会话**，且**改名不动那条 PTY**（前台进程不许换人）。
+# 它跟着本脚本跑两遍（沙箱标记只影响界面文案，不影响这三条）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -72,7 +83,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `AppearanceFontProbeTests`（㈡：主题与字体 —— 手输族之后界面说的话 + SQL 预览的字形）。
 # + `TerminalInterruptProbeTests`（L-92 ㈡①：终端 `⌃C` 打断前台 `sleep 30` —— 非沙箱包的作业控制）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -182,3 +193,5 @@ echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单
 echo "    ＋ §2 FR-EDIT-25 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
 echo "    ＋ §2 FR-EDIT-26 主题与字体（AppearanceFontProbeTests：手输族的三档说法 + SQL 预览取样带）"
 echo "    ＋ §0.3 第 3 条 终端 ⌃C（TerminalInterruptProbeTests：喂 0x03 看前台 sleep 让不让开）"
+echo "    ＋ §1 FR-EDIT-29 多会话那一行的版面与落点（TerminalTabsProbeTests 后三个用例：左半变 / 右四分之一逐像素不变、"
+echo "       右侧按钮按状态齐备、⌘1…9 与 ⌘⇧[ ⌘⇧] 与改名落到对的会话）"
