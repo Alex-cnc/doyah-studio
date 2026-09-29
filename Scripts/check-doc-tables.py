@@ -34,7 +34,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。现在：
 
 **这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 13 份** /
-**42 份命名 + 1 条通配 = 实跑 43 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
+**43 份命名 + 1 条通配 = 实跑 44 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
 `doc-tables-files`）；判据 `Scripts/check-doc-numbers.py` 每次**自己算一遍**（导入本模块读清单 +
 `git check-ignore` 实测 + 真跑本脚本）再与本文件 / `Scripts/verify-all.sh` / `AGENT-SPEC.md` 里每一处
 写法对账 —— 本文件里的数字都是**引用**，改口径改台账。
@@ -130,6 +130,10 @@ DEFAULT_TARGETS = [
     "Docs/proposals/0002-windows-实现落点-同仓多端.md",
     "Docs/proposals/0003-越界门禁新增节判据-三副本对齐.md",
     "Docs/proposals/0004-windows-技术栈改定-tauri-vue-rust.md",
+    # 对侧 2026-09-29（其第 81 轮）新增；判据 E 立起来的**第二天**就抓到它没进清单
+    # （合并后门禁当场红）—— 由本侧第 90 轮补录。这正是判据 E 存在的理由：
+    # 新文档的表格列数不能再躲到清单外（本案里它自己也是来给判据 D / E 打补丁的）。
+    "Docs/proposals/0005-受检清单自洽判据-windows-恒假红-路径分隔符.md",
     "Docs/proposals/README.md",
     "Docs/proposals/_TEMPLATE.md",
 ]
@@ -533,7 +537,8 @@ SELF_TEST_TRACKED = [
     "Docs/README.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
-    # L-89 纳入的 23 份跟踪文档（夹具 = 「干净克隆」那一例的现场，必须与真清单逐条相同）
+    # L-89 纳入的跟踪文档（夹具 = 「干净克隆」那一例的现场，必须与真清单逐条相同）
+    # 24 份（第 90 轮 +1 = 对侧新增的提案 0005，见 DEFAULT_TARGETS 里的注记）
     "AGENT-SPEC.md",
     "RELEASE-0.1.0-alpha.md",
     "RELEASE-0.2.0-alpha.md",
@@ -555,6 +560,7 @@ SELF_TEST_TRACKED = [
     "Docs/proposals/0002-windows-实现落点-同仓多端.md",
     "Docs/proposals/0003-越界门禁新增节判据-三副本对齐.md",
     "Docs/proposals/0004-windows-技术栈改定-tauri-vue-rust.md",
+    "Docs/proposals/0005-受检清单自洽判据-windows-恒假红-路径分隔符.md",
     "Docs/proposals/README.md",
     "Docs/proposals/_TEMPLATE.md",
 ]
@@ -617,8 +623,8 @@ def run_self_test() -> int:
         if code != 0:
             failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
         elif "⚠ 跳过 13 份" not in output:
-            failures.append(f"例 1 失败：没有高声提示「跳过 7 份」（不得静默通过）\n{output}")
-        elif "✅ 表格校验通过（29 个文件，跳过 13 份）" not in output:
+            failures.append(f"例 1 失败：没有高声提示「跳过 13 份」（不得静默通过）\n{output}")
+        elif "✅ 表格校验通过（30 个文件，跳过 13 份）" not in output:
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
             failures.append(f"例 1 失败：通配清单没有显式打印匹配份数（L-41）\n{output}")
@@ -700,11 +706,11 @@ def run_self_test() -> int:
         if code != 0:
             failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 42 份命名文档应全在（不得出现跳过行）\n{output}")
+            failures.append(f"例 4 失败：真仓库 43 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
             failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
-        elif "✅ 表格校验通过（43 个文件）" not in output:
-            failures.append(f"例 4 失败：收尾行应为 43 个文件（42 份命名 + 1 份通配）\n{output}")
+        elif "✅ 表格校验通过（44 个文件）" not in output:
+            failures.append(f"例 4 失败：收尾行应为 44 个文件（43 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
     finally:
