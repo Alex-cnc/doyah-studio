@@ -74,6 +74,10 @@ struct DoyahStudioApp: App {
         WindowGroup {
             MainWindow()
                 .environmentObject(appState)
+                // 查询编辑器缓冲（队列 `L-148`）：**必须单独注入** —— 它刻意不是 `AppState`
+                // 的 `@Published` 属性，就是为了让"每键写文本"只重算观测它的那一小块，
+                // 而不是观测 `appState` 的整个窗口（5,000 行实测 31.74 ms/键）。
+                .environmentObject(appState.editorBuffer)
                 .environmentObject(localization)
                 .environmentObject(terminal)
                 .environmentObject(accent)

@@ -28,6 +28,12 @@ struct WorkspaceAreaView: View {
         HStack(spacing: Spacing.xs) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.xs) {
+                    // 内置浏览器页签（队列 `L-149`）：与 Home / 文件是**同一类页签**。
+                    // 需求提出者 2026-09-30：「浏览器内置到工作区 Tab 页……本质上 html 也是一种文件」；
+                    // 原先它长在数据库侧 —— 那是 **SQL 这门语言的工作台**，不归它管。
+                    ForEach(appState.browserPages) { page in
+                        browserTabButton(page)
+                    }
                     ForEach(tabs.tabs) { tab in
                         tabButton(tab)
                     }
@@ -129,15 +135,59 @@ struct WorkspaceAreaView: View {
                 .fill(isSelected ? Theme.accentColor.opacity(0.16) : Color.clear)
         )
         .contentShape(Rectangle())
-        .onTapGesture { tabs.select(tab.id) }
+        // 选工作区页签 = 离开浏览器（否则浏览器那份选中态会一直压在上面，回不到 Home）。
+        .onTapGesture {
+            appState.selectedBrowserID = nil
+            tabs.select(tab.id)
+        }
         .help(tab.path ?? tab.title)
+    }
+
+    /// 浏览器页签（队列 `L-149`）：与 Home / 文件同一类页签，只是图标与动作走浏览器那条。
+    private func browserTabButton(_ page: BrowserPage) -> some View {
+        let isSelected = appState.selectedBrowserID == page.id
+        return HStack(spacing: Spacing.xs) {
+            if page.isLoading {
+                ProgressView().controlSize(.mini)
+            } else {
+                Image(systemName: "globe")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(isSelected ? Theme.accentColor : Theme.text(.secondary))
+            }
+
+            Text(page.title)
+                .font(Theme.font(.caption))
+                .lineLimit(1)
+                .fontWeight(isSelected ? .semibold : .regular)
+
+            Button {
+                appState.closeBrowserTab(page.id)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            .help(L(.workspaceCloseTab))
+        }
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, Spacing.hair)
+        .background(
+            RoundedRectangle(cornerRadius: Radius.badge)
+                .fill(isSelected ? Theme.accentColor.opacity(0.16) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { appState.selectBrowserTab(page.id) }
+        .help(page.title)
     }
 
     // MARK: 内容
 
     @ViewBuilder
     private var content: some View {
-        if let tab = tabs.selectedTab {
+        if let browser = appState.selectedBrowserPage {
+            // 浏览器页签在工作区（`L-149`）：与 Home / 文件页签同一处呈现。
+            BrowserTabView(page: browser)
+        } else if let tab = tabs.selectedTab {
             if tab.isHome {
                 WorkspaceHomeView()
             } else {

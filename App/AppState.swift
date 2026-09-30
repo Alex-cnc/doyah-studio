@@ -269,6 +269,24 @@ final class AppState: ObservableObject {
     @Published var selectedTabID: UUID?
     @Published var savedQueries: [SavedQuery] = []
 
+    /// 查询编辑器里**正在编辑的文本**（队列 `L-148`）。
+    ///
+    /// **刻意不是 `@Published`**：每敲一个键都写它，写进 `AppState` 就等于每键重算整个窗口
+    /// （5,000 行实测 31.74 ms/键，见 `QueryEditorBuffer` 的注释）。它由视图单独观测
+    /// （`.environmentObject(appState.editorBuffer)`）⇒ 重算范围缩到编辑区那一小块。
+    /// `tabs[i].sql` 仍是**唯一权威副本**，由提交点 `commitEditorDraft(for:)` 同步。
+    let editorBuffer = QueryEditorBuffer()
+
+    /// **提交点**：把编辑器缓冲里的草稿写回权威副本。
+    ///
+    /// 读 `tab.sql` 的入口（执行、保存、关闭、切页签）都要先调它，否则会读到旧 SQL ——
+    /// 这是 `L-148` 这条修法**唯一**需要小心的地方。
+    func commitEditorDraft(for tabID: UUID) {
+        editorBuffer.commit(for: tabID) { [weak self] sql in
+            self?.updateSQL(sql, for: tabID)
+        }
+    }
+
     /// 有未保存改动的页签数。重启前提示会用到（NFR-I18N-03）：
     /// 不能让人为了换个界面语言把正在写的查询丢掉。
     var dirtyTabCount: Int {
@@ -5259,6 +5277,9 @@ final class AppState: ObservableObject {
     func closeTab(_ tabID: UUID) {
         guard tabs.count > 1 else { return }
         guard !(tabs.first(where: { $0.id == tabID })?.isExecuting ?? false) else { return }
+        // **提交点**（队列 `L-148`）：关页签前把编辑器缓冲里的草稿写回权威副本 ——
+        // 否则"页签内容"在关闭这一刻就丢了最后一段编辑（保存/持久化读的是权威副本）。
+        commitEditorDraft(for: tabID)
         EditorCommandCenter.shared.forgetSelection(tabID: tabID)
         tabs.removeAll { $0.id == tabID }
         if selectedTabID == tabID {
@@ -5523,6 +5544,9 @@ final class AppState: ObservableObject {
         sqlOverride: String? = nil,
         runningSource: ExecutionScope.Source? = nil
     ) async {
+        // **提交点**（队列 `L-148`）：执行读的是权威副本 `tab.sql`，而打字先落在编辑器缓冲里
+        // ⇒ 不先提交就会执行到"最后一次提交之前"的 SQL。
+        commitEditorDraft(for: tabID)
         guard let tabIndex = tabs.firstIndex(where: { $0.id == tabID }) else { return }
         guard !tabs[tabIndex].isExecuting else { return }
 

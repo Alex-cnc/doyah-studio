@@ -28,6 +28,13 @@ set -euo pipefail
 #
 # 说明：ad-hoc 签名 + entitlements 足以在本机运行（网络客户端 + 默认不带 App Sandbox）。
 # 如果要分发或使用钥匙串的持久授权，请换用自己的开发者证书签名。
+#
+# **签名身份（Q53，2026-09-30）**：ad-hoc 没有稳定身份 ⇒ **每次重打包都换指纹** ⇒
+# macOS「本地网络」授权对不上新包（症状：应用连不上 217 的库，终端 `psql` 却正常）。
+# 有了稳定身份，授权只授一次，之后重打包不再掉。用法：
+#   ./Scripts/make-signing-identity.sh                    # 一次性：建自签名身份（要输一次钥匙串密码）
+#   DOYAH_CODESIGN_IDENTITY="Developer ID Application: …" ./Scripts/build-app.sh   # 用别的身份
+# 找不到身份时**回退 ad-hoc**（构建不因此中断），并在终端写明后果。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 CONFIGURATION="${1:-debug}"
@@ -197,11 +204,27 @@ else
   fi
 fi
 
-echo "==> ad-hoc 签名"
-codesign --force --sign - \
-  --entitlements "${ENTITLEMENTS}" \
-  --timestamp=none \
-  "${APP}" 2>&1 | tail -3
+# Q53：优先用稳定身份签名。有身份 ⇒ 指纹稳定 ⇒ 本地网络授权不会随重打包失效；
+# 没有 ⇒ 回退 ad-hoc（与改动前行为一致），只在终端说明后果，不让构建失败。
+#
+# **不用 `security find-identity` 判存在性** —— 它只列「被信任的」身份，自签名证书
+# 未信任时实测恒报 `0 valid identities found`，会把装好的身份误判成没有。
+# 判据改成**真签一次**：签得成就算有，签不成再回退 ad-hoc（失败信息原样打出来）。
+IDENTITY="${DOYAH_CODESIGN_IDENTITY:-DoyahStudio Local Dev}"
+SIGN_LOG="$(mktemp)"
+if codesign --force --sign "${IDENTITY}" \
+  --entitlements "${ENTITLEMENTS}" --timestamp=none "${APP}" >"${SIGN_LOG}" 2>&1; then
+  echo "==> 签名：${IDENTITY}（指纹稳定 ⇒「本地网络」授权不会随重打包失效）"
+else
+  echo "==> 身份「${IDENTITY}」用不了 ⇒ 回退 ad-hoc"
+  sed 's/^/    /' "${SIGN_LOG}" | head -3
+  echo "    重打包会换指纹，macOS「本地网络」授权可能对不上新包（应用连不上 217、终端却正常）。"
+  echo "    先跑一次：./Scripts/make-signing-identity.sh"
+  codesign --force --sign - \
+    --entitlements "${ENTITLEMENTS}" --timestamp=none "${APP}" 2>&1 | tail -3
+fi
+rm -f "${SIGN_LOG}"
+echo "    结果：$(codesign -dv "${APP}" 2>&1 | grep -E 'Signature=|Identifier=' | tr '\n' ' ')"
 
 echo ""
 echo "完成：${APP}"

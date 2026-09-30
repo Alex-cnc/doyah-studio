@@ -33,9 +33,19 @@ final class SQLLineNumberProbeTests: XCTestCase {
     // MARK: - 宿主与夹具
 
     private struct Harness: View {
-        @State var text: String
+        /// 权威副本（模拟 `AppState.tabs[i].sql`）。
+        let text: String
+        let tabID = UUID()
+        /// 编辑器缓冲（队列 `L-148`）：与产品接线同形 —— 每键只写它，不写全局 `AppState`。
+        @StateObject private var buffer = QueryEditorBuffer()
         var body: some View {
-            SQLEditorView(text: $text, databaseType: .postgresql, diagnostics: [], tabID: UUID())
+            SQLEditorView(
+                text: buffer.displayText(for: tabID, authoritative: text),
+                databaseType: .postgresql,
+                diagnostics: [],
+                tabID: tabID,
+                onTextChange: { buffer.noteEdit($0, for: tabID) }
+            )
         }
     }
 

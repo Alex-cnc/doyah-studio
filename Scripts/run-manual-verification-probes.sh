@@ -272,8 +272,12 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   `check-result-scroll-ledger.py` ⑤ —— 一处入口漏了就等于一个都跑不到（第 96 轮实测）。
 # + `SQLLineNumberProbeTests`（L-111：数据库侧 SQL 编辑器的行号列 —— 正文起点 = 列宽 /
 #   列区里有墨 / 行数 9 → 151 时列宽与像素都变 / 两个编辑器的列宽逐个相等，见「第十五批」）。
+# + PerfTypingProbeTests（`L-148`：查询页签每键耗时的机器判据 —— 5,000 行 / 739,219 字符，
+#   断言**每键 p50 < 5 ms**（实测 33.6 → 1.8 ms，改前 31.74 ms）。`verify-all.sh` 那十八项
+#   判的是静态与行为，**判不到运行时开销** —— 这是「每键写全局 @Published」那类错唯一的拦网，
+#   见「第十六批」与 §9 第 104 条：探针不挂进 FILTER = 这一族一个都跑不到）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

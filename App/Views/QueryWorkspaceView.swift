@@ -6,14 +6,10 @@ struct QueryWorkspaceView: View {
 
     var body: some View {
         Group {
-            // 浏览器页签优先：选中它时编辑区就是浏览器（下方面板属于 SQL 页签的上下文）。
-            if let browser = appState.selectedBrowserPage {
-                VStack(spacing: 0) {
-                    tabBar
-                    Divider()
-                    BrowserTabView(page: browser)
-                }
-            } else if let tab = appState.selectedTab {
+            // **浏览器页签不在这里**（队列 `L-149`，2026-09-30 需求提出者实测反馈）：
+            // 数据库侧是 **SQL 这门语言的工作台**；浏览器页签属于**工作区**（与 Home 同一类页签，
+            // 因为 html 也是一种文件）。原先它在这里既占内容区又占页签条。
+            if let tab = appState.selectedTab {
                 // **下方面板不在这里**（2026-09-30）：它搬到了 `MainWindow.sectionWithLowerPane`，
                 // 与「工作区」段共享同一个实例（需求提出者实测反馈：「带 terminal 的底部区域是在
                 // 两个功能中共享的」）。所以这一层只画页签条 + 编辑器，最大化也由那一层统一判。
@@ -40,36 +36,6 @@ struct QueryWorkspaceView: View {
     private var tabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s) {
-                // 浏览器页签排在最前：它们不是「放在某个 SQL 页签里」的东西，
-                // 而是与 SQL 页签同级的一类页签（FR-EDIT-34）。
-                ForEach(appState.browserPages) { page in
-                    HStack(spacing: Spacing.s) {
-                        if page.isLoading {
-                            ProgressView()
-                                .controlSize(.mini)
-                        }
-
-                        Button {
-                            appState.selectBrowserTab(page.id)
-                        } label: {
-                            Label(page.title, systemImage: "globe")
-                                .labelStyle(.titleAndIcon)
-                        }
-                        .buttonStyle(.plain)
-                        .fontWeight(appState.selectedBrowserID == page.id ? .semibold : .regular)
-
-                        Button {
-                            appState.closeBrowserTab(page.id)
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(Theme.font(.caption))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, Spacing.m)
-                    .padding(.vertical, Spacing.s)
-                }
-
                 ForEach(appState.tabs) { tab in
                     HStack(spacing: Spacing.s) {
                         if tab.isExecuting {
@@ -122,6 +88,9 @@ struct QueryWorkspaceView: View {
 struct QueryEditorView: View {
     @EnvironmentObject private var appState: AppState
     let tab: QueryTab
+    /// 编辑器缓冲（队列 `L-148`）：每键只写它 ⇒ 重算范围只有这一小块，
+    /// 而不是观测全局 `AppState` 的整个窗口。
+    @EnvironmentObject private var editorBuffer: QueryEditorBuffer
     @State private var isSaveQueryPresented = false
     @State private var isGoToLinePresented = false
 
@@ -223,19 +192,22 @@ struct QueryEditorView: View {
     private func editorArea(_ diagnostics: [SQLDiagnostic]) -> some View {
         VStack(spacing: 0) {
             SQLEditorView(
-                text: Binding(
-                    get: { tab.sql },
-                    set: { appState.updateSQL($0, for: tab.id) }
-                ),
+                text: editorBuffer.displayText(for: tab.id, authoritative: tab.sql),
                 databaseType: appState.connection(for: tab)?.dbType ?? .postgresql,
                 diagnostics: diagnostics,
                 tabID: tab.id,
+                // 每键只写缓冲（队列 `L-148`）：写 `appState` 会让整个窗口每键重算
+                // —— 5,000 行实测 31.74 ms/键。
+                onTextChange: { editorBuffer.noteEdit($0, for: tab.id) },
                 // 查询记忆（FR-AI-13 S4）：索引来自归档，按**连接名**隔离 ——
                 // 生产库跑过的语句不会跑到测试库的补全里。
                 memoryIndex: appState.queryMemoryIndex,
                 memoryConnection: appState.connection(for: tab)?
                     .displayTitle(untitled: L(.connectionUntitled))
             )
+            // **提交点**（队列 `L-148`）：视图消失 = 切页签 / 切模块，
+            // 此刻把草稿写回权威副本，避免"切回来发现最后一段编辑没了"。
+            .onDisappear { appState.commitEditorDraft(for: tab.id) }
 
             if !diagnostics.isEmpty {
                 Divider()

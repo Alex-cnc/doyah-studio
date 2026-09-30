@@ -7,11 +7,21 @@ import DoyahCore
 /// - 关键字自动变成紫色，函数、字符串、注释、数字分别配色
 /// - 静态检查（未闭合字符串/注释/括号）以红色下划线和提示条展示
 struct SQLEditorView: NSViewRepresentable {
-    @Binding var text: String
+    /// 编辑器要显示的文本。由调用方决定是「编辑器草稿」还是「权威副本」
+    /// （`QueryEditorBuffer.displayText(for:authoritative:)`）。
+    ///
+    /// **刻意不是 `@Binding`**（队列 `L-148`）：绑定写回等于每敲一个键都写全局 `AppState`
+    /// ⇒ 整个窗口同步重算 + AppKit 布局，5,000 行实测 **31.74 ms/键**。
+    /// 工作区编辑器（`CodeEditorView`）从一开始就是「按值传入 + 回调传出」，所以同一份
+    /// 5,000 行 SQL 在工作区跟手、在数据库侧卡 —— 同一屏两个编辑面，两种接法。
+    let text: String
     let databaseType: DatabaseType
     let diagnostics: [SQLDiagnostic]
     /// 命令通道只对当前页签生效。
     let tabID: UUID
+    /// 每键回调：**只许写 `QueryEditorBuffer`**（重算范围 = 编辑区那一小块），
+    /// 不许直接写 `AppState` —— 那是 `L-148` 量出来的 31 ms 的来源。
+    var onTextChange: (String) -> Void = { _ in }
     /// 查询记忆索引（FR-AI-13 S4）：默认空索引 —— 无记忆时补全行为与历史版本一致。
     var memoryIndex = QueryMemory.Index()
     /// 记忆的隔离键（连接名）；nil 表示不按连接过滤。
@@ -234,7 +244,8 @@ struct SQLEditorView: NSViewRepresentable {
             guard let textView, !isUpdatingFromSwiftUI, !textView.isApplyingAttributes else { return }
 
             textSync.notePublished(textView.string)
-            parent.text = textView.string
+            // 只写编辑器缓冲（`QueryEditorBuffer`），**不写全局 `AppState`** —— 队列 `L-148`。
+            parent.onTextChange(textView.string)
             // 打字 / 粘贴 / 撤销都会走到这里 ⇒ 判「行数（位数）变了没、行起点要不要重算」的
             // **唯一钩子**（与工作区编辑器的 `textDidChange` 同一条）。
             textView.reloadLineNumbers()
@@ -272,17 +283,35 @@ struct SQLEditorView: NSViewRepresentable {
 
             textSync.noteAppliedExternal(text)
             textView.setSelectedRange(NSRange(location: 0, length: 0))
+            // 外部改动已落地 ⇒ 把编辑器缓冲对齐到它（队列 `L-148`）：不然缓冲里那份旧草稿
+            // 会**盖住**刚载入的内容（`displayText` 优先取草稿），表现为"打开已保存查询没反应"。
+            parent.onTextChange(textView.string)
         }
 
         /// 延后一次高亮，避免与输入法 / 文本编辑回调重入。
+        ///
+        /// **必须是真 debounce，不是「扔到下一个 runloop」**（2026-09-30 队列 `L-143` 实测）：
+        /// `DispatchQueue.main.async` 在连续按键（尤其长按删除）时等于**每个键**都全量重新着色
+        /// 整篇文本（`apply(tokens:)` 先对全文 `setAttributes`）。本侧实测一次全量着色的代价：
+        /// **33 ms（5,000 行 / 414 KB）· 138 ms（5,000 行长行 / 1.75 MB）** —— 表现在用户那儿
+        /// 就是「粘 5,000 行后在编辑区打字 / 删除明显卡顿」。
+        /// 工作区编辑器在 **2026-09-29** 已按同一口径改成按文档大小分档的 debounce（那里注释写着
+        /// 「5,000 行文档上表现为删除时明显卡顿」），**本侧当时漏了** —— 同一屏里两个编辑面
+        /// 又长成了两个样子。这里与它逐字对齐。
+        ///
+        /// 合并窗口按文档大小分档：大文档等更久，代价是高亮比光标慢一档，换来打字跟手。
+        /// 尺寸取 `textStorage.length`（**O(1)**）而不是 `string.count` —— 后者每次都把整篇
+        /// 文本实体化再数字符，是白付的 O(n)。
         func scheduleHighlighting() {
             highlightWorkItem?.cancel()
 
+            let size = textView?.textStorage?.length ?? 0
+            let delay: TimeInterval = size > sqlRealtimeScanLimit ? 0.45 : 0.12
             let item = DispatchWorkItem { [weak self] in
                 self?.applyHighlighting()
             }
             highlightWorkItem = item
-            DispatchQueue.main.async(execute: item)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
         }
 
         func applyHighlighting() {

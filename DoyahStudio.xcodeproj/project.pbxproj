@@ -183,6 +183,7 @@
 		587BA79A28ABE2C29B592ED7 /* SQLLexerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 204DB56ADDF8FD107EA2A460 /* SQLLexerTests.swift */; };
 		58EFC1C30A7E90DB093D5090 /* DataTaskRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE34A4D770C1ABD7D7CD7054 /* DataTaskRun.swift */; };
 		596C2422F99455EBFEE745C9 /* TerminalRunTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C8D06CDF3E1BAE8864A41F7 /* TerminalRunTests.swift */; };
+		5A1ABDBFB18485A3B69969E9 /* QueryEditorBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F975AE07F76108B3D884A199 /* QueryEditorBuffer.swift */; };
 		5A37DAEE90EE80859B18831F /* ObjectTreeRowContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 152FFFFDD152CAEFDDDD3A7B /* ObjectTreeRowContent.swift */; };
 		5B166490B4590612A6D9A3D7 /* InlineEditSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69D269D7C5E435D2616A0CD9 /* InlineEditSheets.swift */; };
 		5B6623F3C1F68C16914D083B /* SlowQueryReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E065A2A85DF5B78CBB8B708 /* SlowQueryReportTests.swift */; };
@@ -1020,6 +1021,7 @@
 		F897F3BE80C90983918EF78C /* WorkspaceExplorerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceExplorerView.swift; sourceTree = "<group>"; };
 		F9183E8C677AB77024B04634 /* QueryDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryDiagnostics.swift; sourceTree = "<group>"; };
 		F95E1AB7B31AED8EC55C6A06 /* TerminalModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalModeTests.swift; sourceTree = "<group>"; };
+		F975AE07F76108B3D884A199 /* QueryEditorBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryEditorBuffer.swift; sourceTree = "<group>"; };
 		FA4F503600026163E7F4B328 /* DataTaskVersionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataTaskVersionSheet.swift; sourceTree = "<group>"; };
 		FAF1D00352F54AB959E0C2D0 /* EditorResponsivenessConventionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorResponsivenessConventionTests.swift; sourceTree = "<group>"; };
 		FB06FA08DA478F5385B46065 /* DataTaskSpecSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataTaskSpecSheet.swift; sourceTree = "<group>"; };
@@ -1635,6 +1637,7 @@
 				92A0A0D3BD53F37E0F1B88DA /* LocalPort.swift */,
 				B4FF13BFC70E02614E9A4A74 /* MainMenuLocalizer.swift */,
 				F9183E8C677AB77024B04634 /* QueryDiagnostics.swift */,
+				F975AE07F76108B3D884A199 /* QueryEditorBuffer.swift */,
 				A1139072C542541E446F88CB /* ShortcutCatalog.swift */,
 				846E4416A87B1769B4C29856 /* TerminalPane.swift */,
 				58D37DCF3AEA1AD0D0A60C48 /* TerminalSession.swift */,
@@ -1949,6 +1952,7 @@
 				76B21AF1FA00C06D9A10AE33 /* PrivilegePanel.swift in Sources */,
 				FC3F12236C57927E7AC91063 /* QueryContextBar.swift in Sources */,
 				E6C72293B60569CACAB9469F /* QueryDiagnostics.swift in Sources */,
+				5A1ABDBFB18485A3B69969E9 /* QueryEditorBuffer.swift in Sources */,
 				00280248C40E9ED4C42A0E57 /* QueryParameterSheet.swift in Sources */,
 				0954E1FCCF2684F0D44DEAB5 /* QueryToolbar.swift in Sources */,
 				540C2DCDDFB984E5E1D7D54A /* QueryWorkspaceView.swift in Sources */,
