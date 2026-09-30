@@ -72,6 +72,14 @@ struct DiagnosisPanel: View {
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.secondary))
             Spacer()
+            // 「没重复存」时给一条**跳过去**的路（队列 L-134 口径①）：只说一句「之前存过」，
+            // 等于让用户自己去列表里翻。
+            if appState.reusedCapturedNote != nil {
+                Button(L(.diagnosisOpenCaptured)) {
+                    appState.revealReusedCapturedNote()
+                    dismiss()
+                }
+            }
             if let message = appState.diagnosisMessage {
                 Text(message)
                     .font(Theme.font(.caption))
@@ -212,8 +220,16 @@ struct DiagnosisPanel: View {
                 Button(L(.diagnosisParse)) { appState.parseDiagnosisReply() }
                     .disabled(appState.diagnosisReply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 // 存进笔记（DOYAH-10）：只存**采纳的结论 + 可复跑取证**，不含结果行数据。
+                // 同一份产物默认**不重复存**（队列 L-134 / Q14=A）—— 判定与写库都在
+                // `AICaptureIntake` 一处，这里只负责把结果说给人听。
                 Button(L(.diagnosisSaveNote)) {
                     Task { await appState.saveDiagnosisNote() }
+                }
+                .disabled((appState.diagnosisReport?.items.isEmpty ?? true))
+                // 逃生门（**显式**才存副本）：同一份产物确实要留第二份时走这颗，
+                // 而不是把默认行为改回“每次都存”——那样又变回两条。
+                Button(L(.diagnosisSaveNoteCopy)) {
+                    Task { await appState.saveDiagnosisNote(forceNew: true) }
                 }
                 .disabled((appState.diagnosisReport?.items.isEmpty ?? true))
                 Spacer()

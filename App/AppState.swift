@@ -399,6 +399,9 @@ final class AppState: ObservableObject {
     @Published var diagnosisReport: DiagnosisAdviceReport?
     @Published var diagnosisIsGathering = false
     @Published var diagnosisMessage: String?
+    /// 上一次「存进笔记」**没有重复存**、而是指回的那条已有笔记（队列 `L-134`）。
+    /// 界面据此给一个「打开那条」的入口 —— 只有真的发生了「同指纹已存在」才有值。
+    @Published var reusedCapturedNote: Note?
 
     /// 「Schema 对比与同步」面板（FR-DDL-04）。
     @Published var isSchemaDiffPresented = false
@@ -6595,7 +6598,11 @@ final class AppState: ObservableObject {
     ///
     /// 只收**采纳的条目**（被拒绝的结论是过程、不是结论），并走 `AICapture` 统一元信息 ——
     /// 界面不自己拼正文，否则来源类型、指纹、安全边界会各拼一份、迟早不一致。
-    func saveDiagnosisNote() async {
+    ///
+    /// **同一份产物默认不重复存**（队列 `L-134`，依据 `Q14=A`）：判定与写库都在
+    /// `AICaptureIntake.receive` 一处 —— 这里从前自己算过一遍同指纹、算完却照样存第二份，
+    /// 于是「只存一条」谁也不负责。要副本必须走 `forceNew`（界面上单独一颗按钮）。
+    func saveDiagnosisNote(forceNew: Bool = false) async {
         guard notesEnabled else {
             diagnosisMessage = L(.licenseNotesNotIncluded)
             return
@@ -6605,8 +6612,6 @@ final class AppState: ObservableObject {
             return
         }
         do {
-            let store = NoteLibrary.defaultLibrary()
-            let existing = try await store.load()
             let draft = AICapture.diagnosisNote(
                 question: diagnosisQuestion,
                 target: selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? "",
@@ -6614,16 +6619,37 @@ final class AppState: ObservableObject {
                 report: report,
                 language: LocalizationManager.shared.effectiveLanguage
             )
-            let duplicate = draft.source.fingerprint.map { fingerprint in
-                existing.contains { $0.source.fingerprint == fingerprint }
-            } ?? false
-            let saved = try await store.upsert(draft)
-            diagnosisMessage = duplicate
-                ? L(.diagnosisNoteDuplicate, saved.title)
-                : L(.diagnosisNoteSaved, saved.title)
+            let result = try await AICaptureIntake.receive(
+                draft,
+                into: NoteLibrary.defaultLibrary(),
+                forceNew: forceNew
+            )
+            switch result.outcome {
+            case .saved:
+                reusedCapturedNote = nil
+                diagnosisMessage = L(.diagnosisNoteSaved, result.note.title)
+            case .savedCopy:
+                reusedCapturedNote = nil
+                diagnosisMessage = L(.diagnosisNoteSavedCopy, result.note.title)
+            case .reusedExisting:
+                // 没重复存 ⇒ 把**已有那条**记下来，界面上给一个「打开那条」的入口。
+                reusedCapturedNote = result.note
+                diagnosisMessage = L(.diagnosisNoteReused, result.note.title)
+            }
+            await reloadNotes()
         } catch {
             diagnosisMessage = ErrorPresenter.message(for: error)
         }
+    }
+
+    /// 打开「上一次没有重复存的那条」笔记（诊断面板上那个入口）。
+    ///
+    /// 存完把用户丢在原地、只说一句「之前存过」，等于让他自己去列表里翻 —— 入口就在这里。
+    func revealReusedCapturedNote() {
+        guard let note = reusedCapturedNote else { return }
+        reusedCapturedNote = nil
+        selectActivityItem(.notes)
+        edit(note)
     }
 
     /// 把建议的 SQL 放进编辑器（**不执行**：执行仍然走用户自己那一步与那道审批闸门）。

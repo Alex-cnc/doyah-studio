@@ -338,8 +338,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case mysqlConnectTimedOut
     case aiNoteGoal
     case diagnosisSaveNote
+    case diagnosisSaveNoteCopy
     case diagnosisNoteSaved
-    case diagnosisNoteDuplicate
+    case diagnosisNoteSavedCopy
+    case diagnosisNoteReused
+    case diagnosisOpenCaptured
     case aiNoteQuestion
     case aiNoteEvidence
     case aiNoteEvidenceSection
@@ -2107,8 +2110,11 @@ public enum LocalizedStrings {
         .mysqlConnectTimedOut: [.simplifiedChinese: "连接（含 TLS 与认证）超过 %@ 秒没有完成，已放弃", .english: "The connection (TLS and authentication included) did not finish within %@ seconds; giving up"],
         .aiNoteGoal: [.simplifiedChinese: "目标：%@", .english: "Target: %@"],
         .diagnosisSaveNote: [.simplifiedChinese: "存进笔记", .english: "Save to notes"],
+        .diagnosisSaveNoteCopy: [.simplifiedChinese: "再存一份", .english: "Save a copy"],
         .diagnosisNoteSaved: [.simplifiedChinese: "已存进笔记：%@", .english: "Saved to notes: %@"],
-        .diagnosisNoteDuplicate: [.simplifiedChinese: "已存进笔记：%@（同一份产物之前存过）", .english: "Saved to notes: %@ (the same output was captured before)"],
+        .diagnosisNoteSavedCopy: [.simplifiedChinese: "已存进笔记（副本）：%@", .english: "Saved a copy to notes: %@"],
+        .diagnosisNoteReused: [.simplifiedChinese: "同一份产物已经存过：%@（没有重复保存）", .english: "The same output is already in notes: %@ (nothing was saved again)"],
+        .diagnosisOpenCaptured: [.simplifiedChinese: "打开那条笔记", .english: "Open that note"],
         .aiNoteQuestion: [.simplifiedChinese: "问题：%@", .english: "Question: %@"],
         .aiNoteEvidence: [.simplifiedChinese: "依据：%@", .english: "Evidence: %@"],
         .aiNoteEvidenceSection: [.simplifiedChinese: "### 取证（可复跑）", .english: "### Evidence (re-runnable)"],

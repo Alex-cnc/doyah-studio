@@ -1676,7 +1676,7 @@ struct DoyahCLI {
 
         guard let sql = value(for: "--sql") else {
             FileHandle.standardError.write(Data(("用法：diagnose --sql <语句> [--question <问题>] "
-                + "[--advice-file <模型回复文件>] [--read-only] [--json]\n").utf8))
+                + "[--advice-file <模型回复文件>] [--read-only] [--save-note [--force-new]] [--json]\n").utf8))
             return 2
         }
 
@@ -1766,10 +1766,12 @@ struct DoyahCLI {
             // `--save-note`：把**采纳的结论 + 可复跑取证**存进笔记（AI 产物→笔记的桥，DOYAH-10）。
             // 位置很关键：必须挂在**解析之后** —— 挂在解析之前拿到的永远是 nil，
             // 会退化成"开关存在但不生效"（上一版就是这么错的，已回退重做）。
+            //
+            // **同一份产物默认不重复存**（队列 `L-134` / `Q14=A`）：判重与写库都在
+            // `AICaptureIntake` 一处 —— 这里从前自己算了一遍同指纹、算完却照样存第二份。
+            // 要副本走 `--force-new`（**显式**的逃生门）。
             if arguments.contains("--save-note"), let report = adviceReport {
                 do {
-                    let store = noteLibrary()
-                    let existing = try await store.load()
                     let draft = AICapture.diagnosisNote(
                         question: question,
                         target: username + "@" + host + ":" + String(port) + "/" + database,
@@ -1777,14 +1779,24 @@ struct DoyahCLI {
                         report: report,
                         language: language
                     )
-                    let duplicate = draft.source.fingerprint.map { fingerprint in
-                        existing.contains { $0.source.fingerprint == fingerprint }
-                    } ?? false
-                    let saved = try await store.upsert(draft)
+                    let result = try await AICaptureIntake.receive(
+                        draft,
+                        into: noteLibrary(),
+                        forceNew: arguments.contains("--force-new")
+                    )
                     if isJSON {
-                        print("{\"ok\":true,\"noteId\":\"" + saved.id.uuidString + "\",\"duplicate\":" + (duplicate ? "true" : "false") + "}")
+                        print("{\"ok\":true,\"noteId\":\"" + result.note.id.uuidString
+                            + "\",\"outcome\":\"" + result.outcome.rawValue
+                            + "\",\"duplicate\":" + (result.outcome == .reusedExisting ? "true" : "false") + "}")
                     } else {
-                        print("已存进笔记：" + saved.title + (duplicate ? "（同一份产物之前存过，指纹一致）" : ""))
+                        switch result.outcome {
+                        case .saved:
+                            print("已存进笔记：" + result.note.title)
+                        case .savedCopy:
+                            print("已存进笔记（副本）：" + result.note.title)
+                        case .reusedExisting:
+                            print("同一份产物已经存过：" + result.note.title + "（没有重复保存；要副本加 --force-new）")
+                        }
                     }
                     await service.disconnect()
                     return 0

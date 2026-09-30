@@ -40,6 +40,9 @@ NOTE_SOURCES = [
     "Core/License.swift",
     # 拆分后 `AICapture` 只剩"笔记侧"的映射（诊断 / 维护那两个已移到 AICaptureUltra）
     "Core/AICapture.swift",
+    # 入库判定（队列 L-134）：同指纹默认不重复存 + 显式逃生门 —— 只吃 `NoteDraft` / `Note`
+    # 与存储入口，不引用数据库侧与 Ultra 侧任何类型（所以它属笔记侧）
+    "Core/AICaptureIntake.swift",
 ]
 
 # 刻意**不在**清单里的笔记相关文件：它们按设计就引用 Ultra 侧类型，属于宿主侧适配层。

@@ -13,6 +13,7 @@
 		0103FBC77D31C1F94CC8FF2B /* DatabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90DDD432E4C4DC252CB68B19 /* DatabaseService.swift */; };
 		022FE76F61C45BD1BD79D39F /* DatabaseStatsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CC7D76CFA338A70A6260E3 /* DatabaseStatsPanel.swift */; };
 		02BDAA17AE2E380C6355DF01 /* RelaunchPromptSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DED32A6DA6CBEB76DEF69D65 /* RelaunchPromptSheet.swift */; };
+		03945AFC30144B581BB9BF15 /* AICaptureIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15EA5A067372702ECA118F1E /* AICaptureIntakeTests.swift */; };
 		0394AD1D5C8AD1315DD6958A /* MySQLDialect.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C42FB59DE835B483DA20B8 /* MySQLDialect.swift */; };
 		046550E887B527CD672B4E8B /* LicenseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39A0245B127C403AD51CFC87 /* LicenseTests.swift */; };
 		0479EE4E3409D8E480534CEA /* DatabaseObjectRefTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F711C502A2915FB13FC754EB /* DatabaseObjectRefTests.swift */; };
@@ -301,6 +302,7 @@
 		A1DA96678BED43656B6E37B5 /* ConnectionInfoText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C9FC04EDD57037B234AB043 /* ConnectionInfoText.swift */; };
 		A2AE70CAB293C4F4434CDAE4 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = C8E04EF4EEEC4C09F5408DF4 /* AppIcon.icns */; };
 		A2EEBBFBEAD429B0DB515E8E /* ObjectTreeAutoExpansion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15C30F3276E3F1F5C65E0CC0 /* ObjectTreeAutoExpansion.swift */; };
+		A314AE48DF42A4024444E98E /* AICaptureIntake.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2312C2D74964667A61A4C34E /* AICaptureIntake.swift */; };
 		A37B1F70F722A71D0308DB72 /* WorkspaceTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6139E42B6D53799460D20A1 /* WorkspaceTab.swift */; };
 		A40B74593EAD1B72E9E9E232 /* TableDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E7741FC99170EFDCE590F2B /* TableDesign.swift */; };
 		A41F62BFAAC2EAAC4D4EDF69 /* SQLGeneratorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A484FFD5DC6FE385D3117DCD /* SQLGeneratorTests.swift */; };
@@ -621,6 +623,7 @@
 		1528B7C14707F749A202AA32 /* BrowseRowsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseRowsSheet.swift; sourceTree = "<group>"; };
 		152FFFFDD152CAEFDDDD3A7B /* ObjectTreeRowContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeRowContent.swift; sourceTree = "<group>"; };
 		15C30F3276E3F1F5C65E0CC0 /* ObjectTreeAutoExpansion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeAutoExpansion.swift; sourceTree = "<group>"; };
+		15EA5A067372702ECA118F1E /* AICaptureIntakeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICaptureIntakeTests.swift; sourceTree = "<group>"; };
 		170AE6948992877951D1C46D /* ColumnAlignmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColumnAlignmentTests.swift; sourceTree = "<group>"; };
 		178216401A8D27B6185551D7 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		188EFEA1CFEDF23DF05F8CA6 /* QueryCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryCompletion.swift; sourceTree = "<group>"; };
@@ -638,6 +641,7 @@
 		216ED7C1D13F02A9F594D31B /* ExecutionRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionRegistryTests.swift; sourceTree = "<group>"; };
 		21F638FFCA8E26D73CCB4C24 /* ExecutionScope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionScope.swift; sourceTree = "<group>"; };
 		22647DC76824AA9A607B5A44 /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Note.swift; sourceTree = "<group>"; };
+		2312C2D74964667A61A4C34E /* AICaptureIntake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICaptureIntake.swift; sourceTree = "<group>"; };
 		242D1F80CF80EC31AE7E1F47 /* ResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultView.swift; sourceTree = "<group>"; };
 		24CA0C21A3F3B0E9E83F9AFF /* ResultViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultViewTests.swift; sourceTree = "<group>"; };
 		2529970A93CEFDF0619AEF4E /* ForeignKeyNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForeignKeyNavigation.swift; sourceTree = "<group>"; };
@@ -1145,6 +1149,7 @@
 				7D4940466E9017F520B00E2D /* AgentGuardrailTests.swift */,
 				E147F7A13B696E69F9A4B6B2 /* AgentQuotaSessionTests.swift */,
 				329DD7E4A19F476B0DB7027B /* AgentSQLGeneratorTests.swift */,
+				15EA5A067372702ECA118F1E /* AICaptureIntakeTests.swift */,
 				B66F088AEF267517C40F8C4A /* AICaptureTests.swift */,
 				92D5E6994B47BECB7AA53361 /* AppearanceAxesTests.swift */,
 				538FD957E0C99758FB8D9038 /* ArchiveLocationTests.swift */,
@@ -1323,6 +1328,7 @@
 				31D3B91CABD7149C6E834E82 /* AgentGuardrail.swift */,
 				4D7BEDB3799C434B744FC52C /* AgentSQLGenerator.swift */,
 				EE37FC23299B1643B48049DD /* AICapture.swift */,
+				2312C2D74964667A61A4C34E /* AICaptureIntake.swift */,
 				3A890A3C5350AA4BD3B08459 /* AICaptureUltra.swift */,
 				2613A8F6C9A696B79D65D646 /* AppearancePreference.swift */,
 				DCCB8D743E4AC63B8BC49B4D /* AppError.swift */,
@@ -1979,6 +1985,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				152D3BF03D62E44C305E843A /* AICapture.swift in Sources */,
+				A314AE48DF42A4024444E98E /* AICaptureIntake.swift in Sources */,
 				186D1C509C1FE1BE50EADED9 /* AICaptureUltra.swift in Sources */,
 				1728410C4C53B5C01D20F63C /* AccentTheme.swift in Sources */,
 				3692019A91785B5F3B26CA06 /* ActivityBar.swift in Sources */,
@@ -2163,6 +2170,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				03945AFC30144B581BB9BF15 /* AICaptureIntakeTests.swift in Sources */,
 				1F48ABA7CDC7411AF5DF0ABF /* AICaptureTests.swift in Sources */,
 				D16EF4DA6A35073955BE4179 /* AccentThemeTests.swift in Sources */,
 				4549A5B2B669560EF23F3077 /* AffectedRowsTallyTests.swift in Sources */,

@@ -38,6 +38,8 @@ NOTE_SOURCES = [
     "Core/License.swift",
     "Core/AICapture.swift",
     "Core/AICaptureUltra.swift",
+    # 入库判定（队列 L-134）：AI 产物入笔记的判重与逃生门
+    "Core/AICaptureIntake.swift",
 ]
 
 IPC_PATTERNS = [

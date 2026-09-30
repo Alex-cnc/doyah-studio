@@ -47,6 +47,11 @@
       "role": "宿主侧适配（按设计引用 Ultra 类型，非笔记侧可独立构建的那一份）"
     },
     {
+      "path": "Core/AICaptureIntake.swift",
+      "layer": "core",
+      "role": "AI 产物入笔记的**入库判定**（队列 L-134）：同指纹默认不重复存 + 显式逃生门 —— 纯本地判重，无任何网络出口"
+    },
+    {
       "path": "App/Views/NotesPanel.swift",
       "layer": "app",
       "role": "笔记面板（活动栏入口）"
