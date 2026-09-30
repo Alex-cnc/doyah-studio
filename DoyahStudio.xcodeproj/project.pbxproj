@@ -196,6 +196,7 @@
 		64F71A17B1CBEDBF75DF58F5 /* CellInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778BACF0A39C8D5F3C8F9AD8 /* CellInspector.swift */; };
 		65D0CD6E7B074B0FA56FE77C /* CopyTextFormatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083C56C66498EB802E65182F /* CopyTextFormatTests.swift */; };
 		676DBEAE84C1EBC4BAFEF20B /* DiagnosisPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA1616A8BDC09D3FC8101CC /* DiagnosisPanel.swift */; };
+		6783C394716A8FE99B5BAB76 /* LineNumberGutter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0AB9F44EAC9D78799F553D2 /* LineNumberGutter.swift */; };
 		678C78C6A95233AA93F3BC82 /* ConnectionURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EA01EAA0B2A03401CAB1C75 /* ConnectionURL.swift */; };
 		6870DAE900EBB430E023E579 /* TerminalSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D37DCF3AEA1AD0D0A60C48 /* TerminalSession.swift */; };
 		68D54D872AF81D69EADEA1EE /* ResultClientViewBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6042C0A3229128BEF560BB11 /* ResultClientViewBar.swift */; };
@@ -838,6 +839,7 @@
 		9DFF39456653F4FD79AD9C28 /* SyntheticData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticData.swift; sourceTree = "<group>"; };
 		9FAC342296394F961CB246F9 /* SchemaDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaDiff.swift; sourceTree = "<group>"; };
 		A00BB029440E5B82A532004F /* CopyTextFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopyTextFormat.swift; sourceTree = "<group>"; };
+		A0AB9F44EAC9D78799F553D2 /* LineNumberGutter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineNumberGutter.swift; sourceTree = "<group>"; };
 		A1139072C542541E446F88CB /* ShortcutCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutCatalog.swift; sourceTree = "<group>"; };
 		A2942B5B7D2653D956CEB7C3 /* ERDiagramTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ERDiagramTests.swift; sourceTree = "<group>"; };
 		A2D4FDE29508DF1C08F16FC7 /* MenuLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuLocalizationTests.swift; sourceTree = "<group>"; };
@@ -1533,6 +1535,7 @@
 				7B16F41ABC0CF30FFE985C46 /* HoverHint.swift */,
 				9852E57EB89DF0D8AF3FFF5E /* ImportPanel.swift */,
 				69D269D7C5E435D2616A0CD9 /* InlineEditSheets.swift */,
+				A0AB9F44EAC9D78799F553D2 /* LineNumberGutter.swift */,
 				D948A0E7E558EF5B587BE600 /* LockPanel.swift */,
 				084EF6DA43B26F3CEA2A0824 /* LowerPaneTabStrip.swift */,
 				00EF3E7E0570569505B391D4 /* LowerPaneView.swift */,
@@ -1906,6 +1909,7 @@
 				709039ADC0BF7A709387F96B /* HoverHint.swift in Sources */,
 				4ACD36A3391EA5118BD37009 /* ImportPanel.swift in Sources */,
 				5B166490B4590612A6D9A3D7 /* InlineEditSheets.swift in Sources */,
+				6783C394716A8FE99B5BAB76 /* LineNumberGutter.swift in Sources */,
 				CE7CF160937F67D66FB8C221 /* LocalPort.swift in Sources */,
 				2A23A5F8D260E98A44B4EAFF /* LocalizationManager.swift in Sources */,
 				AF7D06EB2C6671CA2680FA65 /* LockPanel.swift in Sources */,

@@ -460,6 +460,18 @@ python3 Scripts/test-empty-action-buttons.py
 # 三条路线全红」这一组，与一条「显式对齐被删但登记还在」；夹具只拷 `App/`，末例核对真仓库逐字节未变）。
 python3 Scripts/check-panel-root-frames.py
 python3 Scripts/check-panel-root-frames.py --self-test
+# L-111（2026-09-30 第 121 轮）：**编辑面的行号列**判据。行号一半是口径（在 `Core/CodeLines`，
+# 15 项单测早就钉住了），另一半是画法 —— 画法这一半此前**没有判据**：工作区编辑器自己长了一套
+# 列宽算法 + 行起点计算，数据库侧 SQL 编辑器一行都没有，于是在队列上挂了 4 天的「要不要一起加」。
+# 判据：A 双向对账（`App/**/*.swift` 里每个 `NSTextView` / `NSTextField` 子类都要在台账
+# `Scripts/editor-line-number-surfaces.json` 登记「画 / 不画 + 为什么」）/ B 挂法齐备（登记为「画」的
+# 编辑面必须真的 `gutter.reload(` + `gutter.draw(in:`）/ C 唯一出处（`CodeLines.lineStarts(` 在 `App/`
+# 里恰好一处、列宽算法全工程恰好一处、别处的 `gutterWidth(digits:` 只许转发）/ D 三书里的口径语句
+# 锚点仍在（`Docs/` 不在盘上时跳过并高声提示，跳过 ≠ 通过）/ E 空跑防护。
+# `Scripts/check-editor-line-numbers.py` 的负例 `--self-test` **10 例**（夹具 = 真源文件与真文档的拷贝，
+# 末例核对真仓库逐字节未变）。
+python3 Scripts/check-editor-line-numbers.py
+python3 Scripts/check-editor-line-numbers.py --self-test
 # L-84 ㈠㈡（2026-09-29 第 81 / 82 轮）：终端**多会话（页签）**判据。需求提出者把它提为刚需
 # 时给的原话是「一个 terminal 在执行 dsh-tui，遇到要执行命令只能去开系统终端，违背了我这个软件的初衷」。
 # 判据判的是「新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射」这**六组判断真的在 `Core/TerminalTabs.swift` 里**、

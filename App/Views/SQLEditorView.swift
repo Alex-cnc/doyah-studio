@@ -71,8 +71,11 @@ struct SQLEditorView: NSViewRepresentable {
         textView.isSelectable = true
         textView.allowsUndo = true
         textView.font = Self.baseFont
-        textView.textColor = .labelColor
-        textView.backgroundColor = .textBackgroundColor
+        // 正文颜色与底色走**主题令牌**（与工作区编辑器同一套；2026-09-30 那次「数据库客户端与工作区
+        // 配色差很大」的整改方向）：行号列画的是 `Surface.panel`，正文底色若还是系统
+        // `textBackgroundColor`，两者会在列的接缝处对不上。
+        textView.textColor = Theme.nsColor(TextTone.primary)
+        textView.backgroundColor = Theme.nsColor(Surface.content)
         textView.drawsBackground = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
@@ -82,7 +85,9 @@ struct SQLEditorView: NSViewRepresentable {
         textView.isGrammarCheckingEnabled = false
         textView.smartInsertDeleteEnabled = false
         textView.usesFindBar = true
-        textView.textContainerInset = NSSize(width: 6, height: 8)
+        // 左留白 = **行号列宽**（在文本进去之后由 `reloadLineNumbers()` 定，见 `LineNumberGutter`）：
+        // 列就画在这条空档里，所以这里只把上下留白定下来。
+        textView.textContainerInset = NSSize(width: 0, height: LineNumberGutter.verticalInset)
         textView.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
         textView.minSize = NSSize(width: 0, height: 0)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
@@ -93,6 +98,9 @@ struct SQLEditorView: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.lineFragmentPadding = 4
         textView.string = text
+        // 行号列：**必须在文本进去之后算**（列宽由行数位数定，顺序反了会先按空文档算成 1 位）。
+        // 与工作区编辑器同一件（`LineNumberGutter`）、同一份 Core 口径（`CodeLines`）。
+        textView.reloadLineNumbers()
         // delegate **在这里才挂**：新视图挂上 delegate 后会立刻上报一次 `(0,0)` 选区，
         // 若在设置文本之前就挂上，会把上面刚读出来的「最近一次选区」冲掉（详见 `makeNSView` 顶部说明）。
         textView.delegate = context.coordinator
@@ -147,6 +155,9 @@ struct SQLEditorView: NSViewRepresentable {
             hasMarkedText: textView.hasMarkedText()
         ) {
             context.coordinator.applyExternalText(text, to: textView)
+            // 换掉整篇文本 ⇒ 行号列跟着重排（走的是 `isUpdatingFromSwiftUI` 那条路，
+            // `textDidChange` 在那里会早退，所以这里必须显式调一次）。
+            textView.reloadLineNumbers()
         }
 
         // 字体偏好变了 → 换字体（含输入法用的 typingAttributes），再重着色一次。
@@ -187,7 +198,7 @@ struct SQLEditorView: NSViewRepresentable {
         ///
         /// 与高亮一样**延后到下一个 runloop**：在 SwiftUI 更新 / 输入法回调栈里重设
         /// 文本属性会破坏输入上下文（BUG-005 的同一类问题）。
-        func applyFontChange(to textView: NSTextView) {
+        func applyFontChange(to textView: SQLTextView) {
             let base = SQLEditorView.baseFont
             DispatchQueue.main.async { [weak self, weak textView] in
                 guard let self, let textView else { return }
@@ -197,6 +208,9 @@ struct SQLEditorView: NSViewRepresentable {
                     .foregroundColor: Theme.nsColor(TextTone.primary)
                 ]
                 self.scheduleHighlighting()
+                // 列宽是按数字在**当前等宽字体**下的宽度量出来的 ⇒ 换字体必须重排行号列
+                // （与工作区编辑器 `updateNSView` 里同一条）。
+                textView.reloadLineNumbers()
             }
         }
 
@@ -221,6 +235,9 @@ struct SQLEditorView: NSViewRepresentable {
 
             textSync.notePublished(textView.string)
             parent.text = textView.string
+            // 打字 / 粘贴 / 撤销都会走到这里 ⇒ 判「行数（位数）变了没、行起点要不要重算」的
+            // **唯一钩子**（与工作区编辑器的 `textDidChange` 同一条）。
+            textView.reloadLineNumbers()
 
             // 组字（marked text）期间不要重设属性，否则会打断输入法。
             guard !textView.hasMarkedText() else { return }
@@ -457,6 +474,36 @@ struct SQLEditorView: NSViewRepresentable {
 
 /// 只做属性渲染的 NSTextView。
 final class SQLTextView: NSTextView {
+
+    // MARK: 行号列（队列 `L-111`；绘制件 = `LineNumberGutter`，与工作区编辑器同一个）
+    //
+    // 形态与工作区编辑器**逐条一致**（在 `textContainerInset.width` 那条空档里画、不引 `NSRulerView`）：
+    // 行号跟着内容纵向滚动、不参与横向滚动，而正文本身不横滚 ⇒ 那条空档天然满足这两条。
+    // 「哪一行算第几行」在 `Core/CodeLines`（15 项单测）、列宽与画法在 `LineNumberGutter`（唯一一份）
+    // ⇒ 这里只负责把它挂上：`reloadLineNumbers()` + `draw(_:)`。
+    /// 行号列的绘制件。
+    let gutter = LineNumberGutter()
+
+    /// 行号列宽度；`0` 表示还没算过（此时不画）。
+    var gutterWidth: CGFloat { gutter.width }
+
+    /// 重算行起点与列宽（文本进去 / 换掉、字体变了、内容改了之后各调一次）。
+    func reloadLineNumbers() {
+        gutter.reload(self)
+    }
+
+    /// 先让 `NSTextView` 画底色与正文，再把行号画上去。
+    ///
+    /// **`saveGraphicsState` / `restoreGraphicsState` 这一对不是装饰**：`NSTextView.draw(_:)`
+    /// 会把裁剪区收窄到文本容器（`textContainerInset` 留出的那条空档整条被裁）且不还回来 ⇒
+    /// 行号画不出来（第 45 轮实测：整条列只剩右侧一个像素；AGENT-SPEC §9 第 21 条）。
+    override func draw(_ dirtyRect: NSRect) {
+        NSGraphicsContext.saveGraphicsState()
+        super.draw(dirtyRect)
+        NSGraphicsContext.restoreGraphicsState()
+        gutter.draw(in: dirtyRect, of: self)
+    }
+
     private(set) var isApplyingAttributes = false
     /// ⌥ 拖拽列选择时的起始文本偏移（nil = 当前不是列选择）。
     private var columnSelectionAnchor: Int?

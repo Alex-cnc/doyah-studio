@@ -219,6 +219,18 @@ set -euo pipefail
 # 无障碍树在离屏时不构建 ⇒ 读不到 `isEnabled`，只能判像素；按钮落点/门槛按本机实测定。
 # 它不连库、也只渲染面板 ⇒ 跟着本脚本跑两遍（两遍都应当绿）。
 #
+# ## 第十五批（队列 L-111，第 121 轮）：数据库侧 SQL 编辑器的行号列
+#
+# `TestsUISnapshot/SQLLineNumberProbeTests.swift` 判的是「**SQL 编辑器的行号列**」这件事
+# 里**只有把真视图跑起来才知道**的那几半（口径在 `Core/CodeLines`，另有 15 项单测）：
+# ① 列真的**落到排版上** —— 正文起点（`textContainerInset.width`）等于列宽，不是只算了个数；
+# ② 列真的**画到像素上** —— 列区里有墨（「算了但不画」正是要挡的假绿），
+#    且行数 9 → 151 时同一块列区画出来的东西**变了**（1 位 vs 3 位数字）；
+# ③ **两个编辑器同一个件** —— 同样行数下工作区编辑器与 SQL 编辑器的列宽、正文起点逐个相等
+#    （「不许新造第二套行号逻辑」的回归钉；各画一套这里就对不上）。
+# 图片**语言无关**（画面里只有 SQL 文本与数字行号）⇒ 不按语言各出一张。
+# 它不连库、也不改任何偏好 ⇒ 跟着本脚本跑两遍（两遍都应当绿）。
+#
 # ## 纪律
 #
 # · 与快照同源：要真渲染视图树、要几分钟 ⇒ **不进** `verify-all.sh`（每轮门禁不跑取证）；
@@ -258,8 +270,10 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   见下面「第十四批」）。
 #   这里同时挂上是为了那条「每个 `*ProbeTests.swift` 都得有入口」的判据
 #   `check-result-scroll-ledger.py` ⑤ —— 一处入口漏了就等于一个都跑不到（第 96 轮实测）。
+# + `SQLLineNumberProbeTests`（L-111：数据库侧 SQL 编辑器的行号列 —— 正文起点 = 列宽 /
+#   列区里有墨 / 行数 9 → 151 时列宽与像素都变 / 两个编辑器的列宽逐个相等，见「第十五批」）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

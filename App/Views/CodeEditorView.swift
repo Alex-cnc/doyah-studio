@@ -218,43 +218,30 @@ final class CodeTextView: NSTextView {
     // 形态 = **在 `textContainerInset.width` 留出的那条空档里画**，不引 `NSRulerView`：
     // 行号要跟着内容一起纵向滚动、又不能参与横向滚动 —— 而正文本身就不横滚
     // （`widthTracksTextView = true`、无横滚条），所以"正文左边那条空档"天然满足这两条。
-    // 算「第几行」的活不在这一层（`Core/CodeLines`，有单测），这里只负责**画**。
+    // 算「第几行」的活不在这一层（`Core/CodeLines`，有单测）；**画**也不在这一层了 ——
+    // 自第 121 轮（队列 `L-111`）起工作区编辑器与**数据库 SQL 编辑器**共用同一个绘制件
+    // （`App/Views/LineNumberGutter.swift`），这里只负责把列挂上。
 
-    /// 已经算好的行起点（UTF-16 偏移）。打字 / 换页签 / 换字体时由 `reloadLineNumbers()` 重算。
-    private var lineStarts: [Int] = [0]
+    /// 行号列的**绘制件**（全工程唯一一份，见 `App/Views/LineNumberGutter.swift`）——
+    /// 本视图不再自己算行号、也不自己量列宽，只负责把它挂上（`reload` / `draw`）。
+    let gutter = LineNumberGutter()
 
     /// 行号列宽度；`0` 表示还没算过（此时不画）。
-    private(set) var gutterWidth: CGFloat = 0
+    var gutterWidth: CGFloat { gutter.width }
 
     /// 数字用**当前等宽字体**的小号（FR-EDIT-26 里用户可换字体族 / 字号 ⇒ 跟着变）。
-    static var lineNumberFont: NSFont {
-        FontManager.shared.monospaceNSFont(size: TypeScale.monoSmallSize)
-    }
+    static var lineNumberFont: NSFont { LineNumberGutter.font }
 
-    static let gutterPaddingLeft = Spacing.xs
-    static let gutterPaddingRight = Spacing.s
-    static let verticalInset = Spacing.s
+    static let gutterPaddingLeft = LineNumberGutter.paddingLeft
+    static let gutterPaddingRight = LineNumberGutter.paddingRight
+    static let verticalInset = LineNumberGutter.verticalInset
 
-    /// 行号列宽 = 左留白 + 位数 × 数字宽 + 右留白。
-    ///
-    /// 数字宽按**当前字体实量**而不是写死：列宽写死的话，用户把字号调大（或换个更宽的等宽字体）
-    /// 之后数字会被裁掉，而 99 → 100 行这种"多一位"同样会挤（`CodeLines.digits`）。
-    static func gutterWidth(digits: Int) -> CGFloat {
-        let digitWidth = ("0" as NSString).size(withAttributes: [.font: lineNumberFont]).width
-        return gutterPaddingLeft + CGFloat(max(1, digits)) * digitWidth + gutterPaddingRight
-    }
+    /// 行号列宽（转发绘制件的那一份算——**全工程只有一处算列宽**）。
+    static func gutterWidth(digits: Int) -> CGFloat { LineNumberGutter.width(digits: digits) }
 
     /// 重算行起点与列宽。**加行、改字体会改变位数与数字宽**，所以这两条路都要调它。
     func reloadLineNumbers() {
-        lineStarts = CodeLines.lineStarts(in: string)
-        let width = Self.gutterWidth(digits: CodeLines.digits(of: lineStarts.count))
-        if abs(width - gutterWidth) > 0.5 {
-            gutterWidth = width
-            // `textContainerInset.width` 左右同时生效 ⇒ 右边也留同一宽度。接受它：
-            // 无横滚 + 自动换行，代价只是换行位置提前一点，换来的形态最简单（没有第二套滚动同步）。
-            textContainerInset = NSSize(width: width, height: Self.verticalInset)
-        }
-        needsDisplay = true
+        gutter.reload(self)
     }
 
     /// 先让 `NSTextView` 画底色与正文，再把行号画上去 —— 顺序反了会被底色盖掉
@@ -269,74 +256,8 @@ final class CodeTextView: NSTextView {
         NSGraphicsContext.saveGraphicsState()
         super.draw(dirtyRect)
         NSGraphicsContext.restoreGraphicsState()
-        drawLineNumbers(in: dirtyRect)
-    }
-
-    private func drawLineNumbers(in dirtyRect: NSRect) {
-        guard gutterWidth > 0, let layoutManager, let container = textContainer else { return }
-
-        let gutter = NSRect(x: 0, y: dirtyRect.minY, width: gutterWidth, height: dirtyRect.height)
-        Theme.nsColor(Surface.panel).setFill()
-        gutter.fill()
-        Theme.hairlineNSColor.setFill()
-        NSRect(
-            x: gutterWidth - Metrics.hairline,
-            y: dirtyRect.minY,
-            width: Metrics.hairline,
-            height: dirtyRect.height
-        ).fill()
-
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: Self.lineNumberFont,
-            .foregroundColor: Theme.nsColor(TextTone.tertiary),
-        ]
-        let origin = textContainerOrigin
-        let length = (string as NSString).length
-
-        // 只画看得见的那几行：先问"可见区顶部落在哪个字符上"，再从那一行往后画到出界为止。
-        // 从第 1 行硬扫虽然在短文件上没差别，但在几千行的文件里会让**每一帧**都变成几千次排版查询。
-        let probeY = max(0, dirtyRect.minY - origin.y)
-        let probeCharacter = layoutManager.characterIndex(
-            for: NSPoint(x: 0, y: probeY),
-            in: container,
-            fractionOfDistanceBetweenInsertionPoints: nil
-        )
-        var index = max(0, CodeLines.lineNumber(at: probeCharacter, lineStarts: lineStarts) - 1)
-
-        while index < lineStarts.count {
-            let top = origin.y
-                + fragmentTop(forLineStartingAt: lineStarts[index], layoutManager: layoutManager, container: container, length: length)
-            if top > dirtyRect.maxY { break }
-
-            let label = "\(index + 1)" as NSString
-            let size = label.size(withAttributes: attributes)
-            let x = gutterWidth - Self.gutterPaddingRight - size.width
-            // 与正文**基线对齐**：数字比正文小一号，按顶边对齐会看起来高一档。
-            let y = top + (CodeEditorView.baseFont.ascender - Self.lineNumberFont.ascender)
-            label.draw(at: NSPoint(x: x, y: y), withAttributes: attributes)
-            index += 1
-        }
-    }
-
-    /// 某一行的**顶边**（文本容器坐标）。
-    ///
-    /// 两类位置要分开取：正常行按第一个字形的 line fragment（软换行的续行用同一个起点 ⇒ 一个逻辑行
-    /// 只有一个号，这是对的）；而末尾那个空行**没有字形**，取 `NSTextView` 为它准备的 extra line fragment
-    /// （口径 ② 在画这一侧的落点 —— 少了它，末尾空行就没有号）。
-    private func fragmentTop(
-        forLineStartingAt lineStart: Int,
-        layoutManager: NSLayoutManager,
-        container: NSTextContainer,
-        length: Int
-    ) -> CGFloat {
-        guard lineStart < length else {
-            if layoutManager.extraLineFragmentTextContainer != nil {
-                return layoutManager.extraLineFragmentRect.minY
-            }
-            return layoutManager.usedRect(for: container).maxY
-        }
-        let glyph = layoutManager.glyphIndexForCharacter(at: lineStart)
-        return layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil).minY
+        // 行号：交给唯一绘制件画（`LineNumberGutter.draw`）
+        gutter.draw(in: dirtyRect, of: self)
     }
 
     /// 补全**自己插**，不交给 `NSTextView` 默认实现。
