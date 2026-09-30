@@ -13,171 +13,13 @@ struct WorkspaceAreaView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            tabStrip
+            WorkspaceTabStrip()
             Divider()
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             messageBar
         }
         .background(Theme.surface(.content))
-    }
-
-    // MARK: 页签条
-
-    private var tabStrip: some View {
-        HStack(spacing: Spacing.xs) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Spacing.xs) {
-                    // 内置浏览器页签（队列 `L-149`）：与 Home / 文件是**同一类页签**。
-                    // 需求提出者 2026-09-30：「浏览器内置到工作区 Tab 页……本质上 html 也是一种文件」；
-                    // 原先它长在数据库侧 —— 那是 **SQL 这门语言的工作台**，不归它管。
-                    ForEach(appState.browserPages) { page in
-                        browserTabButton(page)
-                    }
-                    ForEach(tabs.tabs) { tab in
-                        tabButton(tab)
-                    }
-                }
-                .padding(.vertical, Spacing.hair)
-            }
-
-            Spacer(minLength: Spacing.s)
-
-            if let tab = tabs.selectedTab, !tab.isHome {
-                Text(L(.workspaceLanguageLabel, tab.language.displayName))
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(Theme.text(.tertiary))
-                    .lineLimit(1)
-
-                editMenu
-
-                Button {
-                    tabs.save(tab.id)
-                } label: {
-                    Image(systemName: "square.and.arrow.down")
-                        .font(Theme.font(.caption))
-                }
-                .buttonStyle(.borderless)
-                .disabled(!tab.isDirty)
-                .help(L(.workspaceSaveButton))
-            }
-
-            Button {
-                openFileFromPanel()
-            } label: {
-                Image(systemName: "folder.badge.plus")
-                    .font(Theme.font(.caption))
-            }
-            .buttonStyle(.borderless)
-            .help(L(.workspaceOpenFileButton))
-        }
-        .padding(.horizontal, Spacing.s)
-        .padding(.vertical, Spacing.xs)
-    }
-
-    // MARK: 编辑菜单（工作区自己的那一份）
-
-    /// 「编辑」菜单 —— **代码格式化**（FR-EDIT-39）的菜单入口。
-    ///
-    /// 为什么在工作区页签条上再画一份、而不是塞进主菜单栏的「编辑」：主菜单栏那份是
-    /// SQL 编辑器在用的（`QueryToolbar`），而这两个编辑器分属两个活动区、各有一套编辑动作
-    /// （SQL 那套有诊断与执行，这套只有格式化）。画在同一处会互相打架。
-    private var editMenu: some View {
-        Menu {
-            Button(L(.workspaceFormatMenuItem, AppShortcut.formatCode.display)) {
-                tabs.formatSelected()
-            }
-            .keyboardShortcut(AppShortcut.formatCode.key, modifiers: AppShortcut.formatCode.modifiers)
-        } label: {
-            Image(systemName: "text.alignleft")
-                .font(Theme.font(.caption))
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help(L(.workspaceFormatMenuItem, AppShortcut.formatCode.display))
-    }
-
-    private func tabButton(_ tab: WorkspaceTab) -> some View {
-        let isSelected = tab.id == tabs.selectedTab?.id
-        return HStack(spacing: Spacing.xs) {
-            Image(systemName: tab.isHome ? "house" : "doc.text")
-                .font(Theme.font(.caption))
-                .foregroundStyle(isSelected ? Theme.accentColor : Theme.text(.secondary))
-
-            Text(tab.title)
-                .font(Theme.font(.caption))
-                .lineLimit(1)
-                .fontWeight(isSelected ? .semibold : .regular)
-
-            if tab.isDirty {
-                Circle()
-                    .fill(Theme.status(.warning))
-                    .frame(width: 6, height: 6)
-                    .help(L(.workspaceDirtyTag))
-            }
-
-            // Home 关不掉（工作区的落脚点），所以它没有关闭按钮。
-            if !tab.isHome {
-                Button {
-                    tabs.close(tab.id)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(Theme.font(.caption))
-                }
-                .buttonStyle(.borderless)
-                .help(L(.workspaceCloseTab))
-            }
-        }
-        .padding(.horizontal, Spacing.s)
-        .padding(.vertical, Spacing.hair)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.badge)
-                .fill(isSelected ? Theme.accentColor.opacity(0.16) : Color.clear)
-        )
-        .contentShape(Rectangle())
-        // 选工作区页签 = 离开浏览器（否则浏览器那份选中态会一直压在上面，回不到 Home）。
-        .onTapGesture {
-            appState.selectedBrowserID = nil
-            tabs.select(tab.id)
-        }
-        .help(tab.path ?? tab.title)
-    }
-
-    /// 浏览器页签（队列 `L-149`）：与 Home / 文件同一类页签，只是图标与动作走浏览器那条。
-    private func browserTabButton(_ page: BrowserPage) -> some View {
-        let isSelected = appState.selectedBrowserID == page.id
-        return HStack(spacing: Spacing.xs) {
-            if page.isLoading {
-                ProgressView().controlSize(.mini)
-            } else {
-                Image(systemName: "globe")
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(isSelected ? Theme.accentColor : Theme.text(.secondary))
-            }
-
-            Text(page.title)
-                .font(Theme.font(.caption))
-                .lineLimit(1)
-                .fontWeight(isSelected ? .semibold : .regular)
-
-            Button {
-                appState.closeBrowserTab(page.id)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(Theme.font(.caption))
-            }
-            .buttonStyle(.borderless)
-            .help(L(.workspaceCloseTab))
-        }
-        .padding(.horizontal, Spacing.s)
-        .padding(.vertical, Spacing.hair)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.badge)
-                .fill(isSelected ? Theme.accentColor.opacity(0.16) : Color.clear)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture { appState.selectBrowserTab(page.id) }
-        .help(page.title)
     }
 
     // MARK: 内容
@@ -251,17 +93,6 @@ struct WorkspaceAreaView: View {
         .background(tone.opacity(0.10))
     }
 
-    // MARK: 动作
-
-    private func openFileFromPanel() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.message = L(.workspaceOpenFileButton)
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        tabs.openFile(at: url)
-    }
 }
 
 /// 工作区的 **Home 欢迎页**（FR-EDIT-35）：欢迎语 / 版本与版权 / 最近打开。

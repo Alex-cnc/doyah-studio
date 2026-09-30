@@ -276,8 +276,15 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   断言**每键 p50 < 5 ms**（实测 33.6 → 1.8 ms，改前 31.74 ms）。`verify-all.sh` 那十八项
 #   判的是静态与行为，**判不到运行时开销** —— 这是「每键写全局 @Published」那类错唯一的拦网，
 #   见「第十六批」与 §9 第 104 条：探针不挂进 FILTER = 这一族一个都跑不到）。
+# + `WorkspaceChromeHeightProbeTests`（`L-144`／内测清单**乙5**：工作区页签条那一行的高度不变量 ——
+#   4 种页签组合（含 **2 个空白浏览器页签**原场景）× 5 个宽度量出来的高度**全部相等**（实测 30.0pt），
+#   另加两条**对照负例**（会随宽度换行的长文案 / 高理想高度的空态样块）证明这套量法真的判得动）。
+#   本批的**主入口其实是 `./Scripts/verify-all.sh` 第 1 项**（它用离屏宿主 `sizeThatFits`、
+#   **不渲染位图、不需要窗口与人在场** ⇒ 每轮门禁都跑）；挂在这里是为了那条
+#   「每个 `*ProbeTests.swift` 都得有入口」的判据 `check-result-scroll-ledger.py` ⑤ ——
+#   一处入口漏了就等于一个都跑不到（第 96 轮实测，第 133 轮又被这条判据逮到一次）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

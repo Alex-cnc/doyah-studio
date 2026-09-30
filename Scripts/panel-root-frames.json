@@ -2,7 +2,7 @@
   "title": "面板根固定尺寸 `.frame(width:height:)` 的处置台账（队列 L-61）",
   "scope": "App/Views/**/*.swift",
   "panelRootMinWidth": 400,
-  "scannedFiles": 75,
+  "scannedFiles": 76,
   "totals": {
     "frames": 36,
     "panelRoots": 21,
@@ -333,8 +333,8 @@
       "note": "列规格 + 预览两处都是滚动容器（含 `ScrollView([.horizontal, .vertical])` 的宽表预览）⇒ 撑满"
     },
     {
-      "file": "App/Views/WorkspaceAreaView.swift",
-      "symbol": "WorkspaceAreaView",
+      "file": "App/Views/WorkspaceTabStrip.swift",
+      "symbol": "WorkspaceTabStrip",
       "frame": "width: 6, height: 6",
       "count": 1,
       "kind": "ornament",
@@ -361,5 +361,5 @@
     }
   ],
   "totalsNote": "`frames` / `panelRoots` / `ornaments` 都是**处数**（同一形状出现多次按处数记，例如对象树里三处 12×12 的形状算 3 处）；条目数另计（现 31 条）。",
-  "updated": "2026-09-30（第 121 轮：队列 `L-111` 抽出**唯一绘制件** `App/Views/LineNumberGutter.swift` （行号列的列宽算法 + 画哪几行都归它，工作区编辑器与数据库 SQL 编辑器只挂上它）⇒ 扫描范围 74 → 75；处数不变 36 = 面板根 21 · 装饰 15）"
+  "updated": "2026-10-01（第 133 轮：队列 `L-144` 把工作区页签条抽成独立视图 `App/Views/WorkspaceTabStrip.swift`（页签上那枚 6pt 装饰点随视图搬家，同一处、同一形状）⇒ 扫描范围 75 → 76；处数不变 36 = 面板根 21 · 装饰 15）"
 }
