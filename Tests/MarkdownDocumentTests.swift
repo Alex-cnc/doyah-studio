@@ -332,4 +332,116 @@ final class MarkdownDocumentTests: XCTestCase {
         let markdown = "# 标题\n\n- [x] 一\n- [ ] 二\n\n| a |\n| --- |\n| b |\n\n```\ncode\n```"
         XCTAssertEqual(MarkdownDocument.parse(markdown), MarkdownDocument.parse(markdown))
     }
+
+    // MARK: 跟随滚动：光标行 ↔ 预览锚点（`L-137` 判据 ③）
+
+    /// 逐行映射的底稿：标题 / 空行 / 段落 / 列表 / 文件末尾多出的那一行。
+    func testAnchorMapsEveryLineToItsBlock() {
+        let document = MarkdownDocument.parse("# 标题\n\n第一段\n\n- 一\n- 二\n")
+        XCTAssertEqual(document.lineCount, 7)
+        XCTAssertEqual(document.blocks.map(\.sourceLine), [1, 3, 5])
+        XCTAssertEqual(document.anchor(forSourceLine: 1), MarkdownPreviewAnchor(blockIndex: 0, sourceLine: 1))
+        // 空行归**前一个块**（空行在预览里不是独立的一块）
+        XCTAssertEqual(document.anchor(forSourceLine: 2)?.blockIndex, 0)
+        XCTAssertEqual(document.anchor(forSourceLine: 3), MarkdownPreviewAnchor(blockIndex: 1, sourceLine: 3))
+        XCTAssertEqual(document.anchor(forSourceLine: 4)?.blockIndex, 1)
+        XCTAssertEqual(document.anchor(forSourceLine: 5), MarkdownPreviewAnchor(blockIndex: 2, sourceLine: 5))
+        // 末尾那一行是「文件以换行结尾」多出来的空行 ⇒ 仍锚在最后一个块上
+        XCTAssertEqual(document.anchor(forSourceLine: 7), MarkdownPreviewAnchor(blockIndex: 2, sourceLine: 5))
+    }
+
+    /// 文首空行锚到第一个块（文档开头不能没有跟随滚动）；原文范围外的行**不猜**。
+    func testAnchorHandlesDocumentHeadAndOutOfRangeLines() {
+        let document = MarkdownDocument.parse("\n\n# 标题\n")
+        XCTAssertEqual(document.blocks.map(\.sourceLine), [3])
+        XCTAssertEqual(document.anchor(forSourceLine: 1), MarkdownPreviewAnchor(blockIndex: 0, sourceLine: 3))
+        XCTAssertEqual(document.anchor(forSourceLine: 2)?.blockIndex, 0)
+        XCTAssertNil(document.anchor(forSourceLine: 0))
+        XCTAssertNil(document.anchor(forSourceLine: -3))
+        XCTAssertNil(document.anchor(forSourceLine: 5))
+        XCTAssertNil(MarkdownDocument.parse("").anchor(forSourceLine: 1))
+    }
+
+    /// 落在子块里的行下钻到最精确那一层；与父块同起始行的子块**不参与**下钻。
+    func testAnchorDrillsIntoNestedBlocks() {
+        let document = MarkdownDocument.parse("- 父项\n  - 子项\n- 第二项\n")
+        XCTAssertEqual(document.blocks.map(\.sourceLine), [1])
+        // 行 1 = 列表自己（子列表从第 2 行起 ⇒ 不下钻）
+        XCTAssertEqual(document.anchor(forSourceLine: 1), MarkdownPreviewAnchor(blockIndex: 0, sourceLine: 1))
+        // 行 2 起 = 嵌套子列表（`nestedPath` 给的是**子块数组**里的下标）
+        XCTAssertEqual(document.anchor(forSourceLine: 2),
+                       MarkdownPreviewAnchor(blockIndex: 0, nestedPath: [0], sourceLine: 2))
+        XCTAssertTrue(document.anchor(forSourceLine: 3)?.isNested == true)
+        XCTAssertEqual(document.anchor(forSourceLine: 3)?.sourceLine, 2)
+    }
+
+    /// 引用里的行：第一段（与引用块同起始行）不下钻，第二段起下钻到子块。
+    func testAnchorInsideQuote() {
+        let document = MarkdownDocument.parse("> 引用\n>\n> 第二段\n")
+        XCTAssertEqual(document.blocks.map(\.sourceLine), [1])
+        guard case let .quote(blocks) = document.blocks[0].kind else {
+            return XCTFail("应当是引用，得到 \(document.blocks[0].kind)")
+        }
+        XCTAssertEqual(blocks.map(\.sourceLine), [1, 3])
+        XCTAssertEqual(document.anchor(forSourceLine: 1), MarkdownPreviewAnchor(blockIndex: 0, sourceLine: 1))
+        XCTAssertEqual(document.anchor(forSourceLine: 2)?.blockIndex, 0)
+        XCTAssertEqual(document.anchor(forSourceLine: 3),
+                       MarkdownPreviewAnchor(blockIndex: 0, nestedPath: [1], sourceLine: 3))
+    }
+
+    /// 围栏代码块与表格的**内部行**都锚在那一块上（不按行拆）。
+    func testAnchorCoversCodeFenceAndTableInterior() {
+        let document = MarkdownDocument.parse("```swift\nlet a = 1\nlet b = 2\n```\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n")
+        XCTAssertEqual(document.blocks.map(\.sourceLine), [1, 6])
+        XCTAssertEqual(document.anchor(forSourceLine: 4)?.blockIndex, 0)
+        XCTAssertEqual(document.anchor(forSourceLine: 5)?.blockIndex, 0)
+        XCTAssertEqual(document.anchor(forSourceLine: 7), MarkdownPreviewAnchor(blockIndex: 1, sourceLine: 6))
+        XCTAssertEqual(document.anchor(forSourceLine: 9)?.blockIndex, 1)
+    }
+
+    /// 被上限截断的尾巴仍在原文范围内 ⇒ 锚在**最后一个已解析块**上（少画的行由 `report` 报数）。
+    func testAnchorOnTruncatedTailPointsAtLastParsedBlock() {
+        let document = MarkdownDocument.parse("# 一\n\n二\n三\n",
+                                              limits: MarkdownParseLimits(maxLines: 100, maxBlocks: 1))
+        XCTAssertEqual(document.blocks.map(\.sourceLine), [1])
+        XCTAssertTrue(document.report.isTruncated)
+        XCTAssertEqual(document.anchor(forSourceLine: 4), MarkdownPreviewAnchor(blockIndex: 0, sourceLine: 1))
+        XCTAssertEqual(document.anchor(forSourceLine: 5)?.blockIndex, 0)
+        XCTAssertNil(document.anchor(forSourceLine: 6))
+    }
+
+    /// 全文档逐行的不变量：已解析范围内**行行都有锚点**、锚点行 ≤ 光标行、块下标与锚点行都不倒退。
+    func testAnchorInvariantsAcrossWholeDocument() {
+        let markdown = "# 标题\n\n第一段\n第二段\n\n> 引用\n> 第二段\n\n- 一\n  - 子\n- 二\n\n| a |\n| --- |\n| b |\n\n```\ncode\n```\n"
+        let document = MarkdownDocument.parse(markdown)
+        XCTAssertFalse(document.report.isTruncated)
+        XCTAssertGreaterThan(document.blocks.count, 4)
+        var lastBlock = -1
+        var lastLine = 0
+        for line in 1...document.lineCount {
+            guard let anchor = document.anchor(forSourceLine: line) else {
+                return XCTFail("第 \(line) 行没有锚点（已解析范围内行行都必须有）")
+            }
+            XCTAssertLessThanOrEqual(anchor.sourceLine, line)
+            XCTAssertLessThan(anchor.blockIndex, document.blocks.count)
+            XCTAssertGreaterThanOrEqual(anchor.blockIndex, lastBlock)
+            XCTAssertGreaterThanOrEqual(anchor.sourceLine, lastLine)
+            lastBlock = anchor.blockIndex
+            lastLine = anchor.sourceLine
+        }
+        // 每个顶层块的**起始行**必须锚到自己（块起点不能被前一块吃掉）
+        for (index, block) in document.blocks.enumerated() {
+            XCTAssertEqual(document.anchor(forSourceLine: block.sourceLine)?.blockIndex, index)
+        }
+    }
+
+    /// 映射是**纯函数**（同输入两次逐条相等），且同一行在任何时刻都是同一答案（不读时钟）。
+    func testAnchorIsPureAndStable() {
+        let document = MarkdownDocument.parse("- 一\n  - 子\n\n段落\n")
+        for line in 1...document.lineCount {
+            XCTAssertEqual(document.anchor(forSourceLine: line), document.anchor(forSourceLine: line))
+        }
+        XCTAssertEqual(document.anchor(forSourceLine: 2),
+                       MarkdownPreviewAnchor(blockIndex: 0, nestedPath: [0], sourceLine: 2))
+    }
 }

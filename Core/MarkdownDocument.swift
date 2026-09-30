@@ -181,6 +181,100 @@ public struct MarkdownDocument: Equatable, Sendable {
     }
 }
 
+// MARK: - 跟随滚动的锚点映射（`L-137` 判据 ③）
+
+/// 预览锚点：**编辑区里的某一行，在预览里对应哪一块**。
+///
+/// 跟随滚动**不许**在渲染时数文本 —— 数出来的「第 N 行」与源文件的第 N 行是两回事
+/// （段落软换行、被吃掉的标记、代码块的每一行都会让两者错位）。所以映射只走**行号**这一条通道：
+/// 解析层早把每块的原文绝对行号记进模型，这里只做一次纯查表。
+public struct MarkdownPreviewAnchor: Equatable, Sendable {
+    /// 顶层块下标 —— **渲染层的滚动落点**（`MarkdownDocument.blocks[blockIndex]`）。
+    public var blockIndex: Int
+    /// 命中块所在的嵌套路径（空数组 = 光标行落在顶层块自己身上）。
+    ///
+    /// 口径：每一层给的是**该块子块数组里的下标**，而「子块数组」= 这一层的子块按顺序摊平
+    /// （列表 = 各条目 `children` 依次拼接 —— 条目本身不是块；引用 = 它自己的 `blocks`）。
+    /// 渲染层要下钻时按同一套摊平口径走，别自己另算一套。
+    public var nestedPath: [Int]
+    /// 命中块的起始行（1 起，原文绝对行号）。**不变量：它 ≤ 光标行**。
+    public var sourceLine: Int
+
+    public init(blockIndex: Int, nestedPath: [Int] = [], sourceLine: Int) {
+        self.blockIndex = blockIndex
+        self.nestedPath = nestedPath
+        self.sourceLine = sourceLine
+    }
+
+    /// 光标行是不是落在某个**嵌套**块里（渲染层据此决定要不要下钻）。
+    public var isNested: Bool { !nestedPath.isEmpty }
+}
+
+extension MarkdownPreviewAnchor {
+
+    /// 一个块的直接子块（摊平口径的**唯一出处**，与 `anchor(forSourceLine:)` 同源）。
+    static func childBlocks(of block: MarkdownBlock) -> [MarkdownBlock] {
+        switch block.kind {
+        case let .bulletList(items), let .orderedList(_, items):
+            return items.flatMap(\.children)
+        case let .taskList(items):
+            return items.flatMap(\.children)
+        case let .quote(blocks):
+            return blocks
+        case .heading, .paragraph, .table, .codeBlock, .thematicBreak:
+            return []
+        }
+    }
+}
+
+extension MarkdownDocument {
+
+    /// 光标行（1 起）→ 预览锚点。**纯函数**：同样输入永远同样输出，不读界面、不读时钟。
+    ///
+    /// ## 覆盖范围（唯一口径 —— 写在这里，免得渲染层再定一套）
+    ///   · 块覆盖 `[自己的起始行, 下一个块的起始行 - 1]` ⇒ 块之间的空行归**前一个块**
+    ///     （空行在预览里不是独立的一块，光标停在空行上时预览该停在它上面那块）；
+    ///   · **最后一个块覆盖到原文末行**，含「文件以换行结尾」多出的那一行 ——
+    ///     在末尾打字的瞬间光标正停在那一行，跟随滚动不能偏偏在那时失去锚点；
+    ///   · 落在**第一个块之前**的行（文首空行）⇒ 锚到第一个块（文档开头不能没有跟随滚动）；
+    ///   · 行号 ≤ 0 或 > `lineCount` ⇒ `nil` —— 不在原文里的行**不猜**；
+    ///   · 被上限截断的尾巴仍在 `lineCount` 之内 ⇒ 落在最后一个已解析块：预览本来也只画到那儿，
+    ///     少画了多少由 `report` 如实报数，不靠锚点假装有内容。
+    ///
+    /// ## 嵌套
+    /// 落在子块里时锚点**下钻到最精确的那一层**（子块起始行更晚、且 ≤ 光标行，才算更精确；
+    /// 与父块同起始行的子块不参与 —— 同一视觉位置，多一层下标没有信息）。
+    public func anchor(forSourceLine line: Int) -> MarkdownPreviewAnchor? {
+        guard !blocks.isEmpty, line >= 1, line <= lineCount else { return nil }
+        let top = line < blocks[0].sourceLine ? 0 : lastBlockIndex(atOrBefore: line)
+        var anchor = MarkdownPreviewAnchor(blockIndex: top, sourceLine: blocks[top].sourceLine)
+        var lowerBound = blocks[top].sourceLine
+        var children = MarkdownPreviewAnchor.childBlocks(of: blocks[top])
+        while let position = children.lastIndex(where: { $0.sourceLine <= line && $0.sourceLine > lowerBound }) {
+            anchor.nestedPath.append(position)
+            anchor.sourceLine = children[position].sourceLine
+            lowerBound = children[position].sourceLine
+            children = MarkdownPreviewAnchor.childBlocks(of: children[position])
+        }
+        return anchor
+    }
+
+    /// 顶层块按起始行有序（解析器保证）⇒ 二分出「起始行 ≤ 光标行」的最后一个。
+    private func lastBlockIndex(atOrBefore line: Int) -> Int {
+        var low = 0
+        var high = blocks.count - 1
+        while low < high {
+            let mid = (low + high + 1) / 2
+            if blocks[mid].sourceLine <= line {
+                low = mid
+            } else {
+                high = mid - 1
+            }
+        }
+        return low
+    }
+}
+
 // MARK: - 块级扫描器
 
 /// 行驱动的块级扫描器。**状态就是一个行游标**：每次循环必须消费至少一行
