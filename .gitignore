@@ -40,6 +40,8 @@ xcuserdata/
 !/Docs/design/*.md
 # 主任侧运营文档（开发循环队列）：本地留存 + 微云备份，不推公开仓
 /Docs/design/开发循环-任务队列.md
+# L-130（2026-09-30）：三仓统一待拍板台账（本机台账，与 spec/队列 同款：不入公开仓，靠微云备份）
+/Docs/design/待拍板台账-三仓.md
 # alpha 发布说明（Docs 侧入口页）：与仓根 RELEASE-*.md 成对，入库以便公开仓里从 Docs 也能找到
 !/Docs/alpha-0.2.0-发布说明.md
 

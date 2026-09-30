@@ -24,7 +24,7 @@
 
 **「文件不存在」的两种语义**（L-33，2026-09-27 第 29 轮；另一平台侧实测提出）：
 
-本清单里有 **13 份文档被 `.gitignore` 排除**（原 7 份：`兼容性矩阵` / `GBase-技术验证` / `测试用例` /
+本清单里有 **14 份文档被 `.gitignore` 排除**（原 7 份：`兼容性矩阵` / `GBase-技术验证` / `测试用例` /
 `发布方案` / `手工验收运行手册` / **`智能体助手-开发spec.md`** / **`design/开发循环-任务队列.md`**；
 L-89 纳入的 6 份：`人工点验-单击清单-macOS-20260927.md` / `夜间开发记录_20260921-22.md` /
 `接管记录_v2.3.md` / `调研书-AI智能体能力基线.md` / `调研书-主流数据库客户端基础功能.md` /
@@ -33,8 +33,8 @@ L-89 纳入的 6 份：`人工点验-单击清单-macOS-20260927.md` / `夜间�
 macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平台（Windows）上跑这一项必然红，
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。现在：
 
-**这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 13 份** /
-**43 份命名 + 1 条通配 = 实跑 44 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
+**这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 14 份** /
+**44 份命名 + 1 条通配 = 实跑 45 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
 `doc-tables-files`）；判据 `Scripts/check-doc-numbers.py` 每次**自己算一遍**（导入本模块读清单 +
 `git check-ignore` 实测 + 真跑本脚本）再与本文件 / `Scripts/verify-all.sh` / `AGENT-SPEC.md` 里每一处
 写法对账 —— 本文件里的数字都是**引用**，改口径改台账。
@@ -96,6 +96,8 @@ DEFAULT_TARGETS = [
     # 此前不在清单里 ⇒ 它们的表格列数无人守（存量 89 处就是这么躺着的）。
     "Docs/智能体助手-开发spec.md",
     "Docs/design/开发循环-任务队列.md",
+    # L-130（2026-09-30）：三仓统一待拍板台账（本机台账，`.gitignore` 排除）
+    "Docs/design/待拍板台账-三仓.md",
     # ── L-89（2026-09-29 第 89 轮）：「带表格的文档」全部纳入 ──────────────────────
     # 此前只纳 13 份，而门禁自称「校验 Docs/ 下所有 Markdown 表格」⇒ 每轮必改的
     # `AGENT-SPEC.md` 的 6 处列数错、提案 0003 的 1 处、人工点验清单的 3 处无人判。
@@ -537,7 +539,7 @@ def main() -> int:
 # 这处 1 之差见 `Scripts/self-test-counts.json`）。
 # 全部在**临时目录**里跑真实文档副本，末例核对真仓库逐字节未变。
 # 关键一例是「干净克隆 / 另一平台」：只放**被版本控制跟踪的**那几份文档，
-# 13 份被 `.gitignore` 排除的缺席 —— 口径是**跳过 + 提示、exit 0**（原先必红的正是这一例）。
+# 14 份被 `.gitignore` 排除的缺席 —— 口径是**跳过 + 提示、exit 0**（原先必红的正是这一例）。
 # 例 5（L-41）= 负例：把**队列副本**的一行写坏（多一格）⇒ 必须 exit 1 并指名行号
 # （判据写完不对已知改动报红 = 没有判据）。
 # 例 6（L-89）= 判据 E 的两面：带表格却不在清单 ⇒ 判红并点名；`Docs/archive/` ⇒ 豁免
@@ -586,6 +588,7 @@ SELF_TEST_ABSENT = [
     "Docs/手工验收运行手册.md",
     "Docs/智能体助手-开发spec.md",
     "Docs/design/开发循环-任务队列.md",
+    "Docs/design/待拍板台账-三仓.md",
     # L-89 纳入的 6 份（同样被 `.gitignore` 排除）
     "Docs/人工点验-单击清单-macOS-20260927.md",
     "Docs/夜间开发记录_20260921-22.md",
@@ -630,14 +633,14 @@ def run_self_test() -> int:
             if any((clone / relative).exists() for relative in SELF_TEST_ABSENT):
                 failures.append("夹具准备失败：被 .gitignore 排除的文档不该出现在临时目录里")
 
-        # 例 1·干净克隆（默认清单，缺 13 份）→ exit 0 且**高声提示**、不得静默
+        # 例 1·干净克隆（默认清单，缺 14 份）→ exit 0 且**高声提示**、不得静默
         total += 1
         code, output = run([], clone)
         if code != 0:
             failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
-        elif "⚠ 跳过 13 份" not in output:
-            failures.append(f"例 1 失败：没有高声提示「跳过 13 份」（不得静默通过）\n{output}")
-        elif "✅ 表格校验通过（30 个文件，跳过 13 份）" not in output:
+        elif "⚠ 跳过 14 份" not in output:
+            failures.append(f"例 1 失败：没有高声提示「跳过 14 份」（不得静默通过）\n{output}")
+        elif "✅ 表格校验通过（30 个文件，跳过 14 份）" not in output:
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
             failures.append(f"例 1 失败：通配清单没有显式打印匹配份数（L-41）\n{output}")
@@ -719,11 +722,11 @@ def run_self_test() -> int:
         if code != 0:
             failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 43 份命名文档应全在（不得出现跳过行）\n{output}")
+            failures.append(f"例 4 失败：真仓库 44 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
             failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
-        elif "✅ 表格校验通过（44 个文件）" not in output:
-            failures.append(f"例 4 失败：收尾行应为 44 个文件（43 份命名 + 1 份通配）\n{output}")
+        elif "✅ 表格校验通过（45 个文件）" not in output:
+            failures.append(f"例 4 失败：收尾行应为 45 个文件（44 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
 
@@ -751,7 +754,7 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 13 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 跨平台标识（Windows 形态落回清单写法）/ 真仓库 43 份无跳过")
+    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 14 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 跨平台标识（Windows 形态落回清单写法）/ 真仓库 44 份无跳过")
     return 0
 
 
