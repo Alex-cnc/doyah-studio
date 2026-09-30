@@ -532,14 +532,21 @@ def self_test() -> int:
 
         # 11 处数不符（同一处 frame 在盘上出现两次、台账只记 1）
         views, led = fresh()
-        target = views / "ObjectTreeView.swift"
-        target.write_text(target.read_text(encoding="utf-8").replace(
-            "Color.clear.frame(width: 12, height: 12)",
-            "Color.clear.frame(width: 12, height: 12)\n            Color.clear.frame(width: 12, height: 12)"),
-            encoding="utf-8")
+        # 锚点**从台账派生**，不写死文件名与那段源码文本：写死的话，实现一搬家这例就变成
+        # 「replace 没命中 = 盘上什么都没变 = 判绿」的空转（2026-09-30 实测：对象树行渲染搬进
+        # `ObjectTreeRowContent.swift` 之后，本例如实变成了空转，而自检 19 条里它**报绿**）。
+        anchor = next(x for x in json.loads(led.read_text(encoding="utf-8"))["items"]
+                      if x.get("count") == 1)
+        target = sandbox / anchor["file"]
+        needle = ".frame(%s)" % anchor["frame"]
+        text = target.read_text(encoding="utf-8")
+        assert needle in text, "台账条目 %s 的 `%s` 在盘上找不到 —— 本例如需重锚，请连带修正台账" % (
+            anchor["file"], needle)
+        target.write_text(text.replace(needle, needle + "\n            " + needle, 1),
+                          encoding="utf-8")
         problems, _ = evaluate(views, led)
         record("处数与盘上不符", problems, "处数不符")
-        restore("App/Views/ObjectTreeView.swift")
+        restore(anchor["file"])
 
         # 12 台账声明的扫描事实与磁盘不符
         views, led = fresh()

@@ -23,6 +23,16 @@ import XCTest
 /// **视图必须把解析交给那个纯函数、且纯函数体内必须仍然「悬停优先 → 兜底选中」**。
 /// 语义一字未改，判据强度不减：除源码锚点外，`TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift`
 /// 另有拿真行数组喂 `resolve` 的行为判据（悬停优先 / 兜底 / 都没有 → nil）。
+///
+/// ## 锚点归位二（2026-09-30，修队列 `L-103` 的 10 条 HEAD 红灯）
+///
+/// 2026-09-29 23:25–23:36 的交互会话把右键**交给 AppKit 捕获器自己给出**
+/// （`ObjectTreeRightClick.swift::menu(for:)` → `ObjectTreeAppKitMenu.build(object: row.object …)`），
+/// **整树兜底菜单与「视图里调 `resolve`」一起消失了** ⇒ 原先那条「视图必须调 `ObjectTreeMenuTarget.resolve`」
+/// 判红。归位口径：**右键的目标不再由「悬停 / 上次选中」解析，而是命中行自己的对象 ——
+/// 这比原判据要的更强**，所以那条断言改成它的结构性版本（生产路径不许出现 `resolve(` /
+/// `menuTargetObject`），`resolve` 本体仍留在盘上、仍由上面那份探针的行为判据守着（作为
+/// 「菜单内容与规则」的可渲染判据）。
 final class ObjectTreeMenuConventionTests: XCTestCase {
 
     private func source(_ relative: String) throws -> String {
@@ -67,9 +77,11 @@ final class ObjectTreeMenuConventionTests: XCTestCase {
             try source("App/Views/ObjectTreeRightClick.swift").contains("override func menu(for event: NSEvent) -> NSMenu?"),
             "捕获器必须自己给出菜单（AppKit 取 superview 链上第一个非 nil 的 menu(for:)）"
         )
-        XCTAssertTrue(
+        // 归位二（2026-09-30）：右键的目标**不再经过解析**，而是命中行自己的对象（见上一条 `object: row.object`）。
+        // 原断言要的是「解析要能被判据直接断言」；新的结构性版本更强 —— 生产路径里**不许出现解析**：
+        XCTAssertFalse(
             text.contains("ObjectTreeMenuTarget.resolve("),
-            "「作用在哪一行」必须交给纯函数 `ObjectTreeMenuTarget.resolve` —— 结论要能被判据直接断言"
+            "生产路径不许再按「悬停 / 上次选中」解析菜单目标 —— 那正是整树兜底菜单与「点数据库却弹服务器菜单」的来源"
         )
 
         // ② 解析的住处（第 110 轮搬过去的）：体内必须仍是「悬停优先」，并且兜底到「已选中那一行」。
@@ -99,11 +111,12 @@ final class ObjectTreeMenuConventionTests: XCTestCase {
             "「这一行有没有菜单」要问 Core 的规则，不许在视图里另写一份类型判断"
         )
 
-        // ③ 点击本身就是「指针在这一行」的铁证：单击与双击都要写悬停盒子（连 onHover 共 ≥3 处写入）。
-        let writes = text.components(separatedBy: "hoverBox.rowID = row.object.id").count - 1
-        XCTAssertGreaterThanOrEqual(
-            writes, 3,
-            "单击与双击都要顺手写悬停盒子（当前只有 \(writes) 处写入）—— 否则手快的人点完立刻右键还是空菜单"
+        // ③ 归位二（2026-09-30）：老修法是「点一下顺手把悬停盒子写成被点的那一行」这种**记账式兜底**；
+        //    行级 AppKit 菜单之后，右键走的是**命中行自己**的对象、整条路不读悬停记录 —— 结构性修法，更强。
+        //    代价：`hoverBox` 如今只写不读（生产路径没有读者）⇒ 已如实登记为队列 `L-119`，不在这里钉死。
+        XCTAssertTrue(
+            text.contains("makeMenu: {") && text.contains("object: row.object"),
+            "每一行的菜单必须直接用它自己的 `row.object` —— 右键不经过悬停记录"
         )
     }
 }
