@@ -720,6 +720,25 @@
      "path": "Scripts/test-server-objects.sh"
     }
    ]
+  },
+  {
+   "id": "FR-EDIT-38",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "not-implemented",
+   "reasonText": "Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围",
+   "marker": "**[alpha 不含]**（Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/check-language-registry.py"
+    },
+    {
+     "path": "Scripts/test-language-registry-gate.py"
+    },
+    {
+     "path": "Tests/CodeLanguageRegistryTests.swift"
+    }
+   ]
   }
  ]
 }

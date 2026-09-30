@@ -760,6 +760,52 @@
      "note": "§6 资产表新增行（随本轮一起落）"
     }
    ]
+  },
+  {
+   "key": "language-registry",
+   "script": "Scripts/check-language-registry.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 7,
+   "countRegex": "自检：例数 (\\d+) / 通过",
+   "why": "队列 L-106 / 闭环第 2 项（FR-EDIT-38 ①③：语言表声明式登记的形状 + 高亮色走主题令牌）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-language-registry\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表「语言表声明式登记 + 高亮色走主题令牌」行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "判据自己的证据两处：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 2 项注释（L-106 那一段）"
+    }
+   ]
+  },
+  {
+   "key": "language-registry-gate",
+   "script": "Scripts/test-language-registry-gate.py",
+   "args": [],
+   "cases": 4,
+   "countRegex": "例数 (\\d+) / 通过 \\d+ / 失败",
+   "why": "队列 L-106 / 闭环第 2 项（`check-language-registry.py` 的**命令行路径**证据：真仓库 exit 0 / 写坏 exit 1 并点名 / 参数错 exit 2 / 真仓库逐字节未变）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "test-language-registry-gate\\.py.{0,2000}?\\*\\*例数 (\\d+)\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表「语言表声明式登记 + 高亮色走主题令牌」行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "test-language-registry-gate\\.py` \\*\\*例数 (\\d+)\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 2 项注释（L-106 那一段）"
+    }
+   ]
   }
  ]
 }

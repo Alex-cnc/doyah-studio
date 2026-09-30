@@ -173,7 +173,7 @@ else
   skip_step 1 "Core 与平台适配层单测（Scripts/verify-core.sh 要 Xcode 工具链的 swift）"
 fi
 
-echo "==> 2/18 平台中立性（Core 不含平台专属依赖 · 脚本不含平台专属路径标识）"
+echo "==> 2/18 平台中立性（Core 不含平台专属依赖 · 脚本不含平台专属路径标识 · 语言登记形状）"
 python3 Scripts/check-core-portability.py
 # 第 91 轮（提案 0005 **采纳**）：第二条管的是 **`Scripts/*.py` 自己** ——
 # `Scripts/` 是**两侧都在跑**的判据（Windows 侧 `windows/Tools/verify-all.ps1` 第 ③ 项就是
@@ -185,6 +185,23 @@ python3 Scripts/check-core-portability.py
 # 判据 A 禁这一形状（仓内 13 处已全部改 `.as_posix()`，其中第三处 `check-doc-numbers.py` 是本轮扫出来的）、
 # B 例外台账默认**空**、C 空跑防护、D 判据自己的证据（8 例）。样式见 `Docs/概要设计.md` §8.3。
 python3 Scripts/check-script-portability.py
+
+# L-106（FR-EDIT-38 ①③，2026-09-30 开发循环第 117 轮）：语言的**登记形状** ——
+# 与本项同源，都是「Core 的形状」那类判据（项数仍十八）。
+# 「语言表声明式登记」这句话要能被机械看住：语言知识（扩展名映射 + 关键字 / 类型 / 字面量 /
+# 注释 / 运算符规则集）只允许住在 `Core/CodeLanguageDefinitions.swift`，而**消费方那一族**
+# （词法器 / 规则集 / 判语言 / 补全 / 两个编辑器 / CLI）里出现 `language == .xxx` / `case .sql:`
+# 这类**身份分支**即判红 —— 那正是「加一个语言要改核心代码」的形状，而它不报错、只是变笨。
+# 顺带看住三件登记自洽：语言标识与登记项**同集合** / 扩展名与文件名不许两个主人 /
+# `isCode` 为真者必须给得出注释规则与字符串界定符（缺了 = 识别了却一个颜色都没有）。
+# 高亮色一律走 `SyntaxTone` 令牌（FR-EDIT-38 ③）：编辑器里出现裸色值即判红。
+# 判据自己的证据两处：`--self-test` **7 例**（夹具一律在临时副本上写坏，末例核对真仓库逐字节未变）
+# + 入口证据 `Scripts/test-language-registry-gate.py` **例数 4**（走的是**命令行路径**：
+# 真仓库 exit 0 / 写坏 exit 1 并点名到文件 / 参数错 exit 2 / 真仓库逐字节未变 —— 函数路径与
+# 命令行路径的坏法不同，两条都要有人跑）。
+python3 Scripts/check-language-registry.py
+python3 Scripts/check-language-registry.py --self-test
+python3 Scripts/test-language-registry-gate.py
 
 echo "==> 3/18 本地化：Core 展示文本棘轮（R-45）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
 python3 Scripts/check-core-localization.py

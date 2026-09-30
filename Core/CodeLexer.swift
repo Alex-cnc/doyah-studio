@@ -46,18 +46,26 @@ public struct CodeToken: Sendable, Equatable {
 /// 做对：字符串里的 `if` 不能被着成关键字，注释里的引号不能开启一个字符串。
 /// 这类错误的代价不是崩溃而是**误导**：颜色错了，读代码的人会以为自己在看语法。
 ///
-/// 覆盖范围（2026-09-24 需求提出者口径，先前端常见语言）：
-/// JavaScript / TypeScript / SQL / HTML / CSS / JSON / Python，外加 YAML / Shell / Markdown 的轻量支持。
-/// **新增语言不需要改这里** —— 只要在 `CodeSyntax` 里补一份定义（注释 / 字符串 / 关键字表 / 大小写）。
+/// **本文件不认识任何一个具体语言**（FR-EDIT-38 ①）：要什么规则、算不算标记语言、
+/// 属性名是不是"后面跟冒号"，全部从 `CodeLanguageDefinition` 的规则集与特质里读。
+/// 加语言时这里没什么可改的 —— 反过来说，**这里出现 `language == .xxx` 就是判据要报红的形状**
+/// （`Scripts/check-language-registry.py`）。
+///
+/// 覆盖范围（2026-09-30 需求提出者口径，FR-EDIT-38 ②）：Alpha 2 = 常见编程语言前 10
+/// （Python / JavaScript / TypeScript / Java / C / C++ / C# / Go / Rust / PHP）
+/// 加上既有的 SQL / HTML / CSS / JSON / YAML / Shell / Markdown；Beta 1 = 全量。
 public enum CodeLexer {
 
     /// 全量切分（含标识符与标点 —— 便于测试与将来做符号功能）。
     public static func tokens(in text: String, language: TextLanguage) -> [CodeToken] {
         guard !text.isEmpty else { return [] }
+        let definition = language.definition
+        let syntax = definition.syntax
         // 纯文本**一个记号都不给**：连数字都不该着色（它不是代码，颜色只会让人以为那是语法）。
-        guard language != .plainText else { return [] }
-        let syntax = CodeSyntax.of(language)
-        var scanner = Scanner(text: text, syntax: syntax, isHTML: language == .html, isCSS: language == .css)
+        // 判据不是"语言标识等于 plainText"，而是"这条登记项**一条规则都没有**" —— 前者是身份判断，
+        // 后者是数据判断（将来一个"只有注释、没有关键字"的语言也能自动走对路）。
+        guard syntax.hasAnyRule else { return [] }
+        var scanner = Scanner(text: text, syntax: syntax, traits: definition.traits)
         return scanner.run()
     }
 
@@ -72,17 +80,16 @@ public enum CodeLexer {
 private struct Scanner {
     let text: String
     let syntax: CodeSyntax
-    let isHTML: Bool
-    let isCSS: Bool
+    /// 语言特质（原来是 `language == .html` / `language == .css` 两处身份判断，见文件头注释）。
+    let traits: CodeLanguageTraits
 
     private var index: String.Index
     private var tokens: [CodeToken] = []
 
-    init(text: String, syntax: CodeSyntax, isHTML: Bool, isCSS: Bool) {
+    init(text: String, syntax: CodeSyntax, traits: CodeLanguageTraits) {
         self.text = text
         self.syntax = syntax
-        self.isHTML = isHTML
-        self.isCSS = isCSS
+        self.traits = traits
         self.index = text.startIndex
     }
 
@@ -90,7 +97,7 @@ private struct Scanner {
         while index < text.endIndex {
             let character = text[index]
 
-            if isHTML, character == "<", matchCommentOrTag() { continue }
+            if traits.hasMarkupTags, character == "<", matchCommentOrTag() { continue }
             if matchComment() { continue }
             if matchString() { continue }
 
@@ -110,13 +117,24 @@ private struct Scanner {
                 emit(word: word)
                 continue
             }
-            // 标点：单字符一个记号。**不做多字符运算符合并** —— 着色不需要，
-            // 而"把 `=>` 合成一个 token"会让将来做符号时更难拆。
+            // 标点 / 运算符：按语言登记的运算符表做**最长匹配**（`->` / `::` / `==`
+            // 合成一个记号），没登记的字符一个字符一个记号 —— 与既有行为一致。
+            // 不合并的话，"这个语言里 `=` 与 `==` 是两个不同的东西"这件事在下游（做符号 / 做
+            // 结构高亮时）就得再拼一次，而那时已经失去了位置信息。
             let start = index
-            index = text.index(after: index)
+            index = matchOperatorLength()
             tokens.append(CodeToken(kind: .punctuation, range: start..<index))
         }
         return tokens
+    }
+
+    /// 当前位置起**最长**的已登记运算符长度；没有命中就是 1（单字符标点）。
+    /// **任何路径都必须前进**（返回 ≥1）—— 返回 0 会让 `run()` 死循环。
+    private mutating func matchOperatorLength() -> String.Index {
+        for candidate in syntax.operatorLookup where hasPrefix(candidate, at: index) {
+            return text.index(index, offsetBy: candidate.count)
+        }
+        return text.index(after: index)
     }
 
     // MARK: 注释
@@ -231,9 +249,10 @@ private struct Scanner {
             tokens.append(CodeToken(kind: .keyword, range: range))
         } else if syntax.isBuiltin(word) {
             tokens.append(CodeToken(kind: .builtin, range: range))
-        } else if isCSS, isPropertyPosition() {
+        } else if traits.colonStartsPropertyName, isPropertyPosition() {
             // CSS 的属性名不一定在我们的表里（用户自定义属性 `--brand` 也在内）：
-            // **后面紧跟冒号**的标识符就是属性名。
+            // **后面紧跟冒号**的标识符就是属性名。这条判断本身也是登记项的一个特质
+            // （`CodeLanguageTraits.colonStartsPropertyName`），不是"语言叫 css"。
             tokens.append(CodeToken(kind: .builtin, range: range))
         } else {
             tokens.append(CodeToken(kind: .identifier, range: range))

@@ -38,20 +38,33 @@ public struct CodeSnippet: Sendable, Equatable {
     }
 }
 
-/// 一个语言的**语法定义**：关键字、内置名、注释与字符串形态、是否区分大小写、常用片段。
+/// 一个语言的**着色规则集**（FR-EDIT-38 ①：关键字 / 类型 / 字面量 / 内置名 / 注释 /
+/// 字符串 / 运算符 / 片段）。
 ///
-/// 为什么key字表与补全片段放**同一份**：着色与补全都是"这个词算不算关键字"的消费者。
+/// 为什么规则集与补全片段放**同一份**：着色与补全都是"这个词算不算关键字"的消费者。
 /// 分成两份的典型症状是——用户看到 `await` 被着成关键字，补全却给不出来（或反过来）。
 /// 这也正是 `SQLDialect` 已有的做法（`keywords` / `builtinFunctions` 同时喂高亮与补全）。
 ///
-/// 语言范围（2026-09-24 需求提出者口径）：**先支持前端常见语言**（JS / TS / SQL / HTML / CSS / Python），
-/// 之后再加 C / C++ / Java —— 加一个语言只需要在这里补一份 `case`，不必碰词法器。
+/// **本类型不再持有"我是哪个语言"**：语言身份（扩展名映射 / 显示名 / 特质）归
+/// `CodeLanguageDefinition`，规则集只回答"这些字怎么上色"。这样词法器与补全都
+/// 拿得到规则、却拿不到"语言身份"可判 —— 加语言时它们没什么可改的。
 public struct CodeSyntax: Sendable {
-    public let language: TextLanguage
+    /// **聚合后的关键字表**：`keywords + types + literals`（着色与补全都读它）。
+    ///
+    /// 聚合在初始化时做一次，是为了让下面三张表能各写各的 —— 分类是可读性，
+    /// 着色只有一个判据："这个词要不要按关键字上色"。
     public let keywords: [String]
+    /// 类型名（`int` / `String` / `Vec`…）—— 着色上与关键字同类。
+    public let types: [String]
+    /// 字面量（`true` / `null` / `nil` / `None`…）—— 着色上与关键字同类。
+    public let literals: [String]
+    /// 内置名 / 属性 / 标签属性（`console` / `color` / `class`…）。
     public let builtins: [String]
     public let comments: [CodeCommentStyle]
     public let stringDelimiters: [String]
+    /// 运算符表（多字符的写全：`->` / `::` / `==`）。词法器按**最长匹配**合并成一个记号，
+    /// 没登记的多字符串退回"一个字符一个记号"（与既有行为一致）。
+    public let operators: [String]
     public let isCaseInsensitive: Bool
     /// 双写引号是不是"转义一个引号"（SQL 的 `''`；JS / Python 用反斜杠，不是这种）。
     public let usesDoubledQuoteEscape: Bool
@@ -60,30 +73,60 @@ public struct CodeSyntax: Sendable {
     /// 归一化后的关键字集合（大小写不敏感的语言统一转小写，见 `normalized(_:)`）。
     public let keywordLookup: Set<String>
     public let builtinLookup: Set<String>
+    /// 按长度降序的运算符表（最长匹配用；同长度按登记次序）。
+    public let operatorLookup: [String]
 
     public init(
-        language: TextLanguage,
-        keywords: [String],
+        keywords: [String] = [],
+        types: [String] = [],
+        literals: [String] = [],
         builtins: [String] = [],
-        comments: [CodeCommentStyle],
+        comments: [CodeCommentStyle] = [],
         stringDelimiters: [String] = ["\"", "'"],
+        operators: [String] = [],
         isCaseInsensitive: Bool = false,
         usesDoubledQuoteEscape: Bool = false,
         snippets: [CodeSnippet] = []
     ) {
-        self.language = language
-        self.keywords = keywords
+        let allKeywords = Self.merged(keywords, types, literals)
+        self.keywords = allKeywords
+        self.types = types
+        self.literals = literals
         self.builtins = builtins
         self.comments = comments
         self.stringDelimiters = stringDelimiters
+        self.operators = operators
         self.isCaseInsensitive = isCaseInsensitive
         self.usesDoubledQuoteEscape = usesDoubledQuoteEscape
         self.snippets = snippets
-        self.keywordLookup = Set(keywords.map { Self.normalized($0, caseInsensitive: isCaseInsensitive) })
+        self.keywordLookup = Set(allKeywords.map { Self.normalized($0, caseInsensitive: isCaseInsensitive) })
         self.builtinLookup = Set(builtins.map { Self.normalized($0, caseInsensitive: isCaseInsensitive) })
+        self.operatorLookup = Self.longestFirst(operators)
     }
 
-    /// 查表用的归一化：不区分大小写的语言（SQL / HTML / CSS）统一小写。
+    /// 三张表合成一张、去掉重复（同一个词出现在两张表里不算错，但别让补全列表出现两遍）。
+    private static func merged(_ lists: [String]...) -> [String] {
+        var seen: Set<String> = []
+        var result: [String] = []
+        for list in lists {
+            for word in list where seen.insert(word).inserted { result.append(word) }
+        }
+        return result
+    }
+
+    private static func longestFirst(_ operators: [String]) -> [String] {
+        var seen: Set<String> = []
+        let unique = operators.filter { !$0.isEmpty && seen.insert($0).inserted }
+        return unique.sorted { $0.count == $1.count ? false : $0.count > $1.count }
+    }
+
+    /// **有没有规则可施** —— 一条都没有的语言（纯文本）一个记号都不给：
+    /// 连数字都不该着色（它不是代码，颜色只会让人以为那是语法）。
+    public var hasAnyRule: Bool {
+        !keywordLookup.isEmpty || !builtinLookup.isEmpty || !comments.isEmpty || !stringDelimiters.isEmpty
+    }
+
+    /// 查表用的归一化：不区分大小写的语言（SQL / HTML / CSS / PHP）统一小写。
     public static func normalized(_ word: String, caseInsensitive: Bool) -> String {
         caseInsensitive ? word.lowercased() : word
     }
@@ -95,230 +138,9 @@ public struct CodeSyntax: Sendable {
     public func isKeyword(_ word: String) -> Bool { keywordLookup.contains(normalized(word)) }
     public func isBuiltin(_ word: String) -> Bool { builtinLookup.contains(normalized(word)) }
 
-    /// 取某个语言的语法定义。**新增语言只改这一处。**
+    /// 取某个语言的规则集。**规则集来自登记表**（`CodeLanguageRegistry`）——
+    /// 本文件里没有一条语言知识，`of(_:)` 只是换个问法。
     public static func of(_ language: TextLanguage) -> CodeSyntax {
-        switch language {
-        case .javascript: return .javascript
-        case .typescript: return .typescript
-        case .sql: return .sql
-        case .html: return .html
-        case .css: return .css
-        case .json: return .json
-        case .python: return .python
-        case .shell: return .shell
-        case .yaml: return .yaml
-        case .markdown: return .markdown
-        case .plainText: return .plainText
-        }
+        CodeLanguageRegistry.definition(of: language).syntax
     }
-}
-
-// MARK: - 各语言的表
-
-private extension CodeSyntax {
-
-    static let slashComments = [CodeCommentStyle(line: "//"), CodeCommentStyle(block: "/*", "*/")]
-
-    static let javascript = CodeSyntax(
-        language: .javascript,
-        keywords: [
-            "const", "let", "var", "function", "return", "if", "else", "for", "while", "do", "switch", "case",
-            "default", "break", "continue", "class", "extends", "super", "new", "this", "typeof", "instanceof",
-            "in", "of", "delete", "void", "yield", "async", "await", "try", "catch", "finally", "throw",
-            "import", "export", "from", "as", "static", "get", "set", "true", "false", "null", "undefined",
-            "NaN", "Infinity"
-        ],
-        builtins: [
-            "console", "log", "window", "document", "JSON", "Object", "Array", "String", "Number", "Boolean",
-            "Math", "Date", "Promise", "Map", "Set", "Symbol", "Error", "RegExp", "parseInt", "parseFloat",
-            "setTimeout", "setInterval", "fetch", "require", "module", "exports"
-        ],
-        comments: slashComments,
-        stringDelimiters: ["\"", "'", "`"],
-        snippets: [
-            CodeSnippet(label: "log", insertText: "console.log()", detailKey: .codeDetailLog),
-            CodeSnippet(label: "func", insertText: "function name() {\n  \n}", detailKey: .codeDetailFunction),
-            CodeSnippet(label: "arrow", insertText: "const name = () => {\n  \n}", detailKey: .codeDetailArrow),
-            CodeSnippet(label: "forof", insertText: "for (const item of items) {\n  \n}", detailKey: .codeDetailLoop),
-            CodeSnippet(label: "try", insertText: "try {\n  \n} catch (error) {\n  console.error(error)\n}", detailKey: .codeDetailException),
-            CodeSnippet(label: "import", insertText: "import {  } from \"\"", detailKey: .codeDetailImport),
-            CodeSnippet(label: "fetch", insertText: "const response = await fetch(url)", detailKey: .codeDetailRequest)
-        ]
-    )
-
-    static let typescript = CodeSyntax(
-        language: .typescript,
-        keywords: javascript.keywords + [
-            "interface", "type", "enum", "implements", "public", "private", "protected", "readonly", "declare",
-            "namespace", "abstract", "keyof", "infer", "never", "unknown", "any", "string", "number", "boolean",
-            "object", "symbol", "bigint", "satisfies", "override", "is", "asserts"
-        ],
-        builtins: javascript.builtins + ["Partial", "Required", "Readonly", "Record", "Pick", "Omit", "Promise"],
-        comments: slashComments,
-        stringDelimiters: ["\"", "'", "`"],
-        snippets: javascript.snippets + [
-            CodeSnippet(label: "interface", insertText: "interface Name {\n  \n}", detailKey: .codeDetailType),
-            CodeSnippet(label: "type", insertText: "type Name = {\n  \n}", detailKey: .codeDetailType)
-        ]
-    )
-
-    /// SQL 的关键字与内置函数**直接取自方言**（`PostgresDialect`）——
-    /// 与编辑器高亮、补全用的是同一份定义。方言侧已冻结（见 SRS v3.180），这里只**读**它。
-    static var sql: CodeSyntax {
-        let dialect = PostgresDialect()
-        return CodeSyntax(
-            language: .sql,
-            keywords: dialect.keywords,
-            builtins: dialect.builtinFunctions,
-            comments: [CodeCommentStyle(line: "--"), CodeCommentStyle(block: "/*", "*/")],
-            stringDelimiters: ["'", "\""],
-            isCaseInsensitive: true,
-            // SQL 的 `'it''s'` 是一个字符串 —— 不认这条就会把它切成两段，后面的括号 / 关键字跟着错位。
-            usesDoubledQuoteEscape: true,
-            snippets: [
-                CodeSnippet(label: "select", insertText: "SELECT * FROM ", detailKey: .codeDetailQuery),
-                CodeSnippet(label: "selectwhere", insertText: "SELECT *\nFROM table_name\nWHERE condition", detailKey: .codeDetailQuery),
-                CodeSnippet(label: "insert", insertText: "INSERT INTO table_name (columns)\nVALUES (values)", detailKey: .codeDetailInsert),
-                CodeSnippet(label: "update", insertText: "UPDATE table_name\nSET column = value\nWHERE condition", detailKey: .codeDetailUpdate),
-                CodeSnippet(label: "delete", insertText: "DELETE FROM table_name\nWHERE condition", detailKey: .codeDetailDelete),
-                CodeSnippet(label: "create", insertText: "CREATE TABLE table_name (\n  id bigint PRIMARY KEY\n)", detailKey: .codeDetailCreateTable),
-                CodeSnippet(label: "join", insertText: "JOIN other ON other.id = table_name.other_id", detailKey: .codeDetailJoin)
-            ]
-        )
-    }
-
-    static let html = CodeSyntax(
-        language: .html,
-        keywords: [
-            "html", "head", "body", "title", "meta", "link", "script", "style", "div", "span", "p", "a", "img",
-            "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th", "form", "input", "button", "label",
-            "select", "option", "textarea", "section", "header", "footer", "nav", "main", "article", "aside",
-            "h1", "h2", "h3", "h4", "h5", "h6", "br", "hr", "strong", "em", "code", "pre", "iframe", "canvas",
-            "svg", "template", "slot"
-        ],
-        builtins: [
-            "class", "id", "style", "href", "src", "alt", "title", "type", "name", "value", "placeholder",
-            "disabled", "checked", "selected", "readonly", "required", "target", "rel", "width", "height",
-            "colspan", "rowspan", "for", "action", "method", "charset", "content", "defer", "async", "lang"
-        ],
-        comments: [CodeCommentStyle(block: "<!--", "-->")],
-        stringDelimiters: ["\"", "'"],
-        isCaseInsensitive: true,
-        snippets: [
-            CodeSnippet(label: "html5", insertText: "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n  <title></title>\n</head>\n<body>\n  \n</body>\n</html>", detailKey: .codeDetailTemplate),
-            CodeSnippet(label: "div", insertText: "<div></div>", detailKey: .codeDetailElement),
-            CodeSnippet(label: "a", insertText: "<a href=\"\"></a>", detailKey: .codeDetailLink),
-            CodeSnippet(label: "img", insertText: "<img src=\"\" alt=\"\">", detailKey: .codeDetailImage),
-            CodeSnippet(label: "input", insertText: "<input type=\"text\" name=\"\">", detailKey: .codeDetailInput),
-            CodeSnippet(label: "ul", insertText: "<ul>\n  <li></li>\n</ul>", detailKey: .codeDetailList)
-        ]
-    )
-
-    static let css = CodeSyntax(
-        language: .css,
-        keywords: ["@media", "@import", "@keyframes", "@font-face", "@supports", "@charset", "important"],
-        builtins: [
-            "color", "background", "background-color", "background-image", "display", "flex", "grid", "position",
-            "top", "right", "bottom", "left", "width", "height", "min-width", "max-width", "min-height",
-            "max-height", "margin", "padding", "border", "border-radius", "font", "font-size", "font-family",
-            "font-weight", "line-height", "text-align", "text-decoration", "letter-spacing", "opacity",
-            "overflow", "z-index", "transform", "transition", "animation", "box-shadow", "cursor", "gap",
-            "align-items", "align-content", "justify-content", "flex-direction", "flex-wrap", "grid-template-columns",
-            "grid-template-rows", "visibility", "content", "outline", "filter", "object-fit", "white-space"
-        ],
-        comments: [CodeCommentStyle(block: "/*", "*/")],
-        stringDelimiters: ["\"", "'"],
-        isCaseInsensitive: true,
-        snippets: [
-            CodeSnippet(label: "flex", insertText: "display: flex;\nalign-items: center;\njustify-content: center;", detailKey: .codeDetailLayout),
-            CodeSnippet(label: "grid", insertText: "display: grid;\ngrid-template-columns: repeat(3, 1fr);\ngap: 8px;", detailKey: .codeDetailLayout),
-            CodeSnippet(label: "center", insertText: "position: absolute;\ntop: 50%;\nleft: 50%;\ntransform: translate(-50%, -50%);", detailKey: .codeDetailCenter),
-            CodeSnippet(label: "media", insertText: "@media (max-width: 768px) {\n  \n}", detailKey: .codeDetailMedia)
-        ]
-    )
-
-    static let json = CodeSyntax(
-        language: .json,
-        keywords: ["true", "false", "null"],
-        comments: [CodeCommentStyle(line: "//"), CodeCommentStyle(block: "/*", "*/")],
-        stringDelimiters: ["\""],
-        snippets: [
-            CodeSnippet(label: "object", insertText: "{\n  \"key\": \"value\"\n}", detailKey: .codeDetailObject),
-            CodeSnippet(label: "array", insertText: "[\n  \n]", detailKey: .codeDetailArray)
-        ]
-    )
-
-    static let python = CodeSyntax(
-        language: .python,
-        keywords: [
-            "def", "class", "return", "if", "elif", "else", "for", "while", "break", "continue", "pass",
-            "import", "from", "as", "try", "except", "finally", "raise", "with", "lambda", "global",
-            "nonlocal", "assert", "yield", "async", "await", "del", "in", "is", "not", "and", "or",
-            "None", "True", "False", "self", "match", "case"
-        ],
-        builtins: [
-            "print", "len", "range", "str", "int", "float", "bool", "list", "dict", "set", "tuple", "sum",
-            "min", "max", "sorted", "enumerate", "zip", "open", "isinstance", "type", "super", "format",
-            "abs", "round", "any", "all", "map", "filter"
-        ],
-        comments: [CodeCommentStyle(line: "#")],
-        stringDelimiters: ["\"", "'"],
-        snippets: [
-            CodeSnippet(label: "def", insertText: "def name():\n    ", detailKey: .codeDetailFunction),
-            CodeSnippet(label: "class", insertText: "class Name:\n    def __init__(self):\n        ", detailKey: .codeDetailClass),
-            CodeSnippet(label: "main", insertText: "if __name__ == \"__main__\":\n    ", detailKey: .codeDetailEntry),
-            CodeSnippet(label: "for", insertText: "for item in items:\n    ", detailKey: .codeDetailLoop),
-            CodeSnippet(label: "try", insertText: "try:\n    \nexcept Exception as error:\n    print(error)", detailKey: .codeDetailException)
-        ]
-    )
-
-    static let shell = CodeSyntax(
-        language: .shell,
-        keywords: [
-            "if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac",
-            "function", "return", "export", "local", "readonly", "source", "echo", "exit", "set", "unset"
-        ],
-        builtins: ["grep", "sed", "awk", "cat", "ls", "cd", "mkdir", "rm", "cp", "mv", "chmod", "curl", "git"],
-        comments: [CodeCommentStyle(line: "#")],
-        stringDelimiters: ["\"", "'"],
-        snippets: [
-            CodeSnippet(label: "if", insertText: "if [ condition ]; then\n  \nfi", detailKey: .codeDetailCondition),
-            CodeSnippet(label: "for", insertText: "for item in items; do\n  \ndone", detailKey: .codeDetailLoop),
-            CodeSnippet(label: "func", insertText: "name() {\n  \n}", detailKey: .codeDetailFunction)
-        ]
-    )
-
-    static let yaml = CodeSyntax(
-        language: .yaml,
-        keywords: ["true", "false", "null", "yes", "no"],
-        comments: [CodeCommentStyle(line: "#")],
-        stringDelimiters: ["\"", "'"],
-        snippets: [
-            CodeSnippet(label: "map", insertText: "key: value", detailKey: .codeDetailMap),
-            CodeSnippet(label: "list", insertText: "- item", detailKey: .codeDetailListItem)
-        ]
-    )
-
-    /// Markdown 的**插入模板刻意用 ASCII 占位**（`## Heading` / `[text](url)`）：
-    /// 插入的是**文档内容**，不该预设用户用什么语言写文档；而这一条说明文字（右侧 detail）
-    /// 仍走文案表、按界面语言显示。这样也不会让"Core 里出现中文内容字面量"这种账目蒙混过关。
-    static let markdown = CodeSyntax(
-        language: .markdown,
-        keywords: [],
-        comments: [],
-        stringDelimiters: ["`"],
-        snippets: [
-            CodeSnippet(label: "h2", insertText: "## Heading", detailKey: .codeDetailHeading),
-            CodeSnippet(label: "code", insertText: "```\n\n```", detailKey: .codeDetailCodeBlock),
-            CodeSnippet(label: "link", insertText: "[text](url)", detailKey: .codeDetailLink),
-            CodeSnippet(label: "table", insertText: "| col | col |\n|---|---|\n|  |  |", detailKey: .codeDetailTable)
-        ]
-    )
-
-    static let plainText = CodeSyntax(
-        language: .plainText,
-        keywords: [],
-        comments: [],
-        stringDelimiters: []
-    )
 }

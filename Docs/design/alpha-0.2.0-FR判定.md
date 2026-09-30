@@ -65,6 +65,7 @@
 | **FR-EDIT-34** | 3.2 SQL 编辑与执行 | GUI 点击与下载观感待人工点验 | `ui-click` | `Scripts/alpha-main-chain-v0.2.sh`、`Scripts/make-ui-snapshots.sh` |
 | **FR-EDIT-35** | 3.2 SQL 编辑与执行 | 界面切换与点击待人工点验 | `ui-click` | `Scripts/verify-core.sh` |
 | **FR-EDIT-36** | 3.2 SQL 编辑与执行 | 界面点击待人工点验 | `ui-click` | `Scripts/test-workspace-editor.sh`、`Scripts/verify-all.sh` |
+| **FR-EDIT-38** | 3.2 SQL 编辑与执行 | Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围 | `not-implemented` | `Scripts/check-language-registry.py`、`Scripts/test-language-registry-gate.py`、`Tests/CodeLanguageRegistryTests.swift` |
 | **FR-IO-02** | 3.9 导入导出与备份 | vendor 驱动只实现 CopyFrom，缺 COPY … TO STDOUT | `environment` | `Scripts/test-cursor-export.sh`、`Scripts/test-table-export.sh` |
 | **FR-IO-03** | 3.9 导入导出与备份 | 界面点击待人工点验 | `ui-click` | `Scripts/test-copy-import.sh`、`Scripts/test-data-import.sh` |
 | **FR-IO-04** | 3.9 导入导出与备份 | 仅剩 217 专用库的真实还原待外部实例（「沙箱下起子进程的临时例外」2026-09-29 随拍板消解） | `device-instance` | `Scripts/build-app.sh`、`Scripts/test-backup-restore.sh` |

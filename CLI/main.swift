@@ -2236,7 +2236,7 @@ struct DoyahCLI {
         if let path = value(for: "--detect") {
             let language = TextLanguage.detect(path: path)
             print("\(path) → \(language.rawValue)（\(language.displayName)）")
-            return language == .plainText ? 1 : 0
+            return language.definition.isFallback ? 1 : 0
         }
 
         guard let raw = value(for: "--language"), let language = TextLanguage(rawValue: raw) else {
