@@ -543,6 +543,23 @@ python3 Scripts/test-note-search-route.py
 # 第三方库两种引法 / 用例文件被删 / 用例被掏空 / 扫描面被削掉 / 绿对照 / 末例真仓库逐字节未变）。
 python3 Scripts/check-markdown-single-source.py
 python3 Scripts/check-markdown-single-source.py --self-test
+# L-149 ③④（2026-10-01 第 134 轮）：**内置浏览器页签的归属 = 工作区**判据。由头 = 需求提出者
+# 2026-09-30 原话「浏览器内置到工作区 Tab 页，而不是放到数据库 SQL 查询界面，本质上 html 也是一种文件」
+# （数据库侧的口径 = **SQL 这门语言的工作台**）。第 131 轮把展示层搬到了工作区，但这件事此前没有任何
+# 东西看得见：挪回数据库侧、或搬走了没接上，编译照过、单测照绿。判据是一份**双向对账**的允许落点台账 ——
+# A 允许落点 ⊆ 台账（`App/` 下出现 `browserPages` / `selectedBrowserPage` / `BrowserTabView` /
+# `openBrowserTab` / `browserTabButton` 的文件必须登记过；唯一豁免 = 状态所有者 `AppState` 与视图定义
+# `BrowserTabView.swift`）—— 数据库侧 `App/Views/QueryWorkspaceView.swift` 命中即红；
+# B 台账 ⊆ 允许落点（登记过的落点必须真的命中 —— 拦「搬走了没接上」「引用删了只留注释」）；
+# C 两条文档条文（SRS 的 `FR-EDIT-34` 定义格 / `Docs/概要设计.md` §3.12 的「视图契约」行）必须写
+# 「工作区」且不得回写「编辑器区」（订正过程留在证据格里，判据只看条文格）；
+# D 空跑防护（`App/` 扫描面文件数下限 · 台账文件存在性 · 五个标识各自至少一处命中）。
+# 判据见 `Scripts/check-browser-tab-ownership.py`；负例 `--self-test` 12 例
+# （绿对照 / 数据库侧塞回状态引用 / 数据库侧塞回视图渲染 / 页签条不再引用 / 内容区不再渲染 /
+#  SRS 条文改回旧措辞 / 契约视图契约行改回旧措辞 / SRS 条文行被删 / 工作区视图被删 /
+#  契约行被删 / 无关文件改动不误报 / 末例真仓库逐字节未变）。
+python3 Scripts/check-browser-tab-ownership.py
+python3 Scripts/check-browser-tab-ownership.py --self-test
 
 if [ "${PLATFORM}" = "macos" ]; then
   echo "==> 11/18 打包 .app（沙箱）"

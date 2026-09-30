@@ -25,9 +25,9 @@
     }
   ],
   "floors": {
-    "families": 38,
-    "totalCases": 481,
-    "anchorSites": 63,
+    "families": 39,
+    "totalCases": 493,
+    "anchorSites": 65,
     "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。"
   },
   "notCovered": [
@@ -852,6 +852,30 @@
           "regex": "判据见 `Scripts/check-markdown-single-source\\.py`；负例 `--self-test` (\\d+) 例",
           "minSites": 1,
           "note": "闭环第 10 项注释"
+        }
+      ]
+    },
+    {
+      "key": "browser-tab-ownership",
+      "script": "Scripts/check-browser-tab-ownership.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 12,
+      "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
+      "why": "队列 L-149 ③④ / 闭环第 9 项（内置浏览器页签的归属 = 工作区：双向对账的允许落点台账 + 数据库侧视图命中即红 + 两条文档条文格必须写「工作区」）",
+      "anchors": [
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "check-browser-tab-ownership\\.py.{0,2000}?--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "§6 资产表「内置浏览器页签的归属 = 工作区」行"
+        },
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "判据见 `Scripts/check-browser-tab-ownership\\.py`；负例 `--self-test` (\\d+) 例",
+          "minSites": 1,
+          "note": "闭环第 9 项注释（L-149 ③④ 那一段）"
         }
       ]
     }
