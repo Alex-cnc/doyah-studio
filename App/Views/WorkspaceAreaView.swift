@@ -43,6 +43,8 @@ struct WorkspaceAreaView: View {
                     .foregroundStyle(Theme.text(.tertiary))
                     .lineLimit(1)
 
+                editMenu
+
                 Button {
                     tabs.save(tab.id)
                 } label: {
@@ -65,6 +67,28 @@ struct WorkspaceAreaView: View {
         }
         .padding(.horizontal, Spacing.s)
         .padding(.vertical, Spacing.xs)
+    }
+
+    // MARK: 编辑菜单（工作区自己的那一份）
+
+    /// 「编辑」菜单 —— **代码格式化**（FR-EDIT-39）的菜单入口。
+    ///
+    /// 为什么在工作区页签条上再画一份、而不是塞进主菜单栏的「编辑」：主菜单栏那份是
+    /// SQL 编辑器在用的（`QueryToolbar`），而这两个编辑器分属两个活动区、各有一套编辑动作
+    /// （SQL 那套有诊断与执行，这套只有格式化）。画在同一处会互相打架。
+    private var editMenu: some View {
+        Menu {
+            Button(L(.workspaceFormatMenuItem, AppShortcut.formatCode.display)) {
+                tabs.formatSelected()
+            }
+            .keyboardShortcut(AppShortcut.formatCode.key, modifiers: AppShortcut.formatCode.modifiers)
+        } label: {
+            Image(systemName: "text.alignleft")
+                .font(Theme.font(.caption))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(L(.workspaceFormatMenuItem, AppShortcut.formatCode.display))
     }
 
     private func tabButton(_ tab: WorkspaceTab) -> some View {
@@ -122,8 +146,10 @@ struct WorkspaceAreaView: View {
                         tabID: tab.id,
                         text: tab.content,
                         language: tab.language,
+                        pendingFormat: tabs.formatDelivery,
                         onTextChange: { text in tabs.updateContent(text, for: tab.id) },
-                        onSave: { tabs.save(tab.id) }
+                        onSave: { tabs.save(tab.id) },
+                        onFormat: { tabs.formatSelected() }
                     )
                     Divider()
                     Text(L(.workspaceEditorHint))

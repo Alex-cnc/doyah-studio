@@ -1,7 +1,7 @@
 {
-  "note": "语言表模板占位符 ↔ `L(...)` 调用点实参的对账台账（队列 L-46）。判据与用法见 Scripts/check-format-arguments.py 头部。shapes = 门禁**判不出类型**的实参形状，逐条登记：kind 只认有出处可引的（text / number，理由写清 file:line）；没有出处的一律 unverified —— unverified 不参与槽位交叉检查，只被形状与处数棘轮钉住，不是放行。",
+  "note": "语言表模板占位符 ↔ `L(...)` 调用点实参的对账台账（队列 L-46）。判据与用法见 Scripts/check-format-arguments.py 头部。shapes = 门禁**判不出类型**的实参形状，逐条登记：kind 只认有出处可引的（text / number，理由写清 file:line）；没有出处的一律 unverified —— unverified 不参与槽位交叉检查，只被形状与处数棘轮钉住，不是放行。 预算棘轮：unknownBudget 116 → 117（2026-09-30 循环第 119 轮 `L-107`）：新增一处 `L(.workspaceFormatFailed, …, failure.exitCode.map(String.init) ?? \"—\", …)` —— 该实参形状已按 `kind=text` 登记（见 shapes 末条），但「类型不明实参数」这一计数**在登记之前就自增** ⇒ 预算必须同批 +1，否则判据 D 会把「已登记」的也算成超支。",
   "version": 1,
-  "unknownBudget": 116,
+  "unknownBudget": 117,
   "shapes": [
     {
       "shape": "<reason>",
@@ -392,6 +392,12 @@
       "kind": "unverified",
       "maxSites": 1,
       "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+    },
+    {
+      "shape": "failure.exitCode.map(…)",
+      "kind": "text",
+      "maxSites": 1,
+      "reason": "App/WorkspaceTabsModel.swift:184 `failure.exitCode.map(String.init) ?? \"—\"` ⇒ String（`exitCode` 的声明在 Core/CodeFormatting.swift：`public let exitCode: Int32?`，缺值分支是字符串字面量 `\"—\"`）；该键三处模板都是 `%@`"
     }
   ],
   "exceptions": []

@@ -33,6 +33,10 @@ enum AppShortcut: CaseIterable {
     case outdent
     case clearEditor
     case format
+    /// 工作区代码编辑器的「格式化代码」（FR-EDIT-39）。与 SQL 编辑器那条 `format` 用**同一个键**：
+    /// 两者分属两个活动区（SQL 编辑器的「编辑」菜单 / 工作区页签条），不会同时出现在屏幕上；
+    /// 而「格式化」在哪儿都是 ⇧⌘F 这件事，比给两个区域各发明一个键更有用。
+    case formatCode
 
 
     case safeMode
@@ -90,6 +94,7 @@ enum AppShortcut: CaseIterable {
         case .outdent: return "["
         case .clearEditor: return "k"
         case .format: return "f"
+        case .formatCode: return "f"
         case .safeMode: return "s"
         case .confirmAllWrites: return "w"
         case .agentAudit: return "a"
@@ -112,7 +117,7 @@ enum AppShortcut: CaseIterable {
             return [.command]
         case .stop:
             return [.command]
-        case .check, .executionPlan, .saveFileAs, .savedQueries, .history, .clearEditor, .format, .agentAudit, .egressLog, .newBrowserTab, .dataTask, .help, .terminal, .archive:
+        case .check, .executionPlan, .saveFileAs, .savedQueries, .history, .clearEditor, .format, .formatCode, .agentAudit, .egressLog, .newBrowserTab, .dataTask, .help, .terminal, .archive:
             return [.command, .shift]
         case .replace, .safeMode, .confirmAllWrites,
              .selectNextOccurrence, .addCursorAbove, .addCursorBelow:

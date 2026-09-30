@@ -138,6 +138,87 @@ final class WorkspaceTabsModel: ObservableObject {
         save(id)
     }
 
+    // MARK: 代码格式化（FR-EDIT-39，形态 = ③ 混合）
+
+    /// 格式化结果的一次性投递：模型算好文本，**由编辑器视图自己**做那一次替换。
+    ///
+    /// 为什么不直接改 `content`：那条路最终是 `updateNSView` 里的 `textView.string = text`，
+    /// 而它**不注册撤销** —— 用户按 ⌘Z 拿不回来。需求要求「格式化前后可撤销」，
+    /// 所以替换必须发生在 `NSTextView` 上（`CodeTextView.applyFormat`）。
+    struct FormatDelivery: Equatable {
+        let id: UUID
+        let tabID: UUID
+        let text: String
+    }
+
+    @Published private(set) var formatDelivery: FormatDelivery?
+
+    /// 「格式化代码」：菜单与 ⇧⌘F 走**同一个入口**（两个入口两条路迟早不一致）。
+    func formatSelected() {
+        guard let tab = selectedTab, !tab.isHome else {
+            // 工作区首页不是文件：这句话本身也是「说说清楚」，不是静默 return。
+            errorText = L(.workspaceFormatNoFile)
+            return
+        }
+        let language = tab.language
+        let path = tab.path
+        let text = tab.content
+        Task {
+            let execution = await CodeFormatService.run(
+                plan: CodeFormatPlanner.plan(language: language) { CodeFormatToolLocator.isExecutable($0) },
+                language: language,
+                path: path,
+                text: text,
+                runner: FoundationCodeFormatProcessRunner()
+            )
+            apply(execution, to: tab.id)
+        }
+    }
+
+    /// 三种结局都要说话 —— 需求原文：不静默失败、也不给出「看起来变了但没变」的结果。
+    private func apply(_ execution: CodeFormatExecution, to tabID: UUID) {
+        switch execution {
+        case .refused(let reason):
+            errorText = Self.refusalText(reason)
+        case .failed(let failure):
+            errorText = L(
+                .workspaceFormatFailed,
+                Self.engineName(failure.engine),
+                failure.exitCode.map(String.init) ?? "—",
+                failure.message
+            )
+        case .ready(let outcome):
+            guard outcome.changed else {
+                noticeText = L(.workspaceFormatUnchanged, Self.engineName(outcome.engine))
+                return
+            }
+            // 投给视图去做可撤销替换；文本到那时才进编辑器。
+            formatDelivery = FormatDelivery(id: UUID(), tabID: tabID, text: outcome.text)
+            noticeText = L(.workspaceFormatDone, Self.engineName(outcome.engine))
+        }
+    }
+
+    /// 界面文案这一半（Core 只给结构化的结局，中文/英文都在语言表里）。
+    private static func engineName(_ engine: CodeFormatEngine) -> String {
+        switch engine {
+        case .external(let name, let version):
+            // 契约层口径（b）：说了用外部工具，就要说得清**哪一个、哪一版**。
+            // 版本探测不到（或工具不认 `--version`）就只说名字 —— 不编版本号。
+            guard let version, !version.isEmpty else { return name }
+            return "\(name) \(version)"
+        case .builtin: return L(.workspaceFormatEngineBuiltin)
+        }
+    }
+
+    private static func refusalText(_ reason: CodeFormatRefusal) -> String {
+        switch reason {
+        case .unknownLanguage:
+            return L(.workspaceFormatRefusedUnknown)
+        case .noFormatter(let language):
+            return L(.workspaceFormatRefusedNoFormatter, language.displayName)
+        }
+    }
+
     // MARK: 最近打开（Home 用）
 
     func record(file path: String) {

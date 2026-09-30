@@ -48,6 +48,9 @@ public struct CodeLanguageDefinition: Sendable {
     /// 而那本该是**数据**（这一条是回落值）而不是身份判断（`language == .plainText`）——
     /// 后者正是 FR-EDIT-38 ① 要从核心代码里清掉的形状。
     public let isFallback: Bool
+    /// 格式化能力（FR-EDIT-39）。表在下面 `formats`，这里只是转发后的结果 ——
+    /// 与 `syntax` / `traits` 一样，「这个语言怎么格式化」是**数据**，不是核心代码里的分支。
+    public let format: CodeFormatCapability
 
     public init(
         _ language: TextLanguage,
@@ -57,7 +60,8 @@ public struct CodeLanguageDefinition: Sendable {
         isCode: Bool = true,
         syntax: CodeSyntax,
         traits: CodeLanguageTraits = .none,
-        isFallback: Bool = false
+        isFallback: Bool = false,
+        format: CodeFormatCapability = .none
     ) {
         self.language = language
         self.displayName = displayName
@@ -67,6 +71,26 @@ public struct CodeLanguageDefinition: Sendable {
         self.syntax = syntax
         self.traits = traits
         self.isFallback = isFallback
+        self.format = format
+    }
+
+    /// 复制一份、换掉格式化能力。
+    ///
+    /// 为什么要有它：`formats` 表**单列**（不动那 18 条登记项），
+    /// 于是「取定义」时必须把两边合成一条 —— 合成只此一处，
+    /// 单测钉住「`CodeLanguageRegistry.all` 与 `definition(of:)` 给的是同一份定义」。
+    func withFormat(_ capability: CodeFormatCapability) -> CodeLanguageDefinition {
+        CodeLanguageDefinition(
+            language,
+            displayName: displayName,
+            fileExtensions: fileExtensions,
+            fileNames: fileNames,
+            isCode: isCode,
+            syntax: syntax,
+            traits: traits,
+            isFallback: isFallback,
+            format: capability
+        )
     }
 }
 
@@ -83,7 +107,12 @@ public struct CodeLanguageDefinition: Sendable {
 public enum CodeLanguageRegistry {
 
     /// 全部登记项（`TextLanguage.allCases` 的次序就是这里的次序）。
-    public static var all: [CodeLanguageDefinition] { definitions }
+    ///
+    /// 带上 `formats` 表里的格式化能力（FR-EDIT-39）——「这个语言怎么格式化」与
+    /// 「怎么着色」一样是定义的一部分，两条路取到的必须是同一份定义。
+    public static var all: [CodeLanguageDefinition] {
+        definitions.map { $0.withFormat(formats[$0.language.rawValue] ?? .none) }
+    }
 
     public static func definition(of language: TextLanguage) -> CodeLanguageDefinition {
         // 表里必有它的定义：`TextLanguage.init?(rawValue:)` 已经用同一张表判过存在性。
@@ -640,9 +669,85 @@ public enum CodeLanguageRegistry {
     /// 标识 → 定义（`TextLanguage` 的存在性判定与"取定义"都走它）。
     private static let index: [String: CodeLanguageDefinition] = {
         var table: [String: CodeLanguageDefinition] = [:]
-        for definition in definitions { table[definition.language.rawValue] = definition }
+        for definition in all { table[definition.language.rawValue] = definition }
         return table
     }()
+
+    // MARK: 格式化能力（FR-EDIT-39）
+
+    /// 各语言「怎么格式化」——**单列一张表**，并且只被格式化那一层读（着色 / 补全 / 判语言
+    /// 与它无关）。不塞进上面每一条登记项里的理由：加一个语言的格式化能力 = 这里加一行，
+    /// 而动不着那 18 条（那 18 条的每个字段都被判据逐条盯着）。
+    ///
+    /// **登记纪律**（`Scripts/check-code-formatting.py` 与
+    /// `Tests/CodeFormattingTests.swift` 两处守着）：
+    /// 1. 只登记**满足「从 stdin 读源码、把结果写 stdout、成功退出码 0」**的工具 ——
+    ///    这条纪律就是「格式化不碰磁盘」的全部保证（要改文件的工具一律不许登记）；
+    /// 2. `displayName` 不许空（说了用外部工具就得说得清是哪一个）；
+    /// 3. 内置兜底（`builtin`）只许给**有词法规则**的语言 —— 兜底靠词法证明「那段空白不在
+    ///    字符串里」，没有词法就证明不了（纯文本 / Markdown / YAML 的空白可能就是内容）。
+    ///
+    /// 不在这张表里的语言 = **没有可用的格式化方式**（如实拒绝），而不是硬塞一个改不对的东西。
+    private static let formats: [String: CodeFormatCapability] = [
+        // SQL：既有 FR-EDIT-22 的保守格式化器当兜底（工作区里的 .sql 没有连接上下文，
+        // 这一层只保证「关键字大写 + 子句换行 + 缩进」这几条保守规则）。
+        "sql": CodeFormatCapability(builtin: .sql),
+        "javascript": CodeFormatCapability(tools: prettier, builtin: .braceIndent),
+        "typescript": CodeFormatCapability(tools: prettier, builtin: .braceIndent),
+        "json": CodeFormatCapability(tools: prettier, builtin: .braceIndent),
+        "css": CodeFormatCapability(tools: prettier, builtin: .braceIndent),
+        "html": CodeFormatCapability(tools: prettier, builtin: .whitespace),
+        "python": CodeFormatCapability(
+            tools: [CodeFormatTool(executable: "black", arguments: ["-q", "-"], displayName: "Black")],
+            builtin: .whitespace
+        ),
+        "go": CodeFormatCapability(
+            // `gofmt` **不认 `--version`**（给了会被当成文件参数）⇒ 登记空数组：
+            // 版本探测这条路对它关掉，界面只说名字，不编版本号。
+            tools: [CodeFormatTool(executable: "gofmt", displayName: "gofmt", versionArguments: [])],
+            builtin: .braceIndent
+        ),
+        "rust": CodeFormatCapability(
+            tools: [CodeFormatTool(executable: "rustfmt", arguments: ["--emit", "stdout"], displayName: "rustfmt")],
+            builtin: .braceIndent
+        ),
+        "c": CodeFormatCapability(tools: clangFormat, builtin: .braceIndent),
+        "cpp": CodeFormatCapability(tools: clangFormat, builtin: .braceIndent),
+        "java": CodeFormatCapability(
+            tools: [CodeFormatTool(executable: "google-java-format", arguments: ["-"], displayName: "google-java-format")],
+            builtin: .braceIndent
+        ),
+        // C# / PHP：常见发行版里没有「读 stdin、写 stdout」的官方格式化器
+        // （`dotnet format` 按工程跑、`php-cs-fixer` 只改文件）⇒ 不登记外部工具，只给内置兜底。
+        "csharp": CodeFormatCapability(builtin: .braceIndent),
+        "php": CodeFormatCapability(builtin: .braceIndent),
+        // Shell：`shfmt` 不给文件就读 stdin、写 stdout。
+        // 内置兜底**不登记** —— Shell 在登记表里没有词法规则，兜底没法证明空白不在字符串里。
+        "shell": CodeFormatCapability(
+            tools: [CodeFormatTool(executable: "shfmt", arguments: ["-"], displayName: "shfmt")]
+        ),
+        // Markdown / YAML：只给外部工具（空白本身就是它们的语义），没有兜底。
+        "markdown": CodeFormatCapability(tools: prettier),
+        "yaml": CodeFormatCapability(tools: prettier)
+    ]
+
+    /// Prettier 靠**文件名**判 parser，所以实参里带上文件路径（`%FILE%` 由 Core 填）。
+    private static let prettier = [
+        CodeFormatTool(
+            executable: "prettier",
+            arguments: ["--stdin-filepath", CodeFormatTool.fileNamePlaceholder],
+            displayName: "Prettier"
+        )
+    ]
+
+    /// `clang-format` 不给文件就读 stdin；`-assume-filename` 让它按对的方言选项跑。
+    private static let clangFormat = [
+        CodeFormatTool(
+            executable: "clang-format",
+            arguments: ["-assume-filename", CodeFormatTool.fileNamePlaceholder],
+            displayName: "clang-format"
+        )
+    ]
 
     /// 扩展名 / 文件名 → 语言。**先登记者优先**（两个语言抢同一个扩展名时行为是确定的），
     /// 但这种重复本身是错的 —— 单测 `testNoTwoLanguagesClaimTheSameExtension` 与门禁都会判红。

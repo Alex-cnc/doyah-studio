@@ -11,8 +11,13 @@ struct CodeEditorView: NSViewRepresentable {
     let tabID: UUID
     let text: String
     let language: TextLanguage
+    /// 模型算好的格式化结果（一次性投递，FR-EDIT-39）。视图拿它做**可撤销**的整篇替换。
+    var pendingFormat: WorkspaceTabsModel.FormatDelivery?
     var onTextChange: (String) -> Void
     var onSave: () -> Void
+
+    /// 触发格式化（菜单项与 ⇧⌘F 都调它）。
+    var onFormat: () -> Void
 
     /// 订阅字体偏好：偏好一变，SwiftUI 重跑 `updateNSView` → 编辑器换字体。
     @ObservedObject private var fonts = FontManager.shared
@@ -59,7 +64,9 @@ struct CodeEditorView: NSViewRepresentable {
         // 布局管理器只铺可见范围，光标以外的段落延后算。
         textView.layoutManager?.allowsNonContiguousLayout = true
         textView.string = text
+        textView.tabID = tabID
         textView.onSave = onSave
+        textView.onFormat = onFormat
         // 行号列的宽度由「行数位数」定（`textContainerInset.width` 就是它的宽度），
         // 所以必须在**文本进去之后**算一次 —— 顺序反了会先按空文档算成 1 位。
         textView.reloadLineNumbers()
@@ -82,7 +89,15 @@ struct CodeEditorView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? CodeTextView else { return }
         context.coordinator.parent = self
+        textView.tabID = tabID
         textView.onSave = onSave
+        textView.onFormat = onFormat
+        // 格式化结果：**每条投递只应用一次**（按投递 id 记账，不按文本比 —— 文本可能正好相等）。
+        if let delivery = pendingFormat, delivery.tabID == tabID,
+           context.coordinator.appliedFormatID != delivery.id {
+            context.coordinator.appliedFormatID = delivery.id
+            textView.applyFormat(delivery.text)
+        }
         let fontChanged = textView.font?.fontName != Self.baseFont.fontName
             || textView.font?.pointSize != Self.baseFont.pointSize
         if fontChanged {
@@ -115,6 +130,8 @@ struct CodeEditorView: NSViewRepresentable {
         weak var textView: CodeTextView?
         var lastHighlightedText: String?
         var isApplyingExternalText = false
+        /// 已经应用过的格式化投递（同一条投递只应用一次）。
+        var appliedFormatID: UUID?
         private var highlightWorkItem: DispatchWorkItem?
 
         init(_ parent: CodeEditorView) {
@@ -186,6 +203,12 @@ struct CodeEditorView: NSViewRepresentable {
 /// `.keyboardShortcut` 在文本视图获得焦点时收不到这个按键。拦在这里最稳。
 final class CodeTextView: NSTextView {
     var onSave: (() -> Void)?
+
+    /// 触发格式化（FR-EDIT-39）。菜单项与 ⇧⌘F 都落到这一个口子。
+    var onFormat: (() -> Void)?
+
+    /// 这个编辑器画的是哪个页签（格式化投递按它归属）。
+    var tabID: UUID?
 
     /// 补全落光标用：插入的是哪个语言，决定片段插入后的落点约定。
     var completionLanguage: TextLanguage = .plainText
@@ -353,7 +376,31 @@ final class CodeTextView: NSTextView {
             onSave?()
             return true
         }
+        // ⇧⌘F：格式化代码（FR-EDIT-39）。与 ⌘S 同一条理由 —— SwiftUI 的 `.keyboardShortcut`
+        // 在文本视图拿到焦点时收不到这个按键，而"光标在编辑器里"正是要格式化的那一刻。
+        if event.modifierFlags.contains([.command, .shift]),
+           event.charactersIgnoringModifiers?.lowercased() == "f" {
+            onFormat?()
+            return true
+        }
         return super.performKeyEquivalent(with: event)
+    }
+
+    /// 把格式化结果换进编辑器（FR-EDIT-39）。
+    ///
+    /// **走 `shouldChangeText` → `replaceCharacters` → `didChangeText` 这条路**：
+    /// `allowsUndo` 会把它记成一条普通编辑，⌘Z 回到格式化前；`didChangeText` 又会触发
+    /// 代理的 `textDidChange` ⇒ 模型里的内容、行号列、着色一起跟上。
+    ///
+    /// 为什么不用 `string = text`（`updateNSView` 同步外部文本的那条路）：那条路
+    /// **不注册撤销、也不触发 `textDidChange`** —— 用户按 ⌘Z 拿不回来、模型还停在旧文本上。
+    /// 需求原文要求「格式化前后可撤销」，替换就只能发生在这里。
+    func applyFormat(_ text: String) {
+        guard text != string, let storage = textStorage else { return }
+        let whole = NSRange(location: 0, length: storage.length)
+        guard shouldChangeText(in: whole, replacementString: text) else { return }
+        storage.replaceCharacters(in: whole, with: text)
+        didChangeText()
     }
 
     /// 把记号涂上去。基色与字体先铺满，再逐段覆盖 —— 与 SQL 编辑器同一手法。

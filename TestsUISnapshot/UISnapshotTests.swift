@@ -152,7 +152,8 @@ final class UISnapshotTests: XCTestCase {
                     text: Self.editorDocument,
                     language: .javascript,
                     onTextChange: { _ in },
-                    onSave: {}
+                    onSave: {},
+                    onFormat: {}
                 )
             }
             // 编辑器里没有一句文案（行号是数字、正文是样例代码）⇒ 中英两遍必须**逐字节相同**；

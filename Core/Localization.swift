@@ -472,6 +472,15 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceOpenedWithEncoding
     case workspaceFileSaved
     case workspaceSaveFailed
+    // 代码格式化（FR-EDIT-39）：**如实说明用了哪一种**、认不出就说明为什么
+    case workspaceFormatMenuItem
+    case workspaceFormatNoFile
+    case workspaceFormatDone
+    case workspaceFormatUnchanged
+    case workspaceFormatEngineBuiltin
+    case workspaceFormatRefusedUnknown
+    case workspaceFormatRefusedNoFormatter
+    case workspaceFormatFailed
     // 代码编辑器（FR-EDIT-36）：补全候选的说明文字与常用片段说明
     case codeDetailKeyword
     case codeDetailBuiltin
@@ -2231,6 +2240,37 @@ public enum LocalizedStrings {
         .workspaceOpenedWithEncoding: [.simplifiedChinese: "%@ 不是 UTF-8，已按 %@ 打开", .english: "%@ is not UTF-8; opened as %@"],
         .workspaceFileSaved: [.simplifiedChinese: "已保存 %@", .english: "Saved %@"],
         .workspaceSaveFailed: [.simplifiedChinese: "保存 %@ 失败：%@", .english: "Could not save %@: %@"],
+        // 代码格式化（FR-EDIT-39）。两条口径写进文案里：**用了哪一种要说**（外部工具名 / 内置兜底）、
+        // **没变就说没变**（不给出「看起来变了但没变」的结果）。
+        .workspaceFormatMenuItem: [.simplifiedChinese: "格式化代码（%@）", .english: "Format Code (%@)"],
+        .workspaceFormatNoFile: [
+            .simplifiedChinese: "当前没有可格式化的文件页签（工作区首页不做格式化）",
+            .english: "No file tab to format (the workspace home is not a file)"
+        ],
+        .workspaceFormatDone: [
+            .simplifiedChinese: "格式化完成：%@；⌘Z 可撤销",
+            .english: "Formatted with %@; ⌘Z to undo"
+        ],
+        .workspaceFormatUnchanged: [
+            .simplifiedChinese: "%@ 没有做出改动（内容已经一致）",
+            .english: "%@ made no changes"
+        ],
+        .workspaceFormatEngineBuiltin: [
+            .simplifiedChinese: "内置简易格式化（没找到外部工具）",
+            .english: "built-in basic formatting (no external tool found)"
+        ],
+        .workspaceFormatRefusedUnknown: [
+            .simplifiedChinese: "认不出这个文件是什么语言，没有可用的格式化方式",
+            .english: "Cannot tell what language this file is, so there is no formatter for it"
+        ],
+        .workspaceFormatRefusedNoFormatter: [
+            .simplifiedChinese: "%@ 没有可用的格式化方式：外部工具没装，也没有内置兜底",
+            .english: "%@ has no formatter: no external tool installed and no built-in fallback"
+        ],
+        .workspaceFormatFailed: [
+            .simplifiedChinese: "%@ 格式化失败（退出码 %@）：%@",
+            .english: "%@ failed (exit code %@): %@"
+        ],
         .codeDetailKeyword: [.simplifiedChinese: "关键字", .english: "Keyword"],
         .codeDetailBuiltin: [.simplifiedChinese: "内置", .english: "Built-in"],
         .codeDetailSnippet: [.simplifiedChinese: "片段", .english: "Snippet"],

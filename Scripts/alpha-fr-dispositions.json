@@ -739,6 +739,22 @@
      "path": "Tests/CodeLanguageRegistryTests.swift"
     }
    ]
+  },
+  {
+   "id": "FR-EDIT-39",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "代码格式化的界面点击待人工点验（选路三支与三种结局已有 25 条 Core 判据；「装了 / 没装外部工具」两种环境的实际表现需人看）",
+   "marker": "**[alpha 不含]**（界面点击与「装了 / 没装外部工具」两种环境的实际表现只能人工点验；选路与三种结局由 `Tests/CodeFormattingTests.swift` 25 例逐条判）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/CodeFormattingTests.swift"
+    },
+    {
+     "path": "Core/CodeFormatting.swift"
+    }
+   ]
   }
  ]
 }
