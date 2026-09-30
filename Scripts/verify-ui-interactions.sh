@@ -52,7 +52,14 @@ set -euo pipefail
 # `ObjectTreeActions.isAvailable` 的规则**双向**对账；作用行用产品自己摊平的
 # `ObjectTreeRows.visibleRows` 喂 `ObjectTreeMenuTarget.resolve`。
 # 老缺陷的回归钉 = 「非服务器那一行**不许**出现服务器菜单项」（点数据库弹服务器菜单那次）。
-# 下面三条源锚点盯的是：菜单仍由 Core 的规则决定、悬停行仍存进**无观察者**的盒子、菜单仍**无条件**挂。
+#
+# **源锚点归位（开发循环第 113 轮，队列 `L-103`）**：2026-09-29 23:25–23:36 那个会话把行渲染搬进
+# `ObjectTreeRowContent.swift`、把右键改由**行的 AppKit 捕获器**自己给出（`ObjectTreeRightClick.swift`
+# → `ObjectTreeAppKitMenu.build(object: row.object…)`），附录里原先钉的三条（`.contextMenu {` /
+# `ObjectTreeMenuTarget.resolve(` / `ObjectTreeContextMenu.items(` 在 `ObjectTreeView.swift` 里）
+# 跟着失效 ⇒ 本入口**九条探针全绿却在源锚点那一步 exit 1**。归位后盯的是**同一件事的新形状**：
+# 每一行有自己的捕获器、菜单由这一行现建、目标就是 `row.object`（「不许退回整树一份 + 悬停解析」
+# 那半由两份 Swift 判据的 `XCTAssertFalse` 钉住，不在这里重复）。
 
 ROOT="$(cd "$(dirname "${0}")/.." && pwd -P)"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
@@ -193,11 +200,15 @@ anchors = {
     "App/Views/ObjectTreeView.swift": (
         ("@State private var hoverBox = HoverBox()",
          "悬停行不再存进那个**无观察者**的盒子 ⇒ 鼠标停着不动界面会自己闪（2026-09-24 那次）"),
-        (".contextMenu {",
-         "整块上的那一个菜单不再挂着（内容会退回「别处按列表行解析」那种错行）"),
-        ("ObjectTreeMenuTarget.resolve(", "菜单作用在哪一行不再经那个纯函数解析"),
-        ("ObjectTreeContextMenu.items(",
-         "菜单内容不再由那一份唯一出处提供 —— 视图里会另写一份，两处迟早不一致"),
+        ("RowMouseCatcher(",
+         "每一行不再挂自己的鼠标捕获器 ⇒ 右键与「零等待选中」都会退回旧路"),
+        ("makeMenu: {",
+         "行里不再现建那一份菜单 ⇒ 会退回「整树一份 + 按列表行解析」那种错行"),
+        ("object: row.object",
+         "菜单的目标不再是**这一行自己的对象** ⇒ 会退回按悬停 / 上次选中解析"),
+        # 反向那半（整树兜底菜单 `menuTargetObject` / `ObjectTreeMenuTarget.resolve(` 不许回来）由
+        # `Tests/ObjectTreeRowMenuConventionTests.swift` 与 `Tests/ObjectTreeMenuConventionTests.swift`
+        # 的 `XCTAssertFalse` 钉住 —— 这个脚本只支持「在场」形状，别把它写成第二个判据。
     ),
     "App/Views/ObjectTreeContextMenu.swift": (
         ("static func items(",
