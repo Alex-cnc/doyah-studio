@@ -22,7 +22,11 @@ final class GBaseServiceTests: XCTestCase {
 
     /// GBase 8a 不再返回"未实现"占位 —— 驱动已接上（协议族同 MySQL）。
     func testFactoryReturnsGBaseService() {
-        let service = DatabaseServiceFactory.make(for: makeConfig(), password: nil)
+        let service = DatabaseServiceFactory.make(
+            for: makeConfig(),
+            password: nil,
+            language: .simplifiedChinese
+        )
         XCTAssertTrue(service is GBaseService)
         XCTAssertEqual(service.config.dbType, .gbase8a)
         XCTAssertEqual(service.config.port, 5258)

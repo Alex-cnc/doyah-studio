@@ -159,6 +159,7 @@
 		4D568C5F4BBB74B79B5EEF2B /* ObjectTreeRightClick.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4B49FD28C3E7C592415C32 /* ObjectTreeRightClick.swift */; };
 		4DD9E3D7C69CD7BFCEAE9532 /* ConnectionConfigMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E949445CD5738E8F1C2DC8B /* ConnectionConfigMigrationTests.swift */; };
 		4DDA0D5D24ABA438A1731782 /* TransactionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10420ADC72B871F8350340C7 /* TransactionSession.swift */; };
+		4EF4A97095405676B47F8D75 /* MySQLWordingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119D35D8E7ABF312C37A0CC6 /* MySQLWordingTests.swift */; };
 		4FDB2F4FDFBB65FC1B978D48 /* ObjectTreeAutoExpansionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1068C1A852D180C93CF037C3 /* ObjectTreeAutoExpansionTests.swift */; };
 		4FE35BF0A8A1323F146CBE23 /* RoutineCandidateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DC5812CF98F6647DE4D1C88 /* RoutineCandidateTests.swift */; };
 		4FFC779F9795D5CBF4581080 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9591B886C2F024CED65AFF2 /* LocalizationTests.swift */; };
@@ -171,6 +172,7 @@
 		54518BD104D800059B754880 /* ConnectionAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9CB635B2BEE5CEDE548D9EF /* ConnectionAppearance.swift */; };
 		5524A06A37B0A919A2FB941D /* TerminalTabsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5EAD165BABE4DE13CE46153 /* TerminalTabsModel.swift */; };
 		556838E2DBE2A6DAAED46958 /* StatementSplitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84F4D6D293EAA0FB6801986E /* StatementSplitterTests.swift */; };
+		5590730BA56F66FA0553C934 /* MySQLWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1BE3A0C02CBC3285787A43B /* MySQLWording.swift */; };
 		55C0AC2F7A29C1DC68E65B35 /* DoyahPlatform.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 104D2C16A7A77A93CCF270D9 /* DoyahPlatform.framework */; };
 		55CC7A81EFD4AAEC725E3157 /* InflateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7655EC1824BE636291008C9 /* InflateTests.swift */; };
 		55EBE957E86DBF4DFB70FF6E /* TextLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B99C971DED47BB56A504E0 /* TextLanguage.swift */; };
@@ -608,6 +610,7 @@
 		106063595C70E45F6F341B63 /* ExternalProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalProcess.swift; sourceTree = "<group>"; };
 		1068C1A852D180C93CF037C3 /* ObjectTreeAutoExpansionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeAutoExpansionTests.swift; sourceTree = "<group>"; };
 		1181A94A5A6F55DB84D27003 /* XLSXReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLSXReader.swift; sourceTree = "<group>"; };
+		119D35D8E7ABF312C37A0CC6 /* MySQLWordingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySQLWordingTests.swift; sourceTree = "<group>"; };
 		12A982A10B383F94C618BDDD /* minimal.xlsx */ = {isa = PBXFileReference; path = minimal.xlsx; sourceTree = "<group>"; };
 		12AD10A94207DC07336F8AFE /* MCPSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPSession.swift; sourceTree = "<group>"; };
 		1306D14741E0119FBE2797D3 /* DatabaseType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseType.swift; sourceTree = "<group>"; };
@@ -989,6 +992,7 @@
 		EFE0735AFAB53E8F8317F3C7 /* MaintenancePlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenancePlanTests.swift; sourceTree = "<group>"; };
 		F106607CE6B98F00FEDCBC75 /* Dialects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dialects.swift; sourceTree = "<group>"; };
 		F11290867E9B44D1E7CB8D29 /* ConnectionAppearanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionAppearanceTests.swift; sourceTree = "<group>"; };
+		F1BE3A0C02CBC3285787A43B /* MySQLWording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySQLWording.swift; sourceTree = "<group>"; };
 		F271DD4A5DF8A068DDDEDDEA /* ActivityBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityBar.swift; sourceTree = "<group>"; };
 		F298CC1043700F747085FDF9 /* BrowserTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserTabView.swift; sourceTree = "<group>"; };
 		F3D09F2311E4B89E930FE79A /* dates1904.xlsx */ = {isa = PBXFileReference; path = dates1904.xlsx; sourceTree = "<group>"; };
@@ -1215,6 +1219,7 @@
 				73A0FA699B421CAEDD7E6EF7 /* MetadataServiceTests.swift */,
 				351BA5281B85C8B96236BA42 /* MultiCursorTests.swift */,
 				8CC0B057BD7792B8E86FB2EF /* MySQLDialectTests.swift */,
+				119D35D8E7ABF312C37A0CC6 /* MySQLWordingTests.swift */,
 				DA5F1CC03A72965275949B56 /* NoteBodyTests.swift */,
 				FBE5308316B042A4E78A4DF1 /* NoteDataBoundaryTests.swift */,
 				692776AC49B8A11884733C89 /* NoteLibraryTests.swift */,
@@ -1407,6 +1412,7 @@
 				98ECE349080FB4D8CD2D9F24 /* MultiCursor.swift */,
 				B7C42FB59DE835B483DA20B8 /* MySQLDialect.swift */,
 				86D957C3BF5E7A3ABAFF0FC6 /* MySQLService.swift */,
+				F1BE3A0C02CBC3285787A43B /* MySQLWording.swift */,
 				22647DC76824AA9A607B5A44 /* Note.swift */,
 				00ED45C4996A9D29A9FE34CA /* NoteBody.swift */,
 				F678809FE7DED8258F88A7D7 /* ObjectDDL.swift */,
@@ -2070,6 +2076,7 @@
 				C6154926151AFC416EA89B0F /* MultiCursor.swift in Sources */,
 				0394AD1D5C8AD1315DD6958A /* MySQLDialect.swift in Sources */,
 				472A9846B2F6E8DE1A2A87D0 /* MySQLService.swift in Sources */,
+				5590730BA56F66FA0553C934 /* MySQLWording.swift in Sources */,
 				2D3062903DFDCCD53C70C192 /* Note.swift in Sources */,
 				373CEC7381F237D9BD585065 /* NoteBody.swift in Sources */,
 				7015033916AA8FA3B5DB2DB0 /* NoteDatabase.swift in Sources */,
@@ -2239,6 +2246,7 @@
 				CF952C00EAC2B07D64979A1C /* MetadataServiceTests.swift in Sources */,
 				CAEECB45886E3837C88485F4 /* MultiCursorTests.swift in Sources */,
 				7E2320D6F5B88155F07984A0 /* MySQLDialectTests.swift in Sources */,
+				4EF4A97095405676B47F8D75 /* MySQLWordingTests.swift in Sources */,
 				2BD93F294EDBDA96CC9924A1 /* NoteBodyTests.swift in Sources */,
 				B1EA42C36321C0335ABD4F07 /* NoteDataBoundaryTests.swift in Sources */,
 				0EE60532EA565EC6035C8E13 /* NoteLibraryTests.swift in Sources */,

@@ -279,7 +279,11 @@ final class MySQLFormProbeTests: XCTestCase {
             username: target.user,
             sslMode: .disable
         )
-        let service = DatabaseServiceFactory.make(for: config, password: target.password)
+        let service = DatabaseServiceFactory.make(
+            for: config,
+            password: target.password,
+            language: .simplifiedChinese
+        )
         let info = try await service.connect()
         return (service, info)
     }

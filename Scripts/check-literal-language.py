@@ -54,6 +54,11 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
   `Core/MaintenancePlan.swift`（`review` / `makePlan`）、
   `Core/MCPToolCatalog.swift`（`decision`）+ `Core/MCPSession.swift`（会话属性 `language`
   与 `init(capabilities:language:)`）。
+  **L-65 第 5 批（2026-09-30 第 123 轮，MySQL / GBase 一族 —— 清零收官）**：渲染搬进**新文件**
+  `Core/MySQLWording.swift`（八句话各留 `language:` 形参），`Core/MySQLService.swift` 钉住那个
+  **唯一语言来源**（`public nonisolated let language:` + `init(… language:)` + `withTimeout(… language:)`）；
+  「调用方也要钉」再加四处：`Core/DatabaseService.swift`（工厂的 MySQL / GBase 两个分支）、
+  `Core/GBaseService.swift`、`App/Views/ConnectionFormView.swift`（「测试连接」）、命令行连库入口。
   **同一判据最新加的一条是「调用方也要钉」**：形参留着还不够 —— 展示点不给语言，一样会退回
   「Core 自己选」。所以 `App/AppState.swift`（维护 / 诊断两处捕获）、
   `App/Views/AboutLicenseSheet.swift`（升级页）、`CLI/main.swift`（维护命令 / MCP 会话）
@@ -463,6 +468,26 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
             r"public\s+let\s+language:\s*AppLanguage",
             r"init\([\s\S]{0,200}?language:\s*AppLanguage",
         ],
+        # L-65 第 5 批（2026-09-30 第 123 轮）：**MySQL / GBase 一族** —— 渲染搬进新文件
+        # `Core/MySQLWording.swift`（ADR-25 冻结点的落法 = 新增文件，旧文件只留「语言从哪来」）。
+        # 钉三处堵两条路：① 新文件的文本出口形参（防「删形参、体内再写死」）；
+        # ② service 那个**唯一语言来源** `language` 与 `init(… language:)`；③ `withTimeout` 也收语言
+        # （超时那句话的渲染点在那儿，语言只能从连接对象流进去）。
+        "Core/MySQLWording.swift": [
+            r"func\s+connectTimedOut\([^)]*language:\s*AppLanguage",
+            r"func\s+hostResolveFailed\([^)]*language:\s*AppLanguage",
+            r"func\s+lastInsertID\([^)]*language:\s*AppLanguage",
+            r"func\s+statementTimeout\([^)]*language:\s*AppLanguage",
+            r"func\s+cancelNoConnectionID\([^)]*language:\s*AppLanguage",
+            r"func\s+cancelStatementMissing\([^)]*language:\s*AppLanguage",
+            r"func\s+cancelDispatchFailed\([^)]*language:\s*AppLanguage",
+            r"func\s+copyUnsupported\([^)]*language:\s*AppLanguage",
+        ],
+        "Core/MySQLService.swift": [
+            r"public\s+nonisolated\s+let\s+language:\s*AppLanguage",
+            r"init\([\s\S]{0,200}?language:\s*AppLanguage",
+            r"func\s+withTimeout<[\s\S]{0,200}?language:\s*AppLanguage",
+        ],
     }
     for rel, patterns in pinned_params.items():
         path = root / rel
@@ -480,9 +505,19 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
             "MaintenancePlanner.makePlan(",
             "AICapture.maintenanceNote(",
             "AICapture.diagnosisNote(",
+            "DatabaseServiceFactory.make(",
         ],
         "App/Views/AboutLicenseSheet.swift": ["LicensePresentation.upgradeLines("],
-        "CLI/main.swift": ["MaintenancePlanner.makePlan(", "MCPServerSession(capabilities:"],
+        "App/Views/ConnectionFormView.swift": ["DatabaseServiceFactory.make("],
+        "CLI/main.swift": [
+            "MaintenancePlanner.makePlan(",
+            "MCPServerSession(capabilities:",
+            "DatabaseServiceFactory.make(",
+        ],
+        # L-65 第 5 批：数据库侧那两句人话的语言，从**创建连接的那两层**流进驱动 ——
+        # 工厂漏给语言，MySQL/GBase 分支就又变成「Core 自己选」。
+        "Core/DatabaseService.swift": ["MySQLService(config:", "GBaseService(config:"],
+        "Core/GBaseService.swift": ["MySQLService("],
     }
     for rel, needles in sorted(call_sites.items()):
         path = root / rel

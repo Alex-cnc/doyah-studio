@@ -677,7 +677,11 @@ struct ConnectionFormView: View {
             }
             defer { tunnel?.stop() }
 
-            let service = DatabaseServiceFactory.make(for: target, password: testPassword)
+            let service = DatabaseServiceFactory.make(
+                for: target,
+                password: testPassword,
+                language: LocalizationManager.shared.effectiveLanguage
+            )
             do {
                 let serverInfo = try await service.connect()
                 bannerMessage = L(.connectionFormConnected, serverInfo.version, serverInfo.database, serverInfo.user)

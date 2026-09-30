@@ -77,7 +77,8 @@ final class MySQLDialectTests: XCTestCase {
         XCTAssertTrue(
             DatabaseServiceFactory.make(
                 for: ConnectionConfig(name: "m", dbType: .mysql, username: "root"),
-                password: nil
+                password: nil,
+                language: .simplifiedChinese
             ) is MySQLService
         )
     }
@@ -88,7 +89,8 @@ final class MySQLDialectTests: XCTestCase {
     func testGBaseUsesItsOwnService() {
         let service = DatabaseServiceFactory.make(
             for: ConnectionConfig(name: "g", dbType: .gbase8a, username: "root"),
-            password: nil
+            password: nil,
+            language: .simplifiedChinese
         )
         XCTAssertTrue(service is GBaseService)
         XCTAssertFalse(service is MySQLService)
@@ -167,20 +169,24 @@ final class MySQLDialectTests: XCTestCase {
     // MARK: - 连接超时（R-52：以前超时没用上，卡住不结束）
 
     func testWithTimeoutReturnsFastResult() async throws {
-        let value = try await MySQLService.withTimeout(5) { 42 }
+        let value = try await MySQLService.withTimeout(5, language: .simplifiedChinese) { 42 }
         XCTAssertEqual(value, 42)
     }
 
     func testWithTimeoutThrowsOnSlowOperation() async {
         do {
-            _ = try await MySQLService.withTimeout(1) {
+            _ = try await MySQLService.withTimeout(1, language: .simplifiedChinese) {
                 try await Task.sleep(nanoseconds: 5_000_000_000)
                 return 0
             }
             XCTFail("慢操作应当超时")
         } catch let error as MySQLService.MySQLServiceError {
-            guard case .timedOut(let seconds) = error else { return XCTFail("应当是超时错误") }
+            guard case .timedOut(let seconds, let message) = error else {
+                return XCTFail("应当是超时错误")
+            }
             XCTAssertEqual(seconds, 1, "超时秒数要如实回报（1 秒下限）")
+            // 语言由调用方给 ⇒ 同一句话在两种语言下必须真的不同（否则英文译文又不可达）。
+            XCTAssertEqual(message, MySQLWording.connectTimedOut(seconds: 1, language: .simplifiedChinese))
         } catch {
             XCTFail("应当是 timedOut，实际 \(error)")
         }

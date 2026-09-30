@@ -5905,7 +5905,11 @@ final class AppState: ObservableObject {
             derived.database = targetDatabase
 
             let newTask = Task<(any DatabaseService, ServerInfo), Error> {
-                let service = DatabaseServiceFactory.make(for: derived, password: password)
+                let service = DatabaseServiceFactory.make(
+                    for: derived,
+                    password: password,
+                    language: LocalizationManager.shared.effectiveLanguage
+                )
                 do {
                     let serverInfo = try await service.connect()
                     return (service, serverInfo)

@@ -12,6 +12,15 @@ import MySQLNIO
 public actor MySQLService: DatabaseService {
     public nonisolated let config: ConnectionConfig
 
+    /// 这个连接说哪种语言（**由创建它的调用方给定** —— 队列 `L-65` 第 5 批）。
+    ///
+    /// 与 `MCPServerSession.language` 同一个理由：这几句话挂在**这一次连接**上，
+    /// 由**启动它的那个人**决定语言（界面传 `effectiveLanguage`、命令行显式传中文）。
+    /// **不留默认值** —— 默认值等于把「写死语言」藏起来（L-47 口径）。
+    /// 文案本身一个字都不在这个文件里：全部在 `Core/MySQLWording.swift`
+    /// （ADR-25 冻结点的落法 = 新增文件承载渲染，旧文件只留「语言从哪来」）。
+    public nonisolated let language: AppLanguage
+
     private let password: String?
     /// 方言**可注入**：GBase 8a 与 MySQL 同属一个协议族，驱动只差方言与少数自省查询，
     /// 所以这里不复制一份 service，而是把方言当参数（`GBaseService` 就是这么组合出来的）。
@@ -29,9 +38,15 @@ public actor MySQLService: DatabaseService {
     /// 执行注册表：「谁在跑、谁被取消过」的唯一事实源（R-29 / R-30），与 PG 侧共用同一个类型。
     private let registry = ExecutionRegistryBox()
 
-    public init(config: ConnectionConfig, password: String?, dialect: (any SQLDialect)? = nil) {
+    public init(
+        config: ConnectionConfig,
+        password: String?,
+        language: AppLanguage,
+        dialect: (any SQLDialect)? = nil
+    ) {
         self.config = config
         self.password = password
+        self.language = language
         self.dialect = dialect ?? SQLDialectFactory.make(for: config.dbType)
     }
 
@@ -49,35 +64,40 @@ public actor MySQLService: DatabaseService {
     /// TCP 通了但对端不回应时会**永远等下去**，用户看到的是"卡着不动"，比报错更难排查。
     /// 超时覆盖**连接 + TLS 协商 + 认证**整段（只给 TCP 连接设超时挡不住"连上之后卡在认证"）。
     public func connect() async throws -> ServerInfo {
-        try await Self.withTimeout(TimeInterval(config.timeout)) { [self] in
+        try await Self.withTimeout(TimeInterval(config.timeout), language: language) { [self] in
             try await connectWithoutTimeout()
         }
     }
 
     /// 超时只看这层：错误要**可区分**（上层才知道是"到点了"而不是被谁取消了）。
     enum MySQLServiceError: Error, LocalizedError {
-        case timedOut(Int)
+        /// payload 带的是**抛出方按调用方语言渲染好的整句**（同 `SSHTunnelError` 那三支）：
+        /// `LocalizedError` 协议入口**不带语言语境**，在这里选语言就等于把「写死语言」塞回来。
+        case timedOut(seconds: Int, message: String)
+
         public var errorDescription: String? {
             switch self {
-            case .timedOut(let seconds):
-                return LocalizedStrings.format(.mysqlConnectTimedOut, language: .simplifiedChinese, String(seconds))
+            case .timedOut(_, let message):
+                return message
             }
         }
     }
 
     static func withTimeout<T: Sendable>(
         _ seconds: TimeInterval,
+        language: AppLanguage,
         operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
         let limit = max(1, Int(seconds))
+        let message = MySQLWording.connectTimedOut(seconds: limit, language: language)
         return try await withThrowingTaskGroup(of: T.self) { group in
             group.addTask { try await operation() }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(limit) * 1_000_000_000)
-                throw MySQLServiceError.timedOut(limit)
+                throw MySQLServiceError.timedOut(seconds: limit, message: message)
             }
             guard let result = try await group.next() else {
-                throw MySQLServiceError.timedOut(limit)
+                throw MySQLServiceError.timedOut(seconds: limit, message: message)
             }
             group.cancelAll()
             return result
@@ -94,7 +114,7 @@ public actor MySQLService: DatabaseService {
         } catch {
             // 解析不了主机名：把 group 收干净再抛，别留一个没人管的线程池。
             await shutdown(group)
-            throw AppError.queryFailed(LocalizedStrings.format(.mysqlHostResolveFailed, language: .simplifiedChinese, config.host, error.localizedDescription))
+            throw AppError.queryFailed(MySQLWording.hostResolveFailed(host: config.host, detail: error.localizedDescription, language: language))
         }
 
         let created: MySQLConnection
@@ -287,11 +307,7 @@ public actor MySQLService: DatabaseService {
                 let meta = try await self.sessionMetadata(on: connection)
                 affectedRows = meta.affectedRows
                 if let lastInsertID = meta.lastInsertID, lastInsertID > 0 {
-                    notice = LocalizedStrings.format(
-                        .mysqlLastInsertID,
-                        language: .simplifiedChinese,
-                        String(lastInsertID)
-                    )
+                    notice = MySQLWording.lastInsertID(String(lastInsertID), language: language)
                 }
             }
 
@@ -308,7 +324,7 @@ public actor MySQLService: DatabaseService {
         if registry.withLock({ $0.isTimedOut(handle) }) {
             let seconds = options.statementTimeout.map { String(Int($0)) } ?? "—"
             continuation.finish(
-                throwing: AppError.queryFailed(LocalizedStrings.format(.mysqlStatementTimeout, language: .simplifiedChinese, seconds))
+                throwing: AppError.queryFailed(MySQLWording.statementTimeout(seconds: seconds, language: language))
             )
             return
         }
@@ -351,7 +367,7 @@ public actor MySQLService: DatabaseService {
 
     private func mapTimeoutIfNeeded(_ error: any Error, handle: ExecutionHandle) -> any Error {
         registry.withLock { $0.isTimedOut(handle) }
-            ? AppError.queryFailed(LocalizedStrings.format(.mysqlStatementTimeout, language: .simplifiedChinese, "—"))
+            ? AppError.queryFailed(MySQLWording.statementTimeout(seconds: "—", language: language))
             : error
     }
 
@@ -367,12 +383,12 @@ public actor MySQLService: DatabaseService {
     /// 用 `KILL QUERY` 而不是 `KILL`：只终止目标语句，连接与后续操作都还在。
     private func cancelServerSide() async -> CancelOutcome {
         guard let serverConnectionID else {
-            let reason = LocalizedStrings.text(.mysqlCancelNoConnectionID, language: .simplifiedChinese)
+            let reason = MySQLWording.cancelNoConnectionID(language: language)
             logger.warning("\(reason)")
             return .failed(reason: reason)
         }
         guard let statement = dialect.cancelSessionStatement(pid: serverConnectionID) else {
-            return .failed(reason: LocalizedStrings.text(.mysqlCancelStatementMissing, language: .simplifiedChinese))
+            return .failed(reason: MySQLWording.cancelStatementMissing(language: language))
         }
 
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
@@ -393,7 +409,7 @@ public actor MySQLService: DatabaseService {
             try? await cancelConnection.close().get()
             return .cancelled
         } catch {
-            let reason = LocalizedStrings.format(.mysqlCancelDispatchFailed, language: .simplifiedChinese, error.localizedDescription)
+            let reason = MySQLWording.cancelDispatchFailed(detail: error.localizedDescription, language: language)
             logger.warning("\(reason)")
             return .failed(reason: reason)
         }
@@ -416,7 +432,7 @@ public actor MySQLService: DatabaseService {
     /// `COPY … FROM STDIN` 是 PostgreSQL 的通道；MySQL 走 `LOAD DATA LOCAL INFILE` 或批量 INSERT，
     /// **这里如实说"不支持"**，绝不静默退回逐条 INSERT（那会让"用了快路径"变成一句空话）。
     public func copyFromText(table: String, columns: [String], text: String) async throws {
-        throw AppError.notImplemented(LocalizedStrings.text(.mysqlCopyUnsupported, language: .simplifiedChinese))
+        throw AppError.notImplemented(MySQLWording.copyUnsupported(language: language))
     }
 
     private func run(_ sql: String) async throws {

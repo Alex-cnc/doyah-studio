@@ -404,7 +404,7 @@
       "key": "literal-language",
       "script": "Scripts/test-literal-language-gate.py",
       "args": [],
-      "cases": 14,
+      "cases": 17,
       "countRegex": "负例自测 (\\d+)/\\d+ 通过",
       "why": "队列 L-47 / L-65 / 闭环第 3 项（语言是传进来的）",
       "anchors": [

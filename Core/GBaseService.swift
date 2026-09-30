@@ -23,9 +23,17 @@ public actor GBaseService: DatabaseService {
     /// 真正干活的驱动（方言已注入为 `GBaseDialect`）。
     private let driver: MySQLService
 
-    public init(config: ConnectionConfig, password: String?) {
+    /// `language` 由创建者给定、**原样转给干活的驱动**（队列 `L-65` 第 5 批）：
+    /// GBase 8a 与 MySQL 共用同一个 service，那几句人话（超时 / 取消 / 复制通道）
+    /// 都在 `Core/MySQLWording.swift`，语言只能在「谁在用这个连接」那一层知道。
+    public init(config: ConnectionConfig, password: String?, language: AppLanguage) {
         self.config = config
-        self.driver = MySQLService(config: config, password: password, dialect: GBaseDialect())
+        self.driver = MySQLService(
+            config: config,
+            password: password,
+            language: language,
+            dialect: GBaseDialect()
+        )
     }
 
     public func connect() async throws -> ServerInfo {

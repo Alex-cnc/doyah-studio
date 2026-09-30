@@ -114,22 +114,22 @@ def main() -> int:
         cases += 1
         ledger = copy / LEDGER
         data = json.loads(ledger.read_text(encoding="utf-8"))
-        data["deadKeys"] = [entry for entry in data["deadKeys"] if entry["key"] != "mysqlCopyUnsupported"]
+        data["deadKeys"] = [entry for entry in data["deadKeys"] if entry["key"] != "mcpApprovalDenied"]
         ledger.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         rc, out = run(copy)
-        if rc == 0 or "mysqlCopyUnsupported" not in out or "B " not in out:
+        if rc == 0 or "mcpApprovalDenied" not in out or "B " not in out:
             failures.append(f"例 3（新增未登记死译文）应判红并点名该键，实测 rc={rc}：\n{out}")
 
         # 例 4（判据 B ② · 反向陈旧）：把一个已登记的死键改成语境取值 ⇒ 台账条目陈旧。
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/MySQLService.swift",
-            "LocalizedStrings.text(.mysqlCopyUnsupported, language: .simplifiedChinese)",
-            "LocalizedStrings.text(.mysqlCopyUnsupported, language: AppLanguage.simplifiedChinese)",
+            copy / "Core/MCPToolCatalog.swift",
+            "return .needsApproval(reason: text(.mcpNeedsApproval, tool.name, language: language))",
+            "return .needsApproval(reason: text(.mcpApprovalDenied, tool.name, language: language))",
         )
         rc, out = run(copy)
-        if rc == 0 or "mysqlCopyUnsupported" not in out or "陈旧" not in out:
+        if rc == 0 or "mcpApprovalDenied" not in out or "陈旧" not in out:
             failures.append(f"例 4（死键修好后台账陈旧）应判红，实测 rc={rc}：\n{out}")
 
         # 例 5（判据 C · 源树判据）：把已透传的文本出口的 `language:` 形参去掉。
@@ -239,6 +239,45 @@ def main() -> int:
         rc, out = run(copy)
         if rc == 0 or "Core/AICapture.swift" not in out or "笔记侧" not in out:
             failures.append(f"例 12（笔记侧又收语言）应判红并点名 AICapture.swift，实测 rc={rc}：\n{out}")
+
+        # 例 13（判据 C · L-65 第 5 批钉的 MySQL 文案族）：渲染搬进了**新文件**
+        # `Core/MySQLWording.swift` —— 把某一句的 `language:` 形参删掉（改成体内自选），
+        # 「ADR-25 冻结点的落法」就退回「中文写死在新文件里」，必须当场报红。
+        copy = fresh()
+        cases += 1
+        patch(
+            copy / "Core/MySQLWording.swift",
+            "public static func copyUnsupported(language: AppLanguage) -> String {",
+            "public static func copyUnsupported() -> String { let language = AppLanguage.simplifiedChinese",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "MySQLWording.swift" not in out or "C " not in out:
+            failures.append(f"例 13（MySQL 文案族丢了 language: 形参）应判红且含 C 判据，实测 rc={rc}：\n{out}")
+
+        # 例 14（判据 C · 数据库侧那两句人话的**来源**）：工厂的 MySQL 分支不把语言交出去 ——
+        # 形参都还在，但连接对象再也拿不到语言 ⇒ 报红点名 `Core/DatabaseService.swift`。
+        copy = fresh()
+        cases += 1
+        patch(
+            copy / "Core/DatabaseService.swift",
+            "            return MySQLService(config: config, password: password, language: language)",
+            "            return MySQLService(config: config, password: password)",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "DatabaseService.swift" not in out or "C " not in out:
+            failures.append(f"例 14（工厂不给驱动语言）应判红且含 C 判据，实测 rc={rc}：\n{out}")
+
+        # 例 15（判据 C · 展示点那一半）：界面「测试连接」不发语言（第 5 批新接的调用点）。
+        copy = fresh()
+        cases += 1
+        patch(
+            copy / "App/Views/ConnectionFormView.swift",
+            "                for: target,\n                password: testPassword,\n                language: LocalizationManager.shared.effectiveLanguage\n            )",
+            "                for: target,\n                password: testPassword\n            )",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "ConnectionFormView.swift" not in out or "C " not in out:
+            failures.append(f"例 15（测试连接不传语言）应判红且含 C 判据，实测 rc={rc}：\n{out}")
 
     after = digest_tree()
     cases += 1

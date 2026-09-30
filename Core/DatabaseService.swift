@@ -61,16 +61,24 @@ public extension DatabaseService {
 }
 
 public enum DatabaseServiceFactory {
-    public static func make(for config: ConnectionConfig, password: String?) -> DatabaseService {
+    /// `language:` 由调用方给（队列 `L-65` 第 5 批）：**只有 MySQL 一族**的驱动会渲染
+    /// 给人看的文案（超时 / 取消 / 复制通道那几句，见 `Core/MySQLWording.swift`）——
+    /// PostgreSQL 侧一句都没有。所以这个形参在 PG 分支上不落任何东西，但**仍必须由调用方给**
+    /// （不留默认值：默认值等于把「写死语言」藏起来，L-47 口径）。
+    public static func make(
+        for config: ConnectionConfig,
+        password: String?,
+        language: AppLanguage
+    ) -> DatabaseService {
         switch config.dbType {
         case .postgresql:
             return PostgresService(config: config, password: password)
         case .mysql:
-            return MySQLService(config: config, password: password)
+            return MySQLService(config: config, password: password, language: language)
         case .gbase8a:
             // GBase 8a 与 MySQL 同族：驱动委托给方言可注入的 `MySQLService`（见 `GBaseService`）。
             // **注意这不等于"GBase 已验证"** —— 无实例，端到端 0 次，如实登记在 FR-DRV-08。
-            return GBaseService(config: config, password: password)
+            return GBaseService(config: config, password: password, language: language)
         }
     }
 }

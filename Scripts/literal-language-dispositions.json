@@ -1,6 +1,6 @@
 {
-  "note": "「语言是传进来的，不是写死的」台账（队列 L-47）。判据与用法见 Scripts/check-literal-language.py 头部。files = 把**字面语言**传给本地化取值入口的文件（maxSites 是登记时的实测处数，只判「不许增」；0 = 回归钉，本轮已把语言透传的文件钉在这里）。deadKeys = 「有英文译文、却只被写死语言的入口引用」的键 —— 这是**已登记的欠账**，不是放行；新增一个未登记的死键即判红，修好一个就要销账。 **版本 3（队列 L-65 第 3/4 批）**：六个文件（`AICapture` / `AICaptureUltra` / `License` / `MCPToolCatalog` / `MCPSession` / `MaintenancePlan`）的语言已透传 ⇒ `maxSites` 归零（回归钉）；死译文销掉 `mcpNeedsApproval`（会话语言可由创建者给定后它真的可达了）。余 14 处 = `MySQLService` 9（数据库侧冻结，ADR-25）+ `CLI/main.swift` 5（有意中文）。",
-  "version": 3,
+  "note": "「语言是传进来的，不是写死的」台账（队列 L-47）。判据与用法见 Scripts/check-literal-language.py 头部。files = 把**字面语言**传给本地化取值入口的文件（maxSites 是登记时的实测处数，只判「不许增」；0 = 回归钉，本轮已把语言透传的文件钉在这里）。deadKeys = 「有英文译文、却只被写死语言的入口引用」的键 —— 这是**已登记的欠账**，不是放行；新增一个未登记的死键即判红，修好一个就要销账。 **版本 4（队列 L-65 第 5 批 · 开发循环第 123 轮）**：`Core/MySQLService.swift` 一族的语言已透传（落法 = 新增文件 `Core/MySQLWording.swift` 承载渲染，旧文件只留「语言从哪来」的 `language` 属性 —— ADR-25 冻结点，需求提出者 2026-09-30 拍板 `Q42`） ⇒ `maxSites` 9 → **0**（回归钉）、死译文 **8 个键销账（9 → 1）**。 `CLI/main.swift` **5 → 6 处**：命令行的连库入口（`DatabaseServiceFactory.make(… language:)`）也显式说中文 —— 同 `Q43` 口径（命令行没有界面语境，有意为之，**不计入清零目标**）。 清零目标（44 处里的 39 处）**本轮达成**：余 5 处只在 CLI，逐条理由见下表。",
+  "version": 4,
   "files": [
     {
       "file": "Core/DiagnosisContext.swift",
@@ -14,8 +14,8 @@
     },
     {
       "file": "Core/MySQLService.swift",
-      "maxSites": 9,
-      "reason": "MySQL 驱动的连接 / 取消 / 超时 / 复制文案。语言透传属同族欠账（队列 L-65）；**本文件还在数据库侧冻结**（ADR-25，冻结点 `67fc5e6`，只增不改）⇒ 改这里要解冻或走新增文件，本轮只登记。"
+      "maxSites": 0,
+      "reason": "**回归钉（队列 L-65 第 5 批已透传）**：写法与 `MCPSession` 同族 —— 语言由**创建这个连接的人**给定（`public nonisolated let language`，`init(… language:)`），9 处文案一律转交 `Core/MySQLWording.swift` 渲染。**为什么单开一个文件**：本文件在数据库侧**阶段性冻结**（ADR-25，冻结点 `67fc5e6`，只增不改），需求提出者 2026-09-30 拍板（`Q42`）给的落法就是「新增文件承载渲染、旧文件行为一行不动」；冻结语义（协议 / 语句 / 取消路径）一字未改，改的只是「语言从哪来」这一件事。**协议入口那条**：`MySQLServiceError.errorDescription` 只回 payload 里**已渲染好的整句**，不在这里选语言（同 `SSHTunnelError` 那三支）。"
     },
     {
       "file": "Core/LicenseLoader.swift",
@@ -29,8 +29,8 @@
     },
     {
       "file": "CLI/main.swift",
-      "maxSites": 5,
-      "reason": "**有意为之**：CLI 没有界面语境，语言就该是显式的中文（本轮 L-47 把诊断输出也改成显式传 `AppLanguage.simplifiedChinese`）；另两处是 MCP 审批载荷文案。代价是这两个键的英文译文当前不可达 ⇒ 已登记进 deadKeys，要不要给 CLI 加一个语言开关属新需求（不在本轮）。**L-65 第 2 批补记**：隧道命令那句是 `let language = AppLanguage.simplifiedChinese`（**赋值**，不进本台账的计数 —— 判据量的是 `language: .simplifiedChinese` 这种**传参**形状），随后 `start(language:)` 与 `describe(language:)` 都用它；**别把它当成「没写死」**，命令行说中文是有意的口径，不是遗漏。"
+      "maxSites": 6,
+      "reason": "**有意为之**：CLI 没有界面语境，语言就该是显式的中文（本轮 L-47 把诊断输出也改成显式传 `AppLanguage.simplifiedChinese`）；另两处是 MCP 审批载荷文案。代价是这两个键的英文译文当前不可达 ⇒ 已登记进 deadKeys，要不要给 CLI 加一个语言开关属新需求（不在本轮）。**L-65 第 2 批补记**：隧道命令那句是 `let language = AppLanguage.simplifiedChinese`（**赋值**，不进本台账的计数 —— 判据量的是 `language: .simplifiedChinese` 这种**传参**形状），随后 `start(language:)` 与 `describe(language:)` 都用它；**别把它当成「没写死」**，命令行说中文是有意的口径，不是遗漏。**L-65 第 5 批补记（5 → 6 处）**：命令行的连库入口 `DatabaseServiceFactory.make(for:password:language:)` 同样显式传 `.simplifiedChinese`（数据库侧那几句失败文案也归命令行）—— 同 `Q43`（2026-09-30 拍板「保持现状」）口径，**不计入清零目标**（清零目标 = 44 处里的 39 处，CLI 那 5 处本就不在内）。"
     },
     {
       "file": "Core/NoteBody.swift",
@@ -74,38 +74,6 @@
     }
   ],
   "deadKeys": [
-    {
-      "key": "mysqlConnectTimedOut",
-      "reason": "同族欠账（队列 L-65）：调用点在 `Core/MySQLService.swift`（数据库侧冻结），语言写死中文 ⇒ 英文译文不可达。"
-    },
-    {
-      "key": "mysqlHostResolveFailed",
-      "reason": "同族欠账（队列 L-65）：`Core/MySQLService.swift` 的连接文案。"
-    },
-    {
-      "key": "mysqlLastInsertID",
-      "reason": "同族欠账（队列 L-65）：`Core/MySQLService.swift`。"
-    },
-    {
-      "key": "mysqlStatementTimeout",
-      "reason": "同族欠账（队列 L-65）：`Core/MySQLService.swift`（两处调用）。"
-    },
-    {
-      "key": "mysqlCancelNoConnectionID",
-      "reason": "同族欠账（队列 L-65）：`Core/MySQLService.swift` 的取消路径。"
-    },
-    {
-      "key": "mysqlCancelStatementMissing",
-      "reason": "同族欠账（队列 L-65）：`Core/MySQLService.swift` 的取消路径。"
-    },
-    {
-      "key": "mysqlCancelDispatchFailed",
-      "reason": "同族欠账（队列 L-65）：`Core/MySQLService.swift` 的取消路径。"
-    },
-    {
-      "key": "mysqlCopyUnsupported",
-      "reason": "同族欠账（队列 L-65）：`Core/MySQLService.swift`。"
-    },
     {
       "key": "mcpApprovalDenied",
       "reason": "**有意为之**：这处调用点只在 `CLI/main.swift`（命令行没有界面语境 ⇒ 中文是显式口径，同文件另一处隧道命令的 `let language = AppLanguage.simplifiedChinese`）。同理那一句的英文译文当前不可达 —— 要不要给 CLI 加语言开关属新需求，不在本轮。**L-65 第 4 批补记**：同一句在 Core 侧的 `MCPToolCatalog.decision(language:)` 现在按会话语言出，但门禁只对**CLI 这处**可见（短名助手那条漏判已在第 4 批修掉，见 `local_helpers`）。"

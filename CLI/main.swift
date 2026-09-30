@@ -1964,7 +1964,11 @@ struct DoyahCLI {
             timeout: Int(value(for: "--timeout") ?? "10") ?? 10
         )
 
-        let service = DatabaseServiceFactory.make(for: config, password: value(for: "--password"))
+        let service = DatabaseServiceFactory.make(
+            for: config,
+            password: value(for: "--password"),
+            language: .simplifiedChinese
+        )
 
         let info: ServerInfo
         do {

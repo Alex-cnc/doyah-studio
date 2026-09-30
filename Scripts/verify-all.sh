@@ -250,8 +250,8 @@ python3 Scripts/test-copy-emphasis-gate.py
 # （`DiagnosisContext` 的文本出口必须带 `language:` 形参、`DiagnosisAdvice.parse` 必须带、
 # 面板必须传 `effectiveLanguage` —— 只靠 A 挡不住「删掉形参再在函数体里写死」）/
 # D 空跑不许通过（语言表解析不到键、键引用为 0、扫到的文件过少都判红）。
-# 台账 `Scripts/literal-language-dispositions.json`；负例 `test-literal-language-gate.py` **14 例**
-# （第 46 轮落地时 9 例，L-65 第 2/3/4 批又各补了 1~3 例 —— 例数的唯一来源与逐处对账见
+# 台账 `Scripts/literal-language-dispositions.json`；负例 `test-literal-language-gate.py` **17 例**
+# （第 46 轮落地时 9 例，L-65 第 2/3/4 批又各补了 1~3 例、第 5 批 +3 例 —— 例数的唯一来源与逐处对账见
 # `Scripts/self-test-counts.json`，一律在临时副本上写坏）。
 python3 Scripts/check-literal-language.py
 python3 Scripts/test-literal-language-gate.py
