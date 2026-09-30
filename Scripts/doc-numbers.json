@@ -181,14 +181,14 @@
       "unit": "份",
       "secondary": {
         "label": "受版本控制的文档份数（自检夹具口径）",
-        "value": 30
+        "value": 31
       },
       "measure": {
         "kind": "doc-tables-lists",
         "module": "Scripts/check-doc-tables.py",
         "expect": [
           14,
-          30
+          31
         ],
         "note": "导入那个模块读它的清单（**权威算法是它自己的 `gitignored_documents()`**）+ `git check-ignore -z` 实测「被排除的确实是这 7 份」+ 与自检夹具 `SELF_TEST_ABSENT` / `SELF_TEST_TRACKED` **逐条**对账（清单改了没改夹具即判红）；不在 git 仓库里时 git 侧复核如实报「跳过」，不假装核过"
       },
@@ -233,7 +233,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "表格校验通过（(\\d+) 个文件，跳过 (\\d+) 份）",
           "expect": [
-            30,
+            31,
             14
           ],
           "minSites": 1,
@@ -299,19 +299,19 @@
     {
       "key": "doc-tables-files",
       "label": "check-doc-tables 在本机默认跑时受检的文件数",
-      "value": 45,
+      "value": 46,
       "unit": "份",
       "secondary": {
         "label": "清单里命名的文档份数",
-        "value": 44
+        "value": 45
       },
       "measure": {
         "kind": "doc-tables-run",
         "module": "Scripts/check-doc-tables.py",
         "regex": "✅ 表格校验通过（(\\d+) 个文件",
         "expect": [
-          45,
-          44
+          46,
+          45
         ],
         "note": "**真跑一遍**那个脚本（默认清单，cwd = 仓根），从它自己的收尾行抓受检文件数；跑不过 / 抓不到收尾行都判红（格式被改坏 = 证据坏了）。次值 = 清单里命名的份数（`len(DEFAULT_TARGETS)`，与 1 条通配合成 14）"
       },
@@ -320,9 +320,9 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "\\*\\*(\\d+) 份命名 \\+ (\\d+) 条通配 = 实跑 (\\d+) 份\\*\\*",
           "expect": [
-            44,
+            45,
             1,
-            45
+            46
           ],
           "minSites": 1,
           "note": "docstring：本轮新增的「数字的唯一来源」段"
@@ -331,7 +331,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "✅ 表格校验通过（(\\d+) 个文件）",
           "expect": [
-            45
+            46
           ],
           "minSites": 1,
           "note": "自检例 4：真仓库受检文件数"
@@ -340,7 +340,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "真仓库 (\\d+) 份无跳过",
           "expect": [
-            44
+            45
           ],
           "minSites": 1,
           "note": "自检收尾行"
@@ -349,8 +349,8 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "收尾行应为 (\\d+) 个文件（(\\d+) 份命名 \\+ (\\d+) 份通配）",
           "expect": [
+            46,
             45,
-            44,
             1
           ],
           "minSites": 1,
@@ -360,7 +360,7 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "真仓库 (\\d+) 份命名文档应全在",
           "expect": [
-            44
+            45
           ],
           "minSites": 1,
           "note": "自检例 4 的反向断言（真仓库不许出现跳过行）"
@@ -369,8 +369,8 @@
           "file": "Scripts/verify-all.sh",
           "regex": "真仓库 (\\d+) 份受检无跳过（(\\d+) 份命名 \\+ (\\d+) 份通配",
           "expect": [
+            46,
             45,
-            44,
             1
           ],
           "minSites": 1,
@@ -380,9 +380,9 @@
           "file": "AGENT-SPEC.md",
           "regex": "\\*\\*(\\d+) 份命名 \\+ (\\d+) 条通配 = 实跑 (\\d+) 份\\*\\*",
           "expect": [
-            44,
+            45,
             1,
-            45
+            46
           ],
           "minSites": 1,
           "note": "§6 资产表（本轮新增落点）"

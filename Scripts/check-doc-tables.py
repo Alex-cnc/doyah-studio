@@ -34,7 +34,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。现在：
 
 **这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 14 份** /
-**44 份命名 + 1 条通配 = 实跑 45 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
+**45 份命名 + 1 条通配 = 实跑 46 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
 `doc-tables-files`）；判据 `Scripts/check-doc-numbers.py` 每次**自己算一遍**（导入本模块读清单 +
 `git check-ignore` 实测 + 真跑本脚本）再与本文件 / `Scripts/verify-all.sh` / `AGENT-SPEC.md` 里每一处
 写法对账 —— 本文件里的数字都是**引用**，改口径改台账。
@@ -98,6 +98,8 @@ DEFAULT_TARGETS = [
     "Docs/design/开发循环-任务队列.md",
     # L-130（2026-09-30）：三仓统一待拍板台账（本机台账，`.gitignore` 排除）
     "Docs/design/待拍板台账-三仓.md",
+    # 需求提出者 2026-09-30 功能规划（Markdown 预览 / 内置浏览器核查）：带表格 ⇒ 纳入受检
+    "Docs/design/规划-工作区Markdown预览与内置浏览器-20260930.md",
     # ── L-89（2026-09-29 第 89 轮）：「带表格的文档」全部纳入 ──────────────────────
     # 此前只纳 13 份，而门禁自称「校验 Docs/ 下所有 Markdown 表格」⇒ 每轮必改的
     # `AGENT-SPEC.md` 的 6 处列数错、提案 0003 的 1 处、人工点验清单的 3 处无人判。
@@ -547,6 +549,7 @@ def main() -> int:
 
 SELF_TEST_TRACKED = [
     "Docs/需求规范书.md",
+    "Docs/design/规划-工作区Markdown预览与内置浏览器-20260930.md",
     "Docs/产品能力规划说明书.md",
     "Docs/概要设计.md",
     "Docs/README.md",
@@ -640,7 +643,7 @@ def run_self_test() -> int:
             failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
         elif "⚠ 跳过 14 份" not in output:
             failures.append(f"例 1 失败：没有高声提示「跳过 14 份」（不得静默通过）\n{output}")
-        elif "✅ 表格校验通过（30 个文件，跳过 14 份）" not in output:
+        elif "✅ 表格校验通过（31 个文件，跳过 14 份）" not in output:
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
             failures.append(f"例 1 失败：通配清单没有显式打印匹配份数（L-41）\n{output}")
@@ -722,11 +725,11 @@ def run_self_test() -> int:
         if code != 0:
             failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 44 份命名文档应全在（不得出现跳过行）\n{output}")
+            failures.append(f"例 4 失败：真仓库 45 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
             failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
-        elif "✅ 表格校验通过（45 个文件）" not in output:
-            failures.append(f"例 4 失败：收尾行应为 45 个文件（44 份命名 + 1 份通配）\n{output}")
+        elif "✅ 表格校验通过（46 个文件）" not in output:
+            failures.append(f"例 4 失败：收尾行应为 46 个文件（45 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
 
@@ -754,7 +757,7 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 14 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 跨平台标识（Windows 形态落回清单写法）/ 真仓库 44 份无跳过")
+    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 14 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 跨平台标识（Windows 形态落回清单写法）/ 真仓库 45 份无跳过")
     return 0
 
 
