@@ -220,6 +220,7 @@
 		72E2DA9EC56F06B89D22A701 /* DataTaskTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1B358B198CAAC96D1DFDA4 /* DataTaskTests.swift */; };
 		72EA713A03DB52CF470112E4 /* SSHTunnelProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853F2D56128CDAA5B95B5C2F /* SSHTunnelProcess.swift */; };
 		735E9D0C68F37FE0840D0EC7 /* ServerObjectsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B895C59EA1CABB3555C0339 /* ServerObjectsPanel.swift */; };
+		74D154A5D608330E1006BBAF /* LowerPaneSizing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C048A61814D025ECC212B180 /* LowerPaneSizing.swift */; };
 		7521131CEA3FE4866FB1B88C /* DesignTokensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9431167C0ABF30CB531D55 /* DesignTokensTests.swift */; };
 		75D7B30F0C18E13357A665AE /* BrowseRowsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1528B7C14707F749A202AA32 /* BrowseRowsSheet.swift */; };
 		767C8D92A016D2692D49582E /* CopyTextFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00BB029440E5B82A532004F /* CopyTextFormat.swift */; };
@@ -367,6 +368,7 @@
 		C8B112DC28D4D9D574F110AE /* ResultViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24CA0C21A3F3B0E9E83F9AFF /* ResultViewTests.swift */; };
 		C8CD4861EE76A24B3CA004EE /* XLSXWriterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E864B8ECE52A3C9C02FA6E36 /* XLSXWriterTests.swift */; };
 		C9F911943CD437DFB2528B7F /* TerminalRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96413CFB6CEE98776A138DDF /* TerminalRun.swift */; };
+		CACFEE8494B65B1F10220EC7 /* LowerPaneSizingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF344515E026353ABD62BEA7 /* LowerPaneSizingTests.swift */; };
 		CAEECB45886E3837C88485F4 /* MultiCursorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 351BA5281B85C8B96236BA42 /* MultiCursorTests.swift */; };
 		CC144CE0A92F8B45DDC5FF16 /* DoyahCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AE8BE22E68AD7A621E98BDCC /* DoyahCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		CCB1C9AAAC2B6896723EFA7E /* MenuLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE844E31078C7575E8CE56B3 /* MenuLocalization.swift */; };
@@ -884,6 +886,7 @@
 		BEEB21FB19E91FE9CEE711EB /* SQLiteKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteKit.swift; sourceTree = "<group>"; };
 		BFA7F2F57FDE8976E8677044 /* MemoryRetentionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryRetentionTests.swift; sourceTree = "<group>"; };
 		C022EA38ED16D30DE5B586C4 /* DatabaseStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseStats.swift; sourceTree = "<group>"; };
+		C048A61814D025ECC212B180 /* LowerPaneSizing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowerPaneSizing.swift; sourceTree = "<group>"; };
 		C096A676E469ADF5297AE00A /* LockMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockMonitor.swift; sourceTree = "<group>"; };
 		C0D3A44567FE80AFA3F8B483 /* ForeignKeyNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForeignKeyNavigationTests.swift; sourceTree = "<group>"; };
 		C0F66772CFBBA816D246CA21 /* InlineEditDraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineEditDraftTests.swift; sourceTree = "<group>"; };
@@ -971,6 +974,7 @@
 		ED607403CD8E32896432C6BE /* ExecutionRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionRegistry.swift; sourceTree = "<group>"; };
 		EE37FC23299B1643B48049DD /* AICapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICapture.swift; sourceTree = "<group>"; };
 		EF15BDC53399284069A19712 /* CoreLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreLocalizationTests.swift; sourceTree = "<group>"; };
+		EF344515E026353ABD62BEA7 /* LowerPaneSizingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowerPaneSizingTests.swift; sourceTree = "<group>"; };
 		EF852B95CB3571B14DEC3FF2 /* DoyahStudio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DoyahStudio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EFE0735AFAB53E8F8317F3C7 /* MaintenancePlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenancePlanTests.swift; sourceTree = "<group>"; };
 		F106607CE6B98F00FEDCBC75 /* Dialects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dialects.swift; sourceTree = "<group>"; };
@@ -1189,6 +1193,7 @@
 				A9591B886C2F024CED65AFF2 /* LocalizationTests.swift */,
 				EA2FF271DF1C903E814B9111 /* LocalSecretStoreTests.swift */,
 				C7913306A42F7A4B4584A497 /* LockMonitorTests.swift */,
+				EF344515E026353ABD62BEA7 /* LowerPaneSizingTests.swift */,
 				EFE0735AFAB53E8F8317F3C7 /* MaintenancePlanTests.swift */,
 				2F19F5EDD378A35166D4D17A /* MCPApprovalQueueTests.swift */,
 				196CD6679D37CDDCC5EF993E /* MCPTests.swift */,
@@ -1372,6 +1377,7 @@
 				DDFA4F63188FA05DE24F4C92 /* Localization.swift */,
 				0A9AC5E117EDADD5F26CFD51 /* LocalSecretStore.swift */,
 				C096A676E469ADF5297AE00A /* LockMonitor.swift */,
+				C048A61814D025ECC212B180 /* LowerPaneSizing.swift */,
 				B0ABF47A29865ACAA1FAD912 /* LowerPaneTab.swift */,
 				291B34BCBD3A29B08FB7A73A /* MaintenancePlan.swift */,
 				F595D662F0385DE07F8F6E70 /* MCPApprovalQueue.swift */,
@@ -2030,6 +2036,7 @@
 				696BAF7BBBC39872298F7F5F /* LocalSecretStore.swift in Sources */,
 				46D690C4191CCB0C93EC0C9A /* Localization.swift in Sources */,
 				477FF7D75A89E224DF70EE62 /* LockMonitor.swift in Sources */,
+				74D154A5D608330E1006BBAF /* LowerPaneSizing.swift in Sources */,
 				ABAD63A048633EB2055B1BF8 /* LowerPaneTab.swift in Sources */,
 				926072FC6969B7EF58DF5E20 /* MCPApprovalQueue.swift in Sources */,
 				F170B68EAB7ABED07E75818A /* MCPProtocol.swift in Sources */,
@@ -2202,6 +2209,7 @@
 				278656636EB6F2AE7726FDD8 /* LocalSecretStoreTests.swift in Sources */,
 				4FFC779F9795D5CBF4581080 /* LocalizationTests.swift in Sources */,
 				D6C572FCD1F1619E8E53CD35 /* LockMonitorTests.swift in Sources */,
+				CACFEE8494B65B1F10220EC7 /* LowerPaneSizingTests.swift in Sources */,
 				FCC23E451E7FE3FA99F16E35 /* MCPApprovalQueueTests.swift in Sources */,
 				9F18E36C55FA0A92C2CB2F26 /* MCPTests.swift in Sources */,
 				76B2ADE92942CE299F40348F /* MaintenancePlanTests.swift in Sources */,

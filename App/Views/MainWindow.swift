@@ -78,6 +78,9 @@ struct MainWindow: View {
     ///  ③ **最大化仍覆盖整段** —— 判在段一级，所以两段行为一致。
     @ViewBuilder
     private func sectionWithLowerPane<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        // 折叠态的判定只在这里取一次，往下传给两处（面板自己 + 高度提示）——
+        // 免得「谁折叠」有两处口径。
+        let collapsed = !appState.isLowerPaneVisible
         VStack(spacing: 0) {
             if appState.isLowerPaneVisible, appState.isLowerPaneMaximized {
                 LowerPaneView(tab: appState.selectedTab)
@@ -85,10 +88,15 @@ struct MainWindow: View {
                 content()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Divider()
-                LowerPaneView(tab: appState.selectedTab, isCollapsed: !appState.isLowerPaneVisible)
-                    // 默认占一成多的高度（与 L-84 ㈠ 的「下方面板默认占 20%」同一条口径，
-                    // 折叠时由 `LowerPaneView` 自己按标题栏一行固定住）。
-                    .frame(minHeight: 90, idealHeight: 200)
+                LowerPaneView(tab: appState.selectedTab, isCollapsed: collapsed)
+                    // 高度提示**由面板自己那一层算**（`LowerPaneSizing`）：
+                    // 折叠态必须是「不设约束」，否则这里会留下一条比标题栏宽的空白带
+                    // （2026-09-30 需求提出者实测缺陷，队列 `L-121`—— 原来这里写死
+                    //  `.frame(minHeight: 90, idealHeight: 200)`，折叠后那 90pt 的框还在）。
+                    .frame(
+                        minHeight: LowerPaneSizing.minHeight(collapsed: collapsed),
+                        idealHeight: LowerPaneSizing.idealHeight(collapsed: collapsed)
+                    )
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
