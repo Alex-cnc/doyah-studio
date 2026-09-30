@@ -8,7 +8,8 @@ import Foundation
 /// 与 `QueryTab` 并列，各自演进。
 public struct WorkspaceTab: Identifiable, Sendable, Equatable {
     public let id: UUID
-    /// 页签标题（Home 是「Home」，文件是文件名）。
+    /// 页签标题（文件页 = 文件名；**Home 页由调用点从语言表取** —— `L(.workspaceTabHome)` → 中文「首页」/ 英文 `Home`。
+    /// Core 不认识语言表（`L(_:)` 在 App 侧），所以这里**不写死任何文案**）。
     public var title: String
     /// 文件路径；`nil` = **Home 欢迎页**（工作区的默认页签，FR-EDIT-35）。
     public var path: String?
@@ -43,9 +44,11 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
         )
     }
 
-    /// Home 页签。
-    public static func home() -> WorkspaceTab {
-        WorkspaceTab(title: "Home", language: .plainText)
+    /// Home 页签（工作区的落脚点）。
+    ///
+    /// **标题由调用点传入**：Core 里不许出现展示文案 —— 之前这里写死 `"Home"`，中文界面也显示 Home（`L-108`）。
+    public static func home(title: String) -> WorkspaceTab {
+        WorkspaceTab(title: title, language: .plainText)
     }
 
     /// 存盘成功：把"已保存内容"对齐到当前内容。

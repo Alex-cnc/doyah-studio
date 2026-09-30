@@ -445,6 +445,7 @@ public enum LKey: String, CaseIterable, Sendable {
     // 工作区原生体验（FR-EDIT-35 / 36）：页签、Home 页、打开与保存文件
     case workspaceHomeWelcome
     case workspaceHomeSubtitle
+    case workspaceTabHome
     case workspaceHomeBuildLine
     case workspaceHomeCopyright
     case workspaceRecentFiles
@@ -2203,6 +2204,7 @@ public enum LocalizedStrings {
         .sshSummary: [.simplifiedChinese: "经 %@@%@:%@ → %@:%@", .english: "Via %@@%@:%@ → %@:%@"],
         .workspaceHomeWelcome: [.simplifiedChinese: "欢迎回来", .english: "Welcome back"],
         .workspaceHomeSubtitle: [.simplifiedChinese: "左边选工作区，点文件就能在编辑器里打开；配色与补全按文件类型自动匹配。", .english: "Pick a workspace on the left, then click a file to open it here. Highlighting and completion follow the file type."],
+        .workspaceTabHome: [.simplifiedChinese: "首页", .english: "Home"],
         .workspaceHomeBuildLine: [.simplifiedChinese: "版本 %@（构建 %@）", .english: "Version %@ (build %@)"],
         .workspaceHomeCopyright: [.simplifiedChinese: "© 2026 DoyahStudio · 本机优先：数据与文件不出这台机器", .english: "© 2026 DoyahStudio · Local first: your data and files stay on this machine"],
         .workspaceRecentFiles: [.simplifiedChinese: "最近打开的文件", .english: "Recent files"],

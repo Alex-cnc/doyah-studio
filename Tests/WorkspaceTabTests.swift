@@ -5,7 +5,7 @@ import XCTest
 final class WorkspaceTabTests: XCTestCase {
 
     func testOpeningSameFileReusesTab() {
-        var tabs = [WorkspaceTab.home()]
+        var tabs = [WorkspaceTab.home(title: "首页")]
         let first = WorkspaceTabSet.opening(path: "/tmp/a.js", in: tabs, content: "let a = 1")
         tabs = first.tabs
         XCTAssertEqual(tabs.count, 2)
@@ -25,7 +25,7 @@ final class WorkspaceTabTests: XCTestCase {
 
     /// Home 是工作区的落脚点：**关不掉**。
     func testHomeCannotBeClosed() {
-        let home = WorkspaceTab.home()
+        let home = WorkspaceTab.home(title: "首页")
         let file = WorkspaceTab.file(path: "/tmp/a.py", content: "")
         let remaining = WorkspaceTabSet.closing(id: home.id, in: [home, file])
         XCTAssertEqual(remaining.count, 2)
@@ -34,7 +34,7 @@ final class WorkspaceTabTests: XCTestCase {
 
     /// 关闭后选中项落到右边（没有就左边）。
     func testSelectionAfterClosing() {
-        let home = WorkspaceTab.home()
+        let home = WorkspaceTab.home(title: "首页")
         let a = WorkspaceTab.file(path: "/tmp/a.js", content: "")
         let b = WorkspaceTab.file(path: "/tmp/b.js", content: "")
         let tabs = [home, a, b]
@@ -113,5 +113,56 @@ final class WorkspaceHistoryTests: XCTestCase {
         let decoded = try JSONDecoder().decode(WorkspaceHistory.self, from: data)
         XCTAssertEqual(decoded, history)
         XCTAssertEqual(decoded.files.first?.displayName, "index.ts")
+    }
+}
+
+/// Home 页签标题的约定（`L-108`；`FR-EDIT-35` 口径补充）。
+///
+/// 规矩：**Core 不许出现展示文案** —— 标题一律由调用点从语言表取。
+/// 之前 `Core/WorkspaceTab.swift` 写死 `"Home"`，中文界面也是 Home。
+final class WorkspaceHomeTitleTests: XCTestCase {
+
+    private func source(_ relative: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
+    }
+
+    /// 标题由调用点给（Core 不猜）。
+    func testTitleComesFromCaller() {
+        let home = WorkspaceTab.home(title: "首页")
+        XCTAssertEqual(home.title, "首页")
+        XCTAssertTrue(home.isHome)
+        XCTAssertEqual(home.language, .plainText)
+    }
+
+    /// 语言表两栏都有（中文「首页」/ 英文 `Home`）。
+    func testLanguageTableHasBothLanguages() {
+        XCTAssertEqual(LocalizedStrings.text(.workspaceTabHome, language: .simplifiedChinese), "首页")
+        XCTAssertEqual(LocalizedStrings.text(.workspaceTabHome, language: .english), "Home")
+    }
+
+    /// 源锚点一：Core 里不再有写死的展示文案。
+    ///
+    /// 只看**代码行**（跳过 `//` 注释与文档段）—— 注释里会引用这个坏例子（`"Home"`），
+    /// 拿整份文件搜子串会把自己的说明文字当成命中（这条判据初版就是这么误报的）。
+    func testCoreDoesNotHardcodeDisplayTitle() throws {
+        let code = try source("Core/WorkspaceTab.swift")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.hasPrefix("//") }
+            .joined(separator: "\n")
+        guard !code.contains("\"Home\"") else {
+            return XCTFail("Core 里又出现了写死的展示文案 —— 标题必须由调用点从语言表取")
+        }
+    }
+
+    /// 源锚点二：宿主装配侧确实从语言表取名。
+    func testAppFeedsLocalizedTitle() throws {
+        let text = try source("App/WorkspaceTabsModel.swift")
+        guard text.contains(".home(title: L(.workspaceTabHome))") else {
+            return XCTFail("Home 页签标题没有走语言表 —— 锚点变了请更新这条判据，不要删掉它")
+        }
     }
 }

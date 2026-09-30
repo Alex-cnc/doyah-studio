@@ -15,7 +15,7 @@ final class WorkspaceTabsModel: ObservableObject {
     /// 会把界面卡死，而"能打开但卡死"比"明确说不打开"糟得多。
     static let maximumFileSize = 2 * 1024 * 1024
 
-    @Published private(set) var tabs: [WorkspaceTab] = [.home()]
+    @Published private(set) var tabs: [WorkspaceTab] = [.home(title: L(.workspaceTabHome))]
     @Published private(set) var selectedID: UUID?
     @Published private(set) var history = WorkspaceHistory()
     /// 失败原因（界面上如实显示，不静默）。
