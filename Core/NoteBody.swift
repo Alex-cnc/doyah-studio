@@ -104,18 +104,19 @@ public enum NoteBodyProjection {
 
     // MARK: - 权威源 → span 树
 
-    /// Markdown + 旁挂 → span 树。**解析不了的东西原样保留为纯文本**（不吞、不改写）。
+    /// **行内标记的唯一解析处**（全局只有这一份，见下）。
     ///
-    /// **语言由调用方给定**（队列 L-47 / L-65 的口径）：降级说明是**给人看的话**，
-    /// 界面要英文就传 `.english`。此前这里写死简体中文 ⇒ 语言表里
-    /// `noteSidecarLost` / `noteLostColor` / `noteLostSize` / `noteExportDegraded`
-    /// 的英文译文**永远不可达**（死译文）。**刻意不留默认值**：默认值等于把「写死语言」藏起来。
-    public static func toSpans(_ body: NoteBody, language: AppLanguage) -> NoteProjection {
+    /// 抽出来是因为队列 `L-137`（工作区 Markdown 预览）：预览的**块级**结构由
+    /// `MarkdownDocument` 产出，而每一块里的**行内**标记必须与笔记侧**同一份实现** ——
+    /// 否则同一个 `**粗体**` 在笔记里是粗体、在预览里是星号，两套口径。
+    /// 门禁 `Scripts/check-markdown-single-source.py` 就守这一条（`nextMarker` 只许在 `NoteBody.swift`）。
+    ///
+    /// **口径一字未改**（提取前它长在 `toSpans` 里）：只认 `**` / `*` / `` ` `` 三个标记；
+    /// **取最早出现的那个**（不是「先试代码再试粗体」）；未闭合 / 空内容不算一对；
+    /// 扫到谁先出现就切谁，切不动就整段退化成纯文本（不吞、不改写）。
+    public static func parseInline(_ markdown: String) -> [NoteSpan] {
         var spans: [NoteSpan] = []
-        var degradations: [String] = []
-        var remaining = Substring(body.markdown)
-
-        // 只认三个行内标记；扫到谁先出现就切谁，切不动就整段退化成纯文本。
+        var remaining = Substring(markdown)
         while !remaining.isEmpty {
             if let marker = nextMarker(in: remaining) {
                 let (before, markerText, inner, after) = marker
@@ -133,6 +134,18 @@ public enum NoteBodyProjection {
                 remaining = ""
             }
         }
+        return spans
+    }
+
+    /// Markdown + 旁挂 → span 树。**解析不了的东西原样保留为纯文本**（不吞、不改写）。
+    ///
+    /// **语言由调用方给定**（队列 L-47 / L-65 的口径）：降级说明是**给人看的话**，
+    /// 界面要英文就传 `.english`。此前这里写死简体中文 ⇒ 语言表里
+    /// `noteSidecarLost` / `noteLostColor` / `noteLostSize` / `noteExportDegraded`
+    /// 的英文译文**永远不可达**（死译文）。**刻意不留默认值**：默认值等于把「写死语言」藏起来。
+    public static func toSpans(_ body: NoteBody, language: AppLanguage) -> NoteProjection {
+        var spans = parseInline(body.markdown)
+        var degradations: [String] = []
 
         // 旁挂：按"文本 + 第几次出现"定位 —— **要能在 span 内部再切一刀**。
         // 一开始我按"整段 span 文本相等"定位，结果纯文本（没有任何 Markdown 标记）时整篇是一个大 span，
