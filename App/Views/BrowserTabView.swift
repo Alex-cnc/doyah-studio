@@ -9,12 +9,12 @@ import DoyahPlatform
 /// 版式全部走设计令牌（`Theme` / `Spacing` / `Radius` / `HairlineView`）——
 /// 系统语义色与裸间距会被令牌棘轮拦下。
 ///
-/// 这个视图**不做任何导航判断**：地址栏提交交给 `AppState.navigateBrowserTab`，
+/// 这个视图**不做任何导航判断**：地址栏提交交给 `WorkspaceBrowserModel.navigateBrowserTab`，
 /// 那里会先过 Core 的策略、再让引擎加载、并把这次出网写进日志。视图只负责显示。
 struct BrowserTabView: View {
     let page: BrowserPage
 
-    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var browser: WorkspaceBrowserModel
     @State private var address: String = ""
     @FocusState private var isAddressFocused: Bool
 
@@ -46,7 +46,7 @@ struct BrowserTabView: View {
     private var toolbar: some View {
         HStack(spacing: Spacing.s) {
             Button {
-                let engine = appState.browserEngine(for: page)
+                let engine = browser.browserEngine(for: page)
                 Task { await engine.goBack() }
             } label: {
                 Image(systemName: "chevron.left")
@@ -56,7 +56,7 @@ struct BrowserTabView: View {
             .help(L(.browserBack))
 
             Button {
-                let engine = appState.browserEngine(for: page)
+                let engine = browser.browserEngine(for: page)
                 Task { await engine.goForward() }
             } label: {
                 Image(systemName: "chevron.right")
@@ -66,7 +66,7 @@ struct BrowserTabView: View {
             .help(L(.browserForward))
 
             Button {
-                let engine = appState.browserEngine(for: page)
+                let engine = browser.browserEngine(for: page)
                 if page.isLoading {
                     engine.stopLoading()
                 } else {
@@ -83,7 +83,7 @@ struct BrowserTabView: View {
                 .font(Theme.font(.monoSmall))
                 .focused($isAddressFocused)
                 .onSubmit {
-                    appState.navigateBrowserTab(page.id, input: address)
+                    browser.navigateBrowserTab(page.id, input: address)
                     isAddressFocused = false
                 }
 
@@ -130,7 +130,7 @@ struct BrowserTabView: View {
 
     @ViewBuilder
     private var content: some View {
-        if page.url != nil, appState.isBrowserPagePristine(page.id) {
+        if page.url != nil, browser.isBrowserPagePristine(page.id) {
             // 从会话恢复出来的页签：**不自动请求**（否则只是打开应用，数据就已经出网了）。
             // 给出明确的一步：用户点了才加载。
             VStack(spacing: Spacing.s) {
@@ -149,7 +149,7 @@ struct BrowserTabView: View {
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
                 Button(L(.browserReload)) {
-                    let engine = appState.browserEngine(for: page)
+                    let engine = browser.browserEngine(for: page)
                     Task { await engine.reload() }
                 }
                 .buttonStyle(.borderedProminent)
@@ -163,14 +163,14 @@ struct BrowserTabView: View {
                 description: Text(L(.browserEmptyHint))
             )
         } else {
-            BrowserEngineView(engine: appState.browserEngine(for: page))
+            BrowserEngineView(engine: browser.browserEngine(for: page))
         }
     }
 }
 
 /// `WKWebView` 的 SwiftUI 承载。
 ///
-/// 只做「把已有引擎的 view 贴进来」这一件事：引擎是按页签缓存的（见 `AppState.browserEngine(for:)`），
+/// 只做「把已有引擎的 view 贴进来」这一件事：引擎是按页签缓存的（见 `WorkspaceBrowserModel.browserEngine(for:)`），
 /// 所以切换页签、视图重建都不会重新加载页面。
 private struct BrowserEngineView: NSViewRepresentable {
     let engine: WebKitBrowserEngine

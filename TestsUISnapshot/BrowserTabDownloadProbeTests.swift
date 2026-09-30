@@ -41,7 +41,7 @@ import DoyahPlatform
 ///      那条断言不是恒真的）。
 ///   ③ **下载**：真授权目录（walk 的是产品自己的 `BrowserDownload.destination` + 真 `FileManager`）——
 ///      文件真的落在那个目录、同名再来一次得到 `-1` 而**原来那份一个字节没动**；
-///      走真 `AppState.handleBrowserDownload(_:page:)` ⇒ 提示条就是「已下载到 <路径>」，
+///      走真 `WorkspaceBrowserModel.handleBrowserDownload(_:page:)` ⇒ 提示条就是「已下载到 <路径>」，
 ///      外发日志里那条 `allowed` 也带着页签身份。
 ///
 /// ## 边界（如实写在前面）
@@ -156,9 +156,9 @@ final class BrowserTabDownloadProbeTests: XCTestCase {
     func testRestoredTabShowsAddressWithoutLoading() async throws {
         let address = "http://127.0.0.1:9/docs"
         let first = await makeState()
-        let tabID = first.openBrowserTab()
-        first.navigateBrowserTab(tabID, input: address)
-        let reachedModel = await waitUntil { first.browserPages.first(where: { $0.id == tabID })?.url != nil }
+        let tabID = first.workspaceBrowser.openBrowserTab()
+        first.workspaceBrowser.navigateBrowserTab(tabID, input: address)
+        let reachedModel = await waitUntil { first.workspaceBrowser.browserPages.first(where: { $0.id == tabID })?.url != nil }
         XCTAssertTrue(reachedModel, "地址栏导航没把地址写进页模型")
         let landed = await waitUntil { FileManager.default.fileExists(atPath: self.tabsFile.path) }
         XCTAssertTrue(landed, "页签没有落盘 —— 重开应用就没得恢复")
@@ -166,12 +166,12 @@ final class BrowserTabDownloadProbeTests: XCTestCase {
         // 重开：**新的** AppState 走真恢复路径（页签库文件是同一份）
         let second = await makeState()
         let page = try XCTUnwrap(
-            second.browserPages.first(where: { $0.id == tabID }),
+            second.workspaceBrowser.browserPages.first(where: { $0.id == tabID }),
             "重开之后页签没回来（恢复路径断了）"
         )
         XCTAssertEqual(page.url?.absoluteString, address, "恢复出来的地址不是上次那个")
         XCTAssertTrue(
-            second.isBrowserPagePristine(tabID),
+            second.workspaceBrowser.isBrowserPagePristine(tabID),
             "恢复出来的页签被当成已加载 —— 打开应用就出网了（契约：恢复不自动请求）"
         )
 
@@ -180,7 +180,7 @@ final class BrowserTabDownloadProbeTests: XCTestCase {
         let scope = LocalizationManager.beginHostLanguage(language)
         defer { LocalizationManager.endHostLanguage() }
         let host = UISnapshot.LiveHost(
-            BrowserTabView(page: page).environmentObject(second),
+            BrowserTabView(page: page).environmentObject(second.workspaceBrowser),
             size: CGSize(width: 720, height: 360)
         )
         host.settle()
@@ -199,7 +199,7 @@ final class BrowserTabDownloadProbeTests: XCTestCase {
         try writeEvidence("restoredTab", [
             "address": address,
             "restoredAddress": page.url?.absoluteString ?? "",
-            "pristineAfterRestart": second.isBrowserPagePristine(tabID),
+            "pristineAfterRestart": second.workspaceBrowser.isBrowserPagePristine(tabID),
             "addressFieldValues": fields,
             "restoredTitle": restoredTitle,
             "screenshot": shot.file,
@@ -215,8 +215,8 @@ final class BrowserTabDownloadProbeTests: XCTestCase {
     @MainActor
     func testEgressLogCanBeFilteredByTab() async throws {
         let state = await makeState()
-        let tabA = state.openBrowserTab()
-        let tabB = state.openBrowserTab()
+        let tabA = state.workspaceBrowser.openBrowserTab()
+        let tabB = state.workspaceBrowser.openBrowserTab()
         XCTAssertNotEqual(tabA, tabB)
 
         // 标题 ≥12 字：页签下拉的标签取值规则（「短标签会被后来的长标题替换」）与记录先后无关
@@ -226,13 +226,13 @@ final class BrowserTabDownloadProbeTests: XCTestCase {
             url: URL(string: "http://127.0.0.1:9/a")!,
             title: titleA
         )
-        state.applyBrowserUpdate(pageA)
-        state.handleBrowserDownload(
+        state.workspaceBrowser.applyBrowserUpdate(pageA)
+        state.workspaceBrowser.handleBrowserDownload(
             .finished(filename: "report.zip", url: scratch.appendingPathComponent("report.zip")),
             page: pageA
         )
         // 地址栏导航：真引擎 → 真策略 → 真日志；打在 discard 口（连不上就失败，也不会真出网）
-        state.navigateBrowserTab(tabA, input: "http://127.0.0.1:9/a")
+        state.workspaceBrowser.navigateBrowserTab(tabA, input: "http://127.0.0.1:9/a")
         let recorded = await waitUntil { self.egressLineCount() == 2 }
         XCTAssertTrue(recorded, "两条记录没落盘（实际 \(egressLineCount()) 行）—— 日志是异步写的，先等它")
         await state.refreshEgressLog()
@@ -326,14 +326,15 @@ final class BrowserTabDownloadProbeTests: XCTestCase {
     /// 授权的获取走产品自己的书签机制（`MacDirectoryAccess.makeBookmark` → `DirectoryBookmark`
     /// → `AppState.authorizedDownloadDirectory()`），不塞假对象；落盘命名走产品自己的
     /// `BrowserDownload.destination` + **真 `FileManager`**；回报走产品自己的
-    /// `AppState.handleBrowserDownload(_:page:)`（引擎的下载回调调的就是它）。
+    /// `WorkspaceBrowserModel.handleBrowserDownload(_:page:)`（引擎的下载回调调的就是它；
+    /// 队列 `L-149` 剩余① 之后这条路的落点在模型上，外发留痕仍回流到 `AppState`）。
     @MainActor
     func testDownloadLandsInAuthorizedDirectoryWithoutOverwriting() async throws {
         let state = await makeState()
-        let tabID = state.openBrowserTab()
+        let tabID = state.workspaceBrowser.openBrowserTab()
         let title = "文档站（探针 · 下载）"
         let page = BrowserPage(id: tabID, url: URL(string: "http://127.0.0.1:9/a")!, title: title)
-        state.applyBrowserUpdate(page)
+        state.workspaceBrowser.applyBrowserUpdate(page)
 
         let bookmark = try MacDirectoryAccess.makeBookmark(for: scratch, displayName: "下载探针")
         state.storedDirectoryBookmarks = [bookmark]
@@ -367,10 +368,10 @@ final class BrowserTabDownloadProbeTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: first), payload, "第二份把第一份写坏了")
 
         // 回报：引擎下载结束走的就是这条（提示条 + 外发留痕）
-        state.handleBrowserDownload(.finished(filename: "report.zip", url: second), page: page)
+        state.workspaceBrowser.handleBrowserDownload(.finished(filename: "report.zip", url: second), page: page)
         let notice = L(.browserDownloadFinished, second.path)
         XCTAssertEqual(
-            state.browserPages.first(where: { $0.id == tabID })?.notice,
+            state.workspaceBrowser.browserPages.first(where: { $0.id == tabID })?.notice,
             notice,
             "页上那条提示不是「已下载到 <路径>」"
         )
@@ -385,7 +386,7 @@ final class BrowserTabDownloadProbeTests: XCTestCase {
         // 提示条真的画上去了：同一份视图两次渲染**逐字节相同**（无噪声），
         // 去掉提示条那一份必须**不同**（否则判据是空的）
         let reported = try XCTUnwrap(
-            state.browserPages.first(where: { $0.id == tabID }),
+            state.workspaceBrowser.browserPages.first(where: { $0.id == tabID }),
             "页签不在模型里"
         )
         let withNotice = try renderTabHost(page: reported, state: state)
@@ -455,7 +456,7 @@ final class BrowserTabDownloadProbeTests: XCTestCase {
     @MainActor
     private func renderTabHost(page: BrowserPage, state: AppState) throws -> String {
         let host = UISnapshot.LiveHost(
-            BrowserTabView(page: page).environmentObject(state),
+            BrowserTabView(page: page).environmentObject(state.workspaceBrowser),
             size: CGSize(width: 720, height: 300)
         )
         host.settle()

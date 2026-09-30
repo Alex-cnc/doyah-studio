@@ -26,7 +26,7 @@
   ],
   "floors": {
     "families": 39,
-    "totalCases": 493,
+    "totalCases": 496,
     "anchorSites": 65,
     "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。"
   },
@@ -861,15 +861,15 @@
       "args": [
         "--self-test"
       ],
-      "cases": 12,
+      "cases": 15,
       "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "队列 L-149 ③④ / 闭环第 9 项（内置浏览器页签的归属 = 工作区：双向对账的允许落点台账 + 数据库侧视图命中即红 + 两条文档条文格必须写「工作区」）",
+      "why": "队列 L-149 ③④ + 剩余① / 闭环第 9 项（内置浏览器页签的归属 = 工作区：状态所有者 = App/WorkspaceBrowserModel.swift 只此一处 + 双向对账的允许落点台账 + 数据库侧视图命中即红 + 两条文档条文格必须写「工作区」）",
       "anchors": [
         {
           "file": "AGENT-SPEC.md",
-          "regex": "check-browser-tab-ownership\\.py.{0,2000}?--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "regex": "check-browser-tab-ownership\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*（绿对照",
           "minSites": 1,
-          "note": "§6 资产表「内置浏览器页签的归属 = 工作区」行"
+          "note": "§6 资产表「内置浏览器页签的归属 = 工作区」行（只认现状声明那一处括号；历史变更行里记的旧例数不回改、也不进判据）"
         },
         {
           "file": "Scripts/verify-all.sh",

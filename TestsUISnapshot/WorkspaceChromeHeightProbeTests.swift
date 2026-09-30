@@ -40,7 +40,9 @@ import DoyahCore
 /// · 量的是**应用内 chrome 行**（工作区页签条）——**不是** AppKit 窗口标题栏
 ///   （`NSWindow` 的 titlebar / toolbar）那一层；后者要真窗口，本轮**未机器化**；
 /// · 不验观感（对齐 / 间距好不好看），也不验页签**点起来对不对**（那是既有点验项）；
-/// · 不碰任何用户数据：`browserPages` 直接在内存里摆，页签历史指向 `.build/` 下的临时文件。
+/// · 不碰任何用户数据：`workspaceBrowser.browserPages` 直接在内存里摆
+///   （队列 `L-149` 剩余① 之后浏览器状态归 `WorkspaceBrowserModel`，所以片场里要单独注入它），
+///   页签历史指向 `.build/` 下的临时文件。
 final class WorkspaceChromeHeightProbeTests: XCTestCase {
 
     /// 取样宽度：从「非全屏的窄窗口」到「大屏全屏」（内测报的是**非全屏**下出事）。
@@ -62,8 +64,8 @@ final class WorkspaceChromeHeightProbeTests: XCTestCase {
 
         let state = AppState()
         // **只在内存里摆页签**（`openBrowserTab()` 会落盘到真实数据目录 —— 探针不写用户数据）。
-        state.browserPages = []
-        state.selectedBrowserID = nil
+        state.workspaceBrowser.browserPages = []
+        state.workspaceBrowser.selectedBrowserID = nil
         let tabs = WorkspaceTabsModel(store: WorkspaceHistoryStore(fileURL: historyURL))
         return (state, tabs)
     }
@@ -74,6 +76,7 @@ final class WorkspaceChromeHeightProbeTests: XCTestCase {
         let controller = NSHostingController(
             rootView: strip
                 .environmentObject(host.state)
+                .environmentObject(host.state.workspaceBrowser)
                 .environmentObject(host.tabs)
         )
         let size = controller.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
@@ -102,16 +105,16 @@ final class WorkspaceChromeHeightProbeTests: XCTestCase {
     func testChromeRowHeightDoesNotFollowContentOrCountOrWidth() throws {
         // ① 基线：只有 Home（一个页签、没有浏览器）
         let baseline = measure("基线·仅 Home") { state, _ in
-            state.browserPages = []
-            state.selectedBrowserID = nil
+            state.workspaceBrowser.browserPages = []
+            state.workspaceBrowser.selectedBrowserID = nil
         }
 
         // ② 内测原场景：2 个**空白**浏览器页签，选中空白那个
         let twoBlank = measure("2 个空白浏览器页签（选中空白）") { state, _ in
             let first = BrowserPage()
             let second = BrowserPage()
-            state.browserPages = [first, second]
-            state.selectedBrowserID = second.id
+            state.workspaceBrowser.browserPages = [first, second]
+            state.workspaceBrowser.selectedBrowserID = second.id
         }
 
         // ③ 对照 ②：2 个页签里有地址、有标题的那一个被选中
@@ -121,16 +124,16 @@ final class WorkspaceChromeHeightProbeTests: XCTestCase {
                 url: URL(string: "https://example.com/a/very/long/path/that/keeps/going")!,
                 title: "Example Domain"
             )
-            state.browserPages = [blank, page]
-            state.selectedBrowserID = page.id
+            state.workspaceBrowser.browserPages = [blank, page]
+            state.workspaceBrowser.selectedBrowserID = page.id
         }
 
         // ④ 数量：2 浏览器 + 2 文件页签（临时文件，真读真开）
         let mixed = measure("2 浏览器 + 2 文件页签") { state, tabs in
             let first = BrowserPage()
             let second = BrowserPage(url: URL(string: "https://example.org/")!, title: "Example")
-            state.browserPages = [first, second]
-            state.selectedBrowserID = first.id
+            state.workspaceBrowser.browserPages = [first, second]
+            state.workspaceBrowser.selectedBrowserID = first.id
 
             let scratch = UISnapshot.outputDirectory.deletingLastPathComponent()
                 .appendingPathComponent("ui-snapshot-scratch", isDirectory: true)
@@ -182,8 +185,8 @@ final class WorkspaceChromeHeightProbeTests: XCTestCase {
     @MainActor
     func testMeasurementRespondsToContentDrivenHeight() throws {
         let baseline = measure("对照·基线（同一行）") { state, _ in
-            state.browserPages = [BrowserPage()]
-            state.selectedBrowserID = nil
+            state.workspaceBrowser.browserPages = [BrowserPage()]
+            state.workspaceBrowser.selectedBrowserID = nil
         }
 
         // 玩具①：会随宽度换行的长文案（「往 chrome 行里塞内容」这一类病的原型）
@@ -192,12 +195,13 @@ final class WorkspaceChromeHeightProbeTests: XCTestCase {
         var tall: [CGFloat] = []
         for width in widths {
             let host = makeHost()
-            host.state.browserPages = [BrowserPage()]
-            host.state.selectedBrowserID = nil
+            host.state.workspaceBrowser.browserPages = [BrowserPage()]
+            host.state.workspaceBrowser.selectedBrowserID = nil
 
             let wrapController = NSHostingController(
                 rootView: StripWithToy(wrappingCopy: true)
                     .environmentObject(host.state)
+                    .environmentObject(host.state.workspaceBrowser)
                     .environmentObject(host.tabs)
             )
             wrapping.append(
@@ -207,6 +211,7 @@ final class WorkspaceChromeHeightProbeTests: XCTestCase {
             let tallController = NSHostingController(
                 rootView: StripWithToy(wrappingCopy: false)
                     .environmentObject(host.state)
+                    .environmentObject(host.state.workspaceBrowser)
                     .environmentObject(host.tabs)
             )
             tall.append(

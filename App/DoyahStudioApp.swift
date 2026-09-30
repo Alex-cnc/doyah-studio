@@ -78,6 +78,11 @@ struct DoyahStudioApp: App {
                 // 的 `@Published` 属性，就是为了让"每键写文本"只重算观测它的那一小块，
                 // 而不是观测 `appState` 的整个窗口（5,000 行实测 31.74 ms/键）。
                 .environmentObject(appState.editorBuffer)
+                // 工作区浏览器页签（队列 `L-149` 剩余①）：与 `editorBuffer` 同一条口径 ——
+                // **必须单独注入**。它刻意不是 `AppState` 的 `@Published` 属性，就是为了让
+                // 引擎每回报一次标题 / 加载中只重算观测它自己的那一小块（工作区页签条 + 内容区），
+                // 而不是观测 `appState` 的整个窗口。
+                .environmentObject(appState.workspaceBrowser)
                 .environmentObject(localization)
                 .environmentObject(terminal)
                 .environmentObject(accent)
@@ -115,7 +120,7 @@ struct DoyahStudioApp: App {
         // 菜单栏命令放进 `DoyahStudioCommands`：`.commands {}` 闭包只在场景建立时求值一次，
         // 直接写在这里会让语言切换后**菜单栏不刷新**（见该文件注释与 NFR-I18N-03）。
         .commands {
-            DoyahStudioCommands(appState: appState)
+            DoyahStudioCommands(appState: appState, workspaceBrowser: appState.workspaceBrowser)
         }
     }
 }

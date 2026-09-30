@@ -378,6 +378,7 @@
 		C80AE41963387AF67D93AA89 /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02F350771F608C831EB1EFA1 /* CommandPaletteView.swift */; };
 		C81E1CF0F2D54F17409A9EA9 /* ConnectionAppearanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11290867E9B44D1E7CB8D29 /* ConnectionAppearanceTests.swift */; };
 		C85FB15653ECA2622AD36E0F /* FontManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E495362E0E72132E10C3DC93 /* FontManager.swift */; };
+		C871958C73906AF20D289462 /* WorkspaceBrowserModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29FD24F9CA5EB9392340856 /* WorkspaceBrowserModel.swift */; };
 		C8B112DC28D4D9D574F110AE /* ResultViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24CA0C21A3F3B0E9E83F9AFF /* ResultViewTests.swift */; };
 		C8CD4861EE76A24B3CA004EE /* XLSXWriterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E864B8ECE52A3C9C02FA6E36 /* XLSXWriterTests.swift */; };
 		C9F911943CD437DFB2528B7F /* TerminalRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96413CFB6CEE98776A138DDF /* TerminalRun.swift */; };
@@ -883,6 +884,7 @@
 		B0ABF47A29865ACAA1FAD912 /* LowerPaneTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowerPaneTab.swift; sourceTree = "<group>"; };
 		B19E3CB7E6D3980B888AFF49 /* SyntheticDataPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticDataPanel.swift; sourceTree = "<group>"; };
 		B21FD73FD507E366EDB57F3A /* postgres-nio */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "postgres-nio"; path = "Vendor/postgres-nio"; sourceTree = SOURCE_ROOT; };
+		B29FD24F9CA5EB9392340856 /* WorkspaceBrowserModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceBrowserModel.swift; sourceTree = "<group>"; };
 		B3F5C57F60F0F1E1E2C89F7C /* XLSXWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLSXWriter.swift; sourceTree = "<group>"; };
 		B42BA6FB2BD86E07D258CBAA /* WorkspaceAreaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAreaView.swift; sourceTree = "<group>"; };
 		B42BE321F5914814D5B12837 /* MemoryGeneralStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryGeneralStore.swift; sourceTree = "<group>"; };
@@ -1645,6 +1647,7 @@
 				846E4416A87B1769B4C29856 /* TerminalPane.swift */,
 				58D37DCF3AEA1AD0D0A60C48 /* TerminalSession.swift */,
 				F5EAD165BABE4DE13CE46153 /* TerminalTabsModel.swift */,
+				B29FD24F9CA5EB9392340856 /* WorkspaceBrowserModel.swift */,
 				701F55440BEA21E48AB0953D /* WorkspaceStore.swift */,
 				0D14EB82DF73913D9D7B8455 /* WorkspaceTabsModel.swift */,
 			);
@@ -1987,6 +1990,7 @@
 				0FE729B653595498614D1B59 /* TerminalView.swift in Sources */,
 				9B0148202D3B244638012BC0 /* TransactionControl.swift in Sources */,
 				E8A05180915CBB8589A01C38 /* WorkspaceAreaView.swift in Sources */,
+				C871958C73906AF20D289462 /* WorkspaceBrowserModel.swift in Sources */,
 				BF8E2C671A67797E0FB06FB2 /* WorkspaceExplorerView.swift in Sources */,
 				6CBD0B6CEB6DAC20B6986989 /* WorkspaceStore.swift in Sources */,
 				9A0B8C1E22CF11446FF0DFBE /* WorkspaceTabStrip.swift in Sources */,

@@ -277,6 +277,17 @@ final class AppState: ObservableObject {
     /// `tabs[i].sql` 仍是**唯一权威副本**，由提交点 `commitEditorDraft(for:)` 同步。
     let editorBuffer = QueryEditorBuffer()
 
+    /// 工作区的浏览器页签（`FR-EDIT-34` / 队列 `L-149` 剩余①「结构债」）。
+    ///
+    /// **刻意不是 `@Published`**（与 `editorBuffer` 同一条口径）：浏览器只是工作区的一类页签，
+    /// 它的状态变化只该重算**观测它自己**的那一小块（工作区），而本类被整个窗口观测 ——
+    /// 挂在 `@Published` 上的话，引擎每回报一次标题 / 加载中都会让整个窗口重算。
+    /// 视图单独观测它（`.environmentObject(appState.workspaceBrowser)`）。
+    ///
+    /// 本类只借同一个实例做**接线**（它自己不看这些状态）：启动链恢复页签、
+    /// 下载落盘目录、外发留痕 —— 见 `extension AppState: WorkspaceBrowserHost`。
+    let workspaceBrowser = WorkspaceBrowserModel()
+
     /// **提交点**：把编辑器缓冲里的草稿写回权威副本。
     ///
     /// 读 `tab.sql` 的入口（执行、保存、关闭、切页签）都要先调它，否则会读到旧 SQL ——
@@ -536,19 +547,13 @@ final class AppState: ObservableObject {
     /// 「审批与审计…」面板的呈现开关（菜单命令驱动）。
     @Published var isAgentAuditPresented = false
 
-    // MARK: - 浏览器页签（FR-EDIT-34）
+    // MARK: 统一外发日志（NFR-SEC-08）
     //
-    // 为什么**不**把浏览器塞进 `QueryTab`：那会把 SQL 专属字段（sql / results / isExecuting…）
-    // 污染成一堆可选值，约百处引用都要跟着改成 `if let`，而且每加一个浏览器字段就再污染一次。
-    // 这里让两套页签并行存在，只用一个"当前选中"把它们连起来 —— SQL 路径零改动。
+    // 浏览器页签的**状态**（页签集 / 选中 / 引擎缓存）不在这里（队列 `L-149` 剩余①）：
+    // 它归 `WorkspaceBrowserModel`，由工作区单独观测 —— 浏览器只是工作区的一类页签，
+    // 它的加载状态不该惊动整个窗口（同族的病与修法见 `QueryEditorBuffer`）。
+    // 本类只留两件**与全局有关**的事：外发日志面板、下载用的授权目录。
 
-    /// 打开着的浏览器页签（状态模型在 Core，视图只读它）。
-    @Published var browserPages: [BrowserPage] = []
-    /// 当前选中的浏览器页签；非 nil 时编辑区显示浏览器（SQL 页签的选择保持不变，切回来即可）。
-    @Published var selectedBrowserID: UUID?
-
-    /// 引擎（`WKWebView`）按页签缓存：视图重建时不重新加载页面。
-    private var browserEngines: [UUID: WebKitBrowserEngine] = [:]
     /// 统一外发日志面板（NFR-SEC-08）。
     @Published var isEgressLogPresented = false
     @Published var egressEntries: [EgressEntry] = []
@@ -1089,10 +1094,6 @@ final class AppState: ObservableObject {
     /// 审计日志（追加式 JSONL）；导出前脱敏在 Core 里完成（NFR-AI-03）。
     private let agentAuditLog = AgentAuditLog.shared
     private let egressLog = EgressLog.shared
-    /// 浏览器页签的会话持久化（恢复**不自动请求**，见 `BrowserTabStore` 的说明）。
-    private let browserTabStore = BrowserTabStore.shared
-    /// 引擎是否已经为某个页签发过请求 —— 用来区分「恢复出来还没加载」与「已在浏览」。
-    @Published var browserEngineLoadedPageIDs: Set<UUID> = []
 
 
     /// 连接缓存键：同一个「已保存连接」可以在多个数据库上各持有一条连接。
@@ -1152,38 +1153,15 @@ final class AppState: ObservableObject {
                 + " / 活动栏 [" + visibleActivityItems.map(\.rawValue).joined(separator: ",") + "]"
                 + " / " + licenseSummary
         )
+        // 浏览器页签的宿主接线：下载落盘目录 / 外发留痕 / 失败告知。模型只**弱**持有本类。
+        workspaceBrowser.host = self
         startupChain = Task {
             await loadConnections()
             await loadSavedQueries()
-            await restoreBrowserTabs()
+            await workspaceBrowser.restoreBrowserTabs()
             // 笔记列表在启动时就载入：它现在是活动栏上的一栏，切过去必须**立刻有内容**，
             // 不能再依赖"先点一下菜单项"来触发加载。
             await reloadNotes()
-        }
-    }
-
-    /// 恢复上次的浏览器页签：**只恢复地址与历史，不发起任何请求**。
-    ///
-    /// 恢复完不自动选中它们 —— 用户上次在写 SQL，就该回到 SQL（选中态不持久化是刻意的：
-    /// 把"上次在看某个网页"当成默认状态，反而会在启动时把一个空白浏览器推到眼前）。
-    private func restoreBrowserTabs() async {
-        do {
-            browserPages = try await browserTabStore.load()
-        } catch {
-            // 文件损坏之类：如实说出来，但不要打断启动。
-            statusMessage = ErrorPresenter.message(for: error)
-        }
-    }
-
-    /// 任何页签变化都落盘（失败只提示，不影响使用）。
-    private func persistBrowserTabs() {
-        let pages = browserPages
-        Task {
-            do {
-                try await browserTabStore.save(pages)
-            } catch {
-                statusMessage = ErrorPresenter.message(for: error)
-            }
         }
     }
 
@@ -2549,65 +2527,21 @@ final class AppState: ObservableObject {
         )
     }
 
-    // MARK: - 浏览器页签动作
-
-    var selectedBrowserPage: BrowserPage? {
-        browserPages.first { $0.id == selectedBrowserID }
-    }
-
-    /// 新建浏览器页签。**默认打开空白页** —— 不加载任何远程内容（契约）。
-    @discardableResult
-    func openBrowserTab() -> UUID {
-        let page = BrowserPage()
-        browserPages.append(page)
-        selectedBrowserID = page.id
-        persistBrowserTabs()
-        return page.id
-    }
-
-    func selectBrowserTab(_ id: UUID) {
-        guard browserPages.contains(where: { $0.id == id }) else { return }
-        selectedBrowserID = id
-    }
-
-    func closeBrowserTab(_ id: UUID) {
-        browserPages.removeAll { $0.id == id }
-        browserEngines[id] = nil
-        browserEngineLoadedPageIDs.remove(id)
-        persistBrowserTabs()
-        if selectedBrowserID == id {
-            selectedBrowserID = browserPages.last?.id
-        }
-    }
-
-    /// 取（或建）该页签的引擎。视图每次重绘都会调用它，所以必须是幂等的。
-    func browserEngine(for page: BrowserPage) -> WebKitBrowserEngine {
-        if let existing = browserEngines[page.id] {
-            return existing
-        }
-        let engine = WebKitBrowserEngine(pageID: page.id, origin: "浏览器 · 页签")
-        // 引擎回报的状态（加载中 / 标题 / 地址 / 失败原因）写回模型 —— 否则切页签或重绘后
-        // 界面就停在旧状态；`setUpdateHandler` 在主线程回调，直接转发即可。
-        engine.setUpdateHandler { [weak self] updated in
-            self?.applyBrowserUpdate(updated)
-            if !updated.isLoading, updated.url != nil {
-                self?.browserEngineLoadedPageIDs.insert(updated.id)
-            }
-        }
-        // 下载落盘目录与外发留痕（FR-EDIT-34）：目录走用户**显式授权**过的那一个
-        // （与数据任务产物同一套），没有授权就拒绝并说明 —— 沙箱里偷偷落到容器里，
-        // 用户会"下载成功但找不到文件"。
-        engine.downloadDirectory = { [weak self] in
-            self?.authorizedDownloadDirectory()
-        }
-        engine.onDownloadEvent = { [weak self] outcome in
-            guard let self else { return }
-            let page = self.browserPages.first { $0.id == page.id } ?? BrowserPage(id: page.id)
-            self.handleBrowserDownload(outcome, page: page)
-        }
-        browserEngines[page.id] = engine
-        return engine
-    }
+    // MARK: - 浏览器页签：宿主侧的三件事（队列 `L-149` 剩余①）
+    //
+    // 页签集 / 选中 / 引擎缓存 / 导航动作**都不在本类**了 —— 它们随状态一起搬进
+    // `App/WorkspaceBrowserModel.swift`（新建 / 选中 / 关闭页签、取引擎、状态写回、
+    // 地址栏导航、在浏览器里打开、会话恢复与落盘）。
+    //
+    // 这里刻意**不写出那几个入口的名字**：门禁 `check-browser-tab-ownership.py` 对它们做的是
+    // **文本级**台账对账，写在本文件里会当场报红（这条纪律本身就是在钉「数据库侧 / 全局状态
+    // 不许再出现浏览器」）。要看名字，去 `WorkspaceBrowserModel`。
+    //
+    // **为什么搬**：浏览器只是工作区的一类页签，它的加载状态不该惊动整个窗口（本类被整个窗口
+    // 观测）。同族的病在数据库侧已用 `QueryEditorBuffer` 治过一次。
+    //
+    // 留下的三件都是**与全局有关**的：目录书签、外发日志面板、启动链上的失败告知 ——
+    // 形状由 `WorkspaceBrowserHost` 协议定（实现即下面这三个方法 + `authorizedDownloadDirectory()`）。
 
     /// 下载用的授权目录（FR-EDIT-34，与 FR-AI-08 同一套 `SecureDirectoryAccess`）。
     ///
@@ -2622,89 +2556,52 @@ final class AppState: ObservableObject {
         return grant.url
     }
 
-    /// 下载进展 → 外发日志 + 界面状态（FR-EDIT-34 / NFR-SEC-08）。
+    /// 浏览器模型要落盘的目录（`WorkspaceBrowserHost` 的那一条）。
     ///
-    /// **下载也是出网**：不管成功、失败还是被拒，都留一条账 —— 与浏览器导航同一条纪律。
-    func handleBrowserDownload(_ outcome: WebKitBrowserEngine.DownloadOutcome, page: BrowserPage) {
-        let tabTitle = page.title ?? page.url?.absoluteString
-        let target = page.url?.absoluteString ?? "(未知来源)"
+    /// 引擎的下载回调走这里 —— 目录的权威数据（用户授权过的书签）在本类，模型不自己抄一份。
+    func browserDownloadDirectory() -> URL? {
+        authorizedDownloadDirectory()
+    }
 
-        func record(_ result: EgressOutcome, detail: String) {
-            Task {
-                await egressLog.record(
-                    kind: .browser,
-                    target: target,
-                    origin: "浏览器 · 下载",
-                    outcome: result,
-                    detail: detail,
-                    tabID: page.id,
-                    tabTitle: tabTitle
-                )
-                await refreshEgressLog()
-            }
-        }
-
-        func showNotice(_ message: String) {
-            guard let index = browserPages.firstIndex(where: { $0.id == page.id }) else { return }
-            browserPages[index].setNotice(message)
-        }
-
-        switch outcome {
-        case .refused(let reason):
-            record(.denied, detail: reason)
-            showNotice(reason)
-        case .started(let filename):
-            showNotice(L(.browserDownloadStarted, filename))
-        case .finished(let filename, let url):
+    /// 统一外发日志（NFR-SEC-08）：**下载也是出网**，成功 / 失败 / 被拒都留一条账。
+    ///
+    /// 形状（目标 / 明细 / 页签身份）由 `WorkspaceBrowserModel.handleBrowserDownload` 出；
+    /// 这里只写盘 + 刷面板。**终态（完成 / 失败）** 顺带归还目录访问权 —— 写盘是异步的，
+    /// 持有期必须覆盖它（原先这两处 `releaseDownloadGrants()` 长在 `handleBrowserDownload`
+    /// 的 `.finished` / `.failed` 分支里，随实现一起搬到这里，顺序与语义未变）。
+    func recordBrowserDownloadEgress(
+        outcome: EgressOutcome,
+        target: String,
+        detail: String,
+        tabID: UUID,
+        tabTitle: String?
+    ) {
+        if outcome == .allowed || outcome == .failed {
             releaseDownloadGrants()
-            record(.allowed, detail: BrowserDownload.logDetail(filename: filename, outcome: "完成"))
-            showNotice(L(.browserDownloadFinished, url.path))
-        case .failed(let filename, let reason):
-            releaseDownloadGrants()
-            record(.failed, detail: BrowserDownload.logDetail(filename: filename, outcome: "失败：\(reason)"))
-            showNotice(L(.browserDownloadFailed, filename, reason))
         }
+        Task {
+            await egressLog.record(
+                kind: .browser,
+                target: target,
+                origin: "浏览器 · 下载",
+                outcome: outcome,
+                detail: detail,
+                tabID: tabID,
+                tabTitle: tabTitle
+            )
+            await refreshEgressLog()
+        }
+    }
+
+    /// 启动链上的失败（页签库损坏之类）如实说出来，但不打断启动。
+    func reportBrowserStatusMessage(_ message: String) {
+        statusMessage = message
     }
 
     /// 释放下载期间保持的目录访问权（幂等）。
     private func releaseDownloadGrants() {
         for grant in browserDownloadGrants { grant.stopAccessing() }
         browserDownloadGrants.removeAll()
-    }
-
-    /// 把引擎回报的状态写回模型（引擎在主线程回调，这里只做转发）。
-    func applyBrowserUpdate(_ page: BrowserPage) {
-        guard let index = browserPages.firstIndex(where: { $0.id == page.id }) else { return }
-        browserPages[index] = page
-        // 标题 / 地址变化也落盘：否则下次恢复出来的是上次启动时的旧地址。
-        persistBrowserTabs()
-    }
-
-    /// 这个页签是否已经加载过（false = 从会话里恢复出来、还没发过请求）。
-    func isBrowserPagePristine(_ id: UUID) -> Bool {
-        !browserEngineLoadedPageIDs.contains(id)
-    }
-
-    /// 地址栏提交：解析 → 交给引擎（引擎内部先过 Core 策略、再写外发日志）。
-    func navigateBrowserTab(_ id: UUID, input: String) {
-        guard let page = browserPages.first(where: { $0.id == id }) else { return }
-        switch BrowserSession.parseAddress(input) {
-        case .success(let url):
-            let engine = browserEngine(for: page)
-            Task { await engine.load(url) }
-        case .failure(let error):
-            var rejected = page
-            rejected.rejectNavigation(reason: error.reason)
-            applyBrowserUpdate(rejected)
-        }
-    }
-
-    /// 在浏览器里打开某个地址（供「用浏览器打开」这类入口复用）。
-    func openInBrowser(_ text: String) {
-        let id = browserPages.contains(where: { $0.id == selectedBrowserID })
-            ? selectedBrowserID!
-            : openBrowserTab()
-        navigateBrowserTab(id, input: text)
     }
 
     /// 追加一条审计记录：先落到内存（面板立刻看得见），再追加到 JSONL。
@@ -6716,6 +6613,15 @@ final class AppState: ObservableObject {
         serverInfos[connectionID] = nil
     }
 }
+
+/// `AppState` 就是浏览器页签的宿主：它给模型的三件东西（下载落盘目录 / 统一外发留痕 / 启动链上的
+/// 失败告知）全是**它自己的数据**（目录书签、外发日志面板、状态栏）。
+///
+/// **为什么空扩展 + 实现在类内**：三处实现要用的 `authorizedDownloadDirectory()` /
+/// `releaseDownloadGrants()` / `egressLog` / `statusMessage` 都在类内，而「模型要什么、
+/// 宿主给什么」这一问的答案放在宿主那一节（`// MARK: - 浏览器页签：宿主侧的三件事`）最好读 ——
+/// 空扩展只负责把协议关系写出来（`AppState` 是 `WorkspaceBrowserHost`）。
+extension AppState: WorkspaceBrowserHost {}
 
 /// 逐行收集外部程序输出（见 `runExternalProcess` 的说明）。
 private actor OutputCollector {

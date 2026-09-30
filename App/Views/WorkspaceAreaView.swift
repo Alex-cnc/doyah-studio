@@ -10,6 +10,8 @@ struct WorkspaceAreaView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var workspace: WorkspaceStore
     @EnvironmentObject private var tabs: WorkspaceTabsModel
+    /// 浏览器页签的状态所有者（队列 `L-149` 剩余①）—— 与 `WorkspaceTabsModel` 同一条口径。
+    @EnvironmentObject private var browser: WorkspaceBrowserModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,9 +28,9 @@ struct WorkspaceAreaView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let browser = appState.selectedBrowserPage {
+        if let page = browser.selectedBrowserPage {
             // 浏览器页签在工作区（`L-149`）：与 Home / 文件页签同一处呈现。
-            BrowserTabView(page: browser)
+            BrowserTabView(page: page)
         } else if let tab = tabs.selectedTab {
             if tab.isHome {
                 WorkspaceHomeView()

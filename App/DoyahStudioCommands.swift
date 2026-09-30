@@ -24,6 +24,10 @@ struct DoyahStudioCommands: Commands {
     /// 顺带把菜单图反复置脏，得不偿失。将来若要按状态禁用菜单项，再改成 `@ObservedObject`。
     let appState: AppState
 
+    /// 浏览器页签的状态所有者（队列 `L-149` 剩余①）。理由同上：菜单只**调用**它
+    /// （「新建浏览器页签」），不根据页签集派生任何东西。
+    let workspaceBrowser: WorkspaceBrowserModel
+
     /// 语言：**必须由命令结构体自己观察**，菜单标题才会跟着切换。
     @ObservedObject private var localization = LocalizationManager.shared
 
@@ -36,8 +40,9 @@ struct DoyahStudioCommands: Commands {
 
             // 浏览器页签与 SQL 页签同级（FR-EDIT-34），所以入口也该在「文件 · 新建」这一组里，
             // 而不是躲在「智能体」菜单下 —— 它跟智能体没有任何关系。
+            // 动作打在**工作区的浏览器模型**上（队列 `L-149` 剩余①）：页签长在工作区。
             Button(L(.menuNewBrowserTab)) {
-                appState.openBrowserTab()
+                workspaceBrowser.openBrowserTab()
             }
             .keyboardShortcut(AppShortcut.newBrowserTab.key, modifiers: AppShortcut.newBrowserTab.modifiers)
         }

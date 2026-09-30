@@ -8,11 +8,15 @@
 但**这件事此前没有任何东西看得见** —— 挪回数据库侧、或搬走了没接上，编译照过、单测照绿。
 
 判据 = 一份**双向对账**的允许落点台账（`App/` 下出现下列标识的文件必须登记过，登记的必须真的命中）：
-    `browserPages` / `selectedBrowserPage` / `BrowserTabView` / `openBrowserTab` / `browserTabButton`
+    `browserPages` / `selectedBrowserPage` / `selectedBrowserID` / `browserEngines` /
+    `BrowserTabView` / `openBrowserTab` / `browserTabButton`
 数据库侧视图 `App/Views/QueryWorkspaceView.swift` 命中即红（它不在台账里，也不会被登记）。
+**状态所有者**另判一处（第 135 轮补，队列 `L-149` 剩余①）：浏览器状态必须住在
+`App/WorkspaceBrowserModel.swift`（那个类只此一处定义）——
+挂回 `AppState` 的 `@Published` 上，引擎每回报一次标题 / 加载中就要重算整个窗口。
 另判两处**文档条文**（SRS `FR-EDIT-34` 定义格、概要设计 §3.12「视图契约」行）必须写「工作区」、
 不得再钉在「编辑器区」；订正过程留在证据格里，**判据只看条文格**。空跑防护：扫描面文件数 /
-台账文件 / 五个标识各自至少一处命中。
+台账文件 / 七个标识各自至少一处命中 / 状态所有者类在位。
 
 用法：
     python3 Scripts/check-browser-tab-ownership.py              # 人读结论，失败非零退出
@@ -34,21 +38,26 @@ import tempfile
 BASE = pathlib.Path(__file__).resolve().parent.parent
 
 APP_DIR = "App"
-STATE_OWNER = "App/AppState.swift"
+# **状态所有者**（队列 `L-149` 剩余①，2026-10-01 第 135 轮搬的家）：浏览器页签的
+# 页签集 / 选中 / 引擎缓存 / 导航动作全在这个文件里 —— 它**不是** `AppState`
+# （挂在那里时引擎每回报一次标题 / 加载中都要重算整个窗口；同族的病见 `QueryEditorBuffer`）。
+STATE_OWNER = "App/WorkspaceBrowserModel.swift"
+STATE_OWNER_CLASS = "final class WorkspaceBrowserModel: ObservableObject"
 VIEW_DEFINITION = "App/Views/BrowserTabView.swift"
 DB_SIDE_VIEW = "App/Views/QueryWorkspaceView.swift"
 WORKSPACE_VIEWS = ("App/Views/WorkspaceTabStrip.swift", "App/Views/WorkspaceAreaView.swift")
 
-# 台账：标识 → 允许出现它的文件（`App/` 下，除下面两处豁免）。两个方向都要对账。
+# 台账：标识 → 允许出现它的文件（`App/` 下，除下面那处豁免）。两个方向都要对账。
 LEDGER = {
-    "browserPages": {"App/Views/WorkspaceTabStrip.swift"},
-    "selectedBrowserPage": {"App/Views/WorkspaceAreaView.swift"},
+    "browserPages": {STATE_OWNER, "App/Views/WorkspaceTabStrip.swift"},
+    "selectedBrowserPage": {STATE_OWNER, "App/Views/WorkspaceAreaView.swift"},
+    "selectedBrowserID": {STATE_OWNER, "App/Views/WorkspaceTabStrip.swift"},
+    "browserEngines": {STATE_OWNER},
     "BrowserTabView": {"App/Views/WorkspaceAreaView.swift"},
-    "openBrowserTab": {"App/DoyahStudioCommands.swift"},
+    "openBrowserTab": {STATE_OWNER, "App/DoyahStudioCommands.swift"},
     "browserTabButton": {"App/Views/WorkspaceTabStrip.swift"},
 }
 EXEMPT = {
-    STATE_OWNER: "浏览器页签状态的唯一所有者（结构债：应像 `WorkspaceTabsModel` 那样只被工作区观测，见队列 `L-149` 剩余①）",
     VIEW_DEFINITION: "浏览器视图自己的定义处（只被工作区内容区渲染）",
 }
 
@@ -100,7 +109,20 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     notes: list[str] = []
     sources = app_sources(root, problems)
 
-    # ① + ② 双向对账：允许落点 ⊆ 台账，台账 ⊆ 允许落点
+    # ①b 状态所有者：浏览器状态必须住在工作区模型里，而那个类**只此一处**定义
+    if STATE_OWNER not in sources:
+        problems.append(f"`{STATE_OWNER}` 不在扫描面里 —— 浏览器页签的状态所有者不见了（判据悬空）")
+    elif STATE_OWNER_CLASS not in sources[STATE_OWNER]:
+        problems.append(
+            f"`{STATE_OWNER}` 里找不到 `{STATE_OWNER_CLASS}` —— 状态所有者被改名 / 被掏空"
+        )
+    else:
+        notes.append(f"状态所有者 = `{STATE_OWNER}`（`{STATE_OWNER_CLASS}`）")
+    for name, text in sources.items():
+        if name != STATE_OWNER and STATE_OWNER_CLASS in text:
+            problems.append(f"`{name}` 里也声明了 `{STATE_OWNER_CLASS}` —— 状态所有者只能有一处")
+
+    # ② 双向对账：允许落点 ⊆ 台账，台账 ⊆ 允许落点
     for token, allowed in sorted(LEDGER.items()):
         found = hits(sources, token)
         for name in sorted(allowed):
@@ -204,7 +226,8 @@ def main() -> int:
             print(f"   - {problem}")
         return 1
     print(
-        "\n✅ 内置浏览器页签归属 = 工作区：落点全部在台账内（数据库侧零命中）· 台账逐条真的命中 · "
+        "\n✅ 内置浏览器页签归属 = 工作区：状态所有者 = `App/WorkspaceBrowserModel.swift`（只此一处）· "
+        "落点全部在台账内（数据库侧零命中）· 台账逐条真的命中 · "
         f"SRS `{SRS_ENTRY}` 与概要设计 §3.12 条文已写「{OWNED_WORD}」· 判据面在位"
     )
     return 0
@@ -285,12 +308,39 @@ def self_test(root: pathlib.Path) -> int:
 
         # ④⑤ 红：搬到工作区却没接上（台账登记了、盘上没有）
         strip = fresh("strip-unwired")
-        _patch(strip / WORKSPACE_VIEWS[0], "ForEach(appState.browserPages)", "ForEach(appState.hiddenBrowserPages)")
+        _patch(strip / WORKSPACE_VIEWS[0], "ForEach(browser.browserPages)", "ForEach(browser.hiddenBrowserPages)")
         cases.append(("工作区页签条不再引用 browserPages", bool(check(strip)[0])))
 
         area = fresh("area-unwired")
-        _patch(area / WORKSPACE_VIEWS[1], "BrowserTabView(page: browser)", "Color.clear")
+        _patch(area / WORKSPACE_VIEWS[1], "BrowserTabView(page: page)", "Color.clear")
         cases.append(("工作区内容区不再渲染 BrowserTabView", bool(check(area)[0])))
+
+        # ⑤b 红：状态被搬回 `AppState`（`L-149` 剩余① 正是要它**不**住在那儿）
+        state_back = fresh("state-back-in-appstate")
+        _patch(
+            state_back / "App/AppState.swift",
+            "final class AppState: ObservableObject {",
+            "final class AppState: ObservableObject {\n    @Published var browserPages: [BrowserPage] = []",
+        )
+        cases.append(("浏览器状态被写回 AppState", bool(check(state_back)[0])))
+
+        # ⑤c 红：数据库侧又读浏览器选中态（`selectedBrowserID` 同在这份台账里）
+        db_selection = fresh("db-side-selection")
+        _patch(
+            db_selection / DB_SIDE_VIEW,
+            "    var body: some View {",
+            "    var body: some View {\n        let _drift = appState.selectedBrowserID",
+        )
+        cases.append(("数据库侧读 selectedBrowserID", bool(check(db_selection)[0])))
+
+        # ⑤d 红：状态所有者被改名 / 被掏空
+        owner_gone = fresh("owner-renamed")
+        _patch(
+            owner_gone / STATE_OWNER,
+            STATE_OWNER_CLASS,
+            "final class WorkspaceBrowserModelRenamed: ObservableObject",
+        )
+        cases.append(("状态所有者类被改名", bool(check(owner_gone)[0])))
 
         # ⑥⑦ 红：文档条文又把浏览器钉回数据库侧
         srs_back = fresh("srs-back")

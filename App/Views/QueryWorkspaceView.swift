@@ -43,13 +43,16 @@ struct QueryWorkspaceView: View {
                                 .controlSize(.mini)
                         }
 
+                        // 数据库侧**不认识浏览器**（队列 `L-149` 剩余①）：这里原先会顺手清掉浏览器
+                        // 页签的选中态、加粗也看「浏览器有没有被选中」—— 那两处是浏览器还长在
+                        // 编辑区时留下的耦合。浏览器现在是**工作区的一类页签**，在数据库侧点
+                        // SQL 页签与它无关（要清选中态是工作区页签条自己的事，见 `WorkspaceTabStrip`）。
                         Button(tab.isDirty ? "\(tab.title) •" : tab.title) {
                             appState.selectedTabID = tab.id
-                            appState.selectedBrowserID = nil
                         }
                         .buttonStyle(.plain)
                         .fontWeight(
-                            appState.selectedTabID == tab.id && appState.selectedBrowserID == nil
+                            appState.selectedTabID == tab.id
                                 ? .semibold
                                 : .regular
                         )

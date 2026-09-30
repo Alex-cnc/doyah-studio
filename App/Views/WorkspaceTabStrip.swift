@@ -25,6 +25,9 @@ import DoyahCore
 struct WorkspaceTabStrip: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var tabs: WorkspaceTabsModel
+    /// 浏览器页签的**状态所有者**（队列 `L-149` 剩余①）：它不在 `AppState` 上 ——
+    /// 浏览器只是工作区的一类页签，引擎每回报一次标题 / 加载中不该重算整个窗口。
+    @EnvironmentObject private var browser: WorkspaceBrowserModel
 
     var body: some View {
         HStack(spacing: Spacing.xs) {
@@ -33,7 +36,7 @@ struct WorkspaceTabStrip: View {
                     // 内置浏览器页签（队列 `L-149`）：与 Home / 文件是**同一类页签**。
                     // 需求提出者 2026-09-30：「浏览器内置到工作区 Tab 页……本质上 html 也是一种文件」；
                     // 原先它长在数据库侧 —— 那是 **SQL 这门语言的工作台**，不归它管。
-                    ForEach(appState.browserPages) { page in
+                    ForEach(browser.browserPages) { page in
                         browserTabButton(page)
                     }
                     ForEach(tabs.tabs) { tab in
@@ -139,7 +142,7 @@ struct WorkspaceTabStrip: View {
         .contentShape(Rectangle())
         // 选工作区页签 = 离开浏览器（否则浏览器那份选中态会一直压在上面，回不到 Home）。
         .onTapGesture {
-            appState.selectedBrowserID = nil
+            browser.clearSelection()
             tabs.select(tab.id)
         }
         .help(tab.path ?? tab.title)
@@ -147,7 +150,7 @@ struct WorkspaceTabStrip: View {
 
     /// 浏览器页签（队列 `L-149`）：与 Home / 文件同一类页签，只是图标与动作走浏览器那条。
     private func browserTabButton(_ page: BrowserPage) -> some View {
-        let isSelected = appState.selectedBrowserID == page.id
+        let isSelected = browser.selectedBrowserID == page.id
         return HStack(spacing: Spacing.xs) {
             if page.isLoading {
                 ProgressView().controlSize(.mini)
@@ -163,7 +166,7 @@ struct WorkspaceTabStrip: View {
                 .fontWeight(isSelected ? .semibold : .regular)
 
             Button {
-                appState.closeBrowserTab(page.id)
+                browser.closeBrowserTab(page.id)
             } label: {
                 Image(systemName: "xmark")
                     .font(Theme.font(.caption))
@@ -178,7 +181,7 @@ struct WorkspaceTabStrip: View {
                 .fill(isSelected ? Theme.accentColor.opacity(0.16) : Color.clear)
         )
         .contentShape(Rectangle())
-        .onTapGesture { appState.selectBrowserTab(page.id) }
+        .onTapGesture { browser.selectBrowserTab(page.id) }
         .help(page.title)
     }
 
