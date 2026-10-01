@@ -71,13 +71,54 @@ public enum MenuLocalization {
     /// **我们直接写就能变**（2026-09-24 起就这么做，于是"换语言要重启"这条限制去掉了）。
     /// 顶层菜单没有 action，只能按标题查；叶子项走 `retitled(action:appName:to:)`（更可靠）。
     public static func retitled(_ title: String, to language: AppLanguage) -> String? {
+        key(forTitle: title).map { LocalizedStrings.text($0, language: language) }
+    }
+
+    /// 这个标题**属于哪个键**（两种语言都试）—— 反向映射的中间结果。
+    ///
+    /// 与 `retitled(_:to:)` 分开：诊断（`lookup`）要说清「认出来了、但认成了哪个键」，
+    /// 只说最终文案是看不出这一点的（见队列 `L-145` 的菜单 dump）。
+    public static func key(forTitle title: String) -> LKey? {
         for key in menuKeys + systemMenuTitles {
             for candidate in AppLanguage.allCases
             where LocalizedStrings.text(key, language: candidate) == title {
-                return LocalizedStrings.text(key, language: language)
+                return key
             }
         }
         return nil
+    }
+
+    /// 一个菜单项在**当前这张表**里被认成了什么（诊断用，队列 `L-145`）。
+    ///
+    /// 为什么需要它：菜单栏是唯一「只有 AppKit 那棵树知道」的地方 —— 界面快照拍不到它、
+    /// 源码判据也读不到它（`NSMenuItem.title` 是运行期值）。`MainMenuLocalizer` 在每次
+    /// 展开前都会 `retitle` 一遍，可**认不出来的项它一个字节都不改** ⇒ 「中文菜单里还有
+    /// 英文项」这种症状，根因只可能是三选一：① selector 不在表里；② 标题不在表里（自有项
+    /// 忘了登记）；③ 键在、但目标语言缺译（`LocalizedStrings.text` 会退回键名原文）。
+    /// 这三者用「最终文案」是分不开的，故把判定过程本身交出来。
+    public enum Lookup: Equatable {
+        /// 按 `action` selector 认出来的系统叶子项。
+        case system(key: LKey, target: String)
+        /// 按标题认出来的项（自有菜单项 / 系统菜单顶层标题）。
+        case title(key: LKey, target: String)
+        /// 两张表都认不出 ⇒ `retitle` 不会碰它，它会停在**启动语言**上。
+        case unrecognized(selector: String?)
+    }
+
+    public static func lookup(
+        title: String,
+        selector: String?,
+        appName: String,
+        to language: AppLanguage
+    ) -> Lookup {
+        if let selector, systemMenuItems[selector] != nil,
+           let target = retitled(action: selector, appName: appName, to: language) {
+            return .system(key: systemMenuItems[selector]!, target: target)
+        }
+        if let key = key(forTitle: title) {
+            return .title(key: key, target: LocalizedStrings.text(key, language: language))
+        }
+        return .unrecognized(selector: selector)
     }
 
     // MARK: - 系统菜单（AppKit 渲染的那些）

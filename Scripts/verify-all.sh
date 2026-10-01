@@ -57,7 +57,7 @@ set -euo pipefail
 #      + **Markdown 解析只有一份**（L-137：行内扫描器唯一定义在笔记侧 / 块级模型只由
 #        契约层构造 / 预览真的调用同一个行内函数 / 不引第三方 Markdown 库，
 #        见 `check-markdown-single-source.py`）
-#  11. 打包 .app（沙箱构建）
+#  11. 打包 .app（沙箱构建）+ **菜单栏那一层在换语言后不许停在启动语言**（L-145，内测丙2）
 #  12. 脚本 shell 多字节安全（bash 3.2 的变量名坑，见 `check-shell-locale-safety.py`）
 #  13. 脚本连接信息参数化（连真库的脚本不许写死端口 / 地址 / 账号，见 `check-script-env-parameterization.py`）
 #  14. 连接失败的文案覆盖面（驱动错误码 ↔ 文案台账，见 `check-connection-failure-coverage.py`）
@@ -586,6 +586,17 @@ python3 Scripts/check-browser-tab-ownership.py --self-test
 if [ "${PLATFORM}" = "macos" ]; then
   echo "==> 11/18 打包 .app（沙箱）"
   ./Scripts/build-app.sh
+  # L-145（2026-10-01 内测丙2 · 「中文菜单里有 2 个英文菜单」）：**菜单栏那一层**的判据。
+  # 由头 = 界面快照拍不到菜单栏（它不在任何视图里）、源码判据也读不到它（`NSMenuItem.title` 是
+  # 运行期值）⇒ 键都登记了、表也齐全、门禁全绿，菜单栏却停在**启动语言**上（实测：切完语言后
+  # AppKit 会把 File / Edit / View / Window / Help 的顶层标题按启动语言再本地化一次，**不发任何通知**）。
+  # 判据 = 真启动两档（英文→中文 / 中文→英文，走用户真实的语言切换入口）+ 判 dump 的 A 段
+  # （**还没点开任何菜单**时的原样 = 用户看见菜单栏的那一刻）：不许有任何菜单项停在启动语言；
+  # 「认不出」的项只许在白名单里（应用名 / 语言显示名 / 窗口标题）；外加空跑防护与形状判据。
+  # 判据 L-145 的负例 `--self-test` **10 例**（含「停启动语言」「认不出没登记」「缺系统菜单」「同一条 dump 改一字节即判红」）。
+  # 放在打包之后：它要跑刚构建出来的那个包（`dist/DoyahStudio.app`）。
+  python3 Scripts/check-menu-language.py
+  python3 Scripts/check-menu-language.py --self-test
 else
   skip_step 11 "打包 .app（Scripts/build-app.sh 走 xcodebuild，且产物是 .app 包）"
 fi

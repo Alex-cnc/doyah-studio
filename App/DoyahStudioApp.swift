@@ -25,7 +25,10 @@ struct DoyahStudioApp: App {
         // 什么都不会发生（这正是 R-36 第二版踩的坑）。
         // 接替启动优先判断：它会等旧实例真的退出，并把交接单消费掉。
         let isTakeover = AppRelauncher.claimHandoffIfPresent()
-        if !isTakeover, let existing = Self.otherRunningInstance() {
+        // **一次性 dump 探针不进单实例保护**（队列 `L-145`）：它不建窗口、跑完就 `exit(0)`，
+        // 而单实例保护会让它在「用户正开着应用」时静默退出 —— 那样门禁就成了一条时灵时不灵的判据。
+        let isMenuDumpProbe = ProcessInfo.processInfo.environment["DOYAH_MENU_DUMP"] != nil
+        if !isTakeover, !isMenuDumpProbe, let existing = Self.otherRunningInstance() {
             // **必须看 activate() 的返回值**：对方可能正在退出（我刚踩过 ——
             // "杀掉旧实例后立刻启动"会让新实例静默 exit(0)，表现就是"界面干脆不出来"：
             // 没有窗口、没有崩溃报告、进程也没了）。只有真的把它激活了，我才退出自己；

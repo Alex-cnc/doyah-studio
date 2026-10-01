@@ -25,9 +25,9 @@
     }
   ],
   "floors": {
-    "families": 40,
-    "totalCases": 509,
-    "anchorSites": 67,
+    "families": 41,
+    "totalCases": 519,
+    "anchorSites": 69,
     "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。"
   },
   "notCovered": [
@@ -900,6 +900,30 @@
           "regex": "L-142 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
           "minSites": 1,
           "note": "闭环第 6 项注释（L-142 那一段）"
+        }
+      ]
+    },
+    {
+      "key": "menu-language",
+      "script": "Scripts/check-menu-language.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 10,
+      "countRegex": "自检 (\\d+) 例：\\d+ 通过 / \\d+ 失败",
+      "why": "队列 L-145（内测清单丙2）/ 闭环第 11 项环内（菜单栏那一层在换语言后不许停在启动语言：判 dump 的 A 段 = 还没点开菜单时的原样 + 白名单 + 空跑防护 + 形状）",
+      "anchors": [
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "check-menu-language\\.py.{0,4000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "§6 资产表「菜单栏那一层」行（只认现状声明那一处括号；§9 第 111 条与历史变更行里的旧例数不回改、也不进判据）"
+        },
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "L-145 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "闭环第 11 项注释（L-145 那一段）"
         }
       ]
     }

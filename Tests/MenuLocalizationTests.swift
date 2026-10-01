@@ -111,4 +111,51 @@ final class MenuLocalizationTests: XCTestCase {
             XCTAssertNil(MenuLocalization.retitled(title, to: .english), "不该改写：\(title)")
         }
     }
+
+    // MARK: 诊断（队列 L-145：菜单栏那一层没有任何判据看得见）
+
+    /// 诊断要分得开「按 selector 认出来的系统项 / 按标题认出来的自有项 / 两张表都认不出」。
+    ///
+    /// 为什么需要：认不出 ⇒ `MainMenuLocalizer` 一个字节都不改 ⇒ 那一项会**停在启动语言**上。
+    /// 「中文菜单里还有英文项」这句话，只有这三档分得开才定位得了。
+    func testLookupTellsTheThreeCasesApart() {
+        let system = MenuLocalization.lookup(
+            title: "Undo", selector: "undo:", appName: "Doyah Studio", to: .simplifiedChinese
+        )
+        XCTAssertEqual(system, .system(key: .menuSystemUndo, target: "撤销"))
+
+        let owned = MenuLocalization.lookup(
+            title: "Query Archive", selector: "menuAction:", appName: "Doyah Studio", to: .simplifiedChinese
+        )
+        XCTAssertEqual(owned, .title(key: .archiveTitle, target: "查询归档"))
+
+        let unknown = MenuLocalization.lookup(
+            title: "Something New", selector: "someNewSystemItem:", appName: "Doyah Studio", to: .english
+        )
+        XCTAssertEqual(unknown, .unrecognized(selector: "someNewSystemItem:"))
+    }
+
+    /// 认不出那一路要**如实**带出 selector（诊断靠它区分「内置表漏了」与「系统新加的项」）；
+    /// 连 action 都没有的项则给 `nil`。
+    func testUnrecognizedKeepsTheSelectorAsEvidence() {
+        XCTAssertEqual(
+            MenuLocalization.lookup(title: "Whatever", selector: nil, appName: "x", to: .english),
+            .unrecognized(selector: nil)
+        )
+    }
+
+    /// 按标题反查键（`key(forTitle:)`）与 `retitled(_:to:)` 必须同源同答 ——
+    /// 两者都要能认出两种语言下的同一个键。
+    func testKeyForTitleMatchesRetitled() {
+        for key in MenuLocalization.menuKeys + MenuLocalization.systemMenuTitles {
+            for language in AppLanguage.allCases {
+                let title = LocalizedStrings.text(key, language: language)
+                XCTAssertEqual(MenuLocalization.key(forTitle: title), key, "认不出：\(title)")
+                XCTAssertEqual(
+                    MenuLocalization.retitled(title, to: language),
+                    LocalizedStrings.text(key, language: language)
+                )
+            }
+        }
+    }
 }
