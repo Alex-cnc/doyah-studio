@@ -121,6 +121,39 @@ final class CodeLanguageRegistryTests: XCTestCase {
         XCTAssertEqual(TextLanguage.detect(path: "weird."), .plainText)
     }
 
+    // MARK: 默认视图（FR-EDIT-36 消费者口径 / 队列 `L-149` 剩余②）
+
+    /// 「用浏览器打开」这件事是**登记表里的数据**，不是工作区里的分支：
+    /// 声明 `.browser` 的必须**恰好一条**（HTML），其余一律文本编辑器；且合成那份定义
+    /// （`all` 带格式化能力）与 `definition(of:)` 取到的必须是同一个值（别在复制时丢掉）。
+    func testDefaultViewIsDeclaredInTheRegistry() {
+        let browserLanguages = CodeLanguageRegistry.all
+            .filter { $0.defaultView == .browser }
+            .map(\.language.rawValue)
+        XCTAssertEqual(browserLanguages, ["html"], "声明「默认用浏览器打开」的语言必须恰好是 HTML：\(browserLanguages)")
+        for definition in CodeLanguageRegistry.all {
+            XCTAssertEqual(
+                definition.defaultView,
+                CodeLanguageRegistry.definition(of: definition.language).defaultView,
+                "\(definition.language.rawValue) 两条路取到的默认视图不一致（合成定义时丢了字段）"
+            )
+        }
+    }
+
+    /// 工作区问的是「**这个路径**默认用哪种视图打开」—— 判语言那一步的回落就是这一档的答案。
+    func testDefaultViewForPathUsesTheRegistry() {
+        XCTAssertEqual(CodeLanguageRegistry.defaultView(forPath: "/Users/me/site/index.html"), .browser)
+        XCTAssertEqual(CodeLanguageRegistry.defaultView(forPath: "page.htm"), .browser)
+        XCTAssertEqual(CodeLanguageRegistry.defaultView(forPath: "INDEX.HTML"), .browser, "判语言不分大小写")
+        XCTAssertEqual(CodeLanguageRegistry.defaultView(forPath: "template.xhtml"), .browser)
+
+        // 其余一律文本编辑器 —— 包括认不出的（回落值也有自己的那一档，不许猜成浏览器）。
+        XCTAssertEqual(CodeLanguageRegistry.defaultView(forPath: "notes.md"), .editor)
+        XCTAssertEqual(CodeLanguageRegistry.defaultView(forPath: "schema.sql"), .editor)
+        XCTAssertEqual(CodeLanguageRegistry.defaultView(forPath: "noextension"), .editor)
+        XCTAssertEqual(CodeLanguageRegistry.defaultView(forPath: ""), .editor)
+    }
+
     /// 纯文本的定义里一条规则都没有 —— 所以词法器对它零输出（连数字都不着色）。
     func testPlainTextHasNoRulesAndYieldsNoTokens() {
         let syntax = TextLanguage.plainText.definition.syntax

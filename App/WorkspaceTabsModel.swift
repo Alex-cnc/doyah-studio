@@ -30,6 +30,14 @@ final class WorkspaceTabsModel: ObservableObject {
     /// 全局一个开关（不按页签各记一份）：用户要的是"看的时候分屏、写的时候全宽"。
     @Published var previewVisible = true
 
+    /// 把文件交给**工作区的浏览器页签**那一侧（队列 `L-149` 剩余②）。
+    ///
+    /// 为什么是注入的闭包而不是本模型直接持一个 `WorkspaceBrowserModel`：浏览器页签的
+    /// 状态归 `WorkspaceBrowserModel`（第 135 轮搬过来的，判据 `check-browser-tab-ownership.py`
+    /// 守着「只此一处」）；工作区页签模型只负责「这个文件该去哪儿」，交接由宿主（`DoyahStudioApp`）
+    /// 接线一次。**没接线时不静默丢失** —— 走文本编辑器打开（见 `openFile(at:)`）。
+    var openInBrowserTab: ((URL) -> Void)?
+
     func togglePreview() {
         previewVisible.toggle()
     }
@@ -90,8 +98,19 @@ final class WorkspaceTabsModel: ObservableObject {
     // MARK: 打开 / 保存
 
     /// 打开一个文件：已经开着就切过去（**不重复开**）。
+    ///
+    /// **去哪儿开由语言登记表说**（`FR-EDIT-36` 的消费者口径）：登记项声明
+    /// `defaultView == .browser` 的那一类（今天 = `.html` / `.htm` / `.xhtml`）交给工作区的
+    /// 浏览器页签；其余（含认不出的）当文本打开。**这里刻意不写「扩展名 == "html"」** ——
+    /// 那是把语言知识搬回核心代码，正是 `FR-EDIT-38` ① 要清掉的形状
+    /// （判据 `Scripts/check-language-registry.py` 的 E 档守着「读这一档的地方只有一处」）。
     func openFile(at url: URL) {
         let path = url.path
+        if CodeLanguageRegistry.defaultView(forPath: path) == .browser, let openInBrowserTab {
+            openInBrowserTab(url)
+            record(file: path)
+            return
+        }
         if let existing = tabs.first(where: { $0.path == path }) {
             selectedID = existing.id
             return

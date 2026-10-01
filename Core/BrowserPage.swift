@@ -16,8 +16,12 @@ public enum BrowserNavigationDecision: Equatable, Sendable {
 ///    发起（在地址栏回车、点链接）。引擎里的自动加载（恢复会话、预取、脚本发起的跳转）
 ///    一律拒绝。
 /// 2. 只放行 `http` / `https`；`about:blank` 放行（它就是"空白页"）。`javascript:`、
-///    `data:`、`file:` 一律拒绝 —— 前两者是脚本注入面，后者会绕过"文件访问必须经授权目录"
-///    这条既有纪律（FR-AI-08 的授权模型）。
+///    `data:` 一律拒绝 —— 两者都是脚本注入面。
+///    **`file:`（本机文件）自 2026-10-01 起放行，但只在用户显式发起时**：人类主人答「允许」
+///    （口径 = 需求书 `R-35` ⑥ / 概要设计 §3.12「本机文件可加载」）—— 本机文件不是网络内容，
+///    它是工作区的自然对象（需求原话「本质上 html 也是一种文件」）。边界一条不减：
+///    仍须显式发起（下面那道 `isUserInitiated` 闸先过）、仍**进出网留痕**、写盘仍走**授权目录**
+///    （`FR-AI-08`）、仍**不注入脚本桥**；读进来的内容照旧按不可信处理。
 /// 3. **拒绝也要留痕**：每次裁决都会在外发日志里留下 `allowed` / `denied`。
 ///
 /// 为什么把策略放在 Core 而不是塞进 `WKWebView` 的代理里：这是**契约**，
@@ -26,6 +30,9 @@ public enum BrowserNavigationPolicy {
 
     /// 允许被加载的 URL scheme。
     public static let allowedSchemes: Set<String> = ["http", "https"]
+
+    /// 本机文件（`file:`）—— 2026-10-01 口径放行；**只在用户显式发起时**（见 `decide` 里那道闸）。
+    public static let localFileScheme = "file"
 
     public static func decide(url: URL?, isUserInitiated: Bool) -> BrowserNavigationDecision {
         guard let url else {
@@ -40,11 +47,24 @@ public enum BrowserNavigationPolicy {
         }
 
         if !isUserInitiated {
-            return .block(reason: "默认不加载远程内容：只有你主动输入地址或在页面上点击，才会发起请求")
+            // 本机文件与远程内容是**同一条闸**：都不许自动加载（恢复会话、预取、脚本发起的跳转）。
+            // 说法按对象分开 —— 把「打开一个本机文件被拦」说成"不加载远程内容"，用户会以为程序搞错了。
+            let subject = scheme == localFileScheme ? "本机文件" : "远程内容"
+            return .block(reason: "默认不加载\(subject)：只有你主动输入地址或在页面上点击，才会发起请求")
+        }
+
+        // 本机文件（2026-10-01 人类主人答「允许」；口径 = 需求书 `R-35` ⑥ / 概要设计 §3.12）：
+        // 放行**用户显式发起**的本机文件加载（工作区里点开 `.html` / 页面里点一个本地链接）。
+        // 这道判定排在 `isUserInitiated` 闸之后 ⇒ 「不许自动加载、不许静默重放」一条不减。
+        if scheme == localFileScheme {
+            guard url.isFileURL, !url.path.isEmpty else {
+                return .block(reason: "本机文件地址不完整（没有路径）：已被拒绝")
+            }
+            return .allow(url)
         }
 
         guard allowedSchemes.contains(scheme) else {
-            return .block(reason: "只允许 http / https；\(scheme.isEmpty ? "未知协议" : scheme + ":") 已被拒绝")
+            return .block(reason: "只允许 http / https / 本机文件；\(scheme.isEmpty ? "未知协议" : scheme + ":") 已被拒绝")
         }
 
         guard url.host != nil else {

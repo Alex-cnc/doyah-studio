@@ -147,7 +147,25 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
         guard let loadURL = transition.urlToLoad else { return }
         // 这一次 `view.load` 是"应用层已裁决过"的，代理里放行即可（一次标记，一次消费）。
         explicitLoadRequested = true
-        view.load(URLRequest(url: loadURL))
+        present(loadURL)
+    }
+
+    /// 真正交给 WebView 的那一步。
+    ///
+    /// **本机文件必须走 `loadFileURL`**（队列 `L-149` 剩余②）：`WKWebView` 不把 `file:` 当成
+    /// 可导航的请求，`load(URLRequest(fileURL))` 会以 `WebKitErrorDomain` 失败 ——
+    /// 而 `loadFileURL(_:allowingReadAccessTo:)` 才是官方的本机文件入口（它同时把沙箱读权限
+    /// 交给渲染进程，这正是沙箱里本机页面能读到自己同目录资源的原因）。
+    ///
+    /// 读取范围 = 该文件**所在的目录**：本机页面里的同目录资源（css / 图片 / 脚本）本来就要一起读，
+    /// 收得只剩一个文件会让页面渲染成裸文档。这一步仍然**只在用户显式发起**时到达（策略已放行）、
+    /// 也已经**写过外发日志**；写盘照旧走授权目录 —— 给读权限不等于给写权限。
+    private func present(_ url: URL) {
+        if url.isFileURL {
+            view.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        } else {
+            view.load(URLRequest(url: url))
+        }
     }
 
     private func publish() {

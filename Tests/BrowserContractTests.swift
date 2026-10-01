@@ -3,8 +3,8 @@ import XCTest
 
 /// 内嵌浏览器的契约测试（FR-EDIT-34）。
 ///
-/// 这一组盯住的是**行为契约**，不是渲染：策略（默认不加载远程内容、只放行 http/https）、
-/// 状态迁移（历史 / 前进后退 / 失败留在原页）、以及**每条出网都进外发日志**。
+/// 这一组盯住的是**行为契约**，不是渲染：策略（默认不加载远程内容、只放行 http/https +
+/// 用户显式发起的本机文件）、状态迁移（历史 / 前进后退 / 失败留在原页）、以及**每条出网都进外发日志**。
 /// 渲染归平台实现，两个平台共用这里的规则。
 final class BrowserContractTests: XCTestCase {
 
@@ -47,12 +47,11 @@ final class BrowserContractTests: XCTestCase {
         XCTAssertEqual(decision, .allow(url("https://example.com/a?b=1")))
     }
 
-    /// 只放行 http / https；其余协议有**可读**的拒绝原因。
-    func testNonWebSchemesAreBlockedWithReadableReason() {
+    /// 脚本注入面（`javascript:` / `data:`）一律拒绝，且拒绝原因**可读**。
+    func testScriptInjectionSchemesAreBlockedWithReadableReason() {
         for text in [
             "javascript:alert(1)",
-            "data:text/html,<h1>x</h1>",
-            "file:///etc/passwd"
+            "data:text/html,<h1>x</h1>"
         ] {
             guard case .block(let reason) = BrowserNavigationPolicy.decide(
                 url: url(text), isUserInitiated: true
@@ -61,6 +60,60 @@ final class BrowserContractTests: XCTestCase {
             }
             XCTAssertFalse(reason.isEmpty)
         }
+    }
+
+    // MARK: - 本机文件（2026-10-01 口径：`R-35` ⑥ / 概要设计 §3.12「本机文件可加载」）
+
+    /// **用户显式发起**的本机文件放行（工作区里点开 `.html` 就是这条路径）。
+    func testLocalFileIsAllowedWhenUserInitiated() {
+        let target = url("file:///Users/me/site/index.html")
+        XCTAssertEqual(
+            BrowserNavigationPolicy.decide(url: target, isUserInitiated: true),
+            .allow(target)
+        )
+    }
+
+    /// 本机文件与远程内容是**同一条闸**：自动加载（恢复会话 / 预取 / 脚本跳转）一律拒绝，
+    /// 而且说法要落在「本机文件」上（说成"不加载远程内容"会让用户以为程序搞错了对象）。
+    func testLocalFileIsBlockedWhenNotUserInitiated() {
+        guard case .block(let reason) = BrowserNavigationPolicy.decide(
+            url: url("file:///Users/me/site/index.html"), isUserInitiated: false
+        ) else {
+            return XCTFail("非用户发起的本机文件加载必须被拒绝")
+        }
+        XCTAssertTrue(reason.contains("默认不加载本机文件"), "实际原因：\(reason)")
+    }
+
+    /// 地址不完整（没有路径）的本机文件**不猜**：拒绝并说明。
+    func testIncompleteLocalFileURLIsBlocked() {
+        guard case .block(let reason) = BrowserNavigationPolicy.decide(
+            url: url("file://"), isUserInitiated: true
+        ) else {
+            return XCTFail("没有路径的本机文件地址必须被拒绝")
+        }
+        XCTAssertTrue(reason.contains("路径"), "实际原因：\(reason)")
+    }
+
+    /// 本机文件的加载**同样进出网日志**（口径里的边界一条不减：显式发起 / 出网留痕）。
+    func testLocalFileLoadIsRecordedInEgressLog() async throws {
+        let log = EgressLog(directoryURL: directory)
+        let target = url("file:///Users/me/site/index.html")
+        let transition = BrowserSession.navigate(
+            page: BrowserPage(),
+            to: target,
+            origin: "浏览器 · 页签 1",
+            isUserInitiated: true
+        )
+
+        XCTAssertEqual(transition.urlToLoad, target)
+        XCTAssertEqual(transition.egressOutcome, .allowed)
+        XCTAssertTrue(transition.shouldRecord, "本机文件也要留痕（它不是 about:blank）")
+
+        await BrowserSession.record(transition, origin: "浏览器 · 页签 1", log: log)
+        let entries = try await log.entries()
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.outcome, .allowed)
+        XCTAssertTrue(entries.first?.target.contains("index.html") == true, "实际目标：\(entries.first?.target ?? "（空）")")
     }
 
     func testBlankPageIsAllowed() {

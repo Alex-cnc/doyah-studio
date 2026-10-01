@@ -67,9 +67,12 @@ final class WorkspaceBrowserModel: ObservableObject {
     private var browserEngines: [UUID: WebKitBrowserEngine] = [:]
     /// 浏览器页签的会话持久化（恢复**不自动请求**，见 `BrowserTabStore` 的说明）。
     private let browserTabStore: BrowserTabStore
+    /// 引擎写外发日志用的那一份（默认 = 应用那一份；探针注入临时目录 ⇒ 不写用户数据）。
+    private let egressLog: EgressLog
 
-    init(browserTabStore: BrowserTabStore = .shared) {
+    init(browserTabStore: BrowserTabStore = .shared, egressLog: EgressLog = .shared) {
         self.browserTabStore = browserTabStore
+        self.egressLog = egressLog
     }
 
     // MARK: 选中与页签
@@ -91,6 +94,37 @@ final class WorkspaceBrowserModel: ObservableObject {
     func selectBrowserTab(_ id: UUID) {
         guard browserPages.contains(where: { $0.id == id }) else { return }
         selectedBrowserID = id
+    }
+
+    /// 在工作区里**用浏览器视图打开一个本机文件**（队列 `L-149` 剩余②：`.html` / `.htm` 的落点）。
+    ///
+    /// 两件事必须一次做对：
+    /// ① 这是**用户显式发起**的加载（他刚点了工作区树里的文件）⇒ 走 `engine.load`，与地址栏回车
+    ///    同一条路 —— 策略、外发留痕、`WKWebView` 加载都在那一条路里，本方法**不自己判断能不能加载**；
+    /// ② 同一个文件已经开着就切过去（与文件页签同一口径，不重复开）。
+    ///
+    /// 「已经加载过」当场标上：这个页签是用户刚打开的，不是从会话里恢复出来的 ——
+    /// 界面上不该出现「点一下才加载」那条恢复态（那条是给"上次开着、这次没点"的页签用的）。
+    @discardableResult
+    func openFileInBrowser(_ url: URL) -> UUID {
+        if let existing = browserPages.first(where: { $0.url == url }) {
+            selectedBrowserID = existing.id
+            return existing.id
+        }
+        let page = BrowserPage(url: url, title: url.lastPathComponent)
+        // **顺序有意**：先建引擎、再把页签登记进列表。
+        // `WebKitBrowserEngine` 在挂更新回调那一刻会**立刻回报一次**它自己那份页模型的初始状态
+        // （那份还没有地址）—— 若页签已经在列表里，这一次回报会把刚写进去的文件地址抹掉：
+        // 地址栏空着，而且「同一个文件点两次」的去重（按地址找）会失效 ⇒ 多开一个页签。
+        // 反过来，那一次回报找不到对应页签、被 `applyBrowserUpdate` 的 guard 丢掉。
+        // （第 145 轮探针 `WorkspaceFileRoutingProbeTests` 抓到的真缺陷 —— 两条用例钉住。）
+        let engine = browserEngine(for: page)
+        browserPages.append(page)
+        selectedBrowserID = page.id
+        browserEngineLoadedPageIDs.insert(page.id)
+        persistBrowserTabs()
+        Task { await engine.load(url) }
+        return page.id
     }
 
     /// 取消浏览器的选中态（选工作区里的 Home / 文件页签时）。
@@ -120,7 +154,7 @@ final class WorkspaceBrowserModel: ObservableObject {
         if let existing = browserEngines[page.id] {
             return existing
         }
-        let engine = WebKitBrowserEngine(pageID: page.id, origin: "浏览器 · 页签")
+        let engine = WebKitBrowserEngine(pageID: page.id, origin: "浏览器 · 页签", log: egressLog)
         // 引擎回报的状态（加载中 / 标题 / 地址 / 失败原因）写回模型 —— 否则切页签或重绘后
         // 界面就停在旧状态；`setUpdateHandler` 在主线程回调，直接转发即可。
         engine.setUpdateHandler { [weak self] updated in

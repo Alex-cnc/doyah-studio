@@ -21,6 +21,21 @@ public struct CodeLanguageTraits: Sendable, Equatable {
     public static let none = CodeLanguageTraits()
 }
 
+/// 一个语言的文件**默认用哪种视图打开**（`FR-EDIT-36` 的消费者口径 / 队列 `L-149` 剩余②）。
+///
+/// 为什么要写在登记表里：需求提出者 2026-09-30 原话「浏览器内置到工作区 Tab 页 …… **本质上 html
+/// 也是一种文件**」—— 但「`.html` 该用浏览器视图打开」这件事是**语言 / 类型**的知识，不是工作区
+/// 里的一句分支。写进登记表之后，将来再多一种「用浏览器打开的文件类型」（例如 `.svg` / `.pdf`）
+/// = 改一行登记，工作区那一侧一行都不用动（与 `FR-EDIT-38` ①「新增语言不改核心代码」同一条口径）；
+/// 而「按语言身份分支」（`if 扩展名 == "html"`）正是那条口径要清掉的形状，
+/// 由 `Scripts/check-language-registry.py` 守着。
+public enum CodeDefaultView: String, Sendable, Equatable, CaseIterable {
+    /// 文本编辑器（绝大部分语言；也是认不出时的回落）。
+    case editor
+    /// 内嵌浏览器（工作区里的一类页签；标记语言走这一档 —— 浏览器**不是** SQL 工作台的页签）。
+    case browser
+}
+
 /// 一个语言的**全部知识**：它叫什么、认哪些扩展名 / 文件名、按什么规则着色、是不是代码。
 ///
 /// **新增语言 = 往 `CodeLanguageRegistry.definitions` 加一条 + 在本文件末尾给标识加一行
@@ -51,6 +66,8 @@ public struct CodeLanguageDefinition: Sendable {
     /// 格式化能力（FR-EDIT-39）。表在下面 `formats`，这里只是转发后的结果 ——
     /// 与 `syntax` / `traits` 一样，「这个语言怎么格式化」是**数据**，不是核心代码里的分支。
     public let format: CodeFormatCapability
+    /// 这个语言的文件**默认用哪种视图打开**（`FR-EDIT-36` 消费者口径；见 `CodeDefaultView`）。
+    public let defaultView: CodeDefaultView
 
     public init(
         _ language: TextLanguage,
@@ -61,7 +78,8 @@ public struct CodeLanguageDefinition: Sendable {
         syntax: CodeSyntax,
         traits: CodeLanguageTraits = .none,
         isFallback: Bool = false,
-        format: CodeFormatCapability = .none
+        format: CodeFormatCapability = .none,
+        defaultView: CodeDefaultView = .editor
     ) {
         self.language = language
         self.displayName = displayName
@@ -72,6 +90,7 @@ public struct CodeLanguageDefinition: Sendable {
         self.traits = traits
         self.isFallback = isFallback
         self.format = format
+        self.defaultView = defaultView
     }
 
     /// 复制一份、换掉格式化能力。
@@ -89,7 +108,8 @@ public struct CodeLanguageDefinition: Sendable {
             syntax: syntax,
             traits: traits,
             isFallback: isFallback,
-            format: capability
+            format: capability,
+            defaultView: defaultView
         )
     }
 }
@@ -133,6 +153,15 @@ public enum CodeLanguageRegistry {
             return .plainText
         }
         return extensionIndex[String(name[name.index(after: dot)...])] ?? .plainText
+    }
+
+    /// 按路径给出「这个文件默认用哪种视图打开」—— **工作区打开文件的唯一出处**（`FR-EDIT-36` 消费者口径）。
+    ///
+    /// 为什么要一个函数而不是让调用方自己 `detect` + 取字段：调用方一旦自己拼，
+    /// 「认不出的文件怎么办」就会被各写一份（今天是「当文本打开」，明天可能有人写成「当浏览器打开」）。
+    /// 这里只有一句：**判语言 → 取那一档登记**，认不出就落到 `plainText` 的登记（= 文本编辑器）。
+    public static func defaultView(forPath path: String) -> CodeDefaultView {
+        definition(of: detect(path: path)).defaultView
     }
 
     /// 扩展名 → 语言 / 文件名 → 语言（单测与门禁判"有没有两个语言抢同一个"）。
@@ -270,7 +299,8 @@ public enum CodeLanguageRegistry {
                     CodeSnippet(label: "ul", insertText: "<ul>\n  <li></li>\n</ul>", detailKey: .codeDetailList)
                 ]
             ),
-            traits: CodeLanguageTraits(hasMarkupTags: true)
+            traits: CodeLanguageTraits(hasMarkupTags: true),
+            defaultView: .browser
         ),
 
         CodeLanguageDefinition(

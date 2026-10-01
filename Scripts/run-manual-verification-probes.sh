@@ -293,8 +293,11 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   窗口变窄只减不增、窄到放不下那一档**整条不显示**（量出来 0），另加**对照**：旧口径
 #   （写死 320）在同一套量法下窄窗口必判越界（判据真的能判红）。主入口同样是 `verify-all.sh`
 #   第 1 项（离屏 `NSHostingController`，不渲染位图、不需要窗口与人在场）。
+# + `WorkspaceFileRoutingProbeTests`（`L-149` 剩余②：工作区打开文件的路由 —— `.html` / `.htm`
+#   交给**浏览器页签**那一侧、`.md` / `.sql` 照旧进编辑器（对照）、没接线时回落文本编辑器、
+#   同一个文件点两次只开一个页签；不渲染位图 ⇒ 主入口同样是 `verify-all.sh` 第 1 项）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

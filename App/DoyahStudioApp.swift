@@ -102,6 +102,12 @@ struct DoyahStudioApp: App {
                         Task { await appState.refreshSQLArchiveStatus() }
                     }
                     appState.workspacePathProvider = { [workspace] in workspace.rootPath }
+                    // 工作区打开文件的路由（队列 `L-149` 剩余②）：登记表说「默认用浏览器打开」的
+                    // 那一类（`.html` / `.htm`）交给浏览器页签。**交接只在这里接一次** ——
+                    // 工作区那一侧问的是登记表，浏览器状态留在它自己的模型里。
+                    workspaceTabs.openInBrowserTab = { [browser = appState.workspaceBrowser] url in
+                        browser.openFileInBrowser(url)
+                    }
                     await workspace.load()
                 }
                 .tint(accent.accentColor)
