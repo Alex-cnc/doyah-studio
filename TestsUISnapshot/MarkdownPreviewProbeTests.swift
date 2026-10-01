@@ -17,6 +17,10 @@ import DoyahCore
 /// ② **跟随滚动落点**：光标行 → 顶层块下标，必须与契约层 `anchor(forSourceLine:)`
 ///    同解（界面层不许自己数行）。
 /// ③ **如实报数**：截断时才有计数，且与 `report` 逐字段相等；没截断就一行不多。
+/// ④ **预览全过程统一外发日志零写入**（判据 ②）：远端图 / 链接 / 内联 HTML 这些
+///    最容易「顺手做成一发出网」的内容，喂进全过程之后统一外发日志的条数必须**一条不增**；
+///    同一族带两条对照（数条数的量法写得出来就读得到 / `shared` 就是应用默认那一份），
+///    外加渲染侧不许自带**直连网络 API** 的源码判据。
 ///
 /// ## 边界（如实登记）
 ///
@@ -192,6 +196,177 @@ final class MarkdownPreviewProbeTests: XCTestCase {
         let controller = host(preview(""))
         settle(controller)
         XCTAssertTrue(textViews(in: controller.view).isEmpty)
+    }
+
+    // MARK: ④ 预览全过程：统一外发日志零写入（判据 ②）
+
+    /// **诱饵**：这几种内容最容易被「顺手做成一次出网」—— 远端图片、链接、内联 HTML、
+    /// 引用里的地址。预览哪天开始拉远端图，「默认零外发」这条对外承诺就**悄悄**不成立了，
+    /// 而编译照过、快照照绿、读图也读不出来。
+    private let egressBait = """
+    # 远端图与链接
+
+    ![远端图](https://example.com/pixel.png)
+
+    [链接](https://example.com/page)
+
+    ![本机图](file:///tmp/not-authorized.png)
+
+    > 引用里的地址 https://example.com/quote
+    """
+
+    /// 读统一外发日志现在有几条（**只读**，不写）。
+    private func egressCount() async throws -> Int {
+        try await EgressLog.shared.entries().count
+    }
+
+    /// 量具目录：优先用脚本注入的那个（`run-manual-verification-probes.sh` 会注入本仓
+    /// `.build/` 下的临时目录）；没有注入就自己在本仓 `.build/` 下开一个。
+    ///
+    /// **为什么非要本仓内**：测试进程跑在**沙箱**里，写不进 `~/Library/Application Support`
+    /// （实测：往那儿写会留下一个 0 字节的 `egress-log.jsonl.sb-*` 临时文件，日志永远数不出东西）
+    /// ⇒ 拿一个写不进去的目录判「零写入」，是**假绿**（连真写入都落不了盘）。
+    private func egressProbeDirectory() -> URL {
+        let environment = ProcessInfo.processInfo.environment
+        if let injected = environment["DOYAH_EGRESS_LOG_DIR"], !injected.isEmpty {
+            return URL(fileURLWithPath: injected, isDirectory: true)
+        }
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let fallback = root.appendingPathComponent(".build/ui-probe-egress", isDirectory: true)
+        // 在**第一次碰 `EgressLog.shared` 之前**把它指到可写目录（没注入时才这么做，
+        // 绝不覆盖脚本注入的值）。
+        setenv("DOYAH_EGRESS_LOG_DIR", fallback.path, 1)
+        return fallback
+    }
+
+    /// **判据 ②**：全过程（解析正常 / 截断 / 超大 + 离屏渲染 + 跟随滚动扫全篇 + 空文档）
+    /// 跑完，统一外发日志的条数**一条不增**。
+    @MainActor
+    func testPreviewProcessWritesNothingToTheUnifiedEgressLog() async throws {
+        // 空跑防护：诱饵里必须真有「会诱发出网」的内容，否则这条判的是空文档。
+        XCTAssertTrue(egressBait.contains("https://"), "诱饵里没有远端地址 ⇒ 这条判的是空跑")
+
+        // ① 量具就是**应用那一份**，且它得**写得进去** —— 两件都不成立就明确跳过
+        //    （跳过 ≠ 通过；探针脚本会核对证据，不让人拿「跳过」冒充「判过」）。
+        let directory = egressProbeDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let meter = await EgressLog.shared.fileLocation()
+        guard meter.deletingLastPathComponent().path == directory.path else {
+            throw XCTSkip("共享外发日志已被绑到别处（\(meter.path)）⇒ 这一条量不了，跳过（不算通过）")
+        }
+        let probe = EgressLog(directoryURL: directory)
+        await probe.record(kind: .externalProgram, target: "probe-control", origin: "对照", outcome: .denied)
+        let controlCount = try await probe.entries().count
+        guard controlCount == 1 else {
+            throw XCTSkip("\(directory.path) 写不进去（沙箱）⇒ 「零写入」判不出来，跳过（不算通过）")
+        }
+        // 对照那一条落盘 = 写得进、数得出；清掉它，回到干净基线。
+        try? FileManager.default.removeItem(at: meter)
+
+        let before = try await egressCount()
+        XCTAssertEqual(before, 0, "清场后该是 0 条 —— 实测 \(before) 条")
+
+        let cursor = MarkdownPreviewCursorModel()
+        let controller = host(MarkdownPreviewView(text: egressBait, language: .markdown, cursor: cursor))
+        settle(controller)
+
+        // 渲染必须真的发生了（空底也能「零外发」—— 那不算数）。
+        let blocks = MarkdownDocument.parse(egressBait)
+        let tall = host(MarkdownBlocksView(blocks: blocks.blocks, language: .markdown))
+        XCTAssertGreaterThan(
+            tall.sizeThatFits(in: NSSize(width: 720, height: 10_000)).height, 0,
+            "预览没画出任何高度 ⇒ 这一轮什么都没渲染，「零外发」不作数"
+        )
+
+        // 跟随滚动扫全篇（光标行 → 锚点 → 滚动），截断那一档（报数条会被画出来），空文档。
+        for line in 0...(blocks.lineCount + 2) { cursor.report(line: line) }
+        let truncated = MarkdownDocument.parse(
+            egressBait + "\n更多正文\n", limits: MarkdownParseLimits(maxLines: 3, maxBlocks: 2)
+        )
+        XCTAssertNotNil(
+            MarkdownPreviewContent.truncationCounts(truncated.report),
+            "截断那一条没生效 ⇒ 报数条这一路没被走到"
+        )
+        settle(host(MarkdownBlocksView(blocks: truncated.blocks, language: .markdown)))
+        settle(host(preview("")))
+
+        // 真出网那条路多半是**异步**的（URLSession 回调、后台任务）：给它一个让出的窗口再读一次 ——
+        // 免得「晚到的写」被当成「没写」。`Task.sleep` 会把主 actor 让出去，别的任务这期间能跑。
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let after = try await egressCount()
+        XCTAssertEqual(
+            after, before,
+            "预览全过程往统一外发日志写了 \(after - before) 条 —— 「默认零外发」这条承诺当场作废"
+        )
+        try? FileManager.default.removeItem(at: meter)   // 清场：别把夹具留给后面的用例
+    }
+
+    /// **对照之一（判据必须能判红）**：同一套「数条数」的量法，真写一条必须数得到 ——
+    /// 否则上面那条「0 条」可能只是这个量法根本读不出东西（假绿）。
+    /// 用临时目录里的**另一份**日志来写：不去污染应用那一份（探针只管读）。
+    func testEgressCountMethodSeesAWrite() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MarkdownPreviewEgressProbe-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let log = EgressLog(directoryURL: directory)
+        let before = try await log.entries().count
+        XCTAssertEqual(before, 0, "临时目录是新的，这一步该是 0 条")
+
+        await log.record(
+            kind: .browser, target: "https://example.com/probe",
+            origin: "对照", outcome: .allowed
+        )
+        let after = try await log.entries().count
+        XCTAssertEqual(after, before + 1, "写了一条却数不出来 ⇒ 上面那条「零写入」不作数")
+    }
+
+    /// **对照之二**：上面量的是 `EgressLog.shared` —— 它必须就是**应用默认拿到的那一份**
+    /// （没人注入目录时 `EgressLog()` 与 `shared` 解到同一个文件）。否则那条判据量的是
+    /// 一个「没人往里写」的空壳，绿得毫无意义。
+    func testSharedEgressLogIsTheDefaultInstance() async {
+        let shared = await EgressLog.shared.fileLocation()
+        let fresh = await EgressLog().fileLocation()
+        XCTAssertEqual(
+            shared.path, fresh.path,
+            "`shared` 与默认构造解不到同一个文件 ⇒ 用量 `shared` 的那条判据量错了对象"
+        )
+    }
+
+    // MARK: ⑤ 渲染侧不许自带直连网络的能力（同一条判据的另一条腿）
+
+    /// 判据 ② 量的是**统一外发日志**；万一有人加了一处**绕过日志的直连**，那条量法看不见
+    /// （日志里当然也没有）。所以再钉一条源码判据：预览渲染那一份里不许出现**直连网络的 API**。
+    ///
+    /// **边界（如实登记）**：只禁**直连 API**（`URLSession` / `WKWebView` / `import Network` /
+    /// `NWConnection`），**不禁 URL 字符串** —— 链接默认开在已内嵌的浏览器页签（`L-137` 剩余③）
+    /// 落地时那一侧本来就要拿地址；出网与否归浏览器那条通道（它自己写外发日志）。
+    func testPreviewRenderSourceHasNoDirectNetworkAPI() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("App/Views/MarkdownPreviewView.swift"), encoding: .utf8
+        )
+
+        // 空跑防护：扫的那一份必须在位、形状对得上（改名 / 掏空 ⇒ 红）。
+        XCTAssertGreaterThan(source.count, 4_000, "渲染侧源文件只有 \(source.count) 字节 ⇒ 这条判的是空跑")
+        XCTAssertTrue(source.contains("struct MarkdownPreviewView"), "渲染侧源文件的形状对不上")
+
+        let tokens = ["URLSession", "WKWebView", "import Network", "NWConnection"]
+        let hits = tokens.filter { source.contains($0) }
+        XCTAssertTrue(hits.isEmpty, "预览渲染侧出现了直连网络的 API：\(hits) —— 出网只能走统一外发日志那条通道")
+
+        // 对照（判据必须能判红）：同一套扫法在**真的直连网络**的文件上必须命中。
+        let control = try String(
+            contentsOf: root.appendingPathComponent("Platform/macOS/WebKitBrowserEngine.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(
+            tokens.filter { control.contains($0) }.isEmpty,
+            "同一套扫法在浏览器引擎上都命中不了 ⇒ 上面那条「零命中」不作数"
+        )
     }
 }
 
