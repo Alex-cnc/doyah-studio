@@ -283,8 +283,13 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   **不渲染位图、不需要窗口与人在场** ⇒ 每轮门禁都跑）；挂在这里是为了那条
 #   「每个 `*ProbeTests.swift` 都得有入口」的判据 `check-result-scroll-ledger.py` ⑤ ——
 #   一处入口漏了就等于一个都跑不到（第 96 轮实测，第 133 轮又被这条判据逮到一次）。
+# + `MarkdownPreviewProbeTests`（`L-137` 第三片：工作区 Markdown 预览的**界面面** ——
+#   ① 预览里没有可编辑文本视图（只读），且同一套遍历**能**看见真插进去的可编辑 `NSTextView`
+#   （对照：证明"零命中"不是"看不见"）；② 光标行 → 顶层块下标与契约层锚点同解；
+#   ③ 截断计数只在真截断时给、逐字段相等；④ 块多则高（证明真画了，不是空底）。
+#   主入口同样是 `verify-all.sh` 第 1 项（离屏 `NSHostingController`，不渲染位图、不需要人在场）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

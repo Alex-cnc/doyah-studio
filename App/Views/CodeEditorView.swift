@@ -19,6 +19,10 @@ struct CodeEditorView: NSViewRepresentable {
     /// 触发格式化（菜单项与 ⇧⌘F 都调它）。
     var onFormat: () -> Void
 
+    /// 光标行上报（1 起）—— 工作区 Markdown 预览的**跟随滚动**输入面（队列 `L-137`）。
+    /// 行号由 `Core/CodeLines` 算（与行号列**同一份**实现，界面层不自己数换行）。
+    var onCursorLine: ((Int) -> Void)?
+
     /// 订阅字体偏好：偏好一变，SwiftUI 重跑 `updateNSView` → 编辑器换字体。
     @ObservedObject private var fonts = FontManager.shared
 
@@ -75,6 +79,8 @@ struct CodeEditorView: NSViewRepresentable {
         context.coordinator.language = language
         textView.completionLanguage = language
         context.coordinator.applyHighlighting()
+        // 首次上报光标行：页签刚打开时预览就该对齐到文档开头，而不是等第一次移动光标。
+        context.coordinator.reportCursorLine()
 
         let scrollView = NSScrollView()
         scrollView.documentView = textView
@@ -119,6 +125,10 @@ struct CodeEditorView: NSViewRepresentable {
         if textChanged || fontChanged {
             textView.reloadLineNumbers()
         }
+        // 切页签 / 换了内容：光标行跟着新文档重报一次（预览据此重新对齐）。
+        if textChanged {
+            context.coordinator.reportCursorLine()
+        }
         if fontChanged || languageChanged || context.coordinator.lastHighlightedText != textView.string {
             context.coordinator.applyHighlighting()
         }
@@ -146,6 +156,21 @@ struct CodeEditorView: NSViewRepresentable {
             textView.reloadLineNumbers()
             parent.onTextChange(textView.string)
             scheduleHighlighting()
+        }
+
+        // MARK: 光标行（队列 L-137：Markdown 预览的跟随滚动）
+
+        /// 选中区一变就上报一次光标行。行号算在 `Core/CodeLines`（与行号列同一份），
+        /// 这里只负责把 `NSRange.location`（**UTF-16 单元**）交给它。
+        func textViewDidChangeSelection(_ notification: Notification) {
+            reportCursorLine()
+        }
+
+        func reportCursorLine() {
+            guard let textView else { return }
+            let location = textView.selectedRange().location
+            guard location != NSNotFound else { return }
+            parent.onCursorLine?(CodeLines.lineNumber(at: location, in: textView.string))
         }
 
         /// 延后一次高亮：避免与输入法 / 文本编辑回调重入。

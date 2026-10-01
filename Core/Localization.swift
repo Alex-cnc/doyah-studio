@@ -463,6 +463,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceCloseTab
     case workspaceDirtyTag
     case workspaceEditorHint
+    case workspacePreviewToggle
+    case workspacePreviewEmpty
+    case workspacePreviewSkippedNotice
+    case workspacePreviewSkippedLines
+    case workspacePreviewUnparsedLines
+    case workspacePreviewLineUnit
     case workspaceNoWorkspaceHint
     case workspaceLanguageLabel
     case workspaceHistoryLoadFailed
@@ -2234,6 +2240,12 @@ public enum LocalizedStrings {
         .workspaceCloseTab: [.simplifiedChinese: "关闭页签", .english: "Close tab"],
         .workspaceDirtyTag: [.simplifiedChinese: "有未保存的改动", .english: "Unsaved changes"],
         .workspaceEditorHint: [.simplifiedChinese: "⌘S 保存 · ⌃Space / F5 触发补全 · 左侧点文件即可打开", .english: "⌘S saves · ⌃Space / F5 for completion · click a file on the left to open it"],
+        .workspacePreviewToggle: [.simplifiedChinese: "Markdown 预览", .english: "Markdown preview"],
+        .workspacePreviewEmpty: [.simplifiedChinese: "这个文件没有可预览的内容", .english: "Nothing to preview in this file"],
+        .workspacePreviewSkippedNotice: [.simplifiedChinese: "部分内容未预览", .english: "Some content was not previewed"],
+        .workspacePreviewSkippedLines: [.simplifiedChinese: "跳过", .english: "skipped"],
+        .workspacePreviewUnparsedLines: [.simplifiedChinese: "未解析", .english: "unparsed"],
+        .workspacePreviewLineUnit: [.simplifiedChinese: "行", .english: "lines"],
         .workspaceNoWorkspaceHint: [.simplifiedChinese: "还没有选择工作区 —— 在左侧点「选择工作区…」", .english: "No workspace chosen — click “Choose workspace…” on the left"],
         .workspaceLanguageLabel: [.simplifiedChinese: "语言：%@", .english: "Language: %@"],
         .workspaceHistoryLoadFailed: [.simplifiedChinese: "读取「最近打开」记录失败：%@（已按空历史继续）", .english: "Could not read the recent-items file: %@ (continuing with an empty list)"],

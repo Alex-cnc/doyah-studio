@@ -23,6 +23,17 @@ final class WorkspaceTabsModel: ObservableObject {
     /// 一次性提示（保存成功 / 按非 UTF-8 编码打开之类）。
     @Published var noticeText: String?
 
+    /// 工作区右侧是否显示 **Markdown 只读预览**（队列 `L-137`）。
+    ///
+    /// 状态住在模型里、视图只读它 —— 与页签集、浏览器页签同一条纪律
+    /// （放进视图的 `@State` 会在切页签 / 重建视图时把用户的选择丢掉）。
+    /// 全局一个开关（不按页签各记一份）：用户要的是"看的时候分屏、写的时候全宽"。
+    @Published var previewVisible = true
+
+    func togglePreview() {
+        previewVisible.toggle()
+    }
+
     private let store: WorkspaceHistoryStore
 
     init(store: WorkspaceHistoryStore = .standard()) {

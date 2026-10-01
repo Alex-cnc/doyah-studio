@@ -12,6 +12,8 @@ struct WorkspaceAreaView: View {
     @EnvironmentObject private var tabs: WorkspaceTabsModel
     /// 浏览器页签的状态所有者（队列 `L-149` 剩余①）—— 与 `WorkspaceTabsModel` 同一条口径。
     @EnvironmentObject private var browser: WorkspaceBrowserModel
+    /// 预览的跟随滚动输入面（队列 `L-137`）：**独立对象**，光标每换一行只惊动预览那一侧。
+    @StateObject private var previewCursor = MarkdownPreviewCursorModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,25 +38,65 @@ struct WorkspaceAreaView: View {
                 WorkspaceHomeView()
             } else {
                 VStack(spacing: 0) {
-                    CodeEditorView(
-                        tabID: tab.id,
-                        text: tab.content,
-                        language: tab.language,
-                        pendingFormat: tabs.formatDelivery,
-                        onTextChange: { text in tabs.updateContent(text, for: tab.id) },
-                        onSave: { tabs.save(tab.id) },
-                        onFormat: { tabs.formatSelected() }
-                    )
+                    editorArea(tab: tab)
                     Divider()
-                    Text(L(.workspaceEditorHint))
-                        .font(Theme.font(.caption))
-                        .foregroundStyle(Theme.text(.tertiary))
-                        .lineLimit(1)
-                        .padding(.horizontal, Spacing.s)
-                        .padding(.vertical, Spacing.hair)
+                    hintBar(tab: tab)
                 }
             }
         }
+    }
+
+    /// 编辑器区：Markdown 文件（且预览开关打开）⇒ **编辑区 + 只读预览**分屏（队列 `L-137`）。
+    ///
+    /// 分屏器用 `HSplitView`：中间那条分隔线可以拖 —— "看预览"和"写代码"哪个要宽
+    /// 是用户当下的事，不该由我们钉死比例。
+    @ViewBuilder
+    private func editorArea(tab: WorkspaceTab) -> some View {
+        let editor = CodeEditorView(
+            tabID: tab.id,
+            text: tab.content,
+            language: tab.language,
+            pendingFormat: tabs.formatDelivery,
+            onTextChange: { text in tabs.updateContent(text, for: tab.id) },
+            onSave: { tabs.save(tab.id) },
+            onFormat: { tabs.formatSelected() },
+            onCursorLine: { line in previewCursor.report(line: line) }
+        )
+        if tab.language == .markdown && tabs.previewVisible {
+            HSplitView {
+                editor
+                MarkdownPreviewView(text: tab.content, language: tab.language, cursor: previewCursor)
+            }
+        } else {
+            editor
+        }
+    }
+
+    /// 底部提示条：快捷键提示 + **Markdown 预览开关**（只有 Markdown 文件才给这个开关 ——
+    /// 别的语言上它按下去不会有任何变化，那是"可点却无反应"）。
+    private func hintBar(tab: WorkspaceTab) -> some View {
+        HStack(spacing: Spacing.s) {
+            Text(L(.workspaceEditorHint))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.tertiary))
+                .lineLimit(1)
+            Spacer(minLength: Spacing.s)
+            if tab.language == .markdown {
+                Button {
+                    tabs.togglePreview()
+                } label: {
+                    Label(
+                        L(.workspacePreviewToggle),
+                        systemImage: tabs.previewVisible ? "sidebar.right" : "sidebar.squares.right"
+                    )
+                    .font(Theme.font(.caption))
+                }
+                .buttonStyle(.borderless)
+                .help(L(.workspacePreviewToggle))
+            }
+        }
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, Spacing.hair)
     }
 
     /// 底部消息条：错误优先，其次一次性提示。**不静默**——打不开、存不下都要说出来。
