@@ -32,6 +32,10 @@
 
 **本机（Windows）跑对侧共享判据的实况（第 31 轮实测，供两侧参照）**：`Scripts/` 下 13 条跨平台判据在本机 **9 绿 / 4 红，4 红全部与本轮合流无关** —— `check-doc-tables.py` 红因**本侧循环镜像台账** `Docs/循环台账.md`（`/Docs/*` 已 gitignore，但它是「有表格却不在受检清单」的本地文档）⇒ 连带 `check-doc-numbers.py` 的 `[doc-tables-files]` 一项红；`check-release-version.py` 与 `check-self-test-counts.py` 红因**本机没有那两份被 gitignore 的本地文档**（`Docs/发布方案.md` / `Docs/design/开发循环-任务队列.md`）。另有一处纯环境现象：跑 `Scripts/check-self-test-counts.py`（它会实跑各判据自测）后，`Scripts/lib/test-env.sh` / `real-db-scripts.txt` / `remote-bypass-scripts.json` / `test-er-diagram.sh` 四个**被跟踪文件出现纯行尾（CRLF）抖动、内容零差异** ⇒ 还原姿势 `git checkout HEAD -- <文件>`（本侧 `Tools/*.ps1` 一律 UTF-8 带 BOM 的纪律不受影响）。
 
+**对侧一笔合流后的本侧适用性（Windows 侧第 33 轮，2026-10-01）**：对侧本轮推一笔 —— **`L-137` 第三片**（`d1789aa`：**工作区 Markdown 只读预览**。新增 `App/Views/MarkdownPreviewView.swift`（块级模型 → SwiftUI 视图树；**行内 span 复用契约层「一处解析」的产物** `NoteBodyProjection.parseInline`，`App/` 里不引第二套解析；围栏代码块复用 `CodeLexer` + `SyntaxTone`）；`WorkspaceTabsModel.previewVisible` 开关 + `WorkspaceAreaView` 的 `HSplitView` 分屏 + 提示条开关；`CodeEditorView.onCursorLine` 上报光标行（行号复用 `Core/CodeLines`）+ `MarkdownPreviewCursorModel` 去重；6 条文案进语言表（中英）；**概要设计 §3.29 补「渲染侧三条口径」：只读 / 落点 = 顶层块下标 / 如实报数**）。本侧据此登记**一条等价义务（④）**（**暂不动代码** —— Studio 不在当前队列，Notes 安卓未完工）：
+
+④ **预览 = 「一份解析、两个消费者」**：本侧表示层将来做笔记 / 工作区 Markdown 预览时 —— ① **块级模型只许核心层构造**（表示层不得自己造块，也**不得引第三方 Markdown 解析库**）；② **行内 span 必须与编辑器 / 渲染共用同一处解析实现**（各写一套即判红）；③ 渲染侧守三条 —— **只读**（预览不是第二个编辑器 ⇒ 渲染树里不许出现可编辑控件）/ **滚动落点 = 顶层块下标**（嵌套子块只滚到它的顶层块，越界什么都不做）/ **如实报数**（超限截断时给计数，干净文档一行不多）。对侧判据 `Scripts/check-markdown-single-source.py` **在本机（Windows）实测可跑且绿**（行内扫描器唯一定义在 `Core/NoteBody.swift` / 块级模型唯一产地 `Core/MarkdownDocument.swift`（9 处构造）/ 同源调用 6 处 / 无第三方解析库 / 解析层用例 35 个）；本侧无表示层预览对象，故先只读登记。**另**：对侧 `Scripts/panel-root-frames.json` 扫描范围 `App/Views/` **76 → 77**（多一个文件）—— 本侧对应物是**自己那份**目录扫描台账（`Tools/check-p-parity.ps1` 同族），等表示层铺开时按同名规则重建，别把对侧的台账当本侧的基线。
+
 ## 先跑闸门
 
 ```powershell
