@@ -288,8 +288,13 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   （对照：证明"零命中"不是"看不见"）；② 光标行 → 顶层块下标与契约层锚点同解；
 #   ③ 截断计数只在真截断时给、逐字段相等；④ 块多则高（证明真画了，不是空底）。
 #   主入口同样是 `verify-all.sh` 第 1 项（离屏 `NSHostingController`，不渲染位图、不需要人在场）。
+# + `TitleBarSearchProbeTests`（`L-141`／内测清单**甲1**：标题栏搜索栏在**非全屏**窗口下不收敛、
+#   遮住窗口标题 —— 量「真视图在每一档窗口宽度下占多宽」：每档与策略 `TitleBarSearchLayout` 同值、
+#   窗口变窄只减不增、窄到放不下那一档**整条不显示**（量出来 0），另加**对照**：旧口径
+#   （写死 320）在同一套量法下窄窗口必判越界（判据真的能判红）。主入口同样是 `verify-all.sh`
+#   第 1 项（离屏 `NSHostingController`，不渲染位图、不需要窗口与人在场）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

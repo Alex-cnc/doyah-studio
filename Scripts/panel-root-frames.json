@@ -2,7 +2,7 @@
   "title": "面板根固定尺寸 `.frame(width:height:)` 的处置台账（队列 L-61）",
   "scope": "App/Views/**/*.swift",
   "panelRootMinWidth": 400,
-  "scannedFiles": 77,
+  "scannedFiles": 78,
   "totals": {
     "frames": 36,
     "panelRoots": 21,

@@ -133,7 +133,8 @@ final class CommandPaletteTests: XCTestCase {
 ///  ① **拼装**：`WindowTitle.text` 是唯一出口，分隔符只在它那里；
 ///  ② **派生**：每个活动栏项都有中英两份标题名（新增项不许悄悄没有标题）；
 ///  ③ **接线（源锚点）**：`MainWindow` 真把标题交给 `navigationTitle`、把搜索栏放在工具条**
-///     正中**位（`.toolbarPrincipal`），并在回车时把词交给**命令面板**（不另做一套搜索）。
+///     正中**位（`.principal`，宽度由 `TitleBarSearchLayout` 给 —— 队列 `L-141`），
+///     并在回车时把词交给**命令面板**（不另做一套搜索）。
 final class WindowTitleConventionTests: XCTestCase {
 
     private func source(_ relative: String) throws -> String {
@@ -200,10 +201,19 @@ final class WindowTitleConventionTests: XCTestCase {
         guard text.contains("appState.selectedActivityItem.titleKey") else {
             return XCTFail("标题没有跟着活动栏项走（没有取 `selectedActivityItem.titleKey`）")
         }
-        guard text.contains("placement: .toolbarPrincipal") else {
-            return XCTFail("搜索栏不在工具条的**正中**位（`.toolbarPrincipal`）—— 需求要的是「标题后面居中」")
+        guard text.contains("ToolbarItem(placement: .principal)") else {
+            return XCTFail("搜索栏不在工具条的**正中**位（`.principal`）—— 需求要的是「标题后面居中」")
         }
-        guard text.contains("appState.presentCommandPalette(seed: appState.globalSearchQuery)") else {
+        // 2026-10-01（队列 `L-141` 甲1）：宽度**不再交给系统**（`.searchable(placement: .toolbarPrincipal)`
+        // 给的宽度与窗口宽度无关 ⇒ 窄窗口压住标题）—— 改由 `TitleBarSearchLayout` 给，
+        // 锚点因此从「系统正中位」变成「自绘正中位 + 策略给宽度」。这条不删，只改判据锚点。
+        guard text.contains("TitleBarSearchField(windowWidth:") else {
+            return XCTFail("搜索栏没有接上宽度策略（`TitleBarSearchField`）—— 甲1 的修法就是这一步")
+        }
+        // 回车那一处**随搜索栏一起搬进了 `TitleBarSearchField`**（原标题栏搜索栏是系统件，
+        // 现在是自绘件）⇒ 锚点跟着搬，判的是同一件事。
+        let field = try source("App/Views/TitleBarSearchField.swift")
+        guard field.contains("appState.presentCommandPalette(seed: appState.globalSearchQuery)") else {
             return XCTFail("回车没有把词交给命令面板 —— 搜索栏成了摆设")
         }
     }

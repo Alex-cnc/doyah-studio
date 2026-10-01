@@ -36,6 +36,7 @@ struct MainWindow: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var localization: LocalizationManager
     @EnvironmentObject private var workspace: WorkspaceStore
+    @State private var contentWidth: CGFloat = 0
     @State private var formMode: ConnectionFormMode?
 
     /// 侧栏内容由活动栏决定（「看哪个视图」与「视图里看什么」分开）。
@@ -129,20 +130,28 @@ struct MainWindow: View {
             // 原话「软件主界面的标题就是一个 Doyah Studio 太浪费了…标题要跟着变成
             // Doyah Studio - Workspace / - Database / - Notes 这种」。
             .navigationTitle(windowTitle)
-            // **标题后面居中的搜索栏**（FR-EDIT-37）：`.toolbarPrincipal` = 系统工具条的**正中**位
-            // （macOS 12+），宽度由系统给。要「更长」的自绘输入框得换成
-            // `ToolbarItem(placement: .principal)` + 自定宽度 —— 代价是与窗口标题抢同一块位置，
-            // 需要自己排布；先按系统原生形态落地，观感不合适再换（记在需求行的「仍未做」里）。
-            .searchable(
-                text: $appState.globalSearchQuery,
-                placement: .toolbarPrincipal,
-                prompt: Text(L(.windowSearchPlaceholder))
-            )
-            // 回车把词交给**命令面板**：搜索栏不另做一套搜索，`CommandPalette.search` 与
-            // `AppCommandCatalog` 仍是唯一来源（面板里能接着改词，体验与 ⌘K 一致）。
-            .onSubmit(of: .search) {
-                appState.presentCommandPalette(seed: appState.globalSearchQuery)
+            // **标题后面居中的搜索栏**（FR-EDIT-37）：位置仍是工具条的**正中**位，
+            // 但宽度**不再由系统给** —— 系统给的是一个与窗口宽度无关的宽度，窗口一窄就压住标题
+            // （需求提出者 2026-09-30 内测甲1：「不是全屏时搜索框没有同步缩小，遮住了
+            // `Doyah Studio - Workspace` 标题」）。宽度改由 `TitleBarSearchLayout` 给：
+            // 窗口变窄 ⇒ 收敛；窄到放不下 ⇒ 整条不显示（回车入口仍在 ⌘K / 命令面板）。
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    TitleBarSearchField(windowWidth: contentWidth, titleText: windowTitle)
+                        .environmentObject(appState)
+                }
             }
+        }
+        // **内容区宽度**（队列 `L-141`）：搜索栏的宽度策略要吃一个「窗口有多宽」，
+        // 而标题栏与内容区同宽 ⇒ 在内容区量一次就够（工具条里的那一枚自己量不到窗口）。
+        // 用 `preference` 而不是 `GeometryReader` 包住内容：后者会改掉内容的排布方式。
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: MainWindowContentWidthKey.self, value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(MainWindowContentWidthKey.self) { width in
+            contentWidth = width
         }
         .sheet(item: $formMode) { mode in
             ConnectionFormView(
@@ -353,6 +362,15 @@ struct MainWindow: View {
         } message: {
             Text(appState.errorMessage ?? "")
         }
+    }
+}
+
+/// 内容区宽度的**唯一出处**（队列 `L-141`）：标题栏搜索栏的宽度策略吃这个数。
+/// 取 `max` 归并 —— 窗口里有分栏时，几何读数会有多份，取最大的那份（= 整个内容区）才不会偏小。
+private struct MainWindowContentWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
