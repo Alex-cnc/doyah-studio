@@ -67,7 +67,16 @@ struct WorkspaceAreaView: View {
         if tab.language == .markdown && tabs.previewVisible {
             HSplitView {
                 editor
-                MarkdownPreviewView(text: tab.content, language: tab.language, cursor: previewCursor)
+                MarkdownPreviewView(
+                    text: tab.content,
+                    language: tab.language,
+                    cursor: previewCursor,
+                    // 预览里的链接**默认开在已内嵌的浏览器页签里**（契约 `FR-EDIT-45`）：
+                    // 走的是**地址栏回车同一条路**（`openInBrowser` → `BrowserSession.parseAddress`
+                    // → 引擎的策略裁决 + 统一外发日志）—— 预览自己**不判**能不能加载，
+                    // 也不弹系统浏览器（`MarkdownPreviewView` 把 `openURL` 收在自己那一层）。
+                    openLink: { target in browser.openInBrowser(target) }
+                )
             }
         } else {
             editor

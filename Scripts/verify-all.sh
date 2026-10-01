@@ -569,15 +569,17 @@ python3 Scripts/test-note-search-route.py
 # L-137（2026-09-30 第 130 轮）：**Markdown 解析只有一份，预览只许消费它** ——
 # 需求提出者要「工作区的编辑器带 markdown 预览」，而这条路上有个必然的诱惑：再写一套块级解析
 # 或引一个第三方渲染库。一旦那样做，同一份 `**粗体**` 在笔记里是粗体、在预览里是星号，
-# 而**编译照过、单测照绿**，没有任何东西看得见。判据四条：行内扫描器 `nextMarker` 的定义唯一
-# 且在 `Core/NoteBody.swift`（名字也不许出这个文件）/ 块级模型 `MarkdownBlock(` 只许
+# 而**编译照过、单测照绿**，没有任何东西看得见。判据五条：行内扫描器 `nextMarker` **与链接扫描器
+# `linkMarker`** 的定义都唯一且在 `Core/NoteBody.swift`（名字也不许出这个文件，见 `L-137` 剩余③）/
+# 块级模型 `MarkdownBlock(` 只许
 # `Core/MarkdownDocument.swift` 构造（界面与平台层只渲染）/ 块级模型里必须**真的调用**
 # `NoteBodyProjection.parseInline(`（至少 4 处 —— 同源判的是调用点，不是注释）/
 # `import` 与依赖声明里不得出现第三方 Markdown 库。另加四条空跑防护（扫描面 / 块构造处数 /
 # 同源调用处数 / 解析层用例数下限）。
-# 判据见 `Scripts/check-markdown-single-source.py`；负例 `--self-test` 12 例
-# （行内扫描器出现第二份 / 定义被删 / 界面自己造块 / 模型被掏空 / 同源调用被删 /
-# 第三方库两种引法 / 用例文件被删 / 用例被掏空 / 扫描面被削掉 / 绿对照 / 末例真仓库逐字节未变）。
+# 判据见 `Scripts/check-markdown-single-source.py`；负例 `--self-test` 13 例
+# （行内扫描器出现第二份 / 定义被删 / **链接扫描器出现第二份** / 界面自己造块 / 模型被掏空 /
+# 同源调用被删 / 第三方库两种引法 / 用例文件被删 / 用例被掏空 / 扫描面被削掉 / 绿对照 /
+# 末例真仓库逐字节未变）。
 python3 Scripts/check-markdown-single-source.py
 python3 Scripts/check-markdown-single-source.py --self-test
 # L-149 ③④（2026-10-01 第 134 轮）：**内置浏览器页签的归属 = 工作区**判据。由头 = 需求提出者

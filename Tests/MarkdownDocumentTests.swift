@@ -266,6 +266,7 @@ final class MarkdownDocumentTests: XCTestCase {
             "**未闭合的粗体",
             "星号 * 单独出现",
             "``",
+            "见 [文档](https://example.com/a) 与 [相对](docs/x.md)",
         ]
         for sample in samples {
             let document = MarkdownDocument.parse(sample)
@@ -291,6 +292,45 @@ final class MarkdownDocumentTests: XCTestCase {
             NoteBodyProjection.toSpans(body, language: .simplifiedChinese).spans,
             NoteBodyProjection.parseInline("a **b** c")
         )
+    }
+
+    // MARK: 链接（2026-10-01 第 146 轮补：契约口径「链接进 span 树」）
+
+    /// **链接目标由笔记侧同一函数产出**（本层不自己解析链接），且**每种块型都一样**；
+    /// 行号不受影响（链接不新增行）。
+    func testLinkSpansFlowThroughEveryBlockKind() {
+        let paragraph = MarkdownDocument.parse("见 [文档](https://example.com/a) 完")
+        XCTAssertEqual(
+            paragraph.blocks[0].kind,
+            .paragraph(spans: [
+                NoteSpan(text: "见 "),
+                NoteSpan(text: "文档", link: "https://example.com/a"),
+                NoteSpan(text: " 完"),
+            ])
+        )
+        XCTAssertEqual(paragraph.blocks[0].sourceLine, 1)
+
+        let heading = MarkdownDocument.parse("# 见 [文档](docs/a.md)")
+        guard case let .heading(level, headingSpans) = heading.blocks[0].kind else {
+            return XCTFail("应当是标题")
+        }
+        XCTAssertEqual(level, 1)
+        XCTAssertEqual(headingSpans.last, NoteSpan(text: "文档", link: "docs/a.md"))
+
+        let list = MarkdownDocument.parse("- [文档](docs/a.md)")
+        guard case let .bulletList(items) = list.blocks[0].kind else {
+            return XCTFail("应当是列表")
+        }
+        XCTAssertEqual(items[0].spans, NoteBodyProjection.parseInline("[文档](docs/a.md)"))
+        XCTAssertEqual(items[0].sourceLine, 1)
+
+        // 表格：`\|` 转义在切格时被还原成 `|`，**再**交给行内解析 —— 两件事各管一摊。
+        let table = MarkdownDocument.parse("| 列 |\n| --- |\n| [a](b\\|c) |")
+        guard case let .table(_, _, rows) = table.blocks[0].kind else {
+            return XCTFail("应当是表格")
+        }
+        XCTAssertEqual(rows[0][0].map(\.text), ["a"])
+        XCTAssertEqual(rows[0][0][0].link, "b|c")
     }
 
     // MARK: 上限与如实的截断报告

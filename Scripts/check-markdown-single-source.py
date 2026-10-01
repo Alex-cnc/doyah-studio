@@ -10,9 +10,11 @@
 
 所以把「只有一份」变成机械判据：
 
-  ① **行内解析唯一**：`nextMarker`（行内标记扫描器）只许在 `Core/NoteBody.swift` 里出现 ——
-     别处命中即红；一处都没有也红（扫描面被削过 / 判据空转）。
-     行内标记清单那一个字面量（``["`", "**", "*"]``）同理**只许一份**。
+  ① **行内解析唯一**：`nextMarker`（行内标记扫描器）与 `linkMarker`（链接扫描器）都只许在
+     `Core/NoteBody.swift` 里出现 —— 别处命中即红（那是第二套行内解析的入口）；一处都没有也红
+     （扫描面被削过 / 判据空转）。行内标记清单那一个字面量（``["`", "**", "*", "["]``）同理**只许一份**。
+     链接扫描器是 2026-10-01（第 146 轮，队列 `L-137` 剩余③）补进来的：链接与粗体一样是**笔记侧
+     那一份解析**的产物，别处再写一套链接解析就是同一族的病。
   ② **块级模型只有一个产地**：`MarkdownBlock(` 的构造只许在 `Core/MarkdownDocument.swift` ——
      `App/` / `Platform/` / `CLI/` 里出现即红（界面只渲染模型，不许自己造块：
      造块就等于在自己那份里重新决定「什么算标题」）。
@@ -53,7 +55,8 @@ BLOCK_OWNER = "Core/MarkdownDocument.swift"
 PARSE_TESTS = "Tests/MarkdownDocumentTests.swift"
 
 INLINE_SCANNER = "nextMarker"
-INLINE_MARKER_LIST = '["`", "**", "*"]'
+LINK_SCANNER = "linkMarker"
+INLINE_MARKER_LIST = '["`", "**", "*", "["]'
 BLOCK_CONSTRUCTOR = "MarkdownBlock("
 SHARED_INLINE_CALL = "NoteBodyProjection.parseInline("
 
@@ -131,6 +134,25 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
         )
     if definition_owners == [INLINE_OWNER] and not problems:
         notes.append(f"行内标记扫描器 `{INLINE_SCANNER}`：唯一定义在 `{INLINE_OWNER}`，名字不出本文件")
+    # ①b **链接扫描器同理**（2026-10-01 第 146 轮补，队列 `L-137` 剩余③）：定义唯一 + 名字不出本文件。
+    link_definition = re.compile(rf"func\s+{LINK_SCANNER}\s*\(")
+    link_definition_owners = sorted(name for name, text in sources.items() if link_definition.search(text))
+    if link_definition_owners != [INLINE_OWNER]:
+        problems.append(
+            f"`{LINK_SCANNER}` 的**定义**必须是且只是 `{INLINE_OWNER}` 里的一处，"
+            f"实测 {link_definition_owners or '一处都没有'} —— 链接目标的生产只许一处（一处都没有 = 判据空转）"
+        )
+    stray_link_scanners = [
+        name for name in sorted(sources) if name != INLINE_OWNER and LINK_SCANNER in sources[name]
+    ]
+    if stray_link_scanners:
+        problems.append(
+            f"`{LINK_SCANNER}` 的名字出现在 `{INLINE_OWNER}` 以外的地方：{stray_link_scanners}"
+            " —— 链接解析只许有一处，别处出现即红（链接与粗体同一条口径）"
+        )
+    if link_definition_owners == [INLINE_OWNER] and not stray_link_scanners:
+        notes.append(f"链接扫描器 `{LINK_SCANNER}`：唯一定义在 `{INLINE_OWNER}`，名字不出本文件")
+
     marker_list_owners = sorted(name for name, text in sources.items() if INLINE_MARKER_LIST in text)
     if marker_list_owners != [INLINE_OWNER]:
         problems.append(
@@ -241,7 +263,7 @@ def main() -> int:
             print(f"   - {problem}")
         return 1
     print(
-        "\n✅ Markdown 解析只有一份：行内扫描器唯一（笔记侧）· 块级模型唯一产地（契约层）· "
+        "\n✅ Markdown 解析只有一份：行内扫描器与链接扫描器都唯一（笔记侧）· 块级模型唯一产地（契约层）· "
         "预览真的调用同一个行内函数 · 无第三方 Markdown 解析库 · 判据面在位"
     )
     return 0
@@ -381,6 +403,16 @@ def self_test(root: pathlib.Path) -> int:
         no_scan = fresh("no-scan")
         shutil.rmtree(no_scan / "Platform")
         cases.append(("扫描面被削掉", bool(check(no_scan)[0])))
+
+        # ②b 红：**链接扫描器**出现第二份（2026-10-01 第 146 轮补 —— 与 ② 同一族的形状）
+        duplicate_link = fresh("link-duplicate")
+        (duplicate_link / "App/Views").mkdir(parents=True, exist_ok=True)
+        (duplicate_link / "App/Views/MarkdownPreview.swift").write_text(
+            "import Foundation\n\n/// 预览自己扫链接目标（本门禁必须抓住它）\n"
+            "private func linkMarker(in text: Substring) -> Int? { nil }\n",
+            encoding="utf-8",
+        )
+        cases.append(("链接扫描器出现第二份", bool(check(duplicate_link)[0])))
 
         # 末例：真仓库逐字节未变 + 真仓库实跑绿
         after = {name: _sha(root / name) for name in WATCHED if (root / name).exists()}

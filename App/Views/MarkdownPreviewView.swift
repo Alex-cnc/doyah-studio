@@ -23,8 +23,10 @@ import SwiftUI
 ///
 /// ## 边界（如实登记，别当已验）
 ///
-/// · 链接**还不可点** ——「在已内嵌的浏览器页签里打开」要先定「链接进不进笔记侧
-///   span 树」这条契约口径（队列 `L-137` 剩余③），本片不顺手加；
+/// · 链接**可点，但不弹系统浏览器**（队列 `L-137` 剩余③，2026-10-01 落）—— 点击交给**工作区
+///   浏览器页签**（宿主接线 `browser.openInBrowser(_:)`，那是地址栏回车同一条路：
+///   策略裁决 + 统一外发日志都在它那里）。本层只判「画不画得成链接」（`URL(string:)`），
+///   **不判能不能加载**（两个问题不一样）；
 /// · 解析未做防抖，靠 `MarkdownDocument.parse` 自身上限（20,000 行 / 5,000 块）
 ///   兜住最坏情况，且解析在后台任务里跑（不占主线程）；
 /// · 旁挂样式（`NoteSpan` 的 `color` / `size`）不生效 —— 它们来自笔记侧旁挂，
@@ -36,6 +38,23 @@ struct MarkdownPreviewView: View {
     let language: TextLanguage
     /// 跟随滚动的输入面：编辑区光标所在行。
     @ObservedObject var cursor: MarkdownPreviewCursorModel
+    /// 链接点击的去处（**目标原文**）。宿主接给工作区浏览器页签那条唯一入口。
+    ///
+    /// `nil` = 没接线 ⇒ 点击**明确丢弃**，**不落 `.systemAction`**：契约明写「不弹系统浏览器」，
+    /// 没接线时弹一个系统浏览器是**把没接线变成看得见的错行为**（判据里也无人点击）。
+    let openLink: ((String) -> Void)?
+
+    init(
+        text: String,
+        language: TextLanguage,
+        cursor: MarkdownPreviewCursorModel,
+        openLink: ((String) -> Void)? = nil
+    ) {
+        self.text = text
+        self.language = language
+        self.cursor = cursor
+        self.openLink = openLink
+    }
 
     @State private var document = MarkdownDocument.parse("")
 
@@ -53,6 +72,13 @@ struct MarkdownPreviewView: View {
             reportBar
         }
         .background(Theme.surface(.content))
+        // 链接属性只装得下 `URL`，点一下去哪儿由**这里**决定：交给宿主的那个入口，
+        // 而不是系统的默认行为（`SFSafariApplication` / 用户默认浏览器）。
+        .environment(\.openURL, OpenURLAction { url in
+            guard let openLink else { return .discarded }
+            openLink(MarkdownPreviewContent.linkTarget(for: url))
+            return .handled
+        })
         // 解析放后台：`MarkdownDocument.parse` 是有上限的纯函数（`Sendable`），
         // 但大文件上仍是毫秒级 —— 放主线程上打字会跟手变差。
         .task(id: text) {
@@ -299,22 +325,44 @@ struct MarkdownBlockView: View {
 ///
 /// 本层**不解析任何标记**：`spans` 是笔记侧同一个函数
 /// （`NoteBodyProjection.parseInline`）的产物，这里只把 bold / italic / code
-/// 三种样式映射成字体与颜色。
+/// 映射成字体与颜色、把 `link` 映射成**可点的链接属性**。
 enum MarkdownInline {
     static func text(_ spans: [NoteSpan]) -> Text {
-        spans.reduce(Text(verbatim: "")) { $0 + run($1) }
+        Text(attributed(spans))
     }
 
-    private static func run(_ span: NoteSpan) -> Text {
-        var text = Text(verbatim: span.text)
-        if span.styles.contains(.bold) { text = text.bold() }
-        if span.styles.contains(.italic) { text = text.italic() }
-        if span.styles.contains(.code) {
-            text = text
-                .font(Theme.font(.monoSmall))
-                .foregroundColor(Theme.syntax(.function))
+    /// 行内 span → `AttributedString`（**判据量的就是这一份**）。
+    ///
+    /// 为什么从"逐段 `Text` 加样式再拼接"改成一次组装：`Text + Text` 的拼接会把各段的
+    /// **运行期属性**留在各自那一段上，而链接必须**在拼接之后还带着链接属性** ——
+    /// 否则就是"看起来像链接、点不动"（`TestsUISnapshot/MarkdownPreviewProbeTests.swift`
+    /// 直接量这一份的 run 属性）。bold / italic 走 `inlinePresentationIntent`
+    /// （= SwiftUI 给 `AttributedString(markdown:)` 用的那一套），字体仍跟随外层 `.font(...)`。
+    static func attributed(_ spans: [NoteSpan]) -> AttributedString {
+        var result = AttributedString()
+        for span in spans {
+            result.append(run(span))
         }
-        return text
+        return result
+    }
+
+    private static func run(_ span: NoteSpan) -> AttributedString {
+        var run = AttributedString(span.text)
+        var intent: InlinePresentationIntent = []
+        if span.styles.contains(.bold) { intent.insert(.stronglyEmphasized) }
+        if span.styles.contains(.italic) { intent.insert(.emphasized) }
+        if !intent.isEmpty { run.inlinePresentationIntent = intent }
+        if span.styles.contains(.code) {
+            run.font = Theme.font(.monoSmall)
+            run.foregroundColor = Theme.syntax(.function)
+        }
+        if let target = span.link, let url = MarkdownPreviewContent.linkURL(for: target) {
+            // 目标能不能**加载**不在这里判（浏览器那条入口判）；这里只判**画不画得成链接**。
+            run.link = url
+            run.foregroundColor = Theme.accentColor
+            run.underlineStyle = .single
+        }
+        return run
     }
 }
 
@@ -377,6 +425,30 @@ enum MarkdownPreviewContent {
     static func truncationCounts(_ report: MarkdownParseReport) -> (skipped: Int, unparsed: Int)? {
         guard report.isTruncated else { return nil }
         return (report.skippedLineCount, report.unparsedLineCount)
+    }
+
+    /// 链接目标 → **可点的 `URL`**（队列 `L-137` 剩余③）。
+    ///
+    /// **只判「画不画得成链接」，不判「能不能加载」** —— 后者是浏览器那条唯一入口的事
+    /// （`BrowserSession.parseAddress`，策略裁决与外发留痕都在那里）。两个问题不一样：
+    /// 一个目标可以是「画得出链接、但被策略拒掉」，反过来也有（相对路径画得出来，
+    /// 能不能加载要看它落不落在授权目录外）。
+    ///
+    /// 解析不出来的目标（空、含空格之类）**按普通文本画** —— 不猜、不改写、
+    /// **不假装可点**（点了什么都不发生的"链接"比纯文本更坏）。
+    static func linkURL(for target: String) -> URL? {
+        guard !target.isEmpty else { return nil }
+        return URL(string: target)
+    }
+
+    /// 点击之后交回浏览器那条入口的**目标文本**。
+    ///
+    /// 链接属性只装得下 `URL` ⇒ 这里做一次还原（`URL(string:)` → `absoluteString`）。
+    /// **相对路径原样往返**（`docs/x.md` 回来还是 `docs/x.md`）；需要百分号编码的字符
+    /// 回来时是**编码形态**（`URL(string:)` 做的事，本层不自己编解码）—— 浏览器那条入口
+    /// 对两种形态都认。
+    static func linkTarget(for url: URL) -> String {
+        url.absoluteString
     }
 }
 

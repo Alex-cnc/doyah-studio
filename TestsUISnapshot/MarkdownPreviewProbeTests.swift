@@ -27,7 +27,9 @@ import DoyahCore
 /// · 不验观感（字号 / 间距好不好看）—— 那是快照 + 读图那一族；
 /// · `.task(id:)` 在离屏宿主里不会自己转 run loop，所以本轮用一个**有上限的自旋**
 ///   放它跑完（`settle`）；高度断言留了余量，不拿像素级相等当判据；
-/// · 不验链接可点（`L-137` 剩余③ 未落，链接还不可点）。
+/// · **链接可点**（剩余③，2026-10-01）量的是**链接属性**与**接管 `openURL` 那一句**
+///   （`OpenURLAction.Result` 不是 `Equatable`，运行期比不了「回的是哪一支」）；
+///   「点一下真的开在浏览器页签里」是 GUI 行为 ⇒ 归人工点验（内测清单）。
 final class MarkdownPreviewProbeTests: XCTestCase {
 
     // MARK: 取样文档
@@ -367,6 +369,159 @@ final class MarkdownPreviewProbeTests: XCTestCase {
             tokens.filter { control.contains($0) }.isEmpty,
             "同一套扫法在浏览器引擎上都命中不了 ⇒ 上面那条「零命中」不作数"
         )
+    }
+
+    // MARK: ⑥ 链接可点（队列 `L-137` 剩余③，2026-10-01）
+
+    /// 一份带链接的文档（链接在**段落里**，与 `egressBait` 那份同样的形状）。
+    private let linkSample = "见 [文档](https://example.com/a?b=1) 与 [相对](docs/x.md) 完"
+
+    /// **链接属性真的挂上了**：块里的行内 span 经渲染侧那一份组装之后，
+    /// 「文档」那一段必须带着 `https://example.com/a?b=1`，其余各段**一个都没有**。
+    ///
+    /// 量的就是真渲染用的那一份（`MarkdownInline.attributed`）—— 不是测试里另拼一套。
+    func testLinkRunsCarryTheLinkAttribute() throws {
+        let document = MarkdownDocument.parse(linkSample)
+        guard case let .paragraph(spans) = document.blocks[0].kind else {
+            return XCTFail("应当是段落")
+        }
+        let attributed = MarkdownInline.attributed(spans)
+        let links = links(in: attributed)
+
+        XCTAssertEqual(links.count, 2, "带链接的段数与目标对不上：\(links)")
+        XCTAssertEqual(links["文档"], "https://example.com/a?b=1")
+        XCTAssertEqual(links["相对"], "docs/x.md")
+        XCTAssertNil(links["见 "], "没链接的那几段不许被安上链接属性")
+        XCTAssertNil(links[" 与 "])
+        XCTAssertNil(links[" 完"])
+    }
+
+    /// **对照（判据必须能判红）**：同一套取值法在**没有链接**的文档上必须一条都取不到 ——
+    /// 否则上面那条「两条都对」可能只是这套遍历见了谁都报链接。
+    func testLinkAttributeProbeSeesNothingWithoutLinks() {
+        let document = MarkdownDocument.parse("普通 **粗体** 与 `代码`")
+        guard case let .paragraph(spans) = document.blocks[0].kind else {
+            return XCTFail("应当是段落")
+        }
+        XCTAssertTrue(links(in: MarkdownInline.attributed(spans)).isEmpty)
+    }
+
+    /// **连不出来 URL 的目标按普通文本画**（不猜、不改写、**不假装可点**）：
+    /// 点了什么都不发生的"链接"比纯文本更坏。
+    func testUnparseableTargetIsDrawnAsPlainText() {
+        let spans = [
+            NoteSpan(text: "尖括号", link: "https://a<b.com/"),
+            NoteSpan(text: "空目标", link: ""),
+        ]
+        XCTAssertTrue(links(in: MarkdownInline.attributed(spans)).isEmpty)
+        XCTAssertNil(MarkdownPreviewContent.linkURL(for: "https://a<b.com/"))
+        XCTAssertNil(MarkdownPreviewContent.linkURL(for: ""))
+        // 边界（如实登记）：**空格与非 ASCII 不是"解析不出来"** —— `URL(string:)` 自己给它们
+        // 百分号编码（实测 `"…/a b"` → `"…/a%20b"`）⇒ 这类目标照画成链接，
+        // 只是交回入口时是**编码形态**（下一条往返用例钉着这一点）。
+        XCTAssertEqual(
+            MarkdownPreviewContent.linkURL(for: "https://example.com/a b")?.absoluteString,
+            "https://example.com/a%20b"
+        )
+        // 相对路径照画（能不能加载由浏览器那条入口判）
+        XCTAssertNotNil(MarkdownPreviewContent.linkURL(for: "docs/x.md"))
+    }
+
+    /// **交回浏览器那条入口的目标文本**：绝对地址与相对路径都必须**原样往返**
+    /// （链接属性只装得下 `URL`，中间那一次还原不许改写目标）。
+    func testLinkTargetRoundTripsIntoTheBrowserEntry() throws {
+        for target in ["https://example.com/a?b=1", "docs/x.md", "file:///tmp/a.html"] {
+            let url = try XCTUnwrap(MarkdownPreviewContent.linkURL(for: target))
+            XCTAssertEqual(MarkdownPreviewContent.linkTarget(for: url), target)
+        }
+        // **边界（如实登记）**：需要编码的目标（空格 / 非 ASCII）交回时是**编码形态** ——
+        // 那是 `URL(string:)` 做的事，本层不自己编解码（浏览器那条入口两种形态都认）。
+        let spaced = try XCTUnwrap(MarkdownPreviewContent.linkURL(for: "https://example.com/a b"))
+        XCTAssertEqual(MarkdownPreviewContent.linkTarget(for: spaced), "https://example.com/a%20b")
+    }
+
+    /// **源码判据（点击不弹系统浏览器）**：预览必须**自己接管** `openURL`，并且**代码里
+    /// 不许出现系统默认动作** —— 没接线也得丢弃（契约明写「默认在已内嵌的浏览器页签里打开，
+    /// 不弹系统浏览器」）。
+    ///
+    /// 为什么用源码判据：`OpenURLAction.Result` **不是 `Equatable`**，运行期没法比较
+    /// 「回的是哪一支」；而"有没有接管"这件事在源码上是**确定的**（少写这一句 = 系统拿默认浏览器打开）。
+    /// **剥注释后再判**：契约那句话本身就要写出这个标识符 —— 判的是代码，不是散文。
+    func testPreviewTakesOverOpenURLActionAndNeverFallsBackToTheSystem() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("App/Views/MarkdownPreviewView.swift"), encoding: .utf8
+        )
+        // 空跑防护：扫的那一份必须在位、形状对得上
+        XCTAssertTrue(source.contains("struct MarkdownPreviewView"), "渲染侧源文件的形状对不上")
+        XCTAssertTrue(source.contains(".environment(\\.openURL,"), "预览没有接管 openURL ⇒ 点击会落到系统默认浏览器")
+
+        let code = strippingComments(source)
+        XCTAssertFalse(code.contains("systemAction"), "代码里出现系统默认动作 ⇒ 没接线时会退回系统浏览器")
+        XCTAssertTrue(code.contains("openLink("), "接管了却没有交给宿主那个入口 —— 点击等于没地方去")
+        XCTAssertTrue(code.contains(".discarded"), "没接线时的处置必须是「明确丢弃」，不是系统默认动作")
+        // 对照：同一套扫法在一个**不接管**的视图上必须扫不到（证明这条判据不是恒真）
+        let control = try String(
+            contentsOf: root.appendingPathComponent("App/Views/WorkspaceTabStrip.swift"), encoding: .utf8
+        )
+        XCTAssertFalse(control.contains(".environment(\\.openURL,"))
+    }
+
+    /// 剥掉注释（块注释整体去掉、行注释从 `//` 起去掉）；双引号里的 `//`（`"https://…"`）不算注释 ——
+    /// 只做这一档朴素判断，够这个渲染侧源文件用。
+    private func strippingComments(_ source: String) -> String {
+        var out = ""
+        var inBlock = false
+        var inString = false
+        var index = source.startIndex
+        while index < source.endIndex {
+            let character = source[index]
+            let next = source.index(after: index)
+            if inBlock {
+                if character == "*", next < source.endIndex, source[next] == "/" {
+                    inBlock = false
+                    index = source.index(after: next)
+                    continue
+                }
+                index = next
+                continue
+            }
+            if inString {
+                out.append(character)
+                if character == "\"" { inString = false }
+                index = next
+                continue
+            }
+            if character == "\"" {
+                inString = true
+                out.append(character)
+                index = next
+                continue
+            }
+            if character == "/", next < source.endIndex, source[next] == "/" {
+                while index < source.endIndex, source[index] != "\n" { index = source.index(after: index) }
+                continue
+            }
+            if character == "/", next < source.endIndex, source[next] == "*" {
+                inBlock = true
+                index = source.index(after: next)
+                continue
+            }
+            out.append(character)
+            index = next
+        }
+        return out
+    }
+
+    /// 取 `AttributedString` 里带链接属性的那几段（文字 → 目标）。
+    private func links(in attributed: AttributedString) -> [String: String] {
+        var found: [String: String] = [:]
+        for run in attributed.runs {
+            guard let link = run.attributes.link else { continue }
+            found[String(attributed[run.range].characters)] = link.absoluteString
+        }
+        return found
     }
 }
 
