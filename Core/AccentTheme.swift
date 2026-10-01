@@ -81,13 +81,24 @@ public struct AccentTheme: Equatable, Sendable, Identifiable {
         fillHex: 0x9C4A42
     )
 
+    /// 星空紫的配套强调色（紫罗兰系，2026-10-01 新增 —— 「星空紫」主题自带）。
+    ///
+    /// 与表面同色相（否则「星空紫」主题里会杵着一个鲸鱼蓝按钮）。
+    /// `accent` 跟表面比 ≥3.0；`fill` 是压暗过的那一档，压白字 ≥4.5（实测 5.92）。
+    public static let stardust = AccentTheme(
+        id: "stardust",
+        nameKey: .accentStardust,
+        accentHex: 0x8FA6FF,
+        fillHex: 0x5568D8
+    )
+
     /// 全部候选。
     ///
     /// 界面不再逐条列强调色（「外观」面板的强调色列表**升格为主题下拉**，每个主题自带配套值，
     /// 见 `DesignTheme.accent`）；这一份集合仍然要有两个用途：
     ///   ① **解析旧配置** —— 用户以前挑过的 `deep-teal` / `whale-magenta` 得继续认得出来；
     ///   ② 给「几个强调色彼此可分辨」「配套值不是随便挑的」这类判据提供全集。
-    public static let all: [AccentTheme] = [whaleBlue, deepTeal, whaleMagenta, beanGreen, roseGold]
+    public static let all: [AccentTheme] = [whaleBlue, deepTeal, whaleMagenta, beanGreen, roseGold, stardust]
 
     /// 默认与回退都是鲸鱼蓝（与 App 图标同系）。
     public static let fallback = AccentTheme.whaleBlue

@@ -85,10 +85,13 @@ public enum LKey: String, CaseIterable, Sendable {
     case designThemeTechBlue
     case designThemeBeanGreen
     case designThemeRoseGold
+    /// 星空紫（2026-10-01 新增：「比科技蓝更梦幻」的那一档，星际猎人的星云感）。
+    case designThemeStardust
     /// 主题配套强调色的名字（`AccentTheme.nameKey` 与主题名分开：主题名是给用户看的，
     /// 强调色名给"实心按钮上那两个字的缩写"用）。
     case accentBeanGreen
     case accentRoseGold
+    case accentStardust
     /// 主题（配色方案三选一 · FR-EDIT-33 扩写 · 队列 L-80 ㈡）：面板上的那一段。
     case appearanceDesignThemeSection
     case appearanceDesignThemeHint
@@ -1912,8 +1915,10 @@ public enum LocalizedStrings {
         .designThemeTechBlue: [.simplifiedChinese: "科技蓝", .english: "Tech Blue"],
         .designThemeBeanGreen: [.simplifiedChinese: "豆芽绿", .english: "Bean Sprout Green"],
         .designThemeRoseGold: [.simplifiedChinese: "玫瑰金", .english: "Rose Gold"],
+        .designThemeStardust: [.simplifiedChinese: "星空紫", .english: "Stardust"],
         .accentBeanGreen: [.simplifiedChinese: "豆芽绿", .english: "Bean Sprout Green"],
         .accentRoseGold: [.simplifiedChinese: "玫瑰金", .english: "Rose Gold"],
+        .accentStardust: [.simplifiedChinese: "星空紫", .english: "Stardust"],
         .appearanceDesignThemeSection: [.simplifiedChinese: "主题（配色方案）", .english: "Theme (Color Scheme)"],
         .appearanceDesignThemeHint: [.simplifiedChinese: "一个主题是一组令牌值（底色基调 + 强调色家族 + 语法着色），不是只换一个强调色；选定后立即生效并记住。", .english: "A theme is a whole set of token values (base surfaces + accent family + syntax colours), not just one accent colour; it takes effect immediately and is remembered."],
         .appearanceDesignThemeDerived: [.simplifiedChinese: "推导草案", .english: "Derived draft"],

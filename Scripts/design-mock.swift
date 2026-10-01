@@ -112,6 +112,10 @@ struct Theme {
     /// 默认主题「科技蓝」（外观方案 D）的深浅两态。
     static let dark = Theme(name: "深色 · 方案 D 科技蓝", isDark: true, scheme: .techBlue)
     static let light = Theme(name: "浅色 · 方案 D 科技蓝", isDark: false, scheme: .techBlue)
+
+    /// 「星空紫」的深浅两态（2026-10-01 新增：需求提出者要的「比科技蓝更梦幻」那一档）。
+    static let stardustDark = Theme(name: "深色 · 星空紫", isDark: true, scheme: .stardust)
+    static let stardustLight = Theme(name: "浅色 · 星空紫", isDark: false, scheme: .stardust)
 }
 
 /// 侧栏当前显示哪个视图 —— 由最左侧活动栏切换（VS Code 的信息架构：
@@ -1014,6 +1018,30 @@ write(darkData, "样张-深色-D-科技蓝.png")
 let lightData = renderWindow(theme: light, accent: currentAccent)
 allChecks += verifyWindow(lightData, theme: light, accent: currentAccent, label: "浅色-D-科技蓝").checks
 write(lightData, "样张-浅色-D-科技蓝.png")
+
+// 1b）星空紫主样张（2026-10-01 新增）：深 / 浅两态，交互强调色用它**自带**的配套值。
+let stardustPreset = DesignTheme.stardust.accent
+let stardustAccent = Accent(
+    name: LocalizedStrings.text(stardustPreset.nameKey, language: .simplifiedChinese),
+    color: NSColor(mockHex: stardustPreset.accentHex),
+    note: "\(stardustPreset.id) · 实心按钮压白字走 fill \(String(format: "#%06X", stardustPreset.fillHex))"
+)
+let sdDark = renderWindow(theme: .stardustDark, accent: stardustAccent)
+allChecks += verifyWindow(sdDark, theme: .stardustDark, accent: stardustAccent, label: "深色-星空紫").checks
+write(sdDark, "样张-深色-星空紫.png")
+
+let sdLight = renderWindow(theme: .stardustLight, accent: stardustAccent)
+allChecks += verifyWindow(sdLight, theme: .stardustLight, accent: stardustAccent, label: "浅色-星空紫").checks
+write(sdLight, "样张-浅色-星空紫.png")
+
+// 1c）星空紫的**紫调判据**（对应上面科技蓝的蓝调判据）：深色表面必须带紫调（B > G 且 B > R）。
+//     这条能机械地把「换了值、但样张还是旧配色」抓出来。
+for (label, background) in [("content", Theme.stardustDark.content), ("sidebar", Theme.stardustDark.sidebar), ("panel", Theme.stardustDark.panel)] {
+    let components = background.usingColorSpace(.sRGB)!
+    let purple = components.blueComponent - components.greenComponent
+    allChecks.append(Check(ok: purple > 8.0 / 255.0,
+                           note: String(format: "星空紫的深色 %@ 必须带紫调（B−G = %.1f/255，需 > 8/255）", label, purple * 255)))
+}
 
 // 2）**蓝调判据**（方案 D 的「这组值真的落地了吗」）：深色表面必须带蓝调（B > R）。
 //    旧的深色是**中性灰**（B ≈ R）—— 所以这一条能机械地把「换了值、但样张还是旧配色」抓出来；

@@ -32,6 +32,8 @@ public enum DesignTheme: String, CaseIterable, Identifiable, Sendable {
     case beanGreen = "bean-green"
     /// 玫瑰金：暖粉金系（**推导草案**，等 Linux 侧实际色值）。
     case roseGold = "rose-gold"
+    /// 星空紫：深空靛紫系（2026-10-01 新增 —— 需求提出者要的「比科技蓝更梦幻」那一档，星际猎人的星云感）。
+    case stardust = "stardust"
 
     public var id: String { rawValue }
 
@@ -41,6 +43,7 @@ public enum DesignTheme: String, CaseIterable, Identifiable, Sendable {
         case .techBlue: return .designThemeTechBlue
         case .beanGreen: return .designThemeBeanGreen
         case .roseGold: return .designThemeRoseGold
+        case .stardust: return .designThemeStardust
         }
     }
 
@@ -60,6 +63,7 @@ public enum DesignTheme: String, CaseIterable, Identifiable, Sendable {
         case .techBlue: return .whaleBlue
         case .beanGreen: return .beanGreen
         case .roseGold: return .roseGold
+        case .stardust: return .stardust
         }
     }
 
@@ -67,7 +71,7 @@ public enum DesignTheme: String, CaseIterable, Identifiable, Sendable {
     public var palette: ThemePalette { ThemePalette.of(self) }
 
     /// 用户可选的顺序 = 界面里的顺序（科技蓝在首位：它是默认值，也是 Linux 侧同名的那一个）。
-    public static let all: [DesignTheme] = [.techBlue, .beanGreen, .roseGold]
+    public static let all: [DesignTheme] = [.techBlue, .stardust, .beanGreen, .roseGold]
 
     /// 默认与回退都是科技蓝（产品改造前的现状就是这一组值）。
     public static let fallback = DesignTheme.techBlue
@@ -128,6 +132,7 @@ public struct ThemePalette: Equatable, Sendable {
         case .techBlue: return .techBlue
         case .beanGreen: return .beanGreen
         case .roseGold: return .roseGold
+        case .stardust: return .stardust
         }
     }
 
@@ -189,7 +194,7 @@ public struct ThemePalette: Equatable, Sendable {
         accent: ThemeColor(light: 0x2F7D52, dark: 0x86C79C),
         accentGlow: ThemeColor(light: 0x1B7A4A, dark: 0xA8E6BB),
         accentSoft: ThemeColor(light: 0x4C7B5F, dark: 0x56795F),
-        accentTeal: ThemeColor(light: 0x0F7F7A, dark: 0x7FD8C4),
+        accentTeal: ThemeColor(light: 0x0F7F7A, dark: 0x86D8E8),
         accentWarm: ThemeColor(light: 0x8A6A3B, dark: 0xC9B27A),
         hairlineLight: 0xD5E3D9,
         hairlineDarkAlpha: 0.10
@@ -222,6 +227,50 @@ public struct ThemePalette: Equatable, Sendable {
         accentTeal: ThemeColor(light: 0x0F7F7A, dark: 0x9BD3C8),
         accentWarm: ThemeColor(light: 0x8A6A3B, dark: 0xE0B57E),
         hairlineLight: 0xF0D9D5,
+        hairlineDarkAlpha: 0.10
+    )
+
+    // MARK: 星空紫（2026-10-01 新增 · 需求提出者定「比科技蓝更梦幻」的那一档）
+    //
+    // 设计意图（三条输入信号）：
+    //   · **科技派** —— 不能甜腻、不能粉嫩，要冷冽的科技感；
+    //   · **星际猎人** —— 宇宙 / 星云 / 扫描 / 能量，深空 + 荧光；
+    //   · **比科技蓝更梦幻** —— 不是「更亮的蓝」，要有质变。
+    //
+    // 三个手法：
+    //   ① **色相左移**：蓝 `#4E6FFF` → 紫罗兰 —— 紫在光谱上紧邻蓝，**邻近不突兀**，但自带星云 / 极光 / 深海荧光的联想；
+    //   ② **深底偏靛**：深色不是「黑蓝」而是**靛紫**（`content = #241356`），像深空而不像夜色；
+    //   ③ **辉光层**：`accentGlow` 取更亮的紫罗兰，模拟星云发光 —— 语法 `keyword` 挂它，代码高亮自带光感。
+    //
+    // **为什么紫色比蓝色难做**（实测记录，留给后来者）：WCAG 相对亮度的通道权重是
+    // `R 0.2126 / G 0.7152 / B 0.0722` —— 紫色主要靠 **B 通道**提亮，而 B 的权重**最低**，
+    // 所以「紫调表面」的亮度天然上不去、五档容易挤成一团。
+    // 本组因此**刻意把 B 的绝对值放大**（`window #0A0618` → `raised #4723A0`，B 通道跨 24 → 160），
+    // 靠 B 的大跨度换取「表面距离 ≥0.02」与「亮度严格递增」同时成立。
+    // （另注：判据 `check-design-themes.py` 的表面距离是 **RGB 欧氏距离**，不是亮度差 ——
+    //   按亮度差去调参会得出「科技蓝自己都过不了」的错误结论，已踩过。）
+
+    public static let stardust = ThemePalette(
+        id: .stardust,
+        window: ThemeColor(light: 0xE4E7ED, dark: 0x0C1018),
+        sidebar: ThemeColor(light: 0xE7E9ED, dark: 0x141B2A),
+        content: ThemeColor(light: 0xFFFFFF, dark: 0x1B2436),
+        panel: ThemeColor(light: 0xE7E9ED, dark: 0x25314A),
+        raised: ThemeColor(light: 0xFFFFFF, dark: 0x333F5E),
+        textBright: ThemeColor(light: 0x0A0F1C, dark: 0xF0F3FA),
+        textPrimary: ThemeColor(light: 0x1A2334, dark: 0xC8D2E8),
+        textSecondary: ThemeColor(light: 0x4E5C78, dark: 0x8E9CB8),
+        textTertiary: ThemeColor(light: 0x6A7A96, dark: 0x6B7A96),
+        textDisabled: ThemeColor(light: 0xAFB8CC, dark: 0x49556B),
+        success: ThemeColor(light: 0x16704A, dark: 0x4ADE80),
+        warning: ThemeColor(light: 0x92600B, dark: 0xFBBF24),
+        danger: ThemeColor(light: 0xC2321F, dark: 0xF87171),
+        accent: ThemeColor(light: 0x4F5FD8, dark: 0x8FA6FF),
+        accentGlow: ThemeColor(light: 0x4053CC, dark: 0xB8C4FF),
+        accentSoft: ThemeColor(light: 0x5A6485, dark: 0x5D6C8C),
+        accentTeal: ThemeColor(light: 0x0F7F7A, dark: 0x7FD8C4),
+        accentWarm: ThemeColor(light: 0x8A6A3B, dark: 0xC9B27A),
+        hairlineLight: 0xCFD4DE,
         hairlineDarkAlpha: 0.10
     )
 }
