@@ -30,9 +30,19 @@
 跨平台框架设计等）只受独占节规则约束 —— 记录类文件是本侧可写面，不该被契约层锁住。
 
 逃生门（都会打印理由）：
-  · 行内或上一行注 `exclusive-allow：理由`（独占节）/ `contract-change：理由`（契约层）
-  · 提交信息整批 `exclusive-allow: 理由` / `contract-change: 理由`
-  · 独占节正文注 `exclusive-allow-section`（整节豁免，用于「首建占位节」）
+  · **本次新增的行**自己带 `exclusive-allow：理由`（独占节）/ `contract-change：理由`（契约层）
+  · 同一次改动里成对新增的多行块：上一行**也是本次新增行**时，上一行的注记也算
+  · 提交信息整批 `exclusive-allow: 理由` / `contract-change: 理由`（**纯删除**走这条）
+  · 独占节正文注 `exclusive-allow-section`（整节豁免，用于「首建占位节」；**未随口径 A 收窄**，
+    收尾归队列 L-40 / N-02）
+
+**口径 A（2026-10-01 拍板 · 三仓同改）：新增行必须自带注记**
+  豁免只认**本次新增行自己带的注记**：① 替换对里的 `-` 侧（老内容）不再提供豁免 ——
+  旧版两侧任一带注记即整体豁免，实测「把已提交在案那行的注记摘掉再跑」会报 **「受检改动 0 行」判绿**；
+  ② 上一行豁免只在上一行**也是本次新增行**时成立（在案的上一行不再放行）。
+  成对证据见 `--self-test` 的「口径 A」五例（① 新增行不带注记 ⇒ 红并点名行号 / ② 新增行自带注记 ⇒ 绿 /
+  ③ 摘掉在案那行的注记 ⇒ 红（本轮要修的那处松紧）/ ④ 只靠**在案**的上一行 ⇒ 红 /
+  ⑤ 上一行与本次新增行**同批新增**且上一行带注记 ⇒ 绿）。
 
 汇报：任一类违规 → 退出 1 并点名 `文件:行号`；**拿不到基线 → 退出 2**（含「`--base` 显式给了却解析不到」
 那一档，不以「没基线 / 基线解析不到」为由静默放行 = 修掉越界门禁的空跑缺陷）；无候选文件 → 退出 0 但
@@ -78,7 +88,7 @@
     python3 Scripts/check-exclusive-sections.py --contract-docs 核心契约  # 追加契约层锁定的文档
     python3 Scripts/check-exclusive-sections.py --base HEAD~1 --files Docs/概要设计.md
     python3 Scripts/check-exclusive-sections.py --diff-file d.patch       # 用现成 diff（CI / 自测）
-    python3 Scripts/check-exclusive-sections.py --self-test               # 自测 18 例（含判据 ④ 与未跟踪增量）
+    python3 Scripts/check-exclusive-sections.py --self-test               # 自测 23 例（含判据 ④、未跟踪增量与口径 A 五例）
 
 本侧推断：darwin → apple，其它 → nonapple（可用 --mine 覆盖；写 macos / windows 也行，别名等价）。
 基线推断顺序 origin/master → HEAD~1 → HEAD，实际采用哪一个会打印出来（拿不到就退出 2，绝不当成「没问题」）。
@@ -314,6 +324,9 @@ def check(files, mine, theirs, base, diff_text, quiet=False, contract_owner="app
         return 0
     violations, checked, contracts = [], 0, []
     newsecs = []          # 判据 ④：非契约所有者新开、又没带 [独占:*] 的节标题（含新开 [开放]）
+    # 口径 A（2026-10-01 拍板 · 三仓同改）：豁免只认「本次新增行自己带的注记」。先把本次 diff 的
+    # **新增行号集**按文件收好（`+` 侧的 new 行号），供「上一行也算自己带的」那条判定用。
+    added_idx = {_p: {nl for kd, _o, nl, _c in _hs if kd == "+"} for _p, _hs in parsed.items()}
     for path, hunks in sorted(parsed.items()):
         if files and path not in files:
             continue
@@ -331,12 +344,15 @@ def check(files, mine, theirs, base, diff_text, quiet=False, contract_owner="app
         for tok, _lv, s, e, _ti in (new_secs if wd_lines else []) :
             if any(ALLOW_SECTION in x for x in (wd_lines[s:e + 1] if wd_lines else [])):
                 sect_allow.add((tok, s, e))
-        for items, pair_allow in group_pairs(hunks):
-            if pair_allow:
+        added_here = added_idx.get(path, set())
+        for items, _pair_allow in group_pairs(hunks):
+            # 口径 A：豁免只认**本次新增行自己带的注记** —— 替换对由 `+` 侧代表（`-` 侧是在案老内容，
+            # 它的注记不再为本次改动放行：旧版「任一侧带注记即整对豁免」，实测会让「把在案那行的注记
+            # 摘掉再跑」报 **「受检改动 0 行」判绿**）。老注记不豁免，但 `-` 侧**照判** —— 老内容所在
+            # 的层级正是「这处改动是否越界」的判据（成对证据见 `--self-test`「口径 A③」）。
+            if any(kd == "+" and has_tag(c) for kd, _o, _n, c in items):
                 continue
             for kind, old_l, new_l, content in items:
-                if ALLOW in content:
-                    continue
                 if kind == "+":
                     lines, secs = wd_lines, new_secs
                     line0 = new_l
@@ -348,7 +364,9 @@ def check(files, mine, theirs, base, diff_text, quiet=False, contract_owner="app
                 if not lines or line0 is None or line0 >= len(lines):
                     continue
                 prev = lines[line0 - 1] if line0 > 0 else ""
-                if ALLOW in prev:
+                # 口径 A：上一行的注记只在「上一行也是本次新增行」时算数 —— 已提交在案的上一行
+                # 不再为下面那一行放行（旧版实测松紧；成对证据见 --self-test「口径 A④」）。
+                if kind == "+" and (line0 - 1) in added_here and has_tag(prev):
                     continue
                 # ④ 新增节必须带 [独占:*]（对侧 L-42 判据，本仓第 20 轮移植）：非契约所有者不得在
                 #    契约层锁定的文档里新开一个「谁都能写」的节。只看**纯插入**的标题行（len(items)==1），
@@ -569,6 +587,46 @@ Apple 实现细节：SwiftUI / Keychain。
                  "契约所有者新开无标记节 · 应该通过", mine="apple"))
     r.append(run("## 9. 已知边界（分平台）", "## 9. 已知边界（分平台）[开放]",
                  "非所有者给已有标题追加 [开放]（自我解锁）· 应该报红"))
+
+    # ── 口径 A（2026-10-01 拍板 · 三仓同改）5 例：豁免只认「本次新增行自己带的注记」 ──────────
+    import contextlib as _cl
+    import io as _io2
+
+    def run_a(pre, edit_old, edit_new, label, expect_red=True, expect_text=None, mine="nonapple"):
+        """先按 `pre` 造出「已在案」的基线（提交掉），再施加本次改动并判定（口径 A 成对证据）。"""
+        base_sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        if pre is not None:
+            text = open(path, encoding="utf-8").read().replace(pre[0], pre[1], 1)
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            subprocess.run(["git", "commit", "-qam", "pre"], check=True)
+        text = open(path, encoding="utf-8").read().replace(edit_old, edit_new, 1)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        diff = subprocess.run(["git", "-c", "core.quotepath=false", "diff", "--unified=0", "HEAD", "--", path],
+                              capture_output=True, text=True).stdout
+        buf = _io2.StringIO()
+        with _cl.redirect_stdout(buf):
+            rc = check([path], mine, ["apple"], "HEAD", diff, quiet=True, contract_owner="apple")
+        out = buf.getvalue()
+        subprocess.run(["git", "reset", "-q", "--hard", base_sha], check=True)
+        ok = ((rc == 1) == expect_red) and (expect_text in out if expect_text else True)
+        print("  自测[%s] → %s" % (label, "✅" if ok else "❌ 不符预期（rc=%d）" % rc))
+        return ok
+
+    CL = "契约正文，只有契约所有者能改。"
+    CL_TAGGED = CL + " contract-change：跨端要先改契约"      # 「已在案」的带注记行
+
+    r.append(run_a(None, CL, CL + "\n契约正文续：本侧加的一行。",
+                   "口径 A① 本次新增行不带注记 · 应该报红并点名行号", expect_text="概要设计.md:"))
+    r.append(run_a(None, CL, CL + "\n契约正文续：带痕迹的一行。 contract-change：跨端要先改契约",
+                   "口径 A② 本次新增行自带注记 · 应该通过", expect_red=False))
+    r.append(run_a((CL, CL_TAGGED), CL_TAGGED, CL,
+                   "口径 A③ 摘掉在案那行的注记（旧版报「受检改动 0 行」判绿）· 应该报红"))
+    r.append(run_a((CL, CL_TAGGED), CL_TAGGED, CL_TAGGED + "\n契约正文续：本侧加的一行。",
+                   "口径 A④ 只靠在案的上一行（注记不在本次新增行上）· 应该报红"))
+    r.append(run_a(None, CL, CL + "\n契约正文续：带痕迹。 contract-change：跨端要先改契约\n契约正文续：正文。",
+                   "口径 A⑤ 上一行与新增行同批新增且带注记 · 应该通过", expect_red=False))
 
     # ── 未跟踪增量（提案 0003 裁决）3 例：候选集含未跟踪新增文档 ──────────────────
     import contextlib
