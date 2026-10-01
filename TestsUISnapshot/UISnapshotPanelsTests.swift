@@ -940,9 +940,9 @@ final class UISnapshotPanelsTests: XCTestCase {
         }
     }
 
-    // MARK: - 主题（配色方案三选一 · L-80 ㈡）
+    // MARK: - 主题（配色方案四选一 · L-80 ㈡ / 星空紫 T-20261001-031）
 
-    /// **三个主题各拍一遍**：同一块「外观」面板、选择不同 ⇒ 三张图必须不一样。
+    /// **四个主题各拍一遍**：同一块「外观」面板、选择不同 ⇒ 四张图必须不一样。
     ///
     /// 造态靠**宿主语境覆盖**（`DesignThemeManager.beginHostTheme`，与第 13 轮为语言定的那条路同构：
     /// 只覆盖、不落盘）—— 拍一张图不该改用户的偏好。
@@ -955,7 +955,7 @@ final class UISnapshotPanelsTests: XCTestCase {
         let host = makeEmptyHost()
         let size = CGSize(width: 560, height: 700)
         // 两轴证据的取样口（队列 L-85）：每张图的**画布角像素**（快照在最底层铺的是
-        // `Theme.surface(.window)` ⇒ 角上就是这一档的 `window` 值）。三主题 × 深浅两态 = 6 个样本。
+        // `Theme.surface(.window)` ⇒ 角上就是这一档的 `window` 值）。四主题 × 深浅两态 = 8 个样本。
         var cornerSamples: [(theme: DesignTheme, scheme: ColorScheme, sample: (red: Int, green: Int, blue: Int), name: String)] = []
 
         for theme in DesignTheme.all {
@@ -977,13 +977,13 @@ final class UISnapshotPanelsTests: XCTestCase {
                 XCTAssertEqual(pair.records.count, 2, "\(pair.base)：中英两遍都要在")
                 for (index, language) in UISnapshot.coverageLanguages.enumerated() {
                     let record = pair.records[index]
-                    // ① 三个主题名都在（列表逐个列出 —— 有一个选不到的话这里当场红）
+                    // ① 四个主题名都在（列表逐个列出 —— 有一个选不到的话这里当场红）
                     for candidate in DesignTheme.all {
                         let label = UISnapshot.localizedText(language) { L(candidate.nameKey) }
                         XCTAssertTrue(
                             record.localizedStrings.contains(label),
                             "\(record.name)：\(record.language) 那遍没有主题名「\(label)」"
-                                + " —— 面板没把三个主题都列出来？"
+                                + " —— 面板没把四个主题都列出来？"
                         )
                     }
                     // ② 推导主题逐条标注
@@ -1032,7 +1032,7 @@ final class UISnapshotPanelsTests: XCTestCase {
         /// PNG 往返的容差（实测最多 4，见 `UISnapshot.sampledRGB`）——**不是**视觉容差。
         let encodeTolerance = 8
 
-        XCTAssertEqual(cornerSamples.count, 6, "三主题 × 深浅两态 = 6 张，一张不能少")
+        XCTAssertEqual(cornerSamples.count, 8, "四主题 × 深浅两态 = 8 张，一张不能少")
         for theme in DesignTheme.all {
             guard let light = cornerSamples.first(where: { $0.theme == theme && $0.scheme == .light }),
                   let dark = cornerSamples.first(where: { $0.theme == theme && $0.scheme == .dark }) else {
@@ -1056,12 +1056,12 @@ final class UISnapshotPanelsTests: XCTestCase {
                 )
             }
         }
-        // 配色轴的另一半：三张**深色**图的角像素两两不同（否则三个主题在像素上是同一套配色）。
-        // 取深色那一档是因为它在三主题之间差得最开（浅色为了「专业感」刻意都接近白）。
+        // 配色轴的另一半：四张**深色**图的角像素两两不同（否则四个主题在像素上是同一套配色）。
+        // 取深色那一档是因为它在四主题之间差得最开（浅色为了「专业感」刻意都接近白）。
         let darks = DesignTheme.all.compactMap { theme in
             cornerSamples.first { $0.theme == theme && $0.scheme == .dark }
         }
-        XCTAssertEqual(darks.count, 3)
+        XCTAssertEqual(darks.count, 4)
         for (index, lhs) in darks.enumerated() {
             for rhs in darks[(index + 1)...] {
                 XCTAssertGreaterThan(

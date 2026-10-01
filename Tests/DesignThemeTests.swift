@@ -15,21 +15,22 @@ final class DesignThemeTests: XCTestCase {
 
     // MARK: 主题集
 
-    func testThreeThemesWithStableUniqueIdentifiers() {
-        XCTAssertEqual(DesignTheme.all.count, 3)
-        XCTAssertEqual(Set(DesignTheme.all.map(\.id)).count, 3)
+    func testFourThemesWithStableUniqueIdentifiers() {
+        XCTAssertEqual(DesignTheme.all.count, 4)
+        XCTAssertEqual(Set(DesignTheme.all.map(\.id)).count, 4)
         // id 是持久化用的（`ui.designTheme`），写死在这里防止有人顺手改名把用户的选择弄丢
-        XCTAssertEqual(DesignTheme.all.map(\.id), ["tech-blue", "bean-green", "rose-gold"])
+        XCTAssertEqual(DesignTheme.all.map(\.id), ["tech-blue", "stardust", "bean-green", "rose-gold"])
         // 与 Linux 侧同名的三个主题（需求提出者给的名：科技蓝 / 豆芽绿 / 玫瑰金）
         XCTAssertEqual(DesignTheme.all[0], .techBlue, "科技蓝是默认值，排在第一个")
         XCTAssertEqual(DesignTheme.fallback, .techBlue)
     }
 
     func testEachThemeHasItsOwnNameKey() {
-        XCTAssertEqual(Set(DesignTheme.all.map(\.nameKey)).count, 3)
+        XCTAssertEqual(Set(DesignTheme.all.map(\.nameKey)).count, 4)
         XCTAssertEqual(DesignTheme.techBlue.nameKey, .designThemeTechBlue)
         XCTAssertEqual(DesignTheme.beanGreen.nameKey, .designThemeBeanGreen)
         XCTAssertEqual(DesignTheme.roseGold.nameKey, .designThemeRoseGold)
+        XCTAssertEqual(DesignTheme.stardust.nameKey, .designThemeStardust)
         // 名字必须是**双语都在**的（缺一条就会出现英文界面上露出中文主题名）
         for theme in DesignTheme.all {
             let table = LocalizedStrings.table[theme.nameKey]
@@ -58,11 +59,14 @@ final class DesignThemeTests: XCTestCase {
         XCTAssertFalse(DesignTheme.techBlue.isDerivedDraft, "科技蓝 = 外观方案 D 的实际值")
         XCTAssertTrue(DesignTheme.beanGreen.isDerivedDraft)
         XCTAssertTrue(DesignTheme.roseGold.isDerivedDraft)
+        // 星空紫 = 需求提出者给的观感（NASA 韦伯「宇宙悬崖」取色）⇒ **是实际值**，不是推导草案
+        XCTAssertFalse(DesignTheme.stardust.isDerivedDraft,
+                       "星空紫的值来自需求提出者给的观感，在界面上标「推导草案」就是说假话")
     }
 
-    // MARK: 三套值表
+    // MARK: 四套值表
 
-    /// 三套表都要真的存在、id 对得上，且**互不相同**（防"复制一份改了名字"）。
+    /// 四套表都要真的存在、id 对得上，且**互不相同**（防"复制一份改了名字"）。
     func testEveryThemeHasItsOwnPalette() {
         var seen: Set<String> = []
         for theme in DesignTheme.all {

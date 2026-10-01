@@ -51,7 +51,11 @@ public enum DesignTheme: String, CaseIterable, Identifiable, Sendable {
     ///
     /// 为什么要能在代码里问这一句：界面要在「待值」的主题旁边如实标出来（不许把推导值当实际值卖），
     /// 门禁也要据此检查「待值登记还在、没被静默删掉」。
-    public var isDerivedDraft: Bool { self != .techBlue }
+    ///
+    /// 2026-10-01（T-20261001-031）：原先写成「不是科技蓝就算推导」—— 星空紫的值来自需求提出者
+    /// 给的观感（NASA 韦伯「宇宙悬崖」NGC 3324 取色），是**实际值**；按旧写法它会被界面标成
+    /// 「推导草案」，那就是在界面上说假话。改成逐主题点名，新增主题必须显式决定自己算不算推导。
+    public var isDerivedDraft: Bool { self == .beanGreen || self == .roseGold }
 
     /// 该主题**配套的交互强调色**（选中行 / 主按钮 / 焦点环）。
     ///

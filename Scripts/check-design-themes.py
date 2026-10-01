@@ -21,12 +21,12 @@
 判据（任一不过即失败）
 ----------------------
 A. **主题集**：`Core/DesignTheme.swift` 的 `case <名> = "<id>"` 集合与顺序必须等于台账里的三个
-   （`tech-blue` / `bean-green` / `rose-gold`），且 `DesignTheme.all` 把三个主题**都**列了出来
+   （`tech-blue` / `bean-green` / `rose-gold` / `stardust`），且 `DesignTheme.all` 把四个主题**都**列了出来
    （列漏一个 = 用户选不到它）。
-B. **三套值表角色齐全**：每个 `ThemePalette` 块必须含全部 20 个字段（18 个色角色 + 发丝线两参数），
+B. **四套值表角色齐全**：每个 `ThemePalette` 块必须含全部 20 个字段（18 个色角色 + 发丝线两参数），
    缺一个即红 —— 缺角色在 Swift 里是编译错误，但"新加一套表时少写一行"这类改动会先在
    **复制粘贴的中间态**里存在；`of(_:)` 的 switch 必须三支齐全（每个主题都取得到值）。
-C. **独立复算门槛**（本脚本自己实现，不看 Swift 的实现）：三主题 × 深浅两态逐条判 ——
+C. **独立复算门槛**（本脚本自己实现，不看 Swift 的实现）：四主题 × 深浅两态逐条判 ——
    正文 ≥4.5 / 强对比 ≥7 且强于正文 / 辅助 ≥3.0 / 禁用比辅助淡且 ≥1.5 / 状态色在两表面 ≥3.0 /
    强调家族按角色 ≥4.5（文字链接）与 ≥3.0（图标线，基准 = 深色对 window、浅色对白）/
    语法六档两两不同且各自过关 / 深色五档明度严格递增 / 浅色 content 最亮 /
@@ -35,14 +35,14 @@ D. **语法色必须仍挂在家族角色上**：`Core/DesignTokens.swift` 的 `
    逐行对账（keyword→accentGlow / string→warm / number→teal / function→accent /
    identifier→primary / comment→tertiary）—— 谁把某个语法色改回硬编码，六档就与家族脱钩。
 E. **主题名与 Linux 侧对齐 + 待值登记成对**：
-   ① `Core/Localization.swift` 里三个主题名键的中文值必须是「科技蓝 / 豆芽绿 / 玫瑰金」，
+   ① `Core/Localization.swift` 里四个主题名键的中文值必须是「科技蓝 / 豆芽绿 / 玫瑰金 / 星空紫」，
       且 `Docs/design/外观方案-v1.md` §9 的主题表里三行**同名**（双向覆盖，缺一即红）；
    ② 有推导主题（`isDerivedDraft`）就必须 ① 值表**紧挨着的那段注释**里标着「推导草案」
       （§9.1 的原话）② `Docs/发布计划.md` 的待输入表里登记着「豆芽绿 / 玫瑰金 色值（Linux 侧）」
       那件事 —— 推导值不许**静默变成**实际值。
 F. 空跑防护：主题数 / 角色数 / 实测对数 / 文档锚点处数四条下限，任何一条踩线即红。
 G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也能切了，但**用户手上那个入口**是另一件事
-   —— 三个主题里有没有人**选不到**、预览是不是只给一块色卡、推导值有没有在界面上**逐条**标出来、
+   —— 四个主题里有没有人**选不到**、预览是不是只给一块色卡、推导值有没有在界面上**逐条**标出来、
    以及"加了主题就把原来那个强调色入口删掉"这类**静默收功能**。判据：① 面板必须逐个列出主题集
    （`ForEach(DesignTheme.all)`）且选主题走**唯一写入口** `select(_:)`，且**订阅**了主题管理器
    （否则换了主题这块面板自己不跟着变）；② 主题行必须画出**三个真实场景**（选中行 / 主按钮 / 焦点环）
@@ -101,7 +101,7 @@ AXIS_APPEARANCE_TERMINAL_KEY = "terminal.appearance"  # 终端的深浅档（第
 AXIS_THEME_KEY = "ui.designTheme"                  # 配色轴落盘键 = `DesignTheme.Storage.key`
 # 像素比对的容差：**实测出来的**（快照 PNG 往返把通道值偏移最多 4：深色 `window #02070A` 读回
 # `#02060A`、浅色 `#F1F5FA` 读回 `#F4F7FB`）⇒ 取 8。它必须小于「换一个主题」在这套值上的差异
-# （深色 `window` 三个主题实测 #02060A / #03160A / #1A070B，至少一个通道差 16 以上）。
+# （深色 `window` 四个主题实测 #02060A / #03160A / #1A070B / #0C1018，两两至少差 14 以上）。
 AXIS_PIXEL_TOLERANCE = 8
 # 取色口子的锚点（定义是 `sampledRGB(ofPNGAt path:…)`、调用点是 `sampledRGB(ofPNGAt: …)`）——
 # 取到「ofPNGAt」为止即可同时认这两处；带上冒号反而只认调用点（第 83 轮判据当场抓出来的）。
@@ -113,7 +113,7 @@ AXIS_TEST_CASES = {
     "testAppearanceTruthTableOverEveryStateAndSystemValue": "三态 × 系统两态 = 6 组真值表",
     "testDarkResolutionIsIndependentOfTheme": "换主题不改深浅判定",
     "testPaletteSelectionIsIndependentOfAppearanceAxis": "换深浅不改配色",
-    "testAxisMatrixCoversEveryCombinationExactlyOnce": "18 组组合不重不漏",
+    "testAxisMatrixCoversEveryCombinationExactlyOnce": "24 组组合不重不漏",
     "testFollowSystemBothStatesClearThresholdsInEveryTheme": "跟随系统两态都过门槛",
     "testStorageKeysAreSeparateAndNamespaced": "两轴落盘键分开",
 }
@@ -121,13 +121,20 @@ MIN_AXIS_SITES = 30   # 判据 H：判点处数下限（空跑防护：扫描面
 
 # ---- 台账式常量（每条都带理由；理由为空即红）-------------------------------------------------
 
-# 三个主题的 id 与顺序（= 界面里的顺序；与 Linux 侧同名）。
-THEME_IDS = ["tech-blue", "bean-green", "rose-gold"]
+# 主题 id 的**声明顺序**（= `Core/DesignTheme.swift` 里 case 的书写顺序；与 Linux 侧同名）。
+# 2026-10-01（T-20261001-031）：加第 4 个「星空紫」（需求提出者要的「比科技蓝更梦幻」那一档）。
+# 认的是**声明顺序**，不是界面顺序 —— 界面顺序（`DesignTheme.all`，科技蓝打头）由判据 A 另判。
+THEME_IDS = ["tech-blue", "bean-green", "rose-gold", "stardust"]
 THEME_NAMES_ZH = {
     "tech-blue": "科技蓝",
     "bean-green": "豆芽绿",
     "rose-gold": "玫瑰金",
+    "stardust": "星空紫",
 }
+# 「推导草案」**只有** Linux 侧实际色值未到的那两个（2026-10-01 由「不是科技蓝就算推导」改成点名）：
+# 星空紫的值来自需求提出者给的观感（NASA 韦伯「宇宙悬崖」NGC 3324 取色）⇒ 是实际值，
+# 界面上标「推导草案」就是说假话；新增主题必须在这里显式决定自己算不算推导。
+DERIVED_THEME_IDS = ["bean-green", "rose-gold"]
 # 值表必须有的字段：18 个色角色 + 发丝线两个参数。
 COLOR_ROLES = (
     "window", "sidebar", "content", "panel", "raised",
@@ -159,9 +166,9 @@ LARGE_TEXT = 3.0
 COMPONENT = 3.0
 SURFACE_SEPARATION = 0.02
 
-MIN_THEMES = 3          # 判据 F：主题数下限
+MIN_THEMES = 4          # 判据 F：主题数下限
 MIN_ROLES = 20          # 判据 F：每套表的字段数下限
-MIN_CHECKS = 120        # 判据 F：实测对数下限（3 主题 × 2 态 × 每个角色若干条）
+MIN_CHECKS = 160        # 判据 F：实测对数下限（4 主题 × 2 态 × 每个角色若干条）
 
 # ---- 判据 G（界面入口）的对照表（每条都带理由）------------------------------------------------
 # 主题候选行必须画出的**三个真实场景** —— 缺一个就退化成"只给一块色卡"（用户只能凭想象选）。
@@ -497,7 +504,7 @@ def check_names_and_pending(root: pathlib.Path) -> tuple[list[Issue], int]:
                                             f" —— 名对齐是判据 E 的一半"))
     # 推导主题 ↔ 待值登记（成对）：有推导主题就必须 ① 值表旁标着「推导」② 发布计划还登记着那件待值
     theme_text = theme_swift_text(root)
-    derived = [theme_id for theme_id in THEME_IDS if theme_id != "tech-blue"]
+    derived = DERIVED_THEME_IDS
     release = (root / RELEASE_PLAN).read_text(encoding="utf-8") if (root / RELEASE_PLAN).exists() else ""
     for theme_id in derived:
         palette_name = "".join(
@@ -632,14 +639,14 @@ def check_ui_entry(root: pathlib.Path) -> tuple[list[Issue], int]:
 
 
 def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
-    """外观的**两轴正交**：深浅轴（三态）× 配色轴（三主题）。队列 L-85。
+    """外观的**两轴正交**：深浅轴（三态）× 配色轴（四主题）。队列 L-85。
 
     与判据 C / G 的分工：C 管「值对不对」（独立复算门槛）、G 管「配色轴的入口在不在界面上」，
     H 管的是**两轴之间**的规矩。四条都是「不做就是没做」：
       ① 深浅轴三态齐全 + 真值表逐格 + 未知值回落「跟随系统」；
       ② 两轴**互不读取**：两个落盘键分开，且各自的写盘点里不许出现对方的键
          —— 串轴的表现是「切了主题，深浅档被顺手重置」，用户看不出原因；
-      ③ 组合**可达**：3 态 × 2 系统态 × 3 主题 = 18 组，且「跟随系统」在系统深浅两态下都有值
+      ③ 组合**可达**：3 态 × 2 系统态 × 4 主题 = 24 组，且「跟随系统」在系统深浅两态下都有值
          （只测一态时，另一态可能落在看不清的颜色上 —— 这正是「随系统主题」的全部风险）；
       ④ 组合**到像素**：快照角像素（铺的 `window` 底）必须等于该主题该档的 `window` 值 ——
          要有取色口子、有断言、有**实测出来的**容差（PNG 往返偏移 ≤4 ⇒ 8；不是拍脑袋定的）。
@@ -719,26 +726,26 @@ def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
                                                " —— 重启就丢"))
         if AXIS_THEME_KEY in app_state:
             issues.append(Issue(APP_STATE_SWIFT, f"深浅档的写盘路径里出现了配色轴的键 `{AXIS_THEME_KEY}` —— 两轴串了"))
-    # ③ 组合可达：3 态 × 2 系统态 × 3 主题 = 18 组（「跟随系统」两态都要走一遍）
+    # ③ 组合可达：3 态 × 2 系统态 × 4 主题 = 24 组（「跟随系统」两态都要走一遍）
     combos = len(AXIS_STATES) * len(AXIS_SYSTEM_STATES) * len(THEME_IDS)
     axes_tests_path = root / AXES_TESTS_SWIFT
     sites += 1
     if not axes_tests_path.exists():
-        issues.append(Issue(AXES_TESTS_SWIFT, "两轴组合的单测不存在 —— 18 组组合无人走"))
+        issues.append(Issue(AXES_TESTS_SWIFT, "两轴组合的单测不存在 —— 24 组组合无人走"))
     else:
         axes_tests = axes_tests_path.read_text(encoding="utf-8")
         for anchor, why in (
             ("AppearancePreference.allCases", "深浅轴的三态"),
-            ("DesignTheme.all", "配色轴的三主题"),
+            ("DesignTheme.all", "配色轴的四主题"),
             ("systemStates", "系统当前深浅两态"),
         ):
             sites += 1
             if anchor not in axes_tests:
-                issues.append(Issue(AXES_TESTS_SWIFT, f"组合枚举里少了{why}（找不到 `{anchor}`）—— 18 组走不全"))
+                issues.append(Issue(AXES_TESTS_SWIFT, f"组合枚举里少了{why}（找不到 `{anchor}`）—— 24 组走不全"))
         sites += 1
         if str(combos) not in axes_tests:
             issues.append(Issue(AXES_TESTS_SWIFT,
-                                f"单测里没有组合数 {combos}（3 态 × 2 系统态 × 3 主题）—— 少走几组也看不出来"))
+                                f"单测里没有组合数 {combos}（3 态 × 2 系统态 × 4 主题）—— 少走几组也看不出来"))
         for name, why in AXIS_TEST_CASES.items():
             sites += 1
             if f"func {name}(" not in axes_tests:
@@ -934,7 +941,7 @@ def self_test() -> int:
         # ⑬ 红：`.all` 漏列一个主题
         short_all = _fixture(pathlib.Path(tmp) / "bad-all")
         _patch(short_all / THEMES_SWIFT,
-               "public static let all: [DesignTheme] = [.techBlue, .beanGreen, .roseGold]",
+               "public static let all: [DesignTheme] = [.techBlue, .stardust, .beanGreen, .roseGold]",
                "public static let all: [DesignTheme] = [.techBlue, .beanGreen]")
         cases.append(("`.all` 漏列主题", True, check_theme_set(short_all)))
 
@@ -1081,7 +1088,7 @@ def main(argv: list[str]) -> int:
         return 1
     print("\n✅ 主题集三选一：三套值表角色齐全、逐主题 × 深浅两态过门槛、名与 Linux 侧对齐、待值登记在位；"
           "界面入口（主题列表 + 每主题三个真实场景 + 推导逐条标注）已接上；"
-          "两轴正交（深浅三态 × 配色三主题 = 18 组组合、跟随系统两态都过门槛、组合已到像素上）")
+          "两轴正交（深浅三态 × 配色四主题 = 24 组组合、跟随系统两态都过门槛、组合已到像素上）")
     return 0
 
 

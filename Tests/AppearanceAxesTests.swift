@@ -10,7 +10,7 @@ import XCTest
 ///   ① **深浅轴**三态与真值表（3 态 × 系统当前态 = 6 组）逐组对上；
 ///   ② **正交**：深浅判定**只读深浅轴**（换主题不改深浅）、配色**只读配色轴**（换深浅不改配色）——
 ///      两轴一旦互相读，就会出现「切了主题，深浅档被顺手重置」这类没人能解释的行为；
-///   ③ **可组合**：两轴的笛卡尔积（3 态 × 2 系统态 × 3 主题 = 18 组）逐组可达、不重不漏，
+///   ③ **可组合**：两轴的笛卡尔积（3 态 × 2 系统态 × 4 主题 = 24 组）逐组可达、不重不漏，
 ///      且「跟随系统」这一档在系统深浅**两态**下都拿到该主题对应那一档的值、**都过门槛**
 ///      （正文 ≥4.5 / 强对比 ≥7 / 图标线 ≥3）；
 ///   ④ 两轴的**持久化键分开**（切一轴不许把另一轴写回默认）。
@@ -22,7 +22,7 @@ final class AppearanceAxesTests: XCTestCase {
 
     private let thresholds = ColorContrast.Threshold.self
 
-    /// 两轴组合的**一次性枚举**（判据 D/E 的公共入口）：18 组，顺序固定便于逐组定位。
+    /// 两轴组合的**一次性枚举**（判据 D/E 的公共入口）：24 组，顺序固定便于逐组定位。
     /// 放在测试里而不是生产代码里：生产侧两轴本来就是分开取的（`AppearancePreference` 管深浅、
     /// `DesignThemeManager` 管配色），**没有**一个「组合对象」；这里要的只是把组合逐个走一遍。
     private struct Combination: Hashable {
@@ -97,7 +97,7 @@ final class AppearanceAxesTests: XCTestCase {
 
     // MARK: - ② 正交：两轴互不读取
 
-    /// **换主题不改深浅判定**：同一个（深浅档 × 系统态）下，三个主题给出的深浅结论必须一致。
+    /// **换主题不改深浅判定**：同一个（深浅档 × 系统态）下，四个主题给出的深浅结论必须一致。
     func testDarkResolutionIsIndependentOfTheme() {
         for appearance in AppearancePreference.allCases {
             for systemIsDark in Self.systemStates {
@@ -138,19 +138,19 @@ final class AppearanceAxesTests: XCTestCase {
 
     // MARK: - ③ 可组合：笛卡尔积逐个走一遍
 
-    /// 18 组：不重、不漏，且每轴每个取值都出现了正确的次数（3 主题各 6 组、3 态各 6 组、2 系统态各 9 组）。
+    /// 24 组：不重、不漏，且每轴每个取值都出现了正确的次数（4 主题各 6 组、3 态各 8 组、2 系统态各 12 组）。
     func testAxisMatrixCoversEveryCombinationExactlyOnce() {
         let combinations = Self.matrix
-        XCTAssertEqual(combinations.count, 18, "3 态 × 2 系统态 × 3 主题 = 18")
-        XCTAssertEqual(Set(combinations).count, 18, "组合有重复")
+        XCTAssertEqual(combinations.count, 24, "3 态 × 2 系统态 × 4 主题 = 24")
+        XCTAssertEqual(Set(combinations).count, 24, "组合有重复")
         for theme in DesignTheme.all {
             XCTAssertEqual(combinations.filter { $0.theme == theme }.count, 6)
         }
         for appearance in AppearancePreference.allCases {
-            XCTAssertEqual(combinations.filter { $0.appearance == appearance }.count, 6)
+            XCTAssertEqual(combinations.filter { $0.appearance == appearance }.count, 8)
         }
         for systemIsDark in Self.systemStates {
-            XCTAssertEqual(combinations.filter { $0.systemIsDark == systemIsDark }.count, 9)
+            XCTAssertEqual(combinations.filter { $0.systemIsDark == systemIsDark }.count, 12)
         }
     }
 
