@@ -73,5 +73,7 @@ windows/Bench/**/dist/
 windows/App/dist/
 windows/App/src-tauri/gen/
 windows/Bench/grid/public/data/
+# 循环台账镜像（本机打点脚本写的人读副本；随轮重写 ⇒ 必须忽略，否则仓库长期 dirty 会冻住唤醒门禁）
+windows/循环台账.md
 *.pyc
 __pycache__/
