@@ -24,7 +24,7 @@
 
 **「文件不存在」的两种语义**（L-33，2026-09-27 第 29 轮；另一平台侧实测提出）：
 
-本清单里有 **14 份文档被 `.gitignore` 排除**（原 7 份：`兼容性矩阵` / `GBase-技术验证` / `测试用例` /
+本清单里有 **13 份文档被 `.gitignore` 排除**（原 7 份：`兼容性矩阵` / `GBase-技术验证` / `测试用例` /
 `发布方案` / `手工验收运行手册` / **`智能体助手-开发spec.md`** / **`design/开发循环-任务队列.md`**；
 L-89 纳入的 6 份：`人工点验-单击清单-macOS-20260927.md` / `夜间开发记录_20260921-22.md` /
 `接管记录_v2.3.md` / `调研书-AI智能体能力基线.md` / `调研书-主流数据库客户端基础功能.md` /
@@ -33,8 +33,8 @@ L-89 纳入的 6 份：`人工点验-单击清单-macOS-20260927.md` / `夜间�
 macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平台（Windows）上跑这一项必然红，
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。现在：
 
-**这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 14 份** /
-**46 份命名 + 1 条通配 = 实跑 47 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
+**这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 13 份** /
+**48 份命名 + 1 条通配 = 实跑 49 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
 `doc-tables-files`）；判据 `Scripts/check-doc-numbers.py` 每次**自己算一遍**（导入本模块读清单 +
 `git check-ignore` 实测 + 真跑本脚本）再与本文件 / `Scripts/verify-all.sh` / `AGENT-SPEC.md` 里每一处
 写法对账 —— 本文件里的数字都是**引用**，改口径改台账。
@@ -143,6 +143,11 @@ DEFAULT_TARGETS = [
     "Docs/proposals/0005-受检清单自洽判据-windows-恒假红-路径分隔符.md",
     "Docs/proposals/README.md",
     "Docs/proposals/_TEMPLATE.md",
+    # 2026-10-01 第 156 轮（收尾）：同侧并发会话（派活单 `T-20261001-052`，提交 `8c0ca8c`）新增的两份
+    # 带表格文档（人工测试清单模板 + Alpha 2 落点）未进清单 ⇒ 判据 E 在 `master` 上当场红（与本轮自己的
+    # 那批文件无关，如实归因）。按判据 E 的处方补录：新文档的表格列数不能在清单外躺着。
+    "Docs/模板-人工测试清单-alpha.md",
+    "Docs/人工测试清单-alpha2-macOS.md",
 ]
 
 # L-41（第 35 轮）：**每轮必改的第三份台账** —— 开发记录。文件名带日期 ⇒ 用通配，
@@ -544,7 +549,7 @@ def main() -> int:
 # 这处 1 之差见 `Scripts/self-test-counts.json`）。
 # 全部在**临时目录**里跑真实文档副本，末例核对真仓库逐字节未变。
 # 关键一例是「干净克隆 / 另一平台」：只放**被版本控制跟踪的**那几份文档，
-# 14 份被 `.gitignore` 排除的缺席 —— 口径是**跳过 + 提示、exit 0**（原先必红的正是这一例）。
+# 13 份被 `.gitignore` 排除的缺席 —— 口径是**跳过 + 提示、exit 0**（原先必红的正是这一例）。
 # 例 5（L-41）= 负例：把**队列副本**的一行写坏（多一格）⇒ 必须 exit 1 并指名行号
 # （判据写完不对已知改动报红 = 没有判据）。
 # 例 6（L-89）= 判据 E 的两面：带表格却不在清单 ⇒ 判红并点名；`Docs/archive/` ⇒ 豁免
@@ -560,8 +565,13 @@ SELF_TEST_TRACKED = [
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
     # L-89 纳入的跟踪文档（夹具 = 「干净克隆」那一例的现场，必须与真清单逐条相同）
-    # 25 份（第 90 轮 +1 = 对侧新增的提案 0005；2026-10-01 第 149 轮 +1 =
-    # 星空紫「星云皮肤」那一轮新增的营销物料说明 `Docs/design/store/README.md`，见 DEFAULT_TARGETS 里的注记）
+    # 35 份（第 90 轮 +1 = 对侧新增的提案 0005；2026-10-01 第 149 轮 +1 =
+    # 星空紫「星云皮肤」那一轮新增的营销物料说明 `Docs/design/store/README.md`，见 DEFAULT_TARGETS 里的注记；
+    # 2026-10-01 第 156 轮（收尾）+3 = 同侧并发会话 `8c0ca8c` 把 `Docs/发布方案.md` 收进了库 +
+    # 新增两份带表格文档 ⇒ 本名单必须与「清单里**入库**的那批」逐条相同，否则判据 `doc-tables-lists` 当场红）
+    "Docs/发布方案.md",
+    "Docs/模板-人工测试清单-alpha.md",
+    "Docs/人工测试清单-alpha2-macOS.md",
     "AGENT-SPEC.md",
     "RELEASE-0.1.0-alpha.md",
     "RELEASE-0.2.0-alpha.md",
@@ -592,7 +602,11 @@ SELF_TEST_ABSENT = [
     "Docs/兼容性矩阵.md",
     "Docs/GBase-技术验证.md",
     "Docs/测试用例.md",
-    "Docs/发布方案.md",
+    # 2026-10-01 第 156 轮（收尾）：`Docs/发布方案.md` 从这份名单里移除 —— 同侧并发会话
+    # （派活单 `T-20261001-052`，提交 `8c0ca8c`）把它**收进了库**（此前被 `.gitignore` 排除），
+    # 于是「干净克隆里应缺的那批」从 14 份变 13 份，自检例 1 / 例 4 的期望数跟着按实测改。
+    # 边界如实登记：协议说 Studio `Docs/*` 别 `git add -f`（跨端共享的是三书 + 对外件），
+    # 这一份是**那笔提交的作者决定**；本侧只把夹具对齐到**盘上的事实**，要不要撤回它归那笔作者。
     "Docs/手工验收运行手册.md",
     "Docs/智能体助手-开发spec.md",
     "Docs/design/开发循环-任务队列.md",
@@ -641,14 +655,14 @@ def run_self_test() -> int:
             if any((clone / relative).exists() for relative in SELF_TEST_ABSENT):
                 failures.append("夹具准备失败：被 .gitignore 排除的文档不该出现在临时目录里")
 
-        # 例 1·干净克隆（默认清单，缺 14 份）→ exit 0 且**高声提示**、不得静默
+        # 例 1·干净克隆（默认清单，缺 13 份）→ exit 0 且**高声提示**、不得静默
         total += 1
         code, output = run([], clone)
         if code != 0:
             failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
-        elif "⚠ 跳过 14 份" not in output:
-            failures.append(f"例 1 失败：没有高声提示「跳过 14 份」（不得静默通过）\n{output}")
-        elif "✅ 表格校验通过（32 个文件，跳过 14 份）" not in output:
+        elif "⚠ 跳过 13 份" not in output:
+            failures.append(f"例 1 失败：没有高声提示「跳过 13 份」（不得静默通过）\n{output}")
+        elif "✅ 表格校验通过（35 个文件，跳过 13 份）" not in output:
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
             failures.append(f"例 1 失败：通配清单没有显式打印匹配份数（L-41）\n{output}")
@@ -730,11 +744,11 @@ def run_self_test() -> int:
         if code != 0:
             failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 46 份命名文档应全在（不得出现跳过行）\n{output}")
+            failures.append(f"例 4 失败：真仓库 48 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
             failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
-        elif "✅ 表格校验通过（47 个文件）" not in output:
-            failures.append(f"例 4 失败：收尾行应为 47 个文件（46 份命名 + 1 份通配）\n{output}")
+        elif "✅ 表格校验通过（49 个文件）" not in output:
+            failures.append(f"例 4 失败：收尾行应为 49 个文件（48 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
 
@@ -762,7 +776,7 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 14 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 跨平台标识（Windows 形态落回清单写法）/ 真仓库 46 份无跳过")
+    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 13 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 跨平台标识（Windows 形态落回清单写法）/ 真仓库 48 份无跳过")
     return 0
 
 
