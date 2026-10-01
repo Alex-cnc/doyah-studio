@@ -215,6 +215,68 @@ final class BrowserContractTests: XCTestCase {
         XCTAssertEqual(count, 0)
     }
 
+    // MARK: - 拒绝理由的语言（队列 `L-154`：语言是传进来的，不是写死的）
+
+    /// 拒绝理由是**给用户看的整句**：语言跟调用方走，英文档里不许混出汉字。
+    func testBlockReasonFollowsRequestedLanguage() {
+        guard case .block(let englishReason) = BrowserNavigationPolicy.decide(
+            url: url("https://example.com/"), isUserInitiated: false, language: .english
+        ) else {
+            return XCTFail("非用户发起的远程加载必须被拒绝")
+        }
+        XCTAssertTrue(englishReason.contains("Remote content is not loaded by default"), "实际：\(englishReason)")
+        XCTAssertFalse(containsHan(englishReason), "英文档漏了汉字：\(englishReason)")
+
+        // 不传语言的既有调用点仍是简体中文（默认值 = 旧行为，接口加形参不改口径）。
+        guard case .block(let defaultReason) = BrowserNavigationPolicy.decide(
+            url: url("https://example.com/"), isUserInitiated: false
+        ) else {
+            return XCTFail("默认语言下也必须拒绝")
+        }
+        XCTAssertTrue(defaultReason.contains("默认不加载远程内容"), "实际：\(defaultReason)")
+    }
+
+    /// 每条拒绝路径在英文档下都不许漏汉字 —— 这 9 句原先写死在 `Core/BrowserPage.swift` 里。
+    func testEveryBlockPathHasEnglishWording() {
+        let cases: [(String, URL?)] = [
+            ("没有地址", nil),
+            ("脚本注入面", url("javascript:alert(1)")),
+            ("本机文件没有路径", url("file://")),
+            ("不允许的协议", url("weird:thing"))
+        ]
+        for (label, target) in cases {
+            guard case .block(let reason) = BrowserNavigationPolicy.decide(
+                url: target, isUserInitiated: true, language: .english
+            ) else {
+                return XCTFail("\(label) 必须被拒绝")
+            }
+            XCTAssertFalse(reason.isEmpty)
+            XCTAssertFalse(containsHan(reason), "\(label) 的英文档漏了汉字：\(reason)")
+        }
+    }
+
+    /// 地址解析失败的理由同样跟调用方语言走（`parseAddress(_:language:)`）。
+    func testAddressErrorFollowsRequestedLanguage() {
+        switch BrowserSession.parseAddress("   ", language: .english) {
+        case .success:
+            XCTFail("空输入必须失败")
+        case .failure(let error):
+            XCTAssertEqual(error.reason, "Enter an address")
+        }
+
+        switch BrowserSession.parseAddress("hello world", language: .english) {
+        case .success:
+            XCTFail("解析不出来的输入必须失败")
+        case .failure(let error):
+            XCTAssertTrue(error.reason.contains("makes no sense"), "实际：\(error.reason)")
+            XCTAssertFalse(containsHan(error.reason), "英文档漏了汉字：\(error.reason)")
+        }
+    }
+
+    private func containsHan(_ text: String) -> Bool {
+        text.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
+    }
+
     // MARK: - 状态迁移
 
     func testHistoryEnablesBackAndForwardAndTruncatesForwardBranch() {

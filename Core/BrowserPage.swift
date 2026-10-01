@@ -34,10 +34,19 @@ public enum BrowserNavigationPolicy {
     /// 本机文件（`file:`）—— 2026-10-01 口径放行；**只在用户显式发起时**（见 `decide` 里那道闸）。
     public static let localFileScheme = "file"
 
-    public static func decide(url: URL?, isUserInitiated: Bool) -> BrowserNavigationDecision {
+    /// 一次裁决。
+    ///
+    /// `language` 是**调用方**的语言（队列 `L-154`）：拒绝理由会直接显示给用户，
+    /// Core 不许自己挑语言（R-45 / FR-DATA-04）。默认值只为兼容既有调用点，
+    /// 界面与命令行都显式传当前语言。
+    public static func decide(
+        url: URL?,
+        isUserInitiated: Bool,
+        language: AppLanguage = .simplifiedChinese
+    ) -> BrowserNavigationDecision {
         guard let url else {
             // 空白页：没有 URL 也是一种正常状态（新页签就是这个样子）。
-            return .block(reason: "没有要加载的地址")
+            return .block(reason: LocalizedStrings.text(.browserBlockNoAddress, language: language))
         }
 
         let scheme = (url.scheme ?? "").lowercased()
@@ -49,8 +58,8 @@ public enum BrowserNavigationPolicy {
         if !isUserInitiated {
             // 本机文件与远程内容是**同一条闸**：都不许自动加载（恢复会话、预取、脚本发起的跳转）。
             // 说法按对象分开 —— 把「打开一个本机文件被拦」说成"不加载远程内容"，用户会以为程序搞错了。
-            let subject = scheme == localFileScheme ? "本机文件" : "远程内容"
-            return .block(reason: "默认不加载\(subject)：只有你主动输入地址或在页面上点击，才会发起请求")
+            let key: LKey = scheme == localFileScheme ? .browserBlockAutoLocalFile : .browserBlockAutoRemote
+            return .block(reason: LocalizedStrings.text(key, language: language))
         }
 
         // 本机文件（2026-10-01 人类主人答「允许」；口径 = 需求书 `R-35` ⑥ / 概要设计 §3.12）：
@@ -58,17 +67,20 @@ public enum BrowserNavigationPolicy {
         // 这道判定排在 `isUserInitiated` 闸之后 ⇒ 「不许自动加载、不许静默重放」一条不减。
         if scheme == localFileScheme {
             guard url.isFileURL, !url.path.isEmpty else {
-                return .block(reason: "本机文件地址不完整（没有路径）：已被拒绝")
+                return .block(reason: LocalizedStrings.text(.browserBlockIncompleteLocalFile, language: language))
             }
             return .allow(url)
         }
 
         guard allowedSchemes.contains(scheme) else {
-            return .block(reason: "只允许 http / https / 本机文件；\(scheme.isEmpty ? "未知协议" : scheme + ":") 已被拒绝")
+            let shown = scheme.isEmpty
+                ? LocalizedStrings.text(.browserSchemeUnknown, language: language)
+                : scheme + ":"
+            return .block(reason: LocalizedStrings.format(.browserBlockSchemeNotAllowed, language: language, shown))
         }
 
         guard url.host != nil else {
-            return .block(reason: "地址缺少主机名")
+            return .block(reason: LocalizedStrings.text(.browserBlockMissingHost, language: language))
         }
 
         return .allow(url)
@@ -239,10 +251,15 @@ public enum BrowserSession {
     ///
     /// 只做最小纠偏（补 `https://`），不做"猜搜索词"——猜错会把用户输入发去搜索引擎，
     /// 那是**外发决策**，不该由一个便利函数替他做。
-    public static func parseAddress(_ input: String) -> Result<URL, BrowserAddressError> {
+    ///
+    /// `language` 同 `decide(url:isUserInitiated:language:)`：失败理由要显示给用户（队列 `L-154`）。
+    public static func parseAddress(
+        _ input: String,
+        language: AppLanguage = .simplifiedChinese
+    ) -> Result<URL, BrowserAddressError> {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return .failure(BrowserAddressError("请输入地址"))
+            return .failure(BrowserAddressError(LocalizedStrings.text(.browserAddressEmpty, language: language)))
         }
         if trimmed.lowercased() == "about:blank" {
             return .success(URL(string: "about:blank")!)
@@ -250,7 +267,9 @@ public enum BrowserSession {
 
         let candidate = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
         guard let url = URL(string: candidate), url.host != nil else {
-            return .failure(BrowserAddressError("看不懂这个地址：\(trimmed)"))
+            return .failure(BrowserAddressError(
+                LocalizedStrings.format(.browserAddressUnparsable, language: language, trimmed)
+            ))
         }
         return .success(url)
     }
@@ -264,9 +283,14 @@ public enum BrowserSession {
         page: BrowserPage,
         to url: URL?,
         origin: String,
-        isUserInitiated: Bool
+        isUserInitiated: Bool,
+        language: AppLanguage = .simplifiedChinese
     ) -> Transition {
-        let decision = BrowserNavigationPolicy.decide(url: url, isUserInitiated: isUserInitiated)
+        let decision = BrowserNavigationPolicy.decide(
+            url: url,
+            isUserInitiated: isUserInitiated,
+            language: language
+        )
         let target = EgressTarget.sanitize(url?.absoluteString ?? "")
 
         switch decision {

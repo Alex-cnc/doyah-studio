@@ -1054,6 +1054,17 @@ public enum LKey: String, CaseIterable, Sendable {
     case browserReload
     case browserStop
     case browserEmptyHint
+    // 浏览器导航策略的**拒绝理由**（队列 `L-154`）：这些是用户可见的整句，
+    // 语言由调用方给（`decide(…language:)`），Core 自己不挑语言 —— 见 R-45 / FR-DATA-04。
+    case browserBlockNoAddress
+    case browserBlockAutoRemote
+    case browserBlockAutoLocalFile
+    case browserBlockIncompleteLocalFile
+    case browserBlockSchemeNotAllowed
+    case browserSchemeUnknown
+    case browserBlockMissingHost
+    case browserAddressEmpty
+    case browserAddressUnparsable
     case menuEgressLog
     case egressColumnTime
     case egressColumnKind
@@ -2842,6 +2853,15 @@ public enum LocalizedStrings {
         .browserReload: [.simplifiedChinese: "刷新", .english: "Reload"],
         .browserStop: [.simplifiedChinese: "停止", .english: "Stop"],
         .browserEmptyHint: [.simplifiedChinese: "空白页 —— 输入地址才会发起请求；每次出网都会记进「外发日志…」", .english: "Blank page — a request only happens when you navigate; every request is recorded in the Egress Log"],        .agentApprovalConnectionMismatch: [.simplifiedChinese: "审批单上的连接是「%@」，当前选中的是「%@」—— 已拒绝执行。请切回原连接后重新提交。", .english: "This approval was for connection \"%@\" but the current selection is \"%@\" — execution refused. Switch back to that connection and submit again."],
+        .browserBlockNoAddress: [.simplifiedChinese: "没有要加载的地址", .english: "There is no address to load"],
+        .browserBlockAutoRemote: [.simplifiedChinese: "默认不加载远程内容：只有你主动输入地址或在页面上点击，才会发起请求", .english: "Remote content is not loaded by default — a request only happens when you type an address or click on a page"],
+        .browserBlockAutoLocalFile: [.simplifiedChinese: "默认不加载本机文件：只有你主动输入地址或在页面上点击，才会发起请求", .english: "Local files are not loaded by default — a file only loads when you type its path or click a link"],
+        .browserBlockIncompleteLocalFile: [.simplifiedChinese: "本机文件地址不完整（没有路径）：已被拒绝", .english: "Incomplete local file address (no path) — refused"],
+        .browserBlockSchemeNotAllowed: [.simplifiedChinese: "只允许 http / https / 本机文件；%@ 已被拒绝", .english: "Only http / https / local files are allowed — %@ was refused"],
+        .browserSchemeUnknown: [.simplifiedChinese: "未知协议", .english: "unknown scheme"],
+        .browserBlockMissingHost: [.simplifiedChinese: "地址缺少主机名", .english: "The address has no host name"],
+        .browserAddressEmpty: [.simplifiedChinese: "请输入地址", .english: "Enter an address"],
+        .browserAddressUnparsable: [.simplifiedChinese: "看不懂这个地址：%@", .english: "That address makes no sense: %@"],
         .egressColumnTime: [.simplifiedChinese: "时间", .english: "Time"],
         .egressColumnKind: [.simplifiedChinese: "类别", .english: "Kind"],
         .egressColumnTarget: [.simplifiedChinese: "目标", .english: "Target"],

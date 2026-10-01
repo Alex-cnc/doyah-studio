@@ -174,6 +174,9 @@ final class WorkspaceBrowserModel: ObservableObject {
             let current = self.browserPages.first { $0.id == page.id } ?? BrowserPage(id: page.id)
             self.handleBrowserDownload(outcome, page: current)
         }
+        // 拒绝理由的语言（队列 `L-154`）：**按当前渲染语言**（宿主语境优先），与其它 Core 出口同一口径。
+        // 引擎在独立 target 里看不到语言管理器 ⇒ 由这里注入，界面换了语言也立刻跟上。
+        engine.languageProvider = { LocalizationManager.shared.effectiveLanguage }
         browserEngines[page.id] = engine
         return engine
     }
@@ -230,7 +233,7 @@ final class WorkspaceBrowserModel: ObservableObject {
     /// 地址栏提交：解析 → 交给引擎（引擎内部先过 Core 策略、再写外发日志）。
     func navigateBrowserTab(_ id: UUID, input: String) {
         guard let page = browserPages.first(where: { $0.id == id }) else { return }
-        switch BrowserSession.parseAddress(input) {
+        switch BrowserSession.parseAddress(input, language: LocalizationManager.shared.effectiveLanguage) {
         case .success(let url):
             let engine = browserEngine(for: page)
             Task { await engine.load(url) }

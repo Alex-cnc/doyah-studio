@@ -44,6 +44,13 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
     /// 下载进展回调（应用层据此写外发日志与界面状态）。
     public var onDownloadEvent: (@MainActor (DownloadOutcome) -> Void)?
 
+    /// 拒绝理由用哪种语言渲染（**应用层注入**）。
+    ///
+    /// 引擎在独立的 target（`DoyahPlatform`）里，看不到应用层的语言管理器 ⇒ 与
+    /// `downloadDirectory` 同一形状：**谁拥有语言谁注入**。默认简体中文 ——
+    /// 那是 `Core/BrowserPage.swift` 每个入口的默认值，不是这里另开的一个口径。
+    public var languageProvider: (@MainActor () -> AppLanguage) = { .simplifiedChinese }
+
     /// 正在进行的下载：`WKDownload` 的完成 / 失败回调里拿不到文件名与落盘位置，
     /// 得在"选目标"那一步自己记下来（这也是唯一知道目标的时刻）。
     private var downloadTargets: [ObjectIdentifier: (filename: String, url: URL)] = [:]
@@ -127,7 +134,8 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
             page: page,
             to: url,
             origin: origin,
-            isUserInitiated: isUserInitiated
+            isUserInitiated: isUserInitiated,
+            language: languageProvider()
         )
         page = transition.page
         publish()
@@ -207,7 +215,8 @@ extension WebKitBrowserEngine: WKNavigationDelegate {
                 page: page,
                 to: url,
                 origin: origin,
-                isUserInitiated: Self.isUserInitiated(navigationAction.navigationType)
+                isUserInitiated: Self.isUserInitiated(navigationAction.navigationType),
+                language: languageProvider()
             )
             page = transition.page
             publish()
@@ -226,7 +235,8 @@ extension WebKitBrowserEngine: WKNavigationDelegate {
             page: page,
             to: url,
             origin: origin,
-            isUserInitiated: userInitiated
+            isUserInitiated: userInitiated,
+            language: languageProvider()
         )
         page = transition.page
         publish()
