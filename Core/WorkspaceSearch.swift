@@ -46,8 +46,8 @@ public enum WorkspaceSearch {
 
     /// 在工作区内按文件名递归搜索。
     ///
-    /// 匹配规则：**大小写与变音符号不敏感的子串匹配**（`localizedCaseInsensitiveContains`）——
-    /// 与访达一致，免得用户记不住大小写就搜不到。
+    /// 匹配规则：**大小写与变音符号不敏感的子串匹配** —— 走引擎里那个**唯一谓词**
+    /// （`matches(_:normalizedQuery:)`，与内容搜索同源），免得用户记不住大小写就搜不到。
     public static func findFileNames(
         in root: URL,
         query: String,
@@ -56,12 +56,12 @@ public enum WorkspaceSearch {
         ignored: Set<String> = WorkspaceTree.defaultIgnored,
         fileManager: FileManager = .default
     ) -> Result {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, limit > 0, maxDepth >= 0 else {
+        let needle = normalize(query: query)
+        guard !needle.isEmpty, limit > 0, maxDepth >= 0 else {
             return Result(entries: [], isTruncated: false)
         }
 
-        var matches: [WorkspaceEntry] = []
+        var found: [WorkspaceEntry] = []
         var truncated = false
         var queue: [(url: URL, depth: Int)] = [(root, 0)]
 
@@ -79,19 +79,208 @@ public enum WorkspaceSearch {
                 case .directory:
                     queue.append((directory.appendingPathComponent(entry.name), depth + 1))
                 case .file:
-                    if entry.name.localizedCaseInsensitiveContains(trimmed) {
-                        if matches.count >= limit {
+                    if matches(entry.name, normalizedQuery: needle) {
+                        if found.count >= limit {
                             truncated = true
-                            return Result(entries: matches, isTruncated: true)
+                            return Result(entries: found, isTruncated: true)
                         }
-                        matches.append(entry)
+                        found.append(entry)
                     }
                 }
             }
         }
 
         return Result(
-            entries: matches.sorted { $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending },
+            entries: found.sorted { $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending },
+            isTruncated: truncated
+        )
+    }
+
+    // MARK: - 内容检索（FR-EDIT-44 / FR-EDIT-42 共用的一套引擎）
+
+    /// 匹配谓词 —— **唯一出处**。
+    ///
+    /// 两条纪律：
+    ///   1. 文件名搜索与内容搜索**必须走同一个谓词**（大小写与变音符号不敏感的子串）；
+    ///      界面侧（`App/`）不许另写一套 `contains` —— 否则「同一个词在文件名里搜得到、
+    ///      在内容里搜不到」这类分歧迟早出现，而且是静默的。
+    ///   2. 归一化只此一处（`precomposedStringWithCanonicalMapping`），免得两处各归一一次。
+    static func matches(_ text: String, normalizedQuery query: String) -> Bool {
+        guard !query.isEmpty else { return false }
+        return text.precomposedStringWithCanonicalMapping
+            .range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+
+    /// 把查询词归一成比较用的形状（与 `matches` 同源）。
+    public static func normalize(query: String) -> String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
+            .precomposedStringWithCanonicalMapping
+            .lowercased()
+    }
+
+    // MARK: - 内容检索的产物（FR-EDIT-44 标头搜索框 / FR-EDIT-42 跨文件搜索共用）
+
+    /// 一条内容命中 = **某个文件的某一行**。
+    public struct ContentHit: Equatable, Sendable {
+        public let entry: WorkspaceEntry
+        /// 行号，**1 起**（与编辑器行号列同口径）。
+        public let line: Int
+        /// 该行原文裁剪后的摘要 —— **不改写原文**（不替换、不美化）。
+        public let snippet: String
+        public init(entry: WorkspaceEntry, line: Int, snippet: String) {
+            self.entry = entry
+            self.line = line
+            self.snippet = snippet
+        }
+    }
+
+    /// 一个文件里的命中组（界面按文件分组渲染）。
+    public struct ContentGroup: Equatable, Sendable, Identifiable {
+        public let entry: WorkspaceEntry
+        public let hits: [ContentHit]
+        public var id: String { entry.relativePath }
+        public init(entry: WorkspaceEntry, hits: [ContentHit]) {
+            self.entry = entry
+            self.hits = hits
+        }
+    }
+
+    /// **跳过报告** —— 跳过 ≠ 通过：二进制 / 超大 / 读不了的文件各记一笔，界面要看得见。
+    public struct SkipReport: Equatable, Sendable {
+        public var binary: Int
+        public var tooLarge: Int
+        public var unreadable: Int
+        public var total: Int { binary + tooLarge + unreadable }
+        public var isEmpty: Bool { total == 0 }
+        public init(binary: Int = 0, tooLarge: Int = 0, unreadable: Int = 0) {
+            self.binary = binary
+            self.tooLarge = tooLarge
+            self.unreadable = unreadable
+        }
+    }
+
+    /// 内容检索结果。
+    public struct ContentResult: Equatable, Sendable {
+        public var groups: [ContentGroup]
+        public var skips: SkipReport
+        /// 真正读了内容的文件数（含读了但没命中的）。
+        public var scannedFiles: Int
+        /// 命中总数到达上限而提前停止（界面应如实提示）。
+        public var isTruncated: Bool
+        public var hitCount: Int { groups.reduce(0) { $0 + $1.hits.count } }
+        public init(groups: [ContentGroup] = [], skips: SkipReport = SkipReport(),
+                    scannedFiles: Int = 0, isTruncated: Bool = false) {
+            self.groups = groups
+            self.skips = skips
+            self.scannedFiles = scannedFiles
+            self.isTruncated = isTruncated
+        }
+        public static let empty = ContentResult()
+    }
+
+    // MARK: - 内容检索
+
+    /// 单文件大小上限（超过就**跳过并报数**，不假装搜过）。
+    public static let defaultMaxFileSize = 2 * 1024 * 1024
+    /// 单个文件最多记多少条命中（免得一个文件把整份结果吃光）。
+    public static let defaultPerFileLimit = 20
+    /// 摘要长度上限（超出截断加省略号 —— **原文一个字不改**）。
+    public static let defaultSnippetLimit = 200
+    static let binaryProbeBytes = 8192
+
+    /// 按行切分：`\r\n` / `\n` / `\r` 三种终止符都认（与 `Core/CodeLines` 同口径）。
+    static func splitLines(_ text: String) -> [String] {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .components(separatedBy: "\n")
+    }
+
+    /// 解码成文本；**解不出来 = 二进制**（前 8 KiB 含 NUL 也算）。
+    static func decodeText(_ data: Data) -> String? {
+        if data.prefix(binaryProbeBytes).contains(0) { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// 上下文摘要：去掉首尾空白，超长截断加 `…`。
+    static func snippet(_ line: String, limit: Int = defaultSnippetLimit) -> String {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count > limit else { return trimmed }
+        return String(trimmed.prefix(limit)) + "…"
+    }
+
+    /// 在工作区内**按内容**检索（`FR-EDIT-44` 标头搜索框 / `FR-EDIT-42` 跨文件搜索共用）。
+    ///
+    /// 与 `findFileNames` 同骨架、**同一个匹配谓词**（有界递归 / 不跟随符号链接 /
+    /// 尊重忽略名单 / 如实报数），差别只在「读内容并按行命中」。
+    ///
+    /// 跳过三条路各自计数，**跳过 ≠ 通过**：二进制（解不出 UTF-8 或含 NUL）/
+    /// 超过 `maxFileSize` / 读不了。命中按文件分组，组内按行号升序。
+    public static func findContents(
+        in root: URL,
+        query: String,
+        limit: Int = defaultResultLimit,
+        perFileLimit: Int = defaultPerFileLimit,
+        maxDepth: Int = defaultMaxDepth,
+        maxFileSize: Int = defaultMaxFileSize,
+        snippetLimit: Int = defaultSnippetLimit,
+        ignored: Set<String> = WorkspaceTree.defaultIgnored,
+        fileManager: FileManager = .default
+    ) -> ContentResult {
+        let needle = normalize(query: query)
+        guard !needle.isEmpty, limit > 0, perFileLimit > 0, maxDepth >= 0, maxFileSize > 0 else {
+            return .empty
+        }
+        var groups: [ContentGroup] = []
+        var skips = SkipReport()
+        var scanned = 0
+        var total = 0
+        var truncated = false
+        var queue: [(url: URL, depth: Int)] = [(root, 0)]
+
+        while !queue.isEmpty && !truncated {
+            let (directory, depth) = queue.removeFirst()
+            guard depth < maxDepth else { continue }
+            guard let children = try? WorkspaceTree.children(
+                of: directory, relativeTo: root, showHidden: false, ignored: ignored, fileManager: fileManager
+            ) else { continue }
+
+            for entry in children {
+                switch entry.kind {
+                case .symlink:
+                    continue                      // 与文件名搜索同：不跟随、也不报告
+                case .directory:
+                    queue.append((directory.appendingPathComponent(entry.name), depth + 1))
+                case .file:
+                    let url = directory.appendingPathComponent(entry.name)
+                    let attributes = try? fileManager.attributesOfItem(atPath: url.path)
+                    let size = (attributes?[.size] as? NSNumber)?.intValue ?? 0
+                    if size > maxFileSize { skips.tooLarge += 1; continue }
+                    guard let data = try? Data(contentsOf: url) else { skips.unreadable += 1; continue }
+                    guard let text = decodeText(data) else { skips.binary += 1; continue }
+                    scanned += 1
+
+                    var fileHits: [ContentHit] = []
+                    for (index, raw) in splitLines(text).enumerated() {
+                        guard matches(raw, normalizedQuery: needle) else { continue }
+                        if total >= limit { truncated = true; break }
+                        fileHits.append(ContentHit(
+                            entry: entry, line: index + 1, snippet: snippet(raw, limit: snippetLimit)
+                        ))
+                        total += 1
+                        if fileHits.count >= perFileLimit { break }
+                    }
+                    if !fileHits.isEmpty { groups.append(ContentGroup(entry: entry, hits: fileHits)) }
+                    if truncated { break }
+                }
+            }
+        }
+
+        return ContentResult(
+            groups: groups.sorted {
+                $0.entry.relativePath.localizedCaseInsensitiveCompare($1.entry.relativePath) == .orderedAscending
+            },
+            skips: skips,
+            scannedFiles: scanned,
             isTruncated: truncated
         )
     }

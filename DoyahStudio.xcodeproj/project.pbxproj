@@ -277,6 +277,7 @@
 		89D33D75F714B622E3A329AC /* SQLParameters.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FB9C39737F91778E735BC2 /* SQLParameters.swift */; };
 		8A676BE0E6D0458C8573DD4E /* WorkspaceSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A53C963C536B74AFE8C649 /* WorkspaceSearch.swift */; };
 		8A920C5FAAABA91EF5A844EB /* CodeLanguageDefinitions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FB172BFC556B86E9C3E26E5 /* CodeLanguageDefinitions.swift */; };
+		8AFCBF8FFBEB58032BC2A107 /* WorkspaceSearchContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E42E50D3B719A3EC3F1B0CB1 /* WorkspaceSearchContentTests.swift */; };
 		8BBE7C33486566F553D1AECD /* CodeLines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F8AD5BFE8B80A1E7A16885D /* CodeLines.swift */; };
 		8D22714E8679C5E5A52A23AA /* ActivityBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEC292F264A082306792978B /* ActivityBarView.swift */; };
 		8DEB18EC23F5825C558E926C /* MCPToolCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9EAFC5C49C8013AFBD5936 /* MCPToolCatalog.swift */; };
@@ -1000,6 +1001,7 @@
 		E1A74852EF0FFDED1B310D28 /* SQLFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLFormatterTests.swift; sourceTree = "<group>"; };
 		E3B2BFDE87EEC5EF10E125A7 /* KeychainSecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainSecretStore.swift; sourceTree = "<group>"; };
 		E412E54A42AAF844BF5215F5 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		E42E50D3B719A3EC3F1B0CB1 /* WorkspaceSearchContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSearchContentTests.swift; sourceTree = "<group>"; };
 		E495362E0E72132E10C3DC93 /* FontManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontManager.swift; sourceTree = "<group>"; };
 		E53DCE8EEA4A67CBF1089CFA /* PostgresCellFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostgresCellFormatter.swift; sourceTree = "<group>"; };
 		E6139E42B6D53799460D20A1 /* WorkspaceTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTab.swift; sourceTree = "<group>"; };
@@ -1329,6 +1331,7 @@
 				575338F2996C994F4AEA7E03 /* TransactionSessionTests.swift */,
 				D6BECEF718279DBD2CE05F2B /* TreeActionProvenanceConventionTests.swift */,
 				3F998F6A252B5E4E9AD29756 /* WorkspaceHistoryTests.swift */,
+				E42E50D3B719A3EC3F1B0CB1 /* WorkspaceSearchContentTests.swift */,
 				FD9874F27B81672A096337C6 /* WorkspaceTabTests.swift */,
 				C6D7E71EBADF7CD8DF8881BB /* WorkspaceTreeTests.swift */,
 				D97FE426296BDFD01620485B /* XLSXReaderTests.swift */,
@@ -2385,6 +2388,7 @@
 				E31F60153B031133017E205D /* TransactionSessionTests.swift in Sources */,
 				DB9F944F9219BC2A34B0664A /* TreeActionProvenanceConventionTests.swift in Sources */,
 				76F554299EA64A24C5078BD0 /* WorkspaceHistoryTests.swift in Sources */,
+				8AFCBF8FFBEB58032BC2A107 /* WorkspaceSearchContentTests.swift in Sources */,
 				A05C9C882FC50796FD8D2C0A /* WorkspaceTabTests.swift in Sources */,
 				27B3101291A099E2230F69D4 /* WorkspaceTreeTests.swift in Sources */,
 				3469A92EB112107D07480984 /* XLSXReaderTests.swift in Sources */,
