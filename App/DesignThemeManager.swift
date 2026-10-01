@@ -38,9 +38,9 @@ final class DesignThemeManager: ObservableObject {
         // **不在这里回头写强调色**：老用户可能存过一个「深海青」，若启动时被主题覆盖，
         // 就成了"打开一次就悄悄改了偏好"。主题只在**用户选了它**的那一刻同步配套强调色。
         selected = DesignTheme.resolve(id: UserDefaults.standard.string(forKey: DesignTheme.Storage.key))
-        // 皮肤开关：**缺省开**（用户明确要它）。用 `object(forKey:)` 而不是 `bool(forKey:)` ——
-        // 后者对"从未设过"也返回 false，会让默认值变成关（这正是"新装看不到皮肤"的经典坑）。
-        isNebulaSkinEnabled = UserDefaults.standard.object(forKey: NebulaSkinStorage.key) as? Bool ?? true
+        // 皮肤开关：键 / 缺省值 / 读法**都住在 Core**（`NebulaSkinPreference`）——
+        // 规则只有一处，`Tests/NebulaSkinPreferenceTests.swift` 能直接跑它。
+        isNebulaSkinEnabled = NebulaSkinPreference.isEnabled(in: .standard)
     }
 
     /// 进入宿主语境（快照用）：返回进入前的那一个，调用方负责还原。
@@ -79,9 +79,10 @@ final class DesignThemeManager: ObservableObject {
     /// **只对星空紫生效**：别的主题没有"星云"语义，偷偷加星星是走样（见 `NebulaBackground`）。
     @Published private(set) var isNebulaSkinEnabled: Bool
 
-    /// 皮肤开关的持久化键（与 `DesignTheme.Storage.key` 同一前缀，便于一起清理）。
+    /// 皮肤开关的持久化键（**唯一定义在 Core**：`NebulaSkinPreference.key`）——
+    /// 这里刻意不再写第二份字面量：同一个键写两处，改一处就是"老用户的选择静默失效"。
     enum NebulaSkinStorage {
-        static let key = "ui.nebulaSkin"
+        static let key = NebulaSkinPreference.key
     }
 
     /// 开关皮肤。**只在星空紫下才有视觉差别**，但开关本身对所有主题都记住 ——

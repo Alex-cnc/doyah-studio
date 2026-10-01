@@ -112,7 +112,9 @@
 		31E6CAAF05BFD5B602DE6B86 /* LicensePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AD0B7353ADAAB4A7427E1A5 /* LicensePresentation.swift */; };
 		32DCD76AB87CB37E41DFF6FE /* ConnectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F0A06A4CC779CE258A5B86 /* ConnectionStore.swift */; };
 		32F70A82D45C27C4D016C777 /* PrivilegeProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1053065542E38D0A6B38E9BE /* PrivilegeProbe.swift */; };
+		343477B7C2D678E4BCD3D9D1 /* NebulaSkinPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34F1AACEE158012CB85DFFF7 /* NebulaSkinPreference.swift */; };
 		3469A92EB112107D07480984 /* XLSXReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D97FE426296BDFD01620485B /* XLSXReaderTests.swift */; };
+		357743B8FB75746D8F4834B1 /* NebulaSkinPreferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B45074022BE0285075B1C95B /* NebulaSkinPreferenceTests.swift */; };
 		3602B608B9672763888D0768 /* PostgresService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB2565DCD6CF06E98BE41BD1 /* PostgresService.swift */; };
 		3692019A91785B5F3B26CA06 /* ActivityBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F271DD4A5DF8A068DDDEDDEA /* ActivityBar.swift */; };
 		373CEC7381F237D9BD585065 /* NoteBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00ED45C4996A9D29A9FE34CA /* NoteBody.swift */; };
@@ -685,6 +687,7 @@
 		329DD7E4A19F476B0DB7027B /* AgentSQLGeneratorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSQLGeneratorTests.swift; sourceTree = "<group>"; };
 		332109CDF94931D18000652E /* DelimitedTextReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelimitedTextReader.swift; sourceTree = "<group>"; };
 		33452CC29410B46C886FE298 /* EgressLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EgressLogTests.swift; sourceTree = "<group>"; };
+		34F1AACEE158012CB85DFFF7 /* NebulaSkinPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NebulaSkinPreference.swift; sourceTree = "<group>"; };
 		351BA5281B85C8B96236BA42 /* MultiCursorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiCursorTests.swift; sourceTree = "<group>"; };
 		36E44C47B40FBC90C620CCA8 /* WorkspaceTabStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTabStrip.swift; sourceTree = "<group>"; };
 		3706990CE120EAC85F014A6B /* WebKitBrowserEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebKitBrowserEngineTests.swift; sourceTree = "<group>"; };
@@ -902,6 +905,7 @@
 		B3F5C57F60F0F1E1E2C89F7C /* XLSXWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLSXWriter.swift; sourceTree = "<group>"; };
 		B42BA6FB2BD86E07D258CBAA /* WorkspaceAreaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAreaView.swift; sourceTree = "<group>"; };
 		B42BE321F5914814D5B12837 /* MemoryGeneralStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryGeneralStore.swift; sourceTree = "<group>"; };
+		B45074022BE0285075B1C95B /* NebulaSkinPreferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NebulaSkinPreferenceTests.swift; sourceTree = "<group>"; };
 		B498721B8CA05C6D5D9A022F /* BrowserDownload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserDownload.swift; sourceTree = "<group>"; };
 		B4FF13BFC70E02614E9A4A74 /* MainMenuLocalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainMenuLocalizer.swift; sourceTree = "<group>"; };
 		B5D1A29013983F0D25EA0474 /* TabNumberGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNumberGenerator.swift; sourceTree = "<group>"; };
@@ -1253,6 +1257,7 @@
 				351BA5281B85C8B96236BA42 /* MultiCursorTests.swift */,
 				8CC0B057BD7792B8E86FB2EF /* MySQLDialectTests.swift */,
 				119D35D8E7ABF312C37A0CC6 /* MySQLWordingTests.swift */,
+				B45074022BE0285075B1C95B /* NebulaSkinPreferenceTests.swift */,
 				DA5F1CC03A72965275949B56 /* NoteBodyTests.swift */,
 				FBE5308316B042A4E78A4DF1 /* NoteDataBoundaryTests.swift */,
 				692776AC49B8A11884733C89 /* NoteLibraryTests.swift */,
@@ -1450,6 +1455,7 @@
 				B7C42FB59DE835B483DA20B8 /* MySQLDialect.swift */,
 				86D957C3BF5E7A3ABAFF0FC6 /* MySQLService.swift */,
 				F1BE3A0C02CBC3285787A43B /* MySQLWording.swift */,
+				34F1AACEE158012CB85DFFF7 /* NebulaSkinPreference.swift */,
 				22647DC76824AA9A607B5A44 /* Note.swift */,
 				00ED45C4996A9D29A9FE34CA /* NoteBody.swift */,
 				F678809FE7DED8258F88A7D7 /* ObjectDDL.swift */,
@@ -2132,6 +2138,7 @@
 				0394AD1D5C8AD1315DD6958A /* MySQLDialect.swift in Sources */,
 				472A9846B2F6E8DE1A2A87D0 /* MySQLService.swift in Sources */,
 				5590730BA56F66FA0553C934 /* MySQLWording.swift in Sources */,
+				343477B7C2D678E4BCD3D9D1 /* NebulaSkinPreference.swift in Sources */,
 				2D3062903DFDCCD53C70C192 /* Note.swift in Sources */,
 				373CEC7381F237D9BD585065 /* NoteBody.swift in Sources */,
 				7015033916AA8FA3B5DB2DB0 /* NoteDatabase.swift in Sources */,
@@ -2306,6 +2313,7 @@
 				CAEECB45886E3837C88485F4 /* MultiCursorTests.swift in Sources */,
 				7E2320D6F5B88155F07984A0 /* MySQLDialectTests.swift in Sources */,
 				4EF4A97095405676B47F8D75 /* MySQLWordingTests.swift in Sources */,
+				357743B8FB75746D8F4834B1 /* NebulaSkinPreferenceTests.swift in Sources */,
 				2BD93F294EDBDA96CC9924A1 /* NoteBodyTests.swift in Sources */,
 				B1EA42C36321C0335ABD4F07 /* NoteDataBoundaryTests.swift in Sources */,
 				0EE60532EA565EC6035C8E13 /* NoteLibraryTests.swift in Sources */,

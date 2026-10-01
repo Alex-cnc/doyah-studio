@@ -53,11 +53,32 @@ G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也
    语言那条路定过这个口径），而 `select(_:)` **必须**写盘。判点只看**那一段源码切片**，不看整文件
    （否则"别处写过一句"就顶数 —— 第 77 轮自检例 ⑨/⑮ 两次栽在这上面）。
 
-判据自己的证据：`--self-test` **25 例**（24 个红/绿成对 + 末例核对真仓库十三份文件逐字节未变；夹具一律在临时目录）。
+判据 I（**星空紫「星云皮肤」的存在 / 开关 / 三层表面**，队列 `L-155`，第 154 轮）
+------------------------------------------------------------------------------------
+`L-153` 把星云皮肤落进产品时**如实登记了**一处判据缺口：皮肤"真的画了 / 关了真回纯色 /
+别的主题真的不画"三件事当时**没有任何门禁在看**，现有的判据只证了"编译进包 / 无裸色值 /
+台账对齐"。判据 I 补的就是"存在、开关与三层表面"这一半（另一半是**像素**判据，
+在 `TestsUISnapshot/NebulaSkinProbeTests.swift`；静态与像素的分工写在那个文件头）：
+
+  ① **规则只有一处出处**：键 / 缺省值 / 读法 / 生效条件全在 `Core/NebulaSkinPreference.swift`
+     —— 键的字面量在 `Core`+`App`+`Platform`+`CLI` 里**只许出现一次**（写两处 ⇒ 改一处就让
+     老用户的开关选择静默失效）；读法逐字必须是 `object(forKey:) as? Bool ?? 缺省`
+     （`bool(forKey:)` 对"从未设过"返回 `false` ⇒ 缺省值被静默改成关）；
+  ② **生效条件 = 星空紫 且 开关开**，且 `NebulaBackground.body` **只许调它、不许再写一遍**
+     （切片里出现 `.stardust` 即红 —— 两处口径必然分叉）；
+  ③ **三层表面（侧栏 / 内容区 / 下方面板）各自恰有一处落点**：少了那一层没皮肤、
+     多了那一层重复铺（观感与性能都是问题）；
+  ④ **界面那个开关接到唯一写入口**（`designTheme.setNebulaSkinEnabled`，绑本地 `@State` 就落不了盘），
+     且**只在星空紫下出现**（别的主题下摆一个点了没反应的开关是把用户绕晕）；
+  ⑤ 两族的落点都在位：像素探针（三张主角 + 逐像素比对口子 + 阈值出处）**必须挂进**
+     `Scripts/run-manual-verification-probes.sh` 的 FILTER（AGENT-SPEC §9 第 104 条：不挂进
+     FILTER 的这一族一个都跑不到），以及 Core 侧规则单测的几条点名用例。
+
+判据自己的证据：`--self-test` **35 例**（34 个红/绿成对 + 末例核对真仓库二十份文件逐字节未变；夹具一律在临时目录）。
 
 用法：
     python3 Scripts/check-design-themes.py              # 校验（闭环第 6 项）
-    python3 Scripts/check-design-themes.py --self-test  # 门禁自己的证据（25 例）
+    python3 Scripts/check-design-themes.py --self-test  # 门禁自己的证据（35 例）
 """
 
 from __future__ import annotations
@@ -118,6 +139,47 @@ AXIS_TEST_CASES = {
     "testStorageKeysAreSeparateAndNamespaced": "两轴落盘键分开",
 }
 MIN_AXIS_SITES = 30   # 判据 H：判点处数下限（空跑防护：扫描面被削即红）
+
+# ---- 判据 I（星云皮肤：存在 / 开关 / 三层表面；队列 L-155）的台账（每条都带理由）----------------
+NEBULA_SWIFT = "App/Views/NebulaBackground.swift"          # 绘制侧（Canvas + 三层强度）
+NEBULA_PREF_SWIFT = "Core/NebulaSkinPreference.swift"      # 规则的唯一出处（键 / 缺省 / 读法 / 生效条件）
+MAIN_WINDOW_SWIFT = "App/Views/MainWindow.swift"           # 侧栏与内容区两层落点的所在
+LOWER_PANE_SWIFT = "App/Views/LowerPaneView.swift"         # 下方面板那一层落点的所在
+NEBULA_PROBE_SWIFT = "TestsUISnapshot/NebulaSkinProbeTests.swift"   # 像素级证据（三张主角 + 对照件）
+NEBULA_TESTS_SWIFT = "Tests/NebulaSkinPreferenceTests.swift"        # 规则的单测（默认开 / 重开仍关）
+PROBE_RUNNER_SH = "Scripts/run-manual-verification-probes.sh"       # 探针的跑法（FILTER 是唯一入口）
+NEBULA_TOGGLE_KEY = "ui.nebulaSkin"                        # 落盘键（键名就是契约）
+NEBULA_KEY_DECL = f'public static let key = "{NEBULA_TOGGLE_KEY}"'
+# 读法的**实体**（逐字）：`bool(forKey:)` 对"从未设过"返回 false ⇒ 缺省值被静默改成关。
+NEBULA_READ_BODY = "defaults.object(forKey: key) as? Bool ?? defaultEnabled"
+# 生效条件的**实体**（逐字）：两个条件缺一不可（少前半 = 别的主题也长星星；少后半 = 关不掉）。
+NEBULA_EFFECT_BODY = "theme == .stardust && isSkinEnabled"
+# 绘制侧只许**调用**那一条规则（判据 I ② 认的是这串标记）。
+NEBULA_EFFECT_CALL = "NebulaSkinPreference.paintsNebula("
+NEBULA_DEFAULT_DECL = "public static let defaultEnabled = true"
+# 三层表面各自的落点（层名 → 应当出现的文件；字面量逐字）。
+# 少了那一层没皮肤；多了那一层重复铺（先铺表面再叠星云，铺两遍是两倍的绘制）。
+NEBULA_LAYER_SITES = {
+    "侧栏": (MAIN_WINDOW_SWIFT, "NebulaSurface(surface: .sidebar, layer: .sidebar)"),
+    "内容区": (MAIN_WINDOW_SWIFT, "NebulaBackground(layer: .content)"),
+    "下方面板": (LOWER_PANE_SWIFT, "NebulaBackground(layer: .panel)"),
+}
+# 界面入口（外观面板）：绑唯一写入口 + 只在星空紫下露面。
+NEBULA_SHEET_BINDING = "designTheme.setNebulaSkinEnabled($0)"
+NEBULA_SHEET_CONDITION = "if designTheme.theme == .stardust {"
+# 像素探针里必须在场的标记（三张主角 + 比对口子 + 阈值出处）。
+NEBULA_PROBE_MARKERS = (
+    "nebula-skin-", "stardust-on", "stardust-off", "techblue-on",
+    "UISnapshot.differingPixels", "minimumPaintedPixels",
+)
+# 规则单测里必须是命名的用例（少一条即红）—— 判据只认"这一条存在"，跑绿由 `swift test` 保证。
+NEBULA_TEST_CASES = {
+    "testNeverSetMeansEnabled": "从未设过 ⇒ 开（新装直接看到皮肤）",
+    "testReadRuleDiffersFromBoolForKeyOnAFreshStore": "读法不许退回 bool(forKey:)",
+    "testOffIsPersistedAndSurvivesReopen": "关掉之后重开仍是关",
+    "testPaintsNebulaTruthTableOverEveryThemeAndSwitchState": "生效条件真值表（4 主题 × 2 态）",
+}
+MIN_NEBULA_SITES = 22   # 判据 I：判点处数下限（空跑防护）
 
 # ---- 台账式常量（每条都带理由；理由为空即红）-------------------------------------------------
 
@@ -273,6 +335,17 @@ def palette_for(root: pathlib.Path, theme_id: str) -> dict | None:
 
 def theme_ids_in_source(root: pathlib.Path) -> list[str]:
     return [ident for _, ident in THEME_CASE.findall(theme_swift_text(root))]
+
+
+def _strip_comments(text: str) -> str:
+    """剥掉 `//` 行注释（判"这段源码里写死了什么"时，注释里提到它不算）。
+
+    为什么必须有这一步：`NebulaBackground` 的说明注释里**原文就写着**
+    「在这里再写一遍 `== .stardust && …` 只会让两处慢慢分叉」—— 不剥注释，
+    判据会把这句**说明文字**当成"第二处实现"而误判（第 154 轮实测）。
+    本仓的 Swift 源码不用块注释 `/* */`，所以只处理行注释。
+    """
+    return "\n".join(line.split("//", 1)[0] for line in text.splitlines())
 
 
 def _type_slice(text: str, marker: str, closing: str = "\n}") -> str | None:
@@ -817,6 +890,163 @@ def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
                                                   f" —— 扫描面被削过，不许通过"))
     return issues, sites
 
+# ---------------------------------------------------------------- 判据 I
+
+def _swift_sources(root: pathlib.Path) -> list[pathlib.Path]:
+    """判据 I 的扫描面：`Core` / `App` / `Platform` / `CLI` 里的 `.swift`（判"键字面量只许一处"）。"""
+    found: list[pathlib.Path] = []
+    for folder in ("Core", "App", "Platform", "CLI"):
+        found += sorted((root / folder).rglob("*.swift"))
+    return found
+
+
+def check_nebula_skin(root: pathlib.Path) -> tuple[list[Issue], int]:
+    """星空紫「星云皮肤」的存在 / 开关 / 三层表面（队列 `L-155`）。
+
+    与像素探针的分工：这里判**结构上的事实**（规则在哪、条件写没写对、落点在不在、开关接没接上、
+    探针有没有被挂进跑法）；「真的画了 / 关了真回纯色 / 别的主题不画」由
+    `TestsUISnapshot/NebulaSkinProbeTests.swift` 逐像素判。两条都不能省：
+    静态判据看不见"画出来是空的"，像素判据看不见"还有第二处条件在别处等着分叉"。
+    """
+    issues: list[Issue] = []
+    sites = 0
+
+    # ① 规则的唯一出处：键 / 缺省值 / 读法 / 生效条件
+    pref_path = root / NEBULA_PREF_SWIFT
+    if not pref_path.exists():
+        return [Issue(NEBULA_PREF_SWIFT, "皮肤偏好的规则不存在 —— 判据 I 的前提没了"
+                                         "（键 / 缺省值 / 读法 / 生效条件都应当只在这里写一次）")], sites
+    pref = _strip_comments(pref_path.read_text(encoding="utf-8"))
+
+    sites += 1
+    if NEBULA_KEY_DECL not in pref:
+        issues.append(Issue(NEBULA_PREF_SWIFT, f"落盘键不是台账登记的那一个（缺 `{NEBULA_KEY_DECL}`）"
+                                              f" —— 改键 = 老用户的开关选择静默失效"))
+    sites += 1
+    if NEBULA_DEFAULT_DECL not in pref:
+        issues.append(Issue(NEBULA_PREF_SWIFT, "缺省值不是「开」"
+                                              " —— 需求提出者 2026-10-01 要的就是新装直接看到皮肤"))
+    sites += 1
+    if NEBULA_READ_BODY not in pref:
+        issues.append(Issue(NEBULA_PREF_SWIFT,
+                            f"读法不是 `{NEBULA_READ_BODY}` —— 退回 `bool(forKey:)` 会把缺省从「开」改成「关」"
+                            f"（「新装看不到皮肤」的经典坑）"))
+    effect = _type_slice(pref, "func paintsNebula(", closing="\n    }") or ""
+    sites += 1
+    if NEBULA_EFFECT_BODY not in effect:
+        issues.append(Issue(NEBULA_PREF_SWIFT,
+                            f"生效条件不是「主题是星空紫 **且** 开关开」（缺 `{NEBULA_EFFECT_BODY}`）"
+                            f" —— 少前半是「别的主题也长星星」，少后半是「关不掉」"))
+
+    # ② 键字面量全仓**只许一处**（写两处 ⇒ 改一处就让老用户的选择失效，而界面上毫无症状）
+    literal = re.compile(rf'"{re.escape(NEBULA_TOGGLE_KEY)}"')
+    holders = [
+        path.relative_to(root).as_posix()
+        for path in _swift_sources(root)
+        if literal.search(_strip_comments(path.read_text(encoding="utf-8")))
+    ]
+    sites += 1
+    if holders != [NEBULA_PREF_SWIFT]:
+        issues.append(Issue(NEBULA_PREF_SWIFT,
+                            f"`{NEBULA_TOGGLE_KEY}` 这个**字面量**出现在 {holders or '空'}"
+                            f"（应当只有 `{NEBULA_PREF_SWIFT}` 一处）"
+                            f" —— 同一个键写两处，改一处就让老用户的选择静默失效"))
+
+    # ③ 绘制侧只许调用那一条规则，不许自己再写一遍主题判断
+    nebula_path = root / NEBULA_SWIFT
+    sites += 1
+    if not nebula_path.exists():
+        issues.append(Issue(NEBULA_SWIFT, "星云皮肤的绘制视图不存在 —— 三层表面就没人铺了"))
+    else:
+        nebula = _strip_comments(nebula_path.read_text(encoding="utf-8"))
+        body = _type_slice(nebula, "var body: some View {", closing="\n    }") or ""
+        sites += 1
+        if not body:
+            issues.append(Issue(NEBULA_SWIFT, "取不到绘制视图的 `body` 切片 —— 判据 I 的前提没了"))
+        sites += 1
+        if NEBULA_EFFECT_CALL not in body:
+            issues.append(Issue(NEBULA_SWIFT,
+                                f"绘制视图的生效条件没有走唯一出处（缺 `{NEBULA_EFFECT_CALL}`）"
+                                f" —— 条件写在两处，迟早分叉"))
+        sites += 1
+        if ".stardust" in body:
+            issues.append(Issue(NEBULA_SWIFT,
+                                "绘制视图的 `body` 里又写了一遍主题判断（出现 `.stardust`）"
+                                " —— 生效条件只许有一处出处（判据 I ②）"))
+
+    # ④ 三层表面各自**恰有一处**落点
+    app_files = sorted((root / "App").rglob("*.swift"))
+    for label, (expected_file, marker) in NEBULA_LAYER_SITES.items():
+        hits: list[str] = []
+        for path in app_files:
+            count = _strip_comments(path.read_text(encoding="utf-8")).count(marker)
+            if count:
+                hits += [path.relative_to(root).as_posix()] * count
+        sites += 1
+        if hits != [expected_file]:
+            issues.append(Issue(expected_file,
+                                f"{label} 那一层的星云落点是 {hits or '没有'}（应当**恰有一处**，在 `{expected_file}`）"
+                                f" —— 少了那层没皮肤、多了那层重复铺"))
+
+    # ⑤ 界面那个开关：绑唯一写入口 + 只在星空紫下露面
+    sheet_path = root / APPEARANCE_SWIFT
+    sites += 1
+    if not sheet_path.exists():
+        issues.append(Issue(APPEARANCE_SWIFT, "外观面板不存在 —— 皮肤开关没有入口"))
+    else:
+        sheet = _strip_comments(sheet_path.read_text(encoding="utf-8"))
+        sites += 1
+        if NEBULA_SHEET_BINDING not in sheet:
+            issues.append(Issue(APPEARANCE_SWIFT,
+                                f"皮肤开关没有接到唯一写入口（缺 `{NEBULA_SHEET_BINDING}`）"
+                                f" —— 绑到本地 `@State` 上就落不了盘（重启又打开）"))
+        sites += 1
+        if NEBULA_SHEET_CONDITION not in sheet:
+            issues.append(Issue(APPEARANCE_SWIFT,
+                                f"皮肤开关不再只在星空紫下出现（缺 `{NEBULA_SHEET_CONDITION}`）"
+                                f" —— 别的主题下摆一个点了没反应的开关是把用户绕晕"))
+
+    # ⑥ 规则的单测（默认开 / 读法 / 重开仍关 / 真值表）——"重开"这一态 App 侧做不到，只能在 Core
+    tests_path = root / NEBULA_TESTS_SWIFT
+    sites += 1
+    if not tests_path.exists():
+        issues.append(Issue(NEBULA_TESTS_SWIFT, "规则的单测不存在"
+                                               " —— 「默认开 / 重开仍关」这两态会没有机器判据"))
+    else:
+        tests = _strip_comments(tests_path.read_text(encoding="utf-8"))
+        for name, why in NEBULA_TEST_CASES.items():
+            sites += 1
+            if f"func {name}(" not in tests:
+                issues.append(Issue(NEBULA_TESTS_SWIFT, f"少了这条单测：`{name}`（{why}）"))
+
+    # ⑦ 像素探针必须在场，且**挂进过滤清单**（不挂进 FILTER 的这一族一个都跑不到 —— §9 第 104 条）
+    probe_path = root / NEBULA_PROBE_SWIFT
+    sites += 1
+    if not probe_path.exists():
+        issues.append(Issue(NEBULA_PROBE_SWIFT,
+                            "像素探针不存在 —— 「真的画了 / 关了真回纯色 / 别的主题不画」又只能靠人读图"))
+    else:
+        probe = _strip_comments(probe_path.read_text(encoding="utf-8"))
+        for marker in NEBULA_PROBE_MARKERS:
+            sites += 1
+            if marker not in probe:
+                issues.append(Issue(NEBULA_PROBE_SWIFT, f"像素探针里缺 `{marker}`"))
+        runner_path = root / PROBE_RUNNER_SH
+        sites += 1
+        if not runner_path.exists():
+            issues.append(Issue(PROBE_RUNNER_SH, "探针跑法脚本不存在 —— 这一族没有入口"))
+        elif "NebulaSkinProbeTests" not in _strip_comments(runner_path.read_text(encoding="utf-8")):
+            issues.append(Issue(PROBE_RUNNER_SH,
+                                "像素探针没挂进 `--filter` 的 FILTER 清单"
+                                " —— 不挂进 FILTER 的这一族一个都跑不到（AGENT-SPEC §9 第 104 条）"))
+
+    sites += 1
+    if sites < MIN_NEBULA_SITES:
+        issues.append(Issue(NEBULA_PREF_SWIFT, f"判据 I 只判了 {sites} 处（下限 {MIN_NEBULA_SITES}）"
+                                              f" —— 扫描面被削过，不许通过"))
+    return issues, sites
+
+
 # ---------------------------------------------------------------- 自检
 
 def _sha(path: pathlib.Path) -> str:
@@ -824,13 +1054,24 @@ def _sha(path: pathlib.Path) -> str:
 
 
 def _fixture(base: pathlib.Path) -> pathlib.Path:
-    """把判据要看的十三份文件复制到临时目录（夹具一律在临时目录里写坏）。"""
+    """把判据要看的文件复制到临时目录（夹具一律在临时目录里写坏）。"""
     for relative in (THEMES_SWIFT, TOKENS_SWIFT, LOCALIZATION_SWIFT, DESIGN_DOC, RELEASE_PLAN,
                      APPEARANCE_SWIFT, THEME_MANAGER_SWIFT, APPEARANCE_PREF_SWIFT, APP_STATE_SWIFT,
-                     AXES_TESTS_SWIFT, AXES_PROBE_SWIFT, SNAPSHOT_KIT_SWIFT, PANELS_TESTS_SWIFT):
+                     AXES_TESTS_SWIFT, AXES_PROBE_SWIFT, SNAPSHOT_KIT_SWIFT, PANELS_TESTS_SWIFT,
+                     NEBULA_SWIFT, NEBULA_PREF_SWIFT, MAIN_WINDOW_SWIFT, LOWER_PANE_SWIFT,
+                     NEBULA_PROBE_SWIFT, NEBULA_TESTS_SWIFT, PROBE_RUNNER_SH):
         target = base / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / relative, target)
+    # 判据 I ④ 要**扫** `App/` 下的所有 `.swift`（判"三层表面各自恰有一处落点"），
+    # 所以 `App/Views/` 里的其它视图也要一起搬进夹具 —— 只搬"判据直接点名的那几份"的话，
+    # 复制一份落点到别的视图上时夹具根本看不见（那样负例就是假绿）。
+    for path in sorted((ROOT / "App").rglob("*.swift")):
+        relative = path.relative_to(ROOT)
+        target = base / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists():
+            shutil.copy(path, target)
     return base
 
 
@@ -844,7 +1085,9 @@ def self_test() -> int:
     cases: list[tuple[str, bool, list[Issue]]] = []
     watched = (THEMES_SWIFT, TOKENS_SWIFT, LOCALIZATION_SWIFT, DESIGN_DOC, RELEASE_PLAN,
                APPEARANCE_SWIFT, THEME_MANAGER_SWIFT, APPEARANCE_PREF_SWIFT, APP_STATE_SWIFT,
-               AXES_TESTS_SWIFT, AXES_PROBE_SWIFT, SNAPSHOT_KIT_SWIFT, PANELS_TESTS_SWIFT)
+               AXES_TESTS_SWIFT, AXES_PROBE_SWIFT, SNAPSHOT_KIT_SWIFT, PANELS_TESTS_SWIFT,
+               NEBULA_SWIFT, NEBULA_PREF_SWIFT, MAIN_WINDOW_SWIFT, LOWER_PANE_SWIFT,
+               NEBULA_PROBE_SWIFT, NEBULA_TESTS_SWIFT, PROBE_RUNNER_SH)
     before = {name: _sha(ROOT / name) for name in watched}
 
     def static_issues(fixture: pathlib.Path) -> list[Issue]:
@@ -855,6 +1098,7 @@ def self_test() -> int:
         issues += check_names_and_pending(fixture)[0]
         issues += check_ui_entry(fixture)[0]
         issues += check_two_axis(fixture)[0]
+        issues += check_nebula_skin(fixture)[0]
         return issues
 
     with tempfile.TemporaryDirectory(prefix="doyah-themes-selftest-") as tmp:
@@ -1016,6 +1260,75 @@ def self_test() -> int:
                "UISnapshot.sampledRGBBROKEN(ofPNGAt: record.file")
         cases.append(("两轴：组合没到像素（红）", True, static_issues(no_pixel)))
 
+        # ⑲ 红：星云皮肤的生效条件少了一半（去掉"主题是星空紫"）
+        #      —— 少这一半 = 别的主题也长星星，而界面上看不出任何异常。
+        half_effect = _fixture(pathlib.Path(tmp) / "bad-nebula-effect-half")
+        _patch(half_effect / NEBULA_PREF_SWIFT,
+               "theme == .stardust && isSkinEnabled", "isSkinEnabled")
+        cases.append(("皮肤：生效条件少一半（红）", True, static_issues(half_effect)))
+
+        # ⑳ 红：开关的读法退回 `bool(forKey:)`（"从未设过"被读成关 ⇒ 缺省值静默改成关）
+        bool_read = _fixture(pathlib.Path(tmp) / "bad-nebula-read")
+        _patch(bool_read / NEBULA_PREF_SWIFT,
+               "defaults.object(forKey: key) as? Bool ?? defaultEnabled",
+               "defaults.bool(forKey: key)")
+        cases.append(("皮肤：读法退回 bool(forKey:)（红）", True, static_issues(bool_read)))
+
+        # ㉑ 红：键的字面量被抄了第二份（改一处就让老用户的选择静默失效）
+        duplicate_key = _fixture(pathlib.Path(tmp) / "bad-nebula-key")
+        key_file = duplicate_key / THEME_MANAGER_SWIFT
+        key_file.write_text(key_file.read_text(encoding="utf-8")
+                            + '\n// 抄一份键字面量（负例）\nlet duplicateNebulaKey = "ui.nebulaSkin"\n',
+                            encoding="utf-8")
+        cases.append(("皮肤：键字面量抄了第二份（红）", True, static_issues(duplicate_key)))
+
+        # ㉒ 红：绘制视图的 body 里又写了一遍主题判断（条件两处出处 ⇒ 迟早分叉）
+        inline_effect = _fixture(pathlib.Path(tmp) / "bad-nebula-inline")
+        _patch(inline_effect / NEBULA_SWIFT,
+               "        if NebulaSkinPreference.paintsNebula(",
+               "        if themeManager.theme == .stardust, themeManager.isNebulaSkinEnabled, false || (")
+        cases.append(("皮肤：绘制视图又写一遍主题判断（红）", True, static_issues(inline_effect)))
+
+        # ㉓ 红：某一层的落点被删（下方面板那一层没皮肤）
+        missing_layer = _fixture(pathlib.Path(tmp) / "bad-nebula-layer-missing")
+        _patch(missing_layer / LOWER_PANE_SWIFT,
+               "                NebulaBackground(layer: .panel)\n", "")
+        cases.append(("皮肤：某一层落点被删（红）", True, static_issues(missing_layer)))
+
+        # ㉔ 红：某一层的落点被抄了第二份（重复铺 —— 先铺表面再叠星云，铺两遍是两倍的绘制）
+        duplicate_layer = _fixture(pathlib.Path(tmp) / "bad-nebula-layer-dup")
+        layer_file = duplicate_layer / MAIN_WINDOW_SWIFT
+        layer_file.write_text(layer_file.read_text(encoding="utf-8")
+                              + "\n// 重复铺一层（负例）\nlet duplicateNebulaLayer = NebulaBackground(layer: .content)\n",
+                              encoding="utf-8")
+        cases.append(("皮肤：某一层落点抄了第二份（红）", True, static_issues(duplicate_layer)))
+
+        # ㉕ 红：界面那个开关绑到本地 `@State`（点了不落盘 ⇒ 重启又变回开）
+        local_state = _fixture(pathlib.Path(tmp) / "bad-nebula-binding")
+        _patch(local_state / APPEARANCE_SWIFT,
+               "            set: { designTheme.setNebulaSkinEnabled($0) }",
+               "            set: { _ = $0 }")
+        cases.append(("皮肤：开关绑到本地 @State（红）", True, static_issues(local_state)))
+
+        # ㉖ 红：规则的单测少一条（"关掉之后重开仍是关"没了 —— 那一态只能在这里判）
+        missing_case = _fixture(pathlib.Path(tmp) / "bad-nebula-test-case")
+        _patch(missing_case / NEBULA_TESTS_SWIFT,
+               "    func testOffIsPersistedAndSurvivesReopen() {",
+               "    func removedReopenCase() {")
+        cases.append(("皮肤：单测少一条（红）", True, static_issues(missing_case)))
+
+        # ㉗ 红：像素探针没挂进 FILTER（这一族一个都跑不到 —— §9 第 104 条那条教训）
+        unfiltered = _fixture(pathlib.Path(tmp) / "bad-nebula-filter")
+        _patch(unfiltered / PROBE_RUNNER_SH, "|NebulaSkinProbeTests", "")
+        cases.append(("皮肤：探针没挂进 FILTER（红）", True, static_issues(unfiltered)))
+
+        # ㉘ 红：像素探针里"逐像素比对"的口子被删（三张主角还在，但没人比像素了）
+        no_compare = _fixture(pathlib.Path(tmp) / "bad-nebula-probe")
+        _patch(no_compare / NEBULA_PROBE_SWIFT,
+               "let count = UISnapshot.differingPixels(left, right)",
+               "let count = 0")
+        cases.append(("皮肤：探针不再比像素（红）", True, static_issues(no_compare)))
+
     failures = 0
     # 迭代**副本**：这个循环体里将来若有人再 `cases.append(...)`，迭代列表会一直变长
     # ⇒ 自检永不结束（第 83 轮实测：3 例被重复打印 809 次、进程挂住）。
@@ -1032,7 +1345,7 @@ def self_test() -> int:
     unchanged = before == after
     if not unchanged:
         failures += 1
-    print(f"{'✅' if unchanged else '❌'} 真仓库十三份文件逐字节未变")
+    print(f"{'✅' if unchanged else '❌'} 真仓库二十份文件逐字节未变")
     total = len(cases) + 1
     print(f"自测通过（{total} 例）" if failures == 0 else f"自测失败：{failures}/{total} 例不符")
     return 0 if failures == 0 else 1
@@ -1057,6 +1370,8 @@ def main(argv: list[str]) -> int:
     issues += entry_issues
     axis_issues, axis_sites = check_two_axis(ROOT)
     issues += axis_issues
+    nebula_issues, nebula_sites = check_nebula_skin(ROOT)
+    issues += nebula_issues
 
     print("==> 主题集（配色方案，队列 L-80 ㈠ ㈡）")
     print(f"    ① 主题集：{len(theme_ids_in_source(ROOT))} 个（台账 {len(THEME_IDS)} 个：{', '.join(THEME_IDS)}）")
@@ -1069,6 +1384,9 @@ def main(argv: list[str]) -> int:
     print(f"    ⑦ 两轴正交：{axis_sites} 处落点（深浅轴三态 / 两轴互不读取 / "
           f"{len(AXIS_STATES) * len(AXIS_SYSTEM_STATES) * len(THEME_IDS)} 组组合可达 / 组合到像素 / "
           f"面板显示当前深浅档）")
+    print(f"    ⑧ 星云皮肤（队列 L-155）：{nebula_sites} 处落点（规则的唯一出处 / 键字面量只许一处 / "
+          f"生效条件两半都在且绘制侧只许调用 / 三层表面各自恰有一处 / 开关绑唯一写入口且只在星空紫下露面 / "
+          f"规则单测与像素探针的落点都在位，探针还挂着 FILTER）")
 
     if len(theme_ids_in_source(ROOT)) < MIN_THEMES:
         issues.append(Issue(THEMES_SWIFT, f"主题数 {len(theme_ids_in_source(ROOT))} < 下限 {MIN_THEMES}"))
@@ -1080,6 +1398,9 @@ def main(argv: list[str]) -> int:
     if entry_sites < MIN_ENTRY_SITES:
         issues.append(Issue(APPEARANCE_SWIFT, f"界面入口只判了 {entry_sites} 处（下限 {MIN_ENTRY_SITES}）"
                                              f" —— 扫描面被削过，不许通过"))
+    if nebula_sites < MIN_NEBULA_SITES:
+        issues.append(Issue(NEBULA_PREF_SWIFT, f"判据 I 只判了 {nebula_sites} 处（下限 {MIN_NEBULA_SITES}）"
+                                               f" —— 扫描面被削过，不许通过"))
 
     if issues:
         print(f"\n❌ {len(issues)} 处未过：")
@@ -1088,7 +1409,9 @@ def main(argv: list[str]) -> int:
         return 1
     print("\n✅ 主题集三选一：三套值表角色齐全、逐主题 × 深浅两态过门槛、名与 Linux 侧对齐、待值登记在位；"
           "界面入口（主题列表 + 每主题三个真实场景 + 推导逐条标注）已接上；"
-          "两轴正交（深浅三态 × 配色四主题 = 24 组组合、跟随系统两态都过门槛、组合已到像素上）")
+          "两轴正交（深浅三态 × 配色四主题 = 24 组组合、跟随系统两态都过门槛、组合已到像素上）；"
+          "星云皮肤（队列 L-155：规则唯一出处 + 三层表面各一处落点 + 开关绑唯一写入口且只在星空紫下露面 + "
+          "规则单测与像素探针的落点都在位）")
     return 0
 
 

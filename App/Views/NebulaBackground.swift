@@ -55,7 +55,13 @@ struct NebulaBackground: View {
 
     var body: some View {
         // **只在星空紫主题下生效** —— 别的主题逐像素回到旧观感（不能偷偷给所有主题加星星）。
-        if themeManager.theme == .stardust, themeManager.isNebulaSkinEnabled {
+        // 组合的判定走 Core 的**唯一出处** `NebulaSkinPreference.paintsNebula`：
+        // 门禁判的就是那一个函数（`Scripts/check-design-themes.py` 判据 I），
+        // 在这里再写一遍 `== .stardust && …` 只会让两处慢慢分叉。
+        if NebulaSkinPreference.paintsNebula(
+            theme: themeManager.theme,
+            isSkinEnabled: themeManager.isNebulaSkinEnabled
+        ) {
             Canvas { context, size in
                 draw(into: &context, size: size)
             }
