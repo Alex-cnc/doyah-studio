@@ -25,8 +25,8 @@
     }
   ],
   "floors": {
-    "families": 41,
-    "totalCases": 519,
+    "families": 42,
+    "totalCases": 528,
     "anchorSites": 69,
     "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。"
   },
@@ -924,6 +924,30 @@
           "regex": "L-145 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
           "minSites": 1,
           "note": "闭环第 11 项注释（L-145 那一段）"
+        }
+      ]
+    },
+    {
+      "key": "agent-provider-presets",
+      "script": "Scripts/check-agent-provider-presets.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 9,
+      "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
+      "why": "队列 L-146（内测清单丁3）/ 闭环第 9 项（模型服务预设：端点只有一份出处 = Core/AgentProviderPreset.swift + 界面真的消费目录（遍历 / 选中值 / 模型内容 / 恢复选中 / 自动填充）+ 形状与空跑防护）",
+      "anchors": [
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "check-agent-provider-presets\\.py.{0,4000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "§6 资产表「模型服务预设」行（只认现状声明那一处括号；§9 第 113 条与历史变更行里的旧例数不回改、也不进判据）"
+        },
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "L-146 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "闭环第 9 项注释（L-146 那一段）"
         }
       ]
     }

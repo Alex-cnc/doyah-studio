@@ -526,6 +526,21 @@ python3 Scripts/check-terminal-tabs.py --self-test
 python3 Scripts/check-result-scroll-ledger.py
 python3 Scripts/check-result-scroll-ledger.py --self-test
 
+# L-146（内测清单丁3，2026-10-01 第 142 轮）：**模型服务预设只有一个出处，界面只许消费它**。
+# 需求原话「AI 助理配置时应该提供主流大模型配置 url 和可选择模型，毕竟很多人是不懂的」——
+# 这件事有两个不会报错的坏法：① 界面自己写死一个端点（「端点只改一处」当场不成立，而编译照过、
+# 单测照绿）；② 目录长在 Core 里、界面却没接上（用户打开面板还是两个空框）。
+# 判据：A 唯一出处（提供商宿主名**从 `Core/AgentProviderPreset.swift` 里解析出来**、只许出现在
+# 那个文件；环回地址不算提供商宿主名）/ B 界面接线五处锚点（遍历目录 · 选中值 = 稳定标识 ·
+# 模型下拉内容取自契约层 · 重开面板按端点恢复选中 · 选提供商自动填端点与模型）/
+# C 形状（标识唯一 · 端点唯一 · 「自定义」恰一条且端点为「空」· 标签键中英齐备）/
+# D 空跑防护（预设条数 · 宿主数 · 扫描面三条下限）。
+# `Scripts/check-agent-provider-presets.py`（L-146 的负例 `--self-test` **9 例**：绿对照 / 别处写死端点 /
+# 预设被削到 1 条 / 两条共用端点 / 下拉不再遍历目录 / 模型下拉绕开契约层 / 标签键没进语言表 /
+# 扫描面被削掉 / 末例核对真仓库逐字节未变）。
+python3 Scripts/check-agent-provider-presets.py
+python3 Scripts/check-agent-provider-presets.py --self-test
+
 echo "==> 10/18 插件装配链（FR-PLUG-01~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py
 python3 Scripts/check-plugin-assembly.py

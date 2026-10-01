@@ -15,6 +15,9 @@ struct AgentSettingsSheet: View {
     @State private var isEnabled = false
     @State private var endpoint = ""
     @State private var model = ""
+    /// 选中的提供商（队列 `L-146`）：**由端点反推**，不在配置里多存一个字段 ——
+    /// 重开面板时按端点认一次，认不出就是「自定义」。
+    @State private var providerID = AgentProviderCatalog.customID
     @State private var timeoutSeconds = "60"
     @State private var maxRequests = ""
     @State private var maxOutputTokens = ""
@@ -35,8 +38,32 @@ struct AgentSettingsSheet: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
+                // 提供商预设（FR-AI-01 的配置面 · 队列 L-146）：先选提供商，端点与常用模型
+                // 自动填好，两个输入框**仍然可改**（自建网关 / 代理 / 私有部署照旧能用）。
+                // 那句说明挂 Section 标题（用系统自己那套小字样式）—— 本面板不再自己写字号与前景色。
+                Section(L(.agentProviderHint)) {
+                    Picker(L(.agentProvider), selection: $providerID) {
+                        ForEach(AgentProviderCatalog.all) { preset in
+                            Text(L(preset.labelKey)).tag(preset.id)
+                        }
+                    }
+                }
+
                 TextField(L(.agentEndpoint), text: $endpoint, prompt: Text(L(.agentEndpointPlaceholder)))
-                TextField(L(.agentModel), text: $model, prompt: Text(L(.agentModelPlaceholder)))
+                HStack(spacing: 8) {
+                    TextField(L(.agentModel), text: $model, prompt: Text(L(.agentModelPlaceholder)))
+                    Menu {
+                        ForEach(selectedPreset.modelOptions(currentModel: model), id: \.self) { name in
+                            Button(name) { model = name }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.up.chevron.down")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .disabled(selectedPreset.models.isEmpty)
+                    .help(L(.agentModelPresetHint))
+                }
                 TextField(L(.agentTimeout), text: $timeoutSeconds)
 
                 Section(L(.agentQuotaSection)) {
@@ -77,6 +104,10 @@ struct AgentSettingsSheet: View {
         }
         .padding(20)
         .frame(width: 560)
+        // 换提供商 ⇒ 自动填端点与模型；手改端点 ⇒ 重认一次「这是谁」。
+        // 两条都不自己判，只读契约层（`AgentProviderCatalog`）给的答案。
+        .onChange(of: providerID) { _, newValue in applyProvider(newValue) }
+        .onChange(of: endpoint) { _, newValue in syncProvider(with: newValue) }
         .task {
             guard !isLoaded else { return }
             isLoaded = true
@@ -84,6 +115,8 @@ struct AgentSettingsSheet: View {
             isEnabled = configuration.isEnabled
             endpoint = configuration.endpoint
             model = configuration.model
+            // 按端点认回「上次选的是谁」（认不出 = 自定义）——重开面板不许落回自定义。
+            providerID = AgentProviderCatalog.resolved(endpoint: configuration.endpoint).id
             timeoutSeconds = String(Int(configuration.timeoutSeconds))
             maxRequests = configuration.quota.maxRequestsPerSession.map(String.init) ?? ""
             maxOutputTokens = configuration.quota.maxOutputTokensPerRequest.map(String.init) ?? ""
@@ -122,6 +155,28 @@ struct AgentSettingsSheet: View {
         .frame(width: 460, alignment: .leading)
     }
 
+    // MARK: - 提供商预设（L-146）
+
+    /// 当前选中的提供商：界面画标签与模型下拉都取自它（标识认不出就退回「自定义」）。
+    private var selectedPreset: AgentProviderPreset {
+        AgentProviderCatalog.preset(id: providerID) ?? AgentProviderCatalog.custom
+    }
+
+    /// 选提供商 ⇒ 自动填端点；有预设模型清单时把模型也带到第一项。
+    /// 清单为空（本机服务 / 接入点 ID 这类）时**不动**用户已填好的模型名。
+    private func applyProvider(_ id: String) {
+        guard let preset = AgentProviderCatalog.preset(id: id), !preset.isCustom else { return }
+        endpoint = preset.endpoint
+        if let first = preset.models.first { model = first }
+    }
+
+    /// 手改端点 ⇒ 重认一次「这是谁」（认不出就是「自定义」）——
+    /// 免得出现「上面显示 OpenAI、实际发往别处」这种面板在撒谎的状态。
+    private func syncProvider(with endpoint: String) {
+        let target = AgentProviderCatalog.resolved(endpoint: endpoint).id
+        if providerID != target { providerID = target }
+    }
+
     // MARK: - 输入 → 配置
 
     private var draftConfiguration: AgentConfiguration {
@@ -134,7 +189,11 @@ struct AgentSettingsSheet: View {
                 maxRequestsPerSession: positiveInt(maxRequests),
                 maxOutputTokensPerRequest: positiveInt(maxOutputTokens),
                 maxTotalTokens: positiveInt(maxTotalTokens)
-            )
+            ),
+            // **护栏策略不许省略**（本面板没有它的编辑面）：省略就是拿 `.readOnlyDefault` 覆写，
+            // 会把用户在「审批与审计」面板里设的只读模式与白名单一起抹掉 ——
+            // `AgentConfigurationStore.save` 是**整份覆写**、不做字段合并（L-146 顺带修）。
+            guardPolicy: appState.agentConfiguration.guardPolicy
         )
     }
 

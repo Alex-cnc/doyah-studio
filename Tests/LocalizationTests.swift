@@ -68,7 +68,18 @@ final class LocalizationTests: XCTestCase {
         .agentEndpointPlaceholder,
         .agentModelPlaceholder,
         .agentAPIKey,
-        .appBrand
+        .appBrand,
+        // 队列 L-146：提供商预设里的**品牌名不译** —— 中英两种界面都该是同一串
+        // （「OpenAI 的中文名」不存在）；中文名的提供商（通义千问 / 智谱 / 月之暗面 /
+        // 火山方舟 / 硅基流动 / Ollama / vLLM）在下面逐条给出中文，不进这个集合。
+        .agentProviderOpenAI,
+        .agentProviderAnthropic,
+        .agentProviderDeepSeek,
+        .agentProviderOpenRouter,
+        .agentProviderGroq,
+        .agentProviderMistral,
+        .agentProviderXAI,
+        .agentProviderGemini
     ]
 
     /// 英文文案里不得残留汉字。

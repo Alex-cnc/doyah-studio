@@ -988,6 +988,26 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentSaved
     case agentSaveFailed
     case agentInvalidHint
+    // 提供商预设（FR-AI-01 的配置面 · 队列 L-146）
+    case agentProvider
+    case agentProviderHint
+    case agentModelPresetHint
+    case agentProviderOpenAI
+    case agentProviderAnthropic
+    case agentProviderDeepSeek
+    case agentProviderQwen
+    case agentProviderZhipu
+    case agentProviderMoonshot
+    case agentProviderVolcano
+    case agentProviderSiliconFlow
+    case agentProviderOpenRouter
+    case agentProviderGroq
+    case agentProviderMistral
+    case agentProviderXAI
+    case agentProviderGemini
+    case agentProviderOllama
+    case agentProviderVLLM
+    case agentProviderCustom
 
     // 自然语言 → SQL（FR-AI-02）
     case menuAgentGenerateSQL
@@ -2756,6 +2776,27 @@ public enum LocalizedStrings {
         .agentSaved: [.simplifiedChinese: "已保存智能体设置。", .english: "Agent settings saved."],
         .agentSaveFailed: [.simplifiedChinese: "保存智能体设置失败：%@", .english: "Saving agent settings failed: %@"],
         .agentInvalidHint: [.simplifiedChinese: "配置尚不完整，即使打开总开关也不会外发。", .english: "Configuration is incomplete; nothing will be sent even with the switch on."],
+        // 提供商预设（FR-AI-01 的配置面 · 队列 L-146）：**品牌名不译**（两种语言同名）的
+        // 那几条在 LocalizationTests 的 languageNeutralKeys 里逐条登记。
+        .agentProvider: [.simplifiedChinese: "提供商预设", .english: "Provider preset"],
+        .agentProviderHint: [.simplifiedChinese: "选一个提供商，端点与常用模型会自动填好（仍可手改）；API Key 需要你自己填。", .english: "Pick a provider and the endpoint plus common models are filled in (both stay editable); you still supply your own API key."],
+        .agentModelPresetHint: [.simplifiedChinese: "从常用模型里选一个，或自己填模型名。", .english: "Pick a common model, or type your own."],
+        .agentProviderOpenAI: [.simplifiedChinese: "OpenAI", .english: "OpenAI"],
+        .agentProviderAnthropic: [.simplifiedChinese: "Anthropic (Claude)", .english: "Anthropic (Claude)"],
+        .agentProviderDeepSeek: [.simplifiedChinese: "DeepSeek", .english: "DeepSeek"],
+        .agentProviderQwen: [.simplifiedChinese: "通义千问（阿里云百炼）", .english: "Qwen (Alibaba Cloud Model Studio)"],
+        .agentProviderZhipu: [.simplifiedChinese: "智谱 GLM", .english: "Zhipu GLM"],
+        .agentProviderMoonshot: [.simplifiedChinese: "月之暗面 Kimi", .english: "Moonshot Kimi"],
+        .agentProviderVolcano: [.simplifiedChinese: "火山方舟（豆包）", .english: "Volcano Ark (Doubao)"],
+        .agentProviderSiliconFlow: [.simplifiedChinese: "硅基流动", .english: "SiliconFlow"],
+        .agentProviderOpenRouter: [.simplifiedChinese: "OpenRouter", .english: "OpenRouter"],
+        .agentProviderGroq: [.simplifiedChinese: "Groq", .english: "Groq"],
+        .agentProviderMistral: [.simplifiedChinese: "Mistral", .english: "Mistral"],
+        .agentProviderXAI: [.simplifiedChinese: "xAI Grok", .english: "xAI Grok"],
+        .agentProviderGemini: [.simplifiedChinese: "Google Gemini", .english: "Google Gemini"],
+        .agentProviderOllama: [.simplifiedChinese: "Ollama（本机）", .english: "Ollama (local)"],
+        .agentProviderVLLM: [.simplifiedChinese: "vLLM（本机 / 局域网）", .english: "vLLM (local / LAN)"],
+        .agentProviderCustom: [.simplifiedChinese: "自定义（OpenAI 兼容）", .english: "Custom (OpenAI-compatible)"],
         .menuAgentGenerateSQL: [.simplifiedChinese: "文生 SQL…", .english: "Text-to-SQL…"],
         .agentSQLTitle: [.simplifiedChinese: "自然语言 → SQL", .english: "Plain language → SQL"],
         .agentSQLInstruction: [.simplifiedChinese: "你想要什么？", .english: "What do you want?"],
