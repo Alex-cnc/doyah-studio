@@ -64,6 +64,7 @@ struct MaintenancePanel: View {
                 .foregroundStyle(Theme.text(.secondary))
             TextEditor(text: $appState.maintenancePlanText)
                 .font(Theme.font(.mono))
+                .editorSurface()
                 .frame(height: 130)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)

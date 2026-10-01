@@ -39,6 +39,7 @@ struct DataTaskSpecSheet: View {
                     .foregroundStyle(.secondary)
                 TextEditor(text: $specs)
                     .font(.system(.caption, design: .monospaced))
+                    .editorSurface()
                     .frame(height: 110)
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor)))
                 TextField(L(.dataTaskSpecHints), text: $hints)

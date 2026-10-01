@@ -2,7 +2,7 @@
   "title": "面板根固定尺寸 `.frame(width:height:)` 的处置台账（队列 L-61）",
   "scope": "App/Views/**/*.swift",
   "panelRootMinWidth": 400,
-  "scannedFiles": 78,
+  "scannedFiles": 79,
   "totals": {
     "frames": 36,
     "panelRoots": 21,
@@ -361,5 +361,5 @@
     }
   ],
   "totalsNote": "`frames` / `panelRoots` / `ornaments` 都是**处数**（同一形状出现多次按处数记，例如对象树里三处 12×12 的形状算 3 处）；条目数另计（现 31 条）。",
-  "updated": "2026-10-01（第 133 轮：队列 `L-144` 把工作区页签条抽成独立视图 `App/Views/WorkspaceTabStrip.swift`（页签上那枚 6pt 装饰点随视图搬家，同一处、同一形状）⇒ 扫描范围 75 → 76；处数不变 36 = 面板根 21 · 装饰 15）"
+  "updated": "2026-10-01（第 139 轮：队列 `L-142` 新增 `App/Views/EditorSurface.swift`（编辑面底色与字色的唯一写法 `.editorSurface()`）⇒ 扫描范围 78 → 79；处数不变 36 = 面板根 21 · 装饰 15；台账 34 条。**订正**：上一版这条说明停留在第 133 轮（写「75 → 76」）而 `scannedFiles` 已被第 137 / 138 轮改成 78 —— 本轮一并刷新，历史以本条与前几轮的提交为准）"
 }

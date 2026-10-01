@@ -402,6 +402,24 @@ python3 Scripts/check-design-mock-tokens.py --self-test
 # 深浅轴的键）/ 组合没到像素（面板快照不再取角像素）。
 python3 Scripts/check-design-themes.py
 python3 Scripts/check-design-themes.py --self-test
+# L-142（2026-10-01 第 139 轮）：上面三条管的是**令牌本身**（值表 / 样张 / 主题集），
+# 管不了「**某个编辑面干脆没走令牌**」。真现场（内测清单 **甲2**，需求提出者 2026-09-30 原话）：
+# 「笔记的正文编辑区背景色明显不符合其他 2 个的配色方案」—— 笔记正文是 SwiftUI `TextEditor`，
+# **默认画系统的 `textBackgroundColor`**，而工作区代码编辑器与数据库 SQL 编辑器早就在用
+# `Theme.nsColor(Surface.content)`（`L-111` 那一批）。棘轮扫的是「写坏的值」，
+# 这里的问题是**什么都没写** ⇒ 门禁全绿、观感不对（这正是覆盖面缺口）。
+# 判据 `Scripts/check-editor-surface-tokens.py`（项数仍十八）：
+#   A 台账双向对账（`App/` 下每处多行编辑面都登记；登记的必须真的还在 ⇒ 新加编辑面要登记）
+#   B 每个编辑面都挂 `.editorSurface()`（处数棘轮：挂了的处数 == 编辑面的处数）
+#   C 唯一出处 `App/Views/EditorSurface.swift`（函数体必须 `scrollContentBackground(.hidden)`
+#     + `Theme.surface(.content)` + `Theme.text(.primary)`，不许出现裸色 / 系统色 / 字号字面量；
+#     且只此一处定义）
+#   D 另两个编辑面（AppKit `NSTextView`）仍是令牌色，不许退回 `NSColor.textBackgroundColor`
+#   E 空跑防护（扫描面文件数 / 编辑面处数 / 台账条数）
+#   F 编辑面不许自己再画一层底色（除唯一出处）
+# L-142 的负例 `--self-test` **13 例**（红 / 绿成对，夹具一律在临时副本，末例核对真仓库逐字节未变）。
+python3 Scripts/check-editor-surface-tokens.py
+python3 Scripts/check-editor-surface-tokens.py --self-test
 
 echo "==> 7/18 平台等价矩阵 + P-* 平台差异登记对账"
 # L-26（2026-09-27 第 25 轮）：这一项跑两条 ——

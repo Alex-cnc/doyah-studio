@@ -25,9 +25,9 @@
     }
   ],
   "floors": {
-    "families": 39,
-    "totalCases": 496,
-    "anchorSites": 65,
+    "families": 40,
+    "totalCases": 509,
+    "anchorSites": 67,
     "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。"
   },
   "notCovered": [
@@ -876,6 +876,30 @@
           "regex": "判据见 `Scripts/check-browser-tab-ownership\\.py`；负例 `--self-test` (\\d+) 例",
           "minSites": 1,
           "note": "闭环第 9 项注释（L-149 ③④ 那一段）"
+        }
+      ]
+    },
+    {
+      "key": "editor-surface-tokens",
+      "script": "Scripts/check-editor-surface-tokens.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 13,
+      "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
+      "why": "队列 L-142（内测清单甲2）/ 闭环第 6 项（编辑面的底色与字色只用主题令牌：每处编辑面都挂唯一写法 .editorSurface() + 台账双向对账 + 唯一出处 + 另两个 AppKit 编辑面不许退回系统底色 + 空跑防护）",
+      "anchors": [
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "check-editor-surface-tokens\\.py.{0,4000}?`--self-test` \\*\\*(\\d+) 例\\*\\*（绿对照",
+          "minSites": 1,
+          "note": "§6 资产表「编辑面的底色与字色」行（只认现状声明那一处括号；历史变更行里记的旧例数不回改、也不进判据）"
+        },
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "L-142 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "闭环第 6 项注释（L-142 那一段）"
         }
       ]
     }

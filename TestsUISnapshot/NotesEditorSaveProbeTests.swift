@@ -154,22 +154,32 @@ final class NotesEditorSaveProbeTests: XCTestCase {
 
     @MainActor
     private func render(_ host: Host, label: String) throws -> NSBitmapImageRep {
-        let size = Self.size
         let view = ZStack {
             Theme.surface(.window)
             NotesEditorView()
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: Self.size.width, height: Self.size.height)
         .snapshotEnvironment(
             state: host.state,
             workspace: host.workspace,
             tabs: host.tabs,
             terminal: host.terminal
         )
+        return try renderPNG(view, label: "notes-save-\(label)", scheme: .aqua).rep
+    }
 
+    /// 把任意视图渲染成一张落盘 PNG（`.build/ui-snapshot-state/<label>.png`），返回位图与路径。
+    ///
+    /// **为什么要有它**（队列 `L-142` 那一批）：同一条渲染路径要跑三种外观（浅色 / 深色 / 对照件），
+    /// 各写一遍会出现「三份真相」——底面渲染的差异（窗口 / 布局 / 位图）会伪装成判据的差异。
+    @MainActor
+    private func renderPNG<V: View>(
+        _ view: V, label: String, scheme: NSAppearance.Name
+    ) throws -> (rep: NSBitmapImageRep, path: String) {
+        let size = Self.size
         // 正文编辑器是 AppKit 自绘（`TextEditor` → 真 `NSTextView`）：没有真实窗口就画不出内容
         // （与 `UISnapshotSidebarStateTests` 同一条实测），所以给一个**不上屏**的 borderless 窗口。
-        let appearance = NSAppearance(named: .aqua)
+        let appearance = NSAppearance(named: scheme)
         let hosting = NSHostingView(rootView: view)
         hosting.appearance = appearance
         hosting.frame = CGRect(origin: .zero, size: size)
@@ -216,8 +226,108 @@ final class NotesEditorSaveProbeTests: XCTestCase {
         let directory = UISnapshot.outputDirectory.deletingLastPathComponent()
             .appendingPathComponent("ui-snapshot-state", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try data.write(to: directory.appendingPathComponent("notes-save-\(label).png"))
-        return rep
+        let url = directory.appendingPathComponent("\(label).png")
+        try data.write(to: url)
+        return (rep, url.path)
+    }
+
+    // MARK: - 编辑面底色：系统底色真的让位了吗（队列 `L-142` · 内测清单 甲2）
+
+    /// 取样矩形（**像素**坐标、左上原点、含 2× 缩放）：落在笔记正文编辑区**内部**、避开正文与边框。
+    ///
+    /// 坐标按本机实测定（视图 900×560pt ⇒ 1800×1120px）：编辑区从标题行 / 标题框 / 标签框之下开始、
+    /// 到按钮行之上结束（空正文时区里只有左上角一个光标）⇒ 取右侧中部这一块，
+    /// 点在字上、边框上、或别处都判不出来。
+    private static let surfaceSample = (leading: 1000, top: 450, width: 700, height: 220)
+
+    /// 判据：**渲染出来的笔记正文编辑面画的是主题令牌那一种底色**（内测清单 **甲2**）。
+    ///
+    /// 源码层由 `Scripts/check-editor-surface-tokens.py` 判「每处编辑面都挂 `.editorSurface()`、
+    /// 唯一出处走令牌」；这一条补的是「**那几行真的生效了吗**」——
+    /// 系统底色那层没让位的话，`.background(...)` 会被它压在底下（**画了等于没画，源码判据看不出来**）。
+    ///
+    /// **为什么必须深色**：浅色下 `Surface.content` 就是 **纯白 `0xFFFFFF`**，与系统
+    /// `textBackgroundColor`（也是纯白）**逐通道相同** ⇒ 浅色判据是**假绿**；
+    /// 深色下两者分别是 `palette.content` 的深色值（科技蓝 **`0x0B1A2A`**）与系统的近中性深灰，
+    /// 一取色就分得开（内测报的正是深色下的「不成套」）。
+    ///
+    /// 同一族里带**对照件**：一个**没挂**修饰的裸 `TextEditor`，同一位置取色**必须不等于**令牌值 ——
+    /// 对照不红 ⇒ 「相等」这一条根本判不动东西（同第 105 / 108 条的纪律）。
+    @MainActor
+    func testNoteEditorSurfacePaintsThemeToken() throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        _ = try UISnapshot.applyLicense(.standard, to: host.state)
+        host.state.noteEditorTitle = ""
+        host.state.noteEditorTags = ""
+        host.state.noteEditorBody = ""
+
+        let size = Self.size
+        let scheme = NSAppearance.Name.darkAqua
+
+        let editorView = ZStack {
+            Theme.surface(.window)
+            NotesEditorView()
+        }
+        .frame(width: size.width, height: size.height)
+        .snapshotEnvironment(
+            state: host.state,
+            workspace: host.workspace,
+            tabs: host.tabs,
+            terminal: host.terminal
+        )
+        let (_, editorPath) = try renderPNG(editorView, label: "notes-surface-dark", scheme: scheme)
+
+        // 对照件：内测甲2 的原样（`TextEditor` 自带系统底色，没挂 `.editorSurface()`）。
+        let controlView = ZStack {
+            Theme.surface(.window)
+            VStack { TextEditor(text: .constant("")) }
+                .padding(Spacing.l)
+        }
+        .frame(width: size.width, height: size.height)
+        let (_, controlPath) = try renderPNG(controlView, label: "notes-surface-control-dark", scheme: scheme)
+
+        let expected = UISnapshot.channels(
+            of: DesignThemeManager.shared.theme.palette.content.hex(dark: true)
+        )
+        let sample = Self.surfaceSample
+
+        guard let editorBand = UISnapshot.region(
+            ofPNGAt: editorPath, leading: sample.leading, top: sample.top,
+            width: sample.width, height: sample.height
+        ), let controlBand = UISnapshot.region(
+            ofPNGAt: controlPath, leading: sample.leading, top: sample.top,
+            width: sample.width, height: sample.height
+        ) else {
+            XCTFail("取样矩形落在图外了 —— 坐标按本机实测定（1800×1120px），改尺寸要重定")
+            return
+        }
+
+        let editor = (Int(editorBand.background.0), Int(editorBand.background.1), Int(editorBand.background.2))
+        let control = (Int(controlBand.background.0), Int(controlBand.background.1), Int(controlBand.background.2))
+        print("🎨 编辑面底色（深色）：笔记正文 \(editor) / 令牌 \(expected) / 对照裸 TextEditor \(control)")
+
+        // ① 笔记正文编辑区 = 主题令牌那一种底色（容差 8：PNG 往返实测偏移 ≤4，见 `sampledRGB` 的注释）。
+        for (name, actual, want) in [
+            ("R", editor.0, expected.red), ("G", editor.1, expected.green), ("B", editor.2, expected.blue),
+        ] {
+            XCTAssertLessThanOrEqual(
+                abs(actual - want), 8,
+                "笔记正文编辑区的 \(name) 通道实测 \(actual)、令牌 \(want) —— 编辑面没走主题令牌"
+                    + "（内测清单甲2 的原病：它画的是系统 textBackgroundColor）"
+            )
+        }
+
+        // ② 对照件必须判得出「不一样」，否则上面那三条是假绿。
+        let controlDelta = max(
+            abs(control.0 - expected.red),
+            max(abs(control.1 - expected.green), abs(control.2 - expected.blue))
+        )
+        XCTAssertGreaterThan(
+            controlDelta, 8,
+            "对照件（没挂 `.editorSurface()` 的裸 TextEditor）在这套量法下取到的底色 \(control)"
+                + " 与令牌 \(expected) 差不出 8 以上 ⇒ 这条量法分辨不了两种底色，笔记那三条不算数"
+        )
     }
 
     // MARK: - 像素判读

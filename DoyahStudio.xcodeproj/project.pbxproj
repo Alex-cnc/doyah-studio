@@ -458,6 +458,7 @@
 		ED59FA237193247E66FFCFF2 /* SSLModeDialectTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E6B4EC19B05AD5676D576B7 /* SSLModeDialectTests.swift */; };
 		EDC6D3A68E1E37B9DF9D3A34 /* ConnectionGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96E1F727248E24B2D5BE2974 /* ConnectionGroupingTests.swift */; };
 		EEC4BB94926B2CD440EDB36E /* RowBrowsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BE51E2E99933339D8756EB9 /* RowBrowsing.swift */; };
+		EED6F842A1693E2773BAB678 /* EditorSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A64B5F54EEC87CDDB424C35 /* EditorSurface.swift */; };
 		F01CE2DEE7C4CE185EB1BE7A /* MenuLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D4FDE29508DF1C08F16FC7 /* MenuLocalizationTests.swift */; };
 		F044E1DBAD9C878AEE3ECBC1 /* InlineEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AE4EDF77D18515395988BFC /* InlineEdit.swift */; };
 		F160603BB11812DD20648BC3 /* BackupRestoreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F796B9CA6789ED235CD91983 /* BackupRestoreSheet.swift */; };
@@ -639,6 +640,7 @@
 		196CD6679D37CDDCC5EF993E /* MCPTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPTests.swift; sourceTree = "<group>"; };
 		197141A48EA970273FA7662F /* QueryParameterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryParameterSheet.swift; sourceTree = "<group>"; };
 		19A0DA80562FEDBC056407C7 /* ExplainPlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExplainPlanTests.swift; sourceTree = "<group>"; };
+		1A64B5F54EEC87CDDB424C35 /* EditorSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorSurface.swift; sourceTree = "<group>"; };
 		1B895C59EA1CABB3555C0339 /* ServerObjectsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerObjectsPanel.swift; sourceTree = "<group>"; };
 		1BC38248EAE4B838A8592036 /* PrivilegeProbeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivilegeProbeTests.swift; sourceTree = "<group>"; };
 		1CA09226CFC59BC808FC721F /* CodeLinesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeLinesTests.swift; sourceTree = "<group>"; };
@@ -1562,6 +1564,7 @@
 				FA4F503600026163E7F4B328 /* DataTaskVersionSheet.swift */,
 				FEA1616A8BDC09D3FC8101CC /* DiagnosisPanel.swift */,
 				A37D3C41E155EAAA0EAA34F0 /* DropDatabaseSheet.swift */,
+				1A64B5F54EEC87CDDB424C35 /* EditorSurface.swift */,
 				0A997C62697FF3134A0BFAC4 /* EgressLogSheet.swift */,
 				410CD7D681954243BADC0917 /* ERDiagramPanel.swift */,
 				D81FE38807C64D090234544E /* ExecutionPlanPanel.swift */,
@@ -1939,6 +1942,7 @@
 				A698FD73B1B5A1B0711574A7 /* DropDatabaseSheet.swift in Sources */,
 				240BA5CF637B870FD5402124 /* ERDiagramPanel.swift in Sources */,
 				46DB142EECB91B4D48B447B3 /* EditorCommandCenter.swift in Sources */,
+				EED6F842A1693E2773BAB678 /* EditorSurface.swift in Sources */,
 				7782307043A2E036D892038F /* EgressLogSheet.swift in Sources */,
 				AFF9533396F881ECE2308808 /* ErrorPresenter.swift in Sources */,
 				CE4E8D74E1E9B2E2A33A0067 /* ExecutionPlanPanel.swift in Sources */,

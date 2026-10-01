@@ -273,6 +273,7 @@ struct DataTaskPanel: View {
         section(L(.dataTaskSectionSpecs), hint: L(.dataTaskSpecsHint)) {
             TextEditor(text: binding(\.specs, default: ""))
                 .font(.system(.caption, design: .monospaced))
+                .editorSurface()
                 .frame(height: 90)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor)))
             HStack(spacing: 8) {

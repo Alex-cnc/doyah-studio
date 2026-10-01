@@ -100,6 +100,7 @@ struct DiagnosisPanel: View {
                 .textFieldStyle(.roundedBorder)
             TextEditor(text: $sql)
                 .font(Theme.font(.mono))
+                .editorSurface()
                 .frame(height: 72)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
@@ -211,6 +212,7 @@ struct DiagnosisPanel: View {
                 .foregroundStyle(Theme.text(.secondary))
             TextEditor(text: $appState.diagnosisReply)
                 .font(Theme.font(.mono))
+                .editorSurface()
                 .frame(height: 110)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)

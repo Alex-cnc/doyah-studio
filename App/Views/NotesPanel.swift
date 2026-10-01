@@ -102,6 +102,7 @@ struct NotesEditorView: View {
                 .font(Theme.font(.caption))
             TextEditor(text: $appState.noteEditorBody)
                 .font(Theme.font(.mono))
+                .editorSurface()
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(Theme.surface(.panel), lineWidth: 1)

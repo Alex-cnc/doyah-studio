@@ -151,6 +151,7 @@ struct AgentSQLPanel: View {
 
                 TextEditor(text: $editableSQL)
                     .font(.system(.caption, design: .monospaced))
+                    .editorSurface()
                     .frame(height: 150)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
