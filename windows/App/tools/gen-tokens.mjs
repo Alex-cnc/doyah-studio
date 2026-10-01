@@ -231,6 +231,47 @@ function push(map, group, name, value) {
 // `DesignTheme.rawValue`（`tech-blue`）—— 两者是两回事，硬把 case 名写进选择器会让前端
 // 永远匹配不上（属性选择器不报错，只是不生效：又一例「静默失效」）。
 
+/**
+ * 「推导草案」判定式的解析（`public var isDerivedDraft: Bool { … }`）。
+ *
+ * 两种写法都认；**认不出一律判红**（不猜、不退回旧口径 —— 猜错的后果是界面把实际值标成
+ * 「推导草案」或反过来）：
+ *   · `self != .<case>`                  —— 补集写法（除该主题外都算推导草案）；
+ *   · `self == .<a> || self == .<b> …`   —— **逐主题点名**（2026-10-01 起对侧写法：
+ *     新增主题必须显式决定自己算不算推导）。点名的 case 必须都在 `DesignTheme` 里（笔误即判红）。
+ */
+function parseDerivedDraft(text, ids) {
+  const match = text.match(/public var isDerivedDraft: Bool \{\s*([^}]*?)\s*\}/)
+  if (!match) fail('解析不到 `isDerivedDraft` 的判定式（哪个主题还是「推导草案」的唯一来源）—— 写法变了？')
+  const expr = match[1]
+
+  const complement = expr.match(/^self != \.(\w+)$/)
+  if (complement) {
+    if (!ids.has(complement[1])) {
+      fail(`isDerivedDraft 的 \`!= .${complement[1]}\` 不在 DesignTheme 的 case 列表里（改名了？）`)
+    }
+    return new Set([...ids.keys()].filter((caseName) => caseName !== complement[1]))
+  }
+
+  const parts = expr.split('||').map((part) => part.trim())
+  if (parts.length > 0 && parts.every((part) => /^self == \.\w+$/.test(part))) {
+    const cases = parts.map((part) => part.replace(/^self == \./, ''))
+    for (const caseName of cases) {
+      if (!ids.has(caseName)) {
+        fail(`isDerivedDraft 里点名的 \`.${caseName}\` 不在 DesignTheme 的 case 列表里（笔误？）`)
+      }
+    }
+    if (new Set(cases).size !== cases.length) fail('isDerivedDraft 的判定式里有重复点名的主题')
+    return new Set(cases)
+  }
+
+  fail(
+    `isDerivedDraft 的判定式写法没登记过（${expr}）—— 只认「\`self != .<case>\`」与` +
+      '「`self == .<case>` 逐主题点名」两种；先核对语义再登记，别让本侧自己猜',
+  )
+  return new Set()
+}
+
 function parseThemeMeta(text) {
   const enumMatch = text.match(/public enum DesignTheme: [^{]*\{/)
   if (!enumMatch) fail('值表源里找不到 `public enum DesignTheme`（主题 id 的唯一来源）')
@@ -244,8 +285,7 @@ function parseThemeMeta(text) {
 
   const fallback = text.match(/public static let fallback = DesignTheme\.(\w+)/)
   if (!fallback) fail('解析不到 `DesignTheme.fallback`（默认主题的唯一来源）—— 写法变了？')
-  const derived = text.match(/public var isDerivedDraft: Bool \{\s*self != \.(\w+)\s*\}/)
-  if (!derived) fail('解析不到 `isDerivedDraft` 的判定式（哪个主题还是「推导草案」的唯一来源）—— 写法变了？')
+  const derivedCases = parseDerivedDraft(text, ids)
 
   const nameKeys = new Map()
   for (const line of body.split(/\r?\n/)) {
@@ -256,7 +296,7 @@ function parseThemeMeta(text) {
     if (!nameKeys.has(caseName)) fail(`DesignTheme.${caseName} 没有 nameKey（显示名的唯一来源）—— 写法变了？`)
   }
 
-  return { ids, fallbackCase: fallback[1], derivedBaselineCase: derived[1], nameKeys }
+  return { ids, fallbackCase: fallback[1], derivedCases, nameKeys }
 }
 
 function resolveThemeIds(palettes, meta) {
@@ -272,8 +312,9 @@ function resolveThemeIds(palettes, meta) {
     id.caseName = caseName
     id.value = rawId
     id.fallback = caseName === meta.fallbackCase
-    // 「推导草案」= 源里那条判定式（`self != .<baseline>`）—— 本侧不另抄一份，免得不一致时界面照旧标着推导值。
-    id.derivedDraft = caseName !== meta.derivedBaselineCase
+    // 「推导草案」= 源里那条判定式（`self != .<case>` 或 `self == .<a> || …` 逐主题点名）
+    // —— 本侧不另抄一份，免得不一致时界面照旧标着推导值。
+    id.derivedDraft = meta.derivedCases.has(caseName)
     id.nameKey = meta.nameKeys.get(caseName)
   }
 }

@@ -58,11 +58,12 @@ export function applyTheme(root: ThemeRoot, mode: ThemeMode): void {
 
 // ── 配色方案（主题集；§9.2 / §9.4「候选同名同值」）───────────────────────────
 //
-// 三个主题的 **id / 默认主题 / 是否「推导草案」** 全部来自生成物 `themes.generated.ts`
+// 主题集的 **id / 默认主题 / 是否「推导草案」** 全部来自生成物 `themes.generated.ts`
 // （由 `tools/gen-tokens.mjs` 从 macOS 侧 `Core/DesignTheme.swift` 解析 —— 本侧不手抄，
-// 对侧改名 / 增删主题 / 值到位后不再是推导草案，这边 `--check` 就判红、跑一次生成即跟上）。
+// 对侧改名 / 增删主题 / 判定式换写法 / 值到位后不再是推导草案，这边 `--check` 就判红、
+// 跑一次生成即跟上）。
 // 这里只补两样生成物给不出的东西：**属性名**与**中文显示名**（显示名与 macOS 侧同口径：
-// 科技蓝 / 豆芽绿 / 玫瑰金；新增主题没配显示名 ⇒ `theme.test.ts` 判红，不会静默显示成 id）。
+// 科技蓝 / 星空紫 / 豆芽绿 / 玫瑰金；新增主题没配显示名 ⇒ `theme.test.ts` 判红，不会静默显示成 id）。
 
 import { THEME_SCHEMES, type ThemeSchemeId } from './themes.generated'
 
@@ -75,6 +76,7 @@ export const THEME_SCHEME_LABELS: Record<string, string> = {
   'tech-blue': '科技蓝',
   'bean-green': '豆芽绿',
   'rose-gold': '玫瑰金',
+  stardust: '星空紫',
 }
 
 /**

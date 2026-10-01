@@ -69,6 +69,77 @@ describe('gen-tokens（令牌生成物 ⇄ Swift 源）', () => {
   })
 })
 
+// 「推导草案」判定式：对侧 2026-10-01 把它从「不是默认主题就算推导」改成**逐主题点名**
+// （新增主题必须显式决定自己算不算推导）⇒ 本侧解析器必须两种写法都认，且**认不出就判红**
+// （猜错的后果是界面把实际值标成「推导草案」，或反过来）。
+describe('gen-tokens（推导草案判定式）', () => {
+  const derivedOf = (text) => {
+    const map = new Map()
+    for (const line of text.split('\n')) {
+      const match = line.match(/id: '([a-z0-9-]+)'.*derivedDraft: (true|false)/)
+      if (match) map.set(match[1], match[2] === 'true')
+    }
+    return map
+  }
+
+  const generateWith = (rewrite) => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'doyah-derived-'))
+    const patched = rewrite(readFileSync(paletteSource, 'utf8'))
+    expect(patched).not.toBe(readFileSync(paletteSource, 'utf8')) // 注入必须真的改到东西
+    const fixture = resolve(dir, 'DesignTheme.swift')
+    writeFileSync(fixture, patched)
+    const themesOut = resolve(dir, 'themes.ts')
+    const result = run('gen-tokens.mjs', [
+      '--palette-source',
+      fixture,
+      '--themes-out',
+      themesOut,
+      '--out',
+      resolve(dir, 'out.css'),
+    ])
+    return { result, themesOut }
+  }
+
+  const rewritePredicate = (expression) => (text) =>
+    text.replace(/public var isDerivedDraft: Bool \{[^}]*\}/, `public var isDerivedDraft: Bool { ${expression} }`)
+
+  it('逐主题点名（`self == .a || self == .b`）：点到的才是推导草案', () => {
+    const { result, themesOut } = generateWith(
+      rewritePredicate('self == .beanGreen || self == .stardust'),
+    )
+    expect(result.status).toBe(0)
+    const map = derivedOf(readFileSync(themesOut, 'utf8'))
+    expect(map.get('bean-green')).toBe(true)
+    expect(map.get('stardust')).toBe(true)
+    expect(map.get('tech-blue')).toBe(false)
+    expect(map.get('rose-gold')).toBe(false)
+  })
+
+  it('补集写法（`self != .a`）仍然认：除它以外都算推导草案', () => {
+    const { result, themesOut } = generateWith(rewritePredicate('self != .techBlue'))
+    expect(result.status).toBe(0)
+    const map = derivedOf(readFileSync(themesOut, 'utf8'))
+    expect(map.get('tech-blue')).toBe(false)
+    expect(map.get('bean-green')).toBe(true)
+    expect(map.get('rose-gold')).toBe(true)
+    expect(map.get('stardust')).toBe(true)
+  })
+
+  it('没登记过的写法 ⇒ 非零退出并点名（不许猜，也不许当「都不是推导」静默放过）', () => {
+    const { result } = generateWith(
+      rewritePredicate('self == .stardust ? true : false'),
+    )
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toMatch(/isDerivedDraft/)
+  })
+
+  it('点名了不存在的主题 ⇒ 非零退出并点名（笔误不许静默）', () => {
+    const { result } = generateWith(rewritePredicate('self == .beanGrean'))
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toMatch(/beanGrean/)
+  })
+})
+
 describe('token-ratchet（裸值棘轮）', () => {
   it('规则名与 mac 基线同名（六条，改名即两侧对不上）', () => {
     expect(RULES).toEqual(['bare-color', 'bare-font', 'bare-spacing', 'bare-radius', 'bare-textstyle', 'bare-foreground'])
@@ -127,13 +198,21 @@ describe('token-ratchet（裸值棘轮）', () => {
     }
   })
 
-  it('每个主题一个变量块（§9.2）：三态齐全，且 id 用 rawValue 而不是 Swift case 名', () => {
+  it('每个主题一个变量块（§9.2）：主题集里的每个 id 三态齐全，且 id 用 rawValue 而不是 Swift case 名', () => {
     const css = readFileSync(resolve(appDir, 'src/theme/tokens.generated.css'), 'utf8')
-    for (const id of ['tech-blue', 'bean-green', 'rose-gold']) {
+    // 主题集从生成物读（不写死三四个）：对侧新增主题 ⇒ 这里自动跟着要求它有三态块。
+    const ids = [...readFileSync(resolve(appDir, 'src/theme/themes.generated.ts'), 'utf8').matchAll(/id: '([a-z0-9-]+)'/g)].map(
+      (match) => match[1],
+    )
+    expect(ids.length).toBeGreaterThanOrEqual(2)
+    for (const id of ids) {
       expect(css).toContain(`:root[data-theme-scheme='${id}'] {`)
       expect(css).toContain(`:root[data-theme-scheme='${id}'][data-theme='dark'] {`)
       expect(css).toContain(`:root[data-theme-scheme='${id}']:not([data-theme='light']):not([data-theme='dark']) {`)
     }
-    expect(css).not.toContain('data-theme-scheme=\'techBlue\'')
+    // 反向：CSS 里出现的每个 `data-theme-scheme='…'` 取值都必须在主题集里（多出来的块 = 生成物漂了）
+    for (const match of css.matchAll(/data-theme-scheme='([^']+)'/g)) {
+      expect(ids).toContain(match[1])
+    }
   })
 })

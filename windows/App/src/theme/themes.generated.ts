@@ -9,6 +9,7 @@ export const THEME_SCHEMES = [
   { id: 'tech-blue', swift: 'techBlue', nameKey: 'designThemeTechBlue', fallback: true, derivedDraft: false },
   { id: 'bean-green', swift: 'beanGreen', nameKey: 'designThemeBeanGreen', fallback: false, derivedDraft: true },
   { id: 'rose-gold', swift: 'roseGold', nameKey: 'designThemeRoseGold', fallback: false, derivedDraft: true },
+  { id: 'stardust', swift: 'stardust', nameKey: 'designThemeStardust', fallback: false, derivedDraft: false },
 ] as const
 
 export type ThemeSchemeId = (typeof THEME_SCHEMES)[number]['id']

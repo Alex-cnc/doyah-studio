@@ -4,7 +4,7 @@
  * 令牌取值的**单一来源** = macOS 侧 Core/DesignTokens.swift（角色与刻度）
  *                        + Core/DesignTheme.swift（每主题一份值表；§8.5.3「令牌取值」属「一样」的五项之一）。
  * 重新生成：node windows/App/tools/gen-tokens.mjs（比对：--check）
- * 源 sha256：role 315922aa3921 / palette f2a4152161de
+ * 源 sha256：role 315922aa3921 / palette 7f53edfb9cd2
  *
  * 主题块：`:root` 三态 = 默认主题的值；`[data-theme-scheme="<id>"]` 三态 = 该主题的值
  * （属性选择器特异性更高 ⇒ 写了 data-theme-scheme 时一定压过默认块）。
@@ -298,7 +298,7 @@
   --ds-color-accent-accent: #86C79C;
   --ds-color-accent-accentGlow: #A8E6BB;
   --ds-color-accent-accentSoft: #56795F;
-  --ds-color-accent-teal: #7FD8C4;
+  --ds-color-accent-teal: #86D8E8;
   --ds-color-accent-warm: #C9B27A;
   --ds-color-syntax-keyword: var(--ds-color-accent-accentGlow);
   --ds-color-syntax-identifier: var(--ds-color-text-primary);
@@ -327,7 +327,7 @@
     --ds-color-accent-accent: #86C79C;
     --ds-color-accent-accentGlow: #A8E6BB;
     --ds-color-accent-accentSoft: #56795F;
-    --ds-color-accent-teal: #7FD8C4;
+    --ds-color-accent-teal: #86D8E8;
     --ds-color-accent-warm: #C9B27A;
     --ds-color-syntax-keyword: var(--ds-color-accent-accentGlow);
     --ds-color-syntax-identifier: var(--ds-color-text-primary);
@@ -420,6 +420,97 @@
     --ds-color-accent-accentSoft: #9C6F6F;
     --ds-color-accent-teal: #9BD3C8;
     --ds-color-accent-warm: #E0B57E;
+    --ds-color-syntax-keyword: var(--ds-color-accent-accentGlow);
+    --ds-color-syntax-identifier: var(--ds-color-text-primary);
+    --ds-color-syntax-string: var(--ds-color-accent-warm);
+    --ds-color-syntax-number: var(--ds-color-accent-teal);
+    --ds-color-syntax-function: var(--ds-color-accent-accent);
+    --ds-color-syntax-comment: var(--ds-color-text-tertiary);
+    --ds-hairline-dark-alpha: 0.1;
+  }
+}
+
+/* 主题：stardust（stardust / DesignTheme.stardust）—— 3 态 */
+:root[data-theme-scheme='stardust'] {
+  --ds-color-categorical-blue: #3B57E0;
+  --ds-color-categorical-teal: #0F7F7F;
+  --ds-color-categorical-magenta: #B02A83;
+  --ds-color-categorical-amber: #B9791B;
+  --ds-color-surface-window: #E4E7ED;
+  --ds-color-surface-sidebar: #E7E9ED;
+  --ds-color-surface-content: #FFFFFF;
+  --ds-color-surface-panel: #E7E9ED;
+  --ds-color-surface-raised: #FFFFFF;
+  --ds-color-text-bright: #0A0F1C;
+  --ds-color-text-primary: #1A2334;
+  --ds-color-text-secondary: #4E5C78;
+  --ds-color-text-tertiary: #6A7A96;
+  --ds-color-text-disabled: #AFB8CC;
+  --ds-color-status-success: #16704A;
+  --ds-color-status-warning: #92600B;
+  --ds-color-status-danger: #C2321F;
+  --ds-color-accent-accent: #4F5FD8;
+  --ds-color-accent-accentGlow: #4053CC;
+  --ds-color-accent-accentSoft: #5A6485;
+  --ds-color-accent-teal: #0F7F7A;
+  --ds-color-accent-warm: #8A6A3B;
+  --ds-color-syntax-keyword: var(--ds-color-accent-accentGlow);
+  --ds-color-syntax-identifier: var(--ds-color-text-primary);
+  --ds-color-syntax-string: var(--ds-color-accent-warm);
+  --ds-color-syntax-number: var(--ds-color-accent-teal);
+  --ds-color-syntax-function: var(--ds-color-accent-accent);
+  --ds-color-syntax-comment: var(--ds-color-text-tertiary);
+  --ds-color-hairline-light: #CFD4DE;
+}
+
+:root[data-theme-scheme='stardust'][data-theme='dark'] {
+  --ds-color-surface-window: #0C1018;
+  --ds-color-surface-sidebar: #141B2A;
+  --ds-color-surface-content: #1B2436;
+  --ds-color-surface-panel: #25314A;
+  --ds-color-surface-raised: #333F5E;
+  --ds-color-text-bright: #F0F3FA;
+  --ds-color-text-primary: #C8D2E8;
+  --ds-color-text-secondary: #8E9CB8;
+  --ds-color-text-tertiary: #6B7A96;
+  --ds-color-text-disabled: #49556B;
+  --ds-color-status-success: #4ADE80;
+  --ds-color-status-warning: #FBBF24;
+  --ds-color-status-danger: #F87171;
+  --ds-color-accent-accent: #8FA6FF;
+  --ds-color-accent-accentGlow: #B8C4FF;
+  --ds-color-accent-accentSoft: #5D6C8C;
+  --ds-color-accent-teal: #7FD8C4;
+  --ds-color-accent-warm: #C9B27A;
+  --ds-color-syntax-keyword: var(--ds-color-accent-accentGlow);
+  --ds-color-syntax-identifier: var(--ds-color-text-primary);
+  --ds-color-syntax-string: var(--ds-color-accent-warm);
+  --ds-color-syntax-number: var(--ds-color-accent-teal);
+  --ds-color-syntax-function: var(--ds-color-accent-accent);
+  --ds-color-syntax-comment: var(--ds-color-text-tertiary);
+  --ds-hairline-dark-alpha: 0.1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-scheme='stardust']:not([data-theme='light']):not([data-theme='dark']) {
+    --ds-color-surface-window: #0C1018;
+    --ds-color-surface-sidebar: #141B2A;
+    --ds-color-surface-content: #1B2436;
+    --ds-color-surface-panel: #25314A;
+    --ds-color-surface-raised: #333F5E;
+    --ds-color-text-bright: #F0F3FA;
+    --ds-color-text-primary: #C8D2E8;
+    --ds-color-text-secondary: #8E9CB8;
+    --ds-color-text-tertiary: #6B7A96;
+    --ds-color-text-disabled: #49556B;
+    --ds-color-status-success: #4ADE80;
+    --ds-color-status-warning: #FBBF24;
+    --ds-color-status-danger: #F87171;
+    --ds-color-accent-accent: #8FA6FF;
+    --ds-color-accent-accentGlow: #B8C4FF;
+    --ds-color-accent-accentSoft: #5D6C8C;
+    --ds-color-accent-teal: #7FD8C4;
+    --ds-color-accent-warm: #C9B27A;
     --ds-color-syntax-keyword: var(--ds-color-accent-accentGlow);
     --ds-color-syntax-identifier: var(--ds-color-text-primary);
     --ds-color-syntax-string: var(--ds-color-accent-warm);
