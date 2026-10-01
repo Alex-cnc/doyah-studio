@@ -37,7 +37,8 @@ struct WorkspaceExplorerView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.surface(.sidebar))
+        // 底色由父层 `NebulaSurface(.sidebar)` 统一给（这里再铺会盖住星云皮肤）
+        .background(Color.clear)
     }
 
     // MARK: 头部

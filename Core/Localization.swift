@@ -87,6 +87,9 @@ public enum LKey: String, CaseIterable, Sendable {
     case designThemeRoseGold
     /// 星空紫（2026-10-01 新增：「比科技蓝更梦幻」的那一档，星际猎人的星云感）。
     case designThemeStardust
+    /// 星云皮肤开关（FR-EDIT-45）：只在星空紫下出现。
+    case appearanceNebulaSkin
+    case appearanceNebulaSkinHint
     /// 主题配套强调色的名字（`AccentTheme.nameKey` 与主题名分开：主题名是给用户看的，
     /// 强调色名给"实心按钮上那两个字的缩写"用）。
     case accentBeanGreen
@@ -1915,10 +1918,12 @@ public enum LocalizedStrings {
         .designThemeTechBlue: [.simplifiedChinese: "科技蓝", .english: "Tech Blue"],
         .designThemeBeanGreen: [.simplifiedChinese: "豆芽绿", .english: "Bean Sprout Green"],
         .designThemeRoseGold: [.simplifiedChinese: "玫瑰金", .english: "Rose Gold"],
-        .designThemeStardust: [.simplifiedChinese: "星空紫", .english: "Stardust"],
+        .designThemeStardust: [.simplifiedChinese: "星空紫", .english: "Star Purple"],
         .accentBeanGreen: [.simplifiedChinese: "豆芽绿", .english: "Bean Sprout Green"],
         .accentRoseGold: [.simplifiedChinese: "玫瑰金", .english: "Rose Gold"],
-        .accentStardust: [.simplifiedChinese: "星空紫", .english: "Stardust"],
+        .accentStardust: [.simplifiedChinese: "星空紫", .english: "Star Purple"],
+        .appearanceNebulaSkin: [.simplifiedChinese: "星云皮肤（星空紫）", .english: "Nebula skin (Star Purple)"],
+        .appearanceNebulaSkinHint: [.simplifiedChinese: "在表面上叠加星云云气与星点，取自 NASA「宇宙悬崖」的观感。关闭后回到纯色表面。", .english: "Overlays nebula clouds and stars on surfaces, inspired by NASA's Cosmic Cliffs. Turn off for plain surfaces."],
         .appearanceDesignThemeSection: [.simplifiedChinese: "主题（配色方案）", .english: "Theme (Color Scheme)"],
         .appearanceDesignThemeHint: [.simplifiedChinese: "一个主题是一组令牌值（底色基调 + 强调色家族 + 语法着色），不是只换一个强调色；选定后立即生效并记住。", .english: "A theme is a whole set of token values (base surfaces + accent family + syntax colours), not just one accent colour; it takes effect immediately and is remembered."],
         .appearanceDesignThemeDerived: [.simplifiedChinese: "推导草案", .english: "Derived draft"],
@@ -2023,7 +2028,7 @@ public enum LocalizedStrings {
         .noteLostColor: [.simplifiedChinese: "颜色 %@", .english: "color %@"],
         .licenseMissing: [.simplifiedChinese: "还没有放许可证（当前呈现 Standard）", .english: "No license yet (Standard is shown)"],
         .activityNotes: [.simplifiedChinese: "笔记", .english: "Notes"],
-        .menuViewNotes: [.simplifiedChinese: "笔记", .english: "Notes"],
+        .menuViewNotes: [.simplifiedChinese: "笔记视图", .english: "Notes View"],
         // 窗口标题与标题栏搜索栏（FR-EDIT-37）：品牌名中英同值；占位文案按语言各一份。
         .appBrand: [.simplifiedChinese: "Doyah Studio", .english: "Doyah Studio"],
         .windowSearchPlaceholder: [.simplifiedChinese: "搜索…", .english: "Search…"],

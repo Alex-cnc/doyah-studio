@@ -42,17 +42,22 @@ struct MainWindow: View {
     /// 侧栏内容由活动栏决定（「看哪个视图」与「视图里看什么」分开）。
     @ViewBuilder
     private var sidebarContent: some View {
-        switch appState.selectedActivityItem {
-        case .database:
-            ConnectionListView(
-                onAdd: { formMode = .new },
-                onEdit: { configuration in formMode = .edit(configuration) }
-            )
-        case .workspace:
-            WorkspaceExplorerView()
-        case .notes:
-            // 笔记的"看哪个视图"= 笔记栏，"视图里看什么" = 选哪一条笔记（列表在侧栏、编辑在右边）。
-            NotesListView()
+        // **星云皮肤**（星空紫「星云皮肤」· 2026-10-01 需求提出者要的「皮肤」质感；派单 `T-20261001-031`／`T-20261001-037`；队列 `L-153`）：侧栏是"星云"最该出现的地方（它是 chrome，不是阅读区），
+        // 所以云气与星点都给满。`NebulaSurface` 先铺表面令牌色再叠星云 ——
+        // 主题不是星空紫、或用户关了皮肤时，它**逐像素回到纯色表面**。
+        NebulaSurface(surface: .sidebar, layer: .sidebar) {
+            switch appState.selectedActivityItem {
+            case .database:
+                ConnectionListView(
+                    onAdd: { formMode = .new },
+                    onEdit: { configuration in formMode = .edit(configuration) }
+                )
+            case .workspace:
+                WorkspaceExplorerView()
+            case .notes:
+                // 笔记的"看哪个视图"= 笔记栏，"视图里看什么" = 选哪一条笔记（列表在侧栏、编辑在右边）。
+                NotesListView()
+            }
         }
     }
 
@@ -86,8 +91,17 @@ struct MainWindow: View {
             if appState.isLowerPaneVisible, appState.isLowerPaneMaximized {
                 LowerPaneView(tab: appState.selectedTab)
             } else {
-                content()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // **星云皮肤用显式叠层**：`.background()` 是铺在内容**下层**，
+                // 只要内容里有任何一处不透明就会被整片盖住（2026-10-01 实测：侧栏能看到星云、
+                // 内容区看不到，根因就是 `QueryWorkspaceView` 自己铺了 `.background(.content)`）。
+                // 改成 `ZStack` 后**星云在下、内容在上**，且 `allowsHitTesting(false)` 不吃点击。
+                ZStack {
+                    Theme.surface(.content)
+                    NebulaBackground(layer: .content)
+                    content()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Divider()
                 LowerPaneView(tab: appState.selectedTab, isCollapsed: collapsed)
                     // 高度提示**由面板自己那一层算**（`LowerPaneSizing`）：

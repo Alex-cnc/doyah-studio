@@ -88,7 +88,7 @@ public struct AccentTheme: Equatable, Sendable, Identifiable {
     public static let stardust = AccentTheme(
         id: "stardust",
         nameKey: .accentStardust,
-        accentHex: 0x8FA6FF,
+        accentHex: 0x9B5BF0,
         fillHex: 0x5568D8
     )
 

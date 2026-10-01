@@ -1099,5 +1099,10 @@ for (theme, name) in [(dark, "深色"), (light, "浅色")] {
 }
 
 let failed = allChecks.filter { !$0.ok }
-print(failed.isEmpty ? "全部样张自检通过（\(allChecks.count) 项）" : "\(failed.count)/\(allChecks.count) 项自检未过")
+if failed.isEmpty {
+    print("全部样张自检通过（\(allChecks.count) 项）")
+} else {
+    print("\(failed.count)/\(allChecks.count) 项自检未过")
+    for f in failed { print("  ✗ \(f.note)") }
+}
 exit(failed.isEmpty ? 0 : 1)

@@ -274,7 +274,7 @@ echo "==> 4/18 文档表格与派生计数"
 # 现在：默认清单里不存在 → **跳过 + 高声提示**；显式点名 / `--require-all` → 判红。
 # 本闭环传不传 `--require-all` 由参数决定（主开发机上自我证明时加）。
 # **口径的两个数不是这里说了算**（第 65 轮 L-72 ㈡）：`14 份被排除` / `44 份命名 + 1 条通配 =
-# 实跑 45 份` 由台账 `Scripts/doc-numbers.json`（`doc-tables-lists` / `doc-tables-files`）登记，
+# 实跑 46 份` 由台账 `Scripts/doc-numbers.json`（`doc-tables-lists` / `doc-tables-files`）登记，
 # 判据 `Scripts/check-doc-numbers.py` 每次自己算一遍（导入 `check-doc-tables.py` 读清单 +
 # `git check-ignore` 实测 + 真跑它一遍）再与本文件 / 该脚本 / `AGENT-SPEC.md` 逐处对账。
 if [ "${REQUIRE_ALL}" = "1" ]; then
@@ -284,7 +284,7 @@ else
 fi
 # 这一半是门禁自己的证据（L-33；L-41 补例 5；L-89 补例 6）：干净克隆跳过 14 份且 exit 0 /
 # --require-all 判红 / 显式点名判红 / **写坏一行被判红并指名行号** / **带表格却不在清单判红且归档豁免** /
-# 真仓库 46 份受检无跳过（45 份命名 + 1 份通配；
+# 真仓库 47 份受检无跳过（46 份命名 + 1 份通配；
 # **末例核对真仓库逐字节未变**）。
 python3 Scripts/check-doc-tables.py --self-test
 # L-32（2026-09-27 第 28 轮）：变更记录版本号**唯一**、头部版本格**可判**（= 变更记录最高号，

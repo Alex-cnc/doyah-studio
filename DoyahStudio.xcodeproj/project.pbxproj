@@ -169,6 +169,7 @@
 		4FFC779F9795D5CBF4581080 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9591B886C2F024CED65AFF2 /* LocalizationTests.swift */; };
 		50D6ED2013797C3E94759748 /* KeepAlive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98D4DCE8C67A46FE2A2A1B16 /* KeepAlive.swift */; };
 		50E319AA0E5F6B616C1F2DE9 /* SQLiteKitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C5702F819029A387FA00983 /* SQLiteKitTests.swift */; };
+		511466BA5C6E4642249CB237 /* NebulaBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2C9287961D51A2CC6598792 /* NebulaBackground.swift */; };
 		5118FA2463529B68449E1518 /* TitleBarSearchLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 944D1F64579A88C46F20A2E8 /* TitleBarSearchLayout.swift */; };
 		523C52200B7972F02889E53F /* SQLArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69E09E91C24D5A17333AFCD4 /* SQLArchive.swift */; };
 		52D47EEF8F391CD9CC1A2D85 /* ResultFilterSQL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49FA37B58DBA38E5B8CF96EE /* ResultFilterSQL.swift */; };
@@ -955,6 +956,7 @@
 		D0A8AB89FDE2B36A47902273 /* SQLLinter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLLinter.swift; sourceTree = "<group>"; };
 		D2445EA872B7A6DCBF7B2250 /* BackupToolCheckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupToolCheckTests.swift; sourceTree = "<group>"; };
 		D24A7EA14835CF61F6B3AF10 /* CellInspectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellInspectorTests.swift; sourceTree = "<group>"; };
+		D2C9287961D51A2CC6598792 /* NebulaBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NebulaBackground.swift; sourceTree = "<group>"; };
 		D2F37C18C2C3A535F5EF3DB5 /* TextFileDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFileDecoder.swift; sourceTree = "<group>"; };
 		D3C5504FFAFF57825841F49B /* DirectoryPanelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryPanelPicker.swift; sourceTree = "<group>"; };
 		D3DD9BA6D448B36976CA3CEA /* SSHTunnel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHTunnel.swift; sourceTree = "<group>"; };
@@ -1586,6 +1588,7 @@
 				F7FDA0F75D612506098D28B0 /* MainWindow.swift */,
 				4397C3CBDC22D2B3A5530C14 /* MarkdownPreviewView.swift */,
 				BDB21052F30097E679588FE2 /* MCPApprovalPanel.swift */,
+				D2C9287961D51A2CC6598792 /* NebulaBackground.swift */,
 				4C604886B315DB3AEA77E165 /* NotesPanel.swift */,
 				3E6523603226B14944DB3254 /* ObjectSearchPanel.swift */,
 				74EE9103E63CD4DB70251E35 /* ObjectTreeAppKitMenu.swift */,
@@ -1969,6 +1972,7 @@
 				F841FF3A2602801FE0592631 /* MainWindow.swift in Sources */,
 				632978A79C9F208CD1E77521 /* MaintenancePanel.swift in Sources */,
 				472F1E6ED95E76F6E67F1496 /* MarkdownPreviewView.swift in Sources */,
+				511466BA5C6E4642249CB237 /* NebulaBackground.swift in Sources */,
 				E82CFBAE23875685C0370117 /* NotesPanel.swift in Sources */,
 				42375BDC9F67BF7BC406ACB7 /* ObjectSearchPanel.swift in Sources */,
 				23953C0248F3C7E5B8D1C9D4 /* ObjectTreeAppKitMenu.swift in Sources */,

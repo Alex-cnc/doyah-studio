@@ -80,7 +80,9 @@ struct ConnectionListView: View {
         // `List` 默认自带系统背景，所以两步：先 `scrollContentBackground(.hidden)` 把它让出来，
         // 再铺令牌 —— 只写 `.background(...)` 是盖不住的（这正是"看着没生效"的常见原因）。
         .scrollContentBackground(.hidden)
-        .background(Theme.surface(.sidebar))
+        // **底色不在这里铺**：父层 `NebulaSurface(.sidebar)` 已经铺了表面色 + 星云皮肤。
+        // 这里再铺一次不透明色会把星云**整片盖住**（2026-10-01 实测：皮肤"看着没生效"）。
+        .background(Color.clear)
         // MARK: 对象树里那些面板（**挂在这里，别挂回 `ObjectTreeView`**）
         //
         // 为什么：修饰符挂在 `Group` 上会被 SwiftUI **分发到每个子视图**，而对象树的内容就是

@@ -207,6 +207,15 @@ struct AppearanceSheet: View {
         )
     }
 
+    /// 星云皮肤开关的绑定（星空紫「星云皮肤」· 2026-10-01 需求提出者要的「皮肤」质感；派单 `T-20261001-031`／`T-20261001-037`；队列 `L-153`）。走 `DesignThemeManager` 而不是本地 `@State` ——
+    /// 落盘与通知都由它一处负责（与主题、强调色同一纪律）。
+    private var nebulaSkinBinding: Binding<Bool> {
+        Binding(
+            get: { designTheme.isNebulaSkinEnabled },
+            set: { designTheme.setNebulaSkinEnabled($0) }
+        )
+    }
+
     private var cursorBlinkBinding: Binding<Bool> {
         Binding(
             get: { appState.terminalCursorPreference.appearance.blinks },
@@ -274,6 +283,17 @@ struct AppearanceSheet: View {
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.tertiary))
                 .fixedSize(horizontal: false, vertical: true)
+
+            // **星云皮肤开关**：只在「星空紫」下出现 ——
+            // 别的主题没有"星云"语义，摆一个永远无效的开关只会让人困惑。
+            if designTheme.theme == .stardust {
+                Divider().padding(.vertical, Spacing.xs)
+                Toggle(L(.appearanceNebulaSkin), isOn: nebulaSkinBinding)
+                Text(L(.appearanceNebulaSkinHint))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.tertiary))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.horizontal, Spacing.l)
         .padding(.vertical, Spacing.m)

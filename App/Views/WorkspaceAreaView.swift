@@ -23,7 +23,9 @@ struct WorkspaceAreaView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             messageBar
         }
-        .background(Theme.surface(.content))
+        // 底色由父层统一给（`sectionWithLowerPane` 的 `NebulaBackground`）——
+    // 这里再铺不透明色会把星云皮肤**整片盖住**（2026-10-01 实测）。
+    .background(Color.clear)
     }
 
     // MARK: 内容

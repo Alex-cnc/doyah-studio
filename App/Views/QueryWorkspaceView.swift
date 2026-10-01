@@ -30,7 +30,9 @@ struct QueryWorkspaceView: View {
         // **底色走主题令牌**（2026-09-30 需求提出者实测：数据库客户端与工作区配色差很大）。
         // 原来写的是系统 `textBackgroundColor` —— 它跟 `DesignTheme` 无关，于是同一屏里
         // 「工作区是科技蓝、数据库客户端是系统白」并存。令牌化后两段同一个底色家族。
-        .background(Theme.surface(.content))
+        // 底色由父层统一给（`sectionWithLowerPane` 的 `NebulaBackground`）——
+    // 这里再铺不透明色会把星云皮肤**整片盖住**（2026-10-01 实测）。
+    .background(Color.clear)
     }
 
     private var tabBar: some View {
