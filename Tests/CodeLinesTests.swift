@@ -175,4 +175,64 @@ final class CodeLinesTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - 行号 → 位置（`range(ofLine:in:)`，队列 L-117：跳到命中行）
+
+    /// 互逆：每一行的范围起点换回行号必须还是那一行；范围里的原文必须真的是那一行。
+    func testLineRangeRoundTripsWithLineNumber() {
+        let samples = [
+            "", "\n", "a", "a\n", "\n\n\n", "a\r\nb\r\n", "中😀\u{2028}x\ny",
+            "let a = 1\r\n// 注释\n\nfunc f() {}\r",
+        ]
+        for text in samples {
+            let ns = text as NSString
+            let count = CodeLines.count(in: text)
+            for line in 1...count {
+                guard let range = CodeLines.range(ofLine: line, in: text) else {
+                    XCTFail("第 \(line) 行（共 \(count) 行）换不出位置：\(text.debugDescription)")
+                    continue
+                }
+                XCTAssertEqual(CodeLines.lineNumber(at: range.location, in: text), line,
+                               "换回位置再换回来必须同号：\(text.debugDescription)")
+                XCTAssertLessThanOrEqual(range.location + range.length, ns.length,
+                                         "范围不许越过文本末尾")
+            }
+        }
+    }
+
+    /// 越界一律 `nil`：宁可让调用方看见"没有这一行"，也不要夹到别的行上去。
+    func testLineRangeReturnsNilWhenOutOfBounds() {
+        let text = "a\nb\n"
+        XCTAssertNil(CodeLines.range(ofLine: 0, in: text))
+        XCTAssertNil(CodeLines.range(ofLine: -3, in: text))
+        XCTAssertNil(CodeLines.range(ofLine: CodeLines.count(in: text) + 1, in: text))
+        XCTAssertNotNil(CodeLines.range(ofLine: CodeLines.count(in: text), in: text),
+                        "最后一行（末尾终止符造出的空行）也算一行")
+    }
+
+    /// 覆盖到的原文就是那一行（含行终止符）—— 「跳到命中行」看到的正是这一段。
+    func testLineRangeCoversThatLineOnly() {
+        let text = "alpha agent\u{2028}beta agent\n"
+        let ns = text as NSString
+        XCTAssertEqual(ns.substring(with: CodeLines.range(ofLine: 1, in: text)!), "alpha agent\u{2028}")
+        XCTAssertEqual(ns.substring(with: CodeLines.range(ofLine: 2, in: text)!), "beta agent\n")
+        XCTAssertEqual(ns.substring(with: CodeLines.range(ofLine: 3, in: text)!), "")
+    }
+
+    /// 行**内容**范围 = 去掉行终止符的那些行（内容检索按它读原文做摘要）。
+    func testContentRangesDropLineTerminators() {
+        let samples: [(String, [String])] = [
+            ("a\nb\n", ["a", "b", ""]),
+            ("a\r\nb\r", ["a", "b", ""]),
+            ("alpha agent\u{2028}beta agent\n", ["alpha agent", "beta agent", ""]),
+            ("last", ["last"]),
+            ("", [""]),
+        ]
+        for (text, expected) in samples {
+            let ns = text as NSString
+            let got = CodeLines.contentRanges(in: text).map { ns.substring(with: $0) }
+            XCTAssertEqual(got, expected, "\(text.debugDescription) 逐行内容不对")
+            XCTAssertEqual(got.count, CodeLines.count(in: text), "内容范围必须与行数一一对应")
+        }
+    }
 }

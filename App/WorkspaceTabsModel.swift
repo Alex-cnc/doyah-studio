@@ -168,6 +168,33 @@ final class WorkspaceTabsModel: ObservableObject {
         save(id)
     }
 
+    // MARK: 跳到命中行（FR-EDIT-44 标头搜索框）
+
+    /// 「打开文件并**跳到第 N 行**」的一次性投递 —— 与格式化同一形状（`FormatDelivery`）：
+    /// 模型只算「跳去哪儿」，真正挪光标与滚动的是编辑器视图那一层（`NSTextView`）。
+    struct RevealDelivery: Equatable {
+        let id: UUID
+        let tabID: UUID
+        /// 行号，**1 起**（与行号列同口径）。
+        let line: Int
+    }
+
+    @Published private(set) var revealDelivery: RevealDelivery?
+
+    /// 打开文件并跳到某一行（`FR-EDIT-44` 的「回车打开并跳到命中行」）。
+    ///
+    /// 为什么收成一个入口：`openFile(at:)` 里的路由（浏览器页签 / 已开着就切过去 / 太大 / 二进制）
+    /// 是**唯一**一份实现，跳行只是「在打开成功之后再做一件事」—— 视图里各写一遍会绕开那些拒绝路径
+    /// （症状：点了一个打不开的文件，界面却像是跳过去了）。
+    func openFile(at url: URL, line: Int?) {
+        openFile(at: url)
+        guard let line, line > 0 else { return }
+        // 落到浏览器页签那一类没有「行」可跳（`tabs` 里也就没有对应页签）—— 不静默编一个。
+        guard let tab = tabs.first(where: { $0.path == url.path }) else { return }
+        selectedID = tab.id
+        revealDelivery = RevealDelivery(id: UUID(), tabID: tab.id, line: line)
+    }
+
     // MARK: 代码格式化（FR-EDIT-39，形态 = ③ 混合）
 
     /// 格式化结果的一次性投递：模型算好文本，**由编辑器视图自己**做那一次替换。

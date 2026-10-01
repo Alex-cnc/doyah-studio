@@ -59,6 +59,7 @@ struct WorkspaceAreaView: View {
             text: tab.content,
             language: tab.language,
             pendingFormat: tabs.formatDelivery,
+            pendingReveal: tabs.revealDelivery,
             onTextChange: { text in tabs.updateContent(text, for: tab.id) },
             onSave: { tabs.save(tab.id) },
             onFormat: { tabs.formatSelected() },

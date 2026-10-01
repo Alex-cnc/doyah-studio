@@ -13,6 +13,8 @@ struct CodeEditorView: NSViewRepresentable {
     let language: TextLanguage
     /// 模型算好的格式化结果（一次性投递，FR-EDIT-39）。视图拿它做**可撤销**的整篇替换。
     var pendingFormat: WorkspaceTabsModel.FormatDelivery?
+    /// 「跳到第 N 行」的一次性投递（`FR-EDIT-44` 标头搜索框回车）。
+    var pendingReveal: WorkspaceTabsModel.RevealDelivery?
     var onTextChange: (String) -> Void
     var onSave: () -> Void
 
@@ -104,6 +106,13 @@ struct CodeEditorView: NSViewRepresentable {
             context.coordinator.appliedFormatID = delivery.id
             textView.applyFormat(delivery.text)
         }
+        // 「跳到命中行」：同样**每条投递只应用一次**（同一条投递重复应用会把用户
+        // 自己挪过的光标拽回去 —— 上下滚动一下就跳回命中行是最烦人的那种"智能"）。
+        if let reveal = pendingReveal, reveal.tabID == tabID,
+           context.coordinator.appliedRevealID != reveal.id {
+            context.coordinator.appliedRevealID = reveal.id
+            textView.reveal(line: reveal.line)
+        }
         let fontChanged = textView.font?.fontName != Self.baseFont.fontName
             || textView.font?.pointSize != Self.baseFont.pointSize
         if fontChanged {
@@ -142,6 +151,8 @@ struct CodeEditorView: NSViewRepresentable {
         var isApplyingExternalText = false
         /// 已经应用过的格式化投递（同一条投递只应用一次）。
         var appliedFormatID: UUID?
+        /// 已经应用过的「跳到第 N 行」投递（同上）。
+        var appliedRevealID: UUID?
         private var highlightWorkItem: DispatchWorkItem?
 
         init(_ parent: CodeEditorView) {
@@ -332,6 +343,18 @@ final class CodeTextView: NSTextView {
             return true
         }
         return super.performKeyEquivalent(with: event)
+    }
+
+    /// 跳到第 `line` 行（1 起）：把光标挪过去并滚到可见（`FR-EDIT-44` 的「回车跳到命中行」）。
+    ///
+    /// 两条口径：
+    ///   · 行号 → 位置**只有一处换算**（`Core/CodeLines.range(ofLine:in:)`，与行号列同一份实现）；
+    ///     这里自己数 `\n` 的话，`U+2028` 这类终止符上会跳到相邻的行；
+    ///   · 光标长度取 0（**不选中整行**）：用户下一步是改这一行，整行高亮只会让他多按一次方向键。
+    func reveal(line: Int) {
+        guard let range = CodeLines.range(ofLine: line, in: string) else { return }
+        setSelectedRange(NSRange(location: range.location, length: 0))
+        scrollRangeToVisible(NSRange(location: range.location, length: 0))
     }
 
     /// 把格式化结果换进编辑器（FR-EDIT-39）。

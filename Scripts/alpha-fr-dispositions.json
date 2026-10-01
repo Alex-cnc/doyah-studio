@@ -755,6 +755,25 @@
      "path": "Core/CodeFormatting.swift"
     }
    ]
+  },
+  {
+   "id": "FR-EDIT-44",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "工作区标头搜索框的界面点击与观感待人工点验（分组与顺序 / 键盘行走 / 行号换算 / 跳过计数已有 30 条 Core 判据；「点下去真的跳到那一行」需人看）",
+   "marker": "**[alpha 不含]**（界面点击与观感待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/WorkspaceHeaderSearchTests.swift"
+    },
+    {
+     "path": "Tests/WorkspaceSearchContentTests.swift"
+    },
+    {
+     "path": "App/Views/WorkspaceHeaderSearch.swift"
+    }
+   ]
   }
  ]
 }

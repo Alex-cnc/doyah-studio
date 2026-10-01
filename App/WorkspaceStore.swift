@@ -27,46 +27,13 @@ final class WorkspaceStore: ObservableObject {
     /// 工作区变化时通知外部（终端启动目录要跟着走）。
     var onWorkspaceChanged: ((String?) -> Void)?
 
-    // MARK: 文件名搜索（FR-EDIT-32）
+    // MARK: 文件名搜索（FR-EDIT-32 / FR-EDIT-44）
     //
-    // 有界：忽略名单 + 深度上限 + 结果上限，全部收在 `WorkspaceSearch`（可单测）。
-    // 这里只负责"什么时候算一次"与缓存 —— 每次敲键都重扫大目录是界面卡顿的经典来源。
-
-    /// 搜索词。改动即重算（短查询会命中缓存）。
-    @Published var searchQuery = "" {
-        didSet { recomputeSearch() }
-    }
-
-    /// 搜索结果；`nil` = 当前没有在搜索。
-    @Published private(set) var searchResult: WorkspaceSearch.Result?
-
-    /// 是否处于搜索状态（界面据此决定显示树还是结果列表）。
-    var isSearching: Bool {
-        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var searchCache: [String: WorkspaceSearch.Result] = [:]
-
-    func clearSearch() {
-        searchQuery = ""
-    }
-
-    private func recomputeSearch() {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty, let rootURL else {
-            searchResult = nil
-            return
-        }
-        // 缓存键带上工作区路径：换工作区后同一个词不能命中旧结果。
-        let key = rootURL.path + "\u{1}" + query
-        if let cached = searchCache[key] {
-            searchResult = cached
-            return
-        }
-        let result = WorkspaceSearch.findFileNames(in: rootURL, query: query)
-        searchCache[key] = result
-        searchResult = result
-    }
+    // 界面入口只有一个：标头那个搜索框（`App/Views/WorkspaceHeaderSearch.swift`，`FR-EDIT-44`：
+    // **文件名 + 内容关键字分两组**）。它自己按需调 `Core/WorkspaceSearch`（一次给两组结果），
+    // 所以这里**不再保留**「只搜文件名」的那套状态与缓存 —— 同一条路留两个入口，
+    // 迟早出现「这个框搜得到、那个框搜不到」，而那是静默的（第 155 轮 §3.33 已定「一套引擎、两个入口」，
+    // 那个"两个入口"指的是标头框与跨文件搜索，不是同一个框的两份实现）。
 
     private var childrenCache: [String: [WorkspaceEntry]] = [:]
     private var expandedPaths: Set<String> = []

@@ -188,11 +188,15 @@ public enum WorkspaceSearch {
     public static let defaultSnippetLimit = 200
     static let binaryProbeBytes = 8192
 
-    /// 按行切分：`\r\n` / `\n` / `\r` 三种终止符都认（与 `Core/CodeLines` 同口径）。
-    static func splitLines(_ text: String) -> [String] {
-        text.replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-            .components(separatedBy: "\n")
+    /// 按**逻辑行**切分：每行在原文里占的 UTF-16 范围（**不含**行终止符）。
+    ///
+    /// **口径不在这一层**：行终止符有 `\n` / `\r\n` / `\r` / `U+2028` / `U+2029` / `U+0085`
+    /// 好几种写法，而"第几行"的权威定义在 `Core/CodeLines`（编辑器行号列读的就是它）。
+    /// 这里以前自己 `components(separatedBy: "\n")`，于是**命中行号与编辑器行号是两套数法** ——
+    /// `U+2028` 之类终止符上两者会差，而 `FR-EDIT-44` 的「回车跳到命中行」正要把行号换回位置
+    /// ⇒ 会**静默跳到相邻的行**。故改为复用 `CodeLines.contentRanges`（同一份实现）。
+    static func lineRanges(in text: String) -> [NSRange] {
+        CodeLines.contentRanges(in: text)
     }
 
     /// 解码成文本；**解不出来 = 二进制**（前 8 KiB 含 NUL 也算）。
@@ -260,7 +264,9 @@ public enum WorkspaceSearch {
                     scanned += 1
 
                     var fileHits: [ContentHit] = []
-                    for (index, raw) in splitLines(text).enumerated() {
+                    let ns = text as NSString
+                    for (index, range) in lineRanges(in: text).enumerated() {
+                        let raw = ns.substring(with: range)
                         guard matches(raw, normalizedQuery: needle) else { continue }
                         if total >= limit { truncated = true; break }
                         fileHits.append(ContentHit(
@@ -282,6 +288,124 @@ public enum WorkspaceSearch {
             skips: skips,
             scannedFiles: scanned,
             isTruncated: truncated
+        )
+    }
+
+    // MARK: - 标头搜索框的结果（FR-EDIT-44）
+
+    /// 标头搜索框（`FR-EDIT-44`）的**一次结果**：文件名命中 + 内容命中。
+    ///
+    /// 为什么要有这一层（而不是让视图连着调两次引擎）：
+    ///   1. **两组的成员与顺序是口径**（文件名在前；内容按文件分组、组内行号升序）——
+    ///      写在视图里就没法单测，而「同一份目录两次检索结果稳定且有序」正是 `FR-EDIT-44` 的判据；
+    ///   2. 键盘行走的**扁平顺序**与渲染顺序必须是**同一个**（两份顺序迟早不一致，
+    ///      症状 = ↑↓ 选中的行与高亮的行不是同一条）；
+    ///   3. 跳过与截断的**如实报数**要一路传到界面（跳过 ≠ 通过）。
+    public struct HeaderSearchResults: Equatable, Sendable {
+
+        /// 一行结果 = 一个文件名命中，或一条内容命中（某文件的某一行）。
+        public enum Row: Equatable, Sendable {
+            case file(WorkspaceEntry)
+            case content(ContentHit)
+
+            /// 这一行指向的文件（回车要打开它）。
+            public var entry: WorkspaceEntry {
+                switch self {
+                case .file(let entry): return entry
+                case .content(let hit): return hit.entry
+                }
+            }
+
+            /// 内容命中的行号；文件名命中没有行（打开即可，不必跳）。
+            public var line: Int? {
+                switch self {
+                case .file: return nil
+                case .content(let hit): return hit.line
+                }
+            }
+
+            /// 稳定 id（同一份目录、同一个词 ⇒ 同一个 id）—— 界面按它做差异渲染。
+            public var id: String {
+                switch self {
+                case .file(let entry): return "file\u{1}\(entry.relativePath)"
+                case .content(let hit): return "content\u{1}\(hit.entry.relativePath)\u{1}\(hit.line)"
+                }
+            }
+        }
+
+        /// 归一化之后的查询词（空 = 没在搜）。
+        public let query: String
+        public let files: [WorkspaceEntry]
+        public let filesTruncated: Bool
+        public let content: ContentResult
+        /// 键盘行走 / 渲染共用的**唯一**顺序：文件名命中在前，随后是内容命中（按文件分组、组内行号升序）。
+        public let rows: [Row]
+
+        public var isEmpty: Bool { rows.isEmpty }
+        /// 内容命中条数。
+        public var contentHitCount: Int { content.hitCount }
+        /// 跳过计数（二进制 / 超限 / 读不出）—— 界面必须看得见。
+        public var skips: SkipReport { content.skips }
+        /// 任一上限触发（界面应如实提示）。
+        public var isTruncated: Bool { filesTruncated || content.isTruncated }
+
+        public static let empty = HeaderSearchResults(
+            query: "", files: [], filesTruncated: false, content: .empty
+        )
+
+        public init(query: String, files: [WorkspaceEntry], filesTruncated: Bool, content: ContentResult) {
+            self.query = query
+            self.files = files
+            self.filesTruncated = filesTruncated
+            self.content = content
+            var rows: [Row] = files.map { Row.file($0) }
+            for group in content.groups {
+                for hit in group.hits { rows.append(.content(hit)) }
+            }
+            self.rows = rows
+        }
+
+        /// 选中下标夹到合法范围（↑↓ 到边界原地不动，不许越界、也不许"跳回 0"）。
+        /// 空结果返回 0 —— 界面拿它当下标用，不必再判一次。
+        public func clamped(_ index: Int) -> Int {
+            guard !rows.isEmpty else { return 0 }
+            return min(max(0, index), rows.count - 1)
+        }
+
+        /// 按 ↑/↓ 走一步（`delta` = ±1），边界上原地不动。
+        public func moved(from index: Int, by delta: Int) -> Int {
+            clamped(clamped(index) + delta)
+        }
+    }
+
+    /// 标头搜索框的一次检索：**文件名命中 + 内容命中**一次算完（`FR-EDIT-44`）。
+    ///
+    /// 两个半边走的是**同一套引擎**（同一个匹配谓词、同一份忽略名单、同样的有界遍历）——
+    /// 「两处各写一套匹配」是这个功能最容易出的分歧，`FR-EDIT-44` 的条文明确不许。
+    public static func headerResults(
+        in root: URL,
+        query: String,
+        fileLimit: Int = defaultResultLimit,
+        limit: Int = defaultResultLimit,
+        perFileLimit: Int = defaultPerFileLimit,
+        maxDepth: Int = defaultMaxDepth,
+        maxFileSize: Int = defaultMaxFileSize,
+        snippetLimit: Int = defaultSnippetLimit,
+        ignored: Set<String> = WorkspaceTree.defaultIgnored,
+        fileManager: FileManager = .default
+    ) -> HeaderSearchResults {
+        let needle = normalize(query: query)
+        guard !needle.isEmpty else { return .empty }
+        let names = findFileNames(
+            in: root, query: query, limit: fileLimit, maxDepth: maxDepth,
+            ignored: ignored, fileManager: fileManager
+        )
+        let contents = findContents(
+            in: root, query: query, limit: limit, perFileLimit: perFileLimit, maxDepth: maxDepth,
+            maxFileSize: maxFileSize, snippetLimit: snippetLimit, ignored: ignored, fileManager: fileManager
+        )
+        return HeaderSearchResults(
+            query: needle, files: names.entries, filesTruncated: names.isTruncated, content: contents
         )
     }
 }

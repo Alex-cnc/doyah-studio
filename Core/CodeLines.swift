@@ -73,6 +73,60 @@ public enum CodeLines {
         return lineNumber(at: offset, lineStarts: starts)
     }
 
+    /// 第 `line` 行（1 起）在文本里占的 **UTF-16 范围**（含该行的行终止符）。
+    ///
+    /// 用途 = `lineNumber(at:)` 的**逆运算**：内容检索命中给的是**行号**
+    /// （`FR-EDIT-44` 的「回车打开并跳到命中行」），编辑器要跳过去就得把行号换回
+    /// `NSRange`。这条换算与 `lineNumber(at:)` 必须同一份实现 —— 两处各写一套
+    /// （一处按 `\n` 数、一处按 `NSString.getLineStart` 数）在 `U+2028` 这类行终止符上
+    /// 会给出**不同的行号**，症状是「跳到了相邻几行」，且是静默的。
+    ///
+    /// 越界（`< 1` 或 `> count(in:)`）返回 `nil`：宁可让调用方看见"没有这一行"，
+    /// 也不要夹到别的行上去（跳错行比不跳更难查）。
+    public static func range(ofLine line: Int, in text: String) -> NSRange? {
+        let ns = text as NSString
+        return range(ofLine: line, lineStarts: lineStarts(in: text), length: ns.length)
+    }
+
+    /// 同上，但用**已经算好的** `lineStarts` 与文本长度（视图里一次跳一行，不必重算整篇）。
+    public static func range(ofLine line: Int, lineStarts starts: [Int], length: Int) -> NSRange? {
+        guard line >= 1, line <= starts.count else { return nil }
+        let start = starts[line - 1]
+        let end = line < starts.count ? starts[line] : length
+        return NSRange(location: start, length: max(0, end - start))
+    }
+
+    /// 每个逻辑行的**内容范围**（**不含**行终止符）—— 与 `lineStarts(in: count:at:)` 同一份切法。
+    ///
+    /// 用途 = 「按行读原文」：内容检索命中要给**该行原文**做摘要，而摘要是摆给用户看的，
+    /// 末尾多带一个 `\n` 只会在结果列表里多出一片空白。
+    /// 行号与切法仍由本类型唯一决定（调用方不要另写一套 `components(separatedBy: "\n")` ——
+    /// 那样在 `U+2028` 这类终止符上与编辑器行号会分叉）。
+    public static func contentRanges(in text: String) -> [NSRange] {
+        let ns = text as NSString
+        let length = ns.length
+        let starts = lineStarts(in: text)
+        return starts.enumerated().map { index, start in
+            let end = index + 1 < starts.count ? starts[index + 1] : length
+            return NSRange(location: start, length: max(0, contentEnd(ofLineAt: start, end: end, in: ns) - start))
+        }
+    }
+
+    /// 一行的内容末尾（去掉行终止符）。`\r\n` 算两字节，其余终止符各一字节。
+    private static func contentEnd(ofLineAt start: Int, end: Int, in ns: NSString) -> Int {
+        var contentEnd = end
+        guard contentEnd > start else { return contentEnd }
+        let last = ns.character(at: contentEnd - 1)
+        guard last == 0x0A || last == 0x0D || last == 0x2028 || last == 0x2029 || last == 0x0085 else {
+            return contentEnd
+        }
+        contentEnd -= 1
+        if last == 0x0A, contentEnd > start, ns.character(at: contentEnd - 1) == 0x0D {
+            contentEnd -= 1
+        }
+        return contentEnd
+    }
+
     /// 同上，但用**已经算好的** `lineStarts`（视图每次重绘要问很多次，不该反复重算整篇文本）。
     public static func lineNumber(at offset: Int, lineStarts starts: [Int]) -> Int {
         guard !starts.isEmpty else { return 1 }
