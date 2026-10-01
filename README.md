@@ -14,6 +14,14 @@ macOS 上的**原生数据库工作台**（Swift / SwiftUI，无 JVM、无 Elect
 - 运行环境：macOS 14 及以上
 - **界面中英双语**：简体中文 / English，**运行时切换、不用重启**（见下「国际化」一节）
 
+## 看一眼（星空紫主题）
+
+![Doyah Studio · 星空紫主题 · 深色](Docs/design/store/doyah-studio-stardust-dark.png)
+
+![Doyah Studio · 星空紫主题 · 浅色](Docs/design/store/doyah-studio-stardust-light.png)
+
+<sub>「星空紫」是需求提出者 2026-10-01 定的那一档主题（观感取自 NASA 韦伯望远镜「宇宙悬崖」的蓝紫星云，值表见 `Core/DesignTheme.swift` 的 `stardust`）；界面里四主题（科技蓝 / 星空紫 / 豆芽绿 / 玫瑰金）可一键切换。两张展示图由 `Scripts/render-store-shot.sh` 出，色源与样张同源（说明见 [`Docs/design/store/README.md`](Docs/design/store/README.md)）。</sub>
+
 ## 能做什么
 
 - **连数据库**：连接管理、按连接切换数据库；密码存放在系统钥匙串，配置文件中不留密码

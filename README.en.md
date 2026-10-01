@@ -17,6 +17,14 @@ export or clear. **With no model endpoint configured, every other feature still 
 - Requirements: macOS 14 or later
 - **Bilingual UI**: English and 简体中文, switchable at runtime (no restart)
 
+## A look at it (Stardust theme)
+
+![Doyah Studio · Stardust theme · dark](Docs/design/store/doyah-studio-stardust-dark.png)
+
+![Doyah Studio · Stardust theme · light](Docs/design/store/doyah-studio-stardust-light.png)
+
+<sub>**Stardust** is the theme the requester defined on 2026-10-01 (its palette is taken from the blue-and-violet nebula in NASA/Webb's "Cosmic Cliffs", see `Core/DesignTheme.swift`). Four themes (Tech Blue / Stardust / Bean Sprout Green / Rose Gold) are switchable in-app. These two images are rendered by `Scripts/render-store-shot.sh`; their colours come from the same tokens as the design sheets (see [`Docs/design/store/README.md`](Docs/design/store/README.md)).</sub>
+
 ## What it does
 
 - **Connect**: connection management, per-connection database switching; passwords live in the system Keychain
