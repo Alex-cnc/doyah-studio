@@ -317,7 +317,7 @@ def self_test() -> int:
         "0|title|submenuAction:|文件|menuSystemFile|文件|ok",
         "0|title|submenuAction:|File|menuSystemFile|文件|ok"), True, ["停在启动语言"])
     if FIXTURE_DUMP.exists():
-        case("⑨ 绿对照：仓库里留档的那份真 dump（第 141 轮实测）",
+        case("⑨ 绿对照：仓库里留档的那份真 dump（第 140 轮实测）",
              FIXTURE_DUMP.read_text(encoding="utf-8"), False)
     else:
         cases.append(("⑨ 绿对照：真 dump 留档", False, ["留档文件不存在：%s" % FIXTURE_DUMP]))
