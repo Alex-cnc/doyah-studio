@@ -68,6 +68,8 @@ describe('ipc', () => {
       'workspace_deletion_summary',
       'workspace_delete',
       'workspace_reveal',
+      'workspace_read_lines',
+      'workspace_read_spans',
     ])
   })
 

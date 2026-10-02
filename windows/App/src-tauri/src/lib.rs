@@ -555,6 +555,22 @@ fn workspace_reveal(
     fs::reveal_entry(&workspace_root, &relative_path, terminal.unwrap_or(false))
 }
 
+/// 读一个文件的**行结构**（行号列宽 / 主换行符 / 是否混排）—— 判定在领域层 code_lines。
+#[tauri::command]
+fn workspace_read_lines(workspace_root: String, relative_path: String) -> Result<fs::FileLines, DbFailure> {
+    fs::read_lines(&workspace_root, &relative_path)
+}
+
+/// 读一个文件的**高亮分词**（按同一份原文切片的字节偏移）。
+#[tauri::command]
+fn workspace_read_spans(
+    workspace_root: String,
+    relative_path: String,
+    language_key: Option<String>,
+) -> Result<fs::FileSpans, DbFailure> {
+    fs::read_spans(&workspace_root, &relative_path, language_key.as_deref())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -602,7 +618,9 @@ pub fn run() {
             workspace_move,
             workspace_deletion_summary,
             workspace_delete,
-            workspace_reveal
+            workspace_reveal,
+            workspace_read_lines,
+            workspace_read_spans
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

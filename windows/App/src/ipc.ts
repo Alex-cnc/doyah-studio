@@ -60,6 +60,9 @@ export const COMMANDS = {
   workspaceDelete: 'workspace_delete',
   // 在资源管理器 / 终端打开（2.1）
   workspaceReveal: 'workspace_reveal',
+  // 编辑面（2.2：行结构 / 高亮分词）
+  workspaceReadLines: 'workspace_read_lines',
+  workspaceReadSpans: 'workspace_read_spans',
 } as const
 
 export interface AppInfo {
@@ -681,5 +684,65 @@ export function workspaceReveal(
     COMMANDS.workspaceReveal,
     { workspaceRoot, relativePath, terminal },
     () => ({ program: 'explorer.exe', args: [], workingDirectory: null, used: 'explorer' as const }),
+  )
+}
+// ── 编辑面（alpha 2.2）──────────────────────────────────────────────────────────────
+
+export type CodeTokenKind = 'comment' | 'str' | 'number' | 'keyword'
+
+/** 一段带位置的高亮分词（`start` / `end` 是**字节偏移**，相对整份原文）。 */
+export interface CodeSpan {
+  start: number
+  end: number
+  kind: CodeTokenKind
+}
+
+/** 一行：内容 + 它后面那个终止符（`null` = 最后一行没有终止符）+ 原文字节起点。 */
+export interface CodeLine {
+  text: string
+  ending: string | null
+  byteStart: number
+}
+
+export interface FileLines {
+  relativePath: string
+  lines: CodeLine[]
+  /** 行号列要留几位（写死宽度会在第 100 行处挤掉数字） */
+  gutterDigits: number
+  dominantEnding: 'lf' | 'crlf' | 'cr' | 'ls' | 'ps' | 'nel' | null
+  /** **混排**（同时有两种以上终止符）⇒ 界面要如实说 */
+  mixedEndings: boolean
+  languageKey: string
+}
+
+export interface FileSpans {
+  relativePath: string
+  spans: CodeSpan[]
+  /** 原文**字节**长度（前端据此校验两边看的是同一份文本） */
+  byteLen: number
+}
+
+/** 读一个文件的行结构（行号列宽 / 主换行符 / 是否混排）。 */
+export function workspaceReadLines(workspaceRoot: string, relativePath: string): Promise<FileLines> {
+  return call(COMMANDS.workspaceReadLines, { workspaceRoot, relativePath }, () => ({
+    relativePath,
+    lines: [],
+    gutterDigits: 1,
+    dominantEnding: null,
+    mixedEndings: false,
+    languageKey: 'lang.plainText',
+  }))
+}
+
+/** 读一个文件的高亮分词（字节偏移）。 */
+export function workspaceReadSpans(
+  workspaceRoot: string,
+  relativePath: string,
+  languageKey?: string,
+): Promise<FileSpans> {
+  return call(
+    COMMANDS.workspaceReadSpans,
+    { workspaceRoot, relativePath, languageKey },
+    () => ({ relativePath, spans: [], byteLen: 0 }),
   )
 }

@@ -19,14 +19,33 @@ import {
   workspaceOpened,
   workspaceOpenTabs,
   workspaceReadFile,
+  workspaceReadLines,
+  workspaceReadSpans,
   workspaceReveal,
   workspaceRename,
+  type CodeSpan,
   type DbFailure,
   type FileContent,
+  type FileLines,
   type FsEntry,
   type WorkspaceHistory,
 } from '../ipc'
 import { entryGlyph, flattenTree, indentPx, neighbouringRow, tabLabel, toggleExpanded, workspaceDisplayName } from '../workspace/logic'
+import { dominantEndingLabel, lineNumberText, segmentsForLine, sliceSegments } from '../workspace/editor'
+
+/** 编辑面数据（2.2）：行结构 + 高亮分词，按相对路径缓存 */
+const editorData = ref(new Map<string, { structure: FileLines; spans: CodeSpan[] }>())
+
+/** 一行要画的片段（按同一份原文的字节偏移归位到行内） */
+function lineSegments(lineIndex: number) {
+  const data = activeEditor.value
+  const line = data?.structure.lines[lineIndex]
+  if (!data || !line) return []
+  // 本行的字节终点 = 下一行的起点（最后一行就是整份原文的末尾）
+  const nextStart =
+    data.structure.lines[lineIndex + 1]?.byteStart ?? line.byteStart + new TextEncoder().encode(line.text).length
+  return sliceSegments(line.text, segmentsForLine(line.text, line.byteStart, nextStart, data.spans))
+}
 
 /** 本版只读：编辑面显示内容，改与存归 2.1 / 2.2 段（不假装能改）。 */
 interface OpenTab {
@@ -174,11 +193,43 @@ async function openFile(entry: FsEntry) {
     }
     tabs.value = [...tabs.value, tab]
     selectedTabId.value = tab.id
+    // 编辑面数据（2.2）：行结构 + 高亮分词。**拉不到不影响打开** —— 退化成纯文本显示
+    await loadEditorData(tab.relativePath)
     await rememberOpenTabs()
   } finally {
     busy.value = ''
   }
 }
+
+/** 打开一个页签时拉一次编辑面数据（行号列宽 / 主换行符 / 混排 / 高亮分词） */
+async function loadEditorData(relativePath: string | null) {
+  if (!relativePath) return
+  try {
+    const [structure, highlight] = await Promise.all([
+      workspaceReadLines(root.value, relativePath),
+      workspaceReadSpans(root.value, relativePath),
+    ])
+    const next = new Map(editorData.value)
+    next.set(relativePath, { structure, spans: highlight.spans })
+    editorData.value = next
+  } catch {
+    // 读不到就不上色、不给行号（**不假装**有）
+  }
+}
+
+/** 当前页签的编辑面数据（没有就是纯文本） */
+const activeEditor = computed(() =>
+  activeTab.value?.relativePath ? editorData.value.get(activeTab.value.relativePath) : undefined,
+)
+
+/** 换行符如实显示：混排要说出来，别偷偷统一 */
+const endingNote = computed(() => {
+  const data = activeEditor.value
+  if (!data) return ''
+  const parts = [`换行符 ${dominantEndingLabel(data.structure.dominantEnding)}`]
+  if (data.structure.mixedEndings) parts.push('**混排**（保存时会统一成上面那种）')
+  return parts.join(' · ')
+})
 
 function closeTab(id: string) {
   const index = tabs.value.findIndex((t) => t.id === id)
@@ -525,9 +576,28 @@ function onTreeKeydown(event: KeyboardEvent) {
           <template v-else-if="activeTab">
             <p class="ws__editor-meta">
               {{ activeTab.relativePath }} · {{ activeTab.languageKey }}
+              <span v-if="endingNote" class="ws__tag">{{ endingNote }}</span>
               <span class="ws__tag">只读（本版）</span>
             </p>
-            <pre class="ws__code">{{ activeTab.content }}</pre>
+            <!-- 编辑面：**行号列 + 高亮**（行号列宽随行数变 —— 写死会在第 100 行处挤掉数字） -->
+            <div v-if="activeEditor" class="ws__gutter-wrap">
+              <div class="ws__gutter" aria-hidden="true">
+                <span v-for="(line, i) in activeEditor.structure.lines" :key="i" class="ws__gutter-num">{{
+                  lineNumberText(i, activeEditor.structure.gutterDigits)
+                }}</span>
+              </div>
+              <pre class="ws__code ws__code--lined"><span
+                v-for="(line, i) in activeEditor.structure.lines"
+                :key="i"
+                class="ws__line"
+              ><span
+                v-for="(piece, j) in lineSegments(i)"
+                :key="j"
+                :class="piece.kind === 'plain' ? undefined : `ws__tok ws__tok--${piece.kind}`"
+              >{{ piece.text }}</span>
+</span></pre>
+            </div>
+            <pre v-else class="ws__code">{{ activeTab.content }}</pre>
           </template>
           <p v-else class="ws__empty">没有打开的页签</p>
         </div>
@@ -807,6 +877,65 @@ function onTreeKeydown(event: KeyboardEvent) {
   font-size: var(--ds-font-caption-size);
 }
 
+/* 行号列 + 代码（2.2）：两栏并排，行高必须一致（否则行号与内容会错开半行） */
+.ws__gutter-wrap {
+  display: flex;
+  align-items: stretch;
+  background: var(--ds-color-surface-content);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  overflow: auto;
+}
+
+.ws__gutter {
+  display: flex;
+  flex-direction: column;
+  padding: var(--ds-spacing-s) var(--ds-spacing-xs);
+  border-right: var(--ds-metric-hairline) solid var(--ds-hairline);
+  background: var(--ds-color-surface-sidebar);
+  color: var(--ds-color-text-tertiary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  line-height: var(--ds-metric-list-row-height);
+  text-align: right;
+  user-select: none;
+}
+
+.ws__gutter-num {
+  display: block;
+  white-space: pre;
+}
+
+.ws__code--lined {
+  flex: 1;
+  line-height: var(--ds-metric-list-row-height);
+  border: 0;
+  border-radius: 0;
+  white-space: pre;
+}
+
+.ws__line {
+  display: block;
+  min-height: var(--ds-metric-list-row-height);
+}
+
+/* 高亮色只走令牌（棘轮守着） */
+.ws__tok--comment {
+  color: var(--ds-color-text-tertiary);
+}
+
+.ws__tok--str {
+  color: var(--ds-color-accent-accent);
+}
+
+.ws__tok--number {
+  color: var(--ds-color-status-warning);
+}
+
+.ws__tok--keyword {
+  color: var(--ds-color-text-primary);
+  font-weight: 600;
+}
 .ws__code {
   margin: 0;
   padding: var(--ds-spacing-s);

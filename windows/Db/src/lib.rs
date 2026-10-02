@@ -10,10 +10,12 @@
 //! **服务端条件浏览**（`browse`，FR-DATA-02）。对象树、SQL 执行面按 `windows/版本计划.md` 继续。
 
 pub mod browse;
+pub mod code_lines;
 pub mod config;
 pub mod db_type;
 pub mod file_ops;
 pub mod foreign_key;
+pub mod highlight;
 pub mod inspect;
 pub mod reveal;
 pub mod sql;
@@ -27,12 +29,19 @@ pub use reveal::{ensure_inside, explorer_plan, pick_terminal, terminal_plan, Rev
 pub use sql::{explain, spans, tokenize, StatementSpan, Token, TokenKind};
 pub use writeback::{edits_to_dml, statement_risk, CellEdit, DmlStatement, Risk, RowKey, TransactionPlan};
 pub use tree::{group_by_schema, search, sort_objects, ObjectKind, ObjectNode, SearchHit};
+pub use code_lines::{
+    digits_of, dominant_ending, gutter_digits, is_mixed, join_with, line_count, lines, Line, LineEnding,
+};
 pub use config::{ConnectionBundle, BundleError, ConnectionConfig, SshTunnelConfig};
 pub use db_type::{DatabaseType, SslMode};
 pub use foreign_key::{parse_edge, query as fk_query, Direction, Edge, Option_};
 pub use file_ops::{
     can_move_into, decide_rename, deletion_summary, unique_name, validate_name, DeletionSummary,
     Failure as FileOpFailure, RenameDecision, DELETION_COUNT_LIMIT,
+};
+// 注：	okenize / TokenKind 已被 sql 模块占用（那边是 SQL 编辑面的分词）⇒ 这里加 code 前缀
+pub use highlight::{
+    syntax_of, tokenize as tokenize_code, CodeSpan, CodeSyntax, CodeTokenKind,
 };
 pub use inspect::{CellValue, Field, Shape, SummaryLanguage};
 pub use url::{FormMerge, ImportedConnection, UrlParseError};

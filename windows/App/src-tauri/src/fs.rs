@@ -865,3 +865,150 @@ mod reveal_tests {
         assert!(found.is_some(), "Windows 上应当至少能找到 PowerShell 或 cmd");
     }
 }
+
+// ── 编辑面：行结构 + 高亮（2.2）──────────────────────────────────────────────────
+//
+// 读一个文件的**行结构**：行内容 / 每行的终止符 / 行号列宽 / 主换行符 / 是否混排。
+// 判定全在领域层（`code_lines`）—— 这里只把文件读出来喂给它。
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLines {
+    pub relative_path: String,
+    pub lines: Vec<doyah_studio_db::Line>,
+    /// 行号列要留几位（`99 → 2` / `10000 → 5`；写死宽度会在第 100 行处挤掉数字）
+    pub gutter_digits: usize,
+    /// 主换行符（`None` = 单行文件，无从判断）
+    pub dominant_ending: Option<doyah_studio_db::LineEnding>,
+    /// **混排**（同时有两种以上终止符）⇒ 界面要如实说，别偷偷统一
+    pub mixed_endings: bool,
+    /// 语言键（高亮按它取语法）
+    pub language_key: &'static str,
+}
+
+pub fn read_lines(workspace_root: &str, relative: &str) -> Result<FileLines, DbFailure> {
+    let file = read_text_file(workspace_root, relative)?;
+    let text = &file.content;
+    Ok(FileLines {
+        relative_path: file.relative_path,
+        lines: doyah_studio_db::lines(text),
+        gutter_digits: doyah_studio_db::gutter_digits(text),
+        dominant_ending: doyah_studio_db::dominant_ending(text),
+        mixed_endings: doyah_studio_db::is_mixed(text),
+        language_key: file.language_key,
+    })
+}
+
+/// 高亮分词：`(相对路径, 分词表, 原文长度)` —— 前端**按同一份原文切片**上色。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSpans {
+    pub relative_path: String,
+    pub spans: Vec<doyah_studio_db::CodeSpan>,
+    /// 原文**字节**长度（前端可据此校验两边看到的是同一份文本）
+    pub byte_len: usize,
+}
+
+pub fn read_spans(workspace_root: &str, relative: &str, language_key: Option<&str>) -> Result<FileSpans, DbFailure> {
+    let file = read_text_file(workspace_root, relative)?;
+    let language = match language_key {
+        Some(key) => language_from_key(key),
+        None => doyah_studio_db::TextLanguage::detect(&file.relative_path),
+    };
+    Ok(FileSpans {
+        relative_path: file.relative_path,
+        spans: doyah_studio_db::tokenize_code(&file.content, language),
+        byte_len: file.content.len(),
+    })
+}
+
+/// 语言键 → 语言（**认不出一律纯文本**：猜错会按错的语法上色，比不上色更误导）。
+fn language_from_key(key: &str) -> doyah_studio_db::TextLanguage {
+    use doyah_studio_db::TextLanguage as L;
+    match key {
+        "lang.markdown" => L::Markdown,
+        "lang.rust" => L::Rust,
+        "lang.typescript" => L::TypeScript,
+        "lang.javascript" => L::JavaScript,
+        "lang.json" => L::Json,
+        "lang.toml" => L::Toml,
+        "lang.yaml" => L::Yaml,
+        "lang.sql" => L::Sql,
+        "lang.shell" => L::Shell,
+        "lang.html" => L::Html,
+        "lang.css" => L::Css,
+        _ => L::PlainText,
+    }
+}
+
+#[cfg(test)]
+mod lines_tests {
+    use super::*;
+
+    fn root(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("doyah-lines-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn reads_line_structure_with_gutter_width_and_endings() {
+        let dir = root("read");
+        let root_text = dir.to_string_lossy().to_string();
+        // 三种换行符各来一次 + 一个混排文件
+        std::fs::write(dir.join("lf.rs"), "fn a() {}\nfn b() {}\n").unwrap();
+        std::fs::write(dir.join("crlf.rs"), "fn a() {}\r\nfn b() {}\r\n").unwrap();
+        std::fs::write(dir.join("cr.rs"), "fn a() {}\rfn b() {}\r").unwrap();
+        std::fs::write(dir.join("mixed.txt"), "a\r\nb\nc").unwrap();
+
+        let lf = read_lines(&root_text, "lf.rs").unwrap();
+        assert_eq!(lf.lines.len(), 3, "末尾终止符算多一行");
+        assert_eq!(lf.dominant_ending, Some(doyah_studio_db::LineEnding::Lf));
+        assert!(!lf.mixed_endings);
+        assert_eq!(lf.gutter_digits, 1);
+
+        let crlf = read_lines(&root_text, "crlf.rs").unwrap();
+        assert_eq!(crlf.dominant_ending, Some(doyah_studio_db::LineEnding::Crlf));
+        assert_eq!(crlf.lines.len(), 3, "CRLF 算一个终止符，不是两个");
+
+        let cr = read_lines(&root_text, "cr.rs").unwrap();
+        assert_eq!(cr.dominant_ending, Some(doyah_studio_db::LineEnding::Cr));
+        assert_eq!(cr.lines.len(), 3);
+
+        let mixed = read_lines(&root_text, "mixed.txt").unwrap();
+        assert!(mixed.mixed_endings, "混排要如实报");
+        assert_eq!(mixed.lines.len(), 3);
+
+        // 行号列宽：造一个 12 行的文件 ⇒ 2 位
+        let twelve: String = (1..=12).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(dir.join("twelve.txt"), &twelve).unwrap();
+        assert_eq!(read_lines(&root_text, "twelve.txt").unwrap().gutter_digits, 2);
+    }
+
+    #[test]
+    fn spans_cover_the_content_and_identify_the_language() {
+        let dir = root("spans");
+        let root_text = dir.to_string_lossy().to_string();
+        let source = "fn main() {\n    let s = \"hi\"; // 注释\n}\n";
+        std::fs::write(dir.join("main.rs"), source).unwrap();
+
+        let spans = read_spans(&root_text, "main.rs", None).unwrap();
+        assert_eq!(spans.byte_len, source.len(), "前端据此校验两边看的是同一份文本");
+        assert!(!spans.spans.is_empty());
+        // 关键字 / 字符串 / 注释都认出来了
+        let kinds: Vec<doyah_studio_db::CodeTokenKind> = spans.spans.iter().map(|s| s.kind).collect();
+        assert!(kinds.contains(&doyah_studio_db::CodeTokenKind::Keyword));
+        assert!(kinds.contains(&doyah_studio_db::CodeTokenKind::Str));
+        assert!(kinds.contains(&doyah_studio_db::CodeTokenKind::Comment));
+        // 每个 span 都能安全切片
+        for span in &spans.spans {
+            assert!(source.is_char_boundary(span.start) && source.is_char_boundary(span.end));
+        }
+        // 明确给语言键时按它算（给 markdown ⇒ 空表）
+        let plain = read_spans(&root_text, "main.rs", Some("lang.markdown")).unwrap();
+        assert!(plain.spans.is_empty(), "Markdown 不上色");
+        // 认不出的键 ⇒ 纯文本
+        assert!(read_spans(&root_text, "main.rs", Some("lang.nope")).unwrap().spans.is_empty());
+    }
+}
