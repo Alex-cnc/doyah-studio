@@ -12,6 +12,7 @@
 pub mod appearance;
 pub mod browse;
 pub mod code_lines;
+pub mod command_history;
 pub mod config;
 pub mod cursor;
 pub mod db_type;
@@ -59,6 +60,7 @@ pub use cursor::{anchor_prefix, remember, restore, Cursor, CursorAnchor, Restore
 pub use code_lines::{
     digits_of, dominant_ending, gutter_digits, is_mixed, join_with, line_count, lines, Line, LineEnding,
 };
+pub use command_history::{Entry as CommandHistoryEntry, History as CommandHistory, HISTORY_LIMIT as COMMAND_HISTORY_LIMIT};
 pub use config::{ConnectionBundle, BundleError, ConnectionConfig, SshTunnelConfig};
 pub use db_type::{DatabaseType, SslMode};
 pub use foreign_key::{parse_edge, query as fk_query, Direction, Edge, Option_};
