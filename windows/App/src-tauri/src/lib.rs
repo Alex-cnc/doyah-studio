@@ -492,6 +492,15 @@ fn workspace_closed() -> Result<serde_json::Value, DbFailure> {
     Ok(serde_json::json!({ "history": next }))
 }
 
+/// 记下"当前开着的页签"（只记路径 —— 内容以盘上为准，恢复时按路径重读）。
+#[tauri::command]
+fn workspace_open_tabs(workspace_root: String, paths: Vec<String>) -> Result<serde_json::Value, DbFailure> {
+    let (history, _) = fs::read_history();
+    let next = history.opened_workspace(&workspace_root, "").recording_open_tabs(&paths);
+    fs::write_history(&next)?;
+    Ok(serde_json::json!({ "history": next }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -532,7 +541,8 @@ pub fn run() {
             workspace_read_file,
             workspace_history,
             workspace_opened,
-            workspace_closed
+            workspace_closed,
+            workspace_open_tabs
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

@@ -13,6 +13,7 @@ import {
   workspaceHistory,
   workspaceListDirectory,
   workspaceOpened,
+  workspaceOpenTabs,
   workspaceReadFile,
   type DbFailure,
   type FileContent,
@@ -116,6 +117,9 @@ async function openWorkspace() {
     const stamp = new Date().toISOString()
     const recorded = await workspaceOpened(candidate, stamp)
     history.value = recorded.history
+    // 会话恢复：把上次开着的页签**按路径重读**（盘上没有的跳过并报出来）
+    await restoreOpenTabs(recorded.history.openTabs ?? [])
+    await rememberOpenTabs()
   } catch (e) {
     failure.value = describeError(e)
     root.value = ''
@@ -164,6 +168,7 @@ async function openFile(entry: FsEntry) {
     }
     tabs.value = [...tabs.value, tab]
     selectedTabId.value = tab.id
+    await rememberOpenTabs()
   } finally {
     busy.value = ''
   }
@@ -181,6 +186,7 @@ function closeTab(id: string) {
     const fallback = remaining[Math.min(index, remaining.length - 1)] ?? remaining[remaining.length - 1]
     selectedTabId.value = fallback ? fallback.id : HOME_ID
   }
+  void rememberOpenTabs()
 }
 
 /** 键盘上下在树里走位（**到边界停住**，不循环 —— 见 logic.test.ts） */
@@ -198,6 +204,45 @@ async function closeWorkspace() {
   tabs.value = [homeTab()]
   selectedTabId.value = HOME_ID
   selected.value = null
+}
+
+/** 把"当前开着的页签"记下来（只记路径；内容以盘上为准） */
+async function rememberOpenTabs() {
+  if (!root.value) return
+  const paths = tabs.value.map((t) => t.relativePath).filter((p): p is string => p !== null)
+  try {
+    const recorded = await workspaceOpenTabs(root.value, paths)
+    history.value = recorded.history
+  } catch {
+    // 记不住不影响用（下次少恢复几个页签而已），不打断当前操作
+  }
+}
+
+/** 恢复上次开着的页签：**按路径重新读盘**；盘上没有的**跳过并报出来**（不假装还在） */
+async function restoreOpenTabs(paths: readonly string[]) {
+  const missing: string[] = []
+  for (const path of paths) {
+    try {
+      const file = await workspaceReadFile(root.value, path)
+      const tab: OpenTab = {
+        id: `tab-restored-${path}`,
+        title: path.split('/').pop() ?? path,
+        relativePath: file.relativePath,
+        content: file.content,
+        languageKey: file.languageKey,
+        saved: file.content,
+      }
+      tabs.value = [...tabs.value, tab]
+    } catch {
+      missing.push(path)
+    }
+  }
+  if (missing.length) {
+    failure.value = {
+      message: `有 ${missing.length} 个上次开着的文件没恢复：${missing.join('、')}`,
+      hint: '它们可能被移动或删除了；**没有假装还在**。修好后重新点开即可。',
+    }
+  }
 }
 
 function onTreeKeydown(event: KeyboardEvent) {

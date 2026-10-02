@@ -51,6 +51,7 @@ export const COMMANDS = {
   workspaceHistory: 'workspace_history',
   workspaceOpened: 'workspace_opened',
   workspaceClosed: 'workspace_closed',
+  workspaceOpenTabs: 'workspace_open_tabs',
 } as const
 
 export interface AppInfo {
@@ -557,12 +558,14 @@ export interface WorkspaceHistory {
   files: HistoryEntry[]
   workspaces: HistoryEntry[]
   currentRoot: string | null
+  /** **上次开着的页签**（只记路径，按顺序）—— 恢复时按路径重读，盘上没有的跳过 */
+  openTabs: string[]
 }
 
 /** 读历史。读不出来时给**空历史 + 一句原因**（不抛：记录坏掉不该让工作区打不开）。 */
 export function workspaceHistory(): Promise<{ history: WorkspaceHistory; warning: string | null }> {
   return call(COMMANDS.workspaceHistory, {}, () => ({
-    history: { files: [], workspaces: [], currentRoot: null },
+    history: { files: [], workspaces: [], currentRoot: null, openTabs: [] },
     warning: null,
   }))
 }
@@ -570,13 +573,19 @@ export function workspaceHistory(): Promise<{ history: WorkspaceHistory; warning
 /** 记一次「打开了这个工作区」：进「最近打开」+ 记为当前根。 */
 export function workspaceOpened(workspaceRoot: string, at: string): Promise<{ history: WorkspaceHistory }> {
   return call(COMMANDS.workspaceOpened, { workspaceRoot, at }, () => ({
-    history: { files: [], workspaces: [], currentRoot: null },
+    history: { files: [], workspaces: [], currentRoot: null, openTabs: [] },
   }))
 }
 
 /** 关掉当前工作区：只清当前根，**保留**最近打开里的记录。 */
 export function workspaceClosed(): Promise<{ history: WorkspaceHistory }> {
   return call(COMMANDS.workspaceClosed, {}, () => ({
-    history: { files: [], workspaces: [], currentRoot: null },
+    history: { files: [], workspaces: [], currentRoot: null, openTabs: [] },
+  }))
+}
+/** 记下当前开着的页签（只记路径；内容以盘上为准）。 */
+export function workspaceOpenTabs(workspaceRoot: string, paths: string[]): Promise<{ history: WorkspaceHistory }> {
+  return call(COMMANDS.workspaceOpenTabs, { workspaceRoot, paths }, () => ({
+    history: { files: [], workspaces: [], currentRoot: null, openTabs: [] },
   }))
 }

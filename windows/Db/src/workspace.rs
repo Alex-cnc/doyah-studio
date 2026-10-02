@@ -233,6 +233,12 @@ pub struct History {
     /// 等于删掉"最近打开"里的那条记录。混成一个字段，"关掉"就变成了"删记录"。
     #[serde(default)]
     pub current_root: Option<String>,
+    /// **上次开着的页签**（只记路径，按顺序）—— 会话恢复用。
+    ///
+    /// **不记内容**：内容以盘上的为准（记内容是"代码库副本"的老问题：体积、陈旧、
+    /// 以及"我到底在编辑哪一份"）。恢复时**按路径重新读盘**；盘上没有的路径**跳过并报出来**。
+    #[serde(default)]
+    pub open_tabs: Vec<String>,
 }
 
 impl History {
@@ -247,8 +253,27 @@ impl History {
     }
 
     /// **关掉**当前工作区：只清"当前根"，**保留**"最近打开"清单里的记录。
+    ///
+    /// 页签也一并清掉（工作区都关了，还记着它的页签没意义）。
     pub fn closed_workspace(mut self) -> Self {
         self.current_root = None;
+        self.open_tabs.clear();
+        self
+    }
+
+    /// 记下"当前开着的页签"（只记路径，去重、保持顺序）。
+    pub fn recording_open_tabs(mut self, paths: &[String]) -> Self {
+        let mut seen: Vec<String> = Vec::new();
+        for path in paths {
+            let trimmed = path.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if !seen.iter().any(|p| p == trimmed) {
+                seen.push(trimmed.to_string());
+            }
+        }
+        self.open_tabs = seen;
         self
     }
 
@@ -713,10 +738,35 @@ mod tests {
     }
 
     #[test]
+    fn open_tabs_are_recorded_by_path_deduped_and_cleared_when_closing() {
+        let h = History::default()
+            .opened_workspace("D:/ws", "2026-10-02T20:00:00Z")
+            .recording_open_tabs(&[
+                "src/main.rs".to_string(),
+                "  README.md  ".to_string(),
+                "src/main.rs".to_string(), // 重复：只留一条
+                String::new(),             // 空：不记
+            ]);
+        // 顺序保持、去重、trim
+        assert_eq!(h.open_tabs, vec!["src/main.rs".to_string(), "README.md".to_string()]);
+        // **不记内容**：这个结构里根本没有 content 字段（内容以盘上为准）
+        let text = serde_json::to_string(&h).unwrap();
+        assert!(!text.contains("content"), "历史里不该出现内容：{text}");
+        // 关掉工作区 ⇒ 页签一并清掉；但最近打开清单仍在
+        let closed = h.closed_workspace();
+        assert!(closed.open_tabs.is_empty());
+        assert_eq!(closed.workspaces.len(), 1);
+        // 旧文件（没有 openTabs）也要读得进来
+        let old = "{\"files\":[],\"workspaces\":[],\"currentRoot\":\"D:/ws\"}";
+        let parsed: History = serde_json::from_str(old).unwrap();
+        assert!(parsed.open_tabs.is_empty());
+    }
+
+    #[test]
     fn history_json_round_trips_and_tolerates_an_older_file() {
         let h = History::default().opened_workspace("D:/ws", "2026-10-02T20:00:00Z");
         let text = serde_json::to_string(&h).unwrap();
-        assert!(text.contains("\"currentRoot\""), "{text}");
+        assert!(text.contains("\"currentRoot\"") && text.contains("\"openTabs\""), "{text}");
         let back: History = serde_json::from_str(&text).unwrap();
         assert_eq!(back, h);
         // 旧文件（没有 currentRoot 那一项）也要读得进来 —— 会话恢复不该让老用户开不了工作区

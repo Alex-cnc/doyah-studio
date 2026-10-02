@@ -61,6 +61,7 @@ describe('ipc', () => {
       'workspace_history',
       'workspace_opened',
       'workspace_closed',
+      'workspace_open_tabs',
     ])
   })
 
