@@ -4,7 +4,7 @@
 // 契约来源：`Docs/概要设计.md` §8.5.4「一样」清单 + macOS 侧 `Core/ActivityBar.swift`。
 // 四模块位与对侧的语义一一对应；**未开工的视图如实标 ⬜**（不半建、不假装能点）。
 
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { appInfo, type AppInfo } from './ipc'
 import CommandPalette from './shell/CommandPalette.vue'
 import TitleBar from './shell/TitleBar.vue'
@@ -25,6 +25,25 @@ import {
 import { activeItem, setActive } from './shell/activityBarStore'
 
 const info = ref<AppInfo | null>(null)
+// 工作区根（面板里搜文件要用它；由 WorkspaceView 在打开/关闭工作区时同步上来）
+const workspaceRoot = ref('')
+
+/** 给 WorkspaceView 的"请打开这个文件"信号（**先声明后使用**） */
+const openFileSignal = ref<string | null>(null)
+
+/**
+ * 面板里选中一个**文件**：切到工作区视图并打开它。
+ *
+ * 为什么要切视图：面板是全局的，而"打开文件"是工作区的事 —— 不切过去就会"点了没反应"。
+ * `openFileSignal` 是给 WorkspaceView 的信号（它才是真正能打开文件的那一层）。
+ */
+async function openFromPalette(target: { relativePath: string }) {
+  setActive('workspace')
+  openFileSignal.value = target.relativePath
+  // 让监听方处理完就清掉（避免重复触发）
+  await nextTick()
+  openFileSignal.value = null
+}
 // 命令面板（2.9）：Ctrl+K 打开；清单来自 `shell/commands.ts`，匹配排序在 Rust 侧
 const paletteOpen = ref(false)
 
@@ -141,7 +160,14 @@ function onSelect(id: ActivityBarItemId) {
     <!-- 星云皮肤（2.8）：只在「星空紫 + 深色 + 开关开」时由 data-nebula 显形；纯装饰、不吃点击 -->
     <div class="nebula" aria-hidden="true"></div>
     <!-- 命令面板（2.9）：Ctrl+K 开关；清单在 shell/commands.ts，匹配排序在 Rust 侧 -->
-    <CommandPalette :open="paletteOpen" :view="activeItem === 'workspace' ? 'workspace' : 'database'" @close="paletteOpen = false" @run="runCommand" />
+    <CommandPalette
+      :open="paletteOpen"
+      :view="activeItem === 'workspace' ? 'workspace' : 'database'"
+      :workspace-root="workspaceRoot"
+      @close="paletteOpen = false"
+      @run="runCommand"
+      @open="openFromPalette"
+    />
     <p v-if="commandNote" class="shell__command-note">{{ commandNote }}</p>
     <p v-else class="shell__command-hint">Ctrl+K 打开命令面板</p>
     <!-- 外观控件：深浅轴 × 配色轴 + 皮肤开关（规则全在 Rust 侧，这里只改值） -->
@@ -181,7 +207,11 @@ function onSelect(id: ActivityBarItemId) {
       <main class="shell__main">
         <!-- 数据库：**真库链路**（连库 → 对象树 → SQL → 结果），驱动在 Rust 外壳 -->
         <DatabaseView v-if="activeItem === 'database'" />
-        <WorkspaceView v-else-if="activeItem === 'workspace'" />
+        <WorkspaceView
+          v-else-if="activeItem === 'workspace'"
+          :open-file-signal="openFileSignal"
+          @root-changed="workspaceRoot = $event"
+        />
         <p v-else class="shell__placeholder">
           {{ itemTitle(activeItem) }}视图尚未开工（⬜ 不半建）。
         </p>

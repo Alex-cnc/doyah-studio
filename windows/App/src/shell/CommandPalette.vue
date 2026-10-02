@@ -7,17 +7,21 @@
 //   ③ 执行完就关面板；**执行失败要说出来**（由调用方负责显示）。
 
 import { computed, nextTick, ref, watch } from 'vue'
-import { paletteSearch, type PaletteMatch } from '../ipc'
+import { paletteSearch, workspaceSearch, type PaletteItem, type PaletteMatch } from '../ipc'
 import { commandsFor, type Command } from './commands'
+import { fileToItem, mergeItems, targetOf } from './paletteTargets'
 
 const props = defineProps<{
   open: boolean
   view: 'workspace' | 'database'
+  /** 工作区根（有它才能把**文件**也搜进面板） */
+  workspaceRoot?: string
 }>()
 
 const emit = defineEmits<{
   (event: 'close'): void
   (event: 'run', command: Command): void
+  (event: 'open', target: { relativePath: string; line?: number }): void
 }>()
 
 const query = ref('')
@@ -38,9 +42,24 @@ function toItems(commands: readonly Command[]) {
   }))
 }
 
+/** 把**工作区文件**也搜进来（与命令同一张榜；搜索用的是 Rust 侧同一个引擎） */
+async function openableItems(needle: string): Promise<PaletteItem[]> {
+  const root = props.workspaceRoot
+  if (!root || needle.trim().length < 2) return [] // 太短就别搜（一搜一大片，反而吵）
+  try {
+    const found = await workspaceSearch(root, needle, { byContent: false, limit: 200 })
+    return found.files.map((path) => fileToItem(path, false))
+  } catch {
+    // 搜不到就不并进来（**不假装搜过**）
+    return []
+  }
+}
+
 async function refresh() {
   if (!props.open) return
-  matches.value = await paletteSearch(query.value, toItems(available.value))
+  const commands = toItems(available.value)
+  const openables = await openableItems(query.value)
+  matches.value = await paletteSearch(query.value, mergeItems(commands, openables))
   // 选中项夹进范围（结果变少时不该停在空位上）
   cursor.value = Math.min(cursor.value, Math.max(0, matches.value.length - 1))
 }
@@ -83,12 +102,21 @@ function move(delta: number) {
   cursor.value = Math.max(0, Math.min(matches.value.length - 1, next))
 }
 
+/** 选中并执行：**先看 id 是哪一类**（命令 / 文件 / 对象），再分派 */
 function runSelected() {
   const chosen = matches.value[cursor.value]
   if (!chosen) return
-  const command = available.value.find((c) => c.id === chosen.item.id)
-  if (!command) return
-  emit('run', command)
+  const target = targetOf(chosen.item.id)
+  if (target.kind === 'command') {
+    const command = available.value.find((c) => c.id === target.id)
+    if (!command) return
+    emit('run', command)
+  } else if (target.kind === 'file') {
+    emit('open', { relativePath: target.relativePath })
+  } else {
+    // 数据库对象：本侧还没做"从面板跳到对象"，如实说明而不是静默什么都不做
+    return
+  }
   emit('close')
 }
 </script>

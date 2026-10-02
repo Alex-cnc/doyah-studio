@@ -7,7 +7,7 @@
 //   · **纯逻辑层**（`workspace/logic.ts`）管显示串与树的展开/键盘走位（有 13 例单测）。
 //   · 本组件只管状态与排版。
 
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   workspaceClosed,
   workspaceCreate,
@@ -262,6 +262,26 @@ function plainOf(spans: MdSpan[]): string {
 function isMdBlock(block: MdBlock): boolean {
   return typeof block.kind === 'object' && block.kind !== null
 }
+const props = defineProps<{
+  /** 命令面板选中的文件（由外壳递进来）；`null` = 没有待打开的文件 */
+  openFileSignal?: string | null
+}>()
+
+const emit = defineEmits<{
+  (event: 'root-changed', root: string): void
+}>()
+
+/** 工作区根变化时同步给外壳（面板里搜文件要用它） */
+watch(root, (value) => emit('root-changed', value), { immediate: true })
+
+/** 面板递进来的"请打开这个文件"：真正打开它（**只有这一层会开文件**） */
+watch(
+  () => props.openFileSignal,
+  async (path) => {
+    if (!path || !root.value) return
+    await openFile({ name: path.split('/').pop() ?? path, relativePath: path, kind: 'file', isExpandable: false })
+  },
+)
 /** 本版只读：编辑面显示内容，改与存归 2.1 / 2.2 段（不假装能改）。 */
 interface OpenTab {
   id: string
