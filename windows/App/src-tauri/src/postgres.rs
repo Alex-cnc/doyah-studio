@@ -102,6 +102,33 @@ impl DbFailure {
     }
 }
 
+/// 启动 SQL 的**逐条**执行结果（FR-CONN-17）。
+///
+/// 口径（照抄领域层 `startup_statements` 的设计意图）：**逐条发、逐条报错** ——
+/// 一条失败不该把后面的一起吞掉（`search_path` 没设上，后面所有查询都可能找错表），
+/// 所以这里**不返回一个布尔**，而是每一句各自的结果、各自的失败原话。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupOutcome {
+    /// 语句原文（已 trim；注释与空段在领域层就被丢掉了）
+    pub sql: String,
+    pub ok: bool,
+    /// 失败时的可读原因（服务端原话 + 提示）；成功为 `None`
+    pub failure: Option<DbFailure>,
+}
+
+/// 连接结果：服务端自述 + 启动 SQL 的逐条结果。
+///
+/// **为什么启动 SQL 失败不阻断连接**：语句本身合法与否是用户的事（例如给一个没权限的库设
+/// `search_path`）；把它做成"连不上"会让用户连界面都进不去，反而查不了为什么。⇒ 连上照常返回，
+/// 失败**如实摆在界面上**（哪一条、服务端说了什么）。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectReport {
+    pub info: ServerInfo,
+    pub startup: Vec<StartupOutcome>,
+}
+
 /// 拼驱动要的连接串。**口令单独传**（`password()`），绝不进连接串（会进日志与进程列表）。
 pub fn connection_string(params: &ConnectParams) -> String {
     format!(
@@ -146,6 +173,49 @@ pub struct PgSession {
 impl PgSession {
     pub fn info(&self) -> &ServerInfo {
         &self.info
+    }
+
+    /// 驱动客户端（**只在表示层内部用**：lib.rs 的命令层与本文件的启动 SQL 下发）。
+    /// 公开它是因为 lib.rs 要拿会话去跑查询 —— 领域层永远看不到它（那边零驱动）。
+    pub fn client(&self) -> &Client {
+        &self.client
+    }
+
+    /// **连接 + 下发启动 SQL**（FR-CONN-17）。
+    ///
+    /// 连接失败 ⇒ `Err`（连不上就是连不上）；连上之后**启动 SQL 逐条发**，某条失败
+    /// **不阻断**，结果逐条摆在 `ConnectReport::startup` 里（见该类型的口径说明）。
+    pub async fn connect_with_startup(
+        params: &ConnectParams,
+        startup_sql: &[String],
+    ) -> Result<(Self, ConnectReport), DbFailure> {
+        let session = Self::connect(params).await?;
+        let mut startup = Vec::with_capacity(startup_sql.len());
+        for sql in startup_sql {
+            // 用 `execute`（不带结果集、也不留行）：启动 SQL 一般是 `SET` / `SELECT set_config`，
+            // 走 `run` 会把可能的结果集实体化一份却没处放 —— 这里只要"成没成"与服务端原话。
+            let outcome = match session.client().prepare(sql).await {
+                Ok(statement) => match session.client().execute(&statement, &[]).await {
+                    Ok(_) => StartupOutcome { sql: sql.clone(), ok: true, failure: None },
+                    Err(e) => StartupOutcome {
+                        sql: sql.clone(),
+                        ok: false,
+                        failure: Some(DbFailure::from_driver_text(&server_error_text(&e))),
+                    },
+                },
+                Err(e) => StartupOutcome {
+                    sql: sql.clone(),
+                    ok: false,
+                    failure: Some(DbFailure::from_driver_text(&server_error_text(&e))),
+                },
+            };
+            startup.push(outcome);
+        }
+        let info_for_report = session.info().clone();
+        Ok((session, ConnectReport {
+            info: info_for_report,
+            startup,
+        }))
     }
 
     /// **连接**：失败时给服务端原话 + 提示。TLS 档本轮按明文并如实告知调用方。

@@ -22,12 +22,16 @@ import {
   type QueryResult,
   type SavedConnection,
   type ServerInfo,
+  type StartupOutcome,
   type TableNode,
 } from '../ipc'
 
 const form = ref<ConnectParams>({ ...LAB_CONNECTION })
 const password = ref('')
 const remember = ref(true)
+/** 启动 SQL（FR-CONN-17）：连接后自动执行；**逐条发、逐条报错**（一条失败不吞掉后面的） */
+const startupSql = ref('')
+const startup = ref<StartupOutcome[]>([])
 const saved = ref<SavedConnection[]>([])
 const info = ref<ServerInfo | null>(null)
 const tables = ref<TableNode[]>([])
@@ -131,12 +135,25 @@ async function connect() {
   busy.value = '连接中…'
   clearFailure()
   try {
-    info.value = await dbConnect({ ...form.value, password: password.value || undefined })
+    // 启动 SQL 的切分在领域层做（注释丢掉、空段不算、字符串里的分号不切）。
+    // ⚠️ 如实登记**这一处简化**：前端先按「分号 + 行尾」粗切一遍再交上去，
+    // 所以字符串里带分号的启动 SQL（罕见）在前端就会被切错 —— 正解是让 Rust 收整段原文、
+    // 由 `doyah_studio_db::config::split_statements` 切（下一段改接口时一并做）。
+    const statements = startupSql.value.trim()
+      ? startupSql.value
+          .split(/;\s*(?:\r?\n|$)/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0 && !s.startsWith('--'))
+      : []
+    const report = await dbConnect({ ...form.value, password: password.value || undefined }, statements)
+    info.value = report.info
+    startup.value = report.startup
     result.value = null
     await loadTables()
   } catch (e) {
     info.value = null
     tables.value = []
+    startup.value = []
     failure.value = describeError(e)
   } finally {
     busy.value = ''
@@ -243,6 +260,33 @@ async function probe() {
       {{ info.serverEncoding }} · schema {{ info.currentSchema ?? '—' }}） ·
       <span :title="info.version">{{ versionShort }}</span>
     </p>
+
+    <!-- 启动 SQL（FR-CONN-17）：连接后自动执行；逐条发、逐条报 -->
+    <details class="db__startup">
+      <summary>
+        启动 SQL（连接后自动执行，逐条发、逐条报错）
+        <span v-if="startup.length" class="db__note">
+          —— 上次：{{ startup.filter((s) => s.ok).length }} 成 / {{ startup.filter((s) => !s.ok).length }} 败
+        </span>
+      </summary>
+      <textarea
+        v-model="startupSql"
+        spellcheck="false"
+        rows="2"
+        aria-label="启动 SQL"
+        placeholder="例如 SET search_path = app, public;  或  SET statement_timeout = '5s'"
+      />
+      <ul v-if="startup.length" class="db__startup-list">
+        <li v-for="(item, i) in startup" :key="i" :class="{ 'db__startup-bad': !item.ok }">
+          <span class="db__startup-mark">{{ item.ok ? '✅' : '❌' }}</span>
+          <code>{{ item.sql }}</code>
+          <div v-if="item.failure" class="db__startup-fail">
+            <p class="db__failure-msg">{{ item.failure.message }}</p>
+            <p class="db__failure-hint">{{ item.failure.hint }}</p>
+          </div>
+        </li>
+      </ul>
+    </details>
 
     <!-- 失败：原话 + 提示，两段都显示 -->
     <div v-if="failure" class="db__failure" role="alert">
@@ -389,6 +433,50 @@ async function probe() {
 
 .db__conn-del:hover {
   color: var(--ds-color-status-danger);
+}
+
+.db__startup {
+  padding: 0 var(--ds-spacing-m) var(--ds-spacing-s);
+}
+
+.db__startup summary {
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
+}
+
+.db__startup textarea {
+  width: 100%;
+  margin-top: var(--ds-spacing-xs);
+  padding: var(--ds-spacing-xs);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  resize: vertical;
+}
+
+.db__startup-list {
+  margin: var(--ds-spacing-xs) 0 0;
+  padding-left: var(--ds-spacing-m);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__startup-list code {
+  font-family: var(--ds-font-stack);
+}
+
+.db__startup-bad {
+  color: var(--ds-color-status-danger);
+}
+
+.db__startup-mark {
+  margin-right: var(--ds-spacing-xs);
+}
+
+.db__startup-fail {
+  margin: var(--ds-spacing-xs) 0;
 }
 
 .db__field input {

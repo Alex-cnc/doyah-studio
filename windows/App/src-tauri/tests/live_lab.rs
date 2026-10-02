@@ -93,6 +93,48 @@ async fn main_chain_connect_tables_query_on_real_db() {
 }
 
 #[tokio::test]
+async fn startup_sql_is_sent_one_by_one_and_reported_per_statement() {
+    let Some(params) = lab_params() else { return };
+    // 三句：一句设 5s、一句设成坏值、一句也是好的 —— 坏的那句**不许吞掉**后面那句
+    let statements = vec![
+        "SET statement_timeout = '5s'".to_string(),
+        "SET statement_timeout = 'not-a-duration'".to_string(),
+        "SET search_path = app, public".to_string(),
+    ];
+    let (session, report) = PgSession::connect_with_startup(&params, &statements)
+        .await
+        .expect("连接本身应当成功（启动 SQL 失败不阻断连接）");
+
+    // ① 逐条结果：好 / 坏 / 好，顺序与条数都要对
+    assert_eq!(report.startup.len(), 3, "{:?}", report.startup);
+    assert!(report.startup[0].ok, "第 1 句应当成功");
+    assert!(!report.startup[1].ok, "第 2 句是坏值，必须判失败");
+    assert!(report.startup[2].ok, "第 3 句不该被第 2 句连累（逐条发、逐条报）");
+    let failure = report.startup[1].failure.as_ref().expect("失败必须带原因");
+    assert!(!failure.message.is_empty() && !failure.hint.is_empty());
+
+    // ② 生效要不要真？要真：第 1 句的 5s 应当真的设在会话上
+    let shown = session
+        .run("SHOW statement_timeout", 10)
+        .await
+        .expect("查会话参数应当成功");
+    assert_eq!(
+        shown.rows.first().and_then(|r| r.first().cloned()).flatten().as_deref(),
+        Some("5s"),
+        "第 1 句应当真的生效（{shown:?}）"
+    );
+
+    // ③ 第 3 句也真的生效了（坏语句之后的语句照样执行到）
+    let path = session.run("SHOW search_path", 10).await.expect("查 search_path 应当成功");
+    let text = path.rows.first().and_then(|r| r.first().cloned()).flatten().unwrap_or_default();
+    assert!(text.contains("app"), "第 3 句应当真的生效：{text}");
+
+    // ④ 报告里的服务端自述与连接自述一致（同一条连接，不是连了两次）
+    assert_eq!(report.info.database, session.info().database);
+    assert_eq!(report.info.user, session.info().user);
+}
+
+#[tokio::test]
 async fn unreachable_server_reports_readable_reason() {
     let mut params = lab_params().unwrap_or(ConnectParams {
         host: "127.0.0.1".into(),

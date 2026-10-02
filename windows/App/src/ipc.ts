@@ -165,6 +165,20 @@ export interface ProbeReport {
   selectOne: string | null
 }
 
+/** 启动 SQL 的逐条结果（FR-CONN-17）：**逐条发、逐条报** —— 一条失败不吞掉后面的。 */
+export interface StartupOutcome {
+  sql: string
+  ok: boolean
+  /** 失败时的可读原因（服务端原话 + 提示）；成功为 null */
+  failure: DbFailure | null
+}
+
+/** 连接结果：服务端自述 + 启动 SQL 逐条结果。 */
+export interface ConnectReport {
+  info: ServerInfo
+  startup: StartupOutcome[]
+}
+
 /** 本机**专用实验库**（自己起的测试集群：端口 5433、trust 认证；不动本机现有那台）。
  *  写在这里只为减少手输 —— 它**不是**产品默认值（产品默认值在领域层的 `DatabaseType` 上）。 */
 export const LAB_CONNECTION: ConnectParams = {
@@ -175,8 +189,8 @@ export const LAB_CONNECTION: ConnectParams = {
   sslMode: 'disable',
 }
 
-export function dbConnect(params: ConnectParams): Promise<ServerInfo> {
-  return call(COMMANDS.dbConnect, { params }, () => {
+export function dbConnect(params: ConnectParams, startupSql?: string[]): Promise<ConnectReport> {
+  return call(COMMANDS.dbConnect, { params, startupSql }, () => {
     throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里连库（npm run tauri dev）。' } as DbFailure
   })
 }

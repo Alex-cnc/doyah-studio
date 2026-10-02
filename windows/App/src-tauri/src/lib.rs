@@ -10,8 +10,8 @@ mod query;
 
 pub use connections::{config_from_form, ConnectionStore};
 pub use postgres::{
-    ConnectParams, DbFailure, PgSession, ProbeReport, QueryResult, ServerInfo, TableNode,
-    MAX_QUERY_ROWS,
+    ConnectParams, ConnectReport, DbFailure, PgSession, ProbeReport, QueryResult, ServerInfo,
+    StartupOutcome, TableNode, MAX_QUERY_ROWS,
 };
 pub use query::{DatasetSummary, GridWindowPayload, ViewCache, MAX_WINDOW_ROWS};
 
@@ -86,18 +86,25 @@ fn grid_window(
 // ── 数据库命令（真库链路；模型来自领域层 Db，驱动只在本层）─────────────────────────────
 
 /// 连接（**一次一个**：多连接管理是后续段的事）。成功后把会话留在状态里。
+///
+/// `startup_sql` = 连接后自动执行的语句（FR-CONN-17，**已由领域层逐条切好**）。
+/// 某条失败**不阻断连接** —— 逐条结果在返回值里如实摆出来（见 `ConnectReport` 的口径说明）。
 #[tauri::command]
-async fn db_connect(state: State<'_, ShellState>, params: ConnectParams) -> Result<ServerInfo, DbFailure> {
+async fn db_connect(
+    state: State<'_, ShellState>,
+    params: ConnectParams,
+    startup_sql: Option<Vec<String>>,
+) -> Result<ConnectReport, DbFailure> {
     // 先把旧会话放掉（换连接 = 断旧连新），**先放锁再 await**，别把锁带过 await
     {
         let mut slot = state.db.lock().await;
         *slot = None;
     }
-    let session = PgSession::connect(&params).await?;
-    let info = session.info().clone();
+    let statements = startup_sql.unwrap_or_default();
+    let (session, report) = PgSession::connect_with_startup(&params, &statements).await?;
     let mut slot = state.db.lock().await;
     *slot = Some(Arc::new(session));
-    Ok(info)
+    Ok(report)
 }
 
 /// 断开（把会话丢掉；驱动任务随之结束）。
