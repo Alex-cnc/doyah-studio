@@ -430,6 +430,7 @@
 		DA85C7AF38935C712A9F02D4 /* SQLArchiveSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4826050B3500065064F239F9 /* SQLArchiveSheet.swift */; };
 		DB09B34A49F724B5F1720F1D /* CreateDatabaseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E868219A2614E4454ABA19A /* CreateDatabaseSheet.swift */; };
 		DB2EE7A820938A1420FCF198 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B84440E46CC78EBF1848779 /* AppTheme.swift */; };
+		DB380C41F63C8B7052BF3B5B /* WorkspaceRowAffordanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87660241B4806CDB6A659AC5 /* WorkspaceRowAffordanceTests.swift */; };
 		DB43888D8DFFD62FCF4D5A79 /* DoyahCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AE8BE22E68AD7A621E98BDCC /* DoyahCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		DB587AE8585ABD12430EDF0B /* DoyahCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AE8BE22E68AD7A621E98BDCC /* DoyahCore.framework */; };
 		DB9F944F9219BC2A34B0664A /* TreeActionProvenanceConventionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6BECEF718279DBD2CE05F2B /* TreeActionProvenanceConventionTests.swift */; };
@@ -839,6 +840,7 @@
 		859A23CF786D5A0C29A786AC /* ExecutionScopeTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionScopeTitle.swift; sourceTree = "<group>"; };
 		86147C51C5A0090DF3A2B5AF /* ResultExportEncoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultExportEncoding.swift; sourceTree = "<group>"; };
 		86D957C3BF5E7A3ABAFF0FC6 /* MySQLService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySQLService.swift; sourceTree = "<group>"; };
+		87660241B4806CDB6A659AC5 /* WorkspaceRowAffordanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceRowAffordanceTests.swift; sourceTree = "<group>"; };
 		876DF6256A868580CCA4BB0C /* ConnectionGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionGrouping.swift; sourceTree = "<group>"; };
 		88B98C951F5916A3167EAEE3 /* ConnectionFailureNonConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionFailureNonConnectionTests.swift; sourceTree = "<group>"; };
 		891C58A5D0B425F0AF553B94 /* ObjectTreeRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeRows.swift; sourceTree = "<group>"; };
@@ -1346,6 +1348,7 @@
 				78D054047B42AF0EA1AAD3D8 /* WorkspaceFileOperationsTests.swift */,
 				EC33E95E3E895D8C4D07DD77 /* WorkspaceHeaderSearchTests.swift */,
 				3F998F6A252B5E4E9AD29756 /* WorkspaceHistoryTests.swift */,
+				87660241B4806CDB6A659AC5 /* WorkspaceRowAffordanceTests.swift */,
 				E42E50D3B719A3EC3F1B0CB1 /* WorkspaceSearchContentTests.swift */,
 				FD9874F27B81672A096337C6 /* WorkspaceTabTests.swift */,
 				C6D7E71EBADF7CD8DF8881BB /* WorkspaceTreeTests.swift */,
@@ -2412,6 +2415,7 @@
 				2A597DA1C155A580EA6B6E80 /* WorkspaceFileOperationsTests.swift in Sources */,
 				54F173246672B06B189CE4B0 /* WorkspaceHeaderSearchTests.swift in Sources */,
 				76F554299EA64A24C5078BD0 /* WorkspaceHistoryTests.swift in Sources */,
+				DB380C41F63C8B7052BF3B5B /* WorkspaceRowAffordanceTests.swift in Sources */,
 				8AFCBF8FFBEB58032BC2A107 /* WorkspaceSearchContentTests.swift in Sources */,
 				A05C9C882FC50796FD8D2C0A /* WorkspaceTabTests.swift in Sources */,
 				27B3101291A099E2230F69D4 /* WorkspaceTreeTests.swift in Sources */,
