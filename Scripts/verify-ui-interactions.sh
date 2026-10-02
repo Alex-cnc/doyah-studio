@@ -61,13 +61,22 @@ set -euo pipefail
 # 每一行有自己的捕获器、菜单由这一行现建、目标就是 `row.object`（「不许退回整树一份 + 悬停解析」
 # 那半由两份 Swift 判据的 `XCTAssertFalse` 钉住，不在这里重复）。
 
+# ## 第四批（`T-20261002-027`，开发循环第 162 轮）：标题栏搜索栏**点击地图**
+#
+# `TestsUISnapshot/TitleBarSearchClickProbeTests.swift` 判「**看得见的框 = 能点的框**」这条：
+# 可见框内的采样点逐点断言命中目标 = 输入框或其接力层（任一点落空 ⇒ 判红）、留白点按下真的把
+# 键盘交给同一框里的输入框、清空按钮那一段留给 SwiftUI、以及**同一套量法喂修前那份框必须判红**
+# （红/绿成对）。**真因**（第 162 轮量到的）：SwiftUI 画的背景填充与 `strokeBorder` 默认参与命中
+# 测试，压在那层接力之上 ⇒ 第 161 轮那层「装上却没接到点击」。宿主是**手工搭的真窗口 + 工具条**
+# （与 SwiftUI 工具条项同形），进程内合成事件 ⇒ 零权限。
+
 ROOT="$(cd "$(dirname "${0}")/.." && pwd -P)"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -129,10 +138,11 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 9:
+    if int(total) < 14:
         failures.append(
-            f"只跑了 {total} 条 —— 三批九条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
-            " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行）应当都跑到"
+            f"只跑了 {total} 条 —— 四批十四条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
+            " 点击地图 / 留白点给键盘 / 清空按钮那一段 / 修前对照 / 装饰层源锚点）应当都跑到"
         )
 
 expected = [
@@ -145,6 +155,11 @@ expected = [
     "testEachRowKindGetsItsOwnMenuNotTheServersMenu",
     "testMenuTargetFollowsTheRowUnderTheMouse",
     "testMenuIsDeterministicAndFollowsTheRow",
+    "testEveryVisiblePointInTheBoxLandsOnTheFieldOrTheRelay",
+    "testPaddingClicksHandTheFieldTheKeyboard",
+    "testClearButtonZoneIsLeftToSwiftUI",
+    "testLegacyHitTestableDecorationsWouldSwallowTheBox",
+    "testSourceAnchorsKeepTheDecorationsOutOfHitTesting",
 ]
 for name in expected:
     if name not in log:
@@ -159,7 +174,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print("✓ 九条都真跑过、都以 passed 收尾、没有跳过")
+print("✓ 十四条都真跑过、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -228,6 +243,16 @@ anchors = {
         ("public static let menuKinds: Set<DatabaseObject.Kind> = [",
          "「哪些节点类型该有右键菜单」不再在 Core 里单点定义（漏一个就判不出来了）"),
     ),
+    "App/Views/TitleBarSearchField.swift": (
+        (".fill(Theme.surface(.raised))\n                .allowsHitTesting(false)",
+         "背景填充又参与命中测试了 ⇒ 点击会被 SwiftUI 收走，可见框里的留白重新点不动（T-20261002-027 的真因）"),
+        (".strokeBorder(Theme.hairline(scheme), lineWidth: Metrics.hairline)\n                .allowsHitTesting(false)",
+         "边线又参与命中测试了 ⇒ 同上"),
+        (".foregroundStyle(Theme.text(.tertiary))\n                .allowsHitTesting(false)",
+         "放大镜图标又参与命中测试了 ⇒ 那 22pt 里点不动"),
+        ("TitleBarSearchMetrics.trailingReserve(",
+         "接力层不再让开清空按钮那一段 ⇒ 会把 `×` 的点击抢走"),
+    ),
 }
 
 failures = []
@@ -241,7 +266,8 @@ for relative, needles in anchors.items():
         if needle not in text:
             failures.append(f"{relative} 里「{needle}」不见了：{why}")
 
-for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests"):
+for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests",
+              "TitleBarSearchClickProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -255,7 +281,7 @@ PY
 
 echo
 echo "==> 完成：证据日志在 ${OUT}/"
-echo "    本入口判住的九条："
+echo "    本入口判住的十四条："
 echo "    · §1 FR-EDIT-29 鼠标上报（真 PTY 上的 SGR 报文：右下角点击列行变大、拖动 32、滚轮 64、⌥ 归本机）"
 echo "    · §1 FR-EDIT-29 方向键 DECCKM（?1h 时 ^[OA、复位后 ^[[B）"
 echo "    · §1 FR-EDIT-29 右键菜单（五项齐备且指向产品自己的动作、接管 + ⌥ 时按钮码 10 转发）"
@@ -265,3 +291,7 @@ echo "    · §3 FR-EDIT-27 ⌥ 拖拽列选（逐行一段、短行夹到行尾
 echo "    · §4 FR-META-14 逐行菜单**内容**（七类节点各一张图；动作项与 Core 的规则双向对账；非服务器行不许出现服务器菜单项）"
 echo "    · §4 FR-META-14 菜单作用在**哪一行**（悬停优先 / 盒子空退回选中项 / 表头与无菜单节点 / 都不成立时的空菜单）"
 echo "    · §4 FR-META-14 菜单确定性与跟随行（同一行两次逐字节一致、不同行必须画成两个样子）"
+echo "    · §1 FR-EDIT-37 标题栏搜索栏点击地图（可见框内 34 点全部落到输入框或接力层：修前 30 点落空 / 修后 0 点）"
+echo "    · §1 FR-EDIT-37 留白点按下把键盘交给输入框（30/30 拿到第一响应者 = 字段编辑器）"
+echo "    · §1 FR-EDIT-37 清空按钮那一段留给 SwiftUI（接力层按实量 27pt 让开，不吞 × 的点击）"
+echo "    · §1 FR-EDIT-37 修前对照（装饰参与命中测试的那份框必须判红 —— 这条判据量得出来）"

@@ -49,6 +49,7 @@ struct TitleBarSearchField: View {
             Image(systemName: "magnifyingglass")
                 .imageScale(.small)
                 .foregroundStyle(Theme.text(.tertiary))
+                .allowsHitTesting(false)
             TextField(L(.windowSearchPlaceholder), text: $appState.globalSearchQuery)
                 .textFieldStyle(.plain)
                 .font(Theme.font(.body))
@@ -73,10 +74,12 @@ struct TitleBarSearchField: View {
         .background(
             RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                 .fill(Theme.surface(.raised))
+                .allowsHitTesting(false)
         )
         .overlay(
             RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                 .strokeBorder(Theme.hairline(scheme), lineWidth: Metrics.hairline)
+                .allowsHitTesting(false)
         )
         // **看得见的框 = 能点的框**（派活单 `T-20261002-011`，合并 `T-20261001-041` / `051`）：
         // 留白与放大镜那一段由下面这层 AppKit 视图接手（真因、以及为什么不走 SwiftUI 手势，
