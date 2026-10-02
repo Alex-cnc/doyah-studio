@@ -143,10 +143,12 @@ export interface TableNode {
   kind: string
 }
 
-/** 一次查询的结果：列名 + 行（每格文本或 null）+ 截断与影响行数。 */
+/** 一次查询的结果：列名 + 行（每格文本或 null）+ 数值形态 + 截断与影响行数。 */
 export interface QueryResult {
   columns: string[]
   rows: (string | null)[][]
+  /** 每行的**数值形态**（该列解析得出数字才有值）：排序 / 筛选**按值比**，不拿显示串比 */
+  numRows: (number | null)[][]
   returned: number
   truncated: boolean
   affected: number | null

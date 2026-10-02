@@ -17,12 +17,15 @@ use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 /// 一次查询最多实体化多少行（超过就如实报截断）。
 pub const MAX_QUERY_ROWS: usize = 5000;
 
-/// 结果集：列名 + 行（每格是文本或 NULL）+ 截断标记 + 影响行数。
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+/// 结果集：列名 + 行（每格是文本或 NULL）+ 数值形态 + 截断标记 + 影响行数。
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResult {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<Option<String>>>,
+    /// 每行的**数值形态**（该列解析得出数字才有值）：排序 / 筛选**按值比**，
+    /// 不拿显示字符串比（`"9" > "10"` 这种字典序错排是客户端表格的经典缺陷）。
+    pub num_rows: Vec<Vec<Option<f64>>>,
     /// 服务端一共回来多少行；`rows.len() < returned` = 被上限截断
     pub returned: usize,
     pub truncated: bool,
@@ -291,6 +294,7 @@ impl PgSession {
                 .await
                 .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
             return Ok(QueryResult {
+            num_rows: Vec::new(),
                 columns: Vec::new(),
                 rows: Vec::new(),
                 returned: 0,
@@ -327,6 +331,7 @@ impl PgSession {
         }
         Ok(QueryResult {
             columns,
+            num_rows: numeric_view(&rows),
             returned: rows.len(),
             rows,
             truncated: capped,
@@ -463,6 +468,20 @@ fn unknown(row: &tokio_postgres::Row, index: usize, col_type: &tokio_postgres::t
     }
 }
 
+/// 显示文本 → **数值形态**（解析不出就是 `None`）。
+///
+/// 口径：只认"看起来就是数"的串（可带正负号、小数、科学计数、前后空白）；
+/// **千分位逗号不算**（`1,234` 在有的区域设置里是数字、有的不是 —— 判不准就不判，
+/// 宁可让那一列按文本排，也不猜）。
+pub fn numeric_view(rows: &[Vec<Option<String>>]) -> Vec<Vec<Option<f64>>> {
+    rows.iter()
+        .map(|row| {
+            row.iter()
+                .map(|cell| cell.as_deref().and_then(|s| s.trim().parse::<f64>().ok()))
+                .collect()
+        })
+        .collect()
+}
 /// 简单协议的消息 → 结果集（**这一处**做解码，界面只拿字符串）。
 pub fn result_from_messages(messages: &[SimpleQueryMessage], limit: usize) -> QueryResult {
     let mut acc = QueryAccumulator::new(limit);
@@ -522,6 +541,7 @@ impl QueryAccumulator {
 
     pub fn finish(self) -> QueryResult {
         QueryResult {
+            num_rows: Vec::new(),
             columns: self.columns,
             rows: self.rows,
             returned: self.returned,

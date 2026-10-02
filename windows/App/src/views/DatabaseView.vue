@@ -25,6 +25,7 @@ import {
   type StartupOutcome,
   type TableNode,
 } from '../ipc'
+import { toTsv, visibleOrder } from '../grid/view'
 
 const form = ref<ConnectParams>({ ...LAB_CONNECTION })
 const password = ref('')
@@ -32,6 +33,42 @@ const remember = ref(true)
 /** 启动 SQL（FR-CONN-17）：连接后自动执行；**逐条发、逐条报错**（一条失败不吞掉后面的） */
 const startupSql = ref('')
 const startup = ref<StartupOutcome[]>([])
+
+// 结果网格的**显示态**：筛选词 + 排序列/方向（真正的比较逻辑在 `grid/view.ts`，那里有单测）
+const filter = ref('')
+const sortColumn = ref<number | null>(null)
+const sortDesc = ref(false)
+const copied = ref('')
+
+/** 看得见的那一屏：先筛后排（序号是 `result.rows` 的下标） */
+const visible = computed<number[]>(() =>
+  result.value
+    ? visibleOrder(result.value, filter.value, sortColumn.value === null ? null : { column: sortColumn.value, desc: sortDesc.value })
+    : [],
+)
+
+/** 点表头：同一列再点就翻方向；换列则从升序开始 */
+function toggleSort(column: number) {
+  if (sortColumn.value === column) {
+    sortDesc.value = !sortDesc.value
+  } else {
+    sortColumn.value = column
+    sortDesc.value = false
+  }
+}
+
+/** 复制**看得见的**那一屏（TSV，贴 Excel 直接分列；NULL 是空单元格） */
+async function copyVisible() {
+  if (!result.value) return
+  const text = toTsv(result.value, visible.value)
+  try {
+    await navigator.clipboard.writeText(text)
+    copied.value = `已复制 ${visible.value.length} 行`
+  } catch (e) {
+    copied.value = '复制失败：浏览器/外壳不给剪贴板权限（可手动选中表格复制）'
+  }
+  setTimeout(() => (copied.value = ''), 2500)
+}
 const saved = ref<SavedConnection[]>([])
 const info = ref<ServerInfo | null>(null)
 const tables = ref<TableNode[]>([])
@@ -354,15 +391,30 @@ async function probe() {
         </form>
 
         <div v-if="result && result.columns.length" class="db__grid-wrap">
+          <div class="db__grid-tools">
+            <input v-model="filter" type="search" placeholder="筛选（当前结果内，不分大小写）" aria-label="筛选结果" />
+            <span class="db__note">显示 {{ visible.length }} / {{ result.rows.length }} 行</span>
+            <button class="db__btn" type="button" @click="copyVisible">复制（TSV）</button>
+            <span v-if="copied" class="db__note">{{ copied }}</span>
+          </div>
           <table class="db__grid">
             <thead>
               <tr>
-                <th v-for="c in result.columns" :key="c">{{ c }}</th>
+                <th
+                  v-for="(c, j) in result.columns"
+                  :key="c"
+                  class="db__grid-head"
+                  :title="`点一下按 ${c} 排序（再点翻方向）`"
+                  @click="toggleSort(j)"
+                >
+                  {{ c }}
+                  <span v-if="sortColumn === j" class="db__sort-mark">{{ sortDesc ? '▼' : '▲' }}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, i) in result.rows" :key="i">
-                <td v-for="(cell, j) in row" :key="j" :class="{ 'db__null': cell === null }">
+              <tr v-for="i in visible" :key="i">
+                <td v-for="(cell, j) in result.rows[i]" :key="j" :class="{ 'db__null': cell === null }">
                   {{ cell === null ? 'NULL' : cell }}
                 </td>
               </tr>
@@ -646,6 +698,30 @@ async function probe() {
   white-space: nowrap;
 }
 
+.db__grid-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  margin-bottom: var(--ds-spacing-xs);
+}
+
+.db__grid-tools input {
+  height: var(--ds-metric-control-height);
+  padding: 0 var(--ds-spacing-s);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+}
+
+.db__grid-head {
+  cursor: pointer;
+}
+
+.db__sort-mark {
+  margin-left: var(--ds-spacing-xs);
+  color: var(--ds-color-accent-accent);
+}
 .db__grid th {
   position: sticky;
   top: 0;
