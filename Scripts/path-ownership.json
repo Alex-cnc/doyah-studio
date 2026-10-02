@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "repo": "DoyahStudio",
+  "purpose": "「盘上的路径归谁」的唯一清单（判据 = 同目录的 check-path-ownership.py，三仓同源；三仓副本见该脚本 docstring）。清单可以各仓不同，判据逻辑逐字节同一份。",
+  "trees": [
+    {
+      "id": "macos",
+      "owner": "macos",
+      "hosts": [
+        "darwin"
+      ],
+      "contract_side": "apple",
+      "label": "macOS 端（大河马 / 本机侧；Swift + SwiftUI / AppKit）",
+      "paths": [
+        "App/",
+        "Core/",
+        "CLI/",
+        "Platform/macOS/",
+        "Tests/",
+        "TestsPlatform/",
+        "TestsUISnapshot/",
+        "Tools/",
+        "Vendor/",
+        "Package.swift",
+        "Package.resolved",
+        "project.yml",
+        "DoyahStudio.xcodeproj/"
+      ],
+      "note": "与派活单 T-20261002-029 给的清单一致，只多一条 `Package.resolved`（SwiftPM 锁文件，属 Swift 族）；`Scripts/` 单列进 shared（见 shared_note）。"
+    },
+    {
+      "id": "windows",
+      "owner": "windows",
+      "hosts": [
+        "win32",
+        "windows"
+      ],
+      "contract_side": "nonapple",
+      "label": "Windows 端（黄鳍大肥鱼 / Windows 机；Tauri 2 + Vue 3 + TypeScript / Rust）",
+      "paths": [
+        "windows/"
+      ]
+    }
+  ],
+  "shared": [
+    "Docs/",
+    "Scripts/",
+    "AGENT-SPEC.md"
+  ],
+  "shared_note": "共享面 = 两侧都写的地方：改它**不算越界**，但要走声明式台账（清单 `shared_ledger` 改前登记 / 本次新增行注 `shared-surface：理由` / 提交信息注 `shared-surface: 理由`），三处都没有理由 ⇒ 判红。`Scripts/` 在派活单 T-20261002-029 里被同时列进「macOS 仓根族」与「共享面」两处 ⇒ 本清单按**共享面**收口：里面的判据（`check-*.py` / `verify-all.sh`）被两侧共同调用，`Scripts/doc-numbers.json` 的 `checkScriptParity` 也是按「闭环引用」写的，判它是某一端专属会与现行事实相抵。要改成 macOS 专属 ⇒ 改这一行 + 记一笔变更。",
+  "shared_require_declaration": true,
+  "shared_ledger": [
+    {
+      "glob": "Scripts/check-path-ownership.py",
+      "reason": "派活单 T-20261002-029（人类主人四项之二/四 · macOS 半）落「路径归属判据」本体，三仓同源副本之一",
+      "by": "macos",
+      "at": "2026-10-02"
+    },
+    {
+      "glob": "Scripts/path-ownership.json",
+      "reason": "同上：本仓的路径归属清单（三仓各一份，脚本逐字节同一份）",
+      "by": "macos",
+      "at": "2026-10-02"
+    },
+    {
+      "glob": "Scripts/verify-all.sh",
+      "reason": "派活单 T-20261002-029：把路径归属判据接进闭环第 16 项（项数仍十八，接线不新增项块）",
+      "by": "macos",
+      "at": "2026-10-02"
+    },
+    {
+      "glob": "Docs/proposals/0004-windows-技术栈改定-tauri-vue-rust.md",
+      "reason": "派活单 T-20261002-029：反向扫的对侧残留清单写进本提案的回执（红线 6：对侧独占节只提醒不代改）",
+      "by": "macos",
+      "at": "2026-10-02"
+    }
+  ],
+  "unclassified_allow": [
+    {
+      "path": "README.md",
+      "reason": "仓根门面（两侧都可能改措辞 / 加索引）"
+    },
+    {
+      "path": "README.en.md",
+      "reason": "仓根门面（英文版，同上）"
+    },
+    {
+      "path": "LICENSE",
+      "reason": "许可证（不归任何一端）"
+    },
+    {
+      "path": "THIRD-PARTY-NOTICES.md",
+      "reason": "第三方声明（随依赖变，两侧都可能追加）"
+    },
+    {
+      "path": "RELEASE-0.1.0-alpha.md",
+      "reason": "发布说明（历史件，只读性维护）"
+    },
+    {
+      "path": "RELEASE-0.2.0-alpha.md",
+      "reason": "发布说明（同上）"
+    },
+    {
+      "path": ".gitignore",
+      "reason": "仓级忽略规则（两侧都可能加条目）"
+    },
+    {
+      "path": ".clang/",
+      "reason": "本机工具目录（格式配置），非任一端产品代码"
+    },
+    {
+      "path": ".handoff/",
+      "reason": "会话交接目录（工具产物），非任一端产品代码"
+    }
+  ]
+}

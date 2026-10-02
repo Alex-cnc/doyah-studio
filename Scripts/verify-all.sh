@@ -665,7 +665,7 @@ python3 Scripts/check-cli-failure-readability.py
 python3 Scripts/check-cell-decode-coverage.py
 python3 Scripts/check-cell-decode-coverage.py --self-test
 
-echo "==> 16/18 越界检查（三书独占节：改动不得落在对侧节内）"
+echo "==> 16/18 越界检查（三书独占节 + 路径归属：改动不得落在对侧节 / 对侧子树上）"
 # 形态 A（2026-09-27 拍板）：三书单点定稿，但「平台实现」层按端独占 —— 标记 `[独占:macos]` /
 # `[独占:windows]` 的节只由该侧改；本机 = macOS 侧。判据与逃生门见脚本头注释。
 # 第二条是**门禁自己的证据**（L-42）：**23 例**负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——
@@ -674,6 +674,16 @@ echo "==> 16/18 越界检查（三书独占节：改动不得落在对侧节内�
 # 拿不到基线退出 2 + 本侧未跟踪增量），`--base` 显式给了却解析不到**也退出 2**（不许静默放行）。
 python3 Scripts/check-exclusive-sections.py
 python3 Scripts/check-exclusive-sections.py --self-test
+# 路径归属判据（派活单 `T-20261002-029`，2026-10-02 立；三仓同源副本，清单 = `Scripts/path-ownership.json`）：
+# 上面那个判据管「文档里的**节**」归谁，这一个管「盘上的**目录 / 文件**」归谁 ——
+# 改动落在**对侧子树**（对侧 = `windows/`，本侧 = 仓根 Swift 族）⇒ 判红并点名文件；
+# 共享面（`Docs/` · `Scripts/` · `AGENT-SPEC.md`）不算越界，但要**声明式台账**：
+# 清单 `shared_ledger` 改前登记理由（glob 命中）/ 本次新增行注 `shared-surface：理由` /
+# 提交信息注 `shared-surface: 理由`，三处都没有理由 ⇒ 判红。本侧由清单 `hosts` 推断
+# （macOS = `darwin` ⇒ macos 端），不写死 —— 换台机器跑不会把运行方当成对侧。
+# 第二条是**门禁自己的证据**：**26 例**（对侧子树 / 共享面未登记 / 清单过期 / 本地落后远端 / 中文路径…）。
+python3 Scripts/check-path-ownership.py
+python3 Scripts/check-path-ownership.py --self-test
 
 echo "==> 17/18 vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例 + 现编现跑自证"
 # 为什么这三条必须一起跑（第 18 轮 L-25 第 1 批）：
