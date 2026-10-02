@@ -24,7 +24,10 @@ set -euo pipefail
 #   · 上架那天切回 —— **Mac App Store 强制沙箱**，此时 `DOYAH_SANDBOX=1` 即得；
 #   · 旧的 `DOYAH_NO_SANDBOX=1` 仍然认（= 今天默认的那一面），只是不再有开关作用。
 #
-# 产物：dist/DoyahStudio.app
+# 产物：dist/DoyahStudio-<发布标签>.app（**发布标签**在下面「发布标签（唯一出处）」一节里定义）
+#   · 交付 / 复测**一律用带版本号的那份**；`dist/DoyahStudio.app` 只是指向最新一份的**软链**（方便入口，
+#     不作身份来源 —— 身份 = 带版本号的实物自身，派活单 `T-20261002-028`）。
+#   · 交付回执：脚本末尾固定打印「产物名 / 构建时间 / sha256 前 8 位 / 本版包含哪些修复」。
 #
 # 说明：ad-hoc 签名 + entitlements 足以在本机运行（网络客户端 + 默认不带 App Sandbox）。
 # 如果要分发或使用钥匙串的持久授权，请换用自己的开发者证书签名。
@@ -43,7 +46,16 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 SCRATCH_X86="${ROOT}/.build-x86"
 CACHE="${ROOT}/.build-cache"
-APP="${ROOT}/dist/DoyahStudio.app"
+
+# ── 发布标签（**唯一出处**）──────────────────────────────────────────────────────
+# 产物名（`dist/DoyahStudio-<发布标签>.app`）与 Info.plist 的 `DoyahReleaseLabel`**都从这一个值派生**，
+# 不许手抄第二份（派活单 `T-20261002-028`；判据 = `Scripts/check-release-version.py`，闭环第 18 项）。
+# 口径 = **`<里程碑>.<子号>`**（每个里程碑从 `.0` 起，里程碑内小改 +1）—— 出处 `Docs/发布计划.md` §5 附注。
+# 当前 **Alpha 2 = Workspace** ⇒ `alpha2.0`。
+RELEASE_LABEL="alpha2.0"
+
+APP="${ROOT}/dist/DoyahStudio-${RELEASE_LABEL}.app"
+LATEST_LINK="${ROOT}/dist/DoyahStudio.app"
 DOYAH_ARCH="${DOYAH_ARCH:-}"
 
 export DEVELOPER_DIR
@@ -137,7 +149,7 @@ else
 fi
 echo "==> 架构：$(lipo -info "${APP}/Contents/MacOS/DoyahStudio" 2>&1 | sed 's/^.*: //')"
 
-cat > "${APP}/Contents/Info.plist" <<'PLIST'
+cat > "${APP}/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -167,6 +179,8 @@ cat > "${APP}/Contents/Info.plist" <<'PLIST'
     <string>0.2.0</string>
     <key>CFBundleVersion</key>
     <string>2</string>
+    <key>DoyahReleaseLabel</key>
+    <string>${RELEASE_LABEL}</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
@@ -226,6 +240,39 @@ fi
 rm -f "${SIGN_LOG}"
 echo "    结果：$(codesign -dv "${APP}" 2>&1 | grep -E 'Signature=|Identifier=' | tr '\n' ' ')"
 
+# ---- 别名：不带版本号的 `dist/DoyahStudio.app` 只作**方便入口**（派活单 `T-20261002-028`）----
+# 身份 = **带版本号的实物**（`DoyahStudio-${RELEASE_LABEL}.app` 自身）；别名只是一个软链，
+# 方便工具与习惯路径（`Scripts/check-menu-language.py` 等）继续能用。
+# 历史上那个**真目录**（不带版本号）**不删** —— 挪进 `dist/历史/` 留档（交付面文档写明以带版本号的实物为准）。
+if [ -e "${LATEST_LINK}" ] && [ ! -L "${LATEST_LINK}" ]; then
+  mkdir -p "${ROOT}/dist/历史"
+  LEGACY_NAME="DoyahStudio-遗留-$(date +%Y%m%dT%H%M%S).app"
+  echo "==> ${LATEST_LINK} 是旧的真目录（不带版本号）⇒ 挪到 dist/历史/${LEGACY_NAME} 留档"
+  mv "${LATEST_LINK}" "${ROOT}/dist/历史/${LEGACY_NAME}"
+fi
+ln -sfn "$(basename "${APP}")" "${LATEST_LINK}"
+echo "==> 别名：dist/DoyahStudio.app -> $(readlink "${LATEST_LINK}")（身份以带版本号的实物为准）"
+
+# ---- 交付回执（固定四项：产物名 / 构建时间 / sha256 前 8 位 / 本版包含哪些修复）----
+# 人类主人据此回答「我手上这份是不是最新的」。**历史包只增不删**：每个发布标签一个独立目录，
+# 重建只覆盖**同名**的那一个 ⇒ 保留最近 ≥3 个历史包是结构保证，不靠额外的清理步骤。
+BIN_FILE="${APP}/Contents/MacOS/DoyahStudio"
+NOTES_FILE="${ROOT}/dist/发布说明-${RELEASE_LABEL}.md"
+echo ""
+echo "==== 交付回执 ===="
+echo "产物名：$(basename "${APP}")"
+echo "构建时间：$(date +%Y-%m-%dT%H:%M:%S%z)（UTC $(date -u +%Y-%m-%dT%H:%M:%SZ)）"
+echo "sha256（前 8 位）：$(shasum -a 256 "${BIN_FILE}" | cut -c1-8)（二进制 ${BIN_FILE##*/} · $(stat -f %z "${BIN_FILE}") 字节）"
+if [ -f "${NOTES_FILE}" ]; then
+  # 第一行**自带**前缀也认（剥掉一个，免得打印成「本版包含：本版包含：…」）
+  NOTES_LINE="$(head -1 "${NOTES_FILE}")"
+  NOTES_LINE="${NOTES_LINE#本版包含：}"
+  echo "本版包含：${NOTES_LINE}"
+else
+  echo "本版包含：（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 的第一行写一句，或从交付面文档取）"
+fi
+echo "目录里的历史包：$(ls -d "${ROOT}"/dist/DoyahStudio-*.app 2>/dev/null | wc -l | tr -d ' ') 个（含本次）"
+echo "=================="
 echo ""
 echo "完成：${APP}"
 echo "运行：open \"${APP}\""

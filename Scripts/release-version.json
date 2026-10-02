@@ -8,19 +8,36 @@
     "buildConfigurations = 生成物里该目标的构建配置必须齐全的那一组（少一个 = 判红：少一档就等于某一档没人守）。",
     "generator = 生成物的产出工具与版本 —— **登记为快照，不判红**：工具链版本漂移（用户升级 xcodegen）不该把无关轮次的闭合门禁判红；「生成物是否过期」由 C1/C2/C3 的**内容**对账判定。",
     "anchors = 文档里的「现状声明」落点（精确正则 + 捕获组）：每一处捕获到的值必须 == 本台账的值；命中处数 < minSites 判红（数字被删光也算红）。",
+    "releaseLabel = **发布标签**（`<里程碑>.<子号>`，如 `alpha2.0`）：制品身份的一半 —— 「手上这份是哪份构建」靠它认。**唯一出处** = `releaseLabelSource.path` 里那个 shell 变量；产物名与产物 `Info.plist` 的 `releaseLabelSource.plistKey` 都必须**派生**自它（手抄第二份 = 判红）。",
+    "distPolicy = `dist/` 实物的口径：带版本号的包才是身份；`latestAlias` 那条不带版本号的路径**只许是软链**；`keepAtLeast` = 历史包下限（**只增不删**的方针下由结构保证，判据只报数、不因此判红）。",
     "notInScope = 本判据**明确不判**的东西，逐条写理由 —— 不写就是偷偷放过。"
   ],
   "authority": {
     "path": "Scripts/build-app.sh",
-    "kind": "Info.plist 模板（`<<'PLIST'` heredoc，组装 `dist/DoyahStudio.app` 时写入）",
+    "kind": "Info.plist 模板（`<<PLIST` heredoc，组装 `dist/DoyahStudio-<发布标签>.app` 时写入）",
     "keys": {
       "marketingVersion": "CFBundleShortVersionString",
       "buildVersion": "CFBundleVersion"
     },
-    "evidence": "第 57 轮发布收口时用 `/usr/libexec/PlistBuddy -c \"Print :CFBundleShortVersionString\" dist/DoyahStudio.app/Contents/Info.plist` 实测产物 = `0.2.0` / `2`"
+    "evidence": "第 57 轮发布收口时用 `/usr/libexec/PlistBuddy -c \"Print :CFBundleShortVersionString\" dist/DoyahStudio.app/Contents/Info.plist` 实测产物 = `0.2.0` / `2`（当时产物还叫 `DoyahStudio.app`；2026-10-02 起产物名带发布标签、`DoyahStudio.app` 只是软链）"
   },
   "marketingVersion": "0.2.0",
   "buildVersion": "2",
+  "releaseLabel": "alpha2.0",
+  "releaseLabelSource": {
+    "path": "Scripts/build-app.sh",
+    "variable": "RELEASE_LABEL",
+    "derivationAnchor": "APP=\"${ROOT}/dist/DoyahStudio-${RELEASE_LABEL}.app\"",
+    "plistKey": "DoyahReleaseLabel",
+    "note": "领域：口径 = `<里程碑>.<子号>`（里程碑内小改 +1，每个里程碑从 `.0` 起），出处 `Docs/发布计划.md` §5 附注；当前 Alpha 2 = Workspace。**两处派生**：① 产物名（`dist/DoyahStudio-${RELEASE_LABEL}.app`）② 产物 Info.plist 的 `DoyahReleaseLabel`（模板里写 `${RELEASE_LABEL}` —— heredoc 必须是**不带引号**的 `<<PLIST` 才会展开）。交付面文档两处（`Docs/发布计划.md` §5 · `AGENT-SPEC.md` §6）由 anchors 对账。"
+  },
+  "distPolicy": {
+    "glob": "DoyahStudio-*.app",
+    "latestAlias": "dist/DoyahStudio.app",
+    "keepAtLeast": 3,
+    "policy": "只增不删：每个发布标签一个独立目录，重建只覆盖**同名**那一个；不带版本号的路径只作软链（旧的真目录挪 `dist/历史/` 留档，不删）",
+    "note": "`dist/` 不进库（见 notInScope）⇒ 干净克隆上这一族**跳过并高声提示**：跳过 ≠ 通过。"
+  },
   "mirrors": [
     {
       "path": "project.yml",
@@ -80,11 +97,26 @@
       "captures": ["marketingVersion", "buildVersion"],
       "minSites": 2,
       "note": "§6 资产表「发布说明与产物版本」行 + §5 发布段各一处"
+    },
+    {
+      "path": "Docs/发布计划.md",
+      "regex": "^\\*\\*产物名（唯一出处[^\\n]*?`DoyahStudio-([A-Za-z][A-Za-z0-9]*\\.[0-9]+)\\.app`",
+      "captures": ["releaseLabel"],
+      "minSites": 1,
+      "note": "§5「产物名」段首（产物名的交付面声明）"
+    },
+    {
+      "path": "AGENT-SPEC.md",
+      "regex": "^\\| 发布说明与产物版本.*?`DoyahStudio-([A-Za-z][A-Za-z0-9]*\\.[0-9]+)\\.app`",
+      "captures": ["releaseLabel"],
+      "minSites": 1,
+      "note": "§6 资产表「发布说明与产物版本」行的产物名声明"
     }
   ],
   "notInScope": [
     "两个框架目标（`DoyahCore` / `DoyahPlatform`）的 `MARKETING_VERSION`（XcodeGen 默认 `1.0`）：它们是**内部框架**，不是发布产物的身份 —— 框架版本跟着 app 走没有意义，改它只是多一处漂移面。判据每次实跑**显式打印**这三处「范围外」值。",
-    "`Package.swift`（SwiftPM 清单）与 `dist/*.app`：前者是**另一条构建路线**（`build-app.sh` 走 `swift build`，根本不读 `.xcodeproj`），后者是产物、不进版本控制。",
+    "`Package.swift`（SwiftPM 清单）：它是**另一条构建路线**的口径（`build-app.sh` 走 `swift build`，根本不读 `.xcodeproj`）。",
+    "`dist/*.app` 的**字节内容**（二进制、资源、签名）：产物不进版本控制、每次构建都不同，判它等于判「你能不能复现同一份二进制」—— 那不是身份，是构建确定性（另一件事）。**在范围内**的只有三样：① 带版本号的包**在不在**（名字对不对）② 它的 `Contents/Info.plist` 里 `DoyahReleaseLabel` / `CFBundleShortVersionString` 是不是本台账的值 ③ 不带版本号的那条路径**是不是软链**、指向当前标签那份。",
     "标签名（`v0.2.0-alpha`）与发布说明里的版本叙述：那是**发布记录**，不是「同一个值的多处副本」；历史行本来就该留着旧值（与 `doc-numbers.json` 对变更记录行的口径一致）。",
     "`DoyahStudio.xcodeproj/xcshareddata/xcschemes/*.xcscheme`（生成物的一部分）：它们**由同一个 `xcodegen generate` 一起产出**，每次重生成里 `BlueprintIdentifier` 都会整体换号 —— 把它也纳入逐项对账，只会把**工具的每一次正常重生成都判成漂移**（判据会变成噪声、然后被人绕开）。判据只钉「应用目标 / 目标集合 / `Sources` 源文件集合 / bundle id / 版本键」这些**语义稳定**的对账点；scheme 只在 C1「目标集合」间接被覆盖。"
   ]

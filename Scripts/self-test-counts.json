@@ -564,7 +564,7 @@
       "args": [
         "--self-test"
       ],
-      "cases": 10,
+      "cases": 16,
       "countRegex": "自测通过（(\\d+) 例）",
       "why": "队列 L-70 / 闭环第 18 项（生成物一致性 · 族 ②：发布产物版本号三处一致 + Xcode 工程不许与 project.yml 漂移）",
       "anchors": [

@@ -46,7 +46,7 @@ L-55 文档数字 / L-72 例数 / 本条）。
 
     python3 Scripts/check-release-version.py              # 判真仓库
     python3 Scripts/check-release-version.py --root <目录> # 判别的仓库（自测夹具用它）
-    python3 Scripts/check-release-version.py --self-test   # 判据自己的证据（10 例）
+    python3 Scripts/check-release-version.py --self-test   # 判据自己的证据（16 例）
 
 退出码：0 = 全绿；1 = 判红（逐条点名文件与行号）；2 = 用法 / 夹具错误。
 """
@@ -78,12 +78,16 @@ def parse_plist_template(text: str):
     """从 build-app.sh 里取出 Info.plist 模板的键值（key → [(值, 行号), …]）。"""
     lines = text.split("\n")
     start = None
+    quoted = False
     for index, line in enumerate(lines):
-        if re.search(r"<<'PLIST'", line):
+        match = re.search(r"<<\s*('PLIST'|PLIST)", line)
+        if match:
             start = index + 1
+            # 带引号的 heredoc **不展开** `${…}`；`<<PLIST` 才展开 —— 发布标签靠这一条派生。
+            quoted = match.group(1).startswith("'")
             break
     if start is None:
-        return None, "没有找到 Info.plist 模板的 heredoc 起点（`<<'PLIST'`）"
+        return None, "没有找到 Info.plist 模板的 heredoc 起点（`<<'PLIST'` / `<<PLIST`）"
     end = None
     for index in range(start, len(lines)):
         if lines[index].strip() == "PLIST":
@@ -114,7 +118,34 @@ def parse_plist_template(text: str):
             value = tag.group(1) if tag else value_line.strip()
         found.setdefault(key, []).append((value, cursor + 1))
         index = cursor + 1
-    return found, None
+
+    # `<<PLIST`（不带引号）会展开模板里的 `${变量}` —— 把这种**引用**解析成 shell 里的定义值，
+    # 这样「一处定义、两处派生」才有判据（派活单 `T-20261002-028`）。
+    assignments = shell_assignments(text)
+    resolved: dict = {}
+    for key, sites in found.items():
+        entries = []
+        for value, line in sites:
+            reference = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", value.strip())
+            if reference and not quoted:
+                name = reference.group(1)
+                definitions = assignments.get(name) or []
+                if len(definitions) != 1:
+                    return None, ("模板第 %d 行用 `${%s}` 派生，但这个变量在本脚本里有 %d 处定义"
+                                  "（只许一处）" % (line, name, len(definitions)))
+                value = definitions[0][0]
+            entries.append((value, line))
+        resolved[key] = entries
+    return resolved, None
+
+
+def shell_assignments(text: str):
+    """shell 里的字面量赋值：{变量名: [(值, 行号), …]}（只认 `NAME="值"` 独占一行的形状）。"""
+    found: dict = {}
+    for match in re.finditer(r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)=\"([^\"]*)\"[ \t]*$", text, re.M):
+        line = text[:match.start()].count("\n") + 1
+        found.setdefault(match.group(1), []).append((match.group(2), line))
+    return found
 
 
 # --------------------------------------------------------------------------------------
@@ -360,6 +391,18 @@ def load_ledger(root: pathlib.Path, report: Report):
         report.bad("[台账] anchors 缺失（文档里的现状声明没人看）")
     if not ledger.get("notInScope"):
         report.bad("[台账] notInScope 缺失（范围外不写清 = 偷偷放过）")
+    # 发布标签（派活单 `T-20261002-028`）：一处定义、两处派生 —— 台账要指名出处，否则判据没基准。
+    label = ledger.get("releaseLabel")
+    if not isinstance(label, str) or not re.match(r"^[A-Za-z][A-Za-z0-9]*\.\d+$", label):
+        report.bad("[台账] releaseLabel 缺失或形状不对（期望 `<里程碑>.<子号>`，如 `alpha2.0`）：%r" % label)
+    source = ledger.get("releaseLabelSource") or {}
+    for field in ("path", "variable", "derivationAnchor", "plistKey"):
+        if not source.get(field):
+            report.bad("[台账] releaseLabelSource.%s 缺失（发布标签从哪派生要写清）" % field)
+    policy = ledger.get("distPolicy") or {}
+    for field in ("glob", "latestAlias", "keepAtLeast", "policy"):
+        if not policy.get(field):
+            report.bad("[台账] distPolicy.%s 缺失（别名与实物的口径没写清 = 判据只能猜）" % field)
     return ledger
 
 
@@ -581,6 +624,115 @@ def check_structure(root: pathlib.Path, ledger: dict, targets, pbx, report: Repo
         report.note("本机没有 `%s`（判据不需要它 —— 比对的是文件内容，不是「谁跑过」）" % generator.get("tool"))
 
 
+def check_release_label(root: pathlib.Path, ledger: dict, report: Report):
+    """B4 —— 发布标签：一处定义，产物名与 Info.plist 两处派生（派活单 `T-20261002-028`）。"""
+    label = ledger["releaseLabel"]
+    source = ledger["releaseLabelSource"]
+    relative = source["path"]
+    variable = source["variable"]
+    plist_key = source["plistKey"]
+    text = read_text(root, relative, report)
+    if text is None:
+        return
+    sites = shell_assignments(text).get(variable) or []
+    if not sites:
+        report.bad("%s：没有 `%s=\"…\"` —— 发布标签没有出处，产物名与 Info.plist 从哪派生？"
+                   % (relative, variable))
+    elif len(sites) > 1:
+        report.bad("%s：`%s` 定义了 %d 次（%s）—— 只许一处，否则又是多处副本"
+                   % (relative, variable, len(sites),
+                      "、".join("第 %d 行" % line for _, line in sites)))
+    else:
+        value, line = sites[0]
+        report.sites += 1
+        if value != label:
+            report.bad("%s:%d 的 `%s` = `%s`，台账 `releaseLabel` = `%s`"
+                       % (relative, line, variable, value, label))
+    anchor = source["derivationAnchor"]
+    if anchor not in text:
+        report.bad("%s：找不到产物名派生式 `%s`（产物名被写死了 / 不再跟着发布标签走）"
+                   % (relative, anchor))
+    table, error = parse_plist_template(text)
+    if table is None:
+        report.bad("%s：%s" % (relative, error))
+        return
+    raw = re.search(r"<key>%s</key>[ \t]*\n[ \t]*<string>([^<]*)</string>" % re.escape(plist_key), text)
+    if raw is None:
+        report.bad("%s：Info.plist 模板里没有 `%s`（产物自己不带发布标签 = 认不出手上是哪份构建）"
+                   % (relative, plist_key))
+        return
+    if raw.group(1).strip() != "${%s}" % variable:
+        report.bad("%s：`%s` 的值是 `%s`，不是 `${%s}` —— 手抄第二份，将来必定漂移"
+                   % (relative, plist_key, raw.group(1).strip(), variable))
+    for value, line in table.get(plist_key) or []:
+        report.sites += 1
+        if value != label:
+            report.bad("%s:%d 的 `%s` = `%s`，台账 `releaseLabel` = `%s`"
+                       % (relative, line, plist_key, value, label))
+
+
+def check_dist(root: pathlib.Path, ledger: dict, report: Report):
+    """C5 —— `dist/` 实物：带版本号的包才是身份，别名只许是软链（派活单 `T-20261002-028`）。"""
+    policy = ledger["distPolicy"]
+    dist = root / "dist"
+    if not dist.is_dir():
+        report.note("dist/ 不在盘上 ⇒「实物」那一向本轮**跳过**（干净克隆 / 还没出过包）—— **跳过 ≠ 通过**")
+        return
+    label = ledger["releaseLabel"]
+    packages = sorted(p for p in dist.glob(policy["glob"]) if p.is_dir())
+    shaped = re.compile(r"^[A-Za-z][A-Za-z0-9]*\.[0-9]+$")
+    for package in packages:
+        suffix = package.name[len("DoyahStudio-"):-len(".app")]
+        plist_path = package / "Contents" / "Info.plist"
+        if not plist_path.is_file():
+            report.bad("dist/%s 里没有 Contents/Info.plist（包不完整）" % package.name)
+            continue
+        plist_text = plist_path.read_text(encoding="utf-8", errors="replace")
+        entry = re.search(r"<key>DoyahReleaseLabel</key>[ \t]*\n[ \t]*<string>([^<]*)</string>", plist_text)
+        if shaped.match(suffix):
+            report.sites += 1
+            if entry is None:
+                report.bad("dist/%s 的 Info.plist 没有 `DoyahReleaseLabel`（名字说是一个版本、包里没有身份）"
+                           % package.name)
+            elif entry.group(1) != suffix:
+                report.bad("dist/%s 的 Info.plist `DoyahReleaseLabel` = `%s`，与包名那一截对不上"
+                           % (package.name, entry.group(1)))
+        else:
+            report.note("dist/%s 的名字不是发布标签形状（留档件）—— 只登记，不判红" % package.name)
+    wanted = dist / ("DoyahStudio-%s.app" % label)
+    if not wanted.is_dir():
+        report.bad("dist/ 在盘上，却没有带版本号的产物 `%s`（产物名没跟着发布标签走？）" % wanted.name)
+    else:
+        plist_path = wanted / "Contents" / "Info.plist"
+        if plist_path.is_file():
+            plist_text = plist_path.read_text(encoding="utf-8", errors="replace")
+            for key, field in (("CFBundleShortVersionString", "marketingVersion"),
+                               ("DoyahReleaseLabel", "releaseLabel")):
+                entry = re.search(r"<key>%s</key>[ \t]*\n[ \t]*<string>([^<]*)</string>" % re.escape(key), plist_text)
+                if entry is None:
+                    report.bad("%s 的 Info.plist 里没有 `%s`" % (wanted.name, key))
+                    continue
+                report.sites += 1
+                if entry.group(1) != ledger[field]:
+                    report.bad("%s 的 Info.plist `%s` = `%s`，台账 `%s` = `%s`"
+                               % (wanted.name, key, entry.group(1), field, ledger[field]))
+        else:
+            report.bad("%s 里没有 Contents/Info.plist（包不完整）" % wanted.name)
+    alias = dist / "DoyahStudio.app"
+    if alias.is_symlink():
+        target = os.path.basename(os.readlink(str(alias)))
+        report.sites += 1
+        if target != wanted.name:
+            report.bad("dist/DoyahStudio.app 指向 `%s`，不是当前发布标签那一份 `%s`" % (target, wanted.name))
+    elif alias.exists():
+        report.bad("dist/DoyahStudio.app 是**真目录** —— 不带版本号的路径只许是软链（身份 = 带版本号的实物）")
+    else:
+        report.note("dist/DoyahStudio.app 不存在（别名未建）—— 交付一律用带版本号那份")
+    keep = policy["keepAtLeast"]
+    report.note("dist/ 里带版本号的包 %d 个（%s）｜台账要求保留最近 ≥%s 个，策略 = %s"
+                % (len(packages), "、".join(p.name for p in packages) or "无", keep, policy["policy"]))
+
+
 def check_anchors(root: pathlib.Path, ledger: dict, report: Report):
     """C4 —— 文档里的现状声明逐处对账。"""
     for anchor in ledger.get("anchors") or []:
@@ -624,6 +776,8 @@ def check(root: pathlib.Path):
     pbx = check_pbxproj(root, ledger, report)
     check_structure(root, ledger, targets, pbx, report)
     check_anchors(root, ledger, report)
+    check_release_label(root, ledger, report)
+    check_dist(root, ledger, report)
     if report.sites < FLOOR_ANCHOR_SITES:
         report.bad("空跑防护：全部比对点只有 %d 处（少于下限 %d）—— 判据被掏空了？"
                    % (report.sites, FLOOR_ANCHOR_SITES))
@@ -655,6 +809,7 @@ FIXTURE_FILES = [
     LEDGER,
     "DoyahStudio.xcodeproj/project.pbxproj",
     "Docs/发布方案.md",
+    "Docs/发布计划.md",
     "AGENT-SPEC.md",
 ]
 FIXTURE_LINKS = ["Core", "App", "Platform", "Tests", "TestsPlatform"]
@@ -683,6 +838,24 @@ def edit(path: pathlib.Path, old: str, new: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def make_fixture_dist(fixture: pathlib.Path, label: str, marketing: str,
+                      plist_label=None, alias_target=None, alias_as_dir: bool = False) -> None:
+    """合成一个 `dist/` 夹具（真产物几十 MB 且不进库）：只写判据会读的那几行。"""
+    dist = fixture / "dist"
+    package = dist / ("DoyahStudio-%s.app" % label)
+    (package / "Contents").mkdir(parents=True, exist_ok=True)
+    (package / "Contents" / "Info.plist").write_text(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\">\n<dict>\n"
+        "    <key>CFBundleShortVersionString</key>\n    <string>%s</string>\n"
+        "    <key>DoyahReleaseLabel</key>\n    <string>%s</string>\n"
+        "</dict>\n</plist>\n" % (marketing, plist_label or label), encoding="utf-8")
+    alias = dist / "DoyahStudio.app"
+    if alias_as_dir:
+        alias.mkdir()
+    else:
+        os.symlink(alias_target or package.name, str(alias))
+
+
 def run_self_test() -> int:
     real_root = pathlib.Path(__file__).resolve().parent.parent
     cases = []
@@ -696,6 +869,8 @@ def run_self_test() -> int:
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         marketing = ledger["marketingVersion"]
         build = ledger["buildVersion"]
+        label = ledger["releaseLabel"]
+        variable = ledger["releaseLabelSource"]["variable"]
         shas_before = {
             relative: __import__("hashlib").sha256((real_root / relative).read_bytes()).hexdigest()
             for relative in FIXTURE_FILES + ["Scripts/release-version.json"]
@@ -773,6 +948,53 @@ def run_self_test() -> int:
              "| `CFBundleVersion` | `7` |")
         problems = check(fixture).problems
         record("例 9 文档锚点写错 ⇒ 判红", any("发布方案.md" in p for p in problems), "；".join(problems[:2]))
+
+        # 例 11：发布标签的定义值被改 ⇒ 判红并点名
+        fixture = build_fixture(scratch, real_root)
+        edit(fixture / "Scripts/build-app.sh", 'RELEASE_LABEL="%s"' % label,
+             'RELEASE_LABEL="alpha9.9"')
+        problems = check(fixture).problems
+        record("例 11 发布标签的定义值 ≠ 台账 ⇒ 判红",
+               any("RELEASE_LABEL" in p for p in problems), "；".join(problems[:2]))
+
+        # 例 12：Info.plist 模板里那处**引用**被手抄成字面量 ⇒ 判红（值还等于台账，只有「手抄」这一条能抓）
+        fixture = build_fixture(scratch, real_root)
+        edit(fixture / "Scripts/build-app.sh", "<string>${%s}</string>" % variable,
+             "<string>%s</string>" % label)
+        problems = check(fixture).problems
+        record("例 12 plist 模板里手抄标签（不再引用变量）⇒ 判红",
+               any("手抄第二份" in p for p in problems), "；".join(problems[:2]))
+
+        # 例 13：产物名不再派生（写死）⇒ 判红
+        fixture = build_fixture(scratch, real_root)
+        edit(fixture / "Scripts/build-app.sh",
+             'APP="${ROOT}/dist/DoyahStudio-${%s}.app"' % variable,
+             'APP="${ROOT}/dist/DoyahStudio.app"')
+        problems = check(fixture).problems
+        record("例 13 产物名写死（不派生）⇒ 判红",
+               any("派生式" in p for p in problems), "；".join(problems[:2]))
+
+        # 例 14：合成 dist 且都对 ⇒ 绿（「实物」那一向真的量到了）
+        fixture = build_fixture(scratch, real_root)
+        make_fixture_dist(fixture, label, marketing)
+        problems = check(fixture).problems
+        record("例 14 dist 实物 + 别名都对 ⇒ 绿", not problems, "；".join(problems[:2]))
+
+        # 例 15：包内身份与包名对不上 + 别名指向别处 ⇒ 两处都判红
+        fixture = build_fixture(scratch, real_root)
+        make_fixture_dist(fixture, label, marketing, plist_label="alpha9.9",
+                          alias_target="DoyahStudio-alpha9.9.app")
+        problems = check(fixture).problems
+        record("例 15 实物身份对不上 + 别名指向别处 ⇒ 两处判红",
+               any("对不上" in p for p in problems) and any("指向" in p for p in problems),
+               "；".join(problems[:3]))
+
+        # 例 16：别名做成真目录（不再是软链）⇒ 判红
+        fixture = build_fixture(scratch, real_root)
+        make_fixture_dist(fixture, label, marketing, alias_as_dir=True)
+        problems = check(fixture).problems
+        record("例 16 别名做成真目录 ⇒ 判红",
+               any("只许是软链" in p for p in problems), "；".join(problems[:2]))
 
         # 例 10：真仓库 —— 四份文件逐字节未变 + 真仓库实跑绿
         shas_after = {
