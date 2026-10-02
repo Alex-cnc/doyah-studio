@@ -28,6 +28,7 @@ pub mod staleness;
 pub mod tree;
 pub mod terminal;
 pub mod terminal_input;
+pub mod terminal_tabs;
 pub mod url;
 pub mod workspace;
 pub mod writeback;
@@ -70,6 +71,10 @@ pub use highlight::{
     syntax_of, tokenize as tokenize_code, CodeSpan, CodeSyntax, CodeTokenKind,
 };
 pub use inspect::{CellValue, Field, Shape, SummaryLanguage};
+pub use terminal_tabs::{
+    derive_title, perform as perform_tab_command, sanitize_title, SessionState, Tab as TerminalTab,
+    TabCommand, Tabs as TerminalTabs, TITLE_LIMIT,
+};
 pub use terminal_input::{
     control_key, cursor_key, cursor_key_with_modifiers, function_key, key_char, mouse_report, paste as paste_bytes,
     CursorKey as TermCursorKey, Modifiers as TermModifiers, MouseAction, MouseButton, MouseEvent,
