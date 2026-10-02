@@ -6,10 +6,10 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本（`CFBundleShortVersionString` / tag） | **待 10-02 出包时回填** |
-| 字节数 | **待回填** |
-| sha256 | **待回填** |
-| 提交号 | **待回填** |
+| 版本（`CFBundleShortVersionString` / tag） | `0.2.0` / tag `alpha2.0`（`Info.plist` 的 `DoyahReleaseLabel`，口径见 `Docs/发布计划.md` §5 附注） |
+| 字节数 | 72,900,080（`DoyahStudio-alpha2.0.app/Contents/MacOS/DoyahStudio`） |
+| sha256 | 前 8 `1dce00db`（全值为每次构建都变的**校验值、非身份**，见派活单 `T-20261002-028` 的口径） |
+| 提交号 | `a227e80`（构建前最后一次提交，2026-10-02 15:39:12；包构建于 15:41:13，其后 `App/`/`Core/`/`Tests/` 零改动 ⇒ 与源码同向） |
 | 冻结判据 | 10-02 00:00 起冻结、不做新功能；只修 Alpha 2 的 bug（`Docs/发布计划.md` §5） |
 | 出的人 / 时间 | 本侧（大河马）· 与 Alpha 2 包同时（10-02） |
 
