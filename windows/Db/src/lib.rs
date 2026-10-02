@@ -18,6 +18,7 @@ pub mod cursor;
 pub mod db_type;
 pub mod file_ops;
 pub mod foreign_key;
+pub mod format;
 pub mod highlight;
 pub mod inspect;
 pub mod markdown;
@@ -77,6 +78,11 @@ pub use code_lines::{
 pub use command_history::{Entry as CommandHistoryEntry, History as CommandHistory, HISTORY_LIMIT as COMMAND_HISTORY_LIMIT};
 pub use config::{ConnectionBundle, BundleError, ConnectionConfig, SshTunnelConfig};
 pub use db_type::{DatabaseType, SslMode};
+pub use format::{
+    builtin_for, describe as describe_format_plan, format_whitespace, plan_format as plan_format, tools_for,
+    Builtin as FormatBuiltin, Capability as FormatCapability, Plan as FormatPlan, Refusal as FormatRefusal,
+    Tool as FormatTool, WhitespaceReport,
+};
 pub use foreign_key::{parse_edge, query as fk_query, Direction, Edge, Option_};
 pub use file_ops::{
     can_move_into, decide_rename, deletion_summary, unique_name, validate_name, DeletionSummary,
