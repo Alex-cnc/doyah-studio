@@ -75,5 +75,8 @@ windows/App/src-tauri/gen/
 windows/Bench/grid/public/data/
 # 循环台账镜像（本机打点脚本写的人读副本；随轮重写 ⇒ 必须忽略，否则仓库长期 dirty 会冻住唤醒门禁）
 windows/循环台账.md
+# 本侧打出来的安装包（MSI / NSIS）：与 target/ 同源（Tauri bundler 的产物），只是我把它
+# 复制到仓内一个稳定目录方便取用 ⇒ 同样不进版本库（一打包就变、几个 MB、无版本价值）
+windows/dist-packages/
 *.pyc
 __pycache__/
