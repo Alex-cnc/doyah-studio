@@ -10,8 +10,8 @@ mod query;
 
 pub use connections::{config_from_form, ConnectionStore};
 pub use postgres::{
-    ConnectParams, DbFailure, PgSession, ProbeReport, QueryResult, ServerInfo, TableNode,
-    MAX_QUERY_ROWS,
+    ConnectParams, ConnectReport, DbFailure, PgSession, ProbeReport, QueryResult, ServerInfo,
+    StartupOutcome, TableNode, MAX_QUERY_ROWS,
 };
 pub use query::{DatasetSummary, GridWindowPayload, ViewCache, MAX_WINDOW_ROWS};
 
@@ -86,18 +86,25 @@ fn grid_window(
 // ── 数据库命令（真库链路；模型来自领域层 Db，驱动只在本层）─────────────────────────────
 
 /// 连接（**一次一个**：多连接管理是后续段的事）。成功后把会话留在状态里。
+///
+/// `startup_sql` = 连接后自动执行的语句（FR-CONN-17，**已由领域层逐条切好**）。
+/// 某条失败**不阻断连接** —— 逐条结果在返回值里如实摆出来（见 `ConnectReport` 的口径说明）。
 #[tauri::command]
-async fn db_connect(state: State<'_, ShellState>, params: ConnectParams) -> Result<ServerInfo, DbFailure> {
+async fn db_connect(
+    state: State<'_, ShellState>,
+    params: ConnectParams,
+    startup_sql: Option<Vec<String>>,
+) -> Result<ConnectReport, DbFailure> {
     // 先把旧会话放掉（换连接 = 断旧连新），**先放锁再 await**，别把锁带过 await
     {
         let mut slot = state.db.lock().await;
         *slot = None;
     }
-    let session = PgSession::connect(&params).await?;
-    let info = session.info().clone();
+    let statements = startup_sql.unwrap_or_default();
+    let (session, report) = PgSession::connect_with_startup(&params, &statements).await?;
     let mut slot = state.db.lock().await;
     *slot = Some(Arc::new(session));
-    Ok(info)
+    Ok(report)
 }
 
 /// 断开（把会话丢掉；驱动任务随之结束）。
@@ -185,6 +192,102 @@ fn connection_delete(
     state.connections.remove(&id)
 }
 
+/// 生成**服务端条件浏览**的 SQL（FR-DATA-02；**只生成、不执行**）。
+///
+/// 契约要点（与对侧 `Core/RowBrowsing.swift` 同一口径）：
+/// ① 片段**原样下发**（用户在自己库上写 SQL，本层不做"聪明"改写）；
+/// ② 出现分号（像不止一条语句）⇒ **拒绝并说清**，不会因为点了个"浏览"就把后面的语句执行掉；
+/// ③ 排序写两处 ⇒ 报冲突（无法判断以哪个为准）。
+/// 返回 SQL 供界面**预览**再执行 —— 预览与执行同一份输入、只解析一次。
+#[tauri::command]
+fn browse_sql(
+    table: String,
+    schema: Option<String>,
+    where_clause: Option<String>,
+    order_by: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    count_only: Option<bool>,
+) -> Result<String, DbFailure> {
+    let filter = doyah_studio_db::browse::BrowseFilter {
+        where_clause: where_clause.unwrap_or_default(),
+        order_by: order_by.unwrap_or_default(),
+        limit: limit.unwrap_or(200),
+        offset: offset.unwrap_or(0),
+    };
+    let built = if count_only.unwrap_or(false) {
+        doyah_studio_db::browse::count(&table, schema.as_deref(), &filter)
+    } else {
+        doyah_studio_db::browse::browse(&table, schema.as_deref(), &filter)
+    };
+    built.map_err(|e: doyah_studio_db::browse::BrowseError| DbFailure {
+        message: e.message().to_string(),
+        hint: format!("（判定标识：{}）改好条件再试 —— 这里只接受单条表达式。", e.identifier()),
+    })
+}
+
+/// 单行详情的**值检查**（FR-DATA-05）：宽表竖排看、长 JSON 格式化看。
+///
+/// 纯计算（判定形态 + 给展示文本与元信息），**不碰数据库** —— 输入就是界面上那一行。
+/// 要点：NULL 与空串分开；JSON **必须真能解析**才当 JSON（半截日志按文本显示）；
+/// 截断**必须**连原始字符数 / 行数一起报，否则用户会以为拿到的就是全部。
+#[tauri::command]
+fn inspect_row(
+    columns: Vec<String>,
+    type_names: Option<Vec<String>>,
+    row: Vec<Option<String>>,
+) -> Vec<doyah_studio_db::inspect::Field> {
+    let types = type_names.unwrap_or_default();
+    let cols: Vec<(String, String)> = columns
+        .into_iter()
+        .enumerate()
+        .map(|(i, name)| (name, types.get(i).cloned().unwrap_or_default()))
+        .collect();
+    doyah_studio_db::inspect::row(&cols, &row, doyah_studio_db::inspect::DEFAULT_DISPLAY_LIMIT)
+}
+
+/// 读外键元数据（FR-DATA-06）：从 `pg_constraint` 把每条外键的**定义原文**取回来。
+///
+/// 为什么取定义原文而不是拆好的列：解析规则（`FOREIGN KEY (..) REFERENCES ..(..)`）
+/// 在领域层 `foreign_key::parse_edge` 里，**只有一处**实现、可单测；
+/// 命令层只负责"把服务端的话原样拿回来"。
+#[tauri::command]
+async fn db_foreign_keys(state: State<'_, ShellState>) -> Result<Vec<doyah_studio_db::foreign_key::Edge>, DbFailure> {
+    let session = current_session(&state).await?;
+    let sql = "SELECT c.conname, c.contype::text, pg_get_constraintdef(c.oid), \
+               t.relname, n.nspname \
+               FROM pg_constraint c \
+               JOIN pg_class t ON t.oid = c.conrelid \
+               JOIN pg_namespace n ON n.oid = t.relnamespace \
+               WHERE c.contype = 'f' AND n.nspname NOT IN ('pg_catalog', 'information_schema') \
+               ORDER BY n.nspname, t.relname, c.conname";
+    let result = session.client().simple_query(sql).await.map_err(|e| DbFailure {
+        message: postgres::server_error_text(&e),
+        hint: "读外键元数据失败：确认当前用户能读 pg_catalog（一般都有）。".to_string(),
+    })?;
+    let mut edges = Vec::new();
+    for message in result {
+        if let tokio_postgres::SimpleQueryMessage::Row(row) = message {
+            let constraint = row.get(0);
+            let kind = row.get(1).unwrap_or_default();
+            let definition = row.get(2).unwrap_or_default();
+            let table = row.get(3).unwrap_or_default();
+            let schema = row.get(4);
+            if let Some(edge) = doyah_studio_db::foreign_key::parse_edge(
+                constraint,
+                kind,
+                definition,
+                table,
+                schema,
+                schema,
+            ) {
+                edges.push(edge);
+            }
+        }
+    }
+    Ok(edges)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -204,7 +307,10 @@ pub fn run() {
             db_probe,
             connections_list,
             connection_save,
-            connection_delete
+            connection_delete,
+            browse_sql,
+            inspect_row,
+            db_foreign_keys
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

@@ -23,6 +23,12 @@ export const COMMANDS = {
   connectionsList: 'connections_list',
   connectionSave: 'connection_save',
   connectionDelete: 'connection_delete',
+  // 服务端条件浏览（只生成 SQL，执行仍走 dbQuery）
+  browseSql: 'browse_sql',
+  // 单行详情的值检查（纯计算，不碰数据库）
+  inspectRow: 'inspect_row',
+  // 外键元数据（FR-DATA-06：两个方向的跳转都靠它）
+  dbForeignKeys: 'db_foreign_keys',
 } as const
 
 export interface AppInfo {
@@ -143,10 +149,12 @@ export interface TableNode {
   kind: string
 }
 
-/** 一次查询的结果：列名 + 行（每格文本或 null）+ 截断与影响行数。 */
+/** 一次查询的结果：列名 + 行（每格文本或 null）+ 数值形态 + 截断与影响行数。 */
 export interface QueryResult {
   columns: string[]
   rows: (string | null)[][]
+  /** 每行的**数值形态**（该列解析得出数字才有值）：排序 / 筛选**按值比**，不拿显示串比 */
+  numRows: (number | null)[][]
   returned: number
   truncated: boolean
   affected: number | null
@@ -165,6 +173,20 @@ export interface ProbeReport {
   selectOne: string | null
 }
 
+/** 启动 SQL 的逐条结果（FR-CONN-17）：**逐条发、逐条报** —— 一条失败不吞掉后面的。 */
+export interface StartupOutcome {
+  sql: string
+  ok: boolean
+  /** 失败时的可读原因（服务端原话 + 提示）；成功为 null */
+  failure: DbFailure | null
+}
+
+/** 连接结果：服务端自述 + 启动 SQL 逐条结果。 */
+export interface ConnectReport {
+  info: ServerInfo
+  startup: StartupOutcome[]
+}
+
 /** 本机**专用实验库**（自己起的测试集群：端口 5433、trust 认证；不动本机现有那台）。
  *  写在这里只为减少手输 —— 它**不是**产品默认值（产品默认值在领域层的 `DatabaseType` 上）。 */
 export const LAB_CONNECTION: ConnectParams = {
@@ -175,8 +197,8 @@ export const LAB_CONNECTION: ConnectParams = {
   sslMode: 'disable',
 }
 
-export function dbConnect(params: ConnectParams): Promise<ServerInfo> {
-  return call(COMMANDS.dbConnect, { params }, () => {
+export function dbConnect(params: ConnectParams, startupSql?: string[]): Promise<ConnectReport> {
+  return call(COMMANDS.dbConnect, { params, startupSql }, () => {
     throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里连库（npm run tauri dev）。' } as DbFailure
   })
 }
@@ -246,4 +268,69 @@ export function connectionSave(request: ConnectionSaveRequest): Promise<SavedCon
 
 export function connectionDelete(id: string): Promise<SavedConnection[]> {
   return call(COMMANDS.connectionDelete, { id }, () => [] as SavedConnection[])
+}
+
+/** 生成**服务端条件浏览**的 SQL（FR-DATA-02；只生成，不执行）。
+ *  契约：片段原样下发；出现分号（像多条语句）**拒绝**；排序写两处报冲突。 */
+export function browseSql(request: {
+  table: string
+  schema?: string
+  whereClause?: string
+  orderBy?: string
+  limit?: number
+  offset?: number
+  countOnly?: boolean
+}): Promise<string> {
+  return call(COMMANDS.browseSql, { ...request }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+  })
+}
+/** 值的形态（与领域层 `inspect::Shape` 同名同义；`binary` 带字节数）。 */
+export type CellShape =
+  | { kind: 'null' }
+  | { kind: 'empty' }
+  | { kind: 'jsonObject' }
+  | { kind: 'jsonArray' }
+  | { kind: 'binary'; byteCount: number }
+  | { kind: 'scalarJson' }
+  | { kind: 'text' }
+
+export interface CellValue {
+  shape: CellShape
+  /** 展示文本（JSON 已美化、二进制已摘要） */
+  display: string
+  originalCharacterCount: number
+  originalByteCount: number
+  isTruncated: boolean
+  lineCount: number
+}
+
+export interface RowField {
+  columnName: string
+  typeName: string
+  value: CellValue
+}
+
+/** 单行详情的**值检查**（FR-DATA-05）：纯计算 —— 输入就是界面上那一行。 */
+export function inspectRow(
+  columns: string[],
+  row: (string | null)[],
+  typeNames?: string[],
+): Promise<RowField[]> {
+  return call(COMMANDS.inspectRow, { columns, typeNames, row }, () => [] as RowField[])
+}
+/** 外键的一条边（与领域层 `foreign_key::Edge` 同形）。 */
+export interface FkEdge {
+  constraintName: string | null
+  fromTable: string
+  fromSchema: string | null
+  columns: string[]
+  toTable: string
+  toSchema: string | null
+  referencedColumns: string[]
+}
+
+/** 读外键元数据（从 pg_constraint 取定义原文，解析规则在领域层 —— 只有一处实现）。 */
+export function dbForeignKeys(): Promise<FkEdge[]> {
+  return call(COMMANDS.dbForeignKeys, {}, () => [] as FkEdge[])
 }
