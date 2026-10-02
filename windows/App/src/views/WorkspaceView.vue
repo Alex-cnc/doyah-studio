@@ -23,6 +23,7 @@ import {
   workspaceReadFile,
   workspaceReadLines,
   workspaceClampLine,
+  workspaceMarkdown,
   workspaceRecordCursor,
   workspaceSearch,
   workspaceReadSpans,
@@ -35,11 +36,15 @@ import {
   type FsEntry,
   type CursorAnchor,
   type LoadedFile,
+  type MdBlock,
+  type MdDocument,
+  type MdSpan,
   type SearchOutcome,
   type WorkspaceHistory,
 } from '../ipc'
 import { entryGlyph, flattenTree, indentPx, neighbouringRow, tabLabel, toggleExpanded, workspaceDisplayName } from '../workspace/logic'
 import { dominantEndingLabel, lineNumberText, segmentsForLine, sliceSegments } from '../workspace/editor'
+import MarkdownPreview from './MarkdownPreview.vue'
 import {
   charWidthFrom,
   codeWidthByDisplayColumns,
@@ -219,6 +224,43 @@ async function openHit(relativePath: string, line?: number) {
     const clamped = await workspaceClampLine(root.value, relativePath, line)
     tabs.value = tabs.value.map((t) => (t.id === tab.id ? { ...t, cursorLine: clamped, cursorHow: 'exact' } : t))
   }
+}
+// Markdown 预览（2.5）：模型由 Rust 侧一处解析产出，这里**只画**（只读，没有可编辑控件）
+const preview = ref<MdDocument | null>(null)
+const showPreview = ref(false)
+
+/** 当前页签是不是 Markdown（按语言键判断，不靠文件名猜） */
+const activeIsMarkdown = computed(() => activeTab.value?.languageKey === 'lang.markdown')
+
+async function togglePreview() {
+  if (!activeTab.value?.relativePath) return
+  showPreview.value = !showPreview.value
+  if (!showPreview.value) return
+  try {
+    preview.value = await workspaceMarkdown(root.value, activeTab.value.relativePath)
+  } catch (e) {
+    failure.value = describeError(e)
+    showPreview.value = false
+  }
+}
+
+/** 行内 span 的样式类（加粗/斜体/代码可以有交集） */
+function inlineClass(span: MdSpan): string[] {
+  const classes: string[] = []
+  if (span.bold) classes.push('md__bold')
+  if (span.italic) classes.push('md__italic')
+  if (span.code) classes.push('md__code')
+  return classes
+}
+
+/** 把一段行内 span 拼成纯文字（表格/列表里要纯文字时用） */
+function plainOf(spans: MdSpan[]): string {
+  return spans.map((s) => s.text).join('')
+}
+
+/** 列表条目的缩进（嵌套层级由 children 递归渲染，这里只是排一下） */
+function isMdBlock(block: MdBlock): boolean {
+  return typeof block.kind === 'object' && block.kind !== null
 }
 /** 本版只读：编辑面显示内容，改与存归 2.1 / 2.2 段（不假装能改）。 */
 interface OpenTab {
@@ -869,6 +911,9 @@ function onTreeKeydown(event: KeyboardEvent) {
               <span v-if="activeTab.cursorHow !== 'exact' && activeTab.cursorLine > 1" class="ws__tag" title="文件被改过，位置是按内容锚找回来的">
                 位置可能不准（按内容找回来的）
               </span>
+              <button v-if="activeIsMarkdown" class="ws__act" type="button" :title="showPreview ? '看源码' : '看预览（只读）'" @click="togglePreview">
+                {{ showPreview ? '源码' : '预览' }}
+              </button>
               <button class="ws__act" type="button" title="重新比对盘上有没有被别处改过" @click="checkExternalChanges">
                 ⟳ 比对
               </button>
@@ -878,8 +923,12 @@ function onTreeKeydown(event: KeyboardEvent) {
               <p class="ws__stale-msg">{{ staleNotice.note }}</p>
               <button class="ws__btn ws__btn--primary" type="button" @click="reloadActiveTab">重新打开</button>
             </div>
+            <!-- Markdown 只读预览（2.5）：模型由 Rust 侧一处解析产出，这里只画 -->
+            <div v-if="showPreview && preview" class="ws__preview">
+              <MarkdownPreview :document="preview" />
+            </div>
             <!-- 编辑面：**行号列 + 高亮**（行号列宽随行数变 —— 写死会在第 100 行处挤掉数字） -->
-            <div v-if="activeEditor" class="ws__gutter-wrap">
+            <div v-if="activeEditor && !showPreview" class="ws__gutter-wrap">
               <div class="ws__gutter" aria-hidden="true" :style="gutterStyle">
                 <span
                   v-for="(line, i) in activeEditor.structure.lines"
@@ -902,7 +951,7 @@ function onTreeKeydown(event: KeyboardEvent) {
               >{{ piece.text }}</span>
 </span></pre>
             </div>
-            <pre v-else class="ws__code">{{ activeTab.content }}</pre>
+            <pre v-else-if="!showPreview" class="ws__code">{{ activeTab.content }}</pre>
           </template>
           <p v-else class="ws__empty">没有打开的页签</p>
         </div>
@@ -1253,6 +1302,14 @@ function onTreeKeydown(event: KeyboardEvent) {
   margin: 0;
   color: var(--ds-color-text-primary);
   font-size: var(--ds-font-caption-size);
+}
+/* Markdown 预览容器（只读：里面不出现任何可编辑控件） */
+.ws__preview {
+  padding: var(--ds-spacing-s);
+  background: var(--ds-color-surface-content);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  overflow: auto;
 }
 .ws__gutter-wrap {
   display: flex;

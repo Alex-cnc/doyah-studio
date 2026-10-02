@@ -75,6 +75,7 @@ describe('ipc', () => {
       'workspace_record_cursor',
       'workspace_search',
       'workspace_clamp_line',
+      'workspace_markdown',
     ])
   })
 

@@ -70,6 +70,8 @@ export const COMMANDS = {
   // 检索（2.4：按文件名 / 按内容，共用同一个匹配谓词）
   workspaceSearch: 'workspace_search',
   workspaceClampLine: 'workspace_clamp_line',
+  // Markdown 预览（2.5：一份解析，界面只画模型）
+  workspaceMarkdown: 'workspace_markdown',
 } as const
 
 export interface AppInfo {
@@ -866,4 +868,49 @@ export function workspaceSearch(
 /** 跳到命中行前把行号**夹进真实行数**（文件可能在检索之后被改短了）。 */
 export function workspaceClampLine(workspaceRoot: string, relativePath: string, line: number): Promise<number> {
   return call(COMMANDS.workspaceClampLine, { workspaceRoot, relativePath, line }, () => line)
+}
+// ── Markdown 预览（alpha 2.5）──────────────────────────────────────────────────────
+
+/** 行内 span（一段文字 + 是否加粗/斜体/代码 + 链接目标）。 */
+export interface MdSpan {
+  text: string
+  bold: boolean
+  italic: boolean
+  code: boolean
+  target: string | null
+}
+
+export type MdColumnAlignment = 'none' | 'left' | 'center' | 'right'
+
+/** 块级模型的成员（**没有可编辑控件**：预览是只读的，这条是结构上挡住的）。 */
+export type MdBlockKind =
+  | { type: 'heading'; level: number; spans: MdSpan[] }
+  | { type: 'paragraph'; spans: MdSpan[] }
+  | { type: 'codeFence'; language: string | null; text: string }
+  | {
+      type: 'listItem'
+      number: number | null
+      /** 任务项勾选态；`null` = 不是任务项（复选框已从正文里摘出） */
+      checked: boolean | null
+      spans: MdSpan[]
+      children: MdBlock[]
+    }
+  | { type: 'table'; alignments: MdColumnAlignment[]; header: MdSpan[][]; rows: MdSpan[][][] }
+  | { type: 'quote'; children: MdBlock[] }
+  | { type: 'rule' }
+
+export interface MdBlock {
+  /** 起始行（1 起）—— 跟随滚动时把行映射到预览锚点要用 */
+  line: number
+  kind: MdBlockKind
+}
+
+export interface MdDocument {
+  version: number
+  blocks: MdBlock[]
+}
+
+/** 解析 Markdown 成块级模型（解析在 Rust 领域层，一份实现两处消费）。 */
+export function workspaceMarkdown(workspaceRoot: string, relativePath: string): Promise<MdDocument> {
+  return call(COMMANDS.workspaceMarkdown, { workspaceRoot, relativePath }, () => ({ version: 1, blocks: [] }))
 }

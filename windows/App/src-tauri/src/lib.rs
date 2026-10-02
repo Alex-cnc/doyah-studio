@@ -636,6 +636,16 @@ fn workspace_clamp_line(workspace_root: String, relative_path: String, line: usi
     search::clamp_line(&workspace_root, &relative_path, line)
 }
 
+/// 解析 Markdown 成**块级模型**（预览用）。
+///
+/// 解析在领域层（`markdown::parse`，纯函数 + 7 例单测）；本命令只负责把文件读出来喂给它。
+/// **一份解析、两个消费者**：将来笔记侧也走同一个 parse，不另写第二套。
+#[tauri::command]
+fn workspace_markdown(workspace_root: String, relative_path: String) -> Result<doyah_studio_db::MarkdownDocument, DbFailure> {
+    let file = fs::read_text_file(&workspace_root, &relative_path)?;
+    Ok(doyah_studio_db::parse_markdown(&file.content))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -690,7 +700,8 @@ pub fn run() {
             workspace_check_staleness,
             workspace_record_cursor,
             workspace_search,
-            workspace_clamp_line
+            workspace_clamp_line,
+            workspace_markdown
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

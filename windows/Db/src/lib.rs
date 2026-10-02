@@ -18,6 +18,7 @@ pub mod file_ops;
 pub mod foreign_key;
 pub mod highlight;
 pub mod inspect;
+pub mod markdown;
 pub mod reveal;
 pub mod search;
 pub mod sql;
@@ -28,6 +29,10 @@ pub mod workspace;
 pub mod writeback;
 
 pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter};
+pub use markdown::{
+    parse as parse_markdown, parse_inline, Block, BlockKind, ColumnAlignment, Document as MarkdownDocument,
+    Span as MarkdownSpan, MARKDOWN_FORMAT_VERSION,
+};
 pub use reveal::{ensure_inside, explorer_plan, pick_terminal, terminal_plan, RevealPlan, TerminalKind};
 pub use search::{
     assemble, decode_text, hits_in_text, matches, normalize, snippet, ContentGroup, ContentHit,
