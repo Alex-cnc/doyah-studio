@@ -94,8 +94,12 @@ struct WorkspaceTabStrip: View {
             }
             .keyboardShortcut(AppShortcut.formatCode.key, modifiers: AppShortcut.formatCode.modifiers)
         } label: {
-            Image(systemName: "text.alignleft")
-                .font(Theme.font(.caption))
+            // 图标 + **文字**（内测清单 `#2`：只有图标时按名字找不到这个入口）。
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "text.alignleft")
+                Text(L(.workspaceFormatLabel))
+            }
+            .font(Theme.font(.caption))
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -109,7 +113,9 @@ struct WorkspaceTabStrip: View {
                 .font(Theme.font(.caption))
                 .foregroundStyle(isSelected ? Theme.accentColor : Theme.text(.secondary))
 
-            Text(tab.title)
+            // Home 的标题**在渲染时**从语言表取（内测清单 `#8`：根视图按 `.id(language)` 重建、
+            // 而模型只建一次 —— 标题若在建模时算死，运行期切语言不会重算）。
+            Text(tab.isHome ? L(.workspaceTabHome) : tab.title)
                 .font(Theme.font(.caption))
                 .lineLimit(1)
                 .fontWeight(isSelected ? .semibold : .regular)
@@ -145,7 +151,7 @@ struct WorkspaceTabStrip: View {
             browser.clearSelection()
             tabs.select(tab.id)
         }
-        .help(tab.path ?? tab.title)
+        .help(tab.path ?? (tab.isHome ? L(.workspaceTabHome) : tab.title))
     }
 
     /// 浏览器页签（队列 `L-149`）：与 Home / 文件同一类页签，只是图标与动作走浏览器那条。

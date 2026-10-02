@@ -57,6 +57,25 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceRefresh
     case workspaceReveal
     case workspaceTreeEmpty
+    // MARK: 工作区文件操作（FR-EDIT-41 · 队列 L-114）—— 悬浮菜单那三枚图标的文案
+    case workspaceNewFile
+    case workspaceNewFolder
+    case workspaceNewFileBase
+    case workspaceRename
+    case workspaceDeleteToTrash
+    case workspaceFileTrashed
+    case workspaceDeleteConfirmTitle
+    case workspaceDeleteMessageFile
+    case workspaceDeleteMessageFolder
+    case workspaceDeleteMessageFolderTruncated
+    case workspaceDeleteConfirmAction
+    case workspaceFileOpEmptyName
+    case workspaceFileOpIllegalName
+    case workspaceFileOpExists
+    case workspaceFileOpNotContained
+    case workspaceFileOpNotADirectory
+    case workspaceFileOpRoot
+    case workspaceFileOpFailed
     case workspaceLoading
     case workspaceSearchTruncated
     case workspaceSearchEmpty
@@ -500,6 +519,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceFormatRefusedUnknown
     case workspaceFormatRefusedNoFormatter
     case workspaceFormatFailed
+    /// 页签条上那一枚按钮的**可见文字**（内测清单 `#2`：只有图标时按名字找不到入口）。
+    case workspaceFormatLabel
     // 代码编辑器（FR-EDIT-36）：补全候选的说明文字与常用片段说明
     case codeDetailKeyword
     case codeDetailBuiltin
@@ -1952,6 +1973,56 @@ public enum LocalizedStrings {
         .workspaceEmptyHint: [.simplifiedChinese: "选一个本地目录作为工作区：终端会在那里启动，查询归档与智能体的文件读写也都以它为准。", .english: "Pick a local folder as your workspace: the terminal starts there, and query archiving plus the agent's file access follow it."],
         .workspaceRefresh: [.simplifiedChinese: "刷新", .english: "Refresh"],
         .workspaceReveal: [.simplifiedChinese: "在访达中显示", .english: "Reveal in Finder"],
+        .workspaceNewFile: [.simplifiedChinese: "新建文件", .english: "New File"],
+        .workspaceNewFolder: [.simplifiedChinese: "新建文件夹", .english: "New Folder"],
+        .workspaceNewFileBase: [.simplifiedChinese: "未命名", .english: "Untitled"],
+        .workspaceRename: [.simplifiedChinese: "重命名", .english: "Rename"],
+        .workspaceDeleteToTrash: [
+            .simplifiedChinese: "删除（移到废纸篓）", .english: "Delete (Move to Trash)",
+        ],
+        .workspaceFileTrashed: [
+            .simplifiedChinese: "「%@」已移到废纸篓（在访达里可以放回去）。",
+            .english: "“%@” moved to the Trash (you can put it back from Finder).",
+        ],
+        .workspaceDeleteConfirmTitle: [
+            .simplifiedChinese: "移到废纸篓？", .english: "Move to Trash?",
+        ],
+        .workspaceDeleteMessageFile: [
+            .simplifiedChinese: "「%@」将被移到废纸篓。", .english: "“%@” will be moved to the Trash.",
+        ],
+        .workspaceDeleteMessageFolder: [
+            .simplifiedChinese: "「%@」及其中的 %d 项将被移到废纸篓。",
+            .english: "“%@” and the %d items inside it will be moved to the Trash.",
+        ],
+        .workspaceDeleteMessageFolderTruncated: [
+            .simplifiedChinese: "「%@」及其中的 %d 项以上将被移到废纸篓。",
+            .english: "“%@” and %d or more items inside it will be moved to the Trash.",
+        ],
+        .workspaceDeleteConfirmAction: [
+            .simplifiedChinese: "移到废纸篓", .english: "Move to Trash",
+        ],
+        .workspaceFileOpEmptyName: [
+            .simplifiedChinese: "名字不能为空。", .english: "The name can’t be empty.",
+        ],
+        .workspaceFileOpIllegalName: [
+            .simplifiedChinese: "名字里不能有「/」或「:」：%@",
+            .english: "A name can’t contain “/” or “:”: %@",
+        ],
+        .workspaceFileOpExists: [
+            .simplifiedChinese: "「%@」已经存在了。", .english: "“%@” already exists.",
+        ],
+        .workspaceFileOpNotContained: [
+            .simplifiedChinese: "只能在工作区里操作。", .english: "Only inside the workspace.",
+        ],
+        .workspaceFileOpNotADirectory: [
+            .simplifiedChinese: "「%@」不是文件夹。", .english: "“%@” is not a folder.",
+        ],
+        .workspaceFileOpRoot: [
+            .simplifiedChinese: "工作区根目录不能删。", .english: "The workspace root can’t be deleted.",
+        ],
+        .workspaceFileOpFailed: [
+            .simplifiedChinese: "操作失败：%@", .english: "The operation failed: %@",
+        ],
         .workspaceTreeEmpty: [.simplifiedChinese: "这个目录里没有可显示的条目。", .english: "Nothing to show in this folder."],
         .workspaceLoading: [.simplifiedChinese: "正在读取…", .english: "Loading…"],
         .workspaceSearchTruncated: [.simplifiedChinese: "结果已达上限，请输入更精确的关键词。", .english: "Result limit reached — type a more specific query."],
@@ -2379,6 +2450,7 @@ public enum LocalizedStrings {
             .simplifiedChinese: "%@ 没有可用的格式化方式：外部工具没装，也没有内置兜底",
             .english: "%@ has no formatter: no external tool installed and no built-in fallback"
         ],
+        .workspaceFormatLabel: [.simplifiedChinese: "格式化", .english: "Format"],
         .workspaceFormatFailed: [
             .simplifiedChinese: "%@ 格式化失败（退出码 %@）：%@",
             .english: "%@ failed (exit code %@): %@"

@@ -18,18 +18,47 @@ struct WorkspaceExplorerView: View {
     @State private var selectedPath: String?
     @State private var hoveredPath: String?
 
+    // MARK: 文件操作的行内状态（FR-EDIT-41 · 队列 L-114）
+    /// 行内改名框里的字。
+    @State private var renamingText = ""
+    /// 这个字是给哪一行准备的（新建之后 store 直接置 `renamingPath`，靠它对上号）。
+    @State private var renameTargetPath: String?
+    @FocusState private var isRenameFieldFocused: Bool
+    /// 待确认的删除（确认框里要写清「将删几项」）。
+    @State private var pendingDeletion: WorkspaceEntry?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if workspace.hasWorkspace {
                 header
                 pathLine
                 tree
-                statusFooter
             } else {
                 emptyState
                 Spacer(minLength: 0)
-                statusFooter
             }
+            // 文件操作的实话（成功也留一句：删除要说清「去哪儿了」）。
+            if let notice = workspace.noticeText {
+                noticeLine(notice)
+            }
+            statusFooter
+        }
+        // 删除确认：非空目录**必须先看见「将删几项」**（需求提出者 2026-09-30 定的形态）。
+        .alert(
+            L(.workspaceDeleteConfirmTitle),
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            presenting: pendingDeletion
+        ) { entry in
+            Button(L(.commonCancel), role: .cancel) { pendingDeletion = nil }
+            Button(L(.workspaceDeleteConfirmAction), role: .destructive) {
+                if workspace.delete(entry), selectedPath == entry.relativePath { selectedPath = nil }
+                pendingDeletion = nil
+            }
+        } message: { entry in
+            Text(deletionMessage(for: entry))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // 底色由父层 `NebulaSurface(.sidebar)` 统一给（这里再铺会盖住星云皮肤）
@@ -132,12 +161,37 @@ struct WorkspaceExplorerView: View {
                 .foregroundStyle(isSelected ? accent.accentColor : Theme.text(.tertiary))
                 .frame(width: 14)
 
-            Text(entry.name)
-                .font(Theme.font(.body))
-                .foregroundStyle(isSelected ? Theme.text(.primary) : Theme.text(.secondary))
-                .lineLimit(1)
+            if workspace.renamingPath == entry.relativePath {
+                TextField(L(.workspaceRename), text: $renamingText)
+                    .textFieldStyle(.plain)
+                    .font(Theme.font(.body))
+                    .foregroundStyle(Theme.text(.primary))
+                    .focused($isRenameFieldFocused)
+                    .onSubmit { commitRename(entry) }
+                    .onExitCommand { cancelRename() }
+                    .onAppear {
+                        // 新建那条路是 store 直接置的 `renamingPath`：这里的字要从这一行取。
+                        if renameTargetPath != entry.relativePath {
+                            renameTargetPath = entry.relativePath
+                            renamingText = entry.name
+                        }
+                        isRenameFieldFocused = true
+                    }
+                    .accessibilityIdentifier("workspace-rename-field-\(entry.relativePath)")
+            } else {
+                Text(entry.name)
+                    .font(Theme.font(.body))
+                    .foregroundStyle(isSelected ? Theme.text(.primary) : Theme.text(.secondary))
+                    .lineLimit(1)
+            }
 
             Spacer(minLength: 0)
+
+            // 悬浮才出现（不占常驻行宽 —— 常驻会把文件名挤成一截）；
+            // 正在改名的这一行**始终**显示，免得鼠标一移开按钮就没了。
+            if isHovered || workspace.renamingPath == entry.relativePath {
+                rowActions(entry)
+            }
         }
         .padding(.leading, Spacing.s + CGFloat(row.depth) * 14)
         .padding(.trailing, Spacing.m)
@@ -196,6 +250,109 @@ struct WorkspaceExplorerView: View {
         } else {
             Color.clear
         }
+    }
+
+    // MARK: 行内文件操作（FR-EDIT-41 · 队列 L-114）
+
+    /// 行的右侧三枚（文件夹）/ 两枚（文件）：加号 = 新建（点开出两项菜单）、减号 = 删到废纸篓、铅笔 = 改名。
+    /// 每枚都带即时名称提示（`.help`）—— 只有图标时「按名字找不到入口」，这正是内测清单 `#2` 的那条。
+    @ViewBuilder
+    private func rowActions(_ entry: WorkspaceEntry) -> some View {
+        HStack(spacing: Spacing.hair) {
+            if entry.isDirectory {
+                Menu {
+                    Button(L(.workspaceNewFile)) { workspace.createEntry(in: entry, asFile: true) }
+                    Button(L(.workspaceNewFolder)) { workspace.createEntry(in: entry, asFile: false) }
+                } label: {
+                    rowActionIcon("plus", help: "\(L(.workspaceNewFile)) / \(L(.workspaceNewFolder))")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .accessibilityIdentifier("workspace-action-plus-\(entry.relativePath)")
+            }
+
+            Button {
+                pendingDeletion = entry
+            } label: {
+                rowActionIcon("minus", help: L(.workspaceDeleteToTrash))
+            }
+            .buttonStyle(.plain)
+            .help(L(.workspaceDeleteToTrash))
+            .accessibilityLabel(L(.workspaceDeleteToTrash))
+            .accessibilityIdentifier("workspace-action-minus-\(entry.relativePath)")
+
+            Button {
+                beginRename(entry)
+            } label: {
+                rowActionIcon("pencil", help: L(.workspaceRename))
+            }
+            .buttonStyle(.plain)
+            .help(L(.workspaceRename))
+            .accessibilityLabel(L(.workspaceRename))
+            .accessibilityIdentifier("workspace-action-pencil-\(entry.relativePath)")
+        }
+    }
+
+    private func rowActionIcon(_ symbol: String, help: String) -> some View {
+        Image(systemName: symbol)
+            .font(Theme.font(.caption))
+            .foregroundStyle(Theme.text(.tertiary))
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+            .help(help)
+    }
+
+    private func beginRename(_ entry: WorkspaceEntry) {
+        selectedPath = entry.relativePath
+        renameTargetPath = entry.relativePath
+        renamingText = entry.name
+        workspace.renamingPath = entry.relativePath
+        isRenameFieldFocused = true
+    }
+
+    private func cancelRename() {
+        workspace.renamingPath = nil
+        renameTargetPath = nil
+        isRenameFieldFocused = false
+    }
+
+    /// 回车提交。**失败就留在改名态**（输入框收掉等于把用户敲的字扔了）。
+    private func commitRename(_ entry: WorkspaceEntry) {
+        let trimmed = renamingText.trimmingCharacters(in: .whitespaces)
+        if workspace.rename(entry, to: trimmed) {
+            if selectedPath == entry.relativePath { selectedPath = nil }  // 路径变了，选中态放掉
+            renameTargetPath = nil
+            isRenameFieldFocused = false
+        }
+    }
+
+    /// 删之前那句实话：文件 = 1 项；文件夹要把**里面的数量**说出来（数到上限就写「N 项以上」）。
+    private func deletionMessage(for entry: WorkspaceEntry) -> String {
+        guard entry.isDirectory else { return L(.workspaceDeleteMessageFile, entry.name) }
+        let summary = workspace.deletionSummary(for: entry)
+        let inside = max(summary.items - 1, 0)
+        if inside == 0 { return L(.workspaceDeleteMessageFile, entry.name) }
+        return summary.truncated
+            ? L(.workspaceDeleteMessageFolderTruncated, entry.name, inside)
+            : L(.workspaceDeleteMessageFolder, entry.name, inside)
+    }
+
+    /// 操作结果那一行（在底部状态之上）。
+    private func noticeLine(_ text: String) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Image(systemName: "info.circle")
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.tertiary))
+            Text(text)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Spacing.m)
+        .padding(.bottom, Spacing.s)
     }
 
     // MARK: 空状态

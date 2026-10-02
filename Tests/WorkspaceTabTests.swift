@@ -165,4 +165,17 @@ final class WorkspaceHomeTitleTests: XCTestCase {
             return XCTFail("Home 页签标题没有走语言表 —— 锚点变了请更新这条判据，不要删掉它")
         }
     }
+    /// 源锚点三（内测清单 `#8`）：**渲染点**也要取语言表。
+    ///
+    /// 模型只建一次，而切语言时根视图按 `.id(language)` 重建 —— 标题若只在**建模那一刻**算一次，
+    /// 运行期切语言不会重算（实测：切英文后页签仍写「首页」，切回中文同理）。
+    func testTabStripReadsHomeTitleFromLanguageTableAtRenderTime() throws {
+        let text = try source("App/Views/WorkspaceTabStrip.swift")
+        guard text.contains("tab.isHome ? L(.workspaceTabHome) : tab.title") else {
+            return XCTFail("页签条没有在渲染时取 Home 标题 —— 切语言会停在建模那次的语言上")
+        }
+        guard !text.contains("Text(tab.title)") else {
+            return XCTFail("页签条又把标题直接写成 `Text(tab.title)` 了（Home 会不跟着语言变）")
+        }
+    }
 }

@@ -218,22 +218,11 @@ final class WorkspaceTabsModel: ObservableObject {
             return
         }
         let language = tab.language
-        let path = tab.path
         let text = tab.content
         Task {
-            // 探针三态（定案口径：「优先外部，如无联网则用内置」）。本机登记的工具都是**本地 CLI**，
-            // 今天报不出 `.unusable` —— 那一档由 Core 判据 + 注入桩覆盖（`Tests/CodeFormattingTests.swift`）；
-            // 哪天登记进网络型工具，这里只需把探针改成会返回 `.unusable(.networkUnreachable)` 即可。
-            let decision = CodeFormatPlanner.decide(language: language) {
-                CodeFormatToolLocator.isExecutable($0) ? .usable : .missing
-            }
-            let execution = await CodeFormatService.run(
-                plan: decision.plan,
-                language: language,
-                path: path,
-                text: text,
-                runner: FoundationCodeFormatProcessRunner()
-            )
+            // **只用内置**（需求提出者 2026-10-02 定案；「外部优先 / 回退内置」那版作废）。
+            // 这一层被删掉了：不探 `PATH`、不探测工具，`runBuiltin` 连 `runner` 都不收 ⇒ 结构上起不了子进程。
+            let execution = CodeFormatService.runBuiltin(language: language, text: text)
             apply(execution, to: tab.id)
         }
     }

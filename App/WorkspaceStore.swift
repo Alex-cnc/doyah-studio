@@ -24,6 +24,12 @@ final class WorkspaceStore: ObservableObject {
     /// 缓存内容变化时自增，驱动界面重绘（缓存本身不需要被观察）。
     @Published private(set) var revision = 0
 
+    /// 文件操作给的实话（成功也给一句：删除尤其要说清「去哪儿了」）。`nil` = 没有要说的。
+    @Published private(set) var noticeText: String?
+
+    /// 正在**行内改名**的那个条目（相对路径）—— 新建之后直接进这一态（需求提出者原话）。
+    @Published var renamingPath: String?
+
     /// 工作区变化时通知外部（终端启动目录要跟着走）。
     var onWorkspaceChanged: ((String?) -> Void)?
 
@@ -118,6 +124,8 @@ final class WorkspaceStore: ObservableObject {
         bookmark = nil
         rootURL = nil
         loadError = nil
+        noticeText = nil
+        renamingPath = nil
         try? await store.removeAll()
         apply(status: .notAuthorized, bookmark: nil)
     }
@@ -174,6 +182,105 @@ final class WorkspaceStore: ObservableObject {
         let target = entry.flatMap { url(for: $0) } ?? rootURL
         guard let target else { return }
         NSWorkspace.shared.activateFileViewerSelecting([target])
+    }
+
+    // MARK: 文件操作（FR-EDIT-41 · 队列 L-114）
+    //
+    // 形态由需求提出者 2026-09-30 定（2026-10-02 追加「必须在 Alpha 2 交付」）：文件夹行 = 加号
+    // （点开「新建文件 / 新建文件夹」）/ 减号（删到废纸篓）/ 铅笔（改名）；文件行 = 减号 / 铅笔。
+    // 这里只管**动作与状态**；按钮长什么样、悬浮怎么出现，都在 `WorkspaceExplorerView`。
+
+    /// 新建（文件 / 文件夹）：建完**直接进入改名态** —— 所以顺手把 `renamingPath` 置成新条目。
+    func createEntry(in directory: WorkspaceEntry?, asFile: Bool) {
+        guard let rootURL else { return }
+        let parent = directory.flatMap { url(for: $0) } ?? rootURL
+        do {
+            let created: URL
+            if asFile {
+                created = try WorkspaceFileOperations.createFile(
+                    baseName: L(.workspaceNewFileBase),
+                    fileExtension: "txt",
+                    in: parent,
+                    workspaceURL: rootURL
+                )
+            } else {
+                created = try WorkspaceFileOperations.createDirectory(
+                    baseName: L(.workspaceNewFolder),
+                    in: parent,
+                    workspaceURL: rootURL
+                )
+            }
+            // 建在已展开的目录里：父目录不展开，新行根本看不见（用户会以为「点了没反应」）。
+            if let directory { expandedPaths.insert(directory.relativePath) }
+            guard let relative = WorkspaceTree.relativePath(of: created, in: rootURL) else { return }
+            reload(parentOf: relative)
+            noticeText = nil
+            renamingPath = relative
+        } catch {
+            noticeText = Self.operationMessage(for: error)
+        }
+    }
+
+    /// 改名。返回**成没成** —— 失败要留在改名态里，别把输入框收掉（收掉等于把用户敲的字扔了）。
+    @discardableResult
+    func rename(_ entry: WorkspaceEntry, to newName: String) -> Bool {
+        guard let rootURL, let source = url(for: entry) else { return false }
+        do {
+            _ = try WorkspaceFileOperations.rename(source, to: newName, in: rootURL)
+            reload(parentOf: entry.relativePath)
+            noticeText = nil
+            renamingPath = nil
+            return true
+        } catch {
+            noticeText = Self.operationMessage(for: error)
+            return false
+        }
+    }
+
+    /// 删除（**走废纸篓**）：确认框在界面上，这里只管做与说。
+    @discardableResult
+    func delete(_ entry: WorkspaceEntry) -> Bool {
+        guard let rootURL, let target = url(for: entry) else { return false }
+        do {
+            _ = try WorkspaceFileOperations.delete(target, in: rootURL)
+            reload(parentOf: entry.relativePath)
+            noticeText = L(.workspaceFileTrashed, entry.name)
+            return true
+        } catch {
+            noticeText = Self.operationMessage(for: error)
+            return false
+        }
+    }
+
+    /// 删之前那句「将删几项」（非空文件夹必须让用户先看见数字）。
+    func deletionSummary(for entry: WorkspaceEntry) -> WorkspaceFileOperations.DeletionSummary {
+        guard let target = url(for: entry) else {
+            return WorkspaceFileOperations.DeletionSummary(items: 0, truncated: false)
+        }
+        return WorkspaceFileOperations.deletionSummary(at: target)
+    }
+
+    /// 失败要说得清是哪一类（Core 只给结构，句子在这里）。
+    static func operationMessage(for error: Error) -> String {
+        guard let failure = error as? WorkspaceFileOperations.Failure else {
+            return L(.workspaceFileOpFailed, error.localizedDescription)
+        }
+        switch failure {
+        case .emptyName: return L(.workspaceFileOpEmptyName)
+        case .illegalName(let name): return L(.workspaceFileOpIllegalName, name)
+        case .alreadyExists(let name): return L(.workspaceFileOpExists, name)
+        case .notContained: return L(.workspaceFileOpNotContained)
+        case .notADirectory(let name): return L(.workspaceFileOpNotADirectory, name)
+        case .rootNotDeletable: return L(.workspaceFileOpRoot)
+        case .system(let reason): return L(.workspaceFileOpFailed, reason)
+        }
+    }
+
+    /// 改完 / 删完只刷新**那一层**（父目录），不整棵树重来。
+    private func reload(parentOf relativePath: String) {
+        let parent = (relativePath as NSString).deletingLastPathComponent
+        childrenCache[parent] = listChildren(relativePath: parent)
+        revision += 1
     }
 
     // MARK: 内部

@@ -150,6 +150,24 @@ public enum CodeFormatPlanner {
         return .refused(.noFormatter(language: definition.language))
     }
 
+    /// **只用内置**（需求提出者 2026-10-02 定案）—— 不探测外部工具，也没有「外部优先 / 回退内置」那一层。
+    ///
+    /// 与 `plan(language:isExecutable:)` 的差别只有一处：**不进「外部优先」那条分支，连探测都不做**
+    /// （环境里装没装 `prettier` 不影响这条路）。三条出口与旧口径一致：认不出 ⇒ `.refused(.unknownLanguage)`；
+    /// 有词法且有内置 ⇒ `.builtin`；其余 ⇒ `.refused(.noFormatter)`。
+    public static func planBuiltinOnly(language: TextLanguage) -> CodeFormatPlan {
+        planBuiltinOnly(definition: language.definition)
+    }
+
+    public static func planBuiltinOnly(definition: CodeLanguageDefinition) -> CodeFormatPlan {
+        if definition.isFallback { return .refused(.unknownLanguage) }
+        let capability = definition.format
+        if capability.builtin.isAvailable, definition.syntax.hasAnyRule {
+            return .builtin(capability.builtin)
+        }
+        return .refused(.noFormatter(language: definition.language))
+    }
+
     /// `%FILE%` 的落值：有路径用路径，没有就用「untitled.<本语言的第一个扩展名>」——
     /// 靠文件名判 parser 的工具（Prettier）拿到 `untitled.txt` 会直接报错，而那不是用户的错。
     public static func fileName(path: String?, language: TextLanguage) -> String {
@@ -431,6 +449,29 @@ public enum CodeFormatService {
                     CodeFormatFailure(engine: engine, exitCode: nil, message: error.localizedDescription)
                 )
             }
+        }
+    }
+
+    /// **只用内置**那条路的执行入口：**不收 `runner`** —— 这条路上没有任何子进程可起
+    /// （定案「只用内置」在结构上落地：调用方拿不到跑外部工具的手段）。
+    public static func runBuiltin(
+        language: TextLanguage,
+        text: String,
+        databaseType: DatabaseType = .postgresql
+    ) -> CodeFormatExecution {
+        switch CodeFormatPlanner.planBuiltinOnly(language: language) {
+        case .refused(let reason):
+            return .refused(reason)
+        case .builtin(let style):
+            let formatted = CodeBuiltinFormatter.format(
+                text, style: style, language: language, databaseType: databaseType
+            )
+            return .ready(
+                CodeFormatOutcome(text: formatted, engine: .builtin(style), changed: formatted != text)
+            )
+        case .external:
+            // 结构上到不了这里（`planBuiltinOnly` 从不返回 `.external`）；真到了也不静默。
+            return .refused(.noFormatter(language: language))
         }
     }
 

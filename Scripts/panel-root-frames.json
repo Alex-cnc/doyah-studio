@@ -4,9 +4,9 @@
   "panelRootMinWidth": 400,
   "scannedFiles": 81,
   "totals": {
-    "frames": 36,
+    "frames": 37,
     "panelRoots": 21,
-    "ornaments": 15
+    "ornaments": 16
   },
   "intentVocab": {
     "content-stretches": "这个面板根里有能撑满高度的容器（`ScrollView` / `List` / `Table` / `Form`（滚动容器）/ `GeometryReader` / 显式的 `maxHeight: .infinity`）⇒ 内容本来就填满这个尺寸，**居中与顶对齐视觉等价**（`stretchProbe` 要在同一个视图类型里真的存在）",
@@ -358,6 +358,15 @@
       "kind": "ornament",
       "intent": "",
       "note": "小组件图标按钮的点击区（`iconButton`：`Image(...).frame(20×20).contentShape(Rectangle())`）—— 图标尺寸，不是面板根"
+    },
+    {
+      "file": "App/Views/WorkspaceExplorerView.swift",
+      "symbol": "WorkspaceExplorerView",
+      "frame": "width: 16, height: 16",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "悬浮菜单那三枚图标的点击区（`rowActionIcon`：`Image(...).frame(16×16).contentShape(Rectangle())`）—— 图标尺寸，不是面板根（队列 `L-114`，2026-10-02）"
     }
   ],
   "totalsNote": "`frames` / `panelRoots` / `ornaments` 都是**处数**（同一形状出现多次按处数记，例如对象树里三处 12×12 的形状算 3 处）；条目数另计（现 31 条）。",
