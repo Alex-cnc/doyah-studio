@@ -11,7 +11,13 @@ import TitleBar from './shell/TitleBar.vue'
 import { commandById, type Command } from './shell/commands'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
-import { appearanceGet, appearanceSet, type Appearance as AppearancePref, type DomAppearance } from './ipc'
+import {
+  appearanceGet,
+  appearanceSet,
+  dbPaletteObjects,
+  type Appearance as AppearancePref,
+  type DomAppearance,
+} from './ipc'
 import { applyAppearance, MODE_LABELS, SCHEME_LABELS, systemIsDark } from './shell/appearance'
 import DatabaseView from './views/DatabaseView.vue'
 import WorkspaceView from './views/WorkspaceView.vue'
@@ -25,6 +31,23 @@ import {
 import { activeItem, setActive } from './shell/activityBarStore'
 
 const info = ref<AppInfo | null>(null)
+// 面板里可搜的数据库对象与最近打开（**打开面板时才拉对象**：连不上就是空，不打扰）
+const paletteObjects = ref<{ schema: string; name: string; kind: string }[]>([])
+const recentFiles = ref<string[]>([])
+
+/** 记一个"刚打开过的文件"（最近的在前，去重，最多 10 条） */
+function rememberRecentFile(relativePath: string) {
+  recentFiles.value = [relativePath, ...recentFiles.value.filter((p) => p !== relativePath)].slice(0, 10)
+}
+
+async function loadPaletteObjects() {
+  try {
+    paletteObjects.value = await dbPaletteObjects()
+  } catch {
+    // 没连库 / 读不到 ⇒ 面板里只是少一类可搜项（**不弹错**）
+    paletteObjects.value = []
+  }
+}
 // 工作区根（面板里搜文件要用它；由 WorkspaceView 在打开/关闭工作区时同步上来）
 const workspaceRoot = ref('')
 
@@ -39,6 +62,7 @@ const openFileSignal = ref<string | null>(null)
  */
 async function openFromPalette(target: { relativePath: string }) {
   setActive('workspace')
+  rememberRecentFile(target.relativePath)
   openFileSignal.value = target.relativePath
   // 让监听方处理完就清掉（避免重复触发）
   await nextTick()
@@ -51,6 +75,7 @@ function onGlobalKeydown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault()
     paletteOpen.value = !paletteOpen.value
+    if (paletteOpen.value) void loadPaletteObjects()
   }
 }
 
@@ -166,6 +191,8 @@ function onSelect(id: ActivityBarItemId) {
       :workspace-root="workspaceRoot"
       @close="paletteOpen = false"
       @run="runCommand"
+:objects="paletteObjects"
+      :recent-files="recentFiles"
       @open="openFromPalette"
     />
     <p v-if="commandNote" class="shell__command-note">{{ commandNote }}</p>

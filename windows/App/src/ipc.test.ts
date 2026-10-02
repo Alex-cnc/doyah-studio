@@ -79,6 +79,7 @@ describe('ipc', () => {
       'appearance_get',
       'appearance_set',
       'palette_search',
+      'db_palette_objects',
     ])
   })
 

@@ -694,6 +694,37 @@ fn palette_search(
     doyah_studio_db::palette_search(&query, &items, limit.unwrap_or(50))
 }
 
+/// 面板用的**对象清单**：一条 SQL 取回全部表 / 视图（**不逐个 schema 问** —— 那在大库上很慢）。
+///
+/// 只在面板打开、且连上库时才拉；失败就返回空（面板里只是少一类可搜项，**不打扰用户**）。
+#[tauri::command]
+async fn db_palette_objects(state: State<'_, ShellState>) -> Result<Vec<serde_json::Value>, DbFailure> {
+    let session = current_session(&state).await?;
+    let sql = "SELECT n.nspname, c.relname, \
+               CASE c.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'table' \
+                    WHEN 'v' THEN 'view' WHEN 'm' THEN 'view' WHEN 'f' THEN 'table' ELSE 'other' END \
+               FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+               WHERE c.relkind IN ('r','p','v','m','f') \
+                 AND n.nspname NOT IN ('pg_catalog','information_schema') \
+                 AND n.nspname NOT LIKE 'pg\\_%' \
+               ORDER BY n.nspname, c.relname";
+    let result = session.client().simple_query(sql).await.map_err(|e| DbFailure {
+        message: postgres::server_error_text(&e),
+        hint: "读对象清单失败：确认当前用户能读 pg_catalog（一般都有）。".to_string(),
+    })?;
+    let mut out: Vec<serde_json::Value> = Vec::new();
+    for message in result {
+        if let tokio_postgres::SimpleQueryMessage::Row(row) = message {
+            out.push(serde_json::json!({
+                "schema": row.get(0).unwrap_or_default(),
+                "name": row.get(1).unwrap_or_default(),
+                "kind": row.get(2).unwrap_or_default(),
+            }));
+        }
+    }
+    Ok(out)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -752,7 +783,8 @@ pub fn run() {
             workspace_markdown,
             appearance_get,
             appearance_set,
-            palette_search
+            palette_search,
+            db_palette_objects
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

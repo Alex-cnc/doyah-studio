@@ -9,13 +9,17 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { paletteSearch, workspaceSearch, type PaletteItem, type PaletteMatch } from '../ipc'
 import { commandsFor, type Command } from './commands'
-import { fileToItem, mergeItems, targetOf } from './paletteTargets'
+import { fileToItem, mergeItems, objectToItem, targetOf } from './paletteTargets'
 
 const props = defineProps<{
   open: boolean
   view: 'workspace' | 'database'
   /** 工作区根（有它才能把**文件**也搜进面板） */
   workspaceRoot?: string
+  /** 可搜的数据库对象（连上库时由外壳拉好递进来） */
+  objects?: { schema: string; name: string; kind: string }[]
+  /** 最近打开的文件（相对路径，最近的在前） */
+  recentFiles?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -59,7 +63,13 @@ async function refresh() {
   if (!props.open) return
   const commands = toItems(available.value)
   const openables = await openableItems(query.value)
-  matches.value = await paletteSearch(query.value, mergeItems(commands, openables))
+  // 最近打开放前面（"回到刚才那个"是最常用的动作）；对象按名字搜
+  const recent = (props.recentFiles ?? []).map((path) => {
+    const item = fileToItem(path, false)
+    return { ...item, group: '最近打开' }
+  })
+  const objects = (props.objects ?? []).map((o) => objectToItem(o.schema, o.name, o.kind))
+  matches.value = await paletteSearch(query.value, mergeItems(commands, [...recent, ...openables, ...objects]))
   // 选中项夹进范围（结果变少时不该停在空位上）
   cursor.value = Math.min(cursor.value, Math.max(0, matches.value.length - 1))
 }

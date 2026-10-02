@@ -77,6 +77,8 @@ export const COMMANDS = {
   appearanceSet: 'appearance_set',
   // 命令面板（2.9：匹配与排序在 Rust 领域层）
   paletteSearch: 'palette_search',
+  // 面板用的对象清单（一条 SQL 取回全部表/视图）
+  dbPaletteObjects: 'db_palette_objects',
 } as const
 
 export interface AppInfo {
@@ -991,4 +993,15 @@ export function paletteSearch(query: string, items: PaletteItem[], limit = 50): 
       .slice(0, limit)
       .map((item) => ({ item, score: 0, highlighted: [], tier: 'substring' as const })),
   )
+}
+/** 面板里可搜的数据库对象（schema + 名 + 种类）。 */
+export interface PaletteObject {
+  schema: string
+  name: string
+  kind: string
+}
+
+/** 面板用的对象清单：**一条 SQL 取回全部表 / 视图**（不逐个 schema 问）。连不上就给空。 */
+export function dbPaletteObjects(): Promise<PaletteObject[]> {
+  return call(COMMANDS.dbPaletteObjects, {}, () => [] as PaletteObject[])
 }
