@@ -1552,3 +1552,228 @@ mod open_decision_tests {
         assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
     }
 }
+
+// ── 保存（2.3 遗留项）：写盘 + 冲突拦截 ─────────────────────────────────────────────
+//
+// 判定在领域层 `save_guard`（6 例单测）。本层的顺序**必须是**：
+// **先判 → 冲突就拒（一个字节都不写）→ 通过了才写盘**。
+// 反过来（先写再报错）就等于"已经覆盖了别人的改动"，那是不可撤销的伤害。
+//
+// **载入快照由界面带进来**（`loaded`）：页签打开时记的那一份才是基线；
+// 在这里现读盘会把基线换成"盘上现在这份"，冲突判定当场失真 —— 这是本函数第一条纪律。
+
+/// 保存的判定结果（给界面）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveReport {
+    pub relative_path: String,
+    pub decision: doyah_studio_db::SaveDecision,
+    /// 拒绝时的一句说明（**说清盘上是什么、下一步能选什么**）
+    pub note: Option<String>,
+    /// 写成功后的**新快照**（界面要更新它，否则下次保存会误报冲突）
+    pub snapshot: Option<doyah_studio_db::LoadedFile>,
+}
+
+/// 保存一个文件：**先判再写**。
+///
+/// `loaded` = 页签打开时记的快照（**基线，不能现读**）；`force` = 用户明确选择"用我的版本覆盖"。
+pub fn save_file(
+    workspace_root: &str,
+    relative: &str,
+    content: &str,
+    saved_content: &str,
+    loaded: &doyah_studio_db::LoadedFile,
+    force: bool,
+) -> Result<SaveReport, DbFailure> {
+    let now = disk_state(workspace_root, relative)?;
+
+    // ① 判定（**读盘之后、写盘之前**）
+    let staleness = doyah_studio_db::classify(loaded, now.as_ref());
+    let decision = if force {
+        doyah_studio_db::decide_overwrite(content, saved_content, staleness)
+    } else {
+        doyah_studio_db::decide_save(content, saved_content, loaded, now.as_ref())
+    };
+
+    match decision {
+        doyah_studio_db::SaveDecision::NothingToDo => Ok(SaveReport {
+            relative_path: relative.replace('\\', "/"),
+            decision: doyah_studio_db::SaveDecision::NothingToDo,
+            note: Some("内容没有变化，已跳过写入。".to_string()),
+            snapshot: None,
+        }),
+        doyah_studio_db::SaveDecision::Conflict { staleness } => Ok(SaveReport {
+            relative_path: relative.replace('\\', "/"),
+            decision: doyah_studio_db::SaveDecision::Conflict { staleness },
+            // **拒绝保存**：这里一个字节都没写
+            note: Some(doyah_studio_db::explain_conflict(staleness)),
+            snapshot: None,
+        }),
+        doyah_studio_db::SaveDecision::Write { recreated } => {
+            let target = resolve_in(workspace_root, relative)?;
+            std::fs::write(&target, content.as_bytes()).map_err(|e| {
+                failure(
+                    format!("写文件失败：{e}（{}）", target.display()),
+                    "确认文件可写（可能被别的程序占用 / 只读）。",
+                )
+            })?;
+            let snapshot = file_snapshot(workspace_root, relative)?;
+            Ok(SaveReport {
+                relative_path: relative.replace('\\', "/"),
+                decision: doyah_studio_db::SaveDecision::Write { recreated },
+                note: if recreated {
+                    Some("盘上这份原本不在了 —— 已**重新建一份**。".to_string())
+                } else {
+                    None
+                },
+                snapshot: Some(snapshot),
+            })
+        }
+    }
+}
+
+/// 盘上此刻的状态（**不写任何东西**）。
+fn disk_state(
+    workspace_root: &str,
+    relative: &str,
+) -> Result<Option<doyah_studio_db::DiskFile>, DbFailure> {
+    let path = resolve_in(workspace_root, relative)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let meta = std::fs::metadata(&path).map_err(|e| {
+        failure(format!("看不到这个文件：{e}（{}）", path.display()), "确认权限。")
+    })?;
+    let bytes = std::fs::read(&path).map_err(|e| {
+        failure(format!("读文件失败：{e}（{}）", path.display()), "确认权限。")
+    })?;
+    Ok(Some(doyah_studio_db::DiskFile {
+        byte_count: meta.len(),
+        modified_unix: modified_unix(&meta),
+        content_hash: doyah_studio_db::content_hash(&bytes),
+    }))
+}
+
+#[cfg(test)]
+mod save_tests {
+    use super::*;
+
+    // 夹具根目录：**不用系统临时区**（cargo test 拿不到会话里的 TEMP，系统临时区在本机沙箱里拒写
+    // ⇒ 建夹具报"拒绝访问"）。可用环境变量覆盖。
+    fn fixture_root() -> std::path::PathBuf {
+        match std::env::var("DOYAH_TEST_ROOT") {
+            Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+            _ => std::path::PathBuf::from("D:/AIProjects/_tmp_face2/fish-fixtures"),
+        }
+    }
+
+    fn root(tag: &str) -> PathBuf {
+        static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let unique = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = fixture_root().join(format!("doyah-save-{tag}-{}-{unique}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_normal_save_writes_and_returns_a_fresh_snapshot() {
+        let dir = root("normal");
+        let root_text = dir.to_string_lossy().to_string();
+        std::fs::write(dir.join("a.txt"), "hello").unwrap();
+        let loaded = file_snapshot(&root_text, "a.txt").unwrap();
+
+        let report = save_file(&root_text, "a.txt", "hello world", "hello", &loaded, false).unwrap();
+        assert!(matches!(
+            report.decision,
+            doyah_studio_db::SaveDecision::Write { .. }
+        ));
+        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "hello world");
+        // **新快照要回来**（界面更新它，否则下次保存会误报冲突）
+        assert!(report.snapshot.is_some());
+        let fresh = report.snapshot.unwrap();
+        assert_eq!(fresh.content_hash, doyah_studio_db::content_hash(b"hello world"));
+
+        // 用新快照再存一次（内容又改了）⇒ 不冲突
+        let second = save_file(&root_text, "a.txt", "hello world 2", "hello world", &fresh, false).unwrap();
+        assert!(matches!(
+            second.decision,
+            doyah_studio_db::SaveDecision::Write { .. }
+        ));
+    }
+
+    #[test]
+    fn an_external_change_is_refused_and_the_file_is_left_untouched() {
+        let dir = root("conflict");
+        let root_text = dir.to_string_lossy().to_string();
+        std::fs::write(dir.join("a.txt"), "hello").unwrap();
+        let loaded = file_snapshot(&root_text, "a.txt").unwrap();
+        // 别处改了它
+        std::fs::write(dir.join("a.txt"), "SOMEONE ELSE").unwrap();
+
+        let report = save_file(&root_text, "a.txt", "my version", "hello", &loaded, false).unwrap();
+        assert!(matches!(
+            report.decision,
+            doyah_studio_db::SaveDecision::Conflict { .. }
+        ));
+        assert!(report.note.unwrap().contains("没有保存"));
+        // **一个字节都没写**（这是本函数最要紧的一条）
+        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "SOMEONE ELSE");
+        assert!(report.snapshot.is_none());
+
+        // 用户明确选"覆盖" ⇒ 放行，并且内容确实被覆盖
+        let forced = save_file(&root_text, "a.txt", "my version", "hello", &loaded, true).unwrap();
+        assert!(matches!(
+            forced.decision,
+            doyah_studio_db::SaveDecision::Write { .. }
+        ));
+        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "my version");
+    }
+
+    #[test]
+    fn nothing_to_do_skips_the_write_entirely() {
+        let dir = root("none");
+        let root_text = dir.to_string_lossy().to_string();
+        std::fs::write(dir.join("a.txt"), "same").unwrap();
+        let loaded = file_snapshot(&root_text, "a.txt").unwrap();
+        let before = std::fs::metadata(dir.join("a.txt")).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let report = save_file(&root_text, "a.txt", "same", "same", &loaded, false).unwrap();
+        assert!(matches!(
+            report.decision,
+            doyah_studio_db::SaveDecision::NothingToDo
+        ));
+        // 时间戳**没被搅动**（说明真的没写）
+        let after = std::fs::metadata(dir.join("a.txt")).unwrap().modified().unwrap();
+        assert_eq!(before, after, "没变化就不该写盘");
+    }
+
+    #[test]
+    fn a_file_deleted_on_disk_is_recreated_and_says_so() {
+        let dir = root("recreate");
+        let root_text = dir.to_string_lossy().to_string();
+        std::fs::write(dir.join("a.txt"), "hello").unwrap();
+        let loaded = file_snapshot(&root_text, "a.txt").unwrap();
+        std::fs::remove_file(dir.join("a.txt")).unwrap();
+
+        let report = save_file(&root_text, "a.txt", "new content", "hello", &loaded, false).unwrap();
+        match report.decision {
+            doyah_studio_db::SaveDecision::Write { recreated } => assert!(recreated),
+            other => panic!("应当是 Write {{ recreated: true }}，实际 {other:?}"),
+        }
+        assert!(report.note.unwrap().contains("重新建一份"));
+        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "new content");
+    }
+
+    #[test]
+    fn saving_refuses_escapes() {
+        let dir = root("escape");
+        let root_text = dir.to_string_lossy().to_string();
+        let loaded = doyah_studio_db::LoadedFile {
+            relative_path: "a.txt".to_string(),
+            byte_count: 5,
+            modified_unix: Some(1),
+            content_hash: doyah_studio_db::content_hash(b"hello"),
+        };
+        assert!(save_file(&root_text, "../outside.txt", "x", "y", &loaded, false).is_err());
+    }
+}

@@ -26,6 +26,7 @@ import {
   workspaceDecideOpen,
   workspaceMarkdown,
   workspaceReadImage,
+  workspaceSave,
   workspaceRecordCursor,
   workspaceSearch,
   workspaceReadSpans,
@@ -42,6 +43,7 @@ import {
   type MdDocument,
   type MdSpan,
   type OpenDecision,
+  type SaveReport,
   type SearchOutcome,
   type WorkspaceHistory,
 } from '../ipc'
@@ -316,6 +318,60 @@ const activeHit = computed(() => {
   const path = activeTab.value?.relativePath
   return path ? hitInfo.value.get(path) : undefined
 })
+
+// 保存（2.3）：编辑面的内容 + 冲突处置
+const editorDraft = ref('')
+const saveReport = ref<SaveReport | null>(null)
+
+/** 当前页签有未保存改动 */
+const isDirty = computed(() => {
+  const tab = activeTab.value
+  return !!tab && tab.relativePath !== null && editorDraft.value !== tab.saved
+})
+
+/** 把草稿对齐到当前页签（切页签 / 打开文件时调） */
+watch(
+  () => [activeTab.value?.id, activeTab.value?.content] as const,
+  () => {
+    editorDraft.value = activeTab.value?.content ?? ''
+    saveReport.value = null
+  },
+  { immediate: true },
+)
+
+/**
+ * 保存当前页签：**必须先有载入快照**（基线），否则不保存 ——
+ * 没有基线就无法判断"盘上有没有被别人改过"，盲目写就是拿别人的改动去赌。
+ */
+async function saveActiveTab(force = false) {
+  const tab = activeTab.value
+  if (!tab?.relativePath || !root.value) return
+  const loaded = snapshots.value.get(tab.relativePath)
+  if (!loaded) {
+    failure.value = {
+      message: '这个页签没有载入快照，无法安全保存',
+      hint: '重新打开它一次（快照是"盘上有没有被改过"的判据，缺了就不能保证不覆盖别人的改动）。',
+    }
+    return
+  }
+  busy.value = '保存中…'
+  try {
+    const report = await workspaceSave(root.value, tab.relativePath, editorDraft.value, tab.saved, loaded, force)
+    saveReport.value = report
+    if (report.decision.kind === 'write' && report.snapshot) {
+      // 写成功：内容成为"已保存"，并更新快照（否则下次保存会误报冲突）
+      tabs.value = tabs.value.map((t) =>
+        t.id === tab.id ? { ...t, content: editorDraft.value, saved: editorDraft.value } : t,
+      )
+      await rememberSnapshot(tab.relativePath)
+      await loadEditorData(tab.relativePath)
+    }
+  } catch (e) {
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
+  }
+}
 
 /** 本版只读：编辑面显示内容，改与存归 2.1 / 2.2 段（不假装能改）。 */
 interface OpenTab {
@@ -1004,10 +1060,29 @@ function onTreeKeydown(event: KeyboardEvent) {
               <button v-if="activeIsMarkdown" class="ws__act" type="button" :title="showPreview ? '看源码' : '看预览（只读）'" @click="togglePreview">
                 {{ showPreview ? '源码' : '预览' }}
               </button>
+              <button
+                class="ws__act"
+                type="button"
+                :title="isDirty ? '保存到磁盘（盘上被别处改过时会拒绝）' : '没有改动'"
+                :disabled="!isDirty"
+                @click="saveActiveTab(false)"
+              >
+                💾 保存
+              </button>
               <button class="ws__act" type="button" title="重新比对盘上有没有被别处改过" @click="checkExternalChanges">
                 ⟳ 比对
               </button>
             </p>
+            <!-- 保存冲突（2.3）：**拒绝保存**之后要给人一条出路（覆盖 / 先比对） -->
+            <div v-if="saveReport && (saveReport.decision.kind === 'conflict' || saveReport.note)" class="ws__stale" role="alert">
+              <p class="ws__stale-msg">{{ saveReport.note }}</p>
+              <template v-if="saveReport.decision.kind === 'conflict'">
+                <button class="ws__btn" type="button" @click="checkExternalChanges">先比对</button>
+                <button class="ws__btn ws__btn--primary" type="button" @click="saveActiveTab(true)">
+                  用我的版本覆盖
+                </button>
+              </template>
+            </div>
             <!-- 外部改动（2.3）：**如实说**，并给出下一步（重新打开）—— 只说"变了"等于把问题丢回给人 -->
             <div v-if="staleNotice" class="ws__stale" role="alert">
               <p class="ws__stale-msg">{{ staleNotice.note }}</p>

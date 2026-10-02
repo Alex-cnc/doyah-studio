@@ -86,6 +86,8 @@ export const COMMANDS = {
   // 按类型打开（2.3：文本 / 图片 / 二进制 / 太大）
   workspaceDecideOpen: 'workspace_decide_open',
   workspaceReadImage: 'workspace_read_image',
+  // 保存（2.3：先判冲突再写）
+  workspaceSave: 'workspace_save',
 } as const
 
 export interface AppInfo {
@@ -1068,4 +1070,43 @@ export function workspaceDecideOpen(workspaceRoot: string, relativePath: string)
 /** 读图片字节（base64）供 `data:` 显示。 */
 export function workspaceReadImage(workspaceRoot: string, relativePath: string): Promise<string> {
   return call(COMMANDS.workspaceReadImage, { workspaceRoot, relativePath }, () => '')
+}
+
+
+// ── 保存（alpha 2.3 遗留项）────────────────────────────────────────────────────────
+
+/** 保存的判定（与 Rust 侧 `SaveDecision` 同形）。 */
+export type SaveDecision =
+  | { kind: 'write'; recreated: boolean }
+  | { kind: 'nothingToDo' }
+  | { kind: 'conflict'; staleness: 'modified' | 'deleted' | 'replaced' | 'unchanged' }
+
+export interface SaveReport {
+  relativePath: string
+  decision: SaveDecision
+  /** 拒绝时的一句说明（**说清盘上是什么、下一步能选什么**） */
+  note: string | null
+  /** 写成功后的**新快照**（界面要更新它，否则下次保存会误报冲突） */
+  snapshot: LoadedFile | null
+}
+
+/**
+ * 保存一个文件（**先判冲突再写**）。
+ *
+ * `loaded` 必须是**页签打开时记的那份快照**（基线）——在这里现读盘会把基线换成"盘上现在这份"，
+ * 冲突判定当场失真。
+ */
+export function workspaceSave(
+  workspaceRoot: string,
+  relativePath: string,
+  content: string,
+  savedContent: string,
+  loaded: LoadedFile,
+  force = false,
+): Promise<SaveReport> {
+  return call(
+    COMMANDS.workspaceSave,
+    { workspaceRoot, relativePath, content, savedContent, loaded, force },
+    () => ({ relativePath, decision: { kind: 'nothingToDo' as const }, note: null, snapshot: null }),
+  )
 }

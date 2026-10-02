@@ -24,6 +24,7 @@ pub mod markdown;
 pub mod open_as;
 pub mod palette;
 pub mod reveal;
+pub mod save_guard;
 pub mod search;
 pub mod sql;
 pub mod staleness;
@@ -52,6 +53,9 @@ pub use palette::{
     KEYWORD_BONUS,
 };
 pub use reveal::{ensure_inside, explorer_plan, pick_terminal, terminal_plan, RevealPlan, TerminalKind};
+pub use save_guard::{
+    decide_overwrite, decide_save, explain_conflict, SaveDecision,
+};
 pub use search::{
     assemble, decode_text, hits_in_text, matches, normalize, snippet, ContentGroup, ContentHit,
     ContentResult, SkipReport, BINARY_PROBE_BYTES, DEFAULT_MAX_DEPTH, DEFAULT_MAX_FILE_SIZE,

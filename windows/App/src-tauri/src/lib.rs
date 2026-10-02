@@ -762,6 +762,28 @@ fn workspace_read_image(workspace_root: String, relative_path: String) -> Result
     fs::read_image_base64(&workspace_root, &relative_path)
 }
 
+/// 保存一个文件（**先判冲突再写**）：盘上被别处改过就**拒绝**，一个字节都不写。
+///
+/// `loaded` = 页签打开时记的快照（**基线**，不能在这里现读）；`force` = 用户明确选"用我的版本覆盖"。
+#[tauri::command]
+fn workspace_save(
+    workspace_root: String,
+    relative_path: String,
+    content: String,
+    saved_content: String,
+    loaded: doyah_studio_db::LoadedFile,
+    force: Option<bool>,
+) -> Result<fs::SaveReport, DbFailure> {
+    fs::save_file(
+        &workspace_root,
+        &relative_path,
+        &content,
+        &saved_content,
+        &loaded,
+        force.unwrap_or(false),
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -826,7 +848,8 @@ pub fn run() {
             command_history_record,
             command_history_clear,
             workspace_decide_open,
-            workspace_read_image
+            workspace_read_image,
+            workspace_save
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");
