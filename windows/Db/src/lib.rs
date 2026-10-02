@@ -19,6 +19,7 @@ pub mod foreign_key;
 pub mod highlight;
 pub mod inspect;
 pub mod reveal;
+pub mod search;
 pub mod sql;
 pub mod staleness;
 pub mod tree;
@@ -28,6 +29,11 @@ pub mod writeback;
 
 pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter};
 pub use reveal::{ensure_inside, explorer_plan, pick_terminal, terminal_plan, RevealPlan, TerminalKind};
+pub use search::{
+    assemble, decode_text, hits_in_text, matches, normalize, snippet, ContentGroup, ContentHit,
+    ContentResult, SkipReport, BINARY_PROBE_BYTES, DEFAULT_MAX_DEPTH, DEFAULT_MAX_FILE_SIZE,
+    DEFAULT_PER_FILE_LIMIT, DEFAULT_RESULT_LIMIT, DEFAULT_SNIPPET_LIMIT,
+};
 pub use sql::{explain, spans, tokenize, StatementSpan, Token, TokenKind};
 pub use staleness::{classify, content_hash, note as staleness_note, DiskFile, LoadedFile, Staleness};
 pub use writeback::{edits_to_dml, statement_risk, CellEdit, DmlStatement, Risk, RowKey, TransactionPlan};

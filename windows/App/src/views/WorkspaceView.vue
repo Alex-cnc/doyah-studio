@@ -22,7 +22,9 @@ import {
   workspaceFileSnapshot,
   workspaceReadFile,
   workspaceReadLines,
+  workspaceClampLine,
   workspaceRecordCursor,
+  workspaceSearch,
   workspaceReadSpans,
   workspaceReveal,
   workspaceRename,
@@ -33,6 +35,7 @@ import {
   type FsEntry,
   type CursorAnchor,
   type LoadedFile,
+  type SearchOutcome,
   type WorkspaceHistory,
 } from '../ipc'
 import { entryGlyph, flattenTree, indentPx, neighbouringRow, tabLabel, toggleExpanded, workspaceDisplayName } from '../workspace/logic'
@@ -176,6 +179,47 @@ const codeStyle = computed(() => {
   )
   return width === null ? {} : { width: `${width}px` }
 })
+// 检索（2.4）：按文件名 / 按内容 —— **两者共用 Rust 侧同一个匹配谓词**，前端不另写一套 contains
+const searchQuery = ref('')
+const searchByContent = ref(false)
+const searchResult = ref<SearchOutcome | null>(null)
+const searching = ref(false)
+
+async function runSearch() {
+  if (!root.value || !searchQuery.value.trim()) return
+  searching.value = true
+  failure.value = null
+  try {
+    searchResult.value = await workspaceSearch(root.value, searchQuery.value, {
+      byContent: searchByContent.value,
+      showHidden: showHidden.value,
+    })
+  } catch (e) {
+    failure.value = describeError(e)
+    searchResult.value = null
+  } finally {
+    searching.value = false
+  }
+}
+
+/** 命中条数（文件名与内容两种模式各算各的） */
+const searchHitCount = computed(() => {
+  const result = searchResult.value
+  if (!result) return 0
+  return searchByContent.value ? result.groups.reduce((sum, g) => sum + g.hits.length, 0) : result.files.length
+})
+
+/** 点一条命中：打开那个文件**并跳到命中行**（行号先夹进真实行数） */
+async function openHit(relativePath: string, line?: number) {
+  // 文件可能还没在树里展开过 —— 直接按路径打开（走的是同一条安全关）
+  await openFile({ name: relativePath.split('/').pop() ?? relativePath, relativePath, kind: 'file', isExpandable: false })
+  const tab = tabs.value.find((t) => t.relativePath === relativePath)
+  if (!tab) return
+  if (line !== undefined) {
+    const clamped = await workspaceClampLine(root.value, relativePath, line)
+    tabs.value = tabs.value.map((t) => (t.id === tab.id ? { ...t, cursorLine: clamped, cursorHow: 'exact' } : t))
+  }
+}
 /** 本版只读：编辑面显示内容，改与存归 2.1 / 2.2 段（不假装能改）。 */
 interface OpenTab {
   id: string
@@ -646,6 +690,58 @@ function onTreeKeydown(event: KeyboardEvent) {
       <span class="ws__note">{{ headerText }}</span>
     </form>
 
+    <!-- 检索（2.4）：按文件名 / 按内容；点结果即打开并跳到命中行 -->
+    <form v-if="root" class="ws__searchbar" @submit.prevent="runSearch">
+      <input v-model="searchQuery" type="search" placeholder="在工作区里找…（回车搜索）" aria-label="工作区检索" />
+      <label class="ws__check">
+        <input v-model="searchByContent" type="checkbox" />
+        搜内容（不勾=只搜文件名）
+      </label>
+      <button class="ws__btn" type="submit" :disabled="searching">搜索</button>
+      <span v-if="searchResult" class="ws__note">
+        命中 {{ searchHitCount }} 条<template v-if="searchResult.truncated">（**已达上限 {{ searchResult.limit }}**，不是全部）</template>
+        <template v-if="searchByContent">
+          · 读了 {{ searchResult.scannedFiles }} 个文件
+          <template v-if="searchResult.skips.binary + searchResult.skips.tooLarge + searchResult.skips.unreadable > 0">
+            · 跳过 {{ searchResult.skips.binary }} 个二进制 / {{ searchResult.skips.tooLarge }} 个过大 /
+            {{ searchResult.skips.unreadable }} 个读不了
+          </template>
+        </template>
+      </span>
+      <button v-if="searchResult" class="ws__act" type="button" title="清掉结果" @click="searchResult = null">✕</button>
+    </form>
+    <div v-if="searchResult" class="ws__hits">
+      <template v-if="searchByContent">
+        <div v-for="group in searchResult.groups" :key="group.relativePath" class="ws__hit-group">
+          <p class="ws__hit-file">{{ group.relativePath }}（{{ group.hits.length }} 处）</p>
+          <button
+            v-for="hit in group.hits"
+            :key="hit.line"
+            class="ws__hit"
+            type="button"
+            :title="`打开并跳到第 ${hit.line} 行`"
+            @click="openHit(hit.relativePath, hit.line)"
+          >
+            第 {{ hit.line }} 行：{{ hit.snippet }}
+          </button>
+        </div>
+        <p v-if="searchResult.groups.length === 0" class="ws__empty">没有命中（跳过的那几个文件不算"没命中"）</p>
+      </template>
+      <template v-else>
+        <button
+          v-for="file in searchResult.files"
+          :key="file"
+          class="ws__hit"
+          type="button"
+          :title="`打开 ${file}`"
+          @click="openHit(file)"
+        >
+          {{ file }}
+        </button>
+        <p v-if="searchResult.files.length === 0" class="ws__empty">没有名字匹配的文件</p>
+      </template>
+    </div>
+
     <p v-if="historyWarning" class="ws__note ws__note--warn">{{ historyWarning }}</p>
 
     <div v-if="failure" class="ws__failure" role="alert">
@@ -892,6 +988,59 @@ function onTreeKeydown(event: KeyboardEvent) {
 }
 
 /* 删除确认条：读数 + 两个按钮（不做系统对话框） */
+.ws__searchbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  padding: var(--ds-spacing-xs) var(--ds-spacing-m);
+  border-bottom: var(--ds-metric-hairline) solid var(--ds-hairline);
+  background: var(--ds-color-surface-panel);
+}
+
+.ws__searchbar input[type='search'] {
+  min-width: 280px;
+  height: var(--ds-metric-control-height);
+  padding: 0 var(--ds-spacing-s);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+}
+
+/* 命中列表：最多占半屏，避免把编辑面挤没 */
+.ws__hits {
+  max-height: 40vh;
+  overflow: auto;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-m);
+  border-bottom: var(--ds-metric-hairline) solid var(--ds-hairline);
+}
+
+.ws__hit-file {
+  margin: var(--ds-spacing-xs) 0;
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.ws__hit {
+  display: block;
+  width: 100%;
+  padding: var(--ds-spacing-xs);
+  background: transparent;
+  color: var(--ds-color-text-primary);
+  border: 0;
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws__hit:hover {
+  background: var(--ds-color-surface-panel);
+}
 .ws__confirm {
   display: flex;
   flex-wrap: wrap;

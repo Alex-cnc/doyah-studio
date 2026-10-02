@@ -73,6 +73,8 @@ describe('ipc', () => {
       'workspace_file_snapshot',
       'workspace_check_staleness',
       'workspace_record_cursor',
+      'workspace_search',
+      'workspace_clamp_line',
     ])
   })
 

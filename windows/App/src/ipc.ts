@@ -67,6 +67,9 @@ export const COMMANDS = {
   workspaceFileSnapshot: 'workspace_file_snapshot',
   workspaceCheckStaleness: 'workspace_check_staleness',
   workspaceRecordCursor: 'workspace_record_cursor',
+  // 检索（2.4：按文件名 / 按内容，共用同一个匹配谓词）
+  workspaceSearch: 'workspace_search',
+  workspaceClampLine: 'workspace_clamp_line',
 } as const
 
 export interface AppInfo {
@@ -807,4 +810,60 @@ export function workspaceRecordCursor(
     { workspaceRoot, relativePath, line, column },
     () => ({ history: { files: [], workspaces: [], currentRoot: null, openTabs: [] } }),
   )
+}
+// ── 检索（alpha 2.4）────────────────────────────────────────────────────────────────
+
+export interface ContentHit {
+  relativePath: string
+  line: number
+  snippet: string
+}
+
+export interface ContentGroup {
+  relativePath: string
+  hits: ContentHit[]
+}
+
+/** **跳过报告**：跳过 ≠ 通过（二进制 / 超大 / 读不了各记一笔，界面要看得见）。 */
+export interface SkipReport {
+  binary: number
+  tooLarge: number
+  unreadable: number
+}
+
+export interface SearchOutcome {
+  /** 按文件名找到的（相对路径） */
+  files: string[]
+  groups: ContentGroup[]
+  skips: SkipReport
+  scannedFiles: number
+  /** 命中总数到达上限而提前停止（界面要如实提示） */
+  truncated: boolean
+  /** 本次真正用的上限（界面照它说话，不写死） */
+  limit: number
+}
+
+/** 工作区检索：`byContent = false` 只看名字（快），`true` 逐个读内容并按行命中。 */
+export function workspaceSearch(
+  workspaceRoot: string,
+  query: string,
+  options: { byContent?: boolean; showHidden?: boolean; limit?: number; maxDepth?: number } = {},
+): Promise<SearchOutcome> {
+  return call(
+    COMMANDS.workspaceSearch,
+    {
+      workspaceRoot,
+      query,
+      byContent: options.byContent ?? false,
+      showHidden: options.showHidden ?? false,
+      limit: options.limit,
+      maxDepth: options.maxDepth,
+    },
+    () => ({ files: [], groups: [], skips: { binary: 0, tooLarge: 0, unreadable: 0 }, scannedFiles: 0, truncated: false, limit: 200 }),
+  )
+}
+
+/** 跳到命中行前把行号**夹进真实行数**（文件可能在检索之后被改短了）。 */
+export function workspaceClampLine(workspaceRoot: string, relativePath: string, line: number): Promise<number> {
+  return call(COMMANDS.workspaceClampLine, { workspaceRoot, relativePath, line }, () => line)
 }

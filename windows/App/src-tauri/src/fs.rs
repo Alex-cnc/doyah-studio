@@ -186,8 +186,17 @@ pub fn read_text_file(workspace_root: &str, relative: &str) -> Result<FileConten
 mod tests {
     use super::*;
 
+    // 夹具根目录：**不用系统临时区**（cargo test 拿不到会话里的 TEMP，系统临时区在本机沙箱里
+// 拒写 ⇒ 建夹具报“拒绝访问”，看着像权限问题、其实是写错了地方）。可用环境变量覆盖。
+fn fixture_root() -> std::path::PathBuf {
+    match std::env::var("DOYAH_TEST_ROOT") {
+        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+        _ => std::path::PathBuf::from("D:/AIProjects/_tmp_face2/fish-fixtures"),
+    }
+}
+
     fn temp_root(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("doyah-fs-{tag}-{}", std::process::id()));
+        let dir = fixture_root().join(format!("doyah-fs-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("sub")).unwrap();
         std::fs::write(dir.join("a.txt"), "hello").unwrap();
@@ -633,8 +642,17 @@ mod write_tests {
 
     // ── 写面（alpha 2.1）：真建 / 真改 / 真移动 / 真删（回收站）──────────────────────────
 
+    // 夹具根目录：**不用系统临时区**（cargo test 拿不到会话里的 TEMP，系统临时区在本机沙箱里
+// 拒写 ⇒ 建夹具报“拒绝访问”，看着像权限问题、其实是写错了地方）。可用环境变量覆盖。
+fn fixture_root() -> std::path::PathBuf {
+    match std::env::var("DOYAH_TEST_ROOT") {
+        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+        _ => std::path::PathBuf::from("D:/AIProjects/_tmp_face2/fish-fixtures"),
+    }
+}
+
     fn write_root(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("doyah-write-{tag}-{}", std::process::id()));
+        let dir = fixture_root().join(format!("doyah-write-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("sub")).unwrap();
         dir
@@ -834,8 +852,17 @@ mod reveal_tests {
 
     /// 本模块自备临时根（跨模块共享私有测试助手不值当：两处各六行，比"公开一个只为测试存在的
     /// 函数"更干净）。
+    // 夹具根目录：**不用系统临时区**（cargo test 拿不到会话里的 TEMP，系统临时区在本机沙箱里
+// 拒写 ⇒ 建夹具报“拒绝访问”，看着像权限问题、其实是写错了地方）。可用环境变量覆盖。
+fn fixture_root() -> std::path::PathBuf {
+    match std::env::var("DOYAH_TEST_ROOT") {
+        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+        _ => std::path::PathBuf::from("D:/AIProjects/_tmp_face2/fish-fixtures"),
+    }
+}
+
     fn write_root(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("doyah-reveal-{tag}-{}", std::process::id()));
+        let dir = fixture_root().join(format!("doyah-reveal-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -945,8 +972,17 @@ fn language_from_key(key: &str) -> doyah_studio_db::TextLanguage {
 mod lines_tests {
     use super::*;
 
+    // 夹具根目录：**不用系统临时区**（cargo test 拿不到会话里的 TEMP，系统临时区在本机沙箱里拒写
+    // ⇒ 建夹具报"拒绝访问"，看着像权限问题、其实是写错了地方）。可用环境变量覆盖。
+    fn fixture_root() -> std::path::PathBuf {
+        match std::env::var("DOYAH_TEST_ROOT") {
+            Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+            _ => std::path::PathBuf::from("D:/AIProjects/_tmp_face2/fish-fixtures"),
+        }
+    }
+
     fn root(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("doyah-lines-{tag}-{}", std::process::id()));
+        let dir = fixture_root().join(format!("doyah-lines-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -1086,8 +1122,17 @@ pub fn check_staleness(
 mod staleness_tests {
     use super::*;
 
+    // 夹具根目录：**不用系统临时区**（cargo test 拿不到会话里的 TEMP，系统临时区在本机沙箱里拒写
+    // ⇒ 建夹具报“拒绝访问”，看着像权限问题、其实是写错了地方）。可用环境变量覆盖。
+    fn fixture_root() -> std::path::PathBuf {
+        match std::env::var("DOYAH_TEST_ROOT") {
+            Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+            _ => std::path::PathBuf::from("D:/AIProjects/_tmp_face2/fish-fixtures"),
+        }
+    }
+
     fn root(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("doyah-stale-{tag}-{}", std::process::id()));
+        let dir = fixture_root().join(format!("doyah-stale-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir

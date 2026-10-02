@@ -7,6 +7,7 @@
 pub mod connections;
 pub mod fs;
 pub mod postgres;
+pub mod search;
 mod query;
 
 pub use connections::{config_from_form, ConnectionStore};
@@ -606,6 +607,35 @@ fn workspace_record_cursor(
     Ok(serde_json::json!({ "history": next }))
 }
 
+/// 工作区检索：按**文件名**或按**内容**找（两者共用同一个匹配谓词）。
+///
+/// `byContent = false` 只看名字、不读内容（快）；`true` 逐个读内容并按行命中。
+/// **跳过 ≠ 通过**：二进制 / 超大 / 读不了各记一笔，界面要看得见。
+#[tauri::command]
+fn workspace_search(
+    workspace_root: String,
+    query: String,
+    by_content: Option<bool>,
+    show_hidden: Option<bool>,
+    limit: Option<usize>,
+    max_depth: Option<usize>,
+) -> Result<search::SearchOutcome, DbFailure> {
+    search::search_workspace(
+        &workspace_root,
+        &query,
+        by_content.unwrap_or(false),
+        show_hidden.unwrap_or(false),
+        limit,
+        max_depth,
+    )
+}
+
+/// 跳到命中行前把行号**夹进真实行数**（文件可能在检索之后被改短了）。
+#[tauri::command]
+fn workspace_clamp_line(workspace_root: String, relative_path: String, line: usize) -> Result<usize, DbFailure> {
+    search::clamp_line(&workspace_root, &relative_path, line)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -658,7 +688,9 @@ pub fn run() {
             workspace_read_spans,
             workspace_file_snapshot,
             workspace_check_staleness,
-            workspace_record_cursor
+            workspace_record_cursor,
+            workspace_search,
+            workspace_clamp_line
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

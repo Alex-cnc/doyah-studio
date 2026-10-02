@@ -269,10 +269,20 @@ pub fn config_from_form(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // 夹具根目录：**不用系统临时区**（cargo test 拿不到会话里的 TEMP，系统临时区在本机沙箱里拒写
+    // ⇒ 建夹具报“拒绝访问”，看着像权限问题、其实是写错了地方）。可用环境变量覆盖。
+    fn fixture_root() -> std::path::PathBuf {
+        match std::env::var("DOYAH_TEST_ROOT") {
+            Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+            _ => std::path::PathBuf::from("D:/AIProjects/_tmp_face2/fish-fixtures"),
+        }
+    }
+
     use doyah_studio_db::db_type::SslMode;
 
     fn tmp_store(tag: &str) -> ConnectionStore {
-        let dir = std::env::temp_dir().join(format!("doyah-test-{tag}-{}", std::process::id()));
+        let dir = fixture_root().join(format!("doyah-test-{tag}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         ConnectionStore::new(dir.join("connections.json"))
     }
