@@ -95,6 +95,12 @@ enum MainMenuLocalizer {
                 // （`NSMenu.didBeginTrackingNotification` 的观察者做的正是 `refresh`）。
                 // 两段分开写：A≠B 才说明「自愈只在展开时生效」，A=B 说明「walk 真的没走到它」。
                 var report = menuReport(headline: "A 原样（未展开菜单）")
+                // 可选（`DOYAH_MENU_DUMP_OPEN=1`）：先把每个顶层菜单**展开一次**再往下 dump。
+                // 见 `openEveryTopLevelMenu` 的说明 —— 不展开就枚举不到 AppKit 展开时才插进来的那一族。
+                if let open = environment["DOYAH_MENU_DUMP_OPEN"], open == "1" {
+                    openEveryTopLevelMenu()
+                }
+                report += menuReport(headline: "C 各菜单展开过一次之后（含 AppKit 展开时才插进来的项）")
                 refresh(to: LocalizationManager.shared.language)
                 report += menuReport(headline: "B 展开菜单时那条自愈路之后")
                 try? report.write(toFile: path, atomically: true, encoding: .utf8)
@@ -278,6 +284,38 @@ enum MainMenuLocalizer {
             ?? "DoyahStudio"
     }
 
+    /// 把每个顶层菜单**展开一次**再收起来（探针口子，`DOYAH_MENU_DUMP_OPEN=1`）。
+    ///
+    /// 为什么要它：`显示` / `窗口` 里有一批项**不是 SwiftUI 建的**，而是 AppKit 在
+    /// **菜单被展开的那一刻**才插进树里的（实测：不展开的那份 dump 里
+    /// `显示标签页栏` / `显示所有标签页` / `填充` / `居中` / `移动与调整大小` /
+    /// `全屏幕平铺` 一条都不在）⇒ 「中文界面下不许有英文项」这条断言要在这些项上真的成立，
+    /// 判据就必须先展开；否则枚举不到 = 默认通过（那正是内测第三批打回来的那一面）。
+    ///
+    /// 展开走的是**用户那条路**（`popUpMenuPositioningItem`），于是 `didBeginTracking`
+    /// 与自愈照常发生 —— dump 的 C 段就是「用户展开菜单那一刻看到的样子」。
+    @MainActor
+    static func openEveryTopLevelMenu() {
+        guard let mainMenu = NSApp.mainMenu else { return }
+        NSApp.activate()
+        // **两遍**：`显示` 菜单里的「标签页栏」那一族是 AppKit 按窗口标签页状态**条件性**插进来的
+        // （实测：同一份代码两次真启动，一次插了一次没插）⇒ 展开两遍能把它逼出来；已经在树里的项
+        // 第二遍只是再显示一次，代价 = 几百毫秒。
+        for _ in 0..<2 {
+            for item in mainMenu.items {
+                guard let submenu = item.submenu else { continue }
+                // `popUp…` 是**阻塞**的（内含菜单跟踪循环）⇒ 先排一个定时收起器，
+                // 否则探针就挂在这个循环里出不来（收起后 `popUp…` 返回，接着展开下一个）。
+                // **两个**收起定时器：实测偶发「第一次收起没生效 ⇒ `popUp…` 一直不回」，
+                // 第二个定时器把那一路兜住（探针挂住 = 这一档压根出不了 dump）。
+                for delay in [0.6, 1.6] {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { submenu.cancelTracking() }
+                }
+                _ = submenu.popUp(positioning: nil, at: NSPoint(x: 30, y: 30), in: nil)
+            }
+        }
+    }
+
     @MainActor
     private static func retitle(_ menu: NSMenu, to language: AppLanguage) -> Int {
         var changed = 0
@@ -289,14 +327,21 @@ enum MainMenuLocalizer {
                 MenuLocalization.retitled(action: NSStringFromSelector($0), appName: appName, to: language)
             } ?? nil
             // 只在真的不一致时才写：避免对着已经正确的菜单反复置脏、白刷一次界面。
-            if let retitled = byAction ?? MenuLocalization.retitled(item.title, to: language),
-               retitled != item.title {
-                item.title = retitled
-                changed += 1
-                // **菜单栏顶层项还要改 `NSMenu.title`**：AppKit 显示的是子菜单自己的 title，
-                // 只写 `item.title` 在菜单栏上看不出来（2026-09-24 实测：File/Edit/View 不动，
-                // 它们下面的子项却都变了）。子菜单标题不是用户可见文案时改它无副作用。
-                if item.submenu?.title != retitled { item.submenu?.title = retitled }
+            if let retitled = byAction ?? MenuLocalization.retitled(item.title, to: language) {
+                if retitled != item.title {
+                    item.title = retitled
+                    changed += 1
+                }
+                // **子菜单自己的 `NSMenu.title` 也要跟**（内外分开判，不一样才写）：
+                // ① 顶层项：AppKit 显示的是**子菜单自己的 title**，只写 `item.title` 在菜单栏上
+                //    看不出来（2026-09-24 实测：File/Edit/View 不动，它们下面的子项却都变了）；
+                // ② 展开时才插进来的那族（`移动与调整大小` / `全屏幕平铺`）：实测 `item.title`
+                //    已经是新语言、`submenu.title` 还停在启动语言（2026-10-02 的 dump 里那一条 =
+                //    `submenu=Move & Resize`）—— 只判 `retitled != item.title` 的话它永远轮不到。
+                if let submenu = item.submenu, submenu.title != retitled {
+                    submenu.title = retitled
+                    changed += 1
+                }
             }
             if let submenu = item.submenu {
                 changed += retitle(submenu, to: language)

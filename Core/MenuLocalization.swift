@@ -159,6 +159,48 @@ public enum MenuLocalization {
         "arrangeInFront:": .menuSystemBringAllToFront,
         "toggleFullScreen:": .menuSystemEnterFullScreen,
         "toggleSidebar:": .menuSystemToggleSidebar,
+        // **展开菜单时才由 AppKit 插进树里的那一族**（内测第三批 · 丙2 下一层，2026-10-02）。
+        //
+        // 为什么单列：`显示` / `窗口` 两个菜单里有一批项不是 SwiftUI 建的，而是菜单**被展开时**
+        // AppKit 才插进来的（实测：`DOYAH_MENU_DUMP_OPEN=1` 那份 dump 里它们才出现）。
+        // 标题按**进程启动语言**渲染，运行期切语言对它们无效 —— 中文界面下就看见
+        // `Show Tab Bar` / `Show All Tabs` / `Fill` / `Center` / `Move & Resize` / `Full Screen Tile`。
+        // selector 逐条抄自本机运行中的应用（`Scripts/fixtures/menu-dump-*.txt` 里带 selector 那份）；
+        // 其中 `_zoom*` / `_tile*` / `alternateArrangeInFront:` / `_removeWindowFromStageManagerSet:`
+        // 是 AppKit 的**私有** selector（没有公开 API）—— 认不出就等于停在启动语言，
+        // 认得出只是改标题、不碰行为，与其余系统项同一条路。
+        "toggleTabBar:": .menuSystemShowTabBar,
+        "toggleTabOverview:": .menuSystemShowAllTabs,
+        "miniaturizeAll:": .menuSystemMinimizeAll,
+        "zoomAll:": .menuSystemZoomAll,
+        "_zoomFill:": .menuSystemFill,
+        "_zoomCenter:": .menuSystemCenter,
+        "_zoomLeft:": .menuSystemZoomLeft,
+        "_zoomRight:": .menuSystemZoomRight,
+        "_zoomTop:": .menuSystemZoomTop,
+        "_zoomBottom:": .menuSystemZoomBottom,
+        "_zoomTopLeft:": .menuSystemZoomTopLeft,
+        "_zoomTopRight:": .menuSystemZoomTopRight,
+        "_zoomBottomLeft:": .menuSystemZoomBottomLeft,
+        "_zoomBottomRight:": .menuSystemZoomBottomRight,
+        "_zoomLeftAndRight:": .menuSystemZoomLeftAndRight,
+        "_zoomLeftThreeUp:": .menuSystemZoomLeftThreeUp,
+        "_zoomRightAndLeft:": .menuSystemZoomRightAndLeft,
+        "_zoomRightThreeUp:": .menuSystemZoomRightThreeUp,
+        "_zoomTopAndBottom:": .menuSystemZoomTopAndBottom,
+        "_zoomTopThreeUp:": .menuSystemZoomTopThreeUp,
+        "_zoomBottomAndTop:": .menuSystemZoomBottomAndTop,
+        "_zoomBottomThreeUp:": .menuSystemZoomBottomThreeUp,
+        "_zoomQuarters:": .menuSystemQuarters,
+        "_zoomUntile:": .menuSystemReturnToPreviousSize,
+        "_tileLeft:": .menuSystemTileLeft,
+        "_tileRight:": .menuSystemTileRight,
+        "alternateArrangeInFront:": .menuSystemArrangeInFront,
+        "_removeWindowFromStageManagerSet:": .menuSystemRemoveWindowFromSet,
+        "selectPreviousTab:": .menuSystemShowPreviousTab,
+        "selectNextTab:": .menuSystemShowNextTab,
+        "moveTabToNewWindow:": .menuSystemMoveTabToNewWindow,
+        "mergeAllWindows:": .menuSystemMergeAllWindows,
         "showHelp:": .menuSystemAppHelp
     ]
 
@@ -170,7 +212,16 @@ public enum MenuLocalization {
         .menuSystemWindow,
         .menuSystemHelp,
         .menuSystemServices,
-        .menuSystemAutoFill
+        .menuSystemAutoFill,
+        // **只能按标题认的系统子项**（内测第三批 · 丙2 下一层，2026-10-02）：它们没有
+        // action（`移动与调整大小` / `全屏幕平铺` 两个**子菜单标题**的 action 都是
+        // `submenuAction:`，`二等分` / `四等分` / `排列` 三个**分组标题**连 action 都没有）
+        // ⇒ 按 selector 认不了，只能按两种语言下的标题认（`key(forTitle:)` 两种都试）。
+        .menuSystemMoveAndResize,
+        .menuSystemFullScreenTile,
+        .menuSystemHalves,
+        .menuSystemQuarters,
+        .menuSystemArrange
     ]
 
     /// 系统菜单叶子项：按 selector 取文案（带应用名的项用 `appName` 填 `%@`）。
