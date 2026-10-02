@@ -53,6 +53,12 @@ pub struct ServerInfo {
     pub user: String,
     pub server_encoding: String,
     pub current_schema: Option<String>,
+    /// 连到哪台主机（**本进程记的**，不是服务端自述；取消请求要用它再开一条连接）
+    #[serde(default)]
+    pub host: String,
+    /// 连到哪个端口（同上）
+    #[serde(default)]
+    pub port: u16,
 }
 
 /// 连接参数（IPC 入参）。口令**不常驻**：前端从凭据来源取来后即用即弃。
@@ -168,7 +174,7 @@ pub fn wants_tls(ssl_mode: Option<&str>) -> bool {
     )
 }
 
-/// 会话：一个已建立的连接 + 它自述的信息。
+/// 会话：一个已建立的连接 + 它自述的信息（含**连到哪儿** —— 取消请求要往同一地址再开一条连接）。
 pub struct PgSession {
     client: Client,
     info: ServerInfo,
@@ -242,8 +248,42 @@ impl PgSession {
                 eprintln!("[doyah] 与数据库的连接断了：{e}");
             }
         });
-        let info = read_server_info(&client).await?;
+        let mut info = read_server_info(&client).await?;
+        // 记下"连到哪儿"：取消请求要往同一地址再开一条连接（见 `cancel`）
+        info.host = params.host.clone();
+        info.port = params.port;
         Ok(Self { client, info })
+    }
+
+    /// **请求服务端取消当前查询**（1.2 段）。
+    ///
+    /// 实现：走 PostgreSQL 协议的 `CancelRequest` —— 拿**驱动自己给的** `CancelRequest`
+    /// （内含服务端后端 PID 与该连接的取消密钥），向**同一条地址再开一个 TCP 连接**把它发过去。
+    /// 为什么不用 `tokio-postgres` 的 `cancel_token()`：那个方法在当前版本要 `postgres` /
+    /// `postgres-openssl` 特性，而本机 cargo 缓存里没有对应依赖 ⇒ 为一个取消功能再引一次联网取包
+    /// 不划算；协议层的 CancelRequest 是同一件事，且只在本文件（连接层）出现。
+    ///
+    /// 口径要说清（不是"万事大吉"）：
+    /// ① 取消是**请求**，不是保证 —— 服务端可能已经在返回路上（那时它不回取消、查询照常成功）；
+    /// ② 取消的是**服务端当前正在跑的那条**；本进程不再等待的那个 future 由调用方丢弃；
+    /// ③ 取消之后**连接仍然可用**（协议上是 QueryCanceled 错误，连接本身不坏）—— 这是本段
+    ///    出口判据点名的那条，真库用例里真取消一次再接着查询来验。
+    pub async fn cancel(&self) -> Result<(), DbFailure> {
+        let request = self.client.cancel_token();
+        let mut stream = tokio::net::TcpStream::connect((self.info.host.as_str(), self.info.port))
+            .await
+            .map_err(|e| DbFailure {
+                message: format!("打开取消连接失败：{e}"),
+                hint: "服务端可能已断开；重连后再试。".to_string(),
+            })?;
+        request
+            .cancel_query_raw(&mut stream, NoTls)
+            .await
+            .map_err(|e| DbFailure {
+                message: format!("发送取消请求失败：{e}"),
+                hint: "服务端可能已断开；重连后再试。取消是请求，不是保证。".to_string(),
+            })?;
+        Ok(())
     }
 
     /// 对象树：表 / 视图（按 schema、名字排序）。
@@ -393,8 +433,7 @@ impl PgSession {
     }
 
     /// 快速自检（`--probe` 用）：连上、能问出一行、能列出表。
-    pub async fn probe(&self) -> Result<ProbeReport, DbFailure> {
-        let tables = self.tables().await?;
+    pub async fn probe(&self) -> Result<ProbeReport, DbFailure> {        let tables = self.tables().await?;
         let one = self.run("SELECT 1 AS one", 10).await?;
         Ok(ProbeReport {
             info: self.info.clone(),
@@ -408,6 +447,68 @@ impl PgSession {
             select_one: one.rows.first().and_then(|r| r.first().cloned()).flatten(),
         })
     }
+
+    /// **多段执行**（1.2 段）：把输入按分号切成多段，**逐段执行、逐段报告**。
+    ///
+    /// 三条口径：
+    /// ① 切分用领域层 `config::split_statements`（与启动 SQL 同一套：丢注释、字符串里的分号不切）
+    ///    —— 编辑面的位置切分在 `sql::spans`，两者条数由领域层用例对住，这里不另写一套；
+    /// ② **一段失败就停**（`stop_on_error`）：这是数据库客户端的常规语义 —— 后面的语句可能
+    ///    依赖前面那句（建表 → 插数），硬跑下去只会制造一堆连带错误；停在哪一条、服务端说了
+    ///    什么，都如实摆在 `statements` 里；
+    /// ③ **取消之后不再往下跑**：调用方（命令层）在每一段之间检查取消标志 —— 取消是"停在这段"，
+    ///    不是"把后面的也发出去"。
+    pub async fn run_batch(
+        &self,
+        sql: &str,
+        limit: usize,
+        stop_on_error: bool,
+    ) -> Result<Vec<StatementOutcome>, DbFailure> {
+        let statements = doyah_studio_db::config::split_statements(sql);
+        let mut out = Vec::with_capacity(statements.len());
+        for text in statements {
+            let started = std::time::Instant::now();
+            match self.run(&text, limit).await {
+                Ok(result) => out.push(StatementOutcome {
+                    sql: text,
+                    ok: true,
+                    result: Some(result),
+                    failure: None,
+                    elapsed_ms: started.elapsed().as_millis() as u64,
+                }),
+                Err(failure) => {
+                    out.push(StatementOutcome {
+                        sql: text,
+                        ok: false,
+                        result: None,
+                        failure: Some(failure),
+                        elapsed_ms: started.elapsed().as_millis() as u64,
+                    });
+                    if stop_on_error {
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// 多段执行里**一段**的结果（1.2 段）。
+///
+/// 为什么要逐段报告而不是合成一个总结果：一次提交五句、第三句错了，用户必须知道
+/// **是哪一句**错了、前两句有没有生效、后两句跑没跑 —— 合成一个布尔等于把这些信息全丢掉。
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatementOutcome {
+    pub sql: String,
+    pub ok: bool,
+    /// 成功时的结果集（没有结果列的语句给空列 + 影响行数）
+    pub result: Option<QueryResult>,
+    /// 失败时的可读原因（服务端原话 + 提示）
+    pub failure: Option<DbFailure>,
+    /// 这一段耗时（毫秒）—— 计划与慢查询排查都要看它
+    pub elapsed_ms: u64,
 }
 
 /// 自检读数。
@@ -436,6 +537,9 @@ async fn read_server_info(client: &Client) -> Result<ServerInfo, DbFailure> {
                 user: get(2).unwrap_or_default(),
                 server_encoding: get(3).unwrap_or_default(),
                 current_schema: get(4),
+                // 这两项是**本进程记的**（"连到哪儿"），由 `connect` 随后填上 —— 取消请求要用它
+                host: String::new(),
+                port: 0,
             });
         }
     }

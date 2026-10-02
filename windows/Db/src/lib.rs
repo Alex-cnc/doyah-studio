@@ -14,10 +14,12 @@ pub mod config;
 pub mod db_type;
 pub mod foreign_key;
 pub mod inspect;
+pub mod sql;
 pub mod tree;
 pub mod url;
 
 pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter};
+pub use sql::{explain, spans, tokenize, StatementSpan, Token, TokenKind};
 pub use tree::{group_by_schema, search, sort_objects, ObjectKind, ObjectNode, SearchHit};
 pub use config::{ConnectionBundle, BundleError, ConnectionConfig, SshTunnelConfig};
 pub use db_type::{DatabaseType, SslMode};

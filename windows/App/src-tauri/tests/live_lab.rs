@@ -210,6 +210,84 @@ async fn lazy_object_tree_layer_by_layer_on_real_db() {
     assert!(doyah_studio_db::tree::search(&app_layer, "  ").is_empty());
 }
 
+/// **1.2 SQL 编辑面**：多段执行逐段报告 + **执行中可取消**（取消后连接仍可用）+ EXPLAIN 生成。
+///
+/// 判据（版本计划 §1.2 的出口「多段语句一次提交、取消后连接仍可用」）：
+/// ① 多段提交：三段里第二段坏 ⇒ 逐段结果三条、`ok` 依次 真/假/真（**不是停止后续**，因为默认
+///    `stop_on_error` 关掉时要把后面的跑完；这里显式传 false 验"都跑"），各段耗时字段有值；
+/// ② 取消：起一条长查询，取消它 ⇒ 该查询以错误收场，而**同一条会话接下来照样能查询**；
+/// ③ EXPLAIN：单条能生成、多段被拒（拒绝理由要说清条数）。
+#[tokio::test]
+async fn sql_editor_batch_cancel_and_explain_on_real_db() {
+    let Some(params) = lab_params() else { return };
+    let session = PgSession::connect(&params).await.expect("应当连上实验库");
+
+    // ① 多段执行：成 / 败 / 成，逐段报告（不合成一个总结果）
+    let batch = session
+        .run_batch(
+            "select 1 as a; select * from app.no_such_table_12; select 2 as b",
+            100,
+            false, // 不因一段失败就停 —— 本用例要验"都跑到了"
+        )
+        .await
+        .expect("多段执行本身应当返回结果（段内失败不算调用失败）");
+    assert_eq!(batch.len(), 3, "三段都要有各自的报告：{batch:?}");
+    assert!(batch[0].ok, "第 1 段应当成功");
+    assert!(!batch[1].ok, "第 2 段是坏表名，必须判失败");
+    assert!(batch[2].ok, "第 3 段不该被第 2 段连累（逐段执行、逐段报告）");
+    assert!(batch[0].result.is_some(), "成功段要带结果集");
+    assert!(batch[1].result.is_none(), "失败段不该有结果集");
+    let failure = batch[1].failure.as_ref().expect("失败段必须带原因");
+    assert!(failure.message.contains("no_such_table_12"), "{}", failure.message);
+    assert!(!failure.hint.is_empty());
+
+    // ①b 默认口径是**一段失败就停**：后面的段不该被发出去
+    let stopped = session
+        .run_batch("select 1; select * from app.no_such_table_13; select 3", 100, true)
+        .await
+        .expect("应当返回");
+    assert_eq!(stopped.len(), 2, "失败即停 ⇒ 只报告到出错那一段：{stopped:?}");
+    assert!(stopped[0].ok && !stopped[1].ok);
+
+    // ② 取消：长查询 + 取消 ⇒ 查询失败，但**连接仍可用**
+    //
+    // 用 `Arc` 把同一条会话借给两个地方：**取消要发给同一条连接**（每条连接有自己的后端 PID
+    // 与取消密钥），所以不能另开一条连接来"取消"，那样取消的是别人。
+    let session = std::sync::Arc::new(session);
+    let sleeper = std::sync::Arc::clone(&session);
+    let long = tokio::spawn(async move { sleeper.run("select pg_sleep(30)", 10).await });
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+    session.cancel().await.expect("发送取消请求应当成功");
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(15), long)
+        .await
+        .expect("取消后长查询应当很快结束（不是等满 30 秒）")
+        .expect("任务本身不该 panic");
+    assert!(outcome.is_err(), "被取消的查询应当以错误收场：{outcome:?}");
+    // 取消之后连接照常：这条是出口判据点名的
+    let after = session
+        .run("select 41 + 1 as answer", 10)
+        .await
+        .expect("取消之后同一条会话仍应能查询");
+    assert_eq!(
+        after.rows.first().and_then(|r| r.first().cloned()).flatten().as_deref(),
+        Some("42")
+    );
+
+    // ③ EXPLAIN 生成：单条能生成；多段被拒并说清条数
+    let plan = doyah_studio_db::sql::explain("select count(*) from app.accounts", false)
+        .expect("单条应当能生成计划");
+    assert!(plan.starts_with("EXPLAIN "), "{plan}");
+    let rejected = doyah_studio_db::sql::explain("select 1; select 2", false).unwrap_err();
+    assert!(rejected.contains('2'), "拒绝理由要说清有几条：{rejected}");
+    // 生成出来的计划语句**真能跑**（只生成不执行是界面的姿势；这里要证它本身合法）
+    let explained = session.run(&plan, 100).await.expect("生成的计划语句应当能在真库上执行");
+    assert!(!explained.rows.is_empty(), "EXPLAIN 应当至少回一行计划：{explained:?}");
+
+    // ④ 高亮分词也在真库往返的路子里验一次（纯计算，但保证与本用例同一套输入没崩）
+    let tokens = doyah_studio_db::sql::tokenize(&batch[0].sql);
+    assert!(!tokens.is_empty());
+}
+
 #[tokio::test]
 async fn unreachable_server_reports_readable_reason() {
     let mut params = lab_params().unwrap_or(ConnectParams {

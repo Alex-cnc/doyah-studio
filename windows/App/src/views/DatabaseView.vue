@@ -16,6 +16,10 @@ import {
   dbConnect,
   dbDisconnect,
   dbQuery,
+  dbRunBatch,
+  dbCancel,
+  explainStatement,
+  highlightSql,
   dbSchemas,
   dbRelations,
   searchObjects,
@@ -29,11 +33,23 @@ import {
   type ServerInfo,
   type RowField,
   type StartupOutcome,
+  type StatementOutcome,
   type TableNode,
   type ObjectNode,
   type SearchHit,
+  type SqlToken,
 } from '../ipc'
 import { frozenColumnStyles, toTsv, visibleOrder } from '../grid/view'
+import {
+  filterCompletions,
+  highlightPieces,
+  keywordCompletions,
+  objectCompletions,
+  outcomeSummary,
+  pickDisplayedOutcome,
+  wordBeforeCaret,
+  type CompletionItem,
+} from '../sql/editor'
 
 const form = ref<ConnectParams>({ ...LAB_CONNECTION })
 const password = ref('')
@@ -217,6 +233,8 @@ onMounted(async () => {
   } catch (e) {
     failure.value = describeError(e)
   }
+  // 编辑器一进来就上一次高亮（纯计算，失败了也只是退回纯文本）
+  await refreshHighlight()
 })
 
 /** 这套表单当前对应的连接 id（点列表里的连接 = 换成它的 id；新表单 = 新 id）。 */
@@ -474,6 +492,118 @@ async function run() {
   }
 }
 
+// ── SQL 编辑面（1.2）：高亮 / 补全 / 多段执行 / 执行中可取消 / EXPLAIN ─────────────────
+
+/** 高亮片段（词法在领域层 —— 与执行切分同一套规则）。 */
+const pieces = ref<{ text: string; kind: SqlToken['kind'] }[]>([])
+/** 逐段执行结果（多段时显示"哪句成、哪句败、各耗时"）。 */
+const outcomes = ref<StatementOutcome[]>([])
+/** 正在编辑的这一段要被查看的下标（默认按"先看失败、否则看最后一句"挑）。 */
+const shownOutcome = ref<number | null>(null)
+/** 补全：候选清单与当前高亮的候选下标。 */
+const completions = ref<CompletionItem[]>([])
+const completionIndex = ref(0)
+const sqlArea = ref<HTMLTextAreaElement | null>(null)
+
+async function refreshHighlight() {
+  try {
+    pieces.value = highlightPieces(sql.value, await highlightSql(sql.value))
+  } catch {
+    // 高亮失败不该挡住写 SQL：退回纯文本（不弹错、不清空编辑器）
+    pieces.value = [{ text: sql.value, kind: 'punctuation' }]
+  }
+}
+
+/** 光标移动 ⇒ 重算补全候选（只在有词时弹，避免一进编辑器糊一屏）。 */
+async function refreshCompletions() {
+  const area = sqlArea.value
+  if (!area) {
+    completions.value = []
+    return
+  }
+  const word = wordBeforeCaret(sql.value, area.selectionStart ?? 0)
+  if (!word) {
+    completions.value = []
+    return
+  }
+  const items = [...keywordCompletions(), ...objectCompletions(loadedObjects.value)]
+  completions.value = filterCompletions(items, word)
+  completionIndex.value = 0
+}
+
+/** Tab / 回车接受当前候选：把光标前那个词换成候选文本。 */
+function acceptCompletion(item?: CompletionItem) {
+  const chosen = item ?? completions.value[completionIndex.value]
+  const area = sqlArea.value
+  if (!chosen || !area) return
+  const caret = area.selectionStart ?? sql.value.length
+  const word = wordBeforeCaret(sql.value, caret)
+  sql.value = sql.value.slice(0, caret - word.length) + chosen.text + sql.value.slice(caret)
+  completions.value = []
+  void refreshHighlight()
+}
+
+/** **多段执行**：一次提交多条，逐段报告；显示"先看失败、否则看最后一句"。 */
+async function runBatch(analyze: boolean) {
+  busy.value = analyze ? '生成并执行计划…' : '执行中…'
+  clearFailure()
+  try {
+    let text = sql.value
+    if (analyze) {
+      // EXPLAIN 只对单条：多段会被拒（并说明为什么），这里如实把拒绝端出来
+      text = await explainStatement(sql.value, true)
+    }
+    outcomes.value = await dbRunBatch(text)
+    const pick = pickDisplayedOutcome(outcomes.value)
+    shownOutcome.value = pick
+    if (pick !== null) {
+      const chosen = outcomes.value[pick]
+      result.value = chosen.result
+      if (!chosen.ok) failure.value = chosen.failure
+    } else {
+      result.value = null
+    }
+  } catch (e) {
+    outcomes.value = []
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
+  }
+}
+
+/** 只生成计划（不执行）—— 与「条件浏览」同一姿势：先看将要执行什么。 */
+async function showPlan() {
+  clearFailure()
+  try {
+    sql.value = await explainStatement(sql.value, false)
+    await refreshHighlight()
+    await runBatch(false)
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
+/** **取消当前查询**：往服务端发取消请求，不是本地"不等了"。 */
+async function cancelRunning() {
+  try {
+    await dbCancel()
+    busy.value = '已发取消请求（服务端可能已在返回路上）'
+    setTimeout(() => {
+      if (busy.value.startsWith('已发取消')) busy.value = ''
+    }, 2500)
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
+/** 点某一段的结果：网格换成那一段。 */
+function selectOutcome(index: number) {
+  shownOutcome.value = index
+  const chosen = outcomes.value[index]
+  result.value = chosen?.result ?? null
+  failure.value = chosen && !chosen.ok ? chosen.failure : null
+}
+
 function useTable(t: ObjectNode) {
   // 记住"这一屏是从哪张表来的"——外键入口只对**那张表**的列才有意义
   resultSource.value = { schema: t.schema, table: t.name }
@@ -704,10 +834,46 @@ async function probe() {
 
       <!-- SQL 与结果 -->
       <div class="db__main">
-        <form class="db__sql" @submit.prevent="run">
-          <textarea v-model="sql" spellcheck="false" rows="3" aria-label="SQL" />
+        <form class="db__sql" @submit.prevent="runBatch(false)">
+          <!-- 编辑面：**高亮层在下面（透明文字）+ 真 textarea 在上面**。
+               两层共用同一份字体与内边距（否则光标与字会错位，这是这种做法的经典坑）。 -->
+          <div class="db__editor">
+            <pre class="db__editor-highlight" aria-hidden="true"><span
+              v-for="(piece, i) in pieces"
+              :key="i"
+              :class="`db__tok db__tok--${piece.kind}`"
+            >{{ piece.text }}</span></pre>
+            <textarea
+              ref="sqlArea"
+              v-model="sql"
+              spellcheck="false"
+              rows="3"
+              aria-label="SQL"
+              @input="refreshHighlight(); refreshCompletions()"
+              @keyup="refreshCompletions()"
+              @click="refreshCompletions()"
+              @keydown.tab.prevent="acceptCompletion()"
+              @keydown.esc="completions = []"
+            />
+          </div>
+          <ul v-if="completions.length" class="db__completions">
+            <li v-for="(c, i) in completions.slice(0, 8)" :key="`${c.kind}:${c.text}`">
+              <button
+                class="db__completion"
+                :class="{ 'db__completion--active': i === completionIndex }"
+                type="button"
+                @click="acceptCompletion(c)"
+              >
+                <span class="db__completion-text">{{ c.text }}</span>
+                <span class="db__kind">{{ c.detail }}</span>
+              </button>
+            </li>
+          </ul>
           <div class="db__sql-actions">
             <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy">执行</button>
+            <button class="db__btn" type="button" :disabled="!busy" @click="cancelRunning">取消</button>
+            <button class="db__btn" type="button" :disabled="!!busy" @click="showPlan">只看计划</button>
+            <button class="db__btn" type="button" :disabled="!!busy" @click="runBatch(true)">执行并出计划</button>
             <span v-if="result && !result.columns.length" class="db__note">
               影响 {{ result.affected ?? '未知' }} 行（无结果集）
             </span>
@@ -718,6 +884,29 @@ async function probe() {
             </span>
           </div>
         </form>
+
+        <!-- 逐段结果（1.2）：多段提交时"哪句成、哪句败、各耗时多少"一眼可见 -->
+        <div v-if="outcomes.length > 1" class="db__outcomes">
+          <p class="db__outcomes-title">
+            这次提交了 {{ outcomes.length }} 段（点某一段把它显示到下面的网格里）
+          </p>
+          <ol class="db__outcomes-list">
+            <li v-for="(o, i) in outcomes" :key="i">
+              <button
+                class="db__outcome"
+                :class="{ 'db__outcome--bad': !o.ok, 'db__outcome--active': i === shownOutcome }"
+                type="button"
+                :title="o.sql"
+                @click="selectOutcome(i)"
+              >
+                <span class="db__outcome-mark">{{ o.ok ? '✅' : '❌' }}</span>
+                <span class="db__outcome-summary">{{ outcomeSummary(o) }}</span>
+                <span class="db__kind">{{ o.elapsedMs }} ms</span>
+                <span class="db__outcome-sql">{{ o.sql }}</span>
+              </button>
+            </li>
+          </ol>
+        </div>
 
 
         <!-- 结果区：左表格（可排序 / 筛选 / 复制 / 点行看详情）+ 右详情（竖排值检查） -->
@@ -1183,6 +1372,161 @@ async function probe() {
   align-items: center;
   gap: var(--ds-spacing-s);
   margin-top: var(--ds-spacing-xs);
+}
+
+/* ── SQL 编辑面（1.2）：高亮层 + 真 textarea 叠放 / 补全清单 / 逐段结果 ─────────────── */
+
+.db__editor {
+  position: relative;
+}
+
+/* 高亮层与 textarea **必须共用**同一份字体、字号、行高、内边距与换行规则：
+   任何一处不同，光标与字就会错位（这是这种叠放做法的经典坑）。 */
+.db__editor-highlight,
+.db__editor textarea {
+  margin: 0;
+  padding: var(--ds-spacing-s);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: var(--ds-metric-hairline) solid transparent;
+  border-radius: var(--ds-radius-control);
+}
+
+.db__editor-highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--ds-color-text-primary);
+  pointer-events: none;
+}
+
+.db__editor textarea {
+  position: relative;
+  width: 100%;
+  background: var(--ds-color-surface-content);
+  /* 字色透明：看到的是下面那层的上色文字；光标色仍用主题色（否则看不见光标） */
+  color: transparent;
+  caret-color: var(--ds-color-text-primary);
+  border-color: var(--ds-hairline);
+  resize: vertical;
+}
+
+.db__editor textarea::selection {
+  background: var(--ds-color-accent-accent);
+}
+
+.db__tok--keyword {
+  color: var(--ds-color-accent-accent);
+}
+
+.db__tok--string {
+  color: var(--ds-color-status-success);
+}
+
+.db__tok--number {
+  color: var(--ds-color-status-warning);
+}
+
+.db__tok--line_comment,
+.db__tok--block_comment {
+  color: var(--ds-color-text-tertiary);
+}
+
+.db__tok--quoted_ident {
+  color: var(--ds-color-status-warning);
+}
+
+.db__completions {
+  max-height: 220px;
+  margin: var(--ds-spacing-xs) 0 0;
+  padding: var(--ds-spacing-xs) 0;
+  overflow: auto;
+  background: var(--ds-color-surface-raised);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  list-style: none;
+}
+
+.db__completion {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-spacing-s);
+  width: 100%;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  background: transparent;
+  color: var(--ds-color-text-primary);
+  border: 0;
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.db__completion--active,
+.db__completion:hover {
+  background: var(--ds-color-surface-panel);
+}
+
+.db__completion-text {
+  font-family: var(--ds-font-stack);
+}
+
+.db__outcomes {
+  padding: 0 var(--ds-spacing-m) var(--ds-spacing-s);
+}
+
+.db__outcomes-title {
+  margin: 0 0 var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__outcomes-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.db__outcome {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  width: 100%;
+  padding: var(--ds-spacing-xs);
+  background: transparent;
+  color: var(--ds-color-text-primary);
+  border: 0;
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.db__outcome:hover {
+  background: var(--ds-color-surface-panel);
+}
+
+.db__outcome--active {
+  background: var(--ds-color-surface-panel);
+}
+
+.db__outcome--bad {
+  color: var(--ds-color-status-danger);
+}
+
+.db__outcome-summary {
+  flex: 0 0 auto;
+}
+
+.db__outcome-sql {
+  overflow: hidden;
+  color: var(--ds-color-text-tertiary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .db__grid-wrap {

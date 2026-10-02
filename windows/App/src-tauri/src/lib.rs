@@ -11,7 +11,7 @@ mod query;
 pub use connections::{config_from_form, ConnectionStore};
 pub use postgres::{
     ConnectParams, ConnectReport, DbFailure, PgSession, ProbeReport, QueryResult, ServerInfo,
-    StartupOutcome, TableNode, MAX_QUERY_ROWS,
+    StartupOutcome, StatementOutcome, TableNode, MAX_QUERY_ROWS,
 };
 pub use query::{DatasetSummary, GridWindowPayload, ViewCache, MAX_WINDOW_ROWS};
 
@@ -257,8 +257,54 @@ fn browse_sql(
     })
 }
 
-/// 单行详情的**值检查**（FR-DATA-05）：宽表竖排看、长 JSON 格式化看。
+// ── SQL 编辑面（1.2：多段执行 / 执行中可取消 / EXPLAIN）──────────────────────────────────
+
+/// **多段执行**：一次提交多条，**逐段执行、逐段报告**（哪句成、哪句败、各耗时多少）。
+#[tauri::command]
+async fn db_run_batch(
+    state: State<'_, ShellState>,
+    sql: String,
+    stop_on_error: Option<bool>,
+) -> Result<Vec<StatementOutcome>, DbFailure> {
+    let session = current_session(&state).await?;
+    session
+        .run_batch(&sql, MAX_QUERY_ROWS, stop_on_error.unwrap_or(true))
+        .await
+}
+
+/// **取消当前查询**（1.2 段「执行中可取消」）。
 ///
+/// 口径：这是**往服务端发的取消请求**，不是本地"不等了"。本地丢弃 future 不会让服务端停下。
+/// 取消之后连接仍可用（协议上是 QueryCanceled），出口判据点名的就是这条。
+#[tauri::command]
+async fn db_cancel(state: State<'_, ShellState>) -> Result<bool, DbFailure> {
+    let session = current_session(&state).await?;
+    session.cancel().await?;
+    Ok(true)
+}
+
+/// 生成 `EXPLAIN` 语句（**只对单条**；多段输入拒绝并说清为什么，不替用户挑一段）。
+///
+/// 只生成、不执行 —— 与「服务端条件浏览」同一姿势：用户先看见将要执行什么。
+/// `analyze` 为真时带 `ANALYZE, BUFFERS`（**会真的执行语句**，写语句要先确认由界面负责）。
+#[tauri::command]
+fn explain_statement(sql: String, analyze: Option<bool>) -> Result<String, DbFailure> {
+    doyah_studio_db::sql::explain(&sql, analyze.unwrap_or(false)).map_err(|message| DbFailure {
+        message,
+        hint: "EXPLAIN 一次只解释一条语句：选中要解释的那条，或把其它的删掉。".to_string(),
+    })
+}
+
+/// 高亮分词（1.2 段）：**只做词法**，纯计算、不碰数据库。
+///
+/// 为什么分词在 Rust 侧：高亮的"什么算字符串 / 什么算注释"必须与执行时切分**同一套规则**，
+/// 两边各写一套必然漂移（前端字符串里一个 `--` 就能让高亮与执行对不上）。
+#[tauri::command]
+fn highlight_sql(sql: String) -> Vec<doyah_studio_db::sql::Token> {
+    doyah_studio_db::sql::tokenize(&sql)
+}
+
+/// 单行详情的**值检查**（FR-DATA-05）：宽表竖排看、长 JSON 格式化看。///
 /// 纯计算（判定形态 + 给展示文本与元信息），**不碰数据库** —— 输入就是界面上那一行。
 /// 要点：NULL 与空串分开；JSON **必须真能解析**才当 JSON（半截日志按文本显示）；
 /// 截断**必须**连原始字符数 / 行数一起报，否则用户会以为拿到的就是全部。
@@ -338,6 +384,10 @@ pub fn run() {
             db_relations,
             search_objects,
             db_query,
+            db_run_batch,
+            db_cancel,
+            explain_statement,
+            highlight_sql,
             db_probe,
             connections_list,
             connection_save,

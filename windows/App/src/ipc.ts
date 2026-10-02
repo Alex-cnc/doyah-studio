@@ -22,6 +22,11 @@ export const COMMANDS = {
   dbRelations: 'db_relations',
   searchObjects: 'search_objects',
   dbQuery: 'db_query',
+  // SQL 编辑面（1.2：多段执行 / 取消 / EXPLAIN / 高亮分词）
+  dbRunBatch: 'db_run_batch',
+  dbCancel: 'db_cancel',
+  explainStatement: 'explain_statement',
+  highlightSql: 'highlight_sql',
   dbProbe: 'db_probe',
   // 连接列表（配置落盘 + 口令进系统凭据管理器）
   connectionsList: 'connections_list',
@@ -381,4 +386,57 @@ export function dbRelations(schema: string): Promise<ObjectNode[]> {
 /** 对象搜索：**纯函数在领域层**，本函数只把已加载的那一层递过去。 */
 export function searchObjects(items: ObjectNode[], query: string): Promise<SearchHit[]> {
   return call(COMMANDS.searchObjects, { items, query }, () => [] as SearchHit[])
+}
+
+// ── SQL 编辑面（1.2：多段执行 / 取消 / EXPLAIN / 高亮）──────────────────────────────────
+
+/** 多段执行里**一段**的结果（与表示层 `StatementOutcome` 同形）。 */
+export interface StatementOutcome {
+  sql: string
+  ok: boolean
+  result: QueryResult | null
+  failure: DbFailure | null
+  /** 这一段耗时（毫秒） */
+  elapsedMs: number
+}
+
+/** **多段执行**：一次提交多条，逐段执行、逐段报告。`stopOnError` 缺省为真（一段失败就停）。 */
+export function dbRunBatch(sql: string, stopOnError = true): Promise<StatementOutcome[]> {
+  return call(COMMANDS.dbRunBatch, { sql, stopOnError }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里执行（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+/** **取消当前查询**：往服务端发取消请求（不是本地"不等了"）。取消后连接仍可用。 */
+export function dbCancel(): Promise<boolean> {
+  return call(COMMANDS.dbCancel, {}, () => false)
+}
+
+/** 生成 `EXPLAIN` 语句（只生成、不执行；**只对单条**，多段输入会被拒并说明原因）。 */
+export function explainStatement(sql: string, analyze = false): Promise<string> {
+  return call(COMMANDS.explainStatement, { sql, analyze }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+/** 高亮用的词法单元种类（与领域层 `sql::TokenKind` 同名）。 */
+export type SqlTokenKind =
+  | 'keyword'
+  | 'string'
+  | 'number'
+  | 'line_comment'
+  | 'block_comment'
+  | 'quoted_ident'
+  | 'punctuation'
+  | 'ident'
+
+export interface SqlToken {
+  kind: SqlTokenKind
+  start: number
+  end: number
+}
+
+/** 高亮分词：**词法在领域层**（与执行切分同一套规则），本函数只把原文递过去。 */
+export function highlightSql(sql: string): Promise<SqlToken[]> {
+  return call(COMMANDS.highlightSql, { sql }, () => [] as SqlToken[])
 }
