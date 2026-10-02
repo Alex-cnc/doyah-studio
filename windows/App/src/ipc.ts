@@ -47,6 +47,10 @@ export const COMMANDS = {
   // 工作区（alpha 2.0：列目录 / 读文本文件；写面归 2.1 段）
   workspaceListDirectory: 'workspace_list_directory',
   workspaceReadFile: 'workspace_read_file',
+  // 工作区历史与会话恢复（2.0：上次打开的根 / 最近打开两份清单）
+  workspaceHistory: 'workspace_history',
+  workspaceOpened: 'workspace_opened',
+  workspaceClosed: 'workspace_closed',
 } as const
 
 export interface AppInfo {
@@ -541,4 +545,38 @@ export function workspaceReadFile(workspaceRoot: string, relativePath: string): 
   return call(COMMANDS.workspaceReadFile, { workspaceRoot, relativePath }, () => {
     throw { message: '浏览器旁路没有工作区', hint: '请在 Tauri 外壳里打开工作区（npm run tauri dev）。' } as DbFailure
   })
+}
+/** 「最近打开」的一条记录。 */
+export interface HistoryEntry {
+  path: string
+  openedAt: string
+}
+
+/** 工作区历史：两份清单 + **上次打开的根**（会话恢复用）。 */
+export interface WorkspaceHistory {
+  files: HistoryEntry[]
+  workspaces: HistoryEntry[]
+  currentRoot: string | null
+}
+
+/** 读历史。读不出来时给**空历史 + 一句原因**（不抛：记录坏掉不该让工作区打不开）。 */
+export function workspaceHistory(): Promise<{ history: WorkspaceHistory; warning: string | null }> {
+  return call(COMMANDS.workspaceHistory, {}, () => ({
+    history: { files: [], workspaces: [], currentRoot: null },
+    warning: null,
+  }))
+}
+
+/** 记一次「打开了这个工作区」：进「最近打开」+ 记为当前根。 */
+export function workspaceOpened(workspaceRoot: string, at: string): Promise<{ history: WorkspaceHistory }> {
+  return call(COMMANDS.workspaceOpened, { workspaceRoot, at }, () => ({
+    history: { files: [], workspaces: [], currentRoot: null },
+  }))
+}
+
+/** 关掉当前工作区：只清当前根，**保留**最近打开里的记录。 */
+export function workspaceClosed(): Promise<{ history: WorkspaceHistory }> {
+  return call(COMMANDS.workspaceClosed, {}, () => ({
+    history: { files: [], workspaces: [], currentRoot: null },
+  }))
 }

@@ -227,9 +227,31 @@ pub struct History {
     pub files: Vec<HistoryEntry>,
     #[serde(default)]
     pub workspaces: Vec<HistoryEntry>,
+    /// **上次打开的工作区根**（会话恢复用）。
+    ///
+    /// 为什么单列一项而不是"取 `workspaces[0]`"：两者语义不同 —— 关掉当前工作区**不该**
+    /// 等于删掉"最近打开"里的那条记录。混成一个字段，"关掉"就变成了"删记录"。
+    #[serde(default)]
+    pub current_root: Option<String>,
 }
 
 impl History {
+    /// 记一次"打开了这个工作区"：既进"最近打开"清单，也记为**当前根**（会话恢复用）。
+    pub fn opened_workspace(mut self, path: &str, at: &str) -> Self {
+        self = self.recording_workspace(path, at);
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            self.current_root = Some(trimmed.to_string());
+        }
+        self
+    }
+
+    /// **关掉**当前工作区：只清"当前根"，**保留**"最近打开"清单里的记录。
+    pub fn closed_workspace(mut self) -> Self {
+        self.current_root = None;
+        self
+    }
+
     /// 记一次"打开了文件"。
     pub fn recording_file(mut self, path: &str, at: &str) -> Self {
         self.files = update(&self.files, path, at, FILE_HISTORY_LIMIT);
@@ -666,5 +688,41 @@ mod tests {
         assert_eq!(entry_kind(false, true), EntryKind::Directory);
         assert!(entry_kind(false, true).is_expandable());
         assert_eq!(entry_kind(false, false), EntryKind::File);
+    }
+
+    // ── 会话恢复（当前根）────────────────────────────────────────────────
+
+    #[test]
+    fn opening_a_workspace_sets_current_root_and_records_it() {
+        let h = History::default().opened_workspace("D:/ws", "2026-10-02T20:00:00Z");
+        assert_eq!(h.current_root.as_deref(), Some("D:/ws"));
+        assert_eq!(h.workspaces.len(), 1, "同时进「最近打开」清单");
+        assert_eq!(h.workspaces[0].path, "D:/ws");
+        // 空白路径不该把当前根清掉（它是"没给路径"，不是"关掉工作区"）
+        let h = h.opened_workspace("   ", "2026-10-02T20:01:00Z");
+        assert_eq!(h.current_root.as_deref(), Some("D:/ws"));
+    }
+
+    #[test]
+    fn closing_a_workspace_clears_the_root_but_keeps_the_history() {
+        let h = History::default()
+            .opened_workspace("D:/ws", "2026-10-02T20:00:00Z")
+            .closed_workspace();
+        assert!(h.current_root.is_none(), "关掉之后没有当前根");
+        assert_eq!(h.workspaces.len(), 1, "**关掉 ≠ 删记录**：最近打开里还在");
+    }
+
+    #[test]
+    fn history_json_round_trips_and_tolerates_an_older_file() {
+        let h = History::default().opened_workspace("D:/ws", "2026-10-02T20:00:00Z");
+        let text = serde_json::to_string(&h).unwrap();
+        assert!(text.contains("\"currentRoot\""), "{text}");
+        let back: History = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, h);
+        // 旧文件（没有 currentRoot 那一项）也要读得进来 —— 会话恢复不该让老用户开不了工作区
+        let old = "{\"files\":[],\"workspaces\":[]}";
+        let parsed: History = serde_json::from_str(old).unwrap();
+        assert!(parsed.current_root.is_none());
+        assert!(parsed.workspaces.is_empty());
     }
 }

@@ -262,3 +262,58 @@ mod tests {
         assert!(err.message.contains("不是目录"), "{}", err.message);
     }
 }
+
+// ── 「最近打开」与会话恢复的落盘（FR-EDIT-35 的 Home 页数据 + 2.0 会话恢复）──────────────
+//
+// 与工程里其它偏好文件同一套路（对侧 `WorkspaceHistoryStore` 同口径）：**一个 JSON、按需读写、
+// 坏了不致命** —— 读失败返回**空历史**而不是抛错（一份"最近打开"坏掉，不该让工作区打不开），
+// 但要把"为什么空"**说出来**，不静默吞掉。
+
+/// 历史文件的默认落点：`%APPDATA%\DoyahStudio\workspace-history.json`。
+pub fn history_path() -> std::path::PathBuf {
+    let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+    std::path::Path::new(&base).join("DoyahStudio").join("workspace-history.json")
+}
+
+/// 读历史：**文件不存在 = 空历史**；文件坏了 = 空历史 + 一句可读的原因（不抛）。
+///
+/// 返回 `(history, warning)`：`warning` 非空表示"这次是空的，因为读不出来"。
+pub fn read_history() -> (doyah_studio_db::workspace::History, Option<String>) {
+    let path = history_path();
+    if !path.exists() {
+        return (doyah_studio_db::workspace::History::default(), None);
+    }
+    match std::fs::read_to_string(&path) {
+        Ok(text) if text.trim().is_empty() => (doyah_studio_db::workspace::History::default(), None),
+        Ok(text) => match serde_json::from_str::<doyah_studio_db::workspace::History>(&text) {
+            Ok(history) => (history, None),
+            Err(e) => (
+                doyah_studio_db::workspace::History::default(),
+                Some(format!("最近打开记录读不出来（{e}）—— 已按空记录继续，原文件未改动：{}", path.display())),
+            ),
+        },
+        Err(e) => (
+            doyah_studio_db::workspace::History::default(),
+            Some(format!("最近打开记录打不开（{e}）：{}", path.display())),
+        ),
+    }
+}
+
+/// 写历史（**整份覆盖**：这份记录就是唯一事实源，不做增量合并）。
+pub fn write_history(history: &doyah_studio_db::workspace::History) -> Result<(), DbFailure> {
+    let path = history_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            failure(format!("建配置目录失败：{e}（{}）", parent.display()), "确认该目录可写。")
+        })?;
+    }
+    let text = serde_json::to_string_pretty(history).map_err(|e| {
+        failure(format!("历史序列化失败：{e}"), "这属实现缺陷：请保留现场并报告。")
+    })?;
+    std::fs::write(&path, text).map_err(|e| {
+        failure(
+            format!("写最近打开记录失败：{e}（{}）", path.display()),
+            "确认该文件可写（可能被杀毒软件 / 权限限制）。",
+        )
+    })
+}

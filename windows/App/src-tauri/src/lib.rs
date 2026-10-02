@@ -467,6 +467,31 @@ fn workspace_read_file(workspace_root: String, relative_path: String) -> Result<
     fs::read_text_file(&workspace_root, &relative_path)
 }
 
+/// 读工作区历史（**含"上次打开的根"**，会话恢复用）：读不出来就给空历史 + 一句原因，不抛。
+#[tauri::command]
+fn workspace_history() -> serde_json::Value {
+    let (history, warning) = fs::read_history();
+    serde_json::json!({ "history": history, "warning": warning })
+}
+
+/// 记一次"打开了工作区"：进"最近打开" + 记为当前根（会话恢复用）。
+#[tauri::command]
+fn workspace_opened(workspace_root: String, at: String) -> Result<serde_json::Value, DbFailure> {
+    let (history, _) = fs::read_history();
+    let next = history.opened_workspace(&workspace_root, &at);
+    fs::write_history(&next)?;
+    Ok(serde_json::json!({ "history": next }))
+}
+
+/// 关掉当前工作区：只清"当前根"，**保留**"最近打开"里的记录。
+#[tauri::command]
+fn workspace_closed() -> Result<serde_json::Value, DbFailure> {
+    let (history, _) = fs::read_history();
+    let next = history.closed_workspace();
+    fs::write_history(&next)?;
+    Ok(serde_json::json!({ "history": next }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -504,7 +529,10 @@ pub fn run() {
             inspect_row,
             db_foreign_keys,
             workspace_list_directory,
-            workspace_read_file
+            workspace_read_file,
+            workspace_history,
+            workspace_opened,
+            workspace_closed
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

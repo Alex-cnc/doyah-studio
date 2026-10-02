@@ -58,6 +58,9 @@ describe('ipc', () => {
       'db_foreign_keys',
       'workspace_list_directory',
       'workspace_read_file',
+      'workspace_history',
+      'workspace_opened',
+      'workspace_closed',
     ])
   })
 

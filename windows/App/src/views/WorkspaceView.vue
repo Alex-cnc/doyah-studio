@@ -7,13 +7,17 @@
 //   · **纯逻辑层**（`workspace/logic.ts`）管显示串与树的展开/键盘走位（有 13 例单测）。
 //   · 本组件只管状态与排版。
 
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
+  workspaceClosed,
+  workspaceHistory,
   workspaceListDirectory,
+  workspaceOpened,
   workspaceReadFile,
   type DbFailure,
   type FileContent,
   type FsEntry,
+  type WorkspaceHistory,
 } from '../ipc'
 import { entryGlyph, flattenTree, indentPx, neighbouringRow, tabLabel, toggleExpanded, workspaceDisplayName } from '../workspace/logic'
 
@@ -39,6 +43,32 @@ const selected = ref<string | null>(null)
 const selectedTabId = ref<string>(HOME_ID)
 const failure = ref<DbFailure | null>(null)
 const busy = ref('')
+
+// 会话恢复（2.0）：上次打开的根 + 最近打开两份清单。
+// **不自动打开**上次那个文件夹：路径可能已被移动 / 删除，自动打开会每次启动弹一次错；
+// 改成"预填 + 一句话告诉你是上次那个"，由人点一下「打开」（想打开哪个由人定）。
+const history = ref<WorkspaceHistory | null>(null)
+const historyWarning = ref('')
+
+onMounted(async () => {
+  try {
+    const payload = await workspaceHistory()
+    history.value = payload.history
+    historyWarning.value = payload.warning ?? ''
+    if (payload.history.currentRoot) {
+      rootDraft.value = payload.history.currentRoot
+    }
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+})
+
+/** 最近打开的工作区（点一下填进输入框）。 */
+const recentWorkspaces = computed(() => history.value?.workspaces ?? [])
+
+function useRecent(path: string) {
+  rootDraft.value = path
+}
 
 const rootEntries = computed(() => children.value.get('') ?? [])
 
@@ -82,6 +112,10 @@ async function openWorkspace() {
     selectedTabId.value = HOME_ID
     selected.value = null
     await loadLevel('')
+    // 记一次「打开了这个工作区」：既进「最近打开」，也记为当前根（下次启动预填它）
+    const stamp = new Date().toISOString()
+    const recorded = await workspaceOpened(candidate, stamp)
+    history.value = recorded.history
   } catch (e) {
     failure.value = describeError(e)
     root.value = ''
@@ -150,6 +184,22 @@ function closeTab(id: string) {
 }
 
 /** 键盘上下在树里走位（**到边界停住**，不循环 —— 见 logic.test.ts） */
+/** 关掉当前工作区：清当前根，**保留**最近打开里的记录（这条区分是领域层定的） */
+async function closeWorkspace() {
+  try {
+    const recorded = await workspaceClosed()
+    history.value = recorded.history
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+  root.value = ''
+  children.value = new Map()
+  expanded.value = new Set()
+  tabs.value = [homeTab()]
+  selectedTabId.value = HOME_ID
+  selected.value = null
+}
+
 function onTreeKeydown(event: KeyboardEvent) {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
   event.preventDefault()
@@ -171,9 +221,12 @@ function onTreeKeydown(event: KeyboardEvent) {
         显示隐藏项
       </label>
       <button class="ws__btn ws__btn--primary" type="submit" :disabled="!!busy">打开</button>
+      <button v-if="root" class="ws__btn" type="button" :disabled="!!busy" @click="closeWorkspace">关闭工作区</button>
       <span v-if="busy" class="ws__note">{{ busy }}</span>
       <span class="ws__note">{{ headerText }}</span>
     </form>
+
+    <p v-if="historyWarning" class="ws__note ws__note--warn">{{ historyWarning }}</p>
 
     <div v-if="failure" class="ws__failure" role="alert">
       <p class="ws__failure-msg">{{ failure.message }}</p>
@@ -219,6 +272,21 @@ function onTreeKeydown(event: KeyboardEvent) {
             <p class="ws__home-line">左侧「资源管理器」里点一个**文件**即可在这里只读打开；点**目录**展开一层。</p>
             <p class="ws__home-line">键盘 ↑ / ↓ 可在树里走位（到边界停住，不循环）。</p>
             <p class="ws__home-line">本版**只读**：编辑与保存归 2.1 / 2.2 段（不假装能改）。</p>
+            <template v-if="recentWorkspaces.length">
+              <p class="ws__home-line">最近打开的工作区（点一下填进上面的输入框）：</p>
+              <div class="ws__recent">
+                <button
+                  v-for="entry in recentWorkspaces"
+                  :key="entry.path"
+                  class="ws__btn"
+                  type="button"
+                  :title="entry.path"
+                  @click="useRecent(entry.path)"
+                >
+                  {{ entry.path }}
+                </button>
+              </div>
+            </template>
           </template>
           <template v-else-if="activeTab">
             <p class="ws__editor-meta">
@@ -301,6 +369,20 @@ function onTreeKeydown(event: KeyboardEvent) {
 .ws__empty {
   color: var(--ds-color-text-secondary);
   font-size: var(--ds-font-caption-size);
+}
+
+/* 历史文件读不出来时的提示：**说得出来**，但不挡着开工作区 */
+.ws__note--warn {
+  margin: 0;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-m);
+  color: var(--ds-color-status-warning);
+}
+
+.ws__recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-spacing-xs);
+  margin-top: var(--ds-spacing-xs);
 }
 
 .ws__failure {
