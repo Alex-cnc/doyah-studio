@@ -7,9 +7,12 @@
 //   · 截断：`truncated` 为真时**如实说**（不静默少给行）；
 //   · 未连接：按钮可用但一按就给可读原因（不做"灰着但不说为什么"）。
 
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   LAB_CONNECTION,
+  connectionDelete,
+  connectionSave,
+  connectionsList,
   dbConnect,
   dbDisconnect,
   dbQuery,
@@ -17,18 +20,84 @@ import {
   type ConnectParams,
   type DbFailure,
   type QueryResult,
+  type SavedConnection,
   type ServerInfo,
   type TableNode,
 } from '../ipc'
 
 const form = ref<ConnectParams>({ ...LAB_CONNECTION })
 const password = ref('')
+const remember = ref(true)
+const saved = ref<SavedConnection[]>([])
 const info = ref<ServerInfo | null>(null)
 const tables = ref<TableNode[]>([])
 const sql = ref('select id, name, balance from app.accounts order by id limit 20')
 const result = ref<QueryResult | null>(null)
 const failure = ref<DbFailure | null>(null)
 const busy = ref('')
+
+onMounted(async () => {
+  try {
+    saved.value = await connectionsList()
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+})
+
+/** 这套表单当前对应的连接 id（点列表里的连接 = 换成它的 id；新表单 = 新 id）。 */
+const formId = ref(crypto.randomUUID())
+
+/** 点一条保存过的连接：把它填进表单（**口令不在这里**：口令在系统凭据管理器里）。 */
+function useSaved(c: SavedConnection) {
+  formId.value = c.id
+  form.value = {
+    host: c.host,
+    port: c.port,
+    database: c.database,
+    user: c.username,
+    sslMode: c.sslMode,
+  }
+  password.value = ''
+  failure.value = null
+}
+
+async function saveCurrent() {
+  busy.value = '保存中…'
+  clearFailure()
+  try {
+    saved.value = await connectionSave({
+      id: formId.value,
+      name: `${form.value.database}@${form.value.host}`,
+      host: form.value.host,
+      port: form.value.port,
+      database: form.value.database,
+      user: form.value.user,
+      sslMode: form.value.sslMode,
+      isReadOnly: false,
+      password: password.value || undefined,
+      rememberPassword: remember.value && !!password.value,
+    })
+  } catch (e) {
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
+  }
+}
+
+async function removeSaved(c: SavedConnection) {
+  busy.value = '删除中…'
+  clearFailure()
+  try {
+    saved.value = await connectionDelete(c.id)
+    if (formId.value === c.id) {
+      formId.value = crypto.randomUUID()
+    }
+  } catch (e) {
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
+  }
+}
 
 /** 服务端版本太长（PostgreSQL 18.6 on x86_64-windows…）⇒ 只显示前两段，完整值放 tooltip。 */
 const versionShort = computed(() => {
@@ -155,11 +224,16 @@ async function probe() {
         <span>口令</span>
         <input v-model="password" type="password" autocomplete="off" placeholder="不落盘、不显示" />
       </label>
+      <label class="db__field db__field--check" title="口令进 Windows 凭据管理器（本用户可见），配置文件里没有口令">
+        <span>记住口令</span>
+        <input v-model="remember" type="checkbox" />
+      </label>
       <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy">
         {{ info ? '重新连接' : '连接' }}
       </button>
       <button v-if="info" class="db__btn" type="button" :disabled="!!busy" @click="disconnect">断开</button>
       <button class="db__btn" type="button" :disabled="!!busy" @click="loadTables">列出对象</button>
+      <button class="db__btn" type="button" :disabled="!!busy" @click="saveCurrent">保存到连接列表</button>
       <span v-if="busy" class="db__busy">{{ busy }}</span>
     </form>
 
@@ -177,6 +251,27 @@ async function probe() {
     </div>
 
     <div class="db__body">
+      <!-- 连接列表（保存过的连接；口令不在其中，在系统凭据管理器里） -->
+      <aside class="db__tree db__tree--connections">
+        <p class="db__tree-title">连接（{{ saved.length }}）</p>
+        <p v-if="saved.length === 0" class="db__tree-empty">
+          还没有保存过连接。填好上面的表单按「保存到连接列表」，口令（若勾了记住）进系统凭据管理器。
+        </p>
+        <div v-for="c in saved" :key="c.id" class="db__conn">
+          <button
+            class="db__table"
+            type="button"
+            :title="`${c.username}@${c.host}:${c.port}/${c.database}（口令不在配置文件里）`"
+            @click="useSaved(c)"
+          >
+            {{ c.name }}<span class="db__kind">{{ c.isReadOnly ? '只读' : '' }}</span>
+          </button>
+          <button class="db__conn-del" type="button" title="删除这条连接（并清掉它的凭据）" @click="removeSaved(c)">
+            ✕
+          </button>
+        </div>
+      </aside>
+
       <!-- 对象树（本轮到表 / 视图） -->
       <aside class="db__tree">
         <p class="db__tree-title">对象（{{ tables.length }}）</p>
@@ -266,6 +361,34 @@ async function probe() {
 
 .db__field--narrow {
   width: 84px;
+}
+
+.db__field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  padding-bottom: var(--ds-spacing-xs);
+}
+
+.db__tree--connections {
+  width: 240px;
+}
+
+.db__conn {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+}
+
+.db__conn-del {
+  background: transparent;
+  color: var(--ds-color-text-tertiary);
+  border: 0;
+  cursor: pointer;
+}
+
+.db__conn-del:hover {
+  color: var(--ds-color-status-danger);
 }
 
 .db__field input {
