@@ -26,6 +26,7 @@ pub mod search;
 pub mod sql;
 pub mod staleness;
 pub mod tree;
+pub mod terminal;
 pub mod url;
 pub mod workspace;
 pub mod writeback;
@@ -68,5 +69,6 @@ pub use highlight::{
     syntax_of, tokenize as tokenize_code, CodeSpan, CodeSyntax, CodeTokenKind,
 };
 pub use inspect::{CellValue, Field, Shape, SummaryLanguage};
+pub use terminal::{is_wide, Cell as TerminalCell, Color as TerminalColor, Pen as TerminalPen, Screen as TerminalScreen, SCROLLBACK_LIMIT};
 pub use url::{FormMerge, ImportedConnection, UrlParseError};
 pub use workspace::{EntryKind, History, Tab, TextLanguage};
