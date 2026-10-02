@@ -210,8 +210,20 @@ enum MainMenuLocalizer {
                 }
             }
         }
+        // 活动栏换区（`MenuAreaPolicy`）：菜单项的**显示**跟着换。与语言无关，所以单独一条观察；
+        // `object` 带的是落定后的项（`selectActivityItem` 里发的就是它，不是用户原本点的那个）。
+        NotificationCenter.default.addObserver(
+            forName: .doyahActivityItemChanged, object: nil, queue: .main
+        ) { note in
+            MainActor.assumeIsolated {
+                guard let item = note.object as? ActivityBarItem else { return }
+                syncAreaVisibility(item)
+            }
+        }
         // 启动完成前 `NSApp.mainMenu` 可能还没建好，所以顺便立刻试一次。
         refresh(to: LocalizationManager.shared.language)
+        // 首屏也按当前区对齐一次显示（偏好里的区可能已经不是数据库）。
+        syncAreaVisibility(lastKnownArea)
         // **启动也要开补刷窗口**（队列 `L-145` 的第 141 轮实测）：AppKit 会在应用启动后把
         // File / Edit / View / Window / Help 这五个**系统菜单**的顶层标题按**启动语言**再本地化
         // 一次（实测：我们把顶栏改成中文后，0.3 秒内它自己变回英文，而这一次**不会**发任何通知 ——
@@ -237,6 +249,8 @@ enum MainMenuLocalizer {
     @MainActor
     private static func apply(_ language: AppLanguage) {
         guard let mainMenu = NSApp.mainMenu else { return }
+        // SwiftUI 重建菜单图后 `isHidden` 会回到初值 ⇒ 每一遍都按当前区再对齐一次（与语言无关）。
+        applyVisibility(mainMenu, area: lastKnownArea)
         let changed = retitle(mainMenu, to: language)
         guard changed > 0 else {
             // 这一遍什么都不用改 ⇒ 说明上一次改名站住了，回头看到此为止。
@@ -274,6 +288,59 @@ enum MainMenuLocalizer {
     /// 入口与 `refresh` 一样保持 `nonisolated`（调用方是普通 `ObservableObject`）。
     nonisolated static func beginHealing() {
         DispatchQueue.main.async { MainActor.assumeIsolated { healUntil = Date().addingTimeInterval(healWindow) } }
+    }
+
+    // MARK: 活动栏换区 · 菜单项显示（`MenuAreaPolicy`，2026-10-02 需求提出者口径）
+
+    /// 活动栏当前选中区的**最后已知值**。
+    ///
+    /// 菜单层**不持有 `AppState`**（那一层是 AppKit 的，不订阅视图模型）⇒ 本值由
+    /// `AppState.selectActivityItem(_:)` 发的 `.doyahActivityItemChanged` 喂进来；
+    /// 启动时先按持久化偏好落一个初值（与 `AppState` 同一个解析函数，见 `ActivityBarItem.resolve`），
+    /// 免得「启动就停在上次的区」这一段菜单还按数据库区显示。
+    @MainActor private static var lastKnownArea: ActivityBarItem = ActivityBarItem.resolve(
+        id: UserDefaults.standard.string(forKey: ActivityBarItem.storageKey)
+    )
+
+    /// 按当前选中区对齐菜单项的**显示**。
+    ///
+    /// **为什么不用 SwiftUI 的条件菜单项**（`if appState.selectedActivityItem == .database { Button… }`）：
+    /// `.commands {}` 的叶子项 SwiftUI **不重建**（本文件顶部那条实测 —— 换语言时子项会停在旧语言，
+    /// 就是这个原因）⇒ 换区时条件不会重新求值，菜单上那一项会留在原地。所以只能在这一层直接改
+    /// `NSMenuItem.isHidden`，与「标题自愈」同一条路。
+    ///
+    /// 只碰**登记过的**键（`MenuAreaPolicy.owner(of:) != nil`）：认不出来的项一律不动 —— 系统菜单
+    /// （文件 / 编辑 / 显示 / 窗口 / 帮助）与没登记的项不该因为这条联动而消失。
+    @MainActor
+    static func syncAreaVisibility(_ area: ActivityBarItem) {
+        lastKnownArea = area
+        guard let mainMenu = NSApp.mainMenu else { return }
+        let changed = applyVisibility(mainMenu, area: area)
+        if changed > 0 {
+            StartupLog.write("菜单按活动栏区对齐：\(area.rawValue)（改 \(changed) 项显示）")
+        }
+    }
+
+    /// 递归：把登记过的项按区设成显示 / 隐藏。返回改了几项（0 = 本来就对）。
+    @MainActor
+    @discardableResult
+    static func applyVisibility(_ menu: NSMenu, area: ActivityBarItem) -> Int {
+        var changed = 0
+        for item in menu.items {
+            if let submenu = item.submenu {
+                changed += applyVisibility(submenu, area: area)
+                continue
+            }
+            guard let key = MenuLocalization.key(forTitle: item.title),
+                  MenuAreaPolicy.owner(of: key) != nil
+            else { continue }
+            let shouldHide = !MenuAreaPolicy.isVisible(key: key, in: area)
+            if item.isHidden != shouldHide {
+                item.isHidden = shouldHide
+                changed += 1
+            }
+        }
+        return changed
     }
 
     /// 应用显示名（系统菜单里"关于 / 隐藏 / 退出 / 帮助"都带它，不该写死在文案表里）。
