@@ -34,7 +34,7 @@ struct TitleBarSearchField: View {
             titleWidth: TitleBarSearchMetrics.titleWidth(of: titleText)
         )
         if width > 0 {
-            field
+            field(width: width)
                 .frame(width: width)
                 .help(L(.windowSearchPlaceholder))
         } else {
@@ -44,7 +44,7 @@ struct TitleBarSearchField: View {
         }
     }
 
-    private var field: some View {
+    private func field(width: CGFloat) -> some View {
         HStack(spacing: Spacing.xs) {
             Image(systemName: "magnifyingglass")
                 .imageScale(.small)
@@ -78,6 +78,84 @@ struct TitleBarSearchField: View {
             RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                 .strokeBorder(Theme.hairline(scheme), lineWidth: Metrics.hairline)
         )
+        // **看得见的框 = 能点的框**（派活单 `T-20261002-011`，合并 `T-20261001-041` / `051`）：
+        // 留白与放大镜那一段由下面这层 AppKit 视图接手（真因、以及为什么不走 SwiftUI 手势，
+        // 都写在 `TitleBarSearchClickRelay` 上）。宽要**让开右边那一小段** —— 清空按钮是 SwiftUI
+        // 画的，而这层是 AppKit 视图（在它前面），不让开就会把 `×` 的点击抢走。
+        .background(alignment: .leading) {
+            TitleBarSearchClickRelay()
+                .frame(
+                    width: max(
+                        0,
+                        width - TitleBarSearchMetrics.trailingReserve(
+                            hasClearButton: !appState.globalSearchQuery.isEmpty
+                        )
+                    )
+                )
+        }
+    }
+}
+
+/// 「**看得见的框 = 能点的框**」那半（派活单 `T-20261002-011`，合并 `T-20261001-041` / `051`）。
+///
+/// ## 真因（2026-10-02 在真窗口上量的点击地图）
+///
+/// 画出来的框是 **360×24**，而真正能聚焦的只有内层 `TextField` 那一块 **332×16** ⇒
+/// 「左边放大镜那 22pt」「上下各 4pt 留白」「右边 4pt」点上去**进不了控件**：没有光标、
+/// 拿不到第一响应者、打进去的键也没落点（需求提出者原话：「点上去没有光标 / 不能打出字母」）。
+/// 8 点点击地图（真窗口 · 窗口 active+key · 进程内合成点击）实测：只有落在输入框矩形里的 3 点聚焦。
+///
+/// ## 为什么不走 SwiftUI 手势
+///
+/// 先试过 `@FocusState` + `.onTapGesture`：**同一次点击先聚焦、随即被打回窗口** ——
+/// 手势那一笔状态变更让这一层重排，刚拿到的第一响应者当场被收回（实测：加上手势之后，
+/// 连原生那一小块也判 0）。⇒ 接管放在 **AppKit** 这一层，且**一个字都不改 SwiftUI 状态**。
+///
+/// ## 只接「谁也没要」的点击
+///
+/// 这层是**背景**（挂在输入框与清空按钮之下）：命中测试先把点击交给真控件；落到这层上的
+/// 就是留白那几处 —— 此时把**第一响应者**交给同一框里的那枚输入框。
+/// 边界（如实登记）：只动第一响应者，**不碰文本与选区**（落点仍由 AppKit 自己决定）。
+struct TitleBarSearchClickRelay: NSViewRepresentable {
+
+    func makeNSView(context: Context) -> NSView { RelayView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    /// 承接留白点击的那一层。
+    final class RelayView: NSView {
+
+        override func mouseDown(with event: NSEvent) {
+            guard let field = RelayView.searchField(beside: self) else {
+                super.mouseDown(with: event)
+                return
+            }
+            window?.makeFirstResponder(field)
+        }
+
+        /// **同一根工具条里**那枚输入框（唯一出处）。
+        ///
+        /// 口径：只在本工具条里找 —— 侧栏那枚搜索框不在工具条里，别的窗口更不会误伤；
+        /// 并排掉 AppKit 自己的标题字段（`_NSToolbarTitleField` 也是 `NSTextField`）。
+        static func searchField(beside view: NSView) -> NSTextField? {
+            var node: NSView? = view
+            while let current = node, !NSStringFromClass(type(of: current)).contains("NSToolbar") {
+                node = current.superview
+            }
+            guard let scope = node else { return nil }
+            return firstField(in: scope)
+        }
+
+        private static func firstField(in view: NSView) -> NSTextField? {
+            for subview in view.subviews {
+                if let field = subview as? NSTextField,
+                   !NSStringFromClass(type(of: field)).contains("NSToolbarTitleField") {
+                    return field
+                }
+                if let found = firstField(in: subview) { return found }
+            }
+            return nil
+        }
     }
 }
 
@@ -86,6 +164,21 @@ enum TitleBarSearchMetrics {
     /// 标题栏字体：macOS 用**系统字号**（13pt）加 semibold，与标题栏实际绘制一致。
     static var titleFont: NSFont {
         .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+    }
+
+    /// 整框点击接力那层**右边要让开**的那一小段（清空按钮那一段；没有按钮时是 0）。
+    ///
+    /// 为什么要让：接力层是 AppKit 视图，而清空按钮是 SwiftUI 画的 —— AppKit 这层在它前面，
+    /// 不让开就会把 `×` 的点击抢走。取值**实量**：`×` 图标宽度 + 图标两侧的间距
+    /// （2026-10-02 真窗口实测：`xmark.circle.fill` `.imageScale(.small)` 那枚按钮 = 17×13，
+    /// 于 `Spacing.xs + clearButtonSymbolWidth + Spacing.s` 就是它那一段）。
+    static func trailingReserve(hasClearButton: Bool) -> CGFloat {
+        hasClearButton ? (Spacing.xs + clearButtonSymbolWidth + Spacing.s) : 0
+    }
+
+    /// `×` 那枚 SF Symbol 的宽度（pt）—— **实量**，与 `titleWidth(of:)` 同一口径：不估。
+    static var clearButtonSymbolWidth: CGFloat {
+        NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: nil)?.size.width ?? 13
     }
 
     static func titleWidth(of title: String) -> CGFloat {
