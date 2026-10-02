@@ -367,3 +367,84 @@ final class CodeFormattingTests: XCTestCase {
         XCTAssertNil(missing.fallbackReason)
     }
 }
+
+/// **只用内置**（需求提出者 2026-10-02 定案）这一族。
+///
+/// 上面那族钉的是「外部优先 / 兜底 / 拒绝」三态；这一族钉的是**这一版的产品路径根本不进外部那条分支**
+/// —— 环境里装了 `prettier` 也不走它，而且宿主侧**拿不到**任何起子进程的手段（`runBuiltin` 不收 `runner`）。
+final class CodeFormatBuiltinOnlyTests: XCTestCase {
+
+    /// 红绿成对的对照：旧口径「装了工具」走外部；定案口径走同一个语言仍走内置。
+    func testBuiltinOnlyNeverGoesExternalEvenWhenAToolIsInstalled() {
+        let old = CodeFormatPlanner.plan(language: .javascript) { _ in true }
+        guard case .external = old else { return XCTFail("旧口径装了工具就该走外部：\(old)") }
+
+        XCTAssertEqual(
+            CodeFormatPlanner.planBuiltinOnly(language: .javascript),
+            .builtin(.braceIndent),
+            "定案「只用内置」之后不许再回外部那条分支"
+        )
+    }
+
+    /// 内置档位与旧口径的兜底那一档**逐条一致**（换口径不该换结果）。
+    func testBuiltinOnlyKeepsTheSameBuiltinChoices() {
+        XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .javascript), .builtin(.braceIndent))
+        XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .python), .builtin(.whitespace))
+        XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .sql), .builtin(.sql))
+        XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .html), .builtin(.whitespace))
+    }
+
+    /// 两种拒绝仍然分得开（认不出 / 认得但没有内置）。
+    func testBuiltinOnlyStillRefusesHonestly() {
+        XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .plainText), .refused(.unknownLanguage))
+        XCTAssertEqual(
+            CodeFormatPlanner.planBuiltinOnly(language: .markdown),
+            .refused(.noFormatter(language: .markdown))
+        )
+    }
+
+    /// 执行入口：内置那一档真跑出结果、如实报「变没变」，且**幂等**（再跑一次不该再变）。
+    func testRunBuiltinFormatsAndIsIdempotent() {
+        let messy = "func f() {\nreturn 1\n}\n"
+        guard case .ready(let changed) = CodeFormatService.runBuiltin(language: .javascript, text: messy) else {
+            return XCTFail("内置这条路必须给得出结果")
+        }
+        XCTAssertEqual(changed.engine, .builtin(.braceIndent))
+        XCTAssertEqual(changed.text, "func f() {\n    return 1\n}\n")
+        XCTAssertTrue(changed.changed)
+
+        guard case .ready(let again) = CodeFormatService.runBuiltin(language: .javascript, text: changed.text) else {
+            return XCTFail("已规整的文本也要给出结果")
+        }
+        XCTAssertFalse(again.changed, "没变就说没变（不然每点一次格式化都在改文件）")
+        XCTAssertEqual(again.text, changed.text)
+    }
+
+    /// 拒绝那两档**原样穿过**执行入口。
+    func testRunBuiltinPassesRefusalsThrough() {
+        XCTAssertEqual(
+            CodeFormatService.runBuiltin(language: .markdown, text: "# t\n"),
+            .refused(.noFormatter(language: .markdown))
+        )
+    }
+
+    /// 源锚点：宿主那一侧**回不到外部那条路**（判据在，旧写法就活不下来）。
+    func testAppSideReachesNoExternalRoute() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let app = try String(
+            contentsOf: root.appendingPathComponent("App/WorkspaceTabsModel.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            app.contains("CodeFormatService.runBuiltin("),
+            "格式化入口没有走「只用内置」那条路（定案作废了「外部优先/回退内置」）"
+        )
+        for forbidden in [
+            "CodeFormatToolLocator", "FoundationCodeFormatProcessRunner", "CodeFormatPlanner.decide",
+        ] {
+            XCTAssertFalse(app.contains(forbidden), "定案「只用内置」之后宿主不该再出现 \(forbidden)")
+        }
+    }
+}
