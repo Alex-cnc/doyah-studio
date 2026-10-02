@@ -239,6 +239,12 @@ pub struct History {
     /// 以及"我到底在编辑哪一份"）。恢复时**按路径重新读盘**；盘上没有的路径**跳过并报出来**。
     #[serde(default)]
     pub open_tabs: Vec<String>,
+    /// **每个页签的光标位置**（相对路径 → 锚）—— 2.3「重启后光标回来」。
+    ///
+    /// 存的是**行号 + 行内偏移 + 那一行开头的锚**（不是整份文件的字节偏移：文件开头多一行就全错）。
+    /// 键与 `open_tabs` 的路径一致；页签关掉时对应项**一并清掉**（不留孤儿）。
+    #[serde(default)]
+    pub cursors: std::collections::BTreeMap<String, crate::cursor::CursorAnchor>,
 }
 
 impl History {
@@ -258,6 +264,7 @@ impl History {
     pub fn closed_workspace(mut self) -> Self {
         self.current_root = None;
         self.open_tabs.clear();
+        self.cursors.clear();
         self
     }
 
@@ -774,5 +781,70 @@ mod tests {
         let parsed: History = serde_json::from_str(old).unwrap();
         assert!(parsed.current_root.is_none());
         assert!(parsed.workspaces.is_empty());
+    }
+}
+
+impl History {
+    /// 记下某个文件的光标位置（**只在该页签还开着时**才有意义）。
+    pub fn recording_cursor(mut self, path: &str, anchor: crate::cursor::CursorAnchor) -> Self {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            self.cursors.insert(trimmed.to_string(), anchor);
+        }
+        self
+    }
+
+    /// 取某个文件上次的光标位置。
+    pub fn cursor_for(&self, path: &str) -> Option<&crate::cursor::CursorAnchor> {
+        self.cursors.get(path)
+    }
+
+    /// 页签集合变了之后**清掉孤儿光标**（已关掉的页签不该留着位置）。
+    pub fn prune_cursors(mut self) -> Self {
+        let open: std::collections::HashSet<&str> = self.open_tabs.iter().map(String::as_str).collect();
+        self.cursors.retain(|path, _| open.contains(path.as_str()));
+        self
+    }
+}
+
+#[cfg(test)]
+mod cursor_tests {
+    use super::*;
+
+    #[test]
+    fn cursors_round_trip_and_orphans_are_pruned() {
+        use crate::cursor::{CursorAnchor, Cursor};
+        let anchor = CursorAnchor { line: 12, column: 3, line_prefix: "let x".to_string() };
+        let h = History::default()
+            .opened_workspace("D:/ws", "2026-10-02T20:00:00Z")
+            .recording_open_tabs(&["a.rs".to_string(), "b.rs".to_string()])
+            .recording_cursor("a.rs", anchor.clone());
+        // 记下来了
+        assert_eq!(h.cursor_for("a.rs"), Some(&anchor));
+        assert!(h.cursor_for("b.rs").is_none());
+        // 序列化往返（camelCase）
+        let text = serde_json::to_string(&h).unwrap();
+        assert!(text.contains("\"cursors\""), "{text}");
+        let back: History = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, h);
+
+        // 页签集合变了 ⇒ **孤儿光标要清掉**（已关掉的页签不该留着位置）
+        let pruned = h.clone().recording_open_tabs(&["b.rs".to_string()]).prune_cursors();
+        assert!(pruned.cursor_for("a.rs").is_none(), "a.rs 已不在页签里，光标不该留着");
+        assert!(pruned.cursor_for("b.rs").is_none());
+
+        // 关掉工作区 ⇒ 页签与光标一并清（最近打开清单仍在）
+        let closed = h.closed_workspace();
+        assert!(closed.cursors.is_empty());
+        assert_eq!(closed.workspaces.len(), 1);
+        assert_eq!(Cursor::new(0, 0).line, 1);
+    }
+
+    #[test]
+    fn an_old_history_file_without_cursors_still_loads() {
+        let old = "{\"files\":[],\"workspaces\":[],\"currentRoot\":\"D:/ws\",\"openTabs\":[\"a.rs\"]}";
+        let parsed: History = serde_json::from_str(old).unwrap();
+        assert!(parsed.cursors.is_empty(), "旧文件没有 cursors 也要读得进来");
+        assert_eq!(parsed.open_tabs.len(), 1);
     }
 }

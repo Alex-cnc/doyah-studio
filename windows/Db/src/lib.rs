@@ -12,6 +12,7 @@
 pub mod browse;
 pub mod code_lines;
 pub mod config;
+pub mod cursor;
 pub mod db_type;
 pub mod file_ops;
 pub mod foreign_key;
@@ -31,6 +32,7 @@ pub use sql::{explain, spans, tokenize, StatementSpan, Token, TokenKind};
 pub use staleness::{classify, content_hash, note as staleness_note, DiskFile, LoadedFile, Staleness};
 pub use writeback::{edits_to_dml, statement_risk, CellEdit, DmlStatement, Risk, RowKey, TransactionPlan};
 pub use tree::{group_by_schema, search, sort_objects, ObjectKind, ObjectNode, SearchHit};
+pub use cursor::{anchor_prefix, remember, restore, Cursor, CursorAnchor, RestoreHow, RestoredCursor};
 pub use code_lines::{
     digits_of, dominant_ending, gutter_digits, is_mixed, join_with, line_count, lines, Line, LineEnding,
 };

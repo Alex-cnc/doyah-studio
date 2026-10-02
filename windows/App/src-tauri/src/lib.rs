@@ -587,6 +587,25 @@ fn workspace_check_staleness(
     Ok(serde_json::json!({ "staleness": staleness, "note": note }))
 }
 
+/// 记下某个页签的**光标位置**（行号 + 行内偏移 + 那一行开头的锚）—— 2.3「重启后光标回来」。
+///
+/// 锚的作用：文件被改过之后，纯行号常常还指得对，但"对不上"这件事必须能被发现
+/// （领域层 `cursor::restore` 会给 Exact / ByAnchor / Clamped 三种来源，界面据此决定要不要提醒）。
+#[tauri::command]
+fn workspace_record_cursor(
+    workspace_root: String,
+    relative_path: String,
+    line: usize,
+    column: usize,
+) -> Result<serde_json::Value, DbFailure> {
+    let file = fs::read_text_file(&workspace_root, &relative_path)?;
+    let anchor = doyah_studio_db::remember(&file.content, &doyah_studio_db::Cursor::new(line, column));
+    let (history, _) = fs::read_history();
+    let next = history.opened_workspace(&workspace_root, "").recording_cursor(&relative_path, anchor);
+    fs::write_history(&next)?;
+    Ok(serde_json::json!({ "history": next }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -638,7 +657,8 @@ pub fn run() {
             workspace_read_lines,
             workspace_read_spans,
             workspace_file_snapshot,
-            workspace_check_staleness
+            workspace_check_staleness,
+            workspace_record_cursor
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

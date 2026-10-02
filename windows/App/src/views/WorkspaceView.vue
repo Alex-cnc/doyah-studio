@@ -22,6 +22,7 @@ import {
   workspaceFileSnapshot,
   workspaceReadFile,
   workspaceReadLines,
+  workspaceRecordCursor,
   workspaceReadSpans,
   workspaceReveal,
   workspaceRename,
@@ -30,6 +31,7 @@ import {
   type FileContent,
   type FileLines,
   type FsEntry,
+  type CursorAnchor,
   type LoadedFile,
   type WorkspaceHistory,
 } from '../ipc'
@@ -124,6 +126,10 @@ interface OpenTab {
   content: string
   languageKey: string
   saved: string
+  /** 上次离开时停在哪一行（1 起）；本版只读，这个"光标"就是那一行 */
+  cursorLine: number
+  /** 这个位置是**怎么恢复来的**（只有不确定时才提醒用户） */
+  cursorHow: 'exact' | 'byAnchor' | 'clamped'
 }
 
 const HOME_ID = 'home'
@@ -192,7 +198,16 @@ function describeError(e: unknown): DbFailure {
 }
 
 function homeTab(): OpenTab {
-  return { id: HOME_ID, title: '首页', relativePath: null, content: '', languageKey: 'lang.plainText', saved: '' }
+  return {
+    id: HOME_ID,
+    title: '首页',
+    relativePath: null,
+    content: '',
+    languageKey: 'lang.plainText',
+    saved: '',
+    cursorLine: 1,
+    cursorHow: 'exact',
+  }
 }
 
 async function loadLevel(relativePath: string) {
@@ -260,6 +275,10 @@ async function openFile(entry: FsEntry) {
   busy.value = '读取中…'
   try {
     const file: FileContent = await workspaceReadFile(root.value, entry.relativePath)
+    // 先拉编辑面数据（行结构）—— 光标恢复要用它对齐；**拉不到不影响打开**
+    await loadEditorData(file.relativePath)
+    // 光标恢复（2.3）：把上次的锚与现在的行结构对一遍，落到原位（怎么来的要说清）
+    const restored = restoreCursor(file.relativePath, history.value?.cursors?.[file.relativePath])
     const tab: OpenTab = {
       id: `tab-${tabs.value.length}-${file.relativePath}`,
       title: entry.name,
@@ -267,11 +286,11 @@ async function openFile(entry: FsEntry) {
       content: file.content,
       languageKey: file.languageKey,
       saved: file.content,
+      cursorLine: restored.line,
+      cursorHow: restored.how,
     }
     tabs.value = [...tabs.value, tab]
     selectedTabId.value = tab.id
-    // 编辑面数据（2.2）：行结构 + 高亮分词。**拉不到不影响打开** —— 退化成纯文本显示
-    await loadEditorData(tab.relativePath)
     await rememberSnapshot(tab.relativePath)
     await rememberOpenTabs()
   } finally {
@@ -279,6 +298,42 @@ async function openFile(entry: FsEntry) {
   }
 }
 
+/**
+ * 光标恢复：行号命中且那一行开头对得上 ⇒ exact；否则按前缀找 ⇒ byAnchor；都找不到 ⇒ 夹到最后一行。
+ *
+ * 与 Rust 侧 cursor::restore 同一套判定（那边有 7 例单测）；这里按同一口径走一遍，
+ * 因为打开文件时我们已经把行结构拉回来了，不必再多一次往返。
+ */
+function restoreCursor(
+  relativePath: string,
+  anchor: CursorAnchor | undefined,
+): { line: number; how: 'exact' | 'byAnchor' | 'clamped' } {
+  if (!anchor) return { line: 1, how: 'exact' }
+  const structure = editorData.value.get(relativePath)?.structure
+  if (!structure) return { line: Math.max(1, anchor.line), how: 'exact' }
+  const prefixOf = (text: string) => [...text.trimStart()].slice(0, 32).join('')
+  const want = Math.max(1, anchor.line)
+  const line = structure.lines[want - 1]
+  if (line && prefixOf(line.text) === anchor.linePrefix) return { line: want, how: 'exact' }
+  const found = structure.lines.findIndex((l) => prefixOf(l.text) === anchor.linePrefix)
+  if (found >= 0) return { line: found + 1, how: 'byAnchor' }
+  return { line: Math.max(1, structure.lines.length), how: 'clamped' }
+}
+
+/** 切页签：**先把当前这个停在哪记下来**，再切过去 */
+function switchTab(id: string) {
+  void rememberCursor(activeTab.value)
+  selectedTabId.value = id
+}
+/** 记下某个页签停在哪儿（切页签 / 关页签时调） */
+async function rememberCursor(tab: OpenTab | null) {
+  if (!tab?.relativePath || !root.value) return
+  try {
+    await workspaceRecordCursor(root.value, tab.relativePath, tab.cursorLine, 0)
+  } catch {
+    // 记不住不影响用（下次恢复不到原位而已），不打断当前操作
+  }
+}
 /** 打开一个页签时拉一次编辑面数据（行号列宽 / 主换行符 / 混排 / 高亮分词） */
 async function loadEditorData(relativePath: string | null) {
   if (!relativePath) return
@@ -311,6 +366,7 @@ const endingNote = computed(() => {
 
 function closeTab(id: string) {
   const index = tabs.value.findIndex((t) => t.id === id)
+  if (index >= 0) void rememberCursor(tabs.value[index])
   if (index < 0) return
   const isHome = tabs.value[index].relativePath === null
   if (isHome) return // Home 关不掉（领域规则）
@@ -622,7 +678,7 @@ function onTreeKeydown(event: KeyboardEvent) {
       <div class="ws__main">
         <div class="ws__tabs" role="tablist">
           <div v-for="tab in tabs" :key="tab.id" class="ws__tab" :class="{ 'ws__tab--active': tab.id === selectedTabId }">
-            <button class="ws__tab-name" type="button" role="tab" :aria-selected="tab.id === selectedTabId" @click="selectedTabId = tab.id">
+            <button class="ws__tab-name" type="button" role="tab" :aria-selected="tab.id === selectedTabId" @click="switchTab(tab.id)">
               {{ tabLabel(tab.title, tab.content !== tab.saved) }}
             </button>
             <button v-if="tab.relativePath !== null" class="ws__tab-close" type="button" title="关闭页签" @click="closeTab(tab.id)">✕</button>
@@ -656,6 +712,9 @@ function onTreeKeydown(event: KeyboardEvent) {
               {{ activeTab.relativePath }} · {{ activeTab.languageKey }}
               <span v-if="endingNote" class="ws__tag">{{ endingNote }}</span>
               <span class="ws__tag">只读（本版）</span>
+              <span v-if="activeTab.cursorHow !== 'exact' && activeTab.cursorLine > 1" class="ws__tag" title="文件被改过，位置是按内容锚找回来的">
+                位置可能不准（按内容找回来的）
+              </span>
               <button class="ws__act" type="button" title="重新比对盘上有没有被别处改过" @click="checkExternalChanges">
                 ⟳ 比对
               </button>
@@ -668,7 +727,13 @@ function onTreeKeydown(event: KeyboardEvent) {
             <!-- 编辑面：**行号列 + 高亮**（行号列宽随行数变 —— 写死会在第 100 行处挤掉数字） -->
             <div v-if="activeEditor" class="ws__gutter-wrap">
               <div class="ws__gutter" aria-hidden="true">
-                <span v-for="(line, i) in activeEditor.structure.lines" :key="i" class="ws__gutter-num">{{
+                <span
+                  v-for="(line, i) in activeEditor.structure.lines"
+                  :key="i"
+                  class="ws__gutter-num"
+                  :class="{ 'ws__gutter-num--cursor': activeTab.cursorLine === i + 1 }"
+                  :title="activeTab.cursorLine === i + 1 ? '上次停在这一行' : undefined"
+                >{{
                   lineNumberText(i, activeEditor.structure.gutterDigits)
                 }}</span>
               </div>
@@ -1005,6 +1070,11 @@ function onTreeKeydown(event: KeyboardEvent) {
   user-select: none;
 }
 
+/* 上次停在的那一行：左侧给一条标记（本版只读，"光标"就是这一行） */
+.ws__gutter-num--cursor {
+  color: var(--ds-color-accent-accent);
+  font-weight: 600;
+}
 .ws__gutter-num {
   display: block;
   white-space: pre;

@@ -66,6 +66,7 @@ export const COMMANDS = {
   // 外部改动（2.3：载入快照 / 比对）
   workspaceFileSnapshot: 'workspace_file_snapshot',
   workspaceCheckStaleness: 'workspace_check_staleness',
+  workspaceRecordCursor: 'workspace_record_cursor',
 } as const
 
 export interface AppInfo {
@@ -574,6 +575,15 @@ export interface WorkspaceHistory {
   currentRoot: string | null
   /** **上次开着的页签**（只记路径，按顺序）—— 恢复时按路径重读，盘上没有的跳过 */
   openTabs: string[]
+  /** 每个页签的**光标锚**（相对路径 → 行号 + 行内偏移 + 那一行开头的锚） */
+  cursors?: Record<string, CursorAnchor>
+}
+
+/** 恢复光标用的锚（**行号 + 行内偏移 + 那一行开头的片段**） */
+export interface CursorAnchor {
+  line: number
+  column: number
+  linePrefix: string
 }
 
 /** 读历史。读不出来时给**空历史 + 一句原因**（不抛：记录坏掉不该让工作区打不开）。 */
@@ -784,4 +794,17 @@ export function workspaceCheckStaleness(workspaceRoot: string, loaded: LoadedFil
     staleness: 'unchanged' as const,
     note: null,
   }))
+}
+/** 记下某个页签的光标位置（行号 + 行内偏移；锚由 Rust 侧从内容里取）。 */
+export function workspaceRecordCursor(
+  workspaceRoot: string,
+  relativePath: string,
+  line: number,
+  column: number,
+): Promise<{ history: WorkspaceHistory }> {
+  return call(
+    COMMANDS.workspaceRecordCursor,
+    { workspaceRoot, relativePath, line, column },
+    () => ({ history: { files: [], workspaces: [], currentRoot: null, openTabs: [] } }),
+  )
 }
