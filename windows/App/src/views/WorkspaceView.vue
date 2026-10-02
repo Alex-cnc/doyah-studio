@@ -37,6 +37,12 @@ import {
 } from '../ipc'
 import { entryGlyph, flattenTree, indentPx, neighbouringRow, tabLabel, toggleExpanded, workspaceDisplayName } from '../workspace/logic'
 import { dominantEndingLabel, lineNumberText, segmentsForLine, sliceSegments } from '../workspace/editor'
+import {
+  charWidthFrom,
+  codeWidthByDisplayColumns,
+  gutterWidth,
+  type FontMetrics,
+} from '../workspace/metrics'
 
 /** 编辑面数据（2.2）：行结构 + 高亮分词，按相对路径缓存 */
 const editorData = ref(new Map<string, { structure: FileLines; spans: CodeSpan[] }>())
@@ -118,6 +124,58 @@ async function reloadActiveTab() {
   }
 }
 
+// 列宽**按当前等宽字体实量**（2.2）：量一个字符宽，宽度都按"字符数 × 字符宽"算。
+// 为什么不能写死：等宽字体在不同机器上字宽不同（默认字体 / DPI 缩放 / 用户字号），
+// 写死会在高 DPI 上偏窄、小字号上偏宽，横向滚动条出现得莫名其妙。
+const fontMetrics = ref<FontMetrics>({ charWidth: 8, measured: false })
+
+/** 可视区宽度（代码列要不要给宽度靠它判断）；跟随缩放变化 */
+const windowWidth = ref(typeof window === 'undefined' ? 0 : window.innerWidth)
+function onResize() {
+  windowWidth.value = window.innerWidth
+}
+
+/** 用 canvas 量一个字符的宽度（**真正碰 canvas 的只有这几行**，其余是纯函数） */
+function measureCharWidth(): FontMetrics {
+  try {
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) return charWidthFrom(() => Number.NaN)
+    const styles = getComputedStyle(document.documentElement)
+    const family = styles.getPropertyValue('--ds-font-stack').trim() || 'monospace'
+    const size = styles.getPropertyValue('--ds-font-caption-size').trim() || '12px'
+    context.font = `${size} ${family}`
+    return charWidthFrom((sample) => context.measureText(sample).width)
+  } catch {
+    // 量不出来就退回保守默认值（**并如实标注没量到**）
+    return charWidthFrom(() => Number.NaN)
+  }
+}
+
+onMounted(() => {
+  fontMetrics.value = measureCharWidth()
+  window.addEventListener('resize', onResize)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', onResize))
+
+/** 行号列宽度（按最大行号的位数算，夹在上下限之间） */
+const gutterStyle = computed(() => {
+  const digits = activeEditor.value?.structure.gutterDigits ?? 1
+  return { width: `${gutterWidth(digits, fontMetrics.value)}px` }
+})
+
+/** 代码列宽度：只有**内容比可视区宽**时才给（否则会出一条永远拉不动的横向滚动条） */
+const codeStyle = computed(() => {
+  const data = activeEditor.value
+  if (!data) return {}
+  const available = Math.max(0, windowWidth.value - 320)
+  const width = codeWidthByDisplayColumns(
+    data.structure.lines.map((line) => line.text),
+    fontMetrics.value,
+    { availableWidth: available, maxWidth: 20_000 },
+  )
+  return width === null ? {} : { width: `${width}px` }
+})
 /** 本版只读：编辑面显示内容，改与存归 2.1 / 2.2 段（不假装能改）。 */
 interface OpenTab {
   id: string
@@ -726,7 +784,7 @@ function onTreeKeydown(event: KeyboardEvent) {
             </div>
             <!-- 编辑面：**行号列 + 高亮**（行号列宽随行数变 —— 写死会在第 100 行处挤掉数字） -->
             <div v-if="activeEditor" class="ws__gutter-wrap">
-              <div class="ws__gutter" aria-hidden="true">
+              <div class="ws__gutter" aria-hidden="true" :style="gutterStyle">
                 <span
                   v-for="(line, i) in activeEditor.structure.lines"
                   :key="i"
@@ -737,7 +795,7 @@ function onTreeKeydown(event: KeyboardEvent) {
                   lineNumberText(i, activeEditor.structure.gutterDigits)
                 }}</span>
               </div>
-              <pre class="ws__code ws__code--lined"><span
+              <pre class="ws__code ws__code--lined" :style="codeStyle"><span
                 v-for="(line, i) in activeEditor.structure.lines"
                 :key="i"
                 class="ws__line"
