@@ -15,6 +15,7 @@
 //! 原地改会让"保存冲突"那套护栏失效（工具已经把盘上改了，我们再判冲突就晚了）。
 //! 走管道 ⇒ **内容在内存里进出，落盘仍走保存护栏**（盘上被别处改过照样拒绝）。
 
+use doyah_studio_db::highlight::CodeTokenKind;
 use doyah_studio_db::workspace::TextLanguage;
 use doyah_studio_db::{FormatBuiltin, FormatPlan, FormatTool};
 
@@ -347,6 +348,24 @@ fn extension_hint(language: TextLanguage) -> &'static str {
     }
 }
 
+/// 说清一档内置做了什么（**含放过几行 / 不变式没过就整档放弃**）。
+fn describe_builtin(outcome: &BuiltinOutcome) -> String {
+    if outcome.invariant_failed {
+        // 不变式没过 ⇒ 整档放弃：**说出来**，不装作做过了
+        return "（**检查后放弃**：这一档会改动到内容本身，为免改坏，内容一字未改）".to_string();
+    }
+    let base = if outcome.changed_lines > 0 {
+        format!("（改了 {} 行的缩进/关键字", outcome.changed_lines)
+    } else {
+        "（没有需要改的地方".to_string()
+    };
+    if outcome.skipped_lines > 0 {
+        format!("{base}；**放过了 {} 行** —— 那几行的花括号/关键字在字符串或注释里）", outcome.skipped_lines)
+    } else {
+        format!("{base}）")
+    }
+}
+
 /// 跑内置兜底；返回（内容, 变了没有, 一句说明）。
 fn run_builtin(builtin: FormatBuiltin, content: &str, language: TextLanguage) -> (String, bool, String) {
     match builtin {
@@ -363,11 +382,21 @@ fn run_builtin(builtin: FormatBuiltin, content: &str, language: TextLanguage) ->
             };
             (report.formatted, changed, extra)
         }
-        // 登记了但本笔未实现的两个：**如实说没做**，不假装
-        FormatBuiltin::Sql | FormatBuiltin::BraceIndent | FormatBuiltin::None => (
+        FormatBuiltin::BraceIndent => {
+            let outcome = format_brace_indent(content, language);
+            let extra = describe_builtin(&outcome);
+            (outcome.content, outcome.changed_lines > 0, extra)
+        }
+        FormatBuiltin::Sql => {
+            let outcome = format_sql_keywords(content, language);
+            let extra = describe_builtin(&outcome);
+            (outcome.content, outcome.changed_lines > 0, extra)
+        }
+        // `None` = 这条路不存在；真走到这里就**如实说没做**
+        FormatBuiltin::None => (
             content.to_string(),
             false,
-            "（这个内置档位本版**尚未实现** ⇒ 内容一字未改）".to_string(),
+            "（这个内置档位不存在 ⇒ 内容一字未改）".to_string(),
         ),
     }
 }
@@ -463,5 +492,374 @@ mod tests {
         assert_eq!(refused.engine, "refused");
         assert_eq!(refused.content, "whatever   \n", "拒绝时不能改内容");
         assert!(refused.note.contains("认不出"));
+    }
+}
+
+// ── 内置兜底的两档（2.6）：按花括号重排缩进 / SQL 关键字与分行 ──────────────────────────
+//
+// 为什么放在这里（而不是领域层 `format.rs`）：这两档要**按行切 + 按 token 片段判安全**，
+// 而"哪段是字符串/注释"的判据来自领域层 `highlight::tokenize`。放在表示层能直接用，
+// 领域层那半（规划与"整理空白"）保持不变。
+//
+// ## 两档共同的第一纪律：**只准动空白**
+// 判据是一条**内容不变式**：把结果与原文的所有非空白字符抽出来，**必须逐字相同**。
+// 不满足就**放弃这一档、原样返回**（宁可不格式化，也不改坏代码）。这条不变式在两档各有单测。
+
+/// 一档内置格式化的结果。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuiltinOutcome {
+    pub content: String,
+    /// 有多少行被改了缩进 / 关键字
+    pub changed_lines: usize,
+    /// **因为不安全而放过的行数**（放过的要让人知道）
+    pub skipped_lines: usize,
+    /// 内容不变式没通过 ⇒ 整档放弃（原样返回）
+    pub invariant_failed: bool,
+}
+
+/// 抽出所有**非空白字符**（内容不变式用）。
+fn non_whitespace(text: &str) -> String {
+    text.chars().filter(|ch| !ch.is_whitespace()).collect()
+}
+
+/// 内容不变式：结果与原文的非空白字符必须逐字相同。
+fn keeps_content(original: &str, formatted: &str) -> bool {
+    non_whitespace(original) == non_whitespace(formatted)
+}
+
+/// 一行的**行首空白**（字符）与**内容起点**（字节）。返回 `(空白串, 内容起点的字节偏移)`。
+fn leading_whitespace(line: &str) -> (String, usize) {
+    let mut indent = String::new();
+    let mut bytes = 0usize;
+    for ch in line.chars() {
+        if ch == ' ' || ch == '\t' {
+            indent.push(ch);
+            bytes += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+    (indent, bytes)
+}
+
+/// 一行里有没有落在**字符串 / 注释**里的花括号（有就不敢按它算层级）。
+fn braces_inside_tokens(line: &str, language: TextLanguage) -> bool {
+    doyah_studio_db::tokenize_code(line, language)
+        .iter()
+        .filter(|span| matches!(span.kind, CodeTokenKind::Str | CodeTokenKind::Comment))
+        .any(|span| line[span.start..span.end].contains('{') || line[span.start..span.end].contains('}'))
+}
+
+/// 一行里**不在字符串 / 注释里**的花括号净数（`{` 记 +1，`}` 记 −1）。
+fn brace_delta(line: &str, language: TextLanguage) -> i32 {
+    let spans: Vec<(usize, usize)> = doyah_studio_db::tokenize_code(line, language)
+        .iter()
+        .filter(|span| matches!(span.kind, CodeTokenKind::Str | CodeTokenKind::Comment))
+        .map(|span| (span.start, span.end))
+        .collect();
+    let covered = |index: usize| spans.iter().any(|(start, end)| *start <= index && index < *end);
+    let mut delta = 0i32;
+    for (index, byte) in line.bytes().enumerate() {
+        if covered(index) {
+            continue;
+        }
+        match byte {
+            b'{' => delta += 1,
+            b'}' => delta -= 1,
+            _ => {}
+        }
+    }
+    delta
+}
+
+/// 用空格重排一行的行首缩进（**只换行首空白**，内容起点之后的每一个字节都不动）。
+fn reindent(line: &str, depth: i32, unit: &str) -> (String, bool) {
+    let (indent, content_start) = leading_whitespace(line);
+    if content_start == line.len() {
+        return (line.to_string(), false); // 空行 / 全空白行不动
+    }
+    let want = unit.repeat(depth.max(0) as usize);
+    if indent == want {
+        return (line.to_string(), false);
+    }
+    let mut out = String::with_capacity(line.len() + want.len());
+    out.push_str(&want);
+    out.push_str(&line[content_start..]);
+    (out, true)
+}
+
+/// 内置档：**按花括号层级重排行首缩进**（缩进单位按文件里已有的推断）。
+///
+/// 安全边界（都在单测里）：
+/// - 花括号**在字符串/注释里**的行**跳过**（算层级会算错、重排会改坏内容）；
+/// - 行尾的 `{` / 行首的 `}` 参与层级；
+/// - **只动行首空白** ⇒ 内容不变式必然成立；一旦不成立就整档放弃。
+pub fn format_brace_indent(code: &str, language: TextLanguage) -> BuiltinOutcome {
+    let lines = doyah_studio_db::code_lines::lines(code);
+    // 缩进单位：按文件里已有的行首缩进取"最小正增量"，取不到就用 4 空格
+    let unit = detect_indent_unit(code).unwrap_or_else(|| "    ".to_string());
+
+    let mut out = String::with_capacity(code.len());
+    let mut depth = 0i32;
+    let mut changed_lines = 0usize;
+    let mut skipped_lines = 0usize;
+
+    for line in &lines {
+        let text = line.text.as_str();
+        let trimmed = text.trim_start();
+        // 先减：行首是 `}` ⇒ 这一行要往外退一层
+        let mut line_depth = depth;
+        if trimmed.starts_with('}') {
+            line_depth -= 1;
+        }
+
+        if braces_inside_tokens(text, language) {
+            skipped_lines += 1;
+            out.push_str(text);
+        } else {
+            let (reindented, changed) = reindent(text, line_depth, &unit);
+            if changed {
+                changed_lines += 1;
+            }
+            out.push_str(&reindented);
+        }
+
+        // 再按这一行的净变化更新层级
+        let delta = if braces_inside_tokens(text, language) {
+            0
+        } else {
+            brace_delta(text, language)
+        };
+        depth += delta;
+        if depth < 0 {
+            depth = 0;
+        }
+
+        if let Some(ending) = line.ending {
+            out.push_str(ending.text());
+        }
+    }
+
+    if !keeps_content(code, &out) {
+        // 不变式没过 ⇒ **整档放弃**（宁可原样，也不改坏）
+        return BuiltinOutcome {
+            content: code.to_string(),
+            changed_lines: 0,
+            skipped_lines,
+            invariant_failed: true,
+        };
+    }
+    BuiltinOutcome {
+        content: out,
+        changed_lines,
+        skipped_lines,
+        invariant_failed: false,
+    }
+}
+
+/// 推断缩进单位：文件里行首缩进的最小正增量（空格或制表符都认）。
+fn detect_indent_unit(code: &str) -> Option<String> {
+    let mut best: Option<usize> = None;
+    for line in doyah_studio_db::code_lines::lines(code) {
+        let (indent, content_start) = leading_whitespace(&line.text);
+        if content_start == 0 || content_start == line.text.len() {
+            continue;
+        }
+        // 纯制表符缩进 ⇒ 单位就用制表符
+        if indent.starts_with('\t') {
+            return Some("\t".to_string());
+        }
+        let width = indent.len();
+        if width > 0 && best.map(|current| width < current).unwrap_or(true) {
+            best = Some(width);
+        }
+    }
+    best.filter(|width| *width > 0).map(|width| " ".repeat(width))
+}
+
+/// SQL 关键字表（**只大写这些词**；不认的词一个字不动）。
+const SQL_KEYWORDS: &[&str] = &[
+    "select", "from", "where", "group", "by", "order", "having", "limit", "offset", "insert",
+    "into", "values", "update", "set", "delete", "join", "inner", "left", "right", "outer", "on",
+    "as", "and", "or", "not", "null", "is", "in", "between", "like", "case", "when", "then",
+    "else", "end", "union", "all", "distinct", "create", "table", "view", "index", "drop",
+    "alter", "add", "column", "primary", "key", "foreign", "references", "default", "with",
+    "returning", "exists", "count", "sum", "avg", "min", "max",
+];
+
+/// 内置档：**SQL 关键字大写**（字符串 / 注释里的一个字符都不动）。
+///
+/// 不做"重排成一行"那种激进的事：那会改动大量空白，风险与收益不成比例；
+/// 大写关键字是**能证明安全**（逐词判定）且真有用的一档。
+pub fn format_sql_keywords(code: &str, language: TextLanguage) -> BuiltinOutcome {
+    let lines = doyah_studio_db::code_lines::lines(code);
+    let mut out = String::with_capacity(code.len());
+    let mut changed_lines = 0usize;
+    let mut skipped_lines = 0usize;
+
+    for line in &lines {
+        let text = line.text.as_str();
+        // 整行都在注释里（以 `--` 开头）⇒ 跳过
+        if text.trim_start().starts_with("--") {
+            skipped_lines += 1;
+            out.push_str(text);
+            if let Some(ending) = line.ending {
+                out.push_str(ending.text());
+            }
+            continue;
+        }
+        // 排除字符串 / 注释片段后，逐词判定
+        let spans: Vec<(usize, usize)> = doyah_studio_db::tokenize_code(text, language)
+            .iter()
+            .filter(|span| matches!(span.kind, CodeTokenKind::Str | CodeTokenKind::Comment))
+            .map(|span| (span.start, span.end))
+            .collect();
+        let covered = |index: usize| spans.iter().any(|(start, end)| *start <= index && index < *end);
+        let mut rebuilt = String::with_capacity(text.len());
+        let mut changed = false;
+        let mut index = 0usize;
+        while index < text.len() {
+            let byte = text.as_bytes()[index];
+            // 词的开头（字母或下划线）且不在 token 里
+            if (byte.is_ascii_alphabetic() || byte == b'_') && !covered(index) {
+                let start = index;
+                while index < text.len()
+                    && (text.as_bytes()[index].is_ascii_alphanumeric() || text.as_bytes()[index] == b'_')
+                {
+                    index += 1;
+                }
+                let word = &text[start..index];
+                let lower = word.to_ascii_lowercase();
+                if SQL_KEYWORDS.contains(&lower.as_str()) {
+                    let upper = lower.to_ascii_uppercase();
+                    if upper != word {
+                        changed = true;
+                    }
+                    rebuilt.push_str(&upper);
+                } else {
+                    rebuilt.push_str(word);
+                }
+                continue;
+            }
+            // 非词首：按 UTF-8 边界整字符复制
+            let ch = text[index..].chars().next().unwrap_or(' ');
+            rebuilt.push(ch);
+            index += ch.len_utf8();
+        }
+        if changed {
+            changed_lines += 1;
+        }
+        out.push_str(&rebuilt);
+        if let Some(ending) = line.ending {
+            out.push_str(ending.text());
+        }
+    }
+
+    // SQL 档的不变式**按大小写不敏感比**：这一档要做的正是改大小写，
+    // 拿"逐字相同"去比必然判失败（我第一版就是这样，用例红在不变式上，不是实现在这一步错）。
+    if non_whitespace(&out).to_lowercase() != non_whitespace(code).to_lowercase() {
+        return BuiltinOutcome {
+            content: code.to_string(),
+            changed_lines: 0,
+            skipped_lines,
+            invariant_failed: true,
+        };
+    }
+    BuiltinOutcome {
+        content: out,
+        changed_lines,
+        skipped_lines,
+        invariant_failed: false,
+    }
+}
+
+#[cfg(test)]
+mod builtin_format_tests {
+    use super::*;
+
+    #[test]
+    fn brace_indent_reindents_and_keeps_content_identical() {
+        let messy = "fn main() {\nlet a = 1;\nif a > 0 {\nprintln!(\"hi\");\n}\n}\n";
+        let outcome = format_brace_indent(messy, TextLanguage::Rust);
+        assert!(!outcome.invariant_failed, "内容不变式必须成立");
+        // **内容一字不改**（只动空白）
+        assert_eq!(non_whitespace(&outcome.content), non_whitespace(messy));
+        // 缩进确实按层级排了
+        assert_eq!(
+            outcome.content,
+            "fn main() {\n    let a = 1;\n    if a > 0 {\n        println!(\"hi\");\n    }\n}\n"
+        );
+        assert!(outcome.changed_lines >= 3);
+    }
+
+    #[test]
+    fn brace_indent_respects_the_existing_indent_unit_and_tabs() {
+        // 文件里用的是 2 空格 ⇒ 按 2 空格排。
+        // **内容里必须真有一行是缩进的**，单位才推断得出来 —— 我第一版给的是一份
+        // "一行都没有缩进"的内容 ⇒ 推断不出单位、按默认 4 空格排（那是正确退化）。
+        // 所以这里先放一行 2 空格缩进的，再放一行没缩进的看它有没有跟上 2 空格。
+        let two = "fn a() {\n  let only = 1;\nfn b() {\nlet c = 2;\n}\n}\n";
+        let two_out = format_brace_indent(two, TextLanguage::Rust);
+        // 精确取那一行来比（**不要用带 `\n` 的子串断言** —— 行首前面还有缩进，
+        // 子串会错位；我上一版就是这样，看着像实现错，其实是断言写错）
+        let c_line = doyah_studio_db::code_lines::lines(&two_out.content)
+            .into_iter()
+            .find(|line| line.text.contains("let c"))
+            .map(|line| line.text)
+            .unwrap_or_default();
+        // 单位是 2 空格 ⇒ 第一层 2 个、**第二层 4 个**（`let c` 在两层里）。
+        // 我上一版把"两层"算成了 2 个空格 —— 又是用例算错，实现是对的。
+        assert_eq!(c_line, "    let c = 2;", "两层缩进 = 2 × 单位 2 空格");
+        let only_line = doyah_studio_db::code_lines::lines(&two_out.content)
+            .into_iter()
+            .find(|line| line.text.contains("let only"))
+            .map(|line| line.text)
+            .unwrap_or_default();
+        assert_eq!(only_line, "  let only = 1;", "一层缩进 = 单位本身（2 空格，不是默认的 4）");
+        // 用制表符的文件 ⇒ 继续用制表符（不把它换成空格）
+        let tabs = "fn a() {\n\tlet b = 1;\n}\n";
+        let tabs_out = format_brace_indent(tabs, TextLanguage::Rust);
+        assert!(tabs_out.content.contains("\n\tlet b = 1;"), "{}", tabs_out.content);
+    }
+
+    #[test]
+    fn brace_indent_skips_lines_whose_braces_are_inside_strings() {
+        // 花括号在字符串里 ⇒ **放过这一行**（算层级会算错、重排会改坏内容）
+        let tricky = "fn a() {\n    let s = \"}{\";\n}\n";
+        let outcome = format_brace_indent(tricky, TextLanguage::Rust);
+        assert_eq!(outcome.skipped_lines, 1, "字符串里带花括号的行要放过");
+        assert!(outcome.content.contains("let s = \"}{\";"));
+        assert!(!outcome.invariant_failed);
+    }
+
+    #[test]
+    fn brace_indent_leaves_crlf_alone() {
+        let crlf = "fn a() {\r\nlet b = 1;\r\n}\r\n";
+        let outcome = format_brace_indent(crlf, TextLanguage::Rust);
+        assert!(outcome.content.contains("\r\n"), "CRLF 要保留：{:?}", outcome.content);
+        assert_eq!(outcome.content.matches("\r\n").count(), 3);
+    }
+
+    #[test]
+    fn sql_keywords_are_uppercased_outside_strings_and_comments() {
+        let sql = "select id, name from users where name = 'select me' -- select in comment\n";
+        let outcome = format_sql_keywords(sql, TextLanguage::Sql);
+        assert!(!outcome.invariant_failed);
+        let text = &outcome.content;
+        assert!(text.starts_with("SELECT id, name FROM users WHERE name = "), "{text}");
+        // **字符串里的一个字不动**
+        assert!(text.contains("'select me'"), "{text}");
+        // **注释里的一个字不动**
+        assert!(text.contains("-- select in comment"), "{text}");
+        // 内容不变式：非空白字符相同（大写会改字符大小写 ⇒ 这条不变式对 SQL 档要放宽）
+        assert_eq!(text.to_lowercase(), sql.to_lowercase(), "除大小写外内容一字不改");
+    }
+
+    #[test]
+    fn sql_keywords_do_not_touch_column_named_like_a_keyword() {
+        // `select_count` 这种带下划线的标识符**不是一个关键字** ⇒ 不动它
+        let sql = "select select_count from t\n";
+        let outcome = format_sql_keywords(sql, TextLanguage::Sql);
+        assert!(outcome.content.contains("SELECT select_count FROM t"), "{}", outcome.content);
     }
 }
