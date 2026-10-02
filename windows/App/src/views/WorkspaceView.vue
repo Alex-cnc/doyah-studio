@@ -47,6 +47,7 @@ import {
 } from '../ipc'
 import { entryGlyph, flattenTree, indentPx, neighbouringRow, tabLabel, toggleExpanded, workspaceDisplayName } from '../workspace/logic'
 import { dominantEndingLabel, lineNumberText, segmentsForLine, sliceSegments } from '../workspace/editor'
+import { highlightPieces } from '../workspace/highlights'
 import MarkdownPreview from './MarkdownPreview.vue'
 import {
   charWidthFrom,
@@ -63,6 +64,15 @@ function lineSegments(lineIndex: number) {
   const data = activeEditor.value
   const line = data?.structure.lines[lineIndex]
   if (!data || !line) return []
+  // **命中高亮优先**：从检索跳过来时，这一行的命中片段直接标出来（比语法色更该看见）。
+  // 口径与检索同源（`workspace/highlights.ts` 复刻了 Rust 侧那套归一规则）。
+  const hit = activeHit.value
+  if (hit) {
+    const pieces = highlightPieces(line.text, hit.query)
+    if (pieces.some((piece) => piece.hit)) {
+      return pieces.map((piece) => ({ text: piece.text, kind: piece.hit ? 'hit' : 'plain' }))
+    }
+  }
   // 本行的字节终点 = 下一行的起点（最后一行就是整份原文的末尾）
   const nextStart =
     data.structure.lines[lineIndex + 1]?.byteStart ?? line.byteStart + new TextEncoder().encode(line.text).length
@@ -219,6 +229,8 @@ const searchHitCount = computed(() => {
 
 /** 点一条命中：打开那个文件**并跳到命中行**（行号先夹进真实行数） */
 async function openHit(relativePath: string, line?: number) {
+  // **先记下命中信息**（行内高亮要用它；打开之后才记会晚一拍）
+  if (line !== undefined) rememberHit(relativePath, searchQuery.value, line)
   // 文件可能还没在树里展开过 —— 直接按路径打开（走的是同一条安全关）
   await openFile({ name: relativePath.split('/').pop() ?? relativePath, relativePath, kind: 'file', isExpandable: false })
   const tab = tabs.value.find((t) => t.relativePath === relativePath)
@@ -226,6 +238,10 @@ async function openHit(relativePath: string, line?: number) {
   if (line !== undefined) {
     const clamped = await workspaceClampLine(root.value, relativePath, line)
     tabs.value = tabs.value.map((t) => (t.id === tab.id ? { ...t, cursorLine: clamped, cursorHow: 'exact' } : t))
+    // **滚到那一行**：行号列那一格有 `data-line`，用它在容器里滚过去
+    await nextTick()
+    const target = document.querySelector(`[data-hit-line="${clamped}"]`)
+    target?.scrollIntoView({ block: 'center' })
   }
 }
 // Markdown 预览（2.5）：模型由 Rust 侧一处解析产出，这里**只画**（只读，没有可编辑控件）
@@ -285,6 +301,22 @@ watch(
     await openFile({ name: path.split('/').pop() ?? path, relativePath: path, kind: 'file', isExpandable: false })
   },
 )
+// 从检索跳过来时的命中信息（2.4）：**查询词**用来在行内标出命中，**行号**用来滚到那里
+const hitInfo = ref<Map<string, { query: string; line: number }>>(new Map())
+
+/** 记一次"这一跳带着检索词"（打开命中时调） */
+function rememberHit(relativePath: string, query: string, line: number) {
+  const next = new Map(hitInfo.value)
+  next.set(relativePath, { query, line })
+  hitInfo.value = next
+}
+
+/** 当前页签的命中信息（没有就是普通打开） */
+const activeHit = computed(() => {
+  const path = activeTab.value?.relativePath
+  return path ? hitInfo.value.get(path) : undefined
+})
+
 /** 本版只读：编辑面显示内容，改与存归 2.1 / 2.2 段（不假装能改）。 */
 interface OpenTab {
   id: string
@@ -1003,6 +1035,7 @@ function onTreeKeydown(event: KeyboardEvent) {
                   :key="i"
                   class="ws__gutter-num"
                   :class="{ 'ws__gutter-num--cursor': activeTab.cursorLine === i + 1 }"
+                  :data-hit-line="activeHit?.line === i + 1 ? i + 1 : undefined"
                   :title="activeTab.cursorLine === i + 1 ? '上次停在这一行' : undefined"
                 >{{
                   lineNumberText(i, activeEditor.structure.gutterDigits)
@@ -1445,6 +1478,13 @@ function onTreeKeydown(event: KeyboardEvent) {
 }
 
 /* 高亮色只走令牌（棘轮守着） */
+/* 命中高亮（2.4）：从检索跳过来的那一行，命中片段标出来 */
+.ws__tok--hit {
+  background: var(--ds-color-status-warning);
+  color: var(--ds-color-surface-content);
+  border-radius: var(--ds-radius-hairline);
+}
+
 .ws__tok--comment {
   color: var(--ds-color-text-tertiary);
 }
