@@ -1190,3 +1190,101 @@ mod staleness_tests {
         assert!(file_snapshot(&root_text, "nope.txt").is_err());
     }
 }
+
+// ── 外观偏好的落盘（2.8）──────────────────────────────────────────────────────────
+//
+// 与其它偏好文件同一套路：**一个 JSON、按需读写、坏了不致命**（读不出来就按缺省走，
+// 缺省是"跟随系统 + 星空紫 + 皮肤开"）。**键名与取值是契约**（见 Db/src/appearance.rs 的 keys）。
+
+/// 外观偏好文件：`%APPDATA%\DoyahStudio\appearance.json`。
+pub fn appearance_path() -> std::path::PathBuf {
+    let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+    std::path::Path::new(&base).join("DoyahStudio").join("appearance.json")
+}
+
+/// 读外观偏好：文件不在 / 读不出来 / 结构不认识 ⇒ **按缺省**（不抛错，界面照常起）。
+pub fn read_appearance() -> (doyah_studio_db::Appearance, Option<String>) {
+    let path = appearance_path();
+    if !path.exists() {
+        return (doyah_studio_db::Appearance::default(), None);
+    }
+    match std::fs::read_to_string(&path) {
+        Ok(text) if text.trim().is_empty() => (doyah_studio_db::Appearance::default(), None),
+        Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
+            Ok(value) => {
+                // 逐项解析：**缺项用缺省、未知值按规则回落**（不整体失败）
+                let mode = value.get("mode").and_then(|v| v.as_str()).map(str::to_string);
+                let scheme = value.get("scheme").and_then(|v| v.as_str()).map(str::to_string);
+                let nebula = value.get("nebulaSkin").and_then(|v| v.as_bool());
+                (
+                    doyah_studio_db::Appearance::resolve(
+                        mode.as_deref(),
+                        scheme.as_deref(),
+                        nebula,
+                    ),
+                    None,
+                )
+            }
+            Err(e) => (
+                doyah_studio_db::Appearance::default(),
+                Some(format!("外观偏好读不出来（{e}）—— 已按缺省继续：{}", path.display())),
+            ),
+        },
+        Err(e) => (
+            doyah_studio_db::Appearance::default(),
+            Some(format!("外观偏好打不开（{e}）：{}", path.display())),
+        ),
+    }
+}
+
+/// 写外观偏好（整份覆盖）。
+pub fn write_appearance(appearance: &doyah_studio_db::Appearance) -> Result<(), DbFailure> {
+    let path = appearance_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            failure(format!("建配置目录失败：{e}（{}）", parent.display()), "确认该目录可写。")
+        })?;
+    }
+    // 落盘用**契约键名**（mode / scheme / nebulaSkin），与读回来时一一对应
+    let payload = serde_json::json!({
+        "mode": appearance.mode.raw(),
+        "scheme": appearance.scheme.raw(),
+        "nebulaSkin": appearance.nebula_skin,
+    });
+    let text = serde_json::to_string_pretty(&payload).map_err(|e| {
+        failure(format!("外观偏好序列化失败：{e}"), "这属实现缺陷：请保留现场并报告。")
+    })?;
+    std::fs::write(&path, text).map_err(|e| {
+        failure(
+            format!("写外观偏好失败：{e}（{}）", path.display()),
+            "确认该文件可写（可能被杀毒软件 / 权限限制）。",
+        )
+    })
+}
+
+#[cfg(test)]
+mod appearance_tests {
+    use super::*;
+
+    #[test]
+    fn appearance_round_trips_and_unknown_values_fall_back() {
+        // 直接用领域层的解析规则验一遍"缺项 / 未知值"两条（文件 IO 由上面的读写函数承担）
+        let fresh = doyah_studio_db::Appearance::resolve(None, None, None);
+        assert!(fresh.nebula_skin, "缺省皮肤开");
+        assert_eq!(fresh.scheme, doyah_studio_db::ColorScheme::Stardust);
+        let unknown = doyah_studio_db::Appearance::resolve(Some("nope"), Some("nope"), Some(false));
+        assert_eq!(unknown.mode, doyah_studio_db::AppearanceMode::FollowSystem);
+        assert_eq!(unknown.scheme, doyah_studio_db::ColorScheme::Stardust);
+        assert!(!unknown.nebula_skin);
+        // 落盘形态：键名是契约
+        let payload = serde_json::json!({
+            "mode": fresh.mode.raw(),
+            "scheme": fresh.scheme.raw(),
+            "nebulaSkin": fresh.nebula_skin,
+        });
+        let text = serde_json::to_string(&payload).unwrap();
+        assert!(text.contains("\"mode\":\"followSystem\""), "{text}");
+        assert!(text.contains("\"scheme\":\"stardust\""), "{text}");
+        assert!(text.contains("\"nebulaSkin\":true"), "{text}");
+    }
+}

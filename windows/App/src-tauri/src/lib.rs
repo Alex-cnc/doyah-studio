@@ -646,6 +646,41 @@ fn workspace_markdown(workspace_root: String, relative_path: String) -> Result<d
     Ok(doyah_studio_db::parse_markdown(&file.content))
 }
 
+/// 读外观偏好（深浅轴 / 配色轴 / 星云皮肤开关）。
+///
+/// `systemIsDark` 由前端给（`matchMedia` 的当前值）—— 本命令只算"最终该长什么样"，
+/// **不改任何东西**，界面照着设 `data-*` 即可。
+#[tauri::command]
+fn appearance_get(system_is_dark: Option<bool>) -> serde_json::Value {
+    let (appearance, warning) = fs::read_appearance();
+    serde_json::json!({
+        "appearance": appearance,
+        "dom": appearance.to_dom(system_is_dark.unwrap_or(false)),
+        "warning": warning,
+    })
+}
+
+/// 改外观偏好：**部分更新**（只传要改的那几项，其余保持）。
+#[tauri::command]
+fn appearance_set(
+    mode: Option<String>,
+    scheme: Option<String>,
+    nebula_skin: Option<bool>,
+    system_is_dark: Option<bool>,
+) -> Result<serde_json::Value, DbFailure> {
+    let (current, _) = fs::read_appearance();
+    let next = doyah_studio_db::Appearance::resolve(
+        Some(mode.as_deref().unwrap_or(current.mode.raw())),
+        Some(scheme.as_deref().unwrap_or(current.scheme.raw())),
+        Some(nebula_skin.unwrap_or(current.nebula_skin)),
+    );
+    fs::write_appearance(&next)?;
+    Ok(serde_json::json!({
+        "appearance": next,
+        "dom": next.to_dom(system_is_dark.unwrap_or(false)),
+    }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -701,7 +736,9 @@ pub fn run() {
             workspace_record_cursor,
             workspace_search,
             workspace_clamp_line,
-            workspace_markdown
+            workspace_markdown,
+            appearance_get,
+            appearance_set
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

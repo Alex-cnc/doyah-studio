@@ -72,6 +72,9 @@ export const COMMANDS = {
   workspaceClampLine: 'workspace_clamp_line',
   // Markdown 预览（2.5：一份解析，界面只画模型）
   workspaceMarkdown: 'workspace_markdown',
+  // 外观（2.8：深浅轴 / 配色轴 / 星云皮肤）
+  appearanceGet: 'appearance_get',
+  appearanceSet: 'appearance_set',
 } as const
 
 export interface AppInfo {
@@ -913,4 +916,51 @@ export interface MdDocument {
 /** 解析 Markdown 成块级模型（解析在 Rust 领域层，一份实现两处消费）。 */
 export function workspaceMarkdown(workspaceRoot: string, relativePath: string): Promise<MdDocument> {
   return call(COMMANDS.workspaceMarkdown, { workspaceRoot, relativePath }, () => ({ version: 1, blocks: [] }))
+}
+// ── 外观（alpha 2.8）────────────────────────────────────────────────────────────────
+
+/** 落盘偏好（与 Rust 侧 `Appearance` 同形）。 */
+export interface Appearance {
+  mode: 'followSystem' | 'alwaysDark' | 'alwaysLight'
+  scheme: 'techBlue' | 'beanGreen' | 'roseGold' | 'stardust'
+  /** 星云皮肤开关；**缺省开** */
+  nebulaSkin: boolean
+}
+
+/** Rust 算好的 DOM 取值（`dataTheme` 为 `null` = 不设那个属性）。 */
+export interface DomAppearance {
+  dataTheme: 'dark' | 'light' | null
+  dataScheme: string
+  nebula: boolean
+  isDark: boolean
+}
+
+export interface AppearancePayload {
+  appearance: Appearance
+  dom: DomAppearance
+  warning?: string | null
+}
+
+/** 读外观偏好（`systemIsDark` 由前端给 —— 本命令只算"最终该长什么样"）。 */
+export function appearanceGet(systemIsDark: boolean): Promise<AppearancePayload> {
+  return call(COMMANDS.appearanceGet, { systemIsDark }, () => ({
+    appearance: { mode: 'followSystem', scheme: 'stardust', nebulaSkin: true },
+    dom: { dataTheme: null, dataScheme: 'stardust', nebula: systemIsDark, isDark: systemIsDark },
+    warning: null,
+  }))
+}
+
+/** 改外观偏好（**部分更新**：只传要改的那几项）。 */
+export function appearanceSet(
+  patch: { mode?: Appearance['mode']; scheme?: Appearance['scheme']; nebulaSkin?: boolean },
+  systemIsDark: boolean,
+): Promise<{ appearance: Appearance; dom: DomAppearance }> {
+  return call(
+    COMMANDS.appearanceSet,
+    { mode: patch.mode, scheme: patch.scheme, nebulaSkin: patch.nebulaSkin, systemIsDark },
+    () => ({
+      appearance: { mode: patch.mode ?? 'followSystem', scheme: patch.scheme ?? 'stardust', nebulaSkin: patch.nebulaSkin ?? true },
+      dom: { dataTheme: null, dataScheme: patch.scheme ?? 'stardust', nebula: systemIsDark, isDark: systemIsDark },
+    }),
+  )
 }

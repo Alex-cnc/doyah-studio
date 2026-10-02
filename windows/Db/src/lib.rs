@@ -9,6 +9,7 @@
 //! 本文件先落几片：**连接配置模型**（`config`）· **连接串解析 / 导出**（`url`）·
 //! **服务端条件浏览**（`browse`，FR-DATA-02）。对象树、SQL 执行面按 `windows/版本计划.md` 继续。
 
+pub mod appearance;
 pub mod browse;
 pub mod code_lines;
 pub mod config;
@@ -28,6 +29,9 @@ pub mod url;
 pub mod workspace;
 pub mod writeback;
 
+pub use appearance::{
+    Appearance, AppearanceMode, ColorScheme, DomAppearance,
+};
 pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter};
 pub use markdown::{
     parse as parse_markdown, parse_inline, Block, BlockKind, ColumnAlignment, Document as MarkdownDocument,

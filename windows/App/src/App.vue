@@ -4,11 +4,13 @@
 // 契约来源：`Docs/概要设计.md` §8.5.4「一样」清单 + macOS 侧 `Core/ActivityBar.swift`。
 // 四模块位与对侧的语义一一对应；**未开工的视图如实标 ⬜**（不半建、不假装能点）。
 
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { appInfo, type AppInfo } from './ipc'
 import TitleBar from './shell/TitleBar.vue'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
+import { appearanceGet, appearanceSet, type Appearance as AppearancePref, type DomAppearance } from './ipc'
+import { applyAppearance, MODE_LABELS, SCHEME_LABELS, systemIsDark } from './shell/appearance'
 import DatabaseView from './views/DatabaseView.vue'
 import WorkspaceView from './views/WorkspaceView.vue'
 import {
@@ -24,6 +26,38 @@ const info = ref<AppInfo | null>(null)
 const loaded = ref(0)
 const total = ref(0)
 
+// 外观（2.8）：规则在 Rust 侧（`Db/src/appearance.rs`），这里只管"读回来 → 贴到根元素 → 改了就存回去"
+const appearance = ref<AppearancePref | null>(null)
+const appearanceWarning = ref('')
+
+/** 系统当前深浅（只在"跟随系统"那一档影响结果；监听它才能在系统切换时即时跟随） */
+const darkQuery =
+  typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null
+const systemDark = ref(systemIsDark())
+
+/** 改了任一项：写回并重贴（**部分更新**，只传改动的那项） */
+async function changeAppearance(patch: Partial<Pick<AppearancePref, 'mode' | 'scheme' | 'nebulaSkin'>>) {
+  if (!appearance.value) return
+  try {
+    const payload = await appearanceSet(patch, systemDark.value)
+    appearance.value = payload.appearance
+    applyAppearance(payload.dom)
+  } catch {
+    // 存不下去就**不假装配上了**：界面先不动，下次启动会回到上次存下的那份
+  }
+}
+
+/** 系统深浅变了：重算一次（不改偏好，只重贴） */
+async function refreshAppearance() {
+  try {
+    const payload = await appearanceGet(systemDark.value)
+    appearance.value = payload.appearance
+    applyAppearance(payload.dom)
+  } catch {
+    // 读不到就不动（不把外观失败放大成界面故障）
+  }
+}
+
 /** 活动栏的显示面：顺序、文案、图标语义都从 `activityBar.ts` 派生（视图里不再排一次）。 */
 const sections = ITEMS.map((id) => ({
   id,
@@ -34,7 +68,29 @@ const sections = ITEMS.map((id) => ({
 
 onMounted(async () => {
   info.value = await appInfo()
+  // 外观：读一次偏好并贴上（**读不到就按缺省贴** —— 外观读失败不该挡住界面）
+  try {
+    const payload = await appearanceGet(systemDark.value)
+    appearance.value = payload.appearance
+    appearanceWarning.value = payload.warning ?? ''
+    applyAppearance(payload.dom)
+  } catch {
+    applyAppearance({
+      dataTheme: null,
+      dataScheme: 'stardust',
+      nebula: systemDark.value,
+      isDark: systemDark.value,
+    })
+  }
+  darkQuery?.addEventListener('change', onSystemChange)
 })
+
+function onSystemChange(event: MediaQueryListEvent) {
+  systemDark.value = event.matches
+  void refreshAppearance()
+}
+
+onBeforeUnmount(() => darkQuery?.removeEventListener('change', onSystemChange))
 
 function onSelect(id: ActivityBarItemId) {
   setActive(id)
@@ -44,6 +100,40 @@ function onSelect(id: ActivityBarItemId) {
 <template>
   <div class="shell">
     <TitleBar :info="info" :item="activeItem" />
+    <!-- 星云皮肤（2.8）：只在「星空紫 + 深色 + 开关开」时由 data-nebula 显形；纯装饰、不吃点击 -->
+    <div class="nebula" aria-hidden="true"></div>
+    <!-- 外观控件：深浅轴 × 配色轴 + 皮肤开关（规则全在 Rust 侧，这里只改值） -->
+    <div v-if="appearance" class="appearance">
+      <label class="appearance__field">
+        <span>外观</span>
+        <select
+          :value="appearance.mode"
+          @change="changeAppearance({ mode: ($event.target as HTMLSelectElement).value as AppearancePref['mode'] })"
+        >
+          <option v-for="m in MODE_LABELS" :key="m.value" :value="m.value">{{ m.label }}</option>
+        </select>
+      </label>
+      <label class="appearance__field">
+        <span>配色</span>
+        <select
+          :value="appearance.scheme"
+          @change="changeAppearance({ scheme: ($event.target as HTMLSelectElement).value as AppearancePref['scheme'] })"
+        >
+          <option v-for="s in SCHEME_LABELS" :key="s.value" :value="s.value">{{ s.label }}</option>
+        </select>
+      </label>
+      <label class="appearance__check" title="只在「星空紫 + 深色」时看得出来">
+        <input
+          type="checkbox"
+          :checked="appearance.nebulaSkin"
+          @change="changeAppearance({ nebulaSkin: ($event.target as HTMLInputElement).checked })"
+        />
+        星云皮肤
+      </label>
+      <span v-if="appearanceWarning" class="appearance__warn" :title="appearanceWarning">
+        外观偏好读不出来（按缺省走）
+      </span>
+    </div>
     <div class="shell__body">
       <SideBar :sections="sections" :active="activeItem" @select="onSelect" />
       <main class="shell__main">
@@ -102,5 +192,69 @@ function onSelect(id: ActivityBarItemId) {
 .shell__placeholder {
   padding: var(--ds-spacing-l);
   color: var(--ds-color-text-secondary);
+}
+
+/* ── 星云皮肤（2.8）───────────────────────────────────────────────────────────
+   只在 `data-nebula='on'` 时显形（那个属性由领域层三个条件算出来：星空紫 + 深色 + 开关开）。
+   **纯装饰**：`pointer-events: none` 不吃点击；用两层径向渐变 + 一层点状星空做"星云"。
+   颜色只走令牌（棘轮守着）—— 不落系统色。 */
+.nebula {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+
+:root[data-nebula='on'] .nebula {
+  display: block;
+  background:
+    radial-gradient(ellipse at 18% 12%, var(--ds-color-accent-accentGlow) 0%, transparent 42%),
+    radial-gradient(ellipse at 82% 78%, var(--ds-color-accent-accentGlow) 0%, transparent 46%),
+    radial-gradient(circle at 62% 28%, var(--ds-color-text-bright) 0, transparent 2px),
+    radial-gradient(circle at 28% 62%, var(--ds-color-text-bright) 0, transparent 1.5px),
+    radial-gradient(circle at 74% 46%, var(--ds-color-text-bright) 0, transparent 1.5px),
+    radial-gradient(circle at 42% 84%, var(--ds-color-text-bright) 0, transparent 1px);
+  opacity: 0.55;
+}
+
+/* 外观控件：贴在内容之上，但只占标题栏那一行的高度 */
+.appearance {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  padding: var(--ds-spacing-xs) var(--ds-spacing-m);
+  background: var(--ds-color-surface-panel);
+  border-bottom: var(--ds-metric-hairline) solid var(--ds-hairline);
+  font-size: var(--ds-font-caption-size);
+}
+
+.appearance__field {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+}
+
+.appearance__field select {
+  height: var(--ds-metric-control-height);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+}
+
+.appearance__check {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+}
+
+.appearance__warn {
+  color: var(--ds-color-status-warning);
 }
 </style>
