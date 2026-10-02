@@ -138,11 +138,11 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 14:
+    if int(total) < 15:
         failures.append(
-            f"只跑了 {total} 条 —— 四批十四条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 四批十五条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
-            " 点击地图 / 留白点给键盘 / 清空按钮那一段 / 修前对照 / 装饰层源锚点）应当都跑到"
+            " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点）应当都跑到"
         )
 
 expected = [
@@ -155,11 +155,12 @@ expected = [
     "testEachRowKindGetsItsOwnMenuNotTheServersMenu",
     "testMenuTargetFollowsTheRowUnderTheMouse",
     "testMenuIsDeterministicAndFollowsTheRow",
-    "testEveryVisiblePointInTheBoxLandsOnTheFieldOrTheRelay",
+    "testEverySamplePointInTheVisibleBoxLandsOnTheBoxOrItsControls",
     "testPaddingClicksHandTheFieldTheKeyboard",
-    "testClearButtonZoneIsLeftToSwiftUI",
-    "testLegacyHitTestableDecorationsWouldSwallowTheBox",
-    "testSourceAnchorsKeepTheDecorationsOutOfHitTesting",
+    "testClearButtonShowsWithTextAndClearsIt",
+    "testTypedTextThenReturnStillHandsTheWordOut",
+    "testLegacySwiftUISearchBoxWouldSwallowThePaddingPoints",
+    "testSourceAnchorsKeepTheBoxPureAppKit",
 ]
 for name in expected:
     if name not in log:
@@ -174,7 +175,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print("✓ 十四条都真跑过、都以 passed 收尾、没有跳过")
+print("✓ 十五条都真跑过、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -244,14 +245,14 @@ anchors = {
          "「哪些节点类型该有右键菜单」不再在 Core 里单点定义（漏一个就判不出来了）"),
     ),
     "App/Views/TitleBarSearchField.swift": (
-        (".fill(Theme.surface(.raised))\n                .allowsHitTesting(false)",
-         "背景填充又参与命中测试了 ⇒ 点击会被 SwiftUI 收走，可见框里的留白重新点不动（T-20261002-027 的真因）"),
-        (".strokeBorder(Theme.hairline(scheme), lineWidth: Metrics.hairline)\n                .allowsHitTesting(false)",
-         "边线又参与命中测试了 ⇒ 同上"),
-        (".foregroundStyle(Theme.text(.tertiary))\n                .allowsHitTesting(false)",
-         "放大镜图标又参与命中测试了 ⇒ 那 22pt 里点不动"),
-        ("TitleBarSearchMetrics.trailingReserve(",
-         "接力层不再让开清空按钮那一段 ⇒ 会把 `×` 的点击抢走"),
+        ("final class TitleBarSearchBoxView: NSView",
+         "整框不再是 AppKit 视图 ⇒ 命中测试又会被 SwiftUI 那层接走，可见框里的留白重新点不动（T-20261002-027 二次复测打回后的结构性换法）"),
+        ("final class TitleBarSearchFieldView: NSTextField",
+         "输入框不再是自己的 `NSTextField` ⇒ 非活动窗口的第一击（`acceptsFirstMouse`）没处放"),
+        ("override func mouseDown(with event: NSEvent)",
+         "整框不再自己接留白点击 ⇒ 那几处重新变成「点上去没反应」"),
+        ("DOYAH_SEARCHBOX_PROBE",
+         "真窗口命中地图探针没了 ⇒ 判据又只能量手工搭的宿主（第 162 轮就是在那里看偏的）"),
     ),
 }
 
@@ -281,7 +282,7 @@ PY
 
 echo
 echo "==> 完成：证据日志在 ${OUT}/"
-echo "    本入口判住的十四条："
+echo "    本入口判住的十五条："
 echo "    · §1 FR-EDIT-29 鼠标上报（真 PTY 上的 SGR 报文：右下角点击列行变大、拖动 32、滚轮 64、⌥ 归本机）"
 echo "    · §1 FR-EDIT-29 方向键 DECCKM（?1h 时 ^[OA、复位后 ^[[B）"
 echo "    · §1 FR-EDIT-29 右键菜单（五项齐备且指向产品自己的动作、接管 + ⌥ 时按钮码 10 转发）"
@@ -291,7 +292,8 @@ echo "    · §3 FR-EDIT-27 ⌥ 拖拽列选（逐行一段、短行夹到行尾
 echo "    · §4 FR-META-14 逐行菜单**内容**（七类节点各一张图；动作项与 Core 的规则双向对账；非服务器行不许出现服务器菜单项）"
 echo "    · §4 FR-META-14 菜单作用在**哪一行**（悬停优先 / 盒子空退回选中项 / 表头与无菜单节点 / 都不成立时的空菜单）"
 echo "    · §4 FR-META-14 菜单确定性与跟随行（同一行两次逐字节一致、不同行必须画成两个样子）"
-echo "    · §1 FR-EDIT-37 标题栏搜索栏点击地图（可见框内 34 点全部落到输入框或接力层：修前 30 点落空 / 修后 0 点）"
-echo "    · §1 FR-EDIT-37 留白点按下把键盘交给输入框（30/30 拿到第一响应者 = 字段编辑器）"
-echo "    · §1 FR-EDIT-37 清空按钮那一段留给 SwiftUI（接力层按实量 27pt 让开，不吞 × 的点击）"
+echo "    · §1 FR-EDIT-37 标题栏搜索栏点击地图（可见框内 21 点全部落到整框 / 输入框 / 清空按钮；上一轮那版同期必须判红）"
+echo "    · §1 FR-EDIT-37 留白点按下把键盘交给输入框（左留白 + 上下留白逐点：第一响应者 = 输入框或它的字段编辑器）"
+echo "    · §1 FR-EDIT-37 清空按钮三态（空词隐藏 / 有词显示 / 点它清空并回调）"
+echo "    · §1 FR-EDIT-37 打字之后按回车那个词真的交出去（打字不许把 AppKit 的编辑会话收掉 —— 2026-10-02 晚的真缺陷）"
 echo "    · §1 FR-EDIT-37 修前对照（装饰参与命中测试的那份框必须判红 —— 这条判据量得出来）"

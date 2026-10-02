@@ -27,8 +27,11 @@ struct DoyahStudioApp: App {
         let isTakeover = AppRelauncher.claimHandoffIfPresent()
         // **一次性 dump 探针不进单实例保护**（队列 `L-145`）：它不建窗口、跑完就 `exit(0)`，
         // 而单实例保护会让它在「用户正开着应用」时静默退出 —— 那样门禁就成了一条时灵时不灵的判据。
+        // 搜索栏命中地图探针（`DOYAH_SEARCHBOX_PROBE`）要**建窗口**才量得到，同理放行。
         let isMenuDumpProbe = ProcessInfo.processInfo.environment["DOYAH_MENU_DUMP"] != nil
-        if !isTakeover, !isMenuDumpProbe, let existing = Self.otherRunningInstance() {
+        let isSearchBoxProbe =
+            ProcessInfo.processInfo.environment[TitleBarSearchBoxProbe.environmentKey] != nil
+        if !isTakeover, !isMenuDumpProbe, !isSearchBoxProbe, let existing = Self.otherRunningInstance() {
             // **必须看 activate() 的返回值**：对方可能正在退出（我刚踩过 ——
             // "杀掉旧实例后立刻启动"会让新实例静默 exit(0)，表现就是"界面干脆不出来"：
             // 没有窗口、没有崩溃报告、进程也没了）。只有真的把它激活了，我才退出自己；
