@@ -744,8 +744,8 @@
    "id": "FR-EDIT-39",
    "domain": "3.2 SQL 编辑与执行",
    "reason": "ui-click",
-   "reasonText": "代码格式化的界面点击待人工点验（选路三支与三种结局已有 25 条 Core 判据；「装了 / 没装外部工具」两种环境的实际表现需人看）",
-   "marker": "**[alpha 不含]**（界面点击与「装了 / 没装外部工具」两种环境的实际表现只能人工点验；选路与三种结局由 `Tests/CodeFormattingTests.swift` 25 例逐条判）",
+   "reasonText": "代码格式化的界面点击待人工点验（选路三支与三种结局已有 29 条 Core 判据，含 2026-10-02 新补的「无联网」一档；「装了 / 没装外部工具」两种环境的实际表现需人看）",
+   "marker": "**[alpha 不含]**（界面点击与「装了 / 没装外部工具」两种环境的实际表现只能人工点验；选路与三种结局由 `Tests/CodeFormattingTests.swift` **29 例**逐条判（含 **2026-10-02 新补的「无联网」一档**：探针三态说「装了但无联网 / 装了但跑不起来」⇒ **回退内置**，并把**回退原因**带出去（`CodeFormatDecision.fallbackReason`）—— 定案「优先外部，如无联网则用内置」就是这一档））",
    "markerPreExisting": false,
    "evidence": [
     {
