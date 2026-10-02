@@ -14,6 +14,7 @@
 # 第 22 轮：11 项 → 12 项（新增第 11 项 = `P-*` 平台差异登记两侧对账，接契约侧 L-45 的 `Scripts/check-p-parity.py`）
 # 第 24 轮：12 项 → 13 项（① ② 两项按 2026-09-28 开工令换栈：cargo/前端；新增第 12 项 = 结果网格压力基准可复跑）
 # 第 27 轮：13 项 → 14 项（新增第 13 项 = 生成物一致性「发布产物版本号一个值三处一致」，接契约侧 L-70 的 §8.3 闸门行）
+# Windows 侧（fatfish）2026-10-02：14 项 → 15 项（新增第 14 项 = 路径归属判据，派活单 T-20261002-033：--mine windows + 清单 Scripts/path-ownership.json）
 
 param(
   [switch]$RequireAll,
@@ -27,7 +28,7 @@ $RepoRoot = Get-DoyahRepoRoot -ToolsDir $ToolsDir
 $ran = New-Object System.Collections.ArrayList
 $skipped = New-Object System.Collections.ArrayList
 $failed = New-Object System.Collections.ArrayList
-$total = 14
+$total = 15
 
 Write-Host "== Doyah Studio · Windows 侧闸门（§8.3.1 六项必需项 + §8.5.3 等价物）"
 Write-Host ("   仓库：{0}" -f $RepoRoot)
@@ -142,8 +143,12 @@ Invoke-ChildGate "11/$total" "⑦ `P-*` 平台差异登记两侧对账（SRS §1
 Invoke-ChildGate "12/$total" "结果网格压力基准（数据侧可复跑：grid-bench）" 'check-grid-bench.ps1'
 # ── 13/14 生成物一致性：发布产物版本号「一个值、三处逐字一致」（契约侧 L-70）────
 Invoke-ChildGate "13/$total" "生成物一致性：发布产物版本号一个值三处一致（+ 与 mac 侧发布台账同源）" 'check-release-version.ps1'
-# ── 14/14 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
-Write-DoyahStep "14/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
+# ── 14/15 路径归属（派活单 T-20261002-033 的 Windows 侧那一项）──────────────────
+# 清单 = 共享面 `Scripts/path-ownership.json`（**只有一份**，本侧只引用）；判据本体 =
+# 共享面 `Scripts/check-path-ownership.py`（同一份，三仓同源）⇒ 本侧只做按本侧姿势传参。
+Invoke-ChildGate "14/$total" "路径归属（一次改动不得落在对侧子树；共享面要登记理由）" 'check-path-ownership.ps1' -SkipReason $pythonSkipReason -ChildArgs @{ Base = $Base }
+# ── 15/15 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
+Write-DoyahStep "15/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
 Write-DoyahPass "本脚本即闭环入口；跳过的项已逐条列出（等价物可以缺席，缺席必须可见）"
 [void]$ran.Add("⑥ 一条命令跑全")
 
