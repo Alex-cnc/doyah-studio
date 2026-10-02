@@ -91,6 +91,9 @@ export const COMMANDS = {
   // 跨文件替换（2.4：先预览，再逐个走保存护栏落盘）
   workspaceReplacePreview: 'workspace_replace_preview',
   workspaceReplaceApply: 'workspace_replace_apply',
+  // 代码格式化（2.6：外部优先，没有则内置并如实说明）
+  workspaceFormatTools: 'workspace_format_tools',
+  workspaceFormatContent: 'workspace_format_content',
 } as const
 
 export interface AppInfo {
@@ -1195,5 +1198,55 @@ export function workspaceReplaceApply(
       force: options.force ?? false,
     },
     () => ({ results: [], written: 0, conflicts: 0, totalChanges: 0 }),
+  )
+}
+
+
+// ── 代码格式化（alpha 2.6）──────────────────────────────────────────────────────────
+
+export interface FormatToolProbe {
+  executable: string
+  displayName: string
+  available: boolean
+  path: string | null
+  /** 探测到的版本（**探不到就是 null**，绝不编造） */
+  version: string | null
+}
+
+export interface FormatToolsPayload {
+  languageKey: string
+  tools: FormatToolProbe[]
+}
+
+export interface FormatOutcome {
+  /** 格式化后的内容（没改动时等于原文） */
+  content: string
+  changed: boolean
+  /** 这句话如实说「用了哪一个工具 / 内置做了什么」 */
+  note: string
+  /** `external` / `builtin` / `refused` */
+  engine: string
+  problem: string | null
+}
+
+/** 探一个文件的候选格式化工具（真探：找路径 + 真跑版本旗标）。 */
+export function workspaceFormatTools(workspaceRoot: string, relativePath: string): Promise<FormatToolsPayload> {
+  return call(COMMANDS.workspaceFormatTools, { workspaceRoot, relativePath }, () => ({
+    languageKey: 'lang.plainText',
+    tools: [],
+  }))
+}
+
+/** 格式化一段内容（**不落盘**：落盘仍走 workspaceSave 的冲突护栏）。 */
+export function workspaceFormatContent(
+  workspaceRoot: string,
+  relativePath: string,
+  content: string,
+  preferBuiltin = false,
+): Promise<FormatOutcome> {
+  return call(
+    COMMANDS.workspaceFormatContent,
+    { workspaceRoot, relativePath, content, preferBuiltin },
+    () => ({ content, changed: false, note: '（浏览器旁路没有工作区）', engine: 'refused', problem: null }),
   )
 }

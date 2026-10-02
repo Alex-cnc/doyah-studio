@@ -27,6 +27,8 @@ import {
   workspaceMarkdown,
   workspaceReadImage,
   workspaceReplaceApply,
+  workspaceFormatContent,
+  workspaceFormatTools,
   workspaceReplacePreview,
   workspaceSave,
   workspaceRecordCursor,
@@ -45,6 +47,7 @@ import {
   type MdDocument,
   type MdSpan,
   type OpenDecision,
+  type FormatToolProbe,
   type ReplacePreview,
   type SaveReport,
   type SearchOutcome,
@@ -426,6 +429,46 @@ async function applyReplace(force = false) {
     }
   } catch (e) {
     failure.value = describeError(e)
+  }
+}
+
+// 代码格式化（2.6）：按定案口径 —— **外部工具优先，没有则内置并如实说明**
+const formatTools = ref<FormatToolProbe[]>([])
+const formatNote = ref('')
+
+/** 探一次候选工具（打开文件 / 进入页签时调；**真探**，探不到就是没有） */
+async function probeFormatTools() {
+  const tab = activeTab.value
+  if (!tab?.relativePath || !root.value) {
+    formatTools.value = []
+    return
+  }
+  try {
+    const payload = await workspaceFormatTools(root.value, tab.relativePath)
+    formatTools.value = payload.tools
+  } catch {
+    // 探不到只是没有外部工具（还有内置兜底），**不弹错**
+    formatTools.value = []
+  }
+}
+
+/** 格式化当前页签（**只改内存**；要落盘还得点保存，届时照样走冲突护栏） */
+async function formatActiveTab(preferBuiltin = false) {
+  const tab = activeTab.value
+  if (!tab?.relativePath || !root.value) return
+  busy.value = '格式化中…'
+  try {
+    const outcome = await workspaceFormatContent(root.value, tab.relativePath, editorDraft.value, preferBuiltin)
+    editorDraft.value = outcome.content
+    formatNote.value = outcome.note
+    if (outcome.changed) {
+      // 内容变成本地草稿（**未保存**）：靠 isDirty 提示，用户点保存才落盘
+      tabs.value = tabs.value.map((t) => (t.id === tab.id ? { ...t, content: outcome.content } : t))
+    }
+  } catch (e) {
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
   }
 }
 
@@ -1146,6 +1189,18 @@ function onTreeKeydown(event: KeyboardEvent) {
               <button
                 class="ws__act"
                 type="button"
+                :title="
+                  formatTools.some((t) => t.available)
+                    ? '代码格式化（外部工具优先）'
+                    : '代码格式化（没有外部工具 ⇒ 内置兜底，会如实说明）'
+                "
+                @click="formatActiveTab(false)"
+              >
+                ✨ 格式化
+              </button>
+              <button
+                class="ws__act"
+                type="button"
                 :title="isDirty ? '保存到磁盘（盘上被别处改过时会拒绝）' : '没有改动'"
                 :disabled="!isDirty"
                 @click="saveActiveTab(false)"
@@ -1156,6 +1211,11 @@ function onTreeKeydown(event: KeyboardEvent) {
                 ⟳ 比对
               </button>
             </p>
+            <!-- 格式化的回执（2.6）：**必须说清用了哪一个工具 / 内置做了什么** -->
+            <div v-if="formatNote" class="ws__stale" role="status">
+              <p class="ws__stale-msg">{{ formatNote }}</p>
+              <button class="ws__btn" type="button" @click="formatNote = ''">知道了</button>
+            </div>
             <!-- 保存冲突（2.3）：**拒绝保存**之后要给人一条出路（覆盖 / 先比对） -->
             <div v-if="saveReport && (saveReport.decision.kind === 'conflict' || saveReport.note)" class="ws__stale" role="alert">
               <p class="ws__stale-msg">{{ saveReport.note }}</p>

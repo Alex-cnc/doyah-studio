@@ -1055,6 +1055,14 @@ mod lines_tests {
 // "另存了一遍同样的内容"很常见），再看大小与修改时间；盘上没有了 ⇒ "已删除"（不是"已改动"）。
 
 /// 载入一个文件时记下的快照（页签拿它做对比）。
+/// 路径安全关的公开薄封装（**只判安全、不给路径**）。
+///
+/// 命令层需要「先过安全关」但不需要拿到绝对路径时用它 —— 免得把 `resolve_in` 变成公开的，
+/// 那样谁都能绕过后续检查直接拿路径。
+pub fn ensure_inside(workspace_root: &str, relative: &str) -> Result<(), DbFailure> {
+    resolve_in(workspace_root, relative).map(|_| ())
+}
+
 pub fn file_snapshot(workspace_root: &str, relative: &str) -> Result<doyah_studio_db::LoadedFile, DbFailure> {
     let path = resolve_in(workspace_root, relative)?;
     let meta = std::fs::metadata(&path).map_err(|e| {

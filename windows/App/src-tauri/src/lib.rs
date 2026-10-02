@@ -5,6 +5,7 @@
 //! 名字是**运行时静默失败**，靠人记不住）。
 
 pub mod connections;
+pub mod format_tool;
 pub mod fs;
 pub mod postgres;
 
@@ -815,6 +816,46 @@ fn workspace_replace_apply(
     )
 }
 
+// ── 代码格式化（2.6）：探测工具 / 格式化内容 ─────────────────────────────────────────
+//
+// 规划与内置兜底在领域层 `Db/src/format.rs`（6 例）；真探测与真跑在 `format_tool.rs`（6 例）。
+// 本层只做命令的出入参。**格式化只改内存、不落盘** —— 落盘仍走 `workspace_save`
+// （盘上被别处改过照样拒绝，格式化不能绕过那条护栏）。
+
+/// 探一个文件对应语言的候选工具（**真探**：`where.exe` 找路径 + 真跑版本旗标）。
+#[tauri::command]
+fn workspace_format_tools(workspace_root: String, relative_path: String) -> Result<serde_json::Value, DbFailure> {
+    // 路径仍要过安全关（免得拿相对路径去探别的目录 —— 虽然这里只用它推语言）
+    fs::ensure_inside(&workspace_root, &relative_path)?;
+    let language = doyah_studio_db::TextLanguage::detect(&relative_path);
+    let probes = format_tool::probe_language(language);
+    Ok(serde_json::json!({
+        "languageKey": language.key(),
+        "tools": probes,
+    }))
+}
+
+/// 格式化一段内容（**不落盘**）。
+///
+/// `prefer_builtin` = 明确要求"只用内置"（断网环境 / 用户选择）；默认走定案口径（外部优先）。
+#[tauri::command]
+fn workspace_format_content(
+    workspace_root: String,
+    relative_path: String,
+    content: String,
+    prefer_builtin: Option<bool>,
+) -> Result<format_tool::FormatOutcome, DbFailure> {
+    fs::ensure_inside(&workspace_root, &relative_path)?;
+    let language = doyah_studio_db::TextLanguage::detect(&relative_path);
+    let is_fallback = language == doyah_studio_db::TextLanguage::PlainText;
+    Ok(format_tool::format_content(
+        language,
+        is_fallback,
+        &content,
+        prefer_builtin.unwrap_or(false),
+    ))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -882,7 +923,9 @@ pub fn run() {
             workspace_read_image,
             workspace_save,
             workspace_replace_preview,
-            workspace_replace_apply
+            workspace_replace_apply,
+            workspace_format_tools,
+            workspace_format_content
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

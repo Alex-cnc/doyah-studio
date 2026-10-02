@@ -88,6 +88,8 @@ describe('ipc', () => {
       'workspace_save',
       'workspace_replace_preview',
       'workspace_replace_apply',
+      'workspace_format_tools',
+      'workspace_format_content',
     ])
   })
 
