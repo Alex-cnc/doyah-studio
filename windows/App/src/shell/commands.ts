@@ -98,6 +98,13 @@ export const COMMANDS_LIST: readonly Command[] = [
     scope: { kind: 'view', view: 'database' },
   },
   {
+    id: 'history.clear',
+    title: '清空命令使用记录',
+    keywords: ['clear history', 'usage', 'frecency'],
+    group: '面板',
+    scope: { kind: 'global' },
+  },
+  {
     id: 'appearance.followSystem',
     title: '外观跟随系统',
     keywords: ['appearance', 'system', 'theme'],

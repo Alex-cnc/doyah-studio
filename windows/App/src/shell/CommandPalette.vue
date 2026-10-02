@@ -52,11 +52,14 @@ function toItems(commands: readonly Command[]) {
     if (bi === undefined) return -1
     return ai - bi
   })
-  return sorted.map((command) => ({
+  // 榜上靠前的几条**单独列组**（面板上一眼能看出"这几个是我常用的"）；
+  // 但**不另造条目**（同一 id 只出现一次，否则搜索结果会重复）
+  const recentCount = Math.min(5, ranked.length)
+  return sorted.map((command, index) => ({
     id: command.id,
     title: command.title,
     keywords: command.keywords,
-    group: command.group,
+    group: index < recentCount && order.has(command.id) ? '最近使用' : command.group,
   }))
 }
 

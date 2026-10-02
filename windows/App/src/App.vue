@@ -14,6 +14,7 @@ import StatusBar from './shell/StatusBar.vue'
 import {
   appearanceGet,
   appearanceSet,
+  commandHistoryClear,
   commandHistoryGet,
   commandHistoryRecord,
   dbPaletteObjects,
@@ -113,6 +114,17 @@ async function runCommand(command: Command) {
   // 先记一笔（**常用优先**排序靠它；记不进也不影响执行）
   void rememberCommand(command.id)
   switch (command.id) {
+    case 'history.clear': {
+      // 清掉使用记录：清完把"常用优先"的顺序也清空（面板回到清单顺序）
+      try {
+        const payload = await commandHistoryClear()
+        rankedCommands.value = payload.ranked
+      } catch {
+        commandNote.value = '命令使用记录没清掉（文件可能不可写）'
+        setTimeout(() => (commandNote.value = ''), 4000)
+      }
+      return
+    }
     case 'appearance.followSystem':
       await changeAppearance({ mode: 'followSystem' })
       return
