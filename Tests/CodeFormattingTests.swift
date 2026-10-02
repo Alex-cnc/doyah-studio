@@ -313,4 +313,57 @@ final class CodeFormattingTests: XCTestCase {
         }
         XCTAssertTrue(runner.calls.isEmpty, "拒绝那条路不许起进程")
     }
+
+    // MARK: 选路：**无联网**那一档（人类主人 2026-10-02 定案：优先外部；无联网 ⇒ 回退内置 + 如实说明）
+
+    func testNoNetworkFallsBackToBuiltinAndKeepsTheReason() {
+        for language in [TextLanguage.javascript, .python, .go] {
+            let decision = CodeFormatPlanner.decide(language: language) { _ in .unusable(.networkUnreachable) }
+            XCTAssertEqual(
+                decision.plan,
+                .builtin(language.definition.format.builtin),
+                "\(language.rawValue)：无联网 ⇒ 回退内置"
+            )
+            XCTAssertEqual(
+                decision.fallbackReason,
+                .networkUnreachable,
+                "\(language.rawValue)：回退原因必须带出来 —— 界面说不清为什么回退就等于没如实说明"
+            )
+        }
+    }
+
+    func testUnusableCandidateIsNeverChosen() {
+        // 不变式：探针说「不能用」的候选**永远不许**进 plan —— 无联网时挑一个跑不起来的工具，
+        // 正是「静默失败」和「报了成功却没变」的来源。
+        let decision = CodeFormatPlanner.decide(language: .javascript) { _ in .unusable(.networkUnreachable) }
+        if case .external(let tool) = decision.plan {
+            XCTFail("不能用的候选被选中了：\(tool.executable)")
+        }
+    }
+
+    func testUnusableProbeStillPrefersAUsableCandidate() {
+        // 「无联网」只否掉**那一个**工具，不是否掉整条外部路：还有能用的候选就仍然走外部。
+        let decision = CodeFormatPlanner.decide(language: .javascript) { name in
+            name == "prettier" ? .unusable(.networkUnreachable) : .usable
+        }
+        switch decision.plan {
+        case .external(let tool):
+            XCTAssertNotEqual(tool.executable, "prettier", "不能用的候选不许被选中")
+            XCTAssertNil(decision.fallbackReason, "走了外部就没有回退原因")
+        default:
+            // javascript 只登记了 prettier 时走这条：那就必须回退内置且带原因。
+            XCTAssertEqual(decision.fallbackReason, .networkUnreachable)
+        }
+    }
+
+    func testTwoStateProbeStaysBackwardCompatible() {
+        // 只有「装了没有」两态的调用点行为照旧；回退原因**恒为 nil**（说不出的原因不许编）。
+        let installed = CodeFormatPlanner.decide(language: .javascript) { $0 == "prettier" }
+        XCTAssertNil(installed.fallbackReason)
+        guard case .external = installed.plan else { return XCTFail("装了就该走外部：\(installed.plan)") }
+
+        let missing = CodeFormatPlanner.decide(language: .javascript) { _ in false }
+        XCTAssertEqual(missing.plan, .builtin(TextLanguage.javascript.definition.format.builtin))
+        XCTAssertNil(missing.fallbackReason)
+    }
 }
