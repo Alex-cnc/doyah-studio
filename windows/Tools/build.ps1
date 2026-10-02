@@ -104,9 +104,21 @@ if ($rc -ne 0) {
   exit 1
 }
 
-$outDir = Join-Path $windowsDir 'target\release'
+# 产物目录：**认 cargo 的 CARGO_TARGET_DIR**（2026-10-02 修）。
+# 由头：脚本原先写死 `windows\target\release`，而本机的会话文件沙箱**拒绝仓内写入** ⇒
+# 构建只能把产物指到仓外（`CARGO_TARGET_DIR` 指别处）。于是衍生判据去读**仓里那份旧二进制**
+# （2026-10-02 09:46 那次），把一次**成功的生产形态构建**判成"前端产物没编进去" —— 假红，
+# 而且是最坏的一种：真的检出手段指向了错的对象。判据沿 cargo 自己的解析顺序取值。
+$envTarget = $env:CARGO_TARGET_DIR
+if ($envTarget) {
+  $targetRoot = if ([System.IO.Path]::IsPathRooted($envTarget)) { $envTarget } else { Join-Path $windowsDir $envTarget }
+} else {
+  $targetRoot = Join-Path $windowsDir 'target'
+}
+$outDir = Join-Path $targetRoot 'release'
 $artifacts = @(Get-ChildItem -Path $outDir -Filter '*.exe' -File -ErrorAction SilentlyContinue)
-Write-DoyahPass ("Rust 产物目录：{0}（{1} 个可执行文件）" -f $outDir, $artifacts.Count)
+$targetNote = if ($envTarget) { '（来自 CARGO_TARGET_DIR）' } else { '' }
+Write-DoyahPass ("Rust 产物目录：{0}{1}（{2} 个可执行文件）" -f $outDir, $targetNote, $artifacts.Count)
 
 # 衍生判据：**产物是不是生产形态**。上面的特性开关一旦被丢掉（改脚本、换机器、抄命令），
 # 二进制照样编得出来，只是它里面没有前端产物 ⇒ 这里用「前端产物的文件名是否出现在二进制里」
