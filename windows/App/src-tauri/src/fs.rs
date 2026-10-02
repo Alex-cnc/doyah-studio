@@ -1777,3 +1777,196 @@ mod save_tests {
         assert!(save_file(&root_text, "../outside.txt", "x", "y", &loaded, false).is_err());
     }
 }
+
+// ── 跨文件替换（2.4）：预览 + 落盘 ───────────────────────────────────────────────
+//
+// 判定与内容计算都在领域层 `replace`（7 例单测）。本层的两条纪律：
+// 1. **预览与落盘用同一份计划**（`preview` 算完交给界面，`apply` 时按同一规则重算一次并核对
+//    盘上快照）—— 不让"看到的是 A、写下去的是 B"。
+// 2. **落盘走保存护栏**：盘上被别处改过就**拒绝**（替换不能绕过冲突判定）。
+
+/// 一份文件的替换预览（**不带**替换后全文，界面不需要；落盘时再算）。**
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplacePreviewFile {
+    pub relative_path: String,
+    pub count: usize,
+    pub changes: Vec<doyah_studio_db::LineChange>,
+}
+
+/// 替换预览的总览。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplacePreview {
+    pub query: String,
+    pub replacement: String,
+    pub files: Vec<ReplacePreviewFile>,
+    /// 一起改了几处
+    pub total: usize,
+    /// 跳过（二进制 / 超大 / 读不了）——**跳过 ≠ 没命中**
+    pub skips: doyah_studio_db::SkipReport,
+    /// 人读的一句话（**说清影响面，再让人确认**）
+    pub summary: String,
+}
+
+/// 扫一遍工作区，算出"将改哪些文件、各改几处"（**不写盘**）。
+pub fn replace_preview(
+    workspace_root: &str,
+    query: &str,
+    replacement: &str,
+    show_hidden: bool,
+) -> Result<ReplacePreview, DbFailure> {
+    if query.trim().is_empty() {
+        return Err(failure("查询词是空的".to_string(), "空查询会把每行每处都换掉，不能这么做。"));
+    }
+    // 复用检索那套有界遍历（忽略名单 / 深度 / 不跟随链接）
+    let outcome = crate::search::search_workspace(
+        workspace_root,
+        query,
+        true,
+        show_hidden,
+        Some(usize::MAX),
+        None,
+    )?;
+    let mut files: Vec<ReplacePreviewFile> = Vec::new();
+    let mut plans: Vec<doyah_studio_db::FileChange> = Vec::new();
+    for group in &outcome.groups {
+        let Ok(file) = read_text_file(workspace_root, &group.relative_path) else {
+            continue;
+        };
+        if let Some(plan) = doyah_studio_db::plan_file(&group.relative_path, &file.content, query, replacement)
+        {
+            files.push(ReplacePreviewFile {
+                relative_path: plan.relative_path.clone(),
+                count: plan.count,
+                changes: plan.changes.clone(),
+            });
+            plans.push(plan);
+        }
+    }
+    let total: usize = plans.iter().map(|plan| plan.count).sum();
+    Ok(ReplacePreview {
+        query: query.to_string(),
+        replacement: replacement.to_string(),
+        files,
+        total,
+        skips: outcome.skips,
+        summary: doyah_studio_db::summarise(&plans),
+    })
+}
+
+/// 落盘结果（逐文件）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceResult {
+    pub relative_path: String,
+    pub count: usize,
+    /// `written` / `conflict` / `skipped`（界面按它分类说话）
+    pub outcome: String,
+    /// 冲突时的一句说明
+    pub note: Option<String>,
+}
+
+/// 落盘总览。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceApplied {
+    pub results: Vec<ReplaceResult>,
+    pub written: usize,
+    pub conflicts: usize,
+    pub total_changes: usize,
+}
+
+/// 真正落盘：**逐个文件走保存护栏**（盘上被改过就拒，不写）。
+///
+/// `snapshots` = 界面带来的"载入快照"（每份文件的基线）；缺基线的文件**直接跳过并说明**
+/// —— 没有基线就无法判断盘上有没有被别处改过，盲目写就是拿别人的改动去赌。
+pub fn replace_apply(
+    workspace_root: &str,
+    query: &str,
+    replacement: &str,
+    snapshots: &std::collections::HashMap<String, doyah_studio_db::LoadedFile>,
+    show_hidden: bool,
+    force: bool,
+) -> Result<ReplaceApplied, DbFailure> {
+    let preview = replace_preview(workspace_root, query, replacement, show_hidden)?;
+    let mut results: Vec<ReplaceResult> = Vec::new();
+    let mut written = 0usize;
+    let mut conflicts = 0usize;
+    let mut total_changes = 0usize;
+
+    for file in &preview.files {
+        let Ok(current) = read_text_file(workspace_root, &file.relative_path) else {
+            results.push(ReplaceResult {
+                relative_path: file.relative_path.clone(),
+                count: 0,
+                outcome: "skipped".to_string(),
+                note: Some("读不出来了（文件可能在预览之后被删/改）".to_string()),
+            });
+            continue;
+        };
+        let Some(plan) = doyah_studio_db::plan_file(&file.relative_path, &current.content, query, replacement)
+        else {
+            results.push(ReplaceResult {
+                relative_path: file.relative_path.clone(),
+                count: 0,
+                outcome: "skipped".to_string(),
+                note: Some("预览之后这里已经不再匹配".to_string()),
+            });
+            continue;
+        };
+        let Some(loaded) = snapshots.get(&file.relative_path) else {
+            results.push(ReplaceResult {
+                relative_path: file.relative_path.clone(),
+                count: plan.count,
+                outcome: "skipped".to_string(),
+                note: Some("没有载入快照（没打开过它）⇒ 无法确认盘上有没有被改过，**不敢写**".to_string()),
+            });
+            continue;
+        };
+        // **同一份计划**：`plan.replaced` 就是写下去的内容（与预览同源）
+        let report = save_file(
+            workspace_root,
+            &file.relative_path,
+            &plan.replaced,
+            &current.content,
+            loaded,
+            force,
+        )?;
+        match report.decision {
+            doyah_studio_db::SaveDecision::Write { .. } => {
+                written += 1;
+                total_changes += plan.count;
+                results.push(ReplaceResult {
+                    relative_path: file.relative_path.clone(),
+                    count: plan.count,
+                    outcome: "written".to_string(),
+                    note: report.note,
+                });
+            }
+            doyah_studio_db::SaveDecision::Conflict { staleness } => {
+                conflicts += 1;
+                results.push(ReplaceResult {
+                    relative_path: file.relative_path.clone(),
+                    count: plan.count,
+                    outcome: "conflict".to_string(),
+                    note: Some(doyah_studio_db::explain_conflict(staleness)),
+                });
+            }
+            doyah_studio_db::SaveDecision::NothingToDo => {
+                results.push(ReplaceResult {
+                    relative_path: file.relative_path.clone(),
+                    count: 0,
+                    outcome: "skipped".to_string(),
+                    note: Some("内容没有变化".to_string()),
+                });
+            }
+        }
+    }
+    Ok(ReplaceApplied {
+        results,
+        written,
+        conflicts,
+        total_changes,
+    })
+}

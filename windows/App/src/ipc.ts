@@ -88,6 +88,9 @@ export const COMMANDS = {
   workspaceReadImage: 'workspace_read_image',
   // 保存（2.3：先判冲突再写）
   workspaceSave: 'workspace_save',
+  // 跨文件替换（2.4：先预览，再逐个走保存护栏落盘）
+  workspaceReplacePreview: 'workspace_replace_preview',
+  workspaceReplaceApply: 'workspace_replace_apply',
 } as const
 
 export interface AppInfo {
@@ -1108,5 +1111,89 @@ export function workspaceSave(
     COMMANDS.workspaceSave,
     { workspaceRoot, relativePath, content, savedContent, loaded, force },
     () => ({ relativePath, decision: { kind: 'nothingToDo' as const }, note: null, snapshot: null }),
+  )
+}
+
+
+// ── 跨文件替换（alpha 2.4）──────────────────────────────────────────────────────────
+
+export interface ReplacePreviewFile {
+  relativePath: string
+  count: number
+  changes: { line: number; before: string; after: string; count: number }[]
+}
+
+export interface ReplacePreview {
+  query: string
+  replacement: string
+  files: ReplacePreviewFile[]
+  /** 一起改了几处 */
+  total: number
+  /** 跳过（二进制 / 超大 / 读不了）—— **跳过 ≠ 没命中** */
+  skips: SkipReport
+  /** 人读的一句话（**说清影响面，再让人确认**） */
+  summary: string
+}
+
+export interface ReplaceResult {
+  relativePath: string
+  count: number
+  /** `written` / `conflict` / `skipped` */
+  outcome: string
+  note: string | null
+}
+
+export interface ReplaceApplied {
+  results: ReplaceResult[]
+  written: number
+  conflicts: number
+  totalChanges: number
+}
+
+/** 跨文件替换的**预览**（**不写盘**）。 */
+export function workspaceReplacePreview(
+  workspaceRoot: string,
+  query: string,
+  replacement: string,
+  showHidden = false,
+): Promise<ReplacePreview> {
+  return call(
+    COMMANDS.workspaceReplacePreview,
+    { workspaceRoot, query, replacement, showHidden },
+    () => ({
+      query,
+      replacement,
+      files: [],
+      total: 0,
+      skips: { binary: 0, tooLarge: 0, unreadable: 0 },
+      summary: '（浏览器旁路没有工作区）',
+    }),
+  )
+}
+
+/**
+ * 跨文件替换的**落盘**：逐个文件走保存护栏（盘上被改过就拒，不写）。
+ *
+ * `snapshots` = 每份文件的**载入快照**（基线）；**缺基线的文件会被跳过并说明** ——
+ * 没有基线就无法判断盘上有没有被别处改过。
+ */
+export function workspaceReplaceApply(
+  workspaceRoot: string,
+  query: string,
+  replacement: string,
+  snapshots: Record<string, LoadedFile>,
+  options: { showHidden?: boolean; force?: boolean } = {},
+): Promise<ReplaceApplied> {
+  return call(
+    COMMANDS.workspaceReplaceApply,
+    {
+      workspaceRoot,
+      query,
+      replacement,
+      snapshots,
+      showHidden: options.showHidden ?? false,
+      force: options.force ?? false,
+    },
+    () => ({ results: [], written: 0, conflicts: 0, totalChanges: 0 }),
   )
 }

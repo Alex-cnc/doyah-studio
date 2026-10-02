@@ -23,6 +23,7 @@ pub mod inspect;
 pub mod markdown;
 pub mod open_as;
 pub mod palette;
+pub mod replace;
 pub mod reveal;
 pub mod save_guard;
 pub mod search;
@@ -51,6 +52,10 @@ pub use open_as::{
 pub use palette::{
     match_item, search as palette_search, Item as PaletteItem, Match as PaletteMatch, Tier as PaletteTier,
     KEYWORD_BONUS,
+};
+pub use replace::{
+    apply_to_line, apply_to_text, decide_apply, plan_file, replacements_in_line, summarise,
+    FileChange, LineChange, ReplaceError, Replacement,
 };
 pub use reveal::{ensure_inside, explorer_plan, pick_terminal, terminal_plan, RevealPlan, TerminalKind};
 pub use save_guard::{

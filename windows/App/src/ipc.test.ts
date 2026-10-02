@@ -86,6 +86,8 @@ describe('ipc', () => {
       'workspace_decide_open',
       'workspace_read_image',
       'workspace_save',
+      'workspace_replace_preview',
+      'workspace_replace_apply',
     ])
   })
 

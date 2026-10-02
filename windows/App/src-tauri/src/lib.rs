@@ -784,6 +784,37 @@ fn workspace_save(
     )
 }
 
+/// 跨文件替换的**预览**（**不写盘**）：将改哪些文件、各改几处。
+#[tauri::command]
+fn workspace_replace_preview(
+    workspace_root: String,
+    query: String,
+    replacement: String,
+    show_hidden: Option<bool>,
+) -> Result<fs::ReplacePreview, DbFailure> {
+    fs::replace_preview(&workspace_root, &query, &replacement, show_hidden.unwrap_or(false))
+}
+
+/// 跨文件替换的**落盘**：逐个文件走保存护栏（盘上被改过就拒，不写）。
+#[tauri::command]
+fn workspace_replace_apply(
+    workspace_root: String,
+    query: String,
+    replacement: String,
+    snapshots: std::collections::HashMap<String, doyah_studio_db::LoadedFile>,
+    show_hidden: Option<bool>,
+    force: Option<bool>,
+) -> Result<fs::ReplaceApplied, DbFailure> {
+    fs::replace_apply(
+        &workspace_root,
+        &query,
+        &replacement,
+        &snapshots,
+        show_hidden.unwrap_or(false),
+        force.unwrap_or(false),
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -849,7 +880,9 @@ pub fn run() {
             command_history_clear,
             workspace_decide_open,
             workspace_read_image,
-            workspace_save
+            workspace_save,
+            workspace_replace_preview,
+            workspace_replace_apply
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

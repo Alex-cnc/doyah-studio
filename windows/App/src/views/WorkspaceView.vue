@@ -26,6 +26,8 @@ import {
   workspaceDecideOpen,
   workspaceMarkdown,
   workspaceReadImage,
+  workspaceReplaceApply,
+  workspaceReplacePreview,
   workspaceSave,
   workspaceRecordCursor,
   workspaceSearch,
@@ -43,6 +45,7 @@ import {
   type MdDocument,
   type MdSpan,
   type OpenDecision,
+  type ReplacePreview,
   type SaveReport,
   type SearchOutcome,
   type WorkspaceHistory,
@@ -370,6 +373,59 @@ async function saveActiveTab(force = false) {
     failure.value = describeError(e)
   } finally {
     busy.value = ''
+  }
+}
+
+// 跨文件替换（2.4）：**先预览、再落盘** —— 一次误操作可能改掉几十个文件，且不可撤销
+const replaceText = ref('')
+const replacePreview = ref<ReplacePreview | null>(null)
+const replaceResult = ref<string>('')
+
+/** 出预览（不写盘） */
+async function previewReplace() {
+  if (!root.value || !searchQuery.value.trim()) return
+  failure.value = null
+  try {
+    replacePreview.value = await workspaceReplacePreview(
+      root.value,
+      searchQuery.value,
+      replaceText.value,
+      showHidden.value,
+    )
+    replaceResult.value = ''
+  } catch (e) {
+    failure.value = describeError(e)
+    replacePreview.value = null
+  }
+}
+
+/** 落盘（**逐个文件走保存护栏**：盘上被改过就拒） */
+async function applyReplace(force = false) {
+  if (!root.value || !replacePreview.value) return
+  failure.value = null
+  try {
+    // **只带已打开页签的快照**（没打开过的文件没有基线 ⇒ 后端会**跳过并说明**，不盲目写）
+    const snapshotPayload = Object.fromEntries(snapshots.value)
+    const payload = await workspaceReplaceApply(
+      root.value,
+      searchQuery.value,
+      replaceText.value,
+      snapshotPayload,
+      { showHidden: showHidden.value, force },
+    )
+    replaceResult.value =
+      `已写 ${payload.written} 个文件（共改 ${payload.totalChanges} 处）` +
+      (payload.conflicts > 0 ? `；**${payload.conflicts} 个文件因盘上被改过而拒绝**` : '')
+    replacePreview.value = null
+    // 落盘后把开着的页签重读一遍（否则界面还是旧的）
+    for (const tab of tabs.value) {
+      if (tab.relativePath) {
+        await loadEditorData(tab.relativePath)
+        await rememberSnapshot(tab.relativePath)
+      }
+    }
+  } catch (e) {
+    failure.value = describeError(e)
   }
 }
 
@@ -885,6 +941,17 @@ function onTreeKeydown(event: KeyboardEvent) {
         <input v-model="searchByContent" type="checkbox" />
         搜内容（不勾=只搜文件名）
       </label>
+      <label class="ws__field">
+        <span>替换为</span>
+        <input v-model="replaceText" type="text" spellcheck="false" placeholder="跨文件替换（先预览）" />
+      </label>
+      <button class="ws__btn" type="button" :disabled="searching || !searchQuery.trim()" @click="previewReplace">
+        预览替换
+      </button>
+      <template v-if="replacePreview">
+        <button class="ws__btn ws__btn--primary" type="button" @click="applyReplace(false)">执行替换</button>
+        <button class="ws__btn" type="button" :disabled="!replacePreview" @click="replacePreview = null">取消</button>
+      </template>
       <button class="ws__btn" type="submit" :disabled="searching">搜索</button>
       <span v-if="searchResult" class="ws__note">
         命中 {{ searchHitCount }} 条<template v-if="searchResult.truncated">（**已达上限 {{ searchResult.limit }}**，不是全部）</template>
@@ -898,6 +965,22 @@ function onTreeKeydown(event: KeyboardEvent) {
       </span>
       <button v-if="searchResult" class="ws__act" type="button" title="清掉结果" @click="searchResult = null">✕</button>
     </form>
+    <!-- 替换预览（2.4）：**先让人看清影响面**（几个文件、各几处）再落盘 -->
+    <div v-if="replacePreview" class="ws__hits">
+      <p class="ws__hit-file">{{ replacePreview.summary }}</p>
+      <p class="ws__note">
+        跳过 {{ replacePreview.skips.binary }} 个二进制 / {{ replacePreview.skips.tooLarge }} 个过大 /
+        {{ replacePreview.skips.unreadable }} 个读不了（**跳过 ≠ 没命中**）
+      </p>
+      <div v-for="file in replacePreview.files" :key="file.relativePath" class="ws__hit-group">
+        <p class="ws__hit-file">{{ file.relativePath }}（{{ file.count }} 处）</p>
+        <p v-for="change in file.changes" :key="change.line" class="ws__hit">
+          第 {{ change.line }} 行：{{ change.before }} → {{ change.after }}
+        </p>
+      </div>
+      <p v-if="replacePreview.files.length === 0" class="ws__empty">没有要改的地方</p>
+    </div>
+    <p v-if="replaceResult" class="ws__note ws__note--warn">{{ replaceResult }}</p>
     <div v-if="searchResult" class="ws__hits">
       <template v-if="searchByContent">
         <div v-for="group in searchResult.groups" :key="group.relativePath" class="ws__hit-group">
