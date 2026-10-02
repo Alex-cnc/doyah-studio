@@ -80,6 +80,9 @@ describe('ipc', () => {
       'appearance_set',
       'palette_search',
       'db_palette_objects',
+      'command_history_get',
+      'command_history_record',
+      'command_history_clear',
     ])
   })
 

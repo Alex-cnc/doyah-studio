@@ -79,6 +79,10 @@ export const COMMANDS = {
   paletteSearch: 'palette_search',
   // 面板用的对象清单（一条 SQL 取回全部表/视图）
   dbPaletteObjects: 'db_palette_objects',
+  // 命令使用历史（2.9：面板里「常用的」排前面）
+  commandHistoryGet: 'command_history_get',
+  commandHistoryRecord: 'command_history_record',
+  commandHistoryClear: 'command_history_clear',
 } as const
 
 export interface AppInfo {
@@ -1004,4 +1008,27 @@ export interface PaletteObject {
 /** 面板用的对象清单：**一条 SQL 取回全部表 / 视图**（不逐个 schema 问）。连不上就给空。 */
 export function dbPaletteObjects(): Promise<PaletteObject[]> {
   return call(COMMANDS.dbPaletteObjects, {}, () => [] as PaletteObject[])
+}
+
+// ── 命令使用历史（alpha 2.9）────────────────────────────────────────────────────────
+
+export interface CommandHistoryPayload {
+  history: { entries: Record<string, { count: number; lastUsed: number }> }
+  /** 已排好序的命令 id（**常用优先、同等常用看谁更近**；排序在 Rust 领域层） */
+  ranked: string[]
+}
+
+/** 读命令使用历史（面板用它把常用的排在前面）。 */
+export function commandHistoryGet(): Promise<CommandHistoryPayload> {
+  return call(COMMANDS.commandHistoryGet, {}, () => ({ history: { entries: {} }, ranked: [] }))
+}
+
+/** 记一次「用了这条命令」：**记完就落盘**（淘汰只在写盘前做一次）。 */
+export function commandHistoryRecord(commandId: string, at: number): Promise<CommandHistoryPayload> {
+  return call(COMMANDS.commandHistoryRecord, { commandId, at }, () => ({ history: { entries: {} }, ranked: [] }))
+}
+
+/** 清掉命令使用历史。 */
+export function commandHistoryClear(): Promise<CommandHistoryPayload> {
+  return call(COMMANDS.commandHistoryClear, {}, () => ({ history: { entries: {} }, ranked: [] }))
 }

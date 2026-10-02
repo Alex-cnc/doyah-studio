@@ -7,6 +7,7 @@
 pub mod connections;
 pub mod fs;
 pub mod postgres;
+
 pub mod search;
 mod query;
 
@@ -725,6 +726,30 @@ async fn db_palette_objects(state: State<'_, ShellState>) -> Result<Vec<serde_js
     Ok(out)
 }
 
+/// 读命令使用历史（面板用它把"常用的"排在前面）。
+#[tauri::command]
+fn command_history_get() -> serde_json::Value {
+    let history = fs::read_command_history();
+    serde_json::json!({ "history": history, "ranked": history.ranked(20) })
+}
+
+/// 记一次"用了这条命令"：**记完就落盘**（淘汰只在写盘前做一次）。
+#[tauri::command]
+fn command_history_record(command_id: String, at: i64) -> Result<serde_json::Value, DbFailure> {
+    let mut history = fs::read_command_history().record(&command_id, at);
+    history.prune();
+    fs::write_command_history(&history)?;
+    Ok(serde_json::json!({ "history": history, "ranked": history.ranked(20) }))
+}
+
+/// 清掉命令使用历史。
+#[tauri::command]
+fn command_history_clear() -> Result<serde_json::Value, DbFailure> {
+    let history = doyah_studio_db::CommandHistory::default();
+    fs::write_command_history(&history)?;
+    Ok(serde_json::json!({ "history": history, "ranked": [] }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -784,7 +809,10 @@ pub fn run() {
             appearance_get,
             appearance_set,
             palette_search,
-            db_palette_objects
+            db_palette_objects,
+            command_history_get,
+            command_history_record,
+            command_history_clear
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

@@ -14,6 +14,8 @@ import StatusBar from './shell/StatusBar.vue'
 import {
   appearanceGet,
   appearanceSet,
+  commandHistoryGet,
+  commandHistoryRecord,
   dbPaletteObjects,
   type Appearance as AppearancePref,
   type DomAppearance,
@@ -31,6 +33,30 @@ import {
 import { activeItem, setActive } from './shell/activityBarStore'
 
 const info = ref<AppInfo | null>(null)
+
+// 命令使用历史（2.9）：**常用优先**的顺序由 Rust 领域层给（这里只存与传）
+const rankedCommands = ref<string[]>([])
+
+async function loadCommandHistory() {
+  try {
+    const payload = await commandHistoryGet()
+    rankedCommands.value = payload.ranked
+  } catch {
+    // 读不到就没有"常用"排序（面板按清单顺序显示），**不弹错**
+    rankedCommands.value = []
+  }
+}
+
+/** 记一次"用了这条命令"（**记完落盘**；失败不打断使用） */
+async function rememberCommand(commandId: string) {
+  try {
+    const payload = await commandHistoryRecord(commandId, Math.floor(Date.now() / 1000))
+    rankedCommands.value = payload.ranked
+  } catch {
+    // 记不住只是下次排序退化，不打断当前动作
+  }
+}
+
 // 面板里可搜的数据库对象与最近打开（**打开面板时才拉对象**：连不上就是空，不打扰）
 const paletteObjects = ref<{ schema: string; name: string; kind: string }[]>([])
 const recentFiles = ref<string[]>([])
@@ -75,12 +101,17 @@ function onGlobalKeydown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault()
     paletteOpen.value = !paletteOpen.value
-    if (paletteOpen.value) void loadPaletteObjects()
+    if (paletteOpen.value) {
+      void loadPaletteObjects()
+      void loadCommandHistory()
+    }
   }
 }
 
 /** 执行一条命令：**能做的就做，做不到就如实说**（不假装执行过） */
 async function runCommand(command: Command) {
+  // 先记一笔（**常用优先**排序靠它；记不进也不影响执行）
+  void rememberCommand(command.id)
   switch (command.id) {
     case 'appearance.followSystem':
       await changeAppearance({ mode: 'followSystem' })
@@ -193,6 +224,7 @@ function onSelect(id: ActivityBarItemId) {
       @run="runCommand"
 :objects="paletteObjects"
       :recent-files="recentFiles"
+      :ranked-commands="rankedCommands"
       @open="openFromPalette"
     />
     <p v-if="commandNote" class="shell__command-note">{{ commandNote }}</p>

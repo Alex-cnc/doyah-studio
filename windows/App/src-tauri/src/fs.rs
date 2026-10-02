@@ -1288,3 +1288,73 @@ mod appearance_tests {
         assert!(text.contains("\"nebulaSkin\":true"), "{text}");
     }
 }
+
+// ── 命令使用历史的落盘（2.9）──────────────────────────────────────────────────────
+//
+// 与其它偏好文件同一套路（一个 JSON、按需读写、坏了不致命）。
+// **淘汰（prune）只在写盘前做一次** —— 绝不在"记一次"里做（那会让新命令永远长不起来，
+// 见 `Db/src/command_history.rs` 的注释）。
+
+/// 命令历史文件：`%APPDATA%\DoyahStudio\command-history.json`。
+pub fn command_history_path() -> std::path::PathBuf {
+    let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+    std::path::Path::new(&base).join("DoyahStudio").join("command-history.json")
+}
+
+/// 读命令历史：文件不在 / 读不出来 ⇒ **空历史**（面板只是没有"最近使用"分组，不打扰用户）。
+pub fn read_command_history() -> doyah_studio_db::CommandHistory {
+    let path = command_history_path();
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return doyah_studio_db::CommandHistory::default();
+    };
+    if text.trim().is_empty() {
+        return doyah_studio_db::CommandHistory::default();
+    }
+    serde_json::from_str(&text).unwrap_or_default()
+}
+
+/// 写命令历史（**写前淘汰一次**）。
+pub fn write_command_history(history: &doyah_studio_db::CommandHistory) -> Result<(), DbFailure> {
+    let path = command_history_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            failure(format!("建配置目录失败：{e}（{}）", parent.display()), "确认该目录可写。")
+        })?;
+    }
+    let text = serde_json::to_string_pretty(history).map_err(|e| {
+        failure(format!("命令历史序列化失败：{e}"), "这属实现缺陷：请保留现场并报告。")
+    })?;
+    std::fs::write(&path, text).map_err(|e| {
+        failure(
+            format!("写命令历史失败：{e}（{}）", path.display()),
+            "确认该文件可写（可能被杀毒软件 / 权限限制）。",
+        )
+    })
+}
+
+#[cfg(test)]
+mod command_history_tests {
+    use super::*;
+
+    #[test]
+    fn history_prunes_only_on_write_boundary_not_per_record() {
+        // **这条是"真缺陷"的回归判据**：记 60 条之后、淘汰之前，条数应当是 60
+        // （如果谁把淘汰放回 record 里，这条会立刻红）。
+        let mut history = doyah_studio_db::CommandHistory::default();
+        for index in 0..60u32 {
+            let id = format!("cmd.{index:02}");
+            // **内层循环是必须的**：cmd.i 要记 i+1 次（我第一版漏了内层，每条只记 1 次
+            // ⇒ 断言 60 次必然红 —— 又是用例写错，不是实现错）
+            for _ in 0..=index {
+                history = history.record(&id, 1000 + index as i64);
+            }
+        }
+        assert_eq!(history.entries.len(), 60, "记的过程不该淘汰");
+        history.prune();
+        assert_eq!(history.entries.len(), doyah_studio_db::COMMAND_HISTORY_LIMIT);
+        assert_eq!(history.count_of("cmd.59"), 60, "用得最多的必须留着");
+        // 空文件 / 坏文件都按空历史走（不抛）
+        let empty = doyah_studio_db::CommandHistory::default();
+        assert!(empty.ranked(10).is_empty());
+    }
+}

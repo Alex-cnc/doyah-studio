@@ -20,6 +20,8 @@ const props = defineProps<{
   objects?: { schema: string; name: string; kind: string }[]
   /** 最近打开的文件（相对路径，最近的在前） */
   recentFiles?: string[]
+  /** 按「常用优先」排好的命令 id（顺序由领域层给） */
+  rankedCommands?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -38,7 +40,19 @@ const available = computed(() => commandsFor(props.view))
 
 /** 把命令翻成领域层要的形状 */
 function toItems(commands: readonly Command[]) {
-  return commands.map((command) => ({
+  // **顺序 = 领域层给的「常用优先」顺序**：面板打开时（查询为空）头几条应当是常用的，
+  // 而不是清单的书写顺序。不在榜上的 id 排在后面（保持原相对顺序）。
+  const ranked = props.rankedCommands ?? []
+  const order = new Map(ranked.map((id, index) => [id, index]))
+  const sorted = [...commands].sort((a, b) => {
+    const ai = order.get(a.id)
+    const bi = order.get(b.id)
+    if (ai === undefined && bi === undefined) return 0
+    if (ai === undefined) return 1
+    if (bi === undefined) return -1
+    return ai - bi
+  })
+  return sorted.map((command) => ({
     id: command.id,
     title: command.title,
     keywords: command.keywords,
