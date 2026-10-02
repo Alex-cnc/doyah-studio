@@ -27,6 +27,25 @@ describe('ipc', () => {
   })
 
   it('命令名与 Rust 侧的注册项同名（真正的双向判在 src-tauri/tests/ipc_contract.rs）', () => {
-    expect(Object.values(COMMANDS)).toEqual(['app_info', 'dataset_summary', 'grid_window'])
+    // 这份清单是**快照**：加命令时这里与 ipc.ts / lib.rs 的 generate_handler![] 一起改，
+    // 三方不一致由 Rust 侧那条双向判据与这条快照各抓一半（漏改哪一半都红）。
+    expect(Object.values(COMMANDS)).toEqual([
+      'app_info',
+      'dataset_summary',
+      'grid_window',
+      'db_connect',
+      'db_disconnect',
+      'db_tables',
+      'db_query',
+      'db_probe',
+    ])
+  })
+
+  it('实验库默认连接参数指向本机专用测试集群，且**不带口令**', async () => {
+    const { LAB_CONNECTION } = await import('./ipc')
+    expect(LAB_CONNECTION.port).toBe(5433)
+    expect(LAB_CONNECTION.database).toBe('doyah_lab')
+    expect(LAB_CONNECTION.sslMode).toBe('disable')
+    expect(LAB_CONNECTION.password).toBeUndefined()
   })
 })

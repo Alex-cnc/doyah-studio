@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["Core", "App/src-tauri"]
+# 成员 = 领域层 Core + 数据库域 Db + 表示层外壳 + 无界面入口 Cli。
+members = ["Core", "Db", "App/src-tauri", "Cli"]
 
 [profile.release]
 opt-level = 3

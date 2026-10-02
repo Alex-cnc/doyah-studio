@@ -4,15 +4,37 @@
 //! 前端命令名与这里的注册项的一致性由 `tests/ipc_contract.rs` 双向判（前端 `invoke` 一个没注册的
 //! 名字是**运行时静默失败**，靠人记不住）。
 
+pub mod postgres;
 mod query;
 
+pub use postgres::{
+    ConnectParams, DbFailure, PgSession, ProbeReport, QueryResult, ServerInfo, TableNode,
+    MAX_QUERY_ROWS,
+};
 pub use query::{DatasetSummary, GridWindowPayload, ViewCache, MAX_WINDOW_ROWS};
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::State;
+use tokio::sync::Mutex as AsyncMutex;
 
-/// 外壳状态：视图缓存（数据集 + 排序置换）。tauri 里跨命令共享的唯一可变状态。
-pub struct ShellState(pub Mutex<ViewCache>);
+/// 外壳状态：视图缓存（数据集 + 排序置换）+ 当前数据库会话。tauri 里跨命令共享的可变状态。
+///
+/// 数据库槽用 **tokio 的异步互斥锁**（异步命令要跨 await 持锁 ⇒ 标准库那把锁的守卫不是 `Send`）；
+/// 命令拿到 `Arc<PgSession>` 后**先放锁再 await**，所以一条慢查询不会把别的命令一起堵住。
+pub struct ShellState {
+    pub cache: Mutex<ViewCache>,
+    /// 当前连接（一次一个；多连接管理是后续段的事）。
+    pub db: AsyncMutex<Option<Arc<PgSession>>>,
+}
+
+/// 取当前会话；没连上就是一句可读的失败（不 panic、不静默）。
+async fn current_session(state: &State<'_, ShellState>) -> Result<Arc<PgSession>, DbFailure> {
+    let guard = state.db.lock().await;
+    guard.clone().ok_or_else(|| DbFailure {
+        message: "尚未连接数据库".to_string(),
+        hint: "先连接（连接面板），再执行这一步。".to_string(),
+    })
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,7 +61,7 @@ fn app_info() -> AppInfo {
 #[tauri::command]
 fn dataset_summary(state: State<'_, ShellState>, rows: usize, cols: usize, seed: u64) -> DatasetSummary {
     // 锁中毒（某个命令 panic）时不让整个界面挂掉：恢复内层继续用，并如实记一笔。
-    let mut cache = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut cache = state.cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     cache.summary(rows, cols, seed)
 }
 
@@ -53,15 +75,73 @@ fn grid_window(
     start: usize,
     len: usize,
 ) -> GridWindowPayload {
-    let mut cache = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut cache = state.cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     cache.window(&query::ViewRequest { rows, cols, seed, order_desc, start, len })
+}
+
+// ── 数据库命令（真库链路；模型来自领域层 Db，驱动只在本层）─────────────────────────────
+
+/// 连接（**一次一个**：多连接管理是后续段的事）。成功后把会话留在状态里。
+#[tauri::command]
+async fn db_connect(state: State<'_, ShellState>, params: ConnectParams) -> Result<ServerInfo, DbFailure> {
+    // 先把旧会话放掉（换连接 = 断旧连新），**先放锁再 await**，别把锁带过 await
+    {
+        let mut slot = state.db.lock().await;
+        *slot = None;
+    }
+    let session = PgSession::connect(&params).await?;
+    let info = session.info().clone();
+    let mut slot = state.db.lock().await;
+    *slot = Some(Arc::new(session));
+    Ok(info)
+}
+
+/// 断开（把会话丢掉；驱动任务随之结束）。
+#[tauri::command]
+async fn db_disconnect(state: State<'_, ShellState>) -> Result<bool, DbFailure> {
+    let mut slot = state.db.lock().await;
+    *slot = None;
+    Ok(true)
+}
+
+/// 列对象树（表 / 视图）。
+#[tauri::command]
+async fn db_tables(state: State<'_, ShellState>) -> Result<Vec<TableNode>, DbFailure> {
+    let session = current_session(&state).await?;
+    session.tables().await
+}
+
+/// 跑一条 SQL。
+#[tauri::command]
+async fn db_query(state: State<'_, ShellState>, sql: String) -> Result<QueryResult, DbFailure> {
+    let session = current_session(&state).await?;
+    session.run(&sql, MAX_QUERY_ROWS).await
+}
+
+/// 自检读数（连上、能问出一行、能列出表）。
+#[tauri::command]
+async fn db_probe(state: State<'_, ShellState>) -> Result<ProbeReport, DbFailure> {
+    let session = current_session(&state).await?;
+    session.probe().await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(ShellState(Mutex::new(ViewCache::new())))
-        .invoke_handler(tauri::generate_handler![app_info, dataset_summary, grid_window])
+        .manage(ShellState {
+            cache: Mutex::new(ViewCache::new()),
+            db: AsyncMutex::new(None),
+        })
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            dataset_summary,
+            grid_window,
+            db_connect,
+            db_disconnect,
+            db_tables,
+            db_query,
+            db_probe
+        ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");
 }

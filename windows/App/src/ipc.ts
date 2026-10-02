@@ -13,6 +13,12 @@ export const COMMANDS = {
   appInfo: 'app_info',
   datasetSummary: 'dataset_summary',
   gridWindow: 'grid_window',
+  // 数据库域（真库链路）—— 与 src-tauri/src/lib.rs 的 generate_handler![] 双向一致
+  dbConnect: 'db_connect',
+  dbDisconnect: 'db_disconnect',
+  dbTables: 'db_tables',
+  dbQuery: 'db_query',
+  dbProbe: 'db_probe',
 } as const
 
 export interface AppInfo {
@@ -101,4 +107,92 @@ export function mockCells(rows: number, cols: number, start: number, len: number
     out.push(cells)
   }
   return out
+}
+
+// ── 数据库域（真库链路）──────────────────────────────────────────────────────────────
+//
+// 契约来源：领域层 `windows/Db`（连接配置 / 连接串解析）+ 概要设计 §8.5.2-4（驱动映射）。
+
+/** 连接入参。口令**即用即弃**：只经 IPC 传给驱动，不落配置、不进连接串、不进日志。 */
+export interface ConnectParams {
+  host: string
+  port: number
+  database: string
+  user: string
+  password?: string
+  sslMode?: string
+}
+
+/** 服务端自述（连上后第一件事：把"连到了哪儿"如实显示出来）。 */
+export interface ServerInfo {
+  version: string
+  database: string
+  user: string
+  serverEncoding: string
+  currentSchema: string | null
+}
+
+/** 对象树节点（本轮到「表 / 视图」这一层）。 */
+export interface TableNode {
+  schema: string
+  name: string
+  kind: string
+}
+
+/** 一次查询的结果：列名 + 行（每格文本或 null）+ 截断与影响行数。 */
+export interface QueryResult {
+  columns: string[]
+  rows: (string | null)[][]
+  returned: number
+  truncated: boolean
+  affected: number | null
+}
+
+/** 失败：**服务端原话** + 一句"该往哪儿看"（两段都显示，不合并成一句"失败了"）。 */
+export interface DbFailure {
+  message: string
+  hint: string
+}
+
+export interface ProbeReport {
+  info: ServerInfo
+  tableCount: number
+  schemas: string[]
+  selectOne: string | null
+}
+
+/** 本机**专用实验库**（自己起的测试集群：端口 5433、trust 认证；不动本机现有那台）。
+ *  写在这里只为减少手输 —— 它**不是**产品默认值（产品默认值在领域层的 `DatabaseType` 上）。 */
+export const LAB_CONNECTION: ConnectParams = {
+  host: '127.0.0.1',
+  port: 5433,
+  database: 'doyah_lab',
+  user: 'doyah',
+  sslMode: 'disable',
+}
+
+export function dbConnect(params: ConnectParams): Promise<ServerInfo> {
+  return call(COMMANDS.dbConnect, { params }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里连库（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+export function dbDisconnect(): Promise<boolean> {
+  return call(COMMANDS.dbDisconnect, {}, () => false)
+}
+
+export function dbTables(): Promise<TableNode[]> {
+  return call(COMMANDS.dbTables, {}, () => [] as TableNode[])
+}
+
+export function dbQuery(sql: string): Promise<QueryResult> {
+  return call(COMMANDS.dbQuery, { sql }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里执行（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+export function dbProbe(): Promise<ProbeReport> {
+  return call(COMMANDS.dbProbe, {}, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里自检（npm run tauri dev）。' } as DbFailure
+  })
 }

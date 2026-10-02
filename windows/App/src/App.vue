@@ -9,7 +9,7 @@ import { appInfo, type AppInfo } from './ipc'
 import TitleBar from './shell/TitleBar.vue'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
-import ResultsView from './views/ResultsView.vue'
+import DatabaseView from './views/DatabaseView.vue'
 import {
   BUILT_ITEMS,
   ITEMS,
@@ -20,9 +20,6 @@ import {
 import { activeItem, setActive } from './shell/activityBarStore'
 
 const info = ref<AppInfo | null>(null)
-const rows = ref(200000)
-const cols = ref(20)
-const orderDesc = ref(false)
 const loaded = ref(0)
 const total = ref(0)
 
@@ -49,25 +46,14 @@ function onSelect(id: ActivityBarItemId) {
     <div class="shell__body">
       <SideBar :sections="sections" :active="activeItem" @select="onSelect" />
       <main class="shell__main">
-        <!-- 数据库：本轮只到「外壳 + 合成数据结果网格」；真库链路按 windows/版本计划.md 1.0 段推进 -->
-        <section v-if="activeItem === 'database'" class="shell__stack">
-          <p class="shell__notice">
-            数据库模块：当前是<strong>外壳 + 合成数据结果网格</strong>（窗口取数已跑通）。
-            真库连接 / 对象树 / SQL 执行按 <code>windows/版本计划.md</code> 的 1.0 段推进。
-          </p>
-          <ResultsView
-            v-model:rows="rows"
-            v-model:cols="cols"
-            v-model:order-desc="orderDesc"
-            @stats="(payload) => ((loaded = payload.loaded), (total = payload.total))"
-          />
-        </section>
+        <!-- 数据库：**真库链路**（连库 → 对象树 → SQL → 结果），驱动在 Rust 外壳 -->
+        <DatabaseView v-if="activeItem === 'database'" />
         <p v-else class="shell__placeholder">
           {{ itemTitle(activeItem) }}视图尚未开工（⬜ 不半建）。
         </p>
       </main>
     </div>
-    <StatusBar :info="info" :rows="rows" :cols="cols" :loaded="loaded" :total="total" />
+    <StatusBar :info="info" :loaded="loaded" :total="total" />
   </div>
 </template>
 

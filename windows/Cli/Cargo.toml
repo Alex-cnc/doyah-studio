@@ -1,0 +1,13 @@
+[package]
+name = "doyah-studio-cli"
+version = "0.0.0"   # 刻意不参与「发布产物版本号一个值三处一致」的口径（那三处见 Tools/release-version.json）
+edition = "2021"
+description = "Doyah Studio · Windows 侧无界面验证入口（§8.5.1：子命令 + 退出码表 + --json）"
+publish = false
+
+[[bin]]
+name = "doyah-studio-cli"
+path = "src/main.rs"
+
+[dependencies]
+doyah-studio-core = { path = "../Core" }
