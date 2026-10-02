@@ -246,6 +246,48 @@ fn inspect_row(
     doyah_studio_db::inspect::row(&cols, &row, doyah_studio_db::inspect::DEFAULT_DISPLAY_LIMIT)
 }
 
+/// 读外键元数据（FR-DATA-06）：从 `pg_constraint` 把每条外键的**定义原文**取回来。
+///
+/// 为什么取定义原文而不是拆好的列：解析规则（`FOREIGN KEY (..) REFERENCES ..(..)`）
+/// 在领域层 `foreign_key::parse_edge` 里，**只有一处**实现、可单测；
+/// 命令层只负责"把服务端的话原样拿回来"。
+#[tauri::command]
+async fn db_foreign_keys(state: State<'_, ShellState>) -> Result<Vec<doyah_studio_db::foreign_key::Edge>, DbFailure> {
+    let session = current_session(&state).await?;
+    let sql = "SELECT c.conname, c.contype::text, pg_get_constraintdef(c.oid), \
+               t.relname, n.nspname \
+               FROM pg_constraint c \
+               JOIN pg_class t ON t.oid = c.conrelid \
+               JOIN pg_namespace n ON n.oid = t.relnamespace \
+               WHERE c.contype = 'f' AND n.nspname NOT IN ('pg_catalog', 'information_schema') \
+               ORDER BY n.nspname, t.relname, c.conname";
+    let result = session.client().simple_query(sql).await.map_err(|e| DbFailure {
+        message: postgres::server_error_text(&e),
+        hint: "读外键元数据失败：确认当前用户能读 pg_catalog（一般都有）。".to_string(),
+    })?;
+    let mut edges = Vec::new();
+    for message in result {
+        if let tokio_postgres::SimpleQueryMessage::Row(row) = message {
+            let constraint = row.get(0);
+            let kind = row.get(1).unwrap_or_default();
+            let definition = row.get(2).unwrap_or_default();
+            let table = row.get(3).unwrap_or_default();
+            let schema = row.get(4);
+            if let Some(edge) = doyah_studio_db::foreign_key::parse_edge(
+                constraint,
+                kind,
+                definition,
+                table,
+                schema,
+                schema,
+            ) {
+                edges.push(edge);
+            }
+        }
+    }
+    Ok(edges)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -267,7 +309,8 @@ pub fn run() {
             connection_save,
             connection_delete,
             browse_sql,
-            inspect_row
+            inspect_row,
+            db_foreign_keys
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

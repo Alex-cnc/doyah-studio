@@ -128,6 +128,71 @@ const result = ref<QueryResult | null>(null)
 const failure = ref<DbFailure | null>(null)
 const busy = ref('')
 
+// 外键跳转（FR-DATA-06）：元数据读回来缓存一次；**入口只在有目标时出现**
+const fkEdges = ref<FkEdge[]>([])
+const resultSource = ref<{ schema: string; table: string } | null>(null)
+
+/** 连上之后读一次外键元数据（读不到就保持空 —— 那就没有入口，符合「没目标不显示」） */
+async function loadForeignKeys() {
+  try {
+    fkEdges.value = await dbForeignKeys()
+  } catch {
+    fkEdges.value = []
+  }
+}
+
+/** 某一格有没有可跳转目标（两个方向都算；**没有就不给入口**，这是需求点名的验收点） */
+function cellFkTargets(columnName: string): { schema: string | null; table: string; column: string }[] {
+  if (!resultSource.value || fkEdges.value.length === 0) return []
+  const wantTable = resultSource.value.table.toLowerCase()
+  const wantSchema = resultSource.value.schema.toLowerCase()
+  const out: { schema: string | null; table: string; column: string }[] = []
+  for (const edge of fkEdges.value) {
+    const fromMatches =
+      edge.fromTable.toLowerCase() === wantTable &&
+      (!edge.fromSchema || edge.fromSchema.toLowerCase() === wantSchema)
+    if (fromMatches) {
+      edge.columns.forEach((local, i) => {
+        if (local.toLowerCase() === columnName.toLowerCase() && i < edge.referencedColumns.length) {
+          out.push({ schema: edge.toSchema, table: edge.toTable, column: edge.referencedColumns[i] })
+        }
+      })
+    }
+    const toMatches =
+      edge.toTable.toLowerCase() === wantTable &&
+      (!edge.toSchema || edge.toSchema.toLowerCase() === wantSchema)
+    if (toMatches) {
+      edge.referencedColumns.forEach((referenced, i) => {
+        if (referenced.toLowerCase() === columnName.toLowerCase() && i < edge.columns.length) {
+          out.push({ schema: edge.fromSchema, table: edge.fromTable, column: edge.columns[i] })
+        }
+      })
+    }
+  }
+  return out
+}
+
+/** 跳过去：按目标表 + 目标列，用**这一格的值**生成查询（字面量转义在领域层，前端不自己拼） */
+async function jumpTo(target: { schema: string | null; table: string; column: string }, value: string | null) {
+  if (value === null) return
+  try {
+    const literal = /^-?\d+(\.\d+)?$/.test(value.trim())
+      ? value.trim()
+      : "'" + value.replace(/'/g, "''") + "'"
+    const generated = await browseSql({
+      table: target.table,
+      schema: target.schema ?? undefined,
+      whereClause: '"' + target.column.replace(/"/g, '""') + '" = ' + literal,
+      limit: 200,
+    })
+    sql.value = generated
+    await run()
+    resultSource.value = { schema: target.schema ?? '', table: target.table }
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
 onMounted(async () => {
   try {
     saved.value = await connectionsList()
@@ -238,10 +303,12 @@ async function connect() {
     startup.value = report.startup
     result.value = null
     await loadTables()
+    await loadForeignKeys()
   } catch (e) {
     info.value = null
     tables.value = []
     startup.value = []
+    fkEdges.value = []
     failure.value = describeError(e)
   } finally {
     busy.value = ''
@@ -286,6 +353,8 @@ async function run() {
 }
 
 function useTable(t: TableNode) {
+  // 记住"这一屏是从哪张表来的"——外键入口只对**那张表**的列才有意义
+  resultSource.value = { schema: t.schema, table: t.name }
   sql.value = `select * from ${t.schema}.${t.name} limit 50`
 }
 
@@ -507,6 +576,17 @@ async function probe() {
                   >
                     <td v-for="(cell, j) in result.rows[i]" :key="j" :class="{ 'db__null': cell === null }">
                       {{ cell === null ? 'NULL' : cell }}
+                      <!-- 外键入口：**只在有目标时出现**（没目标不显示，点了没反应比不给更糟） -->
+                      <template v-for="(t, k) in cellFkTargets(result.columns[j])" :key="k">
+                        <button
+                          class="db__fk"
+                          type="button"
+                          :title="`跳到 ${t.schema ? t.schema + '.' : ''}${t.table} 里 ${t.column} = 这一格值 的行`"
+                          @click.stop="jumpTo(t, cell)"
+                        >
+                          ↪
+                        </button>
+                      </template>
                     </td>
                   </tr>
                 </tbody>
@@ -530,6 +610,20 @@ async function probe() {
                       <template v-if="f.value.isTruncated">· 已截断（下面不是全部）</template>
                     </p>
                     <pre class="db__detail-value" :class="{ 'db__null': f.value.shape.kind === 'null' }">{{ f.value.shape.kind === 'null' ? 'NULL' : f.value.shape.kind === 'empty' ? '（空串）' : f.value.display }}</pre>
+                    <!-- 详情面板里也给外键入口（带目标名，比表格里的箭头更好认） -->
+                    <div v-if="cellFkTargets(f.columnName).length" class="db__detail-fk">
+                      <button
+                        v-for="(t, k) in cellFkTargets(f.columnName)"
+                        :key="k"
+                        class="db__btn"
+                        type="button"
+                        :disabled="f.value.shape.kind === 'null'"
+                        :title="f.value.shape.kind === 'null' ? 'NULL 没有可跳转的值' : '跳到该行'"
+                        @click="jumpTo(t, f.value.shape.kind === 'null' ? null : f.value.display)"
+                      >
+                        ↪ {{ t.schema ? t.schema + '.' : '' }}{{ t.table }}（{{ t.column }}）
+                      </button>
+                    </div>
                   </dd>
                 </template>
               </dl>
@@ -766,6 +860,20 @@ async function probe() {
 
 .db__row {
   cursor: pointer;
+}
+
+/* 外键入口：贴着单元格右侧的小箭头（**只在有目标时渲染**） */
+.db__fk {
+  margin-left: var(--ds-spacing-xs);
+  padding: 0 var(--ds-spacing-xs);
+  background: transparent;
+  color: var(--ds-color-accent-accent);
+  border: 0;
+  cursor: pointer;
+}
+
+.db__detail-fk {
+  margin-top: var(--ds-spacing-xs);
 }
 
 .db__row:hover td {

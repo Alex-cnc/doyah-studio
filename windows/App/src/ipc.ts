@@ -27,6 +27,8 @@ export const COMMANDS = {
   browseSql: 'browse_sql',
   // 单行详情的值检查（纯计算，不碰数据库）
   inspectRow: 'inspect_row',
+  // 外键元数据（FR-DATA-06：两个方向的跳转都靠它）
+  dbForeignKeys: 'db_foreign_keys',
 } as const
 
 export interface AppInfo {
@@ -316,4 +318,19 @@ export function inspectRow(
   typeNames?: string[],
 ): Promise<RowField[]> {
   return call(COMMANDS.inspectRow, { columns, typeNames, row }, () => [] as RowField[])
+}
+/** 外键的一条边（与领域层 `foreign_key::Edge` 同形）。 */
+export interface FkEdge {
+  constraintName: string | null
+  fromTable: string
+  fromSchema: string | null
+  columns: string[]
+  toTable: string
+  toSchema: string | null
+  referencedColumns: string[]
+}
+
+/** 读外键元数据（从 pg_constraint 取定义原文，解析规则在领域层 —— 只有一处实现）。 */
+export function dbForeignKeys(): Promise<FkEdge[]> {
+  return call(COMMANDS.dbForeignKeys, {}, () => [] as FkEdge[])
 }

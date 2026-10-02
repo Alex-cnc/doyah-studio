@@ -43,6 +43,7 @@ describe('ipc', () => {
       'connection_delete',
       'browse_sql',
       'inspect_row',
+      'db_foreign_keys',
     ])
   })
 
