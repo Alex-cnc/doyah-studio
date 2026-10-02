@@ -750,6 +750,18 @@ fn command_history_clear() -> Result<serde_json::Value, DbFailure> {
     Ok(serde_json::json!({ "history": history, "ranked": [] }))
 }
 
+/// 判一个文件**该怎么打开**（文本 / 图片 / 二进制 / 太大）—— 判定在领域层 open_as。
+#[tauri::command]
+fn workspace_decide_open(workspace_root: String, relative_path: String) -> Result<fs::OpenDecision, DbFailure> {
+    fs::decide_open(&workspace_root, &relative_path)
+}
+
+/// 读图片字节（base64）供界面用 `data:` 显示；**只允许读判定为图片的文件**。
+#[tauri::command]
+fn workspace_read_image(workspace_root: String, relative_path: String) -> Result<String, DbFailure> {
+    fs::read_image_base64(&workspace_root, &relative_path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -812,7 +824,9 @@ pub fn run() {
             db_palette_objects,
             command_history_get,
             command_history_record,
-            command_history_clear
+            command_history_clear,
+            workspace_decide_open,
+            workspace_read_image
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

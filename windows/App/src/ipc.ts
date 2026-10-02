@@ -83,6 +83,9 @@ export const COMMANDS = {
   commandHistoryGet: 'command_history_get',
   commandHistoryRecord: 'command_history_record',
   commandHistoryClear: 'command_history_clear',
+  // 按类型打开（2.3：文本 / 图片 / 二进制 / 太大）
+  workspaceDecideOpen: 'workspace_decide_open',
+  workspaceReadImage: 'workspace_read_image',
 } as const
 
 export interface AppInfo {
@@ -1031,4 +1034,38 @@ export function commandHistoryRecord(commandId: string, at: number): Promise<Com
 /** 清掉命令使用历史。 */
 export function commandHistoryClear(): Promise<CommandHistoryPayload> {
   return call(COMMANDS.commandHistoryClear, {}, () => ({ history: { entries: {} }, ranked: [] }))
+}
+
+
+// ── 按类型打开（alpha 2.3 遗留项）────────────────────────────────────────────────────
+
+/** 该怎么打开这个文件（判定在 Rust 领域层 `open_as`）。 */
+export type OpenAs =
+  | { kind: 'text'; languageKey: string }
+  | { kind: 'image'; format: 'png' | 'jpeg' | 'gif' | 'webp' | 'bmp' }
+  | { kind: 'binary' }
+  | { kind: 'tooLarge'; bytes: number; limit: number }
+
+export interface OpenDecision {
+  relativePath: string
+  openAs: OpenAs
+  /** 界面直接显示的一句说明（`null` = 正常文本，不打扰） */
+  note: string | null
+  /** 图片的 MIME（`null` = 不是图片） */
+  imageMime: string | null
+}
+
+/** 判一个文件该怎么打开（**只读头部**：大文件不整个读进来）。 */
+export function workspaceDecideOpen(workspaceRoot: string, relativePath: string): Promise<OpenDecision> {
+  return call(COMMANDS.workspaceDecideOpen, { workspaceRoot, relativePath }, () => ({
+    relativePath,
+    openAs: { kind: 'text' as const, languageKey: 'lang.plainText' },
+    note: null,
+    imageMime: null,
+  }))
+}
+
+/** 读图片字节（base64）供 `data:` 显示。 */
+export function workspaceReadImage(workspaceRoot: string, relativePath: string): Promise<string> {
+  return call(COMMANDS.workspaceReadImage, { workspaceRoot, relativePath }, () => '')
 }

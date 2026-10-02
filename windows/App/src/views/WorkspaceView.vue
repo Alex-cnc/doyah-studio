@@ -23,7 +23,9 @@ import {
   workspaceReadFile,
   workspaceReadLines,
   workspaceClampLine,
+  workspaceDecideOpen,
   workspaceMarkdown,
+  workspaceReadImage,
   workspaceRecordCursor,
   workspaceSearch,
   workspaceReadSpans,
@@ -39,6 +41,7 @@ import {
   type MdBlock,
   type MdDocument,
   type MdSpan,
+  type OpenDecision,
   type SearchOutcome,
   type WorkspaceHistory,
 } from '../ipc'
@@ -429,7 +432,7 @@ async function onRowClick(entry: FsEntry) {
   }
 }
 
-async function openFile(entry: FsEntry) {
+async function openTextFile(entry: FsEntry) {
   // **同一路径只开一个页签**（领域规则）：已开着就切过去，不重复开
   const existing = tabs.value.find((t) => t.relativePath === entry.relativePath)
   if (existing) {
@@ -498,6 +501,41 @@ async function rememberCursor(tab: OpenTab | null) {
     // 记不住不影响用（下次恢复不到原位而已），不打断当前操作
   }
 }
+// 按类型打开（2.3）：打开文件前先判"该怎么打开" —— 图片走图片预览，二进制 / 太大给说明
+const openDecision = ref<OpenDecision | null>(null)
+const imageDataUrl = ref('')
+
+/**
+ * 打开文件**之前**问一次"该怎么打开"。
+ *
+ * 为什么要问：工作区里不只放代码 —— 图片、二进制、超大日志都有。
+ * 全塞进编辑面会得到"一屏乱码"或"打开就卡住"；判定在 Rust 领域层（`open_as`，5 例单测）。
+ */
+async function openFile(entry: FsEntry) {
+  if (!root.value) return
+  failure.value = null
+  try {
+    const decision = await workspaceDecideOpen(root.value, entry.relativePath)
+    openDecision.value = decision
+    if (decision.openAs.kind === 'image') {
+      // 图片：取字节走图片预览（**不进编辑面**）
+      imageDataUrl.value = `data:${decision.imageMime};base64,${await workspaceReadImage(root.value, entry.relativePath)}`
+      preview.value = null
+      showPreview.value = false
+      return
+    }
+    imageDataUrl.value = ''
+    if (decision.openAs.kind !== 'text') {
+      // 二进制 / 太大：**如实说**，不硬塞进编辑面
+      return
+    }
+  } catch (e) {
+    failure.value = describeError(e)
+    return
+  }
+  await openTextFile(entry)
+}
+
 /** 打开一个页签时拉一次编辑面数据（行号列宽 / 主换行符 / 混排 / 高亮分词） */
 async function loadEditorData(relativePath: string | null) {
   if (!relativePath) return
@@ -943,6 +981,16 @@ function onTreeKeydown(event: KeyboardEvent) {
               <p class="ws__stale-msg">{{ staleNotice.note }}</p>
               <button class="ws__btn ws__btn--primary" type="button" @click="reloadActiveTab">重新打开</button>
             </div>
+            <!-- 图片预览（2.3 按类型打开）：按内容认出来的图片走这里 -->
+            <div v-if="imageDataUrl" class="ws__image">
+              <p class="ws__note">{{ openDecision?.note }}</p>
+              <img :src="imageDataUrl" :alt="activeTab?.title ?? '图片'" class="ws__image-img" />
+            </div>
+            <!-- 二进制 / 太大：如实说，不硬塞进编辑面 -->
+            <div v-else-if="openDecision && openDecision.openAs.kind !== 'text'" class="ws__notice">
+              <p class="ws__failure-msg">{{ openDecision.note }}</p>
+              <p class="ws__failure-hint">用「在终端打开」或系统工具看它（本版不假装能预览）。</p>
+            </div>
             <!-- Markdown 只读预览（2.5）：模型由 Rust 侧一处解析产出，这里只画 -->
             <div v-if="showPreview && preview" class="ws__preview">
               <MarkdownPreview :document="preview" />
@@ -1324,6 +1372,25 @@ function onTreeKeydown(event: KeyboardEvent) {
   font-size: var(--ds-font-caption-size);
 }
 /* Markdown 预览容器（只读：里面不出现任何可编辑控件） */
+/* 图片预览（按类型打开）：给个上限，别把界面撑破 */
+.ws__image {
+  padding: var(--ds-spacing-s);
+}
+
+.ws__image-img {
+  max-width: 100%;
+  max-height: 60vh;
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+}
+
+/* 二进制 / 太大的说明区（**不硬塞**） */
+.ws__notice {
+  padding: var(--ds-spacing-s);
+  border: var(--ds-metric-hairline) solid var(--ds-color-status-warning);
+  border-radius: var(--ds-radius-control);
+}
+
 .ws__preview {
   padding: var(--ds-spacing-s);
   background: var(--ds-color-surface-content);

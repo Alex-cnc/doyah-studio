@@ -1358,3 +1358,197 @@ mod command_history_tests {
         assert!(empty.ranked(10).is_empty());
     }
 }
+// ── 按类型打开（2.3 遗留项）：判定 + 图片字节 ────────────────────────────────────────
+//
+// 判定在领域层 `open_as`（5 例单测：图片按内容认 / 二进制 / 太大不截断 / 说明给下一步）。
+// 本层只负责"读头部让领域层判、需要时把图片字节取出来"。
+
+/// 打开判定的结果（给界面 + 一句说明）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenDecision {
+    pub relative_path: String,
+    pub open_as: doyah_studio_db::OpenAs,
+    /// 界面直接显示的一句说明（`None` = 正常文本，不打扰）
+    pub note: Option<String>,
+    /// 图片的 MIME（`None` = 不是图片；界面用 `data:` 显示）
+    pub image_mime: Option<String>,
+}
+
+/// 判一个文件该怎么打开（**只读头部**：大文件不整个读进来）。
+pub fn decide_open(workspace_root: &str, relative: &str) -> Result<OpenDecision, DbFailure> {
+    let path = resolve_in(workspace_root, relative)?;
+    let meta = std::fs::metadata(&path).map_err(|e| {
+        failure(
+            format!("看不到这个文件：{e}（{}）", path.display()),
+            "它可能被移动或删除了；刷新一下树。",
+        )
+    })?;
+    let whole_size = meta.len();
+
+    // 只读前 PROBE_BYTES（够判魔数与 NUL）
+    let head = {
+        use std::io::Read;
+        let mut file = std::fs::File::open(&path).map_err(|e| {
+            failure(format!("打不开这个文件：{e}（{}）", path.display()), "确认权限。")
+        })?;
+        let mut buffer = vec![0u8; doyah_studio_db::PROBE_BYTES];
+        let read = file.read(&mut buffer).unwrap_or(0);
+        buffer.truncate(read);
+        buffer
+    };
+
+    let language = doyah_studio_db::TextLanguage::detect(relative);
+    let open_as = doyah_studio_db::decide_open_as(&head, whole_size, language.key());
+    let note = doyah_studio_db::explain_open_as(&open_as);
+    let image_mime = match &open_as {
+        doyah_studio_db::OpenAs::Image { format } => Some(format.mime().to_string()),
+        _ => None,
+    };
+    Ok(OpenDecision {
+        relative_path: relative.replace('\\', "/"),
+        open_as,
+        note,
+        image_mime,
+    })
+}
+
+/// 读图片字节（base64）供界面用 `data:` 显示。
+///
+/// **只允许读判定为图片的文件**（免得把任意大文件塞进前端）；太大也要拒（图片也有上限）。
+pub fn read_image_base64(workspace_root: &str, relative: &str) -> Result<String, DbFailure> {
+    let decision = decide_open(workspace_root, relative)?;
+    if decision.image_mime.is_none() {
+        return Err(failure(
+            format!("这不是图片：{relative}"),
+            "只有按图片打开的文件才走这条路（其余走编辑面）。",
+        ));
+    }
+    let path = resolve_in(workspace_root, relative)?;
+    let bytes = std::fs::read(&path).map_err(|e| {
+        failure(format!("读图片失败：{e}（{}）", path.display()), "确认权限与文件状态。")
+    })?;
+    // 图片上限比文本宽（图片本来就不小），但仍要有个头
+    const IMAGE_LIMIT: usize = 32 * 1024 * 1024;
+    if bytes.len() > IMAGE_LIMIT {
+        return Err(failure(
+            format!("图片太大（{} 字节，上限 {IMAGE_LIMIT}）", bytes.len()),
+            "本版不做图片降采样；用系统看图工具打开更大。",
+        ));
+    }
+    Ok(base64_encode(&bytes))
+}
+
+/// 标准 base64 编码（**自写不引依赖**：只需编码，几行就够）。
+fn base64_encode(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = *chunk.get(1).unwrap_or(&0) as u32;
+        let b2 = *chunk.get(2).unwrap_or(&0) as u32;
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        out.push(TABLE[(triple >> 18) as usize & 0x3f] as char);
+        out.push(TABLE[(triple >> 12) as usize & 0x3f] as char);
+        out.push(if chunk.len() > 1 {
+            TABLE[(triple >> 6) as usize & 0x3f] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[triple as usize & 0x3f] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
+#[cfg(test)]
+mod open_decision_tests {
+    use super::*;
+
+    // 夹具根目录：**不用系统临时区**（cargo test 拿不到会话里的 TEMP，系统临时区在本机沙箱里拒写
+    // ⇒ 建夹具报"拒绝访问"）。可用环境变量覆盖。
+    fn fixture_root() -> std::path::PathBuf {
+        match std::env::var("DOYAH_TEST_ROOT") {
+            Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+            _ => std::path::PathBuf::from("D:/AIProjects/_tmp_face2/fish-fixtures"),
+        }
+    }
+
+    fn root(tag: &str) -> PathBuf {
+        static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let unique = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // 与其它测试模块同一口径：**不用系统临时区**（cargo test 拿不到会话里的 TEMP，
+        // 系统临时区在本机沙箱里拒写 ⇒ 建夹具报"拒绝访问"）。
+        let dir = fixture_root().join(format!("doyah-open-{tag}-{}-{unique}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn decides_text_image_binary_and_too_large() {
+        let dir = root("decide");
+        let root_text = dir.to_string_lossy().to_string();
+
+        std::fs::write(dir.join("a.rs"), "fn main() {}").unwrap();
+        std::fs::write(dir.join("blob.bin"), [0u8, 1, 2, 3]).unwrap();
+        // 一张最小的 PNG（只需魔数够判）
+        let png: Vec<u8> = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0];
+        std::fs::write(dir.join("pic.txt"), &png).unwrap(); // **扩展名故意骗人**
+        // 超大文本
+        let big = "x".repeat((doyah_studio_db::MAX_EDITABLE_BYTES + 10) as usize);
+        std::fs::write(dir.join("big.txt"), &big).unwrap();
+
+        let text = decide_open(&root_text, "a.rs").unwrap();
+        assert!(matches!(text.open_as, doyah_studio_db::OpenAs::Text { .. }));
+        assert!(text.note.is_none(), "正常文本不打扰");
+
+        let binary = decide_open(&root_text, "blob.bin").unwrap();
+        assert_eq!(binary.open_as, doyah_studio_db::OpenAs::Binary);
+        assert!(binary.note.unwrap().contains("终端"), "要给出下一步");
+
+        let image = decide_open(&root_text, "pic.txt").unwrap();
+        assert_eq!(image.image_mime.as_deref(), Some("image/png"), "按内容认，不看扩展名");
+        assert!(image.note.unwrap().contains("PNG"));
+
+        let large = decide_open(&root_text, "big.txt").unwrap();
+        match large.open_as {
+            doyah_studio_db::OpenAs::TooLarge { bytes, limit } => {
+                assert!(bytes > limit);
+            }
+            other => panic!("应当是 TooLarge，实际 {other:?}"),
+        }
+        // 越界与不存在都要挡
+        assert!(decide_open(&root_text, "../outside.txt").is_err());
+        assert!(decide_open(&root_text, "nope.txt").is_err());
+    }
+
+    #[test]
+    fn image_bytes_are_returned_only_for_images() {
+        let dir = root("image");
+        let root_text = dir.to_string_lossy().to_string();
+        let png: Vec<u8> = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3];
+        std::fs::write(dir.join("pic.png"), &png).unwrap();
+        std::fs::write(dir.join("a.txt"), "hello").unwrap();
+
+        let encoded = read_image_base64(&root_text, "pic.png").unwrap();
+        assert!(encoded.starts_with("iVBORw0KGgo"), "PNG 的 base64 前缀固定：{encoded}");
+        // 非图片 ⇒ 拒绝（不把任意文件塞给前端）
+        assert!(read_image_base64(&root_text, "a.txt").is_err());
+        assert!(read_image_base64(&root_text, "../x.png").is_err());
+    }
+
+    #[test]
+    fn base64_matches_known_values() {
+        // RFC 4648 的样例（含补位）
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode(b"foob"), "Zm9vYg==");
+        assert_eq!(base64_encode(b"fooba"), "Zm9vYmE=");
+        assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+    }
+}

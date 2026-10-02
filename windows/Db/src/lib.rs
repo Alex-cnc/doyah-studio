@@ -21,6 +21,7 @@ pub mod foreign_key;
 pub mod highlight;
 pub mod inspect;
 pub mod markdown;
+pub mod open_as;
 pub mod palette;
 pub mod reveal;
 pub mod search;
@@ -41,6 +42,10 @@ pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter
 pub use markdown::{
     parse as parse_markdown, parse_inline, Block, BlockKind, ColumnAlignment, Document as MarkdownDocument,
     Span as MarkdownSpan, MARKDOWN_FORMAT_VERSION,
+};
+pub use open_as::{
+    decide as decide_open_as, explain as explain_open_as, image_format, looks_binary, ImageFormat, OpenAs,
+    MAX_EDITABLE_BYTES, PROBE_BYTES,
 };
 pub use palette::{
     match_item, search as palette_search, Item as PaletteItem, Match as PaletteMatch, Tier as PaletteTier,

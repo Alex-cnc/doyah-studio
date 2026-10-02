@@ -83,6 +83,8 @@ describe('ipc', () => {
       'command_history_get',
       'command_history_record',
       'command_history_clear',
+      'workspace_decide_open',
+      'workspace_read_image',
     ])
   })
 
