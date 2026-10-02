@@ -42,6 +42,9 @@ struct DoyahStudioCommands: Commands {
             // 而不是躲在「智能体」菜单下 —— 它跟智能体没有任何关系。
             // 动作打在**工作区的浏览器模型**上（队列 `L-149` 剩余①）：页签长在工作区。
             Button(L(.menuNewBrowserTab)) {
+                // 页签长在**工作区**（队列 `L-149`）⇒ 执行前先切到工作区：
+                // 与「新建查询」同一个坑（2026-10-02 需求提出者实测过那一半）。
+                appState.selectActivityItem(.workspace)
                 workspaceBrowser.openBrowserTab()
             }
             .keyboardShortcut(AppShortcut.newBrowserTab.key, modifiers: AppShortcut.newBrowserTab.modifiers)

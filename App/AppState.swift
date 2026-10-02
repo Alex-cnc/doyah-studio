@@ -490,6 +490,9 @@ final class AppState: ObservableObject {
         guard resolved != selectedActivityItem else { return }
         selectedActivityItem = resolved
         UserDefaults.standard.set(resolved.rawValue, forKey: ActivityBarItem.storageKey)
+        // 广播换区（2026-10-02 需求提出者：菜单显示要跟活动栏联动）——
+        // 菜单栏那一层（`MainMenuLocalizer`）不持有本对象，靠这条对齐菜单项的显示。
+        NotificationCenter.default.post(name: .doyahActivityItemChanged, object: resolved)
     }
 
     /// 把选中项落到当前档位下可见的项上。
@@ -501,6 +504,7 @@ final class AppState: ObservableObject {
               resolved != selectedActivityItem else { return }
         selectedActivityItem = resolved
         UserDefaults.standard.set(resolved.rawValue, forKey: ActivityBarItem.storageKey)
+        NotificationCenter.default.post(name: .doyahActivityItemChanged, object: resolved)
     }
 
     /// 重新读许可证 —— 用户刚把许可证文件放进去时用，**不用重启**。
@@ -5166,6 +5170,10 @@ final class AppState: ObservableObject {
     static var unboundConnectionID: UUID { noConnectionID }
 
     func newQueryTab() {
+        // **先切到数据库区再建页签**（2026-10-02 需求提出者实测：在工作区里点「新建查询」，
+        // 页签建好了、界面还停在工作区 ⇒ 看起来像"点了没反应"）。
+        // 放在这一个入口里而不是菜单按钮上：菜单 / 命令面板 / 界面按钮最终都走这里。
+        selectActivityItem(.database)
         let tab = QueryTab(title: L(.workspaceTabTitle, tabNumbers.next()))
         tabs.append(tab)
         selectedTabID = tab.id
