@@ -157,3 +157,60 @@ export function normalizeFrozenCount(columns: readonly string[], frozenCount: nu
   if (!Number.isFinite(frozenCount)) return 0
   return Math.max(0, Math.min(Math.trunc(frozenCount), columns.length))
 }
+
+// ── 分页（1.3 段）──────────────────────────────────────────────────────────────────
+//
+// 口径：分页是**客户端对当前可见序列的再切分**（服务端分页走"按条件浏览"的 LIMIT/OFFSET）。
+// 为什么要分页：一屏 5000 行 DOM 没必要全建，而"我在第几页、一共几页"是看数据时的基本方位感。
+
+/** 一页多少行（缺省；界面可改）。 */
+export const DEFAULT_PAGE_SIZE = 200
+
+/**
+ * 把可见序列切成某一页：`{ rows, page, pageCount, total }`。
+ *
+ * 三条口径（用例守）：
+ * ① **夹紧页码**：页码给负数 / 超界都夹到合法范围（不返回空白页，让人以为"没数据"）；
+ * ② **空结果 = 1 页 0 行**（不是 0 页 —— "第 0 页 / 共 0 页"读起来像出了错）；
+ * ③ 页大小非正或非整数时退回 `DEFAULT_PAGE_SIZE`（不抛异常，界面不该因为一个输入框崩）。
+ */
+export function pageOf(
+  order: number[],
+  page: number,
+  pageSize: number,
+): { rows: number[]; page: number; pageCount: number; total: number } {
+  const size = Number.isFinite(pageSize) && pageSize >= 1 ? Math.trunc(pageSize) : DEFAULT_PAGE_SIZE
+  const total = order.length
+  const pageCount = Math.max(1, Math.ceil(total / size))
+  const wanted = Number.isFinite(page) ? Math.trunc(page) : 1
+  const clamped = Math.max(1, Math.min(wanted, pageCount))
+  const start = (clamped - 1) * size
+  return { rows: order.slice(start, start + size), page: clamped, pageCount, total }
+}
+
+/**
+ * 冻结列样式：**优先用实测宽度**（界面把每列量到的宽度报上来），没量到才退回估算。
+ *
+ * 为什么要有实测这一档：估算是按**表头字符数**算的，而表头往往比内容短得多 ——
+ * 结果就是"冻是冻住了，但表头被盖住一半"。实测宽度只有界面能给（纯函数不读 DOM），
+ * 所以这里同时接受两种来源，并**逐列回退**（某列没量到不影响其它列）。
+ */
+export function frozenColumnStylesMeasured(
+  columns: readonly string[],
+  frozenCount: number,
+  measured: Record<number, number>,
+): Record<number, { left: string; zIndex: number }> {
+  const count = normalizeFrozenCount(columns, frozenCount)
+  const styles: Record<number, { left: string; zIndex: number }> = {}
+  let offset = 0
+  for (let i = 0; i < count; i += 1) {
+    styles[i] = { left: `${offset}px`, zIndex: 3 }
+    const observed = measured[i]
+    const width =
+      typeof observed === 'number' && Number.isFinite(observed) && observed > 0
+        ? observed
+        : estimateColumnWidth(columns[i] ?? '')
+    offset += width
+  }
+  return styles
+}

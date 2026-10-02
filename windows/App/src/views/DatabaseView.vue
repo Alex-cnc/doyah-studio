@@ -7,7 +7,7 @@
 //   · 截断：`truncated` 为真时**如实说**（不静默少给行）；
 //   · 未连接：按钮可用但一按就给可读原因（不做"灰着但不说为什么"）。
 
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   LAB_CONNECTION,
   connectionDelete,
@@ -39,7 +39,8 @@ import {
   type SearchHit,
   type SqlToken,
 } from '../ipc'
-import { frozenColumnStyles, toTsv, visibleOrder } from '../grid/view'
+import { frozenColumnStylesMeasured, pageOf, visibleOrder, DEFAULT_PAGE_SIZE } from '../grid/view'
+import { EXPORT_FORMAT_LABELS, exportRows, type ExportFormat } from '../grid/export'
 import {
   filterCompletions,
   highlightPieces,
@@ -117,29 +118,63 @@ function toggleSort(column: number) {
     sortColumn.value = column
     sortDesc.value = false
   }
+  // 排序 / 筛选变了就回第一页：留在第 5 页看新排序的结果没有意义
+  page.value = 1
 }
 
-// 冻结列（FR-RES-05）：只冻最左边连续若干列；偏移用估算宽度（纯函数，已单测）
+// 冻结列（FR-RES-05）：只冻最左边连续若干列。
+// **宽度优先用实测值**（界面把每列的 offsetWidth 报上来），没量到才退回按表头估算 ——
+// 估算是按表头字符数算的，而表头往往比内容短，结果就是"冻住了但表头被盖一半"。
 const frozenCount = ref(0)
+const measuredWidths = ref<Record<number, number>>({})
 const frozenStyles = computed<Record<number, { left: string; zIndex: number }>>(() =>
-  result.value ? frozenColumnStyles(result.value.columns, frozenCount.value) : {},
+  result.value
+    ? frozenColumnStylesMeasured(result.value.columns, frozenCount.value, measuredWidths.value)
+    : {},
 )
 
-/** 表头 / 单元格的内联样式：冻的列给 sticky + left，不冻的列给空 */
+/** 量一次表头的真实列宽（只在结果变化后量；量不到就让纯函数退回估算）。 */
+async function measureColumns() {
+  await nextTick()
+  const heads = document.querySelectorAll<HTMLTableCellElement>('table.db__grid thead th')
+  const observed: Record<number, number> = {}
+  heads.forEach((head, index) => {
+    const width = head.getBoundingClientRect().width
+    if (Number.isFinite(width) && width > 0) observed[index] = Math.round(width)
+  })
+  measuredWidths.value = observed
+}
+
+// 分页（1.3）：**对当前可见序列再切分**，不是服务端分页（服务端分页走「按条件浏览」）
+const page = ref(1)
+const pageSize = ref(DEFAULT_PAGE_SIZE)
+const paged = computed(() => pageOf(visible.value, page.value, pageSize.value))
+/** 网格里真正画出来的那些行（导出也用这一份 —— 导出必须与眼前一致）。 */
+const shownRows = computed(() => paged.value.rows)
+
+/** 点表头：同一列再点就翻方向；换列则从升序开始 */
 function cellStyle(index: number): Record<string, string> {
   const style = frozenStyles.value[index]
   if (!style) return {}
   return { position: 'sticky', left: style.left, zIndex: String(style.zIndex) }
 }
 
-/** 复制**看得见的**那一屏（TSV，贴 Excel 直接分列；NULL 是空单元格） */
+/** 复制格式（1.3）：五种 —— 各格式的转义规则在 `grid/export.ts`（有单测）。 */
+const copyFormat = ref<ExportFormat>('tsv')
+
+/**
+ * 复制**当前这一页**（与眼前一致 —— 不是偷偷导出全部）。
+ *
+ * 口径：导出/复制的范围 = 网格里真正画出来的那些行；要全量请在「按条件浏览」里用
+ * LIMIT/OFFSET 从服务端取（那才是大结果集的正确姿势）。
+ */
 async function copyVisible() {
   if (!result.value) return
-  const text = toTsv(result.value, visible.value)
+  const text = exportRows(result.value, shownRows.value, copyFormat.value, resultSource.value?.table)
   try {
     await navigator.clipboard.writeText(text)
-    copied.value = `已复制 ${visible.value.length} 行`
-  } catch (e) {
+    copied.value = `已复制 ${shownRows.value.length} 行（${EXPORT_FORMAT_LABELS[copyFormat.value]}）`
+  } catch {
     copied.value = '复制失败：浏览器/外壳不给剪贴板权限（可手动选中表格复制）'
   }
   setTimeout(() => (copied.value = ''), 2500)
@@ -159,6 +194,14 @@ async function openDetail(index: number) {
   detail.value = { index, fields }
 }
 const result = ref<QueryResult | null>(null)
+
+// 结果换了就：回第一页、重新量列宽。
+// 为什么用 watch 而不是在每个赋值点手写：`result` 有好几条赋值路径（执行 / 逐段挑选 / 外键跳转 /
+// 条件浏览），漏一处就会出现"换了结果还停在第 5 页"或"冻的列宽还是上一份结果的"。
+watch(result, () => {
+  page.value = 1
+  void measureColumns()
+})
 const failure = ref<DbFailure | null>(null)
 const busy = ref('')
 
@@ -914,14 +957,45 @@ async function probe() {
           <template v-if="result && result.columns.length">
             <div class="db__grid-wrap">
               <div class="db__grid-tools">
-                <input v-model="filter" type="search" placeholder="筛选（当前结果内，不分大小写）" aria-label="筛选结果" />
-                <span class="db__note">显示 {{ visible.length }} / {{ result.rows.length }} 行</span>
+                <input
+                  v-model="filter"
+                  type="search"
+                  placeholder="筛选（当前结果内，不分大小写）"
+                  aria-label="筛选结果"
+                  @input="page = 1"
+                />
+                <span class="db__note">
+                  命中 {{ visible.length }} / 共 {{ result.rows.length }} 行 ·
+                  第 {{ paged.page }} / {{ paged.pageCount }} 页（本页 {{ shownRows.length }} 行）
+                </span>
+                <button class="db__btn" type="button" :disabled="paged.page <= 1" @click="page = paged.page - 1">
+                  上一页
+                </button>
+                <button
+                  class="db__btn"
+                  type="button"
+                  :disabled="paged.page >= paged.pageCount"
+                  @click="page = paged.page + 1"
+                >
+                  下一页
+                </button>
+                <label class="db__freeze">
+                  每页
+                  <input v-model.number="pageSize" type="number" min="1" @change="page = 1" />
+                  行
+                </label>
                 <label class="db__freeze">
                   冻结前
                   <input v-model.number="frozenCount" type="number" min="0" :max="result.columns.length" />
                   列
                 </label>
-                <button class="db__btn" type="button" @click="copyVisible">复制（TSV）</button>
+                <label class="db__freeze">
+                  复制为
+                  <select v-model="copyFormat" class="db__select">
+                    <option v-for="(label, fmt) in EXPORT_FORMAT_LABELS" :key="fmt" :value="fmt">{{ label }}</option>
+                  </select>
+                </label>
+                <button class="db__btn" type="button" @click="copyVisible">复制</button>
                 <span v-if="copied" class="db__note">{{ copied }}</span>
               </div>
               <table class="db__grid">
@@ -942,7 +1016,7 @@ async function probe() {
                 </thead>
                 <tbody>
                   <tr
-                    v-for="i in visible"
+                    v-for="i in shownRows"
                     :key="i"
                     class="db__row"
                     title="点这一行看详情（值检查：NULL 与空串分开、长 JSON 格式化）"
@@ -1591,6 +1665,16 @@ th.db__grid-head[style] {
   color: var(--ds-color-text-primary);
   border: var(--ds-metric-hairline) solid var(--ds-hairline);
   border-radius: var(--ds-radius-control);
+}
+
+.db__select {
+  height: var(--ds-metric-control-height);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
 }
 
 .db__grid-head {
