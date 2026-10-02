@@ -25,9 +25,9 @@
     }
   ],
   "floors": {
-    "families": 42,
-    "totalCases": 538,
-    "anchorSites": 69,
+    "families": 43,
+    "totalCases": 559,
+    "anchorSites": 75,
     "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。"
   },
   "notCovered": [
@@ -948,6 +948,36 @@
           "regex": "L-146 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
           "minSites": 1,
           "note": "闭环第 9 项注释（L-146 那一段）"
+        }
+      ]
+    },
+    {
+      "key": "queue-needs-user",
+      "script": "Scripts/check-queue-needs-user.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 11,
+      "countRegex": "自测：(\\d+)/\\d+ 例符合预期",
+      "why": "队列 L-150 / 闭环第 4 项（`needs-user` 行必须点名一个仍未决的拍板号 —— 空壳汇总格判红；由头 = `L-10` 成员全决后没人关格，探针每轮替成员问需求提出者）",
+      "anchors": [
+        {
+          "file": "AGENT-SPEC.md",
+          "regex": "check-queue-needs-user\\.py.{0,1200}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "§6 资产表「`needs-user` 点名纪律」行"
+        },
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "负例 `--self-test` \\*\\*(\\d+) 例\\*\\*（= 10 条负例 \\+ 末例核对真仓库两份台账逐字节未变",
+          "minSites": 1,
+          "note": "闭环第 4 项注释（L-150 那一段）"
+        },
+        {
+          "file": "Scripts/check-queue-needs-user.py",
+          "regex": "判据自己的证据（(\\d+) 例",
+          "minSites": 1,
+          "note": "脚本自己的用法行"
         }
       ]
     }

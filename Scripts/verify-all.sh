@@ -326,6 +326,21 @@ else
   python3 Scripts/check-doc-q-series.py
 fi
 python3 Scripts/check-doc-q-series.py --self-test
+# L-150（2026-10-02 第 159 轮）：上面这条管的是 **§6 自己**（编号 / 状态 / 与 §4 同源），
+# 管不了**队列里引用 §6 的那一行** —— 真现场 = `L-10`（「需拍板类」汇总格）成员一个个已决之后
+# **没人关格**，状态格还挂着 `needs-user`，于是每轮探针都替已经拍过板的事问「要不要拍板」
+# （需求提出者当场问：「`L-10` 是什么，感觉是不是早就拍过版了」）。判据 `check-queue-needs-user.py`：
+# 每条 `needs-user` 行必须**点名一个仍未决的拍板号**（`Q<号>` / `提案 <编号>`），或写出**挂起理由**
+# （「挂起」+ `≠ 待拍板` / `不重复追问` / `不具备条件` —— **挂起 ≠ 待拍板**）；
+# 全部已决 / 挂起、点了查无此号、空壳格（不点名也没理由）**逐条判红并指名行号**。
+# 该文件与 spec 同属 `.gitignore` 内的本机台账 ⇒ 不在盘上**跳过 + 高声提示**，`--require-all` 判红；
+# 负例 `--self-test` **11 例**（= 10 条负例 + 末例核对真仓库两份台账逐字节未变；含 `L-10` 旧文本复刻 ⇒ 必须判红）。
+if [ "${REQUIRE_ALL}" = "1" ]; then
+  python3 Scripts/check-queue-needs-user.py --require-all
+else
+  python3 Scripts/check-queue-needs-user.py
+fi
+python3 Scripts/check-queue-needs-user.py --self-test
 # L-72 ㈠（2026-09-28 第 65 轮）：上面几条管的是**跨文档的工程设施数字**（闭环项数 / 单测数 /
 # 快照张数），管不了**逐族的负例例数**。真现场两件：① `AGENT-SPEC.md` §6 资产表里那三处 ——
 # 语言透传族的例数写着 10（实测 14）、待拍板队列族写着 7（实测 8）、本项第 17 条注释写着
