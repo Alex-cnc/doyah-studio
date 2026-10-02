@@ -15,7 +15,7 @@ import {
   type FileContent,
   type FsEntry,
 } from '../ipc'
-import { entryGlyph, flattenTree, indentPx, neighbouringRow, tabLabel, toggleExpanded, workspaceDisplayName } from './logic'
+import { entryGlyph, flattenTree, indentPx, neighbouringRow, tabLabel, toggleExpanded, workspaceDisplayName } from '../workspace/logic'
 
 /** 本版只读：编辑面显示内容，改与存归 2.1 / 2.2 段（不假装能改）。 */
 interface OpenTab {
@@ -255,7 +255,8 @@ function onTreeKeydown(event: KeyboardEvent) {
 .ws__field {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  /* 最小档间距：走令牌（棘轮连注释里的字面量也计——这条注释原先写了具体像素值，被判红过一次） */
+  gap: var(--ds-spacing-hair);
   font-size: var(--ds-font-caption-size);
   color: var(--ds-color-text-secondary);
 }

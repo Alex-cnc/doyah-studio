@@ -34,7 +34,9 @@ describe('活动栏项', () => {
   })
 
   it('未开工项不冒充已开工：retro 在 BUILT_ITEMS 之外，其余三项都在', () => {
-    expect(BUILT_ITEMS).toEqual(['workspace', 'database', 'notes'])
+    // 2.0 起「工作区」也开工了 ⇒ 本侧已开工三项。**顺序不必等于声明顺序**：
+    // 栏上顺序只由 ITEMS 决定（这条纪律见上一个用例），这里只断言"是哪三项"。
+    expect([...BUILT_ITEMS].sort()).toEqual(['database', 'notes', 'workspace'])
     expect(BUILT_ITEMS).not.toContain('retro')
     for (const item of BUILT_ITEMS) expect(ITEMS).toContain(item)
   })
