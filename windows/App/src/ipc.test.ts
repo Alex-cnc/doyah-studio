@@ -78,6 +78,7 @@ describe('ipc', () => {
       'workspace_markdown',
       'appearance_get',
       'appearance_set',
+      'palette_search',
     ])
   })
 

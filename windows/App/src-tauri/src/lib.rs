@@ -681,6 +681,19 @@ fn appearance_set(
     }))
 }
 
+/// 命令面板的**匹配与排序**（FR-EDIT-25）。
+///
+/// 命令清单由前端给（**清单只有一份**，在 `App/src/shell/commands.ts`）；
+/// 匹配与排序在领域层（`palette`，7 例单测）—— 前端不另写一套匹配。
+#[tauri::command]
+fn palette_search(
+    query: String,
+    items: Vec<doyah_studio_db::PaletteItem>,
+    limit: Option<usize>,
+) -> Vec<doyah_studio_db::PaletteMatch> {
+    doyah_studio_db::palette_search(&query, &items, limit.unwrap_or(50))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -738,7 +751,8 @@ pub fn run() {
             workspace_clamp_line,
             workspace_markdown,
             appearance_get,
-            appearance_set
+            appearance_set,
+            palette_search
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

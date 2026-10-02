@@ -20,6 +20,7 @@ pub mod foreign_key;
 pub mod highlight;
 pub mod inspect;
 pub mod markdown;
+pub mod palette;
 pub mod reveal;
 pub mod search;
 pub mod sql;
@@ -36,6 +37,10 @@ pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter
 pub use markdown::{
     parse as parse_markdown, parse_inline, Block, BlockKind, ColumnAlignment, Document as MarkdownDocument,
     Span as MarkdownSpan, MARKDOWN_FORMAT_VERSION,
+};
+pub use palette::{
+    match_item, search as palette_search, Item as PaletteItem, Match as PaletteMatch, Tier as PaletteTier,
+    KEYWORD_BONUS,
 };
 pub use reveal::{ensure_inside, explorer_plan, pick_terminal, terminal_plan, RevealPlan, TerminalKind};
 pub use search::{

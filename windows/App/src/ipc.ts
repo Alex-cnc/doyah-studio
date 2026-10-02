@@ -75,6 +75,8 @@ export const COMMANDS = {
   // 外观（2.8：深浅轴 / 配色轴 / 星云皮肤）
   appearanceGet: 'appearance_get',
   appearanceSet: 'appearance_set',
+  // 命令面板（2.9：匹配与排序在 Rust 领域层）
+  paletteSearch: 'palette_search',
 } as const
 
 export interface AppInfo {
@@ -962,5 +964,31 @@ export function appearanceSet(
       appearance: { mode: patch.mode ?? 'followSystem', scheme: patch.scheme ?? 'stardust', nebulaSkin: patch.nebulaSkin ?? true },
       dom: { dataTheme: null, dataScheme: patch.scheme ?? 'stardust', nebula: systemIsDark, isDark: systemIsDark },
     }),
+  )
+}
+// ── 命令面板（alpha 2.9）────────────────────────────────────────────────────────────
+
+export interface PaletteItem {
+  id: string
+  title: string
+  keywords: string[]
+  group: string | null
+}
+
+export interface PaletteMatch {
+  item: PaletteItem
+  score: number
+  /** 标题里命中字符的**字符位置**（界面用来高亮） */
+  highlighted: number[]
+  tier: 'exact' | 'prefix' | 'wordPrefix' | 'substring' | 'acronym' | 'subsequence' | 'keywordOnly'
+}
+
+/** 命令面板的匹配与排序（**匹配只有一处实现**，在 Rust 领域层）。 */
+export function paletteSearch(query: string, items: PaletteItem[], limit = 50): Promise<PaletteMatch[]> {
+  return call(COMMANDS.paletteSearch, { query, items, limit }, () =>
+    items
+      .filter((item) => item.title.toLowerCase().includes(query.trim().toLowerCase()))
+      .slice(0, limit)
+      .map((item) => ({ item, score: 0, highlighted: [], tier: 'substring' as const })),
   )
 }

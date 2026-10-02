@@ -6,7 +6,9 @@
 
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { appInfo, type AppInfo } from './ipc'
+import CommandPalette from './shell/CommandPalette.vue'
 import TitleBar from './shell/TitleBar.vue'
+import { commandById, type Command } from './shell/commands'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
 import { appearanceGet, appearanceSet, type Appearance as AppearancePref, type DomAppearance } from './ipc'
@@ -23,6 +25,38 @@ import {
 import { activeItem, setActive } from './shell/activityBarStore'
 
 const info = ref<AppInfo | null>(null)
+// 命令面板（2.9）：Ctrl+K 打开；清单来自 `shell/commands.ts`，匹配排序在 Rust 侧
+const paletteOpen = ref(false)
+
+function onGlobalKeydown(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    paletteOpen.value = !paletteOpen.value
+  }
+}
+
+/** 执行一条命令：**能做的就做，做不到就如实说**（不假装执行过） */
+async function runCommand(command: Command) {
+  switch (command.id) {
+    case 'appearance.followSystem':
+      await changeAppearance({ mode: 'followSystem' })
+      return
+    case 'appearance.alwaysDark':
+      await changeAppearance({ mode: 'alwaysDark' })
+      return
+    case 'appearance.alwaysLight':
+      await changeAppearance({ mode: 'alwaysLight' })
+      return
+    default:
+      // 其余命令要在对应视图里用界面按钮做（那才是**实际执行路径**）；
+      // 这里如实说明，而不是"静默什么都不做"。
+      commandNote.value = `「${command.title}」请在「${command.view ?? ''}」视图里用界面按钮执行（面板只做发现与分派）`
+      setTimeout(() => (commandNote.value = ''), 4000)
+  }
+}
+
+/** 命令执行的回执（做不到时要说清） */
+const commandNote = ref('')
 const loaded = ref(0)
 const total = ref(0)
 
@@ -83,6 +117,7 @@ onMounted(async () => {
     })
   }
   darkQuery?.addEventListener('change', onSystemChange)
+  window.addEventListener('keydown', onGlobalKeydown)
 })
 
 function onSystemChange(event: MediaQueryListEvent) {
@@ -90,7 +125,10 @@ function onSystemChange(event: MediaQueryListEvent) {
   void refreshAppearance()
 }
 
-onBeforeUnmount(() => darkQuery?.removeEventListener('change', onSystemChange))
+onBeforeUnmount(() => {
+  darkQuery?.removeEventListener('change', onSystemChange)
+  window.removeEventListener('keydown', onGlobalKeydown)
+})
 
 function onSelect(id: ActivityBarItemId) {
   setActive(id)
@@ -102,6 +140,10 @@ function onSelect(id: ActivityBarItemId) {
     <TitleBar :info="info" :item="activeItem" />
     <!-- 星云皮肤（2.8）：只在「星空紫 + 深色 + 开关开」时由 data-nebula 显形；纯装饰、不吃点击 -->
     <div class="nebula" aria-hidden="true"></div>
+    <!-- 命令面板（2.9）：Ctrl+K 开关；清单在 shell/commands.ts，匹配排序在 Rust 侧 -->
+    <CommandPalette :open="paletteOpen" :view="activeItem === 'workspace' ? 'workspace' : 'database'" @close="paletteOpen = false" @run="runCommand" />
+    <p v-if="commandNote" class="shell__command-note">{{ commandNote }}</p>
+    <p v-else class="shell__command-hint">Ctrl+K 打开命令面板</p>
     <!-- 外观控件：深浅轴 × 配色轴 + 皮肤开关（规则全在 Rust 侧，这里只改值） -->
     <div v-if="appearance" class="appearance">
       <label class="appearance__field">
@@ -255,6 +297,20 @@ function onSelect(id: ActivityBarItemId) {
 }
 
 .appearance__warn {
+  color: var(--ds-color-status-warning);
+}
+
+/* 命令面板的入口提示与回执（**做不到的事要说出来**，不静默） */
+.shell__command-hint,
+.shell__command-note {
+  margin: 0;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-m);
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  border-bottom: var(--ds-metric-hairline) solid var(--ds-hairline);
+}
+
+.shell__command-note {
   color: var(--ds-color-status-warning);
 }
 </style>
