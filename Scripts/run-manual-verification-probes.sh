@@ -296,8 +296,13 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `WorkspaceFileRoutingProbeTests`（`L-149` 剩余②：工作区打开文件的路由 —— `.html` / `.htm`
 #   交给**浏览器页签**那一侧、`.md` / `.sql` 照旧进编辑器（对照）、没接线时回落文本编辑器、
 #   同一个文件点两次只开一个页签；不渲染位图 ⇒ 主入口同样是 `verify-all.sh` 第 1 项）。
+# + `TitleBarSearchClickProbeTests`（`T-20261002-027`／开发循环第 162 轮：标题栏搜索栏的**点击地图** ——
+#   可见框内采样点逐点断言命中目标 = 输入框或其接力层、留白点按下把键盘交给同一框里的输入框、
+#   清空按钮那一段留给 SwiftUI，另加**修前对照**（装修层参与命中测试的那份框必须判红）。
+#   主入口其实是 `./Scripts/verify-ui-interactions.sh`（真窗口 + 工具条、进程内合成事件、零权限）；
+#   挂在这里是为了那条「每个 `*ProbeTests.swift` 都得有入口」的判据 `check-result-scroll-ledger.py` ⑤。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
