@@ -40,7 +40,6 @@ pub fn spans(sql: &str) -> Vec<StatementSpan> {
     let bytes = sql.as_bytes();
     let mut start = 0usize;
     let mut i = 0usize;
-    let mut line = 1usize;
     let mut in_single = false;
     let mut in_double = false;
     let mut in_line_comment = false;
@@ -66,7 +65,6 @@ pub fn spans(sql: &str) -> Vec<StatementSpan> {
         if in_line_comment {
             if c == '\n' {
                 in_line_comment = false;
-                line += 1;
             }
             i += 1;
             continue;
@@ -76,9 +74,6 @@ pub fn spans(sql: &str) -> Vec<StatementSpan> {
                 in_block_comment = false;
                 i += 2;
                 continue;
-            }
-            if c == '\n' {
-                line += 1;
             }
             i += 1;
             continue;
@@ -95,9 +90,6 @@ pub fn spans(sql: &str) -> Vec<StatementSpan> {
                 }
                 in_single = false;
             }
-            if c == '\n' {
-                line += 1;
-            }
             i += 1;
             continue;
         }
@@ -107,9 +99,6 @@ pub fn spans(sql: &str) -> Vec<StatementSpan> {
             }
             if c == '"' {
                 in_double = false;
-            }
-            if c == '\n' {
-                line += 1;
             }
             i += 1;
             continue;
@@ -148,7 +137,6 @@ pub fn spans(sql: &str) -> Vec<StatementSpan> {
                 code_start = None;
             }
             '\n' => {
-                line += 1;
                 i += 1;
             }
             other => {
