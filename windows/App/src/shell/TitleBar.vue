@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import type { AppInfo } from '../ipc'
+// 标题栏 —— 窗口标题由**活动栏项派生**（FR-EDIT-37；契约层口径见 `Core/ActivityBar.swift` 的 `WindowTitle`）：
+// 品牌段不翻译、视图段走语言表，拼装只有一处（`windowTitle()`）。
 
-defineProps<{ info: AppInfo | null }>()
+import type { AppInfo } from '../ipc'
+import { windowTitle, type ActivityBarItemId } from './activityBar'
+
+defineProps<{ info: AppInfo | null; item: ActivityBarItemId }>()
 </script>
 
 <template>
   <header class="titlebar">
-    <span class="titlebar__product">Doyah Studio</span>
+    <span class="titlebar__product">{{ windowTitle(item) }}</span>
     <span class="titlebar__hint">Windows 侧（Tauri 2 外壳 · Vue 3 · Rust 领域层）</span>
     <span class="titlebar__version">{{ info ? `v${info.version}` : '…' }}</span>
   </header>
