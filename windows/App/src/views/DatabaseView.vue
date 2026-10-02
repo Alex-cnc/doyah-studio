@@ -20,6 +20,11 @@ import {
   dbCancel,
   explainStatement,
   highlightSql,
+  dbWriteBatch,
+  dbPrimaryKey,
+  editsToDml,
+  statementRisk,
+  dbReadOnly,
   dbSchemas,
   dbRelations,
   searchObjects,
@@ -38,6 +43,8 @@ import {
   type ObjectNode,
   type SearchHit,
   type SqlToken,
+  type CellEdit,
+  type DmlStatement,
 } from '../ipc'
 import { frozenColumnStylesMeasured, pageOf, visibleOrder, DEFAULT_PAGE_SIZE } from '../grid/view'
 import { EXPORT_FORMAT_LABELS, exportRows, type ExportFormat } from '../grid/export'
@@ -595,6 +602,26 @@ async function runBatch(analyze: boolean) {
     if (analyze) {
       // EXPLAIN 只对单条：多段会被拒（并说明为什么），这里如实把拒绝端出来
       text = await explainStatement(sql.value, true)
+    } else {
+      // **危险语句先要确认**（1.4）：无 WHERE 的 UPDATE/DELETE、DROP、TRUNCATE。
+      // 判定在领域层（只认能确凿认出来的），界面只负责弹框；只读连接会被判 forbidden、直接拒。
+      const risk = await statementRisk(text)
+      if (risk === 'forbidden') {
+        failure.value = {
+          message: '这条连接标了只读：写语句不发送。',
+          hint: '要用写功能请新建一条不带只读标记的连接（只读是本机保护，不替代数据库权限）。',
+        }
+        return
+      }
+      if (risk === 'confirm') {
+        const ok = window.confirm(
+          '这条语句被判定为破坏性操作（无 WHERE 的写语句，或 DROP / TRUNCATE）。\n\n确认要执行吗？',
+        )
+        if (!ok) {
+          busy.value = ''
+          return
+        }
+      }
     }
     outcomes.value = await dbRunBatch(text)
     const pick = pickDisplayedOutcome(outcomes.value)
@@ -646,6 +673,159 @@ function selectOutcome(index: number) {
   result.value = chosen?.result ?? null
   failure.value = chosen && !chosen.ok ? chosen.failure : null
 }
+
+// ── 写回与事务（1.4）：内联编辑 → 生成 DML → 一次事务提交 ─────────────────────────────
+//
+// 口径（照领域层 `writeback` 那三条，界面这层要配合好）：
+// ① **无主键不给编辑入口**：定位不到"是哪一行"就不许改（这不是体验问题，是数据正确性）；
+// ② **只读连接只给预览、不给提交**：语句照样生成给用户看，但提交按钮不可用；
+// ③ **提交前必须先看 DML**：不提供"直接提交"的捷径 —— 那正是"改错了才发现"的来路。
+
+/** 当前结果来源表的**主键列**（空 = 无主键 ⇒ 不给编辑）。 */
+const primaryKey = ref<string[]>([])
+/** 只读标记（连接时设定）。 */
+const readOnly = ref(false)
+/** 编辑缓冲：`行下标:列下标` → 新值。 */
+const cellEdits = ref<Record<string, string>>({})
+/** 正在编辑的那一格（`行:列`）。 */
+const editingCell = ref('')
+/** 生成出来的 DML（提交前必须先有它）。 */
+const pendingDml = ref<DmlStatement[]>([])
+
+const canEditCells = computed(() => !readOnly.value && primaryKey.value.length > 0)
+const editCount = computed(() => Object.keys(cellEdits.value).length)
+
+function cellKey(row: number, column: number): string {
+  return `${row}:${column}`
+}
+
+/** 这一格当前显示的文本（有编辑缓冲就用缓冲值）。 */
+function cellText(row: number, column: number, cell: string | null): string {
+  const edited = cellEdits.value[cellKey(row, column)]
+  if (edited !== undefined) return edited
+  return cell === null ? '' : cell
+}
+
+/** 双击进入编辑（只读 / 无主键时不给进）。 */
+function beginEdit(row: number, column: number) {
+  if (!canEditCells.value) return
+  editingCell.value = cellKey(row, column)
+}
+
+function commitEdit(row: number, column: number, value: string) {
+  const key = cellKey(row, column)
+  cellEdits.value = { ...cellEdits.value, [key]: value }
+  editingCell.value = ''
+  pendingDml.value = []
+}
+
+/** 把一行按主键值拼成 `RowKey`（值取自**当前显示的那一行**）。 */
+function rowKeyOf(rowIndex: number): { columns: string[]; values: (string | null)[] } | null {
+  if (!result.value || primaryKey.value.length === 0) return null
+  const keys: (string | null)[] = []
+  for (const column of primaryKey.value) {
+    const at = result.value.columns.indexOf(column)
+    if (at < 0) return null
+    const cell = result.value.rows[rowIndex]?.[at] ?? null
+    keys.push(cell)
+  }
+  return { columns: [...primaryKey.value], values: keys }
+}
+
+/** 编辑缓冲 → 领域层的编辑集（**值列是数值时按数值写**，避免 `"id" = '1'` 这种跨类型比较）。 */
+function cellEditSet(): CellEdit[] {
+  if (!result.value || !resultSource.value) return []
+  const out: CellEdit[] = []
+  for (const [key, value] of Object.entries(cellEdits.value)) {
+    const [rowText, columnText] = key.split(':')
+    const row = Number(rowText)
+    const column = Number(columnText)
+    const rowKey = rowKeyOf(row)
+    const columnName = result.value.columns[column]
+    if (!rowKey || !columnName) continue
+    const numeric = result.value.numRows?.[row]?.[column]
+    out.push({
+      schema: resultSource.value.schema,
+      table: resultSource.value.table,
+      key: rowKey,
+      column: columnName,
+      value,
+      valueIsNumeric: typeof numeric === 'number',
+    })
+  }
+  return out
+}
+
+/** 生成 DML（**只生成**）：先让用户看清将执行什么。 */
+async function previewDml() {
+  clearFailure()
+  try {
+    pendingDml.value = await editsToDml(cellEditSet())
+    copied.value = `将执行 ${pendingDml.value.length} 条`
+    setTimeout(() => (copied.value = ''), 2500)
+  } catch (e) {
+    pendingDml.value = []
+    failure.value = describeError(e)
+  }
+}
+
+/** 提交（一批一次事务）；`rollback` 为真时跑完回滚 —— 也就是"先真跑一遍再撤回"。 */
+async function submitWriteback(rollback: boolean) {
+  if (pendingDml.value.length === 0) {
+    failure.value = {
+      message: '还没有要执行的语句：先点「生成 SQL」看清将执行什么。',
+      hint: '本侧不提供"跳过预览直接提交"的捷径 —— 那正是改错了才发现的来路。',
+    }
+    return
+  }
+  busy.value = rollback ? '试跑（跑完回滚）…' : '提交中…'
+  clearFailure()
+  try {
+    const statements = pendingDml.value.map((d) => d.sql)
+    outcomes.value = await dbWriteBatch(statements, rollback)
+    const failed = outcomes.value.find((o) => !o.ok)
+    if (failed) {
+      failure.value = failed.failure
+    } else {
+      copied.value = rollback
+        ? `试跑完成：${outcomes.value.length} 条都改到，已回滚（值未变）`
+        : `已提交：${outcomes.value.length} 条`
+      setTimeout(() => (copied.value = ''), 4000)
+      if (!rollback) {
+        cellEdits.value = {}
+        pendingDml.value = []
+        await run() // 重新取一次真值，界面不显示"我改成了什么"而是"库里现在是什么"
+      }
+    }
+  } catch (e) {
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
+  }
+}
+
+/** 结果来源变了 / 结果换了 ⇒ 重新读主键与只读标记（编辑入口的依据）。 */
+watch(resultSource, async () => {
+  pendingDml.value = []
+  cellEdits.value = {}
+  if (!resultSource.value) {
+    primaryKey.value = []
+    return
+  }
+  try {
+    primaryKey.value = await dbPrimaryKey(resultSource.value.schema, resultSource.value.table)
+  } catch {
+    primaryKey.value = []
+  }
+})
+
+onMounted(async () => {
+  try {
+    readOnly.value = await dbReadOnly()
+  } catch {
+    readOnly.value = false
+  }
+})
 
 function useTable(t: ObjectNode) {
   // 记住"这一屏是从哪张表来的"——外键入口只对**那张表**的列才有意义
@@ -998,6 +1178,59 @@ async function probe() {
                 <button class="db__btn" type="button" @click="copyVisible">复制</button>
                 <span v-if="copied" class="db__note">{{ copied }}</span>
               </div>
+
+              <!-- 写回（1.4）：双击单元格改值 → 生成 SQL → 试跑 / 提交。
+                   没主键或只读连接时**说清为什么不能改**，不做"灰着但不说为什么"。 -->
+              <div class="db__writeback">
+                <span v-if="readOnly" class="db__note">
+                  这条连接标了只读：可以预览将执行的语句，但**不会发送**（本机保护，不替代数据库权限）
+                </span>
+                <span v-else-if="primaryKey.length === 0" class="db__note">
+                  这张表没有主键：定位不到「是哪一行」，所以不给单元格编辑（请用 SQL 自己写 WHERE）
+                </span>
+                <span v-else class="db__note">
+                  双击单元格改值（主键：{{ primaryKey.join(' + ') }}）· 已改 {{ editCount }} 处
+                </span>
+                <button
+                  class="db__btn"
+                  type="button"
+                  :disabled="editCount === 0"
+                  @click="previewDml"
+                >
+                  生成 SQL（先看清）
+                </button>
+                <button
+                  class="db__btn"
+                  type="button"
+                  :disabled="!readOnly && pendingDml.length === 0"
+                  @click="submitWriteback(true)"
+                >
+                  试跑（跑完回滚）
+                </button>
+                <button
+                  class="db__btn db__btn--primary"
+                  type="button"
+                  :disabled="readOnly || pendingDml.length === 0"
+                  @click="submitWriteback(false)"
+                >
+                  提交（一次事务）
+                </button>
+                <button v-if="editCount > 0" class="db__btn" type="button" @click="cellEdits = {}; pendingDml = []">
+                  放弃改动
+                </button>
+              </div>
+
+              <!-- 将执行的语句（**提交前必须先有它**） -->
+              <div v-if="pendingDml.length" class="db__dml">
+                <p class="db__dml-title">将执行 {{ pendingDml.length }} 条（一次事务）</p>
+                <ul class="db__dml-list">
+                  <li v-for="(d, i) in pendingDml" :key="i">
+                    <code>{{ d.sql }}</code>
+                    <span class="db__kind">{{ d.target }}</span>
+                    <span v-if="d.risk === 'forbidden'" class="db__outcome-summary">（只读：不会发送）</span>
+                  </li>
+                </ul>
+              </div>
               <table class="db__grid">
                 <thead>
                   <tr>
@@ -1022,8 +1255,30 @@ async function probe() {
                     title="点这一行看详情（值检查：NULL 与空串分开、长 JSON 格式化）"
                     @click="openDetail(i)"
                   >
-                    <td v-for="(cell, j) in result.rows[i]" :key="j" :style="cellStyle(j)" :class="{ 'db__null': cell === null, 'db__frozen': !!frozenStyles[j] }">
-                      {{ cell === null ? 'NULL' : cell }}
+                    <td
+                      v-for="(cell, j) in result.rows[i]"
+                      :key="j"
+                      :style="cellStyle(j)"
+                      :class="{
+                        'db__null': cell === null,
+                        'db__frozen': !!frozenStyles[j],
+                        'db__cell--edited': cellEdits[cellKey(i, j)] !== undefined,
+                      }"
+                      @dblclick.stop="beginEdit(i, j)"
+                    >
+                      <!-- 编辑态：就地输入（回车提交、Esc 取消）；非编辑态显示显示值 -->
+                      <input
+                        v-if="editingCell === cellKey(i, j)"
+                        class="db__cell-input"
+                        :value="cellText(i, j, cell)"
+                        autofocus
+                        @keydown.enter="commitEdit(i, j, ($event.target as HTMLInputElement).value)"
+                        @keydown.esc="editingCell = ''"
+                        @blur="commitEdit(i, j, ($event.target as HTMLInputElement).value)"
+                      />
+                      <template v-else>
+                        {{ cellText(i, j, cell) || (cell === null ? 'NULL' : '') }}
+                      </template>
                       <!-- 外键入口：**只在有目标时出现**（没目标不显示，点了没反应比不给更糟） -->
                       <template v-for="(t, k) in cellFkTargets(result.columns[j])" :key="k">
                         <button
@@ -1601,6 +1856,57 @@ async function probe() {
   color: var(--ds-color-text-tertiary);
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* ── 写回（1.4）：工具栏 / 待执行语句 / 就地编辑的单元格 ───────────────────────────── */
+
+.db__writeback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  margin-bottom: var(--ds-spacing-xs);
+}
+
+.db__dml {
+  margin-bottom: var(--ds-spacing-xs);
+  padding: var(--ds-spacing-s);
+  background: var(--ds-color-surface-panel);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+}
+
+.db__dml-title {
+  margin: 0 0 var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__dml-list {
+  margin: 0;
+  padding-left: var(--ds-spacing-m);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__dml-list code {
+  font-family: var(--ds-font-stack);
+}
+
+/* 改过但还没提交的格子：一眼能看出"哪些是我改的"（提交后会被真值覆盖） */
+.db__cell--edited {
+  background: var(--ds-color-surface-raised);
+  outline: var(--ds-metric-hairline) solid var(--ds-color-accent-accent);
+}
+
+.db__cell-input {
+  width: 100%;
+  min-width: 60px;
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-color-accent-accent);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
 }
 
 .db__grid-wrap {

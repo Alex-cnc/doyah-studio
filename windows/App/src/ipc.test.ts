@@ -44,6 +44,11 @@ describe('ipc', () => {
       'db_cancel',
       'explain_statement',
       'highlight_sql',
+      'db_write_batch',
+      'db_primary_key',
+      'edits_to_dml',
+      'statement_risk',
+      'db_read_only',
       'db_probe',
       'connections_list',
       'connection_save',
@@ -51,6 +56,8 @@ describe('ipc', () => {
       'browse_sql',
       'inspect_row',
       'db_foreign_keys',
+      'workspace_list_directory',
+      'workspace_read_file',
     ])
   })
 

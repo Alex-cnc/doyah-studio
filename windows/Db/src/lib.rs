@@ -17,12 +17,16 @@ pub mod inspect;
 pub mod sql;
 pub mod tree;
 pub mod url;
+pub mod workspace;
+pub mod writeback;
 
 pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter};
 pub use sql::{explain, spans, tokenize, StatementSpan, Token, TokenKind};
+pub use writeback::{edits_to_dml, statement_risk, CellEdit, DmlStatement, Risk, RowKey, TransactionPlan};
 pub use tree::{group_by_schema, search, sort_objects, ObjectKind, ObjectNode, SearchHit};
 pub use config::{ConnectionBundle, BundleError, ConnectionConfig, SshTunnelConfig};
 pub use db_type::{DatabaseType, SslMode};
 pub use foreign_key::{parse_edge, query as fk_query, Direction, Edge, Option_};
 pub use inspect::{CellValue, Field, Shape, SummaryLanguage};
 pub use url::{FormMerge, ImportedConnection, UrlParseError};
+pub use workspace::{EntryKind, History, Tab, TextLanguage};

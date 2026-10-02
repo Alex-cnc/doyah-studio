@@ -10,6 +10,7 @@ import TitleBar from './shell/TitleBar.vue'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
 import DatabaseView from './views/DatabaseView.vue'
+import WorkspaceView from './views/WorkspaceView.vue'
 import {
   BUILT_ITEMS,
   ITEMS,
@@ -48,6 +49,7 @@ function onSelect(id: ActivityBarItemId) {
       <main class="shell__main">
         <!-- 数据库：**真库链路**（连库 → 对象树 → SQL → 结果），驱动在 Rust 外壳 -->
         <DatabaseView v-if="activeItem === 'database'" />
+        <WorkspaceView v-else-if="activeItem === 'workspace'" />
         <p v-else class="shell__placeholder">
           {{ itemTitle(activeItem) }}视图尚未开工（⬜ 不半建）。
         </p>

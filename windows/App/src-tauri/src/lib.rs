@@ -5,6 +5,7 @@
 //! 名字是**运行时静默失败**，靠人记不住）。
 
 pub mod connections;
+pub mod fs;
 pub mod postgres;
 mod query;
 
@@ -29,6 +30,11 @@ pub struct ShellState {
     pub db: AsyncMutex<Option<Arc<PgSession>>>,
     /// 连接列表的落盘位置与凭据读写（口令走系统凭据管理器，不进配置文件）。
     pub connections: ConnectionStore,
+    /// **当前连接是不是只读**（FR-CONN-17）：写回与危险判定都要看它。
+    ///
+    /// 为什么用原子布尔而不是塞进会话：只读是**连接级配置**的一部分，而"当前连接"这个槽
+    /// 在换连接 / 断开时会变 —— 把它与会话绑在一起容易出现"会话还在、标记没了"的错位。
+    pub read_only: std::sync::atomic::AtomicBool,
 }
 
 /// 取当前会话；没连上就是一句可读的失败（不 panic、不静默）。
@@ -94,12 +100,17 @@ async fn db_connect(
     state: State<'_, ShellState>,
     params: ConnectParams,
     startup_sql: Option<Vec<String>>,
+    read_only: Option<bool>,
 ) -> Result<ConnectReport, DbFailure> {
     // 先把旧会话放掉（换连接 = 断旧连新），**先放锁再 await**，别把锁带过 await
     {
         let mut slot = state.db.lock().await;
         *slot = None;
     }
+    // 只读标记随连接一起设：换连接时**不保留上一条的标记**（否则"上一条只读"会意外管住新连接）
+    state
+        .read_only
+        .store(read_only.unwrap_or(false), std::sync::atomic::Ordering::Relaxed);
     let statements = startup_sql.unwrap_or_default();
     let (session, report) = PgSession::connect_with_startup(&params, &statements).await?;
     let mut slot = state.db.lock().await;
@@ -304,6 +315,78 @@ fn highlight_sql(sql: String) -> Vec<doyah_studio_db::sql::Token> {
     doyah_studio_db::sql::tokenize(&sql)
 }
 
+// ── 写回与事务（1.4：一批一次事务 / 主键定位 / 只读拦截 / 危险语句确认）──────────────────
+
+/// **一批写回，一次事务**：跑完提交，或（`rollback` 为真 / 中途失败）整批回滚。
+///
+/// **只读连接在这里就被拦住**：命令层先按当前连接配置的 `isReadOnly` 过一遍危险判定，
+/// 命中 `Forbidden` 就整批不发（连服务端都不碰）。
+#[tauri::command]
+async fn db_write_batch(
+    state: State<'_, ShellState>,
+    statements: Vec<String>,
+    rollback: Option<bool>,
+) -> Result<Vec<StatementOutcome>, DbFailure> {
+    let session = current_session(&state).await?;
+    let read_only = state.read_only.load(std::sync::atomic::Ordering::Relaxed);
+    if read_only {
+        // 如实说是哪一条被拦下的：只说"只读"用户不知道自己去点哪儿
+        if let Some(first) = statements.first() {
+            return Err(DbFailure {
+                message: format!("这条连接标了只读，写语句不发送：{first}"),
+                hint: "要用写功能请新建一条不带只读标记的连接（只读是本机保护，不替代数据库权限）。"
+                    .to_string(),
+            });
+        }
+    }
+    session
+        .run_transaction(&statements, rollback.unwrap_or(false))
+        .await
+}
+
+/// 一张表的**主键列名**（写回要靠它定位"是哪一行"；无主键 ⇒ 空表，界面据此不给编辑入口）。
+#[tauri::command]
+async fn db_primary_key(
+    state: State<'_, ShellState>,
+    schema: String,
+    table: String,
+) -> Result<Vec<String>, DbFailure> {
+    let session = current_session(&state).await?;
+    session.primary_key(&schema, &table).await
+}
+
+/// 编辑集 → **要执行的 DML**（**只生成、不执行**：先让用户看清将执行什么）。
+///
+/// 领域层负责：完整主键条件、NULL 用 `IS NULL`、无主键拒改、只读连接标 `forbidden`。
+#[tauri::command]
+fn edits_to_dml(
+    state: State<'_, ShellState>,
+    edits: Vec<doyah_studio_db::writeback::CellEdit>,
+) -> Result<Vec<doyah_studio_db::writeback::DmlStatement>, DbFailure> {
+    let read_only = state.read_only.load(std::sync::atomic::Ordering::Relaxed);
+    doyah_studio_db::writeback::edits_to_dml(&edits, read_only).map_err(|e| DbFailure {
+        message: e.message,
+        hint: e.hint,
+    })
+}
+
+/// 单条 SQL 的**危险判定**（界面据此决定要不要弹确认框）。
+#[tauri::command]
+fn statement_risk(state: State<'_, ShellState>, sql: String) -> String {
+    let read_only = state.read_only.load(std::sync::atomic::Ordering::Relaxed);
+    match doyah_studio_db::writeback::statement_risk(&sql, read_only) {
+        doyah_studio_db::writeback::Risk::Safe => "safe".to_string(),
+        doyah_studio_db::writeback::Risk::Confirm => "confirm".to_string(),
+        doyah_studio_db::writeback::Risk::Forbidden => "forbidden".to_string(),
+    }
+}
+
+/// **只读标记**（FR-CONN-17）：连接时按保存的配置设定，界面也能读回来。
+#[tauri::command]
+fn db_read_only(state: State<'_, ShellState>) -> bool {
+    state.read_only.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// 单行详情的**值检查**（FR-DATA-05）：宽表竖排看、长 JSON 格式化看。///
 /// 纯计算（判定形态 + 给展示文本与元信息），**不碰数据库** —— 输入就是界面上那一行。
 /// 要点：NULL 与空串分开；JSON **必须真能解析**才当 JSON（半截日志按文本显示）；
@@ -365,6 +448,25 @@ async fn db_foreign_keys(state: State<'_, ShellState>) -> Result<Vec<doyah_studi
     Ok(edges)
 }
 
+// ── 工作区（alpha 2.0）命令：列目录 / 读文本文件 ────────────────────────────────────────
+//
+// 只读面（列目录、读文件）：**先过领域层的路径安全关**（`resolve` + `is_contained`）再读盘 ——
+// 相对路径可能来自缓存 / 书签 / 模型输出，不能信。写面（新建 / 改名 / 删除）归 2.1 段。
+
+#[tauri::command]
+fn workspace_list_directory(
+    workspace_root: String,
+    relative_path: Option<String>,
+    show_hidden: Option<bool>,
+) -> Result<Vec<fs::FsEntry>, DbFailure> {
+    fs::list_directory(&workspace_root, relative_path.as_deref().unwrap_or(""), show_hidden.unwrap_or(false))
+}
+
+#[tauri::command]
+fn workspace_read_file(workspace_root: String, relative_path: String) -> Result<fs::FileContent, DbFailure> {
+    fs::read_text_file(&workspace_root, &relative_path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -372,6 +474,7 @@ pub fn run() {
             cache: Mutex::new(ViewCache::new()),
             db: AsyncMutex::new(None),
             connections: ConnectionStore::new(ConnectionStore::default_path()),
+            read_only: std::sync::atomic::AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
@@ -388,13 +491,20 @@ pub fn run() {
             db_cancel,
             explain_statement,
             highlight_sql,
+            db_write_batch,
+            db_primary_key,
+            edits_to_dml,
+            statement_risk,
+            db_read_only,
             db_probe,
             connections_list,
             connection_save,
             connection_delete,
             browse_sql,
             inspect_row,
-            db_foreign_keys
+            db_foreign_keys,
+            workspace_list_directory,
+            workspace_read_file
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

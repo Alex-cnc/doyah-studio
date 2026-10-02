@@ -27,6 +27,12 @@ export const COMMANDS = {
   dbCancel: 'db_cancel',
   explainStatement: 'explain_statement',
   highlightSql: 'highlight_sql',
+  // 写回与事务（1.4：一批一次事务 / 主键定位 / 只读拦截 / 危险语句判定）
+  dbWriteBatch: 'db_write_batch',
+  dbPrimaryKey: 'db_primary_key',
+  editsToDml: 'edits_to_dml',
+  statementRisk: 'statement_risk',
+  dbReadOnly: 'db_read_only',
   dbProbe: 'db_probe',
   // 连接列表（配置落盘 + 口令进系统凭据管理器）
   connectionsList: 'connections_list',
@@ -38,6 +44,9 @@ export const COMMANDS = {
   inspectRow: 'inspect_row',
   // 外键元数据（FR-DATA-06：两个方向的跳转都靠它）
   dbForeignKeys: 'db_foreign_keys',
+  // 工作区（alpha 2.0：列目录 / 读文本文件；写面归 2.1 段）
+  workspaceListDirectory: 'workspace_list_directory',
+  workspaceReadFile: 'workspace_read_file',
 } as const
 
 export interface AppInfo {
@@ -439,4 +448,97 @@ export interface SqlToken {
 /** 高亮分词：**词法在领域层**（与执行切分同一套规则），本函数只把原文递过去。 */
 export function highlightSql(sql: string): Promise<SqlToken[]> {
   return call(COMMANDS.highlightSql, { sql }, () => [] as SqlToken[])
+}
+
+// ── 写回与事务（1.4）──────────────────────────────────────────────────────────────────
+
+/** 一行的主键定位信息（写回靠它找"是哪一行"；无主键就不给编辑入口）。 */
+export interface RowKey {
+  columns: string[]
+  values: (string | null)[]
+}
+
+/** 一处单元格编辑。 */
+export interface CellEdit {
+  schema: string | null
+  table: string
+  key: RowKey
+  column: string
+  value: string | null
+  valueIsNumeric: boolean
+}
+
+/** 生成出来的 DML 与它的风险档。 */
+export interface DmlStatement {
+  sql: string
+  target: string
+  risk: 'safe' | 'confirm' | 'forbidden'
+}
+
+/** 编辑集 → 要执行的 DML（**只生成、不执行**：先看清将执行什么）。 */
+export function editsToDml(edits: CellEdit[]): Promise<DmlStatement[]> {
+  return call(COMMANDS.editsToDml, { edits }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里预览（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+/** 一批写回，一次事务：`rollback` 为真时跑完主动回滚（"提交前预览"的姿势）。 */
+export function dbWriteBatch(statements: string[], rollback = false): Promise<StatementOutcome[]> {
+  return call(COMMANDS.dbWriteBatch, { statements, rollback }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里写回（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+/** 一张表的主键列名（空 = 无主键 ⇒ 界面不给编辑入口）。 */
+export function dbPrimaryKey(schema: string, table: string): Promise<string[]> {
+  return call(COMMANDS.dbPrimaryKey, { schema, table }, () => [] as string[])
+}
+
+/** 单条 SQL 的危险判定：`safe` / `confirm` / `forbidden`。 */
+export function statementRisk(sql: string): Promise<string> {
+  return call(COMMANDS.statementRisk, { sql }, () => 'safe')
+}
+
+/** 当前连接是不是只读。 */
+export function dbReadOnly(): Promise<boolean> {
+  return call(COMMANDS.dbReadOnly, {}, () => false)
+}
+// ── 工作区（alpha 2.0）───────────────────────────────────────────────────────────────
+//
+// 只读面：列一层目录、读一个文本文件。**路径安全由 Rust 侧把关**（领域层 `workspace::resolve`
+// + `is_contained`）—— 前端不自己拼路径判断，避免造第二份判据。
+
+/** 目录里的一个条目。 */
+export interface FsEntry {
+  name: string
+  /** 相对工作区根，**一律 `/` 分隔**（跨平台一致，也当 id 用） */
+  relativePath: string
+  /** `directory` / `file` / `symlink` */
+  kind: 'directory' | 'file' | 'symlink'
+  /** 可展开 = 目录（**符号链接即使指向目录也不展开**） */
+  isExpandable: boolean
+}
+
+export interface FileContent {
+  relativePath: string
+  content: string
+  bytes: number
+  /** 语言键（文案在语言表里） */
+  languageKey: string
+}
+
+/** 列一层目录（不递归：展开才读下一层）。`relativePath` 省略 = 工作区根。 */
+export function workspaceListDirectory(
+  workspaceRoot: string,
+  relativePath?: string,
+  showHidden?: boolean,
+): Promise<FsEntry[]> {
+  return call(COMMANDS.workspaceListDirectory, { workspaceRoot, relativePath, showHidden }, () => [] as FsEntry[])
+}
+
+/** 读一个文本文件（先过安全关；超上限如实报，不悄悄截断）。 */
+export function workspaceReadFile(workspaceRoot: string, relativePath: string): Promise<FileContent> {
+  return call(COMMANDS.workspaceReadFile, { workspaceRoot, relativePath }, () => {
+    throw { message: '浏览器旁路没有工作区', hint: '请在 Tauri 外壳里打开工作区（npm run tauri dev）。' } as DbFailure
+  })
 }

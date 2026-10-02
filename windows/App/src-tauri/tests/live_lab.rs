@@ -288,6 +288,126 @@ async fn sql_editor_batch_cancel_and_explain_on_real_db() {
     assert!(!tokens.is_empty());
 }
 
+/// **1.4 写回与事务**：一批一次事务 / 主动回滚 / 主键定位 / 无主键拒改。
+///
+/// 判据（版本计划 §1.4 的出口「主键定位、一批一事务、提交前预览 DML + 提交 / 回滚」）：
+/// ① 提交档：三条真改到；② **中途失败 ⇒ 整批回滚**（先看改到 10，失败后回 0 —— 这是本段
+///    最要紧的一条："改了一半"是数据事故，不是体验问题）；③ `rollback` 档：改了但主动回滚，
+///    值回到原样；④ 主键元数据真取得到（`app.accounts` → `["id"]`）；⑤ 无主键的表**拒改**
+///    （真在库里造一张无主键表来验，不是靠想象）。
+#[tokio::test]
+async fn writeback_batch_transaction_commit_and_rollback_on_real_db() {
+    let Some(params) = lab_params() else { return };
+    let session = PgSession::connect(&params).await.expect("应当连上实验库");
+
+    // 把夹具的三行余额摆回已知值，并确认起点
+    session
+        .run("update app.accounts set balance = 0 where id <= 3", 10)
+        .await
+        .expect("重置余额应当成功");
+
+    // ④ 主键元数据：真取得到、顺序对
+    let key = session.primary_key("app", "accounts").await.expect("读主键应当成功");
+    assert_eq!(key, vec!["id".to_string()], "主键应当是 id");
+
+    // ⑤ 无主键的表：真造一张，主键列应当为空（界面据此不给编辑入口）
+    session
+        .run("create table if not exists app.no_pk_11 (name text)", 10)
+        .await
+        .expect("造无主键表应当成功");
+    let none = session.primary_key("app", "no_pk_11").await.expect("读主键应当成功");
+    assert!(none.is_empty(), "无主键的表不该报出主键列：{none:?}");
+    // 领域层据此**拒改**（不是生成一条 WHERE 靠猜的语句）
+    let refused = doyah_studio_db::writeback::edits_to_dml(
+        &[doyah_studio_db::writeback::CellEdit {
+            schema: Some("app".into()),
+            table: "no_pk_11".into(),
+            key: doyah_studio_db::writeback::RowKey { columns: vec![], values: vec![] },
+            column: "name".into(),
+            value: Some("x".into()),
+            value_is_numeric: false,
+        }],
+        false,
+    )
+    .unwrap_err();
+    assert!(refused.message.contains("主键"), "{}", refused.message);
+    session.run("drop table if exists app.no_pk_11", 10).await.expect("清表应当成功");
+
+    // ① 提交档：三条都改到（用领域层生成的 DML，验"生成的通路"与"执行的通路"接得上）
+    let edits: Vec<doyah_studio_db::writeback::CellEdit> = (1..=3)
+        .map(|id| doyah_studio_db::writeback::CellEdit {
+            schema: Some("app".into()),
+            table: "accounts".into(),
+            key: doyah_studio_db::writeback::RowKey {
+                columns: vec!["id".into()],
+                values: vec![Some(id.to_string())],
+            },
+            column: "balance".into(),
+            value: Some("10".into()),
+            value_is_numeric: true,
+        })
+        .collect();
+    let generated = doyah_studio_db::writeback::edits_to_dml(&edits, false).expect("应当生成 DML");
+    assert_eq!(generated.len(), 3);
+    assert!(generated[0].sql.contains("\"id\" = 1"), "{}", generated[0].sql);
+    let statements: Vec<String> = generated.iter().map(|d| d.sql.clone()).collect();
+    let outcomes = session.run_transaction(&statements, false).await.expect("提交档应当成功");
+    assert_eq!(outcomes.len(), 3);
+    assert!(outcomes.iter().all(|o| o.ok), "{outcomes:?}");
+    assert_eq!(outcomes[0].result.as_ref().and_then(|r| r.affected), Some(1));
+    let after_commit = session
+        .run("select count(*) from app.accounts where id <= 3 and balance = 10", 10)
+        .await
+        .expect("查应当成功");
+    assert_eq!(
+        after_commit.rows.first().and_then(|r| r.first().cloned()).flatten().as_deref(),
+        Some("3"),
+        "三条都应当真改到"
+    );
+
+    // ② 中途失败 ⇒ **整批回滚**：先改成 20，第二条是坏语句
+    let mixed = vec![
+        "update app.accounts set balance = 20 where id <= 3".to_string(),
+        "update app.accounts set no_such_column = 1 where id = 1".to_string(),
+    ];
+    let failed = session.run_transaction(&mixed, false).await.expect("调用本身应当返回");
+    assert_eq!(failed.len(), 2, "两次结果都要报（失败即停，第二条不再往下发）");
+    assert!(failed[0].ok && !failed[1].ok, "{failed:?}");
+    let after_fail = session
+        .run("select count(*) from app.accounts where id <= 3 and balance = 20", 10)
+        .await
+        .expect("查应当成功");
+    assert_eq!(
+        after_fail.rows.first().and_then(|r| r.first().cloned()).flatten().as_deref(),
+        Some("0"),
+        "失败那一批必须**整批回滚**：改了一半是数据事故"
+    );
+    // 而且回滚之后连接照常可用
+    let alive = session.run("select 7", 10).await.expect("回滚之后仍应能查询");
+    assert_eq!(alive.rows.first().and_then(|r| r.first().cloned()).flatten().as_deref(), Some("7"));
+
+    // ③ 主动回滚（"提交前预览"的姿势）：改到 30 再回滚 ⇒ 值不动
+    let preview = vec!["update app.accounts set balance = 30 where id <= 3".to_string()];
+    let previewed = session.run_transaction(&preview, true).await.expect("回滚档应当成功");
+    assert!(previewed[0].ok, "预览的执行本身是成功的");
+    assert_eq!(previewed[0].result.as_ref().and_then(|r| r.affected), Some(3));
+    let after_rollback = session
+        .run("select count(*) from app.accounts where id <= 3 and balance = 30", 10)
+        .await
+        .expect("查应当成功");
+    assert_eq!(
+        after_rollback.rows.first().and_then(|r| r.first().cloned()).flatten().as_deref(),
+        Some("0"),
+        "主动回滚之后值不该变"
+    );
+
+    // 收尾：把夹具摆回 0（不把状态留给下一个用例）
+    session
+        .run("update app.accounts set balance = 0 where id <= 3", 10)
+        .await
+        .expect("收尾应当成功");
+}
+
 #[tokio::test]
 async fn unreachable_server_reports_readable_reason() {
     let mut params = lab_params().unwrap_or(ConnectParams {

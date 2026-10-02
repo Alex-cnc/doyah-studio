@@ -432,6 +432,103 @@ impl PgSession {
         })
     }
 
+    /// **一批写回，一次事务**（1.4 段）。
+    ///
+    /// 口径（写回是"能改坏数据"的功能，条条都要说清）：
+    /// ① **默认一批一次事务**：中途某条失败 ⇒ **整批回滚**（不让用户面对"改了一半"的库存）；
+    /// ② `rollback` 为真 ⇒ 跑完**主动回滚**（这是"提交前预览"的正确姿势：先跑一遍看影响行数，
+    ///    再决定提交还是回滚 —— 但要说清：在 PostgreSQL 里这仍是**真执行过**，
+    ///    触发器会被触发、序列会被消耗，"回滚了就什么都没发生"是错的）；
+    /// ③ 服务端错误**逐条收集**（哪条、服务端说了什么），不在第一条失败处丢掉上下文；
+    /// ④ 只读连接在**命令层**就被拦住（这里再兜一次：真收到 `forbidden` 就整批不发）。
+    pub async fn run_transaction(
+        &self,
+        statements: &[String],
+        rollback: bool,
+    ) -> Result<Vec<StatementOutcome>, DbFailure> {
+        let plan = doyah_studio_db::writeback::TransactionPlan::explicit();
+        let mut out: Vec<StatementOutcome> = Vec::with_capacity(statements.len() + 2);
+        // 事务语句字面量取自领域层的语句表（**顺序与字面量只此一处**），这里只按序下发。
+        // 为什么不用驱动的 `transaction()`：它要 `&mut Client`，而本层拿的是共享引用；
+        // 手工下发还多一个好处 —— `BEGIN` / `COMMIT` / `ROLLBACK` 各自的结果也能逐条报出来。
+        if let Some(begin) = &plan.begin {
+            self.execute_simple(begin).await?;
+        }
+        let mut failed = false;
+        for sql in statements {
+            let started = std::time::Instant::now();
+            match self.execute_simple(sql).await {
+                Ok(affected) => out.push(StatementOutcome {
+                    sql: sql.clone(),
+                    ok: true,
+                    result: Some(QueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        num_rows: Vec::new(),
+                        returned: 0,
+                        truncated: false,
+                        affected: Some(affected),
+                    }),
+                    failure: None,
+                    elapsed_ms: started.elapsed().as_millis() as u64,
+                }),
+                Err(failure) => {
+                    failed = true;
+                    out.push(StatementOutcome {
+                        sql: sql.clone(),
+                        ok: false,
+                        result: None,
+                        failure: Some(failure),
+                        elapsed_ms: started.elapsed().as_millis() as u64,
+                    });
+                    // 一条失败 ⇒ 不再往下发（后面的语句可能依赖前面那句），直接回滚
+                    break;
+                }
+            }
+        }
+        if failed || rollback {
+            if let Some(rb) = &plan.rollback {
+                self.execute_simple(rb).await?;
+            }
+        } else if let Some(commit) = &plan.commit {
+            self.execute_simple(commit).await?;
+        }
+        Ok(out)
+    }
+
+    /// 下发一条**不带结果集**的语句，取回影响行数（事务语句与写语句都用它）。
+    async fn execute_simple(&self, sql: &str) -> Result<u64, DbFailure> {
+        let statement = self
+            .client
+            .prepare(sql)
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        self.client
+            .execute(&statement, &[])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))
+    }
+
+    /// 一张表的**主键列名**（按主键定义顺序）。没有主键 ⇒ 空表。
+    ///
+    /// 为什么必须有它：写回要靠主键定位"是哪一行"（见领域层 `writeback` 的口径 ①）；
+    /// 无主键的表**不给改入口**，而不是生成一条 `WHERE` 靠猜的 UPDATE。
+    pub async fn primary_key(&self, schema: &str, table: &str) -> Result<Vec<String>, DbFailure> {
+        let sql = "SELECT a.attname \
+                   FROM pg_index i \
+                   JOIN pg_class c ON c.oid = i.indrelid \
+                   JOIN pg_namespace n ON n.oid = c.relnamespace \
+                   JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(i.indkey) \
+                   WHERE i.indisprimary AND n.nspname = $1 AND c.relname = $2 \
+                   ORDER BY array_position(i.indkey, a.attnum)";
+        let rows = self
+            .client
+            .query(sql, &[&schema, &table])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        Ok(rows.into_iter().map(|row| row.get::<_, String>(0)).collect())
+    }
+
     /// 快速自检（`--probe` 用）：连上、能问出一行、能列出表。
     pub async fn probe(&self) -> Result<ProbeReport, DbFailure> {        let tables = self.tables().await?;
         let one = self.run("SELECT 1 AS one", 10).await?;

@@ -26,7 +26,7 @@ export const MAC_ITEMS: readonly ActivityBarItemId[] = ['workspace', 'database',
  * 本侧**已开工**的视图（其余如实标「未开工」，不半建）。
  * `retro` 未开工 —— 与 `windows/版本计划.md` 的 alpha 4.0 一致。
  */
-export const BUILT_ITEMS: readonly ActivityBarItemId[] = ['workspace', 'database', 'notes'] as const
+export const BUILT_ITEMS: readonly ActivityBarItemId[] = ['database', 'workspace', 'notes'] as const
 
 /** 持久化键：与工程内其它 UI 偏好同一套 `ui.` 前缀（对侧 `ActivityBarItem.storageKey` 逐字相同）。 */
 export const ACTIVITY_BAR_STORAGE_KEY = 'ui.activityBarItem'
