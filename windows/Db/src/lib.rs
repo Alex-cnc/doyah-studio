@@ -27,6 +27,7 @@ pub mod sql;
 pub mod staleness;
 pub mod tree;
 pub mod terminal;
+pub mod terminal_input;
 pub mod url;
 pub mod workspace;
 pub mod writeback;
@@ -69,6 +70,11 @@ pub use highlight::{
     syntax_of, tokenize as tokenize_code, CodeSpan, CodeSyntax, CodeTokenKind,
 };
 pub use inspect::{CellValue, Field, Shape, SummaryLanguage};
+pub use terminal_input::{
+    control_key, cursor_key, cursor_key_with_modifiers, function_key, key_char, mouse_report, paste as paste_bytes,
+    CursorKey as TermCursorKey, Modifiers as TermModifiers, MouseAction, MouseButton, MouseEvent,
+    PASTE_END, PASTE_START,
+};
 pub use terminal::{is_wide, Cell as TerminalCell, Color as TerminalColor, Pen as TerminalPen, Screen as TerminalScreen, SCROLLBACK_LIMIT};
 pub use url::{FormMerge, ImportedConnection, UrlParseError};
 pub use workspace::{EntryKind, History, Tab, TextLanguage};
