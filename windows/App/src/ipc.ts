@@ -63,6 +63,9 @@ export const COMMANDS = {
   // 编辑面（2.2：行结构 / 高亮分词）
   workspaceReadLines: 'workspace_read_lines',
   workspaceReadSpans: 'workspace_read_spans',
+  // 外部改动（2.3：载入快照 / 比对）
+  workspaceFileSnapshot: 'workspace_file_snapshot',
+  workspaceCheckStaleness: 'workspace_check_staleness',
 } as const
 
 export interface AppInfo {
@@ -745,4 +748,40 @@ export function workspaceReadSpans(
     { workspaceRoot, relativePath, languageKey },
     () => ({ relativePath, spans: [], byteLen: 0 }),
   )
+}
+// ── 外部改动（alpha 2.3）────────────────────────────────────────────────────────────
+
+/** 载入页签那一刻记下的磁盘状态（比对用）。 */
+export interface LoadedFile {
+  relativePath: string
+  byteCount: number
+  modifiedUnix: number | null
+  contentHash: number
+}
+
+/** 页签内容与盘上现在那份的关系（**只有 unchanged 才安静**）。 */
+export type Staleness = 'unchanged' | 'modified' | 'deleted' | 'replaced'
+
+export interface StalenessReport {
+  staleness: Staleness
+  /** 人话（**说出下一步能做什么**）；`null` = 没变、不打扰 */
+  note: string | null
+}
+
+/** 载入文件时取快照。 */
+export function workspaceFileSnapshot(workspaceRoot: string, relativePath: string): Promise<LoadedFile> {
+  return call(COMMANDS.workspaceFileSnapshot, { workspaceRoot, relativePath }, () => ({
+    relativePath,
+    byteCount: 0,
+    modifiedUnix: null,
+    contentHash: 0,
+  }))
+}
+
+/** 比对快照与盘上现在那份（外部改动要如实说）。 */
+export function workspaceCheckStaleness(workspaceRoot: string, loaded: LoadedFile): Promise<StalenessReport> {
+  return call(COMMANDS.workspaceCheckStaleness, { workspaceRoot, loaded }, () => ({
+    staleness: 'unchanged' as const,
+    note: null,
+  }))
 }

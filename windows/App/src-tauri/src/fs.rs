@@ -1012,3 +1012,136 @@ mod lines_tests {
         assert!(read_spans(&root_text, "main.rs", Some("lang.nope")).unwrap().spans.is_empty());
     }
 }
+
+// ── 外部改动（2.3）：载入快照与实际状态对比 ──────────────────────────────────────────
+//
+// 判定全在领域层 `staleness`：**先看内容指纹**（指纹一样就是没变，时间戳动了也不算 ——
+// "另存了一遍同样的内容"很常见），再看大小与修改时间；盘上没有了 ⇒ "已删除"（不是"已改动"）。
+
+/// 载入一个文件时记下的快照（页签拿它做对比）。
+pub fn file_snapshot(workspace_root: &str, relative: &str) -> Result<doyah_studio_db::LoadedFile, DbFailure> {
+    let path = resolve_in(workspace_root, relative)?;
+    let meta = std::fs::metadata(&path).map_err(|e| {
+        failure(
+            format!("看不到这个文件：{e}（{}）", path.display()),
+            "它可能被移动或删除了；刷新一下树。",
+        )
+    })?;
+    let bytes = std::fs::read(&path).map_err(|e| {
+        failure(
+            format!("读文件失败：{e}（{}）", path.display()),
+            "确认权限与文件状态。",
+        )
+    })?;
+    Ok(doyah_studio_db::LoadedFile {
+        relative_path: relative.replace('\\', "/"),
+        byte_count: meta.len(),
+        modified_unix: modified_unix(&meta),
+        content_hash: doyah_studio_db::content_hash(&bytes),
+    })
+}
+
+/// 修改时间（Unix 秒）；拿不到就是 `None`（**不编一个 0** —— 那会与真实时间戳混起来骗判定）。
+fn modified_unix(meta: &std::fs::Metadata) -> Option<i64> {
+    meta.modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|delta| delta.as_secs() as i64)
+}
+
+/// 检查一个页签的快照与盘上现在那份是否还是同一份。
+///
+/// 返回 `(状态, 人话)`：**状态**给界面做分支，**人话**给界面直接显示（都 `None` 表示没变）。
+pub fn check_staleness(
+    workspace_root: &str,
+    loaded: &doyah_studio_db::LoadedFile,
+) -> Result<(doyah_studio_db::Staleness, Option<String>), DbFailure> {
+    let path = resolve_in(workspace_root, &loaded.relative_path)?;
+    let now = if path.exists() {
+        let meta = std::fs::metadata(&path).map_err(|e| {
+            failure(
+                format!("看不到这个文件：{e}（{}）", path.display()),
+                "确认权限与文件状态。",
+            )
+        })?;
+        let bytes = std::fs::read(&path).map_err(|e| {
+            failure(
+                format!("读文件失败：{e}（{}）", path.display()),
+                "确认权限与文件状态。",
+            )
+        })?;
+        Some(doyah_studio_db::DiskFile {
+            byte_count: meta.len(),
+            modified_unix: modified_unix(&meta),
+            content_hash: doyah_studio_db::content_hash(&bytes),
+        })
+    } else {
+        None // 盘上没有了 ⇒ 交给领域层判成"已删除"
+    };
+    let staleness = doyah_studio_db::classify(loaded, now.as_ref());
+    Ok((staleness, doyah_studio_db::staleness_note(staleness)))
+}
+
+#[cfg(test)]
+mod staleness_tests {
+    use super::*;
+
+    fn root(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("doyah-stale-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn unchanged_then_modified_then_deleted_are_all_reported_truthfully() {
+        let dir = root("check");
+        let root_text = dir.to_string_lossy().to_string();
+        std::fs::write(dir.join("a.txt"), "hello").unwrap();
+
+        let snapshot = file_snapshot(&root_text, "a.txt").unwrap();
+        // ① 没动过 ⇒ 未变，而且**不给提示**（不打扰）
+        let (state, note) = check_staleness(&root_text, &snapshot).unwrap();
+        assert_eq!(state, doyah_studio_db::Staleness::Unchanged);
+        assert!(note.is_none());
+
+        // ② 别处改了内容 ⇒ "被改过" + 一句能照做的人话
+        std::fs::write(dir.join("a.txt"), "hello, world").unwrap();
+        let (state, note) = check_staleness(&root_text, &snapshot).unwrap();
+        assert_eq!(state, doyah_studio_db::Staleness::Modified);
+        assert!(note.unwrap().contains("重新打开"));
+
+        // ③ 内容一样、只是又写了一遍 ⇒ **还是未变**（这条防的是"天天误报"）
+        let snapshot2 = file_snapshot(&root_text, "a.txt").unwrap();
+        std::fs::write(dir.join("a.txt"), "hello, world").unwrap();
+        let (state, _) = check_staleness(&root_text, &snapshot2).unwrap();
+        assert_eq!(state, doyah_studio_db::Staleness::Unchanged, "内容没变就不该报");
+
+        // ④ 盘上删掉 ⇒ "已删除"（与"被改过"分开报）
+        std::fs::remove_file(dir.join("a.txt")).unwrap();
+        let (state, note) = check_staleness(&root_text, &snapshot2).unwrap();
+        assert_eq!(state, doyah_studio_db::Staleness::Deleted);
+        assert!(note.unwrap().contains("已经不在了"));
+    }
+
+    #[test]
+    fn same_size_rewrite_is_reported_as_replaced() {
+        let dir = root("replace");
+        let root_text = dir.to_string_lossy().to_string();
+        std::fs::write(dir.join("b.txt"), "AAAA").unwrap();
+        let snapshot = file_snapshot(&root_text, "b.txt").unwrap();
+        // 同长度改写（大小不变、时间戳可能不变）⇒ 靠指纹抓出来
+        std::fs::write(dir.join("b.txt"), "BBBB").unwrap();
+        let (state, note) = check_staleness(&root_text, &snapshot).unwrap();
+        assert!(state.needs_attention(), "同长度改写必须报出来");
+        assert!(note.is_some());
+    }
+
+    #[test]
+    fn snapshot_refuses_escapes_and_missing_files() {
+        let dir = root("snapshot");
+        let root_text = dir.to_string_lossy().to_string();
+        assert!(file_snapshot(&root_text, "../outside.txt").is_err());
+        assert!(file_snapshot(&root_text, "nope.txt").is_err());
+    }
+}

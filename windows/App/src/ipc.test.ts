@@ -70,6 +70,8 @@ describe('ipc', () => {
       'workspace_reveal',
       'workspace_read_lines',
       'workspace_read_spans',
+      'workspace_file_snapshot',
+      'workspace_check_staleness',
     ])
   })
 

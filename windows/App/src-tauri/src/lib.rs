@@ -571,6 +571,22 @@ fn workspace_read_spans(
     fs::read_spans(&workspace_root, &relative_path, language_key.as_deref())
 }
 
+/// 载入一个文件时的**快照**（页签拿它做外部改动对比）。
+#[tauri::command]
+fn workspace_file_snapshot(workspace_root: String, relative_path: String) -> Result<doyah_studio_db::LoadedFile, DbFailure> {
+    fs::file_snapshot(&workspace_root, &relative_path)
+}
+
+/// 检查一个页签的快照与盘上现在那份是否还是同一份（**外部改动要如实说**）。
+#[tauri::command]
+fn workspace_check_staleness(
+    workspace_root: String,
+    loaded: doyah_studio_db::LoadedFile,
+) -> Result<serde_json::Value, DbFailure> {
+    let (staleness, note) = fs::check_staleness(&workspace_root, &loaded)?;
+    Ok(serde_json::json!({ "staleness": staleness, "note": note }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -620,7 +636,9 @@ pub fn run() {
             workspace_delete,
             workspace_reveal,
             workspace_read_lines,
-            workspace_read_spans
+            workspace_read_spans,
+            workspace_file_snapshot,
+            workspace_check_staleness
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

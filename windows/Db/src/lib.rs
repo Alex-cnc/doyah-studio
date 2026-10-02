@@ -19,6 +19,7 @@ pub mod highlight;
 pub mod inspect;
 pub mod reveal;
 pub mod sql;
+pub mod staleness;
 pub mod tree;
 pub mod url;
 pub mod workspace;
@@ -27,6 +28,7 @@ pub mod writeback;
 pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter};
 pub use reveal::{ensure_inside, explorer_plan, pick_terminal, terminal_plan, RevealPlan, TerminalKind};
 pub use sql::{explain, spans, tokenize, StatementSpan, Token, TokenKind};
+pub use staleness::{classify, content_hash, note as staleness_note, DiskFile, LoadedFile, Staleness};
 pub use writeback::{edits_to_dml, statement_risk, CellEdit, DmlStatement, Risk, RowKey, TransactionPlan};
 pub use tree::{group_by_schema, search, sort_objects, ObjectKind, ObjectNode, SearchHit};
 pub use code_lines::{

@@ -7,7 +7,7 @@
 //   · **纯逻辑层**（`workspace/logic.ts`）管显示串与树的展开/键盘走位（有 13 例单测）。
 //   · 本组件只管状态与排版。
 
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   workspaceClosed,
   workspaceCreate,
@@ -18,6 +18,8 @@ import {
   workspaceMove,
   workspaceOpened,
   workspaceOpenTabs,
+  workspaceCheckStaleness,
+  workspaceFileSnapshot,
   workspaceReadFile,
   workspaceReadLines,
   workspaceReadSpans,
@@ -28,6 +30,7 @@ import {
   type FileContent,
   type FileLines,
   type FsEntry,
+  type LoadedFile,
   type WorkspaceHistory,
 } from '../ipc'
 import { entryGlyph, flattenTree, indentPx, neighbouringRow, tabLabel, toggleExpanded, workspaceDisplayName } from '../workspace/logic'
@@ -45,6 +48,72 @@ function lineSegments(lineIndex: number) {
   const nextStart =
     data.structure.lines[lineIndex + 1]?.byteStart ?? line.byteStart + new TextEncoder().encode(line.text).length
   return sliceSegments(line.text, segmentsForLine(line.text, line.byteStart, nextStart, data.spans))
+}
+
+// 外部改动（2.3）：每个页签存一份**载入快照**；比对结果按页签记，**只有变了才说话**
+const snapshots = ref(new Map<string, LoadedFile>())
+const staleNotes = ref(new Map<string, { staleness: string; note: string }>())
+
+/** 载入（或重载）一个页签时记快照 */
+async function rememberSnapshot(relativePath: string) {
+  try {
+    const loaded = await workspaceFileSnapshot(root.value, relativePath)
+    const next = new Map(snapshots.value)
+    next.set(relativePath, loaded)
+    snapshots.value = next
+    // 快照更新 ⇒ 这一页签的「变了」标记清掉（重载之后就是最新的了）
+    const notes = new Map(staleNotes.value)
+    notes.delete(relativePath)
+    staleNotes.value = notes
+  } catch {
+    // 拿不到快照就不跟踪（**不假装**在跟踪）
+  }
+}
+
+/** 比对所有开着的页签：**在别处被改了就要说出来** */
+async function checkExternalChanges() {
+  if (!root.value) return
+  const notes = new Map(staleNotes.value)
+  for (const tab of tabs.value) {
+    const path = tab.relativePath
+    if (!path) continue
+    const loaded = snapshots.value.get(path)
+    if (!loaded) continue
+    try {
+      const report = await workspaceCheckStaleness(root.value, loaded)
+      if (report.staleness !== 'unchanged' && report.note) {
+        notes.set(path, { staleness: report.staleness, note: report.note })
+      } else {
+        notes.delete(path)
+      }
+    } catch {
+      // 查不动就保持原样（不编一个状态）
+    }
+  }
+  staleNotes.value = notes
+}
+
+/** 当前页签的「变了」提示（没有就是没变） */
+const staleNotice = computed(() => {
+  const path = activeTab.value?.relativePath
+  return path ? staleNotes.value.get(path) : undefined
+})
+
+/** **重新打开**当前页签：从盘上重读内容 + 行结构 + 高亮，并更新快照 */
+async function reloadActiveTab() {
+  const tab = activeTab.value
+  if (!tab?.relativePath || !root.value) return
+  busy.value = '重读中…'
+  try {
+    const file = await workspaceReadFile(root.value, tab.relativePath)
+    tabs.value = tabs.value.map((t) => (t.id === tab.id ? { ...t, content: file.content, saved: file.content } : t))
+    await loadEditorData(tab.relativePath)
+    await rememberSnapshot(tab.relativePath)
+  } catch (e) {
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
+  }
 }
 
 /** 本版只读：编辑面显示内容，改与存归 2.1 / 2.2 段（不假装能改）。 */
@@ -69,6 +138,14 @@ const selected = ref<string | null>(null)
 const selectedTabId = ref<string>(HOME_ID)
 const failure = ref<DbFailure | null>(null)
 const busy = ref('')
+
+// 外部改动检查的时机：**窗口回到前台时**（切出去在别处改文件是主场景）+ 页签上的手动按钮。
+// **不做定时轮询**：那是持续消耗，而"回到前台"已经覆盖了绝大多数场景。
+function onWindowFocus() {
+  void checkExternalChanges()
+}
+onMounted(() => window.addEventListener('focus', onWindowFocus))
+onBeforeUnmount(() => window.removeEventListener('focus', onWindowFocus))
 
 // 会话恢复（2.0）：上次打开的根 + 最近打开两份清单。
 // **不自动打开**上次那个文件夹：路径可能已被移动 / 删除，自动打开会每次启动弹一次错；
@@ -195,6 +272,7 @@ async function openFile(entry: FsEntry) {
     selectedTabId.value = tab.id
     // 编辑面数据（2.2）：行结构 + 高亮分词。**拉不到不影响打开** —— 退化成纯文本显示
     await loadEditorData(tab.relativePath)
+    await rememberSnapshot(tab.relativePath)
     await rememberOpenTabs()
   } finally {
     busy.value = ''
@@ -578,7 +656,15 @@ function onTreeKeydown(event: KeyboardEvent) {
               {{ activeTab.relativePath }} · {{ activeTab.languageKey }}
               <span v-if="endingNote" class="ws__tag">{{ endingNote }}</span>
               <span class="ws__tag">只读（本版）</span>
+              <button class="ws__act" type="button" title="重新比对盘上有没有被别处改过" @click="checkExternalChanges">
+                ⟳ 比对
+              </button>
             </p>
+            <!-- 外部改动（2.3）：**如实说**，并给出下一步（重新打开）—— 只说"变了"等于把问题丢回给人 -->
+            <div v-if="staleNotice" class="ws__stale" role="alert">
+              <p class="ws__stale-msg">{{ staleNotice.note }}</p>
+              <button class="ws__btn ws__btn--primary" type="button" @click="reloadActiveTab">重新打开</button>
+            </div>
             <!-- 编辑面：**行号列 + 高亮**（行号列宽随行数变 —— 写死会在第 100 行处挤掉数字） -->
             <div v-if="activeEditor" class="ws__gutter-wrap">
               <div class="ws__gutter" aria-hidden="true">
@@ -878,6 +964,24 @@ function onTreeKeydown(event: KeyboardEvent) {
 }
 
 /* 行号列 + 代码（2.2）：两栏并排，行高必须一致（否则行号与内容会错开半行） */
+/* 外部改动提示：**醒目但不挡路**（内容还在，只是可能不是盘上那份了） */
+.ws__stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  margin: 0 0 var(--ds-spacing-s);
+  padding: var(--ds-spacing-s);
+  background: var(--ds-color-surface-panel);
+  border: var(--ds-metric-hairline) solid var(--ds-color-status-warning);
+  border-radius: var(--ds-radius-control);
+}
+
+.ws__stale-msg {
+  margin: 0;
+  color: var(--ds-color-text-primary);
+  font-size: var(--ds-font-caption-size);
+}
 .ws__gutter-wrap {
   display: flex;
   align-items: stretch;
