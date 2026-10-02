@@ -216,7 +216,10 @@ struct WorkspaceExplorerView: View {
         .contextMenu {
             Button(L(.workspaceReveal)) { workspace.reveal(entry) }
         }
-        .help(entry.relativePath)
+        // **整行不再挂 tip**（2026-10-02 需求提出者原话：「鼠标悬停到目录上的自带文件名 tip 取消，
+        // 因为没用，且遮住了增删改工具条按钮」）：行的 tip 会盖住行内三枚图标的 tip ——
+        // AppKit 只给光标下**最近的一层**提示，父层挂了，子层那三枚就永远看不到自己的名字。
+        // 需要完整路径的地方仍有右键「在访达中显示」，不靠悬停。
         .accessibilityIdentifier("workspace-row-\(entry.relativePath)")
     }
 
@@ -269,6 +272,10 @@ struct WorkspaceExplorerView: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                // tip 也挂在 `Menu` 本体上：`.borderlessButton` 的 menu 只把 label 当绘制内容，
+                // 挂在内层 label 上实测不一定起效（三枚里就这枚是 Menu 不是 Button）。
+                .help("\(L(.workspaceNewFile)) / \(L(.workspaceNewFolder))")
+                .accessibilityLabel(L(.workspaceNewFile))
                 .accessibilityIdentifier("workspace-action-plus-\(entry.relativePath)")
             }
 

@@ -167,6 +167,16 @@ struct MainWindow: View {
         .onPreferenceChange(MainWindowContentWidthKey.self) { width in
             contentWidth = width
         }
+        // **启动就按「当前默认呈现的是哪个功能」对齐菜单项**（2026-10-02 需求提出者原话：
+        // 「应用启动时就该检查当前默认呈现的是那个功能，来决定菜单项」）。`MainMenuLocalizer` 那一层
+        // 不持有 `AppState`，所以由窗口把**权威值**（许可证解析之后的那个）喂给它 —— `AppState`
+        // 自己发的广播也走同一条路，两条都留着：这条不依赖「观察者装好了没 / 菜单建好了没」的先后。
+        .task {
+            MainMenuLocalizer.syncAreaVisibility(appState.selectedActivityItem)
+        }
+        .onChange(of: appState.selectedActivityItem) { _, item in
+            MainMenuLocalizer.syncAreaVisibility(item)
+        }
         .sheet(item: $formMode) { mode in
             ConnectionFormView(
                 configuration: mode.configuration,

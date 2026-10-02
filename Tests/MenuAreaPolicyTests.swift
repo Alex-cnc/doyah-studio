@@ -125,6 +125,28 @@ final class MenuAreaPolicyTests: XCTestCase {
                       "菜单重建后没有重新对齐显示")
     }
 
+    /// **启动就按当前呈现的功能决定菜单项**（2026-10-02 需求提出者原话：「应用启动时就该检查当前默认
+    /// 呈现的是那个功能，来决定菜单项」）。菜单层不持有 `AppState` ⇒ 由窗口把权威值喂给它，
+    /// 并且不依赖「观察者装好了没 / 菜单建好了没」的先后。
+    func testWindowFeedsCurrentAreaAtLaunch() throws {
+        let window = try source("App/Views/MainWindow.swift")
+        XCTAssertTrue(window.contains("MainMenuLocalizer.syncAreaVisibility(appState.selectedActivityItem)"),
+                      "启动时没有把当前活动栏项喂给菜单层 ⇒ 首屏菜单项与默认呈现的功能不一致")
+        XCTAssertTrue(window.contains(".onChange(of: appState.selectedActivityItem)"),
+                      "换区后没有从窗口这条线再同步一次（广播那条路之外的兜底）")
+    }
+
+    /// 反查键是按**标题**认的 ⇒ 标题改完要再对齐一次，否则「启动那一刻标题还没本地化」会漏掉项。
+    func testApplyRechecksVisibilityAfterRetitle() throws {
+        let localizer = try source("App/MainMenuLocalizer.swift")
+        guard let retitle = localizer.range(of: "let changed = retitle(mainMenu, to: language)") else {
+            return XCTFail("`retitle` 那一步不在了 —— 锚点变了就更新这条判据")
+        }
+        let after = localizer[retitle.upperBound...].prefix(500)
+        XCTAssertTrue(after.contains("applyVisibility(mainMenu, area: lastKnownArea)"),
+                      "改完标题没有重新对齐显示 —— 标题还没本地化的那一刻会认不出登记过的项")
+    }
+
     /// 浏览器页签长在工作区（队列 `L-149`）⇒ 点菜单建页签前先切区，与「新建查询」同一口径。
     func testNewBrowserTabSwitchesToWorkspaceArea() throws {
         let commands = try source("App/DoyahStudioCommands.swift")

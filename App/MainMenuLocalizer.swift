@@ -252,6 +252,10 @@ enum MainMenuLocalizer {
         // SwiftUI 重建菜单图后 `isHidden` 会回到初值 ⇒ 每一遍都按当前区再对齐一次（与语言无关）。
         applyVisibility(mainMenu, area: lastKnownArea)
         let changed = retitle(mainMenu, to: language)
+        // **再对齐一次**：反查键是按**标题**认的，而刚被 SwiftUI 建出来的那一批标题可能是**非**当前语言
+        // 的（`key(forTitle:)` 两种语言都试，认得出来就顺手对齐）—— 所以改完标题再来一遍，
+        // 免得「启动那一刻标题还没本地化 ⇒ 认不出 ⇒ 联动漏掉一项」。
+        applyVisibility(mainMenu, area: lastKnownArea)
         guard changed > 0 else {
             // 这一遍什么都不用改 ⇒ 说明上一次改名站住了，回头看到此为止。
             followUpIndex = 0
