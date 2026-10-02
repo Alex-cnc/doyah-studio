@@ -40,6 +40,12 @@ import DoyahCore
 /// `.toolbar { ToolbarItem(placement: .principal) }` 同形）；命中测试走的是 AppKit 自己那条路
 /// （`hitTest` 递归到子视图），合成事件的投递在**进程内**完成 ⇒ 不需要辅助功能 / 屏幕录制授权。
 ///
+/// **运行面（不设 `XCTSkip` 门）**：零权限、不碰使用者偏好、约 2 秒 ⇒ 它**既**挂在
+/// `./Scripts/verify-ui-interactions.sh`（交互入口）**也**在每轮门禁 `./Scripts/verify-all.sh`
+/// 第 1 项的 `swift test` 里真跑（实测 `.build/round162/verify-all-round162b.log` 第 401 行有本轮的地图读数）。
+/// 这是有意为之：第 161 轮那次「装上了却没接到点击」在**外观上完全看不出来**，
+/// 只有这张地图会红。
+///
 /// ## 边界（如实登记，别当已验）
 ///
 /// · 宿主是**手工搭的**工具条窗口，**不是** App 自己那个窗口：SwiftUI 自家工具条那条接线、
