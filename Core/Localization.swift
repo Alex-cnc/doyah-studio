@@ -1857,6 +1857,51 @@ public enum LKey: String, CaseIterable, Sendable {
     case menuSystemEnterFullScreen
     case menuSystemToggleSidebar
     case menuSystemAppHelp
+    // **系统菜单里「展开才出现」的那一族**（内测第三批 · 丙2 下一层，2026-10-02）。
+    //
+    // 为什么要单列一段：`显示` 与 `窗口` 两个菜单里有一批项**不是 SwiftUI 建的**，
+    // 而是 AppKit 在**菜单被展开的那一刻**才插进树里的（实测：不展开的 dump 里
+    // `显示标签页栏` / `填充` / `居中` / `移动与调整大小` / `全屏幕平铺` 一条都不在）。
+    // 它们的标题由 AppKit 按**进程启动语言**渲染，运行期切语言对它们无效 ——
+    // 于是中文界面下会看到 `Show Tab Bar` / `Fill` / `Center` / `Move & Resize` /
+    // `Full Screen Tile`（需求提出者 2026-10-02 内测原话）。
+    // 表里认不出 ⇒ 自愈不碰它 ⇒ 那一项停在启动语言，故这些也必须逐项登记。
+    case menuSystemShowTabBar
+    case menuSystemShowAllTabs
+    case menuSystemMinimizeAll
+    case menuSystemZoomAll
+    case menuSystemFill
+    case menuSystemCenter
+    case menuSystemMoveAndResize
+    case menuSystemHalves
+    case menuSystemQuarters
+    case menuSystemArrange
+    case menuSystemZoomLeft
+    case menuSystemZoomRight
+    case menuSystemZoomTop
+    case menuSystemZoomBottom
+    case menuSystemZoomTopLeft
+    case menuSystemZoomTopRight
+    case menuSystemZoomBottomLeft
+    case menuSystemZoomBottomRight
+    case menuSystemZoomLeftAndRight
+    case menuSystemZoomLeftThreeUp
+    case menuSystemZoomRightAndLeft
+    case menuSystemZoomRightThreeUp
+    case menuSystemZoomTopAndBottom
+    case menuSystemZoomTopThreeUp
+    case menuSystemZoomBottomAndTop
+    case menuSystemZoomBottomThreeUp
+    case menuSystemReturnToPreviousSize
+    case menuSystemFullScreenTile
+    case menuSystemTileLeft
+    case menuSystemTileRight
+    case menuSystemArrangeInFront
+    case menuSystemRemoveWindowFromSet
+    case menuSystemShowPreviousTab
+    case menuSystemShowNextTab
+    case menuSystemMoveTabToNewWindow
+    case menuSystemMergeAllWindows
     // 显式「重启应用」（R-36 的入口：以前只有"换语言的副作用"，现在换语言不再需要它）
     case menuRelaunchApp
 
@@ -3623,6 +3668,46 @@ public enum LocalizedStrings {
         .menuSystemEnterFullScreen: [.simplifiedChinese: "进入全屏幕", .english: "Enter Full Screen"],
         .menuSystemToggleSidebar: [.simplifiedChinese: "显示/隐藏边栏", .english: "Toggle Sidebar"],
         .menuSystemAppHelp: [.simplifiedChinese: "%@ 帮助", .english: "%@ Help"],
+        // **展开才出现的那一族系统菜单项**（内测第三批 · 丙2 下一层，2026-10-02）。
+        // 文案逐条抄自本机运行的 AppKit 树（英文档 / 中文档两份真 dump 对位，见
+        // `Scripts/fixtures/menu-dump-*.txt`）—— 不自己翻译：这些是系统菜单，
+        // 用户对着系统其它应用的眼睛看的也是这套说法。
+        .menuSystemShowTabBar: [.simplifiedChinese: "显示标签页栏", .english: "Show Tab Bar"],
+        .menuSystemShowAllTabs: [.simplifiedChinese: "显示所有标签页", .english: "Show All Tabs"],
+        .menuSystemMinimizeAll: [.simplifiedChinese: "全部最小化", .english: "Minimize All"],
+        .menuSystemZoomAll: [.simplifiedChinese: "全部缩放", .english: "Zoom All"],
+        .menuSystemFill: [.simplifiedChinese: "填充", .english: "Fill"],
+        .menuSystemCenter: [.simplifiedChinese: "居中", .english: "Center"],
+        .menuSystemMoveAndResize: [.simplifiedChinese: "移动与调整大小", .english: "Move & Resize"],
+        .menuSystemHalves: [.simplifiedChinese: "二等分", .english: "Halves"],
+        .menuSystemQuarters: [.simplifiedChinese: "四等分", .english: "Quarters"],
+        .menuSystemArrange: [.simplifiedChinese: "排列", .english: "Arrange"],
+        .menuSystemZoomLeft: [.simplifiedChinese: "左侧", .english: "Left"],
+        .menuSystemZoomRight: [.simplifiedChinese: "右侧", .english: "Right"],
+        .menuSystemZoomTop: [.simplifiedChinese: "顶部", .english: "Top"],
+        .menuSystemZoomBottom: [.simplifiedChinese: "底部", .english: "Bottom"],
+        .menuSystemZoomTopLeft: [.simplifiedChinese: "左上", .english: "Top Left"],
+        .menuSystemZoomTopRight: [.simplifiedChinese: "右上", .english: "Top Right"],
+        .menuSystemZoomBottomLeft: [.simplifiedChinese: "左下", .english: "Bottom Left"],
+        .menuSystemZoomBottomRight: [.simplifiedChinese: "右下", .english: "Bottom Right"],
+        .menuSystemZoomLeftAndRight: [.simplifiedChinese: "左侧与右侧", .english: "Left & Right"],
+        .menuSystemZoomLeftThreeUp: [.simplifiedChinese: "左侧与四等分", .english: "Left & Quarters"],
+        .menuSystemZoomRightAndLeft: [.simplifiedChinese: "右侧与左侧", .english: "Right & Left"],
+        .menuSystemZoomRightThreeUp: [.simplifiedChinese: "右侧与四等分", .english: "Right & Quarters"],
+        .menuSystemZoomTopAndBottom: [.simplifiedChinese: "顶部与底部", .english: "Top & Bottom"],
+        .menuSystemZoomTopThreeUp: [.simplifiedChinese: "顶部与四等分", .english: "Top & Quarters"],
+        .menuSystemZoomBottomAndTop: [.simplifiedChinese: "底部与顶部", .english: "Bottom & Top"],
+        .menuSystemZoomBottomThreeUp: [.simplifiedChinese: "底部与四等分", .english: "Bottom & Quarters"],
+        .menuSystemReturnToPreviousSize: [.simplifiedChinese: "恢复上一个大小", .english: "Return to Previous Size"],
+        .menuSystemFullScreenTile: [.simplifiedChinese: "全屏幕平铺", .english: "Full Screen Tile"],
+        .menuSystemTileLeft: [.simplifiedChinese: "屏幕左侧", .english: "Left of Screen"],
+        .menuSystemTileRight: [.simplifiedChinese: "屏幕右侧", .english: "Right of Screen"],
+        .menuSystemArrangeInFront: [.simplifiedChinese: "排在前面", .english: "Arrange in Front"],
+        .menuSystemRemoveWindowFromSet: [.simplifiedChinese: "从组中移除窗口", .english: "Remove Window from Set"],
+        .menuSystemShowPreviousTab: [.simplifiedChinese: "显示上一个标签页", .english: "Show Previous Tab"],
+        .menuSystemShowNextTab: [.simplifiedChinese: "显示下一个标签页", .english: "Show Next Tab"],
+        .menuSystemMoveTabToNewWindow: [.simplifiedChinese: "将标签页移到新窗口", .english: "Move Tab to New Window"],
+        .menuSystemMergeAllWindows: [.simplifiedChinese: "合并所有窗口", .english: "Merge All Windows"],
         .menuRelaunchApp: [.simplifiedChinese: "重启应用…", .english: "Relaunch App…"],
         .importPartial: [.simplifiedChinese: "已写入 %d 行（前面的批次已生效，请按需清理）", .english: "%d rows were written (earlier batches are committed; clean up as needed)"],
         .importCancelled: [.simplifiedChinese: "已停止：已写入 %d 行（前面的批次已生效）", .english: "Stopped: %d rows written (earlier batches are committed)"],

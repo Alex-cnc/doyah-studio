@@ -432,14 +432,14 @@
     {
       "key": "panel-root-out-of-scope",
       "label": "面板根判据的**范围外**处数（尺寸取自设计令牌 / 变量的 `.frame` —— 如实打印、不算通过）",
-      "value": 10,
+      "value": 11,
       "unit": "处",
       "measure": {
         "kind": "judge-output",
         "script": "Scripts/check-panel-root-frames.py",
         "regex": "另有 (\\d+) 处",
         "expect": [
-          10
+          11
         ],
         "note": "同一个判据的人读行（它每次显式打印这个数 —— 靠打印区分「没有」与「没扫」）；这条只判「打印出来的数」，范围的归属仍由闭环第 6 项的设计令牌棘城管。"
       },
@@ -448,7 +448,7 @@
           "file": "Docs/概要设计.md",
           "regex": "数量每次\\*\\*显式打印\\*\\*（现 \\*\\*(\\d+)\\*\\* 处",
           "expect": [
-            10
+            11
           ],
           "minSites": 1,
           "note": "§3.27「范围边界（如实写）」段（第 80 轮 L-72 ㈢ 实测：此处写着 9）"
