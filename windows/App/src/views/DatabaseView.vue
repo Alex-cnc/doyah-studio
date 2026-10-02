@@ -16,6 +16,7 @@ import {
   dbConnect,
   dbDisconnect,
   dbQuery,
+  browseSql,
   dbTables,
   type ConnectParams,
   type DbFailure,
@@ -33,6 +34,44 @@ const remember = ref(true)
 /** 启动 SQL（FR-CONN-17）：连接后自动执行；**逐条发、逐条报错**（一条失败不吞掉后面的） */
 const startupSql = ref('')
 const startup = ref<StartupOutcome[]>([])
+// 服务端条件浏览（FR-DATA-02）：只生成 SQL 供预览，执行仍走 dbQuery（同一份输入只解析一次）
+const browse = ref<{ table: string; schema: string } | null>(null)
+const browseWhere = ref('')
+const browseOrder = ref('')
+const browseError = ref('')
+
+function openBrowse(schema: string, table: string) {
+  browse.value = { schema, table }
+  browseWhere.value = ''
+  browseOrder.value = ''
+  browseError.value = ''
+}
+
+/** 生成预览（失败就把「为什么不行」如实显示，不静默给一句空 SQL） */
+async function previewBrowse() {
+  if (!browse.value) return
+  browseError.value = ''
+  try {
+    const sql = await browseSql({
+      table: browse.value.table,
+      schema: browse.value.schema,
+      whereClause: browseWhere.value,
+      orderBy: browseOrder.value,
+    })
+    sqlText.value = sql
+  } catch (e) {
+    browseError.value = describeError(e).message
+  }
+}
+
+/** 预览之后执行（**先看 SQL 再执行**：这是"生成 / 预览 / 执行同一份输入"的用法） */
+async function runBrowse() {
+  await previewBrowse()
+  if (!browseError.value && sqlText.value) {
+    sql.value = sqlText.value
+    await run()
+  }
+}
 
 // 结果网格的**显示态**：筛选词 + 排序列/方向（真正的比较逻辑在 `grid/view.ts`，那里有单测）
 const filter = ref('')
@@ -73,6 +112,7 @@ const saved = ref<SavedConnection[]>([])
 const info = ref<ServerInfo | null>(null)
 const tables = ref<TableNode[]>([])
 const sql = ref('select id, name, balance from app.accounts order by id limit 20')
+const sqlText = ref('')
 const result = ref<QueryResult | null>(null)
 const failure = ref<DbFailure | null>(null)
 const busy = ref('')
@@ -370,8 +410,38 @@ async function probe() {
           >
             {{ t.name }}<span class="db__kind">{{ t.kind === 'table' ? '' : t.kind }}</span>
           </button>
+          <button
+            class="db__browse"
+            type="button"
+            title="按条件浏览（服务端 WHERE / ORDER BY，先生成 SQL 给你看再执行）"
+            @click="openBrowse(t.schema, t.name)"
+          >
+            浏览…
+          </button>
         </div>
       </aside>
+
+        <!-- 服务端条件浏览面板（FR-DATA-02）：先看 SQL，再执行 -->
+        <div v-if="browse" class="db__browse-panel">
+          <p class="db__browse-title">
+            按条件浏览：<code>{{ browse.schema }}.{{ browse.table }}</code>
+            <button class="db__btn" type="button" @click="browse = null">收起</button>
+          </p>
+          <div class="db__browse-fields">
+            <label class="db__field">
+              <span>WHERE（单条表达式；写分号会被拒）</span>
+              <input v-model="browseWhere" type="text" spellcheck="false" placeholder="例如 balance &gt; 100" />
+            </label>
+            <label class="db__field">
+              <span>ORDER BY（只写列与方向）</span>
+              <input v-model="browseOrder" type="text" spellcheck="false" placeholder="例如 id DESC" />
+            </label>
+            <button class="db__btn" type="button" @click="previewBrowse">生成 SQL</button>
+            <button class="db__btn db__btn--primary" type="button" @click="runBrowse">执行</button>
+          </div>
+          <p v-if="browseError" class="db__failure-msg">{{ browseError }}</p>
+          <pre v-if="sqlText" class="db__sql-preview">{{ sqlText }}</pre>
+        </div>
 
       <!-- SQL 与结果 -->
       <div class="db__main">
@@ -643,6 +713,51 @@ async function probe() {
   background: var(--ds-color-surface-panel);
 }
 
+.db__browse {
+  display: block;
+  width: 100%;
+  padding: 0 var(--ds-spacing-xs);
+  background: transparent;
+  color: var(--ds-color-text-tertiary);
+  border: 0;
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.db__browse-panel {
+  padding: var(--ds-spacing-s) var(--ds-spacing-m);
+  border-bottom: var(--ds-metric-hairline) solid var(--ds-hairline);
+  background: var(--ds-color-surface-panel);
+}
+
+.db__browse-title {
+  margin: 0 0 var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__browse-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ds-spacing-s);
+}
+
+.db__browse-fields .db__field input {
+  min-width: 220px;
+}
+
+.db__sql-preview {
+  margin: var(--ds-spacing-xs) 0 0;
+  padding: var(--ds-spacing-xs);
+  background: var(--ds-color-surface-content);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  white-space: pre-wrap;
+}
 .db__kind {
   margin-left: var(--ds-spacing-xs);
   color: var(--ds-color-text-tertiary);

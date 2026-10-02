@@ -192,6 +192,40 @@ fn connection_delete(
     state.connections.remove(&id)
 }
 
+/// 生成**服务端条件浏览**的 SQL（FR-DATA-02；**只生成、不执行**）。
+///
+/// 契约要点（与对侧 `Core/RowBrowsing.swift` 同一口径）：
+/// ① 片段**原样下发**（用户在自己库上写 SQL，本层不做"聪明"改写）；
+/// ② 出现分号（像不止一条语句）⇒ **拒绝并说清**，不会因为点了个"浏览"就把后面的语句执行掉；
+/// ③ 排序写两处 ⇒ 报冲突（无法判断以哪个为准）。
+/// 返回 SQL 供界面**预览**再执行 —— 预览与执行同一份输入、只解析一次。
+#[tauri::command]
+fn browse_sql(
+    table: String,
+    schema: Option<String>,
+    where_clause: Option<String>,
+    order_by: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    count_only: Option<bool>,
+) -> Result<String, DbFailure> {
+    let filter = doyah_studio_db::browse::BrowseFilter {
+        where_clause: where_clause.unwrap_or_default(),
+        order_by: order_by.unwrap_or_default(),
+        limit: limit.unwrap_or(200),
+        offset: offset.unwrap_or(0),
+    };
+    let built = if count_only.unwrap_or(false) {
+        doyah_studio_db::browse::count(&table, schema.as_deref(), &filter)
+    } else {
+        doyah_studio_db::browse::browse(&table, schema.as_deref(), &filter)
+    };
+    built.map_err(|e: doyah_studio_db::browse::BrowseError| DbFailure {
+        message: e.message().to_string(),
+        hint: format!("（判定标识：{}）改好条件再试 —— 这里只接受单条表达式。", e.identifier()),
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -211,7 +245,8 @@ pub fn run() {
             db_probe,
             connections_list,
             connection_save,
-            connection_delete
+            connection_delete,
+            browse_sql
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

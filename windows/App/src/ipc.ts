@@ -23,6 +23,8 @@ export const COMMANDS = {
   connectionsList: 'connections_list',
   connectionSave: 'connection_save',
   connectionDelete: 'connection_delete',
+  // 服务端条件浏览（只生成 SQL，执行仍走 dbQuery）
+  browseSql: 'browse_sql',
 } as const
 
 export interface AppInfo {
@@ -262,4 +264,20 @@ export function connectionSave(request: ConnectionSaveRequest): Promise<SavedCon
 
 export function connectionDelete(id: string): Promise<SavedConnection[]> {
   return call(COMMANDS.connectionDelete, { id }, () => [] as SavedConnection[])
+}
+
+/** 生成**服务端条件浏览**的 SQL（FR-DATA-02；只生成，不执行）。
+ *  契约：片段原样下发；出现分号（像多条语句）**拒绝**；排序写两处报冲突。 */
+export function browseSql(request: {
+  table: string
+  schema?: string
+  whereClause?: string
+  orderBy?: string
+  limit?: number
+  offset?: number
+  countOnly?: boolean
+}): Promise<string> {
+  return call(COMMANDS.browseSql, { ...request }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+  })
 }
