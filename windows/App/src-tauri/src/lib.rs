@@ -4,9 +4,11 @@
 //! 前端命令名与这里的注册项的一致性由 `tests/ipc_contract.rs` 双向判（前端 `invoke` 一个没注册的
 //! 名字是**运行时静默失败**，靠人记不住）。
 
+pub mod connections;
 pub mod postgres;
 mod query;
 
+pub use connections::{config_from_form, ConnectionStore};
 pub use postgres::{
     ConnectParams, DbFailure, PgSession, ProbeReport, QueryResult, ServerInfo, TableNode,
     MAX_QUERY_ROWS,
@@ -25,6 +27,8 @@ pub struct ShellState {
     pub cache: Mutex<ViewCache>,
     /// 当前连接（一次一个；多连接管理是后续段的事）。
     pub db: AsyncMutex<Option<Arc<PgSession>>>,
+    /// 连接列表的落盘位置与凭据读写（口令走系统凭据管理器，不进配置文件）。
+    pub connections: ConnectionStore,
 }
 
 /// 取当前会话；没连上就是一句可读的失败（不 panic、不静默）。
@@ -125,12 +129,69 @@ async fn db_probe(state: State<'_, ShellState>) -> Result<ProbeReport, DbFailure
     session.probe().await
 }
 
+// ── 连接列表命令（配置落盘 + 口令进系统凭据管理器；口令不进配置文件）────────────────────
+
+/// 保存的连接列表（首次使用返回空表，不是错误）。
+#[tauri::command]
+fn connections_list(state: State<'_, ShellState>) -> Result<Vec<doyah_studio_db::config::ConnectionConfig>, DbFailure> {
+    state.connections.load()
+}
+
+/// 记下当前连接（`remember_password` 为真时把口令写进系统凭据管理器；**口令绝不进配置文件**）。
+#[tauri::command]
+fn connection_save(
+    state: State<'_, ShellState>,
+    id: String,
+    name: String,
+    host: String,
+    port: u16,
+    database: String,
+    user: String,
+    ssl_mode: Option<String>,
+    is_read_only: bool,
+    password: Option<String>,
+    remember_password: bool,
+) -> Result<Vec<doyah_studio_db::config::ConnectionConfig>, DbFailure> {
+    let config = config_from_form(
+        &id,
+        &name,
+        &host,
+        port,
+        &database,
+        &user,
+        ssl_mode.as_deref(),
+        is_read_only,
+    );
+    if !config.is_valid() {
+        return Err(DbFailure {
+            message: "连接信息不完整：名字 / 主机 / 用户名不能为空，端口要在 1~65535".to_string(),
+            hint: "补齐后再保存。".to_string(),
+        });
+    }
+    if remember_password {
+        if let Some(secret) = password.as_deref().filter(|p| !p.is_empty()) {
+            connections::remember_password(&id, &user, secret)?;
+        }
+    }
+    state.connections.upsert(config)
+}
+
+/// 删一条连接（**同时清掉它的凭据**）。
+#[tauri::command]
+fn connection_delete(
+    state: State<'_, ShellState>,
+    id: String,
+) -> Result<Vec<doyah_studio_db::config::ConnectionConfig>, DbFailure> {
+    state.connections.remove(&id)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(ShellState {
             cache: Mutex::new(ViewCache::new()),
             db: AsyncMutex::new(None),
+            connections: ConnectionStore::new(ConnectionStore::default_path()),
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
@@ -140,7 +201,10 @@ pub fn run() {
             db_disconnect,
             db_tables,
             db_query,
-            db_probe
+            db_probe,
+            connections_list,
+            connection_save,
+            connection_delete
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

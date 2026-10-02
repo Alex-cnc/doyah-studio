@@ -38,6 +38,9 @@ describe('ipc', () => {
       'db_tables',
       'db_query',
       'db_probe',
+      'connections_list',
+      'connection_save',
+      'connection_delete',
     ])
   })
 

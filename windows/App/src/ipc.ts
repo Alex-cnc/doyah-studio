@@ -19,6 +19,10 @@ export const COMMANDS = {
   dbTables: 'db_tables',
   dbQuery: 'db_query',
   dbProbe: 'db_probe',
+  // 连接列表（配置落盘 + 口令进系统凭据管理器）
+  connectionsList: 'connections_list',
+  connectionSave: 'connection_save',
+  connectionDelete: 'connection_delete',
 } as const
 
 export interface AppInfo {
@@ -195,4 +199,51 @@ export function dbProbe(): Promise<ProbeReport> {
   return call(COMMANDS.dbProbe, {}, () => {
     throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里自检（npm run tauri dev）。' } as DbFailure
   })
+}
+
+// ── 连接列表（配置落盘 + 口令进系统凭据管理器）─────────────────────────────────────────
+
+/** 保存过的一条连接。**没有口令字段** —— 口令只在系统凭据管理器里。 */
+export interface SavedConnection {
+  id: string
+  name: string
+  dbType: string
+  host: string
+  port: number
+  database: string
+  username: string
+  sslMode: string
+  timeout: number
+  schemaVersion: number
+  environment?: string | null
+  colorTag?: string | null
+  isReadOnly: boolean
+  startupSql?: string | null
+  group?: string | null
+}
+
+export interface ConnectionSaveRequest {
+  id: string
+  name: string
+  host: string
+  port: number
+  database: string
+  user: string
+  sslMode?: string
+  isReadOnly: boolean
+  /** 只用于本次写入系统凭据管理器；**绝不进配置文件**。 */
+  password?: string
+  rememberPassword: boolean
+}
+
+export function connectionsList(): Promise<SavedConnection[]> {
+  return call(COMMANDS.connectionsList, {}, () => [] as SavedConnection[])
+}
+
+export function connectionSave(request: ConnectionSaveRequest): Promise<SavedConnection[]> {
+  return call(COMMANDS.connectionSave, { ...request }, () => [] as SavedConnection[])
+}
+
+export function connectionDelete(id: string): Promise<SavedConnection[]> {
+  return call(COMMANDS.connectionDelete, { id }, () => [] as SavedConnection[])
 }
