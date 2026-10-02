@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { QueryResult } from '../ipc'
-import { columnIsNumeric, sortedOrder, filteredOrder, visibleOrder, toTsv, rowText } from './view'
+import { columnIsNumeric, sortedOrder, filteredOrder, visibleOrder, toTsv, rowText, frozenColumnStyles, estimateColumnWidth, normalizeFrozenCount } from './view'
 
 /** 造一个结果集：列 = id(num) / name(text) / score(num, 带 NULL)。 */
 function sample(): QueryResult {
@@ -153,5 +153,48 @@ describe('复制成 TSV', () => {
 describe('显示文本', () => {
   it('NULL 显示为空串', () => {
     expect(rowText(['a', null, 'b'])).toEqual(['a', '', 'b'])
+  })
+})
+
+describe('冻结列（FR-RES-05）', () => {
+  const columns = ['id', '名称', 'score']
+
+  it('只冻结最左边的连续若干列，其余列不给样式（不占位）', () => {
+    const styles = frozenColumnStyles(columns, 2)
+    expect(Object.keys(styles).map(Number).sort()).toEqual([0, 1])
+    expect(styles[0].left).toBe('0px')
+    // 第 2 列的 left = 第 1 列的估宽（不四舍五入成 0）
+    expect(parseInt(styles[1].left, 10)).toBeGreaterThan(0)
+  })
+
+  it('left 逐列累加（不是每列都从 0 开始）', () => {
+    const styles = frozenColumnStyles(columns, 3)
+    const first = estimateColumnWidth(columns[0])
+    const second = estimateColumnWidth(columns[1])
+    expect(styles[0].left).toBe('0px')
+    expect(styles[1].left).toBe(`${first}px`)
+    expect(styles[2].left).toBe(`${first + second}px`)
+  })
+
+  it('宽度估算：中文按两倍宽、有下限与上限', () => {
+    expect(estimateColumnWidth('id')).toBeLessThan(estimateColumnWidth('名称'))
+    expect(estimateColumnWidth('')).toBeGreaterThan(0) // 下限
+    const huge = 'x'.repeat(500)
+    expect(estimateColumnWidth(huge)).toBeLessThanOrEqual(240) // 上限
+  })
+
+  it('冻结数与列数的边界都被夹住（不越界、不报错）', () => {
+    expect(frozenColumnStyles(columns, 0)).toEqual({})
+    expect(normalizeFrozenCount(columns, -3)).toBe(0)
+    expect(normalizeFrozenCount(columns, 99)).toBe(3)
+    expect(normalizeFrozenCount(columns, 1.7)).toBe(1)
+    expect(normalizeFrozenCount(columns, NaN)).toBe(0)
+    // 超范围也给得出样式（夹到列数），不抛
+    expect(Object.keys(frozenColumnStyles(columns, 99)).length).toBe(3)
+    expect(Object.keys(frozenColumnStyles([], 3)).length).toBe(0)
+  })
+
+  it('冻结层比普通表头高一层（否则滚动时会被后面的格子盖住）', () => {
+    expect(frozenColumnStyles(columns, 1)[0].zIndex).toBeGreaterThan(1)
   })
 })

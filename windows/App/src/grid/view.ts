@@ -105,3 +105,55 @@ export function toTsv(result: QueryResult, order: number[]): string {
   const body = order.map((i) => rowText(result.rows[i] ?? []).map(escape).join('\t'))
   return [head, ...body].join('\n')
 }
+
+// ── 冻结列（FR-RES-05）──────────────────────────────────────────────────────────────
+//
+// 口径（为什么这么算，写清楚免得下一轮"优化"掉）：
+//   ① 冻结的是**最左边的连续若干列**（冻结第 3 列而第 2 列不冻，中间会露出滚动内容）；
+//   ② 每列的 `left` = 它左边那些**也被冻结**的列的宽度之和（不冻的列不占位）；
+//   ③ 宽度用估算值（按该列**表头**的字符数），**不测 DOM** —— 纯函数才能单测，
+//      而且估算错一点只是"表头被盖住一点"，不会算错语义。
+
+/** 冻结列宽度估算：中文字符按 2 个宽度单位算。 */
+export const COLUMN_WIDTH_UNIT_PX = 9
+/** 每列的基础内边距（与 CSS 的 padding 对齐，估宽时一并加上）。 */
+export const COLUMN_PADDING_PX = 16
+/** 单列宽度上限（避免一格超长表头把后面全挤飞）。 */
+export const COLUMN_MAX_WIDTH_PX = 240
+
+/** 估算一列的宽度（按列名算；不读 DOM）。 */
+export function estimateColumnWidth(columnName: string): number {
+  let units = 0
+  for (const ch of columnName) {
+    units += /[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 2 : 1
+  }
+  const estimated = units * COLUMN_WIDTH_UNIT_PX + COLUMN_PADDING_PX
+  return Math.min(COLUMN_MAX_WIDTH_PX, Math.max(COLUMN_WIDTH_UNIT_PX * 4, estimated))
+}
+
+/**
+ * 冻结列的样式表：列下标 → `{ left, zIndex }`。
+ *
+ * - 只对**前 `frozenCount` 列**给值（其余列不冻、不占位）；
+ * - `frozenCount` 夹到 `[0, columns.length]`（调用方给超了也不许越界）；
+ * - `zIndex` 比普通表头高一层，否则滚动时会被后面的单元格盖住。
+ */
+export function frozenColumnStyles(
+  columns: readonly string[],
+  frozenCount: number,
+): Record<number, { left: string; zIndex: number }> {
+  const count = Math.max(0, Math.min(frozenCount, columns.length))
+  const styles: Record<number, { left: string; zIndex: number }> = {}
+  let offset = 0
+  for (let i = 0; i < count; i += 1) {
+    styles[i] = { left: `${offset}px`, zIndex: 3 }
+    offset += estimateColumnWidth(columns[i] ?? '')
+  }
+  return styles
+}
+
+/** 冻结列数是否有效（0 = 不冻；超过列数 = 全冻）。 */
+export function normalizeFrozenCount(columns: readonly string[], frozenCount: number): number {
+  if (!Number.isFinite(frozenCount)) return 0
+  return Math.max(0, Math.min(Math.trunc(frozenCount), columns.length))
+}

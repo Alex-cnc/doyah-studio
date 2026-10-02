@@ -28,7 +28,7 @@ import {
   type StartupOutcome,
   type TableNode,
 } from '../ipc'
-import { toTsv, visibleOrder } from '../grid/view'
+import { frozenColumnStyles, toTsv, visibleOrder } from '../grid/view'
 
 const form = ref<ConnectParams>({ ...LAB_CONNECTION })
 const password = ref('')
@@ -96,6 +96,19 @@ function toggleSort(column: number) {
     sortColumn.value = column
     sortDesc.value = false
   }
+}
+
+// 冻结列（FR-RES-05）：只冻最左边连续若干列；偏移用估算宽度（纯函数，已单测）
+const frozenCount = ref(0)
+const frozenStyles = computed<Record<number, { left: string; zIndex: number }>>(() =>
+  result.value ? frozenColumnStyles(result.value.columns, frozenCount.value) : {},
+)
+
+/** 表头 / 单元格的内联样式：冻的列给 sticky + left，不冻的列给空 */
+function cellStyle(index: number): Record<string, string> {
+  const style = frozenStyles.value[index]
+  if (!style) return {}
+  return { position: 'sticky', left: style.left, zIndex: String(style.zIndex) }
 }
 
 /** 复制**看得见的**那一屏（TSV，贴 Excel 直接分列；NULL 是空单元格） */
@@ -548,6 +561,11 @@ async function probe() {
               <div class="db__grid-tools">
                 <input v-model="filter" type="search" placeholder="筛选（当前结果内，不分大小写）" aria-label="筛选结果" />
                 <span class="db__note">显示 {{ visible.length }} / {{ result.rows.length }} 行</span>
+                <label class="db__freeze">
+                  冻结前
+                  <input v-model.number="frozenCount" type="number" min="0" :max="result.columns.length" />
+                  列
+                </label>
                 <button class="db__btn" type="button" @click="copyVisible">复制（TSV）</button>
                 <span v-if="copied" class="db__note">{{ copied }}</span>
               </div>
@@ -558,6 +576,7 @@ async function probe() {
                       v-for="(c, j) in result.columns"
                       :key="c"
                       class="db__grid-head"
+                      :style="cellStyle(j)"
                       :title="`点一下按 ${c} 排序（再点翻方向）`"
                       @click="toggleSort(j)"
                     >
@@ -574,7 +593,7 @@ async function probe() {
                     title="点这一行看详情（值检查：NULL 与空串分开、长 JSON 格式化）"
                     @click="openDetail(i)"
                   >
-                    <td v-for="(cell, j) in result.rows[i]" :key="j" :class="{ 'db__null': cell === null }">
+                    <td v-for="(cell, j) in result.rows[i]" :key="j" :style="cellStyle(j)" :class="{ 'db__null': cell === null, 'db__frozen': !!frozenStyles[j] }">
                       {{ cell === null ? 'NULL' : cell }}
                       <!-- 外键入口：**只在有目标时出现**（没目标不显示，点了没反应比不给更糟） -->
                       <template v-for="(t, k) in cellFkTargets(result.columns[j])" :key="k">
@@ -1021,6 +1040,33 @@ async function probe() {
   white-space: nowrap;
 }
 
+.db__freeze {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__freeze input {
+  width: 56px;
+  height: var(--ds-metric-control-height);
+  padding: 0 var(--ds-spacing-xs);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+}
+
+/* 冻结列要有自己的底色，否则滚动时下面的内容会透出来 */
+.db__frozen {
+  background: var(--ds-color-surface-content);
+}
+
+.db__grid-head.db__frozen,
+th.db__grid-head[style] {
+  background: var(--ds-color-surface-raised);
+}
 .db__grid-tools {
   display: flex;
   align-items: center;
