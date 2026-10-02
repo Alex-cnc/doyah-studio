@@ -12,6 +12,7 @@
 pub mod browse;
 pub mod config;
 pub mod db_type;
+pub mod file_ops;
 pub mod foreign_key;
 pub mod inspect;
 pub mod sql;
@@ -27,6 +28,10 @@ pub use tree::{group_by_schema, search, sort_objects, ObjectKind, ObjectNode, Se
 pub use config::{ConnectionBundle, BundleError, ConnectionConfig, SshTunnelConfig};
 pub use db_type::{DatabaseType, SslMode};
 pub use foreign_key::{parse_edge, query as fk_query, Direction, Edge, Option_};
+pub use file_ops::{
+    can_move_into, decide_rename, deletion_summary, unique_name, validate_name, DeletionSummary,
+    Failure as FileOpFailure, RenameDecision, DELETION_COUNT_LIMIT,
+};
 pub use inspect::{CellValue, Field, Shape, SummaryLanguage};
 pub use url::{FormMerge, ImportedConnection, UrlParseError};
 pub use workspace::{EntryKind, History, Tab, TextLanguage};

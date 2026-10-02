@@ -62,6 +62,11 @@ describe('ipc', () => {
       'workspace_opened',
       'workspace_closed',
       'workspace_open_tabs',
+      'workspace_create',
+      'workspace_rename',
+      'workspace_move',
+      'workspace_deletion_summary',
+      'workspace_delete',
     ])
   })
 

@@ -10,11 +10,16 @@
 import { computed, onMounted, ref } from 'vue'
 import {
   workspaceClosed,
+  workspaceCreate,
+  workspaceDelete,
+  workspaceDeletionSummary,
   workspaceHistory,
   workspaceListDirectory,
+  workspaceMove,
   workspaceOpened,
   workspaceOpenTabs,
   workspaceReadFile,
+  workspaceRename,
   type DbFailure,
   type FileContent,
   type FsEntry,
@@ -245,6 +250,111 @@ async function restoreOpenTabs(paths: readonly string[]) {
   }
 }
 
+/** 某个条目是不是正在改名 / 正在被确认删除（行内状态，不弹系统对话框） */
+const renaming = ref<string | null>(null)
+const renameDraft = ref('')
+const confirming = ref<{ entry: FsEntry; items: number; truncated: boolean } | null>(null)
+/** 拖动中的条目（拖拽移动用） */
+const dragging = ref<FsEntry | null>(null)
+
+/** 新建：文件 / 文件夹（名字由 Rust 侧取「不撞名」的那个） */
+async function createIn(parentRelative: string, directory: boolean) {
+  if (!root.value) return
+  failure.value = null
+  try {
+    const created = await workspaceCreate(root.value, parentRelative, directory ? '新建文件夹' : '未命名', {
+      directory,
+    })
+    // 建完刷新这一层（新建不一定在当前展开的那层：见调用点传的 parent）
+    await loadLevel(parentRelative)
+    if (parentRelative && !expanded.value.has(parentRelative)) {
+      expanded.value = new Set([...expanded.value, parentRelative])
+    }
+    selected.value = created.relativePath
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
+/** 某个条目的父目录相对路径（新建同级用）。 */
+function parentOf(relativePath: string): string {
+  const slash = relativePath.lastIndexOf('/')
+  return slash < 0 ? '' : relativePath.slice(0, slash)
+}
+
+function beginRename(entry: FsEntry) {
+  renaming.value = entry.relativePath
+  renameDraft.value = entry.name
+}
+
+async function commitRename(entry: FsEntry) {
+  if (!root.value) return
+  const next = renameDraft.value
+  renaming.value = null
+  // 名字没变就不打扰后端（同名不算失败这条规则在 Rust 侧也成立，这里只是省一次往返）
+  if (next === entry.name) return
+  failure.value = null
+  try {
+    await workspaceRename(root.value, entry.relativePath, next)
+    await refreshAfterMutation(entry.relativePath)
+  } catch (e) {
+    failure.value = describeError(e)
+    renaming.value = entry.relativePath
+  }
+}
+
+/** 点「删除」：**先取读数再让人确认**（删非空文件夹必须二次确认） */
+async function askDelete(entry: FsEntry) {
+  if (!root.value) return
+  failure.value = null
+  try {
+    const summary = await workspaceDeletionSummary(root.value, entry.relativePath)
+    confirming.value = { entry, items: summary.items, truncated: summary.truncated }
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
+async function confirmDelete() {
+  const pending = confirming.value
+  confirming.value = null
+  if (!pending || !root.value) return
+  try {
+    await workspaceDelete(root.value, pending.entry.relativePath)
+    await refreshAfterMutation(pending.entry.relativePath)
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
+/** 拖拽落下：移进目标目录（**自吞会被 Rust 侧拒绝**，这里只如实显示结果） */
+async function onDrop(entry: FsEntry) {
+  const from = dragging.value
+  dragging.value = null
+  if (!from || !root.value || from.relativePath === entry.relativePath) return
+  failure.value = null
+  try {
+    await workspaceMove(root.value, from.relativePath, entry.relativePath)
+    await refreshAfterMutation(from.relativePath)
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
+/** 改完之后把受影响的那两层重新读一遍（不整树重扫：大工程会卡） */
+async function refreshAfterMutation(movedRelative: string) {
+  const parent = movedRelative.includes('/')
+    ? movedRelative.slice(0, movedRelative.lastIndexOf('/'))
+    : ''
+  await loadLevel(parent)
+  for (const path of [...expanded.value]) {
+    if (children.value.has(path)) await loadLevel(path)
+  }
+  // 被改的那个页签内容不再可信：关掉它（重新点开就是盘上的最新内容）
+  const affected = tabs.value.find((t) => t.relativePath === movedRelative)
+  if (affected) closeTab(affected.id)
+}
+
 function onTreeKeydown(event: KeyboardEvent) {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
   event.preventDefault()
@@ -267,6 +377,10 @@ function onTreeKeydown(event: KeyboardEvent) {
       </label>
       <button class="ws__btn ws__btn--primary" type="submit" :disabled="!!busy">打开</button>
       <button v-if="root" class="ws__btn" type="button" :disabled="!!busy" @click="closeWorkspace">关闭工作区</button>
+      <template v-if="root">
+        <button class="ws__btn" type="button" @click="createIn('', false)">新建文件</button>
+        <button class="ws__btn" type="button" @click="createIn('', true)">新建文件夹</button>
+      </template>
       <span v-if="busy" class="ws__note">{{ busy }}</span>
       <span class="ws__note">{{ headerText }}</span>
     </form>
@@ -276,6 +390,18 @@ function onTreeKeydown(event: KeyboardEvent) {
     <div v-if="failure" class="ws__failure" role="alert">
       <p class="ws__failure-msg">{{ failure.message }}</p>
       <p class="ws__failure-hint">{{ failure.hint }}</p>
+    </div>
+
+    <!-- 删除确认：**先给读数**再动手（删非空文件夹必须二次确认） -->
+    <div v-if="confirming" class="ws__confirm" role="alertdialog">
+      <p class="ws__confirm-msg">
+        删除「{{ confirming.entry.name }}」？<template v-if="confirming.entry.kind === 'directory'">
+          这一项共 <strong>{{ confirming.items }}</strong
+          ><template v-if="confirming.truncated"> 项以上</template> 项</template
+        >。会**移到回收站**（可撤销）。
+      </p>
+      <button class="ws__btn ws__btn--primary" type="button" @click="confirmDelete">移到回收站</button>
+      <button class="ws__btn" type="button" @click="confirming = null">取消</button>
     </div>
 
     <div class="ws__body">
@@ -292,11 +418,50 @@ function onTreeKeydown(event: KeyboardEvent) {
           type="button"
           :style="{ paddingLeft: `${indentPx(row.depth) + 4}px` }"
           :title="`${row.entry.kind} · ${row.entry.relativePath}`"
+          :draggable="row.entry.kind !== 'symlink'"
           @click="onRowClick(row.entry)"
+          @dragstart="dragging = row.entry"
+          @dragover.prevent
+          @drop="row.entry.isExpandable && onDrop(row.entry)"
         >
           <span class="ws__glyph">{{ row.entry.kind === 'directory' ? (row.expanded ? '▾' : entryGlyph(row.entry)) : entryGlyph(row.entry) }}</span>
-          {{ row.entry.name }}
-          <span v-if="row.entry.kind === 'symlink'" class="ws__tag">链接（不跟随）</span>
+          <template v-if="renaming === row.entry.relativePath">
+            <input
+              v-model="renameDraft"
+              class="ws__rename"
+              type="text"
+              @click.stop
+              @keydown.enter.prevent="commitRename(row.entry)"
+              @keydown.esc="renaming = null"
+            />
+          </template>
+          <template v-else>
+            {{ row.entry.name }}
+            <span v-if="row.entry.kind === 'symlink'" class="ws__tag">链接（不跟随）</span>
+          </template>
+          <!-- 行内动作：图标必带提示（title），删非空文件夹要二次确认 -->
+          <span class="ws__actions" @click.stop>
+            <button
+              v-if="row.entry.kind === 'file'"
+              class="ws__act"
+              type="button"
+              title="重命名（回车确认 / Esc 取消）"
+              @click="beginRename(row.entry)"
+            >
+              ✎
+            </button>
+            <button
+              class="ws__act"
+              type="button"
+              title="新建同级文件夹"
+              @click="createIn(parentOf(row.entry.relativePath), false)"
+            >
+              ＋
+            </button>
+            <button class="ws__act" type="button" title="删除（走回收站，可撤销）" @click="askDelete(row.entry)">
+              🗑
+            </button>
+          </span>
         </button>
       </aside>
 
@@ -421,6 +586,61 @@ function onTreeKeydown(event: KeyboardEvent) {
   margin: 0;
   padding: var(--ds-spacing-xs) var(--ds-spacing-m);
   color: var(--ds-color-status-warning);
+}
+
+/* 删除确认条：读数 + 两个按钮（不做系统对话框） */
+.ws__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  margin: var(--ds-spacing-s) var(--ds-spacing-m) 0;
+  padding: var(--ds-spacing-s);
+  background: var(--ds-color-surface-panel);
+  border: var(--ds-metric-hairline) solid var(--ds-color-status-danger);
+  border-radius: var(--ds-radius-control);
+}
+
+.ws__confirm-msg {
+  margin: 0;
+  color: var(--ds-color-text-primary);
+  font-size: var(--ds-font-caption-size);
+}
+
+/* 行内动作：平时淡、悬停才显眼（图标必带提示） */
+.ws__actions {
+  float: right;
+  display: none;
+  gap: var(--ds-spacing-hair);
+}
+
+.ws__row:hover .ws__actions,
+.ws__row--active .ws__actions {
+  display: inline-flex;
+}
+
+.ws__act {
+  padding: 0 var(--ds-spacing-xs);
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  border: 0;
+  cursor: pointer;
+}
+
+.ws__act:hover {
+  color: var(--ds-color-accent-accent);
+}
+
+.ws__rename {
+  width: 60%;
+  height: var(--ds-metric-control-height);
+  padding: 0 var(--ds-spacing-xs);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-color-accent-accent);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
 }
 
 .ws__recent {

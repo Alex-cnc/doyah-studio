@@ -317,3 +317,451 @@ pub fn write_history(history: &doyah_studio_db::workspace::History) -> Result<()
         )
     })
 }
+
+// ── 写面（alpha 2.1）：新建 / 重命名 / 删除（**走回收站**）/ 拖拽移动 ─────────────────────
+//
+// 纪律（与领域层 `file_ops` 的分工）：**判定**在领域层（名字校验 / 唯一名 / 同名不改 / 自吞拦截），
+// **IO** 在这里；越界判定**两遍都过** —— 字符串路径（挡 `..`）与**解开符号链接后的真实路径**
+// （挡"链接指到工作区外"那一步字符串判定拦不住的情况）。
+
+/// 把路径规范化成本侧内部形态，并**剥掉 Windows 的 `\\?\` 前缀**（`canonicalize` 会加上它，
+/// 留着会让后续的包含判定把同一处在字面上当成两条不同路径）。
+fn canonical(path: &Path) -> Option<String> {
+    let resolved = std::fs::canonicalize(path).ok()?;
+    let text = resolved.to_string_lossy().to_string();
+    Some(match text.strip_prefix(r"\\?\") {
+        Some(rest) => rest.to_string(),
+        None => text,
+    })
+}
+
+/// 越界判定：**两遍都要过**（字符串路径 + 解开符号链接后的真实路径）。
+fn require_contained(candidate: &Path, workspace_root: &str) -> Result<(), DbFailure> {
+    let raw = candidate.to_string_lossy().to_string();
+    if !doyah_studio_db::workspace::is_contained(&raw, workspace_root) {
+        return Err(not_contained(&raw));
+    }
+    // 已经存在的东西：解链接之后再判一次（不存在就没法解，跳过第二遍）
+    if candidate.exists() {
+        if let Some(resolved) = canonical(candidate) {
+            if !doyah_studio_db::workspace::is_contained(&resolved, workspace_root) {
+                return Err(failure(
+                    format!("拒绝越界：{raw} 通过符号链接指到了工作区外（{resolved}）"),
+                    "工作区内的链接不能把操作带到工作区外面去。",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn not_contained(path: &str) -> DbFailure {
+    failure(
+        format!("拒绝越界路径：{path}"),
+        "该路径不在当前工作区内（`..` 逃逸、链接指向别处、或换了盘符）。",
+    )
+}
+
+fn file_op_failure(op: &doyah_studio_db::FileOpFailure) -> DbFailure {
+    // 提示文案按**稳定键**给一句人话（界面另有语言表；这里给的是命令层兜底句）
+    let hint = match op {
+        doyah_studio_db::FileOpFailure::NotContained => "只能在当前工作区内操作。",
+        doyah_studio_db::FileOpFailure::EmptyName => "名字不能是空的。",
+        doyah_studio_db::FileOpFailure::IllegalName { .. } => {
+            "名字里不能有 / \\ : < > \" | ? *，也不能是 . / .. / Windows 保留名（CON / NUL / COM1…），首尾不能是空白。"
+        }
+        doyah_studio_db::FileOpFailure::AlreadyExists { .. } => "同名已经存在，换个名字。",
+        doyah_studio_db::FileOpFailure::NotADirectory { .. } => "要往里放东西的那个位置不是文件夹。",
+        doyah_studio_db::FileOpFailure::RootNotDeletable => "工作区根不能删。",
+        doyah_studio_db::FileOpFailure::System { .. } => "系统给的错误原话见上；确认权限与磁盘状态。",
+    };
+    failure(format!("{:?}", op), hint)
+}
+
+/// 解析一个相对路径，**并确认落在工作区内**。
+fn resolve_in(workspace_root: &str, relative: &str) -> Result<PathBuf, DbFailure> {
+    let full = doyah_studio_db::workspace::resolve(relative, workspace_root)
+        .ok_or_else(|| not_contained(relative))?;
+    let path = PathBuf::from(&full);
+    require_contained(&path, workspace_root)?;
+    Ok(path)
+}
+
+/// 新建文件 / 文件夹（名字由领域层取**不撞名的**那个）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedEntry {
+    pub relative_path: String,
+    pub name: String,
+    pub kind: &'static str,
+}
+
+pub fn create_entry(
+    workspace_root: &str,
+    parent_relative: &str,
+    base_name: &str,
+    extension: Option<&str>,
+    directory: bool,
+) -> Result<CreatedEntry, DbFailure> {
+    let parent = if parent_relative.trim().is_empty() {
+        let root = PathBuf::from(workspace_root);
+        require_contained(&root, workspace_root)?;
+        root
+    } else {
+        resolve_in(workspace_root, parent_relative)?
+    };
+    if !parent.is_dir() {
+        return Err(file_op_failure(&doyah_studio_db::FileOpFailure::NotADirectory {
+            name: parent_relative.to_string(),
+        }));
+    }
+    let name = doyah_studio_db::unique_name(base_name, extension, |candidate| {
+        parent.join(candidate).exists()
+    });
+    if let Some(bad) = doyah_studio_db::validate_name(&name) {
+        return Err(file_op_failure(&bad));
+    }
+    let target = parent.join(&name);
+    require_contained(&target, workspace_root)?;
+    let created = if directory {
+        std::fs::create_dir(&target)
+    } else {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true) // **不覆盖**同名（唯一名之后再兜一层）
+            .open(&target)
+            .map(|_| ())
+    };
+    created.map_err(|e| {
+        failure(
+            format!("新建失败：{e}（{}）", target.display()),
+            "确认目标目录可写、且磁盘没满。",
+        )
+    })?;
+    Ok(CreatedEntry {
+        relative_path: relative_path(&target.to_string_lossy(), workspace_root).unwrap_or(name.clone()),
+        name,
+        kind: if directory { "directory" } else { "file" },
+    })
+}
+
+/// 重命名（**同名不改**，不算失败）。
+pub fn rename_entry(workspace_root: &str, relative: &str, new_name: &str) -> Result<CreatedEntry, DbFailure> {
+    let source = resolve_in(workspace_root, relative)?;
+    require_contained(&source, workspace_root)?;
+    let old_name = source
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let parent = source.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from(workspace_root));
+
+    let decision = doyah_studio_db::decide_rename(&old_name, new_name, |candidate| {
+        let candidate_path = parent.join(candidate);
+        candidate_path.exists() && candidate != old_name
+    });
+    match decision {
+        doyah_studio_db::RenameDecision::Same => Ok(CreatedEntry {
+            relative_path: relative.replace('\\', "/"),
+            name: old_name,
+            kind: if source.is_dir() { "directory" } else { "file" },
+        }),
+        doyah_studio_db::RenameDecision::Refused(reason) => Err(file_op_failure(&reason)),
+        doyah_studio_db::RenameDecision::Rename(name) => {
+            let target = parent.join(&name);
+            require_contained(&target, workspace_root)?;
+            std::fs::rename(&source, &target).map_err(|e| {
+                failure(
+                    format!("重命名失败：{e}（{} → {}）", source.display(), target.display()),
+                    "确认源还在、目标没被占用（可能有程序正打开它）。",
+                )
+            })?;
+            Ok(CreatedEntry {
+                relative_path: relative_path(&target.to_string_lossy(), workspace_root)
+                    .unwrap_or(name.clone()),
+                name,
+                kind: if target.is_dir() { "directory" } else { "file" },
+            })
+        }
+    }
+}
+
+/// 拖拽移动：把 `relative` 移进目录 `into_relative`（同级同处 = 什么都不做）。
+pub fn move_entry(
+    workspace_root: &str,
+    relative: &str,
+    into_relative: &str,
+) -> Result<CreatedEntry, DbFailure> {
+    let source = resolve_in(workspace_root, relative)?;
+    let into = if into_relative.trim().is_empty() {
+        PathBuf::from(workspace_root)
+    } else {
+        resolve_in(workspace_root, into_relative)?
+    };
+    if !into.is_dir() {
+        return Err(file_op_failure(&doyah_studio_db::FileOpFailure::NotADirectory {
+            name: into_relative.to_string(),
+        }));
+    }
+    // **不许把目录移进它自己或它的子孙**（经典的自吞操作）
+    let file_name = source
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    doyah_studio_db::can_move_into(relative, into_relative, source.is_dir()).map_err(|e| file_op_failure(&e))?;
+
+    let target = into.join(&file_name);
+    require_contained(&target, workspace_root)?;
+    if target == source {
+        return Ok(CreatedEntry {
+            relative_path: relative.replace('\\', "/"),
+            name: file_name,
+            kind: if source.is_dir() { "directory" } else { "file" },
+        });
+    }
+    if target.exists() {
+        return Err(file_op_failure(&doyah_studio_db::FileOpFailure::AlreadyExists {
+            name: file_name,
+        }));
+    }
+    std::fs::rename(&source, &target).map_err(|e| {
+        failure(
+            format!("移动失败：{e}（{} → {}）", source.display(), target.display()),
+            "跨盘符移动不受支持（先复制再删）；确认目标可写。",
+        )
+    })?;
+    Ok(CreatedEntry {
+        relative_path: relative_path(&target.to_string_lossy(), workspace_root)
+            .unwrap_or(file_name.clone()),
+        name: file_name,
+        kind: if target.is_dir() { "directory" } else { "file" },
+    })
+}
+
+/// 「将删几项」：目录 = 自身 + 递归内容（**数到上限就停并标截断**）；文件 = 1。
+pub fn deletion_summary(workspace_root: &str, relative: &str) -> Result<doyah_studio_db::DeletionSummary, DbFailure> {
+    let path = resolve_in(workspace_root, relative)?;
+    if !path.is_dir() {
+        return Ok(doyah_studio_db::deletion_summary(false, 0));
+    }
+    // 广度优先数，数到上限就停 —— 不为了一句提示去把十万条目录读完
+    let limit = doyah_studio_db::DELETION_COUNT_LIMIT;
+    let mut count = 0usize;
+    let mut queue = vec![path.clone()];
+    while let Some(current) = queue.pop() {
+        let Ok(read) = std::fs::read_dir(&current) else { continue };
+        for item in read.flatten() {
+            count += 1;
+            if count >= limit {
+                return Ok(doyah_studio_db::deletion_summary(true, count));
+            }
+            if item.path().is_dir() {
+                queue.push(item.path());
+            }
+        }
+    }
+    Ok(doyah_studio_db::deletion_summary(true, count))
+}
+
+/// 删除：**走回收站**（可撤销是唯一的真保障）。
+///
+/// 做法 = 调 Windows 自带的 `Microsoft.VisualBasic.FileIO.FileSystem`（它的 `RecycleBin` 档
+/// 就是这个语义）—— 比自己写 Shell API 的 P/Invoke 更不容易出错，且**不需要为删一个文件引入依赖**。
+/// 删完**回读确认**：文件还在就如实报失败，不谎报成功。
+pub fn delete_entry(workspace_root: &str, relative: &str) -> Result<String, DbFailure> {
+    let path = resolve_in(workspace_root, relative)?;
+    let root = canonical(Path::new(workspace_root));
+    if let Some(root) = root {
+        if let Some(target) = canonical(&path) {
+            if target.eq_ignore_ascii_case(&root) {
+                return Err(file_op_failure(&doyah_studio_db::FileOpFailure::RootNotDeletable));
+            }
+        }
+    }
+    if !path.exists() {
+        return Err(failure(
+            format!("要删的东西不在了：{}", path.display()),
+            "可能已经被别的程序删掉；刷新一下树。",
+        ));
+    }
+
+    let is_dir = path.is_dir();
+    let literal = path.to_string_lossy().replace('\'', "''");
+    let script = if is_dir {
+        format!(
+            "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('{literal}', 'OnlyErrorDialogs', 'SendToRecycleBin')"
+        )
+    } else {
+        format!(
+            "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile('{literal}', 'OnlyErrorDialogs', 'SendToRecycleBin')"
+        )
+    };
+
+    let mut command = std::process::Command::new("powershell");
+    command
+        .arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-ExecutionPolicy")
+        .arg("Bypass")
+        .arg("-Command")
+        .arg(&script);
+    // 让子进程的编码与父进程对得上（GBK 输出会让错误原话变成乱码）
+    command.env("PYTHONUTF8", "1");
+    let output = command.output().map_err(|e| {
+        failure(
+            format!("调系统回收站失败：{e}"),
+            "确认 PowerShell 可用（系统自带的那个）。",
+        )
+    })?;
+
+    if path.exists() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(failure(
+            format!(
+                "删除没有生效（文件还在）：{}{}",
+                path.display(),
+                if stderr.is_empty() { String::new() } else { format!("；系统原话：{stderr}") }
+            ),
+            "**没有**改成永久删除 —— 宁可报失败也不悄悄抹掉；确认文件没被占用、回收站可用。",
+        ));
+    }
+    Ok(if is_dir { "directory" } else { "file" }.to_string())
+}
+
+#[cfg(test)]
+mod write_tests {
+    use super::*;
+
+    // ── 写面（alpha 2.1）：真建 / 真改 / 真移动 / 真删（回收站）──────────────────────────
+
+    fn write_root(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("doyah-write-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        dir
+    }
+
+    #[test]
+    fn creates_files_and_directories_with_a_free_name() {
+        let root = write_root("create");
+        let root_text = root.to_string_lossy().to_string();
+        let created = create_entry(&root_text, "", "未命名", None, false).unwrap();
+        assert_eq!(created.name, "未命名");
+        assert_eq!(created.kind, "file");
+        assert!(root.join("未命名").exists());
+        // 再来一个 ⇒ 同名之后自动取「未命名 2」（**不覆盖**）
+        let second = create_entry(&root_text, "", "未命名", None, false).unwrap();
+        assert_eq!(second.name, "未命名 2");
+        assert!(root.join("未命名").exists() && root.join("未命名 2").exists());
+        // 带扩展名 + 在子目录里建
+        let in_sub = create_entry(&root_text, "sub", "new", Some("rs"), false).unwrap();
+        assert_eq!(in_sub.name, "new.rs");
+        assert_eq!(in_sub.relative_path, "sub/new.rs");
+        // 建文件夹
+        let dir = create_entry(&root_text, "", "新文件夹", None, true).unwrap();
+        assert_eq!(dir.kind, "directory");
+        assert!(root.join("新文件夹").is_dir());
+        // 父路径不是目录 ⇒ 给人话
+        let err = create_entry(&root_text, "未命名", "x", None, false).unwrap_err();
+        assert!(err.message.contains("NotADirectory"), "{}", err.message);
+    }
+
+    #[test]
+    fn rename_refuses_collisions_and_treats_same_name_as_noop() {
+        let root = write_root("rename");
+        let root_text = root.to_string_lossy().to_string();
+        std::fs::write(root.join("a.txt"), "a").unwrap();
+        std::fs::write(root.join("b.txt"), "b").unwrap();
+
+        // 同名 ⇒ 不算失败、不报"已存在"
+        let same = rename_entry(&root_text, "a.txt", "a.txt").unwrap();
+        assert_eq!(same.name, "a.txt");
+        assert!(root.join("a.txt").exists());
+
+        // 撞名 ⇒ 明确拒绝，且**原文件没被动**
+        let err = rename_entry(&root_text, "a.txt", "b.txt").unwrap_err();
+        assert!(err.message.contains("AlreadyExists"), "{}", err.message);
+        assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "a");
+
+        // 非法名字 ⇒ 拒绝
+        let err = rename_entry(&root_text, "a.txt", "x/y.txt").unwrap_err();
+        assert!(err.message.contains("IllegalName"), "{}", err.message);
+
+        // 正常改名
+        let done = rename_entry(&root_text, "a.txt", "c.txt").unwrap();
+        assert_eq!(done.name, "c.txt");
+        assert!(!root.join("a.txt").exists() && root.join("c.txt").exists());
+    }
+
+    #[test]
+    fn move_refuses_swallowing_a_directory_into_itself() {
+        let root = write_root("move");
+        let root_text = root.to_string_lossy().to_string();
+        std::fs::create_dir_all(root.join("sub/deep")).unwrap();
+        std::fs::write(root.join("sub/deep/x.txt"), "x").unwrap();
+
+        // 移进自己 / 移进自己的子孙 ⇒ 拒绝（经典自吞）
+        assert!(move_entry(&root_text, "sub", "sub").is_err());
+        assert!(move_entry(&root_text, "sub", "sub/deep").is_err());
+        assert!(root.join("sub/deep/x.txt").exists(), "拒绝之后一个字节都不该动");
+
+        // 正常移动：把 deep 移到 sub 下（已经在，等同不动）→ 目标不存在时才真移
+        std::fs::create_dir_all(root.join("other")).unwrap();
+        let moved = move_entry(&root_text, "sub/deep", "other").unwrap();
+        assert_eq!(moved.relative_path, "other/deep");
+        assert!(root.join("other/deep/x.txt").exists());
+        assert!(!root.join("sub/deep").exists());
+        // 移进不存在的位置 ⇒ 给人话
+        assert!(move_entry(&root_text, "other/deep", "nope").is_err());
+    }
+
+    #[test]
+    fn deletion_summary_counts_children_and_reports_truncation() {
+        let root = write_root("summary");
+        let root_text = root.to_string_lossy().to_string();
+        std::fs::write(root.join("one.txt"), "1").unwrap();
+        // 文件 = 1 项
+        assert_eq!(deletion_summary(&root_text, "one.txt").unwrap().items, 1);
+        // 目录 = 自身 + 内容
+        std::fs::create_dir_all(root.join("pack/inner")).unwrap();
+        std::fs::write(root.join("pack/a.txt"), "a").unwrap();
+        std::fs::write(root.join("pack/inner/b.txt"), "b").unwrap();
+        let summary = deletion_summary(&root_text, "pack").unwrap();
+        assert_eq!(summary.items, 4, "pack + inner + a.txt + b.txt");
+        assert!(!summary.truncated);
+    }
+
+    #[test]
+    fn delete_moves_to_the_recycle_bin_and_refuses_the_root() {
+        let root = write_root("delete");
+        let root_text = root.to_string_lossy().to_string();
+        std::fs::write(root.join("bye.txt"), "bye").unwrap();
+
+        // **工作区根不能删**
+        let err = delete_entry(&root_text, "").unwrap_err();
+        assert!(!err.message.is_empty());
+
+        // 真删：文件不见（进回收站 —— 本用例只能证"不在原地"，回收站位置由系统管）
+        delete_entry(&root_text, "bye.txt").unwrap();
+        assert!(!root.join("bye.txt").exists(), "删完不该还在原地");
+
+        // 目录也能删（走同一个回收站口径）
+        std::fs::create_dir_all(root.join("tmpdir")).unwrap();
+        std::fs::write(root.join("tmpdir/inside.txt"), "x").unwrap();
+        delete_entry(&root_text, "tmpdir").unwrap();
+        assert!(!root.join("tmpdir").exists());
+
+        // 已经不在了 ⇒ 如实报，不谎报成功
+        let err = delete_entry(&root_text, "bye.txt").unwrap_err();
+        assert!(err.message.contains("不在了"), "{}", err.message);
+    }
+
+    #[test]
+    fn write_side_refuses_escapes() {
+        let root = write_root("write-escape");
+        let root_text = root.to_string_lossy().to_string();
+        assert!(create_entry(&root_text, "../..", "x", None, false).is_err());
+        assert!(rename_entry(&root_text, "../outside.txt", "y.txt").is_err());
+        assert!(delete_entry(&root_text, "../outside.txt").is_err());
+        assert!(move_entry(&root_text, "../outside.txt", "").is_err());
+    }
+}

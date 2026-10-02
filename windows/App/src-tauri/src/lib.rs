@@ -501,6 +501,50 @@ fn workspace_open_tabs(workspace_root: String, paths: Vec<String>) -> Result<ser
     Ok(serde_json::json!({ "history": next }))
 }
 
+// ── 工作区写面（alpha 2.1）：新建 / 重命名 / 移动 / 删除（走回收站）────────────────────────
+//
+// 判定在领域层（`file_ops`：名字校验 / 唯一名 / 同名不改 / 自吞拦截），IO 在 `fs`；
+// 越界判定**两遍都过**（字符串路径 + 解链接后的真实路径）。
+
+#[tauri::command]
+fn workspace_create(
+    workspace_root: String,
+    parent_relative_path: Option<String>,
+    base_name: String,
+    extension: Option<String>,
+    directory: bool,
+) -> Result<fs::CreatedEntry, DbFailure> {
+    fs::create_entry(
+        &workspace_root,
+        parent_relative_path.as_deref().unwrap_or(""),
+        &base_name,
+        extension.as_deref(),
+        directory,
+    )
+}
+
+#[tauri::command]
+fn workspace_rename(workspace_root: String, relative_path: String, new_name: String) -> Result<fs::CreatedEntry, DbFailure> {
+    fs::rename_entry(&workspace_root, &relative_path, &new_name)
+}
+
+#[tauri::command]
+fn workspace_move(workspace_root: String, relative_path: String, into_relative_path: String) -> Result<fs::CreatedEntry, DbFailure> {
+    fs::move_entry(&workspace_root, &relative_path, &into_relative_path)
+}
+
+/// 「将删几项」：**先给读数让人确认**，再真删（删非空文件夹要二次确认）。
+#[tauri::command]
+fn workspace_deletion_summary(workspace_root: String, relative_path: String) -> Result<doyah_studio_db::DeletionSummary, DbFailure> {
+    fs::deletion_summary(&workspace_root, &relative_path)
+}
+
+/// 删除：**走回收站**（可撤销是唯一的真保障）；删完回读确认，删不掉就如实报失败。
+#[tauri::command]
+fn workspace_delete(workspace_root: String, relative_path: String) -> Result<String, DbFailure> {
+    fs::delete_entry(&workspace_root, &relative_path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -542,7 +586,12 @@ pub fn run() {
             workspace_history,
             workspace_opened,
             workspace_closed,
-            workspace_open_tabs
+            workspace_open_tabs,
+            workspace_create,
+            workspace_rename,
+            workspace_move,
+            workspace_deletion_summary,
+            workspace_delete
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

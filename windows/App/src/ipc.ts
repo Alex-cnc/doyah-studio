@@ -52,6 +52,12 @@ export const COMMANDS = {
   workspaceOpened: 'workspace_opened',
   workspaceClosed: 'workspace_closed',
   workspaceOpenTabs: 'workspace_open_tabs',
+  // 工作区写面（2.1：新建 / 重命名 / 移动 / 删除走回收站）
+  workspaceCreate: 'workspace_create',
+  workspaceRename: 'workspace_rename',
+  workspaceMove: 'workspace_move',
+  workspaceDeletionSummary: 'workspace_deletion_summary',
+  workspaceDelete: 'workspace_delete',
 } as const
 
 export interface AppInfo {
@@ -588,4 +594,70 @@ export function workspaceOpenTabs(workspaceRoot: string, paths: string[]): Promi
   return call(COMMANDS.workspaceOpenTabs, { workspaceRoot, paths }, () => ({
     history: { files: [], workspaces: [], currentRoot: null, openTabs: [] },
   }))
+}
+// ── 工作区写面（alpha 2.1）──────────────────────────────────────────────────────────
+//
+// 判定在 Rust 领域层（名字校验 / 唯一名 / 同名不改 / 自吞拦截），**前端不自己拼路径或判安全**。
+
+/** 新建 / 改名 / 移动的共同返回：落在哪、叫什么、是文件还是文件夹。 */
+export interface CreatedEntry {
+  relativePath: string
+  name: string
+  kind: 'directory' | 'file'
+}
+
+/** 删除前的读数（`truncated` = 数到上限就停了，界面照实写「N 项以上」）。 */
+export interface DeletionSummary {
+  items: number
+  truncated: boolean
+}
+
+/** 失败的结构化原因（`kind` 决定界面说哪句话）。 */
+export interface FileOpFailure {
+  kind:
+    | 'notContained'
+    | 'emptyName'
+    | 'illegalName'
+    | 'alreadyExists'
+    | 'notADirectory'
+    | 'rootNotDeletable'
+    | 'system'
+  name?: string
+  message?: string
+}
+
+/** 新建文件或文件夹（同名自动取「名字 2」；**不覆盖**）。 */
+export function workspaceCreate(
+  workspaceRoot: string,
+  parentRelativePath: string,
+  baseName: string,
+  options: { extension?: string; directory?: boolean } = {},
+): Promise<CreatedEntry> {
+  return call(COMMANDS.workspaceCreate, {
+    workspaceRoot,
+    parentRelativePath,
+    baseName,
+    extension: options.extension,
+    directory: options.directory ?? false,
+  }, () => ({ relativePath: baseName, name: baseName, kind: (options.directory ? 'directory' : 'file') as 'directory' | 'file' }))
+}
+
+/** 重命名（**同名不算失败**，什么都不做）。 */
+export function workspaceRename(workspaceRoot: string, relativePath: string, newName: string): Promise<CreatedEntry> {
+  return call(COMMANDS.workspaceRename, { workspaceRoot, relativePath, newName }, () => ({ relativePath, name: newName, kind: 'file' as const }))
+}
+
+/** 拖拽移动（**不许把目录移进它自己或子孙**）。 */
+export function workspaceMove(workspaceRoot: string, relativePath: string, intoRelativePath: string): Promise<CreatedEntry> {
+  return call(COMMANDS.workspaceMove, { workspaceRoot, relativePath, intoRelativePath }, () => ({ relativePath, name: relativePath, kind: 'file' as const }))
+}
+
+/** 删除前的读数（先给读数让人确认，再真删）。 */
+export function workspaceDeletionSummary(workspaceRoot: string, relativePath: string): Promise<DeletionSummary> {
+  return call(COMMANDS.workspaceDeletionSummary, { workspaceRoot, relativePath }, () => ({ items: 1, truncated: false }))
+}
+
+/** 删除：**走回收站**（可撤销）；删不掉就报失败，不悄悄抹掉。 */
+export function workspaceDelete(workspaceRoot: string, relativePath: string): Promise<string> {
+  return call(COMMANDS.workspaceDelete, { workspaceRoot, relativePath }, () => 'file')
 }
