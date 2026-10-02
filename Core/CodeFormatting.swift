@@ -159,6 +159,87 @@ public enum CodeFormatPlanner {
     }
 }
 
+/// 外部工具「装上了但用不了」的原因。**「无联网」是其中一类** —— 人类主人 2026-10-02 的形态定案
+/// （「**优先外部，如无联网则用内置**」）要求这一档**回退内置**，且**如实说明**为什么回退。
+///
+/// 这里只给**结构**，不给给用户看的句子 —— 用户可见文案一律走语言表（见 `App/LocalizationManager`）。
+public enum CodeFormatUnusableReason: Sendable, Equatable, CaseIterable {
+    /// 无网络连接（或网络型格式化工具连不上它的端点）。
+    case networkUnreachable
+    /// 装上了但跑不起来（缺依赖 / 没执行权限 / 平台不匹配）。
+    case notRunnable
+}
+
+/// 探针的**三态**：「装了没有」只是其中一维 —— 「装了但不能用」必须与「没装」分开，
+/// 否则界面说不出回退的**真正**原因（定案要的就是这一句）。
+public enum CodeFormatToolStatus: Sendable, Equatable {
+    case usable
+    case unusable(CodeFormatUnusableReason)
+    case missing
+}
+
+/// 选路结果 + **回退原因**（非空 = 本该走外部、因它退回了内置；界面必须说出来）。
+public struct CodeFormatDecision: Sendable, Equatable {
+    public let plan: CodeFormatPlan
+    public let fallbackReason: CodeFormatUnusableReason?
+
+    public init(plan: CodeFormatPlan, fallbackReason: CodeFormatUnusableReason?) {
+        self.plan = plan
+        self.fallbackReason = fallbackReason
+    }
+}
+
+public extension CodeFormatPlanner {
+
+    /// 三态探针版选路 —— **定案口径的落点**：候选按优先级找**能用的**；装上了但不能用的
+    /// **记下原因继续往下找**；一个能用的外部都没有 ⇒ 回退内置，并**把原因带出去**。
+    static func decide(
+        language: TextLanguage,
+        status: (String) -> CodeFormatToolStatus
+    ) -> CodeFormatDecision {
+        decide(definition: language.definition, status: status)
+    }
+
+    /// 同一条判断，直接吃一份定义（单测用它构造表里还没有的组合）。
+    static func decide(
+        definition: CodeLanguageDefinition,
+        status: (String) -> CodeFormatToolStatus
+    ) -> CodeFormatDecision {
+        if definition.isFallback {
+            return CodeFormatDecision(plan: .refused(.unknownLanguage), fallbackReason: nil)
+        }
+        let capability = definition.format
+        var unusable: CodeFormatUnusableReason?
+        for tool in capability.tools {
+            switch status(tool.executable) {
+            case .usable:
+                return CodeFormatDecision(plan: .external(tool), fallbackReason: nil)
+            case .unusable(let reason):
+                // 登记顺序 = 优先级 ⇒ **第一个**候选的原因最能解释用户看到的结果。
+                if unusable == nil { unusable = reason }
+            case .missing:
+                continue
+            }
+        }
+        if capability.builtin.isAvailable, definition.syntax.hasAnyRule {
+            return CodeFormatDecision(plan: .builtin(capability.builtin), fallbackReason: unusable)
+        }
+        return CodeFormatDecision(
+            plan: .refused(.noFormatter(language: definition.language)),
+            fallbackReason: nil
+        )
+    }
+
+    /// 旧的布尔探针（只有「装了没有」两态）走这条 —— 回退原因恒为 `nil`。
+    /// 保留它是因为两态调用点仍然有效，**不是**因为三态可以不要。
+    static func decide(
+        language: TextLanguage,
+        isExecutable: (String) -> Bool
+    ) -> CodeFormatDecision {
+        decide(language: language) { isExecutable($0) ? .usable : .missing }
+    }
+}
+
 /// 「这个工具装了没有」的**唯一实现**：按 `PATH` 顺序找可执行文件。
 ///
 /// 与 `FoundationProcessRunner.resolveExecutable` 同一口径（那里是备份工具用的），
