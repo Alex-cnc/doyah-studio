@@ -20,6 +20,15 @@
 #      在 PowerShell 会话内、或用 `-File` 形式调用时退出码正常。脚本内的父子汇总靠 $LASTEXITCODE（实测正常）。
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+# ④ **子进程 Python 的输出编码**（2026-10-02 第 36 轮实测）：
+#    上面那行只管**本 PowerShell 进程**的控制台编码，管不到我们起出来的子进程。
+#    本机 Python 3.13 的 stdout 跟着系统区域走 GBK，而 `Scripts/*.py` 会打印 `⚠`/`ℹ️`
+#    ⇒ `UnicodeEncodeError: 'gbk' codec can't encode character '\u26a0'`，判据**直接崩**。
+#    症状是「判据全红但代码没问题」：一次实测里 15 项跑 9 / 失败 6，六项红全是这一个原因
+#    （路径归属 / 文档计数 / 平台中立性 / 独占节越界 / 等价矩阵 / P-* 对账）。
+#    修法 = 给子进程钉 UTF-8（PYTHONUTF8 同时开 UTF-8 模式，PYTHONIOENCODING 钉 stdio 编码）。
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
 $ErrorActionPreference = 'Stop'
 
 function Get-DoyahRepoRoot {

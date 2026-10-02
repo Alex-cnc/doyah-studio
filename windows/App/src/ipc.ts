@@ -17,6 +17,10 @@ export const COMMANDS = {
   dbConnect: 'db_connect',
   dbDisconnect: 'db_disconnect',
   dbTables: 'db_tables',
+  // 对象树（1.1：展开一层取一层 + 对象搜索）
+  dbSchemas: 'db_schemas',
+  dbRelations: 'db_relations',
+  searchObjects: 'search_objects',
   dbQuery: 'db_query',
   dbProbe: 'db_probe',
   // 连接列表（配置落盘 + 口令进系统凭据管理器）
@@ -147,6 +151,30 @@ export interface TableNode {
   schema: string
   name: string
   kind: string
+}
+
+/** 对象种类（与领域层 `tree::ObjectKind` 的序列化名一致：snake_case）。 */
+export type ObjectKindName =
+  | 'table'
+  | 'view'
+  | 'materialized_view'
+  | 'foreign_table'
+  | 'sequence'
+  | 'system'
+  | 'other'
+
+/** 树上的一个对象（1.1：在某个 schema 这一层里的一员）。 */
+export interface ObjectNode {
+  schema: string
+  name: string
+  kind: ObjectKindName
+}
+
+/** 一条搜索命中：对象 + **为什么命中**（界面要显示依据，不能只说"匹配"）。 */
+export interface SearchHit {
+  object: ObjectNode
+  /** `qualified` = 命中限定名；`name` = 只命中对象名；`schema` = 只命中 schema 名 */
+  matchedOn: 'qualified' | 'name' | 'schema'
 }
 
 /** 一次查询的结果：列名 + 行（每格文本或 null）+ 数值形态 + 截断与影响行数。 */
@@ -333,4 +361,24 @@ export interface FkEdge {
 /** 读外键元数据（从 pg_constraint 取定义原文，解析规则在领域层 —— 只有一处实现）。 */
 export function dbForeignKeys(): Promise<FkEdge[]> {
   return call(COMMANDS.dbForeignKeys, {}, () => [] as FkEdge[])
+}
+
+// ── 对象树（1.1：展开一层取一层 + 对象搜索）────────────────────────────────────────────
+//
+// 口径：**不在连接时把整库元数据拉光** —— 树的第一层只问 schema，展开某个 schema 才问它下面的
+// 对象。搜索是纯函数（领域层 `tree::search`），只搜「界面上已经看见的那些」，与树里显示的必然一致。
+
+/** 树的第一层：这台服务器上能看到的 schema。 */
+export function dbSchemas(): Promise<string[]> {
+  return call(COMMANDS.dbSchemas, {}, () => [] as string[])
+}
+
+/** 第二层：某个 schema 下的对象（**展开时才问**）。 */
+export function dbRelations(schema: string): Promise<ObjectNode[]> {
+  return call(COMMANDS.dbRelations, { schema }, () => [] as ObjectNode[])
+}
+
+/** 对象搜索：**纯函数在领域层**，本函数只把已加载的那一层递过去。 */
+export function searchObjects(items: ObjectNode[], query: string): Promise<SearchHit[]> {
+  return call(COMMANDS.searchObjects, { items, query }, () => [] as SearchHit[])
 }

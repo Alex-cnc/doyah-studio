@@ -122,6 +122,37 @@ async fn db_tables(state: State<'_, ShellState>) -> Result<Vec<TableNode>, DbFai
     session.tables().await
 }
 
+// ── 对象树（1.1：展开一层取一层；搜索是纯函数在领域层）────────────────────────────────
+
+/// 树的第一层：能看到的 schema。
+#[tauri::command]
+async fn db_schemas(state: State<'_, ShellState>) -> Result<Vec<String>, DbFailure> {
+    let session = current_session(&state).await?;
+    session.schemas().await
+}
+
+/// 第二层：某个 schema 下的对象（**展开时才问**，不在连接时一次拉光）。
+#[tauri::command]
+async fn db_relations(
+    state: State<'_, ShellState>,
+    schema: String,
+) -> Result<Vec<doyah_studio_db::tree::ObjectNode>, DbFailure> {
+    let session = current_session(&state).await?;
+    session.relations(&schema).await
+}
+
+/// 对象搜索：**纯函数**在领域层（`tree::search`），本命令只把已加载的那一层递过去。
+///
+/// 为什么搜索在这一层做而不是下发 SQL：搜索的对象是**界面上已经看见的那些**，
+/// 与树里显示的东西必然一致；下发 `LIKE` 查询会引入"搜到了树里却没有"的错位。
+#[tauri::command]
+fn search_objects(
+    items: Vec<doyah_studio_db::tree::ObjectNode>,
+    query: String,
+) -> Vec<doyah_studio_db::tree::SearchHit> {
+    doyah_studio_db::tree::search(&items, &query)
+}
+
 /// 跑一条 SQL。
 #[tauri::command]
 async fn db_query(state: State<'_, ShellState>, sql: String) -> Result<QueryResult, DbFailure> {
@@ -303,6 +334,9 @@ pub fn run() {
             db_connect,
             db_disconnect,
             db_tables,
+            db_schemas,
+            db_relations,
+            search_objects,
             db_query,
             db_probe,
             connections_list,

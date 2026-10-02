@@ -16,6 +16,9 @@ import {
   dbConnect,
   dbDisconnect,
   dbQuery,
+  dbSchemas,
+  dbRelations,
+  searchObjects,
   browseSql,
   inspectRow,
   dbTables,
@@ -27,6 +30,8 @@ import {
   type RowField,
   type StartupOutcome,
   type TableNode,
+  type ObjectNode,
+  type SearchHit,
 } from '../ipc'
 import { frozenColumnStyles, toTsv, visibleOrder } from '../grid/view'
 
@@ -276,16 +281,123 @@ const versionShort = computed(() => {
   return first.length > 48 ? `${first.slice(0, 48)}…` : first
 })
 
-/** 表按 schema 分组（对象树的雏形；逐层钻取是 1.1 段的事）。 */
-const grouped = computed(() => {
-  const map = new Map<string, TableNode[]>()
-  for (const t of tables.value) {
-    const list = map.get(t.schema) ?? []
-    list.push(t)
-    map.set(t.schema, list)
+// ── 对象树（1.1）：展开一层取一层 + 对象搜索 + 右键菜单 ────────────────────────────────
+//
+// 口径：**不在连接时把整库元数据拉光** —— 第一层只问 schema，展开某个 schema 才问它下面的对象。
+// 已展开的那一层缓存在 `layerOf`，搜索只搜**已经看见的那些**（与树里显示的必然一致）。
+
+/** 已加载的层：schema 名 → 它下面的对象（`''` 这个键是「全部已加载对象的并集」，供搜索用）。 */
+const layerOf = ref<Record<string, ObjectNode[]>>({})
+/** 正在加载的 schema（展开时显示"加载中"，不假装已经有内容）。 */
+const loadingSchema = ref('')
+/** 展开的 schema 集合。 */
+const expanded = ref<Record<string, boolean>>({})
+/** 对象搜索词与命中（`matchedOn` 要显示出来，不能只说"匹配"）。 */
+const objectQuery = ref('')
+const objectHits = ref<SearchHit[]>([])
+/** 右键菜单：位置 + 目标对象；`null` = 没打开。 */
+const contextMenu = ref<{ x: number; y: number; object: ObjectNode } | null>(null)
+
+/** 已加载的全部对象（搜索的输入面）。 */
+const loadedObjects = computed<ObjectNode[]>(() =>
+  Object.values(layerOf.value).flat(),
+)
+
+/** 树：按 schema 排好的 (schema, 对象列表)；**只含已加载的层**（未展开的不占位、不假装）。 */
+const tree = computed<{ schema: string; items: ObjectNode[] }[]>(() =>
+  Object.entries(layerOf.value)
+    .filter(([schema]) => schema !== '')
+    .map(([schema, items]) => ({ schema, items }))
+    .sort((a, b) => a.schema.localeCompare(b.schema)),
+)
+
+/** 第一层：schema 列表（连接后取一次）。 */
+const schemas = ref<string[]>([])
+
+async function loadSchemas() {
+  try {
+    schemas.value = await dbSchemas()
+    layerOf.value = {}
+    expanded.value = {}
+    clearFailure()
+  } catch (e) {
+    failure.value = describeError(e)
   }
-  return [...map.entries()].map(([schema, items]) => ({ schema, items }))
-})
+}
+
+/** 展开 / 收起一个 schema：**第一次展开才去问服务端**（有缓存就不重复问）。 */
+async function toggleSchema(schema: string) {
+  if (expanded.value[schema]) {
+    expanded.value = { ...expanded.value, [schema]: false }
+    return
+  }
+  expanded.value = { ...expanded.value, [schema]: true }
+  if (layerOf.value[schema]) return
+  loadingSchema.value = schema
+  try {
+    const items = await dbRelations(schema)
+    layerOf.value = { ...layerOf.value, [schema]: items }
+    clearFailure()
+  } catch (e) {
+    failure.value = describeError(e)
+    // 取不到就**如实收起**：不把一个空列表当成"这个 schema 是空的"
+    expanded.value = { ...expanded.value, [schema]: false }
+  } finally {
+    loadingSchema.value = ''
+  }
+}
+
+/** 搜索：空词 = 回到树的原貌（不把整库摊成平表）。 */
+async function runObjectSearch() {
+  if (!objectQuery.value.trim()) {
+    objectHits.value = []
+    return
+  }
+  try {
+    objectHits.value = await searchObjects(loadedObjects.value, objectQuery.value)
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
+function openContextMenu(event: MouseEvent, object: ObjectNode) {
+  contextMenu.value = { x: event.clientX, y: event.clientY, object }
+}
+
+function closeContextMenu() {
+  contextMenu.value = null
+}
+
+/** 右键：浏览数据（只有表 / 视图这类**能取数**的对象才给这一项）。 */
+function menuBrowse() {
+  const target = contextMenu.value?.object
+  closeContextMenu()
+  if (!target) return
+  openBrowse(target.schema, target.name)
+}
+
+/** 右键：生成查询（把对象塞进 SQL 编辑面，不自动执行 —— 生成与执行分开）。 */
+function menuGenerateQuery() {
+  const target = contextMenu.value?.object
+  closeContextMenu()
+  if (!target) return
+  useTable({ schema: target.schema, name: target.name, kind: target.kind })
+}
+
+/** 右键：复制名（**限定名原样**：给人看 / 贴回来用。下发 SQL 的引号由服务端侧生成器负责）。 */
+async function menuCopyName() {
+  const target = contextMenu.value?.object
+  closeContextMenu()
+  if (!target) return
+  const text = `${target.schema}.${target.name}`
+  try {
+    await navigator.clipboard.writeText(text)
+    copied.value = `已复制 ${text}`
+  } catch {
+    copied.value = `复制失败：外壳不给剪贴板权限。名字是 ${text}`
+  }
+  setTimeout(() => (copied.value = ''), 2500)
+}
 
 function clearFailure() {
   failure.value = null
@@ -344,12 +456,9 @@ async function disconnect() {
 }
 
 async function loadTables() {
-  try {
-    tables.value = await dbTables()
-    clearFailure()
-  } catch (e) {
-    failure.value = describeError(e)
-  }
+  // 1.1 起对象树按需展开：这个入口只剩「重新取第一层」（schema 列表）。
+  // 保留命令名 `db_tables` 的那条通路见 `dbProbe`（自检仍要能列一次表）。
+  await loadSchemas()
 }
 
 async function run() {
@@ -365,7 +474,7 @@ async function run() {
   }
 }
 
-function useTable(t: TableNode) {
+function useTable(t: ObjectNode) {
   // 记住"这一屏是从哪张表来的"——外键入口只对**那张表**的列才有意义
   resultSource.value = { schema: t.schema, table: t.name }
   sql.value = `select * from ${t.schema}.${t.name} limit 50`
@@ -486,33 +595,90 @@ async function probe() {
         </div>
       </aside>
 
-      <!-- 对象树（本轮到表 / 视图） -->
-      <aside class="db__tree">
-        <p class="db__tree-title">对象（{{ tables.length }}）</p>
+      <!-- 对象树（1.1）：展开一层取一层；右键给「浏览数据 / 生成查询 / 复制名」 -->
+      <aside class="db__tree" @click="closeContextMenu">
+        <p class="db__tree-title">
+          对象（{{ loadedObjects.length }} 个已加载 · {{ schemas.length }} 个 schema）
+        </p>
         <p v-if="!info" class="db__tree-empty">未连接</p>
-        <p v-else-if="tables.length === 0" class="db__tree-empty">没有表 / 视图</p>
-        <div v-for="group in grouped" :key="group.schema" class="db__schema">
-          <p class="db__schema-name">{{ group.schema }}</p>
-          <button
-            v-for="t in group.items"
-            :key="`${t.schema}.${t.name}`"
-            class="db__table"
-            type="button"
-            :title="`${t.kind} · 点一下生成查询`"
-            @click="useTable(t)"
-          >
-            {{ t.name }}<span class="db__kind">{{ t.kind === 'table' ? '' : t.kind }}</span>
-          </button>
-          <button
-            class="db__browse"
-            type="button"
-            title="按条件浏览（服务端 WHERE / ORDER BY，先生成 SQL 给你看再执行）"
-            @click="openBrowse(t.schema, t.name)"
-          >
-            浏览…
-          </button>
-        </div>
+        <template v-else>
+          <input
+            v-model="objectQuery"
+            class="db__tree-search"
+            type="search"
+            placeholder="搜索对象（名字或 schema）"
+            aria-label="搜索数据库对象"
+            @input="runObjectSearch"
+          />
+          <p v-if="objectQuery.trim()" class="db__tree-empty">
+            命中 {{ objectHits.length }} 个（只在已加载的 {{ loadedObjects.length }} 个对象里找）
+          </p>
+          <ul v-if="objectQuery.trim()" class="db__hits">
+            <li v-for="hit in objectHits" :key="`${hit.object.schema}.${hit.object.name}`">
+              <button
+                class="db__table"
+                type="button"
+                :title="`${hit.object.schema}.${hit.object.name}（命中依据：${hit.matchedOn === 'qualified' ? '限定名' : hit.matchedOn === 'name' ? '对象名' : 'schema 名'}）`"
+                @click="useTable({ schema: hit.object.schema, name: hit.object.name, kind: hit.object.kind })"
+                @contextmenu.prevent="openContextMenu($event, hit.object)"
+              >
+                {{ hit.object.name }}<span class="db__kind">{{ hit.object.schema }} · {{ hit.object.kind }}</span>
+              </button>
+            </li>
+          </ul>
+          <template v-else>
+            <p v-if="schemas.length === 0" class="db__tree-empty">没有可展开的 schema</p>
+            <div v-for="schema in schemas" :key="schema" class="db__schema">
+              <button
+                class="db__schema-toggle"
+                type="button"
+                :aria-expanded="expanded[schema] ? 'true' : 'false'"
+                @click="toggleSchema(schema)"
+              >
+                <span class="db__chevron">{{ expanded[schema] ? '▾' : '▸' }}</span>
+                {{ schema }}
+                <span v-if="loadingSchema === schema" class="db__kind">加载中…</span>
+              </button>
+              <template v-if="expanded[schema] && layerOf[schema]">
+                <p v-if="layerOf[schema].length === 0" class="db__tree-empty">这个 schema 下没有对象</p>
+                <button
+                  v-for="t in layerOf[schema]"
+                  :key="`${t.schema}.${t.name}`"
+                  class="db__table"
+                  type="button"
+                  :title="`${t.kind} · 点一下生成查询；右键有更多`"
+                  @click="useTable({ schema: t.schema, name: t.name, kind: t.kind })"
+                  @contextmenu.prevent="openContextMenu($event, t)"
+                >
+                  {{ t.name }}<span class="db__kind">{{ t.kind === 'table' ? '' : t.kind }}</span>
+                </button>
+              </template>
+            </div>
+          </template>
+        </template>
       </aside>
+
+      <!-- 右键菜单：**没目标就不给入口** —— 序列之类取不了数的对象不出现「浏览数据」 -->
+      <ul
+        v-if="contextMenu"
+        class="db__menu"
+        :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+        @click.stop
+      >
+        <li class="db__menu-head">{{ contextMenu.object.schema }}.{{ contextMenu.object.name }}</li>
+        <li>
+          <button
+            v-if="contextMenu.object.kind === 'table' || contextMenu.object.kind === 'view' || contextMenu.object.kind === 'materialized_view' || contextMenu.object.kind === 'foreign_table'"
+            class="db__menu-item"
+            type="button"
+            @click="menuBrowse"
+          >
+            浏览数据…
+          </button>
+        </li>
+        <li><button class="db__menu-item" type="button" @click="menuGenerateQuery">生成查询</button></li>
+        <li><button class="db__menu-item" type="button" @click="menuCopyName">复制名</button></li>
+      </ul>
 
         <!-- 服务端条件浏览面板（FR-DATA-02）：先看 SQL，再执行 -->
         <div v-if="browse" class="db__browse-panel">
@@ -1099,5 +1265,91 @@ th.db__grid-head[style] {
 
 .db__null {
   color: var(--ds-color-text-tertiary);
+}
+
+/* ── 对象树（1.1）：搜索框 / 可展开的 schema / 命中清单 / 右键菜单 ───────────────────── */
+
+.db__tree-search {
+  width: 100%;
+  height: var(--ds-metric-control-height);
+  margin-bottom: var(--ds-spacing-xs);
+  padding: 0 var(--ds-spacing-s);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+}
+
+.db__schema-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  width: 100%;
+  padding: var(--ds-spacing-xs);
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  border: 0;
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.db__schema-toggle:hover {
+  background: var(--ds-color-surface-panel);
+}
+
+/* 三角形只在位置上占位：展开与否靠字形换，不靠加宽 —— 免得展开时整列跟着跳 */
+.db__chevron {
+  width: 1em;
+  flex: 0 0 auto;
+  color: var(--ds-color-text-tertiary);
+}
+
+.db__hits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.db__menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 168px;
+  margin: 0;
+  padding: var(--ds-spacing-xs) 0;
+  background: var(--ds-color-surface-raised);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  list-style: none;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 28%);
+}
+
+.db__menu-head {
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  color: var(--ds-color-text-tertiary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  white-space: nowrap;
+}
+
+.db__menu-item {
+  display: block;
+  width: 100%;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  background: transparent;
+  color: var(--ds-color-text-primary);
+  border: 0;
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.db__menu-item:hover {
+  background: var(--ds-color-accent-accent);
+  color: var(--ds-color-surface-content);
 }
 </style>

@@ -12,6 +12,7 @@
 //! ④ **超过上限如实报截断**，不静默少给行。
 
 use doyah_studio_db::config::ConnectionConfig;
+use doyah_studio_db::tree::{ObjectKind, ObjectNode};
 use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 
 /// 一次查询最多实体化多少行（超过就如实报截断）。
@@ -271,6 +272,58 @@ impl PgSession {
                 });
             }
         }
+        Ok(out)
+    }
+
+    /// 对象树第一层：**这台服务器上能看到的 schema**（1.1 段「展开一层取一层」的第一层）。
+    ///
+    /// 为什么不在连接时把整库元数据一次拉光：大库上那是几百毫秒的固定开销、还没展开就先付了；
+    /// 而且树的第一层本来就只显示 schema。`pg_catalog` / `information_schema` 与 `pg_*`
+    /// 临时 schema 都排掉（它们是实现细节，不是用户的库）。
+    pub async fn schemas(&self) -> Result<Vec<String>, DbFailure> {
+        let sql = "SELECT schema_name FROM information_schema.schemata \
+                   WHERE schema_name NOT IN ('pg_catalog', 'information_schema') \
+                     AND schema_name NOT LIKE 'pg\\_%' \
+                   ORDER BY schema_name";
+        let messages = self
+            .client
+            .simple_query(sql)
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        let mut out = Vec::new();
+        for m in messages {
+            if let SimpleQueryMessage::Row(r) = m {
+                if let Some(name) = r.get(0) {
+                    out.push(name.to_string());
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// 对象树第二层：**某个 schema 下的对象**（按需展开时才问）。
+    ///
+    /// 取的是 `pg_class` 而不是 `information_schema.tables`：序列、物化视图、分区表都在那里，
+    /// 而 `information_schema.tables` 看不到序列。用 `relkind` 单字母词表交给领域层分类
+    /// （分类规则只此一处，见 `doyah_studio_db::tree::ObjectKind::from_server`）。
+    pub async fn relations(&self, schema: &str) -> Result<Vec<ObjectNode>, DbFailure> {
+        let sql = "SELECT c.relname, c.relkind::text \
+                   FROM pg_class c \
+                   JOIN pg_namespace n ON n.oid = c.relnamespace \
+                   WHERE n.nspname = $1 AND c.relkind IN ('r','p','v','m','f','S') \
+                   ORDER BY c.relkind, c.relname";
+        let rows = self
+            .client
+            .query(sql, &[&schema])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        let mut out = Vec::new();
+        for row in rows {
+            let name: String = row.get(0);
+            let kind: String = row.get(1);
+            out.push(ObjectNode::new(schema, name, ObjectKind::from_server(&kind)));
+        }
+        doyah_studio_db::tree::sort_objects(&mut out);
         Ok(out)
     }
 

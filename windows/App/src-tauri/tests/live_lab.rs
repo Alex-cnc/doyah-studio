@@ -7,6 +7,7 @@
 //! 没设就**跳过并说明为什么**（跳过不是通过 —— 与闸门协议一致）。
 //! 实验库不属于产品：它是我自己起的测试集群，不动用户现有那台 PostgreSQL。
 
+use doyah_studio_db::tree::ObjectKind;
 use doyah_studio_shell::postgres::{ConnectParams, PgSession};
 
 fn lab_params() -> Option<ConnectParams> {
@@ -132,6 +133,81 @@ async fn startup_sql_is_sent_one_by_one_and_reported_per_statement() {
     // ④ 报告里的服务端自述与连接自述一致（同一条连接，不是连了两次）
     assert_eq!(report.info.database, session.info().database);
     assert_eq!(report.info.user, session.info().user);
+}
+
+/// **1.1 对象树**：展开一层取一层 —— 第一层只问 schema，展开某个 schema 才问它下面的对象。
+///
+/// 判据（版本计划 §1.1 的出口「展开一层取一层、点表能出数」）：
+/// ① `schemas()` 回得来且含夹具的 `app`；② `relations("app")` 回得来且含两张夹具表；
+/// ③ 序列 / 物化视图这类**别的地方会漏**的对象也能在 `pg_class` 那条路上看见（真库造一个再删）；
+/// ④ 搜索是纯函数：拿真元数据当输入，按名字与限定名各命中一次。
+#[tokio::test]
+async fn lazy_object_tree_layer_by_layer_on_real_db() {
+    let Some(params) = lab_params() else { return };
+    let session = PgSession::connect(&params).await.expect("应当连上实验库");
+
+    // ① 第一层：schema
+    let schemas = session.schemas().await.expect("列 schema 应当成功");
+    assert!(schemas.contains(&"app".to_string()), "实际：{schemas:?}");
+    assert!(
+        !schemas.iter().any(|s| s == "pg_catalog" || s == "information_schema"),
+        "系统 schema 不该出现在树的第一层：{schemas:?}"
+    );
+
+    // ③ 真库造一个序列：`pg_class` 那条路看得见它，`information_schema.tables` 看不见
+    session
+        .run("create sequence if not exists app.seq_probe_11", 10)
+        .await
+        .expect("建序列应当成功");
+    let layer = session.relations("app").await.expect("列 schema 下的对象应当成功");
+    let names: Vec<String> = layer.iter().map(|o| o.name.clone()).collect();
+    assert!(names.contains(&"accounts".to_string()), "实际：{names:?}");
+    assert!(names.contains(&"orders".to_string()), "实际：{names:?}");
+    let seq = layer
+        .iter()
+        .find(|o| o.name == "seq_probe_11")
+        .expect("序列必须能被列出来（改走 pg_class 的原因就是这个）");
+    assert_eq!(seq.kind, ObjectKind::Sequence, "序列的种类要如实分类");
+    assert!(!seq.kind.can_browse(), "序列取不了数 ⇒ 界面不给「浏览数据」入口");
+    session
+        .run("drop sequence if exists app.seq_probe_11", 10)
+        .await
+        .expect("清理序列应当成功");
+
+    // ② 用**第一层的真实返回**当第二层的输入（界面就是这么用的：点开才问）
+    let app_layer = session.relations("app").await.expect("再来一次也应当成功");
+    assert!(app_layer.iter().all(|o| o.schema == "app"), "第二层只该含这个 schema 的对象");
+
+    // ④ 搜索：真元数据当输入，名字命中与限定名命中各验一次
+    //
+    // ⚠️ 期望按**真库事实**写，不按想象写：`app` 里除了夹具两张表，还有建表时自动生成的
+    // `orders_id_seq`（序列）—— 搜 `ORD` 本来就该命中「表 + 它的序列」两条。
+    // 第一次跑这条用例时我按"只命中 orders"写，当场被真库判红（这正是真库判据的价值）。
+    let by_name = doyah_studio_db::tree::search(&app_layer, "ORD");
+    assert!(
+        by_name.iter().any(|h| h.object.name == "orders" && h.matched_on == "name"),
+        "orders 必须按对象名命中：{by_name:?}"
+    );
+    assert!(
+        by_name.iter().all(|h| h.object.name.to_lowercase().contains("ord")),
+        "命中项的名字里都必须真的含 ord（不许混进不匹配的）：{by_name:?}"
+    );
+    let by_qualified = doyah_studio_db::tree::search(&app_layer, "app.acc");
+    assert!(
+        by_qualified.iter().any(|h| h.object.name == "accounts" && h.matched_on == "qualified"),
+        "accounts 必须按限定名命中：{by_qualified:?}"
+    );
+    assert!(
+        by_qualified.iter().all(|h| h.matched_on == "qualified" && h.object.schema == "app"),
+        "限定名模式下命中项都必须是 app 下的、且依据是限定名：{by_qualified:?}"
+    );
+    assert!(
+        by_qualified.iter().all(|h| h.object.name.to_lowercase().starts_with("acc")
+            || h.object.name.to_lowercase().contains("acc")),
+        "命中项名字都真的含 acc：{by_qualified:?}"
+    );
+    // 空查询 = 空结果（界面此时显示树的原貌）
+    assert!(doyah_studio_db::tree::search(&app_layer, "  ").is_empty());
 }
 
 #[tokio::test]
