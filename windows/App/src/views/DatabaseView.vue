@@ -17,12 +17,14 @@ import {
   dbDisconnect,
   dbQuery,
   browseSql,
+  inspectRow,
   dbTables,
   type ConnectParams,
   type DbFailure,
   type QueryResult,
   type SavedConnection,
   type ServerInfo,
+  type RowField,
   type StartupOutcome,
   type TableNode,
 } from '../ipc'
@@ -113,6 +115,15 @@ const info = ref<ServerInfo | null>(null)
 const tables = ref<TableNode[]>([])
 const sql = ref('select id, name, balance from app.accounts order by id limit 20')
 const sqlText = ref('')
+// 单行详情（FR-DATA-05）：宽表竖排看、长 JSON 格式化看 —— **纯计算**，值检查在领域层
+const detail = ref<{ index: number; fields: RowField[] } | null>(null)
+
+/** 点某一行：调领域层的值检查，把这一行的每个字段竖排列出来 */
+async function openDetail(index: number) {
+  if (!result.value) return
+  const fields = await inspectRow(result.value.columns, result.value.rows[index] ?? [])
+  detail.value = { index, fields }
+}
 const result = ref<QueryResult | null>(null)
 const failure = ref<DbFailure | null>(null)
 const busy = ref('')
@@ -483,13 +494,46 @@ async function probe() {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="i in visible" :key="i">
+              <tr
+                v-for="i in visible"
+                :key="i"
+                class="db__row"
+                title="点这一行看详情（值检查：NULL 与空串分开、长 JSON 格式化）"
+                @click="openDetail(i)"
+              >
                 <td v-for="(cell, j) in result.rows[i]" :key="j" :class="{ 'db__null': cell === null }">
                   {{ cell === null ? 'NULL' : cell }}
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+        <!-- 单行详情（FR-DATA-05）：竖排看宽表 —— 每格给形态摘要 + 展示文本（长 JSON 已美化） -->
+        <div class="db__result-row">
+        <aside v-if="detail" class="db__detail">
+          <p class="db__detail-title">
+            第 {{ detail.index + 1 }} 行 · {{ detail.fields.length }} 个字段
+            <button class="db__btn" type="button" @click="detail = null">关闭</button>
+          </p>
+          <dl class="db__detail-list">
+            <template v-for="f in detail.fields" :key="f.columnName">
+              <dt>
+                {{ f.columnName }}<span v-if="f.typeName" class="db__kind">{{ f.typeName }}</span>
+              </dt>
+              <dd>
+                <p class="db__detail-meta">
+                  {{ f.value.shape.kind === 'binary' ? `二进制 ${f.value.shape.byteCount} 字节` : f.value.shape.kind }}
+                  · {{ f.value.originalCharacterCount }} 字符
+                  <template v-if="f.value.lineCount > 1">· {{ f.value.lineCount }} 行</template>
+                  <template v-if="f.value.isTruncated">· 已截断（下面不是全部）</template>
+                </p>
+                <pre class="db__detail-value" :class="{ 'db__null': f.value.shape.kind === 'null' }">{{
+                  f.value.shape.kind === 'null' ? 'NULL' : f.value.shape.kind === 'empty' ? '（空串）' : f.value.display
+                }}</pre>
+              </dd>
+            </template>
+          </dl>
+        </aside>
         </div>
         <p v-else-if="info && !failure" class="db__hint">
           从左侧点一张表生成查询，或直接写 SQL 后按「执行」。
@@ -713,6 +757,61 @@ async function probe() {
   background: var(--ds-color-surface-panel);
 }
 
+.db__result-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.db__row {
+  cursor: pointer;
+}
+
+.db__row:hover td {
+  background: var(--ds-color-surface-panel);
+}
+
+.db__detail {
+  width: 380px;
+  overflow: auto;
+  padding: var(--ds-spacing-s) var(--ds-spacing-m);
+  border-left: var(--ds-metric-hairline) solid var(--ds-hairline);
+  background: var(--ds-color-surface-sidebar);
+}
+
+.db__detail-title {
+  margin: 0 0 var(--ds-spacing-s);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__detail-list {
+  margin: 0;
+}
+
+.db__detail-list dt {
+  margin-top: var(--ds-spacing-s);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__detail-meta {
+  margin: 0 0 var(--ds-spacing-xs);
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__detail-value {
+  margin: 0;
+  padding: var(--ds-spacing-xs);
+  background: var(--ds-color-surface-content);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
 .db__browse {
   display: block;
   width: 100%;

@@ -226,6 +226,26 @@ fn browse_sql(
     })
 }
 
+/// 单行详情的**值检查**（FR-DATA-05）：宽表竖排看、长 JSON 格式化看。
+///
+/// 纯计算（判定形态 + 给展示文本与元信息），**不碰数据库** —— 输入就是界面上那一行。
+/// 要点：NULL 与空串分开；JSON **必须真能解析**才当 JSON（半截日志按文本显示）；
+/// 截断**必须**连原始字符数 / 行数一起报，否则用户会以为拿到的就是全部。
+#[tauri::command]
+fn inspect_row(
+    columns: Vec<String>,
+    type_names: Option<Vec<String>>,
+    row: Vec<Option<String>>,
+) -> Vec<doyah_studio_db::inspect::Field> {
+    let types = type_names.unwrap_or_default();
+    let cols: Vec<(String, String)> = columns
+        .into_iter()
+        .enumerate()
+        .map(|(i, name)| (name, types.get(i).cloned().unwrap_or_default()))
+        .collect();
+    doyah_studio_db::inspect::row(&cols, &row, doyah_studio_db::inspect::DEFAULT_DISPLAY_LIMIT)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -246,7 +266,8 @@ pub fn run() {
             connections_list,
             connection_save,
             connection_delete,
-            browse_sql
+            browse_sql,
+            inspect_row
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

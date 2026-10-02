@@ -12,9 +12,11 @@
 pub mod browse;
 pub mod config;
 pub mod db_type;
+pub mod inspect;
 pub mod url;
 
 pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter};
 pub use config::{ConnectionBundle, BundleError, ConnectionConfig, SshTunnelConfig};
 pub use db_type::{DatabaseType, SslMode};
+pub use inspect::{CellValue, Field, Shape, SummaryLanguage};
 pub use url::{FormMerge, ImportedConnection, UrlParseError};

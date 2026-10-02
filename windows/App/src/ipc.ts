@@ -25,6 +25,8 @@ export const COMMANDS = {
   connectionDelete: 'connection_delete',
   // 服务端条件浏览（只生成 SQL，执行仍走 dbQuery）
   browseSql: 'browse_sql',
+  // 单行详情的值检查（纯计算，不碰数据库）
+  inspectRow: 'inspect_row',
 } as const
 
 export interface AppInfo {
@@ -280,4 +282,38 @@ export function browseSql(request: {
   return call(COMMANDS.browseSql, { ...request }, () => {
     throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
   })
+}
+/** 值的形态（与领域层 `inspect::Shape` 同名同义；`binary` 带字节数）。 */
+export type CellShape =
+  | { kind: 'null' }
+  | { kind: 'empty' }
+  | { kind: 'jsonObject' }
+  | { kind: 'jsonArray' }
+  | { kind: 'binary'; byteCount: number }
+  | { kind: 'scalarJson' }
+  | { kind: 'text' }
+
+export interface CellValue {
+  shape: CellShape
+  /** 展示文本（JSON 已美化、二进制已摘要） */
+  display: string
+  originalCharacterCount: number
+  originalByteCount: number
+  isTruncated: boolean
+  lineCount: number
+}
+
+export interface RowField {
+  columnName: string
+  typeName: string
+  value: CellValue
+}
+
+/** 单行详情的**值检查**（FR-DATA-05）：纯计算 —— 输入就是界面上那一行。 */
+export function inspectRow(
+  columns: string[],
+  row: (string | null)[],
+  typeNames?: string[],
+): Promise<RowField[]> {
+  return call(COMMANDS.inspectRow, { columns, typeNames, row }, () => [] as RowField[])
 }
