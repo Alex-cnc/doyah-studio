@@ -471,73 +471,74 @@ async function probe() {
           </div>
         </form>
 
-        <div v-if="result && result.columns.length" class="db__grid-wrap">
-          <div class="db__grid-tools">
-            <input v-model="filter" type="search" placeholder="筛选（当前结果内，不分大小写）" aria-label="筛选结果" />
-            <span class="db__note">显示 {{ visible.length }} / {{ result.rows.length }} 行</span>
-            <button class="db__btn" type="button" @click="copyVisible">复制（TSV）</button>
-            <span v-if="copied" class="db__note">{{ copied }}</span>
-          </div>
-          <table class="db__grid">
-            <thead>
-              <tr>
-                <th
-                  v-for="(c, j) in result.columns"
-                  :key="c"
-                  class="db__grid-head"
-                  :title="`点一下按 ${c} 排序（再点翻方向）`"
-                  @click="toggleSort(j)"
-                >
-                  {{ c }}
-                  <span v-if="sortColumn === j" class="db__sort-mark">{{ sortDesc ? '▼' : '▲' }}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="i in visible"
-                :key="i"
-                class="db__row"
-                title="点这一行看详情（值检查：NULL 与空串分开、长 JSON 格式化）"
-                @click="openDetail(i)"
-              >
-                <td v-for="(cell, j) in result.rows[i]" :key="j" :class="{ 'db__null': cell === null }">
-                  {{ cell === null ? 'NULL' : cell }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <!-- 单行详情（FR-DATA-05）：竖排看宽表 —— 每格给形态摘要 + 展示文本（长 JSON 已美化） -->
+
+        <!-- 结果区：左表格（可排序 / 筛选 / 复制 / 点行看详情）+ 右详情（竖排值检查） -->
         <div class="db__result-row">
-        <aside v-if="detail" class="db__detail">
-          <p class="db__detail-title">
-            第 {{ detail.index + 1 }} 行 · {{ detail.fields.length }} 个字段
-            <button class="db__btn" type="button" @click="detail = null">关闭</button>
+          <template v-if="result && result.columns.length">
+            <div class="db__grid-wrap">
+              <div class="db__grid-tools">
+                <input v-model="filter" type="search" placeholder="筛选（当前结果内，不分大小写）" aria-label="筛选结果" />
+                <span class="db__note">显示 {{ visible.length }} / {{ result.rows.length }} 行</span>
+                <button class="db__btn" type="button" @click="copyVisible">复制（TSV）</button>
+                <span v-if="copied" class="db__note">{{ copied }}</span>
+              </div>
+              <table class="db__grid">
+                <thead>
+                  <tr>
+                    <th
+                      v-for="(c, j) in result.columns"
+                      :key="c"
+                      class="db__grid-head"
+                      :title="`点一下按 ${c} 排序（再点翻方向）`"
+                      @click="toggleSort(j)"
+                    >
+                      {{ c }}
+                      <span v-if="sortColumn === j" class="db__sort-mark">{{ sortDesc ? '▼' : '▲' }}</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="i in visible"
+                    :key="i"
+                    class="db__row"
+                    title="点这一行看详情（值检查：NULL 与空串分开、长 JSON 格式化）"
+                    @click="openDetail(i)"
+                  >
+                    <td v-for="(cell, j) in result.rows[i]" :key="j" :class="{ 'db__null': cell === null }">
+                      {{ cell === null ? 'NULL' : cell }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- 单行详情（FR-DATA-05）：竖排看宽表 —— 形态摘要 + 展示文本（长 JSON 已美化） -->
+            <aside v-if="detail" class="db__detail">
+              <p class="db__detail-title">
+                第 {{ detail.index + 1 }} 行 · {{ detail.fields.length }} 个字段
+                <button class="db__btn" type="button" @click="detail = null">关闭</button>
+              </p>
+              <dl class="db__detail-list">
+                <template v-for="f in detail.fields" :key="f.columnName">
+                  <dt>
+                    {{ f.columnName }}<span v-if="f.typeName" class="db__kind">{{ f.typeName }}</span>
+                  </dt>
+                  <dd>
+                    <p class="db__detail-meta">
+                      {{ f.value.shape.kind }} · {{ f.value.originalCharacterCount }} 字符
+                      <template v-if="f.value.lineCount > 1">· {{ f.value.lineCount }} 行</template>
+                      <template v-if="f.value.isTruncated">· 已截断（下面不是全部）</template>
+                    </p>
+                    <pre class="db__detail-value" :class="{ 'db__null': f.value.shape.kind === 'null' }">{{ f.value.shape.kind === 'null' ? 'NULL' : f.value.shape.kind === 'empty' ? '（空串）' : f.value.display }}</pre>
+                  </dd>
+                </template>
+              </dl>
+            </aside>
+          </template>
+          <p v-else-if="info && !failure" class="db__hint">
+            从左侧点一张表生成查询，或直接写 SQL 后按「执行」。
           </p>
-          <dl class="db__detail-list">
-            <template v-for="f in detail.fields" :key="f.columnName">
-              <dt>
-                {{ f.columnName }}<span v-if="f.typeName" class="db__kind">{{ f.typeName }}</span>
-              </dt>
-              <dd>
-                <p class="db__detail-meta">
-                  {{ f.value.shape.kind === 'binary' ? `二进制 ${f.value.shape.byteCount} 字节` : f.value.shape.kind }}
-                  · {{ f.value.originalCharacterCount }} 字符
-                  <template v-if="f.value.lineCount > 1">· {{ f.value.lineCount }} 行</template>
-                  <template v-if="f.value.isTruncated">· 已截断（下面不是全部）</template>
-                </p>
-                <pre class="db__detail-value" :class="{ 'db__null': f.value.shape.kind === 'null' }">{{
-                  f.value.shape.kind === 'null' ? 'NULL' : f.value.shape.kind === 'empty' ? '（空串）' : f.value.display
-                }}</pre>
-              </dd>
-            </template>
-          </dl>
-        </aside>
         </div>
-        <p v-else-if="info && !failure" class="db__hint">
-          从左侧点一张表生成查询，或直接写 SQL 后按「执行」。
-        </p>
       </div>
     </div>
   </section>
