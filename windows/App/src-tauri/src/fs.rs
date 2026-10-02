@@ -765,3 +765,103 @@ mod write_tests {
         assert!(move_entry(&root_text, "../outside.txt", "").is_err());
     }
 }
+
+// ── 在资源管理器 / 终端打开（2.1）──────────────────────────────────────────────────
+//
+// 判定在领域层 `reveal`（选哪个程序 / 文件要定位 / 路径必须在内），本层只负责**真启动**。
+// 启动**不等进程**（explorer 会把已有窗口提到前面然后立刻返回，等它反而会卡住界面）。
+
+/// 某个程序在不在 PATH 上（用系统自带的 `where.exe`，退出码 0 = 在）。
+fn program_available(program: &str) -> bool {
+    std::process::Command::new("where.exe")
+        .arg(program)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+/// 在资源管理器里定位（文件选中 / 目录进入）；`terminal = true` 则改为在终端打开。
+pub fn reveal_entry(workspace_root: &str, relative: &str, terminal: bool) -> Result<doyah_studio_db::RevealPlan, DbFailure> {
+    let path = resolve_in(workspace_root, relative)?;
+    // 链接不跟随：用 `symlink_metadata` 判类型（`is_dir` 会跟过去）
+    let meta = std::fs::symlink_metadata(&path).map_err(|e| {
+        failure(
+            format!("看不到这个条目：{e}（{}）", path.display()),
+            "它可能被移动或删除了；刷新一下树。",
+        )
+    })?;
+    let is_directory = meta.is_dir() && !meta.file_type().is_symlink();
+    let full = path.to_string_lossy().to_string();
+    let parent = path
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| workspace_root.to_string());
+
+    let plan = if terminal {
+        doyah_studio_db::terminal_plan(is_directory, &full, &parent, program_available).map_err(|tried| {
+            failure(
+                format!("这台机器上没找到终端程序（试过：{}）", tried.join(" / ")),
+                "装了 Windows Terminal / PowerShell 之后再来（**不硬起一个不存在的程序**）。",
+            )
+        })?
+    } else {
+        doyah_studio_db::explorer_plan(is_directory, &full)
+    };
+
+    let mut command = std::process::Command::new(&plan.program);
+    command.args(&plan.args);
+    if let Some(directory) = &plan.working_directory {
+        command.current_dir(directory);
+    }
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    command.spawn().map_err(|e| {
+        failure(
+            format!("启动失败：{e}（{}）", plan.program),
+            "确认该程序可用（PATH 里能找到）。",
+        )
+    })?;
+    Ok(plan)
+}
+
+#[cfg(test)]
+mod reveal_tests {
+    use super::*;
+
+    /// 本模块自备临时根（跨模块共享私有测试助手不值当：两处各六行，比"公开一个只为测试存在的
+    /// 函数"更干净）。
+    fn write_root(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("doyah-reveal-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn reveal_refuses_escapes_before_touching_anything() {
+        let root = write_root("reveal");
+        let root_text = root.to_string_lossy().to_string();
+        std::fs::write(root.join("a.txt"), "a").unwrap();
+        assert!(reveal_entry(&root_text, "../outside.txt", false).is_err());
+        assert!(reveal_entry(&root_text, "nope.txt", false).is_err(), "不存在的条目要给人话");
+    }
+
+    #[test]
+    fn reveal_plan_for_a_file_locates_it_and_for_a_directory_opens_it() {
+        let root = write_root("reveal-plan");
+        let root_text = root.to_string_lossy().to_string();
+        std::fs::write(root.join("a.txt"), "a").unwrap();
+        // 这里**只验计划**（真启动会弹窗口，不做）—— 用领域层的纯函数按同一入参算一遍
+        let file_plan = doyah_studio_db::explorer_plan(false, &format!("{root_text}/a.txt"));
+        assert!(file_plan.args[0].starts_with("/select,"), "文件要定位");
+        let dir_plan = doyah_studio_db::explorer_plan(true, &root_text);
+        assert!(!dir_plan.args[0].starts_with("/select,"), "目录直接进去");
+        // 终端：这台机器上至少要有一个（Windows 自带 PowerShell 与 cmd）
+        let found = doyah_studio_db::pick_terminal(program_available);
+        assert!(found.is_some(), "Windows 上应当至少能找到 PowerShell 或 cmd");
+    }
+}

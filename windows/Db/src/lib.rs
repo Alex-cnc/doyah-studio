@@ -15,6 +15,7 @@ pub mod db_type;
 pub mod file_ops;
 pub mod foreign_key;
 pub mod inspect;
+pub mod reveal;
 pub mod sql;
 pub mod tree;
 pub mod url;
@@ -22,6 +23,7 @@ pub mod workspace;
 pub mod writeback;
 
 pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter};
+pub use reveal::{ensure_inside, explorer_plan, pick_terminal, terminal_plan, RevealPlan, TerminalKind};
 pub use sql::{explain, spans, tokenize, StatementSpan, Token, TokenKind};
 pub use writeback::{edits_to_dml, statement_risk, CellEdit, DmlStatement, Risk, RowKey, TransactionPlan};
 pub use tree::{group_by_schema, search, sort_objects, ObjectKind, ObjectNode, SearchHit};

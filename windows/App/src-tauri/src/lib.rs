@@ -545,6 +545,16 @@ fn workspace_delete(workspace_root: String, relative_path: String) -> Result<Str
     fs::delete_entry(&workspace_root, &relative_path)
 }
 
+/// 在资源管理器里定位（文件选中 / 目录进入），或改为在终端打开。
+#[tauri::command]
+fn workspace_reveal(
+    workspace_root: String,
+    relative_path: String,
+    terminal: Option<bool>,
+) -> Result<doyah_studio_db::RevealPlan, DbFailure> {
+    fs::reveal_entry(&workspace_root, &relative_path, terminal.unwrap_or(false))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -591,7 +601,8 @@ pub fn run() {
             workspace_rename,
             workspace_move,
             workspace_deletion_summary,
-            workspace_delete
+            workspace_delete,
+            workspace_reveal
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

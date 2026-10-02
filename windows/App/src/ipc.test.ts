@@ -67,6 +67,7 @@ describe('ipc', () => {
       'workspace_move',
       'workspace_deletion_summary',
       'workspace_delete',
+      'workspace_reveal',
     ])
   })
 

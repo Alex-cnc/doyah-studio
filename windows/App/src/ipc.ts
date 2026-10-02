@@ -58,6 +58,8 @@ export const COMMANDS = {
   workspaceMove: 'workspace_move',
   workspaceDeletionSummary: 'workspace_deletion_summary',
   workspaceDelete: 'workspace_delete',
+  // 在资源管理器 / 终端打开（2.1）
+  workspaceReveal: 'workspace_reveal',
 } as const
 
 export interface AppInfo {
@@ -660,4 +662,24 @@ export function workspaceDeletionSummary(workspaceRoot: string, relativePath: st
 /** 删除：**走回收站**（可撤销）；删不掉就报失败，不悄悄抹掉。 */
 export function workspaceDelete(workspaceRoot: string, relativePath: string): Promise<string> {
   return call(COMMANDS.workspaceDelete, { workspaceRoot, relativePath }, () => 'file')
+}
+/** 打开计划：用哪个程序、带什么参数（判定在 Rust 领域层）。 */
+export interface RevealPlan {
+  program: string
+  args: string[]
+  workingDirectory: string | null
+  used: 'explorer' | 'windowsTerminal' | 'powerShell' | 'commandPrompt'
+}
+
+/** 在资源管理器里定位（文件选中 / 目录进入）；`terminal = true` 则改为在终端打开。 */
+export function workspaceReveal(
+  workspaceRoot: string,
+  relativePath: string,
+  terminal = false,
+): Promise<RevealPlan> {
+  return call(
+    COMMANDS.workspaceReveal,
+    { workspaceRoot, relativePath, terminal },
+    () => ({ program: 'explorer.exe', args: [], workingDirectory: null, used: 'explorer' as const }),
+  )
 }

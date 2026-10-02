@@ -19,6 +19,7 @@ import {
   workspaceOpened,
   workspaceOpenTabs,
   workspaceReadFile,
+  workspaceReveal,
   workspaceRename,
   type DbFailure,
   type FileContent,
@@ -276,6 +277,22 @@ async function createIn(parentRelative: string, directory: boolean) {
   }
 }
 
+/** 在资源管理器 / 终端打开（`used` 那一栏告诉人实际用的是哪个程序） */
+async function reveal(entry: FsEntry, terminal: boolean) {
+  if (!root.value) return
+  failure.value = null
+  try {
+    const plan = await workspaceReveal(root.value, entry.relativePath, terminal)
+    revealed.value = terminal ? `已在 ${plan.program} 打开` : `已在资源管理器里选中（${entry.name}）`
+    setTimeout(() => (revealed.value = ''), 2500)
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
+/** 打开动作的回执（**说清用的是哪个程序**） */
+const revealed = ref('')
+
 /** 某个条目的父目录相对路径（新建同级用）。 */
 function parentOf(relativePath: string): string {
   const slash = relativePath.lastIndexOf('/')
@@ -382,6 +399,7 @@ function onTreeKeydown(event: KeyboardEvent) {
         <button class="ws__btn" type="button" @click="createIn('', true)">新建文件夹</button>
       </template>
       <span v-if="busy" class="ws__note">{{ busy }}</span>
+      <span v-if="revealed" class="ws__note">{{ revealed }}</span>
       <span class="ws__note">{{ headerText }}</span>
     </form>
 
@@ -457,6 +475,12 @@ function onTreeKeydown(event: KeyboardEvent) {
               @click="createIn(parentOf(row.entry.relativePath), false)"
             >
               ＋
+            </button>
+            <button class="ws__act" type="button" title="在资源管理器里显示" @click="reveal(row.entry, false)">
+              📁
+            </button>
+            <button class="ws__act" type="button" title="在终端打开（起始目录 = 所在文件夹）" @click="reveal(row.entry, true)">
+              ▶
             </button>
             <button class="ws__act" type="button" title="删除（走回收站，可撤销）" @click="askDelete(row.entry)">
               🗑
