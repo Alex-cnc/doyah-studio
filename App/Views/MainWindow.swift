@@ -102,7 +102,14 @@ struct MainWindow: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                Divider()
+                // 顶边**拖拽把手**（队列 `L-181`）：拖动改面板高度，拖出来的值持久化在 `AppState`。
+                // 为什么不是回到 `VSplitView`：它的子视图数必须在构建时固定，显示/隐藏之间切换会
+                // **重建编辑器子树**（`App/Views/SQLEditorView.swift:58` 有实测记录）—— 那会把正在
+                // 编辑的滚动位置与撤销栈一起弄丢。这条把手只改面板自身的高度，**层级不变**。
+                LowerPaneResizeHandle(
+                    height: appState.lowerPaneHeight,
+                    available: lowerPaneAvailableHeight
+                ) { appState.lowerPaneHeight = $0 }
                 LowerPaneView(tab: appState.selectedTab, isCollapsed: collapsed)
                     // 高度提示**由面板自己那一层算**（`LowerPaneSizing`）：
                     // 折叠态必须是「不设约束」，否则这里会留下一条比标题栏宽的空白带
@@ -110,7 +117,7 @@ struct MainWindow: View {
                     //  `.frame(minHeight: 90, idealHeight: 200)`，折叠后那 90pt 的框还在）。
                     .frame(
                         minHeight: LowerPaneSizing.minHeight(collapsed: collapsed),
-                        idealHeight: LowerPaneSizing.idealHeight(collapsed: collapsed)
+                        idealHeight: lowerPaneIdealHeight(collapsed: collapsed)
                     )
             }
         }
@@ -470,5 +477,60 @@ struct ConnectionSwitchSheet: View {
             appState.selectedConnectionID = configuration.id
             dismiss()
         }
+    }
+}
+
+// MARK: - L-181：下方面板顶边的拖拽把手
+
+/// 下方面板顶边的**拖拽把手**（队列 `L-181`）。
+///
+/// 形态：一条发丝线 + 一个 8pt 高的命中区（2pt 的线谁也点不着 —— 判据①「随时能拖」要真能拖）。
+/// 拖动按**相对位移**算：按下那一刻的高度记在 `startHeight`，不记这个的话一按就跳。
+struct LowerPaneResizeHandle: View {
+    /// 当前高度（来自 `AppState`，持久化）。
+    let height: CGFloat
+    /// 可用高度：拿窗口内容高度当代理（`nil` ⇒ 由 Core 走兜底上限）。
+    let available: CGFloat?
+    /// 写回（已由 Core 夹过范围）。
+    let commit: (CGFloat) -> Void
+
+    @State private var startHeight: CGFloat?
+
+    var body: some View {
+        ZStack {
+            Divider()
+            Color.clear
+                .frame(height: 8)
+                .contentShape(Rectangle())
+                .onHover { inside in
+                    // 指针形状要跟着变，否则「这里能拖」用户看不出来。
+                    if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 1)
+                        .onChanged { value in
+                            let base = startHeight ?? height
+                            if startHeight == nil { startHeight = base }
+                            // 往上拖（translation.height < 0）＝ 面板更高。
+                            commit(base - value.translation.height)
+                        }
+                        .onEnded { _ in startHeight = nil }
+                )
+        }
+        .frame(height: 8)
+    }
+}
+
+private extension MainWindow {
+    /// 展开态的理想高度：**拖过就用拖出来的**（`AppState` 持久化），没拖过用默认口径（`L-181`）。
+    func lowerPaneIdealHeight(collapsed: Bool) -> CGFloat? {
+        guard !collapsed else { return LowerPaneSizing.idealHeight(collapsed: true) }
+        return LowerPaneSizing.clamped(height: appState.lowerPaneHeight, available: lowerPaneAvailableHeight)
+    }
+
+    /// 可用高度：**窗口内容高度**当代理。
+    /// 刻意不引 `GeometryReader` —— 那一层裹上去会动到编辑器所在子树的结构（见 `SQLEditorView.swift:58`）。
+    var lowerPaneAvailableHeight: CGFloat? {
+        (NSApp.keyWindow ?? NSApp.mainWindow)?.contentView?.frame.height
     }
 }

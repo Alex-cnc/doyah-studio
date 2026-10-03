@@ -40,4 +40,20 @@ final class LowerPaneSizingTests: XCTestCase {
             "展开态的理想高度要大于折叠态（后者为 nil ⇒ 按内容自量）"
         )
     }
+
+    // MARK: L-181：拖出来的高度
+
+    /// 拖出来的高度要**夹在合法范围**：下限＝展开态下限，上限＝可用高度的 75%（矮窗口不许把编辑区挤没）。
+    func testDraggedHeightIsClamped() {
+        XCTAssertEqual(LowerPaneSizing.clamped(height: 10, available: 900), LowerPaneSizing.draggableMinHeight)
+        XCTAssertEqual(LowerPaneSizing.clamped(height: 10_000, available: 900), 675)
+        XCTAssertEqual(LowerPaneSizing.clamped(height: 400, available: 900), 400)
+    }
+
+    /// 拿不到可用高度（`nil`）或由它算出的上限低于下限时都要兜底 —— 结果不许随可用高度反向跑。
+    func testDraggedHeightFallsBackSafely() {
+        XCTAssertEqual(LowerPaneSizing.clamped(height: 10_000, available: nil), LowerPaneSizing.fallbackMaxHeight)
+        XCTAssertEqual(LowerPaneSizing.clamped(height: 10, available: 0), LowerPaneSizing.draggableMinHeight)
+        XCTAssertEqual(LowerPaneSizing.clamped(height: 400, available: 100), LowerPaneSizing.draggableMinHeight)
+    }
 }
