@@ -66,9 +66,16 @@ struct CodeEditorView: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.lineFragmentPadding = 4
         // 大文档（5,000 行 / 数万字符）下 `NSTextView` 默认要**整篇**布局：删一个字符也会触发
-        // 全文重排 —— 人工点验实测「删除时明显卡顿」（2026-09-29，NFR-PERF-05）。打开非连续布局，
-        // 布局管理器只铺可见范围，光标以外的段落延后算。
-        textView.layoutManager?.allowsNonContiguousLayout = true
+        // 全文重排 —— 人工点验实测「删除时明显卡顿」（2026-09-29，NFR-PERF-05）。
+        // ⚠️ 只对**大文档**开非连续布局：它的代价就是「可见区被判成已排过」⇒ 编辑后那一块不重画。
+        // 需求提出者 2026-10-03 五轮复测（原始症状见队列 `L-178`）：Markdown 表格行很长、编辑与/不过那一列
+        // 必须把横轴滚到右边（行首被遮住），此时删一个字 ⇒ **编辑区上半屏整片空白**（连行号列都没画，
+        // 同一份文本在预览里完好），拖一下滚动条才恢复；横轴拖回最左（行首可见）则不复现。
+        // 这一族的形态＝「那块被当成已排过」⇒ 与 `allowsNonContiguousLayout` 的已知代价吻合
+        // （非连续布局正是「只排可见范围、其余延后」）。
+        // 取舍：1,000 行以下走标准（连续）布局，稳定优先；大文档（≥1,000 行）仍开非连续布局，
+        // 保住 NFR-PERF-05（5,000 行文档删一个字符不整篇重排）——那条人工点验实测过的卡顿不能退回去。
+        textView.layoutManager?.allowsNonContiguousLayout = CodeLines.lineStarts(in: text).count > 1_000
         textView.string = text
         textView.tabID = tabID
         textView.onSave = onSave
