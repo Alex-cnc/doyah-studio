@@ -463,6 +463,87 @@ async function copyAdminCommands() {
   }
   setTimeout(() => (copied.value = ''), 2500)
 }
+/**
+ * 连接列表分组（布局对齐 macOS 封面图）：图里左栏是「连接列表」下有分组标题（示例：未分组）。
+ *
+ * 两条口径：
+ * 1. **没分组的归到「未分组」，且这一档永远排最后**（其余按名字排 —— 顺序稳定，用户才记得住位置）；
+ * 2. **当前连着的那个高亮**：拿 `info` 里的主机/端口/库与每条比对，**不另存一份"选中 id"**
+ *    （两处状态迟早会不一致）。
+ */
+const connectionGroups = computed(() => {
+  const byGroup = new Map<string, SavedConnection[]>()
+  for (const connection of saved.value) {
+    const key = (connection.group ?? '').trim() || '未分组'
+    const list = byGroup.get(key) ?? []
+    list.push(connection)
+    byGroup.set(key, list)
+  }
+  return [...byGroup.entries()]
+    .map(([name, items]) => ({ name, items }))
+    .sort((a, b) => {
+      if (a.name === '未分组') return 1
+      if (b.name === '未分组') return -1
+      return a.name.localeCompare(b.name)
+    })
+})
+
+/** 这一条是不是当前连着的（拿 `info` 比对）。 */
+function isConnected(connection: SavedConnection): boolean {
+  const current = info.value
+  if (!current) return false
+  return (
+    current.host === connection.host &&
+    current.port === connection.port &&
+    current.database === connection.database
+  )
+}
+
+/** 小字：`主机 · 库名`（图里就是这个形状）。 */
+function connectionSubtitle(connection: SavedConnection): string {
+  return `${connection.host} · ${connection.database}`
+}
+
+/**
+ * 对象树两种视图（图里那组切换：**层级视图 / 按类型分组**）。
+ *
+ * 一条口径（与"按需展开"不冲突）：按类型分组**只能在已经加载的对象里分** ——
+ * 本侧不在连接时把整库元数据拉光。所以那一档会**如实说**"只含已加载的"。
+ */
+const objectView = ref<'hierarchy' | 'byKind'>('hierarchy')
+
+/** 按类型分组的树：类型名 → 对象（只含已加载）。 */
+const kindGroups = computed<{ kind: string; items: ObjectNode[] }[]>(() => {
+  const byKind = new Map<string, ObjectNode[]>()
+  for (const object of Object.values(layerOf.value).flat()) {
+    const key = object.kind?.trim() || '其他'
+    const list = byKind.get(key) ?? []
+    list.push(object)
+    byKind.set(key, list)
+  }
+  return [...byKind.entries()]
+    .map(([kind, items]) => ({ kind, items }))
+    .sort((a, b) => a.kind.localeCompare(b.kind))
+    .map((group) => ({
+      kind: group.kind,
+      items: [...group.items].sort((a, b) =>
+        `${a.schema}.${a.name}`.localeCompare(`${b.schema}.${b.name}`),
+      ),
+    }))
+})
+
+/** 已加载的对象数（按类型分组那一档要用）。 */
+const loadedObjectCount = computed(() => Object.values(layerOf.value).flat().length)
+
+/** 刷新：重取 schema 列表并丢掉已加载的层（重新按需展开） */
+async function refreshObjects() {
+  layerOf.value = {}
+  expanded.value = {}
+  objectQuery.value = ''
+  objectHits.value = []
+  await loadSchemas()
+}
+
 const saved = ref<SavedConnection[]>([])
 const info = ref<ServerInfo | null>(null)
 const tables = ref<TableNode[]>([])
@@ -1212,26 +1293,45 @@ async function probe() {
     </div>
 
     <div class="db__body">
-      <!-- 连接列表（保存过的连接；口令不在其中，在系统凭据管理器里） -->
-      <aside class="db__tree db__tree--connections">
-        <p class="db__tree-title">连接（{{ saved.length }}）</p>
-        <p v-if="saved.length === 0" class="db__tree-empty">
-          还没有保存过连接。填好上面的表单按「保存到连接列表」，口令（若勾了记住）进系统凭据管理器。
-        </p>
-        <div v-for="c in saved" :key="c.id" class="db__conn">
-          <button
-            class="db__table"
-            type="button"
-            :title="`${c.username}@${c.host}:${c.port}/${c.database}（口令不在配置文件里）`"
-            @click="useSaved(c)"
-          >
-            {{ c.name }}<span class="db__kind">{{ c.isReadOnly ? '只读' : '' }}</span>
-          </button>
-          <button class="db__conn-del" type="button" title="删除这条连接（并清掉它的凭据）" @click="removeSaved(c)">
-            ✕
-          </button>
-        </div>
-      </aside>
+        <!-- 连接列表（图里的左栏上半）：分组 + 每条两行小字 + 当前那条高亮 -->
+        <aside class="db__tree db__tree--connections">
+          <p class="db__tree-title">连接列表</p>
+          <p v-if="saved.length === 0" class="db__tree-empty">
+            还没有保存过连接。填好上面的表单按「保存到连接列表」，口令（若勾了记住）进系统凭据管理器。
+          </p>
+          <template v-else>
+            <div v-for="group in connectionGroups" :key="group.name" class="db__conn-group">
+              <p class="db__group-title">{{ group.name }}</p>
+              <div
+                v-for="c in group.items"
+                :key="c.id"
+                class="db__conn"
+                :class="{ 'db__conn--active': isConnected(c) }"
+              >
+                <button
+                  class="db__conn-main"
+                  type="button"
+                  :title="`${c.username}@${c.host}:${c.port}/${c.database}（口令不在配置文件里）`"
+                  @click="useSaved(c)"
+                >
+                  <span class="db__conn-name">
+                    {{ c.name }}
+                    <span v-if="c.isReadOnly" class="db__kind">只读</span>
+                  </span>
+                  <span class="db__conn-sub">{{ connectionSubtitle(c) }}</span>
+                </button>
+                <button
+                  class="db__conn-del"
+                  type="button"
+                  title="删除这条连接（并清掉它的凭据）"
+                  @click="removeSaved(c)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </template>
+        </aside>
 
       <!-- 对象树（1.1）：展开一层取一层；右键给「浏览数据 / 生成查询 / 复制名」 -->
       <aside class="db__tree" @click="closeContextMenu">
@@ -1264,7 +1364,7 @@ async function probe() {
               </button>
             </li>
           </ul>
-          <template v-else>
+          <template v-else-if="!objectQuery.trim() && objectView === 'hierarchy'">
             <p v-if="schemas.length === 0" class="db__tree-empty">没有可展开的 schema</p>
             <div v-for="schema in schemas" :key="schema" class="db__schema">
               <button
@@ -2531,6 +2631,106 @@ th.db__grid-head[style] {
 }
 
 /* ── 对象树（1.1）：搜索框 / 可展开的 schema / 命中清单 / 右键菜单 ───────────────────── */
+
+/* 连接列表与对象树（图里的左栏两块）：分组标题 / 两行条目 / 视图切换 / 工具条 */
+.db__group-title {
+  margin: var(--ds-spacing-s) 0 var(--ds-spacing-hair);
+  padding: 0 var(--ds-spacing-xs);
+  color: var(--ds-color-text-tertiary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+}
+
+/* 连接条目：两行（名字 + 主机·库名 小字），当前连着的那个高亮 */
+.db__conn-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+  flex: 1;
+  min-width: 0;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border: none;
+  border-radius: var(--ds-radius-control);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.db__conn--active .db__conn-main {
+  background: var(--ds-color-surface-raised);
+}
+
+.db__conn-name {
+  color: var(--ds-color-text-primary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-body-size);
+}
+
+.db__conn-sub {
+  color: var(--ds-color-text-tertiary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+}
+
+/* 删除入口：悬停才出现（图里没画，但功能不能丢） */
+.db__conn-del {
+  opacity: 0;
+  flex: none;
+}
+
+.db__conn:hover .db__conn-del {
+  opacity: 1;
+}
+
+/* 对象树头部的两个视图切换（图里的 层级视图 / 按类型分组） */
+.db__view-switch {
+  display: flex;
+  gap: var(--ds-spacing-hair);
+  margin: 0 var(--ds-spacing-xs) var(--ds-spacing-xs);
+  padding: var(--ds-spacing-hair);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-raised);
+}
+
+.db__view {
+  flex: 1;
+  height: var(--ds-metric-toolbar-button-height);
+  border: none;
+  border-radius: var(--ds-radius-hairline);
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
+}
+
+.db__view--active {
+  background: var(--ds-color-accent-accent);
+  color: var(--ds-color-surface-content);
+}
+
+.db__tree-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-hair);
+  margin: 0 var(--ds-spacing-xs) var(--ds-spacing-xs);
+}
+
+.db__icon-btn {
+  flex: none;
+  width: var(--ds-metric-toolbar-button-width);
+  height: var(--ds-metric-toolbar-button-height);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  cursor: pointer;
+}
+
+.db__icon-btn:hover {
+  color: var(--ds-color-text-primary);
+  border-color: var(--ds-color-accent-accent);
+}
 
 .db__tree-search {
   width: 100%;
