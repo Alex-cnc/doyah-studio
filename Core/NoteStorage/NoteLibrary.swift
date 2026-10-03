@@ -113,6 +113,48 @@ public actor NoteLibrary {
         try open().move(noteIDs: noteIDs, toNotebook: notebookUid)
     }
 
+    /// 算「删这个笔记本」的处置计划（**不写库**）：界面拿它写确认框
+    /// （契约 §2.12 第 3 条：非空时写明「将影响多少笔记本与多少条笔记」）。
+    /// 默认笔记本 / 认不出的 uid ⇒ `nil`（删不掉，调用方不必自己判）。
+    public func removalPlan(
+        forNotebook notebookUid: String,
+        policy: ContainerRemovalPolicy = .default
+    ) throws -> ContainerRemovalPlan? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        return try open().removalPlan(forNotebook: notebookUid, policy: policy)
+    }
+
+    /// 算「删这个架」的处置计划（同一条）。
+    public func removalPlan(
+        forShelf shelfUid: String,
+        policy: ContainerRemovalPolicy = .default
+    ) throws -> ContainerRemovalPlan? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        return try open().removalPlan(forShelf: shelfUid, policy: policy)
+    }
+
+    /// **删一个笔记本**（默认档 = 里面的笔记移到默认笔记本），返回落库后的处置结果。
+    /// 默认笔记本 / 认不出的 uid ⇒ `nil`（没有可删的东西，库一个字节不动）。
+    ///
+    /// 计划在**同一次调用里重算**再落库：界面确认框上的数字与真正动手之间隔着一次点击，
+    /// 中间库可能已经变了 —— 按过期的影响面删除，删掉的东西就不是用户确认过的那个了。
+    @discardableResult
+    public func removeNotebook(uid: String, policy: ContainerRemovalPolicy = .default) throws -> ContainerRemovalPlan? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        let database = try open()
+        guard let plan = try database.removalPlan(forNotebook: uid, policy: policy) else { return nil }
+        return try database.applyRemovalPlan(plan)
+    }
+
+    /// **删一个笔记本架**（默认档 = 架里的笔记本整架移到默认架）。
+    @discardableResult
+    public func removeShelf(uid: String, policy: ContainerRemovalPolicy = .default) throws -> ContainerRemovalPlan? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        let database = try open()
+        guard let plan = try database.removalPlan(forShelf: uid, policy: policy) else { return nil }
+        return try database.applyRemovalPlan(plan)
+    }
+
     // MARK: - 写
 
     /// 保存草稿（新建或按 id 覆盖），返回落库后的笔记。

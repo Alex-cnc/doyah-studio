@@ -720,6 +720,121 @@ public final class NoteDatabase {
         try connection.execute("DELETE FROM notebook WHERE uid = ?", [.text(uid)])
     }
 
+    // MARK: - 删除处置落库（队列 L-97 第三片）
+
+    /// 算「删这个笔记本」的处置计划：读一次库里的结构与归属，交给 `NotebookDirectory`（纯逻辑）裁决。
+    /// 默认笔记本认不出来的容器 ⇒ `nil`（不可删）。
+    public func removalPlan(
+        forNotebook notebookUid: String,
+        policy: ContainerRemovalPolicy = .default
+    ) throws -> ContainerRemovalPlan? {
+        try notebookDirectory().removalPlan(forNotebook: notebookUid, policy: policy, placements: try placements())
+    }
+
+    /// 算「删这个架」的处置计划（同一条路）。
+    public func removalPlan(
+        forShelf shelfUid: String,
+        policy: ContainerRemovalPolicy = .default
+    ) throws -> ContainerRemovalPlan? {
+        try notebookDirectory().removalPlan(forShelf: shelfUid, policy: policy, placements: try placements())
+    }
+
+    /// **把处置计划真正落库** —— 一个计划 = **一个事务**。
+    ///
+    /// 为什么必须是同一个事务：删笔记本与改挂它的笔记是两件事，中途失败会留下
+    /// 「笔记还挂着一个已经不存在的 `notebook_uid`」—— 它不违反任何外键
+    /// （`note.notebook_uid` 刻意没加外键，理由见 `NoteSchemaV2` 那段注释），
+    /// 却正好是契约 §2.12 要挡掉的「无归属笔记」。所以要么两件都成、要么都不动。
+    @discardableResult
+    public func applyRemovalPlan(_ plan: ContainerRemovalPlan) throws -> ContainerRemovalPlan {
+        try connection.transaction {
+            switch plan.policy {
+            case .deleteTogether:
+                // ① 先删该删的笔记（标签 / 时间线 / 附件索引靠外键级联一起走）。
+                try deleteNotes(uuids: plan.deletedNoteIDs)
+                // ② 再给「不可删的笔记本」换架 —— **必须排在删架之前**：删架会级联带走架里的笔记本，
+                //    而默认笔记本是不可删的（契约 §2.12 第 3 条）。
+                try rehome(notebookUids: plan.movedNotebookUids, toShelf: plan.targetContainerUid)
+                // ③ 删该删的笔记本。
+                for uid in plan.removedNotebookUids { try deleteNotebook(uid: uid) }
+                // ④ 删容器本身（删架时剩下的笔记本已在 ③ 清空）。
+                try deleteContainer(uid: plan.removedContainerUid, kind: plan.removedContainerKind)
+
+            case .moveToDefault:
+                // ① 笔记改挂默认笔记本。按**归属列**整批扫（而不只认计划里那份名单）：
+                //    名单是「谁会受影响」的账，扫列才是「不留无归属」的保证，两条并用不重不漏。
+                if let destination = plan.targetContainerUid {
+                    try moveNotes(ownedBy: plan.removedContainerUid, also: plan.movedNoteIDs, toNotebook: destination)
+                }
+                // ② 笔记本改挂默认架 + 排序位顺延到目标架现有条数之后（删架档才有内容）。
+                try rehome(notebookUids: plan.movedNotebookUids, toShelf: plan.targetContainerUid)
+                // ③ 删容器本身。
+                try deleteContainer(uid: plan.removedContainerUid, kind: plan.removedContainerKind)
+            }
+        }
+        return plan
+    }
+
+    /// 绑定量分块：`uuid IN (?, ?, …)` 的占位符个数会撞 SQLite 的变量上限
+    /// （编译期 `SQLITE_MAX_VARIABLE_NUMBER`，旧版本只有 999）——
+    /// 而「一个笔记本里有多少条笔记」是用户数据，不能假定它小。分块是这件事**不靠自觉**的做法。
+    private static let bindingChunkSize = 500
+
+    private static func chunks<T>(_ items: [T]) -> [[T]] {
+        guard items.count > bindingChunkSize else { return items.isEmpty ? [] : [items] }
+        return stride(from: 0, to: items.count, by: bindingChunkSize).map {
+            Array(items[$0 ..< min($0 + bindingChunkSize, items.count)])
+        }
+    }
+
+    private func deleteNotes(uuids: [String]) throws {
+        for chunk in Self.chunks(uuids) {
+            let placeholders = Array(repeating: "?", count: chunk.count).joined(separator: ", ")
+            try connection.execute(
+                "DELETE FROM note WHERE uuid IN (\(placeholders))",
+                chunk.map { SQLiteValue.text($0) }
+            )
+        }
+    }
+
+    /// 把若干条笔记改挂到别处。**只动 `notebook_uid`** —— 不碰 `updated_at`（契约 §2.12 第 4 条）。
+    private func moveNotes(ownedBy containerUid: String, also noteIDs: [String], toNotebook target: String) throws {
+        try connection.execute(
+            "UPDATE note SET notebook_uid = ? WHERE notebook_uid = ?",
+            [.text(target), .text(containerUid)]
+        )
+        for chunk in Self.chunks(noteIDs) {
+            let placeholders = Array(repeating: "?", count: chunk.count).joined(separator: ", ")
+            var bindings: [SQLiteValue] = [.text(target)]
+            bindings.append(contentsOf: chunk.map { SQLiteValue.text($0) })
+            try connection.execute(
+                "UPDATE note SET notebook_uid = ? WHERE uuid IN (\(placeholders))",
+                bindings
+            )
+        }
+    }
+
+    /// 把若干笔记本改挂到目标架，排序位**顺延**到目标架现有条数之后（不重号、不跳号）。
+    /// 顺序按传进来的名单（计划里那份是排好序的），目标架为空 / 名单为空 ⇒ 什么都不做。
+    private func rehome(notebookUids: [String], toShelf shelfUid: String?) throws {
+        guard let shelfUid, !notebookUids.isEmpty else { return }
+        var next = try notebookDirectory().notebooks(inShelf: shelfUid).count
+        for uid in notebookUids {
+            try connection.execute(
+                "UPDATE notebook SET shelf_uid = ?, sort_order = ? WHERE uid = ?",
+                [.text(shelfUid), .integer(Int64(next)), .text(uid)]
+            )
+            next += 1
+        }
+    }
+
+    private func deleteContainer(uid: String, kind: NotebookContainerKind) throws {
+        switch kind {
+        case .notebook: try deleteNotebook(uid: uid)
+        case .shelf: try deleteShelf(uid: uid)
+        }
+    }
+
     /// 归属对（`uuid` ↔ `notebook_uid`）。顺序与 `notes()` 同口径（最近更新在前），
     /// 这样「按笔记本过滤」的结果与不过滤时的相对次序一致。
     public func placements() throws -> [NotebookPlacement] {

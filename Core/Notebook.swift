@@ -107,11 +107,22 @@ public struct NotebookPlacement: Equatable, Hashable, Sendable {
     }
 }
 
+/// 被删容器的**种类**：删笔记本与删架是两条不同的路 ——
+/// 前者改挂**笔记**（`note.notebook_uid`），后者改挂**笔记本**（`notebook.shelf_uid`）。
+/// 没有这一格时，「把计划落库」那一步只能靠猜（探测 uid 是架还是笔记本），
+/// 而猜错一次就是「删了架却把里面的笔记本整批带走」——所以这一格由计划自己带（第 168 轮补）。
+public enum NotebookContainerKind: String, Codable, Sendable, CaseIterable {
+    case shelf
+    case notebook
+}
+
 /// 一次删除要动的**东西**（纯逻辑算出来的计划，本身不写库）。
 public struct ContainerRemovalPlan: Equatable, Sendable {
 
     /// 被删掉的容器 uid（笔记本或架）。默认容器**不会**出现在这里。
     public var removedContainerUid: String
+    /// 被删的容器是架还是笔记本（决定改挂笔记还是改挂笔记本）。
+    public var removedContainerKind: NotebookContainerKind
     public var policy: ContainerRemovalPolicy
     /// `moveToDefault` 时的落点（删笔记本 → 默认笔记本；删架 → 默认架）。`deleteTogether` 时为 `nil`。
     public var targetContainerUid: String?
@@ -125,7 +136,10 @@ public struct ContainerRemovalPlan: Equatable, Sendable {
     public var movedNoteIDs: [String]
 
     /// 确认框要写的那句话里的两个数（契约：非空时写明「将影响多少笔记本与多少条笔记」）。
-    public var affectedNotebookCount: Int { removedNotebookUids.count }
+    /// 「受影响」= **被删的 + 被改挂的**（与下面 `affectedNoteCount` 同一条形状）：删架走默认档时
+    /// 一个笔记本都不删、但整架的笔记本都要改挂 —— 只数「被删的」会让确认框说「将影响 0 个笔记本」，
+    /// 而实际上整架都会动（第 168 轮实测：`removedNotebookUids` 在这个档位**本来就该是空**）。
+    public var affectedNotebookCount: Int { removedNotebookUids.count + movedNotebookUids.count }
     public var affectedNoteCount: Int { deletedNoteIDs.count + movedNoteIDs.count }
 }
 
@@ -293,6 +307,7 @@ public struct NotebookDirectory: Equatable, Sendable {
         let affected = directory.notes(placements, inNotebook: target.uid).map(\.noteID)
         return ContainerRemovalPlan(
             removedContainerUid: target.uid,
+            removedContainerKind: .notebook,
             policy: policy,
             targetContainerUid: policy == .moveToDefault ? directory.defaultNotebook?.uid : nil,
             removedNotebookUids: [],
@@ -324,16 +339,20 @@ public struct NotebookDirectory: Equatable, Sendable {
         case .moveToDefault:
             return ContainerRemovalPlan(
                 removedContainerUid: target.uid,
+                removedContainerKind: .shelf,
                 policy: policy,
                 targetContainerUid: directory.defaultShelf?.uid,
                 removedNotebookUids: [],
-                movedNotebookUids: [],
+                // 整架搬走的是**笔记本**（笔记跟着自己的笔记本，一条都不改挂）⇒ 计划里要如实记下
+                // 「哪些笔记本会被改挂」，确认框那句「将影响多少笔记本」才算得出来（第 168 轮补）。
+                movedNotebookUids: notebooksInShelf.map(\.uid),
                 deletedNoteIDs: [],
                 movedNoteIDs: []
             )
         case .deleteTogether:
             return ContainerRemovalPlan(
                 removedContainerUid: target.uid,
+                removedContainerKind: .shelf,
                 policy: policy,
                 targetContainerUid: directory.defaultShelf?.uid,
                 removedNotebookUids: deletableNotebooks.map(\.uid),

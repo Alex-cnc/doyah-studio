@@ -242,9 +242,12 @@ final class NotebookTests: XCTestCase {
         ]
         let plan = directory.removalPlan(forShelf: "sh-b", placements: placements)
         XCTAssertEqual(plan?.policy, .moveToDefault)
+        XCTAssertEqual(plan?.removedContainerKind, .shelf)
         XCTAssertEqual(plan?.targetContainerUid, "sh-a")
         XCTAssertEqual(plan?.deletedNoteIDs, [])
         XCTAssertEqual(plan?.movedNoteIDs, [], "整架搬走的是笔记本，笔记一条都不动")
+        XCTAssertEqual(plan?.movedNotebookUids, ["nb-2"], "要被改挂的笔记本如实进计划（确认框的「将影响多少笔记本」）")
+        XCTAssertEqual(plan?.affectedNotebookCount, 1)
     }
 
     func testDeletingAShelfTogetherKeepsTheUnremovableDefaultNotebook() {
