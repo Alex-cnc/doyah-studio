@@ -223,16 +223,17 @@ struct CodeEditorView: NSViewRepresentable {
 
             // 重着色之后，**把改过的那一段重新排一遍 + 重画**（见 `lastEditedRange` 的注释）。
             //
-            // ⚠️ 这里**不许**用 `invalidateLayout(forCharacterRange:)`：`allowsNonContiguousLayout`
-            // 打开时（本编辑器就是），手工「作废排版」会让可见区被判成「没排过」⇒ **整块文字不画**
-            // ——需求提出者 2026-10-03 18:02 复测报的正是这个：「删一个字的时候前面大段文字不见了」，
-            // 截图 `dist/Screenshot 2026-10-03 at 18.02.02.png` 里编辑区上半屏整片空白，
-            // 而同一份文本在预览里完好（⇒ 文字在，是没画出来）。正解 = `ensureLayout`（让它算出来）
-            // + `invalidateDisplay`（重画），而不是把排版作废。
+            // ⚠️ 这一句的边界是被他两轮复测逼出来的，别再加料：
+            // ① **不许** `invalidateLayout(forCharacterRange:)` —— `allowsNonContiguousLayout` 打开时
+            //    手工「作废排版」会让可见区被判成「没排过」；
+            // ② **也不许**顺手 `invalidateDisplay` / `setNeedsDisplay(visibleRect)` —— 第二轮把作废换成
+            //    「重排 + 重画」之后，需求提出者 2026-10-03 复测**症状一样**（「文字还是不见，光标正常」，
+            //    截图 `dist/Screenshot 2026-10-03 at 18.02.02.png`：编辑区上半屏空白、同一份文本在预览里完好）。
+            // 所以这里只留**最轻的一件**：让那一段的排版算出来（`ensureLayout` 只补算、不置脏）。
+            // 若症状仍在 ⇒ 下一条路是**整条撤回**（退回只带性能修复的版本）并用离屏快照去复现真因，
+            // 而不是在产品里继续试。
             if let range = lastEditedRange, let layout = textView.layoutManager {
                 layout.ensureLayout(forCharacterRange: range)
-                layout.invalidateDisplay(forCharacterRange: range)
-                textView.setNeedsDisplay(textView.visibleRect)
             }
         }
 
