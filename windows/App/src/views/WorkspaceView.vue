@@ -52,11 +52,14 @@ import {
   type SaveReport,
   type SearchOutcome,
   type WorkspaceHistory,
+  connectionsList,
+  type SavedConnection,
 } from '../ipc'
 import { entryGlyph, flattenTree, indentPx, neighbouringRow, tabLabel, toggleExpanded, workspaceDisplayName } from '../workspace/logic'
 import { dominantEndingLabel, lineNumberText, segmentsForLine, sliceSegments } from '../workspace/editor'
 import { highlightPieces } from '../workspace/highlights'
 import MarkdownPreview from './MarkdownPreview.vue'
+import WorkspaceHome from './WorkspaceHome.vue'
 import {
   charWidthFrom,
   codeWidthByDisplayColumns,
@@ -292,6 +295,8 @@ function isMdBlock(block: MdBlock): boolean {
 const props = defineProps<{
   /** 命令面板选中的文件（由外壳递进来）；`null` = 没有待打开的文件 */
   openFileSignal?: string | null
+  /** 版本号（Home 页那行"版本 x.y.z"；外壳给的，本视图不自己编） */
+  version?: string
 }>()
 
 const emit = defineEmits<{
@@ -511,8 +516,53 @@ onBeforeUnmount(() => window.removeEventListener('focus', onWindowFocus))
 // 会话恢复（2.0）：上次打开的根 + 最近打开两份清单。
 // **不自动打开**上次那个文件夹：路径可能已被移动 / 删除，自动打开会每次启动弹一次错；
 // 改成"预填 + 一句话告诉你是上次那个"，由人点一下「打开」（想打开哪个由人定）。
+// ── Home 页三栏（布局对齐 macOS 封面图）───────────────────────────────────────────
+//
+// 「连接」那一栏要的是**已保存的连接**（与数据库视图同一份数据，`connections_list`）。
+// 没连过库就是空数组 ⇒ 那一栏**不画**（不留空栏位充数）。
+const savedConnections = ref<SavedConnection[]>([])
+
+async function loadSavedConnections() {
+  try {
+    savedConnections.value = await connectionsList()
+  } catch {
+    savedConnections.value = []
+  }
+}
+
+/** Home 上点「打开文件…」：引导到资源管理器（工作区内的文件选择在那里） */
+function homeOpenFile() {
+  openHint.value = '在左侧「资源管理器」里点一个文件即可打开；Home 上「最近打开的文件」点一下也能打开。'
+}
+
+/** Home 上点某个最近文件：在**当前工作区**里按相对路径打开（不在工作区内就如实提示） */
+async function homeOpenRecentFile(path: string) {
+  const normalized = path.split('\\').join('/')
+  const base = (root.value || '').split('\\').join('/').replace(/\/+$/, '')
+  if (!base || !normalized.startsWith(base + '/')) {
+    openHint.value = `这个文件不在当前工作区里：${path}（先打开它所在的工作区）`
+    return
+  }
+  await openHit(normalized.slice(base.length + 1))
+}
+
+/** Home 上点某个连接：**如实说**它在数据库视图里用（本视图不连库） */
+function homeOpenConnection(id: string) {
+  const target = savedConnections.value.find((c) => c.id === id)
+  openHint.value = target
+    ? `已保存的连接「${target.name}」在「数据库」视图里使用（点左侧活动栏的数据库图标）。`
+    : '这个连接找不到了（可能已被删除）。'
+}
+
+/** Home 上点某个最近工作区：**真的打开它**（不是只填进输入框） */
+async function openRecentWorkspace(path: string) {
+  rootDraft.value = path
+  await openWorkspace()
+}
+
 const history = ref<WorkspaceHistory | null>(null)
 const historyWarning = ref('')
+const openHint = ref('')
 
 onMounted(async () => {
   try {
@@ -1156,26 +1206,18 @@ function onTreeKeydown(event: KeyboardEvent) {
 
         <div class="ws__editor">
           <template v-if="activeTab && activeTab.relativePath === null">
-            <h2 class="ws__home-title">工作区</h2>
-            <p class="ws__home-line">左侧「资源管理器」里点一个**文件**即可在这里只读打开；点**目录**展开一层。</p>
-            <p class="ws__home-line">键盘 ↑ / ↓ 可在树里走位（到边界停住，不循环）。</p>
-            <p class="ws__home-line">本版**只读**：编辑与保存归 2.1 / 2.2 段（不假装能改）。</p>
-            <template v-if="recentWorkspaces.length">
-              <p class="ws__home-line">最近打开的工作区（点一下填进上面的输入框）：</p>
-              <div class="ws__recent">
-                <button
-                  v-for="entry in recentWorkspaces"
-                  :key="entry.path"
-                  class="ws__btn"
-                  type="button"
-                  :title="entry.path"
-                  @click="useRecent(entry.path)"
-                >
-                  {{ entry.path }}
-                </button>
-              </div>
+              <WorkspaceHome
+                :recent-files="history?.files ?? []"
+                :recent-workspaces="recentWorkspaces"
+                :current-root="history?.currentRoot ?? ''"
+                :connections="savedConnections"
+                :version="props.version?.trim() || '（版本未知）'"
+                @open-file="homeOpenFile"
+                @open-workspace="openRecentWorkspace"
+                @open-connection="homeOpenConnection"
+              />
+              <p v-if="openHint" class="ws__home-line">{{ openHint }}</p>
             </template>
-          </template>
           <template v-else-if="activeTab">
             <p class="ws__editor-meta">
               {{ activeTab.relativePath }} · {{ activeTab.languageKey }}

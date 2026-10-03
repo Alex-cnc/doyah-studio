@@ -300,6 +300,7 @@ function onSelect(id: ActivityBarItemId) {
           <WorkspaceView
             v-else-if="activeItem === 'workspace'"
             :open-file-signal="openFileSignal"
+            :version="info?.version ?? ''"
             @root-changed="workspaceRoot = $event"
             @push-panel="pushPanel"
           />
