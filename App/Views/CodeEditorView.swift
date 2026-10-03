@@ -75,7 +75,10 @@ struct CodeEditorView: NSViewRepresentable {
         // （非连续布局正是「只排可见范围、其余延后」）。
         // 取舍：1,000 行以下走标准（连续）布局，稳定优先；大文档（≥1,000 行）仍开非连续布局，
         // 保住 NFR-PERF-05（5,000 行文档删一个字符不整篇重排）——那条人工点验实测过的卡顿不能退回去。
-        textView.layoutManager?.allowsNonContiguousLayout = CodeLines.lineStarts(in: text).count > 1_000
+        // 口径（行号类判据 `check-editor-line-numbers.py`，队列 `L-181`）：这里问的是**行数**，不是行起点 ——
+        // 行起点的算法只许在绘制件（`App/Views/LineNumberGutter.swift`）里出现一次，
+        // 所以走 `CodeLines.count(in:)`（同一个实现、同一个数，不另立第二套口径）。
+        textView.layoutManager?.allowsNonContiguousLayout = CodeLines.count(in: text) > 1_000
         textView.string = text
         textView.tabID = tabID
         textView.onSave = onSave
