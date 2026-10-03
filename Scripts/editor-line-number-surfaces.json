@@ -34,6 +34,16 @@
       "component": "",
       "registry": "",
       "reason": "单元格编辑器是**单行**取值器：换行会让「一行」变成两行、值也就不对了（值域的判据在 Core/InlineEdit）。它没有「第几行」可言，故不画行号 —— 这不是漏做，是口径。"
+    },
+    {
+      "editor": "标题栏的主搜索框",
+      "kind": "NSTextField",
+      "name": "TitleBarSearchFieldView",
+      "file": "App/Views/TitleBarSearchField.swift",
+      "hasGutter": false,
+      "component": "",
+      "registry": "FR-EDIT-37（主搜索框：导航栏搜索 + 命令面板合一，2026-10-03）",
+      "reason": "标题栏里的**单行**搜索输入（`NSTextField` 单行模式，回车即执行、Esc 收起）：它按定义只有一行，没有「第几行」可言 ⇒ 不画行号。这不是漏做，是口径。"
     }
   ],
   "singleSource": {
@@ -42,5 +52,5 @@
     "note": "「哪一行算第几行」在 Core/CodeLines（15 项单测，契约见概要设计 §3.17 不变量 10）；「列宽怎么量、数字怎么对齐、画哪几行」在 LineNumberGutter。两个编辑器只许**转发**，不许就地重算。"
   },
   "totalsNote": "`surfaces` 逐条对应 App/ 里真实的 NSTextView / NSTextField 子类（双向对账：多一个未登记 ⇒ 红，留一个不在盘上 ⇒ 红）。文件数只做**下限**（scanFloor），不做等值对账 —— 另一侧在同一棵树上加视图文件不该把红灯送给不相干的轮次。",
-  "updated": "2026-09-30（第 121 轮建立：数据库侧 SQL 编辑器补行号列 + 画法抽成共用绘制件；扫描 App/ 102 份源文件 / 3 个编辑面）"
+  "updated": "2026-10-03（补登标题栏主搜索框 `TitleBarSearchFieldView`；扫描 App/ 81 份源文件 / 4 个编辑面）"
 }

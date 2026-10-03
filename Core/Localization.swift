@@ -506,7 +506,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceLanguageLabel
     case workspaceHistoryLoadFailed
     case workspaceHistorySaveFailed
-    case workspaceCloseBlockedDirty
+    // 关闭有未保存改动的页签：**弹确认框**（FR-EDIT-46，需求提出者 2026-10-03）
+    case workspaceCloseConfirmTitle
+    case workspaceCloseConfirmMessage
+    case workspaceCloseSaveAndClose
+    case workspaceCloseDiscardChanges
+    case workspaceCloseCancel
     case workspaceOpenFailedDirectory
     case workspaceFileTooLarge
     case workspaceFileBinary
@@ -2420,7 +2425,11 @@ public enum LocalizedStrings {
         .workspaceLanguageLabel: [.simplifiedChinese: "语言：%@", .english: "Language: %@"],
         .workspaceHistoryLoadFailed: [.simplifiedChinese: "读取「最近打开」记录失败：%@（已按空历史继续）", .english: "Could not read the recent-items file: %@ (continuing with an empty list)"],
         .workspaceHistorySaveFailed: [.simplifiedChinese: "保存「最近打开」记录失败：%@", .english: "Could not save the recent-items file: %@"],
-        .workspaceCloseBlockedDirty: [.simplifiedChinese: "%@ 有未保存的改动，先保存（⌘S）再关闭", .english: "%@ has unsaved changes — save (⌘S) before closing"],
+        .workspaceCloseConfirmTitle: [.simplifiedChinese: "%@ 有未保存的改动", .english: "%@ has unsaved changes"],
+        .workspaceCloseConfirmMessage: [.simplifiedChinese: "关闭前请选择怎么处理这份改动。", .english: "Choose what happens to those changes before closing."],
+        .workspaceCloseSaveAndClose: [.simplifiedChinese: "保存并关闭", .english: "Save and close"],
+        .workspaceCloseDiscardChanges: [.simplifiedChinese: "不保存，直接关闭", .english: "Don't save, close"],
+        .workspaceCloseCancel: [.simplifiedChinese: "取消", .english: "Cancel"],
         .workspaceOpenFailedDirectory: [.simplifiedChinese: "%@ 是目录，不能当文件打开", .english: "%@ is a folder, not a file"],
         .workspaceFileTooLarge: [.simplifiedChinese: "%@ 有 %@，超过上限 %@ —— 暂不在编辑器里打开", .english: "%@ is %@, above the %@ limit — not opening it in the editor"],
         .workspaceFileBinary: [.simplifiedChinese: "%@ 看起来是二进制文件，不在编辑器里打开", .english: "%@ looks like a binary file — not opening it in the editor"],

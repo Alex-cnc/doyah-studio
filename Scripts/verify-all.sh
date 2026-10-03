@@ -674,12 +674,22 @@ python3 Scripts/check-cell-decode-coverage.py --self-test
 echo "==> 16/18 越界检查（三书独占节 + 路径归属：改动不得落在对侧节 / 对侧子树上）"
 # 形态 A（2026-09-27 拍板）：三书单点定稿，但「平台实现」层按端独占 —— 标记 `[独占:macos]` /
 # `[独占:windows]` 的节只由该侧改；本机 = macOS 侧。判据与逃生门见脚本头注释。
-# 第二条是**门禁自己的证据**（L-42）：**23 例**负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——
+# 第二条是**门禁自己的证据**（L-42）：**29 例**负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——（**2026-10-03 订正 23 → 29**：实跑 `python3 Scripts/check-exclusive-sections.py --self-test` = **29/29 通过**；数字的唯一来源 = `Scripts/self-test-counts.json` 的 `exclusive-sections`，`check-doc-numbers` 对账）
 # 判据写完不对已知改动报红，等于没有。两个脚本对外只认退出码，`--self-test` 红了整项就红。
 # 第 33 轮起本脚本是**三副本同源**的「并集」版（提案 0003 裁决：Notes 副本的侧别别名 / `--contract-docs` /
 # 拿不到基线退出 2 + 本侧未跟踪增量），`--base` 显式给了却解析不到**也退出 2**（不许静默放行）。
-python3 Scripts/check-exclusive-sections.py
-python3 Scripts/check-exclusive-sections.py --self-test
+# ⚠️ **两侧词表撞在同一个变量名上**：`DOYAH_SIDE` 在**技能共享仓**那套工具里认**化身名**
+# （`bluewhale` 鲸鱼娘 / `bighippo` 大河马 …，见《蓝色鲸鱼娘赛博基本法》），在本仓的越界判据里
+# 认**平台名**（`macos` / `windows` …）；用户 shell rc 里设的是化身名 ⇒ 判据按「退役词」退出 2
+# （实测 2026-10-03：`--mine=bluewhale` ⇒ 整项红）。这里按 `uname` **显式**把平台名传给它们，
+# 不在脚本里写死 mac；技能仓那套工具照旧用自己的化身名，互不干扰。
+case "$(uname -s)" in
+  Darwin) DOYAH_PLATFORM_SIDE=macos ;;
+  Linux)  DOYAH_PLATFORM_SIDE=linux ;;
+  *)      DOYAH_PLATFORM_SIDE=windows ;;
+esac
+DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-exclusive-sections.py
+DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-exclusive-sections.py --self-test
 # 路径归属判据（派活单 `T-20261002-029`，2026-10-02 立；三仓同源副本，清单 = `Scripts/path-ownership.json`）：
 # 上面那个判据管「文档里的**节**」归谁，这一个管「盘上的**目录 / 文件**」归谁 ——
 # 改动落在**对侧子树**（对侧 = `windows/`，本侧 = 仓根 Swift 族）⇒ 判红并点名文件；

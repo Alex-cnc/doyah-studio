@@ -443,6 +443,76 @@ public enum CodeLanguageRegistry {
         // `CodeSyntax` 的默认值是 `["\"", "'"]`（大多数语言都这样），照默认走的话纯文本会把
         // 引号当字符串着色 —— 那就不是"什么都没认出来"了。
         CodeLanguageDefinition(
+            .swift,
+            displayName: "Swift",
+            fileExtensions: ["swift"],
+            syntax: CodeSyntax(
+                keywords: [
+                    "associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func", "import",
+                    "init", "inout", "internal", "let", "open", "operator", "precedencegroup", "private", "protocol",
+                    "public", "rethrows", "static", "struct", "subscript", "typealias", "var", "break", "case",
+                    "catch", "continue", "default", "defer", "do", "else", "fallthrough", "for", "guard", "if", "in",
+                    "repeat", "return", "throw", "switch", "where", "while", "as", "is", "super", "self", "Self",
+                    "try", "throws", "async", "await", "actor", "nonisolated", "borrowing", "consuming", "package",
+                    "macro", "lazy", "weak", "unowned", "mutating", "nonmutating", "override", "final", "required",
+                    "convenience", "dynamic", "indirect", "infix", "prefix", "postfix", "some", "any"
+                ],
+                types: [
+                    "Int", "Int8", "Int16", "Int32", "Int64", "UInt", "Double", "Float", "Decimal", "String",
+                    "Character", "Bool", "Array", "Dictionary", "Set", "Optional", "Result", "Error", "Void", "Any",
+                    "AnyObject", "Never", "Substring", "ClosedRange", "Range", "URL", "Date", "Data", "UUID",
+                    "Codable", "Encodable", "Decodable", "Equatable", "Hashable", "Comparable", "Identifiable",
+                    "Sendable", "MainActor", "Task", "Published"
+                ],
+                literals: ["nil", "true", "false"],
+                builtins: [
+                    "print", "debugPrint", "assert", "precondition", "fatalError", "dump", "min", "max", "abs",
+                    "zip", "map", "filter", "reduce", "withAnimation", "DispatchQueue"
+                ],
+                comments: slashComments,
+                stringDelimiters: ["\"", "'"],
+                operators: cLikeOperators + ["...", "..<", "->", "??", "?.", "&&", "||", "=>"],
+                snippets: [
+                    CodeSnippet(label: "func", insertText: "func name() {\n  \n}", detailKey: .codeDetailFunction),
+                    CodeSnippet(label: "struct", insertText: "struct Name {\n  \n}", detailKey: .codeDetailType),
+                    CodeSnippet(label: "class", insertText: "final class Name {\n  \n}", detailKey: .codeDetailClass),
+                    CodeSnippet(label: "guard", insertText: "guard condition else { return }", detailKey: .codeDetailCondition),
+                    CodeSnippet(label: "if", insertText: "if condition {\n  \n}", detailKey: .codeDetailCondition)
+                ]
+            )
+        ),
+        CodeLanguageDefinition(
+            .arkts,
+            displayName: "ArkTS",
+            fileExtensions: ["ets", "arkts"],
+            syntax: CodeSyntax(
+                keywords: javascriptCoreKeywords + arkUIKeywords + [
+                    "interface", "type", "enum", "implements", "public", "private", "protected", "readonly",
+                    "declare", "namespace", "abstract", "keyof", "infer", "satisfies", "override", "is", "asserts",
+                    "struct", "as", "from", "of"
+                ],
+                types: ["never", "unknown", "any", "string", "number", "boolean", "object", "symbol", "bigint", "ESObject"],
+                literals: javascriptLiterals,
+                builtins: [
+                    "console", "log", "JSON", "Object", "Array", "String", "Number", "Boolean", "Math", "Date",
+                    "Promise", "Map", "Set", "Symbol", "Error", "RegExp", "parseInt", "parseFloat", "setTimeout",
+                    "setInterval", "AppStorage", "LocalStorage", "PersistentStorage", "Environment", "router",
+                    "animateTo", "getContext"
+                ],
+                comments: slashComments,
+                stringDelimiters: ["\"", "'", "`"],
+                operators: javascriptOperators,
+                snippets: [
+                    CodeSnippet(label: "component", insertText: "@Entry\n@Component\nstruct Name {\n  build() {\n    \n  }\n}", detailKey: .codeDetailClass),
+                    CodeSnippet(label: "state", insertText: "@State value: number = 0", detailKey: .codeDetailKeyword),
+                    CodeSnippet(label: "build", insertText: "build() {\n  \n}", detailKey: .codeDetailFunction),
+                    CodeSnippet(label: "if", insertText: "if (condition) {\n  \n}", detailKey: .codeDetailCondition),
+                    CodeSnippet(label: "forof", insertText: "for (const item of items) {\n  \n}", detailKey: .codeDetailLoop)
+                ]
+            )
+        ),
+
+        CodeLanguageDefinition(
             .plainText,
             displayName: "Plain Text",
             fileExtensions: ["txt", "text", "log", "csv", "tsv"],
@@ -714,8 +784,11 @@ public enum CodeLanguageRegistry {
     /// 1. 只登记**满足「从 stdin 读源码、把结果写 stdout、成功退出码 0」**的工具 ——
     ///    这条纪律就是「格式化不碰磁盘」的全部保证（要改文件的工具一律不许登记）；
     /// 2. `displayName` 不许空（说了用外部工具就得说得清是哪一个）；
-    /// 3. 内置兜底（`builtin`）只许给**有词法规则**的语言 —— 兜底靠词法证明「那段空白不在
-    ///    字符串里」，没有词法就证明不了（纯文本 / Markdown / YAML 的空白可能就是内容）。
+    /// 3. 内置兜底（`builtin`）只许给**证明得了「那段空白不在内容里」**的语言 —— 靠词法（字符串 / 注释）
+    ///    或者靠**它自己的语法边界**（Markdown 的围栏：`markdownTidy` 认 ``` / ~~~，围栏内一字不动）。
+    ///    证明不了的一律不给兜底（纯文本）⇒ 用了如实拒绝。**「证明得了」不等于「能全做」**：
+///    YAML 的档只做行尾空白与结尾换行（缩进与块标量体内一个字不动）—— 拿一条窄规则换「点了有反应」，
+///    边界必须写在函数注释与文档里，不许让用户以为它是格式化器。
     ///
     /// 不在这张表里的语言 = **没有可用的格式化方式**（如实拒绝），而不是硬塞一个改不对的东西。
     private static let formats: [String: CodeFormatCapability] = [
@@ -730,7 +803,9 @@ public enum CodeLanguageRegistry {
         "html": CodeFormatCapability(tools: prettier, builtin: .whitespace),
         "python": CodeFormatCapability(
             tools: [CodeFormatTool(executable: "black", arguments: ["-q", "-"], displayName: "Black")],
-            builtin: .whitespace
+            // **强档**（需求提出者 2026-10-03：「Python 要强格式化，因为它本身就有严格的格式要求」）：
+            // 缩进宽度归一成 4 空格一级，结构按源码自己的相对层级推；三引号内与括号续行不动。
+            builtin: .python
         ),
         "go": CodeFormatCapability(
             // `gofmt` **不认 `--version`**（给了会被当成文件参数）⇒ 登记空数组：
@@ -755,11 +830,24 @@ public enum CodeLanguageRegistry {
         // Shell：`shfmt` 不给文件就读 stdin、写 stdout。
         // 内置兜底**不登记** —— Shell 在登记表里没有词法规则，兜底没法证明空白不在字符串里。
         "shell": CodeFormatCapability(
-            tools: [CodeFormatTool(executable: "shfmt", arguments: ["-"], displayName: "shfmt")]
+            tools: [CodeFormatTool(executable: "shfmt", arguments: ["-"], displayName: "shfmt")],
+            // 需求提出者 2026-10-03：「shell 和 yaml 也要加进来」。宽度 2 空格一级；
+            // **停靠符（heredoc）体内一字不动** —— 那里是数据，不是脚本。
+            builtin: .shell
         ),
-        // Markdown / YAML：只给外部工具（空白本身就是它们的语义），没有兜底。
-        "markdown": CodeFormatCapability(tools: prettier),
-        "yaml": CodeFormatCapability(tools: prettier)
+        // Markdown：**有内置档**（`CodeFormatBuiltin.markdown` = 围栏感知的空白规整）。
+        // 需求提出者 2026-10-03 点名「Markdown 与 JSON 必须内置」；它确实破了「兜底只给有词法的
+        // 语言」这条，因为**它的词法就是围栏** —— `markdownTidy` 自己认 ``` / ~~~，
+        // 围栏内一字不动、硬换行标记不吞（见该函数的四条纪律）。
+        "markdown": CodeFormatCapability(tools: prettier, builtin: .markdown),
+        // YAML：需求提出者 2026-10-03 点名要它 ⇒ 给一个**只做证明得了语义无关**的档：
+        // 行尾空白 + 结尾恰好一个换行；**缩进一个字不动**、**块标量（`|` / `>`）体内整段透传**。
+        // 它**不是**格式化器（对齐 / 折行 / 引号风格不碰）—— 边界写在 `yamlTidy` 的注释里。
+        "yaml": CodeFormatCapability(tools: prettier, builtin: .yaml),
+        // Swift 是**花括号语言** ⇒ 用现成的 `braceIndent`（不另造规则）。
+        "swift": CodeFormatCapability(builtin: .braceIndent),
+        // ArkTS 是 **TypeScript 方言** ⇒ 同 TS 的档（大括号缩进）。
+        "arkts": CodeFormatCapability(builtin: .braceIndent)
     ]
 
     /// Prettier 靠**文件名**判 parser，所以实参里带上文件路径（`%FILE%` 由 Core 填）。
@@ -828,6 +916,8 @@ extension TextLanguage {
     public static let rust = TextLanguage(registered: "rust")
     public static let php = TextLanguage(registered: "php")
     /// 认不出就是它（FR-EDIT-38 ④）—— 登记表最后一条，与 `detect` 的回落同一个值。
+    public static let swift = TextLanguage(registered: "swift")
+    public static let arkts = TextLanguage(registered: "arkts")
     public static let plainText = TextLanguage(registered: "plainText")
 }
 
@@ -862,5 +952,14 @@ private let cLikeOperators = [
 // 只登记**真的到得了**的运算符：`$(` / `${` / `2>` 这种永远不会走到这一步
 // （`$` 是标识符起始、数字已被数字规则吃掉）—— 登记了却到不了 = 死数据。
 private let shellOperators = ["&&", "||", ">>", "<<", "|&", "==", "!=", "->"]
+
+/// ArkTS = **TypeScript 方言 + ArkUI 装饰器**（需求提出者 2026-10-03 拍板纳入，见 `Q61`）。
+/// 装饰器当关键字列（它们只能出现在声明位置，高亮出来比当普通标识符有用）。
+private let arkUIKeywords = [
+    "Entry", "Component", "ComponentV2", "Reusable", "Preview", "CustomDialog", "Concurrent",
+    "State", "Prop", "Link", "Provide", "Consume", "Observed", "ObjectLink", "Watch", "Track",
+    "StorageLink", "StorageProp", "LocalStorageLink", "LocalStorageProp", "ProvideAndConsume",
+    "Builder", "BuilderParam", "LocalBuilder", "Require", "Sendable", "AnimatableExtend", "Styles", "Extend"
+]
 
 private let sqlOperators = ["::", "||", "<>", "!=", "<=", ">=", "->>", "->"]

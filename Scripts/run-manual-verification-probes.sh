@@ -301,8 +301,12 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   清空按钮那一段留给 SwiftUI，另加**修前对照**（装修层参与命中测试的那份框必须判红）。
 #   主入口其实是 `./Scripts/verify-ui-interactions.sh`（真窗口 + 工具条、进程内合成事件、零权限）；
 #   挂在这里是为了那条「每个 `*ProbeTests.swift` 都得有入口」的判据 `check-result-scroll-ledger.py` ⑤。
+# + `FormatMenuWiringProbeTests`（内测 `#2` 第二轮 · 开发循环第 164 轮：格式化入口**真的能跑到页签上** ——
+#   ① `.json` 路径判成 `TextLanguage.json`（判成 fallback 只会得到一句拒绝）；② 乱掉的 JSON 走
+#   `formatSelected()` 必须真的投递重排后的文本；③ 主菜单「编辑」那一项必须带可执行 action/target 并真调用一次。
+#   **它落地当轮漏了接 FILTER**（写下用例却没入口 = 一个都跑不到），由 `check-result-scroll-ledger.py` ⑤ 抓出后补上。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

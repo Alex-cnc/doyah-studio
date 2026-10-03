@@ -1,7 +1,7 @@
 {
  "version": 1,
  "release": "v0.2.0-alpha",
- "updatedAt": "2026-09-30",
+ "updatedAt": "2026-10-03",
  "rule": "FR 🟡 逐条判定（队列 L-69 条件 ③）：能机器验的补证据（脚本 + 断言数，可复跑）；不能机器验的（需人工点击 / 需真机 / 需外部实例）逐条标 [alpha 不含]，状态格仍 🟡 不改 ✅。",
  "reasonBranches": {
   "environment": "本机物理不可能：无实例 / 无扩展 / 无二进制 / 沙箱限制（v0.1.0-alpha 同一批，标记沿用）",
@@ -744,8 +744,8 @@
    "id": "FR-EDIT-39",
    "domain": "3.2 SQL 编辑与执行",
    "reason": "ui-click",
-   "reasonText": "代码格式化的界面点击待人工点验（选路三支与三种结局已有 29 条 Core 判据，含 2026-10-02 新补的「无联网」一档；「装了 / 没装外部工具」两种环境的实际表现需人看）",
-   "marker": "**[alpha 不含]**（界面点击与「装了 / 没装外部工具」两种环境的实际表现只能人工点验；选路与三种结局由 `Tests/CodeFormattingTests.swift` **29 例**逐条判（含 **2026-10-02 新补的「无联网」一档**：探针三态说「装了但无联网 / 装了但跑不起来」⇒ **回退内置**，并把**回退原因**带出去（`CodeFormatDecision.fallbackReason`）—— 定案「优先外部，如无联网则用内置」就是这一档））",
+   "reasonText": "代码格式化的界面点击与观感待人工点验（形态已订正为**只用内置**：不探 `PATH`、不联网；认不出语言与规则空转都如实拒绝）",
+   "marker": "**[alpha 不含]**（界面点击与观感待人工点验；形态 = **只用内置**（2026-10-03 订正，原口径「外部优先 ⇒ 回退内置」已作废），规则与三种结局由 `Tests/CodeFormattingTests.swift` 逐条判）",
    "markerPreExisting": false,
    "evidence": [
     {
@@ -772,6 +772,22 @@
     },
     {
      "path": "App/Views/WorkspaceHeaderSearch.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-46",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "关闭有未保存改动的页签 = 确认框：界面点击待人工点验（规则层有 8 例 Core 判据（7 条规则 + 1 条源码判据）—— 干净页签不弹框 / 脏页签弹且动作与顺序固定 / 取消不关 / 保存失败不关 / 丢弃必关；真点关闭按钮看到框、三个动作各点一遍需人看）",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/WorkspaceClosePolicyTests.swift"
+    },
+    {
+     "path": "Core/WorkspaceClose.swift"
     }
    ]
   }

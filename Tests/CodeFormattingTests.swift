@@ -65,16 +65,30 @@ final class CodeFormattingTests: XCTestCase {
 
     func testBuiltinTakesOverWhenNoExternalTool() {
         XCTAssertEqual(decision(.javascript), .builtin(.braceIndent))
-        XCTAssertEqual(decision(.python), .builtin(.whitespace))
+        XCTAssertEqual(decision(.python), .builtin(.python), "2026-10-03：Python 换成强档（缩进归一）")
         XCTAssertEqual(decision(.sql), .builtin(.sql))
         XCTAssertEqual(decision(.html), .builtin(.whitespace))
+        // 2026-10-03：Markdown 也进这一档（围栏感知的空白规整，不是「空白即语义」那一类了）。
+        XCTAssertEqual(decision(.markdown), .builtin(.markdown))
+        // 同一批（需求提出者点名）：Shell / YAML 各有一档；Swift / ArkTS 是花括号语言 ⇒ 现成的 `braceIndent`。
+        XCTAssertEqual(decision(.shell), .builtin(.shell))
+        XCTAssertEqual(decision(.yaml), .builtin(.yaml))
+        XCTAssertEqual(decision(.swift), .builtin(.braceIndent))
+        XCTAssertEqual(decision(.arkts), .builtin(.braceIndent))
     }
 
-    func testLanguageWithoutBuiltinIsRefusedHonestly() {
-        // Markdown 的空白本身就是语义 ⇒ 只给外部工具。没装 prettier 时**如实拒绝**，
-        // 而不是拿内置兜底去改它、"看起来格式化过了"。
-        XCTAssertEqual(decision(.markdown), .refused(.noFormatter(language: .markdown)))
-        XCTAssertEqual(decision(.yaml), .refused(.noFormatter(language: .yaml)))
+    /// **反向判据**：表里不许再有「登记了格式化、却没有内置档」的语言。
+    ///
+    /// 2026-10-03 之前，Markdown / YAML 就是这一档（只登记 prettier ⇒ 没装工具时点了会如实拒绝）。
+    /// 需求提出者这一天把三件都点名了（Markdown 必须内置 / Python 要强格式化 / Shell 与 YAML 也要加），
+    /// 于是这一档在表里**空了**。这条判据钉的是「谁再登记一个没有内置档的语言就会红」——
+    /// 那时要问的是「它的空白是不是内容」：证明得了就给档，证明不了就照实说「点了不会有反应」。
+    func testEveryRegisteredLanguageHasABuiltinNow() {
+        for definition in CodeLanguageRegistry.all where definition.language != .plainText {
+            if case .refused(.noFormatter(let language)) = decision(definition.language) {
+                XCTFail("\(language.rawValue) 登记了格式化却没有内置档 ⇒ 界面上点了会如实拒绝")
+            }
+        }
     }
 
     func testUnknownLanguageIsRefusedAsUnknown() {
@@ -301,7 +315,8 @@ final class CodeFormattingTests: XCTestCase {
 
     func testRefusedPlanNeverTouchesTheRunner() async {
         let runner = FakeRunner(.success(.init(exitCode: 0, standardOutput: "x", standardError: "")))
-        for language in [TextLanguage.markdown, .yaml, .plainText] {
+        // 2026-10-03：YAML / Shell / Python 都有内置档了 ⇒ 「拒绝」只剩**认不出**这一种（回落值）。
+        for language in [TextLanguage.plainText] {
             let execution = await CodeFormatService.run(
                 plan: decision(language),
                 language: language,
@@ -389,18 +404,15 @@ final class CodeFormatBuiltinOnlyTests: XCTestCase {
     /// 内置档位与旧口径的兜底那一档**逐条一致**（换口径不该换结果）。
     func testBuiltinOnlyKeepsTheSameBuiltinChoices() {
         XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .javascript), .builtin(.braceIndent))
-        XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .python), .builtin(.whitespace))
+        XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .python), .builtin(.python))
         XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .sql), .builtin(.sql))
         XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .html), .builtin(.whitespace))
     }
 
-    /// 两种拒绝仍然分得开（认不出 / 认得但没有内置）。
+    /// 拒绝这半边：认不出的仍旧如实拒绝（「认得但没有内置」那一档见
+    /// `testEveryRegisteredLanguageHasABuiltinNow` —— 它在表里已经空了）。
     func testBuiltinOnlyStillRefusesHonestly() {
         XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .plainText), .refused(.unknownLanguage))
-        XCTAssertEqual(
-            CodeFormatPlanner.planBuiltinOnly(language: .markdown),
-            .refused(.noFormatter(language: .markdown))
-        )
     }
 
     /// 执行入口：内置那一档真跑出结果、如实报「变没变」，且**幂等**（再跑一次不该再变）。
@@ -423,8 +435,8 @@ final class CodeFormatBuiltinOnlyTests: XCTestCase {
     /// 拒绝那两档**原样穿过**执行入口。
     func testRunBuiltinPassesRefusalsThrough() {
         XCTAssertEqual(
-            CodeFormatService.runBuiltin(language: .markdown, text: "# t\n"),
-            .refused(.noFormatter(language: .markdown))
+            CodeFormatService.runBuiltin(language: .plainText, text: "a:  1\n"),
+            .refused(.unknownLanguage)
         )
     }
 
@@ -523,5 +535,179 @@ final class CodeFormatBuiltinOnlyTests: XCTestCase {
         XCTAssertEqual(CodeBuiltinFormatter.prettyJSON(""), "")
         let once = CodeBuiltinFormatter.prettyJSON("{\"a\":[1,{\"b\":2}]}")
         XCTAssertEqual(CodeBuiltinFormatter.prettyJSON(once), once, "第二次格式化不该再动它")
+    }
+}
+
+
+/// Markdown 的内置档（`FR-EDIT-39` 追加条文 · 需求提出者 2026-10-03：「Markdown 和 json 是我今后常用的
+/// 文本格式，所以必须内置它的格式化 schema」）。
+///
+/// 这一档的价值不在「能做多少」，而在**它不乱动**：围栏里的行尾空白是代码内容，行尾两个空格是硬换行。
+final class CodeFormatMarkdownBuiltinTests: XCTestCase {
+
+    private func formatted(_ text: String) -> String {
+        CodeBuiltinFormatter.format(text, style: .markdown, language: .markdown)
+    }
+
+    /// 这一档真的接在 Markdown 这条语言上（不是只加了个 case 没人用）。
+    func testMarkdownPlansToItsOwnBuiltin() {
+        XCTAssertEqual(CodeFormatPlanner.planBuiltinOnly(language: .markdown), .builtin(.markdown))
+    }
+
+    /// 围栏内**一字不动**（行尾空白与缩进在那里都是代码内容）。
+    func testFenceContentIsUntouched() {
+        let source = "# t\n\n```swift\nlet a = 1   \n\tindent   \n```\n"
+        XCTAssertEqual(formatted(source), source)
+    }
+
+    /// 围栏外的行尾空白删掉。
+    func testTrailingWhitespaceOutsideFenceIsRemoved() {
+        XCTAssertEqual(formatted("# t \n\u{6B63}\u{6587}\t\n"), "# t\n\u{6B63}\u{6587}\n")
+    }
+
+    /// 行尾两个及以上空格 = **硬换行标记** ⇒ 保留（规整成恰好两个），别把两行并成一段。
+    func testHardBreakMarkerSurvives() {
+        XCTAssertEqual(formatted("one  \ntwo\n"), "one  \ntwo\n")
+        XCTAssertEqual(formatted("one    \ntwo\n"), "one  \ntwo\n", "多于两个空格规整成两个")
+        // 纯空白行收成空行 —— 不然会在空行上造出一个**假的**硬换行。
+        XCTAssertEqual(formatted("head\n   \ntail\n"), "head\n\ntail\n")
+    }
+
+    /// 结尾恰好一个换行；空输入原样返回（与 `prettyJSON` / `tidy` 同口径）。
+    func testEndsWithExactlyOneNewlineAndEmptyStaysEmpty() {
+        XCTAssertEqual(formatted("# t\n\n\n"), "# t\n")
+        XCTAssertEqual(formatted("# t"), "# t\n")
+        XCTAssertEqual(formatted(""), "")
+    }
+
+    /// 幂等：跑两遍与跑一遍逐字相同。
+    func testIdempotent() {
+        let once = formatted("# t   \n\n```\nx   \n```\n\n\n")
+        XCTAssertEqual(formatted(once), once)
+    }
+
+    /// 没闭合的围栏 ⇒ 后面一律不动（宁可不改，也不把代码当散文）。
+    func testUnclosedFenceLeavesTheRestAlone() {
+        let source = "```\ncode   \n"
+        XCTAssertEqual(formatted(source), source)
+    }
+}
+
+
+/// Python 强档（`FR-EDIT-39` · 需求提出者 2026-10-03：「Python 要强格式化，因为它本身就有严格的格式要求」）。
+///
+/// 「强」= 敢动结构；敢动的边界就写在这几条里：三引号内与括号续行**一个字都不碰**。
+final class CodeFormatPythonBuiltinTests: XCTestCase {
+
+    private func formatted(_ text: String) -> String {
+        CodeBuiltinFormatter.format(text, style: .python, language: .python)
+    }
+
+    /// 宽度归一：源码里 2 空格 / 8 空格的层级都写成 **4 空格一级**（结构跟着源码走，不猜）。
+    func testIndentWidthIsNormalisedToFourSpaces() {
+        XCTAssertEqual(
+            formatted("def f():\n  if x:\n      return 1\n  return 2\n"),
+            "def f():\n    if x:\n        return 1\n    return 2\n"
+        )
+    }
+
+    /// `elif` / `else` / `except` / `finally` 回到**它那个头那一级**。
+    func testDedentKeywordsReturnToTheirHeaderLevel() {
+        let aligned = "try:\n    f()\nexcept ValueError:\n    pass\nelse:\n    g()\nfinally:\n    h()\n"
+        XCTAssertEqual(formatted(aligned), aligned, "本来就齐 ⇒ 一字不动")
+        XCTAssertEqual(
+            formatted("try:\n        f()\nexcept ValueError:\n                pass\n"),
+            "try:\n    f()\nexcept ValueError:\n    pass\n"
+        )
+    }
+
+    /// **三引号字符串内一字不动**（那里的行尾空白也是内容）；开引号那一行只动行首。
+    func testTripleQuotedStringsAreUntouched() {
+        let source = "def f():\n  \"\"\"doc\n     trailing   \n  \"\"\"\n  return 1\n"
+        let expected = "def f():\n    \"\"\"doc\n     trailing   \n  \"\"\"\n    return 1\n"
+        XCTAssertEqual(formatted(source), expected)
+    }
+
+    /// **括号没闭合的续行不动**（那点对齐是给人看的，重排只会越改越丑）。
+    func testContinuationLinesKeepTheirOwnAlignment() {
+        let source = "result = call(\n        first,\n        second\n)\n"
+        XCTAssertEqual(formatted(source), source)
+    }
+
+    /// 空行只清空白、不缩进；结尾恰好一个换行；空输入原样；行尾空白删掉。
+    func testEmptyLinesTrailingWhitespaceAndNewline() {
+        XCTAssertEqual(formatted("def f():\n    pass\n   \n\n\n"), "def f():\n    pass\n")
+        XCTAssertEqual(formatted("x = 1   \n# note   \n"), "x = 1\n# note\n")
+        XCTAssertEqual(formatted(""), "")
+    }
+
+    /// 幂等：跑两遍与跑一遍逐字相同（不然每点一次格式化都在改文件）。
+    func testIdempotent() {
+        let once = formatted("def f():\n  if x:\n    return 1\n")
+        XCTAssertEqual(formatted(once), once)
+    }
+}
+
+/// Shell 档（需求提出者 2026-10-03：「shell 和 yaml 也要加进来，确实会经常用到 shell 脚本」）。
+final class CodeFormatShellBuiltinTests: XCTestCase {
+
+    private func formatted(_ text: String) -> String {
+        CodeBuiltinFormatter.format(text, style: .shell, language: .shell)
+    }
+
+    /// 宽度归一成 **2 空格一级**，`fi` / `done` 回到 `if` / `for` 那一级。
+    func testKeywordBlocksAlignToTheirOpener() {
+        XCTAssertEqual(
+            formatted("if [ -f x ]; then\n        echo yes\n    fi\n"),
+            "if [ -f x ]; then\n  echo yes\nfi\n"
+        )
+    }
+
+    /// **停靠符（heredoc）体内一字不动** —— 那里是数据，不是脚本。
+    func testHeredocBodyIsUntouched() {
+        let source = "cat <<EOF\n  raw   text\t\nEOF\necho done\n"
+        XCTAssertEqual(formatted(source), source)
+    }
+
+    /// 反斜杠续行的下一行缩进不动；行尾空白照删；幂等。
+    func testContinuationAndTrailingWhitespace() {
+        XCTAssertEqual(
+            formatted("echo one \\\n     two   \necho three   \n"),
+            "echo one \\\n     two\necho three\n"
+        )
+        let once = formatted("for f in *; do\n echo \"$f\"\ndone\n")
+        XCTAssertEqual(formatted(once), once)
+    }
+}
+
+/// YAML 档（需求提出者 2026-10-03 点名）—— **它只做证明得了语义无关的两件**，不是格式化器。
+final class CodeFormatYAMLBuiltinTests: XCTestCase {
+
+    private func formatted(_ text: String) -> String {
+        CodeBuiltinFormatter.format(text, style: .yaml, language: .yaml)
+    }
+
+    /// 行尾空白删掉（注释行也算），**缩进一个字不动**（YAML 的缩进就是结构）。
+    func testTrailingWhitespaceIsRemovedButIndentIsNot() {
+        XCTAssertEqual(
+            formatted("root:\n    child: 1   \n  # note   \n"),
+            "root:\n    child: 1\n  # note\n"
+        )
+    }
+
+    /// **块标量体内一字不动**（`|` / `>` 里的行尾空白是内容，多一个空格就改了字符串值）。
+    func testBlockScalarBodyIsUntouched() {
+        XCTAssertEqual(
+            formatted("script: |\n  line one   \n  line two\nnext: 1   \n"),
+            "script: |\n  line one   \n  line two\nnext: 1\n"
+        )
+    }
+
+    /// 结尾恰好一个换行；空输入原样；幂等。
+    func testNewlineAndIdempotence() {
+        XCTAssertEqual(formatted("a: 1\n\n\n"), "a: 1\n")
+        XCTAssertEqual(formatted(""), "")
+        let once = formatted("a: 1   \nb: |\n  x   \n")
+        XCTAssertEqual(formatted(once), once)
     }
 }

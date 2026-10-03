@@ -1,0 +1,339 @@
+# DOYAH-MENU-DUMP v1 — A 原样（未展开菜单）
+# lang=zh-Hans appKitLaunchLocalizations=en appleLanguages=en
+0|UNRECOGNIZED|submenuAction:|Doyah Studio|submenuAction:|-|unknown submenu=Doyah Studio
+1|system|orderFrontStandardAboutPanel:|关于 Doyah Studio|menuSystemAbout|关于 Doyah Studio|ok
+1|title|menuAction:|重启应用…|menuRelaunchApp|重启应用…|ok
+1|title|menuAction:|版本与许可证…|menuAboutLicense|版本与许可证…|ok
+1|separator|-||-|-|-
+1|title|submenuAction:|服务|menuSystemServices|服务|ok submenu=服务
+1|separator|-||-|-|-
+1|system|hide:|隐藏 Doyah Studio|menuSystemHide|隐藏 Doyah Studio|ok
+1|system|hideOtherApplications:|隐藏其他|menuSystemHideOthers|隐藏其他|ok
+1|system|unhideAllApplications:|全部显示|menuSystemShowAll|全部显示|ok
+1|separator|-||-|-|-
+1|system|terminate:|退出 Doyah Studio|menuSystemQuit|退出 Doyah Studio|ok
+0|title|submenuAction:|文件|menuSystemFile|文件|ok submenu=文件
+1|title|menuAction:|新建查询|menuNewQuery|新建查询|ok
+1|title|menuAction:|新建浏览器页签|menuNewBrowserTab|新建浏览器页签|ok
+1|title|menuAction:|查询归档|archiveTitle|查询归档|ok
+1|title|menuAction:|导入数据…|menuImportData|导入数据…|ok
+1|separator|-||-|-|-
+1|system|performClose:|关闭|menuSystemClose|关闭|ok
+1|system|closeAll:|全部关闭|menuSystemCloseAll|全部关闭|ok
+0|title|submenuAction:|编辑|menuSystemEdit|编辑|ok submenu=编辑
+1|system|undo:|撤销|menuSystemUndo|撤销|ok
+1|system|redo:|重做|menuSystemRedo|重做|ok
+1|separator|-||-|-|-
+1|system|cut:|剪切|menuSystemCut|剪切|ok
+1|system|copy:|拷贝|menuSystemCopy|拷贝|ok
+1|system|paste:|粘贴|menuSystemPaste|粘贴|ok
+1|system|delete:|删除|menuSystemDelete|删除|ok
+1|system|selectAll:|全选|menuSystemSelectAll|全选|ok
+1|title|menuAction:|格式化代码|menuFormat|格式化代码|ok
+1|separator|-||-|-|-
+1|title|submenuAction:|自动填充|menuSystemAutoFill|自动填充|ok submenu=自动填充
+2|system|_handleInsertFromContactsCommand:|联系人…|menuSystemContact|联系人…|ok
+2|system|_handleInsertFromPasswordsCommand:|密码…|menuSystemPasswords|密码…|ok
+2|system|_handleInsertFromCreditCardsCommand:|信用卡…|menuSystemCreditCard|信用卡…|ok
+1|system|startDictation:|开始听写…|menuSystemDictation|开始听写…|ok
+1|system|startDictation:|开始听写…|menuSystemDictation|开始听写…|ok
+1|system|orderFrontCharacterPalette:|表情与符号|menuSystemEmoji|表情与符号|ok
+1|system|orderFrontCharacterPalette:|表情与符号|menuSystemEmoji|表情与符号|ok
+1|system|orderFrontCharacterPalette:|表情与符号|menuSystemEmoji|表情与符号|ok
+0|title|submenuAction:|显示|menuSystemView|显示|ok submenu=显示
+1|title|menuAction:|工作区视图|menuViewWorkspace|工作区视图|ok
+1|title|menuAction:|数据库视图|menuViewDatabase|数据库视图|ok
+1|title|menuAction:|笔记视图|menuViewNotes|笔记视图|ok
+1|separator|-||-|-|-
+1|title|menuAction:|外观…|menuAppearance|外观…|ok
+1|title|menuAction:|连接设置…|menuConnectionSettings|连接设置…|ok
+1|title|menuAction:|数据库统计|databaseStatsTitle|数据库统计|ok
+1|title|menuAction:|服务器级对象…|menuServerObjects|服务器级对象…|ok
+1|title|menuAction:|Schema 对比与同步|schemaDiffTitle|Schema 对比与同步|ok
+1|title|menuAction:|ER 图…|menuERDiagram|ER 图…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|显示 / 隐藏下方面板|lowerPaneToggle|显示 / 隐藏下方面板|ok
+0|title|submenuAction:|智能体|menuAgent|智能体|ok submenu=智能体
+1|title|menuAction:|智能体设置…|menuAgentSettings|智能体设置…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|文生 SQL…|menuAgentGenerateSQL|文生 SQL…|ok
+1|title|menuAction:|诊断这条查询…|menuDiagnoseQuery|诊断这条查询…|ok
+1|title|menuAction:|维护任务…|menuMaintenanceTasks|维护任务…|ok
+1|title|menuAction:|笔记…|menuNotes|笔记…|ok
+1|title|menuAction:|外部调用审批…|menuMCPApprovals|外部调用审批…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|数据任务…|menuDataTask|数据任务…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|审批与审计…|menuAgentAudit|审批与审计…|ok
+1|title|menuAction:|外发日志…|menuEgressLog|外发日志…|ok
+0|title|submenuAction:|语言|menuLanguage|语言|ok submenu=语言
+1|UNRECOGNIZED|menuAction:|简体中文|menuAction:|-|unknown
+1|UNRECOGNIZED|menuAction:|English|menuAction:|-|unknown
+0|title|submenuAction:|窗口|menuSystemWindow|窗口|ok submenu=窗口
+1|system|performMiniaturize:|最小化|menuSystemMinimize|最小化|ok
+1|system|performZoom:|缩放|menuSystemZoom|缩放|ok
+1|separator|-||-|-|-
+1|system|arrangeInFront:|全部置于顶层|menuSystemBringAllToFront|全部置于顶层|ok
+1|separator|-||-|-|-
+1|UNRECOGNIZED|makeKeyAndOrderFront:|Doyah Studio - 工作区|makeKeyAndOrderFront:|-|unknown
+0|title|submenuAction:|帮助|menuSystemHelp|帮助|ok submenu=帮助
+1|system|showHelp:|Doyah Studio 帮助|menuSystemAppHelp|Doyah Studio 帮助|ok
+1|system|toggleSidebar:|显示/隐藏边栏|menuSystemToggleSidebar|显示/隐藏边栏|ok
+# 认不出的项 4：Doyah Studio [selector=submenuAction:] ｜ 简体中文 [selector=menuAction:] ｜ English [selector=menuAction:] ｜ Doyah Studio - 工作区 [selector=makeKeyAndOrderFront:]
+# 与目标语言不一致的项 0：
+# DOYAH-MENU-DUMP v1 — C 各菜单展开过一次之后（含 AppKit 展开时才插进来的项）
+# lang=zh-Hans appKitLaunchLocalizations=en appleLanguages=en
+0|UNRECOGNIZED|submenuAction:|Doyah Studio|submenuAction:|-|unknown submenu=Doyah Studio
+1|system|orderFrontStandardAboutPanel:|关于 Doyah Studio|menuSystemAbout|关于 Doyah Studio|ok
+1|title|menuAction:|重启应用…|menuRelaunchApp|重启应用…|ok
+1|title|menuAction:|版本与许可证…|menuAboutLicense|版本与许可证…|ok
+1|separator|-||-|-|-
+1|title|submenuAction:|服务|menuSystemServices|服务|ok submenu=服务
+1|separator|-||-|-|-
+1|system|hide:|隐藏 Doyah Studio|menuSystemHide|隐藏 Doyah Studio|ok
+1|system|hideOtherApplications:|隐藏其他|menuSystemHideOthers|隐藏其他|ok
+1|system|unhideAllApplications:|全部显示|menuSystemShowAll|全部显示|ok
+1|separator|-||-|-|-
+1|system|terminate:|退出 Doyah Studio|menuSystemQuit|退出 Doyah Studio|ok
+1|system|terminate:|退出 Doyah Studio|menuSystemQuit|退出 Doyah Studio|ok
+0|title|submenuAction:|文件|menuSystemFile|文件|ok submenu=文件
+1|title|menuAction:|新建查询|menuNewQuery|新建查询|ok
+1|title|menuAction:|新建浏览器页签|menuNewBrowserTab|新建浏览器页签|ok
+1|title|menuAction:|查询归档|archiveTitle|查询归档|ok
+1|title|menuAction:|导入数据…|menuImportData|导入数据…|ok
+1|separator|-||-|-|-
+1|system|performClose:|关闭|menuSystemClose|关闭|ok
+1|system|closeAll:|全部关闭|menuSystemCloseAll|全部关闭|ok
+0|title|submenuAction:|编辑|menuSystemEdit|编辑|ok submenu=编辑
+1|system|undo:|撤销|menuSystemUndo|撤销|ok
+1|system|redo:|重做|menuSystemRedo|重做|ok
+1|separator|-||-|-|-
+1|system|cut:|剪切|menuSystemCut|剪切|ok
+1|system|copy:|拷贝|menuSystemCopy|拷贝|ok
+1|system|paste:|粘贴|menuSystemPaste|粘贴|ok
+1|system|delete:|删除|menuSystemDelete|删除|ok
+1|system|selectAll:|全选|menuSystemSelectAll|全选|ok
+1|title|menuAction:|格式化代码|menuFormat|格式化代码|ok
+1|separator|-||-|-|-
+1|title|submenuAction:|自动填充|menuSystemAutoFill|自动填充|ok submenu=自动填充
+2|system|_handleInsertFromContactsCommand:|联系人…|menuSystemContact|联系人…|ok
+2|system|_handleInsertFromPasswordsCommand:|密码…|menuSystemPasswords|密码…|ok
+2|system|_handleInsertFromCreditCardsCommand:|信用卡…|menuSystemCreditCard|信用卡…|ok
+1|system|startDictation:|开始听写…|menuSystemDictation|开始听写…|ok
+1|system|startDictation:|开始听写…|menuSystemDictation|开始听写…|ok
+1|system|orderFrontCharacterPalette:|表情与符号|menuSystemEmoji|表情与符号|ok
+1|system|orderFrontCharacterPalette:|表情与符号|menuSystemEmoji|表情与符号|ok
+1|system|orderFrontCharacterPalette:|表情与符号|menuSystemEmoji|表情与符号|ok
+0|title|submenuAction:|显示|menuSystemView|显示|ok submenu=显示
+1|system|toggleTabBar:|显示标签页栏|menuSystemShowTabBar|显示标签页栏|ok
+1|system|toggleTabOverview:|显示所有标签页|menuSystemShowAllTabs|显示所有标签页|ok
+1|separator|-||-|-|-
+1|title|menuAction:|工作区视图|menuViewWorkspace|工作区视图|ok
+1|title|menuAction:|数据库视图|menuViewDatabase|数据库视图|ok
+1|title|menuAction:|笔记视图|menuViewNotes|笔记视图|ok
+1|separator|-||-|-|-
+1|title|menuAction:|外观…|menuAppearance|外观…|ok
+1|title|menuAction:|连接设置…|menuConnectionSettings|连接设置…|ok
+1|title|menuAction:|数据库统计|databaseStatsTitle|数据库统计|ok
+1|title|menuAction:|服务器级对象…|menuServerObjects|服务器级对象…|ok
+1|title|menuAction:|Schema 对比与同步|schemaDiffTitle|Schema 对比与同步|ok
+1|title|menuAction:|ER 图…|menuERDiagram|ER 图…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|显示 / 隐藏下方面板|lowerPaneToggle|显示 / 隐藏下方面板|ok
+0|title|submenuAction:|智能体|menuAgent|智能体|ok submenu=智能体
+1|title|menuAction:|智能体设置…|menuAgentSettings|智能体设置…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|文生 SQL…|menuAgentGenerateSQL|文生 SQL…|ok
+1|title|menuAction:|诊断这条查询…|menuDiagnoseQuery|诊断这条查询…|ok
+1|title|menuAction:|维护任务…|menuMaintenanceTasks|维护任务…|ok
+1|title|menuAction:|笔记…|menuNotes|笔记…|ok
+1|title|menuAction:|外部调用审批…|menuMCPApprovals|外部调用审批…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|数据任务…|menuDataTask|数据任务…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|审批与审计…|menuAgentAudit|审批与审计…|ok
+1|title|menuAction:|外发日志…|menuEgressLog|外发日志…|ok
+0|title|submenuAction:|语言|menuLanguage|语言|ok submenu=语言
+1|UNRECOGNIZED|menuAction:|简体中文|menuAction:|-|unknown
+1|UNRECOGNIZED|menuAction:|English|menuAction:|-|unknown
+0|title|submenuAction:|窗口|menuSystemWindow|窗口|ok submenu=窗口
+1|system|performMiniaturize:|最小化|menuSystemMinimize|最小化|ok
+1|system|miniaturizeAll:|全部最小化|menuSystemMinimizeAll|全部最小化|ok
+1|system|performZoom:|缩放|menuSystemZoom|缩放|ok
+1|system|zoomAll:|全部缩放|menuSystemZoomAll|全部缩放|ok
+1|system|_zoomFill:|填充|menuSystemFill|填充|ok
+1|system|_zoomCenter:|居中|menuSystemCenter|居中|ok
+1|separator|-||-|-|-
+1|title|submenuAction:|移动与调整大小|menuSystemMoveAndResize|移动与调整大小|ok submenu=移动与调整大小
+2|title|-|二等分|menuSystemHalves|二等分|ok
+2|system|_zoomLeft:|左侧|menuSystemZoomLeft|左侧|ok
+2|system|_zoomRight:|右侧|menuSystemZoomRight|右侧|ok
+2|system|_zoomTop:|顶部|menuSystemZoomTop|顶部|ok
+2|system|_zoomBottom:|底部|menuSystemZoomBottom|底部|ok
+2|separator|-||-|-|-
+2|title|-|四等分|menuSystemQuarters|四等分|ok
+2|system|_zoomTopLeft:|左上|menuSystemZoomTopLeft|左上|ok
+2|system|_zoomTopRight:|右上|menuSystemZoomTopRight|右上|ok
+2|system|_zoomBottomLeft:|左下|menuSystemZoomBottomLeft|左下|ok
+2|system|_zoomBottomRight:|右下|menuSystemZoomBottomRight|右下|ok
+2|separator|-||-|-|-
+2|title|-|排列|menuSystemArrange|排列|ok
+2|system|_zoomLeftAndRight:|左侧与右侧|menuSystemZoomLeftAndRight|左侧与右侧|ok
+2|system|_zoomLeftThreeUp:|左侧与四等分|menuSystemZoomLeftThreeUp|左侧与四等分|ok
+2|system|_zoomRightAndLeft:|右侧与左侧|menuSystemZoomRightAndLeft|右侧与左侧|ok
+2|system|_zoomRightThreeUp:|右侧与四等分|menuSystemZoomRightThreeUp|右侧与四等分|ok
+2|system|_zoomTopAndBottom:|顶部与底部|menuSystemZoomTopAndBottom|顶部与底部|ok
+2|system|_zoomTopThreeUp:|顶部与四等分|menuSystemZoomTopThreeUp|顶部与四等分|ok
+2|system|_zoomBottomAndTop:|底部与顶部|menuSystemZoomBottomAndTop|底部与顶部|ok
+2|system|_zoomBottomThreeUp:|底部与四等分|menuSystemZoomBottomThreeUp|底部与四等分|ok
+2|system|_zoomQuarters:|四等分|menuSystemQuarters|四等分|ok
+2|separator|-||-|-|-
+2|system|_zoomUntile:|恢复上一个大小|menuSystemReturnToPreviousSize|恢复上一个大小|ok
+1|title|-|全屏幕平铺|menuSystemFullScreenTile|全屏幕平铺|ok
+1|separator|-||-|-|-
+1|system|toggleFullScreen:|进入全屏幕|menuSystemEnterFullScreen|进入全屏幕|ok
+1|separator|-||-|-|-
+1|system|arrangeInFront:|全部置于顶层|menuSystemBringAllToFront|全部置于顶层|ok
+1|system|alternateArrangeInFront:|排在前面|menuSystemArrangeInFront|排在前面|ok
+1|system|_removeWindowFromStageManagerSet:|从组中移除窗口|menuSystemRemoveWindowFromSet|从组中移除窗口|ok
+1|separator|-||-|-|-
+1|UNRECOGNIZED|makeKeyAndOrderFront:|Doyah Studio - 工作区|makeKeyAndOrderFront:|-|unknown
+1|separator|-||-|-|-
+1|system|selectPreviousTab:|显示上一个标签页|menuSystemShowPreviousTab|显示上一个标签页|ok
+1|system|selectNextTab:|显示下一个标签页|menuSystemShowNextTab|显示下一个标签页|ok
+1|system|moveTabToNewWindow:|将标签页移到新窗口|menuSystemMoveTabToNewWindow|将标签页移到新窗口|ok
+1|system|mergeAllWindows:|合并所有窗口|menuSystemMergeAllWindows|合并所有窗口|ok
+1|separator|-||-|-|-
+0|title|submenuAction:|帮助|menuSystemHelp|帮助|ok submenu=帮助
+1|system|showHelp:|Doyah Studio 帮助|menuSystemAppHelp|Doyah Studio 帮助|ok
+1|system|toggleSidebar:|显示/隐藏边栏|menuSystemToggleSidebar|显示/隐藏边栏|ok
+# 认不出的项 4：Doyah Studio [selector=submenuAction:] ｜ 简体中文 [selector=menuAction:] ｜ English [selector=menuAction:] ｜ Doyah Studio - 工作区 [selector=makeKeyAndOrderFront:]
+# 与目标语言不一致的项 0：
+# DOYAH-MENU-DUMP v1 — B 展开菜单时那条自愈路之后
+# lang=zh-Hans appKitLaunchLocalizations=en appleLanguages=en
+0|UNRECOGNIZED|submenuAction:|Doyah Studio|submenuAction:|-|unknown submenu=Doyah Studio
+1|system|orderFrontStandardAboutPanel:|关于 Doyah Studio|menuSystemAbout|关于 Doyah Studio|ok
+1|title|menuAction:|重启应用…|menuRelaunchApp|重启应用…|ok
+1|title|menuAction:|版本与许可证…|menuAboutLicense|版本与许可证…|ok
+1|separator|-||-|-|-
+1|title|submenuAction:|服务|menuSystemServices|服务|ok submenu=服务
+1|separator|-||-|-|-
+1|system|hide:|隐藏 Doyah Studio|menuSystemHide|隐藏 Doyah Studio|ok
+1|system|hideOtherApplications:|隐藏其他|menuSystemHideOthers|隐藏其他|ok
+1|system|unhideAllApplications:|全部显示|menuSystemShowAll|全部显示|ok
+1|separator|-||-|-|-
+1|system|terminate:|退出 Doyah Studio|menuSystemQuit|退出 Doyah Studio|ok
+1|system|terminate:|退出 Doyah Studio|menuSystemQuit|退出 Doyah Studio|ok
+0|title|submenuAction:|文件|menuSystemFile|文件|ok submenu=文件
+1|title|menuAction:|新建查询|menuNewQuery|新建查询|ok
+1|title|menuAction:|新建浏览器页签|menuNewBrowserTab|新建浏览器页签|ok
+1|title|menuAction:|查询归档|archiveTitle|查询归档|ok
+1|title|menuAction:|导入数据…|menuImportData|导入数据…|ok
+1|separator|-||-|-|-
+1|system|performClose:|关闭|menuSystemClose|关闭|ok
+1|system|closeAll:|全部关闭|menuSystemCloseAll|全部关闭|ok
+0|title|submenuAction:|编辑|menuSystemEdit|编辑|ok submenu=编辑
+1|system|undo:|撤销|menuSystemUndo|撤销|ok
+1|system|redo:|重做|menuSystemRedo|重做|ok
+1|separator|-||-|-|-
+1|system|cut:|剪切|menuSystemCut|剪切|ok
+1|system|copy:|拷贝|menuSystemCopy|拷贝|ok
+1|system|paste:|粘贴|menuSystemPaste|粘贴|ok
+1|system|delete:|删除|menuSystemDelete|删除|ok
+1|system|selectAll:|全选|menuSystemSelectAll|全选|ok
+1|title|menuAction:|格式化代码|menuFormat|格式化代码|ok
+1|separator|-||-|-|-
+1|title|submenuAction:|自动填充|menuSystemAutoFill|自动填充|ok submenu=自动填充
+2|system|_handleInsertFromContactsCommand:|联系人…|menuSystemContact|联系人…|ok
+2|system|_handleInsertFromPasswordsCommand:|密码…|menuSystemPasswords|密码…|ok
+2|system|_handleInsertFromCreditCardsCommand:|信用卡…|menuSystemCreditCard|信用卡…|ok
+1|system|startDictation:|开始听写…|menuSystemDictation|开始听写…|ok
+1|system|startDictation:|开始听写…|menuSystemDictation|开始听写…|ok
+1|system|orderFrontCharacterPalette:|表情与符号|menuSystemEmoji|表情与符号|ok
+1|system|orderFrontCharacterPalette:|表情与符号|menuSystemEmoji|表情与符号|ok
+1|system|orderFrontCharacterPalette:|表情与符号|menuSystemEmoji|表情与符号|ok
+0|title|submenuAction:|显示|menuSystemView|显示|ok submenu=显示
+1|system|toggleTabBar:|显示标签页栏|menuSystemShowTabBar|显示标签页栏|ok
+1|system|toggleTabOverview:|显示所有标签页|menuSystemShowAllTabs|显示所有标签页|ok
+1|separator|-||-|-|-
+1|title|menuAction:|工作区视图|menuViewWorkspace|工作区视图|ok
+1|title|menuAction:|数据库视图|menuViewDatabase|数据库视图|ok
+1|title|menuAction:|笔记视图|menuViewNotes|笔记视图|ok
+1|separator|-||-|-|-
+1|title|menuAction:|外观…|menuAppearance|外观…|ok
+1|title|menuAction:|连接设置…|menuConnectionSettings|连接设置…|ok
+1|title|menuAction:|数据库统计|databaseStatsTitle|数据库统计|ok
+1|title|menuAction:|服务器级对象…|menuServerObjects|服务器级对象…|ok
+1|title|menuAction:|Schema 对比与同步|schemaDiffTitle|Schema 对比与同步|ok
+1|title|menuAction:|ER 图…|menuERDiagram|ER 图…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|显示 / 隐藏下方面板|lowerPaneToggle|显示 / 隐藏下方面板|ok
+0|title|submenuAction:|智能体|menuAgent|智能体|ok submenu=智能体
+1|title|menuAction:|智能体设置…|menuAgentSettings|智能体设置…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|文生 SQL…|menuAgentGenerateSQL|文生 SQL…|ok
+1|title|menuAction:|诊断这条查询…|menuDiagnoseQuery|诊断这条查询…|ok
+1|title|menuAction:|维护任务…|menuMaintenanceTasks|维护任务…|ok
+1|title|menuAction:|笔记…|menuNotes|笔记…|ok
+1|title|menuAction:|外部调用审批…|menuMCPApprovals|外部调用审批…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|数据任务…|menuDataTask|数据任务…|ok
+1|separator|-||-|-|-
+1|title|menuAction:|审批与审计…|menuAgentAudit|审批与审计…|ok
+1|title|menuAction:|外发日志…|menuEgressLog|外发日志…|ok
+0|title|submenuAction:|语言|menuLanguage|语言|ok submenu=语言
+1|UNRECOGNIZED|menuAction:|简体中文|menuAction:|-|unknown
+1|UNRECOGNIZED|menuAction:|English|menuAction:|-|unknown
+0|title|submenuAction:|窗口|menuSystemWindow|窗口|ok submenu=窗口
+1|system|performMiniaturize:|最小化|menuSystemMinimize|最小化|ok
+1|system|miniaturizeAll:|全部最小化|menuSystemMinimizeAll|全部最小化|ok
+1|system|performZoom:|缩放|menuSystemZoom|缩放|ok
+1|system|zoomAll:|全部缩放|menuSystemZoomAll|全部缩放|ok
+1|system|_zoomFill:|填充|menuSystemFill|填充|ok
+1|system|_zoomCenter:|居中|menuSystemCenter|居中|ok
+1|separator|-||-|-|-
+1|title|submenuAction:|移动与调整大小|menuSystemMoveAndResize|移动与调整大小|ok submenu=移动与调整大小
+2|title|-|二等分|menuSystemHalves|二等分|ok
+2|system|_zoomLeft:|左侧|menuSystemZoomLeft|左侧|ok
+2|system|_zoomRight:|右侧|menuSystemZoomRight|右侧|ok
+2|system|_zoomTop:|顶部|menuSystemZoomTop|顶部|ok
+2|system|_zoomBottom:|底部|menuSystemZoomBottom|底部|ok
+2|separator|-||-|-|-
+2|title|-|四等分|menuSystemQuarters|四等分|ok
+2|system|_zoomTopLeft:|左上|menuSystemZoomTopLeft|左上|ok
+2|system|_zoomTopRight:|右上|menuSystemZoomTopRight|右上|ok
+2|system|_zoomBottomLeft:|左下|menuSystemZoomBottomLeft|左下|ok
+2|system|_zoomBottomRight:|右下|menuSystemZoomBottomRight|右下|ok
+2|separator|-||-|-|-
+2|title|-|排列|menuSystemArrange|排列|ok
+2|system|_zoomLeftAndRight:|左侧与右侧|menuSystemZoomLeftAndRight|左侧与右侧|ok
+2|system|_zoomLeftThreeUp:|左侧与四等分|menuSystemZoomLeftThreeUp|左侧与四等分|ok
+2|system|_zoomRightAndLeft:|右侧与左侧|menuSystemZoomRightAndLeft|右侧与左侧|ok
+2|system|_zoomRightThreeUp:|右侧与四等分|menuSystemZoomRightThreeUp|右侧与四等分|ok
+2|system|_zoomTopAndBottom:|顶部与底部|menuSystemZoomTopAndBottom|顶部与底部|ok
+2|system|_zoomTopThreeUp:|顶部与四等分|menuSystemZoomTopThreeUp|顶部与四等分|ok
+2|system|_zoomBottomAndTop:|底部与顶部|menuSystemZoomBottomAndTop|底部与顶部|ok
+2|system|_zoomBottomThreeUp:|底部与四等分|menuSystemZoomBottomThreeUp|底部与四等分|ok
+2|system|_zoomQuarters:|四等分|menuSystemQuarters|四等分|ok
+2|separator|-||-|-|-
+2|system|_zoomUntile:|恢复上一个大小|menuSystemReturnToPreviousSize|恢复上一个大小|ok
+1|title|-|全屏幕平铺|menuSystemFullScreenTile|全屏幕平铺|ok
+1|separator|-||-|-|-
+1|system|toggleFullScreen:|进入全屏幕|menuSystemEnterFullScreen|进入全屏幕|ok
+1|separator|-||-|-|-
+1|system|arrangeInFront:|全部置于顶层|menuSystemBringAllToFront|全部置于顶层|ok
+1|system|alternateArrangeInFront:|排在前面|menuSystemArrangeInFront|排在前面|ok
+1|system|_removeWindowFromStageManagerSet:|从组中移除窗口|menuSystemRemoveWindowFromSet|从组中移除窗口|ok
+1|separator|-||-|-|-
+1|UNRECOGNIZED|makeKeyAndOrderFront:|Doyah Studio - 工作区|makeKeyAndOrderFront:|-|unknown
+1|separator|-||-|-|-
+1|system|selectPreviousTab:|显示上一个标签页|menuSystemShowPreviousTab|显示上一个标签页|ok
+1|system|selectNextTab:|显示下一个标签页|menuSystemShowNextTab|显示下一个标签页|ok
+1|system|moveTabToNewWindow:|将标签页移到新窗口|menuSystemMoveTabToNewWindow|将标签页移到新窗口|ok
+1|system|mergeAllWindows:|合并所有窗口|menuSystemMergeAllWindows|合并所有窗口|ok
+1|separator|-||-|-|-
+0|title|submenuAction:|帮助|menuSystemHelp|帮助|ok submenu=帮助
+1|system|showHelp:|Doyah Studio 帮助|menuSystemAppHelp|Doyah Studio 帮助|ok
+1|system|toggleSidebar:|显示/隐藏边栏|menuSystemToggleSidebar|显示/隐藏边栏|ok
+# 认不出的项 4：Doyah Studio [selector=submenuAction:] ｜ 简体中文 [selector=menuAction:] ｜ English [selector=menuAction:] ｜ Doyah Studio - 工作区 [selector=makeKeyAndOrderFront:]
+# 与目标语言不一致的项 0：

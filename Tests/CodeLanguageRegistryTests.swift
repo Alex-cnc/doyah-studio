@@ -263,4 +263,22 @@ final class CodeLanguageRegistryTests: XCTestCase {
             }
         }
     }
+
+    /// 2026-10-03（`Q61` 拍板）：**Swift 与 ArkTS 进表** —— 前者是 `FR-EDIT-38` 的 Beta 1 缺口（清单里本来就点名包含它），
+    /// 后者是需求提出者新增（他点名的「高频语言」里有 arkts，而旧清单里没有）。
+    func testSwiftAndArkTSAreRegistered() {
+        XCTAssertEqual(CodeLanguageRegistry.detect(path: "main.swift"), .swift)
+        XCTAssertEqual(CodeLanguageRegistry.detect(path: "Index.ets"), .arkts)
+        XCTAssertEqual(CodeLanguageRegistry.detect(path: "Index.arkts"), .arkts)
+        // **一个扩展名只许一个主人**：`.ts` 仍归 TypeScript ⇒ ArkTS 只认 `.ets` / `.arkts`（Q61 选项②）。
+        XCTAssertEqual(CodeLanguageRegistry.detect(path: "index.ts"), .typescript)
+        for language in [TextLanguage.swift, .arkts] {
+            let syntax = CodeLanguageRegistry.definition(of: language).syntax
+            XCTAssertFalse(syntax.keywords.isEmpty, "\(language.rawValue) 得给得出关键字")
+            XCTAssertFalse(syntax.comments.isEmpty, "\(language.rawValue) 得给得出注释规则")
+            XCTAssertFalse(syntax.stringDelimiters.isEmpty, "\(language.rawValue) 得给得出字符串界定符")
+        }
+        // 装饰器当关键字列（ArkTS 的 ArkUI 部分），钉一条免得整串被删光还没人知道。
+        XCTAssertTrue(CodeLanguageRegistry.definition(of: .arkts).syntax.keywords.contains("Entry"))
+    }
 }

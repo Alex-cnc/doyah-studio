@@ -97,10 +97,14 @@ enum MainMenuLocalizer {
                 var report = menuReport(headline: "A 原样（未展开菜单）")
                 // 可选（`DOYAH_MENU_DUMP_OPEN=1`）：先把每个顶层菜单**展开一次**再往下 dump。
                 // 见 `openEveryTopLevelMenu` 的说明 —— 不展开就枚举不到 AppKit 展开时才插进来的那一族。
+                var expansion = "not-requested"
                 if let open = environment["DOYAH_MENU_DUMP_OPEN"], open == "1" {
-                    openEveryTopLevelMenu()
+                    expansion = openEveryTopLevelMenu()
                 }
-                report += menuReport(headline: "C 各菜单展开过一次之后（含 AppKit 展开时才插进来的项）")
+                report += menuReport(
+                    headline: "C 各菜单展开过一次之后（含 AppKit 展开时才插进来的项）",
+                    expansion: expansion
+                )
                 refresh(to: LocalizationManager.shared.language)
                 report += menuReport(headline: "B 展开菜单时那条自愈路之后")
                 try? report.write(toFile: path, atomically: true, encoding: .utf8)
@@ -112,15 +116,16 @@ enum MainMenuLocalizer {
 
     /// 走一遍菜单树，逐项写出「selector / 现标题 / 判定」。`@MainActor` 因为只有主线程能读菜单。
     @MainActor
-    static func menuReport(headline: String) -> String {
+    static func menuReport(headline: String, expansion: String = "") -> String {
         let language = LocalizationManager.shared.language
         let appName = appDisplayName
         var lines: [String] = [
             "# DOYAH-MENU-DUMP v1 — \(headline)",
             "# lang=\(language.rawValue)"
                 + " appKitLaunchLocalizations=\(Bundle.main.preferredLocalizations.joined(separator: ","))"
-                + " appleLanguages=\((UserDefaults.standard.array(forKey: "AppleLanguages") as? [String])?.joined(separator: ",") ?? "?")"
+                + " appleLanguages=\((UserDefaults.standard.array(forKey: "AppleLanguages") as? [String])?.joined(separator: ",") ?? "?")",
         ]
+        if !expansion.isEmpty { lines.append("# openExpansion=\(expansion)") }
         var unrecognized: [String] = []
         var mismatched: [String] = []
         guard let mainMenu = NSApp.mainMenu else {
@@ -365,14 +370,19 @@ enum MainMenuLocalizer {
     ///
     /// 展开走的是**用户那条路**（`popUpMenuPositioningItem`），于是 `didBeginTracking`
     /// 与自愈照常发生 —— dump 的 C 段就是「用户展开菜单那一刻看到的样子」。
+    /// 返回值是一条**自报**：`ok passes=N` 或 `missing=toggleTabBar:,toggleTabOverview: passes=N`
+    /// —— 「探针没展开」与「产品真的停在英文」必须分得开（前者不是产品缺陷，后者才是）。
     @MainActor
-    static func openEveryTopLevelMenu() {
-        guard let mainMenu = NSApp.mainMenu else { return }
+    @discardableResult
+    static func openEveryTopLevelMenu() -> String {
+        guard let mainMenu = NSApp.mainMenu else { return "no-menu" }
         NSApp.activate()
-        // **两遍**：`显示` 菜单里的「标签页栏」那一族是 AppKit 按窗口标签页状态**条件性**插进来的
-        // （实测：同一份代码两次真启动，一次插了一次没插）⇒ 展开两遍能把它逼出来；已经在树里的项
-        // 第二遍只是再显示一次，代价 = 几百毫秒。
+        // **两遍**（不再多试、也不再等 active）：`显示` 菜单里的「标签页栏」那一族是 AppKit 按窗口标签页状态**条件性**插进来的
+        // （实测：同一份代码两次真启动，一次插了一次没插）⇒ 展开能把它逼出来；已经在树里的项
+        // 再展开一遍只是再显示一次，代价 = 几百毫秒。**逼不出来就如实自报**，别让判据去猜。
+        var passes = 0
         for _ in 0..<2 {
+            passes += 1
             for item in mainMenu.items {
                 guard let submenu = item.submenu else { continue }
                 // `popUp…` 是**阻塞**的（内含菜单跟踪循环）⇒ 先排一个定时收起器，
@@ -384,7 +394,24 @@ enum MainMenuLocalizer {
                 }
                 _ = submenu.popUp(positioning: nil, at: NSPoint(x: 30, y: 30), in: nil)
             }
+            if missingConditionalItems().isEmpty { break }
         }
+        let missing = missingConditionalItems()
+        return missing.isEmpty ? "ok passes=\(passes)" : "missing=\(missing.joined(separator: ",")) passes=\(passes)"
+    }
+
+    /// 那批**条件性**项（AppKit 按窗口标签页状态决定插不插）：`toggleTabBar:` / `toggleTabOverview:`。
+    @MainActor
+    private static func missingConditionalItems() -> [String] {
+        var found = Set<String>()
+        func walk(_ menu: NSMenu) {
+            for item in menu.items {
+                if let action = item.action { found.insert(NSStringFromSelector(action)) }
+                if let submenu = item.submenu { walk(submenu) }
+            }
+        }
+        if let mainMenu = NSApp.mainMenu { walk(mainMenu) }
+        return ["toggleTabBar:", "toggleTabOverview:"].filter { !found.contains($0) }
     }
 
     @MainActor

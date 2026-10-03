@@ -73,6 +73,28 @@ public enum CodeFormatBuiltin: String, Sendable, CaseIterable {
     /// 一行式的 JSON（需求提出者「打乱」的正是这种）**除行尾那一个换行外没有任何变化**，
     /// 界面上就是「点了没反应」（内测 `#2` 第二轮打回，见队列 `L-169`）。
     case json
+    /// **Markdown 专用：围栏感知的空白规整**（`markdownTidy`）。
+    ///
+    /// 为什么它不能复用 `whitespace`：`whitespace` 只认「字符串里的空白」，而 Markdown 的空白
+    /// **本身就是语法** —— 代码围栏里的行尾空白是**代码内容**，行尾「两个空格」是**硬换行**。
+    /// 所以这一档的两条纪律写在 `markdownTidy` 上：**围栏内一字不动 / 硬换行标记不吞**。
+    case markdown
+    /// **Python 强档：缩进宽度归一成 4 空格一级**（`pythonReindent`）。
+    ///
+    /// 需求提出者 2026-10-03 原话：「Python 要强格式化，因为它本身就有严格的格式要求」。
+    /// 它比别的档更敢动结构，所以四条纪律写在 `pythonReindent` 上：**三引号字符串内一字不动 /
+    /// 括号未闭合的续行不动 / 空行只清空白 / 其余行按层级重写缩进**；结尾恰好一个换行。
+    case python
+    /// **Shell 档：缩进宽度归一成 2 空格一级 + 认得停靠符（heredoc）**（`shellReindent`）。
+    ///
+    /// 需求提出者 2026-10-03：「shell 和 yaml 也要加进来，确实会经常用到 shell 脚本」。
+    /// 停靠符体内**一字不动**（那里是数据，不是脚本），反斜杠续行的下一行也不动。
+    case shell
+    /// **YAML 档：只做证明得了语义无关的两件**（`yamlTidy`）—— 行尾空白 + 结尾恰好一个换行。
+    ///
+    /// 缩进一个字不动（YAML 的缩进**就是结构**）；**块标量（`|` / `>` 及其修饰符）内部整段透传**
+    /// （那里的行尾空白是**内容**）。所以这一档的能力边界要如实说：它**不是**一个 YAML 格式化器。
+    case yaml
 
     /// 这条兜底**真的会改东西吗**：`none` 不算能力（登记了它等于「没有兜底」）。
     public var isAvailable: Bool { self != .none }
@@ -623,10 +645,314 @@ public enum CodeBuiltinFormatter {
             return SQLFormatter(databaseType: databaseType).format(text)
         case .json:
             return prettyJSON(text)
+        case .markdown:
+            return markdownTidy(text)
+        case .python:
+            return pythonReindent(text)
+        case .shell:
+            return shellReindent(text)
+        case .yaml:
+            return yamlTidy(text)
         }
     }
 
     /// 行尾空白 + 文件末尾恰好一个换行。
+    /// **Markdown 的「语义无关」规整**（`FR-EDIT-39` 追加条文 · 需求提出者 2026-10-03）。
+    ///
+    /// 它比 `tidy` **更容易做错**，所以先说清它不做什么：
+    ///   · **围栏内一字不动** —— ``` / ~~~ 围起来的代码块里，行尾空白（与缩进）是**代码内容**；
+    ///   · **硬换行标记不吞** —— 行尾「两个及以上空格」在 Markdown 里 = `<br>`，抹掉会把两行并成一段；
+    ///   · **缩进不动** —— 列表 / 引用块的前导缩进是语义。
+    ///
+    /// 只做两件事：围栏外**删行尾空白**（保留硬换行标记，规整成恰好两个空格）+ 结尾**恰好一个换行**。
+    /// 空输入原样返回（与 `prettyJSON` / `tidy` 同口径）。
+    static func markdownTidy(_ text: String) -> String {
+        guard !text.isEmpty else { return text }
+        var lines: [String] = []
+        var fenceMarker: String? = nil
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(raw)
+            let fence = fencePrefix(line)
+            if let marker = fenceMarker {
+                lines.append(line)                       // 围栏内：**一字不动**
+                if let close = fence, close.first == marker.first, close.count >= marker.count { fenceMarker = nil }
+                continue
+            }
+            if let open = fence { fenceMarker = open; lines.append(line); continue }
+            lines.append(trimmingTrailingPreservingHardBreak(line))
+        }
+        // `split` 让「结尾本来就有换行」多出一个空元素 ⇒ 收尾折叠成**恰好一个**换行。
+        while let last = lines.last, last.isEmpty, lines.count > 1 { lines.removeLast() }
+        guard !lines.isEmpty else { return "" }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// 行首（≤3 个空格）那一串 ``` 或 ~~~；不是围栏就是 `nil`。
+    static func fencePrefix(_ line: String) -> String? {
+        var index = line.startIndex
+        var indent = 0
+        while index < line.endIndex, line[index] == " ", indent < 4 {
+            indent += 1
+            index = line.index(after: index)
+        }
+        guard index < line.endIndex, line[index] == "`" || line[index] == "~" else { return nil }
+        let character = line[index]
+        var run = ""
+        while index < line.endIndex, line[index] == character {
+            run.append(character)
+            index = line.index(after: index)
+        }
+        return run.count >= 3 ? run : nil
+    }
+
+    /// 行尾空白：**两个及以上空格 = 硬换行标记** ⇒ 规整成恰好两个，别抹掉；其余一律删。
+    /// 纯空白行收成空行（不然会在空行上造出一个假的硬换行）。
+    static func trimmingTrailingPreservingHardBreak(_ line: String) -> String {
+        var end = line.endIndex
+        var spaces = 0
+        while end > line.startIndex {
+            let character = line[line.index(before: end)]
+            if character == " " { spaces += 1 } else if character != "\t" { break }
+            end = line.index(before: end)
+        }
+        let body = String(line[line.startIndex..<end])
+        guard !body.isEmpty, spaces >= 2 else { return body }
+        return body + "  "
+    }
+
+    // MARK: - Python / Shell / YAML（结构敏感的三档 · 需求提出者 2026-10-03 点名）
+
+    /// **Python 的强档**：缩进宽度归一成 **4 空格一级**，结构按源码自己的相对层级走。
+    ///
+    /// 需求提出者 2026-10-03 原话：「Python 要强格式化，因为它本身就有严格的格式要求」。
+    /// 它比别的档更敢动结构，所以四条纪律先钉死（判据逐条盯着）：
+    ///   · **三引号字符串内一字不动**（`\"\"\"` / `'''` 之间的行，行尾空白也是内容）；
+    ///   · **括号没闭合的续行不动**（`foo(\n    a,\n)` 的对齐是给人看的，重排只会越改越丑）；
+    ///   · **空行只清空白、不缩进**；
+    ///   · `elif` / `else` / `except` / `finally` / `case` 这类「回到它那个头那一级」的行按头对齐。
+    static func pythonReindent(_ text: String) -> String {
+        reindentStructure(
+            text, width: 4,
+            dedentKeywords: ["elif", "else", "except", "finally", "case"],
+            commentPrefix: "#", tripleQuotes: ["\"\"\"", "'''"],
+            trackBrackets: true, trackHeredocs: false
+        )
+    }
+
+    /// **Shell 的档**：缩进宽度归一成 **2 空格一级**，停靠符（heredoc）体内一字不动。
+    ///
+    /// 需求提出者 2026-10-03 原话：「shell 和 yaml 也要加进来，确实会经常用到 shell 脚本」。
+    /// 两条纪律：**停靠符体内一字不动**（那里是数据，不是脚本）、反斜杠续行的下一行也不动。
+    static func shellReindent(_ text: String) -> String {
+        reindentStructure(
+            text, width: 2,
+            dedentKeywords: ["fi", "done", "esac", "else", "elif", "}"],
+            commentPrefix: "#", tripleQuotes: [],
+            trackBrackets: false, trackHeredocs: true
+        )
+    }
+
+    /// 结构敏感语言的「宽度归一」骨架（Python / Shell 共用；YAML 不走这里，见 `yamlTidy`）。
+    ///
+    /// 结构（谁在谁里面）**一律按源码自己的相对缩进推**，本函数只改两件：
+    /// **宽度归一成 `width` 空格一级** + 行尾空白 / 结尾换行。四种行**整行透传**（原文照抄）：
+    /// 三引号字符串内、停靠符体内、括号未闭合的续行、反斜杠续行的下一行。
+    static func reindentStructure(
+        _ text: String,
+        width: Int,
+        dedentKeywords: [String],
+        commentPrefix: String,
+        tripleQuotes: [String],
+        trackBrackets: Bool,
+        trackHeredocs: Bool
+    ) -> String {
+        guard !text.isEmpty else { return text }
+        var stack: [Int] = [0]                 // 各层在**源码**里的宽度
+        var fence: String? = nil               // 三引号开着的标记
+        var heredoc: String? = nil             // 停靠符标记
+        var bracketDepth = 0
+        var carryNext = false                  // 上一行以反斜杠结尾 ⇒ 这一行不动
+        var out: [String] = []
+
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+            if let open = fence {                            // ① 三引号内：原文照抄
+                out.append(raw)
+                if occurrences(of: open, in: raw) % 2 == 1 { fence = nil }
+                continue
+            }
+            if let marker = heredoc {                        // ② 停靠符体内：原文照抄
+                out.append(raw)
+                let probe = raw.trimmingCharacters(in: .whitespaces)
+                if probe == marker || probe.trimmingCharacters(in: CharacterSet(charactersIn: "\"'")) == marker {
+                    heredoc = nil
+                }
+                continue
+            }
+            let body = String(raw.drop(while: { $0 == " " || $0 == "\t" }))
+            if body.isEmpty { out.append(""); carryNext = false; continue }   // ③ 空行：只清空白
+            let indent = indentationWidth(of: raw)
+            let code = codePart(of: raw, commentPrefix: commentPrefix)
+            // 认「回到头那一级」的词要看**去掉行首空白之后**的第一个词（源码里 `    fi` 很常见）。
+            let token = firstToken(of: String(code.drop(while: { $0 == " " || $0 == "\t" })))
+            let isContinuation = carryNext || (trackBrackets && bracketDepth > 0)
+
+            if isContinuation {                              // ④ 续行：缩进一个字不动
+                out.append(trailingTrimmed(raw))
+            } else {
+                let isDedent = dedentKeywords.contains(token)
+                if isDedent {
+                    while stack.count > 1, stack.last! >= indent { stack.removeLast() }
+                } else {
+                    while stack.count > 1, stack.last! > indent { stack.removeLast() }
+                    if stack.last! < indent { stack.append(indent) }
+                }
+                let depth = stack.count - 1
+                let lead = String(repeating: " ", count: depth * width)
+                if let open = tripleQuotes.first(where: { body.contains($0) }) {
+                    // 开三引号那一行：行首按层级改，**尾部原样**（那之后的空格已经在字符串里了）
+                    out.append(lead + body)
+                    if occurrences(of: open, in: body) % 2 == 1 { fence = open }
+                } else {
+                    out.append(trailingTrimmed(lead + body))
+                }
+            }
+            if trackBrackets { bracketDepth = max(0, bracketDepth + bracketDelta(of: code)) }
+            if trackHeredocs, let marker = heredocMarker(in: code) { heredoc = marker }
+            carryNext = code.hasSuffix("\\")
+        }
+        while let last = out.last, last.isEmpty, out.count > 1 { out.removeLast() }
+        return out.joined(separator: "\n") + "\n"
+    }
+
+    /// **YAML 的档**：只做**证明得了语义无关**的两件 —— 行尾空白 + 结尾恰好一个换行。
+    ///
+    /// 缩进一个字不动（YAML 的缩进**就是结构**）；**块标量（`|` / `>` 及其修饰符）内部整段透传**
+    /// （那里的行尾空白是**内容**，多一个空格就改了字符串值）。注释（`#`）不算内容 ⇒ 行尾空白照删。
+    /// **边界说清**：这一档**不是** YAML 格式化器（对齐 / 折行 / 引号风格一律不碰）。
+    static func yamlTidy(_ text: String) -> String {
+        guard !text.isEmpty else { return text }
+        var out: [String] = []
+        var blockScalarIndent: Int? = nil
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+            let body = String(raw.drop(while: { $0 == " " || $0 == "\t" }))
+            let indent = indentationWidth(of: raw)
+            if let header = blockScalarIndent {
+                if body.isEmpty { out.append(""); continue }          // 空行仍属块标量
+                if indent > header { out.append(raw); continue }      // 体内：一字不动
+                blockScalarIndent = nil
+            }
+            if body.isEmpty { out.append(""); continue }
+            out.append(trailingTrimmed(raw))
+            var tail = Substring(codePart(of: raw, commentPrefix: "#").drop(while: { $0 == " " || $0 == "\t" }))
+            while let last = tail.last, "-+0123456789".contains(last) { tail = tail.dropLast() }
+            if tail.last == "|" || tail.last == ">" { blockScalarIndent = indent }
+        }
+        while let last = out.last, last.isEmpty, out.count > 1 { out.removeLast() }
+        return out.joined(separator: "\n") + "\n"
+    }
+
+    // MARK: - 上面几档共用的小工具
+
+    /// 前导空白宽度（制表符按 **4** 计 —— 只在「推层级」时用，写出来的一律是空格）。
+    static func indentationWidth(of line: String) -> Int {
+        var width = 0
+        for character in line {
+            if character == " " { width += 1 } else if character == "\t" { width += 4 } else { break }
+        }
+        return width
+    }
+
+    /// 行尾空白删掉（含 `\r`）。
+    static func trailingTrimmed(_ line: String) -> String {
+        var end = line.endIndex
+        while end > line.startIndex {
+            let character = line[line.index(before: end)]
+            if character == " " || character == "\t" || character == "\r" { end = line.index(before: end) } else { break }
+        }
+        return String(line[line.startIndex..<end])
+    }
+
+    /// **代码部分**：切掉行尾注释（`#` 出现在引号里不算注释 —— 这里是最小的引号识别）。
+    static func codePart(of line: String, commentPrefix: String) -> String {
+        var quote: Character? = nil
+        var escaped = false
+        var index = line.startIndex
+        while index < line.endIndex {
+            let character = line[index]
+            if let current = quote {
+                if escaped { escaped = false }
+                else if character == "\\" { escaped = true }
+                else if character == current { quote = nil }
+            } else if character == "\"" || character == "'" {
+                quote = character
+            } else if line[index...].hasPrefix(commentPrefix) {
+                return String(line[line.startIndex..<index])
+            }
+            index = line.index(after: index)
+        }
+        return line
+    }
+
+    /// 行首那串标识符（认 `else` / `fi` / `done` / `esac` 这些「回到头那一级」的词，也认 `}` 与 `)`）。
+    static func firstToken(of code: String) -> String {
+        var token = ""
+        for character in code {
+            if character.isLetter || character == "_" || character == "." || (token.isEmpty && (character == "}" || character == ")")) {
+                token.append(character)
+            } else {
+                break
+            }
+        }
+        return token
+    }
+
+    /// 括号净增（`( [ {` 加、`) ] }` 减）—— 输入已由 `codePart` 摘掉注释与引号内的内容。
+    static func bracketDelta(of code: String) -> Int {
+        var delta = 0
+        for character in code {
+            if character == "(" || character == "[" || character == "{" { delta += 1 }
+            else if character == ")" || character == "]" || character == "}" { delta -= 1 }
+        }
+        return delta
+    }
+
+    /// 停靠符标记：`<<EOF` / `<<-EOF` / `<<"EOF"` / `<<'EOF'` ⇒ `EOF`。
+    static func heredocMarker(in code: String) -> String? {
+        var index = code.startIndex
+        while index < code.endIndex {
+            if code[index...].hasPrefix("<<"), !code[index...].hasPrefix("<<<") {
+                var cursor = code.index(index, offsetBy: 2)
+                if cursor < code.endIndex, code[cursor] == "-" { cursor = code.index(after: cursor) }
+                while cursor < code.endIndex, code[cursor] == " " || code[cursor] == "\t" { cursor = code.index(after: cursor) }
+                var marker = ""
+                if cursor < code.endIndex, code[cursor] == "\"" || code[cursor] == "'" {
+                    let quote = code[cursor]
+                    cursor = code.index(after: cursor)
+                    while cursor < code.endIndex, code[cursor] != quote { marker.append(code[cursor]); cursor = code.index(after: cursor) }
+                } else {
+                    while cursor < code.endIndex, code[cursor].isLetter || code[cursor].isNumber || code[cursor] == "_" {
+                        marker.append(code[cursor]); cursor = code.index(after: cursor)
+                    }
+                }
+                return marker.isEmpty ? nil : marker
+            }
+            index = code.index(after: index)
+        }
+        return nil
+    }
+
+    /// 一个子串在一行里出现几次（判三引号是否在本行合上）。
+    static func occurrences(of needle: String, in haystack: String) -> Int {
+        guard !needle.isEmpty else { return 0 }
+        var count = 0
+        var index = haystack.startIndex
+        while let found = haystack.range(of: needle, range: index..<haystack.endIndex) {
+            count += 1
+            index = found.upperBound
+        }
+        return count
+    }
+
     static func tidy(_ text: String, language: TextLanguage) -> String {
         guard !text.isEmpty else { return text }
         let ns = text as NSString

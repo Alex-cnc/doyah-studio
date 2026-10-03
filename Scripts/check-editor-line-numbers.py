@@ -301,6 +301,9 @@ FIXTURE_SOURCES = [
     # 台账里**不画行号**的那一个（`ResultCellTextField` 在结果表网格里）也要进夹具 ——
     # 少了它，「原样应当绿」那一条会红在「台账指向的文件不在盘上」（第 121 轮自检实测）。
     "App/Views/ResultGrid.swift",
+    # 同理：2026-10-03 台账补登了标题栏主搜索框（`FR-EDIT-37`）⇒ 它也得进夹具，
+    # 否则「原样应当绿（夹具与真仓库同源）」会因为台账指向的文件不在夹具里而红。
+    "App/Views/TitleBarSearchField.swift",
 ]
 FIXTURE_DOCS = list(DOC_ANCHORS)
 
