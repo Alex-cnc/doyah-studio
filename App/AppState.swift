@@ -6134,6 +6134,17 @@ final class AppState: ObservableObject {
         } else if engine.didMigrate {
             statusMessage = L(.notesEngineMigrated, engine.noteCount)
         }
+        // 两层归属（队列 L-97 第二片）：一次性把「缺归属」的笔记落进默认笔记本 —— **幂等**，
+        // 常态下这一步只是两次 SELECT 的开销。默认容器的名字从语言表给（Core 不许写死文案：
+        // 名字是要落库、要显示给用户的数据）。
+        do {
+            _ = try await NoteLibrary.defaultLibrary().ensureOwnership(
+                shelfName: L(.notesDefaultShelfName),
+                notebookName: L(.notesDefaultNotebookName)
+            )
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
         let outcome = await NoteLibrary.defaultLibrary().loadOutcome()
         switch outcome {
         case .loaded(let loaded):
