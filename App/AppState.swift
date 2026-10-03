@@ -406,6 +406,14 @@ final class AppState: ObservableObject {
     // 不是浮在上面的弹窗；两个入口并存会让人不确定"关掉这个窗口笔记还在不在"。
     @Published var notes: [Note] = []
     @Published var notesQuery = ""
+    /// **两级导航的树与归属**（队列 `L-97` 界面半第一片）：架 / 笔记本 + 每条笔记挂在谁名下。
+    /// 纯逻辑在 `Core/NoteNavigation.swift`（判据 `Tests/NoteNavigationTests.swift`），这里只做搬运 ——
+    /// 宿主层不自己写过滤（「按笔记本筛笔记」只许经 `NotesNavigation.filter`）。
+    @Published var notesNavigation = NotesNavigation(directory: NotebookDirectory(shelves: [], notebooks: []), placements: [])
+    /// 界面上「正在看哪一块」：全部 / 某个架 / 某个笔记本。认不出的目标由 Core 归一成 `.all`。
+    @Published var notesScope: NotesScope = .all
+    /// 搜索范围那枚开关（当前范围 / 全部笔记本）—— 只影响搜索结果的筛选。
+    @Published var notesSearchScope: NotesSearchScope = .current
     /// **检索状态**（队列 L-44，2026-09-28）：界面检索改走库以后，「这一屏的结果是怎么来的」
     /// 就成了必须有出处的一件事 —— 三种态各自对应一句如实话（见 `noteSearchHint`）。
     @Published private(set) var noteSearchState: NoteSearchState = .idle
@@ -6035,10 +6043,32 @@ final class AppState: ObservableObject {
     var visibleNotes: [Note] {
         switch noteSearchState {
         case .idle, .unavailable:
-            return Self.mostRecentlyUpdatedFirst(notes)
+            // 范围（两级导航的选中态）在这里生效：看某个笔记本时，列表就是那个笔记本里的。
+            // 为什么把筛法交给 `NotesNavigation`：归属那份兜底只许有一处（缺归属 ⇒ 默认笔记本），
+            // 宿主层自己写一套就会出现「列表里有、搜索里没有」这类对不上的现象。
+            return notesNavigation.filter(Self.mostRecentlyUpdatedFirst(notes), scope: notesScope)
         case .library(_, let results):
-            return results
+            // 检索结果同样过范围：搜索范围那枚开关（当前范围 / 全部笔记本）在这里起作用。
+            return notesNavigation.filter(results, scope: notesScope, searchScope: notesSearchScope)
         }
+    }
+
+    /// 一级导航的选中态入口（唯一一处）：归一（认不出的目标 ⇒ 全部）后重算检索。
+    /// 为什么要重算检索：范围变了 ⇒ 上一次的结果已经不属于这一屏（同一族的老毛病见 `settleNoteSearch`）。
+    func selectNotesScope(_ scope: NotesScope) {
+        notesScope = notesNavigation.normalized(scope)
+        Task { await searchNotes() }
+    }
+
+    /// 跨笔记本的检索结果里，这一条属于哪个笔记本（队列 `L-97` ⑤「跨笔记本结果显示所属笔记本」）。
+    /// 只在**真的跨了**的时候显示：搜「全部笔记本」且当前不是「全部」范围 —— 否则每一行都挂同一个名字，
+    /// 那是噪音不是信息。
+    var showsNotebookInNoteRow: Bool {
+        notesSearchScope == .all && notesScope != .all
+    }
+
+    func notebookName(for note: Note) -> String? {
+        notesNavigation.notebook(forNote: note.id.uuidString)?.name
     }
 
     /// 副行那一句如实话（`nil` = 这一屏没什么要补充的）。
@@ -6153,6 +6183,19 @@ final class AppState: ObservableObject {
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }
+        // 两级导航的树与归属（队列 `L-97` 界面半第一片）：读一次库把「架 / 笔记本」与每条笔记的归属
+        // 取回来。**先确保默认容器存在**（上面那一步），所以这里读到的目录一定是补过的。
+        do {
+            let library = NoteLibrary.defaultLibrary()
+            let directory = try await library.notebookDirectory()
+            let placements = try await library.placements()
+            notesNavigation = NotesNavigation(directory: directory, placements: placements)
+            // 选中态归一：库可能刚被别的入口改过（笔记本删了 / 换了库）⇒ 停在已不存在的范围上
+            // 会显示成空列表，被读成「笔记没了」。
+            notesScope = notesNavigation.normalized(notesScope)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
         let outcome = await NoteLibrary.defaultLibrary().loadOutcome()
         switch outcome {
         case .loaded(let loaded):
@@ -6222,7 +6265,15 @@ final class AppState: ObservableObject {
                 merged.source = existing?.source ?? draft.source
                 _ = try await store.upsert(merged, id: id)
             } else {
-                _ = try await store.upsert(draft)
+                let saved = try await store.upsert(draft)
+                // **在哪个笔记本里新建就落在哪个笔记本**（队列 `L-97` 界面半第一片）：
+                // 落点由 Core 给（`destinationNotebookUid`：在笔记本里 ⇒ 那个；全部 / 架 ⇒ 默认笔记本）。
+                // 不显式搬的话新笔记会落默认笔记本 —— 用户在「笔记本B1」里新建一条，
+                // 它却出现在另一个笔记本里（保存成功、却找不到，这是最难自证的一类）。
+                let destination = notesNavigation.destinationNotebookUid(for: notesScope)
+                if destination != notesNavigation.directory.resolvedNotebookUid(nil) {
+                    _ = try await store.move(noteIDs: [saved.id], toNotebook: destination)
+                }
             }
             await reloadNotes()
             beginNewNote()

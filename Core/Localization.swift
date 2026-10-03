@@ -316,6 +316,16 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesDefaultShelfName
     /// 同上的**默认笔记本**名字（存量笔记缺归属时落这里）。
     case notesDefaultNotebookName
+    /// 队列 `L-97` 界面半（两级导航）：树顶上那行「全部笔记」（不是容器，是一个范围）。
+    case notesAllNotes
+    /// 搜索范围那枚开关的无障碍标签（分段控件自己不带标题）。
+    case notesSearchScopeTitle
+    /// 搜索范围 = 只在当前看的这一块里搜。
+    case notesSearchScopeCurrent
+    /// 搜索范围 = 跨笔记本搜（结果行里要标出每条属于哪个笔记本）。
+    case notesSearchScopeAll
+    /// 跨笔记本的检索结果里，这一行属于哪个笔记本。带笔记本名字参数。
+    case notesRowNotebook
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -2240,6 +2250,11 @@ public enum LocalizedStrings {
         // （`Scripts/check-core-localization.py` 的覆盖面之内）。
         .notesDefaultShelfName: [.simplifiedChinese: "笔记本架", .english: "Shelf"],
         .notesDefaultNotebookName: [.simplifiedChinese: "笔记本", .english: "Notebook"],
+        .notesAllNotes: [.simplifiedChinese: "全部笔记", .english: "All Notes"],
+        .notesSearchScopeTitle: [.simplifiedChinese: "搜索范围", .english: "Search scope"],
+        .notesSearchScopeCurrent: [.simplifiedChinese: "当前范围", .english: "Current scope"],
+        .notesSearchScopeAll: [.simplifiedChinese: "全部笔记本", .english: "All notebooks"],
+        .notesRowNotebook: [.simplifiedChinese: "属于：%@", .english: "In: %@"],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],

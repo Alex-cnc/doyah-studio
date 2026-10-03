@@ -1,7 +1,7 @@
 {
-  "note": "语言表模板占位符 ↔ `L(...)` 调用点实参的对账台账（队列 L-46）。判据与用法见 Scripts/check-format-arguments.py 头部。shapes = 门禁**判不出类型**的实参形状，逐条登记：kind 只认有出处可引的（text / number，理由写清 file:line）；没有出处的一律 unverified —— unverified 不参与槽位交叉检查，只被形状与处数棘轮钉住，不是放行。 预算棘轮：unknownBudget 116 → 117（2026-09-30 循环第 119 轮 `L-107`）：新增一处 `L(.workspaceFormatFailed, …, failure.exitCode.map(String.init) ?? \"—\", …)` —— 该实参形状已按 `kind=text` 登记（见 shapes 末条），但「类型不明实参数」这一计数**在登记之前就自增** ⇒ 预算必须同批 +1，否则判据 D 会把「已登记」的也算成超支。 预算棘轮 117 → 123（2026-10-02 队列 `L-114` 工作区文件操作：2 处 `<inside>` + 3 处 `<name>` + 1 处 `<reason>`，三处形状都已按 kind 登记；同 `L-107` 的先例 —— 登记之前那个计数就已自增，不 +6 判据 D 会把已登记的也算成超支）。 预算棘轮 123 → 124（2026-10-03 队列 `L-172` 关闭确认框：1 处 `tabs.pendingClose?.title ?? \"\"`，形状已按 kind=unverified 登记；同 `L-107` / `L-114` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。",
+  "note": "语言表模板占位符 ↔ `L(...)` 调用点实参的对账台账（队列 L-46）。判据与用法见 Scripts/check-format-arguments.py 头部。shapes = 门禁**判不出类型**的实参形状，逐条登记：kind 只认有出处可引的（text / number，理由写清 file:line）；没有出处的一律 unverified —— unverified 不参与槽位交叉检查，只被形状与处数棘轮钉住，不是放行。 预算棘轮：unknownBudget 116 → 117（2026-09-30 循环第 119 轮 `L-107`）：新增一处 `L(.workspaceFormatFailed, …, failure.exitCode.map(String.init) ?? \"—\", …)` —— 该实参形状已按 `kind=text` 登记（见 shapes 末条），但「类型不明实参数」这一计数**在登记之前就自增** ⇒ 预算必须同批 +1，否则判据 D 会把「已登记」的也算成超支。 预算棘轮 117 → 123（2026-10-02 队列 `L-114` 工作区文件操作：2 处 `<inside>` + 3 处 `<name>` + 1 处 `<reason>`，三处形状都已按 kind 登记；同 `L-107` 的先例 —— 登记之前那个计数就已自增，不 +6 判据 D 会把已登记的也算成超支）。 预算棘轮 123 → 124（2026-10-03 队列 `L-172` 关闭确认框：1 处 `tabs.pendingClose?.title ?? \"\"`，形状已按 kind=unverified 登记；同 `L-107` / `L-114` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。 预算棘轮 124 → 125（2026-10-03 开发循环第 169 轮 `L-97` 界面半第一片：1 处 `<notebook>`（跨笔记本搜索结果行的所属标注），形状已按 kind=text 登记并附出处；同 `L-107` / `L-114` / `L-172` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。",
   "version": 1,
-  "unknownBudget": 124,
+  "unknownBudget": 125,
   "shapes": [
     {
       "shape": "<reason>",
@@ -410,6 +410,12 @@
       "kind": "unverified",
       "maxSites": 1,
       "reason": "类型不明：可选链 + 默认值，文件级索引认不出类型（`WorkspaceCloseRequest.title` 是 `String`）⇒ 只登记形状与处数棘轮；2026-10-03 队列 `L-172` 新增一处（关闭确认框的标题，`App/Views/WorkspaceTabStrip.swift`）"
+    },
+    {
+      "shape": "<notebook>",
+      "kind": "text",
+      "maxSites": 1,
+      "reason": "笔记本名：`App/Views/NotesPanel.swift:80` 的 `if let notebook = appState.notebookName(for: note)` ⇒ `notebook: String`（`App/AppState.swift:6070` 返回 `String?`，此处已解包）；2026-10-03 开发循环第 169 轮队列 `L-97` 界面半第一片"
     }
   ],
   "exceptions": []

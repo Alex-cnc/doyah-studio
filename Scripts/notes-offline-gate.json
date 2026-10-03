@@ -12,6 +12,16 @@
       "role": "笔记正文块模型（纯值类型，无 IO）"
     },
     {
+      "path": "Core/Notebook.swift",
+      "layer": "core",
+      "role": "两层归属的结构模型（架 / 笔记本 + 归属解析 + 删除计划）—— 队列 `L-97` 第一~四片；纯值类型与 `NoteStore` 协议，笔记数据只落本机数据家"
+    },
+    {
+      "path": "Core/NoteNavigation.swift",
+      "layer": "core",
+      "role": "两级导航的宿主装配侧逻辑（选中态 / 范围过滤 / 计数 / 新建落点）—— 队列 `L-97` 界面半第一片；纯函数，无网络无库"
+    },
+    {
       "path": "Core/License.swift",
       "layer": "core",
       "role": "许可与装配判据（笔记模块随包的条件判定）"

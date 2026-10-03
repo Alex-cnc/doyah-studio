@@ -18,6 +18,21 @@ struct NotesListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
+            // **两级导航**（队列 `L-97` ②）：架 → 笔记本 → 笔记。放在列表上方（同一栏内）而不是
+            // 再切一列 —— 侧栏只有 240~380pt，再切一列两边都读不清（`FR-EDIT-37` 那一课：
+            // 宽度不够时别硬塞）。范围选中态由 `AppState.selectNotesScope` 统一归一。
+            NotesContainerTreeView()
+            Divider()
+            // **搜索范围**（队列 `L-97` ⑤）：只在搜索那一层起作用 —— 「当前范围」= 限定在看的那一块，
+            // 「全部笔记本」= 跨笔记本搜（结果行里如实标出每条属于哪个笔记本）。
+            Picker(L(.notesSearchScopeTitle), selection: $appState.notesSearchScope) {
+                Text(L(.notesSearchScopeCurrent)).tag(NotesSearchScope.current)
+                Text(L(.notesSearchScopeAll)).tag(NotesSearchScope.all)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, Spacing.s)
+            .accessibilityIdentifier("notes-search-scope")
             TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal, Spacing.s)
@@ -59,6 +74,13 @@ struct NotesListView: View {
                             Text(note.source.kind.displayName + " · " + (note.source.connectionName ?? "—"))
                                 .font(Theme.font(.caption))
                                 .foregroundStyle(Theme.text(.secondary))
+                            // 跨笔记本搜（搜索范围 = 全部笔记本）时如实标出这条属于哪个笔记本 ——
+                            // 否则结果里一堆同名笔记，看不出它们不是一回事（队列 `L-97` ⑤）。
+                            if appState.showsNotebookInNoteRow, let notebook = appState.notebookName(for: note) {
+                                Text(L(.notesRowNotebook, notebook))
+                                    .font(Theme.font(.caption))
+                                    .foregroundStyle(Theme.text(.secondary))
+                            }
                         }
                     }
                     .buttonStyle(.plain)
@@ -76,6 +98,93 @@ struct NotesListView: View {
         .task(id: appState.notesQuery) {
             await appState.searchNotes()
         }
+    }
+}
+
+/// **两级导航**（队列 `L-97` ②）：笔记本架 → 笔记本，最上面一行「全部」。
+///
+/// 三条口径写在这儿（都各自有理由）：
+///  ① **行上的数字是「这里真正有多少条」**（按归属逐条重算，见 `NotesNavigation.noteCount`）——
+///     不是估算、也不是「索引里有多少」；两处不一致时以归属为准（契约 §2.12 第 5 条）。
+///  ② **点架 = 看整架**（架里的所有笔记本）—— 架不只是一个「分组标题」，它自己也是一个范围。
+///  ③ **默认容器不特殊显示**：用户眼里它就是「笔记本」这个名字（契约只要求它**不可删**，
+///     没要求界面上把它标成默认 —— 标出来反而像另一种东西）。
+///
+/// 未做（如实登记，留给下一片）：重命名 / 新建 / 排序 / 拖拽 / 右键菜单 / 删除确认框
+/// —— 那些要走删除确认框与跨笔记本移动（队列 `L-97` ③④），本片只落「看哪一块」。
+struct NotesContainerTreeView: View {
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            row(
+                scope: .all,
+                systemImage: "tray.full",
+                title: L(.notesAllNotes),
+                count: appState.notes.count,
+                indent: 0,
+                identifier: "notes-scope-all"
+            )
+            ForEach(appState.notesNavigation.shelves) { shelf in
+                row(
+                    scope: .shelf(uid: shelf.uid),
+                    systemImage: "books.vertical",
+                    title: shelf.name,
+                    count: appState.notesNavigation.noteCount(inShelf: shelf.uid, notes: appState.notes),
+                    indent: 0,
+                    identifier: "notes-scope-shelf-\(shelf.uid)"
+                )
+                ForEach(appState.notesNavigation.notebooks(inShelf: shelf.uid)) { notebook in
+                    row(
+                        scope: .notebook(uid: notebook.uid),
+                        systemImage: "book",
+                        title: notebook.name,
+                        count: appState.notesNavigation.noteCount(inNotebook: notebook.uid, notes: appState.notes),
+                        indent: 1,
+                        identifier: "notes-scope-notebook-\(notebook.uid)"
+                    )
+                }
+            }
+        }
+        .accessibilityIdentifier("notes-container-tree")
+    }
+
+    /// 一行：图标 + 名字 + 条数，选中态由 `notesScope` 给（比对归一后的值 —— 用户看到的选中
+    /// 与状态里的选中必须是同一个）。
+    private func row(
+        scope: NotesScope,
+        systemImage: String,
+        title: String,
+        count: Int,
+        indent: Int,
+        identifier: String
+    ) -> some View {
+        let selected = appState.notesScope == scope
+        return Button {
+            appState.selectNotesScope(scope)
+        } label: {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: systemImage)
+                    .font(Theme.font(.caption))
+                    .frame(width: 14)
+                Text(title)
+                    .font(Theme.font(.body))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: Spacing.xs)
+                Text("\(count)")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+            }
+            .padding(.vertical, Spacing.hair)
+            .padding(.leading, Spacing.s + CGFloat(indent) * 14)
+            .padding(.trailing, Spacing.s)
+            .contentShape(Rectangle())
+            .background(selected ? Theme.surface(.panel) : Color.clear)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
     }
 }
 
