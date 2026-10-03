@@ -58,6 +58,7 @@ import {
 } from '../ipc'
 import { frozenColumnStylesMeasured, pageOf, visibleOrder, DEFAULT_PAGE_SIZE } from '../grid/view'
 import { EXPORT_FORMAT_LABELS, exportRows, type ExportFormat } from '../grid/export'
+import { t as translate, toggleLanguage, type UiLanguage } from '../i18n'
 import {
   filterCompletions,
   highlightPieces,
@@ -68,6 +69,13 @@ import {
   wordBeforeCaret,
   type CompletionItem,
 } from '../sql/editor'
+
+// **界面语言（1.8 双语）**：与标题栏同一套取值（zh-Hans / en）
+// 口径：语言表只覆盖**界面外壳**；正文说明与服务端提示仍是中文（已在版本计划里登记未落）。
+const language = ref<UiLanguage>('zh-Hans')
+function t(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
+  return translate(key, language.value, vars)
+}
 
 const form = ref<ConnectParams>({ ...LAB_CONNECTION })
 const password = ref('')
@@ -1310,7 +1318,7 @@ async function probe() {
         <div v-if="designer && shape" class="db__designer">
           <p class="db__browse-title">
             表结构：<code>{{ designer.schema }}.{{ designer.table }}</code>
-            <button class="db__btn" type="button" @click="designer = null; ddlPlan = []">收起</button>
+            <button class="db__btn" type="button" @click="designer = null; ddlPlan = []">{{ t('designer.collapse') }}</button>
           </p>
 
           <table class="db__grid db__designer-grid">
@@ -1337,14 +1345,14 @@ async function probe() {
                     @change="c.defaultExpr = ($event.target as HTMLInputElement).value || null; ddlPlan = []"
                   />
                 </td>
-                <td><button class="db__btn" type="button" @click="removeDraftColumn(i)">删除这列</button></td>
+                <td><button class="db__btn" type="button" @click="removeDraftColumn(i)">{{ t('designer.dropColumn') }}</button></td>
               </tr>
             </tbody>
           </table>
 
           <div class="db__writeback">
-            <button class="db__btn" type="button" @click="addDraftColumn">加一列</button>
-            <button class="db__btn db__btn--primary" type="button" @click="previewDdl">生成变更集</button>
+            <button class="db__btn" type="button" @click="addDraftColumn">{{ t('designer.addColumn') }}</button>
+            <button class="db__btn db__btn--primary" type="button" @click="previewDdl">{{ t('designer.generate') }}</button>
             <button
               class="db__btn"
               type="button"
@@ -1390,7 +1398,7 @@ async function probe() {
         <div v-if="browse" class="db__browse-panel">
           <p class="db__browse-title">
             按条件浏览：<code>{{ browse.schema }}.{{ browse.table }}</code>
-            <button class="db__btn" type="button" @click="browse = null">收起</button>
+            <button class="db__btn" type="button" @click="browse = null">{{ t('designer.collapse') }}</button>
           </p>
           <div class="db__browse-fields">
             <label class="db__field">
@@ -1402,7 +1410,7 @@ async function probe() {
               <input v-model="browseOrder" type="text" spellcheck="false" placeholder="例如 id DESC" />
             </label>
             <button class="db__btn" type="button" @click="previewBrowse">生成 SQL</button>
-            <button class="db__btn db__btn--primary" type="button" @click="runBrowse">执行</button>
+            <button class="db__btn db__btn--primary" type="button" @click="runBrowse">{{ t('sql.run') }}</button>
           </div>
           <p v-if="browseError" class="db__failure-msg">{{ browseError }}</p>
           <pre v-if="sqlText" class="db__sql-preview">{{ sqlText }}</pre>
@@ -1446,10 +1454,10 @@ async function probe() {
             </li>
           </ul>
           <div class="db__sql-actions">
-            <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy">执行</button>
-            <button class="db__btn" type="button" :disabled="!busy" @click="cancelRunning">取消</button>
-            <button class="db__btn" type="button" :disabled="!!busy" @click="showPlan">只看计划</button>
-            <button class="db__btn" type="button" :disabled="!!busy" @click="runBatch(true)">执行并出计划</button>
+            <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy">{{ t('sql.run') }}</button>
+            <button class="db__btn" type="button" :disabled="!busy" @click="cancelRunning">{{ t('sql.cancel') }}</button>
+            <button class="db__btn" type="button" :disabled="!!busy" @click="showPlan">{{ t('sql.planOnly') }}</button>
+            <button class="db__btn" type="button" :disabled="!!busy" @click="runBatch(true)">{{ t('sql.runWithPlan') }}</button>
             <span v-if="result && !result.columns.length" class="db__note">
               影响 {{ result.affected ?? '未知' }} 行（无结果集）
             </span>
@@ -1493,7 +1501,7 @@ async function probe() {
                 <input
                   v-model="filter"
                   type="search"
-                  placeholder="筛选（当前结果内，不分大小写）"
+                  placeholder="{{ t('grid.filter.placeholder') }}"
                   aria-label="筛选结果"
                   @input="page = 1"
                 />
@@ -1528,8 +1536,16 @@ async function probe() {
                     <option v-for="(label, fmt) in EXPORT_FORMAT_LABELS" :key="fmt" :value="fmt">{{ label }}</option>
                   </select>
                 </label>
-                <button class="db__btn" type="button" @click="copyVisible">复制</button>
-                <button class="db__btn" type="button" @click="ioOpen = !ioOpen">导入导出…</button>
+                <button class="db__btn" type="button" @click="copyVisible">{{ t('grid.copy') }}</button>
+                <button
+                  class="db__btn"
+                  type="button"
+                  :title="language === 'zh-Hans' ? 'Switch UI language' : '切换界面语言'"
+                  @click="language = toggleLanguage(language)"
+                >
+                  {{ language === 'zh-Hans' ? 'EN' : '中文' }}
+                </button>
+                <button class="db__btn" type="button" @click="ioOpen = !ioOpen">{{ t('grid.io') }}</button>
                 <button
                   class="db__btn"
                   type="button"
@@ -1544,8 +1560,8 @@ async function probe() {
               <div v-if="adminOpen" class="db__io">
                 <p class="db__browse-title">
                   库（{{ adminDatabases.length }}）· 会话（{{ adminSessions.length }}）
-                  <button class="db__btn" type="button" @click="loadAdmin">刷新</button>
-                  <button class="db__btn" type="button" @click="loadMaintenance">生成维护命令</button>
+                  <button class="db__btn" type="button" @click="loadAdmin">{{ t('admin.refresh') }}</button>
+                  <button class="db__btn" type="button" @click="loadMaintenance">{{ t('admin.maintenance') }}</button>
                   <button
                     class="db__btn"
                     type="button"
@@ -1579,8 +1595,8 @@ async function probe() {
                         {{ s.user }}@{{ s.database }} · {{ s.state }} · {{ s.durationMs }} ms
                         <template v-if="s.waiting">· **在等锁**</template>
                       </span>
-                      <button class="db__btn" type="button" @click="generateKill(s.pid, false)">生成 cancel</button>
-                      <button class="db__btn" type="button" @click="generateKill(s.pid, true)">生成 terminate</button>
+                      <button class="db__btn" type="button" @click="generateKill(s.pid, false)">{{ t('admin.genCancel') }}</button>
+                      <button class="db__btn" type="button" @click="generateKill(s.pid, true)">{{ t('admin.genTerminate') }}</button>
                     </li>
                   </ul>
                 </details>
@@ -1653,7 +1669,7 @@ async function probe() {
                     <input v-model="importHasHeader" type="checkbox" />
                     首行是表头
                   </label>
-                  <button class="db__btn" type="button" @click="runPreviewImport">预览（不写库）</button>
+                  <button class="db__btn" type="button" @click="runPreviewImport">{{ t('io.preview') }}</button>
                   <button
                     class="db__btn db__btn--primary"
                     type="button"
