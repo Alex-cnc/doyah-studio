@@ -56,13 +56,13 @@ describe('界面下拉的取值与显示名', () => {
   it('四个配色都在，取值与令牌层一致', () => {
     expect(SCHEME_LABELS.map((s) => s.value)).toEqual(['techBlue', 'beanGreen', 'roseGold', 'stardust'])
     // 中文显示名（人类主人自己的叫法）
-    expect(SCHEME_LABELS.find((s) => s.value === 'stardust')?.label).toBe('星空紫')
-    expect(SCHEME_LABELS.find((s) => s.value === 'techBlue')?.label).toBe('科技蓝')
+    expect(SCHEME_LABELS.find((s) => s.value === 'stardust')?.key).toBe('appearance.scheme.stardust')
+    expect(SCHEME_LABELS.find((s) => s.value === 'techBlue')?.key).toBe('appearance.scheme.techBlue')
   })
 
   it('三档深浅都在（跟随系统在第一位）', () => {
     expect(MODE_LABELS.map((m) => m.value)).toEqual(['followSystem', 'alwaysDark', 'alwaysLight'])
-    expect(MODE_LABELS[0].label).toContain('跟随')
+    expect(MODE_LABELS[0].key).toBe('appearance.mode.followSystem')
   })
 
   it('拿不到 matchMedia 时按浅色处理（不抛错）', () => {

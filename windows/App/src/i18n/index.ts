@@ -22,6 +22,27 @@ export interface Entry {
 
 /** 语言表：key 用点分层级，便于按区域找。 */
 export const DICT = {
+  // 外观两轴（配色 / 深浅）——**标签改成语言 key**（原来把中文写死在常量里，
+  // 切英文时下拉里仍是中文；扫描器的第三面就是为这类"数据型文案"补的）
+  'appearance.mode': { 'zh-Hans': '外观', en: 'Appearance' },
+  'appearance.scheme': { 'zh-Hans': '配色', en: 'Color scheme' },
+  'appearance.mode.followSystem': { 'zh-Hans': '跟随系统', en: 'Follow system' },
+  'appearance.mode.alwaysDark': { 'zh-Hans': '总是深色', en: 'Always dark' },
+  'appearance.mode.alwaysLight': { 'zh-Hans': '总是浅色', en: 'Always light' },
+  'appearance.scheme.techBlue': { 'zh-Hans': '科技蓝', en: 'Tech blue' },
+  'appearance.scheme.beanGreen': { 'zh-Hans': '豆芽绿', en: 'Bean green' },
+  'appearance.scheme.roseGold': { 'zh-Hans': '玫瑰金', en: 'Rose gold' },
+  'appearance.scheme.stardust': { 'zh-Hans': '星空紫', en: 'Stardust' },
+  'appearance.nebula.tip': {
+    'zh-Hans': '只在「星空紫 + 深色」时看得出来',
+    en: 'Only visible with Stardust + dark',
+  },
+  'appearance.nebula': { 'zh-Hans': '星云皮肤', en: 'Nebula skin' },
+  'appearance.warning': { 'zh-Hans': '外观偏好读不出来（按缺省走）', en: 'Appearance preference unreadable (using defaults)' },
+  'shell.commandHint': { 'zh-Hans': 'Ctrl+K 打开命令面板', en: 'Ctrl+K opens the command palette' },
+  'shell.panel.expand': { 'zh-Hans': '展开底部面板', en: 'Expand bottom panel' },
+  'shell.panel.toggle': { 'zh-Hans': '面板', en: 'Panel' },
+
   // 底部面板（2.x 界面改版新增；四格 + 空态与未开工说明）
   'panel.problems': { 'zh-Hans': '问题', en: 'Problems' },
   'panel.output': { 'zh-Hans': '输出', en: 'Output' },

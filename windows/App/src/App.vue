@@ -10,7 +10,7 @@ import CommandPalette from './shell/CommandPalette.vue'
 import TitleBar from './shell/TitleBar.vue'
 import { commandById, type Command } from './shell/commands'
 import BottomPanel from './shell/BottomPanel.vue'
-import type { UiLanguage } from './i18n'
+import { t as translate, type UiLanguage } from './i18n'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
 import {
@@ -161,6 +161,11 @@ async function runCommand(command: Command) {
  * 详情面板与外壳文案都取它；切换入口仍在数据库视图那一侧（它才是用户看得见的地方）。 */
 const uiLanguage = ref<UiLanguage>('zh-Hans')
 
+/** 外壳文案帮手（语言由外壳自己持有）。 */
+function tr(key: Parameters<typeof translate>[0]): string {
+  return translate(key, uiLanguage.value)
+}
+
 const panelOpen = ref(true)
 const panelEntries = ref<PanelEntry[]>([])
 const PANEL_ENTRY_LIMIT = 500
@@ -272,37 +277,37 @@ function onSelect(id: ActivityBarItemId) {
       @open="openFromPalette"
     />
     <p v-if="commandNote" class="shell__command-note">{{ commandNote }}</p>
-    <p v-else class="shell__command-hint">Ctrl+K 打开命令面板</p>
+    <p v-else class="shell__command-hint">{{ tr('shell.commandHint') }}</p>
     <!-- 外观控件：深浅轴 × 配色轴 + 皮肤开关（规则全在 Rust 侧，这里只改值） -->
     <div v-if="appearance" class="appearance">
       <label class="appearance__field">
-        <span>外观</span>
+        <span>{{ tr('appearance.mode') }}</span>
         <select
           :value="appearance.mode"
           @change="changeAppearance({ mode: ($event.target as HTMLSelectElement).value as AppearancePref['mode'] })"
         >
-          <option v-for="m in MODE_LABELS" :key="m.value" :value="m.value">{{ m.label }}</option>
+          <option v-for="m in MODE_LABELS" :key="m.value" :value="m.value">{{ tr(m.key as never) }}</option>
         </select>
       </label>
       <label class="appearance__field">
-        <span>配色</span>
+        <span>{{ tr('appearance.scheme') }}</span>
         <select
           :value="appearance.scheme"
           @change="changeAppearance({ scheme: ($event.target as HTMLSelectElement).value as AppearancePref['scheme'] })"
         >
-          <option v-for="s in SCHEME_LABELS" :key="s.value" :value="s.value">{{ s.label }}</option>
+          <option v-for="s in SCHEME_LABELS" :key="s.value" :value="s.value">{{ tr(s.key as never) }}</option>
         </select>
       </label>
-      <label class="appearance__check" title="只在「星空紫 + 深色」时看得出来">
+      <label class="appearance__check" :title="tr('appearance.nebula.tip')">
         <input
           type="checkbox"
           :checked="appearance.nebulaSkin"
           @change="changeAppearance({ nebulaSkin: ($event.target as HTMLInputElement).checked })"
         />
-        星云皮肤
+        {{ tr('appearance.nebula') }}
       </label>
       <span v-if="appearanceWarning" class="appearance__warn" :title="appearanceWarning">
-        外观偏好读不出来（按缺省走）
+        {{ tr('appearance.warning') }}
       </span>
     </div>
     <div class="shell__body">
@@ -334,10 +339,10 @@ function onSelect(id: ActivityBarItemId) {
           v-else
           class="shell__panel-open"
           type="button"
-          title="展开底部面板"
+          :title="tr('shell.panel.expand')"
           @click="panelOpen = true"
         >
-          ⌃ 面板
+          ⌃ {{ tr('shell.panel.toggle') }}
         </button>
       </main>
     </div>

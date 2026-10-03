@@ -63,16 +63,23 @@ export function applyAppearance(dom: DomAppearance, root: HTMLElement | null = n
 }
 
 /** 配色轴的中文名（界面下拉用；技术取值不进语言表，这里只是显示名）。 */
-export const SCHEME_LABELS: { value: Appearance['scheme']; label: string }[] = [
-  { value: 'techBlue', label: '科技蓝' },
-  { value: 'beanGreen', label: '豆芽绿' },
-  { value: 'roseGold', label: '玫瑰金' },
-  { value: 'stardust', label: '星空紫' },
+/**
+ * 四个配色。
+ *
+ * **`value` 是稳定标识**（进令牌选择器与落盘偏好），**`key` 才是给用户看的文案** ——
+ * 原来这里直接写中文，切英文时下拉里仍是中文（扫描器第三面就是为这类"数据型文案"补的）。
+ */
+export const SCHEME_LABELS: { value: Appearance['scheme']; key: string }[] = [
+  { value: 'techBlue', key: 'appearance.scheme.techBlue' },
+  { value: 'beanGreen', key: 'appearance.scheme.beanGreen' },
+  { value: 'roseGold', key: 'appearance.scheme.roseGold' },
+  { value: 'stardust', key: 'appearance.scheme.stardust' },
 ]
 
 /** 深浅轴的中文名。 */
-export const MODE_LABELS: { value: Appearance['mode']; label: string }[] = [
-  { value: 'followSystem', label: '跟随系统' },
-  { value: 'alwaysDark', label: '总是深色' },
-  { value: 'alwaysLight', label: '总是浅色' },
+/** 三档深浅（`value` 稳定标识，`key` 是文案 —— 与配色同一口径）。 */
+export const MODE_LABELS: { value: Appearance['mode']; key: string }[] = [
+  { value: 'followSystem', key: 'appearance.mode.followSystem' },
+  { value: 'alwaysDark', key: 'appearance.mode.alwaysDark' },
+  { value: 'alwaysLight', key: 'appearance.mode.alwaysLight' },
 ]
