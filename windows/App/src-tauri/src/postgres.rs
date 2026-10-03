@@ -12,6 +12,7 @@
 //! ④ **超过上限如实报截断**，不静默少给行。
 
 use doyah_studio_db::config::ConnectionConfig;
+use doyah_studio_db::ddl::ColumnDef;
 use doyah_studio_db::tree::{ObjectKind, ObjectNode};
 use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 
@@ -42,6 +43,37 @@ pub struct TableNode {
     pub name: String,
     /// `table` / `view` / `materialized view` / `foreign table`
     pub kind: String,
+}
+
+/// 一条索引（1.5 段表设计器的输入之一）。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexInfo {
+    pub name: String,
+    pub is_unique: bool,
+    pub is_primary: bool,
+    pub columns: Vec<String>,
+}
+
+/// 一条约束（主键 / 外键 / 唯一 / 检查；定义原文）。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConstraintInfo {
+    pub name: String,
+    /// `primary` / `foreign` / `unique` / `check` / 服务端的原字母
+    pub kind: String,
+    pub definition: String,
+}
+
+/// 一张表的**结构**（列 / 索引 / 约束）—— 表设计器一打开就要这三样。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableShape {
+    pub schema: String,
+    pub table: String,
+    pub columns: Vec<ColumnDef>,
+    pub indexes: Vec<IndexInfo>,
+    pub constraints: Vec<ConstraintInfo>,
 }
 
 /// 服务端自述（连上后第一件事：把"连到了哪儿"如实告诉用户）。
@@ -527,6 +559,138 @@ impl PgSession {
             .await
             .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
         Ok(rows.into_iter().map(|row| row.get::<_, String>(0)).collect())
+    }
+
+    /// 读一张表的**结构元数据**（1.5 段：表设计器的输入）。
+    ///
+    /// 三样一起取（列 / 索引 / 约束）而不是分三次问：表设计器一打开就要这三样，
+    /// 分三次会让"打开"变成三次往返，且中间状态可能不一致。
+    pub async fn table_shape(&self, schema: &str, table: &str) -> Result<TableShape, DbFailure> {
+        // 列：类型 / 可空 / 默认值都取**原文**（不自己翻译类型名）
+        let columns_sql = "SELECT column_name, \
+                                  COALESCE(domain_name, data_type) || \
+                                    CASE WHEN character_maximum_length IS NOT NULL \
+                                         THEN '(' || character_maximum_length || ')' \
+                                         WHEN numeric_precision IS NOT NULL AND numeric_scale IS NOT NULL \
+                                         THEN '(' || numeric_precision || ',' || numeric_scale || ')' \
+                                         ELSE '' END AS full_type, \
+                                  is_nullable, column_default \
+                           FROM information_schema.columns \
+                           WHERE table_schema = $1 AND table_name = $2 \
+                           ORDER BY ordinal_position";
+        let mut columns = Vec::new();
+        for row in self
+            .client
+            .query(columns_sql, &[&schema, &table])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?
+        {
+            columns.push(ColumnDef {
+                name: row.get(0),
+                data_type: row.get(1),
+                is_nullable: row.get::<_, String>(2) == "YES",
+                default_expr: row.get(3),
+            });
+        }
+
+        // 索引：按索引名聚合列（`array_agg` 保住列顺序）
+        let indexes_sql = "SELECT i.relname AS index_name, \
+                                  ix.indisunique AS is_unique, \
+                                  ix.indisprimary AS is_primary, \
+                                  array_agg(a.attname ORDER BY k.ord) AS cols \
+                           FROM pg_index ix \
+                           JOIN pg_class i ON i.oid = ix.indexrelid \
+                           JOIN pg_class t ON t.oid = ix.indrelid \
+                           JOIN pg_namespace n ON n.oid = t.relnamespace \
+                           JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON TRUE \
+                           JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum \
+                           WHERE n.nspname = $1 AND t.relname = $2 \
+                           GROUP BY i.relname, ix.indisunique, ix.indisprimary \
+                           ORDER BY i.relname";
+        let mut indexes = Vec::new();
+        for row in self
+            .client
+            .query(indexes_sql, &[&schema, &table])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?
+        {
+            let cols: Vec<String> = row.get(3);
+            indexes.push(IndexInfo {
+                name: row.get(0),
+                is_unique: row.get(1),
+                is_primary: row.get(2),
+                columns: cols,
+            });
+        }
+
+        // 约束：主键 / 外键 / 唯一 / 检查，定义原文直接取（`pg_get_constraintdef`）
+        let constraints_sql = "SELECT c.conname, c.contype::text, pg_get_constraintdef(c.oid) \
+                               FROM pg_constraint c \
+                               JOIN pg_class t ON t.oid = c.conrelid \
+                               JOIN pg_namespace n ON n.oid = t.relnamespace \
+                               WHERE n.nspname = $1 AND t.relname = $2 \
+                               ORDER BY c.conname";
+        let mut constraints = Vec::new();
+        for row in self
+            .client
+            .query(constraints_sql, &[&schema, &table])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?
+        {
+            let kind: String = row.get(1);
+            constraints.push(ConstraintInfo {
+                name: row.get(0),
+                kind: match kind.as_str() {
+                    "p" => "primary".to_string(),
+                    "f" => "foreign".to_string(),
+                    "u" => "unique".to_string(),
+                    "c" => "check".to_string(),
+                    other => other.to_string(),
+                },
+                definition: row.get(2),
+            });
+        }
+
+        Ok(TableShape { schema: schema.to_string(), table: table.to_string(), columns, indexes, constraints })
+    }
+
+    /// **按序执行一批 DDL**（1.5 段）。逐句报告（哪句成、哪句败、各耗时），与多段执行同一形状。
+    ///
+    /// 口径：**调用方（界面）只把非破坏性的那些递进来** —— 破坏性语句在界面层只给"复制语句"，
+    /// 本函数不替它做判断（判定在领域层 `ddl::executable_subset`，一处）。
+    pub async fn run_ddl(&self, statements: &[String]) -> Result<Vec<StatementOutcome>, DbFailure> {
+        let mut out = Vec::with_capacity(statements.len());
+        for sql in statements {
+            let started = std::time::Instant::now();
+            match self.execute_simple(sql).await {
+                Ok(affected) => out.push(StatementOutcome {
+                    sql: sql.clone(),
+                    ok: true,
+                    result: Some(QueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        num_rows: Vec::new(),
+                        returned: 0,
+                        truncated: false,
+                        affected: Some(affected),
+                    }),
+                    failure: None,
+                    elapsed_ms: started.elapsed().as_millis() as u64,
+                }),
+                Err(failure) => {
+                    out.push(StatementOutcome {
+                        sql: sql.clone(),
+                        ok: false,
+                        result: None,
+                        failure: Some(failure),
+                        elapsed_ms: started.elapsed().as_millis() as u64,
+                    });
+                    // DDL 一句失败就停：后面的多半依赖前面那句（建了列才能改它的默认值）
+                    break;
+                }
+            }
+        }
+        Ok(out)
     }
 
     /// 快速自检（`--probe` 用）：连上、能问出一行、能列出表。

@@ -16,6 +16,7 @@ pub mod command_history;
 pub mod config;
 pub mod cursor;
 pub mod db_type;
+pub mod ddl;
 pub mod file_ops;
 pub mod foreign_key;
 pub mod format;
@@ -68,6 +69,11 @@ pub use search::{
     DEFAULT_PER_FILE_LIMIT, DEFAULT_RESULT_LIMIT, DEFAULT_SNIPPET_LIMIT,
 };
 pub use sql::{explain, spans, tokenize, StatementSpan, Token, TokenKind};
+pub use ddl::{
+    add_foreign_key, alter_table, create_index, drop_constraint, drop_index, drop_table,
+    executable_subset, has_destructive, ColumnChange, ColumnDef as DdlColumnDef, DdlError,
+    DdlStatement, StatementClass,
+};
 pub use staleness::{classify, content_hash, note as staleness_note, DiskFile, LoadedFile, Staleness};
 pub use writeback::{edits_to_dml, statement_risk, CellEdit, DmlStatement, Risk, RowKey, TransactionPlan};
 pub use tree::{group_by_schema, search, sort_objects, ObjectKind, ObjectNode, SearchHit};

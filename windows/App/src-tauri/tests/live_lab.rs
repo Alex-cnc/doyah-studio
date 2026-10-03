@@ -408,6 +408,142 @@ async fn writeback_batch_transaction_commit_and_rollback_on_real_db() {
         .expect("收尾应当成功");
 }
 
+/// **1.5 表结构与 DDL**：结构读得到 / 加列真执行 / **删除类只生成不执行**。
+///
+/// 判据（版本计划 §1.5 的出口「表设计器改列 + 变更集预览 + 索引 / 外键 / 约束；
+/// **删除类只生成语句、不自动执行**」）：
+/// ① 结构元数据真读得到（列 / 索引 / 约束三样）；
+/// ② 加列：生成的 `additive` 语句**真在真库上执行**，结构随之变化；
+/// ③ 删列：生成物标 `destructive`、`executable_subset` **不含它**、命令层 `db_run_ddl` 的
+///    同类校验也会拒（用领域层判定直接验）；
+/// ④ 改类型：生成**四步可读**重建（建临时列 / 搬值 / 删旧列 / 改名），删旧列那步标破坏性。
+#[tokio::test]
+async fn table_shape_and_ddl_only_generates_destructive_on_real_db() {
+    let Some(params) = lab_params() else { return };
+    let session = PgSession::connect(&params).await.expect("应当连上实验库");
+
+    // 备一张专用的表，避免动夹具（前面几个用例都在用 app.accounts）
+    session.run("drop table if exists app.ddl_probe_15", 10).await.ok();
+    session
+        .run(
+            "create table app.ddl_probe_15 (id serial primary key, label text not null, note text)",
+            10,
+        )
+        .await
+        .expect("建探针表应当成功");
+
+    // ① 结构元数据：列 / 索引 / 约束三样都要真读到
+    let shape = session.table_shape("app", "ddl_probe_15").await.expect("读结构应当成功");
+    assert_eq!(shape.table, "ddl_probe_15");
+    let names: Vec<&str> = shape.columns.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, vec!["id", "label", "note"], "列顺序应当按定义顺序");
+    let id = shape.columns.iter().find(|c| c.name == "id").expect("id 列");
+    assert!(!id.is_nullable, "主键列应当是 NOT NULL");
+    assert!(id.default_expr.is_some(), "serial 列有默认值（nextval）：{:?}", id.default_expr);
+    let label = shape.columns.iter().find(|c| c.name == "label").expect("label 列");
+    assert!(!label.is_nullable);
+    assert!(shape.indexes.iter().any(|i| i.is_primary), "主键索引应当列出来：{:?}", shape.indexes);
+    assert!(
+        shape.constraints.iter().any(|c| c.kind == "primary"),
+        "主键约束应当列出来：{:?}",
+        shape.constraints
+    );
+
+    // ② 加列：生成 additive ⇒ 真执行 ⇒ 结构里多一列
+    let add = doyah_studio_db::ddl::alter_table(
+        Some("app"),
+        "ddl_probe_15",
+        &[doyah_studio_db::ddl::ColumnChange {
+            from: None,
+            to: Some(doyah_studio_db::ddl::ColumnDef {
+                name: "added".into(),
+                data_type: "integer".into(),
+                is_nullable: true,
+                default_expr: None,
+            }),
+        }],
+    )
+    .expect("生成加列 DDL 应当成功");
+    assert_eq!(add.len(), 1);
+    assert_eq!(add[0].class, doyah_studio_db::ddl::StatementClass::Additive);
+    assert!(!doyah_studio_db::ddl::has_destructive(&add), "加列不是破坏性");
+    let runnable: Vec<String> = doyah_studio_db::ddl::executable_subset(&add)
+        .iter()
+        .map(|s| s.bare.clone())
+        .collect();
+    assert_eq!(runnable.len(), 1, "加列应当可执行");
+    let outcomes = session.run_ddl(&runnable).await.expect("执行加列 DDL 应当成功");
+    assert!(outcomes[0].ok, "{outcomes:?}");
+    let after = session.table_shape("app", "ddl_probe_15").await.expect("再读结构应当成功");
+    assert!(
+        after.columns.iter().any(|c| c.name == "added"),
+        "加列之后结构里应当有它：{:?}",
+        after.columns.iter().map(|c| &c.name).collect::<Vec<_>>()
+    );
+
+    // ③ 删列：生成物标破坏性、不进"可执行"那一档
+    let drop = doyah_studio_db::ddl::alter_table(
+        Some("app"),
+        "ddl_probe_15",
+        &[doyah_studio_db::ddl::ColumnChange {
+            from: Some(
+                after
+                    .columns
+                    .iter()
+                    .find(|c| c.name == "added")
+                    .expect("added 列")
+                    .clone(),
+            ),
+            to: None,
+        }],
+    )
+    .expect("生成删列 DDL 应当成功");
+    assert_eq!(drop[0].class, doyah_studio_db::ddl::StatementClass::Destructive);
+    assert!(doyah_studio_db::ddl::has_destructive(&drop));
+    assert!(
+        doyah_studio_db::ddl::executable_subset(&drop).is_empty(),
+        "删除类不许进可执行那一档（版本计划的原文要求）"
+    );
+    // 而且这条语句**没有被执行**：列还在
+    let still = session.table_shape("app", "ddl_probe_15").await.expect("再读结构应当成功");
+    assert!(
+        still.columns.iter().any(|c| c.name == "added"),
+        "只生成不执行 ⇒ 列必须还在"
+    );
+
+    // ④ 改类型：四步可读重建，删旧列那步是破坏性
+    let alter = doyah_studio_db::ddl::alter_table(
+        Some("app"),
+        "ddl_probe_15",
+        &[doyah_studio_db::ddl::ColumnChange {
+            from: Some(still.columns.iter().find(|c| c.name == "added").expect("added 列").clone()),
+            to: Some(doyah_studio_db::ddl::ColumnDef {
+                name: "added".into(),
+                data_type: "bigint".into(),
+                is_nullable: true,
+                default_expr: None,
+            }),
+        }],
+    )
+    .expect("生成改类型 DDL 应当成功");
+    let classes: Vec<doyah_studio_db::ddl::StatementClass> =
+        alter.iter().map(|s| s.class).collect();
+    assert_eq!(
+        classes,
+        vec![
+            doyah_studio_db::ddl::StatementClass::DataMoving,
+            doyah_studio_db::ddl::StatementClass::DataMoving,
+            doyah_studio_db::ddl::StatementClass::Destructive,
+            doyah_studio_db::ddl::StatementClass::Altering,
+        ],
+        "改类型必须是四步可读重建：{alter:?}"
+    );
+    assert!(alter[0].bare.contains("__new"), "第一步建临时列：{}", alter[0].bare);
+
+    // 收尾：删掉探针表（DROP 由本用例自己执行 —— 它不在产品通路里）
+    session.run("drop table if exists app.ddl_probe_15", 10).await.expect("清表应当成功");
+}
+
 #[tokio::test]
 async fn unreachable_server_reports_readable_reason() {
     let mut params = lab_params().unwrap_or(ConnectParams {

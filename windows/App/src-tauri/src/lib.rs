@@ -15,7 +15,7 @@ mod query;
 pub use connections::{config_from_form, ConnectionStore};
 pub use postgres::{
     ConnectParams, ConnectReport, DbFailure, PgSession, ProbeReport, QueryResult, ServerInfo,
-    StartupOutcome, StatementOutcome, TableNode, MAX_QUERY_ROWS,
+    StartupOutcome, StatementOutcome, TableNode, TableShape, MAX_QUERY_ROWS,
 };
 pub use query::{DatasetSummary, GridWindowPayload, ViewCache, MAX_WINDOW_ROWS};
 
@@ -388,6 +388,133 @@ fn statement_risk(state: State<'_, ShellState>, sql: String) -> String {
 #[tauri::command]
 fn db_read_only(state: State<'_, ShellState>) -> bool {
     state.read_only.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+// ── 表结构与 DDL（1.5：表设计器 / 变更集预览 / 索引约束 / 删除类只生成不执行）──────────────
+
+/// 读一张表的**结构**（列 / 索引 / 约束）—— 表设计器的输入。
+#[tauri::command]
+async fn db_table_shape(
+    state: State<'_, ShellState>,
+    schema: String,
+    table: String,
+) -> Result<TableShape, DbFailure> {
+    let session = current_session(&state).await?;
+    session.table_shape(&schema, &table).await
+}
+
+/// **生成 DDL**（只生成、不执行）：把表设计器的改动变成一串可读语句。
+///
+/// 一个命令按 `op` 分派，而不是拆成六个命令：六个命令会让"同一件事的判定散在六处"，
+/// 而这几档的口径必须一致 —— 尤其"哪些算破坏性"（领域层 `ddl` 是唯一判定处）。
+#[tauri::command]
+fn generate_ddl(
+    op: String,
+    schema: Option<String>,
+    table: Option<String>,
+    original_columns: Option<Vec<doyah_studio_db::ddl::ColumnDef>>,
+    edited_columns: Option<Vec<doyah_studio_db::ddl::ColumnDef>>,
+    columns: Option<Vec<String>>,
+    unique: Option<bool>,
+    index_name: Option<String>,
+    ref_schema: Option<String>,
+    ref_table: Option<String>,
+    ref_columns: Option<Vec<String>>,
+    constraint_name: Option<String>,
+) -> Result<Vec<doyah_studio_db::ddl::DdlStatement>, DbFailure> {
+    use doyah_studio_db::ddl;
+    let table_name = table.clone().unwrap_or_default();
+    let schema_ref = schema.as_deref();
+    let result = match op.as_str() {
+        "alter_columns" => {
+            let original = original_columns.unwrap_or_default();
+            let edited = edited_columns.unwrap_or_default();
+            let changes = column_changes(&original, &edited);
+            ddl::alter_table(schema_ref, &table_name, &changes)
+        }
+        "create_index" => ddl::create_index(
+            schema_ref,
+            &table_name,
+            &columns.unwrap_or_default(),
+            unique.unwrap_or(false),
+            index_name.as_deref(),
+        )
+        .map(|one| vec![one]),
+        "drop_index" => {
+            Ok(vec![ddl::drop_index(schema_ref, index_name.as_deref().unwrap_or_default())])
+        }
+        "add_foreign_key" => ddl::add_foreign_key(
+            schema_ref,
+            &table_name,
+            &columns.unwrap_or_default(),
+            ref_schema.as_deref(),
+            ref_table.as_deref().unwrap_or_default(),
+            &ref_columns.unwrap_or_default(),
+            constraint_name.as_deref(),
+        )
+        .map(|one| vec![one]),
+        "drop_constraint" => Ok(vec![ddl::drop_constraint(
+            schema_ref,
+            &table_name,
+            constraint_name.as_deref().unwrap_or_default(),
+        )]),
+        "drop_table" => Ok(vec![ddl::drop_table(schema_ref, &table_name)]),
+        other => Err(ddl::DdlError {
+            message: format!("认不出的 DDL 操作：{other}"),
+            hint: "可用：alter_columns / create_index / drop_index / add_foreign_key / drop_constraint / drop_table"
+                .to_string(),
+        }),
+    };
+    result.map_err(|e| DbFailure { message: e.message, hint: e.hint })
+}
+
+/// 把「原列集」与「改后列集」比成领域层的列变更（**按列名配对**；新列 / 删列各归其位）。
+///
+/// 口径：**不猜改名** —— 改后找不到同名列就按"删除 + 新增"处理。改名要显式做，
+/// 否则"把 a 改名成 b"会被误判成一删一加，用户以为只是改个名字、实际丢了数据。
+fn column_changes(
+    original: &[doyah_studio_db::ddl::ColumnDef],
+    edited: &[doyah_studio_db::ddl::ColumnDef],
+) -> Vec<doyah_studio_db::ddl::ColumnChange> {
+    use doyah_studio_db::ddl::ColumnChange;
+    let mut out = Vec::new();
+    for from in original {
+        match edited.iter().find(|to| to.name == from.name) {
+            Some(to) => out.push(ColumnChange { from: Some(from.clone()), to: Some(to.clone()) }),
+            None => out.push(ColumnChange { from: Some(from.clone()), to: None }),
+        }
+    }
+    for to in edited {
+        if !original.iter().any(|from| from.name == to.name) {
+            out.push(ColumnChange { from: None, to: Some(to.clone()) });
+        }
+    }
+    out
+}
+
+/// **执行非破坏性 DDL**（加列 / 改列 / 加索引 / 加约束）。
+///
+/// **破坏性语句（删列 / 删索引 / 删约束 / 删表）不走这条命令**：界面只给"复制语句"，
+/// 由用户自己拿到别处执行。命令层再兜一次 —— 万一递进来一句删类语句，直接拒绝并说明。
+#[tauri::command]
+async fn db_run_ddl(
+    state: State<'_, ShellState>,
+    statements: Vec<String>,
+) -> Result<Vec<StatementOutcome>, DbFailure> {
+    let session = current_session(&state).await?;
+    for sql in &statements {
+        if matches!(
+            doyah_studio_db::writeback::statement_risk(sql, false),
+            doyah_studio_db::writeback::Risk::Confirm
+        ) {
+            return Err(DbFailure {
+                message: format!("这句被判为破坏性操作，本命令不执行：{sql}"),
+                hint: "破坏性语句请在生成面板里复制出去、自己确认后执行（本侧只生成、不自动执行）。"
+                    .to_string(),
+            });
+        }
+    }
+    session.run_ddl(&statements).await
 }
 
 /// 单行详情的**值检查**（FR-DATA-05）：宽表竖排看、长 JSON 格式化看。///
@@ -892,6 +1019,9 @@ pub fn run() {
             browse_sql,
             inspect_row,
             db_foreign_keys,
+            db_table_shape,
+            generate_ddl,
+            db_run_ddl,
             workspace_list_directory,
             workspace_read_file,
             workspace_history,

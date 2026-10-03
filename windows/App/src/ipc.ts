@@ -33,6 +33,10 @@ export const COMMANDS = {
   editsToDml: 'edits_to_dml',
   statementRisk: 'statement_risk',
   dbReadOnly: 'db_read_only',
+  // 表结构与 DDL（1.5）
+  dbTableShape: 'db_table_shape',
+  generateDdl: 'generate_ddl',
+  dbRunDdl: 'db_run_ddl',
   dbProbe: 'db_probe',
   // 连接列表（配置落盘 + 口令进系统凭据管理器）
   connectionsList: 'connections_list',
@@ -549,6 +553,84 @@ export function statementRisk(sql: string): Promise<string> {
 /** 当前连接是不是只读。 */
 export function dbReadOnly(): Promise<boolean> {
   return call(COMMANDS.dbReadOnly, {}, () => false)
+}
+
+// ── 表结构与 DDL（1.5：表设计器 / 变更集预览 / 索引约束 / 删除类只生成不执行）──────────────
+
+/** 一列的定义（与领域层 `ddl::ColumnDef` 同形）。 */
+export interface ColumnDef {
+  name: string
+  dataType: string
+  isNullable: boolean
+  defaultExpr: string | null
+}
+
+export interface IndexInfo {
+  name: string
+  isUnique: boolean
+  isPrimary: boolean
+  columns: string[]
+}
+
+export interface ConstraintInfo {
+  name: string
+  /** `primary` / `foreign` / `unique` / `check` / 服务端原字母 */
+  kind: string
+  definition: string
+}
+
+/** 一张表的**结构**（列 / 索引 / 约束）—— 表设计器一打开就要这三样。 */
+export interface TableShape {
+  schema: string
+  table: string
+  columns: ColumnDef[]
+  indexes: IndexInfo[]
+  constraints: ConstraintInfo[]
+}
+
+/** 生成的 DDL 与它的分级（`destructive` = **只生成、不自动执行**）。 */
+export interface DdlStatement {
+  sql: string
+  bare: string
+  class: 'additive' | 'altering' | 'destructive' | 'data_moving'
+  purpose: string
+}
+
+/** 读一张表的结构。 */
+export function dbTableShape(schema: string, table: string): Promise<TableShape> {
+  return call(COMMANDS.dbTableShape, { schema, table }, () => {
+    throw {
+      message: '浏览器旁路没有真库',
+      hint: '请在 Tauri 外壳里打开表设计器（npm run tauri dev）。',
+    } as DbFailure
+  })
+}
+
+/** **生成 DDL**（只生成、不执行）：按 `op` 分派，返回带注释头的可读语句表。 */
+export function generateDdl(request: {
+  op: 'alter_columns' | 'create_index' | 'drop_index' | 'add_foreign_key' | 'drop_constraint' | 'drop_table'
+  schema?: string
+  table?: string
+  originalColumns?: ColumnDef[]
+  editedColumns?: ColumnDef[]
+  columns?: string[]
+  unique?: boolean
+  indexName?: string
+  refSchema?: string
+  refTable?: string
+  refColumns?: string[]
+  constraintName?: string
+}): Promise<DdlStatement[]> {
+  return call(COMMANDS.generateDdl, { ...request }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+/** **执行非破坏性 DDL**（加列 / 改列 / 加索引 / 加约束）；破坏性语句会被命令层拒收。 */
+export function dbRunDdl(statements: string[]): Promise<StatementOutcome[]> {
+  return call(COMMANDS.dbRunDdl, { statements }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里执行（npm run tauri dev）。' } as DbFailure
+  })
 }
 // ── 工作区（alpha 2.0）───────────────────────────────────────────────────────────────
 //
