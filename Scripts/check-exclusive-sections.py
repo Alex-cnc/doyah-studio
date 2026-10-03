@@ -31,7 +31,9 @@
 
   1. `[独占:<平台名>]`  —— 标记集合里含本侧的侧才能改（例：`### 2.3 契约 → Linux 实现 [独占:linux]`）
   2. `[开放]`    —— 台账类节（变更记录 / 索引）：**任何一侧**都能追加，含自己平台的行
-  3. 无标记      —— **契约层**：**只有契约所有者**（`--contract-owner`，默认 `macos` = 大河马）能改；
+  3. 无标记      —— **契约层**：**只有契约所有者**（`--contract-owner`，默认 **`bluewhale`** = 蓝色鲸鱼娘，
+                    **2026-10-03 人类主人制度变更 · 派单 `T-20261003-003`**：三书契约层归鲸鱼娘，平台实现层归各
+                    平台助理 —— `bighippo` macOS/iOS · `tinyhippo` 安卓/鸿蒙 · `fatfish` Windows）能改；
                     其他侧要么走提案（`Docs/proposals/`），要么在改动行 / 上一行 / 提交信息注
                     `contract-change：理由` 留痕
   4. 新增节      —— **非契约所有者**不得在契约层锁定的文档里**新开一个节**（含新开 `[开放]` 台账节）：
@@ -93,11 +95,12 @@
     python3 Scripts/check-exclusive-sections.py                          # 自动推断本侧，基线默认 origin/master
     python3 Scripts/check-exclusive-sections.py --mine macos --base origin/master   # 提交前默认姿势（显式基线最稳）
     python3 Scripts/check-exclusive-sections.py --mine windows,android,harmony      # 多平台侧（同一台 Windows 机做三端）
-    python3 Scripts/check-exclusive-sections.py --contract-owner macos    # 契约层归属（默认 macos = 大河马）
+    python3 Scripts/check-exclusive-sections.py --contract-owner bluewhale  # 契约层归属（默认 bluewhale = 鲸鱼娘）
+    python3 Scripts/check-exclusive-sections.py --mine bighippo              # 演员名 = 平台集（macOS/iOS）
     python3 Scripts/check-exclusive-sections.py --contract-docs 核心契约  # 追加契约层锁定的文档
     python3 Scripts/check-exclusive-sections.py --base HEAD~1 --files Docs/概要设计.md
     python3 Scripts/check-exclusive-sections.py --diff-file d.patch       # 用现成 diff（CI / 自测）
-    python3 Scripts/check-exclusive-sections.py --self-test               # 自测 29 例（含判据 ④、未跟踪增量、口径 A 五例、集合语义与旧词护栏）
+    python3 Scripts/check-exclusive-sections.py --self-test               # 自测 35 例（含判据 ④、未跟踪增量、口径 A 五例、集合语义与旧词护栏、**契约所有者 = 演员名 6 例**）
 
 本侧推断：darwin → `macos,ios`（本机同时做 macOS / iOS 实现）；linux → `linux`；其它 → `windows,android,harmony`
 （Windows 机同时做三端）。可用 `--mine` 覆盖，或设环境变量 `DOYAH_SIDE`（钩子按运行方推断侧别，
@@ -132,21 +135,53 @@ def mark_tokens(tok):
     return [t.strip().lower() for t in re.split(r"[|,]", tok) if t.strip()]
 
 
+# 演员名（四规范名）↔ 平台集 —— 与「标记只表达平台」不冲突：
+#   · **标记**里只写平台名（`[独占:macos]`），**不写人**；
+#   · **演员名**只出现在**命令行 / 契约所有者**这一轴（`--mine bighippo`、`--contract-owner bluewhale`）。
+# 契约所有者 = 演员名（2026-10-03 人类主人制度变更 · 派单 `T-20261003-003`）：三书的**契约层**归
+# `bluewhale`（蓝色鲸鱼娘）；**平台实现层**（`[独占:<平台名>]` 节）仍归各平台助理：`bighippo` = macOS/iOS、
+# `tinyhippo` = 安卓/鸿蒙、`fatfish` = Windows。`bluewhale` **没有平台写权**（空集）—— 所以她对
+# `[独占:*]` 节必然判红；而她的名字要保留下来，供「契约所有者是不是我」这类同一性判定用。
+ACTORS = {
+    "bluewhale": (),                      # 契约层（三书）· 蓝色鲸鱼娘
+    "bighippo": ("macos", "ios"),         # 平台实现 · 麦克大河马（macOS / iOS）
+    "tinyhippo": ("android", "harmony"),  # 平台实现 · 温迪小河马（安卓 / 鸿蒙）
+    "fatfish": ("windows",),              # 平台实现 · 黄鳍大肥鱼（Windows）
+}
+DEFAULT_CONTRACT_OWNER = "bluewhale"
+
+
+def expand(tok):
+    """侧名 / 演员名 → 集合：演员名展开成它的**平台集**；空集（`bluewhale`）保留**名字本身**。"""
+    out = set()
+    for t in mark_tokens(tok):
+        if t in ACTORS:
+            out |= set(ACTORS[t]) or {t}
+        else:
+            out.add(t)
+    return out
+
+
 def bad_tokens(tok):
     """标记值里的退役词 / 词表外名字（旧词残留）—— 非空即判红并点名行号。"""
     return [t for t in mark_tokens(tok) if t not in PLATFORMS]
+
+
+def bad_sides(tok):
+    """**命令行侧名 / 契约所有者**的词表外名字：平台名 与 演员名 都收（标记仍只收平台名）。"""
+    return [t for t in mark_tokens(tok) if t not in PLATFORMS and t not in ACTORS]
 
 
 def allowed(tok, mine):
     """集合语义：`--mine`（可多值）与标记集合**相交**才放行；标记里有退役词 ⇒ 不放行（走旧词判红）。"""
     if bad_tokens(tok):
         return False
-    return bool(set(mark_tokens(tok)) & set(mark_tokens(mine)))
+    return bool(expand(tok) & expand(mine))
 
 
 def same_side(a, b):
-    """两侧是否算同一侧（集合相交）—— 契约所有者判定用。"""
-    return bool(set(mark_tokens(a)) & set(mark_tokens(b)))
+    """两侧是否算同一侧（集合相交）—— 契约所有者判定用（演员名 ↔ 平台名不同侧 ⇒ 不相交）。"""
+    return bool(expand(a) & expand(b))
 
 
 def infer_side():
@@ -605,7 +640,7 @@ macOS / iOS 实现细节：SwiftUI / Keychain。
     subprocess.run(["git", "add", path, other], check=True)
     subprocess.run(["git", "commit", "-qm", "init"], check=True)
 
-    def run(edit_old, edit_new, label, mine="windows", fname=None, expect_text=None):
+    def run(edit_old, edit_new, label, mine="windows", fname=None, expect_text=None, owner="macos"):
         fname = fname or path
         text = open(fname, encoding="utf-8").read().replace(edit_old, edit_new, 1)
         with open(fname, "w", encoding="utf-8") as fh:
@@ -617,7 +652,7 @@ macOS / iOS 实现细节：SwiftUI / Keychain。
         #    自测照样全绿（假绿）。本仓第 20 轮一起改正。
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            rc = check([fname], mine, ["macos", "ios"], "HEAD", diff, quiet=True, contract_owner="macos")
+            rc = check([fname], mine, ["macos", "ios"], "HEAD", diff, quiet=True, contract_owner=owner)
         out = buf.getvalue()
         subprocess.run(["git", "checkout", "-q", "--", fname], check=True)
         ok = ((rc == 1) == ("应该报红" in label)) and (expect_text in out if expect_text else True)
@@ -655,6 +690,26 @@ macOS / iOS 实现细节：SwiftUI / Keychain。
                  "契约所有者新开无标记节 · 应该通过", mine="macos"))
     r.append(run("## 9. 已知边界（分平台）", "## 9. 已知边界（分平台）[开放]",
                  "非所有者给已有标题追加 [开放]（自我解锁）· 应该报红"))
+
+    # ── 契约所有者 = **演员名**（2026-10-03 人类主人制度变更 · 派单 `T-20261003_003` 系）6 例 ──
+    # 由头：三书**契约层**归 `bluewhale`（蓝色鲸鱼娘）；平台实现层仍按**平台名**归各平台助理
+    # （`bighippo` = macOS/iOS、`tinyhippo` = 安卓/鸿蒙、`fatfish` = Windows）。
+    # 成对证据：同一条契约行上「所有者改 ⇒ 绿 / 平台助理改 ⇒ 红」，以及「所有者碰实现层节 ⇒ 红」。
+    r.append(run("契约正文，只有契约所有者能改。", "契约正文（蓝鲸娘第二版）。",
+                 "演员名：契约所有者 `bluewhale` 改契约层 · 应该通过", mine="bluewhale", owner="bluewhale"))
+    r.append(run("契约正文，只有契约所有者能改。", "契约正文：大河马直接改了。",
+                 "演员名：`bighippo`（macOS/iOS）改契约层 · 应该报红", mine="bighippo", owner="bluewhale",
+                 expect_text="contract-change"))
+    r.append(run("契约正文，只有契约所有者能改。", "契约正文：小河马直接改了。",
+                 "演员名：`tinyhippo`（安卓/鸿蒙）改契约层 · 应该报红", mine="tinyhippo", owner="bluewhale"))
+    r.append(run("台账行。", "台账行。\n\n## 11. 新契约节\n\n蓝鲸娘开的新契约节。",
+                 "演员名：契约所有者新开无标记节（判据 ④ 对所有者不设限）· 应该通过",
+                 mine="bluewhale", owner="bluewhale"))
+    r.append(run("macOS / iOS 实现细节：SwiftUI / Keychain。", "macOS / iOS 实现细节：蓝鲸娘改了实现层。",
+                 "演员名：契约所有者碰 `[独占:macos|ios]` 实现层节 · 应该报红（她没有平台写权）",
+                 mine="bluewhale", owner="bluewhale"))
+    r.append(run("契约正文，只有契约所有者能改。", "契约正文（旧姿势：平台名所有者）。",
+                 "兼容：`--contract-owner macos` 旧姿势仍可用 · 应该通过", mine="macos", owner="macos"))
 
     # ── 口径 A（2026-10-01 拍板 · 三仓同改）5 例：豁免只认「本次新增行自己带的注记」 ──────────
     import contextlib as _cl
@@ -774,8 +829,9 @@ def main():
     ap.add_argument("--diff-file", default=None, help="从文件读 diff（CI / 自测）")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--quiet", action="store_true")
-    ap.add_argument("--contract-owner", default="macos",
-                    help="契约层（无独占标记）的归属侧 = 平台名，默认 macos（大河马，本机同时做 macOS / iOS）")
+    ap.add_argument("--contract-owner", default=DEFAULT_CONTRACT_OWNER,
+                    help="契约层（无独占标记）的所有者 = **演员名**，默认 `bluewhale`（蓝色鲸鱼娘 · 契约层）"
+                         "；也可写平台名（旧姿势）")
     ap.add_argument("--contract-docs", nargs="*", default=None,
                     help="契约层锁定的文档名片段（默认三书：概要设计 / 需求规范书 / 产品能力规划说明书）")
     args = ap.parse_args()
@@ -784,13 +840,16 @@ def main():
         return self_test()
 
     mine = args.mine or os.environ.get("DOYAH_SIDE") or infer_side()
-    # 词表已统一为平台名（2026-10-02）：旧词**不归一**，直接退出 2 —— 否则「侧名」与「标记」会两套词表并存。
+    # 词表：**标记** = 平台名（2026-10-02 收口，六个）；**命令行侧名 / 契约所有者** 另收四个演员名
+    # （2026-10-03 制度变更：契约层归 `bluewhale`，实现层归 `bighippo` / `tinyhippo` / `fatfish`）。
+    # 旧词（`apple` / `nonapple`）**不归一**，直接退出 2 —— 否则「侧名」与「标记」会两套词表并存。
     for _who, _val in (("--mine", mine), ("--contract-owner", args.contract_owner)):
-        _bad = bad_tokens(_val)
+        _bad = bad_sides(_val)
         if _bad:
-            print("❌ 侧名用了词表外的名字：%s=%s（退役词 %s）" % (_who, _val, "/".join(_bad)))
-            print("   处理：侧名一律平台名（%s）；`apple` / `nonapple` 已于 2026-10-02 退役 —— 三仓统一词表"
-                  "（Notes §2.2）+ 派单 `T-20261002-038` 的迁移清单" % " · ".join(PLATFORMS))
+            print("❌ 侧名用了词表外的名字：%s=%s（认不出的名字 %s）" % (_who, _val, "/".join(_bad)))
+            print("   处理：侧名 = 平台名（%s）或演员名（%s）；`apple` / `nonapple` 已于 2026-10-02 退役"
+                  "—— 三仓统一词表（Notes §2.2）+ 派单 `T-20261002-038` 的迁移清单"
+                  % (" · ".join(PLATFORMS), " · ".join(ACTORS)))
             return 2
     theirs = [x for x in (args.theirs.split(",") if args.theirs else []) if x] or \
              [t for t in PLATFORMS if not same_side(t, mine)]

@@ -106,6 +106,16 @@ def declaration_reason(text: str):
     return m.group(1).strip() if m else None
 
 
+# ── 演员名（四规范名）与契约所有者（2026-10-03 人类主人制度变更 · 派单 `T-20261003-003`）─────────
+# 契约定：三书**契约层**归 `bluewhale`（蓝色鲸鱼娘）；**平台实现层**归各平台助理：
+#   `bighippo` = macOS / iOS · `tinyhippo` = 安卓 / 鸿蒙 · `fatfish` = Windows。
+# 与「标记只表达平台」不冲突：**路径清单**里各端子树仍按平台分（tree.id = macos / windows / android…），
+# 演员名只出现在**命令行这一轴**（`--mine bighippo` ≡ `--mine macos,ios`；`bluewhale` 无平台集 ⇒ 契约模式）。
+ACTOR_PLATFORMS = {"bluewhale": (), "bighippo": ("macos", "ios"),
+                   "tinyhippo": ("android", "harmony"), "fatfish": ("windows",)}
+DEFAULT_CONTRACT_OWNER = "bluewhale"
+
+
 def norm(p: str) -> str:
     """统一成仓根相对的 POSIX 路径（去 `./`、反斜杠转正斜杠）。"""
     p = str(p).replace("\\", "/")
@@ -158,6 +168,10 @@ class Manifest:
         self.aliases = self.data.get("owner_aliases") or {}
         self.require_declaration = bool(self.data.get("shared_require_declaration", True))
         self.repo_name = self.data.get("repo") or "?"
+        # 契约所有者（演员名）+ 三书清单：**契约模式**（`--mine <契约所有者>`）下只有这些路径放行，
+        # 其余一律判红 —— 人类主人护栏原话：「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」。
+        self.contract_owner = (self.data.get("contract_owner") or DEFAULT_CONTRACT_OWNER).strip().lower()
+        self.contract_docs = [norm(x) for x in (self.data.get("contract_docs") or []) if str(x).strip()]
 
     @staticmethod
     def load(path: pathlib.Path) -> "Manifest":
@@ -183,6 +197,9 @@ class Manifest:
         for a, _r in self.allow:
             if a and not (repo / a.rstrip("/")).exists():
                 probs.append("unclassified_allow 里的路径在盘上不存在：%s" % a)
+        for d in self.contract_docs or []:
+            if not (repo / d.rstrip("/")).exists():
+                probs.append("contract_docs（三书）声明的路径在盘上不存在：%s" % d)
         def overlap(p1, p2):
             return has_prefix(norm(p1).rstrip("/") + "/x", p2) or \
                    has_prefix(norm(p2).rstrip("/") + "/x", p1)
@@ -201,7 +218,17 @@ class Manifest:
         return probs
 
     def _one(self, tok: str):
-        """单个标识 → (tree id 集合, 档位)；认不出 ⇒ (None, None)。"""
+        """单个标识 → (tree id 集合, 档位)；认不出 ⇒ (None, None)。
+
+        `tok` 可以是：tree id（`macos` / `windows` / `android` / `harmony`）· tree 的 owner 名 ·
+        契约侧名 · **演员名**（`bighippo` / `tinyhippo` / `fatfish` ⇒ 展开成它名下的子树；
+        2026-10-03 制度变更）。契约所有者（`bluewhale`，平台集为空）由 `evaluate()` 走**契约模式**。
+        """
+        if tok in ACTOR_PLATFORMS and ACTOR_PLATFORMS[tok]:
+            plats = set(ACTOR_PLATFORMS[tok])
+            ids = {t["id"] for t in self.trees
+                   if t.get("id") in plats or t.get("owner") in plats or (t.get("actor") or "") == tok}
+            return (ids or None), ("actor" if ids else None)
         if tok in {t.get("id") for t in self.trees}:
             return {tok}, "tree"
         alias = self.aliases.get(tok, tok)
@@ -267,6 +294,22 @@ def evaluate(paths, man: Manifest, mine: str, inline=None, commit_note=None):
         return EXIT_PASS, ["⚠️ 无内容可查 ≠ 已通过（改动集为空 —— 「确实没改」与「基线选错 / 查了个空」不是一回事）"], counts0
     counts = {"shared": 0, "mine": 0, "other": 0, "unregistered": 0, "allow": 0}
     out, reds = [], []
+    # —— 契约模式（2026-10-03 制度变更）：`mine` = 契约所有者 ⇒ 只许处理三书，碰到别的就拦 ——
+    if (mine or "").strip().lower() == (man.contract_owner or DEFAULT_CONTRACT_OWNER):
+        if not man.contract_docs:
+            return EXIT_SKIP, ["⚠️ 契约模式判不了：清单里没登记 `contract_docs`（三书清单）"
+                               " —— 契约所有者 = %s；补清单前不判绿" % man.contract_owner], counts
+        for raw in sorted(set(norm(p) for p in paths if norm(p))):
+            if any(has_prefix(raw, d) for d in man.contract_docs):
+                counts["mine"] += 1
+                out.append("✅ 契约层（三书）：%s ⇒ 归 `%s`" % (raw, man.contract_owner))
+            else:
+                counts["other"] += 1
+                reds.append("❌ 契约层护栏：%s ⇒ `%s` 只能处理三书（%s）—— 人类主人护栏"
+                            "「有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」"
+                            % (raw, man.contract_owner, "、".join(man.contract_docs)))
+        code = EXIT_RED if reds else EXIT_PASS
+        return code, out + reds, counts
     mine_ids, mode = man.side_of(mine)
     if mine_ids is None:
         return EXIT_SKIP, ["⚠️ 认不出本侧（`--mine %s`）—— 清单里的端 = %s，契约侧 = %s"
@@ -425,6 +468,8 @@ FIXTURE = {
         {"id": "windows", "owner": "windows", "contract_side": "nonapple",
          "label": "Windows 端（Tauri 2 + Rust）", "paths": ["windows/"]},
     ],
+    "contract_owner": "bluewhale",
+    "contract_docs": ["Docs/需求规范书.md", "Docs/概要设计.md"],
     "shared": ["Docs/", "tools/", "AGENT-SPEC.md"],
     "unclassified_allow": [{"path": "README.md", "reason": "仓根门面"}],
     "shared_ledger": [{"glob": "Docs/发布计划.md", "reason": "台账追加", "by": "macos",
@@ -443,6 +488,8 @@ def _fixture_repo(root: pathlib.Path):
     for p in ("App", "android", "entry", "windows", "Docs", "tools"):
         (root / p).mkdir(parents=True, exist_ok=True)
     for f in ("Package.swift", "hvigorfile.ts", "README.md"):
+        (root / f).write_text("x\n", encoding="utf-8")
+    for f in ("Docs/需求规范书.md", "Docs/概要设计.md"):
         (root / f).write_text("x\n", encoding="utf-8")
 
 
@@ -605,6 +652,24 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     results.append(("㉓ 中文路径端到端 ⇒ 认成共享面（不是「未登记路径」）", ok2, run2.returncode,
                     str(EXIT_RED), run2.stdout.strip()[-320:]))
 
+    # ── ㉔~㉙ 契约所有者 = 演员名（2026-10-03 人类主人制度变更 · 派单 `T-20261003-003`）──────────────
+    # 契约定：三书**契约层**归 `bluewhale`；平台实现层按平台名归各平台助理。护栏原话（人类主人）：
+    # 「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」。成对证据：同一条改动上
+    # 「所有者改 ⇒ 绿 / 碰非三书 ⇒ 红」，以及「演员名 ≡ 平台集」这层映射真的生效。
+    check("㉔ 契约所有者 `bluewhale` 改三书 ⇒ 绿", EXIT_PASS,
+          paths=["Docs/需求规范书.md"], mine="bluewhale", wants=["契约层（三书）"])
+    check("㉕ 契约所有者碰到代码 ⇒ 红（护栏：有涉及代码提交就拦）", EXIT_RED,
+          paths=["App/Views/A.swift"], mine="bluewhale",
+          wants=["契约层护栏", "只能处理三书", "Docs/需求规范书.md"])
+    check("㉖ 契约所有者碰脚本 / 仓根杂项 ⇒ 也红（三书之外的都拦，含共享面与白名单）", EXIT_RED,
+          paths=["tools/hack.py", "README.md"], mine="bluewhale", wants=["契约层护栏"])
+    check("㉗ 演员名 `bighippo` ≡ `macos,ios`：改 macOS 子树 ⇒ 绿", EXIT_PASS,
+          paths=["App/Views/A.swift"], mine="bighippo", wants=["本侧子树"])
+    check("㉘ 演员名 `tinyhippo` ≡ 安卓/鸿蒙：改 windows 子树 ⇒ 红（跨平台仍越界）", EXIT_RED,
+          paths=["windows/Core/src/lib.rs"], mine="tinyhippo", wants=["对侧子树"])
+    check("㉙ 演员名 `fatfish` ≡ windows：改 windows 子树 ⇒ 绿", EXIT_PASS,
+          paths=["windows/Core/src/lib.rs"], mine="fatfish", wants=["本侧子树"])
+
     bad = [r for r in results if not r[1]]
     for name, ok, code, expect, text in results:
         print("  %s %s（退出码 %s，期望 %s）" % ("✅" if ok else "❌", name, code, expect))
@@ -631,7 +696,10 @@ def main(argv=None) -> int:
     ap.add_argument("--diff-file", default=None, help="用现成的 diff 文本")
     ap.add_argument("--manifest", default=None, help="换清单（默认：脚本同目录）")
     ap.add_argument("--repo", default=None, help="仓根（默认：脚本所在仓的 git 顶层）")
-    ap.add_argument("--self-test", action="store_true", help="跑自测（26 例）")
+    ap.add_argument("--actor", default=None,
+                    help="执行者（演员名）：`bluewhale`(=契约模式，只许三书) / `bighippo`(macOS,iOS) / "
+                         "`tinyhippo`(安卓,鸿蒙) / `fatfish`(Windows)；等价于 `--mine <演员名>`")
+    ap.add_argument("--self-test", action="store_true", help="跑自测（32 例）")
     args = ap.parse_args(argv)
 
     script_dir = pathlib.Path(__file__).resolve().parent
@@ -655,17 +723,18 @@ def main(argv=None) -> int:
         print("RESULT: SKIP (exit 2)")
         return EXIT_SKIP
 
-    mine, src = args.mine, "--mine"
+    mine, src = (args.actor or args.mine), ("--actor" if args.actor else "--mine")
     if not mine:
         env_mine = os.environ.get("DOYAH_OWNER") or os.environ.get("DOYAH_SIDE")
         if env_mine:
-            if man.side_of(env_mine)[0] is not None:
+            if env_mine.strip().lower() == (man.contract_owner or DEFAULT_CONTRACT_OWNER) \
+                    or man.side_of(env_mine)[0] is not None:
                 mine, src = env_mine, "环境变量（DOYAH_OWNER / DOYAH_SIDE）"
             else:
                 print("ℹ️ 环境变量 DOYAH_OWNER / DOYAH_SIDE = %s 在本仓清单里认不出"
                       "（本仓的端 = %s）⇒ **忽略它**，改按 `hosts` 推断"
                       % (env_mine, "、".join(t.get("id", "?") for t in man.trees)))
-    if mine and src != "--mine":
+    if mine and src not in ("--mine", "--actor"):
         print("ℹ️ 本侧来自%s = %s" % (src, mine))
     if not mine:
         toks = host_tokens()
