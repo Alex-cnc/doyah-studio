@@ -312,6 +312,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesMigrationNeedsAttention
     /// 笔记文件读不出来（回退空列表、原文件未动），带原因参数。
     case notesFileUnreadable
+    /// 队列 `L-97` 第二片（两层归属落库）：首次运行建出来的**默认笔记本架**的名字（要落库的数据）。
+    case notesDefaultShelfName
+    /// 同上的**默认笔记本**名字（存量笔记缺归属时落这里）。
+    case notesDefaultNotebookName
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -2232,6 +2236,10 @@ public enum LocalizedStrings {
         .notesEngineMigrated: [.simplifiedChinese: "笔记已搬进本机数据库（%d 条），旧的 notes.json 留了一份备份", .english: "Notes moved into the local database (%d items); the old notes.json is kept as a backup"],
         .notesMigrationNeedsAttention: [.simplifiedChinese: "笔记数据迁移没做完：%@（原文件仍在原处，没有丢）", .english: "Notes data migration did not finish: %@ (the original file is still in place, nothing was lost)"],
         .notesFileUnreadable: [.simplifiedChinese: "笔记文件读不出来：%@（已按空列表显示，原文件未改动）", .english: "The notes file could not be read: %@ (showing an empty list; the file itself is untouched)"],
+        // 默认容器的名字是**要落库、要显示给用户的数据** —— 所以由语言表给、由调用方传进 Core
+        // （`Scripts/check-core-localization.py` 的覆盖面之内）。
+        .notesDefaultShelfName: [.simplifiedChinese: "笔记本架", .english: "Shelf"],
+        .notesDefaultNotebookName: [.simplifiedChinese: "笔记本", .english: "Notebook"],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],

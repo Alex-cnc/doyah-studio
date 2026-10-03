@@ -79,6 +79,40 @@ public actor NoteLibrary {
         try open().search(query, limit: limit)
     }
 
+    // MARK: - 两层归属（队列 L-97 第二片）
+
+    /// 库里的两层结构（架 + 笔记本）。库还没建时如实返回**空**（不是「默认容器」——
+    /// 默认容器是迁移写下去的数据，读的时候不该凭空造一个出来）。
+    public func notebookDirectory() throws -> NotebookDirectory {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else {
+            return NotebookDirectory(shelves: [], notebooks: [])
+        }
+        return try open().notebookDirectory()
+    }
+
+    /// 归属对（`uuid` ↔ `notebook_uid`）。
+    public func placements() throws -> [NotebookPlacement] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        return try open().placements()
+    }
+
+    /// **打开笔记时的一次性归属迁移**（幂等）：确保默认架 / 默认笔记本在，
+    /// 并把缺归属的存量笔记落进默认笔记本。名字由调用方从语言表给（Core 不写死文案）。
+    @discardableResult
+    public func ensureOwnership(
+        shelfName: String,
+        notebookName: String,
+        now: Date = Date()
+    ) throws -> NotebookDirectory {
+        try open().ensureDefaultContainers(shelfName: shelfName, notebookName: notebookName, now: now)
+    }
+
+    /// 把若干条笔记移到目标笔记本（不刷新 `updatedAt`，见 `NoteDatabase.move`）。
+    @discardableResult
+    public func move(noteIDs: [UUID], toNotebook notebookUid: String) throws -> Int {
+        try open().move(noteIDs: noteIDs, toNotebook: notebookUid)
+    }
+
     // MARK: - 写
 
     /// 保存草稿（新建或按 id 覆盖），返回落库后的笔记。

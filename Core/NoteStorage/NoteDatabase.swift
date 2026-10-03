@@ -129,6 +129,60 @@ public enum NoteSchemaV1 {
     ]
 }
 
+/// 笔记库的 schema **v2**（队列 `L-97` 第二片）：**两层归属落库**（笔记本架 / 笔记本）。
+///
+/// 契约出处：`DoyahNotes/Docs/核心契约.md` **§2.12 两层归属**（`shelf` / `notebook` 实体 +
+/// `Inspiration.notebookUid` 非空）。本侧只引用不复制 —— 表名 / 列名与契约同形。
+///
+/// 三条口径写在前面（都是这一片真正的取舍）：
+///   · **`note.notebook_uid` 刻意不加外键**：加了 `ON DELETE CASCADE` 之后「删一个笔记本」会**静默删掉**
+///     里面的笔记，而契约 §2.12 要求删容器时二选一（一并删 / **移到默认笔记本**，默认取后者）。
+///     归属策略归 `NotebookDirectory`（Core 半）算，库这一层只存值。
+///   · **列可空**：v1 的存量笔记没有归属 ⇒ 补列这一句只能加可空列。而「没有无归属笔记」这条不变量
+///     由**写入与迁移**保证（`upsert(_ note:)` 落默认笔记本、`ensureDefaultContainers` 兜底回填），
+///     不由 `NOT NULL` 保证 —— 那会让 `ALTER TABLE` 在存量库上直接失败。
+///   · **改列不动数据**：`upsert(_ note:)` 的 `ON CONFLICT DO UPDATE` **不含 `notebook_uid`** ——
+///     否则「改几个字再保存」会把这条笔记的归属抹回默认（静默的数据损坏）。
+public enum NoteSchemaV2 {
+
+    public static let version: Int32 = 2
+
+    /// 新增的表。
+    public static let tables: [String] = ["shelf", "notebook"]
+
+    /// 新增的索引。
+    public static let indexes: [String] = ["notebook_shelf_index", "note_notebook_index"]
+
+    /// 升级语句（顺序即依赖顺序：`shelf` 先于 `notebook`，补列在两张表之后）。
+    public static let ddl: [String] = [
+        """
+        CREATE TABLE shelf (
+            id INTEGER PRIMARY KEY,
+            uid TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL,
+            is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1))
+        );
+        """,
+        """
+        CREATE TABLE notebook (
+            id INTEGER PRIMARY KEY,
+            uid TEXT NOT NULL UNIQUE,
+            shelf_uid TEXT NOT NULL REFERENCES shelf (uid) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL,
+            is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1))
+        );
+        """,
+        "CREATE INDEX notebook_shelf_index ON notebook (shelf_uid, sort_order);",
+        // 存量笔记补列：v1 的笔记一开始没有归属 ⇒ 可空列（回填见 `ensureDefaultContainers`）。
+        "ALTER TABLE note ADD COLUMN notebook_uid TEXT;",
+        "CREATE INDEX note_notebook_index ON note (notebook_uid);"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -213,7 +267,7 @@ public final class NoteDatabase {
     public static let fileName = "notes.sqlite3"
 
     /// 这一版代码支持的 schema 版本。
-    public static let supportedVersion = NoteSchemaV1.version
+    public static let supportedVersion = NoteSchemaV2.version
 
     private let connection: SQLiteConnection
 
@@ -260,7 +314,11 @@ public final class NoteDatabase {
         (try? connection.scalarInt("PRAGMA foreign_keys")).flatMap { $0 } == 1
     }
 
-    /// 按需建/升级到 v1。**一个事务里做完**：DDL 与版本号一起生效，不会出现「表建了一半、版本已记 1」。
+    /// 按需建/升级到最新 schema（当前 v2）。**一个事务里做完**：DDL 与版本号一起生效，
+    /// 不会出现「表建了一半、版本已记 2」。
+    ///
+    /// 逐版升级（不是「按最新版直接建」）：存量库要真的走 v1 → v2 这两步，
+    /// 判据（与单测）才有机会证明「老库升得上来」—— 一条只在新库上跑通的路是假绿。
     public func applySchemaIfNeeded() throws {
         let current = userVersion
         if current > Self.supportedVersion {
@@ -269,9 +327,13 @@ public final class NoteDatabase {
         }
         guard current < Self.supportedVersion else { return }
         try connection.transaction {
-            if current < 1 {
+            if current < NoteSchemaV1.version {
                 for statement in NoteSchemaV1.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV1.version)")
+            }
+            if current < NoteSchemaV2.version {
+                for statement in NoteSchemaV2.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV2.version)")
             }
         }
     }
@@ -283,7 +345,7 @@ public final class NoteDatabase {
         try connection.setPragma("journal_mode = DELETE")
     }
 
-    /// 库里实际存在的表 / 虚拟表（门禁与单测按 `NoteSchemaV1.tables` 对账）。
+    /// 库里实际存在的表 / 虚拟表（门禁与单测按 `NoteSchemaV1.tables` + `NoteSchemaV2.tables` 对账）。
     public func tableNames() throws -> [String] {
         try connection.schemaObjects(kind: "table")
     }
@@ -341,6 +403,17 @@ public final class NoteDatabase {
             // **按 uuid 反查 rowid**，而不是读 `last_insert_rowid()`：走的是 upsert 的 UPDATE 分支时，
             // 那个值可能是上一句话留下的 —— 静默指向另一条笔记，而且不会有任何症状。
             let rowID = try requireRowID(of: note.id)
+            // 归属补缺（schema v2）：**新笔记**落默认笔记本；已有归属的**一字不动**
+            // （`ON CONFLICT` 那一段不含 `notebook_uid`，这里也只管 NULL / 空串）。
+            // 默认容器还没建（首次运行、且调用方还没走过 `ensureDefaultContainers`）时这条 UPDATE
+            // 不匹配任何行、也不写入 NULL —— 交给迁移那一步兜底。
+            try connection.execute(
+                """
+                UPDATE note SET notebook_uid = (SELECT uid FROM notebook WHERE is_default = 1 LIMIT 1)
+                WHERE uuid = ? AND (notebook_uid IS NULL OR notebook_uid = '');
+                """,
+                [.text(note.id.uuidString)]
+            )
             // 标签是**全量替换**语义（`Note.tags` 是完整集合）：先清后插，省掉「差集算法写错」这类缺陷。
             try connection.execute("DELETE FROM note_tag WHERE note_id = ?", [.integer(rowID)])
             for tag in Set(note.tags).sorted() {
@@ -552,6 +625,185 @@ public final class NoteDatabase {
             escaped.append(character)
         }
         return escaped
+    }
+
+    // MARK: - 两层归属（schema v2 · 队列 L-97 第二片）
+
+    /// 库里的两层结构（架 + 笔记本）。结构本身**不兜底**：库里一条都没有就如实返回空
+    /// （兜底落点在 `NotebookDirectory` 的那几个 `resolved*` 与 `ensureDefaultContainers`）。
+    public func notebookDirectory() throws -> NotebookDirectory {
+        NotebookDirectory(shelves: try shelves(), notebooks: try notebooks())
+    }
+
+    /// 全部笔记本架（稳定排序与界面同口径：排序位 → 创建时刻 → uid）。
+    public func shelves() throws -> [Shelf] {
+        try connection
+            .query("SELECT uid, name, sort_order, created_at, is_default FROM shelf ORDER BY sort_order ASC, created_at ASC, uid ASC")
+            .map { row in
+                Shelf(
+                    uid: row.text("uid") ?? "",
+                    name: row.text("name") ?? "",
+                    sortOrder: Int(row.int("sort_order") ?? 0),
+                    createdAt: Date(timeIntervalSince1970: row["created_at"].doubleValue ?? 0),
+                    isDefault: row.int("is_default") == 1
+                )
+            }
+    }
+
+    /// 全部笔记本（同一条稳定排序）。
+    public func notebooks() throws -> [Notebook] {
+        try connection
+            .query(
+                "SELECT uid, shelf_uid, name, sort_order, created_at, is_default FROM notebook ORDER BY sort_order ASC, created_at ASC, uid ASC"
+            )
+            .map { row in
+                Notebook(
+                    uid: row.text("uid") ?? "",
+                    shelfUid: row.text("shelf_uid") ?? "",
+                    name: row.text("name") ?? "",
+                    sortOrder: Int(row.int("sort_order") ?? 0),
+                    createdAt: Date(timeIntervalSince1970: row["created_at"].doubleValue ?? 0),
+                    isDefault: row.int("is_default") == 1
+                )
+            }
+    }
+
+    /// 写一个笔记本架（按 `uid` 覆盖；`is_default` 由调用方定）。
+    public func upsert(_ shelf: Shelf) throws {
+        try connection.execute(
+            """
+            INSERT INTO shelf (uid, name, sort_order, created_at, is_default) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (uid) DO UPDATE SET
+                name = excluded.name, sort_order = excluded.sort_order, is_default = excluded.is_default;
+            """,
+            [
+                .text(shelf.uid),
+                .text(shelf.name),
+                .integer(Int64(shelf.sortOrder)),
+                .real(shelf.createdAt.timeIntervalSince1970),
+                .integer(shelf.isDefault ? 1 : 0)
+            ]
+        )
+    }
+
+    /// 写一个笔记本（按 `uid` 覆盖）。`shelfUid` 指向不存在的架时**外键会拦下来**
+    /// （`shelf_uid` 有 `REFERENCES shelf (uid)`，而 `foreign_keys = ON`）—— 这正是「不存在无归属笔记本」。
+    public func upsert(_ notebook: Notebook) throws {
+        try connection.execute(
+            """
+            INSERT INTO notebook (uid, shelf_uid, name, sort_order, created_at, is_default) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (uid) DO UPDATE SET
+                shelf_uid = excluded.shelf_uid, name = excluded.name,
+                sort_order = excluded.sort_order, is_default = excluded.is_default;
+            """,
+            [
+                .text(notebook.uid),
+                .text(notebook.shelfUid),
+                .text(notebook.name),
+                .integer(Int64(notebook.sortOrder)),
+                .real(notebook.createdAt.timeIntervalSince1970),
+                .integer(notebook.isDefault ? 1 : 0)
+            ]
+        )
+    }
+
+    /// 删一个笔记本架（里面的笔记本靠外键级联走）。
+    ///
+    /// **刻意只做「删这一行」**：里面的笔记怎么办是 `ContainerRemovalPlan`（Core 半）算出来的策略
+    /// （一并删 / 移到默认笔记本），调用方先落那个计划、再调这里 —— 库这一层不替上层做决定。
+    public func deleteShelf(uid: String) throws {
+        try connection.execute("DELETE FROM shelf WHERE uid = ?", [.text(uid)])
+    }
+
+    /// 删一个笔记本（同一条纪律：笔记的处置归调用方）。
+    public func deleteNotebook(uid: String) throws {
+        try connection.execute("DELETE FROM notebook WHERE uid = ?", [.text(uid)])
+    }
+
+    /// 归属对（`uuid` ↔ `notebook_uid`）。顺序与 `notes()` 同口径（最近更新在前），
+    /// 这样「按笔记本过滤」的结果与不过滤时的相对次序一致。
+    public func placements() throws -> [NotebookPlacement] {
+        try connection
+            .query("SELECT uuid, notebook_uid FROM note ORDER BY updated_at DESC, title ASC")
+            .compactMap { row in
+                guard let uuid = row.text("uuid") else { return nil }
+                return NotebookPlacement(noteID: uuid, notebookUid: row.text("notebook_uid"))
+            }
+    }
+
+    /// 一条笔记的归属（缺归属 = `nil`）。
+    public func notebookUid(of id: UUID) throws -> String? {
+        try connection.scalarText("SELECT notebook_uid FROM note WHERE uuid = ?", [.text(id.uuidString)])
+    }
+
+    /// **缺归属**的笔记条数（`NULL` / 空串）。迁移与判据用它自证「没有无归属笔记」——
+    /// 这一条是可量的事实，不是「我以为回填过了」。
+    public func unassignedNoteCount() throws -> Int {
+        Int(try connection.scalarInt("SELECT count(*) FROM note WHERE notebook_uid IS NULL OR notebook_uid = ''") ?? 0)
+    }
+
+    /// 把若干条笔记移到目标笔记本。返回**真正被改动**的行数。
+    ///
+    /// 两条纪律：① 目标 uid **认不出就落默认笔记本**（走 `NotebookDirectory.resolvedNotebookUid`，
+    /// 与列表 / 过滤同一处兜底）；② **不碰 `updated_at`** —— 契约 §2.12 第 4 条：
+    /// 移动不属于「编辑正文」，不构成一次内容更新。
+    @discardableResult
+    public func move(noteIDs: [UUID], toNotebook notebookUid: String) throws -> Int {
+        guard !noteIDs.isEmpty else { return 0 }
+        let target = try notebookDirectory().resolvedNotebookUid(notebookUid)
+        let placeholders = Array(repeating: "?", count: noteIDs.count).joined(separator: ", ")
+        var bindings: [SQLiteValue] = [.text(target)]
+        bindings.append(contentsOf: noteIDs.map { SQLiteValue.text($0.uuidString) })
+        try connection.execute(
+            "UPDATE note SET notebook_uid = ? WHERE uuid IN (\(placeholders))",
+            bindings
+        )
+        return noteIDs.count
+    }
+
+    /// **一次性归属迁移 + 幂等补缺**（队列 `L-97` 第二片的「旧数据迁移」那一半）。
+    ///
+    /// 三件事，全在一个事务里：① 没有默认架 ⇒ 建一个；② 没有默认笔记本 ⇒ 建一个（挂在默认架上）；
+    /// ③ 缺归属（`NULL` / 空串 / **认不出的 uid**）的笔记一律落默认笔记本。
+    ///
+    /// 名字由**调用方给**（Core 不许写死文案 —— 默认容器的名字是要落库、要显示给用户的**数据**）。
+    /// 幂等：第二次调用时三条都不匹配任何行 ⇒ 库一个字节都不变（单测按 `uid` 与条数逐项对账）。
+    @discardableResult
+    public func ensureDefaultContainers(
+        shelfName: String,
+        notebookName: String,
+        now: Date = Date()
+    ) throws -> NotebookDirectory {
+        try connection.transaction {
+            var directory = try notebookDirectory()
+            if directory.defaultShelf == nil {
+                try upsert(Shelf(name: shelfName, sortOrder: directory.shelves.count, createdAt: now, isDefault: true))
+                directory = try notebookDirectory()
+            }
+            if directory.defaultNotebook == nil {
+                let shelfUid = directory.defaultShelf!.uid
+                try upsert(
+                    Notebook(
+                        shelfUid: shelfUid,
+                        name: notebookName,
+                        sortOrder: directory.notebooks(inShelf: shelfUid).count,
+                        createdAt: now,
+                        isDefault: true
+                    )
+                )
+                directory = try notebookDirectory()
+            }
+            let defaultNotebookUid = directory.defaultNotebook!.uid
+            try connection.execute(
+                """
+                UPDATE note SET notebook_uid = ?
+                WHERE notebook_uid IS NULL OR notebook_uid = ''
+                   OR notebook_uid NOT IN (SELECT uid FROM notebook);
+                """,
+                [.text(defaultNotebookUid)]
+            )
+        }
+        return try notebookDirectory()
     }
 
     // MARK: - 快照备份

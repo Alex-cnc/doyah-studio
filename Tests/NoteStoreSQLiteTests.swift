@@ -59,12 +59,17 @@ final class NoteStoreSQLiteTests: XCTestCase {
 
     // MARK: - ① schema v1
 
-    func testSchemaIsCreatedAtVersionOneWithEveryDeclaredObject() throws {
+    /// 建库建到**最新版**，且逐版声明的对象（v1 的表 / 触发器 / 索引 + v2 的表 / 索引）都在。
+    ///
+    /// 为什么按「两个版本声明的并集」核而不是只核最新版的名单：`NoteSchemaV1.ddl` 是**存量库上来
+    /// 要走的那一步**（v1 → v2 是 `ALTER`），它声明的对象必须真在库里 —— 少一张表，老库那条路
+    /// 就在没人测的角落里断掉。
+    func testSchemaIsCreatedAtLatestVersionWithEveryDeclaredObject() throws {
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV1.version)
+        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion)
 
         let tables = try database.tableNames()
-        for expected in NoteSchemaV1.tables {
+        for expected in NoteSchemaV1.tables + NoteSchemaV2.tables {
             XCTAssertTrue(tables.contains(expected), "缺表 \(expected)；实际：\(tables)")
         }
         let triggers = try database.triggerNames()
@@ -72,20 +77,20 @@ final class NoteStoreSQLiteTests: XCTestCase {
             XCTAssertTrue(triggers.contains(expected), "缺触发器 \(expected)；实际：\(triggers)")
         }
         let indexes = try SQLiteConnection(path: url().path).schemaObjects(kind: "index")
-        for expected in NoteSchemaV1.indexes {
+        for expected in NoteSchemaV1.indexes + NoteSchemaV2.indexes {
             XCTAssertTrue(indexes.contains(expected), "缺索引 \(expected)；实际：\(indexes)")
         }
         XCTAssertEqual(try database.integrityCheck(), "ok")
     }
 
-    /// 打开第二次不许动数据（幂等）：schema 已是 v1 就不再跑 DDL，笔记条数不变。
+    /// 打开第二次不许动数据（幂等）：schema 已是最新版就不再跑 DDL，笔记条数不变。
     func testReopeningDoesNotReshapeOrLoseData() throws {
         let first = try makeDatabase()
         try first.upsert(sampleNote(title: "第一条"))
         try first.close()
 
         let second = try makeDatabase()
-        XCTAssertEqual(second.userVersion, 1)
+        XCTAssertEqual(second.userVersion, NoteDatabase.supportedVersion)
         XCTAssertEqual(try second.noteCount(), 1)
         XCTAssertEqual(try second.notes().first?.title, "第一条")
     }
@@ -108,7 +113,7 @@ final class NoteStoreSQLiteTests: XCTestCase {
                 return XCTFail("期望 unsupportedSchemaVersion，实际：\(error)")
             }
             XCTAssertEqual(found, 99)
-            XCTAssertEqual(supported, NoteSchemaV1.version)
+            XCTAssertEqual(supported, NoteDatabase.supportedVersion)
         }
     }
 
@@ -356,7 +361,7 @@ final class NoteStoreSQLiteTests: XCTestCase {
 
         let snapshot = try database.snapshot(to: target)
         XCTAssertEqual(snapshot.noteCount, 3)
-        XCTAssertEqual(snapshot.schemaVersion, NoteSchemaV1.version)
+        XCTAssertEqual(snapshot.schemaVersion, NoteDatabase.supportedVersion)
         XCTAssertEqual(snapshot.integrity, "ok")
         XCTAssertGreaterThan(snapshot.byteCount, 0)
         XCTAssertTrue(FileManager.default.fileExists(atPath: target.path))
@@ -475,7 +480,7 @@ final class NoteStoreSQLiteTests: XCTestCase {
         let report = NoteLibraryMigration.migrateIfNeeded(jsonURL: jsonURL, databaseURL: url())
         XCTAssertEqual(report.outcome, .migrated)
         XCTAssertEqual(report.noteCount, 0)
-        XCTAssertEqual(try makeDatabase().userVersion, 1)
+        XCTAssertEqual(try makeDatabase().userVersion, NoteDatabase.supportedVersion)
     }
 
     /// 生效的 `DOYAH_NOTES_DIR` 覆盖 ⇒ 主动让路（别把真实用户的笔记搬进临时目录）。

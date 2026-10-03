@@ -253,6 +253,7 @@
 		786D356E5E5EA0281FB5A0E0 /* ExecutionSafety.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C63CF77CC130D1D564DDAD6 /* ExecutionSafety.swift */; };
 		7889F3F29441263CDB64A182 /* NoteLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A899230A439F3312F954F45D /* NoteLibrary.swift */; };
 		7A883DD7E815C6EA168C0AB5 /* ExecutionRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED607403CD8E32896432C6BE /* ExecutionRegistry.swift */; };
+		7ADB4B4E4F85A8C20065D5EC /* NotebookStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCADC37BB5BF2B221BF615C7 /* NotebookStorageTests.swift */; };
 		7B889A10D3F40E22C90B8F9D /* TableDesignChangeSetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8085CDB5F4B6A5471247011E /* TableDesignChangeSetTests.swift */; };
 		7C62F3B375789472DC6691CF /* SecureASCIIField.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1322D682D76DDBB9ADE2EA /* SecureASCIIField.swift */; };
 		7E2320D6F5B88155F07984A0 /* MySQLDialectTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CC0B057BD7792B8E86FB2EF /* MySQLDialectTests.swift */; };
@@ -970,6 +971,7 @@
 		CB65FC24B68864F6845B85C6 /* SafeModeConfirmSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeModeConfirmSheet.swift; sourceTree = "<group>"; };
 		CC5750665C2BBAF68D3F4E86 /* BrowserTabStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserTabStore.swift; sourceTree = "<group>"; };
 		CCAA5487D12734A2F61B4AEB /* SQLEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLEditorView.swift; sourceTree = "<group>"; };
+		CCADC37BB5BF2B221BF615C7 /* NotebookStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookStorageTests.swift; sourceTree = "<group>"; };
 		CD446AD2AB1D8CE114FCAA83 /* SecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretStore.swift; sourceTree = "<group>"; };
 		CDE7FD3151693215F320D13B /* MemoryGovernance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryGovernance.swift; sourceTree = "<group>"; };
 		CE3404D30FCA9C5CBBAB8DBD /* CodeCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeCompletion.swift; sourceTree = "<group>"; };
@@ -1284,6 +1286,7 @@
 				119D35D8E7ABF312C37A0CC6 /* MySQLWordingTests.swift */,
 				B45074022BE0285075B1C95B /* NebulaSkinPreferenceTests.swift */,
 				DA5F1CC03A72965275949B56 /* NoteBodyTests.swift */,
+				CCADC37BB5BF2B221BF615C7 /* NotebookStorageTests.swift */,
 				66CB005D8F870189BDF054BB /* NotebookTests.swift */,
 				FBE5308316B042A4E78A4DF1 /* NoteDataBoundaryTests.swift */,
 				692776AC49B8A11884733C89 /* NoteLibraryTests.swift */,
@@ -2361,6 +2364,7 @@
 				0EE60532EA565EC6035C8E13 /* NoteLibraryTests.swift in Sources */,
 				24B35BC4B9DFA48932EA04FF /* NoteStoreSQLiteTests.swift in Sources */,
 				90552540FE15C3ECE1B8E828 /* NoteTests.swift in Sources */,
+				7ADB4B4E4F85A8C20065D5EC /* NotebookStorageTests.swift in Sources */,
 				3B1BD520C18756159989E45D /* NotebookTests.swift in Sources */,
 				44135F9A2492EF3FA0BA93F0 /* ObjectDDLTests.swift in Sources */,
 				D073904227215DE1A29C10A0 /* ObjectSearchTests.swift in Sources */,
