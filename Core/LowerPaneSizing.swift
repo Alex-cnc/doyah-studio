@@ -34,4 +34,30 @@ public enum LowerPaneSizing {
     public static func idealHeight(collapsed: Bool) -> CGFloat? {
         collapsed ? nil : expandedIdealHeight
     }
+
+    // MARK: 用户拖出来的高度（队列 `L-181`）
+
+    /// 拖拽允许的最小高度 —— 与展开态下限同源（一行按钮 + 一点内容），不另立数字。
+    public static let draggableMinHeight: CGFloat = expandedMinHeight
+
+    /// 高度上限**按可用高度的比例**算，不写死绝对值：矮窗口里也不许把编辑区挤没。
+    public static let maxHeightRatio: CGFloat = 0.75
+
+    /// 拿不到可用高度时的绝对兜底上限。
+    public static let fallbackMaxHeight: CGFloat = 600
+
+    /// 把用户拖出来的高度夹进合法范围。
+    ///
+    /// `available` = 面板所在段的总高（App 层拿窗口内容高度当代理）；`nil` 或 ≤ 0 ⇒ 走兜底上限。
+    /// 上限与下限的相对关系也要兜住：可用高度很小时，上限不许低于下限（否则结果会随可用高度反向跑）。
+    public static func clamped(height: CGFloat, available: CGFloat?) -> CGFloat {
+        let lower = draggableMinHeight
+        let upper: CGFloat
+        if let available, available > 0 {
+            upper = max(lower, (available * maxHeightRatio).rounded())
+        } else {
+            upper = fallbackMaxHeight
+        }
+        return min(max(height, lower), upper)
+    }
 }

@@ -846,6 +846,14 @@ final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(isLowerPaneMaximized, forKey: "ui.lowerPaneMaximized") }
     }
 
+    /// 下方面板的**用户拖出来的高度**（队列 `L-181`：顶边拖拽把手）。持久化，与上面两项同一套做法。
+    /// 未拖过时用 `LowerPaneSizing.expandedIdealHeight`（面板默认高度口径）。
+    @Published var lowerPaneHeight: CGFloat =
+        UserDefaults.standard.object(forKey: "ui.lowerPaneHeight") as? Double
+            ?? Double(LowerPaneSizing.expandedIdealHeight) {
+        didSet { UserDefaults.standard.set(Double(lowerPaneHeight), forKey: "ui.lowerPaneHeight") }
+    }
+
     /// 当前选中的下方面板页签。
     @Published var lowerPaneTab: LowerPaneTab =
         LowerPaneTab(rawValue: UserDefaults.standard.string(forKey: "ui.lowerPaneTab") ?? "") ?? .problem {
