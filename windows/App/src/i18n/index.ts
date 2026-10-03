@@ -22,6 +22,33 @@ export interface Entry {
 
 /** 语言表：key 用点分层级，便于按区域找。 */
 export const DICT = {
+  // 底部面板（2.x 界面改版新增；四格 + 空态与未开工说明）
+  'panel.problems': { 'zh-Hans': '问题', en: 'Problems' },
+  'panel.output': { 'zh-Hans': '输出', en: 'Output' },
+  'panel.terminal': { 'zh-Hans': '终端', en: 'Terminal' },
+  'panel.debug': { 'zh-Hans': '调试控制台', en: 'Debug console' },
+  'panel.notReady': { 'zh-Hans': '{name}（本版未开工）', en: '{name} (not implemented in this version)' },
+  'panel.aria': { 'zh-Hans': '底部面板', en: 'Bottom panel' },
+  'panel.collapse': { 'zh-Hans': '收起底部面板', en: 'Collapse bottom panel' },
+  'panel.terminal.note': {
+    'zh-Hans': '内置终端本版未开工（真起 shell 那一半还没打通）。这里不会出现假的提示符。',
+    en: 'The built-in terminal is not implemented in this version (the real shell half is not done). No fake prompt appears here.',
+  },
+  'panel.debug.note': {
+    'zh-Hans': '本版没有调试器，这一格暂不开放。',
+    en: 'This version has no debugger; this tab is not open yet.',
+  },
+  'panel.problems.empty': {
+    'zh-Hans': '没有问题。连库 / 执行 / 检索出的错都会汇总到这里。',
+    en: 'No problems. Errors from connecting, running queries and searching are collected here.',
+  },
+  'panel.output.empty': {
+    'zh-Hans': '还没有输出。连库、执行查询、检索、格式化的回执都会打到这里。',
+    en: 'No output yet. Receipts from connecting, running queries, searching and formatting appear here.',
+  },
+  'panel.expand': { 'zh-Hans': '展开底部面板', en: 'Expand bottom panel' },
+  'panel.toggle': { 'zh-Hans': '面板', en: 'Panel' },
+
   // 结果面工具栏
   'grid.filter.placeholder': { 'zh-Hans': '筛选（当前结果内，不分大小写）', en: 'Filter (current result, case-insensitive)' },
   'grid.rows.summary': { 'zh-Hans': '命中 {hit} / 共 {total} 行', en: '{hit} of {total} rows matched' },

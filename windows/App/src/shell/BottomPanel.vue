@@ -13,6 +13,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { t as translate, type UiLanguage } from '../i18n'
 
 /** 面板里的一条输出（级别决定颜色）。 */
 export interface PanelEntry {
@@ -27,6 +28,8 @@ export interface PanelEntry {
 }
 
 const props = defineProps<{
+  /** 界面语言（由外壳传下来；本组件的文案都走语言表） */
+  language?: UiLanguage
   /** 输出页签的内容 */
   entries: readonly PanelEntry[]
   /** 问题页签的内容（比输出更少、更"要处理"的那些） */
@@ -35,16 +38,21 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (event: 'collapse'): void }>()
 
+/** 本组件的文案帮手（语言由外壳给；不给就按中文）。 */
+function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
+  return translate(key, props.language ?? 'zh-Hans', vars)
+}
+
 type TabId = 'problems' | 'output' | 'terminal' | 'debug'
 
 /** 各页签的标号（问题数实时跟着走）。 */
 const problems = computed(() => props.problems ?? [])
 
 const tabs = computed(() => [
-  { id: 'problems' as TabId, label: '问题', count: problems.value.length, ready: true },
-  { id: 'output' as TabId, label: '输出', count: props.entries.length, ready: true },
-  { id: 'terminal' as TabId, label: '终端', count: 0, ready: false },
-  { id: 'debug' as TabId, label: '调试控制台', count: 0, ready: false },
+  { id: 'problems' as TabId, label: tr('panel.problems'), count: problems.value.length, ready: true },
+  { id: 'output' as TabId, label: tr('panel.output'), count: props.entries.length, ready: true },
+  { id: 'terminal' as TabId, label: tr('panel.terminal'), count: 0, ready: false },
+  { id: 'debug' as TabId, label: tr('panel.debug'), count: 0, ready: false },
 ])
 
 const active = ref<TabId>('output')
@@ -61,7 +69,7 @@ const activeEntries = computed(() => (active.value === 'problems' ? problems.val
 </script>
 
 <template>
-  <section class="panel" aria-label="底部面板">
+  <section class="panel" :aria-label="tr('panel.aria')">
     <div class="panel__tabs" role="tablist">
       <button
         v-for="tab in tabs"
@@ -71,31 +79,27 @@ const activeEntries = computed(() => (active.value === 'problems' ? problems.val
         type="button"
         role="tab"
         :aria-selected="active === tab.id"
-        :title="tab.ready ? tab.label : `${tab.label}（本版未开工）`"
+        :title="tab.ready ? tab.label : tr('panel.notReady', { name: tab.label })"
         @click="active = tab.id"
       >
         {{ tab.label }}
         <span v-if="tab.count > 0" class="panel__tab-count">{{ tab.count }}</span>
       </button>
       <span class="panel__spacer" />
-      <button class="panel__act" type="button" title="收起底部面板" @click="emit('collapse')">⌄</button>
+      <button class="panel__act" type="button" :title="tr('panel.collapse')" @click="emit('collapse')">⌄</button>
     </div>
 
     <div class="panel__body">
       <!-- 未开工的两个页签：如实说，不放假界面 -->
       <p v-if="active === 'terminal' || active === 'debug'" class="panel__note">
         {{
-          active === 'terminal'
-            ? '内置终端本版未开工（真起 shell 那一半还没打通）。这里不会出现假的提示符。'
-            : '本版没有调试器，这一格暂不开放。'
+          active === 'terminal' ? tr('panel.terminal.note') : tr('panel.debug.note')
         }}
       </p>
       <!-- 空的"真"页签：说清"这里会出现什么"，而不是干留白 -->
       <p v-else-if="activeEntries.length === 0" class="panel__note">
         {{
-          active === 'problems'
-            ? '没有问题。连库 / 执行 / 检索出的错都会汇总到这里。'
-            : '还没有输出。连库、执行查询、检索、格式化的回执都会打到这里。'
+          active === 'problems' ? tr('panel.problems.empty') : tr('panel.output.empty')
         }}
       </p>
       <ol v-else class="panel__list">

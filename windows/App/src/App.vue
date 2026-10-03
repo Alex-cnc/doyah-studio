@@ -10,6 +10,7 @@ import CommandPalette from './shell/CommandPalette.vue'
 import TitleBar from './shell/TitleBar.vue'
 import { commandById, type Command } from './shell/commands'
 import BottomPanel from './shell/BottomPanel.vue'
+import type { UiLanguage } from './i18n'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
 import {
@@ -156,6 +157,10 @@ async function runCommand(command: Command) {
 //
 // 输出流水由视图通过 `push-panel` 事件喂进来；有上限（超出丢最老的）——
 // 一个跑一整天的应用不能把输出全留在内存里。
+/** 界面语言：**外壳持有、往下传**（原来是数据库视图自己持有一份 ⇒ 两处会不一致）。
+ * 详情面板与外壳文案都取它；切换入口仍在数据库视图那一侧（它才是用户看得见的地方）。 */
+const uiLanguage = ref<UiLanguage>('zh-Hans')
+
 const panelOpen = ref(true)
 const panelEntries = ref<PanelEntry[]>([])
 const PANEL_ENTRY_LIMIT = 500
@@ -320,6 +325,7 @@ function onSelect(id: ActivityBarItemId) {
         <!-- 底部面板（图里的 问题 / 输出 / 终端 / 调试控制台；后两个如实标「未开工」） -->
         <BottomPanel
           v-if="panelOpen"
+          :language="uiLanguage"
           :entries="panelEntries"
           :problems="panelProblems"
           @collapse="panelOpen = false"
