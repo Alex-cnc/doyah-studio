@@ -345,6 +345,15 @@ final class CodeTextView: NSTextView {
             onSave?()
             return true
         }
+        // ⌘L：勾 / 取消勾选**光标所在行**的任务框（`FR-MD-02`）。
+        // 只认「恰好 ⌘」这一个修饰键 —— 带 ⇧ 的 ⇧⌘L 是应用菜单里的另一件事，不抢。
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.command],
+           event.charactersIgnoringModifiers?.lowercased() == "l",
+           MarkdownEditingScope.applies(to: completionLanguage),
+           let plan = MarkdownListEditing.toggleTask(in: string, selection: selectedRange()) {
+            applyMarkdownPlan(plan)
+            return true
+        }
         // ⇧⌘F：格式化代码（FR-EDIT-39）。与 ⌘S 同一条理由 —— SwiftUI 的 `.keyboardShortcut`
         // 在文本视图拿到焦点时收不到这个按键，而"光标在编辑器里"正是要格式化的那一刻。
         if event.modifierFlags.contains([.command, .shift]),
@@ -353,6 +362,47 @@ final class CodeTextView: NSTextView {
             return true
         }
         return super.performKeyEquivalent(with: event)
+    }
+
+    // MARK: Markdown 编辑手感（FR-MD-01 / FR-MD-02）
+    //
+    // 两件事都只对 Markdown 文档生效（生效范围判在 `Core/MarkdownEditingScope`，
+    // 不在这里自己判语言）：`- ` / `[ ]` 在 YAML 里是数组、在 SQL 里是减号，纯文本里
+    // 用户要的往往是原样的回车。判据在 `Tests/MarkdownEditingTests.swift`。
+
+    /// 回车：列表项自动续行；空条目上的回车 = **退出列表**（都交给 `Core/MarkdownListEditing`）。
+    ///
+    /// 为什么拦在这里：`NSTextView` 的默认回车不会认列表标记，而 SwiftUI 侧的
+    /// `.onSubmit` / 快捷键在文本视图拿到焦点时都收不到这个键 —— 与 ⌘S 同一条理由。
+    /// 判据说 `nil`（不是列表项、光标在标记之前、有选区）就原样交还给默认实现。
+    override func insertNewline(_ sender: Any?) {
+        if MarkdownEditingScope.applies(to: completionLanguage),
+           let plan = MarkdownListEditing.continuation(in: string, selection: selectedRange()),
+           applyMarkdownPlan(plan) {
+            return
+        }
+        super.insertNewline(sender)
+    }
+
+    /// 把 Core 算好的「替换哪一段 / 换成什么 / 光标停哪」落到编辑器上。
+    ///
+    /// **走 `shouldChangeText` → `replaceCharacters` → `didChangeText`**（与 `applyFormat` 同一条路）：
+    /// 这样 ⌘Z 一步回得到续行之前，`didChangeText` 又会带上模型、行号列与着色。
+    /// 直接在 `string` 上拼是不行的 —— 那条路不注册撤销、也不通知模型。
+    ///
+    /// 返回 `false` = 这次没落成（越界 / 被 `shouldChangeText` 拒），调用方应当**交还默认实现**，
+    /// 而不是把这个按键悄悄吞掉。
+    @discardableResult
+    func applyMarkdownPlan(_ plan: MarkdownEditPlan) -> Bool {
+        guard let storage = textStorage, plan.range.location >= 0,
+              plan.range.location + plan.range.length <= storage.length else { return false }
+        guard shouldChangeText(in: plan.range, replacementString: plan.replacement) else { return false }
+        storage.replaceCharacters(in: plan.range, with: plan.replacement)
+        didChangeText()
+        let caret = min(max(0, plan.caret), storage.length)
+        setSelectedRange(NSRange(location: caret, length: 0))
+        scrollRangeToVisible(NSRange(location: caret, length: 0))
+        return true
     }
 
     /// 跳到第 `line` 行（1 起）：把光标挪过去并滚到可见（`FR-EDIT-44` 的「回车跳到命中行」）。
