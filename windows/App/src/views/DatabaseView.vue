@@ -379,6 +379,77 @@ async function runImportNow() {
     busy.value = ''
   }
 }
+
+// ── 库与服务器管理面（1.7）：**读数只读**；危险操作只给语句、不代为执行 ────────────────────
+//
+// 口径（与领域层 `admin` 一致）：
+// ① 维护命令与杀会话**只生成文本**——面板里没有"执行"按钮，只有"复制"；
+// ② 会话列表按**危害**排（等锁优先），与领域层排序一致；
+// ③ 删库确认要**逐字打库名**，判定在领域层（这里只把结果显示出来）。
+
+const adminOpen = ref(false)
+const adminDatabases = ref<DatabaseInfo[]>([])
+const adminSessions = ref<SessionRow[]>([])
+const adminStats = ref<TableStats[]>([])
+const adminNote = ref('')
+/** 维护 / 杀会话命令（只生成，不执行）。 */
+const adminCommands = ref<MaintenanceCommand[]>([])
+const adminCommandNote = ref('')
+
+async function loadAdmin() {
+  busy.value = '读管理面…'
+  clearFailure()
+  try {
+    adminDatabases.value = await ipcAdminDatabases()
+    adminSessions.value = await ipcAdminSessions()
+    if (resultSource.value) {
+      adminStats.value = await ipcAdminTableStats(resultSource.value.schema)
+    }
+    adminNote.value = ''
+  } catch (e) {
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
+  }
+}
+
+/** 生成维护命令（**只生成、不执行**）。 */
+async function loadMaintenance() {
+  const table = resultSource.value?.table
+  if (!table) {
+    adminCommandNote.value = '先从对象树点开一张表（维护命令是按表给的）'
+    return
+  }
+  try {
+    adminCommands.value = await ipcMaintenanceSql(resultSource.value?.schema, table)
+    adminCommandNote.value = '以下是**文本**：本侧不代为执行维护命令'
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
+/** 生成杀会话命令（只生成；先给 cancel，要 terminate 由用户自己选那句话）。 */
+async function generateKill(pid: number, force: boolean) {
+  try {
+    const cmd = await ipcTerminateSql(pid, force)
+    adminCommands.value = [cmd]
+    adminCommandNote.value = `已生成 ${force ? 'terminate' : 'cancel'} 语句：本侧**不代为执行**`
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+}
+
+/** 复制管理命令（这是把破坏性语句拿出去的唯一通路 —— 面板里没有执行按钮）。 */
+async function copyAdminCommands() {
+  const text = adminCommands.value.map((c) => c.sql).join('\n\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    copied.value = `已复制 ${adminCommands.value.length} 条命令`
+  } catch {
+    copied.value = '复制失败：外壳不给剪贴板权限（可手动选中复制）'
+  }
+  setTimeout(() => (copied.value = ''), 2500)
+}
 const saved = ref<SavedConnection[]>([])
 const info = ref<ServerInfo | null>(null)
 const tables = ref<TableNode[]>([])
@@ -1459,7 +1530,83 @@ async function probe() {
                 </label>
                 <button class="db__btn" type="button" @click="copyVisible">复制</button>
                 <button class="db__btn" type="button" @click="ioOpen = !ioOpen">导入导出…</button>
+                <button
+                  class="db__btn"
+                  type="button"
+                  @click="adminOpen = !adminOpen; if (adminOpen) loadAdmin()"
+                >
+                  管理面板…
+                </button>
                 <span v-if="copied" class="db__note">{{ copied }}</span>
+              </div>
+
+              <!-- 管理面（1.7）：读数只读；维护 / 杀会话**只生成语句**，面板里没有执行按钮 -->
+              <div v-if="adminOpen" class="db__io">
+                <p class="db__browse-title">
+                  库（{{ adminDatabases.length }}）· 会话（{{ adminSessions.length }}）
+                  <button class="db__btn" type="button" @click="loadAdmin">刷新</button>
+                  <button class="db__btn" type="button" @click="loadMaintenance">生成维护命令</button>
+                  <button
+                    class="db__btn"
+                    type="button"
+                    :disabled="adminCommands.length === 0"
+                    @click="copyAdminCommands"
+                  >
+                    复制命令（唯一出口）
+                  </button>
+                </p>
+                <p v-if="adminNote" class="db__note">{{ adminNote }}</p>
+
+                <details open>
+                  <summary class="db__note">库列表（大小按服务端读数；**不四舍五入到失真**）</summary>
+                  <ul class="db__dml-list">
+                    <li v-for="d in adminDatabases" :key="d.name">
+                      <code>{{ d.name }}</code>
+                      <span class="db__kind">
+                        {{ d.sizeBytes }} 字节 · {{ d.connections }} 连接 · 属主 {{ d.owner }} ·
+                        {{ d.allowConnections ? '允许连接' : '**不允许连接**' }}
+                      </span>
+                    </li>
+                  </ul>
+                </details>
+
+                <details>
+                  <summary class="db__note">会话与锁（**等锁的排最前** —— 按危害排，不按数字大小排）</summary>
+                  <ul class="db__dml-list">
+                    <li v-for="s in adminSessions" :key="s.pid">
+                      <code>pid {{ s.pid }}</code>
+                      <span class="db__kind">
+                        {{ s.user }}@{{ s.database }} · {{ s.state }} · {{ s.durationMs }} ms
+                        <template v-if="s.waiting">· **在等锁**</template>
+                      </span>
+                      <button class="db__btn" type="button" @click="generateKill(s.pid, false)">生成 cancel</button>
+                      <button class="db__btn" type="button" @click="generateKill(s.pid, true)">生成 terminate</button>
+                    </li>
+                  </ul>
+                </details>
+
+                <details v-if="adminStats.length">
+                  <summary class="db__note">表统计（行数是**估算**，不是精确 count）</summary>
+                  <ul class="db__dml-list">
+                    <li v-for="t in adminStats" :key="t.table">
+                      <code>{{ t.table }}</code>
+                      <span class="db__kind">
+                        ≈{{ t.estimatedRows }} 行 · 共 {{ t.totalBytes }} 字节（索引 {{ t.indexSizePretty }}）·
+                        vacuum {{ t.lastVacuum }} · analyze {{ t.lastAnalyze }}
+                      </span>
+                    </li>
+                  </ul>
+                </details>
+
+                <div v-if="adminCommands.length" class="db__dml">
+                  <p class="db__dml-title">{{ adminCommandNote }}</p>
+                  <ul class="db__dml-list">
+                    <li v-for="(c, i) in adminCommands" :key="i">
+                      <span class="db__kind">{{ c.purpose }} · 代价：{{ c.cost }}</span>
+                      <pre class="db__sql-preview">{{ c.sql }}</pre>
+                    </li>
+                  </ul>
+                </div>
               </div>
 
               <!-- 导入导出（1.6）：导出走原子落盘；导入先预览、再一个事务写入 -->
