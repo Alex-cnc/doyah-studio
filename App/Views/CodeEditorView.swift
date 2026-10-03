@@ -159,8 +159,8 @@ struct CodeEditorView: NSViewRepresentable {
         /// 为什么要它：需求提出者 2026-10-03 报的现场 —— 开着 Markdown 预览、**一个字一个字删除**时，
         /// 源码编辑器这边的**插入点会画在真实文字行的下方**（删掉的文字留下的排版没作废干净，
         /// 插入点仍按旧的那几行算），`拖动滚动条`就恢复正常（一次全量重排把它冲掉）。
-        /// 离屏宿主里连试七档都没重现（`L-178` 记了矩阵），所以这里按**已观测症状**
-        /// 做一次定点作废：改动的那个逻辑行，重着色之后排版 + 显示各作废一次。
+        /// 离屏宿主里连试七档都没重现（`L-178` 记了矩阵），所以这里按**已观测症状**做一次定点**重排 + 重画**：
+        /// 改动的那个逻辑行，重着色之后 `ensureLayout` 一遍再让那一块重画（**只作废显示、不作废排版**）。
         private var lastEditedRange: NSRange?
 
         init(_ parent: CodeEditorView) {
@@ -221,10 +221,16 @@ struct CodeEditorView: NSViewRepresentable {
             textView.apply(tokens: tokens, language: language)
             lastHighlightedText = current
 
-            // 重着色之后，把**改过的那一段**的排版与显示各作废一次（见 `lastEditedRange` 的注释）。
-            // 范围只有一两行 ⇒ 代价可忽略；这一句是「插入点画在真实文字行下方」的定点修复。
+            // 重着色之后，**把改过的那一段重新排一遍 + 重画**（见 `lastEditedRange` 的注释）。
+            //
+            // ⚠️ 这里**不许**用 `invalidateLayout(forCharacterRange:)`：`allowsNonContiguousLayout`
+            // 打开时（本编辑器就是），手工「作废排版」会让可见区被判成「没排过」⇒ **整块文字不画**
+            // ——需求提出者 2026-10-03 18:02 复测报的正是这个：「删一个字的时候前面大段文字不见了」，
+            // 截图 `dist/Screenshot 2026-10-03 at 18.02.02.png` 里编辑区上半屏整片空白，
+            // 而同一份文本在预览里完好（⇒ 文字在，是没画出来）。正解 = `ensureLayout`（让它算出来）
+            // + `invalidateDisplay`（重画），而不是把排版作废。
             if let range = lastEditedRange, let layout = textView.layoutManager {
-                layout.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
+                layout.ensureLayout(forCharacterRange: range)
                 layout.invalidateDisplay(forCharacterRange: range)
                 textView.setNeedsDisplay(textView.visibleRect)
             }
