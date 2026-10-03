@@ -544,6 +544,48 @@ async function refreshObjects() {
   await loadSchemas()
 }
 
+// ── SQL 工具条上的「库」下拉（布局对齐 macOS 封面图那条）──────────────────────────
+//
+// **说清它是什么**：本侧**没有"列出服务端所有库"的命令**，所以这个下拉给的是
+// **「已保存连接里、同主机同用户的那些库」** —— 选一个就是**重连到那个库**
+// （复用已有的连接流程，不新造一条通路）。
+//
+// 为什么不做成"从服务端列库"：那要新加一条命令与一次查询，而且列库需要权限；
+// 现有的"保存过的连接"已经覆盖了日常切换的场景。**做不到的那一半如实写在提示里。**
+const databaseOptions = computed(() => {
+  const current = info.value
+  if (!current) return [] as string[]
+  const names = new Set<string>([current.database])
+  for (const connection of saved.value) {
+    if (connection.host === form.value.host && connection.user === form.value.user) {
+      names.add(connection.database)
+    }
+  }
+  return [...names]
+})
+
+/** 切库 = 重连到那个库（复用已保存连接；找不到就改表单里的库名再连）。 */
+async function switchDatabase(name: string) {
+  if (!name || name === info.value?.database) return
+  const match = saved.value.find(
+    (c) => c.database === name && c.host === form.value.host && c.user === form.value.user,
+  )
+  if (match) {
+    await useSaved(match)
+    return
+  }
+  // 没有对应的保存连接：改表单里的库名，让用户自己按「连接」（**不偷偷连**）
+  form.value = { ...form.value, database: name }
+}
+
+/** 清空 SQL（**先问一句**）。 */
+function clearSql() {
+  if (sql.value.trim() && !window.confirm('清空编辑器里的 SQL？（这一步不能撤销）')) return
+  sql.value = ''
+  outcomes.value = []
+  refreshHighlight()
+}
+
 const saved = ref<SavedConnection[]>([])
 const info = ref<ServerInfo | null>(null)
 const tables = ref<TableNode[]>([])
@@ -1523,6 +1565,36 @@ async function probe() {
 
       <!-- SQL 与结果 -->
       <div class="db__main">
+        <!-- 查询页签（图里的「查询 1 ×」+ 加号）；每个页签各自一份 SQL -->
+        <div class="db__qtabs" role="tablist" aria-label="查询页签">
+          <div
+            v-for="tab in queryTabs"
+            :key="tab.id"
+            class="db__qtab"
+            :class="{ 'db__qtab--active': tab.id === activeQueryTab }"
+          >
+            <button
+              class="db__qtab-name"
+              type="button"
+              role="tab"
+              :aria-selected="tab.id === activeQueryTab"
+              :title="`切换到 ${tab.title}`"
+              @click="selectQueryTab(tab.id)"
+            >
+              {{ tab.title }}
+            </button>
+            <button
+              class="db__qtab-close"
+              type="button"
+              :disabled="queryTabs.length <= 1"
+              :title="queryTabs.length <= 1 ? '最后一个页签不能关（要收起来请切到别的视图）' : '关闭这个查询页签'"
+              @click="closeQueryTab(tab.id)"
+            >
+              ✕
+            </button>
+          </div>
+          <button class="db__qtab-add" type="button" title="新建查询页签" @click="newQueryTab">＋</button>
+        </div>
         <form class="db__sql" @submit.prevent="runBatch(false)">
           <!-- 编辑面：**高亮层在下面（透明文字）+ 真 textarea 在上面**。
                两层共用同一份字体与内边距（否则光标与字会错位，这是这种做法的经典坑）。 -->
@@ -1538,7 +1610,7 @@ async function probe() {
               spellcheck="false"
               rows="3"
               aria-label="SQL"
-              @input="refreshHighlight(); refreshCompletions()"
+              @input="refreshHighlight(); refreshCompletions(); stashActiveQuery()"
               @keyup="refreshCompletions()"
               @click="refreshCompletions()"
               @keydown.tab.prevent="acceptCompletion()"
@@ -1559,10 +1631,32 @@ async function probe() {
             </li>
           </ul>
           <div class="db__sql-actions">
+            <!-- 工具条第一格（图里那条）：当前库 —— 选项来自**已保存连接**里同主机同用户的那些库 -->
+            <label v-if="info" class="db__bar-field db__bar-field--inline">
+              <span>库</span>
+              <select
+                :value="info.database"
+                :disabled="!!busy"
+                title="切到这个库（重连一次）；选项来自已保存连接里同主机同用户的那些库"
+                @change="switchDatabase(($event.target as HTMLSelectElement).value)"
+              >
+                <option v-for="name in databaseOptions" :key="name" :value="name">{{ name }}</option>
+              </select>
+            </label>
+            <span v-if="info" class="db__bar-sep" />
             <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy">{{ t('sql.run') }}</button>
             <button class="db__btn" type="button" :disabled="!busy" @click="cancelRunning">{{ t('sql.cancel') }}</button>
             <button class="db__btn" type="button" :disabled="!!busy" @click="showPlan">{{ t('sql.planOnly') }}</button>
             <button class="db__btn" type="button" :disabled="!!busy" @click="runBatch(true)">{{ t('sql.runWithPlan') }}</button>
+          <button
+            class="db__btn"
+            type="button"
+            :disabled="!sql.trim()"
+            title="清空编辑器（会先问一句）"
+            @click="clearSql"
+          >
+            清空
+          </button>
             <span v-if="result && !result.columns.length" class="db__note">
               影响 {{ result.affected ?? '未知' }} 行（无结果集）
             </span>
@@ -2633,6 +2727,87 @@ th.db__grid-head[style] {
 /* ── 对象树（1.1）：搜索框 / 可展开的 schema / 命中清单 / 右键菜单 ───────────────────── */
 
 /* 连接列表与对象树（图里的左栏两块）：分组标题 / 两行条目 / 视图切换 / 工具条 */
+/* 工具条里的内联字段（库下拉）与分隔线 */
+.db__bar-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--ds-spacing-hair);
+}
+
+.db__bar-sep {
+  width: var(--ds-metric-hairline);
+  align-self: stretch;
+  background: var(--ds-hairline);
+  margin: 0 var(--ds-spacing-hair);
+}
+
+/* 查询页签（图里的「查询 1 ×」+ 加号） */
+.db__qtabs {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-hair);
+  height: var(--ds-metric-tab-height);
+  padding: 0 var(--ds-spacing-xs);
+  border-bottom: var(--ds-metric-hairline) solid var(--ds-hairline);
+}
+
+.db__qtab {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-hair);
+  height: 100%;
+  padding: 0 var(--ds-spacing-xs) 0 var(--ds-spacing-s);
+  border-bottom: var(--ds-metric-hairline) solid transparent;
+}
+
+.db__qtab--active {
+  border-bottom-color: var(--ds-color-accent-accent);
+  background: var(--ds-color-surface-raised);
+}
+
+.db__qtab-name {
+  border: none;
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
+}
+
+.db__qtab--active .db__qtab-name {
+  color: var(--ds-color-text-bright);
+}
+
+.db__qtab-close {
+  border: none;
+  background: transparent;
+  color: var(--ds-color-text-tertiary);
+  cursor: pointer;
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__qtab-close:disabled {
+  opacity: 0;
+  cursor: default;
+}
+
+.db__qtab:hover .db__qtab-close:not(:disabled) {
+  color: var(--ds-color-text-primary);
+}
+
+.db__qtab-add {
+  border: none;
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-body-size);
+  cursor: pointer;
+  padding: 0 var(--ds-spacing-xs);
+}
+
+.db__qtab-add:hover {
+  color: var(--ds-color-accent-accent);
+}
+
 .db__group-title {
   margin: var(--ds-spacing-s) 0 var(--ds-spacing-hair);
   padding: 0 var(--ds-spacing-xs);
