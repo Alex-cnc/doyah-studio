@@ -154,6 +154,14 @@ struct CodeEditorView: NSViewRepresentable {
         /// 已经应用过的「跳到第 N 行」投递（同上）。
         var appliedRevealID: UUID?
         private var highlightWorkItem: DispatchWorkItem?
+        /// 最近一次编辑落在**哪个字符范围**（重着色之后拿它去作废「那一段」的排版）。
+        ///
+        /// 为什么要它：需求提出者 2026-10-03 报的现场 —— 开着 Markdown 预览、**一个字一个字删除**时，
+        /// 源码编辑器这边的**插入点会画在真实文字行的下方**（删掉的文字留下的排版没作废干净，
+        /// 插入点仍按旧的那几行算），`拖动滚动条`就恢复正常（一次全量重排把它冲掉）。
+        /// 离屏宿主里连试七档都没重现（`L-178` 记了矩阵），所以这里按**已观测症状**
+        /// 做一次定点作废：改动的那个逻辑行，重着色之后排版 + 显示各作废一次。
+        private var lastEditedRange: NSRange?
 
         init(_ parent: CodeEditorView) {
             self.parent = parent
@@ -165,6 +173,7 @@ struct CodeEditorView: NSViewRepresentable {
             // 行号列跟着内容走：行数（位数）与行起点都在这里重算 —— 打字、粘贴、撤销
             // 都会走到 `textDidChange`，所以这是唯一需要挂的钩子。
             textView.reloadLineNumbers()
+            lastEditedRange = Self.editedLineRange(in: textView)
             parent.onTextChange(textView.string)
             scheduleHighlighting()
         }
@@ -211,6 +220,27 @@ struct CodeEditorView: NSViewRepresentable {
             let tokens = CodeLexer.tokens(in: current, language: language)
             textView.apply(tokens: tokens, language: language)
             lastHighlightedText = current
+
+            // 重着色之后，把**改过的那一段**的排版与显示各作废一次（见 `lastEditedRange` 的注释）。
+            // 范围只有一两行 ⇒ 代价可忽略；这一句是「插入点画在真实文字行下方」的定点修复。
+            if let range = lastEditedRange, let layout = textView.layoutManager {
+                layout.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
+                layout.invalidateDisplay(forCharacterRange: range)
+                textView.setNeedsDisplay(textView.visibleRect)
+            }
+        }
+
+        /// 改动落在**哪一行**（含行尾换行）：从插入点往回找上一个换行，再往后取到下一个换行。
+        /// 行边界不自己数 —— 与行号列用同一个约定（`\n` 切行），但这里只需要「那一段」够用。
+        private static func editedLineRange(in textView: NSTextView) -> NSRange? {
+            let ns = textView.string as NSString
+            let location = min(textView.selectedRange().location, ns.length)
+            guard location != NSNotFound else { return nil }
+            let head = ns.range(of: "\n", options: .backwards, range: NSRange(location: 0, length: location))
+            let start = head.location == NSNotFound ? 0 : NSMaxRange(head)
+            let tail = ns.range(of: "\n", options: [], range: NSRange(location: location, length: ns.length - location))
+            let end = tail.location == NSNotFound ? ns.length : NSMaxRange(tail)
+            return NSRange(location: start, length: max(end - start, 1))
         }
 
         // MARK: 补全（FR-EDIT-36）
