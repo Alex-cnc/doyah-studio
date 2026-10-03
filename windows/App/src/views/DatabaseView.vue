@@ -34,6 +34,9 @@ import {
   dbTableShape,
   generateDdl,
   dbRunDdl,
+  exportToFile,
+  previewImport,
+  runImport,
   type ConnectParams,
   type DbFailure,
   type QueryResult,
@@ -51,6 +54,7 @@ import {
   type ColumnDef,
   type TableShape,
   type DdlStatement,
+  type ImportPreview,
 } from '../ipc'
 import { frozenColumnStylesMeasured, pageOf, visibleOrder, DEFAULT_PAGE_SIZE } from '../grid/view'
 import { EXPORT_FORMAT_LABELS, exportRows, type ExportFormat } from '../grid/export'
@@ -295,6 +299,85 @@ async function copyVisible() {
     copied.value = '复制失败：浏览器/外壳不给剪贴板权限（可手动选中表格复制）'
   }
   setTimeout(() => (copied.value = ''), 2500)
+}
+
+// ── 导入导出面板（1.6）：导出走"原子落盘"，导入走"预览 → 一个事务写入" ──────────────────
+//
+// 口径：**先预览再写库** —— 导入是"一次写很多行"的操作，用户必须先看见
+// 「读了几行、丢了几行、为什么、列怎么对的」再决定写不写；预览不碰数据库，所以可以随便点。
+
+const ioOpen = ref(false)
+const exportPath = ref('')
+const exportFormat = ref<'csv' | 'json'>('csv')
+const exportNote = ref('')
+const importPath = ref('')
+const importTable = ref('')
+const importHasHeader = ref(true)
+const importPreview = ref<ImportPreview | null>(null)
+const importNote = ref('')
+
+/** 导出**当前 SQL 的结果**到文件（原子落盘：失败不留半截文件）。 */
+async function runExport() {
+  if (!exportPath.value.trim()) {
+    exportNote.value = '先填目标文件路径'
+    return
+  }
+  busy.value = '导出中…'
+  clearFailure()
+  try {
+    const report = await exportToFile(sql.value, exportPath.value.trim(), exportFormat.value)
+    exportNote.value = `已写 ${report.rows} 行 × ${report.columns} 列（${report.bytes} 字节）到 ${report.path}${
+      report.truncated ? ' —— **已截断**：服务端还有更多行没取回来' : ''
+    }`
+  } catch (e) {
+    exportNote.value = ''
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
+  }
+}
+
+/** 预览导入：解析文件并与目标表列对账（**不碰数据库**）。 */
+async function runPreviewImport() {
+  if (!importPath.value.trim() || !importTable.value.trim()) {
+    importNote.value = '先填文件路径与目标表'
+    return
+  }
+  clearFailure()
+  try {
+    // 目标列从当前结果来源拿（同一张表）；没来源就让用户先点开那张表
+    const columns = result.value?.columns ?? []
+    importPreview.value = await previewImport(importPath.value.trim(), importHasHeader.value, columns)
+    importNote.value = ''
+  } catch (e) {
+    importPreview.value = null
+    failure.value = describeError(e)
+  }
+}
+
+/** 执行导入（**一个事务**；中途失败整批回滚）。 */
+async function runImportNow() {
+  if (!importPreview.value) {
+    importNote.value = '先「预览」看清会写入什么'
+    return
+  }
+  busy.value = '导入中…'
+  clearFailure()
+  try {
+    const report = await runImport({
+      path: importPath.value.trim(),
+      schema: resultSource.value?.schema,
+      table: importTable.value.trim(),
+      hasHeader: importHasHeader.value,
+      targetColumns: result.value?.columns ?? [],
+    })
+    importNote.value = `已写入 ${report.inserted} 行（列：${report.columns.join(', ')}）；丢行 ${report.skipped.length}`
+  } catch (e) {
+    importNote.value = ''
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
+  }
 }
 const saved = ref<SavedConnection[]>([])
 const info = ref<ServerInfo | null>(null)
@@ -1375,7 +1458,86 @@ async function probe() {
                   </select>
                 </label>
                 <button class="db__btn" type="button" @click="copyVisible">复制</button>
+                <button class="db__btn" type="button" @click="ioOpen = !ioOpen">导入导出…</button>
                 <span v-if="copied" class="db__note">{{ copied }}</span>
+              </div>
+
+              <!-- 导入导出（1.6）：导出走原子落盘；导入先预览、再一个事务写入 -->
+              <div v-if="ioOpen" class="db__io">
+                <p class="db__browse-title">导出当前 SQL 的结果</p>
+                <div class="db__writeback">
+                  <label class="db__freeze">
+                    格式
+                    <select v-model="exportFormat" class="db__select">
+                      <option value="csv">CSV</option>
+                      <option value="json">JSON</option>
+                    </select>
+                  </label>
+                  <input
+                    v-model="exportPath"
+                    class="db__cell-input db__io-path"
+                    spellcheck="false"
+                    placeholder="目标文件路径，例如 D:\\tmp\\export.csv"
+                    aria-label="导出目标路径"
+                  />
+                  <button class="db__btn db__btn--primary" type="button" :disabled="!!busy" @click="runExport">
+                    导出到文件
+                  </button>
+                  <span v-if="exportNote" class="db__note">{{ exportNote }}</span>
+                </div>
+
+                <p class="db__browse-title">从文件导入（说明：空白字段按 NULL 写入）</p>
+                <div class="db__writeback">
+                  <input
+                    v-model="importPath"
+                    class="db__cell-input db__io-path"
+                    spellcheck="false"
+                    placeholder="CSV 或 .xlsx?? 目前 CSV 直接读；.xlsx 走 Python 桥"
+                    aria-label="导入文件路径"
+                  />
+                  <input
+                    v-model="importTable"
+                    class="db__cell-input"
+                    spellcheck="false"
+                    placeholder="目标表名"
+                    aria-label="目标表名"
+                  />
+                  <label class="db__freeze">
+                    <input v-model="importHasHeader" type="checkbox" />
+                    首行是表头
+                  </label>
+                  <button class="db__btn" type="button" @click="runPreviewImport">预览（不写库）</button>
+                  <button
+                    class="db__btn db__btn--primary"
+                    type="button"
+                    :disabled="!importPreview || !!busy"
+                    @click="runImportNow"
+                  >
+                    导入（一个事务）
+                  </button>
+                </div>
+
+                <div v-if="importPreview" class="db__dml">
+                  <p class="db__dml-title">
+                    预览：分隔符「{{ importPreview.delimiter }}」· 解析 {{ importPreview.parsedRows }} 行 /
+                    共 {{ importPreview.totalDataRows }} 行 · 丢弃 {{ importPreview.skipped.length }} 行
+                  </p>
+                  <p class="db__note">
+                    对上的列：{{ importPreview.matched.map((m) => m[0]).join('、') || '（没有一列对上）' }}
+                    <template v-if="importPreview.unmatchedCsv.length">
+                      · CSV 多出来的列：{{ importPreview.unmatchedCsv.join('、') }}
+                    </template>
+                    <template v-if="importPreview.missing.length">
+                      · 表里没给的列：{{ importPreview.missing.join('、') }}
+                    </template>
+                  </p>
+                  <ul v-if="importPreview.skipped.length" class="db__dml-list">
+                    <li v-for="(s, i) in importPreview.skipped.slice(0, 10)" :key="i">
+                      第 {{ s.line }} 行：{{ s.reason }}（{{ s.preview }}）
+                    </li>
+                  </ul>
+                  <p v-if="importNote" class="db__note">{{ importNote }}</p>
+                </div>
               </div>
 
               <!-- 写回（1.4）：双击单元格改值 → 生成 SQL → 试跑 / 提交。
@@ -2300,5 +2462,19 @@ th.db__grid-head[style] {
 
 .db__designer-grid .db__cell-input {
   min-width: 120px;
+}
+
+/* ── 导入导出面板（1.6）──────────────────────────────────────────────────────────── */
+
+.db__io {
+  margin-bottom: var(--ds-spacing-s);
+  padding: var(--ds-spacing-s);
+  background: var(--ds-color-surface-panel);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+}
+
+.db__io-path {
+  min-width: 320px;
 }
 </style>
