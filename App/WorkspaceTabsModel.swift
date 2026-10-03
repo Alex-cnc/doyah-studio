@@ -273,12 +273,31 @@ final class WorkspaceTabsModel: ObservableObject {
         }
         let language = tab.language
         let text = tab.content
-        Task {
-            // **只用内置**（需求提出者 2026-10-02 定案；「外部优先 / 回退内置」那版作废）。
-            // 这一层被删掉了：不探 `PATH`、不探测工具，`runBuiltin` 连 `runner` 都不收 ⇒ 结构上起不了子进程。
-            let execution = CodeFormatService.runBuiltin(language: language, text: text)
-            apply(execution, to: tab.id)
+        // **格式化不在主线程上跑**。
+        //
+        // 为什么：本类是 `@MainActor`，而**裸 `Task {}` 会继承当前隔离域** ⇒ `runBuiltin` 整段
+        // 算在主线程上，界面就是那段时间的卡顿。实测（需求提出者 2026-10-03 人工点验原话：
+        // 「打乱格式之后再格式化，**界面短暂卡死转圈**」）：40 KB 的 Swift 文件约 0.2 秒、
+        // 257 KB 的约 1.1 秒（修掉括号缩进的平方级扫描之前是 12.8 秒）—— 这些全被算成界面卡死。
+        //
+        // 手法：`nonisolated async` 的**纯函数**（`formattedOffMain`）不继承 `@MainActor`，
+        // `await` 它会把这段搬到协作线程池；结果回到主线程再落地。**没有**用 `Task.detached`
+        // —— 那条路要在并发闭包里引用 `self`（`@MainActor` 类），会引入 Swift 6 的 Sendable 警告。
+        //
+        // 「只用内置」这条口径不变：不探 `PATH`、不探测工具，`runBuiltin` 连 `runner` 都不收
+        // ⇒ 结构上仍然起不了子进程，换线程只是换个地方跑同一段纯函数。
+        Task { [weak self] in
+            let execution = await Self.formattedOffMain(language: language, text: text)
+            self?.apply(execution, to: tab.id)
         }
+    }
+
+    /// 格式化的**纯计算面**：`nonisolated` + `async` ⇒ 不继承 `@MainActor`，在协作线程池上跑。
+    private nonisolated static func formattedOffMain(
+        language: TextLanguage,
+        text: String
+    ) async -> CodeFormatExecution {
+        CodeFormatService.runBuiltin(language: language, text: text)
     }
 
     /// 三种结局都要说话 —— 需求原文：不静默失败、也不给出「看起来变了但没变」的结果。

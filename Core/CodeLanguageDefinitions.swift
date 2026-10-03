@@ -915,9 +915,11 @@ extension TextLanguage {
     public static let go = TextLanguage(registered: "go")
     public static let rust = TextLanguage(registered: "rust")
     public static let php = TextLanguage(registered: "php")
-    /// 认不出就是它（FR-EDIT-38 ④）—— 登记表最后一条，与 `detect` 的回落同一个值。
+    /// Swift 与 ArkTS（`Q61` / `FR-EDIT-38` Beta 1 缺口）：两者都进语言表，
+    /// `.ets` / `.arkts` 归 ArkTS，`.swift` 归 Swift —— 一个扩展名只许一个主人。
     public static let swift = TextLanguage(registered: "swift")
     public static let arkts = TextLanguage(registered: "arkts")
+    /// 认不出就是它（FR-EDIT-38 ④）—— 登记表最后一条，与 `detect` 的回落同一个值。
     public static let plainText = TextLanguage(registered: "plainText")
 }
 

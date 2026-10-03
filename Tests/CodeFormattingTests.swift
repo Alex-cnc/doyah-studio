@@ -711,3 +711,57 @@ final class CodeFormatYAMLBuiltinTests: XCTestCase {
         XCTAssertEqual(formatted(once), once)
     }
 }
+
+
+/// **整篇扫描不许是平方级** —— 需求提出者 2026-10-03 人工点验报的第 1 条性能缺陷的根子在这族实现里。
+/// 原话：「随便打开一个 swift 文件，能识别出是 swift 语言，打乱格式之后再格式化，**界面短暂卡死转圈**」。
+///
+/// 早先 `tidy` / `reindent` 是**每行、甚至每个字符**都对全部记号区间线性扫一遍
+/// （`ranges.contains(where:)`）⇒ 代价 ~ 字符数 × 记号数。同一台机器实测：
+/// 3,000 行合成 Swift **16.5 秒**、`App/AppState.swift`（257 KB）**12.8 秒**；
+/// 改成按偏移查表（`CodeFormatting.Mask`）之后同一份文档 **0.76 秒 / 1.15 秒**（约 20 倍）。
+///
+/// 这里给的是**上限**、不是精确基线：机器负载会抖，但平方级与线性级差着数量级 ——
+/// 这道上限拦的是「又写回逐行扫全部区间」那个形状，不是拦正常的抖动。
+final class CodeFormatPerfTests: XCTestCase {
+
+    /// 与真人手上那份同形：真关键字、真注释（注释里塞右括号）、真字符串。
+    private static func swiftDocument(lines: Int) -> String {
+        var s = ""
+        s.reserveCapacity(lines * 56)
+        for i in 1...lines {
+            switch i % 4 {
+            case 0: s += "    // 第 \(i) 行的注释：右括号 ) 放进注释里，别让计数器把它算进去\n"
+            case 1: s += "    if let value = table[\(i)] {\n"
+            case 2: s += "        print(\"第 \(i) 条：字符串里的括号 ( 也不算\")\n"
+            default: s += "    }\n"
+            }
+        }
+        return s
+    }
+
+    /// 括号重排档（Swift / JS / TS / Rust …）在 3,000 行文档上必须**秒级以内**。
+    func testBraceIndentOnLargeDocumentStaysWithinBudget() {
+        let text = Self.swiftDocument(lines: 3_000)
+        let start = Date()
+        let result = CodeFormatService.runBuiltin(language: .swift, text: text)
+        let elapsed = Date().timeIntervalSince(start)
+        print("PERF braceIndent(\(text.utf16.count) 单元) = \(Int(elapsed * 1000)) ms")
+        guard case .ready = result else { return XCTFail("Swift 该走内置括号档：\(result)") }
+        XCTAssertLessThan(elapsed, 3.0, "平方级实现实测 16.5 秒 —— 别让它回来")
+    }
+
+    /// 结构敏感档（Python 走 `reindentStructure` + `tidy`）同样不该是平方级。
+    func testPythonReindentOnLargeDocumentStaysWithinBudget() {
+        var python = ""
+        for i in 1...2_000 {
+            python += "def f\(i)(x):\n    if x > \(i):\n        return \"第 \(i) 条\"\n\n"
+        }
+        let start = Date()
+        let result = CodeFormatService.runBuiltin(language: .python, text: python)
+        let elapsed = Date().timeIntervalSince(start)
+        print("PERF pythonReindent(\(python.utf16.count) 单元) = \(Int(elapsed * 1000)) ms")
+        guard case .ready = result else { return XCTFail("Python 该走内置档：\(result)") }
+        XCTAssertLessThan(elapsed, 3.0)
+    }
+}

@@ -953,10 +953,50 @@ public enum CodeBuiltinFormatter {
         return count
     }
 
+    /// 「某个 UTF-16 偏移落不落在这一类记号里」的**查表**：建表 O(字符数)、查询 O(1)。
+    ///
+    /// 为什么要它：早先这两个格式化路径（`tidy` / `reindent`）是**每行、甚至每个字符**都对
+    /// 全部记号区间做一次线性扫描（`ranges.contains(where:)`）⇒ 代价是
+    /// **字符数 × 记号数**。实测（2026-10-03 人工点验报「格式化时界面卡死转圈」）：
+    /// 257 KB 的 `App/AppState.swift` 走 `braceIndent` 要 **12.8 秒**、3,000 行合成 Swift 要 **16.5 秒**，
+    /// 而且它跑在**主线程**上（`WorkspaceTabsModel` 是 `@MainActor`，`Task {}` 继承隔离）⇒ 界面卡死。
+    /// 换成查表后同一份文件降到**毫秒级**（判据 `CodeFormatPerfTests` 钉住上限）。
+    struct Mask {
+        private var flags: [Bool]
+
+        init(length: Int) {
+            flags = Array(repeating: false, count: max(length, 0))
+        }
+
+        init(ranges: [NSRange], length: Int) {
+            self.init(length: length)
+            for range in ranges {
+                let start = max(0, range.location)
+                let end = min(length, NSMaxRange(range))
+                guard start < end else { continue }
+                for offset in start..<end { flags[offset] = true }
+            }
+        }
+
+        func contains(_ offset: Int) -> Bool {
+            guard offset >= 0, offset < flags.count else { return false }
+            return flags[offset]
+        }
+
+        /// 一段区间里**有没有**被标上的字符（区间通常只有几个字符：行尾空白）。
+        func overlaps(_ range: NSRange) -> Bool {
+            let start = max(0, range.location)
+            let end = min(flags.count, NSMaxRange(range))
+            guard start < end else { return false }
+            for offset in start..<end where flags[offset] { return true }
+            return false
+        }
+    }
+
     static func tidy(_ text: String, language: TextLanguage) -> String {
         guard !text.isEmpty else { return text }
         let ns = text as NSString
-        let strings = ranges(in: text, language: language, kinds: [.string])
+        let strings = Mask(ranges: ranges(in: text, language: language, kinds: [.string]), length: ns.length)
         var lines: [String] = []
         var cursor = 0
         while true {
@@ -975,7 +1015,7 @@ public enum CodeBuiltinFormatter {
     }
 
     /// 一行去掉行尾空白；**这段空白落在字符串里就原样返回**。
-    private static func trimmedTrailing(_ line: String, lineOffset: Int, strings: [NSRange]) -> String {
+    private static func trimmedTrailing(_ line: String, lineOffset: Int, strings: Mask) -> String {
         let ns = line as NSString
         var end = ns.length
         while end > 0 {
@@ -985,7 +1025,7 @@ public enum CodeBuiltinFormatter {
         }
         guard end < ns.length else { return line }
         let span = NSRange(location: lineOffset + end, length: ns.length - end)
-        if strings.contains(where: { NSIntersectionRange($0, span).length > 0 }) { return line }
+        if strings.overlaps(span) { return line }
         return ns.substring(with: NSRange(location: 0, length: end))
     }
 
@@ -998,8 +1038,17 @@ public enum CodeBuiltinFormatter {
     static func reindent(_ text: String, language: TextLanguage) -> String {
         guard !text.isEmpty else { return text }
         let ns = text as NSString
-        let strings = ranges(in: text, language: language, kinds: [.string])
-        let code = ranges(in: text, language: language, kinds: [.string, .comment])
+        // **词法走一次**（早先这里调了两次 `ranges(…)` = 两次全量词法），两张查表都从这一份记号来。
+        let tokens = CodeLexer.tokens(in: text, language: language)
+        let length = ns.length
+        let strings = Mask(
+            ranges: tokens.filter { $0.kind == .string }.map { NSRange($0.range, in: text) },
+            length: length
+        )
+        let code = Mask(
+            ranges: tokens.filter { $0.kind == .string || $0.kind == .comment }.map { NSRange($0.range, in: text) },
+            length: length
+        )
         var lines: [String] = []
         var depth = 0
         var cursor = 0
@@ -1020,8 +1069,8 @@ public enum CodeBuiltinFormatter {
     private static func reindentedLine(
         _ line: String,
         lineOffset: Int,
-        strings: [NSRange],
-        code: [NSRange],
+        strings: Mask,
+        code: Mask,
         depth: inout Int
     ) -> String {
         let ns = line as NSString
@@ -1035,9 +1084,7 @@ public enum CodeBuiltinFormatter {
         guard start < ns.length else { return "" }
 
         let contentOffset = lineOffset + start
-        if strings.contains(where: { $0.location <= contentOffset && contentOffset < NSMaxRange($0) }) {
-            return line
-        }
+        if strings.contains(contentOffset) { return line }
 
         let content = ns.substring(from: start)
         // 这一行以 `}` 起头 ⇒ 它属于**上一层**：先退一层再写。
@@ -1047,12 +1094,12 @@ public enum CodeBuiltinFormatter {
     }
 
     /// 这一行贡献的括号净增量（字符串 / 注释里的不算）。
-    private static func braceDelta(in line: String, lineOffset: Int, code: [NSRange]) -> Int {
+    private static func braceDelta(in line: String, lineOffset: Int, code: Mask) -> Int {
         let ns = line as NSString
         var delta = 0
         for index in 0..<ns.length {
             let offset = lineOffset + index
-            if code.contains(where: { $0.location <= offset && offset < NSMaxRange($0) }) { continue }
+            if code.contains(offset) { continue }
             switch ns.character(at: index) {
             case 0x7B: delta += 1   // {
             case 0x7D: delta -= 1   // }
