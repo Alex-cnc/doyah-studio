@@ -317,7 +317,12 @@ function onSelect(id: ActivityBarItemId) {
       </span>
     </div>
     <div class="shell__body">
-      <SideBar :sections="sections" :active="activeItem" @select="onSelect" />
+      <SideBar
+        :sections="sections"
+        :active="activeItem"
+        :language="uiLanguage"
+        @select="onSelect"
+      />
       <main class="shell__main">
         <div class="shell__stack">
           <!-- 数据库：真库链路（连库 → 对象树 → SQL → 结果），驱动在 Rust 外壳 -->

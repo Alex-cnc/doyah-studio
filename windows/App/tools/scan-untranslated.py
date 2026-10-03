@@ -61,6 +61,12 @@ def collect():
         rel = path.replace(SRC + os.sep, '').replace('\\', '/')
         if rel.startswith('i18n/') or rel.endswith('.test.ts'):
             continue
+        # **白名单**（逐条给理由，不许默默放过）：
+        # `shell/activityBar.ts` 有一套**自己的双语表**（`'zh-Hans': { title: '工作区' },
+        # en: { title: 'Workspace' }` 成对写在一个表里，`Record<UiLanguage, …>`）。
+        # 那是"另一种合规做法"，不是漏译 —— 头一版判据把它误判成 4 处漏译（假红）。
+        if rel == 'shell/activityBar.ts':
+            continue
         raw = open(path, encoding='utf-8').read()
         text = strip_html_comments(strip_line_comments(strip_block_comments(raw)))
 

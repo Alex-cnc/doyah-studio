@@ -22,6 +22,10 @@ export interface Entry {
 
 /** 语言表：key 用点分层级，便于按区域找。 */
 export const DICT = {
+  // 侧栏（活动栏的窄条）
+  'sidebar.aria': { 'zh-Hans': '视图', en: 'Views' },
+  'sidebar.notReady': { 'zh-Hans': '{name}（未开工）', en: '{name} (not implemented)' },
+
   // 状态栏
   'status.rows': { 'zh-Hans': '结果集 {rows} 行 × {cols} 列', en: 'Result: {rows} rows × {cols} columns' },
   'status.window': { 'zh-Hans': '本片已取 {loaded} 行 / 逻辑 {total} 行', en: 'Loaded {loaded} of {total} rows' },

@@ -3,6 +3,7 @@
 // （视图里不许再排一次顺序，也不许各存一份文案）。
 
 import type { ActivityBarItemId } from './activityBar'
+import { t as translate, type UiLanguage } from '../i18n'
 
 export interface ActivityBarSection {
   readonly id: ActivityBarItemId
@@ -12,7 +13,17 @@ export interface ActivityBarSection {
   readonly ready: boolean
 }
 
-defineProps<{ sections: readonly ActivityBarSection[]; active: ActivityBarItemId }>()
+const props = defineProps<{
+  sections: readonly ActivityBarSection[]
+  active: ActivityBarItemId
+  /** 界面语言（由外壳传下来；不给就按中文） */
+  language?: UiLanguage
+}>()
+
+/** 本组件的文案帮手（语言由外壳给）。 */
+function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
+  return translate(key, props.language ?? 'zh-Hans', vars)
+}
 const emit = defineEmits<{ select: [id: ActivityBarItemId] }>()
 
 /**
@@ -33,7 +44,7 @@ function shortLabel(label: string): string {
 </script>
 
 <template>
-  <nav class="sidebar" role="tablist" aria-label="视图">
+  <nav class="sidebar" role="tablist" :aria-label="tr('sidebar.aria')">
     <button
       v-for="section in sections"
       :key="section.id"
@@ -42,8 +53,8 @@ function shortLabel(label: string): string {
       type="button"
       role="tab"
       :aria-selected="section.id === active"
-      :aria-label="section.ready ? section.label : `${section.label}（未开工）`"
-      :title="section.ready ? section.label : `${section.label}（未开工）`"
+      :aria-label="section.ready ? section.label : tr('sidebar.notReady', { name: section.label })"
+      :title="section.ready ? section.label : tr('sidebar.notReady', { name: section.label })"
       :data-glyph="section.glyph"
       @click="emit('select', section.id)"
     >
