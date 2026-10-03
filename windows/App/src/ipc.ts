@@ -37,6 +37,11 @@ export const COMMANDS = {
   dbTableShape: 'db_table_shape',
   generateDdl: 'generate_ddl',
   dbRunDdl: 'db_run_ddl',
+  // 导入导出（1.6：CSV / JSON / Excel；原子落盘、一个事务写入）
+  exportToFile: 'export_to_file',
+  previewImport: 'preview_import',
+  runImport: 'run_import',
+  xlsxToCsv: 'xlsx_to_csv',
   dbProbe: 'db_probe',
   // 连接列表（配置落盘 + 口令进系统凭据管理器）
   connectionsList: 'connections_list',
@@ -630,6 +635,90 @@ export function generateDdl(request: {
 export function dbRunDdl(statements: string[]): Promise<StatementOutcome[]> {
   return call(COMMANDS.dbRunDdl, { statements }, () => {
     throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里执行（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+// ── 导入导出（1.6）────────────────────────────────────────────────────────────────────
+
+/** 导出结果：**行数与截断如实报**。 */
+export interface ExportReport {
+  path: string
+  rows: number
+  columns: number
+  /** 服务端还有更多行没取回来（超过上限） */
+  truncated: boolean
+  bytes: number
+}
+
+/** 被丢掉的一行（**必须带原因**，否则用户不知道丢的是什么）。 */
+export interface SkippedRow {
+  line: number
+  reason: string
+  preview: string
+}
+
+/** 导入预览：读了几行 / 丢了几行 / 列怎么对的（**不碰数据库**）。 */
+export interface ImportPreview {
+  header: string[]
+  delimiter: string
+  parsedRows: number
+  totalDataRows: number
+  skipped: SkippedRow[]
+  matched: [string, number][]
+  unmatchedCsv: string[]
+  missing: string[]
+  sample: string[][]
+}
+
+export interface ImportReport {
+  inserted: number
+  skipped: SkippedRow[]
+  columns: string[]
+}
+
+/** **导出到文件**（原子落盘：临时文件 + 同目录改名，失败不留半截文件）。 */
+export function exportToFile(
+  sql: string,
+  path: string,
+  format: 'csv' | 'json' = 'csv',
+  maxRows?: number,
+): Promise<ExportReport> {
+  return call(COMMANDS.exportToFile, { sql, path, format, maxRows }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里导出（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+/** **预览导入**（不碰数据库）：解析文件并与目标表列对账。 */
+export function previewImport(
+  path: string,
+  hasHeader: boolean,
+  targetColumns: string[],
+): Promise<ImportPreview> {
+  return call(COMMANDS.previewImport, { path, hasHeader, targetColumns }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里预览导入（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+/** **执行导入**：重新解析文件 → **一个事务**写入（中途失败整批回滚）。 */
+export function runImport(request: {
+  path: string
+  schema?: string
+  table: string
+  hasHeader: boolean
+  targetColumns: string[]
+}): Promise<ImportReport> {
+  return call(COMMANDS.runImport, { ...request }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里导入（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+/** **Excel（.xlsx）→ CSV 文本**（借本机 DSH 运行时的 Python + openpyxl，不引 Rust 侧 Excel 依赖）。 */
+export function xlsxToCsv(path: string, sheet?: string): Promise<string> {
+  return call(COMMANDS.xlsxToCsv, { path, sheet }, () => {
+    throw {
+      message: '浏览器旁路没有真库',
+      hint: 'Excel 通路要在 Tauri 外壳里跑（npm run tauri dev）。',
+    } as DbFailure
   })
 }
 // ── 工作区（alpha 2.0）───────────────────────────────────────────────────────────────

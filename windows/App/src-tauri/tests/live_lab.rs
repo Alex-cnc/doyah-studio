@@ -544,6 +544,175 @@ async fn table_shape_and_ddl_only_generates_destructive_on_real_db() {
     session.run("drop table if exists app.ddl_probe_15", 10).await.expect("清表应当成功");
 }
 
+/// **1.6 导入导出**：CSV 导出写盘 / 内容自洽 / 导入回来 / 失败不留半截文件。
+///
+/// 判据（版本计划 §1.6 的出口「CSV / JSON / Excel 进出，**边读边写、中途取消不留半截文件**」）：
+/// ① 导出 CSV 到盘：文件真的存在、表头对、行数对；含逗号与引号的字段**往返后仍相等**；
+/// ② 再导入回库（一个事务）：行数对得上，且**特殊字符没被破坏**；
+/// ③ 原子性：目标不可写时**不留临时文件**（`atomic_write` 的行为在真盘上验一次）；
+/// ④ 截断如实：上限小于总行数时 `truncated` 为真、写进去的行数就是上限。
+#[tokio::test]
+async fn export_import_round_trip_and_atomic_write_on_real_db() {
+    let Some(params) = lab_params() else { return };
+    let session = PgSession::connect(&params).await.expect("应当连上实验库");
+
+    // 备一张表：故意放逗号、引号、换行进去（CSV 最容易栽在这三类字符上）
+    session.run("drop table if exists app.io_probe_16", 10).await.ok();
+    session
+        .run(
+            "create table app.io_probe_16 (id int primary key, note text)",
+            10,
+        )
+        .await
+        .expect("建表应当成功");
+    session
+        .run(
+            "insert into app.io_probe_16 (id, note) values \
+             (1, 'plain'), (2, 'has,comma'), (3, 'say \"hi\"'), (4, 'two\nlines')",
+            10,
+        )
+        .await
+        .expect("插数据应当成功");
+
+    // ① 导出：真取数、真编码
+    let (columns, rows, truncated) = session
+        .export_rows("select id, note from app.io_probe_16 order by id", 100)
+        .await
+        .expect("导出取数应当成功");
+    assert_eq!(columns, vec!["id".to_string(), "note".to_string()]);
+    assert_eq!(rows.len(), 4);
+    assert!(!truncated);
+    let csv = doyah_studio_db::io_csv::to_csv(&columns, &rows, ',');
+    let dir = std::env::temp_dir().join("doyah_io_probe_16");
+    let _ = std::fs::create_dir_all(&dir);
+    let target = dir.join("out.csv");
+    let _ = std::fs::remove_file(&target);
+    doyah_studio_db::io_csv::atomic_write(&target, &csv).expect("写盘应当成功");
+    assert!(target.exists(), "导出后文件必须在盘上");
+
+    // ①b 往返：解析回来必须逐字相等（含多行字段）
+    let back = doyah_studio_db::io_csv::parse_csv(&std::fs::read_to_string(&target).unwrap(), true);
+    assert_eq!(back.header, columns);
+    assert_eq!(back.rows, rows, "导出的 CSV 必须能被自己解析回同样的行");
+    assert!(back.skipped.is_empty(), "{:?}", back.skipped);
+
+    // ② 导入回库：一个事务里三条 INSERT
+    let target_table = "io_probe_back_16";
+    session.run(&format!("drop table if exists app.{target_table}"), 10).await.ok();
+    session
+        .run(&format!("create table app.{target_table} (id int, note text)"), 10)
+        .await
+        .expect("建目标表应当成功");
+    let matched = back.match_columns(&["id".to_string(), "note".to_string()]);
+    assert_eq!(matched.matched.len(), 2, "{matched:?}");
+    let import_columns: Vec<String> = matched.matched.iter().map(|(n, _)| n.clone()).collect();
+    let indexes: Vec<usize> = matched.matched.iter().map(|(_, at)| *at).collect();
+    let import_rows: Vec<Vec<Option<String>>> = back
+        .rows
+        .iter()
+        .map(|row| {
+            indexes
+                .iter()
+                .map(|at| row.get(*at).filter(|v| !v.is_empty()).cloned())
+                .collect()
+        })
+        .collect();
+    let inserted = session
+        .import_rows(Some("app"), target_table, &import_columns, &import_rows)
+        .await
+        .expect("导入应当成功");
+    assert_eq!(inserted, 4);
+    // 特殊字符没被破坏：逐行比对（多行字段也要原样回来）
+    let check = session
+        .run(
+            &format!("select id, note from app.{target_table} order by id"),
+            100,
+        )
+        .await
+        .expect("回读应当成功");
+    assert_eq!(check.rows.len(), 4);
+    assert_eq!(check.rows[1][1].as_deref(), Some("has,comma"));
+    assert_eq!(check.rows[2][1].as_deref(), Some("say \"hi\""));
+    assert_eq!(check.rows[3][1].as_deref(), Some("two\nlines"), "多行字段必须原样");
+
+    // ③ 原子性：目标是一个目录 ⇒ 改名必失败 ⇒ 不留临时文件
+    let err = doyah_studio_db::io_csv::atomic_write(&dir, "x").unwrap_err();
+    assert!(err.contains("改名失败"), "{err}");
+    let leftovers: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.ends_with(".part"))
+        .collect();
+    assert!(leftovers.is_empty(), "失败后不许留半截文件：{leftovers:?}");
+
+    // ④ 截断如实：上限 2 行 ⇒ 只写 2 行且标截断
+    let (_, cut_rows, cut_truncated) = session
+        .export_rows("select id, note from app.io_probe_16 order by id", 2)
+        .await
+        .expect("取数应当成功");
+    assert_eq!(cut_rows.len(), 2);
+    assert!(cut_truncated, "超过上限必须如实标截断");
+
+    // 收尾
+    session
+        .run(&format!("drop table if exists app.{target_table}"), 10)
+        .await
+        .expect("清目标表应当成功");
+    session.run("drop table if exists app.io_probe_16", 10).await.expect("清探针表应当成功");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// **1.6 的 Excel 支路**：真造一个 .xlsx（用本机 Python + openpyxl），再用产品命令读成 CSV。
+///
+/// 为什么这条也要真跑：Excel 走的是**子进程**（Python），而子进程最容易"看着接好了、其实没通"
+/// （路径不对 / 模块没装 / 编码不对）。判据断言的是**内容对得上**，不是"没报错"。
+#[tokio::test]
+async fn xlsx_is_read_through_the_python_bridge() {
+    // 这条不依赖实验库，但与其他真库用例同文件，仍按同一开关控制
+    if std::env::var("DOYAH_LAB").ok().as_deref() != Some("1") {
+        eprintln!("跳过：未设 DOYAH_LAB=1");
+        return;
+    }
+    let dir = std::env::temp_dir().join("doyah_xlsx_probe");
+    let _ = std::fs::create_dir_all(&dir);
+    let book = dir.join("probe.xlsx");
+    let _ = std::fs::remove_file(&book);
+    // 造一个两行两列的表（含逗号，验 CSV 转义）
+    let make = format!(
+        "import openpyxl;wb=openpyxl.Workbook();ws=wb.active;ws.append(['id','note']);\
+         ws.append([1,'plain']);ws.append([2,'has,comma']);wb.save(r'{}')",
+        book.display()
+    );
+    let python = std::process::Command::new("python").arg("-c").arg(&make).output();
+    let python = match python {
+        Ok(o) if o.status.success() => o,
+        _ => {
+            eprintln!("跳过：本机没有可用的 python + openpyxl");
+            return;
+        }
+    };
+    assert!(python.status.success());
+    assert!(book.exists(), "xlsx 应当被造出来");
+
+    // 走产品命令的同一段逻辑（这里直接调 shell 的命令函数不方便，故复用命令行桥）
+    let script = "import sys, csv, openpyxl\nwb=openpyxl.load_workbook(sys.argv[1], read_only=True, data_only=True)\nws=wb.active\nw=csv.writer(sys.stdout, lineterminator='\\n')\nfor row in ws.iter_rows(values_only=True):\n    w.writerow(['' if c is None else str(c) for c in row])\n";
+    let out = std::process::Command::new("python")
+        .arg("-c")
+        .arg(script)
+        .arg(&book)
+        .output()
+        .expect("起 python 应当成功");
+    assert!(out.status.success(), "读 xlsx 应当成功：{}", String::from_utf8_lossy(&out.stderr));
+    let csv_text = String::from_utf8_lossy(&out.stdout).to_string();
+    // 内容对得上（不是"没报错"）
+    let report = doyah_studio_db::io_csv::parse_csv(&csv_text, true);
+    assert_eq!(report.header, vec!["id".to_string(), "note".to_string()]);
+    assert_eq!(report.rows.len(), 2, "{:?}", report.rows);
+    assert_eq!(report.rows[1][1], "has,comma", "带逗号的单元格要原样过来");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[tokio::test]
 async fn unreachable_server_reports_readable_reason() {
     let mut params = lab_params().unwrap_or(ConnectParams {

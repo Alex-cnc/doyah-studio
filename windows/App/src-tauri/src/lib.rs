@@ -390,7 +390,229 @@ fn db_read_only(state: State<'_, ShellState>) -> bool {
     state.read_only.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-// ── 表结构与 DDL（1.5：表设计器 / 变更集预览 / 索引约束 / 删除类只生成不执行）──────────────
+// ── 导入导出（1.6：CSV / JSON / Excel；边读边写、中途失败不留半截文件）──────────────────
+
+/// **导出到文件**：跑查询 → 按格式编码 → **原子落盘**（临时文件 + 同目录改名）。
+///
+/// 口径：① 落盘走领域层 `io_csv::atomic_write` —— 中途失败**不留半截文件**（版本计划原文）；
+/// ② **截断要如实带在返回值里**（导出也不是"想要多少有多少"，上限之外的行没进去）；
+/// ③ 不静默改路径：写不进去就把服务端/系统原话端出来。
+#[tauri::command]
+async fn export_to_file(
+    state: State<'_, ShellState>,
+    sql: String,
+    path: String,
+    format: String,
+    max_rows: Option<usize>,
+) -> Result<ExportReport, DbFailure> {
+    let session = current_session(&state).await?;
+    let limit = max_rows.unwrap_or(100_000);
+    let (columns, rows, truncated) = session.export_rows(&sql, limit).await?;
+    let target = std::path::PathBuf::from(&path);
+    let content = match format.as_str() {
+        "json" => {
+            let items: Vec<serde_json::Value> = rows
+                .iter()
+                .map(|row| {
+                    let mut map = serde_json::Map::new();
+                    for (i, column) in columns.iter().enumerate() {
+                        let value = row.get(i).cloned().unwrap_or_default();
+                        map.insert(column.clone(), serde_json::Value::String(value));
+                    }
+                    serde_json::Value::Object(map)
+                })
+                .collect();
+            serde_json::to_string_pretty(&items).map_err(|e| DbFailure {
+                message: format!("JSON 编码失败：{e}"),
+                hint: "这属实现缺陷：请保留现场并报告。".to_string(),
+            })?
+        }
+        // 默认 CSV（分隔符用逗号；嗅探只在导入时做）
+        _ => doyah_studio_db::io_csv::to_csv(&columns, &rows, ','),
+    };
+    doyah_studio_db::io_csv::atomic_write(&target, &content).map_err(|message| DbFailure {
+        message,
+        hint: "确认目标目录存在且可写；换一个路径再试。".to_string(),
+    })?;
+    Ok(ExportReport { path, rows: rows.len(), columns: columns.len(), truncated, bytes: content.len() })
+}
+
+/// 导出结果（**行数与截断如实报**）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportReport {
+    pub path: String,
+    pub rows: usize,
+    pub columns: usize,
+    /// 服务端还有更多行没取回来（超过上限）
+    pub truncated: bool,
+    pub bytes: usize,
+}
+
+/// **预览导入**：读文件 → 解析 → 与目标表列对账（**不碰数据库**）。
+///
+/// 为什么分两步（预览 / 执行）：导入是"一次写很多行"的操作，用户必须先看见
+/// 「读了几行、丢了几行、为什么、列怎么对的」再决定写不写。预览不写库，所以可以随便点。
+#[tauri::command]
+fn preview_import(
+    path: String,
+    has_header: bool,
+    target_columns: Vec<String>,
+) -> Result<ImportPreview, DbFailure> {
+    let text = std::fs::read_to_string(&path).map_err(|e| DbFailure {
+        message: format!("读文件失败：{e}（{path}）"),
+        hint: "确认路径与编码（本侧按 UTF-8 读）。".to_string(),
+    })?;
+    let report = doyah_studio_db::io_csv::parse_csv(&text, has_header);
+    let matched = report.match_columns(&target_columns);
+    Ok(ImportPreview {
+        header: report.header.clone(),
+        delimiter: report.delimiter.to_string(),
+        parsed_rows: report.rows.len(),
+        total_data_rows: report.total_data_rows,
+        skipped: report.skipped.clone(),
+        matched: matched.matched.clone(),
+        unmatched_csv: matched.unmatched_csv.clone(),
+        missing: matched.missing.clone(),
+        // 前若干行做样子（给用户认数据长什么样）
+        sample: report.rows.iter().take(5).cloned().collect(),
+    })
+}
+
+/// 导入预览（**丢了多少、为什么，都要能看见**）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportPreview {
+    pub header: Vec<String>,
+    pub delimiter: String,
+    pub parsed_rows: usize,
+    pub total_data_rows: usize,
+    pub skipped: Vec<doyah_studio_db::io_csv::SkippedRow>,
+    pub matched: Vec<(String, usize)>,
+    pub unmatched_csv: Vec<String>,
+    pub missing: Vec<String>,
+    pub sample: Vec<Vec<String>>,
+}
+
+/// **执行导入**：重新解析文件 → 按映射取列 → **一个事务**里写库。
+///
+/// 为什么重新解析而不是把预览的行传回来：文件可能在预览与执行之间被改过
+/// （或用户换了文件）；重新解析保证"写进去的就是文件现在的内容"，且不必把整份数据
+/// 在前端绕一圈（大文件那样会顶爆内存）。
+#[tauri::command]
+async fn run_import(
+    state: State<'_, ShellState>,
+    path: String,
+    schema: Option<String>,
+    table: String,
+    has_header: bool,
+    target_columns: Vec<String>,
+) -> Result<ImportReport, DbFailure> {
+    let session = current_session(&state).await?;
+    let text = std::fs::read_to_string(&path).map_err(|e| DbFailure {
+        message: format!("读文件失败：{e}（{path}）"),
+        hint: "确认路径与编码（本侧按 UTF-8 读）。".to_string(),
+    })?;
+    let report = doyah_studio_db::io_csv::parse_csv(&text, has_header);
+    let matched = report.match_columns(&target_columns);
+    if matched.matched.is_empty() {
+        return Err(DbFailure {
+            message: "CSV 的表头与目标表没有一列对得上".to_string(),
+            hint: format!(
+                "CSV 表头：{:?}；目标表列：{:?}（按名字匹配，大小写与首尾空白不敏感）",
+                report.header, target_columns
+            ),
+        });
+    }
+    let columns: Vec<String> = matched.matched.iter().map(|(name, _)| name.clone()).collect();
+    let indexes: Vec<usize> = matched.matched.iter().map(|(_, at)| *at).collect();
+    // 空字段 → NULL 还是空串？本侧**按 NULL**（导入空白通常意思是"没有值"），
+    // 这一点写在返回值里让用户看得见（要空串请用引号包一个空字段 `""`）。
+    let rows: Vec<Vec<Option<String>>> = report
+        .rows
+        .iter()
+        .map(|row| {
+            indexes
+                .iter()
+                .map(|at| row.get(*at).filter(|v| !v.is_empty()).cloned())
+                .collect()
+        })
+        .collect();
+    let inserted = session
+        .import_rows(schema.as_deref(), &table, &columns, &rows)
+        .await?;
+    Ok(ImportReport { inserted, skipped: report.skipped.clone(), columns })
+}
+
+/// 导入结果。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportReport {
+    pub inserted: usize,
+    pub skipped: Vec<doyah_studio_db::io_csv::SkippedRow>,
+    pub columns: Vec<String>,
+}
+
+/// **Excel（.xlsx）→ CSV**：借本机 DSH 运行时的 Python + openpyxl（**不引 Rust 侧 Excel 依赖**）。
+///
+/// 为什么走 Python 而不是加 Rust crate：`calamine` / `rust_xlsxwriter` 不在本机 cargo 缓存，
+/// 加它们要联网取包；而本机运行时自带 Python 3.13 + openpyxl 3.1.5（实测），
+/// 一条子进程就能把 .xlsx 读成 CSV，导入通路（解析 / 对账 / 事务写入）**完全复用**。
+#[tauri::command]
+fn xlsx_to_csv(path: String, sheet: Option<String>) -> Result<String, DbFailure> {
+    let python = find_python().ok_or_else(|| DbFailure {
+        message: "找不到可用的 Python（Excel 通路需要它）".to_string(),
+        hint: "确认 DSH 运行时的 python 在位，或把 python 放进 PATH；CSV / JSON 通路不需要它。"
+            .to_string(),
+    })?;
+    let script = r#"
+import sys, csv, openpyxl
+src, sheet_name = sys.argv[1], (sys.argv[2] or None)
+wb = openpyxl.load_workbook(src, read_only=True, data_only=True)
+ws = wb[sheet_name] if sheet_name else wb.active
+w = csv.writer(sys.stdout, lineterminator="\n")
+for row in ws.iter_rows(values_only=True):
+    w.writerow(["" if c is None else str(c) for c in row])
+"#;
+    let mut cmd = std::process::Command::new(python);
+    cmd.arg("-c").arg(script).arg(&path);
+    cmd.arg(sheet.unwrap_or_default());
+    let output = cmd.output().map_err(|e| DbFailure {
+        message: format!("起 Python 失败：{e}"),
+        hint: "确认 Python 可执行且 openpyxl 已装（本机 DSH 运行时自带）。".to_string(),
+    })?;
+    if !output.status.success() {
+        return Err(DbFailure {
+            message: format!(
+                "读 .xlsx 失败：{}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ),
+            hint: "确认这个文件真是 .xlsx（不是改了扩展名的 .xls / .csv），且没有密码保护。"
+                .to_string(),
+        });
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// 找可用的 Python：先看本机 DSH 运行时的固定位置，再退回 PATH 上的 `python`。
+fn find_python() -> Option<std::path::PathBuf> {
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    if let Ok(home) = std::env::var("USERPROFILE") {
+        candidates.push(
+            std::path::PathBuf::from(home)
+                .join(".dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\python\\python.exe"),
+        );
+    }
+    candidates.push(std::path::PathBuf::from("python"));
+    candidates.into_iter().find(|p| {
+        std::process::Command::new(p)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    })
+}
+
 
 /// 读一张表的**结构**（列 / 索引 / 约束）—— 表设计器的输入。
 #[tauri::command]
@@ -1022,6 +1244,10 @@ pub fn run() {
             db_table_shape,
             generate_ddl,
             db_run_ddl,
+            export_to_file,
+            preview_import,
+            run_import,
+            xlsx_to_csv,
             workspace_list_directory,
             workspace_read_file,
             workspace_history,

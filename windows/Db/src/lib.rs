@@ -22,6 +22,7 @@ pub mod foreign_key;
 pub mod format;
 pub mod highlight;
 pub mod inspect;
+pub mod io_csv;
 pub mod markdown;
 pub mod open_as;
 pub mod palette;
@@ -99,6 +100,10 @@ pub use highlight::{
     syntax_of, tokenize as tokenize_code, CodeSpan, CodeSyntax, CodeTokenKind,
 };
 pub use inspect::{CellValue, Field, Shape, SummaryLanguage};
+pub use io_csv::{
+    atomic_write, csv_field, normalize_name, parse_csv, sniff_delimiter, to_csv, ColumnMatch,
+    ExportKind, ParseReport, SkippedRow, DELIMITERS,
+};
 pub use terminal_tabs::{
     derive_title, perform as perform_tab_command, sanitize_title, SessionState, Tab as TerminalTab,
     TabCommand, Tabs as TerminalTabs, TITLE_LIMIT,

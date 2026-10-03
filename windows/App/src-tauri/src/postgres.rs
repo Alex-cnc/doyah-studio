@@ -693,7 +693,187 @@ impl PgSession {
         Ok(out)
     }
 
-    /// 快速自检（`--probe` 用）：连上、能问出一行、能列出表。
+    /// **导出取数**（1.6 段）：把一张表（或一条查询）按**流式**取回，收够上限即停。
+    ///
+    /// 口径：导出与界面取数走**同一条** `run`（同一条上限语义、同一份"如实标截断"），
+    /// 不另写一条"导出专用查询" —— 两条路必然漂移，而"导出比界面多/少几行"是最难查的那类缺陷。
+    pub async fn export_rows(
+        &self,
+        sql: &str,
+        limit: usize,
+    ) -> Result<(Vec<String>, Vec<Vec<String>>, bool), DbFailure> {
+        let result = self.run(sql, limit).await?;
+        let rows: Vec<Vec<String>> = result
+            .rows
+            .iter()
+            .map(|row| row.iter().map(|c| c.clone().unwrap_or_default()).collect())
+            .collect();
+        Ok((result.columns, rows, result.truncated))
+    }
+
+    /// **导入**（1.6 段）：一页数据 + 列映射 ⇒ 一个事务里的多条 INSERT。
+    ///
+    /// 口径：① **整个导入是一个事务**（中途失败整批回滚，不留"导了一半"的表）；
+    /// ② 值用**参数化**下发（`$1..$n`），不拼字符串 —— 导入的数据来自外部文件，
+    /// 拼字符串就是把注入面直接开给一个不可信来源；③ 空串与 NULL 的区分由调用方在 `Option` 里表达，
+    /// 本层不猜（CSV 的空白字段到底是空串还是 NULL，只有用户知道）。
+    pub async fn import_rows(
+        &self,
+        schema: Option<&str>,
+        table: &str,
+        columns: &[String],
+        rows: &[Vec<Option<String>>],
+    ) -> Result<usize, DbFailure> {
+        if columns.is_empty() {
+            return Err(DbFailure {
+                message: "没有可写入的列：先做列映射".to_string(),
+                hint: "CSV 的表头要与目标表的列对上（按名字匹配，不按位置）。".to_string(),
+            });
+        }
+        let target = doyah_studio_db::writeback::qualified(schema, table);
+        let quoted: Vec<String> = columns
+            .iter()
+            .map(|c| doyah_studio_db::writeback::quote_ident(c))
+            .collect();
+        // **按目标列的真实类型**显式转换：类型从服务端元数据取（`information_schema.columns`），
+        // 不在客户端猜。为什么不靠"让服务端自己解析"：
+        // 实测 `$n::text[]` 与 `$n::unknown[]` 两条路都被判成 text 表达式 ⇒
+        // 插入 integer 列直接报 SQLSTATE 42804（"表达式的类型为 text"）。显式 cast 一次说清。
+        let column_types = self.column_types(schema, table, columns).await?;
+        let select_cols = column_types
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| format!("c{i}::text::{}", Self::cast_target(ty)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        // 一次插入**一批**：用 `unnest($n::text[])` 把"一列一个数组"摊成行集合。
+        // 为什么不是逐行 INSERT：大文件上逐行往返会把导入拖成"按行计费"，
+        // 而本段点名的正是"边读边写"。
+        let array_params: Vec<String> = (1..=columns.len())
+            .map(|i| format!("${i}::text[]"))
+            .collect();
+        // **`ROWS FROM (...)` 而不是并列写几个 `unnest`**：后者在 FROM 里是**交叉连接**
+        // （实测：4 行 × 4 行 = 16 行，导入直接把数据翻倍）。`ROWS FROM` 按位置把多个集合函数
+        // 并成一行行 —— 这正是"一列一个数组摊成行"要的语义。
+        let unnests = array_params
+            .iter()
+            .map(|p| format!("unnest({p})"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let aliases = (0..columns.len())
+            .map(|i| format!("c{i}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let from_clause = format!("ROWS FROM ({unnests}) AS t({aliases})");
+        let sql = format!(
+            "INSERT INTO {target} ({}) SELECT {select_cols} FROM {from_clause}",
+            quoted.join(", ")
+        );
+        let statement = self
+            .client
+            .prepare(&sql)
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+
+        // 每批的行数：留足参数预算（一行一个数组参数，PostgreSQL 的参数上限是 65535）
+        const BATCH_ROWS: usize = 500;
+        // 事务：一句失败 ⇒ 整批回滚（与写回同一口径）
+        let plan = doyah_studio_db::writeback::TransactionPlan::explicit();
+        if let Some(begin) = &plan.begin {
+            self.execute_simple(begin).await?;
+        }
+        let mut inserted = 0usize;
+        for chunk in rows.chunks(BATCH_ROWS) {
+            // 列式转置：每个参数是一个"该列在这一批里的值"的数组
+            let mut owned_columns: Vec<Vec<Option<String>>> = Vec::with_capacity(columns.len());
+            for (col, _) in columns.iter().enumerate() {
+                owned_columns.push(chunk.iter().map(|row| row.get(col).cloned().flatten()).collect());
+            }
+            let params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = owned_columns
+                .iter()
+                .map(|col| col as &(dyn tokio_postgres::types::ToSql + Sync))
+                .collect();
+            if let Err(e) = self.client.execute(&statement, &params[..]).await {
+                let text = server_error_text(&e);
+                if let Some(rb) = &plan.rollback {
+                    self.execute_simple(rb).await.ok();
+                }
+                return Err(DbFailure {
+                    message: format!(
+                        "第 {} 行起的那一批写库失败（整批已回滚）：{text}",
+                        inserted + 1
+                    ),
+                    hint: "看服务端原话里指出的列与值；改好数据后整批重导。".to_string(),
+                });
+            }
+            inserted += chunk.len();
+        }
+        if let Some(commit) = &plan.commit {
+            self.execute_simple(commit).await?;
+        }
+        Ok(inserted)
+    }
+
+    /// 取**指定若干列**在目标表里的类型原文（导入时要按它做显式转换）。
+    ///
+    /// 返回顺序与 `columns` 一致；某列在元数据里找不到 ⇒ 报错（**不猜类型**）。
+    pub async fn column_types(
+        &self,
+        schema: Option<&str>,
+        table: &str,
+        columns: &[String],
+    ) -> Result<Vec<String>, DbFailure> {
+        let sql = "SELECT column_name, \
+                          COALESCE(domain_name, data_type) || \
+                            CASE WHEN character_maximum_length IS NOT NULL \
+                                 THEN '(' || character_maximum_length || ')' \
+                                 WHEN numeric_precision IS NOT NULL AND numeric_scale IS NOT NULL \
+                                 THEN '(' || numeric_precision || ',' || numeric_scale || ')' \
+                                 ELSE '' END \
+                   FROM information_schema.columns \
+                   WHERE table_name = $1 AND ($2::text IS NULL OR table_schema = $2)";
+        // 不限定 schema 时可能出现同名表：这时**宁可报错也不猜**（见下）
+        let schema_param: Option<&str> = schema;
+        let rows = self
+            .client
+            .query(sql, &[&table, &schema_param])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        let found: Vec<(String, String)> = rows
+            .into_iter()
+            .map(|row| (row.get::<_, String>(0), row.get::<_, String>(1)))
+            .collect();
+        let mut out = Vec::with_capacity(columns.len());
+        for column in columns {
+            match found.iter().find(|(name, _)| name == column) {
+                Some((_, ty)) => out.push(ty.clone()),
+                None => {
+                    return Err(DbFailure {
+                        message: format!("目标表里找不到列 {column}（或同名表不止一张）"),
+                        hint: "确认列名与 schema；导入按列名匹配，找不到就不猜类型。".to_string(),
+                    })
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// 把**显示类型**裁成可当 cast 目标的名字。
+///
+    /// 为什么需要它：`information_schema` 给的是显示类型（`character varying(50)` / `numeric(12,2)`），
+    /// 而 `::numeric(12,2)` 这种写法在「表达式 :: 类型名」的位置**是语法错误**（实测 42601）。
+    /// cast 只认类型名本身 ⇒ 砍掉括号里的长度 / 精度。
+///
+    /// **如实登记的简化**：只砍括号。`character varying` 这类 SQL 标准名 PostgreSQL 认，
+    /// 所以够用；认不出的名字会让服务端报语法错并原话回给用户，**不会被静默吞掉**。
+    fn cast_target(data_type: &str) -> String {
+        match data_type.find('(') {
+            Some(at) => data_type[..at].trim().to_string(),
+            None => data_type.trim().to_string(),
+    }
+}
+
+/// 快速自检（`--probe` 用）：连上、能问出一行、能列出表。
     pub async fn probe(&self) -> Result<ProbeReport, DbFailure> {        let tables = self.tables().await?;
         let one = self.run("SELECT 1 AS one", 10).await?;
         Ok(ProbeReport {
