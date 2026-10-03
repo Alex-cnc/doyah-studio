@@ -4,7 +4,8 @@
 # 本会话已有先例）。棘轮的作用是**先把水位钉住**：新写的界面文案必须走语言表，
 # 老的那批按段推进、每改一批就把基线往下调。**基线只许减。**
 #
-# 口径见 `scan-untranslated.py`。本文件只做"数 + 比基线 + 退出码"。
+# 口径与实现**只有一处**：扫描在 `scan-untranslated.py`，本文件只做"数 + 比基线 + 退出码"
+# （原来这里也抄了一份，结果我补了一面只补到其中一处 ⇒ 两个脚本当场不一致，已改）。
 import os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -16,61 +17,15 @@ sys.path.insert(0, HERE)
 from importlib import import_module
 scan = import_module('scan-untranslated'.replace('-', '_')) if False else None
 
-CJK = re.compile(r'[\u4e00-\u9fff]')
+# **判据只有一处实现**：本文件不再自己写一份扫描（原来两处各一份 ⇒ 我补了一面只补到其中一处，
+# 两个脚本当场不一致）。这里用 importlib 直接载入 `scan-untranslated.py` 的 `collect()`。
+import importlib.util
 
-def strip_block_comments(text):
-    return re.sub(r'/\*.*?\*/', '', text, flags=re.S)
-
-def strip_line_comments(text):
-    out = []
-    for line in text.split('\n'):
-        idx = line.find('//')
-        out.append(line[:idx] if idx >= 0 else line)
-    return '\n'.join(out)
-
-def strip_html_comments(text):
-    return re.sub(r'<!--.*?-->', '', text, flags=re.S)
-
-UI_PATTERNS = [
-    re.compile(r'title="([^"]*)"'),
-    re.compile(r'placeholder="([^"]*)"'),
-    re.compile(r'window\.confirm\(\s*[\'"]([^\'"]*)[\'"]'),
-    re.compile(r'window\.alert\(\s*[\'"]([^\'"]*)[\'"]'),
-]
-
-def collect():
-    hits = []
-    files = []
-    for base, _, names in os.walk(SRC):
-        if 'node_modules' in base:
-            continue
-        for name in names:
-            if name.endswith(('.ts', '.vue')):
-                files.append(os.path.join(base, name))
-    for path in files:
-        rel = path.replace(SRC + os.sep, '').replace('\\', '/')
-        if rel.startswith('i18n/') or rel.endswith('.test.ts'):
-            continue
-        raw = open(path, encoding='utf-8').read()
-        text = strip_html_comments(strip_line_comments(strip_block_comments(raw)))
-        if path.endswith('.vue'):
-            m = re.search(r'<template>(.*?)</template>', text, re.S)
-            if m:
-                for line in m.group(1).split('\n'):
-                    if not CJK.search(line):
-                        continue
-                    if "t('" in line or 't("' in line:
-                        stripped = re.sub(r"\{\{[^}]*\}\}", '', line)
-                        stripped = re.sub(r'<!--.*?-->', '', stripped)
-                        if not CJK.search(stripped):
-                            continue
-                    hits.append((rel, 'template'))
-        else:
-            for pattern in UI_PATTERNS:
-                for mm in pattern.finditer(text):
-                    if CJK.search(mm.group(1)):
-                        hits.append((rel, 'attr'))
-    return hits
+_scanner_path = os.path.join(HERE, 'scan-untranslated.py')
+_spec = importlib.util.spec_from_file_location('doyah_untranslated_scan', _scanner_path)
+_scanner = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_scanner)
+collect = _scanner.collect
 
 hits = collect()
 count = len(hits)
@@ -86,7 +41,7 @@ baseline = None
 if os.path.exists(BASELINE_FILE):
     baseline = int(open(BASELINE_FILE, encoding='utf-8').read().strip() or '0')
 
-print(f'漏译扫描：{count} 处（扫 {len(set(h for h, _ in hits))} 个文件）')
+print(f'漏译扫描：{count} 处（扫 {len(set(h for h, _ in hits))} 个文件；含模板 / 属性 / .ts 数据型文案三面）')
 if baseline is None:
     print('（还没有基线；用 --write-baseline 记下当前水位）')
     sys.exit(0)

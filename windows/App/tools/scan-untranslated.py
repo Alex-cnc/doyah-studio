@@ -1,85 +1,102 @@
-# 漏译扫描（判据工具）：找界面里"没走语言表的中文用户可见文案"
+# 漏译扫描（**判据的唯一实现**）：找界面里"没走语言表的中文用户可见文案"
 #
-# 口径（为什么这么切）：
-# 1. **注释里的中文不算**（那是给读代码的人看的，不是给用户看的）—— 先剥注释；
-# 2. **模板里的中文**基本就是用户可见文案（模板里很少有注释）；
-# 3. **脚本里的中文**要区分：出现在 `title=` / `placeholder=` / `window.confirm(` / 反引号提示串
-#    这一类"会进界面"的位置才算；普通变量名与逻辑不算。
-# 4. **语言表自己**（`i18n/`）里的中文是**应该有的**（那是译文），跳过。
-import os, re, sys
+# 三面都扫（**缺一面就是假绿**）：
+#   ① **模板**：`.vue` 的 `<template>` 里的中文基本就是用户可见文案；
+#   ② **属性/确认框**：`title` / `placeholder` / `window.confirm` / `window.alert` 里的中文；
+#   ③ **`.ts` 里的数据型文案**：`label: '科技蓝'` 这种 —— 界面直接拿它显示。
+#      **这一面是后补的**：头一版只看模板，于是 `appearance.ts` 的配色名、`commands.ts` 的命令名、
+#      `activityBar.ts` 的视图名、`ipc.ts` 的旁路提示**全都没被算进去**（判据不完整就是假绿）。
+#
+# 不算的：注释里的中文（给读代码的人看）、语言表自己（那是译文）、测试文件（那是判据文字）。
+#
+# 用法：`python tools/scan-untranslated.py` 直接看当前水位；
+#       棘轮（`untranslated-ratchet.py`）**复用本文件的 `collect()`** —— 不许再抄一份。
+import os, re
 
-root = r'D:\AIProjects\DoyahStudio\windows\App\src'
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # windows/App
+SRC = os.path.join(ROOT, 'src')
+
 CJK = re.compile(r'[\u4e00-\u9fff]')
+
+UI_PATTERNS = [
+    re.compile(r'title="([^"]*)"'),
+    re.compile(r'placeholder="([^"]*)"'),
+    re.compile(r'window\.confirm\(\s*[\'"]([^\'"]*)[\'"]'),
+    re.compile(r'window\.alert\(\s*[\'"]([^\'"]*)[\'"]'),
+    # `.ts` 里的数据型文案（`label: '科技蓝'` / `text: '…'` / `hint: '…'`）
+    re.compile(r'\b(?:label|title|text|hint|note|placeholder)\s*:\s*[\'"]([^\'"]*)[\'"]'),
+    # 兜底：`value: '带中文的…'`
+    re.compile(r'\bvalue\s*:\s*[\'"]([^\'"]*[\u4e00-\u9fff][^\'"]*)[\'"]'),
+]
+
 
 def strip_block_comments(text):
     return re.sub(r'/\*.*?\*/', '', text, flags=re.S)
 
+
 def strip_line_comments(text):
     out = []
     for line in text.split('\n'):
-        # 简单的行注释剥离：// 之后的内容（不处理字符串里的 //，够用）
         idx = line.find('//')
         out.append(line[:idx] if idx >= 0 else line)
     return '\n'.join(out)
 
+
 def strip_html_comments(text):
     return re.sub(r'<!--.*?-->', '', text, flags=re.S)
 
-# 会进界面的位置（脚本里）
-UI_PATTERNS = [
-    re.compile(r'title="([^"]*)"'),
-    re.compile(r"title=\"([^\"]*)\""),
-    re.compile(r'placeholder="([^"]*)"'),
-    re.compile(r'window\.confirm\(\s*[\'"]([^\'"]*)[\'"]'),
-    re.compile(r'window\.alert\(\s*[\'"]([^\'"]*)[\'"]'),
-]
 
-hits = []
-files = []
-for base, _, names in os.walk(root):
-    if 'node_modules' in base:
-        continue
-    for name in names:
-        if name.endswith(('.ts', '.vue')):
-            files.append(os.path.join(base, name))
+def collect():
+    """返回 [(相对路径, 命中面)] —— **判据的唯一实现**。"""
+    hits = []
+    files = []
+    for base, _, names in os.walk(SRC):
+        if 'node_modules' in base:
+            continue
+        for name in names:
+            if name.endswith(('.ts', '.vue')):
+                files.append(os.path.join(base, name))
 
-for path in files:
-    rel = path.replace(root + os.sep, '').replace('\\', '/')
-    if rel.startswith('i18n/'):
-        continue          # 语言表里的中文是译文，应当在
-    if rel.endswith('.test.ts'):
-        continue          # 测试里的中文是判据文字
-    raw = open(path, encoding='utf-8').read()
-    text = strip_html_comments(strip_line_comments(strip_block_comments(raw)))
+    for path in files:
+        rel = path.replace(SRC + os.sep, '').replace('\\', '/')
+        if rel.startswith('i18n/') or rel.endswith('.test.ts'):
+            continue
+        raw = open(path, encoding='utf-8').read()
+        text = strip_html_comments(strip_line_comments(strip_block_comments(raw)))
 
-    if path.endswith('.vue'):
-        # 模板部分：把 <template>…</template> 里的中文算进来
-        m = re.search(r'<template>(.*?)</template>', text, re.S)
-        if m:
-            for line_no, line in enumerate(m.group(1).split('\n'), 0):
-                if CJK.search(line):
-                    # 模板里已有 t('…') 的不算
+        if path.endswith('.vue'):
+            m = re.search(r'<template>(.*?)</template>', text, re.S)
+            if m:
+                for line in m.group(1).split('\n'):
+                    if not CJK.search(line):
+                        continue
                     if "t('" in line or 't("' in line:
-                        # 同一行可能还有别处中文；这里保守起见：只要没有"裸中文在标签之间"就跳过
                         stripped = re.sub(r"\{\{[^}]*\}\}", '', line)
                         stripped = re.sub(r'<!--.*?-->', '', stripped)
                         if not CJK.search(stripped):
                             continue
-                    hits.append((rel, 'template', line.strip()[:100]))
-    else:
-        for pattern in UI_PATTERNS:
-            for mm in pattern.finditer(text):
-                val = mm.group(1)
-                if CJK.search(val):
-                    hits.append((rel, 'attr/confirm', val[:80]))
+                    hits.append((rel, 'template'))
+        else:
+            for pattern in UI_PATTERNS:
+                for mm in pattern.finditer(text):
+                    if CJK.search(mm.group(1)):
+                        hits.append((rel, 'ts-data'))
 
-print(f'扫描文件数：{len(files)}（跳过语言表与测试）')
-print(f'疑似漏译：{len(hits)} 处')
-print()
-by_file = {}
-for rel, kind, snippet in hits:
-    by_file.setdefault(rel, []).append((kind, snippet))
-for rel in sorted(by_file):
-    print(f'{rel}  ({len(by_file[rel])} 处)')
-    for kind, snippet in by_file[rel][:4]:
-        print(f'    [{kind}] {snippet}')
+    return hits
+
+
+def report(hits):
+    by_file = {}
+    for rel, kind in hits:
+        by_file.setdefault(rel, []).append(kind)
+    for rel in sorted(by_file, key=lambda r: (-len(by_file[r]), r)):
+        print(f'{rel}  ({len(by_file[rel])} 处)')
+    return by_file
+
+
+if __name__ == '__main__':
+    hits = collect()
+    print(f'扫描文件数：{len(set(h for h, _ in hits))} 个文件有命中（跳过语言表与测试）')
+    print(f'疑似漏译：{len(hits)} 处（三面：模板 / 属性 / .ts 数据型文案）')
+    print()
+    report(hits)
