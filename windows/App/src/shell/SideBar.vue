@@ -14,6 +14,22 @@ export interface ActivityBarSection {
 
 defineProps<{ sections: readonly ActivityBarSection[]; active: ActivityBarItemId }>()
 const emit = defineEmits<{ select: [id: ActivityBarItemId] }>()
+
+/**
+ * 活动栏的**短标签**：46px 的窄条放不下四字标签，只放两个字。
+ *
+ * 为什么短标签集中在这里：文案的**语义**来自 `activityBar.ts`（那里是唯一出处），
+ * 这里只是"窄条上的缩略显示"。两处各写一份的话，改一处就会对不上。
+ */
+function shortLabel(label: string): string {
+  const map: Record<string, string> = {
+    工作区: '工作',
+    数据库: '数据',
+    笔记: '笔记',
+    复盘: '复盘',
+  }
+  return map[label] ?? label.slice(0, 2)
+}
 </script>
 
 <template>
@@ -31,7 +47,11 @@ const emit = defineEmits<{ select: [id: ActivityBarItemId] }>()
       :data-glyph="section.glyph"
       @click="emit('select', section.id)"
     >
-      <span class="sidebar__label">{{ section.label }}</span>
+      <!-- 契约：**活动栏 46px**（`Docs/概要设计.md` L218「活动栏 46、侧栏 248」）。
+           之前误用了 `--ds-metric-sidebar-width`（248px，那是给侧栏面板的），
+           于是活动栏看起来像一块导航板 —— 这是本侧的实现错误，不是契约问题。 -->
+      <span class="sidebar__glyph" aria-hidden="true">{{ section.glyph }}</span>
+      <span class="sidebar__short">{{ shortLabel(section.label) }}</span>
       <span v-if="!section.ready" class="sidebar__mark" aria-hidden="true">⬜</span>
     </button>
   </nav>
@@ -42,34 +62,51 @@ const emit = defineEmits<{ select: [id: ActivityBarItemId] }>()
   display: flex;
   flex-direction: column;
   gap: var(--ds-spacing-hair);
-  width: var(--ds-metric-sidebar-width);
-  padding: var(--ds-spacing-s);
+  /* **活动栏宽度走活动栏令牌**（46px），不是侧栏令牌（248px） */
+  width: var(--ds-metric-activity-bar-width);
+  flex: 0 0 auto;
+  padding: var(--ds-spacing-xs) 0;
   background: var(--ds-color-surface-sidebar);
   border-right: var(--ds-metric-hairline) solid var(--ds-hairline);
 }
 
 .sidebar__item {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  min-height: var(--ds-metric-control-height);
-  padding: 0 var(--ds-spacing-s);
+  justify-content: center;
+  gap: var(--ds-spacing-hair);
+  width: 100%;
+  min-height: calc(var(--ds-metric-control-height) * 2);
+  padding: var(--ds-spacing-xs) 0;
   background: transparent;
-  color: var(--ds-color-text-primary);
-  border: 1px solid transparent;
-  border-radius: var(--ds-radius-control);
-  font-size: var(--ds-font-body-size);
-  text-align: left;
+  color: var(--ds-color-text-secondary);
+  border: 0;
+  border-left: 2px solid transparent;
+  font-size: var(--ds-font-caption-size);
+  text-align: center;
   cursor: pointer;
+}
+
+.sidebar__glyph {
+  font-size: var(--ds-metric-activity-icon-size);
+  line-height: 1;
+}
+
+.sidebar__short {
+  font-size: var(--ds-font-caption-size);
+  line-height: 1;
 }
 
 .sidebar__item:hover {
   background: var(--ds-color-surface-panel);
+  color: var(--ds-color-text-primary);
 }
 
 .sidebar__item--active {
   background: var(--ds-color-surface-raised);
-  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-left-color: var(--ds-color-accent-accent);
+  color: var(--ds-color-text-primary);
 }
 
 .sidebar__item--pending {
@@ -78,5 +115,6 @@ const emit = defineEmits<{ select: [id: ActivityBarItemId] }>()
 
 .sidebar__mark {
   font-size: var(--ds-font-caption-size);
+  line-height: 1;
 }
 </style>

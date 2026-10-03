@@ -499,6 +499,13 @@ function isConnected(connection: SavedConnection): boolean {
   )
 }
 
+/** 当前连着的库名（连接列表折叠标题上显示一行"已连：xxx"）。 */
+const connectedName = computed<string>(() => {
+  if (!info.value) return ''
+  const hit = saved.value.find((c) => isConnected(c))
+  return hit ? hit.name : info.value.database
+})
+
 /** 小字：`主机 · 库名`（图里就是这个形状）。 */
 function connectionSubtitle(connection: SavedConnection): string {
   return `${connection.host} · ${connection.database}`
@@ -1335,9 +1342,14 @@ async function probe() {
     </div>
 
     <div class="db__body">
-        <!-- 连接列表（图里的左栏上半）：分组 + 每条两行小字 + 当前那条高亮 -->
-        <aside class="db__tree db__tree--connections">
-          <p class="db__tree-title">连接列表</p>
+      <!-- 数据库页的左栏（**一列，不是两列**）：
+           连接列表收成顶部可折叠的一段，对象树占满整列 ——
+           之前把"连接列表"与"对象树"并排成两栏，导航被挤成两条窄缝，已改。 -->
+      <aside class="db__tree db__tree--navigator" @click="closeContextMenu">
+        <details class="db__conn-fold">
+          <summary class="db__tree-title">
+            连接列表（{{ saved.length }}）<span class="db__kind">已连：{{ connectedName || '无' }}</span>
+          </summary>
           <p v-if="saved.length === 0" class="db__tree-empty">
             还没有保存过连接。填好上面的表单按「保存到连接列表」，口令（若勾了记住）进系统凭据管理器。
           </p>
@@ -1373,10 +1385,9 @@ async function probe() {
               </div>
             </div>
           </template>
-        </aside>
+        </details>
 
-      <!-- 对象树（1.1）：展开一层取一层；右键给「浏览数据 / 生成查询 / 复制名」 -->
-      <aside class="db__tree" @click="closeContextMenu">
+        <!-- 对象树（1.1）：展开一层取一层；右键给「浏览数据 / 生成查询 / 复制名」 -->
         <p class="db__tree-title">
           对象（{{ loadedObjects.length }} 个已加载 · {{ schemas.length }} 个 schema）
         </p>
@@ -2236,12 +2247,39 @@ async function probe() {
   min-height: 0;
 }
 
+/* 数据库页的左栏 = **一列**（连接列表折叠在顶部 + 对象树占满）。
+   之前这里是两个并排的 `aside`，把导航挤成两条窄缝 —— 已改成一列。 */
 .db__tree {
-  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-s);
+  /* 一列的宽度：导航要能看清 schema 与对象名，不能是窄缝 */
+  width: var(--ds-metric-sidebar-width);
+  flex: 0 0 auto;
   overflow: auto;
   padding: var(--ds-spacing-s);
   border-right: var(--ds-metric-hairline) solid var(--ds-hairline);
   background: var(--ds-color-surface-sidebar);
+}
+
+/* 连接列表的可折叠段：默认收起，要用时展开 —— 不占常驻宽度 */
+.db__conn-fold {
+  flex: 0 0 auto;
+}
+
+.db__conn-fold > summary {
+  cursor: pointer;
+}
+
+/* 对象树占满剩下的一列 */
+.db__tree--navigator {
+  overflow: hidden;
+}
+
+.db__tree--navigator > :last-child {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .db__tree-title,
