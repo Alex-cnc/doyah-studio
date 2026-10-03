@@ -414,6 +414,9 @@ final class AppState: ObservableObject {
     @Published var notesScope: NotesScope = .all
     /// 搜索范围那枚开关（当前范围 / 全部笔记本）—— 只影响搜索结果的筛选。
     @Published var notesSearchScope: NotesSearchScope = .current
+    /// **删除确认框**（队列 `L-97` 界面半第二片）：挂在界面上的那一个删除请求。
+    /// 计划从库里**现算**（`NoteLibrary.removalPlan`）——界面算不出来，也不该自己算一遍。
+    @Published var pendingContainerRemoval: ContainerRemovalRequest?
     /// **检索状态**（队列 L-44，2026-09-28）：界面检索改走库以后，「这一屏的结果是怎么来的」
     /// 就成了必须有出处的一件事 —— 三种态各自对应一句如实话（见 `noteSearchHint`）。
     @Published private(set) var noteSearchState: NoteSearchState = .idle
@@ -6058,6 +6061,85 @@ final class AppState: ObservableObject {
     func selectNotesScope(_ scope: NotesScope) {
         notesScope = notesNavigation.normalized(scope)
         Task { await searchNotes() }
+    }
+
+    // MARK: - 删除确认框（队列 `L-97` 界面半第二片）
+
+    /// 确认框正文（**唯一生产点**）：按 `ContainerRemovalSummary` 给的形状出句子 ——
+    /// 视图不自己拼（拼错一次就是「将影响 0 条笔记」这种与事实相反的交代）。
+    var pendingContainerRemovalMessage: String? {
+        guard let request = pendingContainerRemoval else { return nil }
+        switch request.summary {
+        case .empty:
+            return L(.notesRemoveSummaryEmpty)
+        case .notes(let noteCount):
+            return L(.notesRemoveSummaryNotes, noteCount)
+        case .notebooks(let notebookCount):
+            return L(.notesRemoveSummaryNotebooks, notebookCount)
+        case .notebooksAndNotes(let notebookCount, let noteCount):
+            return L(.notesRemoveSummaryBoth, notebookCount, noteCount)
+        }
+    }
+
+    /// 树上点了「删除」：从库里**现算**处置计划，然后把它挂到界面上（确认框据此弹）。
+    ///
+    /// 默认容器 / 认不出的 uid ⇒ 计划是 `nil` ⇒ 只给一句「默认容器删不掉」的人话，**不弹框** ——
+    /// 弹一个「要删除吗」再告诉你不能删，是把两种事实混成一件（用户会以为点了确定就删了）。
+    func requestContainerRemoval(kind: NotebookContainerKind, uid: String, name: String) {
+        Task {
+            do {
+                let library = NoteLibrary.defaultLibrary()
+                let plan: ContainerRemovalPlan?
+                if kind == .notebook {
+                    plan = try await library.removalPlan(forNotebook: uid)
+                } else {
+                    plan = try await library.removalPlan(forShelf: uid)
+                }
+                guard let plan else {
+                    pendingContainerRemoval = nil
+                    statusMessage = L(ContainerRemovalPrompt.notAllowedKey, name)
+                    return
+                }
+                pendingContainerRemoval = ContainerRemovalPrompt.request(plan: plan, containerName: name)
+            } catch {
+                pendingContainerRemoval = nil
+                errorMessage = ErrorPresenter.message(for: error)
+            }
+        }
+    }
+
+    /// 退出口（按 ESC / 点框外）：只收掉请求，库一个字节不动。
+    func cancelContainerRemoval() {
+        pendingContainerRemoval = nil
+    }
+
+    /// 用户在确认框里选了某个动作：按它对应的档位落库，然后**重新读一次库**。
+    ///
+    /// 「取消」不落库（`action.policy == nil`）。落库走 `NoteLibrary.removeNotebook / removeShelf`，
+    /// 计划在那一次调用里**重算**再落 —— 确认框上的数字与真正动手之间隔着一次点击，中间库可能
+    /// 已经变了，按过期的影响面删除，删掉的东西就不是用户确认过的那个了。
+    func resolveContainerRemoval(_ action: ContainerRemovalAction) {
+        guard let request = pendingContainerRemoval, let policy = action.policy else {
+            // 取消：什么都没发生（连重新读库都不必）。
+            pendingContainerRemoval = nil
+            return
+        }
+        Task {
+            do {
+                let library = NoteLibrary.defaultLibrary()
+                if request.kind == .notebook {
+                    _ = try await library.removeNotebook(uid: request.id, policy: policy)
+                } else {
+                    _ = try await library.removeShelf(uid: request.id, policy: policy)
+                }
+                pendingContainerRemoval = nil
+                // 删完重读：树、条数、列表、当前范围的归一（被删的范围回落「全部」）都在这一条路上。
+                await reloadNotes()
+            } catch {
+                pendingContainerRemoval = nil
+                errorMessage = ErrorPresenter.message(for: error)
+            }
+        }
     }
 
     /// 跨笔记本的检索结果里，这一条属于哪个笔记本（队列 `L-97` ⑤「跨笔记本结果显示所属笔记本」）。

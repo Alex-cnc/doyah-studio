@@ -46,6 +46,7 @@ TREE_FILES = [
     # 副本少带一个 ⇒ 「干净副本」这一例会因为「台账写了、盘上没有」而假红（同上一条的坑）
     "Core/Notebook.swift",
     "Core/NoteNavigation.swift",
+    "Core/NotebookRemovalPrompt.swift",
     "App/Views/NotesPanel.swift",
     "Tests/NoteTests.swift",
     "Tests/NoteBodyTests.swift",

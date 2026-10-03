@@ -110,8 +110,10 @@ struct NotesListView: View {
 ///  ③ **默认容器不特殊显示**：用户眼里它就是「笔记本」这个名字（契约只要求它**不可删**，
 ///     没要求界面上把它标成默认 —— 标出来反而像另一种东西）。
 ///
-/// 未做（如实登记，留给下一片）：重命名 / 新建 / 排序 / 拖拽 / 右键菜单 / 删除确认框
-/// —— 那些要走删除确认框与跨笔记本移动（队列 `L-97` ③④），本片只落「看哪一块」。
+/// 未做（如实登记，留给下一片）：重命名 / 新建 / 排序 / 拖拽 / 右键菜单里的移动
+/// —— 那些要走**跨笔记本移动**（队列 `L-97` ④），本片只落「看哪一块」与「删掉它」。
+/// **已做**（本片）：右键 → 删除 → 确认框（`ContainerRemovalPrompt` 给动作与顺序，
+/// `AppState.pendingContainerRemovalMessage` 给影响面那句）。
 struct NotesContainerTreeView: View {
 
     @EnvironmentObject private var appState: AppState
@@ -135,6 +137,15 @@ struct NotesContainerTreeView: View {
                     indent: 0,
                     identifier: "notes-scope-shelf-\(shelf.uid)"
                 )
+                // **删除确认框**（队列 `L-97` ③）：菜单项**不灰** —— 默认容器点了要给一句
+                // 「不能删」的人话（`L-50` 的口径：可点却静默无反应是最坏的一种）。计划从库里
+                // 现算，所以这里不判「能不能删」。
+                .contextMenu {
+                    Button(L(ContainerRemovalPrompt.menuTitleKey(for: .shelf))) {
+                        appState.requestContainerRemoval(kind: .shelf, uid: shelf.uid, name: shelf.name)
+                    }
+                    .accessibilityIdentifier("notes-remove-shelf-\(shelf.uid)")
+                }
                 ForEach(appState.notesNavigation.notebooks(inShelf: shelf.uid)) { notebook in
                     row(
                         scope: .notebook(uid: notebook.uid),
@@ -144,10 +155,47 @@ struct NotesContainerTreeView: View {
                         indent: 1,
                         identifier: "notes-scope-notebook-\(notebook.uid)"
                     )
+                    .contextMenu {
+                        Button(L(ContainerRemovalPrompt.menuTitleKey(for: .notebook))) {
+                            appState.requestContainerRemoval(kind: .notebook, uid: notebook.uid, name: notebook.name)
+                        }
+                        .accessibilityIdentifier("notes-remove-notebook-\(notebook.uid)")
+                    }
                 }
             }
         }
         .accessibilityIdentifier("notes-container-tree")
+        // **删除确认框**（队列 `L-97` ③）：动作与顺序**由模型给**（`ContainerRemovalPrompt.confirmActions`
+        // 是唯一出处），影响面那句也由 `AppState.pendingContainerRemovalMessage` 一处生成 ——
+        // 界面只负责画。别自己硬写三个按钮：规则一改就有两处不一致（`L-172` 同一课）。
+        .confirmationDialog(
+            L(ContainerRemovalPrompt.titleKey, appState.pendingContainerRemoval?.containerName ?? ""),
+            isPresented: Binding(
+                get: { appState.pendingContainerRemoval != nil },
+                // 按 ESC / 点框外 = 「取消」：只收掉请求，库一个字节不动。
+                set: { presented in if !presented { appState.cancelContainerRemoval() } }
+            ),
+            titleVisibility: .visible,
+            presenting: appState.pendingContainerRemoval
+        ) { request in
+            ForEach(request.actions, id: \.self) { action in
+                Button(L(ContainerRemovalPrompt.titleKey(for: action, kind: request.kind)), role: role(for: action)) {
+                    appState.resolveContainerRemoval(action)
+                }
+            }
+        } message: { _ in
+            Text(appState.pendingContainerRemovalMessage ?? "")
+        }
+    }
+
+    /// 动作 → 按钮角色：破坏档给破坏色，「取消」是退出口；默认档（移到默认容器）是**普通**按钮
+    /// —— 它不删任何东西，把它画成红色会让用户在两个都像破坏的动作里挑一个。
+    private func role(for action: ContainerRemovalAction) -> ButtonRole? {
+        switch action {
+        case .moveToDefault: return nil
+        case .deleteTogether: return .destructive
+        case .cancel: return .cancel
+        }
     }
 
     /// 一行：图标 + 名字 + 条数，选中态由 `notesScope` 给（比对归一后的值 —— 用户看到的选中

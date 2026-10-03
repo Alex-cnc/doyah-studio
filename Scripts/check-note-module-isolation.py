@@ -49,6 +49,9 @@ NOTE_SOURCES = [
     # 队列 `L-97` 界面半第一片：宿主装配侧的选中态 / 范围过滤 / 计数 / 新建落点（纯函数，
     # 无网络、无库）—— 它算笔记侧，因为改它的人必须同时受「不许碰网络 / 库」的约束
     "Core/NoteNavigation.swift",
+    # 队列 `L-97` 界面半第二片：删除确认框的动作 / 顺序 / 文案键（纯值类型，无网络、无库；
+    # 只吃 `ContainerRemovalPlan` 与 `LKey`）—— 同上，算笔记侧
+    "Core/NotebookRemovalPrompt.swift",
 ]
 
 # 刻意**不在**清单里的笔记相关文件：它们按设计就引用 Ultra 侧类型，属于宿主侧适配层。

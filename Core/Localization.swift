@@ -326,6 +326,32 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesSearchScopeAll
     /// 跨笔记本的检索结果里，这一行属于哪个笔记本。带笔记本名字参数。
     case notesRowNotebook
+    /// 队列 `L-97` 界面半第二片（删除确认框）：树上「删除笔记本…」那一项。
+    case notesRemoveNotebookMenu
+    /// 同上，架的那一项。
+    case notesRemoveShelfMenu
+    /// 确认框标题（带容器名参数）。
+    case notesRemoveConfirmTitle
+    /// 默认容器删不掉时给的那句人话（带容器名参数）。
+    case notesRemoveDefaultNotAllowed
+    /// 删笔记本：默认档按钮 = 把里面的笔记移到默认笔记本。
+    case notesRemoveMoveToDefaultNotebook
+    /// 删架：默认档按钮 = 把架里的笔记本整架移到默认架。
+    case notesRemoveMoveToDefaultShelf
+    /// 删笔记本：破坏档按钮。
+    case notesRemoveDeleteNotebookTogether
+    /// 删架：破坏档按钮。
+    case notesRemoveDeleteShelfTogether
+    /// 确认框的退出口。
+    case notesRemoveCancel
+    /// 影响面那句：里外都是空的（不写数字）。
+    case notesRemoveSummaryEmpty
+    /// 影响面那句：只有笔记受影响（一个 `%d`）。
+    case notesRemoveSummaryNotes
+    /// 影响面那句：只有笔记本受影响（一个 `%d`）。
+    case notesRemoveSummaryNotebooks
+    /// 影响面那句：两个都受影响（两个 `%d`）。
+    case notesRemoveSummaryBoth
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -2255,6 +2281,21 @@ public enum LocalizedStrings {
         .notesSearchScopeCurrent: [.simplifiedChinese: "当前范围", .english: "Current scope"],
         .notesSearchScopeAll: [.simplifiedChinese: "全部笔记本", .english: "All notebooks"],
         .notesRowNotebook: [.simplifiedChinese: "属于：%@", .english: "In: %@"],
+        // 删除确认框（队列 `L-97` 界面半第二片）：动作与顺序由 `ContainerRemovalPrompt` 给，
+        // 这里只放词句。「影响面」那句分四种形状 —— 两个数分开成句，才不会读成「将影响 0 个笔记本」。
+        .notesRemoveNotebookMenu: [.simplifiedChinese: "删除笔记本…", .english: "Delete Notebook…"],
+        .notesRemoveShelfMenu: [.simplifiedChinese: "删除笔记本架…", .english: "Delete Shelf…"],
+        .notesRemoveConfirmTitle: [.simplifiedChinese: "要删除「%@」吗？", .english: "Delete “%@”?"],
+        .notesRemoveDefaultNotAllowed: [.simplifiedChinese: "「%@」是默认容器，不能删除。", .english: "“%@” is the default container and cannot be deleted."],
+        .notesRemoveMoveToDefaultNotebook: [.simplifiedChinese: "移到默认笔记本", .english: "Move to Default Notebook"],
+        .notesRemoveMoveToDefaultShelf: [.simplifiedChinese: "笔记本整架移到默认架", .english: "Move notebooks to Default Shelf"],
+        .notesRemoveDeleteNotebookTogether: [.simplifiedChinese: "一并删除里面的笔记", .english: "Delete its notes too"],
+        .notesRemoveDeleteShelfTogether: [.simplifiedChinese: "一并删除架里的笔记本", .english: "Delete the shelf’s notebooks too"],
+        .notesRemoveCancel: [.simplifiedChinese: "取消", .english: "Cancel"],
+        .notesRemoveSummaryEmpty: [.simplifiedChinese: "里面还是空的，删除不影响任何笔记。", .english: "It is empty — nothing will be affected."],
+        .notesRemoveSummaryNotes: [.simplifiedChinese: "将影响 %d 条笔记。", .english: "This will affect %d notes."],
+        .notesRemoveSummaryNotebooks: [.simplifiedChinese: "将影响 %d 个笔记本。", .english: "This will affect %d notebooks."],
+        .notesRemoveSummaryBoth: [.simplifiedChinese: "将影响 %d 个笔记本、%d 条笔记。", .english: "This will affect %d notebooks and %d notes."],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],
