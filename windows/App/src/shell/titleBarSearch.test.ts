@@ -14,6 +14,7 @@ import {
   MINIMUM_SEARCH_WIDTH,
   searchFieldWidth,
   TITLE_GAP,
+  TITLE_CHAR_UNIT_PX,
 } from './titleBarSearch'
 
 const TITLE = 'Doyah Studio - 工作区'
@@ -78,5 +79,43 @@ describe('标题栏搜索栏宽度', () => {
   it('标题宽度估算：中文按两倍宽、英文按一倍', () => {
     expect(estimateTitleWidth('工作区')).toBeGreaterThan(estimateTitleWidth('abc'))
     expect(estimateTitleWidth('')).toBe(0)
+  })
+})
+
+
+// ── 与领域层同一套算法（收口审计点出的"同一件事两处实现"）──────────────────────────
+//
+// 背景：本文件（界面侧）与 `Db/src/title_bar_search.rs`（领域层）**各有一份**同一算法。
+// 界面侧必须留一份 —— resize 时要**同步**算，不能每次去问 Rust。所以做法不是"删掉一份"，
+// 而是**让两份互相钉住**：下面这例把两组常量与几何模型对齐；Rust 侧另有 9 例
+// （含**逐宽度扫描**的两条不变量）守着同一套口径。
+//
+// 谁把两处改成不一样的数，这里就红。
+describe('与领域层 title_bar_search.rs 的口径对齐', () => {
+  it('两组常量必须同值（改一处就红）', () => {
+    // 领域层：IDEAL_WIDTH / MIN_WIDTH / TITLE_GAP / LEADING_INSET / TITLE_CHAR_UNIT_PX
+    // 界面侧：IDEAL_SEARCH_WIDTH / MINIMUM_SEARCH_WIDTH / TITLE_GAP / LEADING_INSET / TITLE_CHAR_UNIT_PX
+    expect(IDEAL_SEARCH_WIDTH).toBe(360)
+    expect(MINIMUM_SEARCH_WIDTH).toBe(180)
+    expect(TITLE_GAP).toBe(24)
+    expect(LEADING_INSET).toBe(90)
+    expect(TITLE_CHAR_UNIT_PX).toBe(9)
+  })
+
+  it('几何模型同一条：可用宽 = 窗口宽 − 2 ×（左端固定 + 标题宽 + 空档）', () => {
+    // 手算一遍与函数比（这就是两侧共用的那条式子）
+    const windowWidth = 1200
+    const titleWidth = 200
+    const expected = windowWidth - 2 * (LEADING_INSET + titleWidth + TITLE_GAP)
+    expect(availableWidth(windowWidth, titleWidth)).toBe(expected)
+    // 窄到放不下 ⇒ 收成 0（不变量 ②）
+    expect(searchFieldWidth(2 * (LEADING_INSET + titleWidth + TITLE_GAP) + 179, titleWidth)).toBe(0)
+    // 宽到有余 ⇒ 给理想宽
+    expect(searchFieldWidth(4000, titleWidth)).toBe(IDEAL_SEARCH_WIDTH)
+  })
+
+  it('标题估宽与领域层同口径（中文按两单位）', () => {
+    expect(estimateTitleWidth('abc')).toBe(3 * TITLE_CHAR_UNIT_PX)
+    expect(estimateTitleWidth('工作区')).toBe(3 * 2 * TITLE_CHAR_UNIT_PX)
   })
 })
