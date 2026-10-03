@@ -23,7 +23,8 @@ public struct WorkspaceRow: Equatable, Sendable, Identifiable {
 ///   · 而"我记得文件名里有个 agent，帮我找出来"是**打开工作区后最常做的事**。
 ///
 /// 有界体现在三处（都写死成默认参数，可在单测里改小）：
-///   1. 忽略名单（复用 `WorkspaceTree.defaultIgnored`）；
+///   1. 忽略名单（复用 `WorkspaceTree.searchIgnored` —— 检索**仍然**跳过构建产物 / 依赖目录，
+///      与工作区树**看不看得见**是两件事）；
 ///   2. **深度上限** —— 防止有人把工作区选到 `/` 或家目录后界面卡死；
 ///   3. **结果上限** —— 命中过多时停下来并如实告知"已达上限"，而不是悄悄截断。
 ///
@@ -53,7 +54,7 @@ public enum WorkspaceSearch {
         query: String,
         limit: Int = defaultResultLimit,
         maxDepth: Int = defaultMaxDepth,
-        ignored: Set<String> = WorkspaceTree.defaultIgnored,
+        ignored: Set<String> = WorkspaceTree.searchIgnored,
         fileManager: FileManager = .default
     ) -> Result {
         let needle = normalize(query: query)
@@ -227,7 +228,7 @@ public enum WorkspaceSearch {
         maxDepth: Int = defaultMaxDepth,
         maxFileSize: Int = defaultMaxFileSize,
         snippetLimit: Int = defaultSnippetLimit,
-        ignored: Set<String> = WorkspaceTree.defaultIgnored,
+        ignored: Set<String> = WorkspaceTree.searchIgnored,
         fileManager: FileManager = .default
     ) -> ContentResult {
         let needle = normalize(query: query)
@@ -391,7 +392,7 @@ public enum WorkspaceSearch {
         maxDepth: Int = defaultMaxDepth,
         maxFileSize: Int = defaultMaxFileSize,
         snippetLimit: Int = defaultSnippetLimit,
-        ignored: Set<String> = WorkspaceTree.defaultIgnored,
+        ignored: Set<String> = WorkspaceTree.searchIgnored,
         fileManager: FileManager = .default
     ) -> HeaderSearchResults {
         let needle = normalize(query: query)

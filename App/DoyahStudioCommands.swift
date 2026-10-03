@@ -28,10 +28,26 @@ struct DoyahStudioCommands: Commands {
     /// （「新建浏览器页签」），不根据页签集派生任何东西。
     let workspaceBrowser: WorkspaceBrowserModel
 
+    /// 工作区页签的状态所有者：主菜单「编辑」里的**格式化代码**要打在它身上（`FR-EDIT-39`）。
+    /// 同样只**调用**，不派生任何东西。
+    let workspaceTabs: WorkspaceTabsModel
+
     /// 语言：**必须由命令结构体自己观察**，菜单标题才会跟着切换。
     @ObservedObject private var localization = LocalizationManager.shared
 
     var body: some Commands {
+        // **主菜单「编辑」里的「格式化代码」**（内测清单 `#2` 复测打回：原话「**编辑下无格式化菜单**」）。
+        //
+        // 在此之前它只长在工作区页签条那枚「格式化」下拉里（`WorkspaceTabStrip.editMenu`），
+        // 而用户的习惯位置是**菜单栏的「编辑」** —— 功能在、但按名字找不到，等于没有。
+        // 快捷键只在这里注册一处：同一个 ⇧⌘F 挂两个菜单项，AppKit 只认其中一个（另一项会变成摆设）。
+        CommandGroup(after: .pasteboard) {
+            Button(L(.menuFormat)) {
+                workspaceTabs.formatSelected()
+            }
+            .keyboardShortcut(AppShortcut.formatCode.key, modifiers: AppShortcut.formatCode.modifiers)
+        }
+
         CommandGroup(replacing: .newItem) {
             Button(L(.menuNewQuery)) {
                 appState.newQueryTab()

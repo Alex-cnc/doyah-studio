@@ -97,6 +97,10 @@ public enum LKey: String, CaseIterable, Sendable {
 
     // 外观（FR-EDIT-33）
     case menuAppearance
+    /// 主菜单「编辑」里的**格式化代码**（FR-EDIT-39 的菜单入口）。
+    /// 与页签条那条 `workspaceFormatMenuItem`（带 `%@` 快捷键占位符）分开：这一条要进
+    /// `MenuLocalization.menuKeys` 由菜单自愈改标题，而带 `%@` 的键反查重命名会把 `%@` 原样写出来。
+    case menuFormat
     case appearanceTitle
     case appearanceAccentSection
     case appearanceAccentHint
@@ -2042,6 +2046,7 @@ public enum LocalizedStrings {
         .directoryStatusFailed: [.simplifiedChinese: "书签无法解析，建议重新选择目录", .english: "Bookmark could not be resolved — choose the folder again"],
         .accountUndecidedTitle: [.simplifiedChinese: "账户功能还没定", .english: "The account feature is not decided yet"],
         .accountUndecidedMessage: [.simplifiedChinese: "「登录后提供什么」还没定：模型配额与计费、配置跨机同步、许可校验，三者的架构代价完全不同。在定下来之前这里只放占位入口，不实现登录流程。密钥与密码也不会参与任何同步。", .english: "What signing in should give you is still undecided: model quota and billing, config sync across machines, and licence checks all cost very differently to build. Until that is settled this stays a placeholder — no sign-in flow is implemented, and secrets never take part in any sync."],
+        .menuFormat: [.simplifiedChinese: "格式化代码", .english: "Format Code"],
         .menuAppearance: [.simplifiedChinese: "外观…", .english: "Appearance…"],
         .appearanceTitle: [.simplifiedChinese: "外观", .english: "Appearance"],
         .appearanceAccentSection: [.simplifiedChinese: "强调色", .english: "Accent Color"],

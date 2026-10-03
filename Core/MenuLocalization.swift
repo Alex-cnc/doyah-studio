@@ -61,6 +61,7 @@ public enum MenuLocalization {
         .databaseStatsTitle,
         .schemaDiffTitle,
         .lowerPaneToggle,
+        .menuFormat,
         .menuRelaunchApp
     ]
 

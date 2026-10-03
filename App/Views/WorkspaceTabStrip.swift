@@ -89,10 +89,12 @@ struct WorkspaceTabStrip: View {
     /// （SQL 那套有诊断与执行，这套只有格式化）。画在同一处会互相打架。
     private var editMenu: some View {
         Menu {
+            // 标题走无占位符的 `menuFormat`（主菜单那一项同键，切换语言时由菜单自愈改标题）；
+            // **快捷键不在这里注册** —— ⇧⌘F 归主菜单「编辑」那一项，同一快捷键挂两个菜单项，
+            // AppKit 只认其中一个，另一项会变成摆设。
             Button(L(.workspaceFormatMenuItem, AppShortcut.formatCode.display)) {
                 tabs.formatSelected()
             }
-            .keyboardShortcut(AppShortcut.formatCode.key, modifiers: AppShortcut.formatCode.modifiers)
         } label: {
             // 图标 + **文字**（内测清单 `#2`：只有图标时按名字找不到这个入口）。
             HStack(spacing: Spacing.xs) {
