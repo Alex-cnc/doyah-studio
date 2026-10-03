@@ -22,6 +22,35 @@ export interface Entry {
 
 /** 语言表：key 用点分层级，便于按区域找。 */
 export const DICT = {
+  // 命令面板：命令标题（**面板显示与搜索词都从这里取**，不再各写一份）
+  'cmd.workspace.openFolder': { 'zh-Hans': '打开工作区文件夹', en: 'Open workspace folder' },
+  'cmd.workspace.search': { 'zh-Hans': '在工作区里搜索', en: 'Search in workspace' },
+  'cmd.workspace.newFile': { 'zh-Hans': '新建文件', en: 'New file' },
+  'cmd.workspace.newFolder': { 'zh-Hans': '新建文件夹', en: 'New folder' },
+  'cmd.workspace.save': { 'zh-Hans': '保存当前文件', en: 'Save current file' },
+  'cmd.workspace.format': { 'zh-Hans': '格式化当前文件', en: 'Format current file' },
+  'cmd.workspace.reveal': { 'zh-Hans': '在资源管理器中显示', en: 'Reveal in File Explorer' },
+  'cmd.workspace.closeTab': { 'zh-Hans': '关闭当前页签', en: 'Close current tab' },
+  'cmd.database.connect': { 'zh-Hans': '连接数据库', en: 'Connect to database' },
+  'cmd.database.runQuery': { 'zh-Hans': '执行查询', en: 'Run query' },
+  'cmd.database.explain': { 'zh-Hans': '查看执行计划', en: 'Show query plan' },
+  'cmd.database.export': { 'zh-Hans': '导出结果', en: 'Export results' },
+  'cmd.database.import': { 'zh-Hans': '导入数据', en: 'Import data' },
+  'cmd.appearance.followSystem': { 'zh-Hans': '外观跟随系统', en: 'Follow system appearance' },
+  'cmd.appearance.dark': { 'zh-Hans': '总是深色', en: 'Always dark' },
+  'cmd.appearance.light': { 'zh-Hans': '总是浅色', en: 'Always light' },
+  'cmd.history.clear': { 'zh-Hans': '清空命令使用记录', en: 'Clear command usage history' },
+  'cmd.workspace.compareExternal': { 'zh-Hans': '对比盘上的改动', en: 'Compare with disk' },
+  'cmd.workspace.togglePreview': { 'zh-Hans': '切换预览 / 源码', en: 'Toggle preview / source' },
+  'cmd.database.browseTable': { 'zh-Hans': '浏览表数据', en: 'Browse table data' },
+  'cmd.appearance.alwaysDark': { 'zh-Hans': '总是深色', en: 'Always dark' },
+  'cmd.appearance.alwaysLight': { 'zh-Hans': '总是浅色', en: 'Always light' },
+  // 面板分组名
+  'cmdGroup.workspace': { 'zh-Hans': '工作区', en: 'Workspace' },
+  'cmdGroup.database': { 'zh-Hans': '数据库', en: 'Database' },
+  'cmdGroup.appearance': { 'zh-Hans': '外观', en: 'Appearance' },
+  'cmdGroup.history': { 'zh-Hans': '面板', en: 'Palette' },
+
   // 侧栏（活动栏的窄条）
   'sidebar.aria': { 'zh-Hans': '视图', en: 'Views' },
   'sidebar.notReady': { 'zh-Hans': '{name}（未开工）', en: '{name} (not implemented)' },
@@ -35,6 +64,7 @@ export const DICT = {
   'status.light': { 'zh-Hans': '浅色', en: 'Light' },
   'status.dark': { 'zh-Hans': '深色', en: 'Dark' },
   // 命令面板
+  'palette.recent': { 'zh-Hans': '最近使用', en: 'Recently used' },
   'palette.aria': { 'zh-Hans': '命令面板', en: 'Command palette' },
   'palette.placeholder': {
     'zh-Hans': '输入命令名或缩写（例如 fmt / 格式 / 保存）',

@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { auditCommands, commandById, commandsFor, COMMANDS_LIST } from './commands'
+import { DICT } from '../i18n'
 
 describe('命令登记表', () => {
   it('三者对账：没有重复 id、都能说清在哪儿看得见、视图名都认识', () => {
@@ -22,7 +23,7 @@ describe('命令登记表', () => {
 
   it('每条命令都能按 id 取回来（分派器不会取空）', () => {
     for (const command of COMMANDS_LIST) {
-      expect(commandById(command.id)?.title).toBe(command.title)
+      expect(commandById(command.id)?.titleKey).toBe(command.titleKey)
     }
     // 不存在的 id ⇒ undefined（**不编一个**）
     expect(commandById('nope.nope')).toBeUndefined()
@@ -43,9 +44,9 @@ describe('命令登记表', () => {
 
   it('每条命令都有分组与关键词（面板要分组显示、缩写要能搜到）', () => {
     for (const command of COMMANDS_LIST) {
-      expect(command.group.length).toBeGreaterThan(0)
+      expect(command.groupKey.length).toBeGreaterThan(0)
       expect(command.keywords.length).toBeGreaterThan(0)
-      expect(command.title.length).toBeGreaterThan(0)
+      expect(command.titleKey.length).toBeGreaterThan(0)
     }
   })
 
@@ -61,5 +62,18 @@ describe('命令登记表', () => {
     // ③ 重复 id 会被 Set 检出（与 auditCommands 同一手法）
     const ids = [badId, badId]
     expect(new Set(ids).size).toBeLessThan(ids.length)
+  })
+})
+
+
+describe('命令文案只在语言表里（标题与分组都是 key）', () => {
+  it('每个 titleKey / groupKey 都能在语言表里查到，且两种语言都有', () => {
+    for (const command of COMMANDS_LIST) {
+      // DICT 是 Record，key 不存在时 t() 会返回 ⟪key⟫ —— 这里直接查表
+      expect(Object.keys(DICT)).toContain(command.titleKey)
+      expect(Object.keys(DICT)).toContain(command.groupKey)
+      expect(DICT[command.titleKey as keyof typeof DICT]['zh-Hans'].length).toBeGreaterThan(0)
+      expect(DICT[command.titleKey as keyof typeof DICT].en.length).toBeGreaterThan(0)
+    }
   })
 })

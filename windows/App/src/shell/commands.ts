@@ -17,10 +17,15 @@ export type CommandScope =
 export interface Command {
   /** 稳定标识（执行时用它分派；与快捷键、菜单对账时也用它） */
   id: string
-  title: string
+  /**
+   * 命令标题的**语言 key**（`cmd.<id>`）—— 显示与搜索都从语言表取，**不在这里再写一份文案**
+   * （否则切英文时面板里仍是中文，且中英两处关键词会各飘各的）。
+   */
+  titleKey: string
+  /** 面板分组名的**语言 key**（`cmdGroup.<前缀>`）；前缀从 `id` 的 `分组.动作` 里取 */
+  groupKey: string
   /** 额外关键词（英文名、缩写之类）：参与匹配但不展示 */
   keywords: string[]
-  group: string
   scope: CommandScope
   /** 快捷键提示（只用于展示；**键位不走这里绑定** —— 那要跟系统菜单对齐后再落） */
   shortcut?: string
@@ -34,95 +39,95 @@ export interface Command {
 export const COMMANDS_LIST: readonly Command[] = [
   {
     id: 'workspace.openFolder',
-    title: '打开工作区文件夹',
+    titleKey: 'cmd.workspace.openFolder',
     keywords: ['open folder', 'workspace'],
-    group: '工作区',
+    groupKey: 'cmdGroup.workspace',
     scope: { kind: 'view', view: 'workspace' },
   },
   {
     id: 'workspace.search',
-    title: '在工作区里搜索',
+    titleKey: 'cmd.workspace.search',
     keywords: ['search', 'find', 'grep'],
-    group: '工作区',
+    groupKey: 'cmdGroup.workspace',
     scope: { kind: 'view', view: 'workspace' },
     shortcut: 'Ctrl+Shift+F',
   },
   {
     id: 'workspace.newFile',
-    title: '新建文件',
+    titleKey: 'cmd.workspace.newFile',
     keywords: ['new file', 'create'],
-    group: '工作区',
+    groupKey: 'cmdGroup.workspace',
     scope: { kind: 'view', view: 'workspace' },
   },
   {
     id: 'workspace.newFolder',
-    title: '新建文件夹',
+    titleKey: 'cmd.workspace.newFolder',
     keywords: ['new folder', 'mkdir'],
-    group: '工作区',
+    groupKey: 'cmdGroup.workspace',
     scope: { kind: 'view', view: 'workspace' },
   },
   {
     id: 'workspace.compareExternal',
-    title: '比对盘上有没有被别处改过',
+    titleKey: 'cmd.workspace.compareExternal',
     keywords: ['external change', 'stale', 'reload'],
-    group: '工作区',
+    groupKey: 'cmdGroup.workspace',
     scope: { kind: 'view', view: 'workspace' },
   },
   {
     id: 'workspace.togglePreview',
-    title: '切换 Markdown 预览',
+    titleKey: 'cmd.workspace.togglePreview',
     keywords: ['preview', 'markdown'],
-    group: '工作区',
+    groupKey: 'cmdGroup.workspace',
     scope: { kind: 'view', view: 'workspace' },
   },
   {
     id: 'database.connect',
-    title: '连接数据库',
+    titleKey: 'cmd.database.connect',
     keywords: ['connect', 'postgres'],
-    group: '数据库',
+    groupKey: 'cmdGroup.database',
     scope: { kind: 'view', view: 'database' },
   },
   {
     id: 'database.runQuery',
-    title: '执行 SQL',
+    titleKey: 'cmd.database.runQuery',
     keywords: ['run', 'execute', 'query'],
-    group: '数据库',
+    groupKey: 'cmdGroup.database',
     scope: { kind: 'view', view: 'database' },
     shortcut: 'Ctrl+Enter',
   },
   {
     id: 'database.browseTable',
-    title: '浏览表（生成查询）',
+    titleKey: 'cmd.database.browseTable',
     keywords: ['browse', 'table'],
-    group: '数据库',
+    groupKey: 'cmdGroup.database',
     scope: { kind: 'view', view: 'database' },
   },
   {
     id: 'history.clear',
-    title: '清空命令使用记录',
+    titleKey: 'cmd.history.clear',
     keywords: ['clear history', 'usage', 'frecency'],
-    group: '面板',
+    groupKey: 'cmdGroup.history',
     scope: { kind: 'global' },
   },
   {
     id: 'appearance.followSystem',
-    title: '外观跟随系统',
+    titleKey: 'cmd.appearance.followSystem',
     keywords: ['appearance', 'system', 'theme'],
-    group: '外观',
+    groupKey: 'cmdGroup.appearance',
     scope: { kind: 'global' },
   },
   {
     id: 'appearance.alwaysDark',
-    title: '外观总是深色',
+    titleKey: 'cmd.appearance.alwaysDark',
     keywords: ['dark', 'theme'],
-    group: '外观',
+    groupKey: 'cmdGroup.appearance',
     scope: { kind: 'global' },
   },
   {
     id: 'appearance.alwaysLight',
-    title: '外观总是浅色',
+    titleKey: 'cmd.appearance.alwaysLight',
     keywords: ['light', 'theme'],
-    group: '外观',
+    groupKey: 'cmdGroup.appearance',
     scope: { kind: 'global' },
   },
 ]

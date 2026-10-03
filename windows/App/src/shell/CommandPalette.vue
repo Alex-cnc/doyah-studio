@@ -72,12 +72,19 @@ function toItems(commands: readonly Command[]) {
   // 榜上靠前的几条**单独列组**（面板上一眼能看出"这几个是我常用的"）；
   // 但**不另造条目**（同一 id 只出现一次，否则搜索结果会重复）
   const recentCount = Math.min(5, ranked.length)
-  return sorted.map((command, index) => ({
-    id: command.id,
-    title: command.title,
-    keywords: command.keywords,
-    group: index < recentCount && order.has(command.id) ? '最近使用' : command.group,
-  }))
+  // **显示与搜索词都从语言表取**（`titleKey` / `groupKey`）：
+  //   · 显示：当前语言那一份；
+  //   · 搜索：**两种语言的标题都并进 keywords** —— 用户的界面是中文也可能搜英文缩写，
+  //     只给一种语言的词就会出现"看得见却搜不到"。
+  return sorted.map((command, index) => {
+    const recent = index < recentCount && order.has(command.id)
+    return {
+      id: command.id,
+      title: tr(command.titleKey as never),
+      keywords: [...command.keywords, tr(`cmd.${command.id}` as never)],
+      group: recent ? tr('palette.recent') : tr(command.groupKey as never),
+    }
+  })
 }
 
 /** 把**工作区文件**也搜进来（与命令同一张榜；搜索用的是 Rust 侧同一个引擎） */
