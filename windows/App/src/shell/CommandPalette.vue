@@ -22,6 +22,14 @@ const props = defineProps<{
   recentFiles?: string[]
   /** 按「常用优先」排好的命令 id（顺序由领域层给） */
   rankedCommands?: string[]
+  /**
+   * 从**标题栏搜索框**带进来的词（FR-EDIT-37）。
+   *
+   * 为什么复用面板而不是另做一套搜索：标题栏那个是**全局搜索**（功能 / 命令 / 工作区文件 / 数据库对象），
+   * 而面板早就能搜这三样（清单在 `shell/commands.ts`，匹配排序在 Rust 侧）。
+   * 再写一套匹配就会出现"两处结果不一样"——那是同一条纪律（同一件事不留两个入口）。
+   */
+  seedQuery?: string
 }>()
 
 const emit = defineEmits<{
@@ -31,6 +39,7 @@ const emit = defineEmits<{
 }>()
 
 const query = ref('')
+
 const matches = ref<PaletteMatch[]>([])
 const cursor = ref(0)
 const input = ref<HTMLInputElement | null>(null)
@@ -93,7 +102,10 @@ async function refresh() {
 
 watch(() => props.open, async (open) => {
   if (!open) return
-  query.value = ''
+  // **开面板这一处统一决定起始词**：标题栏搜索带进来的词优先；没有才清空。
+  // 为什么不在别处单独 watch seedQuery：`props.open` 与 `props.seedQuery` 往往同一次
+  // 更新里一起变，两个 watcher 谁先跑不确定 —— 先灌后清就会把词冲掉（我第一版就是这样）。
+  query.value = (props.seedQuery ?? '').trim()
   cursor.value = 0
   await refresh()
   await nextTick()

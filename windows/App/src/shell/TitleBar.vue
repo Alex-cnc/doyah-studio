@@ -12,6 +12,9 @@ import { estimateTitleWidth, searchFieldWidth } from './titleBarSearch'
 
 const props = defineProps<{ info: AppInfo | null; item: ActivityBarItemId }>()
 
+// 标题栏搜索是**全局搜索**：把词抛给外壳去开命令面板（它已能搜 功能 / 文件 / 对象）
+const emit = defineEmits<{ (event: 'search-submit', query: string): void }>()
+
 /** 窗口宽度（跟随缩放变化）—— 唯一的输入，其余都从它算出来。 */
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 0)
 

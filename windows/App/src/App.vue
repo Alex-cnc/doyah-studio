@@ -98,6 +98,14 @@ async function openFromPalette(target: { relativePath: string }) {
 }
 // 命令面板（2.9）：Ctrl+K 打开；清单来自 `shell/commands.ts`，匹配排序在 Rust 侧
 const paletteOpen = ref(false)
+/** 从标题栏搜索带进面板的词（空串 = 面板自己从零开始） */
+const paletteSeed = ref('')
+
+/** 标题栏搜索框回车/点一下：开面板并把词带进去（复用面板已有的三合一搜索） */
+function openPaletteWithSearch(query: string) {
+  paletteSeed.value = query
+  paletteOpen.value = true
+}
 
 function onGlobalKeydown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -242,7 +250,7 @@ function onSelect(id: ActivityBarItemId) {
 
 <template>
   <div class="shell">
-    <TitleBar :info="info" :item="activeItem" />
+    <TitleBar :info="info" :item="activeItem" @search-submit="openPaletteWithSearch" />
     <!-- 星云皮肤（2.8）：只在「星空紫 + 深色 + 开关开」时由 data-nebula 显形；纯装饰、不吃点击 -->
     <div class="nebula" aria-hidden="true"></div>
     <!-- 命令面板（2.9）：Ctrl+K 开关；清单在 shell/commands.ts，匹配排序在 Rust 侧 -->
@@ -255,6 +263,7 @@ function onSelect(id: ActivityBarItemId) {
 :objects="paletteObjects"
       :recent-files="recentFiles"
       :ranked-commands="rankedCommands"
+      :seed-query="paletteSeed"
       @open="openFromPalette"
     />
     <p v-if="commandNote" class="shell__command-note">{{ commandNote }}</p>
