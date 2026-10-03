@@ -78,6 +78,24 @@ struct WorkspaceTabStrip: View {
         }
         .padding(.horizontal, Spacing.s)
         .padding(.vertical, Spacing.xs)
+        // 关闭确认框（`FR-EDIT-46`）：动作与顺序**由模型给**（`WorkspaceClosePolicy` 是唯一出处），
+        // 界面只负责画 —— 别自己硬写三个按钮，否则规则一改就有两处不一致。
+        .confirmationDialog(
+            L(.workspaceCloseConfirmTitle, tabs.pendingClose?.title ?? ""),
+            isPresented: Binding(
+                get: { tabs.pendingClose != nil },
+                // 按 ESC / 点框外 = 「取消」：只收掉请求，页签原样留着。
+                set: { presented in if !presented { tabs.cancelPendingClose() } }
+            ),
+            titleVisibility: .visible,
+            presenting: tabs.pendingClose
+        ) { request in
+            Button(L(.workspaceCloseSaveAndClose)) { tabs.resolvePendingClose(.saveAndClose) }
+            Button(L(.workspaceCloseDiscardChanges), role: .destructive) { tabs.resolvePendingClose(.discardChanges) }
+            Button(L(.workspaceCloseCancel), role: .cancel) { tabs.cancelPendingClose() }
+        } message: { _ in
+            Text(L(.workspaceCloseConfirmMessage))
+        }
     }
 
     // MARK: 编辑菜单（工作区自己的那一份）
@@ -132,7 +150,9 @@ struct WorkspaceTabStrip: View {
             // Home 关不掉（工作区的落脚点），所以它没有关闭按钮。
             if !tab.isHome {
                 Button {
-                    tabs.close(tab.id)
+                    // `FR-EDIT-46`：干净页签直接关；有未保存改动 ⇒ **弹确认框**
+                    // （需求提出者 2026-10-03：「弹出确认框让用户选择，是保存关闭还是不修改直接退出」）。
+                    tabs.requestClose(tab.id)
                 } label: {
                     Image(systemName: "xmark")
                         .font(Theme.font(.caption))

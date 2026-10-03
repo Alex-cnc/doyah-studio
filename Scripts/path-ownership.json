@@ -73,6 +73,78 @@
       "reason": "派活单 T-20261002-029：反向扫的对侧残留清单写进本提案的回执（红线 6：对侧独占节只提醒不代改）",
       "by": "macos",
       "at": "2026-10-02"
+    },
+    {
+      "glob": "Scripts/format-argument-dispositions.json",
+      "reason": "FR-EDIT-39 的格式化形态改口径（2026-10-02 定案「只用内置」，登记外部工具不产生能力）⇒ 处置预算 123→124；共享台账两侧逐字节同一份",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "Scripts/run-manual-verification-probes.sh",
+      "reason": "`TestsUISnapshot/FormatMenuWiringProbeTests.swift` 落地当轮漏接 FILTER（用例一个都跑不到）⇒ 补进探针清单；共享脚本两侧逐字节同一份",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "AGENT-SPEC.md",
+      "reason": "本轮把「Core 单测 2442 / 0 failures」与一条教训（登记表整块插、别拿 `.xxx,` 当锚点）写进 §9；计数口径与门禁说明同步",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "Docs/design/待人工验收清单.md",
+      "reason": "本轮新增 §10.30：Python 强格式化 / Shell / YAML 内置档 / 两门新语言要人工点一遍",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "Docs/产品能力规划说明书.md",
+      "reason": "能力清单新增第 13 条（Python 强档 + Shell/YAML 内置 + 两门语言登记）+ 版本行 v1.104",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "Docs/概要设计.md",
+      "reason": "§8.1 的 schema 由四种规则形状改成八种（含 python/shell/yaml 三档的边界）+ 版本行 v2.127",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "Docs/需求规范书.md",
+      "reason": "`FR-EDIT-38`（覆盖面 20 种语言 / 61 条扩展名、Beta 1 缺口两门已落）与 `FR-EDIT-39`（三档 + 只用内置）+ 版本行 v3.319；正文里的语言名按平台中立性口径加 platform-ok 注",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "Scripts/alpha-fr-dispositions.json",
+      "reason": "`FR-EDIT-38` 的覆盖面账随本轮登记数从 18 种 / 58 条改为 20 种 / 61 条（共享台账两侧同步）",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "Scripts/check-editor-line-numbers.py",
+      "reason": "夹具（`FIXTURE_SOURCES`）补上标题栏主搜索框这一份真源文件 —— 台账补登后夹具不跟上，「原样应当绿」那一条会红",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "Scripts/check-menu-language.py",
+      "reason": "档级重试（自报没展开 / 展开族整条不在 ⇒ 重跑，最多三次）+ 判红措辞把「探针没跑成」与产品缺陷分开 + ⑮ 留档换成 2026-10-03 那份真 dump",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "Scripts/doc-numbers.json",
+      "reason": "Core 单测实测计数 2429 → 2442（本轮 +13：Python 6 / Shell 3 / YAML 3 / 语言登记 1）",
+      "by": "macos",
+      "at": "2026-10-03"
+    },
+    {
+      "glob": "Scripts/editor-line-number-surfaces.json",
+      "reason": "台账补登 `TitleBarSearchFieldView`（标题栏主搜索框，单行输入 ⇒ 不画行号并写明理由）",
+      "by": "macos",
+      "at": "2026-10-03"
     }
   ],
   "unclassified_allow": [

@@ -23,6 +23,10 @@ final class WorkspaceTabsModel: ObservableObject {
     /// 一次性提示（保存成功 / 按非 UTF-8 编码打开之类）。
     @Published var noticeText: String?
 
+    /// 待确认的关闭请求（`FR-EDIT-46`）：有未保存改动时**弹确认框**，
+    /// 而不是像以前那样直接拒绝关闭。`nil` = 没有框要弹。
+    @Published var pendingClose: WorkspaceCloseRequest?
+
     /// 工作区右侧是否显示 **Markdown 只读预览**（队列 `L-137`）。
     ///
     /// 状态住在模型里、视图只读它 —— 与页签集、浏览器页签同一条纪律
@@ -77,14 +81,60 @@ final class WorkspaceTabsModel: ObservableObject {
         }
     }
 
-    /// 关闭页签。**有未保存改动时不关**（并说明原因）——
-    /// 静默丢弃用户刚敲的代码是这类编辑器最不可原谅的行为。
+    /// 关闭页签（`FR-EDIT-46`）。
+    ///
+    /// **点关闭按钮走 `requestClose(_:)`** —— 干净页签直接关，有未保存改动则挂一个
+    /// `pendingClose` 让界面弹确认框（需求提出者 2026-10-03：「弹出确认框让用户选择，
+    /// 是保存关闭还是不修改直接退出」）。旧行为是**直接拒绝关闭**并只给一句话，
+    /// 那是阻塞不是确认。
+    ///
+    /// 本函数仍是**无条件关闭**（确认过之后的落实点），但**脏页签一律拒收** ——
+    /// 那条纪律不因为加了确认框而作废：任何绕过确认的调用点（将来新增的菜单 / 快捷键）
+    /// 都不会让改动**静默**消失。
     func close(_ id: UUID) {
         guard let tab = tabs.first(where: { $0.id == id }) else { return }
         guard !tab.isDirty else {
-            errorText = L(.workspaceCloseBlockedDirty, tab.title)
+            // 到不了这里才叫「有确认框」：脏页签必须先经过 `requestClose(_:)`。
+            pendingClose = WorkspaceCloseRequest(id: tab.id, title: tab.title, actions: WorkspaceClosePolicy.confirmActions)
             return
         }
+        forceClose(id)
+    }
+
+    /// 用户点了关闭按钮 / 关闭入口：**先问清楚再关**。
+    func requestClose(_ id: UUID) {
+        guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        let plan = WorkspaceClosePolicy.plan(isDirty: tab.isDirty)
+        guard plan.needsConfirmation else {
+            forceClose(id)
+            return
+        }
+        pendingClose = WorkspaceCloseRequest(id: tab.id, title: tab.title, actions: plan.actions)
+    }
+
+    /// 确认框里选了某个动作。**保存的成败在这里算**：失败就不关（`WorkspaceClosePolicy`）。
+    func resolvePendingClose(_ action: WorkspaceCloseAction) {
+        guard let request = pendingClose else { return }
+        pendingClose = nil
+        switch action {
+        case .cancel:
+            return
+        case .discardChanges:
+            forceClose(request.id)
+        case .saveAndClose:
+            let saved = save(request.id)
+            guard !WorkspaceClosePolicy.keepsTab(action: action, saveSucceeded: saved) else { return }
+            forceClose(request.id)
+        }
+    }
+
+    /// 关掉确认框但**不关页签**（按 ESC / 点框外走这条，与「取消」同一个结局）。
+    func cancelPendingClose() {
+        pendingClose = nil
+    }
+
+    /// 真正把页签从集合里挪走（**只有确认过、或本来就不脏**才允许到这里）。
+    private func forceClose(_ id: UUID) {
         let next = WorkspaceTabSet.selection(afterClosing: id, in: tabs, selected: selectedID)
         tabs = WorkspaceTabSet.closing(id: id, in: tabs)
         selectedID = next ?? tabs.first?.id
@@ -149,16 +199,20 @@ final class WorkspaceTabsModel: ObservableObject {
         }
     }
 
-    /// 保存（⌘S）：写回原路径。
-    func save(_ id: UUID) {
-        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
-        guard let path = tabs[index].path else { return }
+    /// 保存（⌘S）：写回原路径。返回**是否写成功** —— 「保存并关闭」那条路要靠它决定关不关
+    /// （`FR-EDIT-46`：保存失败就不关，见 `WorkspaceClosePolicy.keepsTab`）。
+    @discardableResult
+    func save(_ id: UUID) -> Bool {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return false }
+        guard let path = tabs[index].path else { return false }
         do {
             try tabs[index].content.write(toFile: path, atomically: true, encoding: .utf8)
             tabs[index].markSaved()
             noticeText = L(.workspaceFileSaved, tabs[index].title)
+            return true
         } catch {
             errorText = L(.workspaceSaveFailed, tabs[index].title, error.localizedDescription)
+            return false
         }
     }
 

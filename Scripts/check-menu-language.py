@@ -65,7 +65,7 @@ BASE = pathlib.Path(__file__).resolve().parent.parent
 DEFAULT_APP = BASE / "dist" / "DoyahStudio.app" / "Contents" / "MacOS" / "DoyahStudio"
 DEFAULTS_DOMAIN = "studio.doyah.DoyahStudio"
 # 绿对照：**修后**那份真 dump（2026-10-02，含展开族与 C 段）
-FIXTURE_DUMP = BASE / "Scripts" / "fixtures" / "menu-dump-real-20261002.txt"
+FIXTURE_DUMP = BASE / "Scripts" / "fixtures" / "menu-dump-real-20261003.txt"
 # 历史留档（第 140 轮那份：格式同前一代，**没有** C 段与展开族 ⇒ 只作历史，不作绿对照）
 LEGACY_FIXTURE = BASE / "Scripts" / "fixtures" / "menu-dump-real-20261001.txt"
 
@@ -321,8 +321,14 @@ def judge_all(dumps, problems):
             notes.append("%s · %s" % (key, note))
     for label, _, conditional in REQUIRED_OPEN_ITEMS:
         if conditional and not seen.get(label, False):
-            problems.append("条件性必检项 `%s` 在这一轮两档**一次都没枚举到** ⇒ 判红"
-                            "（探针没展开菜单 / AppKit 改了写法）" % label)
+            # 探针**自报**没展开成 ⇒ 说清那是「探针没跑成」，别让它读起来像产品缺陷
+            # （2026-10-03 实测：那种形态的报错长得像「中文界面下还有英文项」）。
+            probes_failed = [name for name, text in dumps.items()
+                             if (expansion_report(text) or "").startswith("missing")]
+            hint = ("**探针没能展开菜单**（%s 自报 `missing=…`）⇒ 这一项这一档判不了；"
+                    "已经在收集阶段重试三次，仍未展开成功 —— 先看探针，别先改产品" % " / ".join(probes_failed)) \
+                if probes_failed else "（探针没展开菜单 / AppKit 改了写法）"
+            problems.append("条件性必检项 `%s` 在这一轮两档**一次都没枚举到** ⇒ 判红%s" % (label, hint))
     stats["notes"] = notes
     return problems, stats
 
@@ -331,6 +337,19 @@ def judge_all(dumps, problems):
 
 def _defaults(*arguments):
     return subprocess.run(["defaults", *arguments], capture_output=True, text=True)
+
+
+def expansion_report(dump_text):
+    """读 dump 里探针**自报**的展开结论（`# openExpansion=…`）。
+
+    返回 `None` = 这份 dump 没有这一行（旧包 / 合成 dump），调用方按「不知道」处理；
+    返回 `ok …` = 展开了；返回 `missing=…` = 探针没能把条件族插进树里 —— **这一档的结论不可用**。
+    """
+    found = None
+    for line in dump_text.splitlines():
+        if line.startswith("# openExpansion="):
+            found = line.split("=", 1)[1].strip()   # 取**最后**一条：A/B 段不带这行，C 段才是展开结论
+    return found
 
 
 def run_scenario(binary, launch_lang, switch_lang, target, timeout):
@@ -376,15 +395,34 @@ def collect(scratch, binary, timeout):
     try:
         for name, launch, switch in SCENARIOS:
             target = scratch / ("%s.txt" % name)
-            # 菜单跟踪是**偶发**不收敛的（实测 2026-10-02：同一份包一次 120 秒没写出 dump、下一次秒出）
-            # ⇒ 一档最多重跑一次；两次都不行才判红（判据不该因为探针的抖动把好包判红）。
-            ok, why = run_scenario(binary, launch, switch, target, timeout)
-            if not ok:
+            # 菜单跟踪是**偶发**不收敛的（实测 2026-10-02：同一份包一次 120 秒没写出 dump、下一次秒出；
+            # 2026-10-03 又实测到第二形态：dump 出来了、但**菜单没展开成** —— 那一段里
+            # `显示标签页栏` / `所有标签页` 一条都不在，`移动与调整大小` 的子菜单标题还停在启动语言，
+            # 症状长得像「产品停在英文」。两种形态都**不是产品结论** ⇒ 分开重试、分开报。
+            ok, why, text = False, "", ""
+            for attempt in range(1, 4):
                 ok, why = run_scenario(binary, launch, switch, target, timeout)
+                if not ok:
+                    continue
+                text = target.read_text(encoding="utf-8")
+                expansion = expansion_report(text)
+                # 「这一档不可用」有两个可观测形态：探针**自报**没展开成；或展开族（那几个条件性项）
+                # 在这份 dump 里**整条都不在** —— 后者是上一代包也能看出来的形态。
+                # 条件族的判据认的是**选择器**（dump 里写的是 `toggleTabBar:` 这种），不是中文标题。
+                family = [label[label.index("`") + 1:label.rindex("`")]
+                          for label, _, conditional in REQUIRED_OPEN_ITEMS
+                          if conditional and "`" in label]
+                if expansion is None or expansion.startswith("ok"):
+                    if not family or any(selector in text for selector in family):
+                        break
+                    why = "这一档的展开族（%s）在 dump 里一条都不在" % "、".join(family)
+                else:
+                    why = "探针没能展开菜单（自报 `%s`）" % expansion
+                ok = False
             if not ok:
-                problems.append("档 `%s` 没跑出 dump（重跑一次后仍失败）：%s" % (name, why))
+                problems.append("档 `%s` 没跑出可用的 dump（三次都没成）：%s" % (name, why))
                 continue
-            dumps[name] = target.read_text(encoding="utf-8")
+            dumps[name] = text
     finally:
         if backup.exists():
             _defaults("import", DEFAULTS_DOMAIN, str(backup))
@@ -600,7 +638,7 @@ def self_test() -> int:
         "0|title|submenuAction:|文件|menuSystemFile|文件|ok",
         "0|title|submenuAction:|File|menuSystemFile|文件|ok"), "zh-Hans", True, ["停在启动语言"])
     if FIXTURE_DUMP.exists():
-        case("⑮ 绿对照：仓库里留档的**修后**真 dump（2026-10-02 那份 · 含展开族）",
+        case("⑮ 绿对照：仓库里留档的**修后**真 dump（2026-10-03 那份 · 含展开族与探针自报）",
              FIXTURE_DUMP.read_text(encoding="utf-8"), "zh-Hans", False)
     else:
         cases.append(("⑮ 绿对照：修后真 dump 留档", False, ["留档文件不存在：%s" % FIXTURE_DUMP]))
