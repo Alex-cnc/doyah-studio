@@ -76,6 +76,32 @@ pub struct TableShape {
     pub constraints: Vec<ConstraintInfo>,
 }
 
+/// 一个库的读数（1.7 管理面）。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseInfo {
+    pub name: String,
+    pub owner: String,
+    pub encoding: String,
+    pub size_bytes: i64,
+    pub connections: i64,
+    pub allow_connections: bool,
+}
+
+/// 一张表的读数（1.7 管理面）。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableStats {
+    pub table: String,
+    /// **估算**行数（`pg_class.reltuples`，不是精确 count）
+    pub estimated_rows: i64,
+    pub total_bytes: i64,
+    pub table_bytes: i64,
+    pub index_size_pretty: String,
+    pub last_vacuum: String,
+    pub last_analyze: String,
+}
+
 /// 服务端自述（连上后第一件事：把"连到了哪儿"如实告诉用户）。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -872,6 +898,107 @@ impl PgSession {
             None => data_type.trim().to_string(),
     }
 }
+
+    /// **库列表 + 大小 + 连接数**（1.7 管理面）。只读；普通用户也能看到自己有权连的库。
+    pub async fn databases(&self) -> Result<Vec<DatabaseInfo>, DbFailure> {
+        let sql = "SELECT d.datname, \
+                          pg_catalog.pg_get_userbyid(d.datdba) AS owner, \
+                          pg_catalog.pg_encoding_to_char(d.encoding) AS encoding, \
+                          pg_catalog.pg_database_size(d.datname)::text, \
+                          (SELECT count(*) FROM pg_stat_activity a WHERE a.datname = d.datname)::text, \
+                          d.datallowconn \
+                   FROM pg_database d \
+                   WHERE d.datistemplate = false \
+                   ORDER BY pg_catalog.pg_database_size(d.datname) DESC, d.datname";
+        let rows = self
+            .client
+            .query(sql, &[])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        Ok(rows
+            .into_iter()
+            .map(|row| DatabaseInfo {
+                name: row.get(0),
+                owner: row.get(1),
+                encoding: row.get(2),
+                size_bytes: row.get::<_, String>(3).parse().unwrap_or(0),
+                connections: row.get::<_, String>(4).parse().unwrap_or(0),
+                allow_connections: row.get(5),
+            })
+            .collect())
+    }
+
+    /// **会话与锁**（1.7 管理面）：谁在跑什么、跑了多久、有没有在等锁。
+    ///
+    /// 口径：① `query` 只在 **active** 时给（idle 会话的 `query` 是上一条语句，给了会误导）；
+    /// ② 时长按 `now() - query_start` 算；③ `waiting` 看 `wait_event_type = 'Lock'`
+    /// —— 那才是"正在挡别人 / 被别人挡"的信号。
+    pub async fn sessions(&self) -> Result<Vec<doyah_studio_db::admin::SessionRow>, DbFailure> {
+        let sql = "SELECT pid::text, COALESCE(usename, ''), COALESCE(datname, ''), \
+                          COALESCE(state, ''), \
+                          CASE WHEN state = 'active' THEN query ELSE NULL END, \
+                          COALESCE(EXTRACT(MILLISECONDS FROM (now() - query_start))::bigint, 0)::text, \
+                          COALESCE(wait_event_type, '') \
+                   FROM pg_stat_activity \
+                   WHERE pid <> pg_backend_pid() \
+                   ORDER BY query_start NULLS LAST";
+        let rows = self
+            .client
+            .query(sql, &[])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        let mut out: Vec<doyah_studio_db::admin::SessionRow> = rows
+            .into_iter()
+            .map(|row| doyah_studio_db::admin::SessionRow {
+                pid: row.get::<_, String>(0).parse().unwrap_or(0),
+                user: row.get(1),
+                database: row.get(2),
+                state: row.get(3),
+                query: row.get(4),
+                duration_ms: row.get::<_, String>(5).parse().unwrap_or(0),
+                waiting: row.get::<_, String>(6) == "Lock",
+            })
+            .collect();
+        // 排序口径在领域层（等锁优先、其次按时长）—— 界面直接按这个顺序显示
+        doyah_studio_db::admin::sort_sessions(&mut out);
+        Ok(out)
+    }
+
+    /// **表统计**（1.7 管理面）：行数**估算**、表与索引体积、上次 vacuum / analyze。
+    ///
+    /// 口径：行数取 `pg_class.reltuples`（**估算**）—— 精确 `count(*)` 在大表上要全扫；
+    /// 字段名写明是估算，不假装精确。
+    pub async fn table_stats(&self, schema: &str) -> Result<Vec<TableStats>, DbFailure> {
+        let sql = "SELECT c.relname, \
+                          c.reltuples::bigint::text, \
+                          pg_total_relation_size(c.oid)::text, \
+                          pg_relation_size(c.oid)::text, \
+                          COALESCE(pg_size_pretty(pg_total_relation_size(c.oid) - pg_relation_size(c.oid)), '0'), \
+                          COALESCE(to_char(GREATEST(s.last_vacuum, s.last_autovacuum), 'YYYY-MM-DD HH24:MI'), '从未'), \
+                          COALESCE(to_char(GREATEST(s.last_analyze, s.last_autoanalyze), 'YYYY-MM-DD HH24:MI'), '从未') \
+                   FROM pg_class c \
+                   JOIN pg_namespace n ON n.oid = c.relnamespace \
+                   LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid \
+                   WHERE n.nspname = $1 AND c.relkind IN ('r','p','m') \
+                   ORDER BY pg_total_relation_size(c.oid) DESC";
+        let rows = self
+            .client
+            .query(sql, &[&schema])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        Ok(rows
+            .into_iter()
+            .map(|row| TableStats {
+                table: row.get(0),
+                estimated_rows: row.get::<_, String>(1).parse().unwrap_or(0),
+                total_bytes: row.get::<_, String>(2).parse().unwrap_or(0),
+                table_bytes: row.get::<_, String>(3).parse().unwrap_or(0),
+                index_size_pretty: row.get(4),
+                last_vacuum: row.get(5),
+                last_analyze: row.get(6),
+            })
+            .collect())
+    }
 
 /// 快速自检（`--probe` 用）：连上、能问出一行、能列出表。
     pub async fn probe(&self) -> Result<ProbeReport, DbFailure> {        let tables = self.tables().await?;

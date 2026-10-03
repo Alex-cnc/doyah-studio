@@ -42,6 +42,14 @@ export const COMMANDS = {
   previewImport: 'preview_import',
   runImport: 'run_import',
   xlsxToCsv: 'xlsx_to_csv',
+  // 库与服务器管理面（1.7：读数只读；危险操作只生成语句）
+  adminDatabases: 'admin_databases',
+  adminSessions: 'admin_sessions',
+  adminTableStats: 'admin_table_stats',
+  maintenanceSql: 'maintenance_sql',
+  terminateSql: 'terminate_sql',
+  grantPreview: 'grant_preview',
+  confirmDropDatabase: 'confirm_drop_database',
   dbProbe: 'db_probe',
   // 连接列表（配置落盘 + 口令进系统凭据管理器）
   connectionsList: 'connections_list',
@@ -720,6 +728,98 @@ export function xlsxToCsv(path: string, sheet?: string): Promise<string> {
       hint: 'Excel 通路要在 Tauri 外壳里跑（npm run tauri dev）。',
     } as DbFailure
   })
+}
+
+// ── 库与服务器管理面（1.7）────────────────────────────────────────────────────────────
+
+export interface DatabaseInfo {
+  name: string
+  owner: string
+  encoding: string
+  sizeBytes: number
+  connections: number
+  allowConnections: boolean
+}
+
+/** 会话与锁的一行（排序口径在领域层：等锁优先，其次按时长）。 */
+export interface SessionRow {
+  pid: number
+  user: string
+  database: string
+  state: string
+  /** 只在 active 时有值（idle 会话的 query 是上一条语句，给了会误导） */
+  query: string | null
+  durationMs: number
+  /** 它是不是**等锁**的那个 */
+  waiting: boolean
+}
+
+export interface TableStats {
+  table: string
+  /** **估算**行数（`pg_class.reltuples`，不是精确 count） */
+  estimatedRows: number
+  totalBytes: number
+  tableBytes: number
+  indexSizePretty: string
+  lastVacuum: string
+  lastAnalyze: string
+}
+
+/** 一条维护命令（**只生成、不执行**；每条都带代价说明）。 */
+export interface MaintenanceCommand {
+  sql: string
+  bare: string
+  purpose: string
+  cost: string
+}
+
+/** 危险操作的确认结果。 */
+export interface Confirmation {
+  ok: boolean
+  reason: string | null
+}
+
+export function adminDatabases(): Promise<DatabaseInfo[]> {
+  return call(COMMANDS.adminDatabases, {}, () => [] as DatabaseInfo[])
+}
+
+export function adminSessions(): Promise<SessionRow[]> {
+  return call(COMMANDS.adminSessions, {}, () => [] as SessionRow[])
+}
+
+export function adminTableStats(schema: string): Promise<TableStats[]> {
+  return call(COMMANDS.adminTableStats, { schema }, () => [] as TableStats[])
+}
+
+/** **维护命令**（只生成、不执行）。 */
+export function maintenanceSql(schema: string | undefined, table: string): Promise<MaintenanceCommand[]> {
+  return call(COMMANDS.maintenanceSql, { schema, table }, () => [] as MaintenanceCommand[])
+}
+
+/** **杀会话命令**（只生成、不执行；`force` 为真给 terminate，否则 cancel）。 */
+export function terminateSql(pid: number, force = false): Promise<MaintenanceCommand> {
+  return call(COMMANDS.terminateSql, { pid, force }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+/** **授权预览**（只生成 GRANT / REVOKE 语句）。 */
+export function grantPreview(request: {
+  privileges: string[]
+  objectKind: string
+  schema?: string
+  object: string
+  role: string
+  revoke?: boolean
+}): Promise<string> {
+  return call(COMMANDS.grantPreview, { ...request }, () => {
+    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+  })
+}
+
+/** **删库确认**：逐字打出库名才放行（判定在领域层）。 */
+export function confirmDropDatabase(typed: string, database: string): Promise<Confirmation> {
+  return call(COMMANDS.confirmDropDatabase, { typed, database }, () => ({ ok: false, reason: '浏览器旁路' }))
 }
 // ── 工作区（alpha 2.0）───────────────────────────────────────────────────────────────
 //

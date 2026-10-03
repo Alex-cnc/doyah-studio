@@ -713,6 +713,63 @@ async fn xlsx_is_read_through_the_python_bridge() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// **1.7 库与服务器管理面**：读数真读到 / 维护命令只生成不执行 / 删库确认要逐字打名。
+///
+/// 判据（版本计划 §1.7 的出口「会话与锁列表 + 数据库统计 + 维护任务**只生成命令、不自动执行**」）：
+/// ① 库列表真读到 `doyah_lab` 且大小 > 0；② 会话列表读得到（至少能看到自己以外的东西，
+/// 或如实为空）；③ 表统计读得到夹具表且体积 > 0；④ **维护命令只是文本**（没有任何执行通路，
+/// 本用例断言返回里带"代价"说明）；⑤ 杀会话命令也只是文本；⑥ 删库确认要逐字打名。
+#[tokio::test]
+async fn admin_readings_and_generate_only_commands_on_real_db() {
+    let Some(params) = lab_params() else { return };
+    let session = PgSession::connect(&params).await.expect("应当连上实验库");
+
+    // ① 库列表
+    let dbs = session.databases().await.expect("列库应当成功");
+    let lab = dbs.iter().find(|d| d.name == "doyah_lab").expect("实验库应当在列表里");
+    assert!(lab.size_bytes > 0, "库大小应当 > 0：{lab:?}");
+    assert!(!lab.owner.is_empty(), "属主应当有值");
+    assert!(dbs.iter().all(|d| !d.name.is_empty()));
+
+    // ② 会话与锁：读得到即可（内容随机器状态变，不写死期望）
+    let sessions = session.sessions().await.expect("列会话应当成功");
+    // 排序口径：等锁的必须排在不等锁的前面（真数据上验一次）
+    let first_non_waiting = sessions.iter().position(|s| !s.waiting);
+    let last_waiting = sessions.iter().rposition(|s| s.waiting);
+    if let (Some(first_ok), Some(last_wait)) = (first_non_waiting, last_waiting) {
+        assert!(last_wait < first_ok, "等锁的会话必须排在前面：{sessions:?}");
+    }
+
+    // ③ 表统计：夹具表在，且体积 > 0
+    let stats = session.table_stats("app").await.expect("读表统计应当成功");
+    let accounts = stats.iter().find(|s| s.table == "accounts");
+    assert!(accounts.is_some(), "app.accounts 应当在统计里：{:?}", stats.iter().map(|s| &s.table).collect::<Vec<_>>());
+    let accounts = accounts.unwrap();
+    assert!(accounts.total_bytes > 0, "表体积应当 > 0：{accounts:?}");
+    assert!(accounts.estimated_rows >= 0);
+
+    // ④ 维护命令：**只是文本**，每条都带代价
+    let cmds = doyah_studio_db::admin::maintenance_commands(Some("app"), "accounts");
+    assert!(cmds.len() >= 4);
+    for c in &cmds {
+        assert!(!c.cost.trim().is_empty(), "{} 没写代价", c.purpose);
+        assert!(c.sql.contains("代价"), "{}", c.sql);
+    }
+    assert!(cmds.iter().any(|c| c.bare.contains("VACUUM FULL")));
+    // 而且这些文本**没有被本用例执行**：跑完之后表还在、还能查
+    let alive = session.run("select count(*) from app.accounts", 10).await;
+    assert!(alive.is_ok(), "维护命令只是文本，不该动到库");
+
+    // ⑤ 杀会话命令：只是文本（**不真杀** —— 杀下去这条连接自己也没了）
+    let kill = doyah_studio_db::admin::terminate_command(999_999, true);
+    assert!(kill.bare.contains("pg_terminate_backend(999999)"));
+    assert!(kill.cost.contains("掐断"));
+
+    // ⑥ 删库确认：逐字打名
+    assert!(doyah_studio_db::admin::confirm_drop("doyah_lab", "doyah_lab").ok);
+    assert!(!doyah_studio_db::admin::confirm_drop("doyah", "doyah_lab").ok);
+}
+
 #[tokio::test]
 async fn unreachable_server_reports_readable_reason() {
     let mut params = lab_params().unwrap_or(ConnectParams {

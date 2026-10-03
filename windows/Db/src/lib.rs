@@ -10,6 +10,7 @@
 //! **服务端条件浏览**（`browse`，FR-DATA-02）。对象树、SQL 执行面按 `windows/版本计划.md` 继续。
 
 pub mod appearance;
+pub mod admin;
 pub mod browse;
 pub mod code_lines;
 pub mod command_history;
@@ -42,6 +43,10 @@ pub mod writeback;
 
 pub use appearance::{
     Appearance, AppearanceMode, ColorScheme, DomAppearance,
+};
+pub use admin::{
+    confirm_drop, format_bytes, format_duration, grant_sql, maintenance_commands, sort_sessions,
+    terminate_command, Confirmation, MaintenanceCommand, SessionRow,
 };
 pub use browse::{browse, count, qualified_name, split, BrowseError, BrowseFilter};
 pub use markdown::{

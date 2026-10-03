@@ -14,8 +14,8 @@ mod query;
 
 pub use connections::{config_from_form, ConnectionStore};
 pub use postgres::{
-    ConnectParams, ConnectReport, DbFailure, PgSession, ProbeReport, QueryResult, ServerInfo,
-    StartupOutcome, StatementOutcome, TableNode, TableShape, MAX_QUERY_ROWS,
+    ConnectParams, ConnectReport, DatabaseInfo, DbFailure, PgSession, ProbeReport, QueryResult,
+    ServerInfo, StartupOutcome, StatementOutcome, TableNode, TableShape, TableStats, MAX_QUERY_ROWS,
 };
 pub use query::{DatasetSummary, GridWindowPayload, ViewCache, MAX_WINDOW_ROWS};
 
@@ -613,6 +613,79 @@ fn find_python() -> Option<std::path::PathBuf> {
     })
 }
 
+
+// ── 库与服务器管理面（1.7：读数只读；危险操作只生成语句、不代为执行）────────────────────
+
+/// 库列表 + 大小 + 连接数。
+#[tauri::command]
+async fn admin_databases(state: State<'_, ShellState>) -> Result<Vec<DatabaseInfo>, DbFailure> {
+    let session = current_session(&state).await?;
+    session.databases().await
+}
+
+/// 会话与锁（**排序口径在领域层**：等锁优先、其次按时长）。
+#[tauri::command]
+async fn admin_sessions(
+    state: State<'_, ShellState>,
+) -> Result<Vec<doyah_studio_db::admin::SessionRow>, DbFailure> {
+    let session = current_session(&state).await?;
+    session.sessions().await
+}
+
+/// 某个 schema 下的表统计（行数是**估算**，字段名已写明）。
+#[tauri::command]
+async fn admin_table_stats(
+    state: State<'_, ShellState>,
+    schema: String,
+) -> Result<Vec<TableStats>, DbFailure> {
+    let session = current_session(&state).await?;
+    session.table_stats(&schema).await
+}
+
+/// **维护命令**（只生成、不执行 —— 版本计划原文要求）。
+#[tauri::command]
+fn maintenance_sql(
+    schema: Option<String>,
+    table: String,
+) -> Vec<doyah_studio_db::admin::MaintenanceCommand> {
+    doyah_studio_db::admin::maintenance_commands(schema.as_deref(), &table)
+}
+
+/// **杀会话命令**（只生成、不执行 ——"只登记不执行"）。
+#[tauri::command]
+fn terminate_sql(pid: i32, force: Option<bool>) -> doyah_studio_db::admin::MaintenanceCommand {
+    doyah_studio_db::admin::terminate_command(pid, force.unwrap_or(false))
+}
+
+/// **授权预览**（只生成 GRANT / REVOKE 语句）。
+#[tauri::command]
+fn grant_preview(
+    privileges: Vec<String>,
+    object_kind: String,
+    schema: Option<String>,
+    object: String,
+    role: String,
+    revoke: Option<bool>,
+) -> Result<String, DbFailure> {
+    doyah_studio_db::admin::grant_sql(
+        &privileges,
+        &object_kind,
+        schema.as_deref(),
+        &object,
+        &role,
+        revoke.unwrap_or(false),
+    )
+    .map_err(|message| DbFailure {
+        message,
+        hint: "补齐权限 / 对象 / 角色再生成；本侧只生成语句、不代为执行。".to_string(),
+    })
+}
+
+/// **删库确认**：用户逐字打出库名才放行（领域层判定，界面只显示结果）。
+#[tauri::command]
+fn confirm_drop_database(typed: String, database: String) -> doyah_studio_db::admin::Confirmation {
+    doyah_studio_db::admin::confirm_drop(&typed, &database)
+}
 
 /// 读一张表的**结构**（列 / 索引 / 约束）—— 表设计器的输入。
 #[tauri::command]
@@ -1248,6 +1321,13 @@ pub fn run() {
             preview_import,
             run_import,
             xlsx_to_csv,
+            admin_databases,
+            admin_sessions,
+            admin_table_stats,
+            maintenance_sql,
+            terminate_sql,
+            grant_preview,
+            confirm_drop_database,
             workspace_list_directory,
             workspace_read_file,
             workspace_history,
