@@ -9,8 +9,19 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { AppInfo } from '../ipc'
 import { windowTitle, type ActivityBarItemId } from './activityBar'
 import { estimateTitleWidth, searchFieldWidth } from './titleBarSearch'
+import { t as translate, type UiLanguage } from '../i18n'
 
-const props = defineProps<{ info: AppInfo | null; item: ActivityBarItemId }>()
+const props = defineProps<{
+  info: AppInfo | null
+  item: ActivityBarItemId
+  /** 界面语言（由外壳传下来；不给就按中文） */
+  language?: UiLanguage
+}>()
+
+/** 本组件的文案帮手（语言由外壳给）。 */
+function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
+  return translate(key, props.language ?? 'zh-Hans', vars)
+}
 
 // 标题栏搜索是**全局搜索**：把词抛给外壳去开命令面板（它已能搜 功能 / 文件 / 对象）
 const emit = defineEmits<{ (event: 'search-submit', query: string): void }>()
@@ -41,11 +52,11 @@ const query = ref('')
       class="titlebar__search"
       type="search"
       :style="{ width: `${fieldWidth}px` }"
-      :placeholder="`搜索（当前：${title}）`"
-      aria-label="工作区搜索"
+      :placeholder="tr('titlebar.search.placeholder', { title })"
+      :aria-label="tr('titlebar.search.aria')"
     />
     <!-- 放不下时不塞窄缝：如实告诉人这一档没有搜索栏，入口还在快捷键 -->
-    <span v-else class="titlebar__search-hidden" title="窗口太窄：搜索栏让位给标题（用快捷键搜索）">
+    <span v-else class="titlebar__search-hidden" :title="tr('titlebar.search.hidden')">
       搜索栏让位
     </span>
     <span class="titlebar__version">{{ info ? `v${info.version}` : '…' }}</span>

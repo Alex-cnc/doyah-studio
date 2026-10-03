@@ -22,6 +22,51 @@ export interface Entry {
 
 /** 语言表：key 用点分层级，便于按区域找。 */
 export const DICT = {
+  // 状态栏
+  'status.rows': { 'zh-Hans': '结果集 {rows} 行 × {cols} 列', en: 'Result: {rows} rows × {cols} columns' },
+  'status.window': { 'zh-Hans': '本片已取 {loaded} 行 / 逻辑 {total} 行', en: 'Loaded {loaded} of {total} rows' },
+  'status.theme.aria': { 'zh-Hans': '主题（配色方案）', en: 'Theme (color scheme)' },
+  'status.theme.draft': { 'zh-Hans': '（推导草案）', en: '(derived draft)' },
+  'status.system': { 'zh-Hans': '跟随系统', en: 'Follow system' },
+  'status.light': { 'zh-Hans': '浅色', en: 'Light' },
+  'status.dark': { 'zh-Hans': '深色', en: 'Dark' },
+  // 命令面板
+  'palette.aria': { 'zh-Hans': '命令面板', en: 'Command palette' },
+  'palette.placeholder': {
+    'zh-Hans': '输入命令名或缩写（例如 fmt / 格式 / 保存）',
+    en: 'Type a command name or acronym (e.g. fmt / format / save)',
+  },
+  'palette.search.aria': { 'zh-Hans': '命令搜索', en: 'Command search' },
+  'palette.empty': { 'zh-Hans': '没有匹配的命令', en: 'No matching commands' },
+  // 标题栏搜索
+  'titlebar.search.placeholder': { 'zh-Hans': '搜索（当前：{title}）', en: 'Search (now: {title})' },
+  'titlebar.search.aria': { 'zh-Hans': '工作区搜索', en: 'Global search' },
+  'titlebar.search.hidden': {
+    'zh-Hans': '窗口太窄：搜索栏让位给标题（用快捷键搜索）',
+    en: 'Window too narrow: the search field yields to the title (use the shortcut)',
+  },
+  'titlebar.search.hiddenShort': { 'zh-Hans': '搜索栏让位', en: 'search hidden' },
+
+  // 工作区 Home 页（三栏）
+  'home.welcome': { 'zh-Hans': '欢迎回来', en: 'Welcome back' },
+  'home.lead': {
+    'zh-Hans': '左边选工作区，点文件就能在编辑器里打开；配色与补全按文件类型自动匹配。',
+    en: 'Pick a workspace on the left and click a file to open it in the editor; colors and completion follow the file type.',
+  },
+  'home.version': { 'zh-Hans': '版本 {version}', en: 'Version {version}' },
+  'home.privacy': {
+    'zh-Hans': '© 2026 DoyahStudio · 本机优先：数据与文件不出这台机器',
+    en: '© 2026 DoyahStudio · local-first: your data and files stay on this machine',
+  },
+  'home.openFile': { 'zh-Hans': '打开文件…', en: 'Open file…' },
+  'home.recentFiles': { 'zh-Hans': '最近打开的文件', en: 'Recent files' },
+  'home.recentFiles.empty': { 'zh-Hans': '还没有打开过文件。', en: 'No files opened yet.' },
+  'home.recentWorkspaces': { 'zh-Hans': '最近打开的工作区', en: 'Recent workspaces' },
+  'home.recentWorkspaces.empty': { 'zh-Hans': '还没有打开过工作区。', en: 'No workspaces opened yet.' },
+  'home.current': { 'zh-Hans': '当前工作区', en: 'Current workspace' },
+  'home.connections': { 'zh-Hans': '连接', en: 'Connections' },
+  'home.connectTo': { 'zh-Hans': '连接到 {name}', en: 'Connect to {name}' },
+
   // 数据库视图（连接表单 / 工具条 / 启动 SQL / 左栏）
   'db.connectedAs': { 'zh-Hans': '已连：', en: 'connected: ' },
   'db.none': { 'zh-Hans': '无', en: 'none' },

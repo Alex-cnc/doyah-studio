@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { AppInfo } from '../ipc'
+import { t as translate, type UiLanguage } from '../i18n'
 import { applyTheme, readStoredTheme, storeTheme, type ThemeMode } from '../theme'
 import {
   applyScheme,
@@ -12,12 +13,19 @@ import {
 } from '../theme'
 
 const props = defineProps<{
+  /** 界面语言（由外壳传下来；不给就按中文） */
+  language?: UiLanguage
   info: AppInfo | null
   rows: number
   cols: number
   loaded: number
   total: number
 }>()
+
+/** 本组件的文案帮手（语言由外壳给）。 */
+function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
+  return translate(key, props.language ?? 'zh-Hans', vars)
+}
 
 const emit = defineEmits<{ 'update:theme': [mode: ThemeMode]; 'update:scheme': [scheme: ThemeSchemeId] }>()
 
@@ -42,19 +50,19 @@ function setScheme(next: string): void {
 <template>
   <footer class="statusbar">
     <span>{{ backendLabel }}</span>
-    <span>结果集 {{ rows.toLocaleString() }} 行 × {{ cols }} 列</span>
-    <span>本片已取 {{ loaded }} 行 / 逻辑 {{ total.toLocaleString() }} 行</span>
+    <span>{{ tr('status.rows', { rows: rows.toLocaleString(), cols }) }}</span>
+    <span>{{ tr('status.window', { loaded, total: total.toLocaleString() }) }}</span>
     <span class="statusbar__spacer" />
     <!-- 主题（配色方案）：候选来自生成物（macOS 侧 Core/DesignTheme.swift），与 macOS 侧同名同值;
          「推导草案」标记也跟着生成物走（对侧值到位后这里自动不标）。 -->
     <select
       class="statusbar__scheme"
       :value="scheme"
-      aria-label="主题（配色方案）"
+      :aria-label="tr('status.theme.aria')"
       @change="setScheme(($event.target as HTMLSelectElement).value)"
     >
       <option v-for="candidate in THEME_SCHEMES" :key="candidate.id" :value="candidate.id">
-        {{ THEME_SCHEME_LABELS[candidate.id] ?? candidate.id }}{{ candidate.derivedDraft ? '（推导草案）' : '' }}
+        {{ THEME_SCHEME_LABELS[candidate.id] ?? candidate.id }}{{ candidate.derivedDraft ? tr('status.theme.draft') : '' }}
       </option>
     </select>
     <button
@@ -65,7 +73,7 @@ function setScheme(next: string): void {
       :class="{ 'statusbar__theme--active': candidate === mode }"
       @click="setMode(candidate)"
     >
-      {{ candidate === 'system' ? '跟随系统' : candidate === 'light' ? '浅色' : '深色' }}
+      {{ candidate === 'system' ? tr('status.system') : candidate === 'light' ? tr('status.light') : tr('status.dark') }}
     </button>
   </footer>
 </template>

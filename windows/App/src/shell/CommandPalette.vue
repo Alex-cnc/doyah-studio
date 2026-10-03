@@ -8,10 +8,13 @@
 
 import { computed, nextTick, ref, watch } from 'vue'
 import { paletteSearch, workspaceSearch, type PaletteItem, type PaletteMatch } from '../ipc'
+import { t as translate, type UiLanguage } from '../i18n'
 import { commandsFor, type Command } from './commands'
 import { fileToItem, mergeItems, objectToItem, targetOf } from './paletteTargets'
 
 const props = defineProps<{
+  /** 界面语言（由外壳传下来；不给就按中文） */
+  language?: UiLanguage
   open: boolean
   view: 'workspace' | 'database'
   /** 工作区根（有它才能把**文件**也搜进面板） */
@@ -31,6 +34,11 @@ const props = defineProps<{
    */
   seedQuery?: string
 }>()
+
+/** 本组件的文案帮手（语言由外壳给）。 */
+function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
+  return translate(key, props.language ?? 'zh-Hans', vars)
+}
 
 const emit = defineEmits<{
   (event: 'close'): void
@@ -161,21 +169,21 @@ function runSelected() {
 </script>
 
 <template>
-  <div v-if="open" class="palette" role="dialog" aria-label="命令面板">
+  <div v-if="open" class="palette" role="dialog" :aria-label="tr('palette.aria')">
     <div class="palette__box">
       <input
         ref="input"
         v-model="query"
         class="palette__input"
         type="text"
-        placeholder="输入命令名或缩写（例如 fmt / 格式 / 保存）"
-        aria-label="命令搜索"
+        :placeholder="tr('palette.placeholder')"
+        :aria-label="tr('palette.search.aria')"
         @keydown.down.prevent="move(1)"
         @keydown.up.prevent="move(-1)"
         @keydown.enter.prevent="runSelected"
         @keydown.esc.prevent="emit('close')"
       />
-      <p v-if="matches.length === 0" class="palette__empty">没有匹配的命令</p>
+      <p v-if="matches.length === 0" class="palette__empty">{{ tr('palette.empty') }}</p>
       <ul v-else class="palette__list">
         <li
           v-for="(match, index) in matches"

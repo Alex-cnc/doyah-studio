@@ -13,8 +13,11 @@
 -->
 <script setup lang="ts">
 import type { HistoryEntry, SavedConnection } from '../ipc'
+import { t as translate, type UiLanguage } from '../i18n'
 
 const props = defineProps<{
+  /** 界面语言（由工作区视图传下来；不给就按中文） */
+  language?: UiLanguage
   /** 最近打开的文件（带完整路径，图里是路径小字） */
   recentFiles: readonly HistoryEntry[]
   /** 最近打开的工作区 */
@@ -26,6 +29,11 @@ const props = defineProps<{
   /** 版本号（图里那行"版本 0.2.0（构建 2）"） */
   version: string
 }>()
+
+/** 本组件的文案帮手。 */
+function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
+  return translate(key, props.language ?? 'zh-Hans', vars)
+}
 
 const emit = defineEmits<{
   (event: 'open-file'): void
@@ -49,18 +57,18 @@ function connectionSubtitle(connection: SavedConnection): string {
 
 <template>
   <div class="home">
-    <h2 class="home__title">欢迎回来</h2>
-    <p class="home__lead">左边选工作区，点文件就能在编辑器里打开；配色与补全按文件类型自动匹配。</p>
-    <p class="home__meta">版本 {{ props.version }}</p>
-    <p class="home__meta">© 2026 DoyahStudio · 本机优先：数据与文件不出这台机器</p>
+    <h2 class="home__title">{{ tr('home.welcome') }}</h2>
+    <p class="home__lead">{{ tr('home.lead') }}</p>
+    <p class="home__meta">{{ tr('home.version', { version: props.version }) }}</p>
+    <p class="home__meta">{{ tr('home.privacy') }}</p>
 
-    <button class="home__open" type="button" @click="emit('open-file')">📂 打开文件…</button>
+    <button class="home__open" type="button" @click="emit('open-file')">📂 {{ tr('home.openFile') }}</button>
 
     <div class="home__columns">
       <!-- ① 最近打开的文件 -->
       <section class="home__column">
-        <h3 class="home__column-title">最近打开的文件</h3>
-        <p v-if="props.recentFiles.length === 0" class="home__empty">还没有打开过文件。</p>
+        <h3 class="home__column-title">{{ tr('home.recentFiles') }}</h3>
+        <p v-if="props.recentFiles.length === 0" class="home__empty">{{ tr('home.recentFiles.empty') }}</p>
         <ul v-else class="home__list">
           <li v-for="entry in props.recentFiles" :key="entry.path">
             <button
@@ -78,8 +86,8 @@ function connectionSubtitle(connection: SavedConnection): string {
 
       <!-- ② 最近打开的工作区（当前那个打勾） -->
       <section class="home__column">
-        <h3 class="home__column-title">最近打开的工作区</h3>
-        <p v-if="props.recentWorkspaces.length === 0" class="home__empty">还没有打开过工作区。</p>
+        <h3 class="home__column-title">{{ tr('home.recentWorkspaces') }}</h3>
+        <p v-if="props.recentWorkspaces.length === 0" class="home__empty">{{ tr('home.recentWorkspaces.empty') }}</p>
         <ul v-else class="home__list">
           <li v-for="entry in props.recentWorkspaces" :key="entry.path">
             <button
@@ -90,7 +98,7 @@ function connectionSubtitle(connection: SavedConnection): string {
             >
               <span class="home__item-name">
                 {{ entry.displayName }}
-                <span v-if="entry.path === props.currentRoot" class="home__tick" title="当前工作区">✓</span>
+                <span v-if="entry.path === props.currentRoot" class="home__tick" :title="tr('home.current')">✓</span>
               </span>
               <span class="home__item-path">{{ ellipsize(entry.path) }}</span>
             </button>
@@ -100,13 +108,13 @@ function connectionSubtitle(connection: SavedConnection): string {
 
       <!-- ③ 连接（**没连过库就不画这一栏**，不留空栏位充数） -->
       <section v-if="props.connections.length > 0" class="home__column">
-        <h3 class="home__column-title">连接</h3>
+        <h3 class="home__column-title">{{ tr('home.connections') }}</h3>
         <ul class="home__list">
           <li v-for="connection in props.connections" :key="connection.id">
             <button
               class="home__item"
               type="button"
-              :title="`连接到 ${connection.name}`"
+              :title="tr('home.connectTo', { name: connection.name })"
               @click="emit('open-connection', connection.id)"
             >
               <span class="home__item-name">{{ connection.name }}</span>

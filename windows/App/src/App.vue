@@ -260,12 +260,18 @@ function onSelect(id: ActivityBarItemId) {
 
 <template>
   <div class="shell">
-    <TitleBar :info="info" :item="activeItem" @search-submit="openPaletteWithSearch" />
+    <TitleBar
+      :info="info"
+      :item="activeItem"
+      :language="uiLanguage"
+      @search-submit="openPaletteWithSearch"
+    />
     <!-- 星云皮肤（2.8）：只在「星空紫 + 深色 + 开关开」时由 data-nebula 显形；纯装饰、不吃点击 -->
     <div class="nebula" aria-hidden="true"></div>
     <!-- 命令面板（2.9）：Ctrl+K 开关；清单在 shell/commands.ts，匹配排序在 Rust 侧 -->
     <CommandPalette
       :open="paletteOpen"
+      :language="uiLanguage"
       :view="activeItem === 'workspace' ? 'workspace' : 'database'"
       :workspace-root="workspaceRoot"
       @close="paletteOpen = false"
@@ -346,7 +352,7 @@ function onSelect(id: ActivityBarItemId) {
         </button>
       </main>
     </div>
-    <StatusBar :info="info" :loaded="loaded" :total="total" />
+    <StatusBar :info="info" :loaded="loaded" :total="total" :language="uiLanguage" />
   </div>
 </template>
 

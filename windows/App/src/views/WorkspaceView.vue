@@ -1207,6 +1207,7 @@ function onTreeKeydown(event: KeyboardEvent) {
         <div class="ws__editor">
           <template v-if="activeTab && activeTab.relativePath === null">
               <WorkspaceHome
+                :language="props.language"
                 :recent-files="history?.files ?? []"
                 :recent-workspaces="recentWorkspaces"
                 :current-root="history?.currentRoot ?? ''"
