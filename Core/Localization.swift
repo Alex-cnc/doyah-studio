@@ -352,6 +352,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesRemoveSummaryNotebooks
     /// 影响面那句：两个都受影响（两个 `%d`）。
     case notesRemoveSummaryBoth
+    // 队列 `L-97` 界面半第三片（跨笔记本移动）：菜单标题 / 没地方可去那句人话 / 当前格后缀。
+    case notesMoveMenu
+    case notesMoveNoOtherNotebook
+    case notesMoveCurrentMark
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -2296,6 +2300,9 @@ public enum LocalizedStrings {
         .notesRemoveSummaryNotes: [.simplifiedChinese: "将影响 %d 条笔记。", .english: "This will affect %d notes."],
         .notesRemoveSummaryNotebooks: [.simplifiedChinese: "将影响 %d 个笔记本。", .english: "This will affect %d notebooks."],
         .notesRemoveSummaryBoth: [.simplifiedChinese: "将影响 %d 个笔记本、%d 条笔记。", .english: "This will affect %d notebooks and %d notes."],
+        .notesMoveMenu: [.simplifiedChinese: "移动到…", .english: "Move to…"],
+        .notesMoveNoOtherNotebook: [.simplifiedChinese: "只有一个笔记本，没有别的地方可移。", .english: "Only one notebook exists — nowhere else to move it."],
+        .notesMoveCurrentMark: [.simplifiedChinese: "（当前）", .english: " (current)"],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],

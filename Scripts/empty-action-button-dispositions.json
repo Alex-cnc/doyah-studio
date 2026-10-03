@@ -156,6 +156,12 @@
       "guard": "let report = diagnosisReport, !report.items.isEmpty",
       "form": "explain",
       "reason": "诊断「存进笔记」：没有报告条目时给 `diagnosisEmpty`。"
+    },
+    {
+      "func": "moveNotes",
+      "guard": "!moves.isEmpty",
+      "form": "internal",
+      "reason": "**不是菜单项的前置判据**：笔记行右键菜单里「当前所在那一格」的灰着由 Core `NotebookMovePrompt` 的 `NotebookMoveTarget.isSelectable` 决定（视图 `.disabled(!target.isSelectable)`；判据 `Tests/NotebookMovePromptTests.swift` 5 例钉住它）。这里是**第二道**：`AppState.moveNotes` 把「已经在目标笔记本里的那几条」滤掉，防别的调用路径（不走右键菜单）把一次白写落到库上 —— 白写虽不改 `updatedAt`（契约 §2.12 第 4 条），没有意义的写仍然是没有意义的写。"
     }
   ]
 }

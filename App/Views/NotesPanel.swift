@@ -85,6 +85,9 @@ struct NotesListView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("note-row-\(note.id.uuidString)")
+                    // **跨笔记本移动**（队列 `L-97` ④）：清单 / 顺序 / 当前格都由 `NotebookMovePrompt`
+                    // 一处给（Core），界面只画 —— 菜单按架分组，与上面那棵树的层级一致。
+                    .contextMenu { moveMenu(for: note) }
                 }
             }
         }
@@ -98,6 +101,42 @@ struct NotesListView: View {
         .task(id: appState.notesQuery) {
             await appState.searchNotes()
         }
+    }
+
+    /// 笔记行右键的「移动到…」（队列 `L-97` ④）：清单 / 顺序 / 当前格都由 Core 给
+    /// （`NotebookMovePrompt`），这里只按架分组画出来 —— 分组与左边那棵树的层级一致。
+    /// 「一个可去的地方都没有」时那一项**灰着并写明理由**，不是一个空菜单（`L-50` 的口径：
+    /// 可点却静默无反应是最坏的一种；空菜单则会被读成「这个功能没做」）。
+    @ViewBuilder
+    private func moveMenu(for note: Note) -> some View {
+        let targets = appState.noteMoveTargets(for: [note.id])
+        Menu(L(NotebookMovePrompt.menuTitleKey)) {
+            if NotebookMovePrompt.hasDestination(targets) {
+                ForEach(appState.notesNavigation.shelves) { shelf in
+                    let inShelf = targets.filter { $0.shelfUid == shelf.uid }
+                    if !inShelf.isEmpty {
+                        Menu(shelf.name) {
+                            ForEach(inShelf) { target in
+                                Button(moveLabel(for: target)) {
+                                    Task { await appState.moveNotes([note.id], toNotebook: target.id) }
+                                }
+                                .disabled(!target.isSelectable)
+                                .accessibilityIdentifier("notes-move-to-\(target.id)")
+                            }
+                        }
+                    }
+                }
+            } else {
+                Button(L(NotebookMovePrompt.noTargetKey)) {}
+                    .disabled(true)
+            }
+        }
+        .accessibilityIdentifier("notes-move-menu")
+    }
+
+    /// 目标那一行的文字：当前格带上「你现在在这儿」的后缀（文字在语言表里，这里只拼接）。
+    private func moveLabel(for target: NotebookMoveTarget) -> String {
+        target.isCurrent ? target.name + L(NotebookMovePrompt.currentMarkKey) : target.name
     }
 }
 

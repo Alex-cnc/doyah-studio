@@ -6374,6 +6374,32 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - 跨笔记本移动（队列 `L-97` 界面半第三片）
+
+    /// 菜单要的那份「能移到哪」——**规则与顺序只在 Core 一处**（`NotebookMovePrompt.targets`）。
+    /// 界面不自己拼清单：拼一份就会出现「菜单里有、树上没有」这种分家（`L-97` 同一课）。
+    func noteMoveTargets(for noteIDs: [UUID]) -> [NotebookMoveTarget] {
+        NotebookMovePrompt.targets(
+            directory: notesNavigation.directory,
+            placements: notesNavigation.placements,
+            noteIDs: noteIDs
+        )
+    }
+
+    /// 把若干条笔记移到目标笔记本（契约 §2.12 第 4 条：**只改归属、不刷新 `updatedAt`**）。
+    /// 已经待在目标笔记本里的那几条**不写库** —— 视图那一侧不给选，这里是第二道；
+    /// 白写一次会让「位置不是内容」这条口径变成一句空话。
+    func moveNotes(_ noteIDs: [UUID], toNotebook notebookUid: String) async {
+        let moves = noteIDs.filter { notesNavigation.notebookUid(forNote: $0.uuidString) != notebookUid }
+        guard !moves.isEmpty else { return }
+        do {
+            _ = try await NoteLibrary.defaultLibrary().move(noteIDs: moves, toNotebook: notebookUid)
+            await reloadNotes()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
     // MARK: - 外部调用审批（FR-AI-10 界面那一半）
 
     /// 队列位置由 Core 给（两侧必须算同一个路径，界面写的决定 CLI 才读得到）。
