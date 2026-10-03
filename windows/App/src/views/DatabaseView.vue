@@ -1269,41 +1269,41 @@ async function probe() {
     <!-- 连接条 -->
     <form class="db__bar" @submit.prevent="connect">
       <label class="db__field">
-        <span>主机</span>
+        <span>{{ tr('db.host') }}</span>
         <input v-model="form.host" type="text" spellcheck="false" />
       </label>
       <label class="db__field db__field--narrow">
-        <span>端口</span>
+        <span>{{ tr('db.port') }}</span>
         <input v-model.number="form.port" type="number" min="1" max="65535" />
       </label>
       <label class="db__field">
-        <span>库</span>
+        <span>{{ tr('db.database') }}</span>
         <input v-model="form.database" type="text" spellcheck="false" />
       </label>
       <label class="db__field">
-        <span>用户</span>
+        <span>{{ tr('db.user') }}</span>
         <input v-model="form.user" type="text" spellcheck="false" />
       </label>
       <label class="db__field">
-        <span>口令</span>
-        <input v-model="password" type="password" autocomplete="off" placeholder="不落盘、不显示" />
+        <span>{{ tr('db.password') }}</span>
+        <input v-model="password" type="password" autocomplete="off" :placeholder="tr('db.password.placeholder')" />
       </label>
-      <label class="db__field db__field--check" title="口令进 Windows 凭据管理器（本用户可见），配置文件里没有口令">
-        <span>记住口令</span>
+      <label class="db__field db__field--check" :title="tr('db.remember.tip')">
+        <span>{{ tr('db.remember') }}</span>
         <input v-model="remember" type="checkbox" />
       </label>
       <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy">
-        {{ info ? '重新连接' : '连接' }}
+        {{ info ? tr('db.reconnect') : tr('db.connect') }}
       </button>
-      <button v-if="info" class="db__btn" type="button" :disabled="!!busy" @click="disconnect">断开</button>
-      <button class="db__btn" type="button" :disabled="!!busy" @click="loadTables">列出对象</button>
-      <button class="db__btn" type="button" :disabled="!!busy" @click="saveCurrent">保存到连接列表</button>
+      <button v-if="info" class="db__btn" type="button" :disabled="!!busy" @click="disconnect">{{ tr('db.disconnect') }}</button>
+      <button class="db__btn" type="button" :disabled="!!busy" @click="loadTables">{{ tr('db.loadObjects') }}</button>
+      <button class="db__btn" type="button" :disabled="!!busy" @click="saveCurrent">{{ tr('db.saveToConnections') }}</button>
       <span v-if="busy" class="db__busy">{{ busy }}</span>
     </form>
 
     <!-- 连上了：显示"连到了哪儿" -->
     <p v-if="info" class="db__info">
-      已连接 <strong>{{ info.database }}</strong> （用户 {{ info.user }} ·
+      <strong>{{ info.database }}</strong> · {{ tr('db.connected', { database: info.database, user: info.user }) }}
       {{ info.serverEncoding }} · schema {{ info.currentSchema ?? '—' }}） ·
       <span :title="info.version">{{ versionShort }}</span>
     </p>
@@ -1311,17 +1311,17 @@ async function probe() {
     <!-- 启动 SQL（FR-CONN-17）：连接后自动执行；逐条发、逐条报 -->
     <details class="db__startup">
       <summary>
-        启动 SQL（连接后自动执行，逐条发、逐条报错）
+        {{ tr('db.startup.title') }}
         <span v-if="startup.length" class="db__note">
-          —— 上次：{{ startup.filter((s) => s.ok).length }} 成 / {{ startup.filter((s) => !s.ok).length }} 败
+          {{ tr('db.startup.last', { ok: startup.filter((s) => s.ok).length, fail: startup.filter((s) => !s.ok).length }) }}
         </span>
       </summary>
       <textarea
         v-model="startupSql"
         spellcheck="false"
         rows="2"
-        aria-label="启动 SQL"
-        placeholder="例如 SET search_path = app, public;  或  SET statement_timeout = '5s'"
+        :aria-label="tr('db.startup.aria')"
+        :placeholder="tr('db.startup.placeholder')"
       />
       <ul v-if="startup.length" class="db__startup-list">
         <li v-for="(item, i) in startup" :key="i" :class="{ 'db__startup-bad': !item.ok }">
@@ -1348,10 +1348,10 @@ async function probe() {
       <aside class="db__tree db__tree--navigator" @click="closeContextMenu">
         <details class="db__conn-fold">
           <summary class="db__tree-title">
-            连接列表（{{ saved.length }}）<span class="db__kind">已连：{{ connectedName || '无' }}</span>
+            {{ tr('db.connections') }}（{{ saved.length }}）<span class="db__kind">{{ tr('db.connectedAs') }}{{ connectedName || tr('db.none') }}</span>
           </summary>
           <p v-if="saved.length === 0" class="db__tree-empty">
-            还没有保存过连接。填好上面的表单按「保存到连接列表」，口令（若勾了记住）进系统凭据管理器。
+            {{ tr('db.connections.empty') }}
           </p>
           <template v-else>
             <div v-for="group in connectionGroups" :key="group.name" class="db__conn-group">
@@ -1389,7 +1389,7 @@ async function probe() {
 
         <!-- 对象树（1.1）：展开一层取一层；右键给「浏览数据 / 生成查询 / 复制名」 -->
         <p class="db__tree-title">
-          对象（{{ loadedObjects.length }} 个已加载 · {{ schemas.length }} 个 schema）
+          {{ tr('db.objects.summary', { loaded: loadedObjects.length, schemas: schemas.length }) }}
         </p>
         <p v-if="!info" class="db__tree-empty">未连接</p>
         <template v-else>
@@ -1644,11 +1644,11 @@ async function probe() {
           <div class="db__sql-actions">
             <!-- 工具条第一格（图里那条）：当前库 —— 选项来自**已保存连接**里同主机同用户的那些库 -->
             <label v-if="info" class="db__bar-field db__bar-field--inline">
-              <span>库</span>
+              <span>{{ tr('db.database') }}</span>
               <select
                 :value="info.database"
                 :disabled="!!busy"
-                title="切到这个库（重连一次）；选项来自已保存连接里同主机同用户的那些库"
+                :title="tr('db.switchDatabase')"
                 @change="switchDatabase(($event.target as HTMLSelectElement).value)"
               >
                 <option v-for="name in databaseOptions" :key="name" :value="name">{{ name }}</option>
@@ -1663,7 +1663,7 @@ async function probe() {
             class="db__btn"
             type="button"
             :disabled="!sql.trim()"
-            title="清空编辑器（会先问一句）"
+            :title="tr('db.clear.tip')"
             @click="clearSql"
           >
             清空

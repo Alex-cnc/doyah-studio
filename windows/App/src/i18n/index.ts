@@ -22,6 +22,53 @@ export interface Entry {
 
 /** 语言表：key 用点分层级，便于按区域找。 */
 export const DICT = {
+  // 数据库视图（连接表单 / 工具条 / 启动 SQL / 左栏）
+  'db.connectedAs': { 'zh-Hans': '已连：', en: 'connected: ' },
+  'db.none': { 'zh-Hans': '无', en: 'none' },
+  'db.objects.summary': {
+    'zh-Hans': '对象（{loaded} 个已加载 · {schemas} 个 schema）',
+    en: 'Objects ({loaded} loaded · {schemas} schemas)',
+  },
+  'db.connections.empty': {
+    'zh-Hans': '还没有保存过连接。填好上面的表单按「保存到连接列表」，口令（若勾了记住）进系统凭据管理器。',
+    en: 'No saved connections yet. Fill the form above and press "Save to connection list"; the password (if you tick remember) goes to Windows Credential Manager.',
+  },
+  'db.host': { 'zh-Hans': '主机', en: 'Host' },
+  'db.port': { 'zh-Hans': '端口', en: 'Port' },
+  'db.database': { 'zh-Hans': '库', en: 'Database' },
+  'db.user': { 'zh-Hans': '用户', en: 'User' },
+  'db.password': { 'zh-Hans': '口令', en: 'Password' },
+  'db.password.placeholder': { 'zh-Hans': '不落盘、不显示', en: 'Never stored or shown' },
+  'db.remember.tip': {
+    'zh-Hans': '口令进 Windows 凭据管理器（本用户可见），配置文件里没有口令',
+    en: 'The password goes to Windows Credential Manager (visible to this user); it is not in the config file',
+  },
+  'db.remember': { 'zh-Hans': '记住口令', en: 'Remember password' },
+  'db.connect': { 'zh-Hans': '连接', en: 'Connect' },
+  'db.reconnect': { 'zh-Hans': '重新连接', en: 'Reconnect' },
+  'db.disconnect': { 'zh-Hans': '断开', en: 'Disconnect' },
+  'db.loadObjects': { 'zh-Hans': '列出对象', en: 'List objects' },
+  'db.saveToConnections': { 'zh-Hans': '保存到连接列表', en: 'Save to connection list' },
+  'db.connected': { 'zh-Hans': '已连接 {database}（用户 {user}）', en: 'Connected to {database} (user {user})' },
+  'db.startup.title': { 'zh-Hans': '启动 SQL（连接后自动执行，逐条发、逐条报错）', en: 'Startup SQL (runs on connect, statement by statement)' },
+  'db.startup.last': { 'zh-Hans': '上次：{ok} 成 / {fail} 败', en: 'Last time: {ok} ok / {fail} failed' },
+  'db.startup.aria': { 'zh-Hans': '启动 SQL', en: 'Startup SQL' },
+  'db.startup.placeholder': {
+    'zh-Hans': "例如 SET search_path = app, public;  或  SET statement_timeout = '5s'",
+    en: "e.g. SET search_path = app, public;  or  SET statement_timeout = '5s'",
+  },
+  'db.connections': { 'zh-Hans': '连接列表', en: 'Connections' },
+  'db.tree': { 'zh-Hans': '数据库对象', en: 'Database objects' },
+  'db.view.hierarchy': { 'zh-Hans': '层级视图', en: 'Hierarchy' },
+  'db.view.byKind': { 'zh-Hans': '按类型分组', en: 'By type' },
+  'db.search.placeholder': { 'zh-Hans': '搜索对象（名字或 schema）', en: 'Search objects (name or schema)' },
+  'db.switchDatabase': {
+    'zh-Hans': '切到这个库（重连一次）；选项来自已保存连接里同主机同用户的那些库',
+    en: 'Switch to this database (reconnects); options come from saved connections with the same host and user',
+  },
+  'db.clear': { 'zh-Hans': '清空', en: 'Clear' },
+  'db.clear.tip': { 'zh-Hans': '清空编辑器（会先问一句）', en: 'Clear the editor (asks first)' },
+
   // 外观两轴（配色 / 深浅）——**标签改成语言 key**（原来把中文写死在常量里，
   // 切英文时下拉里仍是中文；扫描器的第三面就是为这类"数据型文案"补的）
   'appearance.mode': { 'zh-Hans': '外观', en: 'Appearance' },
