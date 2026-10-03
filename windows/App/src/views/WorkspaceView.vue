@@ -296,7 +296,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'root-changed', root: string): void
-}>()
+
+  (event: 'push-panel', entry: { text: string; level: 'info' | 'warn' | 'error'; source?: string }): void}>()
 
 /** 工作区根变化时同步给外壳（面板里搜文件要用它） */
 watch(root, (value) => emit('root-changed', value), { immediate: true })

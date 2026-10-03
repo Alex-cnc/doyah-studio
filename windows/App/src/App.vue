@@ -9,6 +9,7 @@ import { appInfo, type AppInfo } from './ipc'
 import CommandPalette from './shell/CommandPalette.vue'
 import TitleBar from './shell/TitleBar.vue'
 import { commandById, type Command } from './shell/commands'
+import BottomPanel from './shell/BottomPanel.vue'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
 import {
@@ -143,6 +144,23 @@ async function runCommand(command: Command) {
 }
 
 /** 命令执行的回执（做不到时要说清） */
+// 底部面板（布局对齐 macOS 封面图）
+//
+// 输出流水由视图通过 `push-panel` 事件喂进来；有上限（超出丢最老的）——
+// 一个跑一整天的应用不能把输出全留在内存里。
+const panelOpen = ref(true)
+const panelEntries = ref<PanelEntry[]>([])
+const PANEL_ENTRY_LIMIT = 500
+
+/** 某个视图往面板里打一条。 */
+function pushPanel(entry: PanelEntry) {
+  const next = [...panelEntries.value, { at: Date.now(), ...entry }]
+  panelEntries.value = next.length > PANEL_ENTRY_LIMIT ? next.slice(next.length - PANEL_ENTRY_LIMIT) : next
+}
+
+/** 只有警告与出错进「问题」页签（要处理的那些）。 */
+const panelProblems = computed(() => panelEntries.value.filter((entry) => entry.level !== 'info'))
+
 const commandNote = ref('')
 const loaded = ref(0)
 const total = ref(0)
@@ -276,16 +294,35 @@ function onSelect(id: ActivityBarItemId) {
     <div class="shell__body">
       <SideBar :sections="sections" :active="activeItem" @select="onSelect" />
       <main class="shell__main">
-        <!-- 数据库：**真库链路**（连库 → 对象树 → SQL → 结果），驱动在 Rust 外壳 -->
-        <DatabaseView v-if="activeItem === 'database'" />
-        <WorkspaceView
-          v-else-if="activeItem === 'workspace'"
-          :open-file-signal="openFileSignal"
-          @root-changed="workspaceRoot = $event"
+        <div class="shell__stack">
+          <!-- 数据库：真库链路（连库 → 对象树 → SQL → 结果），驱动在 Rust 外壳 -->
+          <DatabaseView v-if="activeItem === 'database'" @push-panel="pushPanel" />
+          <WorkspaceView
+            v-else-if="activeItem === 'workspace'"
+            :open-file-signal="openFileSignal"
+            @root-changed="workspaceRoot = $event"
+            @push-panel="pushPanel"
+          />
+          <p v-else class="shell__placeholder">
+            {{ itemTitle(activeItem) }}视图尚未开工（⬜ 不半建）。
+          </p>
+        </div>
+        <!-- 底部面板（图里的 问题 / 输出 / 终端 / 调试控制台；后两个如实标「未开工」） -->
+        <BottomPanel
+          v-if="panelOpen"
+          :entries="panelEntries"
+          :problems="panelProblems"
+          @collapse="panelOpen = false"
         />
-        <p v-else class="shell__placeholder">
-          {{ itemTitle(activeItem) }}视图尚未开工（⬜ 不半建）。
-        </p>
+        <button
+          v-else
+          class="shell__panel-open"
+          type="button"
+          title="展开底部面板"
+          @click="panelOpen = true"
+        >
+          ⌃ 面板
+        </button>
       </main>
     </div>
     <StatusBar :info="info" :loaded="loaded" :total="total" />
@@ -322,6 +359,25 @@ function onSelect(id: ActivityBarItemId) {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+
+/* 折叠后的面板入口（贴在底边） */
+.shell__panel-open {
+  flex: none;
+  height: var(--ds-metric-status-bar-height);
+  border: none;
+  border-top: var(--ds-metric-hairline) solid var(--ds-hairline);
+  background: var(--ds-color-surface-panel);
+  color: var(--ds-color-text-secondary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
+  text-align: left;
+  padding: 0 var(--ds-spacing-s);
+}
+
+.shell__panel-open:hover {
+  color: var(--ds-color-text-primary);
 }
 
 .shell__notice {

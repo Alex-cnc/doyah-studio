@@ -72,6 +72,11 @@ import {
 
 // **界面语言（1.8 双语）**：与标题栏同一套取值（zh-Hans / en）
 // 口径：语言表只覆盖**界面外壳**；正文说明与服务端提示仍是中文（已在版本计划里登记未落）。
+// 视图往底部面板打输出（图里的「输出 / 问题」两格就是收这个）
+const emit = defineEmits<{
+  (event: 'push-panel', entry: { text: string; level: 'info' | 'warn' | 'error'; source?: string }): void
+}>()
+
 const language = ref<UiLanguage>('zh-Hans')
 function t(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
   return translate(key, language.value, vars)
