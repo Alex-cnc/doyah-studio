@@ -11,3 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 doyah-studio-core = { path = "../Core" }
+# 数据库域（连接串解析 / 条件浏览 / 值检查 / CSV 解析 / DDL 生成 … 的**纯逻辑**）。
+# 1.8 段把「无 GUI 也能验证领域层」这条从合成数据集扩到数据库域 —— 这些子命令
+# **不连数据库**（只跑纯函数），所以 CLI 仍然零第三方依赖、不引驱动。
+doyah-studio-db = { path = "../Db" }
