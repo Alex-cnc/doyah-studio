@@ -42,6 +42,10 @@ TREE_FILES = [
     # 入库判定（队列 L-134）：在台账范围里，副本必须带上它，否则「干净副本」这一例会因为
     # 「台账写了、盘上没有」而假红（第 127 轮踩过）
     "Core/AICaptureIntake.swift",
+    # 队列 `L-97`（第一~四片的结构模型 / 界面半第一片的导航逻辑）：同样在台账范围里，
+    # 副本少带一个 ⇒ 「干净副本」这一例会因为「台账写了、盘上没有」而假红（同上一条的坑）
+    "Core/Notebook.swift",
+    "Core/NoteNavigation.swift",
     "App/Views/NotesPanel.swift",
     "Tests/NoteTests.swift",
     "Tests/NoteBodyTests.swift",
