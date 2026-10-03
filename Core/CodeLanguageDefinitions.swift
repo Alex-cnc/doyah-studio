@@ -724,7 +724,8 @@ public enum CodeLanguageRegistry {
         "sql": CodeFormatCapability(builtin: .sql),
         "javascript": CodeFormatCapability(tools: prettier, builtin: .braceIndent),
         "typescript": CodeFormatCapability(tools: prettier, builtin: .braceIndent),
-        "json": CodeFormatCapability(tools: prettier, builtin: .braceIndent),
+        // JSON：内置档是**断行重排**那一种（字符串外空白语义无关 ⇒ 唯一敢断行的语言）。
+        "json": CodeFormatCapability(tools: prettier, builtin: .json),
         "css": CodeFormatCapability(tools: prettier, builtin: .braceIndent),
         "html": CodeFormatCapability(tools: prettier, builtin: .whitespace),
         "python": CodeFormatCapability(

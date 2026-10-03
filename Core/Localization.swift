@@ -2444,8 +2444,10 @@ public enum LocalizedStrings {
             .english: "%@ made no changes"
         ],
         .workspaceFormatEngineBuiltin: [
-            .simplifiedChinese: "内置简易格式化（没找到外部工具）",
-            .english: "built-in basic formatting (no external tool found)"
+            // 2026-10-02 定案「只用内置」之后，外部那条路是**删掉**的（不是「找不到」）——
+            // 旧文案「没找到外部工具」会让人以为是探测失败，如实改成「本地完成、不联网」。
+            .simplifiedChinese: "内置格式化（本地完成，不联网）",
+            .english: "built-in formatter (local, offline)"
         ],
         .workspaceFormatRefusedUnknown: [
             .simplifiedChinese: "认不出这个文件是什么语言，没有可用的格式化方式",

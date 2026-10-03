@@ -483,4 +483,45 @@ final class CodeFormatBuiltinOnlyTests: XCTestCase {
         XCTAssertEqual(LocalizedStrings.text(.menuFormat, language: .simplifiedChinese), "格式化代码")
         XCTAssertEqual(LocalizedStrings.text(.menuFormat, language: .english), "Format Code")
     }
+
+    /// 内测 `#2` 第二轮复测打回（原话：「**格式化菜单有了，但并不具备格式化能力**，我把一个 json 文件
+    /// 打乱了，点击格式没反应」）—— 先钉**能力那一层**：JSON 必须有内置格式化能力，且乱掉的输入必须真的变。
+    /// 这一条在 Core 里判得到；「菜单点下去能不能把它叫起来」是 App 侧那条判据（见探针）。
+    func testJSONHasBuiltinCapabilityAndScrambledInputChanges() throws {
+        guard case .builtin(let style) = CodeFormatPlanner.planBuiltinOnly(language: .json) else {
+            return XCTFail("JSON 没有内置格式化能力 ⇒ 菜单点下去只可能「没反应」")
+        }
+        XCTAssertEqual(style, .json, "JSON 的内置档必须是**断行重排**那一种（`braceIndent` 只逐行调缩进）")
+
+        // 判据要钉**结果长什么样**，不能只判「变了」：旧口径下 `braceIndent` 会返回
+        // 「除行尾那一个换行外一模一样」的文本 —— 只判 `!=` 的话它会**绿**，而用户看到的是「没反应」。
+        let scrambled = "{\"a\":1,\"b\":{\"c\":[1,2,3]},\"d\":\"x\"}"
+        let expected = """
+        {
+            "a": 1,
+            "b": {
+                "c": [
+                    1,
+                    2,
+                    3
+                ]
+            },
+            "d": "x"
+        }
+        """ + "\n"
+        XCTAssertEqual(CodeBuiltinFormatter.format(scrambled, style: style, language: .json), expected)
+    }
+
+    /// 字符串里的结构符不许当结构符；空容器保持紧凑；重复格式化不再变（幂等）；空输入原样返回。
+    func testPrettyJSONProtectsStringsAndIsIdempotent() {
+        XCTAssertEqual(
+            CodeBuiltinFormatter.prettyJSON("{\"k\":\"a{b}:,c\\\"d\"}"),
+            "{\n    \"k\": \"a{b}:,c\\\"d\"\n}\n"
+        )
+        XCTAssertEqual(CodeBuiltinFormatter.prettyJSON("{\"a\":{},\"b\":[]}"),
+                       "{\n    \"a\": {},\n    \"b\": []\n}\n")
+        XCTAssertEqual(CodeBuiltinFormatter.prettyJSON(""), "")
+        let once = CodeBuiltinFormatter.prettyJSON("{\"a\":[1,{\"b\":2}]}")
+        XCTAssertEqual(CodeBuiltinFormatter.prettyJSON(once), once, "第二次格式化不该再动它")
+    }
 }

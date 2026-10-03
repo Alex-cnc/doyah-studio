@@ -65,6 +65,14 @@ public enum CodeFormatBuiltin: String, Sendable, CaseIterable {
     case braceIndent
     /// 走既有的保守 SQL 格式化器（`Core/SQLFormatter.swift`，FR-EDIT-22）。
     case sql
+    /// **JSON 专用：断行 + 缩进重排**（`prettyJSON`）。
+    ///
+    /// 为什么只有它敢断行：**JSON 字符串外的空白是语义无关的** —— 重排不会改意思，
+    /// 而 JS / C / Go 那些括号语言里，注释、模板字符串、正则字面量都可能藏着花括号，
+    /// 没有真词法就会改坏。旧口径把 JSON 也交给 `braceIndent`（**逐行**重排缩进）⇒
+    /// 一行式的 JSON（需求提出者「打乱」的正是这种）**除行尾那一个换行外没有任何变化**，
+    /// 界面上就是「点了没反应」（内测 `#2` 第二轮打回，见队列 `L-169`）。
+    case json
 
     /// 这条兜底**真的会改东西吗**：`none` 不算能力（登记了它等于「没有兜底」）。
     public var isAvailable: Bool { self != .none }
@@ -523,6 +531,78 @@ public enum CodeFormatService {
 /// 里的行尾空格**是内容**，改了就是改语义 —— 而这类改动在界面上看起来只是「格式化了一下」。
 public enum CodeBuiltinFormatter {
 
+
+    /// **JSON 美化**：断行 + 按括号深度缩进，字符串外的空白一律重排。
+    ///
+    /// 三条纪律：
+    ///   · **只绕开字符串与转义** —— `"a{b}:,c"` 里的结构符不许当结构符（JSON 里字符串是唯一
+    ///     必须保护的地方；注释 JSON 没有，所以不需要真词法）；
+    ///   · 空容器保持紧凑（`{}` / `[]` 不摊成三行）；
+    ///   · 收尾恰好一个换行（与 `tidy` 同口径），空输入原样返回。
+    static func prettyJSON(_ text: String) -> String {
+        // 第一遍：切成词元。字符串外的一切空白**直接丢**（JSON 里它没有语义）。
+        var atoms: [String] = []
+        var buffer = ""
+        var inString = false
+        var escaped = false
+        func flush() {
+            let trimmed = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { atoms.append(trimmed) }
+            buffer = ""
+        }
+        for character in text {
+            if inString {
+                buffer.append(character)
+                if escaped { escaped = false }
+                else if character == "\\" { escaped = true }
+                else if character == "\"" { inString = false }
+                continue
+            }
+            if character == "\"" {
+                buffer.append(character)
+                inString = true
+                continue
+            }
+            if "{}[],:".contains(character) {
+                flush()
+                atoms.append(String(character))
+                continue
+            }
+            buffer.append(character)
+        }
+        flush()
+        guard !atoms.isEmpty else { return text }
+
+        // 第二遍：按结构符排版。
+        var output = ""
+        var depth = 0
+        func breakLine(_ level: Int) {
+            output += "\n" + String(repeating: indentUnit, count: max(level, 0))
+        }
+        for (position, atom) in atoms.enumerated() {
+            let next = position + 1 < atoms.count ? atoms[position + 1] : ""
+            let previous = position > 0 ? atoms[position - 1] : ""
+            switch atom {
+            case "{", "[":
+                output += atom
+                depth += 1
+                if !(atom == "{" && next == "}") && !(atom == "[" && next == "]") { breakLine(depth) }
+            case "}", "]":
+                depth -= 1
+                if !(atom == "}" && previous == "{") && !(atom == "]" && previous == "[") { breakLine(depth) }
+                output += atom
+            case ",":
+                output += atom
+                breakLine(depth)
+            case ":":
+                output += ": "
+            default:
+                output += atom
+            }
+        }
+        return output + "\n"
+    }
+
     /// 缩进单位（与 SQL 格式化器、编辑器一致：4 空格）。
     public static let indentUnit = "    "
 
@@ -541,6 +621,8 @@ public enum CodeBuiltinFormatter {
             return reindent(tidy(text, language: language), language: language)
         case .sql:
             return SQLFormatter(databaseType: databaseType).format(text)
+        case .json:
+            return prettyJSON(text)
         }
     }
 
