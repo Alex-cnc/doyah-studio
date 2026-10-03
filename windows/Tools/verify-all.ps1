@@ -28,7 +28,7 @@ $RepoRoot = Get-DoyahRepoRoot -ToolsDir $ToolsDir
 $ran = New-Object System.Collections.ArrayList
 $skipped = New-Object System.Collections.ArrayList
 $failed = New-Object System.Collections.ArrayList
-$total = 15
+$total = 16
 
 Write-Host "== Doyah Studio · Windows 侧闸门（§8.3.1 六项必需项 + §8.5.3 等价物）"
 Write-Host ("   仓库：{0}" -f $RepoRoot)
@@ -147,8 +147,13 @@ Invoke-ChildGate "13/$total" "生成物一致性：发布产物版本号一个�
 # 清单 = 共享面 `Scripts/path-ownership.json`（**只有一份**，本侧只引用）；判据本体 =
 # 共享面 `Scripts/check-path-ownership.py`（同一份，三仓同源）⇒ 本侧只做按本侧姿势传参。
 Invoke-ChildGate "14/$total" "路径归属（一次改动不得落在对侧子树；共享面要登记理由）" 'check-path-ownership.ps1' -SkipReason $pythonSkipReason -ChildArgs @{ Base = $Base }
-# ── 15/15 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
-Write-DoyahStep "15/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
+# ── 15/16 双语漏译棘轮（1.8 段出口「全部文案中英双语」的**可判形式**）──────────────
+# 语言表只证明"**能**翻译"；"**有没有漏**"要靠扫描界面里直接写死的中文。
+# 棘轮**只减不增**：新写的界面文案必须走语言表 `t(...)`。
+Invoke-ChildGate "15/$total" "双语漏译棘轮（界面文案不得绕过语言表；基线只减不增）" 'check-untranslated.ps1' -SkipReason $pythonSkipReason
+
+# ── 16/16 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
+Write-DoyahStep "16/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
 Write-DoyahPass "本脚本即闭环入口；跳过的项已逐条列出（等价物可以缺席，缺席必须可见）"
 [void]$ran.Add("⑥ 一条命令跑全")
 
