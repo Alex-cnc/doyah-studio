@@ -31,10 +31,18 @@ final class EditorResponsivenessConventionTests: XCTestCase {
                       "合并窗口要按文档大小分档（大文档等更久），阈值复用 Core 的实时扫描上限")
     }
 
-    /// 大文档必须打开非连续布局，否则删一个字符也触发全文重排。
-    func testLargeDocumentUsesNonContiguousLayout() throws {
+    /// 非连续布局**只能按文档大小分档打开**：两头都不许。
+    ///
+    /// 开着（无条件）= 小文档会中它的代价 —— 它按「只排可见范围」省算，某块因此被判成「已排过」⇒
+    /// **编辑后那一块不重画**（2026-10-03 人工点验：40 来行的 Markdown 表格一路吃着这档设置，
+    /// 把横轴滚到行首被遮住时删一个字，编辑区上半屏整片空白、连行号列都没画，拖一下滚动条才恢复）；
+    /// 关掉 = 5,000 行文档「删除时明显卡顿」回来（NFR-PERF-05）。
+    func testNonContiguousLayoutIsGatedByDocumentSize() throws {
         let text = try source("App/Views/CodeEditorView.swift")
-        XCTAssertTrue(text.contains("allowsNonContiguousLayout = true"),
-                      "编辑器要打开 `allowsNonContiguousLayout`：关着时 5,000 行的布局是整篇算的")
+
+        XCTAssertFalse(text.contains("allowsNonContiguousLayout = true"),
+                       "不许无条件打开非连续布局：小文档会因此出现「编辑后那一块不重画」")
+        XCTAssertTrue(text.contains("allowsNonContiguousLayout = CodeLines.lineStarts(in: text).count > 1_000"),
+                      "非连续布局要按文档大小分档打开（≥1,000 行），否则 NFR-PERF-05 的删除卡顿会退回来")
     }
 }
