@@ -42,7 +42,12 @@ final class EditorResponsivenessConventionTests: XCTestCase {
 
         XCTAssertFalse(text.contains("allowsNonContiguousLayout = true"),
                        "不许无条件打开非连续布局：小文档会因此出现「编辑后那一块不重画」")
-        XCTAssertTrue(text.contains("allowsNonContiguousLayout = CodeLines.lineStarts(in: text).count > 1_000"),
+        XCTAssertTrue(text.contains("allowsNonContiguousLayout = CodeLines.count(in: text) > 1_000"),
                       "非连续布局要按文档大小分档打开（≥1,000 行），否则 NFR-PERF-05 的删除卡顿会退回来")
+        // 队列 `L-181`（2026-10-03）：这里问的是**行数**，要走 `CodeLines.count(in:)` ——
+        // 行起点的算法（`CodeLines.lineStarts(`）只许在绘制件 `App/Views/LineNumberGutter.swift` 里出现一次
+        // （判据 = `Scripts/check-editor-line-numbers.py`），这一处自己算行起点就是第二套口径。
+        XCTAssertFalse(text.contains("CodeLines.lineStarts("),
+                       "编辑面不许自己算行起点（第二套行号口径）：行数走 `CodeLines.count(in:)`")
     }
 }
