@@ -100,14 +100,40 @@ final class WorkspaceTreeTests: XCTestCase {
     func testChildrenPutsDirectoriesFirstThenFiles() throws {
         let entries = try WorkspaceTree.children(of: root)
         let names = entries.map(\.name)
-        XCTAssertEqual(names, ["Core", "Docs", "escape", "Package.swift"])
-        XCTAssertEqual(entries.map(\.kind), [.directory, .directory, .symlink, .file])
+        // `node_modules` 也在里面：**普通目录在树里看得见**（2026-10-02 口径，见下面那条判据）。
+        XCTAssertEqual(names, ["Core", "Docs", "node_modules", "escape", "Package.swift"])
+        XCTAssertEqual(entries.map(\.kind), [.directory, .directory, .directory, .symlink, .file])
     }
 
-    func testIgnoredDirectoriesAreSkipped() throws {
+    /// **树要与访达一致**（2026-10-02 需求提出者实测：`dist` 在磁盘上有、访达看得见，工作区里却没有）。
+    ///
+    /// 旧口径把 `dist` / `target` / `node_modules` 这类**普通输出目录**也列进了忽略名单，而且界面上
+    /// 没有开关能放出来 ⇒ 静默隐藏。现在树**不再忽略任何真实条目**。
+    func testOrdinaryOutputDirectoriesAreVisible() throws {
+        for directory in ["dist", "target", "Pods"] {
+            try FileManager.default.createDirectory(
+                at: root.appendingPathComponent(directory), withIntermediateDirectories: true
+            )
+        }
         let names = try WorkspaceTree.children(of: root).map(\.name)
-        XCTAssertFalse(names.contains(".build"))
-        XCTAssertFalse(names.contains("node_modules"))
+        for directory in ["dist", "target", "Pods", "node_modules"] {
+            XCTAssertTrue(names.contains(directory), "\(directory) 在磁盘上有，树里就该看得见（与访达同形）")
+        }
+    }
+
+    /// 点开头的条目仍按访达默认口径（那是「隐藏文件」，与「构建产物」两回事）。
+    /// `.build` / `.git` 恰好都是点开头 ⇒ 默认仍然看不到。
+    func testDotEntriesStillFollowFinderDefault() throws {
+        XCTAssertFalse(try WorkspaceTree.children(of: root).map(\.name).contains(".build"))
+        XCTAssertTrue(try WorkspaceTree.children(of: root, showHidden: true).map(\.name).contains(".build"))
+    }
+
+    /// **检索那一侧没变**：它仍然跳过构建产物 / 依赖目录 —— 「树看得见」不等于「检索也要扫几万条」。
+    func testSearchStillSkipsBuildOutput() {
+        XCTAssertTrue(WorkspaceTree.treeIgnored.isEmpty, "树不该再忽略任何真实条目")
+        for name in ["dist", ".build", "node_modules", "target"] {
+            XCTAssertTrue(WorkspaceTree.searchIgnored.contains(name), "检索仍应跳过 \(name)")
+        }
     }
 
     func testHiddenEntriesRequireExplicitOptIn() throws {

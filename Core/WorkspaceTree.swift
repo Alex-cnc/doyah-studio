@@ -27,11 +27,22 @@ public struct WorkspaceEntry: Equatable, Sendable, Identifiable {
 /// 路径包含判定用字符串前缀会在 `/ws` 与 `/ws-evil` 上出错；符号链接跟随会走出工作区。
 public enum WorkspaceTree {
 
-    /// 默认忽略名单：构建产物、依赖、版本库元数据、虚拟环境…
+    /// 文件树列目录时的忽略名单：**空** —— 磁盘上有的条目就要看得见。
     ///
-    /// 这些目录动辄几万条，列进来既慢又没用；用户真要看得细可以关掉忽略
-    /// （`showHidden` 只管点开头的隐藏文件，两者是不同维度，故分开两个参数）。
-    public static let defaultIgnored: Set<String> = [
+    /// 口径（2026-10-02 需求提出者实测）：工作区树要与**访达一致**。他报的原话是
+    /// 「**为什么我在工作区看不到 Doyah Studio 目录下的 dist 目录呢，明明在文件系统下是有的，
+    /// 打开 Finder 能看到**」—— 旧的默认名单里有 `dist` / `target` / `node_modules` 这类**普通输出目录**，
+    /// 而界面上**没有任何开关**能把它们放出来 ⇒ 静默隐藏本身就是缺陷（这一条已在队列 `L-165` 落账）。
+    ///
+    /// 点开头的条目仍按访达的默认口径不显示（由 `showHidden` 控制）—— 那是**另一回事**：
+    /// 它管的是「隐藏文件」，与「构建产物」无关。`.build` / `.git` 恰好都是点开头，所以默认仍然看不到。
+    public static let treeIgnored: Set<String> = []
+
+    /// **检索**（`WorkspaceSearch` / 工作区标头搜索框）用的忽略名单：构建产物、依赖、版本库元数据、虚拟环境…
+    ///
+    /// 与树分开的理由：树的每层是**惰性点开**的（多一行不花钱），而检索是**递归扫几万条**——
+    /// 在那种场景里跳掉 `dist` / `node_modules` 才是它的价值。所以「树看得见」不等于「检索也要扫」。
+    public static let searchIgnored: Set<String> = [
         ".build", ".build-cache", "DerivedData", "node_modules", ".git", ".svn", ".hg",
         ".DS_Store", "__pycache__", ".venv", "venv", ".tox", "target", "dist",
         ".next", ".nuxt", ".swiftpm", ".idea", ".vscode-test", "Pods", "Carthage"
@@ -50,7 +61,7 @@ public enum WorkspaceTree {
         of directory: URL,
         relativeTo root: URL? = nil,
         showHidden: Bool = false,
-        ignored: Set<String> = defaultIgnored,
+        ignored: Set<String> = treeIgnored,
         fileManager: FileManager = .default
     ) throws -> [WorkspaceEntry] {
         let base = root ?? directory

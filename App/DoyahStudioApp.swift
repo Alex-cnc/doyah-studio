@@ -132,7 +132,11 @@ struct DoyahStudioApp: App {
         // 菜单栏命令放进 `DoyahStudioCommands`：`.commands {}` 闭包只在场景建立时求值一次，
         // 直接写在这里会让语言切换后**菜单栏不刷新**（见该文件注释与 NFR-I18N-03）。
         .commands {
-            DoyahStudioCommands(appState: appState, workspaceBrowser: appState.workspaceBrowser)
+            DoyahStudioCommands(
+                appState: appState,
+                workspaceBrowser: appState.workspaceBrowser,
+                workspaceTabs: workspaceTabs
+            )
         }
     }
 }

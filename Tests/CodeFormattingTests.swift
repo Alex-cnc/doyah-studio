@@ -447,4 +447,40 @@ final class CodeFormatBuiltinOnlyTests: XCTestCase {
             XCTAssertFalse(app.contains(forbidden), "定案「只用内置」之后宿主不该再出现 \(forbidden)")
         }
     }
+
+    /// 源锚点（内测清单 `#2` 复测打回：「**编辑下无格式化菜单**」）：
+    /// 功能一直在，但只长在工作区页签条那枚「格式化」下拉里 —— 用户按名字去**菜单栏的「编辑」**找，
+    /// 找不到就等于没有。判据钉三件事：① 主菜单「编辑」里真的有这一项；② ⇧⌘F **只注册一处**
+    /// （同一快捷键挂两个菜单项时 AppKit 只认一个，另一项变成摆设）；③ 这一项能跟着界面语言变。
+    func testFormatMenuItemLivesInMainEditMenu() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let commands = try String(
+            contentsOf: root.appendingPathComponent("App/DoyahStudioCommands.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(commands.contains("CommandGroup(after: .pasteboard)"),
+                      "主菜单「编辑」那一组里没有条目 —— 他找的就是那儿")
+        XCTAssertTrue(commands.contains("L(.menuFormat)"), "「编辑」里那一项没有用无占位符的菜单键")
+        XCTAssertTrue(commands.contains("workspaceTabs.formatSelected()"),
+                      "「编辑」里的格式化没有打到工作区页签上")
+
+        var registrations: [(String, Int)] = []
+        let appRoot = root.appendingPathComponent("App")
+        let appFiles = try FileManager.default.subpathsOfDirectory(atPath: appRoot.path)
+            .filter { $0.hasSuffix(".swift") }
+        for file in appFiles {
+            let text = try String(contentsOf: appRoot.appendingPathComponent(file), encoding: .utf8)
+            let count = text.components(separatedBy: "keyboardShortcut(AppShortcut.formatCode").count - 1
+            if count > 0 { registrations.append((file, count)) }
+        }
+        let total = registrations.reduce(0) { $0 + $1.1 }
+        XCTAssertEqual(total, 1, "⇧⌘F 注册了 \(total) 处：\(registrations) —— 只许一处，多了就是摆设")
+
+        let menuKeys = try String(contentsOf: root.appendingPathComponent("Core/MenuLocalization.swift"), encoding: .utf8)
+        XCTAssertTrue(menuKeys.contains(".menuFormat,"), ".menuFormat 没进菜单键表 ⇒ 切语言后这一项停在旧语言")
+        XCTAssertEqual(LocalizedStrings.text(.menuFormat, language: .simplifiedChinese), "格式化代码")
+        XCTAssertEqual(LocalizedStrings.text(.menuFormat, language: .english), "Format Code")
+    }
 }
