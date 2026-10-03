@@ -31,6 +31,9 @@ import {
   browseSql,
   inspectRow,
   dbTables,
+  dbTableShape,
+  generateDdl,
+  dbRunDdl,
   type ConnectParams,
   type DbFailure,
   type QueryResult,
@@ -45,6 +48,9 @@ import {
   type SqlToken,
   type CellEdit,
   type DmlStatement,
+  type ColumnDef,
+  type TableShape,
+  type DdlStatement,
 } from '../ipc'
 import { frozenColumnStylesMeasured, pageOf, visibleOrder, DEFAULT_PAGE_SIZE } from '../grid/view'
 import { EXPORT_FORMAT_LABELS, exportRows, type ExportFormat } from '../grid/export'
@@ -76,6 +82,110 @@ function openBrowse(schema: string, table: string) {
   browseWhere.value = ''
   browseOrder.value = ''
   browseError.value = ''
+}
+
+// ── 表设计器（1.5）：读结构 → 改列 → 变更集预览 → 只执行非破坏性那些 ──────────────────────
+//
+// 口径（与领域层 `ddl` 一致，界面这层要配合好）：
+// ① **删除类只生成、不自动执行**：生成物按 `class` 分级，只有 `additive` / `altering` 会被
+//    送进执行通路；`destructive` 只显示、供复制；
+// ② **改类型是四步**（建临时列 / 搬值 / 删旧列 / 改名）—— 界面如实把四步都列出来，
+//    其中"删旧列"标破坏性，所以**整段改类型不会被自动执行**（要用户自己复制去跑）；
+// ③ 打不开结构（无可读原因）就如实报，不显示一个空面板让人以为表是空的。
+
+const designer = ref<{ schema: string; table: string } | null>(null)
+const shape = ref<TableShape | null>(null)
+/** 编辑缓冲：列的下标 → 改动（只记改过的格子，不改的不进 DDL）。 */
+const draftColumns = ref<ColumnDef[]>([])
+const ddlPlan = ref<DdlStatement[]>([])
+
+async function openDesigner(schema: string, table: string) {
+  designer.value = { schema, table }
+  shape.value = null
+  ddlPlan.value = []
+  draftColumns.value = []
+  clearFailure()
+  try {
+    const loaded = await dbTableShape(schema, table)
+    shape.value = loaded
+    // 复制一份进编辑缓冲：**原始结构留着**（生成 DDL 要靠它算差异）
+    draftColumns.value = loaded.columns.map((c) => ({ ...c }))
+  } catch (e) {
+    failure.value = describeError(e)
+    designer.value = null
+  }
+}
+
+function addDraftColumn() {
+  draftColumns.value.push({ name: '', dataType: 'text', isNullable: true, defaultExpr: null })
+  ddlPlan.value = []
+}
+
+function removeDraftColumn(index: number) {
+  draftColumns.value.splice(index, 1)
+  ddlPlan.value = []
+}
+
+/** 生成变更集预览（**只生成**）。 */
+async function previewDdl() {
+  if (!shape.value || !designer.value) return
+  clearFailure()
+  try {
+    ddlPlan.value = await generateDdl({
+      op: 'alter_columns',
+      schema: designer.value.schema,
+      table: designer.value.table,
+      originalColumns: shape.value.columns,
+      editedColumns: draftColumns.value,
+    })
+  } catch (e) {
+    ddlPlan.value = []
+    failure.value = describeError(e)
+  }
+}
+
+/** 这批里哪些能自动执行（`additive` / `altering`）；破坏性的只给复制。 */
+const runnableDdl = computed(() => ddlPlan.value.filter((s) => s.class !== 'destructive'))
+const blockedDdl = computed(() => ddlPlan.value.filter((s) => s.class === 'destructive'))
+
+/** 执行**非破坏性**那些；返回结果里逐句报成败。 */
+async function applyDdl() {
+  if (runnableDdl.value.length === 0) {
+    failure.value = {
+      message: '没有可自动执行的语句（破坏性语句只能复制出去自己跑）。',
+      hint: '先点「生成变更集」看清将执行什么；含删除的变更请在生成面板里复制语句。',
+    }
+    return
+  }
+  busy.value = '执行 DDL…'
+  clearFailure()
+  try {
+    outcomes.value = await dbRunDdl(runnableDdl.value.map((s) => s.bare))
+    const failed = outcomes.value.find((o) => !o.ok)
+    failure.value = failed?.failure ?? null
+    if (!failed && designer.value) {
+      // 执行成功就重读结构：界面显示"库里现在是什么"，而不是"我以为改成了什么"
+      await openDesigner(designer.value.schema, designer.value.table)
+      copied.value = `已执行 ${outcomes.value.length} 句`
+      setTimeout(() => (copied.value = ''), 3000)
+    }
+  } catch (e) {
+    failure.value = describeError(e)
+  } finally {
+    busy.value = ''
+  }
+}
+
+/** 复制整份生成的语句（破坏性的那些靠这条路拿出去自己执行）。 */
+async function copyDdl() {
+  const text = ddlPlan.value.map((s) => s.sql).join('\n\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    copied.value = `已复制 ${ddlPlan.value.length} 句`
+  } catch {
+    copied.value = '复制失败：外壳不给剪贴板权限（可手动选中生成物复制）'
+  }
+  setTimeout(() => (copied.value = ''), 2500)
 }
 
 /** 生成预览（失败就把「为什么不行」如实显示，不静默给一句空 SQL） */
@@ -450,6 +560,14 @@ function menuGenerateQuery() {
   closeContextMenu()
   if (!target) return
   useTable({ schema: target.schema, name: target.name, kind: target.kind })
+}
+
+/** 右键：打开表设计器（1.5）—— 只有表 / 视图这类**有结构**的对象才有意义。 */
+function menuDesignTable() {
+  const target = contextMenu.value?.object
+  closeContextMenu()
+  if (!target) return
+  void openDesigner(target.schema, target.name)
 }
 
 /** 右键：复制名（**限定名原样**：给人看 / 贴回来用。下发 SQL 的引号由服务端侧生成器负责）。 */
@@ -1030,8 +1148,89 @@ async function probe() {
           </button>
         </li>
         <li><button class="db__menu-item" type="button" @click="menuGenerateQuery">生成查询</button></li>
+        <li><button class="db__menu-item" type="button" @click="menuDesignTable">表结构设计…</button></li>
         <li><button class="db__menu-item" type="button" @click="menuCopyName">复制名</button></li>
       </ul>
+
+        <!-- 表设计器（1.5）：改列 → 生成变更集 → **只执行非破坏性那些** -->
+        <div v-if="designer && shape" class="db__designer">
+          <p class="db__browse-title">
+            表结构：<code>{{ designer.schema }}.{{ designer.table }}</code>
+            <button class="db__btn" type="button" @click="designer = null; ddlPlan = []">收起</button>
+          </p>
+
+          <table class="db__grid db__designer-grid">
+            <thead>
+              <tr>
+                <th class="db__grid-head">列名</th>
+                <th class="db__grid-head">类型（原文）</th>
+                <th class="db__grid-head">可空</th>
+                <th class="db__grid-head">默认值</th>
+                <th class="db__grid-head">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(c, i) in draftColumns" :key="i">
+                <td><input v-model="c.name" class="db__cell-input" spellcheck="false" @change="ddlPlan = []" /></td>
+                <td><input v-model="c.dataType" class="db__cell-input" spellcheck="false" @change="ddlPlan = []" /></td>
+                <td><input v-model="c.isNullable" type="checkbox" @change="ddlPlan = []" /></td>
+                <td>
+                  <input
+                    :value="c.defaultExpr ?? ''"
+                    class="db__cell-input"
+                    spellcheck="false"
+                    placeholder="（无）"
+                    @change="c.defaultExpr = ($event.target as HTMLInputElement).value || null; ddlPlan = []"
+                  />
+                </td>
+                <td><button class="db__btn" type="button" @click="removeDraftColumn(i)">删除这列</button></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="db__writeback">
+            <button class="db__btn" type="button" @click="addDraftColumn">加一列</button>
+            <button class="db__btn db__btn--primary" type="button" @click="previewDdl">生成变更集</button>
+            <button
+              class="db__btn"
+              type="button"
+              :disabled="runnableDdl.length === 0"
+              @click="applyDdl"
+            >
+              执行非破坏性（{{ runnableDdl.length }} 句）
+            </button>
+            <button class="db__btn" type="button" :disabled="ddlPlan.length === 0" @click="copyDdl">
+              复制全部语句
+            </button>
+            <span v-if="blockedDdl.length" class="db__note">
+              其中 {{ blockedDdl.length }} 句是**破坏性**的：只生成、不自动执行，请复制出去自己确认后跑
+            </span>
+          </div>
+
+          <div v-if="ddlPlan.length" class="db__dml">
+            <p class="db__dml-title">变更集（{{ ddlPlan.length }} 句）</p>
+            <ul class="db__dml-list">
+              <li v-for="(s, i) in ddlPlan" :key="i">
+                <span class="db__kind">{{ s.purpose }} · {{ s.class }}</span>
+                <pre class="db__sql-preview">{{ s.sql }}</pre>
+              </li>
+            </ul>
+          </div>
+
+          <details class="db__startup">
+            <summary>索引与约束（{{ shape.indexes.length }} 个索引 / {{ shape.constraints.length }} 个约束）</summary>
+            <ul class="db__startup-list">
+              <li v-for="ix in shape.indexes" :key="ix.name">
+                <code>{{ ix.name }}</code>
+                <span class="db__kind">{{ ix.isPrimary ? '主键' : ix.isUnique ? '唯一' : '普通' }} · {{ ix.columns.join(', ') }}</span>
+              </li>
+              <li v-for="c in shape.constraints" :key="c.name">
+                <code>{{ c.name }}</code>
+                <span class="db__kind">{{ c.kind }} · {{ c.definition }}</span>
+              </li>
+            </ul>
+          </details>
+        </div>
 
         <!-- 服务端条件浏览面板（FR-DATA-02）：先看 SQL，再执行 -->
         <div v-if="browse" class="db__browse-panel">
@@ -2085,5 +2284,21 @@ th.db__grid-head[style] {
 .db__menu-item:hover {
   background: var(--ds-color-accent-accent);
   color: var(--ds-color-surface-content);
+}
+
+/* ── 表设计器（1.5）：结构网格 + 变更集 ───────────────────────────────────────────── */
+
+.db__designer {
+  padding: var(--ds-spacing-s) var(--ds-spacing-m);
+  border-bottom: var(--ds-metric-hairline) solid var(--ds-hairline);
+  background: var(--ds-color-surface-panel);
+}
+
+.db__designer-grid {
+  margin-bottom: var(--ds-spacing-s);
+}
+
+.db__designer-grid .db__cell-input {
+  min-width: 120px;
 }
 </style>
