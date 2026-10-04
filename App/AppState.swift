@@ -423,6 +423,12 @@ final class AppState: ObservableObject {
     /// 编辑弹框里那个名字输入框的当前值（**唯一来源**：「确定」的灰着与 `commitContainerEdit`
     /// 的守卫都读它 —— `L-50` 那一课：两处各写一遍必分家）。
     @Published var containerEditName = ""
+    /// **多选集合**（队列 `L-97` 界面半第五片）：行上 ⌘ / ⇧ 点选出来的那一批。
+    /// 规则在 Core `NoteSelectionRule`（判据 `Tests/NoteSelectionPromptTests.swift`）——
+    /// 视图只把**当前事件的修饰键**交进来，本文件不自己判修饰键。
+    @Published var selectedNoteIDs: Set<UUID> = []
+    /// 范围选择的锚点（⇧ 点从哪儿起算）。**不进界面**：它只影响下一次 ⇧ 点。
+    private var noteSelectionAnchor: UUID?
     /// **检索状态**（队列 L-44，2026-09-28）：界面检索改走库以后，「这一屏的结果是怎么来的」
     /// 就成了必须有出处的一件事 —— 三种态各自对应一句如实话（见 `noteSearchHint`）。
     @Published private(set) var noteSearchState: NoteSearchState = .idle
@@ -6037,6 +6043,8 @@ final class AppState: ObservableObject {
         switch outcome {
         case .results(let result):
             noteSearchState = .library(route: result.route, notes: result.notes)
+            // 结果换了 ⇒ 可见列表换了 ⇒ 多选集合要跟着收（队列 `L-97` 界面半第五片）。
+            pruneNoteSelection()
         case .failure(let failure):
             noteSearchState = .unavailable(failure: failure)
         }
@@ -6066,6 +6074,8 @@ final class AppState: ObservableObject {
     /// 为什么要重算检索：范围变了 ⇒ 上一次的结果已经不属于这一屏（同一族的老毛病见 `settleNoteSearch`）。
     func selectNotesScope(_ scope: NotesScope) {
         notesScope = notesNavigation.normalized(scope)
+        // 换了一块 ⇒ 可见列表立刻换（`.idle` 那一支不经过库）⇒ 多选集合跟着收一遍。
+        pruneNoteSelection()
         Task { await searchNotes() }
     }
 
@@ -6298,6 +6308,8 @@ final class AppState: ObservableObject {
         // 列表变了，正在跑的检索要跟着重算（队列 L-44）—— 否则刚存下的那条在搜索结果里
         // 永远不出现、刚删掉的那条还在结果里。空查询时这一步只是把状态置回 `.idle`。
         await searchNotes()
+        // 列表 / 范围 / 库都变了 ⇒ 多选集合收一遍（看不见的条目不许留在集合里）。
+        pruneNoteSelection()
     }
 
     func beginNewNote() {
@@ -6404,6 +6416,83 @@ final class AppState: ObservableObject {
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }
+    }
+
+    // MARK: - 批量多选与拖拽（队列 `L-97` 界面半第五片）
+
+    /// 界面上「已选几条」——只有多选（>1）时才显示那一行。
+    var noteSelectionCount: Int { selectedNoteIDs.count }
+
+    /// 点在笔记行上：处置**全在 Core**（`NoteSelectionRule.clicked`），这里只搬运结果。
+    /// `modifiers` 由视图从当前事件读（Core 不认识 AppKit）—— 视图不许自己判修饰键：
+    /// 判一次就会出现「⇧ 点了也在编辑器里换了一条」这种两处不一致。
+    func handleNoteRowClick(_ note: Note, modifiers: NoteSelectionModifiers) {
+        let outcome = NoteSelectionRule.clicked(
+            note.id,
+            modifiers: modifiers,
+            ordered: visibleNotes.map(\.id),
+            selection: selectedNoteIDs,
+            anchor: noteSelectionAnchor
+        )
+        selectedNoteIDs = outcome.selection
+        noteSelectionAnchor = outcome.anchor
+        if let editedID = outcome.edited, let target = notes.first(where: { $0.id == editedID }) {
+            edit(target)
+        }
+    }
+
+    func clearNoteSelection() {
+        selectedNoteIDs = []
+        noteSelectionAnchor = nil
+    }
+
+    /// 把多选集合对着**当前可见列表**收一遍（口径见 Core 那段注释：看不见却生效是最坏的一种）。
+    /// 三个入口都调它：范围变了 / 检索落定 / 重读库。幂等、便宜（集合操作而已）。
+    private func pruneNoteSelection() {
+        let pruned = NoteSelectionRule.pruned(selectedNoteIDs, within: visibleNotes.map(\.id))
+        if pruned != selectedNoteIDs { selectedNoteIDs = pruned }
+        if let anchor = noteSelectionAnchor, !pruned.contains(anchor) { noteSelectionAnchor = nil }
+    }
+
+    /// 右键某一行的「移动…」/ 拖某一行时**带走哪些**（口径 ③：在选中集合里 ⇒ 整捆）。
+    func noteMoveIDs(for note: Note) -> [UUID] {
+        NoteSelectionRule.draggedNoteIDs(
+            clicked: note.id,
+            selection: selectedNoteIDs,
+            ordered: visibleNotes.map(\.id)
+        )
+    }
+
+    /// 拖拽载荷（**唯一生产点**）：视图不自己拼字符串（拼法与解法不一致的症状是「拖过去什么都没发生」，
+    /// 而拖拽失败**没有任何报错**）。
+    func noteDragPayload(for note: Note) -> String {
+        NoteDragPayload.encode(noteMoveIDs(for: note))
+    }
+
+    /// 拖到某个笔记本上：解载荷 → 现算计划 → 一条都不用动就不写库（给一句人话）。
+    func handleNoteDrop(payload: String?, into notebookUid: String) async {
+        guard let payload else { return }
+        await dropNotes(NoteDragPayload.decode(payload), into: notebookUid)
+    }
+
+    /// 落点（拖拽与批量移动共用这一条路 —— 不新写第二条写库路）。
+    ///
+    /// 计划由 Core 算：已经在目标里的那几条**不在 `movingNoteIDs` 里**（位置不是内容，白写一次
+    /// 会让契约 §2.12 第 4 条那句「移动不刷新 `updatedAt`」变成空话）；整捆都已在 ⇒ 不写库、
+    /// 给一句人话（静默什么都不发生是最坏的一种）。
+    func dropNotes(_ noteIDs: [UUID], into notebookUid: String) async {
+        guard !noteIDs.isEmpty else { return }
+        let plan = NoteDropRule.plan(
+            noteIDs: noteIDs,
+            toNotebook: notebookUid,
+            directory: notesNavigation.directory,
+            placements: notesNavigation.placements
+        )
+        guard !plan.isNoop else {
+            statusMessage = L(NoteSelectionPrompt.alreadyThereKey, plan.targetNotebookName)
+            return
+        }
+        await moveNotes(plan.movingNoteIDs, toNotebook: plan.targetNotebookUid)
     }
 
     // MARK: - 容器编辑：新建 / 重命名 / 排序（队列 `L-97` 界面半第四片）

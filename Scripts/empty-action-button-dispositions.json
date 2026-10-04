@@ -170,6 +170,12 @@
       "predicate": "containerEditNameIsAcceptable",
       "view": "App/Views/NotesPanel.swift",
       "reason": "**容器编辑弹框（新建 / 重命名）里的「确定」**（队列 `L-97` 界面半第四片）：名字洗净后是空的（全空白）⇒ 按钮**灰着** —— 与 `SaveQuerySheet` 的 `trimmedName` 同一档先例（空名字上「确定了」没有可落的库）。判据属性 `containerEditNameIsAcceptable` 是**唯一出处**（体 = Core 的 `ContainerNameRule.isAcceptable`），视图那一侧 `.disabled(!appState.containerEditNameIsAcceptable)` 读的是同一个判断；`confirmContainerEdit` 先**同步取走**请求再异步落库 —— 弹框一关 `isPresented` 的 `set` 就会收掉请求，读晚一步就是「点了确定、什么都没发生」。"
+    },
+    {
+      "func": "dropNotes",
+      "guard": "!noteIDs.isEmpty",
+      "form": "internal",
+      "reason": "**不是按钮的前置判据**：拖拽落点的入口 `handleNoteDrop`（视图 `.dropDestination`）只有在载荷解得出来的时候才有内容 —— 别的程序拖来的文本 / 前缀不对 / 整段坏掉时解出**空数组**，这一步什么都不做（拖拽失败没有按钮可灰着、也没有可交代的对象，如实登记）。这里是**第二道**：`AppState.dropNotes` 收到空清单直接返回，防别的调用路径把一次空写落到库上。"
     }
   ]
 }

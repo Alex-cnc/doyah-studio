@@ -367,6 +367,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesEditCancel
     case notesMoveUp
     case notesMoveDown
+    // 队列 `L-97` 界面半第五片（批量多选 + 拖拽）。
+    case notesMoveSelectedMenu
+    case notesSelectionCount
+    case notesDropAlreadyThere
+    case notesDragHint
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -2324,6 +2329,11 @@ public enum LocalizedStrings {
         .notesEditCancel: [.simplifiedChinese: "取消", .english: "Cancel"],
         .notesMoveUp: [.simplifiedChinese: "上移", .english: "Move up"],
         .notesMoveDown: [.simplifiedChinese: "下移", .english: "Move down"],
+        // 队列 `L-97` 界面半第五片（批量多选 + 拖拽）。
+        .notesMoveSelectedMenu: [.simplifiedChinese: "移动选中的 %d 条…", .english: "Move %d selected notes…"],
+        .notesSelectionCount: [.simplifiedChinese: "已选 %d 条", .english: "%d selected"],
+        .notesDropAlreadyThere: [.simplifiedChinese: "这几条已经在「%@」里了。", .english: "These notes are already in “%@”."],
+        .notesDragHint: [.simplifiedChinese: "可把笔记拖到左边的笔记本上", .english: "Drag notes onto a notebook on the left"],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],

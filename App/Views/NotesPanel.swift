@@ -1,3 +1,4 @@
+import AppKit
 import DoyahCore
 import SwiftUI
 
@@ -47,6 +48,14 @@ struct NotesListView: View {
                     .foregroundStyle(Theme.text(.secondary))
                     .padding(.horizontal, Spacing.s)
             }
+            // **多选时的实况**（队列 `L-97` 界面半第五片）：右键「移动选中的 N 条」会带走的就是这些。
+            // 只在真的多选（>1）时出现 —— 选一条时这一行是噪音。
+            if appState.noteSelectionCount > 1 {
+                Text(L(NoteSelectionPrompt.countKey, appState.noteSelectionCount))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .padding(.horizontal, Spacing.s)
+            }
             if appState.visibleNotes.isEmpty {
                 // 分两种"空"：一条笔记都没有，和"搜不到"—— 后者要提示改搜索词，
                 // 否则用户会以为笔记丢了。
@@ -57,37 +66,37 @@ struct NotesListView: View {
                 Spacer()
             } else {
                 List(appState.visibleNotes) { note in
-                    Button {
-                        appState.edit(note)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: Spacing.xs) {
-                                Text(note.title)
-                                    .font(Theme.font(.body))
-                                    .lineLimit(1)
-                                if note.containsRowData {
-                                    Text(L(.notesContainsRowData))
-                                        .font(Theme.font(.caption))
-                                        .foregroundStyle(Theme.status(.warning))
-                                }
-                            }
-                            Text(note.source.kind.displayName + " · " + (note.source.connectionName ?? "—"))
-                                .font(Theme.font(.caption))
-                                .foregroundStyle(Theme.text(.secondary))
-                            // 跨笔记本搜（搜索范围 = 全部笔记本）时如实标出这条属于哪个笔记本 ——
-                            // 否则结果里一堆同名笔记，看不出它们不是一回事（队列 `L-97` ⑤）。
-                            if appState.showsNotebookInNoteRow, let notebook = appState.notebookName(for: note) {
-                                Text(L(.notesRowNotebook, notebook))
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: Spacing.xs) {
+                            Text(note.title)
+                                .font(Theme.font(.body))
+                                .lineLimit(1)
+                            if note.containsRowData {
+                                Text(L(.notesContainsRowData))
                                     .font(Theme.font(.caption))
-                                    .foregroundStyle(Theme.text(.secondary))
+                                    .foregroundStyle(Theme.status(.warning))
                             }
                         }
+                        Text(note.source.kind.displayName + " · " + (note.source.connectionName ?? "—"))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                        // 跨笔记本搜（搜索范围 = 全部笔记本）时如实标出这条属于哪个笔记本 ——
+                        // 否则结果里一堆同名笔记，看不出它们不是一回事（队列 `L-97` ⑤）。
+                        if appState.showsNotebookInNoteRow, let notebook = appState.notebookName(for: note) {
+                            Text(L(.notesRowNotebook, notebook))
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("note-row-\(note.id.uuidString)")
-                    // **跨笔记本移动**（队列 `L-97` ④）：清单 / 顺序 / 当前格都由 `NotebookMovePrompt`
-                    // 一处给（Core），界面只画 —— 菜单按架分组，与上面那棵树的层级一致。
+                    .contentShape(Rectangle())
+                    .onTapGesture { appState.handleNoteRowClick(note, modifiers: .currentEvent) }
+                    .draggable(appState.noteDragPayload(for: note))
+                    .help(L(NoteSelectionPrompt.dragHintKey))
                     .contextMenu { moveMenu(for: note) }
+                    .listRowBackground(
+                        appState.selectedNoteIDs.contains(note.id) ? Theme.surface(.panel) : Color.clear
+                    )
+                    .accessibilityIdentifier("note-row-\(note.id.uuidString)")
                 }
             }
         }
@@ -109,8 +118,11 @@ struct NotesListView: View {
     /// 可点却静默无反应是最坏的一种；空菜单则会被读成「这个功能没做」）。
     @ViewBuilder
     private func moveMenu(for note: Note) -> some View {
-        let targets = appState.noteMoveTargets(for: [note.id])
-        Menu(L(NotebookMovePrompt.menuTitleKey)) {
+        // **批量多选**（队列 `L-97` 界面半第五片）：这一行在选中集合里 ⇒ 整捆一起走
+        // （规则在 Core `NoteSelectionRule.draggedNoteIDs`），菜单标题如实写「几条」。
+        let noteIDs = appState.noteMoveIDs(for: note)
+        let targets = appState.noteMoveTargets(for: noteIDs)
+        Menu(noteIDs.count > 1 ? L(NoteSelectionPrompt.moveSelectionKey, noteIDs.count) : L(NotebookMovePrompt.menuTitleKey)) {
             if NotebookMovePrompt.hasDestination(targets) {
                 ForEach(appState.notesNavigation.shelves) { shelf in
                     let inShelf = targets.filter { $0.shelfUid == shelf.uid }
@@ -118,7 +130,7 @@ struct NotesListView: View {
                         Menu(shelf.name) {
                             ForEach(inShelf) { target in
                                 Button(moveLabel(for: target)) {
-                                    Task { await appState.moveNotes([note.id], toNotebook: target.id) }
+                                    Task { await appState.moveNotes(noteIDs, toNotebook: target.id) }
                                 }
                                 .disabled(!target.isSelectable)
                                 .accessibilityIdentifier("notes-move-to-\(target.id)")
@@ -237,6 +249,13 @@ struct NotesContainerTreeView: View {
                             appState.requestContainerRemoval(kind: .notebook, uid: notebook.uid, name: notebook.name)
                         }
                         .accessibilityIdentifier("notes-remove-notebook-\(notebook.uid)")
+                    }
+                    // **落点**（队列 `L-97` 界面半第五片）：只有笔记本行接拖进来的笔记 ——
+                    // 架行与「全部」行**不接**（契约 §2.12 第 1 条：笔记不直接属于架；
+                    // 接了就表示能挂在架上）。载荷解码与「已在目标里的不写库」都在 AppState 一处。
+                    .dropDestination(for: String.self) { items, _ in
+                        Task { await appState.handleNoteDrop(payload: items.first, into: notebook.uid) }
+                        return true
                     }
                 }
             }
@@ -395,5 +414,19 @@ struct NotesEditorView: View {
         // 于是「工作区是科技蓝、笔记是系统色」并存）。
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.surface(.content))
+    }
+}
+
+/// **当前事件上的修饰键**（队列 `L-97` 界面半第五片）：Core 不认识 AppKit，这道桥住在视图这侧。
+/// 只认两个 —— ⌘（切换）与 ⇧（连选）；⌥ / ⌃ **不参与**，免得把别的快捷键按成多选。
+/// 为什么读「当前事件」而不是挂两个手势：普通手势与修饰手势会**同时**触发（⌘ 点既加选、
+/// 又在编辑器里换了一条），多选就成了一个用不成的功能。
+private extension NoteSelectionModifiers {
+    static var currentEvent: NoteSelectionModifiers {
+        let flags = NSEvent.modifierFlags
+        var modifiers: NoteSelectionModifiers = []
+        if flags.contains(.command) { modifiers.insert(.command) }
+        if flags.contains(.shift) { modifiers.insert(.shift) }
+        return modifiers
     }
 }
