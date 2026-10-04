@@ -382,6 +382,13 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesTimeHoursAgo
     case notesTimeYesterday
     case notesTimeDaysAgo
+    // 队列 `L-184` **第二片**：左栏的「最近」/「标签」两行，与中栏那根排序条。
+    case notesRecent
+    case notesTagsSection
+    case notesSortBy
+    case notesSortUpdated
+    case notesSortCreated
+    case notesSortTitle
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -2359,6 +2366,13 @@ public enum LocalizedStrings {
         .notesTimeHoursAgo: [.simplifiedChinese: "%@ 小时前", .english: "%@ hr ago"],
         .notesTimeYesterday: [.simplifiedChinese: "昨天", .english: "Yesterday"],
         .notesTimeDaysAgo: [.simplifiedChinese: "%@ 天前", .english: "%@ days ago"],
+        // 队列 `L-184` 第二片（左栏「最近」/「标签」+ 中栏排序条）。这一组**都没有数字槽**。
+        .notesRecent: [.simplifiedChinese: "最近", .english: "Recent"],
+        .notesTagsSection: [.simplifiedChinese: "标签", .english: "Tags"],
+        .notesSortBy: [.simplifiedChinese: "排序", .english: "Sort by"],
+        .notesSortUpdated: [.simplifiedChinese: "最近更新", .english: "Recently updated"],
+        .notesSortCreated: [.simplifiedChinese: "创建时间", .english: "Date created"],
+        .notesSortTitle: [.simplifiedChinese: "标题", .english: "Title"],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],

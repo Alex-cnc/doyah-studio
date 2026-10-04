@@ -92,6 +92,7 @@ public enum NotebookCreation {
     ///
     /// 认不出的范围（指向已被删掉的容器）**也走默认架**：与 `NotesNavigation.normalized` 把范围
     /// 回落「全部」同一处置 —— 用户此刻看到的就是「全部」，那就该按「全部」的落点办事。
+    /// 「标签」/「最近」（队列 `L-184` 第二片）同族：它们是**跨架**的范围，不指定任何一格 ⇒ 默认架。
     /// 库里连一个架都没有（还没走过一次性迁移）⇒ `nil`：界面给一句人话，**不弹一个落不了地的框**。
     public static func destinationShelfUid(for scope: NotesScope, directory: NotebookDirectory) -> String? {
         switch scope {
@@ -99,7 +100,7 @@ public enum NotebookCreation {
             if let shelf = directory.shelf(uid: uid) { return shelf.uid }
         case .notebook(let uid):
             if let notebook = directory.notebook(uid: uid) { return notebook.shelfUid }
-        case .all:
+        case .all, .tag, .recent:
             break
         }
         return directory.defaultShelf?.uid ?? directory.sortedShelves.first?.uid

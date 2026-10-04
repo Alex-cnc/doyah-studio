@@ -25,14 +25,26 @@ struct NotesListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             // **中栏的栏头**（队列 `L-184`）：两级导航（架 → 笔记本）搬回左栏、搜索框搬去顶栏，
-            // 这一栏只剩「看哪一条」—— 栏头就只写这一屏有多少条。
+            // 这一栏只剩「看哪一条」—— 栏头写这一屏有多少条 + **排序条**（第二片新加）。
             HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                 Text(L(.notesTitle))
                     .font(Theme.font(.title))
                 Text("\(appState.visibleNotes.count)")
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
-                Spacer()
+                Spacer(minLength: Spacing.xs)
+                // **排序**（队列 `L-184` 第二片）：三档名字与总序都在 Core
+                // （`NotesSortOrder`）—— 视图只画选择器，不自己写比较函数。
+                Picker(L(.notesSortBy), selection: $appState.notesSortOrder) {
+                    ForEach(NotesSortOrder.allCases, id: \.self) { order in
+                        Text(L(order.key)).tag(order)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
+                .help(L(.notesSortBy))
+                .accessibilityIdentifier("notes-sort")
             }
             .padding(.horizontal, Spacing.s)
             if let hint = appState.noteSearchHint {
@@ -211,6 +223,16 @@ struct NotesContainerTreeView: View {
                 indent: 0,
                 identifier: "notes-scope-all"
             )
+            // **最近**（队列 `L-184` 第二片）：跨全部笔记本、**有界**的一屏（条数在 Core 定死 ——
+            // 无界的「最近」就等于「全部笔记」，那是一个点了像没点的入口，`L-50` 同族）。
+            row(
+                scope: .recent,
+                systemImage: "clock",
+                title: L(.notesRecent),
+                count: appState.notesNavigation.filter(appState.notes, scope: .recent).count,
+                indent: 0,
+                identifier: "notes-scope-recent"
+            )
             ForEach(appState.notesNavigation.shelves) { shelf in
                 row(
                     scope: .shelf(uid: shelf.uid),
@@ -288,6 +310,30 @@ struct NotesContainerTreeView: View {
                         Task { await appState.handleNoteDrop(payload: items.first, into: notebook.uid) }
                         return true
                     }
+                }
+            }
+            // **标签**（队列 `L-184` 第二片）：一个标签横跨各笔记本，所以它是**跨笔记本的范围**
+            // （与印象笔记侧栏的标签栏同形）。清单与条数都由 Core 给
+            // （`NotesNavigation.tags(in:)` —— 「一个标签下有多少条」只此一种算法），这里只画。
+            // 一条标签都没有时**整段不出现**（不画一个空标题：那会被读成「这个功能没做」）。
+            let tags = appState.notesNavigation.tags(in: appState.notes)
+            if !tags.isEmpty {
+                Divider()
+                    .padding(.vertical, Spacing.xs)
+                Text(L(.notesTagsSection))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .padding(.horizontal, Spacing.s)
+                    .accessibilityIdentifier("notes-tags-section")
+                ForEach(tags, id: \.tag) { entry in
+                    row(
+                        scope: .tag(entry.tag),
+                        systemImage: "tag",
+                        title: entry.tag,
+                        count: entry.count,
+                        indent: 0,
+                        identifier: "notes-scope-tag-\(entry.tag)"
+                    )
                 }
             }
         }

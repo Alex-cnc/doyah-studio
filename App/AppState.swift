@@ -410,8 +410,11 @@ final class AppState: ObservableObject {
     /// 纯逻辑在 `Core/NoteNavigation.swift`（判据 `Tests/NoteNavigationTests.swift`），这里只做搬运 ——
     /// 宿主层不自己写过滤（「按笔记本筛笔记」只许经 `NotesNavigation.filter`）。
     @Published var notesNavigation = NotesNavigation(directory: NotebookDirectory(shelves: [], notebooks: []), placements: [])
-    /// 界面上「正在看哪一块」：全部 / 某个架 / 某个笔记本。认不出的目标由 Core 归一成 `.all`。
+    /// 界面上「正在看哪一块」：全部 / 某个架 / 某个笔记本 / 某个标签 / 最近。认不出的目标由 Core 归一成 `.all`。
     @Published var notesScope: NotesScope = .all
+    /// **中栏列表的排序**（队列 `L-184` 第二片）：默认「最近更新在前」（三栏重排之前就是这个口径）。
+    /// 总序与第二关键字在 Core（`NotesSortOrder.comparator`）—— 视图只画一个选择器。
+    @Published var notesSortOrder: NotesSortOrder = .updatedDesc
     /// 搜索范围那枚开关（当前范围 / 全部笔记本）—— 只影响搜索结果的筛选。
     @Published var notesSearchScope: NotesSearchScope = .current
     /// **删除确认框**（队列 `L-97` 界面半第二片）：挂在界面上的那一个删除请求。
@@ -6055,25 +6058,27 @@ final class AppState: ObservableObject {
     ///
     /// **检索走库**：搜索框非空时显示的是 `NoteLibrary.search` 给的**库的结果**（库说什么就是什么）；
     /// 空查询不是检索 —— 显示已加载的列表；库读不出来时显示**全部笔记**并在副行如实说明。
-    /// 排序口径：最近更新在前，同一时刻按标题定序（`sorted` 本身不稳定，不给第二关键字
-    /// 会让同一批数据两次渲染顺序可能不同）。
+    ///
+    /// 过滤 + 排序都交给 Core 的 `NotesNavigation.listing`（队列 `L-184` 第二片）：
+    /// 范围那份兜底（缺归属 ⇒ 默认笔记本 / 认不出的范围 ⇒ 全部）与排序那份**总序**
+    /// （第二关键字 = 标题、第三 = uid）只许有一处 —— 宿主自己拼一遍就会出现
+    /// 「列表顺序与判据不一致」这种没人能复现的错。
     var visibleNotes: [Note] {
         switch noteSearchState {
         case .idle, .unavailable:
-            // 范围（两级导航的选中态）在这里生效：看某个笔记本时，列表就是那个笔记本里的。
-            // 为什么把筛法交给 `NotesNavigation`：归属那份兜底只许有一处（缺归属 ⇒ 默认笔记本），
-            // 宿主层自己写一套就会出现「列表里有、搜索里没有」这类对不上的现象。
-            return notesNavigation.filter(Self.mostRecentlyUpdatedFirst(notes), scope: notesScope)
+            return notesNavigation.listing(notes, scope: notesScope, sort: notesSortOrder)
         case .library(_, let results):
             // 检索结果同样过范围：搜索范围那枚开关（当前范围 / 全部笔记本）在这里起作用。
-            return notesNavigation.filter(results, scope: notesScope, searchScope: notesSearchScope)
+            return notesNavigation.listing(
+                results, scope: notesScope, searchScope: notesSearchScope, sort: notesSortOrder
+            )
         }
     }
 
     /// 一级导航的选中态入口（唯一一处）：归一（认不出的目标 ⇒ 全部）后重算检索。
     /// 为什么要重算检索：范围变了 ⇒ 上一次的结果已经不属于这一屏（同一族的老毛病见 `settleNoteSearch`）。
     func selectNotesScope(_ scope: NotesScope) {
-        notesScope = notesNavigation.normalized(scope)
+        notesScope = notesNavigation.normalized(scope, notes: notes)
         // 换了一块 ⇒ 可见列表立刻换（`.idle` 那一支不经过库）⇒ 多选集合跟着收一遍。
         pruneNoteSelection()
         Task { await searchNotes() }
@@ -6158,11 +6163,13 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// 跨笔记本的检索结果里，这一条属于哪个笔记本（队列 `L-97` ⑤「跨笔记本结果显示所属笔记本」）。
-    /// 只在**真的跨了**的时候显示：搜「全部笔记本」且当前不是「全部」范围 —— 否则每一行都挂同一个名字，
-    /// 那是噪音不是信息。
+    /// 跨笔记本的列表行里，这一条属于哪个笔记本（队列 `L-97` ⑤「跨笔记本结果显示所属笔记本」）。
+    /// 只在**真的跨了**的时候显示：① 当前范围本身就是跨笔记本的（标签 / 最近 / 全部）；
+    /// ② 或者搜「全部笔记本」且当前不是「全部」范围。两条都收在 Core 的 `isCrossNotebook` 里
+    /// （视图不许自己 `switch` 范围 —— 两处各写一遍必分家）。否则每一行都挂同一个名字，那是噪音不是信息。
     var showsNotebookInNoteRow: Bool {
-        notesSearchScope == .all && notesScope != .all
+        if notesScope.isCrossNotebook { return notesScope != .all || notesSearchScope == .all }
+        return notesSearchScope == .all
     }
 
     func notebookName(for note: Note) -> String? {
@@ -6226,13 +6233,9 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// 最近更新在前（同一时刻按标题定序）—— 与 `NoteSearch.match(_:query:)` 的空查询同一口径。
-    private static func mostRecentlyUpdatedFirst(_ notes: [Note]) -> [Note] {
-        notes.sorted { left, right in
-            if left.updatedAt != right.updatedAt { return left.updatedAt > right.updatedAt }
-            return left.title < right.title
-        }
-    }
+    /// 最近更新在前（同一时刻按标题定序）—— **已搬进 Core**（队列 `L-184` 第二片）：
+    /// 中栏排序条之后这条口径是 `NotesSortOrder.updatedDesc` 那一档（并且多了第三关键字 `uid`，
+    /// 标题重名时次序仍然确定）。宿主层不再自己排一遍。
 
     func openNotes() {
         // 笔记有了"活动栏那一栏"这个正式的家（以前只弹一个面板）：入口统一走切换视图，
@@ -6288,9 +6291,6 @@ final class AppState: ObservableObject {
             let directory = try await library.notebookDirectory()
             let placements = try await library.placements()
             notesNavigation = NotesNavigation(directory: directory, placements: placements)
-            // 选中态归一：库可能刚被别的入口改过（笔记本删了 / 换了库）⇒ 停在已不存在的范围上
-            // 会显示成空列表，被读成「笔记没了」。
-            notesScope = notesNavigation.normalized(notesScope)
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }
@@ -6305,6 +6305,10 @@ final class AppState: ObservableObject {
             notes = []
             errorMessage = L(.notesFileUnreadable, failure)
         }
+        // 选中态归一（队列 `L-184` 第二片起也管**标签**）：库可能刚被别的入口改过
+        //（笔记本删了 / 换过库 / 这个标签下最后一条被删了）⇒ 停在已不存在的范围上会显示成空列表，
+        // 被读成「笔记没了」。判断要拿**刚读回来的**那份笔记 —— 上面那条加载之后才做得了。
+        notesScope = notesNavigation.normalized(notesScope, notes: notes)
         // 列表变了，正在跑的检索要跟着重算（队列 L-44）—— 否则刚存下的那条在搜索结果里
         // 永远不出现、刚删掉的那条还在结果里。空查询时这一步只是把状态置回 `.idle`。
         await searchNotes()

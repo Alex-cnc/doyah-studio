@@ -20,6 +20,9 @@ final class NoteNavigationTests: XCTestCase {
     ///   架 A（默认）→ 笔记本 A1（默认）、笔记本 A2
     ///   架 B        → 笔记本 B1
     /// 归属：n1 → A1、n2 → A2、n3 → B1、n4 = **缺归属**（落默认笔记本 A1）
+    ///
+    /// 时刻与标签（队列 `L-184` 第二片起）：更新时间 n4 > n1 > n2 > n3、创建时间 n1 < n2 < n3 < n4；
+    /// 标签 = n1 `工作`、n2 `工作` `生活`、n3 无、n4 `生活` —— 排序与标签两组判据都靠这四个数 / 四个标签。
     private func makeSUT() -> (navigation: NotesNavigation, notes: [Note], ids: [String: UUID]) {
         let shelfA = Shelf(uid: "shelf-a", name: "架A", sortOrder: 0, createdAt: t0, isDefault: true)
         let shelfB = Shelf(uid: "shelf-b", name: "架B", sortOrder: 1, createdAt: t0, isDefault: false)
@@ -28,10 +31,22 @@ final class NoteNavigationTests: XCTestCase {
         let b1 = Notebook(uid: "nb-b1", shelfUid: shelfB.uid, name: "笔记本B1", sortOrder: 0, createdAt: t0, isDefault: false)
         let directory = NotebookDirectory(shelves: [shelfB, shelfA], notebooks: [a2, b1, a1])
 
-        let n1 = Note(id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, title: "n1")
-        let n2 = Note(id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!, title: "n2")
-        let n3 = Note(id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!, title: "n3")
-        let n4 = Note(id: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!, title: "n4")
+        let n1 = Note(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, title: "n1",
+            tags: ["工作"], createdAt: t0.addingTimeInterval(10), updatedAt: t0.addingTimeInterval(300)
+        )
+        let n2 = Note(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!, title: "n2",
+            tags: ["工作", "生活"], createdAt: t0.addingTimeInterval(20), updatedAt: t0.addingTimeInterval(200)
+        )
+        let n3 = Note(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!, title: "n3",
+            tags: [], createdAt: t0.addingTimeInterval(30), updatedAt: t0.addingTimeInterval(100)
+        )
+        let n4 = Note(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!, title: "n4",
+            tags: ["生活"], createdAt: t0.addingTimeInterval(40), updatedAt: t0.addingTimeInterval(400)
+        )
         let placements = [
             NotebookPlacement(noteID: n1.id.uuidString, notebookUid: a1.uid),
             NotebookPlacement(noteID: n2.id.uuidString, notebookUid: a2.uid),
@@ -63,13 +78,20 @@ final class NoteNavigationTests: XCTestCase {
         XCTAssertEqual(sut.navigation.noteCount(inShelf: "shelf-a", notes: notes), 3)
         XCTAssertEqual(sut.navigation.noteCount(inShelf: "shelf-b", notes: notes), 1)
         // 与筛选同一条判断 ⇒ 计数与列表行数不可能对不上（这是这一族判据存在的理由）
-        for scope in [NotesScope.all, .shelf(uid: "shelf-a"), .notebook(uid: "nb-a1"), .notebook(uid: "nb-a2")] {
+        let scopes: [NotesScope] = [
+            .all, .shelf(uid: "shelf-a"), .notebook(uid: "nb-a1"), .notebook(uid: "nb-a2"),
+            .tag("工作"), .tag("生活"), .recent,
+        ]
+        for scope in scopes {
             let rows = sut.navigation.filter(notes, scope: scope).count
             let counted: Int
             switch scope {
             case .all: counted = notes.count
             case .shelf(let uid): counted = sut.navigation.noteCount(inShelf: uid, notes: notes)
             case .notebook(let uid): counted = sut.navigation.noteCount(inNotebook: uid, notes: notes)
+            case .tag(let name): counted = sut.navigation.noteCount(inTag: name, notes: notes)
+            // 「最近」这一屏装得下这四条（上限 30）⇒ 计数就是全部
+            case .recent: counted = notes.count
             }
             XCTAssertEqual(counted, rows, "范围 \(scope) 的树计数必须等于列表行数")
         }
@@ -86,14 +108,24 @@ final class NoteNavigationTests: XCTestCase {
     // MARK: - 选中态归一（认不出 ⇒ 全部）
 
     func testNormalizedKeepsKnownTargetsAndFallsBackToAllForUnknownOnes() {
-        let sut = makeSUT().navigation
-        XCTAssertEqual(sut.normalized(.all), .all)
-        XCTAssertEqual(sut.normalized(.notebook(uid: "nb-a2")), .notebook(uid: "nb-a2"))
-        XCTAssertEqual(sut.normalized(.shelf(uid: "shelf-b")), .shelf(uid: "shelf-b"))
+        let sut = makeSUT()
+        let notes = sut.notes
+        XCTAssertEqual(sut.navigation.normalized(.all, notes: notes), .all)
+        XCTAssertEqual(sut.navigation.normalized(.notebook(uid: "nb-a2"), notes: notes), .notebook(uid: "nb-a2"))
+        XCTAssertEqual(sut.navigation.normalized(.shelf(uid: "shelf-b"), notes: notes), .shelf(uid: "shelf-b"))
         // 容器被删掉之后：**回落全部**，不是显示空列表
-        XCTAssertEqual(sut.normalized(.notebook(uid: "已经删了的笔记本")), .all)
-        XCTAssertEqual(sut.normalized(.shelf(uid: "已经删了的架")), .all)
-        XCTAssertEqual(sut.normalized(.notebook(uid: "")), .all)
+        XCTAssertEqual(sut.navigation.normalized(.notebook(uid: "已经删了的笔记本"), notes: notes), .all)
+        XCTAssertEqual(sut.navigation.normalized(.shelf(uid: "已经删了的架"), notes: notes), .all)
+        XCTAssertEqual(sut.navigation.normalized(.notebook(uid: ""), notes: notes), .all)
+        // **标签**（队列 `L-184` 第二片）：标签的存亡只在笔记里（没有「标签表」这回事）
+        XCTAssertEqual(sut.navigation.normalized(.tag("工作"), notes: notes), .tag("工作"))
+        XCTAssertEqual(
+            sut.navigation.normalized(.tag("已经没有笔记用的标签"), notes: notes), .all,
+            "标签下最后一条被删 / 改了标签 ⇒ 这个标签在侧栏上已经不存在，范围要回落「全部」而不是空"
+        )
+        // 「最近」永远有效（它不依赖任何容器或标签）
+        XCTAssertEqual(sut.navigation.normalized(.recent, notes: notes), .recent)
+        XCTAssertEqual(sut.navigation.normalized(.recent, notes: []), .recent)
     }
 
     // MARK: - 范围过滤
@@ -140,11 +172,15 @@ final class NoteNavigationTests: XCTestCase {
 
     func testContainsTreatsAnUnownedNoteAsPartOfTheDefaultNotebookAndItsShelf() {
         let sut = makeSUT()
-        let unowned = sut.ids["n4"]!.uuidString
-        XCTAssertTrue(sut.navigation.contains(.notebook(uid: "nb-a1"), noteID: unowned))
-        XCTAssertTrue(sut.navigation.contains(.shelf(uid: "shelf-a"), noteID: unowned))
-        XCTAssertFalse(sut.navigation.contains(.notebook(uid: "nb-b1"), noteID: unowned))
-        XCTAssertTrue(sut.navigation.contains(.all, noteID: unowned))
+        let unowned = sut.notes.first { $0.title == "n4" }!
+        XCTAssertTrue(sut.navigation.contains(.notebook(uid: "nb-a1"), note: unowned))
+        XCTAssertTrue(sut.navigation.contains(.shelf(uid: "shelf-a"), note: unowned))
+        XCTAssertFalse(sut.navigation.contains(.notebook(uid: "nb-b1"), note: unowned))
+        XCTAssertTrue(sut.navigation.contains(.all, note: unowned))
+        // **标签与「最近」**（队列 `L-184` 第二片）
+        XCTAssertTrue(sut.navigation.contains(.tag("生活"), note: unowned))
+        XCTAssertFalse(sut.navigation.contains(.tag("工作"), note: unowned))
+        XCTAssertTrue(sut.navigation.contains(.recent, note: unowned), "「最近」不挑成员（成员条件在 filter 里按更新时间裁）")
     }
 
     // MARK: - 新建笔记的落点
@@ -155,6 +191,116 @@ final class NoteNavigationTests: XCTestCase {
         XCTAssertEqual(sut.destinationNotebookUid(for: .all), "nb-a1", "看全部时落默认笔记本")
         XCTAssertEqual(sut.destinationNotebookUid(for: .shelf(uid: "shelf-b")), "nb-a1", "架不指定格子 ⇒ 同样落默认笔记本")
         XCTAssertEqual(sut.destinationNotebookUid(for: .notebook(uid: "删掉的")), "nb-a1")
+        // 标签 / 最近（队列 `L-184` 第二片）是**跨笔记本**的范围，同样不指定格子 ⇒ 默认笔记本
+        XCTAssertEqual(sut.destinationNotebookUid(for: .tag("工作")), "nb-a1")
+        XCTAssertEqual(sut.destinationNotebookUid(for: .recent), "nb-a1")
+    }
+
+    // MARK: - 标签与「最近」（队列 `L-184` 第二片）
+
+    /// 标签是**跨笔记本**的范围：n1 在 A1、n2 在 A2 —— 同一个标签把两个笔记本里的笔记捞到一起；
+    /// 认不出的标签 ⇒ 回落「全部」（不是空列表，见 `normalized`）。
+    func testTagScopeSpansNotebooksAndPreservesIncomingOrder() {
+        let sut = makeSUT()
+        XCTAssertEqual(sut.navigation.filter(sut.notes, scope: .tag("工作")).map(\.title), ["n1", "n2"])
+        XCTAssertEqual(sut.navigation.filter(sut.notes, scope: .tag("生活")).map(\.title), ["n2", "n4"])
+        XCTAssertEqual(
+            sut.navigation.filter(Array(sut.notes.reversed()), scope: .tag("工作")).map(\.title),
+            ["n2", "n1"], "顺序原样保留（库里给的顺序 = 用户看到的顺序）"
+        )
+        XCTAssertEqual(
+            sut.navigation.filter(sut.notes, scope: .tag("没有笔记用的标签")).map(\.title),
+            ["n1", "n2", "n3", "n4"], "认不出的标签 ⇒ 回落全部"
+        )
+    }
+
+    /// 侧栏那一栏标签的数字与点进去的行数**必须相等**（同一笔记里重复写两次只算一条）。
+    func testTagSummaryIsOrderedByCountThenNameAndMatchesTheRowCount() {
+        let sut = makeSUT()
+        let summary = sut.navigation.tags(in: sut.notes)
+        XCTAssertEqual(summary.map(\.tag), ["工作", "生活"], "次数相同 ⇒ 字典序")
+        XCTAssertEqual(summary.map(\.count), [2, 2])
+        for entry in summary {
+            XCTAssertEqual(
+                sut.navigation.noteCount(inTag: entry.tag, notes: sut.notes), entry.count,
+                "侧栏数字与点进去的列表行数必须相等"
+            )
+        }
+        // 一条笔记里同一个标签写两遍 ⇒ 仍然只算一条（`Set` 去重那一处口径）
+        let duplicated = Note(title: "重", tags: ["工作", "工作"])
+        XCTAssertEqual(sut.navigation.noteCount(inTag: "工作", notes: [duplicated]), 1)
+        XCTAssertTrue(sut.navigation.tags(in: []).isEmpty, "没有笔记 ⇒ 没有标签（左栏那一段整段不出现）")
+    }
+
+    /// 「最近」= **有界**的一屏：按更新时间取前 `recentLimit` 条 —— 无界的「最近」就等于「全部笔记」。
+    func testRecentScopeIsBoundedAndKeepsTheMostRecentlyUpdated() {
+        let sut = makeSUT()
+        XCTAssertEqual(
+            sut.navigation.filter(sut.notes, scope: .recent).map(\.title), ["n4", "n1", "n2", "n3"],
+            "四条都装得下（上限 30）⇒ 全部，且顺序是更新时间倒序"
+        )
+        let many = (0..<40).map { index in
+            Note(title: String(format: "m%02d", index), updatedAt: t0.addingTimeInterval(Double(index)))
+        }
+        let recent = sut.navigation.filter(many, scope: .recent)
+        XCTAssertEqual(recent.count, NotesNavigation.recentLimit)
+        XCTAssertEqual(recent.first?.title, "m39")
+        XCTAssertEqual(recent.last?.title, "m10")
+        XCTAssertFalse(recent.contains { $0.title == "m09" }, "更旧的进不来 —— 它是有界的短列表，不是第二个「全部笔记」")
+    }
+
+    /// 三档排序都是**总序**：同刻 / 同名时仍定得出先后（`sorted` 本身不稳定，少一个关键字就会「刷新一下顺序变了」）。
+    func testSortOrdersAreTotalAndDeterministic() {
+        let sut = makeSUT()
+        let notes = sut.notes
+        XCTAssertEqual(notes.sorted(by: NotesSortOrder.updatedDesc.comparator).map(\.title), ["n4", "n1", "n2", "n3"])
+        XCTAssertEqual(notes.sorted(by: NotesSortOrder.createdDesc.comparator).map(\.title), ["n4", "n3", "n2", "n1"])
+        XCTAssertEqual(notes.sorted(by: NotesSortOrder.titleAsc.comparator).map(\.title), ["n1", "n2", "n3", "n4"])
+
+        let twinA = Note(id: UUID(uuidString: "00000000-0000-0000-0000-0000000000aa")!, title: "同名", updatedAt: t0)
+        let twinB = Note(id: UUID(uuidString: "00000000-0000-0000-0000-0000000000bb")!, title: "同名", updatedAt: t0)
+        XCTAssertEqual(
+            [twinB, twinA].sorted(by: NotesSortOrder.updatedDesc.comparator).map { $0.id.uuidString },
+            [twinA.id.uuidString, twinB.id.uuidString],
+            "同刻同名 ⇒ 按 uid 定序（第三关键字；不许看运气）"
+        )
+        XCTAssertEqual([twinA, twinB].sorted(by: NotesSortOrder.titleAsc.comparator).map(\.title), ["同名", "同名"])
+        XCTAssertEqual(NotesSortOrder.allCases.count, 3, "只有三档 —— 语言表里也一个不多一个不少")
+    }
+
+    /// `listing` = 列表的**唯一入口**（过滤 + 排序）：范围那一步的兜底与排序那一步的关键字都在 Core 一处。
+    func testListingIsTheSingleEntryPointForFilteringAndSorting() {
+        let sut = makeSUT()
+        XCTAssertEqual(
+            sut.navigation.listing(sut.notes, scope: .tag("工作"), sort: .titleAsc).map(\.title), ["n1", "n2"]
+        )
+        XCTAssertEqual(
+            sut.navigation.listing(sut.notes, scope: .all).map(\.title), ["n4", "n1", "n2", "n3"],
+            "默认 = 最近更新在前（三栏重排之前的口径，不许顺手改掉）"
+        )
+        XCTAssertEqual(
+            sut.navigation.listing(
+                sut.notes, scope: .notebook(uid: "nb-a2"), searchScope: .all, sort: .titleAsc
+            ).map(\.title),
+            ["n1", "n2", "n3", "n4"], "搜「全部笔记本」⇒ 不看当前范围"
+        )
+        XCTAssertEqual(
+            sut.navigation.listing(sut.notes, scope: .recent, sort: .titleAsc).map(\.title),
+            ["n1", "n2", "n3", "n4"], "「最近」裁成员、排序仍听排序条"
+        )
+    }
+
+    /// 「这一块是不是跨笔记本的」只有一处判断（视图据此决定要不要在行上标笔记本）。
+    func testScopeKnowsWhetherItSpansNotebooks() {
+        XCTAssertTrue(NotesScope.all.isCrossNotebook)
+        XCTAssertTrue(NotesScope.tag("工作").isCrossNotebook)
+        XCTAssertTrue(NotesScope.recent.isCrossNotebook)
+        XCTAssertFalse(NotesScope.shelf(uid: "shelf-a").isCrossNotebook)
+        XCTAssertFalse(NotesScope.notebook(uid: "nb-a1").isCrossNotebook)
+        // `targetUid` 只对容器有意义（标签 / 最近指向的是内容条件，不是一个 uid）
+        XCTAssertNil(NotesScope.tag("工作").targetUid)
+        XCTAssertNil(NotesScope.recent.targetUid)
+        XCTAssertEqual(NotesScope.notebook(uid: "nb-a1").targetUid, "nb-a1")
     }
 
     // MARK: - 接线（源码判据）
@@ -170,8 +316,19 @@ final class NoteNavigationTests: XCTestCase {
         XCTAssertTrue(appState.contains("notesScope"), "AppState 要持有选中态")
         XCTAssertTrue(appState.contains("selectNotesScope"), "选中的唯一入口")
         XCTAssertTrue(appState.contains("notesSearchScope"), "搜索范围那枚开关要在状态层")
+        // 队列 `L-184` 第二片：排序的当前值在状态层，列表只许走 Core 那一个入口
+        XCTAssertTrue(appState.contains("notesSortOrder"), "排序条当前选的那一档要在状态层")
+        XCTAssertTrue(appState.contains("notesNavigation.listing("), "中栏列表走 Core 的 `listing`（过滤 + 排序一处）")
+        XCTAssertFalse(
+            appState.contains("mostRecentlyUpdatedFirst"),
+            "排序口径搬进 Core 之后，宿主层不许再自己排一遍（两处各排一次必分家）"
+        )
         XCTAssertTrue(panel.contains("NotesContainerTreeView"), "侧栏要有两级导航那一块")
         XCTAssertTrue(panel.contains("notesSearchScope"), "搜索范围开关要真的接在界面上")
+        XCTAssertTrue(panel.contains("notesSortOrder"), "排序条要真的接在界面上")
+        XCTAssertTrue(panel.contains("notes-scope-recent"), "左栏要有「最近」那一行")
+        XCTAssertTrue(panel.contains("notes-scope-tag-"), "左栏要有标签分组（一行一个标签）")
+        XCTAssertTrue(panel.contains("notesTagsSection"), "标签那一栏的标题来自语言表（不写死中文）")
         XCTAssertFalse(
             appState.contains("notes.filter { $0.notebookUid"),
             "按笔记本筛笔记只许经 NotesNavigation —— 不许在宿主层自己写一套过滤"
