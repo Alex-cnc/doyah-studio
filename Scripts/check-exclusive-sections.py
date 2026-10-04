@@ -144,8 +144,8 @@ def mark_tokens(tok):
 # `[独占:*]` 节必然判红；而她的名字要保留下来，供「契约所有者是不是我」这类同一性判定用。
 ACTORS = {
     "bluewhale": (),                      # 契约层（三书）· 蓝色鲸鱼娘
-    "bighippo": ("macos", "ios"),         # 平台实现 · 麦克大河马（macOS / iOS）
-    "tinyhippo": ("android", "harmony"),  # 平台实现 · 温迪小河马（安卓 / 鸿蒙）
+    "bighippo": ("macos", "ios"),         # 平台实现 · 铁皮大河马（macOS / iOS）
+    "tinyhippo": ("android", "harmony"),  # 平台实现 · 奶牙小河马（安卓 / 鸿蒙）
     "fatfish": ("windows",),              # 平台实现 · 黑鳍大鲨鱼（Windows）
 }
 DEFAULT_CONTRACT_OWNER = "bluewhale"
