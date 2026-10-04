@@ -62,6 +62,16 @@
       "role": "待办清单的三件纯逻辑（分区 / 截止档位 / 空标题）—— 队列 `L-100` 清单界面；纯函数，无网络无库，只吃 `Todo` / `Date` / `Calendar` / `LKey`"
     },
     {
+      "path": "Core/TodoCalendar.swift",
+      "layer": "core",
+      "role": "待办日历的日期算术与投影（月 / 周格子 + 把任务铺在日期上）—— 队列 `L-100` 的 Core 半第二片（第 186 轮落文件时漏登，第 188 轮补登）；纯函数，无网络无库，只吃 `Date` / `Calendar`"
+    },
+    {
+      "path": "Core/Reminder.swift",
+      "layer": "core",
+      "role": "提醒的调度语义（规则 / 规格 / 求解 / 预演 / （日历日, 分钟）↔ 瞬间）—— 队列 `L-100` 的「与提醒联动」Core 半，契约 §2.10 §3.12；纯函数，零平台 API，无网络无库，只吃 Foundation"
+    },
+    {
       "path": "Core/License.swift",
       "layer": "core",
       "role": "许可与装配判据（笔记模块随包的条件判定）"

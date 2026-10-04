@@ -255,7 +255,8 @@ final class TodoCalendarTests: XCTestCase {
 
     func testCalendarViewNormalizeDefaultsToMonth() {
         XCTAssertEqual(TodoCalendarView.allCases, [.month, .week], "两档只落这一处（界面别处不许再抄一份）")
-        XCTAssertEqual(TodoCalendarView.defaultView, .month)
+        XCTAssertEqual(TodoCalendarView.initial, .month,
+                       "默认档 = 月视图（第 187 轮改名 `defaultView` → `initial`：那个名字被「工作区用哪种视图打开」占着）")
         XCTAssertEqual(TodoCalendarView(raw: "week").rawValue, "week")
         XCTAssertEqual(TodoCalendarView(raw: " WEEK ").rawValue, "week", "大小写与首尾空白不算差异")
         XCTAssertEqual(TodoCalendarView(raw: "季度"), .month, "认不出的档位「当没给」= 月视图")

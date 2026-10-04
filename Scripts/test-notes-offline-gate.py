@@ -60,6 +60,11 @@ TREE_FILES = [
     "Core/Todo.swift",
     # 队列 `L-100` 清单界面（待办清单的三件纯逻辑）：同上，台账里有它 ⇒ 副本必须带上
     "Core/TodoPresentation.swift",
+    # 队列 `L-100` 日历的 Core 半第二片（月 / 周格子 + 日期算术 + 投影）—— 第 186 轮**漏登**、
+    # 第 188 轮补：同上，台账里有它 ⇒ 副本必须带上
+    "Core/TodoCalendar.swift",
+    # 队列 `L-100` 的「与提醒联动」Core 半（第 188 轮）：同上，台账里有它 ⇒ 副本必须带上
+    "Core/Reminder.swift",
     "App/Views/NotesPanel.swift",
     "Tests/NoteTests.swift",
     "Tests/NoteBodyTests.swift",

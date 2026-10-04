@@ -1,0 +1,1152 @@
+{
+  "format": "doyah-reminder-golden",
+  "version": 1,
+  "reference": "common/Reminder.ets",
+  "sourceSha256": "2f72aa7d1efa3f62ef5c30c7f06b36d47a1b92be5bf152aad9770fc96e611dbc",
+  "generatedBy": "tools/fixtures/gen-reminder-golden.mjs",
+  "verifier": "android/core ReminderGoldenTest（jvmTest 逐例断言）+ android/tools/check-reminder-parity.py（口径 / 词表 / 样例同步）",
+  "tsc": "D:/Program Files/Huawei/DevEco Studio/tools/hvigor/hvigor/node_modules/typescript/bin/tsc",
+  "note": "预期结果由**鸿蒙侧已交付实现**（reference）跑出，不是安卓侧实现的自证。安卓侧 android/core Reminder.kt 必须在每一例上给出相同的 ok / state / code / due.date / due.minute 与相同的 upcoming 序列。比较面只有「日历日 + 当日分钟 + 档位」（契约 §5 第 5 条）：toEpoch 依赖本机时区，不进本样例（安卓侧那份在 commonTest 里用显式偏移另验）。改动任一端的提醒口径后：先重跑本生成器，再跑 android/tools/check-reminder-parity.py。",
+  "caseCount": 39,
+  "cases": [
+    {
+      "name": "一次性：锚点在未来 ⇒ 排到锚点当天",
+      "why": "最基本的一次性排期",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-10-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-10-01",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-10-01",
+          "minute": 540
+        }
+      ]
+    },
+    {
+      "name": "一次性：锚点已过 ⇒ expired（不自动改期）",
+      "why": "口径 3：替用户改期是产品决定，引擎不猜",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-09-26",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "expired",
+      "code": "",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "一次性：同一天、分钟更晚 ⇒ 排到今天",
+      "why": "口径 2 的边界：同一日历日也要比分钟",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-09-27",
+        "minuteOfDay": 600,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-27",
+      "dueMinute": 600,
+      "upcoming": [
+        {
+          "date": "2026-09-27",
+          "minute": 600
+        }
+      ]
+    },
+    {
+      "name": "一次性：同一天、分钟相同 ⇒ expired（严格晚于）",
+      "why": "口径 2：相等不算「晚于」，否则刷新会拿到同一个已过的时刻",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-09-27",
+        "minuteOfDay": 480,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "expired",
+      "code": "",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "一次性：同一天、分钟更早 ⇒ expired",
+      "why": "口径 2 + 口径 3 的组合",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-09-27",
+        "minuteOfDay": 400,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "expired",
+      "code": "",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "一次性：终止日 = 锚点当天 ⇒ 仍可响（含端点）",
+      "why": "口径 4：终止日含端点",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-10-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": "2026-10-01"
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-10-01",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-10-01",
+          "minute": 540
+        }
+      ]
+    },
+    {
+      "name": "一次性：终止日早于锚点 ⇒ expired",
+      "why": "口径 4 的反面：终止日把这次排期切掉",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-10-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": "2026-09-30"
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": true,
+      "state": "expired",
+      "code": "",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "每 3 天：锚点早于参照日 ⇒ 落在同一余数格上",
+      "why": "间隔规则的核心：格子由锚点定义，不从参照日重算",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-20",
+        "minuteOfDay": 540,
+        "intervalCount": 3,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 4,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-29",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-09-29",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-02",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-05",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-08",
+          "minute": 540
+        }
+      ]
+    },
+    {
+      "name": "每 3 天：参照日正好是格点、分钟已过 ⇒ 顺延一格",
+      "why": "口径 2 在间隔规则上的落点",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-20",
+        "minuteOfDay": 480,
+        "intervalCount": 3,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-26",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-29",
+      "dueMinute": 480,
+      "upcoming": [
+        {
+          "date": "2026-09-29",
+          "minute": 480
+        },
+        {
+          "date": "2026-10-02",
+          "minute": 480
+        },
+        {
+          "date": "2026-10-05",
+          "minute": 480
+        }
+      ]
+    },
+    {
+      "name": "每 3 天：参照日正好是格点、分钟未到 ⇒ 就是今天",
+      "why": "与上一例成对：分钟决定今天还是下一格",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-20",
+        "minuteOfDay": 540,
+        "intervalCount": 3,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-26",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-26",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-09-26",
+          "minute": 540
+        },
+        {
+          "date": "2026-09-29",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-02",
+          "minute": 540
+        }
+      ]
+    },
+    {
+      "name": "每 2 周：锚点在参照日之后 ⇒ 首次即锚点",
+      "why": "锚点是「首次允许的最早日期」",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-10-05",
+        "minuteOfDay": 600,
+        "intervalCount": 2,
+        "intervalUnit": "week",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-10-05",
+      "dueMinute": 600,
+      "upcoming": [
+        {
+          "date": "2026-10-05",
+          "minute": 600
+        },
+        {
+          "date": "2026-10-19",
+          "minute": 600
+        },
+        {
+          "date": "2026-11-02",
+          "minute": 600
+        }
+      ]
+    },
+    {
+      "name": "每 2 周：锚点在参照日之前 ⇒ 按 14 天格子推进",
+      "why": "周单位与天单位的折算（1 周 = 7 天）",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-07",
+        "minuteOfDay": 600,
+        "intervalCount": 2,
+        "intervalUnit": "week",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-10-05",
+      "dueMinute": 600,
+      "upcoming": [
+        {
+          "date": "2026-10-05",
+          "minute": 600
+        },
+        {
+          "date": "2026-10-19",
+          "minute": 600
+        },
+        {
+          "date": "2026-11-02",
+          "minute": 600
+        }
+      ]
+    },
+    {
+      "name": "每天：缺省单位 = day",
+      "why": "口径里的「间隔单位缺省按天」",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-25",
+        "minuteOfDay": 420,
+        "intervalCount": 1,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 4,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-28",
+      "dueMinute": 420,
+      "upcoming": [
+        {
+          "date": "2026-09-28",
+          "minute": 420
+        },
+        {
+          "date": "2026-09-29",
+          "minute": 420
+        },
+        {
+          "date": "2026-09-30",
+          "minute": 420
+        },
+        {
+          "date": "2026-10-01",
+          "minute": 420
+        }
+      ]
+    },
+    {
+      "name": "每 3 天 + 终止日卡在格点 ⇒ 该次仍可响",
+      "why": "口径 4 作用于间隔规则",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-20",
+        "minuteOfDay": 540,
+        "intervalCount": 3,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": "2026-09-29"
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 4,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-29",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-09-29",
+          "minute": 540
+        }
+      ]
+    },
+    {
+      "name": "每 3 天 + 终止日早于下一格 ⇒ expired",
+      "why": "终止日把下一次切掉 ⇒ 不是错误，是「已结束」",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-20",
+        "minuteOfDay": 540,
+        "intervalCount": 3,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": "2026-09-28"
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "expired",
+      "code": "",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "每 0 天 ⇒ invalid（间隔次数必须为正）",
+      "why": "口径 6：宁可不出提醒，也不出一个错的提醒",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-20",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "间隔单位不认识 ⇒ invalid（不回落成 day）",
+      "why": "口径 6：不认识的单位一律判非法",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-20",
+        "minuteOfDay": 540,
+        "intervalCount": 2,
+        "intervalUnit": "month",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "每周：周一 / 周三（ISO 1、3）⇒ 落在最近的周三",
+      "why": "口径 7：ISO 星期口径（1 = 周一）",
+      "spec": {
+        "rule": "weekly",
+        "anchorDate": "2026-09-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [
+          1,
+          3
+        ],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 5,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-28",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-09-28",
+          "minute": 540
+        },
+        {
+          "date": "2026-09-30",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-05",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-07",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-12",
+          "minute": 540
+        }
+      ]
+    },
+    {
+      "name": "每周：参照日本身是命中日、分钟未到 ⇒ 就是今天",
+      "why": "口径 2 在按周规则上的落点（周日 = 7）",
+      "spec": {
+        "rule": "weekly",
+        "anchorDate": "2026-09-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [
+          7
+        ],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 4,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-27",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-09-27",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-04",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-11",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-18",
+          "minute": 540
+        }
+      ]
+    },
+    {
+      "name": "每周：参照日本身是命中日、分钟已过 ⇒ 下一周",
+      "why": "口径 2 的严格晚于",
+      "spec": {
+        "rule": "weekly",
+        "anchorDate": "2026-09-01",
+        "minuteOfDay": 480,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [
+          7
+        ],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 4,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-10-04",
+      "dueMinute": 480,
+      "upcoming": [
+        {
+          "date": "2026-10-04",
+          "minute": 480
+        },
+        {
+          "date": "2026-10-11",
+          "minute": 480
+        },
+        {
+          "date": "2026-10-18",
+          "minute": 480
+        },
+        {
+          "date": "2026-10-25",
+          "minute": 480
+        }
+      ]
+    },
+    {
+      "name": "每周：星期集合脏值（重复 / 越界 / 非整数）⇒ 去重与剔除后仍有效",
+      "why": "口径 6 与口径 7 的组合：非法星期被剔除而不是判整条非法",
+      "spec": {
+        "rule": "weekly",
+        "anchorDate": "2026-09-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [
+          3,
+          3,
+          0,
+          8,
+          -1,
+          1
+        ],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 4,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-28",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-09-28",
+          "minute": 540
+        },
+        {
+          "date": "2026-09-30",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-05",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-07",
+          "minute": 540
+        }
+      ]
+    },
+    {
+      "name": "每周：星期集合全非法 ⇒ invalid",
+      "why": "剔除完为空 ⇒ 规则无法排期",
+      "spec": {
+        "rule": "weekly",
+        "anchorDate": "2026-09-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [
+          0,
+          9
+        ],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "每周：锚点在未来 ⇒ 首次不早于锚点",
+      "why": "锚点 = 首次允许的最早日期",
+      "spec": {
+        "rule": "weekly",
+        "anchorDate": "2026-10-15",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [
+          5
+        ],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 3,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-10-16",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-10-16",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-23",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-30",
+          "minute": 540
+        }
+      ]
+    },
+    {
+      "name": "每周 + 终止日 ⇒ 用尽后回 expired",
+      "why": "口径 4 作用于按周规则",
+      "spec": {
+        "rule": "weekly",
+        "anchorDate": "2026-09-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [
+          2
+        ],
+        "untilDate": "2026-10-06"
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 4,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-29",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-09-29",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-06",
+          "minute": 540
+        }
+      ]
+    },
+    {
+      "name": "闰年：锚点 = 2028-02-29（真实存在的日期）",
+      "why": "日历算术必须支持闰日",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2028-02-29",
+        "minuteOfDay": 1439,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2028-02-29",
+      "dueMinute": 1439,
+      "upcoming": [
+        {
+          "date": "2028-02-29",
+          "minute": 1439
+        }
+      ]
+    },
+    {
+      "name": "分钟边界：当日第 0 分钟与第 1439 分钟都合法",
+      "why": "分钟边界（0 与 1439）",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-27",
+        "minuteOfDay": 0,
+        "intervalCount": 1,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 1439,
+      "count": 3,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-28",
+      "dueMinute": 0,
+      "upcoming": [
+        {
+          "date": "2026-09-28",
+          "minute": 0
+        },
+        {
+          "date": "2026-09-29",
+          "minute": 0
+        },
+        {
+          "date": "2026-09-30",
+          "minute": 0
+        }
+      ]
+    },
+    {
+      "name": "不存在的日期（2026-02-30）⇒ invalid（不滚到 3 月 2 日）",
+      "why": "口径 6：静默错期是提醒最不能接受的失效方式",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-02-30",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "非闰年的 02-29 ⇒ invalid",
+      "why": "同上，换个形状",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-02-29",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "月份越界（2026-13-01）⇒ invalid",
+      "why": "范围校验",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-13-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "日期写法不对（2026-9-27 单位数月日）⇒ invalid",
+      "why": "日期必须两位月两位日",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-9-27",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "分钟越界（1440）⇒ invalid",
+      "why": "0~1439 的边界",
+      "spec": {
+        "rule": "once",
+        "anchorDate": "2026-10-01",
+        "minuteOfDay": 1440,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "规则不认识（everyWeek）⇒ invalid（当没给）",
+      "why": "口径 6：不认识的规则不回落成 once",
+      "spec": {
+        "rule": "everyWeek",
+        "anchorDate": "2026-10-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "规则缺失（空串）⇒ invalid",
+      "why": "口径 6",
+      "spec": {
+        "rule": "",
+        "anchorDate": "2026-10-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "终止日非法（2026-02-30）⇒ invalid",
+      "why": "终止日与锚点用同一套日期校验",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-20",
+        "minuteOfDay": 540,
+        "intervalCount": 3,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": "2026-02-30"
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "参照日非法 ⇒ invalid（调用方传错就报错，不猜）",
+      "why": "口径 6 对参照时刻同样成立",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-20",
+        "minuteOfDay": 540,
+        "intervalCount": 3,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-31",
+      "fromMinute": 480,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "参照分钟非法（-1）⇒ invalid",
+      "why": "参照时刻同样要校验",
+      "spec": {
+        "rule": "weekly",
+        "anchorDate": "2026-09-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [
+          1
+        ],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": -1,
+      "count": 2,
+      "ok": false,
+      "state": "invalid",
+      "code": "reminder.invalid",
+      "dueDate": "",
+      "dueMinute": -1,
+      "upcoming": []
+    },
+    {
+      "name": "预演 0 次 ⇒ 空数组（不是「一次」）",
+      "why": "upcoming 的入参校验",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-09-20",
+        "minuteOfDay": 540,
+        "intervalCount": 3,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-09-27",
+      "fromMinute": 480,
+      "count": 0,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-29",
+      "dueMinute": 540,
+      "upcoming": []
+    },
+    {
+      "name": "跨月 + 跨年：每 10 天从 12 月底推进",
+      "why": "日历算术跨月跨年",
+      "spec": {
+        "rule": "interval",
+        "anchorDate": "2026-12-25",
+        "minuteOfDay": 600,
+        "intervalCount": 10,
+        "intervalUnit": "day",
+        "weekdays": [],
+        "untilDate": ""
+      },
+      "from": "2026-12-28",
+      "fromMinute": 480,
+      "count": 4,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2027-01-04",
+      "dueMinute": 600,
+      "upcoming": [
+        {
+          "date": "2027-01-04",
+          "minute": 600
+        },
+        {
+          "date": "2027-01-14",
+          "minute": 600
+        },
+        {
+          "date": "2027-01-24",
+          "minute": 600
+        },
+        {
+          "date": "2027-02-03",
+          "minute": 600
+        }
+      ]
+    },
+    {
+      "name": "跨月：每周二从 9 月底推进（含跨月）",
+      "why": "按周规则跨月",
+      "spec": {
+        "rule": "weekly",
+        "anchorDate": "2026-09-01",
+        "minuteOfDay": 540,
+        "intervalCount": 0,
+        "intervalUnit": "",
+        "weekdays": [
+          2
+        ],
+        "untilDate": ""
+      },
+      "from": "2026-09-28",
+      "fromMinute": 480,
+      "count": 5,
+      "ok": true,
+      "state": "pending",
+      "code": "",
+      "dueDate": "2026-09-29",
+      "dueMinute": 540,
+      "upcoming": [
+        {
+          "date": "2026-09-29",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-06",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-13",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-20",
+          "minute": 540
+        },
+        {
+          "date": "2026-10-27",
+          "minute": 540
+        }
+      ]
+    }
+  ]
+}
