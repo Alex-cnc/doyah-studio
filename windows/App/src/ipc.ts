@@ -7,6 +7,29 @@
 //      只为开发与自测，**不是产品形态**（真形态 = WebView2 承载）；
 //   3. 窗口取数**不带整份数据**：一次只取 `len` 行（Rust 侧切片，见 `grid/windowing.ts`）。
 
+import { tNow } from './i18n'
+
+/**
+ * 浏览器旁路的统一说法（**19 处原本各写一遍中文**）。
+ *
+ * 为什么集中：这些提示只出现在"没在外壳里跑"的开发场景，但**也要双语** ——
+ * 切英文时留着一句中文，用户看到的就还是不一致。`action` 走语言表（`ipc.action.*`）。
+ */
+function bypassDb(action: string) {
+  return {
+    message: tNow('ipc.bypass.db'),
+    hint: tNow('ipc.bypass.hint', { action: tNow(action as never) }),
+  }
+}
+
+/** 工作区侧的同一件事。 */
+function bypassWorkspace(action: string) {
+  return {
+    message: tNow('ipc.bypass.workspace'),
+    hint: tNow('ipc.bypass.hint', { action: tNow(action as never) }),
+  }
+}
+
 import { invoke } from '@tauri-apps/api/core'
 
 export const COMMANDS = {
@@ -305,7 +328,7 @@ export const LAB_CONNECTION: ConnectParams = {
 
 export function dbConnect(params: ConnectParams, startupSql?: string[]): Promise<ConnectReport> {
   return call(COMMANDS.dbConnect, { params, startupSql }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里连库（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.connect') as DbFailure
   })
 }
 
@@ -319,13 +342,13 @@ export function dbTables(): Promise<TableNode[]> {
 
 export function dbQuery(sql: string): Promise<QueryResult> {
   return call(COMMANDS.dbQuery, { sql }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里执行（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.run') as DbFailure
   })
 }
 
 export function dbProbe(): Promise<ProbeReport> {
   return call(COMMANDS.dbProbe, {}, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里自检（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.selfCheck') as DbFailure
   })
 }
 
@@ -388,7 +411,7 @@ export function browseSql(request: {
   countOnly?: boolean
 }): Promise<string> {
   return call(COMMANDS.browseSql, { ...request }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.generate') as DbFailure
   })
 }
 /** 值的形态（与领域层 `inspect::Shape` 同名同义；`binary` 带字节数）。 */
@@ -476,7 +499,7 @@ export interface StatementOutcome {
 /** **多段执行**：一次提交多条，逐段执行、逐段报告。`stopOnError` 缺省为真（一段失败就停）。 */
 export function dbRunBatch(sql: string, stopOnError = true): Promise<StatementOutcome[]> {
   return call(COMMANDS.dbRunBatch, { sql, stopOnError }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里执行（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.run') as DbFailure
   })
 }
 
@@ -488,7 +511,7 @@ export function dbCancel(): Promise<boolean> {
 /** 生成 `EXPLAIN` 语句（只生成、不执行；**只对单条**，多段输入会被拒并说明原因）。 */
 export function explainStatement(sql: string, analyze = false): Promise<string> {
   return call(COMMANDS.explainStatement, { sql, analyze }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.generate') as DbFailure
   })
 }
 
@@ -542,14 +565,14 @@ export interface DmlStatement {
 /** 编辑集 → 要执行的 DML（**只生成、不执行**：先看清将执行什么）。 */
 export function editsToDml(edits: CellEdit[]): Promise<DmlStatement[]> {
   return call(COMMANDS.editsToDml, { edits }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里预览（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.preview') as DbFailure
   })
 }
 
 /** 一批写回，一次事务：`rollback` 为真时跑完主动回滚（"提交前预览"的姿势）。 */
 export function dbWriteBatch(statements: string[], rollback = false): Promise<StatementOutcome[]> {
   return call(COMMANDS.dbWriteBatch, { statements, rollback }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里写回（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.writeBack') as DbFailure
   })
 }
 
@@ -613,8 +636,8 @@ export interface DdlStatement {
 export function dbTableShape(schema: string, table: string): Promise<TableShape> {
   return call(COMMANDS.dbTableShape, { schema, table }, () => {
     throw {
-      message: '浏览器旁路没有真库',
-      hint: '请在 Tauri 外壳里打开表设计器（npm run tauri dev）。',
+      message: tNow('ipc.bypass.db'),
+      hint: tNow('ipc.bypass.hint', { action: tNow('ipc.action.designer' as never) }),
     } as DbFailure
   })
 }
@@ -635,14 +658,14 @@ export function generateDdl(request: {
   constraintName?: string
 }): Promise<DdlStatement[]> {
   return call(COMMANDS.generateDdl, { ...request }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.generate') as DbFailure
   })
 }
 
 /** **执行非破坏性 DDL**（加列 / 改列 / 加索引 / 加约束）；破坏性语句会被命令层拒收。 */
 export function dbRunDdl(statements: string[]): Promise<StatementOutcome[]> {
   return call(COMMANDS.dbRunDdl, { statements }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里执行（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.run') as DbFailure
   })
 }
 
@@ -692,7 +715,7 @@ export function exportToFile(
   maxRows?: number,
 ): Promise<ExportReport> {
   return call(COMMANDS.exportToFile, { sql, path, format, maxRows }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里导出（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.export') as DbFailure
   })
 }
 
@@ -703,7 +726,7 @@ export function previewImport(
   targetColumns: string[],
 ): Promise<ImportPreview> {
   return call(COMMANDS.previewImport, { path, hasHeader, targetColumns }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里预览导入（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.previewImport') as DbFailure
   })
 }
 
@@ -716,7 +739,7 @@ export function runImport(request: {
   targetColumns: string[]
 }): Promise<ImportReport> {
   return call(COMMANDS.runImport, { ...request }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里导入（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.import') as DbFailure
   })
 }
 
@@ -799,7 +822,7 @@ export function maintenanceSql(schema: string | undefined, table: string): Promi
 /** **杀会话命令**（只生成、不执行；`force` 为真给 terminate，否则 cancel）。 */
 export function terminateSql(pid: number, force = false): Promise<MaintenanceCommand> {
   return call(COMMANDS.terminateSql, { pid, force }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.generate') as DbFailure
   })
 }
 
@@ -813,7 +836,7 @@ export function grantPreview(request: {
   revoke?: boolean
 }): Promise<string> {
   return call(COMMANDS.grantPreview, { ...request }, () => {
-    throw { message: '浏览器旁路没有真库', hint: '请在 Tauri 外壳里生成（npm run tauri dev）。' } as DbFailure
+    throw bypassDb('ipc.action.generate') as DbFailure
   })
 }
 
@@ -857,7 +880,7 @@ export function workspaceListDirectory(
 /** 读一个文本文件（先过安全关；超上限如实报，不悄悄截断）。 */
 export function workspaceReadFile(workspaceRoot: string, relativePath: string): Promise<FileContent> {
   return call(COMMANDS.workspaceReadFile, { workspaceRoot, relativePath }, () => {
-    throw { message: '浏览器旁路没有工作区', hint: '请在 Tauri 外壳里打开工作区（npm run tauri dev）。' } as DbFailure
+    throw bypassWorkspace('ipc.action.openWorkspace') as DbFailure
   })
 }
 /** 「最近打开」的一条记录。 */

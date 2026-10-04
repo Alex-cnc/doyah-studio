@@ -22,6 +22,29 @@ export interface Entry {
 
 /** 语言表：key 用点分层级，便于按区域找。 */
 export const DICT = {
+  // IPC 浏览器旁路提示（不是产品路径，但**也要双语**：切英文时不该留中文）
+  'ipc.bypass.db': { 'zh-Hans': '浏览器旁路没有真库', en: 'The browser fallback has no real database' },
+  'ipc.bypass.workspace': { 'zh-Hans': '浏览器旁路没有工作区', en: 'The browser fallback has no workspace' },
+  'ipc.bypass.hint': {
+    'zh-Hans': '请在 Tauri 外壳里{action}（npm run tauri dev）。',
+    en: 'Please {action} in the Tauri shell (npm run tauri dev).',
+  },
+  'ipc.action.connect': { 'zh-Hans': '连库', en: 'connect' },
+  'ipc.action.run': { 'zh-Hans': '执行', en: 'run queries' },
+  'ipc.action.selfCheck': { 'zh-Hans': '自检', en: 'run self-checks' },
+  'ipc.action.generate': { 'zh-Hans': '生成', en: 'generate' },
+  'ipc.action.preview': { 'zh-Hans': '预览', en: 'preview' },
+  'ipc.action.writeBack': { 'zh-Hans': '写回', en: 'write back' },
+  'ipc.action.designer': { 'zh-Hans': '打开表设计器', en: 'open the table designer' },
+  'ipc.action.export': { 'zh-Hans': '导出', en: 'export' },
+  'ipc.action.previewImport': { 'zh-Hans': '预览导入', en: 'preview an import' },
+  'ipc.action.import': { 'zh-Hans': '导入', en: 'import' },
+  'ipc.action.openWorkspace': { 'zh-Hans': '打开工作区', en: 'open a workspace' },
+  'ipc.confirm.dbName': {
+    'zh-Hans': '库名不一致，没有删除（这是防误删的闸）',
+    en: 'Database name does not match; nothing was dropped (this is the guard against accidents)',
+  },
+
   // 命令面板：命令标题（**面板显示与搜索词都从这里取**，不再各写一份）
   'cmd.workspace.openFolder': { 'zh-Hans': '打开工作区文件夹', en: 'Open workspace folder' },
   'cmd.workspace.search': { 'zh-Hans': '在工作区里搜索', en: 'Search in workspace' },
@@ -306,6 +329,30 @@ export function t(
 }
 
 /** 语言切换：`zh-Hans` ↔ `en`（对称，点一下换一个）。 */
+
+// ── 当前语言（**单一出处**）─────────────────────────────────────────────────────
+//
+// 为什么要有它：`ipc.ts` 里的**浏览器旁路提示**也要双语，但它是底层模块、拿不到组件属性。
+// 让语言有一个**模块级**的当前值，底层模块就能读；界面侧改语言时同步一次即可。
+// 这样"语言"仍然只有一处，不是每个模块各存一份。
+
+let current: UiLanguage = 'zh-Hans'
+
+/** 读当前语言（底层模块用它）。 */
+export function currentLanguage(): UiLanguage {
+  return current
+}
+
+/** 设当前语言（界面侧改语言时调一次）。 */
+export function setLanguage(language: UiLanguage): void {
+  current = language
+}
+
+/** 按当前语言翻一句（**底层模块的便捷入口**，不必自己传语言）。 */
+export function tNow(key: DictKey, vars?: Record<string, string | number>): string {
+  return t(key, current, vars)
+}
+
 export function toggleLanguage(current: UiLanguage): UiLanguage {
   return current === 'zh-Hans' ? 'en' : 'zh-Hans'
 }

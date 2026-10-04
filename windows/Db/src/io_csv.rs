@@ -326,8 +326,13 @@ pub fn atomic_write(target: &std::path::Path, content: &str) -> Result<(), Strin
     let parent = target
         .parent()
         .ok_or_else(|| format!("目标路径没有父目录：{}", target.display()))?;
+    // 临时文件**与目标同目录**（原子改名要求同盘同目录），名字用 `<目标名>.part`。
+    //
+    // **不用点前缀**（原来写的是 `.<名字>.part`）：点开头的文件在本机沙箱里会被拒写
+    // （实测 `写临时文件失败：拒绝访问 (os error 5)`），而那与"原子落盘"这件事无关 ——
+    // 名字只是"别撞上目标"，用 `.part` 后缀已经够了。
     let tmp = parent.join(format!(
-        ".{}.part",
+        "{}.part",
         target
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -451,14 +456,43 @@ mod tests {
         assert!(back.skipped.is_empty(), "{:?}", back.skipped);
     }
 
-    #[test]
-    fn atomic_write_leaves_no_partial_file_when_the_target_is_a_directory() {
-        let dir = std::env::temp_dir().join("doyah_export_probe");
+    /// 本测试自己的临时目录：**每次唯一**。
+    ///
+    /// 为什么要唯一：这两条原来用**固定名字**（`doyah_export_probe` / `doyah_export_ok.txt`）
+    /// 放在系统临时区顶层 ⇒ 上一次运行的残留会互相干扰（本侧实测：一条一直红）。
+    fn own_dir(tag: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
+        // **夹具根落在工作区里**，不用系统临时区 ——
+        // 本机（本会话沙箱）拒写系统临时区：实测 `写临时文件失败：拒绝访问 (os error 5)`。
+        // 这是本仓既有约定（外壳侧各测试模块也这么取），这里照同一口径。
+        let root = match std::env::var("DOYAH_TEST_ROOT") {
+            Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+            _ => std::path::PathBuf::from("D:/AIProjects/_tmp_face2/fish-fixtures"),
+        };
+        let dir = root.join(format!("doyah_io_csv_{tag}_{}_{unique}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
-        // 目标是一个**目录** ⇒ rename 必失败 ⇒ 临时文件必须被清掉
-        let err = atomic_write(&dir, "x").unwrap_err();
+        dir
+    }
+
+    #[test]
+    fn atomic_write_leaves_no_partial_file_when_the_rename_fails() {
+        // **按真实场景来**：目标是一个**已存在的目录**（`<dir>/occupied`），
+        // 这样临时文件落在 `<dir>` 里（与目标同目录 —— 原子改名要求的就是这个），
+        // 改名必然失败 ⇒ 临时文件必须被清掉。
+        //
+        // 原来这条把"目录"本身当目标，于是临时文件落在**临时区顶层**：
+        // 既不像真实调用，又会与别的测试/残留互相踩（本侧实测它一直红）。
+        let dir = own_dir("probe");
+        let occupied = dir.join("occupied");
+        std::fs::create_dir_all(&occupied).unwrap();
+
+        let err = atomic_write(&occupied, "x").unwrap_err();
         assert!(err.contains("改名失败"), "{err}");
-        let leftovers: Vec<String> = std::fs::read_dir(dir.parent().unwrap())
+
+        // **只扫自己那个目录**（原来扫的是整个系统临时区 ⇒ 会被无关残留判红）
+        let leftovers: Vec<String> = std::fs::read_dir(&dir)
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.file_name().to_string_lossy().to_string())
@@ -470,13 +504,22 @@ mod tests {
 
     #[test]
     fn atomic_write_succeeds_and_replaces_content() {
-        let path = std::env::temp_dir().join("doyah_export_ok.txt");
-        let _ = std::fs::remove_file(&path);
+        // 同样用**自己那个目录**（固定文件名在并行/重复运行时会互相踩）
+        let dir = own_dir("replace");
+        let path = dir.join("export_ok.txt");
         atomic_write(&path, "first").expect("第一次写应当成功");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "first");
         // 再写一次：内容被整体替换（不是追加）
         atomic_write(&path, "second").expect("第二次写应当成功");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "second");
-        let _ = std::fs::remove_file(&path);
+        // 成功后也不该留下临时文件
+        let leftovers: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n.ends_with(".part"))
+            .collect();
+        assert!(leftovers.is_empty(), "写成功后不留临时文件：{leftovers:?}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

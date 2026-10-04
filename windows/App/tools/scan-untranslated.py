@@ -24,7 +24,7 @@ UI_PATTERNS = [
     re.compile(r'window\.confirm\(\s*[\'"]([^\'"]*)[\'"]'),
     re.compile(r'window\.alert\(\s*[\'"]([^\'"]*)[\'"]'),
     # `.ts` 里的数据型文案（`label: '科技蓝'` / `text: '…'` / `hint: '…'`）
-    re.compile(r'\b(?:label|title|text|hint|note|placeholder)\s*:\s*[\'"]([^\'"]*)[\'"]'),
+    re.compile(r'\b(?:label|title|text|hint|note|placeholder|message|reason)\s*:\s*[\'"]([^\'"]*)[\'"]'),
     # 兜底：`value: '带中文的…'`
     re.compile(r'\bvalue\s*:\s*[\'"]([^\'"]*[\u4e00-\u9fff][^\'"]*)[\'"]'),
 ]
