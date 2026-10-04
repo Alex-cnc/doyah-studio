@@ -107,7 +107,9 @@ final class NotebookStorageTests: XCTestCase {
         try makeVersionOneDatabase(notes: [note])
 
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV5.version)
+        // 断言认的是**当前最新版**（`NoteDatabase.supportedVersion`）而不是某一版的号 ——
+        // 这一条测的是「老库升得上来」，每加一版就硬编码一个新号会在下一版变成假的。
+        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion)
         let tables = try database.tableNames()
         for expected in NoteSchemaV2.tables {
             XCTAssertTrue(tables.contains(expected), "升级后缺表 \(expected)；实际：\(tables)")
@@ -266,7 +268,7 @@ final class NotebookStorageTests: XCTestCase {
 
         let target = url("snapshots/notes-20261003T213000.sqlite3")
         let snapshot = try database.snapshot(to: target)
-        XCTAssertEqual(snapshot.schemaVersion, NoteSchemaV5.version)
+        XCTAssertEqual(snapshot.schemaVersion, NoteDatabase.supportedVersion)
 
         let restored = try NoteDatabase(path: target.path)
         defer { try? restored.close() }
@@ -285,7 +287,7 @@ final class NotebookStorageTests: XCTestCase {
         try makeVersionOneDatabase(notes: [note])
 
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV5.version, "v1 库要一路升到 v5（补列与补表都不改既有语义）")
+        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion, "v1 库要一路升到最新版（补列与补表都不改既有语义）")
         let restored = try XCTUnwrap(try database.note(id: note.id))
         XCTAssertFalse(restored.isFavorite, "存量笔记的语义就是「没收藏」—— 默认 0 是如实，不是填充")
 
@@ -328,7 +330,7 @@ final class NotebookStorageTests: XCTestCase {
         try makeVersionOneDatabase(notes: [note])
 
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV5.version, "v1 库要一路升到 v5")
+        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion, "v1 库要一路升到最新版")
         let restored = try XCTUnwrap(try database.note(id: note.id))
         XCTAssertFalse(restored.isPinned, "存量笔记的语义就是「没置顶」—— 默认 0 是如实，不是填充")
 

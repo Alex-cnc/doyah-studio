@@ -276,6 +276,61 @@ public enum NoteSchemaV5 {
     ]
 }
 
+/// **schema v6**（队列 `L-100` 落法 ④ 的**存储半**）：新增 **`reminder`**（提醒）一张表。
+///
+/// 契约出处：`DoyahNotes/Docs/核心契约.md` **§2.10 提醒规则与到点**（`ReminderSpec` 的字段
+/// 就是本表的规格列）+ **§3.12 调度语义**（`Core/Reminder.swift`，第 188 轮已落）。
+/// 本侧只引用不复制 —— 列名与契约字段同义（`anchorDate` → `anchor_date`）。
+///
+/// 五条取舍：
+///   · **与笔记 / 任务同库同连接**（`notes.sqlite3`）：「一条任务与它的提醒」要是**同一次事务**，
+///     而事务只有同一个连接才做得到（与 `NoteSchemaV5` 把 `todo` 放同一个库同一条理由）。
+///   · **归属二选一**（`note_id` / `todo_id`，`CHECK` 保证恰有一个非空）：契约 §2.10 目前只把
+///     提醒描述成挂在笔记上的规则；「可否挂待办」的条文归契约所有者（对侧提案 `0011` 在办）
+///     ⇒ 本侧按与对侧**同一份默认口径**落，**裁决若不同即改**（改点 = 这条 `CHECK` + 映射一处）。
+///   · **两个归属列都带 `ON DELETE CASCADE`**：人工测试清单（macOS 半 · Alpha 3）**第 7 条**
+///     写明「任务真删后它的提醒一并清」⇒ 用**形状**保证（而不是在删除路径上记得多写一句）：
+///     孤儿提醒的害处是它到点会弹，而用户在界面上找不到它。
+///   · **规格逐列落库**（不是一列 JSON 装下）：这一层要能按「谁的提醒」查（`reminder_note_index` /
+///     `reminder_todo_index`），而契约 §2.10 的规格本来就是**具名数据**。
+///   · **`weekdays` 存归一后的文本**（`1,3,5`：去重 + 只留 1~7 + 升序）：写与读共用
+///     `ReminderSpec.weekdays(from:)` / `weekdaysText`，不让「库里一个顺序、界面另一个顺序」。
+///     `interval_unit` 存空串 = 「没给」（缺省 `day` 由调度那一层解释，与 `priority`「认不出当没给」同形）。
+public enum NoteSchemaV6 {
+
+    public static let version: Int32 = 6
+
+    /// 新增的表。
+    public static let tables: [String] = ["reminder"]
+
+    /// 新增的索引（两个归属列各一：查「这条任务的提醒」是这一层的唯一新查询面）。
+    public static let indexes: [String] = ["reminder_note_index", "reminder_todo_index"]
+
+    /// 升级语句（顺序即依赖顺序：表先于索引）。
+    public static let ddl: [String] = [
+        """
+        CREATE TABLE reminder (
+            id INTEGER PRIMARY KEY,
+            uuid TEXT NOT NULL UNIQUE,
+            note_id INTEGER REFERENCES note (id) ON DELETE CASCADE,
+            todo_id INTEGER REFERENCES todo (id) ON DELETE CASCADE,
+            rule TEXT NOT NULL DEFAULT '',
+            anchor_date TEXT NOT NULL DEFAULT '',
+            minute_of_day INTEGER NOT NULL DEFAULT -1,
+            interval_count INTEGER NOT NULL DEFAULT 0,
+            interval_unit TEXT NOT NULL DEFAULT '',
+            weekdays TEXT NOT NULL DEFAULT '',
+            until_date TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            CHECK ((note_id IS NULL) <> (todo_id IS NULL))
+        );
+        """,
+        "CREATE INDEX reminder_note_index ON reminder (note_id);",
+        "CREATE INDEX reminder_todo_index ON reminder (todo_id);"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -360,8 +415,8 @@ public final class NoteDatabase {
     public static let fileName = "notes.sqlite3"
 
     /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏、v3 → v4 补置顶、
-    /// v4 → v5 补待办任务清单）。
-    public static let supportedVersion = NoteSchemaV5.version
+    /// v4 → v5 补待办任务清单、v5 → v6 补提醒）。
+    public static let supportedVersion = NoteSchemaV6.version
 
     private let connection: SQLiteConnection
 
@@ -408,7 +463,7 @@ public final class NoteDatabase {
         (try? connection.scalarInt("PRAGMA foreign_keys")).flatMap { $0 } == 1
     }
 
-    /// 按需建/升级到最新 schema（当前 v4）。**一个事务里做完**：DDL 与版本号一起生效，
+    /// 按需建/升级到最新 schema（当前 v6）。**一个事务里做完**：DDL 与版本号一起生效，
     /// 不会出现「表建了一半、版本已记 2」。
     ///
     /// 逐版升级（不是「按最新版直接建」）：存量库要真的走 v1 → v2 这两步，
@@ -440,6 +495,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV5.version {
                 for statement in NoteSchemaV5.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV5.version)")
+            }
+            if current < NoteSchemaV6.version {
+                for statement in NoteSchemaV6.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV6.version)")
             }
         }
     }
@@ -875,6 +934,104 @@ public final class NoteDatabase {
 
     public func todoCount() throws -> Int {
         Int(try connection.scalarInt("SELECT count(*) FROM todo") ?? 0)
+    }
+
+    // MARK: - 提醒（schema v6 · 队列 `L-100` 落法 ④ 的存储半）
+
+    /// 写入或按 uuid 覆盖一条提醒，返回它的 rowid。
+    ///
+    /// 三条口径：
+    ///   · **归属必须真的存在**：挂到一条库里没有的笔记 / 任务上 ⇒ 抛错（`requireRowID` /
+    ///     `requireTodoRowID`）—— 不落一条谁也找不到的提醒（它会到点弹出，而界面上没有它）。
+    ///   · **归属面只在这里落一次**：`note_id` / `todo_id` 由 `ReminderOwner` 决定，
+    ///     「恰有一个非空」由 schema v6 的 `CHECK` 保证（**形状**，不是纪律）。
+    ///   · **规格逐列走**：`rule` / `anchor_date` / `minute_of_day` / `interval_count` /
+    ///     `interval_unit` / `weekdays`（归一文本） / `until_date` —— 入库前不再做第二次解释，
+    ///     认不出的取值由调度那一层按契约判非法（这一层不挡、也不改）。
+    @discardableResult
+    public func upsert(_ reminder: Reminder) throws -> Int64 {
+        let noteRowID = try reminder.owner.noteID.map { try requireRowID(of: $0) }
+        let todoRowID = try reminder.owner.todoID.map { try requireTodoRowID(of: $0) }
+        try connection.execute(
+            """
+            INSERT INTO reminder (
+                uuid, note_id, todo_id, rule, anchor_date, minute_of_day, interval_count,
+                interval_unit, weekdays, until_date, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (uuid) DO UPDATE SET
+                note_id = excluded.note_id,
+                todo_id = excluded.todo_id,
+                rule = excluded.rule,
+                anchor_date = excluded.anchor_date,
+                minute_of_day = excluded.minute_of_day,
+                interval_count = excluded.interval_count,
+                interval_unit = excluded.interval_unit,
+                weekdays = excluded.weekdays,
+                until_date = excluded.until_date,
+                updated_at = excluded.updated_at;
+            """,
+            [
+                .text(reminder.id.uuidString),
+                noteRowID.map { SQLiteValue.integer($0) } ?? .null,
+                todoRowID.map { SQLiteValue.integer($0) } ?? .null,
+                .text(reminder.spec.rule),
+                .text(reminder.spec.anchorDate),
+                .integer(Int64(reminder.spec.minuteOfDay)),
+                .integer(Int64(reminder.spec.intervalCount)),
+                .text(reminder.spec.intervalUnit),
+                .text(reminder.spec.weekdaysText),
+                .text(reminder.spec.untilDate),
+                .real(reminder.createdAt.timeIntervalSince1970),
+                .real(reminder.updatedAt.timeIntervalSince1970)
+            ]
+        )
+        // 按 uuid 反查 rowid（与笔记 / 待办那两处同一个理由：走 UPDATE 分支时
+        // `last_insert_rowid()` 是上一句话留下的值，静默指向另一条提醒且没有症状）。
+        return try requireReminderRowID(of: reminder.id)
+    }
+
+    /// 一条提醒（`nil` = 库里没有这一条）。
+    public func reminder(id: UUID) throws -> Reminder? {
+        try reminders(from: Self.reminderSelect + " WHERE r.uuid = ?", [.text(id.uuidString)]).first
+    }
+
+    /// 某个归属（一条笔记 / 一条任务）的提醒（**创建时间正序、同时间按 uuid 兜底** —— 稳定有序）。
+    ///
+    /// **认不出的归属如实回空表、不抛错**：查询不是写入 —— 问「这条任务还有没有提醒」时，
+    /// 「库里没有这条任务」与「这条任务没有提醒」对调用方是同一个答案（`[]`），
+    /// 不该让界面为了问一句话先做一次存在性判断。
+    public func reminders(of owner: ReminderOwner) throws -> [Reminder] {
+        if let noteID = owner.noteID {
+            return try reminders(
+                from: Self.reminderSelect
+                    + " WHERE r.note_id = (SELECT id FROM note WHERE uuid = ?)"
+                    + " ORDER BY r.created_at ASC, r.uuid ASC",
+                [.text(noteID.uuidString)]
+            )
+        }
+        if let todoID = owner.todoID {
+            return try reminders(
+                from: Self.reminderSelect
+                    + " WHERE r.todo_id = (SELECT id FROM todo WHERE uuid = ?)"
+                    + " ORDER BY r.created_at ASC, r.uuid ASC",
+                [.text(todoID.uuidString)]
+            )
+        }
+        return []
+    }
+
+    /// 全部提醒（**同上**：创建时间正序、同时间按 uuid 兜底）。
+    public func reminders() throws -> [Reminder] {
+        try reminders(from: Self.reminderSelect + " ORDER BY r.created_at ASC, r.uuid ASC")
+    }
+
+    public func reminderCount() throws -> Int {
+        Int(try connection.scalarInt("SELECT count(*) FROM reminder") ?? 0)
+    }
+
+    /// 删一条提醒（认不出的 id ⇒ 一行都不动 —— 与 `deleteTodo` 同形：删是幂等的，不抛错）。
+    public func deleteReminder(id: UUID) throws {
+        try connection.execute("DELETE FROM reminder WHERE uuid = ?", [.text(id.uuidString)])
     }
 
     // MARK: - 两层归属（schema v2 · 队列 L-97 第二片）
@@ -1361,6 +1518,74 @@ public final class NoteDatabase {
             )
         }
         return rowID
+    }
+
+    /// 提醒表的 rowid（同上：拿不到就是程序错误，断言式失败）。
+    private func requireReminderRowID(of id: UUID) throws -> Int64 {
+        guard let rowID = try connection.scalarInt("SELECT id FROM reminder WHERE uuid = ?", [.text(id.uuidString)]) else {
+            throw SQLiteFailure(
+                code: SQLiteResultCode.error,
+                message: "no reminder row for uuid \(id.uuidString)",
+                operation: .step,
+                sql: "SELECT id FROM reminder WHERE uuid = ?"
+            )
+        }
+        return rowID
+    }
+
+    /// 提醒的取行语句（**一处**）：两个归属列各自 LEFT JOIN 出 uuid —— 归属那一行的 uuid
+    /// 才是调用方认的东西（`note_id` / `todo_id` 是本端的 rowid，出了这一层没有意义）。
+    private static let reminderSelect = """
+        SELECT r.uuid AS uuid, r.rule AS rule, r.anchor_date AS anchor_date,
+               r.minute_of_day AS minute_of_day, r.interval_count AS interval_count,
+               r.interval_unit AS interval_unit, r.weekdays AS weekdays, r.until_date AS until_date,
+               r.created_at AS created_at, r.updated_at AS updated_at,
+               n.uuid AS note_uuid, t.uuid AS todo_uuid
+        FROM reminder r
+        LEFT JOIN note n ON n.id = r.note_id
+        LEFT JOIN todo t ON t.id = r.todo_id
+        """
+
+    /// 行 → `Reminder`（每一列都在这里被读一次；归属那一行没了的行**抛错不降级**）。
+    private func reminders(from sql: String, _ bindings: [SQLiteValue] = []) throws -> [Reminder] {
+        try connection.query(sql, bindings).map { row in
+            guard let uuidText = row.text("uuid"), let uuid = UUID(uuidString: uuidText) else {
+                throw SQLiteFailure(
+                    code: SQLiteResultCode.mismatch,
+                    message: "reminder row has no usable uuid",
+                    operation: .step
+                )
+            }
+            let owner: ReminderOwner
+            if let noteText = row.text("note_uuid"), let noteID = UUID(uuidString: noteText) {
+                owner = .note(noteID)
+            } else if let todoText = row.text("todo_uuid"), let todoID = UUID(uuidString: todoText) {
+                owner = .todo(todoID)
+            } else {
+                // 归属那一行没了（本该被 `ON DELETE CASCADE` 拦住）：**抛错不降级** ——
+                // 一条「没有主人」的提醒到点会弹，而用户在界面上找不到它。
+                throw SQLiteFailure(
+                    code: SQLiteResultCode.mismatch,
+                    message: "reminder row has no live owner",
+                    operation: .step
+                )
+            }
+            return Reminder(
+                id: uuid,
+                owner: owner,
+                spec: ReminderSpec(
+                    rule: row.text("rule") ?? "",
+                    anchorDate: row.text("anchor_date") ?? "",
+                    minuteOfDay: Int(row["minute_of_day"].intValue ?? -1),
+                    intervalCount: Int(row["interval_count"].intValue ?? 0),
+                    intervalUnit: row.text("interval_unit") ?? "",
+                    weekdays: ReminderSpec.weekdays(from: row.text("weekdays") ?? ""),
+                    untilDate: row.text("until_date") ?? ""
+                ),
+                createdAt: Date(timeIntervalSince1970: row["created_at"].doubleValue ?? 0),
+                updatedAt: Date(timeIntervalSince1970: row["updated_at"].doubleValue ?? 0)
+            )
+        }
     }
 
     private func todos(from sql: String, _ bindings: [SQLiteValue] = []) throws -> [Todo] {

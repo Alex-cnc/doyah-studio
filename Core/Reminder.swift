@@ -502,3 +502,95 @@ public enum ReminderSchedule {
         (value + divisor - 1) / divisor
     }
 }
+
+// MARK: - 落库的那一行（存储半 · 队列 `L-100` 落法 ④；第 189 轮）
+
+/// 一条提醒**挂在谁身上**（笔记或待办，二选一）。
+///
+/// 为什么这一半现在才落：契约 §2.10 写的是「一条提醒的**规则数据**」（`ReminderSpec`），
+/// 「挂在笔记上还是待办上」属**归属面** —— 对侧（小河马）已在 `DoyahNotes/Docs/proposals/0011`
+/// 提请契约所有者裁决。本侧按与对侧**同一份默认口径**落（一条提醒恰好属于一个目标；
+/// 人工测试清单第 7 条「有截止时间的任务一键挂提醒」= 建一条 `.todo` 的提醒），
+/// **裁决若不同即改** —— 改点只有 schema v6 那一条 `CHECK` 与 `NoteDatabase.upsert(_ reminder:)`。
+public enum ReminderOwner: Equatable, Sendable {
+
+    /// 挂在**笔记**上。
+    case note(UUID)
+    /// 挂在**待办任务**上。
+    case todo(UUID)
+
+    /// 归属笔记的 id（不是这一类就是 `nil`）。
+    public var noteID: UUID? {
+        if case .note(let id) = self { return id }
+        return nil
+    }
+
+    /// 归属任务的 id（不是这一类就是 `nil`）。
+    public var todoID: UUID? {
+        if case .todo(let id) = self { return id }
+        return nil
+    }
+
+    /// 归属是一条笔记吗（`false` = 一条任务）。
+    public var isNote: Bool { noteID != nil }
+}
+
+/// 库里**一条提醒**：归属 + 规则（``ReminderSpec``）+ 两个时刻。
+///
+/// 与 `ReminderSpec` 的分工：规格回答「什么时候响」（契约 §2.10 的那份纯数据，三端同义），
+/// 本结构回答「这是**谁**的提醒、什么时候建的」（本端库里的一行 —— 列名与存储形态属实现面，
+/// 契约不承诺）。**「到没到点」不落库**：那件事由 ``ReminderSchedule`` 按参照时刻**当场算**
+/// （存下来就有两个事实源，且时区一改就是错的）。
+public struct Reminder: Identifiable, Equatable, Sendable {
+
+    public var id: UUID
+    public var owner: ReminderOwner
+    public var spec: ReminderSpec
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        owner: ReminderOwner,
+        spec: ReminderSpec,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.owner = owner
+        self.spec = spec
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+/// 周内取值的**落库文本**（`1,3,5`）与回读。
+///
+/// 为什么要有这一对：`weekdays` 在契约里是**数组**（ISO 1~7），而库那一列是 `TEXT`。
+/// 归一（去重 + 只留 1~7 + 升序）在**写与读两侧是同一个函数** —— 否则「库里存的顺序」与
+/// 「界面上显示的顺序」会各有一套，跨端对拍时同一条规则会给出两种文本。
+extension ReminderSpec {
+
+    /// 周内取值 → 落库文本（升序、去重、非 1~7 的值剔除；空串 = 不按星期）。
+    public var weekdaysText: String { ReminderSpec.weekdaysText(weekdays) }
+
+    /// 落库文本 → 周内取值（认不出的片段一律剔除、**不抛错** —— 与调度那一层「脏值不抛错」同口径）。
+    public static func weekdays(from text: String) -> [Int] {
+        let values = text
+            .split(separator: ",")
+            .compactMap { Int(String($0).trimmingCharacters(in: .whitespaces)) }
+        return normalizedWeekdays(values)
+    }
+
+    /// 归一后的文本（唯一的写法，写与读都走它）。
+    public static func weekdaysText(_ values: [Int]) -> String {
+        normalizedWeekdays(values).map(String.init).joined(separator: ",")
+    }
+
+    private static func normalizedWeekdays(_ values: [Int]) -> [Int] {
+        var seen = Set<Int>()
+        return values
+            .filter { (1...7).contains($0) && seen.insert($0).inserted }
+            .sorted()
+    }
+}

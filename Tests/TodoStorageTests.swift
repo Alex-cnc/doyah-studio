@@ -115,7 +115,7 @@ final class TodoStorageTests: XCTestCase {
         try makeVersionFourDatabase(notes: [note])
 
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV5.version, "v4 库要升到 v5（补表不改既有语义）")
+        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion, "v4 库要升到最新版（补表不改既有语义）")
         let tables = try database.tableNames()
         for expected in NoteSchemaV5.tables {
             XCTAssertTrue(tables.contains(expected), "升级后缺表 \(expected)；实际：\(tables)")
