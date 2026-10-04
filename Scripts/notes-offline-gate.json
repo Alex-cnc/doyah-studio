@@ -72,6 +72,11 @@
       "role": "提醒的调度语义（规则 / 规格 / 求解 / 预演 / （日历日, 分钟）↔ 瞬间）—— 队列 `L-100` 的「与提醒联动」Core 半，契约 §2.10 §3.12；纯函数，零平台 API，无网络无库，只吃 Foundation"
     },
     {
+      "path": "Core/ReminderPresentation.swift",
+      "layer": "core",
+      "role": "提醒的界面层纯逻辑（档位 → 规则 / 权限 → 排不排 / 规则 → 一句话）—— 队列 `L-100` 落法 ④ 的界面半第一片 Core 半（第 190 轮）；纯函数，零平台 API（无系统时钟 / 时区 / 格式化器 / 通知框架），无网络无库，只吃 `Todo` / `Date` / `LKey`"
+    },
+    {
       "path": "Core/License.swift",
       "layer": "core",
       "role": "许可与装配判据（笔记模块随包的条件判定）"

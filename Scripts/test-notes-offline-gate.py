@@ -65,6 +65,8 @@ TREE_FILES = [
     "Core/TodoCalendar.swift",
     # 队列 `L-100` 的「与提醒联动」Core 半（第 188 轮）：同上，台账里有它 ⇒ 副本必须带上
     "Core/Reminder.swift",
+    # 队列 `L-100` 落法 ④ 的界面半第一片（第 190 轮，提醒的界面判定与文案）：同上，台账里有它 ⇒ 副本必须带上
+    "Core/ReminderPresentation.swift",
     "App/Views/NotesPanel.swift",
     "Tests/NoteTests.swift",
     "Tests/NoteBodyTests.swift",

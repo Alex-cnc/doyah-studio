@@ -79,7 +79,10 @@ final class LocalizationTests: XCTestCase {
         .agentProviderGroq,
         .agentProviderMistral,
         .agentProviderXAI,
-        .agentProviderGemini
+        .agentProviderGemini,
+        // 队列 `L-100` 落法 ④（提醒）：星期名之间的**分隔符**是一枚标点，中英各一个标点
+        // （顿号 / 逗号加空格），两种语言里都没有「词」可译 —— 它不是「忘了翻」，是**没有可翻的东西**。
+        .reminderListSeparator
     ]
 
     /// 英文文案里不得残留汉字。

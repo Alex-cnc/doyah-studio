@@ -295,6 +295,22 @@ public enum ReminderSchedule {
         dateOfDay(floorDiv(epochMillis + zoneOffsetMillis, msPerDay))
     }
 
+    /// ``toEpoch(moment:zoneOffsetMillis:)`` 的**另一条**反向路：毫秒时间戳 → （本地日历日, 当日分钟）。
+    ///
+    /// 为什么要与 `dateOfEpoch` 并存：界面拿到的是 `Date`（截止时刻），要把它变成契约形态的
+    /// （日期, 分钟）才挂得上提醒 —— 而**日长**与**日序原点**必须与正向那一份同一处：
+    /// 各写一份就会在「夏令时 / 跨年」那天算错一天，而两边各自的用例都会是绿的。
+    ///
+    /// 极端值（快溢出 `Int` 的毫秒数）回 ``ReminderMoment/none``，**不抛错**（与本层同口径）。
+    public static func momentOfEpoch(epochMillis: Int, zoneOffsetMillis: Int) -> ReminderMoment {
+        guard epochMillis > Int.min / 2, epochMillis < Int.max / 2 else { return .none }
+        let local = epochMillis + zoneOffsetMillis
+        return ReminderMoment(
+            date: dateOfDay(floorDiv(local, msPerDay)),
+            minute: floorMod(local, msPerDay) / 60_000
+        )
+    }
+
     // MARK: - 规则分支（每条只负责「下一次是哪一天」；合法性已在 next 里统一校验）
 
     private static func onceAt(
