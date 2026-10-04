@@ -409,6 +409,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoGroupDue
     case todoGroupTag
     case todoGroupUntagged
+    /// 队列 `L-100` **组织与检索界面半**：清单那一屏的三条切换器（排序 / 筛选 / 分组）与第二句空态话。
+    case todoSortLabel
+    case todoFilterLabel
+    case todoGroupLabel
+    case todosEmptyFiltered
     // 队列 `L-100` **界面半第一片**：待办那一屏自己的入口、空态、编辑器与行上的三个动作。
     // 名字与句子只在这里（Core 里一个汉字都没有 —— `R-45` 棘轮）。
     case notesModuleTodos
@@ -2499,6 +2504,11 @@ public enum LocalizedStrings {
         .todoGroupDue: [.simplifiedChinese: "按时间", .english: "By time"],
         .todoGroupTag: [.simplifiedChinese: "按标签", .english: "By tag"],
         .todoGroupUntagged: [.simplifiedChinese: "未分类", .english: "Untagged"],
+        // 队列 `L-100` **组织与检索界面半**（清单那一屏的三条切换器 + 第二句空态话）。
+        .todoSortLabel: [.simplifiedChinese: "排序", .english: "Sort"],
+        .todoFilterLabel: [.simplifiedChinese: "筛选", .english: "Filter"],
+        .todoGroupLabel: [.simplifiedChinese: "分组", .english: "Group"],
+        .todosEmptyFiltered: [.simplifiedChinese: "这一档没有任务", .english: "No tasks in this view"],
         // 队列 `L-100` **界面半第一片**（待办那一屏的入口 / 空态 / 编辑器 / 行上动作）：都没有数字槽。
         .notesModuleTodos: [.simplifiedChinese: "待办", .english: "Todos"],
         .todosEmpty: [.simplifiedChinese: "还没有待办", .english: "No todos yet"],

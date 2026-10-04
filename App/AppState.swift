@@ -462,6 +462,14 @@ final class AppState: ObservableObject {
     /// **已完成分区默认折叠**（`FR-NOTE-36` 原文）—— 折叠状态是界面状态，默认值由 Core 给
     /// （`TodoSectionKind.isCollapsedByDefault`），这里不写第二遍。
     @Published var todoCompletedExpanded = !TodoSectionKind.completed.isCollapsedByDefault
+    // MARK: - 待办：清单的「组织与检索」（队列 `L-100` 组织与检索界面半）
+    /// 清单按什么排（三档；默认档由 Core 给 —— `TodoSort.Order.defaultOrder`）。
+    /// 上屏的是**档位本身**，界面拿它去 `TodoQuery.board` 换一屏；本文件不自己排。
+    @Published var todoSortOrder: TodoSort.Order = .defaultOrder
+    /// 清单只留哪一档（五档；默认「全部」）。
+    @Published var todoFilter: TodoFilter = .defaultFilter
+    /// 清单怎么归堆（四档；默认「不分组」= 与界面半第一片同形）。
+    @Published var todoGroupBy: TodoGroupBy = .defaultGroupBy
     // MARK: - 待办：清单 / 日历（队列 `L-100` 界面半第二片 · 日历屏）
     /// 中栏看哪一档（清单 / 日历）—— `L-184` ⑤「`L-100` 待办沿用同一骨架（中栏在清单 / 日历间切）」。
     @Published var todoPane: TodoPane = .defaultPane
@@ -6509,10 +6517,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// 清单的两个分区。**分区 / 段序 / 段内顺序全归 Core**（`TodoPresentation.sections`）——
-    /// 视图不自己 `filter` 两遍（那正是「两处各写一套」的分家现场），本文件也只转发。
-    var todoSections: [TodoSection] { TodoPresentation.sections(todos) }
-
     /// 清单那一族共用的**参照窗口**（今天零点 / 明天零点 / 下周一零点）。
     ///
     /// 分工：**App 层可以读系统时钟**（它就是端侧），**边界换算仍只有 `TodoWindow.of` 一处**
@@ -6616,6 +6620,35 @@ final class AppState: ObservableObject {
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }
+    }
+
+    /// 清单那一屏（**唯一查询入口** = `TodoQuery.board`）：筛 → 排 → 分区 → 归堆一次算完。
+    ///
+    /// 为什么不让视图各调各的：界面若自己 `filter` 一遍再 `sorted` 一遍，就是第二套「哪些行进来、
+    /// 按什么排」（两套各自的用例都会是绿的 —— 对侧 `check-ui-parity.py` 的 V 条就是为这一族立的）。
+    /// 参照窗口仍是 `todoWindow`（端侧唯一的时钟读数处，Core 不读表）。
+    var todoBoard: TodoBoard {
+        TodoQuery.board(todos, filter: todoFilter, window: todoWindow, groupBy: todoGroupBy, order: todoSortOrder)
+    }
+
+    /// 清单空态那一句该说什么（判定在 Core：`TodoQuery.emptyKind`）。
+    var todoEmptyKind: TodoEmptyKind {
+        TodoQuery.emptyKind(hasAnyTask: !todos.isEmpty, filter: todoFilter)
+    }
+
+    /// 换排序档（三档）。切档**不重读库、不改任何一条数据** —— 它只换一屏的画法。
+    func setTodoSortOrder(_ order: TodoSort.Order) {
+        todoSortOrder = order
+    }
+
+    /// 换筛选档（五档）。
+    func setTodoFilter(_ filter: TodoFilter) {
+        todoFilter = filter
+    }
+
+    /// 换分组档（四档）。
+    func setTodoGroupBy(_ groupBy: TodoGroupBy) {
+        todoGroupBy = groupBy
     }
 
     // MARK: - 待办：日历那一屏（队列 `L-100` 界面半第二片）

@@ -387,4 +387,94 @@ final class TodoQueryTests: XCTestCase {
         XCTAssertEqual(TodoGroupKey.status(.completed).headerKey, .todoSectionCompleted)
         XCTAssertNil(TodoGroupKey.tag("x").headerKey, "标签组的组头是标签本身（用户数据）")
     }
+
+    func testQueryBarLabelsExistInBothLanguages() {
+        // 组织与检索界面半新增的四个键（三条切换器的轴名 + 第二句空态话）。
+        for key in [LKey.todoSortLabel, .todoFilterLabel, .todoGroupLabel, .todosEmptyFiltered] {
+            let chinese = LocalizedStrings.table[key]?[.simplifiedChinese]
+            let english = LocalizedStrings.table[key]?[.english]
+            XCTAssertNotNil(chinese, "\(key) 缺中文模板")
+            XCTAssertNotNil(english, "\(key) 缺英文模板")
+            XCTAssertNotEqual(chinese, english, "\(key) 中英同一句（漏了一条）")
+        }
+    }
+
+    // MARK: - 组织与检索的界面半（第 192 轮）：组内两区 / 空态两句 / 界面只消费 Core
+
+    func testGroupSectionsPartitionOpenThenCompleted() {
+        let a = todo("A", due: at("2026-10-07"), created: at("2026-10-01"))
+        let b = todo("B", due: at("2026-10-08"), created: at("2026-10-02"))
+        let c = todo("C", due: at("2026-10-09"), done: true, created: at("2026-10-03"))
+        let group = TodoGroup(key: .all, open: [a, b], done: [c])
+        let sections = group.sections
+        XCTAssertEqual(sections.map(\.kind), [.open, .completed])
+        XCTAssertEqual(sections[0].todos.map(\.title), ["A", "B"], "组内未完成那一区不许重排")
+        XCTAssertEqual(sections[1].todos.map(\.title), ["C"])
+        XCTAssertEqual(group.total, 3)
+    }
+
+    func testBoardSectionsOnlyWhenUngrouped() {
+        let t = todo("A", due: at("2026-10-07"))
+        let flat = TodoQuery.board([t], window: window, groupBy: .none)
+        XCTAssertEqual(flat.sections.map(\.kind), [.open, .completed])
+        XCTAssertEqual(flat.sections[0].todos.map(\.title), ["A"])
+        // 分组档下「两区」不再由这一屏画（组头已经承担了分组口径 —— 否则会出现两层重复的头）。
+        for groupBy in [TodoGroupBy.status, .due, .tag] {
+            XCTAssertTrue(
+                TodoQuery.board([t], window: window, groupBy: groupBy).sections.isEmpty,
+                "\(groupBy) 档不该再出两区"
+            )
+        }
+    }
+
+    func testEmptyKindDistinguishesFilteredOutFromReallyEmpty() {
+        // 库里一条都没有 ⇒「还没有待办」（哪怕档位不是「全部」：切回全部也还是空）。
+        XCTAssertEqual(TodoQuery.emptyKind(hasAnyTask: false, filter: .today), .none)
+        XCTAssertEqual(TodoQuery.emptyKind(hasAnyTask: false, filter: .all), .none)
+        // 有任务、当前这一档筛不出来 ⇒ 第二句（不然用户会以为任务丢了）。
+        XCTAssertEqual(TodoQuery.emptyKind(hasAnyTask: true, filter: .today), .filteredOut(.today))
+        XCTAssertEqual(TodoQuery.emptyKind(hasAnyTask: true, filter: .noDue), .filteredOut(.noDue))
+        // 「全部」档筛不掉任何一行 ⇒ 这一支到不了（钉住它，免得将来被当成一种空态画出来）。
+        XCTAssertEqual(TodoQuery.emptyKind(hasAnyTask: true, filter: .all), .none)
+        XCTAssertNotEqual(TodoEmptyKind.none.key, TodoEmptyKind.filteredOut(.today).key)
+    }
+
+    func testGroupHeaderTextComesFromCore() {
+        // 标签组给标签本身（用户数据）；其余去语言表（Core 只给键，句子由界面把 L(...) 传进来）。
+        XCTAssertEqual(TodoGroupKey.tag("急着办").headerText { _ in "译文" }, "急着办")
+        XCTAssertEqual(TodoGroupKey.untagged.headerText { _ in "未分类（译）" }, "未分类（译）")
+        XCTAssertEqual(TodoGroupKey.band(.today).headerText { _ in "档位" }, "档位")
+        XCTAssertEqual(TodoGroupKey.all.headerText { _ in "全部" }, "全部")
+        XCTAssertEqual(TodoGroupKey.status(.completed).headerText { _ in "已完成" }, "已完成")
+    }
+
+    func testListScreenRendersBoardAndNothingElse() throws {
+        // 清单那一屏只消费 `AppState.todoBoard`（唯一查询入口）：不再自己分区、也不自己判空态。
+        let text = Self.strippingComments(try source("App/Views/NotesPanel.swift"))
+        XCTAssertTrue(text.contains("appState.todoBoard"), "清单那一屏没有走 board")
+        XCTAssertTrue(text.contains("appState.todoEmptyKind"), "空态那句话没有走 Core 的判定")
+        XCTAssertFalse(text.contains("TodoPresentation.sections("), "清单那一屏自己分区（第二套分区口径）")
+        XCTAssertFalse(text.contains("appState.todos.isEmpty"), "空态仍按「库里有没有任务」判（筛空会被说成没有待办）")
+    }
+
+    func testQueryBarTakesCaseListsAndRowRenderingFromCore() throws {
+        // 三条切换器的档位清单、组头那句话、行与段头的渲染，都只许有一处出处。
+        let text = Self.strippingComments(try source("App/Views/TodoCalendarView.swift"))
+        for token in [
+            "TodoFilter.allCases", "TodoSort.Order.allCases", "TodoGroupBy.allCases",
+            "headerText", "TodoRowView(todo:", "TodoRegionHeader(section:",
+        ] {
+            XCTAssertTrue(text.contains(token), "界面缺 \(token)（第二套口径的起点）")
+        }
+    }
+
+    /// 去掉注释（形状判据不该被注释里的词判红，也不该被它救绿）。
+    private static func strippingComments(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> String in
+                guard let range = line.range(of: "//") else { return String(line) }
+                return String(line[line.startIndex..<range.lowerBound])
+            }
+            .joined(separator: "\n")
+    }
 }

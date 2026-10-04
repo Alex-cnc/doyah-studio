@@ -708,41 +708,52 @@ struct TodoNavigationView: View {
     }
 }
 
-/// **待办清单**（队列 `L-100` 界面半第一片 · `FR-NOTE-36`）：中栏。
+/// **待办清单**（队列 `L-100` 界面半第一片 · `FR-NOTE-36`；组织与检索界面半补三条切换器）：中栏。
 ///
-/// 三条口径：
-///  ① **分区 / 段序 / 段内顺序全归 Core**（`TodoPresentation.sections`：未完成在前、已完成在后，
-///     **两段恒在** —— 空态与段头计数靠 `count` 一处判）；视图不自己 `filter` 两遍；
-///  ② **已完成默认折叠**（`FR-NOTE-36` 原文）：默认值由 Core 给（`isCollapsedByDefault`），
-///     这一点是**界面状态**（住 `AppState`），Core 不持有它；
-///  ③ **截止带归 Core**（`TodoQuery.band`：**早于今天零点 = 已过期**，契约 §3.13 第四条；
-///     行上的**逾期标识**另走 `TodoDue.isOverdue`（未完成 且 早于今天零点））—— 视图只把「哪一档」
-///     翻成一枚颜色 + 语言表里那句话，自己不比 `Date`（否则「今晨那一点算不算逾期」会有两个答案）。
+/// 四条口径：
+///  ① **一屏全由 Core 算**（`appState.todoBoard` = `TodoQuery.board`：筛 → 排 → 分区 → 归堆）——
+///     视图不自己 `filter` / `sorted`，也不自己决定「空态说哪一句」（`appState.todoEmptyKind`）；
+///  ② **排序 / 筛选 / 分组是界面状态**（住 `AppState`，`TodoQueryBar` 是唯一入口）：切档不写库、
+///     不重读库 —— 清单与日历看的是同一份任务（`FR-NOTE-39`）；
+///  ③ **已完成默认折叠**（`FR-NOTE-36` 原文）：默认值由 Core 给（`isCollapsedByDefault`），
+///     折叠状态是界面状态（住 `AppState`）；
+///  ④ **行的渲染只有一处**（`TodoSectionListView` / `TodoGroupListView` 都用 `TodoRowView` 与
+///     `TodoRegionHeader`）—— 日历那一屏的「当天任务」用的也是同一个它。
 struct TodoListView: View {
 
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s) {
+        let board = appState.todoBoard
+        return VStack(alignment: .leading, spacing: Spacing.s) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                 Text(L(.notesModuleTodos))
                     .font(Theme.font(.title))
-                Text("\(appState.todos.count)")
+                // 条数 = **这一屏上有几条**（当前档位的条数，不是库里总数 —— 两者在筛选中会不同）。
+                Text("\(board.total)")
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
                 Spacer(minLength: Spacing.xs)
             }
             .padding(.horizontal, Spacing.s)
-            if appState.todos.isEmpty {
-                Text(L(.todosEmpty))
+            // 组织与检索：筛选 / 排序 / 分组（三条切换器；档位空间全来自 Core）
+            TodoQueryBar()
+            Divider()
+            if board.total == 0 {
+                // 空态两句不同的话：「一条都没有」与「这一档没有」—— 判定在 Core（`todoEmptyKind`）。
+                Text(L(appState.todoEmptyKind.key))
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
                     .padding(Spacing.s)
                 Spacer()
-            } else {
-                // 分段 + 段头 + 行 → `TodoSectionListView`（日历那一屏的「当天任务」用的是**同一个**它，
+            } else if board.groupBy == .none {
+                // 不分组那一档 = 界面半第一片的同形（两段、段头带折叠开关）。
+                // 段头 + 行 → `TodoSectionListView`（日历那一屏的「当天任务」用的是**同一个**它，
                 // 免得同一行有两个渲染版本：一处改了、另一处忘改）。
-                TodoSectionListView(sections: appState.todoSections)
+                TodoSectionListView(sections: board.sections)
+            } else {
+                // 分组那一档：一组一个 `Section`（组内两区的段头变成行 —— 见 `TodoGroupListView`）。
+                TodoGroupListView(board: board)
             }
         }
         .padding(.vertical, Spacing.s)
@@ -751,7 +762,7 @@ struct TodoListView: View {
         .background(Theme.surface(.sidebar))
     }
 
-    // 段头与行 → `TodoSectionListView` / `TodoRowView`（本文件下方那一段的**唯一**渲染处）。
+    // 段头与行 → `TodoSectionListView` / `TodoRegionHeader` / `TodoRowView`（本文件下方那一段的**唯一**渲染处）。
 }
 
 /// **待办详情 / 编辑器**（队列 `L-100` 界面半第一片）：右栏。

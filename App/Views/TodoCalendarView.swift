@@ -274,10 +274,28 @@ struct TodoSectionListView: View {
         .accessibilityIdentifier("todos-list")
     }
 
-    /// 段头：段名 + 条数（空段也照画 —— `FR-NOTE-36` 的分区是**结构**，不是「有没有内容」）；
-    /// 已完成那一段的名就是一个**折叠开关**（默认折叠的默认值来自 Core）。
+    /// 段头（→ `TodoRegionHeader`：与分组那一屏**共用同一份渲染** —— 各画一份就会出现
+    /// 「折叠箭头只在一个屏上」）。
     @ViewBuilder
     private func header(_ section: TodoSection) -> some View {
+        TodoRegionHeader(section: section)
+    }
+}
+
+/// **分区段头**（一处渲染，两处用）：段名 + 条数（空段也照画 —— `FR-NOTE-36` 的分区是**结构**，
+/// 不是「有没有内容」）；已完成那一段的名就是一个**折叠开关**（默认折叠的默认值来自 Core）。
+///
+/// 两处用 = 清单那一屏（`Section` 的 header）与**分组那一屏**（组内的**行**）：`Section` 不能嵌套，
+/// 所以组内两区的段头只能当一行画。`identifierSuffix` 让两处的可访问性标识不撞车
+/// （分组屏上会同时存在好几个段头）。
+struct TodoRegionHeader: View {
+
+    let section: TodoSection
+    var identifierSuffix: String = ""
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
         HStack(spacing: Spacing.xs) {
             if section.kind == .completed {
                 Image(systemName: appState.todoCompletedExpanded ? "chevron.down" : "chevron.right")
@@ -294,7 +312,11 @@ struct TodoSectionListView: View {
             guard section.kind == .completed else { return }
             appState.todoCompletedExpanded.toggle()
         }
-        .accessibilityIdentifier(section.kind == .completed ? "todos-section-completed" : "todos-section-open")
+        .accessibilityIdentifier(
+            section.kind == .completed
+                ? "todos-section-completed\(identifierSuffix)"
+                : "todos-section-open\(identifierSuffix)"
+        )
     }
 }
 
@@ -438,4 +460,127 @@ private func calendarDayIdentifier(_ date: Date) -> String {
     let calendar = Calendar.current
     let parts = calendar.dateComponents([.year, .month, .day], from: date)
     return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+}
+
+// MARK: - 清单的「组织与检索」（队列 `L-100` 组织与检索界面半）
+
+/// **清单那一屏的工具条**：三条切换器 —— 筛选（五档一排）/ 排序（三档）/ 分组（四档）。
+///
+/// 三条口径：
+///  ① **档位空间全部来自 Core**（`TodoFilter.allCases` / `TodoSort.Order.allCases` /
+///     `TodoGroupBy.allCases`）—— 界面里没有第二份「有哪几档」的清单（新增档位只改 Core 与语言表）；
+///  ② **切档不碰数据**：三处都只改 `AppState` 上的**界面状态**，不重读库、不写库、不改任何一条任务
+///     （`FR-NOTE-39` 的唯一事实源：清单与日历看的是同一份）—— 也正因如此，「切档」这件事
+///     在盘上没有第二个可写之处；
+///  ③ **句子只在语言表里**（`L(档位.key)`）：Core 出「哪一档」，界面出「那句话」。
+struct TodoQueryBar: View {
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            // 筛选决定「有哪些行」，最常切 ⇒ 常驻一排。
+            Picker(L(.todoFilterLabel), selection: Binding(
+                get: { appState.todoFilter },
+                set: { appState.setTodoFilter($0) }
+            )) {
+                ForEach(TodoFilter.allCases, id: \.self) { filter in
+                    Text(L(filter.key)).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .help(L(.todoFilterLabel))
+            .accessibilityIdentifier("todo-filter-switch")
+            // 排序 / 分组决定「这一屏怎么画」，各给一个下拉（标签可见 —— 少了标签就只剩
+            // 「截止时间」这种答不出「这是哪条轴」的当前值，那一课写在 `L-166`）。
+            HStack(spacing: Spacing.xs) {
+                Picker(L(.todoSortLabel), selection: Binding(
+                    get: { appState.todoSortOrder },
+                    set: { appState.setTodoSortOrder($0) }
+                )) {
+                    ForEach(TodoSort.Order.allCases, id: \.self) { order in
+                        Text(L(order.key)).tag(order)
+                    }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+                .accessibilityIdentifier("todo-sort-switch")
+                Picker(L(.todoGroupLabel), selection: Binding(
+                    get: { appState.todoGroupBy },
+                    set: { appState.setTodoGroupBy($0) }
+                )) {
+                    ForEach(TodoGroupBy.allCases, id: \.self) { groupBy in
+                        Text(L(groupBy.key)).tag(groupBy)
+                    }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+                .accessibilityIdentifier("todo-group-switch")
+                Spacer(minLength: Spacing.xs)
+            }
+        }
+        .padding(.horizontal, Spacing.s)
+        .accessibilityIdentifier("todo-query-bar")
+    }
+}
+
+/// **归好堆的清单**（分组档 ≠ 不分组时那一屏）：一组一个 `Section`。
+///
+/// 三条口径：
+///  ① **组的名字与条数来自 Core**（`TodoGroupKey.headerText` / `TodoGroup.total`）——
+///     标签组显示标签本身（那是**用户数据**），其余去语言表；界面**不 `switch` 组键**
+///     （新增一类组键时，改一处的人不会想到另一处）；
+///  ② **组内仍是「未完成 / 已完成」两区**（`TodoGroup.sections` → 仍只有 `TodoPresentation.sections`
+///     一处分区）：`Section` 不能嵌套，段头在这一屏是**组内的一行**（`TodoRegionHeader`，折叠开关仍在），
+///     空的那一区连段头都不画（组头已经说了这个组有几条）；
+///  ③ **界面不筛不排**：进来的是 `TodoQuery.board` 算好的一屏，本视图照着画
+///     （自己 `filter` 一遍就是第二套口径）。
+struct TodoGroupListView: View {
+
+    let board: TodoBoard
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        List {
+            ForEach(board.groups, id: \.key) { group in
+                Section {
+                    rows(of: group)
+                } header: {
+                    header(group)
+                }
+            }
+        }
+        .accessibilityIdentifier("todos-group-list")
+    }
+
+    /// 组头：组的名字 + 组内条数。
+    private func header(_ group: TodoGroup) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Text(group.key.headerText { L($0) })
+                .font(Theme.font(.caption))
+            Text("\(group.total)")
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+        }
+        .accessibilityIdentifier("todos-group-header")
+    }
+
+    /// 组内：两区（未完成 / 已完成）的段头 + 行。
+    @ViewBuilder
+    private func rows(of group: TodoGroup) -> some View {
+        ForEach(group.sections, id: \.kind) { section in
+            if section.count > 0 {
+                TodoRegionHeader(section: section, identifierSuffix: "-group")
+                    .listRowBackground(Color.clear)
+            }
+            // 已完成折叠着时不画行 —— 判定与清单那一屏同源（那一枚总开关住 `AppState`）。
+            if section.kind != .completed || appState.todoCompletedExpanded {
+                ForEach(section.todos) { todo in
+                    TodoRowView(todo: todo)
+                }
+            }
+        }
+    }
 }

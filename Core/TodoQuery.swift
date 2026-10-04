@@ -220,7 +220,8 @@ public enum TodoGroupBy: String, CaseIterable, Sendable {
 /// 为什么不直接用字符串键（对侧用的是带前缀的 `String`）：这里用枚举把「标签叫 `today` 时会与
 /// 时间带撞车」这件事在**类型上**去掉 —— 标签组是 `.tag("today")`，与 `.band(.today)` 是两件事，
 /// 不可能撞。
-public enum TodoGroupKey: Equatable, Sendable {
+/// `Hashable` 是给界面用的（`ForEach(..., id: \.key)`）—— 组键本来就是身份，不是内容。
+public enum TodoGroupKey: Hashable, Sendable {
 
     /// 不分组时唯一那一组。
     case all
@@ -233,7 +234,7 @@ public enum TodoGroupKey: Equatable, Sendable {
     /// 按标签分组：没有标签的行。
     case untagged
 
-    /// 组头那句话的键；标签组与「未分类」在语言表之外（`nil` = 用组键里的标签本身）。
+    /// 组头那句话的键；标签组在语言表之外（`nil` = 用组键里的标签本身）。
     public var headerKey: LKey? {
         switch self {
         case .all: return .todoAll
@@ -241,6 +242,18 @@ public enum TodoGroupKey: Equatable, Sendable {
         case .band(let band): return band.key
         case .tag: return nil
         case .untagged: return .todoGroupUntagged
+        }
+    }
+
+    /// 组头**那句话**：能翻的去语言表（`text` 由界面把 `L(...)` 传进来 —— 与 `TodoPresentation`
+    /// 同一条纪律：Core 里一个汉字都没有），标签组给标签本身。
+    ///
+    /// 为什么由 Core 决定「哪一类去语言表、哪一类给原文」：让界面自己 `switch` 一遍组键，
+    /// 就出现了第二份「什么键长什么样」的口径（新增一类组键时，改一处的人不会想到另一处）。
+    public func headerText(_ text: (LKey) -> String) -> String {
+        switch self {
+        case .tag(let tag): return tag
+        default: return headerKey.map(text) ?? ""
         }
     }
 }
@@ -263,6 +276,14 @@ public struct TodoGroup: Equatable, Sendable {
 
     /// 组内条数（组头右侧的计数）。
     public var total: Int { open.count + done.count }
+
+    /// 组内两区（未完成 / 已完成）—— **分区仍只有 `TodoPresentation.sections` 一处**：
+    /// 这里只是把已经分好、已经排好的两批装回 `TodoSection`（不重排，见该函数的第 ③ 条口径）。
+    ///
+    /// 为什么要有它：分组那一屏不能把 `Section` 套在 `Section` 里，界面得把「组」画成外层、
+    /// 把「未完成 / 已完成」画成组内的行 —— 若界面自己 `filter` 两遍来凑这两区，
+    /// 就是第二条分区口径（对侧由 `check-ui-parity.py` 判红的那一族）。
+    public var sections: [TodoSection] { TodoPresentation.sections(open + done) }
 }
 
 /// 清单的一屏视图：当前筛选档 + 分组档 + 归好堆的组（空组已被丢掉）。
@@ -280,6 +301,35 @@ public struct TodoBoard: Equatable, Sendable {
 
     /// 屏上总条数（空态判定用 —— 与界面半第一片的 `count` 同一条用意：只有一处判空）。
     public var total: Int { groups.reduce(0) { $0 + $1.total } }
+
+    /// **不分组**那一档的两区（分组档回空表 —— 组头已经承担了分组口径，见 `TodoGroupListView`）。
+    ///
+    /// 为什么让 Core 出这一句：界面若自己写 `groups.first?.sections ?? []`，
+    /// 「哪一档才有两区」这条口径就住进了视图（分组档下它会静默画出一组两段，与组头重复）。
+    public var sections: [TodoSection] {
+        groupBy == .none ? (groups.first?.sections ?? []) : []
+    }
+}
+
+/// 清单**空态**的两句话（队列 `L-100` 的组织与检索界面半）：`board.total == 0` 时该说哪一句。
+///
+/// 为什么要分两句：界面半第一片只有一句「还没有待办」（那时清单没有任何档位，空就是真的空）；
+/// 有了筛选档之后，「库里一条都没有」与「有任务、但当前这一档把它们全筛掉了」是两种处境 ——
+/// 都画同一句话，用户会以为自己的任务丢了（他会去找，找不到，然后来报一个不存在的 bug）。
+public enum TodoEmptyKind: Equatable, Sendable {
+
+    /// 一条任务都没有。
+    case none
+    /// 有任务，但当前这一档筛不出（把档位带出来，界面可以只说一句、也可以据此提示怎么回来）。
+    case filteredOut(TodoFilter)
+
+    /// 这一句在语言表里的键。
+    public var key: LKey {
+        switch self {
+        case .none: return .todosEmpty
+        case .filteredOut: return .todosEmptyFiltered
+        }
+    }
 }
 
 /// 清单的**唯一查询入口**：筛选 → 分区 → 分组。
@@ -296,6 +346,14 @@ public enum TodoQuery {
         if dueAt < window.tomorrowStart { return .today }
         if dueAt < window.weekEnd { return .thisWeek }
         return .later
+    }
+
+    /// 清单空态该说哪一句（**唯一判定处**）：只吃两样 —— 库里有没有任务、当前是哪一档。
+    ///
+    /// 界面只在 `board.total == 0` 时问它；此时 `hasAnyTask == true` 且档位不是「全部」
+    /// 就是「这一档筛掉了」（「全部」档下筛不掉任何一行，所以那一支到不了）。
+    public static func emptyKind(hasAnyTask: Bool, filter: TodoFilter) -> TodoEmptyKind {
+        hasAnyTask && filter != .defaultFilter ? .filteredOut(filter) : .none
     }
 
     /// 清单视图（**唯一入口**）：筛 → 排 → 分区 → 归堆。

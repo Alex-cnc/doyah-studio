@@ -93,14 +93,14 @@
     {
       "key": "core-tests",
       "label": "Core 单测项数（verify-core.sh 实测）",
-      "value": 2760,
+      "value": 2767,
       "unit": "项",
       "measure": {
         "kind": "count-file",
         "file": ".build/core-test-count.txt",
         "regex": "(\\d+)",
         "expect": [
-          2760
+          2767
         ],
         "writtenBy": "Scripts/verify-core.sh（同一次运行写出；verify-all.sh 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，判据如实报『跳过』而不是拿旧值当现状）"
       },
