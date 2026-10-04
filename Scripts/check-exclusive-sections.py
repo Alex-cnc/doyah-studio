@@ -11,7 +11,7 @@
   **成员必须都是平台名**。
 - `[开放]` = 台账类节（**节**，不是侧）；**无标记 = 契约层**。
 - **标记只表达平台，不表达人** —— 「谁负责哪个平台」写在文档的职责表里：Studio Windows 端从温迪
-  小河马交接给黄鳍大肥鱼这类人事变动，**不需要改任何标记**。
+  小河马交接给黑鳍大鲨鱼这类人事变动，**不需要改任何标记**。
 - **退役词 `apple` / `nonapple`**：旧归一（`apple|macos|ios → apple`、`nonapple|windows|android|harmony
   → nonapple`）**已删除**，一律**判红并点名行号** —— 这是迁移护栏，半改状态不会静默放行。
 
@@ -146,7 +146,7 @@ ACTORS = {
     "bluewhale": (),                      # 契约层（三书）· 蓝色鲸鱼娘
     "bighippo": ("macos", "ios"),         # 平台实现 · 麦克大河马（macOS / iOS）
     "tinyhippo": ("android", "harmony"),  # 平台实现 · 温迪小河马（安卓 / 鸿蒙）
-    "fatfish": ("windows",),              # 平台实现 · 黄鳍大肥鱼（Windows）
+    "fatfish": ("windows",),              # 平台实现 · 黑鳍大鲨鱼（Windows）
 }
 DEFAULT_CONTRACT_OWNER = "bluewhale"
 
