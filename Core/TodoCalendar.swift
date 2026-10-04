@@ -12,8 +12,10 @@ public enum TodoCalendarView: String, CaseIterable, Sendable {
     /// 周视图。
     case week
 
-    /// 默认档 = 月视图。
-    public static var defaultView: TodoCalendarView { .month }
+    /// 打开日历时的默认档 = 月视图（**不叫 `defaultView`**：那个名字被「工作区用哪种视图打开」
+    /// 那条登记占着，重名会让「默认视图只有一个消费者」的判据把这一处也当成违规 —— 名字撞车
+    /// 不是形状问题，但门禁只认名字，改名字比改门禁便宜）。
+    public static var initial: TodoCalendarView { .month }
 
     /// 归一：认不出的档位「当没给」（大小写与首尾空白不算差异）。
     public init(raw: String) {
@@ -26,6 +28,36 @@ public enum TodoCalendarView: String, CaseIterable, Sendable {
         switch self {
         case .month: return .todoCalendarMonth
         case .week: return .todoCalendarWeek
+        }
+    }
+}
+
+/// 待办那一屏的**中栏**看哪一档（队列 `L-100` 界面半第二片；`L-184` ⑤「中栏在清单 / 日历间切」）。
+///
+/// 与 `TodoCalendarView`（月 / 周）**是两件事**，别混：这一档决定中栏画清单还是画日历，
+/// 那一档只决定日历画月还是画周。两处各写一个「当前看什么」的字符串，就会出现
+/// 「切回清单之后日历还记着上次看的月份」这类没人认领的状态。
+public enum TodoPane: String, CaseIterable, Sendable {
+
+    /// 清单（`FR-NOTE-36` 的那个列表）。
+    case list
+    /// 日历（`FR-NOTE-38` 的可视化）。
+    case calendar
+
+    /// 默认档 = 清单（打开就能看到「有什么要做」，日历是可视化那一半）。
+    public static var defaultPane: TodoPane { .list }
+
+    /// 归一：认不出的档位「当没给」（大小写与首尾空白不算差异）。
+    public init(raw: String) {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self = TodoPane(rawValue: value) ?? .list
+    }
+
+    /// 这一档在语言表里的名字（切换器的唯一出处）。
+    public var key: LKey {
+        switch self {
+        case .list: return .todoPaneList
+        case .calendar: return .todoPaneCalendar
         }
     }
 }
@@ -224,6 +256,30 @@ public enum TodoCalendar {
             }.count
             return TodoDayTasks(date: cell.date, open: open, done: done, overdue: overdue)
         }
+    }
+
+    // MARK: - 表头（列序只有一处出处）
+
+    /// 表头七列的语言键：**从周一起、按 ISO 顺序排满一周**（`FR-NOTE-38` 的月 / 周视图表头）。
+    ///
+    /// 为什么必须与格子同源：表头与格子各自排一遍，就会出现「表头写着周一、第一列其实是周日」
+    /// —— 这类错位只在界面上看得见、单测抓不到。判据把三件事钉在一起：本数组长度 = `columns`、
+    /// `weekdayOrder` 的第一项 = `firstWeekdayISO`、以及格子的星期序列正好按 `weekdayOrder` 轮回。
+    public static var weekdayHeaderKeys: [LKey] {
+        [
+            .todoWeekdayMonday,
+            .todoWeekdayTuesday,
+            .todoWeekdayWednesday,
+            .todoWeekdayThursday,
+            .todoWeekdayFriday,
+            .todoWeekdaySaturday,
+            .todoWeekdaySunday
+        ]
+    }
+
+    /// 表头七列的 ISO 编号（与 `weekdayHeaderKeys` 一一对应）：`firstWeekdayISO` 起、连排 `columns` 个。
+    public static var weekdayOrder: [Int] {
+        Array(firstWeekdayISO...(firstWeekdayISO + columns - 1))
     }
 
     // MARK: - 换算（各一处出处）

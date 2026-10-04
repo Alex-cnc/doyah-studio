@@ -413,6 +413,22 @@ public enum LKey: String, CaseIterable, Sendable {
     // 取值空间与默认档在 `Core/TodoCalendar.swift`，句子只在这里）。
     case todoCalendarMonth
     case todoCalendarWeek
+    // 队列 `L-100` **界面半第二片**（日历那一屏）：中栏两档 + 日历的翻页 / 今天 / 表头 / 空态 + 改期。
+    case todoPaneList
+    case todoPaneCalendar
+    case todoCalendarToday
+    case todoCalendarPrevious
+    case todoCalendarNext
+    case todoCalendarNoDay
+    case todoCalendarDayCount
+    case todoReschedule
+    case todoWeekdayMonday
+    case todoWeekdayTuesday
+    case todoWeekdayWednesday
+    case todoWeekdayThursday
+    case todoWeekdayFriday
+    case todoWeekdaySaturday
+    case todoWeekdaySunday
     // 队列 `L-184` **第二片**：左栏的「最近」/「标签」两行，与中栏那根排序条。
     case notesRecent
     case notesTagsSection
@@ -2438,6 +2454,22 @@ public enum LocalizedStrings {
         // 队列 `L-100` **Core 半第二片**（日历）：两档视图的名字（切换器读 `TodoCalendarView.key`）。
         .todoCalendarMonth: [.simplifiedChinese: "月", .english: "Month"],
         .todoCalendarWeek: [.simplifiedChinese: "周", .english: "Week"],
+        // 队列 `L-100` **界面半第二片**（日历那一屏）。
+        .todoPaneList: [.simplifiedChinese: "清单", .english: "List"],
+        .todoPaneCalendar: [.simplifiedChinese: "日历", .english: "Calendar"],
+        .todoCalendarToday: [.simplifiedChinese: "今天", .english: "Today"],
+        .todoCalendarPrevious: [.simplifiedChinese: "往前翻", .english: "Previous"],
+        .todoCalendarNext: [.simplifiedChinese: "往后翻", .english: "Next"],
+        .todoCalendarNoDay: [.simplifiedChinese: "这一天没有任务", .english: "Nothing on this day"],
+        .todoCalendarDayCount: [.simplifiedChinese: "这一天 %@ 条", .english: "%@ on this day"],
+        .todoReschedule: [.simplifiedChinese: "改期", .english: "Reschedule"],
+        .todoWeekdayMonday: [.simplifiedChinese: "周一", .english: "Mon"],
+        .todoWeekdayTuesday: [.simplifiedChinese: "周二", .english: "Tue"],
+        .todoWeekdayWednesday: [.simplifiedChinese: "周三", .english: "Wed"],
+        .todoWeekdayThursday: [.simplifiedChinese: "周四", .english: "Thu"],
+        .todoWeekdayFriday: [.simplifiedChinese: "周五", .english: "Fri"],
+        .todoWeekdaySaturday: [.simplifiedChinese: "周六", .english: "Sat"],
+        .todoWeekdaySunday: [.simplifiedChinese: "周日", .english: "Sun"],
         // 队列 `L-184` 第二片（左栏「最近」/「标签」+ 中栏排序条）。这一组**都没有数字槽**。
         .notesRecent: [.simplifiedChinese: "最近", .english: "Recent"],
         .notesTagsSection: [.simplifiedChinese: "标签", .english: "Tags"],

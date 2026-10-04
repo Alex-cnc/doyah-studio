@@ -333,4 +333,61 @@ final class TodoCalendarTests: XCTestCase {
         XCTAssertFalse(text.contains("CREATE TABLE calendar"), "不许为日历另存一份任务")
         XCTAssertFalse(text.contains("CREATE TABLE todo_calendar"), "不许为日历另存一份任务")
     }
+
+    // MARK: - 表头与格子的列序同源（界面半第二片）
+
+    /// 表头七列：条数 = 格子的列数（各写一个 7 就是错位的起点）、列序从 `firstWeekdayISO` 起、键不重复。
+    func testWeekdayHeaderMatchesGridColumns() {
+        let keys = TodoCalendar.weekdayHeaderKeys
+        let order = TodoCalendar.weekdayOrder
+
+        XCTAssertEqual(keys.count, TodoCalendar.columns, "表头列数必须等于格子列数（同一个 `columns`）")
+        XCTAssertEqual(order.count, TodoCalendar.columns)
+        XCTAssertEqual(order.first, TodoCalendar.firstWeekdayISO, "第一列 = 一周的第一天（ISO 周一）")
+        XCTAssertEqual(Set(keys).count, keys.count, "七列各是各的名字（重复 = 有两列同名）")
+    }
+
+    /// **表头与格子的列序真的对得上**：格子的星期序列按 `weekdayOrder` 轮回。
+    ///
+    /// 这一条抓的是「表头写着周一、第一列其实是周日」那类错位 —— 两处各自排一遍时，
+    /// 界面看上去只是「日期差一天」，单跑任何一侧都自洽。
+    func testGridWeekdayCyclesInHeaderOrder() {
+        let order = TodoCalendar.weekdayOrder
+        for cells in [monthCells(2026, 10), TodoCalendar.weekCells(anchor: at(2026, 10, 4), calendar: calendar)] {
+            XCTAssertFalse(cells.isEmpty)
+            for (index, cell) in cells.enumerated() {
+                XCTAssertEqual(cell.weekday, order[index % order.count],
+                               "第 \(index) 格的星期与表头第 \(index % order.count) 列不是同一个 —— 表头与格子错位了")
+            }
+        }
+    }
+
+    // MARK: - 中栏两档（清单 / 日历）
+
+    /// `TodoPane` 归一：认不出「当没给」（大小写与首尾空白不算差异）、默认档 = 清单。
+    func testPaneNormalizesUnknownValue() {
+        XCTAssertEqual(TodoPane.allCases.count, 2, "中栏只有两档")
+        XCTAssertEqual(TodoPane.defaultPane, .list)
+        XCTAssertEqual(TodoPane(raw: "  Calendar "), .calendar)
+        XCTAssertEqual(TodoPane(raw: "WEEK"), .list, "认不出的档位当没给（周是日历那一档里的档位，不是中栏档）")
+    }
+
+    /// 两张切换器的键**不共用**：中栏那两档（清单 / 日历）与日历那两档（月 / 周）各是各的名字。
+    func testPaneAndCalendarViewDoNotShareKeys() {
+        let panes = TodoPane.allCases.map(\.key)
+        let views = TodoCalendarView.allCases.map(\.key)
+        XCTAssertTrue(panes.allSatisfy { !views.contains($0) },
+                      "两张切换器显示成了同一套名字（清单/日历 与 月/周 必须分得开）")
+    }
+
+    /// 界面那一层**不算日期**：日历的界面只画格子，日期算术一律回 Core
+    /// （界面自己再写一遍 `date(byAdding:)` 就是第二套算术）。
+    func testCalendarViewKeepsDateArithmeticInCore() throws {
+        let code = Self.strippingComments(try source("App/Views/TodoCalendarView.swift"))
+
+        XCTAssertFalse(code.contains("date(byAdding:"), "界面不许自己算日期")
+        for hardcoded in ["周一", "周日", "Monday", "Sunday"] {
+            XCTAssertFalse(code.contains(hardcoded), "表头名字只能来自语言表：\(hardcoded)")
+        }
+    }
 }

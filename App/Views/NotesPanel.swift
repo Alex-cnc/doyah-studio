@@ -600,7 +600,7 @@ struct NotesAreaView: View {
             // 套一层条件视图会把两栏挤成一栏（布局当场坏掉）。
             if appState.notesModule == .todos {
                 HSplitView {
-                    TodoListView()
+                    TodoPaneView()
                         .frame(minWidth: 220, idealWidth: 300, maxWidth: 520)
                     TodoEditorView()
                         .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
@@ -739,21 +739,9 @@ struct TodoListView: View {
                     .padding(Spacing.s)
                 Spacer()
             } else {
-                List {
-                    ForEach(appState.todoSections, id: \.kind) { section in
-                        Section {
-                            // 已完成那一段折叠着时不画行（顺序与段头都还在 —— 段头就是那个开关）。
-                            if section.kind != .completed || appState.todoCompletedExpanded {
-                                ForEach(section.todos) { todo in
-                                    row(todo)
-                                }
-                            }
-                        } header: {
-                            header(section)
-                        }
-                    }
-                }
-                .accessibilityIdentifier("todos-list")
+                // 分段 + 段头 + 行 → `TodoSectionListView`（日历那一屏的「当天任务」用的是**同一个**它，
+                // 免得同一行有两个渲染版本：一处改了、另一处忘改）。
+                TodoSectionListView(sections: appState.todoSections)
             }
         }
         .padding(.vertical, Spacing.s)
@@ -762,92 +750,7 @@ struct TodoListView: View {
         .background(Theme.surface(.sidebar))
     }
 
-    /// 段头：段名 + 条数（空段也照画 —— `FR-NOTE-36` 的分区是**结构**，不是「有没有内容」）；
-    /// 已完成那一段的名就是一个**折叠开关**（默认折叠的默认值来自 Core）。
-    @ViewBuilder
-    private func header(_ section: TodoSection) -> some View {
-        HStack(spacing: Spacing.xs) {
-            if section.kind == .completed {
-                Image(systemName: appState.todoCompletedExpanded ? "chevron.down" : "chevron.right")
-                    .font(Theme.font(.caption))
-            }
-            Text(L(section.kind.titleKey))
-                .font(Theme.font(.caption))
-            Text("\(section.count)")
-                .font(Theme.font(.caption))
-                .foregroundStyle(Theme.text(.secondary))
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard section.kind == .completed else { return }
-            appState.todoCompletedExpanded.toggle()
-        }
-        .accessibilityIdentifier(section.kind == .completed ? "todos-section-completed" : "todos-section-open")
-    }
-
-    /// 一行：完成态那一枚（点它就是完成 / 重开）+ 标题 + 截止档位 + 优先级 + 标签。
-    /// 截止档位与标题都**只从 Core 拿**（`dueState` / `title`），颜色与句子在这一层。
-    @ViewBuilder
-    private func row(_ todo: Todo) -> some View {
-        HStack(spacing: Spacing.xs) {
-            Button {
-                Task { await appState.toggleTodoDone(todo) }
-            } label: {
-                Image(systemName: todo.done ? "checkmark.circle.fill" : "circle")
-                    .font(Theme.font(.body))
-                    .foregroundStyle(todo.done ? Theme.status(.success) : Theme.text(.secondary))
-            }
-            .buttonStyle(.plain)
-            .help(L(todo.done ? .todoMarkOpen : .todoMarkDone))
-            .accessibilityIdentifier("todo-done-toggle-\(todo.id.uuidString)")
-            VStack(alignment: .leading, spacing: 2) {
-                Text(TodoPresentation.title(todo) ?? L(.notesUntitled))
-                    .font(Theme.font(.body))
-                    .lineLimit(1)
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                    Text(L(TodoPresentation.dueState(todo.dueAt).key))
-                        .font(Theme.font(.caption))
-                        .foregroundStyle(dueTone(todo.dueAt))
-                    if todo.priority != .normal {
-                        Text(L(todo.priority.key))
-                            .font(Theme.font(.caption))
-                            .foregroundStyle(todo.priority == .high ? Theme.status(.warning) : Theme.text(.secondary))
-                    }
-                    if !todo.tags.isEmpty {
-                        Text(todo.tags.joined(separator: " "))
-                            .font(Theme.font(.caption))
-                            .foregroundStyle(Theme.text(.secondary))
-                            .lineLimit(1)
-                    }
-                }
-            }
-            Spacer(minLength: Spacing.xs)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { appState.edit(todo) }
-        .contextMenu {
-            // 与那一枚圆点说的是同一件事、两种措辞（当前不是完成 ⇒「标记完成」）——
-            // 写库与重读都在 `AppState.toggleTodoDone` 一处。
-            Button(L(todo.done ? .todoMarkOpen : .todoMarkDone)) {
-                Task { await appState.toggleTodoDone(todo) }
-            }
-            Divider()
-            Button(L(.todoDelete), role: .destructive) {
-                Task { await appState.deleteTodo(id: todo.id) }
-            }
-        }
-        .listRowBackground(appState.todoEditingID == todo.id ? Theme.surface(.panel) : Color.clear)
-        .accessibilityIdentifier("todo-row-\(todo.id.uuidString)")
-    }
-
-    /// 档位 → 颜色：**逾期**是危险色（`FR-NOTE-38` 的「显式标识」），今天最高对比，其余次级。
-    private func dueTone(_ dueAt: Date?) -> Color {
-        switch TodoPresentation.dueState(dueAt) {
-        case .overdue: return Theme.status(.danger)
-        case .today: return Theme.text(.primary)
-        case .none, .tomorrow, .later: return Theme.text(.secondary)
-        }
-    }
+    // 段头与行 → `TodoSectionListView` / `TodoRowView`（本文件下方那一段的**唯一**渲染处）。
 }
 
 /// **待办详情 / 编辑器**（队列 `L-100` 界面半第一片）：右栏。

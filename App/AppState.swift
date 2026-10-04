@@ -199,6 +199,15 @@ enum TableImportStart {
     case refused(String)
 }
 
+/// 「改期」弹框正在编的那一条（队列 `L-100` 界面半第二片）：视图与 `AppState` 之间的**草稿**，
+/// 不落库 —— 点「保存」才走 `upsert`。`id` 既是「改哪一条」也是弹框的身份（`sheet(item:)` 要 `Identifiable`）。
+struct TodoRescheduleDraft: Identifiable, Equatable {
+    /// 目标任务的 `id`（`Todo` 的 `id` 是 `UUID`）。
+    let id: UUID
+    /// 改到哪一刻。
+    var dueAt: Date
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var connections: [ConnectionConfig] = []
@@ -453,6 +462,18 @@ final class AppState: ObservableObject {
     /// **已完成分区默认折叠**（`FR-NOTE-36` 原文）—— 折叠状态是界面状态，默认值由 Core 给
     /// （`TodoSectionKind.isCollapsedByDefault`），这里不写第二遍。
     @Published var todoCompletedExpanded = !TodoSectionKind.completed.isCollapsedByDefault
+    // MARK: - 待办：清单 / 日历（队列 `L-100` 界面半第二片 · 日历屏）
+    /// 中栏看哪一档（清单 / 日历）—— `L-184` ⑤「`L-100` 待办沿用同一骨架（中栏在清单 / 日历间切）」。
+    @Published var todoPane: TodoPane = .defaultPane
+    /// 日历看月还是看周。
+    @Published var todoCalendarView: TodoCalendarView = .initial
+    /// 日历翻到的那一天（月视图看它所在的月、周视图看它所在的周）。
+    /// **参照时刻由界面给**：`TodoCalendar` 自己一律不读系统时钟（同一条纪律，见那份文件的四条口径）。
+    @Published var todoCalendarAnchor: Date = Date()
+    /// 点中的那一天（`nil` = 还没点过 —— 当天任务区如实显示空态，不替用户选一天）。
+    @Published var todoCalendarSelectedDay: Date?
+    /// 正在改期的那一条（`nil` = 没开改期框）。
+    @Published var todoRescheduleDraft: TodoRescheduleDraft?
     /// 正在编辑的那一条（`nil` = 新建）。
     private var todoBeingEdited: UUID?
     @Published var mcpPendingApprovals: [MCPApprovalRequest] = []
@@ -6576,6 +6597,139 @@ final class AppState: ObservableObject {
         do {
             try await NoteLibrary.defaultLibrary().deleteTodo(id: id)
             if todoBeingEdited == id { beginNewTodo() }
+            await reloadTodos()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    // MARK: - 待办：日历那一屏（队列 `L-100` 界面半第二片）
+
+    /// 切中栏（清单 / 日历）。切档**不重读库** —— 两档看的是同一份 `todos`
+    /// （`FR-NOTE-39` 的唯一事实源：日历不另存任务，也就没有第二份内存态可同步）。
+    func setTodoPane(_ pane: TodoPane) {
+        todoPane = pane
+    }
+
+    /// 切月 / 周。
+    func setTodoCalendarView(_ view: TodoCalendarView) {
+        todoCalendarView = view
+    }
+
+    /// 翻页：月视图整月翻、周视图整周翻（`delta` 正负都收）。
+    /// 日期算术一律走 `TodoCalendar`（本文件不自己 `date(byAdding:)` —— 那正是第二套算术的起点）。
+    func shiftTodoCalendar(_ delta: Int) {
+        let calendar = Calendar.current
+        switch todoCalendarView {
+        case .month:
+            let parts = calendar.dateComponents([.year, .month], from: todoCalendarAnchor)
+            guard let year = parts.year, let month = parts.month,
+                  let shifted = TodoCalendar.shiftMonth(year: year, month: month, delta: delta),
+                  let anchor = TodoCalendar.firstDate(year: shifted.year, month: shifted.month, calendar: calendar)
+            else { return }
+            todoCalendarAnchor = anchor
+        case .week:
+            guard let anchor = TodoCalendar.shift(
+                days: delta * TodoCalendar.columns,
+                from: todoCalendarAnchor,
+                calendar: calendar
+            ) else { return }
+            todoCalendarAnchor = anchor
+        }
+    }
+
+    /// 「今天」：翻回今天**并选中它**（日历上最常用的一跳）。
+    func todoCalendarGoToday() {
+        let today = TodoCalendar.calendarDay(of: Date(), calendar: .current)
+        todoCalendarAnchor = today
+        todoCalendarSelectedDay = today
+    }
+
+    /// 点某一天：锚点跟着走（翻月之后，选中态不该留在上个月里）。
+    func selectTodoCalendarDay(_ date: Date) {
+        let day = TodoCalendar.calendarDay(of: date, calendar: .current)
+        todoCalendarAnchor = day
+        todoCalendarSelectedDay = day
+    }
+
+    /// 日历的格子（月 / 周两档都走 `TodoCalendar`）—— 本文件只挑档，不算日期。
+    var todoCalendarCells: [TodoCalendarCell] {
+        let calendar = Calendar.current
+        switch todoCalendarView {
+        case .month:
+            let parts = calendar.dateComponents([.year, .month], from: todoCalendarAnchor)
+            guard let year = parts.year, let month = parts.month else { return [] }
+            return TodoCalendar.monthCells(year: year, month: month, calendar: calendar)
+        case .week:
+            return TodoCalendar.weekCells(anchor: todoCalendarAnchor, calendar: calendar)
+        }
+    }
+
+    /// 把任务铺到当前的格子上（**同一份 `todos`**，空的天不出现 —— 界面据此决定画不画点）。
+    /// 这里只是把 `TodoCalendar.tasksByDay` 的产出摆成查表形态：投影本身仍只有那一处出处。
+    var todoCalendarDays: [Date: TodoDayTasks] {
+        let days = TodoCalendar.tasksByDay(
+            todos,
+            cells: todoCalendarCells,
+            now: Date(),
+            calendar: .current
+        )
+        return Dictionary(uniqueKeysWithValues: days.map { ($0.date, $0) })
+    }
+
+    /// 这一格是不是选中那一天（「同一天」只有 `TodoCalendar.calendarDay` 一处判据）。
+    func isTodoCalendarSelected(_ cell: TodoCalendarCell) -> Bool {
+        guard let selected = todoCalendarSelectedDay else { return false }
+        return TodoCalendar.calendarDay(of: selected, calendar: .current) == cell.date
+    }
+
+    /// 这一格是不是今天。
+    func isTodoCalendarToday(_ cell: TodoCalendarCell) -> Bool {
+        TodoCalendar.calendarDay(of: Date(), calendar: .current) == cell.date
+    }
+
+    /// 选中那一天的两区（**段序与分区仍走 `TodoPresentation.sections`** —— 与清单屏同一处口径）；
+    /// 没点过某天 ⇒ 空。
+    var todoCalendarSelectedDaySections: [TodoSection] {
+        guard let day = todoCalendarSelectedDay,
+              let tasks = todoCalendarDays[TodoCalendar.calendarDay(of: day, calendar: .current)]
+        else { return [] }
+        return TodoPresentation.sections(tasks.open + tasks.done)
+    }
+
+    /// 选中那一天有没有任务（空态那句话的判据 —— 与上面那份分区同源，不另数一遍）。
+    var todoCalendarSelectedDayHasTasks: Bool {
+        todoCalendarSelectedDaySections.contains { $0.count > 0 }
+    }
+
+    /// 打开「改期」框（`FR-NOTE-38` 的「日历上直接完成 / 改期」）。
+    /// 没有截止时间的任务也能改期 —— 那就是给它**挂上**一个截止时间。
+    func beginReschedule(_ todo: Todo) {
+        todoRescheduleDraft = TodoRescheduleDraft(id: todo.id, dueAt: todo.dueAt ?? Date())
+    }
+
+    func cancelReschedule() {
+        todoRescheduleDraft = nil
+    }
+
+    /// 落改期：写新的 `dueAt` + 刷 `updatedAt`（改期属**内容类编辑**，见 `Todo.updatedAt` 的说明）。
+    /// 完成态**不在这里碰**（它只有 `setDone` 一条写路）—— 与编辑器保存同一条纪律。
+    func applyReschedule() async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        guard let draft = todoRescheduleDraft else { return }
+        todoRescheduleDraft = nil
+        guard var value = todos.first(where: { $0.id == draft.id }) else {
+            statusMessage = L(.todoMissing)
+            await reloadTodos()
+            return
+        }
+        value.dueAt = draft.dueAt
+        value.updatedAt = Date()
+        do {
+            _ = try await NoteLibrary.defaultLibrary().upsert(value)
             await reloadTodos()
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
