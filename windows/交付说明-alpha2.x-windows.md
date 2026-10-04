@@ -1,6 +1,6 @@
 # Doyah Studio · Windows 版 · alpha 2.x 交付说明（单页）
 
-> 由 **黄鳍大肥鱼（`fatfish` / Windows 侧）** 出。**这份是给人看的一页纸**；
+> 由 **黑鳍大肥鲨（`fatshark` / Windows 侧）** 出。**这份是给人看的一页纸**；
 > 逐条的验收方式在 `windows/人工测试清单-alpha2.x-windows.md`（26 条 + 7 条数据库回归），
 > 逐子的交付记录在 `windows/版本计划.md`（§5 变更记录 + §5.1 收口自查）。
 
