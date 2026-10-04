@@ -715,7 +715,8 @@ struct TodoNavigationView: View {
 ///     **两段恒在** —— 空态与段头计数靠 `count` 一处判）；视图不自己 `filter` 两遍；
 ///  ② **已完成默认折叠**（`FR-NOTE-36` 原文）：默认值由 Core 给（`isCollapsedByDefault`），
 ///     这一点是**界面状态**（住 `AppState`），Core 不持有它；
-///  ③ **截止档位归 Core**（`dueState`：**逾期 = 截止时刻已经过去**）—— 视图只把「哪一档」
+///  ③ **截止带归 Core**（`TodoQuery.band`：**早于今天零点 = 已过期**，契约 §3.13 第四条；
+///     行上的**逾期标识**另走 `TodoDue.isOverdue`（未完成 且 早于今天零点））—— 视图只把「哪一档」
 ///     翻成一枚颜色 + 语言表里那句话，自己不比 `Date`（否则「今晨那一点算不算逾期」会有两个答案）。
 struct TodoListView: View {
 

@@ -207,8 +207,11 @@ final class TodoCalendarTests: XCTestCase {
 
         XCTAssertEqual(result.map { ymd($0.date) }, ["2026-10-03", "2026-10-04"])
         XCTAssertEqual(result[0].overdue, 1, "昨天那条未完成 ⇒ 逾期；已完成的那条不算")
-        XCTAssertEqual(result[1].overdue, 1, "今晨已经过去 ⇒ 逾期；今晚还没到 ⇒ 不算")
-        XCTAssertEqual(result[1].open.map(\.id), [morning.id, evening.id], "两区仍按完成态分，与档位无关")
+        // **契约 §3.13 第四条（第 191 轮跟版）**：逾期 = 未完成 且 **早于今天零点** ——
+        // 今晨 09:00 与今晚 23:00 都落在「今天」那一带，**都不算逾期**
+        // （旧口径 `dueAt < now` 会把今晨那条算成逾期，与对侧 `TodoDue.isOverdue` 不是同一个答案）。
+        XCTAssertEqual(result[1].overdue, 0, "今天之内的时刻都不算逾期（边界 = 今天零点，严格小于）")
+        XCTAssertEqual(result[1].open.map(\.id), [morning.id, evening.id], "两区仍按完成态分，与带无关")
     }
 
     /// 空的天不出现、结果按日升序（界面据此决定画不画点）。

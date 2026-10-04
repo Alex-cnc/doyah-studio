@@ -301,7 +301,9 @@ struct TodoSectionListView: View {
 /// 一行待办（清单与日历共用的那一行）：完成态那一枚（点它就是完成 / 重开）+ 标题 + 截止档位
 /// + 优先级 + 标签；右键 = 标记完成 / **改期** / 删除。
 ///
-/// 截止档位与标题都**只从 Core 拿**（`dueState` / `title`），颜色与句子在这一层。
+/// 截止带与标题都**只从 Core 拿**（`TodoQuery.band` / `todo.title`），颜色与句子在这一层。
+/// **逾期标识**（那枚危险色）另走 `TodoDue.isOverdue`（= 未完成 且 早于今天零点，契约 §3.13 第四条）
+/// —— 分带不看完成态，标识只看未完成。
 struct TodoRowView: View {
 
     let todo: Todo
@@ -325,9 +327,9 @@ struct TodoRowView: View {
                     .font(Theme.font(.body))
                     .lineLimit(1)
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                    Text(L(TodoPresentation.dueState(todo.dueAt).key))
+                    Text(L(TodoQuery.band(of: todo, window: appState.todoWindow).key))
                         .font(Theme.font(.caption))
-                        .foregroundStyle(dueTone(todo.dueAt))
+                        .foregroundStyle(dueTone(todo))
                     if todo.priority != .normal {
                         Text(L(todo.priority.key))
                             .font(Theme.font(.caption))
@@ -363,12 +365,14 @@ struct TodoRowView: View {
         .accessibilityIdentifier("todo-row-\(todo.id.uuidString)")
     }
 
-    /// 档位 → 颜色：**逾期**是危险色（`FR-NOTE-38` 的「显式标识」），今天最高对比，其余次级。
-    private func dueTone(_ dueAt: Date?) -> Color {
-        switch TodoPresentation.dueState(dueAt) {
-        case .overdue: return Theme.status(.danger)
+    /// 带 → 颜色：**逾期**（未完成 且 早于今天零点）是危险色（`FR-NOTE-38` 的「显式标识」），
+    /// 今天最高对比，其余次级 —— 判定只调 Core（`TodoDue` / `TodoQuery.band`），视图不比 `Date`。
+    private func dueTone(_ todo: Todo) -> Color {
+        let window = appState.todoWindow
+        if TodoDue.isOverdue(todo, window: window) { return Theme.status(.danger) }
+        switch TodoQuery.band(of: todo, window: window) {
         case .today: return Theme.text(.primary)
-        case .none, .tomorrow, .later: return Theme.text(.secondary)
+        case .overdue, .thisWeek, .later, .noDue: return Theme.text(.secondary)
         }
     }
 }

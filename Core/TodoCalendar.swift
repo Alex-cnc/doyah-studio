@@ -2,7 +2,7 @@ import Foundation
 
 /// 待办日历的两档视图（队列 `L-100` 的「日历」界面 / 需求条文 `FR-NOTE-38`，任务 `T97`）。
 ///
-/// 取值空间只落这一处（与 `TodoDueState` / `TodoPriority` 同族）：界面做切换器时遍历 `all`；
+/// 取值空间只落这一处（与 `TodoBand` / `TodoPriority` 同族）：界面做切换器时遍历 `all`；
 /// 认不出的取值「当没给」= `.month`（进来先看整月）—— 与对侧 `android/core/.../TodoCalendar.kt`
 /// 的 `TodoCalendarView.normalize` **同口径**（引用，不复制代码）。
 public enum TodoCalendarView: String, CaseIterable, Sendable {
@@ -89,7 +89,7 @@ public struct TodoCalendarCell: Equatable, Sendable {
 ///
 /// 一天的两区（未完成 / 已完成）与清单那一屏同一套分区口径（`TodoPresentation.sections`），
 /// 因此「选中某天」看到的列表与清单页是**同一个顺序**；`overdue` 是当天**逾期未完成**的条数
-/// （格子上的点用它画告警色）—— 逾期判定仍只有 `TodoPresentation.dueState` 一处（参照时刻由调用方传）。
+/// （格子上的点用它画告警色）—— 逾期判定仍只有 `TodoDue.isOverdue` 一处（参照时刻由调用方传）。
 ///
 /// 只有**有任务的天**会出现在投影结果里（空的天不出现：界面据此决定画不画点）。
 public struct TodoDayTasks: Equatable, Sendable {
@@ -246,13 +246,13 @@ public enum TodoCalendar {
             guard let dueAt = todo.dueAt else { continue }
             buckets[calendarDay(of: dueAt, calendar: calendar), default: []].append(todo)
         }
-        return cells.compactMap { cell in
+        return cells.compactMap { cell -> TodoDayTasks? in
             guard let rows = buckets[cell.date], !rows.isEmpty else { return nil }
             let sections = TodoPresentation.sections(rows)
             let open = sections.first { $0.kind == .open }?.todos ?? []
             let done = sections.first { $0.kind == .completed }?.todos ?? []
             let overdue = open.filter {
-                TodoPresentation.dueState($0.dueAt, now: now, calendar: calendar) == .overdue
+                TodoDue.isOverdue($0, todayStart: calendar.startOfDay(for: now))
             }.count
             return TodoDayTasks(date: cell.date, open: open, done: done, overdue: overdue)
         }

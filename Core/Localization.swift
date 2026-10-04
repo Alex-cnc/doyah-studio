@@ -389,8 +389,26 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoDueNone
     case todoDueOverdue
     case todoDueToday
-    case todoDueTomorrow
+    /// 队列 `L-100` **组织与检索半**（第 191 轮）：带名由「明天」改成「本周」——
+    /// 契约 §3.13 / 对侧 `TodoQuery.bandOf` 的取值空间里只有一条「本周」带（含明天与后几天），
+    /// 留着「明天」就是第二套分带。
+    case todoDueThisWeek
     case todoDueLater
+    // 队列 `L-100` **组织与检索半**（第 191 轮）：排序三档、筛选五档、分组四档 + 一组「未分类」。
+    // 取值空间在 `Core/TodoSort.swift` / `Core/TodoQuery.swift`，句子只在这里。
+    case todoSortDue
+    case todoSortPriority
+    case todoSortCreated
+    case todoFilterAll
+    case todoFilterToday
+    case todoFilterThisWeek
+    case todoFilterOverdue
+    case todoFilterNoDue
+    case todoGroupNone
+    case todoGroupStatus
+    case todoGroupDue
+    case todoGroupTag
+    case todoGroupUntagged
     // 队列 `L-100` **界面半第一片**：待办那一屏自己的入口、空态、编辑器与行上的三个动作。
     // 名字与句子只在这里（Core 里一个汉字都没有 —— `R-45` 棘轮）。
     case notesModuleTodos
@@ -2466,8 +2484,21 @@ public enum LocalizedStrings {
         .todoDueNone: [.simplifiedChinese: "无截止", .english: "No due date"],
         .todoDueOverdue: [.simplifiedChinese: "已过期", .english: "Overdue"],
         .todoDueToday: [.simplifiedChinese: "今天", .english: "Today"],
-        .todoDueTomorrow: [.simplifiedChinese: "明天", .english: "Tomorrow"],
+        .todoDueThisWeek: [.simplifiedChinese: "本周", .english: "This Week"],
         .todoDueLater: [.simplifiedChinese: "以后", .english: "Later"],
+        .todoSortDue: [.simplifiedChinese: "截止时间", .english: "Due date"],
+        .todoSortPriority: [.simplifiedChinese: "优先级", .english: "Priority"],
+        .todoSortCreated: [.simplifiedChinese: "创建时间", .english: "Created"],
+        .todoFilterAll: [.simplifiedChinese: "全部", .english: "All"],
+        .todoFilterToday: [.simplifiedChinese: "今天", .english: "Today"],
+        .todoFilterThisWeek: [.simplifiedChinese: "本周", .english: "This Week"],
+        .todoFilterOverdue: [.simplifiedChinese: "已过期", .english: "Overdue"],
+        .todoFilterNoDue: [.simplifiedChinese: "无截止", .english: "No due date"],
+        .todoGroupNone: [.simplifiedChinese: "不分组", .english: "No grouping"],
+        .todoGroupStatus: [.simplifiedChinese: "按状态", .english: "By status"],
+        .todoGroupDue: [.simplifiedChinese: "按时间", .english: "By time"],
+        .todoGroupTag: [.simplifiedChinese: "按标签", .english: "By tag"],
+        .todoGroupUntagged: [.simplifiedChinese: "未分类", .english: "Untagged"],
         // 队列 `L-100` **界面半第一片**（待办那一屏的入口 / 空态 / 编辑器 / 行上动作）：都没有数字槽。
         .notesModuleTodos: [.simplifiedChinese: "待办", .english: "Todos"],
         .todosEmpty: [.simplifiedChinese: "还没有待办", .english: "No todos yet"],

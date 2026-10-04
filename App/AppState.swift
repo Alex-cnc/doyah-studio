@@ -6513,6 +6513,21 @@ final class AppState: ObservableObject {
     /// 视图不自己 `filter` 两遍（那正是「两处各写一套」的分家现场），本文件也只转发。
     var todoSections: [TodoSection] { TodoPresentation.sections(todos) }
 
+    /// 清单那一族共用的**参照窗口**（今天零点 / 明天零点 / 下周一零点）。
+    ///
+    /// 分工：**App 层可以读系统时钟**（它就是端侧），**边界换算仍只有 `TodoWindow.of` 一处**
+    /// （Core 里不读时钟，与提醒 / 日历同一条纪律）。端侧只提供「今天这个日历日 + 时区偏移」两样，
+    /// 与对侧 `NotesViewModel.todoWindow()` 同口径。
+    var todoWindow: TodoWindow {
+        let now = Date()
+        let offset = TimeZone.current.secondsFromGMT(for: now) * 1000
+        let today = ReminderSchedule.dateOfEpoch(
+            epochMillis: Int(now.timeIntervalSince1970 * 1000),
+            zoneOffsetMillis: offset
+        )
+        return TodoWindow.of(today: today, zoneOffsetMillis: offset)
+    }
+
     func beginNewTodo() {
         todoBeingEdited = nil
         todoEditorTitle = ""

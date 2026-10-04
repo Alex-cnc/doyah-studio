@@ -1,13 +1,11 @@
 import XCTest
 @testable import DoyahCore
 
-/// 队列 `L-100`（待办清单界面）**Core 半**的纯逻辑判据：分区、截止档位、空标题。
+/// 队列 `L-100`（待办清单界面）**Core 半**的纯逻辑判据：分区与空标题。
 ///
-/// 为什么这三件值得单测：
-///  · **分区**是口径（两段永远都在 / 段序固定 / **段内不许重排** —— 排序是契约半的事），
+/// 为什么这两件值得单测：
+///  · **分区**是口径（两段永远都在 / 段序固定 / **段内不许重排** —— 排序与带在 `TodoSort` / `TodoQuery`），
 ///    写在视图里就是一串 `if`，谁都没断言过；
-///  · **档位边界**（到点那一刻 / 今天早上已过去 / 跨零点 / 明天）只能靠构造时刻来钉，
-///    现场看是看不出来的；
 ///  · **空标题**的哨兵值定在 Core ⇒ 「清单」与「日历」两个界面不必各写一套。
 final class TodoPresentationTests: XCTestCase {
 
@@ -19,28 +17,6 @@ final class TodoPresentationTests: XCTestCase {
         done: Bool = false
     ) -> Todo {
         Todo(title: title, dueAt: due, done: done)
-    }
-
-    /// 一个固定的「现在」：2026-10-04 15:00（本地时区）—— 所有档位判据都以它为参照。
-    private var now: Date {
-        var components = DateComponents()
-        components.year = 2026
-        components.month = 10
-        components.day = 4
-        components.hour = 15
-        components.minute = 0
-        components.second = 0
-        return Calendar.current.date(from: components)!
-    }
-
-    private func at(_ hour: Int, _ minute: Int = 0, day: Int = 4) -> Date {
-        var components = DateComponents()
-        components.year = 2026
-        components.month = 10
-        components.day = day
-        components.hour = hour
-        components.minute = minute
-        return Calendar.current.date(from: components)!
     }
 
     // MARK: - 分区
@@ -77,50 +53,12 @@ final class TodoPresentationTests: XCTestCase {
         XCTAssertFalse(TodoSectionKind.open.isCollapsedByDefault)
     }
 
-    // MARK: - 截止档位
+    // MARK: - 截止带 / 逾期
 
-    func testDueStateIsNoneWithoutDueDate() {
-        XCTAssertEqual(TodoPresentation.dueState(nil, now: now), .none)
-    }
-
-    func testDueStateIsOverdueWhenTheMomentHasPassed() {
-        // 今天早上 09:00 到下午就是**过期**（不是「今天」）—— 清单上最要紧的是它还欠着。
-        XCTAssertEqual(TodoPresentation.dueState(at(9), now: now), .overdue)
-        // 更早的日子同样过期。
-        XCTAssertEqual(TodoPresentation.dueState(at(9, day: 3), now: now), .overdue)
-    }
-
-    func testDueStateIsTodayOnlyBeforeTheMomentArrives() {
-        XCTAssertEqual(TodoPresentation.dueState(at(15, 30), now: now), .today)
-        XCTAssertEqual(TodoPresentation.dueState(at(23, 59), now: now), .today)
-    }
-
-    func testDueStateTreatsTheExactMomentAsToday() {
-        // 「正好到点」算今天（还没过去）；逾期的判定是**严格小于** —— 边界只钉这一处。
-        XCTAssertEqual(TodoPresentation.dueState(now, now: now), .today)
-    }
-
-    func testDueStateTomorrowIsCalendarDayNot24Hours() {
-        // 次日 00:01 = 明天（按日历日差算，不按「还差不到 24 小时」近似）。
-        XCTAssertEqual(TodoPresentation.dueState(at(0, 1, day: 5), now: now), .tomorrow)
-        XCTAssertEqual(TodoPresentation.dueState(at(9, 0, day: 5), now: now), .tomorrow)
-    }
-
-    func testDueStateLaterBeyondTomorrow() {
-        XCTAssertEqual(TodoPresentation.dueState(at(9, 0, day: 6), now: now), .later)
-        XCTAssertEqual(TodoPresentation.dueState(at(9, 0, day: 20), now: now), .later)
-    }
-
-    func testDueStateIsIndependentOfCompletion() {
-        // 完成态不影响档位判定（已完成那一段画不画徽标是界面的事）。
-        let finishedOverdue = todo("早该做的事", due: at(9), done: true)
-        XCTAssertEqual(TodoPresentation.dueState(finishedOverdue.dueAt, now: now), .overdue)
-    }
-
-    func testDueStateKeysAreDistinct() {
-        let states: [TodoDueState] = [.none, .overdue, .today, .tomorrow, .later]
-        XCTAssertEqual(Set(states.map(\.key)).count, states.count)
-    }
+    /// 截止带（`TodoBand`）与逾期标识（`TodoDue.isOverdue`）在第 191 轮从本文件**搬到了**
+    /// `Core/TodoQuery.swift` —— 契约 §3.13 第四条（`done = false` 且 `dueAt < 今天`）落笔后，
+    /// 本文件原来的 `dueState`（`dueAt < now`）与两端一致的口径不符，已删除。
+    /// 判据随之移到 `Tests/TodoQueryTests.swift`（带的五档 / 互斥穷尽 / 逾期与完成态 / 窗口三边界）。
 
     // MARK: - 空标题
 
@@ -137,7 +75,7 @@ final class TodoPresentationTests: XCTestCase {
         // 句子只在语言表里：这一组的每一条都必须中英齐、且两语不同（否则就是漏了一条）。
         let keys: [LKey] = [
             .todoSectionOpen, .todoSectionCompleted,
-            .todoDueNone, .todoDueOverdue, .todoDueToday, .todoDueTomorrow, .todoDueLater,
+            .todoDueNone, .todoDueOverdue, .todoDueToday, .todoDueThisWeek, .todoDueLater,
         ]
         for key in keys {
             let chinese = LocalizedStrings.table[key]?[.simplifiedChinese]

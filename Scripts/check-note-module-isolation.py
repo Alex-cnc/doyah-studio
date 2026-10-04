@@ -83,6 +83,10 @@ NOTE_SOURCES = [
     # 队列 `L-100` 落法 ④ 的**界面半第一片**的 Core 半（第 190 轮）：档位 → 规则 / 权限 → 排不排 /
     # 规则 → 一句话（纯函数，无网络、无库、零平台 API；只吃 `Todo` / `Date` / `LKey`）
     "Core/ReminderPresentation.swift",
+    # 队列 `L-100` 的**组织与检索半**（第 191 轮）：排序三档（契约 §3.13 四条）+ 筛选 / 分组 / 视图
+    # 入口（与对侧 `TodoSort` / `TodoQuery` 同口径）—— 纯函数，无网络、无库、零平台 API
+    "Core/TodoSort.swift",
+    "Core/TodoQuery.swift",
 ]
 
 # 刻意**不在**清单里的笔记相关文件：它们按设计就引用 Ultra 侧类型，属于宿主侧适配层。
