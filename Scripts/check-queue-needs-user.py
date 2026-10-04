@@ -374,19 +374,49 @@ class Case:
         self.extra = extra or []
 
 
-def self_test_cases() -> list[Case]:
-    return [
-        Case("`L-10` 旧文本复刻：汇总格成员全已决 / 挂起，却仍挂 `needs-user`",
-             [row_after(STUDIO_HEAD,
-                        "| **L-900** | **需拍板类（汇总格）**：成员 = Q22 · Q45 · Q46 · Q47 · "
-                        "Q48 · Q49 · Q50 · Q52 · Q42 · Q43 | 决策 | —— | **needs-user** | "
-                        "逐条去向（夹具） |")],
-             "全部已决 / 挂起"),
-        Case("点名一个仍 `⏳ 待拍板` 的号（`Q56`）⇒ 应当绿",
-             [row_after(STUDIO_HEAD,
-                        "| **L-901** | **夹具**：皮肤那个 `FR` 号要不要正式号 | 决策 | —— | "
-                        "**needs-user** | 点名 `Q56`（spec §6 仍 ⏳ 待拍板） |")],
-             green=True),
+def self_test_cases(repo: pathlib.Path) -> tuple[list[Case], list[str]]:
+    """负例清单 —— **锚点一律从实时台账派生，不写死具体号**。
+
+    为什么（`L-163` 收口的真因）：夹具里写死 `Q56` 这类「此刻仍 ⏳ 待拍板」的号，
+    会随台账状态**静默翻转** —— 同一个脚本、同一份代码，`10-02` 那次自检报 `8/11`、
+    今天报 `11/11`，差别只在台账里那几个 Q 号的状态变了。写死的锚点烂掉之后，
+    「应当绿」的例就变成**假红**（把注意力引到一个并不存在的问题上）。
+    与 `L-119` 同族：自检的锚点要么从结构派生，要么迟早烂成陈旧期望值。
+    ⇒ 改成：汇总格成员从**当前已决的号**里取，点名从**当前仍待拍板的号**里取。
+
+    返回 (用例, 跳过的例说明)；台账里没有可用锚点时**宁可少跑几例、也不写死**。
+    """
+    pending, suspended, known, _, _ = spec_q_state(repo / SPEC_REL)
+    settled = sorted(known - pending - suspended)
+    anchors = sorted(pending) + settled
+    skips: list[str] = []
+    if not anchors:
+        return [], ["整份自检都构造不出来 —— `%s` 的 §6 里一个 `Q` 号都没解析到" % SPEC_REL]
+
+    a = anchors[0]
+    cases: list[Case] = []
+    if settled:
+        members = " · ".join("Q%d" % n for n in settled[:8])
+        cases.append(Case(
+            "汇总格成员全已决 / 挂起，却仍挂 `needs-user`",
+            [row_after(STUDIO_HEAD,
+                       "| **L-900** | **需拍板类（汇总格）**：成员 = %s | 决策 | —— | **needs-user** | "
+                       "逐条去向（夹具） |" % members)],
+            "全部已决 / 挂起"))
+    else:
+        skips.append("例「汇总格成员全已决 / 挂起」（台账里没有已决的号）")
+
+    if pending:
+        q = sorted(pending)[0]
+        cases.append(Case(
+            "点名一个仍 `⏳ 待拍板` 的号（`Q%d`）⇒ 应当绿" % q,
+            [row_after(STUDIO_HEAD,
+                       "| **L-901** | **夹具**：皮肤那个 `FR` 号要不要正式号 | 决策 | —— | "
+                       "**needs-user** | 点名 `Q%d`（spec §6 仍 ⏳ 待拍板） |" % q)],
+            green=True))
+    else:
+        skips.append("例「点名一个仍待拍板的号」（台账里没有 ⏳ 待拍板的号）")
+    cases += [
         Case("不点名、也不写挂起理由 ⇒ 空壳格",
              [row_after(STUDIO_HEAD,
                         "| **L-902** | **夹具**：一条空壳汇总格 | 决策 | —— | **needs-user** | "
@@ -403,11 +433,11 @@ def self_test_cases() -> list[Case]:
              "找不到的号"),
         Case("状态格写作词表外的 `needs_user`（形状 `status?`）",
              [row_after(STUDIO_HEAD,
-                        "| **L-905** | **夹具** | 决策 | —— | **needs_user** | 点名 `Q56` |")],
+                        "| **L-905** | **夹具** | 决策 | —— | **needs_user** | 点名 `Q%d` |" % a)],
              "状态词不在词表内"),
         Case("条目号前缀与本小节不符（`Notes` 段里塞一条 `L-` 行）",
              [row_after(NOTES_HEAD,
-                        "| **L-906** | **夹具** | 决策 | —— | **needs-user** | 点名 `Q56` |")],
+                        "| **L-906** | **夹具** | 决策 | —— | **needs-user** | 点名 `Q%d` |" % a)],
              "不符"),
         Case("`Notes` 段点名一个仍 `待采纳` 的提案（`0010`）⇒ 应当绿",
              [row_after(NOTES_HEAD,
@@ -426,6 +456,7 @@ def self_test_cases() -> list[Case]:
                "## 六. 待拍板与待授权（需求提出者的输入队列）")],
              "空跑防护"),
     ]
+    return cases, skips
 
 
 def run_self_test() -> int:
@@ -438,7 +469,9 @@ def run_self_test() -> int:
 
     queue_text, spec_text = queue.read_text(encoding="utf-8"), spec.read_text(encoding="utf-8")
     before = (sha256(queue), sha256(spec))
-    cases = self_test_cases()
+    cases, skipped_examples = self_test_cases(repo)
+    for note in skipped_examples:
+        print("⚠️ 跳过一例：%s" % note)
     failures = 0
 
     for index, case in enumerate(cases, start=1):
