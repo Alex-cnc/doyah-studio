@@ -4,13 +4,13 @@
 // 契约来源：`Docs/概要设计.md` §8.5.4「一样」清单 + macOS 侧 `Core/ActivityBar.swift`。
 // 四模块位与对侧的语义一一对应；**未开工的视图如实标 ⬜**（不半建、不假装能点）。
 
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import { appInfo, type AppInfo } from './ipc'
 import CommandPalette from './shell/CommandPalette.vue'
 import TitleBar from './shell/TitleBar.vue'
 import { commandById, type Command } from './shell/commands'
 import BottomPanel from './shell/BottomPanel.vue'
-import { t as translate, type UiLanguage } from './i18n'
+import { setLanguage, t as translate, type UiLanguage } from './i18n'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
 import {
@@ -160,6 +160,9 @@ async function runCommand(command: Command) {
 /** 界面语言：**外壳持有、往下传**（原来是数据库视图自己持有一份 ⇒ 两处会不一致）。
  * 详情面板与外壳文案都取它；切换入口仍在数据库视图那一侧（它才是用户看得见的地方）。 */
 const uiLanguage = ref<UiLanguage>('zh-Hans')
+
+// 语言一变就同步给 i18n 的"当前值"（ipc 等底层模块读它）——**单一出处**，不是各存一份
+watch(uiLanguage, (value) => setLanguage(value), { immediate: true })
 
 /** 外壳文案帮手（语言由外壳自己持有）。 */
 function tr(key: Parameters<typeof translate>[0]): string {

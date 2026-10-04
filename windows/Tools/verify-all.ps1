@@ -28,7 +28,7 @@ $RepoRoot = Get-DoyahRepoRoot -ToolsDir $ToolsDir
 $ran = New-Object System.Collections.ArrayList
 $skipped = New-Object System.Collections.ArrayList
 $failed = New-Object System.Collections.ArrayList
-$total = 16
+$total = 17
 
 Write-Host "== Doyah Studio · Windows 侧闸门（§8.3.1 六项必需项 + §8.5.3 等价物）"
 Write-Host ("   仓库：{0}" -f $RepoRoot)
@@ -152,8 +152,13 @@ Invoke-ChildGate "14/$total" "路径归属（一次改动不得落在对侧子�
 # 棘轮**只减不增**：新写的界面文案必须走语言表 `t(...)`。
 Invoke-ChildGate "15/$total" "双语漏译棘轮（界面文案不得绕过语言表；基线只减不增）" 'check-untranslated.ps1' -SkipReason $pythonSkipReason
 
-# ── 16/16 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
-Write-DoyahStep "16/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
+# ── 16/17 Vue 组合式 API 导入对账（防"空白页"复发）──────────────────────────────
+# 2026-10-04 实测事故：App.vue 用了 computed 但没从 vue 导入 ⇒ **整个应用白屏**
+# （Vue 挂载成功、根组件 setup 抛 ReferenceError、渲染成空注释）。
+# tsc 不校验模板与 setup 里的未声明引用、vitest 不挂载组件 ⇒ 两道网都漏，只能文本对账。
+Invoke-ChildGate "16/$total" "Vue 组合式 API 导入对账（用了 computed/ref/... 就必须从 vue 导入）" 'check-vue-imports.ps1'
+# ── 17/17 ⑥ 一条命令跑全（本脚本自身）────────────────────────────────────────
+Write-DoyahStep "17/$total" "⑥ 一条命令跑全（本脚本 = 该入口本身）"
 Write-DoyahPass "本脚本即闭环入口；跳过的项已逐条列出（等价物可以缺席，缺席必须可见）"
 [void]$ran.Add("⑥ 一条命令跑全")
 
