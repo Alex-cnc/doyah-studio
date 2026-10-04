@@ -315,6 +315,27 @@ public actor NoteLibrary {
         try open().deleteTodo(id: id)
     }
 
+    // MARK: - 提醒（schema v6 · 队列 `L-100` 落法 ④ 的存储半）
+
+    /// 某个归属（一条笔记 / 一条任务）的提醒。
+    /// 库还不存在时如实返回空表（**不顺手建一个空库**，与 `todos()` 同一条纪律）。
+    public func reminders(of owner: ReminderOwner) throws -> [Reminder] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        return try open().reminders(of: owner)
+    }
+
+    /// 建 / 改一条提醒。**归属必须真的存在** —— 挂到一条不存在的笔记 / 任务上 ⇒ 抛错
+    /// （与 `upsert(_ todo:)` 的「先写后取」同一条纪律；不落一条谁也找不到的提醒）。
+    public func addReminder(_ reminder: Reminder) throws {
+        try open().upsert(reminder)
+    }
+
+    /// 删一条提醒（**任务/笔记被删时它的提醒由库的级联一并走**，见 `NoteSchemaV6`）。
+    public func deleteReminder(id: UUID) throws {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return }
+        try open().deleteReminder(id: id)
+    }
+
     public func delete(id: UUID) throws {
         let database = try open()
         // 库还不存在时删一条 = 什么都没发生（不要顺手建一个空库出来）。

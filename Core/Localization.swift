@@ -429,6 +429,38 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoWeekdayFriday
     case todoWeekdaySaturday
     case todoWeekdaySunday
+    // 队列 `L-100` 落法 ④ 的**界面半第一片**（提醒：一键挂提醒的入口 + 权限 / 通知）。
+    // 句子都在表里，`Core/ReminderPresentation.swift` 只出「哪个键 + 什么实参」。
+    case reminderAttach
+    case reminderPresetAtDue
+    case reminderPresetBefore15m
+    case reminderPresetBefore1h
+    case reminderPresetBefore1d
+    /// 没有截止时间的任务挂不上提醒（「有截止时间的任务一键挂提醒」里那个前提）。
+    case reminderNeedsDue
+    /// 提前量把时刻推到 1970 年之前 ⇒ 不编日期。
+    case reminderOutOfRange
+    /// 一次性 —— 一个时刻槽。
+    case reminderSummaryOnce
+    /// 每 N 天 / 每 N 周 —— **数字槽 + 时刻槽**（数字槽必须 `%d`，`%@` 会印出 (null)）。
+    case reminderSummaryEveryDay
+    case reminderSummaryEveryWeek
+    /// 每周几 —— 星期名槽（译文来自语言表）+ 时刻槽。
+    case reminderSummaryWeekly
+    /// 终止日那一层（套在整句外面）。
+    case reminderSummaryUntil
+    /// 星期名与星期名之间的分隔符（中英不同：顿号 vs 逗号）。
+    case reminderListSeparator
+    /// 「下次 …」/「已经结束了」/「规则认不出来」—— 三种结局各出一句话。
+    case reminderNext
+    case reminderExpired
+    case reminderRuleUnknown
+    /// 系统通知权限三档，各一句话（被拒那一句要说清去哪开）。
+    case reminderPermissionNotDetermined
+    case reminderPermissionDenied
+    case reminderPermissionAuthorized
+    /// 到点那条通知的正文（标题 = 任务标题原样）。
+    case reminderNotificationBody
     // 队列 `L-184` **第二片**：左栏的「最近」/「标签」两行，与中栏那根排序条。
     case notesRecent
     case notesTagsSection
@@ -2470,6 +2502,47 @@ public enum LocalizedStrings {
         .todoWeekdayFriday: [.simplifiedChinese: "周五", .english: "Fri"],
         .todoWeekdaySaturday: [.simplifiedChinese: "周六", .english: "Sat"],
         .todoWeekdaySunday: [.simplifiedChinese: "周日", .english: "Sun"],
+        // 队列 `L-100` 落法 ④ 的**界面半第一片**（提醒）。这一组里只有「每 N 天 / 每 N 周」两条
+        // 带**数字槽**（契约 §2.10 的 `intervalCount` 是数值 ⇒ 槽位写 `%d`，写 `%@` 会印出 (null)），
+        // 其余都是文本槽。
+        .reminderAttach: [.simplifiedChinese: "挂提醒", .english: "Add reminder"],
+        .reminderPresetAtDue: [.simplifiedChinese: "到点时", .english: "At due time"],
+        .reminderPresetBefore15m: [.simplifiedChinese: "提前 15 分钟", .english: "15 minutes before"],
+        .reminderPresetBefore1h: [.simplifiedChinese: "提前 1 小时", .english: "1 hour before"],
+        .reminderPresetBefore1d: [.simplifiedChinese: "提前 1 天", .english: "1 day before"],
+        .reminderNeedsDue: [
+            .simplifiedChinese: "先给这个任务一个截止时间，才能挂提醒",
+            .english: "Give this todo a due time first"
+        ],
+        .reminderOutOfRange: [
+            .simplifiedChinese: "这个提前量算不出日期（早于 1970 年）",
+            .english: "That lead time lands before 1970"
+        ],
+        .reminderSummaryOnce: [.simplifiedChinese: "%@ 提醒一次", .english: "Once at %@"],
+        .reminderSummaryEveryDay: [.simplifiedChinese: "每 %d 天 %@ 提醒", .english: "Every %d days at %@"],
+        .reminderSummaryEveryWeek: [.simplifiedChinese: "每 %d 周 %@ 提醒", .english: "Every %d weeks at %@"],
+        .reminderSummaryWeekly: [.simplifiedChinese: "每周%@ %@ 提醒", .english: "Weekly on %@ at %@"],
+        .reminderSummaryUntil: [.simplifiedChinese: "%@（直到 %@）", .english: "%@ until %@"],
+        .reminderListSeparator: [.simplifiedChinese: "、", .english: ", "],
+        .reminderNext: [.simplifiedChinese: "下次 %@", .english: "Next %@"],
+        .reminderExpired: [.simplifiedChinese: "已经结束了", .english: "Already finished"],
+        .reminderRuleUnknown: [
+            .simplifiedChinese: "这条提醒的规则认不出来",
+            .english: "This reminder's rule is unrecognized"
+        ],
+        .reminderPermissionNotDetermined: [
+            .simplifiedChinese: "还没问过系统通知权限",
+            .english: "Notification permission has not been asked for yet"
+        ],
+        .reminderPermissionDenied: [
+            .simplifiedChinese: "系统通知已关闭，去「系统设置 › 通知」里打开",
+            .english: "Notifications are off — turn them on in System Settings › Notifications"
+        ],
+        .reminderPermissionAuthorized: [
+            .simplifiedChinese: "系统通知已开启",
+            .english: "Notifications are on"
+        ],
+        .reminderNotificationBody: [.simplifiedChinese: "截止时间 %@", .english: "Due %@"],
         // 队列 `L-184` 第二片（左栏「最近」/「标签」+ 中栏排序条）。这一组**都没有数字槽**。
         .notesRecent: [.simplifiedChinese: "最近", .english: "Recent"],
         .notesTagsSection: [.simplifiedChinese: "标签", .english: "Tags"],
