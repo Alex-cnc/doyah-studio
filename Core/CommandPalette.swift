@@ -11,6 +11,18 @@ import Foundation
 /// 而"看起来差不多"的排序差异只有测试能钉住。
 public enum CommandPalette {
 
+    /// 一条面板项属于**哪个搜索范围**（队列 `L-170`：需求提出者给的搜索范围只有两类）。
+    ///
+    /// 为什么要有这个字段：两类项的**回车动作不是一回事** —— 命令交给
+    /// `AppState.performPaletteCommand(_:)` 分派，工作区文件要**打开文件**（`openFile(at:line:)`）。
+    /// 靠 id 前缀去猜也行，但那是把「这是哪一类」这条规则摊在调用方；摊一次就会摊两次。
+    public enum Scope: String, Equatable, Sendable {
+        /// Doyah Studio 自带的命令。
+        case command
+        /// 当前工作区里的文件（**只搜已打开的工作区**，不搜对象树 / 笔记 / 全盘）。
+        case workspaceFile
+    }
+
     /// 参与匹配的一条命令。标题与关键词由界面层提供（**Core 不做本地化**）。
     public struct Item: Equatable, Sendable {
         /// 稳定标识（执行时用它分派）。
@@ -20,12 +32,64 @@ public enum CommandPalette {
         public var keywords: [String]
         /// 分组标题（如「查询」「连接」「智能体」），仅用于展示排序。
         public var category: String?
+        /// 这条项属于哪个搜索范围（默认 = 命令，老调用点不受影响）。
+        public var scope: Scope
 
-        public init(id: String, title: String, keywords: [String] = [], category: String? = nil) {
+        public init(
+            id: String,
+            title: String,
+            keywords: [String] = [],
+            category: String? = nil,
+            scope: Scope = .command
+        ) {
             self.id = id
             self.title = title
             self.keywords = keywords
             self.category = category
+            self.scope = scope
+        }
+    }
+
+    /// 工作区文件项的 **id 形状**（队列 `L-170`）：`file:` + 工作区相对路径。
+    ///
+    /// 形状只此一处：目录项（`AppCommandCatalog`）与回车路由（`CommandPaletteView`）两边
+    /// 各写一遍 `"file:" + path` 的话，改前缀就会变成「点了没反应」——
+    /// 这条坑在本项目里踩过（命令 id 用标题当标识那次）。
+    public enum FileID {
+        public static let prefix = "file:"
+
+        public static func make(relativePath: String) -> String {
+            prefix + relativePath
+        }
+
+        /// 反向解析；**不是文件项返回 `nil`**（空路径也算不是）。
+        public static func relativePath(from id: String) -> String? {
+            guard id.hasPrefix(prefix) else { return nil }
+            let path = String(id.dropFirst(prefix.count))
+            return path.isEmpty ? nil : path
+        }
+
+        public static func isFile(_ id: String) -> Bool {
+            relativePath(from: id) != nil
+        }
+    }
+
+    /// 面板里的**一组**结果（「分层列表」，队列 `L-170`）。
+    ///
+    /// 键盘行走的扁平顺序 = `groups.flatMap(\.matches)` —— 渲染顺序与 ↑↓ 顺序
+    /// 必须是同一个（两份顺序迟早不一致，那正是 `FR-EDIT-44` 标头搜索框踩过的坑）。
+    public struct Group: Equatable, Sendable {
+        public enum Kind: String, Equatable, Sendable {
+            case commands
+            case workspaceFiles
+        }
+
+        public var kind: Kind
+        public var matches: [Match]
+
+        public init(kind: Kind, matches: [Match]) {
+            self.kind = kind
+            self.matches = matches
         }
     }
 
@@ -77,6 +141,37 @@ public enum CommandPalette {
             return lhs.item.id < rhs.item.id
         }
         return Array(matches.prefix(max(0, limit)))
+    }
+
+    /// 把两组**各自已排好序**的结果拼成面板要渲染的分层列表（队列 `L-170`）。
+    ///
+    /// 规则（只决定**组的先后**，组内顺序一个字不改）：
+    ///   1. **空组不出标题** —— 一个只写着「当前工作区的文件 / 0」的表头是噪音；
+    ///   2. 两组都在时，**哪一组的最强命中更硬、哪一组在前**：
+    ///      用户从标题栏那个框里敲的是**文件名**时（前缀 / 全等命中，分档 800/1000），
+    ///      文件组就在前；敲的是命令名时反过来。这是「按你敲的东西决定先给什么」，
+    ///      比写死一个组序更贴实际；
+    ///   3. **同分 ⇒ 命令在前** —— 平局时面板的主用途（执行命令）不变，
+    ///      规则也就有确定答案，不随数组顺序摇。
+    ///
+    /// 成员从哪来不归这一层管：命令组 = `AppCommandCatalog.all()` 匹配出来的，
+    /// 文件组 = `WorkspaceSearch` 命中出来的（**成员与顺序的唯一出处是引擎**，
+    /// 这里再滤一遍就会出现「同一个词在两处给出不同答案」—— `findFileNames` 认
+    /// 变音符号不敏感，`match` 不认）。
+    public static func grouped(commands: [Match], files: [Match]) -> [Group] {
+        let commandGroup = commands.isEmpty ? nil : Group(kind: .commands, matches: commands)
+        let fileGroup = files.isEmpty ? nil : Group(kind: .workspaceFiles, matches: files)
+
+        switch (commandGroup, fileGroup) {
+        case (nil, nil):
+            return []
+        case (let group?, nil), (nil, let group?):
+            return [group]
+        case (let commands?, let files?):
+            let commandBest = commands.matches.map(\.score).max() ?? 0
+            let fileBest = files.matches.map(\.score).max() ?? 0
+            return fileBest > commandBest ? [files, commands] : [commands, files]
+        }
     }
 
     /// 单条匹配（对外暴露便于测试与调试）。

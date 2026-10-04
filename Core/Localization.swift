@@ -870,6 +870,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case paletteCategoryServer
     case paletteCategoryAgent
     case paletteCategoryHelp
+    // 命令面板的搜索范围（队列 `L-170`：只两类 —— 当前工作区的文件 + 自带命令）
+    case commandPaletteCommandsGroup
+    case paletteCategoryWorkspaceFile
+    case paletteWorkspaceSearching
+    case paletteWorkspaceFilesTruncated
     case commandGoToLineHint
     case commandPalettePlaceholder
     case commandPaletteNoMatch
@@ -2835,6 +2840,10 @@ public enum LocalizedStrings {
         .paletteCategoryServer: [.simplifiedChinese: "服务器", .english: "Server"],
         .paletteCategoryAgent: [.simplifiedChinese: "智能体", .english: "Agent"],
         .paletteCategoryHelp: [.simplifiedChinese: "帮助", .english: "Help"],
+        .commandPaletteCommandsGroup: [.simplifiedChinese: "命令", .english: "Commands"],
+        .paletteCategoryWorkspaceFile: [.simplifiedChinese: "当前工作区的文件", .english: "Files in This Workspace"],
+        .paletteWorkspaceSearching: [.simplifiedChinese: "正在检索工作区…", .english: "Searching the workspace…"],
+        .paletteWorkspaceFilesTruncated: [.simplifiedChinese: "工作区文件命中已到上限，只列了前 %@ 条", .english: "Workspace file hits reached the cap — only the first %@ are listed"],
         .commandGoToLineHint: [.simplifiedChinese: "跳转到行请用 %@（面板里没有行号输入框）", .english: "Use %@ to jump to a line (the palette has no line-number field)"],
         .commandPalettePlaceholder: [.simplifiedChinese: "输入命令名…（支持首字母缩写与中文）", .english: "Type a command…(acronyms and Chinese work)"],
         .commandPaletteNoMatch: [.simplifiedChinese: "没有匹配的命令", .english: "No matching command"],

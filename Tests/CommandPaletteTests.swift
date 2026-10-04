@@ -125,6 +125,180 @@ final class CommandPaletteTests: XCTestCase {
     }
 }
 
+/// **面板的搜索范围**（队列 `L-170`，需求提出者 2026-10-03 定案）：
+/// 只有两类 —— **当前工作区里的文件** + **Doyah Studio 自带的命令**。
+///
+/// 判据三层（照「用户可见的小行为也要判据」那套写法）：
+///  ① **项的身份证**：工作区文件项的 id 形状只有一处（`CommandPalette.FileID`），
+///     正反解析成对；命令项默认 `scope = .command`（老调用点不受影响）。
+///  ② **分组规则**：空组不出标题；两组都在时按「最强命中更硬的那组在前」；
+///     同分 ⇒ 命令在前（确定性 —— 不随数组顺序摇）。
+///  ③ **接线（源锚点）**：面板真的把工作区文件名交给引擎（`WorkspaceSearch.findFileNames`）、
+///     真的按 `scope` 分派（文件 → `openFile(at:line:)`），且**没有**去搜范围外的东西
+///     （对象树 / 笔记 / 内容检索）。
+final class CommandPaletteWorkspaceScopeTests: XCTestCase {
+
+    private func item(_ id: String, _ title: String, keywords: [String] = []) -> CommandPalette.Item {
+        CommandPalette.Item(id: id, title: title, keywords: keywords)
+    }
+
+    private func match(_ item: CommandPalette.Item, score: Int) -> CommandPalette.Match {
+        CommandPalette.Match(item: item, score: score, highlighted: [])
+    }
+
+    // MARK: ① 项的身份证
+
+    func testFileIDRoundTripsAndRejectsOtherIDs() {
+        let id = CommandPalette.FileID.make(relativePath: "App/Views/MainWindow.swift")
+        XCTAssertEqual(id, "file:App/Views/MainWindow.swift")
+        XCTAssertEqual(CommandPalette.FileID.relativePath(from: id), "App/Views/MainWindow.swift")
+        XCTAssertTrue(CommandPalette.FileID.isFile(id))
+
+        // 命令 id 不是文件项；空路径也不是。
+        XCTAssertNil(CommandPalette.FileID.relativePath(from: "format"))
+        XCTAssertFalse(CommandPalette.FileID.isFile("format"))
+        XCTAssertNil(CommandPalette.FileID.relativePath(from: CommandPalette.FileID.prefix))
+    }
+
+    func testScopeDefaultsToCommand() {
+        XCTAssertEqual(item("format", "格式化 SQL").scope, .command)
+        let fileItem = CommandPalette.Item(
+            id: CommandPalette.FileID.make(relativePath: "README.md"),
+            title: "README.md",
+            scope: .workspaceFile
+        )
+        XCTAssertEqual(fileItem.scope, .workspaceFile)
+    }
+
+    // MARK: ② 分组规则
+
+    func testEmptyGroupsProduceNoHeader() {
+        XCTAssertTrue(CommandPalette.grouped(commands: [], files: []).isEmpty)
+
+        let commands = [match(item("format", "格式化 SQL"), score: 800)]
+        XCTAssertEqual(CommandPalette.grouped(commands: commands, files: []).map(\.kind), [.commands])
+
+        let files = [match(item("file:README.md", "README.md"), score: 1000)]
+        XCTAssertEqual(CommandPalette.grouped(commands: [], files: files).map(\.kind), [.workspaceFiles])
+    }
+
+    func testHarderHitWinsTheTopGroup() {
+        let commands = [match(item("format", "格式化 SQL"), score: CommandPalette.Score.substring)]
+        let files = [match(item("file:README.md", "README.md"), score: CommandPalette.Score.exact)]
+        XCTAssertEqual(
+            CommandPalette.grouped(commands: commands, files: files).map(\.kind),
+            [.workspaceFiles, .commands],
+            "文件名全等命中（1000）比命令的子串命中（600）硬 ⇒ 文件组在前"
+        )
+    }
+
+    func testTieGoesToCommands() {
+        let commands = [match(item("format", "格式化 SQL"), score: CommandPalette.Score.prefix)]
+        let files = [match(item("file:格式化.md", "格式化.md"), score: CommandPalette.Score.prefix)]
+        XCTAssertEqual(
+            CommandPalette.grouped(commands: commands, files: files).map(\.kind),
+            [.commands, .workspaceFiles],
+            "同分时命令在前 —— 面板的主用途不变，规则也得有确定答案"
+        )
+    }
+
+    /// 组内顺序**一个字不改**（成员与顺序的唯一出处是各自的引擎）。
+    func testInnerOrderIsUntouched() {
+        let commands = [
+            match(item("b", "导出 B"), score: 600),
+            match(item("a", "导出 A"), score: 600),
+        ]
+        let files = [
+            match(item("file:src/a.md", "a.md"), score: 300),
+            match(item("file:docs/b.md", "b.md"), score: 300),
+        ]
+        let groups = CommandPalette.grouped(commands: commands, files: files)
+        XCTAssertEqual(groups.first(where: { $0.kind == .commands })?.matches.map(\.item.id), ["b", "a"])
+        XCTAssertEqual(groups.first(where: { $0.kind == .workspaceFiles })?.matches.map(\.item.id),
+                       ["file:src/a.md", "file:docs/b.md"])
+    }
+
+    /// 端到端：命令与文件同时命中时，走的是**同一个档位比较**（不是写死的组序）。
+    func testRealisticQueryPairs() {
+        let items: [CommandPalette.Item] = [
+            .init(id: "format", title: "格式化 SQL", keywords: ["format", "fmt"]),
+        ]
+        let fileItems: [CommandPalette.Item] = [
+            .init(id: CommandPalette.FileID.make(relativePath: "笔记/格式化.md"), title: "格式化.md",
+                  keywords: ["笔记/格式化.md"], scope: .workspaceFile),
+            .init(id: CommandPalette.FileID.make(relativePath: "db/SQL.md"), title: "SQL.md",
+                  keywords: ["db/SQL.md"], scope: .workspaceFile),
+        ]
+
+        // 敲命令名 ⇒ 命令组在前（「格式化 SQL」与「格式化.md」都是**前缀档** ⇒ 同分 ⇒ 命令在前）。
+        let tied = CommandPalette.grouped(
+            commands: CommandPalette.search("格式", in: items),
+            files: CommandPalette.search("格式", in: fileItems)
+        )
+        XCTAssertEqual(tied.map(\.kind), [.commands, .workspaceFiles])
+
+        // 敲文件名 ⇒ 文件组在前：「SQL.md」是**前缀档**（800），命令那条只到**词首档**（700）。
+        let fileFirst = CommandPalette.grouped(
+            commands: CommandPalette.search("sql", in: items),
+            files: CommandPalette.search("sql", in: fileItems)
+        )
+        XCTAssertEqual(fileFirst.map(\.kind), [.workspaceFiles, .commands])
+    }
+}
+
+/// 接线（源锚点）：面板的**范围**与**回车路由**写在哪一行。
+///
+/// 这一层判的是"两处口径不许漂开"：范围一旦被谁扩回去（或回车路由被改成一律走分派器），
+/// 用户看到的就是"搜出来的东西点了没反应"。与 `FR-EDIT-25` 那批"设了标志位没人读"同族。
+final class CommandPaletteWorkspaceScopeWiringTests: XCTestCase {
+
+    private func source(_ relative: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
+    }
+
+    func testCatalogBuildsWorkspaceFileItemsWithoutTouchingTheStaticCommandList() throws {
+        let text = try source("App/AppCommandCatalog.swift")
+
+        guard text.contains("scope: .workspaceFile") else {
+            return XCTFail("目录里没有造过 `scope: .workspaceFile` 的项 —— 面板拿不到工作区文件那一类")
+        }
+        guard text.contains("CommandPalette.FileID.make(relativePath:") else {
+            return XCTFail("文件项的 id 不是走 `CommandPalette.FileID.make` 造的（前缀会有第二份写法）")
+        }
+        // 静态命令清单里**不许**出现文件项：`Scripts/check-palette-wiring.py` 按 `item(` 数命令，
+        // 且要求每条都在分派器里有 case —— 文件是动态的，混进去那条门禁当场报红。
+        let listStart = try XCTUnwrap(text.range(of: "static func all()"))
+        let listEnd = try XCTUnwrap(text.range(of: "static func shortcutHint", range: listStart.upperBound..<text.endIndex))
+        let listBlock = String(text[listStart.upperBound..<listEnd.lowerBound])
+        XCTAssertFalse(listBlock.contains("FileID"), "命令清单里混进了工作区文件项")
+    }
+
+    func testPaletteRoutesByScopeAndOnlySearchesTheOpenWorkspace() throws {
+        let text = try source("App/Views/CommandPaletteView.swift")
+
+        guard text.contains("CommandPalette.grouped(commands:") else {
+            return XCTFail("面板没有用 `CommandPalette.grouped` 分组 —— 两类结果会按分值混着排")
+        }
+        guard text.contains("WorkspaceSearch.findFileNames(in: root, query: needle)") else {
+            return XCTFail("工作区文件名没有交给引擎（`WorkspaceSearch.findFileNames`）—— 界面自己写了一套匹配")
+        }
+        guard text.contains("case .workspaceFile:") , text.contains("openWorkspaceFile(id:") else {
+            return XCTFail("回车没有按 `scope` 分开路由 —— 文件项会被丢进命令分派器（点了没反应）")
+        }
+        guard text.contains("workspaceTabs.openFile(at: url, line: nil)") else {
+            return XCTFail("文件项没有真的打开文件（`openFile(at:line:)`）")
+        }
+        // 范围外的一律不碰（定案：只做工作区文件 + 自带命令）。
+        XCTAssertFalse(text.contains("findContents"), "面板不许搜内容（那是 `FR-EDIT-44` 标头搜索框的范围）")
+        XCTAssertFalse(text.contains("selectedTreeObject"), "面板不许搜对象树")
+        XCTAssertFalse(text.contains("NotesStore"), "面板不许搜笔记")
+    }
+}
+
+
 /// **窗口标题与标题栏搜索栏**（FR-EDIT-37，2026-09-30 需求提出者）。
 ///
 /// 需求两半：① 主界面标题跟着活动栏走（`Doyah Studio - <视图名>`）；② 标题后面居中放一个搜索栏。

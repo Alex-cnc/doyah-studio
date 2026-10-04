@@ -79,6 +79,43 @@ enum AppCommandCatalog {
         shortcut.display
     }
 
+    // MARK: - 当前工作区的文件（队列 `L-170`）
+
+    /// 面板里那条「当前工作区的文件」项。
+    ///
+    /// **刻意不走上面那个 `item(...)` 辅助**：那个形状只服务**静态命令清单** ——
+    /// 门禁 `Scripts/check-palette-wiring.py` 正是按它数「清单里有几条命令」，并要求
+    /// 每一条都在 `performPaletteCommand` 里有 case。文件项是**动态**的（取决于当时开着
+    /// 哪个工作区），混进那条路径会让门禁把文件命中当成命令。
+    static func workspaceFileItem(_ entry: WorkspaceEntry) -> CommandPalette.Item {
+        CommandPalette.Item(
+            id: CommandPalette.FileID.make(relativePath: entry.relativePath),
+            title: entry.name,
+            // 相对路径也进关键词：搜 `Views` 要能找到 `App/Views/…` 下的那一批
+            // （命中标题之外的那半 —— 引擎按名字命中，面板按名字 + 路径排序）。
+            keywords: [entry.relativePath],
+            category: L(.paletteCategoryWorkspaceFile),
+            scope: .workspaceFile
+        )
+    }
+
+    /// 把工作区的**文件名命中**接成面板的一组（队列 `L-170`）。
+    ///
+    /// **成员与顺序的唯一出处 = `WorkspaceSearch`**（引擎的 `Result` 已经按相对路径排好），
+    /// 这里**不重新过滤**：再滤一遍必然与引擎的谓词分叉 —— `findFileNames` 认
+    /// 「大小写 + 变音符号不敏感」，而 `CommandPalette.match` 只做小写化 ⇒ 只在变音符号上
+    /// 命中的文件会在面板里**静默消失**。所以 `match` 给不出分值时**照样保留这一条**，
+    /// 只是拿最低分（组间比高下时才用到它）。
+    static func workspaceFileMatches(query: String, result: WorkspaceSearch.Result) -> [CommandPalette.Match] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return [] }
+        return result.entries.map { entry in
+            let item = workspaceFileItem(entry)
+            return CommandPalette.match(needle, item: item)
+                ?? CommandPalette.Match(item: item, score: 0, highlighted: [])
+        }
+    }
+
     private static func item(
         _ id: String,
         _ titleKey: LKey,
