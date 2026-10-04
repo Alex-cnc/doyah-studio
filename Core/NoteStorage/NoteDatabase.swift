@@ -204,6 +204,25 @@ public enum NoteSchemaV3 {
     ]
 }
 
+/// **schema v4**（队列 `L-184` 第四片）：给 `note` 补一列 **`pinned`** —— 置顶。
+///
+/// 与 v3 的 `favorite` 是同一形态、同一理由（契约 §2.1 `pinned`「排序第一关键字」）：
+/// 它是笔记自己的一个布尔状态，不是另一件东西 ⇒ **补列、不新表、不新索引**。
+/// 默认 `0` + `NOT NULL`：`ADD COLUMN` 要能在一张已有几百行的表上当场成立，而存量笔记的语义
+/// 本来就是「没置顶」⇒ 默认值是**如实**的，不是填充（同 v3 那一条）。
+public enum NoteSchemaV4 {
+
+    public static let version: Int32 = 4
+
+    /// 这一版**不新增表 / 不新增索引**（只补一列）。
+    public static let tables: [String] = []
+    public static let indexes: [String] = []
+
+    public static let ddl: [String] = [
+        "ALTER TABLE note ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1));"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -287,8 +306,8 @@ public final class NoteDatabase {
     /// 库文件名。**与旧格式 `notes.json` 不同名**：迁移要靠「目标不在」判定要不要搬（L-03 的纪律）。
     public static let fileName = "notes.sqlite3"
 
-    /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏）。
-    public static let supportedVersion = NoteSchemaV3.version
+    /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏、v3 → v4 补置顶）。
+    public static let supportedVersion = NoteSchemaV4.version
 
     private let connection: SQLiteConnection
 
@@ -335,7 +354,7 @@ public final class NoteDatabase {
         (try? connection.scalarInt("PRAGMA foreign_keys")).flatMap { $0 } == 1
     }
 
-    /// 按需建/升级到最新 schema（当前 v3）。**一个事务里做完**：DDL 与版本号一起生效，
+    /// 按需建/升级到最新 schema（当前 v4）。**一个事务里做完**：DDL 与版本号一起生效，
     /// 不会出现「表建了一半、版本已记 2」。
     ///
     /// 逐版升级（不是「按最新版直接建」）：存量库要真的走 v1 → v2 这两步，
@@ -359,6 +378,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV3.version {
                 for statement in NoteSchemaV3.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV3.version)")
+            }
+            if current < NoteSchemaV4.version {
+                for statement in NoteSchemaV4.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV4.version)")
             }
         }
     }
@@ -399,8 +422,8 @@ public final class NoteDatabase {
                 INSERT INTO note (
                     uuid, title, body, source_kind, source_connection_name, source_fingerprint,
                     source_captured_at, created_at, updated_at, contains_row_data, storage_version,
-                    favorite
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    favorite, pinned
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (uuid) DO UPDATE SET
                     title = excluded.title,
                     body = excluded.body,
@@ -427,7 +450,10 @@ public final class NoteDatabase {
                     // **`favorite` 只在这一句的 INSERT 分支里出现**（`ON CONFLICT` 段刻意不含它）：
                     // 与 `notebook_uid` 同一条教训 —— 否则「打开一条收藏过的笔记、改几个字、保存」
                     // 会把它**静默取消收藏**。改收藏只有 `setFavorite` 一条路。
-                    .integer(note.isFavorite ? 1 : 0)
+                    .integer(note.isFavorite ? 1 : 0),
+                    // **`pinned` 同理**：只在 INSERT 分支出现，`ON CONFLICT` 段绝不含它 ——
+                    // 「打开一条置顶过的笔记、改几个字、保存」不许把它静默取消置顶（改置顶只有 `setPinned`）。
+                    .integer(note.isPinned ? 1 : 0)
                 ]
             )
             // **按 uuid 反查 rowid**，而不是读 `last_insert_rowid()`：走的是 upsert 的 UPDATE 分支时，
@@ -523,6 +549,28 @@ public final class NoteDatabase {
     public func isFavorite(id: UUID) throws -> Bool? {
         try connection
             .scalarInt("SELECT favorite FROM note WHERE uuid = ?", [.text(id.uuidString)])
+            .map { $0 == 1 }
+    }
+
+    /// **置顶 / 取消置顶**（队列 `L-184` 第四片；`FR-NOTE-18`、契约 §2.1 `pinned`）。
+    ///
+    /// 与 `setFavorite` 逐条同口径：**不碰 `updated_at`**（置顶是组织行为，不是一次内容更新；否则
+    /// 置顶一下，列表按更新时间排的那一段次序就整体错乱）；**只改这一列**（`upsert` 的 `ON CONFLICT`
+    /// 段不含 `pinned`，所以改正文保存不会把它抹掉）；认不出的 id ⇒ 一行都不匹配，
+    /// 由调用方按返回值如实处置（返回 0 就是「库里没有这条」，不是「已经改好了」）。
+    @discardableResult
+    public func setPinned(_ pinned: Bool, id: UUID) throws -> Int {
+        try connection.execute(
+            "UPDATE note SET pinned = ? WHERE uuid = ?",
+            [.integer(pinned ? 1 : 0), .text(id.uuidString)]
+        )
+        return connection.changeCount
+    }
+
+    /// 一条笔记是不是置顶（`nil` = 库里没有这条笔记）。判据与迁移用它读回事实，不靠内存里的值。
+    public func isPinned(id: UUID) throws -> Bool? {
+        try connection
+            .scalarInt("SELECT pinned FROM note WHERE uuid = ?", [.text(id.uuidString)])
             .map { $0 == 1 }
     }
 
@@ -1201,7 +1249,8 @@ public final class NoteDatabase {
                 createdAt: Date(timeIntervalSince1970: row["created_at"].doubleValue ?? 0),
                 updatedAt: Date(timeIntervalSince1970: row["updated_at"].doubleValue ?? 0),
                 containsRowData: row["contains_row_data"].intValue == 1,
-                isFavorite: row["favorite"].intValue == 1
+                isFavorite: row["favorite"].intValue == 1,
+                isPinned: row["pinned"].intValue == 1
             )
         }
     }

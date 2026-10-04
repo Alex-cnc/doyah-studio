@@ -230,14 +230,15 @@ public actor NoteLibrary {
     @discardableResult
     public func upsert(_ draft: NoteDraft, id: UUID? = nil, now: Date = Date()) throws -> Note {
         let database = try open()
-        // 查一次旧行只为了拿 `createdAt` 与**收藏**：拿不到（新笔记 / 库是空的）就用 `now` / `false`。
-        // 为什么收藏要在这里读回来：`upsert` 的 `ON CONFLICT` 段刻意不碰 `favorite`（与 `notebook_uid`
-        // 同一条教训 —— 改几个字保存不该静默取消收藏），所以库里那份才是事实；
-        // 返回的 `Note` 要如实反映它，否则调用方拿到的是「看起来没收藏」的假象。
+        // 查一次旧行只为了拿 `createdAt` 与**组织状态（收藏 / 置顶）**：拿不到（新笔记 / 库是空的）就用 `now` / `false`。
+        // 为什么这两个要在这里读回来：`upsert` 的 `ON CONFLICT` 段刻意不碰 `favorite` / `pinned`（与
+        // `notebook_uid` 同一条教训 —— 改几个字保存不该静默取消收藏 / 取消置顶），所以库里那份才是事实；
+        // 返回的 `Note` 要如实反映它，否则调用方拿到的是「看起来没收藏 / 没置顶」的假象。
         let existing = try id.flatMap { try database.note(id: $0) }
         var note = draft.makeNote(now: existing?.createdAt ?? now)
         if let id { note.id = id }
         note.isFavorite = existing?.isFavorite ?? false
+        note.isPinned = existing?.isPinned ?? false
         note.updatedAt = now
         _ = try database.upsert(note)
         return note
@@ -253,6 +254,18 @@ public actor NoteLibrary {
     /// 一条笔记是不是收藏（`nil` = 库里没有这条笔记）。
     public func isFavorite(id: UUID) throws -> Bool? {
         try open().isFavorite(id: id)
+    }
+
+    /// **置顶 / 取消置顶一条笔记**（队列 `L-184` 第四片）：返回**真的改了几行**。
+    /// 认不出的 id ⇒ `0` —— 调用方按这个数如实处置，不要假装改成了。
+    @discardableResult
+    public func setPinned(id: UUID, _ pinned: Bool) throws -> Int {
+        try open().setPinned(pinned, id: id)
+    }
+
+    /// 一条笔记是不是置顶（`nil` = 库里没有这条笔记）。
+    public func isPinned(id: UUID) throws -> Bool? {
+        try open().isPinned(id: id)
     }
 
     public func delete(id: UUID) throws {

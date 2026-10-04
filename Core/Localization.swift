@@ -397,6 +397,13 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesUnmarkFavorite
     /// 收藏一个**库里已经没有的** id（写库返回 0 行）时那句如实交代 —— 不静默。
     case notesFavoriteMissing
+    // 队列 `L-184` **第四片**：笔记行上那枚置顶标记，以及右键里的置顶 / 取消置顶
+    // （与收藏那一族并列的两档排序 —— 契约 §2.1 的 `pinned` 是**第一关键字**）。
+    case notesPinned
+    case notesMarkPinned
+    case notesUnmarkPinned
+    /// 置顶一个**库里已经没有的** id（写库返回 0 行）时那句如实交代 —— 同收藏，不静默。
+    case notesPinnedMissing
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -2387,6 +2394,13 @@ public enum LocalizedStrings {
         .notesMarkFavorite: [.simplifiedChinese: "收藏", .english: "Add to favorites"],
         .notesUnmarkFavorite: [.simplifiedChinese: "取消收藏", .english: "Remove from favorites"],
         .notesFavoriteMissing: [
+            .simplifiedChinese: "这条笔记已经不在了（列表已重读）",
+            .english: "That note is gone (the list was reloaded)"
+        ],
+        .notesPinned: [.simplifiedChinese: "已置顶", .english: "Pinned"],
+        .notesMarkPinned: [.simplifiedChinese: "置顶", .english: "Pin to top"],
+        .notesUnmarkPinned: [.simplifiedChinese: "取消置顶", .english: "Unpin"],
+        .notesPinnedMissing: [
             .simplifiedChinese: "这条笔记已经不在了（列表已重读）",
             .english: "That note is gone (the list was reloaded)"
         ],

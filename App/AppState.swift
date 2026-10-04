@@ -6119,6 +6119,23 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// **置顶 / 取消置顶一条笔记**（队列 `L-184` 第四片）：与 `toggleNoteFavorite` 同一条路
+    /// （写库 → 重读 → 界面按重读后的事实重画），失败与「认不出这条」都不静默。
+    func toggleNotePinned(_ note: Note) async {
+        let target = !note.isPinned
+        do {
+            let changed = try await NoteLibrary.defaultLibrary().setPinned(id: note.id, target)
+            if changed == 0 {
+                statusMessage = L(.notesPinnedMissing)
+                await reloadNotes()
+                return
+            }
+            await reloadNotes()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
     // MARK: - 删除确认框（队列 `L-97` 界面半第二片）
 
     /// 确认框正文（**唯一生产点**）：按 `ContainerRemovalSummary` 给的形状出句子 ——

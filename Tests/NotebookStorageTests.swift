@@ -99,7 +99,7 @@ final class NotebookStorageTests: XCTestCase {
         try connection.close()
     }
 
-    // MARK: - ① 存量库升级（v1 → v2）
+    // MARK: - ① 存量库升级（v1 → v4）
 
     /// 存量 v1 库打开后**升到 v2**，两张新表与补列都在，且笔记**一字不丢**。
     func testVersionOneDatabaseUpgradesToVersionTwoWithoutLosingNotes() throws {
@@ -107,7 +107,7 @@ final class NotebookStorageTests: XCTestCase {
         try makeVersionOneDatabase(notes: [note])
 
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV3.version)
+        XCTAssertEqual(database.userVersion, NoteSchemaV4.version)
         let tables = try database.tableNames()
         for expected in NoteSchemaV2.tables {
             XCTAssertTrue(tables.contains(expected), "升级后缺表 \(expected)；实际：\(tables)")
@@ -266,7 +266,7 @@ final class NotebookStorageTests: XCTestCase {
 
         let target = url("snapshots/notes-20261003T213000.sqlite3")
         let snapshot = try database.snapshot(to: target)
-        XCTAssertEqual(snapshot.schemaVersion, NoteSchemaV3.version)
+        XCTAssertEqual(snapshot.schemaVersion, NoteSchemaV4.version)
 
         let restored = try NoteDatabase(path: target.path)
         defer { try? restored.close() }
@@ -285,7 +285,7 @@ final class NotebookStorageTests: XCTestCase {
         try makeVersionOneDatabase(notes: [note])
 
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV3.version, "v1 库要一路升到 v3")
+        XCTAssertEqual(database.userVersion, NoteSchemaV4.version, "v1 库要一路升到 v4（补列不改语义）")
         let restored = try XCTUnwrap(try database.note(id: note.id))
         XCTAssertFalse(restored.isFavorite, "存量笔记的语义就是「没收藏」—— 默认 0 是如实，不是填充")
 
@@ -315,6 +315,73 @@ final class NotebookStorageTests: XCTestCase {
         XCTAssertEqual(try database.setFavorite(true, id: note.id), 1, "同值重写仍是命中一行（UPDATE 按 WHERE 命中计）")
         XCTAssertEqual(try database.setFavorite(false, id: UUID()), 0, "库里没有这个 id ⇒ 一行都不该被改")
         XCTAssertNil(try database.isFavorite(id: UUID()), "问一条不存在的笔记 ⇒ nil，不是 false")
+        XCTAssertEqual(try database.noteCount(), 1)
+    }
+
+    // MARK: - ⑤ 置顶（队列 `L-184` 第四片）
+
+    /// **v1 存量库一路升到 v4**：补列之后老笔记一律「没置顶」（默认 0）；**置顶不刷新 `updatedAt`**；
+    /// **编辑保存不清置顶**（`upsert` 的 `ON CONFLICT` 段刻意不碰这一列）。
+    /// 与收藏那两条**逐条同形** —— 它们是契约 §2.1 两档排序关键字的同一个形状。
+    func testVersionOneDatabaseUpgradesToVersionFourWithPinsOffByDefault() throws {
+        let note = sampleNote(title: "存量笔记", body: "洞庭湖", tags: ["骑行"])
+        try makeVersionOneDatabase(notes: [note])
+
+        let database = try makeDatabase()
+        XCTAssertEqual(database.userVersion, NoteSchemaV4.version, "v1 库要一路升到 v4")
+        let restored = try XCTUnwrap(try database.note(id: note.id))
+        XCTAssertFalse(restored.isPinned, "存量笔记的语义就是「没置顶」—— 默认 0 是如实，不是填充")
+
+        let before = restored.updatedAt
+        XCTAssertEqual(try database.setPinned(true, id: note.id), 1)
+        let pinned = try XCTUnwrap(try database.note(id: note.id))
+        XCTAssertTrue(pinned.isPinned)
+        XCTAssertEqual(pinned.updatedAt, before, "置顶是组织行为 —— 不许刷新 updated_at（同收藏 / 跨笔记本移动）")
+
+        // **编辑保存不清置顶**：内存里故意写成「没置顶」，库里那份才是事实
+        var edited = pinned
+        edited.body = "改了几个字"
+        edited.isPinned = false
+        try database.upsert(edited)
+        let afterEdit = try XCTUnwrap(try database.note(id: note.id))
+        XCTAssertEqual(afterEdit.body, "改了几个字")
+        XCTAssertTrue(afterEdit.isPinned, "改几个字保存不许把置顶静默抹掉")
+        XCTAssertEqual(try database.isPinned(id: note.id), true)
+    }
+
+    /// **收藏与置顶是两列、两件事**：改其中一个不许动另一个（契约 §2.1 把它们列为两档排序关键字）。
+    func testPinnedAndFavoriteAreTwoIndependentColumns() throws {
+        let database = try makeDatabase()
+        let note = sampleNote(title: "两条路各走各的")
+        try database.upsert(note)
+
+        XCTAssertEqual(try database.setPinned(true, id: note.id), 1)
+        XCTAssertEqual(try database.setFavorite(true, id: note.id), 1)
+        var both = try XCTUnwrap(try database.note(id: note.id))
+        XCTAssertTrue(both.isPinned && both.isFavorite)
+
+        XCTAssertEqual(try database.setPinned(false, id: note.id), 1)
+        both = try XCTUnwrap(try database.note(id: note.id))
+        XCTAssertFalse(both.isPinned, "取消置顶生效")
+        XCTAssertTrue(both.isFavorite, "取消置顶不许顺手把收藏也去掉")
+
+        // 反向：改收藏不许动置顶
+        XCTAssertEqual(try database.setPinned(true, id: note.id), 1)
+        XCTAssertEqual(try database.setFavorite(false, id: note.id), 1)
+        both = try XCTUnwrap(try database.note(id: note.id))
+        XCTAssertTrue(both.isPinned)
+        XCTAssertFalse(both.isFavorite)
+    }
+
+    /// 置顶只改那一列；**认不出的 id ⇒ 0 行**（与 `setFavorite` 同一条纪律：不许假装改成了）。
+    func testSetPinnedReportsUnmatchedIdentifiersInsteadOfPretending() throws {
+        let database = try makeDatabase()
+        let note = sampleNote(title: "只有这一条")
+        try database.upsert(note)
+        XCTAssertEqual(try database.setPinned(true, id: note.id), 1)
+        XCTAssertEqual(try database.setPinned(true, id: note.id), 1, "同值重写仍是命中一行（UPDATE 按 WHERE 命中计）")
+        XCTAssertEqual(try database.setPinned(false, id: UUID()), 0, "库里没有这个 id ⇒ 一行都不该被改")
+        XCTAssertNil(try database.isPinned(id: UUID()), "问一条不存在的笔记 ⇒ nil，不是 false")
         XCTAssertEqual(try database.noteCount(), 1)
     }
 

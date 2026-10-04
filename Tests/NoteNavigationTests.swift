@@ -390,6 +390,46 @@ final class NoteNavigationTests: XCTestCase {
         )
     }
 
+    // MARK: - 置顶（队列 `L-184` 第四片）
+
+    /// **置顶上浮**（`FR-NOTE-18` 的**第一档**）：置顶的那一条排在**收藏区之前** ——
+    /// 三档是**同一次比较的三个关键字**（置顶 → 收藏 → 更新时间倒序），不是三段各自排序。
+    func testPinnedNotesFloatAboveFavoritesInTheDefaultOrder() {
+        let sut = makeFavoritesSUT()
+        // 把时间**最旧**的那一条（「收藏·较旧」）置顶 ⇒ 它必须排到最前，且压过另一条收藏。
+        var notes = sut.notes
+        notes[1].isPinned = true
+        let ordered = sut.navigation.listing(notes, scope: .all, sort: .updatedDesc)
+        XCTAssertEqual(ordered.map(\.title), ["收藏·较旧", "收藏·别的架", "普通·最新", "普通·最旧"])
+        XCTAssertTrue(ordered[0].isPinned, "第一条就是置顶那条（时间最旧也照样第一）")
+        XCTAssertFalse(ordered[1].isPinned, "置顶区只有那一条")
+
+        // **两条都置顶**时：置顶区内部**照旧按收藏 → 时间**（三个关键字是同一次比较）
+        var both = notes
+        both[2].isPinned = true   // 「收藏·别的架」也置顶
+        let two = sut.navigation.listing(both, scope: .all, sort: .updatedDesc)
+        XCTAssertEqual(two.prefix(2).map(\.title), ["收藏·别的架", "收藏·较旧"],
+                       "都是置顶 ⇒ 看第二关键字（收藏）与第三关键字（时间）")
+        XCTAssertTrue(two.prefix(2).allSatisfy(\.isPinned))
+
+        // **别的档不吃这一口**：用户显式选了「标题」就按标题排（与收藏同一条登记）。
+        let byTitle = sut.navigation.listing(notes, scope: .all, sort: .titleAsc)
+        XCTAssertEqual(byTitle.map(\.title), byTitle.map(\.title).sorted(), "标题档就是标题序")
+    }
+
+    /// 置顶是**排序关键字**，不是第六个容器：它不新造范围、也不改变任何范围里的成员
+    /// （契约 §2.1 只给了排序位，没有 `pinnedOnly` —— 与收藏不同，这里刻意不加筛选）。
+    func testPinningChangesOrderButNotAnyScopesMembership() {
+        let sut = makeFavoritesSUT()
+        var notes = sut.notes
+        notes[0].isPinned = true
+        XCTAssertEqual(sut.navigation.filter(notes, scope: .all).count, 4)
+        XCTAssertEqual(sut.navigation.filter(notes, scope: .favorites).count,
+                       sut.navigation.favoriteCount(in: notes))
+        XCTAssertEqual(sut.navigation.favoriteCount(in: notes), 2, "置顶不改变收藏那一条判断")
+        XCTAssertEqual(sut.navigation.listing(notes, scope: .all, sort: .updatedDesc).count, 4)
+    }
+
     // MARK: - 接线（源码判据）
 
     /// 视图与 `AppState` 必须**真的用**这套导航 —— 纯逻辑写好了却没人调用，是这一族最典型的假绿
@@ -422,6 +462,10 @@ final class NoteNavigationTests: XCTestCase {
         XCTAssertTrue(appState.contains("notesFavoriteOnly"), "开关的当前值由宿主一处给（左栏那一行共用它）")
         XCTAssertTrue(appState.contains("setNotesFavoriteOnly"), "开关只有一个入口")
         XCTAssertTrue(appState.contains("toggleNoteFavorite"), "收藏的写库入口只此一处")
+        // 队列 `L-184` 第四片：置顶（契约 §2.1 的**第一关键字**）也要有界面入口与唯一写库口
+        XCTAssertTrue(panel.contains("notes-pinned-toggle-"), "行右键要有「置顶 / 取消置顶」")
+        XCTAssertTrue(panel.contains("pin.fill"), "置顶过的行上要看得见图钉（与收藏的星分开）")
+        XCTAssertTrue(appState.contains("toggleNotePinned"), "置顶的写库入口只此一处")
         XCTAssertFalse(
             appState.contains("@Published var notesFavoriteOnly"),
             "开关不许另立第二个状态 —— 两处各存一份必然出现「开关开着、列表在看全部」"

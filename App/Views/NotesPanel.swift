@@ -93,6 +93,15 @@ struct NotesListView: View {
                             Text(note.title)
                                 .font(Theme.font(.body))
                                 .lineLimit(1)
+                            // **置顶的标记**（队列 `L-184` 第四片）：置顶过的行上看得见图钉 ——
+                            // 与收藏的星是**两件事**（契约 §2.1：置顶是第一关键字、收藏是第二），
+                            // 两个标记各画各的，不合并成一个「标记过」。
+                            if note.isPinned {
+                                Image(systemName: "pin.fill")
+                                    .font(Theme.font(.caption))
+                                    .foregroundStyle(Theme.text(.secondary))
+                                    .accessibilityLabel(L(.notesPinned))
+                            }
                             // **收藏的标记**（队列 `L-184` 第三片）：收藏过的行上看得见星 ——
                             // 否则「收藏了没有」只能靠右键菜单里的措辞反推。
                             if note.isFavorite {
@@ -140,6 +149,7 @@ struct NotesListView: View {
                     .draggable(appState.noteDragPayload(for: note))
                     .help(L(NoteSelectionPrompt.dragHintKey))
                     .contextMenu {
+                        pinnedToggle(for: note)
                         favoriteToggle(for: note)
                         Divider()
                         moveMenu(for: note)
@@ -167,6 +177,17 @@ struct NotesListView: View {
             Task { await appState.toggleNoteFavorite(note) }
         }
         .accessibilityIdentifier("notes-favorite-toggle-\(note.id.uuidString)")
+    }
+
+    /// 行右键里的**置顶 / 取消置顶**（队列 `L-184` 第四片）：与上面那条同一条纪律 ——
+    /// 一个动作两种措辞（当前没置顶 ⇒「置顶」、已置顶 ⇒「取消置顶」），写库与重读都在
+    /// `AppState.toggleNotePinned` 一处。**它与收藏是两条独立的菜单项**（契约 §2.1 的两档排序）。
+    @ViewBuilder
+    private func pinnedToggle(for note: Note) -> some View {
+        Button(L(note.isPinned ? .notesUnmarkPinned : .notesMarkPinned)) {
+            Task { await appState.toggleNotePinned(note) }
+        }
+        .accessibilityIdentifier("notes-pinned-toggle-\(note.id.uuidString)")
     }
 
     /// 笔记行右键的「移动到…」（队列 `L-97` ④）：清单 / 顺序 / 当前格都由 Core 给

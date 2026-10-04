@@ -83,8 +83,8 @@ public enum NotesSearchScope: String, CaseIterable, Sendable {
 ///     顺序可能不同 —— 界面上就是「刷新一下顺序变了」）；第二关键字 = 标题，第三 = `uid`
 ///     （标题重名时仍要有确定的次序）；
 ///  ③ **默认 = 最近更新在前**（三栏重排之前就是这个口径，改版不许顺手改掉它）；
-///  ④ **默认档里「收藏」上浮**（队列 `L-184` 第三片）：第二档是收藏、第三档才是时间 —— 见
-///     `comparator` 里那一段（`FR-NOTE-18` 的第一档「置顶」本侧尚未实现，如实登记）。
+///  ④ **默认档里「置顶 → 收藏」上浮**（队列 `L-184` 第三 / 第四片）：`FR-NOTE-18` 的**两档都在** ——
+///     置顶在前、收藏其次、再次才是时间。见 `comparator` 里那一段。
 public enum NotesSortOrder: String, CaseIterable, Sendable {
     /// 最近更新在前。
     case updatedDesc
@@ -107,10 +107,10 @@ public enum NotesSortOrder: String, CaseIterable, Sendable {
         switch self {
         case .updatedDesc:
             return { left, right in
-                // **收藏上浮**（`FR-NOTE-18`「置顶 → 收藏 → 更新时间倒序」的**第二档**）：收藏是
-                // 「我待会儿还要再看的那几条」，把它混在按时间排的长列表里等于没有这个功能。
-                // **置顶**（第一档）本侧还没做（模型与库里都没有那一列）⇒ 这里只落第二档，
-                // 不假装两档都齐了（如实登记在队列 `L-184` 的余项里）。
+                // **置顶上浮**（`FR-NOTE-18`「置顶 → 收藏 → 更新时间倒序」的**第一档**；契约 §2.1
+                // `pinned`）：置顶是「这几条我要一直看得见」—— 被后面的时间次序冲下去就等于没这个功能。
+                if left.isPinned != right.isPinned { return left.isPinned }
+                // **收藏上浮**（同一条的**第二档**）：收藏是「我待会儿还要再看的那几条」。
                 if left.isFavorite != right.isFavorite { return left.isFavorite }
                 if left.updatedAt != right.updatedAt { return left.updatedAt > right.updatedAt }
                 return Self.titleThenID(left, right)

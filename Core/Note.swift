@@ -53,6 +53,11 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
     /// （§2.3 `favoriteOnly`）、排序在**置顶之后、更新时间之前**；**收藏不刷新 `updatedAt`**
     /// （组织行为而非内容变更 —— 与跨笔记本移动同口径，否则收藏一下列表次序就整体错乱）。
     public var isFavorite: Bool
+    /// **置顶**（`DoyahNotes` 核心契约 §2.1 `pinned`；需求条文 `FR-NOTE-18`）：**排序第一关键字**
+    /// （§2.1 字段表与 §3.9 `InspirationDataSource.query` 的「置顶 → 收藏 → 更新时间倒序」）。
+    /// **置顶不刷新 `updatedAt`**（与收藏 / 跨笔记本移动同口径 —— 它是组织行为，不是一次内容更新；
+    /// 否则置顶一下，列表里按时间排的那一段次序就整体错乱）。
+    public var isPinned: Bool
 
     public init(
         id: UUID = UUID(),
@@ -63,7 +68,8 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         containsRowData: Bool = false,
-        isFavorite: Bool = false
+        isFavorite: Bool = false,
+        isPinned: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -74,9 +80,10 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         self.updatedAt = updatedAt
         self.containsRowData = containsRowData
         self.isFavorite = isFavorite
+        self.isPinned = isPinned
     }
 
-    /// **解码**：`favorite` 是**后加的字段**（旧库 / 旧 `notes.json` 里没有这一列）⇒ 缺字段按 `false`。
+    /// **解码**：`favorite` / `pinned` 是**后加的字段**（旧库 / 旧 `notes.json` 里没有这两列）⇒ 缺字段按 `false`。
     /// 不能让它成为「旧数据解不出来」的理由 —— 契约 §2.5 的「加字段**不加版本号**」正是这个意思。
     /// （`CodingKeys` 显式写出来：手写 `init(from:)` 之后合成的那一份不再可靠。）
     public init(from decoder: Decoder) throws {
@@ -90,10 +97,11 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         containsRowData = try container.decodeIfPresent(Bool.self, forKey: .containsRowData) ?? false
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, body, tags, source, createdAt, updatedAt, containsRowData, isFavorite
+        case id, title, body, tags, source, createdAt, updatedAt, containsRowData, isFavorite, isPinned
     }
 }
 
