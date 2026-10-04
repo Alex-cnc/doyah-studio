@@ -143,7 +143,7 @@ Invoke-ChildGate "11/$total" "⑦ `P-*` 平台差异登记两侧对账（SRS §1
 Invoke-ChildGate "12/$total" "结果网格压力基准（数据侧可复跑：grid-bench）" 'check-grid-bench.ps1'
 # ── 13/14 生成物一致性：发布产物版本号「一个值、三处逐字一致」（契约侧 L-70）────
 Invoke-ChildGate "13/$total" "生成物一致性：发布产物版本号一个值三处一致（+ 与 mac 侧发布台账同源）" 'check-release-version.ps1'
-# ── 14/15 路径归属（派活单 T-20261002-033 的 Windows 侧那一项）──────────────────
+# ── 14/15 路径归属（派单 T-20261002-033 的 Windows 侧那一项）──────────────────
 # 清单 = 共享面 `Scripts/path-ownership.json`（**只有一份**，本侧只引用）；判据本体 =
 # 共享面 `Scripts/check-path-ownership.py`（同一份，三仓同源）⇒ 本侧只做按本侧姿势传参。
 Invoke-ChildGate "14/$total" "路径归属（一次改动不得落在对侧子树；共享面要登记理由）" 'check-path-ownership.ps1' -SkipReason $pythonSkipReason -ChildArgs @{ Base = $Base }

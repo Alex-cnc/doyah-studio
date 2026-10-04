@@ -1,6 +1,6 @@
 ﻿# Doyah Studio · Windows 侧闸门（新增项）· 路径归属判据（windows/Tools/check-path-ownership.ps1）
 #
-# 派活单 `T-20261002-033`（人类主人：「大河马与大肥鱼两侧各加一项路径归属判据」）的 **Windows 侧那一项**。
+# 派单 `T-20261002-033`（人类主人：「大河马与大肥鱼两侧各加一项路径归属判据」）的 **Windows 侧那一项**。
 #
 # 三条口径（**判据不重写**，与 §8.4 文档单一来源一致）：
 #   ① **清单只有一份**：`Scripts/path-ownership.json`（macOS 侧落的，shared 面）—— 本脚本**只引用**，
