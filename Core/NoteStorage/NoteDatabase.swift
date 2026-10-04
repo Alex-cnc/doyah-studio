@@ -835,6 +835,78 @@ public final class NoteDatabase {
         }
     }
 
+    // MARK: - 容器编辑落库（队列 L-97 界面半第四片：新建 / 重命名 / 排序）
+
+    /// **新建一个笔记本**：落进某个架、排序位由调用方给（`NotebookCreation.sortOrder` 算的那一个）。
+    /// `shelf_uid` 指向不存在的架时**外键会拦下来**（`notebook.shelf_uid REFERENCES shelf (uid)`）——
+    /// 这正是契约 §2.12 那条「不存在无归属笔记本」在库这一层的落点。
+    /// 新笔记本**永远不是默认容器**（默认笔记本由一次性迁移建、且不随界面动作易主）。
+    @discardableResult
+    public func createNotebook(
+        shelfUid: String,
+        name: String,
+        sortOrder: Int,
+        uid: String = UUID().uuidString,
+        now: Date = Date()
+    ) throws -> Notebook {
+        let notebook = Notebook(
+            uid: uid,
+            shelfUid: shelfUid,
+            name: name,
+            sortOrder: sortOrder,
+            createdAt: now,
+            isDefault: false
+        )
+        try upsert(notebook)
+        return notebook
+    }
+
+    /// **改一个架的名字**：只改 `name` —— 其余三格原样带回（`upsert` 的 `ON CONFLICT` 不含
+    /// `created_at`，但**含** `sort_order` 与 `is_default` ⇒ 必须先把它们读出来再写，
+    /// 否则一次改名会顺手把排序位抹成 0、把默认位丢掉）。
+    /// 认不出的 uid ⇒ `nil`（库一个字节不动）。
+    @discardableResult
+    public func rename(shelfUid: String, name: String) throws -> Shelf? {
+        guard var shelf = try notebookDirectory().shelf(uid: shelfUid) else { return nil }
+        shelf.name = name
+        try upsert(shelf)
+        return shelf
+    }
+
+    /// **改一个笔记本的名字**（同一条）。默认笔记本**也可以改名**（契约 §2.12 第 2 条：
+    /// 不可删、可改名）—— 这里刻意不判 `isDefault`。
+    /// 认不出的 uid ⇒ `nil`。
+    @discardableResult
+    public func rename(notebookUid: String, name: String) throws -> Notebook? {
+        guard var notebook = try notebookDirectory().notebook(uid: notebookUid) else { return nil }
+        notebook.name = name
+        try upsert(notebook)
+        return notebook
+    }
+
+    /// **写一批排序位**（一个事务）：`ContainerReorder.plan` 算出来的整层次序一次写完。
+    /// 为什么必须同事务：半写会让界面上两条挤在同一个位置（次序退回「按创建时刻兜底」），
+    /// 而用户刚做的那一步在屏幕上就**看不见**了 —— 「点了上移没反应」的另一种写法。
+    public func applySortOrders(_ orders: [ContainerSortOrder], kind: NotebookContainerKind) throws {
+        guard !orders.isEmpty else { return }
+        try connection.transaction {
+            for order in orders {
+                switch kind {
+                case .shelf:
+                    try connection.execute(
+                        "UPDATE shelf SET sort_order = ? WHERE uid = ?",
+                        [.integer(Int64(order.sortOrder)), .text(order.uid)]
+                    )
+                case .notebook:
+                    try connection.execute(
+                        "UPDATE notebook SET sort_order = ? WHERE uid = ?",
+                        [.integer(Int64(order.sortOrder)), .text(order.uid)]
+                    )
+                }
+            }
+        }
+    }
+
     /// 归属对（`uuid` ↔ `notebook_uid`）。顺序与 `notes()` 同口径（最近更新在前），
     /// 这样「按笔记本过滤」的结果与不过滤时的相对次序一致。
     public func placements() throws -> [NotebookPlacement] {

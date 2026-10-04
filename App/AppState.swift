@@ -417,6 +417,12 @@ final class AppState: ObservableObject {
     /// **删除确认框**（队列 `L-97` 界面半第二片）：挂在界面上的那一个删除请求。
     /// 计划从库里**现算**（`NoteLibrary.removalPlan`）——界面算不出来，也不该自己算一遍。
     @Published var pendingContainerRemoval: ContainerRemovalRequest?
+    /// **容器编辑**（队列 `L-97` 界面半第四片：新建 / 重命名）：挂在界面上的那一次编辑请求
+    /// （`nil` = 没在编辑）。规则在 Core `NotebookEditPrompt`，这里只做搬运。
+    @Published var pendingContainerEdit: ContainerEditRequest?
+    /// 编辑弹框里那个名字输入框的当前值（**唯一来源**：「确定」的灰着与 `commitContainerEdit`
+    /// 的守卫都读它 —— `L-50` 那一课：两处各写一遍必分家）。
+    @Published var containerEditName = ""
     /// **检索状态**（队列 L-44，2026-09-28）：界面检索改走库以后，「这一屏的结果是怎么来的」
     /// 就成了必须有出处的一件事 —— 三种态各自对应一句如实话（见 `noteSearchHint`）。
     @Published private(set) var noteSearchState: NoteSearchState = .idle
@@ -6394,6 +6400,137 @@ final class AppState: ObservableObject {
         guard !moves.isEmpty else { return }
         do {
             _ = try await NoteLibrary.defaultLibrary().move(noteIDs: moves, toNotebook: notebookUid)
+            await reloadNotes()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    // MARK: - 容器编辑：新建 / 重命名 / 排序（队列 `L-97` 界面半第四片）
+
+    /// 「这个名字能不能落库」——**判据属性（唯一出处）**：编辑弹框里「确定」的 `.disabled`
+    /// 与 `commitContainerEdit` 的第一句守卫**必须是同一条判断**（`L-50` 那一课）。
+    var containerEditNameIsAcceptable: Bool {
+        ContainerNameRule.isAcceptable(containerEditName)
+    }
+
+    /// 弹框标题：新建与重命名不是同一件事（重命名框里预填原名、新建是空的）。
+    var containerEditTitle: String {
+        switch pendingContainerEdit?.mode {
+        case .createNotebook: return L(NotebookCreation.titleKey)
+        case .rename: return L(ContainerEditPrompt.titleKey)
+        case nil: return ""
+        }
+    }
+
+    /// **新建笔记本**（入口）：落点由 Core 按**当前范围**给（架里 ⇒ 那个架；笔记本里 ⇒ 它所属的架；
+    /// 全部 ⇒ 默认架）。从某一行的右键进来时用 `inShelf` 显式指定那一行自己的架 ——
+    /// 右键一个架却把笔记本建到别处，是「点了没反应」之外最让人困惑的一种。
+    /// 一个架都没有 ⇒ **不弹框**，只给一句人话（弹一个落不了地的框是把两种事实混成一件）。
+    func beginNewNotebook(inShelf shelfUid: String? = nil) {
+        let directory = notesNavigation.directory
+        let destination: String?
+        if let shelfUid {
+            destination = directory.shelf(uid: shelfUid)?.uid
+        } else {
+            destination = NotebookCreation.destinationShelfUid(for: notesScope, directory: directory)
+        }
+        guard let destination else {
+            statusMessage = L(NotebookCreation.noShelfKey)
+            return
+        }
+        containerEditName = ""
+        pendingContainerEdit = ContainerEditRequest(
+            id: destination,
+            mode: .createNotebook,
+            kind: .notebook,
+            currentName: "",
+            destinationShelfUid: destination,
+            isDefault: false
+        )
+    }
+
+    /// **重命名**（入口）：默认架 / 默认笔记本**也可改名**（契约 §2.12 第 2 条：不可删、可改名）
+    /// —— 这里刻意不判 `isDefault`，它只用来让界面如实交代「默认容器删不掉、但可以改名」。
+    func beginRenameContainer(kind: NotebookContainerKind, uid: String, name: String, isDefault: Bool) {
+        containerEditName = name
+        pendingContainerEdit = ContainerEditRequest(
+            id: uid,
+            mode: .rename,
+            kind: kind,
+            currentName: name,
+            destinationShelfUid: nil,
+            isDefault: isDefault
+        )
+    }
+
+    /// 退出口（按 ESC / 点框外）：只收掉请求，库一个字节不动。
+    func cancelContainerEdit() {
+        pendingContainerEdit = nil
+        containerEditName = ""
+    }
+
+    /// 点「确定」：**先同步取走**这一次编辑（请求 + 洗净后的名字），再异步落库。
+    ///
+    /// 为什么不在 `Task` 里读 `pendingContainerEdit`：弹框一关，`isPresented` 的 `set` 就会
+    /// 把请求收掉（按 ESC / 点框外走的也是它）—— 两个动作谁先谁后由 SwiftUI 定，读晚一步的
+    /// 症状正是「点了确定、什么都没发生」（`L-50` 那一族里最坏的一种）。
+    /// 判据属性 `containerEditNameIsAcceptable` 是「确定」灰着那条判断的**唯一出处**。
+    func confirmContainerEdit() {
+        guard let request = pendingContainerEdit, containerEditNameIsAcceptable else {
+            cancelContainerEdit()
+            return
+        }
+        let name = ContainerNameRule.sanitized(containerEditName)
+        pendingContainerEdit = nil
+        containerEditName = ""
+        Task { await applyContainerEdit(request, name: name) }
+    }
+
+    /// 编辑落库（**一个入口**）：新建 / 重命名各一条路，落完都**重新读库**
+    /// （树、条数、范围归一会跟着变）。名字与请求都是**调用时传进来的那一份**，
+    /// 不再回读界面状态 —— 界面早已关掉。
+    private func applyContainerEdit(_ request: ContainerEditRequest, name: String) async {
+        do {
+            let library = NoteLibrary.defaultLibrary()
+            switch request.mode {
+            case .createNotebook:
+                if let shelfUid = request.destinationShelfUid {
+                    _ = try await library.createNotebook(inShelf: shelfUid, name: name)
+                }
+            case .rename:
+                if request.kind == .shelf {
+                    _ = try await library.renameShelf(uid: request.id, name: name)
+                } else {
+                    _ = try await library.renameNotebook(uid: request.id, name: name)
+                }
+            }
+            await reloadNotes()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 排序：能不能挪这一步（视图的 `.disabled` 读它，规则在 Core `ContainerReorder`）。
+    func canMoveContainer(kind: NotebookContainerKind, uid: String, direction: ContainerReorderDirection) -> Bool {
+        ContainerReorder.canMove(
+            kind: kind,
+            containerUid: uid,
+            direction: direction,
+            directory: notesNavigation.directory
+        )
+    }
+
+    /// 排序：挪一步（写库 + 重读）。挪不动（已在最前 / 最后 / 认不出）⇒ 不写库 —— 视图那侧本来
+    /// 就不给点，这里是第二道（与 `moveNotes` 同族）。
+    func moveContainer(kind: NotebookContainerKind, uid: String, direction: ContainerReorderDirection) async {
+        do {
+            let moved = try await NoteLibrary.defaultLibrary().reorder(
+                kind: kind,
+                containerUid: uid,
+                direction: direction
+            )
+            guard moved else { return }
             await reloadNotes()
         } catch {
             errorMessage = ErrorPresenter.message(for: error)

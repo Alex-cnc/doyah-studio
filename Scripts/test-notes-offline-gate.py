@@ -49,6 +49,8 @@ TREE_FILES = [
     "Core/NotebookRemovalPrompt.swift",
     # 队列 `L-97` 界面半第三片（跨笔记本移动）：同上，台账里有它 ⇒ 副本必须带上
     "Core/NotebookMovePrompt.swift",
+    # 队列 `L-97` 界面半第四片（新建 / 重命名 / 排序）：同上，台账里有它 ⇒ 副本必须带上
+    "Core/NotebookEditPrompt.swift",
     "App/Views/NotesPanel.swift",
     "Tests/NoteTests.swift",
     "Tests/NoteBodyTests.swift",

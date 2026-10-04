@@ -32,6 +32,11 @@
       "role": "跨笔记本移动的目标清单 / 「能不能去」的规则 / 文案键 —— 队列 `L-97` 界面半第三片；纯值类型，无网络无库，只吃 `NotebookDirectory` / `NotebookPlacement` / `LKey`"
     },
     {
+      "path": "Core/NotebookEditPrompt.swift",
+      "layer": "core",
+      "role": "新建 / 重命名 / 排序的规则与文案键（名字规则、新建落点、整层重排）—— 队列 `L-97` 界面半第四片；纯值类型，无网络无库，只吃 `NotebookDirectory` / `NotesScope` / `LKey`"
+    },
+    {
       "path": "Core/License.swift",
       "layer": "core",
       "role": "许可与装配判据（笔记模块随包的条件判定）"

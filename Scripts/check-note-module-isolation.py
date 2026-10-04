@@ -55,6 +55,9 @@ NOTE_SOURCES = [
     # 队列 `L-97` 界面半第三片：跨笔记本移动的目标清单 / 「能不能去」的规则 / 文案键（纯值类型，
     # 无网络、无库；只吃 `NotebookDirectory` / `NotebookPlacement` / `LKey`）—— 同上，算笔记侧
     "Core/NotebookMovePrompt.swift",
+    # 队列 `L-97` 界面半第四片：新建 / 重命名 / 排序的规则与文案键（纯值类型，无网络、无库；
+    # 只吃 `NotebookDirectory` / `NotesScope` / `LKey`）—— 同上，算笔记侧
+    "Core/NotebookEditPrompt.swift",
 ]
 
 # 刻意**不在**清单里的笔记相关文件：它们按设计就引用 Ultra 侧类型，属于宿主侧适配层。

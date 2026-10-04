@@ -149,16 +149,33 @@ struct NotesListView: View {
 ///  ③ **默认容器不特殊显示**：用户眼里它就是「笔记本」这个名字（契约只要求它**不可删**，
 ///     没要求界面上把它标成默认 —— 标出来反而像另一种东西）。
 ///
-/// 未做（如实登记，留给下一片）：重命名 / 新建 / 排序 / 拖拽 / 右键菜单里的移动
-/// —— 那些要走**跨笔记本移动**（队列 `L-97` ④），本片只落「看哪一块」与「删掉它」。
+/// 未做（如实登记，留给下一片）：**拖拽排序**与**批量多选**（右键菜单那一半已落：新建 / 重命名 /
+/// 上移 / 下移 / 删除 / 移动）。
 /// **已做**（本片）：右键 → 删除 → 确认框（`ContainerRemovalPrompt` 给动作与顺序，
-/// `AppState.pendingContainerRemovalMessage` 给影响面那句）。
+/// `AppState.pendingContainerRemovalMessage` 给影响面那句）；右键 → 新建 / 重命名 / 上移 / 下移
+/// （`NotebookEditPrompt` 给规则，`AppState` 给入口），树顶那个「＋」是新建的第二个入口。
 struct NotesContainerTreeView: View {
 
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // **新建笔记本**（队列 `L-97` 界面半第四片）：入口在树顶上（右键某一行的菜单里也有一个，
+            // 那个会指定「就建在这一行这个架里」）。`help` 用同一句文案 —— 一个光秃秃的「＋」
+            // 在侧栏里是能认出来的，但悬停时要给得出一个词。
+            HStack(spacing: Spacing.xs) {
+                Spacer()
+                Button {
+                    appState.beginNewNotebook()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(Theme.font(.caption))
+                }
+                .buttonStyle(.plain)
+                .help(L(NotebookCreation.menuTitleKey))
+                .accessibilityIdentifier("notes-new-notebook")
+            }
+            .padding(.horizontal, Spacing.s)
             row(
                 scope: .all,
                 systemImage: "tray.full",
@@ -176,10 +193,22 @@ struct NotesContainerTreeView: View {
                     indent: 0,
                     identifier: "notes-scope-shelf-\(shelf.uid)"
                 )
-                // **删除确认框**（队列 `L-97` ③）：菜单项**不灰** —— 默认容器点了要给一句
-                // 「不能删」的人话（`L-50` 的口径：可点却静默无反应是最坏的一种）。计划从库里
-                // 现算，所以这里不判「能不能删」。
+                // **架上的编辑菜单**（队列 `L-97` 界面半第四片）：新建（就在这个架里）/ 重命名 / 排序，
+                // 最后才是删除。删除那一项**不灰**（默认架点了要给一句「不能删」的人话）。
                 .contextMenu {
+                    Button(L(NotebookCreation.menuTitleKey)) {
+                        appState.beginNewNotebook(inShelf: shelf.uid)
+                    }
+                    .accessibilityIdentifier("notes-new-notebook-in-\(shelf.uid)")
+                    Button(L(ContainerEditPrompt.menuTitleKey)) {
+                        appState.beginRenameContainer(
+                            kind: .shelf, uid: shelf.uid, name: shelf.name, isDefault: shelf.isDefault
+                        )
+                    }
+                    .accessibilityIdentifier("notes-rename-shelf-\(shelf.uid)")
+                    Divider()
+                    reorderButtons(kind: .shelf, uid: shelf.uid)
+                    Divider()
                     Button(L(ContainerRemovalPrompt.menuTitleKey(for: .shelf))) {
                         appState.requestContainerRemoval(kind: .shelf, uid: shelf.uid, name: shelf.name)
                     }
@@ -195,6 +224,15 @@ struct NotesContainerTreeView: View {
                         identifier: "notes-scope-notebook-\(notebook.uid)"
                     )
                     .contextMenu {
+                        Button(L(ContainerEditPrompt.menuTitleKey)) {
+                            appState.beginRenameContainer(
+                                kind: .notebook, uid: notebook.uid, name: notebook.name, isDefault: notebook.isDefault
+                            )
+                        }
+                        .accessibilityIdentifier("notes-rename-notebook-\(notebook.uid)")
+                        Divider()
+                        reorderButtons(kind: .notebook, uid: notebook.uid)
+                        Divider()
                         Button(L(ContainerRemovalPrompt.menuTitleKey(for: .notebook))) {
                             appState.requestContainerRemoval(kind: .notebook, uid: notebook.uid, name: notebook.name)
                         }
@@ -204,6 +242,25 @@ struct NotesContainerTreeView: View {
             }
         }
         .accessibilityIdentifier("notes-container-tree")
+        // **容器编辑弹框**（队列 `L-97` 界面半第四片）：新建与重命名共用这一个框（标题由模型按模式给），
+        // 「确定」的灰着读的是 `containerEditNameIsAcceptable` 这**同一个判据**（`L-50`：两处各写一遍必分家）。
+        .alert(
+            appState.containerEditTitle,
+            isPresented: Binding(
+                get: { appState.pendingContainerEdit != nil },
+                // 按 ESC / 点框外 = 退出口：只收掉请求，库一个字节不动。
+                set: { presented in if !presented { appState.cancelContainerEdit() } }
+            )
+        ) {
+            TextField(L(NotebookCreation.namePlaceholderKey), text: $appState.containerEditName)
+            Button(L(ContainerEditPrompt.confirmKey)) {
+                appState.confirmContainerEdit()
+            }
+            .disabled(!appState.containerEditNameIsAcceptable)
+            Button(L(ContainerEditPrompt.cancelKey), role: .cancel) {
+                appState.cancelContainerEdit()
+            }
+        }
         // **删除确认框**（队列 `L-97` ③）：动作与顺序**由模型给**（`ContainerRemovalPrompt.confirmActions`
         // 是唯一出处），影响面那句也由 `AppState.pendingContainerRemovalMessage` 一处生成 ——
         // 界面只负责画。别自己硬写三个按钮：规则一改就有两处不一致（`L-172` 同一课）。
@@ -224,6 +281,20 @@ struct NotesContainerTreeView: View {
             }
         } message: { _ in
             Text(appState.pendingContainerRemovalMessage ?? "")
+        }
+    }
+
+    /// 排序（队列 `L-97` 界面半第四片）：两个方向都由 Core 的 `ContainerReorder.canMove` 判
+    /// 「这一步走不走得动」—— 已在最前 / 已在最后时那一项**灰着**（`L-50` 的口径：可点却无反应
+    /// 是最坏的一种；方向本身就把理由说清了，不必再写一句）。规则与落库共用一个答案。
+    @ViewBuilder
+    private func reorderButtons(kind: NotebookContainerKind, uid: String) -> some View {
+        ForEach(ContainerReorderDirection.allCases, id: \.self) { direction in
+            Button(L(direction.titleKey)) {
+                Task { await appState.moveContainer(kind: kind, uid: uid, direction: direction) }
+            }
+            .disabled(!appState.canMoveContainer(kind: kind, uid: uid, direction: direction))
+            .accessibilityIdentifier("notes-reorder-\(uid)-\(direction.rawValue)")
         }
     }
 

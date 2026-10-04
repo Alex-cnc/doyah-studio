@@ -155,6 +155,62 @@ public actor NoteLibrary {
         return try database.applyRemovalPlan(plan)
     }
 
+    // MARK: - 容器编辑（队列 L-97 界面半第四片：新建 / 重命名 / 排序）
+
+    /// **新建一个笔记本**（落进某个架）。排序位**在这一次调用里现算**（该架内现有条数）——
+    /// 界面那侧的数字是几次点击之前算的，库里可能已经又多了两个，按旧数写下去就会重号。
+    /// 认不出的架 ⇒ `nil`（库一个字节不动）：**不兜底到默认架** ——「新建到一个已经不存在的架里」
+    /// 与「新建到默认架里」是两件事，前者该让调用方知道目标没了（那一侧会重新读库把树刷新）。
+    @discardableResult
+    public func createNotebook(inShelf shelfUid: String, name: String, now: Date = Date()) throws -> Notebook? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        let database = try open()
+        let directory = try database.notebookDirectory()
+        guard directory.shelf(uid: shelfUid) != nil else { return nil }
+        return try database.createNotebook(
+            shelfUid: shelfUid,
+            name: name,
+            sortOrder: directory.nextSortOrder(inShelf: shelfUid),
+            now: now
+        )
+    }
+
+    /// **改一个架的名字**（默认架也可改名 —— 契约 §2.12 第 2 条：不可删、可改名）。
+    /// 认不出的 uid ⇒ `nil`。
+    @discardableResult
+    public func renameShelf(uid: String, name: String) throws -> Shelf? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        return try open().rename(shelfUid: uid, name: name)
+    }
+
+    /// **改一个笔记本的名字**（同一条）。
+    @discardableResult
+    public func renameNotebook(uid: String, name: String) throws -> Notebook? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        return try open().rename(notebookUid: uid, name: name)
+    }
+
+    /// **挪一步**（相邻上移 / 下移）：排序位按可见次序**整层重排**（规则在 `ContainerReorder`）。
+    /// 返回**有没有真的写库**：已在最前 / 已在最后 / uid 认不出 ⇒ `false`（视图那一侧本来就不给点，
+    /// 这里是第二道 —— 与 `moveNotes` 同族）。
+    @discardableResult
+    public func reorder(
+        kind: NotebookContainerKind,
+        containerUid: String,
+        direction: ContainerReorderDirection
+    ) throws -> Bool {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return false }
+        let database = try open()
+        guard let plan = ContainerReorder.plan(
+            kind: kind,
+            containerUid: containerUid,
+            direction: direction,
+            directory: try database.notebookDirectory()
+        ) else { return false }
+        try database.applySortOrders(plan, kind: kind)
+        return true
+    }
+
     // MARK: - 写
 
     /// 保存草稿（新建或按 id 覆盖），返回落库后的笔记。

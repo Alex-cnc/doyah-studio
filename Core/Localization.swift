@@ -356,6 +356,17 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesMoveMenu
     case notesMoveNoOtherNotebook
     case notesMoveCurrentMark
+    // 队列 `L-97` 界面半第四片（容器编辑：新建 / 重命名 / 排序）。
+    case notesNewNotebook
+    case notesNewNotebookTitle
+    case notesNewNotebookNoShelf
+    case notesRenameMenu
+    case notesRenameTitle
+    case notesEditNamePlaceholder
+    case notesEditConfirm
+    case notesEditCancel
+    case notesMoveUp
+    case notesMoveDown
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -2303,6 +2314,16 @@ public enum LocalizedStrings {
         .notesMoveMenu: [.simplifiedChinese: "移动到…", .english: "Move to…"],
         .notesMoveNoOtherNotebook: [.simplifiedChinese: "只有一个笔记本，没有别的地方可移。", .english: "Only one notebook exists — nowhere else to move it."],
         .notesMoveCurrentMark: [.simplifiedChinese: "（当前）", .english: " (current)"],
+        .notesNewNotebook: [.simplifiedChinese: "新建笔记本", .english: "New notebook"],
+        .notesNewNotebookTitle: [.simplifiedChinese: "新建笔记本", .english: "New notebook"],
+        .notesNewNotebookNoShelf: [.simplifiedChinese: "还没有笔记本架，建不了笔记本。", .english: "There is no shelf yet — a notebook needs one."],
+        .notesRenameMenu: [.simplifiedChinese: "重命名…", .english: "Rename…"],
+        .notesRenameTitle: [.simplifiedChinese: "重命名", .english: "Rename"],
+        .notesEditNamePlaceholder: [.simplifiedChinese: "名字", .english: "Name"],
+        .notesEditConfirm: [.simplifiedChinese: "确定", .english: "OK"],
+        .notesEditCancel: [.simplifiedChinese: "取消", .english: "Cancel"],
+        .notesMoveUp: [.simplifiedChinese: "上移", .english: "Move up"],
+        .notesMoveDown: [.simplifiedChinese: "下移", .english: "Move down"],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],

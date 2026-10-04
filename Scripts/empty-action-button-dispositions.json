@@ -162,6 +162,14 @@
       "guard": "!moves.isEmpty",
       "form": "internal",
       "reason": "**不是菜单项的前置判据**：笔记行右键菜单里「当前所在那一格」的灰着由 Core `NotebookMovePrompt` 的 `NotebookMoveTarget.isSelectable` 决定（视图 `.disabled(!target.isSelectable)`；判据 `Tests/NotebookMovePromptTests.swift` 5 例钉住它）。这里是**第二道**：`AppState.moveNotes` 把「已经在目标笔记本里的那几条」滤掉，防别的调用路径（不走右键菜单）把一次白写落到库上 —— 白写虽不改 `updatedAt`（契约 §2.12 第 4 条），没有意义的写仍然是没有意义的写。"
+    },
+    {
+      "func": "confirmContainerEdit",
+      "guard": "let request = pendingContainerEdit, containerEditNameIsAcceptable",
+      "form": "view-disabled",
+      "predicate": "containerEditNameIsAcceptable",
+      "view": "App/Views/NotesPanel.swift",
+      "reason": "**容器编辑弹框（新建 / 重命名）里的「确定」**（队列 `L-97` 界面半第四片）：名字洗净后是空的（全空白）⇒ 按钮**灰着** —— 与 `SaveQuerySheet` 的 `trimmedName` 同一档先例（空名字上「确定了」没有可落的库）。判据属性 `containerEditNameIsAcceptable` 是**唯一出处**（体 = Core 的 `ContainerNameRule.isAcceptable`），视图那一侧 `.disabled(!appState.containerEditNameIsAcceptable)` 读的是同一个判断；`confirmContainerEdit` 先**同步取走**请求再异步落库 —— 弹框一关 `isPresented` 的 `set` 就会收掉请求，读晚一步就是「点了确定、什么都没发生」。"
     }
   ]
 }
