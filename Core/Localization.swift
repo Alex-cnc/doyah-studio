@@ -376,6 +376,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesSelectionCount
     case notesDropAlreadyThere
     case notesDragHint
+    // 队列 `L-184` 三栏重排（中栏卡片右下角那一枚相对时间；档位在 Core，句子只在语言表里）。
+    case notesTimeJustNow
+    case notesTimeMinutesAgo
+    case notesTimeHoursAgo
+    case notesTimeYesterday
+    case notesTimeDaysAgo
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -2346,6 +2352,13 @@ public enum LocalizedStrings {
         .notesSelectionCount: [.simplifiedChinese: "已选 %d 条", .english: "%d selected"],
         .notesDropAlreadyThere: [.simplifiedChinese: "这几条已经在「%@」里了。", .english: "These notes are already in “%@”."],
         .notesDragHint: [.simplifiedChinese: "可把笔记拖到左边的笔记本上", .english: "Drag notes onto a notebook on the left"],
+        // 队列 `L-184`（三栏重排）：中栏卡片右下角那一枚相对时间。**数字走 `%@` 槽**
+        // —— 档位与数字由 Core 的 `NoteRelativeTime` 给，句子只在这里（中英各一）。
+        .notesTimeJustNow: [.simplifiedChinese: "刚刚", .english: "Just now"],
+        .notesTimeMinutesAgo: [.simplifiedChinese: "%@ 分钟前", .english: "%@ min ago"],
+        .notesTimeHoursAgo: [.simplifiedChinese: "%@ 小时前", .english: "%@ hr ago"],
+        .notesTimeYesterday: [.simplifiedChinese: "昨天", .english: "Yesterday"],
+        .notesTimeDaysAgo: [.simplifiedChinese: "%@ 天前", .english: "%@ days ago"],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],

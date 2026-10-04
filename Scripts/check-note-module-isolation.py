@@ -64,6 +64,9 @@ NOTE_SOURCES = [
     # 队列 `L-97` 界面半第六片（跨架移动）：目标清单 / 落点判定 / 文案键（纯值类型，无网络、
     # 无库；只吃 `NotebookDirectory` / `LKey`）—— 同上，算笔记侧
     "Core/NotebookShelfMovePrompt.swift",
+    # 队列 `L-184` 三栏重排：中栏卡片的摘要与相对时间（纯函数，无网络、无库；只吃 `Date` /
+    # `Calendar` / `LKey`）—— 同上，算笔记侧
+    "Core/NotePresentation.swift",
 ]
 
 # 刻意**不在**清单里的笔记相关文件：它们按设计就引用 Ultra 侧类型，属于宿主侧适配层。

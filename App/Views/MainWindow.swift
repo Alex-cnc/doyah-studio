@@ -55,8 +55,9 @@ struct MainWindow: View {
             case .workspace:
                 WorkspaceExplorerView()
             case .notes:
-                // 笔记的"看哪个视图"= 笔记栏，"视图里看什么" = 选哪一条笔记（列表在侧栏、编辑在右边）。
-                NotesListView()
+                // **左栏 = 导航**（队列 `L-184` 三栏重排）：架 → 笔记本两级树（侧栏可折叠）；
+                // 列表与编辑器都在右边那三栏里 —— 侧栏不再兼任「这一栏里看哪一条」。
+                NotesContainerTreeView()
             }
         }
     }
@@ -144,7 +145,9 @@ struct MainWindow: View {
             case .workspace:
                 sectionWithLowerPane { WorkspaceAreaView() }
             case .notes:
-                NotesEditorView()
+                // **三栏**（队列 `L-184`）：左栏 = 侧栏里的两级树（可折叠），中栏 = 列表、
+                // 右栏 = 正文/编辑器、顶栏 = 搜索 + 新建 —— 都在 `NotesAreaView` 里一处装配。
+                NotesAreaView()
             }
             }
             // **窗口标题跟着活动栏走**（FR-EDIT-37，2026-09-30 需求提出者）：

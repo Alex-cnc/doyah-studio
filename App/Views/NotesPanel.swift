@@ -2,12 +2,17 @@ import AppKit
 import DoyahCore
 import SwiftUI
 
-/// 笔记区的两块（DOYAH-01 / 03）：**列表**进侧栏、**编辑器**进右侧。
+/// 笔记区的两块（DOYAH-01 / 03）：**列表**进中栏、**编辑器**进右栏（队列 `L-184` 三栏重排）。
 ///
-/// 为什么拆成两个视图而不是原来那个"一个面板装下所有"：
-/// 笔记在 Standard 下就是**整个应用**（活动栏只有它一项），必须有正经的侧栏 + 正文两栏，
-/// 而不是浮在别人界面上的一个弹窗 —— 弹窗被关掉以后，用户会不确定笔记还在不在。
-/// 两栏的分工也正好对上活动栏的信息架构：「看哪个视图」（笔记）与「视图里看什么」（哪一条）。
+/// 三栏的分工（需求提出者 2026-10-04 原话「macOS版界面布局可以借鉴印象笔记PC端布局」）：
+///   · **左栏** = 导航（笔记本架 → 笔记本 两级树）—— 由 `MainWindow` 的侧栏承载，可折叠；
+///   · **中栏** = 这一条列表（本文件 `NotesListView`：标题 + 摘要 + 相对时间）；
+///   · **右栏** = 正文 / 编辑器（`NotesEditorView`，读写同屏）；
+///   · **顶栏** = 搜索（作用域 = 当前范围 / 全部笔记本）+ 新建（`NotesAreaView`）。
+///
+/// 为什么把搜索框从侧栏搬到顶栏：三栏之后侧栏只剩「导航」这一件事（与印象笔记的分工同形），
+/// 而搜索在侧栏里只能搜「当前这一栏」，搬上去之后它管的是**整个笔记模块** —— 这也是
+/// `L-97` ⑤「搜索范围」那枚开关原先语义最容易被读错的地方（它现在就挂在搜索框旁边。
 ///
 /// 两条刻意的口径（与拆分前一致）：
 /// ① **来源与「含数据」必须一眼可见** —— 笔记将来会同步到云端，"这条是哪来的、含不含数据"
@@ -19,27 +24,17 @@ struct NotesListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
-            // **两级导航**（队列 `L-97` ②）：架 → 笔记本 → 笔记。放在列表上方（同一栏内）而不是
-            // 再切一列 —— 侧栏只有 240~380pt，再切一列两边都读不清（`FR-EDIT-37` 那一课：
-            // 宽度不够时别硬塞）。范围选中态由 `AppState.selectNotesScope` 统一归一。
-            NotesContainerTreeView()
-            Divider()
-            // **搜索范围**（队列 `L-97` ⑤）：只在搜索那一层起作用 —— 「当前范围」= 限定在看的那一块，
-            // 「全部笔记本」= 跨笔记本搜（结果行里如实标出每条属于哪个笔记本）。
-            Picker(L(.notesSearchScopeTitle), selection: $appState.notesSearchScope) {
-                Text(L(.notesSearchScopeCurrent)).tag(NotesSearchScope.current)
-                Text(L(.notesSearchScopeAll)).tag(NotesSearchScope.all)
+            // **中栏的栏头**（队列 `L-184`）：两级导航（架 → 笔记本）搬回左栏、搜索框搬去顶栏，
+            // 这一栏只剩「看哪一条」—— 栏头就只写这一屏有多少条。
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                Text(L(.notesTitle))
+                    .font(Theme.font(.title))
+                Text("\(appState.visibleNotes.count)")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                Spacer()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             .padding(.horizontal, Spacing.s)
-            .accessibilityIdentifier("notes-search-scope")
-            TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal, Spacing.s)
-            // **检索走库**（队列 L-44）：搜索框里变一个字就重算一次。`.task(id:)` 在 id 变化时
-            // 会取消上一次任务；`AppState.searchNotes()` 里还有一道「结果过期就丢」的守卫，
-            // 打字比查库快也不会把旧结果盖上来。
             if let hint = appState.noteSearchHint {
                 // 这一行是**如实交代**：走的是子串兜底，还是检索压根没跑成 —— 两种都不是
                 // 「没找到」，所以不能只给一个空列表了事。
@@ -77,9 +72,26 @@ struct NotesListView: View {
                                     .foregroundStyle(Theme.status(.warning))
                             }
                         }
-                        Text(note.source.kind.displayName + " · " + (note.source.connectionName ?? "—"))
-                            .font(Theme.font(.caption))
-                            .foregroundStyle(Theme.text(.secondary))
+                        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                            Text(note.source.kind.displayName + " · " + (note.source.connectionName ?? "—"))
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                            Spacer(minLength: Spacing.xs)
+                            // **相对时间**（队列 `L-184` 中栏卡片）：档位由 Core 的
+                            // `NotePresentation.relative` 给、句子由语言表给 —— 视图这一层只把
+                            // 「哪一档 + 数字」搬成一句话，不自己算 60 / 3600 这类边界。
+                            Text(timeText(note.updatedAt))
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                        }
+                        // **摘要两行**（队列 `L-184`）：折行与截断都在 Core 一处
+                        // （`NotePresentation.excerpt`）—— 视图不自己 `prefix`，否则两处各截一半。
+                        if !note.body.isEmpty {
+                            Text(NotePresentation.excerpt(note.body))
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                                .lineLimit(2)
+                        }
                         // 跨笔记本搜（搜索范围 = 全部笔记本）时如实标出这条属于哪个笔记本 ——
                         // 否则结果里一堆同名笔记，看不出它们不是一回事（队列 `L-97` ⑤）。
                         if appState.showsNotebookInNoteRow, let notebook = appState.notebookName(for: note) {
@@ -105,11 +117,6 @@ struct NotesListView: View {
         // 侧栏底色与工作区侧栏同一令牌（2026-09-30 实测反馈：笔记界面与工作区配色差很大）。
         .scrollContentBackground(.hidden)
         .background(Theme.surface(.sidebar))
-        // 搜索框里的词一变就重算一次（与上面那条注释同源：`task(id:)` 会取消上一次任务）。
-        // 空查询进这里也只是把状态置回 `.idle` —— 不查库、不改列表。
-        .task(id: appState.notesQuery) {
-            await appState.searchNotes()
-        }
     }
 
     /// 笔记行右键的「移动到…」（队列 `L-97` ④）：清单 / 顺序 / 当前格都由 Core 给
@@ -149,6 +156,14 @@ struct NotesListView: View {
     /// 目标那一行的文字：当前格带上「你现在在这儿」的后缀（文字在语言表里，这里只拼接）。
     private func moveLabel(for target: NotebookMoveTarget) -> String {
         target.isCurrent ? target.name + L(NotebookMovePrompt.currentMarkKey) : target.name
+    }
+
+    /// **相对时间那一句**（队列 `L-184`）：档位是 Core 的纯逻辑，句子只从语言表来。
+    /// 「刚刚」「昨天」两档没有数字槽 ⇒ 不传实参（模板里也没有占位符）。
+    private func timeText(_ date: Date) -> String {
+        let relative = NotePresentation.relative(date)
+        guard let argument = relative.argument else { return L(relative.key) }
+        return L(relative.key, argument)
     }
 }
 
@@ -400,15 +415,9 @@ struct NotesEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(L(.notesTitle))
-                    .font(Theme.font(.title))
-                Text("\(appState.notes.count)")
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(Theme.text(.secondary))
-                Spacer()
-                Button(L(.notesNew)) { appState.beginNewNote() }
-            }
+            // **栏头搬走了**（队列 `L-184` 三栏重排）：「笔记」这个标题与条数进了中栏栏头
+            // （`NotesListView`），「新建」进了顶栏（`NotesAreaView`）—— 同一个窗口里不许出现
+            // 两处「新建」，否则两个按钮的灰 / 亮迟早各有一套判据（`L-50` 的老毛病）。
             TextField(L(.notesUntitled), text: $appState.noteEditorTitle)
                 .textFieldStyle(.roundedBorder)
             TextField(L(.notesTagsPlaceholder), text: $appState.noteEditorTags)
@@ -442,6 +451,72 @@ struct NotesEditorView: View {
         // 于是「工作区是科技蓝、笔记是系统色」并存）。
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.surface(.content))
+    }
+}
+
+/// **笔记区 = 顶栏 + 三栏**（队列 `L-184`）：需求提出者 2026-10-04 原话「macOS版界面布局可以
+/// 借鉴印象笔记PC端布局」—— **结构借鉴，不抄视觉**（品牌色与既有像素判据一字未动）。
+///
+/// 四块（左栏由 `MainWindow` 的侧栏承载，可折叠）：
+///   · **顶栏** = 搜索框（作用域 = 当前范围 / 全部笔记本）+ 新建；
+///   · **中栏** = `NotesListView`（列表：标题 / 摘要两行 / 相对时间）；
+///   · **右栏** = `NotesEditorView`（正文 / 编辑器，读写同屏）；
+///   · **左栏** = `NotesContainerTreeView`（笔记本架 → 笔记本两级树）。
+///
+/// 三条口径：
+///  ① **搜索只有一处**：搬上来之后侧栏 / 中栏都不再有第二个搜索框 —— 两个框各自绑一个词时，
+///     「用户看到的列表到底听谁的」没有答案（`L-44` 那一族的同一个教训）；
+///  ② **范围开关跟着搜索框**：`notesSearchScope` 只对检索那条路起作用（`L-97` ⑤），
+///     所以它必须画在搜索框旁边，而不是画在导航那一栏里；
+///  ③ **中栏 / 右栏宽度可拖**（`HSplitView`）：三栏里最该由用户决定的就是「列表多宽、正文多宽」；
+///     左栏的折叠与宽度归 `NavigationSplitView`（`L-184` ①「左栏可折叠」）。
+struct NotesAreaView: View {
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(spacing: 0) {
+            topBar
+            Divider()
+            HSplitView {
+                NotesListView()
+                    .frame(minWidth: 220, idealWidth: 300, maxWidth: 520)
+                NotesEditorView()
+                    .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Theme.surface(.content))
+        .accessibilityIdentifier("notes-area")
+        // **检索走库**（队列 L-44）：搜索框里变一个字就重算一次。`.task(id:)` 在 id 变化时会取消
+        // 上一次任务；`AppState.searchNotes()` 里还有一道「结果过期就丢」的守卫，打字比查库快
+        // 也不会把旧结果盖上来。挂在**区根**（搜索框现在在顶栏，不在中栏）。
+        .task(id: appState.notesQuery) {
+            await appState.searchNotes()
+        }
+    }
+
+    /// 顶栏：搜索 + 范围 + 新建（`L-184` ④）。
+    private var topBar: some View {
+        HStack(spacing: Spacing.s) {
+            TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 320)
+                .accessibilityIdentifier("notes-search-field")
+            Picker(L(.notesSearchScopeTitle), selection: $appState.notesSearchScope) {
+                Text(L(.notesSearchScopeCurrent)).tag(NotesSearchScope.current)
+                Text(L(.notesSearchScopeAll)).tag(NotesSearchScope.all)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityIdentifier("notes-search-scope")
+            Spacer(minLength: Spacing.s)
+            Button(L(.notesNew)) { appState.beginNewNote() }
+                .accessibilityIdentifier("notes-new")
+        }
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, Spacing.xs)
     }
 }
 

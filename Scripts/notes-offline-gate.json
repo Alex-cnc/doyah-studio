@@ -47,6 +47,11 @@
       "role": "跨架移动的目标清单 / 落点判定 / 文案键 —— 队列 `L-97` 界面半第六片；纯值类型，无网络无库，只吃 `NotebookDirectory` / `LKey`"
     },
     {
+      "path": "Core/NotePresentation.swift",
+      "layer": "core",
+      "role": "中栏卡片的摘要与相对时间 —— 队列 `L-184` 三栏重排；纯函数，无网络无库，只吃 `Date` / `Calendar` / `LKey`"
+    },
+    {
       "path": "Core/License.swift",
       "layer": "core",
       "role": "许可与装配判据（笔记模块随包的条件判定）"
