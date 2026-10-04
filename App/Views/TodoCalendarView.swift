@@ -366,6 +366,15 @@ struct TodoRowView: View {
                 }
             }
             Spacer(minLength: Spacing.xs)
+            // 那一枚小铃铛（队列 `L-100` 落法 ④ 的界面入口半）：库里挂着提醒才画。
+            // 一枚只回答「有没有」，**不回答「几点响」**（那件事在提醒区与到点那条通知里）。
+            if appState.todoReminders[todo.id] != nil {
+                Image(systemName: "bell.fill")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .help(L(.reminderRowBadge))
+                    .accessibilityIdentifier("todo-reminder-badge-\(todo.id.uuidString)")
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture { appState.edit(todo) }

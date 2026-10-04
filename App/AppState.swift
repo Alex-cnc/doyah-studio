@@ -482,6 +482,21 @@ final class AppState: ObservableObject {
     @Published var todoCalendarSelectedDay: Date?
     /// 正在改期的那一条（`nil` = 没开改期框）。
     @Published var todoRescheduleDraft: TodoRescheduleDraft?
+
+    // MARK: 待办：提醒（队列 `L-100` 落法 ④ 的界面入口半）
+
+    /// 「提醒」区当前选中的档位（**界面状态**；默认档由 Core 给）。
+    @Published var todoReminderPreset: ReminderPreset = ReminderPreset.presetDefault
+
+    /// 系统通知权限那一档（端侧唯一的读数处写它；读不出来 ⇒ 未决）。
+    @Published var reminderPermission: ReminderPermission = .notDetermined
+
+    /// 库里所有提醒，按**所属任务 id** 索引（清单行那枚小铃铛与「提醒」区读同一份）。
+    @Published var todoReminders: [UUID: Reminder] = [:]
+
+    /// 系统通知那一层的适配器（**界面只认协议** —— 谁碰 `UNUserNotificationCenter` 在源码上是一处）。
+    let reminderDeliverer: ReminderDelivering = SystemReminderDeliverer()
+
     /// 正在编辑的那一条（`nil` = 新建）。
     private var todoBeingEdited: UUID?
     @Published var mcpPendingApprovals: [MCPApprovalRequest] = []
@@ -6500,7 +6515,13 @@ final class AppState: ObservableObject {
     func setNotesModule(_ module: NotesModule) {
         guard notesModule != module else { return }
         notesModule = module
-        if module == .todos { Task { await reloadTodos() } }
+        if module == .todos {
+            Task {
+                await reloadTodos()
+                await reloadReminders()
+                await refreshReminderPermission()
+            }
+        }
     }
 
     /// 读任务（`NoteLibrary.todos()`：**库不存在 ⇒ 空表**，不顺手建库 —— 那条纪律在门面里）。
@@ -6524,12 +6545,21 @@ final class AppState: ObservableObject {
     /// 与对侧 `NotesViewModel.todoWindow()` 同口径。
     var todoWindow: TodoWindow {
         let now = Date()
-        let offset = TimeZone.current.secondsFromGMT(for: now) * 1000
+        let offset = todoZoneOffsetMillis
         let today = ReminderSchedule.dateOfEpoch(
             epochMillis: Int(now.timeIntervalSince1970 * 1000),
             zoneOffsetMillis: offset
         )
         return TodoWindow.of(today: today, zoneOffsetMillis: offset)
+    }
+
+    /// 端侧**唯一**的时区偏移读数处（清单窗口 / 提醒 / 日历都从它拿）。
+    ///
+    /// 为什么抽出来：提醒的「提前 1 小时」与清单的「今天」必须是**同一把尺** —— 两处各读一次
+    /// 系统时区，在换时区 / 夏令时那一会儿就会各自算出一个不同的日子，而两个功能各自的用例
+    /// 都会是绿的（这正是「同一个数在不同文件里各算一遍」那一族）。
+    var todoZoneOffsetMillis: Int {
+        TimeZone.current.secondsFromGMT(for: Date()) * 1000
     }
 
     func beginNewTodo() {
@@ -6548,6 +6578,12 @@ final class AppState: ObservableObject {
         todoEditorDueAt = todo.dueAt ?? Date()
         todoEditorPriority = todo.priority
         todoEditorTags = todo.tags.joined(separator: " ")
+        // 档位回显（界面入口半）：这条任务已经挂着提醒 ⇒ 档位选择器落在**它那一档**上
+        // （重算不出来 = 那条规则不是四个档位之一 ⇒ 回落默认档，但那条规则照样照实显示）。
+        let existing = todoReminders[todo.id]?.spec
+        todoReminderPreset = existing.flatMap {
+            ReminderPresentation.preset(of: $0, dueAt: todo.dueAt, zoneOffsetMillis: todoZoneOffsetMillis)
+        } ?? ReminderPreset.presetDefault
     }
 
     /// 正在编辑哪一条（`nil` = 新建）。视图据此决定「删除」这枚按钮画不画。
@@ -6614,11 +6650,143 @@ final class AppState: ObservableObject {
             return
         }
         do {
+            // 系统的通知**不归库的级联管**（`ON DELETE CASCADE` 只清库里的行）⇒ 删任务时
+            // 同批把它已经排上的那一条撤掉（库与通知中心两处必须一起变）。
+            let pending = todoReminders[id]
             try await NoteLibrary.defaultLibrary().deleteTodo(id: id)
+            if let pending { await reminderDeliverer.cancel(id: pending.id) }
             if todoBeingEdited == id { beginNewTodo() }
             await reloadTodos()
+            await reloadReminders()
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    // MARK: - 待办：提醒的界面入口（队列 `L-100` 落法 ④「有截止时间的任务一键挂提醒」）
+
+    /// 「提醒」区那一份合成状态（**唯一合成处** = `ReminderEntry.make`；视图不许自己拼一份）。
+    ///
+    /// 参照时刻与偏移都由端侧给（Core 不读表）—— 与 `todoWindow` 共用**同一个** `todoZoneOffsetMillis`。
+    func todoReminderEntry(for todo: Todo) -> ReminderEntry {
+        ReminderEntry.make(
+            dueAt: todo.dueAt,
+            preset: todoReminderPreset,
+            existing: todoReminders[todo.id]?.spec,
+            permission: reminderPermission,
+            now: Date(),
+            zoneOffsetMillis: todoZoneOffsetMillis
+        )
+    }
+
+    /// 换档位（四档）。切档**不写库、不排通知** —— 它只换「下一次点『挂提醒』会用哪一档」。
+    func setTodoReminderPreset(_ preset: ReminderPreset) {
+        todoReminderPreset = preset
+    }
+
+    /// 读提醒（`NoteLibrary.reminders()`：**库不存在 ⇒ 空表**，不顺手建库）。
+    ///
+    /// 一条任务上有多条提醒时取**最早建的那一条**：界面那一枚标记只回答「有没有」，
+    /// 多条并存是提醒编辑器（本片之外）的事。
+    func reloadReminders() async {
+        guard notesEnabled else {
+            todoReminders = [:]
+            return
+        }
+        do {
+            let all = try await NoteLibrary.defaultLibrary().reminders()
+            let byTodo = all.compactMap { reminder in
+                reminder.owner.todoID.map { ($0, reminder) }
+            }
+            todoReminders = Dictionary(byTodo, uniquingKeysWith: { $0.createdAt <= $1.createdAt ? $0 : $1 })
+        } catch {
+            todoReminders = [:]
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 读一次系统通知权限那一档（进待办那一屏时读；读不出来 ⇒ 未决）。
+    func refreshReminderPermission() async {
+        reminderPermission = await reminderDeliverer.permission()
+    }
+
+    /// **一键挂提醒**：算规则（Core）→ 落库（门面）→ 按权限那一档决定现在排不排。
+    ///
+    /// 三步各有其主：**能不能挂**是 Core 的判定（`attachment`；不能挂时说一句原因，**不静默**）、
+    /// **落库**只有门面一条路、**排不排**也是 Core 的判定（`notificationDecision`）——
+    /// 这一层只是把「排」的执行交给通知那一层的适配器。
+    func attachReminder(to todo: Todo) async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        let entry = todoReminderEntry(for: todo)
+        guard let spec = entry.attachment.spec else {
+            statusMessage = L(entry.attachment.reasonKey ?? .reminderNeedsDue)
+            return
+        }
+        do {
+            var value = todoReminders[todo.id] ?? Reminder(owner: .todo(todo.id), spec: spec)
+            value.spec = spec
+            value.updatedAt = Date()
+            try await NoteLibrary.defaultLibrary().addReminder(value)
+            await reloadReminders()
+            await deliverReminder(todo: todo, reminder: value)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 移除这一条任务的提醒：库里删掉那一条，**并把已经排上的系统通知一并撤掉**
+    /// （不撤就是「删了提醒却照样响」—— 用户最难查的那种）。
+    func removeReminder(from todo: Todo) async {
+        guard let existing = todoReminders[todo.id] else { return }
+        do {
+            try await NoteLibrary.defaultLibrary().deleteReminder(id: existing.id)
+            await reminderDeliverer.cancel(id: existing.id)
+            await reloadReminders()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 把一条**已经在库里**的提醒交给系统通知（**唯一的投递处**）。
+    ///
+    /// 未决 ⇒ 先问一次权限（用户已经选过就不再弹框，由适配器判）；问完仍读不出 ⇒ 如实说一句；
+    /// 已授权且有待发时刻 ⇒ 现算触发瞬间排上；被拒 / 已结束 / 规则认不出 ⇒ 各出各的话（不静默不响）。
+    func deliverReminder(todo: Todo, reminder: Reminder) async {
+        var permission = reminderPermission
+        if permission == .notDetermined {
+            permission = await reminderDeliverer.requestPermission()
+            reminderPermission = permission
+        }
+        guard permission != .notDetermined else {
+            statusMessage = L(.reminderPermissionNotDetermined)
+            return
+        }
+        let entry = ReminderEntry.make(
+            dueAt: todo.dueAt,
+            preset: todoReminderPreset,
+            existing: reminder.spec,
+            permission: permission,
+            now: Date(),
+            zoneOffsetMillis: todoZoneOffsetMillis
+        )
+        switch entry.decision {
+        case .schedule(let triggerEpochMillis):
+            await reminderDeliverer.schedule(
+                id: reminder.id,
+                title: ReminderPresentation.notificationTitle(todo.title) ?? L(.notesUntitled),
+                body: ReminderPresentation.notificationBody(
+                    entry.plan.due,
+                    language: LocalizationManager.shared.effectiveLanguage
+                ),
+                triggerEpochMillis: triggerEpochMillis
+            )
+        case .askPermission:
+            statusMessage = L(.reminderPermissionNotDetermined)
+        case .inactive(let key):
+            statusMessage = L(key)
         }
     }
 

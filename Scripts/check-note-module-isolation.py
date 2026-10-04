@@ -83,6 +83,9 @@ NOTE_SOURCES = [
     # 队列 `L-100` 落法 ④ 的**界面半第一片**的 Core 半（第 190 轮）：档位 → 规则 / 权限 → 排不排 /
     # 规则 → 一句话（纯函数，无网络、无库、零平台 API；只吃 `Todo` / `Date` / `LKey`）
     "Core/ReminderPresentation.swift",
+    # 队列 `L-100` 落法 ④ 的**界面入口半**（第 193 轮）：那一区的合成状态（档位空间 / 选中档 /
+    # 档位回显 / 规则 / 求解 / 权限那一档 / 排不排）—— 纯函数，零平台 API，无网络无库
+    "Core/ReminderEntry.swift",
     # 队列 `L-100` 的**组织与检索半**（第 191 轮）：排序三档（契约 §3.13 四条）+ 筛选 / 分组 / 视图
     # 入口（与对侧 `TodoSort` / `TodoQuery` 同口径）—— 纯函数，无网络、无库、零平台 API
     "Core/TodoSort.swift",

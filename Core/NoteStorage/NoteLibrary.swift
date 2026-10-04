@@ -324,6 +324,13 @@ public actor NoteLibrary {
         return try open().reminders(of: owner)
     }
 
+    /// 库里**所有**提醒（界面入口半那一份索引：清单行上那枚小铃铛与「提醒」区都读它）。
+    /// 库不存在时如实返回空表（不顺手建库）。
+    public func reminders() throws -> [Reminder] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        return try open().reminders()
+    }
+
     /// 建 / 改一条提醒。**归属必须真的存在** —— 挂到一条不存在的笔记 / 任务上 ⇒ 抛错
     /// （与 `upsert(_ todo:)` 的「先写后取」同一条纪律；不落一条谁也找不到的提醒）。
     public func addReminder(_ reminder: Reminder) throws {

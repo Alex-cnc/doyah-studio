@@ -270,6 +270,22 @@ public enum ReminderPresentation {
         return .ready(spec: spec, preset: preset, moment: fireMoment)
     }
 
+    /// 已经挂着的那一条是**哪一档**（档位回显的**唯一出处**，界面入口半）。
+    ///
+    /// 怎么认：拿四个档位各算一次 `attachment`，与那一条的规则**逐字段比** —— 选中的档位不是
+    /// 「另存一个字段」（库里没有档位列，也不该有：档位是派生量），而是「**能不能被同一个算式重算出来**」。
+    /// 都重算不出来（那一条是 `weekly` / `interval`，或截止时间后来被改过）⇒ `nil`：
+    /// 界面上一档都不选中，但那条规则照样按原文显示，不假装它是某一档。
+    public static func preset(
+        of spec: ReminderSpec,
+        dueAt: Date?,
+        zoneOffsetMillis: Int
+    ) -> ReminderPreset? {
+        ReminderPreset.allCases.first { candidate in
+            attachment(dueAt: dueAt, preset: candidate, zoneOffsetMillis: zoneOffsetMillis).spec == spec
+        }
+    }
+
     // MARK: - 规则 → 一句话
 
     /// 把一条规则说成人话（**中英各一版**，句子只在语言表里）；规则认不出 ⇒ `nil`。

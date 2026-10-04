@@ -484,6 +484,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case reminderPermissionAuthorized
     /// 到点那条通知的正文（标题 = 任务标题原样）。
     case reminderNotificationBody
+    // 队列 `L-100` 落法 ④ 的**界面入口半**：那一区的标题、移除那一枚、清单行上的标记。
+    case reminderSection
+    case reminderRemove
+    /// 清单行上那一枚小铃铛的说明（悬浮 tip）。
+    case reminderRowBadge
     // 队列 `L-184` **第二片**：左栏的「最近」/「标签」两行，与中栏那根排序条。
     case notesRecent
     case notesTagsSection
@@ -2584,6 +2589,10 @@ public enum LocalizedStrings {
             .english: "Notifications are on"
         ],
         .reminderNotificationBody: [.simplifiedChinese: "截止时间 %@", .english: "Due %@"],
+        // 队列 `L-100` 落法 ④ 界面入口半。三个键**都没有数字槽**。
+        .reminderSection: [.simplifiedChinese: "提醒", .english: "Reminder"],
+        .reminderRemove: [.simplifiedChinese: "移除提醒", .english: "Remove reminder"],
+        .reminderRowBadge: [.simplifiedChinese: "已挂提醒", .english: "Reminder set"],
         // 队列 `L-184` 第二片（左栏「最近」/「标签」+ 中栏排序条）。这一组**都没有数字槽**。
         .notesRecent: [.simplifiedChinese: "最近", .english: "Recent"],
         .notesTagsSection: [.simplifiedChinese: "标签", .english: "Tags"],

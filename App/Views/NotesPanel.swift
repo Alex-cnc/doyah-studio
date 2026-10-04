@@ -803,6 +803,13 @@ struct TodoEditorView: View {
             TextField(L(.notesTagsPlaceholder), text: $appState.todoEditorTags)
                 .textFieldStyle(.roundedBorder)
                 .font(Theme.font(.caption))
+            // 「提醒」那一区（队列 `L-100` 落法 ④ 的界面入口半）：**只对已经在库里的任务画**
+            // （新建态还没有 id，`reminder` 表的两个归属列都是外键 —— 挂不到一条还没落库的任务上；
+            // 画一枚按不动的按钮就是 `L-50` 那一课）。
+            if let id = appState.todoEditingID,
+               let todo = appState.todos.first(where: { $0.id == id }) {
+                TodoReminderSection(todo: todo)
+            }
             HStack(spacing: Spacing.s) {
                 Button(L(.notesSave)) {
                     Task { await appState.saveTodoFromEditor() }
@@ -825,6 +832,94 @@ struct TodoEditorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.surface(.content))
         .accessibilityIdentifier("todo-editor")
+    }
+}
+
+/// **「提醒」那一区**（队列 `L-100` 落法 ④ 的界面入口半）：一键挂提醒 / 移除。
+///
+/// 三条纪律：
+///  ① **唯一合成处是 Core** —— 这一区读 `appState.todoReminderEntry(for:)`（← `ReminderEntry.make`）；
+///     视图不自己比档位、不自己算「提前 1 小时是哪一刻」，也不自己决定空态说哪一句；
+///  ② **只对已经在库里的任务画**（由 `TodoEditorView` 把住：新建态没有 id，挂不上）；
+///  ③ **没有截止时间 ⇒ 按钮灰着 + 一句为什么**（`ReminderAttachment` 给的那句话），
+///     而不是点了没反应 —— `L-50` 那一课。
+struct TodoReminderSection: View {
+
+    let todo: Todo
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        let entry = appState.todoReminderEntry(for: todo)
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: entry.hasReminder ? "bell.fill" : "bell")
+                    .font(Theme.font(.caption))
+                Text(L(.reminderSection))
+                    .font(Theme.font(.caption))
+                Spacer(minLength: Spacing.xs)
+            }
+            // 档位空间来自 Core（`entry.presets` = `ReminderPreset.allCases`）——
+            // 视图不自己列一遍四档（漏一档就是「选了没反应」）。
+            Picker(
+                L(.reminderSection),
+                selection: Binding(
+                    get: { entry.preset },
+                    set: { appState.setTodoReminderPreset($0) }
+                )
+            ) {
+                ForEach(entry.presets, id: \.self) { preset in
+                    Text(L(preset.key)).tag(preset)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("todo-reminder-preset")
+            if let spec = entry.spec {
+                // 已经挂着：把那条规则照实说一遍（含「下次 …」与排不排那一句）——
+                // 句子全由 Core 出，视图只画（不二次加工，否则同一句话会有两个版本）。
+                if let summary = ReminderPresentation.summary(
+                    spec, language: LocalizationManager.shared.effectiveLanguage
+                ) {
+                    Text(summary)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+                if let next = ReminderPresentation.nextText(
+                    entry.plan, language: LocalizationManager.shared.effectiveLanguage
+                ) {
+                    Text(next)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+                if let key = entry.decision.reasonKey {
+                    Text(L(key))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.status(.warning))
+                }
+            } else if let key = entry.attachment.reasonKey {
+                // 还没挂上：说清**为什么现在挂不了**（没有截止时间 / 提前量算不出日期）。
+                Text(L(key))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+            }
+            HStack(spacing: Spacing.s) {
+                Button(L(.reminderAttach)) {
+                    Task { await appState.attachReminder(to: todo) }
+                }
+                .disabled(!entry.canAttach)
+                .accessibilityIdentifier("todo-reminder-attach")
+                if entry.hasReminder {
+                    Button(L(.reminderRemove), role: .destructive) {
+                        Task { await appState.removeReminder(from: todo) }
+                    }
+                    .accessibilityIdentifier("todo-reminder-remove")
+                }
+                Spacer(minLength: Spacing.xs)
+            }
+        }
+        .padding(Spacing.s)
+        .background(Theme.surface(.panel))
+        .accessibilityIdentifier("todo-reminder-section")
     }
 }
 

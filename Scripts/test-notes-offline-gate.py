@@ -67,6 +67,8 @@ TREE_FILES = [
     "Core/Reminder.swift",
     # 队列 `L-100` 落法 ④ 的界面半第一片（第 190 轮，提醒的界面判定与文案）：同上，台账里有它 ⇒ 副本必须带上
     "Core/ReminderPresentation.swift",
+    # 队列 `L-100` 落法 ④ 的界面入口半（第 193 轮，提醒那一区的合成状态）：同上，台账里有它 ⇒ 副本必须带上
+    "Core/ReminderEntry.swift",
     # 队列 `L-100` 的组织与检索半（第 191 轮，排序 / 筛选 / 分组 / 视图入口）：同上，台账里有它 ⇒ 副本必须带上
     "Core/TodoSort.swift",
     "Core/TodoQuery.swift",
