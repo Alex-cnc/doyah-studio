@@ -409,6 +409,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoMissing
     /// 待办那一屏左栏那一行（待办自己的入口与列表 —— `FR-NOTE-36`）。
     case todoAll
+    // 队列 `L-100` **Core 半第二片**（日历）：月 / 周两档的名字（切换器的唯一出处；
+    // 取值空间与默认档在 `Core/TodoCalendar.swift`，句子只在这里）。
+    case todoCalendarMonth
+    case todoCalendarWeek
     // 队列 `L-184` **第二片**：左栏的「最近」/「标签」两行，与中栏那根排序条。
     case notesRecent
     case notesTagsSection
@@ -2431,6 +2435,9 @@ public enum LocalizedStrings {
         .todoDelete: [.simplifiedChinese: "删除待办", .english: "Delete todo"],
         .todoMissing: [.simplifiedChinese: "这条待办已经不在了", .english: "That todo is gone"],
         .todoAll: [.simplifiedChinese: "全部待办", .english: "All todos"],
+        // 队列 `L-100` **Core 半第二片**（日历）：两档视图的名字（切换器读 `TodoCalendarView.key`）。
+        .todoCalendarMonth: [.simplifiedChinese: "月", .english: "Month"],
+        .todoCalendarWeek: [.simplifiedChinese: "周", .english: "Week"],
         // 队列 `L-184` 第二片（左栏「最近」/「标签」+ 中栏排序条）。这一组**都没有数字槽**。
         .notesRecent: [.simplifiedChinese: "最近", .english: "Recent"],
         .notesTagsSection: [.simplifiedChinese: "标签", .english: "Tags"],
