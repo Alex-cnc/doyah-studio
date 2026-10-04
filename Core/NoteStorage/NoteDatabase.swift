@@ -183,6 +183,27 @@ public enum NoteSchemaV2 {
     ]
 }
 
+/// **schema v3**（队列 `L-184` 第三片）：给 `note` 补一列 **`favorite`** —— 收藏。
+///
+/// 为什么是「补列」而不是「新表」：收藏是笔记自己的一个布尔状态（契约 §2.1 `favorite`），
+/// 不是另一件东西；判据与列表都要按它筛 / 按它排。**没有新表、没有新索引** —— 收藏量级与笔记同级，
+/// 单独建索引在这个规模上只是多一处要维护的东西。
+/// 为什么默认 `0` 且 `NOT NULL`：`ADD COLUMN` 要能在一张已有几百行的表上当场成立 ——
+/// 没有默认值的老列在 SQLite 上必须可空，而「可空」会把「没收藏」与「不知道」混成一件事。
+/// 存量笔记的语义本来就是「没收藏」⇒ 默认 `0` 是**如实**的，不是填充。
+public enum NoteSchemaV3 {
+
+    public static let version: Int32 = 3
+
+    /// 这一版**不新增表 / 不新增索引**（只补一列）。
+    public static let tables: [String] = []
+    public static let indexes: [String] = []
+
+    public static let ddl: [String] = [
+        "ALTER TABLE note ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0 CHECK (favorite IN (0, 1));"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -266,8 +287,8 @@ public final class NoteDatabase {
     /// 库文件名。**与旧格式 `notes.json` 不同名**：迁移要靠「目标不在」判定要不要搬（L-03 的纪律）。
     public static let fileName = "notes.sqlite3"
 
-    /// 这一版代码支持的 schema 版本。
-    public static let supportedVersion = NoteSchemaV2.version
+    /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏）。
+    public static let supportedVersion = NoteSchemaV3.version
 
     private let connection: SQLiteConnection
 
@@ -314,7 +335,7 @@ public final class NoteDatabase {
         (try? connection.scalarInt("PRAGMA foreign_keys")).flatMap { $0 } == 1
     }
 
-    /// 按需建/升级到最新 schema（当前 v2）。**一个事务里做完**：DDL 与版本号一起生效，
+    /// 按需建/升级到最新 schema（当前 v3）。**一个事务里做完**：DDL 与版本号一起生效，
     /// 不会出现「表建了一半、版本已记 2」。
     ///
     /// 逐版升级（不是「按最新版直接建」）：存量库要真的走 v1 → v2 这两步，
@@ -334,6 +355,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV2.version {
                 for statement in NoteSchemaV2.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV2.version)")
+            }
+            if current < NoteSchemaV3.version {
+                for statement in NoteSchemaV3.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV3.version)")
             }
         }
     }
@@ -373,8 +398,9 @@ public final class NoteDatabase {
                 """
                 INSERT INTO note (
                     uuid, title, body, source_kind, source_connection_name, source_fingerprint,
-                    source_captured_at, created_at, updated_at, contains_row_data, storage_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_captured_at, created_at, updated_at, contains_row_data, storage_version,
+                    favorite
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (uuid) DO UPDATE SET
                     title = excluded.title,
                     body = excluded.body,
@@ -397,7 +423,11 @@ public final class NoteDatabase {
                     .real(note.createdAt.timeIntervalSince1970),
                     .real(note.updatedAt.timeIntervalSince1970),
                     .integer(note.containsRowData ? 1 : 0),
-                    .integer(Int64(NoteSchemaV1.version))
+                    .integer(Int64(NoteSchemaV1.version)),
+                    // **`favorite` 只在这一句的 INSERT 分支里出现**（`ON CONFLICT` 段刻意不含它）：
+                    // 与 `notebook_uid` 同一条教训 —— 否则「打开一条收藏过的笔记、改几个字、保存」
+                    // 会把它**静默取消收藏**。改收藏只有 `setFavorite` 一条路。
+                    .integer(note.isFavorite ? 1 : 0)
                 ]
             )
             // **按 uuid 反查 rowid**，而不是读 `last_insert_rowid()`：走的是 upsert 的 UPDATE 分支时，
@@ -471,6 +501,29 @@ public final class NoteDatabase {
     /// 删一条笔记（标签 / 时间线 / 附件索引靠外键级联一起走，`foreign_keys = ON` 是前提）。
     public func delete(id: UUID) throws {
         try connection.execute("DELETE FROM note WHERE uuid = ?", [.text(id.uuidString)])
+    }
+
+    /// **收藏 / 取消收藏**（队列 `L-184` 第三片；`FR-NOTE-18`、契约 §2.1 `favorite`）。
+    ///
+    /// 一条纪律：**不碰 `updated_at`** —— 收藏是组织行为，不是一次内容更新（与跨笔记本移动同口径；
+    /// 否则收藏一下，列表按更新时间排的次序就整体错乱）。
+    /// 为什么不做成 `upsert` 的一部分：`upsert` 的 `ON CONFLICT` 段刻意**不含这一列**
+    /// （与 `notebook_uid` 同一条教训）—— 改收藏只有这一条路，且这条路只改这一列。
+    /// 认不出的 id ⇒ 一行都不匹配（静默无操作），由调用方按返回值如实处置。
+    @discardableResult
+    public func setFavorite(_ favorite: Bool, id: UUID) throws -> Int {
+        try connection.execute(
+            "UPDATE note SET favorite = ? WHERE uuid = ?",
+            [.integer(favorite ? 1 : 0), .text(id.uuidString)]
+        )
+        return connection.changeCount
+    }
+
+    /// 一条笔记是不是收藏（`nil` = 库里没有这条笔记）。判据与迁移用它读回事实，不靠内存里的值。
+    public func isFavorite(id: UUID) throws -> Bool? {
+        try connection
+            .scalarInt("SELECT favorite FROM note WHERE uuid = ?", [.text(id.uuidString)])
+            .map { $0 == 1 }
     }
 
     // MARK: - 读
@@ -1147,7 +1200,8 @@ public final class NoteDatabase {
                 ),
                 createdAt: Date(timeIntervalSince1970: row["created_at"].doubleValue ?? 0),
                 updatedAt: Date(timeIntervalSince1970: row["updated_at"].doubleValue ?? 0),
-                containsRowData: row["contains_row_data"].intValue == 1
+                containsRowData: row["contains_row_data"].intValue == 1,
+                isFavorite: row["favorite"].intValue == 1
             )
         }
     }

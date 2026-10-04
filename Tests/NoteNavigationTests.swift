@@ -80,7 +80,7 @@ final class NoteNavigationTests: XCTestCase {
         // 与筛选同一条判断 ⇒ 计数与列表行数不可能对不上（这是这一族判据存在的理由）
         let scopes: [NotesScope] = [
             .all, .shelf(uid: "shelf-a"), .notebook(uid: "nb-a1"), .notebook(uid: "nb-a2"),
-            .tag("工作"), .tag("生活"), .recent,
+            .tag("工作"), .tag("生活"), .recent, .favorites,
         ]
         for scope in scopes {
             let rows = sut.navigation.filter(notes, scope: scope).count
@@ -92,6 +92,8 @@ final class NoteNavigationTests: XCTestCase {
             case .tag(let name): counted = sut.navigation.noteCount(inTag: name, notes: notes)
             // 「最近」这一屏装得下这四条（上限 30）⇒ 计数就是全部
             case .recent: counted = notes.count
+            // 「已收藏」（队列 `L-184` 第三片）：数的是同一批 —— 这一份夹具里一条都没收藏 ⇒ 0 行 0 数
+            case .favorites: counted = sut.navigation.favoriteCount(in: notes)
             }
             XCTAssertEqual(counted, rows, "范围 \(scope) 的树计数必须等于列表行数")
         }
@@ -303,6 +305,91 @@ final class NoteNavigationTests: XCTestCase {
         XCTAssertEqual(NotesScope.notebook(uid: "nb-a1").targetUid, "nb-a1")
     }
 
+    // MARK: - 「已收藏」（队列 `L-184` 第三片）
+
+    /// 这一片自己的一份小夹具：四条笔记里**两条**收藏，其中一条在另一个架里 ——
+    /// 「已收藏」是**跨笔记本**的范围（收藏是笔记自己的状态，与它在哪一格无关）。
+    private func makeFavoritesSUT() -> (navigation: NotesNavigation, notes: [Note]) {
+        let shelfA = Shelf(uid: "shelf-a", name: "架A", sortOrder: 0, createdAt: t0, isDefault: true)
+        let shelfB = Shelf(uid: "shelf-b", name: "架B", sortOrder: 1, createdAt: t0, isDefault: false)
+        let a1 = Notebook(uid: "nb-a1", shelfUid: shelfA.uid, name: "笔记本A1", sortOrder: 0, createdAt: t0, isDefault: true)
+        let b1 = Notebook(uid: "nb-b1", shelfUid: shelfB.uid, name: "笔记本B1", sortOrder: 0, createdAt: t0, isDefault: false)
+        let directory = NotebookDirectory(shelves: [shelfA, shelfB], notebooks: [a1, b1])
+
+        let plainNewest = Note(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A1")!, title: "普通·最新",
+            createdAt: t0.addingTimeInterval(10), updatedAt: t0.addingTimeInterval(400)
+        )
+        let favoriteOld = Note(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A2")!, title: "收藏·较旧",
+            createdAt: t0.addingTimeInterval(20), updatedAt: t0.addingTimeInterval(100),
+            isFavorite: true
+        )
+        let favoriteOtherShelf = Note(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A3")!, title: "收藏·别的架",
+            createdAt: t0.addingTimeInterval(30), updatedAt: t0.addingTimeInterval(200),
+            isFavorite: true
+        )
+        let plainOldest = Note(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A4")!, title: "普通·最旧",
+            createdAt: t0.addingTimeInterval(40), updatedAt: t0.addingTimeInterval(50)
+        )
+        let placements = [
+            NotebookPlacement(noteID: plainNewest.id.uuidString, notebookUid: a1.uid),
+            NotebookPlacement(noteID: favoriteOld.id.uuidString, notebookUid: a1.uid),
+            NotebookPlacement(noteID: favoriteOtherShelf.id.uuidString, notebookUid: b1.uid),
+            NotebookPlacement(noteID: plainOldest.id.uuidString, notebookUid: b1.uid),
+        ]
+        return (NotesNavigation(directory: directory, placements: placements),
+                [plainNewest, favoriteOld, favoriteOtherShelf, plainOldest])
+    }
+
+    /// 「已收藏」= **跨笔记本**的范围；计数与列表行数走同一条判断。
+    func testFavoritesScopeIsCrossNotebookAndCountedByTheSamePredicate() {
+        let sut = makeFavoritesSUT()
+        XCTAssertTrue(NotesScope.favorites.isCrossNotebook, "收藏横跨各笔记本 / 各架")
+        XCTAssertNil(NotesScope.favorites.targetUid, "收藏指向的是内容条件，不是一个容器 uid")
+        XCTAssertEqual(sut.navigation.favoriteCount(in: sut.notes), 2)
+        XCTAssertEqual(sut.navigation.filter(sut.notes, scope: .favorites).count, 2)
+        // **跨架**：两条收藏分属两个架，范围里都得在（收藏与归属无关）
+        XCTAssertEqual(sut.navigation.filter(sut.notes, scope: .favorites).map(\.title).sorted(),
+                       ["收藏·别的架", "收藏·较旧"].sorted())
+    }
+
+    /// 一条收藏都没有时：「已收藏」这一栏**还在**（显示空），**不回落**成「全部」——
+    /// 与「标签」的处置相反，因为标签没了 = 那个标签不存在了，而这一栏是常驻入口。
+    func testFavoritesScopeStaysPutEvenWhenNothingIsFavorited() {
+        let sut = makeFavoritesSUT()
+        let none = sut.notes.map { note -> Note in var copy = note; copy.isFavorite = false; return copy }
+        XCTAssertEqual(sut.navigation.normalized(.favorites, notes: none), .favorites)
+        XCTAssertEqual(sut.navigation.normalized(.favorites, notes: []), .favorites)
+        XCTAssertTrue(sut.navigation.filter(none, scope: .favorites).isEmpty)
+    }
+
+    /// **收藏上浮**（`FR-NOTE-18` 的第二档）：默认档（最近更新）里收藏的两条排在前面，
+    /// 收藏区内部仍按更新时间倒序；未收藏的相对次序一字不变。
+    func testFavoriteNotesFloatToTheTopOfTheDefaultOrder() {
+        let sut = makeFavoritesSUT()
+        let ordered = sut.navigation.listing(sut.notes, scope: .all, sort: .updatedDesc)
+        XCTAssertEqual(ordered.map(\.title), ["收藏·别的架", "收藏·较旧", "普通·最新", "普通·最旧"])
+        XCTAssertTrue(ordered[0].isFavorite && ordered[1].isFavorite, "前两条 = 收藏那一区")
+        XCTAssertGreaterThan(ordered[0].updatedAt, ordered[1].updatedAt, "收藏区内部仍按更新时间倒序")
+        XCTAssertFalse(ordered[2].isFavorite || ordered[3].isFavorite, "未收藏的相对次序一字不变（最新仍在最前）")
+        // **别的档不吃这一口**：用户显式选了「标题」就按标题排（收藏只影响默认档这一条已登记的规则）
+        let byTitle = sut.navigation.listing(sut.notes, scope: .all, sort: .titleAsc)
+        XCTAssertEqual(byTitle.map(\.title), byTitle.map(\.title).sorted(), "标题档就是标题序")
+    }
+
+    /// 在「已收藏」里新建笔记 ⇒ 落**默认笔记本**（收藏不指定任何一格；与标签 / 最近同族）。
+    func testCreatingFromFavoritesFallsBackToDefaultContainers() {
+        let sut = makeFavoritesSUT()
+        XCTAssertEqual(sut.navigation.destinationNotebookUid(for: .favorites), "nb-a1")
+        XCTAssertEqual(
+            NotebookCreation.destinationShelfUid(for: .favorites, directory: sut.navigation.directory),
+            "shelf-a"
+        )
+    }
+
     // MARK: - 接线（源码判据）
 
     /// 视图与 `AppState` 必须**真的用**这套导航 —— 纯逻辑写好了却没人调用，是这一族最典型的假绿
@@ -329,6 +416,16 @@ final class NoteNavigationTests: XCTestCase {
         XCTAssertTrue(panel.contains("notes-scope-recent"), "左栏要有「最近」那一行")
         XCTAssertTrue(panel.contains("notes-scope-tag-"), "左栏要有标签分组（一行一个标签）")
         XCTAssertTrue(panel.contains("notesTagsSection"), "标签那一栏的标题来自语言表（不写死中文）")
+        // 队列 `L-184` 第三片：左栏那一行 + 中栏那枚开关，且**开关不另立第二个状态**
+        XCTAssertTrue(panel.contains("notes-scope-favorites"), "左栏要有「已收藏」那一行")
+        XCTAssertTrue(panel.contains("notes-favorite-filter"), "中栏要有「只看收藏」筛选开关")
+        XCTAssertTrue(appState.contains("notesFavoriteOnly"), "开关的当前值由宿主一处给（左栏那一行共用它）")
+        XCTAssertTrue(appState.contains("setNotesFavoriteOnly"), "开关只有一个入口")
+        XCTAssertTrue(appState.contains("toggleNoteFavorite"), "收藏的写库入口只此一处")
+        XCTAssertFalse(
+            appState.contains("@Published var notesFavoriteOnly"),
+            "开关不许另立第二个状态 —— 两处各存一份必然出现「开关开着、列表在看全部」"
+        )
         XCTAssertFalse(
             appState.contains("notes.filter { $0.notebookUid"),
             "按笔记本筛笔记只许经 NotesNavigation —— 不许在宿主层自己写一套过滤"

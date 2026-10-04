@@ -107,7 +107,7 @@ final class NotebookStorageTests: XCTestCase {
         try makeVersionOneDatabase(notes: [note])
 
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV2.version)
+        XCTAssertEqual(database.userVersion, NoteSchemaV3.version)
         let tables = try database.tableNames()
         for expected in NoteSchemaV2.tables {
             XCTAssertTrue(tables.contains(expected), "升级后缺表 \(expected)；实际：\(tables)")
@@ -266,7 +266,7 @@ final class NotebookStorageTests: XCTestCase {
 
         let target = url("snapshots/notes-20261003T213000.sqlite3")
         let snapshot = try database.snapshot(to: target)
-        XCTAssertEqual(snapshot.schemaVersion, NoteSchemaV2.version)
+        XCTAssertEqual(snapshot.schemaVersion, NoteSchemaV3.version)
 
         let restored = try NoteDatabase(path: target.path)
         defer { try? restored.close() }
@@ -274,6 +274,48 @@ final class NotebookStorageTests: XCTestCase {
         XCTAssertEqual(try restored.notebooks(), try database.notebooks())
         XCTAssertEqual(try restored.placements(), try database.placements())
         XCTAssertEqual(try restored.unassignedNoteCount(), 0)
+    }
+
+    // MARK: - ④ 收藏（队列 `L-184` 第三片）
+
+    /// **v1 存量库一路升到 v3**：补列之后老笔记一律「没收藏」（默认 0）；**收藏不刷新 `updatedAt`**；
+    /// **编辑保存不清收藏**（`upsert` 的 `ON CONFLICT` 段刻意不碰这一列 —— 与 `notebook_uid` 同一条教训）。
+    func testVersionOneDatabaseUpgradesToVersionThreeWithFavoritesOffByDefault() throws {
+        let note = sampleNote(title: "存量笔记", body: "洞庭湖", tags: ["骑行"])
+        try makeVersionOneDatabase(notes: [note])
+
+        let database = try makeDatabase()
+        XCTAssertEqual(database.userVersion, NoteSchemaV3.version, "v1 库要一路升到 v3")
+        let restored = try XCTUnwrap(try database.note(id: note.id))
+        XCTAssertFalse(restored.isFavorite, "存量笔记的语义就是「没收藏」—— 默认 0 是如实，不是填充")
+
+        let before = restored.updatedAt
+        XCTAssertEqual(try database.setFavorite(true, id: note.id), 1)
+        let favorited = try XCTUnwrap(try database.note(id: note.id))
+        XCTAssertTrue(favorited.isFavorite)
+        XCTAssertEqual(favorited.updatedAt, before, "收藏是组织行为 —— 不许刷新 updated_at（否则列表次序整体错乱）")
+
+        // **编辑保存不清收藏**：内存里故意写成「没收藏」，库里那份才是事实
+        var edited = favorited
+        edited.body = "改了几个字"
+        edited.isFavorite = false
+        try database.upsert(edited)
+        let afterEdit = try XCTUnwrap(try database.note(id: note.id))
+        XCTAssertEqual(afterEdit.body, "改了几个字")
+        XCTAssertTrue(afterEdit.isFavorite, "改几个字保存不许把收藏静默抹掉")
+        XCTAssertEqual(try database.isFavorite(id: note.id), true)
+    }
+
+    /// 收藏只改那一列；**认不出的 id ⇒ 0 行**（调用方据此如实交代，而不是假装改成了）。
+    func testSetFavoriteReportsUnmatchedIdentifiersInsteadOfPretending() throws {
+        let database = try makeDatabase()
+        let note = sampleNote(title: "只有这一条")
+        try database.upsert(note)
+        XCTAssertEqual(try database.setFavorite(true, id: note.id), 1)
+        XCTAssertEqual(try database.setFavorite(true, id: note.id), 1, "同值重写仍是命中一行（UPDATE 按 WHERE 命中计）")
+        XCTAssertEqual(try database.setFavorite(false, id: UUID()), 0, "库里没有这个 id ⇒ 一行都不该被改")
+        XCTAssertNil(try database.isFavorite(id: UUID()), "问一条不存在的笔记 ⇒ nil，不是 false")
+        XCTAssertEqual(try database.noteCount(), 1)
     }
 
     // MARK: - ③ 门面（`NoteLibrary` actor）

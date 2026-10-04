@@ -389,6 +389,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesSortUpdated
     case notesSortCreated
     case notesSortTitle
+    // 队列 `L-184` **第三片**：左栏「已收藏」那一行、中栏那枚「只看收藏」筛选开关，
+    // 以及笔记行右键里的收藏 / 取消收藏。
+    case notesFavorites
+    case notesFavoriteOnly
+    case notesMarkFavorite
+    case notesUnmarkFavorite
+    /// 收藏一个**库里已经没有的** id（写库返回 0 行）时那句如实交代 —— 不静默。
+    case notesFavoriteMissing
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -2373,6 +2381,15 @@ public enum LocalizedStrings {
         .notesSortUpdated: [.simplifiedChinese: "最近更新", .english: "Recently updated"],
         .notesSortCreated: [.simplifiedChinese: "创建时间", .english: "Date created"],
         .notesSortTitle: [.simplifiedChinese: "标题", .english: "Title"],
+        // 队列 `L-184` 第三片（左栏「已收藏」+ 中栏筛选开关 + 右键收藏）。同样**都没有数字槽**。
+        .notesFavorites: [.simplifiedChinese: "已收藏", .english: "Favorites"],
+        .notesFavoriteOnly: [.simplifiedChinese: "只看收藏", .english: "Favorites only"],
+        .notesMarkFavorite: [.simplifiedChinese: "收藏", .english: "Add to favorites"],
+        .notesUnmarkFavorite: [.simplifiedChinese: "取消收藏", .english: "Remove from favorites"],
+        .notesFavoriteMissing: [
+            .simplifiedChinese: "这条笔记已经不在了（列表已重读）",
+            .english: "That note is gone (the list was reloaded)"
+        ],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],

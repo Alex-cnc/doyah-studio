@@ -6084,6 +6084,41 @@ final class AppState: ObservableObject {
         Task { await searchNotes() }
     }
 
+    /// **中栏那枚「只看收藏」筛选开关的当前值**（队列 `L-184` 第三片）。
+    ///
+    /// 刻意**不另立一个状态**：左栏的「已收藏」那一行与中栏这枚开关说的是同一件事
+    /// （「只看收藏过的」），共用 `notesScope` 一个变量 ⇒ 不可能出现「开关说开着、列表却在看全部」
+    /// 这种两处各有一份状态才会有的错（这一族的老毛病：两处各写一遍必分家）。
+    var notesFavoriteOnly: Bool { notesScope == .favorites }
+
+    /// **开关的唯一入口**：打开 ⇒ 看「已收藏」；关掉 ⇒ 回到「全部」。
+    ///
+    /// 关掉时回「全部」而不是「上一个范围」：那一份「上一个」要么再存一个变量（第二个状态 ⇒ 又分家），
+    /// 要么让开关的语义变成「临时叠加」而左栏的选中态却停在别处（用户看到的选中态与开关不一致）。
+    /// 当前语义一句话能说清：**开关 = 左栏那一行**。
+    func setNotesFavoriteOnly(_ on: Bool) {
+        selectNotesScope(on ? .favorites : .all)
+    }
+
+    /// **收藏 / 取消收藏一条笔记**（队列 `L-184` 第三片）：写库 → 重读 → 界面按重读后的事实重画。
+    ///
+    /// 为什么落库返回 0 行也要如实说：`setFavorite` 认不出 id 时一行都不匹配 —— 那时界面上的星
+    /// 不会变（重读之后还是原样），用户点了一下没反应，必须有一句话解释，而不是静默。
+    func toggleNoteFavorite(_ note: Note) async {
+        let target = !note.isFavorite
+        do {
+            let changed = try await NoteLibrary.defaultLibrary().setFavorite(id: note.id, target)
+            if changed == 0 {
+                statusMessage = L(.notesFavoriteMissing)
+                await reloadNotes()
+                return
+            }
+            await reloadNotes()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
     // MARK: - 删除确认框（队列 `L-97` 界面半第二片）
 
     /// 确认框正文（**唯一生产点**）：按 `ContainerRemovalSummary` 给的形状出句子 ——

@@ -7,8 +7,8 @@ import Foundation
 // 契约出处：`DoyahNotes/Docs/核心契约.md` **§2.12 两层归属（`Shelf` / `Notebook`）**；
 // 结构那份模型在 `Core/Notebook.swift`（第一片），落库在 `Core/NoteStorage/*`（第二 / 三片）。
 // 这一片只做**界面要用的那几个决定**，每个都写成纯函数（可单测、与视图无关）：
-//   ① **选中态**（`NotesScope`）：看全部 / 看某个架 / 看某个笔记本 / 看某个标签 / 看「最近」——
-//      并且**认不出的目标怎么处置**；
+//   ① **选中态**（`NotesScope`）：看全部 / 看某个架 / 看某个笔记本 / 看某个标签 / 看「最近」/
+//      看「已收藏」——并且**认不出的目标怎么处置**；
 //   ② **范围过滤**（`filter`）：把一份笔记按当前范围筛一遍 —— 命中后仍按归属复核（契约 §2.12 第 5 条
 //      「范围过滤不得只靠索引」），顺序**原样保留**（库里给的顺序即用户看到的顺序）；
 //   ③ **搜索范围**（`NotesSearchScope`）：搜索时是搜「当前范围」还是搜「全部」——
@@ -38,23 +38,28 @@ public enum NotesScope: Hashable, Sendable {
     /// **「最近」**（队列 `L-184` 第二片）：最近更新过的那一批，跨全部笔记本。
     /// 份数由 `NotesNavigation.recentLimit` 定 —— 它是一个**有界的短列表**，不是第二个「全部笔记」。
     case recent
+    /// **「已收藏」**（队列 `L-184` 第三片）：收藏过的那一批，跨全部笔记本。
+    /// 成员条件 = 笔记自己的 `isFavorite`（契约 §2.1 `favorite` ／ §2.3 `favoriteOnly` 的那条路）。
+    /// **它是一个常驻入口**（左栏永远有这一行）⇒ 一条收藏都没有时它显示「空」，不回落到「全部」
+    /// —— 与「标签」不同：标签没了是**那个标签不存在了**，而「已收藏」这一栏一直在。
+    case favorites
 
-    /// 越界检查用：范围指向的那个 uid（`.all` / `.recent` / `.tag` 都是 `nil` —— 前者没有目标，
-    /// 后两者指向的是**内容条件**而不是一个容器 uid）。
+    /// 越界检查用：范围指向的那个 uid（`.all` / `.recent` / `.tag` / `.favorites` 都是 `nil`
+    /// —— 前者没有目标，后三者指向的是**内容条件**而不是一个容器 uid）。
     public var targetUid: String? {
         switch self {
-        case .all, .recent, .tag: return nil
+        case .all, .recent, .tag, .favorites: return nil
         case .shelf(let uid): return uid
         case .notebook(let uid): return uid
         }
     }
 
-    /// 这一块本身是不是**跨笔记本**的（标签 / 最近 / 全部）。
+    /// 这一块本身是不是**跨笔记本**的（标签 / 最近 / 已收藏 / 全部）。
     /// 界面据此决定「列表行里要不要如实标出这条属于哪个笔记本」—— 判据在 Core 一处，
     /// 视图不自己 `switch`（两处各写一遍必分家，这一族的老毛病）。
     public var isCrossNotebook: Bool {
         switch self {
-        case .all, .recent, .tag: return true
+        case .all, .recent, .tag, .favorites: return true
         case .shelf, .notebook: return false
         }
     }
@@ -77,7 +82,9 @@ public enum NotesSearchScope: String, CaseIterable, Sendable {
 ///  ② **每种都带第二关键字**（`sorted` 本身**不稳定**，只给一个关键字时同一批数据两次渲染
 ///     顺序可能不同 —— 界面上就是「刷新一下顺序变了」）；第二关键字 = 标题，第三 = `uid`
 ///     （标题重名时仍要有确定的次序）；
-///  ③ **默认 = 最近更新在前**（三栏重排之前就是这个口径，改版不许顺手改掉它）。
+///  ③ **默认 = 最近更新在前**（三栏重排之前就是这个口径，改版不许顺手改掉它）；
+///  ④ **默认档里「收藏」上浮**（队列 `L-184` 第三片）：第二档是收藏、第三档才是时间 —— 见
+///     `comparator` 里那一段（`FR-NOTE-18` 的第一档「置顶」本侧尚未实现，如实登记）。
 public enum NotesSortOrder: String, CaseIterable, Sendable {
     /// 最近更新在前。
     case updatedDesc
@@ -100,6 +107,11 @@ public enum NotesSortOrder: String, CaseIterable, Sendable {
         switch self {
         case .updatedDesc:
             return { left, right in
+                // **收藏上浮**（`FR-NOTE-18`「置顶 → 收藏 → 更新时间倒序」的**第二档**）：收藏是
+                // 「我待会儿还要再看的那几条」，把它混在按时间排的长列表里等于没有这个功能。
+                // **置顶**（第一档）本侧还没做（模型与库里都没有那一列）⇒ 这里只落第二档，
+                // 不假装两档都齐了（如实登记在队列 `L-184` 的余项里）。
+                if left.isFavorite != right.isFavorite { return left.isFavorite }
                 if left.updatedAt != right.updatedAt { return left.updatedAt > right.updatedAt }
                 return Self.titleThenID(left, right)
             }
@@ -198,6 +210,12 @@ public struct NotesNavigation: Equatable, Sendable {
         notes.filter { contains(.tag(tag), note: $0) }.count
     }
 
+    /// **已收藏的有多少条**（队列 `L-184` 第三片）。与左栏那一行的范围**同一条判断**
+    /// （`contains(.favorites, ...)`）⇒ 侧栏上的数字与点进去的列表行数不可能对不上。
+    public func favoriteCount(in notes: [Note]) -> Int {
+        notes.filter { contains(.favorites, note: $0) }.count
+    }
+
     // MARK: - 选中态
 
     /// 把选中态**归一**：指向已不存在的目标 ⇒ 回落「全部」。
@@ -207,7 +225,7 @@ public struct NotesNavigation: Equatable, Sendable {
     /// （没有「标签表」这回事 —— 标签是笔记自己的字段）。传 `notes` 进来，两件事在同一处判。
     public func normalized(_ scope: NotesScope, notes: [Note]) -> NotesScope {
         switch scope {
-        case .all, .recent:
+        case .all, .recent, .favorites:
             return scope
         case .shelf(let uid):
             return directory.shelf(uid: uid) == nil ? .all : scope
@@ -229,6 +247,9 @@ public struct NotesNavigation: Equatable, Sendable {
         switch scope {
         case .all, .recent:
             return true
+        case .favorites:
+            // 收藏是笔记自己的状态（契约 §2.1）—— 与「在哪一个笔记本里」无关。
+            return note.isFavorite
         case .tag(let name):
             return note.tags.contains(name)
         case .notebook(let uid):
@@ -278,7 +299,7 @@ public struct NotesNavigation: Equatable, Sendable {
         switch normalized(scope, notes: []) {
         case .notebook(let uid):
             return uid
-        case .all, .shelf, .tag, .recent:
+        case .all, .shelf, .tag, .recent, .favorites:
             return directory.resolvedNotebookUid(nil)
         }
     }

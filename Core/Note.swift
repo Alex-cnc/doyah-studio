@@ -49,6 +49,10 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
     /// **这条笔记里含结果集行数据**（默认 false）。存进去就永久留痕 —— 因为一旦同步到云端，
     /// "含不含数据"是用户必须能自己查出来的事实。
     public var containsRowData: Bool
+    /// **收藏**（`DoyahNotes` 核心契约 §2.1 `favorite`；需求条文 `FR-NOTE-18`）：**可单独筛选**
+    /// （§2.3 `favoriteOnly`）、排序在**置顶之后、更新时间之前**；**收藏不刷新 `updatedAt`**
+    /// （组织行为而非内容变更 —— 与跨笔记本移动同口径，否则收藏一下列表次序就整体错乱）。
+    public var isFavorite: Bool
 
     public init(
         id: UUID = UUID(),
@@ -58,7 +62,8 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         source: NoteSource = NoteSource(),
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        containsRowData: Bool = false
+        containsRowData: Bool = false,
+        isFavorite: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -68,6 +73,27 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.containsRowData = containsRowData
+        self.isFavorite = isFavorite
+    }
+
+    /// **解码**：`favorite` 是**后加的字段**（旧库 / 旧 `notes.json` 里没有这一列）⇒ 缺字段按 `false`。
+    /// 不能让它成为「旧数据解不出来」的理由 —— 契约 §2.5 的「加字段**不加版本号**」正是这个意思。
+    /// （`CodingKeys` 显式写出来：手写 `init(from:)` 之后合成的那一份不再可靠。）
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        body = try container.decode(String.self, forKey: .body)
+        tags = try container.decode([String].self, forKey: .tags)
+        source = try container.decode(NoteSource.self, forKey: .source)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        containsRowData = try container.decodeIfPresent(Bool.self, forKey: .containsRowData) ?? false
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, body, tags, source, createdAt, updatedAt, containsRowData, isFavorite
     }
 }
 

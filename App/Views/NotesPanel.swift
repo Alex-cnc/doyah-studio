@@ -45,6 +45,21 @@ struct NotesListView: View {
                 .fixedSize()
                 .help(L(.notesSortBy))
                 .accessibilityIdentifier("notes-sort")
+                // **筛选条**（队列 `L-184` 第三片）：中栏栏头这一枚「只看收藏」。
+                // 它不是第二个状态 —— 绑的就是左栏那一行（`AppState.notesFavoriteOnly` 一处判，
+                // 两个界面面共用一个变量 ⇒ 不可能出现「开关开着、列表在看全部」）。
+                Toggle(isOn: Binding(
+                    get: { appState.notesFavoriteOnly },
+                    set: { appState.setNotesFavoriteOnly($0) }
+                )) {
+                    Label(L(.notesFavoriteOnly), systemImage: "star")
+                        .font(Theme.font(.caption))
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+                .fixedSize()
+                .help(L(.notesFavoriteOnly))
+                .accessibilityIdentifier("notes-favorite-filter")
             }
             .padding(.horizontal, Spacing.s)
             if let hint = appState.noteSearchHint {
@@ -78,6 +93,14 @@ struct NotesListView: View {
                             Text(note.title)
                                 .font(Theme.font(.body))
                                 .lineLimit(1)
+                            // **收藏的标记**（队列 `L-184` 第三片）：收藏过的行上看得见星 ——
+                            // 否则「收藏了没有」只能靠右键菜单里的措辞反推。
+                            if note.isFavorite {
+                                Image(systemName: "star.fill")
+                                    .font(Theme.font(.caption))
+                                    .foregroundStyle(Theme.status(.warning))
+                                    .accessibilityLabel(L(.notesFavorites))
+                            }
                             if note.containsRowData {
                                 Text(L(.notesContainsRowData))
                                     .font(Theme.font(.caption))
@@ -116,7 +139,11 @@ struct NotesListView: View {
                     .onTapGesture { appState.handleNoteRowClick(note, modifiers: .currentEvent) }
                     .draggable(appState.noteDragPayload(for: note))
                     .help(L(NoteSelectionPrompt.dragHintKey))
-                    .contextMenu { moveMenu(for: note) }
+                    .contextMenu {
+                        favoriteToggle(for: note)
+                        Divider()
+                        moveMenu(for: note)
+                    }
                     .listRowBackground(
                         appState.selectedNoteIDs.contains(note.id) ? Theme.surface(.panel) : Color.clear
                     )
@@ -129,6 +156,17 @@ struct NotesListView: View {
         // 侧栏底色与工作区侧栏同一令牌（2026-09-30 实测反馈：笔记界面与工作区配色差很大）。
         .scrollContentBackground(.hidden)
         .background(Theme.surface(.sidebar))
+    }
+
+    /// 行右键里的**收藏 / 取消收藏**（队列 `L-184` 第三片）：一个动作两种措辞 —— 当前不是收藏
+    /// ⇒ 「收藏」、已是收藏 ⇒ 「取消收藏」（同一件事在两处各写一遍，必然出现「两个都写着『收藏』」
+    /// 那种菜单）。写库与重读都在 `AppState.toggleNoteFavorite` 一处。
+    @ViewBuilder
+    private func favoriteToggle(for note: Note) -> some View {
+        Button(L(note.isFavorite ? .notesUnmarkFavorite : .notesMarkFavorite)) {
+            Task { await appState.toggleNoteFavorite(note) }
+        }
+        .accessibilityIdentifier("notes-favorite-toggle-\(note.id.uuidString)")
     }
 
     /// 笔记行右键的「移动到…」（队列 `L-97` ④）：清单 / 顺序 / 当前格都由 Core 给
@@ -222,6 +260,17 @@ struct NotesContainerTreeView: View {
                 count: appState.notes.count,
                 indent: 0,
                 identifier: "notes-scope-all"
+            )
+            // **已收藏**（队列 `L-184` 第三片）：跨全部笔记本的**常驻**入口 —— 与中栏栏头那枚
+            // 「只看收藏」开关说的是同一件事（两边绑同一个状态，不是两套判断）。
+            // 数字与点进去的行数走同一条判断（`favoriteCount` → `contains(.favorites, ...)`）。
+            row(
+                scope: .favorites,
+                systemImage: "star",
+                title: L(.notesFavorites),
+                count: appState.notesNavigation.favoriteCount(in: appState.notes),
+                indent: 0,
+                identifier: "notes-scope-favorites"
             )
             // **最近**（队列 `L-184` 第二片）：跨全部笔记本、**有界**的一屏（条数在 Core 定死 ——
             // 无界的「最近」就等于「全部笔记」，那是一个点了像没点的入口，`L-50` 同族）。
