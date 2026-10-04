@@ -57,7 +57,13 @@ struct MainWindow: View {
             case .notes:
                 // **左栏 = 导航**（队列 `L-184` 三栏重排）：架 → 笔记本两级树（侧栏可折叠）；
                 // 列表与编辑器都在右边那三栏里 —— 侧栏不再兼任「这一栏里看哪一条」。
-                NotesContainerTreeView()
+                // **两屏各有自己的左栏**（队列 `L-100` 界面半第一片）：待办是同一个笔记模块里的
+                // 另一屏（`FR-NOTE-36`：各自入口与列表），所以它的左栏也是自己的。
+                if appState.notesModule == .todos {
+                    TodoNavigationView()
+                } else {
+                    NotesContainerTreeView()
+                }
             }
         }
     }

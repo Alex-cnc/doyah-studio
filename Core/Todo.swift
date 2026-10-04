@@ -24,6 +24,16 @@ public enum TodoPriority: String, Codable, Sendable, CaseIterable {
         let container = try decoder.singleValueContainer()
         self.init(raw: (try? container.decode(String.self)) ?? "")
     }
+
+    /// 这一档在语言表里的名字（队列 `L-100` 界面半第一片：清单行与编辑器共用一个出处 ——
+    /// 两处各写一遍 `switch` 迟早出现「同一档两个名字」）。句子本身只在语言表里。
+    public var key: LKey {
+        switch self {
+        case .low: return .todoPriorityLow
+        case .normal: return .todoPriorityNormal
+        case .high: return .todoPriorityHigh
+        }
+    }
 }
 
 /// 待办任务（`DoyahNotes` 核心契约 `Todo` 实体；需求条文 `FR-NOTE-36~39`，任务 `T95`）。

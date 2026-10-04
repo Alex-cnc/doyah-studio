@@ -439,6 +439,22 @@ final class AppState: ObservableObject {
     @Published var noteEditorBody = ""
     @Published var noteEditorTags = ""
     private var noteBeingEdited: UUID?
+    // MARK: - 待办（队列 `L-100` 界面半第一片 · 清单屏）
+    /// 笔记区里当前看哪一屏（笔记 / 待办）—— `FR-NOTE-36` 的「各自入口与列表，不塞进笔记列表」。
+    @Published private(set) var notesModule: NotesModule = .notes
+    /// 从库里读回来的任务（**创建时间正序**，与 `NoteLibrary.todos()` 同源）。
+    /// 分区只经 Core 的 `TodoPresentation.sections`（本文件不自己 `filter` 两遍 —— 那正是分家现场）。
+    @Published var todos: [Todo] = []
+    @Published var todoEditorTitle = ""
+    @Published var todoEditorHasDue = false
+    @Published var todoEditorDueAt = Date()
+    @Published var todoEditorPriority: TodoPriority = .normal
+    @Published var todoEditorTags = ""
+    /// **已完成分区默认折叠**（`FR-NOTE-36` 原文）—— 折叠状态是界面状态，默认值由 Core 给
+    /// （`TodoSectionKind.isCollapsedByDefault`），这里不写第二遍。
+    @Published var todoCompletedExpanded = !TodoSectionKind.completed.isCollapsedByDefault
+    /// 正在编辑的那一条（`nil` = 新建）。
+    private var todoBeingEdited: UUID?
     @Published var mcpPendingApprovals: [MCPApprovalRequest] = []
     @Published var mcpApprovalMessage: String?
     @Published var mcpApprovalBadLines = 0
@@ -6443,6 +6459,124 @@ final class AppState: ObservableObject {
             try await NoteLibrary.defaultLibrary().delete(id: id)
             if noteBeingEdited == id { beginNewNote() }
             await reloadNotes()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    // MARK: - 待办（队列 `L-100` 界面半第一片 · 清单屏）
+
+    /// 切「看哪一屏」（笔记 / 待办）。切到待办时**读一次库** —— 与 `openNotes()` 同一条：
+    /// 界面上能看见的东西必须来自库，不能来自上一次的残留（`todos` 是内存态，库才是事实）。
+    func setNotesModule(_ module: NotesModule) {
+        guard notesModule != module else { return }
+        notesModule = module
+        if module == .todos { Task { await reloadTodos() } }
+    }
+
+    /// 读任务（`NoteLibrary.todos()`：**库不存在 ⇒ 空表**，不顺手建库 —— 那条纪律在门面里）。
+    func reloadTodos() async {
+        guard notesEnabled else {
+            todos = []
+            return
+        }
+        do {
+            todos = try await NoteLibrary.defaultLibrary().todos()
+        } catch {
+            todos = []
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 清单的两个分区。**分区 / 段序 / 段内顺序全归 Core**（`TodoPresentation.sections`）——
+    /// 视图不自己 `filter` 两遍（那正是「两处各写一套」的分家现场），本文件也只转发。
+    var todoSections: [TodoSection] { TodoPresentation.sections(todos) }
+
+    func beginNewTodo() {
+        todoBeingEdited = nil
+        todoEditorTitle = ""
+        todoEditorHasDue = false
+        todoEditorDueAt = Date()
+        todoEditorPriority = .normal
+        todoEditorTags = ""
+    }
+
+    func edit(_ todo: Todo) {
+        todoBeingEdited = todo.id
+        todoEditorTitle = todo.title
+        todoEditorHasDue = todo.dueAt != nil
+        todoEditorDueAt = todo.dueAt ?? Date()
+        todoEditorPriority = todo.priority
+        todoEditorTags = todo.tags.joined(separator: " ")
+    }
+
+    /// 正在编辑哪一条（`nil` = 新建）。视图据此决定「删除」这枚按钮画不画。
+    var todoEditingID: UUID? { todoBeingEdited }
+
+    /// 「编辑器里到底有没有可保存的内容」—— 与 `noteEditorHasContent` **同一条形状**（`L-50`）：
+    /// 视图那枚「保存」的灰着与 `saveTodoFromEditor()` 的第一句内容守卫读**同一句**
+    /// （两处各写一遍必然分家：一边灰着、一边还能点进去）。
+    var todoEditorHasContent: Bool {
+        !todoEditorTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 保存（新建 / 编辑）。三条纪律：
+    ///  ① **完成态与完成时刻只认库里那一份**（门面 `upsert` 保证）⇒ 「打开一条已完成的任务、
+    ///     改个标题、保存」不会把它静默改回未完成；
+    ///  ② **清截止是显式动作**：界面那枚「有截止时间」关掉时 `dueAt` 写 `nil`
+    ///     （截止时间跟着调用方走 —— 门面就是这么定的）；
+    ///  ③ 新建那条的 `createdAt` / `updatedAt` 由 `Todo` 的默认值给（改的那条显式刷新 `updatedAt`）。
+    func saveTodoFromEditor() async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        guard todoEditorHasContent else { return }
+        let title = todoEditorTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tags = todoEditorTags
+            .split(whereSeparator: { $0 == " " || $0 == "," || $0 == "，" })
+            .map(String.init)
+        var value = todoBeingEdited.flatMap { id in todos.first { $0.id == id } } ?? Todo(title: title)
+        value.title = title
+        value.dueAt = todoEditorHasDue ? todoEditorDueAt : nil
+        value.priority = todoEditorPriority
+        value.tags = tags
+        if todoBeingEdited != nil { value.updatedAt = Date() }
+        do {
+            _ = try await NoteLibrary.defaultLibrary().upsert(value)
+            await reloadTodos()
+            beginNewTodo()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 完成 / 重开。`FR-NOTE-36`：完成态切换**不丢**原始截止时间 —— 那条纪律在库里
+    /// （写路只有 `setDone` 一条，它碰不到 `due_at` 那一列），这里只调它。
+    /// 认不出的 id ⇒ 门面回 `0` ⇒ **如实说一句**，不假装改成了。
+    func toggleTodoDone(_ todo: Todo) async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        do {
+            let changed = try await NoteLibrary.defaultLibrary().setDone(id: todo.id, !todo.done)
+            if changed == 0 { statusMessage = L(.todoMissing) }
+            await reloadTodos()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    func deleteTodo(id: UUID) async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        do {
+            try await NoteLibrary.defaultLibrary().deleteTodo(id: id)
+            if todoBeingEdited == id { beginNewTodo() }
+            await reloadTodos()
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }

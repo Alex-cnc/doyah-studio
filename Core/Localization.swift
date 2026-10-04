@@ -391,6 +391,24 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoDueToday
     case todoDueTomorrow
     case todoDueLater
+    // 队列 `L-100` **界面半第一片**：待办那一屏自己的入口、空态、编辑器与行上的三个动作。
+    // 名字与句子只在这里（Core 里一个汉字都没有 —— `R-45` 棘轮）。
+    case notesModuleTodos
+    case todosEmpty
+    case todoTitlePlaceholder
+    case todoDueLabel
+    case todoHasDueLabel
+    case todoPriorityLabel
+    case todoPriorityLow
+    case todoPriorityNormal
+    case todoPriorityHigh
+    case todoMarkDone
+    case todoMarkOpen
+    case todoDelete
+    /// 认不出的 id（队列 `L-100`）：库里没有这一条时**如实说**，不假装改成了。
+    case todoMissing
+    /// 待办那一屏左栏那一行（待办自己的入口与列表 —— `FR-NOTE-36`）。
+    case todoAll
     // 队列 `L-184` **第二片**：左栏的「最近」/「标签」两行，与中栏那根排序条。
     case notesRecent
     case notesTagsSection
@@ -2398,6 +2416,21 @@ public enum LocalizedStrings {
         .todoDueToday: [.simplifiedChinese: "今天", .english: "Today"],
         .todoDueTomorrow: [.simplifiedChinese: "明天", .english: "Tomorrow"],
         .todoDueLater: [.simplifiedChinese: "以后", .english: "Later"],
+        // 队列 `L-100` **界面半第一片**（待办那一屏的入口 / 空态 / 编辑器 / 行上动作）：都没有数字槽。
+        .notesModuleTodos: [.simplifiedChinese: "待办", .english: "Todos"],
+        .todosEmpty: [.simplifiedChinese: "还没有待办", .english: "No todos yet"],
+        .todoTitlePlaceholder: [.simplifiedChinese: "待办标题", .english: "Todo title"],
+        .todoDueLabel: [.simplifiedChinese: "截止", .english: "Due"],
+        .todoHasDueLabel: [.simplifiedChinese: "有截止时间", .english: "Has due date"],
+        .todoPriorityLabel: [.simplifiedChinese: "优先级", .english: "Priority"],
+        .todoPriorityLow: [.simplifiedChinese: "低", .english: "Low"],
+        .todoPriorityNormal: [.simplifiedChinese: "普通", .english: "Normal"],
+        .todoPriorityHigh: [.simplifiedChinese: "高", .english: "High"],
+        .todoMarkDone: [.simplifiedChinese: "标记完成", .english: "Mark as done"],
+        .todoMarkOpen: [.simplifiedChinese: "标记未完成", .english: "Mark as open"],
+        .todoDelete: [.simplifiedChinese: "删除待办", .english: "Delete todo"],
+        .todoMissing: [.simplifiedChinese: "这条待办已经不在了", .english: "That todo is gone"],
+        .todoAll: [.simplifiedChinese: "全部待办", .english: "All todos"],
         // 队列 `L-184` 第二片（左栏「最近」/「标签」+ 中栏排序条）。这一组**都没有数字槽**。
         .notesRecent: [.simplifiedChinese: "最近", .english: "Recent"],
         .notesTagsSection: [.simplifiedChinese: "标签", .english: "Tags"],

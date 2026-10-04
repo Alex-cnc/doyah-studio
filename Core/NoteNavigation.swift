@@ -75,6 +75,30 @@ public enum NotesSearchScope: String, CaseIterable, Sendable {
     case all
 }
 
+/// 笔记区里当前看**哪一屏**（队列 `L-100` 界面半第一片）。
+///
+/// 由头 = 需求条文 `FR-NOTE-36` 原文：「与笔记**同级**（**各自入口与列表，不塞进笔记列表**）」——
+/// 所以待办不能混进笔记列表，它得有自己的入口与自己的列表。落点是**同一个区顶部的一枚切换**：
+/// 它是「某一屏」的开关（有选中态、会换整块内容），不是第二根活动栏柱子 ——
+/// 活动栏那一层的语义是「哪个产品模块」（工作区 / 数据库 / 笔记），
+/// 而待办与笔记同属 `Doyah Notes` 这一个模块（同一份库、同一份许可位）。
+///
+/// 两屏的名字只从语言表来（Core 里一个汉字都没有）。
+public enum NotesModule: String, CaseIterable, Sendable {
+    /// 笔记（原来的那一屏）。
+    case notes
+    /// 待办（清单 / 日历 —— 日历那一屏归后续片）。
+    case todos
+
+    /// 这一屏在语言表里的名字。
+    public var titleKey: LKey {
+        switch self {
+        case .notes: return .notesTitle
+        case .todos: return .notesModuleTodos
+        }
+    }
+}
+
 /// **中栏列表按什么排**（队列 `L-184` 第二片）。
 ///
 /// 三条口径：

@@ -134,6 +134,14 @@
       "reason": "**本轮修的就是它（L-50）**：从前视图侧没写处置 ⇒ 空编辑器上「保存」满色可点、点下去静默 return（2026-09-26 读图抓到）。口径 = 灰着；判据属性 `noteEditorHasContent` 是唯一出处。同一函数里许可那一档**故意不灰**（Pro 档点下去要给「本档不含笔记」那句人话）—— 两句守卫处置不同。"
     },
     {
+      "func": "saveTodoFromEditor",
+      "guard": "todoEditorHasContent",
+      "form": "view-disabled",
+      "predicate": "todoEditorHasContent",
+      "view": "App/Views/NotesPanel.swift",
+      "reason": "队列 `L-100` 界面半第一片（待办清单屏的编辑器）：与 `saveNoteFromEditor` **同一条形状** —— 口径 = 灰着；判据属性 `todoEditorHasContent` 是唯一出处（视图那枚「保存」的 `.disabled` 与守卫读同一句）。同一函数里许可那一档**故意不灰**（Pro 档点下去要给「本档不含笔记」那句人话），两句守卫处置不同。"
+    },
+    {
       "func": "saveMaintenanceNote",
       "guard": "let review = maintenanceReview, !review.tasks.isEmpty",
       "form": "explain",
