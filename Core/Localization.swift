@@ -382,6 +382,15 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesTimeHoursAgo
     case notesTimeYesterday
     case notesTimeDaysAgo
+    // 队列 `L-100`（待办清单界面 · `FR-NOTE-36` 的未完成 / 已完成分区 + `FR-NOTE-38` 的逾期标识）。
+    // 分区与档位在 Core（`TodoPresentation`），句子只在这里；这一组**都没有数字槽**。
+    case todoSectionOpen
+    case todoSectionCompleted
+    case todoDueNone
+    case todoDueOverdue
+    case todoDueToday
+    case todoDueTomorrow
+    case todoDueLater
     // 队列 `L-184` **第二片**：左栏的「最近」/「标签」两行，与中栏那根排序条。
     case notesRecent
     case notesTagsSection
@@ -2381,6 +2390,14 @@ public enum LocalizedStrings {
         .notesTimeHoursAgo: [.simplifiedChinese: "%@ 小时前", .english: "%@ hr ago"],
         .notesTimeYesterday: [.simplifiedChinese: "昨天", .english: "Yesterday"],
         .notesTimeDaysAgo: [.simplifiedChinese: "%@ 天前", .english: "%@ days ago"],
+        // 队列 `L-100`（待办清单界面）：两个段头 + 四个截止档位 + 「无截止」。同样**都没有数字槽**。
+        .todoSectionOpen: [.simplifiedChinese: "未完成", .english: "Open"],
+        .todoSectionCompleted: [.simplifiedChinese: "已完成", .english: "Completed"],
+        .todoDueNone: [.simplifiedChinese: "无截止", .english: "No due date"],
+        .todoDueOverdue: [.simplifiedChinese: "已过期", .english: "Overdue"],
+        .todoDueToday: [.simplifiedChinese: "今天", .english: "Today"],
+        .todoDueTomorrow: [.simplifiedChinese: "明天", .english: "Tomorrow"],
+        .todoDueLater: [.simplifiedChinese: "以后", .english: "Later"],
         // 队列 `L-184` 第二片（左栏「最近」/「标签」+ 中栏排序条）。这一组**都没有数字槽**。
         .notesRecent: [.simplifiedChinese: "最近", .english: "Recent"],
         .notesTagsSection: [.simplifiedChinese: "标签", .english: "Tags"],

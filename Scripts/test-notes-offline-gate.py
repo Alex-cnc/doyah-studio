@@ -58,6 +58,8 @@ TREE_FILES = [
     "Core/NotePresentation.swift",
     # 队列 `N-11` 的 macOS 核心层半（待办任务的模型）：同上，台账里有它 ⇒ 副本必须带上
     "Core/Todo.swift",
+    # 队列 `L-100` 清单界面（待办清单的三件纯逻辑）：同上，台账里有它 ⇒ 副本必须带上
+    "Core/TodoPresentation.swift",
     "App/Views/NotesPanel.swift",
     "Tests/NoteTests.swift",
     "Tests/NoteBodyTests.swift",
