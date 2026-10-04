@@ -67,6 +67,10 @@ NOTE_SOURCES = [
     # 队列 `L-184` 三栏重排：中栏卡片的摘要与相对时间（纯函数，无网络、无库；只吃 `Date` /
     # `Calendar` / `LKey`）—— 同上，算笔记侧
     "Core/NotePresentation.swift",
+    # 队列 `N-11` 的 macOS 核心层半：待办任务清单的**模型**（`Todo` + `TodoPriority`；纯值类型、
+    # 无网络、无库）—— 库表 / 行映射在 `Core/NoteStorage/NoteDatabase.swift`（那一层不在本清单
+    # 的扫描面内，它的零网络出口由同一族判据按目录口径另管）
+    "Core/Todo.swift",
 ]
 
 # 刻意**不在**清单里的笔记相关文件：它们按设计就引用 Ultra 侧类型，属于宿主侧适配层。

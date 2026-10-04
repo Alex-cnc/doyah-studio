@@ -223,6 +223,59 @@ public enum NoteSchemaV4 {
     ]
 }
 
+/// **schema v5**（队列 `N-11` 的 **macOS 核心层半**）：新增 **`todo`**（待办任务）与
+/// **`todo_tag`** 两张表。
+///
+/// 契约出处：`DoyahNotes/Docs/核心契约.md` 的 `Todo` 实体（提案 `0004` **已采纳裁决**；
+/// 需求条文 `FR-NOTE-36~39`）。本侧只引用不复制 —— 列名与契约字段同义（`dueAt` → `due_at`）。
+///
+/// 四条取舍：
+///   · **`todo` 与 `note` 同库同库文件**（`notes.sqlite3`）：契约 `FR-NOTE-39` 的硬约束是
+///     「清单是**唯一事实源**、日历只是视图」，而「同一次事务」只有**同一个连接**才做得到
+///     （跨库/跨文件就没有事务了）⇒ **不新开库**，只升 schema。
+///   · **`todo_tag` 与 `note_tag` 同形**（主键 `(todo_id, tag)` + `ON DELETE CASCADE`）：
+///     标签是任务的**多值属性**，不是另一件东西；删一条任务时它的标签必须跟着走。
+///   · **`priority` 存串、默认 `'normal'`、不加 `CHECK`**：取值「只增不改」且**认不出的当没给**
+///     （见 `TodoPriority`）—— 加 `CHECK` 等于让「别端多一档」变成写入失败，与那条口径相抵。
+///   · **`due_at` / `completed_at` 可空** = 语义本身（无截止 / 没完成过），不是「不知道」；
+///     而 `done` **`NOT NULL` + 默认 0**（同 v3 的 `favorite`：存量语义就是「没完成」）。
+public enum NoteSchemaV5 {
+
+    public static let version: Int32 = 5
+
+    /// 新增的表。
+    public static let tables: [String] = ["todo", "todo_tag"]
+
+    /// 新增的索引（只有标签那一张：`todo` 的量级与笔记同级，按截止时间排的索引在这一档规模上
+    /// 只是多一处要维护的东西 —— 与 v3 / v4「补列不建索引」同一条理由）。
+    public static let indexes: [String] = ["todo_tag_tag_index"]
+
+    /// 升级语句（顺序即依赖顺序：`todo` 先于 `todo_tag`）。
+    public static let ddl: [String] = [
+        """
+        CREATE TABLE todo (
+            id INTEGER PRIMARY KEY,
+            uuid TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL DEFAULT '',
+            due_at REAL,
+            done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)),
+            completed_at REAL,
+            priority TEXT NOT NULL DEFAULT 'normal',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        );
+        """,
+        """
+        CREATE TABLE todo_tag (
+            todo_id INTEGER NOT NULL REFERENCES todo (id) ON DELETE CASCADE,
+            tag TEXT NOT NULL,
+            PRIMARY KEY (todo_id, tag)
+        );
+        """,
+        "CREATE INDEX todo_tag_tag_index ON todo_tag (tag);"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -306,8 +359,9 @@ public final class NoteDatabase {
     /// 库文件名。**与旧格式 `notes.json` 不同名**：迁移要靠「目标不在」判定要不要搬（L-03 的纪律）。
     public static let fileName = "notes.sqlite3"
 
-    /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏、v3 → v4 补置顶）。
-    public static let supportedVersion = NoteSchemaV4.version
+    /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏、v3 → v4 补置顶、
+    /// v4 → v5 补待办任务清单）。
+    public static let supportedVersion = NoteSchemaV5.version
 
     private let connection: SQLiteConnection
 
@@ -382,6 +436,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV4.version {
                 for statement in NoteSchemaV4.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV4.version)")
+            }
+            if current < NoteSchemaV5.version {
+                for statement in NoteSchemaV5.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV5.version)")
             }
         }
     }
@@ -726,6 +784,97 @@ public final class NoteDatabase {
             escaped.append(character)
         }
         return escaped
+    }
+
+    // MARK: - 待办任务清单（schema v5 · 队列 `N-11` 的 macOS 核心层半）
+
+    /// 写入或按 uuid 覆盖一条任务，返回它的 rowid。
+    ///
+    /// 与 `upsert(_ note:)` 逐条同纪律：本体与标签**在一个事务**里落库（半个任务是最难查的一类
+    /// 不一致）；`due_at` 与 `done` **各写各的**（契约裁决 ①：完成不清截止时间；
+    /// 「已完成」这件事由 `setDone` 改，不由重写正文顺带改）；`priority` 认不出的取值
+    /// **当没给**（`TodoPriority(raw:)` 已归一，这里只管把归一后的那个串存下去）。
+    @discardableResult
+    public func upsert(_ todo: Todo) throws -> Int64 {
+        try connection.transaction {
+            try connection.execute(
+                """
+                INSERT INTO todo (
+                    uuid, title, due_at, done, completed_at, priority, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (uuid) DO UPDATE SET
+                    title = excluded.title,
+                    due_at = excluded.due_at,
+                    done = excluded.done,
+                    completed_at = excluded.completed_at,
+                    priority = excluded.priority,
+                    updated_at = excluded.updated_at;
+                """,
+                [
+                    .text(todo.id.uuidString),
+                    .text(todo.title),
+                    todo.dueAt.map { SQLiteValue.real($0.timeIntervalSince1970) } ?? .null,
+                    .integer(todo.done ? 1 : 0),
+                    todo.completedAt.map { SQLiteValue.real($0.timeIntervalSince1970) } ?? .null,
+                    .text(todo.priority.raw),
+                    .real(todo.createdAt.timeIntervalSince1970),
+                    .real(todo.updatedAt.timeIntervalSince1970)
+                ]
+            )
+            // 按 uuid 反查 rowid（与 `upsert(_ note:)` 同一个理由：走 UPDATE 分支时
+            // `last_insert_rowid()` 是上一句话留下的值，静默指向另一条任务且没有症状）。
+            let rowID = try requireTodoRowID(of: todo.id)
+            // 标签是**全量替换**语义（`Todo.tags` 是完整集合）：先清后插，省掉差集算法那类缺陷。
+            try connection.execute("DELETE FROM todo_tag WHERE todo_id = ?", [.integer(rowID)])
+            for tag in Set(todo.tags).sorted() {
+                try connection.execute(
+                    "INSERT INTO todo_tag (todo_id, tag) VALUES (?, ?)",
+                    [.integer(rowID), .text(tag)]
+                )
+            }
+            return rowID
+        }
+    }
+
+    /// **完成 / 重开**一条任务（`FR-NOTE-36`、契约裁决 ①）：
+    /// 只动 `done` / `completed_at` / `updated_at`，**一个字节都不碰 `due_at`** ——
+    /// 「完成态切换不丢原始截止时间」在这条路上是**形状**而不是纪律（碰不到那一列）。
+    /// 认不出的 id ⇒ 一行都不匹配，由调用方按返回值如实处置（返回 0 就是「库里没有这条」）。
+    @discardableResult
+    public func setDone(_ done: Bool, id: UUID, at moment: Date = Date()) throws -> Int {
+        try connection.execute(
+            "UPDATE todo SET done = ?, completed_at = ?, updated_at = ? WHERE uuid = ?",
+            [
+                .integer(done ? 1 : 0),
+                done ? .real(moment.timeIntervalSince1970) : .null,
+                .real(moment.timeIntervalSince1970),
+                .text(id.uuidString)
+            ]
+        )
+        return connection.changeCount
+    }
+
+    /// 删一条任务（它的标签靠外键级联一起走，`foreign_keys = ON` 是前提）。
+    public func deleteTodo(id: UUID) throws {
+        try connection.execute("DELETE FROM todo WHERE uuid = ?", [.text(id.uuidString)])
+    }
+
+    /// 一条任务（`nil` = 库里没有这一条）。
+    public func todo(id: UUID) throws -> Todo? {
+        try todos(from: "SELECT * FROM todo WHERE uuid = ?", [.text(id.uuidString)]).first
+    }
+
+    /// 全部任务（**创建时间正序、同时间按 uuid 兜底** —— 稳定有序）。
+    ///
+    /// **边界（如实登记）**：「按截止时间 / 优先级 / 创建时间三档排」的**排序口径**与
+    /// 「无截止排哪一端」「逾期是否影响排序」属**契约半**（`DoyahNotes/Docs/核心契约.md`）
+    /// —— 契约落笔前**不在这里自造**（提案 `0004` 末尾明写）⇒ 本片只给一个确定的稳定次序。
+    public func todos() throws -> [Todo] {
+        try todos(from: "SELECT * FROM todo ORDER BY created_at ASC, uuid ASC")
+    }
+
+    public func todoCount() throws -> Int {
+        Int(try connection.scalarInt("SELECT count(*) FROM todo") ?? 0)
     }
 
     // MARK: - 两层归属（schema v2 · 队列 L-97 第二片）
@@ -1199,6 +1348,59 @@ public final class NoteDatabase {
             )
         }
         return rowID
+    }
+
+    /// 任务表的 rowid（与 `requireRowID(of:)` 同一条纪律：拿不到就是程序错误，断言式失败）。
+    private func requireTodoRowID(of id: UUID) throws -> Int64 {
+        guard let rowID = try connection.scalarInt("SELECT id FROM todo WHERE uuid = ?", [.text(id.uuidString)]) else {
+            throw SQLiteFailure(
+                code: SQLiteResultCode.error,
+                message: "no todo row for uuid \(id.uuidString)",
+                operation: .step,
+                sql: "SELECT id FROM todo WHERE uuid = ?"
+            )
+        }
+        return rowID
+    }
+
+    private func todos(from sql: String, _ bindings: [SQLiteValue] = []) throws -> [Todo] {
+        let rows = try connection.query(sql, bindings)
+        guard !rows.isEmpty else { return [] }
+        let rowIDs = rows.compactMap { $0.int("id") }
+        var tagsByRow: [Int64: [String]] = [:]
+        if !rowIDs.isEmpty {
+            let placeholders = Array(repeating: "?", count: rowIDs.count).joined(separator: ", ")
+            let tagRows = try connection.query(
+                "SELECT todo_id, tag FROM todo_tag WHERE todo_id IN (\(placeholders)) ORDER BY tag ASC",
+                rowIDs.map { SQLiteValue.integer($0) }
+            )
+            for row in tagRows {
+                guard let todoID = row.int("todo_id") else { continue }
+                tagsByRow[todoID, default: []].append(row.text("tag") ?? "")
+            }
+        }
+        return try rows.map { row in
+            guard let uuidText = row.text("uuid"), let uuid = UUID(uuidString: uuidText) else {
+                throw SQLiteFailure(
+                    code: SQLiteResultCode.mismatch,
+                    message: "todo row has no usable uuid",
+                    operation: .step
+                )
+            }
+            // **`priority` 认不出不抛错**：`TodoPriority(raw:)` 归一成 `.normal`（「当没给」）——
+            // 与 `materialize` 里 `source_kind` 认不出就抛刻意不同（那一处是数据损坏，这一处是别端多一档）。
+            return Todo(
+                id: uuid,
+                title: row.text("title") ?? "",
+                dueAt: row["due_at"].doubleValue.map { Date(timeIntervalSince1970: $0) },
+                done: row["done"].intValue == 1,
+                completedAt: row["completed_at"].doubleValue.map { Date(timeIntervalSince1970: $0) },
+                priority: TodoPriority(raw: row.text("priority") ?? ""),
+                tags: tagsByRow[row.int("id") ?? 0] ?? [],
+                createdAt: Date(timeIntervalSince1970: row["created_at"].doubleValue ?? 0),
+                updatedAt: Date(timeIntervalSince1970: row["updated_at"].doubleValue ?? 0)
+            )
+        }
     }
 
     private func notes(from sql: String, _ bindings: [SQLiteValue] = []) throws -> [Note] {

@@ -52,6 +52,11 @@
       "role": "中栏卡片的摘要与相对时间 —— 队列 `L-184` 三栏重排；纯函数，无网络无库，只吃 `Date` / `Calendar` / `LKey`"
     },
     {
+      "path": "Core/Todo.swift",
+      "layer": "core",
+      "role": "待办任务清单的模型（`Todo` / `TodoPriority`）—— 队列 `N-11` 的 macOS 核心层半；纯值类型，无网络无库（库表与行映射在 `Core/NoteStorage/`，那一层不走本清单的按名扫描）"
+    },
+    {
       "path": "Core/License.swift",
       "layer": "core",
       "role": "许可与装配判据（笔记模块随包的条件判定）"

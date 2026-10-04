@@ -268,6 +268,53 @@ public actor NoteLibrary {
         try open().isPinned(id: id)
     }
 
+    // MARK: - 待办任务清单（schema v5 · 队列 `N-11` 的 macOS 核心层半）
+
+    /// 全部任务（**创建时间正序** —— 稳定有序；三档排序口径属契约半，见 `Todo` 的说明）。
+    /// 库还不存在时如实返回空表（**不顺手建一个空库**，与 `load()` 同一条纪律）。
+    public func todos() throws -> [Todo] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        return try open().todos()
+    }
+
+    /// 一条任务（`nil` = 库里没有这一条）。
+    public func todo(id: UUID) throws -> Todo? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        return try open().todo(id: id)
+    }
+
+    /// 写入或覆盖一条任务（本体 + 标签一个事务）。返回落库后的那一份（**读回事实**，
+    /// 不是把入参原样回给调用方 —— 与 `upsert(_ draft:)` 同一条纪律）。
+    ///
+    /// 两条纪律与笔记侧同形：
+    ///   ① **完成态与完成时刻只认库里那一份** —— 它们只有 `setDone` 一条写路（与收藏 / 置顶
+    ///      「只有 setter 一条路」同一条教训：否则「打开一条已完成的任务、改个标题、保存」
+    ///      会把它**静默改回未完成**）；
+    ///   ② 截止时间**跟着调用方**（改期就是重写这一列；另开一条「改期」的路只会多一处口径）。
+    @discardableResult
+    public func upsert(_ todo: Todo) throws -> Todo {
+        let database = try open()
+        var value = todo
+        if let existing = try database.todo(id: todo.id) {
+            value.done = existing.done
+            value.completedAt = existing.completedAt
+        }
+        _ = try database.upsert(value)
+        return value
+    }
+
+    /// **完成 / 重开**一条任务：返回**真的改了几行**（认不出的 id ⇒ `0`，调用方按数如实处置）。
+    /// 只动完成态与完成时刻 + `updatedAt`，**不碰截止时间**（契约裁决 ①）。
+    @discardableResult
+    public func setDone(id: UUID, _ done: Bool, at moment: Date = Date()) throws -> Int {
+        try open().setDone(done, id: id, at: moment)
+    }
+
+    public func deleteTodo(id: UUID) throws {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return }
+        try open().deleteTodo(id: id)
+    }
+
     public func delete(id: UUID) throws {
         let database = try open()
         // 库还不存在时删一条 = 什么都没发生（不要顺手建一个空库出来）。
