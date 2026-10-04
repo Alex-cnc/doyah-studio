@@ -154,4 +154,19 @@ final class TerminalInputTests: XCTestCase {
             XCTAssertNotEqual(drag, right, "接管鼠标时（⌥=\(option)）拖动与右键必须走相反的路")
         }
     }
+
+    // MARK: 按键归属（输入法 / 终端 · FR-EDIT-29）
+
+    /// 组字期间整键归输入法（Return 上屏 / Delete 删拼音 / Esc 取消组字 / 方向键选候选）；
+    /// ⌘ 快捷键例外 —— 组字时按 ⌘V / ⌘W 仍该是应用自己的动作。
+    ///
+    /// 钉住的是实测缺陷「中文输入法下敲回车：回车进了终端、拼音还留在输入框」——
+    /// 根因是 `keyDown` 先走 `controlBytes`（keyCode 36 → `0x0D`）再看输入法。
+    func testKeyRouteDefersToInputMethodWhileComposing() {
+        XCTAssertEqual(TerminalInput.keyRoute(hasMarkedText: true, command: false), .inputMethod)
+        XCTAssertEqual(TerminalInput.keyRoute(hasMarkedText: true, command: true), .terminal)
+        // 没在组字 ⇒ 一律走终端自己的规则（否则普通回车就进不去 shell 了）。
+        XCTAssertEqual(TerminalInput.keyRoute(hasMarkedText: false, command: false), .terminal)
+        XCTAssertEqual(TerminalInput.keyRoute(hasMarkedText: false, command: true), .terminal)
+    }
 }

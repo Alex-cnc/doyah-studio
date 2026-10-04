@@ -621,7 +621,18 @@ final class TerminalHostView: NSView, NSMenuItemValidation {
     }
 
     override func keyDown(with event: NSEvent) {
-        if event.modifierFlags.contains(.command) {
+        let hasCommand = event.modifierFlags.contains(.command)
+
+        // 输入法正在组字 ⇒ 整键先交给输入法（判定在 Core 的 `TerminalInput.keyRoute`）。
+        // 组字期间的 Return 是「上屏」、Delete 是「删拼音」、Esc 是「取消组字」、
+        // 方向键是「在候选表里移动」—— 先走下面那套固定字节序列，就会把 Return 当成
+        // 回车写进 PTY、而拼音还留在输入框（实测缺陷）。⌘ 快捷键例外，仍归本机。
+        if TerminalInput.keyRoute(hasMarkedText: hasMarkedText(), command: hasCommand) == .inputMethod {
+            interpretKeyEvents([event])
+            return
+        }
+
+        if hasCommand {
             // 页签动作优先（⌘T / ⌘W / ⌘1…9 / ⌘⇧[ ⌘⇧]）：判定在 Core（含「⇧⌘[ 实际给的是 `{`」
             // 这个坑），这里只把按键交过去。认不出才继续往下走 —— 不许吞掉别人的键。
             if let command = TerminalTabs.command(

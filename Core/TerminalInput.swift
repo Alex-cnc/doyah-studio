@@ -238,4 +238,27 @@ public enum TerminalInput {
     public static func rightClickRoute(mouseReportingActive: Bool, optionHeld: Bool) -> MouseRoute {
         mouseReportingActive && optionHeld ? .program : .local
     }
+
+    // MARK: - 按键归属（输入法 / 终端）
+
+    /// 一次按键事件归谁处理。
+    public enum KeyRoute: String, Sendable {
+        /// 输入法：组字 / 候选 / 上屏都归它，**不许**翻成字节写进 PTY。
+        case inputMethod
+        /// 终端：按 `controlBytes` 与 `⌘` 快捷键那套规则处理。
+        case terminal
+    }
+
+    /// 按键归属：**输入法正在组字时，整键归输入法** —— 唯一例外是带 ⌘ 的快捷键。
+    ///
+    /// 为什么要问这一句（实测缺陷）：`Return`（keyCode 36）在终端自己的规则里被翻成
+    /// `0x0D` 直接写进 PTY，而组字期间的 Return 是**上屏**用的（`Delete` 删拼音、
+    /// `Esc` 取消组字、方向键在候选表里移动，同理）。视图先走固定字节序列、再
+    /// `interpretKeyEvents`，症状就是「回车被送进了终端、拼音还留在输入框」。
+    /// 系统 Terminal 不这样，因为它把整键先交给输入上下文。
+    ///
+    /// `⌘` 不在此列：组字期间按 `⌘V` / `⌘W` 仍该是应用自己的动作。
+    public static func keyRoute(hasMarkedText: Bool, command: Bool) -> KeyRoute {
+        hasMarkedText && !command ? .inputMethod : .terminal
+    }
 }
