@@ -907,6 +907,27 @@ public final class NoteDatabase {
         }
     }
 
+    /// **把一个笔记本挪到另一个架**（跨架移动 —— 队列 `L-97` 落法 ① 的第四格）。
+    ///
+    /// 只改两格：`shelf_uid` + 排序位（**顺延到目标架现有条数之后**，不重号、不跳号）。
+    /// **不碰** `created_at` / `is_default` —— 挪架不是改名、也不是删（契约 §2.12 第 2 条：
+    /// 默认容器不可删、可改名）。也**不碰**里面的笔记：笔记跟着自己的笔记本走。
+    ///
+    /// 三处认不出 / 空操作一律 `nil`（库一个字节不动）—— 判定与 `NotebookShelfMovePrompt.moveDestination`
+    /// 同一条口径：**认不出的笔记本** / **认不出的目标架**（**不兜底到默认架**）/ **已经在该架**。
+    @discardableResult
+    public func move(notebookUid: String, toShelf shelfUid: String) throws -> Notebook? {
+        let directory = try notebookDirectory()
+        guard let notebook = directory.notebook(uid: notebookUid),
+              directory.shelf(uid: shelfUid) != nil,
+              notebook.shelfUid != shelfUid else { return nil }
+        var moved = notebook
+        moved.shelfUid = shelfUid
+        moved.sortOrder = directory.nextSortOrder(inShelf: shelfUid)
+        try upsert(moved)
+        return moved
+    }
+
     /// 归属对（`uuid` ↔ `notebook_uid`）。顺序与 `notes()` 同口径（最近更新在前），
     /// 这样「按笔记本过滤」的结果与不过滤时的相对次序一致。
     public func placements() throws -> [NotebookPlacement] {

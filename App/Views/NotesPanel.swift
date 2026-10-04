@@ -242,6 +242,22 @@ struct NotesContainerTreeView: View {
                             )
                         }
                         .accessibilityIdentifier("notes-rename-notebook-\(notebook.uid)")
+                        // **跨架移动**（队列 `L-97` 界面半第六片 = 落法 ① 的第四格）：清单 / 顺序 /
+                        // 当前架都由 Core 给（`NotebookShelfMovePrompt`），这里只按架画出来。
+                        // 当前架那一项**灰着**、仍照实画（`L-50`：可点却静默无反应是最坏的一种）；
+                        // 库里只有一个架 ⇒ 给一句人话，而不是一个空菜单（空菜单会被读成「没做」）。
+                        Menu(L(NotebookShelfMovePrompt.menuTitleKey)) {
+                            let targets = appState.notebookShelfMoveTargets(for: notebook.uid)
+                            if NotebookShelfMovePrompt.hasDestination(targets) {
+                                ForEach(targets) { target in
+                                    shelfMoveButton(for: target, notebookUid: notebook.uid)
+                                }
+                            } else {
+                                Button(L(NotebookShelfMovePrompt.noTargetKey)) {}
+                                    .disabled(true)
+                            }
+                        }
+                        .accessibilityIdentifier("notes-move-notebook-menu-\(notebook.uid)")
                         Divider()
                         reorderButtons(kind: .notebook, uid: notebook.uid)
                         Divider()
@@ -315,6 +331,18 @@ struct NotesContainerTreeView: View {
             .disabled(!appState.canMoveContainer(kind: kind, uid: uid, direction: direction))
             .accessibilityIdentifier("notes-reorder-\(uid)-\(direction.rawValue)")
         }
+    }
+
+    /// 跨架移动的一项（队列 `L-97` 界面半第六片 = 落法 ① 的第四格）：清单由 Core 给
+    /// （`NotebookShelfMovePrompt`），这里只画；当前架那一项**灰着**、仍照实画出来
+    /// （`L-50`：可点却静默无反应是最坏的一种），后缀「（当前架）」也来自语言表。
+    @ViewBuilder
+    private func shelfMoveButton(for target: NotebookShelfMoveTarget, notebookUid: String) -> some View {
+        Button(target.isCurrent ? target.name + L(NotebookShelfMovePrompt.currentMarkKey) : target.name) {
+            Task { await appState.moveNotebook(uid: notebookUid, toShelf: target.id) }
+        }
+        .disabled(!target.isSelectable)
+        .accessibilityIdentifier("notes-move-notebook-to-shelf-\(target.id)")
     }
 
     /// 动作 → 按钮角色：破坏档给破坏色，「取消」是退出口；默认档（移到默认容器）是**普通**按钮

@@ -51,6 +51,9 @@ TREE_FILES = [
     "Core/NotebookMovePrompt.swift",
     # 队列 `L-97` 界面半第四片（新建 / 重命名 / 排序）：同上，台账里有它 ⇒ 副本必须带上
     "Core/NotebookEditPrompt.swift",
+    # 队列 `L-97` 界面半第五片（批量多选 + 拖拽）与第六片（跨架移动）：同上，台账里有它 ⇒ 副本必须带上
+    "Core/NoteSelectionPrompt.swift",
+    "Core/NotebookShelfMovePrompt.swift",
     "App/Views/NotesPanel.swift",
     "Tests/NoteTests.swift",
     "Tests/NoteBodyTests.swift",

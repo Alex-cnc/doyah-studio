@@ -356,6 +356,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesMoveMenu
     case notesMoveNoOtherNotebook
     case notesMoveCurrentMark
+    // 队列 `L-97` 界面半第六片（跨架移动：笔记本从一个架挪到另一个架）。
+    case notesMoveShelfMenu
+    case notesMoveNoOtherShelf
+    case notesMoveShelfCurrentMark
     // 队列 `L-97` 界面半第四片（容器编辑：新建 / 重命名 / 排序）。
     case notesNewNotebook
     case notesNewNotebookTitle
@@ -2320,6 +2324,9 @@ public enum LocalizedStrings {
         .notesMoveNoOtherNotebook: [.simplifiedChinese: "只有一个笔记本，没有别的地方可移。", .english: "Only one notebook exists — nowhere else to move it."],
         .notesMoveCurrentMark: [.simplifiedChinese: "（当前）", .english: " (current)"],
         .notesNewNotebook: [.simplifiedChinese: "新建笔记本", .english: "New notebook"],
+        .notesMoveShelfMenu: [.simplifiedChinese: "移动到其它架…", .english: "Move to another shelf…"],
+        .notesMoveNoOtherShelf: [.simplifiedChinese: "只有一个架，没有别的地方可移。", .english: "Only one shelf exists — nowhere else to move it."],
+        .notesMoveShelfCurrentMark: [.simplifiedChinese: "（当前架）", .english: " (current shelf)"],
         .notesNewNotebookTitle: [.simplifiedChinese: "新建笔记本", .english: "New notebook"],
         .notesNewNotebookNoShelf: [.simplifiedChinese: "还没有笔记本架，建不了笔记本。", .english: "There is no shelf yet — a notebook needs one."],
         .notesRenameMenu: [.simplifiedChinese: "重命名…", .english: "Rename…"],

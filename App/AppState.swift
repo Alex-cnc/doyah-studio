@@ -6626,6 +6626,35 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - 跨架移动（队列 `L-97` 界面半第六片：落法 ① 的第四格）
+
+    /// 菜单要的那份「这个笔记本能挪到哪些架」——**规则与顺序只在 Core 一处**
+    /// （`NotebookShelfMovePrompt.targets`）：界面不自己拼清单，拼一份就会出现
+    /// 「菜单里有、树上没有」这种分家（`L-97` 同一课）。
+    func notebookShelfMoveTargets(for notebookUid: String) -> [NotebookShelfMoveTarget] {
+        NotebookShelfMovePrompt.targets(notebookUid: notebookUid, directory: notesNavigation.directory)
+    }
+
+    /// 把一个笔记本挪到另一个架（落库只改 `shelf_uid` + 排序位；**不碰** `createdAt` /
+    /// `isDefault`，也不碰里面的笔记）。
+    ///
+    /// 落库前的守卫走 Core 的 `moveDestination`（**唯一一处判定**）：认不出的笔记本 /
+    /// 认不出的目标架 / 已经在该架 ⇒ 不写库。视图那一侧本来就不给点（清单里 `isSelectable`
+    /// 由同一个 `isCurrent` 算出来），这里是第二道；白写一次库只是把「点了没反应」从界面挪到库里。
+    func moveNotebook(uid: String, toShelf shelfUid: String) async {
+        guard let destination = NotebookShelfMovePrompt.moveDestination(
+            notebookUid: uid,
+            targetShelfUid: shelfUid,
+            directory: notesNavigation.directory
+        ) else { return }
+        do {
+            _ = try await NoteLibrary.defaultLibrary().moveNotebook(uid: uid, toShelf: destination)
+            await reloadNotes()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
     // MARK: - 外部调用审批（FR-AI-10 界面那一半）
 
     /// 队列位置由 Core 给（两侧必须算同一个路径，界面写的决定 CLI 才读得到）。

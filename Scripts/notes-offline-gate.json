@@ -37,6 +37,16 @@
       "role": "新建 / 重命名 / 排序的规则与文案键（名字规则、新建落点、整层重排）—— 队列 `L-97` 界面半第四片；纯值类型，无网络无库，只吃 `NotebookDirectory` / `NotesScope` / `LKey`"
     },
     {
+      "path": "Core/NoteSelectionPrompt.swift",
+      "layer": "core",
+      "role": "批量多选 / 拖拽载荷 / 落点计划的规则与文案键 —— 队列 `L-97` 界面半第五片；纯值类型，无网络无库，只吃 `UUID` / `LKey`"
+    },
+    {
+      "path": "Core/NotebookShelfMovePrompt.swift",
+      "layer": "core",
+      "role": "跨架移动的目标清单 / 落点判定 / 文案键 —— 队列 `L-97` 界面半第六片；纯值类型，无网络无库，只吃 `NotebookDirectory` / `LKey`"
+    },
+    {
       "path": "Core/License.swift",
       "layer": "core",
       "role": "许可与装配判据（笔记模块随包的条件判定）"

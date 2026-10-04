@@ -175,6 +175,15 @@ public actor NoteLibrary {
         )
     }
 
+    /// **把一个笔记本挪到另一个架**（跨架移动 —— 队列 `L-97` 落法 ① 的第四格）。
+    /// 认不出的笔记本 / 认不出的目标架 / 已经在该架 ⇒ `nil`（库一个字节不动）；判定在
+    /// `NoteDatabase.move(notebookUid:toShelf:)` 一处（与 `NotebookShelfMovePrompt.moveDestination` 同口径）。
+    @discardableResult
+    public func moveNotebook(uid: String, toShelf shelfUid: String) throws -> Notebook? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        return try open().move(notebookUid: uid, toShelf: shelfUid)
+    }
+
     /// **改一个架的名字**（默认架也可改名 —— 契约 §2.12 第 2 条：不可删、可改名）。
     /// 认不出的 uid ⇒ `nil`。
     @discardableResult
