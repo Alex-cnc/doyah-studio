@@ -3,13 +3,13 @@
 """vendored SQLite 的**现编现跑**自证（FR-PLUG-08 / Q23）。
 
 台账门禁（`check-vendored-sqlite.py`）证明的是「文件就是那一份、宏写着那几条」；
-这一条证明的是「**真的编得起来、跑得对**」：把 `Vendor/sqlite3` 的 `sqlite3.c` 用台账里的编译宏
+这一条证明的是「**真的编得起来、跑得对**」：把 `platform/macos/Vendor/sqlite3` 的 `sqlite3.c` 用台账里的编译宏
 编成一个可执行文件，对着一个**真数据库文件**做一遍笔记存储要用到的事：
 
   1. 版本自证：跑起来读到的 `sqlite3_libversion()` / `sqlite3_sourceid()` 与台账一致
      —— 证明是**我们 vendor 的这一份**，不是系统 libsqlite3（系统库版本随 OS 漂移）；
   2. 编译宏自证：四条宏（THREADSAFE / FTS5 / OMIT_LOAD_EXTENSION / DQS）在运行期自报生效，
-     而不是「写在 Package.swift 里没起作用」；
+     而不是「写在 platform/macos/Package.swift 里没起作用」；
   3. 行为自证：WAL 真的开得起来（并发写 + 多进程读的前提）、参数化写入与读回一致、
      FTS5 能建虚拟表并**真检索**、DQS=0 时双引号字符串**当场报错**。
 
@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
     say("version", sqlite3_libversion());
     say("sourceid", sqlite3_sourceid());
 
-    /* 编译宏有没有真的生效（运行期自报，不看 Package.swift） */
+    /* 编译宏有没有真的生效（运行期自报，不看 platform/macos/Package.swift） */
     say_int("opt_THREADSAFE", sqlite3_compileoption_used("THREADSAFE") ? 1 : 0);
     say_int("opt_ENABLE_FTS5", sqlite3_compileoption_used("ENABLE_FTS5") ? 1 : 0);
     say_int("opt_OMIT_LOAD_EXTENSION", sqlite3_compileoption_used("OMIT_LOAD_EXTENSION") ? 1 : 0);

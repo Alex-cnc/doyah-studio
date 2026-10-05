@@ -28,13 +28,13 @@ GATE = "Scripts/check-sidebar-collapse-state.py"
 
 # 副本需要的最小文件集（门禁会读：AppState / 该视图 / 视图目录下其余文件）
 TREE_FILES = [
-    "App/AppState.swift",
-    "App/Views/ConnectionListView.swift",
+    "platform/macos/App/AppState.swift",
+    "platform/macos/App/Views/ConnectionListView.swift",
     GATE,
 ]
 
-STATE = "App/AppState.swift"
-VIEW = "App/Views/ConnectionListView.swift"
+STATE = "platform/macos/App/AppState.swift"
+VIEW = "platform/macos/App/Views/ConnectionListView.swift"
 
 DECLARATION = "    @Published private(set) var collapsedConnectionGroups: Set<String> = []"
 WRITER = "    func setConnectionGroup(_ group: String, collapsed: Bool) {"
@@ -195,7 +195,7 @@ def main() -> int:
     code, output = run(tree)
     record(
         code != 0 and "判据输入缺失" in output,
-        "`App/AppState.swift` 不在 ⇒ 判红（空跑不许通过）",
+        "`platform/macos/App/AppState.swift` 不在 ⇒ 判红（空跑不许通过）",
         output.strip()[-300:],
     )
 

@@ -11,13 +11,13 @@
 
 所以这一项判三件事：
 
-1. **没有第二个行号面的漏网之鱼** —— `App/` 里每个 `NSTextView` / `NSTextField` 子类都在台账里，
+1. **没有第二个行号面的漏网之鱼** —— `platform/macos/App/` 里每个 `NSTextView` / `NSTextField` 子类都在台账里，
    要么登记「画行号」（并真的挂上绘制件），要么写明**为什么不该有行号**（台账双向对账：
    盘上多一个没登记的编辑面 ⇒ 红；台账里留着已经不在盘上的 ⇒ 红）。
 2. **画行号的编辑面挂的是同一个件** —— 文件里必须同时出现 `LineNumberGutter`、
    `gutter.reload(`、`gutter.draw(in:`（挂法两件套缺一不可），且**不许自己算行起点**
    （`CodeLines.lineStarts(` 出现在别的文件里 ⇒ 红）。
-3. **算法只有一个出处** —— `CodeLines.lineStarts(` 在 `App/` 里恰好一处、且落在绘制件里；
+3. **算法只有一个出处** —— `CodeLines.lineStarts(` 在 `platform/macos/App/` 里恰好一处、且落在绘制件里；
    `static func width(digits:` 也恰好一处；任何 `gutterWidth(digits:` 的定义行必须是**转发**
    （同行出现 `LineNumberGutter.width(digits:`），不许自己量一遍数字宽。
 
@@ -25,7 +25,7 @@
 
 ## 边界（如实登记）
 
-· **扫描范围 = `App/**/*.swift`**（本端 macOS 实现）；SwiftUI 的 `TextField` / `TextEditor` 是值类型、
+· **扫描范围 = `platform/macos/App/**/*.swift`**（本端 macOS 实现）；SwiftUI 的 `TextField` / `TextEditor` 是值类型、
   不是 `NSTextView` 子类 ⇒ 不在本判据范围，台账里写明；
 · **文件数不做等值对账**（只做下限）：另一侧在同一棵树上加视图文件是常事，等值对账会把红灯送给
   不相干的轮次；而**加一个不画行号的编辑面**才是真危险，那一条是等值对账；
@@ -34,7 +34,7 @@
 
 ## 负例
 
-`--self-test`：夹具是一份**真的** `App/Views` + 三份文档的拷贝（临时目录），逐条注入 →
+`--self-test`：夹具是一份**真的** `platform/macos/App/Views` + 三份文档的拷贝（临时目录），逐条注入 →
 逐条判红 → 末例核对真仓库的台账与源文件**逐字节未变**。
 """
 
@@ -51,8 +51,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LEDGER_PATH = ROOT / "Scripts" / "editor-line-number-surfaces.json"
 
-SCOPE = "App/**/*.swift"
-COMPONENT = "App/Views/LineNumberGutter.swift"
+SCOPE = "platform/macos/App/**/*.swift"
+COMPONENT = "platform/macos/App/Views/LineNumberGutter.swift"
 COMPONENT_TYPE = "LineNumberGutter"
 
 # `final class CodeTextView: NSTextView {` / `private final class ResultCellTextField: NSTextField {`
@@ -88,7 +88,7 @@ def read_text(path: Path) -> str:
 
 
 def scan_subclasses(root: Path) -> list[dict]:
-    """盘上真实的编辑面：`App/` 里每个 `NSTextView` / `NSTextField` 子类。"""
+    """盘上真实的编辑面：`platform/macos/App/` 里每个 `NSTextView` / `NSTextField` 子类。"""
     found = []
     for path in app_files(root):
         for match in SUBCLASS_RE.finditer(read_text(path)):
@@ -178,12 +178,12 @@ def single_source_errors(root: Path, ledger: dict) -> list[str]:
     expected = ledger["singleSource"]["lineStarts"]
     if starts_files != [expected]:
         errors.append(
-            f"`CodeLines.lineStarts(` 在 `App/` 里必须只在 `{expected}` 出现一处，实测 {starts_files}"
+            f"`CodeLines.lineStarts(` 在 `platform/macos/App/` 里必须只在 `{expected}` 出现一处，实测 {starts_files}"
         )
     expected_width = ledger["singleSource"]["widthAlgorithm"]
     if width_defs != [expected_width]:
         errors.append(
-            f"`static func width(digits:`（列宽算法）在 `App/` 里必须只在 `{expected_width}` 出现一处，"
+            f"`static func width(digits:`（列宽算法）在 `platform/macos/App/` 里必须只在 `{expected_width}` 出现一处，"
             f"实测 {width_defs}"
         )
     if component_type != COMPONENT:
@@ -295,15 +295,15 @@ def main(argv: list[str]) -> int:
 
 
 FIXTURE_SOURCES = [
-    "App/Views/LineNumberGutter.swift",
-    "App/Views/CodeEditorView.swift",
-    "App/Views/SQLEditorView.swift",
+    "platform/macos/App/Views/LineNumberGutter.swift",
+    "platform/macos/App/Views/CodeEditorView.swift",
+    "platform/macos/App/Views/SQLEditorView.swift",
     # 台账里**不画行号**的那一个（`ResultCellTextField` 在结果表网格里）也要进夹具 ——
     # 少了它，「原样应当绿」那一条会红在「台账指向的文件不在盘上」（第 121 轮自检实测）。
-    "App/Views/ResultGrid.swift",
+    "platform/macos/App/Views/ResultGrid.swift",
     # 同理：2026-10-03 台账补登了标题栏主搜索框（`FR-EDIT-37`）⇒ 它也得进夹具，
     # 否则「原样应当绿（夹具与真仓库同源）」会因为台账指向的文件不在夹具里而红。
-    "App/Views/TitleBarSearchField.swift",
+    "platform/macos/App/Views/TitleBarSearchField.swift",
 ]
 FIXTURE_DOCS = list(DOC_ANCHORS)
 
@@ -364,7 +364,7 @@ def self_test() -> int:
                 "editor": "幽灵编辑面",
                 "kind": "NSTextView",
                 "name": "GhostTextView",
-                "file": "App/Views/SQLEditorView.swift",
+                "file": "platform/macos/App/Views/SQLEditorView.swift",
                 "hasGutter": True,
                 "registry": "FR-EDIT-36",
                 "reason": "",
@@ -375,7 +375,7 @@ def self_test() -> int:
     expectations.append(("台账里留着盘上没有的编辑面", True, ghost_surface))
 
     def remove_draw(directory, ledger):
-        edit(directory, "App/Views/SQLEditorView.swift", "gutter.draw(in: dirtyRect, of: self)", "")
+        edit(directory, "platform/macos/App/Views/SQLEditorView.swift", "gutter.draw(in: dirtyRect, of: self)", "")
         return ledger
 
     expectations.append(("要画行号却没挂上绘制件的 draw 钩子", True, remove_draw))
@@ -383,7 +383,7 @@ def self_test() -> int:
     def own_line_starts(directory, ledger):
         edit(
             directory,
-            "App/Views/SQLEditorView.swift",
+            "platform/macos/App/Views/SQLEditorView.swift",
             "    func reloadLineNumbers() {",
             "    func reloadLineNumbers() {\n        _ = CodeLines.lineStarts(in: string)",
         )
@@ -394,7 +394,7 @@ def self_test() -> int:
     def inline_width(directory, ledger):
         edit(
             directory,
-            "App/Views/CodeEditorView.swift",
+            "platform/macos/App/Views/CodeEditorView.swift",
             "    static func gutterWidth(digits: Int) -> CGFloat { LineNumberGutter.width(digits: digits) }",
             "    static func gutterWidth(digits: Int) -> CGFloat {\n"
             "        let digitWidth = (\"0\" as NSString).size(withAttributes: [.font: lineNumberFont]).width\n"
@@ -408,7 +408,7 @@ def self_test() -> int:
     def second_width_algorithm(directory, ledger):
         edit(
             directory,
-            "App/Views/SQLEditorView.swift",
+            "platform/macos/App/Views/SQLEditorView.swift",
             "final class SQLTextView: NSTextView {",
             "final class SQLTextView: NSTextView {\n"
             "    static func width(digits: Int) -> CGFloat { CGFloat(digits) * 7 }",

@@ -30,53 +30,53 @@ LEDGER = "Scripts/notes-offline-gate.json"
 
 # 副本需要的最小文件集（门禁会读：范围里的源文件、闭环脚本、解耦门禁、台账、负例自己）
 TREE_FILES = [
-    "Core/Note.swift",
-    "Core/NoteBody.swift",
-    "Core/License.swift",
-    "Core/LicenseLoader.swift",
-    "Core/LicensePresentation.swift",
-    "Core/LicensePublicKey.swift",
-    "Core/LicenseSignature.swift",
-    "Core/AICapture.swift",
-    "Core/AICaptureUltra.swift",
+    "platform/macos/Core/Note.swift",
+    "platform/macos/Core/NoteBody.swift",
+    "platform/macos/Core/License.swift",
+    "platform/macos/Core/LicenseLoader.swift",
+    "platform/macos/Core/LicensePresentation.swift",
+    "platform/macos/Core/LicensePublicKey.swift",
+    "platform/macos/Core/LicenseSignature.swift",
+    "platform/macos/Core/AICapture.swift",
+    "platform/macos/Core/AICaptureUltra.swift",
     # 入库判定（队列 L-134）：在台账范围里，副本必须带上它，否则「干净副本」这一例会因为
     # 「台账写了、盘上没有」而假红（第 127 轮踩过）
-    "Core/AICaptureIntake.swift",
+    "platform/macos/Core/AICaptureIntake.swift",
     # 队列 `L-97`（第一~四片的结构模型 / 界面半第一片的导航逻辑）：同样在台账范围里，
     # 副本少带一个 ⇒ 「干净副本」这一例会因为「台账写了、盘上没有」而假红（同上一条的坑）
-    "Core/Notebook.swift",
-    "Core/NoteNavigation.swift",
-    "Core/NotebookRemovalPrompt.swift",
+    "platform/macos/Core/Notebook.swift",
+    "platform/macos/Core/NoteNavigation.swift",
+    "platform/macos/Core/NotebookRemovalPrompt.swift",
     # 队列 `L-97` 界面半第三片（跨笔记本移动）：同上，台账里有它 ⇒ 副本必须带上
-    "Core/NotebookMovePrompt.swift",
+    "platform/macos/Core/NotebookMovePrompt.swift",
     # 队列 `L-97` 界面半第四片（新建 / 重命名 / 排序）：同上，台账里有它 ⇒ 副本必须带上
-    "Core/NotebookEditPrompt.swift",
+    "platform/macos/Core/NotebookEditPrompt.swift",
     # 队列 `L-97` 界面半第五片（批量多选 + 拖拽）与第六片（跨架移动）：同上，台账里有它 ⇒ 副本必须带上
-    "Core/NoteSelectionPrompt.swift",
-    "Core/NotebookShelfMovePrompt.swift",
+    "platform/macos/Core/NoteSelectionPrompt.swift",
+    "platform/macos/Core/NotebookShelfMovePrompt.swift",
     # 队列 `L-184`（三栏重排的纯逻辑）：同上，台账里有它 ⇒ 副本必须带上
-    "Core/NotePresentation.swift",
+    "platform/macos/Core/NotePresentation.swift",
     # 队列 `N-11` 的 macOS 核心层半（待办任务的模型）：同上，台账里有它 ⇒ 副本必须带上
-    "Core/Todo.swift",
+    "platform/macos/Core/Todo.swift",
     # 队列 `L-100` 清单界面（待办清单的三件纯逻辑）：同上，台账里有它 ⇒ 副本必须带上
-    "Core/TodoPresentation.swift",
+    "platform/macos/Core/TodoPresentation.swift",
     # 队列 `L-100` 日历的 Core 半第二片（月 / 周格子 + 日期算术 + 投影）—— 第 186 轮**漏登**、
     # 第 188 轮补：同上，台账里有它 ⇒ 副本必须带上
-    "Core/TodoCalendar.swift",
+    "platform/macos/Core/TodoCalendar.swift",
     # 队列 `L-100` 的「与提醒联动」Core 半（第 188 轮）：同上，台账里有它 ⇒ 副本必须带上
-    "Core/Reminder.swift",
+    "platform/macos/Core/Reminder.swift",
     # 队列 `L-100` 落法 ④ 的界面半第一片（第 190 轮，提醒的界面判定与文案）：同上，台账里有它 ⇒ 副本必须带上
-    "Core/ReminderPresentation.swift",
+    "platform/macos/Core/ReminderPresentation.swift",
     # 队列 `L-100` 落法 ④ 的界面入口半（第 193 轮，提醒那一区的合成状态）：同上，台账里有它 ⇒ 副本必须带上
-    "Core/ReminderEntry.swift",
+    "platform/macos/Core/ReminderEntry.swift",
     # 队列 `L-100` 的组织与检索半（第 191 轮，排序 / 筛选 / 分组 / 视图入口）：同上，台账里有它 ⇒ 副本必须带上
-    "Core/TodoSort.swift",
-    "Core/TodoQuery.swift",
-    "App/Views/NotesPanel.swift",
-    "Tests/NoteTests.swift",
-    "Tests/NoteBodyTests.swift",
-    "Tests/NoteDataBoundaryTests.swift",
-    "Tests/AICaptureTests.swift",
+    "platform/macos/Core/TodoSort.swift",
+    "platform/macos/Core/TodoQuery.swift",
+    "platform/macos/App/Views/NotesPanel.swift",
+    "platform/macos/Tests/NoteTests.swift",
+    "platform/macos/Tests/NoteBodyTests.swift",
+    "platform/macos/Tests/NoteDataBoundaryTests.swift",
+    "platform/macos/Tests/AICaptureTests.swift",
     "Scripts/check-note-module-isolation.py",
     "Scripts/verify-all.sh",
     GATE,
@@ -156,19 +156,19 @@ def main() -> int:
     case(
         "注入调用 `URLSession.shared` → 报红并点名文件与行号",
         lambda tree: edit(
-            tree, "Core/Note.swift",
+            tree, "platform/macos/Core/Note.swift",
             lambda text: text.replace(
                 "public struct Note",
                 '// 出网调用示例（负例）\nlet session = URLSession.shared\n\npublic struct Note',
                 1,
             ),
         ),
-        "Core/Note.swift:", "URLSession",
+        "platform/macos/Core/Note.swift:", "URLSession",
     )
     case(
         "注入 `import Network` → 报红",
         lambda tree: edit(
-            tree, "App/Views/NotesPanel.swift",
+            tree, "platform/macos/App/Views/NotesPanel.swift",
             lambda text: text.replace("import SwiftUI", "import Network\nimport SwiftUI", 1),
         ),
         "import Network",
@@ -176,7 +176,7 @@ def main() -> int:
     case(
         "注入 `https://` 地址字面量 → 报红",
         lambda tree: edit(
-            tree, "Core/AICapture.swift",
+            tree, "platform/macos/Core/AICapture.swift",
             lambda text: text + '\n// 负例：https://license.example.com/activate\n',
         ),
         "https://",
@@ -185,8 +185,8 @@ def main() -> int:
     print("— 范围声明 ↔ 事实（陈旧 / 漏登 / 缩范围）—")
     case(
         "删掉范围里的文件 → 报红（声明与事实不符）",
-        lambda tree: (tree / "App/Views/NotesPanel.swift").unlink(),
-        "App/Views/NotesPanel.swift",
+        lambda tree: (tree / "platform/macos/App/Views/NotesPanel.swift").unlink(),
+        "platform/macos/App/Views/NotesPanel.swift",
     )
     case(
         "新增未登记的笔记源文件 → 报红（漏登一个＝它偷偷不受约束）",
@@ -200,7 +200,7 @@ def main() -> int:
         lambda tree: edit_ledger(
             tree,
             lambda data: data.update({
-                "scope": [entry for entry in data["scope"] if entry["path"] == "Core/NoteBody.swift"],
+                "scope": [entry for entry in data["scope"] if entry["path"] == "platform/macos/Core/NoteBody.swift"],
                 "scopeBeyondIsolation": [],
             }),
         ),
@@ -236,7 +236,7 @@ def main() -> int:
             tree,
             lambda data: data.update({
                 "exceptions": [{
-                    "file": "Core/Note.swift",
+                    "file": "platform/macos/Core/Note.swift",
                     "anchor": "这行在文件里根本不存在",
                     "reason": "负例：故意登记一条陈旧的例外",
                 }]

@@ -22,7 +22,7 @@ set -euo pipefail
 # 不动用户偏好）。脚本末尾会跑 `Scripts/check-ui-snapshot-languages.py` 把两件事判住：
 # 成对齐全 + **语言确实到了像素上**（未注册为语言无关的图，中英两张必须逐字节不同）。
 #
-# 前置：`TestsUISnapshot/` 是独立 test target，依赖 `DoyahStudioApp`（SwiftPM 允许测试目标依赖可执行目标），
+# 前置：`platform/macos/TestsUISnapshot/` 是独立 test target，依赖 `DoyahStudioApp`（SwiftPM 允许测试目标依赖可执行目标），
 # 所以这里不碰生产代码、也不给 App 开任何测试后门。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -73,7 +73,7 @@ if [ -z "${DOYAH_SNAPSHOT_DIR:-}" ] && [ "${FILTER}" != "UISnapshotTests" ]; the
     mkdir -p "${OUT}"
     rm -f "${OUT}"/*.png "${OUT}/manifest.json"
     # **产物目录的写者只有一个口径**（队列 L-185 ①）：改完 `OUT` 必须把它 export 出去 ——
-    # 落盘的是 `TestsUISnapshot/UISnapshotKit.swift`，它读的正是 `DOYAH_SNAPSHOT_DIR` 这个
+    # 落盘的是 `platform/macos/TestsUISnapshot/UISnapshotKit.swift`，它读的正是 `DOYAH_SNAPSHOT_DIR` 这个
     # **环境变量**（`UISnapshot.outputDirectory`），不是这个 `OUT` 变量。只改 `OUT` 的后果实测过：
     # 图照旧落共享目录、收尾去 `filtered/<筛子>/` 找一个不存在的 `manifest.json` ⇒
     # **每一次筛选跑都自报 ❌**（用例 passed、张数齐，结论却是失败），而筛选跑还在顶掉

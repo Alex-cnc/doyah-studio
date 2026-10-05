@@ -36,7 +36,7 @@
   ⑨ **渠道字段两半**（`channelHalves`，队列 L-66）：失败原本是**一份值两处消费**
      （既进 JSON 也打到用户眼前），于是「让人话上屏」必然把机器载荷也换成中文。现在两半收在
      `MaintenanceTask.FailureNote`（`raw` / `readable`），判据钉三件事：
-     ① **类型两半都在**（`Core/MaintenancePlan.swift` 里 `raw` / `readable` 两个字段 + `case failed(FailureNote)`）；
+     ① **类型两半都在**（`platform/macos/Core/MaintenancePlan.swift` 里 `raw` / `readable` 两个字段 + `case failed(FailureNote)`）；
      ② **生产点各填一半**（界面填 `ErrorPresenter`、命令行填同一个可读化入口 —— 不是另拼一句）；
      ③ **显示点只许取人话那一半**（取了 `.raw` 当场报红），机器载荷里原串字段与新增的人话字段成对在位
      （写坏只会在编译过、单测也过的情况下悄悄退化 —— 单测跑不到 CLI 的 JSON 拼装与 `print`）。

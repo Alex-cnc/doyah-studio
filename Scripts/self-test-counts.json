@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "purpose": "「门禁自己的证据」（各族负例 / 自检）的例数台账（队列 L-72 ㈠，闭环第 4 项）。为什么要有它：每一族负例的例数此前在 AGENT-SPEC §6 资产表、脚本自己的 docstring、spec 与开发记录里各写一遍 —— 例数被删一个、脚本收尾行格式被改坏、夹具锚点随源码重构失效，谁都说话。实测现场（第 65 轮）：`Scripts/test-plugin-assembly-gates.py` 每次都在第 3 例崩掉（`Core/AICapture.swift` 的 `sqlNote` 签名改成多行 + 多一个 `tag:` 参数，夹具锚点还是老单行签名），而这个脚本**不在闭环里**（14 个 `test-*.py` 里 8 个没人跑）⇒ 谁都没发现。本台账把「例数」变成唯一来源，并由 `Scripts/check-self-test-counts.py` 每轮**真跑一遍**再对账。",
+  "purpose": "「门禁自己的证据」（各族负例 / 自检）的例数台账（队列 L-72 ㈠，闭环第 4 项）。为什么要有它：每一族负例的例数此前在 AGENT-SPEC §6 资产表、脚本自己的 docstring、spec 与开发记录里各写一遍 —— 例数被删一个、脚本收尾行格式被改坏、夹具锚点随源码重构失效，谁都说话。实测现场（第 65 轮）：`Scripts/test-plugin-assembly-gates.py` 每次都在第 3 例崩掉（`platform/macos/Core/AICapture.swift` 的 `sqlNote` 签名改成多行 + 多一个 `tag:` 参数，夹具锚点还是老单行签名），而这个脚本**不在闭环里**（14 个 `test-*.py` 里 8 个没人跑）⇒ 谁都没发现。本台账把「例数」变成唯一来源，并由 `Scripts/check-self-test-counts.py` 每轮**真跑一遍**再对账。",
   "readingRules": [
     "cases = 权威值 = 这一族**跑起来**数出来的例数（runner 自己把每个例子的结果记进列表再打印总数）。脚本 docstring 里写的数字是**文档**，不是实测 —— 两者不一致就是漂移，改文档。",
     "measure = 实跑：`python3 <script> <args>`，要求 **exit 0**（runner 崩了 = 这一族的负例根本没跑，属「判据写完不对已知改动报红，等于没有」），再按 `countRegex` 从输出里抓数字。**抓不到就判红**（不许静默跳过）。",
@@ -566,7 +566,7 @@
       ],
       "cases": 16,
       "countRegex": "自测通过（(\\d+) 例）",
-      "why": "队列 L-70 / 闭环第 18 项（生成物一致性 · 族 ②：发布产物版本号三处一致 + Xcode 工程不许与 project.yml 漂移）",
+      "why": "队列 L-70 / 闭环第 18 项（生成物一致性 · 族 ②：发布产物版本号三处一致 + Xcode 工程不许与 platform/macos/project.yml 漂移）",
       "anchors": [
         {
           "file": "Scripts/verify-all.sh",
@@ -863,7 +863,7 @@
       ],
       "cases": 15,
       "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "队列 L-149 ③④ + 剩余① / 闭环第 9 项（内置浏览器页签的归属 = 工作区：状态所有者 = App/WorkspaceBrowserModel.swift 只此一处 + 双向对账的允许落点台账 + 数据库侧视图命中即红 + 两条文档条文格必须写「工作区」）",
+      "why": "队列 L-149 ③④ + 剩余① / 闭环第 9 项（内置浏览器页签的归属 = 工作区：状态所有者 = platform/macos/App/WorkspaceBrowserModel.swift 只此一处 + 双向对账的允许落点台账 + 数据库侧视图命中即红 + 两条文档条文格必须写「工作区」）",
       "anchors": [
         {
           "file": "AGENT-SPEC.md",
@@ -935,7 +935,7 @@
       ],
       "cases": 9,
       "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "队列 L-146（内测清单丁3）/ 闭环第 9 项（模型服务预设：端点只有一份出处 = Core/AgentProviderPreset.swift + 界面真的消费目录（遍历 / 选中值 / 模型内容 / 恢复选中 / 自动填充）+ 形状与空跑防护）",
+      "why": "队列 L-146（内测清单丁3）/ 闭环第 9 项（模型服务预设：端点只有一份出处 = platform/macos/Core/AgentProviderPreset.swift + 界面真的消费目录（遍历 / 选中值 / 模型内容 / 恢复选中 / 自动填充）+ 形状与空跑防护）",
       "anchors": [
         {
           "file": "AGENT-SPEC.md",

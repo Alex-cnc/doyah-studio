@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """门禁：连接失败的**文案覆盖面**（开发循环 L-14 起，闭环第 14 项）。
 
-**为什么有它**：驱动是随仓库带走的 Vendor（`Vendor/postgres-nio`），升一次版就可能多出
+**为什么有它**：驱动是随仓库带走的 Vendor（`platform/macos/Vendor/postgres-nio`），升一次版就可能多出
 新的 `PSQLError.Code`。文案层的 `switch` 有 `default:` 兜底，于是新原因**不会报错、不会崩**，
 只会被说成一句与它无关的话 —— 与 L-14 修掉的那件事同一族：
 **代码没坏，话指错了方向**。这类退化没有任何现有门禁看得见（编译过、单测过、文档计数对）。
@@ -27,7 +27,7 @@
   ⑦ 中性归因的**出口**：台账 `neutralFallback` 登记的每个文件都必须真的调了
      `describeNonConnection`，且**处数不少于台账写的 `minCallSites`** —— `describe` 返回 nil
      时不能只剩英文调试串（L-14 留下的那半件事）。只查「有没有这个调用」不够：这些文件里
-     出口常常不止一处（`CLI/main.swift` 两条路），删掉一处剩下的仍能顶数（负例 M/N/O 钉住）。
+     出口常常不止一处（`platform/macos/CLI/main.swift` 两条路），删掉一处剩下的仍能顶数（负例 M/N/O 钉住）。
 
 用法：
     python3 Scripts/check-connection-failure-coverage.py            # 人读结论，失败非零退出
@@ -151,7 +151,7 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
     switch_body = driver_switch_body(mapping)
     pre_switch = region(mapping, "static func describe(psqlError:", "switch psqlError.code {")
     neutral_table = region(mapping, "static let nonConnectionKeys", "\n    ]")
-    language_path = root / ledger.get("languageTable", "Core/Localization.swift")
+    language_path = root / ledger.get("languageTable", "platform/macos/Core/Localization.swift")
     language_table = read(language_path) if language_path.exists() else ""
 
     # ② 驱动 ↔ 台账 双向对账
@@ -255,7 +255,7 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
 
     # ⑦ 中性归因的出口：调用方要真的接上（否则 `describe` 返回 nil 时只剩英文调试串）
     #
-    # **为什么要数处数**：这些文件里的出口常常不止一处（`CLI/main.swift` 就有两条路：
+    # **为什么要数处数**：这些文件里的出口常常不止一处（`platform/macos/CLI/main.swift` 就有两条路：
     # 连接失败那条与查询失败那条）。只查「文件里出现过这个调用」是不够的 —— 删掉其中一处，
     # 剩下那处照样让判据满足，而少掉的那条路已经退回英文调试串了。
     # 负例 K 实测就是这么骗过门禁的（与 L-04 的「失败记进没人读的变量」、L-05 的「断言被删也照绿」同族：

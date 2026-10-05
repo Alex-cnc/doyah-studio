@@ -1,5 +1,5 @@
 {
-  "comment": "Vendor/sqlite3 的台账：版本 / 来源 / 归档哈希 / 交付文件哈希 / 编译宏。门禁 Scripts/check-vendored-sqlite.py 拿它逐字节对账（文件内容、头文件里的版本字符串、Package.swift 里的编译宏、许可声明、第三方声明与接线），换版本必须同步本文件，否则报红。行为侧另由 Scripts/smoke-vendored-sqlite.py 现编现跑自证（不经过 SwiftPM，因此与绑定层的工具链缺陷无关）。",
+  "comment": "platform/macos/Vendor/sqlite3 的台账：版本 / 来源 / 归档哈希 / 交付文件哈希 / 编译宏。门禁 Scripts/check-vendored-sqlite.py 拿它逐字节对账（文件内容、头文件里的版本字符串、platform/macos/Package.swift 里的编译宏、许可声明、第三方声明与接线），换版本必须同步本文件，否则报红。行为侧另由 Scripts/smoke-vendored-sqlite.py 现编现跑自证（不经过 SwiftPM，因此与绑定层的工具链缺陷无关）。",
   "component": "sqlite-amalgamation",
   "version": "3.53.4",
   "versionNumber": 3053004,
@@ -8,22 +8,22 @@
   "archiveSHA256": "1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d",
   "fetchedAt": "2026-09-27",
   "license": "public-domain",
-  "licenseFile": "Vendor/sqlite3/LICENSE.txt",
+  "licenseFile": "platform/macos/Vendor/sqlite3/LICENSE.txt",
   "files": [
     {
-      "path": "Vendor/sqlite3/Sources/CSQLite3/sqlite3.c",
+      "path": "platform/macos/Vendor/sqlite3/Sources/CSQLite3/sqlite3.c",
       "origin": "upstream-amalgamation",
       "bytes": 9515341,
       "sha256": "b1dd5d74ec7f29055a6684fa06fb3c2f6821c87dd38f9a458dfd2e8a1db28189"
     },
     {
-      "path": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
+      "path": "platform/macos/Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
       "origin": "upstream-amalgamation",
       "bytes": 690838,
       "sha256": "919e7f2e8ed1d8f56ac17b412b8971c76aa5d1a879752cc6058f75e7d5910e1d"
     },
     {
-      "path": "Vendor/sqlite3/Sources/CSQLite3/include/CSQLite3.h",
+      "path": "platform/macos/Vendor/sqlite3/Sources/CSQLite3/include/CSQLite3.h",
       "origin": "ours",
       "why": "umbrella 头：SwiftPM 会按「公共头目录里有没有与目标同名的头」生成两种形状的模块图，写上它就走 umbrella header 那一档（显式、可预期）。",
       "bytes": 1078,
@@ -33,7 +33,7 @@
   "allowedExtras": [
     "LICENSE.txt",
     "PROVENANCE.md",
-    "Package.swift"
+    "platform/macos/Package.swift"
   ],
   "excludedFromArchive": {
     "shell.c": "SQLite 自带的命令行工具，不是库的一部分；本产品的命令行是 DoyahCLI",
@@ -59,29 +59,29 @@
   ],
   "swiftTarget": {
     "name": "CSQLite3",
-    "path": "Vendor/sqlite3",
+    "path": "platform/macos/Vendor/sqlite3",
     "targetPath": "Sources/CSQLite3",
     "sources": [
       "Sources/CSQLite3/sqlite3.c"
     ],
     "publicHeadersPath": "include",
-    "header": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
-    "consumer": "`DoyahCore`（`Core/NoteStorage/`）—— **第 21 轮接线**：根 `Package.swift` 的 `DoyahCore` 目标加 `.product(name: \"CSQLite3\", package: \"sqlite3\")`，绑定层 `Core/NoteStorage/SQLiteKit.swift` 里 `import CSQLite3`（第 18 轮那份草稿当初因「显式模块构建下本地包 clang 模块不进模块表」未接线；本轮实测在 Core 目标里可编译、单测通过）。"
+    "header": "platform/macos/Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
+    "consumer": "`DoyahCore`（`platform/macos/Core/NoteStorage/`）—— **第 21 轮接线**：根 `platform/macos/Package.swift` 的 `DoyahCore` 目标加 `.product(name: \"CSQLite3\", package: \"sqlite3\")`，绑定层 `platform/macos/Core/NoteStorage/SQLiteKit.swift` 里 `import CSQLite3`（第 18 轮那份草稿当初因「显式模块构建下本地包 clang 模块不进模块表」未接线；本轮实测在 Core 目标里可编译、单测通过）。"
   },
   "wrapper": {
-    "source": "Core/NoteStorage/SQLiteKit.swift",
-    "constants": "Core/NoteStorage/SQLiteConstants.swift（由 Scripts/gen-sqlite-constants.py 从 vendored 头文件生成；`--check` **已接进 `verify-all.sh` 第 18 项**，`--self-test` 五条篡改）",
-    "storage": "Core/NoteStorage/NoteDatabase.swift（schema v1 + 映射 + 检索 + VACUUM INTO 快照）",
-    "migration": "Core/NoteStorage/NoteLibraryMigration.swift（notes.json → notes.sqlite3 一次性迁移）",
-    "tests": "Tests/SQLiteKitTests.swift（绑定层）+ Tests/NoteStoreSQLiteTests.swift（存储层 / 迁移 / 快照）",
+    "source": "platform/macos/Core/NoteStorage/SQLiteKit.swift",
+    "constants": "platform/macos/Core/NoteStorage/SQLiteConstants.swift（由 Scripts/gen-sqlite-constants.py 从 vendored 头文件生成；`--check` **已接进 `verify-all.sh` 第 18 项**，`--self-test` 五条篡改）",
+    "storage": "platform/macos/Core/NoteStorage/NoteDatabase.swift（schema v1 + 映射 + 检索 + VACUUM INTO 快照）",
+    "migration": "platform/macos/Core/NoteStorage/NoteLibraryMigration.swift（notes.json → notes.sqlite3 一次性迁移）",
+    "tests": "platform/macos/Tests/SQLiteKitTests.swift（绑定层）+ platform/macos/Tests/NoteStoreSQLiteTests.swift（存储层 / 迁移 / 快照）",
     "status": "wired",
     "whyNotSystemLibrary": "口径：不许换系统自带 libsqlite3、也不许引第三方 Swift 封装（GRDB 官方仅 Apple+Linux、Windows 是社区探索；SwiftData / Core Data 为 Apple 独占），否则「Windows 与 macOS 完全一致」不成立。见 FR-PLUG-08。"
   },
   "generator": {
     "why": "Swift 侧不许引用 C 宏（第 18 轮实测：大量引用会把绑定目标判进 SwiftPM 的显式模块构建档，那一档下 vendored 的 clang 模块进不了模块表 ⇒ `import CSQLite3` 不报错但声明全都「cannot find in scope」）。所以宏的值**从头文件生成**成 Swift 常量 —— 于是多出一份**生成物**，而生成物漂移没有任何症状（编译照过、单测照绿，只有三端行为悄悄不一致）。本节点把「生成器 ↔ 生成物 ↔ vendored 头文件」三者的绑定写死，由本门禁对账。",
     "script": "Scripts/gen-sqlite-constants.py",
-    "output": "Core/NoteStorage/SQLiteConstants.swift",
-    "header": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
+    "output": "platform/macos/Core/NoteStorage/SQLiteConstants.swift",
+    "header": "platform/macos/Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
     "versionSource": "头文件里的 `SQLITE_VERSION` 与台账 version 同源（见本文件 version 字段）",
     "inVerifyAll": "Scripts/verify-all.sh 第 18 项",
     "negativeCases": "Scripts/gen-sqlite-constants.py --self-test（5 条篡改：手改生成物一行的值 / 生成物文件丢失 / 头文件宏值被改致生成物过期 / 头文件删掉正文在用的宏 / 正文引用头文件里没有的宏 —— 每条都要报红并指名出处；末例核对真仓库三份文件逐字节未变）",
@@ -102,7 +102,7 @@
       {
         "file": "Scripts/smoke-vendored-sqlite.py",
         "anchor": "sqlite3_compileoption_used",
-        "why": "编译宏自证：四条宏在运行期自报生效，而不是写在 Package.swift 里没起作用"
+        "why": "编译宏自证：四条宏在运行期自报生效，而不是写在 platform/macos/Package.swift 里没起作用"
       },
       {
         "file": "Scripts/smoke-vendored-sqlite.py",
@@ -125,7 +125,7 @@
         "why": "门禁与自证真的进了闭环 —— 不进闭环的门禁等于没有，且门禁自己是没被验过的"
       },
       {
-        "file": "Vendor/sqlite3/PROVENANCE.md",
+        "file": "platform/macos/Vendor/sqlite3/PROVENANCE.md",
         "anchor": "1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d",
         "why": "来源可复现：归档哈希写在来源说明里，换版本时两处必须同时改",
         "syncWith": "Scripts/vendored-sqlite.json 的 archiveSHA256"
@@ -133,30 +133,30 @@
       {
         "file": "THIRD-PARTY-NOTICES.md",
         "anchor": "sqlite-amalgamation",
-        "why": "第三方组件声明表里必须有这一行（用户看的是这一份文件，不是 Vendor/ 目录）"
+        "why": "第三方组件声明表里必须有这一行（用户看的是这一份文件，不是 platform/macos/Vendor/ 目录）"
       },
       {
-        "file": "Package.swift",
+        "file": "platform/macos/Package.swift",
         "anchor": ".product(name: \"CSQLite3\", package: \"sqlite3\")",
         "why": "根包真的把 vendored SQLite 交给了 `DoyahCore` —— 这一行掉了，`import CSQLite3` 就编译不过（正是第 18 轮未接线的那个断点）"
       },
       {
-        "file": "Core/NoteStorage/SQLiteKit.swift",
+        "file": "platform/macos/Core/NoteStorage/SQLiteKit.swift",
         "anchor": "sqlite3_open_v2(",
         "why": "绑定层真的在产品源码里（C 互操作只在这一处，其余地方只经 Swift API）"
       },
       {
-        "file": "Core/NoteStorage/NoteDatabase.swift",
+        "file": "platform/macos/Core/NoteStorage/NoteDatabase.swift",
         "anchor": "tokenize = 'trigram'",
         "why": "中文检索口径落在**生产 schema** 上，而不只是 smoke 脚本里的实验（默认 unicode61 不切中文 —— 第 18 轮实测）"
       },
       {
-        "file": "Tests/NoteStoreSQLiteTests.swift",
+        "file": "platform/macos/Tests/NoteStoreSQLiteTests.swift",
         "anchor": "testSnapshotIsReadableAndMatchesTheSource",
         "why": "快照必须**读回来核对**（行数 + integrity_check + 索引可用）：备份没人验过等于没有备份"
       },
       {
-        "file": "Tests/NoteStoreSQLiteTests.swift",
+        "file": "platform/macos/Tests/NoteStoreSQLiteTests.swift",
         "anchor": "testDeleteCascadesToTagsTimelineAndAttachments",
         "why": "级联删除要真查孤儿行 —— SQLite 默认**关着**外键，这一条盯着「忘了 `PRAGMA foreign_keys = ON`」这类静默失效"
       },
@@ -171,12 +171,12 @@
         "why": "生成器自己的负例入口（5 条篡改）—— 与门禁本身一样，「接线不进闭环就永远不跑」"
       },
       {
-        "file": "Core/NoteStorage/SQLiteConstants.swift",
+        "file": "platform/macos/Core/NoteStorage/SQLiteConstants.swift",
         "anchor": "本文件由 `Scripts/gen-sqlite-constants.py` **生成**",
         "why": "生成物**自报生成者**（含「已接进第 18 项」与修法）—— 手改的人第一眼就该看见「别手改」，而不是靠别人记得"
       },
       {
-        "file": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
+        "file": "platform/macos/Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
         "anchor": "#define SQLITE_OK",
         "why": "头文件是宏值的唯一来源（第 18 项逐字节比对的另一头）；这一行被改 ⇒ 生成物过期"
       }

@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""发布产物版本号：**一个值、三处逐字一致** + **Xcode 工程（生成物）不许与 `project.yml`（源）漂移**
+"""发布产物版本号：**一个值、三处逐字一致** + **Xcode 工程（生成物）不许与 `platform/macos/project.yml`（源）漂移**
 
 队列 L-70，2026-09-28 开发循环第 68 轮。台账 = `Scripts/release-version.json`。
 
 ## 为什么要有它
 
 `Docs/发布方案.md` §2 原来写着「版本号维护位置：`Scripts/build-app.sh` 的 Info.plist 模板、
-`project.yml`（Xcode 工程）。**两处必须一致**」—— 第 57 轮做 `v0.2.0-alpha` 发布收口时实测**不成立**：
+`platform/macos/project.yml`（Xcode 工程）。**两处必须一致**」—— 第 57 轮做 `v0.2.0-alpha` 发布收口时实测**不成立**：
 
-* `project.yml` 的**应用目标一个版本键都没有**（只有两个框架目标带 XcodeGen 的默认 `MARKETING_VERSION: 1.0`）；
-* 入库的 `DoyahStudio.xcodeproj/project.pbxproj` 是**生成物**，里面同样只有那两处 `1.0`；
+* `platform/macos/project.yml` 的**应用目标一个版本键都没有**（只有两个框架目标带 XcodeGen 的默认 `MARKETING_VERSION: 1.0`）；
+* 入库的 `platform/macos/DoyahStudio.xcodeproj/project.pbxproj` 是**生成物**，里面同样只有那两处 `1.0`；
 * 于是那句「两处必须一致」是**纸面纪律** —— 没有任何门禁会说话，谁都不知道哪一处是真的。
 
 更严重的是**生成物早就过期了**且没人知道：入库的 `project.pbxproj` 只有 869 行、包标识仍是
 改名前的 `com.vnull.PostgresClient*`、**没有 `DoyahPlatform` / `DoyahPlatformTests` 两个目标**
 （2026-09-22 改名与平台拆分之后就没再生成过）。`Docs/项目评审-2026-09-23.md` 把「生成物与源可能
-不同步（改了 `project.yml` 忘了重新生成时，Xcode 打开的是旧工程）」记成风险，**但那条风险没有判据**。
+不同步（改了 `platform/macos/project.yml` 忘了重新生成时，Xcode 打开的是旧工程）」记成风险，**但那条风险没有判据**。
 「生成文件没有症状」在本仓库是第五次撞上了（第 17 项 vendored SQLite / 第 18 项生成常量 /
 L-55 文档数字 / L-72 例数 / 本条）。
 
@@ -25,10 +25,10 @@ L-55 文档数字 / L-72 例数 / 本条）。
 * **A 台账自洽**：`Scripts/release-version.json` 结构完整（值 / 形状 / 权威处 / 镜像处 / 生成器登记 /
   锚点 / 范围外），值不是空串，镜像处不许为空。
 * **B 三处逐字一致**：B1 权威处 = `Scripts/build-app.sh` 的 `<<'PLIST'` heredoc 里那两个键
-  （**恰好各一处**）；B2 `project.yml` 应用目标的 `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`；
+  （**恰好各一处**）；B2 `platform/macos/project.yml` 应用目标的 `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`；
   B3 生成物里**该目标自己的每一个构建配置**（`Debug` / `Release`，少一档判红）的同名键。
   三处一律不许缺键：**缺键 = 判红**（这正是第 57 轮的现场：键压根不存在）。
-* **C 生成物 ↔ 源 不许漂移**：C1 目标名集合双向（`project.yml` ↔ 生成物）；C2 每个目标的
+* **C 生成物 ↔ 源 不许漂移**：C1 目标名集合双向（`platform/macos/project.yml` ↔ 生成物）；C2 每个目标的
   `PRODUCT_BUNDLE_IDENTIFIER` 一致；C3 每个目标的 `*.swift` **文件名集合**双向（磁盘 ↔ 该目标
   `PBXSourcesBuildPhase` 的引用）。C3 的前提「各目标源目录之间没有同名 `.swift`」**每次实跑重新验**
   （出现同名即判红并提示改用路径口径 —— 不许悄悄放松）。
@@ -40,7 +40,7 @@ L-55 文档数字 / L-72 例数 / 本条）。
 * 两个框架目标的 `MARKETING_VERSION`（XcodeGen 默认 `1.0`）—— 内部框架不是发布产物的身份。
 * 生成器版本**不判红**（`generator.version`）：用户升级 `xcodegen` 不该把无关轮次的闭合门禁判红；
   「生成物是否过期」由 C1/C2/C3 的**内容**对账回答。版本不一致时高声提示，退出码不变。
-* `Package.swift` / `dist/*.app` / 标签名与发布说明里的版本叙述（另一条构建路线、产物、历史记录）。
+* `platform/macos/Package.swift` / `dist/*.app` / 标签名与发布说明里的版本叙述（另一条构建路线、产物、历史记录）。
 
 ## 用法
 
@@ -149,7 +149,7 @@ def shell_assignments(text: str):
 
 
 # --------------------------------------------------------------------------------------
-# 解析：`project.yml`（只认本仓这份 spec 的形状：2 空格缩进的 targets / settings.base）
+# 解析：`platform/macos/project.yml`（只认本仓这份 spec 的形状：2 空格缩进的 targets / settings.base）
 # --------------------------------------------------------------------------------------
 def parse_project_yml(text: str):
     """返回 {目标名: {type, source_dirs, bundle_id, version_keys, excludes, line}}。"""
@@ -161,7 +161,7 @@ def parse_project_yml(text: str):
             start = index + 1
             break
     if start is None:
-        return None, "`project.yml` 里找不到顶层 `targets:`"
+        return None, "`platform/macos/project.yml` 里找不到顶层 `targets:`"
     end = len(lines)
     for index in range(start, len(lines)):
         if lines[index].strip() and not lines[index].startswith(" "):
@@ -218,12 +218,12 @@ def parse_project_yml(text: str):
             targets[current]["version_keys"][match.group(1)] = (match.group(2), index + 1)
             continue
     if not targets:
-        return None, "`project.yml` 的 `targets:` 下面一个目标都没解析到"
+        return None, "`platform/macos/project.yml` 的 `targets:` 下面一个目标都没解析到"
     return targets, None
 
 
 # --------------------------------------------------------------------------------------
-# 解析：`DoyahStudio.xcodeproj/project.pbxproj`
+# 解析：`platform/macos/DoyahStudio.xcodeproj/project.pbxproj`
 # --------------------------------------------------------------------------------------
 PBX_OBJECT = re.compile(r"\n\t\t([A-F0-9]{24}) /\* (.*?) \*/ = \{\n(.*?)\n\t\t\};", re.S)
 
@@ -437,32 +437,32 @@ def check_authority(root: pathlib.Path, ledger: dict, report: Report):
 
 
 def check_project_yml(root: pathlib.Path, ledger: dict, report: Report):
-    """B2 —— 源：project.yml 应用目标的版本键。"""
-    text = read_text(root, "project.yml", report)
+    """B2 —— 源：platform/macos/project.yml 应用目标的版本键。"""
+    text = read_text(root, "platform/macos/project.yml", report)
     if text is None:
         return None
     targets, error = parse_project_yml(text)
     if targets is None:
-        report.bad("project.yml：%s" % error)
+        report.bad("platform/macos/project.yml：%s" % error)
         return None
     for mirror in ledger["mirrors"]:
-        if mirror["path"] != "project.yml":
+        if mirror["path"] != "platform/macos/project.yml":
             continue
         target = targets.get(mirror.get("target"))
         if target is None:
-            report.bad("project.yml：台账点名的目标 `%s` 不在 spec 里（目标被改名 / 删掉了？）"
+            report.bad("platform/macos/project.yml：台账点名的目标 `%s` 不在 spec 里（目标被改名 / 删掉了？）"
                        % mirror.get("target"))
             continue
         for field, key in (mirror.get("keys") or {}).items():
             entry = target["version_keys"].get(key)
             if entry is None:
-                report.bad("project.yml:%d（目标 `%s`）没有 `%s` —— 缺键就是第 57 轮那个现场"
+                report.bad("platform/macos/project.yml:%d（目标 `%s`）没有 `%s` —— 缺键就是第 57 轮那个现场"
                            % (target["line"], mirror["target"], key))
                 continue
             value, line = entry
             report.sites += 1
             if value != ledger[field]:
-                report.bad("project.yml:%d 的 `%s` = `%s`，台账 `%s` = `%s`"
+                report.bad("platform/macos/project.yml:%d 的 `%s` = `%s`，台账 `%s` = `%s`"
                            % (line, key, value, field, ledger[field]))
     return targets
 
@@ -550,10 +550,10 @@ def check_structure(root: pathlib.Path, ledger: dict, targets, pbx, report: Repo
     only_yml = yml_names - pbx_names
     only_pbx = pbx_names - yml_names
     if only_yml:
-        report.bad("C1 `project.yml` 有的目标在生成物里没有：%s（改了 yml 忘了 `xcodegen generate`）"
+        report.bad("C1 `platform/macos/project.yml` 有的目标在生成物里没有：%s（改了 yml 忘了 `xcodegen generate`）"
                    % "、".join(sorted(only_yml)))
     if only_pbx:
-        report.bad("C1 生成物里有的目标在 `project.yml` 里没有：%s" % "、".join(sorted(only_pbx)))
+        report.bad("C1 生成物里有的目标在 `platform/macos/project.yml` 里没有：%s" % "、".join(sorted(only_pbx)))
     if len(pbx_names) < FLOOR_TARGETS:
         report.bad("C1 生成物只有 %d 个目标（少于下限 %d 个 —— 空跑防护）" % (len(pbx_names), FLOOR_TARGETS))
 
@@ -567,7 +567,7 @@ def check_structure(root: pathlib.Path, ledger: dict, targets, pbx, report: Repo
         pbx_bundles = {entry["keys"].get("PRODUCT_BUNDLE_IDENTIFIER") for _, entry in configs}
         pbx_bundles.discard(None)
         if yml_bundle and pbx_bundles and yml_bundle not in pbx_bundles:
-            report.bad("C2 目标 `%s` 的包标识不一致：`project.yml` = `%s`，生成物 = %s"
+            report.bad("C2 目标 `%s` 的包标识不一致：`platform/macos/project.yml` = `%s`，生成物 = %s"
                        % (name, yml_bundle, "、".join(sorted(pbx_bundles))))
         if len(pbx_bundles) > 1:
             report.bad("C2 目标 `%s` 在生成物里有两套包标识：%s" % (name, "、".join(sorted(pbx_bundles))))
@@ -795,19 +795,19 @@ def run_gate(root: pathlib.Path, quiet: bool = False) -> int:
             print("   · %s" % problem)
         print("RESULT: FAIL")
         return 1
-    print("✅ 发布产物版本号三处逐字一致 + 生成物与 `project.yml` 不漂移（比对点 %d 处）" % report.sites)
+    print("✅ 发布产物版本号三处逐字一致 + 生成物与 `platform/macos/project.yml` 不漂移（比对点 %d 处）" % report.sites)
     print("RESULT: OK")
     return 0
 
 
 # --------------------------------------------------------------------------------------
-# 自测（判据自己的证据）：夹具 = 真文件的副本 + 源目录软链（真仓库带 Vendor/，不能整份复制）
+# 自测（判据自己的证据）：夹具 = 真文件的副本 + 源目录软链（真仓库带 platform/macos/Vendor/，不能整份复制）
 # --------------------------------------------------------------------------------------
 FIXTURE_FILES = [
-    "project.yml",
+    "platform/macos/project.yml",
     "Scripts/build-app.sh",
     LEDGER,
-    "DoyahStudio.xcodeproj/project.pbxproj",
+    "platform/macos/DoyahStudio.xcodeproj/project.pbxproj",
     "Docs/发布方案.md",
     "Docs/发布计划.md",
     "AGENT-SPEC.md",
@@ -882,17 +882,17 @@ def run_self_test() -> int:
         record("例 1 干净夹具 ⇒ rc 0（%d 个比对点）" % report.sites, not report.problems,
                "；".join(report.problems[:2]))
 
-        # 例 2：只改 project.yml 一处 ⇒ 判红并点名
+        # 例 2：只改 platform/macos/project.yml 一处 ⇒ 判红并点名
         fixture = build_fixture(scratch, real_root)
-        edit(fixture / "project.yml", 'MARKETING_VERSION: "%s"' % marketing,
+        edit(fixture / "platform/macos/project.yml", 'MARKETING_VERSION: "%s"' % marketing,
              'MARKETING_VERSION: "9.9.9"')
         problems = check(fixture).problems
-        record("例 2 只改 project.yml 的版本 ⇒ 判红", any("project.yml" in p and "9.9.9" in p for p in problems),
+        record("例 2 只改 platform/macos/project.yml 的版本 ⇒ 判红", any("platform/macos/project.yml" in p and "9.9.9" in p for p in problems),
                "；".join(problems[:2]))
 
         # 例 3：只改生成物一处 ⇒ 判红
         fixture = build_fixture(scratch, real_root)
-        edit(fixture / "DoyahStudio.xcodeproj/project.pbxproj",
+        edit(fixture / "platform/macos/DoyahStudio.xcodeproj/project.pbxproj",
              "CURRENT_PROJECT_VERSION = %s;" % build, "CURRENT_PROJECT_VERSION = 99;")
         problems = check(fixture).problems
         record("例 3 只改生成物的构建号 ⇒ 判红", any("pbxproj" in p and "99" in p for p in problems),
@@ -915,29 +915,29 @@ def run_self_test() -> int:
 
         # 例 6：生成物缺一个目标（改了 yml 忘重生成）⇒ 判红
         fixture = build_fixture(scratch, real_root)
-        text = (fixture / "DoyahStudio.xcodeproj/project.pbxproj").read_text(encoding="utf-8")
+        text = (fixture / "platform/macos/DoyahStudio.xcodeproj/project.pbxproj").read_text(encoding="utf-8")
         new_text, removed = re.subn(r"\n\t\t[A-F0-9]{24} /\* DoyahPlatformTests \*/ = \{\n.*?\n\t\t\};",
                                     "", text, count=1, flags=re.S)
         if removed != 1:
             raise AssertionError("夹具锚点失效：生成物里找不到 DoyahPlatformTests 目标块")
-        (fixture / "DoyahStudio.xcodeproj/project.pbxproj").write_text(new_text, encoding="utf-8")
+        (fixture / "platform/macos/DoyahStudio.xcodeproj/project.pbxproj").write_text(new_text, encoding="utf-8")
         problems = check(fixture).problems
         record("例 6 生成物少一个目标 ⇒ 判红（C1）", any("C1" in p for p in problems), "；".join(problems[:2]))
 
         # 例 7：生成物的 Sources 阶段少一个源文件 ⇒ 判红（C3）
         fixture = build_fixture(scratch, real_root)
-        text = (fixture / "DoyahStudio.xcodeproj/project.pbxproj").read_text(encoding="utf-8")
+        text = (fixture / "platform/macos/DoyahStudio.xcodeproj/project.pbxproj").read_text(encoding="utf-8")
         new_text, removed = re.subn(r"\n\t\t\t\t[A-F0-9]{24} /\* ([A-Za-z0-9_]+\.swift) in Sources \*/,",
                                     "", text, count=1)
         if removed != 1:
             raise AssertionError("夹具锚点失效：生成物的 Sources 阶段里找不到文件条目")
-        (fixture / "DoyahStudio.xcodeproj/project.pbxproj").write_text(new_text, encoding="utf-8")
+        (fixture / "platform/macos/DoyahStudio.xcodeproj/project.pbxproj").write_text(new_text, encoding="utf-8")
         problems = check(fixture).problems
         record("例 7 生成物少登记一个源文件 ⇒ 判红（C3）", any("C3" in p for p in problems), "；".join(problems[:2]))
 
         # 例 8：掏空生成物 ⇒ 判红（空跑防护）
         fixture = build_fixture(scratch, real_root)
-        (fixture / "DoyahStudio.xcodeproj/project.pbxproj").write_text("// empty\n", encoding="utf-8")
+        (fixture / "platform/macos/DoyahStudio.xcodeproj/project.pbxproj").write_text("// empty\n", encoding="utf-8")
         problems = check(fixture).problems
         record("例 8 掏空生成物 ⇒ 判红（空跑防护）",
                any("一个 PBXNativeTarget 都没解析到" in p for p in problems), "；".join(problems[:2]))

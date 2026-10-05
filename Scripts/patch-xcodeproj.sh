@@ -9,7 +9,7 @@ set -euo pipefail
 # 这个脚本在 xcodegen generate 之后自动补齐关联。
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
-PBXPROJ="${PROJECT_ROOT}/DoyahStudio.xcodeproj/project.pbxproj"
+PBXPROJ="${PROJECT_ROOT}/platform/macos/DoyahStudio.xcodeproj/project.pbxproj"
 
 python3 - "${PBXPROJ}" <<'PY'
 import re
@@ -23,7 +23,7 @@ except FileNotFoundError:
     sys.exit(1)
 
 local_ref_match = re.search(
-    r'([A-F0-9]+) /\* XCLocalSwiftPackageReference "Vendor/postgres-nio" \*/ = \{',
+    r'([A-F0-9]+) /\* XCLocalSwiftPackageReference "platform/macos/Vendor/postgres-nio" \*/ = \{',
     content,
 )
 if not local_ref_match:
@@ -49,7 +49,7 @@ def repl(match: re.Match) -> str:
     new_body = "\n".join(
         [
             f"{inner}isa = XCSwiftPackageProductDependency;",
-            f'{inner}package = {package_id} /* XCLocalSwiftPackageReference "Vendor/postgres-nio" */;',
+            f'{inner}package = {package_id} /* XCLocalSwiftPackageReference "platform/macos/Vendor/postgres-nio" */;',
             f"{inner}productName = PostgresNIO;",
         ]
     )

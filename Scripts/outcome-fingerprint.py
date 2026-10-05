@@ -12,7 +12,7 @@
 ## 派生哪些信号（每个需求一行）
 
 - **落地度**：文档的证据格里有没有指向代码/脚本的路径（有 → 至少提到过实现）
-- **验证度**：引用里有没有 `Tests/` 或 `Scripts/`（有测试或可复跑脚本）
+- **验证度**：引用里有没有 `platform/macos/Tests/` 或 `Scripts/`（有测试或可复跑脚本）
 - **存活度**：引用的文件**现在是否还在**（被删了 → 方案提的实现已经不存在）
 - **活跃度**：引用的文件近 90 天的提交次数（越高越可能"当时没想清"，或正在演进）
 - **最后活动**：引用文件里最近一次提交的日期
@@ -126,7 +126,7 @@ def fingerprint(requirement: dict, paths: PathStats) -> dict:
     documents = sorted({path for path, suffix in matches if suffix == "md"})
     details = {path: paths.get(path) for path in referenced}
     missing = [path for path, stat in details.items() if not stat["exists"]]
-    tested = [path for path in referenced if path.startswith(("Tests/", "Scripts/"))]
+    tested = [path for path in referenced if path.startswith(("platform/macos/Tests/", "Scripts/"))]
     activity = sum(stat["recent_commits"] for stat in details.values())
     last_dates = [stat["last_commit"] for stat in details.values() if stat["last_commit"]]
 

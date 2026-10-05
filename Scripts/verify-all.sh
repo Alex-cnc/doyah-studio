@@ -36,7 +36,7 @@ set -euo pipefail
 #        判据 = 台账 ↔ SRS 双向对账 / 标记逐字对上 / 原因档在词表内 / 证据指针存在 / 空跑防护。
 #        为什么要有它：v0.1.0-alpha 那次 6 条环境项是**手加**的标记，此后 🟡 增删机器都不说话，
 #        发布说明「明确不做什么」那一节就会与文档事实脱节（见脚本头注释）。
-#   6. 设计令牌棘轮（App/ 里的裸颜色 / 裸字号 / 裸间距不得比基线更差）
+#   6. 设计令牌棘轮（platform/macos/App/ 里的裸颜色 / 裸字号 / 裸间距不得比基线更差）
 #   7. 平台等价矩阵（§10.10 ↔ `Docs/平台实现状态.json` 台账，列由台账决定）+ 台账校验自检
 #      + `P-*` 平台差异登记的两侧对账（§10.9 ↔ 概要设计 §4：双向覆盖 + 同号同物
 #      + §8.5.5「已落条但未并入」判红，队列 L-45）
@@ -46,7 +46,7 @@ set -euo pipefail
 #   8. 平台中立性棘轮（需求规范书里的平台专属词汇不得比基线更差）
 #   9. 命令面板接线（清单 ↔ 分派器 ↔ 视图绑定；见脚本注释里的真实缺陷）
 #      + 侧边栏折叠状态归属（L-59：状态住在 `AppState`、写入口唯一、默认全展开、未分组不给折叠）
-#      + **面板根固定尺寸 frame 的对齐纪律**（L-61：`App/Views/` 里每一处「宽高都是数字字面量」的
+#      + **面板根固定尺寸 frame 的对齐纪律**（L-61：`platform/macos/App/Views/` 里每一处「宽高都是数字字面量」的
 #        `.frame(width:height:)` 都要在台账 `panel-root-frames.json` 里有处置；面板根必须**把意图
 #        写出来** —— 显式写 `alignment:` 或登记一个在该视图类型里真的存在的撑满令牌，
 #        见 `check-panel-root-frames.py`）
@@ -69,11 +69,11 @@ set -euo pipefail
 #      （`check-vendored-sqlite.py`｜`--self-test`｜`smoke-vendored-sqlite.py`）
 #  18. 生成物一致性（两族）：**生成物不许手改、也不许过期**
 #      · 族 ①（L-43，2026-09-27 第 30 轮）：`gen-sqlite-constants.py --check`
-#        （`Core/NoteStorage/SQLiteConstants.swift` 与 vendored 头文件逐字节一致）
+#        （`platform/macos/Core/NoteStorage/SQLiteConstants.swift` 与 vendored 头文件逐字节一致）
 #        + `--self-test`（5 条篡改都要报红并指名出处）
 #      · 族 ②（**L-70，2026-09-28 第 68 轮**）：`check-release-version.py`
 #        —— 发布产物版本号的**一个值、三处逐字一致**（`build-app.sh` 的 Info.plist 模板 = 权威／
-#        `project.yml` = 源／`.xcodeproj/project.pbxproj` = 生成物，台账 `Scripts/release-version.json`）
+#        `platform/macos/project.yml` = 源／`.xcodeproj/project.pbxproj` = 生成物，台账 `Scripts/release-version.json`）
 #        + **生成物 ↔ 源不许漂移**（目标名 / 包标识 / 每个目标的 `*.swift` 文件名集合，双向）
 #        + `--self-test`（16 例：三处各改一处、台账改一处、生成物少目标 / 少源文件 / 被掏空、锚点写错
 #        都要报红；**发布标签那一族** —— 定义值被改 / plist 模板里手抄标签 / 产物名写死 /
@@ -193,15 +193,15 @@ python3 Scripts/check-script-portability.py
 # L-106（FR-EDIT-38 ①③，2026-09-30 开发循环第 117 轮）：语言的**登记形状** ——
 # 与本项同源，都是「Core 的形状」那类判据（项数仍十八）。
 # 「语言表声明式登记」这句话要能被机械看住：语言知识（扩展名映射 + 关键字 / 类型 / 字面量 /
-# 注释 / 运算符规则集）只允许住在 `Core/CodeLanguageDefinitions.swift`，而**消费方那一族**
+# 注释 / 运算符规则集）只允许住在 `platform/macos/Core/CodeLanguageDefinitions.swift`，而**消费方那一族**
 # （词法器 / 规则集 / 判语言 / 补全 / 两个编辑器 / CLI）里出现 `language == .xxx` / `case .sql:`
 # 这类**身份分支**即判红 —— 那正是「加一个语言要改核心代码」的形状，而它不报错、只是变笨。
 # 顺带看住三件登记自洽：语言标识与登记项**同集合** / 扩展名与文件名不许两个主人 /
 # `isCode` 为真者必须给得出注释规则与字符串界定符（缺了 = 识别了却一个颜色都没有）。
 # 高亮色一律走 `SyntaxTone` 令牌（FR-EDIT-38 ③）：编辑器里出现裸色值即判红。
 # E 档（`L-149` 剩余②，2026-10-01 开发循环第 145 轮）：**「这个文件用哪种视图打开」只有一处出处** ——
-# 登记表里声明 `defaultView: .browser` 的语言**恰好**是 HTML；`App/` 下读 `defaultView` 的文件
-# **恰好**是台账里那一个（`App/WorkspaceTabsModel.swift`，双向对账），且它必须真的把这一档交给
+# 登记表里声明 `defaultView: .browser` 的语言**恰好**是 HTML；`platform/macos/App/` 下读 `defaultView` 的文件
+# **恰好**是台账里那一个（`platform/macos/App/WorkspaceTabsModel.swift`，双向对账），且它必须真的把这一档交给
 # 浏览器那一侧（交接锚点 `openInBrowserTab`）。多一处 = 又一条自己决定「用什么打开」的路。
 # 判据自己的证据两处：`--self-test` **11 例**（夹具一律在临时副本上写坏，末例核对真仓库逐字节未变）
 # + 入口证据 `Scripts/test-language-registry-gate.py` **例数 4**（走的是**命令行路径**：
@@ -219,7 +219,7 @@ python3 Scripts/check-core-localization.py
 # 收成一个口子 `effectiveLanguage`（宿主语境优先），并把这个口径变成机械判据。
 python3 Scripts/check-effective-language.py
 # L-46（2026-09-27 第 37 轮）：上面两条只比**模板与模板**，没有人比过**模板与实参**。
-# 真缺陷就长在这条缝里（第 37 轮实测）：`App/Views/AboutLicenseSheet.swift` 三处
+# 真缺陷就长在这条缝里（第 37 轮实测）：`platform/macos/App/Views/AboutLicenseSheet.swift` 三处
 # `L(.licAboutEdition)` / `L(.licAboutAppVersion)` / `L(.licAboutActivityItems)` 不传实参，
 # 而模板是 `当前版本：%@` —— `LocalizationManager.text` 在 `arguments.isEmpty` 时
 # **原样返回模板**，于是界面上印出的就是 `%@` 本身（中文英文都一样）。
@@ -246,11 +246,11 @@ python3 Scripts/check-copy-emphasis.py
 python3 Scripts/test-copy-emphasis-gate.py
 # L-47（2026-09-28 第 46 轮）：上面几条比的都是「文案怎么取」，谁都没管**语言从哪来**。
 # 真缺陷正长在这条缝里（第 46 轮读图 `diagnosis-empty-en`）：英文界面上界面文案都是英文，
-# 唯独「给模型的资料」整块中文 —— `Core/DiagnosisContext.swift` 的文件私有取值助手把
+# 唯独「给模型的资料」整块中文 —— `platform/macos/Core/DiagnosisContext.swift` 的文件私有取值助手把
 # `language:` **钉死**成 `.simplifiedChinese`，而语言表里 `diagnosisTarget` /
 # `diagnosisFormatConclusion` … 这些键**都有英文译文**却只被这一处引用 ⇒ **英文译文永远
 # 不可达（死译文）**。R-45 的棘轮数的是「含**汉字**的字面量」（这里一个汉字都没有）、
-# `check-effective-language.py` 只扫 `App/` 且只禁「按用户选择取语言」⇒ 两边都没覆盖
+# `check-effective-language.py` 只扫 `platform/macos/App/` 且只禁「按用户选择取语言」⇒ 两边都没覆盖
 # 「把语言写成字面量」这个形状。
 # 判据四条：A 写死语言的调用点必须逐条登记（按文件，带 maxSites 与理由；`maxSites: 0` =
 # 回归钉）/ B 死译文双向对账（新增未登记的死键 ⇒ 红；修好不销账 ⇒ 红；包装函数
@@ -348,7 +348,7 @@ python3 Scripts/check-queue-needs-user.py --self-test
 # 「共十类」篡改（实测 13 条）；② 更重的一条 —— `Scripts/test-*.py` 这
 # 14 个「门禁自己的证据」**没有任何门禁管**（`check-*.py` 有 doc-numbers 的「有判据、没闭环」
 # 对账，`test-*.py` 没有）⇒ 其中 **8 个根本没人跑**，而 `test-plugin-assembly-gates.py`
-# 已经坏在第 3 例（`Core/AICapture.swift` 的 `sqlNote` 签名改成多行 + 多一个 `tag:` 参数，
+# 已经坏在第 3 例（`platform/macos/Core/AICapture.swift` 的 `sqlNote` 签名改成多行 + 多一个 `tag:` 参数，
 # 夹具锚点还是老单行签名）无人知 —— 「判据写完不对已知改动报红，等于没有」。
 # 台账 `Scripts/self-test-counts.json`；判据 `Scripts/check-self-test-counts.py`：
 # A 台账结构（每族 key / script / cases / countRegex / why；没锚点必须写 noAnchorReason）
@@ -377,16 +377,16 @@ python3 Scripts/check-alpha-fr-dispositions.py --self-test
 
 echo "==> 6/18 设计令牌棘轮 + 外观样张与产品同源 + 主题集（三选一）"
 python3 Scripts/check-design-tokens.py
-# L-79 ㈡（2026-09-29 第 76 轮）：上面那条棘轮管的是 **App/ 里的裸颜色 / 裸字号 / 裸间距**，
+# L-79 ㈡（2026-09-29 第 76 轮）：上面那条棘轮管的是 **platform/macos/App/ 里的裸颜色 / 裸字号 / 裸间距**，
 # 管不了「**样张到底是不是照着产品画的**」。真现场：`Scripts/design-mock.swift` 自带一份调色板
-# （头部注释写着「未来会变成 Core/DesignTokens.swift 的真身」）⇒ 方案 D 换值后，它照样出**旧配色**
+# （头部注释写着「未来会变成 platform/macos/Core/DesignTokens.swift 的真身」）⇒ 方案 D 换值后，它照样出**旧配色**
 # 的图（深色中性灰 + 旧强调色），而逐屏复查 / 定调 / 跨端对照全都建立在这张图上。
 # 判据 `Scripts/check-design-mock-tokens.py`（项数仍十八）：
 #   A 渲染脚本里不许有色值字面量（只豁免 3 个 macOS 交通灯系统外壳色）+ 两条「第二份调色板形态」回归钉
 #   B 渲染脚本必须真的引用令牌（8 类符号，有处数下限 —— 引用被删光就是空跑）
-#   C 渲染入口 `Scripts/render-design-mock.sh` 必须把 `Core/DesignTokens.swift` 编进来
+#   C 渲染入口 `Scripts/render-design-mock.sh` 必须把 `platform/macos/Core/DesignTokens.swift` 编进来
 #   D **逐屏复查**：产品源码（Core / App / Tests / CLI / Platform / Tools / TestsUISnapshot，
-#     现 417 个文件）里不许残留**方案 D 之前的旧调色板值**；豁免只有两处 —— `Core/AccentTheme.swift`
+#     现 417 个文件）里不许残留**方案 D 之前的旧调色板值**；豁免只有两处 —— `platform/macos/Core/AccentTheme.swift`
 #     与它的单测（交互强调色是**另一条轴**，用户可切的那三个候选本来就不在 D 的值表里）
 #   E **行为证据**：真跑一遍渲染入口（要求 exit 0 + 自检收尾行 + 张数下限），并判**深色样张的内容底
 #     必须带蓝调**（方案 D 深海军蓝实测 B−R ≈ 45；旧中性灰 ≈ 11 ⇒ 门槛 20）—— 非 macOS 跳过并高声提示
@@ -429,9 +429,9 @@ python3 Scripts/check-design-themes.py --self-test
 # `Theme.nsColor(Surface.content)`（`L-111` 那一批）。棘轮扫的是「写坏的值」，
 # 这里的问题是**什么都没写** ⇒ 门禁全绿、观感不对（这正是覆盖面缺口）。
 # 判据 `Scripts/check-editor-surface-tokens.py`（项数仍十八）：
-#   A 台账双向对账（`App/` 下每处多行编辑面都登记；登记的必须真的还在 ⇒ 新加编辑面要登记）
+#   A 台账双向对账（`platform/macos/App/` 下每处多行编辑面都登记；登记的必须真的还在 ⇒ 新加编辑面要登记）
 #   B 每个编辑面都挂 `.editorSurface()`（处数棘轮：挂了的处数 == 编辑面的处数）
-#   C 唯一出处 `App/Views/EditorSurface.swift`（函数体必须 `scrollContentBackground(.hidden)`
+#   C 唯一出处 `platform/macos/App/Views/EditorSurface.swift`（函数体必须 `scrollContentBackground(.hidden)`
 #     + `Theme.surface(.content)` + `Theme.text(.primary)`，不许出现裸色 / 系统色 / 字号字面量；
 #     且只此一处定义）
 #   D 另两个编辑面（AppKit `NSTextView`）仍是令牌色，不许退回 `NSColor.textBackgroundColor`
@@ -471,13 +471,13 @@ python3 Scripts/check-palette-wiring.py
 # 所有门禁全绿。判据 = 视图不许有局部折叠状态 / 状态必须是 `@State`-free 的 `AppState` 属性
 # 且 `private(set)`、写入口唯一、默认全展开 / 视图绑定必须经 appState / 未分组那一段不许有折叠 /
 # 空跑防护；台账式常量在脚本里，负例 `Scripts/test-sidebar-collapse-state.py`（11 例）。
-# 行为那一半（重建前后像素逐字节相同）在 `TestsUISnapshot/UISnapshotSidebarStateTests.swift`，
+# 行为那一半（重建前后像素逐字节相同）在 `platform/macos/TestsUISnapshot/UISnapshotSidebarStateTests.swift`，
 # 按 L-01 的纪律不进每轮门禁（要 `DOYAH_UI_SNAPSHOT=1`）。
 python3 Scripts/check-sidebar-collapse-state.py
 python3 Scripts/test-sidebar-collapse-state.py
 # L-50：**空数据时按钮必须有个说法**（灰着 / 可点给理由 / 够不着按钮），不许「可点却静默无反应」。
 # 2026-09-26 读图在笔记编辑器上抓到过第三种（「保存」满色可点、点下去静默 return）。这一项把
-# `App/AppState.swift` 里每条「内容为空」守卫与它的处置逐条对账（双向：未登记 ⇒ 红、陈旧 ⇒ 红），
+# `platform/macos/App/AppState.swift` 里每条「内容为空」守卫与它的处置逐条对账（双向：未登记 ⇒ 红、陈旧 ⇒ 红），
 # 并钉住 `view-disabled` 那一档的**唯一出处**（判据属性全局只定义一次 / 守卫必须用它 /
 # 指定视图必须真的 `.disabled` 它 / 视图不许再自己算一遍）。台账与词表见脚本 docstring，
 # 台账 `Scripts/empty-action-button-dispositions.json`；负例 `Scripts/test-empty-action-buttons.py`
@@ -498,15 +498,15 @@ python3 Scripts/test-empty-action-buttons.py
 # 范围内真的存在**）/ D 理由不许空 / E 空跑防护（文件数 · 命中数 · 面板根数 · 台账数下限，
 # 台账声明的扫描事实与磁盘相等）/ F 范围外（用设计令牌 / 变量给尺寸的 `.frame`）**显式打印**数量。
 # 负例 `--self-test` 19 例（含「现造一块既没写 alignment、类型里又没有撑满容器的面板根 ⇒
-# 三条路线全红」这一组，与一条「显式对齐被删但登记还在」；夹具只拷 `App/`，末例核对真仓库逐字节未变）。
+# 三条路线全红」这一组，与一条「显式对齐被删但登记还在」；夹具只拷 `platform/macos/App/`，末例核对真仓库逐字节未变）。
 python3 Scripts/check-panel-root-frames.py
 python3 Scripts/check-panel-root-frames.py --self-test
 # L-111（2026-09-30 第 121 轮）：**编辑面的行号列**判据。行号一半是口径（在 `Core/CodeLines`，
 # 15 项单测早就钉住了），另一半是画法 —— 画法这一半此前**没有判据**：工作区编辑器自己长了一套
 # 列宽算法 + 行起点计算，数据库侧 SQL 编辑器一行都没有，于是在队列上挂了 4 天的「要不要一起加」。
-# 判据：A 双向对账（`App/**/*.swift` 里每个 `NSTextView` / `NSTextField` 子类都要在台账
+# 判据：A 双向对账（`platform/macos/App/**/*.swift` 里每个 `NSTextView` / `NSTextField` 子类都要在台账
 # `Scripts/editor-line-number-surfaces.json` 登记「画 / 不画 + 为什么」）/ B 挂法齐备（登记为「画」的
-# 编辑面必须真的 `gutter.reload(` + `gutter.draw(in:`）/ C 唯一出处（`CodeLines.lineStarts(` 在 `App/`
+# 编辑面必须真的 `gutter.reload(` + `gutter.draw(in:`）/ C 唯一出处（`CodeLines.lineStarts(` 在 `platform/macos/App/`
 # 里恰好一处、列宽算法全工程恰好一处、别处的 `gutterWidth(digits:` 只许转发）/ D 三书里的口径语句
 # 锚点仍在（`Docs/` 不在盘上时跳过并高声提示，跳过 ≠ 通过）/ E 空跑防护。
 # `Scripts/check-editor-line-numbers.py` 的负例 `--self-test` **10 例**（夹具 = 真源文件与真文档的拷贝，
@@ -515,15 +515,15 @@ python3 Scripts/check-editor-line-numbers.py
 python3 Scripts/check-editor-line-numbers.py --self-test
 # L-84 ㈠㈡（2026-09-29 第 81 / 82 轮）：终端**多会话（页签）**判据。需求提出者把它提为刚需
 # 时给的原话是「一个 terminal 在执行 dsh-tui，遇到要执行命令只能去开系统终端，违背了我这个软件的初衷」。
-# 判据判的是「新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射」这**六组判断真的在 `Core/TerminalTabs.swift` 里**、
-# 且被 `Tests/TerminalTabsTests.swift` 逐组钉住（另加「Core 不出用户可见文案」与「页签文案键中英齐」）；
+# 判据判的是「新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射」这**六组判断真的在 `platform/macos/Core/TerminalTabs.swift` 里**、
+# 且被 `platform/macos/Tests/TerminalTabsTests.swift` 逐组钉住（另加「Core 不出用户可见文案」与「页签文案键中英齐」）；
 # **㈡ 起同一判据还判界面接线**（App 侧锚点 **41 处**，L-89 ㈡ ③ 第 96 轮扩）：页签头在工具条
 # `Spacer` **之前**（口径①「左侧」，位置也判）/ 右侧那排按钮**六个符号一个不少**（清单数的是五个动作，
 # 第 6 个是折叠态的展开箭头）**且新画的按钮必须登记**（反向对账棘轮 `RIGHT_SIDE_CALL_SITES` ——
 # 只判「登记过的还在」拦不住「新画一个没登记的」）/ 每页签一条独立会话（不是「一个模型切屏」）/
 # ⌘T ⌘W ⌘1…9 的接线点（判定仍只有 Core 一处）/ 双击重命名 / 二次确认 / 退出标记 / 重启作用在当前页签 /
 # 工具条那一行是**独立视图** `LowerPaneTabStrip`（抽出来才能单独离屏渲染）。
-# App 侧探针**六个用例**锚点（`TestsUISnapshot/TerminalTabsProbeTests.swift`：前三个真开 shell 验
+# App 侧探针**六个用例**锚点（`platform/macos/TestsUISnapshot/TerminalTabsProbeTests.swift`：前三个真开 shell 验
 # 独立性与退出、确认链路；后三个 = 版面（页签头在左 / 右侧按钮位置不动的**像素**判据）、按钮按状态齐备、
 # ⌘1…9 / ⌘⇧[ ⌘⇧] / 改名落到对的会话）。
 # 真人点验 = 主诉场景（一个页签跑 `dsh-tui`、另一个执行命令，互不干扰）。
@@ -532,7 +532,7 @@ python3 Scripts/check-terminal-tabs.py
 python3 Scripts/check-terminal-tabs.py --self-test
 
 # L-89 ㈡ ④（第 97 轮）：**大结果集滚动**（清单 §4 FR-RES-07）那一行的阈值台账 ——
-# 探针 `TestsUISnapshot/LargeResultScrollProbeTests.swift` 的每一条上界都从
+# 探针 `platform/macos/TestsUISnapshot/LargeResultScrollProbeTests.swift` 的每一条上界都从
 # `Scripts/result-scroll-baseline.json` 读（容差必须有来源：基线实测值 + 倍数 + 理由），
 # 于是那份台账**本身就是判据的输入**，谁也不能悄悄改松它：
 #   · 字段齐备 / 规模对得上清单原文（≥ 1 万行 × 20 列）/ 基线是正数；
@@ -540,7 +540,7 @@ python3 Scripts/check-terminal-tabs.py --self-test
 #   · 理由非空（改动必须说明为什么）；
 #   · **探针必须真挂在取证脚本上** —— 第 96 轮实测过「新用例没接进
 #     `run-manual-verification-probes.sh --filter` ⇒ 一个都跑不到」，所以这一条按
-#     「`TestsUISnapshot/` 里每个 `*ProbeTests.swift` 都得在 FILTER 里，否则要在豁免表里写明理由」
+#     「`platform/macos/TestsUISnapshot/` 里每个 `*ProbeTests.swift` 都得在 FILTER 里，否则要在豁免表里写明理由」
 #     逐文件对账（实测抓出 `AppearanceAxesProbeTests` 从 2026-09-29 起就没被任何脚本跑过）。
 # 自检用例 `--self-test` **11 例**（红 / 绿成对，夹具在临时目录，末例核对真仓库台账逐字节未变）。
 python3 Scripts/check-result-scroll-ledger.py
@@ -550,7 +550,7 @@ python3 Scripts/check-result-scroll-ledger.py --self-test
 # 需求原话「AI 助理配置时应该提供主流大模型配置 url 和可选择模型，毕竟很多人是不懂的」——
 # 这件事有两个不会报错的坏法：① 界面自己写死一个端点（「端点只改一处」当场不成立，而编译照过、
 # 单测照绿）；② 目录长在 Core 里、界面却没接上（用户打开面板还是两个空框）。
-# 判据：A 唯一出处（提供商宿主名**从 `Core/AgentProviderPreset.swift` 里解析出来**、只许出现在
+# 判据：A 唯一出处（提供商宿主名**从 `platform/macos/Core/AgentProviderPreset.swift` 里解析出来**、只许出现在
 # 那个文件；环回地址不算提供商宿主名）/ B 界面接线五处锚点（遍历目录 · 选中值 = 稳定标识 ·
 # 模型下拉内容取自契约层 · 重开面板按端点恢复选中 · 选提供商自动填端点与模型）/
 # C 形状（标识唯一 · 端点唯一 · 「自定义」恰一条且端点为「空」· 标签键中英齐备）/
@@ -586,9 +586,9 @@ python3 Scripts/test-note-search-route.py
 # 需求提出者要「工作区的编辑器带 markdown 预览」，而这条路上有个必然的诱惑：再写一套块级解析
 # 或引一个第三方渲染库。一旦那样做，同一份 `**粗体**` 在笔记里是粗体、在预览里是星号，
 # 而**编译照过、单测照绿**，没有任何东西看得见。判据五条：行内扫描器 `nextMarker` **与链接扫描器
-# `linkMarker`** 的定义都唯一且在 `Core/NoteBody.swift`（名字也不许出这个文件，见 `L-137` 剩余③）/
+# `linkMarker`** 的定义都唯一且在 `platform/macos/Core/NoteBody.swift`（名字也不许出这个文件，见 `L-137` 剩余③）/
 # 块级模型 `MarkdownBlock(` 只许
-# `Core/MarkdownDocument.swift` 构造（界面与平台层只渲染）/ 块级模型里必须**真的调用**
+# `platform/macos/Core/MarkdownDocument.swift` 构造（界面与平台层只渲染）/ 块级模型里必须**真的调用**
 # `NoteBodyProjection.parseInline(`（至少 4 处 —— 同源判的是调用点，不是注释）/
 # `import` 与依赖声明里不得出现第三方 Markdown 库。另加四条空跑防护（扫描面 / 块构造处数 /
 # 同源调用处数 / 解析层用例数下限）。
@@ -602,15 +602,15 @@ python3 Scripts/check-markdown-single-source.py --self-test
 # 2026-09-30 原话「浏览器内置到工作区 Tab 页，而不是放到数据库 SQL 查询界面，本质上 html 也是一种文件」
 # （数据库侧的口径 = **SQL 这门语言的工作台**）。第 131 轮把展示层搬到了工作区，但这件事此前没有任何
 # 东西看得见：挪回数据库侧、或搬走了没接上，编译照过、单测照绿。判据是一份**双向对账**的允许落点台账 ——
-# A 允许落点 ⊆ 台账（`App/` 下出现 `browserPages` / `selectedBrowserPage` / `selectedBrowserID` /
+# A 允许落点 ⊆ 台账（`platform/macos/App/` 下出现 `browserPages` / `selectedBrowserPage` / `selectedBrowserID` /
 # `browserEngines` / `BrowserTabView` / `openBrowserTab` / `browserTabButton` 的文件必须登记过；
-# 唯一豁免 = 视图定义 `BrowserTabView.swift`）—— 数据库侧 `App/Views/QueryWorkspaceView.swift` 命中即红；
+# 唯一豁免 = 视图定义 `BrowserTabView.swift`）—— 数据库侧 `platform/macos/App/Views/QueryWorkspaceView.swift` 命中即红；
 # B 台账 ⊆ 允许落点（登记过的落点必须真的命中 —— 拦「搬走了没接上」「引用删了只留注释」）；
 # C 两条文档条文（SRS 的 `FR-EDIT-34` 定义格 / `Docs/概要设计.md` §3.12 的「视图契约」行）必须写
 # 「工作区」且不得回写「编辑器区」（订正过程留在证据格里，判据只看条文格）；
-# D 空跑防护（`App/` 扫描面文件数下限 · 台账文件存在性 · 七个标识各自至少一处命中 · 状态所有者类在位）。
+# D 空跑防护（`platform/macos/App/` 扫描面文件数下限 · 台账文件存在性 · 七个标识各自至少一处命中 · 状态所有者类在位）。
 # **状态所有者另判一处（队列 `L-149` 剩余①，第 135 轮）**：浏览器状态必须住在
-# `App/WorkspaceBrowserModel.swift`（那个类只此一处定义）—— 挂回 `AppState` 的 `@Published` 上，
+# `platform/macos/App/WorkspaceBrowserModel.swift`（那个类只此一处定义）—— 挂回 `AppState` 的 `@Published` 上，
 # 引擎每回报一次标题 / 加载中都要重算整个窗口（同族的病见 `QueryEditorBuffer`）。
 # 判据见 `Scripts/check-browser-tab-ownership.py`；负例 `--self-test` 15 例
 # （绿对照 / 数据库侧塞回状态引用 / 数据库侧塞回视图渲染 / 页签条不再引用 / 内容区不再渲染 /
@@ -665,7 +665,7 @@ python3 Scripts/check-cli-failure-readability.py
 # 浮点 / numeric / 日期时间，其余类型落到 `String(describing: buffer)` ⇒ 用户拿到的不是值，
 # 是驱动内部对象的描述（现场：会话行的 `client_addr` 那一格印控制字符，CLI 表格当场被劈开）。
 # 判据 = 台账 `Scripts/cell-decode-coverage.json` ↔ 源码双向对账（解了不登记 / 登记了没解都报红）
-# + 那条被禁的出口（`String(describing: buffer)`）不许在 `Core/` `App/` 的代码行里回来
+# + 那条被禁的出口（`String(describing: buffer)`）不许在 `platform/macos/Core/` `platform/macos/App/` 的代码行里回来
 # + 诚实兜底（点名类型 + 字节数 + 十六进制预览）必须在位 + 单测逐型锚点 + 真机证据（证据脚本 §7
 # 与 psql 的文本形态逐条相等）。L-74 的负例 **10 例**（一律只在临时副本上写坏，末例核对真仓库逐字节未变）。
 python3 Scripts/check-cell-decode-coverage.py
@@ -718,7 +718,7 @@ python3 Scripts/check-vendored-sqlite.py --self-test
 python3 Scripts/smoke-vendored-sqlite.py
 
 echo "==> 18/18 生成物一致性（L-43）：生成物 ↔ vendored 头文件逐字节"
-# 为什么这一项必须有（第 30 轮 L-43）：`Core/NoteStorage/SQLiteConstants.swift` 是**生成物**，
+# 为什么这一项必须有（第 30 轮 L-43）：`platform/macos/Core/NoteStorage/SQLiteConstants.swift` 是**生成物**，
 # 生成器 `gen-sqlite-constants.py` 早就写好了 `--check`，**而且脚本头部自己就写着
 # 「本 check 未接进 verify-all.sh」** —— 有判据、没闭环。后果：手改生成物一行、
 # 或头文件换版后忘了重生成，编译照过、单测照绿、谁都不会报红（与第 17 项那个 9.5 MB
@@ -730,7 +730,7 @@ echo "==> 18/18 生成物一致性（L-43）：生成物 ↔ vendored 头文件�
 # 台账侧绑定见 `Scripts/vendored-sqlite.json` 的 `generator` 节点（第 17 项对账）。
 python3 Scripts/gen-sqlite-constants.py --check
 python3 Scripts/gen-sqlite-constants.py --self-test
-# 族 ②：发布产物版本号的「一个值、三处逐字一致」+ Xcode 工程（生成物）不许与 project.yml 漂移
+# 族 ②：发布产物版本号的「一个值、三处逐字一致」+ Xcode 工程（生成物）不许与 platform/macos/project.yml 漂移
 # （L-70，第 68 轮）。它与上一族同属「生成文件没有症状」：`.xcodeproj` 在本仓**没有别的门禁**
 # （`build-app.sh` 走 `swift build`，不读工程文件）⇒ 过期了编译照过、单测照绿、发布照发。
 python3 Scripts/check-release-version.py

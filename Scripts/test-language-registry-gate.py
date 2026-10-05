@@ -27,9 +27,9 @@ import tempfile
 REPO = pathlib.Path(__file__).resolve().parent.parent
 GATE = "Scripts/check-language-registry.py"
 WATCHED = (
-    "Core/CodeLanguageDefinitions.swift",
-    "Core/CodeLexer.swift",
-    "App/Views/CodeEditorView.swift",
+    "platform/macos/Core/CodeLanguageDefinitions.swift",
+    "platform/macos/Core/CodeLexer.swift",
+    "platform/macos/App/Views/CodeEditorView.swift",
 )
 CASES = 4
 
@@ -60,14 +60,14 @@ def main() -> int:
     print("== 例 2：临时副本写坏（消费方出现语言身份分支）⇒ exit 1 并点名 ==")
     scratch = pathlib.Path(tempfile.mkdtemp(prefix="doyah-language-gate-cli-"))
     try:
-        for relative in WATCHED + ("Core/CodeSyntax.swift", "Core/TextLanguage.swift",
-                                   "Core/CodeCompletion.swift", "App/Views/SQLEditorView.swift",
-                                   "CLI/main.swift", "Core/DesignTokens.swift"):
+        for relative in WATCHED + ("platform/macos/Core/CodeSyntax.swift", "platform/macos/Core/TextLanguage.swift",
+                                   "platform/macos/Core/CodeCompletion.swift", "platform/macos/App/Views/SQLEditorView.swift",
+                                   "platform/macos/CLI/main.swift", "platform/macos/Core/DesignTokens.swift"):
             destination = scratch / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO / relative, destination)
         # 往词法器里塞一句按语言身份分支的写法 —— 正是 FR-EDIT-38 ① 要清掉的形状。
-        target = scratch / "Core/CodeLexer.swift"
+        target = scratch / "platform/macos/Core/CodeLexer.swift"
         text = target.read_text(encoding="utf-8")
         anchor = "    mutating func run() -> [CodeToken] {"
         assert anchor in text, "夹具锚点失效：CodeLexer.swift 里找不到 run() 的签名"

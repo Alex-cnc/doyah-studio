@@ -3,9 +3,9 @@
 
 存在的理由（真现场）
 --------------------
-方案 D · 科技蓝的值与门槛 2026-09-29 落进了 `Core/DesignTokens.swift`（L-79 ㈠），
+方案 D · 科技蓝的值与门槛 2026-09-29 落进了 `platform/macos/Core/DesignTokens.swift`（L-79 ㈠），
 但**渲染样张的那份脚本自带一份调色板** —— `Scripts/design-mock.swift` 头部注释还写着
-「令牌（未来会变成 `Core/DesignTokens.swift` 的真身）」。于是：
+「令牌（未来会变成 `platform/macos/Core/DesignTokens.swift` 的真身）」。于是：
 
     · 盘上跑的产品 = 方案 D（深海军蓝 + 电光蓝）；
     · 盘上出的样张 = **换值之前的中性灰 + 旧强调色**；
@@ -24,12 +24,12 @@ A. **渲染脚本里不许有调色板**：`Scripts/design-mock.swift` 里的 `0
 B. **必须真的接在真令牌上**：脚本必须引用 `Surface` / `TextTone` / `AccentFamily` / `SyntaxTone` /
    `Radius` / `TypeScale` / `Hairline`（命中处数有下限，防"引用被删光却照样绿"）。
 C. **渲染入口必须把令牌编进来**：`Scripts/render-design-mock.sh` 的 `swiftc` 行必须同时含
-   `main.swift`（脚本本体）与 `Core/DesignTokens.swift`；**L-80 ㈠ 起还要含 `Core/DesignTheme.swift`**
+   `main.swift`（脚本本体）与 `platform/macos/Core/DesignTokens.swift`；**L-80 ㈠ 起还要含 `platform/macos/Core/DesignTheme.swift`**
    （值表按主题分组后落在那一份里）；把令牌文件删掉即红。
-D. **逐屏复查（机械版）**：产品源码（`Core/` `App/` `Tests/` `CLI/` `Platform/` `Tools/`
-   `TestsUISnapshot/`）里**不许残留方案 D 之前的旧调色板值**（`PRE_D_SWATCHES`）—— 这是
+D. **逐屏复查（机械版）**：产品源码（`platform/macos/Core/` `platform/macos/App/` `platform/macos/Tests/` `platform/macos/CLI/` `Platform/` `platform/macos/Tools/`
+   `platform/macos/TestsUISnapshot/`）里**不许残留方案 D 之前的旧调色板值**（`PRE_D_SWATCHES`）—— 这是
    「换了值但某屏漏改」的判据。豁免只有两处，都写在 `EXEMPT_FILES` 里并带理由：
-   `Core/AccentTheme.swift` 与 `Tests/AccentThemeTests.swift`（交互强调色是**另一条轴**，
+   `platform/macos/Core/AccentTheme.swift` 与 `platform/macos/Tests/AccentThemeTests.swift`（交互强调色是**另一条轴**，
    用户可切的那三个候选与方案 D 的表面 / 文本令牌无关；测试钉住它们是对的）。
 E. **行为证据（macOS）**：真跑一遍渲染入口到临时目录，要求退出码 0、打印「全部样张自检通过」、
    张数 ≥ `MIN_SHEETS`，并且**深色样张量出来的内容底必须带蓝调**（B − R > 8/255）——
@@ -91,9 +91,9 @@ PRE_D_SWATCHES = {
 # 逐屏复查的豁免（路径 → 理由）：交互强调色是**另一条轴**（`AccentTheme`，用户可切的那三个），
 # 与方案 D 的表面 / 文本 / 语法令牌无关；把它当"漏改"来判红就判错了。
 EXEMPT_FILES = {
-    "Core/AccentTheme.swift": "交互强调色（AccentTheme）：用户可切的选中条 / 主按钮 / 焦点环，"
+    "platform/macos/Core/AccentTheme.swift": "交互强调色（AccentTheme）：用户可切的选中条 / 主按钮 / 焦点环，"
                               "与方案 D 的令牌家族是两条轴，颜色本来就不在 D 的值表里",
-    "Tests/AccentThemeTests.swift": "同一族的单测钉住那三个强调色的身份值（正是它们该被钉住的地方）",
+    "platform/macos/Tests/AccentThemeTests.swift": "同一族的单测钉住那三个强调色的身份值（正是它们该被钉住的地方）",
 }
 
 # 判据 B：必须引用到的令牌符号 → 文档化的名字
@@ -148,7 +148,7 @@ def check_mock(root: pathlib.Path) -> list[Issue]:
             # 同一行里三个交通灯都写在一行 —— 逐个放过，但漏网的要红
             issues.append(Issue(f"{MOCK}:{lineno}",
                                 f"渲染脚本里出现了色值字面量 {hit} —— 样张必须从 "
-                                f"`Core/DesignTokens.swift` 取色；确属系统外壳色请登记进 EXEMPT_HEX 并写理由"))
+                                f"`platform/macos/Core/DesignTokens.swift` 取色；确属系统外壳色请登记进 EXEMPT_HEX 并写理由"))
     # 一行里有多个豁免色时，上面的循环会把每个都判一遍：只要该行全部命中都在豁免表里就不算命中，
     # 所以这里反过来再确认一次"该行至少有一个非豁免色"才是红（避免把交通灯那一行误判）。
     issues = [i for i in issues if _line_has_unexempt(root, i)]
@@ -180,13 +180,13 @@ def check_entry(root: pathlib.Path) -> list[Issue]:
         return [Issue(ENTRY, "渲染入口不存在（判据面为空 ⇒ 不许通过）")]
     text = path.read_text(encoding="utf-8")
     issues: list[Issue] = []
-    if "Core/DesignTokens.swift" not in text:
-        issues.append(Issue(ENTRY, "swiftc 没有把 `Core/DesignTokens.swift` 编进来 —— "
+    if "platform/macos/Core/DesignTokens.swift" not in text:
+        issues.append(Issue(ENTRY, "swiftc 没有把 `platform/macos/Core/DesignTokens.swift` 编进来 —— "
                                    "那样样张就回到了「自带一份调色板」的老路"))
-    # L-80 ㈠：值表按主题分组后落到 `Core/DesignTheme.swift`（角色语义仍在 `Core/DesignTokens.swift`）
+    # L-80 ㈠：值表按主题分组后落到 `platform/macos/Core/DesignTheme.swift`（角色语义仍在 `platform/macos/Core/DesignTokens.swift`）
     # ⇒ 少编哪一份，样张取到的都不是产品那套值。两台机器上都可判，故单列一条。
-    if "Core/DesignTheme.swift" not in text:
-        issues.append(Issue(ENTRY, "swiftc 没有把 `Core/DesignTheme.swift`（主题值表）编进来 —— "
+    if "platform/macos/Core/DesignTheme.swift" not in text:
+        issues.append(Issue(ENTRY, "swiftc 没有把 `platform/macos/Core/DesignTheme.swift`（主题值表）编进来 —— "
                                    "样张会退化成「默认主题之外什么都不认」"))
     if "main.swift" not in text:
         issues.append(Issue(ENTRY, "入口没有把渲染脚本当 `main.swift` 编译（swiftc 只在文件名叫 "
@@ -332,7 +332,7 @@ def self_test() -> int:
         # ⑥ 红：入口里把令牌文件删掉
         no_token = fresh(pathlib.Path(tmp) / "bad-entry")
         text = (no_token / ENTRY).read_text(encoding="utf-8")
-        (no_token / ENTRY).write_text(text.replace("Core/DesignTokens.swift", "Core/Nothing.swift"),
+        (no_token / ENTRY).write_text(text.replace("platform/macos/Core/DesignTokens.swift", "Core/Nothing.swift"),
                                       encoding="utf-8")
         cases.append(("入口没有把令牌编进来", True, check_entry(no_token)))
 
@@ -406,7 +406,7 @@ def main(argv: list[str]) -> int:
     print("==> 外观样张 ↔ 产品令牌同源（L-79 ㈡）")
     print(f"    ① 渲染脚本 {MOCK}：{'无自带调色板' if not check_mock(ROOT) else '有问题'}"
           f"（豁免 {len(EXEMPT_HEX)} 个系统外壳色）")
-    print(f"    ② 渲染入口 {ENTRY}：把 Core/DesignTokens.swift 编进来"
+    print(f"    ② 渲染入口 {ENTRY}：把 platform/macos/Core/DesignTokens.swift 编进来"
           f"（{'是' if not check_entry(ROOT) else '否'}）")
     print(f"    ③ 逐屏复查：扫了 {scanned} 个产品源文件，"
           f"旧调色板残留 {len(product_issues)} 处（豁免 {len(EXEMPT_FILES)} 个文件）")

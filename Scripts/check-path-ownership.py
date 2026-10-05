@@ -135,7 +135,7 @@ def norm(p: str) -> str:
 
 
 def has_prefix(path: str, prefix: str) -> bool:
-    """前缀命中（锚在仓根）：`App/` 只命中顶层 `App/`；文件前缀要整段相等或后面跟 `/`。"""
+    """前缀命中（锚在仓根）：`platform/macos/App/` 只命中顶层 `platform/macos/App/`；文件前缀要整段相等或后面跟 `/`。"""
     prefix = norm(prefix)
     if prefix.endswith("/"):
         return path.startswith(prefix)
@@ -472,7 +472,7 @@ FIXTURE = {
     "repo": "Fixture",
     "trees": [
         {"id": "macos", "owner": "macos", "contract_side": "apple", "hosts": ["darwin"],
-         "label": "macOS 端", "paths": ["App/", "Package.swift"]},
+         "label": "macOS 端", "paths": ["platform/macos/App/", "platform/macos/Package.swift"]},
         {"id": "android", "owner": "mobile", "contract_side": "nonapple",
          "label": "安卓端（Gradle + Kotlin）", "paths": ["android/"]},
         {"id": "harmony", "owner": "mobile", "contract_side": "nonapple",
@@ -499,7 +499,7 @@ def _fixture_repo(root: pathlib.Path):
     """自测用的假仓：清单里声明的每条路径都真的建出来（否则 validate 那两例测不到点子上）。"""
     for p in ("App", "android", "entry", "windows", "Docs", "tools"):
         (root / p).mkdir(parents=True, exist_ok=True)
-    for f in ("Package.swift", "hvigorfile.ts", "README.md"):
+    for f in ("platform/macos/Package.swift", "hvigorfile.ts", "README.md"):
         (root / f).write_text("x\n", encoding="utf-8")
     for f in ("Docs/需求规范书.md", "Docs/概要设计.md"):
         (root / f).write_text("x\n", encoding="utf-8")
@@ -531,7 +531,7 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
           wants=["无内容可查 ≠ 已通过"])
     # 2 只改本侧子树 ⇒ 绿
     check("② 只改本侧子树 ⇒ 绿", EXIT_PASS,
-          paths=["App/Views/A.swift", "Package.swift"], wants=["本侧子树"])
+          paths=["App/Views/A.swift", "platform/macos/Package.swift"], wants=["本侧子树"])
     # 3 改对侧子树 ⇒ 红 + 点名文件
     check("③ 改对侧子树 ⇒ 红并点名文件", EXIT_RED, paths=["windows/Core/src/lib.rs"],
           wants=["对侧子树", "windows/Core/src/lib.rs", "Windows 端"])
@@ -564,7 +564,7 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     # 12 清单声明路径不在盘上 ⇒ 退出 2（清单过期 = 判据过期）
     check("⑫ 清单声明了盘上没有的路径 ⇒ 退出 2", EXIT_SKIP,
           man_validate=_fx(trees=[{"id": "macos", "owner": "macos", "contract_side": "apple",
-                                   "paths": ["App/", "Nope/"]},
+                                   "paths": ["platform/macos/App/", "Nope/"]},
                                   {"id": "windows", "owner": "windows",
                                    "contract_side": "nonapple", "paths": ["windows/"]}]),
           wants=["在盘上不存在"])
@@ -575,12 +575,12 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
                                   {"id": "harmony", "owner": "mobile",
                                    "contract_side": "nonapple", "paths": ["android/entry/"]},
                                   {"id": "macos", "owner": "macos", "contract_side": "apple",
-                                   "paths": ["App/"]}]),
+                                   "paths": ["platform/macos/App/"]}]),
           wants=["互相覆盖"])
     # 14 子树与共享面互相覆盖 ⇒ 退出 2（这正是「Scripts/ 该算谁的」那一类冲突的防线）
     check("⑭ 子树与共享面互相覆盖 ⇒ 退出 2", EXIT_SKIP,
           man_validate=_fx(trees=[{"id": "macos", "owner": "macos", "contract_side": "apple",
-                                   "paths": ["App/", "tools/"]},
+                                   "paths": ["platform/macos/App/", "tools/"]},
                                   {"id": "windows", "owner": "windows",
                                    "contract_side": "nonapple", "paths": ["windows/"]}]),
           wants=["与共享面互相覆盖"])

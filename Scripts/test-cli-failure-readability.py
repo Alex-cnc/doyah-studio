@@ -28,14 +28,14 @@ GATE_NAME = "check-cli-failure-readability.py"
 LEDGER_REL = "Scripts/cli-failure-readability.json"
 
 FILES = [
-    "CLI/main.swift",
-    "CLI/CLIFailureText.swift",
-    "App/Utilities/ErrorPresenter.swift",
-    "App/AppState.swift",
-    "Core/ConnectionFailure.swift",
-    "Core/MaintenancePlan.swift",
-    "Core/MCPSession.swift",
-    "Core/AICaptureUltra.swift",
+    "platform/macos/CLI/main.swift",
+    "platform/macos/CLI/CLIFailureText.swift",
+    "platform/macos/App/Utilities/ErrorPresenter.swift",
+    "platform/macos/App/AppState.swift",
+    "platform/macos/Core/ConnectionFailure.swift",
+    "platform/macos/Core/MaintenancePlan.swift",
+    "platform/macos/Core/MCPSession.swift",
+    "platform/macos/Core/AICaptureUltra.swift",
     "Scripts/test-cli-failure-readability.sh",
 ]
 
@@ -114,7 +114,7 @@ def main() -> int:
     print("\n== A) 新增一处裸的英文失败输出（有人照着老写法加了一条 catch）")
 
     def add_bare_site(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/main.swift", lambda text: text.replace(
             "    static func main() async {",
             "    static func main() async {\n"
             "        do { try JSONSerialization.jsonObject(with: Data()) }\n"
@@ -126,7 +126,7 @@ def main() -> int:
     print("\n== B) 老写法回来了：把某一处改回直接打原始串")
 
     def revert_one(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/main.swift", lambda text: text.replace(
             'print("列出表失败：\\(CLIFailureText.oneLine(error))")',
             'print("列出表失败：\\(error.localizedDescription)")', 1))
 
@@ -135,14 +135,14 @@ def main() -> int:
     print("\n== C) 只留一个不接线的入口（helper 在、调用全删）")
 
     def unwire(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace("CLIFailureText.oneLine(error)", "error.localizedDescription"))
+        edit(tree, "platform/macos/CLI/main.swift", lambda text: text.replace("CLIFailureText.oneLine(error)", "error.localizedDescription"))
 
     expect("入口没人用 → 报红（反向棘轮）", unwire, "只剩")
 
     print("\n== D) 口径被改：入口里不再走中性归因那一档")
 
     def drop_neutral(tree: Path) -> None:
-        edit(tree, "CLI/CLIFailureText.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/CLIFailureText.swift", lambda text: text.replace(
             "ConnectionFailure.describeNonConnection(error)", "nil", 1))
 
     expect("中性归因那一档被删 → 报红", drop_neutral, "describeNonConnection")
@@ -150,7 +150,7 @@ def main() -> int:
     print("\n== E) 口径被改：认不出时套一句「连接失败」（R-60 的老毛病）")
 
     def claim_connection(tree: Path) -> None:
-        edit(tree, "CLI/CLIFailureText.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/CLIFailureText.swift", lambda text: text.replace(
             "        // 认不出：**原样**返回，不猜测、不套方向结论（口径第 3 条）。\n        return raw",
             "        return \"连接数据库失败：\" + raw", 1))
 
@@ -159,7 +159,7 @@ def main() -> int:
     print("\n== F) 原始串的另一半被删：调试转储没了")
 
     def drop_dump(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace("print(String(reflecting: error))", ""))
+        edit(tree, "platform/macos/CLI/main.swift", lambda text: text.replace("print(String(reflecting: error))", ""))
 
     expect("调试转储被删 → 报红", drop_dump, "调试转储")
 
@@ -204,7 +204,7 @@ def main() -> int:
     print("\n== L) 服务端原话那一档被摘（链里少了 describeServerSide —— 查询类错误又只剩英文串）")
 
     def drop_server_side(tree: Path) -> None:
-        edit(tree, "CLI/CLIFailureText.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/CLIFailureText.swift", lambda text: text.replace(
             "\n            ?? ConnectionFailure.describeServerSide(error)", "", 1))
 
     expect("链里少了服务端原话那一档 → 报红", drop_server_side, "describeServerSide")
@@ -220,14 +220,14 @@ def main() -> int:
                 "        return raw",
                 "        return raw\n" + call.rstrip("\n"), 1)
 
-        edit(tree, "CLI/CLIFailureText.swift", move)
+        edit(tree, "platform/macos/CLI/CLIFailureText.swift", move)
 
     expect("服务端原话排在兜底之后 → 报红", server_side_after_fallback, "顺序反了")
 
     print("\n== N) 能力被削：那一档不再读服务端消息（serverInfo）")
 
     def drop_server_info(tree: Path) -> None:
-        edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/ConnectionFailure.swift", lambda text: text.replace(
             "message: psql.serverInfo?[.message],", "message: nil,", 1))
 
     expect("不读 serverInfo 的 message → 报红", drop_server_info, "serverInfo?[.message]")
@@ -235,7 +235,7 @@ def main() -> int:
     print("\n== O) 界面侧没接：ErrorPresenter 少了这一档（英文译文只被中文语境引用）")
 
     def drop_presenter(tree: Path) -> None:
-        edit(tree, "App/Utilities/ErrorPresenter.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/App/Utilities/ErrorPresenter.swift", lambda text: text.replace(
             "ConnectionFailure.describeServerSide(error, language: LocalizationManager.shared.effectiveLanguage)",
             "nil", 1))
 
@@ -244,7 +244,7 @@ def main() -> int:
     print("\n== P) 主路里又抄一份可读化链（加一档要回来改多处）")
 
     def copy_chain_back(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/main.swift", lambda text: text.replace(
             "            print(CLIFailureText.block(error))",
             "            if let neutral = ConnectionFailure.describeNonConnection(error) { print(neutral.fullText) }\n"
             "            else { print(CLIFailureText.block(error)) }", 1))
@@ -254,7 +254,7 @@ def main() -> int:
     print("\n== Q) 渠道字段两半（队列 L-66）：命令行显示点又取回原串那一半")
 
     def display_raw_again(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/main.swift", lambda text: text.replace(
             'case .failed(let note): state = "失败（\\(note.readable)）"',
             'case .failed(let note): state = "失败（\\(note.raw)）"', 1))
 
@@ -263,7 +263,7 @@ def main() -> int:
     print("\n== R) 同题：界面失败提示行又取回原串那一半（界面这条路最容易被漏掉）")
 
     def app_display_raw(tree: Path) -> None:
-        edit(tree, "App/AppState.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/App/AppState.swift", lambda text: text.replace(
             "maintenanceMessage = L(.maintenanceFailedOne, task.id, failure.readable)",
             "maintenanceMessage = L(.maintenanceFailedOne, task.id, failure.raw)", 1))
 
@@ -272,7 +272,7 @@ def main() -> int:
     print("\n== S) 同题：机器载荷里的人话字段被摘掉（口径 ① 只落了一半）")
 
     def drop_human_field(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/main.swift", lambda text: text.replace(
             '+ "\\"failureReasonHuman\\":\\(jsonQuoted(note.readable))"', '+ ""', 1))
 
     expect("JSON 少人话字段 → 报红", drop_human_field, "机器载荷字段")
@@ -280,7 +280,7 @@ def main() -> int:
     print("\n== T) 同题：两半被并回一份（失败态不再带两半）")
 
     def merge_halves(tree: Path) -> None:
-        edit(tree, "Core/MaintenancePlan.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/MaintenancePlan.swift", lambda text: text.replace(
             "public let readable: String", "public let human: String", 1))
 
     expect("两半被并回一份 → 报红", merge_halves, "readable")
@@ -288,7 +288,7 @@ def main() -> int:
     print("\n== U) 同题：生产点不再填人话（人话那一半没人算出来）")
 
     def producer_without_human(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/main.swift", lambda text: text.replace(
             "readable: CLIFailureText.oneLine(error)", "readable: error.localizedDescription", 1))
 
     expect("生产点不填人话 → 报红", producer_without_human, "生产点")
@@ -296,7 +296,7 @@ def main() -> int:
     print("\n== V) MCP 载荷两半（队列 L-66 ㈡）：载荷里 `text` 被换成人话（两半对调）")
 
     def swap_payload_halves(tree: Path) -> None:
-        edit(tree, "Core/MCPSession.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/MCPSession.swift", lambda text: text.replace(
             '"text": .string(raw),', '"text": .string(human),', 1))
 
     expect("MCP 载荷对调两半 → 报红", swap_payload_halves, "原串被换成了人话")
@@ -304,7 +304,7 @@ def main() -> int:
     print("\n== W) 同题：载荷里的人话字段被摘掉（口径 ① 只落了一半）")
 
     def drop_payload_human(tree: Path) -> None:
-        edit(tree, "Core/MCPSession.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/MCPSession.swift", lambda text: text.replace(
             '                    "textHuman": .string(human),\n', "", 1))
 
     expect("MCP 载荷少人话字段 → 报红", drop_payload_human, "人话那一半必须真的出现在机器载荷里")
@@ -312,7 +312,7 @@ def main() -> int:
     print("\n== X) 同题：生产点的原串那一半被人话顶替（机器载荷会跟着变中文）")
 
     def producer_raw_becomes_human(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/main.swift", lambda text: text.replace(
             "        let raw = error.localizedDescription", "        let raw = CLIFailureText.oneLine(error)", 1))
 
     expect("MCP 生产点原串被顶替 → 报红", producer_raw_becomes_human, "原串那一半")
@@ -320,7 +320,7 @@ def main() -> int:
     print("\n== Y) 同题：三处失败少一处（某一处改回单串）")
 
     def one_site_back_to_single(tree: Path) -> None:
-        edit(tree, "CLI/main.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/main.swift", lambda text: text.replace(
             "                return mcpFailure(error)\n",
             "                return .single(error.localizedDescription, isError: true)\n", 1))
 
@@ -329,7 +329,7 @@ def main() -> int:
     print("\n== Z) 同题：载荷形状退回一个串（`finish` 又只收 `text`）")
 
     def finish_back_to_single_string(tree: Path) -> None:
-        edit(tree, "Core/MCPSession.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/MCPSession.swift", lambda text: text.replace(
             "finish(_ invocation: Invocation, result: MCPToolResult)",
             "finish(_ invocation: Invocation, text result: String)", 1))
 

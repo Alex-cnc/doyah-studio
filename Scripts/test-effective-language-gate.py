@@ -6,7 +6,7 @@
 （第 10 / 11 / 12 轮各吃过一次：假绿的占位图、注释里的假设、以及一条只在**读图**时才看得出来的
 语言混排）。本脚本把常见的退化方式逐个写坏一遍，断言门禁**真的退出码 1 并报出对的原因**。
 
-**只在临时副本上改**：把仓库的 `App/` 拷到临时目录，在副本上写坏，跑门禁时用 `--root` 指过去。
+**只在临时副本上改**：把仓库的 `platform/macos/App/` 拷到临时目录，在副本上写坏，跑门禁时用 `--root` 指过去。
 仓库本身一个字节都不动（跑完会断言这一点）。
 
 跑法（改门禁 / 改语言来源相关代码之后各跑一次）：
@@ -134,12 +134,12 @@ before = snapshot(REPO / "App")
 proc = subprocess.run(["git", "status", "--porcelain", "App"], cwd=REPO, capture_output=True, text=True)
 after = snapshot(REPO / "App")
 if before != after:
-    results.append(("仓库 App/ 未被改动", False, "临时副本的操作漏到了仓库上"))
+    results.append(("仓库 platform/macos/App/ 未被改动", False, "临时副本的操作漏到了仓库上"))
 else:
-    results.append(("仓库 App/ 未被改动", True, ""))
+    results.append(("仓库 platform/macos/App/ 未被改动", True, ""))
 
 changed = [line for line in proc.stdout.splitlines() if line.strip()]
-print(f"\n（仓库 App/ 当前 git 状态：{'干净' if not changed else '有改动 → ' + '；'.join(changed)}）")
+print(f"\n（仓库 platform/macos/App/ 当前 git 状态：{'干净' if not changed else '有改动 → ' + '；'.join(changed)}）")
 
 failures = [name for name, ok, _ in results if not ok]
 print()

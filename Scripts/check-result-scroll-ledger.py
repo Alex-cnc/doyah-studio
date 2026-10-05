@@ -3,7 +3,7 @@
 
 为什么需要这条判据
 ------------------
-探针 `TestsUISnapshot/LargeResultScrollProbeTests.swift` 的每一条上界（帧 p50 / 整幅重画 p50 /
+探针 `platform/macos/TestsUISnapshot/LargeResultScrollProbeTests.swift` 的每一条上界（帧 p50 / 整幅重画 p50 /
 行数放大比值 / 内存增量）都**从台账读**（`Scripts/result-scroll-baseline.json`），文件里不写魔数 ——
 好处是"容差有来源"，坏处是**把上界改松就等于改判据**：`p50MsLimit` 从 2 改成 2000，探针照样绿。
 所以本判据盯的是那份台账本身：
@@ -13,7 +13,7 @@
   3. **基线是正数**（`measured*`），每条上界对实测基线**至少有 3 倍余量**（不许紧到换台机器就红），
      也不许松到没有意义（各有上限档）；
   4. 理由非空（改阈值必须写明为什么，别只改数字）；
-  5. **探针真挂在取证脚本上**：`TestsUISnapshot/` 里每个 `*ProbeTests.swift` 都要出现在
+  5. **探针真挂在取证脚本上**：`platform/macos/TestsUISnapshot/` 里每个 `*ProbeTests.swift` 都要出现在
      `Scripts/run-manual-verification-probes.sh` 的 FILTER 里，否则必须在豁免表里写明理由 ——
      第 96 轮实测过「新用例没接进 `--filter` ⇒ 一个都跑不到」，本判据把这句话变成机械检查
      （落地当轮就抓出 `AppearanceAxesProbeTests` 自 2026-09-29 起没有任何脚本跑它）。
@@ -170,13 +170,13 @@ def wiring_errors(probes_text: str, probe_files: list[str]) -> list[str]:
             continue
         if stem not in probes_text:
             errors.append(
-                f"探针 TestsUISnapshot/{name} 没挂在 Scripts/run-manual-verification-probes.sh 上 —— "
+                f"探针 platform/macos/TestsUISnapshot/{name} 没挂在 Scripts/run-manual-verification-probes.sh 上 —— "
                 f"「写了用例却没接进 `--filter`」= 一个都跑不到；要么接进 FILTER，要么在 PROBE_WIRING_EXEMPT 里写明理由"
             )
 
     for stem, reason in PROBE_WIRING_EXEMPT.items():
         if f"{stem}.swift" not in probe_files:
-            errors.append(f"豁免表里的 `{stem}` 已经不在 TestsUISnapshot/ 了 ⇒ 删掉这条豁免（别留僵尸豁免）")
+            errors.append(f"豁免表里的 `{stem}` 已经不在 platform/macos/TestsUISnapshot/ 了 ⇒ 删掉这条豁免（别留僵尸豁免）")
         if len(reason.strip()) < 12:
             errors.append(f"豁免 `{stem}` 没有写明理由 ⇒ 例外必须可解释")
 

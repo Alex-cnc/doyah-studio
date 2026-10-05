@@ -11,7 +11,7 @@
 //   3. 按 Apple 的 macOS 图标规范合成：1024 画布上放 824 的圆角矩形（约 80%），
 //      圆角半径约 0.2225×824 —— 直接铺满整张画布会显得"方头方脑"，不像原生应用。
 //
-// 产出：App/Resources/AppIcon.icns，以及各尺寸的 iconset（交给 iconutil）。
+// 产出：platform/macos/App/Resources/AppIcon.icns，以及各尺寸的 iconset（交给 iconutil）。
 
 import Foundation
 import CoreGraphics
@@ -19,10 +19,10 @@ import ImageIO
 import UniformTypeIdentifiers
 
 let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-let sourceURL = root.appendingPathComponent("App/Resources/AppIcon-source.png")
+let sourceURL = root.appendingPathComponent("platform/macos/App/Resources/AppIcon-source.png")
 let masterURL = root.appendingPathComponent("App/Resources/AppIcon-1024.png")
 let iconsetURL = root.appendingPathComponent(".build/AppIcon.iconset")
-let icnsURL = root.appendingPathComponent("App/Resources/AppIcon.icns")
+let icnsURL = root.appendingPathComponent("platform/macos/App/Resources/AppIcon.icns")
 
 let watermarkCrop: CGFloat = 180
 let canvas: CGFloat = 1024

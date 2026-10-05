@@ -31,7 +31,7 @@ DOC_PATH = ROOT / "Docs" / "design" / "终端配色方案.md"
 CLI = ROOT / ".build" / "debug" / "DoyahCLI"
 
 # 门槛：正文槽位对底色 ≥ 4.5（WCAG AA）、前景对底色 ≥ 7（AAA）。
-# 与 `Tests/TerminalPaletteTests.swift` 是**两份独立实现**（这里是 Python）。
+# 与 `platform/macos/Tests/TerminalPaletteTests.swift` 是**两份独立实现**（这里是 Python）。
 MIN_TEXT_SLOT = 4.5
 MIN_FOREGROUND = 7.0
 

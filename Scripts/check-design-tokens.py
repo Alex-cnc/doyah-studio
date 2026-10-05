@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """设计令牌防回潮校验（棘轮式 / ratchet）。
 
-背景：外观改造前 App/ 里量出来这些——显式字号只有 3 个、padding 里 `2` 出现 139 次
+背景：外观改造前 platform/macos/App/ 里量出来这些——显式字号只有 3 个、padding 里 `2` 出现 139 次
 并混着 1 / 3 / 6 / 10 / 12 / 20 / 150、颜色是零散的系统色加裸 `Color.orange/.red/.blue`。
 这类"看着不精致"的来源不是一次写坏的，而是**一处处加出来的**；
 所以约束也必须是逐处生效的，不能只靠一次性的美术活。
 
 做法：**棘轮**（只能变好，不能变坏）。
-    1. 本脚本扫描 App/ 下所有 .swift，按规则统计违规数；
+    1. 本脚本扫描 platform/macos/App/ 下所有 .swift，按规则统计违规数；
     2. 与基线 `Scripts/design-token-baseline.json` 比较：
        任何文件任何规则的违规数**不得高于**基线，总数也不得升高；
     3. 迁移过程中违规自然减少，用 `--update-baseline` 把基线往下拧一格（只允许调低，
@@ -170,7 +170,7 @@ def main() -> int:
     baseline = load_baseline()
 
     if "--report" in arguments:
-        print("当前违规统计（App/）：")
+        print("当前违规统计（platform/macos/App/）：")
         for rule in sorted(current_totals):
             print(f"  {rule:<14} {current_totals[rule]:>5}")
         worst = sorted(current.items(), key=lambda item: -sum(item[1].values()))[:8]

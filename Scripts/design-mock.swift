@@ -10,22 +10,22 @@ import Foundation
 //
 // 用法：`Scripts/render-design-mock.sh [输出目录]`（**不要**直接 `swift Scripts/design-mock.swift` ——
 // 那样编不进 Core 的令牌，脚本会编译失败；这正是「样张必须接真令牌」的强制点）。
-// 该入口做的事：把本文件当 `main.swift` + `Core/DesignTokens.swift`（+ `AccentTheme.swift` /
+// 该入口做的事：把本文件当 `main.swift` + `platform/macos/Core/DesignTokens.swift`（+ `AccentTheme.swift` /
 // `ColorContrast.swift` / `Localization.swift`）一起 `swiftc` 编译，再运行产出 PNG。
 // ============================================================================
 
-// MARK: - 令牌（唯一来源 = `Core/DesignTokens.swift`）
+// MARK: - 令牌（唯一来源 = `platform/macos/Core/DesignTokens.swift`）
 //
 // 2026-09-29（队列 **L-79 ㈡**）：**这份脚本不再自带调色板**。
 //
-// 原先它自己写着一份十六进制表（第一行的注释还写着「未来会变成 Core/DesignTokens.swift 的真身」），
+// 原先它自己写着一份十六进制表（第一行的注释还写着「未来会变成 platform/macos/Core/DesignTokens.swift 的真身」），
 // 于是方案 D 换值之后，**样张与产品不再同源** —— 拿它出的图去定调、去逐屏复查，看的是另一套配色
 // （中性灰底 + 旧强调色），而没有任何门禁会说话。现在改为**编译期直接接真令牌**：
-// 本文件与 `Core/DesignTokens.swift`（+ `AccentTheme.swift` / `ColorContrast.swift` /
+// 本文件与 `platform/macos/Core/DesignTokens.swift`（+ `AccentTheme.swift` / `ColorContrast.swift` /
 // `Localization.swift`）一起编译，入口 = `Scripts/render-design-mock.sh`。于是：
 //   · 令牌换值，样张自动跟着换；样张里**不可能**出现产品没有的颜色；
 //   · 门禁 `Scripts/check-design-mock-tokens.py` 钉住这件事：本文件里不许再出现色值字面量、
-//     渲染入口必须真的把 `Core/DesignTokens.swift` 编进来、深色样张必须量得出方案 D 的蓝调。
+//     渲染入口必须真的把 `platform/macos/Core/DesignTokens.swift` 编进来、深色样张必须量得出方案 D 的蓝调。
 //
 // 间距 / 圆角 / 字号同样接 Core（`Spacing` / `Radius` / `Metrics` / `TypeScale`），
 // 所以这份脚本里也找不到「同一件事在第二处各写一遍」。
@@ -67,7 +67,7 @@ enum Typography {
 /// 主题 = **一组令牌值**（与 `Docs/design/外观方案-v1.md` §9 的「一个主题 = 一组值」同口径）。
 ///
 /// 这里不存任何值，只按**主题 + 深浅两态**去 Core 的令牌里取 —— 这就是「样张与产品同源」的落地方式：
-/// 换个配色 = 改值表（`Core/DesignTheme.swift`），样张下一次渲染自动跟着换。
+/// 换个配色 = 改值表（`platform/macos/Core/DesignTheme.swift`），样张下一次渲染自动跟着换。
 struct Theme {
     let name: String
     let isDark: Bool
@@ -134,7 +134,7 @@ struct Accent {
     /// 交互强调色的候选 = **产品里那一份**（`AccentTheme.all`）。旧版在这里又抄了三行十六进制，
     /// 于是产品换强调色、样张不知道；现在只转调，色值与显示名都从 Core / 语言表取。
     ///
-    /// 分工提醒（见 `Core/DesignTokens.swift` 类头）：`AccentTheme` = 用户可切的**交互强调色**
+    /// 分工提醒（见 `platform/macos/Core/DesignTokens.swift` 类头）：`AccentTheme` = 用户可切的**交互强调色**
     /// （选中条 / 主按钮 / 焦点环）；`AccentFamily` = 方案 D 的**基准家族**（链接 / 语法 / 度量值）。
     /// 两者是否合并成「主题」一件事，见队列 **L-80**。
     static let candidates: [Accent] = AccentTheme.all.map { preset in
@@ -317,7 +317,7 @@ func drawWorkspaceExplorer(_ c: Canvas, theme: Theme, accent: Accent, x: CGFloat
         (0, "folder", "Scripts", false),
         (0, "folder", "Tests", false),
         (0, "doc.text", "AGENTS.md", false),
-        (0, "doc.plaintext", "Package.swift", false),
+        (0, "doc.plaintext", "platform/macos/Package.swift", false),
         (0, "doc.text", "README.md", false)
     ]
     for (depth, symbolName, name, selected) in tree {
@@ -992,7 +992,7 @@ func write(_ data: Data, _ name: String) {
 //    ② 深色表面**带蓝调**（B > R）—— 方案 D 的深海军蓝 vs 旧的中性灰（B ≈ R），这是"换了值但
 //       某屏漏改"最省事的一刀；
 //    ③ 语法六档各自等于某个令牌家族的值（没有孤立的旧语法色）。
-print("渲染器：令牌唯一来源 = Core/DesignTheme.swift（默认主题 = 科技蓝 / 方案 D，深 / 浅两态）")
+print("渲染器：令牌唯一来源 = platform/macos/Core/DesignTheme.swift（默认主题 = 科技蓝 / 方案 D，深 / 浅两态）")
 
 let darkLuminance = Surface.allCases.map { ColorContrast.relativeLuminance($0.color(in: .techBlue).dark) }
 allChecks.append(Check(

@@ -19,7 +19,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 
 # PostgresNIO 本身已经打包在工程 Vendor 目录；否则回退到本机 clone 或 GitHub 直连
 if [ -d "${PROJECT_ROOT}/Vendor/postgres-nio/.git" ]; then
-  POSTGRES_MIRROR="file://${PROJECT_ROOT}/Vendor/postgres-nio"
+  POSTGRES_MIRROR="file://${PROJECT_ROOT}/platform/macos/Vendor/postgres-nio"
 elif [ -d "${HOME}/.dsh/tools/postgres-nio-1.33.1/.git" ]; then
   POSTGRES_MIRROR="file://${HOME}/.dsh/tools/postgres-nio-1.33.1"
 else

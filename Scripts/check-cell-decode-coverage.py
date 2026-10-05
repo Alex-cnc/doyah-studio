@@ -17,15 +17,15 @@ A. **台账结构**（`Scripts/cell-decode-coverage.json`）：每型一条，�
    （词表：`decoded` / `honest-unknown` / `text-when-readable`）、`why`（不许空）；
    `decoded` 的还要有源码锚点与单测锚点；处置不在词表内即红。
 B. **双向对账（台账 ↔ 源码）**：① 台账声明的每个锚点必须在它指名的那份源码里**逐字出现**；
-   ② `Core/PostgresCellFormatter.swift::decode` 里那一段 `switch` 的类型标签集合必须与台账的
+   ② `platform/macos/Core/PostgresCellFormatter.swift::decode` 里那一段 `switch` 的类型标签集合必须与台账的
    `formatterCases` **逐条相等** —— 解了新类型不登记 ⇒ 红；台账写着解了、源码里没有 ⇒ 红；
    ③ 三张 oid 表（数组 / 范围 / 多范围）的键数必须与台账登记的一致；④ 台账声明
    `mustNotExist` 的类型（`tid` / `xid` / `record`）不许在源码里长出 `case` —— 这也是反向的。
 C. **两种出口都没有了**：① `bannedExits`（`String(describing: buffer)` 那一族）在
-   `Core/` 与 `App/` 的**代码行**里不许出现（注释里的历史叙述不算）；② `honestFallback`
+   `platform/macos/Core/` 与 `platform/macos/App/` 的**代码行**里不许出现（注释里的历史叙述不算）；② `honestFallback`
    的形态必须在盘上（`unreadable(...)` + `[类型名 字节数B] \\x十六进制`）—— 删掉兜底又回到
    「什么都印得出来」的老路。
-D. **单测逐型钉住**：台账里每个 `testToken` 必须在 `Tests/PostgresCellFormatterTests.swift`
+D. **单测逐型钉住**：台账里每个 `testToken` 必须在 `platform/macos/Tests/PostgresCellFormatterTests.swift`
    里出现，且该文件里的测试函数数不低于下限（防「测试文件被掏空」）。
 E. **行为证据**：`Scripts/test-session-management.sh` §7 必须在盘上，两个 heredoc 的用例条数
    必须与台账登记的相等，台账点名的类型名必须在那一节里出现过（防「证据脚本被换掉」）。
@@ -33,7 +33,7 @@ F. 空跑防护：类型数 / decoded 数 / 单测锚点数 / 证据用例数四
    （「判据自己失效」比「发现不了」更危险）。
 
 边界（如实登记）：本判据判的是**台账与盘上事实对不对得上**，不判解码算法对不对 ——
-算法对不对由 `Tests/PostgresCellFormatterTests.swift`（逐型造字节断言文本）与
+算法对不对由 `platform/macos/Tests/PostgresCellFormatterTests.swift`（逐型造字节断言文本）与
 `Scripts/test-session-management.sh` §7（逐条与 psql 的文本形态比对）两条真证据承担。
 
 判据自己的证据：`--self-test` **10 例**（红/绿成对，夹具一律在临时目录，末例核对真仓库四份文件逐字节未变）。
@@ -276,9 +276,9 @@ def check(root: pathlib.Path) -> list[Issue]:
 
 def self_test() -> int:
     targets = [
-        "Core/PostgresCellFormatter.swift",
-        "Core/PostgresWireValue.swift",
-        "Tests/PostgresCellFormatterTests.swift",
+        "platform/macos/Core/PostgresCellFormatter.swift",
+        "platform/macos/Core/PostgresWireValue.swift",
+        "platform/macos/Tests/PostgresCellFormatterTests.swift",
         "Scripts/test-session-management.sh",
         LEDGER,
     ]
@@ -314,26 +314,26 @@ def self_test() -> int:
         cases.append(("台账被掏空", True, check(emptied)))
 
         shrunk = fresh(pathlib.Path(tmp) / "shrunk")
-        mutate(shrunk, "Core/PostgresCellFormatter.swift", "case .interval:", "case .interval_unused:")
+        mutate(shrunk, "platform/macos/Core/PostgresCellFormatter.swift", "case .interval:", "case .interval_unused:")
         cases.append(("源码少了一种解码（台账还在）", True, check(shrunk)))
 
         grew = fresh(pathlib.Path(tmp) / "grew")
-        mutate(grew, "Core/PostgresCellFormatter.swift", "        default:\n            break",
+        mutate(grew, "platform/macos/Core/PostgresCellFormatter.swift", "        default:\n            break",
                "        case .tid:\n            return nil\n        default:\n            break")
         cases.append(("源码多了一种未登记的 case", True, check(grew)))
 
         relapse = fresh(pathlib.Path(tmp) / "relapse")
-        mutate(relapse, "Core/PostgresCellFormatter.swift",
+        mutate(relapse, "platform/macos/Core/PostgresCellFormatter.swift",
                "        return unreadable(cell.dataType, bytes: bytes)",
                "        return String(describing: cell.bytes)")
         cases.append(("被禁的出口又回来", True, check(relapse)))
 
         no_fallback = fresh(pathlib.Path(tmp) / "no-fallback")
-        mutate(no_fallback, "Core/PostgresCellFormatter.swift", "static func unreadable(", "static func unreadableGone(")
+        mutate(no_fallback, "platform/macos/Core/PostgresCellFormatter.swift", "static func unreadable(", "static func unreadableGone(")
         cases.append(("诚实兜底被删", True, check(no_fallback)))
 
         no_test = fresh(pathlib.Path(tmp) / "no-test")
-        mutate(no_test, "Tests/PostgresCellFormatterTests.swift", "func testTimeWithZoneEastAndWest()",
+        mutate(no_test, "platform/macos/Tests/PostgresCellFormatterTests.swift", "func testTimeWithZoneEastAndWest()",
                "func testTimeAndZone()")
         cases.append(("单测锚点被改名", True, check(no_test)))
 

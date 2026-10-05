@@ -6,12 +6,12 @@
 2026-09-29 需求提出者要求「增加一个 theme 主题选项」，并指出 Linux 版早有**豆芽绿 / 玫瑰金 / 科技蓝**
 三选一。于是令牌值从「一套」变成「**三套**」，而这件事有一个单测天然守不住的地方：
 
-    · 单测（`Tests/DesignTokensTests.swift` / `DesignThemeTests.swift`）与新主题
+    · 单测（`platform/macos/Tests/DesignTokensTests.swift` / `DesignThemeTests.swift`）与新主题
       **用同一份实现**算对比度（`ColorContrast`）。没错，但"判据与被判对象同源"意味着
       —— 如果值表里某一档被改坏、或有人**新加一套表**却漏了某个角色，只会红在同一个实现里；
     · 更要紧的是"**主题名与 Linux 侧对齐**""**待值登记还在**"这两件事**根本不是单测能看的**：
       它们是跨文档的事实（`Docs/design/外观方案-v1.md` §9 的表 / `Docs/发布计划.md` 的待输入表 /
-      `Core/Localization.swift` 的双语文案）。
+      `platform/macos/Core/Localization.swift` 的双语文案）。
 
 本脚本因此做了两件与单测互补的事：
     ① **独立复算**：用 Python 自己重新实现 WCAG 相对亮度 / 对比度 / 表面距离，
@@ -20,7 +20,7 @@
 
 判据（任一不过即失败）
 ----------------------
-A. **主题集**：`Core/DesignTheme.swift` 的 `case <名> = "<id>"` 集合与顺序必须等于台账里的三个
+A. **主题集**：`platform/macos/Core/DesignTheme.swift` 的 `case <名> = "<id>"` 集合与顺序必须等于台账里的三个
    （`tech-blue` / `bean-green` / `rose-gold` / `stardust`），且 `DesignTheme.all` 把四个主题**都**列了出来
    （列漏一个 = 用户选不到它）。
 B. **四套值表角色齐全**：每个 `ThemePalette` 块必须含全部 20 个字段（18 个色角色 + 发丝线两参数），
@@ -31,11 +31,11 @@ C. **独立复算门槛**（本脚本自己实现，不看 Swift 的实现）：
    强调家族按角色 ≥4.5（文字链接）与 ≥3.0（图标线，基准 = 深色对 window、浅色对白）/
    语法六档两两不同且各自过关 / 深色五档明度严格递增 / 浅色 content 最亮 /
    表面之间距离 ≥0.02 / 浅色发丝线比 content 暗。
-D. **语法色必须仍挂在家族角色上**：`Core/DesignTokens.swift` 的 `SyntaxTone.color(in:)` 六行映射
+D. **语法色必须仍挂在家族角色上**：`platform/macos/Core/DesignTokens.swift` 的 `SyntaxTone.color(in:)` 六行映射
    逐行对账（keyword→accentGlow / string→warm / number→teal / function→accent /
    identifier→primary / comment→tertiary）—— 谁把某个语法色改回硬编码，六档就与家族脱钩。
 E. **主题名与 Linux 侧对齐 + 待值登记成对**：
-   ① `Core/Localization.swift` 里四个主题名键的中文值必须是「科技蓝 / 豆芽绿 / 玫瑰金 / 星空紫」，
+   ① `platform/macos/Core/Localization.swift` 里四个主题名键的中文值必须是「科技蓝 / 豆芽绿 / 玫瑰金 / 星空紫」，
       且 `Docs/design/外观方案-v1.md` §9 的主题表里三行**同名**（双向覆盖，缺一即红）；
    ② 有推导主题（`isDerivedDraft`）就必须 ① 值表**紧挨着的那段注释**里标着「推导草案」
       （§9.1 的原话）② `Docs/发布计划.md` 的待输入表里登记着「豆芽绿 / 玫瑰金 色值（Linux 侧）」
@@ -58,9 +58,9 @@ G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也
 `L-153` 把星云皮肤落进产品时**如实登记了**一处判据缺口：皮肤"真的画了 / 关了真回纯色 /
 别的主题真的不画"三件事当时**没有任何门禁在看**，现有的判据只证了"编译进包 / 无裸色值 /
 台账对齐"。判据 I 补的就是"存在、开关与三层表面"这一半（另一半是**像素**判据，
-在 `TestsUISnapshot/NebulaSkinProbeTests.swift`；静态与像素的分工写在那个文件头）：
+在 `platform/macos/TestsUISnapshot/NebulaSkinProbeTests.swift`；静态与像素的分工写在那个文件头）：
 
-  ① **规则只有一处出处**：键 / 缺省值 / 读法 / 生效条件全在 `Core/NebulaSkinPreference.swift`
+  ① **规则只有一处出处**：键 / 缺省值 / 读法 / 生效条件全在 `platform/macos/Core/NebulaSkinPreference.swift`
      —— 键的字面量在 `Core`+`App`+`Platform`+`CLI` 里**只许出现一次**（写两处 ⇒ 改一处就让
      老用户的开关选择静默失效）；读法逐字必须是 `object(forKey:) as? Bool ?? 缺省`
      （`bool(forKey:)` 对"从未设过"返回 `false` ⇒ 缺省值被静默改成关）；
@@ -93,22 +93,22 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-THEMES_SWIFT = "Core/DesignTheme.swift"
-TOKENS_SWIFT = "Core/DesignTokens.swift"
-LOCALIZATION_SWIFT = "Core/Localization.swift"
+THEMES_SWIFT = "platform/macos/Core/DesignTheme.swift"
+TOKENS_SWIFT = "platform/macos/Core/DesignTokens.swift"
+LOCALIZATION_SWIFT = "platform/macos/Core/Localization.swift"
 DESIGN_DOC = "Docs/design/外观方案-v1.md"
 RELEASE_PLAN = "Docs/发布计划.md"
-APPEARANCE_SWIFT = "App/Views/AppearanceSheet.swift"
-THEME_MANAGER_SWIFT = "App/DesignThemeManager.swift"
+APPEARANCE_SWIFT = "platform/macos/App/Views/AppearanceSheet.swift"
+THEME_MANAGER_SWIFT = "platform/macos/App/DesignThemeManager.swift"
 
 # ---- 判据 H（两轴正交，队列 L-85）的台账（每条都带理由）-------------------------------------
 
-APPEARANCE_PREF_SWIFT = "Core/AppearancePreference.swift"     # 深浅轴（三态）的类型与落盘键
-APP_STATE_SWIFT = "App/AppState.swift"                        # 深浅档的写盘点
-AXES_TESTS_SWIFT = "Tests/AppearanceAxesTests.swift"          # 两轴的单测（真值表 / 正交 / 矩阵 / 门槛）
-AXES_PROBE_SWIFT = "TestsUISnapshot/AppearanceAxesProbeTests.swift"  # 真管理器 + 真 UserDefaults 上的探针
-SNAPSHOT_KIT_SWIFT = "TestsUISnapshot/UISnapshotKit.swift"    # 取色口子（像素断言）
-PANELS_TESTS_SWIFT = "TestsUISnapshot/UISnapshotPanelsTests.swift"   # 主题面板快照的角像素断言
+APPEARANCE_PREF_SWIFT = "platform/macos/Core/AppearancePreference.swift"     # 深浅轴（三态）的类型与落盘键
+APP_STATE_SWIFT = "platform/macos/App/AppState.swift"                        # 深浅档的写盘点
+AXES_TESTS_SWIFT = "platform/macos/Tests/AppearanceAxesTests.swift"          # 两轴的单测（真值表 / 正交 / 矩阵 / 门槛）
+AXES_PROBE_SWIFT = "platform/macos/TestsUISnapshot/AppearanceAxesProbeTests.swift"  # 真管理器 + 真 UserDefaults 上的探针
+SNAPSHOT_KIT_SWIFT = "platform/macos/TestsUISnapshot/UISnapshotKit.swift"    # 取色口子（像素断言）
+PANELS_TESTS_SWIFT = "platform/macos/TestsUISnapshot/UISnapshotPanelsTests.swift"   # 主题面板快照的角像素断言
 # 深浅轴的三态（顺序 = 界面上列出的顺序；与 `AppearancePreference` 的 case 名逐字相同）。
 AXIS_STATES = ("followSystem", "alwaysDark", "alwaysLight")
 # 系统当前深浅两态：`followSystem` 这一档必须在**两态**下都取得到值、都过门槛。
@@ -141,12 +141,12 @@ AXIS_TEST_CASES = {
 MIN_AXIS_SITES = 30   # 判据 H：判点处数下限（空跑防护：扫描面被削即红）
 
 # ---- 判据 I（星云皮肤：存在 / 开关 / 三层表面；队列 L-155）的台账（每条都带理由）----------------
-NEBULA_SWIFT = "App/Views/NebulaBackground.swift"          # 绘制侧（Canvas + 三层强度）
-NEBULA_PREF_SWIFT = "Core/NebulaSkinPreference.swift"      # 规则的唯一出处（键 / 缺省 / 读法 / 生效条件）
-MAIN_WINDOW_SWIFT = "App/Views/MainWindow.swift"           # 侧栏与内容区两层落点的所在
-LOWER_PANE_SWIFT = "App/Views/LowerPaneView.swift"         # 下方面板那一层落点的所在
-NEBULA_PROBE_SWIFT = "TestsUISnapshot/NebulaSkinProbeTests.swift"   # 像素级证据（三张主角 + 对照件）
-NEBULA_TESTS_SWIFT = "Tests/NebulaSkinPreferenceTests.swift"        # 规则的单测（默认开 / 重开仍关）
+NEBULA_SWIFT = "platform/macos/App/Views/NebulaBackground.swift"          # 绘制侧（Canvas + 三层强度）
+NEBULA_PREF_SWIFT = "platform/macos/Core/NebulaSkinPreference.swift"      # 规则的唯一出处（键 / 缺省 / 读法 / 生效条件）
+MAIN_WINDOW_SWIFT = "platform/macos/App/Views/MainWindow.swift"           # 侧栏与内容区两层落点的所在
+LOWER_PANE_SWIFT = "platform/macos/App/Views/LowerPaneView.swift"         # 下方面板那一层落点的所在
+NEBULA_PROBE_SWIFT = "platform/macos/TestsUISnapshot/NebulaSkinProbeTests.swift"   # 像素级证据（三张主角 + 对照件）
+NEBULA_TESTS_SWIFT = "platform/macos/Tests/NebulaSkinPreferenceTests.swift"        # 规则的单测（默认开 / 重开仍关）
 PROBE_RUNNER_SH = "Scripts/run-manual-verification-probes.sh"       # 探针的跑法（FILTER 是唯一入口）
 NEBULA_TOGGLE_KEY = "ui.nebulaSkin"                        # 落盘键（键名就是契约）
 NEBULA_KEY_DECL = f'public static let key = "{NEBULA_TOGGLE_KEY}"'
@@ -183,7 +183,7 @@ MIN_NEBULA_SITES = 22   # 判据 I：判点处数下限（空跑防护）
 
 # ---- 台账式常量（每条都带理由；理由为空即红）-------------------------------------------------
 
-# 主题 id 的**声明顺序**（= `Core/DesignTheme.swift` 里 case 的书写顺序；与 Linux 侧同名）。
+# 主题 id 的**声明顺序**（= `platform/macos/Core/DesignTheme.swift` 里 case 的书写顺序；与 Linux 侧同名）。
 # 2026-10-01（T-20261001-031）：加第 4 个「星空紫」（需求提出者要的「比科技蓝更梦幻」那一档）。
 # 认的是**声明顺序**，不是界面顺序 —— 界面顺序（`DesignTheme.all`，科技蓝打头）由判据 A 另判。
 THEME_IDS = ["tech-blue", "bean-green", "rose-gold", "stardust"]
@@ -211,7 +211,7 @@ AUX_ROLES = ("textTertiary",)                          # 辅助：≥3.0
 LINK_ROLES = ("accentGlow", "accentTeal", "accentWarm")  # 会落到文字 / 链接上：≥4.5
 ICON_ROLES = ("accent", "accentSoft")                   # 只做图标线：≥3.0
 
-# 语法六档 → 家族角色（判据 D 的对照表；改这张表要同时改 `Core/DesignTokens.swift` 与文档）。
+# 语法六档 → 家族角色（判据 D 的对照表；改这张表要同时改 `platform/macos/Core/DesignTokens.swift` 与文档）。
 SYNTAX_BINDING = {
     "keyword": "accentGlow",
     "identifier": "primary",
@@ -295,7 +295,7 @@ def distance(lhs: int, rhs: int) -> float:
 # ---------------------------------------------------------------- 解析
 
 def parse_palettes(text: str) -> dict[str, dict]:
-    """从 `Core/DesignTheme.swift` 解析出每套值表：{表名: {字段: 值}}。"""
+    """从 `platform/macos/Core/DesignTheme.swift` 解析出每套值表：{表名: {字段: 值}}。"""
     palettes: dict[str, dict] = {}
     for name, body in PALETTE_BLOCK.findall(text):
         entry: dict = {"_colors": {}, "_hairlineLight": None, "_hairlineAlpha": None}
@@ -905,7 +905,7 @@ def check_nebula_skin(root: pathlib.Path) -> tuple[list[Issue], int]:
 
     与像素探针的分工：这里判**结构上的事实**（规则在哪、条件写没写对、落点在不在、开关接没接上、
     探针有没有被挂进跑法）；「真的画了 / 关了真回纯色 / 别的主题不画」由
-    `TestsUISnapshot/NebulaSkinProbeTests.swift` 逐像素判。两条都不能省：
+    `platform/macos/TestsUISnapshot/NebulaSkinProbeTests.swift` 逐像素判。两条都不能省：
     静态判据看不见"画出来是空的"，像素判据看不见"还有第二处条件在别处等着分叉"。
     """
     issues: list[Issue] = []
@@ -1063,8 +1063,8 @@ def _fixture(base: pathlib.Path) -> pathlib.Path:
         target = base / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / relative, target)
-    # 判据 I ④ 要**扫** `App/` 下的所有 `.swift`（判"三层表面各自恰有一处落点"），
-    # 所以 `App/Views/` 里的其它视图也要一起搬进夹具 —— 只搬"判据直接点名的那几份"的话，
+    # 判据 I ④ 要**扫** `platform/macos/App/` 下的所有 `.swift`（判"三层表面各自恰有一处落点"），
+    # 所以 `platform/macos/App/Views/` 里的其它视图也要一起搬进夹具 —— 只搬"判据直接点名的那几份"的话，
     # 复制一份落点到别的视图上时夹具根本看不见（那样负例就是假绿）。
     for path in sorted((ROOT / "App").rglob("*.swift")):
         relative = path.relative_to(ROOT)

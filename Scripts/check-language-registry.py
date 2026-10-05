@@ -16,26 +16,26 @@ FR-EDIT-38 ① 要的口径是「**新增语言不改核心代码**」：语言�
    同样不报错。
 
 ②的覆盖面（Alpha 2 = 常见编程语言前 10）与④（认不出如实纯文本）由
-`Tests/CodeLanguageRegistryTests.swift` 逐条量；本判据管的是**形状**：知识与标识分别在
+`platform/macos/Tests/CodeLanguageRegistryTests.swift` 逐条量；本判据管的是**形状**：知识与标识分别在
 哪个文件、扩展名有没有两个主人、颜色是不是从令牌取的。
 
 ## 判据
 
 - **A 形状禁令**：语言的**消费方**文件里不许出现"按语言身份分支"的写法
   （`language == .html` / `case .sql:` …）—— 语言知识只允许住在
-  `Core/CodeLanguageDefinitions.swift`。逐处点名 `文件:行号`。
+  `platform/macos/Core/CodeLanguageDefinitions.swift`。逐处点名 `文件:行号`。
   例外走台账 `Scripts/language-registry-exemptions.json`（默认**空**，每条必须命中、理由不许空）。
 - **B 登记自洽**：每条登记项必须给全（`displayName` / `fileExtensions` / `syntax`，
   且 `isCode` 为真者必须有注释规则与字符串界定符）；`TextLanguage` 的标识行与登记项
   **同集合**；一个扩展名 / 文件名只能有一个主人。
-- **C 主题令牌**（③）：高亮色走 `SyntaxTone`（`Core/DesignTokens.swift` 定义、编辑器只用
+- **C 主题令牌**（③）：高亮色走 `SyntaxTone`（`platform/macos/Core/DesignTokens.swift` 定义、编辑器只用
   `Theme.nsColor(SyntaxTone.…)` 取），两个编辑器文件里不许出现裸色值。
 - **E 默认视图的消费者唯一**（队列 `L-149` 剩余②）：登记表里声明「默认用浏览器打开」
-  （`defaultView: .browser`）的语言**恰好**是 HTML；`App/` 下读 `defaultView` 的文件
-  **恰好**是台账里那一个（`App/WorkspaceTabsModel.swift`，双向对账），且它必须真的把这一档
+  （`defaultView: .browser`）的语言**恰好**是 HTML；`platform/macos/App/` 下读 `defaultView` 的文件
+  **恰好**是台账里那一个（`platform/macos/App/WorkspaceTabsModel.swift`，双向对账），且它必须真的把这一档
   交给浏览器那一侧（交接锚点 `openInBrowserTab`）。多一处 = 又一条自己决定「用什么打开」的路，
   将来往登记表里加类型时会被漏掉一半；一处都不读 = 口径没落地（`.html` 照旧当文本打开）。
-- **D 空跑防护**：解析到的登记项数 / 标识行数 / 消费方文件数 / `App/` 文件数几条下限，低了即判红
+- **D 空跑防护**：解析到的登记项数 / 标识行数 / 消费方文件数 / `platform/macos/App/` 文件数几条下限，低了即判红
   （正则失配 ⇒ 零命中 ⇒ 假绿，这是这类判据最经典的坏法）。
 - **判据自己的证据**：`--self-test`（**11 例**）：夹具一律建在临时目录的副本上，
   写坏 ⇒ 判红且点名、还原 ⇒ 绿，末例核对真仓库逐字节未变。
@@ -43,7 +43,7 @@ FR-EDIT-38 ① 要的口径是「**新增语言不改核心代码**」：语言�
 ## 边界（如实登记）
 
 - A 只扫**语言消费方那一族文件**（词法器 / 登记 / 判语言 / 补全 / 两个编辑器 / CLI），
-  不是全仓扫描：`Core/` 里有几百个文件，全扫会把"别的事情里恰好出现的 `.go`"当成违规，
+  不是全仓扫描：`platform/macos/Core/` 里有几百个文件，全扫会把"别的事情里恰好出现的 `.go`"当成违规，
   假阳性多了判据就会被绕过。
 - A 剥掉注释后再匹配：判据自己的注释里会**引用**反面写法（`language == .html` 这种），
   那是说明书不是代码 —— 不剥注释的话这条判据第一个红在它自己头上。
@@ -69,22 +69,22 @@ import sys
 import tempfile
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-DEFINITIONS = pathlib.Path("Core/CodeLanguageDefinitions.swift")
+DEFINITIONS = pathlib.Path("platform/macos/Core/CodeLanguageDefinitions.swift")
 LEDGER = pathlib.Path("Scripts/language-registry-exemptions.json")
 
 # 语言消费方那一族（A 档的扫描面）——「谁按语言身份分支过，就是谁把知识从登记表里搬走了」。
 CONSUMER_FILES = (
-    "Core/CodeLexer.swift",
-    "Core/CodeSyntax.swift",
-    "Core/TextLanguage.swift",
-    "Core/CodeCompletion.swift",
-    "App/Views/CodeEditorView.swift",
-    "App/Views/SQLEditorView.swift",
-    "CLI/main.swift",
+    "platform/macos/Core/CodeLexer.swift",
+    "platform/macos/Core/CodeSyntax.swift",
+    "platform/macos/Core/TextLanguage.swift",
+    "platform/macos/Core/CodeCompletion.swift",
+    "platform/macos/App/Views/CodeEditorView.swift",
+    "platform/macos/App/Views/SQLEditorView.swift",
+    "platform/macos/CLI/main.swift",
 )
 # C 档：语法色的两个取色点（编辑器）与令牌自己的定义处。
-EDITOR_FILES = ("App/Views/CodeEditorView.swift", "App/Views/SQLEditorView.swift")
-TOKEN_FILE = "Core/DesignTokens.swift"
+EDITOR_FILES = ("platform/macos/App/Views/CodeEditorView.swift", "platform/macos/App/Views/SQLEditorView.swift")
+TOKEN_FILE = "platform/macos/Core/DesignTokens.swift"
 TOKEN_ANCHOR = "Theme.nsColor(SyntaxTone."
 BARE_COLOR = re.compile(r"NSColor\(\s*(?:calibrated|displayP3|device|sRGB)?\s*[Rr]ed\s*:|0x[0-9A-Fa-f]{6,8}\b")
 
@@ -94,14 +94,14 @@ BARE_COLOR = re.compile(r"NSColor\(\s*(?:calibrated|displayP3|device|sRGB)?\s*[R
 # 而**读它的地方只许有一处** —— 工作区打开文件那一步。多一处 = 又有一条路自己决定
 # 「这个文件用什么打开」，于是 `.svg` / `.pdf` 这类将来进登记表的类型会被漏掉一半；
 # 一处都不读 = 口径没落地（登记表里写着 `.browser`，实际还是当文本打开）。
-VIEW_CONSUMER_FILES = ("App/WorkspaceTabsModel.swift",)
+VIEW_CONSUMER_FILES = ("platform/macos/App/WorkspaceTabsModel.swift",)
 VIEW_CONSUMER_TOKEN = "defaultView"
 VIEW_HANDOFF_ANCHOR = "openInBrowserTab"
 VIEW_SOURCE_DIR = "App"
 # 数据面：声明「默认用浏览器打开」的语言。今天只有 HTML（`.html` / `.htm` / `.xhtml` 同一条登记）；
 # 将来多个类型就把它改成集合，判据的其余部分不用动。
 BROWSER_VIEW_LANGUAGE = "html"
-# 空跑防护：`App/` 下 `.swift` 的实测条数下限（扫描面被削 ⇒ 假绿）。
+# 空跑防护：`platform/macos/App/` 下 `.swift` 的实测条数下限（扫描面被削 ⇒ 假绿）。
 FLOOR_APP_FILES = 90
 
 # 空跑防护下限（本轮实测：18 条登记 / 18 行标识 / 7 个消费方文件）。
@@ -282,10 +282,10 @@ def check_default_view_consumers(root: pathlib.Path, browser_views: list[str]) -
     三个方向都要成立：
       ① 登记表里声明 `.browser` 的语言**恰好**是 `VIEW_CONSUMER_FILES` 之外的那一份数据
          （今天 = `html`）—— 声明没了 = 口径被删（`.html` 又当文本打开）；
-      ② `App/` 下读 `defaultView` 的文件**恰好**是台账里那一个（双向）；
+      ② `platform/macos/App/` 下读 `defaultView` 的文件**恰好**是台账里那一个（双向）；
       ③ 那一个文件必须真的把这一档**接出去**（`openInBrowserTab` 交接锚点）。
 
-    为什么钉在 `App/` 全量扫描上：这一档的坏法不是崩溃，而是「有人图快在别处写
+    为什么钉在 `platform/macos/App/` 全量扫描上：这一档的坏法不是崩溃，而是「有人图快在别处写
     `if 扩展名 == \"html\"`」—— 那正是 `FR-EDIT-38` ① 要清掉的形状，且症状要等下一种
     浏览器视图类型进登记表才暴露。
     """
@@ -396,7 +396,7 @@ FIXTURE_FILES = CONSUMER_FILES + EDITOR_FILES + (
     # E 档的唯一消费者：自检会改它，所以也要进「真仓库逐字节未变」的对照
     VIEW_CONSUMER_FILES[0],
 )
-# E 档要扫**整个 `App/`**（「别处也在读」这件事只能靠全量扫描发现）⇒ 夹具得把目录一起搬。
+# E 档要扫**整个 `platform/macos/App/`**（「别处也在读」这件事只能靠全量扫描发现）⇒ 夹具得把目录一起搬。
 FIXTURE_TREES = (VIEW_SOURCE_DIR,)
 
 
@@ -413,7 +413,7 @@ def build_fixture(source: pathlib.Path, target: pathlib.Path) -> None:
         destination = target / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source / relative, destination)
-    # E 档扫整个目录（「别处也在读」只能靠全量扫描发现）⇒ 把 `App/` 整棵搬过去。
+    # E 档扫整个目录（「别处也在读」只能靠全量扫描发现）⇒ 把 `platform/macos/App/` 整棵搬过去。
     for tree in FIXTURE_TREES:
         shutil.copytree(source / tree, target / tree, dirs_exist_ok=True)
 
@@ -451,13 +451,13 @@ def run_self_test() -> int:
             print(f"   例「{name}」⇒ exit {code}")
 
         expect_green("干净的夹具本身必须判绿（否则后面的红都不可信）")
-        expect_red(CASES[0], lambda t: mutate(t, "Core/CodeLexer.swift", "        while index < text.endIndex {",
+        expect_red(CASES[0], lambda t: mutate(t, "platform/macos/Core/CodeLexer.swift", "        while index < text.endIndex {",
                                               "        if language == .sql { return [] }\n        while index < text.endIndex {"))
         # CodeLexer 里没有 `language` 变量了：夹具注入的是身份判断的**形状**，判据看的就是形状。
         expect_red(CASES[1], lambda t: mutate(t, str(DEFINITIONS.as_posix()), 'comments: [CodeCommentStyle(block: "<!--", "-->")],', ""))
         expect_red(CASES[2], lambda t: mutate(t, str(DEFINITIONS.as_posix()), 'fileExtensions: ["go"],', 'fileExtensions: ["go", "js"],'))
         expect_red(CASES[3], lambda t: mutate(t, str(DEFINITIONS.as_posix()), '    public static let go = TextLanguage(registered: "go")\n', ""))
-        expect_red(CASES[4], lambda t: mutate(t, "App/Views/CodeEditorView.swift",
+        expect_red(CASES[4], lambda t: mutate(t, "platform/macos/App/Views/CodeEditorView.swift",
                                               "Theme.nsColor(SyntaxTone.keyword)",
                                               "NSColor(red: 1, green: 0, blue: 0, alpha: 1)"))
         expect_red(CASES[5], lambda t: mutate(t, str(DEFINITIONS.as_posix()), "        CodeLanguageDefinition(\n", "        // CodeLanguageDefinition(\n", 999))
@@ -465,7 +465,7 @@ def run_self_test() -> int:
         expect_red(CASES[6], lambda t: mutate(t, str(DEFINITIONS.as_posix()),
                                               "            defaultView: .browser\n",
                                               "            defaultView: .editor\n"))
-        expect_red(CASES[7], lambda t: mutate(t, "App/AppState.swift",
+        expect_red(CASES[7], lambda t: mutate(t, "platform/macos/App/AppState.swift",
                                               "import DoyahCore",
                                               "import DoyahCore\n"
                                               "// 判据夹具：第二个消费者\n"

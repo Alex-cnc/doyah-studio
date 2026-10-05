@@ -12,8 +12,8 @@
 
   ① **范围声明 ↔ 事实**：台账 `notes-offline-gate.json` 的 `scope` 里每个文件都必须存在
      （改名 / 删除后不更新台账 ⇒ 报红，而不是「扫了 0 个文件所以全绿」）。
-  ② **漏登一个文件也不行**：按文件名扫 `Core/`（`Note*` / `AICapture*` / `License*`）与
-     `App/`（`Note*`）下的实际文件，**必须**都在 `scope` 或 `outOfScope` 里 —— 新增笔记源文件
+  ② **漏登一个文件也不行**：按文件名扫 `platform/macos/Core/`（`Note*` / `AICapture*` / `License*`）与
+     `platform/macos/App/`（`Note*`）下的实际文件，**必须**都在 `scope` 或 `outOfScope` 里 —— 新增笔记源文件
      而忘了登记 ⇒ 当场报红（否则「往范围外新写一个文件」就是绕过本门禁的暗道）。
   ③ **与解耦门禁对账**：`scope` 里的 Core 侧文件集合必须等于
      `check-note-module-isolation.py` 的 `NOTE_SOURCES + ULTRA_SIDE_SOURCES`（**两份清单不许各说各话**）。
@@ -111,7 +111,7 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
     if core_dir.is_dir():
         for path in sorted(core_dir.glob("*.swift")):
             if path.name.startswith(CORE_PREFIXES):
-                on_disk.append(f"Core/{path.name}")
+                on_disk.append(f"platform/macos/Core/{path.name}")
     app_dir = root / "App"
     if app_dir.is_dir():
         for path in sorted(app_dir.rglob("*.swift")):
@@ -149,7 +149,7 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
         )
     else:
         isolation_core = {item for name in reconcile_names for item in lists.get(name, [])}
-        scope_core = {rel for rel in scope_paths if rel.startswith("Core/")}
+        scope_core = {rel for rel in scope_paths if rel.startswith("platform/macos/Core/")}
         for rel in sorted(isolation_core - scope_core):
             problems.append(f"{rel}：解耦门禁把它算作笔记源文件，本台账却没登记（两份清单不许各说各话）")
         for rel in sorted(scope_core - isolation_core):

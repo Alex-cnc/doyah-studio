@@ -2,7 +2,7 @@
 # 证据：命令行的失败输出**真的变成人话**了（开发循环 L-15）。
 #
 # 为什么要有它：L-15 把 CLI 里 57 处「打给用户看的失败行」统一接到可读化入口
-# （`CLI/CLIFailureText.swift`）。改的是**输出**，而输出最容易「改了但没人看得见」——
+# （`platform/macos/CLI/CLIFailureText.swift`）。改的是**输出**，而输出最容易「改了但没人看得见」——
 # 单测跑不到 CLI 的 `print`，文档也证不了「真的打出来了人话」。所以这里跑**真实现场**：
 #
 #   §1 连接类：诊断路径连不上的端口     → 人话 + 建议 + 错误码 + 原始串
@@ -144,7 +144,7 @@ rm -f "${BAD_JSON}"
 echo ""
 echo "== 6) 交叉核对：源码里没有裸的英文失败输出（与门禁同一条判据，这里独立算一遍）"
 BARE_FILE="$PWD/.build/cli-failure-bare-lines.txt"
-grep -n "error\.localizedDescription" CLI/main.swift \
+grep -n "error\.localizedDescription" platform/macos/CLI/main.swift \
     | grep -E "print\(|FileHandle.standardError.write\(" \
     | grep -v "CLIFailureText.oneLine" \
     | grep -v '"ok":false' \
@@ -153,14 +153,14 @@ BARE_COUNT="$(wc -l < "${BARE_FILE}" | tr -d ' ')"
 [ "${BARE_COUNT}" = "0" ] \
     && check "打给用户看的失败行都经同一个入口（裸英文 ${BARE_COUNT} 处）" 0 \
     || { echo "    裸的：$(head -3 "${BARE_FILE}")"; check "打给用户看的失败行都经同一个入口" 1; }
-ENTRY_CALLS="$(grep -cE "CLIFailureText\.(oneLine|block)\(" CLI/main.swift | tr -d ' ')"
+ENTRY_CALLS="$(grep -cE "CLIFailureText\.(oneLine|block)\(" platform/macos/CLI/main.swift | tr -d ' ')"
 [ "${ENTRY_CALLS}" -ge 57 ] \
     && check "入口真的在接线（${ENTRY_CALLS} 处 ≥ 57，反向棘轮）" 0 \
     || check "入口真的在接线（只剩 ${ENTRY_CALLS} 处）" 1
-grep -q "ConnectionFailure.describeNonConnection" CLI/CLIFailureText.swift \
+grep -q "ConnectionFailure.describeNonConnection" platform/macos/CLI/CLIFailureText.swift \
     && check "入口里中性归因那一档在位" 0 || check "入口里中性归因那一档在位" 1
-grep -q "CLIFailureText\.\(describeNonConnection\|describeServerSide\)(" CLI/main.swift \
-    && { check "可读化链只写一份（主路里没再抄一份 if/else 链）" 1; grep -n "describeNonConnection\|describeServerSide" CLI/main.swift; } \
+grep -q "CLIFailureText\.\(describeNonConnection\|describeServerSide\)(" platform/macos/CLI/main.swift \
+    && { check "可读化链只写一份（主路里没再抄一份 if/else 链）" 1; grep -n "describeNonConnection\|describeServerSide" platform/macos/CLI/main.swift; } \
     || check "可读化链只写一份（主路里没再抄一份 if/else 链）" 0
 
 echo ""

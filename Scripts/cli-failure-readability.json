@@ -2,14 +2,14 @@
   "generatedAt": "2026-09-28T08:20:00+08:00",
   "note": "命令行失败输出的**口径台账**（闭环第 15 项 `check-cli-failure-readability.py` 按它跟 CLI 源码对账）。**为什么要台账**：CLI 里把失败说给用户看的地方有几十处，原先各写各的（`print(\"列出表失败：\\(error.localizedDescription)\")`）—— 打出来是 `The operation couldn't be completed. (PostgresNIO.PSQLError error 1.)`，既不是人话也没给方向，而驱动其实说过原因（SQLSTATE / 驱动码）。第 7~8 轮只接上了**连接失败**与**查询失败**两条主路，剩下 57 处仍是英文调试串（L-15：同一条口径散在几十个 catch 里，改一处漏一处）。台账把「哪些输出必须走同一个入口」「哪些是口径里的例外」「哪些是还差一点的渠道字段」变成**声明**，门禁逐条与源码对账 —— 新增一处裸英文失败输出会当场报红。**第 47 轮（L-20 ③）追加「服务端原话」这一档**：可读化链由三档变四档，链本身收进 `CLIFailureText.description` 唯一一份。",
   "entryPoint": {
-    "file": "CLI/CLIFailureText.swift",
+    "file": "platform/macos/CLI/CLIFailureText.swift",
     "call": "CLIFailureText.oneLine(",
     "callAlternates": ["CLIFailureText.block("],
     "minCallSites": 57,
     "minCallSitesWhy": "**57 处**（L-15 一轮改造的处数：print / stderr 的所有用户可见失败行）。只查「入口存在」是不够的 —— 把调用删回去、或只写个不接线的 helper，门禁都得报红。处数写小了是台账撒谎（少掉的路径又退回英文调试串），写大了当场报红。**第 47 轮的口径**：入口有两种呈现（`oneLine` 一行 / `block` 多行），**加起来仍必须是 57** —— 三条主路（诊断 / 查询失败）改用多行版是「链收进 `description`」的必然结果，不是漏了两处；所以台账要记 `callAlternates`，只数一种形式会把这两处算成丢失（门禁与证据脚本都按**两种形式合计**判）。",
     "chainFunction": "static func description(_ error: any Error",
     "chainWhy": "**可读化链只写一份**：四档（`describe` → `describeNonConnection` → `describeServerSide` → 原样）收在 `CLIFailureText.description`，一行版取 `oneLine`、多行版取 `block`。第 47 轮把 CLI 三条主路（诊断 / 查询失败 / 对象树）里各抄一遍的 if/else 链**收掉**了 —— 否则「加一档」要回来改三处，正是 L-15 收掉的那种写法。所以 `chainOnlyIn` 之外的扫描文件里**不许**再出现 `ConnectionFailure.describeNonConnection(` / `describeServerSide(`。",
-    "chainOnlyIn": "CLI/CLIFailureText.swift",
+    "chainOnlyIn": "platform/macos/CLI/CLIFailureText.swift",
     "contract": [
       { "step": "ConnectionFailure.describe(", "why": "连接类先说话（人话 + 建议 + 错误码）" },
       { "step": "ConnectionFailure.describeNonConnection(", "why": "驱动报的、但不是连接类（取消 / 主动断开 / 协议层 / 未归类）走中性归因" },
@@ -19,7 +19,7 @@
     ]
   },
   "outputScan": {
-    "files": ["CLI/main.swift"],
+    "files": ["platform/macos/CLI/main.swift"],
     "printMarkers": ["print(", "FileHandle.standardError.write("],
     "rawMarker": "error.localizedDescription",
     "jsonExemptMarkers": ["{\"ok\":false", "jsonQuoted("],
@@ -68,7 +68,7 @@
   "channelHalves": {
     "why": "**「渠道字段两半」的判据**（队列 L-66；需求提出者 2026-09-28 拍板选 ①：机器载荷保原串一字不变、另加人话字段）。为什么必须机械判：这个字段**一次写入、两处消费** —— 谁把显示点改回 `.raw`、或把 JSON 里的人话字段摘掉，编译过、Core 单测也过（单测跑不到 CLI 的 JSON 拼装与 `print`），只有逐处对账看得见。",
     "type": {
-      "file": "Core/MaintenancePlan.swift",
+      "file": "platform/macos/Core/MaintenancePlan.swift",
       "requires": [
         "public struct FailureNote: Equatable, Sendable",
         "public let raw: String",
@@ -79,13 +79,13 @@
     },
     "producers": [
       {
-        "file": "App/AppState.swift",
+        "file": "platform/macos/App/AppState.swift",
         "anchor": "readable: ErrorPresenter.message(for: error)",
         "rawToken": "raw: error.localizedDescription,",
         "why": "界面侧的生产点：原串 = `error.localizedDescription`（一字不变），人话 = `ErrorPresenter.message(for:)`（与界面同一种语言）。"
       },
       {
-        "file": "CLI/main.swift",
+        "file": "platform/macos/CLI/main.swift",
         "anchor": "readable: CLIFailureText.oneLine(error)",
         "rawToken": "raw: error.localizedDescription,",
         "why": "命令行侧的生产点：人话走**同一个可读化入口**（四档链，不是另拼一句）；命令行没有界面语境 ⇒ 简体中文。"
@@ -93,25 +93,25 @@
     ],
     "displaySites": [
       {
-        "file": "CLI/main.swift",
+        "file": "platform/macos/CLI/main.swift",
         "template": "case .failed(let note): state = \"失败（\\({half})）\"",
         "allowed": ["readable"],
         "why": "计划列表里的失败态那一格（从前印的是原串）。判据是**带 `{half}` 占位符的模板**（门禁把它转成正则再判这一行取了哪一半）—— 写死整行文本的话，把它改回 `.raw` 会变成「锚点找不到」，判据就说不出真正的问题。"
       },
       {
-        "file": "CLI/main.swift",
+        "file": "platform/macos/CLI/main.swift",
         "template": ": \"❌ \\(item.id) 失败：\\(item.{half})\")",
         "allowed": ["human"],
         "why": "执行结果那一行（从前印的是原串）。"
       },
       {
-        "file": "App/AppState.swift",
+        "file": "platform/macos/App/AppState.swift",
         "template": "maintenanceMessage = L(.maintenanceFailedOne, task.id, failure.{half})",
         "allowed": ["readable"],
         "why": "界面底部的失败提示行（从前印的是原串）—— 界面这条路最容易被漏掉。"
       },
       {
-        "file": "Core/AICaptureUltra.swift",
+        "file": "platform/macos/Core/AICaptureUltra.swift",
         "template": ".aiNoteStateFailed, note.{half}",
         "allowed": ["readable"],
         "why": "**存进笔记的正文**：这行是会长久留着的产物，原串写进去就再也挑不出来 ⇒ 必须是 `.readable`。"
@@ -119,17 +119,17 @@
     ],
     "machineSites": [
       {
-        "file": "CLI/main.swift",
+        "file": "platform/macos/CLI/main.swift",
         "anchor": "failureFields = \",\\\"failureReason\\\":\\(jsonQuoted(note.raw)),\"",
         "why": "JSON 里的原串字段（**一字不变**：可搜、可上报、口径稳定）。"
       },
       {
-        "file": "CLI/main.swift",
+        "file": "platform/macos/CLI/main.swift",
         "anchor": "\"\\\"failureReasonHuman\\\":\\(jsonQuoted(note.readable))\"",
         "why": "JSON 里**新增**的人话字段（供界面 / MCP 客户端可选展示）—— 拍板口径 ① 的另一半。"
       },
       {
-        "file": "CLI/main.swift",
+        "file": "platform/macos/CLI/main.swift",
         "anchor": "\"\\\"detailHuman\\\":\\(jsonQuoted(item.human))}\"",
         "why": "执行结果数组里 `detail`（原串，不变）与人话 `detailHuman` 成对。"
       }
@@ -138,7 +138,7 @@
   "mcpHalves": {
     "why": "**MCP 工具载荷的「两半」判据**（队列 L-66 ㈡，第 54 轮落地；需求提出者 2026-09-28 拍板口径 ①：机器载荷保原串一字不变、另加人话字段）。为什么必须机械判：载荷形状从前是 `(text, isError)` 这个元组 —— 谁把 `finish` 收回去**一个串**、或把 `textHuman` 摘掉、或把 `text` 改成人话，**编译过、Core 单测也过**（单测钉得住类型，钉不到 CLI 那三处生产点与端到端载荷），只有逐处对账看得见。",
     "type": {
-      "file": "Core/MCPSession.swift",
+      "file": "platform/macos/Core/MCPSession.swift",
       "requires": [
         "public struct MCPToolResult: Equatable, Sendable",
         "public let raw: String",
@@ -149,34 +149,34 @@
       "why": "两半必须是**同一个值的两个字段**（只有一份值时「让人话上屏」就必然把机器载荷一起换成中文）；`finish` 只收这个类型 ⇒ **取哪一半必须在拼载荷那一行显式写出来**（`.raw` / `.readable`），编译器与门禁都看得见。`.single(...)` 是「**本来就没有原串可拆**」的显式出口（成功结果 / 缺参数的本地提示），不是默认值。"
     },
     "payload": {
-      "file": "Core/MCPSession.swift",
+      "file": "platform/macos/Core/MCPSession.swift",
       "anchor": "\"textHuman\": .string(human)",
       "forbidden": ["\"text\": .string(human)"],
       "why": "载荷里两半**成对**：`text` = 原串（一字不变、机器消费）、`textHuman` = 人话（供 MCP 客户端**可选**展示）。摘掉人话字段 = 口径 ① 只落了一半；`\"text\": .string(human)` = **对调**（把机器载荷换成中文）⇒ 出现即报红。"
     },
     "producer": {
-      "file": "CLI/main.swift",
+      "file": "platform/macos/CLI/main.swift",
       "anchor": "private static func mcpFailure(_ error: any Error, context: String? = nil) -> MCPToolResult",
       "rawToken": "let raw = error.localizedDescription",
       "readableToken": "let readable = context.map",
       "why": "三处失败（`listObjects` / `runMCPQuery` / `exportResult` 的写文件失败）**同一口径**：原串 = 一字不变的 `localizedDescription`，人话 = **同一个可读化入口** `CLIFailureText.oneLine`（不是另拼一句 —— 与维护任务那条生产点同款）。"
     },
     "sites": {
-      "file": "CLI/main.swift",
+      "file": "platform/macos/CLI/main.swift",
       "anchor": "return mcpFailure(error",
       "count": 3,
       "why": "**三处失败都在位**（少一处 = 那条路的失败又只剩原串、没有另一半）。写死处数是为了「少一处也看得见」：只查 helper 存在的话，把某一处改回 `.single(error.localizedDescription, isError: true)` 门禁照样绿。"
     }
   },
   "serverSideMessage": {
-    "coreFile": "Core/ConnectionFailure.swift",
+    "coreFile": "platform/macos/Core/ConnectionFailure.swift",
     "definition": "public static func describeServerSide(",
     "coreRequires": ["sqlState: psql.serverInfo?[.sqlState]", "message: psql.serverInfo?[.message]", "readableServerText(raw)", ".serverSideSaid"],
-    "entryFile": "CLI/CLIFailureText.swift",
+    "entryFile": "platform/macos/CLI/CLIFailureText.swift",
     "entryCall": "ConnectionFailure.describeServerSide(",
     "beforeFallback": "return raw",
-    "otherCallers": ["App/Utilities/ErrorPresenter.swift"],
-    "why": "**「serverInfo.message 不许被丢」这条判据的落点**（队列 L-20 ③）。两件事都要机械可查：① **能力还在** —— `Core/ConnectionFailure.swift` 里那一档必须真的读 `serverInfo` 的两格（`.sqlState` / `.message`）、真的经 `readableServerText`（乱码先抽 ASCII）、真的走语言表（`.serverSideSaid`，Core 里不写字面量）；② **接线在位且顺序对** —— 入口 `CLI/CLIFailureText.swift` 必须在「认不出就原样返回」**之前**调它（顺序反了等于这一档永远走不到：R-58 那种「没人调用的好话」），且 App 侧 `ErrorPresenter` 也要接（否则「有英文译文却只被 CLI 的中文语境引用」，正是 L-47 刚收掉的死译文形态）。缺码或缺话时**不给**这一档（退回原样，与改动前逐字一致）—— 这条由单测钉住。"
+    "otherCallers": ["platform/macos/App/Utilities/ErrorPresenter.swift"],
+    "why": "**「serverInfo.message 不许被丢」这条判据的落点**（队列 L-20 ③）。两件事都要机械可查：① **能力还在** —— `platform/macos/Core/ConnectionFailure.swift` 里那一档必须真的读 `serverInfo` 的两格（`.sqlState` / `.message`）、真的经 `readableServerText`（乱码先抽 ASCII）、真的走语言表（`.serverSideSaid`，Core 里不写字面量）；② **接线在位且顺序对** —— 入口 `platform/macos/CLI/CLIFailureText.swift` 必须在「认不出就原样返回」**之前**调它（顺序反了等于这一档永远走不到：R-58 那种「没人调用的好话」），且 App 侧 `ErrorPresenter` 也要接（否则「有英文译文却只被 CLI 的中文语境引用」，正是 L-47 刚收掉的死译文形态）。缺码或缺话时**不给**这一档（退回原样，与改动前逐字一致）—— 这条由单测钉住。"
   },
   "debugDumps": {
     "marker": "String(reflecting: error)",

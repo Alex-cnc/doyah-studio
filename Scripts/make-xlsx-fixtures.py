@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成 .xlsx 读取测试的夹具（FR-IO-06），产物入库在 `Tests/Fixtures/xlsx/`。
+"""生成 .xlsx 读取测试的夹具（FR-IO-06），产物入库在 `platform/macos/Tests/Fixtures/xlsx/`。
 
 为什么要**手写 OOXML** 而不是用 openpyxl：
     夹具要覆盖的是"真实 Excel 里常见、但自己写文件时想不到"的形状 —— 共享字符串、
@@ -22,7 +22,7 @@ import pathlib
 import sys
 import zipfile
 
-OUT = pathlib.Path("Tests/Fixtures/xlsx")
+OUT = pathlib.Path("platform/macos/Tests/Fixtures/xlsx")
 
 CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

@@ -12,10 +12,10 @@
 
 判据：
 
-- **A 唯一出处**：提供商宿主名（**从 `Core/AgentProviderPreset.swift` 里解析出来**，不手抄一份）
-  只许出现在那个文件里；`App/` / `Core/` / `Platform/` / `CLI/`（除目录文件与语言表）
+- **A 唯一出处**：提供商宿主名（**从 `platform/macos/Core/AgentProviderPreset.swift` 里解析出来**，不手抄一份）
+  只许出现在那个文件里；`platform/macos/App/` / `platform/macos/Core/` / `Platform/` / `platform/macos/CLI/`（除目录文件与语言表）
   命中即判红，逐处点名 `文件:行号`。
-- **B 界面接线**：`App/Views/AgentSettingsSheet.swift` 必须真的消费目录 ——
+- **B 界面接线**：`platform/macos/App/Views/AgentSettingsSheet.swift` 必须真的消费目录 ——
   ① 提供商下拉遍历 `AgentProviderCatalog.all` ② 选中值 = 稳定标识（`.tag(preset.id)`）
   ③ 模型下拉内容取自契约层（`modelOptions(currentModel: model)`）
   ④ `.task` 里按端点**恢复选中**（重开面板不许落回自定义）
@@ -26,12 +26,12 @@
   这是这类判据最经典的坏法）。
 - **判据自己的证据**：`--self-test`（**9 例**）。
 
-**与 Core 单测的分工（如实登记）**：`Tests/AgentProviderPresetTests.swift` 判**类型行为**
+**与 Core 单测的分工（如实登记）**：`platform/macos/Tests/AgentProviderPresetTests.swift` 判**类型行为**
 （端点匹配、模型下拉内容、本地判定同源、不许有凭据字段）；本判据判**盘上源码的形状**
 （端点有没有第二个主人、界面有没有接上）—— 后者单测看不见。两处**故意有一处重叠**
 （标识 / 端点唯一）：单测管「运行时是真唯一」，这里管「改了源码但没跑单测也拦得住」。
 
-**边界（如实登记）**：`Tests/` 与 `Docs/` 不在 A 的扫描面（判据自己的夹具要用真端点当输入；
+**边界（如实登记）**：`platform/macos/Tests/` 与 `Docs/` 不在 A 的扫描面（判据自己的夹具要用真端点当输入；
 三书里引一句地址是叙述不是实现）。这条判据也不管**模型名新旧**（服务商上新比本仓发版快，
 清单是起点不是白名单，用户永远可以自己填）。
 
@@ -55,9 +55,9 @@ import tempfile
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
 
-OWNER = "Core/AgentProviderPreset.swift"
-SHEET = "App/Views/AgentSettingsSheet.swift"
-LANGUAGE = "Core/Localization.swift"
+OWNER = "platform/macos/Core/AgentProviderPreset.swift"
+SHEET = "platform/macos/App/Views/AgentSettingsSheet.swift"
+LANGUAGE = "platform/macos/Core/Localization.swift"
 
 SCAN_DIRS = ("App", "Core", "Platform", "CLI")
 SKIP_FILES = {OWNER, LANGUAGE}
@@ -266,7 +266,7 @@ def report(problems: list, stats: dict, as_json: bool) -> int:
         for problem in problems:
             print(f"   · {problem}")
         return 1
-    print("✅ A 唯一出处：提供商宿主名只出现在 Core/AgentProviderPreset.swift")
+    print("✅ A 唯一出处：提供商宿主名只出现在 platform/macos/Core/AgentProviderPreset.swift")
     print("✅ B 界面接线：面板真的消费目录（遍历 / 选中值 / 模型内容 / 恢复选中 / 自动填充）")
     print("✅ C 形状：标识唯一 · 端点唯一 · 自定义恰一条且为空 · 标签键中英齐备")
     print("✅ D 空跑防护：预设条数 / 宿主数 / 扫描面三条下限都在")
@@ -277,7 +277,7 @@ def report(problems: list, stats: dict, as_json: bool) -> int:
 #
 # 纪律：一律在**临时副本**上写坏，末例核对真仓库逐字节未变。
 
-WATCHED = (OWNER, SHEET, LANGUAGE, "Core/AppError.swift")
+WATCHED = (OWNER, SHEET, LANGUAGE, "platform/macos/Core/AppError.swift")
 
 
 def _sha(path: pathlib.Path) -> str:
@@ -319,7 +319,7 @@ def self_test(root: pathlib.Path) -> int:
 
         # ② 红：任何一侧自己写死一个提供商端点（这一族缺陷的标准形状）
         stray = fresh("stray-endpoint")
-        (stray / "App/Views").mkdir(parents=True, exist_ok=True)
+        (stray / "platform/macos/App/Views").mkdir(parents=True, exist_ok=True)
         (stray / "App/Views/StrayEndpoint.swift").write_text(
             "import Foundation\n\nlet defaultEndpoint = \"https://api.deepseek.com/v1\"\n",
             encoding="utf-8",

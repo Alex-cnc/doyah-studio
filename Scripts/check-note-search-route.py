@@ -11,7 +11,7 @@
   ① **唯一生产点**：界面检索只能有一处（`AppState.searchNotes()` 里的
      `NoteLibrary.defaultLibrary().search(`）。0 处 = 悄悄退回内存过滤；多出一处 =
      出现第二条检索路（口径要重新登记）。
-  ② **视图不许自己过滤**：`App/Views/` 里出现 `NoteSearch.match(` 即红（点名 文件:行号）——
+  ② **视图不许自己过滤**：`platform/macos/App/Views/` 里出现 `NoteSearch.match(` 即红（点名 文件:行号）——
      「面板各查各的」正是这一族缺陷的复发形状。
   ③ **每条路线都有交代**：`NoteDatabase.SearchResult.Route` 的**每一个** case 都要在台账
      `note-search-route.json` 里登记处置（给文案键，或显式 `nil` 并写明为什么不必说），
@@ -22,7 +22,7 @@
      反向：台账里登记的键在语言表里找不到 ⇒ 陈旧报红。
 
 另外把「内存检索」的去向也钉住（L-44 的另一半）：`NoteSearch.match` 不再有界面调用者，
-允许的调用者只剩 `Tests/`（语义仍由单测钉着）—— `App/` 里命中即红，`Tests/` 里一处都没有
+允许的调用者只剩 `platform/macos/Tests/`（语义仍由单测钉着）—— `platform/macos/App/` 里命中即红，`platform/macos/Tests/` 里一处都没有
 也报红（那说明判据本身空转了）。
 
 **⑤「结果落地只有一个出口」（队列 `L-89` ㈡ 第 8 条 · 键盘快打竞态，2026-09-29 第 102 轮加）**：
@@ -53,11 +53,11 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent.parent
 LEDGER_DEFAULT = "Scripts/note-search-route.json"
 
-ROUTES_FILE = "Core/NoteStorage/NoteDatabase.swift"
-DISCLOSURE_FILE = "Core/NoteStorage/NoteSearchDisclosure.swift"
-LOCALIZATION_FILE = "Core/Localization.swift"
-UI_STATE_FILE = "App/AppState.swift"
-VIEWS_DIR = "App/Views"
+ROUTES_FILE = "platform/macos/Core/NoteStorage/NoteDatabase.swift"
+DISCLOSURE_FILE = "platform/macos/Core/NoteStorage/NoteSearchDisclosure.swift"
+LOCALIZATION_FILE = "platform/macos/Core/Localization.swift"
+UI_STATE_FILE = "platform/macos/App/AppState.swift"
+VIEWS_DIR = "platform/macos/App/Views"
 TESTS_DIR = "Tests"
 APP_DIR = "App"
 
@@ -194,14 +194,14 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
             )
         else:
             notes.append(f"界面检索生产点：{found} 处（{call_site.get('file', UI_STATE_FILE)}）")
-        # 生产点只许在声明的那一个文件里（`App/` 其余地方不许再开一条路）
+        # 生产点只许在声明的那一个文件里（`platform/macos/App/` 其余地方不许再开一条路）
         for path in sorted((root / APP_DIR).rglob("*.swift")):
             if path.name == Path(call_site.get("file", UI_STATE_FILE)).name:
                 continue
             hits = count_occurrences(read(path), snippet)
             if hits:
                 problems.append(
-                    f"{path.relative_to(root)}：App/ 里另有一条界面检索路（`{snippet}` × {hits}）—— "
+                    f"{path.relative_to(root)}：platform/macos/App/ 里另有一条界面检索路（`{snippet}` × {hits}）—— "
                     "口径要重新登记（唯一生产点是刻意的）"
                 )
 
@@ -274,7 +274,7 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
         # 生产点引用：交代键由映射引用、失败那句由界面引用
         referenced = f".{key}" in disclosure_text or f".{key}" in ui_text
         if not referenced:
-            problems.append(f"{why}：`{key}` 在 `NoteSearchDisclosure` 与 `App/` 里都没有调用点 —— 死键")
+            problems.append(f"{why}：`{key}` 在 `NoteSearchDisclosure` 与 `platform/macos/App/` 里都没有调用点 —— 死键")
         notes.append(f"文案键 `{key}`：{why}")
 
     # ⑤ 结果落地只有一个出口（队列 L-89 ㈡ 第 8 条）：判断在位 / 落地只此一处 / 两条分支都走它 /
@@ -367,12 +367,12 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
     else:
         app_hits = sum(count_occurrences(read(p), symbol) for p in (root / APP_DIR).rglob("*.swift"))
         if app_hits:
-            problems.append(f"`{symbol}` 在 `App/` 里还有 {app_hits} 处调用 —— 界面又回到内存过滤了")
+            problems.append(f"`{symbol}` 在 `platform/macos/App/` 里还有 {app_hits} 处调用 —— 界面又回到内存过滤了")
         test_hits = sum(count_occurrences(read(p), symbol) for p in (root / TESTS_DIR).rglob("*.swift"))
         if not test_hits:
-            problems.append(f"`{symbol}` 在 `Tests/` 里一处调用都没有 —— 语义没人钉住（判据空转）")
+            problems.append(f"`{symbol}` 在 `platform/macos/Tests/` 里一处调用都没有 —— 语义没人钉住（判据空转）")
         if not app_hits and test_hits:
-            notes.append(f"内存检索 `{symbol}`：App/ 0 处、Tests/ {test_hits} 处（只作参考实现留档）")
+            notes.append(f"内存检索 `{symbol}`：platform/macos/App/ 0 处、platform/macos/Tests/ {test_hits} 处（只作参考实现留档）")
 
     return problems, notes
 

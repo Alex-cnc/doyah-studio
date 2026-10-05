@@ -11,14 +11,14 @@
 所以把「只有一份」变成机械判据：
 
   ① **行内解析唯一**：`nextMarker`（行内标记扫描器）与 `linkMarker`（链接扫描器）都只许在
-     `Core/NoteBody.swift` 里出现 —— 别处命中即红（那是第二套行内解析的入口）；一处都没有也红
+     `platform/macos/Core/NoteBody.swift` 里出现 —— 别处命中即红（那是第二套行内解析的入口）；一处都没有也红
      （扫描面被削过 / 判据空转）。行内标记清单那一个字面量（``["`", "**", "*", "["]``）同理**只许一份**。
      链接扫描器是 2026-10-01（第 146 轮，队列 `L-137` 剩余③）补进来的：链接与粗体一样是**笔记侧
      那一份解析**的产物，别处再写一套链接解析就是同一族的病。
-  ② **块级模型只有一个产地**：`MarkdownBlock(` 的构造只许在 `Core/MarkdownDocument.swift` ——
-     `App/` / `Platform/` / `CLI/` 里出现即红（界面只渲染模型，不许自己造块：
+  ② **块级模型只有一个产地**：`MarkdownBlock(` 的构造只许在 `platform/macos/Core/MarkdownDocument.swift` ——
+     `platform/macos/App/` / `Platform/` / `platform/macos/CLI/` 里出现即红（界面只渲染模型，不许自己造块：
      造块就等于在自己那份里重新决定「什么算标题」）。
-  ③ **预览必须真同源**：`Core/MarkdownDocument.swift` 里必须**真的调用**笔记侧那个函数
+  ③ **预览必须真同源**：`platform/macos/Core/MarkdownDocument.swift` 里必须**真的调用**笔记侧那个函数
      （`NoteBodyProjection.parseInline(` 至少 4 处：标题 / 段落 / 表格 / 列表）。
      只写注释说「复用」不算 —— 这条判的是调用点。
   ④ **不引第三方 Markdown**：家规是「不引第三方」（笔记存储引擎当年就是这么定的）。
@@ -50,9 +50,9 @@ import tempfile
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
 
-INLINE_OWNER = "Core/NoteBody.swift"
-BLOCK_OWNER = "Core/MarkdownDocument.swift"
-PARSE_TESTS = "Tests/MarkdownDocumentTests.swift"
+INLINE_OWNER = "platform/macos/Core/NoteBody.swift"
+BLOCK_OWNER = "platform/macos/Core/MarkdownDocument.swift"
+PARSE_TESTS = "platform/macos/Tests/MarkdownDocumentTests.swift"
 
 INLINE_SCANNER = "nextMarker"
 LINK_SCANNER = "linkMarker"
@@ -62,7 +62,7 @@ SHARED_INLINE_CALL = "NoteBodyProjection.parseInline("
 
 SCAN_DIRS = ("Core", "App", "Platform", "CLI")
 TESTS_DIR = "Tests"
-DEPENDENCY_FILES = ("Package.swift", "project.yml")
+DEPENDENCY_FILES = ("platform/macos/Package.swift", "platform/macos/project.yml")
 
 FORBIDDEN_PACKAGES = (
     "MarkdownUI",
@@ -91,7 +91,7 @@ def rel(root: pathlib.Path, path: pathlib.Path) -> str:
 
 
 def swift_sources(root: pathlib.Path, problems: list[str]) -> dict[str, str]:
-    """扫描面：实现层四个目录 + `Tests/` 的全部 `.swift`。**目录不在 ⇒ 判红**（不许悄悄缩面）。"""
+    """扫描面：实现层四个目录 + `platform/macos/Tests/` 的全部 `.swift`。**目录不在 ⇒ 判红**（不许悄悄缩面）。"""
     sources: dict[str, str] = {}
     for dirname in SCAN_DIRS + (TESTS_DIR,):
         base = root / dirname
@@ -279,9 +279,9 @@ WATCHED = (
     INLINE_OWNER,
     BLOCK_OWNER,
     PARSE_TESTS,
-    "Package.swift",
-    "project.yml",
-    "Core/AppError.swift",   # 随便挑一个无关文件：证明「无关文件改了不误报」
+    "platform/macos/Package.swift",
+    "platform/macos/project.yml",
+    "platform/macos/Core/AppError.swift",   # 随便挑一个无关文件：证明「无关文件改了不误报」
 )
 
 
@@ -331,7 +331,7 @@ def self_test(root: pathlib.Path) -> int:
 
         # ② 红：预览侧又写了一份行内扫描器（这一族缺陷的标准形状）
         duplicate = fresh("inline-duplicate")
-        (duplicate / "App/Views").mkdir(parents=True, exist_ok=True)
+        (duplicate / "platform/macos/App/Views").mkdir(parents=True, exist_ok=True)
         (duplicate / "App/Views/MarkdownPreview.swift").write_text(
             "import Foundation\n\n/// 预览自己扫行内标记（本门禁必须抓住它）\n"
             "func scan(text: String) -> Bool { text.contains(\"**\") }\n"
@@ -348,7 +348,7 @@ def self_test(root: pathlib.Path) -> int:
 
         # ④ 红：界面自己造块（绕过契约层）
         stray = fresh("block-stray")
-        (stray / "App/Views").mkdir(parents=True, exist_ok=True)
+        (stray / "platform/macos/App/Views").mkdir(parents=True, exist_ok=True)
         (stray / "App/Views/MarkdownPreview.swift").write_text(
             "import Foundation\n\nfunc makeBlock() -> MarkdownBlock { MarkdownBlock(kind: .thematicBreak, sourceLine: 1) }\n",
             encoding="utf-8",
@@ -372,19 +372,19 @@ def self_test(root: pathlib.Path) -> int:
 
         # ⑦ 红：引入第三方 Markdown 库（import 行）
         third_party = fresh("third-party-import")
-        _patch(third_party / "Core/AppError.swift", "import Foundation", "import Foundation\nimport MarkdownUI")
+        _patch(third_party / "platform/macos/Core/AppError.swift", "import Foundation", "import Foundation\nimport MarkdownUI")
         cases.append(("引入第三方 Markdown 库（import）", bool(check(third_party)[0])))
 
         # ⑧ 红：依赖清单里加第三方 Markdown 包
         third_party_dep = fresh("third-party-dependency")
-        text = (third_party_dep / "Package.swift").read_text(encoding="utf-8")
+        text = (third_party_dep / "platform/macos/Package.swift").read_text(encoding="utf-8")
         text = text.replace(
-            "        .package(path: \"Vendor/sqlite3\"),",
-            "        .package(path: \"Vendor/sqlite3\"),\n"
+            "        .package(path: \"platform/macos/Vendor/sqlite3\"),",
+            "        .package(path: \"platform/macos/Vendor/sqlite3\"),\n"
             "        .package(url: \"https://github.com/gonzalezreal/swift-markdown-ui\", from: \"2.0.0\"),",
             1,
         )
-        (third_party_dep / "Package.swift").write_text(text, encoding="utf-8")
+        (third_party_dep / "platform/macos/Package.swift").write_text(text, encoding="utf-8")
         cases.append(("依赖清单里加第三方 Markdown 包", bool(check(third_party_dep)[0])))
 
         # ⑨ 红：解析层用例被删
@@ -406,7 +406,7 @@ def self_test(root: pathlib.Path) -> int:
 
         # ②b 红：**链接扫描器**出现第二份（2026-10-01 第 146 轮补 —— 与 ② 同一族的形状）
         duplicate_link = fresh("link-duplicate")
-        (duplicate_link / "App/Views").mkdir(parents=True, exist_ok=True)
+        (duplicate_link / "platform/macos/App/Views").mkdir(parents=True, exist_ok=True)
         (duplicate_link / "App/Views/MarkdownPreview.swift").write_text(
             "import Foundation\n\n/// 预览自己扫链接目标（本门禁必须抓住它）\n"
             "private func linkMarker(in text: Substring) -> Int? { nil }\n",

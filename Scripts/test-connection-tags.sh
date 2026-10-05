@@ -66,9 +66,9 @@ echo "$REAL" | head -3 | sed 's/^/  /'
 
 echo ""
 echo "== 5) 安全联动（单测覆盖，这里只做存在性核对）=="
-grep -q "forcesConfirmationForHighRisk" Core/ExecutionSafety.swift \
+grep -q "forcesConfirmationForHighRisk" platform/macos/Core/ExecutionSafety.swift \
     && check "ExecutionSafetyPolicy 有生产强制确认位" 0 || check "强制确认位" 1
-grep -q "ExecutionSafetyPolicy.policy(" App/AppState.swift \
+grep -q "ExecutionSafetyPolicy.policy(" platform/macos/App/AppState.swift \
     && check "AppState 的执行策略确实按连接外观推导（不是只加了字段没人用）" 0 || check "策略未接线" 1
 
 echo ""

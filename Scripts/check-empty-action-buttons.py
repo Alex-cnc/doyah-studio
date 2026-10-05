@@ -16,7 +16,7 @@
 
 ## 判据（四条，机械可查）
 
-A **双向对账**：`App/AppState.swift` 里每条「内容为空」守卫（条件里出现 `isEmpty`，
+A **双向对账**：`platform/macos/App/AppState.swift` 里每条「内容为空」守卫（条件里出现 `isEmpty`，
 或引用了台账登记的**判据属性**）必须逐条登记；台账里的条目若已不在源码里 ⇒ **陈旧判红**。
    ⇒ 新增一处"空就早退"当场被问："这一处是灰着、给理由，还是够不着按钮？"
 
@@ -30,7 +30,7 @@ C **`view-disabled-local`**（判据属性住在视图里，如 `SaveQuerySheet.
 D **`explain`**：守卫体里必须真的有一句给用户的话（`= L(…)` / `= ErrorPresenter…` /
   `throw …` / 赋值给 `*Message`、`*Error`）。挂了"给理由"的名、体里却只 `return` ⇒ 红。
 
-E **空跑防护**：扫到 0 条守卫、台账 0 条、`App/Views/` 一个文件都没有、点名的视图不存在 ⇒ 红。
+E **空跑防护**：扫到 0 条守卫、台账 0 条、`platform/macos/App/Views/` 一个文件都没有、点名的视图不存在 ⇒ 红。
 
 ## 做不到什么（如实写）
 
@@ -62,8 +62,8 @@ from pathlib import Path
 from typing import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
-STATE_FILE = "App/AppState.swift"
-VIEW_DIR = "App/Views"
+STATE_FILE = "platform/macos/App/AppState.swift"
+VIEW_DIR = "platform/macos/App/Views"
 LEDGER_PATH = "Scripts/empty-action-button-dispositions.json"
 
 FORMS = ("view-disabled", "view-disabled-local", "explain", "internal")
@@ -130,7 +130,7 @@ def _guard_block(lines: list[str], index: int, max_lines: int = 10) -> str:
 
 
 def scan_guards(repo: Path, predicates: set[str]) -> list[Sighting]:
-    """扫 `App/AppState.swift`：条件含 `isEmpty`，或引用了登记的判据属性。
+    """扫 `platform/macos/App/AppState.swift`：条件含 `isEmpty`，或引用了登记的判据属性。
 
     只认**单行到 `else`** 的守卫（行内 `else`）—— 多行条件不覆盖，这是有意的窄口径：
     宽口径要么靠括号配对（脆）、要么靠语法树（本工程没有 Swift 解析器）。
@@ -378,7 +378,7 @@ def dump_keys(repo: Path) -> int:
 
 
 def _fixture(repo: Path, dest: Path) -> None:
-    """最小夹具仓：判据只读 `App/`、台账与脚本本身（整仓 16 GB，不能整份拷 ——
+    """最小夹具仓：判据只读 `platform/macos/App/`、台账与脚本本身（整仓 16 GB，不能整份拷 ——
     第 59 轮第一版就是这么写的，11 例负例跑到超时）。"""
     dest.mkdir(parents=True, exist_ok=True)
     shutil.copytree(repo / "App", dest / "App", ignore=shutil.ignore_patterns(".build"))
@@ -392,7 +392,7 @@ def _snapshot(repo: Path) -> dict[str, str]:
     import hashlib
 
     out: dict[str, str] = {}
-    for rel in (STATE_FILE, LEDGER_PATH, "App/Views/NotesPanel.swift", "App/Views/SaveQuerySheet.swift"):
+    for rel in (STATE_FILE, LEDGER_PATH, "platform/macos/App/Views/NotesPanel.swift", "platform/macos/App/Views/SaveQuerySheet.swift"):
         path = repo / rel
         if path.exists():
             out[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -426,7 +426,7 @@ def self_test(repo: Path) -> int:
 
     @case("视图侧处置被删（去掉 .disabled）")
     def _drop_disabled(tmp: Path) -> str | None:
-        rewrite(tmp / "App/Views/NotesPanel.swift",
+        rewrite(tmp / "platform/macos/App/Views/NotesPanel.swift",
                 ".disabled(!appState.noteEditorHasContent)", "")
         return None if Checker(tmp).run() == 1 else "视图丢了 .disabled，门禁没说话"
 
@@ -466,19 +466,19 @@ def self_test(repo: Path) -> int:
 
     @case("视图本地锚点被删（SaveQuerySheet 不再灰着）")
     def _drop_local_anchor(tmp: Path) -> str | None:
-        rewrite(tmp / "App/Views/SaveQuerySheet.swift", ".disabled(trimmedName.isEmpty)", "")
+        rewrite(tmp / "platform/macos/App/Views/SaveQuerySheet.swift", ".disabled(trimmedName.isEmpty)", "")
         return None if Checker(tmp).run() == 1 else "视图本地处置被删，门禁没说话"
 
     @case("判据属性出现第二处定义")
     def _duplicate_predicate(tmp: Path) -> str | None:
-        rewrite(tmp / "App/Views/NotesPanel.swift",
+        rewrite(tmp / "platform/macos/App/Views/NotesPanel.swift",
                 "struct NotesEditorView: View {",
                 "struct NotesEditorView: View {\n    var noteEditorHasContent: Bool { true }")
         return None if Checker(tmp).run() == 1 else "判据出现两处定义，门禁没说话"
 
     @case("视图重新推导判据（唯一出处被破）")
     def _view_recomputes(tmp: Path) -> str | None:
-        rewrite(tmp / "App/Views/NotesPanel.swift",
+        rewrite(tmp / "platform/macos/App/Views/NotesPanel.swift",
                 "    var body: some View {",
                 "    private var hasContentAgain: Bool {\n"
                 "        !appState.noteEditorTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty\n"

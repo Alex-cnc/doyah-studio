@@ -43,7 +43,7 @@ TERMS = {
     "Objective-C / Cocoa 类型": r"\bNS[A-Z][A-Za-z]+\b|\bWKWebView\b|\bCF[A-Z][A-Za-z]+\b",
     "Apple 平台机制": r"(Keychain|钥匙串|entitlements?|App Sandbox|Info\.plist|XcodeGen|xcodebuild|ad-hoc|公证|Developer ID)",
     "macOS 专属 API/概念": r"(security-scoped|withSecurityScope|forkpty|TIOCSWINSZ|NSOpenPanel|NSTableView|NSTextView|\.icns)",
-    "Swift 生态依赖": r"\b(PostgresNIO|MySQLNIO|SwiftNIO|swift-tools|SwiftPM|Package\.swift|Vendor/)\b",
+    "Swift 生态依赖": r"\b(PostgresNIO|MySQLNIO|SwiftNIO|swift-tools|SwiftPM|Package\.swift|platform/macos/Vendor/)\b",
 }
 
 EXEMPT_MARK = "platform-ok"

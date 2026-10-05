@@ -6,7 +6,7 @@
 （第 10 / 11 / 12 / 13 轮各吃过一次：假绿占位图、注释里的假设、只在读图时才看得出来的语言混排、
 以及"有判据没人跑"）。本脚本把 9 种常见退化方式逐个写坏，断言门禁**真的退出码 1 并报出对的原因**。
 
-**只在临时副本上改**：把仓库的 `Core/Localization.swift`、`App/Views/RowDetailPanel.swift`、
+**只在临时副本上改**：把仓库的 `platform/macos/Core/Localization.swift`、`platform/macos/App/Views/RowDetailPanel.swift`、
 `Scripts/verify-all.sh`、`Scripts/copy-emphasis-exemptions.json` 拷到临时目录，在副本上写坏，
 跑门禁时用 `--root` 指过去。**仓库本身一个字节都不动**（末例断言这一点）。
 
@@ -32,8 +32,8 @@ CHECKER = "Scripts/check-copy-emphasis.py"
 
 # 夹具要拷哪些文件（够门禁的五条判据用即可，不必拷整棵树）。
 FIXTURE_FILES = (
-    "Core/Localization.swift",
-    "App/Views/RowDetailPanel.swift",
+    "platform/macos/Core/Localization.swift",
+    "platform/macos/App/Views/RowDetailPanel.swift",
     "Scripts/verify-all.sh",
     "Scripts/copy-emphasis-exemptions.json",
 )
@@ -81,7 +81,7 @@ def case(name: str, expect_code: int, expect_texts: list[str], mutate) -> None:
 
 def put_marker_into(root: pathlib.Path, key: str, language: str, marker: str = "**") -> None:
     """在副本的语言表里，把某个键的某个语言槽位加上标记（模拟"有人又把强调写进文案"）。"""
-    path = root / "Core/Localization.swift"
+    path = root / "platform/macos/Core/Localization.swift"
     text = path.read_text(encoding="utf-8")
     marker_at = text.index(f".{key}: [")
     slot = text.index(f".{language}: \"", marker_at)
@@ -108,7 +108,7 @@ def main() -> int:
 
     # 例 3：渲染点又出现 `LocalizedStringKey` ⇒ 判据 B 报红并指名文件与行号。
     def add_localized_string_key(root: pathlib.Path) -> None:
-        path = root / "App/Views/RowDetailPanel.swift"
+        path = root / "platform/macos/App/Views/RowDetailPanel.swift"
         text = path.read_text(encoding="utf-8")
         path.write_text(text.replace("Text(L(.rowDetailNoSelection))",
                                     "Text(LocalizedStringKey(L(.rowDetailNoSelection)))", 1), encoding="utf-8")
@@ -136,7 +136,7 @@ def main() -> int:
 
     # 例 6：语言表被掏空 / 正则失配 ⇒ 判据 C 报红（"零命中 = 通过"是假绿）。
     def empty_table(root: pathlib.Path) -> None:
-        (root / "Core/Localization.swift").write_text("public enum AppLanguage {}\n", encoding="utf-8")
+        (root / "platform/macos/Core/Localization.swift").write_text("public enum AppLanguage {}\n", encoding="utf-8")
 
     case("例 6 语言表解析不到条目判红（防静默）", 1, ["下限 1500"], empty_table)
 

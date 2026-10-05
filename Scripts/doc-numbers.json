@@ -392,7 +392,7 @@
     },
     {
       "key": "panel-root-frames",
-      "label": "App/Views 里「宽高都是数字字面量」的固定尺寸 `.frame(width:height:)` 处数（= 面板根 + 装饰）",
+      "label": "platform/macos/App/Views 里「宽高都是数字字面量」的固定尺寸 `.frame(width:height:)` 处数（= 面板根 + 装饰）",
       "value": 37,
       "unit": "处",
       "secondary": {

@@ -11,7 +11,7 @@ import Foundation
 //     ⇒ 混进样张链路会破坏上面那条判据。**营销物料与工程证据应分开。**
 //
 // 但「营销」不等于「自己编一套配色」：本件同样**编译期接真令牌**（入口 `Scripts/render-store-shot.sh`
-// 把 `Core/DesignTokens.swift` / `Core/DesignTheme.swift` 等一起编进来），底 / 字 / 强调色一律取
+// 把 `platform/macos/Core/DesignTokens.swift` / `platform/macos/Core/DesignTheme.swift` 等一起编进来），底 / 字 / 强调色一律取
 // `ThemePalette.of(.stardust)`；产品窗口那一块**直接贴渲染入口刚产出的真样张**（不重画）。
 // ⇒ 展示图里不可能出现产品没有的颜色。
 //
@@ -455,7 +455,7 @@ let lightSample = arguments[2]
 let outDirectory = arguments[3]
 try? FileManager.default.createDirectory(atPath: outDirectory, withIntermediateDirectories: true)
 
-print("展示图渲染器：配色唯一来源 = Core/DesignTheme.swift 的 stardust 值表；产品窗口 = 真样张")
+print("展示图渲染器：配色唯一来源 = platform/macos/Core/DesignTheme.swift 的 stardust 值表；产品窗口 = 真样张")
 
 var checks: [StoreCheck] = []
 let darkURL = renderStoreShot(samplePath: darkSample, isDark: true, label: "深色",

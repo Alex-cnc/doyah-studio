@@ -8,8 +8,8 @@ set -euo pipefail
 #   脚本里不许有色值字面量、必须编译真令牌。展示图要加标题 / 卖点 / 圆角 / 辉光这些
 #   **产品里没有的像素**，混进同一条链路会破坏那条判据。**营销物料与工程证据应分开。**
 #
-# 但「分开」只分**像素**，不分**色源**：本入口同样把 `Core/DesignTokens.swift` /
-# `Core/DesignTheme.swift` 一起 `swiftc` 编译（展示图的底 / 字 / 强调色全部取星空紫值表），
+# 但「分开」只分**像素**，不分**色源**：本入口同样把 `platform/macos/Core/DesignTokens.swift` /
+# `platform/macos/Core/DesignTheme.swift` 一起 `swiftc` 编译（展示图的底 / 字 / 强调色全部取星空紫值表），
 # 而产品窗口那一块**直接贴 `render-design-mock.sh` 刚产出的真样张**。
 # ⇒ 展示图里不可能出现产品里没有的颜色，也不会画着旧配色。
 #
@@ -40,11 +40,11 @@ cp "${ROOT}/Scripts/render-store-shot.swift" "${BUILD}/main.swift"
 echo "② 编译展示图渲染器（与 Core 令牌一起编：营销物料也不许自己编配色）"
 xcrun swiftc -O -o "${BUILD}/store-shot" \
   "${BUILD}/main.swift" \
-  "${ROOT}/Core/DesignTokens.swift" \
-  "${ROOT}/Core/DesignTheme.swift" \
-  "${ROOT}/Core/ColorContrast.swift" \
-  "${ROOT}/Core/AccentTheme.swift" \
-  "${ROOT}/Core/Localization.swift"
+  "${ROOT}/platform/macos/Core/DesignTokens.swift" \
+  "${ROOT}/platform/macos/Core/DesignTheme.swift" \
+  "${ROOT}/platform/macos/Core/ColorContrast.swift" \
+  "${ROOT}/platform/macos/Core/AccentTheme.swift" \
+  "${ROOT}/platform/macos/Core/Localization.swift"
 
 echo "③ 渲染深 / 浅各一张到 ${OUT}"
 "${BUILD}/store-shot" "${TMP}/样张-深色-星空紫.png" "${TMP}/样张-浅色-星空紫.png" "${OUT}"

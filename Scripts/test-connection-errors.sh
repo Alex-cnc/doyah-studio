@@ -53,7 +53,7 @@ echo ""
 echo "== 2) 主机名解析不了 =="
 OUT2="$(PGHOST=no-such-host.invalid PGPORT=5432 PGUSER=x PGPASSWORD="${DOYAH_TEST_PGPASSWORD}" PGDATABASE=x \
     "$CLI" -c "SELECT 1" 2>&1)"
-# 这一档 2026-09-26 之前报的是「与数据库的连接中断了」：实测（探针在 Tests/HostResolutionTests.swift）
+# 这一档 2026-09-26 之前报的是「与数据库的连接中断了」：实测（探针在 platform/macos/Tests/HostResolutionTests.swift）
 # 驱动会把解析失败压成 `PSQLError(code: serverClosedConnection)` 且 `underlying == nil` ——
 # 原因在驱动内部就丢了。现在改成**建连之前先解析一次**，因此这里断言的是"说解析、不说中断"。
 code=$?

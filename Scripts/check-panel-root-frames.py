@@ -23,7 +23,7 @@
     这条正是 L-58 那个缺陷下一次会被挡住的地方。
 
 判据（A~F）：
-    A 扫描完整性 · 双向对账：`App/Views/**/*.swift` 里每一处「宽高都是数字字面量」的 `.frame`
+    A 扫描完整性 · 双向对账：`platform/macos/App/Views/**/*.swift` 里每一处「宽高都是数字字面量」的 `.frame`
       恰好一条台账（按 `file` + `symbol` + `frame` 文本 + `count` 对账）；台账里**已不在盘上**
       的条目（陈旧）与盘上**没登记的**（新增）一样判红 —— 一条都不靠人眼。
     B 分类：`width >= panelRootMinWidth`（台账里声明，现为 400）必须是 `panel-root`，
@@ -89,7 +89,7 @@ FRAME_CALL = re.compile(r"\.frame\(")
 def strip_comments_and_strings(text: str) -> str:
     """剥掉行注释 / 块注释 / 字符串与字符字面量的内容，保留换行与长度（行号不变）。
 
-    为什么要剥：`App/Views/PrivilegePanel.swift` 的说明注释里就写着
+    为什么要剥：`platform/macos/App/Views/PrivilegePanel.swift` 的说明注释里就写着
     `` `.frame(width:height:)` 不写 `alignment` `` —— 不剥的话它会被当成一次调用。
     """
     out: list[str] = []
@@ -459,7 +459,7 @@ def self_test() -> int:
                           encoding="utf-8")
         problems, _ = evaluate(views, led)
         record("新增未登记的面板根", problems, "未登记")
-        restore("App/Views/DiagnosisPanel.swift")
+        restore("platform/macos/App/Views/DiagnosisPanel.swift")
 
         # 2 撑满令牌不在该类型里（把理由锚点指到一个不存在的容器）
         views, led = fresh()
@@ -482,7 +482,7 @@ def self_test() -> int:
             ".frame(width: 760, height: 560)", ".frame(width: 760, height: 570)"), encoding="utf-8")
         problems, _ = evaluate(views, led)
         record("陈旧条目（改尺寸没销账）", problems, "陈旧")
-        restore("App/Views/LockPanel.swift")
+        restore("platform/macos/App/Views/LockPanel.swift")
 
         # 5 删掉一条台账（盘上那条没人管了）
         views, led = fresh()
@@ -499,7 +499,7 @@ def self_test() -> int:
             encoding="utf-8")
         problems, _ = evaluate(views, led)
         record("显式对齐被删（但登记还在）", problems, "没有 `alignment:`")
-        restore("App/Views/PrivilegePanel.swift")
+        restore("platform/macos/App/Views/PrivilegePanel.swift")
 
         # 7 台账谎报写了什么值
         views, led = fresh()

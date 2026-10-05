@@ -2,7 +2,7 @@
 """队列 L-50 的负例：`Scripts/check-empty-action-buttons.py` 自己的证据。
 
 判据写完不对已知改动报红，等于没有（第 33 起的老规矩）。11 例全部在**临时夹具仓**上写坏
-（只拷 `App/` + 台账 + 脚本本身；整仓 16 GB，不能整份拷），末例核对真仓库逐字节未变。
+（只拷 `platform/macos/App/` + 台账 + 脚本本身；整仓 16 GB，不能整份拷），末例核对真仓库逐字节未变。
 
     python3 Scripts/test-empty-action-buttons.py
 """

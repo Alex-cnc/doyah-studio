@@ -2,9 +2,9 @@
   "version": 1,
   "purpose": "非文本类型的值「可读 / 认不出要如实说」的台账（队列 L-74，闭环第 15 项）。判据 Scripts/check-cell-decode-coverage.py 拿它做双向对账：台账声明的一型，源码里必须真的解；源码里解了的型，台账里必须登记；没有登记也没有解码的，就只能走「认不出」标记（点名类型 + 字节数 + 十六进制预览），不许把驱动内部描述倒给用户。",
   "sources": {
-    "formatter": "Core/PostgresCellFormatter.swift",
-    "wireValue": "Core/PostgresWireValue.swift",
-    "tests": "Tests/PostgresCellFormatterTests.swift",
+    "formatter": "platform/macos/Core/PostgresCellFormatter.swift",
+    "wireValue": "platform/macos/Core/PostgresWireValue.swift",
+    "tests": "platform/macos/Tests/PostgresCellFormatterTests.swift",
     "evidence": "Scripts/test-session-management.sh"
   },
   "bannedExits": [

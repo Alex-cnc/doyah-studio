@@ -7,25 +7,25 @@
       "shape": "<reason>",
       "kind": "unverified",
       "maxSites": 13,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查；2026-10-02 队列 `L-114` 新增一处（`App/WorkspaceStore.swift` 的 `operationMessage(for:)`：`case .system(let reason)` ⇒ `reason: String`）"
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查；2026-10-02 队列 `L-114` 新增一处（`platform/macos/App/WorkspaceStore.swift` 的 `operationMessage(for:)`：`case .system(let reason)` ⇒ `reason: String`）"
     },
     {
       "shape": "<name>",
       "kind": "text",
       "maxSites": 10,
-      "reason": "库名 / 表名：App/AppState.swift:2058 形参 `name: String`；2026-10-02 队列 `L-114` 新增三处（`App/WorkspaceStore.swift` 的 `operationMessage(for:)`：`case .illegalName(let name)` / `.alreadyExists(let name)` / `.notADirectory(let name)` ⇒ `name: String`）"
+      "reason": "库名 / 表名：platform/macos/App/AppState.swift:2058 形参 `name: String`；2026-10-02 队列 `L-114` 新增三处（`platform/macos/App/WorkspaceStore.swift` 的 `operationMessage(for:)`：`case .illegalName(let name)` / `.alreadyExists(let name)` / `.notADirectory(let name)` ⇒ `name: String`）"
     },
     {
       "shape": "<written>",
       "kind": "number",
       "maxSites": 6,
-      "reason": "App/AppState.swift:4316 `written = request.rows.count` ⇒ Int"
+      "reason": "platform/macos/App/AppState.swift:4316 `written = request.rows.count` ⇒ Int"
     },
     {
       "shape": "<pid>",
       "kind": "number",
       "maxSites": 5,
-      "reason": "App/AppState.swift:4376 `func cancelSessionStatement(pid: Int)`"
+      "reason": "platform/macos/App/AppState.swift:4376 `func cancelSessionStatement(pid: Int)`"
     },
     {
       "shape": "<detail>",
@@ -43,13 +43,13 @@
       "shape": "<column>",
       "kind": "text",
       "maxSites": 3,
-      "reason": "App/AppState.swift:171 `var column: String`（外键跳转的列名）"
+      "reason": "platform/macos/App/AppState.swift:171 `var column: String`（外键跳转的列名）"
     },
     {
       "shape": "<duration>",
       "kind": "text",
       "maxSites": 3,
-      "reason": "App/AppState.swift:5598 `let duration = String(format: \"%.3f\", summary.duration)` ⇒ 已是 String（第 16 轮那族缺陷的同名变量在这里是字符串）"
+      "reason": "platform/macos/App/AppState.swift:5598 `let duration = String(format: \"%.3f\", summary.duration)` ⇒ 已是 String（第 16 轮那族缺陷的同名变量在这里是字符串）"
     },
     {
       "shape": "<message>",
@@ -91,7 +91,7 @@
       "shape": "<failure>",
       "kind": "unverified",
       "maxSites": 3,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查。**其中一处在本轮新增**（队列 L-44）：`App/AppState.swift` 的 `AppState.NoteSearchState.unavailable(failure: String)` 关联值 ⇒ String，模板 `noteSearchUnavailable` 那一处就是 `%@`（类型是确定的，只是门禁判不出裸标识符）。"
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查。**其中一处在本轮新增**（队列 L-44）：`platform/macos/App/AppState.swift` 的 `AppState.NoteSearchState.unavailable(failure: String)` 关联值 ⇒ String，模板 `noteSearchUnavailable` 那一处就是 `%@`（类型是确定的，只是门禁判不出裸标识符）。"
     },
     {
       "shape": "<filename>",
@@ -103,7 +103,7 @@
       "shape": "<number>",
       "kind": "number",
       "maxSites": 2,
-      "reason": "App/AppState.swift:3332 `func rollbackDataTask(taskID: UUID, to number: Int)`"
+      "reason": "platform/macos/App/AppState.swift:3332 `func rollbackDataTask(taskID: UUID, to number: Int)`"
     },
     {
       "shape": "<path>",
@@ -121,13 +121,13 @@
       "shape": ".defaultBrowseLimit",
       "kind": "unverified",
       "maxSites": 2,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查。**处数 1 → 2（2026-09-30，交互会话把对象树右键菜单交给 AppKit 捕获器之后新增）**：① `App/Views/ObjectTreeContextMenu.swift:130`（SwiftUI 那份渲染，探针在用）；② `App/Views/ObjectTreeAppKitMenu.swift:74`（界面真正弹的那份）—— 同一件事的两份渲染各自写了一遍 `L(.treeActionBrowseRows, ObjectTreeActions.defaultBrowseLimit)`。类型本身是有出处的（`Core/ObjectTreeActions.swift:72` `public static let defaultBrowseLimit = 200` ⇒ Int），但它不以本判据认的那种**显式标注**形态出现 ⇒ 仍按 unverified 登记形状与处数，不参与槽位交叉检查。"
+      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查。**处数 1 → 2（2026-09-30，交互会话把对象树右键菜单交给 AppKit 捕获器之后新增）**：① `platform/macos/App/Views/ObjectTreeContextMenu.swift:130`（SwiftUI 那份渲染，探针在用）；② `platform/macos/App/Views/ObjectTreeAppKitMenu.swift:74`（界面真正弹的那份）—— 同一件事的两份渲染各自写了一遍 `L(.treeActionBrowseRows, ObjectTreeActions.defaultBrowseLimit)`。类型本身是有出处的（`platform/macos/Core/ObjectTreeActions.swift:72` `public static let defaultBrowseLimit = 200` ⇒ Int），但它不以本判据认的那种**显式标注**形态出现 ⇒ 仍按 unverified 登记形状与处数，不参与槽位交叉检查。"
     },
     {
       "shape": ".id",
       "kind": "unverified",
       "maxSites": 1,
-      "reason": "App/AppState.swift:6175 `task.id` 是 UUID：**「`%@` 收 UUID 会不会印 `(null)`」未经实测**（第 16 轮只实测过 Int）⇒ 不判，留待有实测再定"
+      "reason": "platform/macos/App/AppState.swift:6175 `task.id` 是 UUID：**「`%@` 收 UUID 会不会印 `(null)`」未经实测**（第 16 轮只实测过 Int）⇒ 不判，留待有实测再定"
     },
     {
       "shape": ".mcpApprovalBadLines",
@@ -151,7 +151,7 @@
       "shape": "<artifactFailure>",
       "kind": "text",
       "maxSites": 1,
-      "reason": "App/AppState.swift:2745 `var artifactFailure: String?`"
+      "reason": "platform/macos/App/AppState.swift:2745 `var artifactFailure: String?`"
     },
     {
       "shape": "<checked>",
@@ -397,37 +397,37 @@
       "shape": "failure.exitCode.map(…)",
       "kind": "text",
       "maxSites": 1,
-      "reason": "App/WorkspaceTabsModel.swift:184 `failure.exitCode.map(String.init) ?? \"—\"` ⇒ String（`exitCode` 的声明在 Core/CodeFormatting.swift：`public let exitCode: Int32?`，缺值分支是字符串字面量 `\"—\"`）；该键三处模板都是 `%@`"
+      "reason": "platform/macos/App/WorkspaceTabsModel.swift:184 `failure.exitCode.map(String.init) ?? \"—\"` ⇒ String（`exitCode` 的声明在 platform/macos/Core/CodeFormatting.swift：`public let exitCode: Int32?`，缺值分支是字符串字面量 `\"—\"`）；该键三处模板都是 `%@`"
     },
     {
       "shape": "<inside>",
       "kind": "number",
       "maxSites": 2,
-      "reason": "目录里有多少项：`App/Views/WorkspaceExplorerView.swift:337/338` 的 `max(summary.items - 1, 0)`（`summary.items` 的声明在 `Core/WorkspaceFileOperations.swift`：`public let items: Int`）⇒ Int；两个键的模板都只有一个 `%d`"
+      "reason": "目录里有多少项：`platform/macos/App/Views/WorkspaceExplorerView.swift:337/338` 的 `max(summary.items - 1, 0)`（`summary.items` 的声明在 `platform/macos/Core/WorkspaceFileOperations.swift`：`public let items: Int`）⇒ Int；两个键的模板都只有一个 `%d`"
     },
     {
       "shape": "tabs.pendingClose?.title ?? \"\"",
       "kind": "unverified",
       "maxSites": 1,
-      "reason": "类型不明：可选链 + 默认值，文件级索引认不出类型（`WorkspaceCloseRequest.title` 是 `String`）⇒ 只登记形状与处数棘轮；2026-10-03 队列 `L-172` 新增一处（关闭确认框的标题，`App/Views/WorkspaceTabStrip.swift`）"
+      "reason": "类型不明：可选链 + 默认值，文件级索引认不出类型（`WorkspaceCloseRequest.title` 是 `String`）⇒ 只登记形状与处数棘轮；2026-10-03 队列 `L-172` 新增一处（关闭确认框的标题，`platform/macos/App/Views/WorkspaceTabStrip.swift`）"
     },
     {
       "shape": "<notebook>",
       "kind": "text",
       "maxSites": 1,
-      "reason": "笔记本名：`App/Views/NotesPanel.swift:80` 的 `if let notebook = appState.notebookName(for: note)` ⇒ `notebook: String`（`App/AppState.swift:6070` 返回 `String?`，此处已解包）；2026-10-03 开发循环第 169 轮队列 `L-97` 界面半第一片"
+      "reason": "笔记本名：`platform/macos/App/Views/NotesPanel.swift:80` 的 `if let notebook = appState.notebookName(for: note)` ⇒ `notebook: String`（`platform/macos/App/AppState.swift:6070` 返回 `String?`，此处已解包）；2026-10-03 开发循环第 169 轮队列 `L-97` 界面半第一片"
     },
     {
       "shape": "<noteCount>",
       "kind": "number",
       "maxSites": 2,
-      "reason": "笔记条数：`App/AppState.swift:6076/6080` 的 `case .notes(let noteCount)` / `case .notebooksAndNotes(_, let noteCount)` ⇒ `ContainerRemovalSummary` 的关联值（`Core/NotebookRemovalPrompt.swift` 声明为 `Int`），只有 `%d` 槽；2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片（删除确认框）"
+      "reason": "笔记条数：`platform/macos/App/AppState.swift:6076/6080` 的 `case .notes(let noteCount)` / `case .notebooksAndNotes(_, let noteCount)` ⇒ `ContainerRemovalSummary` 的关联值（`platform/macos/Core/NotebookRemovalPrompt.swift` 声明为 `Int`），只有 `%d` 槽；2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片（删除确认框）"
     },
     {
       "shape": "<notebookCount>",
       "kind": "number",
       "maxSites": 2,
-      "reason": "笔记本条数：`App/AppState.swift:6078/6080` 的 `case .notebooks(let notebookCount)` / `case .notebooksAndNotes(let notebookCount, _)` ⇒ 同上（`Int`），只有 `%d` 槽；2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片"
+      "reason": "笔记本条数：`platform/macos/App/AppState.swift:6078/6080` 的 `case .notebooks(let notebookCount)` / `case .notebooksAndNotes(let notebookCount, _)` ⇒ 同上（`Int`），只有 `%d` 槽；2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片"
     }
   ],
   "exceptions": []

@@ -15,13 +15,13 @@ set -euo pipefail
 #   · 普通那遍：该说明**不许**出现；
 #   · 沙箱标记那遍：该说明**必须**出现，且与普通那遍相比**只多它这一句**。
 #
-# 逐句断言（中英各判一次）写在 `TestsUISnapshot/ManualVerificationProbeTests.swift` 里；
+# 逐句断言（中英各判一次）写在 `platform/macos/TestsUISnapshot/ManualVerificationProbeTests.swift` 里；
 # 本脚本负责把两遍串起来，并**跨清单再判一次** —— 防「两遍其实跑的是同一面」（那种情况下
 # 每遍自己都绿，而「环境决定界面」这件事根本没被验过）。
 #
 # ## 第二批（队列 L-89 ㈡，第 92 轮）：命令面板接线
 #
-# `TestsUISnapshot/PaletteWiringProbeTests.swift` 判的是清单里 `FR-EDIT-25` 那一句人话
+# `platform/macos/TestsUISnapshot/PaletteWiringProbeTests.swift` 判的是清单里 `FR-EDIT-25` 那一句人话
 # 「**每个命令都真的打开了对应面板（不是点了没反应）**」—— 静态判据
 # （`Scripts/check-palette-wiring.py`：清单 id ↔ 分派器 case ↔ 标志位有没有视图读）判不住这件事，
 # 所以它拿真 `AppState` 把**每一条命令都点一遍**、断言登记在案的**落点**确实发生
@@ -31,7 +31,7 @@ set -euo pipefail
 #
 # ## 第三批（队列 L-89 ㈡ ②，第 93 轮）：主题与字体
 #
-# `TestsUISnapshot/AppearanceFontProbeTests.swift` 判清单 §2 `FR-EDIT-26` 的三条人话：
+# `platform/macos/TestsUISnapshot/AppearanceFontProbeTests.swift` 判清单 §2 `FR-EDIT-26` 的三条人话：
 # 手输一个已装的等宽族 ⇒ 生效且「当前使用」拼写正确（③）、手输非等宽 ⇒ **明确提示它不是等宽**
 # 而不是静默回落（④）、SQL 预览的字形跟着字体走（⑤）。
 # 造态走 `FontManager.beginHostPreference(_:)`（宿主语境覆盖，**不落盘**，与主题 / 语言同构）。
@@ -41,7 +41,7 @@ set -euo pipefail
 #
 # ## 第四批（队列 L-92 ㈡①，第 95 轮）：终端 `⌃C`
 #
-# `TestsUISnapshot/TerminalInterruptProbeTests.swift` 判的是「**非沙箱包（现在的默认与交付口径）
+# `platform/macos/TestsUISnapshot/TerminalInterruptProbeTests.swift` 判的是「**非沙箱包（现在的默认与交付口径）
 # 里 `⌃C` 能不能打断 `sleep 30`**」—— 清单 §0.3 第 3 条原先**要人点**，改默认非沙箱之后
 # 变成机器判得住：往 PTY 喂一个 `0x03` 字节，看前台进程（`tcgetpgrp`）是否真的让开，
 # 并要求它在 8 秒内发生（`⌃C` 没送到的话 `sleep` 会占满 30 秒 ⇒ 探针自己红）。
@@ -50,7 +50,7 @@ set -euo pipefail
 #
 # ## 第五批（队列 L-89 ㈡ ③，第 96 轮）：终端多会话页签那一行
 #
-# `TestsUISnapshot/TerminalTabsProbeTests.swift` 新加的三个用例判的是清单 §1 `FR-EDIT-29`
+# `platform/macos/TestsUISnapshot/TerminalTabsProbeTests.swift` 新加的三个用例判的是清单 §1 `FR-EDIT-29`
 # 多会话那一行的**版面**与**落点**（前三个用例是它原有的「真开 shell 的独立性与退出 / 确认链路」）：
 #   ① 版面：渲染**真工具条**（`LowerPaneTabStrip` —— 从 `LowerPaneView` 抽出来的独立视图，
 #      抽出来就是为了能单独离屏渲染：整块面板一渲染会真开 shell），页签 1 个 → 3 个时
@@ -61,7 +61,7 @@ set -euo pipefail
 #
 # ## 第六批（队列 L-89 ㈡ ④，第 97 轮）：大结果集滚动
 #
-# `TestsUISnapshot/LargeResultScrollProbeTests.swift` 判清单 §4 `FR-RES-07` 那一行
+# `platform/macos/TestsUISnapshot/LargeResultScrollProbeTests.swift` 判清单 §4 `FR-RES-07` 那一行
 # 「查 1 万行 × 20 列，上下滚十几秒 ⇒ 不卡、内存不飙」里**能变成机器判据的那部分**：
 # ① 虚拟化（物化行视图数只跟可见区域有关，1 万行与 10 万行必须同量级）；
 # ② 滚动每一帧画面都在变（位置动了画面没动 = 卡死）且单帧 p50 在上界内；
@@ -72,7 +72,7 @@ set -euo pipefail
 #
 # ## 第七批（队列 L-89 ㈡ ⑤，第 99 轮）：跨库浏览
 #
-# `TestsUISnapshot/CrossDatabaseBrowseProbeTests.swift` 判清单 §5 `FR-META-10` 那一行
+# `platform/macos/TestsUISnapshot/CrossDatabaseBrowseProbeTests.swift` 判清单 §5 `FR-META-10` 那一行
 # 「展开非当前库的节点（对象树 / 服务器选择器）」→ 过 =「**按需建连**；失败时**给可读原因**」。
 # 判据观测的是**服务端**：被测那条走真 `AppState`（与界面同一条路），另一条连接查
 # `pg_stat_activity`，两条各打 `application_name` 标记 ⇒「本进程往哪个库开了几条后端」是
@@ -85,9 +85,9 @@ set -euo pipefail
 #
 # ## 第八批（队列 L-89 ㈡ 第 6 条，第 101 轮）：分组视图
 #
-# `TestsUISnapshot/GroupedViewProbeTests.swift` 判清单里 `FR-META-15 分组视图` 那一行
+# `platform/macos/TestsUISnapshot/GroupedViewProbeTests.swift` 判清单里 `FR-META-15 分组视图` 那一行
 # 「对象树顶部在「层级视图 / 按类型分组」之间切换」→ 过 =「**两种视图都能用**；**切换后选中项不丢**」。
-# 三件事：① 可见行模型（`App/Views/ObjectTreeRows.swift`，本轮从视图里搬出来的纯函数）在两种模式下
+# 三件事：① 可见行模型（`platform/macos/App/Views/ObjectTreeRows.swift`，本轮从视图里搬出来的纯函数）在两种模式下
 # 各摊平一遍，输入是**真库读回来的对象** —— 层级面无表头、分组面表头齐、计数与真库对象数逐个相符、
 # 非表头行两面逐条相同；② **真点一下**那台分段选择器（`UISnapshot.LiveHost` 里的
 # `NSSegmentedControl`：同一进程内 `selectedSegment` + `sendAction` = 真点击，**不需要辅助功能授权**），
@@ -107,7 +107,7 @@ set -euo pipefail
 #
 # ## 第九批（队列 L-89 ㈡ 第 7、8 条，第 102 轮）：笔记检索的两条「只能人工点」
 #
-# `TestsUISnapshot/NoteSearchProbeTests.swift` 判清单里那两行人话：
+# `platform/macos/TestsUISnapshot/NoteSearchProbeTests.swift` 判清单里那两行人话：
 #   · **「存完立刻搜」**（搜一个词 → 清空搜索框 → 新建一条带这个词的笔记 → 保存 → 再搜那个词
 #     ⇒ 过 = 刚存的那条在结果里）—— 判的是 `reloadNotes()` 末尾那次重算：
 #     查询还在搜索框里时保存 ⇒ 新笔记必须**当场**在结果里；删掉 ⇒ 当场消失；清单原文那两个顺序也各判一遍。
@@ -125,7 +125,7 @@ set -euo pipefail
 #
 # ## 第十批（队列 L-89 ㈡ 第 9 条，第 103 轮）：浏览器页签与下载
 #
-# `TestsUISnapshot/BrowserTabDownloadProbeTests.swift` 判清单 §10 `FR-EDIT-34` 那一行的三句人话：
+# `platform/macos/TestsUISnapshot/BrowserTabDownloadProbeTests.swift` 判清单 §10 `FR-EDIT-34` 那一行的三句人话：
 #   ① 「新建页签 → 打开一个站点 → 关掉重开应用看是否恢复地址」；
 #   ② 「看外发日志：按页签筛一次（下拉里应出现你刚浏览的那个页签）」；
 #   ③ 「找一个下载链接点一下 → 提示条『已下载到 <路径>』、文件真的在那个目录里、
@@ -153,7 +153,7 @@ set -euo pipefail
 #
 # ## 第十一批（队列 L-89 ㈡ 第 10 条，第 105 轮）：MySQL 表单联动
 #
-# `TestsUISnapshot/MySQLFormProbeTests.swift` 判清单 §10.7 `FR-DRV-09` 界面那一行
+# `platform/macos/TestsUISnapshot/MySQLFormProbeTests.swift` 判清单 §10.7 `FR-DRV-09` 界面那一行
 # （「新建连接 → 数据库类型选 MySQL → 端口应自动变成 3306、SSL 默认 prefer；连上后看对象树」）：
 #   · **A 组（界面联动）** —— **本机 SwiftUI 的 `Picker` 不落到 AppKit 控件**（第 105 轮实测：
 #     宿主视图树里没有 `NSPopUpButton`）⇒「点一下那台下拉」走不通，照 `EgressLogSheet` 当年的处置
@@ -171,7 +171,7 @@ set -euo pipefail
 #
 # ## 第十二批（队列 L-96，第 106 轮）：同一次刷新被连唤两次 / `reloadRoot` 重入
 #
-# `TestsUISnapshot/ObjectTreeRefreshProbeTests.swift` 判两件事（真库 + 真渲染 + 真 `ObjectTreeView`）：
+# `platform/macos/TestsUISnapshot/ObjectTreeRefreshProbeTests.swift` 判两件事（真库 + 真渲染 + 真 `ObjectTreeView`）：
 #   ① **整棵树在活宿主里真加载出来**：数据分支在场（那台「层级 / 分组」开关**只在「已加载」那一支里**
 #      画得出来）、加载分支退场（「正在加载对象…」不许还在画面上）、画面里真有那棵树
 #      （与「同一条连接指向一个不存在的库」那个失败态对照宿主比，视图树节点数必须多出来）。
@@ -190,7 +190,7 @@ set -euo pipefail
 #
 # ## 第十三批（队列 L-90 ㈡ 第 2 条，第 110 轮）：对象树逐行右键
 #
-# `TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift` 判清单 §4 `FR-META-14` 那一行：
+# `platform/macos/TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift` 判清单 §4 `FR-META-14` 那一行：
 #   ① **七类节点各渲一遍**（服务器 / 数据库 / schema / 表 / 视图 / 函数 / 列，各落一张图）——
 #      菜单里的**动作项**与 Core 的 `ObjectTreeActions.isAvailable` **双向**对账（少一项 / 多一项都判红），
 #      且**服务器那七项不许漏到别的行上**（「点数据库弹服务器菜单」那条老缺陷的回归钉）。
@@ -198,7 +198,7 @@ set -euo pipefail
 #      两样都没有 ⇒ 一句说明（不是空菜单）/ 分组表头与「没有菜单的节点」拿到 nil。
 #   ③ **同一行两次渲染逐字节一致、不同行必须不同**（免得菜单其实是个跟行无关的常量）。
 #   探针按「内容 + 目标行」两件事判，**不吃鼠标事件、不要任何权限**；菜单内容与作用行解析
-#   本轮搬进 `App/Views/ObjectTreeContextMenu.swift`（静态 `@ViewBuilder` 入口 + 一个纯函数），
+#   本轮搬进 `platform/macos/App/Views/ObjectTreeContextMenu.swift`（静态 `@ViewBuilder` 入口 + 一个纯函数），
 #   生产路径与判据读的是同一个入口 —— 差别只有外面那层壳（`.contextMenu` 要兄弟节点、图要容器）。
 #   **边界（如实登记）**：判得到「这一行该有哪些项、作用在哪一行」，**判不到**「AppKit 把这份内容
 #   展成菜单项并在右键位置弹出」（那需要真点一次右键；归人工点验）。
@@ -208,7 +208,7 @@ set -euo pipefail
 #
 # ## 第十四批（队列 L-89 ㈢ ①，第 112 轮）：空编辑器上「保存」灰否（渲染级）
 #
-# `TestsUISnapshot/NotesEditorSaveProbeTests.swift` 判清单那一行原先要人点三下的三态
+# `platform/macos/TestsUISnapshot/NotesEditorSaveProbeTests.swift` 判清单那一行原先要人点三下的三态
 # （**空着灰 / 有内容亮 / 删回灰**）。模型那一半（`AppState.noteEditorHasContent` 三态）与源码
 # 那一半（`check-empty-action-buttons.py`）都已经在判，但两层合起来判不到「**渲染出来的那只按钮
 # 真的跟着变**」⇒ 本条在**像素**上补这一层：三态各渲染一遍真视图，
@@ -221,7 +221,7 @@ set -euo pipefail
 #
 # ## 第十五批（队列 L-111，第 121 轮）：数据库侧 SQL 编辑器的行号列
 #
-# `TestsUISnapshot/SQLLineNumberProbeTests.swift` 判的是「**SQL 编辑器的行号列**」这件事
+# `platform/macos/TestsUISnapshot/SQLLineNumberProbeTests.swift` 判的是「**SQL 编辑器的行号列**」这件事
 # 里**只有把真视图跑起来才知道**的那几半（口径在 `Core/CodeLines`，另有 15 项单测）：
 # ① 列真的**落到排版上** —— 正文起点（`textContainerInset.width`）等于列宽，不是只算了个数；
 # ② 列真的**画到像素上** —— 列区里有墨（「算了但不画」正是要挡的假绿），
@@ -671,13 +671,13 @@ def code_only(text):
     return "\n".join(line for line in text.split("\n") if not line.strip().startswith("//"))
 
 
-rows = source("App/Views/ObjectTreeRows.swift")
-view = source("App/Views/ObjectTreeView.swift")
-toolbar = source("App/Views/ObjectTreeToolbar.swift")
+rows = source("platform/macos/App/Views/ObjectTreeRows.swift")
+view = source("platform/macos/App/Views/ObjectTreeView.swift")
+toolbar = source("platform/macos/App/Views/ObjectTreeToolbar.swift")
 
 failures = []
 # ① 分组聚合**只有一处来源**：视图里自己再拼一份 = 两份口径迟早不一致
-for name, text in (("App/Views/ObjectTreeView.swift", view), ("App/Views/ObjectTreeToolbar.swift", toolbar)):
+for name, text in (("platform/macos/App/Views/ObjectTreeView.swift", view), ("platform/macos/App/Views/ObjectTreeToolbar.swift", toolbar)):
     if "ObjectTreeGrouping.groupedByType(" in code_only(text):
         failures.append(f"{name} 里自己拼了一份分组行 —— 分组只能由 ObjectTreeRows 出")
 if "ObjectTreeGrouping.groupedByType(" not in code_only(rows):
@@ -779,9 +779,9 @@ def code_only(text):
     return "\n".join(line for line in text.split("\n") if not line.strip().startswith("//"))
 
 
-view = code_only(source("App/Views/ObjectTreeView.swift"))
-appstate = code_only(source("App/AppState.swift"))
-gate = code_only(source("Core/ObjectTreeRefreshGate.swift"))
+view = code_only(source("platform/macos/App/Views/ObjectTreeView.swift"))
+appstate = code_only(source("platform/macos/App/AppState.swift"))
+gate = code_only(source("platform/macos/Core/ObjectTreeRefreshGate.swift"))
 
 # ① 生产路径真的过闸门（抽了闸门而没人用 = 没抽，第 101 轮的教训）
 if "objectTreeRefreshGate.roots(" not in view:
@@ -998,7 +998,7 @@ for directory in (plain, sandbox):
             failures.append(f"{base}/downloadLanding：下载那条记录没带页签身份：{landing.get('egressTabID')}")
 
 # 源锚点：「视图用的就是那个纯函数」—— 纯函数抽出来而没人用等于没抽（第 101 轮的教训）
-with open(os.path.join(root, "App/Views/EgressLogSheet.swift"), encoding="utf-8") as handle:
+with open(os.path.join(root, "platform/macos/App/Views/EgressLogSheet.swift"), encoding="utf-8") as handle:
     sheet_text = handle.read()
 if "EgressTabOptions.options(from: appState.egressEntries)" not in sheet_text:
     failures.append("EgressLogSheet 不再用 EgressTabOptions 推导选项（判据与界面脱钩了）")
@@ -1006,8 +1006,8 @@ if ".disabled(tabOptions.isEmpty)" not in sheet_text:
     failures.append("EgressLogSheet 里那条「没有页签就灰着」的接线不见了")
 if "for entry in appState.egressEntries" in sheet_text:
     failures.append("EgressLogSheet 又在自己算一遍选项（同一口径出现了第二处）")
-if not os.path.exists(os.path.join(root, "Core/EgressTabOptions.swift")):
-    failures.append("Core/EgressTabOptions.swift 不在盘上")
+if not os.path.exists(os.path.join(root, "platform/macos/Core/EgressTabOptions.swift")):
+    failures.append("platform/macos/Core/EgressTabOptions.swift 不在盘上")
 
 if failures:
     for item in failures:
@@ -1096,12 +1096,12 @@ for directory, base in ((plain, "普通那遍"), (sandbox, "带沙箱标记那�
 # 于是这里要钉住两头：**界面真的读了那一份**（表单把绑定交给那两个视图、视图真的调它），
 # 以及**那一份本身没被架空**（端口 / SSL 默认值 / 清单都取自方言自己）。
 anchors = {
-    "App/Views/ConnectionFormView.swift": (
+    "platform/macos/App/Views/ConnectionFormView.swift": (
         ("ConnectionDialectPicker(", "表单不再用那两个视图了（联动与界面之间的线断了）"),
         ("sslModeWasAdjusted: $sslModeWasAdjusted", "表单没把「收敛说明」那格交给视图"),
         ("ConnectionSSLModeRow(", "SSL 那一行不再用那个视图了"),
     ),
-    "App/Views/ConnectionDialectSection.swift": (
+    "platform/macos/App/Views/ConnectionDialectSection.swift": (
         ("ForEach(ConnectionDialectLinkage.dialects)", "方言那一台不再读唯一出处里的条目清单"),
         ("ConnectionDialectLinkage.adjustments(for: newValue)", "换方言那条回调不再走唯一出处"),
         ("port = next.port", "换方言时端口不再跟着换"),
@@ -1119,8 +1119,8 @@ for relative, needles in anchors.items():
     for needle, why in needles:
         if needle not in anchor_text:
             failures.append("%s 里「%s」不见了：%s" % (relative, needle, why))
-if not os.path.exists(os.path.join(root, "TestsUISnapshot/MySQLFormProbeTests.swift")):
-    failures.append("TestsUISnapshot/MySQLFormProbeTests.swift 不在盘上")
+if not os.path.exists(os.path.join(root, "platform/macos/TestsUISnapshot/MySQLFormProbeTests.swift")):
+    failures.append("platform/macos/TestsUISnapshot/MySQLFormProbeTests.swift 不在盘上")
 
 if failures:
     for item in failures:

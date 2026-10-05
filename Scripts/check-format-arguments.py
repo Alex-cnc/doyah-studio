@@ -11,9 +11,9 @@
 
 本脚本把这一族变成机械判据。它读两样东西：
 
-* **模板侧**：`Core/Localization.swift` 的 `LocalizedStrings.table`（每个键的中英模板
+* **模板侧**：`platform/macos/Core/Localization.swift` 的 `LocalizedStrings.table`（每个键的中英模板
   → printf 转换符序列）；
-* **调用点侧**：`App/` `CLI/` `Core/` 里 `L(.key, 实参…)` 的调用点（配平括号取实参、
+* **调用点侧**：`platform/macos/App/` `platform/macos/CLI/` `platform/macos/Core/` 里 `L(.key, 实参…)` 的调用点（配平括号取实参、
   按深度切逗号 —— 实参本身可能含逗号，例：`ErrorPresenter.message(for: error)`）。
 
 ## 四条判据
@@ -26,7 +26,7 @@
 * **A′（文字 ⇒ 数字槽）** 实参是字符串字面量（含插值）、或台账把它的形状登记成
   `kind=text`、而模板在该位置的转换符是 `%d` / `%i` / `%f` ⇒ **红**。
 * **B（个数对账）** 实参数 ≠ 该位置模板的占位符数（中英**任一**侧）⇒ **红**。
-  第 37 轮就是靠这一条抓到真缺陷：`App/Views/AboutLicenseSheet.swift` 三处
+  第 37 轮就是靠这一条抓到真缺陷：`platform/macos/App/Views/AboutLicenseSheet.swift` 三处
   `L(.licAboutEdition)` 不传实参，而模板是 `当前版本：%@` —— 界面上原样印出
   `%@`（`LocalizationManager.text` 在 `arguments.isEmpty` 时**原样返回模板**）。
 * **C / D（类型不明的实参：形状台账 + 棘轮）** 判定不出类型（裸标识符、
@@ -45,7 +45,7 @@
 
 * 只查 `L(...)`（App 层用户可见文案的唯一出口）。Core 里 `LocalizedStrings.text(_:language:)`
   不带实参、`String(format:)` 的直调不在本判据内。
-* `Tests/` `TestsUISnapshot/` 不在扫描范围：那里有意构造反例（直接调 `String(format:)`）。
+* `platform/macos/Tests/` `platform/macos/TestsUISnapshot/` 不在扫描范围：那里有意构造反例（直接调 `String(format:)`）。
 * 判定不出类型的实参只被「形状登记 + 棘轮」钉住 —— 形状的 `kind` 写错
   （把真会收 `Int` 的东西登记成 `text`）本门禁**看不见**，这正是 `reason`
   字段要写清「凭哪一行源码判的」的原因。
@@ -76,7 +76,7 @@ REPO_DEFAULT = HERE.parent
 
 LEDGER_REL = "Scripts/format-argument-dispositions.json"
 SCAN_DIRS = ("App", "CLI", "Core")
-TABLE_REL = "Core/Localization.swift"
+TABLE_REL = "platform/macos/Core/Localization.swift"
 
 # printf 转换符：可选 位置参数 / 标志 / 宽度 / 精度 / 长度修饰，最后是转换符本身。
 SPEC_RE = re.compile(
@@ -380,7 +380,7 @@ class Resolver:
                             kind_of_type(rm.group(1))
                         )
                 # 只收**全局成员**（`.x` 形态，且要求全仓只有一种决定性的标注类型）。
-                # **裸标识符不解析** —— 第 37 轮实测过它的害处：`App/AppState.swift` 里
+                # **裸标识符不解析** —— 第 37 轮实测过它的害处：`platform/macos/App/AppState.swift` 里
                 # `let duration = String(format: "%.3f", …)`（String）与别处某个
                 # `let duration: TimeInterval` 同名，文件级索引会把前者判成数字，
                 # 于是 `stateFinished*` 三处**假报红**。裸标识符一律走台账逐条登记

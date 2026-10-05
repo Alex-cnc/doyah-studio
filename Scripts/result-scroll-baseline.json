@@ -1,5 +1,5 @@
 {
-  "note": "「待人工验收清单」§4 FR-RES-07（大结果集滚动）的判据阈值 —— 唯一来源。探针 TestsUISnapshot/LargeResultScrollProbeTests.swift 读它、文件里不写魔数；本台账由 Scripts/check-result-scroll-ledger.py 看着（字段齐备 / 基线为正 / 上限对基线至少 3 倍余量 / 理由非空 / 探针真挂在取证脚本上）。",
+  "note": "「待人工验收清单」§4 FR-RES-07（大结果集滚动）的判据阈值 —— 唯一来源。探针 platform/macos/TestsUISnapshot/LargeResultScrollProbeTests.swift 读它、文件里不写魔数；本台账由 Scripts/check-result-scroll-ledger.py 看着（字段齐备 / 基线为正 / 上限对基线至少 3 倍余量 / 理由非空 / 探针真挂在取证脚本上）。",
   "measuredOn": "2026-09-29",
   "measuredBy": "开发循环第 97 轮 · 本机 macOS 27.0 / Apple Silicon · 离屏 NSWindow + displayIfNeeded / cacheDisplay（scale=1，画布 900×420 pt，24 个滚动位置取中位数）",
   "smallRows": 10000,

@@ -1,7 +1,7 @@
 {
   "title": "编辑面的行号列处置台账（队列 L-111）",
-  "policy": "凡是能编辑多行文本的编辑面都画行号，且共用同一个绘制件（App/Views/LineNumberGutter.swift）与同一份 Core 计行口径（Core/CodeLines）；不画行号的必须写明理由",
-  "scope": "App/**/*.swift 里的 NSTextView / NSTextField 子类。SwiftUI 的 TextField / TextEditor 是值类型、不落 AppKit 控件 ⇒ 不在本判据范围（它们是单行输入或非编辑面）",
+  "policy": "凡是能编辑多行文本的编辑面都画行号，且共用同一个绘制件（platform/macos/App/Views/LineNumberGutter.swift）与同一份 Core 计行口径（Core/CodeLines）；不画行号的必须写明理由",
+  "scope": "platform/macos/App/**/*.swift 里的 NSTextView / NSTextField 子类。SwiftUI 的 TextField / TextEditor 是值类型、不落 AppKit 控件 ⇒ 不在本判据范围（它们是单行输入或非编辑面）",
   "scanFloor": 90,
   "subclassFloor": 2,
   "surfaces": [
@@ -9,9 +9,9 @@
       "editor": "工作区代码编辑器",
       "kind": "NSTextView",
       "name": "CodeTextView",
-      "file": "App/Views/CodeEditorView.swift",
+      "file": "platform/macos/App/Views/CodeEditorView.swift",
       "hasGutter": true,
-      "component": "App/Views/LineNumberGutter.swift",
+      "component": "platform/macos/App/Views/LineNumberGutter.swift",
       "registry": "FR-EDIT-36（队列 L-64，第 45 轮落地；第 121 轮把画法抽成共用绘制件）",
       "reason": ""
     },
@@ -19,9 +19,9 @@
       "editor": "数据库侧 SQL 编辑器",
       "kind": "NSTextView",
       "name": "SQLTextView",
-      "file": "App/Views/SQLEditorView.swift",
+      "file": "platform/macos/App/Views/SQLEditorView.swift",
       "hasGutter": true,
-      "component": "App/Views/LineNumberGutter.swift",
+      "component": "platform/macos/App/Views/LineNumberGutter.swift",
       "registry": "FR-EDIT-36 的延伸口径（队列 L-111，第 121 轮：复用同一套 Core 口径 + 同一个绘制件）",
       "reason": ""
     },
@@ -29,7 +29,7 @@
       "editor": "结果表就地编辑的单元格",
       "kind": "NSTextField",
       "name": "ResultCellTextField",
-      "file": "App/Views/ResultGrid.swift",
+      "file": "platform/macos/App/Views/ResultGrid.swift",
       "hasGutter": false,
       "component": "",
       "registry": "",
@@ -39,7 +39,7 @@
       "editor": "标题栏的主搜索框",
       "kind": "NSTextField",
       "name": "TitleBarSearchFieldView",
-      "file": "App/Views/TitleBarSearchField.swift",
+      "file": "platform/macos/App/Views/TitleBarSearchField.swift",
       "hasGutter": false,
       "component": "",
       "registry": "FR-EDIT-37（主搜索框：导航栏搜索 + 命令面板合一，2026-10-03）",
@@ -47,10 +47,10 @@
     }
   ],
   "singleSource": {
-    "lineStarts": "App/Views/LineNumberGutter.swift",
-    "widthAlgorithm": "App/Views/LineNumberGutter.swift",
+    "lineStarts": "platform/macos/App/Views/LineNumberGutter.swift",
+    "widthAlgorithm": "platform/macos/App/Views/LineNumberGutter.swift",
     "note": "「哪一行算第几行」在 Core/CodeLines（15 项单测，契约见概要设计 §3.17 不变量 10）；「列宽怎么量、数字怎么对齐、画哪几行」在 LineNumberGutter。两个编辑器只许**转发**，不许就地重算。"
   },
-  "totalsNote": "`surfaces` 逐条对应 App/ 里真实的 NSTextView / NSTextField 子类（双向对账：多一个未登记 ⇒ 红，留一个不在盘上 ⇒ 红）。文件数只做**下限**（scanFloor），不做等值对账 —— 另一侧在同一棵树上加视图文件不该把红灯送给不相干的轮次。",
-  "updated": "2026-10-03（补登标题栏主搜索框 `TitleBarSearchFieldView`；扫描 App/ 81 份源文件 / 4 个编辑面）"
+  "totalsNote": "`surfaces` 逐条对应 platform/macos/App/ 里真实的 NSTextView / NSTextField 子类（双向对账：多一个未登记 ⇒ 红，留一个不在盘上 ⇒ 红）。文件数只做**下限**（scanFloor），不做等值对账 —— 另一侧在同一棵树上加视图文件不该把红灯送给不相干的轮次。",
+  "updated": "2026-10-03（补登标题栏主搜索框 `TitleBarSearchFieldView`；扫描 platform/macos/App/ 81 份源文件 / 4 个编辑面）"
 }

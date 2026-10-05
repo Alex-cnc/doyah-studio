@@ -5,18 +5,18 @@
 **为什么需要一条台账而不是一句「已 vendoring」**：这份 `sqlite3.c` 是 9.5 MB 的生成文件，
 换版本、手改一行、编译宏掉一个，**都不会有任何症状** —— 只会让三端行为悄悄不一致，
 或者让「全文检索能用」这条判据在某天静默失效。所以每个事实都必须是**可对账**的：
-内容哈希、头文件里的版本字符串、`Package.swift` 里的编译宏、许可声明、接线位置。
+内容哈希、头文件里的版本字符串、`platform/macos/Package.swift` 里的编译宏、许可声明、接线位置。
 
 对账口径（任一条不一致 ⇒ 非零退出并指名）：
 
   1. `files[]` 里的每个交付文件：字节数 + SHA-256 与台账一致（含我们自己写的 umbrella 头）；
   2. 头文件里的 `SQLITE_VERSION` / `SQLITE_VERSION_NUMBER` / `SQLITE_SOURCE_ID` 与台账一致；
-  3. `Vendor/sqlite3/Package.swift` 的编译宏与台账 `requiredCompileOptions` 逐条一致
+  3. `platform/macos/Vendor/sqlite3/Package.swift` 的编译宏与台账 `requiredCompileOptions` 逐条一致
      （**宏掉了不会有症状**，只有行为悄悄变），目标名 / 源码 / 公共头目录也对账；
   4. 许可声明文件在、且写明公有领域与来源页（用户看的是这一份）；
   5. `PROVENANCE.md` 里的归档哈希与台账 `archiveSHA256` 一致（换版本时两处必须同时改）；
   6. `THIRD-PARTY-NOTICES.md` 里有这一行（第三方组件声明表是给人看的入口）；
-  7. 根 `Package.swift` 里真的接线了这个包；
+  7. 根 `platform/macos/Package.swift` 里真的接线了这个包；
   8. **没有第二份 SQLite**：产品源码里不许出现 `import SQLite3`（系统自带 libsqlite3 版本随 OS 漂移，
      FR-PLUG-08 的口径就是「三端同一份引擎」）；
   9. `wiring.evidenceAnchors` 里的每个锚点在盘上真的还在（锚点陈旧 = 台账还指着证据、证据已经没了）；
@@ -60,18 +60,18 @@ SYSTEM_SQLITE_IMPORT = re.compile(r"^\s*import\s+SQLite3\b", re.MULTILINE)
 # `verify-all.sh` 的项标记形状：`echo "==> 7/17 …"`
 VERIFY_ITEM = re.compile(r"==> (\d+)/(\d+) ")
 
-# 无依赖：只产出 `Vendor/sqlite3/{Package.swift,Sources/CSQLite3/**,LICENSE.txt,PROVENANCE.md}`。
+# 无依赖：只产出 `platform/macos/Vendor/sqlite3/{platform/macos/Package.swift,Sources/CSQLite3/**,LICENSE.txt,PROVENANCE.md}`。
 # 第 18 轮补了两份**接线与锚点所在**的文件：不把它们拷进负例沙箱，第 9 / 10 两条就验不了。
 # 第 30 轮（L-43）再补两份：生成器与它的生成物 —— 第 11 条（生成器绑定）读的就是这两份。
 SELF_TEST_TARGETS = [
-    "Vendor/sqlite3",
+    "platform/macos/Vendor/sqlite3",
     "Scripts/vendored-sqlite.json",
     "Scripts/smoke-vendored-sqlite.py",
     "Scripts/verify-all.sh",
     "Scripts/gen-sqlite-constants.py",
-    "Core/NoteStorage/SQLiteConstants.swift",
+    "platform/macos/Core/NoteStorage/SQLiteConstants.swift",
     "THIRD-PARTY-NOTICES.md",
-    "Package.swift",
+    "platform/macos/Package.swift",
 ]
 
 
@@ -132,9 +132,9 @@ class Gate:
                 self.fail(f"{label} 与台账不符：台账 {expected}，头文件 {match.group(1)}")
 
     def check_vendored_manifest(self, ledger: dict) -> None:
-        manifest = self.root / "Vendor" / "sqlite3" / "Package.swift"
+        manifest = self.root / "Vendor" / "sqlite3" / "platform/macos/Package.swift"
         if not manifest.exists():
-            self.fail("Vendor/sqlite3/Package.swift 不在")
+            self.fail("platform/macos/Vendor/sqlite3/Package.swift 不在")
             return
         text = manifest.read_text(encoding="utf-8")
         target = ledger["swiftTarget"]
@@ -168,7 +168,7 @@ class Gate:
     def check_provenance(self, ledger: dict) -> None:
         provenance = self.root / "Vendor" / "sqlite3" / "PROVENANCE.md"
         if not provenance.exists():
-            self.fail("Vendor/sqlite3/PROVENANCE.md 不在")
+            self.fail("platform/macos/Vendor/sqlite3/PROVENANCE.md 不在")
             return
         text = provenance.read_text(encoding="utf-8")
         if ledger["archiveSHA256"] not in text:
@@ -185,12 +185,12 @@ class Gate:
             self.fail("THIRD-PARTY-NOTICES.md 里没有 sqlite-amalgamation 这一行")
 
     def check_wiring(self) -> None:
-        manifest = self.root / "Package.swift"
+        manifest = self.root / "platform/macos/Package.swift"
         if not manifest.exists():
-            self.fail("根 Package.swift 不在")
+            self.fail("根 platform/macos/Package.swift 不在")
             return
-        if '.package(path: "Vendor/sqlite3")' not in manifest.read_text(encoding="utf-8"):
-            self.fail("根 Package.swift 没有接线 Vendor/sqlite3")
+        if '.package(path: "platform/macos/Vendor/sqlite3")' not in manifest.read_text(encoding="utf-8"):
+            self.fail("根 platform/macos/Package.swift 没有接线 platform/macos/Vendor/sqlite3")
 
     def check_no_second_sqlite(self) -> None:
         for directory in PRODUCT_DIRS:
@@ -337,13 +337,13 @@ def self_test() -> int:
     root = pathlib.Path(__file__).resolve().parent.parent
     print("==> vendored SQLite 门禁负例自检")
     cases: list[tuple[str, object]] = [
-        ("头文件被改一个字节", lambda d: (d / "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h").write_bytes(
-            (d / "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h").read_bytes() + b"\n")),
-        ("编译宏掉一条（FTS5）", lambda d: (d / "Vendor/sqlite3/Package.swift").write_text(
-            (d / "Vendor/sqlite3/Package.swift").read_text(encoding="utf-8").replace(
+        ("头文件被改一个字节", lambda d: (d / "platform/macos/Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h").write_bytes(
+            (d / "platform/macos/Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h").read_bytes() + b"\n")),
+        ("编译宏掉一条（FTS5）", lambda d: (d / "platform/macos/Vendor/sqlite3/Package.swift").write_text(
+            (d / "platform/macos/Vendor/sqlite3/Package.swift").read_text(encoding="utf-8").replace(
                 '.define("SQLITE_ENABLE_FTS5", to: "1")', ""), encoding="utf-8")),
-        ("公共头目录写错（头文件当场看不见）", lambda d: (d / "Vendor/sqlite3/Package.swift").write_text(
-            (d / "Vendor/sqlite3/Package.swift").read_text(encoding="utf-8").replace(
+        ("公共头目录写错（头文件当场看不见）", lambda d: (d / "platform/macos/Vendor/sqlite3/Package.swift").write_text(
+            (d / "platform/macos/Vendor/sqlite3/Package.swift").read_text(encoding="utf-8").replace(
                 'publicHeadersPath: "include"', 'publicHeadersPath: "."'), encoding="utf-8")),
         ("第三方声明表里删掉这一行", lambda d: (d / "THIRD-PARTY-NOTICES.md").write_text(
             (d / "THIRD-PARTY-NOTICES.md").read_text(encoding="utf-8").replace("sqlite-amalgamation", "sqlite"), encoding="utf-8")),

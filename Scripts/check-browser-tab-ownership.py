@@ -7,12 +7,12 @@
 **本质上 html 也是一种文件**」（数据库侧是 **SQL 这门语言的工作台**）。第 131 轮把展示层搬了过去，
 但**这件事此前没有任何东西看得见** —— 挪回数据库侧、或搬走了没接上，编译照过、单测照绿。
 
-判据 = 一份**双向对账**的允许落点台账（`App/` 下出现下列标识的文件必须登记过，登记的必须真的命中）：
+判据 = 一份**双向对账**的允许落点台账（`platform/macos/App/` 下出现下列标识的文件必须登记过，登记的必须真的命中）：
     `browserPages` / `selectedBrowserPage` / `selectedBrowserID` / `browserEngines` /
     `BrowserTabView` / `openBrowserTab` / `browserTabButton`
-数据库侧视图 `App/Views/QueryWorkspaceView.swift` 命中即红（它不在台账里，也不会被登记）。
+数据库侧视图 `platform/macos/App/Views/QueryWorkspaceView.swift` 命中即红（它不在台账里，也不会被登记）。
 **状态所有者**另判一处（第 135 轮补，队列 `L-149` 剩余①）：浏览器状态必须住在
-`App/WorkspaceBrowserModel.swift`（那个类只此一处定义）——
+`platform/macos/App/WorkspaceBrowserModel.swift`（那个类只此一处定义）——
 挂回 `AppState` 的 `@Published` 上，引擎每回报一次标题 / 加载中就要重算整个窗口。
 另判两处**文档条文**（SRS `FR-EDIT-34` 定义格、概要设计 §3.12「视图契约」行）必须写「工作区」、
 不得再钉在「编辑器区」；订正过程留在证据格里，**判据只看条文格**。空跑防护：扫描面文件数 /
@@ -41,21 +41,21 @@ APP_DIR = "App"
 # **状态所有者**（队列 `L-149` 剩余①，2026-10-01 第 135 轮搬的家）：浏览器页签的
 # 页签集 / 选中 / 引擎缓存 / 导航动作全在这个文件里 —— 它**不是** `AppState`
 # （挂在那里时引擎每回报一次标题 / 加载中都要重算整个窗口；同族的病见 `QueryEditorBuffer`）。
-STATE_OWNER = "App/WorkspaceBrowserModel.swift"
+STATE_OWNER = "platform/macos/App/WorkspaceBrowserModel.swift"
 STATE_OWNER_CLASS = "final class WorkspaceBrowserModel: ObservableObject"
-VIEW_DEFINITION = "App/Views/BrowserTabView.swift"
-DB_SIDE_VIEW = "App/Views/QueryWorkspaceView.swift"
-WORKSPACE_VIEWS = ("App/Views/WorkspaceTabStrip.swift", "App/Views/WorkspaceAreaView.swift")
+VIEW_DEFINITION = "platform/macos/App/Views/BrowserTabView.swift"
+DB_SIDE_VIEW = "platform/macos/App/Views/QueryWorkspaceView.swift"
+WORKSPACE_VIEWS = ("platform/macos/App/Views/WorkspaceTabStrip.swift", "platform/macos/App/Views/WorkspaceAreaView.swift")
 
-# 台账：标识 → 允许出现它的文件（`App/` 下，除下面那处豁免）。两个方向都要对账。
+# 台账：标识 → 允许出现它的文件（`platform/macos/App/` 下，除下面那处豁免）。两个方向都要对账。
 LEDGER = {
-    "browserPages": {STATE_OWNER, "App/Views/WorkspaceTabStrip.swift"},
-    "selectedBrowserPage": {STATE_OWNER, "App/Views/WorkspaceAreaView.swift"},
-    "selectedBrowserID": {STATE_OWNER, "App/Views/WorkspaceTabStrip.swift"},
+    "browserPages": {STATE_OWNER, "platform/macos/App/Views/WorkspaceTabStrip.swift"},
+    "selectedBrowserPage": {STATE_OWNER, "platform/macos/App/Views/WorkspaceAreaView.swift"},
+    "selectedBrowserID": {STATE_OWNER, "platform/macos/App/Views/WorkspaceTabStrip.swift"},
     "browserEngines": {STATE_OWNER},
-    "BrowserTabView": {"App/Views/WorkspaceAreaView.swift"},
-    "openBrowserTab": {STATE_OWNER, "App/DoyahStudioCommands.swift"},
-    "browserTabButton": {"App/Views/WorkspaceTabStrip.swift"},
+    "BrowserTabView": {"platform/macos/App/Views/WorkspaceAreaView.swift"},
+    "openBrowserTab": {STATE_OWNER, "platform/macos/App/DoyahStudioCommands.swift"},
+    "browserTabButton": {"platform/macos/App/Views/WorkspaceTabStrip.swift"},
 }
 EXEMPT = {
     VIEW_DEFINITION: "浏览器视图自己的定义处（只被工作区内容区渲染）",
@@ -69,7 +69,7 @@ HLD_CONTRACT_LINE = "**视图契约**"
 OWNED_WORD = "工作区"
 FORBIDDEN_WORD = "编辑器区"
 
-MIN_APP_FILES = 90    # 实测 104（`App/` 下 `.swift`）
+MIN_APP_FILES = 90    # 实测 104（`platform/macos/App/` 下 `.swift`）
 
 
 def read(path: pathlib.Path) -> str:
@@ -81,15 +81,15 @@ def rel(root: pathlib.Path, path: pathlib.Path) -> str:
 
 
 def app_sources(root: pathlib.Path, problems: list[str]) -> dict[str, str]:
-    """扫描面 = `App/` 下全部 `.swift`。目录不在 / 文件数低于下限 ⇒ 判红（不许悄悄缩面）。"""
+    """扫描面 = `platform/macos/App/` 下全部 `.swift`。目录不在 / 文件数低于下限 ⇒ 判红（不许悄悄缩面）。"""
     base = root / APP_DIR
     if not base.is_dir():
-        problems.append("App/ 不存在 —— 扫描面被削过（空跑不许通过）")
+        problems.append("platform/macos/App/ 不存在 —— 扫描面被削过（空跑不许通过）")
         return {}
     sources = {rel(root, path): read(path) for path in sorted(base.rglob("*.swift"))}
     if len(sources) < MIN_APP_FILES:
         problems.append(
-            f"App/ 扫描面只有 {len(sources)} 个 `.swift`（下限 {MIN_APP_FILES}）—— 判据扫不到东西，不许通过"
+            f"platform/macos/App/ 扫描面只有 {len(sources)} 个 `.swift`（下限 {MIN_APP_FILES}）—— 判据扫不到东西，不许通过"
         )
     return sources
 
@@ -139,7 +139,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
                 "（数据库侧视图就是这条口径的反面：它不该有浏览器）"
             )
         if not found:
-            problems.append(f"`{token}` 在整个 App/ 里一处都没有 —— 判据空转（标识被删光 / 扫描面被削）")
+            problems.append(f"`{token}` 在整个 platform/macos/App/ 里一处都没有 —— 判据空转（标识被删光 / 扫描面被削）")
         elif found.keys() <= (set(allowed) | set(EXEMPT)):
             notes.append(f"{token}：落点 {len(found)} 个文件，全部在台账内")
 
@@ -197,7 +197,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     if not (set(EXEMPT) & set(sources)):
         problems.append("两处豁免文件一个都不在扫描面里 —— 台账与盘上对不上")
     notes.append(
-        f"扫描面 App/ {len(sources)} 个 `.swift`；台账 {len(LEDGER)} 个标识 / {len(EXEMPT)} 处豁免"
+        f"扫描面 platform/macos/App/ {len(sources)} 个 `.swift`；台账 {len(LEDGER)} 个标识 / {len(EXEMPT)} 处豁免"
     )
     return problems, notes
 
@@ -226,7 +226,7 @@ def main() -> int:
             print(f"   - {problem}")
         return 1
     print(
-        "\n✅ 内置浏览器页签归属 = 工作区：状态所有者 = `App/WorkspaceBrowserModel.swift`（只此一处）· "
+        "\n✅ 内置浏览器页签归属 = 工作区：状态所有者 = `platform/macos/App/WorkspaceBrowserModel.swift`（只此一处）· "
         "落点全部在台账内（数据库侧零命中）· 台账逐条真的命中 · "
         f"SRS `{SRS_ENTRY}` 与概要设计 §3.12 条文已写「{OWNED_WORD}」· 判据面在位"
     )
@@ -240,8 +240,8 @@ def main() -> int:
 # 报不出来，这门禁就只是文档。
 
 WATCHED = (STATE_OWNER, VIEW_DEFINITION, DB_SIDE_VIEW) + WORKSPACE_VIEWS + (
-    "App/DoyahStudioCommands.swift",
-    "App/Views/AppearanceSheet.swift",   # 无关文件：证明「改别的不会误报」
+    "platform/macos/App/DoyahStudioCommands.swift",
+    "platform/macos/App/Views/AppearanceSheet.swift",   # 无关文件：证明「改别的不会误报」
     SRS,
     HLD,
 )
@@ -252,7 +252,7 @@ def _sha(path: pathlib.Path) -> str:
 
 
 def _fixture(destination: pathlib.Path, root: pathlib.Path) -> pathlib.Path:
-    """把扫描面（`App/` 全部 `.swift`）+ 两份文档复制成一份临时副本。"""
+    """把扫描面（`platform/macos/App/` 全部 `.swift`）+ 两份文档复制成一份临时副本。"""
     for dirname in (APP_DIR, "Docs"):
         source = root / dirname
         if not source.is_dir():
@@ -318,7 +318,7 @@ def self_test(root: pathlib.Path) -> int:
         # ⑤b 红：状态被搬回 `AppState`（`L-149` 剩余① 正是要它**不**住在那儿）
         state_back = fresh("state-back-in-appstate")
         _patch(
-            state_back / "App/AppState.swift",
+            state_back / "platform/macos/App/AppState.swift",
             "final class AppState: ObservableObject {",
             "final class AppState: ObservableObject {\n    @Published var browserPages: [BrowserPage] = []",
         )
@@ -375,7 +375,7 @@ def self_test(root: pathlib.Path) -> int:
         cases.append((f"{HLD} 视图契约行被删", bool(check(no_hld_line)[0])))
 
         unrelated = fresh("unrelated")
-        _patch(unrelated / "App/Views/AppearanceSheet.swift", "import SwiftUI", "import SwiftUI\n// 无关改动")
+        _patch(unrelated / "platform/macos/App/Views/AppearanceSheet.swift", "import SwiftUI", "import SwiftUI\n// 无关改动")
         cases.append(("绿对照：无关文件改动不误报", not check(unrelated)[0]))
 
         # 末例：真仓库逐字节未变 + 真仓库实跑绿

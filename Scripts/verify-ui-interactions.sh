@@ -18,7 +18,7 @@ set -euo pipefail
 #
 # ## 本批（㈠）：终端交互三面
 #
-# `TestsUISnapshot/TerminalInteractionProbeTests.swift` 判清单 §1 那三行的**行为面**：
+# `platform/macos/TestsUISnapshot/TerminalInteractionProbeTests.swift` 判清单 §1 那三行的**行为面**：
 #   ① `FR-EDIT-29` 鼠标上报 —— 按下 / 拖动 / 滚轮在**程序接管鼠标**时真的转发（SGR 报文出现在
 #      「前台程序的字节出口」上），按住 ⌥ 拖动必须归本机（出现选区、报文不再增加）；
 #   ② `FR-EDIT-29` 方向键（DECCKM）—— `?1h` 置位时 ↑ 走 SS3、复位后走 CSI；
@@ -29,7 +29,7 @@ set -euo pipefail
 #
 # ## 第二批（L-90 ㈡ 第 1 条，第 109 轮）：多光标与列编辑
 #
-# `TestsUISnapshot/MultiCursorProbeTests.swift` 判清单 §3 `FR-EDIT-27` 那一行的**行为面**
+# `platform/macos/TestsUISnapshot/MultiCursorProbeTests.swift` 判清单 §3 `FR-EDIT-27` 那一行的**行为面**
 # （「⌥ 拖拽列选；⌥⌘D 选下一处；⌥⌘↑ / ↓ 加光标；多光标下打字与 ⌫」＋验收面「一次撤销能全回退、
 # 光标位置不漂」）：真 `SQLEditorView` 进活宿主、从视图树里取出真 `SQLTextView`，
 # 合成的 `NSEvent`（⌥⌘D / ⌥⌘↑↓ / ⌥ 拖拽）直接交给它的方法；「界面上有几个光标」
@@ -45,9 +45,9 @@ set -euo pipefail
 #
 # ## 第三批（L-90 ㈡ 第 2 条，第 110 轮）：对象树逐行右键
 #
-# `TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift` 判清单 §4 `FR-META-14` 那一行
+# `platform/macos/TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift` 判清单 §4 `FR-META-14` 那一行
 # （「依次右键表 / 视图 / 列 / 服务器 / 数据库 / schema / 函数」）：菜单**内容**与**作用在哪一行**
-# 两件事这一轮都搬进了 `App/Views/ObjectTreeContextMenu.swift`（一个静态 `@ViewBuilder` 入口 + 一个纯函数），
+# 两件事这一轮都搬进了 `platform/macos/App/Views/ObjectTreeContextMenu.swift`（一个静态 `@ViewBuilder` 入口 + 一个纯函数），
 # 于是不需要鼠标事件、也不需要任何权限 —— 每类节点渲染一遍、拿「这一遍取到的文案集合」与
 # `ObjectTreeActions.isAvailable` 的规则**双向**对账；作用行用产品自己摊平的
 # `ObjectTreeRows.visibleRows` 喂 `ObjectTreeMenuTarget.resolve`。
@@ -63,7 +63,7 @@ set -euo pipefail
 
 # ## 第四批（`T-20261002-027`，开发循环第 162 轮）：标题栏搜索栏**点击地图**
 #
-# `TestsUISnapshot/TitleBarSearchClickProbeTests.swift` 判「**看得见的框 = 能点的框**」这条：
+# `platform/macos/TestsUISnapshot/TitleBarSearchClickProbeTests.swift` 判「**看得见的框 = 能点的框**」这条：
 # 可见框内的采样点逐点断言命中目标 = 输入框或其接力层（任一点落空 ⇒ 判红）、留白点按下真的把
 # 键盘交给同一框里的输入框、清空按钮那一段留给 SwiftUI、以及**同一套量法喂修前那份框必须判红**
 # （红/绿成对）。**真因**（第 162 轮量到的）：SwiftUI 画的背景填充与 `strokeBorder` 默认参与命中
@@ -186,7 +186,7 @@ import sys
 
 root = sys.argv[1]
 anchors = {
-    "App/Views/SQLEditorView.swift": (
+    "platform/macos/App/Views/SQLEditorView.swift": (
         ("private var rememberedCarets: [NSRange] = []",
          "视图不再自己记住 AppKit 收不下的裸光标（⌥⌘↑↓ 加光标会静默失效）"),
         ("selectedRanges.map(\\.rangeValue) + rememberedCarets,",
@@ -198,11 +198,11 @@ anchors = {
         ("if !isApplyingMultiSelection { rememberedCarets = [] }",
          "用户自己动光标时不再作废裸光标（会退回「看着一个光标、打字却在两处」）"),
     ),
-    "Core/MultiCursor.swift": (
+    "platform/macos/Core/MultiCursor.swift": (
         ("let end = range.location + min(maxColumn + 1, contentLength)",
          "列选不再夹到行尾（短行会被拽过换行）"),
     ),
-    "App/Views/TerminalView.swift": (
+    "platform/macos/App/Views/TerminalView.swift": (
         ("TerminalInput.route(", "视图不再问 Core 的归属判定（拖动 / 滚轮那条线）"),
         ("TerminalInput.rightClickRoute(", "视图不再问 Core 的右键归属判定"),
         ("guard forwardsRightClick(event) else { return super.rightMouseDown(with: event) }",
@@ -213,7 +213,7 @@ anchors = {
         ("TerminalInput.mouseReport(", "鼠标上报字节不再经唯一出口"),
         ("TerminalInput.shouldReport(", "鼠标上报不再按模式过滤"),
     ),
-    "App/Views/ObjectTreeView.swift": (
+    "platform/macos/App/Views/ObjectTreeView.swift": (
         ("@State private var hoverBox = HoverBox()",
          "悬停行不再存进那个**无观察者**的盒子 ⇒ 鼠标停着不动界面会自己闪（2026-09-24 那次）"),
         ("RowMouseCatcher(",
@@ -223,28 +223,28 @@ anchors = {
         ("object: row.object",
          "菜单的目标不再是**这一行自己的对象** ⇒ 会退回按悬停 / 上次选中解析"),
         # 反向那半（整树兜底菜单 `menuTargetObject` / `ObjectTreeMenuTarget.resolve(` 不许回来）由
-        # `Tests/ObjectTreeRowMenuConventionTests.swift` 与 `Tests/ObjectTreeMenuConventionTests.swift`
+        # `platform/macos/Tests/ObjectTreeRowMenuConventionTests.swift` 与 `platform/macos/Tests/ObjectTreeMenuConventionTests.swift`
         # 的 `XCTAssertFalse` 钉住 —— 这个脚本只支持「在场」形状，别把它写成第二个判据。
     ),
-    "App/Views/ObjectTreeContextMenu.swift": (
+    "platform/macos/App/Views/ObjectTreeContextMenu.swift": (
         ("static func items(",
          "菜单内容不再有唯一入口（判据与界面读的会是两份东西）"),
         ("ObjectTreeActions.isAvailable(.", "菜单项的呈现不再由 Core 的规则决定（视图里会另写一份类型判断）"),
         ("ObjectTreeActions.hasContextMenu(row.object.kind)",
          "「这一行有没有菜单」不再问 Core 的 `menuKinds`"),
     ),
-    "TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift": (
+    "platform/macos/TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift": (
         ("VStack(alignment: .leading, spacing: 6) {",
          "快照的容器不再由判据那一侧加 ⇒ 兄弟节点叠成一行，图上看着像「菜单只有一个条目」"),
     ),
-    "App/Views/ObjectTreeRows.swift": (
+    "platform/macos/App/Views/ObjectTreeRows.swift": (
         ("static func visibleRows(", "可见行不再是产品自己摊平出来的那一份（探针拿它当输入）"),
     ),
-    "Core/ObjectTreeActions.swift": (
+    "platform/macos/Core/ObjectTreeActions.swift": (
         ("public static let menuKinds: Set<DatabaseObject.Kind> = [",
          "「哪些节点类型该有右键菜单」不再在 Core 里单点定义（漏一个就判不出来了）"),
     ),
-    "App/Views/TitleBarSearchField.swift": (
+    "platform/macos/App/Views/TitleBarSearchField.swift": (
         ("final class TitleBarSearchBoxView: NSView",
          "整框不再是 AppKit 视图 ⇒ 命中测试又会被 SwiftUI 那层接走，可见框里的留白重新点不动（T-20261002-027 二次复测打回后的结构性换法）"),
         ("final class TitleBarSearchFieldView: NSTextField",
@@ -269,8 +269,8 @@ for relative, needles in anchors.items():
 
 for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests",
               "TitleBarSearchClickProbeTests"):
-    if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
-        failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
+    if not os.path.exists(os.path.join(root, f"platform/macos/TestsUISnapshot/{probe}.swift")):
+        failures.append(f"platform/macos/TestsUISnapshot/{probe}.swift 不在盘上")
 
 if failures:
     for item in failures:

@@ -11,19 +11,19 @@ dsh-tui，遇到要执行命令只能去开系统终端，**违背了我这个�
 
 判据（任一不过即失败）
 ----------------------
-A. **Core 模型在位**：`Core/TerminalTabs.swift` 每个 API 锚点在盘上（逐条正则，少一条点名），
+A. **Core 模型在位**：`platform/macos/Core/TerminalTabs.swift` 每个 API 锚点在盘上（逐条正则，少一条点名），
    且**六个行为组**（新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射）各自的方法一个不少。
 B. **Core 不出用户可见文案**：该文件的**代码行**里不许出现中文字面量（R-45：人话走语言表）。
-C. **文案键中英都在**：页签那一族键逐个在 `Core/Localization.swift` 的语言表里同时有简中与英文
+C. **文案键中英都在**：页签那一族键逐个在 `platform/macos/Core/Localization.swift` 的语言表里同时有简中与英文
    （少一个 = 英文界面掉回中文）。
-D. **单测逐组钉住**：`Tests/TerminalTabsTests.swift` 里六个行为组的用例锚点必须在，且用例总数
+D. **单测逐组钉住**：`platform/macos/Tests/TerminalTabsTests.swift` 里六个行为组的用例锚点必须在，且用例总数
    不低于下限（防「测试文件被掏空」）。
 E. **口径锚点**：需求提出者的原话场景（一个页签跑 `dsh-tui`、另一个执行命令）在
    `Docs/发布计划.md` 与队列 `L-84` 行里都在（口径被删 = 判据失去依据）。
 F. **㈡ 界面接线在位**（第 82 轮补；**第 96 轮 `L-89` ㈡ ③ 扩**）：这一半在 App 侧
-   （`App/TerminalPane.swift` / `App/TerminalTabsModel.swift` / `App/Views/TerminalTabsBar.swift` /
-   `App/Views/LowerPaneTabStrip.swift` / `App/Views/LowerPaneView.swift` / `App/Views/TerminalView.swift` /
-   `App/TerminalSession.swift`），**逐条对应口径①②④⑤**：
+   （`platform/macos/App/TerminalPane.swift` / `platform/macos/App/TerminalTabsModel.swift` / `platform/macos/App/Views/TerminalTabsBar.swift` /
+   `platform/macos/App/Views/LowerPaneTabStrip.swift` / `platform/macos/App/Views/LowerPaneView.swift` / `platform/macos/App/Views/TerminalView.swift` /
+   `platform/macos/App/TerminalSession.swift`），**逐条对应口径①②④⑤**：
    每页签独立会话对象（不是「一个模型切屏」）、工具条**左侧**的页签头（在 `Spacer` 之前）、
    右侧那排按钮**六个符号一个不少**（清单数的是五个动作：清空日志 / 最大化 / 恢复 / 收起 / 重启 shell；
    第 6 个是折叠态的**展开**箭头 —— 恢复面板的唯一入口）、⌘T ⌘W ⌘1…9/⌘⇧[ ⌘⇧] 的接线点
@@ -32,7 +32,7 @@ F. **㈡ 界面接线在位**（第 82 轮补；**第 96 轮 `L-89` ㈡ ③ 扩*
    **新画一个没登记的**也要报（棘轮 `RIGHT_SIDE_CALL_SITES`：这一行里 `iconButton(` 的调用点数是登记的），
    否则新按钮可以永远不进任何判据；② 工具条那一行抽成了**独立视图**（`LowerPaneTabStrip`），
    锚点随之搬过去 —— 抽出来是为了能**单独离屏渲染**，页面判据（探针四）才拍得到它。
-   **另外**：App 侧探针（`TestsUISnapshot/TerminalTabsProbeTests.swift`）**六个用例**的锚点必须在位
+   **另外**：App 侧探针（`platform/macos/TestsUISnapshot/TerminalTabsProbeTests.swift`）**六个用例**的锚点必须在位
    —— 前三个是真开 shell 的独立性与退出 / 确认链路，后三个是**版面**（页签头在左 / 右侧按钮位置不动的
    像素判据）、**按钮齐备**（按面板状态该有的有、不该有的没有）与**落点**（⌘1…9 / ⌘⇧[ ⌘⇧] / 改名
    落到对的会话，且改名不动那条 PTY）。
@@ -60,23 +60,23 @@ import shutil
 import sys
 import tempfile
 
-MODEL = "Core/TerminalTabs.swift"
-TABLE = "Core/Localization.swift"
-TESTS = "Tests/TerminalTabsTests.swift"
+MODEL = "platform/macos/Core/TerminalTabs.swift"
+TABLE = "platform/macos/Core/Localization.swift"
+TESTS = "platform/macos/Tests/TerminalTabsTests.swift"
 PLAN = "Docs/发布计划.md"
 QUEUE = "Docs/design/开发循环-任务队列.md"
 
 # F（㈡ 界面接线）：判据要盯的 App 侧文件。
-PANE = "App/TerminalPane.swift"
-SESSION = "App/TerminalSession.swift"
-TABS_MODEL = "App/TerminalTabsModel.swift"
-TABS_BAR = "App/Views/TerminalTabsBar.swift"
-LOWER_PANE = "App/Views/LowerPaneView.swift"
-TERMINAL_VIEW = "App/Views/TerminalView.swift"
+PANE = "platform/macos/App/TerminalPane.swift"
+SESSION = "platform/macos/App/TerminalSession.swift"
+TABS_MODEL = "platform/macos/App/TerminalTabsModel.swift"
+TABS_BAR = "platform/macos/App/Views/TerminalTabsBar.swift"
+LOWER_PANE = "platform/macos/App/Views/LowerPaneView.swift"
+TERMINAL_VIEW = "platform/macos/App/Views/TerminalView.swift"
 # F（㈡ 界面接线 · 第 96 轮）：工具条那一行抽成了**独立视图**（原来长在 LowerPaneView 的 tabStrip 里）——
 # 抽出来是为了能**单独离屏渲染**（探针四拿它做版面判据），所以锚点也跟着搬到这里。
-STRIP = "App/Views/LowerPaneTabStrip.swift"
-PROBE = "TestsUISnapshot/TerminalTabsProbeTests.swift"
+STRIP = "platform/macos/App/Views/LowerPaneTabStrip.swift"
+PROBE = "platform/macos/TestsUISnapshot/TerminalTabsProbeTests.swift"
 
 # A：模型锚点。分六组，与 `FR-EDIT-29` 的判据逐条对应 —— 少一组就等于那条判据悬空。
 API_ANCHORS = {
@@ -178,7 +178,7 @@ APP_ANCHORS = {
 RIGHT_SIDE_BUTTONS = ["rectangle.compress.vertical", "rectangle.expand.vertical",
                       "chevron.down", "chevron.up", "trash", "arrow.clockwise"]
 
-# 反向对账的棘轮：`App/Views/LowerPaneTabStrip.swift` 里 `iconButton(` 的**调用点**数。
+# 反向对账的棘轮：`platform/macos/App/Views/LowerPaneTabStrip.swift` 里 `iconButton(` 的**调用点**数。
 # 6 个符号由 5 个调用点画出（最大化 / 恢复是同一个调用点上的三目表达式，展开箭头在折叠那一支）。
 # 新增按钮必须**同时**改这里与登记表 —— 只改一处就判红（这正是「同一件事有两份手抄清单就有两个出口」的解药）。
 RIGHT_SIDE_CALL_SITES = 5

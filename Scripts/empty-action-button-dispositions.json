@@ -91,7 +91,7 @@
       "func": "saveCurrentQuery",
       "guard": "!finalName.isEmpty",
       "form": "view-disabled-local",
-      "view": "App/Views/SaveQuerySheet.swift",
+      "view": "platform/macos/App/Views/SaveQuerySheet.swift",
       "anchor": ".disabled(trimmedName.isEmpty)",
       "reason": "**L-50 选口径时的先例**：同一个动作族（保存）在空名字时本来就是灰着 —— 判据属性 `trimmedName` 住在表单里，表单自己 `.disabled` 它；AppState 这句守卫是第二道（防御性）。"
     },
@@ -130,7 +130,7 @@
       "guard": "noteEditorHasContent",
       "form": "view-disabled",
       "predicate": "noteEditorHasContent",
-      "view": "App/Views/NotesPanel.swift",
+      "view": "platform/macos/App/Views/NotesPanel.swift",
       "reason": "**本轮修的就是它（L-50）**：从前视图侧没写处置 ⇒ 空编辑器上「保存」满色可点、点下去静默 return（2026-09-26 读图抓到）。口径 = 灰着；判据属性 `noteEditorHasContent` 是唯一出处。同一函数里许可那一档**故意不灰**（Pro 档点下去要给「本档不含笔记」那句人话）—— 两句守卫处置不同。"
     },
     {
@@ -138,7 +138,7 @@
       "guard": "todoEditorHasContent",
       "form": "view-disabled",
       "predicate": "todoEditorHasContent",
-      "view": "App/Views/NotesPanel.swift",
+      "view": "platform/macos/App/Views/NotesPanel.swift",
       "reason": "队列 `L-100` 界面半第一片（待办清单屏的编辑器）：与 `saveNoteFromEditor` **同一条形状** —— 口径 = 灰着；判据属性 `todoEditorHasContent` 是唯一出处（视图那枚「保存」的 `.disabled` 与守卫读同一句）。同一函数里许可那一档**故意不灰**（Pro 档点下去要给「本档不含笔记」那句人话），两句守卫处置不同。"
     },
     {
@@ -169,14 +169,14 @@
       "func": "moveNotes",
       "guard": "!moves.isEmpty",
       "form": "internal",
-      "reason": "**不是菜单项的前置判据**：笔记行右键菜单里「当前所在那一格」的灰着由 Core `NotebookMovePrompt` 的 `NotebookMoveTarget.isSelectable` 决定（视图 `.disabled(!target.isSelectable)`；判据 `Tests/NotebookMovePromptTests.swift` 5 例钉住它）。这里是**第二道**：`AppState.moveNotes` 把「已经在目标笔记本里的那几条」滤掉，防别的调用路径（不走右键菜单）把一次白写落到库上 —— 白写虽不改 `updatedAt`（契约 §2.12 第 4 条），没有意义的写仍然是没有意义的写。"
+      "reason": "**不是菜单项的前置判据**：笔记行右键菜单里「当前所在那一格」的灰着由 Core `NotebookMovePrompt` 的 `NotebookMoveTarget.isSelectable` 决定（视图 `.disabled(!target.isSelectable)`；判据 `platform/macos/Tests/NotebookMovePromptTests.swift` 5 例钉住它）。这里是**第二道**：`AppState.moveNotes` 把「已经在目标笔记本里的那几条」滤掉，防别的调用路径（不走右键菜单）把一次白写落到库上 —— 白写虽不改 `updatedAt`（契约 §2.12 第 4 条），没有意义的写仍然是没有意义的写。"
     },
     {
       "func": "confirmContainerEdit",
       "guard": "let request = pendingContainerEdit, containerEditNameIsAcceptable",
       "form": "view-disabled",
       "predicate": "containerEditNameIsAcceptable",
-      "view": "App/Views/NotesPanel.swift",
+      "view": "platform/macos/App/Views/NotesPanel.swift",
       "reason": "**容器编辑弹框（新建 / 重命名）里的「确定」**（队列 `L-97` 界面半第四片）：名字洗净后是空的（全空白）⇒ 按钮**灰着** —— 与 `SaveQuerySheet` 的 `trimmedName` 同一档先例（空名字上「确定了」没有可落的库）。判据属性 `containerEditNameIsAcceptable` 是**唯一出处**（体 = Core 的 `ContainerNameRule.isAcceptable`），视图那一侧 `.disabled(!appState.containerEditNameIsAcceptable)` 读的是同一个判断；`confirmContainerEdit` 先**同步取走**请求再异步落库 —— 弹框一关 `isPresented` 的 `set` 就会收掉请求，读晚一步就是「点了确定、什么都没发生」。"
     },
     {

@@ -112,7 +112,7 @@ echo ""
 echo "== 4) 方差不支持时不给空数组 =="
 # GBase 方言没有 tableStructureQuery 实现（默认 nil）：界面据此给可读错误，
 # 而不是把"读不出来"显示成"这张表没有列"。
-grep -q "func tableStructureQuery(table: String, schema: String?) -> String? { nil }" Core/Dialects.swift \
+grep -q "func tableStructureQuery(table: String, schema: String?) -> String? { nil }" platform/macos/Core/Dialects.swift \
     && check "不支持读取的方言默认返回 nil（不会被当成零列）" 0 \
     || check "默认实现存在" 1
 

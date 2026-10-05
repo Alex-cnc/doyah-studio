@@ -2,174 +2,174 @@
   "_说明": "`Scripts/check-notes-offline.py`（零网络出口门禁，闭环第 10 项）的台账。判据与台账分家会让『改台账就能过』变成一条暗道，所以这里写的是**声明**，门禁拿它跟事实对账。",
   "scope": [
     {
-      "path": "Core/Note.swift",
+      "path": "platform/macos/Core/Note.swift",
       "layer": "core",
       "role": "笔记模型 + 存储入口（`NoteStore`）—— 笔记数据只落本机数据家"
     },
     {
-      "path": "Core/NoteBody.swift",
+      "path": "platform/macos/Core/NoteBody.swift",
       "layer": "core",
       "role": "笔记正文块模型（纯值类型，无 IO）"
     },
     {
-      "path": "Core/Notebook.swift",
+      "path": "platform/macos/Core/Notebook.swift",
       "layer": "core",
       "role": "两层归属的结构模型（架 / 笔记本 + 归属解析 + 删除计划）—— 队列 `L-97` 第一~四片；纯值类型与 `NoteStore` 协议，笔记数据只落本机数据家"
     },
     {
-      "path": "Core/NoteNavigation.swift",
+      "path": "platform/macos/Core/NoteNavigation.swift",
       "layer": "core",
       "role": "两级导航的宿主装配侧逻辑（选中态 / 范围过滤 / 计数 / 新建落点）—— 队列 `L-97` 界面半第一片；纯函数，无网络无库"
     },
     {
-      "path": "Core/NotebookRemovalPrompt.swift",
+      "path": "platform/macos/Core/NotebookRemovalPrompt.swift",
       "layer": "core",
       "role": "删除确认框的动作 / 顺序 / 文案键（影响面那句的形状）—— 队列 `L-97` 界面半第二片；纯值类型，无网络无库，只吃 `ContainerRemovalPlan` 与 `LKey`"
     },
     {
-      "path": "Core/NotebookMovePrompt.swift",
+      "path": "platform/macos/Core/NotebookMovePrompt.swift",
       "layer": "core",
       "role": "跨笔记本移动的目标清单 / 「能不能去」的规则 / 文案键 —— 队列 `L-97` 界面半第三片；纯值类型，无网络无库，只吃 `NotebookDirectory` / `NotebookPlacement` / `LKey`"
     },
     {
-      "path": "Core/NotebookEditPrompt.swift",
+      "path": "platform/macos/Core/NotebookEditPrompt.swift",
       "layer": "core",
       "role": "新建 / 重命名 / 排序的规则与文案键（名字规则、新建落点、整层重排）—— 队列 `L-97` 界面半第四片；纯值类型，无网络无库，只吃 `NotebookDirectory` / `NotesScope` / `LKey`"
     },
     {
-      "path": "Core/NoteSelectionPrompt.swift",
+      "path": "platform/macos/Core/NoteSelectionPrompt.swift",
       "layer": "core",
       "role": "批量多选 / 拖拽载荷 / 落点计划的规则与文案键 —— 队列 `L-97` 界面半第五片；纯值类型，无网络无库，只吃 `UUID` / `LKey`"
     },
     {
-      "path": "Core/NotebookShelfMovePrompt.swift",
+      "path": "platform/macos/Core/NotebookShelfMovePrompt.swift",
       "layer": "core",
       "role": "跨架移动的目标清单 / 落点判定 / 文案键 —— 队列 `L-97` 界面半第六片；纯值类型，无网络无库，只吃 `NotebookDirectory` / `LKey`"
     },
     {
-      "path": "Core/NotePresentation.swift",
+      "path": "platform/macos/Core/NotePresentation.swift",
       "layer": "core",
       "role": "中栏卡片的摘要与相对时间 —— 队列 `L-184` 三栏重排；纯函数，无网络无库，只吃 `Date` / `Calendar` / `LKey`"
     },
     {
-      "path": "Core/Todo.swift",
+      "path": "platform/macos/Core/Todo.swift",
       "layer": "core",
-      "role": "待办任务清单的模型（`Todo` / `TodoPriority`）—— 队列 `N-11` 的 macOS 核心层半；纯值类型，无网络无库（库表与行映射在 `Core/NoteStorage/`，那一层不走本清单的按名扫描）"
+      "role": "待办任务清单的模型（`Todo` / `TodoPriority`）—— 队列 `N-11` 的 macOS 核心层半；纯值类型，无网络无库（库表与行映射在 `platform/macos/Core/NoteStorage/`，那一层不走本清单的按名扫描）"
     },
     {
-      "path": "Core/TodoPresentation.swift",
+      "path": "platform/macos/Core/TodoPresentation.swift",
       "layer": "core",
       "role": "待办清单的三件纯逻辑（分区 / 截止档位 / 空标题）—— 队列 `L-100` 清单界面；纯函数，无网络无库，只吃 `Todo` / `Date` / `Calendar` / `LKey`"
     },
     {
-      "path": "Core/TodoCalendar.swift",
+      "path": "platform/macos/Core/TodoCalendar.swift",
       "layer": "core",
       "role": "待办日历的日期算术与投影（月 / 周格子 + 把任务铺在日期上）—— 队列 `L-100` 的 Core 半第二片（第 186 轮落文件时漏登，第 188 轮补登）；纯函数，无网络无库，只吃 `Date` / `Calendar`"
     },
     {
-      "path": "Core/Reminder.swift",
+      "path": "platform/macos/Core/Reminder.swift",
       "layer": "core",
       "role": "提醒的调度语义（规则 / 规格 / 求解 / 预演 / （日历日, 分钟）↔ 瞬间）—— 队列 `L-100` 的「与提醒联动」Core 半，契约 §2.10 §3.12；纯函数，零平台 API，无网络无库，只吃 Foundation"
     },
     {
-      "path": "Core/ReminderPresentation.swift",
+      "path": "platform/macos/Core/ReminderPresentation.swift",
       "layer": "core",
       "role": "提醒的界面层纯逻辑（档位 → 规则 / 权限 → 排不排 / 规则 → 一句话）—— 队列 `L-100` 落法 ④ 的界面半第一片 Core 半（第 190 轮）；纯函数，零平台 API（无系统时钟 / 时区 / 格式化器 / 通知框架），无网络无库，只吃 `Todo` / `Date` / `LKey`"
     },
     {
-      "path": "Core/TodoSort.swift",
+      "path": "platform/macos/Core/TodoSort.swift",
       "layer": "core",
       "role": "待办清单的排序口径（三档第一关键字 / 无截止排末尾 / 同键 `createdAt` + 标识兜底）—— 队列 `L-100` 的组织与检索半（第 191 轮），契约 §3.13 四条；纯函数，零平台 API，无网络无库，只吃 `Todo` / `Date`"
     },
     {
-      "path": "Core/TodoQuery.swift",
+      "path": "platform/macos/Core/TodoQuery.swift",
       "layer": "core",
       "role": "待办清单的筛选 / 分组 / 视图入口（参照窗口三个边界 + 截止带 + 逾期判定 + 五档筛选 + 四档分组）—— 队列 `L-100` 的组织与检索半（第 191 轮）；纯函数，零平台 API（无系统时钟 / 平台日历 / 时区 / 格式化器），无网络无库，只吃 `Todo` / `Date` / `LKey`"
     },
     {
-      "path": "Core/ReminderEntry.swift",
+      "path": "platform/macos/Core/ReminderEntry.swift",
       "layer": "core",
       "role": "提醒那一区的合成状态（档位空间 / 选中档 / 档位回显 / 规则 / 求解 / 权限 / 排不排）—— 队列 `L-100` 落法 ④ 的界面入口半（第 193 轮）；纯函数，零平台 API（无系统时钟 / 时区 / 平台日历 / 格式化器 / 通知框架），无网络无库，只吃 `Todo` / `Date` / `LKey`"
     },
     {
-      "path": "Core/License.swift",
+      "path": "platform/macos/Core/License.swift",
       "layer": "core",
       "role": "许可与装配判据（笔记模块随包的条件判定）"
     },
     {
-      "path": "Core/LicenseLoader.swift",
+      "path": "platform/macos/Core/LicenseLoader.swift",
       "layer": "core",
       "role": "从**本机文件**装载许可证（读不到就如实说明）—— 许可链是最容易溜进「联网激活」的地方，所以它也在范围内"
     },
     {
-      "path": "Core/LicensePresentation.swift",
+      "path": "platform/macos/Core/LicensePresentation.swift",
       "layer": "core",
       "role": "许可 → 界面呈现哪些块（笔记项可见性的唯一判据）"
     },
     {
-      "path": "Core/LicensePublicKey.swift",
+      "path": "platform/macos/Core/LicensePublicKey.swift",
       "layer": "core",
       "role": "内置公钥（签名校验用；私钥在发行方手里）"
     },
     {
-      "path": "Core/LicenseSignature.swift",
+      "path": "platform/macos/Core/LicenseSignature.swift",
       "layer": "core",
       "role": "Ed25519 签名校验（ADR-34：**只做离线校验，不联网激活**）—— 这条口径现在由本门禁机械守着"
     },
     {
-      "path": "Core/AICapture.swift",
+      "path": "platform/macos/Core/AICapture.swift",
       "layer": "core",
       "role": "笔记侧的 AI 采集映射（按设计只做映射，不发出请求）"
     },
     {
-      "path": "Core/AICaptureUltra.swift",
+      "path": "platform/macos/Core/AICaptureUltra.swift",
       "layer": "core",
       "role": "宿主侧适配（按设计引用 Ultra 类型，非笔记侧可独立构建的那一份）"
     },
     {
-      "path": "Core/AICaptureIntake.swift",
+      "path": "platform/macos/Core/AICaptureIntake.swift",
       "layer": "core",
       "role": "AI 产物入笔记的**入库判定**（队列 L-134）：同指纹默认不重复存 + 显式逃生门 —— 纯本地判重，无任何网络出口"
     },
     {
-      "path": "App/Views/NotesPanel.swift",
+      "path": "platform/macos/App/Views/NotesPanel.swift",
       "layer": "app",
       "role": "笔记面板（活动栏入口）"
     }
   ],
   "scopeBeyondIsolation": [
     {
-      "path": "Core/LicenseLoader.swift",
+      "path": "platform/macos/Core/LicenseLoader.swift",
       "reason": "许可链不在解耦门禁的笔记清单里（那份清单管的是「笔记侧能不能独立构建」），但它按设计要给 Windows / Linux 版复用（`LicenseSignature` 的注释就是这么写的：用 swift-crypto 而不是 CryptoKit，为的是跨平台），所以**笔记模块的零网络出口必须覆盖它** —— 许可校验是「溜进联网激活」最经典的位置，`LicenseSignature` 现在写着「不联网激活」，本门禁把这句话变成判据。"
     },
     {
-      "path": "Core/LicensePresentation.swift",
+      "path": "platform/macos/Core/LicensePresentation.swift",
       "reason": "同上：它决定笔记项在活动栏可见不可见（`check-plugin-assembly.py` 也在盯这一处），属笔记模块的许可半边。"
     },
     {
-      "path": "Core/LicensePublicKey.swift",
+      "path": "platform/macos/Core/LicensePublicKey.swift",
       "reason": "同上：签名校验用的内置公钥，随笔记模块一起跨平台。"
     },
     {
-      "path": "Core/LicenseSignature.swift",
+      "path": "platform/macos/Core/LicenseSignature.swift",
       "reason": "同上：ADR-34 的「只做离线签名校验」这条口径由本门禁守着。"
     }
   ],
   "outOfScope": [
     {
-      "path": "Tests/NoteTests.swift",
+      "path": "platform/macos/Tests/NoteTests.swift",
       "reason": "测试不是随包代码（Linux 产物里没有它）"
     },
     {
-      "path": "Tests/NoteBodyTests.swift",
+      "path": "platform/macos/Tests/NoteBodyTests.swift",
       "reason": "测试不是随包代码"
     },
     {
-      "path": "Tests/NoteDataBoundaryTests.swift",
+      "path": "platform/macos/Tests/NoteDataBoundaryTests.swift",
       "reason": "测试不是随包代码"
     },
     {
-      "path": "Tests/AICaptureTests.swift",
+      "path": "platform/macos/Tests/AICaptureTests.swift",
       "reason": "测试不是随包代码"
     }
   ],
@@ -266,12 +266,12 @@
     ],
     "requiredMarkers": [
       {
-        "file": "Core/Note.swift",
+        "file": "platform/macos/Core/Note.swift",
         "marker": "static func defaultStore",
         "why": "笔记的存储入口必须在范围内：否则把范围缩成几个纯值类型文件，本门禁就变成一句空话（『零网络出口』首先得有那个能写盘/能出网的东西）"
       },
       {
-        "file": "App/Views/NotesPanel.swift",
+        "file": "platform/macos/App/Views/NotesPanel.swift",
         "marker": "struct NotesListView",
         "why": "笔记面板必须在范围内（活动栏入口，Linux 侧也要有它的入口）"
       }

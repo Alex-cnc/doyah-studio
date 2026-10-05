@@ -14,7 +14,7 @@
 修法是把「当前该用哪种语言」收成一个口子：`LocalizationManager.effectiveLanguage`
 （宿主语境优先，其次用户选择）。本门禁把"**不许**再按用户选择取语言"变成机械判据：
 
-  · `App/` 下（除 `App/LocalizationManager.swift` —— 它就是形成这个值的那个文件）**不得**出现
+  · `platform/macos/App/` 下（除 `platform/macos/App/LocalizationManager.swift` —— 它就是形成这个值的那个文件）**不得**出现
     `LocalizationManager.shared.language` 或 `localization.language`；
   · 三个**合法例外**在 `ALLOWED` 里逐条写明理由（都是"问用户选的是哪种语言"或"进程级系统界面"，
     不是"当前渲染语言"）；**例外表也要反向对账**：某个文件里已经没有这种写法了 ⇒ 条目陈旧，红了才删。
@@ -39,9 +39,9 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
-# 扫哪儿：App/ 下所有 Swift 源文件，**除**语言来源自身的定义文件。
+# 扫哪儿：platform/macos/App/ 下所有 Swift 源文件，**除**语言来源自身的定义文件。
 SCAN_ROOT = "App"
-DEFINITION_FILE = "App/LocalizationManager.swift"
+DEFINITION_FILE = "platform/macos/App/LocalizationManager.swift"
 
 # 「按用户选择取语言」的写法（含环境对象那一份）。
 FORBIDDEN = [
@@ -51,15 +51,15 @@ FORBIDDEN = [
 
 # 合法例外：文件 → 理由。每条都会**反向对账**（文件里没有这种写法了 ⇒ 条目陈旧 ⇒ 红）。
 ALLOWED = {
-    "App/MainMenuLocalizer.swift": "改的是 AppKit 系统菜单（进程级系统界面）：按用户选择 / 启动语言"
+    "platform/macos/App/MainMenuLocalizer.swift": "改的是 AppKit 系统菜单（进程级系统界面）：按用户选择 / 启动语言"
     "改写 NSMenuItem.title，不跟渲染语境（见 LocalizationManager 的注释）。",
-    "App/DoyahStudioApp.swift": "根部 `.id(localization.language)`：用户改语言时用它整体重建视图树，"
+    "platform/macos/App/DoyahStudioApp.swift": "根部 `.id(localization.language)`：用户改语言时用它整体重建视图树，"
     "不是拿它当\"当前渲染语言\"。",
-    "App/DoyahStudioCommands.swift": "菜单勾选态：问的就是\"用户选的是哪种语言\"。",
+    "platform/macos/App/DoyahStudioCommands.swift": "菜单勾选态：问的就是\"用户选的是哪种语言\"。",
 }
 
 # 这个口子必须存在（被改名/删掉时，本门禁要当场说清）。
-REQUIRED_DECLARATION = "App/LocalizationManager.swift"
+REQUIRED_DECLARATION = "platform/macos/App/LocalizationManager.swift"
 REQUIRED_PATTERN = re.compile(r"\bvar\s+effectiveLanguage\s*:\s*AppLanguage\b")
 
 
@@ -118,7 +118,7 @@ def main() -> int:
             f"本门禁守的那个口子被改名或删掉了"
         )
 
-    print("🌐 语言来源：App/ 下按用户选择取语言的地方")
+    print("🌐 语言来源：platform/macos/App/ 下按用户选择取语言的地方")
     for relative in sorted(hits):
         marks = "（合法例外）" if relative in ALLOWED else ""
         print(f"   · {relative}{marks}：{len(hits[relative])} 处 —— {'、'.join(hits[relative])}")

@@ -379,7 +379,7 @@
      "path": "Scripts/verify-all.sh"
     },
     {
-     "path": "Tests/CommandPaletteTests.swift"
+     "path": "platform/macos/Tests/CommandPaletteTests.swift"
     }
    ]
   },
@@ -736,7 +736,7 @@
      "path": "Scripts/test-language-registry-gate.py"
     },
     {
-     "path": "Tests/CodeLanguageRegistryTests.swift"
+     "path": "platform/macos/Tests/CodeLanguageRegistryTests.swift"
     }
    ]
   },
@@ -745,14 +745,14 @@
    "domain": "3.2 SQL 编辑与执行",
    "reason": "ui-click",
    "reasonText": "代码格式化的界面点击与观感待人工点验（形态已订正为**只用内置**：不探 `PATH`、不联网；认不出语言与规则空转都如实拒绝）",
-   "marker": "**[alpha 不含]**（界面点击与观感待人工点验；形态 = **只用内置**（2026-10-03 订正，原口径「外部优先 ⇒ 回退内置」已作废），规则与三种结局由 `Tests/CodeFormattingTests.swift` 逐条判）",
+   "marker": "**[alpha 不含]**（界面点击与观感待人工点验；形态 = **只用内置**（2026-10-03 订正，原口径「外部优先 ⇒ 回退内置」已作废），规则与三种结局由 `platform/macos/Tests/CodeFormattingTests.swift` 逐条判）",
    "markerPreExisting": false,
    "evidence": [
     {
-     "path": "Tests/CodeFormattingTests.swift"
+     "path": "platform/macos/Tests/CodeFormattingTests.swift"
     },
     {
-     "path": "Core/CodeFormatting.swift"
+     "path": "platform/macos/Core/CodeFormatting.swift"
     }
    ]
   },
@@ -765,13 +765,13 @@
    "markerPreExisting": false,
    "evidence": [
     {
-     "path": "Tests/WorkspaceHeaderSearchTests.swift"
+     "path": "platform/macos/Tests/WorkspaceHeaderSearchTests.swift"
     },
     {
-     "path": "Tests/WorkspaceSearchContentTests.swift"
+     "path": "platform/macos/Tests/WorkspaceSearchContentTests.swift"
     },
     {
-     "path": "App/Views/WorkspaceHeaderSearch.swift"
+     "path": "platform/macos/App/Views/WorkspaceHeaderSearch.swift"
     }
    ]
   },
@@ -784,10 +784,10 @@
    "markerPreExisting": false,
    "evidence": [
     {
-     "path": "Tests/WorkspaceClosePolicyTests.swift"
+     "path": "platform/macos/Tests/WorkspaceClosePolicyTests.swift"
     },
     {
-     "path": "Core/WorkspaceClose.swift"
+     "path": "platform/macos/Core/WorkspaceClose.swift"
     }
    ]
   }

@@ -7,15 +7,15 @@
     三处 macOS 专属依赖：
 
       1. `Core/KeychainHelper.swift`          —— `import Security`（钥匙串实现）
-      2. `Core/AgentConfigurationStore.swift` —— `import Security`（同上）
-      3. `Core/SecureDirectoryAccess.swift`   —— macOS-only 的 Foundation 书签 API
-      4. `Core/AppError.swift`                —— `OSStatus`（Darwin 类型）
+      2. `platform/macos/Core/AgentConfigurationStore.swift` —— `import Security`（同上）
+      3. `platform/macos/Core/SecureDirectoryAccess.swift`   —— macOS-only 的 Foundation 书签 API
+      4. `platform/macos/Core/AppError.swift`                —— `OSStatus`（Darwin 类型）
 
     Linux 上没有这些模块/类型，Core 会**直接编译不过**。已把它们移到 `Platform/macOS/`
     平台模块（Core 只留协议），本脚本负责让它不再回潮。
 
 口径：
-    · 只管 `Core/**/*.swift` —— 平台模块与 App 本来就该写平台实现，不在此列；
+    · 只管 `platform/macos/Core/**/*.swift` —— 平台模块与 App 本来就该写平台实现，不在此列；
     · 确有必要时在该行加 `// portability-ok: 理由` 显式豁免（会有审计痕迹）。
 
 用法：

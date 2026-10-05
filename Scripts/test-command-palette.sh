@@ -27,7 +27,7 @@ echo "== 2) ⌘K 必须登记在快捷键单一事实来源里（FR-EDIT-28 的�
 # 判据：AppShortcut 里要有一条 ⌘K；且**不得有第二条**占用 ⌘K（占用冲突会让其中一个静默失效）。
 python3 - <<'PY'
 import pathlib, re, sys
-text = pathlib.Path("App/ShortcutCatalog.swift").read_text(encoding="utf-8")
+text = pathlib.Path("platform/macos/App/ShortcutCatalog.swift").read_text(encoding="utf-8")
 if "case commandPalette" not in text:
     print("  ❌ AppShortcut 里没有 commandPalette —— 帮助面板列不出 ⌘K，用户不知道有这个入口")
     sys.exit(1)
@@ -50,7 +50,7 @@ echo ""
 echo "== 3) 每条命令都有类别与关键词（否则面板里搜不到 / 分不出组）=="
 python3 - <<'PY'
 import pathlib, re, sys
-text = pathlib.Path("App/AppCommandCatalog.swift").read_text(encoding="utf-8")
+text = pathlib.Path("platform/macos/App/AppCommandCatalog.swift").read_text(encoding="utf-8")
 items = re.findall(r'item\(\s*"([^"]+)"\s*,\s*\.(\w+)\s*,\s*"([^"]*)"\s*,\s*"([^"]*)"\s*,\s*\.(\w+)\s*\)', text)
 if len(items) < 10:
     print(f"  ❌ 只解析到 {len(items)} 条命令 —— 清单结构可能变了，请同步本脚本")
@@ -69,7 +69,7 @@ PY
 
 echo ""
 echo "== 4) 未知 id 不静默（点了没反应是最坏的结果）=="
-if grep -q "statusMessage = L(.commandPaletteNoMatch)" App/AppState.swift; then
+if grep -q "statusMessage = L(.commandPaletteNoMatch)" platform/macos/App/AppState.swift; then
     check "分派器的 default 分支给出可读提示" 0
 else
     check "分派器 default 分支必须提示，不许静默" 1

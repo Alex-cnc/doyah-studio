@@ -7,7 +7,7 @@
 # 同一幅画、两种容器，所以这里从**源画**重新出一套方形全出血 PNG。
 #
 # 用法：
-#   ./Scripts/make-linux-icons.sh                     # 生成到 App/Resources/icons/hicolor
+#   ./Scripts/make-linux-icons.sh                     # 生成到 platform/macos/App/Resources/icons/hicolor
 #   ./Scripts/make-linux-icons.sh --source <图>       # 换源画
 #   ./Scripts/make-linux-icons.sh --out <目录>        # 换输出根
 #   ./Scripts/make-linux-icons.sh --sizes 16,32,512   # 只出指定尺寸
@@ -22,8 +22,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SOURCE="${ROOT}/App/Resources/AppIcon-source.png"
-OUT="${ROOT}/App/Resources/icons/hicolor"
+SOURCE="${ROOT}/platform/macos/App/Resources/AppIcon-source.png"
+OUT="${ROOT}/platform/macos/App/Resources/icons/hicolor"
 SIZES="16,24,32,48,64,128,256,512"
 NAME="doyahstudio"
 

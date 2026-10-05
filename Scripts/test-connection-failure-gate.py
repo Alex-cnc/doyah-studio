@@ -25,18 +25,18 @@ LEDGER_REL = "Scripts/connection-failure-dispositions.json"
 
 # 门禁要看的文件（相对路径 → 临时树里的同一位置）
 FILES = [
-    "Vendor/postgres-nio/Sources/PostgresNIO/New/PSQLError.swift",
-    "Core/ConnectionFailure.swift",
-    "Core/Localization.swift",
-    "Core/PostgresService.swift",
-    "Core/MySQLService.swift",
+    "platform/macos/Vendor/postgres-nio/Sources/PostgresNIO/New/PSQLError.swift",
+    "platform/macos/Core/ConnectionFailure.swift",
+    "platform/macos/Core/Localization.swift",
+    "platform/macos/Core/PostgresService.swift",
+    "platform/macos/Core/MySQLService.swift",
     "Scripts/test-connection-errors.sh",
-    "Tests/HostResolutionTests.swift",
-    "Tests/ConnectionFailureNonConnectionTests.swift",
-    "App/Utilities/ErrorPresenter.swift",
-    "App/Views/ConnectionFormView.swift",
-    "CLI/main.swift",
-    "CLI/CLIFailureText.swift",
+    "platform/macos/Tests/HostResolutionTests.swift",
+    "platform/macos/Tests/ConnectionFailureNonConnectionTests.swift",
+    "platform/macos/App/Utilities/ErrorPresenter.swift",
+    "platform/macos/App/Views/ConnectionFormView.swift",
+    "platform/macos/CLI/main.swift",
+    "platform/macos/CLI/CLIFailureText.swift",
 ]
 
 passed: list[str] = []
@@ -129,7 +129,7 @@ def main() -> int:
     print("\n== C) 台账撒谎：说翻译了，映射文件里其实没有")
 
     def remove_case(tree: Path) -> None:
-        edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace("case .connectionError, ", "", 1))
+        edit(tree, "platform/macos/Core/ConnectionFailure.swift", lambda text: text.replace("case .connectionError, ", "", 1))
 
     expect("caseRef 不在映射文件里 → 报红", remove_case, "台账在撒谎")
 
@@ -145,7 +145,7 @@ def main() -> int:
     print("\n== E) 兜底分支没了（驱动新增码时会直接崩）")
 
     def drop_default(tree: Path) -> None:
-        edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/ConnectionFailure.swift", lambda text: text.replace(
             "        default:\n",
             "        case .nothingMatchesThis:\n", 1))
 
@@ -154,7 +154,7 @@ def main() -> int:
     print("\n== E'') 兜底又开始给方向结论（R-60 的老毛病）")
 
     def default_claims_connection(tree: Path) -> None:
-        edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/ConnectionFailure.swift", lambda text: text.replace(
             "        default:\n", "        default:\n            return ConnectionFailure.Description(summary: \"连接数据库失败\")\n", 1))
 
     expect("兜底不是 return nil → 报红并点名 R-60", default_claims_connection, "把猜测当结论")
@@ -162,7 +162,7 @@ def main() -> int:
     print("\n== E''') 那一族不再让路（表在，但没接上）")
 
     def no_bypass(tree: Path) -> None:
-        edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/ConnectionFailure.swift", lambda text: text.replace(
             "if nonConnectionKeys[psqlError.code.description] != nil { return nil }", "", 1))
 
     expect("describe 里不再按表让路 → 报红", no_bypass, "让路")
@@ -170,7 +170,7 @@ def main() -> int:
     print("\n== E') 整个 switch 被拆掉（对账对象消失）")
 
     def drop_switch(tree: Path) -> None:
-        edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/ConnectionFailure.swift", lambda text: text.replace(
             "switch psqlError.code {", "switch psqlError.code.description {", 1))
 
     expect("switch 被改名 → 报红并点名", drop_switch, "对账对象")
@@ -178,13 +178,13 @@ def main() -> int:
     print("\n== F) 解析前置检查：被删掉 / 被挪到建连之后")
 
     def drop_preflight(tree: Path) -> None:
-        edit(tree, "Core/PostgresService.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/PostgresService.swift", lambda text: text.replace(
             "        try ConnectionFailure.requireResolvableHost(config.host, port: config.port)\n", "", 1))
 
     expect("前置检查被删 → 报红并点名", drop_preflight, "里找不到")
 
     def move_preflight_after_connect(tree: Path) -> None:
-        edit(tree, "Core/PostgresService.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/PostgresService.swift", lambda text: text.replace(
             "        try ConnectionFailure.requireResolvableHost(config.host, port: config.port)\n", "", 1).replace(
             "        self.connection = newConnection\n",
             "        try ConnectionFailure.requireResolvableHost(config.host, port: config.port)\n"
@@ -209,7 +209,7 @@ def main() -> int:
     print("\n== I) 中性归因：登记了却不写话（表里没这个码）")
 
     def drop_neutral_note(tree: Path) -> None:
-        edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/ConnectionFailure.swift", lambda text: text.replace(
             '        "queryCancelled": (.nonConnectionCancelled, .nonConnectionCancelledAdvice),\n', "", 1))
 
     expect("中性归因的码不在 nonConnectionKeys 里 → 报红", drop_neutral_note, "却不写话")
@@ -218,7 +218,7 @@ def main() -> int:
 
     def drop_neutral_key(tree: Path) -> None:
         # 把语言表里的那一行改名（不是删枚举 case —— 那是编译错误，不是这道门禁该管的事）
-        edit(tree, "Core/Localization.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/Localization.swift", lambda text: text.replace(
             "        .nonConnectionCancelled: [", "        .nonConnectionCancelledRenamed: [", 1))
 
     expect("neutralKey 在语言表里找不到 → 报红", drop_neutral_key, "台账在撒谎")
@@ -226,18 +226,18 @@ def main() -> int:
     print("\n== K) 中性归因的出口断了（CLI 里不再接这一档）")
 
     def drop_cli_exit(tree: Path) -> None:
-        edit(tree, "CLI/CLIFailureText.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/CLI/CLIFailureText.swift", lambda text: text.replace(
             "            ?? ConnectionFailure.describeNonConnection(error)\n", "", 1))
 
     expect("CLI 不接中性归因 → 报红（用户只剩英文调试串）", drop_cli_exit, "中性归因出口")
 
-    print("\n== M) 台账还指着旧文件（链已收进 CLIFailureText，`CLI/main.swift` 里一处都没有）")
+    print("\n== M) 台账还指着旧文件（链已收进 CLIFailureText，`platform/macos/CLI/main.swift` 里一处都没有）")
 
     def ledger_points_at_old_file(tree: Path) -> None:
         data = ledger_of(tree)
         for entry in data["neutralFallback"]:
-            if entry["file"] == "CLI/CLIFailureText.swift":
-                entry["file"] = "CLI/main.swift"
+            if entry["file"] == "platform/macos/CLI/CLIFailureText.swift":
+                entry["file"] = "platform/macos/CLI/main.swift"
         write_ledger(tree, data)
 
     expect("台账指旧文件 → 报红（链已经不在那儿了）", ledger_points_at_old_file, "中性归因出口")
@@ -257,7 +257,7 @@ def main() -> int:
     def ledger_overstates_sites(tree: Path) -> None:
         data = ledger_of(tree)
         for entry in data["neutralFallback"]:
-            if entry["file"] == "CLI/CLIFailureText.swift":
+            if entry["file"] == "platform/macos/CLI/CLIFailureText.swift":
                 entry["minCallSites"] = 3
         write_ledger(tree, data)
 
@@ -266,21 +266,21 @@ def main() -> int:
     print("\n== K'') 语言表整个读不到（那句话没地方放）")
 
     def drop_language_table(tree: Path) -> None:
-        (tree / "Core/Localization.swift").unlink()
+        (tree / "platform/macos/Core/Localization.swift").unlink()
 
     expect("语言表不存在 → 报红", drop_language_table, "语言表读不到")
 
     print("\n== L) 查询被取消那一档（57014）不再被接住 / 名单没人读")
 
     def drop_sqlstate(tree: Path) -> None:
-        edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/ConnectionFailure.swift", lambda text: text.replace(
             'public static let nonConnectionSQLStates: [String] = ["57014"]',
             'public static let nonConnectionSQLStates: [String] = []', 1))
 
     expect("57014 不在名单里 → 报红（这一档会退回英文调试串）", drop_sqlstate, "名单里没有它")
 
     def unread_sqlstate_list(tree: Path) -> None:
-        edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace(
+        edit(tree, "platform/macos/Core/ConnectionFailure.swift", lambda text: text.replace(
             "guard nonConnectionSQLStates.contains(state) else { return nil }",
             "guard state == \"57014\" else { return nil }", 1))
 

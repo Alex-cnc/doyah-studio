@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# 取源：从 sqlite.org 拿**指定版本**的 amalgamation，校验归档哈希，带进 Vendor/sqlite3/。
+# 取源：从 sqlite.org 拿**指定版本**的 amalgamation，校验归档哈希，带进 platform/macos/Vendor/sqlite3/。
 #
 # 为什么要有这个脚本（而不是"我记得下载过"）：
 #   三端（macOS / Windows / Linux）编的是同一份 sqlite3.c，所以"哪一份"必须是可复现的事实。
@@ -11,14 +11,14 @@ set -euo pipefail
 # 用法：
 #   ./Scripts/vendor-sqlite3.sh                      # 取台账里记着的那个版本（默认行为）
 #   ./Scripts/vendor-sqlite3.sh --version 3530500    # 换成另一个版本号（会提示台账要更新）
-#   ./Scripts/vendor-sqlite3.sh --check-sums         # 只下载校验，不往 Vendor/ 里写
+#   ./Scripts/vendor-sqlite3.sh --check-sums         # 只下载校验，不往 platform/macos/Vendor/ 里写
 #
 # 注意：脚本**不**自己改台账 —— 换版本是一次有意识的决定，得有人把哈希抄进
 # `Scripts/vendored-sqlite.json` 并跑门禁（脚本会把该抄的东西打印出来）。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 LEDGER="${ROOT}/Scripts/vendored-sqlite.json"
-TARGET_DIR="${ROOT}/Vendor/sqlite3"
+TARGET_DIR="${ROOT}/platform/macos/Vendor/sqlite3"
 CACHE_DIR="${DOYAH_SQLITE_CACHE:-${TMPDIR:-/tmp}/doyah-sqlite-vendor}"
 
 VERSION=""
@@ -86,7 +86,7 @@ echo "==> 交付文件 SHA-256（台账里要抄的就是这两个 + 归档那�
 shasum -a 256 "${WORK}/sqlite3.c" "${WORK}/sqlite3.h"
 
 if [[ "${CHECK_ONLY}" == "1" ]]; then
-    echo "==> --check-sums：只校验，不写 Vendor/"
+    echo "==> --check-sums：只校验，不写 platform/macos/Vendor/"
     exit 0
 fi
 

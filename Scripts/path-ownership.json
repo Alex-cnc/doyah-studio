@@ -34,7 +34,7 @@
     "platform/macos/DoyahStudio.xcodeproj/",
     "platform/macos/README.md"
    ],
-   "note": "与派活单 T-20261002-029 给的清单一致，只多一条 `Package.resolved`（SwiftPM 锁文件，属 Swift 族）；`Scripts/` 单列进 shared（见 shared_note）。 2026-10-05：目录统一 `platform/<平台>/`（人类主人令 · 派活单 T-20261005-053）⇒ 本侧全部落点前移到 `platform/macos/`（同批执行 git mv，见该分支提交）；同批补登 `platform/macos/README.md`（本格一页声明，片A / 任务 t_a68ad964）—— 不登记它 = 未登记路径判红，而该文件不在 13 条落点的任何前缀下。",
+   "note": "与派活单 T-20261002-029 给的清单一致，只多一条 `platform/macos/Package.resolved`（SwiftPM 锁文件，属 Swift 族）；`Scripts/` 单列进 shared（见 shared_note）。 2026-10-05：目录统一 `platform/<平台>/`（人类主人令 · 派活单 T-20261005-053）⇒ 本侧全部落点前移到 `platform/macos/`（同批执行 git mv，见该分支提交）；同批补登 `platform/macos/README.md`（本格一页声明，片A / 任务 t_a68ad964）—— 不登记它 = 未登记路径判红，而该文件不在 13 条落点的任何前缀下。",
    "actor": "bighippo"
   },
   {
@@ -92,7 +92,7 @@
   },
   {
    "glob": "Scripts/run-manual-verification-probes.sh",
-   "reason": "`TestsUISnapshot/FormatMenuWiringProbeTests.swift` 落地当轮漏接 FILTER（用例一个都跑不到）⇒ 补进探针清单；共享脚本两侧逐字节同一份",
+   "reason": "`platform/macos/TestsUISnapshot/FormatMenuWiringProbeTests.swift` 落地当轮漏接 FILTER（用例一个都跑不到）⇒ 补进探针清单；共享脚本两侧逐字节同一份",
    "by": "macos",
    "at": "2026-10-03"
   },

@@ -12,12 +12,12 @@
 于是同一个窗口里出现两种底（工作区是科技蓝、笔记是系统灰）。**门禁绿着、观感不对。**
 
 判据（六组）：
-    A **台账双向对账** —— `App/` 下每一处多行编辑面（`TextEditor(`）都必须在台账里登记；
+    A **台账双向对账** —— `platform/macos/App/` 下每一处多行编辑面（`TextEditor(`）都必须在台账里登记；
       台账里登记的每一份文件也必须在盘上真的还有编辑面（**新加编辑面要登记**，
       不许悄悄多出一个「自己画底色」的编辑面）。
     B **每个编辑面都挂 `.editorSurface()`** —— 且处数棘轮（挂了的处数 == 编辑面的处数）。
     C **唯一出处** —— `func editorSurface()` 只许有一处定义，且必须在
-      `App/Views/EditorSurface.swift`；它的函数体必须真的走令牌
+      `platform/macos/App/Views/EditorSurface.swift`；它的函数体必须真的走令牌
       （`scrollContentBackground(.hidden)` + `Theme.surface(.content)` + `Theme.text(.primary)`），
       且**不许**出现裸色 / 系统色 / 字号字面量。
     D **另两个编辑面（AppKit `NSTextView`）** —— 工作区代码编辑器与数据库 SQL 编辑器
@@ -51,7 +51,7 @@ BASE = pathlib.Path(__file__).resolve().parent.parent
 
 APP_DIR = "App"
 # 唯一出处：编辑面的底色 / 字色只在这里写一次。
-SURFACE_DEFINITION = "App/Views/EditorSurface.swift"
+SURFACE_DEFINITION = "platform/macos/App/Views/EditorSurface.swift"
 SURFACE_FUNCTION = "func editorSurface()"
 SURFACE_MODIFIER = ".editorSurface()"
 SURFACE_BODY_TOKENS = (
@@ -64,8 +64,8 @@ SURFACE_BODY_FORBIDDEN = ("NSColor", "Color(", ".system(", "0x", "#")
 # 多行编辑面的标识：SwiftUI 的 `TextEditor`（另两个是 AppKit `NSTextView`，见 APPKIT_SURFACES）。
 EDITOR_TOKEN = "TextEditor("
 APPKIT_SURFACES = (
-    "App/Views/CodeEditorView.swift",   # 工作区代码编辑器
-    "App/Views/SQLEditorView.swift",    # 数据库 SQL 编辑器
+    "platform/macos/App/Views/CodeEditorView.swift",   # 工作区代码编辑器
+    "platform/macos/App/Views/SQLEditorView.swift",    # 数据库 SQL 编辑器
 )
 APPKIT_REQUIRED = (
     "backgroundColor = Theme.nsColor(Surface.content)",
@@ -73,17 +73,17 @@ APPKIT_REQUIRED = (
 )
 APPKIT_FORBIDDEN = "NSColor.textBackgroundColor"
 
-# 台账：`App/` 下带多行编辑面的文件（**双向对账**：新加编辑面必须登记，登记的必须真的还在）。
+# 台账：`platform/macos/App/` 下带多行编辑面的文件（**双向对账**：新加编辑面必须登记，登记的必须真的还在）。
 LEDGER = (
-    "App/Views/AgentSQLPanel.swift",      # 智能体 SQL 结果（可编辑回写）
-    "App/Views/DataTaskPanel.swift",      # 数据任务 · 定义（FR-AI-05）
-    "App/Views/DataTaskSpecSheet.swift",  # 数据任务 · 规格输入
-    "App/Views/DiagnosisPanel.swift",     # 诊断 · 语句 + 回答（两处）
-    "App/Views/MaintenancePanel.swift",   # 维护 · 计划
-    "App/Views/NotesPanel.swift",         # 笔记正文（内测 甲2 的正主）
+    "platform/macos/App/Views/AgentSQLPanel.swift",      # 智能体 SQL 结果（可编辑回写）
+    "platform/macos/App/Views/DataTaskPanel.swift",      # 数据任务 · 定义（FR-AI-05）
+    "platform/macos/App/Views/DataTaskSpecSheet.swift",  # 数据任务 · 规格输入
+    "platform/macos/App/Views/DiagnosisPanel.swift",     # 诊断 · 语句 + 回答（两处）
+    "platform/macos/App/Views/MaintenancePanel.swift",   # 维护 · 计划
+    "platform/macos/App/Views/NotesPanel.swift",         # 笔记正文（内测 甲2 的正主）
 )
 
-MIN_APP_FILES = 90     # 实测 104（`App/` 下 `.swift`）
+MIN_APP_FILES = 90     # 实测 104（`platform/macos/App/` 下 `.swift`）
 MIN_SURFACES = 7       # 实测 7 处 `TextEditor(`（台账 6 份文件里）
 
 
@@ -96,15 +96,15 @@ def rel(root: pathlib.Path, path: pathlib.Path) -> str:
 
 
 def app_sources(root: pathlib.Path, problems: list[str]) -> dict[str, str]:
-    """扫描面 = `App/` 下全部 `.swift`。目录不在 / 文件数低于下限 ⇒ 判红（不许悄悄缩面）。"""
+    """扫描面 = `platform/macos/App/` 下全部 `.swift`。目录不在 / 文件数低于下限 ⇒ 判红（不许悄悄缩面）。"""
     base = root / APP_DIR
     if not base.is_dir():
-        problems.append("App/ 不存在 —— 扫描面被削过（空跑不许通过）")
+        problems.append("platform/macos/App/ 不存在 —— 扫描面被削过（空跑不许通过）")
         return {}
     sources = {rel(root, path): read(path) for path in sorted(base.rglob("*.swift"))}
     if len(sources) < MIN_APP_FILES:
         problems.append(
-            f"App/ 扫描面只有 {len(sources)} 个 `.swift`（下限 {MIN_APP_FILES}）—— 判据扫不到东西，不许通过"
+            f"platform/macos/App/ 扫描面只有 {len(sources)} 个 `.swift`（下限 {MIN_APP_FILES}）—— 判据扫不到东西，不许通过"
         )
     return sources
 
@@ -253,7 +253,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
                         " —— 底色只许由 `.editorSurface()` 给（唯一出处）"
                     )
 
-    notes.append(f"扫描面 App/ {len(sources)} 个 `.swift`；台账 {len(LEDGER)} 份文件")
+    notes.append(f"扫描面 platform/macos/App/ {len(sources)} 个 `.swift`；台账 {len(LEDGER)} 份文件")
     return problems, notes
 
 
@@ -296,11 +296,11 @@ def main() -> int:
 
 WATCHED = (
     SURFACE_DEFINITION,
-    "App/Views/NotesPanel.swift",
-    "App/Views/MaintenancePanel.swift",
-    "App/Views/CodeEditorView.swift",
-    "App/Views/SQLEditorView.swift",
-    "App/Views/AppearanceSheet.swift",   # 无关文件：证明「改别的不会误报」
+    "platform/macos/App/Views/NotesPanel.swift",
+    "platform/macos/App/Views/MaintenancePanel.swift",
+    "platform/macos/App/Views/CodeEditorView.swift",
+    "platform/macos/App/Views/SQLEditorView.swift",
+    "platform/macos/App/Views/AppearanceSheet.swift",   # 无关文件：证明「改别的不会误报」
 )
 
 
@@ -309,7 +309,7 @@ def _sha(path: pathlib.Path) -> str:
 
 
 def _fixture(destination: pathlib.Path, root: pathlib.Path) -> pathlib.Path:
-    """把扫描面（`App/` 全部 `.swift`）复制成一份临时副本。"""
+    """把扫描面（`platform/macos/App/` 全部 `.swift`）复制成一份临时副本。"""
     source = root / APP_DIR
     for path in sorted(source.rglob("*")):
         if not path.is_file():
@@ -343,7 +343,7 @@ def self_test(root: pathlib.Path) -> int:
         # ② 红：笔记正文那一处退回去（内测 甲2 的原病：编辑面画系统底色）
         unwired = fresh("notes-unwired")
         _patch(
-            unwired / "App/Views/NotesPanel.swift",
+            unwired / "platform/macos/App/Views/NotesPanel.swift",
             "                .editorSurface()\n",
             "",
         )
@@ -352,7 +352,7 @@ def self_test(root: pathlib.Path) -> int:
         # ③ 红：新加一个**没登记**的编辑面
         new_surface = fresh("new-surface")
         _patch(
-            new_surface / "App/Views/AppearanceSheet.swift",
+            new_surface / "platform/macos/App/Views/AppearanceSheet.swift",
             "    var body: some View {",
             "    var body: some View {\n        TextEditor(text: .constant(\"\"))",
         )
@@ -361,7 +361,7 @@ def self_test(root: pathlib.Path) -> int:
         # ④ 红：台账登记的文件里编辑面被搬走（陈旧台账）
         stale = fresh("stale-ledger")
         _patch(
-            stale / "App/Views/MaintenancePanel.swift",
+            stale / "platform/macos/App/Views/MaintenancePanel.swift",
             "            TextEditor(text: $appState.maintenancePlanText)\n",
             "            Text(\"搬走了\")\n",
         )
@@ -379,7 +379,7 @@ def self_test(root: pathlib.Path) -> int:
         # ⑥ 红：第二处定义（绕开唯一出处）
         duplicate = fresh("duplicate")
         _patch(
-            duplicate / "App/Views/AppearanceSheet.swift",
+            duplicate / "platform/macos/App/Views/AppearanceSheet.swift",
             "    var body: some View {",
             "    func editorSurface() -> some View { self }\n\n    var body: some View {",
         )
@@ -406,7 +406,7 @@ def self_test(root: pathlib.Path) -> int:
         # ⑨⑩ 红：AppKit 那两个编辑面不再走令牌 / 退回系统底色
         appkit = fresh("appkit-notoken")
         _patch(
-            appkit / "App/Views/SQLEditorView.swift",
+            appkit / "platform/macos/App/Views/SQLEditorView.swift",
             "        textView.backgroundColor = Theme.nsColor(Surface.content)",
             "        textView.backgroundColor = NSColor.textBackgroundColor",
         )
@@ -414,7 +414,7 @@ def self_test(root: pathlib.Path) -> int:
 
         workspace_editor = fresh("workspace-editor-notoken")
         _patch(
-            workspace_editor / "App/Views/CodeEditorView.swift",
+            workspace_editor / "platform/macos/App/Views/CodeEditorView.swift",
             "        textView.textColor = Theme.nsColor(TextTone.primary)",
             "        textView.textColor = .labelColor",
         )
@@ -423,7 +423,7 @@ def self_test(root: pathlib.Path) -> int:
         # ⑪ 红：编辑面自己画底色（绕开唯一出处）
         self_paint = fresh("self-paint")
         _patch(
-            self_paint / "App/Views/NotesPanel.swift",
+            self_paint / "platform/macos/App/Views/NotesPanel.swift",
             "                .editorSurface()\n",
             "                .editorSurface()\n                .background(Color.orange)\n",
         )
@@ -431,7 +431,7 @@ def self_test(root: pathlib.Path) -> int:
 
         # ⑫ 绿：无关文件改动不误报 + 末例
         unrelated = fresh("unrelated")
-        _patch(unrelated / "App/Views/AppearanceSheet.swift", "import SwiftUI", "import SwiftUI\n// 无关改动")
+        _patch(unrelated / "platform/macos/App/Views/AppearanceSheet.swift", "import SwiftUI", "import SwiftUI\n// 无关改动")
         cases.append(("绿对照：无关文件改动不误报", not check(unrelated)[0]))
 
         after = {name: _sha(root / name) for name in WATCHED if (root / name).exists()}

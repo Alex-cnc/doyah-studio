@@ -25,9 +25,9 @@
 
 判据（**双向棘轮**，例外只能靠写明理由留在台账里，不能靠改判据）：
 
-  A 文案层：语言表（`Core/Localization.swift` 的 `LocalizedStrings.table`）每个条目的
+  A 文案层：语言表（`platform/macos/Core/Localization.swift` 的 `LocalizedStrings.table`）每个条目的
     **两种语言**槽位都不许含 `**`（marker 例外键除外）；
-  B 渲染层：产品源文件（`App/` `Core/` `CLI/` `Platform/`）里不许再出现 `LocalizedStringKey`
+  B 渲染层：产品源文件（`platform/macos/App/` `platform/macos/Core/` `platform/macos/CLI/` `Platform/`）里不许再出现 `LocalizedStringKey`
     （口径只剩纯文本一种；例外按文件登记 + 反向对账）；
   C 防静默：解析出的语言表条目数不得低于下限（正则失配、表被掏空 ⇒ 当场报红，而不是「零命中 = 通过」）；
   D 例外两端对账：marker 例外键必须在表里且**仍含**登记的标记形态（`***`）、必须写明理由；
@@ -52,7 +52,7 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
-TABLE_FILE = "Core/Localization.swift"
+TABLE_FILE = "platform/macos/Core/Localization.swift"
 EXEMPTIONS = "Scripts/copy-emphasis-exemptions.json"
 VERIFY_ALL = "Scripts/verify-all.sh"
 GATE_COMMAND = "python3 Scripts/check-copy-emphasis.py"
@@ -213,7 +213,7 @@ def main() -> int:
             marks = "（已登记例外）" if relative in renderer_exemptions else ""
             print(f"   · {relative}{marks}:{','.join(str(line) for line in lines)}")
     else:
-        print("   · 产品源文件里 0 处（App/ Core/ CLI/ Platform/）")
+        print("   · 产品源文件里 0 处（platform/macos/App/ platform/macos/Core/ platform/macos/CLI/ Platform/）")
 
     if problems:
         print(f"\n❌ 文案口径门禁未通过（{len(problems)} 项）：")

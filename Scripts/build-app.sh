@@ -17,7 +17,7 @@ set -euo pipefail
 # Intel 实机与 Rosetta 的启动验证仍需真机（构建通过 ≠ 真机可跑）。
 #
 # **沙箱口径（2026-09-29 需求提出者拍板「改非沙箱，先验证功能」）**：
-# 默认出**非沙箱**包（`App/DoyahStudio-unsandboxed.entitlements`）—— 这是交付口径
+# 默认出**非沙箱**包（`platform/macos/App/DoyahStudio-unsandboxed.entitlements`）—— 这是交付口径
 # （`Docs/发布计划.md` §1：交付物 = 非沙箱 ad-hoc 包）。沙箱下挡着三件事：终端作业控制
 # （⌃C）/ 导入导出起 `pg_dump`·`pg_restore` / SSH 隧道起 `ssh`（SRS R-18 路线③）。
 # 沙箱改为**显式开关**（两个 entitlements 文件都留在仓里）：
@@ -191,9 +191,9 @@ cat > "${APP}/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# 应用图标（法斗 Doyah）：App/Resources/AppIcon.icns。
+# 应用图标（法斗 Doyah）：platform/macos/App/Resources/AppIcon.icns。
 # 用 sips/iconutil 校验过含全部 10 个尺寸；缺了它 Dock 与访达里就是白纸图标。
-ICON="${ROOT}/App/Resources/AppIcon.icns"
+ICON="${ROOT}/platform/macos/App/Resources/AppIcon.icns"
 if [ -f "${ICON}" ]; then
   cp "${ICON}" "${APP}/Contents/Resources/AppIcon.icns"
 else
@@ -208,10 +208,10 @@ cp "${ROOT}/THIRD-PARTY-NOTICES.md" "${APP}/Contents/Resources/THIRD-PARTY-NOTIC
 # 交付口径 = 非沙箱包（见文件头与 Docs/发布计划.md §1）。沙箱路径**不许删** ——
 # 上架那天 `DOYAH_SANDBOX=1` 即可切回，两个 entitlements 文件都在仓里。
 if [ "${DOYAH_SANDBOX:-0}" = "1" ]; then
-  ENTITLEMENTS="${ROOT}/App/DoyahStudio.entitlements"
+  ENTITLEMENTS="${ROOT}/platform/macos/App/DoyahStudio.entitlements"
   echo "==> 本次为**沙箱**构建（上架那天才用：终端 ⌃C / pg_dump·pg_restore / ssh 三件不可用）"
 else
-  ENTITLEMENTS="${ROOT}/App/DoyahStudio-unsandboxed.entitlements"
+  ENTITLEMENTS="${ROOT}/platform/macos/App/DoyahStudio-unsandboxed.entitlements"
   echo "==> 本次为**非沙箱**构建（默认 · 交付口径）"
   if [ "${DOYAH_NO_SANDBOX:-0}" = "1" ]; then
     echo "    注意：DOYAH_NO_SANDBOX 已废弃 —— 不带任何开关时默认就是非沙箱，这一条不再需要"

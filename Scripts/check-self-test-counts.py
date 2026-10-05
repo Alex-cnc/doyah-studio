@@ -6,7 +6,7 @@
 夹具锚点随源码重构失效，谁都说话。同族更严重的一层：`Scripts/test-*.py` 这 14 个「门禁自己的证据」
 **没有任何门禁管**（`doc-numbers.json` 的「有判据、没闭环」对账只覆盖 `check-*.py`）⇒
 其中 8 个当时**根本没人跑**。实测现场：`Scripts/test-plugin-assembly-gates.py` 每次都在第 3 例崩掉
-（`Core/AICapture.swift` 的 `sqlNote` 签名改成多行 + 多一个 `tag:` 参数，夹具锚点还是老单行签名），
+（`platform/macos/Core/AICapture.swift` 的 `sqlNote` 签名改成多行 + 多一个 `tag:` 参数，夹具锚点还是老单行签名），
 **没人发现**。判据写完不对已知改动报红 = 没有判据。
 
 **口径**：

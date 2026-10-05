@@ -1,10 +1,10 @@
 {
   "generatedAt": "2026-09-26T23:55:00+08:00",
-  "note": "连接失败文案的**处置台账**（闭环第 14 项 `check-connection-failure-coverage.py` 按它对账）。为什么要台账：驱动是随仓库带走的 Vendor（Vendor/postgres-nio），升一次版就可能多出新的 `PSQLError.Code` —— 那时文案层的 `switch` 有兜底分支，**不会报错、不会崩**，只会把新原因说成最泛的那句。L-14 修的就是这一族的真事：解析不了的主机名被驱动压成 `serverClosedConnection`，文案只好说「连接中断」。台账把「每个码怎么处置」变成**声明**，门禁拿它跟驱动源码与映射文件对账。**第 8 轮（R-60）改了两处口径**：① 兜底分支不再给结论（`default:` 返回 `nil`）—— 认不出是连接问题就不说成连接问题；② 「不是连接类」的那 9 个码从「不翻译」改判为**中性归因**：每个码由 `describeNonConnection` 说一句自己的实话，且必须在映射文件的 `nonConnectionKeys` 里逐条点名（不靠兜底）。",
-  "driverCodeSource": "Vendor/postgres-nio/Sources/PostgresNIO/New/PSQLError.swift",
-  "mapping": "Core/ConnectionFailure.swift",
-  "languageTable": "Core/Localization.swift",
-  "neutralPath": "Core/ConnectionFailure.swift 的 `describeNonConnection(_:language:)`（调用方按 `describe(...) ?? describeNonConnection(...)` 取文案）",
+  "note": "连接失败文案的**处置台账**（闭环第 14 项 `check-connection-failure-coverage.py` 按它对账）。为什么要台账：驱动是随仓库带走的 Vendor（platform/macos/Vendor/postgres-nio），升一次版就可能多出新的 `PSQLError.Code` —— 那时文案层的 `switch` 有兜底分支，**不会报错、不会崩**，只会把新原因说成最泛的那句。L-14 修的就是这一族的真事：解析不了的主机名被驱动压成 `serverClosedConnection`，文案只好说「连接中断」。台账把「每个码怎么处置」变成**声明**，门禁拿它跟驱动源码与映射文件对账。**第 8 轮（R-60）改了两处口径**：① 兜底分支不再给结论（`default:` 返回 `nil`）—— 认不出是连接问题就不说成连接问题；② 「不是连接类」的那 9 个码从「不翻译」改判为**中性归因**：每个码由 `describeNonConnection` 说一句自己的实话，且必须在映射文件的 `nonConnectionKeys` 里逐条点名（不靠兜底）。",
+  "driverCodeSource": "platform/macos/Vendor/postgres-nio/Sources/PostgresNIO/New/PSQLError.swift",
+  "mapping": "platform/macos/Core/ConnectionFailure.swift",
+  "languageTable": "platform/macos/Core/Localization.swift",
+  "neutralPath": "platform/macos/Core/ConnectionFailure.swift 的 `describeNonConnection(_:language:)`（调用方按 `describe(...) ?? describeNonConnection(...)` 取文案）",
   "neutralSQLStates": [
     {
       "sqlState": "57014",
@@ -41,14 +41,14 @@
   "resolutionPreflight": [
     {
       "service": "PostgresService",
-      "file": "Core/PostgresService.swift",
+      "file": "platform/macos/Core/PostgresService.swift",
       "call": "ConnectionFailure.requireResolvableHost",
       "before": "let newConnection = try await PostgresConnection.connect(",
       "why": "PG 侧原先没有这道闸（MySQL 侧一直有）；驱动会把解析失败压成 serverClosedConnection 且 underlying 为 nil，只有建连前自己查才拿得到原因"
     },
     {
       "service": "MySQLService",
-      "file": "Core/MySQLService.swift",
+      "file": "platform/macos/Core/MySQLService.swift",
       "call": "SocketAddress.makeAddressResolvingHost",
       "before": null,
       "why": "MySQL 侧 2026-09-25 起已有前置检查（走语言表文案 `mysqlHostResolveFailed`）；两条路的措辞不同，属已知差异，不阻塞"
@@ -56,31 +56,31 @@
   ],
   "neutralFallback": [
     {
-      "file": "CLI/CLIFailureText.swift",
+      "file": "platform/macos/CLI/CLIFailureText.swift",
       "call": "ConnectionFailure.describeNonConnection",
       "minCallSites": 1,
       "why": "命令行在 `describe` 说不清时以前只打 `简要信息：<error.localizedDescription>`——那是一句英文调试串（`The operation couldn't be completed…`），等于没说。现在这一档给中性归因（码 + 一句实话 + 建议），原始串仍在「调试详情」里",
-      "minCallSitesWhy": "**第 47 轮（L-20）改了记法，处数从「2」变「1」**：CLI 的两条主路（连接失败 / 查询失败）原各写一遍 `describe ?? describeNonConnection ?? 简要信息`，加一档就得回来改两处 —— 第 47 轮把**链收进唯一出处** `CLIFailureText.description`，两条主路（+ 诊断那条）都走它，所以 CLI 侧现在只有**一处**调用这个出口。**不是少接了一条路**：`CLI/main.swift` 里若再出现这个调用，由 `Scripts/check-cli-failure-readability.py` 的「可读化链只写一份」判据当场报红（闭环第 15 项），两条口径互锁 —— 这里改记法而不加处数，是因为**数处数**在链被收成一份之后已经数不到「有没有少接一条路」了"
+      "minCallSitesWhy": "**第 47 轮（L-20）改了记法，处数从「2」变「1」**：CLI 的两条主路（连接失败 / 查询失败）原各写一遍 `describe ?? describeNonConnection ?? 简要信息`，加一档就得回来改两处 —— 第 47 轮把**链收进唯一出处** `CLIFailureText.description`，两条主路（+ 诊断那条）都走它，所以 CLI 侧现在只有**一处**调用这个出口。**不是少接了一条路**：`platform/macos/CLI/main.swift` 里若再出现这个调用，由 `Scripts/check-cli-failure-readability.py` 的「可读化链只写一份」判据当场报红（闭环第 15 项），两条口径互锁 —— 这里改记法而不加处数，是因为**数处数**在链被收成一份之后已经数不到「有没有少接一条路」了"
     },
     {
-      "file": "App/Utilities/ErrorPresenter.swift",
+      "file": "platform/macos/App/Utilities/ErrorPresenter.swift",
       "call": "ConnectionFailure.describeNonConnection",
       "minCallSites": 1,
       "why": "界面以前落到底部的 `String(reflecting:)`（英文类型转储）。现在给中性归因，并**保留原始串**（技术细节那一行）—— 否则 App 在「未知码」这条路上会比改动前少给信息"
     },
     {
-      "file": "App/Views/ConnectionFormView.swift",
+      "file": "platform/macos/App/Views/ConnectionFormView.swift",
       "call": "ConnectionFailure.describeNonConnection",
       "minCallSites": 1,
       "why": "「测试连接」那条路（R-56 修过一次）同样要有这一档：这一族多半就是在这条路上被用户看到的"
     }
   ],
   "evidenceMarkers": [
-    { "file": "Core/ConnectionFailure.swift", "contains": "throw HostResolutionFailure(", "why": "前置检查必须真的把解析失败变成可读错误类型，而不是原样抛驱动的残缺错误" },
+    { "file": "platform/macos/Core/ConnectionFailure.swift", "contains": "throw HostResolutionFailure(", "why": "前置检查必须真的把解析失败变成可读错误类型，而不是原样抛驱动的残缺错误" },
     { "file": "Scripts/test-connection-errors.sh", "contains": "主机名解析不了", "why": "真库证据脚本要断言这一档（L-14 的现场就是它）" },
     { "file": "Scripts/test-connection-errors.sh", "contains": "不再说成", "why": "要有**反向**断言：文案不许再出现「连接中断」——只断言正面措辞时，两句并存也能骗过门禁" },
     { "file": "Scripts/test-connection-errors.sh", "contains": "端口上跑的确实是 PostgreSQL", "why": "第 8 轮新增的**真实现场**：对端不是 PostgreSQL 时驱动报 `unexpectedBackendMessage`，脚本用假服务端把它造出来，并断言文案里出现这一族自己的方向" },
-    { "file": "Tests/ConnectionFailureNonConnectionTests.swift", "contains": "连接数据库失败", "why": "「不许再出现那套指错方向的措辞」必须有测试钉住 —— 门禁管覆盖面对账，措辞本身靠它" },
-    { "file": "Tests/HostResolutionTests.swift", "contains": "testDriverDropsTheResolutionCause", "why": "「驱动把原因丢了」这条前提必须有测试守着：驱动哪天补上 underlying，这里会红，提醒可以简化补偿代码" }
+    { "file": "platform/macos/Tests/ConnectionFailureNonConnectionTests.swift", "contains": "连接数据库失败", "why": "「不许再出现那套指错方向的措辞」必须有测试钉住 —— 门禁管覆盖面对账，措辞本身靠它" },
+    { "file": "platform/macos/Tests/HostResolutionTests.swift", "contains": "testDriverDropsTheResolutionCause", "why": "「驱动把原因丢了」这条前提必须有测试守着：驱动哪天补上 underlying，这里会红，提醒可以简化补偿代码" }
   ]
 }

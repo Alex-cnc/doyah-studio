@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""从 vendored `sqlite3.h` 里**生成** Swift 常量表（`Core/NoteStorage/SQLiteConstants.swift`）。
+"""从 vendored `sqlite3.h` 里**生成** Swift 常量表（`platform/macos/Core/NoteStorage/SQLiteConstants.swift`）。
 
 **为什么需要这一步（不是洁癖）**：Swift 侧只要大量引用 C 宏常量，SwiftPM 的构建就会把这个
 绑定目标判进**显式模块构建**（`-explicit-swift-module-map-file` + `-Xcc -fno-implicit-modules`），
@@ -41,11 +41,11 @@ import subprocess
 import sys
 import tempfile
 
-HEADER_REL = "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h"
+HEADER_REL = "platform/macos/Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h"
 # 第 21 轮（L-25 第 2 批）接线：绑定层从 `Docs/design/待接线-SQLiteKit/` 挪进产品源码
-# `Core/NoteStorage/`，本脚本跟着挪进 `Scripts/`，路径同步更新。
-WRAPPER_REL = "Core/NoteStorage/SQLiteKit.swift"
-OUTPUT_REL = "Core/NoteStorage/SQLiteConstants.swift"
+# `platform/macos/Core/NoteStorage/`，本脚本跟着挪进 `Scripts/`，路径同步更新。
+WRAPPER_REL = "platform/macos/Core/NoteStorage/SQLiteKit.swift"
+OUTPUT_REL = "platform/macos/Core/NoteStorage/SQLiteConstants.swift"
 
 # 取哪些常量：正文里用到的那些（按引用扫，不靠人记）——「生成的清单」与「实际用法」不许各说各话。
 USE_PATTERN = re.compile(r"\bSQLiteMacro\.([a-z0-9_]+)Macro\b")
@@ -63,7 +63,7 @@ HEADER_NOTE = '''// ⚠️ 本文件由 `Scripts/gen-sqlite-constants.py` **生�
 // 第 21 轮接线时 `import CSQLite3` 在 `DoyahCore` 目标里可用（Core 已编译通过、单测跑过）；
 // **宏引用的规模阈值本轮未再复测**，所以这条纪律照旧保留。
 //
-// 值来源：`Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h`（版本见 `Vendor/sqlite3/PROVENANCE.md`）。
+// 值来源：`platform/macos/Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h`（版本见 `platform/macos/Vendor/sqlite3/PROVENANCE.md`）。
 
 import Foundation
 

@@ -47,13 +47,13 @@ say ""
 
 # ── 0. 一致性自检：三处声明的包标识必须一致 ────────────────────────────────
 say "== 0. 包标识一致性自检 =="
-# project.yml 里有三个 bundle id（app / core 框架 / 测试），这里只校验 **app 那个**
+# platform/macos/project.yml 里有三个 bundle id（app / core 框架 / 测试），这里只校验 **app 那个**
 yml_id="${NEW_ID}"
 yml_ok=0
 grep -q "PRODUCT_BUNDLE_IDENTIFIER: ${NEW_ID}$" "${ROOT}/project.yml" && yml_ok=1
 sh_id="$(sed -n 's/.*<string>\(studio\.doyah[^<]*\)<\/string>.*/\1/p' "${ROOT}/Scripts/build-app.sh" | head -1)"
-core_id="$(sed -n 's/.*bundleIdentifier = "\([^"]*\)".*/\1/p' "${ROOT}/Core/DoyahIdentity.swift" | head -1)"
-say "  project.yml（app 目标含该 id）: $([ "${yml_ok}" -eq 1 ] && echo "${NEW_ID}" || echo '<未找到>')"
+core_id="$(sed -n 's/.*bundleIdentifier = "\([^"]*\)".*/\1/p' "${ROOT}/platform/macos/Core/DoyahIdentity.swift" | head -1)"
+say "  platform/macos/project.yml（app 目标含该 id）: $([ "${yml_ok}" -eq 1 ] && echo "${NEW_ID}" || echo '<未找到>')"
 say "  build-app.sh CFBundleIdentifier: ${sh_id:-<未找到>}"
 say "  Core/DoyahIdentity.bundleIdentifier: ${core_id:-<未找到>}"
 if [ "${yml_ok}" -ne 1 ] || [ "${sh_id}" != "${NEW_ID}" ] || [ "${core_id}" != "${NEW_ID}" ]; then

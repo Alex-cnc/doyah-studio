@@ -18,7 +18,7 @@
     python3 Scripts/test-plugin-assembly-gates.py --check-anchors
 
 只把每个负例的**夹具锚点**在当前源码里对一遍（不写盘、不跑门禁），退出码 0 = 全部锚点在位。
-理由 = 本脚本自己栽过：`Core/AICapture.swift` 的 `sqlNote` 签名于第 50 轮前后改成多行 +
+理由 = 本脚本自己栽过：`platform/macos/Core/AICapture.swift` 的 `sqlNote` 签名于第 50 轮前后改成多行 +
 多一个 `tag:` 参数，而这里的 `replace(...)` 锚点还写着单行老签名 ⇒ **脚本每次都在第 3 例崩掉**，
 而这个脚本当时**没人跑**（不在闭环里）⇒ 一直没人发现。它的例数与锚点现状登记在
 `Scripts/self-test-counts.json`（闭环第 4 项的自检例数台账），每轮由
@@ -39,8 +39,8 @@ ISOLATION = "Scripts/check-note-module-isolation.py"
 ANCHOR_ONLY = "--check-anchors" in sys.argv
 
 EXPECTED_WORKTREE = {
-    "Core/AICapture.swift",
-    "Core/AICaptureUltra.swift",
+    "platform/macos/Core/AICapture.swift",
+    "platform/macos/Core/AICaptureUltra.swift",
     "Scripts/check-note-module-isolation.py",
     "Scripts/check-plugin-assembly.py",
     "Scripts/test-plugin-assembly-gates.py",
@@ -108,30 +108,30 @@ def replace(old, new):
 
 
 # ---- 装配链门禁的负例 -------------------------------------------------------
-case("FR-PLUG-02 视图层自己过滤 allCases", "App/Views/ActivityBarView.swift",
+case("FR-PLUG-02 视图层自己过滤 allCases", "platform/macos/App/Views/ActivityBarView.swift",
      add('private func __negativeProbe() { _ = ActivityBarItem.allCases }'),
      ASSEMBLY, 1, "视图层自己过滤 allCases")
 
-case("ADR-35 绕过 resolveSelection 直接赋值", "App/AppState.swift",
+case("ADR-35 绕过 resolveSelection 直接赋值", "platform/macos/App/AppState.swift",
      add('extension AppState { func __negativeProbeSet() { selectedActivityItem = .notes } }'),
      ASSEMBLY, 1, "没过 resolveSelection")
 
-case("ADR-35 selectedActivityItem 不再是 private(set)", "App/AppState.swift",
+case("ADR-35 selectedActivityItem 不再是 private(set)", "platform/macos/App/AppState.swift",
      replace("@Published private(set) var selectedActivityItem", "@Published var selectedActivityItem"),
      ASSEMBLY, 1, "不再是 private(set)")
 
-case("FR-PLUG-06 能力位少一位（笔记没进一套许可）", "Core/License.swift",
+case("FR-PLUG-06 能力位少一位（笔记没进一套许可）", "platform/macos/Core/License.swift",
      replace("static let all: LicenseCapabilities = [.workspaces, .database, .notes]",
              "static let all: LicenseCapabilities = [.workspaces, .database]"),
      ASSEMBLY, 1, "不再是三个能力位")
 
-case("FR-PLUG-03 笔记侧入口混进非文本参数", "Core/AICapture.swift",
+case("FR-PLUG-03 笔记侧入口混进非文本参数", "platform/macos/Core/AICapture.swift",
      replace("        tag: String\n    ) -> NoteDraft {",
              "        tag: String,\n        extra: [String: Any] = [:]\n    ) -> NoteDraft {"),
      ASSEMBLY, 1, "不在白名单")
 
 # ---- 解耦门禁的负例 ---------------------------------------------------------
-case("FR-PLUG-07 笔记源文件引用 Ultra 侧类型", "Core/AICapture.swift",
+case("FR-PLUG-07 笔记源文件引用 Ultra 侧类型", "platform/macos/Core/AICapture.swift",
      add("func __negativeProbe(_ context: DiagnosisContext) {}"),
      ISOLATION, 1, "引用了 DiagnosisContext")
 

@@ -14,7 +14,7 @@
 #      dry-run 不写库 / --yes 真建 / 注入名被拒 / 方言不支持时不发 SQL / --yes 真删
 #
 # 关于 SQL 的来源：第 1–7 节直接跑 SQL，是为了在**没有 CLI 子命令**时也能验 Core 的查询与语句；
-# 第 0 节用 python 把抄来的 SQL 与 Core/ServerObjects.swift 里的原文逐字对账，防止两边漂移。
+# 第 0 节用 python 把抄来的 SQL 与 platform/macos/Core/ServerObjects.swift 里的原文逐字对账，防止两边漂移。
 # 第 8 节起走 CLI 子命令 —— 那条路径同时验到 CLI 的参数解析与 Core 的规划（不抄 SQL）。
 #
 # 纪律：本机没有 `timeout`，不用；不用 `pgrep -c`（无效）；CJK 紧邻变量一律写 ${VAR}。
@@ -106,7 +106,7 @@ cleanup() {
 trap cleanup EXIT
 
 # ─────────────────────────────────────────────────────────────
-# 三条查询：与 Core/ServerObjects.swift 里 ServerObjects 生成的文本一致
+# 三条查询：与 platform/macos/Core/ServerObjects.swift 里 ServerObjects 生成的文本一致
 # ─────────────────────────────────────────────────────────────
 ROLE_SQL="SELECT r.rolname AS name,
        r.rolcanlogin AS can_login,
@@ -135,13 +135,13 @@ LEFT JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
 ORDER BY e.extname
 LIMIT 200"
 
-echo "== 0) 脚本里的 SQL 与 Core/ServerObjects.swift 对账（防止两边漂移）=="
+echo "== 0) 脚本里的 SQL 与 platform/macos/Core/ServerObjects.swift 对账（防止两边漂移）=="
 export SS3_ROLE_SQL="${ROLE_SQL}"
 export SS3_TABLESPACE_SQL="${TABLESPACE_SQL}"
 export SS3_EXTENSION_SQL="${EXTENSION_SQL}"
 python3 - <<'PYEOF'
 import os, pathlib, re, sys
-source = pathlib.Path("Core/ServerObjects.swift").read_text(encoding="utf-8")
+source = pathlib.Path("platform/macos/Core/ServerObjects.swift").read_text(encoding="utf-8")
 
 def norm(text):
     return re.sub(r"\s+", " ", text).strip()
@@ -157,7 +157,7 @@ for label in ("ROLE", "TABLESPACE", "EXTENSION"):
     if sql and sql in source_head:
         print("  ✅ %s_SQL 与 Core 里生成的文本逐字一致（空白归一后）" % label)
     else:
-        print("  ❌ %s_SQL 与 Core/ServerObjects.swift 不一致：\n      %s" % (label, sql))
+        print("  ❌ %s_SQL 与 platform/macos/Core/ServerObjects.swift 不一致：\n      %s" % (label, sql))
         ok = False
 sys.exit(0 if ok else 1)
 PYEOF

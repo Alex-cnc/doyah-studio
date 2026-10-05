@@ -207,14 +207,14 @@ grep -q "工作表序号超出范围" /tmp/doyah-xlsx-import-sheet.log && check 
 
 echo ""
 echo "== 4) 与仓库里的夹具交叉：orders.xlsx 的第二张表 =="
-"$CLI" import --table 导入目标 --file Tests/Fixtures/xlsx/orders.xlsx --format xlsx --sheet 2 > /tmp/doyah-xlsx-import-fixture2.log 2>&1
+"$CLI" import --table 导入目标 --file platform/macos/Tests/Fixtures/xlsx/orders.xlsx --format xlsx --sheet 2 > /tmp/doyah-xlsx-import-fixture2.log 2>&1
 code=$?
 check "列名全对不上时**拒绝导入**并给非零退出码（${code}）" "$([ "$code" -ne 0 ] && echo 0 || echo 1)"
 grep -q "Excel 工作表：第二张" /tmp/doyah-xlsx-import-fixture2.log && check "选中的是「第二张」而不是第一张" 0 || check "选中的是「第二张」而不是第一张" 1
 grep -q "没有任何列能映射到目标表" /tmp/doyah-xlsx-import-fixture2.log && check "并说出了原因（没有任何列能映射）" 0 || check "并说出了原因（没有任何列能映射）" 1
 
 "$CLI" -c "CREATE TABLE 导入目标2 (编号 text, 说明 text);" >/dev/null 2>&1
-"$CLI" import --table 导入目标2 --file Tests/Fixtures/xlsx/orders.xlsx --format xlsx --sheet 2 --write > /tmp/doyah-xlsx-import-fixture2b.log 2>&1
+"$CLI" import --table 导入目标2 --file platform/macos/Tests/Fixtures/xlsx/orders.xlsx --format xlsx --sheet 2 --write > /tmp/doyah-xlsx-import-fixture2b.log 2>&1
 check "列名匹配时第二张表能真导入（退出码 0）" $?
 "$CLI" export --query "SELECT 编号, 说明 FROM 导入目标2" --out /tmp/doyah-xlsx-import-fixture2b.csv > /dev/null 2>&1
 if tail -1 /tmp/doyah-xlsx-import-fixture2b.csv | tr -d '\r' | grep -q "^X-1,第二张表$"; then

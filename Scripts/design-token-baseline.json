@@ -1,98 +1,98 @@
 {
   "comment": "设计令牌棘轮基线：违规数只能降不能升（--update-baseline 下调）",
   "files": {
-    "App/Views/AgentApprovalSheet.swift": {
+    "platform/macos/App/Views/AgentApprovalSheet.swift": {
       "bare-foreground": 5,
       "bare-spacing": 2,
       "bare-textstyle": 7
     },
-    "App/Views/AgentAuditPanel.swift": {
+    "platform/macos/App/Views/AgentAuditPanel.swift": {
       "bare-foreground": 18,
       "bare-spacing": 8,
       "bare-textstyle": 26
     },
-    "App/Views/AgentSQLPanel.swift": {
+    "platform/macos/App/Views/AgentSQLPanel.swift": {
       "bare-color": 1,
       "bare-foreground": 6,
       "bare-spacing": 4,
       "bare-textstyle": 13
     },
-    "App/Views/AgentSettingsSheet.swift": {
+    "platform/macos/App/Views/AgentSettingsSheet.swift": {
       "bare-foreground": 3,
       "bare-spacing": 2,
       "bare-textstyle": 7
     },
-    "App/Views/ConnectionFormView.swift": {
+    "platform/macos/App/Views/ConnectionFormView.swift": {
       "bare-textstyle": 1
     },
-    "App/Views/CreateDatabaseSheet.swift": {
+    "platform/macos/App/Views/CreateDatabaseSheet.swift": {
       "bare-foreground": 1,
       "bare-spacing": 1,
       "bare-textstyle": 3
     },
-    "App/Views/DataTaskPanel.swift": {
+    "platform/macos/App/Views/DataTaskPanel.swift": {
       "bare-color": 2,
       "bare-foreground": 29,
       "bare-spacing": 11,
       "bare-textstyle": 53
     },
-    "App/Views/DataTaskSpecSheet.swift": {
+    "platform/macos/App/Views/DataTaskSpecSheet.swift": {
       "bare-color": 2,
       "bare-foreground": 6,
       "bare-spacing": 2,
       "bare-textstyle": 16
     },
-    "App/Views/DatabasePropertiesSheet.swift": {
+    "platform/macos/App/Views/DatabasePropertiesSheet.swift": {
       "bare-foreground": 2,
       "bare-spacing": 1,
       "bare-textstyle": 4
     },
-    "App/Views/DropDatabaseSheet.swift": {
+    "platform/macos/App/Views/DropDatabaseSheet.swift": {
       "bare-foreground": 2,
       "bare-spacing": 1,
       "bare-textstyle": 5
     },
-    "App/Views/LockPanel.swift": {
+    "platform/macos/App/Views/LockPanel.swift": {
       "bare-foreground": 6,
       "bare-spacing": 3,
       "bare-textstyle": 10
     },
-    "App/Views/LowerPaneView.swift": {
+    "platform/macos/App/Views/LowerPaneView.swift": {
       "bare-spacing": 3
     },
-    "App/Views/PrivilegePanel.swift": {
+    "platform/macos/App/Views/PrivilegePanel.swift": {
       "bare-foreground": 4,
       "bare-spacing": 1,
       "bare-textstyle": 10
     },
-    "App/Views/QueryContextBar.swift": {
+    "platform/macos/App/Views/QueryContextBar.swift": {
       "bare-foreground": 3,
       "bare-spacing": 1,
       "bare-textstyle": 4
     },
-    "App/Views/QueryWorkspaceView.swift": {
+    "platform/macos/App/Views/QueryWorkspaceView.swift": {
       "bare-spacing": 4
     },
-    "App/Views/RelaunchPromptSheet.swift": {
+    "platform/macos/App/Views/RelaunchPromptSheet.swift": {
       "bare-foreground": 1,
       "bare-spacing": 2,
       "bare-textstyle": 1
     },
-    "App/Views/SQLArchiveSheet.swift": {
+    "platform/macos/App/Views/SQLArchiveSheet.swift": {
       "bare-foreground": 5,
       "bare-spacing": 3,
       "bare-textstyle": 7
     },
-    "App/Views/SafeModeConfirmSheet.swift": {
+    "platform/macos/App/Views/SafeModeConfirmSheet.swift": {
       "bare-foreground": 1,
       "bare-spacing": 1,
       "bare-textstyle": 3
     },
-    "App/Views/SaveQuerySheet.swift": {
+    "platform/macos/App/Views/SaveQuerySheet.swift": {
       "bare-spacing": 2,
       "bare-textstyle": 4
     },
-    "App/Views/TableDesignSheet.swift": {
+    "platform/macos/App/Views/TableDesignSheet.swift": {
       "bare-foreground": 10,
       "bare-spacing": 5,
       "bare-textstyle": 15

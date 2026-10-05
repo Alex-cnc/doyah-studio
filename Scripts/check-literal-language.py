@@ -5,7 +5,7 @@
 ## 它挡的是什么
 
 第 46 轮读图：英文界面（`diagnosis-empty-en`）上界面文案都是英文，**唯独「给模型的资料」
-整块是中文**。根因在 `Core/DiagnosisContext.swift` —— 那里有一个文件私有的取值助手把
+整块是中文**。根因在 `platform/macos/Core/DiagnosisContext.swift` —— 那里有一个文件私有的取值助手把
 `language:` **钉死**成 `.simplifiedChinese`：
 
     private func localizedText(_ key: LKey, _ arguments: CVarArg...) -> String {
@@ -19,18 +19,18 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
 
 **为什么现有门禁全都看不见它**：R-45 的棘轮（`check-core-localization.py`）数的是
 「Core 代码里含**汉字**的字符串字面量」—— 这里代码里**一个汉字都没有**（文案早在语言表里）；
-`check-effective-language.py` 只扫 `App/`，且只禁「按用户选择取语言」两种写法。
+`check-effective-language.py` 只扫 `platform/macos/App/`，且只禁「按用户选择取语言」两种写法。
 **「把语言写成字面量」这个形状两边都没覆盖。**
 
 ## 四条判据
 
-* **A（写死语言的调用点必须逐条登记 + 棘轮）** 扫 `Core/` `App/` `CLI/` `Platform/` 的
+* **A（写死语言的调用点必须逐条登记 + 棘轮）** 扫 `platform/macos/Core/` `platform/macos/App/` `platform/macos/CLI/` `Platform/` 的
   `*.swift`，找出把**字面语言**（`language: .simplifiedChinese` / `.english`）传给本地化
   取值入口的每一处，按**文件**归组：文件必须在台账 `Scripts/literal-language-dispositions.json`
   的 `files` 里登记（带 `maxSites` 与 `reason`）。
   未登记的文件 / 超过登记处数 ⇒ **红**；比登记处数**少** ⇒ 只提示（减少是好事，但不许静默改台账）；
-  `maxSites: 0` 是**回归钉** —— 本轮已把语言透传的文件（`Core/DiagnosisContext.swift` /
-  `Core/DiagnosisAdvice.swift`）在这里钉成 0，再出现字面语言即红。
+  `maxSites: 0` 是**回归钉** —— 本轮已把语言透传的文件（`platform/macos/Core/DiagnosisContext.swift` /
+  `platform/macos/Core/DiagnosisAdvice.swift`）在这里钉成 0，再出现字面语言即红。
 * **B（死译文）** 台账 `deadKeys` 逐条登记「有英文译文、却只被写死语言的入口引用」的键
   （它们是**已登记的欠账**，不是放行）。两个方向都判：
   ① 真出现一个**没登记**的死键 ⇒ **红**（这正是本轮要消掉的那一类缺陷，不许再新增）；
@@ -38,33 +38,33 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
   死译文的判定把**包装函数**算进去：形如 `func t(_ key: LKey …)` 而函数体里写死语言的
   私有助手，它的每个调用点都算「写死语言」（这正是 `localizedText` 那一类，
   不这么算的话修之前反而「看不见」）。
-* **C（本轮修的那一族不许回退：源树判据）** `Core/DiagnosisContext.swift` 的文本出口必须
+* **C（本轮修的那一族不许回退：源树判据）** `platform/macos/Core/DiagnosisContext.swift` 的文本出口必须
   **带 `language:` 形参**（`text(language:)` / `promptText(language:)` /
   `boundedPromptText(language:maxCharacters:)` / `makeEvidence(…language:…)`），
-  `DiagnosisAdvice.parse` 必须带 `language:`，`App/Views/DiagnosisPanel.swift` 必须把
+  `DiagnosisAdvice.parse` 必须带 `language:`，`platform/macos/App/Views/DiagnosisPanel.swift` 必须把
   `effectiveLanguage` 传下去 —— 只靠 A 挡不住「删掉形参、在函数体里再写死一次」。
-  **L-65 第 1 批起**同一判据扩到三处同族出口：`Core/LicenseLoader.swift`（`load` /
-  `licenseDecodeFailureHint` / `summary`）、`Core/NoteBody.swift`（`toSpans` / `exportMarkdown`）、
-  `Core/TableImport.swift`（`copySupport` / `preferredWriteMode`）。
-  **L-65 第 2 批**：`Core/SSHTunnelProcess.swift`（`start(...)` / `describe(language:)`）。
-  **L-65 第 3 / 4 批**再扩四族：`Core/AICapture.swift`（`skillNote` / `sqlNote`）、
-  `Core/AICaptureUltra.swift`（`diagnosisNote` / `maintenanceNote` / `stateText`）、
-  `Core/License.swift`（`features(language:)` / `items(for:language:)`）+
-  `Core/LicensePresentation.swift`（`upgradeLines(for:language:)`）、
-  `Core/MaintenancePlan.swift`（`review` / `makePlan`）、
-  `Core/MCPToolCatalog.swift`（`decision`）+ `Core/MCPSession.swift`（会话属性 `language`
+  **L-65 第 1 批起**同一判据扩到三处同族出口：`platform/macos/Core/LicenseLoader.swift`（`load` /
+  `licenseDecodeFailureHint` / `summary`）、`platform/macos/Core/NoteBody.swift`（`toSpans` / `exportMarkdown`）、
+  `platform/macos/Core/TableImport.swift`（`copySupport` / `preferredWriteMode`）。
+  **L-65 第 2 批**：`platform/macos/Core/SSHTunnelProcess.swift`（`start(...)` / `describe(language:)`）。
+  **L-65 第 3 / 4 批**再扩四族：`platform/macos/Core/AICapture.swift`（`skillNote` / `sqlNote`）、
+  `platform/macos/Core/AICaptureUltra.swift`（`diagnosisNote` / `maintenanceNote` / `stateText`）、
+  `platform/macos/Core/License.swift`（`features(language:)` / `items(for:language:)`）+
+  `platform/macos/Core/LicensePresentation.swift`（`upgradeLines(for:language:)`）、
+  `platform/macos/Core/MaintenancePlan.swift`（`review` / `makePlan`）、
+  `platform/macos/Core/MCPToolCatalog.swift`（`decision`）+ `platform/macos/Core/MCPSession.swift`（会话属性 `language`
   与 `init(capabilities:language:)`）。
   **L-65 第 5 批（2026-09-30 第 123 轮，MySQL / GBase 一族 —— 清零收官）**：渲染搬进**新文件**
-  `Core/MySQLWording.swift`（八句话各留 `language:` 形参），`Core/MySQLService.swift` 钉住那个
+  `platform/macos/Core/MySQLWording.swift`（八句话各留 `language:` 形参），`platform/macos/Core/MySQLService.swift` 钉住那个
   **唯一语言来源**（`public nonisolated let language:` + `init(… language:)` + `withTimeout(… language:)`）；
-  「调用方也要钉」再加四处：`Core/DatabaseService.swift`（工厂的 MySQL / GBase 两个分支）、
-  `Core/GBaseService.swift`、`App/Views/ConnectionFormView.swift`（「测试连接」）、命令行连库入口。
+  「调用方也要钉」再加四处：`platform/macos/Core/DatabaseService.swift`（工厂的 MySQL / GBase 两个分支）、
+  `platform/macos/Core/GBaseService.swift`、`platform/macos/App/Views/ConnectionFormView.swift`（「测试连接」）、命令行连库入口。
   **同一判据最新加的一条是「调用方也要钉」**：形参留着还不够 —— 展示点不给语言，一样会退回
-  「Core 自己选」。所以 `App/AppState.swift`（维护 / 诊断两处捕获）、
-  `App/Views/AboutLicenseSheet.swift`（升级页）、`CLI/main.swift`（维护命令 / MCP 会话）
+  「Core 自己选」。所以 `platform/macos/App/AppState.swift`（维护 / 诊断两处捕获）、
+  `platform/macos/App/Views/AboutLicenseSheet.swift`（升级页）、`platform/macos/CLI/main.swift`（维护命令 / MCP 会话）
   这些调用点的**实参里必须出现 `language:`**（在第 50 轮实测抓到过：`static let` 那类写法
   改完形参、调用方不传也一样是死译文）。
-* **C′（一句话只有一个出处）** `App/AppState.swift` 必须调 `LicenseLoader.summary(`，
+* **C′（一句话只有一个出处）** `platform/macos/App/AppState.swift` 必须调 `LicenseLoader.summary(`，
   且**不许**再出现 `L(.licenseActive)` —— 许可状态那一句当年因为 Core 写死中文被界面抄了一份，
   而抄的那份**漂移了**（把 `.unreadable` 的原因丢掉）。判据 B 只看语言表看得见可达性，
   看不见「同一句话两个实现」这个形状。
@@ -84,7 +84,7 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
   现在：只要被调方是**本文件里形参含 `LKey` 的函数**，就按取值入口记账（是否「写死语言」仍由
   「实参里有没有字面语言 / 函数体里有没有写死语言」判）。
 * 一个键**一处引用都没有**时不判（可能是被动态引用）——同理是漏判。
-* `Tests/` `TestsUISnapshot/` 不在扫描范围：那里有意构造中英两种取值。
+* `platform/macos/Tests/` `platform/macos/TestsUISnapshot/` 不在扫描范围：那里有意构造中英两种取值。
 * 台账 `maxSites` 只判「不许增」，不像 L-46 那样把减少也要求同步登记（减少只打提示）。
 
 跑法：
@@ -108,7 +108,7 @@ import tempfile
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 LEDGER = "Scripts/literal-language-dispositions.json"
-KEY_TABLE = "Core/Localization.swift"
+KEY_TABLE = "platform/macos/Core/Localization.swift"
 SCAN_ROOTS = ["Core", "App", "CLI", "Platform"]
 MIN_SOURCE_FILES = 80
 
@@ -414,66 +414,66 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
     # 只靠判据 A 挡不住（A 量的是「写死语言的调用点」，形参被删后**调用点也不写死了**，
     # 而语言会从别的路径漏进来）。所以这三处的文本出口一律在这里钉形参。
     pinned_params = {
-        "Core/DiagnosisContext.swift": [
+        "platform/macos/Core/DiagnosisContext.swift": [
             r"func\s+text\(language:",
             r"func\s+promptText\(language:",
             r"func\s+boundedPromptText\(language:",
             r"func\s+makeEvidence\([\s\S]{0,400}?language:\s*AppLanguage",
         ],
-        "Core/DiagnosisAdvice.swift": [r"func\s+parse\([\s\S]{0,300}?language:\s*AppLanguage"],
-        "Core/LicenseLoader.swift": [
+        "platform/macos/Core/DiagnosisAdvice.swift": [r"func\s+parse\([\s\S]{0,300}?language:\s*AppLanguage"],
+        "platform/macos/Core/LicenseLoader.swift": [
             r"func\s+load\([\s\S]{0,400}?language:\s*AppLanguage",
             r"func\s+licenseDecodeFailureHint\(language:\s*AppLanguage",
             r"func\s+summary\([\s\S]{0,200}?language:\s*AppLanguage",
         ],
-        "Core/NoteBody.swift": [
+        "platform/macos/Core/NoteBody.swift": [
             r"func\s+toSpans\([^)]*language:\s*AppLanguage",
             r"func\s+exportMarkdown\([^)]*language:\s*AppLanguage",
         ],
-        "Core/TableImport.swift": [
+        "platform/macos/Core/TableImport.swift": [
             r"func\s+copySupport\([^)]*language:\s*AppLanguage",
             r"func\s+preferredWriteMode\([^)]*language:\s*AppLanguage",
         ],
         # L-65 第 2 批（2026-09-28 第 49 轮）：SSH 隧道那族 —— 失败文案的出入口都钉在这里。
         # `describe(language:)` 是**人话的唯一出处**（`.portInUse` 只带端口号，语言只能从外面给），
         # `start(...)` 必须收 `language:`；删掉任何一个都会让语言又变成「Core 自己选」。
-        "Core/SSHTunnelProcess.swift": [
+        "platform/macos/Core/SSHTunnelProcess.swift": [
             r"func\s+start\([^)]*language:\s*AppLanguage",
             r"func\s+describe\(language:\s*AppLanguage",
         ],
         # L-65 第 3 批（2026-09-28 第 50 轮）：**四族一起钉** —— AI 捕获（Ultra 侧两个出口 +
         # `stateText`）、许可展示（`static let` → 函数）、维护计划的审阅理由、MCP 会话。
-        # **笔记侧（`Core/AICapture.swift`）例外**：它钉的不是 `language:` 而是**不许收语言**
+        # **笔记侧（`platform/macos/Core/AICapture.swift`）例外**：它钉的不是 `language:` 而是**不许收语言**
         # —— 见文件末尾那段「笔记侧只收文本与标识」的负向判据。
-        "Core/AICaptureUltra.swift": [
+        "platform/macos/Core/AICaptureUltra.swift": [
             r"func\s+diagnosisNote\([\s\S]{0,500}?language:\s*AppLanguage",
             r"func\s+maintenanceNote\([\s\S]{0,500}?language:\s*AppLanguage",
             r"func\s+stateText\([^)]*language:\s*AppLanguage",
         ],
-        "Core/License.swift": [
+        "platform/macos/Core/License.swift": [
             r"func\s+features\(language:\s*AppLanguage",
             r"func\s+items\([^)]*language:\s*AppLanguage",
         ],
-        "Core/LicensePresentation.swift": [
+        "platform/macos/Core/LicensePresentation.swift": [
             r"func\s+upgradeLines\([\s\S]{0,300}?language:\s*AppLanguage",
         ],
-        "Core/MaintenancePlan.swift": [
+        "platform/macos/Core/MaintenancePlan.swift": [
             r"func\s+review\([\s\S]{0,400}?language:\s*AppLanguage",
             r"func\s+makePlan\([\s\S]{0,300}?language:\s*AppLanguage",
         ],
-        "Core/MCPToolCatalog.swift": [
+        "platform/macos/Core/MCPToolCatalog.swift": [
             r"func\s+decision\([\s\S]{0,600}?language:\s*AppLanguage",
         ],
-        "Core/MCPSession.swift": [
+        "platform/macos/Core/MCPSession.swift": [
             r"public\s+let\s+language:\s*AppLanguage",
             r"init\([\s\S]{0,200}?language:\s*AppLanguage",
         ],
         # L-65 第 5 批（2026-09-30 第 123 轮）：**MySQL / GBase 一族** —— 渲染搬进新文件
-        # `Core/MySQLWording.swift`（ADR-25 冻结点的落法 = 新增文件，旧文件只留「语言从哪来」）。
+        # `platform/macos/Core/MySQLWording.swift`（ADR-25 冻结点的落法 = 新增文件，旧文件只留「语言从哪来」）。
         # 钉三处堵两条路：① 新文件的文本出口形参（防「删形参、体内再写死」）；
         # ② service 那个**唯一语言来源** `language` 与 `init(… language:)`；③ `withTimeout` 也收语言
         # （超时那句话的渲染点在那儿，语言只能从连接对象流进去）。
-        "Core/MySQLWording.swift": [
+        "platform/macos/Core/MySQLWording.swift": [
             r"func\s+connectTimedOut\([^)]*language:\s*AppLanguage",
             r"func\s+hostResolveFailed\([^)]*language:\s*AppLanguage",
             r"func\s+lastInsertID\([^)]*language:\s*AppLanguage",
@@ -483,7 +483,7 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
             r"func\s+cancelDispatchFailed\([^)]*language:\s*AppLanguage",
             r"func\s+copyUnsupported\([^)]*language:\s*AppLanguage",
         ],
-        "Core/MySQLService.swift": [
+        "platform/macos/Core/MySQLService.swift": [
             r"public\s+nonisolated\s+let\s+language:\s*AppLanguage",
             r"init\([\s\S]{0,200}?language:\s*AppLanguage",
             r"func\s+withTimeout<[\s\S]{0,200}?language:\s*AppLanguage",
@@ -501,23 +501,23 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
     # 判据 C（L-65 第 3/4 批）：**调用方必须把语言传下去** —— 形参留着还不够，展示点不给语言
     # 一样会退回「Core 自己选」。这里逐处找调用、在它的实参里找 `language:`。
     call_sites = {
-        "App/AppState.swift": [
+        "platform/macos/App/AppState.swift": [
             "MaintenancePlanner.makePlan(",
             "AICapture.maintenanceNote(",
             "AICapture.diagnosisNote(",
             "DatabaseServiceFactory.make(",
         ],
-        "App/Views/AboutLicenseSheet.swift": ["LicensePresentation.upgradeLines("],
-        "App/Views/ConnectionFormView.swift": ["DatabaseServiceFactory.make("],
-        "CLI/main.swift": [
+        "platform/macos/App/Views/AboutLicenseSheet.swift": ["LicensePresentation.upgradeLines("],
+        "platform/macos/App/Views/ConnectionFormView.swift": ["DatabaseServiceFactory.make("],
+        "platform/macos/CLI/main.swift": [
             "MaintenancePlanner.makePlan(",
             "MCPServerSession(capabilities:",
             "DatabaseServiceFactory.make(",
         ],
         # L-65 第 5 批：数据库侧那两句人话的语言，从**创建连接的那两层**流进驱动 ——
         # 工厂漏给语言，MySQL/GBase 分支就又变成「Core 自己选」。
-        "Core/DatabaseService.swift": ["MySQLService(config:", "GBaseService(config:"],
-        "Core/GBaseService.swift": ["MySQLService("],
+        "platform/macos/Core/DatabaseService.swift": ["MySQLService(config:", "GBaseService(config:"],
+        "platform/macos/Core/GBaseService.swift": ["MySQLService("],
     }
     for rel, needles in sorted(call_sites.items()):
         path = root / rel
@@ -542,14 +542,14 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
 
     # 判据 C（L-65 第 3 批 · **负向的那一条**）：**笔记侧不许收语言**。
     #
-    # `Core/AICapture.swift` 是笔记侧文件（要在「只有笔记」的构建里独立存在），它只许收
+    # `platform/macos/Core/AICapture.swift` 是笔记侧文件（要在「只有笔记」的构建里独立存在），它只许收
     # **文本与标识** —— `Scripts/check-plugin-assembly.py` 判据 03 用类型白名单把这条契约钉住。
     # 第一版把 `language: AppLanguage` 当形参加进 `skillNote`，被闭环第 10 项当场拦下。
     # 这里再钉一条负向判据，免得日后「为了省一次渲染」又把语言塞回笔记侧（那样笔记侧就会
     # 替宿主选语言，正是本判据要销掉的形状）。
-    note_side = root / "Core/AICapture.swift"
+    note_side = root / "platform/macos/Core/AICapture.swift"
     if not note_side.exists():
-        failures.append("C 文件消失：Core/AICapture.swift")
+        failures.append("C 文件消失：platform/macos/Core/AICapture.swift")
     else:
         note_text = read(note_side)
         # **只看代码**：注释里会写到这条口径本身（「第一版把 `language: AppLanguage` 当形参…」），
@@ -557,7 +557,7 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
         note_code = "\n".join(line.split("//")[0] for line in note_text.splitlines())
         if re.search(r"language:\s*AppLanguage", note_code) or LITERAL.search(note_code):
             failures.append(
-                "C Core/AICapture.swift 又收起了语言（`language:` 形参或字面语言）—— "
+                "C platform/macos/Core/AICapture.swift 又收起了语言（`language:` 形参或字面语言）—— "
                 "笔记侧只收文本与标识，语言由宿主渲染好再进来（FR-PLUG-03）"
             )
         for pattern, what in (
@@ -565,27 +565,27 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
             (r"func\s+sqlNote\([\s\S]{0,400}?tag:\s*String", "sqlNote(tag:)"),
         ):
             if not re.search(pattern, note_text):
-                failures.append(f"C Core/AICapture.swift 的出口不再收「渲染好的标签文本」（{what}）")
+                failures.append(f"C platform/macos/Core/AICapture.swift 的出口不再收「渲染好的标签文本」（{what}）")
 
-    panel = root / "App/Views/DiagnosisPanel.swift"
+    panel = root / "platform/macos/App/Views/DiagnosisPanel.swift"
     if not panel.exists():
-        failures.append("C 文件消失：App/Views/DiagnosisPanel.swift")
+        failures.append("C 文件消失：platform/macos/App/Views/DiagnosisPanel.swift")
     elif "effectiveLanguage" not in read(panel):
-        failures.append("C App/Views/DiagnosisPanel.swift 没把 effectiveLanguage 传下去（界面语言又会与提示词脱钩）")
+        failures.append("C platform/macos/App/Views/DiagnosisPanel.swift 没把 effectiveLanguage 传下去（界面语言又会与提示词脱钩）")
 
     # C′ **「一句话只有一个出处」**（队列 L-65 收掉的那处重复实现）：许可状态那一句
     # 曾经在界面里被抄过一份（因为 Core 那份写死中文），而抄的那一份**会漂移** ——
     # 实测它已经把 `.unreadable` 的**原因丢掉**了。这里钉死：界面必须调 Core 那一份。
-    app_state = root / "App/AppState.swift"
+    app_state = root / "platform/macos/App/AppState.swift"
     if not app_state.exists():
-        failures.append("C 文件消失：App/AppState.swift")
+        failures.append("C 文件消失：platform/macos/App/AppState.swift")
     else:
         text = read(app_state)
         if "LicenseLoader.summary(" not in text:
-            failures.append("C App/AppState.swift 没有调 `LicenseLoader.summary(` —— 界面又自己抄了一份许可文案")
+            failures.append("C platform/macos/App/AppState.swift 没有调 `LicenseLoader.summary(` —— 界面又自己抄了一份许可文案")
         if "L(.licenseActive)" in text:
             failures.append(
-                "C App/AppState.swift 又出现 `L(.licenseActive)` —— 许可状态那一句应当只有 "
+                "C platform/macos/App/AppState.swift 又出现 `L(.licenseActive)` —— 许可状态那一句应当只有 "
                 "`LicenseLoader.summary(for:language:)` 一个出处（抄一份必然漂移）"
             )
 

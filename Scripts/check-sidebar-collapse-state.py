@@ -3,7 +3,7 @@
 """门禁：**侧边栏的折叠状态住在 `AppState`，不住在视图里**（队列 L-59 / `FR-CONN-15`）。
 
 **为什么有它**：人工点验批次 1 第 3 条实测为挂 —— 用户原话「第 3 条记不住折叠状态」。
-真因不在分组聚合（那是 `Core/ConnectionGrouping.swift` 的纯函数，本来就有单测），而在
+真因不在分组聚合（那是 `platform/macos/Core/ConnectionGrouping.swift` 的纯函数，本来就有单测），而在
 **状态活在哪**：`ConnectionListView` 的 `collapsedGroups` 原本是**视图局部 `@State`**，
 而这个视图由 `MainWindow.sidebarContent` **按活动栏分支创建** ⇒ 切到「工作区 / 笔记」
 再切回来，分支被整个重建、折叠状态当场归零（重开应用同理）。
@@ -13,7 +13,7 @@
 `@State`，症状要再等人点一遍才会被发现（正是本工程反复栽的那个形状）。
 
 判据（每条都能指名 文件:行号）：
-  ① **视图不许自己揣着折叠状态** —— `App/Views/` 里出现「`@State` 且名字含 collapse」即红；
+  ① **视图不许自己揣着折叠状态** —— `platform/macos/App/Views/` 里出现「`@State` 且名字含 collapse」即红；
   ② **状态由 `AppState` 持有、默认全展开** —— 声明行必须是 `@Published private(set)` 且初值是
      空集合（一进来就把组都收起来，会让人以为连接没了）；
   ③ **写入口唯一** —— 对 `collapsedConnectionGroups` 的 `insert` / `remove` 只许出现在
@@ -26,7 +26,7 @@
   ⑥ **空跑防护** —— 三个文件必须在、该解析出来的东西解析不出来即红（本仓库踩过两次
      「判据取不到输入 = 假绿」）。
 
-**行为那一半在 `TestsUISnapshot/UISnapshotSidebarStateTests.swift`**（离屏渲染真视图树 + 逐字节
+**行为那一半在 `platform/macos/TestsUISnapshot/UISnapshotSidebarStateTests.swift`**（离屏渲染真视图树 + 逐字节
 比较：「切活动栏再切回来，画出来的像素必须与折叠那一遍相同」）。按 L-01 的纪律那条不进每轮门禁
 （要 `DOYAH_UI_SNAPSHOT=1`，离屏渲染不该进每轮门禁）⇒ 两条判据是**两层**：
 这里每轮判「状态住在哪」，那里判「重建前后画出来一样」。
@@ -47,9 +47,9 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
 
-STATE_FILE = "App/AppState.swift"
-VIEW_FILE = "App/Views/ConnectionListView.swift"
-VIEWS_DIR = "App/Views"
+STATE_FILE = "platform/macos/App/AppState.swift"
+VIEW_FILE = "platform/macos/App/Views/ConnectionListView.swift"
+VIEWS_DIR = "platform/macos/App/Views"
 
 STATE_PROPERTY = "collapsedConnectionGroups"
 STATE_WRITER = "func setConnectionGroup("

@@ -89,24 +89,24 @@ def main() -> int:
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/DiagnosisContext.swift",
+            copy / "platform/macos/Core/DiagnosisContext.swift",
             "lines.append(localizedText(.diagnosisEvidenceHeader, language: language))",
             "lines.append(LocalizedStrings.text(.diagnosisEvidenceHeader, language: .simplifiedChinese))",
         )
         rc, out = run(copy)
-        if rc == 0 or "Core/DiagnosisContext.swift" not in out or "A " not in out:
+        if rc == 0 or "platform/macos/Core/DiagnosisContext.swift" not in out or "A " not in out:
             failures.append(f"例 1（回归钉）应判红并点名 DiagnosisContext.swift，实测 rc={rc}：\n{out}")
 
         # 例 2（判据 A · 未登记文件）：在台账没登记的文件里写死语言。
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/ObjectTreeGrouping.swift",
+            copy / "platform/macos/Core/ObjectTreeGrouping.swift",
             "language: AppLanguage = .simplifiedChinese",
             "language: AppLanguage = AppLanguage.simplifiedChinese  // 写死语言\n    static let injected = LocalizedStrings.text(.objectGroupOther, language: .simplifiedChinese)",
         )
         rc, out = run(copy)
-        if rc == 0 or "Core/ObjectTreeGrouping.swift" not in out:
+        if rc == 0 or "platform/macos/Core/ObjectTreeGrouping.swift" not in out:
             failures.append(f"例 2（未登记文件）应判红并点名 ObjectTreeGrouping.swift，实测 rc={rc}：\n{out}")
 
         # 例 3（判据 B ①）：新增一个未登记的死译文。
@@ -124,7 +124,7 @@ def main() -> int:
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/MCPToolCatalog.swift",
+            copy / "platform/macos/Core/MCPToolCatalog.swift",
             "return .needsApproval(reason: text(.mcpNeedsApproval, tool.name, language: language))",
             "return .needsApproval(reason: text(.mcpApprovalDenied, tool.name, language: language))",
         )
@@ -136,7 +136,7 @@ def main() -> int:
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/DiagnosisContext.swift",
+            copy / "platform/macos/Core/DiagnosisContext.swift",
             "public func promptText(language: AppLanguage) -> String {",
             "public func promptText() -> String { let language = AppLanguage.simplifiedChinese",
         )
@@ -148,7 +148,7 @@ def main() -> int:
         copy = fresh()
         cases += 1
         patch(
-            copy / "App/Views/DiagnosisPanel.swift",
+            copy / "platform/macos/App/Views/DiagnosisPanel.swift",
             "language: LocalizationManager.shared.effectiveLanguage",
             "language: LocalizationManager.shared.language",
             required=False,
@@ -160,7 +160,7 @@ def main() -> int:
         # 例 7（判据 D · 不许空跑）：语言表整个消失 ⇒ 判据取不到输入。
         copy = fresh()
         cases += 1
-        (copy / "Core/Localization.swift").unlink()
+        (copy / "platform/macos/Core/Localization.swift").unlink()
         rc, out = run(copy)
         if rc == 0 or "一个键都没解析到" not in out:
             failures.append(f"例 7（语言表消失 = 空跑）应判红，实测 rc={rc}：\n{out}")
@@ -170,7 +170,7 @@ def main() -> int:
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/SSHTunnelProcess.swift",
+            copy / "platform/macos/Core/SSHTunnelProcess.swift",
             "public func describe(language: AppLanguage) -> String {",
             "public func describe() -> String { let language = AppLanguage.simplifiedChinese",
         )
@@ -183,12 +183,12 @@ def main() -> int:
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/MaintenancePlan.swift",
+            copy / "platform/macos/Core/MaintenancePlan.swift",
             "        databaseType: DatabaseType = .postgresql,\n        language: AppLanguage\n    ) -> MaintenancePlanReview {",
             "        databaseType: DatabaseType = .postgresql\n    ) -> MaintenancePlanReview { let language = AppLanguage.simplifiedChinese",
         )
         rc, out = run(copy)
-        if rc == 0 or "Core/MaintenancePlan.swift" not in out or "C " not in out:
+        if rc == 0 or "platform/macos/Core/MaintenancePlan.swift" not in out or "C " not in out:
             failures.append(f"例 9（维护计划族丢了 language: 形参）应判红且含 C 判据，实测 rc={rc}：\n{out}")
 
         # 例 10（判据 C · 调用方那一半）：Core 的形参都留着，但**展示点不把语言传下去** ——
@@ -196,7 +196,7 @@ def main() -> int:
         copy = fresh()
         cases += 1
         patch(
-            copy / "App/Views/AboutLicenseSheet.swift",
+            copy / "platform/macos/App/Views/AboutLicenseSheet.swift",
             "                    language: LocalizationManager.shared.effectiveLanguage\n",
             "",
         )
@@ -211,12 +211,12 @@ def main() -> int:
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/MaintenancePlan.swift",
+            copy / "platform/macos/Core/MaintenancePlan.swift",
             "        return LocalizedStrings.text(key, language: language)",
             "        return LocalizedStrings.text(key, language: .simplifiedChinese)",
         )
         patch(
-            copy / "Core/MaintenancePlan.swift",
+            copy / "platform/macos/Core/MaintenancePlan.swift",
             "    return LocalizedStrings.format(key, language: language, arguments)",
             "    return LocalizedStrings.format(key, language: .simplifiedChinese, arguments)",
         )
@@ -232,21 +232,21 @@ def main() -> int:
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/AICapture.swift",
+            copy / "platform/macos/Core/AICapture.swift",
             "        defaultTag: String\n    ) -> NoteDraft {\n        NoteDraft(\n            title: title,\n            body: body,\n            tags: tags ?? [defaultTag],",
             "        language: AppLanguage\n    ) -> NoteDraft {\n        NoteDraft(\n            title: title,\n            body: body,\n            tags: tags ?? [LocalizedStrings.text(.aiNoteTagSkill, language: language)],",
         )
         rc, out = run(copy)
-        if rc == 0 or "Core/AICapture.swift" not in out or "笔记侧" not in out:
+        if rc == 0 or "platform/macos/Core/AICapture.swift" not in out or "笔记侧" not in out:
             failures.append(f"例 12（笔记侧又收语言）应判红并点名 AICapture.swift，实测 rc={rc}：\n{out}")
 
         # 例 13（判据 C · L-65 第 5 批钉的 MySQL 文案族）：渲染搬进了**新文件**
-        # `Core/MySQLWording.swift` —— 把某一句的 `language:` 形参删掉（改成体内自选），
+        # `platform/macos/Core/MySQLWording.swift` —— 把某一句的 `language:` 形参删掉（改成体内自选），
         # 「ADR-25 冻结点的落法」就退回「中文写死在新文件里」，必须当场报红。
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/MySQLWording.swift",
+            copy / "platform/macos/Core/MySQLWording.swift",
             "public static func copyUnsupported(language: AppLanguage) -> String {",
             "public static func copyUnsupported() -> String { let language = AppLanguage.simplifiedChinese",
         )
@@ -255,11 +255,11 @@ def main() -> int:
             failures.append(f"例 13（MySQL 文案族丢了 language: 形参）应判红且含 C 判据，实测 rc={rc}：\n{out}")
 
         # 例 14（判据 C · 数据库侧那两句人话的**来源**）：工厂的 MySQL 分支不把语言交出去 ——
-        # 形参都还在，但连接对象再也拿不到语言 ⇒ 报红点名 `Core/DatabaseService.swift`。
+        # 形参都还在，但连接对象再也拿不到语言 ⇒ 报红点名 `platform/macos/Core/DatabaseService.swift`。
         copy = fresh()
         cases += 1
         patch(
-            copy / "Core/DatabaseService.swift",
+            copy / "platform/macos/Core/DatabaseService.swift",
             "            return MySQLService(config: config, password: password, language: language)",
             "            return MySQLService(config: config, password: password)",
         )
@@ -271,7 +271,7 @@ def main() -> int:
         copy = fresh()
         cases += 1
         patch(
-            copy / "App/Views/ConnectionFormView.swift",
+            copy / "platform/macos/App/Views/ConnectionFormView.swift",
             "                for: target,\n                password: testPassword,\n                language: LocalizationManager.shared.effectiveLanguage\n            )",
             "                for: target,\n                password: testPassword\n            )",
         )

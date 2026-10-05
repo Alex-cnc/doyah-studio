@@ -33,13 +33,13 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
 NOTE_SOURCES = [
-    "Core/Note.swift",
-    "Core/NoteBody.swift",
-    "Core/License.swift",
-    "Core/AICapture.swift",
-    "Core/AICaptureUltra.swift",
+    "platform/macos/Core/Note.swift",
+    "platform/macos/Core/NoteBody.swift",
+    "platform/macos/Core/License.swift",
+    "platform/macos/Core/AICapture.swift",
+    "platform/macos/Core/AICaptureUltra.swift",
     # 入库判定（队列 L-134）：AI 产物入笔记的判重与逃生门
-    "Core/AICaptureIntake.swift",
+    "platform/macos/Core/AICaptureIntake.swift",
 ]
 
 IPC_PATTERNS = [
@@ -85,15 +85,15 @@ def check_01_single_process() -> list[str]:
                 for pattern, label in IPC_PATTERNS:
                     if re.search(pattern, line):
                         found.append(f"{relative}:{number}: 出现 {label}（同进程装配，不许有 IPC）")
-    for relative in NOTE_SOURCES + ["App/Views/NotesPanel.swift"]:
+    for relative in NOTE_SOURCES + ["platform/macos/App/Views/NotesPanel.swift"]:
         if not (REPO / relative).exists():
             found.append(f"{relative}: 笔记源文件不存在（装配链断了？）")
-    # 不存在"笔记插件"这种独立 target / product —— 走 Package.swift 的 target 声明星。
-    manifest = read("Package.swift")
+    # 不存在"笔记插件"这种独立 target / product —— 走 platform/macos/Package.swift 的 target 声明星。
+    manifest = read("platform/macos/Package.swift")
     for match in re.finditer(r"\.(?:test)?[Tt]arget\(\s*\n?\s*name:\s*\"([^\"]+)\"", manifest):
         name = match.group(1)
         if re.search(r"note|plugin|notebook", name, re.I):
-            found.append(f"Package.swift: target \"{name}\" 看起来是独立插件 target（FR-PLUG-01 要求同进程内模块）")
+            found.append(f"platform/macos/Package.swift: target \"{name}\" 看起来是独立插件 target（FR-PLUG-01 要求同进程内模块）")
     return found
 
 
@@ -101,9 +101,9 @@ def check_01_single_process() -> list[str]:
 
 def check_02_visibility() -> list[str]:
     found: list[str] = []
-    bar = read("Core/ActivityBar.swift")
+    bar = read("platform/macos/Core/ActivityBar.swift")
     if not re.search(r"^\s*case notes\b", bar, re.M):
-        found.append("Core/ActivityBar.swift: 活动栏没有 `case notes`")
+        found.append("platform/macos/Core/ActivityBar.swift: 活动栏没有 `case notes`")
 
     # 判可见性的只有 LicensePresentation 一处：全仓 `ActivityBarItem.allCases` 只许在 Core 里出现。
     for directory in ("App", "CLI"):
@@ -116,18 +116,18 @@ def check_02_visibility() -> list[str]:
                         f"可见性判据必须只有 LicensePresentation.activityItems 一处"
                     )
     # 唯一判据：能力位 -> 是否显示笔记（不是灰掉、不是另写一个条件）
-    presentation = read("Core/LicensePresentation.swift")
+    presentation = read("platform/macos/Core/LicensePresentation.swift")
     if not re.search(r"case \.notes:\s*return capabilities\.contains\(\.notes\)", presentation):
-        found.append("Core/LicensePresentation.swift: 笔记项的可见性不再是 capabilities.contains(.notes)")
+        found.append("platform/macos/Core/LicensePresentation.swift: 笔记项的可见性不再是 capabilities.contains(.notes)")
     if len(re.findall(r"ActivityBarItem\.allCases\.filter", presentation)) != 1:
-        found.append("Core/LicensePresentation.swift: 能力位过滤 allCases 的地方不再是恰好一处")
+        found.append("platform/macos/Core/LicensePresentation.swift: 能力位过滤 allCases 的地方不再是恰好一处")
 
     # App 侧的"该显示哪几项"只有一条来源。
-    app_state = read("App/AppState.swift")
+    app_state = read("platform/macos/App/AppState.swift")
     if "LicensePresentation.activityItems(for: licenseCapabilities)" not in app_state:
-        found.append("App/AppState.swift: visibleActivityItems 不再走 LicensePresentation.activityItems")
+        found.append("platform/macos/App/AppState.swift: visibleActivityItems 不再走 LicensePresentation.activityItems")
     if len(re.findall(r"var visibleActivityItems\b", app_state)) != 1:
-        found.append("App/AppState.swift: visibleActivityItems 定义不唯一")
+        found.append("platform/macos/App/AppState.swift: visibleActivityItems 定义不唯一")
     return found
 
 
@@ -135,14 +135,14 @@ def check_02_visibility() -> list[str]:
 
 def check_03_one_way_context() -> list[str]:
     found: list[str] = []
-    capture = read("Core/AICapture.swift")
+    capture = read("platform/macos/Core/AICapture.swift")
 
     # 笔记侧入口只收文本与标识（类型白名单：String / [String] 及其可选）。
     allowed_types = {"String", "String?", "[String]", "[String]?"}
     for signature_name in ("skillNote", "sqlNote"):
         match = re.search(rf"public static func {signature_name}\((.*?)\)\s*->", capture, re.S)
         if not match:
-            found.append(f"Core/AICapture.swift: 找不到 {signature_name} 的签名（改名了？）")
+            found.append(f"platform/macos/Core/AICapture.swift: 找不到 {signature_name} 的签名（改名了？）")
             continue
         for parameter in match.group(1).split(","):
             if ":" not in parameter:
@@ -150,7 +150,7 @@ def check_03_one_way_context() -> list[str]:
             type_name = " ".join(parameter.split(":", 1)[1].split("=", 1)[0].split())
             if type_name not in allowed_types:
                 found.append(
-                    f"Core/AICapture.swift: {signature_name} 的参数类型 {type_name} 不在白名单 "
+                    f"platform/macos/Core/AICapture.swift: {signature_name} 的参数类型 {type_name} 不在白名单 "
                     f"{sorted(allowed_types)}（只许文本与标识）"
                 )
 
@@ -161,18 +161,18 @@ def check_03_one_way_context() -> list[str]:
     )
     open_switches = re.findall(r"rowDataConfirmed\s*=\s*true", whole_repo)
     if len(open_switches) != 1:
-        found.append(f"Core/: 打开\"含行数据\"的地方有 {len(open_switches)} 处（必须恰好 1 处：NoteDraft.withRowData）")
+        found.append(f"platform/macos/Core/: 打开\"含行数据\"的地方有 {len(open_switches)} 处（必须恰好 1 处：NoteDraft.withRowData）")
     if re.search(r"func\s+(withoutRowData|clearRowData|unsetRowData)", whole_repo):
-        found.append("Core/: 出现了撤回\"含行数据\"标痕的入口（留痕必须不可撤回）")
+        found.append("platform/macos/Core/: 出现了撤回\"含行数据\"标痕的入口（留痕必须不可撤回）")
 
     # 来源只记连接名：不存口令 / 连接串 / 主机字段。
-    source_block = re.search(r"public struct NoteSource\b.*?\n}\n", read("Core/Note.swift"), re.S)
+    source_block = re.search(r"public struct NoteSource\b.*?\n}\n", read("platform/macos/Core/Note.swift"), re.S)
     if not source_block:
-        found.append("Core/Note.swift: 找不到 NoteSource 定义")
+        found.append("platform/macos/Core/Note.swift: 找不到 NoteSource 定义")
     else:
         for banned in ("password", "connectionString", "dsn", "uri"):
             if re.search(rf"\b{banned}\b", source_block.group(0), re.I):
-                found.append(f"Core/Note.swift: NoteSource 里出现 {banned}（来源只许连接名字）")
+                found.append(f"platform/macos/Core/Note.swift: NoteSource 里出现 {banned}（来源只许连接名字）")
 
     # 笔记侧文件不引用结果行类型。
     for relative in NOTE_SOURCES:
@@ -187,23 +187,23 @@ def check_03_one_way_context() -> list[str]:
 
 def check_06_one_license() -> list[str]:
     found: list[str] = []
-    license_source = read("Core/License.swift")
+    license_source = read("platform/macos/Core/License.swift")
     if not re.search(
         r"static let all:\s*LicenseCapabilities\s*=\s*\[\.workspaces,\s*\.database,\s*\.notes\]",
         license_source,
     ):
-        found.append("Core/License.swift: `LicenseCapabilities.all` 不再是三个能力位")
+        found.append("platform/macos/Core/License.swift: `LicenseCapabilities.all` 不再是三个能力位")
     bits = re.findall(r"static let (workspaces|database|notes)\s*=\s*LicenseCapabilities\(rawValue:\s*1\s*<<\s*(\d+)\)", license_source)
     if sorted(int(bit) for _, bit in bits) != [0, 1, 2]:
-        found.append(f"Core/License.swift: 能力位不是恰好三位 {bits}")
+        found.append(f"platform/macos/Core/License.swift: 能力位不是恰好三位 {bits}")
     # 没有"插件单独授权"这种东西。
     for pattern in (r"static let\s+(notes|plugin)\w*License", r"var\s+isPluginEnabled", r"LicenseEdition\.\w*plugin"):
         if re.search(pattern, license_source, re.I):
-            found.append(f"Core/License.swift: 出现插件独立授权痕迹（{pattern}）—— 一套许可三能力位，不做独立开关")
+            found.append(f"platform/macos/Core/License.swift: 出现插件独立授权痕迹（{pattern}）—— 一套许可三能力位，不做独立开关")
     if not re.search(r"case \.pro:\s*return \[\.workspaces,\s*\.database\]", license_source):
-        found.append("Core/License.swift: Pro 档不再等于「工作区 + 数据库」（档位必须由能力位推导）")
+        found.append("platform/macos/Core/License.swift: Pro 档不再等于「工作区 + 数据库」（档位必须由能力位推导）")
     if not re.search(r"case \.standard:\s*return \.notesOnly", license_source):
-        found.append("Core/License.swift: Standard 档不再等于「只有笔记」")
+        found.append("platform/macos/Core/License.swift: Standard 档不再等于「只有笔记」")
     return found
 
 
@@ -249,16 +249,16 @@ def _functions_with_assignments(path: pathlib.Path, needle: str) -> tuple[list[t
 
 def check_adr35_single_write_entry() -> list[str]:
     found: list[str] = []
-    app_state = REPO / "App/AppState.swift"
+    app_state = REPO / "platform/macos/App/AppState.swift"
     if not re.search(
         r"@Published\s+private\(set\)\s+var\s+selectedActivityItem", app_state.read_text(encoding="utf-8")
     ):
-        found.append("App/AppState.swift: selectedActivityItem 不再是 private(set)（写入口会多起来）")
+        found.append("platform/macos/App/AppState.swift: selectedActivityItem 不再是 private(set)（写入口会多起来）")
 
     assignments, missing_guard = _functions_with_assignments(app_state, "selectedActivityItem")
     found.extend(missing_guard)
     if not assignments:
-        found.append("App/AppState.swift: 找不到任何 selectedActivityItem 赋值（改名了？）")
+        found.append("platform/macos/App/AppState.swift: 找不到任何 selectedActivityItem 赋值（改名了？）")
 
     for path in sorted((REPO / "App").rglob("*.swift")):
         if path.name == "AppState.swift":

@@ -30,12 +30,12 @@ LEDGER = "Scripts/note-search-route.json"
 
 # 副本需要的最小文件集（门禁会读：路线枚举 / 映射 / 语言表 / 界面状态 / 视图目录 / 台账）
 TREE_FILES = [
-    "Core/NoteStorage/NoteDatabase.swift",
-    "Core/NoteStorage/NoteSearchDisclosure.swift",
-    "Core/Localization.swift",
-    "App/AppState.swift",
-    "App/Views/NotesPanel.swift",
-    "Tests/NoteTests.swift",
+    "platform/macos/Core/NoteStorage/NoteDatabase.swift",
+    "platform/macos/Core/NoteStorage/NoteSearchDisclosure.swift",
+    "platform/macos/Core/Localization.swift",
+    "platform/macos/App/AppState.swift",
+    "platform/macos/App/Views/NotesPanel.swift",
+    "platform/macos/Tests/NoteTests.swift",
     GATE,
     LEDGER,
 ]
@@ -90,7 +90,7 @@ def main() -> int:
 
     # 1) 生产点消失（界面退回内存过滤的形状）
     tree = make_tree()
-    edit(tree, "App/AppState.swift", "let result = try await NoteLibrary.defaultLibrary().search(trimmed)", "let result = NoteDatabase.SearchResult(route: .substring, notes: [])")
+    edit(tree, "platform/macos/App/AppState.swift", "let result = try await NoteLibrary.defaultLibrary().search(trimmed)", "let result = NoteDatabase.SearchResult(route: .substring, notes: [])")
     code, output = run(tree)
     record(code != 0 and "命中 0 处" in output, "界面检索生产点被拿掉 ⇒ 判红", output.strip()[-300:])
 
@@ -98,7 +98,7 @@ def main() -> int:
     tree = make_tree()
     edit(
         tree,
-        "App/AppState.swift",
+        "platform/macos/App/AppState.swift",
         "func searchNotes() async {",
         "func searchAgain() async { _ = try? await NoteLibrary.defaultLibrary().search(notesQuery) }\n\n    func searchNotes() async {",
     )
@@ -109,20 +109,20 @@ def main() -> int:
     tree = make_tree()
     edit(
         tree,
-        "App/Views/NotesPanel.swift",
+        "platform/macos/App/Views/NotesPanel.swift",
         "        .padding(.vertical, Spacing.s)",
         "        .padding(.vertical, Spacing.s)\n        .onChange(of: appState.notesQuery) { _, _ in _ = NoteSearch.match(appState.notes, query: appState.notesQuery) }",
     )
     code, output = run(tree)
     record(
-        code != 0 and "App/Views/NotesPanel.swift:" in output and "内存过滤" in output,
+        code != 0 and "platform/macos/App/Views/NotesPanel.swift:" in output and "内存过滤" in output,
         "视图里出现内存过滤 ⇒ 判红并点名行号",
         output.strip()[-300:],
     )
 
     # 4) 实现与台账不一致（把子串路的交代偷偷改成「不必说」）
     tree = make_tree()
-    edit(tree, "Core/NoteStorage/NoteSearchDisclosure.swift", "return .noteSearchSubstring", "return nil")
+    edit(tree, "platform/macos/Core/NoteStorage/NoteSearchDisclosure.swift", "return .noteSearchSubstring", "return nil")
     code, output = run(tree)
     record(code != 0 and "两边必须逐条相等" in output, "实现改了、台账没跟 ⇒ 判红", output.strip()[-300:])
 
@@ -130,7 +130,7 @@ def main() -> int:
     tree = make_tree()
     edit(
         tree,
-        "Core/NoteStorage/NoteDatabase.swift",
+        "platform/macos/Core/NoteStorage/NoteDatabase.swift",
         "            case substring",
         "            case substring\n            /// 夹具：新增一条没登记的路线\n            case scratchRoute",
     )
@@ -141,7 +141,7 @@ def main() -> int:
     tree = make_tree()
     edit(
         tree,
-        "Core/Localization.swift",
+        "platform/macos/Core/Localization.swift",
         ".noteSearchSubstring: [.simplifiedChinese: \"这次是子串匹配（全文检索需要 3 个字以上，或这一次没命中）\", .english:",
         ".noteSearchSubstring: [.english:",
     )
@@ -150,13 +150,13 @@ def main() -> int:
 
     # 7) 失败那一句成了死键（语言表里有、没人引用）
     tree = make_tree()
-    edit(tree, "App/AppState.swift", "return L(.noteSearchUnavailable, failure)", "return failure")
+    edit(tree, "platform/macos/App/AppState.swift", "return L(.noteSearchUnavailable, failure)", "return failure")
     code, output = run(tree)
     record(code != 0 and "死键" in output, "「检索没跑成」没人引用 ⇒ 判红（死键）", output.strip()[-300:])
 
     # 8) 空跑防护：路线枚举一条都解析不到
     tree = make_tree()
-    edit(tree, "Core/NoteStorage/NoteDatabase.swift", "public enum Route: String, Equatable, Sendable {", "public enum RouteX: String, Equatable, Sendable {")
+    edit(tree, "platform/macos/Core/NoteStorage/NoteDatabase.swift", "public enum Route: String, Equatable, Sendable {", "public enum RouteX: String, Equatable, Sendable {")
     code, output = run(tree)
     record(code != 0 and "空跑不许通过" in output, "解析不到 `Route` 枚举 ⇒ 判红（空跑不许通过）", output.strip()[-300:])
 
@@ -173,7 +173,7 @@ def main() -> int:
     tree = make_tree()
     edit(
         tree,
-        "App/AppState.swift",
+        "platform/macos/App/AppState.swift",
         "        guard query == notesQuery else { return false }",
         "        _ = query   // 夹具：判断不在了",
     )
@@ -188,7 +188,7 @@ def main() -> int:
     tree = make_tree()
     edit(
         tree,
-        "App/AppState.swift",
+        "platform/macos/App/AppState.swift",
         "            settleNoteSearch(.failure(String(describing: error)), for: query)",
         "            noteSearchState = .unavailable(failure: String(describing: error))",
     )
@@ -203,7 +203,7 @@ def main() -> int:
     tree = make_tree()
     edit(
         tree,
-        "App/AppState.swift",
+        "platform/macos/App/AppState.swift",
         "    func searchNotes() async {",
         "    func searchShortcut() async {\n"
         "        noteSearchState = .library(route: .substring, notes: [])\n"
@@ -220,7 +220,7 @@ def main() -> int:
     tree = make_tree()
     edit(
         tree,
-        "App/AppState.swift",
+        "platform/macos/App/AppState.swift",
         "    func runSearch(_ trimmed: String, for query: String) async {",
         "    func runSearch(_ trimmed: String, for query: String) async {\n"
         "        let query = notesQuery   // 夹具：又去读搜索框",
