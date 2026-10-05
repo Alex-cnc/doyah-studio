@@ -433,7 +433,7 @@ def self_test() -> int:
     expectations.append(("文档里的口径锚点被删", True, drop_anchor))
 
     def empty_app(directory, ledger):
-        shutil.rmtree(directory / "App")
+        shutil.rmtree(directory / "platform/macos/App")
         return ledger
 
     expectations.append(("App 目录被掏空（空跑）", True, empty_app))
