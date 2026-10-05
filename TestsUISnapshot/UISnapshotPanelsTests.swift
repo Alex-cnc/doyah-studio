@@ -1078,6 +1078,99 @@ final class UISnapshotPanelsTests: XCTestCase {
                        "宿主语境退出后，生效主题必须回到用户落盘选的那个")
     }
 
+    // MARK: - L-100：待办那一屏的两张（2026-10-05 第 194 轮）
+
+    /// **`L-100` 判据面的最后一项**：`TestsUISnapshot/` 两张 —— ① 清单空态；② 日历月视图。
+    ///
+    /// 为什么是这两张：`L-100`（待办清单 + 待办日历界面）到第 193 轮五片都落了（清单屏 /
+    /// 日历 Core 半 / 日历屏 / 组织与检索 / 提醒界面入口），队列那条自己写的判据面就是
+    /// 「`TestsUISnapshot/` 两张（清单空态 / 日历月视图）+ 可点验条目（改期后清单同步）」——
+    /// 界面手感那一半归人工点验，这两张是**助理可自验**的那一半。
+    ///
+    /// 拍的是**真视图树**（`TodoPaneView`：中栏在清单 / 日历之间切的那个真屏幕）。三条口径：
+    ///  ① 空态**显式构造**（`todos` 摆空 + 渲染后再断言一遍仍空）—— 不靠「碰巧还没加载」；
+    ///  ② 日历那张把**锚点钉死**（`todoCalendarAnchor` = 当月 1 号）并选中当月 7 号 ⇒
+    ///     格子 / 选中态 / 当天任务在月内可复现；**如实登记**：「今天」那一格跟真实时钟走
+    ///     （`AppState.isTodoCalendarToday` 读 `Date()` —— 端侧读表是对的、Core 不读），跨天会变；
+    ///  ③ 两张各抓「只有这一支才写得出来的文案」当判据，且**反向也判**（另一支那句不许出现）。
+    @MainActor
+    func testTodoPaneEmptyListAndCalendarMonth() throws {
+        try requireIsolatedNotesDirectory()
+        let host = makeEmptyHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        let load = try UISnapshot.applyLicense(.standard, to: host.state)
+        XCTAssertEqual(load.entitlements.edition, .standard, "笔记区在 Standard 档下才是「整个应用」")
+        XCTAssertTrue(host.state.notesEnabled, "Standard 档必须带笔记能力（capabilities.notes）")
+
+        // ① 清单空态：一条任务都没有 ⇒ `TodoEmptyKind.none` 那一支（不是「这一档筛空」那一支）。
+        host.state.todos = []
+        host.state.todoPane = .list
+        host.state.todoFilter = .defaultFilter
+        XCTAssertEqual(host.state.todoBoard.total, 0, "本张要拍空态：一条任务都不该有")
+        XCTAssertEqual(host.state.todoEmptyKind, .none, "空态判定该是「一条都没有」，不是「这一档筛空」")
+        let emptyPairs = try snapshotLightAndDark(
+            "todos-pane-list-empty",
+            size: CGSize(width: 460, height: 560),
+            host: host
+        ) {
+            TodoPaneView()
+        }
+        // **渲染后再判一遍**（离屏宿主里 `.task` / `onAppear` 是会跑的 —— 见本文件上面那几批）：
+        // 磁盘上真有任务时这条会当场红，而不是悄悄拍出一张与注释不符的图。
+        XCTAssertTrue(host.state.todos.isEmpty, "渲染期间任务被填上了 —— 空态没站稳")
+        XCTAssertEqual(host.state.todoBoard.total, 0, "渲染期间清单不再是空的")
+        assertInjectedCopy(emptyPairs, present: .todosEmpty, absent: .todosEmptyFiltered)
+
+        // ② 日历月视图：锚点钉在**当月 1 号**，任务铺在当月（含一条逾期、一条无截止、一条已完成）。
+        let calendar = Calendar.current
+        let anchorDay = calendar.startOfDay(for: Date())
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: anchorDay))
+            ?? anchorDay
+        /// 当月第 `value` 天（1 = 1 号）；**只借 `Calendar` 加减**，不手写日期算术。
+        func day(_ value: Int) -> Date {
+            calendar.date(byAdding: .day, value: value - 1, to: monthStart) ?? monthStart
+        }
+        let overdueDay = calendar.date(byAdding: .day, value: -3, to: monthStart) ?? monthStart
+        host.state.todos = [
+            Todo(title: "环洞庭湖热身 · 补给清单", dueAt: day(3), priority: .high, tags: ["骑行"]),
+            Todo(title: "缴水费", dueAt: day(7)),
+            Todo(title: "整理尺八练习曲谱", dueAt: day(7), priority: .low, tags: ["尺八"]),
+            Todo(title: "体检预约", dueAt: overdueDay, priority: .high, tags: ["健康"]),
+            Todo(title: "读完《长日将尽》"),
+            Todo(title: "确认 SRS 版本号", done: true, completedAt: day(2))
+        ]
+        host.state.todoPane = .calendar
+        host.state.todoCalendarView = .month
+        host.state.todoCalendarAnchor = monthStart
+        // 点中当月 7 号（那天有两条）⇒ 「点某天看当天任务」那半也在图里。
+        host.state.todoCalendarSelectedDay = day(7)
+        let cells = host.state.todoCalendarCells
+        XCTAssertEqual(cells.count % TodoCalendar.columns, 0, "月视图格子必须是整周")
+        XCTAssertGreaterThanOrEqual(cells.count, TodoCalendar.columns * 5, "月视图至少 5 周")
+        XCTAssertTrue(host.state.todoCalendarSelectedDayHasTasks, "选中的那天必须有任务（否则图里是空态）")
+        let calendarPairs = try snapshotLightAndDark(
+            "todos-pane-calendar-month",
+            size: CGSize(width: 660, height: 720),
+            host: host
+        ) {
+            TodoPaneView()
+        }
+        // 渲染后再判一遍：任务没被改、锚点没被挪（`TodoPaneView` 自己不读库，这一条是「图拍的确实是
+        // 注释里那个月」的机器证据）。
+        XCTAssertEqual(host.state.todos.count, 6, "渲染期间任务被改了 —— 这张图不作数")
+        XCTAssertEqual(
+            TodoCalendar.calendarDay(of: host.state.todoCalendarAnchor, calendar: calendar),
+            monthStart,
+            "渲染期间锚点被挪了 —— 格子与选中的那天就不是注释里那个月了"
+        )
+        // 正例：表头第一列（周一）与「待办」这一屏名 —— 「日历真的画出来了」的机械证据。
+        assertInjectedCopy(calendarPairs, present: .todoWeekdayMonday, absent: nil)
+        assertInjectedCopy(calendarPairs, present: .notesModuleTodos, absent: nil)
+        // 反例两半：日历那一屏不该出现清单空态那句，也不该出现「这一天没有任务」（选中的那天有任务）。
+        assertInjectedCopy(calendarPairs, present: .todoWeekdayMonday, absent: .todosEmpty)
+        assertInjectedCopy(calendarPairs, present: .todoWeekdayMonday, absent: .todoCalendarNoDay)
+    }
+
     // MARK: - 清单
 
     override class func tearDown() {
