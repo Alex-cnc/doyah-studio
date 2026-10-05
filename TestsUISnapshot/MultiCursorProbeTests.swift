@@ -32,7 +32,9 @@ import DoyahCore
 /// ## 口径与边界（如实登记）
 ///
 /// · 默认 `XCTSkip`（要 `DOYAH_UI_SNAPSHOT=1`），跑法 `./Scripts/verify-ui-interactions.sh`；
-/// · **语言无关**：这几张图里没有一句界面文案（画面就是 SQL 文本与光标），故不按语言各出一张；
+/// · **语言无关**：这几张图里没有一句界面文案（画面就是 SQL 文本与光标）⇒ 中英两遍**逐字节相同**
+///   （并已按口径登记进 `Scripts/ui-snapshot-language-exemptions.json`）。虽然无关，**仍出成对的两张**
+///   （`captureBothLanguages`）—— 语言覆盖门禁要求「成对齐全」，语言无关只是「两张相同」并写明理由；
 /// · 「一次撤销」判的是**文本**回到旧样；AppKit 的 undo 会把光标收回到一处 —— 那是框架行为，
 ///   如实登记，不当判据；
 /// · 判得到「视图拿到这个事件之后做什么」，判不到「系统把事件送到这个视图」。
@@ -139,7 +141,7 @@ final class MultiCursorProbeTests: XCTestCase {
                 "每个选区选中的都该是同一处内容"
             )
         }
-        try host.capture(name: "interaction-editor-occurrence-selection")
+        try host.captureBothLanguages(name: "interaction-editor-occurrence-selection")
 
         // 多光标打字：三处一起改，每个光标各自往前推进一格（位置不漂）
         let original = textView.string
@@ -194,7 +196,7 @@ final class MultiCursorProbeTests: XCTestCase {
             textView.multiSelection.allSatisfy { $0.length == 0 },
             "加出来的都该是裸光标（零长度），不是选区"
         )
-        try host.capture(name: "interaction-editor-multi-caret")
+        try host.captureBothLanguages(name: "interaction-editor-multi-caret")
 
         // 打字 / 退格：每个光标各自生效，且**一次撤销**全回退
         let original = textView.string
@@ -302,7 +304,7 @@ final class MultiCursorProbeTests: XCTestCase {
             let selected = (textView.string as NSString).substring(with: range)
             XCTAssertFalse(selected.contains("\n"), "列选**绝不跨换行**")
         }
-        try host.capture(name: "interaction-editor-column-selection")
+        try host.captureBothLanguages(name: "interaction-editor-column-selection")
 
         // 列选下打字：逐行各替换掉自己那一段 ⇒ 短的那一行整行被换掉，且一次撤销全回退
         let original = textView.string
@@ -314,5 +316,15 @@ final class MultiCursorProbeTests: XCTestCase {
         XCTAssertEqual(lines[2], "#" + original.split(separator: "\n", omittingEmptySubsequences: false)[2].dropFirst(width), "第 3 行同理")
         textView.undoManager?.undo()
         XCTAssertEqual(textView.string, original, "列选那一批同样是一次撤销")
+    }
+
+    /// 类级收尾：把这一遍拍的图写进 `manifest.json`。
+    ///
+    /// **不是可选项**：取证脚本的「跨清单判定」读的就是这份清单 —— 少了它，
+    /// 单跑这一族时收尾会红在「manifest.json 没有」（第 195 轮 · 队列 `L-185` 实测：
+    /// 同族的 `SQLLineNumberProbeTests` 早就有这一句，本文件与对象树那族漏了）。
+    override class func tearDown() {
+        UISnapshot.finishManifestIfEnabled()
+        super.tearDown()
     }
 }

@@ -52,33 +52,30 @@ def record(directory: pathlib.Path, name: str, language: str, payload: bytes, te
     return item
 
 
-def run(checker_dir: pathlib.Path, manifest: dict, exemptions: dict):
+def run(checker_dir: pathlib.Path, manifest: dict, exemptions: dict, extra_args=None):
     with (checker_dir / "manifest.json").open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, ensure_ascii=False)
     with (checker_dir / "exemptions.json").open("w", encoding="utf-8") as handle:
         json.dump(exemptions, handle, ensure_ascii=False)
-    proc = subprocess.run(
-        [
-            sys.executable,
-            CHECKER,
-            "--manifest",
-            str(checker_dir / "manifest.json"),
-            "--exemptions",
-            str(checker_dir / "exemptions.json"),
-        ],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-    )
+    argv = [
+        sys.executable,
+        CHECKER,
+        "--manifest",
+        str(checker_dir / "manifest.json"),
+        "--exemptions",
+        str(checker_dir / "exemptions.json"),
+    ]
+    argv.extend(extra_args or [])
+    proc = subprocess.run(argv, cwd=REPO, capture_output=True, text=True)
     return proc.returncode, proc.stdout + proc.stderr
 
 
-def case(name: str, expect_code: int, expect_text: str, build):
+def case(name: str, expect_code: int, expect_text: str, build, extra_args=None):
     """`build(directory)` 返回 (manifest, exemptions)。"""
     directory = pathlib.Path(tempfile.mkdtemp(prefix="doyah-lang-neg-"))
     try:
         manifest, exemptions = build(directory)
-        code, output = run(directory, manifest, exemptions)
+        code, output = run(directory, manifest, exemptions, extra_args)
         ok = code == expect_code and expect_text in output
         detail = ""
         if not ok:
@@ -210,6 +207,37 @@ def empty_manifest(directory):
 
 
 case("清单里一条都没有", 2, "一条快照都没有", empty_manifest)
+
+
+# —— ⑩ / ⑪：**筛选跑的局部清单**（队列 L-185 的红/绿成对）
+#   真现场：`--filter` 的跑法只拍一族 ⇒ 清单里没有注册表里另外那些条目。旧判据把它读成
+#   「陈旧条目」（实测 18 条假红）⇒ 每一次筛选跑都自报 ❌。同一条输入，**给了 `--partial`**
+#   就只判「拍到的那些」（绿），**不给**仍然要红 —— 半个口子，不是把这条判据关掉。
+def partial_manifest(directory):
+    return (
+        {
+            "snapshots": [
+                record(directory, "panel-a-zh", "zh-Hans", b"aa", ["查询"]),
+                record(directory, "panel-a-en", "en", b"bb", ["Query"]),
+            ]
+        },
+        {"exemptions": {"bar": "只有图标；文案只到 .help 与无障碍标签"}},
+    )
+
+
+case(
+    "筛选跑（局部清单）：本次没拍到的注册条目不当陈旧条目",
+    0,
+    "语言覆盖门禁通过",
+    partial_manifest,
+    extra_args=["--partial"],
+)
+case(
+    "同一份局部清单不给 --partial ⇒ 仍然判红（口子只对筛选跑开）",
+    1,
+    "陈旧条目",
+    partial_manifest,
+)
 
 
 # —— 正例：两组随语言变 + 一组注册为语言无关，且注册的那组确实逐字节相同

@@ -24,10 +24,16 @@
     看图时可以留意（若哪天它同时**不随语言变化**，会被第一条判据拦下，届时再决定是修
     视图还是注册）。
 
+**`--partial`（筛选跑的局部清单，队列 L-185）**：`--filter` 的跑法只拍一族，
+清单里当然不会有注册表的全部条目 —— 那种「这一次没拍」**不许**被读成「条目陈旧」
+（实测：不分开的话，每一次筛选跑都自报 ❌、18 条假红）。给了它，就只判「清单里拍到的那些」
+（成对齐全 / 语言到像素 / 注册的必须逐字节相同），注册表里其余的条目**留给全量跑判**。
+
 跑法：
 
     python3 Scripts/check-ui-snapshot-languages.py                       # 读 .build/ui-snapshots/manifest.json
     python3 Scripts/check-ui-snapshot-languages.py --manifest /tmp/x/manifest.json
+    python3 Scripts/check-ui-snapshot-languages.py --manifest … --partial   # 筛选跑的局部清单（L-185）
 
 它由 `Scripts/make-ui-snapshots.sh` 在渲染完**立刻**调用 —— 快照是取证工具、不进每轮门禁，
 但**取证那一刻**要把这件事判住。负例见 `Scripts/test-ui-snapshot-languages.py`。
@@ -77,6 +83,12 @@ def main() -> int:
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--exemptions", default=str(DEFAULT_EXEMPTIONS))
     parser.add_argument("--quiet", action="store_true", help="只打印结论行")
+    parser.add_argument(
+        "--partial",
+        action="store_true",
+        help="这是**筛选跑**的局部清单（`--filter`）：注册表里没出现在这份清单里的条目"
+        "不当「陈旧条目」判 —— 那要等全量跑（队列 L-185）",
+    )
     args = parser.parse_args()
 
     manifest_path = pathlib.Path(args.manifest)
@@ -125,11 +137,23 @@ def main() -> int:
         return 1
 
     # 注册表：条目必须在 manifest 里出现，且理由非空
+    missing_entries: list[str] = []
     for base, reason in exemptions.items():
         if not str(reason).strip():
             problems.append(f"{base}：注册为语言无关却没写理由（理由就是这条判据的可读性）")
         if base not in groups:
-            problems.append(f"{base}：注册表里有这个条目，但清单里没有这张图 —— 陈旧条目，请删掉")
+            # **筛选跑的局部清单**（`--partial`，队列 L-185）：这一路只拍了被筛中的那一族，
+            # 注册表里其它条目当然不在清单里 —— 那是「这一次没拍」，不是「条目陈旧」。
+            # 不分开的下场实测过：改好产物目录之后，每一次筛选跑照样自报 ❌（18 条假红）。
+            if args.partial:
+                missing_entries.append(base)
+            else:
+                problems.append(f"{base}：注册表里有这个条目，但清单里没有这张图 —— 陈旧条目，请删掉")
+    if missing_entries and not args.quiet:
+        notes.append(
+            f"局部清单（--partial）：注册表里另有 {len(missing_entries)} 条不在这一份里 —— "
+            "陈旧与否由**全量跑**判（筛选跑只判「拍到的那些」）"
+        )
 
     identical_registered: list[str] = []
     for base in sorted(groups):

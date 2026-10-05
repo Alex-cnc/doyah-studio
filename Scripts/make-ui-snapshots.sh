@@ -72,6 +72,13 @@ if [ -z "${DOYAH_SNAPSHOT_DIR:-}" ] && [ "${FILTER}" != "UISnapshotTests" ]; the
     OUT="${SCRATCH}/ui-snapshots/filtered/$(printf '%s' "${FILTER}" | tr -c 'A-Za-z0-9._-' '-')"
     mkdir -p "${OUT}"
     rm -f "${OUT}"/*.png "${OUT}/manifest.json"
+    # **产物目录的写者只有一个口径**（队列 L-185 ①）：改完 `OUT` 必须把它 export 出去 ——
+    # 落盘的是 `TestsUISnapshot/UISnapshotKit.swift`，它读的正是 `DOYAH_SNAPSHOT_DIR` 这个
+    # **环境变量**（`UISnapshot.outputDirectory`），不是这个 `OUT` 变量。只改 `OUT` 的后果实测过：
+    # 图照旧落共享目录、收尾去 `filtered/<筛子>/` 找一个不存在的 `manifest.json` ⇒
+    # **每一次筛选跑都自报 ❌**（用例 passed、张数齐，结论却是失败），而筛选跑还在顶掉
+    # 全量那一份共享清单（第 97 轮只换了「判据读谁」= 改读 `full-run/` 凭证，没修产生它的这一处）。
+    export DOYAH_SNAPSHOT_DIR="${OUT}"
     echo "ℹ️ 这是筛选跑（--filter ${FILTER}）⇒ 产物落在 ${OUT}（不动全量那一份 ${SCRATCH}/ui-snapshots/）"
 fi
 
@@ -115,7 +122,13 @@ PY
 # 「判据太松」就是这么漏过去的）。判据与理由见 Scripts/check-ui-snapshot-languages.py。
 echo
 echo "==> 语言覆盖（中英成对 + 语言到像素）"
-python3 Scripts/check-ui-snapshot-languages.py --manifest "${OUT}/manifest.json"
+# 筛选跑给 `--partial`：这一份清单只含被筛中的那一族，注册表里其余条目**不在**里面 ——
+# 那是「这一次没拍」，不是「条目陈旧」（不分开的话每次筛选跑都自报 ❌、实测 18 条假红）。
+if [ "${FILTER}" = "UISnapshotTests" ]; then
+    python3 Scripts/check-ui-snapshot-languages.py --manifest "${OUT}/manifest.json"
+else
+    python3 Scripts/check-ui-snapshot-languages.py --manifest "${OUT}/manifest.json" --partial
+fi
 
 # ── 全量跑凭证（第 98 轮）：**判据的输入必须只有一个写者** ──
 # 真现场：`.build/ui-snapshots/manifest.json` 是**共享产物** —— 本机人工点验会话跑筛选子集时也往那儿写，

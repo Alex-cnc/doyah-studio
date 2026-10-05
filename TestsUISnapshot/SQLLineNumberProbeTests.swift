@@ -24,7 +24,9 @@ import DoyahCore
 /// ## 口径与边界（如实登记）
 ///
 /// · 默认 `XCTSkip`（要 `DOYAH_UI_SNAPSHOT=1`），跑法 `./Scripts/run-manual-verification-probes.sh`；
-/// · 图片**语言无关**（画面里只有 SQL 文本与数字行号）⇒ 不按语言各出一张；
+/// · 图片**语言无关**（画面里只有 SQL 文本与数字行号）⇒ 中英两遍**逐字节相同**，已登记进
+///   `Scripts/ui-snapshot-language-exemptions.json`；虽无关，**仍出成对的两张**（`captureBothLanguages`）
+///   —— 语言覆盖门禁要求「成对齐全」；
 /// · 判得到「视图把列画成什么样」，判不到「人眼看着舒不舒服」—— 观感仍归人工点验；
 /// · 数字与正文的**基线对齐**只判了「列宽按当前字体实量、正文起点等于列宽」，
 ///   逐像素的字形对齐没有断言（那属于读图）。
@@ -137,7 +139,7 @@ final class SQLLineNumberProbeTests: XCTestCase {
             textView.textContainerInset.height, LineNumberGutter.verticalInset, accuracy: 0.01
         )
 
-        let record = try host.capture(name: "sql-line-numbers-9-lines")
+        let record = try host.captureBothLanguages(name: "sql-line-numbers-9-lines")[0]
         let band = try XCTUnwrap(gutterBand(of: record, points: textView.gutterWidth))
         XCTAssertGreaterThan(band.ink, 0, "列区里必须有墨 —— 「算了但不画」正是这条要挡的假绿")
     }
@@ -163,8 +165,8 @@ final class SQLLineNumberProbeTests: XCTestCase {
             "列变宽必须真的把正文起点推右 —— 光算数不落排版等于没做"
         )
 
-        let shortRecord = try shortHost.capture(name: "sql-line-numbers-9-lines-recheck")
-        let longRecord = try longHost.capture(name: "sql-line-numbers-151-lines")
+        let shortRecord = try shortHost.captureBothLanguages(name: "sql-line-numbers-9-lines-recheck")[0]
+        let longRecord = try longHost.captureBothLanguages(name: "sql-line-numbers-151-lines")[0]
 
         // 同一块列区（按**较窄**的那条列取，两张图都在列内）：内容必须不同。
         let shortBand = try XCTUnwrap(gutterBand(of: shortRecord, points: shortView.gutterWidth))

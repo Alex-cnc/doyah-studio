@@ -34,8 +34,9 @@ import DoyahCore
 ///   点不到 —— 与 `L-89` ㈡ 第 8 条那次「整棵 ObjectTreeView + 真点击」同一个边界）。
 /// · ⑤「鼠标停着不动界面不该闪」是**结构**判据：悬停行存在无观察者的 `HoverBox` 里、菜单**无条件**挂
 ///   （两条源锚点写在 `Scripts/verify-ui-interactions.sh`），不是行为判据。
-/// · 这一族图**只拍中文一面**：判的是「哪一行 / 有哪些项」，语言成对由 `make-ui-snapshots` 的注册表管
-///   （探针直接落 `.build/ui-snapshots/`，不进那张注册表）。
+/// · 这一族图**出中英成对**（`writeBothLanguages`）：菜单项文案是本族**唯一的判据面**，
+///   中文那遍取到的文案集合与规则双向对账；英文那遍只出图，另判「两遍确实不同」。
+///   此前「只拍中文一面」⇒ 全量跑的语言覆盖门禁判红 11 项（队列 `L-185` ②）。
 /// · 默认 `XCTSkip`（要 `DOYAH_UI_SNAPSHOT=1`），跑法 `./Scripts/verify-ui-interactions.sh`。
 final class ObjectTreeContextMenuProbeTests: XCTestCase {
 
@@ -191,6 +192,11 @@ final class ObjectTreeContextMenuProbeTests: XCTestCase {
     /// **容器由这里加**（`VStack` + 内边距）：生产路径交给 `.contextMenu { … }` 的是**兄弟节点**
     /// （AppKit 的菜单项要的就是这个形状），而一张图必须有排布 —— 内容本身两边同源，
     /// 差别只在外面这层壳，如实登记在探针头注的边界里。
+    /// 菜单那一屏渲染一遍：**中英成对**（队列 `L-185` ②）。
+    ///
+    /// 这一族是**真界面** —— 菜单项文案本身就是判据面（文案集合与 `ObjectTreeActions` 规则双向对账），
+    /// 所以文案就该进像素、就该出中英两份。此前「只拍中文一面」⇒ 全量跑的收尾语言覆盖门禁判红 11 项
+    /// （快照名没有语言后缀）。返回**中文那一遍**：本文件里所有期望值都是从 `.simplifiedChinese` 取出来的。
     @MainActor
     @discardableResult
     private func renderMenu(
@@ -198,7 +204,7 @@ final class ObjectTreeContextMenuProbeTests: XCTestCase {
         name: String,
         host: Host
     ) throws -> UISnapshot.Record {
-        try UISnapshot.write(name, size: Self.menuSize, language: .simplifiedChinese) {
+        let pair = try UISnapshot.writeBothLanguages(name, size: Self.menuSize) {
             VStack(alignment: .leading, spacing: 6) {
                 ObjectTreeContextMenu.items(object: object, appState: host.state)
             }
@@ -210,6 +216,11 @@ final class ObjectTreeContextMenuProbeTests: XCTestCase {
                 terminal: host.terminal
             )
         }
+        XCTAssertTrue(
+            pair.textsDiffer,
+            "「\(name)」中英两遍取到的文案必须不同 —— 这一族的判据面就是菜单项文案"
+        )
+        return pair.records[0]
     }
 
     // MARK: - ① 每一行都是它自己的菜单（七类各一张图）+ 动作项与 Core 双向对账
@@ -406,5 +417,15 @@ final class ObjectTreeContextMenuProbeTests: XCTestCase {
     private static func sha256(ofPNGAt path: String) throws -> String {
         let data = try Data(contentsOf: URL(fileURLWithPath: path))
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// 类级收尾：把这一遍拍的图写进 `manifest.json`。
+    ///
+    /// **不是可选项**：取证脚本的「跨清单判定」读的就是这份清单 —— 少了它，
+    /// 单跑这一族时收尾会红在「manifest.json 没有」（第 195 轮 · 队列 `L-185` 实测：
+    /// 同族的 `SQLLineNumberProbeTests` 早就有这一句，本文件与多光标那族漏了）。
+    override class func tearDown() {
+        UISnapshot.finishManifestIfEnabled()
+        super.tearDown()
     }
 }

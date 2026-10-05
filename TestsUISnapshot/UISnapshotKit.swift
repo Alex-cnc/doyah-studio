@@ -923,6 +923,44 @@ enum UISnapshot {
             print("📷 \(name)  \(image.width)×\(image.height)px  \(data.count) B  内容占比 \(String(format: "%.3f", ratio))  [LiveHost]  \(record.language)  文案 \(record.localizedStrings.count) 条  → \(url.path)")
             return record
         }
+
+        /// 同一实例上**按两种语言各拍一遍**（LiveHost 版 `writeBothLanguages`）。
+        ///
+        /// 为什么不能照 `writeBothLanguages` 那样每遍重建视图树：这一族判的是**跨时刻**的事
+        /// （同一个编辑器实例上敲过键 / 拨过开关之后界面变成什么样），重建就把被测的那件事抹掉了
+        /// （见上面那条注释）。于是语言两遍走的是 `LocalizationManager.beginHostLanguage`
+        /// 包住**同一个实例**的渲染 —— 口径与 `write` 同源：只覆盖、不落盘、不动用户偏好。
+        ///
+        /// 谁用它：`MultiCursorProbeTests` / `SQLLineNumberProbeTests` 那几族**仪器图**
+        /// （画面里只有文本与光标 / 行号，没有一句界面文案）。它们必须出成对的两张 ——
+        /// 语言覆盖门禁要求成对齐全，语言无关只是「两张逐字节相同」并登记进注册表的理由。
+        @MainActor
+        @discardableResult
+        func captureBothLanguages(
+            name: String,
+            scale: CGFloat = 2,
+            observed: Set<String> = []
+        ) throws -> [Record] {
+            XCTAssertFalse(
+                name.hasSuffix("-zh") || name.hasSuffix("-en"),
+                "快照名不要自己带语言后缀（由 captureBothLanguages 统一加）：\(name)"
+            )
+            var records: [Record] = []
+            for language in UISnapshot.coverageLanguages {
+                // 一开一关必须成对：渲染中途抛错也不能把语境留在栈上（否则后面每一张都会串语言）。
+                _ = LocalizationManager.beginHostLanguage(language)
+                defer { LocalizationManager.endHostLanguage() }
+                records.append(
+                    try capture(
+                        name: "\(name)\(UISnapshot.languageSuffix(language))",
+                        scale: scale,
+                        language: language,
+                        observed: observed
+                    )
+                )
+            }
+            return records
+        }
     }
 }
 
