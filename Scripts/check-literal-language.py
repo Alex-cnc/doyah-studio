@@ -109,7 +109,7 @@ import tempfile
 REPO = pathlib.Path(__file__).resolve().parent.parent
 LEDGER = "Scripts/literal-language-dispositions.json"
 KEY_TABLE = "platform/macos/Core/Localization.swift"
-SCAN_ROOTS = ["Core", "App", "CLI", "Platform"]
+SCAN_ROOTS = ["platform/macos/Core", "platform/macos/App", "platform/macos/CLI", "platform/macos/Platform"]
 MIN_SOURCE_FILES = 80
 
 # 把字面语言传下去的形状。

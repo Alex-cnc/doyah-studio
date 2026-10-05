@@ -115,7 +115,7 @@ def check_source_list_is_complete() -> list[str]:
     """`platform/macos/Core/` 下的笔记源文件必须"要么在清单里、要么在豁免名单里"。"""
     problems: list[str] = []
     on_disk = sorted(
-        path.name for path in (REPO / "Core").glob("*.swift")
+        path.name for path in (REPO / "platform/macos/Core").glob("*.swift")
         if path.name.startswith("Note") or path.name.startswith("AICapture")
     )
     listed = {pathlib.Path(item).name for item in NOTE_SOURCES + ULTRA_SIDE_SOURCES}
@@ -126,7 +126,7 @@ def check_source_list_is_complete() -> list[str]:
                 f"（是笔记侧就加进 NOTE_SOURCES，是宿主侧就加进 ULTRA_SIDE_SOURCES）"
             )
     for name in sorted(listed):
-        if not (REPO / "Core" / name).exists():
+        if not (REPO / "platform/macos/Core" / name).exists():
             problems.append(f"platform/macos/Core/{name}: 清单里有、磁盘上没有（改名了？请同步更新本脚本）")
     return problems
 

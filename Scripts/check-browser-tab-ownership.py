@@ -37,7 +37,7 @@ import tempfile
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
 
-APP_DIR = "App"
+APP_DIR = "platform/macos/App"
 # **状态所有者**（队列 `L-149` 剩余①，2026-10-01 第 135 轮搬的家）：浏览器页签的
 # 页签集 / 选中 / 引擎缓存 / 导航动作全在这个文件里 —— 它**不是** `AppState`
 # （挂在那里时引擎每回报一次标题 / 加载中都要重算整个窗口；同族的病见 `QueryEditorBuffer`）。

@@ -54,7 +54,7 @@ import sys
 import tempfile
 
 # 产品里不许出现系统 SQLite 的模块（口径见 FR-PLUG-08：三端同一份引擎）。
-PRODUCT_DIRS = ["Core", "Platform", "App", "CLI", "Tools", "Tests"]
+PRODUCT_DIRS = ["platform/macos/Core", "platform/macos/Platform", "platform/macos/App", "platform/macos/CLI", "platform/macos/Tools", "platform/macos/Tests"]
 SYSTEM_SQLITE_IMPORT = re.compile(r"^\s*import\s+SQLite3\b", re.MULTILINE)
 
 # `verify-all.sh` 的项标记形状：`echo "==> 7/17 …"`
@@ -132,7 +132,7 @@ class Gate:
                 self.fail(f"{label} 与台账不符：台账 {expected}，头文件 {match.group(1)}")
 
     def check_vendored_manifest(self, ledger: dict) -> None:
-        manifest = self.root / "Vendor" / "sqlite3" / "platform/macos/Package.swift"
+        manifest = self.root / "platform/macos/Vendor" / "sqlite3" / "platform/macos/Package.swift"
         if not manifest.exists():
             self.fail("platform/macos/Vendor/sqlite3/Package.swift 不在")
             return
@@ -166,7 +166,7 @@ class Gate:
             self.fail("许可声明里没有指向来源页（sqlite.org/copyright.html）")
 
     def check_provenance(self, ledger: dict) -> None:
-        provenance = self.root / "Vendor" / "sqlite3" / "PROVENANCE.md"
+        provenance = self.root / "platform/macos/Vendor" / "sqlite3" / "PROVENANCE.md"
         if not provenance.exists():
             self.fail("platform/macos/Vendor/sqlite3/PROVENANCE.md 不在")
             return

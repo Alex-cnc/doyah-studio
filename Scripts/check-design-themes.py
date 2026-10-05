@@ -895,7 +895,7 @@ def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
 def _swift_sources(root: pathlib.Path) -> list[pathlib.Path]:
     """判据 I 的扫描面：`Core` / `App` / `Platform` / `CLI` 里的 `.swift`（判"键字面量只许一处"）。"""
     found: list[pathlib.Path] = []
-    for folder in ("Core", "App", "Platform", "CLI"):
+    for folder in ("platform/macos/Core", "platform/macos/App", "platform/macos/Platform", "platform/macos/CLI"):
         found += sorted((root / folder).rglob("*.swift"))
     return found
 
@@ -975,7 +975,7 @@ def check_nebula_skin(root: pathlib.Path) -> tuple[list[Issue], int]:
                                 " —— 生效条件只许有一处出处（判据 I ②）"))
 
     # ④ 三层表面各自**恰有一处**落点
-    app_files = sorted((root / "App").rglob("*.swift"))
+    app_files = sorted((root / "platform/macos/App").rglob("*.swift"))
     for label, (expected_file, marker) in NEBULA_LAYER_SITES.items():
         hits: list[str] = []
         for path in app_files:
@@ -1066,7 +1066,7 @@ def _fixture(base: pathlib.Path) -> pathlib.Path:
     # 判据 I ④ 要**扫** `platform/macos/App/` 下的所有 `.swift`（判"三层表面各自恰有一处落点"），
     # 所以 `platform/macos/App/Views/` 里的其它视图也要一起搬进夹具 —— 只搬"判据直接点名的那几份"的话，
     # 复制一份落点到别的视图上时夹具根本看不见（那样负例就是假绿）。
-    for path in sorted((ROOT / "App").rglob("*.swift")):
+    for path in sorted((ROOT / "platform/macos/App").rglob("*.swift")):
         relative = path.relative_to(ROOT)
         target = base / relative
         target.parent.mkdir(parents=True, exist_ok=True)

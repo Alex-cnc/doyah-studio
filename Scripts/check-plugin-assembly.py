@@ -78,7 +78,7 @@ def record(name: str, found: list[str]) -> None:
 
 def check_01_single_process() -> list[str]:
     found: list[str] = []
-    for directory in ("Core", "App", "CLI"):
+    for directory in ("platform/macos/Core", "platform/macos/App", "platform/macos/CLI"):
         for path in sorted((REPO / directory).rglob("*.swift")):
             relative = path.relative_to(REPO).as_posix()
             for number, line in code_lines(relative):
@@ -106,7 +106,7 @@ def check_02_visibility() -> list[str]:
         found.append("platform/macos/Core/ActivityBar.swift: 活动栏没有 `case notes`")
 
     # 判可见性的只有 LicensePresentation 一处：全仓 `ActivityBarItem.allCases` 只许在 Core 里出现。
-    for directory in ("App", "CLI"):
+    for directory in ("platform/macos/App", "platform/macos/CLI"):
         for path in sorted((REPO / directory).rglob("*.swift")):
             relative = path.relative_to(REPO).as_posix()
             for number, line in code_lines(relative):
@@ -157,7 +157,7 @@ def check_03_one_way_context() -> list[str]:
     # 行数据开关：全仓只有一处能打开，且没有"撤回"入口。
     whole_repo = "\n".join(
         path.read_text(encoding="utf-8")
-        for path in sorted((REPO / "Core").glob("*.swift"))
+        for path in sorted((REPO / "platform/macos/Core").glob("*.swift"))
     )
     open_switches = re.findall(r"rowDataConfirmed\s*=\s*true", whole_repo)
     if len(open_switches) != 1:
@@ -260,7 +260,7 @@ def check_adr35_single_write_entry() -> list[str]:
     if not assignments:
         found.append("platform/macos/App/AppState.swift: 找不到任何 selectedActivityItem 赋值（改名了？）")
 
-    for path in sorted((REPO / "App").rglob("*.swift")):
+    for path in sorted((REPO / "platform/macos/App").rglob("*.swift")):
         if path.name == "AppState.swift":
             continue
         for number, line in code_lines(path.relative_to(REPO).as_posix()):

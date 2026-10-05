@@ -97,7 +97,7 @@ BARE_COLOR = re.compile(r"NSColor\(\s*(?:calibrated|displayP3|device|sRGB)?\s*[R
 VIEW_CONSUMER_FILES = ("platform/macos/App/WorkspaceTabsModel.swift",)
 VIEW_CONSUMER_TOKEN = "defaultView"
 VIEW_HANDOFF_ANCHOR = "openInBrowserTab"
-VIEW_SOURCE_DIR = "App"
+VIEW_SOURCE_DIR = "platform/macos/App"
 # 数据面：声明「默认用浏览器打开」的语言。今天只有 HTML（`.html` / `.htm` / `.xhtml` 同一条登记）；
 # 将来多个类型就把它改成集合，判据的其余部分不用动。
 BROWSER_VIEW_LANGUAGE = "html"

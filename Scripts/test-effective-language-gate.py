@@ -51,8 +51,8 @@ def case(name: str, expect_code: int, expect_text: str, mutate):
     """`mutate(app_dir)` 在副本上写坏；返回改动的相对路径（供报告）。"""
     temp = pathlib.Path(tempfile.mkdtemp(prefix="doyah-lang-gate-"))
     try:
-        shutil.copytree(REPO / "App", temp / "App")
-        mutate(temp / "App")
+        shutil.copytree(REPO / "platform/macos/App", temp / "platform/macos/App")
+        mutate(temp / "platform/macos/App")
         code, output = run(temp)
         ok = code == expect_code and expect_text in output
         detail = ""
@@ -130,9 +130,9 @@ for name, ok, detail in results:
         print(f"      {detail}")
 
 # 收场：断言仓库自身一个字节都没动（本轮全部改动只发生在临时副本里）
-before = snapshot(REPO / "App")
-proc = subprocess.run(["git", "status", "--porcelain", "App"], cwd=REPO, capture_output=True, text=True)
-after = snapshot(REPO / "App")
+before = snapshot(REPO / "platform/macos/App")
+proc = subprocess.run(["git", "status", "--porcelain", "platform/macos/App"], cwd=REPO, capture_output=True, text=True)
+after = snapshot(REPO / "platform/macos/App")
 if before != after:
     results.append(("仓库 platform/macos/App/ 未被改动", False, "临时副本的操作漏到了仓库上"))
 else:

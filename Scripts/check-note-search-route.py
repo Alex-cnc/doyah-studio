@@ -58,8 +58,8 @@ DISCLOSURE_FILE = "platform/macos/Core/NoteStorage/NoteSearchDisclosure.swift"
 LOCALIZATION_FILE = "platform/macos/Core/Localization.swift"
 UI_STATE_FILE = "platform/macos/App/AppState.swift"
 VIEWS_DIR = "platform/macos/App/Views"
-TESTS_DIR = "Tests"
-APP_DIR = "App"
+TESTS_DIR = "platform/macos/Tests"
+APP_DIR = "platform/macos/App"
 
 
 def read(path: Path) -> str:

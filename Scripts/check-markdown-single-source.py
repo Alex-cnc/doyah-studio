@@ -60,8 +60,8 @@ INLINE_MARKER_LIST = '["`", "**", "*", "["]'
 BLOCK_CONSTRUCTOR = "MarkdownBlock("
 SHARED_INLINE_CALL = "NoteBodyProjection.parseInline("
 
-SCAN_DIRS = ("Core", "App", "Platform", "CLI")
-TESTS_DIR = "Tests"
+SCAN_DIRS = ("platform/macos/Core", "platform/macos/App", "platform/macos/Platform", "platform/macos/CLI")
+TESTS_DIR = "platform/macos/Tests"
 DEPENDENCY_FILES = ("platform/macos/Package.swift", "platform/macos/project.yml")
 
 FORBIDDEN_PACKAGES = (

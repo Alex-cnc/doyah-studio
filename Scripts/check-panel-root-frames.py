@@ -69,7 +69,7 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-VIEWS = ROOT / "App" / "Views"
+VIEWS = ROOT / "platform/macos/App" / "Views"
 LEDGER = ROOT / "Scripts" / "panel-root-frames.json"
 
 # 扫描范围与门槛
@@ -417,7 +417,7 @@ def self_test() -> int:
     with tempfile.TemporaryDirectory(prefix="panel-root-") as tmp:
         tmpdir = pathlib.Path(tmp)
         sandbox = tmpdir / "repo"
-        shutil.copytree(VIEWS.parent.parent / "App", sandbox / "App",
+        shutil.copytree(VIEWS.parent, sandbox / VIEWS.parent.name,
                         ignore=shutil.ignore_patterns("*.png", "*.jpg"))
         base_ledger = tmpdir / "panel-root-frames.json"
         shutil.copyfile(LEDGER, base_ledger)
@@ -434,7 +434,7 @@ def self_test() -> int:
             led.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
         def restore(relative: str) -> None:
-            shutil.copyfile(VIEWS.parent.parent / relative, sandbox / relative)
+            shutil.copyfile(ROOT / relative, sandbox / relative)
 
         def expected(name: str) -> bool:
             return not (name.startswith("前提自检") or name.startswith("末例"))

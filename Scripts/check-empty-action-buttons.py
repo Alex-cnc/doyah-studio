@@ -381,7 +381,7 @@ def _fixture(repo: Path, dest: Path) -> None:
     """最小夹具仓：判据只读 `platform/macos/App/`、台账与脚本本身（整仓 16 GB，不能整份拷 ——
     第 59 轮第一版就是这么写的，11 例负例跑到超时）。"""
     dest.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(repo / "App", dest / "App", ignore=shutil.ignore_patterns(".build"))
+    shutil.copytree(repo / "platform/macos/App", dest / "platform/macos/App", ignore=shutil.ignore_patterns(".build"))
     (dest / "Scripts").mkdir(exist_ok=True)
     shutil.copy2(repo / LEDGER_PATH, dest / LEDGER_PATH)
     shutil.copy2(repo / "Scripts" / "check-empty-action-buttons.py",

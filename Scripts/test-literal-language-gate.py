@@ -21,8 +21,8 @@ import tempfile
 REPO = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT = "Scripts/check-literal-language.py"
 LEDGER = "Scripts/literal-language-dispositions.json"
-COPY_DIRS = ["Core", "App", "CLI", "Platform", "Scripts"]
-WATCH_DIRS = ["Core", "App", "CLI", "Platform", "Scripts", "Tests"]
+COPY_DIRS = ["platform/macos/Core", "platform/macos/App", "platform/macos/CLI", "platform/macos/Platform", "Scripts"]
+WATCH_DIRS = ["platform/macos/Core", "platform/macos/App", "platform/macos/CLI", "platform/macos/Platform", "Scripts", "platform/macos/Tests"]
 
 
 def digest_tree() -> dict[str, str]:

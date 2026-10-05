@@ -25,7 +25,7 @@ import pathlib
 import re
 import sys
 
-CORE = pathlib.Path("Core")
+CORE = pathlib.Path("platform/macos/Core")
 BASELINE = pathlib.Path("Scripts/core-localization-baseline.json")
 EXEMPT = {"Localization.swift"}
 HAN = re.compile(r"[\u4e00-\u9fff]")

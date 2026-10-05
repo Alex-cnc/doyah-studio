@@ -38,7 +38,7 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 LEDGER_PATH = ROOT / "Scripts" / "result-scroll-baseline.json"
 PROBES_SH = ROOT / "Scripts" / "run-manual-verification-probes.sh"
-PROBE_DIR = ROOT / "TestsUISnapshot"
+PROBE_DIR = ROOT / "platform/macos/TestsUISnapshot"
 
 # 例外：**必须写明理由**。判据会把每一份例外逐条打印出来 —— 加豁免这件事在输出里看得见。
 PROBE_WIRING_EXEMPT = {

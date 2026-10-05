@@ -29,7 +29,7 @@ import pathlib
 import re
 import sys
 
-CORE = pathlib.Path("Core")
+CORE = pathlib.Path("platform/macos/Core")
 EXEMPT_MARK = "portability-ok"
 
 RULES: dict[str, str] = {

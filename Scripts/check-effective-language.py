@@ -40,7 +40,7 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
 # 扫哪儿：platform/macos/App/ 下所有 Swift 源文件，**除**语言来源自身的定义文件。
-SCAN_ROOT = "App"
+SCAN_ROOT = "platform/macos/App"
 DEFINITION_FILE = "platform/macos/App/LocalizationManager.swift"
 
 # 「按用户选择取语言」的写法（含环境对象那一份）。

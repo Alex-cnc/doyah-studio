@@ -59,7 +59,7 @@ GATE_COMMAND = "python3 Scripts/check-copy-emphasis.py"
 SELF_TEST_COMMAND = "python3 Scripts/test-copy-emphasis-gate.py"
 
 # 判据 B 扫哪儿：产品源文件（测试与脚本不在内 —— 测试里出现的是断言字符串，不是界面渲染点）。
-RENDER_DIRS = ("App", "Core", "CLI", "Platform")
+RENDER_DIRS = ("platform/macos/App", "platform/macos/Core", "platform/macos/CLI", "platform/macos/Platform")
 
 # 判据 A 的标记：markdown 强调用的一对星号。
 MARKER = "**"

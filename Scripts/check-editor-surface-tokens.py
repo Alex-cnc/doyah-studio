@@ -49,7 +49,7 @@ import tempfile
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
 
-APP_DIR = "App"
+APP_DIR = "platform/macos/App"
 # 唯一出处：编辑面的底色 / 字色只在这里写一次。
 SURFACE_DEFINITION = "platform/macos/App/Views/EditorSurface.swift"
 SURFACE_FUNCTION = "func editorSurface()"

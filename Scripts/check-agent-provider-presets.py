@@ -59,7 +59,7 @@ OWNER = "platform/macos/Core/AgentProviderPreset.swift"
 SHEET = "platform/macos/App/Views/AgentSettingsSheet.swift"
 LANGUAGE = "platform/macos/Core/Localization.swift"
 
-SCAN_DIRS = ("App", "Core", "Platform", "CLI")
+SCAN_DIRS = ("platform/macos/App", "platform/macos/Core", "platform/macos/Platform", "platform/macos/CLI")
 SKIP_FILES = {OWNER, LANGUAGE}
 
 # 目录里每一行的**规整形状**（一行一条）—— 解析不到就判红，不做模糊匹配。

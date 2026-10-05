@@ -107,12 +107,12 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
     # ---- ② 漏登一个文件也不行 ------------------------------------------------
     declared = set(scope_paths) | {(entry or {}).get("path") for entry in out_of_scope}
     on_disk: list[str] = []
-    core_dir = root / "Core"
+    core_dir = root / "platform/macos/Core"
     if core_dir.is_dir():
         for path in sorted(core_dir.glob("*.swift")):
             if path.name.startswith(CORE_PREFIXES):
                 on_disk.append(f"platform/macos/Core/{path.name}")
-    app_dir = root / "App"
+    app_dir = root / "platform/macos/App"
     if app_dir.is_dir():
         for path in sorted(app_dir.rglob("*.swift")):
             if path.name.startswith(APP_PREFIXES):

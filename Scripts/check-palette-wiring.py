@@ -33,9 +33,9 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-STATE = ROOT / "App" / "AppState.swift"
-CATALOG = ROOT / "App" / "AppCommandCatalog.swift"
-APP = ROOT / "App"
+STATE = ROOT / "platform/macos/App" / "AppState.swift"
+CATALOG = ROOT / "platform/macos/App" / "AppCommandCatalog.swift"
+APP = ROOT / "platform/macos/App"
 
 ITEM = re.compile(r'item\(\s*"([^"]+)"\s*,\s*\.(\w+)\s*,\s*"([^"]*)"')
 CASE = re.compile(r'case\s+"([^"]+)"\s*:')

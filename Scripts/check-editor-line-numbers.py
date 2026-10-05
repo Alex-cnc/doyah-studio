@@ -77,7 +77,7 @@ DOC_ANCHORS = {
 
 
 def app_files(root: Path) -> list[Path]:
-    app = root / "App"
+    app = root / "platform/macos/App"
     if not app.is_dir():
         return []
     return sorted(path for path in app.rglob("*.swift") if path.is_file())

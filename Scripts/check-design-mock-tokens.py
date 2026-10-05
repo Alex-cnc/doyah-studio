@@ -62,7 +62,7 @@ MOCK = "Scripts/design-mock.swift"
 ENTRY = "Scripts/render-design-mock.sh"
 
 # 产品源码（逐屏复查的扫描面）。只扫**版本控制内**的产品代码，不含 Docs（历史行里都是旧值）。
-PRODUCT_DIRS = ("Core", "App", "Tests", "CLI", "Platform", "Tools", "TestsUISnapshot")
+PRODUCT_DIRS = ("platform/macos/Core", "platform/macos/App", "platform/macos/Tests", "platform/macos/CLI", "platform/macos/Platform", "platform/macos/Tools", "platform/macos/TestsUISnapshot")
 
 # ---- 台账式常量（每条都带理由；理由为空即红 —— 见判据里的理由非空检查）--------------------
 

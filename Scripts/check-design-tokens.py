@@ -39,7 +39,7 @@ import pathlib
 import re
 import sys
 
-ROOT = pathlib.Path("App")
+ROOT = pathlib.Path("platform/macos/App")
 BASELINE = pathlib.Path("Scripts/design-token-baseline.json")
 
 SPACING_SCALE = {0, 1, 2, 4, 8, 12, 16, 24, 32}

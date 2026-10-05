@@ -56,7 +56,7 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 LEDGER = "Scripts/cell-decode-coverage.json"
 DISPOSITIONS = {"decoded", "honest-unknown", "text-when-readable"}
-SWIFT_SCAN_DIRS = ("Core", "App")
+SWIFT_SCAN_DIRS = ("platform/macos/Core", "platform/macos/App")
 
 
 class Issue:
