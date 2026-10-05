@@ -132,7 +132,7 @@ class Gate:
                 self.fail(f"{label} 与台账不符：台账 {expected}，头文件 {match.group(1)}")
 
     def check_vendored_manifest(self, ledger: dict) -> None:
-        manifest = self.root / "platform/macos/Vendor" / "sqlite3" / "platform/macos/Package.swift"
+        manifest = self.root / "platform/macos/Vendor" / "sqlite3" / "Package.swift"
         if not manifest.exists():
             self.fail("platform/macos/Vendor/sqlite3/Package.swift 不在")
             return
@@ -189,8 +189,8 @@ class Gate:
         if not manifest.exists():
             self.fail("根 platform/macos/Package.swift 不在")
             return
-        if '.package(path: "platform/macos/Vendor/sqlite3")' not in manifest.read_text(encoding="utf-8"):
-            self.fail("根 platform/macos/Package.swift 没有接线 platform/macos/Vendor/sqlite3")
+        wiring = '.package(path: "%s")' % (self.root / "platform/macos/Vendor" / "sqlite3").relative_to(self.root / "platform/macos")
+        if wiring not in manifest.read_text(encoding="utf-8"): self.fail(f"根 platform/macos/Package.swift 没有接线 vendored sqlite3（应含 {wiring}）")
 
     def check_no_second_sqlite(self) -> None:
         for directory in PRODUCT_DIRS:
