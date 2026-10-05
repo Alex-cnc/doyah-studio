@@ -292,12 +292,12 @@ def self_test() -> int:
         (fixture / "Scripts").mkdir(parents=True, exist_ok=True)
         shutil.copy(real_mock, fixture / MOCK)
         shutil.copy(real_entry, fixture / ENTRY)
-        app = fixture / "App"
+        app = fixture / "platform/macos/App"
         app.mkdir(parents=True, exist_ok=True)
         (app / "SampleView.swift").write_text(
             "import SwiftUI\nlet background = Color(red: 0, green: 0, blue: 0)\n", encoding="utf-8")
-        (fixture / "Core").mkdir(parents=True, exist_ok=True)
-        (fixture / "Core" / "DesignTokens.swift").write_text("// 令牌（夹具占位）\n", encoding="utf-8")
+        (fixture / "platform/macos/Core").mkdir(parents=True, exist_ok=True)
+        (fixture / "platform/macos/Core" / "DesignTokens.swift").write_text("// 令牌（夹具占位）\n", encoding="utf-8")
         return fixture
 
     with tempfile.TemporaryDirectory(prefix="doyah-mock-selftest-") as tmp:
@@ -338,13 +338,13 @@ def self_test() -> int:
 
         # ⑦ 红：产品源码里残留旧值（逐屏复查）
         stale = fresh(pathlib.Path(tmp) / "bad-product")
-        (stale / "App" / "SampleView.swift").write_text(
+        (stale / "platform/macos/App" / "SampleView.swift").write_text(
             "import SwiftUI\nlet background = NSColor(red: 0x1F2229)\n", encoding="utf-8")
         cases.append(("某屏残留旧调色板值", True, check_product_sources(stale)[0]))
 
         # ⑧ 绿：豁免文件（AccentTheme）里出现强调色不算红
         exempt = fresh(pathlib.Path(tmp) / "green-exempt")
-        (exempt / "Core" / "AccentTheme.swift").write_text(
+        (exempt / "platform/macos/Core" / "AccentTheme.swift").write_text(
             "accentHex: 0x4E6FFF,\n", encoding="utf-8")
         cases.append(("AccentTheme 豁免（绿）", False, [i for i in check_product_sources(exempt)[0]
                                                        if "AccentTheme" in i.where]))

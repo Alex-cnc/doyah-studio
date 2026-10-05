@@ -320,7 +320,7 @@ def self_test(root: pathlib.Path) -> int:
         # ② 红：任何一侧自己写死一个提供商端点（这一族缺陷的标准形状）
         stray = fresh("stray-endpoint")
         (stray / "platform/macos/App/Views").mkdir(parents=True, exist_ok=True)
-        (stray / "App/Views/StrayEndpoint.swift").write_text(
+        (stray / "platform/macos" / "App/Views/StrayEndpoint.swift").write_text(
             "import Foundation\n\nlet defaultEndpoint = \"https://api.deepseek.com/v1\"\n",
             encoding="utf-8",
         )
@@ -363,10 +363,10 @@ def self_test(root: pathlib.Path) -> int:
 
         # ⑧ 红：扫描面被削掉（空跑防护 —— 零命中不许当通过）
         gutted = fresh("gutted")
-        for path in sorted((gutted / "Core").rglob("*.swift")):
+        for path in sorted((gutted / "platform/macos/Core").rglob("*.swift")):
             if path.name != pathlib.Path(OWNER).name:
                 path.unlink()
-        for path in sorted((gutted / "App").rglob("*.swift")):
+        for path in sorted((gutted / "platform/macos/App").rglob("*.swift")):
             if path.name != pathlib.Path(SHEET).name:
                 path.unlink()
         cases.append(("扫描面被削掉", bool(check(gutted)[0])))
