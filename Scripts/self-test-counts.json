@@ -352,9 +352,9 @@
       "args": [
         "--self-test"
       ],
-      "cases": 35,
+      "cases": 41,
       "countRegex": "自测汇总：全部通过（(\\d+)/\\d+）",
-      "why": "队列 L-42 / 闭环第 16 项（三书独占节越界）；2026-10-03（派活单 T-20261003-003）新增 6 例：契约所有者 = 演员名（bluewhale / bighippo / tinyhippo / fatfish）",
+      "why": "队列 L-42 / 闭环第 16 项（三书独占节越界）；2026-10-03（派活单 T-20261003-003）新增 6 例：契约所有者 = 演员名（bluewhale / bighippo / tinyhippo / fatshark，旧名 `fatfish` 只保留识别）；2026-10-05（派单 `T-20261005-038` ①）再 +6 例：演员名跟版护栏（规范名表含 fatshark / 退役名只保留识别 / 防回退成对负例）",
       "anchors": [
         {
           "file": "Scripts/check-exclusive-sections.py",

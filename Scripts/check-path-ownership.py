@@ -6,6 +6,11 @@
 `DoyahNotes/tools/logic-check/`。**清单各仓一份**（`path-ownership.json`，与脚本同目录，
 清单可以不同，判据逻辑同文本）。
 
+**「同一份」的作用面（2026-10-05 定标 · 派单 `T-20261005-038` ②）**：只指**判据脚本**
+（本文件与 `check-exclusive-sections.py`）—— 三份逐字节同一份，改一处须三仓同改；
+**清单 `path-ownership.json` 与提交钩子 `tools/hooks/pre-commit` 按仓定制**（各仓路径面 /
+钩子覆盖面本就不同）⇒ 它们的差异**不是分叉**，但须在各仓清单 `reason` 或提交信息里登记。
+
 **为什么要有它**：`check-exclusive-sections.py` 判的是「文档里的**节**」归谁（按标题上的独占
 标记），而「盘上的**目录/文件**归谁」此前只有口头分工 —— 同一个 `git diff` 里改了别的端
 （macOS / Windows / 安卓 / 鸿蒙）的顶层子树，**没有任何判据会报红**。本判据把「路径」这一层补齐：
@@ -59,7 +64,7 @@ Kotlin）、`entry/` + `AppScope/` + `hvigor/` + `hvigorfile.ts` + `oh-package.j
     python3 Scripts/check-path-ownership.py --mine nonapple                 # Notes 写法（契约侧宽松档）
     python3 Scripts/check-path-ownership.py --manifest /tmp/fixture.json    # 换清单（自测 / 夹具）
     python3 Scripts/check-path-ownership.py --files Docs/概要设计.md         # 显式指定改动集
-    python3 Scripts/check-path-ownership.py --self-test                     # 自测 26 例
+    python3 Scripts/check-path-ownership.py --self-test                     # 自测 34 例
 
 **本侧推断**：清单里某棵树的 `hosts` 命中 `uname` 时才敢默认；推断不出就要求 `--mine`（退出 2，
 **不猜**）。
@@ -108,11 +113,16 @@ def declaration_reason(text: str):
 
 # ── 演员名（四规范名）与契约所有者（2026-10-03 人类主人制度变更 · 派单 `T-20261003-003`）─────────
 # 契约定：三书**契约层**归 `bluewhale`（蓝色鲸鱼娘）；**平台实现层**归各平台助理：
-#   `bighippo` = macOS / iOS · `tinyhippo` = 安卓 / 鸿蒙 · `fatfish` = Windows。
+#   `bighippo` = macOS / iOS · `tinyhippo` = 安卓 / 鸿蒙 · `fatshark` = Windows。
 # 与「标记只表达平台」不冲突：**路径清单**里各端子树仍按平台分（tree.id = macos / windows / android…），
 # 演员名只出现在**命令行这一轴**（`--mine bighippo` ≡ `--mine macos,ios`；`bluewhale` 无平台集 ⇒ 契约模式）。
 ACTOR_PLATFORMS = {"bluewhale": (), "bighippo": ("macos", "ios"),
-                   "tinyhippo": ("android", "harmony"), "fatfish": ("windows",)}
+                   "tinyhippo": ("android", "harmony"), "fatshark": ("windows",)}
+# **退役侧名 → 现行规范名**（只保留识别，**不得再作为现行名**；派单 `T-20261005-038` ①）：
+# 2026-10-04 家族改名令（`T-20261004-028`）后 Windows dsh = `fatshark`，旧名 `fatfish` 退役
+# （改属公司 Linux 平台的 dsh）。留着它只为**不把历史单 / 历史提交判红** —— 命令行给了退役名
+# 照样展开成同一个平台集（提示一条「退役旧名」）。
+LEGACY_ACTOR_ALIASES = {"fatfish": "fatshark"}
 DEFAULT_CONTRACT_OWNER = "bluewhale"
 
 
@@ -221,13 +231,15 @@ class Manifest:
         """单个标识 → (tree id 集合, 档位)；认不出 ⇒ (None, None)。
 
         `tok` 可以是：tree id（`macos` / `windows` / `android` / `harmony`）· tree 的 owner 名 ·
-        契约侧名 · **演员名**（`bighippo` / `tinyhippo` / `fatfish` ⇒ 展开成它名下的子树；
+        契约侧名 · **演员名**（`bighippo` / `tinyhippo` / `fatshark`；旧名 `fatfish` 只保留识别 ⇒ 展开成它名下的子树；
         2026-10-03 制度变更）。契约所有者（`bluewhale`，平台集为空）由 `evaluate()` 走**契约模式**。
         """
-        if tok in ACTOR_PLATFORMS and ACTOR_PLATFORMS[tok]:
-            plats = set(ACTOR_PLATFORMS[tok])
+        want = LEGACY_ACTOR_ALIASES.get(tok, tok)      # 退役侧名 → 现行名（识别保留）
+        if want in ACTOR_PLATFORMS and ACTOR_PLATFORMS[want]:
+            plats = set(ACTOR_PLATFORMS[want])
             ids = {t["id"] for t in self.trees
-                   if t.get("id") in plats or t.get("owner") in plats or (t.get("actor") or "") == tok}
+                   if t.get("id") in plats or t.get("owner") in plats
+                   or (t.get("actor") or "") in (want, tok)}
             return (ids or None), ("actor" if ids else None)
         if tok in {t.get("id") for t in self.trees}:
             return {tok}, "tree"
@@ -667,8 +679,17 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
           paths=["App/Views/A.swift"], mine="bighippo", wants=["本侧子树"])
     check("㉘ 演员名 `tinyhippo` ≡ 安卓/鸿蒙：改 windows 子树 ⇒ 红（跨平台仍越界）", EXIT_RED,
           paths=["windows/Core/src/lib.rs"], mine="tinyhippo", wants=["对侧子树"])
-    check("㉙ 演员名 `fatfish` ≡ windows：改 windows 子树 ⇒ 绿", EXIT_PASS,
+    check("㉙ 演员名现行规范名 `fatshark` ≡ windows：改 windows 子树 ⇒ 绿", EXIT_PASS,
+          paths=["windows/Core/src/lib.rs"], mine="fatshark", wants=["本侧子树"])
+    # ㉚ / ㉛ 演员名跟版护栏（2026-10-05 · 派单 `T-20261005-038` ①）：旧名 `fatfish` 退役
+    # （2026-10-04 家族改名令 `T-20261004-028` 后改属公司 Linux 侧）⇒ 规范名表里必须是
+    # `fatshark`，而 `fatfish` 只保留识别（历史单 / 历史提交不判红）。成对证据见 ⑰（词表外名 ⇒ 退出 2）。
+    check("㉚ 退役侧名 `fatfish` 仍可识别（历史单 / 历史提交不判红）：≡ windows ⇒ 绿", EXIT_PASS,
           paths=["windows/Core/src/lib.rs"], mine="fatfish", wants=["本侧子树"])
+    check("㉛ 防回退：规范名表含 `fatshark`、不含退役名 `fatfish`",
+          True, raw_ok=lambda: ACTOR_PLATFORMS.get("fatshark") == ("windows",)
+          and "fatfish" not in ACTOR_PLATFORMS
+          and LEGACY_ACTOR_ALIASES.get("fatfish") == "fatshark")
 
     bad = [r for r in results if not r[1]]
     for name, ok, code, expect, text in results:
@@ -698,8 +719,9 @@ def main(argv=None) -> int:
     ap.add_argument("--repo", default=None, help="仓根（默认：脚本所在仓的 git 顶层）")
     ap.add_argument("--actor", default=None,
                     help="执行者（演员名）：`bluewhale`(=契约模式，只许三书) / `bighippo`(macOS,iOS) / "
-                         "`tinyhippo`(安卓,鸿蒙) / `fatfish`(Windows)；等价于 `--mine <演员名>`")
-    ap.add_argument("--self-test", action="store_true", help="跑自测（32 例）")
+                         "`tinyhippo`(安卓,鸿蒙) / `fatshark`(Windows；旧名 `fatfish` 保留识别)；"
+                         "等价于 `--mine <演员名>`")
+    ap.add_argument("--self-test", action="store_true", help="跑自测（34 例）")
     args = ap.parse_args(argv)
 
     script_dir = pathlib.Path(__file__).resolve().parent

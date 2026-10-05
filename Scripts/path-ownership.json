@@ -8,7 +8,7 @@
   "Docs/需求规范书.md",
   "Docs/概要设计.md"
  ],
- "contract_note": "契约层（三书）**归 `bluewhale`（蓝色鲸鱼娘）**；平台实现层归各平台助理：`bighippo`=macOS/iOS · `tinyhippo`=安卓/鸿蒙 · `fatfish`=Windows（2026-10-03 人类主人制度变更 · 派活单 `T-20261003-003`）。护栏原话（人类主人）：「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」⇒ `--mine bluewhale`（或 `--actor bluewhale`）时**只有 contract_docs 的路径放行**，其余（代码 / 脚本 / 其他文档 / 仓根杂项）一律判红。三书内部**契约层节 vs `[独占:平台]` 实现层节**的边界由 `check-exclusive-sections.py` 机械判。",
+ "contract_note": "契约层（三书）**归 `bluewhale`（蓝色鲸鱼娘）**；平台实现层归各平台助理：`bighippo`=macOS/iOS · `tinyhippo`=安卓/鸿蒙 · `fatshark`=Windows（旧名 `fatfish` 已退役、只保留识别）（2026-10-03 人类主人制度变更 · 派活单 `T-20261003-003`）。护栏原话（人类主人）：「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」⇒ `--mine bluewhale`（或 `--actor bluewhale`）时**只有 contract_docs 的路径放行**，其余（代码 / 脚本 / 其他文档 / 仓根杂项）一律判红。三书内部**契约层节 vs `[独占:平台]` 实现层节**的边界由 `check-exclusive-sections.py` 机械判。",
  "trees": [
   {
    "id": "macos",
@@ -48,7 +48,7 @@
    "paths": [
     "windows/"
    ],
-   "actor": "fatfish"
+   "actor": "fatshark"
   }
  ],
  "shared": [
