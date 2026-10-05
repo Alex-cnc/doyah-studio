@@ -1,7 +1,7 @@
 import XCTest
 @testable import DoyahCore
 
-/// Markdown 编辑手感（`FR-MD-01` 列表续行 / `FR-MD-02` 任务勾选翻转）。
+/// Markdown 编辑手感（`FR-EDIT-47` 列表续行 / `FR-EDIT-48` 任务勾选翻转）。
 ///
 /// 判据形态 = 「给『文本 + 光标』要『期望文本 + 期望光标』」：这一族最容易错的就是
 /// **光标差半个字符**（少一个空格的 `-item`、多一个空格的 `-  item` 都是错，
@@ -23,7 +23,7 @@ final class MarkdownEditingTests: XCTestCase {
         (text as NSString).replacingCharacters(in: plan.range, with: plan.replacement)
     }
 
-    // MARK: - 续行（FR-MD-01）
+    // MARK: - 续行（FR-EDIT-47）
 
     /// 最日常的那一条：`- ` 回车接着写下一项，光标停在新条目的标记之后。
     func testBulletContinuesWithSameMarker() {
@@ -138,7 +138,7 @@ final class MarkdownEditingTests: XCTestCase {
         }
     }
 
-    // MARK: - 任务勾选翻转（FR-MD-02）
+    // MARK: - 任务勾选翻转（FR-EDIT-48）
 
     func testToggleFlipsBothWays() {
         let unchecked = "- [ ] 洗车"

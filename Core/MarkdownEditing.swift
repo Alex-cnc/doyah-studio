@@ -21,7 +21,7 @@ public struct MarkdownEditPlan: Equatable, Sendable {
     }
 }
 
-/// Markdown 编辑手感（`FR-MD-01` / `FR-MD-02`）：**列表续行**与**任务勾选翻转**。
+/// Markdown 编辑手感（`FR-EDIT-47` / `FR-EDIT-48`）：**列表续行**与**任务勾选翻转**。
 ///
 /// ## 为什么是纯逻辑、纯函数
 ///
@@ -41,7 +41,7 @@ public struct MarkdownEditPlan: Equatable, Sendable {
 /// · **有选区时不接**：那一下回车的意思是把选中的文字换掉，不是续行。
 public enum MarkdownListEditing {
 
-    // MARK: - 续行（FR-MD-01）
+    // MARK: - 续行（FR-EDIT-47）
 
     /// 回车时要插入什么。返回 `nil` = **按普通换行处理**（不是失败，是「这条口径不适用」）。
     public static func continuation(in text: String, selection: NSRange) -> MarkdownEditPlan? {
@@ -68,7 +68,7 @@ public enum MarkdownListEditing {
         )
     }
 
-    // MARK: - 任务勾选翻转（FR-MD-02）
+    // MARK: - 任务勾选翻转（FR-EDIT-48）
 
     /// 勾 / 取消勾选**光标所在行**的任务框。返回 `nil` = 这一行没有任务框（那一下按键不该被吞）。
     public static func toggleTask(in text: String, selection: NSRange) -> MarkdownEditPlan? {

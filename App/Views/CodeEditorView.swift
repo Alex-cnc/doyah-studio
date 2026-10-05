@@ -345,7 +345,7 @@ final class CodeTextView: NSTextView {
             onSave?()
             return true
         }
-        // ⌘L：勾 / 取消勾选**光标所在行**的任务框（`FR-MD-02`）。
+        // ⌘L：勾 / 取消勾选**光标所在行**的任务框（`FR-EDIT-48`）。
         // 只认「恰好 ⌘」这一个修饰键 —— 带 ⇧ 的 ⇧⌘L 是应用菜单里的另一件事，不抢。
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.command],
            event.charactersIgnoringModifiers?.lowercased() == "l",
@@ -364,7 +364,7 @@ final class CodeTextView: NSTextView {
         return super.performKeyEquivalent(with: event)
     }
 
-    // MARK: Markdown 编辑手感（FR-MD-01 / FR-MD-02）
+    // MARK: Markdown 编辑手感（FR-EDIT-47 / FR-EDIT-48）
     //
     // 两件事都只对 Markdown 文档生效（生效范围判在 `Core/MarkdownEditingScope`，
     // 不在这里自己判语言）：`- ` / `[ ]` 在 YAML 里是数组、在 SQL 里是减号，纯文本里
