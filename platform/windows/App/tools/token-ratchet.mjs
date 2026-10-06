@@ -142,8 +142,73 @@ export function scan() {
   return { scanned, skipped }
 }
 
+/**
+ * 判据自测夹具（`--self-test`）—— **负例**：证明棘轮真的抓得到它声称抓的东西。
+ *
+ * 为什么要有它：这类工具最容易的失效不是「规则写错」，而是**看着在守、其实没守**
+ * （扫描集为空 / 正则写漏 / 生成物被误排除）。所以自测里既有「该判红的」，
+ * 也有两条「**不该**判红的」（走令牌 / 零值）—— 只测一半等于没测。
+ */
+export const SELF_TEST_FIXTURES = [
+  { label: '裸色值（#RRGGBB）', text: '.a { background: #D9534F; }', rule: 'bare-color', expected: 1 },
+  { label: '裸前景（color: red）', text: '.a { color: red; }', rule: 'bare-foreground', expected: 1 },
+  { label: '裸字号（font-size: 13px）', text: '.a { font-size: 13px; }', rule: 'bare-font', expected: 1 },
+  { label: '非零间距（padding: 6px）', text: '.a { padding: 6px; }', rule: 'bare-spacing', expected: 1 },
+  { label: '非零圆角（border-radius: 6px）', text: '.a { border-radius: 6px; }', rule: 'bare-radius', expected: 1 },
+  // 两条反面：棘轮要是把这些也算上，第一天就没法维护
+  { label: '走令牌不算（color: var(--ds-color-status-danger)）', text: '.a { color: var(--ds-color-status-danger); }', rule: 'bare-foreground', expected: 0 },
+  { label: '零值不算（padding: 0）', text: '.a { padding: 0; }', rule: 'bare-spacing', expected: 0 },
+]
+
+/**
+ * 跑自测，返回 `{ cases, failures }`。
+ * 值面用 `countBareValues` 逐夹具比计数；引用面单独两条（悬空要抓得到 / 已定义要放行）。
+ */
+export function runSelfTest() {
+  const failures = []
+  let cases = 0
+  for (const fixture of SELF_TEST_FIXTURES) {
+    cases += 1
+    const actual = countBareValues(fixture.text)[fixture.rule]
+    if (actual !== fixture.expected) {
+      failures.push(`${fixture.label}：${fixture.rule} 期望 ${fixture.expected}，实际 ${actual}`)
+    }
+  }
+
+  const defined = collectDefinedVars([':root { --ds-color-status-danger: #D9534F; }'])
+  const dangling = [...collectReferencedVars('.a { color: var(--ds-color-status-danger); background: var(--ds-color-nope); }')].filter(
+    (name) => !defined.has(name),
+  )
+  cases += 1
+  if (dangling.length !== 1 || dangling[0] !== '--ds-color-nope') {
+    failures.push(`悬空引用：期望 ['--ds-color-nope']，实际 ${JSON.stringify(dangling)}`)
+  }
+  const resolved = [...collectReferencedVars('.a { color: var(--ds-color-status-danger); }')].filter(
+    (name) => !defined.has(name),
+  )
+  cases += 1
+  if (resolved.length !== 0) {
+    failures.push(`已定义引用被误判为悬空：${JSON.stringify(resolved)}`)
+  }
+
+  return { cases, failures }
+}
+
 function main() {
   const printOnly = process.argv.includes('--print')
+  const selfTestOnly = process.argv.includes('--self-test')
+
+  if (selfTestOnly) {
+    const { cases, failures } = runSelfTest()
+    if (failures.length > 0) {
+      for (const failure of failures) process.stderr.write(`✗ 自测失败：${failure}\n`)
+      process.stdout.write(`判据自测：${cases - failures.length}/${cases} 例通过\n`)
+      process.exit(1)
+    }
+    process.stdout.write(`✅ 判据自测：${cases}/${cases} 例通过（棘轮抓得到它声称抓的东西）\n`)
+    process.exit(0)
+  }
+
   const { scanned, skipped } = scan()
 
   if (!existsSync(resolve(repoRoot, TOKEN_SOURCE))) {

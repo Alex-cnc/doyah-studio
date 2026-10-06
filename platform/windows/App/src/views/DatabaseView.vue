@@ -64,6 +64,14 @@ import { frozenColumnStylesMeasured, pageOf, visibleOrder, DEFAULT_PAGE_SIZE } f
 import { EXPORT_FORMAT_LABELS, exportRows, type ExportFormat } from '../grid/export'
 import { t as translate, toggleLanguage, type UiLanguage } from '../i18n'
 import {
+  groupConnections,
+  readCollapsedGroups,
+  toggleCollapsedGroup,
+  writeCollapsedGroups,
+  type KeyValueStore,
+} from '../shell/connectionDisplay'
+import ConnectionLabel from '../shell/ConnectionLabel.vue'
+import {
   filterCompletions,
   highlightPieces,
   keywordCompletions,
@@ -585,22 +593,69 @@ async function copyAdminCommands() {
  * 2. **当前连着的那个高亮**：拿 `info` 里的主机/端口/库与每条比对，**不另存一份"选中 id"**
  *    （两处状态迟早会不一致）。
  */
-const connectionGroups = computed(() => {
-  const byGroup = new Map<string, SavedConnection[]>()
-  for (const connection of saved.value) {
-    const key = (connection.group ?? '').trim() || '未分组'
-    const list = byGroup.get(key) ?? []
-    list.push(connection)
-    byGroup.set(key, list)
+/**
+ * 连接列表分组（布局对齐 macOS 封面图）：图里左栏是「连接列表」下有分组标题（示例：未分组）。
+ *
+ * 两条口径：
+ * 1. **没分组的归到「未分组」，且这一档永远排最后**（其余按名字排 —— 顺序稳定，用户才记得住位置）；
+ * 2. **当前连着的那个高亮**：拿 `info` 里的主机/端口/库与每条比对，**不另存一份"选中 id"**
+ *    （两处状态迟早会不一致）。
+ *
+ * 分组与顺序本身在 `shell/connectionDisplay.ts`（与折叠状态同源），这里只取值。
+ */
+const connectionGroups = computed(() => groupConnections(saved.value))
+
+/** localStorage 的最小面；**取不到存储就当没有**（隐私模式 / 权限策略下访问本身就抛）。 */
+function connectionStore(): KeyValueStore | null {
+  try {
+    return window.localStorage
+  } catch {
+    return null
   }
-  return [...byGroup.entries()]
-    .map(([name, items]) => ({ name, items }))
-    .sort((a, b) => {
-      if (a.name === '未分组') return 1
-      if (b.name === '未分组') return -1
-      return a.name.localeCompare(b.name)
-    })
-})
+}
+
+/**
+ * 分组折叠状态（FR-CONN-15）：**落在 localStorage、冷启动读回**。
+ *
+ * 为什么不让它留在组件里：折叠态要是活不过一次视图重建，用户看到的是
+ * 「我收起来的东西自己又出来了」—— 那正是 macOS 侧实测挂过、开了队列 L-59 的那条。
+ * 落点口径与「上次选中的连接」（FR-CONN-11）一致：界面偏好，不塞进连接配置文件。
+ */
+const collapsedGroups = ref<Set<string>>(readCollapsedGroups(connectionStore()))
+
+/** 未分组那一段不给折叠（macOS 侧同口径）。 */
+function isGroupCollapsed(group: string | null): boolean {
+  return group !== null && collapsedGroups.value.has(group)
+}
+
+function toggleGroupSection(group: string | null): void {
+  if (group === null) return
+  collapsedGroups.value = toggleCollapsedGroup(collapsedGroups.value, group)
+  writeCollapsedGroups(connectionStore(), collapsedGroups.value)
+}
+
+/** 分组标题文案（未分组段用语言表里的文案，不在模板里写死中文）。 */
+function groupTitle(group: string | null): string {
+  return group ?? t('db.connections.ungrouped')
+}
+
+/** 名称为空时的占位文案（FR-CONN-14）。 */
+const untitledConnection = computed(() => t('db.connections.untitled'))
+
+/** 当前连着的**那条保存连接**（上下文栏与列表共用同一个显示件时要用它）。 */
+const connectedConnection = computed<SavedConnection | null>(
+  () => saved.value.find((c) => isConnected(c)) ?? null,
+)
+
+/** 连接行的悬停提示（地址 + 一句「口令不在配置文件里」）。 */
+function connectionTooltip(connection: SavedConnection): string {
+  return t('db.connections.rowTip', {
+    user: connection.username,
+    host: connection.host,
+    port: connection.port,
+    database: connection.database,
+  })
+}
 
 /** 这一条是不是当前连着的（拿 `info` 比对）。 */
 function isConnected(connection: SavedConnection): boolean {
@@ -1489,6 +1544,16 @@ async function probe() {
       <span v-if="urlImportNote" class="db__note">{{ urlImportNote }}</span>
     </div>
 
+    <!-- 查询上下文栏：当前这条连接的**同一个显示件**（显示名 / 环境标签 / 色条）——
+         与侧边栏连接行共用 ConnectionLabel，两处不可能出现「一处标了、一处没标」（FR-CONN-14 / -16）。 -->
+    <p v-if="connectedConnection" class="db__context">
+      <ConnectionLabel
+        :connection="connectedConnection"
+        :untitled="untitledConnection"
+        :language="language"
+      />
+    </p>
+
     <!-- 连上了：显示"连到了哪儿" -->
     <p v-if="info" class="db__info">
       <strong>{{ info.database }}</strong> · {{ t('db.connected', { database: info.database, user: info.user }) }}
@@ -1542,35 +1607,53 @@ async function probe() {
             {{ t('db.connections.empty') }}
           </p>
           <template v-else>
-            <div v-for="group in connectionGroups" :key="group.name" class="db__conn-group">
-              <p class="db__group-title">{{ group.name }}</p>
-              <div
-                v-for="c in group.items"
-                :key="c.id"
-                class="db__conn"
-                :class="{ 'db__conn--active': isConnected(c) }"
+            <div v-for="group in connectionGroups" :key="group.group ?? '::ungrouped'" class="db__conn-group">
+              <button
+                v-if="group.group !== null"
+                class="db__group-toggle"
+                type="button"
+                :aria-expanded="isGroupCollapsed(group.group) ? 'false' : 'true'"
+                :title="t('db.connections.groupToggle', { name: group.group })"
+                @click="toggleGroupSection(group.group)"
               >
-                <button
-                  class="db__conn-main"
-                  type="button"
-                  :title="`${c.username}@${c.host}:${c.port}/${c.database}（口令不在配置文件里）`"
-                  @click="useSaved(c)"
+                <span class="db__chevron">{{ isGroupCollapsed(group.group) ? '▸' : '▾' }}</span>
+                {{ groupTitle(group.group) }}
+              </button>
+              <p v-else class="db__group-title">{{ groupTitle(group.group) }}</p>
+              <template v-if="!isGroupCollapsed(group.group)">
+                <div
+                  v-for="c in group.items"
+                  :key="c.id"
+                  class="db__conn"
+                  :class="{ 'db__conn--active': isConnected(c) }"
                 >
-                  <span class="db__conn-name">
-                    {{ c.name }}
-                    <span v-if="c.isReadOnly" class="db__kind">只读</span>
-                  </span>
-                  <span class="db__conn-sub">{{ connectionSubtitle(c) }}</span>
-                </button>
-                <button
-                  class="db__conn-del"
-                  type="button"
-                  title="删除这条连接（并清掉它的凭据）"
-                  @click="removeSaved(c)"
-                >
-                  ✕
-                </button>
-              </div>
+                  <button
+                    class="db__conn-main"
+                    type="button"
+                    :title="connectionTooltip(c)"
+                    @click="useSaved(c)"
+                  >
+                    <span class="db__conn-name">
+                      <!-- 显示名 + 环境标签 + 色条：**与查询上下文栏同一个共用件**（FR-CONN-14 / -16） -->
+                      <ConnectionLabel
+                        :connection="c"
+                        :untitled="untitledConnection"
+                        :language="language"
+                      />
+                      <span v-if="c.isReadOnly" class="db__kind">只读</span>
+                    </span>
+                    <span class="db__conn-sub">{{ connectionSubtitle(c) }}</span>
+                  </button>
+                  <button
+                    class="db__conn-del"
+                    type="button"
+                    title="删除这条连接（并清掉它的凭据）"
+                    @click="removeSaved(c)"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </template>
             </div>
           </template>
         </details>
@@ -3042,6 +3125,37 @@ th.db__grid-head[style] {
   font-size: var(--ds-font-caption-size);
 }
 
+/* 可折叠的分组标题（命名分组；未分组那一段仍是上面那个静态标题） */
+.db__group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-hair);
+  width: 100%;
+  margin: var(--ds-spacing-s) 0 var(--ds-spacing-hair);
+  padding: 0 var(--ds-spacing-xs);
+  border: 0;
+  background: transparent;
+  color: var(--ds-color-text-tertiary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.db__group-toggle:hover {
+  color: var(--ds-color-text-primary);
+}
+
+/* 查询上下文栏：当前连接的那一行（与侧边栏连接行同一个显示件） */
+.db__context {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  margin: 0;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-m) 0;
+  font-size: var(--ds-font-body-size);
+}
+
 /* 连接条目：两行（名字 + 主机·库名 小字），当前连着的那个高亮 */
 .db__conn-main {
   display: flex;
@@ -3062,6 +3176,10 @@ th.db__grid-head[style] {
 }
 
 .db__conn-name {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  min-width: 0;
   color: var(--ds-color-text-primary);
   font-family: var(--ds-font-stack);
   font-size: var(--ds-font-body-size);

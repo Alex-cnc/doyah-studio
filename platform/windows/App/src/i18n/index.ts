@@ -193,6 +193,29 @@ export const DICT = {
     en: 'Unrecognised parameters (not silently dropped): {list}',
   },
 
+  // 连接呈现面收口（S-1b）：显示名 / 分组折叠 / 颜色与环境标签（FR-CONN-14 / -15 / -16）
+  'db.connections.ungrouped': { 'zh-Hans': '未分组', en: 'Ungrouped' },
+  'db.connections.untitled': { 'zh-Hans': '（未命名）', en: '(untitled)' },
+  'db.connections.rowTip': {
+    'zh-Hans': '{user}@{host}:{port}/{database}（口令不在配置文件里）',
+    en: '{user}@{host}:{port}/{database} (the password is not in the config file)',
+  },
+  'db.connections.groupToggle': { 'zh-Hans': '折叠 / 展开分组「{name}」', en: 'Collapse / expand group "{name}"' },
+  'db.env.production': { 'zh-Hans': '生产', en: 'Production' },
+  'db.env.staging': { 'zh-Hans': '预发', en: 'Staging' },
+  'db.env.testing': { 'zh-Hans': '测试', en: 'Testing' },
+  'db.env.development': { 'zh-Hans': '开发', en: 'Development' },
+  'db.env.badge': { 'zh-Hans': '环境：{name}', en: 'Environment: {name}' },
+  'db.env.unknownTip': {
+    'zh-Hans': '认不出的环境标签「{name}」—— 原样显示，不当作没标',
+    en: 'Unrecognised environment label "{name}" — shown as-is, not treated as unlabelled',
+  },
+  'db.color.amber': { 'zh-Hans': '琥珀', en: 'Amber' },
+  'db.color.blue': { 'zh-Hans': '蓝', en: 'Blue' },
+  'db.color.magenta': { 'zh-Hans': '洋红', en: 'Magenta' },
+  'db.color.teal': { 'zh-Hans': '青', en: 'Teal' },
+  'db.connections.colorTag': { 'zh-Hans': '自选色：{name}', en: 'Colour tag: {name}' },
+
   // 外观两轴（配色 / 深浅）——**标签改成语言 key**（原来把中文写死在常量里，
   // 切英文时下拉里仍是中文；扫描器的第三面就是为这类"数据型文案"补的）
   'appearance.mode': { 'zh-Hans': '外观', en: 'Appearance' },

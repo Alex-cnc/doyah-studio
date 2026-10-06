@@ -103,7 +103,11 @@ else {
   Write-Host ("    node：{0}" -f $nodeExe)
   $tokenChecks = @(
     @{ Label = '令牌生成物 ⇄ 令牌源（gen-tokens --check）'; Args = @('tools/gen-tokens.mjs', '--check') },
-    @{ Label = '裸值棘轮 + 引用面（token-ratchet）'; Args = @('tools/token-ratchet.mjs') }
+    @{ Label = '裸值棘轮 + 引用面（token-ratchet）'; Args = @('tools/token-ratchet.mjs') },
+    # 第 S-1b 轮扩条：**判据自测**（负例）—— 证明棘轮真的抓得到它声称抓的东西。
+    # 只跑棘轮本体不够：棘轮最容易的失效是「看着在守、其实没守」（扫描集为空 / 正则写漏），
+    # 那种失效下本体照样是全绿的。自测例数 = 9（7 条值面夹具 + 2 条引用面），读数逐行打印。
+    @{ Label = '裸值棘轮 · 判据自测（token-ratchet --self-test）'; Args = @('tools/token-ratchet.mjs', '--self-test') }
   )
   foreach ($check in $tokenChecks) {
     # 判红与否**只由退出码决定**：node 往 stderr 写的那行判红原因照原样打印，不许被 PS 5.1 的
