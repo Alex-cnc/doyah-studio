@@ -258,16 +258,23 @@ struct NotesContainerTreeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // **新建笔记本**（队列 `L-97` 界面半第四片）：入口在树顶上（右键某一行的菜单里也有一个，
-            // 那个会指定「就建在这一行这个架里」）。`help` 用同一句文案 —— 一个光秃秃的「＋」
-            // 在侧栏里是能认出来的，但悬停时要给得出一个词。
+            // **新建笔记本**（队列 `L-97` 界面半第四片；本片 `N-UI-2` 补**可发现性**）：入口在树顶上
+            // （右键某一行的菜单里也有一个，那个会指定「就建在这一行这个架里」）。本片之前这里只有
+            // 一个**裸 `＋`** —— 认得出是个按钮，但要说得出它建的是「笔记本」得悬停或翻右键菜单。
+            // 现在把**图标 + 文字**并排画出来（文字与右键那一项**同键** `NotebookCreation.menuTitleKey`，
+            // 悬停提示仍是同一句）：人一眼就知道哪个按钮能建笔记本，「3 次点击内可建笔记本」的第一步
+            // 不再需要猜（悬停提示与 `accessibilityIdentifier` 一字未动）。
             HStack(spacing: Spacing.xs) {
                 Spacer()
                 Button {
                     appState.beginNewNotebook()
                 } label: {
-                    Image(systemName: "plus")
-                        .font(Theme.font(.caption))
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: "plus")
+                        Text(L(NotebookCreation.menuTitleKey))
+                            .lineLimit(1)
+                    }
+                    .font(Theme.font(.caption))
                 }
                 .buttonStyle(.plain)
                 .help(L(NotebookCreation.menuTitleKey))
@@ -303,6 +310,24 @@ struct NotesContainerTreeView: View {
                 indent: 0,
                 identifier: "notes-scope-recent"
             )
+            // **零架空态引导行**（本片 `N-UI-2` 补**可发现性** · `L-50` 同族）：库里连一个架都没有时
+            // （还没走过一次性迁移 —— `NotebookCreation.destinationShelfUid` 在这一档给 `nil`），
+            // 上面那个「新建笔记本」点下去只会给一句「建不了」。与其让人对着一个按不动的入口猜
+            // 「是不是坏了」，不如在树上**把事实与原因直接写出来**（架由首次运行随默认容器建出，
+            // 界面上没有「新建架」这个动作 —— 如实说，不编一个做不到的指引）。
+            //
+            // 文案键**复用** `NotebookCreation.noShelfKey`（`AppState.beginNewNotebook` 的兜底
+            // 说 的就是它）—— 同一件事**只有一个出处**：这里另起一句就会有两个版本，改一处漏一处。
+            // 这一档是**界面空态**（架数为零），不是写库守卫 ⇒ 不加 `.disabled`、
+            // 不碰任何既有实现（本片只加可见性）。
+            if appState.notesNavigation.shelves.isEmpty {
+                Text(L(NotebookCreation.noShelfKey))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .padding(.horizontal, Spacing.s)
+                    .padding(.vertical, Spacing.xs)
+                    .accessibilityIdentifier("notes-shelf-empty")
+            }
             ForEach(appState.notesNavigation.shelves) { shelf in
                 row(
                     scope: .shelf(uid: shelf.uid),
