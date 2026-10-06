@@ -72,6 +72,12 @@
    "by": "macos",
    "at": "2026-10-02"
   },
+ {
+   "glob": "Scripts/check-script-portability.py",
+   "reason": "单 T-20261006-057（前门授权）：只改旧路径字面量 windows/ → platform/windows/（判据逻辑与断言一字不动）",
+   "by": "tinyhippo",
+   "at": "2026-10-06"
+  },
   {
    "glob": "Scripts/path-ownership.json",
    "reason": "同上：本仓的路径归属清单（三仓各一份，脚本逐字节同一份）",

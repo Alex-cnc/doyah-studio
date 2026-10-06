@@ -3,7 +3,7 @@
 
 ## 为什么要它（提案 0005 采纳，开发循环第 91 轮）
 
-`Scripts/*.py` 是**两侧都在跑**的判据（Windows 侧 `windows/Tools/verify-all.ps1` 第 ③ 项就是
+`Scripts/*.py` 是**两侧都在跑**的判据（Windows 侧 `platform/windows/Tools/verify-all.ps1` 第 ③ 项就是
 `python Scripts/check-doc-tables.py` + `python Scripts/check-doc-versions.py`），而它们内部
 把「相对路径」铸成字符串去和**手抄的清单**比对时，用的是 `str(path.relative_to(root))`：
 

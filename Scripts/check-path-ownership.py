@@ -30,7 +30,7 @@
 
 **「安卓与鸿蒙怎么分」的那一层**（`DoyahNotes` 的答案，写进它的清单注释）：`android/`（Gradle +
 Kotlin）、`entry/` + `AppScope/` + `hvigor/` + `hvigorfile.ts` + `oh-package.json5` +
-`build-profile.json5` + `code-linter.json5`（hvigor + ArkTS）、`windows/`（Tauri 2 + Rust）
+`build-profile.json5` + `code-linter.json5`（hvigor + ArkTS）、`platform/windows/`（Tauri 2 + Rust）
 **在契约层上同属 `[独占:nonapple]`** —— 契约层**不分家**，靠「**顶层子树 + 构建系统**」在盘上分，
 一致性靠**同口径的两份实现 + 黄金样例对拍**（`tools/fixtures/*-golden-v1.json`、
 `backup-cross-corpus-{android,harmony}.json`、`arkts-harness.mjs`）。

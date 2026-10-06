@@ -180,7 +180,7 @@ fi
 echo "==> 2/18 平台中立性（Core 不含平台专属依赖 · 脚本不含平台专属路径标识 · 语言登记形状）"
 python3 Scripts/check-core-portability.py
 # 第 91 轮（提案 0005 **采纳**）：第二条管的是 **`Scripts/*.py` 自己** ——
-# `Scripts/` 是**两侧都在跑**的判据（Windows 侧 `windows/Tools/verify-all.ps1` 第 ③ 项就是
+# `Scripts/` 是**两侧都在跑**的判据（Windows 侧 `platform/windows/Tools/verify-all.ps1` 第 ③ 项就是
 # `python Scripts/check-doc-tables.py` + `python Scripts/check-doc-versions.py`），而它们把相对路径
 # 铸成字符串（`str(path.relative_to(root))`）去和**手抄的正斜杠清单**比对时，Windows 上
 # `str(WindowsPath)` 给 `Docs\README.md` ⇒ **集合匹配恒 False**、凡命中扫描面的文档全部判红，
@@ -692,7 +692,7 @@ DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-exclusive-sections.py
 DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-exclusive-sections.py --self-test
 # 路径归属判据（派活单 `T-20261002-029`，2026-10-02 立；三仓同源副本，清单 = `Scripts/path-ownership.json`）：
 # 上面那个判据管「文档里的**节**」归谁，这一个管「盘上的**目录 / 文件**」归谁 ——
-# 改动落在**对侧子树**（对侧 = `windows/`，本侧 = 仓根 Swift 族）⇒ 判红并点名文件；
+# 改动落在**不属本侧的子树**（谁属谁以同目录 `path-ownership.json` 为准）⇒ 判红并点名文件；
 # 共享面（`Docs/` · `Scripts/` · `AGENT-SPEC.md`）不算越界，但要**声明式台账**：
 # 清单 `shared_ledger` 改前登记理由（glob 命中）/ 本次新增行注 `shared-surface：理由` /
 # 提交信息注 `shared-surface: 理由`，三处都没有理由 ⇒ 判红。本侧由清单 `hosts` 推断
