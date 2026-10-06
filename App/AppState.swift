@@ -4039,6 +4039,17 @@ final class AppState: ObservableObject {
         case "maintenanceTasks": openMaintenance()
         case "mcpApprovals": openMCPApprovals()
         case "notes": openNotes()
+        // **「笔记」菜单那几条**（`N-UI-4`）：菜单项与 ⌘K 面板走的是这同一个分派器 ——
+        // 动作全部落在**既有入口**上，这里不新造行为。
+        case "newNote": beginNewNote()
+        case "newNotebook": beginNewNotebook()
+        // 「搜索范围」两档：改的就是笔记面那枚分段控件的状态（`notesSearchScope`）——
+        // 菜单与控件是同一份状态的两个入口，不另存一份。
+        case "noteSearchScopeCurrent": notesSearchScope = .current
+        case "noteSearchScopeAll": notesSearchScope = .all
+        // 「已收藏 / 全部笔记」：与左栏那两行**同一条入口**（`selectNotesScope`）。
+        case "noteFavorites": selectNotesScope(.favorites)
+        case "noteAllNotes": selectNotesScope(.all)
         case "schemaDiff": isSchemaDiffPresented = true
         case "erDiagram": isERDiagramPresented = true
         case "serverObjects":

@@ -1004,6 +1004,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case paletteCategoryObject
     case paletteCategoryServer
     case paletteCategoryAgent
+    /// 「笔记」那一组命令（`N-UI-4`：进笔记面时菜单栏多出的那个菜单里的命令，同样住 ⌘K 面板）。
+    case paletteCategoryNotes
     case paletteCategoryHelp
     // 命令面板的搜索范围（队列 `L-170`：只两类 —— 当前工作区的文件 + 自带命令）
     case commandPaletteCommandsGroup
@@ -3109,6 +3111,7 @@ public enum LocalizedStrings {
         .paletteCategoryObject: [.simplifiedChinese: "对象", .english: "Object"],
         .paletteCategoryServer: [.simplifiedChinese: "服务器", .english: "Server"],
         .paletteCategoryAgent: [.simplifiedChinese: "智能体", .english: "Agent"],
+        .paletteCategoryNotes: [.simplifiedChinese: "笔记", .english: "Notes"],
         .paletteCategoryHelp: [.simplifiedChinese: "帮助", .english: "Help"],
         .commandPaletteCommandsGroup: [.simplifiedChinese: "命令", .english: "Commands"],
         .paletteCategoryWorkspaceFile: [.simplifiedChinese: "当前工作区的文件", .english: "Files in This Workspace"],

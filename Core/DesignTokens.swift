@@ -81,7 +81,14 @@ public enum Metrics {
     public static let toolbarHeight: CGFloat = 44
     public static let statusBarHeight: CGFloat = 24
     public static let controlHeight: CGFloat = 26
-    /// 侧栏宽度（对象树 / 工作区）。
+    /// 侧栏宽度（对象树 / 工作区 / 笔记面**共用一值**）。
+    ///
+    /// 这个值是侧栏宽度的**唯一出处** —— 视图层不许再写 `240 / 280 / 380` 这种字面量。
+    /// 由头 = 2026-10-06 人类主人实机点验第 1 条「左栏太宽」的定因：它曾是**死常量**
+    /// （`App/` 零命中），真正生效的是 `App/Views/MainWindow.swift` 里写死的那三档
+    /// ⇒ 想调宽度只能改视图，没有单点旋钮。现在那一处（全 App 仅一处侧栏列宽规格）**三档一并读它**，
+    /// 数据库 / 工作区 / 笔记三面共用，不按语境区分（派单 `T-20261006-078` §1；语境化宽度未批）。
+    /// 出处 = `Docs/design/外观方案-v1.md`（侧栏宽 248）。
     public static let sidebarWidth: CGFloat = 248
     /// 最左侧活动栏宽度（FR-EDIT-32）。
     public static let activityBarWidth: CGFloat = 46

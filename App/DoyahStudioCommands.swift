@@ -19,10 +19,12 @@ import DoyahCore
 struct DoyahStudioCommands: Commands {
     /// App 侧的共享状态（`App` 持有 `@StateObject`，这里只借用同一个实例）。
     ///
-    /// 刻意用 `let` 而不是 `@ObservedObject`：菜单项目前只**调用**方法、
-    /// 不根据 `appState` 派生文案或可用性；订阅它只会让结果集流式刷新
-    /// 顺带把菜单图反复置脏，得不偿失。将来若要按状态禁用菜单项，再改成 `@ObservedObject`。
-    let appState: AppState
+    /// **是 `@ObservedObject` 而不是 `let`**（`N-UI-4`）：菜单**集合**要按活动栏当前区选
+    /// （进笔记面多出「笔记」菜单、离开收起），而「当前在哪个区」只有 `appState` 知道 ⇒
+    /// 菜单那一层必须订阅它，否则换区时 `.commands {}` 的内容不会重算（与「语言切换要成为
+    /// 观察根」同一条理由，见本文件顶部）。它同时仍是「只**调用**方法」的用法：
+    /// 这里不按 `appState` 派生任何文案或可用性，订阅带来的刷新只用于**按区取舍菜单**。
+    @ObservedObject var appState: AppState
 
     /// 浏览器页签的状态所有者（队列 `L-149` 剩余①）。理由同上：菜单只**调用**它
     /// （「新建浏览器页签」），不根据页签集派生任何东西。
@@ -145,6 +147,29 @@ struct DoyahStudioCommands: Commands {
                 appState.isEgressLogPresented = true
             }
             .keyboardShortcut(AppShortcut.egressLog.key, modifiers: AppShortcut.egressLog.modifiers)
+        }
+
+        // **「笔记」菜单**（`N-UI-4`：进笔记面出、离开收起）。与正文面同构 ——
+        // `MainWindow` 用 `switch appState.selectedActivityItem` 换那一块内容，这里换**菜单集合**。
+        //
+        // 三条口径：
+        //  ① **集合按当前区选**：判据读的就是本文件里的 `selectedActivityItem`（改前整份 body
+        //     零处读它 ⇒ Workspace / Database / Notes 三态菜单完全相同）；
+        //  ② **命令不在这里定义**：成员从 `AppCommandCatalog.notesMenuCommands()` 取 ——
+        //     标题（语言表键）与关键词在命令目录里，动作在 `AppState.performPaletteCommand` 里，
+        //     于是菜单项与 ⌘K 面板是**同一条命令的两处呈现**（本文件里不出现语言表键、也不出现动作名）；
+        //  ③ **只装配、不复刻显隐机制**：叶子项「按区显隐」那一套仍归 `MenuAreaPolicy` +
+        //     `MainMenuLocalizer.syncAreaVisibility`（`case .menuNotes: return .notes` 照旧生效）；
+        //     这里做的是「菜单集合按区取舍」，不是第二套显示机制。
+        if appState.selectedActivityItem == .notes {
+            CommandMenu(L(.notesTitle)) {
+                ForEach(AppCommandCatalog.notesMenuCommands(), id: \.id) { command in
+                    // 与 ⌘K 面板同一个分派器（`performPaletteCommand`）：一处定义、两处呈现。
+                    Button(command.title) {
+                        appState.performPaletteCommand(command.id)
+                    }
+                }
+            }
         }
 
         // 「显示」菜单：下方面板（结果 / 问题 / 输出 / 终端 / 调试控制台）。

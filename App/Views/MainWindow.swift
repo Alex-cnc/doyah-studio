@@ -138,7 +138,12 @@ struct MainWindow: View {
             ActivityBarView()
             NavigationSplitView {
                 sidebarContent
-                    .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 380)
+                    // **侧栏宽度单点化**（2026-10-06 人类主人实机点验第 1 条「左栏太宽」；派单 `T-20261006-078` §1）：
+                    // 原先这里写死 `min 240 / ideal 280 / max 380`，而设计令牌 `Metrics.sidebarWidth`（248）
+                    // 是**死常量**（`App/` 零命中）⇒ 想调宽度只能改视图，没有单点旋钮。
+                    // 现在三档**一并**读令牌：唯一出处 = `Core/DesignTokens.swift`（外观方案「侧栏宽 248」），
+                    // 数据库 / 工作区 / 笔记**三面共用这一值**，不按语境区分（语境化宽度未批 ⇒ 「只收窄笔记面」另开片）。
+                    .navigationSplitViewColumnWidth(min: Metrics.sidebarWidth, ideal: Metrics.sidebarWidth, max: Metrics.sidebarWidth)
             } detail: {
             // 下方面板（结果 / 问题 / 输出 / 终端 / 调试控制台）已经并进工作区本身，
             // 所以这里不再另开一块区域。

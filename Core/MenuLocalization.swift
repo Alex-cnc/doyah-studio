@@ -62,7 +62,20 @@ public enum MenuLocalization {
         .schemaDiffTitle,
         .lowerPaneToggle,
         .menuFormat,
-        .menuRelaunchApp
+        .menuRelaunchApp,
+        // **「笔记」菜单**（`N-UI-4`）：顶层菜单标题 + 它的叶子项。
+        //
+        // 为什么要登记顶层标题：`MainMenuLocalizer` 是按**标题**反查键的
+        // （`MenuLocalization.key(forTitle:)` 只在 `menuKeys + systemMenuTitles` 里找）——
+        // 键不在表里 ⇒ 运行时判据（`Scripts/check-menu-language.py`）把这一项判成「认不出」（判红），
+        // 且自愈不会碰它。叶子项同理：它们住在菜单栏里，切换语言时必须能按标题认回来。
+        .notesTitle,
+        .notesNew,
+        .notesNewNotebook,
+        .notesSearchScopeCurrent,
+        .notesSearchScopeAll,
+        .notesFavorites,
+        .notesAllNotes
     ]
 
     /// 把「任意受支持语言下的标题」翻成目标语言（自有菜单项 + 系统菜单的**顶层标题**）。
