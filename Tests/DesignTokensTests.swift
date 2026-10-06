@@ -54,6 +54,30 @@ final class DesignTokensTests: XCTestCase {
         XCTAssertEqual(Metrics.sidebarWidth, 248)
     }
 
+    /// 侧栏宽度**只有一处出处**（`Metrics.sidebarWidth`）—— 视图层不许再写 `240 / 280 / 380` 这种字面量。
+    ///
+    /// 由头 = 2026-10-06 人类主人实机点验第 1 条「左栏太宽」的定因：`Metrics.sidebarWidth`（248）
+    /// 此前是**死常量**（`App/` 零命中），真正生效的是 `MainWindow` 里写死的那三档 ⇒ 想调宽度只能改视图，
+    /// 没有单点旋钮。这条把「唯一出处」钉成可机械复核的约束：全 App **只有一处**侧栏列宽规格，
+    /// 且那一处**一律读令牌、不带数字字面量**（改前读数 = 字面量 1 命中 / `App/` 内 `sidebarWidth` 0 命中；
+    /// 改后 = 0 / ≥1 · 派单 `T-20261006-078` §1）。
+    func testSidebarWidthHasExactlyOneSourceAndNoBareNumber() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let text = try String(
+            contentsOf: root.appendingPathComponent("App/Views/MainWindow.swift"), encoding: .utf8
+        )
+        let around = text.components(separatedBy: ".navigationSplitViewColumnWidth(")
+        let spec = around.count == 2 ? String(around[1].prefix(120)) : ""
+        XCTAssertTrue(
+            around.count == 2
+                && spec.contains("Metrics.sidebarWidth")
+                && !spec.contains(where: \.isNumber),
+            "侧栏宽度只许读 `Metrics.sidebarWidth`（唯一出处）：那处规格必须**恰好一处**、读令牌、且不带数字字面量；实测 \(around.count - 1) 处，规格 = \(spec.debugDescription)"
+        )
+    }
+
     // MARK: 表面层次（改造中修掉过两次真缺陷，这里守住）
 
     /// 内容区与侧栏必须能被看出来是两块 —— 第一版只差 3/255，等于没有层次。
