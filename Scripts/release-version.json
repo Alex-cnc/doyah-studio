@@ -21,15 +21,15 @@
     },
     "evidence": "第 57 轮发布收口时用 `/usr/libexec/PlistBuddy -c \"Print :CFBundleShortVersionString\" dist/DoyahStudio.app/Contents/Info.plist` 实测产物 = `0.2.0` / `2`（当时产物还叫 `DoyahStudio.app`；2026-10-02 起产物名带发布标签、`DoyahStudio.app` 只是软链）"
   },
-  "marketingVersion": "0.2.0",
-  "buildVersion": "2",
-  "releaseLabel": "alpha2.0",
+  "marketingVersion": "0.3.0",
+  "buildVersion": "3",
+  "releaseLabel": "alpha3.0",
   "releaseLabelSource": {
     "path": "Scripts/build-app.sh",
     "variable": "RELEASE_LABEL",
     "derivationAnchor": "APP=\"${ROOT}/dist/DoyahStudio-${RELEASE_LABEL}.app\"",
     "plistKey": "DoyahReleaseLabel",
-    "note": "领域：口径 = `<里程碑>.<子号>`（里程碑内小改 +1，每个里程碑从 `.0` 起），出处 `Docs/发布计划.md` §5 附注；当前 Alpha 2 = Workspace。**两处派生**：① 产物名（`dist/DoyahStudio-${RELEASE_LABEL}.app`）② 产物 Info.plist 的 `DoyahReleaseLabel`（模板里写 `${RELEASE_LABEL}` —— heredoc 必须是**不带引号**的 `<<PLIST` 才会展开）。交付面文档两处（`Docs/发布计划.md` §5 · `AGENT-SPEC.md` §6）由 anchors 对账。"
+    "note": "领域：口径 = `<里程碑>.<子号>`（里程碑内小改 +1，每个里程碑从 `.0` 起），出处 `Docs/发布计划.md` §5 附注；当前 Alpha 3 = Notes。**两处派生**：① 产物名（`dist/DoyahStudio-${RELEASE_LABEL}.app`）② 产物 Info.plist 的 `DoyahReleaseLabel`（模板里写 `${RELEASE_LABEL}` —— heredoc 必须是**不带引号**的 `<<PLIST` 才会展开）。交付面文档两处（`Docs/发布计划.md` §5 · `AGENT-SPEC.md` §6）由 anchors 对账。"
   },
   "distPolicy": {
     "glob": "DoyahStudio-*.app",

@@ -95,8 +95,8 @@ targets:
         # 逐字一致；三处一致由 `Scripts/check-release-version.py` 机械判定（闭环第 18 项），
         # 台账 = `Scripts/release-version.json`。改了这里就必须重跑
         # `xcodegen generate`（postGenCommand 会带上 patch-xcodeproj.sh），否则 yml 与工程两处漂移。
-        MARKETING_VERSION: "0.2.0"
-        CURRENT_PROJECT_VERSION: "2"
+        MARKETING_VERSION: "0.3.0"
+        CURRENT_PROJECT_VERSION: "3"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Doyah Studio
         INFOPLIST_KEY_CFBundleIconFile: AppIcon

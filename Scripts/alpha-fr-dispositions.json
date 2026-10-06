@@ -790,6 +790,44 @@
      "path": "Core/WorkspaceClose.swift"
     }
    ]
+  },
+  {
+   "id": "FR-EDIT-47",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "Markdown 列表续行的界面回车手感待人工点验（规则层有 17 例判据含续行各组；真在编辑器里按回车接着写下一项需人看）",
+   "marker": "**[alpha 不含]**（界面回车手感待人工点验；清单 §10.33）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Core/MarkdownEditing.swift"
+    },
+    {
+     "path": "App/Views/CodeEditorView.swift"
+    },
+    {
+     "path": "Tests/MarkdownEditingTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-48",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "Markdown 任务框勾选翻转（⌘L）的界面按键待人工点验（规则层判据同上；界面 9 步见清单 §10.33）",
+   "marker": "**[alpha 不含]**（界面按键待人工点验；清单 §10.33）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Core/MarkdownEditing.swift"
+    },
+    {
+     "path": "App/Views/CodeEditorView.swift"
+    },
+    {
+     "path": "Tests/MarkdownEditingTests.swift"
+    }
+   ]
   }
  ]
 }
