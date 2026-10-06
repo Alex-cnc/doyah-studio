@@ -37,7 +37,9 @@ impl ConnectionStore {
     /// 取不到 `APPDATA` 就退到当前目录 —— **不静默丢数据**，调用方会看到路径。
     pub fn default_path() -> PathBuf {
         match std::env::var("APPDATA") {
-            Ok(base) if !base.trim().is_empty() => Path::new(&base).join("DoyahStudio").join("connections.json"),
+            Ok(base) if !base.trim().is_empty() => Path::new(&base)
+                .join("DoyahStudio")
+                .join("connections.json"),
             _ => PathBuf::from("connections.json"),
         }
     }
@@ -49,7 +51,8 @@ impl ConnectionStore {
         }
         let text = std::fs::read_to_string(&self.config_path).map_err(|e| DbFailure {
             message: format!("读连接配置失败：{e}（{}）", self.config_path.display()),
-            hint: "确认该文件可读；若内容坏了，删掉它会从空列表重建（不会动数据库里的数据）。".to_string(),
+            hint: "确认该文件可读；若内容坏了，删掉它会从空列表重建（不会动数据库里的数据）。"
+                .to_string(),
         })?;
         if text.trim().is_empty() {
             return Ok(Vec::new());
@@ -58,7 +61,8 @@ impl ConnectionStore {
             Ok(bundle) => Ok(bundle.connections),
             Err(err) => Err(DbFailure {
                 message: format!("连接配置读不出来：{err}"),
-                hint: "配置文件可能来自更新版本的客户端或已损坏；先备份再删掉它即可从空列表重建。".to_string(),
+                hint: "配置文件可能来自更新版本的客户端或已损坏；先备份再删掉它即可从空列表重建。"
+                    .to_string(),
             }),
         }
     }
@@ -133,7 +137,20 @@ fn now_iso8601() -> String {
         y += 1;
     }
     let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
-    let months = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let months = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut month = 1;
     for len in months {
         if d < len {
@@ -150,12 +167,9 @@ fn now_iso8601() -> String {
 /// 判据口径：**只认会真的把口令写进文件的那种形状**（`"password": "..."` / `secret`），
 /// 不拿 `passwordHint` 之类的说明文字误报 —— 判据误报多了就会被绕开。
 pub fn bundle_text_has_no_secret(text: &str) -> Option<&'static str> {
-    for word in ["\"password\"", "\"passwd\"", "\"secret\"", "\"pwd\""] {
-        if text.contains(word) {
-            return Some(word);
-        }
-    }
-    None
+    // **同一份词表**：词表与判定在领域层 `config::secret_field`（导出侧那道护栏用的是同一个），
+    // 这里不再自写一份 —— 两处各写一份的下场是"一处加了词、另一处没加"。
+    doyah_studio_db::config::secret_field(text)
 }
 
 /// 凭据目标名：`doyah-studio/<连接 id>`。
@@ -171,7 +185,12 @@ pub fn credential_target(connection_id: &str) -> String {
 pub fn remember_password(connection_id: &str, user: &str, password: &str) -> Result<(), DbFailure> {
     let target = credential_target(connection_id);
     let output = Command::new("cmdkey")
-        .args(["/generic:", &target, &format!("/user:{user}"), &format!("/pass:{password}")])
+        .args([
+            "/generic:",
+            &target,
+            &format!("/user:{user}"),
+            &format!("/pass:{password}"),
+        ])
         .output()
         .map_err(|e| DbFailure {
             message: format!("调 cmdkey 失败：{e}"),
@@ -193,10 +212,13 @@ pub fn remember_password(connection_id: &str, user: &str, password: &str) -> Res
 /// 取口令（读不到返回 `Ok(None)`：**没存过不是错误**）。
 pub fn recall_password(connection_id: &str) -> Result<Option<String>, DbFailure> {
     let target = credential_target(connection_id);
-    let output = Command::new("cmdkey").arg(format!("/list:{target}")).output().map_err(|e| DbFailure {
-        message: format!("调 cmdkey 失败：{e}"),
-        hint: "确认系统自带 cmdkey 可用。".to_string(),
-    })?;
+    let output = Command::new("cmdkey")
+        .arg(format!("/list:{target}"))
+        .output()
+        .map_err(|e| DbFailure {
+            message: format!("调 cmdkey 失败：{e}"),
+            hint: "确认系统自带 cmdkey 可用。".to_string(),
+        })?;
     // 注意：cmdkey 读口令**只能读到自己**（`/list` 不显示口令）⇒ 这里只判"有没有存"，
     // 真取值交给驱动连接时由系统按目标名解析（下一段接 CredReadW 时把这一处补成真取值）。
     let text = String::from_utf8_lossy(&output.stdout);
@@ -215,10 +237,13 @@ pub fn recall_password(connection_id: &str) -> Result<Option<String>, DbFailure>
 /// 用户以为口令清了，其实还在）。
 pub fn forget_password(connection_id: &str) -> Result<(), DbFailure> {
     let target = credential_target(connection_id);
-    let delete = Command::new("cmdkey").arg(format!("/delete:{target}")).output().map_err(|e| DbFailure {
-        message: format!("调 cmdkey 失败：{e}"),
-        hint: "确认系统自带 cmdkey 可用。".to_string(),
-    })?;
+    let delete = Command::new("cmdkey")
+        .arg(format!("/delete:{target}"))
+        .output()
+        .map_err(|e| DbFailure {
+            message: format!("调 cmdkey 失败：{e}"),
+            hint: "确认系统自带 cmdkey 可用。".to_string(),
+        })?;
     if has_credential(&target) {
         return Err(DbFailure {
             message: format!(
@@ -233,7 +258,10 @@ pub fn forget_password(connection_id: &str) -> Result<(), DbFailure> {
 
 /// 凭据管理器里有没有这一条（**只看有没有，取不回口令本体** —— `cmdkey /list` 不回显口令）。
 pub fn has_credential(target: &str) -> bool {
-    match Command::new("cmdkey").arg(format!("/list:{target}")).output() {
+    match Command::new("cmdkey")
+        .arg(format!("/list:{target}"))
+        .output()
+    {
         Ok(out) => {
             let text = String::from_utf8_lossy(&out.stdout);
             text.contains(&format!("Target: {target}"))
@@ -243,10 +271,13 @@ pub fn has_credential(target: &str) -> bool {
 }
 
 /// 由表单参数造一条配置（id 由调用方给；端口 / SSL 的默认值走领域层的类型默认）。
+///
+/// `db_type` 由表单的引擎下拉给出（FR-CONN-02）—— 认不出的字面量由调用方回退，**这里不猜**。
 #[allow(clippy::too_many_arguments)]
 pub fn config_from_form(
     id: &str,
     name: &str,
+    db_type: DatabaseType,
     host: &str,
     port: u16,
     database: &str,
@@ -254,7 +285,7 @@ pub fn config_from_form(
     ssl_mode: Option<&str>,
     is_read_only: bool,
 ) -> ConnectionConfig {
-    let mut config = ConnectionConfig::new(id, name, DatabaseType::Postgresql);
+    let mut config = ConnectionConfig::new(id, name, db_type);
     config.host = host.to_string();
     config.port = port;
     config.database = database.to_string();
@@ -264,6 +295,30 @@ pub fn config_from_form(
     }
     config.is_read_only = is_read_only;
     config
+}
+
+/// 编辑连接时口令框的**三档语义**（FR-CONN-08）。
+///
+/// 为什么要把它抽成一个纯函数：这是"做错了没人立刻发现"的典型 —— 把「留空」当成「写一个空口令」，
+/// 症状是"我什么都没改，怎么口令没了"（而且用户要等到下一次连接失败才会知道）。
+/// 判据（`a_blank_password_keeps_the_saved_one`）就是这条语义的锁：谁把 `None` 改去写空串，它当场红。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PasswordEdit {
+    /// 留空（`None`）：**保持原口令一字不动**。
+    Keep,
+    /// 显式空串：清掉已存口令（这是用户**明确**要清空，与"没填"不是一回事）。
+    Clear,
+    /// 新口令：写进凭据存储。
+    Set(String),
+}
+
+/// 口令框的三档判定（**唯一出处**：命令层照它执行）。
+pub fn password_edit(password: Option<&str>) -> PasswordEdit {
+    match password {
+        None => PasswordEdit::Keep,
+        Some(text) if text.is_empty() => PasswordEdit::Clear,
+        Some(text) => PasswordEdit::Set(text.to_string()),
+    }
 }
 
 #[cfg(test)]
@@ -308,11 +363,31 @@ mod tests {
         let store = tmp_store("round-trip");
         let _ = std::fs::remove_file(&store.config_path);
 
-        let a = config_from_form("id-a", "实验库", "127.0.0.1", 5433, "doyah_lab", "doyah", Some("disable"), false);
+        let a = config_from_form(
+            "id-a",
+            "实验库",
+            DatabaseType::Postgresql,
+            "127.0.0.1",
+            5433,
+            "doyah_lab",
+            "doyah",
+            Some("disable"),
+            false,
+        );
         assert!(a.is_valid());
         store.upsert(a.clone()).unwrap();
 
-        let b = config_from_form("id-b", "线上", "10.0.0.5", 5432, "prod", "bob", Some("require"), true);
+        let b = config_from_form(
+            "id-b",
+            "线上",
+            DatabaseType::Postgresql,
+            "10.0.0.5",
+            5432,
+            "prod",
+            "bob",
+            Some("require"),
+            true,
+        );
         let list = store.upsert(b).unwrap();
         assert_eq!(list.len(), 2);
 
@@ -326,7 +401,10 @@ mod tests {
             "实验库（改名）"
         );
         assert!(list.iter().any(|c| c.is_read_only), "只读标记要保住");
-        assert_eq!(list.iter().find(|c| c.id == "id-a").unwrap().ssl_mode, SslMode::Disable);
+        assert_eq!(
+            list.iter().find(|c| c.id == "id-a").unwrap().ssl_mode,
+            SslMode::Disable
+        );
 
         let list = store.remove("id-a").unwrap();
         assert_eq!(list.len(), 1);
@@ -338,18 +416,40 @@ mod tests {
         let store = tmp_store("no-secret");
         let _ = std::fs::remove_file(&store.config_path);
         store
-            .upsert(config_from_form("id-x", "n", "h", 5432, "d", "u", None, false))
+            .upsert(config_from_form(
+                "id-x",
+                "n",
+                DatabaseType::Postgresql,
+                "h",
+                5432,
+                "d",
+                "u",
+                None,
+                false,
+            ))
             .unwrap();
         let text = std::fs::read_to_string(&store.config_path).unwrap();
-        assert!(bundle_text_has_no_secret(&text).is_none(), "配置里出现口令字段：{text}");
-        assert!(text.contains("不含任何口令") || text.contains("不含"), "包里应当写明不含口令");
+        assert!(
+            bundle_text_has_no_secret(&text).is_none(),
+            "配置里出现口令字段：{text}"
+        );
+        assert!(
+            text.contains("不含任何口令") || text.contains("不含"),
+            "包里应当写明不含口令"
+        );
     }
 
     #[test]
     fn the_secret_guard_is_not_fooled_by_a_password_shaped_field() {
         // 这不是过虑：写配置的那条路一旦被改成带口令，这个判据必须当场炸
-        assert_eq!(bundle_text_has_no_secret(r#"{"password":"hunter2"}"#), Some("\"password\""));
-        assert_eq!(bundle_text_has_no_secret(r#"{"secret":"x"}"#), Some("\"secret\""));
+        assert_eq!(
+            bundle_text_has_no_secret(r#"{"password":"hunter2"}"#),
+            Some("\"password\"")
+        );
+        assert_eq!(
+            bundle_text_has_no_secret(r#"{"secret":"x"}"#),
+            Some("\"secret\"")
+        );
         assert!(bundle_text_has_no_secret(r#"{"note":"口令不在此文件"}"#).is_none());
     }
 
@@ -382,7 +482,9 @@ mod tests {
         let id = format!("selftest-{}", std::process::id());
         let target = credential_target(&id);
         // 先清一遍（上一次跑剩下的），确保起点干净
-        let _ = Command::new("cmdkey").arg(format!("/delete:{target}")).output();
+        let _ = Command::new("cmdkey")
+            .arg(format!("/delete:{target}"))
+            .output();
         assert!(!has_credential(&target), "起点应当是干净的");
 
         remember_password(&id, "doyah", "Secret-For-Test-Only").expect("写入凭据应当成功");
@@ -406,5 +508,27 @@ mod tests {
         let id = format!("selftest-absent-{}", std::process::id());
         forget_password(&id).expect("删一个不存在的目标应当幂等成功");
         assert!(!has_credential(&credential_target(&id)));
+    }
+
+    /// FR-CONN-08 的锁：**编辑时口令留空 = 保持原密码不变**。
+    ///
+    /// 这条用例是"负例注入"的对象：把 `password_edit` 的 `None` 那一档改成
+    /// `PasswordEdit::Set(String::new())`（即"留空写空串"）⇒ 本用例当场判红并点出这一格。
+    #[test]
+    fn a_blank_password_keeps_the_saved_one() {
+        assert_eq!(
+            password_edit(None),
+            PasswordEdit::Keep,
+            "留空必须判成「保持原口令不变」—— 判成写空串就是「我什么都没改，口令没了」"
+        );
+        assert_eq!(
+            password_edit(Some("")),
+            PasswordEdit::Clear,
+            "显式空串是「清空」，与「没填」不是一回事"
+        );
+        assert_eq!(
+            password_edit(Some("s3cret")),
+            PasswordEdit::Set("s3cret".to_string())
+        );
     }
 }

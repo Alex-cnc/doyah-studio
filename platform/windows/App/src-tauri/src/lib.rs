@@ -9,19 +9,22 @@ pub mod format_tool;
 pub mod fs;
 pub mod postgres;
 
-pub mod search;
 mod query;
+pub mod search;
 
 pub use connections::{config_from_form, ConnectionStore};
 pub use postgres::{
     ConnectParams, ConnectReport, DatabaseInfo, DbFailure, PgSession, ProbeReport, QueryResult,
-    ServerInfo, StartupOutcome, StatementOutcome, TableNode, TableShape, TableStats, MAX_QUERY_ROWS,
+    ServerInfo, StartupOutcome, StatementOutcome, TableNode, TableShape, TableStats,
+    MAX_QUERY_ROWS,
 };
 pub use query::{DatasetSummary, GridWindowPayload, ViewCache, MAX_WINDOW_ROWS};
 
 use std::sync::{Arc, Mutex};
 use tauri::State;
 use tokio::sync::Mutex as AsyncMutex;
+
+use doyah_studio_db::db_type::DatabaseType;
 
 /// 外壳状态：视图缓存（数据集 + 排序置换）+ 当前数据库会话。tauri 里跨命令共享的可变状态。
 ///
@@ -72,9 +75,17 @@ fn app_info() -> AppInfo {
 }
 
 #[tauri::command]
-fn dataset_summary(state: State<'_, ShellState>, rows: usize, cols: usize, seed: u64) -> DatasetSummary {
+fn dataset_summary(
+    state: State<'_, ShellState>,
+    rows: usize,
+    cols: usize,
+    seed: u64,
+) -> DatasetSummary {
     // 锁中毒（某个命令 panic）时不让整个界面挂掉：恢复内层继续用，并如实记一笔。
-    let mut cache = state.cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut cache = state
+        .cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     cache.summary(rows, cols, seed)
 }
 
@@ -88,8 +99,18 @@ fn grid_window(
     start: usize,
     len: usize,
 ) -> GridWindowPayload {
-    let mut cache = state.cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    cache.window(&query::ViewRequest { rows, cols, seed, order_desc, start, len })
+    let mut cache = state
+        .cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache.window(&query::ViewRequest {
+        rows,
+        cols,
+        seed,
+        order_desc,
+        start,
+        len,
+    })
 }
 
 // ── 数据库命令（真库链路；模型来自领域层 Db，驱动只在本层）─────────────────────────────
@@ -111,9 +132,10 @@ async fn db_connect(
         *slot = None;
     }
     // 只读标记随连接一起设：换连接时**不保留上一条的标记**（否则"上一条只读"会意外管住新连接）
-    state
-        .read_only
-        .store(read_only.unwrap_or(false), std::sync::atomic::Ordering::Relaxed);
+    state.read_only.store(
+        read_only.unwrap_or(false),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     let statements = startup_sql.unwrap_or_default();
     let (session, report) = PgSession::connect_with_startup(&params, &statements).await?;
     let mut slot = state.db.lock().await;
@@ -185,16 +207,22 @@ async fn db_probe(state: State<'_, ShellState>) -> Result<ProbeReport, DbFailure
 
 /// 保存的连接列表（首次使用返回空表，不是错误）。
 #[tauri::command]
-fn connections_list(state: State<'_, ShellState>) -> Result<Vec<doyah_studio_db::config::ConnectionConfig>, DbFailure> {
+fn connections_list(
+    state: State<'_, ShellState>,
+) -> Result<Vec<doyah_studio_db::config::ConnectionConfig>, DbFailure> {
     state.connections.load()
 }
 
 /// 记下当前连接（`remember_password` 为真时把口令写进系统凭据管理器；**口令绝不进配置文件**）。
+///
+/// 口令框的三档语义在 `connections::password_edit`（FR-CONN-08）：**留空 = 保持原口令不变**，
+/// 显式空串 = 清空，非空 = 写入。命令层只是照它执行，不自己再判一遍。
 #[tauri::command]
 fn connection_save(
     state: State<'_, ShellState>,
     id: String,
     name: String,
+    db_type: Option<String>,
     host: String,
     port: u16,
     database: String,
@@ -204,9 +232,15 @@ fn connection_save(
     password: Option<String>,
     remember_password: bool,
 ) -> Result<Vec<doyah_studio_db::config::ConnectionConfig>, DbFailure> {
+    // 认不出的引擎走 Postgres 回退（表单给的是登记过的字面量；回退值写在**这一处**）
+    let kind = db_type
+        .as_deref()
+        .and_then(DatabaseType::from_raw)
+        .unwrap_or(DatabaseType::Postgresql);
     let config = config_from_form(
         &id,
         &name,
+        kind,
         &host,
         port,
         &database,
@@ -220,12 +254,107 @@ fn connection_save(
             hint: "补齐后再保存。".to_string(),
         });
     }
-    if remember_password {
-        if let Some(secret) = password.as_deref().filter(|p| !p.is_empty()) {
-            connections::remember_password(&id, &user, secret)?;
+    match connections::password_edit(password.as_deref()) {
+        connections::PasswordEdit::Set(secret) => {
+            if remember_password {
+                connections::remember_password(&id, &user, &secret)?;
+            }
         }
+        // 显式清空：把凭据也清掉（留一条孤儿口令是隐患）
+        connections::PasswordEdit::Clear => {
+            let _ = connections::forget_password(&id);
+        }
+        // 留空：一字不动（FR-CONN-08）
+        connections::PasswordEdit::Keep => {}
     }
     state.connections.upsert(config)
+}
+
+/// **表单逐项校验**（FR-CONN-06）：规则只有一份（领域层 `config::validate_form`），
+/// 本命令只把"哪一项不合法、为什么"递回界面 —— 界面据此禁用「连接 / 保存」并逐项提示。
+///
+/// 端口按**文本**校验（`0` / `65536` / 非数字都当场拒）：这是需求原文点名的那一步
+/// 「端口先单独解析再按 1–65535 校验，防止默认端口把非法输入洗白」。
+#[tauri::command]
+fn connection_validate(
+    name: String,
+    host: String,
+    port: String,
+    username: String,
+) -> Vec<doyah_studio_db::config::FieldProblem> {
+    doyah_studio_db::config::validate_form(&name, &host, &port, &username)
+}
+
+/// **换引擎时的那几项默认值**（FR-CONN-02 的类型联动）：端口 / SSL / 默认 schema。
+///
+/// 为什么要有这条命令：默认值**挂在类型上**（领域层 `db_type`），表单不许自己再写一份
+/// （两处各写一份 = 迟早一个改了另一个没改）。
+#[tauri::command]
+fn connection_type_defaults(db_type: String) -> ConnectionTypeDefaults {
+    let kind = DatabaseType::from_raw(&db_type).unwrap_or(DatabaseType::Postgresql);
+    ConnectionTypeDefaults {
+        db_type: kind.raw_value().to_string(),
+        port: kind.default_port(),
+        ssl_mode: kind.default_ssl_mode().raw_value().to_string(),
+        schema: kind.default_schema().map(|value| value.to_string()),
+    }
+}
+
+/// 类型联动的答案（界面直接照着填那三格）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionTypeDefaults {
+    pub db_type: String,
+    pub port: u16,
+    pub ssl_mode: String,
+    pub schema: Option<String>,
+}
+
+/// **从连接 URL 导入**（FR-CONN-19）：解析一行连接串，把各字段回给界面填表。
+///
+/// 两条纪律（照契约）：
+/// ① URL 里带的**口令只回给这一次调用**（界面把它填进口令框，保存时才落凭据存储）——
+///    它**不进配置、不进导出件**；
+/// ② 认不出的查询参数**逐条列出来**（不静默丢：静默会让人以为"设置生效了"）。
+#[tauri::command]
+fn connection_import_url(
+    url: String,
+    name: Option<String>,
+    id: String,
+) -> Result<ImportedUrl, DbFailure> {
+    doyah_studio_db::url::parse(&url, name.as_deref(), &id)
+        .map(|imported| ImportedUrl {
+            db_type: imported.configuration.db_type.raw_value().to_string(),
+            host: imported.configuration.host.clone(),
+            port: imported.configuration.port,
+            database: imported.configuration.database.clone(),
+            user: imported.configuration.username.clone(),
+            ssl_mode: imported.configuration.ssl_mode.raw_value().to_string(),
+            name: imported.configuration.name.clone(),
+            password: imported.password,
+            ignored_parameters: imported.ignored_parameters,
+        })
+        .map_err(|error| DbFailure {
+            message: error.to_string(),
+            hint:
+                "支持的写法：postgres://user@host:port/db?sslmode=…（口令可带，但不会写进配置）。"
+                    .to_string(),
+        })
+}
+
+/// URL 导入的答案（口令**只在这一条回执里**，不进任何落盘面）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedUrl {
+    pub db_type: String,
+    pub host: String,
+    pub port: u16,
+    pub database: String,
+    pub user: String,
+    pub ssl_mode: String,
+    pub name: String,
+    pub password: Option<String>,
+    pub ignored_parameters: Vec<String>,
 }
 
 /// 删一条连接（**同时清掉它的凭据**）。
@@ -267,7 +396,10 @@ fn browse_sql(
     };
     built.map_err(|e: doyah_studio_db::browse::BrowseError| DbFailure {
         message: e.message().to_string(),
-        hint: format!("（判定标识：{}）改好条件再试 —— 这里只接受单条表达式。", e.identifier()),
+        hint: format!(
+            "（判定标识：{}）改好条件再试 —— 这里只接受单条表达式。",
+            e.identifier()
+        ),
     })
 }
 
@@ -337,8 +469,9 @@ async fn db_write_batch(
         if let Some(first) = statements.first() {
             return Err(DbFailure {
                 message: format!("这条连接标了只读，写语句不发送：{first}"),
-                hint: "要用写功能请新建一条不带只读标记的连接（只读是本机保护，不替代数据库权限）。"
-                    .to_string(),
+                hint:
+                    "要用写功能请新建一条不带只读标记的连接（只读是本机保护，不替代数据库权限）。"
+                        .to_string(),
             });
         }
     }
@@ -434,7 +567,13 @@ async fn export_to_file(
         message,
         hint: "确认目标目录存在且可写；换一个路径再试。".to_string(),
     })?;
-    Ok(ExportReport { path, rows: rows.len(), columns: columns.len(), truncated, bytes: content.len() })
+    Ok(ExportReport {
+        path,
+        rows: rows.len(),
+        columns: columns.len(),
+        truncated,
+        bytes: content.len(),
+    })
 }
 
 /// 导出结果（**行数与截断如实报**）。
@@ -524,7 +663,11 @@ async fn run_import(
             ),
         });
     }
-    let columns: Vec<String> = matched.matched.iter().map(|(name, _)| name.clone()).collect();
+    let columns: Vec<String> = matched
+        .matched
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
     let indexes: Vec<usize> = matched.matched.iter().map(|(_, at)| *at).collect();
     // 空字段 → NULL 还是空串？本侧**按 NULL**（导入空白通常意思是"没有值"），
     // 这一点写在返回值里让用户看得见（要空串请用引号包一个空字段 `""`）。
@@ -541,7 +684,11 @@ async fn run_import(
     let inserted = session
         .import_rows(schema.as_deref(), &table, &columns, &rows)
         .await?;
-    Ok(ImportReport { inserted, skipped: report.skipped.clone(), columns })
+    Ok(ImportReport {
+        inserted,
+        skipped: report.skipped.clone(),
+        columns,
+    })
 }
 
 /// 导入结果。
@@ -612,7 +759,6 @@ fn find_python() -> Option<std::path::PathBuf> {
             .unwrap_or(false)
     })
 }
-
 
 // ── 库与服务器管理面（1.7：读数只读；危险操作只生成语句、不代为执行）────────────────────
 
@@ -760,7 +906,10 @@ fn generate_ddl(
                 .to_string(),
         }),
     };
-    result.map_err(|e| DbFailure { message: e.message, hint: e.hint })
+    result.map_err(|e| DbFailure {
+        message: e.message,
+        hint: e.hint,
+    })
 }
 
 /// 把「原列集」与「改后列集」比成领域层的列变更（**按列名配对**；新列 / 删列各归其位）。
@@ -775,13 +924,22 @@ fn column_changes(
     let mut out = Vec::new();
     for from in original {
         match edited.iter().find(|to| to.name == from.name) {
-            Some(to) => out.push(ColumnChange { from: Some(from.clone()), to: Some(to.clone()) }),
-            None => out.push(ColumnChange { from: Some(from.clone()), to: None }),
+            Some(to) => out.push(ColumnChange {
+                from: Some(from.clone()),
+                to: Some(to.clone()),
+            }),
+            None => out.push(ColumnChange {
+                from: Some(from.clone()),
+                to: None,
+            }),
         }
     }
     for to in edited {
         if !original.iter().any(|from| from.name == to.name) {
-            out.push(ColumnChange { from: None, to: Some(to.clone()) });
+            out.push(ColumnChange {
+                from: None,
+                to: Some(to.clone()),
+            });
         }
     }
     out
@@ -804,8 +962,9 @@ async fn db_run_ddl(
         ) {
             return Err(DbFailure {
                 message: format!("这句被判为破坏性操作，本命令不执行：{sql}"),
-                hint: "破坏性语句请在生成面板里复制出去、自己确认后执行（本侧只生成、不自动执行）。"
-                    .to_string(),
+                hint:
+                    "破坏性语句请在生成面板里复制出去、自己确认后执行（本侧只生成、不自动执行）。"
+                        .to_string(),
             });
         }
     }
@@ -837,7 +996,9 @@ fn inspect_row(
 /// 在领域层 `foreign_key::parse_edge` 里，**只有一处**实现、可单测；
 /// 命令层只负责"把服务端的话原样拿回来"。
 #[tauri::command]
-async fn db_foreign_keys(state: State<'_, ShellState>) -> Result<Vec<doyah_studio_db::foreign_key::Edge>, DbFailure> {
+async fn db_foreign_keys(
+    state: State<'_, ShellState>,
+) -> Result<Vec<doyah_studio_db::foreign_key::Edge>, DbFailure> {
     let session = current_session(&state).await?;
     let sql = "SELECT c.conname, c.contype::text, pg_get_constraintdef(c.oid), \
                t.relname, n.nspname \
@@ -846,10 +1007,14 @@ async fn db_foreign_keys(state: State<'_, ShellState>) -> Result<Vec<doyah_studi
                JOIN pg_namespace n ON n.oid = t.relnamespace \
                WHERE c.contype = 'f' AND n.nspname NOT IN ('pg_catalog', 'information_schema') \
                ORDER BY n.nspname, t.relname, c.conname";
-    let result = session.client().simple_query(sql).await.map_err(|e| DbFailure {
-        message: postgres::server_error_text(&e),
-        hint: "读外键元数据失败：确认当前用户能读 pg_catalog（一般都有）。".to_string(),
-    })?;
+    let result = session
+        .client()
+        .simple_query(sql)
+        .await
+        .map_err(|e| DbFailure {
+            message: postgres::server_error_text(&e),
+            hint: "读外键元数据失败：确认当前用户能读 pg_catalog（一般都有）。".to_string(),
+        })?;
     let mut edges = Vec::new();
     for message in result {
         if let tokio_postgres::SimpleQueryMessage::Row(row) = message {
@@ -859,12 +1024,7 @@ async fn db_foreign_keys(state: State<'_, ShellState>) -> Result<Vec<doyah_studi
             let table = row.get(3).unwrap_or_default();
             let schema = row.get(4);
             if let Some(edge) = doyah_studio_db::foreign_key::parse_edge(
-                constraint,
-                kind,
-                definition,
-                table,
-                schema,
-                schema,
+                constraint, kind, definition, table, schema, schema,
             ) {
                 edges.push(edge);
             }
@@ -884,11 +1044,18 @@ fn workspace_list_directory(
     relative_path: Option<String>,
     show_hidden: Option<bool>,
 ) -> Result<Vec<fs::FsEntry>, DbFailure> {
-    fs::list_directory(&workspace_root, relative_path.as_deref().unwrap_or(""), show_hidden.unwrap_or(false))
+    fs::list_directory(
+        &workspace_root,
+        relative_path.as_deref().unwrap_or(""),
+        show_hidden.unwrap_or(false),
+    )
 }
 
 #[tauri::command]
-fn workspace_read_file(workspace_root: String, relative_path: String) -> Result<fs::FileContent, DbFailure> {
+fn workspace_read_file(
+    workspace_root: String,
+    relative_path: String,
+) -> Result<fs::FileContent, DbFailure> {
     fs::read_text_file(&workspace_root, &relative_path)
 }
 
@@ -919,9 +1086,14 @@ fn workspace_closed() -> Result<serde_json::Value, DbFailure> {
 
 /// 记下"当前开着的页签"（只记路径 —— 内容以盘上为准，恢复时按路径重读）。
 #[tauri::command]
-fn workspace_open_tabs(workspace_root: String, paths: Vec<String>) -> Result<serde_json::Value, DbFailure> {
+fn workspace_open_tabs(
+    workspace_root: String,
+    paths: Vec<String>,
+) -> Result<serde_json::Value, DbFailure> {
     let (history, _) = fs::read_history();
-    let next = history.opened_workspace(&workspace_root, "").recording_open_tabs(&paths);
+    let next = history
+        .opened_workspace(&workspace_root, "")
+        .recording_open_tabs(&paths);
     fs::write_history(&next)?;
     Ok(serde_json::json!({ "history": next }))
 }
@@ -949,18 +1121,29 @@ fn workspace_create(
 }
 
 #[tauri::command]
-fn workspace_rename(workspace_root: String, relative_path: String, new_name: String) -> Result<fs::CreatedEntry, DbFailure> {
+fn workspace_rename(
+    workspace_root: String,
+    relative_path: String,
+    new_name: String,
+) -> Result<fs::CreatedEntry, DbFailure> {
     fs::rename_entry(&workspace_root, &relative_path, &new_name)
 }
 
 #[tauri::command]
-fn workspace_move(workspace_root: String, relative_path: String, into_relative_path: String) -> Result<fs::CreatedEntry, DbFailure> {
+fn workspace_move(
+    workspace_root: String,
+    relative_path: String,
+    into_relative_path: String,
+) -> Result<fs::CreatedEntry, DbFailure> {
     fs::move_entry(&workspace_root, &relative_path, &into_relative_path)
 }
 
 /// 「将删几项」：**先给读数让人确认**，再真删（删非空文件夹要二次确认）。
 #[tauri::command]
-fn workspace_deletion_summary(workspace_root: String, relative_path: String) -> Result<doyah_studio_db::DeletionSummary, DbFailure> {
+fn workspace_deletion_summary(
+    workspace_root: String,
+    relative_path: String,
+) -> Result<doyah_studio_db::DeletionSummary, DbFailure> {
     fs::deletion_summary(&workspace_root, &relative_path)
 }
 
@@ -982,7 +1165,10 @@ fn workspace_reveal(
 
 /// 读一个文件的**行结构**（行号列宽 / 主换行符 / 是否混排）—— 判定在领域层 code_lines。
 #[tauri::command]
-fn workspace_read_lines(workspace_root: String, relative_path: String) -> Result<fs::FileLines, DbFailure> {
+fn workspace_read_lines(
+    workspace_root: String,
+    relative_path: String,
+) -> Result<fs::FileLines, DbFailure> {
     fs::read_lines(&workspace_root, &relative_path)
 }
 
@@ -998,7 +1184,10 @@ fn workspace_read_spans(
 
 /// 载入一个文件时的**快照**（页签拿它做外部改动对比）。
 #[tauri::command]
-fn workspace_file_snapshot(workspace_root: String, relative_path: String) -> Result<doyah_studio_db::LoadedFile, DbFailure> {
+fn workspace_file_snapshot(
+    workspace_root: String,
+    relative_path: String,
+) -> Result<doyah_studio_db::LoadedFile, DbFailure> {
     fs::file_snapshot(&workspace_root, &relative_path)
 }
 
@@ -1024,9 +1213,12 @@ fn workspace_record_cursor(
     column: usize,
 ) -> Result<serde_json::Value, DbFailure> {
     let file = fs::read_text_file(&workspace_root, &relative_path)?;
-    let anchor = doyah_studio_db::remember(&file.content, &doyah_studio_db::Cursor::new(line, column));
+    let anchor =
+        doyah_studio_db::remember(&file.content, &doyah_studio_db::Cursor::new(line, column));
     let (history, _) = fs::read_history();
-    let next = history.opened_workspace(&workspace_root, "").recording_cursor(&relative_path, anchor);
+    let next = history
+        .opened_workspace(&workspace_root, "")
+        .recording_cursor(&relative_path, anchor);
     fs::write_history(&next)?;
     Ok(serde_json::json!({ "history": next }))
 }
@@ -1056,7 +1248,11 @@ fn workspace_search(
 
 /// 跳到命中行前把行号**夹进真实行数**（文件可能在检索之后被改短了）。
 #[tauri::command]
-fn workspace_clamp_line(workspace_root: String, relative_path: String, line: usize) -> Result<usize, DbFailure> {
+fn workspace_clamp_line(
+    workspace_root: String,
+    relative_path: String,
+    line: usize,
+) -> Result<usize, DbFailure> {
     search::clamp_line(&workspace_root, &relative_path, line)
 }
 
@@ -1065,7 +1261,10 @@ fn workspace_clamp_line(workspace_root: String, relative_path: String, line: usi
 /// 解析在领域层（`markdown::parse`，纯函数 + 7 例单测）；本命令只负责把文件读出来喂给它。
 /// **一份解析、两个消费者**：将来笔记侧也走同一个 parse，不另写第二套。
 #[tauri::command]
-fn workspace_markdown(workspace_root: String, relative_path: String) -> Result<doyah_studio_db::MarkdownDocument, DbFailure> {
+fn workspace_markdown(
+    workspace_root: String,
+    relative_path: String,
+) -> Result<doyah_studio_db::MarkdownDocument, DbFailure> {
     let file = fs::read_text_file(&workspace_root, &relative_path)?;
     Ok(doyah_studio_db::parse_markdown(&file.content))
 }
@@ -1122,7 +1321,9 @@ fn palette_search(
 ///
 /// 只在面板打开、且连上库时才拉；失败就返回空（面板里只是少一类可搜项，**不打扰用户**）。
 #[tauri::command]
-async fn db_palette_objects(state: State<'_, ShellState>) -> Result<Vec<serde_json::Value>, DbFailure> {
+async fn db_palette_objects(
+    state: State<'_, ShellState>,
+) -> Result<Vec<serde_json::Value>, DbFailure> {
     let session = current_session(&state).await?;
     let sql = "SELECT n.nspname, c.relname, \
                CASE c.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'table' \
@@ -1132,10 +1333,14 @@ async fn db_palette_objects(state: State<'_, ShellState>) -> Result<Vec<serde_js
                  AND n.nspname NOT IN ('pg_catalog','information_schema') \
                  AND n.nspname NOT LIKE 'pg\\_%' \
                ORDER BY n.nspname, c.relname";
-    let result = session.client().simple_query(sql).await.map_err(|e| DbFailure {
-        message: postgres::server_error_text(&e),
-        hint: "读对象清单失败：确认当前用户能读 pg_catalog（一般都有）。".to_string(),
-    })?;
+    let result = session
+        .client()
+        .simple_query(sql)
+        .await
+        .map_err(|e| DbFailure {
+            message: postgres::server_error_text(&e),
+            hint: "读对象清单失败：确认当前用户能读 pg_catalog（一般都有）。".to_string(),
+        })?;
     let mut out: Vec<serde_json::Value> = Vec::new();
     for message in result {
         if let tokio_postgres::SimpleQueryMessage::Row(row) = message {
@@ -1175,13 +1380,19 @@ fn command_history_clear() -> Result<serde_json::Value, DbFailure> {
 
 /// 判一个文件**该怎么打开**（文本 / 图片 / 二进制 / 太大）—— 判定在领域层 open_as。
 #[tauri::command]
-fn workspace_decide_open(workspace_root: String, relative_path: String) -> Result<fs::OpenDecision, DbFailure> {
+fn workspace_decide_open(
+    workspace_root: String,
+    relative_path: String,
+) -> Result<fs::OpenDecision, DbFailure> {
     fs::decide_open(&workspace_root, &relative_path)
 }
 
 /// 读图片字节（base64）供界面用 `data:` 显示；**只允许读判定为图片的文件**。
 #[tauri::command]
-fn workspace_read_image(workspace_root: String, relative_path: String) -> Result<String, DbFailure> {
+fn workspace_read_image(
+    workspace_root: String,
+    relative_path: String,
+) -> Result<String, DbFailure> {
     fs::read_image_base64(&workspace_root, &relative_path)
 }
 
@@ -1215,7 +1426,12 @@ fn workspace_replace_preview(
     replacement: String,
     show_hidden: Option<bool>,
 ) -> Result<fs::ReplacePreview, DbFailure> {
-    fs::replace_preview(&workspace_root, &query, &replacement, show_hidden.unwrap_or(false))
+    fs::replace_preview(
+        &workspace_root,
+        &query,
+        &replacement,
+        show_hidden.unwrap_or(false),
+    )
 }
 
 /// 跨文件替换的**落盘**：逐个文件走保存护栏（盘上被改过就拒，不写）。
@@ -1246,7 +1462,10 @@ fn workspace_replace_apply(
 
 /// 探一个文件对应语言的候选工具（**真探**：`where.exe` 找路径 + 真跑版本旗标）。
 #[tauri::command]
-fn workspace_format_tools(workspace_root: String, relative_path: String) -> Result<serde_json::Value, DbFailure> {
+fn workspace_format_tools(
+    workspace_root: String,
+    relative_path: String,
+) -> Result<serde_json::Value, DbFailure> {
     // 路径仍要过安全关（免得拿相对路径去探别的目录 —— 虽然这里只用它推语言）
     fs::ensure_inside(&workspace_root, &relative_path)?;
     let language = doyah_studio_db::TextLanguage::detect(&relative_path);
@@ -1311,6 +1530,9 @@ pub fn run() {
             connections_list,
             connection_save,
             connection_delete,
+            connection_validate,
+            connection_type_defaults,
+            connection_import_url,
             browse_sql,
             inspect_row,
             db_foreign_keys,

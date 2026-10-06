@@ -78,6 +78,10 @@ export const COMMANDS = {
   connectionsList: 'connections_list',
   connectionSave: 'connection_save',
   connectionDelete: 'connection_delete',
+  // 连接配置面收口（S-1a）：逐项校验 / 换引擎联动默认值 / 从 URL 导入
+  connectionValidate: 'connection_validate',
+  connectionTypeDefaults: 'connection_type_defaults',
+  connectionImportUrl: 'connection_import_url',
   // 服务端条件浏览（只生成 SQL，执行仍走 dbQuery）
   browseSql: 'browse_sql',
   // 单行详情的值检查（纯计算，不碰数据库）
@@ -376,6 +380,8 @@ export interface SavedConnection {
 export interface ConnectionSaveRequest {
   id: string
   name: string
+  /** 引擎（FR-CONN-02）；缺省走 Postgres 回退（回退值在命令层一处）。 */
+  dbType?: string
   host: string
   port: number
   database: string
@@ -385,6 +391,33 @@ export interface ConnectionSaveRequest {
   /** 只用于本次写入系统凭据管理器；**绝不进配置文件**。 */
   password?: string
   rememberPassword: boolean
+}
+
+/** 表单某一项不合法（**点名是哪一项**）。 */
+export interface FieldProblem {
+  field: 'name' | 'host' | 'port' | 'username'
+  message: string
+}
+
+/** 换引擎时的那几项默认值（默认值挂在类型上，界面不自己写一份）。 */
+export interface ConnectionTypeDefaults {
+  dbType: string
+  port: number
+  sslMode: string
+  schema: string | null
+}
+
+/** 从连接 URL 导入的结果。口令**只在这一条回执里**（不进配置、不进导出件）。 */
+export interface ImportedUrl {
+  dbType: string
+  host: string
+  port: number
+  database: string
+  user: string
+  sslMode: string
+  name: string
+  password: string | null
+  ignoredParameters: string[]
 }
 
 export function connectionsList(): Promise<SavedConnection[]> {
@@ -397,6 +430,37 @@ export function connectionSave(request: ConnectionSaveRequest): Promise<SavedCon
 
 export function connectionDelete(id: string): Promise<SavedConnection[]> {
   return call(COMMANDS.connectionDelete, { id }, () => [] as SavedConnection[])
+}
+
+/** 表单逐项校验（FR-CONN-06）：端口按**文本**校验，`0` / `65536` / 非数字都当场拒。 */
+export function connectionValidate(
+  name: string,
+  host: string,
+  port: string,
+  username: string,
+): Promise<FieldProblem[]> {
+  return call(COMMANDS.connectionValidate, { name, host, port, username }, () => [] as FieldProblem[])
+}
+
+/** 换引擎联动（FR-CONN-02）：端口 / SSL / 默认 schema 跟着新类型走。 */
+export function connectionTypeDefaults(dbType: string): Promise<ConnectionTypeDefaults> {
+  return call(COMMANDS.connectionTypeDefaults, { dbType }, () => ({
+    dbType,
+    port: 5432,
+    sslMode: 'prefer',
+    schema: null,
+  }))
+}
+
+/** 从连接 URL 导入（FR-CONN-19）：解析失败给具体原因（不是半个配置）。 */
+export function connectionImportUrl(
+  url: string,
+  id: string,
+  name?: string,
+): Promise<ImportedUrl> {
+  return call(COMMANDS.connectionImportUrl, { url, id, name }, () => {
+    throw bypassDb('ipc.action.connect') as DbFailure
+  })
 }
 
 /** 生成**服务端条件浏览**的 SQL（FR-DATA-02；只生成，不执行）。

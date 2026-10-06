@@ -32,7 +32,10 @@ impl std::fmt::Display for UrlParseError {
         match self {
             UrlParseError::Empty => write!(f, "URL 是空的"),
             UrlParseError::UnsupportedScheme(s) => {
-                write!(f, "不支持的协议：{s}（支持 postgres / postgresql，以及 gbase）")
+                write!(
+                    f,
+                    "不支持的协议：{s}（支持 postgres / postgresql，以及 gbase）"
+                )
             }
             UrlParseError::MissingHost => write!(f, "缺少主机名"),
             UrlParseError::MissingDatabase => write!(f, "缺少数据库名（URL 里的路径部分）"),
@@ -84,11 +87,7 @@ impl FormMerge {
 ///
 /// - `name`：连接名；不给就用「主机/库」拼一个可读的默认名。
 /// - `id`：配置标识（由调用方给，落盘后不再变）。
-pub fn parse(
-    raw: &str,
-    name: Option<&str>,
-    id: &str,
-) -> Result<ImportedConnection, UrlParseError> {
+pub fn parse(raw: &str, name: Option<&str>, id: &str) -> Result<ImportedConnection, UrlParseError> {
     let text = raw.trim();
     if text.is_empty() {
         return Err(UrlParseError::Empty);
@@ -199,7 +198,8 @@ pub fn parse(
         return Err(UrlParseError::MissingHost);
     }
 
-    let mut configuration = ConnectionConfig::new(id, name.unwrap_or(&format!("{host}/{database}")), db_type);
+    let mut configuration =
+        ConnectionConfig::new(id, name.unwrap_or(&format!("{host}/{database}")), db_type);
     configuration.host = host.to_string();
     configuration.port = port;
     configuration.database = database;
@@ -332,7 +332,10 @@ mod tests {
         assert_eq!(r.configuration.database, "中文库");
         assert_eq!(r.password.as_deref(), Some("p@ss"));
         let exported = url_for(&r.configuration);
-        assert_eq!(exported, "postgres://b%20ob@h:5432/%E4%B8%AD%E6%96%87%E5%BA%93?sslmode=prefer");
+        assert_eq!(
+            exported,
+            "postgres://b%20ob@h:5432/%E4%B8%AD%E6%96%87%E5%BA%93?sslmode=prefer"
+        );
         let again = parsed(&exported);
         assert_eq!(again.configuration.database, "中文库");
         assert_eq!(again.configuration.username, "b ob");
@@ -362,17 +365,28 @@ mod tests {
             SslMode::Require,
             "带 fragment 时 sslmode 被覆盖过（早期缺陷）"
         );
-        assert!(r.ignored_parameters.is_empty(), "{:?}", r.ignored_parameters);
+        assert!(
+            r.ignored_parameters.is_empty(),
+            "{:?}",
+            r.ignored_parameters
+        );
 
         // 两个 sslmode：后者胜出，且都算"认识"（不进忽略清单）
         let twice = parsed("postgres://bob@h/db?sslmode=require&sslmode=disable");
         assert_eq!(twice.configuration.ssl_mode, SslMode::Disable);
-        assert!(twice.ignored_parameters.is_empty(), "{:?}", twice.ignored_parameters);
+        assert!(
+            twice.ignored_parameters.is_empty(),
+            "{:?}",
+            twice.ignored_parameters
+        );
 
         let v6 = parsed("postgres://bob@[::1]:6000/db");
         assert_eq!(v6.configuration.host, "::1");
         assert_eq!(v6.configuration.port, 6000);
-        assert_eq!(url_for(&v6.configuration), "postgres://bob@[::1]:6000/db?sslmode=prefer");
+        assert_eq!(
+            url_for(&v6.configuration),
+            "postgres://bob@[::1]:6000/db?sslmode=prefer"
+        );
 
         // 裸 IPv6 明确拒绝（按"最后一个冒号是端口"切会把它切成 host `:`）
         assert_eq!(
@@ -426,7 +440,10 @@ mod tests {
         // URL 没带口令 ⇒ 保留用户已输入的（不静默清空）
         assert_eq!(FormMerge::resolved_password("typed", None), "typed");
         // URL 带了 ⇒ 覆盖
-        assert_eq!(FormMerge::resolved_password("typed", Some("from-url")), "from-url");
+        assert_eq!(
+            FormMerge::resolved_password("typed", Some("from-url")),
+            "from-url"
+        );
     }
 
     #[test]
@@ -436,5 +453,30 @@ mod tests {
         assert_eq!(percent_decode("%ZZ"), None);
         assert_eq!(percent_encode("a b"), "a%20b");
         assert_eq!(percent_encode("中文"), "%E4%B8%AD%E6%96%87");
+    }
+
+    #[test]
+    fn a_password_from_the_url_never_reaches_the_exported_bundle() {
+        // FR-CONN-19 的密码纪律：URL 里带的**只交回调用方**（进凭据存储），
+        // 导出的配置包里**没有**它 —— 断言 + 负例两半都在。
+        let imported = parsed("postgres://bob:ZXvmax_2017@h:5432/db");
+        assert_eq!(imported.password.as_deref(), Some("ZXvmax_2017"));
+        let bundle = crate::config::ConnectionBundle::new(
+            "2026-10-06T00:00:00Z",
+            vec![imported.configuration.clone()],
+        );
+        let text = bundle.export_text().unwrap();
+        assert!(
+            crate::config::secret_field(&text).is_none(),
+            "导出件里出现疑似口令字段：{text}"
+        );
+        assert!(
+            !text.contains("ZXvmax_2017"),
+            "口令不许出现在导出件里：{text}"
+        );
+
+        // 负例：把口令写进导出件 ⇒ 判红并点名
+        let tampered = text.replace("\"note\"", "\"password\":\"ZXvmax_2017\", \"note\"");
+        assert_eq!(crate::config::secret_field(&tampered), Some("\"password\""));
     }
 }

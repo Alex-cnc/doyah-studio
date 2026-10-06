@@ -66,6 +66,22 @@ impl DatabaseType {
         }
     }
 
+    /// **默认 schema**（FR-CONN-02 的类型联动第三项）。
+    ///
+    /// `None` = 这个方言**没有 schema 层**（MySQL 里 database 与 schema 是同一个东西；
+    /// GBase 同族）—— 树形结构与空态文案都按这同一个事实判，不各写一处。
+    ///
+    /// 一处**如实登记的对侧差异**：macOS 侧 `Core/DatabaseType.swift` 的 `defaultSSLMode` 对 GBase 8a
+    /// 给的是 `.disable`，本侧当前是 `.prefer`。属"GBase 方言面按已放下闸"的既有读数，
+    /// **本片不改行为**（改了要连 URL 解析默认值一起动），只把它登记出来。
+    pub const fn default_schema(self) -> Option<&'static str> {
+        match self {
+            DatabaseType::Postgresql => Some("public"),
+            DatabaseType::Mysql => None,
+            DatabaseType::Gbase8a => None,
+        }
+    }
+
     /// 连接串协议名（导出 URL 用）。
     pub const fn url_scheme(self) -> &'static str {
         match self {
@@ -154,8 +170,14 @@ mod tests {
 
     #[test]
     fn parsing_accepts_aliases_and_is_case_insensitive() {
-        assert_eq!(DatabaseType::from_raw("postgres"), Some(DatabaseType::Postgresql));
-        assert_eq!(DatabaseType::from_raw("PostgreSQL"), Some(DatabaseType::Postgresql));
+        assert_eq!(
+            DatabaseType::from_raw("postgres"),
+            Some(DatabaseType::Postgresql)
+        );
+        assert_eq!(
+            DatabaseType::from_raw("PostgreSQL"),
+            Some(DatabaseType::Postgresql)
+        );
         assert_eq!(DatabaseType::from_raw("gbase"), Some(DatabaseType::Gbase8a));
         assert_eq!(DatabaseType::from_raw("oracle"), None);
 
@@ -170,12 +192,20 @@ mod tests {
         assert_eq!(DatabaseType::Postgresql.default_port(), 5432);
         assert_eq!(DatabaseType::Mysql.default_port(), 3306);
         assert_eq!(DatabaseType::Gbase8a.default_port(), 5258);
-        for t in [DatabaseType::Postgresql, DatabaseType::Mysql, DatabaseType::Gbase8a] {
+        for t in [
+            DatabaseType::Postgresql,
+            DatabaseType::Mysql,
+            DatabaseType::Gbase8a,
+        ] {
             assert_eq!(t.default_ssl_mode(), SslMode::Prefer);
             assert!(!t.display_key().is_empty());
         }
         assert_eq!(DatabaseType::Gbase8a.url_scheme(), "gbase");
         assert_eq!(DatabaseType::Mysql.url_scheme(), "postgres");
+        // 类型联动的第三项：默认 schema（`None` = 这个方言没有 schema 层）
+        assert_eq!(DatabaseType::Postgresql.default_schema(), Some("public"));
+        assert_eq!(DatabaseType::Mysql.default_schema(), None);
+        assert_eq!(DatabaseType::Gbase8a.default_schema(), None);
     }
 
     #[test]

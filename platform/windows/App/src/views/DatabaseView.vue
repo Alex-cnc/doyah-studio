@@ -11,7 +11,10 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   LAB_CONNECTION,
   connectionDelete,
+  connectionImportUrl,
   connectionSave,
+  connectionTypeDefaults,
+  connectionValidate,
   connectionsList,
   dbConnect,
   dbDisconnect,
@@ -39,6 +42,7 @@ import {
   runImport,
   type ConnectParams,
   type DbFailure,
+  type FieldProblem,
   type QueryResult,
   type SavedConnection,
   type ServerInfo,
@@ -85,6 +89,116 @@ function t(key: Parameters<typeof translate>[0], vars?: Record<string, string | 
 const form = ref<ConnectParams>({ ...LAB_CONNECTION })
 const password = ref('')
 const remember = ref(true)
+/** 连接名（FR-CONN-02 的表单字段之一）；留空时按「库@主机」派生（沿用旧口径）。 */
+const name = ref('')
+/** 引擎（FR-CONN-02）：换引擎时端口 / SSL / 默认 schema **跟着类型走**（默认值在领域层，表单不另写一份）。 */
+const dbType = ref('postgresql')
+/** 从连接 URL 导入（FR-CONN-19）的输入与回执。 */
+const urlImport = ref('')
+const urlImportNote = ref('')
+/** 表单逐项校验的读数（FR-CONN-06）：**规则只有一份**（领域层 `config::validate_form`），这里只显示它说的话。 */
+const fieldProblems = ref<FieldProblem[]>([])
+
+/** 这一条连接实际用的名字（留空 ⇒ 派生），校验与保存都走它。 */
+const effectiveName = computed(() => name.value.trim() || `${form.value.database}@${form.value.host}`)
+const problemOf = computed<Record<string, string>>(() => {
+  const out: Record<string, string> = {}
+  for (const problem of fieldProblems.value) out[problem.field] = problem.message
+  return out
+})
+const formReady = computed(() => fieldProblems.value.length === 0)
+const problemSummary = computed(() =>
+  t('db.validation.summary', {
+    n: fieldProblems.value.length,
+    fields: fieldProblems.value.map((problem) => problem.message).join('、'),
+  }),
+)
+
+/**
+ * 跑一次逐项校验。端口**按文本**交上去（`0` / `65536` / 非数字由领域层当场拒）——
+ * 界面不自己解析端口，否则就是"两套规则漂移"的来路。
+ */
+async function refreshValidation() {
+  try {
+    fieldProblems.value = await connectionValidate(
+      effectiveName.value,
+      form.value.host,
+      String(form.value.port ?? ''),
+      form.value.user,
+    )
+  } catch {
+    // 校验通路本身坏了不该把表单锁死（保存时命令层还会再判一次）
+    fieldProblems.value = []
+  }
+}
+
+/** 换引擎：端口 / SSL / 默认 schema 照类型的默认值填（改的是"与类型相关"的那几格）。 */
+async function switchDbType(kind: string) {
+  dbType.value = kind
+  try {
+    const defaults = await connectionTypeDefaults(kind)
+    dbType.value = defaults.dbType
+    form.value = { ...form.value, port: defaults.port, sslMode: defaults.sslMode }
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+  await refreshValidation()
+}
+
+/** 从连接 URL 导入：各字段填进表单；**认不出的参数如实列出**（不静默丢）。 */
+async function importUrl() {
+  const text = urlImport.value.trim()
+  if (!text) return
+  clearFailure()
+  try {
+    const parsed = await connectionImportUrl(text, formId.value, name.value.trim() || undefined)
+    dbType.value = parsed.dbType
+    name.value = parsed.name
+    form.value = {
+      host: parsed.host,
+      port: parsed.port,
+      database: parsed.database,
+      user: parsed.user,
+      sslMode: parsed.sslMode,
+    }
+    // URL 里带了口令 ⇒ 填进口令框（**只在这一次会话里**；保存时才落凭据存储，绝不进配置）
+    if (parsed.password) password.value = parsed.password
+    urlImportNote.value = parsed.ignoredParameters.length
+      ? t('db.urlImport.ignored', { list: parsed.ignoredParameters.join('、') })
+      : ''
+    await refreshValidation()
+  } catch (e) {
+    urlImportNote.value = ''
+    failure.value = describeError(e)
+  }
+}
+
+// ── 「上次选中的连接」（FR-CONN-11）──────────────────────────────────────────────
+//
+// 口径与领域层 `config::ConnectionSelection::restore` **同一套**：只记 id；记住的那条
+// 重启后还在就选它，不在了**回退列表首条**（不硬记一条已经不存在的）。
+// 落点用 localStorage（WebView2 按应用持久化）—— 选中态是界面偏好，不塞进连接配置文件。
+const SELECTION_KEY = 'doyah.connection.selectedId'
+
+function rememberSelected(id: string) {
+  try {
+    window.localStorage.setItem(SELECTION_KEY, id)
+  } catch {
+    // 存不下不该挡住"选中"这件事本身
+  }
+}
+
+/** 冷启动恢复：返回该选中的 id（记住的还在 ⇒ 它；否则首条；一条都没有 ⇒ null）。 */
+function restoredSelection(available: string[]): string | null {
+  let remembered: string | null = null
+  try {
+    remembered = window.localStorage.getItem(SELECTION_KEY)
+  } catch {
+    remembered = null
+  }
+  if (remembered && available.includes(remembered)) return remembered
+  return available[0] ?? null
+}
 /** 启动 SQL（FR-CONN-17）：连接后自动执行；**逐条发、逐条报错**（一条失败不吞掉后面的） */
 const startupSql = ref('')
 const startup = ref<StartupOutcome[]>([])
@@ -687,12 +801,27 @@ async function jumpTo(target: { schema: string | null; table: string; column: st
 onMounted(async () => {
   try {
     saved.value = await connectionsList()
+    // FR-CONN-11：冷启动恢复上次选中的那条（不在了就回退首条）
+    const remembered = restoredSelection(saved.value.map((c) => c.id))
+    const chosen = saved.value.find((c) => c.id === remembered)
+    if (chosen) useSaved(chosen)
   } catch (e) {
     failure.value = describeError(e)
   }
   // 编辑器一进来就上一次高亮（纯计算，失败了也只是退回纯文本）
   await refreshHighlight()
+  // 表单逐项校验：一进来先跑一次（"保存 / 连接"按钮的可用性以它为准）
+  await refreshValidation()
 })
+
+// 表单改了 ⇒ 重算逐项校验（规则在领域层，这里只是"把改后的值递过去问一次"）
+watch(
+  [form, name, dbType],
+  () => {
+    void refreshValidation()
+  },
+  { deep: true },
+)
 
 /** 这套表单当前对应的连接 id（点列表里的连接 = 换成它的 id；新表单 = 新 id）。 */
 const formId = ref(crypto.randomUUID())
@@ -700,6 +829,8 @@ const formId = ref(crypto.randomUUID())
 /** 点一条保存过的连接：把它填进表单（**口令不在这里**：口令在系统凭据管理器里）。 */
 function useSaved(c: SavedConnection) {
   formId.value = c.id
+  dbType.value = c.dbType
+  name.value = c.name
   form.value = {
     host: c.host,
     port: c.port,
@@ -709,15 +840,23 @@ function useSaved(c: SavedConnection) {
   }
   password.value = ''
   failure.value = null
+  // FR-CONN-11：选中即记（重启后读回来）
+  rememberSelected(c.id)
+  void refreshValidation()
 }
 
 async function saveCurrent() {
   busy.value = '保存中…'
   clearFailure()
   try {
+    if (!formReady.value) {
+      failure.value = { message: problemSummary.value, hint: '把点名的那几项补齐再保存。' }
+      return
+    }
     saved.value = await connectionSave({
       id: formId.value,
-      name: `${form.value.database}@${form.value.host}`,
+      name: effectiveName.value,
+      dbType: dbType.value,
       host: form.value.host,
       port: form.value.port,
       database: form.value.database,
@@ -727,6 +866,7 @@ async function saveCurrent() {
       password: password.value || undefined,
       rememberPassword: remember.value && !!password.value,
     })
+    rememberSelected(formId.value)
   } catch (e) {
     failure.value = describeError(e)
   } finally {
@@ -1269,41 +1409,89 @@ async function probe() {
     <!-- 连接条 -->
     <form class="db__bar" @submit.prevent="connect">
       <label class="db__field">
-        <span>{{ tr('db.host') }}</span>
+        <span>{{ t('db.name') }}</span>
+        <input v-model="name" type="text" spellcheck="false" :placeholder="effectiveName" />
+      </label>
+      <label class="db__field db__field--narrow" :title="t('db.type.defaults')">
+        <span>{{ t('db.type') }}</span>
+        <select
+          :value="dbType"
+          class="db__select"
+          :disabled="!!busy"
+          @change="switchDbType(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="postgresql">PostgreSQL</option>
+          <option value="mysql">MySQL</option>
+          <option value="gbase8a">GBase 8a</option>
+        </select>
+      </label>
+      <label class="db__field">
+        <span>{{ t('db.host') }}</span>
         <input v-model="form.host" type="text" spellcheck="false" />
       </label>
       <label class="db__field db__field--narrow">
-        <span>{{ tr('db.port') }}</span>
+        <span>{{ t('db.port') }}</span>
         <input v-model.number="form.port" type="number" min="1" max="65535" />
       </label>
       <label class="db__field">
-        <span>{{ tr('db.database') }}</span>
+        <span>{{ t('db.database') }}</span>
         <input v-model="form.database" type="text" spellcheck="false" />
       </label>
       <label class="db__field">
-        <span>{{ tr('db.user') }}</span>
+        <span>{{ t('db.user') }}</span>
         <input v-model="form.user" type="text" spellcheck="false" />
       </label>
       <label class="db__field">
-        <span>{{ tr('db.password') }}</span>
-        <input v-model="password" type="password" autocomplete="off" :placeholder="tr('db.password.placeholder')" />
+        <span>{{ t('db.password') }}</span>
+        <input v-model="password" type="password" autocomplete="off" :placeholder="t('db.password.placeholder')" />
       </label>
-      <label class="db__field db__field--check" :title="tr('db.remember.tip')">
-        <span>{{ tr('db.remember') }}</span>
+      <label class="db__field db__field--narrow">
+        <span>{{ t('db.ssl') }}</span>
+        <select v-model="form.sslMode" class="db__select" :disabled="!!busy">
+          <option value="disable">disable</option>
+          <option value="allow">allow</option>
+          <option value="prefer">prefer</option>
+          <option value="require">require</option>
+          <option value="verify-ca">verify-ca</option>
+          <option value="verify-full">verify-full</option>
+        </select>
+      </label>
+      <label class="db__field db__field--check" :title="t('db.remember.tip')">
+        <span>{{ t('db.remember') }}</span>
         <input v-model="remember" type="checkbox" />
       </label>
-      <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy">
-        {{ info ? tr('db.reconnect') : tr('db.connect') }}
+      <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy || !formReady">
+        {{ info ? t('db.reconnect') : t('db.connect') }}
       </button>
-      <button v-if="info" class="db__btn" type="button" :disabled="!!busy" @click="disconnect">{{ tr('db.disconnect') }}</button>
-      <button class="db__btn" type="button" :disabled="!!busy" @click="loadTables">{{ tr('db.loadObjects') }}</button>
-      <button class="db__btn" type="button" :disabled="!!busy" @click="saveCurrent">{{ tr('db.saveToConnections') }}</button>
+      <button v-if="info" class="db__btn" type="button" :disabled="!!busy" @click="disconnect">{{ t('db.disconnect') }}</button>
+      <button class="db__btn" type="button" :disabled="!!busy" @click="loadTables">{{ t('db.loadObjects') }}</button>
+      <button class="db__btn" type="button" :disabled="!!busy || !formReady" @click="saveCurrent">{{ t('db.saveToConnections') }}</button>
       <span v-if="busy" class="db__busy">{{ busy }}</span>
     </form>
 
+    <!-- 逐项校验（FR-CONN-06）：**哪一项不合法由领域层说了算**，界面只显示、并按它禁用按钮 -->
+    <p v-if="!formReady" class="db__failure-hint">{{ problemSummary }}</p>
+
+    <!-- 从连接 URL 导入（FR-CONN-19）：口令可带，但只填进口令框、绝不进配置 -->
+    <div class="db__writeback">
+      <label class="db__field">
+        <span>{{ t('db.urlImport') }}</span>
+        <input
+          v-model="urlImport"
+          class="db__cell-input db__io-path"
+          type="text"
+          spellcheck="false"
+          :placeholder="t('db.urlImport.placeholder')"
+          :aria-label="t('db.urlImport')"
+        />
+      </label>
+      <button class="db__btn" type="button" @click="importUrl">{{ t('db.urlImport.button') }}</button>
+      <span v-if="urlImportNote" class="db__note">{{ urlImportNote }}</span>
+    </div>
+
     <!-- 连上了：显示"连到了哪儿" -->
     <p v-if="info" class="db__info">
-      <strong>{{ info.database }}</strong> · {{ tr('db.connected', { database: info.database, user: info.user }) }}
+      <strong>{{ info.database }}</strong> · {{ t('db.connected', { database: info.database, user: info.user }) }}
       {{ info.serverEncoding }} · schema {{ info.currentSchema ?? '—' }}） ·
       <span :title="info.version">{{ versionShort }}</span>
     </p>
@@ -1311,17 +1499,17 @@ async function probe() {
     <!-- 启动 SQL（FR-CONN-17）：连接后自动执行；逐条发、逐条报 -->
     <details class="db__startup">
       <summary>
-        {{ tr('db.startup.title') }}
+        {{ t('db.startup.title') }}
         <span v-if="startup.length" class="db__note">
-          {{ tr('db.startup.last', { ok: startup.filter((s) => s.ok).length, fail: startup.filter((s) => !s.ok).length }) }}
+          {{ t('db.startup.last', { ok: startup.filter((s) => s.ok).length, fail: startup.filter((s) => !s.ok).length }) }}
         </span>
       </summary>
       <textarea
         v-model="startupSql"
         spellcheck="false"
         rows="2"
-        :aria-label="tr('db.startup.aria')"
-        :placeholder="tr('db.startup.placeholder')"
+        :aria-label="t('db.startup.aria')"
+        :placeholder="t('db.startup.placeholder')"
       />
       <ul v-if="startup.length" class="db__startup-list">
         <li v-for="(item, i) in startup" :key="i" :class="{ 'db__startup-bad': !item.ok }">
@@ -1348,10 +1536,10 @@ async function probe() {
       <aside class="db__tree db__tree--navigator" @click="closeContextMenu">
         <details class="db__conn-fold">
           <summary class="db__tree-title">
-            {{ tr('db.connections') }}（{{ saved.length }}）<span class="db__kind">{{ tr('db.connectedAs') }}{{ connectedName || tr('db.none') }}</span>
+            {{ t('db.connections') }}（{{ saved.length }}）<span class="db__kind">{{ t('db.connectedAs') }}{{ connectedName || t('db.none') }}</span>
           </summary>
           <p v-if="saved.length === 0" class="db__tree-empty">
-            {{ tr('db.connections.empty') }}
+            {{ t('db.connections.empty') }}
           </p>
           <template v-else>
             <div v-for="group in connectionGroups" :key="group.name" class="db__conn-group">
@@ -1389,7 +1577,7 @@ async function probe() {
 
         <!-- 对象树（1.1）：展开一层取一层；右键给「浏览数据 / 生成查询 / 复制名」 -->
         <p class="db__tree-title">
-          {{ tr('db.objects.summary', { loaded: loadedObjects.length, schemas: schemas.length }) }}
+          {{ t('db.objects.summary', { loaded: loadedObjects.length, schemas: schemas.length }) }}
         </p>
         <p v-if="!info" class="db__tree-empty">未连接</p>
         <template v-else>
@@ -1644,11 +1832,11 @@ async function probe() {
           <div class="db__sql-actions">
             <!-- 工具条第一格（图里那条）：当前库 —— 选项来自**已保存连接**里同主机同用户的那些库 -->
             <label v-if="info" class="db__bar-field db__bar-field--inline">
-              <span>{{ tr('db.database') }}</span>
+              <span>{{ t('db.database') }}</span>
               <select
                 :value="info.database"
                 :disabled="!!busy"
-                :title="tr('db.switchDatabase')"
+                :title="t('db.switchDatabase')"
                 @change="switchDatabase(($event.target as HTMLSelectElement).value)"
               >
                 <option v-for="name in databaseOptions" :key="name" :value="name">{{ name }}</option>
@@ -1663,7 +1851,7 @@ async function probe() {
             class="db__btn"
             type="button"
             :disabled="!sql.trim()"
-            :title="tr('db.clear.tip')"
+            :title="t('db.clear.tip')"
             @click="clearSql"
           >
             清空

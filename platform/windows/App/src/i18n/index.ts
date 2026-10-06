@@ -170,6 +170,28 @@ export const DICT = {
   },
   'db.clear': { 'zh-Hans': '清空', en: 'Clear' },
   'db.clear.tip': { 'zh-Hans': '清空编辑器（会先问一句）', en: 'Clear the editor (asks first)' },
+  // 连接配置面收口（S-1a）：引擎联动 / 逐项校验 / 从 URL 导入
+  'db.type': { 'zh-Hans': '引擎', en: 'Engine' },
+  'db.name': { 'zh-Hans': '名称', en: 'Name' },
+  'db.ssl': { 'zh-Hans': 'SSL', en: 'SSL' },
+  'db.type.defaults': {
+    'zh-Hans': '换引擎会带上该类型的默认端口与 SSL（默认值挂在类型上，表单不另写一份）',
+    en: 'Switching the engine applies that type\u2019s default port and SSL (defaults live on the type, not in the form)',
+  },
+  'db.validation.summary': {
+    'zh-Hans': '还有 {n} 项没填好：{fields}',
+    en: '{n} field(s) still need attention: {fields}',
+  },
+  'db.urlImport': { 'zh-Hans': '从连接 URL 导入', en: 'Import from connection URL' },
+  'db.urlImport.placeholder': {
+    'zh-Hans': 'postgres://user@host:5432/db?sslmode=prefer',
+    en: 'postgres://user@host:5432/db?sslmode=prefer',
+  },
+  'db.urlImport.button': { 'zh-Hans': '导入', en: 'Import' },
+  'db.urlImport.ignored': {
+    'zh-Hans': '认不出的参数（没有静默丢掉）：{list}',
+    en: 'Unrecognised parameters (not silently dropped): {list}',
+  },
 
   // 外观两轴（配色 / 深浅）——**标签改成语言 key**（原来把中文写死在常量里，
   // 切英文时下拉里仍是中文；扫描器的第三面就是为这类"数据型文案"补的）
