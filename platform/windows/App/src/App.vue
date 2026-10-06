@@ -9,6 +9,7 @@ import { appInfo, type AppInfo } from './ipc'
 import CommandPalette from './shell/CommandPalette.vue'
 import TitleBar from './shell/TitleBar.vue'
 import { commandById, type Command } from './shell/commands'
+import { connectionDialogModeForCommand, type ConnectionDialogMode } from './shell/connectionDialog'
 import BottomPanel from './shell/BottomPanel.vue'
 import { setLanguage, t as translate, type UiLanguage } from './i18n'
 import SideBar from './shell/SideBar.vue'
@@ -108,6 +109,17 @@ function openPaletteWithSearch(query: string) {
   paletteOpen.value = true
 }
 
+/** 连接弹层的「开一次」请求（**序号**保证同档连点两次也会重开；布尔量在"开着"时是静默的）。 */
+const connectionDialogRequest = ref<{ mode: ConnectionDialogMode; seq: number } | null>(null)
+let connectionDialogSeq = 0
+
+/** 命令点中了连接面：切到数据库视图（弹层在那一侧）并递一次开弹层请求。 */
+function requestConnectionDialog(mode: ConnectionDialogMode) {
+  setActive('database')
+  connectionDialogSeq += 1
+  connectionDialogRequest.value = { mode, seq: connectionDialogSeq }
+}
+
 function onGlobalKeydown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault()
@@ -123,6 +135,13 @@ function onGlobalKeydown(event: KeyboardEvent) {
 async function runCommand(command: Command) {
   // 先记一笔（**常用优先**排序靠它；记不进也不影响执行）
   void rememberCommand(command.id)
+  // 连接面（表单 + 连接列表）只在弹层里：这三条命令把弹层**开起来**
+  // （开哪一档由 `shell/connectionDialog.ts` 的 id → 档位映射决定；不在这里再写一份）。
+  const dialogMode = connectionDialogModeForCommand(command.id)
+  if (dialogMode) {
+    requestConnectionDialog(dialogMode)
+    return
+  }
   switch (command.id) {
     case 'history.clear': {
       // 清掉使用记录：清完把"常用优先"的顺序也清空（面板回到清单顺序）
@@ -329,7 +348,7 @@ function onSelect(id: ActivityBarItemId) {
       <main class="shell__main">
         <div class="shell__stack">
           <!-- 数据库：真库链路（连库 → 对象树 → SQL → 结果），驱动在 Rust 外壳 -->
-          <DatabaseView v-if="activeItem === 'database'" @push-panel="pushPanel" />
+          <DatabaseView v-if="activeItem === 'database'" :dialog-request="connectionDialogRequest" @push-panel="pushPanel" />
           <WorkspaceView
             v-else-if="activeItem === 'workspace'"
             :open-file-signal="openFileSignal"
