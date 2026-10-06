@@ -190,10 +190,10 @@ def main() -> int:
     )
     case(
         "新增未登记的笔记源文件 → 报红（漏登一个＝它偷偷不受约束）",
-        lambda tree: (tree / "Core/NoteDraft.swift").write_text(
+        lambda tree: (tree / "platform/macos" / "Core/NoteDraft.swift").write_text(
             "import Foundation\n", encoding="utf-8"
         ),
-        "Core/NoteDraft.swift",
+        "platform/macos/Core/NoteDraft.swift",
     )
     case(
         "把范围缩到一个文件 → 报红（范围不是空集：下限 / 层级 / 关键锚点）",
@@ -249,7 +249,7 @@ def main() -> int:
         lambda tree: edit_ledger(
             tree,
             lambda data: data["scopeBeyondIsolation"].append({
-                "path": "Core/Commands.swift",
+                "path": "platform/macos/Core/Commands.swift",
                 "reason": "负例：往范围外登记塞文件，想绕开与解耦清单的对账",
             }),
         ),

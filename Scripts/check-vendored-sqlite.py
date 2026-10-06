@@ -69,7 +69,7 @@ SELF_TEST_TARGETS = [
     "Scripts/smoke-vendored-sqlite.py",
     "Scripts/verify-all.sh",
     "Scripts/gen-sqlite-constants.py",
-    "platform/macos/Core/NoteStorage/SQLiteConstants.swift",
+    "platform/macos/Core/NoteStorage", "platform/macos/Tests/NoteStoreSQLiteTests.swift",  # 第 9 条证据锚点所在（不拷 ⇒ 沙箱预红）
     "THIRD-PARTY-NOTICES.md",
     "platform/macos/Package.swift",
 ]
@@ -350,7 +350,7 @@ def self_test() -> int:
         ("台账里的归档哈希被改", lambda d: (d / "Scripts/vendored-sqlite.json").write_text(
             (d / "Scripts/vendored-sqlite.json").read_text(encoding="utf-8").replace(
                 '"archiveSHA256": "1', '"archiveSHA256": "0'), encoding="utf-8")),
-        ("产品源码里 import 系统 SQLite3", lambda d: (d / "Core" / "Sneaky.swift").write_text(
+        ("产品源码里 import 系统 SQLite3", lambda d: (d / "platform/macos/Core" / "Sneaky.swift").write_text(
             "import SQLite3\n", encoding="utf-8")),
         # 第 18 轮补的四类：证据锚点 / 接线 / 台账项号 / 闭环项数自洽 ——
         # 它们的共同点是「断了不会有任何症状」，所以每一类都必须有一条负例证明门禁真的会红。

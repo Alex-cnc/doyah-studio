@@ -332,7 +332,7 @@ def self_test(root: pathlib.Path) -> int:
         # ② 红：预览侧又写了一份行内扫描器（这一族缺陷的标准形状）
         duplicate = fresh("inline-duplicate")
         (duplicate / "platform/macos/App/Views").mkdir(parents=True, exist_ok=True)
-        (duplicate / "App/Views/MarkdownPreview.swift").write_text(
+        (duplicate / "platform/macos" / "App/Views/MarkdownPreview.swift").write_text(
             "import Foundation\n\n/// 预览自己扫行内标记（本门禁必须抓住它）\n"
             "func scan(text: String) -> Bool { text.contains(\"**\") }\n"
             "private func nextMarker(in text: Substring) -> Int? { nil }\n",
@@ -349,7 +349,7 @@ def self_test(root: pathlib.Path) -> int:
         # ④ 红：界面自己造块（绕过契约层）
         stray = fresh("block-stray")
         (stray / "platform/macos/App/Views").mkdir(parents=True, exist_ok=True)
-        (stray / "App/Views/MarkdownPreview.swift").write_text(
+        (stray / "platform/macos" / "App/Views/MarkdownPreview.swift").write_text(
             "import Foundation\n\nfunc makeBlock() -> MarkdownBlock { MarkdownBlock(kind: .thematicBreak, sourceLine: 1) }\n",
             encoding="utf-8",
         )
@@ -379,9 +379,9 @@ def self_test(root: pathlib.Path) -> int:
         third_party_dep = fresh("third-party-dependency")
         text = (third_party_dep / "platform/macos/Package.swift").read_text(encoding="utf-8")
         text = text.replace(
-            "        .package(path: \"platform/macos/Vendor/sqlite3\"),",
-            "        .package(path: \"platform/macos/Vendor/sqlite3\"),\n"
-            "        .package(url: \"https://github.com/gonzalezreal/swift-markdown-ui\", from: \"2.0.0\"),",
+            "        .package(url: \"https://github.com/apple/swift-crypto.git\", from: \"4.0.0\")",
+            "        .package(url: \"https://github.com/apple/swift-crypto.git\", from: \"4.0.0\"),\n"
+            "        .package(url: \"https://github.com/gonzalezreal/swift-markdown-ui\", from: \"2.0.0\")",
             1,
         )
         (third_party_dep / "platform/macos/Package.swift").write_text(text, encoding="utf-8")
@@ -407,7 +407,7 @@ def self_test(root: pathlib.Path) -> int:
         # ②b 红：**链接扫描器**出现第二份（2026-10-01 第 146 轮补 —— 与 ② 同一族的形状）
         duplicate_link = fresh("link-duplicate")
         (duplicate_link / "platform/macos/App/Views").mkdir(parents=True, exist_ok=True)
-        (duplicate_link / "App/Views/MarkdownPreview.swift").write_text(
+        (duplicate_link / "platform/macos" / "App/Views/MarkdownPreview.swift").write_text(
             "import Foundation\n\n/// 预览自己扫链接目标（本门禁必须抓住它）\n"
             "private func linkMarker(in text: Substring) -> Int? { nil }\n",
             encoding="utf-8",

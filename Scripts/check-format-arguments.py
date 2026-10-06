@@ -664,7 +664,7 @@ FIXTURE_LEDGER = {
         {
             "judgement": "B",
             "key": "label",
-            "site": "App/Fixture.swift:7",
+            "site": "platform/macos/App/Fixture.swift:7",
             "reason": "夹具：标签与值分开渲染，模板本不该带 %@（真仓库同款见 AboutLicenseSheet）",
         }
     ],
@@ -673,11 +673,11 @@ FIXTURE_LEDGER = {
 
 def write_fixture_tree(base: Path, fixture_source: str, ledger: dict | None = None) -> Path:
     root = base / "repo"
-    (root / "Core").mkdir(parents=True, exist_ok=True)
-    (root / "App").mkdir(parents=True, exist_ok=True)
+    (root / "platform/macos/Core").mkdir(parents=True, exist_ok=True)
+    (root / "platform/macos/App").mkdir(parents=True, exist_ok=True)
     (root / "Scripts").mkdir(parents=True, exist_ok=True)
     (root / TABLE_REL).write_text(FIXTURE_TABLE, encoding="utf-8")
-    (root / "App/Fixture.swift").write_text(fixture_source, encoding="utf-8")
+    (root / "platform/macos" / "App/Fixture.swift").write_text(fixture_source, encoding="utf-8")
     payload = FIXTURE_LEDGER if ledger is None else ledger
     (root / LEDGER_REL).write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -694,21 +694,21 @@ def run_self_test() -> int:
             FIXTURE_OK.replace("L(.greet, name, count)", "L(.greet, items.count, count)"),
             None,
             False,
-            "App/Fixture.swift:4",
+            "platform/macos/App/Fixture.swift:4",
         ),
         (
             "A′ 字符串字面量落在 %d 槽",
             FIXTURE_OK.replace("L(.rows, count)", 'L(.rows, "x")'),
             None,
             False,
-            "App/Fixture.swift:5",
+            "platform/macos/App/Fixture.swift:5",
         ),
         (
             "B 实参数 ≠ 占位符数",
             FIXTURE_OK.replace("L(.plain)", "L(.rows)"),
             None,
             False,
-            "App/Fixture.swift:6",
+            "platform/macos/App/Fixture.swift:6",
         ),
         (
             "C 未登记的类型不明实参（形状不在台账里）",
@@ -733,7 +733,7 @@ def run_self_test() -> int:
                     {
                         "judgement": "A",
                         "key": "greet",
-                        "site": "App/Fixture.swift:99",
+                        "site": "platform/macos/App/Fixture.swift:99",
                         "reason": "夹具：故意陈旧",
                     }
                 ],
