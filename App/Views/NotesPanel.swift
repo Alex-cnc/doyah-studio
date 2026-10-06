@@ -173,9 +173,19 @@ struct NotesListView: View {
     /// 那种菜单）。写库与重读都在 `AppState.toggleNoteFavorite` 一处。
     @ViewBuilder
     private func favoriteToggle(for note: Note) -> some View {
-        Button(L(note.isFavorite ? .notesUnmarkFavorite : .notesMarkFavorite)) {
+        // **形态统一**（`N-UI-3`）：操作入口一律 **图标 + 悬停提示**，基准 =
+        // `App/Views/ObjectTreeToolbar.swift:43-62`。菜单项用 `Label`（标题 + 图标）：
+        // 标题一字未动（`macOS` 菜单默认只画标题 ⇒ 菜单长相不变），悬停提示与工具栏同一句。
+        Button {
             Task { await appState.toggleNoteFavorite(note) }
+        } label: {
+            Label {
+                Text(L(note.isFavorite ? .notesUnmarkFavorite : .notesMarkFavorite))
+            } icon: {
+                Image(systemName: note.isFavorite ? "star.slash" : "star")
+            }
         }
+        .help(L(note.isFavorite ? .notesUnmarkFavorite : .notesMarkFavorite))
         .accessibilityIdentifier("notes-favorite-toggle-\(note.id.uuidString)")
     }
 
@@ -184,9 +194,17 @@ struct NotesListView: View {
     /// `AppState.toggleNotePinned` 一处。**它与收藏是两条独立的菜单项**（契约 §2.1 的两档排序）。
     @ViewBuilder
     private func pinnedToggle(for note: Note) -> some View {
-        Button(L(note.isPinned ? .notesUnmarkPinned : .notesMarkPinned)) {
+        // 与 `favoriteToggle` 同一形态（`N-UI-3`）：`Label`（标题 + 图标）+ 悬停提示。
+        Button {
             Task { await appState.toggleNotePinned(note) }
+        } label: {
+            Label {
+                Text(L(note.isPinned ? .notesUnmarkPinned : .notesMarkPinned))
+            } icon: {
+                Image(systemName: note.isPinned ? "pin.slash" : "pin")
+            }
         }
+        .help(L(note.isPinned ? .notesUnmarkPinned : .notesMarkPinned))
         .accessibilityIdentifier("notes-pinned-toggle-\(note.id.uuidString)")
     }
 
@@ -217,8 +235,16 @@ struct NotesListView: View {
                     }
                 }
             } else {
-                Button(L(NotebookMovePrompt.noTargetKey)) {}
-                    .disabled(true)
+                Button {
+                } label: {
+                    Label {
+                        Text(L(NotebookMovePrompt.noTargetKey))
+                    } icon: {
+                        Image(systemName: "arrow.right")
+                    }
+                }
+                .help(L(NotebookMovePrompt.noTargetKey))
+                .disabled(true)
             }
         }
         .accessibilityIdentifier("notes-move-menu")
@@ -340,22 +366,43 @@ struct NotesContainerTreeView: View {
                 // **架上的编辑菜单**（队列 `L-97` 界面半第四片）：新建（就在这个架里）/ 重命名 / 排序，
                 // 最后才是删除。删除那一项**不灰**（默认架点了要给一句「不能删」的人话）。
                 .contextMenu {
-                    Button(L(NotebookCreation.menuTitleKey)) {
+                    Button {
                         appState.beginNewNotebook(inShelf: shelf.uid)
+                    } label: {
+                        Label {
+                            Text(L(NotebookCreation.menuTitleKey))
+                        } icon: {
+                            Image(systemName: "plus")
+                        }
                     }
+                    .help(L(NotebookCreation.menuTitleKey))
                     .accessibilityIdentifier("notes-new-notebook-in-\(shelf.uid)")
-                    Button(L(ContainerEditPrompt.menuTitleKey)) {
+                    Button {
                         appState.beginRenameContainer(
                             kind: .shelf, uid: shelf.uid, name: shelf.name, isDefault: shelf.isDefault
                         )
+                    } label: {
+                        Label {
+                            Text(L(ContainerEditPrompt.menuTitleKey))
+                        } icon: {
+                            Image(systemName: "pencil")
+                        }
                     }
+                    .help(L(ContainerEditPrompt.menuTitleKey))
                     .accessibilityIdentifier("notes-rename-shelf-\(shelf.uid)")
                     Divider()
                     reorderButtons(kind: .shelf, uid: shelf.uid)
                     Divider()
-                    Button(L(ContainerRemovalPrompt.menuTitleKey(for: .shelf))) {
+                    Button {
                         appState.requestContainerRemoval(kind: .shelf, uid: shelf.uid, name: shelf.name)
+                    } label: {
+                        Label {
+                            Text(L(ContainerRemovalPrompt.menuTitleKey(for: .shelf)))
+                        } icon: {
+                            Image(systemName: "trash")
+                        }
                     }
+                    .help(L(ContainerRemovalPrompt.menuTitleKey(for: .shelf)))
                     .accessibilityIdentifier("notes-remove-shelf-\(shelf.uid)")
                 }
                 ForEach(appState.notesNavigation.notebooks(inShelf: shelf.uid)) { notebook in
@@ -368,11 +415,18 @@ struct NotesContainerTreeView: View {
                         identifier: "notes-scope-notebook-\(notebook.uid)"
                     )
                     .contextMenu {
-                        Button(L(ContainerEditPrompt.menuTitleKey)) {
+                        Button {
                             appState.beginRenameContainer(
                                 kind: .notebook, uid: notebook.uid, name: notebook.name, isDefault: notebook.isDefault
                             )
+                        } label: {
+                            Label {
+                                Text(L(ContainerEditPrompt.menuTitleKey))
+                            } icon: {
+                                Image(systemName: "pencil")
+                            }
                         }
+                        .help(L(ContainerEditPrompt.menuTitleKey))
                         .accessibilityIdentifier("notes-rename-notebook-\(notebook.uid)")
                         // **跨架移动**（队列 `L-97` 界面半第六片 = 落法 ① 的第四格）：清单 / 顺序 /
                         // 当前架都由 Core 给（`NotebookShelfMovePrompt`），这里只按架画出来。
@@ -385,17 +439,32 @@ struct NotesContainerTreeView: View {
                                     shelfMoveButton(for: target, notebookUid: notebook.uid)
                                 }
                             } else {
-                                Button(L(NotebookShelfMovePrompt.noTargetKey)) {}
-                                    .disabled(true)
+                                Button {
+                                } label: {
+                                    Label {
+                                        Text(L(NotebookShelfMovePrompt.noTargetKey))
+                                    } icon: {
+                                        Image(systemName: "arrow.right")
+                                    }
+                                }
+                                .help(L(NotebookShelfMovePrompt.noTargetKey))
+                                .disabled(true)
                             }
                         }
                         .accessibilityIdentifier("notes-move-notebook-menu-\(notebook.uid)")
                         Divider()
                         reorderButtons(kind: .notebook, uid: notebook.uid)
                         Divider()
-                        Button(L(ContainerRemovalPrompt.menuTitleKey(for: .notebook))) {
+                        Button {
                             appState.requestContainerRemoval(kind: .notebook, uid: notebook.uid, name: notebook.name)
+                        } label: {
+                            Label {
+                                Text(L(ContainerRemovalPrompt.menuTitleKey(for: .notebook)))
+                            } icon: {
+                                Image(systemName: "trash")
+                            }
                         }
+                        .help(L(ContainerRemovalPrompt.menuTitleKey(for: .notebook)))
                         .accessibilityIdentifier("notes-remove-notebook-\(notebook.uid)")
                     }
                     // **落点**（队列 `L-97` 界面半第五片）：只有笔记本行接拖进来的笔记 ——
@@ -444,13 +513,23 @@ struct NotesContainerTreeView: View {
             )
         ) {
             TextField(L(NotebookCreation.namePlaceholderKey), text: $appState.containerEditName)
-            Button(L(ContainerEditPrompt.confirmKey)) {
+            // **弹框按钮只支持 `Text` 标签**（Apple：alert 控件若不是 `Text` 标签，整块内容被省略）
+            // ⇒ 这一族（含下面确认框那几枚）保持文字形态，只把「一行式」按钮简写展开成
+            // `label:` 形式；**图标 + 悬停提示**那一套用在工具栏 / 菜单那一族（`N-UI-3` 形态基准 =
+            // `App/Views/ObjectTreeToolbar.swift:43-62`）。
+            Button {
                 appState.confirmContainerEdit()
+            } label: {
+                Text(L(ContainerEditPrompt.confirmKey))
             }
+            .help(L(ContainerEditPrompt.confirmKey))
             .disabled(!appState.containerEditNameIsAcceptable)
-            Button(L(ContainerEditPrompt.cancelKey), role: .cancel) {
+            Button(role: .cancel) {
                 appState.cancelContainerEdit()
+            } label: {
+                Text(L(ContainerEditPrompt.cancelKey))
             }
+            .help(L(ContainerEditPrompt.cancelKey))
         }
         // **删除确认框**（队列 `L-97` ③）：动作与顺序**由模型给**（`ContainerRemovalPrompt.confirmActions`
         // 是唯一出处），影响面那句也由 `AppState.pendingContainerRemovalMessage` 一处生成 ——
@@ -466,9 +545,12 @@ struct NotesContainerTreeView: View {
             presenting: appState.pendingContainerRemoval
         ) { request in
             ForEach(request.actions, id: \.self) { action in
-                Button(L(ContainerRemovalPrompt.titleKey(for: action, kind: request.kind)), role: role(for: action)) {
+                Button(role: role(for: action)) {
                     appState.resolveContainerRemoval(action)
+                } label: {
+                    Text(L(ContainerRemovalPrompt.titleKey(for: action, kind: request.kind)))
                 }
+                .help(L(ContainerRemovalPrompt.titleKey(for: action, kind: request.kind)))
             }
         } message: { _ in
             Text(appState.pendingContainerRemovalMessage ?? "")
@@ -481,9 +563,16 @@ struct NotesContainerTreeView: View {
     @ViewBuilder
     private func reorderButtons(kind: NotebookContainerKind, uid: String) -> some View {
         ForEach(ContainerReorderDirection.allCases, id: \.self) { direction in
-            Button(L(direction.titleKey)) {
+            Button {
                 Task { await appState.moveContainer(kind: kind, uid: uid, direction: direction) }
+            } label: {
+                Label {
+                    Text(L(direction.titleKey))
+                } icon: {
+                    Image(systemName: direction == .up ? "arrow.up" : "arrow.down")
+                }
             }
+            .help(L(direction.titleKey))
             .disabled(!appState.canMoveContainer(kind: kind, uid: uid, direction: direction))
             .accessibilityIdentifier("notes-reorder-\(uid)-\(direction.rawValue)")
         }
@@ -572,9 +661,21 @@ struct NotesEditorView: View {
                         .stroke(Theme.surface(.panel), lineWidth: 1)
                 )
             HStack(spacing: Spacing.s) {
-                Button(L(.notesSave)) {
+                // **操作入口形态统一**（`N-UI-3`）：图标 + 标题 + 悬停提示（形态基准 =
+                // `App/Views/ObjectTreeToolbar.swift:43-62`）。标题保留 —— 与同一文件里
+                // `N-UI-2` 刚落地的「图标 + 文字」入口同形，也让 `NotesEditorSaveProbeTests`
+                // 那条**按文字排版校准**的像素判据（底部按钮那一带的最暗墨水）继续成立。
+                Button {
                     Task { await appState.saveNoteFromEditor() }
+                } label: {
+                    Label {
+                        Text(L(.notesSave))
+                    } icon: {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                    .labelStyle(.titleAndIcon)
                 }
+                .help(L(.notesSave))
                 .keyboardShortcut(.defaultAction)
                 // 空编辑器上不许「可点却静默无反应」（队列 L-50）：判据属性是**唯一出处**，
                 // 与 `saveNoteFromEditor()` 的第一句内容守卫同一条判断（口径 = 灰着）。
@@ -685,12 +786,21 @@ struct NotesAreaView: View {
                 .accessibilityIdentifier("notes-search-scope")
             }
             Spacer(minLength: Spacing.s)
-            Button(L(.notesNew)) {
+            // 顶栏「新建」（`N-UI-3`）：与工具条同形 = 图标 + 标题 + 悬停提示（标题保留，见上）。
+            Button {
                 switch appState.notesModule {
                 case .notes: appState.beginNewNote()
                 case .todos: appState.beginNewTodo()
                 }
+            } label: {
+                Label {
+                    Text(L(.notesNew))
+                } icon: {
+                    Image(systemName: "plus")
+                }
+                .labelStyle(.titleAndIcon)
             }
+            .help(L(.notesNew))
             .accessibilityIdentifier("notes-new")
         }
         .padding(.horizontal, Spacing.s)
@@ -836,18 +946,35 @@ struct TodoEditorView: View {
                 TodoReminderSection(todo: todo)
             }
             HStack(spacing: Spacing.s) {
-                Button(L(.notesSave)) {
+                // 与笔记正文那枚「保存」同形（`N-UI-3`）：图标 + 标题 + 悬停提示。
+                Button {
                     Task { await appState.saveTodoFromEditor() }
+                } label: {
+                    Label {
+                        Text(L(.notesSave))
+                    } icon: {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                    .labelStyle(.titleAndIcon)
                 }
+                .help(L(.notesSave))
                 .keyboardShortcut(.defaultAction)
                 .disabled(!appState.todoEditorHasContent)
                 .accessibilityIdentifier("todo-save")
                 // 「删除」只在这一条**已经在库里**时才画（新建态没有可删的东西 —— 画一枚按不动的按钮
                 // 就是 `L-50` 那一课）。
                 if let id = appState.todoEditingID {
-                    Button(L(.todoDelete), role: .destructive) {
+                    Button(role: .destructive) {
                         Task { await appState.deleteTodo(id: id) }
+                    } label: {
+                        Label {
+                            Text(L(.todoDelete))
+                        } icon: {
+                            Image(systemName: "trash")
+                        }
+                        .labelStyle(.titleAndIcon)
                     }
+                    .help(L(.todoDelete))
                     .accessibilityIdentifier("todo-delete")
                 }
                 Spacer()
@@ -928,15 +1055,31 @@ struct TodoReminderSection: View {
                     .foregroundStyle(Theme.text(.secondary))
             }
             HStack(spacing: Spacing.s) {
-                Button(L(.reminderAttach)) {
+                Button {
                     Task { await appState.attachReminder(to: todo) }
+                } label: {
+                    Label {
+                        Text(L(.reminderAttach))
+                    } icon: {
+                        Image(systemName: "bell")
+                    }
+                    .labelStyle(.titleAndIcon)
                 }
+                .help(L(.reminderAttach))
                 .disabled(!entry.canAttach)
                 .accessibilityIdentifier("todo-reminder-attach")
                 if entry.hasReminder {
-                    Button(L(.reminderRemove), role: .destructive) {
+                    Button(role: .destructive) {
                         Task { await appState.removeReminder(from: todo) }
+                    } label: {
+                        Label {
+                            Text(L(.reminderRemove))
+                        } icon: {
+                            Image(systemName: "bell.slash")
+                        }
+                        .labelStyle(.titleAndIcon)
                     }
+                    .help(L(.reminderRemove))
                     .accessibilityIdentifier("todo-reminder-remove")
                 }
                 Spacer(minLength: Spacing.xs)
