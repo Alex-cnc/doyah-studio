@@ -53,7 +53,7 @@
       "why": "同上（执行结果那一份）：`--json` 的 `detail` 取 `.raw`（一字不变、可搜可上报）、`detailHuman` 取 `.readable`；命令行那行 `❌ … 失败：…` 打的是 `.human`。**换值会让 JSON 消费方跟着变中文**，所以这里是**加字段**不是改值 —— 正是第 47 轮那条建议的落地。"
     },
     {
-      "anchor": "rows: nil,\n                            language: language,\n                            failureReason: error.localizedDescription",
+      "anchor": " rows: nil,\n                        language: language,\n                        failureReason: error.localizedDescription",
       "count": 1,
       "reachesUser": false,
       "why": "诊断取证里的字段：进**提示词上下文**与 JSON，给模型与脚本看。（L-47 把语言透传后，这一行中间多了一句 `language: language,` —— 锚点随之更新，别把它当成新增出口。）"
