@@ -45,7 +45,7 @@
     "windows"
    ],
    "contract_side": "nonapple",
-   "label": "Windows 端（黑鳍大鲨鱼 / Windows 机；Tauri 2 + Vue 3 + TypeScript / Rust）",
+   "label": "Windows 端（Windows 机组：组长 tinyhippo / 组员 windows-dev；Tauri 2 + Vue 3 + TypeScript / Rust）",
    "paths": [
     "platform/windows/"
    ],
