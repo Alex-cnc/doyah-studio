@@ -43,6 +43,7 @@ export const COMMANDS = {
   // 对象树（1.1：展开一层取一层 + 对象搜索）
   dbSchemas: 'db_schemas',
   dbRelations: 'db_relations',
+  dbColumns: 'db_columns',
   searchObjects: 'search_objects',
   dbQuery: 'db_query',
   // SQL 编辑面（1.2：多段执行 / 取消 / EXPLAIN / 高亮分词）
@@ -280,6 +281,19 @@ export interface SearchHit {
   object: ObjectNode
   /** `qualified` = 命中限定名；`name` = 只命中对象名；`schema` = 只命中 schema 名 */
   matchedOn: 'qualified' | 'name' | 'schema'
+}
+
+/** 树第三层的一员：列名 + **数据类型原文**（FR-META-05；不缩写、不翻译）。 */
+export interface ColumnNode {
+  name: string
+  dataType: string
+}
+
+/** 一个表 / 视图的列（第三层取数的返回形状）。 */
+export interface TableColumns {
+  schema: string
+  table: string
+  columns: ColumnNode[]
 }
 
 /** 一次查询的结果：列名 + 行（每格文本或 null）+ 数值形态 + 截断与影响行数。 */
@@ -541,6 +555,16 @@ export function dbSchemas(): Promise<string[]> {
 /** 第二层：某个 schema 下的对象（**展开时才问**）。 */
 export function dbRelations(schema: string): Promise<ObjectNode[]> {
   return call(COMMANDS.dbRelations, { schema }, () => [] as ObjectNode[])
+}
+
+/**
+ * 第三层：一个 schema 下**一批表 / 视图的列**（含数据类型原文）。
+ *
+ * 接口收成「一批表」而不是「一张表」：一张表一次是最省事的写法，但「全部展开」就成 N+1
+ * —— 形状先钉住，调用方想 N+1 也难（判据按**调用计数**钉，见 `views/objectTree.ts`）。
+ */
+export function dbColumns(schema: string, tables: string[]): Promise<TableColumns[]> {
+  return call(COMMANDS.dbColumns, { schema, tables }, () => [] as TableColumns[])
 }
 
 /** 对象搜索：**纯函数在领域层**，本函数只把已加载的那一层递过去。 */

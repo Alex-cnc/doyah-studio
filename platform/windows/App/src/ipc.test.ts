@@ -38,6 +38,7 @@ describe('ipc', () => {
       'db_tables',
       'db_schemas',
       'db_relations',
+      'db_columns',
       'search_objects',
       'db_query',
       'db_run_batch',

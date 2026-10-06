@@ -13,7 +13,7 @@
 
 use doyah_studio_db::config::ConnectionConfig;
 use doyah_studio_db::ddl::ColumnDef;
-use doyah_studio_db::tree::{ObjectKind, ObjectNode};
+use doyah_studio_db::tree::{assemble_columns, ColumnRow, ObjectKind, ObjectNode, TableColumns};
 use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 
 /// 一次查询最多实体化多少行（超过就如实报截断）。
@@ -423,6 +423,44 @@ impl PgSession {
         }
         doyah_studio_db::tree::sort_objects(&mut out);
         Ok(out)
+    }
+
+    /// 对象树第三层：**一批表的列**（FR-META-01 的「表 → 列」、FR-META-05 的数据类型）。
+    ///
+    /// **一层一次取数**（不许 N+1）：几张表一条 SQL 问齐（`relname = ANY($2)`），
+    /// 不是「for 表 in 表们 { 查一次 }」。组装走领域层的 `tree::assemble_columns` ——
+    /// 生产路径与判据自测（`tree.rs` 里那个计数替身）用的是**同一个**组装口。
+    ///
+    /// 为什么用 `pg_attribute` + `format_type` 而不是 `information_schema.columns`：
+    /// 后者对**物化视图 / 外部表**的列覆盖面不稳，且类型串是自己拼的；`format_type`
+    /// 直接给服务端原文（`character varying(50)` / `numeric(12,2)`），与表设计器取的
+    /// 那份原文同源。
+    pub async fn columns(
+        &self,
+        schema: &str,
+        tables: &[String],
+    ) -> Result<Vec<TableColumns>, DbFailure> {
+        if tables.is_empty() {
+            return Ok(Vec::new());
+        }
+        let sql = "SELECT c.relname, a.attname, \
+                          pg_catalog.format_type(a.atttypid, a.atttypmod) AS col_type \
+                   FROM pg_catalog.pg_attribute a \
+                   JOIN pg_catalog.pg_class c ON c.oid = a.attrelid \
+                   JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+                   WHERE n.nspname = $1 AND c.relname = ANY($2) \
+                     AND a.attnum > 0 AND NOT a.attisdropped \
+                   ORDER BY c.relname, a.attnum";
+        let rows = self
+            .client
+            .query(sql, &[&schema, &tables])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        let mut cells: Vec<ColumnRow> = Vec::with_capacity(rows.len());
+        for row in rows {
+            cells.push((row.get(0), row.get(1), row.get(2)));
+        }
+        Ok(assemble_columns(schema, tables, &cells))
     }
 
     /// 跑一条 SQL。**扩展协议 + 原生取行上限**：`query_raw` 的流收够 `limit` 行就停，

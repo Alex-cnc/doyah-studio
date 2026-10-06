@@ -189,6 +189,20 @@ fn search_objects(
     doyah_studio_db::tree::search(&items, &query)
 }
 
+/// 第三层：一个 schema 下**一批表 / 视图的列**（含数据类型原文）。
+///
+/// 为什么收成「一批表」而不是「一张表」：一层里的展开动作一次问齐 —— 一张表一次是
+/// 最省事的写法，但界面上「全部展开」就成了 N+1；接口形状先钉住，调用方想 N+1 也难。
+#[tauri::command]
+async fn db_columns(
+    state: State<'_, ShellState>,
+    schema: String,
+    tables: Vec<String>,
+) -> Result<Vec<doyah_studio_db::tree::TableColumns>, DbFailure> {
+    let session = current_session(&state).await?;
+    session.columns(&schema, &tables).await
+}
+
 /// 跑一条 SQL。
 #[tauri::command]
 async fn db_query(state: State<'_, ShellState>, sql: String) -> Result<QueryResult, DbFailure> {
@@ -1515,6 +1529,7 @@ pub fn run() {
             db_tables,
             db_schemas,
             db_relations,
+            db_columns,
             search_objects,
             db_query,
             db_run_batch,

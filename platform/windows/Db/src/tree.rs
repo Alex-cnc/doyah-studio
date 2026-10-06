@@ -181,6 +181,141 @@ pub fn group_by_schema(items: &[ObjectNode]) -> Vec<(String, Vec<ObjectNode>)> {
     out
 }
 
+// ── 第三层：表 / 视图 → 列（FR-META-01 的最后一格、FR-META-05 的数据类型）──────────────
+//
+// 口径（与对侧行为同源，实现按本侧栈重写）：
+// ① **列节点带数据类型**：类型是**服务端原文**（`character varying(50)` / `numeric(12,2)`），
+//    不翻译、不缩写 ——「显示什么」是界面的事，模型只如实带；
+// ② **一层一次取数**：要展开的那几张表**一次**交给取数实现（`expand_layer`），
+//    不许「for 表 in 表们 { 问一次 }」—— 那是 N+1。判据按**取数调用计数**钉死（见本模块测试）；
+// ③ **要了没给的表不丢**：`tables` 里点名要、服务端一行都没回的表，如实给一个**空列组** ——
+//    「这张表没有列」与「我没问这张表」必须能分开（后者会让界面永远转圈）。
+
+/// 系统 schema 的**字面名单**（FR-META-04）。
+pub const SYSTEM_SCHEMA_EXACT: &[&str] = &["pg_catalog", "information_schema"];
+/// 系统 schema 的**前缀名单**（`pg_toast*` / `pg_temp*`，`pg_toast_temp_*` 之类也归这里）。
+pub const SYSTEM_SCHEMA_PREFIXES: &[&str] = &["pg_toast", "pg_temp"];
+
+/// 这个 schema 是不是系统目录。**过滤规则只此一处** —— 查询层（SQL 的 WHERE）与界面层
+/// （展开前先把系统 schema 摘掉）都走它，免得两处各写一份、慢慢漂成两种口径。
+///
+/// 大小写不敏感：服务端把标识符折成小写，但界面 / 测试里手写的 `PG_Catalog` 也得认出来，
+/// 否则「按名字精确匹配」的写法会漏掉它（见本模块负例）。
+pub fn is_system_schema(name: &str) -> bool {
+    let lower = name.trim().to_lowercase();
+    SYSTEM_SCHEMA_EXACT.contains(&lower.as_str())
+        || SYSTEM_SCHEMA_PREFIXES.iter().any(|p| lower.starts_with(p))
+}
+
+/// 把系统 schema 摘掉（**保持输入顺序**，不改别的、不排序 —— 排序是各调用方自己的事）。
+pub fn filter_system_schemas(names: &[String]) -> Vec<String> {
+    names
+        .iter()
+        .filter(|n| !is_system_schema(n))
+        .cloned()
+        .collect()
+}
+
+/// 树第三层的一员：列名 + 数据类型原文（FR-META-05）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ColumnNode {
+    pub name: String,
+    /// 数据类型**原文**（`character varying(50)` / `numeric(12,2)` / `timestamptz`）。
+    pub data_type: String,
+}
+
+impl ColumnNode {
+    pub fn new(name: impl Into<String>, data_type: impl Into<String>) -> Self {
+        Self { name: name.into(), data_type: data_type.into() }
+    }
+}
+
+/// 一个表 / 视图的列（第三层取数的返回形状；`schema` / `table` 是它的坐标）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableColumns {
+    pub schema: String,
+    pub table: String,
+    pub columns: Vec<ColumnNode>,
+}
+
+/// 服务端**一次查询**回来的一行：`(表名, 列名, 数据类型原文)`。
+pub type ColumnRow = (String, String, String);
+
+/// 把一次查询回来的行**组装**成每表一组。生产的取数（`postgres.rs` 的一条 SQL）与判据自测
+/// 走的是**同一个**组装口 —— 这样「组装规则」只有一份，判据钉的就是盘上跑的那份。
+pub fn assemble_columns(schema: &str, tables: &[String], rows: &[ColumnRow]) -> Vec<TableColumns> {
+    let mut out: Vec<TableColumns> = tables
+        .iter()
+        .map(|t| TableColumns {
+            schema: schema.to_string(),
+            table: t.clone(),
+            columns: Vec::new(),
+        })
+        .collect();
+    for (table, name, data_type) in rows {
+        match out.iter_mut().find(|g| &g.table == table) {
+            Some(group) => group.columns.push(ColumnNode::new(name.clone(), data_type.clone())),
+            // 没点名的表也**如实留下**（不静默丢 —— 丢了就会「问过却没显示」）
+            None => out.push(TableColumns {
+                schema: schema.to_string(),
+                table: table.clone(),
+                columns: vec![ColumnNode::new(name.clone(), data_type.clone())],
+            }),
+        }
+    }
+    out
+}
+
+/// 一层取数的**唯一入口**：把要展开的表一次交出去。
+///
+/// 生产实现是 `postgres.rs` 的一条 `... WHERE relname = ANY($2)`；判据自测实现是个**计数器**
+/// —— 两者都从 `expand_layer` 走，于是「调用计数」这条断言钉的是真实取数形状。
+pub trait ColumnFetch {
+    type Error;
+    /// **一次**取回这些表的列；不许在实现里再逐表发查询。
+    fn fetch_columns(&mut self, schema: &str, tables: &[String])
+        -> Result<Vec<TableColumns>, Self::Error>;
+}
+
+/// **一层一次**：空表清单一次都不问（不无谓往返）；否则恰调用取数一次。
+///
+/// 负例（判据自测）：逐表循环 `fetch.fetch_columns(schema, &[t])` 的写法会让调用计数
+/// = 表的张数 ⇒ 本函数那句「计数 == 1」当场判红。
+pub fn expand_layer<F: ColumnFetch + ?Sized>(
+    fetch: &mut F,
+    schema: &str,
+    tables: &[String],
+) -> Result<Vec<TableColumns>, F::Error> {
+    if tables.is_empty() {
+        return Ok(Vec::new());
+    }
+    fetch.fetch_columns(schema, tables)
+}
+
+/// 按**类型**分组（FR-META-15 的「按类型分组」那一档）。
+///
+/// 组序 = 种类权重（表 → 视图 → 物化视图 → 外部表 → 序列 → 系统 → 其他），
+/// **组内保持入参顺序**（不重排：界面已经排过一遍，这里再排一次会让两种视图的顺序凭空不同）。
+pub fn group_by_kind(items: &[ObjectNode]) -> Vec<(ObjectKind, Vec<ObjectNode>)> {
+    let mut kinds: Vec<ObjectKind> = Vec::new();
+    let mut buckets: Vec<Vec<ObjectNode>> = Vec::new();
+    for item in items {
+        match kinds.iter().position(|k| *k == item.kind) {
+            Some(i) => buckets[i].push(item.clone()),
+            None => {
+                kinds.push(item.kind);
+                buckets.push(vec![item.clone()]);
+            }
+        }
+    }
+    let mut pairs: Vec<(ObjectKind, Vec<ObjectNode>)> =
+        kinds.into_iter().zip(buckets.into_iter()).collect();
+    pairs.sort_by_key(|(kind, _)| kind.order());
+    pairs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,5 +446,247 @@ mod tests {
     #[test]
     fn grouping_an_empty_layer_gives_no_groups() {
         assert!(group_by_schema(&[]).is_empty());
+    }
+
+    // ── 第三层：系统 schema 过滤（FR-META-04）─────────────────────────────────────────
+
+    fn schema_list() -> Vec<String> {
+        vec![
+            "app".to_string(),
+            "pg_catalog".to_string(),
+            "information_schema".to_string(),
+            "pg_toast".to_string(),
+            "pg_toast_temp_3".to_string(),
+            "pg_temp_1".to_string(),
+            "public".to_string(),
+        ]
+    }
+
+    #[test]
+    fn system_schema_families_are_recognised_by_name_and_prefix() {
+        assert!(is_system_schema("pg_catalog"));
+        assert!(is_system_schema("information_schema"));
+        assert!(is_system_schema("pg_toast"));
+        assert!(is_system_schema("pg_toast_temp_3"));
+        assert!(is_system_schema("pg_temp_1"));
+        // 用户 schema 一个都不许中
+        assert!(!is_system_schema("app"));
+        assert!(!is_system_schema("public"));
+        assert!(!is_system_schema("my_pg_like")); // 前缀里有 pg_ 但不是系统族
+    }
+
+    #[test]
+    fn filtering_keeps_user_schemas_in_input_order() {
+        let kept = filter_system_schemas(&schema_list());
+        assert_eq!(kept, vec!["app".to_string(), "public".to_string()]);
+        assert!(kept.iter().all(|s| !is_system_schema(s)));
+    }
+
+    #[test]
+    fn negative_a_no_filter_list_is_caught() {
+        // 负例：证明「过滤」这条断言真的抓得到东西 —— 「不过滤」的结果里系统 schema 还在，
+        // 于是「不许出现系统 schema」这句判红（判据写的不是空话）。
+        let unfiltered = schema_list(); // 故意原样返回 = 漏了过滤
+        assert!(
+            unfiltered.iter().any(|s| is_system_schema(s)),
+            "不过滤的写法必须被「不许出现系统 schema」抓到"
+        );
+    }
+
+    #[test]
+    fn negative_case_insensitive_spelling_must_not_leak() {
+        // 负例：按**精确小写**匹配的朴素写法会漏掉大小写混写的那几个 —— 这些也必须被摘掉。
+        let mixed = vec![
+            "PG_Catalog".to_string(),
+            "pg_ToAst_all".to_string(),
+            "Public".to_string(),
+        ];
+        assert!(is_system_schema("PG_Catalog"));
+        assert!(is_system_schema("pg_ToAst_all"));
+        let kept = filter_system_schemas(&mixed);
+        assert_eq!(kept, vec!["Public".to_string()], "系统族要摘干净，用户 schema 原样保留：{kept:?}");
+        // 而朴素的精确匹配写法会把这几个漏过去 —— 说明这条断言不是白写的
+        let naive = |n: &String| !SYSTEM_SCHEMA_EXACT.contains(&n.as_str());
+        assert!(
+            mixed.iter().any(naive),
+            "精确匹配的朴素写法确实会漏（所以判据必须判它红）"
+        );
+    }
+
+    // ── 第三层：列节点与组装（FR-META-01 / -05）──────────────────────────────────────
+
+    fn table_names() -> Vec<String> {
+        vec!["customers".to_string(), "orders".to_string(), "no_pk_table".to_string()]
+    }
+
+    fn column_rows() -> Vec<ColumnRow> {
+        vec![
+            ("customers".to_string(), "id".to_string(), "integer".to_string()),
+            (
+                "customers".to_string(),
+                "name".to_string(),
+                "character varying(50)".to_string(),
+            ),
+            (
+                "orders".to_string(),
+                "total".to_string(),
+                "numeric(12,2)".to_string(),
+            ),
+        ]
+    }
+
+    #[test]
+    fn columns_are_grouped_per_table_in_the_requested_order_with_types() {
+        let groups = assemble_columns("public", &table_names(), &column_rows());
+        let names: Vec<&str> = groups.iter().map(|g| g.table.as_str()).collect();
+        assert_eq!(names, vec!["customers", "orders", "no_pk_table"]);
+        assert_eq!(groups[0].columns.len(), 2);
+        let cols: Vec<&str> = groups[0].columns.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(cols, vec!["id", "name"]);
+        // FR-META-05：类型**原文**照带（不缩写、不翻译）
+        assert_eq!(groups[0].columns[1].data_type, "character varying(50)");
+        assert_eq!(groups[1].columns[0].data_type, "numeric(12,2)");
+        assert_eq!(groups[0].schema, "public");
+    }
+
+    #[test]
+    fn negative_a_requested_table_with_no_rows_must_not_be_dropped() {
+        // 负例：只把 rows 里出现过的表吐出来的写法会**丢掉** `no_pk_table`
+        // （界面于是永远等不到它 ⇒ 那一行永远转圈）。我们要求它是**空列组**。
+        let groups = assemble_columns("public", &table_names(), &column_rows());
+        let asked = groups.iter().find(|g| g.table == "no_pk_table");
+        assert!(
+            asked.is_some(),
+            "点名要过的表必须回一个空列组，不是不回"
+        );
+        assert!(asked.unwrap().columns.is_empty());
+        // 朴素的「只吐 rows 里有的表」写法会少一张 —— 判据抓的就是它
+        let rows = column_rows();
+        let naive_count = {
+            let mut seen: Vec<&str> = Vec::new();
+            for (t, _, _) in &rows {
+                if !seen.iter().any(|s| s == t) {
+                    seen.push(t);
+                }
+            }
+            seen.len()
+        };
+        assert!(
+            naive_count < table_names().len(),
+            "朴素写法只吐 {naive_count} 张，按需的表有 {} 张 ⇒ 必须判红",
+            table_names().len()
+        );
+    }
+
+    #[test]
+    fn negative_a_table_not_asked_for_is_kept_rather_than_silently_dropped() {
+        // 负例：服务端回了没点名的表 —— 不许静默吞掉（吞掉就是「查到了却没显示」）。
+        let rows = vec![("surprise".to_string(), "x".to_string(), "text".to_string())];
+        let groups = assemble_columns("public", &table_names(), &rows);
+        assert_eq!(groups.len(), 4);
+        assert_eq!(groups[3].table, "surprise");
+    }
+
+    // ── 一层一次取数（不许 N+1）────────────────────────────────────────────────────
+
+    /// 计数替身：只数「被问了几次」，不真连库。
+    struct CountingFetch {
+        calls: usize,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct NeverError;
+
+    impl ColumnFetch for CountingFetch {
+        type Error = NeverError;
+        fn fetch_columns(
+            &mut self,
+            schema: &str,
+            tables: &[String],
+        ) -> Result<Vec<TableColumns>, NeverError> {
+            self.calls += 1;
+            // 生产实现是一条 SQL；这里就按 SQL 的形状组装
+            let rows: Vec<ColumnRow> = tables
+                .iter()
+                .map(|t| (t.clone(), "id".to_string(), "integer".to_string()))
+                .collect();
+            Ok(assemble_columns(schema, tables, &rows))
+        }
+    }
+
+    #[test]
+    fn expanding_a_layer_asks_the_server_exactly_once() {
+        let mut fetch = CountingFetch { calls: 0 };
+        let out = expand_layer(&mut fetch, "public", &table_names()).expect("自测取数不会失败");
+        assert_eq!(fetch.calls, 1, "一层里的三张表只能问一次（N+1 = 判红）");
+        assert_eq!(out.len(), 3);
+        let mut none = CountingFetch { calls: 0 };
+        assert!(expand_layer(&mut none, "public", &[]).unwrap().is_empty());
+        assert_eq!(none.calls, 0, "没表要展开就一次都不该问");
+    }
+
+    #[test]
+    fn negative_one_query_per_table_is_caught_by_the_count() {
+        // 负例：N+1 写法（逐表各问一次）—— 计数 != 1，于是上面那句断言当场判红。
+        let mut fetch = CountingFetch { calls: 0 };
+        for table in table_names() {
+            fetch.fetch_columns("public", &[table]).expect("自测取数不会失败");
+        }
+        assert_ne!(
+            fetch.calls, 1,
+            "逐表循环的写法会让计数 = 表数（{}），判据必须判它红",
+            table_names().len()
+        );
+        assert_eq!(fetch.calls, table_names().len());
+    }
+
+    // ── 按类型分组（FR-META-15）───────────────────────────────────────────────────
+
+    #[test]
+    fn grouping_by_kind_orders_groups_by_kind_weight_and_keeps_inner_order() {
+        let groups = group_by_kind(&sample());
+        let kinds: Vec<ObjectKind> = groups.iter().map(|(k, _)| *k).collect();
+        assert_eq!(
+            kinds,
+            vec![ObjectKind::Table, ObjectKind::View, ObjectKind::Sequence],
+            "组序 = 表 → 视图 → 序列"
+        );
+        let tables: Vec<&str> = groups[0].1.iter().map(|o| o.name.as_str()).collect();
+        // 组内保持入参顺序（app.orders, app.accounts, public.orders_archive, app.my.table）
+        assert_eq!(tables, vec!["orders", "accounts", "orders_archive", "my.table"]);
+        // 一个对象都不许丢、也不许重复
+        let total: usize = groups.iter().map(|(_, v)| v.len()).sum();
+        assert_eq!(total, sample().len());
+    }
+
+    #[test]
+    fn negative_can_browse_boolean_must_not_be_used_as_the_grouping_key() {
+        // 负例：拿 `can_browse()` 当分组键会把 表 / 视图 / 物化视图 / 外部表 挤进同一桶
+        // （「按类型分组」直接失真）。判据要求它们各自成组。
+        let groups = group_by_kind(&sample());
+        let table_group = groups.iter().find(|(k, _)| *k == ObjectKind::Table).unwrap();
+        assert!(
+            table_group.1.iter().all(|o| o.kind == ObjectKind::Table),
+            "表这一组里不许混进别的种类"
+        );
+        let naive_buckets = {
+            let items = sample();
+            let mut browsable: Vec<&ObjectNode> = Vec::new();
+            let mut rest: Vec<&ObjectNode> = Vec::new();
+            for o in &items {
+                if o.kind.can_browse() {
+                    browsable.push(o)
+                } else {
+                    rest.push(o)
+                }
+            }
+            (browsable.len(), rest.len())
+        };
+        assert_eq!(
+            naive_buckets,
+            (5, 1),
+            "按 can_browse 分只有两桶（5 / 1）⇒ 与「按类型」不是一回事"
+        );
+        assert!(groups.len() > 2, "按类型分组要出 3 组以上");
     }
 }

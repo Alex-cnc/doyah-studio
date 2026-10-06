@@ -83,7 +83,11 @@ pub use ddl::{
 };
 pub use staleness::{classify, content_hash, note as staleness_note, DiskFile, LoadedFile, Staleness};
 pub use writeback::{edits_to_dml, statement_risk, CellEdit, DmlStatement, Risk, RowKey, TransactionPlan};
-pub use tree::{group_by_schema, search, sort_objects, ObjectKind, ObjectNode, SearchHit};
+pub use tree::{
+    assemble_columns, expand_layer, filter_system_schemas, group_by_kind, group_by_schema,
+    is_system_schema, search, sort_objects, ColumnFetch, ColumnNode, ColumnRow, ObjectKind,
+    ObjectNode, SearchHit, TableColumns,
+};
 // 标题栏搜索栏宽度纯函数（2.0 出口点名的等价物，对侧 Core/TitleBarSearchLayout.swift）
 pub use title_bar_search::{layout as title_bar_search_layout, SearchLayout};
 pub use cursor::{anchor_prefix, remember, restore, Cursor, CursorAnchor, RestoreHow, RestoredCursor};

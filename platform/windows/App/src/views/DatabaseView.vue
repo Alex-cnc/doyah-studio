@@ -30,6 +30,7 @@ import {
   dbReadOnly,
   dbSchemas,
   dbRelations,
+  dbColumns,
   searchObjects,
   browseSql,
   inspectRow,
@@ -51,6 +52,7 @@ import {
   type StatementOutcome,
   type TableNode,
   type ObjectNode,
+  type ColumnNode,
   type SearchHit,
   type SqlToken,
   type CellEdit,
@@ -71,6 +73,16 @@ import {
   type KeyValueStore,
 } from '../shell/connectionDisplay'
 import ConnectionLabel from '../shell/ConnectionLabel.vue'
+import {
+  columnLabel,
+  groupByKind,
+  loadColumns,
+  mergeColumns,
+  tableKey,
+  treeNodeCount,
+  userSchemas,
+  type ColumnsByTable,
+} from './objectTree'
 import {
   filterCompletions,
   highlightPieces,
@@ -688,33 +700,91 @@ function connectionSubtitle(connection: SavedConnection): string {
  */
 const objectView = ref<'hierarchy' | 'byKind'>('hierarchy')
 
-/** 按类型分组的树：类型名 → 对象（只含已加载）。 */
-const kindGroups = computed<{ kind: string; items: ObjectNode[] }[]>(() => {
-  const byKind = new Map<string, ObjectNode[]>()
-  for (const object of Object.values(layerOf.value).flat()) {
-    const key = object.kind?.trim() || '其他'
-    const list = byKind.get(key) ?? []
-    list.push(object)
-    byKind.set(key, list)
-  }
-  return [...byKind.entries()]
-    .map(([kind, items]) => ({ kind, items }))
-    .sort((a, b) => a.kind.localeCompare(b.kind))
-    .map((group) => ({
-      kind: group.kind,
-      items: [...group.items].sort((a, b) =>
-        `${a.schema}.${a.name}`.localeCompare(`${b.schema}.${b.name}`),
-      ),
-    }))
-})
+/** 按类型分组的树：类型名 → 对象（只含已加载）。分组规则在 `objectTree.groupByKind`。 */
+const kindGroups = computed<{ kind: string; items: ObjectNode[] }[]>(() =>
+  groupByKind(loadedObjects.value),
+)
 
 /** 已加载的对象数（按类型分组那一档要用）。 */
-const loadedObjectCount = computed(() => Object.values(layerOf.value).flat().length)
+const loadedObjectCount = computed(() => loadedObjects.value.length)
+
+/** 树的数据行数（对象 + 已加载的列）—— 两档视图**必须相等**（切换不许丢节点）。 */
+const layerNodeCount = computed(() => treeNodeCount(loadedObjects.value, columnsOf.value))
+
+/**
+ * 树的**扁平行**（两档视图共用一个渲染口 —— 各写一份模板必然慢慢漂成两种行为）。
+ *
+ * `header` 行是分组标题（schema 名 / 类型名），不可展开、不挂右键菜单；
+ * `object` 行可点（生成查询）、可右键；`column` 行是第三层（只读，带数据类型）。
+ */
+type TreeRow =
+  | { id: string; kind: 'schema'; label: string; expanded: boolean; loading: boolean; count: number }
+  | { id: string; kind: 'type'; label: string; count: number }
+  | { id: string; kind: 'object'; object: ObjectNode }
+  | { id: string; kind: 'column'; owner: ObjectNode; column: ColumnNode }
+  | { id: string; kind: 'empty'; owner: ObjectNode }
+
+function objectRows(object: ObjectNode): TreeRow[] {
+  const rows: TreeRow[] = [{ id: `obj:${tableKey(object.schema, object.name)}`, kind: 'object', object }]
+  const key = tableKey(object.schema, object.name)
+  if (expandedTables.value[key]) {
+    const columns = columnsFor(object)
+    if (columns.length === 0) {
+      // 展开过、但一列都没取回来：**如实说**（不装作展开成功了）
+      rows.push({ id: `empty:${key}`, kind: 'empty', owner: object })
+    } else {
+      rows.push(
+        ...columns.map((column) => ({
+          id: `col:${key}:${column.name}`,
+          kind: 'column' as const,
+          owner: object,
+          column,
+        })),
+      )
+    }
+  }
+  return rows
+}
+
+const treeRows = computed<TreeRow[]>(() => {
+  const rows: TreeRow[] = []
+  if (objectView.value === 'byKind') {
+    for (const group of kindGroups.value) {
+      rows.push({
+        id: `type:${group.kind}`,
+        kind: 'type',
+        label: group.kind,
+        count: group.items.length,
+      })
+      for (const object of group.items) rows.push(...objectRows(object))
+    }
+    return rows
+  }
+  // 层级视图：schema 行**永远在**（它是展开开关）；展开过才有对象行，对象展开过才有列行。
+  for (const schema of schemas.value) {
+    const items = layerOf.value[schema]
+    const isExpanded = !!expanded.value[schema]
+    rows.push({
+      id: `schema:${schema}`,
+      kind: 'schema',
+      label: schema,
+      expanded: isExpanded,
+      loading: loadingSchema.value === schema,
+      count: items ? items.length : 0,
+    })
+    if (!isExpanded || !items) continue
+    for (const object of items) rows.push(...objectRows(object))
+  }
+  return rows
+})
+
 
 /** 刷新：重取 schema 列表并丢掉已加载的层（重新按需展开） */
 async function refreshObjects() {
   layerOf.value = {}
   expanded.value = {}
+  columnsOf.value = {}
+  expandedTables.value = {}
   objectQuery.value = ''
   objectHits.value = []
   await loadSchemas()
@@ -962,6 +1032,12 @@ const layerOf = ref<Record<string, ObjectNode[]>>({})
 const loadingSchema = ref('')
 /** 展开的 schema 集合。 */
 const expanded = ref<Record<string, boolean>>({})
+/** 第三层：已加载的列（`schema.表名` → 列）。 */
+const columnsOf = ref<ColumnsByTable>({})
+/** 已展开的表（`schema.表名` 集合）。 */
+const expandedTables = ref<Record<string, boolean>>({})
+/** 正在取列的表（`schema.表名`；那一行显示"加载中"，不假装已经有内容）。 */
+const loadingTable = ref('')
 /** 对象搜索词与命中（`matchedOn` 要显示出来，不能只说"匹配"）。 */
 const objectQuery = ref('')
 const objectHits = ref<SearchHit[]>([])
@@ -981,14 +1057,17 @@ const tree = computed<{ schema: string; items: ObjectNode[] }[]>(() =>
     .sort((a, b) => a.schema.localeCompare(b.schema)),
 )
 
-/** 第一层：schema 列表（连接后取一次）。 */
+/** 第一层：schema 列表（连接后取一次）。**系统 schema 在这里就摘掉**（FR-META-04，
+ * 过滤规则只有 `objectTree.isSystemSchema` 一处）。 */
 const schemas = ref<string[]>([])
 
 async function loadSchemas() {
   try {
-    schemas.value = await dbSchemas()
+    schemas.value = userSchemas(await dbSchemas())
     layerOf.value = {}
     expanded.value = {}
+    columnsOf.value = {}
+    expandedTables.value = {}
     clearFailure()
   } catch (e) {
     failure.value = describeError(e)
@@ -1014,6 +1093,70 @@ async function toggleSchema(schema: string) {
     expanded.value = { ...expanded.value, [schema]: false }
   } finally {
     loadingSchema.value = ''
+  }
+}
+
+/** 能展开列的对象（表 / 视图 / 物化视图 / 外部表；序列没有列这一层）。 */
+function canExpandColumns(object: ObjectNode): boolean {
+  return (
+    object.kind === 'table' ||
+    object.kind === 'view' ||
+    object.kind === 'materialized_view' ||
+    object.kind === 'foreign_table'
+  )
+}
+
+/**
+ * 展开 / 收起一张表（**第三层**：表 → 列 + 数据类型）。
+ *
+ * 取数走 `loadColumns`（**一层一次**，不是逐表各问一次）—— 现在一次只展开一张表，
+ * 但形状先钉住：将来「全部展开」也不会变成 N+1（判据按调用计数钉，见 `objectTree.test.ts`）。
+ */
+async function toggleTable(object: ObjectNode) {
+  if (!canExpandColumns(object)) return
+  const key = tableKey(object.schema, object.name)
+  if (expandedTables.value[key]) {
+    expandedTables.value = { ...expandedTables.value, [key]: false }
+    return
+  }
+  expandedTables.value = { ...expandedTables.value, [key]: true }
+  if (columnsOf.value[key]) return
+  loadingTable.value = key
+  try {
+    const groups = await loadColumns(dbColumns, object.schema, [object.name])
+    columnsOf.value = mergeColumns(columnsOf.value, groups)
+    clearFailure()
+  } catch (e) {
+    failure.value = describeError(e)
+    // 取不到就**如实收起**：不把一个空列表当成"这张表没有列"
+    expandedTables.value = { ...expandedTables.value, [key]: false }
+  } finally {
+    loadingTable.value = ''
+  }
+}
+
+/** 某张表已加载的列（没加载过就是空数组 —— 不是"没有列"）。 */
+function columnsFor(object: ObjectNode): ColumnNode[] {
+  return columnsOf.value[tableKey(object.schema, object.name)] ?? []
+}
+
+/** 类型分组标题的文案（种类名走语言表；认不出的种类如实归到「其他」）。 */
+function kindLabel(kind: string): string {
+  switch (kind) {
+    case 'table':
+      return t('db.kind.table')
+    case 'view':
+      return t('db.kind.view')
+    case 'materialized_view':
+      return t('db.kind.materializedView')
+    case 'foreign_table':
+      return t('db.kind.foreignTable')
+    case 'sequence':
+      return t('db.kind.sequence')
+    case 'system':
+      return t('db.kind.system')
+    default:
+      return t('db.kind.other')
   }
 }
 
@@ -1664,6 +1807,30 @@ async function probe() {
         </p>
         <p v-if="!info" class="db__tree-empty">未连接</p>
         <template v-else>
+          <!-- 两档视图（FR-META-15）：层级视图 / 按类型分组 —— 切换只重新聚合已加载的层，不重查 -->
+          <div class="db__tree-modes" role="tablist" :aria-label="t('db.view.aria')">
+            <button
+              class="db__tree-mode"
+              :class="{ 'db__tree-mode--on': objectView === 'hierarchy' }"
+              type="button"
+              role="tab"
+              :aria-selected="objectView === 'hierarchy' ? 'true' : 'false'"
+              @click="objectView = 'hierarchy'"
+            >
+              {{ t('db.view.hierarchy') }}
+            </button>
+            <button
+              class="db__tree-mode"
+              :class="{ 'db__tree-mode--on': objectView === 'byKind' }"
+              type="button"
+              role="tab"
+              :aria-selected="objectView === 'byKind' ? 'true' : 'false'"
+              @click="objectView = 'byKind'"
+            >
+              {{ t('db.view.byKind') }}
+            </button>
+          </div>
+          <p class="db__tree-empty">{{ t('db.tree.nodeCount', { nodes: layerNodeCount }) }}</p>
           <input
             v-model="objectQuery"
             class="db__tree-search"
@@ -1688,34 +1855,49 @@ async function probe() {
               </button>
             </li>
           </ul>
-          <template v-else-if="!objectQuery.trim() && objectView === 'hierarchy'">
+          <template v-else>
             <p v-if="schemas.length === 0" class="db__tree-empty">没有可展开的 schema</p>
-            <div v-for="schema in schemas" :key="schema" class="db__schema">
+            <template v-for="row in treeRows" :key="row.id">
               <button
+                v-if="row.kind === 'schema'"
                 class="db__schema-toggle"
                 type="button"
-                :aria-expanded="expanded[schema] ? 'true' : 'false'"
-                @click="toggleSchema(schema)"
+                :aria-expanded="row.expanded ? 'true' : 'false'"
+                @click="toggleSchema(row.label)"
               >
-                <span class="db__chevron">{{ expanded[schema] ? '▾' : '▸' }}</span>
-                {{ schema }}
-                <span v-if="loadingSchema === schema" class="db__kind">加载中…</span>
+                <span class="db__chevron">{{ row.expanded ? '▾' : '▸' }}</span>
+                {{ row.label }}
+                <span v-if="row.loading" class="db__kind">{{ t('db.tree.loading') }}</span>
+                <span v-else class="db__kind">{{ row.count }}</span>
               </button>
-              <template v-if="expanded[schema] && layerOf[schema]">
-                <p v-if="layerOf[schema].length === 0" class="db__tree-empty">这个 schema 下没有对象</p>
-                <button
-                  v-for="t in layerOf[schema]"
-                  :key="`${t.schema}.${t.name}`"
-                  class="db__table"
-                  type="button"
-                  :title="`${t.kind} · 点一下生成查询；右键有更多`"
-                  @click="useTable({ schema: t.schema, name: t.name, kind: t.kind })"
-                  @contextmenu.prevent="openContextMenu($event, t)"
-                >
-                  {{ t.name }}<span class="db__kind">{{ t.kind === 'table' ? '' : t.kind }}</span>
-                </button>
-              </template>
-            </div>
+              <p v-else-if="row.kind === 'type'" class="db__tree-group">
+                {{ kindLabel(row.label) }}<span class="db__kind">{{ row.count }}</span>
+              </p>
+              <button
+                v-else-if="row.kind === 'object'"
+                class="db__table"
+                type="button"
+                :title="`${row.object.kind} · 点一下生成查询；右键有更多`"
+                @click="useTable({ schema: row.object.schema, name: row.object.name, kind: row.object.kind })"
+                @contextmenu.prevent="openContextMenu($event, row.object)"
+              >
+                <span
+                  v-if="canExpandColumns(row.object)"
+                  class="db__chevron db__chevron--inline"
+                  :title="t('db.columns.toggle')"
+                  @click.stop="toggleTable(row.object)"
+                >{{ expandedTables[tableKey(row.object.schema, row.object.name)] ? '▾' : '▸' }}</span>
+                {{ row.object.name }}<span class="db__kind">{{ row.object.kind === 'table' ? '' : row.object.kind }}</span>
+                <span
+                  v-if="loadingTable === tableKey(row.object.schema, row.object.name)"
+                  class="db__kind"
+                >{{ t('db.tree.loading') }}</span>
+              </button>
+              <p v-else-if="row.kind === 'column'" class="db__column">
+                {{ columnLabel(row.column) }}
+              </p>
+              <p v-else class="db__tree-empty">{{ t('db.columns.empty') }}</p>
+            </template>
           </template>
         </template>
       </aside>
@@ -2585,6 +2767,51 @@ async function probe() {
 
 .db__table:hover {
   background: var(--ds-color-surface-panel);
+}
+
+/* 对象树两档视图切换（FR-META-15） */
+.db__tree-modes {
+  display: flex;
+  gap: var(--ds-spacing-xs);
+  margin-bottom: var(--ds-spacing-xs);
+}
+
+.db__tree-mode {
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  border: 1px solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
+}
+
+.db__tree-mode--on {
+  color: var(--ds-color-text-primary);
+  background: var(--ds-color-surface-panel);
+}
+
+/* 按类型分组的分组标题（虚拟行：不可展开、不挂右键菜单） */
+.db__tree-group {
+  margin: var(--ds-spacing-xs) 0 0;
+  color: var(--ds-color-text-primary);
+  font-size: var(--ds-font-caption-size);
+  font-weight: 600;
+}
+
+/* 第三层：列 + 数据类型 */
+.db__column {
+  margin: 0;
+  padding: 0 0 0 var(--ds-spacing-l);
+  color: var(--ds-color-text-secondary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__chevron--inline {
+  display: inline-block;
+  width: 1em;
 }
 
 .db__result-row {
