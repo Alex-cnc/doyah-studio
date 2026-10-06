@@ -31,6 +31,8 @@ enum UISnapshot {
     /// 工程根（由 `#filePath` 反推，不依赖 cwd）。
     static let packageRoot = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()   // TestsUISnapshot/
+        .deletingLastPathComponent()   // platform/macos/
+        .deletingLastPathComponent()   // platform/
         .deletingLastPathComponent()   // <root>/
 
     /// 产物目录：默认 `.build/ui-snapshots/`，可用 `DOYAH_SNAPSHOT_DIR` 覆盖。

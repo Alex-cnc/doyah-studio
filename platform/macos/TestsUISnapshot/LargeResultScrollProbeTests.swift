@@ -51,9 +51,11 @@ final class LargeResultScrollProbeTests: XCTestCase {
     }
 
     private func ledger() throws -> Ledger {
-        // 仓根由 `#filePath` 往上两级得到（`TestsUISnapshot/x.swift` → 仓根）：
+        // 仓根由 `#filePath` 往上四级得到（`platform/macos/TestsUISnapshot/x.swift` → 仓根）：
         // 不依赖工作目录 —— `swift test` 与 `run-manual-verification-probes.sh` 的 cwd 不是同一处。
         let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let data = try Data(contentsOf: root.appendingPathComponent("Scripts/result-scroll-baseline.json"))
