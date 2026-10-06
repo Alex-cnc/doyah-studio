@@ -290,8 +290,12 @@ struct NotesContainerTreeView: View {
             // 现在把**图标 + 文字**并排画出来（文字与右键那一项**同键** `NotebookCreation.menuTitleKey`，
             // 悬停提示仍是同一句）：人一眼就知道哪个按钮能建笔记本，「3 次点击内可建笔记本」的第一步
             // 不再需要猜（悬停提示与 `accessibilityIdentifier` 一字未动）。
+            // **入口回左区顶部 · 贴左**（`T-20261007-004` §二.1 + §12 `N2-1`：人类主人原话
+            // 「**位置居中，而不是在顶部**」）。本片之前这一行是 `HStack { Spacer(); Button }`
+            // —— 前缀那个 `Spacer()` 把入口**推到最右**（人看着就是「不在顶部、也不在开头」）。
+            // 去掉它之后入口贴左，与上面那一条 CRUD 行**同一条左基线**，整棵树也回到从顶部往下排。
+            // 悬停提示 / `accessibilityIdentifier` / 文案键一字未动（`N-UI-2` 的可发现性不回退）。
             HStack(spacing: Spacing.xs) {
-                Spacer()
                 Button {
                     appState.beginNewNotebook()
                 } label: {
@@ -752,25 +756,24 @@ struct NotesAreaView: View {
         }
     }
 
-    /// 顶栏：**屏切换**（笔记 / 待办）+ 搜索 + 范围 + 新建（`L-184` ④；`L-100` 加了第一枚）。
+    /// 顶栏 = **左区顶部操作行**（`T-20261007-004` 第三节第 1 / 2 条 · 人类主人 2026-10-07 07:0x 逐字）：
+    /// 「**笔记和代办的增删查改的所有操作都应该是在左侧区域顶部，笔记和代办的切换才放最右侧**」。
     ///
-    /// 搜索那一档只在笔记屏出现：待办的**本地检索**属 `FR-NOTE-37`，它的口径还在契约半
-    /// ⇒ 这一屏现在**不给**一个搜不出东西的搜索框（`L-50` 同族：可点却无反应比没有更糟）。
-    /// 「新建」仍是同一个词、同一位置 —— 建的是什么由当前那一屏决定。
+    /// 一行三段（从左到右）：
+    ///   ① **增删查改入口**（`crudEntries`：新建 / 编辑 / 删除，紧跟着就是「查」= 搜索框与作用域）；
+    ///   ② `Spacer`；
+    ///   ③ **笔记 / 待办切换**（`moduleSwitch`，行末那一枚）。
+    ///
+    /// 三条刻意的口径：
+    ///   · **切换在行末**，而这一行**只设左侧留白、不设右侧留白** ——「最右侧」才真的是最右侧。
+    ///     判据①（切换控件右边缘 = 左区行右边缘 ±4 px）由 `TestsUISnapshot/NotesLayoutProbeTests.swift` 钉住；
+    ///   · 「查」**不另发一枚按钮**：搜索框本身就是「查」的入口 —— 搜索只有一处（`L-44`），
+    ///     再发一枚按钮就是第二个入口；
+    ///   · 搜索那一档仍在**笔记屏**才出现（原口径一字未改）：待办的**本地检索**属 `FR-NOTE-37`，
+    ///     它的口径还在契约半 ⇒ 这一屏不给一个搜不出东西的搜索框（`L-50` 同族）。
     private var topBar: some View {
         HStack(spacing: Spacing.s) {
-            Picker(L(.notesTitle), selection: Binding(
-                get: { appState.notesModule },
-                set: { appState.setNotesModule($0) }
-            )) {
-                ForEach(NotesModule.allCases, id: \.self) { module in
-                    Text(L(module.titleKey)).tag(module)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .accessibilityIdentifier("notes-module-switch")
+            crudEntries
             if appState.notesModule == .notes {
                 TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)
                     .textFieldStyle(.roundedBorder)
@@ -786,7 +789,22 @@ struct NotesAreaView: View {
                 .accessibilityIdentifier("notes-search-scope")
             }
             Spacer(minLength: Spacing.s)
-            // 顶栏「新建」（`N-UI-3`）：与工具条同形 = 图标 + 标题 + 悬停提示（标题保留，见上）。
+            moduleSwitch
+        }
+        .padding(.leading, Spacing.s)
+        .padding(.vertical, Spacing.xs)
+        .accessibilityIdentifier("notes-left-actions-row")
+    }
+
+    /// **左区顶部的增删查改入口**（人类主人令 `T-20261007-004` 第三节第 1 条）。
+    ///
+    /// 形态与 `N-UI-3` 定下的工具条**同形**（图标 + 悬停提示；`L-50` 那三种处置里选「灰着」），
+    /// 三枚都接**既有**的单一入口，不新开第二条写路：
+    ///   · **增** = `beginNewNote()` / `beginNewTodo()`（同一个词、同一枚按钮 —— 建什么由当前那一屏决定）；
+    ///   · **改** = `edit(_:)`（笔记 = 多选集合里**唯一**那条；待办 = 编辑器里那条）；
+    ///   · **删** = `deleteNote(id:)` / `deleteTodo(id:)`（逐条走既有的那一个删除入口）。
+    private var crudEntries: some View {
+        HStack(spacing: Spacing.xs) {
             Button {
                 switch appState.notesModule {
                 case .notes: appState.beginNewNote()
@@ -802,9 +820,89 @@ struct NotesAreaView: View {
             }
             .help(L(.notesNew))
             .accessibilityIdentifier("notes-new")
+            Button {
+                if let note = singleSelectedNote {
+                    appState.edit(note)
+                } else if let todo = editingTodo {
+                    appState.edit(todo)
+                }
+            } label: {
+                Label {
+                    Text(L(.commonEdit))
+                } icon: {
+                    Image(systemName: "pencil")
+                }
+                .labelStyle(.iconOnly)
+            }
+            .help(L(.commonEdit))
+            .disabled(singleSelectedNote == nil && editingTodo == nil)
+            .accessibilityIdentifier("notes-edit")
+            Button {
+                deleteSelection()
+            } label: {
+                Label {
+                    Text(L(.notesDelete))
+                } icon: {
+                    Image(systemName: "trash")
+                }
+                .labelStyle(.iconOnly)
+            }
+            .help(L(.notesDelete))
+            .disabled(!hasDeletableSelection)
+            .accessibilityIdentifier("notes-delete")
         }
-        .padding(.horizontal, Spacing.s)
-        .padding(.vertical, Spacing.xs)
+    }
+
+    /// **笔记 / 待办切换**（行末那一枚）：档位集合与名字都在 Core（`NotesModule`），视图只画选择器。
+    private var moduleSwitch: some View {
+        Picker(L(.notesTitle), selection: Binding(
+            get: { appState.notesModule },
+            set: { appState.setNotesModule($0) }
+        )) {
+            ForEach(NotesModule.allCases, id: \.self) { module in
+                Text(L(module.titleKey)).tag(module)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .accessibilityIdentifier("notes-module-switch")
+    }
+
+    /// 「改」在笔记屏的目标：多选集合里**唯一**那条（多选时没有「一条」可改 ⇒ 灰着）。
+    private var singleSelectedNote: Note? {
+        guard appState.notesModule == .notes, appState.selectedNoteIDs.count == 1,
+              let id = appState.selectedNoteIDs.first else { return nil }
+        return appState.notes.first { $0.id == id }
+    }
+
+    /// 「改」在待办屏的目标：编辑器里那一条（没在编辑 ⇒ 灰着）。
+    private var editingTodo: Todo? {
+        guard appState.notesModule == .todos, let id = appState.todoEditingID else { return nil }
+        return appState.todos.first { $0.id == id }
+    }
+
+    /// 「删」有没有目标：笔记 = 多选集合非空；待办 = 编辑器里那一条。
+    private var hasDeletableSelection: Bool {
+        switch appState.notesModule {
+        case .notes: return !appState.selectedNoteIDs.isEmpty
+        case .todos: return appState.todoEditingID != nil
+        }
+    }
+
+    /// 删当前能删的（逐条走既有入口；删完 `AppState` 自己会重读库、收多选集合）。
+    private func deleteSelection() {
+        switch appState.notesModule {
+        case .notes:
+            let ids = appState.selectedNoteIDs
+            guard !ids.isEmpty else { return }
+            Task {
+                for id in ids { await appState.deleteNote(id: id) }
+            }
+        case .todos:
+            guard let id = appState.todoEditingID else { return }
+            Task { await appState.deleteTodo(id: id) }
+        }
     }
 }
 

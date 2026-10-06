@@ -306,7 +306,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   `formatSelected()` 必须真的投递重排后的文本；③ 主菜单「编辑」那一项必须带可执行 action/target 并真调用一次。
 #   **它落地当轮漏了接 FILTER**（写下用例却没入口 = 一个都跑不到），由 `check-result-scroll-ledger.py` ⑤ 抓出后补上。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
