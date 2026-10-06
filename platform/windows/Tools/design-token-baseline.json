@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "purpose": "Windows 侧表示层的**裸值棘轮基线**（§8.5.3「设计令牌棘轮」的等价物）。规则名与 macOS 侧基线 Scripts/design-token-baseline.json 逐名一致（规则名对齐由 platform/windows/Tools/check-design-tokens.ps1 的 ① 项判）。计数与判据 = platform/windows/App/tools/token-ratchet.mjs。",
+  "readingRules": [
+    "files.<仓内路径>.<规则名> = 该文件该规则的**上限**（不是当前值）；未列出的文件/规则上限为 0。",
+    "只降不升：新代码超过上限即判红；确需例外就把上限显式写上（写在这里 = 有据可查的例外）。",
+    "取值来源：node platform/windows/App/tools/token-ratchet.mjs --print（人工下调时看它）。",
+    "生成物 platform/windows/App/src/theme/tokens.generated.css 不参与计数（取值本来就该在那里），排除名单写死在脚本的 EXCLUDED 里。"
+  ],
+  "files": {}
+}

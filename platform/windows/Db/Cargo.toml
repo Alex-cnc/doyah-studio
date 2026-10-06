@@ -1,0 +1,23 @@
+[package]
+name = "doyah-studio-db"
+version = "0.1.0"
+edition = "2021"
+description = "Doyah Studio Windows 侧数据库域（连接配置 / 连接串解析；对象树与查询的模型层随后）"
+publish = false
+
+# 边界（对应 §8.5.1：领域层零 UI / 平台依赖；驱动接线在 App/src-tauri 那一层）：
+#   本层只许纯逻辑 + 配置的序列化 —— 无 GUI、无平台专有 API、**无数据库驱动**。
+#   ⚠️ 如实登记一处**判据缺口**：现有边界判据 `platform/windows/Tools/check-core-boundary.ps1` 只扫
+#   `platform/windows/Core/`，**不覆盖本 crate** ⇒ 本 crate 的依赖面目前没有机械判据在守（serde 是
+#   配置序列化，不是 GUI / 平台面；但"没人守"这件事必须写出来，别当成已经守住了）。
+#   修法建议：把该判据的扫描面由「platform/windows\Core」扩到「windows 下的领域层 crate 清单」。
+#   另：本 crate 尚未登记进 `platform/windows/Cargo.toml` 的 members（见那里的注记 —— 欠一次锁文件更新）。
+
+[dependencies]
+# 只用于**配置的落盘与交换**。
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lib]
+name = "doyah_studio_db"
+path = "src/lib.rs"

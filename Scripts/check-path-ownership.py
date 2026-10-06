@@ -478,7 +478,7 @@ FIXTURE = {
         {"id": "harmony", "owner": "mobile", "contract_side": "nonapple",
          "label": "鸿蒙端（hvigor + ArkTS）", "paths": ["entry/", "hvigorfile.ts"]},
         {"id": "windows", "owner": "windows", "contract_side": "nonapple",
-         "label": "Windows 端（Tauri 2 + Rust）", "paths": ["windows/"]},
+         "label": "Windows 端（Tauri 2 + Rust）", "paths": ["platform/windows/"]},
     ],
     "contract_owner": "bluewhale",
     "contract_docs": ["Docs/需求规范书.md", "Docs/概要设计.md"],
@@ -497,7 +497,7 @@ def _fx(**over) -> Manifest:
 
 def _fixture_repo(root: pathlib.Path):
     """自测用的假仓：清单里声明的每条路径都真的建出来（否则 validate 那两例测不到点子上）。"""
-    for p in ("App", "android", "entry", "windows", "Docs", "tools"):
+    for p in ("App", "android", "entry", "platform/windows", "Docs", "tools"):
         (root / p).mkdir(parents=True, exist_ok=True)
     for f in ("Package.swift", "hvigorfile.ts", "README.md"):
         (root / f).write_text("x\n", encoding="utf-8")
@@ -533,8 +533,8 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     check("② 只改本侧子树 ⇒ 绿", EXIT_PASS,
           paths=["App/Views/A.swift", "Package.swift"], wants=["本侧子树"])
     # 3 改对侧子树 ⇒ 红 + 点名文件
-    check("③ 改对侧子树 ⇒ 红并点名文件", EXIT_RED, paths=["windows/Core/src/lib.rs"],
-          wants=["对侧子树", "windows/Core/src/lib.rs", "Windows 端"])
+    check("③ 改对侧子树 ⇒ 红并点名文件", EXIT_RED, paths=["platform/windows/Core/src/lib.rs"],
+          wants=["对侧子树", "platform/windows/Core/src/lib.rs", "Windows 端"])
     # 4 混合 ⇒ 红，且只点名对侧那一份
     check("④ 本侧 + 对侧混在一批 ⇒ 红，且只点名对侧", EXIT_RED,
           paths=["App/a.swift", "android/app/Main.kt"],
@@ -566,7 +566,7 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
           man_validate=_fx(trees=[{"id": "macos", "owner": "macos", "contract_side": "apple",
                                    "paths": ["App/", "Nope/"]},
                                   {"id": "windows", "owner": "windows",
-                                   "contract_side": "nonapple", "paths": ["windows/"]}]),
+                                   "contract_side": "nonapple", "paths": ["platform/windows/"]}]),
           wants=["在盘上不存在"])
     # 13 两棵树路径互相覆盖 ⇒ 退出 2
     check("⑬ 两棵树路径互相覆盖 ⇒ 退出 2", EXIT_SKIP,
@@ -582,11 +582,11 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
           man_validate=_fx(trees=[{"id": "macos", "owner": "macos", "contract_side": "apple",
                                    "paths": ["App/", "tools/"]},
                                   {"id": "windows", "owner": "windows",
-                                   "contract_side": "nonapple", "paths": ["windows/"]}]),
+                                   "contract_side": "nonapple", "paths": ["platform/windows/"]}]),
           wants=["与共享面互相覆盖"])
     # 15 契约侧宽松档：同一 contract_side 的几棵树互相都算本侧
-    check("⑮ 契约侧宽松档（--mine nonapple）改 windows/ ⇒ 绿", EXIT_PASS,
-          paths=["windows/src/lib.rs"], mine="nonapple", wants=["本侧子树"])
+    check("⑮ 契约侧宽松档（--mine nonapple）改 platform/windows/ ⇒ 绿", EXIT_PASS,
+          paths=["platform/windows/src/lib.rs"], mine="nonapple", wants=["本侧子树"])
     # 16 子树分家档：端 ≠ 本侧 ⇒ 红（安卓与鸿蒙就是靠这一档分的）
     check("⑯ 子树分家档（--mine windows）改 android/ ⇒ 红", EXIT_RED,
           paths=["android/app/a.kt"], mine="windows", wants=["对侧子树", "安卓端"])
@@ -613,17 +613,17 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
         results.append(("⑲b 真仓库清单自校验（声明路径都在盘上）", True, "-", "-", ""))
 
     # ㉑ 逗号列表：同一个实现者手里的两条子树（`--mine android,harmony`）
-    check("㉑ 逗号列表（--mine android,harmony）：改 android/ 绿、改 windows/ 红", EXIT_PASS,
+    check("㉑ 逗号列表（--mine android,harmony）：改 android/ 绿、改 platform/windows/ 红", EXIT_PASS,
           paths=["android/app/a.kt", "entry/src/main/ets/Main.ets"], mine="android,harmony",
           wants=["本侧子树", "鸿蒙端"])
-    check("㉑b 逗号列表下改 windows/ ⇒ 红", EXIT_RED, paths=["windows/src/lib.rs"],
+    check("㉑b 逗号列表下改 platform/windows/ ⇒ 红", EXIT_RED, paths=["platform/windows/src/lib.rs"],
           mine="android,harmony", wants=["对侧子树"])
 
     # ⑳ 本地**落后**远端时不许把「对侧刚推上来的提交」算成本地改动（merge-base 兜住这一类假红）
     fx = tmp / "gitfixture"
     fx.mkdir()
     _fixture_repo(fx)                      # 清单声明的路径全部建出来（清单自校验要过）
-    (fx / "windows" / "w.rs").write_text("x\n", encoding="utf-8")
+    (fx / "platform" / "windows" / "w.rs").write_text("x\n", encoding="utf-8")
     (fx / "path-ownership.json").write_text(json.dumps(FIXTURE, ensure_ascii=False), encoding="utf-8")
 
     def _g(*a):
@@ -636,7 +636,7 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     _g("commit", "-qm", "c1")
     c1 = _g("rev-parse", "HEAD").stdout.strip()
     _g("update-ref", "refs/remotes/origin/master", c1)
-    (fx / "windows" / "w.rs").write_text("y\n", encoding="utf-8")
+    (fx / "platform" / "windows" / "w.rs").write_text("y\n", encoding="utf-8")
     _g("add", "-A")
     _g("commit", "-qm", "c2")
     c2 = _g("rev-parse", "HEAD").stdout.strip()
@@ -678,14 +678,14 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     check("㉗ 演员名 `bighippo` ≡ `macos,ios`：改 macOS 子树 ⇒ 绿", EXIT_PASS,
           paths=["App/Views/A.swift"], mine="bighippo", wants=["本侧子树"])
     check("㉘ 演员名 `tinyhippo` ≡ 安卓/鸿蒙：改 windows 子树 ⇒ 红（跨平台仍越界）", EXIT_RED,
-          paths=["windows/Core/src/lib.rs"], mine="tinyhippo", wants=["对侧子树"])
+          paths=["platform/windows/Core/src/lib.rs"], mine="tinyhippo", wants=["对侧子树"])
     check("㉙ 演员名现行规范名 `fatshark` ≡ windows：改 windows 子树 ⇒ 绿", EXIT_PASS,
-          paths=["windows/Core/src/lib.rs"], mine="fatshark", wants=["本侧子树"])
+          paths=["platform/windows/Core/src/lib.rs"], mine="fatshark", wants=["本侧子树"])
     # ㉚ / ㉛ 演员名跟版护栏（2026-10-05 · 派单 `T-20261005-038` ①）：旧名 `fatfish` 退役
     # （2026-10-04 家族改名令 `T-20261004-028` 后改属公司 Linux 侧）⇒ 规范名表里必须是
     # `fatshark`，而 `fatfish` 只保留识别（历史单 / 历史提交不判红）。成对证据见 ⑰（词表外名 ⇒ 退出 2）。
     check("㉚ 退役侧名 `fatfish` 仍可识别（历史单 / 历史提交不判红）：≡ windows ⇒ 绿", EXIT_PASS,
-          paths=["windows/Core/src/lib.rs"], mine="fatfish", wants=["本侧子树"])
+          paths=["platform/windows/Core/src/lib.rs"], mine="fatfish", wants=["本侧子树"])
     check("㉛ 防回退：规范名表含 `fatshark`、不含退役名 `fatfish`",
           True, raw_ok=lambda: ACTOR_PLATFORMS.get("fatshark") == ("windows",)
           and "fatfish" not in ACTOR_PLATFORMS

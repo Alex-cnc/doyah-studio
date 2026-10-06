@@ -47,7 +47,7 @@
    "contract_side": "nonapple",
    "label": "Windows 端（黑鳍大鲨鱼 / Windows 机；Tauri 2 + Vue 3 + TypeScript / Rust）",
    "paths": [
-    "windows/"
+    "platform/windows/"
    ],
    "actor": "fatshark"
   }
@@ -173,6 +173,12 @@
    "by": "bighippo",
    "at": "2026-10-03",
    "reason": "派活单 T-20261003-003：越界门禁自测 29 → 35 例，例数台账 `cases` 跟版（例数唯一来源）"
+  },
+  {
+   "glob": "Scripts/path-ownership.json",
+   "reason": "W-S01（人类主人 2026-10-06 令「立刻执行」）：Windows 实现层迁到 platform/windows/（原在仓根），本清单 windows 树 paths 跟版",
+   "by": "fatshark",
+   "at": "2026-10-06"
   }
  ],
  "unclassified_allow": [

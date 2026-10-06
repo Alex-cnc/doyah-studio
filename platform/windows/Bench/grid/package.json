@@ -1,0 +1,25 @@
+{
+  "name": "doyah-grid-bench",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Doyah Studio · 结果网格压力基准台（40 万行 × 20 列；Vue 3 + TS + TanStack Virtual 自绘，数据由 platform/windows/Core 的 grid-bench 产出）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@tanstack/vue-virtual": "^3.13.39",
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.9",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}

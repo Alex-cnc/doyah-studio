@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "purpose": "Windows 侧发布产物版本号的唯一登记处（接契约侧 §8.3 闸门表『生成物一致性：发布产物版本号一个值三处一致』那一行 · 队列 L-70；本侧第 27 轮）。同一个值 `0.2.0` 写在三处 —— `platform/windows/App/src-tauri/tauri.conf.json`（权威：Tauri bundler 组装 MSI / NSIS 时把 productName + version 写进安装包元数据，发布产物实际携带的就是它）、`platform/windows/App/package.json`、`platform/windows/App/src-tauri/Cargo.toml` 的 `[package] version`。本台账登记「谁是权威、镜像处必须等于它、跟不跟 mac 侧发布台账、哪些东西明确不判」，判据 `platform/windows/Tools/check-release-version.ps1` 做逐字一致与跨端同源的机械对账（本侧闸门第 13 项）。",
+  "readingRules": [
+    "authority = 权威出处：发布产物实际携带这个值 ⇒ 另两处必须等于它，不是反过来。",
+    "marketingVersion = 当前值（字符串，逐字比对，不做语义化归一：`0.2.0` 与 `0.2` 不是同一个值）。",
+    "mirrors = 必须等于权威值的镜像处（逐处写清是源还是生成物、以及该在哪一段里取值）；判据逐处解析并比对，解析不到 = 判红，不是跳过。",
+    "keys = 该处的取值键名。JSON 处按顶层 `\"键\": \"值\"` 取，且**只许出现一次**（出现第二次 = 又是一处副本，判红）；TOML 处按 `section` 指定的段内取（Cargo 的 `[dependencies]` 里也可能有 `version =`，不算）。",
+    "generatedArtifacts = 携带这个值的**生成物**（若有）。本侧现在为空 —— 见 generatedArtifactsReason；空了也要写清为什么空。",
+    "platformAlign = 与 mac 侧发布台账（`Scripts/release-version.json`）的关系：policy = equal ⇒ 两端同源、不等即判红；policy = independent ⇒ reason 必须非空（放行逐条打印，理由为空仍判红）。counterpartField 只跟 `marketingVersion`，**不跟** `buildVersion`（各端构建号各自递增）。",
+    "anchors = 文档里的「现状声明」落点（精确正则 + 捕获组 + minSites）：每一处捕获到的值必须 == 本台账的值；命中处数 < minSites 判红（数字被删光也算红）。",
+    "notInScope = 本判据**明确不判**的东西，逐条写理由 —— 不写就是偷偷放过。"
+  ],
+  "authority": {
+    "path": "platform/windows/App/src-tauri/tauri.conf.json",
+    "kind": "Tauri 配置（Tauri bundler 组装 MSI / NSIS 时把这个 version 写进安装包元数据 ⇒ 它就是发布产物实际携带的值）",
+    "format": "json",
+    "keys": {
+      "marketingVersion": "version"
+    },
+    "evidence": "本侧第 27 轮实测：`platform/windows/App/src-tauri/tauri.conf.json` 第 4 行 `\"version\": \"0.2.0\"`（顶层唯一一处），与 `platform/windows/App/package.json` 第 4 行、`platform/windows/App/src-tauri/Cargo.toml` 的 `[package] version` 逐字相同。**未实测过**「装出来的 MSI 里读到的产品版本号」—— 那要真跑一次 Tauri bundler（本机未做，见 platform/windows/README.md 的未接网账）。"
+  },
+  "marketingVersion": "0.2.0",
+  "mirrors": [
+    {
+      "path": "platform/windows/App/package.json",
+      "kind": "前端包描述（npm 侧的身份；与 Tauri 配置同源，不许各写一套）",
+      "format": "json",
+      "keys": {
+        "marketingVersion": "version"
+      }
+    },
+    {
+      "path": "platform/windows/App/src-tauri/Cargo.toml",
+      "kind": "Rust 包（cargo 用它命名 release 产物）",
+      "format": "toml",
+      "section": "[package]",
+      "keys": {
+        "marketingVersion": "version"
+      }
+    }
+  ],
+  "generatedArtifacts": [],
+  "generatedArtifactsReason": "本侧这个值的三处**都是源**，仓内没有携带它的生成物：MSI / NSIS 由 Tauri bundler 产出、`platform/windows/App/dist/` 与 `platform/windows/target/` 都被根 `.gitignore` 排除 ⇒ 不存在「生成物 ↔ 源」漂移这一半。契约侧 §8.3 那一行要求的「生成物由本端工具产出时，台账要登记产出工具与版本」**现在没有对象**；若将来版本值改由脚本生成（或把某个产物入库），必须先在此登记生成器（工具 + 版本 + 命令）再让判据判，否则就是又一个「生成文件没有症状」。",
+  "platformAlign": {
+    "policy": "equal",
+    "counterpart": "Scripts/release-version.json",
+    "counterpartField": "marketingVersion",
+    "reason": "同一产品的发布版本号两端必须同源（§8.5.4「一样」清单里的产品身份；Windows 端是同一产品的第二个客户端，不是另一个产品）。对侧升版时本侧三处跟版是一处机械改动 —— 判红是提醒，不是漂移。对侧 `buildVersion`（构建号）**不跟随**：各端构建号各自递增。"
+  },
+  "anchors": [
+    {
+      "path": "Docs/概要设计.md",
+      "regex": "发布产物版本号 `([0-9]+\\.[0-9]+\\.[0-9]+)`（三处逐字一致）",
+      "captures": ["marketingVersion"],
+      "minSites": 1,
+      "note": "§8.5.3 本侧闸门表里这一项的现状声明"
+    },
+    {
+      "path": "platform/windows/README.md",
+      "regex": "发布产物版本号 `([0-9]+\\.[0-9]+\\.[0-9]+)`",
+      "captures": ["marketingVersion"],
+      "minSites": 1,
+      "note": "platform/windows/README.md 未接网账里这一条的销账声明"
+    }
+  ],
+  "notInScope": [
+    "`platform/windows/Core/Cargo.toml` 的 `version`（领域层 crate 的内部版本，不是发布产物的身份）—— 每次显式打印。",
+    "`platform/windows/Bench/grid/package.json` 的 `version`（基准台不是发布产物，不进安装包）—— 每次显式打印。",
+    "对侧 `Scripts/release-version.json` 的 `buildVersion`（各端构建号各自递增）与对侧三个镜像处（Info.plist 模板 / project.yml / project.pbxproj）—— 那是 mac 侧 `Scripts/check-release-version.py` 的判据面，本侧只读它一个字段。",
+    "版本号的**语义**（该不该是 `0.2.0`、什么时候升 `0.3.0`）：本判据只判「三处是否同一个值、是否与 mac 侧同源」，不判取号对不对。",
+    "「装出来的 MSI / NSIS 里读到的产品版本号」：要真跑一次 Tauri bundler 并解析产物元数据（本机未做）—— 本判据判的是**源**，不判打包产物。",
+    "仓外构建产物（`platform/windows/App/dist/` / `platform/windows/target/` / `*.msi` / `*.exe`）都在 `.gitignore` 里，不入库、不受本判据管辖。"
+  ]
+}

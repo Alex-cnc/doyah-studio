@@ -64,19 +64,19 @@ issuer*.key
 Tools/LicenseTool/keys/
 
 # ── Windows 侧（小河马）：Rust / 前端 的构建产物与生成物 ──
-# 不进版本库的理由：一构建/一跑基准就产生 ⇒ 仓库长期 dirty（与「台账镜像必须被忽略」同源，见 windows/Tools/README.md）
-windows/target/
+# 不进版本库的理由：一构建/一跑基准就产生 ⇒ 仓库长期 dirty（与「台账镜像必须被忽略」同源，见 platform/windows/Tools/README.md）
+platform/windows/target/
 target/
 node_modules/
 # 前端 dist 与 Rust target 一律不进版本库
-windows/Bench/**/dist/
-windows/App/dist/
-windows/App/src-tauri/gen/
-windows/Bench/grid/public/data/
+platform/windows/Bench/**/dist/
+platform/windows/App/dist/
+platform/windows/App/src-tauri/gen/
+platform/windows/Bench/grid/public/data/
 # 循环台账镜像（本机打点脚本写的人读副本；随轮重写 ⇒ 必须忽略，否则仓库长期 dirty 会冻住唤醒门禁）
-windows/循环台账.md
+platform/windows/循环台账.md
 # 本侧打出来的安装包（MSI / NSIS）：与 target/ 同源（Tauri bundler 的产物），只是我把它
 # 复制到仓内一个稳定目录方便取用 ⇒ 同样不进版本库（一打包就变、几个 MB、无版本价值）
-windows/dist-packages/
+platform/windows/dist-packages/
 *.pyc
 __pycache__/
