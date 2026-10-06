@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// 工具栏 / 菜单快捷键的**单一事实来源**（FR-EDIT-28）。
 ///
@@ -38,6 +39,21 @@ enum AppShortcut: CaseIterable {
     /// 而「格式化」在哪儿都是 ⇧⌘F 这件事，比给两个区域各发明一个键更有用。
     case formatCode
 
+    /// 工作区 Markdown 的**任务框勾选翻转**（`FR-EDIT-48`）。
+    ///
+    /// 与 SQL 编辑器那条 `.goToLine`（跳转到行）**共用 ⌘L** —— 与上面 `.format` / `.formatCode`
+    /// 是同一条纪律：**按语境分属**。两者分属两个编辑器（数据库 SQL 编辑区 / 工作区
+    /// Markdown 文档），同一个文档里不会同时成立（生效范围由 `MarkdownEditingScope`
+    /// 限死在 Markdown ⇒ SQL 那边它根本不认这一下）。
+    ///
+    /// **冲突登记（先例 = `FR-EDIT-27` 的 ⌘D）**：⌘L 在本表里因此有**两个主人**，登记落点
+    /// 就在这一条与 `.goToLine` 的说明里（本表是快捷键的唯一事实源）；需求行那一侧的偏差
+    /// 登记属契约层（`Docs/**`，归前门），本片不动。
+    ///
+    /// ⚠️ `.toggleTask` **不挂任何菜单项**：`FR-EDIT-48` ⑤ 要的那条菜单项
+    /// （`DoyahStudioCommands` 的「编辑」组）**刻意不写 `.keyboardShortcut`** —— 菜单项一旦挂上
+    /// ⌘L，AppKit 只会认其中一个（另一项变摆设），SQL 侧的 `.goToLine` 就没了。
+    case toggleTask
 
     case safeMode
     case confirmAllWrites
@@ -90,6 +106,8 @@ enum AppShortcut: CaseIterable {
         case .find: return "f"
         case .replace: return "f"
         case .goToLine: return "l"
+        // 与 `.goToLine` 同键（⌘L），按语境分属 —— 见上面 `case toggleTask` 的说明。
+        case .toggleTask: return "l"
         case .indent: return "]"
         case .outdent: return "["
         case .clearEditor: return "k"
@@ -113,7 +131,7 @@ enum AppShortcut: CaseIterable {
 
     var modifiers: EventModifiers {
         switch self {
-        case .execute, .openFile, .saveFile, .saveQuery, .indent, .outdent, .goToLine, .find, .commandPalette:
+        case .execute, .openFile, .saveFile, .saveQuery, .indent, .outdent, .goToLine, .find, .commandPalette, .toggleTask:
             return [.command]
         case .stop:
             return [.command]
@@ -147,5 +165,31 @@ enum AppShortcut: CaseIterable {
     /// 提示文案本身**不再内嵌按键**，统一由这里追加，避免两处各写一份。
     func help(_ title: String) -> String {
         "\(title)（\(display)）"
+    }
+
+    /// 这一条对应的 AppKit 修饰键。
+    ///
+    /// 为什么需要一次换算：菜单与 tooltip 走 SwiftUI 的 `EventModifiers`，而编辑器里的
+    /// `performKeyEquivalent` 拿到的是 `NSEvent`（`NSTextView` 有焦点时 SwiftUI 的
+    /// `.keyboardShortcut` 收不到按键，只能在那一层自己判）。两边判的必须是**同一份定义**
+    /// —— 这里把修饰键换算过去，视图里就不再出现 `[.command]` 那种字面量。
+    var eventModifiers: NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        if modifiers.contains(.command) { flags.insert(.command) }
+        if modifiers.contains(.shift) { flags.insert(.shift) }
+        if modifiers.contains(.option) { flags.insert(.option) }
+        if modifiers.contains(.control) { flags.insert(.control) }
+        return flags
+    }
+
+    /// 这一次按键是不是这一条（键 + 修饰键都取本表）。
+    ///
+    /// 只比「**恰好**这些修饰键」，与 `.keyboardShortcut` 的语义一致：多按了别的修饰键
+    /// （例如 `.toggleTask` 上的 ⇧⌘L）就不算它，按键照旧交还系统。
+    func matches(_ event: NSEvent) -> Bool {
+        let pressed = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard pressed == eventModifiers,
+              let typed = event.charactersIgnoringModifiers?.lowercased() else { return false }
+        return typed == String(key.character).lowercased()
     }
 }

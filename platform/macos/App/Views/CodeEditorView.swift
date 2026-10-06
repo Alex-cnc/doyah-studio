@@ -345,13 +345,13 @@ final class CodeTextView: NSTextView {
             onSave?()
             return true
         }
-        // ⌘L：勾 / 取消勾选**光标所在行**的任务框（`FR-MD-02`）。
-        // 只认「恰好 ⌘」这一个修饰键 —— 带 ⇧ 的 ⇧⌘L 是应用菜单里的另一件事，不抢。
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.command],
-           event.charactersIgnoringModifiers?.lowercased() == "l",
-           MarkdownEditingScope.applies(to: completionLanguage),
-           let plan = MarkdownListEditing.toggleTask(in: string, selection: selectedRange()) {
-            applyMarkdownPlan(plan)
+        // ⌘L：勾 / 取消勾选**光标所在行**的任务框（`FR-EDIT-48`）。
+        // 键与修饰键取 `AppShortcut.toggleTask`（**唯一事实源**，视图里不再写 `"l"` / `[.command]`
+        // 这种字面量）；只认「恰好 ⌘」这一个修饰键 —— ⇧⌘L 是应用菜单里的另一件事，不抢。
+        // 动作落到**唯一入口** `CodeTextView.toggleTask(in:)`：主菜单「编辑」那条菜单项
+        // （`DoyahStudioCommands`）调的是同一个函数。翻不动 ⇒ 返回 false ⇒ 按键交还系统（不吞）。
+        if AppShortcut.toggleTask.matches(event),
+           CodeTextView.toggleTask(in: self) {
             return true
         }
         // ⇧⌘F：格式化代码（FR-EDIT-39）。与 ⌘S 同一条理由 —— SwiftUI 的 `.keyboardShortcut`
@@ -403,6 +403,27 @@ final class CodeTextView: NSTextView {
         setSelectedRange(NSRange(location: caret, length: 0))
         scrollRangeToVisible(NSRange(location: caret, length: 0))
         return true
+    }
+
+    /// **任务框勾选翻转的唯一入口**（`FR-EDIT-48` ⑤）—— 编辑器里的 ⌘L 分支
+    /// （`performKeyEquivalent`）与主菜单「编辑」那条菜单项（`DoyahStudioCommands`）
+    /// 都落到**这一个函数**上。
+    ///
+    /// 为什么收成一个入口：需求原文要的就是「同一动作在菜单里也给一个条目（**与快捷键同一个入口**）」
+    /// —— 两条路各写一遍迟早不一致（`FR-EDIT-39` 的「格式化」就是这么收的：菜单与 ⇧⌘F 都落
+    /// `WorkspaceTabsModel.formatSelected()`）。
+    ///
+    /// `textView` 传 `nil` = **现找当前获得焦点的代码编辑器**（菜单项那一侧走这条）：
+    /// 菜单被点开时第一响应者仍是编辑器，这是 AppKit 里「菜单项作用于当前焦点」的标准做法。
+    /// 生效范围只经 `MarkdownEditingScope`（视图里不自己判语言）。翻不动 —— 非任务行、光标
+    /// 不在任务行、或焦点不在代码编辑器上 —— 返回 `false`，调用方据此**把这一下按键交还系统**。
+    @discardableResult
+    static func toggleTask(in textView: CodeTextView? = nil) -> Bool {
+        guard let target = textView ?? (NSApp.keyWindow?.firstResponder as? CodeTextView),
+              MarkdownEditingScope.applies(to: target.completionLanguage),
+              let plan = MarkdownListEditing.toggleTask(in: target.string, selection: target.selectedRange())
+        else { return false }
+        return target.applyMarkdownPlan(plan)
     }
 
     /// 跳到第 `line` 行（1 起）：把光标挪过去并滚到可见（`FR-EDIT-44` 的「回车跳到命中行」）。

@@ -46,6 +46,17 @@ struct DoyahStudioCommands: Commands {
                 workspaceTabs.formatSelected()
             }
             .keyboardShortcut(AppShortcut.formatCode.key, modifiers: AppShortcut.formatCode.modifiers)
+
+            // 任务框勾选翻转（`FR-EDIT-48` ⑤）：**与 ⌘L 走同一个入口**
+            // （`CodeTextView.toggleTask()` —— 不带参数即「作用于当前获得焦点的代码编辑器」）。
+            // 由头与上面那条同源：功能在、菜单里却没有，按名字找不到就等于没有。
+            //
+            // ⚠️ **刻意不挂 `.keyboardShortcut`**：⌘L 归 SQL 编辑面的 `.goToLine`（跳转到行），
+            // 菜单项一旦挂上它，AppKit 只会认其中之一（另一项变摆设）—— 冲突的登记落点在
+            // `ShortcutCatalog.swift` 的 `case toggleTask` 上。
+            Button(L(.menuToggleTaskCheckbox)) {
+                CodeTextView.toggleTask()
+            }
         }
 
         CommandGroup(replacing: .newItem) {

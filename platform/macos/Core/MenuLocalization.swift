@@ -62,6 +62,8 @@ public enum MenuLocalization {
         .schemaDiffTitle,
         .lowerPaneToggle,
         .menuFormat,
+        // 任务框勾选翻转（FR-EDIT-48 ⑤）：「编辑」菜单里的自有条目，同样要能运行时切语言。
+        .menuToggleTaskCheckbox,
         .menuRelaunchApp
     ]
 
