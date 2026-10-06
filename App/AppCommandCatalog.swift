@@ -50,11 +50,50 @@ enum AppCommandCatalog {
             // 外部调用审批（FR-AI-10 的界面那一半）：外部智能体的写调用在这里等人点。
             // 笔记（DOYAH-01/03）：与数据库、工作区并列的第三块。
             item("notes", .notesTitle, "notes note memo 笔记 记录 灵感", "notes memo", .paletteCategoryAgent),
+            // **「笔记」菜单的成员**（`N-UI-4`）：进笔记面时菜单栏多出这个菜单，离开收起。
+            //
+            // 为什么放在**同一个清单**里而不是写进 `DoyahStudioCommands`：菜单栏与 ⌘K 面板是
+            // **同一条命令的两处呈现**（前门口径：同一命令一处定义、两处呈现）—— 标题（语言表键）
+            // 与关键词在这里定义一次，动作在 `AppState.performPaletteCommand` 里定义一次。
+            item("newNote", .notesNew, "new note 新建 笔记", "new note", .paletteCategoryNotes),
+            item("newNotebook", .notesNewNotebook, "new notebook 新建 笔记本", "new notebook", .paletteCategoryNotes),
+            item("noteSearchScopeCurrent", .notesSearchScopeCurrent, "scope current 搜索范围 当前 笔记本", "search scope current", .paletteCategoryNotes),
+            item("noteSearchScopeAll", .notesSearchScopeAll, "scope all notebooks 搜索范围 全部 笔记本", "search scope all notebooks", .paletteCategoryNotes),
+            item("noteFavorites", .notesFavorites, "favorites 已收藏 收藏", "favorites", .paletteCategoryNotes),
+            item("noteAllNotes", .notesAllNotes, "all notes 全部笔记 笔记", "all notes", .paletteCategoryNotes),
             item("mcpApprovals", .mcpApprovalTitle, "mcp approval external agent 外部 调用 审批 允许 拒绝 智能体", "mcp approval external", .paletteCategoryAgent),
             item("syntheticData", .commandSyntheticData, "synthetic data 合成 测试数据", "synthetic data", .paletteCategoryAgent),
             item("egressLog", .commandEgressLog, "egress log 外发 日志", "egress log", .paletteCategoryAgent),
             item("help", .commandHelp, "help 帮助 快捷键", "help shortcuts", .paletteCategoryHelp),
         ]
+    }
+
+    /// **「笔记」菜单的成员与顺序**（`N-UI-4`）。
+    ///
+    /// 为什么这里只有一串 **id**（没有标题、没有动作）：菜单栏与 ⌘K 面板是同一条命令的两处呈现。
+    /// 标题（语言表键）与关键词在上面的 `all()` 里定义一次，动作在 `AppState.performPaletteCommand`
+    /// 里定义一次 —— 这份清单只说「哪几条进菜单、按什么顺序」。于是菜单文件
+    /// （`App/DoyahStudioCommands.swift`）里**一个语言表键、一个动作名都不出现**：
+    /// 「菜单里那条命令是不是只有这一处定义」由此可以机械扫出来。
+    ///
+    /// 顺序与 `all()` 解耦：`all()` 的顺序服务面板的默认排序（同分时先出高频的），
+    /// 菜单栏要的是「先新建、后范围」这种**动作语序**，两者不是一回事。
+    static let notesMenuCommandIDs = [
+        "newNote",
+        "newNotebook",
+        "noteSearchScopeCurrent",
+        "noteSearchScopeAll",
+        "noteFavorites",
+        "noteAllNotes",
+    ]
+
+    /// 按上面的顺序取出「笔记」菜单的成员（`N-UI-4`：进笔记面时菜单栏多出这个菜单）。
+    ///
+    /// 认不出 id 的后果是「菜单里少一项」（不是崩、也不是藏起别的项）—— id 与上面的清单同在一个
+    /// 文件里，且 `Scripts/check-palette-wiring.py` 钉着「清单里的 id ↔ 分派器」两侧对齐。
+    static func notesMenuCommands() -> [CommandPalette.Item] {
+        let byID = Dictionary(uniqueKeysWithValues: all().map { ($0.id, $0) })
+        return notesMenuCommandIDs.compactMap { byID[$0] }
     }
 
     /// 面板右侧显示的快捷键提示（有就用同一份事实来源 `AppShortcut`，没有就留空）。
