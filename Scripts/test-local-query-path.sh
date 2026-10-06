@@ -16,6 +16,8 @@ set -euo pipefail
 #   TEST_PGPORT       测试端口，默认由 Scripts/lib/test-env.sh 的 querytest 档给出
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+# 源码根（SwiftPM 包根）—— 目录统一 platform/<平台>/ 之后不再等于仓根；跑 swift 一律显式给 --package-path。
+PACKAGE_ROOT="${ROOT}/platform/macos"
 # 本脚本用 querytest 档集群（端口 / 数据目录与默认档不同，见 test-env.sh 的档位表）
 DOYAH_TEST_LOCAL_PROFILE=querytest
 # 连接信息（本机过渡集群 / 远程专用库）由共用入口决定 —— 三档端口与目录只写在它里面
@@ -53,7 +55,7 @@ echo "==> 编译 CLI（增量）"
 "${SWIFT}" build \
   --product DoyahCLI \
   --disable-sandbox \
-  --package-path "${ROOT}" \
+  --package-path "${PACKAGE_ROOT}" \
   --cache-path "${CACHE}" \
   --scratch-path "${SCRATCH}" \
   --manifest-cache local \

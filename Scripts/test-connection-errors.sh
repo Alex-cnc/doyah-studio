@@ -10,6 +10,8 @@
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
+# 源码根（SwiftPM 包根）—— 目录统一 platform/<平台>/ 之后不再等于仓根；跑 swift 一律显式给 --package-path。
+PACKAGE_ROOT="$PWD/platform/macos"
 CLI=".build/debug/DoyahCLI"
 # 连接信息（本机过渡集群 / 远程专用库）由共用入口决定 —— 三档端口与目录只写在它里面
 source "$(cd "$(dirname "$0")" && pwd)/lib/test-env.sh"
@@ -28,7 +30,7 @@ trap cleanup EXIT
 echo "== 0) 构建 CLI =="
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 export CLANG_MODULE_CACHE_PATH="$PWD/.build/clang-module-cache"
-if swift build --disable-sandbox --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
+if swift build --disable-sandbox --package-path "${PACKAGE_ROOT}" --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
     --manifest-cache local -Xswiftc -disable-sandbox --product DoyahCLI > /tmp/conn-errors-build.log 2>&1; then
     check "CLI 构建成功" 0
 else

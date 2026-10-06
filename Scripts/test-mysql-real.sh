@@ -16,6 +16,8 @@
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
+# 源码根（SwiftPM 包根）—— 目录统一 platform/<平台>/ 之后不再等于仓根；跑 swift 一律显式给 --package-path。
+PACKAGE_ROOT="$PWD/platform/macos"
 CLI=".build/debug/DoyahCLI"
 
 HOST="${DOYAH_MYSQL_HOST:-}"
@@ -56,7 +58,7 @@ run_sql() { run_mysql --sql "$1"; }
 echo "== 0) 构建 CLI =="
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 export CLANG_MODULE_CACHE_PATH="$PWD/.build/clang-module-cache"
-swift build --disable-sandbox --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
+swift build --disable-sandbox --package-path "${PACKAGE_ROOT}" --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
     --manifest-cache local -Xswiftc -disable-sandbox --product DoyahCLI > .build/mysql-real-build.log 2>&1 \
     && check "CLI 构建成功" 0 || { check "CLI 构建成功" 1; tail -5 .build/mysql-real-build.log; exit 1; }
 

@@ -40,6 +40,8 @@ set -euo pipefail
 # 找不到身份时**回退 ad-hoc**（构建不因此中断），并在终端写明后果。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+# 源码根（SwiftPM 包根）—— 目录统一 platform/<平台>/ 之后不再等于仓根；跑 swift 一律显式给 --package-path。
+PACKAGE_ROOT="${ROOT}/platform/macos"
 CONFIGURATION="${1:-debug}"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
@@ -91,7 +93,7 @@ build_product() {
     --product DoyahStudioApp \
     --configuration "${CONFIGURATION}" \
     --disable-sandbox \
-    --package-path "${ROOT}" \
+    --package-path "${PACKAGE_ROOT}" \
     --cache-path "${CACHE}" \
     --scratch-path "${scratch}" \
     --manifest-cache local \
@@ -101,7 +103,7 @@ build_product() {
   bin_dir="$("${SWIFT}" build \
     --configuration "${CONFIGURATION}" \
     --disable-sandbox \
-    --package-path "${ROOT}" \
+    --package-path "${PACKAGE_ROOT}" \
     --cache-path "${CACHE}" \
     --scratch-path "${scratch}" \
     --manifest-cache local \

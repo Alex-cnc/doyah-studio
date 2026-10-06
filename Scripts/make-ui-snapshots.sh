@@ -26,6 +26,8 @@ set -euo pipefail
 # 所以这里不碰生产代码、也不给 App 开任何测试后门。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+# 源码根（SwiftPM 包根）—— 目录统一 platform/<平台>/ 之后不再等于仓根；跑 swift 一律显式给 --package-path。
+PACKAGE_ROOT="${ROOT}/platform/macos"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
@@ -85,7 +87,7 @@ fi
 echo "==> 渲染界面快照 → ${OUT}"
 "${SWIFT}" test \
     --disable-sandbox \
-    --package-path . \
+    --package-path "${PACKAGE_ROOT}" \
     --cache-path "${CACHE}" \
     --scratch-path "${SCRATCH}" \
     --manifest-cache local \

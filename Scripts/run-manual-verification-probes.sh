@@ -241,6 +241,8 @@ set -euo pipefail
 # 退出码：0 = 两遍都绿且跨清单判定成立；非 0 = 某一遍红或跨清单判定不成立。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+# 源码根（SwiftPM 包根）—— 目录统一 platform/<平台>/ 之后不再等于仓根；跑 swift 一律显式给 --package-path。
+PACKAGE_ROOT="${ROOT}/platform/macos"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
@@ -433,7 +435,7 @@ run_pass() {  # $1 = 输出目录；$2 = 该遍要设的 APP_SANDBOX_CONTAINER_I
     if [ -n "${mark}" ]; then
         APP_SANDBOX_CONTAINER_ID="${mark}" DOYAH_SNAPSHOT_DIR="${out}" "${SWIFT}" test \
             --disable-sandbox \
-            --package-path . \
+            --package-path "${PACKAGE_ROOT}" \
             --cache-path "${CACHE}" \
             --scratch-path "${SCRATCH}" \
             --manifest-cache local \
@@ -442,7 +444,7 @@ run_pass() {  # $1 = 输出目录；$2 = 该遍要设的 APP_SANDBOX_CONTAINER_I
     else
         DOYAH_SNAPSHOT_DIR="${out}" "${SWIFT}" test \
             --disable-sandbox \
-            --package-path . \
+            --package-path "${PACKAGE_ROOT}" \
             --cache-path "${CACHE}" \
             --scratch-path "${SCRATCH}" \
             --manifest-cache local \
