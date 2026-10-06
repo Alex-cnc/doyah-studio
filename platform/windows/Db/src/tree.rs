@@ -316,6 +316,57 @@ pub fn group_by_kind(items: &[ObjectNode]) -> Vec<(ObjectKind, Vec<ObjectNode>)>
     pairs
 }
 
+// ── 元数据查询的行数上限保护（FR-META-07：10,000 行）───────────────────────────────
+//
+// 口径（与对侧 `QueryOptions(maxRows: 10_000)` 同源，实现按本侧栈重写）：
+// ① **上限是保护，不是"分页"**：元数据本来可以无限长（一个 schema 下几万张表是可能的），
+//    把它整份收进内存是"还没展开就先顶爆内存"的来路 —— 收够上限就不再收；
+// ② **截断要如实报**（`truncated`）：到顶时界面必须能说"只显示了前 N 条，可能不完整"。
+//    静默少给会让用户以为"库里就这么多表" —— 那是最难查的一类缺陷；
+// ③ **恰好装满不算截断**：正好 10,000 行是**完整**的一层；把它说成截断会让每一层
+//    都挂一句"可能不完整"（提示一多就等于没有提示）。
+
+/// 元数据查询的**行数上限**（FR-META-07）。
+pub const METADATA_ROW_LIMIT: usize = 10_000;
+
+/// 上限保护的结果：留下的行 + 有没有被截掉的行 + 生效的上限（界面要写"前 N 条"）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CappedRows<T> {
+    pub rows: Vec<T>,
+    /// 服务端还回得更多、被上限截掉了（**如实报**，不静默少给）
+    pub truncated: bool,
+    /// 本次生效的上限（截断提示里要写它）
+    pub limit: usize,
+}
+
+impl<T> CappedRows<T> {
+    /// 由**流式取数**构造：`rows` 已按上限收好，`more` = "服务端还有一行没读"。
+    ///
+    /// 与 [`cap_metadata_rows`] 的分工：流式那条路在**读的时候**就知道有没有更多
+    /// （所以截断标记由调用方给）；这条纯函数那条路是在**整批已在手上**时截。
+    /// 两条路的最终形状与语义完全一致，界面只认这一个形状。
+    pub fn from_stream(rows: Vec<T>, limit: usize, more: bool) -> Self {
+        Self { rows, truncated: more, limit }
+    }
+}
+
+/// 按上限收行（**纯函数、唯一入口** —— 生产取数的落点与判据自测都走它）。
+///
+/// 语义：`rows.len() <= limit` 时原样返回且 `truncated = false`（**恰好装满也算完整**）；
+/// 超出时留下**前 `limit` 行**（顺序就是树的顺序，不是后 N 行）并置 `truncated = true`。
+///
+/// 负例（本模块测试）：`rows.truncate(0)` 那种"丢光"、以及"原样整份返回"的写法都会让
+/// 「行数不许超过上限」或「截了要有标记」这两句当场判红。
+pub fn cap_metadata_rows<T>(rows: Vec<T>, limit: usize) -> CappedRows<T> {
+    let mut rows = rows;
+    let truncated = rows.len() > limit;
+    if truncated {
+        rows.truncate(limit);
+    }
+    CappedRows { rows, truncated, limit }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -688,5 +739,70 @@ mod tests {
             "按 can_browse 分只有两桶（5 / 1）⇒ 与「按类型」不是一回事"
         );
         assert!(groups.len() > 2, "按类型分组要出 3 组以上");
+    }
+
+    // ── 元数据查询行数上限（FR-META-07：10,000 行）─────────────────────────────────
+
+    #[test]
+    fn metadata_rows_over_the_limit_are_cut_and_truncation_is_reported() {
+        let rows: Vec<usize> = (0..METADATA_ROW_LIMIT + 3).collect();
+        let capped = cap_metadata_rows(rows, METADATA_ROW_LIMIT);
+        assert_eq!(capped.rows.len(), METADATA_ROW_LIMIT, "留下的不许超过上限");
+        assert!(capped.truncated, "截了就必须如实报");
+        assert_eq!(capped.limit, METADATA_ROW_LIMIT);
+        // 留下的是**前** limit 行（顺序就是树的顺序）——不是后 limit 行
+        assert_eq!(capped.rows.first(), Some(&0));
+        assert_eq!(capped.rows.last(), Some(&(METADATA_ROW_LIMIT - 1)));
+    }
+
+    #[test]
+    fn exactly_at_the_limit_is_a_complete_layer_not_a_truncation() {
+        let rows: Vec<usize> = (0..METADATA_ROW_LIMIT).collect();
+        let capped = cap_metadata_rows(rows, METADATA_ROW_LIMIT);
+        assert_eq!(capped.rows.len(), METADATA_ROW_LIMIT);
+        assert!(!capped.truncated, "正好装满 = 完整的一层，不许说成截断");
+    }
+
+    #[test]
+    fn under_the_limit_passes_through_untouched_and_empty_stays_empty() {
+        let small = cap_metadata_rows(vec![1, 2, 3], METADATA_ROW_LIMIT);
+        assert_eq!(small.rows, vec![1, 2, 3]);
+        assert!(!small.truncated);
+        let empty = cap_metadata_rows(Vec::<usize>::new(), METADATA_ROW_LIMIT);
+        assert!(empty.rows.is_empty() && !empty.truncated);
+    }
+
+    #[test]
+    fn negative_a_pass_through_without_capping_is_caught() {
+        // 负例：不加保护的写法把整份返回 ⇒ 「行数不许超过上限」这句当场判红。
+        let rows: Vec<usize> = (0..METADATA_ROW_LIMIT + 1).collect();
+        let naive = rows.clone(); // 原样返回 = 没有上限保护
+        assert!(naive.len() > METADATA_ROW_LIMIT, "无保护的写法确实会超上限");
+        let capped = cap_metadata_rows(rows, METADATA_ROW_LIMIT);
+        assert!(capped.rows.len() <= METADATA_ROW_LIMIT);
+    }
+
+    #[test]
+    fn negative_silent_truncation_without_the_flag_is_caught() {
+        // 负例：截了却不说（`truncate` 完直接返回一个 Vec）—— 界面于是把"前 10000 张表"
+        // 当成"这个 schema 下就这么多表"。留下的行一样，但必须多出「截断了」这个事实。
+        let rows: Vec<usize> = (0..METADATA_ROW_LIMIT + 5).collect();
+        let mut silent = rows.clone();
+        silent.truncate(METADATA_ROW_LIMIT);
+        let capped = cap_metadata_rows(rows, METADATA_ROW_LIMIT);
+        assert_eq!(capped.rows, silent, "留下的行与朴素截断一致");
+        assert!(capped.truncated, "但「截断了」这个事实必须能被界面读到");
+    }
+
+    #[test]
+    fn streaming_construction_carries_the_same_shape_as_the_pure_cap() {
+        // 两条入口（流式 / 整批）产出同一个形状：界面只认一个。
+        let streamed = CappedRows::from_stream(vec![1, 2, 3], METADATA_ROW_LIMIT, true);
+        assert_eq!(streamed.rows, vec![1, 2, 3]);
+        assert!(streamed.truncated);
+        assert_eq!(streamed.limit, METADATA_ROW_LIMIT);
+        let pure = cap_metadata_rows(vec![1, 2, 3], 3);
+        assert_eq!(pure.rows, streamed.rows);
+        assert_eq!(pure.limit, 3);
     }
 }

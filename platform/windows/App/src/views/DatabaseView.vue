@@ -73,6 +73,8 @@ import {
   type KeyValueStore,
 } from '../shell/connectionDisplay'
 import ConnectionLabel from '../shell/ConnectionLabel.vue'
+import NodeIcon from './NodeIcon.vue'
+import { serverMenuActions, type ServerMenuAction } from './serverMenu'
 import {
   columnLabel,
   groupByKind,
@@ -718,6 +720,7 @@ const layerNodeCount = computed(() => treeNodeCount(loadedObjects.value, columns
  * `object` 行可点（生成查询）、可右键；`column` 行是第三层（只读，带数据类型）。
  */
 type TreeRow =
+  | { id: string; kind: 'server' }
   | { id: string; kind: 'schema'; label: string; expanded: boolean; loading: boolean; count: number }
   | { id: string; kind: 'type'; label: string; count: number }
   | { id: string; kind: 'object'; object: ObjectNode }
@@ -749,6 +752,9 @@ function objectRows(object: ObjectNode): TreeRow[] {
 const treeRows = computed<TreeRow[]>(() => {
   const rows: TreeRow[] = []
   if (objectView.value === 'byKind') {
+    // 「服务器」也在这一档的最前（两档视图只是同一批数据的两种排法 —— 服务器节点不属于
+    // 任何一"类"，它是根；少了它，按类型分组这一档就没有可右键的地方）
+    rows.push({ id: 'server:root', kind: 'server' })
     for (const group of kindGroups.value) {
       rows.push({
         id: `type:${group.kind}`,
@@ -760,7 +766,9 @@ const treeRows = computed<TreeRow[]>(() => {
     }
     return rows
   }
-  // 层级视图：schema 行**永远在**（它是展开开关）；展开过才有对象行，对象展开过才有列行。
+  // 层级视图：**第一个节点是「服务器」**（FR-META-11 第一期 —— 三个动作挂在这一行上）；
+  // schema 行**永远在**（它是展开开关）；展开过才有对象行，对象展开过才有列行。
+  rows.push({ id: 'server:root', kind: 'server' })
   for (const schema of schemas.value) {
     const items = layerOf.value[schema]
     const isExpanded = !!expanded.value[schema]
@@ -1043,6 +1051,75 @@ const objectQuery = ref('')
 const objectHits = ref<SearchHit[]>([])
 /** 右键菜单：位置 + 目标对象；`null` = 没打开。 */
 const contextMenu = ref<{ x: number; y: number; object: ObjectNode } | null>(null)
+/**
+ * 服务器节点右键菜单（FR-META-11 第一期）：**只挂在「服务器」那一行上**。
+ *
+ * 与对象菜单分开两处状态而不是合成一个：两者作用对象不同（一个是节点、一个是对象），
+ * 合成一个就得在里面塞一个 `target: 'server' | 'object'` 的判别式 —— 那正是"两套菜单慢慢
+ * 长成一个 if 堆"的来路。分开之后各自的呈现条件是"自己的状态非空"，互不干扰。
+ */
+const serverMenu = ref<{ x: number; y: number } | null>(null)
+
+/**
+ * 服务器节点三动作的可用性（**规则在 `views/serverMenu.ts`，只有一处**）。
+ *
+ * 已连接 ⇒ 连接置灰；未连接 ⇒ 断开置灰；有动作在路上 ⇒ 三个全置灰。
+ * 置灰**不隐藏**：菜单里少一项，用户会以为功能不存在，而不是"现在不能用"。
+ */
+const serverActions = computed<ServerMenuAction[]>(() =>
+  serverMenuActions({ connected: !!info.value, busy: !!busy.value }),
+)
+
+/** 菜单项文案（走语言表）。 */
+function serverActionLabel(action: ServerMenuAction): string {
+  return t(action.labelKey)
+}
+
+/** 置灰时的悬停提示：说清"为什么现在不能用"（不做灰着但不说为什么）。 */
+function serverActionTip(action: ServerMenuAction): string {
+  if (action.enabled) return serverActionLabel(action)
+  const reason = action.reasonKey ? t(action.reasonKey) : ''
+  return t('db.server.menu.disabledTip', { name: `${serverActionLabel(action)} `, reason })
+}
+
+function openServerMenu(event: MouseEvent) {
+  contextMenu.value = null
+  serverMenu.value = { x: event.clientX, y: event.clientY }
+}
+
+function closeServerMenu() {
+  serverMenu.value = null
+}
+
+/** 两处菜单一起关（点树里的空白处时用）。 */
+function closeMenus() {
+  closeContextMenu()
+  closeServerMenu()
+}
+
+/**
+ * 执行服务器节点的一个动作。
+ *
+ * 口径：**置灰的动作点了也不做事**（菜单照常关掉，但不会偷偷发一次连接）——
+ * 否则"灰着能点"就成了比"不给入口"更糟的假象。
+ * 编辑连接**复用连接表单**（改的是上面那份表单，不新造一条通路）。
+ */
+async function runServerAction(action: ServerMenuAction) {
+  closeServerMenu()
+  if (!action.enabled) return
+  if (action.id === 'connect') {
+    await connect()
+    return
+  }
+  if (action.id === 'disconnect') {
+    await disconnect()
+    return
+  }
+  const current = connectedConnection.value
+  if (current) useSaved(current)
+  await nextTick()
+  document.querySelector<HTMLInputElement>('form.db__bar input[type="text"]')?.focus()
+}
 
 /** 已加载的全部对象（搜索的输入面）。 */
 const loadedObjects = computed<ObjectNode[]>(() =>
@@ -1060,10 +1137,14 @@ const tree = computed<{ schema: string; items: ObjectNode[] }[]>(() =>
 /** 第一层：schema 列表（连接后取一次）。**系统 schema 在这里就摘掉**（FR-META-04，
  * 过滤规则只有 `objectTree.isSystemSchema` 一处）。 */
 const schemas = ref<string[]>([])
+/** 元数据被行数上限截断时的读数（`0` = 没截断）—— 界面要如实说"可能不完整"（FR-META-07）。 */
+const metadataTruncated = ref(0)
 
 async function loadSchemas() {
   try {
-    schemas.value = userSchemas(await dbSchemas())
+    const report = await dbSchemas()
+    schemas.value = userSchemas(report.rows)
+    metadataTruncated.value = report.truncated ? report.limit : 0
     layerOf.value = {}
     expanded.value = {}
     columnsOf.value = {}
@@ -1084,8 +1165,9 @@ async function toggleSchema(schema: string) {
   if (layerOf.value[schema]) return
   loadingSchema.value = schema
   try {
-    const items = await dbRelations(schema)
-    layerOf.value = { ...layerOf.value, [schema]: items }
+    const report = await dbRelations(schema)
+    layerOf.value = { ...layerOf.value, [schema]: report.rows }
+    metadataTruncated.value = report.truncated ? report.limit : 0
     clearFailure()
   } catch (e) {
     failure.value = describeError(e)
@@ -1741,7 +1823,7 @@ async function probe() {
       <!-- 数据库页的左栏（**一列，不是两列**）：
            连接列表收成顶部可折叠的一段，对象树占满整列 ——
            之前把"连接列表"与"对象树"并排成两栏，导航被挤成两条窄缝，已改。 -->
-      <aside class="db__tree db__tree--navigator" @click="closeContextMenu">
+      <aside class="db__tree db__tree--navigator" @click="closeMenus">
         <details class="db__conn-fold">
           <summary class="db__tree-title">
             {{ t('db.connections') }}（{{ saved.length }}）<span class="db__kind">{{ t('db.connectedAs') }}{{ connectedName || t('db.none') }}</span>
@@ -1805,8 +1887,12 @@ async function probe() {
         <p class="db__tree-title">
           {{ t('db.objects.summary', { loaded: loadedObjects.length, schemas: schemas.length }) }}
         </p>
-        <p v-if="!info" class="db__tree-empty">未连接</p>
+        <p v-if="!info" class="db__tree-empty">{{ t('db.tree.notConnected') }}</p>
         <template v-else>
+          <!-- 元数据查询到顶（FR-META-07）：**如实说"可能不完整"**，不假装这就是全部 -->
+          <p v-if="metadataTruncated > 0" class="db__tree-empty" role="status">
+            {{ t('db.meta.truncated', { limit: metadataTruncated }) }}
+          </p>
           <!-- 两档视图（FR-META-15）：层级视图 / 按类型分组 —— 切换只重新聚合已加载的层，不重查 -->
           <div class="db__tree-modes" role="tablist" :aria-label="t('db.view.aria')">
             <button
@@ -1835,49 +1921,80 @@ async function probe() {
             v-model="objectQuery"
             class="db__tree-search"
             type="search"
-            placeholder="搜索对象（名字或 schema）"
-            aria-label="搜索数据库对象"
+            :placeholder="t('db.search.placeholder')"
+            :aria-label="t('db.search.placeholder')"
             @input="runObjectSearch"
           />
           <p v-if="objectQuery.trim()" class="db__tree-empty">
-            命中 {{ objectHits.length }} 个（只在已加载的 {{ loadedObjects.length }} 个对象里找）
+            {{ t('db.search.hits', { hit: objectHits.length, loaded: loadedObjects.length }) }}
           </p>
           <ul v-if="objectQuery.trim()" class="db__hits">
             <li v-for="hit in objectHits" :key="`${hit.object.schema}.${hit.object.name}`">
               <button
                 class="db__table"
                 type="button"
-                :title="`${hit.object.schema}.${hit.object.name}（命中依据：${hit.matchedOn === 'qualified' ? '限定名' : hit.matchedOn === 'name' ? '对象名' : 'schema 名'}）`"
+                :title="t('db.search.hitTip', {
+                  schema: hit.object.schema,
+                  name: hit.object.name,
+                  basis: hit.matchedOn === 'qualified'
+                    ? t('db.search.basis.qualified')
+                    : hit.matchedOn === 'name'
+                      ? t('db.search.basis.name')
+                      : t('db.search.basis.schema'),
+                })"
                 @click="useTable({ schema: hit.object.schema, name: hit.object.name, kind: hit.object.kind })"
                 @contextmenu.prevent="openContextMenu($event, hit.object)"
               >
+                <span class="db__icon" :title="t('db.icon.tip', { kind: hit.object.kind })">
+                  <NodeIcon :kind="hit.object.kind" />
+                </span>
                 {{ hit.object.name }}<span class="db__kind">{{ hit.object.schema }} · {{ hit.object.kind }}</span>
               </button>
             </li>
           </ul>
           <template v-else>
-            <p v-if="schemas.length === 0" class="db__tree-empty">没有可展开的 schema</p>
+            <p v-if="schemas.length === 0" class="db__tree-empty">{{ t('db.tree.noSchema') }}</p>
             <template v-for="row in treeRows" :key="row.id">
+              <!-- 服务器节点（FR-META-11 第一期）：右键给「连接 / 断开 / 编辑连接…」 -->
               <button
-                v-if="row.kind === 'schema'"
+                v-if="row.kind === 'server'"
+                class="db__schema-toggle db__server"
+                type="button"
+                :title="t('db.server.menu.aria')"
+                @contextmenu.prevent="openServerMenu($event)"
+              >
+                <span class="db__icon"><NodeIcon kind="server" /></span>
+                {{ t('db.server') }}
+                <span v-if="info" class="db__kind">
+                  {{ t('db.server.menu.connected', { database: info.database, user: info.user }) }}
+                </span>
+              </button>
+              <button
+                v-else-if="row.kind === 'schema'"
                 class="db__schema-toggle"
                 type="button"
                 :aria-expanded="row.expanded ? 'true' : 'false'"
                 @click="toggleSchema(row.label)"
               >
                 <span class="db__chevron">{{ row.expanded ? '▾' : '▸' }}</span>
+                <span class="db__icon" :title="t('db.icon.tip', { kind: 'schema' })">
+                  <NodeIcon kind="schema" />
+                </span>
                 {{ row.label }}
                 <span v-if="row.loading" class="db__kind">{{ t('db.tree.loading') }}</span>
                 <span v-else class="db__kind">{{ row.count }}</span>
               </button>
               <p v-else-if="row.kind === 'type'" class="db__tree-group">
+                <span class="db__icon" :title="t('db.icon.tip', { kind: row.label })">
+                  <NodeIcon :kind="row.label" />
+                </span>
                 {{ kindLabel(row.label) }}<span class="db__kind">{{ row.count }}</span>
               </p>
               <button
                 v-else-if="row.kind === 'object'"
                 class="db__table"
                 type="button"
-                :title="`${row.object.kind} · 点一下生成查询；右键有更多`"
+                :title="t('db.tree.objectTip', { kind: row.object.kind })"
                 @click="useTable({ schema: row.object.schema, name: row.object.name, kind: row.object.kind })"
                 @contextmenu.prevent="openContextMenu($event, row.object)"
               >
@@ -1887,6 +2004,9 @@ async function probe() {
                   :title="t('db.columns.toggle')"
                   @click.stop="toggleTable(row.object)"
                 >{{ expandedTables[tableKey(row.object.schema, row.object.name)] ? '▾' : '▸' }}</span>
+                <span class="db__icon" :title="t('db.icon.tip', { kind: row.object.kind })">
+                  <NodeIcon :kind="row.object.kind" />
+                </span>
                 {{ row.object.name }}<span class="db__kind">{{ row.object.kind === 'table' ? '' : row.object.kind }}</span>
                 <span
                   v-if="loadingTable === tableKey(row.object.schema, row.object.name)"
@@ -1894,6 +2014,9 @@ async function probe() {
                 >{{ t('db.tree.loading') }}</span>
               </button>
               <p v-else-if="row.kind === 'column'" class="db__column">
+                <span class="db__icon" :title="t('db.icon.tip', { kind: 'column' })">
+                  <NodeIcon kind="column" />
+                </span>
                 {{ columnLabel(row.column) }}
               </p>
               <p v-else class="db__tree-empty">{{ t('db.columns.empty') }}</p>
@@ -1902,7 +2025,29 @@ async function probe() {
         </template>
       </aside>
 
-      <!-- 右键菜单：**没目标就不给入口** —— 序列之类取不了数的对象不出现「浏览数据」 -->
+      <!-- 服务器节点右键菜单（FR-META-11 第一期）：三动作**永远都在**，不可用时置灰并说明原因 -->
+      <ul
+        v-if="serverMenu"
+        class="db__menu"
+        :style="{ left: `${serverMenu.x}px`, top: `${serverMenu.y}px` }"
+        :aria-label="t('db.server.menu.aria')"
+        @click.stop
+      >
+        <li class="db__menu-head">{{ t('db.server') }}</li>
+        <li v-for="action in serverActions" :key="action.id">
+          <button
+            class="db__menu-item"
+            type="button"
+            :disabled="!action.enabled"
+            :title="serverActionTip(action)"
+            @click="runServerAction(action)"
+          >
+            {{ serverActionLabel(action) }}
+          </button>
+        </li>
+      </ul>
+
+      <!-- 对象右键菜单：**没目标就不给入口** —— 序列之类取不了数的对象不出现「浏览数据」 -->
       <ul
         v-if="contextMenu"
         class="db__menu"
@@ -1917,12 +2062,12 @@ async function probe() {
             type="button"
             @click="menuBrowse"
           >
-            浏览数据…
+            {{ t('db.menu.browse') }}
           </button>
         </li>
-        <li><button class="db__menu-item" type="button" @click="menuGenerateQuery">生成查询</button></li>
-        <li><button class="db__menu-item" type="button" @click="menuDesignTable">表结构设计…</button></li>
-        <li><button class="db__menu-item" type="button" @click="menuCopyName">复制名</button></li>
+        <li><button class="db__menu-item" type="button" @click="menuGenerateQuery">{{ t('db.menu.generateQuery') }}</button></li>
+        <li><button class="db__menu-item" type="button" @click="menuDesignTable">{{ t('db.menu.design') }}</button></li>
+        <li><button class="db__menu-item" type="button" @click="menuCopyName">{{ t('db.menu.copyName') }}</button></li>
       </ul>
 
         <!-- 表设计器（1.5）：改列 → 生成变更集 → **只执行非破坏性那些** -->
@@ -3557,9 +3702,33 @@ th.db__grid-head[style] {
   cursor: pointer;
 }
 
-.db__menu-item:hover {
+.db__menu-item:hover:not(:disabled) {
   background: var(--ds-color-accent-accent);
   color: var(--ds-color-surface-content);
+}
+
+/* 不可用的动作**置灰但不隐藏**（FR-META-11）：菜单里少一项，用户会以为功能不存在 */
+.db__menu-item:disabled {
+  color: var(--ds-color-text-tertiary);
+  cursor: not-allowed;
+}
+
+/* 节点图标（FR-META-06）：占位固定，免得有图标 / 没图标的行文字对不齐 */
+.db__icon {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-right: var(--ds-spacing-xs);
+  color: var(--ds-color-text-tertiary);
+}
+
+.db__icon > svg {
+  vertical-align: middle;
+}
+
+/* 服务器节点（FR-META-11 第一期）：树的第一行，比 schema 行更"根"一点 */
+.db__server {
+  color: var(--ds-color-text-primary);
 }
 
 /* ── 表设计器（1.5）：结构网格 + 变更集 ───────────────────────────────────────────── */

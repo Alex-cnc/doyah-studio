@@ -146,12 +146,15 @@ async fn lazy_object_tree_layer_by_layer_on_real_db() {
     let Some(params) = lab_params() else { return };
     let session = PgSession::connect(&params).await.expect("应当连上实验库");
 
-    // ① 第一层：schema
+    // ① 第一层：schema（带行数上限，FR-META-07）
     let schemas = session.schemas().await.expect("列 schema 应当成功");
-    assert!(schemas.contains(&"app".to_string()), "实际：{schemas:?}");
+    assert_eq!(schemas.limit, doyah_studio_db::tree::METADATA_ROW_LIMIT);
+    assert!(!schemas.truncated, "实验库的 schema 数远不到上限，不该报截断");
+    let names_of_schemas = &schemas.rows;
+    assert!(names_of_schemas.contains(&"app".to_string()), "实际：{names_of_schemas:?}");
     assert!(
-        !schemas.iter().any(|s| s == "pg_catalog" || s == "information_schema"),
-        "系统 schema 不该出现在树的第一层：{schemas:?}"
+        !names_of_schemas.iter().any(|s| s == "pg_catalog" || s == "information_schema"),
+        "系统 schema 不该出现在树的第一层：{names_of_schemas:?}"
     );
 
     // ③ 真库造一个序列：`pg_class` 那条路看得见它，`information_schema.tables` 看不见
@@ -160,6 +163,8 @@ async fn lazy_object_tree_layer_by_layer_on_real_db() {
         .await
         .expect("建序列应当成功");
     let layer = session.relations("app").await.expect("列 schema 下的对象应当成功");
+    assert!(!layer.truncated, "实验库一个 schema 下的对象远不到上限");
+    let layer = layer.rows;
     let names: Vec<String> = layer.iter().map(|o| o.name.clone()).collect();
     assert!(names.contains(&"accounts".to_string()), "实际：{names:?}");
     assert!(names.contains(&"orders".to_string()), "实际：{names:?}");
@@ -175,7 +180,11 @@ async fn lazy_object_tree_layer_by_layer_on_real_db() {
         .expect("清理序列应当成功");
 
     // ② 用**第一层的真实返回**当第二层的输入（界面就是这么用的：点开才问）
-    let app_layer = session.relations("app").await.expect("再来一次也应当成功");
+    let app_layer = session
+        .relations("app")
+        .await
+        .expect("再来一次也应当成功")
+        .rows;
     assert!(app_layer.iter().all(|o| o.schema == "app"), "第二层只该含这个 schema 的对象");
 
     // ④ 搜索：真元数据当输入，名字命中与限定名命中各验一次

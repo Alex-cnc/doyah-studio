@@ -161,18 +161,25 @@ async fn db_tables(state: State<'_, ShellState>) -> Result<Vec<TableNode>, DbFai
 // ── 对象树（1.1：展开一层取一层；搜索是纯函数在领域层）────────────────────────────────
 
 /// 树的第一层：能看到的 schema。
+///
+/// 返回 [`doyah_studio_db::tree::CappedRows`]（行 + 截断标记 + 上限）—— 元数据查询
+/// 一律走行数上限保护（FR-META-07：10,000 行）；到顶时界面如实说"可能不完整"。
 #[tauri::command]
-async fn db_schemas(state: State<'_, ShellState>) -> Result<Vec<String>, DbFailure> {
+async fn db_schemas(
+    state: State<'_, ShellState>,
+) -> Result<doyah_studio_db::tree::CappedRows<String>, DbFailure> {
     let session = current_session(&state).await?;
     session.schemas().await
 }
 
 /// 第二层：某个 schema 下的对象（**展开时才问**，不在连接时一次拉光）。
+///
+/// 同样带上限保护（FR-META-07）：一个 schema 下几万张表是可能的。
 #[tauri::command]
 async fn db_relations(
     state: State<'_, ShellState>,
     schema: String,
-) -> Result<Vec<doyah_studio_db::tree::ObjectNode>, DbFailure> {
+) -> Result<doyah_studio_db::tree::CappedRows<doyah_studio_db::tree::ObjectNode>, DbFailure> {
     let session = current_session(&state).await?;
     session.relations(&schema).await
 }

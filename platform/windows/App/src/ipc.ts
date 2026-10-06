@@ -546,15 +546,31 @@ export function dbForeignKeys(): Promise<FkEdge[]> {
 //
 // 口径：**不在连接时把整库元数据拉光** —— 树的第一层只问 schema，展开某个 schema 才问它下面的
 // 对象。搜索是纯函数（领域层 `tree::search`），只搜「界面上已经看见的那些」，与树里显示的必然一致。
+//
+// **元数据行数上限（FR-META-07）**：两层元数据查询都返回 `CappedRows<T>`（行 + 截断标记 + 上限）
+// —— 收够 10,000 行就停，到顶时 `truncated` 为真，界面据此如实说"可能不完整"（不静默少给）。
 
-/** 树的第一层：这台服务器上能看到的 schema。 */
-export function dbSchemas(): Promise<string[]> {
-  return call(COMMANDS.dbSchemas, {}, () => [] as string[])
+/** 带上限保护的元数据结果（与领域层 `tree::CappedRows` 同形）。 */
+export interface CappedRows<T> {
+  rows: T[]
+  /** 服务端还回得更多、被上限截掉了（界面要如实说） */
+  truncated: boolean
+  /** 本次生效的上限（"只显示了前 N 条"里的 N） */
+  limit: number
 }
 
-/** 第二层：某个 schema 下的对象（**展开时才问**）。 */
-export function dbRelations(schema: string): Promise<ObjectNode[]> {
-  return call(COMMANDS.dbRelations, { schema }, () => [] as ObjectNode[])
+/** 树的第一层：这台服务器上能看到的 schema（带上限保护，FR-META-07）。 */
+export function dbSchemas(): Promise<CappedRows<string>> {
+  return call(COMMANDS.dbSchemas, {}, () => ({ rows: [] as string[], truncated: false, limit: 0 }))
+}
+
+/** 第二层：某个 schema 下的对象（**展开时才问**；带上限保护，FR-META-07）。 */
+export function dbRelations(schema: string): Promise<CappedRows<ObjectNode>> {
+  return call(COMMANDS.dbRelations, { schema }, () => ({
+    rows: [] as ObjectNode[],
+    truncated: false,
+    limit: 0,
+  }))
 }
 
 /**

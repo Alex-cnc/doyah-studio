@@ -56,6 +56,18 @@ const COLOR_KEYWORDS = ['inherit', 'currentcolor', 'transparent', 'none', 'unset
 
 const toRepoPath = (absolute) => relative(repoRoot, absolute).split(sep).join('/')
 
+/**
+ * 两条仓内路径是不是同一个（**大小写不敏感**）。
+ *
+ * 为什么不能用 `===`：Windows 的文件系统不区分大小写，而**路径的大小写取决于它是怎么被拼出来的**
+ * —— 同一个目录，`node tools/token-ratchet.mjs` 拿到 `platform/…`，vitest 解析模块真实路径时
+ * 拿到 `Platform/…`（磁盘上的真实大小写）。用 `===` 比会**假红**：生成物 `tokens.generated.css`
+ * 明明登记在 EXCLUDED 里，却因为大小写不同而没被排除、被当成 299 处裸色值判红
+ * （2026-10-06 实测：`npm test` 判红、单独跑同一个脚本通过）。判据该判的是"路径指同一个文件"，
+ * 不是"字符串逐字节相同"。Linux / macOS 上这条恒等于 `===`（不会放过任何真实的路径差异）。
+ */
+const sameRepoPath = (a, b) => a.toLowerCase() === b.toLowerCase()
+
 /** 一行里第 N 个捕获组的值里有没有「非零数字」（`0` / `0px` 不算裸值 —— 与 Spacing.hair 同级的最小例外）。 */
 const hasNonZeroNumber = (value) => /(?<![\d.])[1-9]/.test(value)
 
@@ -133,7 +145,7 @@ export function scan() {
   const skipped = []
   for (const file of files.sort()) {
     const repoPath = toRepoPath(file)
-    if (EXCLUDED.includes(repoPath)) {
+    if (EXCLUDED.some((excluded) => sameRepoPath(excluded, repoPath))) {
       skipped.push(repoPath)
       continue
     }

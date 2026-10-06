@@ -175,6 +175,61 @@ export const DICT = {
   'db.kind.sequence': { 'zh-Hans': '序列', en: 'Sequences' },
   'db.kind.system': { 'zh-Hans': '系统目录', en: 'System catalog' },
   'db.kind.other': { 'zh-Hans': '其他', en: 'Other' },
+  // 节点类型图标（FR-META-06）：图标是给眼睛的，读屏与悬停给的是这一句
+  'db.icon.tip': { 'zh-Hans': '节点类型：{kind}', en: 'Node type: {kind}' },
+  // 服务器节点与它的右键三动作（FR-META-11 第一期）
+  'db.server': { 'zh-Hans': '服务器', en: 'Server' },
+  'db.server.menu.aria': { 'zh-Hans': '服务器节点菜单', en: 'Server node menu' },
+  'db.server.menu.connect': { 'zh-Hans': '连接', en: 'Connect' },
+  'db.server.menu.disconnect': { 'zh-Hans': '断开', en: 'Disconnect' },
+  'db.server.menu.editConnection': { 'zh-Hans': '编辑连接…', en: 'Edit connection…' },
+  'db.server.reason.alreadyConnected': {
+    'zh-Hans': '已经连着这台服务器',
+    en: 'Already connected to this server',
+  },
+  'db.server.reason.notConnected': {
+    'zh-Hans': '当前没有连接可断开',
+    en: 'There is no connection to disconnect',
+  },
+  'db.server.reason.busy': {
+    'zh-Hans': '有动作正在执行（连接中 / 断开中）',
+    en: 'An action is in progress (connecting / disconnecting)',
+  },
+  'db.server.menu.disabledTip': {
+    'zh-Hans': '{name}不可用：{reason}',
+    en: '{name} is unavailable: {reason}',
+  },
+  'db.server.menu.connected': {
+    'zh-Hans': '已连 {database}（用户 {user}）',
+    en: 'Connected to {database} (user {user})',
+  },
+  'db.tree.notConnected': { 'zh-Hans': '未连接', en: 'Not connected' },
+  'db.tree.noSchema': { 'zh-Hans': '没有可展开的 schema', en: 'No schema to expand' },
+  // 元数据查询行数上限（FR-META-07）：到顶时如实说"可能不完整"
+  'db.meta.truncated': {
+    'zh-Hans': '元数据超过上限（{limit} 行）：只显示前 {limit} 条，列表可能不完整',
+    en: 'Metadata exceeded the limit ({limit} rows): showing the first {limit}, the list may be incomplete',
+  },
+  // 对象右键菜单（第二期那一组）—— 这几条原来写死在模板里，本片顺手收进语言表
+  'db.menu.browse': { 'zh-Hans': '浏览数据…', en: 'Browse data…' },
+  'db.menu.generateQuery': { 'zh-Hans': '生成查询', en: 'Generate query' },
+  'db.menu.design': { 'zh-Hans': '表结构设计…', en: 'Table designer…' },
+  'db.menu.copyName': { 'zh-Hans': '复制名', en: 'Copy name' },
+  'db.tree.objectTip': {
+    'zh-Hans': '{kind} · 点一下生成查询；右键有更多',
+    en: '{kind} · click to generate a query; right-click for more',
+  },
+  'db.search.hits': {
+    'zh-Hans': '命中 {hit} 个（只在已加载的 {loaded} 个对象里找）',
+    en: '{hit} matched (searched the {loaded} loaded objects)',
+  },
+  'db.search.hitTip': {
+    'zh-Hans': '{schema}.{name}（命中依据：{basis}）',
+    en: '{schema}.{name} (matched on: {basis})',
+  },
+  'db.search.basis.qualified': { 'zh-Hans': '限定名', en: 'qualified name' },
+  'db.search.basis.name': { 'zh-Hans': '对象名', en: 'object name' },
+  'db.search.basis.schema': { 'zh-Hans': 'schema 名', en: 'schema name' },
   'db.search.placeholder': { 'zh-Hans': '搜索对象（名字或 schema）', en: 'Search objects (name or schema)' },
   'db.switchDatabase': {
     'zh-Hans': '切到这个库（重连一次）；选项来自已保存连接里同主机同用户的那些库',

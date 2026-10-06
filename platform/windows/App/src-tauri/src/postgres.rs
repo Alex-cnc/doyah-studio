@@ -13,7 +13,10 @@
 
 use doyah_studio_db::config::ConnectionConfig;
 use doyah_studio_db::ddl::ColumnDef;
-use doyah_studio_db::tree::{assemble_columns, ColumnRow, ObjectKind, ObjectNode, TableColumns};
+use doyah_studio_db::tree::{
+    assemble_columns, CappedRows, ColumnRow, ObjectKind, ObjectNode, TableColumns,
+    METADATA_ROW_LIMIT,
+};
 use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 
 /// 一次查询最多实体化多少行（超过就如实报截断）。
@@ -373,30 +376,65 @@ impl PgSession {
         Ok(out)
     }
 
+    /// 按**元数据行数上限**流式收行（FR-META-07：10,000 行）。
+    ///
+    /// 为什么走 `query_raw` 而不是 `query()`：后者**先把整份结果收进内存再截** —— 那正是
+    /// 「还没展开就先顶爆内存」的来路（本侧通用取数那一档此前实测抓到过同一个坑，见 `run`）。
+    /// 这里收够 `limit` 行就停；**再多探一行**只为判「服务端是不是还有」—— 那一行不留内容，
+    /// 只把 `more` 定成真（截断标记要如实报，不静默少给）。
+    async fn stream_metadata_rows(
+        &self,
+        statement: &tokio_postgres::Statement,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        limit: usize,
+    ) -> Result<(Vec<tokio_postgres::Row>, bool), DbFailure> {
+        use futures_util::StreamExt;
+        let stream = self
+            .client
+            .query_raw(statement, params.iter().copied())
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        futures_util::pin_mut!(stream);
+        let mut rows: Vec<tokio_postgres::Row> = Vec::new();
+        let mut more = false;
+        while let Some(item) = stream.next().await {
+            let row = item.map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+            if rows.len() >= limit {
+                more = true;
+                break;
+            }
+            rows.push(row);
+        }
+        Ok((rows, more))
+    }
+
     /// 对象树第一层：**这台服务器上能看到的 schema**（1.1 段「展开一层取一层」的第一层）。
     ///
     /// 为什么不在连接时把整库元数据一次拉光：大库上那是几百毫秒的固定开销、还没展开就先付了；
     /// 而且树的第一层本来就只显示 schema。`pg_catalog` / `information_schema` 与 `pg_*`
     /// 临时 schema 都排掉（它们是实现细节，不是用户的库）。
-    pub async fn schemas(&self) -> Result<Vec<String>, DbFailure> {
+    ///
+    /// **行数上限保护（FR-META-07）**：走 [`Self::stream_metadata_rows`]，最多
+    /// [`METADATA_ROW_LIMIT`] 行；到顶时 `truncated = true`，界面据此如实说"可能不完整"。
+    pub async fn schemas(&self) -> Result<CappedRows<String>, DbFailure> {
         let sql = "SELECT schema_name FROM information_schema.schemata \
                    WHERE schema_name NOT IN ('pg_catalog', 'information_schema') \
                      AND schema_name NOT LIKE 'pg\\_%' \
                    ORDER BY schema_name";
-        let messages = self
+        let statement = self
             .client
-            .simple_query(sql)
+            .prepare(sql)
             .await
             .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
-        let mut out = Vec::new();
-        for m in messages {
-            if let SimpleQueryMessage::Row(r) = m {
-                if let Some(name) = r.get(0) {
-                    out.push(name.to_string());
-                }
-            }
-        }
-        Ok(out)
+        let none: [&(dyn tokio_postgres::types::ToSql + Sync); 0] = [];
+        let (rows, more) = self
+            .stream_metadata_rows(&statement, &none, METADATA_ROW_LIMIT)
+            .await?;
+        let names: Vec<String> = rows
+            .iter()
+            .filter_map(|row| row.get::<_, Option<String>>(0))
+            .collect();
+        Ok(CappedRows::from_stream(names, METADATA_ROW_LIMIT, more))
     }
 
     /// 对象树第二层：**某个 schema 下的对象**（按需展开时才问）。
@@ -404,25 +442,34 @@ impl PgSession {
     /// 取的是 `pg_class` 而不是 `information_schema.tables`：序列、物化视图、分区表都在那里，
     /// 而 `information_schema.tables` 看不到序列。用 `relkind` 单字母词表交给领域层分类
     /// （分类规则只此一处，见 `doyah_studio_db::tree::ObjectKind::from_server`）。
-    pub async fn relations(&self, schema: &str) -> Result<Vec<ObjectNode>, DbFailure> {
+    ///
+    /// **行数上限保护（FR-META-07）**：一个 schema 下几万张表是可能的，整份收进内存正是
+    /// 这一条要挡的；到顶时 `truncated = true`（界面说"只显示了前 10000 个对象"）。
+    pub async fn relations(&self, schema: &str) -> Result<CappedRows<ObjectNode>, DbFailure> {
         let sql = "SELECT c.relname, c.relkind::text \
                    FROM pg_class c \
                    JOIN pg_namespace n ON n.oid = c.relnamespace \
                    WHERE n.nspname = $1 AND c.relkind IN ('r','p','v','m','f','S') \
                    ORDER BY c.relkind, c.relname";
-        let rows = self
+        let statement = self
             .client
-            .query(sql, &[&schema])
+            .prepare(sql)
             .await
             .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
-        let mut out = Vec::new();
-        for row in rows {
-            let name: String = row.get(0);
-            let kind: String = row.get(1);
-            out.push(ObjectNode::new(schema, name, ObjectKind::from_server(&kind)));
-        }
+        let params: [&(dyn tokio_postgres::types::ToSql + Sync); 1] = [&schema];
+        let (rows, more) = self
+            .stream_metadata_rows(&statement, &params, METADATA_ROW_LIMIT)
+            .await?;
+        let mut out: Vec<ObjectNode> = rows
+            .iter()
+            .map(|row| {
+                let name: String = row.get(0);
+                let kind: String = row.get(1);
+                ObjectNode::new(schema, name, ObjectKind::from_server(&kind))
+            })
+            .collect();
         doyah_studio_db::tree::sort_objects(&mut out);
-        Ok(out)
+        Ok(CappedRows::from_stream(out, METADATA_ROW_LIMIT, more))
     }
 
     /// 对象树第三层：**一批表的列**（FR-META-01 的「表 → 列」、FR-META-05 的数据类型）。
