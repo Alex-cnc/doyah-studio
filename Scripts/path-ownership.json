@@ -4,11 +4,12 @@
  "purpose": "「盘上的路径归谁」的唯一清单（判据 = 同目录的 check-path-ownership.py，三仓同源；三仓副本见该脚本 docstring）。清单可以各仓不同，判据逻辑逐字节同一份。",
  "contract_owner": "bluewhale",
  "contract_docs": [
-  "Docs/产品能力规划说明书.md",
-  "Docs/需求规范书.md",
-  "Docs/概要设计.md"
+  "Docs/",
+  "AGENT-SPEC.md",
+  "README.md",
+  "Scripts/doc-numbers.json"
  ],
- "contract_note": "契约层（三书）**归 `bluewhale`（蓝色鲸鱼娘）**；平台实现层归各平台助理：`bighippo`=macOS/iOS · `tinyhippo`=安卓/鸿蒙 · `fatshark`=Windows（旧名 `fatfish` 已退役、只保留识别）（2026-10-03 人类主人制度变更 · 派活单 `T-20261003-003`）。护栏原话（人类主人）：「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」⇒ `--mine bluewhale`（或 `--actor bluewhale`）时**只有 contract_docs 的路径放行**，其余（代码 / 脚本 / 其他文档 / 仓根杂项）一律判红。三书内部**契约层节 vs `[独占:平台]` 实现层节**的边界由 `check-exclusive-sections.py` 机械判。",
+ "contract_note": "契约层（三书）**归 `bluewhale`（蓝色鲸鱼娘）**；平台实现层归各平台助理：`bighippo`=macOS/iOS · `tinyhippo`=安卓/鸿蒙 · `fatshark`=Windows（旧名 `fatfish` 已退役、只保留识别）（2026-10-03 人类主人制度变更 · 派活单 `T-20261003-003`）。**契约层落笔面 = 人类主人 2026-10-05 批准的四类：`Docs/**` + `AGENT-SPEC.md` + 仓根 `README.md` + `Scripts/doc-numbers.json`（计数台账）** ⇒ `--mine bluewhale`（或 `--actor bluewhale`）时**只有 contract_docs 声明的这几类放行**，其余（代码 / 脚本 / 其他文档 / 仓根杂项）一律判红 —— **「产品代码不许越界」这条本体不变**。原始护栏（人类主人 2026-10-03）：「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」；本仓按 10-05 的扩面裁决跟版（依据派单 `T-20261005-088` ①）。三书内部**契约层节 vs `[独占:平台]` 实现层节**的边界由 `check-exclusive-sections.py` 机械判。",
  "trees": [
   {
    "id": "macos",
@@ -59,6 +60,12 @@
  "shared_note": "共享面 = 两侧都写的地方：改它**不算越界**，但要走声明式台账（清单 `shared_ledger` 改前登记 / 本次新增行注 `shared-surface：理由` / 提交信息注 `shared-surface: 理由`），三处都没有理由 ⇒ 判红。`Scripts/` 在派活单 T-20261002-029 里被同时列进「macOS 仓根族」与「共享面」两处 ⇒ 本清单按**共享面**收口：里面的判据（`check-*.py` / `verify-all.sh`）被两侧共同调用，`Scripts/doc-numbers.json` 的 `checkScriptParity` 也是按「闭环引用」写的，判它是某一端专属会与现行事实相抵。要改成 macOS 专属 ⇒ 改这一行 + 记一笔变更。",
  "shared_require_declaration": true,
  "shared_ledger": [
+  {
+   "glob": "Scripts/path-ownership.json",
+   "reason": "T-20261005-088 ①：契约层落笔面跟版为人类主人 2026-10-05 批准的四类（Docs/** + AGENT-SPEC.md + 仓根 README.md + Scripts/doc-numbers.json）",
+   "by": "bighippo",
+   "at": "2026-10-06"
+  },
   {
    "glob": "Scripts/check-path-ownership.py",
    "reason": "派活单 T-20261002-029（人类主人四项之二/四 · macOS 半）落「路径归属判据」本体，三仓同源副本之一",
