@@ -15,6 +15,8 @@
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
+# 源码根（SwiftPM 包根）—— 目录统一 platform/<平台>/ 之后不再等于仓根；跑 swift 一律显式给 --package-path。
+PACKAGE_ROOT="$PWD/platform/macos"
 CLI=".build/debug/DoyahCLI"
 
 fail=0
@@ -23,7 +25,7 @@ check() { if [ "$2" -eq 0 ]; then echo "  ✅ $1"; else echo "  ❌ $1"; fail=1;
 echo "== 0) 构建 CLI =="
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 export CLANG_MODULE_CACHE_PATH="$PWD/.build/clang-module-cache"
-if swift build --disable-sandbox --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
+if swift build --disable-sandbox --package-path "${PACKAGE_ROOT}" --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
     --manifest-cache local -Xswiftc -disable-sandbox --product DoyahCLI > /tmp/terminal-modes-build.log 2>&1; then
     check "CLI 构建成功" 0
 else
@@ -134,7 +136,7 @@ grep -q "OSC 12;? → OSC 12;rgb:" /tmp/terminal-modes.txt && check "对照表�
 
 echo ""
 echo "== 4) 单测（字节形状 + 解析器行为）=="
-if swift test --disable-sandbox --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
+if swift test --disable-sandbox --package-path "${PACKAGE_ROOT}" --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
     --manifest-cache local -Xswiftc -disable-sandbox \
     --filter 'TerminalInputTests|TerminalModeTests|TerminalCursorTests' > /tmp/terminal-modes-tests.log 2>&1; then
     check "TerminalInputTests + TerminalModeTests 全过" 0

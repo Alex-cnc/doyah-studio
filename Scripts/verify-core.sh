@@ -7,6 +7,9 @@ set -euo pipefail
 # 适合在没有数据库服务器时，先验证驱动编译与单元测试。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+# 源码根（SwiftPM 包根）：目录统一 platform/<平台>/ 之后不再等于仓根（包清单在它下面），
+# 跑 swift 一律显式 `--package-path "${PACKAGE_ROOT}"`（不靠 cwd）。
+PACKAGE_ROOT="${ROOT}/platform/macos"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
@@ -25,7 +28,7 @@ cd "${ROOT}"
 
 "${SWIFT}" package \
   --disable-sandbox \
-  --package-path . \
+  --package-path "${PACKAGE_ROOT}" \
   --cache-path "${CACHE}" \
   --scratch-path "${SCRATCH}" \
   --manifest-cache local \
@@ -34,7 +37,7 @@ cd "${ROOT}"
 set +e   # 这一段要自己收 swift 的退出码（PIPESTATUS），别让 set -e 抢在前头中止
 "${SWIFT}" test \
   --disable-sandbox \
-  --package-path . \
+  --package-path "${PACKAGE_ROOT}" \
   --cache-path "${CACHE}" \
   --scratch-path "${SCRATCH}" \
   --manifest-cache local \

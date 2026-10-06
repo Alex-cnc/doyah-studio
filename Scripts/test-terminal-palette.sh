@@ -12,6 +12,8 @@
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
+# 源码根（SwiftPM 包根）—— 目录统一 platform/<平台>/ 之后不再等于仓根；跑 swift 一律显式给 --package-path。
+PACKAGE_ROOT="$PWD/platform/macos"
 CLI=".build/debug/DoyahCLI"
 
 fail=0
@@ -20,7 +22,7 @@ check() { if [ "$2" -eq 0 ]; then echo "  ✅ $1"; else echo "  ❌ $1"; fail=1;
 echo "== 0) 构建 CLI =="
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 export CLANG_MODULE_CACHE_PATH="$PWD/.build/clang-module-cache"
-if swift build --disable-sandbox --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
+if swift build --disable-sandbox --package-path "${PACKAGE_ROOT}" --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
     --manifest-cache local -Xswiftc -disable-sandbox --product DoyahCLI > /tmp/terminal-palette-build.log 2>&1; then
     check "CLI 构建成功" 0
 else
@@ -112,7 +114,7 @@ font_case "字号 14 原样保留" 14 14
 
 echo ""
 echo "== 3) 自动化门槛（单测）=="
-if swift test --disable-sandbox --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
+if swift test --disable-sandbox --package-path "${PACKAGE_ROOT}" --cache-path "$PWD/.build-cache" --scratch-path "$PWD/.build" \
     --manifest-cache local -Xswiftc -disable-sandbox \
     --filter 'TerminalPaletteTests|TerminalDimAttributeTests' > /tmp/terminal-palette-tests.log 2>&1; then
     check "TerminalPaletteTests / TerminalDimAttributeTests 全过" 0

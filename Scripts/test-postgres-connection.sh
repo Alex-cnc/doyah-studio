@@ -17,6 +17,8 @@ set -euo pipefail
 #   disable / allow / prefer / require / verify-ca / verify-full
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+# 源码根（SwiftPM 包根）—— 目录统一 platform/<平台>/ 之后不再等于仓根；跑 swift 一律显式给 --package-path。
+PACKAGE_ROOT="${ROOT}/platform/macos"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
@@ -63,7 +65,7 @@ PY
 
 exec "${SWIFT}" run \
   --disable-sandbox \
-  --package-path "${ROOT}" \
+  --package-path "${PACKAGE_ROOT}" \
   --cache-path "${CACHE}" \
   --scratch-path "${SCRATCH}" \
   --manifest-cache local \

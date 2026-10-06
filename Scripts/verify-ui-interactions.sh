@@ -71,6 +71,8 @@ set -euo pipefail
 # （与 SwiftUI 工具条项同形），进程内合成事件 ⇒ 零权限。
 
 ROOT="$(cd "$(dirname "${0}")/.." && pwd -P)"
+# 源码根（SwiftPM 包根）—— 目录统一 platform/<平台>/ 之后不再等于仓根；跑 swift 一律显式给 --package-path。
+PACKAGE_ROOT="${ROOT}/platform/macos"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
@@ -105,7 +107,7 @@ echo "==> 跑交互探针（${FILTER}）—— 证据日志 ${LOG}"
 set +e
 "${SWIFT}" test \
     --disable-sandbox \
-    --package-path . \
+    --package-path "${PACKAGE_ROOT}" \
     --cache-path "${CACHE}" \
     --scratch-path "${SCRATCH}" \
     --manifest-cache local \
