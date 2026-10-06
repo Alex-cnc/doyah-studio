@@ -10,7 +10,7 @@
 // 第 21 轮接线时 `import CSQLite3` 在 `DoyahCore` 目标里可用（Core 已编译通过、单测跑过）；
 // **宏引用的规模阈值本轮未再复测**，所以这条纪律照旧保留。
 //
-// 值来源：`Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h`（版本见 `Vendor/sqlite3/PROVENANCE.md`）。
+// 值来源：`platform/macos/Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h`（版本见 `platform/macos/Vendor/sqlite3/PROVENANCE.md`）。
 
 import Foundation
 
