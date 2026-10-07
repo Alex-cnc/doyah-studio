@@ -216,6 +216,8 @@ export const DICT = {
     'zh-Hans': '元数据超过上限（{limit} 行）：只显示前 {limit} 条，列表可能不完整',
     en: 'Metadata exceeded the limit ({limit} rows): showing the first {limit}, the list may be incomplete',
   },
+  // 查询页签标题（与 macOS `workspaceTabTitle` =「查询 %d」/「Query %d」同一句；编号不复用）
+  'db.queryTab': { 'zh-Hans': '查询 {n}', en: 'Query {n}' },
   // 对象右键菜单（第二期那一组）—— 这几条原来写死在模板里，本片顺手收进语言表
   'db.menu.browse': { 'zh-Hans': '浏览数据…', en: 'Browse data…' },
   'db.menu.generateQuery': { 'zh-Hans': '生成查询', en: 'Generate query' },

@@ -866,7 +866,104 @@ function clearSql() {
 const saved = ref<SavedConnection[]>([])
 const info = ref<ServerInfo | null>(null)
 const tables = ref<TableNode[]>([])
-const sql = ref('select id, name, balance from app.accounts order by id limit 20')
+// ── 查询页签（SQL 工具条上方那条「查询 1 ×」+ 加号；图里点名的界面件）────────────────
+//
+// 之前模板引用了 `queryTabs` / `activeQueryTab` / `selectQueryTab` / `closeQueryTab` /
+// `newQueryTab` / `stashActiveQuery`，**脚本区一个都没声明** —— 页签条整段渲染成空，
+// 且渲染期读 `queryTabs.length` 就是读 `undefined.length`（一旦分支被走进就是 TypeError）。
+// 本片以 macOS `AppState`（`tabs` / `selectedTabID` / `newQueryTab` / `closeTab`）为准补齐：
+//   · **权威副本在页签里**（`queryTabs[i].sql`）—— 编辑器里的 `sql` 是**实时缓冲**，
+//     由提交点 `stashActiveQuery()` 把缓冲写回当前页签；切 / 关 / 新建页签前先提交，
+//     否则「页签内容」会在切换这一刻丢掉最后一段编辑（与 macOS `commitEditorDraft` 同口径）。
+//   · **编号不复用**：关掉「查询 2」再新建仍是「查询 3」（与 macOS `TabNumberGenerator` 同口径）。
+interface QueryTab {
+  id: string
+  title: string
+  sql: string
+}
+
+/** 页签编号生成器（**只增不减**，编号不复用）。 */
+function makeTabNumberGenerator(): () => number {
+  let next = 1
+  return () => next++
+}
+const nextQueryTabNumber = makeTabNumberGenerator()
+/** 页签标题走语言表（与 macOS `workspaceTabTitle` =「查询 %d」/「Query %d」同一句）。 */
+function queryTabTitle(n: number): string {
+  return t('db.queryTab', { n })
+}
+
+/** 编辑器初始 SQL（第一张页签用它起头 —— 与改前单页签时的默认值一致）。 */
+const DEFAULT_QUERY_SQL = 'select id, name, balance from app.accounts order by id limit 20'
+/** 查询页签（至少一张：关到最后一张时按钮是灰的，见模板 `queryTabs.length <= 1`）。 */
+const queryTabs = ref<QueryTab[]>([
+  { id: crypto.randomUUID(), title: queryTabTitle(nextQueryTabNumber()), sql: DEFAULT_QUERY_SQL },
+])
+/** 当前选中的页签 id（模板里 `tab.id === activeQueryTab` 用它判高亮）。 */
+const activeQueryTab = ref(queryTabs.value[0].id)
+
+/** 编辑器里的实时文本（**缓冲**，不是权威副本）；初始 = 第一张页签的 SQL。 */
+const sql = ref(queryTabs.value[0].sql)
+
+const activeQueryTabRecord = computed<QueryTab | undefined>(
+  () =>
+    queryTabs.value.find((tab) => tab.id === activeQueryTab.value) ??
+    queryTabs.value[queryTabs.value.length - 1],
+)
+
+/** **提交点**：把编辑器缓冲写回当前页签的权威副本。读 `tab.sql` 的入口都要先调它。 */
+function stashActiveQuery(): void {
+  const tab = activeQueryTabRecord.value
+  if (tab) tab.sql = sql.value
+}
+
+// 编辑器每落一笔就回写 —— 免得在各处赋值点（执行 / 清空 / 跳转 / EXPLAIN…）逐个补，漏一处就丢内容。
+watch(sql, stashActiveQuery)
+
+/** 换页签后要重做的那几件显示面的事（高亮 / 补全），与结果面解耦。 */
+function afterQueryTabSwitch(): void {
+  outcomes.value = []
+  detail.value = null
+  void refreshHighlight()
+  void refreshCompletions()
+}
+
+/** 切到某张页签：**先提交当前页签**，再换选中的页签并把它的 SQL 装进编辑器。 */
+function selectQueryTab(id: string): void {
+  if (id === activeQueryTab.value) return
+  stashActiveQuery()
+  const target = queryTabs.value.find((tab) => tab.id === id)
+  if (!target) return
+  activeQueryTab.value = id
+  sql.value = target.sql
+  afterQueryTabSwitch()
+}
+
+/** 新建一张空页签并选中（编号不复用）。 */
+function newQueryTab(): void {
+  stashActiveQuery()
+  const tab: QueryTab = { id: crypto.randomUUID(), title: queryTabTitle(nextQueryTabNumber()), sql: '' }
+  queryTabs.value.push(tab)
+  activeQueryTab.value = tab.id
+  sql.value = ''
+  afterQueryTabSwitch()
+}
+
+/** 关一张页签：最后一张不许关（模板已按 `queryTabs.length <= 1` 把按钮置灰，这里是**同一口径的兜底**）。 */
+function closeQueryTab(id: string): void {
+  if (queryTabs.value.length <= 1) return
+  const index = queryTabs.value.findIndex((tab) => tab.id === id)
+  if (index < 0) return
+  const wasActive = activeQueryTab.value === id
+  queryTabs.value.splice(index, 1)
+  if (!wasActive) return
+  // 关掉的是当前页签 ⇒ 落到剩下最后一张（与 macOS `closeTab` 一致）
+  const next = queryTabs.value[queryTabs.value.length - 1]
+  activeQueryTab.value = next.id
+  sql.value = next.sql
+  afterQueryTabSwitch()
+}
+
 const sqlText = ref('')
 // 单行详情（FR-DATA-05）：宽表竖排看、长 JSON 格式化看 —— **纯计算**，值检查在领域层
 const detail = ref<{ index: number; fields: RowField[] } | null>(null)
