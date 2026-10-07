@@ -48,12 +48,16 @@ struct NotesListView: View {
                 // **筛选条**（队列 `L-184` 第三片）：中栏栏头这一枚「只看收藏」。
                 // 它不是第二个状态 —— 绑的就是左栏那一行（`AppState.notesFavoriteOnly` 一处判，
                 // 两个界面面共用一个变量 ⇒ 不可能出现「开关开着、列表在看全部」）。
+                // **图标化**（片 `N2-2`「工具条 图标化」）：星号一枚 + 悬停提示 —— 与 SQL 编辑区
+                // 工具条那些开关同一个形状（`.button` 档的开关本来就是图标按钮）；
+                // 标题 `L(.notesFavoriteOnly)` 保留在 `Label` 里（无障碍／提示仍说得清它是什么）。
                 Toggle(isOn: Binding(
                     get: { appState.notesFavoriteOnly },
                     set: { appState.setNotesFavoriteOnly($0) }
                 )) {
                     Label(L(.notesFavoriteOnly), systemImage: "star")
-                        .font(Theme.font(.caption))
+                        .labelStyle(.iconOnly)
+                        .font(Theme.font(.icon))
                 }
                 .toggleStyle(.button)
                 .controlSize(.small)
@@ -100,6 +104,7 @@ struct NotesListView: View {
                                 Image(systemName: "pin.fill")
                                     .font(Theme.font(.caption))
                                     .foregroundStyle(Theme.text(.secondary))
+                                    .help(L(.notesPinned))
                                     .accessibilityLabel(L(.notesPinned))
                             }
                             // **收藏的标记**（队列 `L-184` 第三片）：收藏过的行上看得见星 ——
@@ -108,6 +113,7 @@ struct NotesListView: View {
                                 Image(systemName: "star.fill")
                                     .font(Theme.font(.caption))
                                     .foregroundStyle(Theme.status(.warning))
+                                    .help(L(.notesFavorites))
                                     .accessibilityLabel(L(.notesFavorites))
                             }
                             if note.containsRowData {
@@ -622,6 +628,7 @@ struct NotesContainerTreeView: View {
                 Image(systemName: systemImage)
                     .font(Theme.font(.caption))
                     .frame(width: 14)
+                    .help(title)
                 Text(title)
                     .font(Theme.font(.body))
                     .lineLimit(1)
@@ -771,21 +778,37 @@ struct NotesAreaView: View {
     ///     再发一枚按钮就是第二个入口；
     ///   · 搜索那一档仍在**笔记屏**才出现（原口径一字未改）：待办的**本地检索**属 `FR-NOTE-37`，
     ///     它的口径还在契约半 ⇒ 这一屏不给一个搜不出东西的搜索框（`L-50` 同族）。
+    ///
+    /// **宽度收敛 ≈40%**（片 `N2-2`）：这一行里能吃宽度的三样各收一处 ——
+    ///   ① 增删查改入口 **图标化**（`crudEntries`：156.5 → 92pt）；
+    ///   ② 「作用域」由**分段条**改**下拉**（`notes-search-scope`：221 → 134pt，也把这一屏的分段条
+    ///      从 4 收到 1，判据①）；
+    ///   ③ 「查」的搜索框 `maxWidth` 320 → 200（这一行里唯一还能吃满宽度的控件；收窄它与前两样
+    ///      是同一件事的三半 —— 判据④量的是**整个左区操作行**的宽度，改前 713.5pt / 改后 442pt（×0.62）。
+    ///      成对读数的出处 = `TestsUISnapshot/NotesLayoutProbeTests.testN22ExploreMeasurableWidths`
+    ///      （活宿主顶带上逐件量：改前 x=[8.0…721.5] / 改后 x=[8.0…450.0]，两端都是 `_FocusRingView`
+    ///      与 `PlatformTextFieldAdaptor` 的实测矩形，不是按常量算出来的）。
     private var topBar: some View {
         HStack(spacing: Spacing.s) {
             crudEntries
             if appState.notesModule == .notes {
                 TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)
                     .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 320)
+                    // **「查」的宽度**：原 320 是这一行的宽度主项（片 `N2-2` 判据④的成对读数里，
+                    // 它一项就占掉 713.5pt 里的 320）。收窄到 200 之后整行 442pt（×0.62）。
+                    .frame(maxWidth: NotesAreaView.searchFieldMaxWidth)
                     .accessibilityIdentifier("notes-search-field")
                 Picker(L(.notesSearchScopeTitle), selection: $appState.notesSearchScope) {
                     Text(L(.notesSearchScopeCurrent)).tag(NotesSearchScope.current)
                     Text(L(.notesSearchScopeAll)).tag(NotesSearchScope.all)
                 }
-                .pickerStyle(.segmented)
+                // **作用域改下拉**（片 `N2-2`）：它答的是「这次搜哪儿」——一个**取值**，不是「看哪一屏」。
+                // 与 SQL 编辑区工具条同一设计语言（那边一件分段条都没有，取值一律走下拉菜单）。
+                // 逐处写明理由、保留的分段条另见 `moduleSwitch`。
+                .pickerStyle(.menu)
                 .labelsHidden()
                 .fixedSize()
+                .help(L(.notesSearchScopeTitle))
                 .accessibilityIdentifier("notes-search-scope")
             }
             Spacer(minLength: Spacing.s)
@@ -798,62 +821,58 @@ struct NotesAreaView: View {
 
     /// **左区顶部的增删查改入口**（人类主人令 `T-20261007-004` 第三节第 1 条）。
     ///
-    /// 形态与 `N-UI-3` 定下的工具条**同形**（图标 + 悬停提示；`L-50` 那三种处置里选「灰着」），
+    /// 形态 = **纯图标按钮 + 悬停提示**（片 `N2-2`「图标化 · 与 SQL 编辑区同一设计语言」）：
+    /// 三枚都走 `App/Views/ToolbarIcon.swift` 的 `ToolbarIconButton` —— 就是 SQL 编辑区工具条
+    /// 那一套（图标 + 固定 28 × 22 命中区 + `.help`），本文件不再自己画第二份。
+    /// **本片之前**「增」是 `labelStyle(.titleAndIcon)`（图标 + 「新建」两个字）⇒ 这一簇量出来
+    /// 156.5pt；改成纯图标之后是 92pt（**收敛 ≈41%**，判据④ 的成对读数量到的就是它）。
+    /// 字被图标替掉，**去发现性不靠猜**：那一句提示（`L(.notesNew)` / `L(.commonEdit)` /
+    /// `L(.notesDelete)`）一字未动，`accessibilityIdentifier` 也一字未动。
+    ///
     /// 三枚都接**既有**的单一入口，不新开第二条写路：
     ///   · **增** = `beginNewNote()` / `beginNewTodo()`（同一个词、同一枚按钮 —— 建什么由当前那一屏决定）；
     ///   · **改** = `edit(_:)`（笔记 = 多选集合里**唯一**那条；待办 = 编辑器里那条）；
     ///   · **删** = `deleteNote(id:)` / `deleteTodo(id:)`（逐条走既有的那一个删除入口）。
+    /// 灰 / 亮的口径也一字未改（`.disabled(...)` 还挂在原来的判据属性上）。
     private var crudEntries: some View {
         HStack(spacing: Spacing.xs) {
-            Button {
+            ToolbarIconButton(systemName: "plus", help: L(.notesNew)) {
                 switch appState.notesModule {
                 case .notes: appState.beginNewNote()
                 case .todos: appState.beginNewTodo()
                 }
-            } label: {
-                Label {
-                    Text(L(.notesNew))
-                } icon: {
-                    Image(systemName: "plus")
-                }
-                .labelStyle(.titleAndIcon)
             }
-            .help(L(.notesNew))
             .accessibilityIdentifier("notes-new")
-            Button {
+            ToolbarIconButton(systemName: "pencil", help: L(.commonEdit)) {
                 if let note = singleSelectedNote {
                     appState.edit(note)
                 } else if let todo = editingTodo {
                     appState.edit(todo)
                 }
-            } label: {
-                Label {
-                    Text(L(.commonEdit))
-                } icon: {
-                    Image(systemName: "pencil")
-                }
-                .labelStyle(.iconOnly)
             }
-            .help(L(.commonEdit))
             .disabled(singleSelectedNote == nil && editingTodo == nil)
             .accessibilityIdentifier("notes-edit")
-            Button {
+            ToolbarIconButton(systemName: "trash", help: L(.notesDelete)) {
                 deleteSelection()
-            } label: {
-                Label {
-                    Text(L(.notesDelete))
-                } icon: {
-                    Image(systemName: "trash")
-                }
-                .labelStyle(.iconOnly)
             }
-            .help(L(.notesDelete))
             .disabled(!hasDeletableSelection)
             .accessibilityIdentifier("notes-delete")
         }
     }
 
+    /// **「查」那一格的宽度上限**（片 `N2-2`）：改前是写死的 `320`，是左区操作行里唯一的宽度主项。
+    /// 收窄到 200 是「操作栏宽度收敛 ≈40%」（判据④）里的一份 —— 它不吃满行宽之后，整条操作行
+    /// 才收得下来（改前 713.5pt → 改后 442pt）。数字留在这里一处，免得两个地方各写一个。
+    private static let searchFieldMaxWidth: CGFloat = 200
+
     /// **笔记 / 待办切换**（行末那一枚）：档位集合与名字都在 Core（`NotesModule`），视图只画选择器。
+    ///
+    /// **本片保留的 1 处分段条**（判据①「4 → ≤2」里留下的那一档，理由写在这儿）：
+    /// 它答的是「**看哪一屏**」——这是**模式**，不是取值；两档一眼可见、点一下就到，与 SQL 编辑区
+    /// 里"执行 / 停止"那类**模式**按钮是同一种东西。反过来，同一屏里那些「选一个值」的选择器
+    /// （作用域 / 优先级 / 提醒档 / 筛选 / 月周）本片一律改**下拉菜单** —— 分段条留给模式，
+    /// 取值走菜单，这才是「与 SQL 编辑区同一设计语言」那一句的可执行版。
+    /// N2-1 的几何判据①（右边缘贴齐左区行右边缘）钉的就是这一枚，本片不动它的位置与形态。
     private var moduleSwitch: some View {
         Picker(L(.notesTitle), selection: Binding(
             get: { appState.notesModule },
@@ -921,6 +940,7 @@ struct TodoNavigationView: View {
                 Image(systemName: "checklist")
                     .font(Theme.font(.caption))
                     .frame(width: 14)
+                    .help(L(.todoAll))
                 Text(L(.todoAll))
                     .font(Theme.font(.body))
                     .lineLimit(1)
@@ -1031,7 +1051,11 @@ struct TodoEditorView: View {
                     Text(L(priority.key)).tag(priority)
                 }
             }
-            .pickerStyle(.segmented)
+            // **四档优先级 = 取值 ⇒ 下拉**（片 `N2-2` 判据①：NotesPanel 的分段条 4 → 1）。
+            // 同一屏的「保存 / 删除」两枚是**动作**（带文字的按钮，且 `NotesEditorSaveProbeTests`
+            // 有一条按文字排版校准的像素判据），本片不动它们。
+            .pickerStyle(.menu)
+            .help(L(.todoPriorityLabel))
             .accessibilityIdentifier("todo-priority")
             TextField(L(.notesTagsPlaceholder), text: $appState.todoEditorTags)
                 .textFieldStyle(.roundedBorder)
@@ -1105,6 +1129,7 @@ struct TodoReminderSection: View {
             HStack(spacing: Spacing.xs) {
                 Image(systemName: entry.hasReminder ? "bell.fill" : "bell")
                     .font(Theme.font(.caption))
+                    .help(L(.reminderSection))
                 Text(L(.reminderSection))
                     .font(Theme.font(.caption))
                 Spacer(minLength: Spacing.xs)
@@ -1122,7 +1147,8 @@ struct TodoReminderSection: View {
                     Text(L(preset.key)).tag(preset)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
+            .help(L(.reminderSection))
             .accessibilityIdentifier("todo-reminder-preset")
             if let spec = entry.spec {
                 // 已经挂着：把那条规则照实说一遍（含「下次 …」与排不排那一句）——

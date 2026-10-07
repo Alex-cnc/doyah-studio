@@ -31,6 +31,11 @@ struct TodoPaneView: View {
     }
 
     /// 清单 / 日历切换器（档位空间与名字都来自 Core：`TodoPane`）。
+    ///
+    /// **本片保留的 1 处分段条**（判据①「3 → ≤2」里留下的那一档，理由写在这儿）：
+    /// 它答的是「**看哪一屏**」——模式，不是取值；与笔记屏行末那一枚「笔记 / 待办」
+    /// （`NotesAreaView.moduleSwitch`）是同一种东西。同一屏里「选一个值」的选择器
+    /// （月 / 周、筛选）本片一律改**下拉菜单**（片 `N2-2`「与 SQL 编辑区同一设计语言」）。
     private var modeBar: some View {
         HStack(spacing: Spacing.xs) {
             Picker(L(.notesModuleTodos), selection: Binding(
@@ -79,6 +84,13 @@ struct TodoCalendarPane: View {
 
     // MARK: - 工具条（月 / 周 + 翻页 + 回来 + 今天）
 
+    /// **日历那一屏的工具条**（片 `N2-2`「与 SQL 编辑区同一设计语言」）：
+    ///   · 「月 / 周」由**分段条**改**下拉**（判据①：TodoCalendarView 的分段条 3 → 1）——
+    ///     它答的是「这一屏怎么画」这个**取值**，不是「看哪一屏」那个模式（模式那一条留在 `modeBar`）；
+    ///   · 翻页两枚走**唯一出处**的 `ToolbarIconButton`（图标 + 固定 28 × 22 命中区 + 悬停提示），
+    ///     与 SQL 编辑区工具条 / 笔记面操作栏是**同一个**它；
+    ///   · 「今天」是带字的一枚（它是个**动作 + 目标**，纯图标说不清是"回到哪一天"）——
+    ///     原样保留文字，另补一句与它同一句的悬停提示（判据②：图标 / 按钮都要说得出自己干什么）。
     private var toolbar: some View {
         HStack(spacing: Spacing.xs) {
             Picker(L(.todoPaneCalendar), selection: Binding(
@@ -89,34 +101,28 @@ struct TodoCalendarPane: View {
                     Text(L(view.key)).tag(view)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
+            .help(L(.todoPaneCalendar))
             .accessibilityIdentifier("todo-calendar-view-switch")
             Spacer(minLength: Spacing.xs)
-            Button {
+            ToolbarIconButton(systemName: "chevron.left", help: L(.todoCalendarPrevious)) {
                 appState.shiftTodoCalendar(-1)
-            } label: {
-                Image(systemName: "chevron.left")
             }
-            .buttonStyle(.plain)
-            .help(L(.todoCalendarPrevious))
             .accessibilityIdentifier("todo-calendar-previous")
             Text(periodTitle)
                 .font(Theme.font(.caption))
                 .lineLimit(1)
                 .accessibilityIdentifier("todo-calendar-period")
-            Button {
+            ToolbarIconButton(systemName: "chevron.right", help: L(.todoCalendarNext)) {
                 appState.shiftTodoCalendar(1)
-            } label: {
-                Image(systemName: "chevron.right")
             }
-            .buttonStyle(.plain)
-            .help(L(.todoCalendarNext))
             .accessibilityIdentifier("todo-calendar-next")
             Button(L(.todoCalendarToday)) {
                 appState.todoCalendarGoToday()
             }
+            .help(L(.todoCalendarToday))
             .accessibilityIdentifier("todo-calendar-today")
         }
         .padding(.horizontal, Spacing.s)
@@ -489,6 +495,9 @@ struct TodoQueryBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             // 筛选决定「有哪些行」，最常切 ⇒ 常驻一排。
+            // **五档筛选改下拉**（片 `N2-2`）：它答的是「这一屏留哪些行」这个**取值** ——
+            // 五档一排的分段条是工具条上最占宽的一件（本片把它收成下拉，判据①：
+            // TodoCalendarView 的分段条 3 → 1）。档位空间仍全部来自 Core（`TodoFilter.allCases`）。
             Picker(L(.todoFilterLabel), selection: Binding(
                 get: { appState.todoFilter },
                 set: { appState.setTodoFilter($0) }
@@ -497,7 +506,7 @@ struct TodoQueryBar: View {
                     Text(L(filter.key)).tag(filter)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .labelsHidden()
             .help(L(.todoFilterLabel))
             .accessibilityIdentifier("todo-filter-switch")

@@ -257,4 +257,43 @@ final class NotesLayoutProbeTests: XCTestCase {
                 + " —— 「增删查改的所有操作都在左侧区域顶部」这条要求量到的就是它"
         )
     }
+
+    // MARK: - N2-2 探索：操作栏 / 工具条里**哪些东西量得动**（一次性诊断）
+
+    /// 把「操作栏 / 工具条」相关的几件视图各量一遍宽度，并把活宿主顶带里的控件逐条打印出来
+    /// —— 用来定 N2-2 那条「宽度收敛」的判据到底该量哪一个数（读源码常量会量错东西）。
+    @MainActor
+    func testN22ExploreMeasurableWidths() throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+
+        func fitting<V: View>(_ label: String, _ view: V, width: CGFloat = 4000, height: CGFloat = 80) {
+            let controller = NSHostingController(
+                rootView: AnyView(
+                    view.snapshotEnvironment(
+                        state: host.state, workspace: host.workspace, tabs: host.tabs, terminal: host.terminal
+                    )
+                )
+            )
+            let size = controller.sizeThatFits(in: CGSize(width: width, height: height))
+            print("N2-2-EXPLORE fitting[\(label)] = \(pt(size.width)) x \(pt(size.height))")
+        }
+        fitting("NotesListView", NotesListView())
+        fitting("TodoQueryBar", TodoQueryBar())
+        fitting("TodoPaneView", TodoPaneView(), height: 400)
+        fitting("NotesAreaView", NotesAreaView(), height: 700)
+
+        let live = makeLive(host)
+        for view in UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: live.hosting) {
+            let r = rect(of: view, in: live.hosting)
+            guard !r.isEmpty, r.height > 1, r.height <= 80 else { continue }
+            let top = distanceToTopEdge(r, in: live.hosting)
+            guard top <= 80 else { continue }
+            print(
+                "N2-2-EXPLORE view cls=\(String(describing: type(of: view)))"
+                    + " id=\(view.accessibilityIdentifier())"
+                    + " x=[\(pt(r.minX))…\(pt(r.maxX))] w=\(pt(r.width)) h=\(pt(r.height)) top=\(pt(top))"
+            )
+        }
+    }
 }

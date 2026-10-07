@@ -406,12 +406,11 @@ struct QueryToolbar: View {
 
     // MARK: - 通用图标按钮样式
 
+    /// **工具条图标**（片 `N2-2` 收成一处）：本文件不再自己画这一套，
+    /// 走 `App/Views/ToolbarIcon.swift` 的 `ToolbarIcon` —— 笔记面 / 待办面的操作栏用的是**同一个**它。
+    /// 这一处就是「基准」：`ToolbarIcon` 的尺寸 / 字重 / 颜色口径原本只写在这里。
     private func toolbarIcon(_ systemName: String) -> some View {
-        Image(systemName: systemName)
-            .font(Theme.font(.icon)).fontWeight(.semibold)
-            .foregroundStyle(Theme.text(.secondary))
-            .frame(width: Metrics.toolbarButtonWidth, height: Metrics.toolbarButtonHeight)
-            .contentShape(Rectangle())
+        ToolbarIcon(systemName: systemName)
     }
 }
 
