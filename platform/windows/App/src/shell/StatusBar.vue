@@ -12,15 +12,20 @@ import {
   type ThemeSchemeId,
 } from '../theme'
 
-const props = defineProps<{
-  /** 界面语言（由外壳传下来；不给就按中文） */
-  language?: UiLanguage
-  info: AppInfo | null
-  rows: number
-  cols: number
-  loaded: number
-  total: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** 界面语言（由外壳传下来；不给就按中文） */
+    language?: UiLanguage
+    info: AppInfo | null
+    /** 结果集行数（由外壳给）。**没给就按 0** —— 模板照常画「结果集 0 行 × 0 列」，不抛。 */
+    rows?: number
+    /** 结果集列数（同上） */
+    cols?: number
+    loaded: number
+    total: number
+  }>(),
+  { rows: 0, cols: 0 },
+)
 
 /** 本组件的文案帮手（语言由外壳给）。 */
 function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {

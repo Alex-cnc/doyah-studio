@@ -304,9 +304,6 @@ const emit = defineEmits<{
 
   (event: 'push-panel', entry: { text: string; level: 'info' | 'warn' | 'error'; source?: string }): void}>()
 
-/** 工作区根变化时同步给外壳（面板里搜文件要用它） */
-watch(root, (value) => emit('root-changed', value), { immediate: true })
-
 /** 面板递进来的"请打开这个文件"：真正打开它（**只有这一层会开文件**） */
 watch(
   () => props.openFileSignal,
@@ -340,16 +337,6 @@ const isDirty = computed(() => {
   const tab = activeTab.value
   return !!tab && tab.relativePath !== null && editorDraft.value !== tab.saved
 })
-
-/** 把草稿对齐到当前页签（切页签 / 打开文件时调） */
-watch(
-  () => [activeTab.value?.id, activeTab.value?.content] as const,
-  () => {
-    editorDraft.value = activeTab.value?.content ?? ''
-    saveReport.value = null
-  },
-  { immediate: true },
-)
 
 /**
  * 保存当前页签：**必须先有载入快照**（基线），否则不保存 ——
@@ -495,6 +482,14 @@ interface OpenTab {
 const HOME_ID = 'home'
 
 const root = ref('')
+
+// 工作区根变化时同步给外壳（面板里搜文件要用它）。
+// **位置有讲究**：`immediate: true` 的 watch 是 setup 期就执行的顶层语句，必须排在 `root`
+// 声明**之后** —— 排前面会撞 TDZ（`Cannot access 'root' before initialization`），
+// 组件 setup 抛错 ⇒ Vue 用空注释占位 ⇒ **工作区视图整屏空白**（2026-10-07 实测事故）。
+// 语义不变：依旧"一挂载就把当前根同步出去"（immediate）。
+watch(root, (value) => emit('root-changed', value), { immediate: true })
+
 const rootDraft = ref('')
 const showHidden = ref(false)
 const children = ref<Map<string, FsEntry[]>>(new Map())
@@ -592,6 +587,20 @@ const rows = computed(() =>
 
 const activeTab = computed<OpenTab | null>(
   () => tabs.value.find((t) => t.id === selectedTabId.value) ?? null,
+)
+
+// 把草稿对齐到当前页签（切页签 / 打开文件时调）。
+// **位置有讲究**：`watch(getter, cb, { immediate: true })` 的 getter 与回调**都在 setup 期就跑**，
+// 必须排在 `activeTab` 声明**之后** —— 排前面同样撞 TDZ（`Cannot access 'activeTab' before
+// initialization`）。这是 2026-10-07 与 `root` 那处同源的第二处：只修 `root` 时第一个错把它挡住了，
+// 挂载冒烟测试（真挂一次）才让它露出来。语义不变。
+watch(
+  () => [activeTab.value?.id, activeTab.value?.content] as const,
+  () => {
+    editorDraft.value = activeTab.value?.content ?? ''
+    saveReport.value = null
+  },
+  { immediate: true },
 )
 
 /** 层标题：`工作区 · <名字>`；没打开就写"未打开工作区" */

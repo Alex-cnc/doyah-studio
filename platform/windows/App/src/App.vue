@@ -202,8 +202,20 @@ function pushPanel(entry: PanelEntry) {
 const panelProblems = computed(() => panelEntries.value.filter((entry) => entry.level !== 'info'))
 
 const commandNote = ref('')
+// 状态栏的四个读数：**来源 = 当前结果集**（由 DatabaseView 在结果变化时上报，见 `onResultStats`）。
+// 没有结果（未连库 / 没跑查询）时一律 0 —— 不编造数字。
+const rows = ref(0)
+const cols = ref(0)
 const loaded = ref(0)
 const total = ref(0)
+
+/** 结果集换了：把「结果集几行几列 / 本片取了行」同步给状态栏。 */
+function onResultStats(payload: { rows: number; cols: number; loaded: number; total: number }) {
+  rows.value = payload.rows
+  cols.value = payload.cols
+  loaded.value = payload.loaded
+  total.value = payload.total
+}
 
 // 外观（2.8）：规则在 Rust 侧（`Db/src/appearance.rs`），这里只管"读回来 → 贴到根元素 → 改了就存回去"
 const appearance = ref<AppearancePref | null>(null)
@@ -348,7 +360,7 @@ function onSelect(id: ActivityBarItemId) {
       <main class="shell__main">
         <div class="shell__stack">
           <!-- 数据库：真库链路（连库 → 对象树 → SQL → 结果），驱动在 Rust 外壳 -->
-          <DatabaseView v-if="activeItem === 'database'" :dialog-request="connectionDialogRequest" @push-panel="pushPanel" />
+          <DatabaseView v-if="activeItem === 'database'" :dialog-request="connectionDialogRequest" @push-panel="pushPanel" @result-stats="onResultStats" />
           <WorkspaceView
             v-else-if="activeItem === 'workspace'"
             :open-file-signal="openFileSignal"
@@ -379,7 +391,7 @@ function onSelect(id: ActivityBarItemId) {
         </button>
       </main>
     </div>
-    <StatusBar :info="info" :loaded="loaded" :total="total" :language="uiLanguage" />
+    <StatusBar :info="info" :rows="rows" :cols="cols" :loaded="loaded" :total="total" :language="uiLanguage" />
   </div>
 </template>
 

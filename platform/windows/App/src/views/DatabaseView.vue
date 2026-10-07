@@ -102,6 +102,8 @@ import {
 // 视图往底部面板打输出（图里的「输出 / 问题」两格就是收这个）
 const emit = defineEmits<{
   (event: 'push-panel', entry: { text: string; level: 'info' | 'warn' | 'error'; source?: string }): void
+  /** 结果集变了：把「几行几列 / 本片取了行」报给外壳（状态栏那两段读数就用它）。 */
+  (event: 'result-stats', payload: { rows: number; cols: number; loaded: number; total: number }): void
 }>()
 
 /**
@@ -883,6 +885,14 @@ const result = ref<QueryResult | null>(null)
 watch(result, () => {
   page.value = 1
   void measureColumns()
+  // 状态栏读数（结果集几行几列 / 本片取了行）：**同一处出口**，免得各赋值点漏报一处。
+  // 没有结果时一律 0（不编造数字）。
+  emit('result-stats', {
+    rows: result.value ? result.value.rows.length : 0,
+    cols: result.value ? result.value.columns.length : 0,
+    loaded: result.value ? result.value.rows.length : 0,
+    total: result.value ? result.value.returned : 0,
+  })
 })
 const failure = ref<DbFailure | null>(null)
 const busy = ref('')
