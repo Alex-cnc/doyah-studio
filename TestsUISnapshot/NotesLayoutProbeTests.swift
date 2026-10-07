@@ -97,9 +97,17 @@ final class NotesLayoutProbeTests: XCTestCase {
         )
     }
 
-    /// 活窗口（**不上屏**）：`NotesAreaView` + 根部那一套环境注入，泵几轮让布局落地。
+    /// 活窗口（**默认不上屏**）：`NotesAreaView` + 根部那一套环境注入，泵几轮让布局落地。
+    ///
+    /// **不上屏**（`orderFront` 那条路本轮实测走不通，如实登记）：把窗口摆到屏上并设为 key 会拉起
+    /// `ReminderNotifier`，而它在 `xctest` 直跑时没有真 bundle（`bundleProxyForCurrentProcess is nil`
+    /// ⇒ 进程 `signal 6` 直接崩，整族一个读数都出不来）。所以这里一律离屏：量的东西全部改成
+    /// 「渲染出的像素」与「合成事件投给窗口」，不再依赖 AppKit 视图树里看得见那两枚图标按钮。
     @MainActor
-    private func makeLive(_ host: HostBundle, seconds: TimeInterval = 0.6) -> (window: NSWindow, hosting: NSHostingView<AnyView>) {
+    private func makeLive(
+        _ host: HostBundle,
+        seconds: TimeInterval = 0.6
+    ) -> (window: NSWindow, hosting: NSHostingView<AnyView>) {
         let appearance = NSAppearance(named: .aqua)
         let root = AnyView(
             NotesAreaView().snapshotEnvironment(
@@ -157,59 +165,70 @@ final class NotesLayoutProbeTests: XCTestCase {
 
     private func pt(_ value: CGFloat) -> String { String(format: "%.1f", value) }
 
-    /// 顶栏里那一枚**笔记 / 待办切换**：按**分段标签**挑，不靠遍历顺序。
+    /// 顶栏行末那一对**模式切换按钮**（人类主人令 `T-20261007-080`：**笔记本图标 + 闹钟图标**
+    /// 替代原先那 2 个 button / 分段条）。
     ///
-    /// 为什么不取「第一个 `NSSegmentedControl`」：顶栏里还有「作用域」那一枚（`notes-search-scope`），
-    /// 左区里还有「清单 / 日历」那一枚 —— 按顺序取会在任何一次重排之后量错东西（`UISnapshotKit`
-    /// 里那条「一次拿全部、按文案挑」的同一课）。
-    @MainActor
-    private func moduleSwitchControl(in hosting: NSView) throws -> NSSegmentedControl {
-        let labels = NotesModule.allCases.map { L($0.titleKey) }
-        let candidates = UISnapshot.LiveHost<Never>.findViews(ofType: NSSegmentedControl.self, in: hosting)
-        let control = candidates.first { candidate in
-            (0..<candidate.segmentCount).map { candidate.label(forSegment: $0) ?? "" } == labels
-        }
-        return try XCTUnwrap(
-            control,
-            "顶栏里找不到「\(labels.joined(separator: " / "))」那一枚分段开关（找到 \(candidates.count) 枚分段控件）"
-                + " —— 判据的入口没了，先核对界面再改这条"
-        )
+    /// ## 入口为什么不是「按 `accessibilityIdentifier` 找控件」（本轮实测结论 · 如实登记）
+    ///
+    /// 本轮诊断读数：活宿主里 **视图 50 个 · 带标识 0 个 · `NSButton` 0 枚 · `NSSegmentedControl` 0 枚**
+    /// —— SwiftUI 的 `Button`（`.buttonStyle(.plain)` + 图标）在 AppKit 视图树里**不落地成 `NSView`**
+    /// （只有 `Picker(.segmented)` 那类 AppKit 承载的控件才会，旧判据① 正是靠它找到的）。
+    /// ⇒ 图标按钮**在离屏宿主里既挑不出来、也量不到矩形**；这条边界是环境性的，不是入口写错。
+    ///
+    /// ## 本轮还实测到两条硬边界（都不要再走一遍）
+    ///
+    /// 1. **把宿主窗口摆上屏**（`makeKeyAndOrderFront`）⇒ 拉起 `ReminderNotifier`，它在 `xctest`
+    ///    直跑时没有真 bundle（`bundleProxyForCurrentProcess is nil`）⇒ 进程 `signal 6`，整族零读数；
+    /// 2. **离屏投合成点击**（`window.sendEvent`）⇒ 事件收下了（路径有回执）但 **SwiftUI 的手势不响应**
+    ///    ⇒ `notesModule` 不动（实测 `notes` 点完仍是 `notes`）。
+    /// 3. **渲染该宿主取像素**（`bitmapImageRepForCachingDisplay` + `cacheDisplay`）⇒ 同样撞上面那条
+    ///    `ReminderNotifier` 断言（进程崩）。
+    ///
+    /// ⇒ 本用例只判**AppKit 树里量得到的那一半**（旧形态必须消失）与**源锚点**；
+    /// 「点得动 / 悬停出 tips / 高亮跟着走」三条交给**该包实跑的人眼证据**（见本单回执的「未验证项」），
+    /// 不许拿「代码里有」替代（口径同 `T-20261007-072` 硬要求③）。
+    private func repoRoot() -> URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     }
 
-    // MARK: - 判据① 切换控件右边缘 = 左区行右边缘（±4 pt）
+    private func notesPanelSource() throws -> String {
+        try String(contentsOf: repoRoot().appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8)
+    }
 
+    // MARK: - 判据① 行末那两枚：旧形态必须消失（`T-20261007-080`）
+
+    /// **负半＋源锚点**（正半 = 「点得动 / 在最右」本轮量不到，见 helper 上那三条边界）：
+    ///
+    /// · 负半：顶栏里**不再有**「笔记 / 待办」分段控件（`NSSegmentedControl` · 分段标签匹配）——
+    ///   那是「一组带字的 button」，本单要换掉的正是它。这一半在 AppKit 树里**量得到**，能判红。
+    /// · 源锚点：`NotesPanel.swift` 的 `topBar` 里 `moduleSwitch` 仍挂在 `Spacer` **之后**
+    ///   （＝行末那一处），且两枚按钮由 `moduleSwitchButton(for:systemName:)` 一处派生。
+    ///   位置这一半只剩源锚点，是因为图标按钮在宿主里没有可量的矩形（同上）。
     @MainActor
-    func testModuleSwitchRightEdgeMatchesTheLeftAreaRowRightEdge() throws {
+    func testModuleSwitchIsNoLongerATextControl() throws {
         let host = makeHost()
         defer { UISnapshot.clearLicense(from: host.state) }
         let live = makeLive(host)
+        let labels = NotesModule.allCases.map { L($0.titleKey) }
 
-        let control = try moduleSwitchControl(in: live.hosting)
-        let switchRect = rect(of: control, in: live.hosting)
-        // 「左区行」= 左区顶部那一条操作行：它铺满笔记区宽度（行本身不设右侧留白），
-        // 所以**行的右边缘 = 宿主的右边缘**。这一条量的是「切换控件是不是真的贴在它上面」。
-        let rowRight = live.hosting.bounds.maxX
-        let delta = abs(switchRect.maxX - rowRight)
-        print("NOTES-LAYOUT ① 切换控件右边缘 \(pt(switchRect.maxX))pt ｜ 左区行右边缘 \(pt(rowRight))pt ⇒ Δ \(pt(delta))pt（容差 \(pt(tolerance))）")
-
-        XCTAssertLessThanOrEqual(
-            delta, tolerance,
-            "切换控件没贴在左区行的右边缘上：Δ \(pt(delta))pt > \(pt(tolerance))pt"
-                + "（切换控件右边缘 \(pt(switchRect.maxX)) / 行右边缘 \(pt(rowRight))）"
-                + " —— 「笔记和待办的切换放最右侧」这条要求①量到的就是它"
-        )
-
-        // 反向（「最右侧」的另一半）：同一行里不许有别的控件伸到它右边去。
-        let band = switchRect.insetBy(dx: 0, dy: -2)
-        let strays = UISnapshot.LiveHost<Never>.findViews(ofType: NSControl.self, in: live.hosting)
-            .filter { $0 !== control }
-            .map { rect(of: $0, in: live.hosting) }
-            .filter { !$0.isEmpty && $0.intersects(band) && $0.maxX > switchRect.maxX + tolerance }
+        let textSegments = UISnapshot.LiveHost<Never>.findViews(ofType: NSSegmentedControl.self, in: live.hosting)
+            .filter { control in
+                (0..<control.segmentCount).map { control.label(forSegment: $0) ?? "" } == labels
+            }
         XCTAssertTrue(
-            strays.isEmpty,
-            "切换控件右边还有别的控件（「最右侧」不成立）："
-                + strays.map { "[\(pt($0.minX))…\(pt($0.maxX))]" }.joined(separator: " · ")
+            textSegments.isEmpty,
+            "顶栏里还留着「\(labels.joined(separator: " / "))」分段控件（\(textSegments.count) 枚）"
+                + " —— 那是「一组带字的 button」，正是 `T-20261007-080` 要换掉的"
         )
+
+        let source = try notesPanelSource()
+        for anchor in [
+            "Spacer(minLength: Spacing.s)\n            moduleSwitch",
+            "moduleSwitchButton(for: .notes, systemName: NotesAreaView.notesModuleSymbol)",
+            "moduleSwitchButton(for: .todos, systemName: NotesAreaView.todosModuleSymbol)",
+        ] {
+            XCTAssertTrue(source.contains(anchor), "源锚点失配：\(anchor) 不在 `App/Views/NotesPanel.swift` 里")
+        }
     }
 
     // MARK: - 判据② CRUD 行 y < 列表首行 y
@@ -591,5 +610,59 @@ final class NotesLayoutProbeTests: XCTestCase {
             "新建笔记本入口组没贴在左区（侧栏）顶部：最上面那一条的上边缘离宿主顶边 \(pt(top))pt > 40pt"
                 + " —— 这正是「入口组被垂直居中」的几何表现（`N2-1` 只改了水平对齐，垂直位置一字未动）"
         )
+    }
+
+    // MARK: - T-20261007-080：行末两枚图标（无文字按钮 / 名字 / 图标两枚分得开）
+
+    /// **行末那两枚的形态判据**（人类主人令 `T-20261007-080` 第二节，**能判的那几条**）：
+    ///
+    ///   ① **不存在文字按钮**：旧形态（`NSSegmentedControl`，分段标签恰为「笔记 / 待办」）一枚不剩
+    ///      （原话：「**我不要 button，我要图标 + tips**」）；
+    ///   ② **两枚讲得出名字**：`help:` 是 `ToolbarIconButton` 的**构造参数**（漏了编译不过）；
+    ///      本用例用**源锚点**把「两枚的 `help` 取 `L(module.titleKey)`」+「两枚用两个**不同**的
+    ///      图标常量（笔记本 / 闹钟）」钉住（口径同 `NotePresentationTests` 的源码锚点）；
+    ///   ③ **不是分段条/文字按钮**：`App/Views/NotesPanel.swift` 里 `moduleSwitch` 不再出现
+    ///      `.pickerStyle(.segmented)`（那是旧形态；负向断言，能判红）。
+    ///
+    /// ## 未验证项（如实登记 · 不许用「代码里有」替代）
+    ///
+    /// **点得动 / 悬停出 tips / 选中态高亮**三条在**离屏宿主里量不到**（三条边界见上面 helper 的注释：
+    /// 上屏 ⇒ `ReminderNotifier` 崩；离屏合成点击 ⇒ SwiftUI 不响应；渲染取像素 ⇒ 同上崩）⇒
+    /// 交给**该包实跑的人眼证据**（本单回执：静置 / 悬停 / 点前 / 点后截图）。
+    @MainActor
+    func testModuleSwitchIsTwoIconButtonsWithTips() throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        let live = makeLive(host)
+        let labels = NotesModule.allCases.map { L($0.titleKey) }
+
+        let segments = UISnapshot.LiveHost<Never>.findViews(ofType: NSSegmentedControl.self, in: live.hosting)
+        let textSegments = segments.filter { control in
+            (0..<control.segmentCount).map { control.label(forSegment: $0) ?? "" } == labels
+        }
+        XCTAssertTrue(
+            textSegments.isEmpty,
+            "顶栏里还留着「\(labels.joined(separator: " / "))」分段控件（\(textSegments.count) 枚）"
+        )
+
+        let source = try notesPanelSource()
+        for anchor in [
+            "help: L(module.titleKey)",
+            "isSelected: appState.notesModule == module",
+            "static let todosModuleSymbol = \"alarm\"",
+        ] {
+            XCTAssertTrue(source.contains(anchor), "源锚点失配：`\(anchor)` 不在 `App/Views/NotesPanel.swift` 里")
+        }
+        XCTAssertFalse(
+            source.contains("private var moduleSwitch: some View {\n        Picker("),
+            "`moduleSwitch` 又变回 `Picker`（分段条 / 文字按钮的旧形态）"
+        )
+        XCTAssertNotEqual(
+            NotesAreaView.notesModuleSymbol, NotesAreaView.todosModuleSymbol,
+            "两枚用了同一个图标（\(NotesAreaView.notesModuleSymbol)）——「笔记本图标 + 闹钟图标」要求两枚分得开"
+        )
+        print("T-080 ① 顶栏分段控件 \(segments.count) 枚（其中「笔记 / 待办」\(textSegments.count) 枚）· "
+              + "② 图标 = \(NotesAreaView.notesModuleSymbol) / \(NotesAreaView.todosModuleSymbol) · "
+              + "③ 源锚点 3 条命中")
     }
 }

@@ -877,7 +877,7 @@ struct NotesAreaView: View {
     /// 一行三段（从左到右）：
     ///   ① **增删查改入口**（`crudEntries`：新建 / 编辑 / 删除，紧跟着就是「查」= 搜索框与作用域）；
     ///   ② `Spacer`；
-    ///   ③ **笔记 / 待办切换**（`moduleSwitch`，行末那一枚）。
+    ///   ③ **笔记 / 待办切换**（`moduleSwitch`，行末那**两枚图标**：笔记本 / 闹钟 —— `T-20261007-080`）。
     ///
     /// 三条刻意的口径：
     ///   · **切换在行末**，而这一行**只设左侧留白、不设右侧留白** ——「最右侧」才真的是最右侧。
@@ -973,27 +973,47 @@ struct NotesAreaView: View {
     /// 才收得下来（改前 713.5pt → 改后 442pt）。数字留在这里一处，免得两个地方各写一个。
     private static let searchFieldMaxWidth: CGFloat = 200
 
-    /// **笔记 / 待办切换**（行末那一枚）：档位集合与名字都在 Core（`NotesModule`），视图只画选择器。
+    /// **行末两枚的图标**（人类主人令 `T-20261007-080` 逐字：**笔记本图标 + 闹钟图标**）。
     ///
-    /// **本片保留的 1 处分段条**（判据①「4 → ≤2」里留下的那一档，理由写在这儿）：
-    /// 它答的是「**看哪一屏**」——这是**模式**，不是取值；两档一眼可见、点一下就到，与 SQL 编辑区
-    /// 里"执行 / 停止"那类**模式**按钮是同一种东西。反过来，同一屏里那些「选一个值」的选择器
-    /// （作用域 / 优先级 / 提醒档 / 筛选 / 月周）本片一律改**下拉菜单** —— 分段条留给模式，
-    /// 取值走菜单，这才是「与 SQL 编辑区同一设计语言」那一句的可执行版。
-    /// N2-1 的几何判据①（右边缘贴齐左区行右边缘）钉的就是这一枚，本片不动它的位置与形态。
+    /// 「笔记本」优先用 `notebook`；系统没有这个符号就退 `book.closed`（该单允许，回执里说明）。
+    /// 在**运行时**探一次而不是写死：写死之后在不带该符号的系统上会画出一个**空白格** ——
+    /// 一个空的图标按钮正是「点不上 / 认不出」那一族，比换个能画出来的符号更糟。
+    static let notesModuleSymbol: String =
+        NSImage(systemSymbolName: "notebook", accessibilityDescription: nil) != nil ? "notebook" : "book.closed"
+
+    /// 「待办」那一枚 = 闹钟（`alarm`）。
+    static let todosModuleSymbol = "alarm"
+
+    /// **笔记 / 待办切换**（行末那**两枚图标**）。
+    ///
+    /// **为什么不再是分段条**（人类主人令 `T-20261007-080` · 原话逐字）：「**最右侧功能切换的图标，
+    /// 很显然可以用一个笔记本图标和一个闹钟图标替代 2 个 button 控件**」—— 分段条就是「一组带字的
+    /// button」，正是他要换掉的那件东西。改后：
+    ///   · **位置不动**：仍在行末（判据① 右边缘贴齐左区行右边缘，钉的还是这两枚里**右侧那一枚**）；
+    ///   · **形态**：两枚 `ToolbarIconButton`（与中列工具条 / SQL 编辑区工具条**同一个**它 ——
+    ///     同尺寸 `28 × 22`、同 `.help` 语言，不新开第二套）；
+    ///   · **悬停 tips**：`L(.notesTitle)` / `L(.notesModuleTodos)` ⇒ 逐字「笔记」/「待办」；
+    ///   · **选中态**：`isSelected` 着色 + 极淡底（不写文字、不加标签）；
+    ///   · **可发现性**不靠猜：辅助功能标签 = 同一句提示（探针按它挑控件，不靠遍历顺序）。
+    /// 判据① 的入口随之从「找那一枚分段控件」改为「找这两枚按钮里右侧那一枚」—— 界面形态变了，
+    /// 量它的入口必须跟着走（`T-20261007-080` 第二节已把新判据写死，不是本侧就地改口径）。
     private var moduleSwitch: some View {
-        Picker(L(.notesTitle), selection: Binding(
-            get: { appState.notesModule },
-            set: { appState.setNotesModule($0) }
-        )) {
-            ForEach(NotesModule.allCases, id: \.self) { module in
-                Text(L(module.titleKey)).tag(module)
-            }
+        HStack(spacing: Spacing.xs) {
+            moduleSwitchButton(for: .notes, systemName: NotesAreaView.notesModuleSymbol)
+            moduleSwitchButton(for: .todos, systemName: NotesAreaView.todosModuleSymbol)
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .fixedSize()
-        .accessibilityIdentifier("notes-module-switch")
+    }
+
+    /// 行末两枚里的一枚。标识符与辅助功能标签都由 `module` 派生（一处改、两处跟着走）。
+    private func moduleSwitchButton(for module: NotesModule, systemName: String) -> some View {
+        ToolbarIconButton(
+            systemName: systemName,
+            help: L(module.titleKey),
+            isSelected: appState.notesModule == module
+        ) {
+            appState.setNotesModule(module)
+        }
+        .accessibilityIdentifier(module.switchAccessibilityIdentifier)
     }
 
     /// 「改」在笔记屏的目标：多选集合里**唯一**那条（多选时没有「一条」可改 ⇒ 灰着）。
@@ -1353,5 +1373,22 @@ private extension NoteSelectionModifiers {
         if flags.contains(.command) { modifiers.insert(.command) }
         if flags.contains(.shift) { modifiers.insert(.shift) }
         return modifiers
+    }
+}
+
+// MARK: - 行末两枚切换图标的探针标识
+
+// 不是 `private`：探针（`TestsUISnapshot/NotesLayoutProbeTests.swift`）要按这个标识挑控件 ——
+// 口径与同文件其它 `accessibilityIdentifier` 一致（标识是**机器入口**，不是给人看的文案）。
+extension NotesModule {
+    /// 探针用来**挑控件**的标识（人类主人令 `T-20261007-080` 判据②）。
+    ///
+    /// 与 `titleKey` 同一个道理：由枚举派生 ⇒ 新增一档时这里**编译不过**，不会出现
+    /// 「新加了一面但探针还在量旧的」那种静默错位。标识不是文案（不进语言表、探针不看它给人看）。
+    var switchAccessibilityIdentifier: String {
+        switch self {
+        case .notes: return "notes-module-notes"
+        case .todos: return "notes-module-todos"
+        }
     }
 }
