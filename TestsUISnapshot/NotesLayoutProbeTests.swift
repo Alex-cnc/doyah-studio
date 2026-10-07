@@ -484,4 +484,112 @@ final class NotesLayoutProbeTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - N2-7 新建笔记本入口组回左区顶部（几何判据 · 成对读数：改前 / 改后）
+
+    /// **`+ New notebook` 与笔记本列表贴在左区（侧栏）顶部**（片 `N2-7` · 人类主人 2026-10-07 22:51
+    /// 第三包截图定因：`N2-1`「入口由居中回顶部」**未做到** —— 侧栏里那棵树仍被**垂直居中**）。
+    ///
+    /// ## 判据
+    ///
+    /// 把左区（侧栏）那一份**真内容**——`MainWindow.swift:48` 那个
+    /// `NebulaSurface(surface: .sidebar, layer: .sidebar) { NotesContainerTreeView() }`——
+    /// 挂进一个**固定尺寸 248 × 700** 的离屏宿主（宽 = `Metrics.sidebarWidth`；高远大于树的内容，
+    /// 让「内容挂顶还是被居中」在几何上看得出来），泵几轮让布局落地，量宿主里**最上面那一条
+    /// 可读矩形**的上边缘离宿主顶边的距离 `top`：
+    ///
+    ///   · 内容贴在容器顶部时 `top` 只有几 pt（首个控件那一行的行内边距）；
+    ///   · 被居中时 `top ≈ (700 − 内容高 114) / 2 = 293 pt`。
+    ///
+    /// 判据：**`top ≤ 40 pt`**（宿主高 700 的上 6%）。
+    ///
+    /// **成对读数**：改动前先跑一次记 `top_before`（**本机实测 293.0 pt**，判据当场红），改动后
+    /// 再跑得 `top_after ≤ 40`。两次数都 `print` 出来（口径与同文件既有判据一致：读数即证据）。
+    ///
+    /// ## 量得到的对象（优先 → 退）
+    ///
+    /// 优先量 `accessibilityIdentifier == "notes-new-notebook"` 那一枚（入口自己）；若离屏宿主里
+    /// 量不到它（SwiftUI 的 `Button` 在离屏时**不落到 `NSControl`**、无障碍树也不构建 —— 见
+    /// `NotesEditorSaveProbeTests` 头注释实测），**退到**「宿主里最上面一条可读矩形」，
+    /// 语义不变（那正是「树的内容挂在容器顶部」这件事的几何内容）。
+    /// **一个矩形都量不到就停**（卡上边界：留 comment + 标 `needs_input`）——
+    /// 不许把这条判据退化成读源码 / 读常量 / 数 `grep` 命中。
+    @MainActor
+    func testNewNotebookEntrySitsInTopBandOfLeftArea() throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+
+        // 左区（侧栏）固定尺寸：宽与导航分栏同规格（`Metrics.sidebarWidth` = 248），
+        // 高取得远大于树的内容 —— 「挂顶还是居中」只在高度富余时才看得出来。
+        //
+        // **为什么不是直接挂 `NotesContainerTreeView()`**：本机实测（`NSHostingView` 根视图）
+        // 那样挂**量不出这个缺陷** —— 根视图被钉在左上角，量到的 `top ≈ 0`（判据在改动前就绿，
+        // 「成对读数」的对照那一半不成立）。真实左区不是「裸挂一棵树」：`MainWindow.swift:48`
+        // 把它包在 `NebulaSurface(surface: .sidebar, layer: .sidebar) { … }` 里，而
+        // `NebulaSurface.body` 是一个 `ZStack`（默认 `alignment = .center`）——
+        // **这一层居中就是「入口组被垂直居中」的现场**。所以这里挂的是**左区那一份的真内容**
+        // （`NebulaSurface` + 树），尺寸固定 248 × 700。
+        let hostSize = CGSize(width: Metrics.sidebarWidth, height: 700)
+        let root = AnyView(
+            NebulaSurface(surface: .sidebar, layer: .sidebar) {
+                NotesContainerTreeView()
+            }
+            .snapshotEnvironment(
+                state: host.state, workspace: host.workspace, tabs: host.tabs, terminal: host.terminal
+            )
+        )
+        let hosting = NSHostingView(rootView: root)
+        hosting.frame = CGRect(origin: .zero, size: hostSize)
+
+        let window = NSWindow(
+            contentRect: CGRect(origin: .zero, size: hostSize),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+
+        // 泵几轮让布局落地（与 `makeLive` 同一套）。
+        let deadline = Date().addingTimeInterval(0.6)
+        while Date() < deadline {
+            window.layoutIfNeeded()
+            hosting.layoutSubtreeIfNeeded()
+            hosting.displayIfNeeded()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        window.layoutIfNeeded()
+        hosting.layoutSubtreeIfNeeded()
+
+        // 量对象一：入口那一枚（按 `accessibilityIdentifier` 找）。
+        let entryRect = UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: hosting)
+            .first { $0.accessibilityIdentifier() == "notes-new-notebook" }
+            .map { rect(of: $0, in: hosting) }
+
+        // 量对象二（退路）：宿主里最上面一条**可读矩形** —— 排除宿主自己与铺满宿主的背景层
+        // （那是容器不是内容），剩下的就是树里真画出来的控件 / 行。
+        let contentRects = UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: hosting)
+            .filter { $0 !== hosting }
+            .map { rect(of: $0, in: hosting) }
+            .filter { !$0.isEmpty && $0.width > 1 && $0.height > 1 && $0.size != hostSize }
+
+        let topmost = try XCTUnwrap(
+            contentRects.min { distanceToTopEdge($0, in: hosting) < distanceToTopEdge($1, in: hosting) },
+            "侧栏宿主里一个可读矩形都没量到 —— 判据的入口没了"
+                + "（按卡上边界：停 + 卡上留 comment + 标 needs_input；不许退化成读源码）"
+        )
+        let measured = entryRect ?? topmost
+        let top = distanceToTopEdge(measured, in: hosting)
+        print(
+            "NOTES-LAYOUT N2-7 左区顶部带：top=\(pt(top))pt（宿主 \(pt(hostSize.width))×\(pt(hostSize.height))，"
+                + "量的是\(entryRect == nil ? "宿主里最上面一条可读矩形" : "notes-new-notebook 那一枚")，"
+                + "可读矩形 \(contentRects.count) 条）｜限额 40.0pt"
+        )
+
+        XCTAssertLessThanOrEqual(
+            top, 40,
+            "新建笔记本入口组没贴在左区（侧栏）顶部：最上面那一条的上边缘离宿主顶边 \(pt(top))pt > 40pt"
+                + " —— 这正是「入口组被垂直居中」的几何表现（`N2-1` 只改了水平对齐，垂直位置一字未动）"
+        )
+    }
 }

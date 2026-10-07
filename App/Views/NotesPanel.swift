@@ -516,6 +516,23 @@ struct NotesContainerTreeView: View {
                     )
                 }
             }
+            // **入口组回左区顶部 —— 改的是「垂直对齐」**（本片 `N2-7` · 派单 `T-20261007-075`；
+            // 由头 = 人类主人 2026-10-07 22:51 第三包截图：「`+ New notebook` 与笔记本列表仍在
+            // 左区中下部」）。
+            //
+            // 这一棵树的容器是 `NebulaSurface` 那个 `ZStack`（`App/Views/NebulaBackground.swift:186`，
+            // 默认 `alignment = .center`），而本行以上原本**既没有 `Spacer()`、也没有
+            // `.frame(maxHeight: .infinity, alignment: .top)`** ⇒ `VStack` 按内容高度（本机实测
+            // 114pt）排完之后，被容器按**默认居中**摆 —— 宿主高 700 时量到的上边缘是 **293pt**
+            // （= (700 − 114) / 2），人看着就是「入口组不在顶部、跑到中下部去了」。
+            //
+            // `N2-1` 那次只去掉了入口行内**前缀**的 `Spacer()`（改的是**水平**对齐：
+            // 「推到最右 → 贴左」），**垂直位置一字未动** —— 这一条 `Spacer()` 补的正是垂直那一半：
+            // 把树的底撑到容器底 ⇒ 内容从容器顶部往下排（改后本机实测上边缘 **0.0pt**，
+            // 判据 `NotesLayoutProbeTests.testNewNotebookEntrySitsInTopBandOfLeftArea`：`top ≤ 40`）。
+            //
+            // 只动垂直位置：配色 / 圆角 / 间距 / 悬停提示 / `accessibilityIdentifier` / 文案键一字未改。
+            Spacer(minLength: 0)
         }
         .accessibilityIdentifier("notes-container-tree")
         // **容器编辑弹框**（队列 `L-97` 界面半第四片）：新建与重命名共用这一个框（标题由模型按模式给），
