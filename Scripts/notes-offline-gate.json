@@ -135,6 +135,11 @@
       "path": "App/Views/NotesPanel.swift",
       "layer": "app",
       "role": "笔记面板（活动栏入口）"
+    },
+    {
+      "path": "App/Views/NotePreviewBody.swift",
+      "layer": "app",
+      "role": "笔记正文的只读呈现（`NotePreviewBody`：预览态把 `NSTextView.isEditable` 置假，片 `N2-3a`）—— 纯呈现，无网络无库"
     }
   ],
   "scopeBeyondIsolation": [
