@@ -1655,3 +1655,58 @@ export function workspaceFormatContent(
     () => ({ content, changed: false, note: '（浏览器旁路没有工作区）', engine: 'refused', problem: null }),
   )
 }
+
+// ── 内置终端（W-C 底部终端 · 2.7 · S-9b）：界面侧的四个包装 ───────────────────────────────
+//
+// 命令名的单一出处仍是 `COMMANDS`（`terminalOpen` / `terminalWrite` / `terminalRead` /
+// `terminalClose` 四条）。S-9a 只登记了名字，本片补**可调用包装**；界面侧只经这四个函数
+// 调用终端，不许自己 `invoke('terminal_*')`。
+//
+// **浏览器旁路**：不在 Tauri 里跑时没有真终端（真形态是 WebView2 里跑真 PTY）—— `terminalOpen`
+// 与 `dbConnect` 同款：给一句「浏览器旁路没有真终端」的结构化失败，不拿假会话冒充成功。
+
+/** 浏览器旁路的终端提示（与 `bypassDb` / `bypassWorkspace` 同一姿势）。 */
+function bypassTerminal(action: string) {
+  return {
+    message: tNow('ipc.bypass.terminal'),
+    hint: tNow('ipc.bypass.hint', { action: tNow(action as never) }),
+  }
+}
+
+/** 一次读取的返回（与 Rust 侧 `pty::PtyChunk` 同形；`exitCode` 拿到才有）。 */
+export interface TerminalChunk {
+  data: string
+  eof: boolean
+  exitCode: number | null
+}
+
+/** 起会话的入参（都可缺省：不给就是系统 shell、80×24）。 */
+export interface TerminalOpenOptions {
+  program?: string
+  args?: string[]
+  cwd?: string
+  cols?: number
+  rows?: number
+}
+
+/** 起一个真交互式终端会话，返回会话 id（Rust 侧从 1 起的自增号）。 */
+export function terminalOpen(options: TerminalOpenOptions = {}): Promise<number> {
+  return call(COMMANDS.terminalOpen, { ...options }, () => {
+    throw bypassTerminal('ipc.action.terminal') as unknown as number
+  })
+}
+
+/** 往终端会话写（用户按键 / 粘贴）。 */
+export function terminalWrite(id: number, data: string): Promise<void> {
+  return call(COMMANDS.terminalWrite, { id, data }, () => undefined)
+}
+
+/** 读终端输出（最多等 `timeoutMs`，缺省 50ms），带「是否已结束」与退出码。 */
+export function terminalRead(id: number, timeoutMs = 50): Promise<TerminalChunk> {
+  return call(COMMANDS.terminalRead, { id, timeoutMs }, () => ({ data: '', eof: true, exitCode: null }))
+}
+
+/** 关闭终端会话（子进程 / pty / 两条线程一并收工）。 */
+export function terminalClose(id: number): Promise<void> {
+  return call(COMMANDS.terminalClose, { id }, () => undefined)
+}

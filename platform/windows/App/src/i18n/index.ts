@@ -25,6 +25,7 @@ export const DICT = {
   // IPC 浏览器旁路提示（不是产品路径，但**也要双语**：切英文时不该留中文）
   'ipc.bypass.db': { 'zh-Hans': '浏览器旁路没有真库', en: 'The browser fallback has no real database' },
   'ipc.bypass.workspace': { 'zh-Hans': '浏览器旁路没有工作区', en: 'The browser fallback has no workspace' },
+  'ipc.bypass.terminal': { 'zh-Hans': '浏览器旁路没有真终端', en: 'The browser fallback has no real terminal' },
   'ipc.bypass.hint': {
     'zh-Hans': '请在 Tauri 外壳里{action}（npm run tauri dev）。',
     en: 'Please {action} in the Tauri shell (npm run tauri dev).',
@@ -40,6 +41,7 @@ export const DICT = {
   'ipc.action.previewImport': { 'zh-Hans': '预览导入', en: 'preview an import' },
   'ipc.action.import': { 'zh-Hans': '导入', en: 'import' },
   'ipc.action.openWorkspace': { 'zh-Hans': '打开工作区', en: 'open a workspace' },
+  'ipc.action.terminal': { 'zh-Hans': '起终端会话', en: 'start a terminal session' },
   'ipc.confirm.dbName': {
     'zh-Hans': '库名不一致，没有删除（这是防误删的闸）',
     en: 'Database name does not match; nothing was dropped (this is the guard against accidents)',
@@ -320,9 +322,22 @@ export const DICT = {
   'panel.notReady': { 'zh-Hans': '{name}（本版未开工）', en: '{name} (not implemented in this version)' },
   'panel.aria': { 'zh-Hans': '底部面板', en: 'Bottom panel' },
   'panel.collapse': { 'zh-Hans': '收起底部面板', en: 'Collapse bottom panel' },
-  'panel.terminal.note': {
-    'zh-Hans': '内置终端本版未开工（真起 shell 那一半还没打通）。这里不会出现假的提示符。',
-    en: 'The built-in terminal is not implemented in this version (the real shell half is not done). No fake prompt appears here.',
+  // 终端页签（W-C 底部终端 · 2.7 · S-9b 起接真会话）：会话页签条 + 输出区 + 输入行
+  'panel.terminal.session': { 'zh-Hans': '{n} 号终端', en: 'Terminal {n}' },
+  'panel.terminal.new': { 'zh-Hans': '新建终端', en: 'New terminal' },
+  'panel.terminal.close': { 'zh-Hans': '关闭终端', en: 'Close terminal' },
+  'panel.terminal.aria': { 'zh-Hans': '终端会话', en: 'Terminal session' },
+  'panel.terminal.empty': {
+    'zh-Hans': '进入终端页签会自动起一个会话。',
+    en: 'A session starts automatically when you open this tab.',
+  },
+  'panel.terminal.input': {
+    'zh-Hans': '在此输入（直接送到 shell）',
+    en: 'Type here (sent straight to the shell)',
+  },
+  'panel.terminal.ended': {
+    'zh-Hans': '会话已结束（退出码 {code}）',
+    en: 'Session ended (exit code {code})',
   },
   'panel.debug.note': {
     'zh-Hans': '本版没有调试器，这一格暂不开放。',
