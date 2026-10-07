@@ -1581,6 +1581,27 @@ pub fn run() {
         // 系统文件 / 文件夹选择器（W-A-1）：Home「打开文件…」与命令面板「打开工作区文件夹」
         // 两处入口靠它弹**真**选择器；权限最小面登记在 `capabilities/default.json`（只给 `dialog:allow-open`）。
         .plugin(tauri_plugin_dialog::init())
+        // **界面可见构建标识**（S-073a · 前门裁决 `T-20261007-085`）：主窗口标题写成
+        // `Doyah Studio {版本} · {提交短号} · {构建时刻}`，打开包就能认出「这是哪一份构建」——
+        // 原先标题写死 `Doyah Studio`，debug / release / 一周前的旧包长得一模一样。
+        // 版本号仍只有一处真源 = 本 crate 的 `CARGO_PKG_VERSION`（见 `app_info`）；
+        // 提交短号与构建时刻由 `build.rs` 经 `cargo:rustc-env` 在构建期注入（取不到即 `unknown`）。
+        .setup(|app| {
+            use tauri::Manager as _;
+            if let Some(window) = app.get_webview_window("main") {
+                let title = format!(
+                    "Doyah Studio {} · {} · {}",
+                    env!("CARGO_PKG_VERSION"),
+                    env!("DOYAH_BUILD_HEAD"),
+                    env!("DOYAH_BUILD_TIME"),
+                );
+                // 设不上标题不该让外壳起不来：照原样记一笔，其余照跑。
+                if let Err(error) = window.set_title(&title) {
+                    eprintln!("设置主窗口标题失败：{error}");
+                }
+            }
+            Ok(())
+        })
         .manage(ShellState {
             cache: Mutex::new(ViewCache::new()),
             db: AsyncMutex::new(None),
