@@ -12,6 +12,10 @@ pub mod postgres;
 /// 本文件与其它文件只许经 `pty::` 接口调用，不许直接依赖 PTY crate（判据见
 /// `Tools/check-platform-parity.ps1` 第五道「PTY 隔离」）。
 pub mod pty;
+/// 底部终端「端到端接线」层（W-C 底部终端 · S-9c）：把 `pty::` 的真字节喂进领域层
+/// 屏幕模型 / 按键编码 / 页签会话，令 `Db/src/terminal*.rs` 那 29 例**由真字节流驱动**。
+/// 只经 `pty::` 接口调用，本模块**不许出现 PTY crate 名**（判据同第五道「PTY 隔离」）。
+pub mod terminal_bridge;
 
 mod query;
 pub mod search;
@@ -1522,7 +1526,11 @@ fn workspace_format_content(
     ))
 }
 
-// ── 内置终端（W-C 底部终端 · S-9a）：四条命令，**只经 `pty::` 接口**，本文件不碰 PTY 库 ──
+// ── 内置终端（W-C 底部终端 · S-9a 起 PTY，S-9c 起**经领域层**）：四条命令，本文件不碰 PTY 库 ──
+//
+// S-9c 起命令走 `terminal_bridge::`：真字节喂进领域层屏幕模型（`TerminalScreen`）、
+// 会话 id ↔ `TerminalTabs`、退出态落 `mark_exited`。`data` 字段**原样保留**（前端仍靠它渲染），
+// `screen` 是**新增的投影字段**（只增不减，前端 `TerminalChunk` 与既有 15 例不动）。
 
 /// 起一个真交互式终端会话，返回会话 id。
 ///
@@ -1537,7 +1545,7 @@ fn terminal_open(
 ) -> Result<u64, String> {
     let program = program.unwrap_or_else(pty::default_shell);
     let args = args.unwrap_or_default();
-    pty::open(
+    terminal_bridge::open(
         &program,
         &args,
         cwd.as_deref(),
@@ -1549,19 +1557,22 @@ fn terminal_open(
 /// 往终端会话写（用户按键 / 粘贴）。
 #[tauri::command]
 fn terminal_write(id: u64, data: String) -> Result<(), String> {
-    pty::write(id, &data)
+    terminal_bridge::write(id, &data)
 }
 
-/// 读终端输出（最多等 `timeout_ms`），带「是否已结束」与退出码。
+/// 读终端输出（最多等 `timeout_ms`）：裸字节 + 领域层屏幕投影 + 是否结束 + 退出码。
 #[tauri::command]
-fn terminal_read(id: u64, timeout_ms: Option<u64>) -> Result<pty::PtyChunk, String> {
-    pty::read(id, timeout_ms.unwrap_or(50))
+fn terminal_read(
+    id: u64,
+    timeout_ms: Option<u64>,
+) -> Result<terminal_bridge::TerminalChunk, String> {
+    terminal_bridge::read(id, timeout_ms.unwrap_or(50))
 }
 
 /// 关闭终端会话。
 #[tauri::command]
 fn terminal_close(id: u64) -> Result<(), String> {
-    pty::close(id)
+    terminal_bridge::close(id)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
