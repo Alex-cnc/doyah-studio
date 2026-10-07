@@ -160,7 +160,24 @@ final class NotePresentationTests: XCTestCase {
         XCTAssertTrue(panel.contains(".accessibilityIdentifier(\"notes-search-field\")"), "搜索框要有标识（探针与点验都靠它）")
 
         // ④ 「新建」只有一处（栏头那个按钮搬走了）。
-        XCTAssertEqual(panel.components(separatedBy: "Button(L(.notesNew))").count - 1, 1, "「新建」只许有一个入口")
+        //
+        // **锚点跟版（片 `N2-4` 顺手清掉这条先红；口径一字未改）**：原先那句判据锚在
+        // `Button(L(.notesNew))` 这个**字面形状**上，而入口形态此后换过两次 —— `N-UI-3`（2026-10-06，
+        // 提交 559cd29）把它改成 `ToolbarIconButton(systemName: "plus", help: L(.notesNew))`，
+        // `N2-2`（2026-10-07）再收成那一族 ⇒ 源码里再也找不到那个字面串 ⇒ 这条判据**自 559cd29 起
+        // 就一直是红的**（基线 `f0fbf0a` 上复跑同一句话：实测 0、期望 1），而它红着会让
+        // `verify-all.sh` 在第 1 项就中止（`set -e`）—— 十八项全跑不成。
+        // 口径不变：**「新建」只许有一个入口**。改判**两件事各一处**（比原字面锚更贴口径）：
+        // 文案键 `L(.notesNew)` 与 `accessibilityIdentifier("notes-new")` 都只出现一次 ——
+        // 再画第二个「新建」入口（换文案 / 换图标 / 换按钮族）都至少会多出其中一处。
+        XCTAssertEqual(
+            panel.components(separatedBy: "L(.notesNew)").count - 1, 1,
+            "「新建」只许有一个入口（数的是文案键 `L(.notesNew)` 的出现处数）"
+        )
+        XCTAssertEqual(
+            panel.components(separatedBy: "\"notes-new\"").count - 1, 1,
+            "「新建」只许有一个入口（数的是可读标识 `notes-new` 的出现处数）"
+        )
     }
 
     /// 剥注释（`//` 与 `///` 行、`/* */` 块）—— 与 `NotebookMovePromptTests` 同一份实现（同一课）。
