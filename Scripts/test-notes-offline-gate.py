@@ -73,6 +73,9 @@ TREE_FILES = [
     "Core/TodoSort.swift",
     "Core/TodoQuery.swift",
     "App/Views/NotesPanel.swift",
+    # 片 `N2-3a`（单击预览的只读正文呈现）—— 补登进台账范围：同上，台账里有它 ⇒ 副本必须带上，
+    # 否则「干净副本」这一例会因为「台账写了、盘上没有」而假红（同前几条的坑）
+    "App/Views/NotePreviewBody.swift",
     "Tests/NoteTests.swift",
     "Tests/NoteBodyTests.swift",
     "Tests/NoteDataBoundaryTests.swift",

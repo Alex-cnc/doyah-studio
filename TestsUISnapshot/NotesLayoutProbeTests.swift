@@ -258,6 +258,194 @@ final class NotesLayoutProbeTests: XCTestCase {
         )
     }
 
+    // MARK: - N2-3a 单击 ⇒ 预览（成对读数：点前 / 点后）
+
+    /// **单击列表项 ⇒ 右栏进预览（正文只读）**（片 `N2-3a`「单击预览」· 人类主人令 `T-20261007-004`
+    /// 第三节第 3 条）。
+    ///
+    /// 判据是**成对读数**（点前 / 点后各一次），两个数都读**真视图**上的事实：
+    ///   ① `AppState.editorMode`（模式那一个值的唯一出处）—— 点前 `!= .preview`、点后 `== .preview`；
+    ///   ② 正文区那个 `NSTextView` 的 `isEditable` —— 点前 `true`、点后 `false`。
+    ///
+    /// **为什么 ② 读 `NSTextView.isEditable` 这种底层的数**：只读这件事在 SwiftUI 这一层没有
+    /// 直接读数（实测 `.disabled(_:)` **不改**底层 `isEditable` —— 见 `App/Views/NotePreviewBody.swift`
+    /// 头注释），而「正文真的变成不可编辑」正是这一段要实现的东西 ⇒ 只能读它。
+    /// **点前那一次就是对照件**：同一套遍历在 `.edit` 态必须读到 `true` —— 量法若恒读 `false`
+    /// （或一个都量不到），这里当场红。
+    ///
+    /// **怎么算「单击」**：走生产那条入口 `AppState.handleNoteRowClick(_:modifiers:)`
+    /// （行上 `.onTapGesture` 调的就是它，见 `App/Views/NotesPanel.swift:154`），修饰键给**空**
+    /// （无修饰 = Core `NoteSelectionRule.clicked` 口径里的「打开这一条」）。
+    ///
+    /// **边界（如实登记）**：`onTapGesture` 自己（AppKit 把一次真实鼠标按下认成 tap）不在判据面里 ——
+    /// 这里判的是「这条入口走完之后，模式与正文只读性各是什么」，真实鼠标点验归人工。
+    @MainActor
+    func testSingleClickOpensPreviewWithReadOnlyBody() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        try await seedOneNote(host)
+        await host.state.reloadNotes()
+        let note = try XCTUnwrap(
+            host.state.visibleNotes.first,
+            "夹具没进列表（`visibleNotes` 是空的）⇒ 下面那一下「单击」没有对象"
+        )
+
+        let live = makeLive(host)
+        // 模式一变，SwiftUI 要在 `TextEditor` / `NotePreviewBody` 两支之间换视图 ⇒ 再泵一轮让它落地。
+        func settle() {
+            let deadline = Date().addingTimeInterval(0.5)
+            while Date() < deadline {
+                live.window.layoutIfNeeded()
+                live.hosting.layoutSubtreeIfNeeded()
+                live.hosting.displayIfNeeded()
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            }
+            live.window.layoutIfNeeded()
+            live.hosting.layoutSubtreeIfNeeded()
+        }
+        func bodyEditableFlags() -> [Bool] {
+            UISnapshot.LiveHost<Never>.findViews(ofType: NSTextView.self, in: live.hosting).map(\.isEditable)
+        }
+
+        // ── 点前：默认 `.edit`，正文那一个 `NSTextView` 可编辑（= 对照件）────────────────
+        let beforeMode = host.state.editorMode
+        let beforeEditable = bodyEditableFlags()
+        print("NOTES-N2-3a 点前：editorMode=\(beforeMode) 正文 NSTextView \(beforeEditable.count) 个 isEditable=\(beforeEditable)")
+        XCTAssertNotEqual(
+            beforeMode, .preview,
+            "还没点任何行，编辑器就已经是 `.preview` 了 ⇒ 起点不对，成对读数的「点前」那一半不成立"
+        )
+        XCTAssertFalse(beforeEditable.isEmpty, "点前宿主里一个 `NSTextView` 都没量到 —— 判据的入口没了")
+        XCTAssertTrue(
+            beforeEditable.allSatisfy { $0 },
+            "点前正文区不是可编辑的（isEditable=\(beforeEditable)）—— 对照件不成立，「点后变假」就说明不了什么"
+        )
+
+        // ── 单击（无修饰 = Core 口径里的「打开这一条」）──────────────────────────────
+        host.state.handleNoteRowClick(note, modifiers: [])
+        settle()
+
+        // ── 点后：`.preview`，同一套遍历读到 `isEditable == false` ──────────────────────
+        let afterMode = host.state.editorMode
+        let afterEditable = bodyEditableFlags()
+        print("NOTES-N2-3a 点后：editorMode=\(afterMode) 正文 NSTextView \(afterEditable.count) 个 isEditable=\(afterEditable)")
+        XCTAssertEqual(
+            afterMode, .preview,
+            "单击之后 `editorMode` 不是 `.preview`（实测 \(afterMode)）——「单击预览」没落地"
+        )
+        XCTAssertFalse(afterEditable.isEmpty, "点后宿主里一个 `NSTextView` 都没量到 —— 只读那一半读不到")
+        XCTAssertTrue(
+            afterEditable.allSatisfy { !$0 },
+            "单击之后正文区的 `NSTextView.isEditable` 不是 false（实测 \(afterEditable)）—— 正文没进只读"
+        )
+        // 成对的一条硬约束：两次读数必须**不一样**（否则「点前」只是把「点后」抄了一遍）。
+        XCTAssertNotEqual(
+            beforeEditable, afterEditable,
+            "点前 / 点后读到的是同一个 isEditable 集合 ⇒ 这一对读数是恒真的"
+        )
+    }
+
+    // MARK: - N2-3b 双击内容区 ⇒ 进编辑 + 顶部编辑工具条（成对读数：点前 / 点后）
+
+    /// **双击内容区 ⇒ 进编辑 + 顶部编辑工具条出现**（片 `N2-3b` · 人类主人令 `T-20261007-004` 第 4 条：
+    /// 「双击编辑 + 顶部编辑工具条」「保存进工具条（参考 SQL 界面）」「不许放底部」）。
+    ///
+    /// 判据是**成对读数**（点前 / 点后各一次），两个数都读**真视图**上的事实：
+    ///   ① `AppState.editorMode`（模式那一个值的唯一出处）—— 点前 `== .preview`
+    ///      （先走 `N2-3a` 的单击那条入口）、点后 `== .edit`；
+    ///   ② **顶部编辑工具条出现** —— 判据是**几何**：正文那一块的上边缘被一条工具条**顶下去**了。
+    ///      工具条是 `NotesEditorView` 的**第一行**子视图（`NotesEditorToolbar`），它一出现，
+    ///      它下面的一切（标题 / 标签 / 正文）整体下移**一条行的量**。
+    ///
+    /// **为什么「下移」就是「工具条在这儿」**：这个离屏宿主里，SwiftUI 的 `Button` 不落到
+    /// `NSControl`（`NotesEditorSaveProbeTests` 头注释实测 `NSButton` = 0 个），所以**工具条自己
+    /// 没有一条可读的矩形**；而「它下面那块被顶下去多少」量得到，且正是「工具条占了栏顶那一带」
+    /// 这句话在几何上的全部内容。本条同时把工具条按 `accessibilityIdentifier` 找一遍并**打印**
+    /// 读数（找到了就直接给出一致证据，找不到也不影响判据成立）。
+    ///
+    /// **点前那一次就是对照件**：同一套遍历在预览态必须读到「没有工具条」——
+    /// 量法若恒读同一个数（或一个都量不到），这里当场红。
+    ///
+    /// **怎么算「双击内容区」**：走生产那条入口 `AppState.beginEditingCurrentNote()`
+    /// （`NotePreviewBody` 那一支上 `.onTapGesture(count: 2)` 调的就是它，见 `App/Views/NotesPanel.swift`）。
+    /// 真实鼠标的双击由 AppKit 判定，不在判据面里 —— 与 `N2-3a` 同一条边界（那一侧也是走入口）。
+    @MainActor
+    func testN23bDoubleClickOnContentEntersEditingWithTopToolbar() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        try await seedOneNote(host)
+        await host.state.reloadNotes()
+        let note = try XCTUnwrap(
+            host.state.visibleNotes.first,
+            "夹具没进列表（`visibleNotes` 是空的）⇒ 下面那两下没有对象"
+        )
+
+        let live = makeLive(host)
+        // 模式一变，SwiftUI 要在 `TextEditor` / `NotePreviewBody` 两支之间换视图 ⇒ 再泵一轮让它落地。
+        func settle() {
+            let deadline = Date().addingTimeInterval(0.5)
+            while Date() < deadline {
+                live.window.layoutIfNeeded()
+                live.hosting.layoutSubtreeIfNeeded()
+                live.hosting.displayIfNeeded()
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            }
+            live.window.layoutIfNeeded()
+            live.hosting.layoutSubtreeIfNeeded()
+        }
+        /// 正文那一块（`NotePreviewBody` / `TextEditor` 里那个真 `NSTextView`）的上边缘。
+        func bodyTop() throws -> CGFloat {
+            let rects = UISnapshot.LiveHost<Never>.findViews(ofType: NSTextView.self, in: live.hosting)
+                .map { rect(of: $0, in: live.hosting) }
+                .filter { !$0.isEmpty }
+            return try XCTUnwrap(
+                rects.map { distanceToTopEdge($0, in: live.hosting) }.min(),
+                "右栏里一个 `NSTextView` 都没量到 —— 判据的入口没了"
+            )
+        }
+        /// 顶部编辑工具条**自己**的矩形（按 `accessibilityIdentifier` 找；宿主不给这个读数时是 nil）。
+        func toolbarRect() -> CGRect? {
+            UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: live.hosting)
+                .first { $0.accessibilityIdentifier() == "notes-editor-toolbar" }
+                .map { rect(of: $0, in: live.hosting) }
+        }
+        func toolbarText() -> String {
+            guard let r = toolbarRect() else { return "无读数" }
+            return "[\(pt(r.minX))…\(pt(r.width))]×\(pt(r.height))pt"
+        }
+
+        // ── 点前：先单击（`N2-3a` 那条入口）⇒ 预览；此时正文贴着栏顶、工具条不在 ──────────
+        host.state.handleNoteRowClick(note, modifiers: [])
+        settle()
+        let beforeMode = host.state.editorMode
+        let beforeTop = try bodyTop()
+        print("NOTES-N2-3b 点前：editorMode=\(beforeMode) 正文上边缘=\(pt(beforeTop))pt 工具条=\(toolbarText())")
+
+        XCTAssertEqual(
+            beforeMode, .preview,
+            "点前不是预览态（实测 \(beforeMode)）—— 起点不对，成对读数的「点前」那一半不成立"
+        )
+
+        // ── 双击内容区（= `NotePreviewBody` 那一支上的双击手势调的那个入口）───────────────
+        host.state.beginEditingCurrentNote()
+        settle()
+
+        // ── 点后：编辑态 + 正文被顶部工具条顶下去一条行的量 ────────────────────────────
+        let afterMode = host.state.editorMode
+        let afterTop = try bodyTop()
+        print("NOTES-N2-3b 点后：editorMode=\(afterMode) 正文上边缘=\(pt(afterTop))pt 工具条=\(toolbarText())")
+
+        XCTAssertEqual(
+            afterMode, .edit,
+            "双击内容区之后 `editorMode` 不是 `.edit`（实测 \(afterMode)）——「双击进编辑」没落地"
+        )
+        XCTAssertGreaterThan(
+            afterTop, beforeTop + 24,
+            "双击之后正文上边缘没有下移出一条工具条的量（点前 \(pt(beforeTop))pt / 点后 \(pt(afterTop))pt）"
+                + " —— 顶部编辑工具条没出现，或它没画在正文之上（「不许放底部」的反面）"
+        )
+    }
+
     // MARK: - N2-2 探索：操作栏 / 工具条里**哪些东西量得动**（一次性诊断）
 
     /// 把「操作栏 / 工具条」相关的几件视图各量一遍宽度，并把活宿主顶带里的控件逐条打印出来
