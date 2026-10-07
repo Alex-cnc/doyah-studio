@@ -1,6 +1,6 @@
 [package]
 name = "doyah-studio-shell"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Doyah Studio Windows 侧表示层外壳（Tauri 2 外壳 + Vue 3 前端；领域层复用 ../Core 与 ../Db）"
 license = "UNLICENSED"

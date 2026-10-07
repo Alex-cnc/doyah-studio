@@ -1,7 +1,7 @@
 {
   "name": "doyah-studio-windows-shell",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Doyah Studio · Windows 侧表示层外壳（Tauri 2 外壳 + Vue 3 + TypeScript；Rust 领域层在 ../Core）",
   "type": "module",
   "scripts": {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "purpose": "Windows 侧发布产物版本号的唯一登记处（接契约侧 §8.3 闸门表『生成物一致性：发布产物版本号一个值三处一致』那一行 · 队列 L-70；本侧第 27 轮）。同一个值 `0.2.0` 写在三处 —— `platform/windows/App/src-tauri/tauri.conf.json`（权威：Tauri bundler 组装 MSI / NSIS 时把 productName + version 写进安装包元数据，发布产物实际携带的就是它）、`platform/windows/App/package.json`、`platform/windows/App/src-tauri/Cargo.toml` 的 `[package] version`。本台账登记「谁是权威、镜像处必须等于它、跟不跟 mac 侧发布台账、哪些东西明确不判」，判据 `platform/windows/Tools/check-release-version.ps1` 做逐字一致与跨端同源的机械对账（本侧闸门第 13 项）。",
+  "purpose": "Windows 侧发布产物版本号的唯一登记处（接契约侧 §8.3 闸门表『生成物一致性：发布产物版本号一个值三处一致』那一行 · 队列 L-70；本侧第 27 轮）。同一个值 `0.3.0` 写在三处 —— `platform/windows/App/src-tauri/tauri.conf.json`（权威：Tauri bundler 组装 MSI / NSIS 时把 productName + version 写进安装包元数据，发布产物实际携带的就是它）、`platform/windows/App/package.json`、`platform/windows/App/src-tauri/Cargo.toml` 的 `[package] version`。本台账登记「谁是权威、镜像处必须等于它、跟不跟 mac 侧发布台账、哪些东西明确不判」，判据 `platform/windows/Tools/check-release-version.ps1` 做逐字一致与跨端同源的机械对账（本侧闸门第 13 项）。",
   "readingRules": [
     "authority = 权威出处：发布产物实际携带这个值 ⇒ 另两处必须等于它，不是反过来。",
     "marketingVersion = 当前值（字符串，逐字比对，不做语义化归一：`0.2.0` 与 `0.2` 不是同一个值）。",
@@ -18,9 +18,9 @@
     "keys": {
       "marketingVersion": "version"
     },
-    "evidence": "本侧第 27 轮实测：`platform/windows/App/src-tauri/tauri.conf.json` 第 4 行 `\"version\": \"0.2.0\"`（顶层唯一一处），与 `platform/windows/App/package.json` 第 4 行、`platform/windows/App/src-tauri/Cargo.toml` 的 `[package] version` 逐字相同。**未实测过**「装出来的 MSI 里读到的产品版本号」—— 那要真跑一次 Tauri bundler（本机未做，见 platform/windows/README.md 的未接网账）。"
+    "evidence": "本侧第 27 轮实测：`platform/windows/App/src-tauri/tauri.conf.json` 第 4 行 `\"version\": \"0.3.0\"`（顶层唯一一处），与 `platform/windows/App/package.json` 第 4 行、`platform/windows/App/src-tauri/Cargo.toml` 的 `[package] version` 逐字相同。**未实测过**「装出来的 MSI 里读到的产品版本号」—— 那要真跑一次 Tauri bundler（本机未做，见 platform/windows/README.md 的未接网账）。"
   },
-  "marketingVersion": "0.2.0",
+  "marketingVersion": "0.3.0",
   "mirrors": [
     {
       "path": "platform/windows/App/package.json",
@@ -68,7 +68,7 @@
     "`platform/windows/Core/Cargo.toml` 的 `version`（领域层 crate 的内部版本，不是发布产物的身份）—— 每次显式打印。",
     "`platform/windows/Bench/grid/package.json` 的 `version`（基准台不是发布产物，不进安装包）—— 每次显式打印。",
     "对侧 `Scripts/release-version.json` 的 `buildVersion`（各端构建号各自递增）与对侧三个镜像处（Info.plist 模板 / project.yml / project.pbxproj）—— 那是 mac 侧 `Scripts/check-release-version.py` 的判据面，本侧只读它一个字段。",
-    "版本号的**语义**（该不该是 `0.2.0`、什么时候升 `0.3.0`）：本判据只判「三处是否同一个值、是否与 mac 侧同源」，不判取号对不对。",
+    "版本号的**语义**（该不该是 `0.3.0`、什么时候升 `0.4.0`）：本判据只判「三处是否同一个值、是否与 mac 侧同源」，不判取号对不对。",
     "「装出来的 MSI / NSIS 里读到的产品版本号」：要真跑一次 Tauri bundler 并解析产物元数据（本机未做）—— 本判据判的是**源**，不判打包产物。",
     "仓外构建产物（`platform/windows/App/dist/` / `platform/windows/target/` / `*.msi` / `*.exe`）都在 `.gitignore` 里，不入库、不受本判据管辖。"
   ]
