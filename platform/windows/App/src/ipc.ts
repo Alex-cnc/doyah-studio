@@ -153,6 +153,10 @@ export interface AppInfo {
   version: string
   platform: string
   backend: 'tauri' | 'browser'
+  /** 构建标识 · 提交短号（`tauri` 侧由 `build.rs` 注入；浏览器旁路给非真值 `browser`）。 */
+  buildHead: string
+  /** 构建标识 · 构建时刻 `MM-dd HH:mm`（浏览器旁路给空串）。 */
+  buildTime: string
 }
 
 export interface DatasetSummary {
@@ -201,6 +205,8 @@ export function appInfo(): Promise<AppInfo> {
     version: '0.2.0',
     platform: 'browser',
     backend: 'browser' as const,
+    buildHead: 'browser',
+    buildTime: '',
   }))
 }
 

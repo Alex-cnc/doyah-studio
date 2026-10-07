@@ -8,6 +8,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { AppInfo } from '../ipc'
 import { windowTitle, type ActivityBarItemId } from './activityBar'
+import { buildStamp } from './buildStamp'
 import { estimateTitleWidth, searchFieldWidth } from './titleBarSearch'
 import { t as translate, type UiLanguage } from '../i18n'
 
@@ -59,7 +60,7 @@ const query = ref('')
     <span v-else class="titlebar__search-hidden" :title="tr('titlebar.search.hidden')">
       搜索栏让位
     </span>
-    <span class="titlebar__version">{{ info ? `v${info.version}` : '…' }}</span>
+    <span class="titlebar__version">{{ buildStamp(info) }}</span>
   </header>
 </template>
 

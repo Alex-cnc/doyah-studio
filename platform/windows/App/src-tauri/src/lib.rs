@@ -70,6 +70,10 @@ pub struct AppInfo {
     pub platform: String,
     /// `tauri` = 真外壳（Rust 领域层经 IPC 供数）；`browser` = 浏览器旁路（前端 mock）。
     pub backend: &'static str,
+    /// 构建标识 · 第一段：构建时工作树所在提交的短号（`build.rs` 经 `cargo:rustc-env` 注入）。
+    pub build_head: String,
+    /// 构建标识 · 第二段：构建时刻（`MM-dd HH:mm`，本机本地时间；同样由 `build.rs` 注入）。
+    pub build_time: String,
 }
 
 #[tauri::command]
@@ -79,6 +83,8 @@ fn app_info() -> AppInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
         platform: std::env::consts::OS.to_string(),
         backend: "tauri",
+        build_head: env!("DOYAH_BUILD_HEAD").to_string(),
+        build_time: env!("DOYAH_BUILD_TIME").to_string(),
     }
 }
 
