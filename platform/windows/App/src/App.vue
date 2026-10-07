@@ -9,6 +9,7 @@ import { appInfo, type AppInfo } from './ipc'
 import CommandPalette from './shell/CommandPalette.vue'
 import TitleBar from './shell/TitleBar.vue'
 import { commandById, type Command } from './shell/commands'
+import { pickFolder } from './shell/dialogs'
 import { connectionDialogModeForCommand, type ConnectionDialogMode } from './shell/connectionDialog'
 import BottomPanel from './shell/BottomPanel.vue'
 import { setLanguage, t as translate, type UiLanguage } from './i18n'
@@ -84,6 +85,9 @@ const workspaceRoot = ref('')
 /** 给 WorkspaceView 的"请打开这个文件"信号（**先声明后使用**） */
 const openFileSignal = ref<string | null>(null)
 
+/** 给 WorkspaceView 的"请打开这个目录"信号（命令面板「打开工作区文件夹」用；**先声明后使用**） */
+const openFolderSignal = ref<string | null>(null)
+
 /**
  * 面板里选中一个**文件**：切到工作区视图并打开它。
  *
@@ -143,6 +147,19 @@ async function runCommand(command: Command) {
     return
   }
   switch (command.id) {
+    case 'workspace.openFolder': {
+      // **真的调起系统文件夹选择器**（本条命令原先走默认分支、只回一句「请在视图里用界面按钮执行」
+      // = 入口死路；前门单 `T-20261007-015` 一 认定为真缺陷）。选中的目录递给 WorkspaceView，
+      // 由它走**既有** `openWorkspace()` —— 打开栈只有那一处。
+      const selected = await pickFolder(tr('cmd.workspace.openFolder'))
+      if (!selected) return
+      setActive('workspace')
+      openFolderSignal.value = selected
+      // 让监听方处理完就清掉（避免重复触发）——与 `openFromPalette` 同一套
+      await nextTick()
+      openFolderSignal.value = null
+      return
+    }
     case 'history.clear': {
       // 清掉使用记录：清完把"常用优先"的顺序也清空（面板回到清单顺序）
       try {
@@ -364,6 +381,7 @@ function onSelect(id: ActivityBarItemId) {
           <WorkspaceView
             v-else-if="activeItem === 'workspace'"
             :open-file-signal="openFileSignal"
+            :open-folder-signal="openFolderSignal"
             :version="info?.version ?? ''"
             @root-changed="workspaceRoot = $event"
             @push-panel="pushPanel"

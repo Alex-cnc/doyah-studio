@@ -1521,6 +1521,9 @@ fn workspace_format_content(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 系统文件 / 文件夹选择器（W-A-1）：Home「打开文件…」与命令面板「打开工作区文件夹」
+        // 两处入口靠它弹**真**选择器；权限最小面登记在 `capabilities/default.json`（只给 `dialog:allow-open`）。
+        .plugin(tauri_plugin_dialog::init())
         .manage(ShellState {
             cache: Mutex::new(ViewCache::new()),
             db: AsyncMutex::new(None),

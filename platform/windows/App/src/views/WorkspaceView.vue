@@ -60,6 +60,8 @@ import { dominantEndingLabel, lineNumberText, segmentsForLine, sliceSegments } f
 import { highlightPieces } from '../workspace/highlights'
 import MarkdownPreview from './MarkdownPreview.vue'
 import WorkspaceHome from './WorkspaceHome.vue'
+// 系统选择器（W-A-1）：Home「打开文件…」用它调起**真**的文件对话框 —— 唯一调用点在 `shell/dialogs.ts`
+import { pickFile } from '../shell/dialogs'
 import {
   charWidthFrom,
   codeWidthByDisplayColumns,
@@ -295,6 +297,8 @@ function isMdBlock(block: MdBlock): boolean {
 const props = defineProps<{
   /** 命令面板选中的文件（由外壳递进来）；`null` = 没有待打开的文件 */
   openFileSignal?: string | null
+  /** 命令面板「打开工作区文件夹」选中的目录（由外壳递进来）；`null` = 没有待打开的目录 */
+  openFolderSignal?: string | null
   /** 版本号（Home 页那行"版本 x.y.z"；外壳给的，本视图不自己编） */
   version?: string
 }>()
@@ -525,9 +529,40 @@ async function loadSavedConnections() {
   }
 }
 
-/** Home 上点「打开文件…」：引导到资源管理器（工作区内的文件选择在那里） */
-function homeOpenFile() {
-  openHint.value = '在左侧「资源管理器」里点一个文件即可打开；Home 上「最近打开的文件」点一下也能打开。'
+/**
+ * Home 上点「📂 打开文件…」：**真的调起系统选择器**，选中的文件走**既有**打开路径。
+ *
+ * 改前这里只写一行 `openHint`（按钮名带「…」承诺了动作、行为却只是提示）—— 2026-10-07 前门
+ * 裁决 `T-20261007-015` 一 认定为**真缺陷**。取消（用户没选 / 非真外壳）⇒ 什么都不做。
+ */
+async function homeOpenFile() {
+  openHint.value = ''
+  const selected = await pickFile('打开文件')
+  if (!selected) return
+  await openPickedFile(selected)
+}
+
+/**
+ * 打开一个**系统选择器选中的绝对路径**：走**既有**打开路径（`openHit` → `openFile` → 领域层判定），
+ * **不新开一套打开栈**。
+ *
+ * 文件已在当前工作区里 ⇒ 直接按相对路径打开；不在（或还没开工作区）⇒ 先把**它所在的目录**
+ * 打开成工作区（既有的 `openWorkspace()`），再按文件名打开 —— 否则"打开文件…"选了个工作区外的文件
+ * 仍然是条死路。两步都是本文件里已有的路径，没有第二种打开实现。
+ */
+async function openPickedFile(absolutePath: string) {
+  const normalized = absolutePath.split('\\').join('/')
+  const base = (root.value || '').split('\\').join('/').replace(/\/+$/, '')
+  if (base && normalized.startsWith(base + '/')) {
+    await openHit(normalized.slice(base.length + 1))
+    return
+  }
+  const slash = normalized.lastIndexOf('/')
+  const dir = slash > 0 ? normalized.slice(0, slash) : normalized
+  const name = slash >= 0 ? normalized.slice(slash + 1) : ''
+  rootDraft.value = dir
+  await openWorkspace()
+  if (name && root.value) await openHit(name)
 }
 
 /** Home 上点某个最近文件：在**当前工作区**里按相对路径打开（不在工作区内就如实提示） */
@@ -659,6 +694,21 @@ async function openWorkspace() {
     busy.value = ''
   }
 }
+
+/**
+ * 命令面板递进来的「请打开这个文件夹」：**真的打开它**（走既有的 `openWorkspace()`）。
+ *
+ * 为什么放在 `openWorkspace` 之后：watch 的注册与回调都碰 `rootDraft` / `openWorkspace`，
+ * 排在它们**之后**可以一眼看出没有 setup 期 TDZ（本文件 2026-10-07 已因同类问题栽过一次）。
+ */
+watch(
+  () => props.openFolderSignal,
+  async (path) => {
+    if (!path) return
+    rootDraft.value = path
+    await openWorkspace()
+  },
+)
 
 async function onRowClick(entry: FsEntry) {
   selected.value = entry.relativePath

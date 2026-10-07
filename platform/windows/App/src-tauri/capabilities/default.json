@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Windows 外壳的默认能力集：**最小面** —— 只有 core:default（窗口生命周期 / 事件）。本侧不引任何插件（凭据 / PTY / 通知在 Platform/Windows/ 落地时再逐项登记）。",
+  "description": "Windows 外壳的默认能力集：**最小面**，逐项登记（引了哪个插件、给了哪条最小权限）。① `core:default` —— 窗口生命周期 / 事件（Tauri 内核自带，非插件）。② `dialog:allow-open` —— 插件 `tauri-plugin-dialog` 的**只**「打开（文件 / 文件夹）选择器」这一条权限（Home「打开文件…」与命令面板「打开工作区文件夹」两处入口用；前端唯一调用点 = `App/src/shell/dialogs.ts`）；保存对话框 / 消息框 / 确认框不给（用不到就不登记，别按 `dialog:default` 整包给）。其余插件的（凭据 / PTY / 通知）在 Platform/Windows/ 落地时再逐项登记。",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-open"]
 }

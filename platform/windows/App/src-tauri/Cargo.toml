@@ -24,6 +24,10 @@ doyah-studio-db = { path = "../../Db" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = [] }
+# 系统文件 / 文件夹选择器（Tauri 2 官方对话框插件）：Home「打开文件…」与命令面板
+# 「打开工作区文件夹」两处入口用它调起**系统选择器**（此前两处都只写提示 = 入口死路，
+# 前门单 `T-20261007-015` 一）。前端侧唯一的调用点是 `App/src/shell/dialogs.ts`。
+tauri-plugin-dialog = "2"
 # PostgreSQL 驱动（P-* 选型：纯 Rust 实现，不引 libpq / 客户端库 ⇒ 分发面小、跨平台一致）。
 # **驱动只在这一层**：领域层保持零驱动（见 platform/windows/Db/Cargo.toml 的边界注记）。
 tokio-postgres = { version = "0.7" }
