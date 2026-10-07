@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 // 而 `vite/client` 已经声明了 `*?raw` —— 判据文件也要过类型检查）。
 import connectionDisplaySource from './connectionDisplay.ts?raw'
 import connectionLabelSource from './ConnectionLabel.vue?raw'
+import connectionDialogSource from './ConnectionDialog.vue?raw'
 import databaseViewSource from '../views/DatabaseView.vue?raw'
 import {
   CATEGORICAL_TONES,
@@ -35,6 +36,7 @@ import type { SavedConnection } from '../ipc'
 const SOURCES: Record<string, string> = {
   'shell/connectionDisplay.ts': connectionDisplaySource,
   'shell/ConnectionLabel.vue': connectionLabelSource,
+  'shell/ConnectionDialog.vue': connectionDialogSource,
   'views/DatabaseView.vue': databaseViewSource,
 }
 
@@ -269,16 +271,24 @@ describe('来源面：显示名 / 环境标签两处同源', () => {
   })
 
   it('真仓库：显示名只在 connectionDisplay.ts 里拼，视图里没有第二处', () => {
-    for (const file of ['views/DatabaseView.vue', 'shell/ConnectionLabel.vue']) {
+    for (const file of ['views/DatabaseView.vue', 'shell/ConnectionDialog.vue', 'shell/ConnectionLabel.vue']) {
       expect({ file, hits: adHocTitleHits(source(file)) }).toEqual({ file, hits: 0 })
     }
   })
 
-  it('真仓库：侧边栏连接行与查询上下文栏用的是**同一个** ConnectionLabel', () => {
-    const view = source('views/DatabaseView.vue')
-    expect(view.match(/<ConnectionLabel\b/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+  it('真仓库：连接列表行与查询上下文栏用的是**同一个** ConnectionLabel（列表搬进弹层后跨两件数）', () => {
+    // 连接面已经搬进弹层（S-7a）：列表行在 `shell/ConnectionDialog.vue`、查询上下文栏在
+    // `views/DatabaseView.vue` —— 两处**都**必须用同一个共用件（判据的强度不变，只是数的面多了一件）。
+    const surfaces = ['views/DatabaseView.vue', 'shell/ConnectionDialog.vue']
+    const hits = surfaces.reduce(
+      (total, file) => total + (source(file).match(/<ConnectionLabel\b/g)?.length ?? 0),
+      0,
+    )
+    expect(hits).toBeGreaterThanOrEqual(2)
     // 而且不自己画环境徽标（徽标只在共用件里）
-    expect(view).not.toMatch(/conn__badge/)
+    for (const file of surfaces) {
+      expect({ file, badge: /conn__badge/.test(source(file)) }).toEqual({ file, badge: false })
+    }
   })
 
   it('负例：本片两个文件里不许出现色值字面量（颜色只走 --ds-* 令牌）', () => {

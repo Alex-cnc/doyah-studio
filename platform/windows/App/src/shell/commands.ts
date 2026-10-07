@@ -88,6 +88,22 @@ export const COMMANDS_LIST: readonly Command[] = [
     scope: { kind: 'view', view: 'database' },
   },
   {
+    // 连接面（表单 + 连接列表）只在弹层里 —— 这两条命令是它的**菜单入口**
+    // （开哪一档由 `shell/connectionDialog.ts` 的 id → 档位映射决定，不在这里再写一份）。
+    id: 'database.newConnection',
+    titleKey: 'cmd.database.newConnection',
+    keywords: ['new connection', 'add connection', 'postgres'],
+    groupKey: 'cmdGroup.database',
+    scope: { kind: 'view', view: 'database' },
+  },
+  {
+    id: 'database.editConnection',
+    titleKey: 'cmd.database.editConnection',
+    keywords: ['edit connection', 'connection settings'],
+    groupKey: 'cmdGroup.database',
+    scope: { kind: 'view', view: 'database' },
+  },
+  {
     id: 'database.runQuery',
     titleKey: 'cmd.database.runQuery',
     keywords: ['run', 'execute', 'query'],

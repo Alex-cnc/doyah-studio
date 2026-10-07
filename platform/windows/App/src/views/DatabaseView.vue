@@ -66,13 +66,14 @@ import { frozenColumnStylesMeasured, pageOf, visibleOrder, DEFAULT_PAGE_SIZE } f
 import { EXPORT_FORMAT_LABELS, exportRows, type ExportFormat } from '../grid/export'
 import { t as translate, toggleLanguage, type UiLanguage } from '../i18n'
 import {
-  groupConnections,
   readCollapsedGroups,
   toggleCollapsedGroup,
   writeCollapsedGroups,
   type KeyValueStore,
 } from '../shell/connectionDisplay'
 import ConnectionLabel from '../shell/ConnectionLabel.vue'
+import ConnectionDialog from '../shell/ConnectionDialog.vue'
+import type { ConnectionDialogMode } from '../shell/connectionDialog'
 import NodeIcon from './NodeIcon.vue'
 import { serverMenuActions, type ServerMenuAction } from './serverMenu'
 import {
@@ -102,6 +103,48 @@ import {
 const emit = defineEmits<{
   (event: 'push-panel', entry: { text: string; level: 'info' | 'warn' | 'error'; source?: string }): void
 }>()
+
+/**
+ * 外壳（命令面板 / 菜单）递进来的「开连接弹层」请求。
+ *
+ * 为什么要一个请求对象而不是布尔量：同一档连点两次（`seq` 变了）也要**重开一次**，
+ * 布尔量在"已经开着"时是静默的。
+ */
+const props = defineProps<{
+  dialogRequest?: { mode: ConnectionDialogMode; seq: number } | null
+}>()
+
+/** 连接弹层的开合与档位 —— **状态归本视图**（弹层件只画与上报，不持有连接状态）。 */
+const dialogOpen = ref(false)
+const dialogMode = ref<ConnectionDialogMode>('current')
+const connectionDialog = ref<InstanceType<typeof ConnectionDialog> | null>(null)
+
+/**
+ * 开弹层：置档位 + 按档位做该做的事。
+ *
+ * - `new`     —— 起一张新表单（`startNewConnectionForm`）；
+ * - `edit`    —— 表单不动，把光标送到连接名那一格（原「编辑连接…」的落点，逐条照搬）；
+ * - `current` —— 表单不动、也不抢焦点（「连接数据库」只管把表单摆出来）。
+ */
+function openConnectionDialog(mode: ConnectionDialogMode): void {
+  if (mode === 'new') startNewConnectionForm()
+  dialogMode.value = mode
+  dialogOpen.value = true
+  if (mode === 'edit') void nextTick(() => connectionDialog.value?.focusName())
+}
+
+/** 「新建连接」= 起一张**新表单**：换 id、名字 / 口令 / URL 导入清空、字段回默认（口径不变）。 */
+function startNewConnectionForm(): void {
+  formId.value = crypto.randomUUID()
+  name.value = ''
+  password.value = ''
+  urlImport.value = ''
+  urlImportNote.value = ''
+  remember.value = true
+  form.value = { ...LAB_CONNECTION }
+  clearFailure()
+  void refreshValidation()
+}
 
 const language = ref<UiLanguage>('zh-Hans')
 function t(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
@@ -617,8 +660,6 @@ async function copyAdminCommands() {
  *
  * 分组与顺序本身在 `shell/connectionDisplay.ts`（与折叠状态同源），这里只取值。
  */
-const connectionGroups = computed(() => groupConnections(saved.value))
-
 /** localStorage 的最小面；**取不到存储就当没有**（隐私模式 / 权限策略下访问本身就抛）。 */
 function connectionStore(): KeyValueStore | null {
   try {
@@ -637,20 +678,10 @@ function connectionStore(): KeyValueStore | null {
  */
 const collapsedGroups = ref<Set<string>>(readCollapsedGroups(connectionStore()))
 
-/** 未分组那一段不给折叠（macOS 侧同口径）。 */
-function isGroupCollapsed(group: string | null): boolean {
-  return group !== null && collapsedGroups.value.has(group)
-}
-
 function toggleGroupSection(group: string | null): void {
   if (group === null) return
   collapsedGroups.value = toggleCollapsedGroup(collapsedGroups.value, group)
   writeCollapsedGroups(connectionStore(), collapsedGroups.value)
-}
-
-/** 分组标题文案（未分组段用语言表里的文案，不在模板里写死中文）。 */
-function groupTitle(group: string | null): string {
-  return group ?? t('db.connections.ungrouped')
 }
 
 /** 名称为空时的占位文案（FR-CONN-14）。 */
@@ -660,16 +691,6 @@ const untitledConnection = computed(() => t('db.connections.untitled'))
 const connectedConnection = computed<SavedConnection | null>(
   () => saved.value.find((c) => isConnected(c)) ?? null,
 )
-
-/** 连接行的悬停提示（地址 + 一句「口令不在配置文件里」）。 */
-function connectionTooltip(connection: SavedConnection): string {
-  return t('db.connections.rowTip', {
-    user: connection.username,
-    host: connection.host,
-    port: connection.port,
-    database: connection.database,
-  })
-}
 
 /** 这一条是不是当前连着的（拿 `info` 比对）。 */
 function isConnected(connection: SavedConnection): boolean {
@@ -682,17 +703,17 @@ function isConnected(connection: SavedConnection): boolean {
   )
 }
 
-/** 当前连着的库名（连接列表折叠标题上显示一行"已连：xxx"）。 */
-const connectedName = computed<string>(() => {
-  if (!info.value) return ''
-  const hit = saved.value.find((c) => isConnected(c))
-  return hit ? hit.name : info.value.database
-})
+/**
+ * 当前连着的那些**保存连接**的 id（弹层的列表高亮用）。
+ *
+ * 为什么给 id 而不是给个判断函数：高亮口径**只有一处**（就是上面的 `isConnected`），
+ * 弹层里不再判一次 —— 拿 `info` 比对的两处迟早会不一致。
+ * 注意是"所有命中的"（两条保存连接指同一个库时都会亮）。
+ */
+const connectedIds = computed<string[]>(() => saved.value.filter((c) => isConnected(c)).map((c) => c.id))
 
-/** 小字：`主机 · 库名`（图里就是这个形状）。 */
-function connectionSubtitle(connection: SavedConnection): string {
-  return `${connection.host} · ${connection.database}`
-}
+/** 已折叠的分组名（折叠状态落在 localStorage，这里只把它摊成可传的数组）。 */
+const collapsedGroupNames = computed<string[]>(() => [...collapsedGroups.value])
 
 /**
  * 对象树两种视图（图里那组切换：**层级视图 / 按类型分组**）。
@@ -959,6 +980,16 @@ watch(
 /** 这套表单当前对应的连接 id（点列表里的连接 = 换成它的 id；新表单 = 新 id）。 */
 const formId = ref(crypto.randomUUID())
 
+// 外壳递进来的「开连接弹层」请求（命令面板的「连接数据库 / 新建连接 / 编辑连接」走这里）：
+// 同一档连点两次 `seq` 也变，所以每次都**重开一次**（不像布尔量那样"开着就静默"）。
+watch(
+  () => props.dialogRequest,
+  (request) => {
+    if (!request) return
+    openConnectionDialog(request.mode)
+  },
+)
+
 /** 点一条保存过的连接：把它填进表单（**口令不在这里**：口令在系统凭据管理器里）。 */
 function useSaved(c: SavedConnection) {
   formId.value = c.id
@@ -1117,8 +1148,8 @@ async function runServerAction(action: ServerMenuAction) {
   }
   const current = connectedConnection.value
   if (current) useSaved(current)
-  await nextTick()
-  document.querySelector<HTMLInputElement>('form.db__bar input[type="text"]')?.focus()
+  // 编辑连接 → 开弹层（表单里的光标位置由弹层自己落到连接名那一格）
+  openConnectionDialog('edit')
 }
 
 /** 已加载的全部对象（搜索的输入面）。 */
@@ -1686,89 +1717,44 @@ async function probe() {
 
 <template>
   <section class="db">
-    <!-- 连接条 -->
-    <form class="db__bar" @submit.prevent="connect">
-      <label class="db__field">
-        <span>{{ t('db.name') }}</span>
-        <input v-model="name" type="text" spellcheck="false" :placeholder="effectiveName" />
-      </label>
-      <label class="db__field db__field--narrow" :title="t('db.type.defaults')">
-        <span>{{ t('db.type') }}</span>
-        <select
-          :value="dbType"
-          class="db__select"
-          :disabled="!!busy"
-          @change="switchDbType(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="postgresql">PostgreSQL</option>
-          <option value="mysql">MySQL</option>
-          <option value="gbase8a">GBase 8a</option>
-        </select>
-      </label>
-      <label class="db__field">
-        <span>{{ t('db.host') }}</span>
-        <input v-model="form.host" type="text" spellcheck="false" />
-      </label>
-      <label class="db__field db__field--narrow">
-        <span>{{ t('db.port') }}</span>
-        <input v-model.number="form.port" type="number" min="1" max="65535" />
-      </label>
-      <label class="db__field">
-        <span>{{ t('db.database') }}</span>
-        <input v-model="form.database" type="text" spellcheck="false" />
-      </label>
-      <label class="db__field">
-        <span>{{ t('db.user') }}</span>
-        <input v-model="form.user" type="text" spellcheck="false" />
-      </label>
-      <label class="db__field">
-        <span>{{ t('db.password') }}</span>
-        <input v-model="password" type="password" autocomplete="off" :placeholder="t('db.password.placeholder')" />
-      </label>
-      <label class="db__field db__field--narrow">
-        <span>{{ t('db.ssl') }}</span>
-        <select v-model="form.sslMode" class="db__select" :disabled="!!busy">
-          <option value="disable">disable</option>
-          <option value="allow">allow</option>
-          <option value="prefer">prefer</option>
-          <option value="require">require</option>
-          <option value="verify-ca">verify-ca</option>
-          <option value="verify-full">verify-full</option>
-        </select>
-      </label>
-      <label class="db__field db__field--check" :title="t('db.remember.tip')">
-        <span>{{ t('db.remember') }}</span>
-        <input v-model="remember" type="checkbox" />
-      </label>
-      <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy || !formReady">
-        {{ info ? t('db.reconnect') : t('db.connect') }}
-      </button>
-      <button v-if="info" class="db__btn" type="button" :disabled="!!busy" @click="disconnect">{{ t('db.disconnect') }}</button>
-      <button class="db__btn" type="button" :disabled="!!busy" @click="loadTables">{{ t('db.loadObjects') }}</button>
-      <button class="db__btn" type="button" :disabled="!!busy || !formReady" @click="saveCurrent">{{ t('db.saveToConnections') }}</button>
-      <span v-if="busy" class="db__busy">{{ busy }}</span>
-    </form>
-
-    <!-- 逐项校验（FR-CONN-06）：**哪一项不合法由领域层说了算**，界面只显示、并按它禁用按钮 -->
-    <p v-if="!formReady" class="db__failure-hint">{{ problemSummary }}</p>
-
-    <!-- 从连接 URL 导入（FR-CONN-19）：口令可带，但只填进口令框、绝不进配置 -->
-    <div class="db__writeback">
-      <label class="db__field">
-        <span>{{ t('db.urlImport') }}</span>
-        <input
-          v-model="urlImport"
-          class="db__cell-input db__io-path"
-          type="text"
-          spellcheck="false"
-          :placeholder="t('db.urlImport.placeholder')"
-          :aria-label="t('db.urlImport')"
-        />
-      </label>
-      <button class="db__btn" type="button" @click="importUrl">{{ t('db.urlImport.button') }}</button>
-      <span v-if="urlImportNote" class="db__note">{{ urlImportNote }}</span>
-    </div>
-
+    <!-- 连接弹层（对齐 macOS ConnectionSettingsSheet 的呈现形态）：
+         表单字段 / 连接列表 / 按钮行为都是从下面主区**搬**过去的（逐条照搬，不是重写）。 -->
+    <ConnectionDialog
+      ref="connectionDialog"
+      v-model:form="form"
+      v-model:name="name"
+      v-model:db-type="dbType"
+      v-model:password="password"
+      v-model:remember="remember"
+      v-model:url-import="urlImport"
+      :open="dialogOpen"
+      :mode="dialogMode"
+      :language="language"
+      :busy="busy"
+      :effective-name="effectiveName"
+      :problems="problemOf"
+      :ready="formReady"
+      :summary="problemSummary"
+      :connections="saved"
+      :info="info"
+      :connected-ids="connectedIds"
+      :untitled="untitledConnection"
+      :url-import-note="urlImportNote"
+      :collapsed-groups="collapsedGroupNames"
+      @close="dialogOpen = false"
+      @connect="connect"
+      @disconnect="disconnect"
+      @load-objects="loadTables"
+      @save="saveCurrent"
+      @remove="removeSaved"
+      @select="useSaved"
+      @import-url="importUrl"
+      @switch-type="switchDbType"
+      @toggle-group="toggleGroupSection"
+    />
+    <!-- 连接面（表单 / 校验回执 / URL 导入）已**搬进弹层**：`shell/ConnectionDialog.vue`。
+         主区不再内联铺开 —— 入口是菜单命令「新建连接 / 编辑连接…」与服务器节点右键菜单
+         （对齐 macOS `App/Views/ConnectionSettingsSheet.swift` 的呈现形态）。 -->
     <!-- 查询上下文栏：当前这条连接的**同一个显示件**（显示名 / 环境标签 / 色条）——
          与侧边栏连接行共用 ConnectionLabel，两处不可能出现「一处标了、一处没标」（FR-CONN-14 / -16）。 -->
     <p v-if="connectedConnection" class="db__context">
@@ -1824,64 +1810,8 @@ async function probe() {
            连接列表收成顶部可折叠的一段，对象树占满整列 ——
            之前把"连接列表"与"对象树"并排成两栏，导航被挤成两条窄缝，已改。 -->
       <aside class="db__tree db__tree--navigator" @click="closeMenus">
-        <details class="db__conn-fold">
-          <summary class="db__tree-title">
-            {{ t('db.connections') }}（{{ saved.length }}）<span class="db__kind">{{ t('db.connectedAs') }}{{ connectedName || t('db.none') }}</span>
-          </summary>
-          <p v-if="saved.length === 0" class="db__tree-empty">
-            {{ t('db.connections.empty') }}
-          </p>
-          <template v-else>
-            <div v-for="group in connectionGroups" :key="group.group ?? '::ungrouped'" class="db__conn-group">
-              <button
-                v-if="group.group !== null"
-                class="db__group-toggle"
-                type="button"
-                :aria-expanded="isGroupCollapsed(group.group) ? 'false' : 'true'"
-                :title="t('db.connections.groupToggle', { name: group.group })"
-                @click="toggleGroupSection(group.group)"
-              >
-                <span class="db__chevron">{{ isGroupCollapsed(group.group) ? '▸' : '▾' }}</span>
-                {{ groupTitle(group.group) }}
-              </button>
-              <p v-else class="db__group-title">{{ groupTitle(group.group) }}</p>
-              <template v-if="!isGroupCollapsed(group.group)">
-                <div
-                  v-for="c in group.items"
-                  :key="c.id"
-                  class="db__conn"
-                  :class="{ 'db__conn--active': isConnected(c) }"
-                >
-                  <button
-                    class="db__conn-main"
-                    type="button"
-                    :title="connectionTooltip(c)"
-                    @click="useSaved(c)"
-                  >
-                    <span class="db__conn-name">
-                      <!-- 显示名 + 环境标签 + 色条：**与查询上下文栏同一个共用件**（FR-CONN-14 / -16） -->
-                      <ConnectionLabel
-                        :connection="c"
-                        :untitled="untitledConnection"
-                        :language="language"
-                      />
-                      <span v-if="c.isReadOnly" class="db__kind">只读</span>
-                    </span>
-                    <span class="db__conn-sub">{{ connectionSubtitle(c) }}</span>
-                  </button>
-                  <button
-                    class="db__conn-del"
-                    type="button"
-                    title="删除这条连接（并清掉它的凭据）"
-                    @click="removeSaved(c)"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </template>
-            </div>
-          </template>
-        </details>
+        <!-- 连接列表也搬进了弹层（与连接表单同一个件）：
+             左栏只剩对象树与它的视图切换（FR-CONN-15 的分组折叠仍由弹层读同一份 localStorage）。 -->
 
         <!-- 对象树（1.1）：展开一层取一层；右键给「浏览数据 / 生成查询 / 复制名」 -->
         <p class="db__tree-title">
@@ -2681,16 +2611,6 @@ async function probe() {
   min-height: 0;
 }
 
-.db__bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--ds-spacing-s);
-  padding: var(--ds-spacing-s) var(--ds-spacing-m);
-  border-bottom: var(--ds-metric-hairline) solid var(--ds-hairline);
-  background: var(--ds-color-surface-panel);
-}
-
 .db__field {
   display: flex;
   flex-direction: column;
@@ -2712,23 +2632,6 @@ async function probe() {
 
 .db__tree--connections {
   width: 240px;
-}
-
-.db__conn {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-spacing-xs);
-}
-
-.db__conn-del {
-  background: transparent;
-  color: var(--ds-color-text-tertiary);
-  border: 0;
-  cursor: pointer;
-}
-
-.db__conn-del:hover {
-  color: var(--ds-color-status-danger);
 }
 
 .db__startup {
@@ -2861,14 +2764,6 @@ async function probe() {
 }
 
 /* 连接列表的可折叠段：默认收起，要用时展开 —— 不占常驻宽度 */
-.db__conn-fold {
-  flex: 0 0 auto;
-}
-
-.db__conn-fold > summary {
-  cursor: pointer;
-}
-
 /* 对象树占满剩下的一列 */
 .db__tree--navigator {
   overflow: hidden;
@@ -3489,36 +3384,6 @@ th.db__grid-head[style] {
   color: var(--ds-color-accent-accent);
 }
 
-.db__group-title {
-  margin: var(--ds-spacing-s) 0 var(--ds-spacing-hair);
-  padding: 0 var(--ds-spacing-xs);
-  color: var(--ds-color-text-tertiary);
-  font-family: var(--ds-font-stack);
-  font-size: var(--ds-font-caption-size);
-}
-
-/* 可折叠的分组标题（命名分组；未分组那一段仍是上面那个静态标题） */
-.db__group-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-spacing-hair);
-  width: 100%;
-  margin: var(--ds-spacing-s) 0 var(--ds-spacing-hair);
-  padding: 0 var(--ds-spacing-xs);
-  border: 0;
-  background: transparent;
-  color: var(--ds-color-text-tertiary);
-  font-family: var(--ds-font-stack);
-  font-size: var(--ds-font-caption-size);
-  text-align: left;
-  cursor: pointer;
-}
-
-.db__group-toggle:hover {
-  color: var(--ds-color-text-primary);
-}
-
-/* 查询上下文栏：当前连接的那一行（与侧边栏连接行同一个显示件） */
 .db__context {
   display: flex;
   align-items: center;
@@ -3529,50 +3394,6 @@ th.db__grid-head[style] {
 }
 
 /* 连接条目：两行（名字 + 主机·库名 小字），当前连着的那个高亮 */
-.db__conn-main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-spacing-hair);
-  flex: 1;
-  min-width: 0;
-  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
-  border: none;
-  border-radius: var(--ds-radius-control);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.db__conn--active .db__conn-main {
-  background: var(--ds-color-surface-raised);
-}
-
-.db__conn-name {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-spacing-xs);
-  min-width: 0;
-  color: var(--ds-color-text-primary);
-  font-family: var(--ds-font-stack);
-  font-size: var(--ds-font-body-size);
-}
-
-.db__conn-sub {
-  color: var(--ds-color-text-tertiary);
-  font-family: var(--ds-font-stack);
-  font-size: var(--ds-font-caption-size);
-}
-
-/* 删除入口：悬停才出现（图里没画，但功能不能丢） */
-.db__conn-del {
-  opacity: 0;
-  flex: none;
-}
-
-.db__conn:hover .db__conn-del {
-  opacity: 1;
-}
-
 /* 对象树头部的两个视图切换（图里的 层级视图 / 按类型分组） */
 .db__view-switch {
   display: flex;
