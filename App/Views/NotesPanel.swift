@@ -664,13 +664,29 @@ struct NotesEditorView: View {
             TextField(L(.notesTagsPlaceholder), text: $appState.noteEditorTags)
                 .textFieldStyle(.roundedBorder)
                 .font(Theme.font(.caption))
-            TextEditor(text: $appState.noteEditorBody)
-                .font(Theme.font(.mono))
-                .editorSurface()
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Theme.surface(.panel), lineWidth: 1)
-                )
+            // **正文那一块按 `appState.editorMode` 分两半**（片 `N2-3a`「单击预览」）：
+            //   · `.edit`（新建 / 「改」）⇒ SwiftUI `TextEditor`，就是本片之前那一支；
+            //   · `.preview`（列表里单击一条）⇒ `NotePreviewBody`：真 `NSTextView` 且
+            //     `isEditable == false`。**为什么不用 `.disabled(_:)`**：离屏实测（macOS 27 /
+            //     本机 2026-10-07）`.disabled(true)` 之后底层 `NSTextView.isEditable` **仍是 `true`**
+            //     —— 它只是不投递事件，不是「这块文本视图不可编辑」（见 `NotePreviewBody` 头注释）。
+            // 两半**共用同一条 `.editorSurface()`**（编辑面底色的唯一出处）：编辑面处数棘轮要求
+            // `.editorSurface()` 处数 == 编辑面（`TextEditor(`）处数，所以它只挂在 `TextEditor` 这一支上。
+            if appState.editorMode == .edit {
+                TextEditor(text: $appState.noteEditorBody)
+                    .font(Theme.font(.mono))
+                    .editorSurface()
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Theme.surface(.panel), lineWidth: 1)
+                    )
+            } else {
+                NotePreviewBody(text: appState.noteEditorBody)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Theme.surface(.panel), lineWidth: 1)
+                    )
+            }
             HStack(spacing: Spacing.s) {
                 // **操作入口形态统一**（`N-UI-3`）：图标 + 标题 + 悬停提示（形态基准 =
                 // `App/Views/ObjectTreeToolbar.swift:43-62`）。标题保留 —— 与同一文件里

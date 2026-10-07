@@ -5,6 +5,20 @@ import UniformTypeIdentifiers
 import DoyahCore
 import DoyahPlatform
 
+/// **笔记编辑器的模式**（片 `N2-3a`「单击预览」· 人类主人令 `T-20261007-004` 第三节第 3 条）。
+///
+/// · `.preview` —— 在列表里**单击**一条 ⇒ 右栏打开这一条**看内容**，**正文只读**；
+/// · `.edit` —— 「新建」与「改」这两个**既有**入口 ⇒ 正文可编辑（语义与本片之前一字未改）。
+///
+/// **只此一处**判「正文那一块可不可编辑」：视图（`App/Views/NotesPanel.swift` 的
+/// `NotesEditorView`）与判据（`TestsUISnapshot/NotesLayoutProbeTests.swift`）读的是同一个值。
+///
+/// **本片不含**「双击进编辑」（= `N2-3b`）：本片只把**单击**这一件事从「进编辑」改成「进预览」。
+enum NoteEditorMode: Equatable {
+    case preview
+    case edit
+}
+
 struct QueryTab: Identifiable {
     let id: UUID
     var title: String
@@ -447,6 +461,12 @@ final class AppState: ObservableObject {
     @Published var noteEditorTitle = ""
     @Published var noteEditorBody = ""
     @Published var noteEditorTags = ""
+    /// **当前是「预览」还是「改」**（片 `N2-3a`「单击预览」；枚举见文件头的 `NoteEditorMode`）。
+    ///
+    /// 默认 `.edit` —— 与本片之前一致（没点过任何行时编辑器就是可编辑的）。
+    /// 三个入口改它：`handleNoteRowClick`（单击 ⇒ `.preview`）、`edit(_:)` 与 `beginNewNote()`
+    /// （既有的「改」/「新建」⇒ `.edit`）。
+    @Published var editorMode: NoteEditorMode = .edit
     private var noteBeingEdited: UUID?
     // MARK: - 待办（队列 `L-100` 界面半第一片 · 清单屏）
     /// 笔记区里当前看哪一屏（笔记 / 待办）—— `FR-NOTE-36` 的「各自入口与列表，不塞进笔记列表」。
@@ -6439,18 +6459,29 @@ final class AppState: ObservableObject {
         pruneNoteSelection()
     }
 
+    /// 把一条笔记装进编辑器的**内容**（标题 / 正文 / 标签 + 正在编辑的 id）——**不动模式**。
+    /// 模式由三个入口各自定（单击 ⇒ `.preview`；「改」/「新建」⇒ `.edit`），见 `NoteEditorMode`。
+    private func loadEditorContent(_ note: Note) {
+        noteBeingEdited = note.id
+        noteEditorTitle = note.title
+        noteEditorBody = note.body
+        noteEditorTags = note.tags.joined(separator: " ")
+    }
+
     func beginNewNote() {
         noteBeingEdited = nil
         noteEditorTitle = ""
         noteEditorBody = ""
         noteEditorTags = ""
+        // 新建 ⇒ 正文要能写（片 `N2-3a`：`.edit` 是本片之前那一个语义）。
+        editorMode = .edit
     }
 
     func edit(_ note: Note) {
-        noteBeingEdited = note.id
-        noteEditorTitle = note.title
-        noteEditorBody = note.body
-        noteEditorTags = note.tags.joined(separator: " ")
+        loadEditorContent(note)
+        // 「改」入口（左区顶部那枚铅笔，`NotesPanel.crudEntries`）⇒ 正文可编辑。
+        // 单击进的是**预览**（见 `handleNoteRowClick`）—— 本片只改了单击那一条。
+        editorMode = .edit
     }
 
     /// 「编辑器里到底有没有可保存的内容」（队列 **L-50**）。
@@ -7008,7 +7039,11 @@ final class AppState: ObservableObject {
         selectedNoteIDs = outcome.selection
         noteSelectionAnchor = outcome.anchor
         if let editedID = outcome.edited, let target = notes.first(where: { $0.id == editedID }) {
-            edit(target)
+            // **单击 = 预览**（片 `N2-3a`「单击预览」· 人类主人令 `T-20261007-004` 第三节第 3 条）：
+            // 这一条的内容进右栏，但**正文只读**。Core 只给「要不要打开这一条」（`outcome.edited`），
+            // 「打开成看 / 打开成改」是界面这一侧的事 ⇒ 模式在这里定点。
+            loadEditorContent(target)
+            editorMode = .preview
         }
     }
 
