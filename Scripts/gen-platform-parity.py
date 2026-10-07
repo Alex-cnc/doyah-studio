@@ -48,6 +48,7 @@ SCRIPT = pathlib.Path(__file__).resolve()
 
 BEGIN = "<!-- BEGIN platform-parity -->"
 END = "<!-- END platform-parity -->"
+BLOCK_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 
 ALLOWED_STATUS = ("✅", "🟡", "⬜")
 LEDGER_TOP_KEYS = {"_comment", "default", "platforms", "notPlatforms"}
@@ -93,6 +94,36 @@ def clean(text: str) -> str:
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     text = text.replace("`", "")
     return re.sub(r"\s+", " ", text).strip()
+
+
+def extract_block(text: str) -> str | None:
+    """取 BEGIN/END 之间的派生区块正文（找不到标记 = None）。"""
+    if BEGIN not in text or END not in text:
+        return None
+    return text.split(BEGIN, 1)[1].split(END, 1)[0]
+
+
+def normalize_block(block: str) -> str:
+    """把派生区块归一成**内容**（供 `--check` 比对）。
+
+    依据 = 提案 0007 建议①（2026-10-07 采纳 · 前门 `T-20261007-013` §三）：§10.10 是本脚本
+    重写的**派生区块**，人写进去的 `<!-- contract-change：… -->`、以及注释被摘掉后留下的空白，
+    都**不是内容** —— 旧实现逐字节比 ⇒ 对侧一注记即恒红（`G-62` 的根因）。三步：
+    ① 摘掉 HTML 注释；② 整行只剩注释 ⇒ 整行丢弃（派生区块里本没有这一行）；
+    ③ 行内空白折叠 + 去行尾。只在 BEGIN/END **之间**生效，区块外一字不动。
+    """
+    out: list[str] = []
+    for line in block.splitlines():
+        if "<!--" in line:
+            line = BLOCK_COMMENT_RE.sub("", line)
+            if line.strip() == "":
+                continue
+        out.append(re.sub(r"[ \t]+", " ", line).rstrip())
+    while out and out[0] == "":
+        out.pop(0)
+    while out and out[-1] == "":
+        out.pop()
+    return "\n".join(out)
 
 
 def load_rows() -> list[tuple[str, str, str]]:
@@ -549,6 +580,18 @@ def main() -> int:
         current = SRS.read_text(encoding="utf-8")
         if updated == current:
             print(f"✅ 平台等价矩阵与现状一致（{len(rows)} 条；平台列 {len(platforms) + 1}）")
+            return 0
+        current_block = extract_block(current)
+        updated_block = extract_block(updated)
+        if (
+            current_block is not None
+            and updated_block is not None
+            and normalize_block(current_block) == normalize_block(updated_block)
+        ):
+            print(
+                f"✅ 平台等价矩阵与现状一致（{len(rows)} 条；平台列 {len(platforms) + 1}；"
+                "区块内 HTML 注释与注释残留空白按提案 0007 建议① 归一后无实质差异）"
+            )
             return 0
         print("❌ 平台等价矩阵与现状不一致：")
         for line_number, left, right in first_differences(current, updated):

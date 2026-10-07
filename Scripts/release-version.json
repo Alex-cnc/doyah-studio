@@ -23,7 +23,7 @@
   },
   "marketingVersion": "0.3.0",
   "buildVersion": "3",
-  "releaseLabel": "alpha3.0",
+  "releaseLabel": "alpha3.1",
   "releaseLabelSource": {
     "path": "Scripts/build-app.sh",
     "variable": "RELEASE_LABEL",

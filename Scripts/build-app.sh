@@ -51,8 +51,8 @@ CACHE="${ROOT}/.build-cache"
 # 产物名（`dist/DoyahStudio-<发布标签>.app`）与 Info.plist 的 `DoyahReleaseLabel`**都从这一个值派生**，
 # 不许手抄第二份（派活单 `T-20261002-028`；判据 = `Scripts/check-release-version.py`，闭环第 18 项）。
 # 口径 = **`<里程碑>.<子号>`**（每个里程碑从 `.0` 起，里程碑内小改 +1）—— 出处 `Docs/发布计划.md` §5 附注。
-# 当前 **Alpha 3 = Notes** ⇒ `alpha3.0`。
-RELEASE_LABEL="alpha3.0"
+# 当前 **Alpha 3 = Notes** ⇒ `alpha3.1`（2026-10-07 重出：含四片 UI 修复，子号 +1 避免与 `alpha3.0` 身份撞车）。
+RELEASE_LABEL="alpha3.1"
 
 APP="${ROOT}/dist/DoyahStudio-${RELEASE_LABEL}.app"
 LATEST_LINK="${ROOT}/dist/DoyahStudio.app"
