@@ -463,9 +463,18 @@ final class AppState: ObservableObject {
     /// **检索状态**（队列 L-44，2026-09-28）：界面检索改走库以后，「这一屏的结果是怎么来的」
     /// 就成了必须有出处的一件事 —— 三种态各自对应一句如实话（见 `noteSearchHint`）。
     @Published private(set) var noteSearchState: NoteSearchState = .idle
-    @Published var noteEditorTitle = ""
-    @Published var noteEditorBody = ""
-    @Published var noteEditorTags = ""
+    /// 三个编辑框（标题 / 正文 / 标签）：**任何一个变了都算「编辑器有改动」**（片 `N2-4`）。
+    /// `didSet` 里只做两件事（见 `noteEditorTextChanged`）：标脏 + 重排**停顿计时**——
+    /// 计时不是「每键入一次写一次库」，而是「停手 `NoteAutosave.pauseWindow` 之后写一次」。
+    @Published var noteEditorTitle = "" {
+        didSet { noteEditorTextChanged() }
+    }
+    @Published var noteEditorBody = "" {
+        didSet { noteEditorTextChanged() }
+    }
+    @Published var noteEditorTags = "" {
+        didSet { noteEditorTextChanged() }
+    }
     /// **当前是「预览」还是「改」**（片 `N2-3a`「单击预览」；枚举见文件头的 `NoteEditorMode`）。
     ///
     /// 默认 `.edit` —— 与 `N2-3a` 之前一致（没点过任何行时编辑器就是可编辑的）。
@@ -474,6 +483,44 @@ final class AppState: ObservableObject {
     /// （既有的「改」/「新建」，以及列表行**双击** ⇒ `.edit`）。
     @Published var editorMode: NoteEditorMode = .edit
     private var noteBeingEdited: UUID?
+
+    // MARK: - 自动保存（片 `N2-4` · 人类主人令 `T-20261007-006` 第二节第六条）
+
+    /// 编辑器现在这一份的**保存状态**（工具条画它、状态栏说它、机器判据也读它 —— 唯一出处）。
+    /// 口径与停顿窗口在 `Core/NoteStorage/NoteAutosave.swift`。
+    @Published private(set) var noteSaveState: NoteSaveState = .idle
+    /// 编辑器里有没有**还没落库**的改动（`noteSaveState == .idle` ⇔ 没有）。
+    private var noteEditorDirty = false
+    /// 正在跑的计时 / 写库那一发（**唯一一处**：新一轮改动与「切走即存」都会把上一发收掉重排）。
+    private var noteAutoSaveTask: Task<Void, Never>?
+    /// 装内容进编辑器期间置真 —— 那三个 `didSet` 据此**不把「装进来的」当成「用户改的」**。
+    private var isLoadingNoteEditor = false
+    /// 刚落库、还没被 `reloadNotes()` 反映到 `notes` 里的那一份（**读旧列表的窗口期**）。
+    /// 回到同一条笔记时优先用它，否则用户会看到「自己刚写的字不在了」（见 `loadEditorContent`）。
+    private var pendingNoteSnapshot: NoteEditorSnapshot?
+
+    /// **编辑器里的一份内容快照**：写库与「切走即存」都以它为据。
+    ///
+    /// 为什么要有它：「切走即存」那些入口**紧接着**就会改写编辑器那三个 `@Published`，
+    /// 而写库是异步的 —— 不快照的话，写下去的是**下一条**的内容。
+    private struct NoteEditorSnapshot {
+        let id: UUID?
+        let title: String
+        let body: String
+        let tags: String
+
+        /// 转成落库用的草稿（空标题落 `无标题`，与手动「保存」同一口径）。
+        func draft(untitled: String) -> NoteDraft {
+            let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            return NoteDraft(
+                title: trimmed.isEmpty ? untitled : trimmed,
+                body: body,
+                tags: tags.split(whereSeparator: { $0 == " " || $0 == "," || $0 == "，" }).map(String.init),
+                source: NoteSource(kind: .manual)
+            )
+        }
+    }
+
     // MARK: - 待办（队列 `L-100` 界面半第一片 · 清单屏）
     /// 笔记区里当前看哪一屏（笔记 / 待办）—— `FR-NOTE-36` 的「各自入口与列表，不塞进笔记列表」。
     @Published private(set) var notesModule: NotesModule = .notes
@@ -6175,6 +6222,8 @@ final class AppState: ObservableObject {
     /// 一级导航的选中态入口（唯一一处）：归一（认不出的目标 ⇒ 全部）后重算检索。
     /// 为什么要重算检索：范围变了 ⇒ 上一次的结果已经不属于这一屏（同一族的老毛病见 `settleNoteSearch`）。
     func selectNotesScope(_ scope: NotesScope) {
+        // **切走即存**（片 `N2-4`）：换左栏那一行 = 离开手上这一条笔记（列表整块换掉）。
+        flushNoteAutosave()
         notesScope = notesNavigation.normalized(scope, notes: notes)
         // 换了一块 ⇒ 可见列表立刻换（`.idle` 那一支不经过库）⇒ 多选集合跟着收一遍。
         pruneNoteSelection()
@@ -6467,23 +6516,52 @@ final class AppState: ObservableObject {
 
     /// 把一条笔记装进编辑器的**内容**（标题 / 正文 / 标签 + 正在编辑的 id）——**不动模式**。
     /// 模式由三个入口各自定（单击 ⇒ `.preview`；「改」/「新建」⇒ `.edit`），见 `NoteEditorMode`。
+    ///
+    /// **优先用「刚落库、还没反映到 `notes` 里的那一份」**（片 `N2-4`）：自动保存是异步的，
+    /// 而「点走再点回来」是同步的两下 —— 在写完 `reloadNotes()` 之前读到的是库里**写之前**的那一份，
+    /// 用户会看到自己刚敲的字没了。`pendingNoteSnapshot` 就是补这个窗口期的（写完即清）。
     private func loadEditorContent(_ note: Note) {
-        noteBeingEdited = note.id
-        noteEditorTitle = note.title
-        noteEditorBody = note.body
-        noteEditorTags = note.tags.joined(separator: " ")
+        if let pending = pendingNoteSnapshot, pending.id == note.id {
+            setNoteEditorContent(id: note.id, title: pending.title, body: pending.body, tags: pending.tags)
+            return
+        }
+        setNoteEditorContent(
+            id: note.id,
+            title: note.title,
+            body: note.body,
+            tags: note.tags.joined(separator: " ")
+        )
+    }
+
+    /// **唯一一处**把内容写进编辑器（三个 `@Published` + 正在编辑的 id）。
+    ///
+    /// 为什么要收成一个入口：那三个 `didSet` 是「有改动就自动保存」的判据，而这里是
+    /// 「**读进来的，不是用户写的**」那道闸（`isLoadingNoteEditor`）—— 谁再自己逐个赋一次值，
+    /// 就会凭空多出一串「改动」：刚点开一条笔记就被自动保存写回去一次（`L-172` 同一课）。
+    private func setNoteEditorContent(id: UUID?, title: String, body: String, tags: String) {
+        isLoadingNoteEditor = true
+        noteBeingEdited = id
+        noteEditorTitle = title
+        noteEditorBody = body
+        noteEditorTags = tags
+        isLoadingNoteEditor = false
+        // 装进来 = 与库里一致 ⇒ 不脏，也不该再挂着上一条留下的保存状态。
+        noteEditorDirty = false
+        noteSaveState = .idle
     }
 
     func beginNewNote() {
-        noteBeingEdited = nil
-        noteEditorTitle = ""
-        noteEditorBody = ""
-        noteEditorTags = ""
+        // **切走即存**（片 `N2-4`）：点「新建」就是离开手上这一条 —— 先把改动落下去再清空。
+        flushNoteAutosave()
+        setNoteEditorContent(id: nil, title: "", body: "", tags: "")
         // 新建 ⇒ 正文要能写（片 `N2-3a`：`.edit` 是本片之前那一个语义）。
         editorMode = .edit
     }
 
     func edit(_ note: Note) {
+        // **切走即存**（片 `N2-4`）：换一条之前先把手上这条的改动落下去 ——
+        // 否则「编辑完直接点开另一条」这几秒里敲的字全丢（验收判据①/②）。
+        flushNoteAutosave()
         loadEditorContent(note)
         // 「改」入口（左区顶部那枚铅笔，`NotesPanel.crudEntries`）⇒ 正文可编辑。
         // **列表行的双击也走这里**（片 `N2-3b`）：那一刻手上有一条笔记 ⇒ 内容与模式一起给。
@@ -6520,6 +6598,8 @@ final class AppState: ObservableObject {
         !noteEditorTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !noteEditorBody.isEmpty
     }
 
+    /// **手动「保存」**（工具条那一枚）：与自动保存**同一条写路**（`writeNoteEditor`），
+    /// 区别只有收尾 —— 手动保存之后编辑器清空、回到「新建态」（本片之前的口径，一字未改）。
     func saveNoteFromEditor() async {
         guard notesEnabled else {
             statusMessage = L(.licenseNotesNotIncluded)
@@ -6528,23 +6608,110 @@ final class AppState: ObservableObject {
         // 许可那一档是**可点 + 给理由**（Pro 档要点得到「本档不含笔记」这句人话）；
         // 内容为空那一档是**灰着** —— 两句守卫的处置不同，别合并。
         guard noteEditorHasContent else { return }
-        let title = noteEditorTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let draft = NoteDraft(
-            title: title.isEmpty ? L(.notesUntitled) : title,
-            body: noteEditorBody,
-            tags: noteEditorTags.split(whereSeparator: { $0 == " " || $0 == "," || $0 == "，" }).map(String.init),
-            source: NoteSource(kind: .manual)
+        let saved = await writeNoteEditor(snapshot: noteEditorSnapshot(), automatic: false)
+        if saved { beginNewNote() }
+    }
+
+    // MARK: - 自动保存（片 `N2-4` · 停顿即存 + 切走即存）
+
+    /// 编辑器那三个框**任何一个**变了都走这里：标脏 + 重排停顿计时。
+    /// 装内容期间（`isLoadingNoteEditor`）不算改动 —— 那是「读进来的」，不是「用户写的」。
+    private func noteEditorTextChanged() {
+        guard !isLoadingNoteEditor else { return }
+        noteEditorDirty = true
+        noteSaveState = .pending
+        scheduleNoteAutoSave()
+    }
+
+    /// 重排**停顿计时**：把上一发收掉、重开一发 —— 只有**停手之后**那一发才写库。
+    ///
+    /// 计时走 `Task.sleep`（挂起）：敲键盘这条路上只有「取消 + 新建一个 Task」，
+    /// **没有一次同步写盘** —— 片上边界「不许把自动保存做成阻塞输入」说的就是这一条。
+    private func scheduleNoteAutoSave() {
+        noteAutoSaveTask?.cancel()
+        noteAutoSaveTask = Task { [weak self] in
+            try? await Task.sleep(for: NoteAutosave.pauseWindow)
+            guard !Task.isCancelled else { return }
+            await self?.autosaveNoteEditor()
+        }
+    }
+
+    /// 编辑器里这一份的快照（写库与「切走即存」共用的**唯一出处**）。
+    private func noteEditorSnapshot() -> NoteEditorSnapshot {
+        NoteEditorSnapshot(
+            id: noteBeingEdited, title: noteEditorTitle, body: noteEditorBody, tags: noteEditorTags
         )
+    }
+
+    /// 手上这一份是不是**就是刚写下去的那一份**（写入期间用户还在敲 ⇒ 判假，见 `writeNoteEditor`）。
+    private func noteEditorMatches(_ written: NoteEditorSnapshot) -> Bool {
+        written.id == noteBeingEdited
+            && written.title == noteEditorTitle
+            && written.body == noteEditorBody
+            && written.tags == noteEditorTags
+    }
+
+    /// **停顿即存**：停顿窗口到了 ⇒ 把编辑器里那一份落库。
+    /// 三条守卫（许可 / 有内容 / 真的有改动）：一条不满足就**不动库、也不改状态** ——
+    /// 空编辑器上不许凭空写出一条空笔记来。
+    @discardableResult
+    func autosaveNoteEditor() async -> Bool {
+        guard notesEnabled, noteEditorDirty, noteEditorHasContent else { return false }
+        return await writeNoteEditor(snapshot: noteEditorSnapshot(), automatic: true)
+    }
+
+    /// **切走即存**：离开这一条笔记之前，把手上的改动**先快照、再排进写库队列**。
+    ///
+    /// 为什么是「先快照」：紧接着那些入口（点另一行 / 换范围 / 换模块 / 新建）就会改写编辑器
+    /// 那三个 `@Published`，而写库是异步的 —— 不快照的话写下去的是**下一条**的内容。
+    /// 为什么**不等它写完**：那些入口都在手势回调里（同步的），等 = 把交互卡在写盘上。
+    /// 需要确定收口的地方只有两处：机器判据（`awaitPendingNoteAutosave()`）与
+    /// 「重新打开这一条时优先用它」那份快照（`pendingNoteSnapshot`）。
+    func flushNoteAutosave() {
+        guard noteEditorDirty, noteEditorHasContent else { return }
+        noteAutoSaveTask?.cancel()
+        let snapshot = noteEditorSnapshot()
+        pendingNoteSnapshot = snapshot
+        noteAutoSaveTask = Task { [weak self] in
+            await self?.writeNoteEditor(snapshot: snapshot, automatic: true)
+        }
+    }
+
+    /// 等手上那一发自动保存**收口**（停顿计时 + 写库）。
+    ///
+    /// 生产路径不需要「等」—— 它是后台的；需要确定性的只有机器判据：
+    /// 「切走即存」之后要断言「内容已经在库里」，不能靠 `sleep` 去撞（撞早了就是假绿）。
+    func awaitPendingNoteAutosave() async {
+        await noteAutoSaveTask?.value
+    }
+
+    /// **唯一一条写库路**（手动「保存」与自动保存都走它）：新建 / 覆盖 + 落点 + 重读。
+    ///
+    /// 两条纪律：
+    ///   · **编辑已有笔记保留原来源**（来源是事实，不该因为改了几个字就丢掉 —— 本片之前的口径）；
+    ///   · 失败**分两种处置**：自动保存是**后台**的（验收判据④：全程无弹窗）⇒ 工具条那一枚状态
+    ///     ＋ 状态栏一句人话；手动保存是**用户正看着**的动作 ⇒ 多一个可复制的错误框（既有口径）。
+    ///   两种都不静默（验收判据⑥）。
+    @discardableResult
+    private func writeNoteEditor(snapshot: NoteEditorSnapshot, automatic: Bool) async -> Bool {
+        noteSaveState = .saving
+        // 写下去的那一份（新建那一支会补上刚落库的 id —— 见下面那句注释）。
+        var written = snapshot
         do {
             let store = NoteLibrary.defaultLibrary()
-            if let id = noteBeingEdited {
-                // 编辑已有笔记：**保留原来源与创建时间**（来源是事实，不该因为改了几个字就丢掉）。
+            if let id = snapshot.id {
                 let existing = notes.first { $0.id == id }
-                var merged = draft
-                merged.source = existing?.source ?? draft.source
+                var merged = snapshot.draft(untitled: L(.notesUntitled))
+                merged.source = existing?.source ?? merged.source
                 _ = try await store.upsert(merged, id: id)
             } else {
-                let saved = try await store.upsert(draft)
+                let saved = try await store.upsert(snapshot.draft(untitled: L(.notesUntitled)))
+                // **新建这一条已经在库里了** ⇒ 编辑器改认它（`noteBeingEdited = saved.id`）：
+                // 否则每一次自动保存都会**再建一条**（敲一会儿就多出好几条几乎一样的笔记）。
+                written = NoteEditorSnapshot(
+                    id: saved.id, title: snapshot.title, body: snapshot.body, tags: snapshot.tags
+                )
+                noteBeingEdited = saved.id
                 // **在哪个笔记本里新建就落在哪个笔记本**（队列 `L-97` 界面半第一片）：
                 // 落点由 Core 给（`destinationNotebookUid`：在笔记本里 ⇒ 那个；全部 / 架 ⇒ 默认笔记本）。
                 // 不显式搬的话新笔记会落默认笔记本 —— 用户在「笔记本B1」里新建一条，
@@ -6554,10 +6721,31 @@ final class AppState: ObservableObject {
                     _ = try await store.move(noteIDs: [saved.id], toNotebook: destination)
                 }
             }
+            if written.id == noteBeingEdited {
+                // 写入期间用户还在敲（`await` 那一瞬主 actor 是让出来的）⇒ **不能**一句「干净了」
+                // 把这段时间里的按键抹掉：手上这一份与刚写下去的那一份不一样就保持「脏」并重排。
+                if noteEditorMatches(written) {
+                    noteEditorDirty = false
+                    noteSaveState = .idle
+                    pendingNoteSnapshot = nil
+                } else {
+                    noteEditorDirty = true
+                    noteSaveState = .pending
+                    scheduleNoteAutoSave()
+                }
+            }
+            // 编辑器已经换到别的笔记上（`written.id != noteBeingEdited`）：这一发写的是**上一条**的
+            // 收尾 ⇒ 当前编辑器那份「脏 / 净」由它自己的改动说了算，这里一个字都不碰。
             await reloadNotes()
-            beginNewNote()
+            return true
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            let reason = ErrorPresenter.message(for: error)
+            // **失败绝不静默**（判据⑥）：状态那一格记住原因 —— 工具条画红、悬停给原因、
+            // 状态栏把这句话说出来；手动保存再加一个可复制的框（既有口径，自动保存那条不弹）。
+            noteSaveState = .failed(reason)
+            statusMessage = L(.notesAutoSaveFailedStatus, reason)
+            if !automatic { errorMessage = reason }
+            return false
         }
     }
 
@@ -6577,6 +6765,8 @@ final class AppState: ObservableObject {
     /// 界面上能看见的东西必须来自库，不能来自上一次的残留（`todos` 是内存态，库才是事实）。
     func setNotesModule(_ module: NotesModule) {
         guard notesModule != module else { return }
+        // **切走即存**（片 `N2-4`）：切走 / 切回都会换掉右栏那一块 ⇒ 先把手上这份落下去。
+        flushNoteAutosave()
         notesModule = module
         if module == .todos {
             Task {
@@ -7060,6 +7250,9 @@ final class AppState: ObservableObject {
         selectedNoteIDs = outcome.selection
         noteSelectionAnchor = outcome.anchor
         if let editedID = outcome.edited, let target = notes.first(where: { $0.id == editedID }) {
+            // **切走即存**（片 `N2-4`）：这一下要么换到另一条、要么把同一条重新装一遍 ——
+            // 两种都会**覆盖编辑器里的内容** ⇒ 先把手上这份落下去（验收判据①/②）。
+            flushNoteAutosave()
             // **单击 = 预览**（片 `N2-3a`「单击预览」· 人类主人令 `T-20261007-004` 第三节第 3 条）：
             // 这一条的内容进右栏，但**正文只读**。Core 只给「要不要打开这一条」（`outcome.edited`），
             // 「打开成看 / 打开成改」是界面这一侧的事 ⇒ 模式在这里定点。

@@ -185,6 +185,18 @@
    "reason": "W-S01（人类主人 2026-10-06 令「立刻执行」）：Windows 实现层迁到 platform/windows/（原在仓根），本清单 windows 树 paths 跟版",
    "by": "fatshark",
    "at": "2026-10-06"
+  },
+  {
+   "glob": "Scripts/test-note-autosave-kill9.sh",
+   "reason": "片 N2-4（任务 t_b2a943b6 · macOS 机组）：判据③「强杀之后重开、最近一次自动保存的内容还在」的**进程级**证据 —— 两遍 swift test，中间那一下由 phase 1 自己发 SIGKILL（不可捕获、不给收尾机会），phase 2 另起一个进程读盘核对",
+   "by": "macos",
+   "at": "2026-10-07"
+  },
+  {
+   "glob": "Scripts/empty-action-button-dispositions.json",
+   "reason": "片 N2-4（任务 t_b2a943b6 · macOS 机组）：自动保存新增两处空守卫（`autosaveNoteEditor` / `flushNoteAutosave`，form=internal，理由逐条写在台账里）⇒ L-50 的处置对账台账跟版（守卫 28 → 30 条）",
+   "by": "macos",
+   "at": "2026-10-07"
   }
  ],
  "unclassified_allow": [

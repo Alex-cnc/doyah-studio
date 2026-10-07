@@ -184,6 +184,18 @@
       "guard": "!noteIDs.isEmpty",
       "form": "internal",
       "reason": "**不是按钮的前置判据**：拖拽落点的入口 `handleNoteDrop`（视图 `.dropDestination`）只有在载荷解得出来的时候才有内容 —— 别的程序拖来的文本 / 前缀不对 / 整段坏掉时解出**空数组**，这一步什么都不做（拖拽失败没有按钮可灰着、也没有可交代的对象，如实登记）。这里是**第二道**：`AppState.dropNotes` 收到空清单直接返回，防别的调用路径把一次空写落到库上。"
+    },
+    {
+      "func": "autosaveNoteEditor",
+      "guard": "notesEnabled, noteEditorDirty, noteEditorHasContent",
+      "form": "internal",
+      "reason": "**不是按钮的前置判据**：这是**后台**的「停顿即存」（片 `N2-4`，任务 `t_b2a943b6`）—— 由停顿计时器那一发调它（`scheduleNoteAutoSave`），界面上没有对应的按钮可以灰着。三条守卫各自的处置：① 许可那一档 = 不写库（与 `saveNoteFromEditor` 读同一个 `notesEnabled`）；②③ 两条防的是「没动过 / 空编辑器也写一次」——**没有内容就不该凭空写出一条空笔记**。用户看得见的那一档（空编辑器上「保存」灰着）已经登记在同族的 `saveNoteFromEditor` 条目里（判据属性 `noteEditorHasContent` 是唯一出处）；工具条那一枚状态字画的是 `noteSaveState`，是**显示**不是可点入口。"
+    },
+    {
+      "func": "flushNoteAutosave",
+      "guard": "noteEditorDirty, noteEditorHasContent",
+      "form": "internal",
+      "reason": "**不是按钮的前置判据**：「切走即存」（片 `N2-4`，任务 `t_b2a943b6`）—— 点另一行（`handleNoteRowClick`）/ 换范围（`selectNotesScope`）/ 换模块（`setNotesModule`）/ 新建（`beginNewNote`）/ 进编辑（`edit(_:)`）这几个入口在改写编辑器内容**之前**先调它，把手上那份快照排进写库队列；它不是任何按钮的灰 / 亮判据。没有改动（或编辑器是空的）时**什么都不做**：这一条正是「别把一次空写落到库上」的那道闸 —— 与 `dropNotes` / `moveNotes` 同一条纪律（可点却静默无反应是缺陷；这里恰好相反：**没有可写的东西就不写**）。"
     }
   ]
 }

@@ -731,6 +731,13 @@ struct NotesEditorView: View {
 ///     全窗口没有第二处「保存」（判据：把 `App/Views/*.swift` 里那两处「保存」的文案键
 ///     `grep` 一遍 —— 命中行必须都落在**工具条行**里，底栏同类命中 = 0）。
 ///
+/// **片 `N2-4` 在这里加了一枚「保存状态」**（人工令 `T-20261007-006` 第二节第六条）：
+/// 保存按钮右边那一格画 `appState.noteSaveState`（未保存 / 保存中… / 自动保存失败），
+/// 只在**有话说**的那三态出现 —— `.idle`（没有未落库的改动）不占地方（`L-50` 同族：
+/// 一直亮着的一行字等于没有提示）。失败那一档换警示色、悬停给原因。
+/// 状态的值与那句原因都只有一处出处（`Core/NoteStorage/NoteAutosave.swift` 的 `NoteSaveState`），
+/// 视图只画不判。
+///
 /// 两条刻意的口径：
 ///   · **只在 `.edit` 出现**（由 `NotesEditorView` 把住）：预览态的正文只读，保存无处可用 ——
 ///     画一枚永远灰着的按钮就是 `L-50` 那一课；
@@ -761,6 +768,18 @@ struct NotesEditorToolbar: View {
             // 许可那一档故意不灰 —— Pro 档点下去要给「本档不含笔记」那句人话。
             .disabled(!appState.noteEditorHasContent)
             .accessibilityIdentifier("notes-editor-save")
+            // **自动保存的状态**（片 `N2-4`）：只有「有话说」的那三态才画 ——
+            // `.idle`（没有未落库的改动）**不占地方**：常态下多一行永远亮着的字会被读成
+            // 「这行本来就长这样」，反而看不出「现在真的有东西没存」（与 `L-50` 同一条口径）。
+            // 三态各有各的话（键在语言表里，中英齐）；失败那一档换警示色、悬停给原因
+            // —— 验收判据⑥「自动保存的失败路径要有可见线索」在界面上的那一份。
+            if let key = appState.noteSaveState.languageKey {
+                Text(L(key))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(saveStateColor)
+                    .help(appState.noteSaveState.failureReason ?? L(key))
+                    .accessibilityIdentifier(NoteAutosave.statusIdentifier)
+            }
             Text(L(.notesSourceHint))
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.secondary))
@@ -770,6 +789,12 @@ struct NotesEditorToolbar: View {
         .padding(.vertical, Spacing.xs)
         .background(Theme.surface(.panel))
         .accessibilityIdentifier("notes-editor-toolbar")
+    }
+
+    /// 状态那一枚的颜色：**失败换警示色**（「有东西没存上」必须一眼看得出来），
+    /// 「等待落库 / 正在写库」两档是辅助色 —— 它们不是错误，不该抢「保存」那枚的注意力。
+    private var saveStateColor: Color {
+        appState.noteSaveState.isFailure ? Theme.status(.warning) : Theme.text(.secondary)
     }
 }
 

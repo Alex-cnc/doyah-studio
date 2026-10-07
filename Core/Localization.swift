@@ -301,6 +301,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case noteSearchUnavailable
     case notesTagsPlaceholder
     case notesSourceHint
+    /// **自动保存的状态**（片 `N2-4`）：有改动、还在停顿窗口里等着落库。
+    case notesAutoSavePending
+    /// 正在写库。
+    case notesAutoSaveSaving
+    /// 自动保存**失败**（工具条那一枚）；原因走悬停提示。
+    case notesAutoSaveFailed
+    /// 自动保存失败时状态栏那一句（带原因参数）—— 第二个可见线索，不静默。
+    case notesAutoSaveFailedStatus
     case notesUntitled
     case notesContainsRowData
     case notesSourcePrefix
@@ -2431,6 +2439,10 @@ public enum LocalizedStrings {
         .noteSearchUnavailable: [.simplifiedChinese: "检索没跑成：%@（下面列出的是全部笔记）", .english: "Search did not run: %@ (all notes are listed below)"],
         .notesTagsPlaceholder: [.simplifiedChinese: "标签（空格或逗号分开）", .english: "Tags (separate with spaces or commas)"],
         .notesSourceHint: [.simplifiedChinese: "来源由创建时记下，之后编辑不会改它", .english: "The source is recorded at creation and is not changed by later edits"],
+        .notesAutoSavePending: [.simplifiedChinese: "未保存", .english: "Unsaved"],
+        .notesAutoSaveSaving: [.simplifiedChinese: "保存中…", .english: "Saving…"],
+        .notesAutoSaveFailed: [.simplifiedChinese: "自动保存失败", .english: "Auto-save failed"],
+        .notesAutoSaveFailedStatus: [.simplifiedChinese: "自动保存失败：%@（改动仍在编辑器里，没有丢）", .english: "Auto-save failed: %@ (your edits are still in the editor, nothing was lost)"],
         .notesUntitled: [.simplifiedChinese: "无标题", .english: "Untitled"],
         .notesContainsRowData: [.simplifiedChinese: "含数据", .english: "contains data"],
         .notesSourcePrefix: [.simplifiedChinese: "来源：", .english: "Source: "],

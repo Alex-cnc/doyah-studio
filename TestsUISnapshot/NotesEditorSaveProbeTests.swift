@@ -48,6 +48,26 @@ import DoyahCore
 /// （单独跑要 `DOYAH_UI_SNAPSHOT=1` + `DOYAH_NOTES_DIR=<临时目录>`）。
 /// 纪律同 L-01：要真渲染 ⇒ **不进** `verify-all.sh`；产物落 `.build/ui-snapshot-state/`
 /// （**刻意不调 `UISnapshot.write`**：探针产物不进快照清单，免得搅乱「张数 / 组数」那类派生计数）。
+///
+/// ## 片 `N2-4` 追加的四条（自动保存 · 人工令 `T-20261007-006` 第二节第六条）
+///
+/// 判据编号与卡上那张验收表一一对应（都在**盘上**判：另开一个 `NoteLibrary` 独立连接读回，
+/// 不读 `AppState.notes` —— 拿内存态判「存下来了」是自己判自己）：
+///   · `testN24AutosavePersistsOnPauseWithoutAnyExitPath` —— **③ 强杀等价物**：
+///     打字之后**不做任何离开 / 退出动作**，只等停顿窗口；成对读数（窗前后各读一次盘）；
+///   · `testN24LeavingTheNoteFlushesImmediately` —— **① / ② 切走即存**：
+///     同一篇重开（点回列表那一下）与换一篇再回来，两半都从盘上读回；
+///   · `testN24FailureIsVisibleAndNeverAPopup` —— **⑥ 失败有可见线索 + ④ 无弹窗**：
+///     把临时笔记库改成只读（可复跑的触发方式，读数里打印了 chmod 那条命令）⇒
+///     状态进 `.failed` 且带原因、状态栏有那句话、**`errorMessage` 仍是 nil**（不弹框）、
+///     编辑器里那一份没丢；另加**反向对照**（同一条坏路上手动保存仍给那个可复制的框）；
+///   · `testN24ToolbarSaveStateKeyIsReadable` —— **⑤ 工具条保存状态键存在且可读**：
+///     三态各有文案键且中英齐（缺一语言 = 死键就判红）、`idle` 无键、源锚点（工具条真读这份
+///     状态 + `NoteAutosave.statusIdentifier` 唯一出处 + 自动保存那一段里没有弹框入口）、
+///     渲染级（`.pending` 与「已写完」两态在工具条那一带逐像素不同 ⇒ 状态那一格真的画了）。
+///   **边界（如实登记）**：③ 是**等价物**而不是真的 `kill -9` —— 判的是「没有任何退出路径，
+///   内容也已经 `COMMIT` 到盘上」（`kill -9` 只丢内存）；真要跑一次带信号的那条，
+///   见本片交接里那条可复跑命令（进程级演示不在本探针里）。
 final class NotesEditorSaveProbeTests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -339,6 +359,411 @@ final class NotesEditorSaveProbeTests: XCTestCase {
             "对照件（没挂 `.editorSurface()` 的裸 TextEditor）在这套量法下取到的底色 \(control)"
                 + " 与令牌 \(expected) 差不出 8 以上 ⇒ 这条量法分辨不了两种底色，笔记那三条不算数"
         )
+    }
+
+    // MARK: - N2-4 自动保存（停顿即存 + 切走即存 + 失败可见 + 无弹窗）
+
+    /// 夹具：写 N 条笔记进**临时**笔记库，并把笔记能力打开。
+    ///
+    /// **先在临时家里再写**：`DOYAH_NOTES_DIR` 不在场就跳过（`setUpWithError` 已经把住）——
+    /// 探针不许往真实用户数据家写夹具（与 `UISnapshotPanelsTests` / `NotesLayoutProbeTests` 同一条纪律）。
+    @MainActor
+    private func seedAutosaveNotes(_ state: AppState, titles: [String]) async throws -> [Note] {
+        let load = try UISnapshot.applyLicense(.standard, to: state)
+        XCTAssertEqual(load.entitlements.basis, .licensed, "临时许可证没落地 ⇒ 下面读不到笔记能力")
+        XCTAssertTrue(state.notesEnabled, "Standard 档必须带笔记能力（capabilities.notes）")
+        var created: [Note] = []
+        for (index, title) in titles.enumerated() {
+            created.append(
+                try await NoteLibrary.defaultLibrary().upsert(
+                    NoteDraft(title: title, body: "夹具正文 \(index)")
+                )
+            )
+        }
+        await state.reloadNotes()
+        return created
+    }
+
+    /// **独立连接**读回一条笔记：另开一个 `NoteLibrary`（同一路径、另一个实例）。
+    ///
+    /// 为什么不用 `AppState.notes`：那是内存态 —— 拿它判「已经存到库里了」等于自己判自己
+    /// （判据③「强杀之后内容还在」要的正是「盘上那一份」）。
+    private func readBackFromLibrary(_ id: UUID) async throws -> Note? {
+        let library = NoteLibrary(databaseURL: NoteLibrary.defaultDatabaseURL())
+        return try await library.load().first { $0.id == id }
+    }
+
+    /// ## N2-4 判据③（**强杀等价物**）＋ 判据①的「停顿」那一半
+    ///
+    /// 「编辑 → **不做任何离开动作** → 内容已经在盘上」。为什么这一条就是 `kill -9` 等价物：
+    /// `kill -9` 只丢**内存**里那一份，盘上那份是自动保存已经 `COMMIT` 掉的（SQLite 的写是一个事务）；
+    /// 所以「没有任何退出 / 切走路径，停顿窗口一到内容就落库」成立 ⇒ 强杀之后重开读到的就是它。
+    /// **成对读数**（两遍都读盘）：打字之后（还没到停顿窗口）→ 库里还是旧的；窗口到了 → 库里是新的。
+    @MainActor
+    func testN24AutosavePersistsOnPauseWithoutAnyExitPath() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        let seeded = try await seedAutosaveNotes(host.state, titles: ["N2-4 停顿即存夹具"])
+        let note = try XCTUnwrap(seeded.first, "夹具没落库")
+
+        host.state.edit(note)
+        XCTAssertEqual(
+            host.state.noteSaveState, .idle,
+            "前置：刚装进编辑器就该是「没有未落库的改动」（`setNoteEditorContent` 那一道闸）"
+        )
+
+        let typed = "自动保存·停顿即存·\(UUID().uuidString)"
+        host.state.noteEditorBody = typed
+        XCTAssertEqual(
+            host.state.noteSaveState, .pending,
+            "改了一个字之后状态不是「未保存」⇒ 自动保存的判据根本立不起来"
+        )
+
+        // 成对读数①：还没到停顿窗口 —— **盘上**那一份还是旧的。
+        let before = try await readBackFromLibrary(note.id)
+        XCTAssertNotEqual(
+            before?.body, typed,
+            "还没到停顿窗口，盘上就已经是新内容了 ⇒ 这一段量的不是「停顿即存」"
+        )
+
+        // 只等停顿窗口 —— **不点任何东西**（这一条就是要证明「没有退出路径也会落库」）。
+        await host.state.awaitPendingNoteAutosave()
+
+        // 成对读数②：盘上那一份已经是新的了。
+        let after = try await readBackFromLibrary(note.id)
+        XCTAssertEqual(
+            after?.body, typed,
+            "停顿窗口到了（约 \(NoteAutosave.pauseWindow)）而盘上还是旧内容 ⇒ 停顿即存没落地"
+        )
+        XCTAssertEqual(host.state.noteSaveState, .idle, "写完 ⇒ 状态要回到「没有未落库的改动」")
+        XCTAssertGreaterThan(
+            after?.updatedAt ?? .distantPast, before?.updatedAt ?? .distantPast,
+            "盘上那份的时间戳没往前走 ⇒ 这一条读到的可能还是写之前那一份"
+        )
+        print(
+            "🧷 N2-4 ③ 停顿即存（无任何退出/切走动作）：独立连接读回正文 = 「\(after?.body ?? "nil")」"
+                + "（写前 = 「\(before?.body ?? "nil")」）"
+        )
+    }
+
+    /// ## N2-4 判据①②：**切走即存**（同一篇重开 / 换一篇再回来）
+    ///
+    /// 两半都在**盘上**判（独立连接），不是读内存：
+    ///   ① 编辑 → **直接返回列表**（点同一条 = 单击进预览）→ 重开该篇 ⇒ 内容在；
+    ///   ② 编辑 → **点选另一篇** → 回原篇 ⇒ 内容已存。
+    @MainActor
+    func testN24LeavingTheNoteFlushesImmediately() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        let seeded = try await seedAutosaveNotes(host.state, titles: ["N2-4 切走即存甲", "N2-4 切走即存乙"])
+        let first = try XCTUnwrap(seeded.first, "夹具甲没落库")
+        let second = try XCTUnwrap(seeded.last, "夹具乙没落库")
+        XCTAssertNotEqual(first.id, second.id, "两篇夹具是同一条 —— 判据②「换一篇」就无从谈起")
+
+        // ── ① 编辑 → 直接返回列表 → 重开该篇 ─────────────────────────────────────
+        host.state.edit(first)
+        let typed = "自动保存·切走即存甲·\(UUID().uuidString)"
+        host.state.noteEditorBody = typed
+        XCTAssertEqual(host.state.noteSaveState, .pending, "前置：有未落库的改动")
+
+        host.state.handleNoteRowClick(first, modifiers: [])  // 无修饰单击 = 打开这一条（进预览）
+        XCTAssertEqual(
+            host.state.noteEditorBody, typed,
+            "① 点回同一条之后编辑器里立刻不是刚写的那一份 ⇒ 「读完就没了」那一路又回来了"
+        )
+        await host.state.awaitPendingNoteAutosave()
+        let storedAfterLeaving = try await readBackFromLibrary(first.id)
+        XCTAssertEqual(
+            storedAfterLeaving?.body, typed,
+            "① 返回列表那一下没有把改动落库（盘上还是旧的）"
+        )
+        XCTAssertEqual(host.state.noteSaveState, .idle, "① 落库之后状态要回到干净")
+
+        // 重开该篇：**从库里重新读**（把内存那份换掉），再点开它。
+        await host.state.reloadNotes()
+        let reopened = try XCTUnwrap(
+            host.state.notes.first { $0.id == first.id }, "重读之后找不到那一篇了"
+        )
+        XCTAssertEqual(reopened.body, typed, "① 重读回来的正文不是刚写的那一份")
+        host.state.handleNoteRowClick(reopened, modifiers: [])
+        XCTAssertEqual(host.state.noteEditorBody, typed, "① 重开该篇之后编辑器里就是它")
+
+        // ── ② 编辑 → 点选另一篇 → 回原篇 ⇒ 内容已存 ───────────────────────────────
+        host.state.edit(reopened)
+        let typedAgain = "自动保存·切走即存甲·第二遍·\(UUID().uuidString)"
+        host.state.noteEditorBody = typedAgain
+        XCTAssertEqual(host.state.noteSaveState, .pending, "前置：第二遍也有未落库的改动")
+
+        host.state.handleNoteRowClick(second, modifiers: [])
+        XCTAssertEqual(
+            host.state.noteEditorBody, second.body,
+            "② 点另一篇之后编辑器里不是那一篇 ⇒ 下面那条断言看的不是「换走」这件事"
+        )
+        await host.state.awaitPendingNoteAutosave()
+        let storedSecond = try await readBackFromLibrary(first.id)
+        XCTAssertEqual(
+            storedSecond?.body, typedAgain,
+            "② 点走之后原篇那一份没落库"
+        )
+
+        let backToFirst = try XCTUnwrap(host.state.notes.first { $0.id == first.id }, "① 的夹具不见了")
+        host.state.handleNoteRowClick(backToFirst, modifiers: [])
+        XCTAssertEqual(
+            host.state.noteEditorBody, typedAgain,
+            "② 回原篇之后编辑器里不是已存的那一份"
+        )
+        print(
+            "🧷 N2-4 ①② 切走即存：两半都从独立连接读回 —— ①「\(storedAfterLeaving?.body ?? "nil")」"
+                + " ②「\(storedSecond?.body ?? "nil")」"
+        )
+    }
+
+    /// ## N2-4 判据⑥：**自动保存失败路径有可见线索**（并同时判判据④「全程无弹窗」）
+    ///
+    /// 触发方式（可复跑）：把临时笔记库那个目录 + 库文件**改成只读** —— 下一次写库必失败
+    /// （SQLite 连 `-journal` 都建不出来）。判据四条：
+    ///   ① 状态那一格进 `.failed` 且**带一句原因**（工具条那一枚画的就是它）；
+    ///   ② 状态栏那句里有「自动保存失败」（第二个可见线索）；
+    ///   ③ **不弹框**：`errorMessage`（那个框的开关）必须还是 `nil` —— 验收判据④；
+    ///   ④ **改动没丢**：编辑器里还是刚敲的那一份（失败不等于把内容也抹了）。
+    /// 另加**反向对照**：同一条坏路上手动「保存」**仍然**给那个可复制的框 ——
+    /// 否则「上面第 ③ 条是绿的」也可能只是因为「压根没在写」。
+    @MainActor
+    func testN24FailureIsVisibleAndNeverAPopup() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        let seeded = try await seedAutosaveNotes(host.state, titles: ["N2-4 失败路径夹具"])
+        let note = try XCTUnwrap(seeded.first, "夹具没落库")
+
+        host.state.edit(note)
+        let typed = "自动保存·失败路径·\(UUID().uuidString)"
+        host.state.noteEditorBody = typed
+
+        let directory = NoteLibrary.defaultDirectory()
+        let databaseURL = NoteLibrary.defaultDatabaseURL()
+        let fileManager = FileManager.default
+        // 先记下原权限，判完**一定**还回去（否则临时数据家删不掉、下一轮清不干净）。
+        let directoryPermissions = (try? fileManager.attributesOfItem(atPath: directory.path)[.posixPermissions]) as? NSNumber
+        let filePermissions = (try? fileManager.attributesOfItem(atPath: databaseURL.path)[.posixPermissions]) as? NSNumber
+        defer {
+            try? fileManager.setAttributes(
+                [.posixPermissions: directoryPermissions ?? NSNumber(value: 0o755)], ofItemAtPath: directory.path
+            )
+            try? fileManager.setAttributes(
+                [.posixPermissions: filePermissions ?? NSNumber(value: 0o644)], ofItemAtPath: databaseURL.path
+            )
+        }
+        try fileManager.setAttributes([.posixPermissions: NSNumber(value: 0o555)], ofItemAtPath: directory.path)
+        try fileManager.setAttributes([.posixPermissions: NSNumber(value: 0o444)], ofItemAtPath: databaseURL.path)
+        print("🧷 N2-4 ⑥ 触发方式：chmod 0555 \(directory.path) + chmod 0444 \(databaseURL.lastPathComponent)")
+
+        await host.state.awaitPendingNoteAutosave()
+
+        guard case .failed(let reason) = host.state.noteSaveState else {
+            XCTFail("写库必失败的那条路上，状态还是 \(host.state.noteSaveState) ⇒ 失败没有出路（判据⑥）")
+            return
+        }
+        XCTAssertFalse(reason.isEmpty, "失败那一档没有原因 ⇒ 工具条上那句话说不清「为什么没存上」")
+        XCTAssertTrue(
+            host.state.statusMessage.contains(L(.notesAutoSaveFailed)),
+            "状态栏里没有「\(L(.notesAutoSaveFailed))」那句：实测「\(host.state.statusMessage)」"
+        )
+        XCTAssertNil(
+            host.state.errorMessage,
+            "自动保存失败弹了框（`errorMessage` 是那个框的开关）⇒ 验收判据④「全程无弹窗」不成立"
+        )
+        XCTAssertEqual(host.state.noteEditorBody, typed, "失败之后编辑器里那一份被抹掉了 —— 改动丢了")
+
+        // 反向对照：同一条坏路上，手动「保存」仍然给那个可复制的框。
+        await host.state.saveNoteFromEditor()
+        XCTAssertNotNil(
+            host.state.errorMessage,
+            "反向对照不成立：同一条坏路上手动保存也没报错 ⇒ 上面「没弹框」那一条是假绿"
+        )
+        host.state.errorMessage = nil
+        print("🧷 N2-4 ⑥ 失败可见：state=\(host.state.noteSaveState) 原因=「\(reason)」")
+    }
+
+    /// ## N2-4 判据⑤：**工具条保存状态键存在且可读**
+    ///
+    /// 「键」两头都要可读：
+    ///   · **文案键**（`LKey`）：三态各一个、`idle` 不占地方；两个语言都没缺（缺一语言 = 死键）；
+    ///   · **界面锚点**：工具条那一行读的就是 `appState.noteSaveState`，标识唯一出处是
+    ///     `NoteAutosave.statusIdentifier`（源锚点，从仓里真读源码来判 —— 不把锚点抄进判据）。
+    /// 再加**渲染级**一条：`.pending` 那一档真的画了东西 —— 与「已经写完、内容还在」那一态比，
+    /// 唯一的差别就是那一枚状态字，两图必须不一样（按钮在两边都是亮的）。
+    @MainActor
+    func testN24ToolbarSaveStateKeyIsReadable() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        let seeded = try await seedAutosaveNotes(host.state, titles: ["N2-4 状态键夹具"])
+        let note = try XCTUnwrap(seeded.first, "夹具没落库")
+
+        // ① 三态各有键；`idle` 不画（没有未落库的改动就不占地方）。
+        XCTAssertNil(NoteSaveState.idle.languageKey, "`idle` 不该有状态文字 —— 常态下多一行永远亮着的字看不出问题")
+        let keyed: [NoteSaveState] = [.pending, .saving, .failed("原因")]
+        for state in keyed {
+            let key = try XCTUnwrap(state.languageKey, "\(state) 没有文案键")
+            let chinese = LocalizedStrings.text(key, language: .simplifiedChinese)
+            let english = LocalizedStrings.text(key, language: .english)
+            XCTAssertFalse(chinese.isEmpty, "\(key) 缺中文")
+            XCTAssertFalse(english.isEmpty, "\(key) 缺英文")
+            XCTAssertNotEqual(chinese, english, "\(key) 中英一模一样 ⇒ 语言表那一半没落地")
+            XCTAssertNotEqual(chinese, key.rawValue, "\(key) 在语言表里查不到（回落成了键名）")
+        }
+        XCTAssertEqual(NoteAutosave.statusIdentifier, "notes-editor-save-state", "状态那一格的可读名字被改了")
+
+        // ② 源锚点：工具条读的就是这一份状态（判据与界面认同一个名字）。
+        let root = Self.repositoryRoot
+        let panel = try String(contentsOf: root.appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8)
+        XCTAssertTrue(
+            panel.contains("appState.noteSaveState.languageKey"),
+            "`NotesPanel.swift` 里找不到「按状态取文案键」那一处 —— 工具条没有再读这份状态"
+        )
+        XCTAssertTrue(
+            panel.contains("NoteAutosave.statusIdentifier"),
+            "`NotesPanel.swift` 里找不到 `NoteAutosave.statusIdentifier` —— 状态那一格没有可读名字"
+        )
+        let appState = try String(contentsOf: root.appendingPathComponent("App/AppState.swift"), encoding: .utf8)
+        for anchor in ["flushNoteAutosave()", "awaitPendingNoteAutosave()", "NoteAutosave.pauseWindow", "@Published private(set) var noteSaveState"] {
+            XCTAssertTrue(appState.contains(anchor), "`AppState.swift` 里找不到「\(anchor)」—— 自动保存的接线掉了")
+        }
+        // 判据④的另一半（源码级）：自动保存这条路上**不许**出现弹框入口。
+        let autosaveRegion = Self.sourceRegion(
+            in: appState,
+            from: "// MARK: - 自动保存（片 `N2-4` · 停顿即存 + 切走即存）",
+            to: "func deleteNote(id: UUID) async"
+        )
+        XCTAssertFalse(autosaveRegion.isEmpty, "截不出自动保存那一段源码 —— 锚点被改了（判据自己失效）")
+        for forbidden in [".alert(", "confirmationDialog(", "NSAlert"] {
+            XCTAssertFalse(
+                autosaveRegion.contains(forbidden),
+                "自动保存那一段里出现了 `\(forbidden)` —— 验收判据④「全程无弹窗」"
+            )
+        }
+
+        // ③ 渲染级：`.pending` 那一档真的画在工具条上。
+        host.state.edit(note)
+        host.state.noteEditorTitle = "临"
+        XCTAssertEqual(host.state.noteSaveState, .pending, "前置：打字之后应当是「未保存」")
+        let pending = try render(host, label: "04-autosave-pending")
+        await host.state.awaitPendingNoteAutosave()
+        XCTAssertEqual(host.state.noteSaveState, .idle, "写完 ⇒ 状态回到干净（这一态就是上面那一态的对照）")
+        XCTAssertEqual(host.state.noteEditorTitle, "临", "对照态要求内容都还在 —— 两边只有那一枚状态字不同")
+        let saved = try render(host, label: "05-autosave-idle")
+
+        let band = changedPixels(
+            pending, saved, fromTop: Self.buttonBandFromTop, toTop: Self.buttonBandToTop
+        )
+        XCTAssertGreaterThan(
+            band.count, 0,
+            "「未保存 / 已写完」两态在工具条那一带上逐像素相同 ⇒ 状态那一格没有真的画出来"
+        )
+        print(
+            "🧷 N2-4 ⑤ 状态那一格：pending 最暗 \(bandDarkest(pending)) / 已写完最暗 \(bandDarkest(saved))"
+                + " ／ 工具条带差异 \(band.count) 像素"
+        )
+    }
+
+    // MARK: - N2-4 判据③ 的**进程级**那一半：真的 `SIGKILL` 自己
+
+    /// 交接单：phase 1 把「哪一条笔记、期望正文」写下来给 phase 2 读。
+    private struct Kill9Handoff: Codable {
+        let noteID: UUID
+        let expectedBody: String
+        let databasePath: String
+    }
+
+    /// phase 1 要用的环境变量（驱动脚本 `Scripts/test-note-autosave-kill9.sh` 设它）。
+    private static let kill9PhaseKey = "DOYAH_AUTOSAVE_KILL9"
+    private static let kill9HandoffKey = "DOYAH_AUTOSAVE_KILL9_HANDOFF"
+
+    /// **phase 1：打字 → 等停顿窗口 → 真的 `SIGKILL` 自己**。
+    ///
+    /// 为什么是 `kill(getpid(), SIGKILL)` 而不是「退出」：`SIGKILL` **不可捕获、不给任何收尾机会**
+    /// —— 与用户从活动监视器里「强制退出」是同一条路（`kill -9 <pid>` 就是发它）。
+    /// 于是「重开之后内容还在」这句话就只能靠**盘上那一份**成立，别的解释全被堵死。
+    ///
+    /// 默认跳过（`DOYAH_AUTOSAVE_KILL9` 不在场 ⇒ `XCTSkip`）：这一条会**把自己所在的进程杀掉**，
+    /// 绝不能混进常规探针跑（那会把 `swift test` 的收尾也一起带走）。
+    @MainActor
+    func testN24Kill9PhaseOneTypeThenForceKill() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(
+            environment[Self.kill9PhaseKey] == "type",
+            "进程级那条要显式打开：`\(Self.kill9PhaseKey)=type`（驱动脚本在 Scripts/）"
+        )
+        let handoffPath = try XCTUnwrap(
+            environment[Self.kill9HandoffKey],
+            "没给交接单路径（`\(Self.kill9HandoffKey)`）⇒ 强杀之后那一遍读不到「期望什么」"
+        )
+
+        let host = makeHost()
+        let seeded = try await seedAutosaveNotes(host.state, titles: ["N2-4 强杀夹具"])
+        let note = try XCTUnwrap(seeded.first, "夹具没落库")
+        host.state.edit(note)
+        let typed = "自动保存·强杀·\(UUID().uuidString)"
+        host.state.noteEditorBody = typed
+
+        // 等停顿窗口：**不做任何离开 / 退出动作**（这一条要证明的就是「没人做任何事也落库了」）。
+        await host.state.awaitPendingNoteAutosave()
+        try await readBackFromLibrary(note.id)  // 落库自证：读得回来才写交接单
+
+        let handoff = Kill9Handoff(
+            noteID: note.id,
+            expectedBody: typed,
+            databasePath: NoteLibrary.defaultDatabaseURL().path
+        )
+        try JSONEncoder().encode(handoff).write(to: URL(fileURLWithPath: handoffPath))
+        print("🧷 N2-4 ③ phase 1：已落库并写好交接单，接下来 `SIGKILL` 自己（pid \(getpid())）")
+        // **必须刷新**：这一行之后进程就要被 `SIGKILL` 带走，而 stdout 重定向到文件时是块缓冲 ——
+        // 不刷新的话读数会跟着缓冲区一起消失（实测：驱动脚本看不到这一行，只能判「没跑到」）。
+        fflush(stdout)
+
+        kill(getpid(), SIGKILL)
+        // 到不了这儿 —— `SIGKILL` 不可捕获（留这一行是给读代码的人看的）。
+        XCTFail("`SIGKILL` 之后还活着 ⇒ 这一条没有真的强杀")
+    }
+
+    /// **phase 2：另起一个进程**读交接单 + 读盘，断言「最近一次自动保存的内容在」。
+    @MainActor
+    func testN24Kill9PhaseTwoReadBackAfterForceKill() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(
+            environment[Self.kill9PhaseKey] == "read",
+            "phase 2 要显式打开：`\(Self.kill9PhaseKey)=read`（驱动脚本在 Scripts/）"
+        )
+        let handoffPath = try XCTUnwrap(environment[Self.kill9HandoffKey], "没给交接单路径")
+        let handoff = try JSONDecoder().decode(
+            Kill9Handoff.self, from: try Data(contentsOf: URL(fileURLWithPath: handoffPath))
+        )
+        // **另开一个连接、另起一个进程**读盘 —— 上一个进程已经被 `SIGKILL` 带走了。
+        let library = NoteLibrary(databaseURL: URL(fileURLWithPath: handoff.databasePath))
+        let stored = try await library.load().first { $0.id == handoff.noteID }
+        XCTAssertEqual(
+            stored?.body, handoff.expectedBody,
+            "强杀之后重开，盘上没有「最近一次自动保存」的内容 ⇒ 判据③不成立"
+        )
+        print("🧷 N2-4 ③ phase 2：强杀后重开，独立进程读回正文 = 「\(stored?.body ?? "nil")」")
+    }
+
+    // MARK: - N2-4 辅助：仓里真读源码
+
+    /// 仓库根：`#filePath` = 本文件在仓里的绝对路径 ⇒ 上两级就是根。
+    private static var repositoryRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // TestsUISnapshot
+            .deletingLastPathComponent()  // 仓根
+    }
+
+    /// 截一段源码（首尾锚点都必须找得到；找不到给空串 —— 调用方会据此判红，
+    /// 「锚点被改了」不许静默当作「那一段干干净净」）。
+    private static func sourceRegion(in text: String, from start: String, to end: String) -> String {
+        guard let startRange = text.range(of: start),
+              let endRange = text.range(of: end, range: startRange.upperBound..<text.endIndex) else {
+            return ""
+        }
+        return String(text[startRange.upperBound..<endRange.lowerBound])
     }
 
     // MARK: - 像素判读
