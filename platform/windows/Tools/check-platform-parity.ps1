@@ -21,6 +21,10 @@
 # 的 `Mandatory` 是**逐元素**校验，真文件里一行空行即抛；取不到内容（件不在盘上 / 0 行）必须**判红并点名**，
 # 不许空跑通过（假绿）也不许崩。自测例只增不减（入口可发现性 3+1 ⇒ 4+1）。
 #
+# 第五道判据（S-9a，2026-10-07 扩条）：**PTY 隔离** —— 用成熟 crate 起真交互式 shell 的同时，
+# 把 PTY 实现收在**单一模块** `App/src-tauri/src/pty.rs` 里（`portable-pty` 这个 crate 名只许在那里出现，
+# 其余 `.rs` 只许经 `pty::` 接口调用；漏出去即判红并点名 `文件:行号`）。**本判据只扩条，未放宽既有四条。**
+#
 # 退出码：0 = 通过 / 1 = 判红 / 2 = 跳过
 
 param(
@@ -484,13 +488,135 @@ function Invoke-DoyahEntryPointLivenessSelfTest {
   return 0
 }
 
+# ── 判据本体（第五条）：PTY 隔离（S-9a，2026-10-07）────────────────────────────────
+#
+# 由头：前门裁决 `T-20261007-031` 走 A —— **用成熟 crate 起真交互式 shell**，且实现收在
+# **单一模块**里。理由：PTY 是平台相关面里最容易换实现的一段（本侧手写 `CreatePseudoConsole`
+# / `STARTUPINFOEXW` 四轮实测未通、已整段回退），收在一处则**日后换库 = 换一个文件**，
+# 命令层与前端一行不动；同时这条是可以按文本判死的。
+#
+# 一条口径（缺一即判红，逐条点名 `文件:行号`；crate 名归一 `-` 与 `_`）：
+#   PTY crate 名（`portable-pty` / `portable_pty`）**只许**在 `App/src-tauri/src/pty.rs` 出现；
+#   其它 `.rs` 文件里出现 = 实现漏出去了 ⇒ 判红并点名。
+#   另：`pty.rs` 必须在盘上且**真的引了这个 crate** ——
+#   空文件 / 空壳不许当「实现」（空跑通过 = 假绿）。**本判据只扩条，未放宽既有四条。**
+function Get-DoyahPtyIsolationVerdict {
+  param([Parameter(Mandatory = $true)][string]$AppTauriDir)
+
+  $reasons = New-Object System.Collections.ArrayList
+  $implPath = Join-Path (Join-Path $AppTauriDir 'src') 'pty.rs'
+
+  # ① 实现模块在盘上、且真的引了 PTY crate（空壳不算实现）
+  if (-not (Test-Path $implPath)) {
+    [void]$reasons.Add('PTY 实现模块不在盘上：App/src-tauri/src/pty.rs（PTY 代码的唯一落点）')
+  } else {
+    $implText = Read-DoyahTextFile -Path $implPath
+    if ([string]::IsNullOrWhiteSpace($implText) -or ($implText -notmatch 'portable[-_]pty')) {
+      [void]$reasons.Add('App/src-tauri/src/pty.rs 里没有引 PTY crate（portable-pty）—— 空壳不算实现（空跑不许通过）')
+    }
+  }
+
+  if (-not (Test-Path $AppTauriDir)) {
+    [void]$reasons.Add('表示层源目录不在盘上：App/src-tauri')
+    return $reasons
+  }
+
+  # ② crate 名只许在 pty.rs：其它 .rs 里出现即判红并点名
+  $rsFiles = @(Get-ChildItem -Path $AppTauriDir -Filter '*.rs' -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -ne $implPath })
+  foreach ($file in $rsFiles) {
+    $text = Read-DoyahTextFile -Path $file.FullName
+    if ([string]::IsNullOrWhiteSpace($text)) { continue }
+    $lines = @($text -split "`n")
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+      if ($lines[$i] -match 'portable[-_]pty') {
+        $rel = $file.FullName.Substring($AppTauriDir.Length).TrimStart([char[]]@('\', '/'))
+        [void]$reasons.Add(('PTY 实现漏到了别的文件：{0}:{1} 直接引了 PTY crate —— 其它文件只许经 pty:: 接口调用' -f $rel, ($i + 1)))
+      }
+    }
+  }
+
+  return $reasons
+}
+
+# ── 判据自测（固定夹具，**全在临时目录里**，盘上一个字节不动）───────────────────────────
+#
+# 负例 4 / 正对照 1：每条负例都在证「判据真的抓得到它声称抓的东西」，正对照证它**不误伤**。
+function Invoke-DoyahPtyIsolationSelfTest {
+  $ptyOk = @(
+    'use portable_pty::{native_pty_system, CommandBuilder, PtySize};',
+    'pub fn open() -> Result<u64, String> { Ok(1) }'
+  ) -join "`n"
+  $ptyShellOnly = ''
+  $consumerOk = @(
+    'pub mod pty;',
+    'fn terminal_open() { let _ = pty::open("cmd.exe", &[], None, 80, 24); }'
+  ) -join "`n"
+  $consumerLeak = @(
+    'use portable_pty::CommandBuilder;',
+    'pub fn db_query() {}'
+  ) -join "`n"
+  $libLeak = @(
+    'pub mod pty;',
+    'fn terminal_open() { let _ = portable_pty::native_pty_system(); }'
+  ) -join "`n"
+
+  $cases = @(
+    @{ Name = '正对照·PTY 只在 pty.rs、其余文件只走 pty:: 接口'; Pty = $ptyOk; Query = $consumerOk; Lib = $consumerOk; WantReasons = $false; MustMention = '' },
+    @{ Name = '负例·query.rs 里直接 use portable_pty::…'; Pty = $ptyOk; Query = $consumerLeak; Lib = $consumerOk; WantReasons = $true; MustMention = 'query.rs:' },
+    @{ Name = '负例·lib.rs 里出现 PTY crate 名'; Pty = $ptyOk; Query = $consumerOk; Lib = $libLeak; WantReasons = $true; MustMention = 'lib.rs:' },
+    @{ Name = '负例·pty.rs 不在盘上'; Pty = $null; Query = $consumerOk; Lib = $consumerOk; WantReasons = $true; MustMention = 'pty.rs' },
+    @{ Name = '负例·pty.rs 在盘上但没引 crate（空壳假绿）'; Pty = $ptyShellOnly; Query = $consumerOk; Lib = $consumerOk; WantReasons = $true; MustMention = 'pty.rs' }
+  )
+
+  $failed = 0
+  $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('doyah-pty-isolation-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+  try {
+    foreach ($case in $cases) {
+      $tauriDir = Join-Path $tmpRoot ([guid]::NewGuid().ToString('N').Substring(0, 8))
+      $src = Join-Path $tauriDir 'src'
+      New-Item -ItemType Directory -Path $src -Force | Out-Null
+      if ($null -ne $case.Pty) {
+        [System.IO.File]::WriteAllText((Join-Path $src 'pty.rs'), $case.Pty, [System.Text.UTF8Encoding]::new($false))
+      }
+      [System.IO.File]::WriteAllText((Join-Path $src 'query.rs'), $case.Query, [System.Text.UTF8Encoding]::new($false))
+      [System.IO.File]::WriteAllText((Join-Path $src 'lib.rs'), $case.Lib, [System.Text.UTF8Encoding]::new($false))
+
+      $reasons = @(Get-DoyahPtyIsolationVerdict -AppTauriDir $tauriDir)
+      $has = ($reasons.Count -gt 0)
+      if ($has -ne $case.WantReasons) {
+        Write-DoyahFail (('{0}：期望「{1}」，实际判红数组 = [{2}]' -f $case.Name, $(if ($case.WantReasons) { '有理由' } else { '无理由' }), ($reasons -join ' / ')))
+        $failed += 1
+        continue
+      }
+      if ($case.WantReasons -and $case.MustMention) {
+        $joined = ($reasons -join ' / ')
+        if ($joined -notmatch [regex]::Escape($case.MustMention)) {
+          Write-DoyahFail (('{0}：判红理由里没点名「{1}」（实际：{2}）' -f $case.Name, $case.MustMention, $joined))
+          $failed += 1
+          continue
+        }
+      }
+      Write-Host ('    ✅ {0}' -f $case.Name)
+    }
+  }
+  finally {
+    if (Test-Path $tmpRoot) { Remove-Item -Path $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue }
+  }
+  $total = $cases.Count
+  Write-Host ('    判据自测：{0}/{1}' -f ($total - $failed), $total)
+  if ($failed -gt 0) { return 1 }
+  return 0
+}
+
 if ($SelfTest) {
-  Write-Host '== ⑤ 平台等价矩阵 · 判据自测（负例 4 / 正对照 2 + 连接面形态 负例 4 / 正对照 1 + 入口可发现性 负例 4 / 正对照 1 = 16 例）'
-  Write-Host '   例数只增不减：W-A-1 之前为 11 例（4+2 + 4+1），W-A-1 加 4 例（入口可发现性 3+1）⇒ 15 例；W-A-1b 再加 1 例（入口可发现性 4+1，补「被读的件挪走 ⇒ 判红」）⇒ 16 例。'
+  Write-Host '== ⑤ 平台等价矩阵 · 判据自测（负例 4 / 正对照 2 + 连接面形态 负例 4 / 正对照 1 + 入口可发现性 负例 4 / 正对照 1 + PTY 隔离 负例 4 / 正对照 1 = 21 例）'
+  Write-Host '   例数只增不减：W-A-1 之前为 11 例（4+2 + 4+1），W-A-1 加 4 例（入口可发现性 3+1）⇒ 15 例；W-A-1b 再加 1 例（入口可发现性 4+1，补「被读的件挪走 ⇒ 判红」）⇒ 16 例；S-9a 再加 5 例（PTY 隔离 负例 4 / 正对照 1）⇒ 21 例。'
   $rc = 0
   if ((Invoke-DoyahParitySelfTest) -ne 0) { $rc = 1 }
   if ((Invoke-DoyahConnectionSurfaceSelfTest) -ne 0) { $rc = 1 }
   if ((Invoke-DoyahEntryPointLivenessSelfTest) -ne 0) { $rc = 1 }
+  if ((Invoke-DoyahPtyIsolationSelfTest) -ne 0) { $rc = 1 }
   exit $rc
 }
 
@@ -596,6 +722,23 @@ foreach ($reason in $entryReasons) {
 }
 if ($entryReasons.Count -eq 0) {
   Write-DoyahPass "入口可发现性如实：Home「打开文件…」真的调起系统选择器 · 命令「打开工作区文件夹」真的调起系统文件夹选择器 · 选择器唯一调用点 shell/dialogs.ts"
+}
+
+# ── 第五道：PTY 隔离（S-9a：PTY crate 名只许在 App/src-tauri/src/pty.rs）────────────────
+Write-Host "  ── PTY 隔离自测（固定夹具，全部在临时目录里；负例 4 / 正对照 1）"
+if ((Invoke-DoyahPtyIsolationSelfTest) -ne 0) {
+  Write-DoyahFail "PTY 隔离判据自测未通过 ⇒ 本判据自己的证据不成立"
+  $failed = $true
+}
+
+$appTauriDir = Join-Path $RepoRoot 'platform\windows\App\src-tauri'
+$ptyReasons = @(Get-DoyahPtyIsolationVerdict -AppTauriDir $appTauriDir)
+foreach ($reason in $ptyReasons) {
+  Write-DoyahFail $reason
+  $failed = $true
+}
+if ($ptyReasons.Count -eq 0) {
+  Write-DoyahPass "PTY 隔离如实：PTY crate 名只出现在 App/src-tauri/src/pty.rs · 其余 .rs 只经 pty:: 接口调用"
 }
 
 if ($failed) {

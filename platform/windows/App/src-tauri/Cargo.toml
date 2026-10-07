@@ -31,6 +31,14 @@ tauri-plugin-dialog = "2"
 # PostgreSQL 驱动（P-* 选型：纯 Rust 实现，不引 libpq / 客户端库 ⇒ 分发面小、跨平台一致）。
 # **驱动只在这一层**：领域层保持零驱动（见 platform/windows/Db/Cargo.toml 的边界注记）。
 tokio-postgres = { version = "0.7" }
+# 内置终端的 PTY（W-C 底部终端 / 段 2.7）：用成熟 crate 起真交互式 shell。
+# 选型见前门裁决 `T-20261007-031`（走 A）；许可 = **MIT**（wezterm 出品 Wez Furlong，
+# 对照 crate 自带的 `Cargo.toml` / `LICENSE.md` 实测 —— 裁决与卡面记的「BSD-2」与实测不符，
+# 已按实测登记进 `THIRD-PARTY-NOTICES.md`）。
+# **PTY 代码只许落在 `src/pty.rs` 这一个模块**（单一隔离开关，日后可整体替换）；
+# 其它文件只许经 `pty::` 接口调用，不许直接 `use portable_pty::…`（由
+# `Tools/check-platform-parity.ps1` 第五道「PTY 隔离」判据把这条机械化）。
+portable-pty = "0.9"
 # 结果集要**流式取**（收够上限就停），所以要流工具；版本与 tokio-postgres 自己的依赖同族
 futures-util = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

@@ -108,6 +108,10 @@ describe('ipc', () => {
       'workspace_replace_apply',
       'workspace_format_tools',
       'workspace_format_content',
+      'terminal_open',
+      'terminal_write',
+      'terminal_read',
+      'terminal_close',
     ])
   })
 

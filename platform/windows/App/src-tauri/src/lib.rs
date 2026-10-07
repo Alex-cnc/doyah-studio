@@ -8,6 +8,10 @@ pub mod connections;
 pub mod format_tool;
 pub mod fs;
 pub mod postgres;
+/// 内置终端的 PTY 层（W-C 底部终端 · S-9a）。**PTY 全部代码只在这个模块里**；
+/// 本文件与其它文件只许经 `pty::` 接口调用，不许直接依赖 PTY crate（判据见
+/// `Tools/check-platform-parity.ps1` 第五道「PTY 隔离」）。
+pub mod pty;
 
 mod query;
 pub mod search;
@@ -1518,6 +1522,48 @@ fn workspace_format_content(
     ))
 }
 
+// ── 内置终端（W-C 底部终端 · S-9a）：四条命令，**只经 `pty::` 接口**，本文件不碰 PTY 库 ──
+
+/// 起一个真交互式终端会话，返回会话 id。
+///
+/// `program` 缺省即系统 shell（`%COMSPEC%`）；`args` 为空 = 交互式，给了 = 跑一次性命令。
+#[tauri::command]
+fn terminal_open(
+    program: Option<String>,
+    args: Option<Vec<String>>,
+    cwd: Option<String>,
+    cols: Option<u16>,
+    rows: Option<u16>,
+) -> Result<u64, String> {
+    let program = program.unwrap_or_else(pty::default_shell);
+    let args = args.unwrap_or_default();
+    pty::open(
+        &program,
+        &args,
+        cwd.as_deref(),
+        cols.unwrap_or(80),
+        rows.unwrap_or(24),
+    )
+}
+
+/// 往终端会话写（用户按键 / 粘贴）。
+#[tauri::command]
+fn terminal_write(id: u64, data: String) -> Result<(), String> {
+    pty::write(id, &data)
+}
+
+/// 读终端输出（最多等 `timeout_ms`），带「是否已结束」与退出码。
+#[tauri::command]
+fn terminal_read(id: u64, timeout_ms: Option<u64>) -> Result<pty::PtyChunk, String> {
+    pty::read(id, timeout_ms.unwrap_or(50))
+}
+
+/// 关闭终端会话。
+#[tauri::command]
+fn terminal_close(id: u64) -> Result<(), String> {
+    pty::close(id)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1608,7 +1654,11 @@ pub fn run() {
             workspace_replace_preview,
             workspace_replace_apply,
             workspace_format_tools,
-            workspace_format_content
+            workspace_format_content,
+            terminal_open,
+            terminal_write,
+            terminal_read,
+            terminal_close
         ])
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");

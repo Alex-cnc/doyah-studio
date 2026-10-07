@@ -139,6 +139,13 @@ export const COMMANDS = {
   // 代码格式化（2.6：外部优先，没有则内置并如实说明）
   workspaceFormatTools: 'workspace_format_tools',
   workspaceFormatContent: 'workspace_format_content',
+  // 内置终端（W-C 底部终端 · 2.7 · S-9a）：起会话 / 写入 / 读输出 / 关闭。
+  // 命令名的单一出处仍在这里 —— 与 lib.rs 的 generate_handler![] 双向一致，
+  // 界面的接线（谁调用、怎么显示）归 S-9b，本片只登记这四条名字。
+  terminalOpen: 'terminal_open',
+  terminalWrite: 'terminal_write',
+  terminalRead: 'terminal_read',
+  terminalClose: 'terminal_close',
 } as const
 
 export interface AppInfo {
