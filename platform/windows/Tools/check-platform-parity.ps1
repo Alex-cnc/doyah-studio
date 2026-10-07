@@ -17,6 +17,10 @@
 # 前门单 `T-20261007-015` 一 裁决为真缺陷）；选择器只许有**一处调用点** `App/src/shell/dialogs.ts`。
 # **本判据只扩条，未放宽既有三条。**
 #
+# W-A-1b 补正（2026-10-07）：判据本体**不许在真仓库上抛异常** —— 取函数的 `Lines` 参数对 `[string[]]`
+# 的 `Mandatory` 是**逐元素**校验，真文件里一行空行即抛；取不到内容（件不在盘上 / 0 行）必须**判红并点名**，
+# 不许空跑通过（假绿）也不许崩。自测例只增不减（入口可发现性 3+1 ⇒ 4+1）。
+#
 # 退出码：0 = 通过 / 1 = 判红 / 2 = 跳过
 
 param(
@@ -284,11 +288,16 @@ $EntryFolderPickerCall = 'pickFolder('
 $EntryFolderCommandId = 'workspace.openFolder'
 
 # 取一个**顶层函数**的正文（从函数行到下一个顶格 `}`）。找不到返回 $null。主路径与自测**读同一份**。
+#
+# 被读的件是**真文件的行数组**：1846 行里只要有**一行空行**，`Mandatory` 对 `[string[]]` 的隐式
+# 「非空」校验就会**逐元素**报 `ParameterArgumentValidationErrorEmptyStringNotAllowed`
+# ⇒ 判据本体在真仓库上抛异常（第 567 行实测）。故此处显式放行空串 / 空集合，空集合走「找不到」的判红面。
 function Get-DoyahTopLevelFunctionBody {
   param(
-    [Parameter(Mandatory = $true)][string[]]$Lines,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][AllowEmptyCollection()][string[]]$Lines,
     [Parameter(Mandatory = $true)][string]$Name
   )
+  if ($null -eq $Lines -or @($Lines).Count -eq 0) { return $null }
   $pattern = '^\s*(async\s+)?function\s+' + [regex]::Escape($Name) + '\s*\('
   $start = -1
   for ($i = 0; $i -lt $Lines.Count; $i++) {
@@ -329,12 +338,18 @@ function Get-DoyahEntryPointLivenessVerdict {
   if (-not (Test-Path $viewPath)) {
     [void]$reasons.Add('工作区视图不在盘上：views/WorkspaceView.vue')
   } else {
-    $viewLines = (Read-DoyahTextFile -Path $viewPath) -split "`n"
-    $body = Get-DoyahTopLevelFunctionBody -Lines $viewLines -Name $EntryHomeFn
-    if (-not $body) {
-      [void]$reasons.Add(('views/WorkspaceView.vue 里找不到 {0}()（Home「打开文件…」的落点）' -f $EntryHomeFn))
-    } elseif (-not $body.Text.Contains($EntryFilePickerCall)) {
-      [void]$reasons.Add(('入口点了没反应：Home「打开文件…」只写提示、没调起系统选择器 —— views/WorkspaceView.vue:{0} 的 {1}() 里应调用 {2}' -f ($body.Start + 1), $EntryHomeFn, $EntryFilePickerCall))
+    $viewText = Read-DoyahTextFile -Path $viewPath
+    if ([string]::IsNullOrWhiteSpace($viewText)) {
+      # 取不到内容（0 行）= 空跑面：**判红并点名** —— 不许空跑通过（假绿），也不许崩。
+      [void]$reasons.Add('views/WorkspaceView.vue:1 取不到内容（0 行）⇒ 判红（空跑通过 = 假绿，本判据不许）')
+    } else {
+      $viewLines = @($viewText -split "`n")
+      $body = Get-DoyahTopLevelFunctionBody -Lines $viewLines -Name $EntryHomeFn
+      if (-not $body) {
+        [void]$reasons.Add(('views/WorkspaceView.vue 里找不到 {0}()（Home「打开文件…」的落点）' -f $EntryHomeFn))
+      } elseif (-not $body.Text.Contains($EntryFilePickerCall)) {
+        [void]$reasons.Add(('入口点了没反应：Home「打开文件…」只写提示、没调起系统选择器 —— views/WorkspaceView.vue:{0} 的 {1}() 里应调用 {2}' -f ($body.Start + 1), $EntryHomeFn, $EntryFilePickerCall))
+      }
     }
   }
 
@@ -343,20 +358,25 @@ function Get-DoyahEntryPointLivenessVerdict {
     [void]$reasons.Add('外壳分派器不在盘上：App.vue')
   } else {
     $appText = Read-DoyahTextFile -Path $appPath
-    $appLines = $appText -split "`n"
-    $casePattern = "case\s+'" + [regex]::Escape($EntryFolderCommandId) + "'"
-    $caseLine = -1
-    for ($i = 0; $i -lt $appLines.Count; $i++) {
-      if ($appLines[$i] -match $casePattern) { $caseLine = $i + 1; break }
-    }
-    if ($caseLine -lt 0) {
-      $defaultLine = 1
+    if ([string]::IsNullOrWhiteSpace($appText)) {
+      # 取不到内容（0 行）= 空跑面：**判红并点名** —— 不许空跑通过（假绿），也不许崩。
+      [void]$reasons.Add('App.vue:1 取不到内容（0 行）⇒ 判红（空跑通过 = 假绿，本判据不许）')
+    } else {
+      $appLines = @($appText -split "`n")
+      $casePattern = "case\s+'" + [regex]::Escape($EntryFolderCommandId) + "'"
+      $caseLine = -1
       for ($i = 0; $i -lt $appLines.Count; $i++) {
-        if ($appLines[$i] -match '^\s*default\s*:') { $defaultLine = $i + 1; break }
+        if ($appLines[$i] -match $casePattern) { $caseLine = $i + 1; break }
       }
-      [void]$reasons.Add(('入口点了没反应：命令「{0}」没有分派分支、落到了默认分支（只回一句提示）—— App.vue:{1}' -f $EntryFolderCommandId, $defaultLine))
-    } elseif ($appText -notmatch [regex]::Escape($EntryFolderPickerCall)) {
-      [void]$reasons.Add(('命令「{0}」没有真的调起系统文件夹选择器（缺 {1}）—— App.vue:{2}' -f $EntryFolderCommandId, $EntryFolderPickerCall, $caseLine))
+      if ($caseLine -lt 0) {
+        $defaultLine = 1
+        for ($i = 0; $i -lt $appLines.Count; $i++) {
+          if ($appLines[$i] -match '^\s*default\s*:') { $defaultLine = $i + 1; break }
+        }
+        [void]$reasons.Add(('入口点了没反应：命令「{0}」没有分派分支、落到了默认分支（只回一句提示）—— App.vue:{1}' -f $EntryFolderCommandId, $defaultLine))
+      } elseif ($appText -notmatch [regex]::Escape($EntryFolderPickerCall)) {
+        [void]$reasons.Add(('命令「{0}」没有真的调起系统文件夹选择器（缺 {1}）—— App.vue:{2}' -f $EntryFolderCommandId, $EntryFolderPickerCall, $caseLine))
+      }
     }
   }
 
@@ -417,7 +437,8 @@ function Invoke-DoyahEntryPointLivenessSelfTest {
     @{ Name = '正对照·两处入口都真的调起系统选择器'; View = $viewOk; App = $appOk; Dialogs = $dialogsOk; WantReasons = $false; MustMention = '' },
     @{ Name = '负例·Home「打开文件…」只写提示（没调起选择器）'; View = $viewHintOnly; App = $appOk; Dialogs = $dialogsOk; WantReasons = $true; MustMention = 'WorkspaceView.vue:' },
     @{ Name = '负例·命令「打开工作区文件夹」落到默认分支（只回一句提示）'; View = $viewOk; App = $appDefaultOnly; Dialogs = $dialogsOk; WantReasons = $true; MustMention = 'App.vue:' },
-    @{ Name = '负例·系统选择器模块不在盘上'; View = $viewOk; App = $appOk; Dialogs = $null; WantReasons = $true; MustMention = 'dialogs.ts' }
+    @{ Name = '负例·系统选择器模块不在盘上'; View = $viewOk; App = $appOk; Dialogs = $null; WantReasons = $true; MustMention = 'dialogs.ts' },
+    @{ Name = '负例·被读的件挪走（工作区视图不在盘上）'; View = $null; App = $appOk; Dialogs = $dialogsOk; WantReasons = $true; MustMention = 'WorkspaceView.vue' }
   )
 
   $failed = 0
@@ -427,8 +448,12 @@ function Invoke-DoyahEntryPointLivenessSelfTest {
       $src = Join-Path $tmpRoot ([guid]::NewGuid().ToString('N').Substring(0, 8))
       New-Item -ItemType Directory -Path (Join-Path $src 'views') -Force | Out-Null
       New-Item -ItemType Directory -Path (Join-Path $src 'shell') -Force | Out-Null
-      [System.IO.File]::WriteAllText((Join-Path $src 'views/WorkspaceView.vue'), $case.View, [System.Text.UTF8Encoding]::new($false))
-      [System.IO.File]::WriteAllText((Join-Path $src 'App.vue'), $case.App, [System.Text.UTF8Encoding]::new($false))
+      if ($case.View) {
+        [System.IO.File]::WriteAllText((Join-Path $src 'views/WorkspaceView.vue'), $case.View, [System.Text.UTF8Encoding]::new($false))
+      }
+      if ($case.App) {
+        [System.IO.File]::WriteAllText((Join-Path $src 'App.vue'), $case.App, [System.Text.UTF8Encoding]::new($false))
+      }
       if ($case.Dialogs) {
         [System.IO.File]::WriteAllText((Join-Path $src 'shell/dialogs.ts'), $case.Dialogs, [System.Text.UTF8Encoding]::new($false))
       }
@@ -460,8 +485,8 @@ function Invoke-DoyahEntryPointLivenessSelfTest {
 }
 
 if ($SelfTest) {
-  Write-Host '== ⑤ 平台等价矩阵 · 判据自测（负例 4 / 正对照 2 + 连接面形态 负例 4 / 正对照 1 + 入口可发现性 负例 3 / 正对照 1 = 15 例）'
-  Write-Host '   例数只增不减：本片 W-A-1 之前为 11 例（4+2 + 4+1），本片加 4 例（入口可发现性 3+1）⇒ 15 例。'
+  Write-Host '== ⑤ 平台等价矩阵 · 判据自测（负例 4 / 正对照 2 + 连接面形态 负例 4 / 正对照 1 + 入口可发现性 负例 4 / 正对照 1 = 16 例）'
+  Write-Host '   例数只增不减：W-A-1 之前为 11 例（4+2 + 4+1），W-A-1 加 4 例（入口可发现性 3+1）⇒ 15 例；W-A-1b 再加 1 例（入口可发现性 4+1，补「被读的件挪走 ⇒ 判红」）⇒ 16 例。'
   $rc = 0
   if ((Invoke-DoyahParitySelfTest) -ne 0) { $rc = 1 }
   if ((Invoke-DoyahConnectionSurfaceSelfTest) -ne 0) { $rc = 1 }
@@ -558,7 +583,7 @@ if ($surfaceReasons.Count -eq 0) {
 }
 
 # ── 第四道：入口可发现性（W-A-1：两处入口必须真的调起系统选择器）───────────────────────
-Write-Host "  ── 入口可发现性自测（固定夹具，全部在临时目录里；负例 3 / 正对照 1）"
+Write-Host "  ── 入口可发现性自测（固定夹具，全部在临时目录里；负例 4 / 正对照 1）"
 if ((Invoke-DoyahEntryPointLivenessSelfTest) -ne 0) {
   Write-DoyahFail "入口可发现性判据自测未通过 ⇒ 本判据自己的证据不成立"
   $failed = $true
