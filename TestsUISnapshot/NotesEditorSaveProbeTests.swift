@@ -24,10 +24,15 @@ import DoyahCore
 ///
 /// 前置（防判错画面）：三态的谓词必须是 `false` / `true` / `false`；每一遍都要有内容
 /// （内容占比下限，防「渲染成空白」的假绿）。
-///   ① **空着灰**：底部按钮那一带（y ≥ 1000，见下）**最暗墨水亮度 ≥ 80**（实测 **91**）；
+///   ① **空着灰**：工具条那一带（**顶部** y ∈ [0, 100)，见下）**最暗墨水亮度 ≥ 80**（实测 **91**）；
 ///   ② **有内容亮**：填一个字之后，同一带出现深墨水（**≤ 60**，实测 **36**），
-///      且**按钮那一带确实变了**（两态差异像素落在 y ≥ 1000 的 ≥ 2000 个，实测 **5028**）；
+///      且**按钮那一带确实变了**（两态差异像素落在这一带的 ≥ 2000 个，实测 **5028**）；
 ///   ③ **删回灰**：清空之后与空态**逐字节相同**（差异像素 **0**）—— 「删回灰」不是「看着差不多」。
+///
+/// **判定带随片 `N2-3b` 从底带搬到顶带**：人类主人令 `T-20261007-004` 第 4 条把「保存」搬进了
+/// **顶部编辑工具条**（`App/Views/NotesPanel.swift` 的 `NotesEditorToolbar`）⇒ 它不再落在
+/// 底部那一带里。三态断言本身**一字未改**，只重定了量它的那一带 —— 本文件头注释原先就写着
+/// 「判定带与亮度门槛是**按本机实测定的**：换字号 / 换排版会动这条带，届时按实测重定」。
 ///
 /// ## 判不到的（如实登记，别把这条读成「按钮会被点」）
 ///
@@ -66,9 +71,12 @@ final class NotesEditorSaveProbeTests: XCTestCase {
     /// 画的尺寸：与清单里那两张空态图同规格（正文编辑器满宽）。
     private static let size = CGSize(width: 900, height: 560)
 
-    /// 按钮行落在图上哪一带：按本机实测（2× 渲染 ⇒ 1120 px 高，按钮行在 y ≈ 1030…1090）。
-    /// 取 1000 当分界是**留了余量**的：只要按钮还在最后 120 px 里，这条带就成立。
-    private static let buttonBandFromTop = 1000
+    /// 按钮落在图上哪一带：**顶部编辑工具条那一带**（片 `N2-3b` 把它从底带搬上来的）。
+    /// 按本机实测（2× 渲染 ⇒ 1120 px 高）：编辑器内边距 16pt ⇒ 工具条 ≈ 16…48pt ⇒ **32…96px**；
+    /// 它下面那一行（标题框）的顶边在 ~130px 之下 ⇒ 取 [0, 100) 只框住工具条，
+    /// 不碰标题框里那个字（碰上了的话「有内容亮」会被标题里那个字判绿 —— 量的就不是按钮了）。
+    private static let buttonBandFromTop = 0
+    private static let buttonBandToTop = 100
 
     @MainActor
     private func makeHost() -> Host {
@@ -132,10 +140,13 @@ final class NotesEditorSaveProbeTests: XCTestCase {
             "填了字之后按钮那一带**没有**变深（最暗亮度 \(typedBand)，门槛 ≤ 60，实测基准 36）"
                 + " ⇒ 「保存」不会亮（有内容却存不下去）"
         )
-        let buttonCluster = changedPixels(empty, typed, fromTop: Self.buttonBandFromTop)
+        let buttonCluster = changedPixels(
+            empty, typed, fromTop: Self.buttonBandFromTop, toTop: Self.buttonBandToTop
+        )
         XCTAssertGreaterThanOrEqual(
             buttonCluster.count, 2000,
-            "按钮那一带（y ≥ \(Self.buttonBandFromTop)）只变了 \(buttonCluster.count) 个像素"
+            "按钮那一带（y ∈ [\(Self.buttonBandFromTop), \(Self.buttonBandToTop))）只变了"
+                + " \(buttonCluster.count) 个像素"
                 + "（实测基准 5028）⇒ 「亮 / 灰」的变化没落在按钮上，判的是别的东西"
         )
         // 反证方向：变化**不许只**发生在别处（标题输入框那一域另外还有变化，那是我们填进去的那个字）。
@@ -332,18 +343,20 @@ final class NotesEditorSaveProbeTests: XCTestCase {
 
     // MARK: - 像素判读
 
-    /// 两张图在 `y ≥ fromTop` 那一带里**变掉的像素**（含两侧的亮度，供断言消息里报读数）。
+    /// 两张图在 `y ∈ [fromTop, toTop)` 那一带里**变掉的像素**（含两侧的亮度，供断言消息里报读数）。
+    /// `toTop = nil` ⇒ 一直到图底（判「整图变了多少」时用它）。
     ///
     /// 容差 8（RGB 绝对值之和）：抗锯齿与字体光栅化在两遍之间本来就可能有 1~2 的差，
     /// 而「灰 → 深」这种变化是几十上百的量级（实测 118 → 33）。
     private func changedPixels(
-        _ lhs: NSBitmapImageRep, _ rhs: NSBitmapImageRep, fromTop: Int
+        _ lhs: NSBitmapImageRep, _ rhs: NSBitmapImageRep, fromTop: Int, toTop: Int? = nil
     ) -> [(x: Int, y: Int, left: Int, right: Int)] {
         guard let lData = lhs.bitmapData, let rData = rhs.bitmapData else { return [] }
         let lRow = lhs.bytesPerRow, rRow = rhs.bytesPerRow
         let spp = lhs.samplesPerPixel
         var out: [(Int, Int, Int, Int)] = []
-        for y in fromTop..<lhs.pixelsHigh {
+        let end = min(toTop ?? lhs.pixelsHigh, lhs.pixelsHigh)
+        for y in fromTop..<end {
             for x in 0..<lhs.pixelsWide {
                 let li = y * lRow + x * spp
                 let ri = y * rRow + x * spp
@@ -360,13 +373,13 @@ final class NotesEditorSaveProbeTests: XCTestCase {
 
     /// 按钮那一带里**最暗的墨水亮度**（0 = 纯黑，255 = 纯白）。
     ///
-    /// 为什么用「最暗」而不是平均：这一带上除了按钮还有一句灰色的来源提示
-    /// （`L(.notesSourceHint)`），平均会把两者的差摊平；而「灰着 / 亮着」的区别恰恰
-    /// 就在**最深的那一笔**上 —— 减淡的标签画不出深墨水（实测空态 91 / 有内容态 36 —— 2026-09-30 笔记正文补了主题底色后重测，原 34）。
+    /// 为什么用「最暗」而不是平均：这一带（**顶部编辑工具条**，片 `N2-3b` 之后的位置）里
+    /// 除了按钮还有一句灰色的来源提示（`L(.notesSourceHint)`），平均会把两者的差摊平；
+    /// 而「灰着 / 亮着」的区别恰恰就在**最深的那一笔**上 —— 减淡的标签画不出深墨水。
     private func bandDarkest(_ rep: NSBitmapImageRep) -> Int {
         guard let data = rep.bitmapData else { return 255 }
         var darkest = 255
-        for y in Self.buttonBandFromTop..<rep.pixelsHigh {
+        for y in Self.buttonBandFromTop..<min(Self.buttonBandToTop, rep.pixelsHigh) {
             for x in 0..<rep.pixelsWide {
                 let index = y * rep.bytesPerRow + x * rep.samplesPerPixel
                 let value = luminance(

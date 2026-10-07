@@ -8,12 +8,17 @@ import DoyahPlatform
 /// **笔记编辑器的模式**（片 `N2-3a`「单击预览」· 人类主人令 `T-20261007-004` 第三节第 3 条）。
 ///
 /// · `.preview` —— 在列表里**单击**一条 ⇒ 右栏打开这一条**看内容**，**正文只读**；
-/// · `.edit` —— 「新建」与「改」这两个**既有**入口 ⇒ 正文可编辑（语义与本片之前一字未改）。
+/// · `.edit` —— 「新建」/「改」，以及**双击进编辑**（片 `N2-3b`）⇒ 正文可编辑
+///   （「新建」/「改」的语义与本片之前一字未改）。
 ///
 /// **只此一处**判「正文那一块可不可编辑」：视图（`App/Views/NotesPanel.swift` 的
 /// `NotesEditorView`）与判据（`TestsUISnapshot/NotesLayoutProbeTests.swift`）读的是同一个值。
 ///
-/// **本片不含**「双击进编辑」（= `N2-3b`）：本片只把**单击**这一件事从「进编辑」改成「进预览」。
+/// **`N2-3a` 只改了一半**（单击 ⇒ 预览）；**双击进编辑**是片 `N2-3b` 补上的那另一半
+/// （人类主人令 `T-20261007-004` 第 4 条：「双击编辑 + 顶部编辑工具条」）。
+/// 两个双击入口共用同一件事、**不是两套判断**：内容区双击走 `beginEditingCurrentNote()`
+/// （内容已经从预览装好了 ⇒ 只翻模式），列表行双击走既有的 `edit(_:)`（那一刻手上有一条笔记
+/// ⇒ 内容与模式一起给）。
 enum NoteEditorMode: Equatable {
     case preview
     case edit
@@ -463,9 +468,10 @@ final class AppState: ObservableObject {
     @Published var noteEditorTags = ""
     /// **当前是「预览」还是「改」**（片 `N2-3a`「单击预览」；枚举见文件头的 `NoteEditorMode`）。
     ///
-    /// 默认 `.edit` —— 与本片之前一致（没点过任何行时编辑器就是可编辑的）。
-    /// 三个入口改它：`handleNoteRowClick`（单击 ⇒ `.preview`）、`edit(_:)` 与 `beginNewNote()`
-    /// （既有的「改」/「新建」⇒ `.edit`）。
+    /// 默认 `.edit` —— 与 `N2-3a` 之前一致（没点过任何行时编辑器就是可编辑的）。
+    /// **四个入口**改它：`handleNoteRowClick`（单击 ⇒ `.preview`）、`beginEditingCurrentNote`
+    /// （双击**内容区** ⇒ `.edit`；片 `N2-3b`）、`edit(_:)` 与 `beginNewNote()`
+    /// （既有的「改」/「新建」，以及列表行**双击** ⇒ `.edit`）。
     @Published var editorMode: NoteEditorMode = .edit
     private var noteBeingEdited: UUID?
     // MARK: - 待办（队列 `L-100` 界面半第一片 · 清单屏）
@@ -6480,7 +6486,22 @@ final class AppState: ObservableObject {
     func edit(_ note: Note) {
         loadEditorContent(note)
         // 「改」入口（左区顶部那枚铅笔，`NotesPanel.crudEntries`）⇒ 正文可编辑。
-        // 单击进的是**预览**（见 `handleNoteRowClick`）—— 本片只改了单击那一条。
+        // **列表行的双击也走这里**（片 `N2-3b`）：那一刻手上有一条笔记 ⇒ 内容与模式一起给。
+        // 单击进的是**预览**（见 `handleNoteRowClick`）。
+        editorMode = .edit
+    }
+
+    /// **双击进编辑**（片 `N2-3b`「双击编辑」· 人类主人令 `T-20261007-004` 第 4 条）——
+    /// **内容区**（右栏正文那一块）双击走这一条。
+    ///
+    /// 内容此刻**已经在编辑器里**（单击预览 `handleNoteRowClick` 已经把它装好并置了 `.preview`）
+    /// ⇒ 这里**只翻模式**：再装一遍内容不会出错，但会把「谁装的」变成两处，而
+    /// 「正文那一块可不可编辑」这个值的出处必须只有一处（`NoteEditorMode` 头注释同一条纪律）。
+    ///
+    /// 空编辑器（`noteBeingEdited == nil`：没点过任何一条 / 刚 `beginNewNote()` 过）双击没有对象
+    /// ⇒ 什么都不做 —— 而不是把一块空正文切成「可编辑」让用户以为在改某一条。
+    func beginEditingCurrentNote() {
+        guard noteBeingEdited != nil else { return }
         editorMode = .edit
     }
 

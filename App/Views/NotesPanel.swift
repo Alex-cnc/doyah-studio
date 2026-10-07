@@ -151,6 +151,12 @@ struct NotesListView: View {
                         }
                     }
                     .contentShape(Rectangle())
+                    // **双击在前、单击在后**（片 `N2-3b`）：顺序反了的话第一次点击就被单击手势吃掉，
+                    // 双击永远不会到达 —— 这一条在本仓有两处实测（`App/Views/TerminalTabsBar.swift:77`、
+                    // `App/Views/ObjectTreeView.swift:222`），所以两个手势的顺序是**口径**，不是偏好。
+                    //   双击 ⇒ 进编辑（`edit(_:)`：内容 + 模式一起）；
+                    //   单击 ⇒ 进预览（片 `N2-3a`：正文字只读，见 `handleNoteRowClick`）。
+                    .onTapGesture(count: 2) { appState.edit(note) }
                     .onTapGesture { appState.handleNoteRowClick(note, modifiers: .currentEvent) }
                     .draggable(appState.noteDragPayload(for: note))
                     .help(L(NoteSelectionPrompt.dragHintKey))
@@ -649,13 +655,24 @@ struct NotesContainerTreeView: View {
     }
 }
 
-/// 笔记正文（标题 / 标签 / 正文 / 保存 + 新建）。
+/// 笔记正文（**顶部编辑工具条** + 标题 / 标签 / 正文）。
+///
+/// 「保存」不在本视图里 —— 片 `N2-3b` 把它搬进了 `NotesEditorToolbar`（本视图的第一行子视图）；
+/// 「新建」也不在这里（进了顶栏 `NotesAreaView`，见下方注释）。
 struct NotesEditorView: View {
 
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
+            // **顶部编辑工具条**（片 `N2-3b`）：编辑态下，动作住在编辑面**之上**的一条行里
+            // —— 与 SQL 编辑区同一条设计语言（`QueryEditorView` 里 `QueryToolbar` 就画在编辑区之上）。
+            // **只在 `.edit` 出现**：预览态的正文只读，「保存」无处可用（画一枚永远灰着的按钮
+            // 就是 `L-50` 那一课）。进编辑那条路见 `NotePreviewBody` 那一支上的双击。
+            if appState.editorMode == .edit {
+                NotesEditorToolbar()
+                Divider()
+            }
             // **栏头搬走了**（队列 `L-184` 三栏重排）：「笔记」这个标题与条数进了中栏栏头
             // （`NotesListView`），「新建」进了顶栏（`NotesAreaView`）—— 同一个窗口里不许出现
             // 两处「新建」，否则两个按钮的灰 / 亮迟早各有一套判据（`L-50` 的老毛病）。
@@ -686,32 +703,12 @@ struct NotesEditorView: View {
                         RoundedRectangle(cornerRadius: 6)
                             .stroke(Theme.surface(.panel), lineWidth: 1)
                     )
-            }
-            HStack(spacing: Spacing.s) {
-                // **操作入口形态统一**（`N-UI-3`）：图标 + 标题 + 悬停提示（形态基准 =
-                // `App/Views/ObjectTreeToolbar.swift:43-62`）。标题保留 —— 与同一文件里
-                // `N-UI-2` 刚落地的「图标 + 文字」入口同形，也让 `NotesEditorSaveProbeTests`
-                // 那条**按文字排版校准**的像素判据（底部按钮那一带的最暗墨水）继续成立。
-                Button {
-                    Task { await appState.saveNoteFromEditor() }
-                } label: {
-                    Label {
-                        Text(L(.notesSave))
-                    } icon: {
-                        Image(systemName: "square.and.arrow.down")
-                    }
-                    .labelStyle(.titleAndIcon)
-                }
-                .help(L(.notesSave))
-                .keyboardShortcut(.defaultAction)
-                // 空编辑器上不许「可点却静默无反应」（队列 L-50）：判据属性是**唯一出处**，
-                // 与 `saveNoteFromEditor()` 的第一句内容守卫同一条判断（口径 = 灰着）。
-                // 许可那一档故意不灰 —— Pro 档点下去要给「本档不含笔记」那句人话。
-                .disabled(!appState.noteEditorHasContent)
-                Text(L(.notesSourceHint))
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(Theme.text(.secondary))
-                Spacer()
+                    // **双击内容区 ⇒ 进编辑**（片 `N2-3b`；人类主人令 `T-20261007-004` 第 4 条）。
+                    // 双击之前走的是「单击 ⇒ 预览」那一条（`handleNoteRowClick` 已经把这一条
+                    // 装进了编辑器）⇒ 这里**只翻模式**，入口 = `AppState.beginEditingCurrentNote()`。
+                    // 手势只挂**只读这一支**：编辑态那一支是 `TextEditor`，往上挂点击手势会跟
+                    // 正文的选字 / 光标抢事件（`L-50` 同族：手势吃掉正常操作）。
+                    .onTapGesture(count: 2) { appState.beginEditingCurrentNote() }
             }
         }
         .padding(Spacing.l)
@@ -720,6 +717,59 @@ struct NotesEditorView: View {
         // 于是「工作区是科技蓝、笔记是系统色」并存）。
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.surface(.content))
+    }
+}
+
+/// **顶部编辑工具条**（片 `N2-3b`「顶部编辑工具条」· 人类主人令 `T-20261007-004` 第 4 条）。
+///
+/// 三条原话逐条对应：
+///   · 「**双击编辑 + 顶部编辑工具条**」—— 工具条画在编辑面**之上**（`NotesEditorView` 的第一行），
+///     进编辑那条路 = **内容区双击**（手势挂在 `NotePreviewBody` 那一支上）；
+///   · 「**保存进工具条**（参考 SQL 界面）」—— 动作住在工具条里，与 SQL 编辑区同一个位置关系
+///     （`QueryEditorView`：工具条 → 分隔线 → 编辑面）；
+///   · 「**不许放底部**」—— 原先压在底部的那一行 `HStack`（保存 + 来源提示）本片**整段删除**，
+///     全窗口没有第二处「保存」（判据：把 `App/Views/*.swift` 里那两处「保存」的文案键
+///     `grep` 一遍 —— 命中行必须都落在**工具条行**里，底栏同类命中 = 0）。
+///
+/// 两条刻意的口径：
+///   · **只在 `.edit` 出现**（由 `NotesEditorView` 把住）：预览态的正文只读，保存无处可用 ——
+///     画一枚永远灰着的按钮就是 `L-50` 那一课；
+///   · **按钮形态一字未改**（图标 + 标题 + 悬停提示，`N-UI-3`）：标题保留 —— 与同文件里
+///     增删查改那三枚图标入口同族；`TestsUISnapshot/NotesEditorSaveProbeTests` 那条**按文字
+///     排版校准**的像素判据也跟着这一行从底带搬到顶带（该探针头注释已写明「换排版会动这条带，
+///     届时按实测重定」）。
+struct NotesEditorToolbar: View {
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        HStack(spacing: Spacing.s) {
+            Button {
+                Task { await appState.saveNoteFromEditor() }
+            } label: {
+                Label {
+                    Text(L(.notesSave))
+                } icon: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .labelStyle(.titleAndIcon)
+            }
+            .help(L(.notesSave))
+            .keyboardShortcut(.defaultAction)
+            // 空编辑器上不许「可点却静默无反应」（队列 L-50）：判据属性是**唯一出处**，
+            // 与 `saveNoteFromEditor()` 的第一句内容守卫同一条判断（口径 = 灰着）。
+            // 许可那一档故意不灰 —— Pro 档点下去要给「本档不含笔记」那句人话。
+            .disabled(!appState.noteEditorHasContent)
+            .accessibilityIdentifier("notes-editor-save")
+            Text(L(.notesSourceHint))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            Spacer(minLength: Spacing.s)
+        }
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, Spacing.xs)
+        .background(Theme.surface(.panel))
+        .accessibilityIdentifier("notes-editor-toolbar")
     }
 }
 
@@ -1046,6 +1096,11 @@ struct TodoEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
+            // **顶部编辑工具条**（片 `N2-3b`）：与笔记编辑器同一条位置关系 —— 动作住在编辑面**之上**，
+            // 底部不再有任何动作行（人类主人令 `T-20261007-004` 第 4 条：「保存进工具条」「不许放底部」）。
+            // 待办这一屏没有「预览态」，所以这一行**恒在**（笔记面那边只在 `.edit` 出现）。
+            editorToolbar
+            Divider()
             TextField(L(.todoTitlePlaceholder), text: $appState.todoEditorTitle)
                 .textFieldStyle(.roundedBorder)
             Toggle(isOn: $appState.todoEditorHasDue) {
@@ -1083,45 +1138,59 @@ struct TodoEditorView: View {
                let todo = appState.todos.first(where: { $0.id == id }) {
                 TodoReminderSection(todo: todo)
             }
-            HStack(spacing: Spacing.s) {
-                // 与笔记正文那枚「保存」同形（`N-UI-3`）：图标 + 标题 + 悬停提示。
-                Button {
-                    Task { await appState.saveTodoFromEditor() }
-                } label: {
-                    Label {
-                        Text(L(.notesSave))
-                    } icon: {
-                        Image(systemName: "square.and.arrow.down")
-                    }
-                    .labelStyle(.titleAndIcon)
-                }
-                .help(L(.notesSave))
-                .keyboardShortcut(.defaultAction)
-                .disabled(!appState.todoEditorHasContent)
-                .accessibilityIdentifier("todo-save")
-                // 「删除」只在这一条**已经在库里**时才画（新建态没有可删的东西 —— 画一枚按不动的按钮
-                // 就是 `L-50` 那一课）。
-                if let id = appState.todoEditingID {
-                    Button(role: .destructive) {
-                        Task { await appState.deleteTodo(id: id) }
-                    } label: {
-                        Label {
-                            Text(L(.todoDelete))
-                        } icon: {
-                            Image(systemName: "trash")
-                        }
-                        .labelStyle(.titleAndIcon)
-                    }
-                    .help(L(.todoDelete))
-                    .accessibilityIdentifier("todo-delete")
-                }
-                Spacer()
-            }
         }
         .padding(Spacing.l)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.surface(.content))
         .accessibilityIdentifier("todo-editor")
+    }
+
+    /// **顶部编辑工具条**（片 `N2-3b` 的「工具条行」）：保存 / 删除。
+    ///
+    /// 本片之前这两枚压在编辑器**最后一行**；人类主人令 `T-20261007-004` 第 4 条要的是
+    /// 「**保存进工具条**（参考 SQL 界面）」「**不许放底部**」—— 所以整行搬到 `TodoEditorView`
+    /// 的第一行（与 `QueryToolbar` 同一个位置关系），底部不再有第二处动作入口。
+    /// 两枚按钮的形态、文案、灰 / 亮判据（`todoEditorHasContent`）、`accessibilityIdentifier`
+    /// **一字未改**。
+    private var editorToolbar: some View {
+        HStack(spacing: Spacing.s) {
+            // 与笔记正文那枚「保存」同形（`N-UI-3`）：图标 + 标题 + 悬停提示。
+            Button {
+                Task { await appState.saveTodoFromEditor() }
+            } label: {
+                Label {
+                    Text(L(.notesSave))
+                } icon: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .labelStyle(.titleAndIcon)
+            }
+            .help(L(.notesSave))
+            .keyboardShortcut(.defaultAction)
+            .disabled(!appState.todoEditorHasContent)
+            .accessibilityIdentifier("todo-save")
+            // 「删除」只在这一条**已经在库里**时才画（新建态没有可删的东西 —— 画一枚按不动的按钮
+            // 就是 `L-50` 那一课）。
+            if let id = appState.todoEditingID {
+                Button(role: .destructive) {
+                    Task { await appState.deleteTodo(id: id) }
+                } label: {
+                    Label {
+                        Text(L(.todoDelete))
+                    } icon: {
+                        Image(systemName: "trash")
+                    }
+                    .labelStyle(.titleAndIcon)
+                }
+                .help(L(.todoDelete))
+                .accessibilityIdentifier("todo-delete")
+            }
+            Spacer(minLength: Spacing.s)
+        }
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, Spacing.xs)
+        .background(Theme.surface(.panel))
+        .accessibilityIdentifier("todo-editor-toolbar")
     }
 }
 
