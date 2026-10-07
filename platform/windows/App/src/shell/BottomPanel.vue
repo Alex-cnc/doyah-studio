@@ -4,10 +4,12 @@
   图里有四个页签：**问题 / 输出 / 终端 / 调试控制台**。本版的处理：
   - **输出** 与 **问题**：真能收东西 —— 由外层（数据库视图 / 工作区视图）通过 `entries` 喂进来；
     每条带级别（普通 / 警告 / 出错）与时刻。
-  - **终端**（2.7 段 · 第二片 S-9b）：**接真会话** —— 进入页签按需起一个会话，键入走
+  - **终端**（2.7 段 · 第二片 S-9b；第四片 S-9d 薄壳化）：**接真会话** —— 进入页签按需起一个会话，键入走
     `terminalWrite`、输出靠 `terminalRead` 循环取回、页签关 / 组件卸载走 `terminalClose`。
-    **会话页签条**支持新建 / 切换 / 关闭，**每个页签一条独立会话**。纯逻辑（回话 `ESC[6n` /
-    字节不丢 / 会话状态）在 `./terminal.ts`，本组件只做接线。
+    **会话页签条**支持新建 / 切换 / 关闭，**每个页签一条独立会话**。渲染源 = Rust 桥接层给的
+    `chunk.screen`（领域层屏幕模型投影）；**设备查询（`ESC[6n`）回话已归 Rust 桥接层单点**，
+    前端不再扫查询、不再回话（纯逻辑在 `./terminal.ts`，本组件只做接线）。
+    本片 `terminalWrite` 只余**键盘输入**一处调用。
   - **调试控制台**：本版没有调试器，如实标注「未开工」（点进去看到的是一句说明，不放假界面）。
 
   为什么早前把「未开工」也留在面板里：图的骨架里这个面板是常驻的，**留格子比留空白更诚实**；
@@ -127,7 +129,7 @@ async function openSession(): Promise<void> {
   }
 }
 
-/** 读循环：一轮一轮把字节取回来喂给纯逻辑，顺带把 `ESC[6n` 的回话写回去。 */
+/** 读循环：一轮一轮把字节取回来喂给纯逻辑（**只存投影**）。回话归 Rust 桥接层单点，这里不写回。 */
 async function pump(id: number): Promise<void> {
   tokenSeq += 1
   const token = tokenSeq
@@ -146,15 +148,8 @@ async function pump(id: number): Promise<void> {
     if (disposed || runTokens.get(id) !== token) return
     const current = sessionOf(id)
     if (!current) return
-    const { state, reply } = feed(current.state, chunk)
-    current.state = state
-    if (reply) {
-      try {
-        await terminalWrite(id, reply)
-      } catch (error) {
-        lastError.value = describeError(error)
-      }
-    }
+    // 纯逻辑只存领域层投影（渲染源）；`ESC[6n` 回话已归 Rust 桥接层单点，这里**不再写回**。
+    current.state = feed(current.state, chunk)
     if (chunk.eof) return
     await delay(READ_GAP_MS)
   }
@@ -274,7 +269,7 @@ const activeEntries = computed(() => (active.value === 'problems' ? problems.val
           {{ tr('panel.terminal.empty') }}
         </p>
         <template v-else-if="activeState">
-          <pre class="panel__term-out">{{ activeState.buffer }}</pre>
+          <pre class="panel__term-out">{{ activeState.screen?.text }}</pre>
           <p v-if="activeState.eof" class="panel__note">
             {{ tr('panel.terminal.ended', { code: activeState.exitCode ?? '—' }) }}
           </p>

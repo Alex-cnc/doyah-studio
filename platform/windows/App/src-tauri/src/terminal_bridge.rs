@@ -1,5 +1,5 @@
 //! 底部终端「端到端接线」层：把真 PTY 的字节流**经领域层屏幕模型**跑通
-//! （W-C 底部终端 · 第三片 `S-9c`）。
+//! （W-C 底部终端 · 第三片 `S-9c` + 第四片 `S-9d`）。
 //!
 //! ## 这一片补的缺口
 //!
@@ -11,8 +11,10 @@
 //!   ⇒ 屏幕模型由**真 shell 的输出**驱动；
 //! - 一份 `TerminalTabs`（会话 id ↔ 页签 id）：子进程结束 / 会话关闭时 `mark_exited`
 //!   ⇒ 退出态由**真退出码**驱动；
-//! - 读回的投影带 `pending_responses`（`ESC[6n` 之类的设备查询应答）：本片只当**投影与断言**用，
-//!   **不写回 PTY** —— 回话仍归前端（避免与前端 `cursorReport` 双回话；搬迁登记为下一片 `S-9d`）。
+//! - 读回的投影带 `pending_responses`（`ESC[6n` 之类的设备查询应答）：`S-9c` 只当**投影与断言**用、
+//!   不写回 PTY；**`S-9d` 起由本层写回** —— `read` 把这一轮的应答 `mem::take` 出来、逐条写回 PTY、
+//!   **消费后清空**（单点回话：同一条查询只回一次，不许每次 `read` 重发）。前端随之**薄壳化**：
+//!   不再扫查询、不再回话（那份 `cursorReport` 已删），渲染源改为本层的 `screen` 投影。
 //!
 //! ## 一条边界（判据在 `Tools/check-platform-parity.ps1` 第五道「PTY 隔离」）
 //!
@@ -58,7 +60,8 @@ pub struct ScreenProjection {
     pub text: String,
     pub cursor: Cursor,
     pub cursor_visible: bool,
-    /// 设备查询应答（如 `ESC[6n` 的 `ESC[1;1R`）—— 本片只投影，不写回 PTY。
+    /// 设备查询应答（如 `ESC[6n` 的 `ESC[1;1R`）—— **本轮消费掉（写回 PTY）的那一批**；
+    /// 消费后从屏幕里清空，故同一条查询的应答**至多出现一次**（`S-9d` 单点回话）。
     pub pending_responses: Vec<String>,
     pub eof: bool,
     pub exit_code: Option<i32>,
@@ -153,6 +156,9 @@ pub fn write(id: u64, data: &str) -> Result<(), String> {
 }
 
 /// 读一个窗口（最多等 `timeout_ms`）：把真字节喂进领域层屏幕模型，返回裸字节 + 屏幕投影。
+///
+/// **单点回话（`S-9d`）**：`feed` 出来的设备查询应答（`ESC[6n` 之类）在**本层** `mem::take` 走、逐条
+/// 写回 `pty::write` —— 前端不再回话，故两边不会同时回（双回话会让 ConPTY 把第二条应答当杂散输入）。
 pub fn read(id: u64, timeout_ms: u64) -> Result<TerminalChunk, String> {
     // 先在锁内取出屏幕与页签 id，**放锁后再阻塞读**（一条慢读不堵别的会话）。
     let (screen, tab_id) = {
@@ -177,10 +183,18 @@ pub fn read(id: u64, timeout_ms: u64) -> Result<TerminalChunk, String> {
         }
     }
 
-    let screen_projection = {
-        let guard = screen.lock().map_err(|_| lock_err("读屏幕投影"))?;
-        project(&guard, chunk.eof, chunk.exit_code)
+    // 取出这一轮的投影 + **消费掉**本轮设备查询应答（消费后清空 ⇒ 同一条查询只回一次）。
+    let (screen_projection, replies) = {
+        let mut guard = screen.lock().map_err(|_| lock_err("读屏幕投影"))?;
+        let replies = std::mem::take(&mut guard.pending_responses);
+        (
+            project(&guard, &replies, chunk.eof, chunk.exit_code),
+            replies,
+        )
     };
+
+    // 单点回话：把这一轮的应答写回 PTY。**失败必须可见**（不许静默吞 —— 与「起不来必须报错」同口径）。
+    write_back_replies(id, &replies)?;
 
     Ok(TerminalChunk {
         data: chunk.data,
@@ -241,8 +255,25 @@ fn feed_into_screen(screen: &Mutex<TerminalScreen>, bytes: &[u8]) -> Result<(), 
     Ok(())
 }
 
+/// 把这一轮的设备查询应答写回 PTY（**单点回话**）；失败一律 `Err`，不静默吞。
+///
+/// **本函数就是「回话」本体**：注入自证（本片 scratch harness）把它暂时改成空实现
+/// ⇒「设备查询恰好回一条」的核心用例必判红（真 shell 收不到回话 ⇒ 按 S-9a 零字节输出）；
+/// 还原 ⇒ 转绿。改点只有本函数体，便于 `finally` 还原后断言工作区 0 脏。
+fn write_back_replies(id: u64, replies: &[String]) -> Result<(), String> {
+    for reply in replies {
+        pty::write(id, reply)?;
+    }
+    Ok(())
+}
+
 /// 把领域层屏幕投影成线上形态（只读既有公开面）。
-fn project(screen: &TerminalScreen, eof: bool, exit_code: Option<i32>) -> ScreenProjection {
+fn project(
+    screen: &TerminalScreen,
+    replies: &[String],
+    eof: bool,
+    exit_code: Option<i32>,
+) -> ScreenProjection {
     let rows: Vec<String> = (0..screen.height()).map(|row| screen.row_text(row)).collect();
     ScreenProjection {
         text: screen.text(),
@@ -252,7 +283,7 @@ fn project(screen: &TerminalScreen, eof: bool, exit_code: Option<i32>) -> Screen
             col: screen.cursor_col,
         },
         cursor_visible: screen.cursor_visible,
-        pending_responses: screen.pending_responses.clone(),
+        pending_responses: replies.to_vec(),
         eof,
         exit_code,
     }

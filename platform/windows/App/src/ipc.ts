@@ -1673,11 +1673,28 @@ function bypassTerminal(action: string) {
   }
 }
 
-/** 一次读取的返回（与 Rust 侧 `pty::PtyChunk` 同形；`exitCode` 拿到才有）。 */
+/** 领域层屏幕模型投影的线上形态（与 Rust 侧 `terminal_bridge::ScreenProjection` 同形）。 */
+export interface TerminalScreenProjection {
+  /** 网格每行的可显示文本。 */
+  rows: string[]
+  /** 整屏文本（各行以 `\n` 相连）—— S-9d 起为前端**渲染源**。 */
+  text: string
+  cursor: { row: number; col: number }
+  cursorVisible: boolean
+  /** 本轮消费（已写回 PTY）的设备查询应答；消费后清空，故同一条至多出现一次。 */
+  pendingResponses: string[]
+  eof: boolean
+  exitCode: number | null
+}
+
+/** 一次读取的返回（与 Rust 侧 `terminal_bridge::TerminalChunk` 同形；`exitCode` 拿到才有）。 */
 export interface TerminalChunk {
+  /** PTY 原始字节（前端不再显示它；保留字段以与线上形态同形）。 */
   data: string
   eof: boolean
   exitCode: number | null
+  /** 领域层屏幕投影（S-9c 起新增字段；S-9d 起为前端渲染源）。浏览器旁路没有真终端 ⇒ `null`。 */
+  screen: TerminalScreenProjection | null
 }
 
 /** 起会话的入参（都可缺省：不给就是系统 shell、80×24）。 */
@@ -1701,9 +1718,14 @@ export function terminalWrite(id: number, data: string): Promise<void> {
   return call(COMMANDS.terminalWrite, { id, data }, () => undefined)
 }
 
-/** 读终端输出（最多等 `timeoutMs`，缺省 50ms），带「是否已结束」与退出码。 */
+/** 读终端输出（最多等 `timeoutMs`，缺省 50ms），带领域层屏幕投影与「是否已结束」与退出码。 */
 export function terminalRead(id: number, timeoutMs = 50): Promise<TerminalChunk> {
-  return call(COMMANDS.terminalRead, { id, timeoutMs }, () => ({ data: '', eof: true, exitCode: null }))
+  return call(COMMANDS.terminalRead, { id, timeoutMs }, () => ({
+    data: '',
+    eof: true,
+    exitCode: null,
+    screen: null,
+  }))
 }
 
 /** 关闭终端会话（子进程 / pty / 两条线程一并收工）。 */
