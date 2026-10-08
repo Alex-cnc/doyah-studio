@@ -7231,6 +7231,44 @@ final class AppState: ObservableObject {
         todoCalendarSelectedDaySections.contains { $0.count > 0 }
     }
 
+    // MARK: - 日历「选中日」那两枚入口（片 `TD-CAL-1` · 派单 `T-20261009-026`）
+
+    /// **① 选中日直接新建**：把新建态摆成「截止 = 该日 09:00」，再交给**既有**的那份编辑器草稿。
+    ///
+    /// 三条口径：
+    ///  ① **不新开写路**：本函数只摆草稿（`beginNewTodo()` 那几格 + 截止那两格），
+    ///     落库仍是编辑器那一条（`saveTodoFromEditor()` → 门面 `upsert`）；
+    ///  ② **日期换算走 Core**（`TodoCalendar.moment`）：本文件不自己拼 `DateComponents` ——
+    ///     与 `calendarDay` / `shift(days:)` 同一条纪律，端侧再拼一份就是第二套「09:00 是哪一刻」；
+    ///  ③ **没选中那天 ⇒ 不预填截止**：日历「不替用户选一天」（`todoCalendarSelectedDay` 头注释），
+    ///     这一支就退化成普通的新建，而不是替他把截止挂到「今天」上。
+    func newTodoOn(selectedDay day: Date?) {
+        beginNewTodo()
+        guard let day,
+              let due = TodoCalendar.moment(
+                  hour: Self.calendarNewTodoHour, minute: 0, on: day, calendar: .current
+              )
+        else { return }
+        todoEditorHasDue = true
+        todoEditorDueAt = due
+    }
+
+    /// 「选中日直接新建」预填的**钟点**（唯一出处：口径要改只改这一处，别在两处各写一个 9）。
+    private static let calendarNewTodoHour = 9
+
+    /// **② 写笔记**：切到笔记面并新开一篇。
+    ///
+    /// 两件事各走**既有**的单一入口 —— `setNotesModule(.notes)`（切面，内含「切走即存」那一步，
+    /// 所以切面不丢手上这条的字）与 `beginNewNote()`（清空编辑器 + 进 `.edit`）；
+    /// 本函数自己不碰库、也不自己拼编辑器内容。
+    ///
+    /// **为什么不带日期实参**：笔记不像待办那样挂在某一天上（`Note` 没有截止日）——
+    /// 把日期塞进标题 / 正文就是替产品发明一条「日期怎么写进笔记」的口径，而那条口径**没有单据**。
+    func writeNote() {
+        setNotesModule(.notes)
+        beginNewNote()
+    }
+
     /// 打开「改期」框（`FR-NOTE-38` 的「日历上直接完成 / 改期」）。
     /// 没有截止时间的任务也能改期 —— 那就是给它**挂上**一个截止时间。
     func beginReschedule(_ todo: Todo) {

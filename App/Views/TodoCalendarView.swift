@@ -228,6 +228,24 @@ struct TodoCalendarPane: View {
                 Text(selectedDayTitle)
                     .font(Theme.font(.title))
                     .lineLimit(1)
+                Spacer(minLength: Spacing.xs)
+                // **「选中日」那两枚入口**（片 `TD-CAL-1` · 派单 `T-20261009-026`）：
+                //   ① 新建待办 —— 截止预填**选中日 09:00**（摆草稿走 `AppState.newTodoOn(selectedDay:)`）；
+                //   ② 写笔记   —— 切到笔记面并新开一篇（走 `AppState.writeNote()`）。
+                // 形态与这一屏工具条那两枚**同族**（`ToolbarIconButton`：图标 + 悬停提示），
+                // 于是这两枚也不必自己画第二套按钮。两枚都**只在选中了某一天时才画**：
+                // 这一区是「选中日」的地盘，没选那天就没有「哪一天」可预填（日历的口径是
+                // 「不替用户选一天」——`todoCalendarSelectedDay` 头注释），也就不该在这儿凭空给一个日子。
+                if let day = appState.todoCalendarSelectedDay {
+                    ToolbarIconButton(systemName: "plus", help: L(.todoCalendarNewTodo)) {
+                        appState.newTodoOn(selectedDay: day)
+                    }
+                    .accessibilityIdentifier("todo-calendar-new-todo")
+                    ToolbarIconButton(systemName: "square.and.pencil", help: L(.todoCalendarWriteNote)) {
+                        appState.writeNote()
+                    }
+                    .accessibilityIdentifier("todo-calendar-write-note")
+                }
             }
             .padding(.horizontal, Spacing.s)
             if appState.todoCalendarSelectedDayHasTasks {
