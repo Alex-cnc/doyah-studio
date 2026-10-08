@@ -313,8 +313,12 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   **pid 换人**、页签留着；④ 渲染真二级条：页签 1 → 3 时**左半必须变、右四分之一逐像素不变**
 #   （右侧那四枚不被页签挤动）+ 左 / 右各切一张图存盘。
 #   它**真开 shell**（取证专用，`XCTSkip` 到 `DOYAH_UI_SNAPSHOT=1`），跟着本脚本跑两遍。
+# + `TodoCalendarEntriesProbeTests`（`TD-CAL-1` · 派单 `T-20261009-026`：日历「选中日」那两枚入口 ——
+#   新建待办的截止预填该日 09:00 / 「写笔记」新开一篇；正反两面由**渲染记录**判）+ `LunarSubtitleProbeTests`
+#   （`TD-CAL-2` 同派单：月视图格的**副条** —— 每格农历日 + 交节那天那一格的节气）。
+#   两枚都是「写下用例却没接进 `--filter` = 一个都跑不到」，由 `check-result-scroll-ledger.py` ⑤ 抓出后补上。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|TodoCalendarEntriesProbeTests|LunarSubtitleProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

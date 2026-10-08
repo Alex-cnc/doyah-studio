@@ -174,20 +174,49 @@ struct TodoCalendarPane: View {
         }
     }
 
-    /// 一格：日号 + 任务点（逾期那些天画告警色）。选中 / 今天是两种**不同的**标记
-    /// （选中 = 一块底色、今天 = 日号加粗对比），两件事各画各的，不互相顶掉。
+    /// 一格：日号 + **副条**（农历日 / 节气，片 `TD-CAL-2`）+ 任务点（逾期那些天画告警色）。
+    /// 选中 / 今天是两种**不同的**标记（选中 = 一块底色、今天 = 日号加粗对比），
+    /// 两件事各画各的，不互相顶掉。
+    ///
+    /// 副条两行的口径（`FR-NOTE-40` / `FR-NOTE-41`）：
+    ///   · **农历日**每格都有（`LunarCalendar.dayInfo` 一处出；表外回 `nil` ⇒ 那一行不画，
+    ///     不猜一个日子出来）；
+    ///   · **节气**只有**交节那一天**那一行才出现（其余日子不画）—— 于是副条正是
+    ///     「农历日 +（有则）当日节气」。
+    ///
+    /// 为什么拼装在这一层而不在 Core：Core 只出「哪个键」（`LunarDate` 的月名 / 日名键、
+    /// `SolarTerm.key`），句子与拼法都在语言表里 —— 与 `TodoCalendar.weekdayHeaderKeys`
+    /// 同一条纪律（Core 里出现中文，`check-core-localization` 那条棘轮会当场红）。
     @ViewBuilder
     private func cellView(_ cell: TodoCalendarCell) -> some View {
         let day = appState.todoCalendarDays[cell.date]
         let isSelected = appState.isTodoCalendarSelected(cell)
         let isToday = appState.isTodoCalendarToday(cell)
+        let lunar = LunarCalendar.dayInfo(for: cell.date, calendar: .current)
         VStack(spacing: Spacing.hair) {
             Text("\(cell.dayOfMonth)")
                 .font(isToday ? Theme.font(.bodyStrong) : Theme.font(.caption))
                 .foregroundStyle(cell.inMonth ? Theme.text(.primary) : Theme.text(.tertiary))
+            if let lunar {
+                // 月名 / 日名各自一枚键，拼法由模板给（中文挨着写「八月廿八」、英文用「8/28」）。
+                Text(L(.lunarDateTemplate, L(lunar.lunar.monthNameKey), L(lunar.lunar.dayNameKey)))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(cell.inMonth ? Theme.text(.secondary) : Theme.text(.tertiary))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .accessibilityIdentifier("todo-calendar-lunar-\(calendarDayIdentifier(cell.date))")
+            }
+            if let term = lunar?.term {
+                Text(L(term.key))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(cell.inMonth ? Theme.accentColor : Theme.text(.tertiary))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .accessibilityIdentifier("todo-calendar-term-\(calendarDayIdentifier(cell.date))")
+            }
             taskDots(day)
         }
-        .frame(maxWidth: .infinity, minHeight: 34, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .top)
         .padding(.vertical, Spacing.hair)
         .background(
             RoundedRectangle(cornerRadius: Radius.control)

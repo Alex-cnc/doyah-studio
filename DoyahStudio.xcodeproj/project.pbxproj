@@ -67,6 +67,7 @@
 		1A290393D8B66F9CB5A39E7D /* SQLEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCAA5487D12734A2F61B4AEB /* SQLEditorView.swift */; };
 		1A64EF73DB81FF8D52CDA6D8 /* DatabaseAdminTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E1C0743409AC3E6AAAAAF2 /* DatabaseAdminTests.swift */; };
 		1A6F77C67BB71DBB47A01D88 /* DataTaskPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF4CD986B34F16DD58C88B34 /* DataTaskPresentationTests.swift */; };
+		1B560B6EBDCD2243AD516989 /* LunarCalendarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A40DDBE7559CE91AF39386 /* LunarCalendarTests.swift */; };
 		1B641F323C982F53167AB6D7 /* DiagnosisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4BC801E04F0ACE54EA2DDC9 /* DiagnosisTests.swift */; };
 		1B887C8D6C3D18AFE59D7D72 /* LicenseSignatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08E4AA740F6D33622D2A8409 /* LicenseSignatureTests.swift */; };
 		1C32517CD1265B97DCD37767 /* PostgresServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A05B98639B8833318F4201 /* PostgresServiceTests.swift */; };
@@ -89,6 +90,7 @@
 		2033BA633560CFEBE28AF0EA /* ColumnAlignment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808E88169388D310FAAD743C /* ColumnAlignment.swift */; };
 		20B537D73EC01610890E155B /* TerminalPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846E4416A87B1769B4C29856 /* TerminalPane.swift */; };
 		21A9779A647867C3C9075409 /* ResultFilterSQLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A7D755C5B135B045AFA5EB /* ResultFilterSQLTests.swift */; };
+		21B5B737FA376B7362D822D6 /* LunarCalendar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F6D35BC2466AEFF6492266 /* LunarCalendar.swift */; };
 		23953C0248F3C7E5B8D1C9D4 /* ObjectTreeAppKitMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EE9103E63CD4DB70251E35 /* ObjectTreeAppKitMenu.swift */; };
 		23F25FBB087023E1535A163F /* ResultExporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 040849CD989B47F2B7AE4109 /* ResultExporterTests.swift */; };
 		240BA5CF637B870FD5402124 /* ERDiagramPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 410CD7D681954243BADC0917 /* ERDiagramPanel.swift */; };
@@ -716,6 +718,7 @@
 		1FB74933E88504B9592BDF0C /* stored.xlsx */ = {isa = PBXFileReference; path = stored.xlsx; sourceTree = "<group>"; };
 		1FF9F725FC2B73D0C59613C1 /* QueryToolbarConventionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryToolbarConventionTests.swift; sourceTree = "<group>"; };
 		204DB56ADDF8FD107EA2A460 /* SQLLexerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLLexerTests.swift; sourceTree = "<group>"; };
+		20F6D35BC2466AEFF6492266 /* LunarCalendar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LunarCalendar.swift; sourceTree = "<group>"; };
 		212C4E5156BC382C2BADBA86 /* CursorPaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorPaging.swift; sourceTree = "<group>"; };
 		216ED7C1D13F02A9F594D31B /* ExecutionRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionRegistryTests.swift; sourceTree = "<group>"; };
 		21F638FFCA8E26D73CCB4C24 /* ExecutionScope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionScope.swift; sourceTree = "<group>"; };
@@ -1058,6 +1061,7 @@
 		CF6E61F35A0EBE3CC7AE3339 /* TerminalStartupHint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalStartupHint.swift; sourceTree = "<group>"; };
 		CFA3C7C0790F9AE4AB8DBF3B /* ResultClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultClipboard.swift; sourceTree = "<group>"; };
 		D01C2FFFA78AC328FB543749 /* BackupExecutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupExecutionTests.swift; sourceTree = "<group>"; };
+		D0A40DDBE7559CE91AF39386 /* LunarCalendarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LunarCalendarTests.swift; sourceTree = "<group>"; };
 		D0A8AB89FDE2B36A47902273 /* SQLLinter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLLinter.swift; sourceTree = "<group>"; };
 		D2445EA872B7A6DCBF7B2250 /* BackupToolCheckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupToolCheckTests.swift; sourceTree = "<group>"; };
 		D24A7EA14835CF61F6B3AF10 /* CellInspectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellInspectorTests.swift; sourceTree = "<group>"; };
@@ -1360,6 +1364,7 @@
 				EA2FF271DF1C903E814B9111 /* LocalSecretStoreTests.swift */,
 				C7913306A42F7A4B4584A497 /* LockMonitorTests.swift */,
 				EF344515E026353ABD62BEA7 /* LowerPaneSizingTests.swift */,
+				D0A40DDBE7559CE91AF39386 /* LunarCalendarTests.swift */,
 				EFE0735AFAB53E8F8317F3C7 /* MaintenancePlanTests.swift */,
 				42B0BED1656644487F605244 /* MarkdownDocumentTests.swift */,
 				E4E4DF091405EB36101C714A /* MarkdownEditingTests.swift */,
@@ -1581,6 +1586,7 @@
 				C096A676E469ADF5297AE00A /* LockMonitor.swift */,
 				C048A61814D025ECC212B180 /* LowerPaneSizing.swift */,
 				B0ABF47A29865ACAA1FAD912 /* LowerPaneTab.swift */,
+				20F6D35BC2466AEFF6492266 /* LunarCalendar.swift */,
 				291B34BCBD3A29B08FB7A73A /* MaintenancePlan.swift */,
 				F136388F9E400F9D3B73EB2F /* MarkdownDocument.swift */,
 				CC6D2D510D4CE1B713C7F800 /* MarkdownEditing.swift */,
@@ -2297,6 +2303,7 @@
 				477FF7D75A89E224DF70EE62 /* LockMonitor.swift in Sources */,
 				74D154A5D608330E1006BBAF /* LowerPaneSizing.swift in Sources */,
 				ABAD63A048633EB2055B1BF8 /* LowerPaneTab.swift in Sources */,
+				21B5B737FA376B7362D822D6 /* LunarCalendar.swift in Sources */,
 				926072FC6969B7EF58DF5E20 /* MCPApprovalQueue.swift in Sources */,
 				F170B68EAB7ABED07E75818A /* MCPProtocol.swift in Sources */,
 				4CD7E348927E7B02DE60A812 /* MCPSession.swift in Sources */,
@@ -2498,6 +2505,7 @@
 				4FFC779F9795D5CBF4581080 /* LocalizationTests.swift in Sources */,
 				D6C572FCD1F1619E8E53CD35 /* LockMonitorTests.swift in Sources */,
 				CACFEE8494B65B1F10220EC7 /* LowerPaneSizingTests.swift in Sources */,
+				1B560B6EBDCD2243AD516989 /* LunarCalendarTests.swift in Sources */,
 				FCC23E451E7FE3FA99F16E35 /* MCPApprovalQueueTests.swift in Sources */,
 				9F18E36C55FA0A92C2CB2F26 /* MCPTests.swift in Sources */,
 				76B2ADE92942CE299F40348F /* MaintenancePlanTests.swift in Sources */,
