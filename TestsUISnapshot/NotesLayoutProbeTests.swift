@@ -143,6 +143,50 @@ final class NotesLayoutProbeTests: XCTestCase {
         return (window, hosting)
     }
 
+    /// **任意视图**的离屏宿主（`makeLive` 的泛型版：口径逐字相同 —— `areaSize`、`.aqua`、泵 `seconds` 秒、
+    /// 不上屏）。`N2-LW` 那条判据要在**同一轮运行**里挂**两份**视图（生产 + 改前复刻件），
+    /// 而 `makeLive` 的根视图写死了 `NotesAreaView`，所以这里补一个能挂任意视图的。
+    @MainActor
+    private func makeOffscreenHost<V: View>(
+        _ host: HostBundle,
+        _ view: V,
+        seconds: TimeInterval = 0.6
+    ) -> (window: NSWindow, hosting: NSHostingView<AnyView>) {
+        let appearance = NSAppearance(named: .aqua)
+        let root = AnyView(
+            view.snapshotEnvironment(
+                state: host.state,
+                workspace: host.workspace,
+                tabs: host.tabs,
+                terminal: host.terminal
+            )
+        )
+        let hosting = NSHostingView(rootView: root)
+        hosting.appearance = appearance
+        hosting.frame = CGRect(origin: .zero, size: areaSize)
+
+        let window = NSWindow(
+            contentRect: CGRect(origin: .zero, size: areaSize),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.appearance = appearance
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            window.layoutIfNeeded()
+            hosting.layoutSubtreeIfNeeded()
+            hosting.displayIfNeeded()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        window.layoutIfNeeded()
+        hosting.layoutSubtreeIfNeeded()
+        return (window, hosting)
+    }
+
     // MARK: - 量法（宿主坐标系，翻不翻转都得出同一个结论）
 
     /// 某个 AppKit 视图在宿主坐标系里的矩形。
@@ -905,6 +949,151 @@ final class NotesLayoutProbeTests: XCTestCase {
             "T-081 ② 删除先确认：点删除后 \(before)（不变）· 取消后 \(before)（不变）· "
                 + "确认后 \(before - 1)（减 1）｜确认动作 = "
                 + "\(NoteRemovalPrompt.confirmActions.map(\.rawValue))"
+        )
+    }
+
+    // MARK: - N2-LW 中栏（存放笔记列表的那一列）整列收窄（成对读数：改前 / 改后）
+
+    /// **中栏那一列（存放笔记列表的左侧）的整列宽度 ≤ 改前的 60%**（片 `N2-LW` · 派单 `T-20261008-025`）。
+    ///
+    /// ## 对上的那一句（人类主人 2026-10-08 14:3x 逐字）
+    ///
+    /// 「**C，左栏整体太宽了。我这里说的左栏不是最左侧的笔记本导航栏，是存放笔记列表的左侧，
+    /// 右侧就是笔记内容**」
+    /// —— 收窄对象是**中栏整列的宽度**，不是某一枚行内控件。前门已裁定「行内读数收敛」
+    /// （搜索框 `320→200` · 行宽 `713.5→442pt`）**不算**本条完成，所以判据量的必须是**整列**。
+    ///
+    /// ## 量什么（真几何，不是读源码常量）
+    ///
+    /// 沿用本文件既有的离屏宿主口径（`areaSize = 1100×700`，`makeLive` 那一套）。`HSplitView`
+    /// 在这个宿主里**落地成真 `NSSplitView`**：两个真子视图＝两列，第三个子是分隔线（实测宽 5pt，
+    /// 按「宽 > 8pt 才是一列」排除）。量的就是这两列的**落地宽度**（＝整栏，不是行内控件）。
+    ///
+    /// ## 成对读数怎么来的（**同一轮运行里两份在位**）
+    ///
+    ///   · **改后** = 生产的 `NotesAreaView()` 挂进 1100×700 宿主；
+    ///   · **改前** = **复刻件**：同一副骨架（`HSplitView` + `NotesListView` + `NotesEditorView`），
+    ///     中栏那三档写**改前那三个数**（`220 / 300 / 520`，与 `App/Views/NotesPanel.swift` 里
+    ///     `listPane*Width` 注释登记的改前值逐字相同），挂进同样大的宿主。
+    ///
+    /// 两次读数都在本机当场量出来 ⇒ 判据自足（不靠回执里手抄一个数）。本机实测：改前那一列
+    /// 落地 **520.0pt**（＝它的 `maxWidth`：`HSplitView` 先各半分，中栏那半 549.5pt 被夹住），
+    /// 右栏 579.0pt，两列和 1099pt ＋ 1pt 分隔线 ＝ 宿主 1100pt。
+    ///
+    /// ## 判据（缺一不算交付）
+    ///
+    ///   ① **中栏整列**：`改后 ≤ 改前 × 0.60`；
+    ///   ② **旁证（守恒）**：右栏（`NotesEditorView` 那一列）**变宽**，且**两列宽度和不变**
+    ///      —— 整窗不变 ⇒ 中栏让出去的那一块原样进右栏，不是两列一起缩；
+    ///   ③ **「量的确实是列表那一列」**：笔记列表（`NSTableView`）必须**落在左那一子视图里**
+    ///      （不按位置假定，也不靠源码锚点）。
+    ///
+    /// ## 能判红（否则「改小了」会被读成「都对」）
+    ///
+    /// 反例 = **改动前那一版**：那时生产与复刻件是同一组常量 ⇒ 中栏两次都量到 520.0pt，
+    /// `520.0 ≤ 520.0 × 0.60` 当场红（本机实测：改动前跑本用例 = 1 failure）。
+    /// **不许跳过** —— 量不到两列（视图树变了）或列表不在左列，直接判红收场，本用例里没有 `XCTSkip`。
+    ///
+    /// ## 边界（如实登记）
+    ///
+    /// · 量的是**离屏宿主里两列的落地宽度**，不是真窗口上用户拖动分栏之后的宽度（用户拖动的宽度
+    ///   本片**不碰**：不给 `HSplitView` 加持久化）；
+    /// · 宿主宽 1100 ＝ 应用窗口内容区的**最小**宽（`App/DoyahStudioApp.swift` 的 `.frame(minWidth: 1_100…)`）；
+    ///   真实运行时笔记区还要再窄（要减去活动栏与侧栏）—— 但**这一列实际多宽由 `maxWidth` 定**
+    ///   （实测：宿主 700 / 800 / 852 / 1400 四档下，中栏宽 349.5 / 399.5 / 425.5 / 520.0pt，
+    ///   都是「各半分，超 `maxWidth` 就夹住」的同一条规律），所以宿主再宽读数也一样；
+    /// · 不判观感（「这样看着舒服吗」）—— 那是人类主人按整窗图看的那一半。
+    @MainActor
+    func testNotesListColumnWidthShrunk() throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+
+        // ── 改后：生产那一份（窄的是 `NotesAreaView` 里的 `listPane*Width`）──────────────────
+        let after = makeLive(host)
+
+        // ── 改前：复刻件（同骨架 · 中栏三档 = 改前那三个数）─────────────────────────────────
+        let before = makeOffscreenHost(
+            host,
+            HSplitView {
+                NotesListView()
+                    .frame(minWidth: 220, idealWidth: 300, maxWidth: 520)
+                NotesEditorView()
+                    .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        )
+
+        /// 宿主里那两列（左 = 中栏 / 右 = 正文那一列）各自的**真视图**与**落地宽度**。
+        /// 分隔线那一子按宽度滤掉（实测 5pt，与两列相叠）。
+        func panes(_ hosting: NSView) throws -> (left: NSView, right: NSView, leftWidth: CGFloat, rightWidth: CGFloat) {
+            let split = try XCTUnwrap(
+                UISnapshot.LiveHost<Never>.findViews(ofType: NSSplitView.self, in: hosting).first,
+                "宿主里没有 `NSSplitView` —— `HSplitView` 没落地，量不到「整列宽度」（判据的入口没了）"
+            )
+            let ordered = split.subviews
+                .map { (view: $0, rect: rect(of: $0, in: hosting)) }
+                .filter { $0.rect.width > 8 }
+                .sorted { $0.rect.minX < $1.rect.minX }
+            let pair = try XCTUnwrap(
+                ordered.count == 2 ? ordered : nil,
+                "`HSplitView` 里量到的不是两列（实测 \(ordered.count) 列）—— 判据量不到「中栏 / 右栏」"
+            )
+            return (pair[0].view, pair[1].view, pair[0].rect.width, pair[1].rect.width)
+        }
+
+        let afterPanes = try panes(after.hosting)
+        let beforePanes = try panes(before.hosting)
+
+        // ── ③「左那一列 = 存放笔记列表的那一列」量实（不按位置假定）───────────────────────────
+        let list = try XCTUnwrap(
+            UISnapshot.LiveHost<Never>.findViews(ofType: NSTableView.self, in: after.hosting).first,
+            "宿主里没有 `NSTableView` —— 笔记列表没落地，判据量不到「存放笔记列表的那一列」"
+        )
+        XCTAssertTrue(
+            list.isDescendant(of: afterPanes.left),
+            "笔记列表（`NSTableView`）不落在左边那一子视图里 —— 量到的左列不是「存放笔记列表的左侧」"
+        )
+
+        let limit = beforePanes.leftWidth * 0.60
+        print(
+            "NOTES-LAYOUT N2-LW 中栏整列宽度（成对读数 · 同一轮两件在位）："
+                + "改前 \(pt(beforePanes.leftWidth))pt → 改后 \(pt(afterPanes.leftWidth))pt"
+                + "（限额 = 改前 × 0.60 = \(pt(limit))pt，余量 \(pt(limit - afterPanes.leftWidth))pt）"
+                + " ｜ 右栏 \(pt(beforePanes.rightWidth))pt → \(pt(afterPanes.rightWidth))pt"
+                + " ｜ 两列和 \(pt(beforePanes.leftWidth + beforePanes.rightWidth))pt → "
+                + "\(pt(afterPanes.leftWidth + afterPanes.rightWidth))pt"
+                + "（宿主 \(pt(areaSize.width))×\(pt(areaSize.height))，两列 + 1pt 分隔线）"
+        )
+
+        // ① 中栏整列 ≤ 改前 × 0.60
+        XCTAssertGreaterThan(
+            beforePanes.leftWidth, 100,
+            "改前那一半量到 \(pt(beforePanes.leftWidth))pt —— 对照件不成立，下面那条比不出东西"
+        )
+        XCTAssertLessThanOrEqual(
+            afterPanes.leftWidth, limit,
+            "中栏（存放笔记列表的那一列）整列没收到改前的 60% 以内：改后 \(pt(afterPanes.leftWidth))pt"
+                + " ＞ 限额 \(pt(limit))pt（改前 \(pt(beforePanes.leftWidth))pt）"
+                + " —— 「左栏整体太宽了」指的就是这一列（不是最左侧的笔记本导航栏）"
+        )
+        // 一对读数不许恒等（否则「改小了」这句话没有内容）。
+        XCTAssertNotEqual(
+            afterPanes.leftWidth, beforePanes.leftWidth,
+            "改前 / 改后量到同一个宽度（\(pt(afterPanes.leftWidth))pt）⇒ 这一对读数是恒真的"
+        )
+
+        // ② 旁证：右栏变宽 + 两列和守恒（整窗不变 ⇒ 让出去的那一块进了右栏）
+        XCTAssertGreaterThan(
+            afterPanes.rightWidth, beforePanes.rightWidth,
+            "右栏（正文那一列）没有变宽：\(pt(beforePanes.rightWidth))pt → \(pt(afterPanes.rightWidth))pt"
+                + " —— 整窗不变时中栏收掉的宽度应当原样进右栏"
+        )
+        XCTAssertEqual(
+            afterPanes.leftWidth + afterPanes.rightWidth,
+            beforePanes.leftWidth + beforePanes.rightWidth,
+            accuracy: 1,
+            "两列宽度和变了（\(pt(beforePanes.leftWidth + beforePanes.rightWidth))pt → "
+                + "\(pt(afterPanes.leftWidth + afterPanes.rightWidth))pt）—— 那不是「中栏让宽」，是整块布局被动了"
         )
     }
 }

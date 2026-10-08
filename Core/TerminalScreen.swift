@@ -244,6 +244,20 @@ public final class TerminalScreen {
         isAlternateScreen ? 0 : scrollbackLines.count
     }
 
+    /// 缓冲里**非空的行数**（可见屏 + 回滚区）。
+    ///
+    /// 为什么要有它（二级条「清除终端会话窗口内容」那枚按钮，2026-10-08）：
+    /// 「擦掉了没有」必须在**界面上读得出来**，而不是靠读代码相信 —— 空行不算内容，
+    /// 于是清完之后这个数应当回到 0。探针与门禁拿它当读数（`TerminalPane.bufferLineCount`）。
+    public var bufferLineCount: Int {
+        (scrollbackLines + screen).reduce(0) { count, row in
+            let hasContent = row.contains { cell in
+                !cell.displayText.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+            return count + (hasContent ? 1 : 0)
+        }
+    }
+
     /// 按显示偏移取 `height` 行：`offset = 0` 是实时画面，`offset > 0` 往上翻。
     ///
     /// 回滚区与屏幕在这里拼成一个**虚拟缓冲**，视图不需要知道两者的边界 ——
@@ -889,6 +903,26 @@ public final class TerminalScreen {
     /// 用户想要的通常是"把上面那些翻不到头的历史清掉"，而不是把正在跑的 TUI 也重置。
     public func clearScrollback() {
         scrollbackLines.removeAll()
+    }
+
+    /// **清除会话窗口内容**（终端二级条右侧那枚图标按钮，人类主人 2026-10-08 原话：
+    /// 「清除终端会话窗口内容」）。
+    ///
+    /// 与另外两条清屏口径的分工（三条并存，各有各的入口）：
+    /// · `clearScrollback()` —— 只丢**历史**行，当前屏留着（右键菜单「清除回滚区」）；
+    /// · `reset()` —— 连**模式位 / 备用屏 / 光标**一起复位（RIS，重启 shell 时用）；
+    /// · 本方法 —— 把**可见屏与回滚区一起擦掉**，但**不碰模式位、不碰备用屏开关、不杀进程**。
+    ///   用户按下它想要的是「这一屏不看了」，而不是「把正在跑的 TUI 打断」或「把这条会话结束掉」。
+    ///
+    /// 前台若是全屏 TUI（备用屏）：擦掉的是**备用屏**的内容，程序下一帧会自己重画 ——
+    /// 这正是 iTerm「Clear Buffer」的行为；把 `isAlternateScreen` / `savedMainScreen` 清掉
+    /// 才是真的打断它（那是 `reset()` 的事）。
+    public func clearBuffer() {
+        scrollbackLines.removeAll()
+        screen = Array(repeating: blankRow(), count: rows)
+        cursorRow = 0
+        cursorColumn = 0
+        pendingWrap = false
     }
 
     public func reset() {

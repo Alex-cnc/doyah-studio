@@ -196,6 +196,14 @@
       "guard": "noteEditorDirty, noteEditorHasContent",
       "form": "internal",
       "reason": "**不是按钮的前置判据**：「切走即存」（片 `N2-4`，任务 `t_b2a943b6`）—— 点另一行（`handleNoteRowClick`）/ 换范围（`selectNotesScope`）/ 换模块（`setNotesModule`）/ 新建（`beginNewNote`）/ 进编辑（`edit(_:)`）这几个入口在改写编辑器内容**之前**先调它，把手上那份快照排进写库队列；它不是任何按钮的灰 / 亮判据。没有改动（或编辑器是空的）时**什么都不做**：这一条正是「别把一次空写落到库上」的那道闸 —— 与 `dropNotes` / `moveNotes` 同一条纪律（可点却静默无反应是缺陷；这里恰好相反：**没有可写的东西就不写**）。"
+    },
+    {
+      "func": "requestNoteRemoval",
+      "guard": "!ids.isEmpty",
+      "form": "view-disabled-local",
+      "view": "App/Views/NotesPanel.swift",
+      "anchor": ".disabled(!hasDeletableSelection)",
+      "reason": "**删除先确认（片 `N2-9`，派单 `T-20261007-079` ② / `T-20261007-081`，提交 `53afa20`）**：笔记屏左区那枚「删」（`notes-delete`）在**没选中任何一行**时是**灰着**的 —— 判据属性 `hasDeletableSelection` 住在视图里（`NotesPanel.swift` 里：笔记 = 多选集合非空，待办 = 编辑器里那一条），视图侧 `.disabled(!hasDeletableSelection)` 就是这一档的处置，用字面锚点钉住它。`AppState` 这句 `guard !ids.isEmpty` 是**第二道**（与 `saveCurrentQuery` 同一档先例，只是这里连属性名都不是同一个）：笔记那一半在空集合上本来就没有可删的东西，`requestNoteRemoval` 只挂确认请求、不落库（N2-9 的落法：点删除 ⇒ 条目数不变，确认 ⇒ 才 `deleteNote` / `deleteTodo`）。同一函数里待办那一句是 `guard let id = todoEditingID else`（不含 `isEmpty`、不在扫描口径里），且待办编辑器那枚「删」**只在有目标时才画** —— 那是「够不着按钮」那一档；本条目只登记笔记这一半。"
     }
   ]
 }

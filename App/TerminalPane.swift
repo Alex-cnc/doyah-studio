@@ -44,6 +44,28 @@ final class TerminalPane: ObservableObject {
     /// PTY 是否已经起过（视图用它决定"首次布局时用真实几何启动"）。
     var hasStarted: Bool { didStart }
 
+    /// 这条会话的 shell 进程号（「重启终端」的读数：重启前后必须不同）。
+    /// 会话没起来时是 -1。
+    var processIdentifier: pid_t { session.processIdentifier }
+
+    /// 「一键启动」待送的那条命令（nil = 没有待送）。
+    ///
+    /// 为什么要有它：页签是**先建对象、后由视图布局时启动**的（`TerminalHostView.layout()` 拿得到
+    /// 真实几何才启动 PTY），而按钮点下去的那一刻会话还没起来 —— 命令先记在这儿，
+    /// 起来那一刻送进去（见 `startIfNeeded`）。
+    private var pendingLaunch: TerminalLaunchCommand?
+
+    /// 在这个会话里敲一条命令（二级条那两枚「一键启动」）。
+    ///
+    /// 会话还没起来 ⇒ 记下来，`startIfNeeded` 起来之后送（**不能丢**：丢了按钮就是静默无反应）。
+    func launch(_ command: TerminalLaunchCommand) {
+        guard hasStarted, isRunning else {
+            pendingLaunch = command
+            return
+        }
+        session.write(text: command.inputLine)
+    }
+
     /// 会话退出时回调（协调器据此把页签标成「已退出」并让标题不再装作有人在跑）。
     var onExitDetected: ((Int32) -> Void)?
 
@@ -189,12 +211,31 @@ final class TerminalPane: ObservableObject {
         screen.resize(columns: columns, rows: rows)
         if session.start(columns: columns, rows: rows, workingDirectory: launchDirectory()) {
             isRunning = true
+            // 「一键启动」那条命令在**会话起来之后**才送（本机实测 2026-10-08：`forkpty` 之后立刻写
+            // 也送得到，但那时 shell 才刚 exec —— 等 `start` 返回再写，时序上更干净），
+            // 而且**只送一次**（送过就清掉，重启不会把命令又敲一遍）。
+            if let pending = pendingLaunch {
+                pendingLaunch = nil
+                session.write(text: pending.inputLine)
+            }
         } else {
             isRunning = false
             errorText = session.lastError
         }
         requestRedraw?()
     }
+
+    /// **清除会话窗口内容**（二级条右侧那枚图标按钮）：擦掉可见屏与回滚区，
+    /// **不杀进程、不动会话**（前台程序下一帧自己重画）。
+    func clearBuffer() {
+        screen.clearBuffer()
+        scrollOffset = 0
+        selection = nil
+        requestRedraw?()
+    }
+
+    /// 缓冲里非空的行数（清屏按钮的读数；见 `TerminalScreen.bufferLineCount`）。
+    var bufferLineCount: Int { screen.bufferLineCount }
 
     func restart(columns: Int, rows: Int) {
         session.terminate()

@@ -78,6 +78,15 @@ public struct TerminalTab: Identifiable, Equatable, Sendable {
     /// 用户重命名（nil = 用前台进程名）。
     /// 写入口只有 `TerminalTabs.rename`（`internal(set)`：Core 之外的模块只能读）。
     public internal(set) var customTitle: String?
+    /// **「一键启动」带出来的名字**（nil = 这个页签不是一键启动建的）。
+    ///
+    /// 为什么要有它（2026-10-08 实测）：二级条那两枚「一键启动」跑的是 `dsh-tui` / `hermes`，
+    /// 而这两个都是**解释器启动器**（`#!/usr/bin/env node` / `exec … python3`）——
+    /// 前台进程组的可执行路径查到的是 `node` / `python3`，照它推出来的标题是 `node`。
+    /// 用户点那枚按钮是为了跑 `dsh-tui`，页签上写着 `node` 是**错误的名字**。
+    /// 所以名字由**点的哪一枚**决定，而不是等前台进程猜。
+    /// 它与 `customTitle` 是两件事：用户改名仍然优先（那是他自己起的名字）。
+    public internal(set) var launchTitle: String?
     /// 前台进程的**可执行路径**（由 PTY 侧查询后回填；查不到就是 nil）。
     public internal(set) var foregroundProcess: String?
     /// 会话状态。
@@ -88,19 +97,22 @@ public struct TerminalTab: Identifiable, Equatable, Sendable {
         shellPath: String,
         foregroundProcess: String? = nil,
         customTitle: String? = nil,
+        launchTitle: String? = nil,
         state: State = .live
     ) {
         self.id = id
         self.shellPath = shellPath
         self.foregroundProcess = foregroundProcess
         self.customTitle = customTitle
+        self.launchTitle = launchTitle
         self.state = state
     }
 
-    /// 页签上显示的名字：用户重命名 ＞ 前台进程名 ＞ shell 名；三者都拿不到就是 nil
+    /// 页签上显示的名字：用户重命名 ＞ 一键启动的名字 ＞ 前台进程名 ＞ shell 名；都没有就是 nil
     /// （界面用语言表里的兜底词，Core 不出用户可见文案）。
     public var title: String? {
         customTitle
+            ?? launchTitle
             ?? TerminalTabTitle.derive(fromExecutablePath: foregroundProcess)
             ?? TerminalTabTitle.derive(fromExecutablePath: shellPath)
     }
@@ -133,6 +145,40 @@ public enum TerminalTabCloseDecision: Equatable, Sendable {
     case needsConfirmation
     /// 不许关（见 `TerminalTabCloseRefusal`）。
     case refuse(TerminalTabCloseRefusal)
+}
+
+/// **「一键启动」的两个预设**（人类主人 2026-10-08 原话：「右侧是常用的工具按钮，比如一键启动
+/// dsh-tui、Hermes」）。
+///
+/// 为什么这两个名字在 Core 而不在视图里：它们同时是**要敲进 shell 的那一行**、**新页签的标题**
+/// 与**门禁 / 探针要核对的字面量** —— 三处各写一遍，其中一处改了名（`dsh-tui` → `dshtui`）
+/// 另外两处照样是绿的，而按钮点下去就开始报「command not found」。判定与字面量放在一起，
+/// 与页签的其它口径同一个理由：能穷举的东西不留两层。
+public enum TerminalLaunchCommand: String, CaseIterable, Sendable {
+    /// 一键启动 `dsh-tui`（鲸鱼 TUI）。
+    case dshTUI = "dsh-tui"
+    /// 一键启动 `hermes`（Hermes Agent CLI）。
+    case hermes = "hermes"
+
+    /// 送进 shell 的那一行：命令 + 一个换行（= 用户在提示符上敲完回车）。
+    public var inputLine: String { rawValue + "\n" }
+
+    /// 新页签的标题 —— **预设名直接给**。
+    ///
+    /// 为什么不等前台进程名（本机实测，2026-10-08）：`dsh-tui` 与 `hermes` 都是**解释器启动器**
+    /// （`dsh-tui` 是 `#!/usr/bin/env node`、`hermes` 是 `exec … python3`），
+    /// 真跑起来之后前台进程组的可执行路径查到的是 `node` / `python3` ——
+    /// 照它推标题，页签上写的就是 `node`。名字见 `TerminalTab.launchTitle`。
+    public var tabTitle: String { rawValue }
+}
+
+/// 重启页签的判定 —— 界面拿它决定「直接重启」还是「先问一句」。
+public enum TerminalTabRestartDecision: Equatable, Sendable {
+    /// 会话已经退出（或页签已经不在）→ 里面没有东西可丢，直接重启。
+    case canRestart
+    /// 会话在跑 → 重启要 SIGHUP 整条进程组 ⇒ **先问一句**（人类主人 2026-10-08 口径：
+    /// 不许把「重启终端」做成静默杀进程）。
+    case needsConfirmation
 }
 
 /// 不许关闭的理由（写全，界面照原话给用户一个说法；不许静默无反应）。
@@ -221,14 +267,20 @@ public struct TerminalTabs: Equatable, Sendable {
 
     /// 新建页签：插在**当前页签右侧**并激活，返回新页签的 id。
     /// `shellPath` 缺省沿用当前页签的 shell（同一个面板里的会话用同一个 shell）。
+    /// `launchTitle` 给「一键启动」那两枚用（名字由点的哪一枚决定，见 `TerminalTab.launchTitle`）。
     @discardableResult
-    public mutating func newTab(shellPath: String? = nil, foregroundProcess: String? = nil) -> Int {
+    public mutating func newTab(
+        shellPath: String? = nil,
+        foregroundProcess: String? = nil,
+        launchTitle: String? = nil
+    ) -> Int {
         let id = nextID
         nextID += 1
         let tab = TerminalTab(
             id: id,
             shellPath: shellPath ?? activeTab.shellPath,
-            foregroundProcess: foregroundProcess
+            foregroundProcess: foregroundProcess,
+            launchTitle: launchTitle
         )
         tabs.insert(tab, at: activeIndex + 1)
         activeID = id
@@ -365,6 +417,18 @@ public struct TerminalTabs: Equatable, Sendable {
         guard let index = index(of: id) else { return false }
         tabs[index].state = .live
         return true
+    }
+
+    // MARK: 重启
+
+    /// 重启这个页签要不要先问一句（**只判，不改**：确认对话框在界面侧）。
+    ///
+    /// 口径（与 `closeDecision` 同一个形状，但**没有** `force:` 那一套）：重启不是「销毁会话」——
+    /// 页签 id / 名字 / 位置都留着，用户确认一次就够，不需要第二条判定；
+    /// 会话**已经退出**时也不用问（里面没有东西可丢）。
+    public func restartDecision(for id: Int) -> TerminalTabRestartDecision {
+        guard let tab = tab(id: id) else { return .canRestart }
+        return tab.isExited ? .canRestart : .needsConfirmation
     }
 
     // MARK: 关闭

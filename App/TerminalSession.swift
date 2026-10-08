@@ -222,6 +222,14 @@ final class TerminalSession {
         write(Array(text.utf8))
     }
 
+    /// 这条会话的 **shell 进程号**。
+    ///
+    /// 为什么对外露出来（2026-10-08）：二级条那枚「重启终端」的语义是「**换一条命**」，
+    /// 而「换了没有」只有 pid 说得清 —— 重启前后 pid 必须不同（探针拿它当读数，
+    /// 见 `TestsUISnapshot/TerminalSubToolbarProbeTests.swift`）。
+    /// 会话没起来（或已经收摊）时是 -1。
+    var processIdentifier: pid_t { childPID }
+
     /// 前台进程组的**可执行文件路径**（页签标题的唯一来源；查不到 = nil）。
     ///
     /// 三步都靠系统给的答案，不猜：

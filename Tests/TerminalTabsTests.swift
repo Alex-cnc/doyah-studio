@@ -414,4 +414,68 @@ extension TerminalTabsTests {
         XCTAssertEqual(copy.ids, [1, 2, 3])
         XCTAssertNotEqual(original, copy)
     }
+
+    // MARK: - 一键启动的两个预设（终端二级条右侧那两枚按钮，2026-10-08）
+
+    /// 预设本身就是**两条事实**：敲进 shell 的那一行、以及新页签的名字。
+    /// 两者都是字面量，所以能在这里逐字钉死 —— 这也是把它们放进 Core 的理由
+    /// （三处各写一遍的话，改了一处另外两处照样绿）。
+    func testLaunchPresetsCarryCommandLineAndTabTitle() {
+        XCTAssertEqual(TerminalLaunchCommand.allCases.map(\.rawValue), ["dsh-tui", "hermes"])
+        XCTAssertEqual(TerminalLaunchCommand.dshTUI.inputLine, "dsh-tui\n")
+        XCTAssertEqual(TerminalLaunchCommand.hermes.inputLine, "hermes\n")
+        XCTAssertEqual(TerminalLaunchCommand.dshTUI.tabTitle, "dsh-tui")
+        XCTAssertEqual(TerminalLaunchCommand.hermes.tabTitle, "hermes")
+    }
+
+    /// 一键启动的页签名：**预设名直接给**，不被前台进程名盖掉（实测那一条是 `node`），
+    /// 但**用户改名仍然优先** —— 它是他自己起的名字。
+    func testLaunchTitleWinsOverForegroundProcessButNotOverRename() {
+        var tabs = TerminalTabs(shellPath: shell)
+        let id = tabs.newTab(launchTitle: TerminalLaunchCommand.dshTUI.tabTitle)
+
+        XCTAssertEqual(tabs.tab(id: id)?.title, "dsh-tui", "新页签没带上预设名")
+        XCTAssertEqual(tabs.tab(id: id)?.isRenamed, false, "预设名不是用户重命名")
+
+        // 前台进程名回填（解释器启动器实测给的是 node）也不许盖掉预设名。
+        _ = tabs.setForegroundProcess("/opt/homebrew/Cellar/node/26.8.2/bin/node", for: id)
+        XCTAssertEqual(tabs.tab(id: id)?.title, "dsh-tui", "前台进程名把预设名盖掉了")
+
+        // 用户改名优先。
+        _ = tabs.rename(id: id, to: "我的鲸鱼")
+        XCTAssertEqual(tabs.tab(id: id)?.title, "我的鲸鱼")
+
+        // 清掉重命名 ⇒ 回落到**预设名**，而不是 `node`。
+        _ = tabs.rename(id: id, to: "   ")
+        XCTAssertEqual(tabs.tab(id: id)?.title, "dsh-tui")
+    }
+
+    /// 普通新页签（`⌘T` / 页签条上的 `+`）口径**一字未改**：没有预设名，仍按前台进程名走。
+    func testPlainNewTabStillDerivesTitleFromForegroundProcess() {
+        var tabs = TerminalTabs(shellPath: shell)
+        let id = tabs.newTab()
+        XCTAssertNil(tabs.tab(id: id)?.launchTitle)
+        XCTAssertEqual(tabs.tab(id: id)?.title, "zsh", "没有预设名时回落到 shell 名")
+        _ = tabs.setForegroundProcess("/usr/local/bin/psql", for: id)
+        XCTAssertEqual(tabs.tab(id: id)?.title, "psql", "前台进程名应当驱动标题")
+    }
+
+    // MARK: - 重启确认（「重启终端」那枚按钮的判定）
+
+    /// 会话在跑 ⇒ 重启**先问一句**（要 SIGHUP 整条进程组，里面有程序一起结束）；
+    /// 会话已经退出 ⇒ 直接重启（没有东西可丢）；页签不在 ⇒ 直接重启（上面没人在跑）。
+    func testRestartDecisionAsksWhileLiveAndNotAfterExit() {
+        var tabs = TerminalTabs(shellPath: shell)
+        let id = tabs.activeID
+        XCTAssertEqual(tabs.restartDecision(for: id), .needsConfirmation)
+
+        _ = tabs.markExited(id: id, code: 0)
+        XCTAssertEqual(tabs.restartDecision(for: id), .canRestart)
+
+        // 重启之后又回到「在跑」⇒ 又该问了（`markLive` 是重启那条链上的回填）。
+        _ = tabs.markLive(id: id)
+        XCTAssertEqual(tabs.restartDecision(for: id), .needsConfirmation)
+
+        XCTAssertEqual(tabs.restartDecision(for: 999), .canRestart, "不存在的页签 = 上面没人在跑")
+    }
 }
