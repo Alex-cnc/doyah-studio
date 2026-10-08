@@ -8,21 +8,25 @@
 派单仓 `assets/product-icon/icon-1024.png` 母版**等比**重生 —— macOS 侧换源 + 重出 `.icns`，
 Linux 侧八档 hicolor 同源重出。本目录四份资产的现状见下表。
 
+**2026-10-09 底衬改正**（人类主人令 `T-20261008-056`：图标底衬 = **② 透明底**）：四份资产全部改由
+派单仓 `assets/product-icon/icon-transparent-1024.png`（sha256 `b42a81f9…` · 1024² · RGBA · 四角 alpha=0）
+母版**等比**重生 —— 两处 1024 逐字节副本、`.icns` 十档、hicolor 八档，**不再有米白圆底、也没有白角**。
+
 ## 目录里有什么
 
 | 文件 | 平台 | 在 Git 里 | 说明 |
 |---|---|---|---|
-| `AppIcon-source.png` | 通用（源画） | ✅ 已提交 | **1024×1024 母版**（2026-10-08 统一默认图标：派单仓 `assets/product-icon/icon-1024.png` 的**逐字节副本**，sha256 `b9fcae57…`；米白圆底 + 白角，真 PNG、无 alpha）。Linux 侧要出任何尺寸都从这份派生 |
-| `AppIcon.icns` | 仅 macOS | ✅ 已提交 | Apple 专用容器（内部 10 档 16…1024，**由母版等比派生**），装进 `.app` 供 Dock / 访达用。**Linux 桌面不认这个格式** |
-| `AppIcon-1024.png` | macOS / 通用 | ✅ 已提交（走 `git add -f`；`.gitignore` 第 49 行仍排除该路径） | **= 母版逐字节副本**（与 `AppIcon-source.png` 同 sha256 `b9fcae57…`）。2026-10-08 统一图标后它**不再是**「824 内缩的 macOS 成品」 |
-| `icons/hicolor/**/doyahstudio.png` | 仅 Linux | ✅ 已提交 | 8 档尺寸（16/24/32/48/64/128/256/512），真 PNG，**由母版等比重生**（2026-10-08；`Scripts/make-linux-icons.sh` 默认源），直接可装进图标主题 |
+| `AppIcon-source.png` | 通用（源画） | ✅ 已提交 | **1024×1024 母版**（2026-10-09 起：派单仓 `assets/product-icon/icon-transparent-1024.png` 的**逐字节副本**，sha256 `b42a81f9…`；**透明底** —— 四角与四边中点读数 alpha=0，真 PNG / RGBA）。Linux 侧要出任何尺寸都从这份派生 |
+| `AppIcon.icns` | 仅 macOS | ✅ 已提交 | Apple 专用容器（内部 10 档 16…1024，**由母版等比派生**；2026-10-09 起由透明底母版重出），装进 `.app` 供 Dock / 访达用。**Linux 桌面不认这个格式** |
+| `AppIcon-1024.png` | macOS / 通用 | ✅ 已提交（走 `git add -f`；`.gitignore` 第 49 行仍排除该路径） | **= 母版逐字节副本**（与 `AppIcon-source.png` 同 sha256 `b42a81f9…`）。2026-10-08 统一图标后它**不再是**「824 内缩的 macOS 成品」；2026-10-09 起母版本身即透明底 |
+| `icons/hicolor/**/doyahstudio.png` | 仅 Linux | ✅ 已提交 | 8 档尺寸（16/24/32/48/64/128/256/512），真 PNG，**由母版等比重生**（2026-10-09 透明底母版重出；`Scripts/make-linux-icons.sh` 默认源），直接可装进图标主题 |
 
 ## 为什么不能直接把 `.icns` 拷到 Linux
 
 macOS 的应用图标是 `.icns`（Apple 专用容器，内部按尺寸分档存放 16…1024 的位图），GNOME / KDE / XFCE
 找图标时**只看** `hicolor/<N>x<N>/apps/` 下的 PNG 或矢量图。把 `.icns` 放进
 `~/.local/share/icons/` 的结果是：桌面拿不到图标，回退成一个默认方块 —— 不报错，但也没效果。
-另外 macOS 侧过去那版成品图标按系统观感做了 10% 留白 + 圆角（2026-10-08 统一图标后**母版是米白圆底 + 白角、无留白**），Linux 侧通常要**方形全出血**，
+另外 macOS 侧过去那版成品图标按系统观感做了 10% 留白 + 圆角（2026-10-08 统一图标后**母版是米白圆底 + 白角、无留白**；2026-10-09 起**母版换成透明底**），Linux 侧通常要**方形全出血**，
 由桌面环境自己决定要不要加形状；所以这里是从源画重新出，不是从 `.icns` 转换。
 
 ## 在 Linux 上安装
@@ -78,8 +82,10 @@ done
 ## 两个已登记的坑
 
 1. ~~**`AppIcon-source.png` 的实际内容是 JPEG**（JFIF，后缀却是 `.png`）~~ —— **2026-10-08 统一图标后
-   此坑已消失**：现源画是货真价实的 PNG（`sips -g format` ⇒ `png`；`hasAlpha: no`）。留档的原因：
+   此坑已消失**：现源画是货真价实的 PNG（`sips -g format` ⇒ `png`）。留档的原因：
    Linux 侧若还按「源画是 JPEG」的旧认知留着校验分支，可以去掉那一支了。
+   （2026-10-09 起母版换成**透明底**：`sips -g hasAlpha` ⇒ `yes`，`Image.mode` ⇒ `RGBA` —— 早先那版
+   是 RGB、无 alpha 通道，若哪处代码/校验按「无 alpha」假设写的，同样要跟版。）
 2. **图标名与 `.desktop` 的 `Icon=` 必须一致**，否则同样是"装了但看不见"——排查时先跑
    `gtk-update-icon-cache`，再看 `Icon=` 是否拼错。
 
