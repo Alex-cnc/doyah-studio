@@ -68,6 +68,16 @@ import DoyahCore
 ///   **边界（如实登记）**：③ 是**等价物**而不是真的 `kill -9` —— 判的是「没有任何退出路径，
 ///   内容也已经 `COMMIT` 到盘上」（`kill -9` 只丢内存）；真要跑一次带信号的那条，
 ///   见本片交接里那条可复跑命令（进程级演示不在本探针里）。
+///
+/// ## 片 `N2-SV` 追加的两条（保存键改**纯图标** + 悬停 tips · 派单 `T-20261008-023`）
+///
+/// 派单要的是「工具条那枚「保存」从『图标 + 文字』改成『纯图标 + 悬停 tip「保存」』，
+/// 位置与点击路径不变」。卡上点名的机制是「扫描该工具条区 `NSButton.title` ⇒ 断言全为空串」——
+/// **这一路在本环境里判不动**（本文件头注释那条实测：SwiftUI 的 `Button` 不落到 `NSButton`，
+/// 扫到的按钮只有判据自己插进去的那枚**对照件**），所以判据① 拆成三路（AppKit 树扫描 + 对照件 /
+/// 源码扫描 / **渲染级深墨水跨度**），判据② 按语义判「悬停读得到名字」而不锁 `.help` 还是
+/// `HoverHint`，判据③ 沿用本文件既有的「状态 + 独立连接读盘」口径判点击路径没变。
+/// 三条的读数都在断言消息与 `🖼 / 📄 N2-SV` 那几行打印里。
 final class NotesEditorSaveProbeTests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -207,6 +217,20 @@ final class NotesEditorSaveProbeTests: XCTestCase {
     private func renderPNG<V: View>(
         _ view: V, label: String, scheme: NSAppearance.Name
     ) throws -> (rep: NSBitmapImageRep, path: String) {
+        let (rep, _, path) = try renderHosted(view, label: label, scheme: scheme)
+        return (rep, path)
+    }
+
+    /// 同一条渲染路径的**本体**：比 `renderPNG` 多交回一个**宿主 `NSView`**。
+    ///
+    /// 为什么要多交这一件（片 `N2-SV`）：判据① 要在真渲染出来的宿主里扫 AppKit 树
+    /// （`NSButton.title`）—— 那条遍历要宿主本身，而 `renderPNG` 原先只交回位图与路径。
+    /// **不另写一条渲染路径**：外观 / 窗口 / 布局 / 位图仍然只有这一份实现（`renderPNG` 成了薄壳，
+    /// 三份真相那条纪律照旧）。
+    @MainActor
+    private func renderHosted<V: View>(
+        _ view: V, label: String, scheme: NSAppearance.Name
+    ) throws -> (rep: NSBitmapImageRep, hosting: NSView, path: String) {
         let size = Self.size
         // 正文编辑器是 AppKit 自绘（`TextEditor` → 真 `NSTextView`）：没有真实窗口就画不出内容
         // （与 `UISnapshotSidebarStateTests` 同一条实测），所以给一个**不上屏**的 borderless 窗口。
@@ -259,7 +283,7 @@ final class NotesEditorSaveProbeTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("\(label).png")
         try data.write(to: url)
-        return (rep, url.path)
+        return (rep, hosting, url.path)
     }
 
     // MARK: - 编辑面底色：系统底色真的让位了吗（队列 `L-142` · 内测清单 甲2）
@@ -358,6 +382,292 @@ final class NotesEditorSaveProbeTests: XCTestCase {
             controlDelta, 8,
             "对照件（没挂 `.editorSurface()` 的裸 TextEditor）在这套量法下取到的底色 \(control)"
                 + " 与令牌 \(expected) 差不出 8 以上 ⇒ 这条量法分辨不了两种底色，笔记那三条不算数"
+        )
+    }
+
+    // MARK: - 片 `N2-SV`（派单 `T-20261008-023`）：保存键改**纯图标** + 悬停 tips
+
+    /// 判据②认的「名字」那一份：语言表里的 `notesSave`（工具条那枚按钮的悬停提示读它）。
+    private static let saveTipKey = LKey.notesSave
+
+    /// 工具条那一带里「深墨水」的门槛（亮度，0 = 纯黑 / 255 = 纯白）——**先量后定**。
+    ///
+    /// 这一带里除了那枚按钮，还有一句灰色的来源提示（`L(.notesSourceHint)`，辅助色 ⇒ 亮度远在
+    /// 门槛之上）：门槛压在「按钮的墨」与「辅助色的字」之间，量到的就只是**按钮自己**。
+    /// 实测读数见 `darkInkSpan` 那三行打印（改前 / 改后各一份）。
+    private static let saveInkThreshold = 60
+
+    /// 深墨水**横向跨度**的上限（像素，含 2× 缩放）：一枚图标之内。
+    /// 改前那枚是「图标 + 保存」两个字 ⇒ 跨度更长（读数见断言消息），这一条**改前必红**。
+    private static let saveInkSpanCeiling = 56
+
+    /// **对照件**：一枚**写着字**的真 `NSButton`（判据① 的空跑防护要它）。
+    ///
+    /// 为什么必须有它：这块宿主里 SwiftUI 的 `Button` **不落到 `NSButton`**（本文件头注释实测
+    /// **0 枚**，`AGENT-SPEC.md` §9 第 87 条同一条读数）⇒ 若「扫到的 `title` 全是空串」这句
+    /// 只靠「一枚按钮都扫不到」成立，扫法自己坏了也照样绿（这一族最坏的失效方式）。
+    /// 放进一枚带字的真 `NSButton`，同一套遍历**必须**扫到它 —— 两件事同时成立，判据① 才算数。
+    private struct ProbeTextButton: NSViewRepresentable {
+        let title: String
+        func makeNSView(context: Context) -> NSButton {
+            let button = NSButton(title: title, target: nil, action: nil)
+            button.bezelStyle = .rounded
+            return button
+        }
+        func updateNSView(_ button: NSButton, context: Context) {
+            button.title = title
+        }
+    }
+
+    /// 工具条那一带（`y ∈ [0, 100)` 像素）里**深墨水**（亮度 < `threshold`）的**横向跨度**。
+    ///
+    /// 「**没有文字**」这件事在像素上量到的就是它：改前「图标 + 保存」两个字 ⇒ 深墨水铺满一个字宽
+    /// 有余；改后只剩一枚图标 ⇒ 跨度收在一枚图标之内。四个门槛各打一行读数（60 / 90 / 120 / 150），
+    /// 便于复看「门槛压在哪儿、为什么压在那儿」。
+    private func darkInkSpan(_ rep: NSBitmapImageRep, below threshold: Int) -> (from: Int, to: Int, count: Int) {
+        guard let data = rep.bitmapData else { return (0, 0, 0) }
+        var from = Int.max
+        var to = 0
+        var count = 0
+        for y in Self.buttonBandFromTop..<min(Self.buttonBandToTop, rep.pixelsHigh) {
+            for x in 0..<rep.pixelsWide {
+                let index = y * rep.bytesPerRow + x * rep.samplesPerPixel
+                let value = luminance(Int(data[index]), Int(data[index + 1]), Int(data[index + 2]))
+                if value < threshold {
+                    from = min(from, x)
+                    to = max(to, x)
+                    count += 1
+                }
+            }
+        }
+        return count == 0 ? (0, 0, 0) : (from, to, to - from + 1)
+    }
+
+    /// 一个视图的**下边缘**离宿主顶边多远（pt；宿主是 SwiftUI 的 `NSHostingView`，通常是翻转的）。
+    private func distanceFromTop(of view: NSView, in hosting: NSView) -> CGFloat {
+        let rect = hosting.convert(view.bounds, from: view)
+        return hosting.isFlipped ? rect.minY : hosting.bounds.height - rect.maxY
+    }
+
+    /// 仓里的 `App/Views/NotesPanel.swift` 源码（判据从**源码**上取的那两半读它）。
+    private func notesPanelSource() throws -> String {
+        try String(contentsOf: Self.repositoryRoot.appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8)
+    }
+
+    /// **保存键那一块**源码：从动作那一句（`Task { await appState.saveNoteFromEditor() }`）起，
+    /// 到内容守卫那一句（`.disabled(!appState.noteEditorHasContent)`）止 —— `.help(…)` 与
+    /// `.keyboardShortcut(…)` 都**在块里**。
+    ///
+    /// 判据与界面**认同一处**：三处锚点（动作 / 悬停 / 内容守卫）无论形态怎么改都得在（内容守卫那
+    /// 一处另有门禁 `check-empty-action-buttons.py` 看着）—— 找不到就返回空串，调用方据此判红
+    /// （「锚点被改了」不许静默当作「那一块干干净净」）。
+    private static func saveButtonBlock(in text: String) -> String {
+        sourceRegion(
+            in: text,
+            from: "Task { await appState.saveNoteFromEditor() }",
+            to: ".disabled(!appState.noteEditorHasContent)"
+        )
+    }
+
+    /// 入口里注册的 `NSInitialToolTipDelay`（毫秒）—— 「名字**必须即时出现**」（`FR-EXEC-13` /
+    /// 变更记录 v3.249）那一档在本判据里的落点：出厂 2000ms 才是「等好几秒」那条病。
+    private static func registeredToolTipDelay(in source: String) -> Int? {
+        let pattern = "\"NSInitialToolTipDelay\":\\s*([0-9]+)"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        guard let match = regex.firstMatch(in: source, range: range),
+              let valueRange = Range(match.range(at: 1), in: source) else { return nil }
+        return Int(source[valueRange])
+    }
+
+    // MARK: - 片 `N2-SV` 判据①（无文字按钮）+ 判据②（悬停名字）
+
+    /// ## 判据①：工具条那一枚保存键**没有文字** —— 三路合起来判，谁都别单独承担
+    ///
+    /// ### 为什么不是卡上点名的那**一路**
+    /// 卡上写的是「探针扫描该工具条区 `NSButton.title` ⇒ 断言全为空串」。这一路**在本环境里
+    /// 判不动**（读数同一次运行里打出来：这块离屏宿主里 SwiftUI 的 `Button` 不落到 `NSButton`，
+    /// 扫到的按钮**只有那枚对照件**）—— 只靠它，改不改都是绿的。所以①拆成三路：
+    ///   · **①-a AppKit 树扫描 + 对照件**：往同一宿主里插一枚**带字**的真 `NSButton`（落在工具条
+    ///     带**之外**）⇒ 同一套扫法必须扫到它；工具条那一带里一枚带字的 `NSButton` 都不许有
+    ///     （打印扫到的 `title` 集合）。这一路是**空跑防护**；
+    ///   · **①-b 源码扫描**：保存键那一块里不许出现 `Text(` / `.labelStyle(.titleAndIcon)`
+    ///     —— **改前这里必红**（原样是 `Text(L(.notesSave))` + `.titleAndIcon`）；
+    ///   · **①-c 渲染级反证**：工具条带里深墨水的**横向跨度**必须收在一枚图标之内
+    ///     —— **改前这一条也必红**（「图标 + 保存」两个字比一枚图标宽）。
+    ///
+    /// ### 判据②「名字从哪来」不锁实现
+    /// 卡上两条口径打架（前门建议 `.help("保存")`；`FR-EXEC-13` + 变更记录 v3.249 明写「名字提示
+    /// **必须即时出现**」，而系统 `.help` 的出厂延迟是 2000ms）⇒ 判据**按语义判**：那一块必须带
+    /// `.help(L(.notesSave))` **或** `.hoverHint(L(.notesSave)…)`，且名字就是语言表的 `notesSave`
+    /// （中「保存」/ 英 "Save"）。**即时**那一档由入口那条既有口径承接
+    /// （`NSInitialToolTipDelay` ≤ 200ms）—— 本用例把它读出来打印。
+    @MainActor
+    func testN2SVSaveButtonHasNoTextLabelAndNamesItselfOnHover() throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        _ = try UISnapshot.applyLicense(.standard, to: host.state)
+        // 有内容 ⇒ 那枚按钮**亮着**（灰着的那一态由既有三态用例管，这里不重复判）。
+        host.state.noteEditorTitle = "临"
+        XCTAssertTrue(
+            host.state.noteEditorHasContent,
+            "前置：填了字 ⇒ 保存键该是亮的（灰着那一态归既有的三态用例）"
+        )
+
+        // ── ①-a / ①-c：同一个宿主上量（AppKit 树扫描 + 像素跨度）─────────────────────
+        let controlTitle = "对照·这枚按钮写着字"
+        let view = ZStack {
+            Theme.surface(.window)
+            NotesEditorView()
+            ProbeTextButton(title: controlTitle)
+                .frame(width: 240, height: 24)
+                .offset(y: 150)  // pt：落在工具条带（顶部 50pt）**之外**
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
+        .snapshotEnvironment(
+            state: host.state,
+            workspace: host.workspace,
+            tabs: host.tabs,
+            terminal: host.terminal
+        )
+        let (rep, hosting, _) = try renderHosted(view, label: "n2sv-save-icon-only", scheme: .aqua)
+
+        let buttons = UISnapshot.LiveHost<Never>.findViews(ofType: NSButton.self, in: hosting)
+        let scannedTitles = buttons.map(\.title)
+        let band = CGFloat(Self.buttonBandToTop) / 2  // px → pt（带高 100px = 50pt）
+        let bandTitles = buttons
+            .filter { distanceFromTop(of: $0, in: hosting) < band }
+            .map(\.title)
+        print("🖼 N2-SV ①-a 宿主里的 `NSButton` \(buttons.count) 枚，title 集合 = \(scannedTitles)")
+        print("🖼 N2-SV ①-a 工具条那一带（y < \(band)pt）里带字的 `NSButton` = \(bandTitles)")
+        XCTAssertTrue(
+            scannedTitles.contains(controlTitle),
+            "对照件没被扫到（扫到的 title 集合 = \(scannedTitles)）⇒ 这套扫法看不见带字的按钮，"
+                + "「工具条里没有文字按钮」那句是**空跑**"
+        )
+        XCTAssertTrue(
+            bandTitles.allSatisfy { $0.isEmpty },
+            "工具条那一带里还有带字的 `NSButton`：\(bandTitles)"
+                + " —— `FR-EXEC-13` / 台账第 27 条「工具·操作类控件禁文字按钮」"
+        )
+
+        for threshold in [60, 90, 120, 150] {
+            let sample = darkInkSpan(rep, below: threshold)
+            print("🖼 N2-SV ①-c 亮度 < \(threshold) 的墨水：跨度 \(sample.count) 像素（x \(sample.from)…\(sample.to)）")
+        }
+        let ink = darkInkSpan(rep, below: Self.saveInkThreshold)
+        XCTAssertGreaterThan(
+            ink.count, 0,
+            "工具条那一带里一枚图标都量不到深墨水（亮度门槛 \(Self.saveInkThreshold)）"
+                + " —— 判据的入口没了（按钮被删了？还是渲染成了空白？）"
+        )
+        XCTAssertLessThanOrEqual(
+            ink.count, Self.saveInkSpanCeiling,
+            "工具条带里的深墨水横跨 \(ink.count) 像素（上限 \(Self.saveInkSpanCeiling)，x \(ink.from)…\(ink.to)）"
+                + " ⇒ 那枚按钮上还挂着**文字**（一枚图标跨不了这么宽）"
+        )
+
+        // ── ①-b 源码扫描：保存键那一块里不许有文字控件 ───────────────────────────────
+        let source = try notesPanelSource()
+        let block = Self.saveButtonBlock(in: source)
+        XCTAssertFalse(
+            block.isEmpty,
+            "截不出「保存」那一块源码 —— 锚点（动作那一句 / 它自己的 `.help(`）被改了，判据自己失效"
+        )
+        print("📄 N2-SV ①-b 保存键那一块源码（逐字）：\n\(block)")
+        XCTAssertTrue(
+            block.contains("Image(systemName:"),
+            "保存键那一块里连图标都没有 —— 这不是「改纯图标」，是把它掏空了"
+        )
+        XCTAssertFalse(
+            block.contains("Text("),
+            "保存键那一块里还有 `Text(` ⇒ 图标上还挂着文字（`FR-EXEC-13` / 台账第 27 条）"
+        )
+        XCTAssertFalse(
+            block.contains(".labelStyle(.titleAndIcon)"),
+            "保存键那一块还是 `.labelStyle(.titleAndIcon)` ——「图标 + 文字」的旧形态"
+        )
+
+        // ── ② 悬停名字（`.help` 或既有 `HoverHint` 皆可）+「即时」那一档 ────────────────
+        let hasHelp = block.contains(".help(L(.notesSave))")
+        let hasHover = block.contains(".hoverHint(L(.notesSave)")
+        print("📄 N2-SV ② 悬停那一档：`.help(L(.notesSave))` = \(hasHelp) ／ `.hoverHint(L(.notesSave)…)` = \(hasHover)")
+        XCTAssertTrue(
+            hasHelp || hasHover,
+            "保存那枚既没有 `.help(L(.notesSave))` 也没有 `.hoverHint(L(.notesSave)…)`"
+                + " —— 悬停读不到名字（`FR-EXEC-13`：名字由悬停提示给出）"
+        )
+        let chinese = LocalizedStrings.text(Self.saveTipKey, language: .simplifiedChinese)
+        let english = LocalizedStrings.text(Self.saveTipKey, language: .english)
+        print("📄 N2-SV ② 悬停读到的名字：中「\(chinese)」／ 英「\(english)」")
+        XCTAssertEqual(chinese, "保存", "悬停读到的中文名不是「保存」")
+        XCTAssertEqual(english, "Save", "悬停读到的英文名不是「Save」")
+
+        let appSource = try String(
+            contentsOf: Self.repositoryRoot.appendingPathComponent("App/DoyahStudioApp.swift"),
+            encoding: .utf8
+        )
+        let delay = try XCTUnwrap(
+            Self.registeredToolTipDelay(in: appSource),
+            "入口里找不到 `NSInitialToolTipDelay` 的注册 —— 系统 tooltip 会退回出厂 2000ms"
+                + "（「等好几秒」那条病，变更记录 v3.249）"
+        )
+        print("📄 N2-SV ② 入口注册的 `NSInitialToolTipDelay` = \(delay)ms（出厂 2000ms ⇒ 「悬停即现」口径）")
+        XCTAssertLessThanOrEqual(
+            delay, 200,
+            "tooltip 首次延迟注册成 \(delay)ms（> 200）—— 名字「必须即时出现」这一档不成立"
+        )
+    }
+
+    // MARK: - 片 `N2-SV` 判据③（点击仍走原路径）
+
+    /// ## 判据③：点一下那枚按钮，**还是原来那条路**（沿用本文件既有的断言口径）
+    ///
+    /// 形态换了（图标 + 文字 ⇒ 纯图标），点击路径**一个字都不许动** —— 判据读两处**盘上 / 状态**的
+    /// 事实，不读视图自己怎么想：
+    ///   · 动作那一边：走生产入口 `saveNoteFromEditor()`（工具条那枚 `Button` 的动作就是它，
+    ///     源码锚点见 `saveButtonBlock`），点完状态回到「没有未落库的改动」（`.idle`）；
+    ///   · 盘那一边：**另开一个 `NoteLibrary` 连接**读回那一条 ⇒ 正文 / 标题都真是刚写的那一份；
+    ///   · 收尾口径（本文件既有）：手动保存之后编辑器清空、回到「新建态」。
+    @MainActor
+    func testN2SVSaveButtonStillWritesThroughTheSamePath() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        let seeded = try await seedAutosaveNotes(host.state, titles: ["N2-SV 保存键夹具"])
+        let note = try XCTUnwrap(seeded.first, "夹具没落库")
+
+        host.state.edit(note)
+        host.state.noteEditorTitle = "N2-SV·保存键"
+        let typed = "保存键·点一下就该落库·\(UUID().uuidString)"
+        host.state.noteEditorBody = typed
+        XCTAssertTrue(
+            host.state.noteEditorHasContent,
+            "前置：有内容 ⇒ 那枚按钮是亮的（灰着那一档归既有的三态用例）"
+        )
+        let beforeState = host.state.noteSaveState
+        print("🖼 N2-SV ③ 点前：noteSaveState = \(beforeState) ／ 按钮可点 = \(host.state.noteEditorHasContent)")
+
+        // 工具条那枚 `Button` 的动作就是这一句（`App/Views/NotesPanel.swift`）。
+        await host.state.saveNoteFromEditor()
+
+        let afterState = host.state.noteSaveState
+        let stored = try await readBackFromLibrary(note.id)
+        print(
+            "🖼 N2-SV ③ 点后：noteSaveState = \(afterState) ／ 盘上正文 = 「\(stored?.body ?? "nil")」"
+                + " ／ 编辑器回到新建态 = \(!host.state.noteEditorHasContent)"
+        )
+        XCTAssertEqual(
+            afterState, .idle,
+            "点完「保存」之后状态没有回到「没有未落库的改动」（实测 \(afterState)）—— 点击路径被打断了"
+        )
+        XCTAssertEqual(
+            stored?.body, typed,
+            "点完「保存」之后盘上没有刚写的那一份（独立连接读回「\(stored?.body ?? "nil")」）"
+        )
+        XCTAssertEqual(stored?.title, "N2-SV·保存键", "标题那一半也没落库")
+        XCTAssertFalse(
+            host.state.noteEditorHasContent,
+            "手动保存之后编辑器应当清空、回到「新建态」（`saveNoteFromEditor` 的既有口径）"
         )
     }
 

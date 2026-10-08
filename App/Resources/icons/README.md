@@ -4,21 +4,25 @@
 需求提出者 2026-09-24 问：「应用图标能用在 Linux 版吗？如果可以，看下这个文件有没有上传 GitHub，
 我同步到 Linux 版本上去。」
 
+**2026-10-08 统一默认图标**（人类主人：「设置这张图片为产品所有平台版本的默认图标」）：全平台改由
+派单仓 `assets/product-icon/icon-1024.png` 母版**等比**重生 —— macOS 侧换源 + 重出 `.icns`，
+Linux 侧八档 hicolor 同源重出。本目录四份资产的现状见下表。
+
 ## 目录里有什么
 
 | 文件 | 平台 | 在 Git 里 | 说明 |
 |---|---|---|---|
-| `AppIcon-source.png` | 通用（源画） | ✅ 已提交 | 2048×2048，**全出血方形**（实测内容覆盖 0%…100%，四角也是画面的一部分）。Linux 侧要出任何尺寸都从这份派生 |
-| `AppIcon.icns` | 仅 macOS | ✅ 已提交 | Apple 专用容器，装进 `.app` 供 Dock / 访达用。**Linux 桌面不认这个格式** |
-| `AppIcon-1024.png` | 仅 macOS | ❌ 被 `.gitignore` 排除 | 由 `Scripts/make-app-icon.swift` 生成的 macOS 观感成品：内容只占约 80%（实测像素包围盒 100…922），四角是透明圆角 —— 这正是 Linux 上**不该**用的那一版 |
-| `icons/hicolor/**/doyahstudio.png` | 仅 Linux | ✅ 已提交 | 8 档尺寸（16/24/32/48/64/128/256/512），真 PNG、方形全出血，直接可装进图标主题 |
+| `AppIcon-source.png` | 通用（源画） | ✅ 已提交 | **1024×1024 母版**（2026-10-08 统一默认图标：派单仓 `assets/product-icon/icon-1024.png` 的**逐字节副本**，sha256 `b9fcae57…`；米白圆底 + 白角，真 PNG、无 alpha）。Linux 侧要出任何尺寸都从这份派生 |
+| `AppIcon.icns` | 仅 macOS | ✅ 已提交 | Apple 专用容器（内部 10 档 16…1024，**由母版等比派生**），装进 `.app` 供 Dock / 访达用。**Linux 桌面不认这个格式** |
+| `AppIcon-1024.png` | macOS / 通用 | ✅ 已提交（走 `git add -f`；`.gitignore` 第 49 行仍排除该路径） | **= 母版逐字节副本**（与 `AppIcon-source.png` 同 sha256 `b9fcae57…`）。2026-10-08 统一图标后它**不再是**「824 内缩的 macOS 成品」 |
+| `icons/hicolor/**/doyahstudio.png` | 仅 Linux | ✅ 已提交 | 8 档尺寸（16/24/32/48/64/128/256/512），真 PNG，**由母版等比重生**（2026-10-08；`Scripts/make-linux-icons.sh` 默认源），直接可装进图标主题 |
 
 ## 为什么不能直接把 `.icns` 拷到 Linux
 
 macOS 的应用图标是 `.icns`（Apple 专用容器，内部按尺寸分档存放 16…1024 的位图），GNOME / KDE / XFCE
 找图标时**只看** `hicolor/<N>x<N>/apps/` 下的 PNG 或矢量图。把 `.icns` 放进
 `~/.local/share/icons/` 的结果是：桌面拿不到图标，回退成一个默认方块 —— 不报错，但也没效果。
-另外 macOS 的成品图标按系统观感做了 10% 留白 + 圆角，Linux 侧通常要**方形全出血**，
+另外 macOS 侧过去那版成品图标按系统观感做了 10% 留白 + 圆角（2026-10-08 统一图标后**母版是米白圆底 + 白角、无留白**），Linux 侧通常要**方形全出血**，
 由桌面环境自己决定要不要加形状；所以这里是从源画重新出，不是从 `.icns` 转换。
 
 ## 在 Linux 上安装
@@ -73,9 +77,9 @@ done
 
 ## 两个已登记的坑
 
-1. **`AppIcon-source.png` 的实际内容是 JPEG**（JFIF，后缀却是 `.png`）。缩放不受影响
-   （`sips` 与 ImageMagick 都按内容识别），但假如 Linux 侧的打包流程按后缀做严格校验，
-   会在这里挑刺。要彻底干净就用本目录生成的真 PNG，或先把源画转成真 PNG 再入仓。
+1. ~~**`AppIcon-source.png` 的实际内容是 JPEG**（JFIF，后缀却是 `.png`）~~ —— **2026-10-08 统一图标后
+   此坑已消失**：现源画是货真价实的 PNG（`sips -g format` ⇒ `png`；`hasAlpha: no`）。留档的原因：
+   Linux 侧若还按「源画是 JPEG」的旧认知留着校验分支，可以去掉那一支了。
 2. **图标名与 `.desktop` 的 `Icon=` 必须一致**，否则同样是"装了但看不见"——排查时先跑
    `gtk-update-icon-cache`，再看 `Icon=` 是否拼错。
 
@@ -86,14 +90,13 @@ done
 
 > 图标资产在 `App/Resources/icons/`，请这样处理：
 >
-> 1. 用 `AppIcon-source.png`（2048×2048 源画）**向下**缩放，生成 freedesktop 尺寸集：
+> 1. 用 `AppIcon-source.png`（1024×1024 母版，2026-10-08 起）**向下**缩放，生成 freedesktop 尺寸集：
 >    `hicolor/<N>x<N>/apps/<应用名>.png`，N 取 16 / 24 / 32 / 48 / 64 / 128 / 256 / 512；
 >    `<应用名>` 必须与 `.desktop` 里的 `Icon=` 一致。
-> 2. **不要**用 `AppIcon.icns`（Apple 专用容器，Linux 桌面不认）；也**不要**用
->    `AppIcon-1024.png`（那是 macOS 观感成品：内容只占约 80%、四角透明圆角）。
-> 3. **不要把小图放大** —— 放大只会糊。需要更多尺寸，一律从 2048 的源画重出。
-> 4. 源画后缀是 `.png` 但内容是 JPEG（JFIF）。缩放工具按内容识别没问题；若你们的打包
->    流程按后缀严格校验并报错，先把它转成真 PNG 再用。
+> 2. **不要**用 `AppIcon.icns`（Apple 专用容器，Linux 桌面不认）。`AppIcon-1024.png` 现在与源画
+>    **逐字节相同**（同一张图），用哪个都一样（它 2026-10-08 前是 macOS 观感成品，现已作废）。
+> 3. **不要把小图放大** —— 放大只会糊。需要更多尺寸，一律从 1024 的母版重出。
+> 4. 源画现为**真 PNG**（2026-10-08 前它是 JPEG 套 `.png` 后缀，该坑随统一图标消失）。
 > 5. 生成完**逐个断言产物的实际宽高**等于目标尺寸（别只看命令退出码）。
 > 6. 仓库里其实已经生成好八档（`App/Resources/icons/hicolor/`）。尺寸与名字都合适的话，
 >    直接 `cp -R App/Resources/icons/hicolor ~/.local/share/icons/` 最省事 —— 自己重出会用到
