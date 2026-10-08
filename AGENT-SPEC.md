@@ -26,7 +26,7 @@
 
 | 标记 | 谁可改 |
 |---|---|
-| 无标记 = **契约层** | **只有 `bluewhale` 可改**；平台实现层归各平台助理（`bighippo` macOS/iOS · `tinyhippo` 安卓/鸿蒙 · `fatfish` Windows），只写自己 `[独占:<平台名>]` 节；越界需在改动里注 `contract-change：理由`（需求提出者直接指令优先，红线 7）。判据：`--contract-owner bluewhale` / `--mine bluewhale`（契约模式：只许三书，碰代码即拦） |
+| 无标记 = **契约层** | **只有 `bluewhale` 可改**；平台实现层归各平台助理（`hugehippo` macOS/iOS · `babyhippo` 安卓/鸿蒙 · `fatfish` Windows），只写自己 `[独占:<平台名>]` 节；越界需在改动里注 `contract-change：理由`（需求提出者直接指令优先，红线 7）。判据：`--contract-owner bluewhale` / `--mine bluewhale`（契约模式：只许三书，碰代码即拦） |
 | `[独占:macos]` | 只有本侧（macOS 桌面板） |
 | `[独占:ios]` | 只有本侧（iOS 版） |
 | `[独占:windows]` | 只有对侧（**本侧只读，绝不代写**） |
