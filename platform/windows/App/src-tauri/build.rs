@@ -132,8 +132,8 @@ fn main() {
         "icons",             // 打包图标
         "Cargo.toml",        // 本包清单
         "src",               // App/src-tauri/src（Rust 外壳本体）
-        "../../src",         // App/src（前端源码；进产物的输入）
-        "../../tools",       // App/tools（构建 / 出包脚本 —— S-073e 的由头就在这一行）
+        "../src",            // App/src（前端源码；进产物的输入）
+        "../tools",          // App/tools（构建 / 出包脚本 —— S-073e 的由头就在这一行）
         "../../Core",        // 领域层（path 依赖，进产物）
         "../../Db",          // 领域层（path 依赖，进产物）
         "../../Cli",         // 工作区成员
