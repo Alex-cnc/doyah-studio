@@ -331,6 +331,49 @@ public enum NoteSchemaV6 {
     ]
 }
 
+/// **schema v7**（队列 `HIST-1` · 契约 `DR-02` 由「内存态」改判为**持久化**）：新增
+/// **`query_history`** 一张表 —— 查询历史的落盘。
+///
+/// 契约出处：`DR-02`（v3.327：「本机数据库 / 本地 only / 上限 500 条或 90 天 / 可清空 + 单条删」）
+/// + `FR-EDIT-10`（「历史」页签 = 与工具条时钟菜单**同一份**历史源）。本侧只引用不复制 ——
+/// 列名与 `QueryHistory` 字段同义（`connectionID` → `connection_id`）。
+///
+/// 五条取舍：
+///   · **与笔记同库同连接**（`notes.sqlite3`）：一次执行 = **一次写**，不新开第二个 SQLite 文件
+///     ——「单一写入口」的前提是「只有一处拿得到连接」（与 v5 把 `todo` 放同库同一条理由）。
+///   · **`id TEXT PRIMARY KEY` 存 `QueryHistory.id.uuidString`**：写入走「按 id 覆盖」
+///     （`ON CONFLICT`），于是「连续重复执行同一条 SQL 只刷新最新一条」不必再开一条更新写路。
+///   · **时间戳 `REAL`（`timeIntervalSince1970`）**：与 `note` / `todo` / `reminder` 三表同一口径。
+///   · **上限（500 条 / 90 天）不在库这一层**：库只管存与取，裁剪由 `QueryHistoryStore`
+///     **同一处**做（判据要能指着那一处说「先到者为准」，两处各裁一次就会各说各话）。
+///   · **与 `SQLArchive` 分工不覆盖**（`DR-02` 明文）：归档 = 用户**主动收藏**、长期保留
+///     （磁盘上的 `*.sql` 文件）；这里 = 会话历史、有上限、可清空。两者互不读写对方的存储。
+///   · **不建索引**：表自己最多 500 行（上限就写在那句裁剪里），`ORDER BY executed_at DESC`
+///     在几百行上是内存排序 —— 与 v3 / v4「补列不建索引」同一条理由（不为规模不成立的问题加东西）。
+public enum NoteSchemaV7 {
+
+    public static let version: Int32 = 7
+
+    /// 新增的表。
+    public static let tables: [String] = ["query_history"]
+
+    /// 这一版**不新增索引**（理由见上）。
+    public static let indexes: [String] = []
+
+    public static let ddl: [String] = [
+        """
+        CREATE TABLE query_history (
+            id TEXT PRIMARY KEY,
+            connection_id TEXT NOT NULL DEFAULT '',
+            sql TEXT NOT NULL DEFAULT '',
+            executed_at REAL NOT NULL,
+            duration REAL NOT NULL DEFAULT 0,
+            succeeded INTEGER NOT NULL DEFAULT 0 CHECK (succeeded IN (0, 1))
+        );
+        """
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -415,8 +458,8 @@ public final class NoteDatabase {
     public static let fileName = "notes.sqlite3"
 
     /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏、v3 → v4 补置顶、
-    /// v4 → v5 补待办任务清单、v5 → v6 补提醒）。
-    public static let supportedVersion = NoteSchemaV6.version
+    /// v4 → v5 补待办任务清单、v5 → v6 补提醒、v6 → v7 补查询历史）。
+    public static let supportedVersion = NoteSchemaV7.version
 
     private let connection: SQLiteConnection
 
@@ -499,6 +542,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV6.version {
                 for statement in NoteSchemaV6.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV6.version)")
+            }
+            if current < NoteSchemaV7.version {
+                for statement in NoteSchemaV7.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV7.version)")
             }
         }
     }
@@ -1032,6 +1079,109 @@ public final class NoteDatabase {
     /// 删一条提醒（认不出的 id ⇒ 一行都不动 —— 与 `deleteTodo` 同形：删是幂等的，不抛错）。
     public func deleteReminder(id: UUID) throws {
         try connection.execute("DELETE FROM reminder WHERE uuid = ?", [.text(id.uuidString)])
+    }
+
+    // MARK: - 查询历史（schema v7 · 队列 HIST-1）
+
+    /// 库里的全部查询历史（**执行时间倒序** = 界面「最新在上」；同刻按 `rowid` 倒序，
+    /// 同一批写入里后写的那条在前 —— 读数稳定，不靠「碰巧的插入顺序」）。
+    ///
+    /// 上限（500 条 / 90 天）**不在这一层裁**：库只管存与取，裁剪收在 `QueryHistoryStore.prune`
+    /// 一处（`DR-02` 的「先到者为准」只有一处说得清）。
+    public func queryHistory() throws -> [QueryHistory] {
+        try connection
+            .query(
+                """
+                SELECT id, connection_id, sql, executed_at, duration, succeeded
+                FROM query_history
+                ORDER BY executed_at DESC, rowid DESC;
+                """
+            )
+            .compactMap { row in
+                // 认不出的行**不装作读出来了**（与 `attachments(of:)` 同一条纪律）：
+                // id / connection_id 不是 UUID 的行走 compactMap 丢掉，而不是拿默认值糊一条出来。
+                guard
+                    let rawID = row.text("id"), let id = UUID(uuidString: rawID),
+                    let rawConnection = row.text("connection_id"),
+                    let connectionID = UUID(uuidString: rawConnection)
+                else { return nil }
+                return QueryHistory(
+                    id: id,
+                    connectionID: connectionID,
+                    sql: row.text("sql") ?? "",
+                    executedAt: Date(timeIntervalSince1970: row["executed_at"].doubleValue ?? 0),
+                    duration: row["duration"].doubleValue ?? 0,
+                    succeeded: row["succeeded"].boolValue ?? false
+                )
+            }
+    }
+
+    /// 写一条历史：**按 id 覆盖**（同 id 再写 = 刷新 `executed_at` / `duration` / `succeeded`）。
+    ///
+    /// 「连续重复执行同一条 SQL 只刷新最新一条」由调用方复用最新那一条的 `id` 实现
+    /// —— 库里因此**不需要**第二条更新写路（单一写入口的推论）。
+    public func upsertQueryHistory(_ entry: QueryHistory) throws {
+        try connection.execute(
+            """
+            INSERT INTO query_history (id, connection_id, sql, executed_at, duration, succeeded)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (id) DO UPDATE SET
+                connection_id = excluded.connection_id,
+                sql = excluded.sql,
+                executed_at = excluded.executed_at,
+                duration = excluded.duration,
+                succeeded = excluded.succeeded;
+            """,
+            [
+                .text(entry.id.uuidString),
+                .text(entry.connectionID.uuidString),
+                .text(entry.sql),
+                .real(entry.executedAt.timeIntervalSince1970),
+                .real(entry.duration),
+                .integer(entry.succeeded ? 1 : 0)
+            ]
+        )
+    }
+
+    /// 裁掉超出上限的行（**唯一一处裁剪**，`QueryHistoryStore` 只调它）：
+    /// 只保留「最新 `maxEntries` 条」∩「不早于 `maxAge` 秒前」—— 两个上限**先到者为准**。
+    /// 换句话说：一条行留下来，必须**同时**还在前 `maxEntries` 名内、且比 `now - maxAge` 新。
+    ///
+    /// `maxEntries <= 0` 判成「不留」而不是「不裁」：上限写成 0 的含义是清空，
+    /// 而把 0 读成「无上限」会把一条保护性配置变成反方向的危险默认。
+    public func pruneQueryHistory(keepingMax maxEntries: Int, maxAge: TimeInterval, now: Date = Date()) throws {
+        guard maxEntries > 0 else {
+            try clearQueryHistory()
+            return
+        }
+        try connection.execute(
+            """
+            DELETE FROM query_history
+            WHERE executed_at < ?
+               OR id NOT IN (
+                    SELECT id FROM query_history ORDER BY executed_at DESC, rowid DESC LIMIT ?
+               );
+            """,
+            [.real(now.addingTimeInterval(-maxAge).timeIntervalSince1970), .integer(Int64(maxEntries))]
+        )
+    }
+
+    /// 清空全部历史，返回**真的删了几行**（调用方按这个数如实处置，不假装删了）。
+    @discardableResult
+    public func clearQueryHistory() throws -> Int {
+        let before = try queryHistoryCount()
+        try connection.execute("DELETE FROM query_history;")
+        return before
+    }
+
+    /// 删一条历史（认不出的 id ⇒ 一行都不动 —— 删是幂等的，不抛错，与 `deleteReminder` 同形）。
+    public func deleteQueryHistory(id: UUID) throws {
+        try connection.execute("DELETE FROM query_history WHERE id = ?", [.text(id.uuidString)])
+    }
+
+    /// 历史条数（`snapshot` 的元信息与证据脚本用它把「库里真有东西」说成数）。
+    public func queryHistoryCount() throws -> Int {
+        Int(try connection.scalarInt("SELECT count(*) FROM query_history") ?? 0)
     }
 
     // MARK: - 两层归属（schema v2 · 队列 L-97 第二片）
