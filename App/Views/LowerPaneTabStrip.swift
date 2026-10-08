@@ -12,13 +12,14 @@ import DoyahCore
 ///    tab 头切换」）—— 而 `LowerPaneView` 整块**渲染不得**：它的内容那半边挂着 `TerminalHostView`，
 ///    离屏渲染会**真开一条 shell**（见 `TerminalView.layout()` 里那句启动）。于是「工具条长什么样」
 ///    一直只能靠读源码或让人点。
-/// ② **右侧只剩窗口按钮**（最大化 / 恢复 / 折叠，折叠态换成向上的展开箭头）。2026-10-08（`T-1a`）：
-///    子终端那几件（终端页签条 / 状态小字「已停止 / 出错」/ 重启 shell / 清空日志）**已全部移出
-///    这一行**，由 `T-1b` 归位到终端页签自己的二级工具条 —— 这一行的**右侧**只剩窗口按钮。
+/// ② **右侧只剩窗口按钮**（最大化 / 恢复 / 折叠，折叠态换成向上的展开箭头）。2026-10-08：`T-1a`
+///    把子终端那几件（终端页签条 / 状态小字「已停止 / 出错」/ 重启 shell / 清空日志）移出这一行，
+///    `T-1b` 已把它们归位 —— 终端页签条、状态小字、`refusalHint` 进了终端自己的二级条
+///    （`App/Views/TerminalSubToolbar.swift`），`trash` 进了问题 / 输出两页的内容顶部
+///    （`App/Views/LowerPaneView.swift` 的 `logPaneToolbar`）。**这一行的右侧只剩窗口按钮。**
 ///
-/// 抽出来之后，`TestsUISnapshot/TerminalTabsProbeTests` 能直接渲染**这一行**：
-/// 页签从 1 个变成 3 个时，**左半部分必须变、右半部分必须逐像素不变** ——
-/// 这正是「页签头在左、右侧按钮位置不动」的机器判据（判据写在那个探针里）。
+/// 抽出来之后，`TestsUISnapshot/TerminalTabsProbeTests` 能直接渲染**这一行**。
+/// （页签头那半边的版面判据自 `T-1b` 起归**终端二级条**（`TerminalSubToolbar`）—— 页签头不在这一行了。）
 ///
 /// ## 边界
 ///
@@ -120,7 +121,8 @@ struct LowerPaneTabStrip: View {
     /// 本行现在画的是**窗口按钮**这一族（最大化 / 恢复 / 折叠，折叠态换成展开箭头），共 3 个调用点。
     /// `Scripts/check-terminal-tabs.py` 的登记表与这里**双向对账**：这里多画一个没登记的按钮，
     /// 或者登记过的按钮被顺手挪走，判据都会点名。子终端那几个动作按钮（清空日志 / 重启 shell）
-    /// 随 `T-1a`（2026-10-08）移出本行 —— 那份登记表要等 `T-1b` 把它们归位后再一并重算。
+    /// 随 `T-1a`（2026-10-08）移出本行 —— `T-1b` 已把登记表按**新层级**重算：本行四个窗口符号
+    /// （3 个调用点），二级条那一侧另有一条判据（页签头必须在 `Spacer` 之前）。
     private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
@@ -138,31 +140,9 @@ struct LowerPaneTabStrip: View {
     }
 }
 
-// MARK: - 当前页签的状态小字
+// MARK: - 当前页签的状态小字（已随二级条搬走）
 
-/// 工具条右侧那两行小字：**已停止 / 出错**。
-///
-/// 为什么单独一个小视图：这两件事是**会话级**的（`TerminalPane` 自己的 `@Published`），
-/// 而工具条观察的是面板级模型（`TerminalModel`）。用小视图直接把 pane 观察起来，
-/// 协调器就不必把每个页签的 `isRunning` / `errorText` 再镜像一份 —— 镜像就是第二份真相。
-///
-/// 它与工具条同行，所以随工具条一起搬到这个文件（口径与版面都是一体的）。
-struct TerminalPaneStatus: View {
-    @ObservedObject var pane: TerminalPane
-
-    var body: some View {
-        HStack(spacing: Spacing.xs) {
-            if !pane.isRunning {
-                Text(L(.terminalStopped))
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(Theme.status(.warning))
-            }
-            if let errorText = pane.errorText {
-                Text(errorText)
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(Theme.status(.danger))
-                    .lineLimit(1)
-            }
-        }
-    }
-}
+/// 原来这里躺着 `TerminalPaneStatus`（「已停止 / 出错」两行小字）。`T-1b`（2026-10-08）把它
+/// **搬进了终端页签自己的二级工具条**（`App/Views/TerminalSubToolbar.swift`）—— 它观察的是
+/// **会话级**的 `TerminalPane`，「问题 / 输出」两页根本没有会话这回事，所以它不属于外层条。
+/// 定义只剩一份（搬走的那一份），这里留个路标，免得下次有人在本文件里再找它。

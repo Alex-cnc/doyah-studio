@@ -102,16 +102,24 @@ struct LowerPaneView: View {
     private var content: some View {
         switch appState.lowerPaneTab {
         case .problem:
-            problemsContent
+            logPane { problemsContent }
 
         case .output:
-            logList(
-                tab?.outputLog ?? [],
-                emptyText: L(.lowerPaneOutputEmpty)
-            )
+            logPane {
+                logList(
+                    tab?.outputLog ?? [],
+                    emptyText: L(.lowerPaneOutputEmpty)
+                )
+            }
 
         case .terminal:
             VStack(spacing: 0) {
+                // **终端页签自己的二级工具条**（人类主人 2026-10-08 原话：「在 terminal 页签下再来
+                // 一个工具条，左侧是每个细分 terminal 的 title，右侧是常用的工具按钮」）——
+                // 左侧 = 细分终端 title（`TerminalTabsBar`），右侧的动作按钮位由 `T-2` 填。
+                // 它在外层页签条**之下**、终端内容**之上**：外层条只留四个面板页签 + 窗口按钮。
+                TerminalSubToolbar()
+                Divider()
                 // **每个页签一个自己的视图实例**（`.id` 挂在当前页签 id 上）：切页签 = 换一屏。
                 // 换掉的那一屏并没有丢 —— 它的屏幕缓冲、回滚位置、选区都在自己的 `TerminalPane` 里，
                 // 切回来原样还在。契约（L-84 ㈠）：折叠 / 最大化 / 隐藏 / 切语言 / 窗口重排
@@ -162,6 +170,42 @@ struct LowerPaneView: View {
         .padding(.horizontal, Spacing.s)
         .padding(.vertical, Spacing.xs)
         .help(L(.terminalShortcutHint))
+    }
+
+    /// 问题 / 输出两页外面那一层：**内容顶部一行 + 分隔线 + 内容**。
+    ///
+    /// 为什么会有这一行（`T-1b`，2026-10-08）：清理日志的 `trash` 原先长在**外层**页签条的右侧，
+    /// `T-1a` 按人类主人的原话（「最外层的 tab bar 最右侧就只保留最大化、恢复、最小化折叠按钮」）
+    /// 把它移出外层条。它的作用对象本来就是**这两页的日志**，所以归位到这两页的内容顶部 ——
+    /// 既不占外层条，也不静默消失（`T-1a` 移出的五件，去向逐条记在
+    /// `App/Views/TerminalSubToolbar.swift` 的注释里）。
+    private func logPane<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            logPaneToolbar
+            Divider()
+            content()
+        }
+    }
+
+    /// 问题 / 输出两页顶部那一行：右侧是**清空日志**（原外层条右侧的 `trash`）。
+    ///
+    /// 为什么不做成「有日志才显示」：原来那一枚就是常驻的 —— 归位只换位置，不换语义
+    /// （口径：工作区段没有查询页签时点它**如实无效**，不假装清掉了什么）。
+    private var logPaneToolbar: some View {
+        HStack(spacing: Spacing.hair) {
+            Spacer(minLength: 8)
+
+            Button {
+                if let tab { appState.clearLowerPaneLog(for: tab.id) }
+            } label: {
+                Image(systemName: "trash")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            .help(L(.lowerPaneClear))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
     }
 
     private var problemsContent: some View {
