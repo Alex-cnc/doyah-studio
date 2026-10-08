@@ -550,6 +550,18 @@ final class AppState: ObservableObject {
     @Published var todoFilter: TodoFilter = .defaultFilter
     /// 清单怎么归堆（四档；默认「不分组」= 与界面半第一片同形）。
     @Published var todoGroupBy: TodoGroupBy = .defaultGroupBy
+    /// 清单的**本地关键字检索词**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 B4）。
+    ///
+    /// 与 `todoFilter` / `todoSortOrder` / `todoGroupBy` **同类**（界面状态，住 `AppState`）：
+    /// 切一个字只重画这一屏（`todoBoard` 重算），**不重读库、不写库** —— 清单与日历仍看同一份
+    /// `todos`（`FR-NOTE-39`）。判定本身在 Core（`TodoSearch`），这里只存那个词。
+    @Published var todoSearchText = ""
+    /// **只读详情**看的是哪一条（片 `TD-LIST-1` 的 A6；`nil` = 没在看详情）。
+    ///
+    /// 与 `todoBeingEdited` 是**互斥的两态**：点清单里的一行 ⇒ 这一格被设上（只读详情）；
+    /// 显式「编辑」（行的右键 / 左区那枚「编辑」）⇒ 这一格清掉、进编辑器。两态同时只可能有一个非空
+    /// （`todoDetailTodo` 的口径），所以右栏不必自己判「谁优先」。
+    @Published var todoDetailID: UUID?
     // MARK: - 待办：清单 / 日历（队列 `L-100` 界面半第二片 · 日历屏）
     /// 中栏看哪一档（清单 / 日历）—— `L-184` ⑤「`L-100` 待办沿用同一骨架（中栏在清单 / 日历间切）」。
     @Published var todoPane: TodoPane = .defaultPane
@@ -7078,6 +7090,8 @@ final class AppState: ObservableObject {
 
     func beginNewTodo() {
         todoBeingEdited = nil
+        // 新建态 = 编辑器那一屏：把「只读详情」那一格清掉（否则右栏还画着上一次点开的那一条的详情）。
+        todoDetailID = nil
         todoEditorTitle = ""
         todoEditorHasDue = false
         todoEditorDueAt = Date()
@@ -7085,7 +7099,30 @@ final class AppState: ObservableObject {
         todoEditorTags = ""
     }
 
+    /// **点清单里的一行 ⇒ 只读详情**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）。
+    ///
+    /// 与 `edit(_:)` 明确分开（**只读 ≠ 编辑**）：这里只把「看哪一条」记下来，**不进编辑态**
+    /// （清掉 `todoBeingEdited`）—— 于是右栏出的是 `TodoDetailView`（无编辑控件），
+    /// 而不是把同一份数据灌进编辑器（那样「点一下」就等于「可改」，是这一片要挡掉的形状）。
+    func showTodoDetail(_ todo: Todo) {
+        todoBeingEdited = nil
+        todoDetailID = todo.id
+    }
+
+    /// **右栏那一屏的只读详情**（`nil` = 不画详情 ⇒ 画编辑器）。
+    ///
+    /// 三件事一起回答，所以收在一处（散在视图里就会出现「编辑态与详情态同时成立」这种自相矛盾的屏）：
+    /// ① 在编辑 ⇒ 不给详情（编辑器优先，`edit(_:)` 已经把这一格清掉了）；
+    /// ② 那一格为空 ⇒ 不给详情；
+    /// ③ 详情那一条**必须还在库里**（被删掉的 id ⇒ 退回编辑器那一屏，而不是画一条已经不存在的任务）。
+    var todoDetailTodo: Todo? {
+        guard todoBeingEdited == nil, let id = todoDetailID else { return nil }
+        return todos.first { $0.id == id }
+    }
+
     func edit(_ todo: Todo) {
+        // 进编辑器 = 与「只读详情」互斥（右栏只画得下一样）。
+        todoDetailID = nil
         todoBeingEdited = todo.id
         todoEditorTitle = todo.title
         todoEditorHasDue = todo.dueAt != nil
@@ -7170,6 +7207,8 @@ final class AppState: ObservableObject {
             try await NoteLibrary.defaultLibrary().deleteTodo(id: id)
             if let pending { await reminderDeliverer.cancel(id: pending.id) }
             if todoBeingEdited == id { beginNewTodo() }
+            // 删掉的正是右栏详情那一条 ⇒ 收掉那一屏（不然右栏会画一条已经不在库里的任务）。
+            if todoDetailID == id { todoDetailID = nil }
             await reloadTodos()
             await reloadReminders()
         } catch {
@@ -7366,12 +7405,26 @@ final class AppState: ObservableObject {
     /// 按什么排」（两套各自的用例都会是绿的 —— 对侧 `check-ui-parity.py` 的 V 条就是为这一族立的）。
     /// 参照窗口仍是 `todoWindow`（端侧唯一的时钟读数处，Core 不读表）。
     var todoBoard: TodoBoard {
-        TodoQuery.board(todos, filter: todoFilter, window: todoWindow, groupBy: todoGroupBy, order: todoSortOrder)
+        TodoQuery.board(
+            todos,
+            filter: todoFilter,
+            search: todoSearchText,
+            window: todoWindow,
+            groupBy: todoGroupBy,
+            order: todoSortOrder
+        )
     }
 
     /// 清单空态那一句该说什么（判定在 Core：`TodoQuery.emptyKind`）。
+    ///
+    /// 「有没有在搜」也要给（片 `TD-LIST-1`）：搜一个词一条都不命中时，库里明明有任务 ——
+    /// 说成「还没有待办」就是一句假话（用户会以为任务丢了）。
     var todoEmptyKind: TodoEmptyKind {
-        TodoQuery.emptyKind(hasAnyTask: !todos.isEmpty, filter: todoFilter)
+        TodoQuery.emptyKind(
+            hasAnyTask: !todos.isEmpty,
+            filter: todoFilter,
+            searching: !TodoSearch.normalized(todoSearchText).isEmpty
+        )
     }
 
     /// 换排序档（三档）。切档**不重读库、不改任何一条数据** —— 它只换一屏的画法。
@@ -7387,6 +7440,12 @@ final class AppState: ObservableObject {
     /// 换分组档（四档）。
     func setTodoGroupBy(_ groupBy: TodoGroupBy) {
         todoGroupBy = groupBy
+    }
+
+    /// 换**本地检索词**（片 `TD-LIST-1` 的 B4）。切一个字只重画这一屏 —— 与上面三条切换器同一条口径：
+    /// **不重读库、不写库、不改任何一条任务**（`FR-NOTE-39` 的唯一事实源）。
+    func setTodoSearchText(_ text: String) {
+        todoSearchText = text
     }
 
     // MARK: - 待办：日历那一屏（队列 `L-100` 界面半第二片）

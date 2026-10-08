@@ -20,6 +20,10 @@ import Foundation
 ///     逾期**标识**（`TodoDue.isOverdue`）**只看未完成**（它回答「要不要催」）—— 契约 §3.13 第四条；
 ///  ④ **认不出的取值「当没给」**：筛选 / 分组 / 排序的取值都只认本文件登记的档，认不出回默认档
 ///     （原样装进去会让界面显示一个不存在的档，而库里那一行永远筛不出来）。
+///
+/// 第五件（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 B4）：**本地关键字检索**（`TodoSearch`）——
+/// 「哪些行进来」的第三个输入，与筛选**同一层、同一份数据**（不新开查库路），判定只看标题。
+/// 空词 = 不过滤（「没在搜」不等于「什么都搜不到」）。
 
 /// 清单的**参照窗口**：三个边界时刻，**全由调用方传**。
 ///
@@ -120,6 +124,41 @@ public enum TodoDue {
     /// 同上，参照时刻只给「今天零点」那一半（与对侧 `TodoDue.isOverdue(todo, todayStart)` 同形）。
     public static func isOverdue(_ todo: Todo, todayStart: Date) -> Bool {
         isOverdue(todo.dueAt, done: todo.done, todayStart: todayStart)
+    }
+}
+
+/// 清单的**本地关键字检索**（`FR-NOTE-37` 的「检索」那一半）—— 判定只落这一处。
+///
+/// **是本地检索，不是查库**：待办那一屏的检索按【已加载的那一份 `todos`】过滤（与筛选 / 排序 /
+/// 分组同一层、同一个数据来源 `FR-NOTE-39` 的唯一事实源）—— 它不新开一条查库路，也就没有
+/// 「查到的与屏上的对不上」这种处境。对侧 `TodoQuery.kt` 与本侧同口径。
+///
+/// 三条口径：
+///  ① **只看标题**：`localizedCaseInsensitiveContains`（大小写不敏感、语言无关的包含判定）——
+///     截止时间那一列不参与匹配（搜「10-07」不会把那天到期、标题里没这个串的行捞出来）；
+///  ② **空词 = 不过滤**：检索词归一（去首尾空白）之后是空串 ⇒ 每一行都命中 ——
+///     「没在搜」不等于「什么都搜不到」（与 `TodoFilter.all` 同一条用意）；
+///  ③ **唯一入口**：界面只调 ``apply(_:query:)``，不自己 `filter` / `contains`（第二套匹配
+///     口径正是「同一个词两处给出不同结果」那种缺陷的起点）。
+public enum TodoSearch {
+
+    /// 检索词归一：去首尾空白（用户按空格不算搜一个空格）。
+    public static func normalized(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 一行是否命中：**只看标题**，大小写不敏感；空词（归一后）⇒ 命中。
+    public static func matches(_ todo: Todo, query: String) -> Bool {
+        let needle = normalized(query)
+        guard !needle.isEmpty else { return true }
+        return todo.title.localizedCaseInsensitiveContains(needle)
+    }
+
+    /// 筛出命中的行（**唯一检索入口**）。空词原样返回（不重排、不动顺序 —— 顺序只有 `TodoSort` 一处）。
+    public static func apply(_ todos: [Todo], query: String) -> [Todo] {
+        let needle = normalized(query)
+        guard !needle.isEmpty else { return todos }
+        return todos.filter { $0.title.localizedCaseInsensitiveContains(needle) }
     }
 }
 
@@ -348,26 +387,31 @@ public enum TodoQuery {
         return .later
     }
 
-    /// 清单空态该说哪一句（**唯一判定处**）：只吃两样 —— 库里有没有任务、当前是哪一档。
+    /// 清单空态该说哪一句（**唯一判定处**）：只吃三样 —— 库里有没有任务、当前是哪一档、有没有在搜。
     ///
-    /// 界面只在 `board.total == 0` 时问它；此时 `hasAnyTask == true` 且档位不是「全部」
-    /// 就是「这一档筛掉了」（「全部」档下筛不掉任何一行，所以那一支到不了）。
-    public static func emptyKind(hasAnyTask: Bool, filter: TodoFilter) -> TodoEmptyKind {
-        hasAnyTask && filter != .defaultFilter ? .filteredOut(filter) : .none
+    /// 界面只在 `board.total == 0` 时问它；此时 `hasAnyTask == true` 且（档位不是「全部」**或**
+    /// 正在检索）就是「这一档 / 这个词筛掉了」（「全部」档 + 空词下筛不掉任何一行，所以那一支到不了）。
+    public static func emptyKind(hasAnyTask: Bool, filter: TodoFilter, searching: Bool = false) -> TodoEmptyKind {
+        hasAnyTask && (filter != .defaultFilter || searching) ? .filteredOut(filter) : .none
     }
 
-    /// 清单视图（**唯一入口**）：筛 → 排 → 分区 → 归堆。
+    /// 清单视图（**唯一入口**）：筛 → 检索 → 排 → 分区 → 归堆。
     ///
     /// 组顺序固定：不分组 = 1 组（键 `.all`）；按状态 = 未完成 → 已完成；按时间 = `TodoBand.displayOrder`；
     /// 按标签 = 标签升序（确定序）+ 「未分类」最后。**空组一律丢掉**（界面上不画空组）。
+    ///
+    /// `search` = 本地关键字（`TodoSearch`，只看标题）：它与筛选**同一层**（都答「哪些行进来」），
+    /// 都在排序之前 —— 一词一档各自的口径都还在它们自己那一处，界面只调这一个入口。
     public static func board(
         _ todos: [Todo],
         filter: TodoFilter = .defaultFilter,
+        search: String = "",
         window: TodoWindow,
         groupBy: TodoGroupBy = .defaultGroupBy,
         order: TodoSort.Order = .defaultOrder
     ) -> TodoBoard {
-        let kept = TodoFilter.apply(todos, filter: filter, window: window)
+        let matched = TodoSearch.apply(todos, query: search)
+        let kept = TodoFilter.apply(matched, filter: filter, window: window)
         let sections = TodoSort.sections(kept, order: order)
         let open = sections.first { $0.kind == .open }?.todos ?? []
         let done = sections.first { $0.kind == .completed }?.todos ?? []
