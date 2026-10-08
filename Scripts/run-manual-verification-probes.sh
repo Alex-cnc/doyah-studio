@@ -335,7 +335,12 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   确认才落库（清空 ⇒ 0 / 单条 ⇒ 减 1），读数同时给内存镜像与**库里真值**。
 #   ⚠️ ③ 要写临时笔记库（历史与笔记**同库**）⇒ 走 `DOYAH_NOTES_DIR`，没设就 `XCTSkip`。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests"
+# + `TodoCalendarEntriesProbeTests`（`TD-CAL-1` · 派单 `T-20261009-026`：日历「选中日」那两枚入口 ——
+#   新建待办的截止预填该日 09:00 / 「写笔记」新开一篇；正反两面由**渲染记录**判）+ `LunarSubtitleProbeTests`
+#   （`TD-CAL-2` 同派单：月视图格的**副条** —— 每格农历日 + 交节那天那一格的节气）。
+#   两枚都是「写下用例却没接进 `--filter` = 一个都跑不到」，由 `check-result-scroll-ledger.py` ⑤ 抓出后补上。
+# `--filter` 传的是**正则**，所以这里用 `|` 连接。
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
