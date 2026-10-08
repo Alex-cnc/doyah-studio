@@ -715,7 +715,13 @@ struct NotesEditorView: View {
                             .stroke(Theme.surface(.panel), lineWidth: 1)
                     )
             } else {
-                NotePreviewBody(text: appState.noteEditorBody)
+                NotePreviewBody(
+                    text: appState.noteEditorBody,
+                    // **正文被按下 ⇒ 进编辑**（人类主人裁决 `T-20261007-077`：**R3 单击 + R4 双击**）。
+                    // 按下这件事由正文那块 `NSTextView`（`PreviewTextView`）自己投出来 ——
+                    // 挂在**外层**的手势轮不到（正文自己吃掉鼠标事件，见 `NotePreviewBody` 头注释）。
+                    onActivate: { appState.beginEditingCurrentNote() }
+                )
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
                             .stroke(Theme.surface(.panel), lineWidth: 1)

@@ -465,6 +465,188 @@ final class NotesLayoutProbeTests: XCTestCase {
         )
     }
 
+    // MARK: - R3 / R4 / R5 预览态点正文 ⇒ 进编辑（`T-20261007-077` · 人类主人裁决「要 A + C，不要 B」）
+
+    /// **预览态下，把一次鼠标按下投给正文那块文本 ⇒ 进编辑**（人类主人裁决 `T-20261007-077`：
+    /// **A + C，不要 B**；原话逐字「**我的预期是 A 和 C，不是 B**」）。
+    ///
+    /// ## 对上的五条
+    ///
+    /// · **R1 / R2 是起点，不是本用例的判据**：先走 `handleNoteRowClick(_:modifiers:)`（列表里单击
+    ///   那条入口）⇒ `editorMode == .preview`（R1 保留）；R2（列表里双击）本轮不碰。
+    /// · **R3（= C）**：预览态下**单击正文**（`mouseDown` · `clickCount = 1`）⇒ `editorMode == .edit`；
+    /// · **R4（= A）**：回到预览态后**双击正文**（`clickCount = 2`）⇒ `editorMode == .edit`；
+    /// · **R5**：点之前，正文那个 `NSTextView.isEditable == false`（预览期仍只读 —— R3 / R4 是
+    ///   「点了就切编辑」，不是「预览里能直接改字」）。
+    ///
+    /// ## 判据为什么是「投事件给真视图」，而不是「调一下入口」
+    ///
+    /// 单里写死的两条：① 判据必须是**对正文区发单击 / 双击事件**；② **不许拿「代码里有
+    /// `onTapGesture`」当判据** —— 判的必须是 `editorMode` 由 `.preview` → `.edit` 这条**状态转移**。
+    /// 所以这里把 `NSEvent`（左键按下）**真的投给宿主视图树里那块正文**，再看模式。
+    ///
+    /// ## 这条路为什么判得动（同文件里另两条手势判不动）
+    ///
+    /// `N2-3b` 与 `T-080` 那两条登记的边界是 **SwiftUI 的手势不响应合成事件**
+    /// （`window.sendEvent` ⇒ 事件收下但 `notesModule` 不动）。本用例走的是 **AppKit 那一层**：
+    /// 预览态正文是一个**真 `NSTextView`**（`App/Views/NotePreviewBody.swift` 的
+    /// `PreviewTextView`），它对 `mouseDown(with:)` 的处置是**同步、确定**的 —— 直接把事件投给
+    /// 那个视图即可，绕开 SwiftUI 的手势判定。
+    ///
+    /// ## 能判红（否则「投完就进编辑」可能是这套量法自己造的）
+    ///
+    /// 两条对照件都在同一次运行里：
+    ///   ① **点前 / 点后成对**：点之前必须是 `.preview`（点后变 `.edit` 才有意义）；
+    ///   ② **负对照**：把**同一个事件**投给一枚**跟产品无关的裸 `NSTextView`** ⇒ `editorMode`
+    ///      必须**一个字节不动** —— 这一条挡的是「只要调了 `mouseDown` 模式就会翻」这类恒真量法。
+    /// 改动前那一版（正文是裸 `NSTextView`、不接回调）**本用例当场红**（实测读数见本轮回执）。
+    @MainActor
+    func testR3R4ClickOnPreviewBodyEntersEditing() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        try await seedOneNote(host)
+        await host.state.reloadNotes()
+        let note = try XCTUnwrap(
+            host.state.visibleNotes.first,
+            "夹具没进列表（`visibleNotes` 是空的）⇒ 下面那两下「点正文」没有上下文"
+        )
+
+        let live = makeLive(host)
+        // 模式一变，SwiftUI 要在 `TextEditor` / `NotePreviewBody` 两支之间换视图 ⇒ 再泵一轮让它落地。
+        func settle() {
+            let deadline = Date().addingTimeInterval(0.5)
+            while Date() < deadline {
+                live.window.layoutIfNeeded()
+                live.hosting.layoutSubtreeIfNeeded()
+                live.hosting.displayIfNeeded()
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            }
+            live.window.layoutIfNeeded()
+            live.hosting.layoutSubtreeIfNeeded()
+        }
+        /// 预览态里那块**只读**正文（`isEditable == false` 的那一个 `NSTextView`）。
+        func previewBody() throws -> NSTextView {
+            let bodies = UISnapshot.LiveHost<Never>.findViews(ofType: NSTextView.self, in: live.hosting)
+                .filter { !$0.isEditable }
+            return try XCTUnwrap(
+                bodies.first,
+                "预览态里一个只读的 `NSTextView` 都没量到 —— 判据的入口没了"
+                    + "（本用例要判的就是「在这块文本上按下鼠标」）"
+            )
+        }
+        /// **把一次左键按下投给某个视图**（真 `NSEvent`；`clickCount` 区分单击 / 双击）。
+        func press(_ view: NSView, clickCount: Int) throws {
+            let event = try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown,
+                    location: NSPoint(x: 8, y: 8),
+                    modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: live.window.windowNumber,
+                    context: nil,
+                    eventNumber: 1,
+                    clickCount: clickCount,
+                    pressure: 1
+                ),
+                "`NSEvent.mouseEvent` 没造出来 ⇒ 这一条判据的输入没了"
+            )
+            view.mouseDown(with: event)
+        }
+
+        // ── 起点：R1（列表里单击）⇒ 预览态 ─────────────────────────────────────────
+        host.state.handleNoteRowClick(note, modifiers: [])
+        settle()
+        let startMode = host.state.editorMode
+        print("T-077 起点（列表里单击之后）：editorMode=\(startMode)")
+        XCTAssertEqual(
+            startMode, .preview,
+            "起点不是预览态（实测 \(startMode)）—— R1 那条「单击列表 ⇒ 预览」没成立，成对读数的点前不成立"
+        )
+
+        // ── R5 的前提：预览期正文只读 ────────────────────────────────────────────
+        let body = try previewBody()
+        print("T-077 正文那件：类型=\(type(of: body)) isEditable=\(body.isEditable)")
+        XCTAssertFalse(
+            body.isEditable,
+            "预览期正文不是只读的（isEditable=true）—— R5 不成立"
+        )
+
+        // ── 负对照：同一个事件投给一枚跟产品无关的裸 `NSView` ⇒ 模式不许动 ──────────
+        // **为什么不是裸 `NSTextView`**（本轮实测 · 别重走）：`NSTextView` 的 `mouseDown(with:)`
+        // 会落进 **AppKit 的跟踪循环**、等一个 `mouseUp`；离屏探针里没有后续事件 ⇒ 整个用例挂在
+        // 那一行（实测跑满 4 分钟 CPU 不返回，只能杀掉）。负对照要判的只是「投事件这个动作本身
+        // 不会翻模式」，一枚普通 `NSView` 就够。
+        let control = NSView(frame: CGRect(x: 0, y: 0, width: 200, height: 80))
+        let beforeControl = host.state.editorMode
+        try press(control, clickCount: 1)
+        settle()
+        print("T-077 负对照（裸 `NSView` 收同一个事件）：\(beforeControl) → \(host.state.editorMode)")
+        XCTAssertEqual(
+            host.state.editorMode, beforeControl,
+            "同一个事件投给一枚跟产品无关的裸 `NSView` 也把模式翻掉了 ⇒ 这套量法恒真，判不出东西"
+        )
+
+        // ── R3 的前置守卫（同时也是本用例在**改动前**的判红点）──────────────────────
+        // 正文必须由**产品自己的** `PreviewTextView` 处置鼠标按下：改动前那一版是裸 `NSTextView`
+        // —— 它既不接回调，直接投事件还会落进 AppKit 跟踪循环 ⇒ 这条守卫让「R3 / R4 没落地」
+        // **当场判红**，而不是把用例挂死。两条守卫都不绿就直接返回（后面那两下按不下去）。
+        guard let preview = body as? PreviewTextView else {
+            XCTFail(
+                "预览态正文不是 `PreviewTextView`（`App/Views/NotePreviewBody.swift`）—— "
+                    + "R3 / R4 那条「在正文上按下 ⇒ 进编辑」的事件路径不在产品上（实测类型 \(type(of: body))）"
+            )
+            return
+        }
+        guard preview.onActivate != nil else {
+            XCTFail(
+                "正文那件没接上回调（`onActivate` 是 nil）—— 投事件会挂死在 AppKit 的跟踪循环里；"
+                    + "R3 / R4 的另一半也没接上"
+            )
+            return
+        }
+
+        // ── R3（= C）：预览态**单击**正文 ⇒ 进编辑 ────────────────────────────────
+        let beforeSingle = host.state.editorMode
+        try press(preview, clickCount: 1)
+        settle()
+        let afterSingle = host.state.editorMode
+        print("T-077 R3 单击正文：\(beforeSingle) → \(afterSingle)")
+        XCTAssertEqual(
+            afterSingle, .edit,
+            "R3（预览态单击正文 ⇒ 进编辑）没落地：投完单击之后 `editorMode` 还是 \(afterSingle)"
+        )
+        XCTAssertNotEqual(
+            beforeSingle, afterSingle,
+            "点前 / 点后读到同一个值（\(afterSingle)）⇒ 这一对读数是恒真的"
+        )
+
+        // ── R4（= A）：回到预览态，**双击**正文 ⇒ 进编辑 ──────────────────────────
+        host.state.handleNoteRowClick(note, modifiers: [])
+        settle()
+        XCTAssertEqual(
+            host.state.editorMode, .preview,
+            "第二次「列表里单击」没回到预览态（实测 \(host.state.editorMode)）—— R4 的起点不成立"
+        )
+        let bodyForDouble = try previewBody()
+        guard let previewForDouble = bodyForDouble as? PreviewTextView, previewForDouble.onActivate != nil else {
+            XCTFail("双击那一路的正文不是接上回调的 `PreviewTextView`（类型 \(type(of: bodyForDouble))）")
+            return
+        }
+        let beforeDouble = host.state.editorMode
+        try press(previewForDouble, clickCount: 2)
+        settle()
+        let afterDouble = host.state.editorMode
+        print("T-077 R4 双击正文：\(beforeDouble) → \(afterDouble)")
+        XCTAssertEqual(
+            afterDouble, .edit,
+            "R4（预览态双击正文 ⇒ 进编辑）没落地：投完双击之后 `editorMode` 还是 \(afterDouble)"
+        )
+        XCTAssertNotEqual(
+            beforeDouble, afterDouble,
+            "点前 / 点后读到同一个值（\(afterDouble)）⇒ 这一对读数是恒真的"
+        )
+    }
+
     // MARK: - N2-2 探索：操作栏 / 工具条里**哪些东西量得动**（一次性诊断）
 
     /// 把「操作栏 / 工具条」相关的几件视图各量一遍宽度，并把活宿主顶带里的控件逐条打印出来
