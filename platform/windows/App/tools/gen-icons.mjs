@@ -5,12 +5,12 @@
 // 打包 MSI / NSIS 也要图标。图标是**生成物**（可复现），所以入库的是这个脚本 + **母版** + 生成结果。
 //
 // 源（唯一母版）：`tools/icon-source-1024.png` —— 与派单仓
-//   `_shared/DoyahDispatch/assets/product-icon/icon-1024.png` **逐字节相同**
-//   （1024×1024 · bitDepth 8 · **colorType 2 无 alpha** · 无隔行）。
+//   `_shared/DoyahDispatch/assets/product-icon/icon-transparent-1024.png` **逐字节相同**
+//   （1024×1024 · bitDepth 8 · **colorType 6 RGBA** · 无隔行 · **底衬 = 透明**）。
 //
 // 本脚本**只做等比缩放**（面积平均 / box filter，按源像元与目标像元的覆盖面积加权），
 // 产出既有各档 PNG 与**七档 `icon.ico`（16/24/32/48/64/128/256）**：
-//   · 不裁切构图、不加 alpha、不改底衬（母版无 alpha ⇒ 逐档像素仍全不透明）；
+//   · 不裁切构图、不加底衬、**母版 alpha 逐档原样保留**（四角 / 四边 alpha=0 ⇒ 各档透明底）；
 //   · **不引第三方依赖**（解码 / 缩放 / 编码全用 node 内置模块，见文件末 `import` 行）。
 //
 // 用法：node tools/gen-icons.mjs [--check]

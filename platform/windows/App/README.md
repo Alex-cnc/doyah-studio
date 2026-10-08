@@ -12,7 +12,7 @@
 | `src-tauri/src/main.rs` | 可执行入口（发布构建不弹控制台） |
 | `src-tauri/tauri.conf.json` | Tauri 配置（窗口 / CSP / `frontendDist = ../dist` / bundle MSI + NSIS） |
 | `src-tauri/capabilities/default.json` | 能力集：**只有 `core:default`**（不引任何插件） |
-| `src-tauri/icons/` | 应用图标 —— **生成物**（`tools/gen-icons.mjs` 由母版 `tools/icon-source-1024.png` **等比派生**；`icon.ico` 含 16/24/32/48/64/128/256 **七档**） |
+| `src-tauri/icons/` | 应用图标 —— **生成物**（`tools/gen-icons.mjs` 由母版 `tools/icon-source-1024.png` **等比派生**；母版 sha256 `b42a81f969a2cc32` · 1024² · bd8 · ct6(RGBA) · **底衬 = 透明**；`icon.ico` 含 16/24/32/48/64/128/256 **七档**） |
 | `src/ipc.ts` | 前端 ↔ Rust 的唯一出入口（命令名 `COMMANDS` + **浏览器旁路** mock） |
 | `src/grid/windowing.ts` | 窗口取数的纯函数（要哪一片 / 上下留多少占位） |
 | `src/theme/index.ts` | 主题档位（system / light / dark）+ 变量名拼法 |
