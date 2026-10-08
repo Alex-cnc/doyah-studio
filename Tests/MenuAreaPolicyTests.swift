@@ -87,14 +87,44 @@ final class MenuAreaPolicyTests: XCTestCase {
         return try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
     }
 
+    /// 取 `anchor` 起、**配对花括号**圈住的那一段（即锚点所在函数的函数体 / 闭包体）。
+    ///
+    /// 为什么不再用「锚点 + 固定 N 个字符」：那是**魔数窗口** —— 函数里插几行就会把要找的语句
+    /// 挤出窗口，判据**假红**、且与源码对错无关（HIST-2 在 `selectActivityItem` 里插了 3 行
+    /// 注释与 `syncLowerPaneTabWithSegment()` 调用，就把 900 的窗口挤爆了）。
+    /// 改成跟着函数体走：锚点后的第一个 `{` 起、到与它配对的 `}` 为止 —— 函数里增删多少行都不影响，
+    /// 判据只随「那句还在不在这个函数里」变化。
+    private func functionBody(in source: String, from anchor: String) -> Substring? {
+        guard let anchorRange = source.range(of: anchor),
+              let openBrace = source[anchorRange.lowerBound...].firstIndex(of: "{"),
+              let body = balancedBlock(in: source, from: openBrace) else { return nil }
+        return body
+    }
+
+    /// 从 `openBrace` 起，返回与它配对的 `}` **之前**的整段（含首尾花括号）。
+    private func balancedBlock(in source: String, from openBrace: String.Index) -> Substring? {
+        var depth = 0
+        var index = openBrace
+        while index < source.endIndex {
+            switch source[index] {
+            case "{": depth += 1
+            case "}":
+                depth -= 1
+                if depth == 0 { return source[openBrace...index] }
+            default: break
+            }
+            index = source.index(after: index)
+        }
+        return nil
+    }
+
     /// 新建查询 = 先切到数据库区再建页签。**只做菜单显示联动是不够的**：快捷键 ⌘T 与命令面板
     /// 不经过菜单项，页签仍会建在看不见的区里。
     func testNewQuerySwitchesToDatabaseArea() throws {
         let state = try source("App/AppState.swift")
-        guard let range = state.range(of: "func newQueryTab() {") else {
+        guard let body = functionBody(in: state, from: "func newQueryTab() {") else {
             return XCTFail("`newQueryTab()` 不在了 —— 锚点变了就更新这条判据，不要删掉它")
         }
-        let body = state[range.lowerBound...].prefix(600)
         XCTAssertTrue(body.contains("selectActivityItem(.database)"),
                       "`newQueryTab()` 没有先切到数据库区 —— 在工作区里点「新建查询」会建在看不见的地方")
     }
@@ -102,10 +132,9 @@ final class MenuAreaPolicyTests: XCTestCase {
     /// 换区必须广播（菜单层不持有 `AppState`，这是两端之间唯一的接口）。
     func testSelectionPostsActivityChange() throws {
         let state = try source("App/AppState.swift")
-        guard let range = state.range(of: "func selectActivityItem(") else {
+        guard let body = functionBody(in: state, from: "func selectActivityItem(") else {
             return XCTFail("`selectActivityItem(_:)` 不在了 —— 它是选中区的唯一写入口，别改名")
         }
-        let body = state[range.lowerBound...].prefix(900)
         XCTAssertTrue(body.contains("NotificationCenter.default.post(name: .doyahActivityItemChanged"),
                       "换区没有广播 ⇒ 菜单显示不会跟着变")
     }
@@ -139,10 +168,13 @@ final class MenuAreaPolicyTests: XCTestCase {
     /// 反查键是按**标题**认的 ⇒ 标题改完要再对齐一次，否则「启动那一刻标题还没本地化」会漏掉项。
     func testApplyRechecksVisibilityAfterRetitle() throws {
         let localizer = try source("App/MainMenuLocalizer.swift")
-        guard let retitle = localizer.range(of: "let changed = retitle(mainMenu, to: language)") else {
+        guard let body = functionBody(in: localizer, from: "private static func apply(_ language: AppLanguage) {") else {
+            return XCTFail("`apply(_:)` 不在了 —— 锚点变了就更新这条判据")
+        }
+        guard let retitle = body.range(of: "let changed = retitle(mainMenu, to: language)") else {
             return XCTFail("`retitle` 那一步不在了 —— 锚点变了就更新这条判据")
         }
-        let after = localizer[retitle.upperBound...].prefix(500)
+        let after = body[retitle.upperBound...]
         XCTAssertTrue(after.contains("applyVisibility(mainMenu, area: lastKnownArea)"),
                       "改完标题没有重新对齐显示 —— 标题还没本地化的那一刻会认不出登记过的项")
     }
@@ -150,11 +182,12 @@ final class MenuAreaPolicyTests: XCTestCase {
     /// 浏览器页签长在工作区（队列 `L-149`）⇒ 点菜单建页签前先切区，与「新建查询」同一口径。
     func testNewBrowserTabSwitchesToWorkspaceArea() throws {
         let commands = try source("App/DoyahStudioCommands.swift")
-        guard let range = commands.range(of: "workspaceBrowser.openBrowserTab()") else {
+        guard let body = functionBody(in: commands, from: "Button(L(.menuNewBrowserTab))"),
+              let openTab = body.range(of: "workspaceBrowser.openBrowserTab()") else {
             return XCTFail("浏览器页签那枚菜单项不在了 —— 锚点变了就更新这条判据")
         }
-        let around = commands[commands.startIndex..<range.lowerBound].suffix(400)
-        XCTAssertTrue(around.contains("selectActivityItem(.workspace)"),
+        let before = body[body.startIndex..<openTab.lowerBound]
+        XCTAssertTrue(before.contains("selectActivityItem(.workspace)"),
                       "新建浏览器页签没有先切到工作区 —— 页签会建在看不见的区里")
     }
 }
