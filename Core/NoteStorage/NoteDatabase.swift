@@ -374,6 +374,36 @@ public enum NoteSchemaV7 {
     ]
 }
 
+/// **schema v8**（片 `WY-1a` · 派单 `T-20261009-029` / `T-20261008-050`）：给 `note` 补一列
+/// **`spans`** —— 笔记正文的**权威源**（span 树的 JSON）。
+///
+/// 契约出处与口径：片 `WY-1a` 的「`NoteBody` 权威源改 `{version: 2, spans[]}`」——
+/// `note` 表新增 `spans` 列（schema +1），`body` 列**降为 spans 的单向投影**
+/// （由 `NoteBody.body` 派生 · **不反向回写** · 正文的**单一写入口** = `setNoteSpans`）。
+///
+/// 四条取舍：
+///   · **补列、不新表、不新索引**：正文本来就是 `note` 自己的一个状态（与 v3 `favorite` /
+///     v4 `pinned` 同形）；检索（`note_fts`）读的仍是 `body` 投影，不需要给 spans 建索引。
+///   · **列可空**：v1 存量笔记还没有 spans ⇒ 补列只能加可空列。「每条都有 spans」这条不变量
+///     由**库内一次性迁移**保证（= 片 `WY-2`，**单独出包**），不由 `NOT NULL` 保证 ——
+///     那会让 `ALTER TABLE` 在存量库上直接失败（同 v2 的 `notebook_uid`）。
+///   · **不在这里回填**：本片**只动 Core 模型 + schema**，不做历史迁移，也不删用户正文
+///     （`body` 列一个字节不改）。
+///   · **写入口唯一**：只有 `setNoteSpans(_:body:id:)` 一处写 `spans`（并把它的投影写进 `body`）——
+///     「改正文」这条路只有一条，且它**不改** `updated_at` 之外的任何列（与 `setFavorite` 同纪律）。
+public enum NoteSchemaV8 {
+
+    public static let version: Int32 = 8
+
+    /// 这一版**不新增表 / 不新增索引**（只补一列）。
+    public static let tables: [String] = []
+    public static let indexes: [String] = []
+
+    public static let ddl: [String] = [
+        "ALTER TABLE note ADD COLUMN spans TEXT;"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -458,8 +488,8 @@ public final class NoteDatabase {
     public static let fileName = "notes.sqlite3"
 
     /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏、v3 → v4 补置顶、
-    /// v4 → v5 补待办任务清单、v5 → v6 补提醒、v6 → v7 补查询历史）。
-    public static let supportedVersion = NoteSchemaV7.version
+    /// v4 → v5 补待办任务清单、v5 → v6 补提醒、v6 → v7 补查询历史、v7 → v8 补正文 spans 列）。
+    public static let supportedVersion = NoteSchemaV8.version
 
     private let connection: SQLiteConnection
 
@@ -546,6 +576,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV7.version {
                 for statement in NoteSchemaV7.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV7.version)")
+            }
+            if current < NoteSchemaV8.version {
+                for statement in NoteSchemaV8.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV8.version)")
             }
         }
     }
@@ -736,6 +770,32 @@ public final class NoteDatabase {
         try connection
             .scalarInt("SELECT pinned FROM note WHERE uuid = ?", [.text(id.uuidString)])
             .map { $0 == 1 }
+    }
+
+    // MARK: - 正文 spans（schema v8 · 片 `WY-1a`）
+
+    /// **写一条笔记的正文权威源 `spans`（JSON）—— 这里是唯一一处写 `spans` 的路径。**
+    ///
+    /// 三条口径：
+    ///   · **`spans` 是权威源，`body` 是它的单向投影**：所以同一条语句把**投影**（`body`）一并写下去
+    ///     —— 落库的 `body` 因此恒等于 `spans` 的投影，不会有「权威源换了、文本列还是旧的」这种半新半旧。
+    ///   · **不反向回写**：没有任何一条路从 `body` 反推 `spans`（v1 → v2 的一次性迁移归片 `WY-2`）。
+    ///   · **不碰 `updated_at` 之外的列**：调用方若要刷新时间，自己给；这里只动正文这两列
+    ///     （与 `setFavorite` / `setPinned` 的「只改这一件」同纪律 —— 改正文不该顺带动归属 / 收藏 / 置顶）。
+    /// 认不出的 id ⇒ 一行都不匹配（静默无操作），由调用方按返回值如实处置。
+    @discardableResult
+    public func setNoteSpans(_ spans: String, body: String, id: UUID) throws -> Int {
+        try connection.execute(
+            "UPDATE note SET spans = ?, body = ? WHERE uuid = ?",
+            [.text(spans), .text(body), .text(id.uuidString)]
+        )
+        return connection.changeCount
+    }
+
+    /// 一条笔记的正文 spans（JSON 原样；`nil` = 库里没有这条笔记 **或** 该列还是 `NULL`（v1 存量，未迁移））。
+    /// 这两种「`nil`」对读的人是同一件事（这条还没有 v2 权威源），与 `isFavorite` 的 `nil` 同形。
+    public func noteSpans(id: UUID) throws -> String? {
+        try connection.scalarText("SELECT spans FROM note WHERE uuid = ?", [.text(id.uuidString)])
     }
 
     // MARK: - 读

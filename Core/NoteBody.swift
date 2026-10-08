@@ -1,28 +1,43 @@
 import Foundation
 
-/// 笔记正文的**权威源与投影**（Q8 已拍板选 C：Markdown 为源 + 受限样式旁挂）。
+/// 笔记正文的**权威源与投影**。
 ///
-/// 这一层要回答的不是"格式好不好看"，而是**投影到底有损在哪**。所以它是一个可单测的纯函数对：
-///   · `toSpans`：权威源（Markdown + 旁挂样式）→ 编辑器要的 span 树（鸿蒙 `RichEditor` / iOS / Android 各自渲染它）；
-///   · `fromSpans`：span 树 → 权威源（**能进 Markdown 的就写进 Markdown，进不了的落旁挂**）；
-///   · `exportMarkdown`：给"导出 md 文件"用 —— **必须同时给出降级报告**，不许静默丢样式。
+/// **2026-10-08 改版（片 `WY-1a` · 派单 `T-20261009-029` / `T-20261008-050`；依据 `DR-09` 第三改 /
+/// `FR-RT-10` / `FR-RT-11` / 概要设计 `ADR-11`）**：权威源从 v1 的「Markdown + 样式旁挂」
+/// **切到 v2 的 span 树**（`{version: 2, spans: [...]}`）。从此：
+///   · **`spans` 是权威源** —— 一篇笔记的正文以它为准；
+///   · **`body`（Markdown 文本）降为单向投影** —— 由 `spans` 派生（`body` / 兼容别名 `markdown`
+///     都是 `NoteBodyProjection.markdown(from:)` 的产物），**不反向回写**（改文本不会回改 spans 的语义）；
+///   · 落库侧：`note` 表新增 **`spans` 列**（schema v8），正文的**单一写入口** = `NoteDatabase.setNoteSpans`；
+///     **交换面不变** —— JSON 备份格式仍走纯文本 `body`（`Note.body`），不塞富文本结构。
 ///
-/// **支持的子集刻意很小**（Q8 的"不做清单"在这里变成代码）：
-/// 粗体 `**x**`、斜体 `*x*`、行内代码 `` `x` ``、**链接 `[文字](目标)`**（2026-10-01 第 146 轮补，
-/// 队列 `L-137` 剩余③ —— 人类主人答「#2，进」）；**行内颜色与字号 Markdown 表达不了 → 一律进旁挂**；
+/// **v1 → v2 的迁移规则**（`NoteBody.migrated()`）：
+///   · 旧文档（`{version: 1, markdown, sidecar}`）仍可**反序列化**（`NoteSidecarStyle` 兼容）；
+///   · 迁移把 v1 的「Markdown + 旁挂」投影成 v2 的 spans —— **旁挂里的颜色 / 字号会被搬到 span 上，
+///     不许静默丢**（搬不动的那几条由 `NoteBodyProjection.project(_:sidecar:language:)` 如实报降级）；
+///   · 更高版本如实拒绝（`MigrationError.fromFuture`）。
+///
+/// 「支持的子集刻意很小」这条 v1 口径**一字未改**：粗体 `**x**`、斜体 `*x*`、行内代码 `` `x` ``、
+/// 链接 `[文字](目标)`（2026-10-01 第 146 轮补，队列 `L-137` 剩余③ —— 人类主人答「#2，进」）；
+/// 行内颜色与字号 Markdown 表达不了 → 落 span 的 `color` / `size`；
 /// 其余 Markdown 语法（标题、列表、表格…）**原样当纯文本搬运**，不解析也不破坏 ——
-/// 这保证了"AI 写进来的 Markdown 不会被我们改坏"。
-/// **链接刻意只到"目标"为止**：它是不是能加载的地址、该开在哪儿，都不在这一层判
+/// 这保证了「AI 写进来的 Markdown 不会被我们改坏」。
+/// **链接刻意只到「目标」为止**：它是不是能加载的地址、该开在哪儿，都不在这一层判
 /// （前者是浏览器那条唯一入口，后者是契约「默认开在已内嵌的浏览器页签里」）。
 public enum NoteBodyFormat {
     /// 权威源的版本号：结构变了才升，并必须给出迁移规则（Q8 的硬要求）。
-    public static let currentVersion = 1
+    /// **v1 → v2**：权威源 Markdown + 旁挂 → `spans`（片 `WY-1a`）。
+    public static let currentVersion = 2
 }
 
-/// 旁挂样式：只承载 **Markdown 表达不了**的属性（颜色 / 字号），并按"文本 + 第几次出现"定位。
+/// 旁挂样式：v1 权威源里承载 **Markdown 表达不了**的属性（颜色 / 字号）的那一半，
+/// 按「文本 + 第几次出现」定位。
 ///
-/// 为什么用"文本 + 序号"而不是偏移量：偏移量在 AI 改写后会整体失效（一改就全错位），
-/// 而"这段文字 + 它是第几次出现"在人改、AI 改之后**仍大概率对得上**；对不上就如实降级（见 `toSpans`）。
+/// v2 起旁挂**不再是权威源的一部分**（颜色 / 字号直接落在 span 上）；这个类型只作为 **v1 的反序列化面**
+/// 保留 —— 老文档里的那一段 JSON 仍要认得出来，且**不许静默丢**（见 `NoteBody.migrated()`）。
+///
+/// 为什么用「文本 + 序号」而不是偏移量：偏移量在 AI 改写后会整体失效（一改就全错位），
+/// 而「这段文字 + 它是第几次出现」在人改、AI 改之后**仍大概率对得上**；对不上就如实降级（见 `project`）。
 public struct NoteSidecarStyle: Codable, Equatable, Sendable {
     public var text: String
     /// 同一段文字在一篇笔记里出现的次序（从 0 开始）。
@@ -40,23 +55,81 @@ public struct NoteSidecarStyle: Codable, Equatable, Sendable {
     }
 }
 
-/// 权威源：Markdown 正文 + 版本号 + 旁挂样式。
-public struct NoteBody: Codable, Equatable, Sendable {
-    public var version: Int
-    public var markdown: String
-    public var sidecar: [NoteSidecarStyle]
+/// 任意 JSON 值（保真用）：`NoteSpan` 里**不认得**的字段原样装在这里，**往返不丢**。
+///
+/// 这是前向兼容的地基：契约 v1.27 之后会给 span 加字段（`link` / `code` …），老版本读新数据
+/// 再写回时**不许把这些字段丢掉**（片 `WY-1a` 明文：本片不新增那两个字段，但模型要留得住）。
+public enum NoteJSONValue: Equatable, Sendable {
+    case null
+    case bool(Bool)
+    case number(Double)
+    case string(String)
+    case array([NoteJSONValue])
+    case object([String: NoteJSONValue])
+}
 
-    public init(version: Int = NoteBodyFormat.currentVersion, markdown: String = "", sidecar: [NoteSidecarStyle] = []) {
-        self.version = version
-        self.markdown = markdown
-        self.sidecar = sidecar
+extension NoteJSONValue: Codable {
+    public init(from decoder: Decoder) throws {
+        let single = try decoder.singleValueContainer()
+        if single.decodeNil() { self = .null; return }
+        if let value = try? single.decode(Bool.self) { self = .bool(value); return }
+        if let value = try? single.decode(Double.self) { self = .number(value); return }
+        if let value = try? single.decode(String.self) { self = .string(value); return }
+        if let value = try? single.decode([NoteJSONValue].self) { self = .array(value); return }
+        if let value = try? single.decode([String: NoteJSONValue].self) { self = .object(value); return }
+        throw DecodingError.dataCorruptedError(in: single, debugDescription: "unsupported JSON value")
     }
+
+    public func encode(to encoder: Encoder) throws {
+        var single = encoder.singleValueContainer()
+        switch self {
+        case .null: try single.encodeNil()
+        case .bool(let value): try single.encode(value)
+        case .number(let value): try single.encode(value)
+        case .string(let value): try single.encode(value)
+        case .array(let value): try single.encode(value)
+        case .object(let value): try single.encode(value)
+        }
+    }
+}
+
+/// 权威源 **v2**：`{version, spans}` —— 一篇笔记的正文以 **span 树**为准。
+///
+/// `body` / `markdown` 都是**单向投影**（由 `spans` 派生，见类型头部注释），**不是**存储字段。
+public struct NoteBody: Codable, Equatable, Sendable {
+    /// 权威源的版本号（`NoteBodyFormat.currentVersion`）。
+    public var version: Int
+    /// **权威源**：正文的 span 树（v2 起）。
+    public var spans: [NoteSpan]
+
+    public init(version: Int = NoteBodyFormat.currentVersion, spans: [NoteSpan] = []) {
+        self.version = version
+        self.spans = spans
+    }
+
+    /// **v1 兼容构造**：`markdown` + `sidecar` 是 v1 的权威源 —— 当场按 1→2 规则投影成 v2 的 `spans`。
+    /// **旁挂里的颜色 / 字号会被搬到 span 上（不静默丢）**；搬不动的那些交给
+    /// `NoteBodyProjection.project(_:sidecar:language:)` 由调用方按语言如实报降级。
+    public init(version: Int = NoteBodyFormat.currentVersion, markdown: String, sidecar: [NoteSidecarStyle] = []) {
+        self.version = version
+        self.spans = NoteBodyProjection.spans(fromMarkdown: markdown, sidecar: sidecar)
+    }
+
+    /// **单向投影**：由 `spans` 派生的 Markdown 正文 —— **不是存储字段，也不反向回写**。
+    /// 落库的 `note.body` 列 = 它的产物；改这段文本不会回改 `spans`（spans 仍是权威源）。
+    public var body: String { NoteBodyProjection.markdown(from: spans) }
+
+    /// 兼容别名：v1 时代这个读点叫 `markdown`（= 同一份投影）。
+    public var markdown: String { body }
 
     /// 版本迁移：**只认自己认识的版本**，更高的版本如实拒绝（不猜、不静默降级）。
     public enum MigrationError: Error, Equatable {
         case fromFuture(Int)
     }
 
+    /// **1→2 规则**：v1 的「Markdown + 旁挂」在**解码 / 构造**时已经投影成 `spans`
+    /// （旁挂的颜色 / 字号那一步就搬到了 span 上 —— 见 `init(markdown:sidecar:)` 与 `init(from:)`）；
+    /// 这里把版本号落到 `currentVersion`。更高的版本如实拒绝。
     public func migrated() throws -> NoteBody {
         guard version <= NoteBodyFormat.currentVersion else {
             throw MigrationError.fromFuture(version)
@@ -67,13 +140,48 @@ public struct NoteBody: Codable, Equatable, Sendable {
     }
 }
 
+extension NoteBody {
+    private enum CodingKeys: String, CodingKey {
+        case version, spans
+        /// v1 的两个键（只在解码时出现；`body` 是更早的旧名，一并对上）。
+        case markdown, body, sidecar
+    }
+
+    /// **可解 v1 也可解 v2**：有 `spans` 走 v2；否则按 v1 的 `markdown`（或旧名 `body`）+ `sidecar`
+    /// 经 1→2 规则投影成 spans。**更高版本不在这里拒** —— 版本门在 `migrated()`（与 v1 同口径）。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        if let spans = try container.decodeIfPresent([NoteSpan].self, forKey: .spans) {
+            self.spans = spans
+        } else {
+            let markdown = try container.decodeIfPresent(String.self, forKey: .markdown)
+                ?? container.decodeIfPresent(String.self, forKey: .body)
+                ?? ""
+            let sidecar = try container.decodeIfPresent([NoteSidecarStyle].self, forKey: .sidecar) ?? []
+            spans = NoteBodyProjection.spans(fromMarkdown: markdown, sidecar: sidecar)
+        }
+    }
+
+    /// **只写权威源**：`{version, spans}`（`body` / `markdown` 是派生投影，不落 JSON）。
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(spans, forKey: .spans)
+    }
+}
+
 /// span 树（编辑器渲染用）：一段文字 + 它带的样式 +（链接才有）目标。
+///
+/// **可编解码，且留得住不认得的字段**：JSON 里出现 `knownFieldNames` 之外的键时原样进
+/// `unknownFields`，再写回时一并带出 —— 契约 v1.27 之后会加 `link` / `code` 等字段，
+/// 老版本读新数据**不许把它们丢掉**（片 `WY-1a` 的判据 ③）。
 public struct NoteSpan: Equatable, Sendable {
     public enum Style: String, Equatable, Sendable, CaseIterable {
         case bold
         case italic
         case code
-        /// 行内颜色（Markdown 表达不了，来自旁挂）
+        /// 行内颜色（Markdown 表达不了，v2 起是 span 自己的字段）
         case color
         /// 字号（同上）
         case size
@@ -88,15 +196,79 @@ public struct NoteSpan: Equatable, Sendable {
     /// 两件事刻意**不在这里**判：① 它是不是一个能加载的地址（那是浏览器那条唯一入口的事，
     /// 见 `BrowserSession.parseAddress`）；② 它该开在哪儿（契约：默认在已内嵌的浏览器页签里）。
     /// 链接 span 的 `text` 是**显示文字**（点之前看见的那几个字）；非链接 span 是 `nil`。
-    /// **链接不进 `styles`** —— 它不是粗体那种"样式"，它是**目标**。
+    /// **链接不进 `styles`** —— 它不是粗体那种「样式」，它是**目标**。
     public var link: String?
+    /// **不认得的字段原样保留**（前向兼容，见 `NoteJSONValue`）。已知字段名不在此列。
+    public var unknownFields: [String: NoteJSONValue]
 
-    public init(text: String, styles: Set<Style> = [], color: String? = nil, size: Int? = nil, link: String? = nil) {
+    /// 已知字段名：解码时这些各走各的分支，其余一律进 `unknownFields`。
+    static let knownFieldNames: Set<String> = ["text", "styles", "color", "size", "link"]
+
+    public init(
+        text: String,
+        styles: Set<Style> = [],
+        color: String? = nil,
+        size: Int? = nil,
+        link: String? = nil,
+        unknownFields: [String: NoteJSONValue] = [:]
+    ) {
         self.text = text
         self.styles = styles
         self.color = color
         self.size = size
         self.link = link
+        self.unknownFields = unknownFields
+    }
+}
+
+extension NoteSpan: Codable {
+    /// 动态键：span 的字段名不是有限集合（前向兼容要求留得住未知键），所以用字符串键容器。
+    private struct DynamicKey: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicKey.self)
+        var text = ""
+        var styles: Set<Style> = []
+        var color: String?
+        var size: Int?
+        var link: String?
+        var unknown: [String: NoteJSONValue] = [:]
+        for key in container.allKeys {
+            switch key.stringValue {
+            case "text": text = (try? container.decode(String.self, forKey: key)) ?? ""
+            case "styles":
+                let raws = (try? container.decode([String].self, forKey: key)) ?? []
+                styles = Set(raws.compactMap(Style.init(rawValue:)))
+            case "color": color = try? container.decode(String.self, forKey: key)
+            case "size": size = try? container.decode(Int.self, forKey: key)
+            case "link": link = try? container.decode(String.self, forKey: key)
+            default:
+                if let value = try? container.decode(NoteJSONValue.self, forKey: key) {
+                    unknown[key.stringValue] = value
+                }
+            }
+        }
+        self.init(text: text, styles: styles, color: color, size: size, link: link, unknownFields: unknown)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: DynamicKey.self)
+        try container.encode(text, forKey: DynamicKey(stringValue: "text"))
+        if !styles.isEmpty {
+            // 排序后再写：集合无序，写出来的字节也应当是确定的（人工比对与 diff 才读得懂）。
+            try container.encode(styles.map(\.rawValue).sorted(), forKey: DynamicKey(stringValue: "styles"))
+        }
+        if let color { try container.encode(color, forKey: DynamicKey(stringValue: "color")) }
+        if let size { try container.encode(size, forKey: DynamicKey(stringValue: "size")) }
+        if let link { try container.encode(link, forKey: DynamicKey(stringValue: "link")) }
+        for (name, value) in unknownFields where !Self.knownFieldNames.contains(name) {
+            try container.encode(value, forKey: DynamicKey(stringValue: name))
+        }
     }
 }
 
@@ -157,21 +329,20 @@ public enum NoteBodyProjection {
         return spans
     }
 
-    /// Markdown + 旁挂 → span 树。**解析不了的东西原样保留为纯文本**（不吞、不改写）。
+    /// 把旁挂样式应用到 span 树上（**v1 → v2 投影的核心一步**）。返回**没能定位**的那些旁挂
+    /// （调用方按语言如实报降级 —— 不静默丢）。
     ///
-    /// **语言由调用方给定**（队列 L-47 / L-65 的口径）：降级说明是**给人看的话**，
-    /// 界面要英文就传 `.english`。此前这里写死简体中文 ⇒ 语言表里
-    /// `noteSidecarLost` / `noteLostColor` / `noteLostSize` / `noteExportDegraded`
-    /// 的英文译文**永远不可达**（死译文）。**刻意不留默认值**：默认值等于把「写死语言」藏起来。
-    public static func toSpans(_ body: NoteBody, language: AppLanguage) -> NoteProjection {
-        var spans = parseInline(body.markdown)
-        var degradations: [String] = []
-
-        // 旁挂：按"文本 + 第几次出现"定位 —— **要能在 span 内部再切一刀**。
-        // 一开始我按"整段 span 文本相等"定位，结果纯文本（没有任何 Markdown 标记）时整篇是一个大 span，
-        // 旁挂永远定位不到（测试当场抓到）。正确做法是：找到那段文字后**把 span 切成三份**再上样式。
-        // 已知简化：出现次序按"扫描顺序"计，不做跨 span 的严格计数（原型够用，正式实现要写清口径）。
-        for style in body.sidecar {
+    /// 旁挂按「文本 + 第几次出现」定位 —— **要能在 span 内部再切一刀**。
+    /// 一开始我按「整段 span 文本相等」定位，结果纯文本（没有任何 Markdown 标记）时整篇是一个大 span，
+    /// 旁挂永远定位不到（测试当场抓到）。正确做法是：找到那段文字后**把 span 切成三份**再上样式。
+    /// 已知简化：出现次序按「扫描顺序」计，不做跨 span 的严格计数（原型够用，正式实现要写清口径）。
+    static func applySidecar(
+        _ spans: [NoteSpan],
+        _ sidecar: [NoteSidecarStyle]
+    ) -> (spans: [NoteSpan], unplaced: [NoteSidecarStyle]) {
+        var spans = spans
+        var unplaced: [NoteSidecarStyle] = []
+        for style in sidecar {
             var seen = 0
             var applied = false
             var index = 0
@@ -200,10 +371,43 @@ public enum NoteBodyProjection {
                 break
             }
             if !applied {
-                degradations.append(LocalizedStrings.format(.noteSidecarLost, language: language, String(style.occurrence + 1), style.text))
+                unplaced.append(style)
             }
         }
-        return NoteProjection(spans: spans, degradations: degradations)
+        return (spans, unplaced)
+    }
+
+    /// **v1 → v2 规则**（语言中立的那一半）：Markdown + 旁挂 → span 树。
+    /// 旁挂里的颜色 / 字号会被搬到 span 上；**搬不动的那些这里不报**（要给人看的话走 `project`）。
+    public static func spans(fromMarkdown markdown: String, sidecar: [NoteSidecarStyle] = []) -> [NoteSpan] {
+        applySidecar(parseInline(markdown), sidecar).spans
+    }
+
+    /// **v1 投影（带降级报告）**：Markdown + 旁挂 → span 树 + 如实报出的降级。
+    ///
+    /// **语言由调用方给定**（队列 L-47 / L-65 的口径）：降级说明是**给人看的话**，
+    /// 界面要英文就传 `.english`。此前这里写死简体中文 ⇒ 语言表里
+    /// `noteSidecarLost` / `noteLostColor` / `noteLostSize` / `noteExportDegraded`
+    /// 的英文译文**永远不可达**（死译文）。**刻意不留默认值**：默认值等于把「写死语言」藏起来。
+    public static func project(
+        _ markdown: String,
+        sidecar: [NoteSidecarStyle] = [],
+        language: AppLanguage
+    ) -> NoteProjection {
+        let result = applySidecar(parseInline(markdown), sidecar)
+        let degradations = result.unplaced.map {
+            LocalizedStrings.format(.noteSidecarLost, language: language, String($0.occurrence + 1), $0.text)
+        }
+        return NoteProjection(spans: result.spans, degradations: degradations)
+    }
+
+    /// **v2 语义下的 `toSpans`**：权威源**已经是** spans，投影不再产生降级。
+    ///
+    /// 保留这个名字是为了既有读点与门禁口径：`MarkdownDocumentTests` 仍按
+    /// `toSpans(NoteBody(markdown: ...), language:).spans == parseInline(同一段)` 钉住
+    /// 「预览与笔记同一份行内解析」（`Scripts/check-markdown-single-source.py` ③）。
+    public static func toSpans(_ body: NoteBody, language: AppLanguage) -> NoteProjection {
+        NoteProjection(spans: body.spans, degradations: [])
     }
 
     /// 行内解析扫到的一个候选：切点 + 切点之前的文字 + 标记本身 + 标记里的文字 +
@@ -282,15 +486,13 @@ public enum NoteBodyProjection {
         )
     }
 
-    // MARK: - span 树 → 权威源
+    // MARK: - span 树 → 投影（单向）
 
-    /// span 树 → 权威源。**能进 Markdown 的进 Markdown，进不了的落旁挂** ——
-    /// 这样"编辑器里改过再存"不会悄悄丢掉颜色与字号。
-    public static func fromSpans(_ spans: [NoteSpan]) -> NoteBody {
+    /// span 树 → **Markdown 投影**。这是 `NoteBody.body` 的实现 —— 单向：只从 spans 派生文本，
+    /// 文本不反向回写 spans。（v1 那种「能进 Markdown 的进 Markdown、进不了的落旁挂」在 v2 不再是
+    /// 权威源的一部分：颜色 / 字号本就存在 span 上。）
+    public static func markdown(from spans: [NoteSpan]) -> String {
         var markdown = ""
-        var sidecar: [NoteSidecarStyle] = []
-        var seen: [String: Int] = [:]
-
         for span in spans {
             var text = span.text
             if let link = span.link {
@@ -304,14 +506,14 @@ public enum NoteBodyProjection {
                 if span.styles.contains(.italic) { text = "*" + text + "*" }
             }
             markdown += text
-
-            if span.color != nil || span.size != nil {
-                let occurrence = seen[span.text, default: 0]
-                seen[span.text] = occurrence + 1
-                sidecar.append(NoteSidecarStyle(text: span.text, occurrence: occurrence, color: span.color, size: span.size))
-            }
         }
-        return NoteBody(markdown: markdown, sidecar: sidecar)
+        return markdown
+    }
+
+    /// span 树 → 权威源 `NoteBody`。v2 起权威源**就是** `spans` —— 直接装进 `NoteBody`，
+    /// 不做「能进 Markdown 的进 Markdown」那一步（那是 v1 的形态）。
+    public static func fromSpans(_ spans: [NoteSpan]) -> NoteBody {
+        NoteBody(spans: spans)
     }
 
     // MARK: - 导出（给"导出 .md 文件"用，必须报降级）
@@ -322,17 +524,18 @@ public enum NoteBodyProjection {
         public var degradations: [String]
     }
 
+    /// 导出报告：Markdown 表达不了的行内颜色 / 字号**必然丢** ⇒ 逐条如实报出来。
     public static func exportMarkdown(_ body: NoteBody, language: AppLanguage) -> ExportResult {
         var degradations: [String] = []
-        for style in body.sidecar {
+        for span in body.spans {
             var lost: [String] = []
-            if let color = style.color { lost.append(LocalizedStrings.format(.noteLostColor, language: language, color)) }
-            if let size = style.size { lost.append(LocalizedStrings.format(.noteLostSize, language: language, String(size))) }
+            if let color = span.color { lost.append(LocalizedStrings.format(.noteLostColor, language: language, color)) }
+            if let size = span.size { lost.append(LocalizedStrings.format(.noteLostSize, language: language, String(size))) }
             if !lost.isEmpty {
-                degradations.append(LocalizedStrings.format(.noteExportDegraded, language: language, style.text, lost.joined(separator: " / ")))
+                degradations.append(LocalizedStrings.format(.noteExportDegraded, language: language, span.text, lost.joined(separator: " / ")))
             }
         }
-        // 导出的是**权威源本身**（不重排、不美化）：AI 写进来的排版不该被我们改掉。
-        return ExportResult(markdown: body.markdown, degradations: degradations)
+        // 导出的是**投影本身**（不重排、不美化）：AI 写进来的排版不该被我们改掉。
+        return ExportResult(markdown: body.body, degradations: degradations)
     }
 }
