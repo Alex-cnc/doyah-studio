@@ -301,58 +301,79 @@ final class TerminalTabsProbeTests: XCTestCase {
         }
     }
 
+    /// 渲染一遍**终端二级条**（`TerminalSubToolbar` —— 终端页签自己那一条）。
+    ///
+    /// 「细分终端 title 在**左侧**」这条位置判据自 `T-1b`（2026-10-08）起落在**这里** —— 外层条上
+    /// 已经没有页签头了（`T-1a` 移出）。和 `LowerPaneTabStrip` 同一条理由能离屏渲染：它长在终端
+    /// 内容顶部，而整块面板一渲染会真开 shell。
+    @MainActor
+    private func renderSubToolbar(_ name: String, host: StripHost) throws -> UISnapshot.LanguagePair {
+        try UISnapshot.writeBothLanguages(name, size: Self.stripSize) {
+            TerminalSubToolbar()
+                .snapshotEnvironment(
+                    state: host.state,
+                    workspace: host.workspace,
+                    tabs: host.tabs,
+                    terminal: host.terminal
+                )
+        }
+    }
+
     /// 工具条那一行的尺寸（点）：一行的实际高度约 26pt，取 40 留余量。
+    ///
+    /// **同一把尺子量两条**：外层页签条（`LowerPaneTabStrip`）与终端二级条（`TerminalSubToolbar`）
+    /// 用同一个尺寸离屏渲染，左右分带的像素判据才是「同一套量法」。
     private static let stripSize = CGSize(width: 900, height: 40)
 
     /// 「左半必须变」的**下限**（像素）。
     ///
-    /// 来源（实测，第 96 轮）：3 页签 vs 1 页签，左半实测差异 **10984** 像素（同一轮右四分之一 = 0）。
-    /// 下限取 **400**（实测的 3.6%）：多出来的两个页签头各约 100pt 宽 × 26pt 高（2× 下 ≈ 200×52 px），
-    /// 单是第二个页签头就远超 400 —— 取这个数既挡得住"几乎没变"（把页签头挪到右边时实测 **0**，
-    /// 红/绿成对记在开发记录里），也不吃排版微调带来的几像素漂移。上限不设：判据要的是"变了"。
+    /// 来源（实测，第 96 轮，当时量的还是外层条）：3 页签 vs 1 页签，左半实测差异 **10984** 像素
+    /// （同一轮右四分之一 = 0）。`T-1b` 把页签头搬进二级条之后量的是**二级条**，读数由本用例每次
+    /// `print` 出来（读数即证据）。下限仍取 **400**：多出来的两个页签头各约 100pt 宽 × 26pt 高
+    /// （2× 下 ≈ 200×52 px），单是第二个页签头就远超 400 —— 既挡得住「几乎没变」（把页签头挪到
+    /// 右边时实测 **0**），也不吃排版微调带来的几像素漂移。上限不设：判据要的是「变了」。
     private static let minimumStripLeftDiff = 400
 
-    // MARK: - 探针四：工具条那一行的版面（页签头在左、右侧按钮位置不动）—— 队列 L-89 ㈡ ③
+    // MARK: - 探针四：二级条那一行的版面（细分终端 title 在左、右侧状态不受页签数影响）
 
-    /// 清单那一行（`FR-EDIT-29` 多会话）第 ① 条是句**版面**话：「页签头在**左侧**、右侧五个动作
-    /// 按钮**一个不少**」。它此前只有两条弱证据：源码级顺序（`check-terminal-tabs.py`：
-    /// `TerminalTabsBar` 必须排在 `Spacer(minLength: 8)` 之前）与助理读图（快照 `terminal-tabs-bar`）。
-    /// 顺序挡不住「布局真的把右侧那排挤走了」，读图是人眼、不可复跑。
+    /// 清单那一行（`FR-EDIT-29` 多会话）第 ① 条是句**版面**话：「细分 terminal 的页签头在**左侧**」。
     ///
-    /// 这里把它变成**像素**判据：渲染**真工具条**，页签从 1 个变 3 个（其中一个已退出）⇒
-    /// · **左半**必须变（页签头确实长在左半边）；
-    /// · **右半**必须**逐像素相同**（右侧那排按钮不受页签数影响 ⇒ 在右、没被挤动）。
+    /// `T-1a`/`T-1b`（2026-10-08）把页签头从**外层**页签条搬进**终端二级条**
+    /// （`App/Views/TerminalSubToolbar.swift`）之后，这条版面判据**只能**在二级条上成立 ——
+    /// 外层条上已经没有页签头了。所以这里量的是**二级条**：
     ///
-    /// 两根针都有反面：「整张图不一样」判不出变在哪一侧 —— 页签头挂到右边、或右侧按钮被页签挤着走，
-    /// 都会让整张图变，只有**分左右**才判得开这两件事。
+    /// · 渲染**真二级条**（`TerminalSubToolbar` —— 独立视图，能单独离屏渲染），页签从 1 个变 3 个
+    ///   （其中一个已退出）⇒ **左半**必须变（页签头确实长在左半边）；
+    /// · **右四分之一**必须**逐像素相同**（右侧的状态小字不受页签数影响 ⇒ 在右、没被挤动）。
+    ///
+    /// 同一条用例还判**反面**（`T-1b` 的层级）：**外层条上不许有页签头** —— 同一个宿主上页签从
+    /// 1 个变 3 个，**外层页签条整张图必须逐像素相同**（页签头要是还长在这一行，页签数一变它必变）。
     @MainActor
     func testStripKeepsTabHeadersOnTheLeftAndRightButtonsInPlace() throws {
         try XCTSkipUnless(UISnapshot.isEnabled, "快照要 DOYAH_UI_SNAPSHOT=1")
 
-        // 甲：**一个页签**（= 现状），会话真起着（状态小字那两行于是不出现，两态才是同一套右侧）。
-        let oneHost = try makeStripHost()
-        oneHost.state.lowerPaneTab = .terminal
-        oneHost.state.isLowerPaneMaximized = false
-        oneHost.terminal.activePane.startIfNeeded(columns: 80, rows: 24)
-        let one = try renderStrip("manual-check-terminal-strip-1tab", host: oneHost)
-        oneHost.terminal.activePane.stop()
+        // **一个宿主装齐两态**：页签数是两个界面的唯一变量（别的都别动，否则像素差异归不到页签头上）。
+        // 会话不启 ⇒ 两态的 `TerminalPaneStatus` 都只画「已停止」—— 右侧才谈得上「逐像素相同」。
+        let host = try makeStripHost()
+        host.state.lowerPaneTab = .terminal
+        host.state.isLowerPaneMaximized = false
+
+        // 甲：**一个页签**（= 现状）—— 二级条与外层条各拍一遍。
+        let one = try renderSubToolbar("manual-check-terminal-subtoolbar-1tab", host: host)
+        let outerOne = try renderStrip("manual-check-terminal-strip-1tab", host: host)
 
         // 乙：**三个页签**（`zsh` / `dsh-tui` / `psql`，其中 `psql` 已退出），当前是中间那个。
         //    与探针三同一个场景 —— 需求主诉场景就是「一个跑着 dsh-tui、另一个执行命令」。
-        let threeHost = try makeStripHost()
-        threeHost.state.lowerPaneTab = .terminal
-        threeHost.state.isLowerPaneMaximized = false
-        let firstID = threeHost.terminal.tabs.activeID
-        let secondID = threeHost.terminal.newTab()
-        let thirdID = threeHost.terminal.newTab()
-        threeHost.terminal.rename(id: firstID, to: "zsh")
-        threeHost.terminal.rename(id: secondID, to: "dsh-tui")
-        threeHost.terminal.rename(id: thirdID, to: "psql")
-        threeHost.terminal.markExited(id: thirdID, code: 0)
-        threeHost.terminal.select(id: secondID)
-        threeHost.terminal.pane(for: secondID).startIfNeeded(columns: 80, rows: 24)
-        let three = try renderStrip("manual-check-terminal-strip-3tabs", host: threeHost)
-        threeHost.terminal.pane(for: secondID).stop()
+        let firstID = host.terminal.tabs.activeID
+        let secondID = host.terminal.newTab()
+        let thirdID = host.terminal.newTab()
+        host.terminal.rename(id: firstID, to: "zsh")
+        host.terminal.rename(id: secondID, to: "dsh-tui")
+        host.terminal.rename(id: thirdID, to: "psql")
+        host.terminal.markExited(id: thirdID, code: 0)
+        host.terminal.select(id: secondID)
+        let three = try renderSubToolbar("manual-check-terminal-subtoolbar-3tabs", host: host)
+        let outerThree = try renderStrip("manual-check-terminal-strip-3tabs", host: host)
 
         // 前置一：两遍**确实是两个界面状态**（否则下面的像素差异是幻觉）。
         XCTAssertNotEqual(
@@ -382,34 +403,59 @@ final class TerminalTabsProbeTests: XCTestCase {
             )
         )
 
-        // 判据 A：**左半必须变** —— 页签头的确长在左半边。
+        // 判据 A：**左半必须变** —— 细分终端的页签头长在二级条的左半边。
         XCTAssertGreaterThan(leftOne.ink, 0, "左半一个字都没画 —— 判据的前提不成立")
-        XCTAssertGreaterThan(rightOne.ink, 0, "右四分之一一个字都没画 —— 右侧那排按钮不见了？")
+        XCTAssertGreaterThan(rightOne.ink, 0, "右四分之一一个字都没画 —— 右侧状态小字不见了？")
         let leftDiff = try XCTUnwrap(UISnapshot.differingPixels(leftOne, leftThree))
         let rightDiff = try XCTUnwrap(UISnapshot.differingPixels(rightOne, rightThree))
-        print("📐 工具条左半差异 \(leftDiff) 像素 / 右四分之一差异 \(rightDiff) 像素（3 页签 vs 1 页签）")
+        print("📐 二级条左半差异 \(leftDiff) 像素 / 右四分之一差异 \(rightDiff) 像素（3 页签 vs 1 页签）")
         XCTAssertGreaterThan(
             leftDiff, Self.minimumStripLeftDiff,
             "页签从 1 个变 3 个，左半只差 \(leftDiff) 像素 —— 页签头不在左半边？"
         )
 
-        // 判据 B：**右四分之一必须逐像素相同** —— 右侧那排按钮的位置与样子不受页签数影响。
-        // 这一条就是口径①「右侧现有按钮一概不动」的像素版：页签再多也不许把它挤走 / 挤变形。
+        // 判据 B：**右四分之一必须逐像素相同** —— 右侧那点东西不受页签数影响。
         XCTAssertEqual(
             rightDiff, 0,
-            "页签数一变右半也跟着变（\(rightDiff) 像素）—— 右侧那排按钮被页签挤动了"
+            "页签数一变右半也跟着变（\(rightDiff) 像素）—— 右侧被页签挤动了"
+        )
+
+        // 判据 C（`T-1b` 层级）：**外层页签条整张图逐像素相同** —— 页签头不在这一行。
+        // 页签头要是还长在外层条上，页签 1 个变 3 个它必变；不变 = 「平级」那件事的回归钉。
+        let outerOneBand = try XCTUnwrap(
+            UISnapshot.columnBand(
+                ofPNGAt: outerOne.records[0].file, fromLeading: 0, width: outerOne.records[0].width
+            ),
+            "取不到外层条整张图（图不在盘上？）"
+        )
+        let outerThreeBand = try XCTUnwrap(
+            UISnapshot.columnBand(
+                ofPNGAt: outerThree.records[0].file, fromLeading: 0, width: outerThree.records[0].width
+            )
+        )
+        let outerDiff = try XCTUnwrap(UISnapshot.differingPixels(outerOneBand, outerThreeBand))
+        print("📐 外层页签条整张图差异 \(outerDiff) 像素（3 页签 vs 1 页签 · 判「页签头不在这行」）")
+        XCTAssertEqual(
+            outerDiff, 0,
+            "页签数一变外层页签条整张图也跟着变（\(outerDiff) 像素）—— 页签头又长回外层条了"
+            + "（它只属于终端二级条 `TerminalSubToolbar`）"
         )
     }
 
-    // MARK: - 探针四之二：右侧那排按钮按**状态**齐备（口径①「一个不少」的另一半）
+    // MARK: - 探针四之二：外层条右侧只剩**窗口按钮**、且按**面板状态**齐备
 
-    /// 口径①说「右侧现有按钮**一概不动**」—— 机器判据此前只有源码级符号表（少一个符号就报红）。
-    /// 这里补上**状态 → 应有哪些**这一半：同一排按钮在不同面板状态下换的是**哪几个**。
+    /// 口径①说「最外层 tab bar 最右侧只保留最大化、恢复、最小化折叠按钮」—— 机器判据此前只有
+    /// 源码级符号表（少一个符号就报红）。这里补上**状态 → 应有哪些**这一半：同一排按钮在不同面板
+    /// 状态下换的是**哪几个**。
     ///
-    /// 判的是**渲染记录里的文案**（`L(...)` 在这一遍真的取到的值）。它与源码里的字符串不是一回事：
-    /// 这几个 `help` 正是鼠标停上去时用户看到的那句话 —— 「按钮在不在」与「它说不说话」一起判。
+    /// `T-1a`（2026-10-08）把子终端那几件移出外层条（终端页签条 / 状态小字 / 重启 shell / 清空日志），
+    /// 于是本条的基线随之改变：**终端态不再 `requires: .terminalRestart`**、任何态都**不许**再出现
+    /// `.lowerPaneClear`（清空日志归位到问题 / 输出两页的内容顶部，不在这一条里）。
     ///
-    /// 两个方向都判：该有的必须有，**不该有的不许有**（终端态冒出「清空日志」= 面板状态串了）。
+    /// 判的是**渲染记录里的文案**（`L(...)` 在这一遍真的取到的值）—— 这几个 `help` 正是鼠标停上去时
+    /// 用户看到的那句话：「按钮在不在」与「它说不说话」一起判。
+    ///
+    /// 两个方向都判：该有的必须有，**不该有的不许有**（外层条上冒出子终端那几件 = 层级串了）。
     @MainActor
     func testRightSideButtonsMatchThePanelState() throws {
         try XCTSkipUnless(UISnapshot.isEnabled, "快照要 DOYAH_UI_SNAPSHOT=1")
@@ -423,27 +469,28 @@ final class TerminalTabsProbeTests: XCTestCase {
         }
 
         let cases = [
-            // 终端态（不折叠）：重启 shell + 最大化 + 收起；清空日志与展开箭头都不属于这一态。
+            // 终端态（不折叠）：外层条右侧**只剩窗口按钮**（最大化 + 收起）。
+            // 重启 shell 已随 `T-1a` 移出（归 `T-2` 的二级条四按钮），清空日志归内容顶部 —— 这一行都不该有。
             Case(
                 name: "manual-check-terminal-strip-buttons-terminal",
                 tab: .terminal, collapsed: false,
-                requires: [.terminalRestart, .lowerPaneMaximize, .lowerPaneHide],
-                forbids: [.lowerPaneClear, .lowerPaneExpand]
+                requires: [.lowerPaneMaximize, .lowerPaneHide],
+                forbids: [.terminalRestart, .lowerPaneClear, .lowerPaneExpand]
             ),
-            // 问题态：右侧是清空日志 + 最大化 + 收起；终端那排一个都不许出现。
+            // 问题态：右侧同样是窗口按钮；清空日志**不在这一行**（它归问题页的内容顶部）。
             Case(
                 name: "manual-check-terminal-strip-problem",
                 tab: .problem, collapsed: false,
-                requires: [.lowerPaneClear, .lowerPaneMaximize, .lowerPaneHide],
-                forbids: [.terminalRestart, .lowerPaneExpand]
+                requires: [.lowerPaneMaximize, .lowerPaneHide],
+                forbids: [.lowerPaneClear, .terminalRestart, .lowerPaneExpand]
             ),
             // 折叠的终端态：最大化 / 收起换成**向上的展开箭头**（那是把面板恢复出来的唯一入口），
-            // 而终端自己的那排（页签头 / 重启）**继续留着** —— 折叠收起的是内容，不是这一行。
+            // 而终端那排（重启 shell）与清空日志都不属于这一行。
             Case(
                 name: "manual-check-terminal-strip-collapsed",
                 tab: .terminal, collapsed: true,
-                requires: [.terminalRestart, .lowerPaneExpand],
-                forbids: [.lowerPaneHide, .lowerPaneMaximize, .lowerPaneClear]
+                requires: [.lowerPaneExpand],
+                forbids: [.lowerPaneHide, .lowerPaneMaximize, .lowerPaneClear, .terminalRestart]
             ),
         ]
 
@@ -574,5 +621,152 @@ final class TerminalTabsProbeTests: XCTestCase {
         XCTAssertTrue(panes[1].isRunning, "清掉重命名这步把会话弄死了")
 
         for pane in panes { pane.stop() }
+    }
+
+    // MARK: - 探针四之三：二级条 / 外层条的**运行时元素 dump** + 截图（`T-1b` 判据 ① ③）
+
+    /// 证据文件落在快照目录（`DOYAH_SNAPSHOT_DIR`）—— 与 `NoteSearchProbeTests` 同款的命名。
+    /// 落地之后 **脚本 / 人可核**：`terminal-tabs-evidence-<case>.json`。
+    private func writeEvidence(_ caseName: String, _ payload: [String: Any]) throws {
+        let directory = UISnapshot.outputDirectory
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var enriched = payload
+        enriched["case"] = caseName
+        enriched["snapshotDirectory"] = directory.path
+        let data = try JSONSerialization.data(withJSONObject: enriched, options: [.prettyPrinted, .sortedKeys])
+        try data.write(
+            to: directory.appendingPathComponent("terminal-tabs-evidence-\(caseName).json"),
+            options: .atomic
+        )
+    }
+
+    /// `T-1b` 的判据 ① 要的是**运行时元素 dump**（不是源码级清单）：外层页签集合 + 二级条元素清单 +
+    /// 按钮 label；判据 ③ 要**一张截图**（终端页签 + 二级条）。
+    ///
+    /// 两个来源都是运行时的：
+    /// · **渲染观测**（`UISnapshot` 记录里的 `localizedStrings`）：这一遍 `L(...)` **真的取到了哪些字**
+    ///   —— 文案没进这一遍，就不许出现在 dump 里（挡住「源码里有、画面上没有」）；
+    /// · **真模型**（`TerminalModel` / `LowerPaneTab`）：页签标题、图标名、文案键取自产品自己的类型，
+    ///   不是在这一条用例里另抄一份。
+    ///
+    /// 判据同时钉住**两个方向**：外层条那遍**不含**任何子终端文案（层级），二级条那遍**不含**任何
+    /// 窗口按钮文案（两条各司其职）。
+    ///
+    /// 源码级接线清单另有（`Scripts/check-terminal-tabs.py` 的静态锚点）；这一份是**这一遍渲染的事实**。
+    /// 截图 = 二级条那两张（中英各一）+ 外层条两张（层级对照）。
+    @MainActor
+    func testTerminalSubToolbarElementDumpAndScreenshot() throws {
+        try XCTSkipUnless(UISnapshot.isEnabled, "快照要 DOYAH_UI_SNAPSHOT=1")
+
+        // 需求主诉场景：`zsh` / `dsh-tui` / `psql`，当前是中间那个，`psql` 已退出。
+        let host = try makeStripHost()
+        host.state.lowerPaneTab = .terminal
+        host.state.isLowerPaneMaximized = false
+        let firstID = host.terminal.tabs.activeID
+        let secondID = host.terminal.newTab()
+        let thirdID = host.terminal.newTab()
+        host.terminal.rename(id: firstID, to: "zsh")
+        host.terminal.rename(id: secondID, to: "dsh-tui")
+        host.terminal.rename(id: thirdID, to: "psql")
+        host.terminal.markExited(id: thirdID, code: 0)
+        host.terminal.select(id: secondID)
+
+        // 判据 ③：截图（终端页签 + 二级条）—— 二级条那一对（中英各一）。外层条也拍一对（层级对照）。
+        let sub = try renderSubToolbar("manual-check-terminal-subtoolbar", host: host)
+        let outer = try renderStrip("manual-check-terminal-strip", host: host)
+
+        func zh(_ key: LKey) -> String { UISnapshot.localizedText(.simplifiedChinese) { L(key) } }
+        func en(_ key: LKey) -> String { UISnapshot.localizedText(.english) { L(key) } }
+
+        let subObserved = Set(sub.records[0].localizedStrings)
+        let outerObserved = Set(outer.records[0].localizedStrings)
+
+        // ---- 元素 dump 的四块 ----
+        // ① 外层页签集合：四个下方面板页签（符号 + 中英标题）。
+        let outerTabs: [[String: Any]] = LowerPaneTab.allCases.map {
+            ["symbol": $0.symbolName, "zh": zh($0.textKey), "en": en($0.textKey)]
+        }
+        // ② 外层条右侧的窗口按钮（口径①：只剩最大化 / 收起 / 折叠态展开箭头）。
+        let windowButtons: [[String: Any]] = [
+            ["symbol": "rectangle.expand.vertical", "helpZH": zh(.lowerPaneMaximize), "helpEN": en(.lowerPaneMaximize)],
+            ["symbol": "chevron.down", "helpZH": zh(.lowerPaneHide), "helpEN": en(.lowerPaneHide)],
+            ["symbol": "chevron.up", "helpZH": zh(.lowerPaneExpand), "helpEN": en(.lowerPaneExpand)],
+        ]
+        // ③ 二级条元素清单：左侧细分终端 title 列表 + 「已退出」标记 + 右侧状态小字。
+        let subElements: [[String: Any]] = [
+            ["role": "tabs", "symbol": "terminal", "titles": host.terminal.tabs.tabs.map { host.terminal.title(for: $0) }],
+            ["role": "exitedMark", "zh": zh(.terminalTabExited), "en": en(.terminalTabExited)],
+            ["role": "status", "zh": zh(.terminalStopped), "en": en(.terminalStopped)],
+        ]
+        // ④ 二级条上的按钮 label（新建页签 / 关闭页签）。
+        let subButtons: [[String: Any]] = [
+            ["role": "newTab", "symbol": "plus", "labelZH": zh(.terminalTabNew), "labelEN": en(.terminalTabNew),
+             "helpZH": "\(zh(.terminalTabNew))（⌘T）"],
+            ["role": "closeTab", "symbol": "xmark", "labelZH": zh(.terminalTabClose), "labelEN": en(.terminalTabClose)],
+        ]
+
+        // ---- 前置：这一批拍的确实是那个场景 ----
+        XCTAssertEqual(host.terminal.tabs.ids, [firstID, secondID, thirdID])
+        XCTAssertEqual(host.terminal.tabs.activeID, secondID)
+        XCTAssertEqual((subElements[0]["titles"] as? [String]) ?? [], ["zsh", "dsh-tui", "psql"],
+                       "二级条左侧的细分终端 title 列表不是那三个")
+
+        // ---- 二级条那遍：状态小字 / 已退出 / 两个按钮的 label 真的进了这一遍 ----
+        // 注意：观测到的是 **`L(...)` 取到的值**，「新建终端页签」在界面上还带着 `（⌘T）` 后缀 ——
+        // 那个后缀是源码里的字符串插值拼出来的（不是语言表里的一条），这一层观测不到，见 dump 的 `helpZH`。
+        for (label, text) in [
+            ("状态小字", zh(.terminalStopped)),
+            ("已退出标记", zh(.terminalTabExited)),
+            ("新建页签按钮", zh(.terminalTabNew)),
+            ("关闭页签按钮", zh(.terminalTabClose)),
+        ] {
+            XCTAssertTrue(subObserved.contains(text), "二级条这一遍没画「\(label)」（应显示「\(text)」）")
+        }
+        // ---- 二级条那遍**不许**出现窗口按钮的文案（层级：那是外层条的事）----
+        for (label, text) in [
+            ("最大化", zh(.lowerPaneMaximize)),
+            ("收起面板", zh(.lowerPaneHide)),
+            ("展开面板", zh(.lowerPaneExpand)),
+        ] {
+            XCTAssertFalse(subObserved.contains(text), "二级条这一遍出现了外层条才有的「\(label)」—— 层级串了")
+        }
+
+        // ---- 外层条那遍：四个面板页签 + 两个窗口按钮文案都在 ----
+        for tab in LowerPaneTab.allCases {
+            XCTAssertTrue(outerObserved.contains(zh(tab.textKey)), "外层条这一遍没画出页签「\(zh(tab.textKey))」")
+        }
+        XCTAssertTrue(outerObserved.contains(zh(.lowerPaneMaximize)), "外层条这一遍没有最大化按钮")
+        XCTAssertTrue(outerObserved.contains(zh(.lowerPaneHide)), "外层条这一遍没有收起按钮")
+
+        // ---- 外层条那遍**不许**出现任何子终端文案（层级断言：判据①的运行时那一半）----
+        let forbiddenKeys: [(String, LKey)] = [
+            ("已退出标记", .terminalTabExited),
+            ("状态小字", .terminalStopped),
+            ("新建页签", .terminalTabNew),
+            ("关闭页签", .terminalTabClose),
+            ("重新开始 shell", .terminalRestart),
+            ("清空", .lowerPaneClear),
+        ]
+        let leaked = forbiddenKeys.compactMap { outerObserved.contains(zh($0.1)) ? $0.0 : nil }
+        XCTAssertTrue(
+            leaked.isEmpty,
+            "外层页签条这一遍出现了子终端项 \(leaked)：它们属于终端二级条 / 问题·输出内容顶部，不属于这一行"
+        )
+
+        // ---- 落盘：运行时元素 dump（脚本 / 人可核）----
+        try writeEvidence("elements", [
+            "outerStripTabs": outerTabs,
+            "outerStripWindowButtons": windowButtons,
+            "outerStripObservedStrings": outer.records[0].localizedStrings,
+            "subToolbarElements": subElements,
+            "subToolbarButtons": subButtons,
+            "subToolbarObservedStrings": sub.records[0].localizedStrings,
+            "layerForbiddenLeakedIntoOuterStrip": leaked,
+            "screenshots": [
+                sub.records[0].file, sub.records[1].file,
+                outer.records[0].file, outer.records[1].file,
+            ],
+        ])
+        print("🧾 运行时元素 dump → \(UISnapshot.outputDirectory.path)/terminal-tabs-evidence-elements.json")
     }
 }
