@@ -665,4 +665,64 @@ final class NotesLayoutProbeTests: XCTestCase {
               + "② 图标 = \(NotesAreaView.notesModuleSymbol) / \(NotesAreaView.todosModuleSymbol) · "
               + "③ 源锚点 3 条命中")
     }
+
+    // MARK: - 判据③ 删除先确认（`T-20261007-079` ② / `T-20261007-081`）
+
+    /// **破坏性操作先确认**（人类主人原话，2026-10-07 23:0x 逐字：「**delete 时连个确认都就直接删了**」
+    /// —— 那是数据风险）。
+    ///
+    /// 判据的形状（`T-20261007-079` 第二节写死的）：**点删除 ⇒ 条目数不变，直到确认**。
+    ///
+    /// ## 入口为什么是「驱动 `AppState` 的状态机」而不是「点界面那枚按钮」
+    ///
+    /// 离屏宿主里 SwiftUI 的手势不响应（合成事件收下但 `notesModule` 不动），上屏 / 取像素又会撞
+    /// `ReminderNotifier` 断言 ⇒ 界面事件这条路本轮量不到（三条边界见上面 helper 注释，别重走）。
+    /// 但「点删除会不会就删了」这件事**不在视图里** —— 它由 `AppState` 的状态机决定，而状态机是
+    /// **同步可驱动**的 ⇒ 直接量它，得到的是**同一件事**的机器读数：
+    ///   ① `requestNoteRemoval()`（= 点删除）⇒ 挂上确认请求，**一条都没少**；
+    ///   ② `cancelNoteRemoval()`（= 取消）⇒ 仍一条没少；
+    ///   ③ `confirmNoteRemoval()`（= 确认）⇒ 这才少一条。
+    ///
+    /// ## 能判红（否则「没少」会被读成「都对」）
+    ///
+    /// 反例 = 改动前那一版 `deleteSelection()`：它直接调 `deleteNote(id:)` ⇒ 在 ① 那一步
+    /// 条目数就已经少了一条，两条断言当场红。
+    @MainActor
+    func testDeletingANoteAsksForConfirmationBeforeTouchingTheLibrary() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        try await seedOneNote(host)
+        await host.state.reloadNotes()
+
+        let seeded = try XCTUnwrap(host.state.notes.first, "夹具没读进来 ⇒ 判据量不到「条目数不变」")
+        let before = host.state.notes.count
+        XCTAssertGreaterThan(before, 0)
+
+        // ① 点删除 ⇒ 只挂请求，条目数不变
+        host.state.selectedNoteIDs = [seeded.id]
+        host.state.requestNoteRemoval()
+        XCTAssertNotNil(
+            host.state.pendingNoteRemoval,
+            "点了删除却没挂上确认请求 ⇒ 破坏性操作没被拦下（数据风险）"
+        )
+        XCTAssertEqual(host.state.notes.count, before, "点删除就改了条目数 ⇒ 没有二次确认")
+
+        // ② 取消 ⇒ 库一个字节不动
+        host.state.cancelNoteRemoval()
+        host.state.selectedNoteIDs = []
+        await host.state.reloadNotes()
+        XCTAssertEqual(host.state.notes.count, before, "取消之后条目数变了")
+
+        // ③ 确认 ⇒ 这才少一条
+        host.state.selectedNoteIDs = [seeded.id]
+        host.state.requestNoteRemoval()
+        await host.state.confirmNoteRemoval()
+        XCTAssertEqual(host.state.notes.count, before - 1, "确认删除之后条目数没减")
+
+        print(
+            "T-081 ② 删除先确认：点删除后 \(before)（不变）· 取消后 \(before)（不变）· "
+                + "确认后 \(before - 1)（减 1）｜确认动作 = "
+                + "\(NoteRemovalPrompt.confirmActions.map(\.rawValue))"
+        )
+    }
 }

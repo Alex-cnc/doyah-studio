@@ -448,6 +448,10 @@ final class AppState: ObservableObject {
     /// **删除确认框**（队列 `L-97` 界面半第二片）：挂在界面上的那一个删除请求。
     /// 计划从库里**现算**（`NoteLibrary.removalPlan`）——界面算不出来，也不该自己算一遍。
     @Published var pendingContainerRemoval: ContainerRemovalRequest?
+    /// **单条删除的确认**（人类主人令 `T-20261007-079` ② / `T-20261007-081`）：挂在界面上的那一个
+    /// 删除请求。破坏性操作先问一次 —— **判据：点删除后条目数不变，直到确认**。
+    /// 规则在 Core `NoteRemovalPrompt`（判据 `TestsUISnapshot/NotesLayoutProbeTests.swift`）。
+    @Published var pendingNoteRemoval: NoteRemovalRequest?
     /// **容器编辑**（队列 `L-97` 界面半第四片：新建 / 重命名）：挂在界面上的那一次编辑请求
     /// （`nil` = 没在编辑）。规则在 Core `NotebookEditPrompt`，这里只做搬运。
     @Published var pendingContainerEdit: ContainerEditRequest?
@@ -6913,6 +6917,62 @@ final class AppState: ObservableObject {
             await reloadReminders()
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    // MARK: - 单条删除的确认（人类主人令 `T-20261007-079` ② / `T-20261007-081`）
+
+    /// 点「删除」：把要删的东西摆到确认框上，**先不落库**。
+    ///
+    /// 判据的落点（`TestsUISnapshot/NotesLayoutProbeTests.swift`）：调它之后**条目数不变** ——
+    /// 真正的库动作在 `confirmNoteRemoval()`。这就是「破坏性操作先问一次」那句话的机械形状：
+    /// 点删除 ⇒ 只挂请求；确认 ⇒ 才 `deleteNote` / `deleteTodo`；取消 ⇒ 库一个字节不动。
+    func requestNoteRemoval() {
+        switch notesModule {
+        case .notes:
+            let ids = selectedNoteIDs
+            guard !ids.isEmpty else { pendingNoteRemoval = nil; return }
+            let subject = ids.count == 1
+                ? (notes.first { $0.id == ids.first }?.title ?? "")
+                : ""
+            pendingNoteRemoval = NoteRemovalPrompt.request(target: .notes(Array(ids)), subject: subject)
+        case .todos:
+            guard let id = todoEditingID else { pendingNoteRemoval = nil; return }
+            let subject = todos.first { $0.id == id }?.title ?? ""
+            pendingNoteRemoval = NoteRemovalPrompt.request(target: .todo(id), subject: subject)
+        }
+    }
+
+    /// 退出口（按 ESC / 点框外 / 点「取消」）：只收掉请求，库一个字节不动。
+    func cancelNoteRemoval() {
+        pendingNoteRemoval = nil
+    }
+
+    /// 确认框标题（**唯一生产点**）：单条写明名字，多选写「删除」（条数放到正文那句里）。
+    /// 视图不自己拼句子 —— 拼错一次就是「要删除「」吗？」这种与事实相反的交代。
+    var pendingNoteRemovalTitle: String? {
+        guard let request = pendingNoteRemoval else { return nil }
+        if case .notes = request.target, request.target.isMultipleNotes {
+            return L(.notesDelete)
+        }
+        return L(.notesRemoveConfirmTitle, request.subject)
+    }
+
+    /// 确认框正文（多选才写条数；单条的名字已经在标题里了）。
+    var pendingNoteRemovalMessage: String? {
+        guard let request = pendingNoteRemoval, request.target.isMultipleNotes else { return nil }
+        return L(.notesRemoveSummaryNotes, request.target.count)
+    }
+
+    /// 用户在确认框里点了「删除」：**这才落库**，然后重读库。
+    func confirmNoteRemoval() async {
+        guard let request = pendingNoteRemoval else { return }
+        pendingNoteRemoval = nil
+        switch request.target {
+        case .notes(let ids):
+            for id in ids { await deleteNote(id: id) }
+        case .todo(let id):
+            await deleteTodo(id: id)
         }
     }
 

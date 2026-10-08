@@ -170,3 +170,91 @@ public enum ContainerRemovalPrompt {
         )
     }
 }
+
+// MARK: - 单条删除的确认（人类主人令 `T-20261007-079` ② / `T-20261007-081`）
+
+// 人类主人原话（2026-10-07 23:0x，逐字）：「**delete 时连个确认都就直接删了**」——
+// 那是**数据风险**：树上点一下、`deleteNote(id:)` 直接落库，界面上没有任何一步「你确定吗」。
+//
+// 这一片与上面的容器删除**同一条形态、同一条理由**（`ContainerRemovalPrompt` 文件头那三条）：
+//   · **动作与顺序只有一处**（`confirmActions`）—— 工具条那一枚、将来的菜单路、判据自己，
+//     三处消费者各写一遍就会出现「按钮这条路先问、菜单那条直接删」这种一半有的行为；
+//   · **界面只画**：要删什么（`NoteRemovalTarget`）与那句标题由调用方算好挂上来，
+//     视图不自己数「选了几条」、也不自己拼句子。
+//
+// **判据的落点**：`App/Views/NotesPanel.swift` 那一枚删除**不再直接调** `deleteNote` / `deleteTodo`，
+// 而是先挂请求（`AppState.requestNoteRemoval()`）⇒ **条目数不变**；只有确认步
+// （`AppState.confirmNoteRemoval()`）才落库。判据 `TestsUISnapshot/NotesLayoutProbeTests.swift`
+// 量「点删除后条目数不变，直到确认」。
+
+/// 确认框里的一个动作。**只有 `delete` 会真的删**。
+public enum NoteRemovalAction: String, CaseIterable, Sendable, Equatable {
+
+    /// 真的删（破坏档，界面给破坏色）。
+    case delete
+    /// 什么都不做（按 ESC / 点框外也是它）。**库一个字节不动**。
+    case cancel
+
+    /// 这个动作会不会真的删东西（`deletesContent` 是事实，不是样式）。
+    public var deletesContent: Bool { self == .delete }
+}
+
+/// 这一次要删的是哪一片（笔记多选 / 待办单选）。
+public enum NoteRemovalTarget: Equatable, Sendable {
+
+    /// 笔记面：多选集合里的那几条。
+    case notes([UUID])
+    /// 待办面：编辑器里那一条。
+    case todo(UUID)
+
+    /// 会删掉几条（确认框那句「将影响 N 条」读它；视图不自己数）。
+    public var count: Int {
+        switch self {
+        case .notes(let ids): return ids.count
+        case .todo: return 1
+        }
+    }
+
+    /// 是不是「多选笔记」那一档（多条时确认框才写条数 —— 单条写名字更有用）。
+    public var isMultipleNotes: Bool {
+        if case .notes(let ids) = self { return ids.count > 1 }
+        return false
+    }
+}
+
+/// **挂在界面上的那一个删除请求**（确认框读它）。
+public struct NoteRemovalRequest: Identifiable, Equatable, Sendable {
+
+    public let id: UUID
+    public let target: NoteRemovalTarget
+    /// 确认框标题里要写出来的那个名字（单条笔记 / 待办的标题；多选时为空串）。
+    public let subject: String
+    /// 确认框里的动作，**顺序就是呈现顺序**。
+    public let actions: [NoteRemovalAction]
+
+    public init(id: UUID = UUID(), target: NoteRemovalTarget, subject: String, actions: [NoteRemovalAction]) {
+        self.id = id
+        self.target = target
+        self.subject = subject
+        self.actions = actions
+    }
+
+    /// 这个请求里有这个动作吗（界面按它决定画哪些按钮，别自己硬写两枚）。
+    public func offers(_ action: NoteRemovalAction) -> Bool { actions.contains(action) }
+}
+
+/// 单条删除确认框的规则（**唯一出处**）。
+public enum NoteRemovalPrompt {
+
+    /// 确认框里的动作与顺序 —— **只此一处**。
+    ///
+    /// 为什么破坏档在前：「取消」不是第三个业务选择，它是**退出口**（按 ESC / 点框外也是它）
+    /// —— 业务上只有「删」与「不删」两件，而这一档没有「不删内容」的替代动作（不像删笔记本可以
+    /// 移到默认笔记本），所以只有两枚。
+    public static let confirmActions: [NoteRemovalAction] = [.delete, .cancel]
+
+    /// 从「要删什么」造出「挂在界面上的请求」。
+    public static func request(target: NoteRemovalTarget, subject: String) -> NoteRemovalRequest {
+        NoteRemovalRequest(target: target, subject: subject, actions: confirmActions)
+    }
+}

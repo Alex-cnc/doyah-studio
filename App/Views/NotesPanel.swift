@@ -863,6 +863,35 @@ struct NotesAreaView: View {
         }
         .background(Theme.surface(.content))
         .accessibilityIdentifier("notes-area")
+        // **单条删除的确认框**（人类主人令 `T-20261007-079` ②）：动作与顺序**由模型给**
+        // （`NoteRemovalPrompt.confirmActions` 是唯一出处），标题 / 正文也由 `AppState` 两处生成
+        // —— 界面只负责画。与容器删除确认（上一节）同一条形态：别自己硬写两枚按钮，规则一改
+        // 就有两处不一致（`L-172` 那一课）。
+        .confirmationDialog(
+            appState.pendingNoteRemovalTitle ?? "",
+            isPresented: Binding(
+                get: { appState.pendingNoteRemoval != nil },
+                // 按 ESC / 点框外 = 「取消」：只收掉请求，库一个字节不动。
+                set: { presented in if !presented { appState.cancelNoteRemoval() } }
+            ),
+            titleVisibility: .visible,
+            presenting: appState.pendingNoteRemoval
+        ) { request in
+            ForEach(request.actions, id: \.self) { action in
+                Button(role: action == .cancel ? .cancel : .destructive) {
+                    if action == .cancel {
+                        appState.cancelNoteRemoval()
+                    } else {
+                        Task { await appState.confirmNoteRemoval() }
+                    }
+                } label: {
+                    Text(L(action == .cancel ? .notesRemoveCancel : .notesDelete))
+                }
+                .help(L(action == .cancel ? .notesRemoveCancel : .notesDelete))
+            }
+        } message: { _ in
+            if let message = appState.pendingNoteRemovalMessage { Text(message) }
+        }
         // **检索走库**（队列 L-44）：搜索框里变一个字就重算一次。`.task(id:)` 在 id 变化时会取消
         // 上一次任务；`AppState.searchNotes()` 里还有一道「结果过期就丢」的守卫，打字比查库快
         // 也不会把旧结果盖上来。挂在**区根**（搜索框现在在顶栏，不在中栏）。
@@ -1037,19 +1066,12 @@ struct NotesAreaView: View {
         }
     }
 
-    /// 删当前能删的（逐条走既有入口；删完 `AppState` 自己会重读库、收多选集合）。
+    /// 删当前能删的。**不再直接调 `deleteNote` / `deleteTodo`**（人类主人令 `T-20261007-079` ②：
+    /// 「delete 时连个确认都就直接删了」= 数据风险）—— 改成**先挂一个确认请求**，界面弹确认框，
+    /// 只有确认那一步（`AppState.confirmNoteRemoval()`）才落库。判据：点删除后**条目数不变**，
+    /// 直到确认（`TestsUISnapshot/NotesLayoutProbeTests.swift`）。
     private func deleteSelection() {
-        switch appState.notesModule {
-        case .notes:
-            let ids = appState.selectedNoteIDs
-            guard !ids.isEmpty else { return }
-            Task {
-                for id in ids { await appState.deleteNote(id: id) }
-            }
-        case .todos:
-            guard let id = appState.todoEditingID else { return }
-            Task { await appState.deleteTodo(id: id) }
-        }
+        appState.requestNoteRemoval()
     }
 }
 
@@ -1233,9 +1255,11 @@ struct TodoEditorView: View {
             .accessibilityIdentifier("todo-save")
             // 「删除」只在这一条**已经在库里**时才画（新建态没有可删的东西 —— 画一枚按不动的按钮
             // 就是 `L-50` 那一课）。
-            if let id = appState.todoEditingID {
+            if appState.todoEditingID != nil {
                 Button(role: .destructive) {
-                    Task { await appState.deleteTodo(id: id) }
+                    // **先确认再删**（人类主人令 `T-20261007-079` ②）：这里只挂请求，确认框那一头
+                    // 才是 `deleteTodo`。判据同「点删除后条目数不变」。
+                    appState.requestNoteRemoval()
                 } label: {
                     Label {
                         Text(L(.todoDelete))
