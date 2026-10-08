@@ -12,7 +12,9 @@ import DoyahCore
 ///    tab 头切换」）—— 而 `LowerPaneView` 整块**渲染不得**：它的内容那半边挂着 `TerminalHostView`，
 ///    离屏渲染会**真开一条 shell**（见 `TerminalView.layout()` 里那句启动）。于是「工具条长什么样」
 ///    一直只能靠读源码或让人点。
-/// ② **右侧那排按钮一个不少**（最大化 / 恢复 / 收起 / 重启 shell，问题与输出态还有清空日志）。
+/// ② **右侧只剩窗口按钮**（最大化 / 恢复 / 折叠，折叠态换成向上的展开箭头）。2026-10-08（`T-1a`）：
+///    子终端那几件（终端页签条 / 状态小字「已停止 / 出错」/ 重启 shell / 清空日志）**已全部移出
+///    这一行**，由 `T-1b` 归位到终端页签自己的二级工具条 —— 这一行的**右侧**只剩窗口按钮。
 ///
 /// 抽出来之后，`TestsUISnapshot/TerminalTabsProbeTests` 能直接渲染**这一行**：
 /// 页签从 1 个变成 3 个时，**左半部分必须变、右半部分必须逐像素不变** ——
@@ -44,49 +46,9 @@ struct LowerPaneTabStrip: View {
                 tabButton(item)
             }
 
-            if appState.lowerPaneTab == .terminal {
-                // 终端多会话（L-84 ㈡）：**页签头落在工具条左侧** ——
-                // 四个下方面板页签之后、右侧那排按钮之前。
-                // 需求原话（2026-09-29）：「其顶部工具条右侧是常见操作按钮，但**左侧应该是空白，
-                // 可以实现 tab 头切换**，支持多 terminal 操作」⇒ 右侧那排按钮**一概不动**。
-                Divider().frame(maxHeight: 14).padding(.horizontal, Spacing.xs)
-                TerminalTabsBar(terminal: terminal)
-            }
-
+            // 子终端项（页签条 / 状态小字 / 重启 shell / 清空日志）**不在这一行** ——
+            // 它们归终端页签自己的二级工具条（`T-1b` 归位；本片 2026-10-08 先把它们移出外层条）。
             Spacer(minLength: 8)
-
-            if appState.lowerPaneTab == .problem || appState.lowerPaneTab == .output {
-                iconButton("trash", help: L(.lowerPaneClear)) {
-                    // 工作区段（无查询页签）没有可清的日志 —— 按钮如实无效，不假装清掉了什么。
-                    if let tab { appState.clearLowerPaneLog(for: tab.id) }
-                }
-            }
-
-            if appState.lowerPaneTab == .terminal {
-                // 「这一步做不了」的说法（当前只有一种：**最后一个页签不许关**）。
-                // 为什么要有这一行：⌘W 在最后一个页签上什么都不会发生 —— 静默无反应会被读成
-                // 「这个软件的 ⌘W 坏了」（Core 只给枚举理由，人话在这里）。
-                if let refusalHint = terminal.refusalHint {
-                    Text(refusalHint)
-                        .font(Theme.font(.caption))
-                        .foregroundStyle(Theme.status(.warning))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: 320, alignment: .trailing)
-                        .help(refusalHint)
-                }
-                // 当前页签的「已停止 / 出错」两行小字。观察的是 **pane 自己**（会话级的
-                // @Published），所以拆成一个小视图 —— 协调器不必把每个页签的字段都镜像一遍。
-                TerminalPaneStatus(pane: terminal.activePane)
-                iconButton("arrow.clockwise", help: L(.terminalRestart)) {
-                    // **作用在当前页签上**：多会话之后「重启」不再指向唯一那个终端。
-                    terminal.restart(
-                        id: terminal.tabs.activeID,
-                        columns: terminal.activePane.screen.columns,
-                        rows: terminal.activePane.screen.rows
-                    )
-                }
-            }
 
             if isCollapsed {
                 // 折叠态只留一个**向上**的箭头：这是"把它恢复出来"的入口，
@@ -153,10 +115,12 @@ struct LowerPaneTabStrip: View {
         .help(L(item.textKey))
     }
 
-    /// 右侧那排按钮的**唯一画法**（口径①：它们一概不动；一个都不许少）。
+    /// 这一行右侧按钮的**唯一画法**（口径①：它们一概不动；一个都不许少）。
     ///
+    /// 本行现在画的是**窗口按钮**这一族（最大化 / 恢复 / 折叠，折叠态换成展开箭头），共 3 个调用点。
     /// `Scripts/check-terminal-tabs.py` 的登记表与这里**双向对账**：这里多画一个没登记的按钮，
-    /// 或者登记过的按钮被顺手挪走，判据都会点名 —— 「五个动作按钮一个不少」不是靠人眼看。
+    /// 或者登记过的按钮被顺手挪走，判据都会点名。子终端那几个动作按钮（清空日志 / 重启 shell）
+    /// 随 `T-1a`（2026-10-08）移出本行 —— 那份登记表要等 `T-1b` 把它们归位后再一并重算。
     private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
