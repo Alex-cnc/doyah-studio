@@ -4,7 +4,9 @@ import DoyahCore
 /// 查询窗口**下部**那一块 —— 与 VS Code 底部面板同构的多页签区域。
 ///
 /// 它不是独立新增的区域：原来的 Result（结果表）区域就是这里，现在升成页签，
-/// 与 问题 / 输出 / 终端 / 调试控制台 并列。终端页签用的 `TerminalModel` 挂在 App 层，
+/// 与 问题 / 输出 / 终端 / 调试控制台 / **历史** 并列（`FR-EDIT-10` v3.326：「历史」只在
+/// Database 客户端段出现 —— 段条件在 `AppState.availableLowerPaneTabs`，不在视图里）。
+/// 终端页签用的 `TerminalModel` 挂在 App 层，
 /// 所以切页签、最大化 / 恢复、乃至切换界面语言都不会把 shell 杀掉。
 struct LowerPaneView: View {
     @EnvironmentObject private var appState: AppState
@@ -158,7 +160,117 @@ struct LowerPaneView: View {
                 symbol: "ladybug",
                 text: L(.lowerPaneDebugPlaceholder)
             )
+
+        case .history:
+            historyPane
         }
+    }
+
+    // MARK: 「历史」页（`FR-EDIT-10` v3.326 扩写 / `DR-02`）
+
+    /// 「历史」页签的内容。
+    ///
+    /// 三条口径（都写在这里，免得下一个人往旁边再抄一份）：
+    ///   · **只在 Database 段出现在页签条上** —— 段条件的唯一出处是
+    ///     `AppState.availableLowerPaneTabs`（页签条只画它给的几枚）。内容这一侧**不自己判一遍**
+    ///     （判两遍就是两处口径；工作区段这颗页签根本画不出来，切不到这里）。
+    ///   · **与工具条时钟菜单同一份数据**：两处都读 `appState.queryHistory`
+    ///     （← `HIST-1` 落盘门面的**回读镜像**，单一读盘点）。这里**不自己开库 / 不自己 load**
+    ///     —— 两处各自读盘 = 第二份真相。
+    ///   · **清空 / 单条删除都是先挂请求**（`requestClearQueryHistory()` / `requestDeleteHistory(_:)`），
+    ///     确认框挂在页签条那一层（`LowerPaneTabStrip`），**只有确认那一步才动库**。
+    ///     记录的是**执行过的 SQL / DDL**（不含导出 / 备份 / 连接管理这类非语句动作）。
+    private var historyPane: some View {
+        VStack(spacing: 0) {
+            historyPaneToolbar
+            Divider()
+            if appState.queryHistory.isEmpty {
+                placeholder(symbol: "clock.arrow.circlepath", text: L(.historyEmpty))
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(appState.queryHistory) { entry in
+                            historyRow(entry)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, Spacing.xs)
+                }
+            }
+        }
+    }
+
+    /// 历史页顶部那一行：标题 + 右侧「清空」（`DR-02` 的**清空**入口之一）。
+    ///
+    /// 「清空」**灰着的判据**读的是 `AppState.canClearQueryHistory`（判据属性唯一出处）——
+    /// 视图不自己写 `queryHistory.isEmpty`（`Scripts/empty-action-button-dispositions.json`）。
+    private var historyPaneToolbar: some View {
+        HStack(spacing: Spacing.hair) {
+            Text(L(.historyTitle))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+
+            Spacer(minLength: 8)
+
+            Button {
+                appState.requestClearQueryHistory()
+            } label: {
+                Label(L(.historyClear), systemImage: "trash")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            .disabled(!appState.canClearQueryHistory)
+            .help(L(.historyClear))
+        }
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, Spacing.xs)
+    }
+
+    /// 历史里的一行：结果标记 + 时间 + 语句摘要，右侧两枚（载入 / 删除）。
+    ///
+    /// 「删除」只是**先挂请求**（`DR-02` 单条删的二次确认入口）；「载入」走的是与时钟菜单
+    /// 那一项**同一个**入口 `AppState.loadHistory(_:into:)`。
+    private func historyRow(_ entry: QueryHistory) -> some View {
+        HStack(spacing: Spacing.s) {
+            Image(systemName: entry.succeeded ? "checkmark.circle" : "xmark.octagon.fill")
+                .font(Theme.font(.caption))
+                .foregroundStyle(entry.succeeded ? Theme.status(.success) : Theme.status(.danger))
+
+            Text(Self.timeFormatter.string(from: entry.executedAt))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(Theme.text(.tertiary))
+
+            Text(AppState.historyPreview(entry.sql))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 8)
+
+            Button {
+                if let tab { appState.loadHistory(entry, into: tab.id) }
+            } label: {
+                Image(systemName: "arrow.up.doc")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            // 没有查询页签（所有页签都关掉了）时载入没有落点 ⇒ 灰着，而不是点了没反应。
+            .disabled(tab == nil)
+            .help(L(.historyLoadHelp))
+
+            Button {
+                appState.requestDeleteHistory(entry)
+            } label: {
+                Image(systemName: "trash")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            .help(L(.commonDelete))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, Spacing.xs)
     }
 
     /// 终端页签底部的**快捷键提示条**。

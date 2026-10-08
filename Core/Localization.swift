@@ -218,6 +218,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case lowerPaneOutput
     case lowerPaneTerminal
     case lowerPaneDebugConsole
+    /// 「历史」页签（`FR-EDIT-10` v3.326 扩写：只在 Database 客户端段出现）。
+    case lowerPaneHistory
     case lowerPaneToggle
     case lowerPaneHide
     case lowerPaneExpand
@@ -1991,6 +1993,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case historyClear
     case historyHelp
     case historyLoadHelp
+    /// 「历史」页签里的**归档**动作（`FR-EDIT-10`：→ `Core/SQLArchive`）。
+    case historyArchive
+    case historyArchiveHelp
+    /// 清空 / 单条删除两处**二次确认**（`DR-02`：可清空 / 单条删除）。
+    case historyClearConfirmTitle
+    case historyClearConfirmMessage
+    case historyDeleteConfirmTitle
+    case historyDeleteConfirmMessage
     case editorCompletionHelp
 
     // 对象树右键菜单 / 新建数据库（FR-META-11）
@@ -2383,6 +2393,7 @@ public enum LocalizedStrings {
         .lowerPaneOutput: [.simplifiedChinese: "输出", .english: "Output"],
         .lowerPaneTerminal: [.simplifiedChinese: "终端", .english: "Terminal"],
         .lowerPaneDebugConsole: [.simplifiedChinese: "调试控制台", .english: "Debug Console"],
+        .lowerPaneHistory: [.simplifiedChinese: "历史", .english: "History"],
         .lowerPaneToggle: [.simplifiedChinese: "显示 / 隐藏下方面板", .english: "Show/Hide Bottom Pane"],
         .lowerPaneHide: [.simplifiedChinese: "收起面板", .english: "Collapse pane"],
         .lowerPaneExpand: [.simplifiedChinese: "展开面板", .english: "Expand pane"],
@@ -3887,10 +3898,16 @@ public enum LocalizedStrings {
         .inlineEditInsertConfirm: [.simplifiedChinese: "加入待提交", .english: "Add to pending changes"],
         .inlineEditInsertEmpty: [.simplifiedChinese: "一行都没有填：追加行至少要写一列。", .english: "Nothing was filled in: an appended row needs at least one column."],
         .historyTitle: [.simplifiedChinese: "查询历史", .english: "Query History"],
-        .historyEmpty: [.simplifiedChinese: "本次运行还没有执行过查询", .english: "No queries executed in this session"],
+        .historyEmpty: [.simplifiedChinese: "还没有查询历史", .english: "No query history yet"],
         .historyClear: [.simplifiedChinese: "清空历史", .english: "Clear History"],
-        .historyHelp: [.simplifiedChinese: "查询历史（仅保留在内存，退出即清空）", .english: "Query history (in memory only, cleared on quit)"],
+        .historyHelp: [.simplifiedChinese: "查询历史（本机保存，可清空 / 单条删除）", .english: "Query history (stored locally; clear it or delete single entries)"],
         .historyLoadHelp: [.simplifiedChinese: "载入到当前页签", .english: "Load into current tab"],
+        .historyArchive: [.simplifiedChinese: "归档", .english: "Archive"],
+        .historyArchiveHelp: [.simplifiedChinese: "把这一条写入本机 SQL 归档", .english: "Write this entry to the local SQL archive"],
+        .historyClearConfirmTitle: [.simplifiedChinese: "要清空全部查询历史吗？", .english: "Clear all query history?"],
+        .historyClearConfirmMessage: [.simplifiedChinese: "清空后无法恢复：本机保存的历史记录会全部删掉。", .english: "This cannot be undone: every locally stored entry will be deleted."],
+        .historyDeleteConfirmTitle: [.simplifiedChinese: "要删除这一条历史吗？", .english: "Delete this history entry?"],
+        .historyDeleteConfirmMessage: [.simplifiedChinese: "这一条将从本机历史里移除，无法撤销。", .english: "This entry will be removed from the local history and cannot be recovered."],
         .editorCompletionHelp: [.simplifiedChinese: "补全（F5 或 Esc）", .english: "Complete (F5 or Esc)"],
         .objectTreeMenuConnect: [.simplifiedChinese: "连接", .english: "Connect"],
         .objectTreeMenuDisconnect: [.simplifiedChinese: "断开", .english: "Disconnect"],

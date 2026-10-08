@@ -656,6 +656,9 @@ final class AppState: ObservableObject {
         guard resolved != selectedActivityItem else { return }
         selectedActivityItem = resolved
         UserDefaults.standard.set(resolved.rawValue, forKey: ActivityBarItem.storageKey)
+        // **换段就把下方面板的页签口径跟着换**（`FR-EDIT-10` 段条件：历史只在 Database 段出现，
+        // 切走时若正选中它就落到该段可用页签、切回恢复）—— 判定收在 `syncLowerPaneTabWithSegment`。
+        syncLowerPaneTabWithSegment()
         // 广播换区（2026-10-02 需求提出者：菜单显示要跟活动栏联动）——
         // 菜单栏那一层（`MainMenuLocalizer`）不持有本对象，靠这条对齐菜单项的显示。
         NotificationCenter.default.post(name: .doyahActivityItemChanged, object: resolved)
@@ -670,6 +673,8 @@ final class AppState: ObservableObject {
               resolved != selectedActivityItem else { return }
         selectedActivityItem = resolved
         UserDefaults.standard.set(resolved.rawValue, forKey: ActivityBarItem.storageKey)
+        // 与 `selectActivityItem` 同一条口径：这里也是**换段**（只是不提示），页签跟着换。
+        syncLowerPaneTabWithSegment()
         NotificationCenter.default.post(name: .doyahActivityItemChanged, object: resolved)
     }
 
@@ -1028,7 +1033,55 @@ final class AppState: ObservableObject {
     /// 当前选中的下方面板页签。
     @Published var lowerPaneTab: LowerPaneTab =
         LowerPaneTab(rawValue: UserDefaults.standard.string(forKey: "ui.lowerPaneTab") ?? "") ?? .problem {
-        didSet { UserDefaults.standard.set(lowerPaneTab.rawValue, forKey: "ui.lowerPaneTab") }
+        didSet {
+            UserDefaults.standard.set(lowerPaneTab.rawValue, forKey: "ui.lowerPaneTab")
+            // 用户在**非 Database 段**又自己换了一枚（比如在工作区段点「输出」）⇒ 那次「历史」
+            // 不再需要恢复 —— 「恢复上次选中」恢复的是**切走那一刻**的选中；之后用户明确点过
+            // 别的，就听用户当下的（否则切回来会把他刚点的那一枚顶掉）。
+            if !isHistoryPaneAvailable, lowerPaneTab != .history {
+                restoresHistoryTabOnReturnToDatabase = false
+            }
+        }
+    }
+
+    /// 下方面板的页签里**这一档可见的那几枚**（外层页签条只画它给的那几枚）。
+    ///
+    /// `FR-EDIT-10`（v3.326 扩写 · 队列 `HIST-2`）：「历史」**只在 Database 客户端段出现**
+    /// —— 工作区段没有查询上下文。段条件的**唯一出处就是这一句**：视图里再写一遍 `if`
+    /// 就是第二处口径，页签条与将来别的消费者迟早各说各话。
+    /// 序 = 问题 / 输出 / 终端 / 调试控制台 / 历史（`LowerPaneTab.allCases` 的顺序就是显示顺序）。
+    var availableLowerPaneTabs: [LowerPaneTab] {
+        isHistoryPaneAvailable ? LowerPaneTab.allCases : LowerPaneTab.allCases.filter { $0 != .history }
+    }
+
+    /// 「历史」页签本档可见吗（`FR-EDIT-10` 的段条件：仅 Database 客户端段）。
+    var isHistoryPaneAvailable: Bool { selectedActivityItem == .database }
+
+    /// 切段前「历史」是不是正被选中 —— 供「切回 Database 段 ⇒ 恢复上次选中」用。
+    ///
+    /// **记在内存里、不落盘**：它记的是「上一次在 Database 段选的是哪一枚」，而落盘的
+    /// `ui.lowerPaneTab` 记的是**当前真正生效的那一枚**（切到工作区段时是终端）。
+    private var restoresHistoryTabOnReturnToDatabase = false
+
+    /// **段切换时的页签口径**（`FR-EDIT-10` 段条件那一句）—— 唯一一处：
+    ///   · 切到**非 Database 段** ⇒ 「历史」页签隐藏；若正选中它 ⇒ 自动切到该段可用页签
+    ///     （取**终端**：两段都成立、且与「执行过的 SQL」最贴近的那一页）；
+    ///   · 切回 **Database 段** ⇒ 恢复上次选中（那次正是「历史」的话）。
+    ///
+    /// 为什么收成一个方法：`selectActivityItem` / `ensureActivitySelectionVisible` / 构造三处
+    /// 都可能改段 —— 各写一段就是三份口径（本工程同族事故见 `L-143`）。
+    private func syncLowerPaneTabWithSegment() {
+        guard !isHistoryPaneAvailable else {
+            guard restoresHistoryTabOnReturnToDatabase else { return }
+            restoresHistoryTabOnReturnToDatabase = false
+            lowerPaneTab = .history
+            return
+        }
+        guard lowerPaneTab == .history else { return }
+        // **先落页签、后立标记**：`lowerPaneTab` 的 `didSet` 会把「非 Database 段 + 非历史」
+        // 当成用户自己换了一枚而清掉标记 —— 顺序反过来就会当场把自己刚立的那一个清掉。
+        lowerPaneTab = .terminal
+        restoresHistoryTabOnReturnToDatabase = true
     }
 
     /// 某个页签当前生效的连接：优先用它自己最近一次执行用的连接，否则退回左侧选中的连接。
@@ -1204,7 +1257,8 @@ final class AppState: ObservableObject {
         switch lowerPaneTab {
         case .problem: tabs[index].problemLog = TabLog.cleared()
         case .output: tabs[index].outputLog = TabLog.cleared()
-        case .terminal, .debugConsole: break
+        // 「历史」页不是日志页（它读的是查询历史、清空走 `requestClearQueryHistory` 那条确认路）。
+        case .terminal, .debugConsole, .history: break
         }
     }
 
@@ -1329,6 +1383,10 @@ final class AppState: ObservableObject {
         // `ui.activityBarItem` 里还存着 `database`）。启动就落到可见项上，否则界面会停在
         // 一个"选着但画不出来"的视图上 —— 那是最难查的一类"空白界面"。
         ensureActivitySelectionVisible()
+        // **启动时对一次段与页签的口径**（`FR-EDIT-10` 段条件）：`ui.lowerPaneTab` 里可能存着
+        // 「历史」，而 `ui.activityBarItem` 存的是工作区段 —— 那种组合下这一枚画不出来，
+        // 面板会停在一个「选着但不显示」的页签上。判定与换段同一条（`syncLowerPaneTabWithSegment`）。
+        syncLowerPaneTabWithSegment()
         // 启动时把"这一档能看到什么"记一行。理由很实际：用户来问「我的工作区 / 数据库不见了」
         // 时，看一眼 `startup.log` 就知道是哪一档、为什么（不用让他把许可证文件翻出来）。
         // 只记档位与来源，不记许可证内容。
@@ -1457,15 +1515,22 @@ final class AppState: ObservableObject {
 
     // MARK: - 查询历史（`DR-02` 持久化 · 门面 `QueryHistoryStore`）
 
-    /// 清空历史（工具条时钟菜单里那一项）。
+    /// 清空历史（`DR-02`：可清空）—— **只有确认步会调它**（`confirmHistoryRemoval`）。
     ///
-    /// **签名保持同步**：调用点在 `App/Views/QueryToolbar.swift`，而本片的文件面**不许碰**
-    /// `App/Views/**`（页签 UI 归 `HIST-2`）⇒ 落盘的 `await` 放进 `Task`，内存那一份当场清空
-    /// （用户看到的就是「立刻没了」——不该为了清一次历史去等一次磁盘往返）。
-    func clearQueryHistory() {
+    /// **签名从同步改成了 `async`**（`HIST-2`，2026-10-08）：`HIST-1` 那一版保持同步，理由写在
+    /// 「调用点在 `App/Views/QueryToolbar.swift`、本片不许碰 `App/Views/**` ⇒ 落盘 `await` 塞进
+    /// `Task`」。`HIST-2` 把两个入口都改成**先挂确认请求**，调用点随之收进本类（`confirmHistoryRemoval`）
+    /// —— 于是那条理由不成立了，而「确认 ⇒ 落库」这件事**必须能被判据读到**：落盘塞进游离 `Task`，
+    /// 判据读到的是**清空之前**的库（本轮实测就是这么抓到的：内存已空、库里还是 3 条）。
+    /// 内存那一份仍然**当场**清空（界面立刻反映），落盘 await 在本调用里完成。
+    func clearQueryHistory() async {
         queryHistory.removeAll()
-        let store = queryHistoryStore
-        Task { try? await store.clear() }
+        do {
+            try await queryHistoryStore.clear()
+        } catch {
+            // 落盘失败如实说出来（不静默吞）—— 下次启动回读会以后端的真值为准。
+            statusMessage = ErrorPresenter.message(for: error)
+        }
     }
 
     /// 启动加载查询历史（`DR-02`：**重启后仍在**）。
@@ -1487,6 +1552,161 @@ final class AppState: ObservableObject {
             $0.fileURL = nil
             $0.isDirty = true
         }
+    }
+
+    // MARK: - 清空 / 单条删除的确认（`DR-02`：可清空 · 单条删除）
+
+    /// **挂在界面上的那一个（清空 / 删除）请求**（`nil` = 没有待确认的动作）。
+    ///
+    /// 规则（动作与顺序、文案键）在 Core `QueryHistoryRemovalPrompt` —— **唯一出处**；
+    /// 这里只做搬运。判据：挂请求这一步**库一个字节不动**，直到 `confirmHistoryRemoval()`；
+    /// 取消 = 只收掉请求（`TestsUISnapshot/QueryHistoryPaneProbeTests.swift`）。
+    @Published var pendingHistoryRemoval: QueryHistoryRemovalRequest?
+
+    /// 点「清空历史」：把动作摆到确认框上，**先不落库**。
+    ///
+    /// 两个入口（页签里的「清空」与工具条时钟菜单里那一项）都走它 ——
+    /// 一处先问、另一处直接清就是「一半有的行为」（`L-143` 那一课）。
+    /// 没有可清的东西时按钮是**灰着**的（判据属性 `canClearQueryHistory`，唯一出处见下）。
+    func requestClearQueryHistory() {
+        guard canClearQueryHistory else { pendingHistoryRemoval = nil; return }
+        pendingHistoryRemoval = QueryHistoryRemovalPrompt.request(target: .all)
+    }
+
+    /// 「清空历史」有没有可清的东西 —— **判据属性唯一出处**（`L-50` ②）。
+    ///
+    /// `requestClearQueryHistory` 的守卫与历史页签那枚「清空」的 `.disabled` 用的是**同一条判断**；
+    /// 视图侧不许再自己写一遍 `queryHistory.isEmpty`（两处各写一遍正是 `L-50` 那一轮抓到的病根）。
+    /// 台账：`Scripts/empty-action-button-dispositions.json`（`view-disabled` 档）。
+    var canClearQueryHistory: Bool { !queryHistory.isEmpty }
+
+    /// 点某一条的「删除」：同上，先挂请求。
+    ///
+    /// `subject` = 那一条 SQL 的**单行摘要**（确认框正文里写出来，用户才知道删的是哪一条）。
+    func requestDeleteHistory(_ entry: QueryHistory) {
+        pendingHistoryRemoval = QueryHistoryRemovalPrompt.request(
+            target: .one(entry.id),
+            subject: Self.historyPreview(entry.sql)
+        )
+    }
+
+    /// 退出口（按 ESC / 点框外 / 点「取消」）：只收掉请求，库一个字节不动。
+    func cancelHistoryRemoval() {
+        pendingHistoryRemoval = nil
+    }
+
+    /// 确认框标题（**唯一生产点**；视图不自己拼句子）。
+    var pendingHistoryRemovalTitle: String? {
+        guard let request = pendingHistoryRemoval else { return nil }
+        return L(QueryHistoryRemovalPrompt.titleKey(for: request.target))
+    }
+
+    /// 确认框正文：单条时把那条 SQL 的摘要写出来（清空那一档是通用一句）。
+    var pendingHistoryRemovalMessage: String? {
+        guard let request = pendingHistoryRemoval else { return nil }
+        let base = L(QueryHistoryRemovalPrompt.messageKey(for: request.target))
+        // 单条才把摘要补上（清空那一档没有「哪一条」这回事）。这里是**两句拼装**，
+        // 不是「空数据按钮」的前置守卫 —— 所以刻意写成 `if` 而不是 `guard`（后者会被
+        // `check-empty-action-buttons.py` 当成 AppState 的空守卫要求登记，而它并不是一处按钮前置）。
+        if case .one = request.target, !request.subject.isEmpty {
+            return base + "\n" + request.subject
+        }
+        return base
+    }
+
+    /// 用户在确认框里点了「清空」/「删除」：**这才动库**，然后落地。
+    func confirmHistoryRemoval() async {
+        guard let request = pendingHistoryRemoval else { return }
+        pendingHistoryRemoval = nil
+        switch request.target {
+        case .all:
+            await clearQueryHistory()
+        case .one(let id):
+            await deleteQueryHistory(id: id)
+        }
+    }
+
+    /// 删一条历史（`DR-02` 单条删）：内存镜像当场跟上，库那一侧走门面。
+    ///
+    /// 与 `clearQueryHistory` 同一条口径：内存先落（界面立刻反映），落盘 `await` 在本调用里完成
+    /// —— 「确认 ⇒ 落库」得能被判据读到（游离 `Task` 会让判据读到删之前的库）。
+    /// 落盘失败如实说出来（不静默吞），下次启动回读以后端真值为准。
+    func deleteQueryHistory(id: UUID) async {
+        queryHistory.removeAll { $0.id == id }
+        let store = queryHistoryStore
+        do {
+            try await store.delete(id: id)
+        } catch {
+            statusMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 把一条历史**手动归档**（`FR-EDIT-10`：历史页签内的「归档」动作 → `Core/SQLArchive`）。
+    ///
+    /// 与执行期归档（`archiveExecutedSQL`）走**同一条写盘路**（`openQueriesDirectory` +
+    /// `sqlArchiveWriter.append`）—— 不另开第二套写盘（两套迟早在一边改掉）。
+    /// 目录取不到 ⇒ 用归档面板那句「未授权」如实说出来（**不静默吞**：点了没反应是这里最忌的）。
+    ///
+    /// **刻意不再过一遍 `memoryRecordingPolicy`**：那一句判的是「本次执行要不要记录」
+    /// （`FR-AI-15`，自动记录），而这里是用户对**某一条既有历史**的显式动作 —— 两回事，
+    /// 用同一句判据糊住会让显式动作看起来没反应。
+    func archiveHistoryEntry(_ entry: QueryHistory) {
+        let configuration = connections.first { $0.id == entry.connectionID }
+        let archiveEntry = SQLArchiveEntry(
+            sql: entry.sql,
+            firstExecutedAt: entry.executedAt,
+            lastExecutedAt: entry.executedAt,
+            connection: configuration?.displayTitle(untitled: L(.connectionUntitled))
+                ?? L(.connectionUntitled),
+            database: selectedDatabase ?? "",
+            durationSeconds: entry.duration,
+            affectedRows: nil,
+            succeeded: entry.succeeded,
+            note: nil
+        )
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                guard let opened = try await self.openQueriesDirectory() else {
+                    self.statusMessage = L(.archiveDirectoryNotAuthorized)
+                    return
+                }
+                defer { opened.grant?.stopAccessing() }
+                let directory = opened.url
+                let count = try await self.sqlArchiveWriter.append(archiveEntry, in: directory)
+                self.reportArchived(directory: directory, count: count)
+                // 刚归档的这条应该马上可用于补全（FR-AI-13 S4）；重建在后台、失败也不影响归档结果。
+                await self.refreshQueryMemoryIndex()
+            } catch {
+                self.statusMessage = L(.archiveFailed, ErrorPresenter.message(for: error))
+            }
+        }
+    }
+
+    /// 「已归档到 …（当天 N 条）」这一句的**唯一生产点**（执行期归档与历史页的手动归档共用）。
+    ///
+    /// 为什么收成一处而不是两处各写一遍：`format-argument` 那条台账按**实参形状**记调用点
+    /// （`Scripts/format-argument-dispositions.json`），同一个形状两处各写一遍就要再登记一次
+    /// —— 而那正是「同一句话有两份口径」的机械形状。收成一处之后台账一处都不动。
+    private func reportArchived(directory: URL, count: Int) {
+        statusMessage = L(
+            .archiveSaved,
+            directory.deletingLastPathComponent().lastPathComponent,
+            count
+        )
+    }
+
+    /// 一条 SQL 的**单行摘要**（确认框正文 / 菜单项文案共用一条口径）。
+    ///
+    /// 换行 / 制表符压成空格、超长截断 —— 两处各写一份迟早一边改了另一边没改。
+    static func historyPreview(_ sql: String, limit: Int = 48) -> String {
+        let singleLine = sql
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+            .split(separator: " ")
+            .joined(separator: " ")
+        return singleLine.count > limit ? String(singleLine.prefix(limit)) + "…" : singleLine
     }
 
     /// 读取归档目录书签并刷新状态（界面打开归档面板时调用）。
@@ -1636,7 +1856,7 @@ final class AppState: ObservableObject {
 
                 // 归档落在 queries/ 子目录，避免和数据任务产物、以及工作区里的代码混在一起。
                 let count = try await self.sqlArchiveWriter.append(entry, in: directory)
-                self.statusMessage = L(.archiveSaved, directory.deletingLastPathComponent().lastPathComponent, count)
+                self.reportArchived(directory: directory, count: count)
                 // 刚写进去的这条应该马上可用于补全（FR-AI-13 S4）；重建在后台、失败也不影响执行结果。
                 await self.refreshQueryMemoryIndex()
             } catch {
