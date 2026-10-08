@@ -313,8 +313,18 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   **pid 换人**、页签留着；④ 渲染真二级条：页签 1 → 3 时**左半必须变、右四分之一逐像素不变**
 #   （右侧那四枚不被页签挤动）+ 左 / 右各切一张图存盘。
 #   它**真开 shell**（取证专用，`XCTSkip` 到 `DOYAH_UI_SNAPSHOT=1`），跟着本脚本跑两遍。
+# + `QueryHistoryPaneProbeTests`（片 `HIST-2` · 派单 `T-20261009-018` / `T-20261009-010` ·
+#   人类主人 2026-10-08 令：下方面板外层页签条新增「历史」，**只在 Database 客户端段出现**，
+#   与工具条时钟菜单**同一份**历史源，并给「清空」/「单条删除」两处**二次确认**）：
+#   ① 段条件（`FR-EDIT-10`）：Database 段页签可见（渲染出的文案里有「历史」）→ 切工作区段
+#   **不可见**且正选中历史时**自动落到终端** → 切回**恢复历史**（三态成对读数 + 选中项 dump）；
+#   ② 同源：源码锚点（页面与菜单都读 `appState.queryHistory`）+ **读盘点唯一**
+#   （`App/` 里提到落盘门面 `QueryHistoryStore` 的文件只许 `AppState.swift`）；
+#   ③ 二次确认（`DR-02`）：点清空/删除 ⇒ **只挂请求**（内存与库都不变）→ 取消不变 →
+#   确认才落库（清空 ⇒ 0 / 单条 ⇒ 减 1），读数同时给内存镜像与**库里真值**。
+#   ⚠️ ③ 要写临时笔记库（历史与笔记**同库**）⇒ 走 `DOYAH_NOTES_DIR`，没设就 `XCTSkip`。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

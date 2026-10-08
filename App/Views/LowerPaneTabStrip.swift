@@ -43,7 +43,12 @@ struct LowerPaneTabStrip: View {
 
     var body: some View {
         HStack(spacing: Spacing.hair) {
-            ForEach(LowerPaneTab.allCases) { item in
+            // **只画这一档可见的那几枚**（`FR-EDIT-10` 段条件）—— 顺序 / 可见性都取自
+            // `AppState.availableLowerPaneTabs`（唯一出处）：Database 段 = 问题 / 输出 / 终端 /
+            // 调试控制台 / **历史**；工作区段 = 不含「历史」的那四枚（工作区没有查询上下文）。
+            // 这一行**不再自己列举**页签：`ForEach(LowerPaneTab.allCases)` 会让工作区段也画出
+            // 「历史」，而段条件写两遍正是它最容易被改坏的地方。
+            ForEach(appState.availableLowerPaneTabs) { item in
                 tabButton(item)
             }
 
@@ -76,9 +81,47 @@ struct LowerPaneTabStrip: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
+        // **清空 / 单条删除的二次确认**（`DR-02`「可清空 / 单条删除」· 队列 `HIST-2`）。
+        //
+        // 为什么挂**这一层**（页签条）而不是历史页的内容里 / 也不是 `LowerPaneView`：
+        //   · **两个入口都得够得着**：页签里的「清空」与每条右侧的「删除」在内容里，
+        //     而工具条时钟菜单那一项（`QueryToolbar.historyMenu`）在**内容之外** ——
+        //     挂进内容里，时钟菜单清空时就没有能弹框的宿主（点了没反应）。页签条在
+        //     Database 段**始终挂着**（折叠态也只收内容，标题栏含这一行还在）。
+        //   · **呈现通道不打架**：`LowerPaneView` 那一层已经挂着两条 `alert`（关页签 / 重命名），
+        //     同一视图上再挤一条弹窗，SwiftUI 只保证最后挂的那个弹得出来（该文件里有实测留档）
+        //     —— 换一层是这里唯一稳的做法（与终端「重启确认」当年挪进内容层同一个理由）。
+        //
+        // 动作与顺序由 Core `QueryHistoryRemovalPrompt` 给（**唯一出处**），标题 / 正文由
+        // `AppState` 两处生成 —— 界面只负责画（别自己硬写两枚按钮，规则一改就有两处不一致）。
+        .confirmationDialog(
+            appState.pendingHistoryRemovalTitle ?? "",
+            isPresented: Binding(
+                get: { appState.pendingHistoryRemoval != nil },
+                // 按 ESC / 点框外 = 「取消」：只收掉请求，库一个字节不动。
+                set: { presented in if !presented { appState.cancelHistoryRemoval() } }
+            ),
+            titleVisibility: .visible,
+            presenting: appState.pendingHistoryRemoval
+        ) { request in
+            ForEach(request.actions, id: \.self) { action in
+                Button(role: action == .cancel ? .cancel : .destructive) {
+                    if action == .cancel {
+                        appState.cancelHistoryRemoval()
+                    } else {
+                        Task { await appState.confirmHistoryRemoval() }
+                    }
+                } label: {
+                    Text(L(QueryHistoryRemovalPrompt.actionTitleKey(action)))
+                }
+                .help(L(QueryHistoryRemovalPrompt.actionTitleKey(action)))
+            }
+        } message: { _ in
+            if let message = appState.pendingHistoryRemovalMessage { Text(message) }
+        }
     }
 
-    // MARK: 下方面板自己的四个页签
+    // MARK: 下方面板自己的页签（问题 / 输出 / 终端 / 调试控制台，Database 段另加「历史」）
 
     private func tabButton(_ item: LowerPaneTab) -> some View {
         let isSelected = appState.lowerPaneTab == item

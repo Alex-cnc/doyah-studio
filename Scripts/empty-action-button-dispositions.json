@@ -204,6 +204,14 @@
       "view": "App/Views/NotesPanel.swift",
       "anchor": ".disabled(!hasDeletableSelection)",
       "reason": "**删除先确认（片 `N2-9`，派单 `T-20261007-079` ② / `T-20261007-081`，提交 `53afa20`）**：笔记屏左区那枚「删」（`notes-delete`）在**没选中任何一行**时是**灰着**的 —— 判据属性 `hasDeletableSelection` 住在视图里（`NotesPanel.swift` 里：笔记 = 多选集合非空，待办 = 编辑器里那一条），视图侧 `.disabled(!hasDeletableSelection)` 就是这一档的处置，用字面锚点钉住它。`AppState` 这句 `guard !ids.isEmpty` 是**第二道**（与 `saveCurrentQuery` 同一档先例，只是这里连属性名都不是同一个）：笔记那一半在空集合上本来就没有可删的东西，`requestNoteRemoval` 只挂确认请求、不落库（N2-9 的落法：点删除 ⇒ 条目数不变，确认 ⇒ 才 `deleteNote` / `deleteTodo`）。同一函数里待办那一句是 `guard let id = todoEditingID else`（不含 `isEmpty`、不在扫描口径里），且待办编辑器那枚「删」**只在有目标时才画** —— 那是「够不着按钮」那一档；本条目只登记笔记这一半。"
+    },
+    {
+      "func": "requestClearQueryHistory",
+      "guard": "canClearQueryHistory",
+      "form": "view-disabled",
+      "predicate": "canClearQueryHistory",
+      "view": "App/Views/LowerPaneView.swift",
+      "reason": "**历史页签的「清空」（片 `HIST-2` / 派单 `T-20261009-018`、`T-20261009-010`）**：历史为空时那枚「清空」**灰着** —— 空列表上「清空」没有可落的动作。判据属性 `canClearQueryHistory` 在 `AppState` 里**只定义一次**（体 = `!queryHistory.isEmpty`），守卫（`requestClearQueryHistory`）与视图侧 `.disabled(!appState.canClearQueryHistory)` 读的是**同一条判断**；视图不许再自己写一遍 `queryHistory.isEmpty`。同一条路也是工具条时钟菜单那一项的清空入口（`DR-02`：可清空）—— 两处都在**确认框**之后才落库。"
     }
   ]
 }

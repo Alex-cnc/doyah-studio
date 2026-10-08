@@ -89,6 +89,8 @@ struct QueryToolbar: View {
 
     // MARK: - 文件
 
+    /// 历史下拉（`DR-02` 持久化后它读的仍是 `AppState.queryHistory` —— **与「历史」页签同一份数据**，
+    /// 单一读盘点：两处各自读盘就是第二份真相，`HIST-2` 明令不许）。
     private var historyMenu: some View {
         Menu {
             if appState.queryHistory.isEmpty {
@@ -106,7 +108,9 @@ struct QueryToolbar: View {
                 Divider()
 
                 Button(L(.historyClear)) {
-                    appState.clearQueryHistory()
+                    // **先挂确认请求**（`DR-02` 的二次确认）：与「历史」页签那枚「清空」同一个入口
+                    // —— 一处先问、另一处直接清就是「一半有的行为」（确认框挂在页签条那一层）。
+                    appState.requestClearQueryHistory()
                 }
             }
         } label: {
@@ -119,15 +123,12 @@ struct QueryToolbar: View {
     }
 
     /// 菜单项文案：单行 SQL 摘要 + 成功/失败标记。
+    ///
+    /// 摘要走 `AppState.historyPreview`（**唯一出处**）—— 历史页签每一行写的是同一句，
+    /// 两处各写一份摘要口径迟早一边改了另一边没改。
     private func historyLabel(for entry: QueryHistory) -> String {
-        let singleLine = entry.sql
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\t", with: " ")
-            .split(separator: " ")
-            .joined(separator: " ")
-        let preview = singleLine.count > 48 ? String(singleLine.prefix(48)) + "…" : singleLine
         let mark = entry.succeeded ? "✓" : "✗"
-        return "\(mark) \(preview)"
+        return "\(mark) \(AppState.historyPreview(entry.sql))"
     }
 
     // 「运行范围」菜单已删（FR-EXEC-14，2026-09-27 需求提出者拍板）：
