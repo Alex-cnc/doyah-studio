@@ -137,7 +137,26 @@ final class TerminalModel: ObservableObject {
     /// 新建页签（`⌘T` 与页签条上的「+」）。
     @discardableResult
     func newTab() -> Int {
-        let id = tabs.newTab()
+        makeTab(launchTitle: nil)
+    }
+
+    /// **一键启动**（终端二级条右侧那两枚）：新建一个页签，并在这个页签里直接跑预设程序。
+    ///
+    /// 与 `newTab()` 唯一的区别是**名字**与**待送的那一行命令**：名字由预设给
+    /// （`TerminalLaunchCommand.tabTitle` 里写着为什么不等前台进程名），命令在会话起来那一刻
+    /// 由 `TerminalPane.launch` 送进 PTY。
+    @discardableResult
+    func launchTab(_ command: TerminalLaunchCommand) -> Int {
+        let id = makeTab(launchTitle: command.tabTitle)
+        pane(for: id).launch(command)
+        refusalHint = nil
+        return id
+    }
+
+    /// 建页签 + 建它自己的会话（两个入口共用这一段：`newTab()` / `launchTab(_:)`）。
+    @discardableResult
+    private func makeTab(launchTitle: String?) -> Int {
+        let id = tabs.newTab(launchTitle: launchTitle)
         let pane = TerminalPane()
         wire(pane, to: id)
         panes[id] = pane
@@ -261,5 +280,51 @@ final class TerminalModel: ObservableObject {
         pane(for: id).restart(columns: columns, rows: rows)
         _ = tabs.markLive(id: id)
         refusalHint = nil
+    }
+
+    /// 「重启终端」的**二次确认目标**（nil = 没有待确认的重启）。
+    ///
+    /// 与 `pendingCloseTab` 同一个形状：重启要 SIGHUP 整条进程组
+    /// （里面有程序在跑的话一起结束）⇒ **先问一句**，不许做成静默杀进程
+    /// （人类主人 2026-10-08 原话：「重启终端等操作」，边界里写明必须二次确认）。
+    @Published var pendingRestartTab: Int?
+
+    /// 点「重启终端」：会话在跑就先问一句，已经退出就直接重启（判定在 Core 的 `restartDecision`）。
+    func requestRestart() {
+        let id = tabs.activeID
+        switch tabs.restartDecision(for: id) {
+        case .canRestart:
+            restart(id: id)
+        case .needsConfirmation:
+            pendingRestartTab = id
+        }
+    }
+
+    /// 用户在确认框里点了「重启终端」。
+    func confirmRestart() {
+        guard let id = pendingRestartTab else { return }
+        pendingRestartTab = nil
+        restart(id: id)
+    }
+
+    /// 用户在确认框里点了「取消」。
+    func cancelRestart() { pendingRestartTab = nil }
+
+    /// 重启（尺寸取**这条会话屏幕自己的现状**）。
+    ///
+    /// 为什么不用视图那一侧的几何：二级条那枚按钮长在终端内容**外面** ——
+    /// 它拿不到 `TerminalHostView` 的格子尺寸（`TerminalView.restartShell` 那条路才拿得到）。
+    /// 而屏幕模型里的 columns / rows 就是这条会话现在的真实尺寸（视图每次布局都会同步过来），
+    /// 用它起新会话，第一帧的排版就是对的。
+    private func restart(id: Int) {
+        let pane = pane(for: id)
+        restart(id: id, columns: pane.screen.columns, rows: pane.screen.rows)
+    }
+
+    // MARK: 清屏（工具条右侧那枚，作用在**当前页签**上）
+
+    /// **清除终端会话窗口内容**：擦掉当前页签的显示缓冲（可见屏 + 回滚区），**不杀进程**。
+    func clearActiveBuffer() {
+        activePane.clearBuffer()
     }
 }
