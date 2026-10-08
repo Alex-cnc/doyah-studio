@@ -420,3 +420,4 @@ try {
   process.stdout.write(`FAIL=${e.message}\n`)
   shutdown(1)
 }
+// S-073e 复现点：只改 App/tools/**（本行注释）并提交后重建 —— 改前 build.rs 不重跑，徽标滞留旧短号。
