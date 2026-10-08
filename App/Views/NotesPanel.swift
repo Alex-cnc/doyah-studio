@@ -837,6 +837,8 @@ struct NotesEditorToolbar: View {
 ///     所以它必须画在搜索框旁边，而不是画在导航那一栏里；
 ///  ③ **中栏 / 右栏宽度可拖**（`HSplitView`）：三栏里最该由用户决定的就是「列表多宽、正文多宽」；
 ///     左栏的折叠与宽度归 `NavigationSplitView`（`L-184` ①「左栏可折叠」）。
+///     中栏那三档宽度的**取值与出处**见 `listPaneMinWidth` / `listPaneIdealWidth` / `listPaneMaxWidth`
+///     （片 `N2-LW` · `T-20261008-025`：人类主人「左栏整体太宽了」指的是**这一栏**，整列收到改前的 ≤60%）。
 struct NotesAreaView: View {
 
     @EnvironmentObject private var appState: AppState
@@ -852,7 +854,11 @@ struct NotesAreaView: View {
             if appState.notesModule == .todos {
                 HSplitView {
                     TodoPaneView()
-                        .frame(minWidth: 220, idealWidth: 300, maxWidth: 520)
+                        .frame(
+                            minWidth: NotesAreaView.listPaneMinWidth,
+                            idealWidth: NotesAreaView.listPaneIdealWidth,
+                            maxWidth: NotesAreaView.listPaneMaxWidth
+                        )
                     TodoEditorView()
                         .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -860,7 +866,11 @@ struct NotesAreaView: View {
             } else {
                 HSplitView {
                     NotesListView()
-                        .frame(minWidth: 220, idealWidth: 300, maxWidth: 520)
+                        .frame(
+                            minWidth: NotesAreaView.listPaneMinWidth,
+                            idealWidth: NotesAreaView.listPaneIdealWidth,
+                            maxWidth: NotesAreaView.listPaneMaxWidth
+                        )
                     NotesEditorView()
                         .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -1007,6 +1017,57 @@ struct NotesAreaView: View {
     /// 收窄到 200 是「操作栏宽度收敛 ≈40%」（判据④）里的一份 —— 它不吃满行宽之后，整条操作行
     /// 才收得下来（改前 713.5pt → 改后 442pt）。数字留在这里一处，免得两个地方各写一个。
     private static let searchFieldMaxWidth: CGFloat = 200
+
+    // MARK: - 中栏（列表那一列）的三档宽度（片 `N2-LW` · 派单 `T-20261008-025`）
+
+    /// **存放笔记列表的那一列**（＝三栏里的**中栏**；**不是**最左侧的笔记本导航栏）的三档宽度。
+    ///
+    /// 人类主人原话（2026-10-08 14:3x 逐字）：「**C，左栏整体太宽了。我这里说的左栏不是最左侧的
+    /// 笔记本导航栏，是存放笔记列表的左侧，右侧就是笔记内容**」。
+    /// 口径 = **整列的宽度**收到**改前的 ≤60%**（前门已裁定「行内控件变短」不算完成 —— 搜索框
+    /// `320→200` / 行宽 `713.5→442pt` 那一族是**另一件事**，见上面 `searchFieldMaxWidth`）。
+    ///
+    /// ## 改前是三个裸数字，且**落地值 = `maxWidth`**（本机实测 · 记在案）
+    ///
+    /// 改前 `HSplitView` 里两处裸写 `minWidth: 220 · idealWidth: 300 · maxWidth: 520`。
+    /// `TestsUISnapshot/NotesLayoutProbeTests.testNotesListColumnWidthShrunk` 在既有离屏宿主
+    /// （`areaSize = 1100×700`）里量到：**中栏落地 520.0pt**（`HSplitView` 先按各半分，中栏那半
+    /// 549.5pt 被 `maxWidth` 夹住 ⇒ 520），右栏 579.0pt，两列和 1099pt + 1pt 分隔线 = 1100pt。
+    /// 也就是说：**这一列实际多宽由 `maxWidth` 定**（`minWidth` / `idealWidth` 只在窗口极小、
+    /// 或用户拖动分栏时才起作用）。
+    ///
+    /// ## 取值（前门裁决 `T-20261008-053` ① · 组长第 277 轮收口：回到 **300** 档）
+    ///
+    /// 「现宽」有两个可读口径，本机都实测过（记在案）：
+    ///   · **B 离屏口径**（判据可复跑）：离屏宿主 `1100×700` 下中栏改前落地 **520pt**
+    ///     ⇒ 改后须 **≤ 312pt**（`520 × 0.60 = 312`）；
+    ///   · **A 真机口径**（人类主人按整屏图判）：同一旧构建、同一满屏窗口下实测出现过 **397pt** 与
+    ///     **520pt** 两个值 —— 组长第 277 轮逐张看图复核：**自然打开**的窗口量到 **520pt**，而
+    ///     **397pt** 出现在窗口「被放大而非自然打开」那一态 ⇒ **以自然打开窗口的 520pt 为基准**。
+    ///
+    /// 基准 = **520** ⇒ `520 × 0.60 = 312` ⇒ **`maxWidth` = 300**（`300 / 520 = 57.7% ≤ 60%`）。
+    ///
+    ///   · `minWidth`   220 → **132**（×0.60）；
+    ///   · `idealWidth` 300 → **180**（×0.60）；
+    ///   · `maxWidth`   520 → **300**（×0.577）—— 改前 520 的 60% 是 **312**，而 `520 * 0.60` 在
+    ///     IEEE double 里**恰好**等于 `312.0`（`312.0 <= 520 * 0.60` 只在逐位相等时成立 ⇒ 判据
+    ///     **零余量**，任何一点布局漂移就翻）。取整百 **300** 同样满足「≤60%」，且给判据留出 12pt 余量。
+    ///     （曾按 397 基准试收 **238pt**（commit `a8454d8`），实测**中栏头部控件放不下** ——
+    ///     搜索占位被截断、`Notes` 断成 `Not`/`es` 两行 ⇒ 组长第 277 轮裁定**回到 300 档**；
+    ///     更窄须重排头部 ＝ 扩范围，另立片。）
+    ///
+    /// ## 为什么三个数住在这里、不写死在两处调用点
+    ///
+    /// `NotesAreaView.body` 里**两屏各有一套三栏**（待办一屏 / 笔记一屏，`L-100` 界面半第一片），
+    /// `HSplitView` 的成员不能在它外面套条件视图，所以那**两处**各写了一遍同一组数字 ——
+    /// 一处改了另一处不改，「待办那屏的中栏还是老宽」不会有任何症状。提成常量 = 这个口径只剩一处。
+    /// 位置与 `searchFieldMaxWidth` 同址（这个类型里的宽度旋钮都放在一起）。
+    ///
+    /// **不动的东西**（本次边界）：搜索框 `320→200`（`N2-2` 已定案，一字不改）、最左侧笔记本导航栏
+    /// （人类主人明说不在本次范围）、整窗尺寸、`Core/**`、`HSplitView` 用户拖动宽度的持久化（不给它加）。
+    private static let listPaneMinWidth: CGFloat = 132
+    private static let listPaneIdealWidth: CGFloat = 180
+    private static let listPaneMaxWidth: CGFloat = 300
 
     /// **行末两枚的图标**（人类主人令 `T-20261007-080` 逐字：**笔记本图标 + 闹钟图标**）。
     ///
