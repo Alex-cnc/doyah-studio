@@ -305,8 +305,16 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   ① `.json` 路径判成 `TextLanguage.json`（判成 fallback 只会得到一句拒绝）；② 乱掉的 JSON 走
 #   `formatSelected()` 必须真的投递重排后的文本；③ 主菜单「编辑」那一项必须带可执行 action/target 并真调用一次。
 #   **它落地当轮漏了接 FILTER**（写下用例却没入口 = 一个都跑不到），由 `check-result-scroll-ledger.py` ⑤ 抓出后补上。
+# + `TerminalSubToolbarProbeTests`（`T-2` 片 · 人类主人 2026-10-08 原话「右侧是常用的工具按钮」：
+#   终端二级工具条右侧那四枚的**行为**与**版面** —— ① 一键启动 `dsh-tui` / `hermes` 真的建了页签、
+#   页签名 = 预设名、会话起来后**前台进程换人**且屏幕有回显（前门补判据 `T-20261008-026` 要的
+#   「确实起了一个 dsh 终端（有回显 / 有进程读数）」）；② 清除会话窗口内容之后**缓冲行数归零**
+#   而 pid 不变、会话仍在跑（只擦屏幕）；③ 重启终端**先弹确认**（pid 一个字节没动）→ 确认后
+#   **pid 换人**、页签留着；④ 渲染真二级条：页签 1 → 3 时**左半必须变、右四分之一逐像素不变**
+#   （右侧那四枚不被页签挤动）+ 左 / 右各切一张图存盘。
+#   它**真开 shell**（取证专用，`XCTSkip` 到 `DOYAH_UI_SNAPSHOT=1`），跟着本脚本跑两遍。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

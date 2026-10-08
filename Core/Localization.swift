@@ -803,6 +803,17 @@ public enum LKey: String, CaseIterable, Sendable {
     case terminalTabExitedCode
     case terminalTabShortcutHint
     case terminalTabRenameMessage
+    // 终端二级工具条**右侧**那四枚常用动作（人类主人 2026-10-08 原话：「右侧是常用的工具按钮，
+    // 比如一键启动 dsh-tui、Hermes，清除终端会话窗口内容，重启终端等操作」）。
+    // 四枚都是**图标按钮**（口径：不许文字按钮），所以这里每一条都是**鼠标停上去的提示**；
+    // 重启那一族另有三句给二次确认框（不许静默杀进程）。
+    case terminalLaunchDshTUI
+    case terminalLaunchHermes
+    case terminalClearBuffer
+    case terminalRestartTab
+    case terminalRestartConfirmTitle
+    case terminalRestartConfirmMessage
+    case terminalRestartConfirmAction
 
     // 系统级菜单的语言需要重启才跟随（macOS 在进程启动时固定 AppKit 的本地化）
     case relaunchTitle
@@ -2933,6 +2944,13 @@ public enum LocalizedStrings {
         .terminalTabExitedCode: [.simplifiedChinese: "已退出（代码 %@）", .english: "Exited (code %@)"],
         .terminalTabShortcutHint: [.simplifiedChinese: "页签：⌘T 新建 · ⌘W 关闭 · ⌘⇧[ / ⌘⇧] 前后切换 · ⌘1…9 直选", .english: "Tabs: ⌘T new · ⌘W close · ⌘⇧[ / ⌘⇧] switch · ⌘1…9 jump"],
         .terminalTabRenameMessage: [.simplifiedChinese: "这个名字只贴在页签上，不影响终端里跑的东西。留空确定 = 用前台进程名（跑什么就叫什么）。", .english: "This name only labels the tab; nothing inside the terminal is affected. Confirm with it empty to fall back to the foreground process name."],
+        .terminalLaunchDshTUI: [.simplifiedChinese: "一键启动 dsh-tui：新建一个终端页签，并直接在里面跑 dsh-tui", .english: "Launch dsh-tui: open a new terminal tab and run dsh-tui in it"],
+        .terminalLaunchHermes: [.simplifiedChinese: "一键启动 Hermes：新建一个终端页签，并直接在里面跑 hermes", .english: "Launch Hermes: open a new terminal tab and run hermes in it"],
+        .terminalClearBuffer: [.simplifiedChinese: "清除终端会话窗口内容：只擦这一屏（含回滚区），不结束会话、不动里面跑的程序", .english: "Clear the terminal buffer: wipes this screen (and the scrollback) without ending the session or touching what is running"],
+        .terminalRestartTab: [.simplifiedChinese: "重启终端：换一条新会话（会结束当前进程，重启前先问一句）", .english: "Restart terminal: start a fresh session (ends the current process; asks first)"],
+        .terminalRestartConfirmTitle: [.simplifiedChinese: "重启会结束这条会话里正在跑的程序", .english: "Restarting ends whatever is running in this session"],
+        .terminalRestartConfirmMessage: [.simplifiedChinese: "重启终端会杀掉这条会话的 shell（里面有程序在跑的话一起结束），然后新建一条。屏幕内容会清空，页签与名字留着，不会再问第二次。要重启吗？", .english: "Restarting kills this session's shell (together with anything running inside it) and starts a fresh one. The screen is wiped, the tab and its name stay, and it will not ask again. Restart?"],
+        .terminalRestartConfirmAction: [.simplifiedChinese: "重启终端", .english: "Restart Terminal"],
         .relaunchTitle: [.simplifiedChinese: "重启应用", .english: "Relaunch the app"],
         .relaunchMessage: [.simplifiedChinese: "重启会关掉当前进程再打开一个：界面上的页签、光标位置与展开状态都会重来（连接与页签本身存在配置里，不会丢）。\n换语言不需要这一步 —— 语言是就地切换的，这个入口只服务\"我就是想重开一个进程\"。", .english: "Relaunching closes this process and starts a new one: on-screen tabs, cursor positions and expansion state start over (connections and tabs live in config, so they survive).\nSwitching language does not need this — the language switches in place; this entry is only for when you actually want a fresh process."],
         .relaunchMessageUnsaved: [.simplifiedChinese: "注意：还有 %d 个页签有未保存的改动，重启会丢失。", .english: "Note: %d tab(s) have unsaved changes that would be lost."],

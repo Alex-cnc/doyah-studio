@@ -12,11 +12,12 @@ dsh-tui，遇到要执行命令只能去开系统终端，**违背了我这个�
 判据（任一不过即失败）
 ----------------------
 A. **Core 模型在位**：`Core/TerminalTabs.swift` 每个 API 锚点在盘上（逐条正则，少一条点名），
-   且**六个行为组**（新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射）各自的方法一个不少。
+   且**七个行为组**（新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射 /
+   一键启动与重启）各自的方法一个不少。
 B. **Core 不出用户可见文案**：该文件的**代码行**里不许出现中文字面量（R-45：人话走语言表）。
 C. **文案键中英都在**：页签那一族键逐个在 `Core/Localization.swift` 的语言表里同时有简中与英文
    （少一个 = 英文界面掉回中文）。
-D. **单测逐组钉住**：`Tests/TerminalTabsTests.swift` 里六个行为组的用例锚点必须在，且用例总数
+D. **单测逐组钉住**：`Tests/TerminalTabsTests.swift` 里七个行为组的用例锚点必须在，且用例总数
    不低于下限（防「测试文件被掏空」）。
 E. **口径锚点**：需求提出者的原话场景（一个页签跑 `dsh-tui`、另一个执行命令）在
    `Docs/发布计划.md` 与队列 `L-84` 行里都在（口径被删 = 判据失去依据）。
@@ -48,6 +49,17 @@ F. **㈡ 界面接线在位**（第 82 轮补；**第 96 轮 `L-89` ㈡ ③ 扩*
    **四个窗口按钮**（3 个调用点）；清空日志归位在 `LowerPaneView.swift` 的问题 / 输出内容顶部
    （锚点 `logPaneToolbar`）。
 
+   **`T-2` 片（2026-10-08，人类主人原话的下半句：「右侧是常用的工具按钮，比如**一键启动
+   dsh-tui、Hermes，清除终端会话窗口内容，重启终端**等操作」）**：二级条右侧那四枚的判据分三层 ——
+   ① **语义在 Core**：一键启动的两个预设（`TerminalLaunchCommand`：要敲的命令 + 新页签的名字）
+      与「重启要不要先问一句」（`restartDecision`）各有锚点（A 组的第七组，另配单测组）；
+   ② **四枚成对存在**（`SUB_TOOLBAR_ACTIONS`）：逐枚判 `accessibilityIdentifier` 与**同一枚按钮
+      那一块**里的 `.help(` —— 四枚都是**图标按钮**（禁文字按钮），提示是用户唯一读得到的解释；
+      外加**反向对账棘轮**（二级条里画了几枚必须等于登记表长度，多画一枚就判红）；
+   ③ **行为读数**在另一份探针（`TestsUISnapshot/TerminalSubToolbarProbeTests.swift`）：
+      一键启动起一条真会话（前台换人 + 有回显）/ 清屏只擦缓冲（行数归零、pid 不变）/
+      重启先问一句再换 pid / 二级条左半变·右四分之一逐像素不变。
+
 边界（如实登记）：本判据判的是**接线在位**（文件里有没有这条线、位置对不对），
 不等于「界面上点得动」—— 真开 PTY 的行为由 App 侧探针（`TerminalTabsProbeTests`，
 `DOYAH_UI_SNAPSHOT=1` 时跑）承担，观感由快照 `terminal-tabs-bar{,-dark}-{zh,en}` 与
@@ -55,7 +67,7 @@ F. **㈡ 界面接线在位**（第 82 轮补；**第 96 轮 `L-89` ㈡ ③ 扩*
 `dsh-tui`、另一个执行命令，互不干扰）。
 
 判据自己的证据：`--self-test` **13 例**（红 / 绿成对；夹具一律在临时目录；末例核对真仓库
-**有盘的十四份**文件逐字节未变）。
+**有盘的十五份**文件逐字节未变）。
 
 ⚠️ **已知先红（2026-10-08 实测，非本族引入）**：`Docs/design/开发循环-任务队列.md` **全仓不存在**
 （`git log --all` 无此路径）⇒ 例 1（绿路基线）与「口径锚点 2 处」这一条会报红，
@@ -99,8 +111,12 @@ STRIP = "App/Views/LowerPaneTabStrip.swift"
 # 「页签头在左侧」这条位置判据随之搬到这里（它现在只能在二级条上成立）。
 SUB_TOOLBAR = "App/Views/TerminalSubToolbar.swift"
 PROBE = "TestsUISnapshot/TerminalTabsProbeTests.swift"
+# F（`T-2` 片 · 2026-10-08）：二级条那四枚的**行为**由另一份探针承担 —— 它们真开 shell
+# （一键启动起一条真会话、清屏读缓冲行数、重启读 pid），所以与快照同一条纪律：
+# 取证才跑（`DOYAH_UI_SNAPSHOT=1`），用例锚点必须在位（判据塌了这一条就悬空）。
+SUB_PROBE = "TestsUISnapshot/TerminalSubToolbarProbeTests.swift"
 
-# A：模型锚点。分六组，与 `FR-EDIT-29` 的判据逐条对应 —— 少一组就等于那条判据悬空。
+# A：模型锚点。分七组，与 `FR-EDIT-29` 的判据逐条对应 —— 少一组就等于那条判据悬空。
 API_ANCHORS = {
     "新建": ["public mutating func newTab"],
     "关闭": ["public func closeDecision", "public mutating func close(id: Int, force: Bool"],
@@ -112,6 +128,10 @@ API_ANCHORS = {
                  "public var isShellInForeground"],
     "按键映射": ["public enum TerminalTabCommand", "public static func command(",
                  "public mutating func perform(_ command: TerminalTabCommand)"],
+    # T-2 片（2026-10-08）：二级条右侧那四枚的**语义**也在 Core —— 一键启动的两个预设
+    # （要敲的命令 + 新页签的名字）与「重启要不要先问一句」的判定。放在这里而不是视图里的
+    # 理由写在 `TerminalLaunchCommand` 的注释里：三处各写一遍就会漂移。
+    "一键启动与重启": ["public enum TerminalLaunchCommand", "public func restartDecision(for id: Int)"],
 }
 
 # D：单测锚点（每条一个行为组；用例总数下限）。
@@ -122,6 +142,8 @@ TEST_ANCHORS = {
     "标题推导": "testDeriveTitleStripsLoginShellDash",
     "关闭确认": "testCloseDecisionNeedsConfirmationForRunningProgram",
     "按键映射": "testCommandAcceptsShiftedBracketsAsWellAsPlainOnes",
+    # T-2 片：一键启动的名字优先序（预设名 ＞ 前台进程名，用户重命名仍优先）+ 重启要不要问。
+    "一键启动与重启": "testLaunchTitleWinsOverForegroundProcessButNotOverRename",
 }
 TEST_FLOOR = 34
 
@@ -176,6 +198,11 @@ APP_ANCHORS = {
         ("终端二级工具条是独立视图（能单独离屏渲染）", "struct TerminalSubToolbar"),
         ("细分终端 title 挂在二级条左侧", "TerminalTabsBar(terminal: terminal)"),
         ("当前页签的状态小字在二级条右侧", "TerminalPaneStatus(pane: terminal.activePane)"),
+        # F（T-2 片 · 2026-10-08）：右侧四枚动作各自的**落点**（点击交给协调器）。
+        ("一键启动 dsh-tui 的落点", "terminal.launchTab(.dshTUI)"),
+        ("一键启动 Hermes 的落点", "terminal.launchTab(.hermes)"),
+        ("清除会话窗口内容的落点", "terminal.clearActiveBuffer()"),
+        ("重启终端的落点（先问一句）", "terminal.requestRestart()"),
     ],
     TERMINAL_VIEW: [
         ("按键交给 Core 判定", "TerminalTabs.command("),
@@ -191,6 +218,17 @@ APP_ANCHORS = {
          "func testRightSideButtonsMatchThePanelState"),
         ("⌘1…9 / ⌘⇧[ ⌘⇧] / 双击改名落到对的会话",
          "func testNumberedSelectionAndRenameLandOnTheRightSession"),
+    ],
+    # F（`T-2` 片）：二级条右侧那四枚的**行为**读数（真开 shell / 真读 pid / 真读缓冲行数）。
+    SUB_PROBE: [
+        ("一键启动真的起了一条会话（前台换人 + 有回显）",
+         "func testLaunchButtonsStartRealSessionsAndNameTheirTabs"),
+        ("清屏只擦缓冲、不杀进程（缓冲行数归零 / pid 不变）",
+         "func testClearBufferWipesTheScreenButKeepsTheSession"),
+        ("重启先问一句、确认之后 pid 换人",
+         "func testRestartAsksFirstThenChangesTheProcessIdentifier"),
+        ("二级条版面：title 在左 / 四枚在右（像素 + 左/右各一张）",
+         "func testSubToolbarKeepsTitlesOnTheLeftAndFourButtonsInPlace"),
     ],
 }
 
@@ -223,6 +261,24 @@ LAYER_FORBIDDEN = [
     ("arrow.clockwise", "重启 shell"),
     ('"trash"', "清空日志"),
 ]
+
+# F：终端二级工具条的**右侧那四枚常用动作**（`T-2` 片 · 2026-10-08 人类主人原话：「右侧是常用的
+# 工具按钮，比如一键启动 dsh-tui、Hermes，清除终端会话窗口内容，重启终端等操作」）。
+#
+# 判据就是交付面里写死的那一条：**每个 `accessibilityIdentifier` 与**同一枚按钮那一块里的
+# `.help(` 成对存在（4/4）**。为什么必须成对：这四枚是**图标按钮**（口径：不许文字按钮）——
+# 提示（`.help`）与无障碍标签是用户**唯一**读得到的解释；少一个，界面上就多一枚
+# 「没人知道按下去会发生什么」的图标。少 `.help(` 不影响编译、不影响观感，只有这条判据看着它。
+SUB_TOOLBAR_ACTIONS = [
+    ("terminal-launch-dsh-tui", "一键启动 dsh-tui"),
+    ("terminal-launch-hermes", "一键启动 Hermes"),
+    ("terminal-clear-buffer", "清除终端会话窗口内容"),
+    ("terminal-restart", "重启终端"),
+]
+
+# 反向对账的棘轮（与 `RIGHT_SIDE_CALL_SITES` 同一个形状，数在 `check_app` 里）：二级条里
+# `accessibilityIdentifier("terminal-…")` 的**枚数**必须正好等于登记表长度 ——
+# 新画一枚没登记的按钮（例如第 5 枚）只改这一处就判红。
 
 # E：口径锚点（需求提出者的原话场景 —— 判据的立足点）。
 PLAN_ANCHOR = r"一个页签跑\s*`?dsh-tui`?[^\n]{0,60}另一个页签执行命令"
@@ -431,6 +487,43 @@ def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
         ))
     else:
         sites += 1
+
+    # F（`T-2` 片 · 2026-10-08）：二级条**右侧那四枚** —— 每个 `accessibilityIdentifier`
+    # 必须与**同一枚按钮那一块**里的 `.help(` 成对（判据② 4/4）。
+    #
+    # 「同一枚那一块」= 从这一枚**往前最近一个** `Button {` 起、到**往后最近一个** `Button {` 为止。
+    # 用字窗（±N 字符）判是行不通的：四枚挨着排，窗口一大就会把隔壁那枚的 `.help(` 算进来 ——
+    # 那是**假绿**（隔壁有提示、这一枚没有，判据照样过）。
+    for identifier, note in SUB_TOOLBAR_ACTIONS:
+        marker = f'accessibilityIdentifier("{identifier}")'
+        at = sub.find(marker)
+        if at < 0:
+            issues.append(Issue(
+                f"{SUB_TOOLBAR}[右侧四枚]",
+                f"{note} 那枚不见了：缺 `{marker}`（人类主人原话点名了它）",
+            ))
+            continue
+        start = sub.rfind("Button {", 0, at)
+        next_button = sub.find("Button {", at)
+        block = sub[start if start >= 0 else 0: next_button if next_button >= 0 else len(sub)]
+        if ".help(" not in block:
+            issues.append(Issue(
+                f"{SUB_TOOLBAR}[右侧四枚]",
+                f"{note} 那枚没有 `.help(` 提示 —— 图标按钮没有提示，用户只能猜它干什么",
+            ))
+        else:
+            sites += 1
+
+    # 反向对账（`T-2` 片）：二级条里画的**枚数**必须等于登记表长度。
+    drawn = sub.count('accessibilityIdentifier("terminal-')
+    if drawn != len(SUB_TOOLBAR_ACTIONS):
+        issues.append(Issue(
+            f"{SUB_TOOLBAR}[右侧四枚·反向对账]",
+            f"二级条里画了 {drawn} 枚（登记的是 {len(SUB_TOOLBAR_ACTIONS)} 枚）"
+            f"—— 多画了没登记的按钮，还是把登记过的那枚删了？（两边都得改）",
+        ))
+    else:
+        sites += 1
     return issues, sites
 
 
@@ -480,7 +573,9 @@ def run(root: pathlib.Path) -> tuple[list[Issue], dict[str, int]]:
     # G：空跑防护 —— 「判据自己失效」比「发现不了」更危险。
     expected_api = sum(len(group) for group in API_ANCHORS.values())
     expected_app = (sum(len(anchors) for anchors in APP_ANCHORS.values())
-                    + len(RIGHT_SIDE_BUTTONS) + len(LAYER_FORBIDDEN) + 2)
+                    + len(RIGHT_SIDE_BUTTONS) + len(LAYER_FORBIDDEN) + 2
+                    # `T-2` 片：二级条右侧四枚（逐枚成对）+ 它们的反向对账棘轮。
+                    + len(SUB_TOOLBAR_ACTIONS) + 1)
     if stats["apiSites"] < expected_api:
         issues.append(Issue("空跑防护", f"API 锚点只命中 {stats['apiSites']}/{expected_api} 处"))
     if stats["appSites"] < expected_app:
@@ -494,7 +589,7 @@ def run(root: pathlib.Path) -> tuple[list[Issue], dict[str, int]]:
 
 FIXTURE_FILES = [MODEL, TABLE, TESTS, PLAN, QUEUE,
                  PANE, SESSION, TABS_MODEL, TABS_BAR, LOWER_PANE, STRIP, SUB_TOOLBAR,
-                 TERMINAL_VIEW, PROBE]
+                 TERMINAL_VIEW, PROBE, SUB_PROBE]
 
 
 def _digests(root: pathlib.Path) -> dict[str, str]:
@@ -510,7 +605,7 @@ def _digests(root: pathlib.Path) -> dict[str, str]:
 
 
 def _fixture(base: pathlib.Path) -> pathlib.Path:
-    """把判据盯着的十四份文件原样拷进临时目录（**只在副本上写坏**）。
+    """把判据盯着的十五份文件原样拷进临时目录（**只在副本上写坏**）。
 
     盘上没有的那几份跳过（同 `_digests` 的理由：缺文件由 `check_docs` 报红，不该让自测连跑都跑不起来）。
     """
@@ -639,18 +734,37 @@ def self_test(root: pathlib.Path) -> int:
 
     # 例 12（F · 红路）：**多画一个没登记的按钮**（反向对账）⇒ 报红。
     # 这一条才是"一个不少"的另一半：正向只认登记过的符号在不在，新画的按钮它一条都不响。
+    # **`T-2` 片扩**：这一例现在同时写坏**三处**、三条红都要看到 ——
+    #   ① 外层条多画一枚（`iconButton("star")`）；
+    #   ② 终端二级条多画一枚（`accessibilityIdentifier("terminal-extra-bonus")`）；
+    #   ③ 二级条某一枚**丢了 `.help(`**（图标按钮没有提示 = 用户只能猜）。
+    # 为什么不拆成两例：这三处是**同一条判据族**（「右侧几枚 + 每枚有提示」）的不同写坏方式，
+    # 而拆例会改本脚本的自测例数（13）—— 那个数在 `Scripts/self-test-counts.json` /
+    # `verify-all.sh` / `AGENT-SPEC.md` 三处登记着，改它要同时动三份文档。分开判的成本大于收益，
+    # 但三条红**逐一断言**：任何一条不被抓出来，这一例就红（合并的代价被这一句补上）。
     with_fixture = _fixture(root)
     _rewrite(with_fixture / STRIP, "            Spacer(minLength: 8)\n",
              "            Spacer(minLength: 8)\n"
              "            iconButton(\"star\", help: L(.lowerPaneHide)) { }\n")
+    _rewrite(with_fixture / SUB_TOOLBAR,
+             '            .accessibilityIdentifier("terminal-restart")\n',
+             '            .accessibilityIdentifier("terminal-restart")\n'
+             '            .accessibilityIdentifier("terminal-extra-bonus")\n')
+    _rewrite(with_fixture / SUB_TOOLBAR, "            .help(L(.terminalClearBuffer))\n", "")
     issues, _ = run(with_fixture)
-    record(any("一个不少" in str(issue) for issue in issues),
-           "例 12（F）多画一个没登记的按钮 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
+    texts = [str(issue) for issue in issues]
+    record(
+        any("一个不少" in text for text in texts)
+        and any("右侧四枚·反向对账" in text for text in texts)
+        and any("没有 `.help(` 提示" in text for text in texts),
+        "例 12（F）多画没登记的按钮（外层条 / 二级条各一处）+ 二级条某一枚丢提示 ⇒ 三条红",
+        "；".join(texts[:3])
+    )
     shutil.rmtree(with_fixture, ignore_errors=True)
 
-    # 例 13（反过来核一遍）：所有写坏都发生在副本上 —— 真仓库十三份文件必须逐字节未变。
+    # 例 13（反过来核一遍）：所有写坏都发生在副本上 —— 真仓库（有盘的）十五份文件必须逐字节未变。
     after = _digests(root)
-    record(before == after, "例 13 真仓库（有盘的十四份）文件逐字节未变",
+    record(before == after, "例 13 真仓库（有盘的十五份）文件逐字节未变",
            "；".join(f"{name} 变了" for name in after if before[name] != after[name]))
 
     for ok, label, detail in results:
