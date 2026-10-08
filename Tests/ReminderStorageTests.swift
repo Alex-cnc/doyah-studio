@@ -51,11 +51,13 @@ final class ReminderStorageTests: XCTestCase {
         Reminder(owner: owner, spec: spec, createdAt: createdAt, updatedAt: createdAt)
     }
 
-    // MARK: - ① 新库 = v6（表与索引都在）
+    // MARK: - ① 新库 = 最新版（v7；reminder 表与索引都在）
 
-    func testFreshDatabaseIsVersionSixWithReminderTable() throws {
+    func testFreshDatabaseIsLatestVersionWithReminderTable() throws {
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV6.version)
+        // 断言认的是**当前最新版**（`NoteDatabase.supportedVersion`）而不是某一版的号：
+        // schema 每加一档（这里是 v7 查询历史），这条用例不该跟着改一个字。
+        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion)
         let tables = try database.tableNames()
         for expected in NoteSchemaV6.tables {
             XCTAssertTrue(tables.contains(expected), "缺表 \(expected)；实际：\(tables)")
@@ -63,10 +65,10 @@ final class ReminderStorageTests: XCTestCase {
         XCTAssertTrue(try database.foreignKeysEnabled, "级联删靠它：外键必须是开着的")
         XCTAssertEqual(try database.reminderCount(), 0, "新库里一条提醒都没有")
         // 幂等：再开一次库，版本不动
-        XCTAssertEqual(try makeDatabase().userVersion, NoteSchemaV6.version)
+        XCTAssertEqual(try makeDatabase().userVersion, NoteDatabase.supportedVersion)
     }
 
-    // MARK: - ② 存量库升级（手搭 v5 库：v1 → v6 那条路真的走得通）
+    // MARK: - ② 存量库升级（手搭 v5 库：v1 → 最新版那条路真的走得通）
 
     /// 手搭一个 **v5 库** —— 存量用户的库长什么样：v1~v5 的 DDL 都在、`user_version = 5`、
     /// 里面有真笔记（含标签）与真任务（含标签）。**表有几张就要写几张**：
@@ -128,7 +130,7 @@ final class ReminderStorageTests: XCTestCase {
         try connection.close()
     }
 
-    func testVersionFiveDatabaseUpgradesToVersionSixWithoutLosingAnything() throws {
+    func testVersionFiveDatabaseUpgradesToLatestVersionWithoutLosingAnything() throws {
         let note = Note(
             title: "存量笔记",
             body: "洞庭湖",
@@ -141,7 +143,7 @@ final class ReminderStorageTests: XCTestCase {
         try makeVersionFiveDatabase(note: note, todo: todo)
 
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV6.version, "v5 库要升到 v6（补表不改既有语义）")
+        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion, "v5 库要升到最新版（补表不改既有语义）")
         XCTAssertTrue(try database.tableNames().contains("reminder"))
         XCTAssertEqual(try database.noteCount(), 1)
         XCTAssertEqual(try XCTUnwrap(try database.note(id: note.id)).tags, ["骑行"], "笔记与它的标签都要原样在")
@@ -151,7 +153,7 @@ final class ReminderStorageTests: XCTestCase {
         // 升级后能立刻挂提醒（老库上的新表真的能用）
         try database.upsert(sampleReminder(owner: .todo(todo.id)))
         XCTAssertEqual(try database.reminders(of: .todo(todo.id)).count, 1)
-        XCTAssertEqual(try makeDatabase().userVersion, NoteSchemaV6.version, "幂等")
+        XCTAssertEqual(try makeDatabase().userVersion, NoteDatabase.supportedVersion, "幂等")
     }
 
     // MARK: - ③ 往返（规格每个字段都真的进了库）
