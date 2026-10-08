@@ -23,6 +23,13 @@
    （`--check-anchors` 那一族），按正则数脚本里的用例定义条数，必须 == `cases`（否则「删掉一个用例」
    在 runner 那一侧只是数字变小）。
 6. **空跑防护**：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红。
+7. **本机台账不在盘上时，那几族自检如实跳过**（2026-10-08 · 任务 `t_004a679b`）：有的族的
+   `--self-test` 要读**真仓库那几份本机台账**（`.gitignore` 内、只在主开发机上）—— 如
+   `check-doc-q-series` / `check-queue-needs-user` 要 `design/开发循环-任务队列.md` 与
+   `智能体助手-开发spec.md`。干净克隆 / 并行工作树 / 另一平台**没有它们** ⇒ 那几族如实打印
+   「干净克隆上跳过」、**退出 0、不打例数**（不是崩、也不是静默）。这样的族在台账里登记
+   `hostLedgerSelfTest`（`files` 真缺 **且** `marker` 命中才算跳过）—— **两个条件都满足才认**，
+   否则照旧判红（口径出处 = `AGENT-SPEC.md` §9 第 147 条 ④；在**主开发机**上这条永不生效）。
 
 **边界（如实登记，不假装判住）**：
 
@@ -206,6 +213,17 @@ def validate_ledger(ledger: dict, root: pathlib.Path) -> list[str]:
                 re.compile(ratchet.get("regex", ""))
             except re.error as error:
                 problems.append(f"{label} sourceRatchet 正则不合法：{error}")
+
+        # `hostLedgerSelfTest`（2026-10-08 · 任务 `t_004a679b`）：这一族的自检要读真仓库那几份
+        # 本机台账；全缺时它如实跳过、不打例数。三个字段缺一不可（跳过要写理由，不许静默）。
+        host_ledgers = family.get("hostLedgerSelfTest")
+        if host_ledgers is not None:
+            if not (host_ledgers.get("files") or []):
+                problems.append(f"{label} hostLedgerSelfTest 缺 files（要写明它读哪几份本机台账）")
+            if not (host_ledgers.get("marker") or "").strip():
+                problems.append(f"{label} hostLedgerSelfTest 缺 marker（要写明那一族跳过的原话）")
+            if not (host_ledgers.get("note") or "").strip():
+                problems.append(f"{label} hostLedgerSelfTest 缺 note（跳过要写理由，不静默）")
     return problems
 
 
@@ -235,6 +253,19 @@ def run_family(root: pathlib.Path, family: dict, problems: list, notes: list, ti
 
     matches = list(re.finditer(family["countRegex"], output))
     if not matches:
+        # 台账登记了 `hostLedgerSelfTest` 的族：它的自检要读真仓库那几份本机台账（`.gitignore` 内、
+        # 只在主开发机上）⇒ 台账**真缺**、且它自己**说了跳过**，两个条件都满足才认（跳过 ≠ 通过）。
+        # 主开发机上台账在盘 ⇒ 这条分支永不生效，收尾行被改坏照样判红（口径 = `AGENT-SPEC.md` §9 第 147 条 ④）。
+        skip_rule = family.get("hostLedgerSelfTest") or {}
+        declared = skip_rule.get("files") or []
+        if declared and all(not (root / rel).exists() for rel in declared) and re.search(
+            skip_rule.get("marker", ""), output
+        ):
+            notes.append(
+                f"[{key}] 跳过实跑：本机台账 {'、'.join(declared)} 不在盘上，"
+                f"这一族的自检如实跳过（跳过 ≠ 通过；{skip_rule.get('note', '')}）"
+            )
+            return
         tail = "\n".join(output.strip().splitlines()[-6:])
         problems.append(
             f"[{key}] 解析不到例数（countRegex = {family['countRegex']!r}）—— 收尾行格式被改坏，"

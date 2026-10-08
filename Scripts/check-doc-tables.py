@@ -47,6 +47,13 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 **跳过只覆盖「文档在不在」**：文档一旦存在，它的表格 / 派生数字 / 版本号判据一条都不放宽
 （跳过的永远是整份文档，不是文档里的某项检查）。
 
+**自检也不许硬读本机台账**（2026-10-08 · 任务 `t_004a679b`）：`--self-test` 里**依赖真仓库那几份
+本机台账**的两例 —— 例 5（写坏队列副本一行）与例 4 的真仓库断言（48 份命名全在 / 实跑 49 个文件 /
+无跳过行）—— 在台账不在盘上时**跳过 + 高声提示**：既不崩（例 5 原先直接 `FileNotFoundError`），
+也不假红（例 4 原先把「干净克隆必然缺台账」读成「文档被删」）。口径同上面这一条，出处 =
+`AGENT-SPEC.md` §9 第 147 条 ④（本机台账类判据一律「不在盘上就跳过 + 高声提示」）。**在
+主开发机上这两例照旧必须真跑、一条都不放宽**（`--self-test` 的例数仍是 8，不因跳过而改）。
+
 **L-41（2026-09-27 第 35 轮）：覆盖范围补上「每轮必改的两份台账」** —— 此前清单只有 11 个文件，
 而循环**每轮都在改**的 `Docs/智能体助手-开发spec.md` 与 `Docs/design/开发循环-任务队列.md`
 **不在其中**（`AGENT-SPEC.md` §9 第 3 条如实写着「改这两份要自己数」）。独立探针实测存量：
@@ -562,6 +569,13 @@ def main() -> int:
 # （判据写完不对已知改动报红 = 没有判据）。
 # 例 6（L-89）= 判据 E 的两面：带表格却不在清单 ⇒ 判红并点名；`Docs/archive/` ⇒ 豁免
 # （豁免的理由登记在 `COVERAGE_EXEMPT` 常量里 —— 不静默跳过）。
+#
+# **例 4 / 例 5 要看真仓库那几份本机台账**（`.gitignore` 内、只在主开发机上）⇒ 不在盘上时**跳过 +
+# 高声提示**（2026-10-08 · 任务 `t_004a679b`）：干净克隆 / 并行工作树 / 另一平台必然没有它们 ——
+# 原先例 5 直接 `FileNotFoundError`（闭环第 4 项当轮必崩，与当轮改动无关）、例 4 把缺席读成
+# 「文档被删或路径写错」而假红。口径出处 = `AGENT-SPEC.md` §9 第 147 条 ④（本机台账类判据
+# 一律「不在盘上就跳过 + 高声提示」，`--require-all` 才判红）。跳过的只是**这两例**，其余各例照跑；
+# 例数仍是 8（跳过不改总数、也不许静默）。
 
 SELF_TEST_TRACKED = [
     "Docs/design/store/README.md",
@@ -636,7 +650,19 @@ def run_self_test() -> int:
 
     repository = pathlib.Path(__file__).resolve().parent.parent
     failures: list[str] = []
+    skipped: list[str] = []
     total = 0
+
+    # 本机台账（`.gitignore` 内、只在主开发机上的那几份）在不在盘上 —— 决定**要看真仓库那几份台账**
+    # 的两例（例 4 的真仓库断言 / 例 5 的写坏队列副本）能不能在这台机器上真跑。
+    # 口径出处：`AGENT-SPEC.md` §9 第 147 条 ④（本机台账类判据一律「不在盘上就跳过 + 高声提示」）；
+    # 干净克隆 / 并行工作树 / 另一平台必然没有它们 —— 原先例 5 崩、例 4 假红（任务 `t_004a679b`）。
+    absent_host_ledgers = [
+        relative for relative in SELF_TEST_ABSENT if not (repository / relative).exists()
+    ]
+    # 「**全缺**」= 台账根本不在这台机器上（干净克隆 / 并行工作树 / 另一平台）⇒ 跳过；
+    # 「**缺一部分**」= 其余台账在盘上 ⇒ 这里就是主开发机，缺的那几份是**被删或路径写错** ⇒ 照旧判红。
+    host_ledgers_absent_entirely = len(absent_host_ledgers) == len(SELF_TEST_ABSENT)
 
     def run(arguments: list[str], cwd: pathlib.Path) -> tuple[int, str]:
         completed = subprocess.run(
@@ -699,8 +725,21 @@ def run_self_test() -> int:
         total += 1
         anchor = "| **L-54** |"
         queue_source = repository / "Docs/design/开发循环-任务队列.md"
-        broken = queue_source.read_text()
-        if queue_source.read_text().count(anchor) != 1:
+        broken = queue_source.read_text() if queue_source.exists() else None
+        if broken is None and not host_ledgers_absent_entirely:
+            # 主开发机（其余本机台账在盘上）却缺这一份 ⇒ 文档被删或路径写错，判红。
+            failures.append(
+                "例 5 准备失败：本机台账 `Docs/design/开发循环-任务队列.md` 不在盘上，"
+                "而其余本机台账在盘上（主开发机上文档被删或路径写错）"
+            )
+        elif broken is None:
+            # 本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）⇒ 本项**跳过 + 高声提示**：
+            # 不崩、也不判红（口径见函数头注释与 `AGENT-SPEC.md` §9 第 147 条 ④）。
+            skipped.append(
+                "例 5（把队列副本一行写坏 ⇒ 必须 exit 1 并指名行号）："
+                "本机台账 `Docs/design/开发循环-任务队列.md` 不在盘上"
+            )
+        elif broken.count(anchor) != 1:
             failures.append(f"例 5 准备失败：锚点 {anchor} 在队列里出现 {broken.count(anchor)} 次（应恰好 1 次）")
         else:
             broken = broken.replace(anchor, "| **L-54** | —— |", 1)
@@ -751,6 +790,20 @@ def run_self_test() -> int:
         after = (repository / "Docs/概要设计.md").read_bytes()
         if code != 0:
             failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
+        elif host_ledgers_absent_entirely:
+            # 真仓库里那几份本机台账**整批**不在盘上 ⇒「48 份命名全在 / 不许出现跳过行 / 实跑 49 个文件」
+            # 这三条**在这台机器上核不了**（口径同例 5）⇒ 本项跳过 + 高声提示；
+            # 仍然断言另一半：缺台账时如实报「跳过」，不是崩、也不是静默。
+            # （只缺一部分时走下面的严格分支 —— 那是主开发机上文档被删。）
+            if "跳过" not in output:
+                failures.append(
+                    f"例 4 失败：本机台账缺席时应如实报「跳过」（不得静默通过），实际输出里没有跳过行\n{output}"
+                )
+            else:
+                skipped.append(
+                    "例 4（真仓库 48 份命名文档全在、实跑 49 个文件、无跳过行）："
+                    f"{len(absent_host_ledgers)} 份本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）"
+                )
         elif "跳过" in output:
             failures.append(f"例 4 失败：真仓库 48 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
@@ -784,7 +837,22 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    print(f"✅ 自检通过（{total}/{total}）：干净克隆跳过 13 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 跨平台标识（Windows 形态落回清单写法）/ 真仓库 48 份无跳过")
+    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 48 份无跳过）只在**真跑过**时才算数；
+    # 跳过时如实换掉措辞（跳过的例不许冒充跑过 —— 跳过 ≠ 通过）。
+    tail = (
+        "真仓库 48 份无跳过"
+        if not skipped
+        else "真仓库那两例在这台机器上不适用（本机台账不在盘上，见上面的跳过提示）"
+    )
+    if skipped:
+        print(f"⚠ 跳过 {len(skipped)} 例（本机台账不在盘上 —— 干净克隆 / 并行工作树 / 另一平台；**跳过 ≠ 通过**）：")
+        for item in skipped:
+            print("   · " + item)
+        print("   在主开发机上跑同一条命令，这几例必须真跑；其余各例在两种机器上都照跑。")
+    suffix = f"，跳过 {len(skipped)} 例" if skipped else ""
+    # 收尾行的**头部格式不许动**（`self-test-counts.json` 的 countRegex 就认
+    # `自检通过（N/M）`）⇒ 跳过数写在方括号外的 `suffix` 位置，别挤进括号里。
+    print(f"✅ 自检通过（{total}/{total}）{suffix}：干净克隆跳过 13 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 跨平台标识（Windows 形态落回清单写法）/ {tail}")
     return 0
 
 

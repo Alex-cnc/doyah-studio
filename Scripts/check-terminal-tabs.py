@@ -367,23 +367,36 @@ def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
     return issues, sites
 
 
-def check_docs(root: pathlib.Path) -> tuple[list[Issue], int]:
-    """E：口径锚点（需求提出者的原话场景 —— 判据的立足点）。"""
+def check_docs(root: pathlib.Path) -> tuple[list[Issue], int, int]:
+    """E：口径锚点（需求提出者的原话场景 —— 判据的立足点）。
+
+    返回 `(issues, hits, expected)`：`QUEUE` 是**本机台账**（`.gitignore` 内、只在主开发机上）
+    ⇒ 不在盘上时**这一处锚点如实跳过 + 高声提示**、既不算命中也不判红（口径出处 =
+    `AGENT-SPEC.md` §9 第 147 条 ④），`expected` 跟着减 —— 否则「干净克隆」会被读成
+    「口径被删了」。`PLAN` 是入库件，缺它照旧判红。
+    """
     issues: list[Issue] = []
     hits = 0
+    expected = 0
     for relative, pattern, note in (
         (PLAN, PLAN_ANCHOR, "发布计划的验收场景表"),
         (QUEUE, QUEUE_ANCHOR, "队列 L-84 行的需求原话"),
     ):
         text = _read(root, relative)
         if not text.strip():
+            if relative == QUEUE:
+                print(f"⚠ 跳过口径锚点：{relative} 不在盘上（本机台账，只在主开发机上 —— "
+                      f"干净克隆 / 并行工作树 / 另一平台；跳过 ≠ 通过）")
+                continue
             issues.append(Issue(relative, "文档不在盘上"))
+            expected += 1
             continue
+        expected += 1
         if re.search(pattern, text):
             hits += 1
         else:
             issues.append(Issue(relative, f"{note}里的口径被删了（判据失去立足点）"))
-    return issues, hits
+    return issues, hits, expected
 
 
 def run(root: pathlib.Path) -> tuple[list[Issue], dict[str, int]]:
@@ -406,9 +419,10 @@ def run(root: pathlib.Path) -> tuple[list[Issue], dict[str, int]]:
     issues += app_issues
     stats["appSites"] = app_sites
 
-    doc_issues, doc_hits = check_docs(root)
+    doc_issues, doc_hits, doc_expected = check_docs(root)
     issues += doc_issues
     stats["docHits"] = doc_hits
+    stats["docExpected"] = doc_expected
 
     # G：空跑防护 —— 「判据自己失效」比「发现不了」更危险。
     expected_api = sum(len(group) for group in API_ANCHORS.values())
@@ -419,8 +433,8 @@ def run(root: pathlib.Path) -> tuple[list[Issue], dict[str, int]]:
         issues.append(Issue("空跑防护", f"界面接线锚点只命中 {stats['appSites']}/{expected_app} 处"))
     if stats["keys"] < len(KEYS):
         issues.append(Issue("空跑防护", f"文案键只有 {stats['keys']}/{len(KEYS)} 个中英齐"))
-    if stats["docHits"] < 2:
-        issues.append(Issue("空跑防护", f"口径锚点只命中 {stats['docHits']}/2 处"))
+    if stats["docHits"] < stats["docExpected"]:
+        issues.append(Issue("空跑防护", f"口径锚点只命中 {stats['docHits']}/{stats['docExpected']} 处"))
     return issues, stats
 
 
@@ -452,6 +466,13 @@ def _rewrite(path: pathlib.Path, old: str, new: str) -> bool:
 
 
 def self_test(root: pathlib.Path) -> int:
+    # 本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）⇒ 本族自检**如实跳过 + 高声提示**、
+    # 退出 0（口径出处 = `AGENT-SPEC.md` §9 第 147 条 ④）：夹具里那十三份文件含**队列台账**
+    # （`_fixture` / `_digests` 都要读它），硬跑必崩 —— 而崩在干净克隆上与当轮改动无关。
+    if not (root / QUEUE).is_file():
+        print("⚠️ 自测需要 %s（本机台账）—— 干净克隆上跳过" % QUEUE)
+        return 0
+
     results: list[tuple[bool, str, str]] = []
 
     def record(ok: bool, label: str, detail: str = "") -> None:
