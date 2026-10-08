@@ -272,7 +272,18 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   `check-result-scroll-ledger.py` ⑤ —— 一处入口漏了就等于一个都跑不到（第 96 轮实测）。
 # + `SQLLineNumberProbeTests`（L-111：数据库侧 SQL 编辑器的行号列 —— 正文起点 = 列宽 /
 #   列区里有墨 / 行数 9 → 151 时列宽与像素都变 / 两个编辑器的列宽逐个相等，见「第十五批」）。
-# + PerfTypingProbeTests（`L-148`：查询页签每键耗时的机器判据 —— 5,000 行 / 739,219 字符，
+# + `TodoCalendarEntriesProbeTests`（`TD-CAL-1` 片 · 派单 `T-20261009-026`：待办日历「选中日」那两枚入口 ——
+#   ① 选中日直接新建（截止预填该日 09:00，另有对照件证明既有的「新建」不带截止）；② 选中日 →「写笔记」。
+#   它落地当轮**漏了接 FILTER**（用例一个都跑不到），由 `check-result-scroll-ledger.py` ⑤ 抓出后补上
+#   —— 与 `FormatMenuWiringProbeTests` 当年那一处同一个坏法）。
+# + `TodoDetailSearchProbeTests`（`TD-LIST-1` 片 · 派单 `T-20261009-026`：待办清单那两件 ——
+#   ① 点一行 ⇒ **右栏只读详情**（渲染右栏两遍：那一条的标题 / 截止 / 优先级 / 标签都在，
+#   **编辑器那几句一句都不许出现**；另加反向对照：显式「编辑」之后同一个件必须画得出那几句，
+#   否则「没有」可能只是「读不到」）；② `TodoQueryBar` 的**本地关键字检索** ⇒ 清单只剩按标题命中的行
+#   （敲一个只配得上一条的子串；反向对照 = 那个词只存在于另一条的**标签**里 ⇒ 一条都不留）。
+#   主入口是 `Scripts/run-manual-verification-probes.sh`（它自己会带 `DOYAH_NOTES_DIR`）；
+#   挂在这里也是为了那条「每个 `*ProbeTests.swift` 都得有入口」的判据 `check-result-scroll-ledger.py` ⑤）。
+# + `PerfTypingProbeTests`（`L-148`：查询页签每键耗时的机器判据 —— 5,000 行 / 739,219 字符，
 #   断言**每键 p50 < 5 ms**（实测 33.6 → 1.8 ms，改前 31.74 ms）。`verify-all.sh` 那十八项
 #   判的是静态与行为，**判不到运行时开销** —— 这是「每键写全局 @Published」那类错唯一的拦网，
 #   见「第十六批」与 §9 第 104 条：探针不挂进 FILTER = 这一族一个都跑不到）。
@@ -314,7 +325,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   （右侧那四枚不被页签挤动）+ 左 / 右各切一张图存盘。
 #   它**真开 shell**（取证专用，`XCTSkip` 到 `DOYAH_UI_SNAPSHOT=1`），跟着本脚本跑两遍。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

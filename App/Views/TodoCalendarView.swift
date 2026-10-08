@@ -401,8 +401,14 @@ struct TodoRowView: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { appState.edit(todo) }
+        // **点一行 ⇒ 只读详情**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）：只把「看哪一条」
+        // 记下来（`showTodoDetail`），**不进编辑态** —— 只读 ≠ 编辑。要改走下面右键那枚「编辑」。
+        .onTapGesture { appState.showTodoDetail(todo) }
         .contextMenu {
+            // 「编辑」是**进写入面**的那条路（片 `TD-LIST-1`）：详情那一屏自己不带编辑控件，
+            // 所以改这一件事必须在这儿留一个入口，否则「点开只剩看」就成了功能缺失。
+            Button(L(.commonEdit)) { appState.edit(todo) }
+            Divider()
             // 与那一枚圆点说的是同一件事、两种措辞（当前不是完成 ⇒「标记完成」）——
             // 写库与重读都在 `AppState.toggleTodoDone` 一处。
             Button(L(todo.done ? .todoMarkOpen : .todoMarkDone)) {
@@ -416,7 +422,12 @@ struct TodoRowView: View {
         }
         // 在 `List` 里才生效（日历那一屏的当天任务也是一个 `List`）——
         // 换个滚动容器时它是空操作，不是「另一种行」。
-        .listRowBackground(appState.todoEditingID == todo.id ? Theme.surface(.panel) : Color.clear)
+        // 编辑态与「右栏正显示的那一条」都点亮：用户总要知道**右边那份是在说哪一行**。
+        .listRowBackground(
+            appState.todoEditingID == todo.id || appState.todoDetailID == todo.id
+                ? Theme.surface(.panel)
+                : Color.clear
+        )
         .accessibilityIdentifier("todo-row-\(todo.id.uuidString)")
     }
 
@@ -497,7 +508,8 @@ private func calendarDayIdentifier(_ date: Date) -> String {
 
 // MARK: - 清单的「组织与检索」（队列 `L-100` 组织与检索界面半）
 
-/// **清单那一屏的工具条**：三条切换器 —— 筛选（五档一排）/ 排序（三档）/ 分组（四档）。
+/// **清单那一屏的工具条**：四条输入 —— **关键字检索**（本地，只看标题）/ 筛选（五档）/ 排序（三档）/
+/// 分组（四档）。
 ///
 /// 三条口径：
 ///  ① **档位空间全部来自 Core**（`TodoFilter.allCases` / `TodoSort.Order.allCases` /
@@ -528,6 +540,18 @@ struct TodoQueryBar: View {
             .labelsHidden()
             .help(L(.todoFilterLabel))
             .accessibilityIdentifier("todo-filter-switch")
+            // **本地关键字检索**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 B4）：与上面那一档筛选、
+            // 下面那一排排序 / 分组**同一层** —— 它答的也是「这一屏留哪些行」，只是那个词由用户敲。
+            // 判定在 Core（`TodoSearch`：只看标题、大小写不敏感、空词不过滤），本视图只把词绑上去；
+            // **不新开屏、不加按钮**（与 `L-44`「搜索只有一处」同一条纪律：这一屏的检索入口就是这一格）。
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "magnifyingglass")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                TextField(L(.windowSearchPlaceholder), text: $appState.todoSearchText)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("todo-search-field")
+            }
             // 排序 / 分组决定「这一屏怎么画」，各给一个下拉（标签可见 —— 少了标签就只剩
             // 「截止时间」这种答不出「这是哪条轴」的当前值，那一课写在 `L-166`）。
             HStack(spacing: Spacing.xs) {

@@ -868,7 +868,7 @@ struct NotesAreaView: View {
                             idealWidth: NotesAreaView.listPaneIdealWidth,
                             maxWidth: NotesAreaView.listPaneMaxWidth
                         )
-                    TodoEditorView()
+                    TodoRightPaneView()
                         .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1128,9 +1128,15 @@ struct NotesAreaView: View {
         return appState.notes.first { $0.id == id }
     }
 
-    /// 「改」在待办屏的目标：编辑器里那一条（没在编辑 ⇒ 灰着）。
+    /// 「改」在待办屏的目标：**右栏正在显示的那一条**（只读详情，或编辑器里那一条）。
+    ///
+    /// 片 `TD-LIST-1` 之后右栏有两态：点一行 ⇒ 只读详情（自己不带编辑入口）；显式编辑 ⇒ 编辑器。
+    /// 这一枚就是「从详情进编辑」的那条路（行的右键「编辑」是另一条）—— 两态都从这一处读目标，
+    /// 免得「详情那一屏上这枚按钮灰着、换到编辑器上才亮」这种半截行为。
     private var editingTodo: Todo? {
-        guard appState.notesModule == .todos, let id = appState.todoEditingID else { return nil }
+        guard appState.notesModule == .todos else { return nil }
+        if let detail = appState.todoDetailTodo { return detail }
+        guard let id = appState.todoEditingID else { return nil }
         return appState.todos.first { $0.id == id }
     }
 
@@ -1242,6 +1248,119 @@ struct TodoListView: View {
     }
 
     // 段头与行 → `TodoSectionListView` / `TodoRegionHeader` / `TodoRowView`（本文件下方那一段的**唯一**渲染处）。
+}
+
+/// **待办那一屏的右栏**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）：两态只在这里分。
+///
+/// ① 右栏正在显示某一条（点清单里的一行 ⇒ 只读详情）⇒ `TodoDetailView`；
+/// ② 否则（编辑态 / 新建态）⇒ `TodoEditorView`（原来的那一屏，一字未改）。
+///
+/// 为什么抽成一个**具名的件**、而不是在 `NotesAreaView` 里就地写一个 `if`：
+///   · **两态互斥的口径只有一处**（`appState.todoDetailTodo`：在编辑 / 没选 / 那条已不在库里 ⇒ 都不给详情）。
+///     判据写在两处就会出现「右栏画着详情、另一边以为在编辑」这种半截态；
+///   · **它可以被单独渲染**：待办那一屏整块在 `swift test` 宿主里进不去（切面要拉起通知中心，
+///     见 `TestsUISnapshot/TodoCalendarEntriesProbeTests.swift` 头注释），抽出来才拍得到
+///     「点了某一行之后，右栏长什么样」—— 判据④那两张图拍的就是这一件。
+struct TodoRightPaneView: View {
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        if let todo = appState.todoDetailTodo {
+            TodoDetailView(todo: todo)
+        } else {
+            TodoEditorView()
+        }
+    }
+}
+
+/// **待办只读详情**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）：点清单里的一行 ⇒ 右栏出这一屏。
+///
+/// 四条口径：
+///  ① **只读 ≠ 编辑**：这一屏**一个编辑控件都没有** —— 没有标题输入框、没有「有截止时间」那枚开关、
+///     没有保存与删除（判据：渲染这一屏时取到的文案里**不许出现**编辑器那几句，见探针 甲）。
+///     要改走**两条既有入口**：行的右键「编辑」，或左区顶部那枚「编辑」（都进 `TodoEditorView`）；
+///  ② **拿的都来自 Core**：截止那一句走 `TodoQuery.band`（分带的唯一出处），逾期那枚色走
+///     `TodoDue.isOverdue` —— 本视图不比 `Date`、不自己算「还剩几天」；
+///  ③ **标签是用户数据**（照原样画），其余句子只在语言表里（`L(...)`）；
+///  ④ **没有「备注」这一格**：`Todo` 模型里没有正文 / 备注字段（`Core/Todo.swift`）—— 读数只有
+///     标题 / 完成态 / 截止 / 优先级 / 标签，不凭空造一个永远是空的行（`L-50` 那一课：画不出来的东西
+///     不要画成空态，读者会以为是自己没填）。
+struct TodoDetailView: View {
+
+    let todo: Todo
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            title
+            Divider()
+            row(
+                L(.todoDueLabel),
+                value: L(TodoQuery.band(of: todo, window: appState.todoWindow).key),
+                tone: TodoDue.isOverdue(todo, window: appState.todoWindow)
+                    ? Theme.status(.danger)
+                    : Theme.text(.primary),
+                id: "todo-detail-due"
+            )
+            row(
+                L(.todoPriorityLabel),
+                value: L(todo.priority.key),
+                tone: todo.priority == .high ? Theme.status(.warning) : Theme.text(.primary),
+                id: "todo-detail-priority"
+            )
+            if !todo.tags.isEmpty { tags }
+            Spacer(minLength: 0)
+        }
+        .padding(Spacing.l)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.surface(.content))
+        .accessibilityIdentifier("todo-detail")
+    }
+
+    /// 标题那一行：完成态只有一枚**只读**的记（点它什么也不会发生 —— 完成 / 重开只有清单行上那一枚）。
+    private var title: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            Image(systemName: todo.done ? "checkmark.circle.fill" : "circle")
+                .font(Theme.font(.body))
+                .foregroundStyle(todo.done ? Theme.status(.success) : Theme.text(.secondary))
+                .help(L(todo.done ? .todoSectionCompleted : .todoSectionOpen))
+            Text(TodoPresentation.title(todo) ?? L(.notesUntitled))
+                .font(Theme.font(.title))
+                .lineLimit(2)
+                .accessibilityIdentifier("todo-detail-title")
+            Spacer(minLength: Spacing.xs)
+        }
+    }
+
+    /// 一栏读数：左边是**轴名**（语言表里那句），右边是 Core 给的值（带已经由调用方定好的色）。
+    private func row(_ label: String, value: String, tone: Color, id: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            Text(label)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            Text(value)
+                .font(Theme.font(.body))
+                .foregroundStyle(tone)
+            Spacer(minLength: 0)
+        }
+        .accessibilityIdentifier(id)
+    }
+
+    /// 标签那一行：标签本身是**用户数据**，照原样显示（不翻译、不排序 —— 顺序是用户给的那个顺序）。
+    private var tags: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            Image(systemName: "tag")
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            Text(todo.tags.joined(separator: " "))
+                .font(Theme.font(.body))
+                .lineLimit(2)
+            Spacer(minLength: 0)
+        }
+        .accessibilityIdentifier("todo-detail-tags")
+    }
 }
 
 /// **待办详情 / 编辑器**（队列 `L-100` 界面半第一片）：右栏。
