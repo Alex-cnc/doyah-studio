@@ -78,6 +78,17 @@ import DoyahCore
 /// 源码扫描 / **渲染级深墨水跨度**），判据② 按语义判「悬停读得到名字」而不锁 `.help` 还是
 /// `HoverHint`，判据③ 沿用本文件既有的「状态 + 独立连接读盘」口径判点击路径没变。
 /// 三条的读数都在断言消息与 `🖼 / 📄 N2-SV` 那几行打印里。
+///
+/// ## 片 `TODO-SV` 追加的一条（派单 `T-20261009-038`）：**待办面**那枚保存键同口径
+///
+/// 片 `N2-SV` 把「笔记面」的保存键改成了纯图标；本片把**待办面**（`TodoEditorView` 的
+/// `editorToolbar`，仍在同一个文件 `App/Views/NotesPanel.swift`）那一枚按**同一条口径**改掉
+/// —— 「工具条上不许有文字按钮」（`NFR-UI-01` / `FR-EXEC-13` / 台账第 27 条）。
+/// 判据沿用片 `N2-SV` 那三路里的两路（①-a AppKit 树扫描 + 对照件 → 「工具条带内带字按钮 = 0」；
+/// ①-b 源码扫描：那一块里不许有 `Text(` / `.titleAndIcon`），另加两处**位置 / 点击路径**的
+/// 逐字锚点（`.help` ⟶ `.keyboardShortcut` ⟶ `.disabled` ⟶ `.accessibilityIdentifier("todo-save")`
+/// 四行**连着**、动作那一句一字未动）。**为什么两个面各判一遍**：两处是两段独立的代码，
+/// 笔记面改了不等于待办面改了 —— 这正是本片存在的理由。
 final class NotesEditorSaveProbeTests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -669,6 +680,146 @@ final class NotesEditorSaveProbeTests: XCTestCase {
             host.state.noteEditorHasContent,
             "手动保存之后编辑器应当清空、回到「新建态」（`saveNoteFromEditor` 的既有口径）"
         )
+    }
+
+    // MARK: - 片 `TODO-SV`（派单 `T-20261009-038`）：**待办面**保存键同口径
+
+    /// **待办保存键那一块**源码：从动作那一句（`Task { await appState.saveTodoFromEditor() }`）起，
+    /// 到内容守卫那一句（`.disabled(!appState.todoEditorHasContent)`）止 —— `.help(…)` 与
+    /// `.keyboardShortcut(…)` 都**在块里**（与 `saveButtonBlock` 同一口径，只换锚点）。
+    ///
+    /// 找不到锚点就返回空串，调用方据此判红（「锚点被改了」不许静默当作「那一块干干净净」）。
+    private static func todoSaveButtonBlock(in text: String) -> String {
+        sourceRegion(
+            in: text,
+            from: "Task { await appState.saveTodoFromEditor() }",
+            to: ".disabled(!appState.todoEditorHasContent)"
+        )
+    }
+
+    /// ## 判据①（无文字按钮·两路）+ ②（悬停名字）：**待办面**那枚保存键
+    ///
+    /// 与片 `N2-SV` 判的是同一件事，只是换一屏（`TodoEditorView`）—— **两个面的工具条是两段
+    /// 独立的代码**（笔记面改了不等于待办面改了，这正是本片存在的理由），所以各判各的：
+    ///   · **①-a AppKit 树扫描 + 对照件**：待办工具条那一带里带字的 `NSButton` = **0**
+    ///     （「工具条带内带字按钮 = 0」）—— 同一宿主里插一枚带字的**对照件**（落在带外），
+    ///     同一套扫法**必须**扫到它，否则这一条是空跑；
+    ///   · **①-b 源码扫描**：待办保存键那一块里不许出现 `Text(` / `.labelStyle(.titleAndIcon)`
+    ///     —— **改前这里必红**（原样是 `Text(L(.notesSave))` + `.titleAndIcon`）；
+    ///   · **② 悬停名字**：那一块必须带 `.help(L(.notesSave))`（名字就是语言表的 `notesSave`
+    ///     ⇒ 中「保存」/ 英 "Save"）。「即时」那一档由**入口唯一出处**承接
+    ///     （`NSInitialToolTipDelay`，已由 N2-SV 那一例读出并判 ≤ 200ms），本片不重复判。
+    /// 位置 / 点击路径那一档另按**逐字锚点**判：动作那一句、`.keyboardShortcut(.defaultAction)`、
+    /// 四行连着的那一串（`.help` ⟶ 快捷键 ⟶ `.disabled` ⟶ `.accessibilityIdentifier("todo-save")`）。
+    @MainActor
+    func testTodoSaveKeyHasNoTextLabelAndNamesItselfOnHover() throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        _ = try UISnapshot.applyLicense(.standard, to: host.state)
+        // 有内容 ⇒ 那枚按钮**亮着**（灰着那一档的判据属性是 `todoEditorHasContent`，
+        // 与 `saveTodoFromEditor()` 的第一句守卫是**同一个**属性）。
+        host.state.todoEditorTitle = "临"
+        XCTAssertTrue(
+            host.state.todoEditorHasContent,
+            "前置：填了字 ⇒ 待办保存键该是亮的（灰着那一档归 `saveTodoFromEditor()` 的守卫）"
+        )
+
+        // ── ①-a：同一个宿主上扫 AppKit 树 ────────────────────────────────────────────
+        // 实测口径（同片 N2-SV）：这块离屏宿主里 SwiftUI 的 `Button` **不落到 `NSButton`**，
+        // 所以带字的**对照件**必须同时被扫到，这一条才算数（否则是空跑）。
+        let controlTitle = "对照·这枚按钮写着字"
+        let view = ZStack {
+            Theme.surface(.window)
+            TodoEditorView()
+            ProbeTextButton(title: controlTitle)
+                .frame(width: 240, height: 24)
+                .offset(y: 150)  // pt：落在工具条带（顶部 50pt）**之外**
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
+        .snapshotEnvironment(
+            state: host.state,
+            workspace: host.workspace,
+            tabs: host.tabs,
+            terminal: host.terminal
+        )
+        let (_, hosting, _) = try renderHosted(view, label: "todo-sv-save-icon-only", scheme: .aqua)
+
+        let buttons = UISnapshot.LiveHost<Never>.findViews(ofType: NSButton.self, in: hosting)
+        let scannedTitles = buttons.map(\.title)
+        let band = CGFloat(Self.buttonBandToTop) / 2  // px → pt（带高 100px = 50pt）
+        let bandTitles = buttons
+            .filter { distanceFromTop(of: $0, in: hosting) < band }
+            .map(\.title)
+        print("🖼 TODO-SV ①-a 宿主里的 `NSButton` \(buttons.count) 枚，title 集合 = \(scannedTitles)")
+        print("🖼 TODO-SV ①-a 待办工具条那一带（y < \(band)pt）里带字的 `NSButton` = \(bandTitles)")
+        XCTAssertTrue(
+            scannedTitles.contains(controlTitle),
+            "对照件没被扫到（扫到的 title 集合 = \(scannedTitles)）⇒ 这套扫法看不见带字的按钮，"
+                + "「工具条带内带字按钮 = 0」那句是**空跑**"
+        )
+        XCTAssertTrue(
+            bandTitles.allSatisfy { $0.isEmpty },
+            "待办工具条那一带里还有带字的 `NSButton`：\(bandTitles)"
+                + " ⇒ 「工具条带内带字按钮 = 0」不成立（`NFR-UI-01` / 台账第 27 条禁文字按钮）"
+        )
+
+        // ── ①-b 源码扫描：待办保存键那一块里不许有文字控件 ───────────────────────────
+        let source = try notesPanelSource()
+        let block = Self.todoSaveButtonBlock(in: source)
+        XCTAssertFalse(
+            block.isEmpty,
+            "截不出「待办·保存」那一块源码 —— 锚点（`saveTodoFromEditor()` 那一句 / 内容守卫那一句）"
+                + "被改了，判据自己失效"
+        )
+        print("📄 TODO-SV ①-b 待办保存键那一块源码（逐字）：\n\(block)")
+        XCTAssertTrue(
+            block.contains("Image(systemName:"),
+            "待办保存键那一块里连图标都没有 —— 这不是「改纯图标」，是把它掏空了"
+        )
+        XCTAssertFalse(
+            block.contains("Text("),
+            "待办保存键那一块里还有 `Text(` ⇒ 图标上还挂着文字（`NFR-UI-01` / 台账第 27 条）"
+        )
+        XCTAssertFalse(
+            block.contains(".labelStyle(.titleAndIcon)"),
+            "待办保存键那一块还是 `.labelStyle(.titleAndIcon)` ——「图标 + 文字」的旧形态"
+        )
+        XCTAssertTrue(
+            block.contains(".keyboardShortcut(.defaultAction)"),
+            "待办保存键的快捷键口径被动了（`.keyboardShortcut(.defaultAction)` 不在块里）"
+        )
+
+        // ── 位置 / 点击路径：四行**连着**（`.help` ⟶ 快捷键 ⟶ 守卫 ⟶ 标识），动作那一句没动 ──
+        let clickPath = [
+            ".help(L(.notesSave))",
+            ".keyboardShortcut(.defaultAction)",
+            ".disabled(!appState.todoEditorHasContent)",
+            ".accessibilityIdentifier(\"todo-save\")",
+        ].joined(separator: "\n            ")  // 缩进 12 空格：四句在原文件里是**连着**的四行
+        print("📄 TODO-SV 位置/点击路径锚点（逐字，四行连着）：\n\(clickPath)")
+        XCTAssertTrue(
+            source.contains(clickPath),
+            "「.help ⟶ 快捷键 ⟶ 守卫 ⟶ 标识」这四行不再**连着**（顺序 / 间距 / 字面被改了）"
+                + " ⇒ 「位置与点击路径不变」这一档不成立"
+        )
+        let identifierHits = source.components(separatedBy: ".accessibilityIdentifier(\"todo-save\")").count - 1
+        XCTAssertEqual(
+            identifierHits, 1,
+            "`todo-save` 这个可读标识在 `NotesPanel.swift` 里出现 \(identifierHits) 次（期望 **1**）"
+                + " —— 形态改了，探针挑控件用的那个标识不许换"
+        )
+
+        // ── ② 悬停名字：`.help(L(.notesSave))`，名字 = 语言表 notesSave ───────────────
+        XCTAssertTrue(
+            block.contains(".help(L(.notesSave))"),
+            "待办保存那枚没有 `.help(L(.notesSave))` —— 悬停读不到名字（`FR-EXEC-13` / "
+                + "`ToolbarIcon.swift` 口径：「有图标没提示」= 0）"
+        )
+        let chinese = LocalizedStrings.text(Self.saveTipKey, language: .simplifiedChinese)
+        let english = LocalizedStrings.text(Self.saveTipKey, language: .english)
+        print("📄 TODO-SV ② 悬停读到的名字：中「\(chinese)」／ 英「\(english)」")
+        XCTAssertEqual(chinese, "保存", "悬停读到的中文名不是「保存」")
+        XCTAssertEqual(english, "Save", "悬停读到的英文名不是「Save」")
     }
 
     // MARK: - N2-4 自动保存（停顿即存 + 切走即存 + 失败可见 + 无弹窗）

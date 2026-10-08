@@ -1283,8 +1283,10 @@ struct TodoEditorView: View {
                 }
             }
             // **四档优先级 = 取值 ⇒ 下拉**（片 `N2-2` 判据①：NotesPanel 的分段条 4 → 1）。
-            // 同一屏的「保存 / 删除」两枚是**动作**（带文字的按钮，且 `NotesEditorSaveProbeTests`
-            // 有一条按文字排版校准的像素判据），本片不动它们。
+            // 同一屏的「保存 / 删除」两枚是**动作**（不是取值）⇒ 优先级那种「四档取值」用下拉。
+            // （当时两枚都带文字，且 `NotesEditorSaveProbeTests` 有一条按文字排版校准的像素判据，
+            // 本片不动它们。**片 `TODO-SV`** 之后「保存」那一枚已改成纯图标 + 悬停 tips（片
+            // `N2-SV` 在笔记面的同一条口径）；「删除」不动 —— 这一句的判据只对「取值 ⇒ 下拉」生效。）
             .pickerStyle(.menu)
             .help(L(.todoPriorityLabel))
             .accessibilityIdentifier("todo-priority")
@@ -1311,19 +1313,22 @@ struct TodoEditorView: View {
     /// 「**保存进工具条**（参考 SQL 界面）」「**不许放底部**」—— 所以整行搬到 `TodoEditorView`
     /// 的第一行（与 `QueryToolbar` 同一个位置关系），底部不再有第二处动作入口。
     /// 两枚按钮的形态、文案、灰 / 亮判据（`todoEditorHasContent`）、`accessibilityIdentifier`
-    /// **一字未改**。
+    /// **一字未改**（片 `N2-3b` 那一轮的口径；**片 `TODO-SV` 之后「保存」那一枚的形态改了** ——
+    /// 图标 + 标题 ⇒ 纯图标 + 悬停 tips，见下面 `editorToolbar` 里那一行注释；「删除」仍是
+    /// 带文字的动作按钮）。
     private var editorToolbar: some View {
         HStack(spacing: Spacing.s) {
-            // 与笔记正文那枚「保存」同形（`N-UI-3`）：图标 + 标题 + 悬停提示。
+            // **纯图标**（片 `TODO-SV` · 派单 `T-20261009-038`）：原先这里是「图标 + 标题」两个字
+            // 的那种 `Label`（旧形态逐字见片 `N2-SV` 在笔记面的同一处），即工具条上的一枚
+            // **文字按钮**；口径 = `NFR-UI-01` / `FR-EXEC-13` / 台账第 27 条「工具·操作类控件
+            // 一律『图标 + 悬停 tips』，禁文字按钮」⇒ 改成**纯图标**，名字只由下面那一句
+            // 悬停提示给（读语言表的 `notesSave`；入口注册 `NSInitialToolTipDelay = 150` ⇒ 即时），
+            // 与**笔记面**那一枚（片 `N2-SV`）同形、同一套设计语言。
+            // **位置、动作、灰 / 亮判据、`accessibilityIdentifier`、快捷键一字未动。**
             Button {
                 Task { await appState.saveTodoFromEditor() }
             } label: {
-                Label {
-                    Text(L(.notesSave))
-                } icon: {
-                    Image(systemName: "square.and.arrow.down")
-                }
-                .labelStyle(.titleAndIcon)
+                Image(systemName: "square.and.arrow.down")
             }
             .help(L(.notesSave))
             .keyboardShortcut(.defaultAction)
