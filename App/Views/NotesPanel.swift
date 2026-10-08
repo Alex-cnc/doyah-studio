@@ -764,10 +764,22 @@ struct NotesEditorView: View {
 /// 两条刻意的口径：
 ///   · **只在 `.edit` 出现**（由 `NotesEditorView` 把住）：预览态的正文只读，保存无处可用 ——
 ///     画一枚永远灰着的按钮就是 `L-50` 那一课；
-///   · **按钮形态一字未改**（图标 + 标题 + 悬停提示，`N-UI-3`）：标题保留 —— 与同文件里
-///     增删查改那三枚图标入口同族；`TestsUISnapshot/NotesEditorSaveProbeTests` 那条**按文字
-///     排版校准**的像素判据也跟着这一行从底带搬到顶带（该探针头注释已写明「换排版会动这条带，
-///     届时按实测重定」）。
+///   · **按钮形态 = 纯图标 + 悬停名字**（片 `N2-SV` · 派单 `T-20261008-023`**改的就是这一条**）：
+///     原来这里是 `Label { Text(L(.notesSave)) } + .labelStyle(.titleAndIcon)`（图标 + 「保存」
+///     两个字），即**工具条上的一枚文字按钮**；台账第 27 条与 `FR-EXEC-13` 的口径是
+///     「工具·操作类控件一律『图标 + 悬停 tips』，禁文字按钮」⇒ 这一枚改成**纯图标**，
+///     名字只由悬停提示给（`.help(L(.notesSave))`）。**位置与点击路径一字未动**
+///     （仍在工具条原格位、动作仍是 `saveNoteFromEditor()`、`accessibilityIdentifier` 不变）。
+///     **为什么留 `.help` 而不改走 `HoverHint`**：① 变更记录 v3.249 已把「即时」这件事定案在
+///     入口那一处 —— 注册 `NSInitialToolTipDelay = 150`（出厂 2000ms），全 app 的 `.help`
+///     一起变即时（`App/DoyahStudioApp.swift`），所以 `.help` 这一档**本来就即时**；
+///     ② 与工具条上其它图标按钮同一条既有口径（数据库侧查询工具条也全是 `.help`，其处数由
+///     `Tests/QueryToolbarConventionTests.swift` ⑥ 的棘轮钉住）—— 在这里单开第二条提示机制，
+///     同一种控件就有了两套做法（`NFR-UI-01` 要的恰好是「同一套设计语言」）；
+///     ③ `HoverHint` 现有的两处调用点都在**下方是 AppKit 承载视图**的地方，理由写在
+///     `App/Views/HoverHint.swift` 与 `QueryContextBar.swift` 里，本处不属那一档。
+///     `TestsUISnapshot/NotesEditorSaveProbeTests` 那两条**按文字排版校准**的判据跟着这一行重定
+///     （该探针头注释与改前读数都写着「换排版会动这条带，届时按实测重定」）。
 struct NotesEditorToolbar: View {
 
     @EnvironmentObject private var appState: AppState
@@ -777,12 +789,9 @@ struct NotesEditorToolbar: View {
             Button {
                 Task { await appState.saveNoteFromEditor() }
             } label: {
-                Label {
-                    Text(L(.notesSave))
-                } icon: {
-                    Image(systemName: "square.and.arrow.down")
-                }
-                .labelStyle(.titleAndIcon)
+                // **纯图标**（片 `N2-SV`）：没有 `Text`、没有 `Label`、没有 `.labelStyle` ——
+                // 名字走下面那一句 `.help(L(.notesSave))`（即时、与全 app 同一条口径，见头注释）。
+                Image(systemName: "square.and.arrow.down")
             }
             .help(L(.notesSave))
             .keyboardShortcut(.defaultAction)
