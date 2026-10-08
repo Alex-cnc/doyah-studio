@@ -954,7 +954,19 @@ final class NotesLayoutProbeTests: XCTestCase {
 
     // MARK: - N2-LW 中栏（存放笔记列表的那一列）整列收窄（成对读数：改前 / 改后）
 
-    /// **中栏那一列（存放笔记列表的左侧）的整列宽度 ≤ 改前的 60%**（片 `N2-LW` · 派单 `T-20261008-025`）。
+    /// **中栏那一列（存放笔记列表的左侧）的整列宽度 ≤ 改前的 60%**（片 `N2-LW` · 派单 `T-20261008-025`）
+    /// —— 并随**前门裁决 `T-20261009-001`**跟到**改后目标档 `≤238.0pt`**（片 `N2-LW-238`）。
+    ///
+    /// ## 期望值的跟版（本片只改这一处 · 断言形状与负例一字未动）
+    ///
+    /// 前门裁定：「宽度判据取【真机真实窗口】⇒ `397 → 300 = 75.6%` 未达 ≤60% ⇒ 需重做 N2-LW 到
+    /// **≤238pt**（允许工具条分 2 行，头部不许断词），**旧 520 / 300 只作离屏读数留档**」。⇒
+    /// 本用例的**期望值**从「上一版改后的 `300.0pt` 读数」跟到**改后目标档 `238.0pt`**；
+    /// **相对判据（`≤ 改前 × 0.60`）与改前复刻件（负例）一字未动**，新增的只是那一条更严的
+    /// 目标档断言（见下面判据 ①b）。三个离屏读数按序留档：
+    ///   · 改前（复刻件 `220 / 300 / 520`，本片不动）= **520.0pt**；
+    ///   · 上一版改后（生产 `132 / 180 / 300`，本片改前）= **300.0pt**；
+    ///   · 本版改后（生产 `132 / 143 / 238`）= **238.0pt**。
     ///
     /// ## 对上的那一句（人类主人 2026-10-08 14:3x 逐字）
     ///
@@ -982,7 +994,9 @@ final class NotesLayoutProbeTests: XCTestCase {
     ///
     /// ## 判据（缺一不算交付）
     ///
-    ///   ① **中栏整列**：`改后 ≤ 改前 × 0.60`；
+    ///   ① **中栏整列**：`改后 ≤ 改前 × 0.60`（旧口径 · 以离屏 520 为基准 ⇒ 限额 312pt）；
+    ///   ①b **改后目标档**：`改后 ≤ 238.0pt`（本轮前门 `T-20261009-001` 给的目标档；
+    ///      真机口径 `397 × 0.60 = 238.2` ⇒ ≤238 —— 这一条**更严**，是新增的「期望值」）；
     ///   ② **旁证（守恒）**：右栏（`NotesEditorView` 那一列）**变宽**，且**两列宽度和不变**
     ///      —— 整窗不变 ⇒ 中栏让出去的那一块原样进右栏，不是两列一起缩；
     ///   ③ **「量的确实是列表那一列」**：笔记列表（`NSTableView`）必须**落在左那一子视图里**
@@ -1095,5 +1109,148 @@ final class NotesLayoutProbeTests: XCTestCase {
             "两列宽度和变了（\(pt(beforePanes.leftWidth + beforePanes.rightWidth))pt → "
                 + "\(pt(afterPanes.leftWidth + afterPanes.rightWidth))pt）—— 那不是「中栏让宽」，是整块布局被动了"
         )
+
+        // ①b **改后目标档**（前门裁决 `T-20261009-001`：真机口径 `397 × 0.60 = 238.2` ⇒ ≤238pt）。
+        // 上面那条相对判据（≤ 改前 × 0.60 = 312pt）是**原来的口径**（以旧离屏 520 为基准），
+        // 这一条是**本轮前门给的目标档**：改后读数必须落在 **238.0pt** 里。两条都留着 ——
+        // 新的那条更严，旧的留作「≤ 旧口径 60%」的旁证（不删、不放宽）。
+        print(
+            "NOTES-LAYOUT N2-LW-238 改后目标档：中栏改后 \(pt(afterPanes.leftWidth))pt ≤ 238.0pt"
+                + "（改前 = \(pt(beforePanes.leftWidth))pt 离屏留档 · 上一版改后读数 = 300.0pt 离屏留档）"
+        )
+        XCTAssertLessThanOrEqual(
+            afterPanes.leftWidth, 238.0,
+            "中栏整列没收到前门给的 **238pt** 档：改后 \(pt(afterPanes.leftWidth))pt ＞ 238.0pt"
+                + "（`T-20261009-001`：宽度判据取真机真实窗口 ⇒ 397 × 0.60 = 238.2 ⇒ ≤238pt）"
+        )
+    }
+
+    // MARK: - N2-LW-238 中栏头部在 238pt 档下不溢出（`T-20261009-001` 判据 2）
+
+    /// **238pt 档下「中栏头部内容 ≤ 中栏可用宽度」（0 溢出）+ 工具条确实分了两行**。
+    ///
+    /// ## 由头（238 档的已登记缺陷）
+    ///
+    /// `a8454d8` 只把三档常量收到 238 时 **中栏自身的头部放不下**：`Notes 4` 被挤断成
+    /// `Not` / `es` 两行、排序条被裁到栏外（旧图 `.build/n2lw-shots/after-1352.png`）。
+    /// 前门 `T-20261009-001` 因此**允许工具条分 2 行**、但**头部不许断词**。本用例量「重排之后
+    /// 头部还溢不溢」。
+    ///
+    /// ## 入口（与 `testNotesListColumnWidthShrunk` 同一套离屏宿主）
+    ///
+    /// `areaSize = 1100×700`；`HSplitView` 落地成真 `NSSplitView`，**左那一子 = 中栏**
+    /// （宽 = `listPaneMaxWidth`）。头部那一带 = **栏内上缘往下 90pt** 的一条带。带里量得到的
+    /// 是 **AppKit 承载的那几件**：排序条（`Picker(.menu)`）与「只看收藏」开关各落地成一个
+    /// `_FocusRingView`（读数逐件 `print`）。
+    ///
+    /// ## 判据（缺一不绿）
+    ///   ① **入口在**：头部带里至少量到 2 件控件 —— 一件都量不到 ⇒ 判红（不许悄悄跳过）；
+    ///   ② **0 溢出**：每一件的右边缘 ≤ 中栏右边缘（容差 0.5pt = 子像素），且并集宽度 ≤ 中栏宽度；
+    ///   ③ **工具条分了两行**：带里最高与最低那两件的**上缘相差 ≥ 20pt** —— 这是「允许工具条分
+    ///      2 行」落地后的几何形状（改前的**单行**布局里两件同高，本判据当场红）；
+    ///   ④ **源锚点（不许断词 / 不许截断）**：标题带 `.lineLimit(1)` + 横向 `fixedSize`；
+    ///      两个判定入口 `notes-sort` / `notes-favorite-filter` 与搜索框占位键一字未动。
+    ///
+    /// ## 能判红（否则「量不到」会被读成「都对」）
+    /// 把头部改回**单行**（`listHeader` 里两行并回一行）⇒ ③ 当场红；把中栏放回 300pt 档
+    /// ⇒ ② 的并集宽度读数变宽、① 的入口仍在（② 仍绿 —— 它判的是溢出，不是宽度档，宽度档归
+    /// `testNotesListColumnWidthShrunk`）。
+    ///
+    /// ## 边界（如实登记）
+    /// · 量到的是**头部里 AppKit 承载的那几件**；标题 / 条数是 SwiftUI 文本、在这个离屏宿主里
+    ///   **不落地成 `NSView`**（同文件既有的两条边界实测）⇒ 它们的宽度**量不到** ——
+    ///   「标题不断词、搜索占位完整」那一半由 ④ 的源锚点钉住，**真实渲染那一半交真机整屏图人工判**
+    ///   （回执里给成对图，本用例不许自称绿）；
+    /// · 不判观感。
+    @MainActor
+    func testNotesListHeaderFitsInsideTheNarrowListPane() throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        let live = makeLive(host)
+
+        let split = try XCTUnwrap(
+            UISnapshot.LiveHost<Never>.findViews(ofType: NSSplitView.self, in: live.hosting).first,
+            "宿主里没有 `NSSplitView` —— `HSplitView` 没落地，量不到「中栏」"
+        )
+        let columns = split.subviews
+            .map { (view: $0, rect: rect(of: $0, in: live.hosting)) }
+            .filter { $0.rect.width > 8 }
+            .sorted { $0.rect.minX < $1.rect.minX }
+        let pane = try XCTUnwrap(
+            columns.first,
+            "`HSplitView` 里量不到列（实测 \(columns.count) 列）—— 判据量不到「中栏头部」"
+        )
+        let paneRect = pane.rect
+
+        /// 头部那一带里的 AppKit **控件**：栏内上缘往下 90pt、高 ≤ 40pt（头部两行里最高的那件
+        /// 也只有 24pt —— 这一刀把栏内容器视图（整条 56pt 高的头部栈）挡在外面）、
+        /// 左缘不越过栏左缘（`KeyViewProxy` 那类代理会带负的 x，它是宿主内部件不是界面件）。
+        let headerRects = UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: pane.view)
+            .filter { $0 !== pane.view }
+            .map { rect(of: $0, in: live.hosting) }
+            .filter { r in
+                guard !r.isEmpty, r.width > 1, r.height > 1, r.height <= 40 else { return false }
+                guard r.minX >= paneRect.minX - 0.5, r.maxX > paneRect.minX else { return false }
+                let topOffset = distanceToTopEdge(r, in: live.hosting) - distanceToTopEdge(paneRect, in: live.hosting)
+                return topOffset >= -1 && topOffset <= 90
+            }
+            // 同一件控件被 SwiftUI 的桥接层包了两三层（`_FocusRingView` / 宿主容器），
+            // 取**同矩形**里最内层那一件即可 —— 按矩形去重，免得同一件被算两次把并集算歪。
+            .reduce(into: [CGRect]()) { unique, r in
+                if !unique.contains(where: { abs($0.minX - r.minX) < 0.5 && abs($0.maxX - r.maxX) < 0.5
+                    && abs($0.minY - r.minY) < 0.5 }) {
+                    unique.append(r)
+                }
+            }
+            .sorted { $0.minX < $1.minX }
+
+        for r in headerRects {
+            print(
+                "NOTES-LAYOUT N2-LW-238 头部件：x=[\(pt(r.minX))…\(pt(r.maxX))] w=\(pt(r.width))"
+                    + " h=\(pt(r.height)) top=+\(pt(distanceToTopEdge(r, in: live.hosting) - distanceToTopEdge(paneRect, in: live.hosting)))"
+            )
+        }
+        let union = headerRects.reduce(CGRect.null) { $0.union($1) }
+        let tops = headerRects.map { distanceToTopEdge($0, in: live.hosting) }
+        let spread = (tops.max() ?? 0) - (tops.min() ?? 0)
+        let overflow = headerRects.map { $0.maxX - paneRect.maxX }.max() ?? 0
+        print(
+            "NOTES-LAYOUT N2-LW-238 中栏头部：中栏 x=[\(pt(paneRect.minX))…\(pt(paneRect.maxX))] w=\(pt(paneRect.width))"
+                + " ｜ 头部件 \(headerRects.count) 件 · 并集 w=\(pt(union.width))"
+                + " ｜ 最右溢出 \(pt(overflow))pt ｜ 两行落差 \(pt(spread))pt"
+        )
+
+        // ① 入口在
+        XCTAssertGreaterThanOrEqual(
+            headerRects.count, 2,
+            "中栏头部带里量到的控件不足 2 件（实测 \(headerRects.count) 件）—— 判据的入口没了"
+                + "（排序条 / 只看收藏开关都是 AppKit 承载的控件，量不到就说明头部形态变了）"
+        )
+        // ② 0 溢出
+        XCTAssertLessThanOrEqual(
+            union.width, paneRect.width,
+            "中栏头部内容宽度 \(pt(union.width))pt ＞ 中栏可用宽度 \(pt(paneRect.width))pt —— 头部溢出了这一栏"
+        )
+        XCTAssertLessThanOrEqual(
+            overflow, 0.5,
+            "中栏头部有控件越过这一栏的右边缘 \(pt(overflow))pt（> 0.5pt 容差）—— 排序条被裁到栏外就是这个症状"
+        )
+        // ③ 工具条分了两行
+        XCTAssertGreaterThanOrEqual(
+            spread, 20,
+            "中栏头部那几件**同高**（上缘落差 \(pt(spread))pt）—— 工具条没有分两行，还是改前那条单行布局"
+                + "（238pt 档下单行放不下，`Notes 4` 会被挤断）"
+        )
+        // ④ 源锚点（不许断词 / 不许截断 · 判定入口一字未动）
+        let source = try notesPanelSource()
+        for anchor in [
+            "private var listHeader: some View",
+            ".fixedSize(horizontal: true, vertical: false)",
+            ".accessibilityIdentifier(\"notes-sort\")",
+            ".accessibilityIdentifier(\"notes-favorite-filter\")",
+            "TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)",
+        ] {
+            XCTAssertTrue(source.contains(anchor), "源锚点失配：`\(anchor)` 不在 `App/Views/NotesPanel.swift` 里")
+        }
     }
 }

@@ -26,46 +26,16 @@ struct NotesListView: View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             // **中栏的栏头**（队列 `L-184`）：两级导航（架 → 笔记本）搬回左栏、搜索框搬去顶栏，
             // 这一栏只剩「看哪一条」—— 栏头写这一屏有多少条 + **排序条**（第二片新加）。
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                Text(L(.notesTitle))
-                    .font(Theme.font(.title))
-                Text("\(appState.visibleNotes.count)")
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(Theme.text(.secondary))
-                Spacer(minLength: Spacing.xs)
-                // **排序**（队列 `L-184` 第二片）：三档名字与总序都在 Core
-                // （`NotesSortOrder`）—— 视图只画选择器，不自己写比较函数。
-                Picker(L(.notesSortBy), selection: $appState.notesSortOrder) {
-                    ForEach(NotesSortOrder.allCases, id: \.self) { order in
-                        Text(L(order.key)).tag(order)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
-                .help(L(.notesSortBy))
-                .accessibilityIdentifier("notes-sort")
-                // **筛选条**（队列 `L-184` 第三片）：中栏栏头这一枚「只看收藏」。
-                // 它不是第二个状态 —— 绑的就是左栏那一行（`AppState.notesFavoriteOnly` 一处判，
-                // 两个界面面共用一个变量 ⇒ 不可能出现「开关开着、列表在看全部」）。
-                // **图标化**（片 `N2-2`「工具条 图标化」）：星号一枚 + 悬停提示 —— 与 SQL 编辑区
-                // 工具条那些开关同一个形状（`.button` 档的开关本来就是图标按钮）；
-                // 标题 `L(.notesFavoriteOnly)` 保留在 `Label` 里（无障碍／提示仍说得清它是什么）。
-                Toggle(isOn: Binding(
-                    get: { appState.notesFavoriteOnly },
-                    set: { appState.setNotesFavoriteOnly($0) }
-                )) {
-                    Label(L(.notesFavoriteOnly), systemImage: "star")
-                        .labelStyle(.iconOnly)
-                        .font(Theme.font(.icon))
-                }
-                .toggleStyle(.button)
-                .controlSize(.small)
-                .fixedSize()
-                .help(L(.notesFavoriteOnly))
-                .accessibilityIdentifier("notes-favorite-filter")
-            }
-            .padding(.horizontal, Spacing.s)
+            //
+            // **头部固定两行**（片 `N2-LW-238` · 派单 `T-20261009-001` · 前门裁决 `T-20261009-001`）：
+            // 这一栏的整列上限收到 **238pt** 之后，原来那一行**放不下** —— 实测（238 档旧图
+            // `.build/n2lw-shots/after-1352.png`）「`Notes 4`」被挤断成「`Not`」/「`es`」两行、
+            // 排序条被裁到栏外。⇒ 头部改成**两行**（工具条允许分两行）：
+            //   · 第一行 = 标题 + 条数 + 行末那枚「只看收藏」开关；
+            //   · 第二行 = 排序条（`notes-sort`）。
+            // 两行的内容各自都短到 238pt 里放得下（实测：排序条 154pt / 开关 36.5pt），
+            // 且标题与条数**不许断词、不许截断**。见 `listHeader`。
+            listHeader
             if let hint = appState.noteSearchHint {
                 // 这一行是**如实交代**：走的是子串兜底，还是检索压根没跑成 —— 两种都不是
                 // 「没找到」，所以不能只给一个空列表了事。
@@ -178,6 +148,75 @@ struct NotesListView: View {
         // 侧栏底色与工作区侧栏同一令牌（2026-09-30 实测反馈：笔记界面与工作区配色差很大）。
         .scrollContentBackground(.hidden)
         .background(Theme.surface(.sidebar))
+    }
+
+    /// **中栏栏头 = 固定的两行**（片 `N2-LW-238` · 派单 `T-20261009-001`）。
+    ///
+    /// 为什么是**固定的两行**、而不是「一行放不下就自动换行」：这一段里所有量得到的几何都在
+    /// **离屏宿主**（`TestsUISnapshot/NotesLayoutProbeTests.swift`：SwiftUI 的文本不落地成
+    /// `NSView`，只有选择器 / 开关这类 AppKit 承载的控件量得到）—— 自动换行（`ViewThatFits` /
+    /// 流式布局）在那里的落地形状随系统版本变，判据钉不住。固定的两行让「头部内容宽度 ≤ 中栏宽度」
+    /// 在 **238pt** 档下**恒成立**：两行里最宽的一件是排序条（本机实测 154pt），整列可用宽
+    /// 238 − 2×8（`Spacing.s` 左右留白）= 222pt，余量 68pt。
+    ///
+    /// 两行分工（口径与改前的单行一致，只是拆开）：
+    ///   · **第一行** = 标题（`notesTitle`：Notes / 笔记）+ 条数 + 行末那枚**只看收藏**开关；
+    ///   · **第二行** = **排序条**（`notes-sort`，队列 `L-184` 第二片那三档）。
+    ///
+    /// **不许断词、不许截断**：标题与条数各带 `.lineLimit(1)`，标题另加横向 `fixedSize`
+    /// —— 宁可整块不收缩，也不把词拆成两行（238 档旧图里断的正是 `Notes` → `Not` / `es`）。
+    /// **排序条与开关的判定入口一字未动**：`notes-sort` / `notes-favorite-filter` 两个
+    /// `accessibilityIdentifier` 都还在各自那一件上（判据按它挑控件，不靠遍历顺序）。
+    private var listHeader: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                Text(L(.notesTitle))
+                    .font(Theme.font(.title))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Text("\(appState.visibleNotes.count)")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .lineLimit(1)
+                Spacer(minLength: Spacing.xs)
+                // **筛选条**（队列 `L-184` 第三片）：中栏栏头这一枚「只看收藏」。
+                // 它不是第二个状态 —— 绑的就是左栏那一行（`AppState.notesFavoriteOnly` 一处判，
+                // 两个界面面共用一个变量 ⇒ 不可能出现「开关开着、列表在看全部」）。
+                // **图标化**（片 `N2-2`「工具条 图标化」）：星号一枚 + 悬停提示 —— 与 SQL 编辑区
+                // 工具条那些开关同一个形状（`.button` 档的开关本来就是图标按钮）；
+                // 标题 `L(.notesFavoriteOnly)` 保留在 `Label` 里（无障碍／提示仍说得清它是什么）。
+                Toggle(isOn: Binding(
+                    get: { appState.notesFavoriteOnly },
+                    set: { appState.setNotesFavoriteOnly($0) }
+                )) {
+                    Label(L(.notesFavoriteOnly), systemImage: "star")
+                        .labelStyle(.iconOnly)
+                        .font(Theme.font(.icon))
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+                .fixedSize()
+                .help(L(.notesFavoriteOnly))
+                .accessibilityIdentifier("notes-favorite-filter")
+            }
+            HStack(spacing: Spacing.xs) {
+                // **排序**（队列 `L-184` 第二片）：三档名字与总序都在 Core
+                // （`NotesSortOrder`）—— 视图只画选择器，不自己写比较函数。
+                Picker(L(.notesSortBy), selection: $appState.notesSortOrder) {
+                    ForEach(NotesSortOrder.allCases, id: \.self) { order in
+                        Text(L(order.key)).tag(order)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
+                .help(L(.notesSortBy))
+                .accessibilityIdentifier("notes-sort")
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, Spacing.s)
+        .accessibilityIdentifier("notes-list-header")
     }
 
     /// 行右键里的**收藏 / 取消收藏**（队列 `L-184` 第三片）：一个动作两种措辞 —— 当前不是收藏
@@ -1045,25 +1084,31 @@ struct NotesAreaView: View {
     /// 也就是说：**这一列实际多宽由 `maxWidth` 定**（`minWidth` / `idealWidth` 只在窗口极小、
     /// 或用户拖动分栏时才起作用）。
     ///
-    /// ## 取值（前门裁决 `T-20261008-053` ① · 组长第 277 轮收口：回到 **300** 档）
+    /// ## 取值（前门裁决 `T-20261009-001`：宽度判据取【真机真实窗口】⇒ 收到 **238pt**）
     ///
     /// 「现宽」有两个可读口径，本机都实测过（记在案）：
+    ///   · **A 真机口径**（人类主人按整屏图判 · **本轮以它为准**）：自然打开的 1352pt 宽窗口下
+    ///     旧包中栏落地 **397pt** ⇒ 改后须 **≤ 238pt**（`397 × 0.60 = 238.2`）；
     ///   · **B 离屏口径**（判据可复跑）：离屏宿主 `1100×700` 下中栏改前落地 **520pt**
-    ///     ⇒ 改后须 **≤ 312pt**（`520 × 0.60 = 312`）；
-    ///   · **A 真机口径**（人类主人按整屏图判）：同一旧构建、同一满屏窗口下实测出现过 **397pt** 与
-    ///     **520pt** 两个值 —— 组长第 277 轮逐张看图复核：**自然打开**的窗口量到 **520pt**，而
-    ///     **397pt** 出现在窗口「被放大而非自然打开」那一态 ⇒ **以自然打开窗口的 520pt 为基准**。
+    ///     ⇒ 改后须 **≤ 312pt**（`520 × 0.60 = 312`）。
+    /// 前门裁定（`T-20261009-001` 最要紧条）：「**宽度判据取【真机真实窗口】⇒ 397→300=75.6%
+    /// 未达 ≤60% ⇒ 需重做 N2-LW 到 ≤238pt**（允许工具条分 2 行，头部不许断词），
+    /// **旧 520/300 只作离屏读数留档**」。
     ///
-    /// 基准 = **520** ⇒ `520 × 0.60 = 312` ⇒ **`maxWidth` = 300**（`300 / 520 = 57.7% ≤ 60%`）。
+    ///   · `minWidth`   220 → **132**（×0.60 · 可读性保底，本次不再往下）；
+    ///   · `idealWidth` 300 → `180` → **143**（`180` 是上一版按 520 口径收的值；本次 = `238 × 0.60`
+    ///     取整，与 `maxWidth` 同步收敛）；
+    ///   · `maxWidth`   520 → `300` → **238**（= A 口径 `397 × 0.60 = 238.2` 取整）。
     ///
-    ///   · `minWidth`   220 → **132**（×0.60）；
-    ///   · `idealWidth` 300 → **180**（×0.60）；
-    ///   · `maxWidth`   520 → **300**（×0.577）—— 改前 520 的 60% 是 **312**，而 `520 * 0.60` 在
-    ///     IEEE double 里**恰好**等于 `312.0`（`312.0 <= 520 * 0.60` 只在逐位相等时成立 ⇒ 判据
-    ///     **零余量**，任何一点布局漂移就翻）。取整百 **300** 同样满足「≤60%」，且给判据留出 12pt 余量。
-    ///     （曾按 397 基准试收 **238pt**（commit `a8454d8`），实测**中栏头部控件放不下** ——
-    ///     搜索占位被截断、`Notes` 断成 `Not`/`es` 两行 ⇒ 组长第 277 轮裁定**回到 300 档**；
-    ///     更窄须重排头部 ＝ 扩范围，另立片。）
+    /// ## 238 档与头部重排是**同一步**（本片不拆 · 组长粒度说明）
+    ///
+    /// 只收常量、不重排中栏头部 ⇒ **复现 `a8454d8` 已登记的缺陷**：238 档下头部控件放不下
+    /// （搜索占位被截断、`Notes` 断成 `Not`/`es` 两行、排序条被裁到栏外）。故本片的头部 =
+    /// `NotesListView.listHeader` 的**固定两行**（第一行 标题+条数+「只看收藏」开关 / 第二行 排序条）
+    /// ——「允许工具条分 2 行、头部不许断词」那一句的落地。
+    ///
+    /// 旧 300 档的真机证据图 = `.build/n2lw-shots/N2LW-final-after-300.png`（中栏 `589..1191px`
+    /// = `301.0pt`）；离屏留档 = 上一版 `NotesLayoutProbeTests` 打印的 `改前 520.0pt → 改后 300.0pt`。
     ///
     /// ## 为什么三个数住在这里、不写死在两处调用点
     ///
@@ -1075,8 +1120,8 @@ struct NotesAreaView: View {
     /// **不动的东西**（本次边界）：搜索框 `320→200`（`N2-2` 已定案，一字不改）、最左侧笔记本导航栏
     /// （人类主人明说不在本次范围）、整窗尺寸、`Core/**`、`HSplitView` 用户拖动宽度的持久化（不给它加）。
     private static let listPaneMinWidth: CGFloat = 132
-    private static let listPaneIdealWidth: CGFloat = 180
-    private static let listPaneMaxWidth: CGFloat = 300
+    private static let listPaneIdealWidth: CGFloat = 143
+    private static let listPaneMaxWidth: CGFloat = 238
 
     /// **行末两枚的图标**（人类主人令 `T-20261007-080` 逐字：**笔记本图标 + 闹钟图标**）。
     ///
