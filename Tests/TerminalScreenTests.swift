@@ -153,6 +153,49 @@ final class TerminalScreenTests: XCTestCase {
         XCTAssertEqual(s.scrollbackCount, 3, "回滚缓冲必须按上限裁剪")
     }
 
+    // MARK: 清除会话窗口内容（二级条右侧那枚按钮的读数）
+
+    func testBufferLineCountCountsNonEmptyLinesOnly() {
+        let s = screen(columns: 10, rows: 4)
+        XCTAssertEqual(s.bufferLineCount, 0, "刚建好的屏幕里没有内容")
+
+        s.feed(text: "one\r\ntwo\r\n")
+        XCTAssertEqual(s.bufferLineCount, 2)
+
+        // 空行不算内容（否则「清完之后还剩几行」这个读数永远归不了零）。
+        s.feed(text: "\r\n")
+        XCTAssertEqual(s.bufferLineCount, 2)
+    }
+
+    func testClearBufferWipesScreenAndScrollbackButKeepsModesAndCursorVisibility() {
+        let s = screen(columns: 10, rows: 2)
+        // 滚一行进回滚区，再置几个模式位 —— 清屏**不许**把它们复位。
+        s.feed(text: "one\r\ntwo\r\nthree")
+        s.feed(text: "\u{1B}[?1h")     // DECCKM：方向键走应用模式
+        s.feed(text: "\u{1B}[?25l")    // 光标隐藏
+        XCTAssertGreaterThan(s.scrollbackCount, 0)
+        XCTAssertGreaterThan(s.bufferLineCount, 0)
+
+        s.clearBuffer()
+
+        XCTAssertEqual(s.scrollbackCount, 0, "回滚区没清掉")
+        XCTAssertEqual(s.bufferLineCount, 0, "可见屏上还有内容 —— 清完之后读数必须是 0")
+        XCTAssertEqual(s.cursorRow, 0)
+        XCTAssertEqual(s.cursorColumn, 0)
+        // 模式位与光标可见性**不动**：清屏不是复位（`reset()` 才是）——
+        // 前台某程序正在应用方向键模式时把这一位复位，它下一帧就错键序了。
+        XCTAssertTrue(s.isApplicationCursorKeysEnabled, "清屏把 DECCKM 复位了（那是 reset() 的事）")
+        XCTAssertFalse(s.isCursorVisible, "清屏把光标显隐改了（那是前台程序的事）")
+    }
+
+    func testResetStillResetsModesUnlikeClearBuffer() {
+        // 两条口径的分工：`reset()` 连模式位一起复位（重启 shell 用），`clearBuffer()` 不碰。
+        let s = screen(columns: 10, rows: 2)
+        s.feed(text: "\u{1B}[?1h")
+        s.reset()
+        XCTAssertFalse(s.isApplicationCursorKeysEnabled)
+    }
+
     // MARK: 尺寸变化
 
     func testResizeKeepsContentAndClampsCursor() {

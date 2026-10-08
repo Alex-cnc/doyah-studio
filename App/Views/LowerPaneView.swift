@@ -135,6 +135,23 @@ struct LowerPaneView: View {
                 Divider()
                 terminalShortcutBar
             }
+            // 重启终端的**二次确认**（二级条右侧第 ④ 枚）：重启要 SIGHUP 整条进程组，
+            // 里面有程序在跑的话一起结束 ⇒ 先问一句（判定在 Core 的 `restartDecision`，
+            // 这里只负责问）。挂在**终端内容这一层**而不是外层面板：外层那两个 alert
+            // （关页签 / 重命名）已经在用同一层的呈现通道，三个挤在同一个视图上时
+            // SwiftUI 只保证最后挂的那个能弹出来 —— 换一层是这里唯一稳的做法。
+            .alert(
+                L(.terminalRestartConfirmTitle),
+                isPresented: Binding(
+                    get: { terminal.pendingRestartTab != nil },
+                    set: { if !$0 { terminal.cancelRestart() } }
+                )
+            ) {
+                Button(L(.terminalRestartConfirmAction), role: .destructive) { terminal.confirmRestart() }
+                Button(L(.commonCancel), role: .cancel) { terminal.cancelRestart() }
+            } message: {
+                Text(L(.terminalRestartConfirmMessage))
+            }
 
         case .debugConsole:
             placeholder(

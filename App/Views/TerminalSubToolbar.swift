@@ -37,12 +37,10 @@ struct TerminalSubToolbar: View {
 
             Spacer(minLength: 8)
 
-            // ── 右侧：终端自己的动作按钮位 ───────────────────────────────────────────
-            // `T-2` 在这里补四枚（一键 `dsh-tui` / 一键 Hermes / 清除终端会话窗口内容 / 重启终端）。
             // **不许静默消失**（`T-1a` 移出的五件里，本片负责交代它们的去向）：
-            //   · 终端页签条 `TerminalTabsBar` → 本行左侧（本片已归位）；
-            //   · 状态小字 `TerminalPaneStatus` 与 `terminal.refusalHint` → 本行右侧（本片已归位，见下）；
-            //   · `arrow.clockwise`（重启 shell）→ `T-2` 的四枚之一（重启终端），本片留位；
+            //   · 终端页签条 `TerminalTabsBar` → 本行左侧（`T-1b` 已归位）；
+            //   · 状态小字 `TerminalPaneStatus` 与 `terminal.refusalHint` → 本行右侧（见下）；
+            //   · `arrow.clockwise`（重启 shell）→ 本行右侧四枚里的第 ④ 枚（重启终端）；
             //   · `trash`（清空日志）→ **不属于终端**：它作用在问题 / 输出两页的日志上，
             //     已归位到那两页的**内容顶部**（`LowerPaneView.logPaneToolbar`）。
             if let refusalHint = terminal.refusalHint {
@@ -58,9 +56,85 @@ struct TerminalSubToolbar: View {
             }
             // 当前页签的「已停止 / 出错」两行小字（观察的是 **pane 自己**的 `@Published`）。
             TerminalPaneStatus(pane: terminal.activePane)
+            // ── 右侧：终端自己的动作按钮位 ───────────────────────────────────────────
+            // **四枚常用动作**（人类主人 2026-10-08 原话：「右侧是常用的工具按钮，比如一键启动
+            // dsh-tui、Hermes，清除终端会话窗口内容，重启终端等操作」）。
+            //
+            // 全部是**图标 + `.help()` 提示**（口径：不许文字按钮）—— 与页签条上的 `xmark` / `+`
+            // 同一个画法。四枚的**语义**都在 Core 里（一键启动的两个预设 = `TerminalLaunchCommand`，
+            // 重启要不要确认 = `TerminalTabs.restartDecision`），这里只负责把点击交给协调器。
+            //
+            // `T-1a` 移出的五件里，`arrow.clockwise`（重启 shell）就是这四枚之一 —— 它从**外层**
+            // 页签条搬到这里（层级断言 `LAYER_FORBIDDEN` 盯着外层条别再出现它）。
+            terminalActions
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
+    }
+
+    // MARK: - 右侧那四枚常用动作
+
+    /// 四枚动作：**两枚开新会话**（一键启动）+ 一条分隔 + **两枚作用在当前会话上**（清除 / 重启）。
+    ///
+    /// 为什么按这个顺序、且中间断开：左边那两枚点下去是**加一条**（页签变多），
+    /// 右边那两枚点下去是**改这一条**（擦屏幕 / 换一条命）—— 作用域不同的两组挨着排，
+    /// 很容易把「清除」读成「清掉刚启动的那个预设」。
+    private var terminalActions: some View {
+        HStack(spacing: Spacing.hair) {
+            // ① 一键启动 dsh-tui：新建一个 terminal 会话并直接跑 `dsh-tui`。
+            Button {
+                terminal.launchTab(.dshTUI)
+            } label: {
+                Image(systemName: "terminal")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            .help(L(.terminalLaunchDshTUI))
+            .accessibilityIdentifier("terminal-launch-dsh-tui")
+            .accessibilityLabel(L(.terminalLaunchDshTUI))
+
+            // ② 一键启动 Hermes：同上，跑 `hermes`。
+            Button {
+                terminal.launchTab(.hermes)
+            } label: {
+                Image(systemName: "sparkles")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            .help(L(.terminalLaunchHermes))
+            .accessibilityIdentifier("terminal-launch-hermes")
+            .accessibilityLabel(L(.terminalLaunchHermes))
+
+            // 两组作用域之间的断开（开新会话 ／ 改当前会话）。
+            Divider()
+                .frame(height: Spacing.m)
+                .padding(.horizontal, Spacing.xs)
+
+            // ③ 清除终端会话窗口内容：只擦这一屏（含回滚区），**不杀进程**。
+            Button {
+                terminal.clearActiveBuffer()
+            } label: {
+                Image(systemName: "eraser")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            .help(L(.terminalClearBuffer))
+            .accessibilityIdentifier("terminal-clear-buffer")
+            .accessibilityLabel(L(.terminalClearBuffer))
+
+            // ④ 重启终端：换一条新会话（**先问一句** —— 判定在 Core 的 `restartDecision`，
+            //    确认框挂在 `LowerPaneView`，与关页签那一族同一个形状）。
+            Button {
+                terminal.requestRestart()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            .help(L(.terminalRestartTab))
+            .accessibilityIdentifier("terminal-restart")
+            .accessibilityLabel(L(.terminalRestartTab))
+        }
     }
 }
 
