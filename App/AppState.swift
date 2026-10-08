@@ -7239,6 +7239,20 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// **行内右键那一枚「删除」的入口**（片 `A5-DEL` · 派单 `T-20261009-038`）：把**被点的那一条**待办
+    /// 摆到**同一个**确认框上，先不落库。
+    ///
+    /// 为什么另开一个「按 id」的入口而不复用 `requestNoteRemoval()`：那个函数按 `notesModule` 分流、
+    /// 待办那一支取的是 `todoEditingID`（编辑器里那一条）—— 而行内右键发生在清单 / 日历那一栏，与
+    /// 「正在编辑哪一条」无关，硬塞进去会把「右键的那条」与「编辑器那条」糊成一个（右键删 A、确认删 B）。
+    /// 出口与 `requestNoteRemoval()` 的 `.todos` 分支**同一处**（`NoteRemovalPrompt.request`）——
+    /// 待办的三处删除入口（左区顶部 / 编辑面 / 行内右键）由此全经确认框。
+    /// 判据：`TestsUISnapshot/NotesLayoutProbeTests.swift`（点删除后条目数不变，直到确认）。
+    func requestTodoRemoval(id: UUID) {
+        let subject = todos.first { $0.id == id }?.title ?? ""
+        pendingNoteRemoval = NoteRemovalPrompt.request(target: .todo(id), subject: subject)
+    }
+
     /// 退出口（按 ESC / 点框外 / 点「取消」）：只收掉请求，库一个字节不动。
     func cancelNoteRemoval() {
         pendingNoteRemoval = nil

@@ -445,8 +445,12 @@ struct TodoRowView: View {
             }
             Button(L(.todoReschedule)) { appState.beginReschedule(todo) }
             Divider()
+            // **先确认再删**（片 `A5-DEL` · 派单 `T-20261009-038`）：这里只挂请求（与编辑面 / 左区顶部
+            // 那两枚走**同一个**确认框），确认框那一头（`confirmNoteRemoval`）才是 `deleteTodo`。
+            // 判据：点删除后条目数不变，直到确认（`TestsUISnapshot/NotesLayoutProbeTests.swift`）。
+            // 改动前这里直连 `appState.deleteTodo(id:)` ⇒ 右键一下就落库。
             Button(L(.todoDelete), role: .destructive) {
-                Task { await appState.deleteTodo(id: todo.id) }
+                appState.requestTodoRemoval(id: todo.id)
             }
         }
         // 在 `List` 里才生效（日历那一屏的当天任务也是一个 `List`）——

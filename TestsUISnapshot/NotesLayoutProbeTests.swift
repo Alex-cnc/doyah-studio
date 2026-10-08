@@ -88,6 +88,17 @@ final class NotesLayoutProbeTests: XCTestCase {
         _ = try await NoteLibrary.defaultLibrary().upsert(NoteDraft(title: "左区骨架探针夹具", body: "probe"))
     }
 
+    /// 夹具一条**待办** + 把笔记能力打开（`reloadTodos()` 挂着 `notesEnabled` 那道守卫）。
+    /// 与 `seedOneNote` 同一形状，只是换成待办表（片 `A5-DEL` 的行内右键那一条要量待办条目数）。
+    @MainActor
+    private func seedOneTodo(_ host: HostBundle) async throws {
+        try requireIsolatedNotesDirectory()
+        let load = try UISnapshot.applyLicense(.standard, to: host.state)
+        XCTAssertEqual(load.entitlements.basis, .licensed, "临时许可证没落地 ⇒ 下面读不到待办能力")
+        XCTAssertTrue(host.state.notesEnabled, "Standard 档必须带笔记能力（capabilities.notes）")
+        try await NoteLibrary.defaultLibrary().upsert(Todo(title: "行内右键删除探针夹具"))
+    }
+
     /// 「夹具要写笔记库」的前置：口径与 `UISnapshotPanelsTests` 同一条。
     private func requireIsolatedNotesDirectory() throws {
         try XCTSkipIf(
@@ -947,6 +958,82 @@ final class NotesLayoutProbeTests: XCTestCase {
 
         print(
             "T-081 ② 删除先确认：点删除后 \(before)（不变）· 取消后 \(before)（不变）· "
+                + "确认后 \(before - 1)（减 1）｜确认动作 = "
+                + "\(NoteRemovalPrompt.confirmActions.map(\.rawValue))"
+        )
+    }
+
+    // MARK: - 判据③b 行内右键删除也先确认（片 `A5-DEL` · 派单 `T-20261009-038`）
+
+    /// **待办行内右键那一枚「删除」也走同一个确认框**（片 `A5-DEL` · 派单 `T-20261009-038`）。
+    ///
+    /// ## 由头（人类主人令 `T-20261009-038` ①）
+    ///
+    /// 待办的删除入口有三处：左区顶部那枚「删」、编辑面那枚「删」、**清单 / 日历行内的右键菜单那枚**。
+    /// 前两处已改走确认框（片 `N2-9`），**行内右键那一枚一直直连 `deleteTodo`** —— 右键一下就落库，
+    /// 正是 `T-20261007-079` ② 那句「delete 时连个确认都就直接删了」在待办这一侧的残留。
+    /// 本片把它接到**同一处**确认框：`AppState.requestTodoRemoval(id:)` 挂的仍是**同一个**
+    /// `pendingNoteRemoval` 状态，界面那一个 `.confirmationDialog` 照旧是唯一呈现点。
+    ///
+    /// ## 判据的形状（与笔记那条逐字同形）
+    ///
+    ///   ① `requestTodoRemoval(id:)`（= 行内右键「删除」）⇒ 挂上确认请求（**且挂的是被右键的那一条**）、
+    ///      库条目数**不变**；
+    ///   ② `cancelNoteRemoval()`（= 取消）⇒ 仍一条没少；
+    ///   ③ `confirmNoteRemoval()`（= 确认）⇒ 这才少一条。
+    ///
+    /// ## 能判红（否则「没少」会被读成「都对」）
+    ///
+    /// 反例 = 改动前那一版行内右键：`Task { await appState.deleteTodo(id: todo.id) }` —— 它既不经
+    /// `pendingNoteRemoval`，也在 ① 那一步就把条目数减了，两条断言当场红。
+    ///
+    /// ## 边界（如实登记）
+    ///
+    /// 离屏宿主里 SwiftUI 的手势不响应、`confirmationDialog` 是 AppKit 模态框（不上屏弹不出来）
+    /// ⇒ 判到「**请求挂上了、库暂时没动、确认才动**」这一串状态机读数（与上面笔记那条同一口径，
+    /// 别重走「点界面那枚按钮」），判不到「框真的弹在屏幕上」那一半（归人工点验）。
+    @MainActor
+    func testDeletingATodoFromTheRowAsksForConfirmationBeforeTouchingTheLibrary() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        try await seedOneTodo(host)
+        await host.state.reloadTodos()
+
+        let seeded = try XCTUnwrap(host.state.todos.first, "夹具没读进来 ⇒ 判据量不到「条目数不变」")
+        let before = host.state.todos.count
+        XCTAssertGreaterThan(before, 0)
+
+        // ① 行内右键「删除」⇒ 只挂请求，条目数不变
+        host.state.requestTodoRemoval(id: seeded.id)
+        let request = try XCTUnwrap(
+            host.state.pendingNoteRemoval,
+            "行内右键删除却没挂上确认请求 ⇒ 破坏性操作没被拦下（数据风险）"
+        )
+        XCTAssertEqual(
+            request.target, .todo(seeded.id),
+            "确认框挂的不是被右键的那一条（右键删 A、确认删 B）"
+        )
+        XCTAssertEqual(
+            request.actions, NoteRemovalPrompt.confirmActions,
+            "确认框动作不是唯一出处给的（自己硬写了按钮）"
+        )
+        XCTAssertNotNil(host.state.pendingNoteRemovalTitle, "确认框标题没有生产点")
+        await host.state.reloadTodos()
+        XCTAssertEqual(host.state.todos.count, before, "行内右键就改了条目数 ⇒ 没有二次确认")
+
+        // ② 取消 ⇒ 库一个字节不动
+        host.state.cancelNoteRemoval()
+        await host.state.reloadTodos()
+        XCTAssertNil(host.state.pendingNoteRemoval, "取消之后请求还挂着")
+        XCTAssertEqual(host.state.todos.count, before, "取消之后条目数变了")
+
+        // ③ 确认 ⇒ 这才少一条
+        host.state.requestTodoRemoval(id: seeded.id)
+        await host.state.confirmNoteRemoval()
+        XCTAssertEqual(host.state.todos.count, before - 1, "确认删除之后条目数没减")
+
+        print(
+            "A5-DEL 行内右键删除先确认：点删除后 \(before)（不变）· 取消后 \(before)（不变）· "
                 + "确认后 \(before - 1)（减 1）｜确认动作 = "
                 + "\(NoteRemovalPrompt.confirmActions.map(\.rawValue))"
         )
