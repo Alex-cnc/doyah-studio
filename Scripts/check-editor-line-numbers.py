@@ -304,6 +304,9 @@ FIXTURE_SOURCES = [
     # 同理：2026-10-03 台账补登了标题栏主搜索框（`FR-EDIT-37`）⇒ 它也得进夹具，
     # 否则「原样应当绿（夹具与真仓库同源）」会因为台账指向的文件不在夹具里而红。
     "App/Views/TitleBarSearchField.swift",
+    # 同理（2026-10-08）：台账补登笔记面只读预览正文（`PreviewTextView`，N2-3a）⇒ 它也得进夹具，
+    # 否则「原样应当绿（夹具与真仓库同源）」会因为台账指向的文件不在夹具里而红。
+    "App/Views/NotePreviewBody.swift",
 ]
 FIXTURE_DOCS = list(DOC_ANCHORS)
 
