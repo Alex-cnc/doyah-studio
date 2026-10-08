@@ -32,6 +32,17 @@ L-55 文档数字 / L-72 例数 / 本条）。
   `PRODUCT_BUNDLE_IDENTIFIER` 一致；C3 每个目标的 `*.swift` **文件名集合**双向（磁盘 ↔ 该目标
   `PBXSourcesBuildPhase` 的引用）。C3 的前提「各目标源目录之间没有同名 `.swift`」**每次实跑重新验**
   （出现同名即判红并提示改用路径口径 —— 不许悄悄放松）。
+  **C3 磁盘侧的扫描口径：点开头的目录不算源码**（`.build` / `.build-cache` / `.swiftpm` / `.secrets`）。
+  由头（任务 `t_7325ffbf`，2026-10-08 实测）：`platform/<平台>/` 是**自洽包**布局
+  （`origin/migrate/platform-macos` 分支的树里 `platform/macos/Package.swift` 与
+  `platform/macos/TestsUISnapshot/**` 都在——包根就在 `Platform/macOS`）⇒ 包自己那份 `.build/`
+  落在**目标源目录之内**；切回 master 之后包的文件被 git 收走、被忽略的 `.build/` 留下 ⇒
+  残留里的 `.swift` 被算成「该进工程而没进」⇒ **假红**（干净克隆上不出现，只在那台跑过包的机器上红）。
+  跳过**不许静默**：每次实跑打印跳过了哪几处。
+  **反向那一半也判**：生成物里**引用**了源目录点目录下的 `.swift` ⇒ 判红并点名（`xcodegen generate`
+  会把残留收进工程，而这一条会因此**变绿** —— 最坏的那种绿；`project.yml` 的 `excludes` 是堵它的
+  第一道，这条判据是第二道）。判据**不读 `.gitignore`**：自测夹具不是 git 仓库，口径取纯文件系统
+  那一份（点目录 = 非源码），与 `.gitignore` 里 `.build/` 的收口同向。
 * **D 空跑防护**：目标数 / 每个目标的源文件数 / 每个目标的构建配置数 / 锚点命中处数都有下限；
   任何一条降到「什么都没查到」就判红（防「判据被掏空 ⇒ 零命中 = 通过」）。
 
@@ -305,25 +316,56 @@ def pbx_target_swift_names(pbx: dict, target_id: str):
 
 # --------------------------------------------------------------------------------------
 # 磁盘侧：源目录里的 *.swift（跟随目录符号链接 —— 自测夹具用软链指真源目录）
+#
+# **点开头的目录不算源码**（构建残留 / 本机杂件）：口径与由头见文件头「C 生成物 ↔ 源」那一段。
 # --------------------------------------------------------------------------------------
+def swift_names_in(directory: pathlib.Path):
+    """某个目录下**全部** `*.swift` 的名字（含点目录 —— 反向判据要用它认领生成物里的残留）。"""
+    out = []
+    stack = [directory]
+    while stack:
+        current = stack.pop()
+        try:
+            entries = list(os.scandir(str(current)))
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.is_dir(follow_symlinks=True):
+                stack.append(pathlib.Path(entry.path))
+            elif entry.name.endswith(".swift"):
+                out.append(entry.name)
+    return out
+
+
 def swift_names_on_disk(root: pathlib.Path, relative: str):
+    """源目录里的 `*.swift`（**点目录不算**）。
+
+    返回 `(名字, 被跳过的点目录, 点目录里的 .swift 名字)`；源目录不存在 ⇒ `None`（调用方判红）。
+    """
     base = root / relative
     if not base.is_dir():
-        return None
-    out = []
+        return None, [], []
+    out, dot_dirs, dot_swift = [], [], []
     stack = [base]
     while stack:
         current = stack.pop()
         try:
             entries = list(os.scandir(str(current)))
         except OSError:
-            return None
+            return None, [], []
         for entry in entries:
+            if entry.name.startswith("."):
+                # `.build` / `.build-cache` / `.swiftpm` / `.secrets`：`platform/<平台>/` 自洽包
+                # 布局下包根就是源目录，包自己的 `.build/` 会落在源目录之内（实测见文件头）。
+                if entry.is_dir(follow_symlinks=True):
+                    dot_dirs.append(pathlib.Path(entry.path).relative_to(base).as_posix())
+                    dot_swift.extend(swift_names_in(pathlib.Path(entry.path)))
+                continue
             if entry.is_dir(follow_symlinks=True):
                 stack.append(pathlib.Path(entry.path))
             elif entry.name.endswith(".swift"):
                 out.append(entry.name)
-    return sorted(out)
+    return sorted(out), sorted(dot_dirs), sorted(dot_swift)
 
 
 # --------------------------------------------------------------------------------------
@@ -574,16 +616,31 @@ def check_structure(root: pathlib.Path, ledger: dict, targets, pbx, report: Repo
         # C3 源文件集合（双向）
         pbx_swift = pbx_target_swift_names(pbx, ident)
         disk_swift = []
+        dot_dirs, dot_swift = [], []
         for source_dir in target["source_dirs"]:
-            found = swift_names_on_disk(root, source_dir)
+            found, dirs, names = swift_names_on_disk(root, source_dir)
             if found is None:
                 report.bad("C3 目标 `%s` 的源目录不存在：`%s`" % (name, source_dir))
                 continue
             disk_swift.extend(found)
+            dot_dirs.extend("%s/%s" % (source_dir, item) for item in dirs)
+            dot_swift.extend(names)
+        if dot_dirs:
+            # 跳过不许静默：跳了哪几处、为什么跳，每次实跑都打出来。
+            report.note("C3 目标 `%s`：源目录里的**点目录不算源码**（构建残留），已跳过 %d 处：%s"
+                        % (name, len(dot_dirs), brief(dot_dirs)))
         if len(disk_swift) < FLOOR_SWIFT_PER_TARGET:
             report.bad("C3 目标 `%s` 的源目录里一个 `.swift` 都没找到（空跑防护）" % name)
         missing_in_pbx = sorted(set(disk_swift) - set(pbx_swift))
-        missing_on_disk = sorted(set(pbx_swift) - set(disk_swift))
+        leaked = sorted(set(pbx_swift) & set(dot_swift))
+        if leaked:
+            # 反向那一半：生成物**不许**引用点目录下的 `.swift` —— 那种「绿」是最坏的
+            # （垃圾被收进生成物，同时把「磁盘上有、生成物里没有」这一条判红条件抵消掉）。
+            report.bad("C3 目标 `%s`：生成物引用了源目录**点目录**下的 `.swift`：%s（%s）"
+                       "—— `xcodegen generate` 把构建残留收进了工程；删掉残留重生成"
+                       "（`project.yml` 的 `excludes` 是堵它的第一道，本条是第二道）"
+                       % (name, brief(leaked), "、".join(dot_dirs)))
+        missing_on_disk = sorted(set(pbx_swift) - set(disk_swift) - set(leaked))
         if missing_in_pbx:
             report.bad("C3 目标 `%s`：磁盘上有、生成物里没有的 `.swift`：%s（工程过期）"
                        % (name, brief(missing_in_pbx)))
@@ -597,10 +654,11 @@ def check_structure(root: pathlib.Path, ledger: dict, targets, pbx, report: Repo
         report.bad("C3 前提失效：不同目标目录里出现同名 `.swift`（%s）⇒ 文件名口径不再精确，"
                    "请改用路径口径后重跑" % "、".join("%s（%s）" % (k, "/".join(v)) for k, v in sorted(duplicated.items())))
 
-    # 范围外显式打印
+    # 范围外显式打印（`xcodegen` 按这些条目**不收**进工程；点目录的构建残留就是靠它挡在门外）
     for name, target in sorted(targets.items()):
         if target["excludes"]:
-            report.note("范围外（`%s` 的 excludes，均非 `.swift`）：%s" % (name, "、".join(target["excludes"])))
+            report.note("生成器排除项（`%s` 的 excludes，`xcodegen` 不收进工程）：%s"
+                        % (name, "、".join(target["excludes"])))
 
     generator = ledger.get("generator") or {}
     report.note("生成物登记：`%s %s`（命令 `%s`；postGen `%s`）——**版本不判红**（工具链漂移不该判红无关轮次），过期由 C1/C2/C3 判"
@@ -831,6 +889,26 @@ def build_fixture(scratch: pathlib.Path, real_root: pathlib.Path) -> pathlib.Pat
     return fixture
 
 
+def add_dot_residue(fixture: pathlib.Path, real_root: pathlib.Path) -> None:
+    """把夹具里的 `Platform` 换成**只含 `macOS/` 的真副本**，再往里造一个**点目录**残留。
+
+    为什么要这一份夹具：`platform/<平台>/` 是**自洽包**布局（`origin/migrate/platform-macos` 的树里
+    `platform/macos/Package.swift` + `platform/macos/TestsUISnapshot/**` 都在）⇒ **包根就是目标源目录**，
+    包自己那份 `.build/` 落在源目录之内；切回 master 只剩这份被 git 忽略的残留。
+    """
+    link = fixture / "Platform"
+    if link.is_symlink():
+        link.unlink()
+    elif link.exists():
+        shutil.rmtree(str(link))
+    shutil.copytree(str(real_root / "Platform" / "macOS"),
+                    str(link / "macOS"),
+                    ignore=shutil.ignore_patterns(".build", ".build-cache"))
+    junk = link / "macOS" / ".build" / "ui-snapshot-scratch"
+    junk.mkdir(parents=True, exist_ok=True)
+    (junk / "probe-b.swift").write_text("// 构建残留：不是源码\n", encoding="utf-8")
+
+
 def edit(path: pathlib.Path, old: str, new: str) -> None:
     text = path.read_text(encoding="utf-8")
     if old not in text:
@@ -876,11 +954,19 @@ def run_self_test() -> int:
             for relative in FIXTURE_FILES + ["Scripts/release-version.json"]
         }
 
-        # 例 1：干净夹具 ⇒ 通过
+        # 例 1：干净夹具 + 源目录里的**点目录**残留 ⇒ 通过（点目录不算源码）；
+        #       同一夹具再放一个点目录**之外**的 `.swift` ⇒ 判红（对照：跳过没有把判据掏空）
         fixture = build_fixture(scratch, real_root)
-        report = check(fixture)
-        record("例 1 干净夹具 ⇒ rc 0（%d 个比对点）" % report.sites, not report.problems,
-               "；".join(report.problems[:2]))
+        add_dot_residue(fixture, real_root)
+        with_residue = check(fixture)
+        (fixture / "Platform" / "macOS" / "loose-stray.swift").write_text(
+            "// 点目录之外的乱入源码（夹具用）\n", encoding="utf-8")
+        with_stray = check(fixture).problems
+        record("例 1 干净夹具（含源目录里的点目录残留）⇒ rc 0（%d 个比对点）；"
+               "多一个点目录之外的 `.swift` ⇒ 判红" % with_residue.sites,
+               not with_residue.problems and any("loose-stray.swift" in p for p in with_stray),
+               "；".join(with_residue.problems[:2])
+               or "没点名乱入的那个文件：" + "；".join(with_stray[:2]))
 
         # 例 2：只改 project.yml 一处 ⇒ 判红并点名
         fixture = build_fixture(scratch, real_root)
