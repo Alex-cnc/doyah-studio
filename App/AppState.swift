@@ -269,7 +269,10 @@ final class AppState: ObservableObject {
             setIfChanged(\.canCreateDatabase, nil)
         }
     }
-    /// 本次运行的查询历史。按 DR-02 只放在内存里，退出应用即清空。
+    /// 查询历史（`DR-02` 持久化：**本机数据库 / 本地 only / 上限 500 条或 90 天 · 可清空 + 单条删**）。
+    ///
+    /// 内存这一份是门面 `QueryHistoryStore` 的**回读镜像**：写入 / 清空 / 启动加载都走它，
+    /// 上限也在它那一处裁 —— 这里不再自己 `removeLast`（两处各裁一次就会各说各话）。
     @Published var queryHistory: [QueryHistory] = []
 
     /// 当前登录用户能否创建数据库（FR-META-11）。
@@ -960,6 +963,11 @@ final class AppState: ObservableObject {
 
     /// 写入串行化：两次执行几乎同时结束时不至于互相覆盖。
     private let sqlArchiveWriter = SQLArchiveWriter()
+
+    /// 查询历史的落盘门面（`DR-02` 持久化 · 队列 `HIST-1`）—— **写入 / 清空 / 单条删 /
+    /// 启动加载的唯一入口**。内存里的 `queryHistory` 只是它的回读镜像；
+    /// 「500 条 / 90 天」的上限在门面 `QueryHistoryStore.prune` 那一处裁（这里不自己截断）。
+    private let queryHistoryStore = QueryHistoryStore.defaultStore()
     /// App 侧调度 tick（Core 的 `TaskScheduler` 不启定时器、只做纯时间计算）。
     private var dataTaskTicker: Task<Void, Never>?
     /// 已提交审批、等待人工决定的任务执行（审批单 id → 待办）。
@@ -1300,8 +1308,9 @@ final class AppState: ObservableObject {
     /// 「上次选中的连接」持久化键（FR-CONN-11）。
     private static let selectedConnectionDefaultsKey = "settings.selectedConnectionID"
 
-    /// 历史条数上限，避免长时间运行后无限增长。
-    private static let historyLimit = 50
+    /// 历史条数的上限**不在这一层记**：唯一出处是门面 `QueryHistoryStore.maxEntries`（500），
+    /// `DR-02` 的「500 条或 90 天（先到者为准）」在门面那一处裁（`QueryHistoryStore.prune`）。
+    /// 换上限只改门面一个数，界面这一侧自动跟上。
 
     /// 启动链的句柄（连接 / 保存的查询 / 浏览器页签 / **笔记列表**）。
     ///
@@ -1337,6 +1346,8 @@ final class AppState: ObservableObject {
             // 笔记列表在启动时就载入：它现在是活动栏上的一栏，切过去必须**立刻有内容**，
             // 不能再依赖"先点一下菜单项"来触发加载。
             await reloadNotes()
+            // 查询历史（`DR-02` 持久化）：启动就回读 —— 重启后历史仍在，不等「先执行一条 SQL」。
+            await loadQueryHistory()
         }
     }
 
@@ -1444,10 +1455,29 @@ final class AppState: ObservableObject {
         )
     }
 
-    // MARK: - 查询历史（内存态）
+    // MARK: - 查询历史（`DR-02` 持久化 · 门面 `QueryHistoryStore`）
 
+    /// 清空历史（工具条时钟菜单里那一项）。
+    ///
+    /// **签名保持同步**：调用点在 `App/Views/QueryToolbar.swift`，而本片的文件面**不许碰**
+    /// `App/Views/**`（页签 UI 归 `HIST-2`）⇒ 落盘的 `await` 放进 `Task`，内存那一份当场清空
+    /// （用户看到的就是「立刻没了」——不该为了清一次历史去等一次磁盘往返）。
     func clearQueryHistory() {
         queryHistory.removeAll()
+        let store = queryHistoryStore
+        Task { try? await store.clear() }
+    }
+
+    /// 启动加载查询历史（`DR-02`：**重启后仍在**）。
+    ///
+    /// 与 `reloadNotes()` 放在同一条启动链上：历史要能在用户切到「历史」页 / 打开时钟菜单时
+    /// **已经有内容**，而不是等「先执行一条 SQL」把列表喂出来。读不出来不拦启动：如实说明，列表留空。
+    func loadQueryHistory() async {
+        do {
+            queryHistory = try await queryHistoryStore.load()
+        } catch {
+            statusMessage = ErrorPresenter.message(for: error)
+        }
     }
 
     /// 把历史 SQL 载入指定页签。
@@ -1615,6 +1645,13 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// 记录一次执行（成功与失败两条路径都经过这里 —— **单一收口点**）。
+    ///
+    /// `DR-02` 改判后这一段同时做两件事，但**分工不覆盖**：
+    ///   · **归档**（`SQLArchive`，磁盘上的 `*.sql`）= 用户主动收藏、长期保留；
+    ///   · **历史**（`QueryHistoryStore` → 库表 `query_history`）= 会话历史、有上限、可清空。
+    ///
+    /// 落盘失败**不改变执行结果** —— 历史写不进去只该说一声，不该让一次已经跑完的查询看起来失败了。
     private func recordHistory(
         sql: String,
         connectionID: UUID,
@@ -1622,9 +1659,7 @@ final class AppState: ObservableObject {
         succeeded: Bool,
         affectedRows: Int? = nil,
         note: String? = nil
-    ) {
-        // 归档放在这个**单一收口点**：成功与失败两条路径都会经过这里，
-        // 不必在别处再补一遍（补必漏）。
+    ) async {
         if let configuration = connections.first(where: { $0.id == connectionID }) {
             archiveExecutedSQL(
                 sql: sql,
@@ -1637,26 +1672,28 @@ final class AppState: ObservableObject {
             )
         }
 
-        // 连续重复执行同一条 SQL 时只刷新最新一条，避免刷屏。
-        if let first = queryHistory.first,
-           first.sql == sql,
-           first.connectionID == connectionID {
-            queryHistory[0].executedAt = Date()
-            queryHistory[0].duration = duration
-            queryHistory[0].succeeded = succeeded
-            return
+        // 连续重复执行同一条 SQL 时只刷新最新一条，避免刷屏：**复用最新那一条的 id**，
+        // 门面按 id 覆盖写（不新插一行、也不在库里开第二条更新写路）。
+        let repeated = queryHistory.first.flatMap { first -> QueryHistory? in
+            first.sql == sql && first.connectionID == connectionID ? first : nil
         }
-
         let entry = QueryHistory(
+            id: repeated?.id ?? UUID(),
             connectionID: connectionID,
             sql: sql,
+            executedAt: Date(),
             duration: duration,
             succeeded: succeeded
         )
-        queryHistory.insert(entry, at: 0)
 
-        if queryHistory.count > Self.historyLimit {
-            queryHistory.removeLast(queryHistory.count - Self.historyLimit)
+        do {
+            // 上限（500 条 / 90 天）由门面在同一处裁；回来的是**裁剪后**的完整列表（倒序）。
+            queryHistory = try await queryHistoryStore.append(entry)
+        } catch {
+            // 落盘失败：内存镜像照旧如实更新（这次执行确实发生了），但**说出来**（不静默吞）。
+            queryHistory.removeAll { $0.id == entry.id }
+            queryHistory.insert(entry, at: 0)
+            statusMessage = ErrorPresenter.message(for: error)
         }
     }
 
@@ -5870,7 +5907,7 @@ final class AppState: ObservableObject {
             // （或驱动没把取消变成抛错），归档里就留下一条"成功执行"的假记录 ——
             // 归档是审计依据，假成功比失败更糟。
             let cancelled = Task.isCancelled
-            recordHistory(
+            await recordHistory(
                 sql: sql,
                 connectionID: configuration.id,
                 duration: Date().timeIntervalSince(executionStart),
@@ -5890,7 +5927,7 @@ final class AppState: ObservableObject {
                     $0.statusMessage = L(.stateExecutionFailed)
                 }
             }
-            recordHistory(
+            await recordHistory(
                 sql: sql,
                 connectionID: configuration.id,
                 duration: Date().timeIntervalSince(executionStart),
