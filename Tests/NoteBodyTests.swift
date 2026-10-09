@@ -300,6 +300,101 @@ final class NoteBodyTests: XCTestCase {
         XCTAssertEqual(hex, NoteHighlight.backgroundColorHex, "NoteHighlight 的两个形态必须是同一个色值")
     }
 
+    // MARK: 片 `WY-1b2`（编辑面块级三枚）：`NoteSpan.Block` 三档 + `checked` 落盘
+
+    /// **交换面字面量逐字同形**（片 `WY-1b2` · 契约 v1.30 §2.4 / §3.3）：
+    /// 三档块级写进交换面 / 备份 / 跨端传输的 `type` 必须是 `LIST_ORDERED` / `LIST_UNORDERED` /
+    /// `LIST_CHECKBOX`，勾选态字段名是 `checked` —— **各端不许自定义交换字段名**。
+    /// 这一条钉的是「Swift 内部名（ordered / bullet / task）不许直接进 JSON」。
+    func testBlockExchangeLiteralsMatchTheContract() {
+        XCTAssertEqual(NoteSpan.Block.ordered.exchangeType, "LIST_ORDERED")
+        XCTAssertEqual(NoteSpan.Block.bullet.exchangeType, "LIST_UNORDERED")
+        XCTAssertEqual(NoteSpan.Block.task(checked: false).exchangeType, "LIST_CHECKBOX")
+        XCTAssertEqual(NoteSpanType.listOrdered.rawValue, "LIST_ORDERED")
+        XCTAssertEqual(NoteSpanType.listUnordered.rawValue, "LIST_UNORDERED")
+        XCTAssertEqual(NoteSpanType.listCheckbox.rawValue, "LIST_CHECKBOX")
+
+        // 反向：从字面量还原（含 checked）。
+        XCTAssertEqual(NoteSpan.Block.from(exchangeType: "LIST_ORDERED", checked: false), .ordered)
+        XCTAssertEqual(NoteSpan.Block.from(exchangeType: "LIST_UNORDERED", checked: false), .bullet)
+        XCTAssertEqual(NoteSpan.Block.from(exchangeType: "LIST_CHECKBOX", checked: true), .task(checked: true))
+        XCTAssertNil(NoteSpan.Block.from(exchangeType: "PARAGRAPH", checked: false), "没定义的字面量不许猜成某一档")
+    }
+
+    /// **判据 1**：三类块（`task(checked:)` / `ordered` / `bullet`）**往反不丢** ——
+    /// `spans → JSON → spans` 等价；且写出来的 JSON **逐字**是契约那三档（不是 Swift 内部名）。
+    func testBlockSpansRoundTripThroughJSON() throws {
+        let spans = [
+            NoteSpan(text: "第一条", block: .ordered),
+            NoteSpan(text: "圆点", block: .bullet),
+            NoteSpan(text: "带勾", block: .task(checked: true)),
+            NoteSpan(text: "普通段落")
+        ]
+        let body = NoteBody(spans: spans)
+        let data = try JSONEncoder().encode(body)
+        let json = String(decoding: data, as: UTF8.self)
+        for literal in ["LIST_ORDERED", "LIST_UNORDERED", "LIST_CHECKBOX"] {
+            XCTAssertTrue(json.contains("\"\(literal)\""), "交换面里没有契约字面量 \(literal)：\(json)")
+        }
+        // Swift 内部名**不许**出现在 JSON 里（两套命名 = 跨端分家）。
+        for forbidden in ["\"ordered\"", "\"bullet\"", "\"task\""] {
+            XCTAssertFalse(json.contains(forbidden), "交换面里出现了 Swift 内部名 \(forbidden)：\(json)")
+        }
+
+        let back = try JSONDecoder().decode(NoteBody.self, from: data)
+        XCTAssertEqual(back.spans, spans, "三类块往反不许丢")
+    }
+
+    /// **判据 1 的尾句**：`checked` 变化**可落盘**（重开读回同值）—— 勾选框的勾选状态。
+    /// 本片只到「`NoteBody` JSON 往反」这一层（真落库 + 端到端归 `WY-2a`，组长裁决第 295 轮）。
+    func testCheckboxCheckedStateSurvivesReopen() throws {
+        func reencode(_ checked: Bool) throws -> NoteSpan {
+            let body = NoteBody(spans: [NoteSpan(text: "任务项", block: .task(checked: checked))])
+            let data = try JSONEncoder().encode(body)
+            let json = String(decoding: data, as: UTF8.self)
+            XCTAssertTrue(json.contains("\"checked\":\(checked)"), "勾选态没进交换面：\(json)")
+            return try JSONDecoder().decode(NoteBody.self, from: data).spans[0]
+        }
+        XCTAssertEqual(try reencode(true).block, .task(checked: true), "勾上之后重开读回同值")
+        XCTAssertEqual(try reencode(false).block, .task(checked: false), "取消勾选之后重开读回同值")
+    }
+
+    /// **块级不进 Markdown 投影**（契约不变量⑤：编号 / 层级由渲染层生成、不落库）——
+    /// 正文里**不许**冒出 `1.` / `- ` / 勾选框标记，文字照旧、不吞不改。
+    func testBlockSpansDoNotLeakMarkersIntoMarkdown() {
+        let body = NoteBody(spans: [
+            NoteSpan(text: "甲", block: .ordered),
+            NoteSpan(text: "乙", block: .bullet),
+            NoteSpan(text: "丙", block: .task(checked: false))
+        ])
+        XCTAssertEqual(body.markdown, "甲乙丙", "块级不产出标记，文字原样投影")
+        for marker in ["1.", "2.", "- ", "☐", "☑", "[]", "[x]"] {
+            XCTAssertFalse(body.markdown.contains(marker), "正文投影里出现了块级标记 \(marker)")
+        }
+    }
+
+    /// **未知 `type` 不丢弃**（契约 §2.4 不变量②：老版本读新数据仍要保住段落位置）——
+    /// 认不出的 `type` 原样留进 `unknownFields`，再写回时带出（与 `link` / `code` 那条前向兼容同口径）。
+    func testUnknownSpanTypeIsNotDropped() throws {
+        let json = #"{"version":2,"spans":[{"text":"图","type":"IMAGE","src":"a.png"}]}"#
+        let body = try JSONDecoder().decode(NoteBody.self, from: Data(json.utf8))
+        XCTAssertNil(body.spans[0].block, "IMAGE 不是那三档块级 ⇒ block 应当是 nil")
+        XCTAssertEqual(body.spans[0].unknownFields["type"], .string("IMAGE"), "未知 type 不许丢")
+        let again = try JSONDecoder().decode(NoteBody.self, from: try JSONEncoder().encode(body))
+        XCTAssertEqual(again.spans[0].unknownFields["type"], .string("IMAGE"), "未知 type 往反不许丢")
+        XCTAssertEqual(again.spans[0].unknownFields["src"], .string("a.png"))
+    }
+
+    /// **块级可带行内样式**（块与样式是两件事，互不吞）：一段既是勾选框又是粗体，往反后两样都在。
+    func testBlockAndInlineStyleCoexist() throws {
+        let span = NoteSpan(text: "粗任务", styles: [.bold], block: .task(checked: true))
+        let back = try JSONDecoder().decode(
+            NoteBody.self, from: try JSONEncoder().encode(NoteBody(spans: [span]))
+        )
+        XCTAssertEqual(back.spans[0].block, .task(checked: true))
+        XCTAssertEqual(back.spans[0].styles, [.bold])
+    }
+
     /// 把 `0xRRGGBB` 拆成三通道（Core 测试里没有 AppKit，自己拆一遍，口径与 `NoteHighlight.rgb` 对齐）。
     private static func channels(ofHex hex: UInt32) -> (red: Int, green: Int, blue: Int) {
         (red: Int((hex >> 16) & 0xFF), green: Int((hex >> 8) & 0xFF), blue: Int(hex & 0xFF))
