@@ -358,8 +358,15 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   另有一档**无落脚点**（旧快照 / Home 选中）⇒ 光标与滚动都不许被动过。**不落快照**（判几何不判像素）。
 #   口径（写这条时踩过）：插入点必须取**可见范围内**的行再量 —— 非连续布局下文档中部的 `firstRect`
 #   返回零矩形（离屏量不到）；量不到那一档**交矩阵不交结论**（用例只打印矩阵、不把几何判绿）。
+# + `AccountSyncSheetProbeTests`（片 `云F` · 任务 t_b51cd0ff：账号与同步界面的**离屏快照** ——
+#   卡判据 ④ 要的三张读数（注册页 / 登录页 / 开关处）：把**真视图树**（`App/Views/AccountSyncSheet.swift`）
+#   离屏渲染成 PNG（中英各一遍），断言 `S4` 那句「当前不是端到端加密 —— 内容在云端可读」真的到了
+#   渲染文本上、注册页那一遍真的是注册页；注入假传输 + 内存令牌存储（不碰真网络 / 真钥匙串），
+#   产物落 `DOYAH_SNAPSHOT_DIR`（不写全量跑凭证 ⇒ 不扰动「快照张数」那条计数）。
+#   它落地当轮**漏了接 FILTER**（写下用例却没入口 = 一个都跑不到），由 `check-result-scroll-ledger.py` ⑤
+#   抓出后补上 —— 与 `TodoCalendarEntriesProbeTests` / `FormatMenuWiringProbeTests` 那几处同一个坏法。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
