@@ -6930,9 +6930,13 @@ final class AppState: ObservableObject {
     }
 
     /// span 树 → 落库那份 JSON（`NoteBody` 的编解码面 = 交换面，**不另起一套序列化**）。
+    ///
+    /// **canonical（片 `云-编码canonical`）**：编码配置由 `NoteBodyCanonical.encoder()` **一处**给出
+    /// （键按字典序 / 紧凑 / `/` 不转义）—— 修掉 `云E` 实测的「跨进程字节不稳」（默认 `JSONEncoder()`
+    /// 的键序不保序：同一份正文两次运行给出不同字节）。**为什么不在这一行就地 `JSONEncoder()`**：
+    /// 那样写入口、单测、探针就是三份配置，同一件事三套口径 —— 与「不另起一套序列化」相反。
     private static func encodedSpans(_ spans: [NoteSpan]) throws -> String {
-        let data = try JSONEncoder().encode(NoteBody(spans: spans))
-        return String(decoding: data, as: UTF8.self)
+        try NoteBodyCanonical.json(NoteBody(spans: spans))
     }
 
     /// 落库那份 JSON → span 树（读不回来 ⇒ `nil`：不猜、也不静默当成空树）。

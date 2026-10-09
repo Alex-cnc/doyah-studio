@@ -171,6 +171,43 @@ extension NoteBody {
     }
 }
 
+/// **canonical JSON（确定性序列化）** —— 正文落库 / 交换面的**唯一**序列化配置。
+///
+/// 片 `云-编码canonical`（前置 `云D` `t_806b2f9f`；依据前门裁 `T-20261009-134` §二「序列化确定性」·
+/// 读数出处 `云E` `t_571c7e65` · `cloud-sync/格式自证-macOS.md` §三.5 / §四）。三条口径：
+///   · **B1 键序**：JSON 对象键按**字典序升序**（Swift `JSONEncoder.OutputFormatting.sortedKeys`）；
+///   · **B2 空白**：**紧凑**输出（不加 `.prettyPrinted` —— 这一份是机器比对 / 附件 `sha256` 的载体，
+///     不是给人读的）；与同族两处**逐条同源**：元数据面 `NoteStore.save`（`Core/Note.swift`）与
+///     云端行面 `CloudSyncService.encoder()`（`Core/NoteSync/CloudSyncService.swift`）都带这两条 flag；
+///   · **B5 `/`**：**不转义**（`.withoutEscapingSlashes`）—— 同上两处也是不转义。
+///
+/// 为什么必须定住：`云E` 实测**默认 `JSONEncoder()` 的键序跨进程不保序** —— 同一份正文两次运行
+/// 给出**不同字节**（RUN A ≠ RUN B，同进程非首次编码亦未必相同）；而跨端互验与附件 `sha256` /
+/// 冲突判定都以「同一输入 ⇒ 同一字节」为前提（裁定第 2 条原文）。
+///
+/// **两处刻意不在这里定（不是漏定）**：
+///   · **B4 时间**：`NoteBody` 面**没有 `Date` 字段**（`version` 是 `Int`，`spans` 全是字符串 /
+///     整数 / 布尔）⇒ 这一份不需要日期策略。时间只出现在**元数据面**（`NoteStore.save` 的
+///     `.iso8601`）与**同步行面**（`CloudSyncService.encoder()` 的 UTC ISO8601），各在那一处定；
+///   · **B6 字段名**：由各自的 `CodingKeys` 负责（本面是 `version` / `spans`，本片**未改**）。
+///
+/// 定义落在**编解码面自己身上**（而不是某一个调用点）：本文件头部那条「`NoteBody` 的编解码面 =
+/// 交换面，**不另起一套序列化**」—— 写入口（`AppState.encodedSpans`）、单测、探针取的都该是**这一条**，
+/// 免得三处各定一套（同一件事有两套口径，跨端一读就分家）。
+public enum NoteBodyCanonical {
+    /// canonical 编码器：键按字典序、紧凑、`/` 不转义。
+    public static func encoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return encoder
+    }
+
+    /// 正文权威源的 **canonical JSON 文本** —— 落库 `note.spans` 列 / 上行 `content` 用的就是这一条。
+    public static func json(_ body: NoteBody) throws -> String {
+        String(decoding: try encoder().encode(body), as: UTF8.self)
+    }
+}
+
 /// 交换面上 span 的 **`type` 字段取值**（片 `WY-1b2` · 契约 v1.30 §2.4 / §3.3）。
 ///
 /// **这是契约字面量的唯一出处**：三档块级类型写进交换面 / 备份 / 跨端传输时**必须**逐字是
