@@ -102,13 +102,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case accountUndecidedTitle
     case accountUndecidedMessage
 
-    // 账号与同步界面（片 `云F` · 契约 SRS §6.4「账号与同步界面（最小集）」）
+    // 账号与同步界面（片 `云F` · 契约 SRS §6.4「账号与同步界面（最小集）」）。
     //
     // 一屏六项：注册页 / 登录页 / 同步开关（`S4` 原文）/ 登出 / 多端会话 / 找回入口位。
     // 三条口径决定这些键怎么切（为什么见 `App/Auth/AccountFlowModel.swift` 的文件注释）：
     //   · **登录失败只有一句话**（`FR-AUTH-02`）—— 用户名不存在与口令错不可区分；
     //   · **同步开关默认关**（契约 §10.4 `S3`）—— 开关旁常显 `S4` 那句告知；
-    //   · **没核验就不建账号**（`FR-AUTH-01`）—— 字段校验与「缺核验通道」两条都停在「不建账号」。
+    //   · **没核验就不建账号**（`FR-AUTH-01`）—— 注册 = 官方 `signUp` 面（SRS v3.91 §6.4.2
+    //     `IR-18` ① ② ③：**发码 ⇒ 校验 ⇒ 注册**），三步没走完不建半个账号。
     case menuAccountSync
     case accountSyncTitle
     case accountTabSignIn
@@ -117,11 +118,33 @@ public enum LKey: String, CaseIterable, Sendable {
     case accountUsernamePlaceholder
     case accountPasswordLabel
     case accountConfirmPasswordLabel
+    /// 注册通道的**手机号**栏（`IR-18` ① ③ 的 `phone_number`；区号前缀由 Core 一处补）。
+    case accountPhoneLabel
+    /// **发送验证码**（`IR-18` ①）。
+    case accountSendCodeAction
+    /// **验证码**栏（`IR-18` ② 的 `verification_code`）。
+    case accountCodeLabel
+    /// 验证码已发出的回执（用户看不到 `verification_id`，只该看到「发出去了」这句）。
+    case accountCodeSent
     case accountSignInAction
     case accountSignUpAction
     case accountSignInFailed
     case accountSignInIncomplete
-    case accountSignUpUnavailable
+    /// 字段都填了但还没发码 ⇒ 先发码（这一句对应 `RegistrationOutcome.verificationNotStarted`）。
+    case accountSignUpNeedsCode
+    /// 注册失败档 ①：手机号或验证码没过（官方 `invalid_phone_number` / `invalid_verification_code`）。
+    case accountSignUpFailedVerification
+    /// 注册失败档 ②：发得太频繁（官方 `rate_limit_exceeded`）。
+    case accountSignUpFailedTooOften
+    /// 注册失败档 ③：用户名已被占用（官方 `username_already_exists`）。
+    case accountSignUpFailedUsernameTaken
+    /// 注册失败档 ④：口令不合规 —— 服务端判的强度不足（官方 `weak_password`）。
+    /// **复杂度规则在服务端**：客户端只判长度（`AccountFlowModel.passwordMinimumLength`）。
+    case accountSignUpFailedWeakPassword
+    /// 注册失败档 ⑤：没走到判定（出网失败 / 服务端说了句不认识的话）。
+    case accountSignUpFailedIncomplete
+    case accountFieldPhoneEmpty
+    case accountFieldCodeEmpty
     case accountFieldUsernameEmpty
     case accountFieldUsernameTooShort
     case accountFieldUsernameInvalid
@@ -2461,11 +2484,22 @@ public enum LocalizedStrings {
         .accountUsernamePlaceholder: [.simplifiedChinese: "登录用的用户名", .english: "Your sign-in username"],
         .accountPasswordLabel: [.simplifiedChinese: "口令", .english: "Password"],
         .accountConfirmPasswordLabel: [.simplifiedChinese: "确认口令", .english: "Confirm password"],
+        .accountPhoneLabel: [.simplifiedChinese: "手机号", .english: "Phone number"],
+        .accountSendCodeAction: [.simplifiedChinese: "发送验证码", .english: "Send code"],
+        .accountCodeLabel: [.simplifiedChinese: "验证码", .english: "Verification code"],
+        .accountCodeSent: [.simplifiedChinese: "验证码已发出，请查收短信。", .english: "Code sent — check your text messages."],
         .accountSignInAction: [.simplifiedChinese: "登录", .english: "Sign in"],
         .accountSignUpAction: [.simplifiedChinese: "注册", .english: "Create account"],
         .accountSignInFailed: [.simplifiedChinese: "用户名或口令不对。", .english: "Wrong username or password."],
         .accountSignInIncomplete: [.simplifiedChinese: "登录没能完成：网络或服务暂时不可用，请稍后重试。", .english: "Sign-in didn't complete — the network or service is unavailable, so try again shortly."],
-        .accountSignUpUnavailable: [.simplifiedChinese: "注册暂未开放：服务端建账号的接口还没接进来，在核验通道就位之前不会建立任何账号。字段校验照常生效。", .english: "Sign-up isn't open yet: the server's account-creation endpoint isn't wired in, and no account is created before a verification channel exists. Field checks still apply."],
+        .accountSignUpNeedsCode: [.simplifiedChinese: "先点「发送验证码」，再用收到的验证码注册。", .english: "Send a code first, then register with the code you receive."],
+        .accountSignUpFailedVerification: [.simplifiedChinese: "手机号或验证码不对，请检查后重试。", .english: "The phone number or the code is wrong — check both and try again."],
+        .accountSignUpFailedTooOften: [.simplifiedChinese: "发送太频繁，请稍后再试。", .english: "Sending too often — try again in a moment."],
+        .accountSignUpFailedUsernameTaken: [.simplifiedChinese: "这个用户名已经被占用，换一个再试。", .english: "That username is taken — pick another one."],
+        .accountSignUpFailedWeakPassword: [.simplifiedChinese: "服务端不接受这个口令（强度不足）：请用长一些、且混有大小写字母、数字或符号的口令。", .english: "The server rejected this password as too weak — use a longer one mixing upper and lower case, digits or symbols."],
+        .accountSignUpFailedIncomplete: [.simplifiedChinese: "注册没能完成：网络或服务暂时不可用，请稍后重试。", .english: "Sign-up didn't complete — the network or service is unavailable, so try again shortly."],
+        .accountFieldPhoneEmpty: [.simplifiedChinese: "请先填手机号。", .english: "Enter a phone number first."],
+        .accountFieldCodeEmpty: [.simplifiedChinese: "请填验证码（点「发送验证码」后收到的短信里那几位）。", .english: "Enter the code from the text message (send one first)."],
         .accountFieldUsernameEmpty: [.simplifiedChinese: "请先填用户名。", .english: "Enter a username first."],
         .accountFieldUsernameTooShort: [.simplifiedChinese: "用户名至少 3 个字符。", .english: "A username needs at least 3 characters."],
         .accountFieldUsernameInvalid: [.simplifiedChinese: "用户名只能用英文字母、数字、下划线或短横线，最长 32 个字符。", .english: "A username uses letters, digits, underscore or hyphen, at most 32 characters."],
