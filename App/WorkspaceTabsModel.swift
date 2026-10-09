@@ -48,8 +48,15 @@ final class WorkspaceTabsModel: ObservableObject {
 
     private let store: WorkspaceHistoryStore
 
-    init(store: WorkspaceHistoryStore = .standard()) {
+    /// 会话快照的落盘（`FR-EDIT-43`）。与「最近打开」**分开两份文件**：一份是历史，一份是现场。
+    private let sessionStore: WorkspaceSessionStore
+
+    init(
+        store: WorkspaceHistoryStore = .standard(),
+        sessionStore: WorkspaceSessionStore = .standard()
+    ) {
         self.store = store
+        self.sessionStore = sessionStore
         var loaded = WorkspaceHistory()
         var problem: String?
         do {
@@ -220,6 +227,87 @@ final class WorkspaceTabsModel: ObservableObject {
     func saveSelected() {
         guard let id = selectedID else { return }
         save(id)
+    }
+
+    // MARK: 会话恢复（FR-EDIT-43 · 队列 L-116 · Q60 取 B 的第一片 = **页签集**）
+    //
+    // 本片只做页签集（+ 上次工作区）；**光标与滚动位置是紧接的下一片**（同一个文件，避免两卡并行改）。
+    // 快照的编解码 / 版本兼容 / 「文件找不到了」「脏缓冲」两套语义都在 `Core/WorkspaceSession.swift`
+    // （纯逻辑、可单测）；这里只负责**什么时候写、写什么、恢复完怎么说**。
+
+    /// 上次会话的工作区根目录（快照里那一栏）。
+    ///
+    /// 本片只**记录并带回来**：重新取用授权、读回书签仍是 `WorkspaceStore` 的既有职责
+    /// （它有自己的 `workspace-bookmark.json`），这里不重造那条路。
+    @Published private(set) var restoredWorkspacePath: String?
+
+    /// 恢复结果的**真实读数**（找不到的文件 / 未保存的改动各自的名单）。`nil` = 本次没恢复过。
+    @Published private(set) var sessionRestore: WorkspaceSessionRestore?
+
+    /// **退出时落快照**：把当前页签集 + 上次工作区写进 `workspace-session.json`。
+    ///
+    /// 返回成没成（与 `save(_:)` 同一形状）；失败**不静默** —— 说清「下次启动会回到更早的页签集」。
+    ///
+    /// 为什么是**退出时写一次**、而不是像浏览器页签那样「每次变化都落盘」：工作区页签**带内容**，
+    /// 跟着按键写文件在编辑器里就是每敲一个字写一次盘（一页几百 KB）。
+    @discardableResult
+    func saveSession() -> Bool {
+        let snapshot = WorkspaceSessionSnapshot.capture(
+            tabs: tabs,
+            selectedID: selectedID,
+            // 「上次工作区」= 最近打开的那个工作区目录（`history` 本来就记着它，
+            // 见 `record(workspace:)`）—— 不另开一路状态，免得两处说法迟早不一致。
+            workspacePath: history.workspaces.first?.path
+        )
+        do {
+            try sessionStore.save(snapshot)
+            return true
+        } catch {
+            errorText = L(.workspaceSessionSaveFailed, error.localizedDescription)
+            return false
+        }
+    }
+
+    /// **启动时恢复**：回到上次的页签集（+ 上次工作区）。
+    ///
+    /// 没有快照 = 第一次启动，保持默认（一个 Home 页）；三句话都必须说出来（不静默）：
+    /// 快照读不动 / 有页签的源文件找不到了 / 有未保存改动回来了。
+    func restoreSession() {
+        let snapshot: WorkspaceSessionSnapshot?
+        do {
+            snapshot = try sessionStore.load()
+        } catch {
+            errorText = L(.workspaceSessionLoadFailed, error.localizedDescription)
+            return
+        }
+        guard let snapshot else { return }
+
+        let restored = WorkspaceSessionSnapshot.restore(from: snapshot)
+        guard !restored.tabs.isEmpty else { return }
+
+        var restoredTabs = restored.tabs
+        // **落脚点不许丢**（Home 关不掉，见 `WorkspaceTabSet.closing`）：快照里没有 Home
+        // （手改过的文件 / 更早的写法）就补一个 —— 缺了它，工作区就没有默认页了。
+        // 标题在这里补是因为 Core 不认识语言表（`L(_:)` 在 App 侧）。
+        if !restoredTabs.contains(where: { $0.isHome }) {
+            restoredTabs.insert(.home(title: L(.workspaceTabHome)), at: 0)
+        }
+
+        tabs = restoredTabs
+        selectedID = restored.selectedTabID ?? restoredTabs.first?.id
+        restoredWorkspacePath = restored.workspacePath
+        sessionRestore = restored
+
+        // 名单包成字符串字面量：语言表那侧只有一个 `%@` 槽，这里给的就是一个字符串
+        // （`Core/WorkspaceSession.swift` 里 `missingPaths` / `unsavedPaths` 已经是路径数组）。
+        if !restored.missingPaths.isEmpty {
+            let names = restored.missingPaths.joined(separator: "、")
+            errorText = L(.workspaceSessionMissingFiles, "\(names)")
+        }
+        if !restored.unsavedPaths.isEmpty {
+            let names = restored.unsavedPaths.joined(separator: "、")
+            noticeText = L(.workspaceSessionUnsavedRestored, "\(names)")
+        }
     }
 
     // MARK: 跳到命中行（FR-EDIT-44 标头搜索框）
