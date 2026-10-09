@@ -732,7 +732,8 @@ public struct NoteLibraryCloudSource: CloudNoteSource {
 
     public func cloudRow(uid: String) async throws -> CloudNoteRow? {
         guard let id = UUID(uuidString: uid) else { return nil }
-        let notes = try await library.load()
+        // **含墓碑**：删除那一条路要还能读到它（否则队列就地销账、云端永远不知道）。
+        let notes = try await library.loadIncludingDeleted()
         guard let note = notes.first(where: { $0.id == id }) else { return nil }
         let spans = ((try? await library.noteSpans(id: id)) ?? nil)
         let placement = ((try? await library.placements()) ?? []).first { $0.noteID == uid }
@@ -749,7 +750,9 @@ public struct NoteLibraryCloudSource: CloudNoteSource {
             // 走的是毫秒 3 位 —— 不归一的话，「同一次写入」在本地与云端会是两个不等的瞬时
             // （同一 `rev` 的幂等重放会被判成冲突）。
             updatedAt: CloudSyncCoding.normalizedToMilliseconds(note.updatedAt),
-            deletedAt: nil,
+            // 本地墓碑时刻（`nil` = 活的）。墓碑上行时 `flush` 会把它刷成"此刻"，但**本地事实**
+            // 由这一处读出来 —— 判据要能在同一轮里看到"本地确实落了墓碑"。
+            deletedAt: (try? await library.deletedAt(id: id)) ?? nil,
             deviceId: nil
         )
     }

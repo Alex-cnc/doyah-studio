@@ -311,7 +311,7 @@ final class ReminderStorageTests: XCTestCase {
         try database.upsert(doomed)
         try database.upsert(survivor)
 
-        try database.delete(id: note.id)
+        try database.delete(id: note.id, at: Date(timeIntervalSince1970: 0))
 
         XCTAssertNil(try database.reminder(id: doomed.id))
         XCTAssertEqual(try database.reminders(of: .note(kept.id)).map(\.id), [survivor.id])

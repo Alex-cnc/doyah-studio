@@ -432,6 +432,25 @@ public enum NoteSchemaV9 {
     ]
 }
 
+/// 笔记库的 schema **v10** —— 删一条笔记 = **落墓碑**（契约 §6.4.1 / `IR-17`：`deleted_at`，**不物理删**）。
+///
+/// 为什么补这一列（2026-10-09 人类主人真机点验缺陷 `T-20261009-161/162/163`）：改前本地删笔记走的是
+/// 物理 `DELETE`，而行没了之后**没有任何东西可以上行** ⇒ 云端与另一端的副本只知道"本地少了一行"，
+/// 不知道"这一行被删了"，于是按 LWW 把旧副本又拉回来（"删了又被拉回"）。墓碑把"删除"变成一次
+/// **可传播的内容变更**（`deleted_at` 非空 + `rev` +1），与契约同形。
+public enum NoteSchemaV10 {
+
+    public static let version: Int32 = 10
+
+    /// 这一版**不新增表 / 不新增索引**（只补一列）。
+    public static let tables: [String] = []
+    public static let indexes: [String] = []
+
+    public static let ddl: [String] = [
+        "ALTER TABLE note ADD COLUMN deleted_at REAL;"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -471,6 +490,10 @@ public enum NoteStorageFailure: Error, Equatable, CustomStringConvertible {
     case snapshotTargetExists(String)
     /// 快照写出来了，但读回来不对（行数或完整性检查不过）。
     case snapshotMismatch(String)
+    /// **删除没命中任何一行**（`changeCount == 0`）：库里没有这条 uuid，或它已经是墓碑。
+    /// 这一条存在的唯一理由就是**不许静默**（2026-10-09 人类主人真机点验缺陷 `T-20261009-162`：
+    /// 改前没命中的删除静默返回，用户看到的是"点了删除、什么都没发生"）。
+    case noteNotFound(String)
 
     public var description: String {
         switch self {
@@ -482,6 +505,8 @@ public enum NoteStorageFailure: Error, Equatable, CustomStringConvertible {
             return "snapshot target already exists: \(path)"
         case .snapshotMismatch(let reason):
             return "snapshot verification failed: \(reason)"
+        case .noteNotFound(let id):
+            return "no note to delete: \(id)"
         }
     }
 }
@@ -517,8 +542,8 @@ public final class NoteDatabase {
 
     /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏、v3 → v4 补置顶、
     /// v4 → v5 补待办任务清单、v5 → v6 补提醒、v6 → v7 补查询历史、v7 → v8 补正文 spans 列、
-    /// v8 → v9 补待办备注 `note` 列）。
-    public static let supportedVersion = NoteSchemaV9.version
+    /// v8 → v9 补待办备注 `note` 列、**v9 → v10 补笔记墓碑 `deleted_at` 列**）。
+    public static let supportedVersion = NoteSchemaV10.version
 
     private let connection: SQLiteConnection
 
@@ -565,7 +590,7 @@ public final class NoteDatabase {
         (try? connection.scalarInt("PRAGMA foreign_keys")).flatMap { $0 } == 1
     }
 
-    /// 按需建/升级到最新 schema（当前 v9）。**一个事务里做完**：DDL 与版本号一起生效，
+    /// 按需建/升级到最新 schema（当前 v10）。**一个事务里做完**：DDL 与版本号一起生效，
     /// 不会出现「表建了一半、版本已记 2」。
     ///
     /// 逐版升级（不是「按最新版直接建」）：存量库要真的走 v1 → v2 这两步，
@@ -613,6 +638,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV9.version {
                 for statement in NoteSchemaV9.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV9.version)")
+            }
+            if current < NoteSchemaV10.version {
+                for statement in NoteSchemaV10.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV10.version)")
             }
         }
     }
@@ -755,9 +784,49 @@ public final class NoteDatabase {
         }
     }
 
-    /// 删一条笔记（标签 / 时间线 / 附件索引靠外键级联一起走，`foreign_keys = ON` 是前提）。
-    public func delete(id: UUID) throws {
-        try connection.execute("DELETE FROM note WHERE uuid = ?", [.text(id.uuidString)])
+    /// **删一条笔记 = 落墓碑**（契约 §6.4.1 / `IR-17`：`deleted_at` 非空，**不物理删**）。
+    ///
+    /// 改前这里是 `DELETE FROM note WHERE uuid = ?` 且**不检查 `changeCount`** —— 一条没命中的
+    /// 删除（id 对不上 / 已经删过）**静默返回**，列表自然不变、用户以为"点了没反应"
+    /// （2026-10-09 人类主人真机点验缺陷 `T-20261009-161/162/163`；家族里这一族叫**静默面**）。
+    /// 现在：**返回值就是事实** —— `0` = 库里没有这一条（或它已经是墓碑），调用方必须如实报错，
+    /// 不许当成"删好了"。
+    ///
+    /// 三段一起在一个事务里做：
+    ///   ① `note` 行**置墓碑**（`deleted_at` + 刷 `updated_at`，行本身留着 —— 删除靠它跨端传播）；
+    ///   ② 正文索引（`note_fts` 是外部内容表）**把旧值喂给 FTS5** 删掉那一条 —— 墓碑行不该还能被搜到；
+    ///   ③ 从属行（标签 / 时间线 / 附件索引 / 提醒）**就地物理删** —— 它们是这条笔记的私有派生物，
+    ///      没有跨端身份，留着只会让"一个墓碑拖着四个活着的孩子"。
+    @discardableResult
+    public func tombstone(id: UUID, at: Date) throws -> Int {
+        try connection.transaction {
+            try connection.execute(
+                "UPDATE note SET deleted_at = ?, updated_at = ? WHERE uuid = ? AND deleted_at IS NULL",
+                [.real(at.timeIntervalSince1970), .real(at.timeIntervalSince1970), .text(id.uuidString)]
+            )
+            let changed = connection.changeCount
+            guard changed > 0 else { return changed }
+            let rowID = try requireRowID(of: id)
+            try connection.execute(
+                """
+                INSERT INTO note_fts (note_fts, rowid, title, body)
+                SELECT 'delete', id, title, body FROM note WHERE id = ?;
+                """,
+                [.integer(rowID)]
+            )
+            for table in ["note_tag", "note_timeline", "note_attachment", "reminder"] {
+                try connection.execute("DELETE FROM \(table) WHERE note_id = ?", [.integer(rowID)])
+            }
+            return changed
+        }
+    }
+
+    /// 删一条笔记（**墓碑入口**；`at` 由调用方给 —— Core 里不读时钟）。
+    ///
+    /// 名字保留 `delete` 是为了让调用点的语义读起来还是"删"；实现已经换成墓碑（见 `tombstone`）。
+    @discardableResult
+    public func delete(id: UUID, at: Date) throws -> Int {
+        try tombstone(id: id, at: at)
     }
 
     /// **收藏 / 取消收藏**（队列 `L-184` 第三片；`FR-NOTE-18`、契约 §2.1 `favorite`）。
@@ -834,16 +903,44 @@ public final class NoteDatabase {
     // MARK: - 读
 
     public func noteCount() throws -> Int {
-        Int(try connection.scalarInt("SELECT count(*) FROM note") ?? 0)
+        Int(try connection.scalarInt("SELECT count(*) FROM note WHERE deleted_at IS NULL") ?? 0)
     }
 
     /// 全部笔记（更新时间倒序、同时间按标题 —— **稳定有序**，界面不必自己再排一遍）。
+    ///
+    /// **墓碑行不在里面**（`deleted_at` 非空 = 这条已经不是"一条活着的笔记"）；要读它走
+    /// `noteIncludingDeleted(id:)`（同步面专用）。
     public func notes() throws -> [Note] {
         try notes(from: "SELECT * FROM note ORDER BY updated_at DESC, title ASC")
     }
 
     public func note(id: UUID) throws -> Note? {
         try notes(from: "SELECT * FROM note WHERE uuid = ?", [.text(id.uuidString)]).first
+    }
+
+    /// 一条笔记**含墓碑**（同步面专用）：删除那一条路要还能读到它 —— 读不到就等于
+    /// 「墓碑永远发不出去」（改前的物理删正是这样：行没了，上行时 `cloudRow` 返回 `nil`，
+    /// 队列就地销账、云端永远不知道）。
+    public func noteIncludingDeleted(id: UUID) throws -> Note? {
+        try notes(
+            from: "SELECT * FROM note WHERE uuid = ?",
+            [.text(id.uuidString)],
+            includingDeleted: true
+        ).first
+    }
+
+    /// 一条笔记的墓碑时刻（`nil` = 库里没有这条 **或** 它还没被删）。
+    public func deletedAt(id: UUID) throws -> Date? {
+        guard let value = try connection.scalar(
+            "SELECT deleted_at FROM note WHERE uuid = ?",
+            [.text(id.uuidString)]
+        ), let seconds = value.doubleValue else { return nil }
+        return Date(timeIntervalSince1970: seconds)
+    }
+
+    /// **含墓碑**的全部笔记（同步面专用出口 —— 见 `noteIncludingDeleted`）。
+    public func notesIncludingDeleted() throws -> [Note] {
+        try notes(from: "SELECT * FROM note ORDER BY updated_at DESC, title ASC", includingDeleted: true)
     }
 
     /// 时间线（按时间正序 —— 读流水要顺着读）。
@@ -1876,14 +1973,18 @@ public final class NoteDatabase {
         }
     }
 
-    private func notes(from sql: String, _ bindings: [SQLiteValue] = []) throws -> [Note] {
-        try materialize(try connection.query(sql, bindings))
+    private func notes(from sql: String, _ bindings: [SQLiteValue] = [], includingDeleted: Bool = false) throws -> [Note] {
+        try materialize(try connection.query(sql, bindings), includingDeleted: includingDeleted)
     }
 
     /// 行 → `Note`（**一行的所有列都在这里被读一次**；读不认识的值时抛错，不降级）。
     ///
     /// 标签单独一句查（`IN` 列表按 rowid 批量取），避免每行一条 `SELECT` 的 N+1。
-    private func materialize(_ rows: [SQLiteRow]) throws -> [Note] {
+    private func materialize(_ rows: [SQLiteRow], includingDeleted: Bool = false) throws -> [Note] {
+        // **墓碑行不进列表 / 检索 / 计数**（契约 §6.4.1 / `IR-17`）。过滤放在这一处，是因为它是
+        // 所有读路径（`notes()` / `note(id:)` / `search`）的唯一汇聚点 —— 三处各写一遍 `deleted_at
+        // IS NULL` 迟早会漏一处，而"漏的那一处搜得到已删的笔记"正好是最难被发现的那种。
+        let rows = includingDeleted ? rows : rows.filter { $0["deleted_at"].isNull }
         guard !rows.isEmpty else { return [] }
         let rowIDs = rows.compactMap { $0.int("id") }
         var tagsByRow: [Int64: [String]] = [:]

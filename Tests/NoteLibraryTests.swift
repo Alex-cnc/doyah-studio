@@ -131,9 +131,16 @@ final class NoteLibraryTests: XCTestCase {
         XCTAssertEqual(tagBefore, 1)
         XCTAssertEqual(timelineBefore, 1, "每次写都该在时间线上留一条")
 
-        try await store.delete(id: note.id)
+        try await store.delete(id: note.id, at: Date(timeIntervalSince1970: 0))
 
-        XCTAssertEqual(try connection.scalarInt("SELECT count(*) FROM note"), 0)
+        // **删除 = 墓碑**（契约 §6.4.1 / `IR-17`，2026-10-09 `T-20261009-161/162/163`）：改前这一行
+        // 断言的是「`note` 表 0 行」（物理删）—— 那正是缺陷本体（行没了 ⇒ 删除没法跨端传播）。
+        // 现在：**活着的笔记 0 行、墓碑 1 行**；从属行（标签 / 时间线）仍就地物理删。
+        XCTAssertEqual(try connection.scalarInt("SELECT count(*) FROM note WHERE deleted_at IS NULL"), 0)
+        XCTAssertEqual(
+            try connection.scalarInt("SELECT count(*) FROM note WHERE deleted_at IS NOT NULL"), 1,
+            "删除必须落成墓碑（行还在、`deleted_at` 非空）"
+        )
         XCTAssertEqual(try connection.scalarInt("SELECT count(*) FROM note_tag"), 0, "孤儿标签行 = 外键没开（PRAGMA 默认是关的）")
         XCTAssertEqual(try connection.scalarInt("SELECT count(*) FROM note_timeline"), 0, "孤儿时间线行同上")
         try connection.close()

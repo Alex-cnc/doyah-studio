@@ -224,7 +224,7 @@ final class NoteStoreSQLiteTests: XCTestCase {
         try database.upsert(note)
         try database.addAttachment(NoteAttachment(path: "/tmp/a.txt"), to: note.id)
 
-        try database.delete(id: note.id)
+        try database.delete(id: note.id, at: Date(timeIntervalSince1970: 0))
 
         let raw = try SQLiteConnection(path: url().path)
         for table in ["note_tag", "note_timeline", "note_attachment"] {
@@ -330,11 +330,16 @@ final class NoteStoreSQLiteTests: XCTestCase {
         XCTAssertTrue(try database.search("南太行").notes.isEmpty, "旧词必须从索引里消失")
         XCTAssertEqual(try database.search("云南拉练").notes.count, 1)
 
-        try database.delete(id: note.id)
+        try database.delete(id: note.id, at: Date(timeIntervalSince1970: 0))
         XCTAssertTrue(try database.search("云南拉练").notes.isEmpty, "删笔记要连索引一起清")
-        // 外部内容表：索引空了，内容表也该是空的（没有残留行把 count 撑起来）。
+        // **外部内容表**：`count(*) FROM note_fts` 读的是内容表（`note`）—— 墓碑行的内容还在
+        // （这正是 `IR-17` 要的：行留着，删除靠它跨端传播）⇒ 这里量的必须是**倒排索引**（`MATCH`）。
         let raw = try SQLiteConnection(path: url().path)
-        XCTAssertEqual(try raw.scalarInt("SELECT count(*) FROM note_fts"), 0)
+        XCTAssertEqual(try raw.scalarInt("SELECT count(*) FROM note_fts WHERE note_fts MATCH '云南拉练'"), 0)
+        XCTAssertEqual(
+            try raw.scalarInt("SELECT count(*) FROM note WHERE deleted_at IS NOT NULL"), 1,
+            "删除必须落成墓碑（物理删 ⇒ 删除传不出去）"
+        )
     }
 
     /// 空查询给全部（更新时间倒序），不是给空 —— 界面打开时的默认列表就走这一条。

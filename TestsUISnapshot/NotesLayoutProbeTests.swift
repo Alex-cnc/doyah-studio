@@ -963,6 +963,35 @@ final class NotesLayoutProbeTests: XCTestCase {
         )
     }
 
+    // MARK: - 判据④ 未选中 ⇒ 点删除**不许静默**（派单 `T-20261009-161` ③①）
+
+    /// **未选中任何一条时点删除**：条目数**不变** + **出现提示**（不许静默返回）。
+    ///
+    /// 由头（人类主人真机点验缺陷 `T-20261009-161`）：改前 `requestNoteRemoval()` 在选中为空时
+    /// 是 `pendingNoteRemoval = nil; return` —— 不弹框、不提示、什么都不发生，用户看到的就是
+    /// 「删除按钮在、但点了没用」。反例 = 改前那一版：本判据第二行当场红（`statusMessage` 是空的）。
+    @MainActor
+    func testDeletingWithoutSelectionSaysSomethingInsteadOfStayingSilent() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        try await seedOneNote(host)
+        await host.state.reloadNotes()
+        let before = host.state.notes.count
+
+        host.state.selectedNoteIDs = []
+        host.state.statusMessage = ""
+        host.state.requestNoteRemoval()
+
+        XCTAssertNil(host.state.pendingNoteRemoval, "没有选中却挂上了确认请求")
+        XCTAssertEqual(
+            host.state.statusMessage, L(.notesRemoveNoSelection),
+            "未选中时静默返回 ⇒ 用户看到的是「点了没反应」（这正是本次缺陷）"
+        )
+        XCTAssertEqual(host.state.notes.count, before, "未选中时条目数不该变")
+
+        print("T-161 ③① 未选中点删除：条目数 \(before)（不变）· 提示 = 「\(host.state.statusMessage)」")
+    }
+
     // MARK: - 判据③b 行内右键删除也先确认（片 `A5-DEL` · 派单 `T-20261009-038`）
 
     /// **待办行内右键那一枚「删除」也走同一个确认框**（片 `A5-DEL` · 派单 `T-20261009-038`）。

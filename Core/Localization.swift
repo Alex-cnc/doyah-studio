@@ -449,6 +449,9 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesRemoveSummaryNotebooks
     /// 影响面那句：两个都受影响（两个 `%d`）。
     case notesRemoveSummaryBoth
+    /// **删除没有目标**时的那句人话（2026-10-09 人类主人真机点验缺陷 `T-20261009-161`：
+    /// 改前这里**静默返回** —— 不弹框、不提示、什么都不发生，用户看到的是"点了没反应"）。
+    case notesRemoveNoSelection
     // 队列 `L-97` 界面半第三片（跨笔记本移动）：菜单标题 / 没地方可去那句人话 / 当前格后缀。
     case notesMoveMenu
     case notesMoveNoOtherNotebook
@@ -2738,6 +2741,7 @@ public enum LocalizedStrings {
         .notesRemoveSummaryNotes: [.simplifiedChinese: "将影响 %d 条笔记。", .english: "This will affect %d notes."],
         .notesRemoveSummaryNotebooks: [.simplifiedChinese: "将影响 %d 个笔记本。", .english: "This will affect %d notebooks."],
         .notesRemoveSummaryBoth: [.simplifiedChinese: "将影响 %d 个笔记本、%d 条笔记。", .english: "This will affect %d notebooks and %d notes."],
+        .notesRemoveNoSelection: [.simplifiedChinese: "没有选中可删除的条目，先选一条再点删除。", .english: "Nothing is selected — pick an item first, then delete."],
         .notesMoveMenu: [.simplifiedChinese: "移动到…", .english: "Move to…"],
         .notesMoveNoOtherNotebook: [.simplifiedChinese: "只有一个笔记本，没有别的地方可移。", .english: "Only one notebook exists — nowhere else to move it."],
         .notesMoveCurrentMark: [.simplifiedChinese: "（当前）", .english: " (current)"],

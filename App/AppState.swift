@@ -7236,9 +7236,15 @@ final class AppState: ObservableObject {
 
     func deleteNote(id: UUID) async {
         do {
-            try await NoteLibrary.defaultLibrary().delete(id: id)
+            // **墓碑入口**（`IR-17`）：`changeCount == 0`（库里没有这条）会抛 `noteNotFound`，
+            // 由下面那条 `catch` 如实报出来 —— 不再静默 no-op（`T-20261009-161/162`）。
+            try await NoteLibrary.defaultLibrary().delete(id: id, at: Date())
             if noteBeingEdited == id { beginNewNote() }
             await reloadNotes()
+            // **删除也是一次内容变更**：写库成功之后入队 + 尝试上行（`IR-17` 墓碑 / `IR-21` 断网留队）。
+            // 契约 v3.96 新纪律：墓碑上行 `rev` 必须 +1 —— 由 `flush` 的 `.delete` 那一支用
+            // `nextRevision(for:)` 落实（否则另一端持更高 `rev` 的副本会把删除 LWW 覆盖回来）。
+            await enqueueCloudSync(uid: id.uuidString, operation: .delete)
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }
@@ -7442,13 +7448,24 @@ final class AppState: ObservableObject {
         switch notesModule {
         case .notes:
             let ids = selectedNoteIDs
-            guard !ids.isEmpty else { pendingNoteRemoval = nil; return }
+            guard !ids.isEmpty else {
+                // **不许静默**（人类主人真机点验缺陷 `T-20261009-161`）：没有选中任何一条时
+                // 给一句人话。改前这里 `pendingNoteRemoval = nil; return` —— 不弹框、不提示、
+                // 什么都不发生，用户看到的就是"点了删除没反应"。
+                pendingNoteRemoval = nil
+                statusMessage = L(.notesRemoveNoSelection)
+                return
+            }
             let subject = ids.count == 1
                 ? (notes.first { $0.id == ids.first }?.title ?? "")
                 : ""
             pendingNoteRemoval = NoteRemovalPrompt.request(target: .notes(Array(ids)), subject: subject)
         case .todos:
-            guard let id = todoEditingID else { pendingNoteRemoval = nil; return }
+            guard let id = todoEditingID else {
+                pendingNoteRemoval = nil
+                statusMessage = L(.notesRemoveNoSelection)
+                return
+            }
             let subject = todos.first { $0.id == id }?.title ?? ""
             pendingNoteRemoval = NoteRemovalPrompt.request(target: .todo(id), subject: subject)
         }

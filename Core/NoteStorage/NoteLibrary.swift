@@ -364,11 +364,31 @@ public actor NoteLibrary {
         try open().deleteReminder(id: id)
     }
 
-    public func delete(id: UUID) throws {
-        let database = try open()
+    /// **删一条笔记 = 落墓碑**（契约 §6.4.1 / `IR-17`）—— 门面这一层只做两件事：
+    /// ① 库不在 ⇒ 没有可删的（返回 `false`，不顺手建一个空库）；
+    /// ② **`changeCount == 0` ⇒ 抛 `noteNotFound`**（改前这里是"删了就是删了"的静默路径，
+    /// 2026-10-09 人类主人真机点验缺陷 `T-20261009-162`：没命中的删除必须**报错**，不许静默 no-op）。
+    ///
+    /// - Returns: `true` = 真的落下了墓碑；`false` = 库还不存在（没有任何东西被删）。
+    @discardableResult
+    public func delete(id: UUID, at: Date) throws -> Bool {
         // 库还不存在时删一条 = 什么都没发生（不要顺手建一个空库出来）。
-        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return }
-        try database.delete(id: id)
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return false }
+        let changed = try open().tombstone(id: id, at: at)
+        guard changed > 0 else { throw NoteStorageFailure.noteNotFound(id.uuidString) }
+        return true
+    }
+
+    /// 一条笔记的墓碑时刻（`nil` = 没有这条 或 还没删）。
+    public func deletedAt(id: UUID) throws -> Date? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        return try open().deletedAt(id: id)
+    }
+
+    /// **含墓碑**的全部笔记（同步面专用：删除那一条路要还能读到那行）。
+    public func loadIncludingDeleted() throws -> [Note] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        return try open().notesIncludingDeleted()
     }
 
     // MARK: - 快照 / 维护
