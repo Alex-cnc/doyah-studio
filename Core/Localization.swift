@@ -296,6 +296,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesFormatItalic
     case notesFormatUnderline
     case notesFormatHighlight
+    /// 笔记编辑工具条的**块级三枚**（片 `WY-1b2` · 派单 `T-20261009-045` 第 ⑤⑥⑦ 项）：勾选框 /
+    /// 有序编号 / 无序编号（同样只由悬停提示给名字）。
+    case notesFormatCheckbox
+    case notesFormatOrdered
+    case notesFormatUnordered
     case notesDelete
     case notesSearchPlaceholder
     case notesEmpty
@@ -2549,6 +2554,9 @@ public enum LocalizedStrings {
         .notesFormatItalic: [.simplifiedChinese: "斜体", .english: "Italic"],
         .notesFormatUnderline: [.simplifiedChinese: "下划线", .english: "Underline"],
         .notesFormatHighlight: [.simplifiedChinese: "荧光笔（淡黄）", .english: "Highlighter (pale yellow)"],
+        .notesFormatCheckbox: [.simplifiedChinese: "勾选框", .english: "Checkbox"],
+        .notesFormatOrdered: [.simplifiedChinese: "有序编号", .english: "Numbered list"],
+        .notesFormatUnordered: [.simplifiedChinese: "无序编号", .english: "Bulleted list"],
         .notesDelete: [.simplifiedChinese: "删除", .english: "Delete"],
         .notesSearchPlaceholder: [.simplifiedChinese: "搜索标题 / 正文 / 标签", .english: "Search title, body or tags"],
         .notesEmpty: [.simplifiedChinese: "还没有笔记", .english: "No notes yet"],
