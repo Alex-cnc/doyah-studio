@@ -171,6 +171,23 @@ extension NoteBody {
     }
 }
 
+/// 交换面上 span 的 **`type` 字段取值**（片 `WY-1b2` · 契约 v1.30 §2.4 / §3.3）。
+///
+/// **这是契约字面量的唯一出处**：三档块级类型写进交换面 / 备份 / 跨端传输时**必须**逐字是
+/// `LIST_ORDERED` / `LIST_UNORDERED` / `LIST_CHECKBOX` —— 各端**不许自定义交换字段名**
+/// （契约 §2.4 不变量④：「内部模型可异、交换形态必须同形」）。
+///
+/// 为什么单出一份而不是把 Swift 内部名（`ordered` / `bullet` / `task`）直接写进 JSON：
+/// 那样同一件事就有了两套命名，跨端一读就分家 —— 契约那条硬话钉的正是这一点。
+public enum NoteSpanType: String, Equatable, Sendable {
+    /// 有序编号列表项（块级）。编号由**渲染层**按相邻同类 span 顺序生成，不落库（契约 §3.3 / 不变量⑤）。
+    case listOrdered = "LIST_ORDERED"
+    /// 无序编号列表项（块级）。渲染为圆点，同上。
+    case listUnordered = "LIST_UNORDERED"
+    /// 勾选框（任务项，块级）。勾选状态 = 本 span 的 `checked` 字段。
+    case listCheckbox = "LIST_CHECKBOX"
+}
+
 /// span 树（编辑器渲染用）：一段文字 + 它带的样式 +（链接才有）目标。
 ///
 /// **可编解码，且留得住不认得的字段**：JSON 里出现 `knownFieldNames` 之外的键时原样进
@@ -190,6 +207,46 @@ public struct NoteSpan: Equatable, Sendable {
         case size
     }
 
+    /// **块级类型**（片 `WY-1b2` · 派单 `T-20261009-045` 第 ⑤⑥⑦ 项 · 契约 v1.30 §2.4 / §3.3）。
+    ///
+    /// 这三档与 `Style` 那些**行内**样式不同：它们描述的是**整个段落 / 块**（有序编号 / 无序编号 /
+    /// 勾选框任务项），而不是段落里某几个字的字形。
+    ///
+    /// **内部模型可异、交换形态必须同形**（契约 §2.4 不变量④）：Swift 这一侧用 `ordered` /
+    /// `bullet` / `task`，但**写进 JSON 的是 `type` = `LIST_ORDERED` / `LIST_UNORDERED` /
+    /// `LIST_CHECKBOX`**（见 `exchangeType`）—— Swift 内部名**绝不直接进 JSON**。
+    ///
+    /// **编号 / 层级由渲染层生成、不落库**（契约不变量⑤）：这里只存「这一段是哪一档块级」，
+    /// 不存「它是第几号」；将来要嵌套层级 ⇒ 走提案改契约，不得各端私加。
+    public enum Block: Equatable, Sendable {
+        /// 有序编号列表项。
+        case ordered
+        /// 无序编号列表项（圆点）。
+        case bullet
+        /// 勾选框（任务项）；`checked` 是勾选状态（缺省未勾）。
+        case task(checked: Bool)
+
+        /// 写进交换面 `type` 字段的字面量（**契约逐字同形**，见 `NoteSpanType`）。
+        public var exchangeType: String {
+            switch self {
+            case .ordered: return NoteSpanType.listOrdered.rawValue
+            case .bullet: return NoteSpanType.listUnordered.rawValue
+            case .task: return NoteSpanType.listCheckbox.rawValue
+            }
+        }
+
+        /// 从交换面的 `type` 字面量 + `checked` 还原块级类型；**不是那三档的字面量 ⇒ `nil`**
+        /// （未知 `type` 不在这里判——解码面会原样留进 `unknownFields`，前向兼容不丢）。
+        public static func from(exchangeType raw: String, checked: Bool) -> Block? {
+            switch raw {
+            case NoteSpanType.listOrdered.rawValue: return .ordered
+            case NoteSpanType.listUnordered.rawValue: return .bullet
+            case NoteSpanType.listCheckbox.rawValue: return .task(checked: checked)
+            default: return nil
+            }
+        }
+    }
+
     public var text: String
     public var styles: Set<Style>
     public var color: String?
@@ -207,6 +264,10 @@ public struct NoteSpan: Equatable, Sendable {
     /// `NoteHighlight.backgroundColorHex`（本片只做固定淡黄，不做多色选择器 —— 判据作废那条口径）。
     /// Markdown 表达不了它 ⇒ 不进 `NoteBody.body` 投影（落库归 `WY-2` 的 span 直存）。
     public var backgroundColor: String?
+    /// **块级类型**（片 `WY-1b2`）：`nil` = 普通文本 span（本片之前**所有** span 都是这一档）；
+    /// 非 nil = 有序编号 / 无序编号 / 勾选框任务项（见 `Block`）。缺省 `nil` 是刻意的 ——
+    /// 老数据（WY-1a 写的 `{version:2, spans:[...]}`）里没有它，读回来就该是文本 span。
+    public var block: Block?
     /// **不认得的字段原样保留**（前向兼容，见 `NoteJSONValue`）。已知字段名不在此列。
     public var unknownFields: [String: NoteJSONValue]
 
@@ -220,6 +281,7 @@ public struct NoteSpan: Equatable, Sendable {
         size: Int? = nil,
         link: String? = nil,
         backgroundColor: String? = nil,
+        block: Block? = nil,
         unknownFields: [String: NoteJSONValue] = [:]
     ) {
         self.text = text
@@ -228,6 +290,7 @@ public struct NoteSpan: Equatable, Sendable {
         self.size = size
         self.link = link
         self.backgroundColor = backgroundColor
+        self.block = block
         self.unknownFields = unknownFields
     }
 }
@@ -249,6 +312,10 @@ extension NoteSpan: Codable {
         var size: Int?
         var link: String?
         var backgroundColor: String?
+        // **块级那两个字段**（片 `WY-1b2`）：`type` 与 `checked` 是**交换面**的键（契约 §2.4）。
+        // 认得出那三档 ⇒ 落成 `block`；认不出 / 不该在这儿出现 ⇒ 原样留进 `unknownFields`（前向兼容）。
+        var typeRaw: String?
+        var checkedRaw: Bool?
         var unknown: [String: NoteJSONValue] = [:]
         for key in container.allKeys {
             switch key.stringValue {
@@ -260,11 +327,27 @@ extension NoteSpan: Codable {
             case "size": size = try? container.decode(Int.self, forKey: key)
             case "link": link = try? container.decode(String.self, forKey: key)
             case "backgroundColor": backgroundColor = try? container.decode(String.self, forKey: key)
+            case "type": typeRaw = try? container.decode(String.self, forKey: key)
+            case "checked": checkedRaw = try? container.decode(Bool.self, forKey: key)
             default:
                 if let value = try? container.decode(NoteJSONValue.self, forKey: key) {
                     unknown[key.stringValue] = value
                 }
             }
+        }
+        // `type` 三档 ⇒ `block`；未知 `type`（老版本读新数据）**不得丢弃**（契约 §2.4 不变量②）——
+        // 连同 `checked` 一起原样留进 `unknownFields`，再写回时带出。
+        var block: Block?
+        if let typeRaw {
+            if let recognized = Block.from(exchangeType: typeRaw, checked: checkedRaw ?? false) {
+                block = recognized
+            } else {
+                unknown["type"] = .string(typeRaw)
+                if let checkedRaw { unknown["checked"] = .bool(checkedRaw) }
+            }
+        } else if let checkedRaw {
+            // 没有 `type` 却带着 `checked`：同样原样留住（不猜它属于谁）。
+            unknown["checked"] = .bool(checkedRaw)
         }
         self.init(
             text: text,
@@ -273,6 +356,7 @@ extension NoteSpan: Codable {
             size: size,
             link: link,
             backgroundColor: backgroundColor,
+            block: block,
             unknownFields: unknown
         )
     }
@@ -288,6 +372,15 @@ extension NoteSpan: Codable {
         if let size { try container.encode(size, forKey: DynamicKey(stringValue: "size")) }
         if let link { try container.encode(link, forKey: DynamicKey(stringValue: "link")) }
         if let backgroundColor { try container.encode(backgroundColor, forKey: DynamicKey(stringValue: "backgroundColor")) }
+        // **块级**（片 `WY-1b2`）：写的是**交换面**的 `type` 字面量（`LIST_ORDERED` / …），
+        // **不是** Swift 内部名 —— 契约 §2.4 不变量④钉的就是这一条。
+        // `checked` 只在勾选框那档出现；显式写出（含 `false`）⇒「勾选状态必须落库」在交换面上是**看得见的**。
+        if let block {
+            try container.encode(block.exchangeType, forKey: DynamicKey(stringValue: "type"))
+            if case .task(let checked) = block {
+                try container.encode(checked, forKey: DynamicKey(stringValue: "checked"))
+            }
+        }
         for (name, value) in unknownFields where !Self.knownFieldNames.contains(name) {
             try container.encode(value, forKey: DynamicKey(stringValue: name))
         }

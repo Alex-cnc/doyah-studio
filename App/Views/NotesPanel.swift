@@ -877,7 +877,23 @@ struct NotesEditorToolbar: View {
                 }
                 .help(L(command.titleKey))
                 .disabled(!canApplyInline)
-                .accessibilityIdentifier("notes-editor-format-\(command.rawValue)")
+                .accessibilityIdentifier(command.accessibilityIdentifier)
+            }
+            // **块级三枚**（片 `WY-1b2` · 派单 `T-20261009-045` 第 ⑤⑥⑦ 项）：勾选框（任务项）/
+            // 有序编号 / 无序编号。形态与上面四枚**同一档**（纯图标 + 悬停名字 + 空正文灰着）；
+            // 作用在**当前段落**（`NotesTextView.applyBlock(_:)`），产物落 span 的块级属性、
+            // **不往正文写** `1.` / `- ` 标记（契约 v1.30 不变量⑤：编号由渲染层生成）。
+            // 图标 / 文案键 / 标识都取自 `NoteBlockCommand`（唯一出处），不许在这里各写一遍。
+            ForEach(NoteBlockCommand.allCases, id: \.self) { command in
+                Button {
+                    controller.toggleBlock(command)
+                } label: {
+                    Image(systemName: command.symbolName)
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+                .help(L(command.titleKey))
+                .disabled(!canApplyInline)
+                .accessibilityIdentifier(command.accessibilityIdentifier)
             }
             Text(L(.notesSourceHint))
                 .font(Theme.font(.caption))

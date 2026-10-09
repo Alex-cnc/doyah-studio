@@ -38,6 +38,19 @@ import DoyahCore
 ///
 /// `env DOYAH_UI_SNAPSHOT=1 bash Scripts/run-manual-verification-probes.sh --filter NotesEditor`
 /// 或 `env DOYAH_UI_SNAPSHOT=1 swift test --filter NotesEditorFormatProbeTests`。
+///
+/// ## 片 `WY-1b2` 追加的**块级三枚**（勾选框 / 有序编号 / 无序编号）
+///
+/// 同一工具条上补齐 ⑤⑥⑦ 三枚（`NoteBlockCommand`）：与行内四枚同形（纯图标 + 悬停名字 + 空正文灰着），
+/// 但作用在**当前段落**（`NotesTextView.applyBlock(_:)`）—— 段落变成有序编号 / 无序编号 / 勾选框任务项。
+///
+/// **产物落 span 的块级属性**（`NoteSpan.block`；进 `NSTextStorage` 用 `.doyahBlock` 承载），
+/// **不往正文写** `1.` / `- ` / 勾选框标记（契约 v1.30 不变量⑤：编号 / 层级由**渲染层**生成、不落库）。
+/// 交换面上那三档的字面量 = `LIST_ORDERED` / `LIST_UNORDERED` / `LIST_CHECKBOX`（+ `checked`），
+/// 逐字与契约同形（`NoteSpan.Block.exchangeType`，唯一出处 `NoteSpanType`）。
+///
+/// **落库仍不并入本片**（真落库 + 端到端归 `WY-2a`）：本片只到内存属性 + `NoteBody` 交换面往返，
+/// 以及「重挂一次编辑面」那一跳。勾选态的入口是 `NotesTextView.setChecked(_:)`（判据用它模拟「勾一下」）。
 
 /// 行内四枚的**命令词表**（片 `WY-1b1`）。
 ///
@@ -68,6 +81,56 @@ enum NoteInlineCommand: String, CaseIterable, Sendable {
         case .highlight: return .notesFormatHighlight
         }
     }
+
+    /// 探针用来**挑控件**的标识（由枚举派生 ⇒ 新增一档编译期就得给标识；`NotesModule` 同款）。
+    var accessibilityIdentifier: String { "notes-editor-format-\(rawValue)" }
+}
+
+/// **块级三枚的**命令词表（片 `WY-1b2` · 派单 `T-20261009-045` 第 ⑤⑥⑦ 项）。
+///
+/// 与行内四枚（`NoteInlineCommand`）同一条纪律：工具条那三枚按钮与机器判据读的是**同一份**
+/// `rawValue` / 图标 / 文案键 / 标识 —— 两处各写一遍迟早对不上，于是收成一个 `CaseIterable`。
+///
+/// **块级**与行内样式不同：它描述**整个段落**（有序编号 / 无序编号 / 勾选框任务项），
+/// 落在 span 的 `NoteSpan.block` 上（进 `NSTextStorage` 时用 `.doyahBlock` 承载）。
+/// **编号 / 层级由渲染层生成、不落库**（契约 v1.30 不变量⑤）⇒ 正文里**不写** `1.` / `- ` 标记。
+enum NoteBlockCommand: String, CaseIterable, Sendable {
+    /// ⑤ 勾选框（任务项）。
+    case checkbox
+    /// ⑥ 有序编号（`1. 2. 3.`）。
+    case ordered
+    /// ⑦ 无序编号（圆点）。
+    case unordered
+
+    /// SF Symbols 名（纯图标按钮：名字只由悬停提示给，见 `NotesEditorToolbar`）。
+    var symbolName: String {
+        switch self {
+        case .checkbox: return "checklist"
+        case .ordered: return "list.number"
+        case .unordered: return "list.bullet"
+        }
+    }
+
+    /// 悬停名字（语言表键；中英齐备）。
+    var titleKey: LKey {
+        switch self {
+        case .checkbox: return .notesFormatCheckbox
+        case .ordered: return .notesFormatOrdered
+        case .unordered: return .notesFormatUnordered
+        }
+    }
+
+    /// 探针用来**挑控件**的标识（与 `NoteInlineCommand` 同一形状；由枚举派生 ⇒ 新增一档编译期就得给标识）。
+    var accessibilityIdentifier: String { "notes-editor-block-\(rawValue)" }
+
+    /// 落在 span 上的**块级类型**（缺省勾选框是未勾 —— 勾选态另由界面动作改）。
+    var block: NoteSpan.Block {
+        switch self {
+        case .checkbox: return .task(checked: false)
+        case .ordered: return .ordered
+        case .unordered: return .bullet
+        }
+    }
 }
 
 /// 富文本面里承载行内样式的**私有属性键**。
@@ -81,6 +144,12 @@ extension NSAttributedString.Key {
     static let doyahItalic = NSAttributedString.Key("com.doyah.note.italic")
     static let doyahUnderline = NSAttributedString.Key("com.doyah.note.underline")
     static let doyahCode = NSAttributedString.Key("com.doyah.note.code")
+    /// **块级类型**（片 `WY-1b2`）：值 = 契约交换面字面量（`LIST_ORDERED` / `LIST_UNORDERED` /
+    /// `LIST_CHECKBOX`）—— 与 span 的 `block` 同一份词表（`NoteSpan.Block.exchangeType`），
+    /// 界面这一侧**不另起一套**命名。
+    static let doyahBlock = NSAttributedString.Key("com.doyah.note.block")
+    /// **勾选框的勾选态**（片 `WY-1b2`）：`Bool`，只在 `.doyahBlock == LIST_CHECKBOX` 时有意义。
+    static let doyahChecked = NSAttributedString.Key("com.doyah.note.checked")
 }
 
 /// span 树 ↔ `NSAttributedString` 的**唯一换算处**（片 `WY-1b1`）。
@@ -122,6 +191,12 @@ enum NoteRichAttributes {
             }
             if span.styles.contains(.code) { attributes[.doyahCode] = true }
             if span.backgroundColor != nil { attributes[.backgroundColor] = highlightColor() }
+            // **块级**（片 `WY-1b2`）：值写的是契约交换面字面量（`NoteSpan.Block.exchangeType`）——
+            // 与 span 的 `block` 同一份词表，界面侧不另起命名。勾选框另挂勾选态。
+            if let block = span.block {
+                attributes[.doyahBlock] = block.exchangeType
+                if case .task(let checked) = block { attributes[.doyahChecked] = checked }
+            }
             result.append(NSAttributedString(string: span.text, attributes: attributes))
         }
         return result
@@ -142,7 +217,11 @@ enum NoteRichAttributes {
             if attributes[.doyahUnderline] != nil { styles.insert(.underline) }
             if attributes[.doyahCode] != nil { styles.insert(.code) }
             let background = attributes[.backgroundColor] != nil ? NoteHighlight.backgroundColorHex : nil
-            spans.append(NoteSpan(text: text, styles: styles, backgroundColor: background))
+            // **块级**（片 `WY-1b2`）：按交换面字面量还原（认不出 ⇒ 就当普通文本 span）。
+            let blockRaw = attributes[.doyahBlock] as? String
+            let checked = (attributes[.doyahChecked] as? Bool) ?? false
+            let block = blockRaw.flatMap { NoteSpan.Block.from(exchangeType: $0, checked: checked) }
+            spans.append(NoteSpan(text: text, styles: styles, backgroundColor: background, block: block))
             guard runRange.length > 0 else { break }
             index = runRange.location + runRange.length
         }
@@ -274,6 +353,62 @@ final class NotesTextView: NSTextView {
         didChangeText()
     }
 
+    // MARK: - 三条块级动作（片 `WY-1b2`）
+
+    /// 施加一条**块级**命令：作用在**当前段落**（光标 / 选区所在的那一段）上。
+    ///
+    /// 产物**落在 span 的块级属性上**（`.doyahBlock` = 契约交换面字面量），
+    /// **不往正文里写** `1.` / `- ` 标记（契约 v1.30 不变量⑤：编号 / 层级由渲染层生成、不落库）。
+    /// 同一档再点一次 = 取消（段落回到普通文本）；换一档 = 直接改档。
+    func applyBlock(_ command: NoteBlockCommand) {
+        guard let storage = textStorage else { return }
+        let range = blockRange()
+        guard range.length > 0 else { return }
+        let key = NSAttributedString.Key.doyahBlock
+        let current = storage.attribute(key, at: range.location, effectiveRange: nil) as? String
+        storage.beginEditing()
+        if current == command.block.exchangeType {
+            // 再点一次 = 取消这一档（勾选框连勾选态一起撤掉）。
+            storage.removeAttribute(key, range: range)
+            storage.removeAttribute(.doyahChecked, range: range)
+        } else {
+            storage.addAttribute(key, value: command.block.exchangeType, range: range)
+            if case .task(let checked) = command.block {
+                storage.addAttribute(.doyahChecked, value: checked, range: range)
+            } else {
+                storage.removeAttribute(.doyahChecked, range: range)
+            }
+        }
+        storage.endEditing()
+        didChangeText()
+    }
+
+    /// 勾选 / 取消勾选**当前段落**的勾选框（任务项）。段落不是勾选框 ⇒ 什么都不发生。
+    ///
+    /// 这是「勾选状态落盘」的入口 —— 本片只做到内存里的属性 + 交换面往返（真落库归 `WY-2a`）。
+    func setChecked(_ checked: Bool) {
+        guard let storage = textStorage else { return }
+        let range = blockRange()
+        guard range.length > 0 else { return }
+        guard let raw = storage.attribute(.doyahBlock, at: range.location, effectiveRange: nil) as? String,
+              let block = NoteSpan.Block.from(exchangeType: raw, checked: checked),
+              case .task = block else { return }
+        storage.beginEditing()
+        storage.addAttribute(.doyahChecked, value: checked, range: range)
+        storage.endEditing()
+        didChangeText()
+    }
+
+    /// 当前段落范围（含行尾 —— 段落属性挂在整段上）。
+    private func blockRange() -> NSRange {
+        let ns = string as NSString
+        let length = ns.length
+        guard length > 0 else { return NSRange(location: 0, length: 0) }
+        var location = min(max(selectedRange().location, 0), length)
+        if location == length { location = length - 1 }
+        return ns.paragraphRange(for: NSRange(location: location, length: 0))
+    }
+
     // MARK: - 目标范围
 
     private func targetRange() -> NSRange {
@@ -370,5 +505,15 @@ final class NotesRichTextController: ObservableObject {
 
     func toggle(_ command: NoteInlineCommand) {
         textView?.apply(command)
+    }
+
+    /// **块级**三枚（片 `WY-1b2`）—— 与行内四枚走同一条接线（工具条按钮与判据读的是同一个入口）。
+    func toggleBlock(_ command: NoteBlockCommand) {
+        textView?.applyBlock(command)
+    }
+
+    /// 勾选框的勾选态（片 `WY-1b2`）：作用在当前段落的勾选框上（判据用它模拟「勾一下」）。
+    func setChecked(_ checked: Bool) {
+        textView?.setChecked(checked)
     }
 }
