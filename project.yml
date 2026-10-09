@@ -127,6 +127,10 @@ targets:
     dependencies:
       - target: DoyahCore
       - target: DoyahPlatform
+      # 片 `云F`（任务 t_b51cd0ff）新增的 `Tests/AccountFlowTests.swift` 判的是**真界面模型**
+      # （`@testable import DoyahStudioApp`）⇒ 本目标要跟 `Package.swift` 的 `DoyahCoreTests`
+      # 一样带上对 App 目标的依赖（片 `云批-补正` · 任务 t_ce3ce7cc 收口；上一轮登记为已知边界）。
+      - target: DoyahStudio
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: studio.doyah.DoyahStudioTests
