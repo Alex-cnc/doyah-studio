@@ -85,6 +85,13 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceHeaderSearchLine
     case workspaceHeaderSearchSkipped
     case workspaceHeaderSearchHint
+    case workspaceReplacePlaceholder
+    case workspaceReplaceAll
+    case workspaceReplaceSingle
+    case workspaceReplacePreview
+    case workspaceReplaceSummary
+    case workspaceReplaceApplied
+    case workspaceReplaceUndone
     case archiveUsingWorkspace
     case directoryStatusGranted
     case directoryStatusStale
@@ -2384,6 +2391,13 @@ public enum LocalizedStrings {
         .workspaceHeaderSearchLine: [.simplifiedChinese: "第 %@ 行", .english: "line %@"],
         .workspaceHeaderSearchSkipped: [.simplifiedChinese: "已跳过 %@ 个文件（二进制 / 过大 / 读不出）", .english: "Skipped %@ files (binary / too large / unreadable)"],
         .workspaceHeaderSearchHint: [.simplifiedChinese: "↑↓ 选择 · ↩ 打开并跳到命中行 · esc 清空", .english: "↑↓ select · ↩ open at the hit · esc clear"],
+        .workspaceReplacePlaceholder: [.simplifiedChinese: "替换为…（留空则删除命中处）", .english: "Replace with… (empty deletes the hit)"],
+        .workspaceReplaceAll: [.simplifiedChinese: "全部替换", .english: "Replace All"],
+        .workspaceReplaceSingle: [.simplifiedChinese: "替换这一条", .english: "Replace this hit"],
+        .workspaceReplacePreview: [.simplifiedChinese: "替换预览（先看清再应用）", .english: "Replace preview (review before applying)"],
+        .workspaceReplaceSummary: [.simplifiedChinese: "将改 %@ 个文件 · 共 %@ 处", .english: "Change %@ files · %@ occurrences"],
+        .workspaceReplaceApplied: [.simplifiedChinese: "已替换 %@ 处 · 可撤销", .english: "Replaced %@ · undoable"],
+        .workspaceReplaceUndone: [.simplifiedChinese: "已撤销替换", .english: "Replace undone"],
         .archiveUsingWorkspace: [.simplifiedChinese: "未单独指定归档目录，当前使用工作区：%@", .english: "No archive folder chosen — using the workspace: %@"],
         .directoryStatusGranted: [.simplifiedChinese: "已授权读写：%@", .english: "Read-write access granted: %@"],
         .directoryStatusStale: [.simplifiedChinese: "已授权读写：%@（书签已过期，建议重新选择一次）", .english: "Read-write access granted: %@ (bookmark is stale — choose the folder again)"],

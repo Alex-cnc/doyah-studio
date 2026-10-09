@@ -32,16 +32,42 @@ struct WorkspaceHeaderSearch: View {
     @State private var isRunning = false
     @State private var pending: Task<Void, Never>?
 
+    // MARK: 替换（`FR-EDIT-42` 的另一半：先预览后落盘 / 可撤销）
+    //
+    // 口径：替换**复用同一套引擎**（`WorkspaceSearch.replacePlan` / `replaceLine`）——
+    // 匹配谓词 / 忽略名单 / 二进制与超大判定全在 Core，界面**不写第二套**；
+    // 落盘与撤销也走 Core 的 `apply` / `revert`（撤销凭证存原字节，不重新搜一遍）。
+    /// 是否展开替换那一行（关掉时结果面板与只读检索一字不变）。
+    @State private var showsReplace = false
+    @State private var replacement = ""
+    /// 待应用的替换计划（非空 = 正在预览；**先预览后应用**）。
+    @State private var plan: WorkspaceSearch.ReplacePlan = .empty
+    @State private var isPlanning = false
+    /// 上一次落盘的**撤销凭证**（`apply` 给的：撤销 = 原字节写回）。
+    @State private var undo: WorkspaceSearch.ReplaceUndo?
+    @State private var replaceNote: String?
+    @State private var pendingPlan: Task<Void, Never>?
+
     /// 结果面板的高度上限：它是"下拉结果"，不该把下面的文件树整片挤走。
     private let panelMaxHeight: CGFloat = 240
     /// 连续输入的合并窗口（读全工作区内容是要花时间的，敲一下扫一次会把界面拖住）。
     private let debounceNanoseconds: UInt64 = 220_000_000
+    /// 替换预览的高度与行数上限（预览是「看一眼」，不该把面板撑爆）。
+    private let replacePreviewMaxHeight: CGFloat = 200
+    private let replacePreviewFileLimit = 40
+    private let replacePreviewLineLimit = 10
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             field
+            if showsReplace {
+                replaceBar
+            }
             if isSearching {
                 panel
+            }
+            if showsReplace && (!plan.isEmpty || isPlanning) {
+                replacePreview
             }
         }
         .onAppear {
@@ -49,6 +75,8 @@ struct WorkspaceHeaderSearch: View {
             query = initialQuery
             schedule()
         }
+        // 改替换词就把旧预览作废（预览必须与输入一致，不能留一份过期的差异）。
+        .onChange(of: replacement) { _, _ in plan = .empty }
         // ↑↓ 与 esc：输入框自己的键盘语义，不走全局快捷键表（与命令面板同一条纪律）。
         .onKeyPress(.downArrow) {
             move(1)
@@ -77,6 +105,18 @@ struct WorkspaceHeaderSearch: View {
                 .onSubmit { activate(selectedRow) }
                 .onChange(of: query) { _, _ in schedule() }
             if isSearching {
+                // 替换入口：展开一行替换词 + 「全部替换」（先出预览，再落盘）。
+                Button {
+                    showsReplace.toggle()
+                    if !showsReplace { plan = .empty }
+                } label: {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .imageScale(.small)
+                        .foregroundStyle(showsReplace ? Theme.accentColor : Theme.text(.tertiary))
+                }
+                .buttonStyle(.plain)
+                .help(L(.commandReplace))
+
                 Button {
                     clear()
                 } label: {
@@ -152,6 +192,122 @@ struct WorkspaceHeaderSearch: View {
         .padding(.top, Spacing.xs)
     }
 
+    // MARK: 替换（`FR-EDIT-42`：单条 / 全部、先预览后落盘、可撤销）
+
+    /// 替换那一行：替换词输入框 + 「全部替换」（算计划 → 出预览）+ 「撤销」。
+    private var replaceBar: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "arrow.left.arrow.right")
+                    .imageScale(.small)
+                    .foregroundStyle(Theme.text(.tertiary))
+                TextField(L(.workspaceReplacePlaceholder), text: $replacement)
+                    .textFieldStyle(.plain)
+                    .font(Theme.font(.caption))
+                if undo != nil {
+                    Button(L(.menuSystemUndo)) { undoReplace() }
+                        .buttonStyle(.plain)
+                        .font(Theme.font(.caption))
+                }
+                Button(L(.workspaceReplaceAll)) { schedulePlan() }
+                    .buttonStyle(.plain)
+                    .font(Theme.font(.caption))
+                    .disabled(searchedQuery.isEmpty)
+            }
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                    .fill(Theme.surface(.raised))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                    .strokeBorder(Theme.hairline(scheme), lineWidth: Metrics.hairline)
+            )
+
+            if let note = replaceNote {
+                notice(note, tone: Theme.text(.tertiary))
+            }
+        }
+        .padding(.top, Spacing.xs)
+    }
+
+    /// 差异预览：说清影响面（几个文件 / 几处），逐条给「原文 → 改后」，再让人按「替换」。
+    private var replacePreview: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "arrow.left.arrow.right")
+                    .imageScale(.small)
+                    .foregroundStyle(Theme.text(.tertiary))
+                Text(L(.workspaceReplacePreview))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                Spacer(minLength: 0)
+                if isPlanning {
+                    Text(L(.workspaceLoading))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.tertiary))
+                } else {
+                    Text(L(.workspaceReplaceSummary, "\(plan.fileCount)", "\(plan.changeCount)"))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.tertiary))
+                }
+            }
+            .padding(.horizontal, Spacing.m)
+            .padding(.vertical, Spacing.xs)
+
+            if !plan.isEmpty {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(plan.files.prefix(replacePreviewFileLimit)) { file in
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("\(file.entry.relativePath) · \(file.count)")
+                                    .font(Theme.font(.caption))
+                                    .foregroundStyle(Theme.text(.secondary))
+                                    .lineLimit(1)
+                                ForEach(
+                                    Array(file.changes.prefix(replacePreviewLineLimit).enumerated()),
+                                    id: \.offset
+                                ) { _, change in
+                                    Text("\(change.line): \(change.before) → \(change.after)")
+                                        .font(Theme.font(.caption))
+                                        .foregroundStyle(Theme.text(.tertiary))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                            }
+                            .padding(.horizontal, Spacing.m)
+                            .padding(.vertical, Spacing.hair)
+                        }
+                    }
+                    .padding(.vertical, Spacing.xs)
+                }
+                .frame(maxHeight: replacePreviewMaxHeight)
+
+                HStack(spacing: Spacing.s) {
+                    Button(L(.commandReplace)) { applyPlan() }
+                        .buttonStyle(.plain)
+                        .font(Theme.font(.caption))
+                    Button(L(.commonCancel)) { plan = .empty }
+                        .buttonStyle(.plain)
+                        .font(Theme.font(.caption))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, Spacing.m)
+                .padding(.vertical, Spacing.xs)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                .fill(Theme.surface(.raised))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                .strokeBorder(Theme.hairline(scheme), lineWidth: Metrics.hairline)
+        )
+        .padding(.top, Spacing.xs)
+    }
+
     private func notice(_ text: String, tone: Color) -> some View {
         Text(text)
             .font(Theme.font(.caption))
@@ -196,6 +352,18 @@ struct WorkspaceHeaderSearch: View {
                     .truncationMode(.middle)
             }
             Spacer(minLength: 0)
+            // 单条替换：只改这一条命中所在的那一行（同样**先出预览**，与全部替换同一条落盘 / 撤销路）。
+            if showsReplace, case .content(let hit) = row {
+                Button {
+                    previewSingle(hit)
+                } label: {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .imageScale(.small)
+                        .foregroundStyle(Theme.text(.tertiary))
+                }
+                .buttonStyle(.plain)
+                .help(L(.workspaceReplaceSingle))
+            }
         }
         .padding(.horizontal, Spacing.m)
         .padding(.vertical, Spacing.xs)
@@ -300,11 +468,15 @@ struct WorkspaceHeaderSearch: View {
     private func clear() {
         pending?.cancel()
         pending = nil
+        pendingPlan?.cancel()
+        pendingPlan = nil
         query = ""
         searchedQuery = ""
         results = .empty
         selected = 0
         isRunning = false
+        plan = .empty
+        isPlanning = false
     }
 
     /// 打开选中的那一行：文件名命中只打开；内容命中**打开并跳到命中行**。
@@ -340,5 +512,62 @@ struct WorkspaceHeaderSearch: View {
             selected = 0
             isRunning = false
         }
+    }
+
+    // MARK: 替换的动作（计划 → 预览 → 落盘 → 撤销，全部走 Core）
+
+    /// 算一份**全部替换**的计划（异步 —— 要读整个工作区）：结果落 `plan`，界面出预览。
+    private func schedulePlan() {
+        pendingPlan?.cancel()
+        let needle = searchedQuery
+        let replacementText = replacement
+        guard showsReplace, !needle.isEmpty, let root = workspace.rootURL else {
+            plan = .empty
+            isPlanning = false
+            return
+        }
+        isPlanning = true
+        replaceNote = nil
+        pendingPlan = Task {
+            let computed = await Task.detached(priority: .userInitiated) {
+                WorkspaceSearch.replacePlan(in: root, query: needle, replacement: replacementText)
+            }.value
+            if Task.isCancelled { return }
+            plan = computed
+            isPlanning = false
+        }
+    }
+
+    /// **单条替换**的预览：只算那一行（一个文件，同步即可）。
+    private func previewSingle(_ hit: WorkspaceSearch.ContentHit) {
+        guard let root = workspace.rootURL else { return }
+        let computed = WorkspaceSearch.replaceLine(
+            in: root, query: searchedQuery, replacement: replacement,
+            entry: hit.entry, line: hit.line
+        )
+        guard !computed.isEmpty else { return }
+        plan = computed
+        replaceNote = nil
+    }
+
+    /// 落盘整个预览过的计划（**先预览后应用**：走到这里用户已经看过差异）。
+    /// 撤销凭证来自 Core 的 `apply`（原字节），撤销不重新搜一遍。
+    private func applyPlan() {
+        guard let root = workspace.rootURL, !plan.isEmpty else { return }
+        guard let receipt = WorkspaceSearch.apply(plan, in: root) else { return }
+        let count = plan.changeCount
+        undo = receipt
+        plan = .empty
+        replaceNote = L(.workspaceReplaceApplied, "\(count)")
+        Task { await workspace.refresh() }
+    }
+
+    /// 撤销上一次落盘（把原字节写回）。
+    private func undoReplace() {
+        guard let root = workspace.rootURL, let receipt = undo else { return }
+        _ = WorkspaceSearch.revert(receipt, in: root)
+        undo = nil
+        replaceNote = L(.workspaceReplaceUndone)
+        Task { await workspace.refresh() }
     }
 }
