@@ -80,6 +80,12 @@ struct DoyahStudioCommands: Commands {
             Button(L(.menuAboutLicense)) {
                 appState.isAboutLicensePresented = true
             }
+
+            // 「账户与同步…」（片 `云F` · 契约 §6.4「账号与同步界面（最小集）」）。
+            // 与「版本与许可证…」同住应用菜单：账户是应用级的，不属于任何活动栏区。
+            Button(L(.menuAccountSync)) {
+                appState.showAccountSync()
+            }
         }
 
         CommandGroup(after: .newItem) {

@@ -239,6 +239,18 @@
    "reason": "同上（任务 t_7325ffbf）：本次两处共享面改动（`check-release-version.py` / `verify-all.sh`）的声明登记在本清单",
    "by": "bighippo",
    "at": "2026-10-08"
+  },
+  {
+   "glob": "Scripts/panel-root-frames.json",
+   "reason": "片 `云F`（任务 t_b51cd0ff · macOS 机组）：`App/Views/` 新增一个视图文件 `AccountSyncSheet.swift` ⇒ 台账 `scannedFiles` 87 → 88（处数 37 = 面板根 21 · 装饰 16 与 35 条条目都不变：新面板根只给宽度，属判据 F 的范围外）",
+   "by": "macos",
+   "at": "2026-10-09"
+  },
+  {
+   "glob": "Scripts/path-ownership.json",
+   "reason": "同上（片 `云F` · 任务 t_b51cd0ff）：本次共享面改动的声明登记在本清单",
+   "by": "macos",
+   "at": "2026-10-09"
   }
  ],
  "unclassified_allow": [

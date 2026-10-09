@@ -742,6 +742,15 @@ final class AppState: ObservableObject {
 
     /// 「账户」占位说明（R-23：语义未定，只放占位不实现登录）。
     @Published var isAccountNoticePresented = false
+
+    /// 「账户与同步…」面板的呈现开关（片 `云F` · 契约 §6.4「账号与同步界面（最小集）」）。
+    ///
+    /// 与上面那条 R-23 占位说明**不是同一件事**：这一条打开的是真界面（注册页 / 登录页 /
+    /// 同步开关（`S4` 原文）/ 登出 / 多端会话 / 找回入口位），而占位那条是「登录后提供什么还没定」
+    /// 那个年代的说明。占位那条**本片不删、活动栏那颗按钮也不改**（不扩范围）：换不换既有入口
+    /// 属语义变更，归组长裁；本片只补一处**门** + 一条菜单项。
+    @Published var isAccountSyncPresented = false
+
     // MARK: 执行计划（FR-DIAG-01）
 
     /// 执行计划面板的呈现开关。
@@ -6747,6 +6756,14 @@ final class AppState: ObservableObject {
         }
         selectActivityItem(.notes)
         Task { await reloadNotes() }
+    }
+
+    /// 打开「账户与同步…」面板（片 `云F` · 契约 §6.4「账号与同步界面（最小集）」）。
+    ///
+    /// 一扇门、一个写入口：菜单项（`DoyahStudioCommands`）与将来的活动栏入口都只许调它 ——
+    /// 「面板开没开」这件事在 `AppState` 里只有一个 `@Published`（`isAccountSyncPresented`）。
+    func showAccountSync() {
+        isAccountSyncPresented = true
     }
 
     func reloadNotes() async {
