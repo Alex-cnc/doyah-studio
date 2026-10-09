@@ -12,7 +12,7 @@
 于是同一个窗口里出现两种底（工作区是科技蓝、笔记是系统灰）。**门禁绿着、观感不对。**
 
 判据（六组）：
-    A **台账双向对账** —— `App/` 下每一处多行编辑面（`TextEditor(`）都必须在台账里登记；
+    A **台账双向对账** —— `App/` 下每一处多行编辑面（`TextEditor(` / `NotesRichTextEditor(`）都必须在台账里登记；
       台账里登记的每一份文件也必须在盘上真的还有编辑面（**新加编辑面要登记**，
       不许悄悄多出一个「自己画底色」的编辑面）。
     B **每个编辑面都挂 `.editorSurface()`** —— 且处数棘轮（挂了的处数 == 编辑面的处数）。
@@ -20,8 +20,9 @@
       `App/Views/EditorSurface.swift`；它的函数体必须真的走令牌
       （`scrollContentBackground(.hidden)` + `Theme.surface(.content)` + `Theme.text(.primary)`），
       且**不许**出现裸色 / 系统色 / 字号字面量。
-    D **另两个编辑面（AppKit `NSTextView`）** —— 工作区代码编辑器与数据库 SQL 编辑器
-      必须仍是「底色 = `Surface.content` / 字色 = `TextTone.primary`」，
+    D **另几个编辑面（AppKit `NSTextView`）** —— 工作区代码编辑器、数据库 SQL 编辑器与笔记正文
+      富文本面（`App/Views/NotesRichTextEditor.swift`，片 `WY-1b1`）必须仍是
+      「底色 = `Surface.content` / 字色 = `TextTone.primary`」，
       且**不许**退回系统底色（`NSColor.textBackgroundColor`）。
     E **空跑防护** —— 扫描面文件数 / 编辑面处数 / 台账条数三条下限 + 出处文件必须在位。
     F **反面：编辑面不许自己画底色** —— 视图里除了 `.editorSurface()` 之外，
@@ -61,11 +62,22 @@ SURFACE_BODY_TOKENS = (
 )
 SURFACE_BODY_FORBIDDEN = ("NSColor", "Color(", ".system(", "0x", "#")
 
-# 多行编辑面的标识：SwiftUI 的 `TextEditor`（另两个是 AppKit `NSTextView`，见 APPKIT_SURFACES）。
-EDITOR_TOKEN = "TextEditor("
+# 多行编辑面的标识：SwiftUI 的 `TextEditor`（另几个是 AppKit `NSTextView`，见 APPKIT_SURFACES）。
+# **2026-10-09（片 `WY-1b1`）**：笔记正文的编辑面从纯文本 `TextEditor` 换成富文本
+# `NotesRichTextEditor`（`NSViewRepresentable` 包 `NotesTextView`）—— 它**仍是一处多行编辑面**，
+# 于是加入标识集合（台账仍登记 `NotesPanel.swift`；`.`editorSurface()` 仍挂在它身上，
+# 处数棘轮「挂了的处数 == 编辑面处数」保持相等）。这是一次**等量换位**，不是降门槛：
+# `MIN_SURFACES` 一字未动。
+EDITOR_TOKENS = (
+    "TextEditor(",
+    "NotesRichTextEditor(",
+)
+# 报错文案里点名用的可读形态（判据口径只用上面的元组）。
+EDITOR_TOKENS_LABEL = " 或 ".join(EDITOR_TOKENS)
 APPKIT_SURFACES = (
-    "App/Views/CodeEditorView.swift",   # 工作区代码编辑器
-    "App/Views/SQLEditorView.swift",    # 数据库 SQL 编辑器
+    "App/Views/CodeEditorView.swift",       # 工作区代码编辑器
+    "App/Views/SQLEditorView.swift",        # 数据库 SQL 编辑器
+    "App/Views/NotesRichTextEditor.swift",  # 笔记正文富文本面（片 `WY-1b1`）
 )
 APPKIT_REQUIRED = (
     "backgroundColor = Theme.nsColor(Surface.content)",
@@ -83,8 +95,8 @@ LEDGER = (
     "App/Views/NotesPanel.swift",         # 笔记正文（内测 甲2 的正主）
 )
 
-MIN_APP_FILES = 90     # 实测 104（`App/` 下 `.swift`）
-MIN_SURFACES = 7       # 实测 7 处 `TextEditor(`（台账 6 份文件里）
+MIN_APP_FILES = 90     # 实测 105（`App/` 下 `.swift`）
+MIN_SURFACES = 7       # 实测 7 处多行编辑面（6 处 `TextEditor(` + 1 处 `NotesRichTextEditor(`，台账 6 份文件里）
 
 
 def read(path: pathlib.Path) -> str:
@@ -119,7 +131,7 @@ def surface_sites(text: str) -> list[int]:
     """多行编辑面的行号（从 1 起）。注释行不算（示例代码不是编辑面）。"""
     return [
         number for number, line in enumerate(text.splitlines(), 1)
-        if EDITOR_TOKEN in line and not is_comment(line)
+        if any(token in line for token in EDITOR_TOKENS) and not is_comment(line)
     ]
 
 
@@ -142,7 +154,7 @@ def carries_modifier(text: str, line_number: int) -> bool:
         if SURFACE_MODIFIER in line:
             return True
         stripped = line.strip()
-        if EDITOR_TOKEN in line or stripped.startswith("}") or stripped == "":
+        if any(token in line for token in EDITOR_TOKENS) or stripped.startswith("}") or stripped == "":
             return False
     return False
 
@@ -162,12 +174,14 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
         if name not in sources:
             problems.append(f"台账登记的编辑面 `{name}` 不在扫描面里 —— 文件被搬走 / 改名（台账陈旧）")
         elif name not in on_disk:
-            problems.append(f"台账登记的编辑面 `{name}` 里找不到 `{EDITOR_TOKEN}` —— 编辑面被搬走（台账陈旧）")
+            problems.append(
+                f"台账登记的编辑面 `{name}` 里找不到 `{EDITOR_TOKENS_LABEL}` —— 编辑面被搬走（台账陈旧）"
+            )
     for name in sorted(on_disk):
         if name not in LEDGER:
             where = ", ".join(str(number) for number in on_disk[name])
             problems.append(
-                f"`{name}`:{where} 出现 `{EDITOR_TOKEN}` —— 这是个**没登记**的编辑面"
+                f"`{name}`:{where} 出现 `{EDITOR_TOKENS_LABEL}` —— 这是个**没登记**的编辑面"
                 "（新加编辑面要登记进本判据的台账，并挂 `.editorSurface()`）"
             )
 
@@ -182,7 +196,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
                 wired += 1
             else:
                 problems.append(
-                    f"`{name}`:{number} 的 `{EDITOR_TOKEN}` 没挂 `{SURFACE_MODIFIER}`"
+                    f"`{name}`:{number} 的 `{EDITOR_TOKENS_LABEL}` 没挂 `{SURFACE_MODIFIER}`"
                     " —— 它会画系统底色（`textBackgroundColor`），与另两个编辑面对不上（内测 甲2）"
                 )
     modifier_count = sum(modifier_uses(text) for text in sources.values())
@@ -234,7 +248,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     if all(name in sources for name in APPKIT_SURFACES) and not any(
         APPKIT_FORBIDDEN in code_text(sources[name]) for name in APPKIT_SURFACES
     ):
-        notes.append("AppKit 两个编辑面：底色 `Surface.content` / 字色 `TextTone.primary` 在位")
+        notes.append("AppKit 三个编辑面：底色 `Surface.content` / 字色 `TextTone.primary` 在位")
 
     # ── F 编辑面不许自己画底色（除唯一出处外）───────────────────────────────
     for name, numbers in sorted(on_disk.items()):
@@ -283,7 +297,7 @@ def main() -> int:
     print(
         "\n✅ 编辑面的底色与字色只用主题令牌：每处多行编辑面都挂 `.editorSurface()` · "
         f"唯一出处 = `{SURFACE_DEFINITION}`（`Surface.content` / `TextTone.primary`）· "
-        "AppKit 两个编辑面仍是令牌色 · 台账双向对账通过 · 判据面在位"
+        "AppKit 三个编辑面仍是令牌色 · 台账双向对账通过 · 判据面在位"
     )
     return 0
 

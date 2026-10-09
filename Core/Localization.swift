@@ -290,6 +290,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case menuNotes
     case notesNew
     case notesSave
+    /// 笔记编辑工具条的**行内四枚**（片 `WY-1b1` · 派单 `T-20261009-045`）：纯图标 + 悬停名字
+    /// （与「保存」同一档口径：工具条上不许出现文字按钮，`FR-EXEC-13`）。
+    case notesFormatBold
+    case notesFormatItalic
+    case notesFormatUnderline
+    case notesFormatHighlight
     case notesDelete
     case notesSearchPlaceholder
     case notesEmpty
@@ -2539,6 +2545,10 @@ public enum LocalizedStrings {
         .menuNotes: [.simplifiedChinese: "笔记…", .english: "Notes…"],
         .notesNew: [.simplifiedChinese: "新建", .english: "New"],
         .notesSave: [.simplifiedChinese: "保存", .english: "Save"],
+        .notesFormatBold: [.simplifiedChinese: "粗体", .english: "Bold"],
+        .notesFormatItalic: [.simplifiedChinese: "斜体", .english: "Italic"],
+        .notesFormatUnderline: [.simplifiedChinese: "下划线", .english: "Underline"],
+        .notesFormatHighlight: [.simplifiedChinese: "荧光笔（淡黄）", .english: "Highlighter (pale yellow)"],
         .notesDelete: [.simplifiedChinese: "删除", .english: "Delete"],
         .notesSearchPlaceholder: [.simplifiedChinese: "搜索标题 / 正文 / 标签", .english: "Search title, body or tags"],
         .notesEmpty: [.simplifiedChinese: "还没有笔记", .english: "No notes yet"],

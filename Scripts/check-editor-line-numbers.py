@@ -307,6 +307,8 @@ FIXTURE_SOURCES = [
     # 同理（2026-10-08）：台账补登笔记面只读预览正文（`PreviewTextView`，N2-3a）⇒ 它也得进夹具，
     # 否则「原样应当绿（夹具与真仓库同源）」会因为台账指向的文件不在夹具里而红。
     "App/Views/NotePreviewBody.swift",
+    # 同理（2026-10-09）：台账补登笔记正文富文本编辑面（`NotesTextView`，片 `WY-1b1`）⇒ 它也得进夹具。
+    "App/Views/NotesRichTextEditor.swift",
 ]
 FIXTURE_DOCS = list(DOC_ANCHORS)
 

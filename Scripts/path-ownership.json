@@ -197,6 +197,30 @@
    "reason": "片 N2-4（任务 t_b2a943b6 · macOS 机组）：自动保存新增两处空守卫（`autosaveNoteEditor` / `flushNoteAutosave`，form=internal，理由逐条写在台账里）⇒ L-50 的处置对账台账跟版（守卫 28 → 30 条）",
    "by": "macos",
    "at": "2026-10-07"
+  },
+  {
+   "glob": "Scripts/check-editor-surface-tokens.py",
+   "reason": "片 WY-1b1（任务 t_32b856f8 · macOS 机组）：笔记正文编辑面从纯文本 `TextEditor` 换成富文本 `NotesRichTextEditor` ⇒ 编辑面标识集合加一项、AppKit 面台账加 `NotesRichTextEditor.swift`（等量换位，`MIN_SURFACES` 未动）",
+   "by": "macos",
+   "at": "2026-10-09"
+  },
+  {
+   "glob": "Scripts/notes-offline-gate.json",
+   "reason": "片 WY-1b1（任务 t_32b856f8 · macOS 机组）：新增笔记源文件 `App/Views/NotesRichTextEditor.swift` 登记进零网络出口范围（漏登一个 = 它偷偷不受约束）",
+   "by": "macos",
+   "at": "2026-10-09"
+  },
+  {
+   "glob": "Scripts/test-notes-offline-gate.py",
+   "reason": "片 WY-1b1（任务 t_32b856f8 · macOS 机组）：负例副本的最小文件集跟上新增的笔记源文件（否则「干净副本」那一例会因「台账写了、盘上没有」假红）",
+   "by": "macos",
+   "at": "2026-10-09"
+  },
+  {
+   "glob": "Scripts/panel-root-frames.json",
+   "reason": "片 WY-1b1（任务 t_32b856f8 · macOS 机组）：`App/Views/` 新增一个视图文件 ⇒ 台账 `scannedFiles` 85 → 86（扫描范围变了要同步台账）",
+   "by": "macos",
+   "at": "2026-10-09"
   }
  ],
  "unclassified_allow": [

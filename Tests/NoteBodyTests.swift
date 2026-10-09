@@ -253,4 +253,55 @@ final class NoteBodyTests: XCTestCase {
         XCTAssertEqual(odd.spans.map(\.text).joined(), "未闭合 **粗体")
         XCTAssertEqual(NoteBodyProjection.fromSpans([]).markdown, "")
     }
+
+    // MARK: 片 `WY-1b1`（编辑面富文本化 + 行内四枚）：`underline` / `backgroundColor` 两个新字段
+
+    /// **判据 ①（本片的新增项）**：span 承载 `bold / italic / underline / backgroundColor` 时
+    /// `spans → JSON → spans` **往返不丢** —— 四个字段各判一次（片 `WY-1b1` 加的是后两个）。
+    func testUnderlineAndBackgroundSurviveRoundTrip() throws {
+        let spans = [
+            NoteSpan(text: "粗", styles: [.bold]),
+            NoteSpan(text: "斜", styles: [.italic]),
+            NoteSpan(text: "下", styles: [.underline]),
+            NoteSpan(text: "划", styles: [.bold, .underline], backgroundColor: NoteHighlight.backgroundColorHex),
+            NoteSpan(text: "普")
+        ]
+        let body = NoteBody(spans: spans)
+        let back = try JSONDecoder().decode(NoteBody.self, from: try JSONEncoder().encode(body))
+        XCTAssertEqual(back.spans, spans, "四样样式（粗 / 斜 / 下划线 / 底色）往返不许丢")
+        XCTAssertEqual(back.spans[3].backgroundColor, NoteHighlight.backgroundColorHex)
+        XCTAssertTrue(back.spans[3].styles.contains(.underline))
+    }
+
+    /// **下划线是「样式」（进 `styles` 集合，与 bold / italic 同形）**；底色是**独立字段**
+    /// （与 `color` 同形，`#RRGGBB`）—— 两个字段的形状这轮就钉住，别下一个人再各写一套。
+    func testUnderlineIsAStyleAndBackgroundIsAField() {
+        let span = NoteSpan(text: "字", styles: [.underline], backgroundColor: "#FFF3B0")
+        XCTAssertTrue(NoteSpan.Style.allCases.contains(.underline), "underline 进样式集合（CaseIterable 里有它）")
+        XCTAssertEqual(span.backgroundColor, "#FFF3B0")
+        XCTAssertNil(NoteSpan(text: "字").backgroundColor, "没铺底色的 span 是 nil（不是空串）")
+    }
+
+    /// **底色与下划线不进 Markdown 投影**（Markdown 表达不了）—— 正文里不许冒出标记，
+    /// 也不许因为「表达不了」就改写 / 吞掉文字。落库那条路（span 直存）归片 `WY-2`。
+    func testUnderlineAndBackgroundDoNotLeakIntoMarkdown() {
+        let body = NoteBody(spans: [
+            NoteSpan(text: "加粗", styles: [.bold]),
+            NoteSpan(text: "带底色", styles: [.underline], backgroundColor: NoteHighlight.backgroundColorHex),
+            NoteSpan(text: "普通")
+        ])
+        XCTAssertEqual(body.markdown, "**加粗**带底色普通", "下划线 / 底色不产出标记，粗体仍是 Markdown 那一档")
+    }
+
+    /// **淡黄底色的唯一出处**：数值形态与字符串形态**是同一个值** —— 谁改一个忘了另一个当场红。
+    func testHighlightColorHasASingleSource() {
+        let channels = Self.channels(ofHex: NoteHighlight.rgb)
+        let hex = String(format: "#%02X%02X%02X", channels.red, channels.green, channels.blue)
+        XCTAssertEqual(hex, NoteHighlight.backgroundColorHex, "NoteHighlight 的两个形态必须是同一个色值")
+    }
+
+    /// 把 `0xRRGGBB` 拆成三通道（Core 测试里没有 AppKit，自己拆一遍，口径与 `NoteHighlight.rgb` 对齐）。
+    private static func channels(ofHex hex: UInt32) -> (red: Int, green: Int, blue: Int) {
+        (red: Int((hex >> 16) & 0xFF), green: Int((hex >> 8) & 0xFF), blue: Int(hex & 0xFF))
+    }
 }

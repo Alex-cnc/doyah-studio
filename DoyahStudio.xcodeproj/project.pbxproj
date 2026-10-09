@@ -50,6 +50,7 @@
 		12FFB9DE406BF2B633A4D946 /* TerminalScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B1DE01A972FDCCEE802B6D /* TerminalScreenTests.swift */; };
 		130164AD5FB74234C8AAA7E1 /* SQLArchiveStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4AB8694B0050BC9FE4EC1E /* SQLArchiveStore.swift */; };
 		132616D1E0EA652757677A92 /* QueryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 396637D9ED2A115B613C3FF3 /* QueryModels.swift */; };
+		1369CF2C95F5AE4744E6F1A7 /* NotesRichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CF1A602A8E4FFB00CD9B83E /* NotesRichTextEditor.swift */; };
 		152D3BF03D62E44C305E843A /* AICapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE37FC23299B1643B48049DD /* AICapture.swift */; };
 		157BBBFD05FB6A6698E7D845 /* BackupToolCheckTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2445EA872B7A6DCBF7B2250 /* BackupToolCheckTests.swift */; };
 		158043066792BD5884923C09 /* SlowQueryReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A475C7B4865E90B8BA1687C5 /* SlowQueryReport.swift */; };
@@ -302,6 +303,7 @@
 		863125031237016F67BE296C /* KeepAliveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB00B9FB2D8ED6E1E439AB79 /* KeepAliveTests.swift */; };
 		8696E4D98E5F8E50CD9F4CD7 /* DoyahPlatform.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 104D2C16A7A77A93CCF270D9 /* DoyahPlatform.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		86CEF4622428D3E66220F978 /* TerminalScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD290F66ED9157B540E9314B /* TerminalScreen.swift */; };
+		876052A518F5BCFBC3552BBC /* QueryHistoryPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD73C25E354E2EF319313021 /* QueryHistoryPrompt.swift */; };
 		87A523BB20EAA34EF562E214 /* TerminalSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD28DDB09B743A8843A3AF4A /* TerminalSettingsTests.swift */; };
 		88045D856243C9481E811835 /* MemoryGovernance.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDE7FD3151693215F320D13B /* MemoryGovernance.swift */; };
 		8804DDBB0161539DE1A7EB4B /* DataTaskSpecSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB06FA08DA478F5385B46065 /* DataTaskSpecSheet.swift */; };
@@ -522,6 +524,7 @@
 		EED6F842A1693E2773BAB678 /* EditorSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A64B5F54EEC87CDDB424C35 /* EditorSurface.swift */; };
 		F01CE2DEE7C4CE185EB1BE7A /* MenuLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D4FDE29508DF1C08F16FC7 /* MenuLocalizationTests.swift */; };
 		F044E1DBAD9C878AEE3ECBC1 /* InlineEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AE4EDF77D18515395988BFC /* InlineEdit.swift */; };
+		F14D6428508593E8DF8656FC /* QueryHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54F984DFF691F507B800DF5B /* QueryHistoryStore.swift */; };
 		F160603BB11812DD20648BC3 /* BackupRestoreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F796B9CA6789ED235CD91983 /* BackupRestoreSheet.swift */; };
 		F170B68EAB7ABED07E75818A /* MCPProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 629DAAF0F7DFCC521F1421BC /* MCPProtocol.swift */; };
 		F17C5DE2E5DB3BC4006A6F03 /* RoutineCandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AD7AD2E539DA21145AF89FD /* RoutineCandidate.swift */; };
@@ -534,6 +537,7 @@
 		F8A8E77E33541ED4AFDB1815 /* ResultGridStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E640E9E4EF3C833E9214ADD /* ResultGridStateTests.swift */; };
 		F8CF8986CE459C7049AC02F6 /* SSHTunnelSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 022D8FF5154D72912F8BC564 /* SSHTunnelSecrets.swift */; };
 		F90DB7A5B2D3EFA87DF4CB0A /* RoutineCandidatesPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6772FEF2266FFFFDF053BD3A /* RoutineCandidatesPanel.swift */; };
+		F98482A957FD9BD18475D786 /* QueryHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A6F9BE40ED213EFB0706CBF /* QueryHistoryStoreTests.swift */; };
 		F990BDB03CB950995703DAA5 /* PrivilegeProbeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BC38248EAE4B838A8592036 /* PrivilegeProbeTests.swift */; };
 		FA322EE27A0A509CB0F65E5B /* CommandPaletteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F0A52D0B9469A6C77735AA /* CommandPaletteTests.swift */; };
 		FA43E381D30705D89F9AFE32 /* XLSXReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1181A94A5A6F55DB84D27003 /* XLSXReader.swift */; };
@@ -798,6 +802,7 @@
 		4954FA9E22FBF93DE1356406 /* AgentAuditPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAuditPresentation.swift; sourceTree = "<group>"; };
 		49FA37B58DBA38E5B8CF96EE /* ResultFilterSQL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultFilterSQL.swift; sourceTree = "<group>"; };
 		4A00684C5D12762432788189 /* ObjectDDLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectDDLTests.swift; sourceTree = "<group>"; };
+		4A6F9BE40ED213EFB0706CBF /* QueryHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryHistoryStoreTests.swift; sourceTree = "<group>"; };
 		4B1B358B198CAAC96D1DFDA4 /* DataTaskTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataTaskTests.swift; sourceTree = "<group>"; };
 		4BAF2BC6D6B22F11FB9A9A48 /* TodoPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoPresentation.swift; sourceTree = "<group>"; };
 		4C604886B315DB3AEA77E165 /* NotesPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesPanel.swift; sourceTree = "<group>"; };
@@ -820,6 +825,7 @@
 		538FD957E0C99758FB8D9038 /* ArchiveLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveLocationTests.swift; sourceTree = "<group>"; };
 		53EA83CB77D831A144C1CA5E /* NotebookShelfMoveStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookShelfMoveStorageTests.swift; sourceTree = "<group>"; };
 		54A7D755C5B135B045AFA5EB /* ResultFilterSQLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultFilterSQLTests.swift; sourceTree = "<group>"; };
+		54F984DFF691F507B800DF5B /* QueryHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryHistoryStore.swift; sourceTree = "<group>"; };
 		56D190F5C7F64C20850697F0 /* ServerObjects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerObjects.swift; sourceTree = "<group>"; };
 		56FCA2A9A6593E6276436D28 /* CancellationNoiseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CancellationNoiseTests.swift; sourceTree = "<group>"; };
 		575338F2996C994F4AEA7E03 /* TransactionSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionSessionTests.swift; sourceTree = "<group>"; };
@@ -962,6 +968,7 @@
 		99EC106756D4161CE9445454 /* InlineEditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineEditTests.swift; sourceTree = "<group>"; };
 		9AB7303AF9FF6357B10BD7D6 /* SaveQuerySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveQuerySheet.swift; sourceTree = "<group>"; };
 		9BA67005C82C749296CD86A9 /* LicenseLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseLoader.swift; sourceTree = "<group>"; };
+		9CF1A602A8E4FFB00CD9B83E /* NotesRichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesRichTextEditor.swift; sourceTree = "<group>"; };
 		9DFF39456653F4FD79AD9C28 /* SyntheticData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticData.swift; sourceTree = "<group>"; };
 		9FAC342296394F961CB246F9 /* SchemaDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaDiff.swift; sourceTree = "<group>"; };
 		A00BB029440E5B82A532004F /* CopyTextFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopyTextFormat.swift; sourceTree = "<group>"; };
@@ -1055,6 +1062,7 @@
 		CCAA5487D12734A2F61B4AEB /* SQLEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLEditorView.swift; sourceTree = "<group>"; };
 		CCADC37BB5BF2B221BF615C7 /* NotebookStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookStorageTests.swift; sourceTree = "<group>"; };
 		CD446AD2AB1D8CE114FCAA83 /* SecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretStore.swift; sourceTree = "<group>"; };
+		CD73C25E354E2EF319313021 /* QueryHistoryPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryHistoryPrompt.swift; sourceTree = "<group>"; };
 		CDE7FD3151693215F320D13B /* MemoryGovernance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryGovernance.swift; sourceTree = "<group>"; };
 		CE3404D30FCA9C5CBBAB8DBD /* CodeCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeCompletion.swift; sourceTree = "<group>"; };
 		CF0B97CE0F60557E9F1BB533 /* FoundationSecurityScopedBookmarking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationSecurityScopedBookmarking.swift; sourceTree = "<group>"; };
@@ -1408,6 +1416,7 @@
 				C6A05B98639B8833318F4201 /* PostgresServiceTests.swift */,
 				1BC38248EAE4B838A8592036 /* PrivilegeProbeTests.swift */,
 				620319668625E38EADD657CB /* QueryCompletionTests.swift */,
+				4A6F9BE40ED213EFB0706CBF /* QueryHistoryStoreTests.swift */,
 				4CBF5098C754404B2A35E722 /* QueryMemoryTests.swift */,
 				1FF9F725FC2B73D0C59613C1 /* QueryToolbarConventionTests.swift */,
 				2452576D49A6720859C54BB5 /* ReminderEntryTests.swift */,
@@ -1627,6 +1636,8 @@
 				437A0AA1D08D4EFBDE956A96 /* PostgresWireValue.swift */,
 				1053065542E38D0A6B38E9BE /* PrivilegeProbe.swift */,
 				188EFEA1CFEDF23DF05F8CA6 /* QueryCompletion.swift */,
+				CD73C25E354E2EF319313021 /* QueryHistoryPrompt.swift */,
+				54F984DFF691F507B800DF5B /* QueryHistoryStore.swift */,
 				A311326241D9B1B5036F0D96 /* QueryMemory.swift */,
 				396637D9ED2A115B613C3FF3 /* QueryModels.swift */,
 				0C9683A18ADF2FA806B37658 /* Reminder.swift */,
@@ -1765,6 +1776,7 @@
 				D2C9287961D51A2CC6598792 /* NebulaBackground.swift */,
 				C317B402BCFF61672290359B /* NotePreviewBody.swift */,
 				4C604886B315DB3AEA77E165 /* NotesPanel.swift */,
+				9CF1A602A8E4FFB00CD9B83E /* NotesRichTextEditor.swift */,
 				3E6523603226B14944DB3254 /* ObjectSearchPanel.swift */,
 				74EE9103E63CD4DB70251E35 /* ObjectTreeAppKitMenu.swift */,
 				301F4E6D7D02702F8786EEAD /* ObjectTreeContextMenu.swift */,
@@ -2156,6 +2168,7 @@
 				511466BA5C6E4642249CB237 /* NebulaBackground.swift in Sources */,
 				96EBF0D15B47E98EEC272394 /* NotePreviewBody.swift in Sources */,
 				E82CFBAE23875685C0370117 /* NotesPanel.swift in Sources */,
+				1369CF2C95F5AE4744E6F1A7 /* NotesRichTextEditor.swift in Sources */,
 				42375BDC9F67BF7BC406ACB7 /* ObjectSearchPanel.swift in Sources */,
 				23953C0248F3C7E5B8D1C9D4 /* ObjectTreeAppKitMenu.swift in Sources */,
 				D0811A31C309429ED03B7C3D /* ObjectTreeContextMenu.swift in Sources */,
@@ -2349,6 +2362,8 @@
 				D0EB88A0BF0EC1D006D4D49A /* PostgresWireValue.swift in Sources */,
 				32F70A82D45C27C4D016C777 /* PrivilegeProbe.swift in Sources */,
 				80C4C178EF93680F0DF1F6F6 /* QueryCompletion.swift in Sources */,
+				876052A518F5BCFBC3552BBC /* QueryHistoryPrompt.swift in Sources */,
+				F14D6428508593E8DF8656FC /* QueryHistoryStore.swift in Sources */,
 				FF92A3AC95ECD15E5FF9E46A /* QueryMemory.swift in Sources */,
 				132616D1E0EA652757677A92 /* QueryModels.swift in Sources */,
 				8F865A7421C1B84FDE26EE8B /* Reminder.swift in Sources */,
@@ -2549,6 +2564,7 @@
 				1C32517CD1265B97DCD37767 /* PostgresServiceTests.swift in Sources */,
 				F990BDB03CB950995703DAA5 /* PrivilegeProbeTests.swift in Sources */,
 				1D1B52BA9110A91608596A52 /* QueryCompletionTests.swift in Sources */,
+				F98482A957FD9BD18475D786 /* QueryHistoryStoreTests.swift in Sources */,
 				B6CD320721465DFC5D479ECC /* QueryMemoryTests.swift in Sources */,
 				B8CDA63A4994CE0ECC0F420B /* QueryToolbarConventionTests.swift in Sources */,
 				075D09622F1CF774E9102047 /* ReminderEntryTests.swift in Sources */,
