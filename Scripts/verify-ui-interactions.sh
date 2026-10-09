@@ -102,6 +102,8 @@ cd "${ROOT}"
 
 LOG="${OUT}/run-$(date +%Y%m%d-%H%M%S).log"
 echo "==> 跑交互探针（${FILTER}）—— 证据日志 ${LOG}"
+# 证据面（T-20261009-095 ②）：回执里的「工具链」必须可复现 ⇒ 每次跑都写进输出（`DEVELOPER_DIR` 仍可外部覆盖）。
+echo "ℹ️ 工具链证据: DEVELOPER_DIR=${DEVELOPER_DIR} · $("${DEVELOPER_DIR}/usr/bin/xcodebuild" -version 2>/dev/null | tr '\n' ' ')"
 set +e
 "${SWIFT}" test \
     --disable-sandbox \

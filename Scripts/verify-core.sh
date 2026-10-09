@@ -17,6 +17,10 @@ export CLANG_MODULE_CACHE_PATH="${SCRATCH}/clang-module-cache"
 export SWIFT_MODULE_CACHE_PATH="${SCRATCH}/swift-module-cache"
 mkdir -p "${SCRATCH}" "${CACHE}" "${CLANG_MODULE_CACHE_PATH}" "${SWIFT_MODULE_CACHE_PATH}"
 
+# 证据面（T-20261009-095 ②）：凡跑 swift test / xcodebuild 的证据必须能复现「用的哪套工具链」
+# ⇒ 每次跑都把这行打进输出；`DEVELOPER_DIR` 仍可被外部显式覆盖（本机制不锁死取值）。
+echo "ℹ️ 工具链证据: DEVELOPER_DIR=${DEVELOPER_DIR} · $("${DEVELOPER_DIR}/usr/bin/xcodebuild" -version 2>/dev/null | tr '\n' ' ')"
+
 # 「文档里的数字」台账（Scripts/doc-numbers.json）的 core-tests 那一项，证据落在下面两个文件里：
 TEST_LOG="${SCRATCH}/core-test.log"
 COUNT_FILE="${SCRATCH}/core-test-count.txt"
