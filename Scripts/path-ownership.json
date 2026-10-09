@@ -56,7 +56,8 @@
  "shared": [
   "Docs/",
   "Scripts/",
-  "AGENT-SPEC.md"
+  "AGENT-SPEC.md",
+  "cloud-sync/"
  ],
  "shared_note": "共享面 = 两侧都写的地方：改它**不算越界**，但要走声明式台账（清单 `shared_ledger` 改前登记 / 本次新增行注 `shared-surface：理由` / 提交信息注 `shared-surface: 理由`），三处都没有理由 ⇒ 判红。`Scripts/` 在派活单 T-20261002-029 里被同时列进「macOS 仓根族」与「共享面」两处 ⇒ 本清单按**共享面**收口：里面的判据（`check-*.py` / `verify-all.sh`）被两侧共同调用，`Scripts/doc-numbers.json` 的 `checkScriptParity` 也是按「闭环引用」写的，判它是某一端专属会与现行事实相抵。要改成 macOS 专属 ⇒ 改这一行 + 记一笔变更。",
  "shared_require_declaration": true,
@@ -262,6 +263,12 @@
  {
    "glob": "Scripts/path-ownership.json",
    "reason": "同上（片 `云批-补正` · 任务 t_ce3ce7cc）：本次两处共享面改动的声明登记在本清单",
+   "by": "macos",
+   "at": "2026-10-09"
+ },
+ {
+   "glob": "cloud-sync/**",
+   "reason": "跨端互验前置取证面（各端一份 格式自证-<端>.md；本侧 macOS 侧交付云E）",
    "by": "macos",
    "at": "2026-10-09"
  }
