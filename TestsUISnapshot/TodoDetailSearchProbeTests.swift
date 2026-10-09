@@ -24,9 +24,13 @@ import DoyahCore
 ///    可数的整数；`TextField` 落到真 `NSTextField`（`MySQLFormProbeTests` 读端口那一格同源）⇒
 ///    「**右栏有没有可编辑控件**」也是可数的（`只读 ≠ 编辑` 的机械形状就是这么判的）；
 /// ② **这一遍 `L(...)` 取到过的文案**（`UISnapshot` 的记录）：判得动语言表里那些句子，
-///    **判不了用户数据**（任务标题 / 标签不走 `L(...)`）。所以「右栏画的是哪一条」由**只有右栏会印、
-///    且不与任何下拉的条目撞车**的读数来判：夹具 A 的截止落在「更晚」那一带
-///    （`todoDueLater` 这句**只有带那一栏会印**，筛选下拉的五档里没有它）。
+///    **判不了用户数据**（任务标题 / 标签不走 `L(...)`），也**判不了定形文本**（片 `TD-DUE` 之后
+///    详情那一行的截止是与安卓同形的具体时刻 `MM-DD HH:mm`，它不是语言表里的句子 ⇒ 不进这份记录）。
+///    所以「右栏画的是哪一条」由**只有右栏会印、且不与任何下拉的条目撞车**的读数来判：夹具 A 的
+///    优先级是「高」（`todoPriorityHigh`；B / C 分别是「低」/「普通」），而分带词里**只有「以后」
+///    （`todoDueLater`）不与筛选下拉那五档撞车**（另外四句逐字相同 ⇒ 在本屏判不动），它现在
+///    **不再上详情** —— 这正是片 `TD-DUE` 的成对读数：改前 `todoDueLater`（「以后」）就落在这一份
+///    记录里（那时只有详情会印它），改后不在。另外四句由末尾那条「只装右栏那一件」的用例判。
 ///
 /// ## 判据（可机械跑 · 每组都印读数）
 ///
@@ -34,8 +38,9 @@ import DoyahCore
 ///   → `AppState.todoDetailTodo` → `TodoRightPaneView`）。为了让「右栏画的是哪一条」**不被左侧清单
 ///   污染**，这一遍把清单用「只存在于标签里的那个词」搜空（它同时就是 乙③ 的反向对照）：
 ///   ① 正面：活宿主里**清单 0 行**；文案里有两条轴名（`todoDueLabel` / `todoPriorityLabel`）与
-///      A 的带 / 优先级（`todoDueLater`「更晚」/ `todoPriorityHigh`）—— 清单是空的 ⇒ 这两个读数
-///      **只可能来自右栏**；
+///      A 的优先级（`todoPriorityHigh`），而分带词「以后」（`todoDueLater`）**不在** —— 清单是空的 ⇒
+///      这些读数**只可能来自右栏**（片 `TD-DUE`：详情那一行的截止已是与安卓同形的**具体时刻**，
+///      改前「以后」正是详情印的；其余四句与筛选下拉撞车，在本屏判不动）；
 ///   ② 反面（这一片的关键）：**一条都不许出现**编辑器那三句（`todoTitlePlaceholder`「待办标题」/
 ///      `todoHasDueLabel`「有截止时间」/ `notesSave`「保存」）—— **只读 ≠ 编辑**；
 ///   ③ 对照：`beginNewTodo()` 之后**同一个件**渲染出来**必须**有那三句，否则 ② 的「没有」
@@ -295,13 +300,25 @@ final class TodoDetailSearchProbeTests: XCTestCase {
         for (index, language) in UISnapshot.coverageLanguages.enumerated() {
             let texts = seen(detail, index)
             let wanted = language == .simplifiedChinese
-                ? [zh(.todoDueLabel), zh(.todoPriorityLabel), zh(.todoDueLater), zh(.todoPriorityHigh)]
-                : [en(.todoDueLabel), en(.todoPriorityLabel), en(.todoDueLater), en(.todoPriorityHigh)]
+                ? [zh(.todoDueLabel), zh(.todoPriorityLabel), zh(.todoPriorityHigh)]
+                : [en(.todoDueLabel), en(.todoPriorityLabel), en(.todoPriorityHigh)]
             let missing = wanted.filter { !texts.contains($0) }
             XCTAssertTrue(
                 missing.isEmpty,
-                "右栏只读详情上缺 \(missing)（清单这一遍是 0 行 ⇒ 这两个读数只可能来自右栏）—— \(language.rawValue) 那遍"
+                "右栏只读详情上缺 \(missing)（清单这一遍是 0 行 ⇒ 这些读数只可能来自右栏）—— \(language.rawValue) 那遍"
             )
+            // 片 `TD-DUE`（派单 `T-20261009-042` ④）：详情那一行的截止改成**具体时刻**（`TodoDueText.text`）
+            // 之后，详情上不再印分带词。这一遍能当**干净读数**的只有「以后」（`todoDueLater`）—— 另外四句
+            // （今天 / 本周 / 已过期 / 无截止）与**筛选下拉那五档**逐字相同（`todoFilter*`：语言表里两组
+            // 中文、英文都一字不差），在这一屏上撞车，判不动。成对读数：**改前本探针正是拿「以后」判的**
+            // （夹具 A 的截止落在那一带 ⇒ 那时只有详情会印它），改后它不再出现。
+            let laterGhost = language == .simplifiedChinese ? zh(.todoDueLater) : en(.todoDueLater)
+            XCTAssertFalse(
+                texts.contains(laterGhost),
+                "详情那一行的截止该是与安卓同形的具体时刻了，却仍印着分带词「\(laterGhost)」—— \(language.rawValue) 那遍"
+            )
+            // 分带五句里那四句与筛选档撞车的，改由「**只装右栏那一件**」的那一遍判（本文件末尾
+            // `testDetailDueShowsConcreteMomentLikeAndroid`：不带清单、不带检索格 ⇒ 没有撞车面）。
             let forbidden = language == .simplifiedChinese
                 ? [zh(.todoTitlePlaceholder), zh(.todoHasDueLabel), zh(.notesSave)]
                 : [en(.todoTitlePlaceholder), en(.todoHasDueLabel), en(.notesSave)]
@@ -324,7 +341,7 @@ final class TodoDetailSearchProbeTests: XCTestCase {
                 "空态说成了「\(empty)」—— 库里明明有任务，这是一句假话（\(language.rawValue) 那遍）"
             )
             record("🔒 甲（\(language.rawValue)）：清单那一支已被空态替换（NSTableView \(emptyRows.count) 张）；右栏读数 "
-                + wanted.map { "「\($0)」" }.joined(separator: " / ") + " 都在；编辑器 "
+                + wanted.map { "「\($0)」" }.joined(separator: " / ") + " 都在；分带词「\(laterGhost)」不在；编辑器 "
                 + forbidden.map { "「\($0)」" }.joined(separator: " / ") + " 一句都没有；空态 = 「\(filtered)」")
         }
 
@@ -485,5 +502,133 @@ final class TodoDetailSearchProbeTests: XCTestCase {
             }
             record("🔤 \(key.rawValue)：zh=「\(zh(key))」 / en=「\(en(key))」")
         }
+    }
+
+    /// 片 `TD-DUE`（派单 `T-20261009-042` ④）：详情「截止」那一行 = **与安卓同形的具体时刻**。
+    ///
+    /// 口径出处（对侧实读）：安卓详情那一格是 `todo.dueAt?.let { TimeText.dueText(it) } ?: 「无截止」`
+    /// （`DoyahNotes/platform/android/app/src/main/java/studio/doyah/notes/android/ui/TodoDetailDialog.kt`），
+    /// `TimeText.dueText`（同目录 `TimeText.kt`）= 两位月 - 两位日 + 24 小时制分钟（例 `10-09 09:00`）。
+    ///
+    /// 四组读数：
+    ///   ① **同形**：`TodoDueText.text(<2026-10-09 09:00>)` == `10-09 09:00`，夹具里那一刻（「30 天后」）
+    ///      也落在同一个形状上（正则判形状，不写死字面量），零点那一档另判一遍（免得被 12 小时制换掉）；
+    ///   ② **无截止走既有键**：`TodoDueText.text(nil)` == 语言表里那两句「无截止」（中英各判一遍，
+    ///      取值在语言窗口内算）—— 不新造文案；
+    ///   ③ **成对读数**（同一份源码里的计数，改前 → 改后）：`App/Views/NotesPanel.swift` 里
+    ///      `TodoQuery.band(of:` **1 ⇒ 0**、`TodoDueText.text(` **0 ⇒ 1**；而清单行 / 分组那一侧
+    ///      （`App/Views/TodoCalendarView.swift`）仍是 **2**、`Core/TodoQuery.swift` 的分带本体仍在
+    ///      —— **分带读数不许被动**；
+    ///   ④ **只装右栏那一件**（不带清单 / 检索格 / 筛选下拉 ⇒ 没有「与筛选档逐字撞车」那层混淆面）：
+    ///      分带五句**一句都不许在**，而轴名 + 优先级仍在（反向对照，否则「没有带词」是空跑）。
+    @MainActor
+    func testDetailDueShowsConcreteMomentLikeAndroid() throws {
+        // ① 同形：样例时刻 ⇒ 与安卓 `TimeText.dueText` 同一个形状。
+        let sample = try XCTUnwrap(
+            DateComponents(calendar: .current, year: 2026, month: 10, day: 9, hour: 9, minute: 0).date,
+            "构造不出样例时刻（2026-10-09 09:00）"
+        )
+        XCTAssertEqual(
+            TodoDueText.text(sample), "10-09 09:00",
+            "详情那一行的截止形状变了 —— 安卓侧 `TimeText.dueText` 是 `MM-DD HH:mm`（例 `10-09 09:00`）"
+        )
+        XCTAssertEqual(
+            TodoDueText.format, "MM-dd HH:mm",
+            "形状常量被动过（`dd` = 月内第几天、`HH` = 24 小时制 —— 换成 `DD` 就成了「一年里的第几天」）"
+        )
+        let shape = #"^[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$"#
+        let later = Calendar.current.date(
+            byAdding: .day, value: 30, to: Calendar.current.startOfDay(for: Date())
+        ) ?? Date()
+        let rendered = TodoDueText.text(later)
+        XCTAssertNotNil(
+            rendered.range(of: shape, options: .regularExpression),
+            "夹具那一刻（30 天后）没落在 `MM-DD HH:mm` 这个形状上：实测「\(rendered)」"
+        )
+        let midnight = try XCTUnwrap(
+            DateComponents(calendar: .current, year: 2026, month: 1, day: 1, hour: 0, minute: 5).date,
+            "构造不出零点样例（2026-01-01 00:05）"
+        )
+        XCTAssertEqual(TodoDueText.text(midnight), "01-01 00:05", "零点这一档被换成 12 小时制了？")
+        record("🕘 同形：2026-10-09 09:00 ⇒ 「\(TodoDueText.text(sample))」；30 天后 ⇒ 「\(rendered)」；"
+            + "2026-01-01 00:05 ⇒ 「\(TodoDueText.text(midnight))」")
+
+        // ② 无截止 ⇒ 语言表里既有那一句（不新造文案），中英各判一遍。
+        //    ⚠ 取值必须在**语言窗口内**算：`TodoDueText.text(nil)` 走 `L(...)`，在窗口外算拿的是本机
+        //    偏好语言（本机是英文）—— 与「期望值那一遍」不同一条路就比不出东西（本用例第一版就是这么错的）。
+        for language in UISnapshot.coverageLanguages {
+            let none = UISnapshot.localizedText(language) { L(.todoDueNone) }
+            let renderedNone = UISnapshot.localizedText(language) { TodoDueText.text(nil) }
+            XCTAssertEqual(
+                renderedNone, none,
+                "无截止该走语言表里既有的那一句（\(language.rawValue)）"
+            )
+            record("🕘 无截止（\(language.rawValue)）⇒ 「\(renderedNone)」（既有键，未新造）")
+        }
+
+        // ④ **只装右栏那一件**（不带清单、不带检索格 / 筛选下拉）：没有「与筛选档逐字撞车」那层混淆面，
+        //    分带五句**一句都不许在**（撞不动的东西才判得动 —— 甲那一遍只能判「以后」一句）。
+        //    反向对照 = 两条轴名与 A 的优先级「高」必须在（否则「一句带词都没有」可能只是「这一棵没渲染」）。
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        _ = try UISnapshot.applyLicense(.standard, to: host.state)
+        populate(host)
+        host.state.todoSearchText = ""
+        host.state.showTodoDetail(host.state.todos[0])
+        pump(0.2)
+        XCTAssertNotNil(host.state.todoDetailTodo, "前置：这一遍右栏该是只读详情（不是编辑器）")
+        let pane = try UISnapshot.writeBothLanguages("probe-td-due-detail-pane", size: Self.areaSize) {
+            AnyView(environment(TodoRightPaneView(), host))
+        }
+        let bandKeys: [LKey] = [.todoDueOverdue, .todoDueToday, .todoDueThisWeek, .todoDueLater, .todoDueNone]
+        for (index, language) in UISnapshot.coverageLanguages.enumerated() {
+            let texts = seen(pane, index)
+            let bandWords = bandKeys.map { language == .simplifiedChinese ? zh($0) : en($0) }
+            let leaks = bandWords.filter { texts.contains($0) }
+            XCTAssertTrue(
+                leaks.isEmpty,
+                "只读详情那一件上出现了分带词 \(leaks) —— 这一棵没有筛选下拉（片 `TD-DUE` 之后）"
+                    + "带词只可能来自详情本身（\(language.rawValue) 那遍）"
+            )
+            let anchors = [LKey.todoDueLabel, .todoPriorityLabel, .todoPriorityHigh]
+                .map { language == .simplifiedChinese ? zh($0) : en($0) }
+            let missing = anchors.filter { !texts.contains($0) }
+            XCTAssertTrue(
+                missing.isEmpty,
+                "反向对照不成立：只读详情那一件上缺 \(missing) ⇒ 上面那句「没有分带词」是空跑（\(language.rawValue) 那遍）"
+            )
+            record("🕘 右栏单独那一遍（\(language.rawValue)）：分带五句 "
+                + bandWords.map { "「\($0)」" }.joined(separator: " / ") + " 一句都不在；轴名 / 优先级 "
+                + anchors.map { "「\($0)」" }.joined(separator: " / ") + " 都在")
+        }
+
+        // ③ 成对读数 + 源锚点：详情那一行换了取值来源，清单行 / 分组与 Core 的分带本体一字未动。
+        func occurrences(_ needle: String, in text: String) -> Int {
+            text.components(separatedBy: needle).count - 1
+        }
+        let panel = try source("App/Views/NotesPanel.swift")
+        let calendar = try source("App/Views/TodoCalendarView.swift")
+        let query = try source("Core/TodoQuery.swift")
+        XCTAssertEqual(
+            occurrences("TodoQuery.band(of:", in: panel), 0,
+            "`App/Views/NotesPanel.swift` 里还有分带取值 —— 成对读数：改前 1（详情那一行）⇒ 改后 0"
+        )
+        XCTAssertEqual(
+            occurrences("TodoDueText.text(", in: panel), 1,
+            "详情那一行的取值来源该恰好一处（`TodoDueText.text(`）"
+        )
+        XCTAssertEqual(
+            occurrences("TodoQuery.band(of:", in: calendar), 2,
+            "清单行 / 分组的分带读数不许被动 —— `App/Views/TodoCalendarView.swift` 该仍是两处"
+                + "（行上那句 + 色档那支 switch）"
+        )
+        XCTAssertTrue(
+            query.contains("public static func band(of todo: Todo, window: TodoWindow) -> TodoBand {"),
+            "`Core/TodoQuery.swift` 的分带本体不见了 / 签名被动过 —— 清单行 / 分组还读它（分带的唯一出处不许动）"
+        )
+        record("📄 成对读数：`NotesPanel.swift` 里 `TodoQuery.band(of:` "
+            + "\(occurrences("TodoQuery.band(of:", in: panel)) 处、`TodoDueText.text(` "
+            + "\(occurrences("TodoDueText.text(", in: panel)) 处；`TodoCalendarView.swift` "
+            + "\(occurrences("TodoQuery.band(of:", in: calendar)) 处；`Core/TodoQuery.swift` 的分带本体仍在")
     }
 }
