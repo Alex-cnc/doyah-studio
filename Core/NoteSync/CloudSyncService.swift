@@ -646,12 +646,9 @@ public final class CloudSyncService: @unchecked Sendable {
     }
 
     private func upload(_ row: CloudNoteRow, token: String) throws {
-        let body: Data
-        do {
-            body = try CloudSyncCoding.encoder().encode(row.upload)
-        } catch {
-            throw CloudSyncError.malformedResponse
-        }
+        // **上行体 = canonical JSON**（契约 §6.4.1.1 判据①②）：键序按契约列序（不是字典序）、
+        // 可选键省略、`deleted_at` 显式 `null` —— 由 `CloudSyncCoding.uploadJSON` 一处成形。
+        let body = Data(CloudSyncCoding.uploadJSON(row).utf8)
         let response = try send(
             CloudAuthHTTPRequest(
                 method: "POST",
@@ -710,10 +707,27 @@ public struct NoteLibraryCloudSource: CloudNoteSource {
 
     public init(
         library: NoteLibrary = NoteLibrary.defaultLibrary(),
-        contentType: String = "application/json"
+        // **`text/plain`**（契约 §6.4.1.1 判据④：`content_type` = 与本地 `contentType` 同值）。
+        // 片「载荷同形」（急件 · `T-20261009-158`）：真机实测本侧写的是 `application/json`，
+        // 与本地同值口径不符 —— 正文形态由 `content.version` 承载，`content_type` 只报「正文是文本」。
+        contentType: String = "text/plain"
     ) {
         self.library = library
         self.contentType = contentType
+    }
+
+    /// `note.spans`（内部形态）→ **交换面 canonical**（契约 §2.4 / §6.4.1.1）。
+    ///
+    /// 本侧 `note.spans` 列存的是**内部模型**（`text` / `styles` 数组 / `backgroundColor` 平铺）；
+    /// 上行 `content` 必须是契约的**交换形态**（`type` / `content` / `styles` 对象）——两者刻意不同，
+    /// 由 `NoteBodyExchange` 在这一处做**唯一**投影（同一次写入在两端同形）。
+    /// `spans` 列缺失（老数据）⇒ 由投影文本现造一份 `NoteBody`，**仍然**走交换面编码（不裸发纯文本）。
+    static func exchangeContent(spansJSON: String?, body: String) -> String {
+        if let spansJSON, !spansJSON.isEmpty,
+           let document = try? JSONDecoder().decode(NoteBody.self, from: Data(spansJSON.utf8)) {
+            return NoteBodyExchange.json(document)
+        }
+        return NoteBodyExchange.json(NoteBody(markdown: body))
     }
 
     public func cloudRow(uid: String) async throws -> CloudNoteRow? {
@@ -725,7 +739,7 @@ public struct NoteLibraryCloudSource: CloudNoteSource {
         return CloudNoteRow(
             uid: uid,
             title: note.title,
-            content: spans ?? note.body,
+            content: Self.exchangeContent(spansJSON: spans, body: note.body),
             contentType: contentType,
             notebookUid: placement?.notebookUid,
             tags: note.tags,
@@ -850,4 +864,142 @@ enum CloudSyncCoding {
         }
         return encoder
     }
+
+    /// **上行体的 canonical JSON**（契约 §6.4.1.1 判据①②③）——**键序按契约列序**，不是字典序：
+    /// `uid` → `title` → `content` → `content_type` → `notebook_uid` → `tags` → `pinned` → `rev`
+    /// → `updated_at` → `deleted_at` → `device_id`（`owner_id` **不写**，服务端 `default auth.uid()`）。
+    ///
+    /// 三条硬口径：
+    ///   · **可选键省略** —— 没值的键**不输出**（不写 `null` 占位）；
+    ///   · **唯一例外 = `deleted_at`** —— 未删除时**显式 `null`**（墓碑语义要求该列可查、可比较）；
+    ///   · `content` = **字符串**（内含 JSON，不得作为嵌套对象传输）；`/` 不转义；紧凑。
+    ///
+    /// 为什么不用 `encoder()`：`JSONEncoder` 的键序不保插入序，`.sortedKeys` 只给字典序 ——
+    /// 两者都拿不到契约列序（判据①）。
+    static func uploadJSON(_ row: CloudNoteRow) -> String {
+        var parts: [String] = []
+        parts.append("\"uid\":\(NoteBodyExchange.quoted(row.uid))")
+        if let title = row.title { parts.append("\"title\":\(NoteBodyExchange.quoted(title))") }
+        if let content = row.content { parts.append("\"content\":\(NoteBodyExchange.quoted(content))") }
+        if let contentType = row.contentType {
+            parts.append("\"content_type\":\(NoteBodyExchange.quoted(contentType))")
+        }
+        if let notebookUid = row.notebookUid {
+            parts.append("\"notebook_uid\":\(NoteBodyExchange.quoted(notebookUid))")
+        }
+        if let tags = row.tags {
+            parts.append("\"tags\":[\(tags.map(NoteBodyExchange.quoted).joined(separator: ","))]")
+        }
+        if let pinned = row.pinned { parts.append("\"pinned\":\(pinned)") }
+        parts.append("\"rev\":\(row.rev)")
+        parts.append("\"updated_at\":\(NoteBodyExchange.quoted(iso8601String(row.updatedAt)))")
+        if let deletedAt = row.deletedAt {
+            parts.append("\"deleted_at\":\(NoteBodyExchange.quoted(iso8601String(deletedAt)))")
+        } else {
+            parts.append("\"deleted_at\":null")
+        }
+        if let deviceId = row.deviceId { parts.append("\"device_id\":\(NoteBodyExchange.quoted(deviceId))") }
+        return "{\(parts.joined(separator: ","))}"
+    }
 }
+
+// MARK: - 发往云端的载荷 · canonical 同形判据
+
+/// **上行载荷的 canonical 同形检查**（急件 · 派单 `T-20261009-158` 第 ④ 件）。
+///
+/// 由头 = 真机实测：链路通了，但载荷**不合契约**（`content_type=application/json` + `content` 内部
+/// 是内部模型形态）——这类偏差本该**在出包前判红**，而不是等跨端互验才发现。于是把契约 §6.4.1.1
+/// 的判据①②③④压成一份**可跑、可负例**的机械检查：对上行体的 `content` / `content_type` 逐条核对，
+/// 返回违规清单（空 = 通过）。判据本体只在这一份，单测与出包前检查读同一条。
+public enum CloudPayloadCanonical {
+
+    /// 契约允许的 `content_type`（= 本地 `contentType` 同值）。
+    public static let expectedContentType = "text/plain"
+
+    /// 行级 snake_case 键名 —— 只许出现在**行级**，`content` 内部出现即判红（契约 §6.4.1.1 禁令①）。
+    static let rowLevelSnakeKeys = ["content_type", "notebook_uid", "updated_at", "deleted_at", "device_id", "owner_id"]
+
+    /// 违规码（**语言无关**：Core 不得新增展示文案字面量 —— 出口层自己映射成人话，
+    /// `Scripts/check-core-localization.py` 的棘轮就不必为诊断串开口子）。
+    public enum Violation: String, Equatable, Sendable, CaseIterable {
+        /// 判据④：`content_type` 与本地同值不符（应 `text/plain`）。
+        case contentTypeMismatch
+        /// `content` 缺失或为空。
+        case contentMissing
+        /// `content` 是空壳（`{}` / `[]` / `""`）—— 空壳不算笔记。
+        case contentEmptyShell
+        /// 判据①：`content` 内 `version` 不在首位。
+        case contentVersionNotFirst
+        /// `content` 缺 `spans`。
+        case contentMissingSpans
+        /// 判据③ 禁令①：`content` 内部出现行级 snake 键。
+        case contentRowLevelSnakeKey
+        /// `content` 用了内部键 `text`（交换面应 `content`）。
+        case contentUsesInternalTextKey
+        /// `styles` 是数组（交换面应对象）。
+        case contentStylesIsArray
+        /// span 的 `type` 与 `content` 不成对（每个 span 都须带 `type`）。
+        case spanTypeContentUnpaired
+    }
+
+    /// 逐条核对上行载荷。空数组 = 通过。
+    public static func violations(content: String?, contentType: String?) -> [Violation] {
+        var found: [Violation] = []
+
+        // 判据④：`content_type` = 与本地 `contentType` 同值
+        if (contentType ?? "") != expectedContentType {
+            found.append(.contentTypeMismatch)
+        }
+
+        // 判据③④：`content` 必须是**非空壳**的 JSON 字符串
+        guard let content, !content.isEmpty else {
+            found.append(.contentMissing)
+            return found
+        }
+        if content == "{}" || content == "[]" || content == "\"\"" {
+            found.append(.contentEmptyShell)
+        }
+
+        // 判据①：`content` 内键序 = `version` → `spans`（`version` 必须在首位）
+        if !content.hasPrefix("{\"version\":") {
+            found.append(.contentVersionNotFirst)
+        }
+        if !content.contains("\"spans\":") {
+            found.append(.contentMissingSpans)
+        }
+
+        // 判据③：`content` 是字符串，内部**不得** snake 化
+        for key in rowLevelSnakeKeys where content.contains("\"\(key)\"") {
+            found.append(.contentRowLevelSnakeKey)
+        }
+
+        // 交换形态：span 用 `type` + `content` + `styles` **对象**；内部键 `text` / 数组式 `styles` 判红
+        if content.contains("\"text\":") {
+            found.append(.contentUsesInternalTextKey)
+        }
+        if content.contains("\"styles\":[") {
+            found.append(.contentStylesIsArray)
+        }
+        // 每个 span 都必须带 `type`（`TEXT` / `LIST_*`）—— 数量对不上即判红
+        let typeCount = occurrences(of: "\"type\":", in: content)
+        let contentCount = occurrences(of: "\"content\":", in: content)
+        if typeCount != contentCount || typeCount == 0 {
+            found.append(.spanTypeContentUnpaired)
+        }
+
+        return found
+    }
+
+    /// 子串出现次数（判据用，纯函数）。
+    static func occurrences(of needle: String, in haystack: String) -> Int {
+        guard !needle.isEmpty else { return 0 }
+        var count = 0
+        var search = haystack[...]
+        while let range = search.range(of: needle) {
+            count += 1
+            search = search[range.upperBound...]
+        }
+        return count
+    }
+}
+

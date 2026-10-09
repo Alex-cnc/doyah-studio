@@ -461,4 +461,78 @@ final class NoteSyncE2ETests: XCTestCase {
             throw CloudSyncError.transport("offline (live probe)")
         }
     }
+
+    // MARK: - 判据 ⑥ 发往云端的载荷 · canonical 同形（急件 · 派单 `T-20261009-158` 第 ④ 件）
+
+    /// **上行 `content` = 契约 §2.4 交换形态**（不是本侧内部模型形态）：`version` → `spans`；
+    /// 每个 span `type` → `content` → `styles`（**对象**）；`backgroundColor` / `code` 收在 `styles` 内、
+    /// 有值才写。真机实测的偏差（`text` / 数组式 `styles` / 缺 `type` / `application/json`）在这一条下判红。
+    func testExchangePayloadIsContractShapedAndInternalShapeIsRejected() throws {
+        let body = NoteBody(spans: [
+            NoteSpan(text: "普通文字"),
+            NoteSpan(text: "粗体", styles: [.bold]),
+            NoteSpan(text: "链接", link: "https://example.com/a"),
+            NoteSpan(text: "荧光", backgroundColor: NoteHighlight.backgroundColorHex),
+            NoteSpan(text: "带勾任务", block: .task(checked: true))
+        ])
+        let exchange = NoteBodyExchange.json(body)
+        XCTAssertEqual(
+            exchange,
+            ##"{"version":2,"spans":[{"type":"TEXT","content":"普通文字","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000"}},{"type":"TEXT","content":"粗体","styles":{"bold":true,"italic":false,"underline":false,"fontSize":16,"color":"#000000"}},{"type":"TEXT","content":"链接","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000"},"link":"https://example.com/a"},{"type":"TEXT","content":"荧光","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000","backgroundColor":"#FFF3B0"}},{"type":"LIST_CHECKBOX","content":"带勾任务","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000"},"checked":true}]}"##,
+            "交换面 canonical 形状（键序 / 类型 / styles 对象 / 有值才写）"
+        )
+        XCTAssertFalse(exchange.contains("\\/"), "`/` 不得转义成 `\\/`")
+
+        // 正例：交换形态 + `text/plain` ⇒ 0 违规
+        XCTAssertEqual(
+            CloudPayloadCanonical.violations(content: exchange, contentType: "text/plain"), [],
+            "交换形态 + text/plain 必须 0 违规"
+        )
+
+        // 负例：本侧**内部**形态（= 真机实测那一版）+ `application/json` ⇒ 判红
+        let internalShape = try NoteBodyCanonical.json(body)
+        let negative = CloudPayloadCanonical.violations(content: internalShape, contentType: "application/json")
+        XCTAssertGreaterThanOrEqual(negative.count, 2, "内部形态 + application/json 必须判红：\(negative)")
+        for expected: CloudPayloadCanonical.Violation in [.contentTypeMismatch, .contentUsesInternalTextKey, .contentStylesIsArray, .spanTypeContentUnpaired] {
+            XCTAssertTrue(negative.contains(expected), "负例必须命中 `\(expected)`：\(negative)")
+        }
+    }
+
+    /// **上行体键序**（判据① 行级 = 契约列序）+ `deleted_at` 显式 `null`（判据② 唯一例外）。
+    func testUploadBodyFollowsCanonicalRowKeyOrder() throws {
+        let row = CloudNoteRow(
+            uid: "8C4E2B10-5A7D-4F31-9E62-B0D3C7A95F48",
+            title: "周会纪要",
+            content: NoteBodyExchange.json(NoteBody(spans: [NoteSpan(text: "周三")])),
+            contentType: CloudPayloadCanonical.expectedContentType,
+            notebookUid: "656AF1CB-367B-4A0E-94AF-97C5812DF176",
+            tags: ["工作"],
+            pinned: false,
+            rev: 8,
+            updatedAt: Date(timeIntervalSince1970: 1_790_000_000),
+            deletedAt: nil,
+            deviceId: "macos-test"
+        )
+        let json = CloudSyncCoding.uploadJSON(row)
+        XCTAssertFalse(json.contains("\"owner_id\""), "上行体不许自带 owner_id")
+        let pairs = [
+            ("\"uid\"", "\"title\""), ("\"title\"", "\"content\""), ("\"content\"", "\"content_type\""),
+            ("\"content_type\"", "\"notebook_uid\""), ("\"notebook_uid\"", "\"tags\""),
+            ("\"tags\"", "\"pinned\""), ("\"pinned\"", "\"rev\""), ("\"rev\"", "\"updated_at\""),
+            ("\"updated_at\"", "\"deleted_at\""), ("\"deleted_at\"", "\"device_id\"")
+        ]
+        for (earlier, later) in pairs {
+            let a = try XCTUnwrap(json.range(of: earlier)?.lowerBound)
+            let b = try XCTUnwrap(json.range(of: later)?.lowerBound)
+            XCTAssertLessThan(a, b, "键序应为契约列序：\(earlier) 必须在 \(later) 前\n\(json)")
+        }
+        XCTAssertTrue(json.contains("\"deleted_at\":null"), "未删除时 `deleted_at` 必须显式 null：\(json)")
+        XCTAssertFalse(json.contains("\\/"), "`/` 不得转义")
+        // 往返：形状没变（只是键序 / 缺省换了）⇒ 上行体的解码面照旧认得
+        let back = try CloudSyncCoding.decoder().decode(CloudNoteRow.Upload.self, from: Data(json.utf8))
+        XCTAssertEqual(back.uid, row.uid)
+        XCTAssertEqual(back.rev, 8)
+        XCTAssertEqual(back.contentType, CloudPayloadCanonical.expectedContentType)
+        XCTAssertNil(back.deletedAt)
+    }
 }

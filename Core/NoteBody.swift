@@ -208,6 +208,74 @@ public enum NoteBodyCanonical {
     }
 }
 
+/// **交换面 canonical（跨端传输形态）** —— 契约 `Docs/核心契约.md` §2.4 + SRS §6.4.1.1。
+///
+/// 片「载荷同形」（急件 · 派单 `T-20261009-158`）：真机实测发现上行 `content` 用的是**本侧内部模型**
+/// 的形态（`text` / `styles` 当数组 / `backgroundColor` 平铺 / 无 `type`），与 §2.4 的交换形态不同形
+/// ⇒ 安卓 / 鸿蒙按契约读会认不出（§2.4 不变量④「内部模型可异、交换形态必须同形」被违反）。
+///
+/// 与 `NoteBodyCanonical` 的分工（**刻意的，不是两套口径跑偏**）：
+///   · `NoteBodyCanonical` = 本侧**内部落库面**（`note.spans` 列）的确定性序列化 —— 键按字典序；
+///   · `NoteBodyExchange` = **交换面**（上行 `content`）—— 键序由契约钉死（`version` 在前），
+///     **不是字典序**（字典序会把 `spans` 排到 `version` 前面，正是判据①要禁的）。
+///
+/// 为什么手写拼串而不是 `JSONEncoder`：`JSONEncoder` 的键序**不保插入序**（`云E` 实测默认编码器
+/// 输出的 `spans` 就在 `version` 前 ⇒ 字典哈希序），`.sortedKeys` 又只给字典序 —— 两者都给不出
+/// 「`version` → `spans`」这个契约顺序；契约判据①要的正是**这个顺序**。
+public enum NoteBodyExchange {
+
+    /// 交换面正文 JSON：`{"version":N,"spans":[…]}`（契约 §6.4.1.1 判据① 键序）。
+    public static func json(_ body: NoteBody) -> String {
+        let spans = body.spans.map(spanJSON).joined(separator: ",")
+        return "{\"version\":\(body.version),\"spans\":[\(spans)]}"
+    }
+
+    /// 单个 span：`type` → `content` → `styles` →（有值才写）`link` · `checked`。
+    private static func spanJSON(_ span: NoteSpan) -> String {
+        var parts: [String] = []
+        parts.append("\"type\":\(quoted(span.block?.exchangeType ?? "TEXT"))")
+        parts.append("\"content\":\(quoted(span.text))")
+        parts.append("\"styles\":\(stylesJSON(span))")
+        if let link = span.link { parts.append("\"link\":\(quoted(link))") }
+        if case .task(let checked)? = span.block { parts.append("\"checked\":\(checked)") }
+        return "{\(parts.joined(separator: ","))}"
+    }
+
+    /// `styles`：`bold` → `italic` → `underline` → `fontSize` → `color` →（有值才写）`code` · `backgroundColor`。
+    private static func stylesJSON(_ span: NoteSpan) -> String {
+        var parts: [String] = []
+        parts.append("\"bold\":\(span.styles.contains(.bold))")
+        parts.append("\"italic\":\(span.styles.contains(.italic))")
+        parts.append("\"underline\":\(span.styles.contains(.underline))")
+        parts.append("\"fontSize\":\(span.size ?? 16)")
+        parts.append("\"color\":\(quoted(span.color ?? "#000000"))")
+        if span.styles.contains(.code) { parts.append("\"code\":true") }
+        if let background = span.backgroundColor { parts.append("\"backgroundColor\":\(quoted(background))") }
+        return "{\(parts.joined(separator: ","))}"
+    }
+
+    /// JSON 字符串字面量：只转义**必需字符**（`"` / `\` / 控制字符），**`/` 一律不转义**（裁定 B5）。
+    static func quoted(_ value: String) -> String {
+        var out = "\""
+        for scalar in value.unicodeScalars {
+            switch scalar {
+            case "\"": out += "\\\""
+            case "\\": out += "\\\\"
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            default:
+                if scalar.value < 0x20 {
+                    out += String(format: "\\u%04x", scalar.value)
+                } else {
+                    out.unicodeScalars.append(scalar)
+                }
+            }
+        }
+        return out + "\""
+    }
+}
+
 /// 交换面上 span 的 **`type` 字段取值**（片 `WY-1b2` · 契约 v1.30 §2.4 / §3.3）。
 ///
 /// **这是契约字面量的唯一出处**：三档块级类型写进交换面 / 备份 / 跨端传输时**必须**逐字是
