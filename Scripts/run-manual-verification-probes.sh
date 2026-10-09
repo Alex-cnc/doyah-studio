@@ -339,8 +339,18 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   新建待办的截止预填该日 09:00 / 「写笔记」新开一篇；正反两面由**渲染记录**判）+ `LunarSubtitleProbeTests`
 #   （`TD-CAL-2` 同派单：月视图格的**副条** —— 每格农历日 + 交节那天那一格的节气）。
 #   两枚都是「写下用例却没接进 `--filter` = 一个都跑不到」，由 `check-result-scroll-ledger.py` ⑤ 抓出后补上。
+# + `RetroHostProbeTests`（片 `M7-HOST` · 派单 `T-20261009-080`：活动栏 `Retro` 项 + 装配 `DoyahRetroUI` ——
+#   ① `ActivityBarItem.allCases` 含 `retro`（它自己的图标 / 名字 / 菜单键齐）；② `symbolName` / `titleKey` /
+#   `menuKey` 三处 switch **穷尽且无 `default`**（源判据：`default` 会让将来新增的区静默落进某分支）；
+#   ③ `LicensePresentation.activityItems(for: .all)` 含 `.retro` 且**三档都有**（不挂授权 ⇒ 全档可见，
+#   能力位仍恰好三个）；④ `ReportListModel.fixed()` **真读固定扫描目录**（本机两包 `2026-W41` / `2026-W40`）
+#   且 `RetroHostView()` 可构造、可布局、不崩。判的是 Core 真值与 AppKit 视图树的事实、**不判像素** ⇒
+#   **主入口就是本脚本** `Scripts/run-manual-verification-probes.sh`（它自己 `export DOYAH_UI_SNAPSHOT=1`，
+#   探针 `XCTSkip` 到该变量；单跑 = `env DOYAH_UI_SNAPSHOT=1 swift test --filter RetroHost`）。
+#   它落地当轮**漏了接 FILTER**（写下用例却没入口 = 一个都跑不到），由 `check-result-scroll-ledger.py` ⑤ 抓出后补上
+#   —— 与 `TodoCalendarEntriesProbeTests` / `FormatMenuWiringProbeTests` 那两处同一个坏法。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
