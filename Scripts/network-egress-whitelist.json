@@ -1,0 +1,103 @@
+{
+  "_说明": "`Scripts/check-network-egress.py`（全仓网络出口门禁，闭环第 10 项）的台账。清单只许取自 Notes SRS **v3.94** §6.4「按面分层的文件级显式清单」（前门落笔 `987ace7` · 回执 T-20261009-149 ③）；台账写的是**声明**，门禁拿它跟事实对账 —— 判据与台账分家会让『改台账就能过』变成一条暗道，所以面 / 文件 / 理由三样缺一不可。",
+  "srs": {
+    "doc": "Notes SRS v3.94",
+    "commit": "987ace7",
+    "section": "§6.4 网络出口与门禁（按面分层的文件级显式清单）",
+    "frontDoorReceipt": "T-20261009-149 ③「禁网门禁片可建（判据能写死）」",
+    "pending": "「判定对象 = 代码出现（`//` / `///` 注释与字符串字面量里的提及不算出现）」这条口径尚未写进 SRS v3.94 —— SRS 表末行按**字面**会判红 `Core/DataTaskSpecGenerator.swift:7` 的 `///` 文档注释（那**不是**出网调用）。已作契约措辞缺口上报前门（组长第 371 轮预审 · 单号 T-20261009-159）；本门禁按该口径实现。"
+  },
+  "tokens": [
+    {
+      "token": "URLSession",
+      "reason": "系统自带的出网 API；出现在白名单之外的文件里就说明那条链路能发数据出去"
+    },
+    {
+      "token": "URLRequest",
+      "reason": "请求对象；只可能是要发出去的东西"
+    }
+  ],
+  "requiredTokens": [
+    "URLSession",
+    "URLRequest"
+  ],
+  "surfaces": [
+    {
+      "key": "sync",
+      "name": "笔记同步面",
+      "rule": "该面唯一出口",
+      "files": [
+        "Core/NoteSync/CloudSyncService.swift"
+      ],
+      "reason": "SRS §6.4 表第 1 行：同步面的出网接线集中在这一个文件（上行 upsert + 增量下拉 + 断网重试），便于审计与将来替换；`Core/NoteSync/` 其余文件（`SyncCore.swift` / `SyncQueue.swift` 等纯逻辑）必须保持可离线单测。"
+    },
+    {
+      "key": "auth",
+      "name": "认证面",
+      "rule": "单列（认证与同步解耦）",
+      "files": [
+        "Core/NoteSync/CloudAuth.swift"
+      ],
+      "reason": "SRS §6.4 表第 2 行：认证（口令换令牌 / 刷新 / 登出 / 注册）与同步解耦，单独一个文件承载它自己的 HTTP 面；端点口径见 §6.4.2 IR-18。"
+    },
+    {
+      "key": "ai",
+      "name": "AI 面（既有豁免 · 本次不动）",
+      "rule": "既有豁免，登记不改",
+      "files": [
+        "Core/LLMClient.swift",
+        "Core/EgressLog.swift"
+      ],
+      "reason": "SRS §6.4 表第 3 行：AI 面的出网（模型调用）与统一外发日志的传输装饰器都在既有实现里，本次口径修正**不动它们**，只登记。"
+    },
+    {
+      "key": "seam",
+      "name": "装配缝（不算出口）",
+      "rule": "只注入 transport，不得直接出网",
+      "files": [
+        "App/AppState.swift",
+        "App/Auth/AccountFlowModel.swift"
+      ],
+      "allowPatterns": [
+        "URLSessionTransport\\(",
+        "URLSessionCloudAuthTransport\\("
+      ],
+      "reason": "SRS §6.4 表第 4 行：这两处是**装配缝** —— 把出网传输（`URLSessionTransport` / `URLSessionCloudAuthTransport`）注入到 Core 的客户端上，**自己不直接出网**；除注入之外出现 `URLSession` / `URLRequest` ⇒ 判红（纪律③）。"
+    }
+  ],
+  "scan": {
+    "roots": [
+      "App",
+      "Core"
+    ],
+    "glob": "*.swift",
+    "commentPolicy": "判定对象 = **代码出现**：`URLSession` / `URLRequest` 出现在 `//` / `///` 行注释、`/* */` 块注释或**字符串字面量**里**不算出现、不判红**（与 `check-core-portability.py` / `check-editor-surface-tokens.py` / `check-design-tokens.py` 同一口径：「注释里提到某个标识不算它还在用」）。例：`Core/DataTaskSpecGenerator.swift:7` 的 `///` 文档注释写着「本类型里没有任何 URLSession / 请求组装」—— 那是**声明不出网**，不判红、也**不进白名单**（白名单只许取自 SRS）。"
+  },
+  "floors": {
+    "minFilesScanned": 1,
+    "minSurfaces": 4,
+    "minRequiredTokens": 2
+  },
+  "wiring": {
+    "verifyAll": "Scripts/verify-all.sh",
+    "gateCall": "check-network-egress.py",
+    "negativeTest": "Scripts/test-network-egress-gate.py"
+  },
+  "evidence": [
+    {
+      "file": "Scripts/verify-all.sh",
+      "contains": "check-network-egress.py",
+      "why": "门禁必须在闭环里真的被调用（存在但没接线＝红不起来，第 10 项那类假绿）"
+    },
+    {
+      "file": "Scripts/test-network-egress-gate.py",
+      "contains": "URLSession.shared",
+      "why": "负例必须真的注入一次出网调用（真仓里白名单之外一条都扫不出来，所以『门禁看得见违规』只能靠负例证明）"
+    }
+  ],
+  "knownGaps": [
+    "① 只判『源码里出现出网 API』，判不了『运行时真的没有出网』（那要靠断网用例与统一外发日志；后者见 NFR-SEC-08）。",
+    "② 只扫 `App/` 与 `Core/`（`Platform/` / `CLI/` / `Tools/` 不在 SRS §6.4 表的口径内）；将来要扩面，须先有前门口径。",
+    "③ 「判定对象 = 代码出现（注释 / 字符串里的提及不算出现）」这条口径尚未写进 SRS v3.94（前门单号 T-20261009-159）。"
+  ]
+}

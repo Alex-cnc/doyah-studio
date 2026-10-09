@@ -579,6 +579,20 @@ python3 Scripts/check-plugin-assembly.py
 # 与上面那份解耦清单**两边对账**（漏登一个源文件也是红）。判据与台账见
 # `Scripts/notes-offline-gate.json`（关键令牌不许被拿掉、例外要写明理由且锚点陈旧报红）。
 python3 Scripts/check-notes-offline.py
+# Notes SRS **v3.94 §6.4「按面分层的文件级显式清单」**（前门落笔 `987ace7` · 回执 T-20261009-149 ③ ·
+# 收执行侧 ⑰ 相抵上报）：上面那条零网络门禁只扫 `Core/` 下文件名以 `Note` 开头的文件与 `App/Note*`，
+# 而 `Core/NoteSync/` 是**子目录**、文件名不以 `Note` 开头 ⇒ 云同步面 / 认证面**不在它的扫描面内**（假绿）。
+# 本门禁把「谁可以出网」收成一张**文件级**清单并逐文件判：`App/` `Core/` 里除四个面（笔记同步 =
+# `Core/NoteSync/CloudSyncService.swift` / 认证 = `Core/NoteSync/CloudAuth.swift` / AI 既有豁免 =
+# `Core/LLMClient.swift` + `Core/EgressLog.swift` / 装配缝 = `App/AppState.swift` +
+# `App/Auth/AccountFlowModel.swift`）之外，任何文件**代码里**出现 `URLSession` / `URLRequest`
+# ⇒ 判红并点名 `文件:行号`。口径：**只判代码出现** —— `//` / `///` 注释与字符串字面量里的提及
+# **不算出现**（与 `check-core-portability.py` / `check-editor-surface-tokens.py` 同一口径：
+# 「注释里提到某个标识不算它还在用」）；装配缝只许注入 transport、直接出网判红；目录级豁免无效。
+# 台账 `Scripts/network-egress-whitelist.json`；负例 `Scripts/test-network-egress-gate.py`
+# （15 例：注入两种令牌 / 白名单与装配缝对照 / 装配缝直接出网 / 注释与字符串提及 / 台账漏登与幽灵文件 /
+# 令牌表掏空 / 拆接线 / 真仓库逐字节未变）。
+python3 Scripts/check-network-egress.py
 # L-44：界面检索**走库**（唯一生产点）+ **所走路线如实标注**（子串兜底 / 检索没跑成）——
 # 视图不许拿已加载的列表自己过滤；每条路线都要在台账里登记处置（给键或显式 nil）并与实现
 # 逐条相等；文案键要真的在语言表里（中英都在）且真的被引用（死键也判红）。
