@@ -174,20 +174,49 @@ struct TodoCalendarPane: View {
         }
     }
 
-    /// 一格：日号 + 任务点（逾期那些天画告警色）。选中 / 今天是两种**不同的**标记
-    /// （选中 = 一块底色、今天 = 日号加粗对比），两件事各画各的，不互相顶掉。
+    /// 一格：日号 + **副条**（农历日 / 节气，片 `TD-CAL-2`）+ 任务点（逾期那些天画告警色）。
+    /// 选中 / 今天是两种**不同的**标记（选中 = 一块底色、今天 = 日号加粗对比），
+    /// 两件事各画各的，不互相顶掉。
+    ///
+    /// 副条两行的口径（`FR-NOTE-40` / `FR-NOTE-41`）：
+    ///   · **农历日**每格都有（`LunarCalendar.dayInfo` 一处出；表外回 `nil` ⇒ 那一行不画，
+    ///     不猜一个日子出来）；
+    ///   · **节气**只有**交节那一天**那一行才出现（其余日子不画）—— 于是副条正是
+    ///     「农历日 +（有则）当日节气」。
+    ///
+    /// 为什么拼装在这一层而不在 Core：Core 只出「哪个键」（`LunarDate` 的月名 / 日名键、
+    /// `SolarTerm.key`），句子与拼法都在语言表里 —— 与 `TodoCalendar.weekdayHeaderKeys`
+    /// 同一条纪律（Core 里出现中文，`check-core-localization` 那条棘轮会当场红）。
     @ViewBuilder
     private func cellView(_ cell: TodoCalendarCell) -> some View {
         let day = appState.todoCalendarDays[cell.date]
         let isSelected = appState.isTodoCalendarSelected(cell)
         let isToday = appState.isTodoCalendarToday(cell)
+        let lunar = LunarCalendar.dayInfo(for: cell.date, calendar: .current)
         VStack(spacing: Spacing.hair) {
             Text("\(cell.dayOfMonth)")
                 .font(isToday ? Theme.font(.bodyStrong) : Theme.font(.caption))
                 .foregroundStyle(cell.inMonth ? Theme.text(.primary) : Theme.text(.tertiary))
+            if let lunar {
+                // 月名 / 日名各自一枚键，拼法由模板给（中文挨着写「八月廿八」、英文用「8/28」）。
+                Text(L(.lunarDateTemplate, L(lunar.lunar.monthNameKey), L(lunar.lunar.dayNameKey)))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(cell.inMonth ? Theme.text(.secondary) : Theme.text(.tertiary))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .accessibilityIdentifier("todo-calendar-lunar-\(calendarDayIdentifier(cell.date))")
+            }
+            if let term = lunar?.term {
+                Text(L(term.key))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(cell.inMonth ? Theme.accentColor : Theme.text(.tertiary))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .accessibilityIdentifier("todo-calendar-term-\(calendarDayIdentifier(cell.date))")
+            }
             taskDots(day)
         }
-        .frame(maxWidth: .infinity, minHeight: 34, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .top)
         .padding(.vertical, Spacing.hair)
         .background(
             RoundedRectangle(cornerRadius: Radius.control)
@@ -228,6 +257,24 @@ struct TodoCalendarPane: View {
                 Text(selectedDayTitle)
                     .font(Theme.font(.title))
                     .lineLimit(1)
+                Spacer(minLength: Spacing.xs)
+                // **「选中日」那两枚入口**（片 `TD-CAL-1` · 派单 `T-20261009-026`）：
+                //   ① 新建待办 —— 截止预填**选中日 09:00**（摆草稿走 `AppState.newTodoOn(selectedDay:)`）；
+                //   ② 写笔记   —— 切到笔记面并新开一篇（走 `AppState.writeNote()`）。
+                // 形态与这一屏工具条那两枚**同族**（`ToolbarIconButton`：图标 + 悬停提示），
+                // 于是这两枚也不必自己画第二套按钮。两枚都**只在选中了某一天时才画**：
+                // 这一区是「选中日」的地盘，没选那天就没有「哪一天」可预填（日历的口径是
+                // 「不替用户选一天」——`todoCalendarSelectedDay` 头注释），也就不该在这儿凭空给一个日子。
+                if let day = appState.todoCalendarSelectedDay {
+                    ToolbarIconButton(systemName: "plus", help: L(.todoCalendarNewTodo)) {
+                        appState.newTodoOn(selectedDay: day)
+                    }
+                    .accessibilityIdentifier("todo-calendar-new-todo")
+                    ToolbarIconButton(systemName: "square.and.pencil", help: L(.todoCalendarWriteNote)) {
+                        appState.writeNote()
+                    }
+                    .accessibilityIdentifier("todo-calendar-write-note")
+                }
             }
             .padding(.horizontal, Spacing.s)
             if appState.todoCalendarSelectedDayHasTasks {
@@ -383,8 +430,14 @@ struct TodoRowView: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { appState.edit(todo) }
+        // **点一行 ⇒ 只读详情**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）：只把「看哪一条」
+        // 记下来（`showTodoDetail`），**不进编辑态** —— 只读 ≠ 编辑。要改走下面右键那枚「编辑」。
+        .onTapGesture { appState.showTodoDetail(todo) }
         .contextMenu {
+            // 「编辑」是**进写入面**的那条路（片 `TD-LIST-1`）：详情那一屏自己不带编辑控件，
+            // 所以改这一件事必须在这儿留一个入口，否则「点开只剩看」就成了功能缺失。
+            Button(L(.commonEdit)) { appState.edit(todo) }
+            Divider()
             // 与那一枚圆点说的是同一件事、两种措辞（当前不是完成 ⇒「标记完成」）——
             // 写库与重读都在 `AppState.toggleTodoDone` 一处。
             Button(L(todo.done ? .todoMarkOpen : .todoMarkDone)) {
@@ -392,13 +445,22 @@ struct TodoRowView: View {
             }
             Button(L(.todoReschedule)) { appState.beginReschedule(todo) }
             Divider()
+            // **先确认再删**（片 `A5-DEL` · 派单 `T-20261009-038`）：这里只挂请求（与编辑面 / 左区顶部
+            // 那两枚走**同一个**确认框），确认框那一头（`confirmNoteRemoval`）才是 `deleteTodo`。
+            // 判据：点删除后条目数不变，直到确认（`TestsUISnapshot/NotesLayoutProbeTests.swift`）。
+            // 改动前这里直连 `appState.deleteTodo(id:)` ⇒ 右键一下就落库。
             Button(L(.todoDelete), role: .destructive) {
-                Task { await appState.deleteTodo(id: todo.id) }
+                appState.requestTodoRemoval(id: todo.id)
             }
         }
         // 在 `List` 里才生效（日历那一屏的当天任务也是一个 `List`）——
         // 换个滚动容器时它是空操作，不是「另一种行」。
-        .listRowBackground(appState.todoEditingID == todo.id ? Theme.surface(.panel) : Color.clear)
+        // 编辑态与「右栏正显示的那一条」都点亮：用户总要知道**右边那份是在说哪一行**。
+        .listRowBackground(
+            appState.todoEditingID == todo.id || appState.todoDetailID == todo.id
+                ? Theme.surface(.panel)
+                : Color.clear
+        )
         .accessibilityIdentifier("todo-row-\(todo.id.uuidString)")
     }
 
@@ -479,7 +541,8 @@ private func calendarDayIdentifier(_ date: Date) -> String {
 
 // MARK: - 清单的「组织与检索」（队列 `L-100` 组织与检索界面半）
 
-/// **清单那一屏的工具条**：三条切换器 —— 筛选（五档一排）/ 排序（三档）/ 分组（四档）。
+/// **清单那一屏的工具条**：四条输入 —— **关键字检索**（本地，只看标题）/ 筛选（五档）/ 排序（三档）/
+/// 分组（四档）。
 ///
 /// 三条口径：
 ///  ① **档位空间全部来自 Core**（`TodoFilter.allCases` / `TodoSort.Order.allCases` /
@@ -510,6 +573,18 @@ struct TodoQueryBar: View {
             .labelsHidden()
             .help(L(.todoFilterLabel))
             .accessibilityIdentifier("todo-filter-switch")
+            // **本地关键字检索**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 B4）：与上面那一档筛选、
+            // 下面那一排排序 / 分组**同一层** —— 它答的也是「这一屏留哪些行」，只是那个词由用户敲。
+            // 判定在 Core（`TodoSearch`：只看标题、大小写不敏感、空词不过滤），本视图只把词绑上去；
+            // **不新开屏、不加按钮**（与 `L-44`「搜索只有一处」同一条纪律：这一屏的检索入口就是这一格）。
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "magnifyingglass")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                TextField(L(.windowSearchPlaceholder), text: $appState.todoSearchText)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("todo-search-field")
+            }
             // 排序 / 分组决定「这一屏怎么画」，各给一个下拉（标签可见 —— 少了标签就只剩
             // 「截止时间」这种答不出「这是哪条轴」的当前值，那一课写在 `L-166`）。
             HStack(spacing: Spacing.xs) {

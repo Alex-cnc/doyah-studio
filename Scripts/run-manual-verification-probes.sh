@@ -272,7 +272,18 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   `check-result-scroll-ledger.py` ⑤ —— 一处入口漏了就等于一个都跑不到（第 96 轮实测）。
 # + `SQLLineNumberProbeTests`（L-111：数据库侧 SQL 编辑器的行号列 —— 正文起点 = 列宽 /
 #   列区里有墨 / 行数 9 → 151 时列宽与像素都变 / 两个编辑器的列宽逐个相等，见「第十五批」）。
-# + PerfTypingProbeTests（`L-148`：查询页签每键耗时的机器判据 —— 5,000 行 / 739,219 字符，
+# + `TodoCalendarEntriesProbeTests`（`TD-CAL-1` 片 · 派单 `T-20261009-026`：待办日历「选中日」那两枚入口 ——
+#   ① 选中日直接新建（截止预填该日 09:00，另有对照件证明既有的「新建」不带截止）；② 选中日 →「写笔记」。
+#   它落地当轮**漏了接 FILTER**（用例一个都跑不到），由 `check-result-scroll-ledger.py` ⑤ 抓出后补上
+#   —— 与 `FormatMenuWiringProbeTests` 当年那一处同一个坏法）。
+# + `TodoDetailSearchProbeTests`（`TD-LIST-1` 片 · 派单 `T-20261009-026`：待办清单那两件 ——
+#   ① 点一行 ⇒ **右栏只读详情**（渲染右栏两遍：那一条的标题 / 截止 / 优先级 / 标签都在，
+#   **编辑器那几句一句都不许出现**；另加反向对照：显式「编辑」之后同一个件必须画得出那几句，
+#   否则「没有」可能只是「读不到」）；② `TodoQueryBar` 的**本地关键字检索** ⇒ 清单只剩按标题命中的行
+#   （敲一个只配得上一条的子串；反向对照 = 那个词只存在于另一条的**标签**里 ⇒ 一条都不留）。
+#   主入口是 `Scripts/run-manual-verification-probes.sh`（它自己会带 `DOYAH_NOTES_DIR`）；
+#   挂在这里也是为了那条「每个 `*ProbeTests.swift` 都得有入口」的判据 `check-result-scroll-ledger.py` ⑤）。
+# + `PerfTypingProbeTests`（`L-148`：查询页签每键耗时的机器判据 —— 5,000 行 / 739,219 字符，
 #   断言**每键 p50 < 5 ms**（实测 33.6 → 1.8 ms，改前 31.74 ms）。`verify-all.sh` 那十八项
 #   判的是静态与行为，**判不到运行时开销** —— 这是「每键写全局 @Published」那类错唯一的拦网，
 #   见「第十六批」与 §9 第 104 条：探针不挂进 FILTER = 这一族一个都跑不到）。
@@ -313,8 +324,23 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   **pid 换人**、页签留着；④ 渲染真二级条：页签 1 → 3 时**左半必须变、右四分之一逐像素不变**
 #   （右侧那四枚不被页签挤动）+ 左 / 右各切一张图存盘。
 #   它**真开 shell**（取证专用，`XCTSkip` 到 `DOYAH_UI_SNAPSHOT=1`），跟着本脚本跑两遍。
+# + `QueryHistoryPaneProbeTests`（片 `HIST-2` · 派单 `T-20261009-018` / `T-20261009-010` ·
+#   人类主人 2026-10-08 令：下方面板外层页签条新增「历史」，**只在 Database 客户端段出现**，
+#   与工具条时钟菜单**同一份**历史源，并给「清空」/「单条删除」两处**二次确认**）：
+#   ① 段条件（`FR-EDIT-10`）：Database 段页签可见（渲染出的文案里有「历史」）→ 切工作区段
+#   **不可见**且正选中历史时**自动落到终端** → 切回**恢复历史**（三态成对读数 + 选中项 dump）；
+#   ② 同源：源码锚点（页面与菜单都读 `appState.queryHistory`）+ **读盘点唯一**
+#   （`App/` 里提到落盘门面 `QueryHistoryStore` 的文件只许 `AppState.swift`）；
+#   ③ 二次确认（`DR-02`）：点清空/删除 ⇒ **只挂请求**（内存与库都不变）→ 取消不变 →
+#   确认才落库（清空 ⇒ 0 / 单条 ⇒ 减 1），读数同时给内存镜像与**库里真值**。
+#   ⚠️ ③ 要写临时笔记库（历史与笔记**同库**）⇒ 走 `DOYAH_NOTES_DIR`，没设就 `XCTSkip`。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests"
+# + `TodoCalendarEntriesProbeTests`（`TD-CAL-1` · 派单 `T-20261009-026`：日历「选中日」那两枚入口 ——
+#   新建待办的截止预填该日 09:00 / 「写笔记」新开一篇；正反两面由**渲染记录**判）+ `LunarSubtitleProbeTests`
+#   （`TD-CAL-2` 同派单：月视图格的**副条** —— 每格农历日 + 交节那天那一格的节气）。
+#   两枚都是「写下用例却没接进 `--filter` = 一个都跑不到」，由 `check-result-scroll-ledger.py` ⑤ 抓出后补上。
+# `--filter` 传的是**正则**，所以这里用 `|` 连接。
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

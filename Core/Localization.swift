@@ -218,6 +218,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case lowerPaneOutput
     case lowerPaneTerminal
     case lowerPaneDebugConsole
+    /// 「历史」页签（`FR-EDIT-10` v3.326 扩写：只在 Database 客户端段出现）。
+    case lowerPaneHistory
     case lowerPaneToggle
     case lowerPaneHide
     case lowerPaneExpand
@@ -288,6 +290,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case menuNotes
     case notesNew
     case notesSave
+    /// 笔记编辑工具条的**行内四枚**（片 `WY-1b1` · 派单 `T-20261009-045`）：纯图标 + 悬停名字
+    /// （与「保存」同一档口径：工具条上不许出现文字按钮，`FR-EXEC-13`）。
+    case notesFormatBold
+    case notesFormatItalic
+    case notesFormatUnderline
+    case notesFormatHighlight
     case notesDelete
     case notesSearchPlaceholder
     case notesEmpty
@@ -452,6 +460,9 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoCalendarNext
     case todoCalendarNoDay
     case todoCalendarDayCount
+    // 片 `TD-CAL-1`（派单 `T-20261009-026`）：日历「选中日」那两枚入口 —— 新建待办 / 写笔记。
+    case todoCalendarNewTodo
+    case todoCalendarWriteNote
     case todoReschedule
     case todoWeekdayMonday
     case todoWeekdayTuesday
@@ -460,6 +471,89 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoWeekdayFriday
     case todoWeekdaySaturday
     case todoWeekdaySunday
+    // 片 `TD-CAL-2`（派单 `T-20261009-026`）：月视图格的**副条** —— 农历日 + 当日节气。
+    // 二十四枚节气（顺序 = `SolarTerm` 的 `rawValue`：0 = 小寒 … 23 = 冬至），
+    // 十二个月名前缀 + 十二个闰月前缀（值只是**前缀**，「月」字由 `lunarDateTemplate` 给），
+    // 三十个日名（初一 … 三十），一枚副条拼装模板。
+    case lunarTermMinorCold
+    case lunarTermMajorCold
+    case lunarTermStartOfSpring
+    case lunarTermRainWater
+    case lunarTermAwakeningOfInsects
+    case lunarTermSpringEquinox
+    case lunarTermPureBrightness
+    case lunarTermGrainRain
+    case lunarTermStartOfSummer
+    case lunarTermGrainFull
+    case lunarTermGrainInEar
+    case lunarTermSummerSolstice
+    case lunarTermMinorHeat
+    case lunarTermMajorHeat
+    case lunarTermStartOfAutumn
+    case lunarTermEndOfHeat
+    case lunarTermWhiteDew
+    case lunarTermAutumnEquinox
+    case lunarTermColdDew
+    case lunarTermFrostDescent
+    case lunarTermStartOfWinter
+    case lunarTermMinorSnow
+    case lunarTermMajorSnow
+    case lunarTermWinterSolstice
+    case lunarMonth1st
+    case lunarMonth2nd
+    case lunarMonth3rd
+    case lunarMonth4th
+    case lunarMonth5th
+    case lunarMonth6th
+    case lunarMonth7th
+    case lunarMonth8th
+    case lunarMonth9th
+    case lunarMonth10th
+    case lunarMonth11th
+    case lunarMonth12th
+    case lunarMonthLeap1st
+    case lunarMonthLeap2nd
+    case lunarMonthLeap3rd
+    case lunarMonthLeap4th
+    case lunarMonthLeap5th
+    case lunarMonthLeap6th
+    case lunarMonthLeap7th
+    case lunarMonthLeap8th
+    case lunarMonthLeap9th
+    case lunarMonthLeap10th
+    case lunarMonthLeap11th
+    case lunarMonthLeap12th
+    case lunarDay1
+    case lunarDay2
+    case lunarDay3
+    case lunarDay4
+    case lunarDay5
+    case lunarDay6
+    case lunarDay7
+    case lunarDay8
+    case lunarDay9
+    case lunarDay10
+    case lunarDay11
+    case lunarDay12
+    case lunarDay13
+    case lunarDay14
+    case lunarDay15
+    case lunarDay16
+    case lunarDay17
+    case lunarDay18
+    case lunarDay19
+    case lunarDay20
+    case lunarDay21
+    case lunarDay22
+    case lunarDay23
+    case lunarDay24
+    case lunarDay25
+    case lunarDay26
+    case lunarDay27
+    case lunarDay28
+    case lunarDay29
+    case lunarDay30
+    case lunarDateTemplate
     // 队列 `L-100` 落法 ④ 的**界面半第一片**（提醒：一键挂提醒的入口 + 权限 / 通知）。
     // 句子都在表里，`Core/ReminderPresentation.swift` 只出「哪个键 + 什么实参」。
     case reminderAttach
@@ -1988,6 +2082,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case historyClear
     case historyHelp
     case historyLoadHelp
+    /// 「历史」页签里的**归档**动作（`FR-EDIT-10`：→ `Core/SQLArchive`）。
+    case historyArchive
+    case historyArchiveHelp
+    /// 清空 / 单条删除两处**二次确认**（`DR-02`：可清空 / 单条删除）。
+    case historyClearConfirmTitle
+    case historyClearConfirmMessage
+    case historyDeleteConfirmTitle
+    case historyDeleteConfirmMessage
     case editorCompletionHelp
 
     // 对象树右键菜单 / 新建数据库（FR-META-11）
@@ -2380,6 +2482,7 @@ public enum LocalizedStrings {
         .lowerPaneOutput: [.simplifiedChinese: "输出", .english: "Output"],
         .lowerPaneTerminal: [.simplifiedChinese: "终端", .english: "Terminal"],
         .lowerPaneDebugConsole: [.simplifiedChinese: "调试控制台", .english: "Debug Console"],
+        .lowerPaneHistory: [.simplifiedChinese: "历史", .english: "History"],
         .lowerPaneToggle: [.simplifiedChinese: "显示 / 隐藏下方面板", .english: "Show/Hide Bottom Pane"],
         .lowerPaneHide: [.simplifiedChinese: "收起面板", .english: "Collapse pane"],
         .lowerPaneExpand: [.simplifiedChinese: "展开面板", .english: "Expand pane"],
@@ -2442,6 +2545,10 @@ public enum LocalizedStrings {
         .menuNotes: [.simplifiedChinese: "笔记…", .english: "Notes…"],
         .notesNew: [.simplifiedChinese: "新建", .english: "New"],
         .notesSave: [.simplifiedChinese: "保存", .english: "Save"],
+        .notesFormatBold: [.simplifiedChinese: "粗体", .english: "Bold"],
+        .notesFormatItalic: [.simplifiedChinese: "斜体", .english: "Italic"],
+        .notesFormatUnderline: [.simplifiedChinese: "下划线", .english: "Underline"],
+        .notesFormatHighlight: [.simplifiedChinese: "荧光笔（淡黄）", .english: "Highlighter (pale yellow)"],
         .notesDelete: [.simplifiedChinese: "删除", .english: "Delete"],
         .notesSearchPlaceholder: [.simplifiedChinese: "搜索标题 / 正文 / 标签", .english: "Search title, body or tags"],
         .notesEmpty: [.simplifiedChinese: "还没有笔记", .english: "No notes yet"],
@@ -2565,6 +2672,9 @@ public enum LocalizedStrings {
         .todoCalendarNext: [.simplifiedChinese: "往后翻", .english: "Next"],
         .todoCalendarNoDay: [.simplifiedChinese: "这一天没有任务", .english: "Nothing on this day"],
         .todoCalendarDayCount: [.simplifiedChinese: "这一天 %@ 条", .english: "%@ on this day"],
+        // 片 `TD-CAL-1`：日历「选中日」那两枚入口（两枚都是**动作**，提示句与按钮语义同一句）。
+        .todoCalendarNewTodo: [.simplifiedChinese: "新建待办", .english: "New todo"],
+        .todoCalendarWriteNote: [.simplifiedChinese: "写笔记", .english: "Write note"],
         .todoReschedule: [.simplifiedChinese: "改期", .english: "Reschedule"],
         .todoWeekdayMonday: [.simplifiedChinese: "周一", .english: "Mon"],
         .todoWeekdayTuesday: [.simplifiedChinese: "周二", .english: "Tue"],
@@ -2573,6 +2683,85 @@ public enum LocalizedStrings {
         .todoWeekdayFriday: [.simplifiedChinese: "周五", .english: "Fri"],
         .todoWeekdaySaturday: [.simplifiedChinese: "周六", .english: "Sat"],
         .todoWeekdaySunday: [.simplifiedChinese: "周日", .english: "Sun"],
+        .lunarTermMinorCold: [.simplifiedChinese: "小寒", .english: "Minor Cold"],
+        .lunarTermMajorCold: [.simplifiedChinese: "大寒", .english: "Major Cold"],
+        .lunarTermStartOfSpring: [.simplifiedChinese: "立春", .english: "Start of Spring"],
+        .lunarTermRainWater: [.simplifiedChinese: "雨水", .english: "Rain Water"],
+        .lunarTermAwakeningOfInsects: [.simplifiedChinese: "惊蛰", .english: "Awakening of Insects"],
+        .lunarTermSpringEquinox: [.simplifiedChinese: "春分", .english: "Spring Equinox"],
+        .lunarTermPureBrightness: [.simplifiedChinese: "清明", .english: "Pure Brightness"],
+        .lunarTermGrainRain: [.simplifiedChinese: "谷雨", .english: "Grain Rain"],
+        .lunarTermStartOfSummer: [.simplifiedChinese: "立夏", .english: "Start of Summer"],
+        .lunarTermGrainFull: [.simplifiedChinese: "小满", .english: "Grain Full"],
+        .lunarTermGrainInEar: [.simplifiedChinese: "芒种", .english: "Grain in Ear"],
+        .lunarTermSummerSolstice: [.simplifiedChinese: "夏至", .english: "Summer Solstice"],
+        .lunarTermMinorHeat: [.simplifiedChinese: "小暑", .english: "Minor Heat"],
+        .lunarTermMajorHeat: [.simplifiedChinese: "大暑", .english: "Major Heat"],
+        .lunarTermStartOfAutumn: [.simplifiedChinese: "立秋", .english: "Start of Autumn"],
+        .lunarTermEndOfHeat: [.simplifiedChinese: "处暑", .english: "End of Heat"],
+        .lunarTermWhiteDew: [.simplifiedChinese: "白露", .english: "White Dew"],
+        .lunarTermAutumnEquinox: [.simplifiedChinese: "秋分", .english: "Autumn Equinox"],
+        .lunarTermColdDew: [.simplifiedChinese: "寒露", .english: "Cold Dew"],
+        .lunarTermFrostDescent: [.simplifiedChinese: "霜降", .english: "Frost's Descent"],
+        .lunarTermStartOfWinter: [.simplifiedChinese: "立冬", .english: "Start of Winter"],
+        .lunarTermMinorSnow: [.simplifiedChinese: "小雪", .english: "Minor Snow"],
+        .lunarTermMajorSnow: [.simplifiedChinese: "大雪", .english: "Major Snow"],
+        .lunarTermWinterSolstice: [.simplifiedChinese: "冬至", .english: "Winter Solstice"],
+        .lunarMonth1st: [.simplifiedChinese: "正", .english: "1"],
+        .lunarMonth2nd: [.simplifiedChinese: "二", .english: "2"],
+        .lunarMonth3rd: [.simplifiedChinese: "三", .english: "3"],
+        .lunarMonth4th: [.simplifiedChinese: "四", .english: "4"],
+        .lunarMonth5th: [.simplifiedChinese: "五", .english: "5"],
+        .lunarMonth6th: [.simplifiedChinese: "六", .english: "6"],
+        .lunarMonth7th: [.simplifiedChinese: "七", .english: "7"],
+        .lunarMonth8th: [.simplifiedChinese: "八", .english: "8"],
+        .lunarMonth9th: [.simplifiedChinese: "九", .english: "9"],
+        .lunarMonth10th: [.simplifiedChinese: "十", .english: "10"],
+        .lunarMonth11th: [.simplifiedChinese: "冬", .english: "11"],
+        .lunarMonth12th: [.simplifiedChinese: "腊", .english: "12"],
+        .lunarMonthLeap1st: [.simplifiedChinese: "闰正", .english: "leap 1"],
+        .lunarMonthLeap2nd: [.simplifiedChinese: "闰二", .english: "leap 2"],
+        .lunarMonthLeap3rd: [.simplifiedChinese: "闰三", .english: "leap 3"],
+        .lunarMonthLeap4th: [.simplifiedChinese: "闰四", .english: "leap 4"],
+        .lunarMonthLeap5th: [.simplifiedChinese: "闰五", .english: "leap 5"],
+        .lunarMonthLeap6th: [.simplifiedChinese: "闰六", .english: "leap 6"],
+        .lunarMonthLeap7th: [.simplifiedChinese: "闰七", .english: "leap 7"],
+        .lunarMonthLeap8th: [.simplifiedChinese: "闰八", .english: "leap 8"],
+        .lunarMonthLeap9th: [.simplifiedChinese: "闰九", .english: "leap 9"],
+        .lunarMonthLeap10th: [.simplifiedChinese: "闰十", .english: "leap 10"],
+        .lunarMonthLeap11th: [.simplifiedChinese: "闰冬", .english: "leap 11"],
+        .lunarMonthLeap12th: [.simplifiedChinese: "闰腊", .english: "leap 12"],
+        .lunarDay1: [.simplifiedChinese: "初一", .english: "1"],
+        .lunarDay2: [.simplifiedChinese: "初二", .english: "2"],
+        .lunarDay3: [.simplifiedChinese: "初三", .english: "3"],
+        .lunarDay4: [.simplifiedChinese: "初四", .english: "4"],
+        .lunarDay5: [.simplifiedChinese: "初五", .english: "5"],
+        .lunarDay6: [.simplifiedChinese: "初六", .english: "6"],
+        .lunarDay7: [.simplifiedChinese: "初七", .english: "7"],
+        .lunarDay8: [.simplifiedChinese: "初八", .english: "8"],
+        .lunarDay9: [.simplifiedChinese: "初九", .english: "9"],
+        .lunarDay10: [.simplifiedChinese: "初十", .english: "10"],
+        .lunarDay11: [.simplifiedChinese: "十一", .english: "11"],
+        .lunarDay12: [.simplifiedChinese: "十二", .english: "12"],
+        .lunarDay13: [.simplifiedChinese: "十三", .english: "13"],
+        .lunarDay14: [.simplifiedChinese: "十四", .english: "14"],
+        .lunarDay15: [.simplifiedChinese: "十五", .english: "15"],
+        .lunarDay16: [.simplifiedChinese: "十六", .english: "16"],
+        .lunarDay17: [.simplifiedChinese: "十七", .english: "17"],
+        .lunarDay18: [.simplifiedChinese: "十八", .english: "18"],
+        .lunarDay19: [.simplifiedChinese: "十九", .english: "19"],
+        .lunarDay20: [.simplifiedChinese: "二十", .english: "20"],
+        .lunarDay21: [.simplifiedChinese: "廿一", .english: "21"],
+        .lunarDay22: [.simplifiedChinese: "廿二", .english: "22"],
+        .lunarDay23: [.simplifiedChinese: "廿三", .english: "23"],
+        .lunarDay24: [.simplifiedChinese: "廿四", .english: "24"],
+        .lunarDay25: [.simplifiedChinese: "廿五", .english: "25"],
+        .lunarDay26: [.simplifiedChinese: "廿六", .english: "26"],
+        .lunarDay27: [.simplifiedChinese: "廿七", .english: "27"],
+        .lunarDay28: [.simplifiedChinese: "廿八", .english: "28"],
+        .lunarDay29: [.simplifiedChinese: "廿九", .english: "29"],
+        .lunarDay30: [.simplifiedChinese: "三十", .english: "30"],
+        .lunarDateTemplate: [.simplifiedChinese: "%@月%@", .english: "%@/%@"],
         // 队列 `L-100` 落法 ④ 的**界面半第一片**（提醒）。这一组里只有「每 N 天 / 每 N 周」两条
         // 带**数字槽**（契约 §2.10 的 `intervalCount` 是数值 ⇒ 槽位写 `%d`，写 `%@` 会印出 (null)），
         // 其余都是文本槽。
@@ -3881,10 +4070,16 @@ public enum LocalizedStrings {
         .inlineEditInsertConfirm: [.simplifiedChinese: "加入待提交", .english: "Add to pending changes"],
         .inlineEditInsertEmpty: [.simplifiedChinese: "一行都没有填：追加行至少要写一列。", .english: "Nothing was filled in: an appended row needs at least one column."],
         .historyTitle: [.simplifiedChinese: "查询历史", .english: "Query History"],
-        .historyEmpty: [.simplifiedChinese: "本次运行还没有执行过查询", .english: "No queries executed in this session"],
+        .historyEmpty: [.simplifiedChinese: "还没有查询历史", .english: "No query history yet"],
         .historyClear: [.simplifiedChinese: "清空历史", .english: "Clear History"],
-        .historyHelp: [.simplifiedChinese: "查询历史（仅保留在内存，退出即清空）", .english: "Query history (in memory only, cleared on quit)"],
+        .historyHelp: [.simplifiedChinese: "查询历史（本机保存，可清空 / 单条删除）", .english: "Query history (stored locally; clear it or delete single entries)"],
         .historyLoadHelp: [.simplifiedChinese: "载入到当前页签", .english: "Load into current tab"],
+        .historyArchive: [.simplifiedChinese: "归档", .english: "Archive"],
+        .historyArchiveHelp: [.simplifiedChinese: "把这一条写入本机 SQL 归档", .english: "Write this entry to the local SQL archive"],
+        .historyClearConfirmTitle: [.simplifiedChinese: "要清空全部查询历史吗？", .english: "Clear all query history?"],
+        .historyClearConfirmMessage: [.simplifiedChinese: "清空后无法恢复：本机保存的历史记录会全部删掉。", .english: "This cannot be undone: every locally stored entry will be deleted."],
+        .historyDeleteConfirmTitle: [.simplifiedChinese: "要删除这一条历史吗？", .english: "Delete this history entry?"],
+        .historyDeleteConfirmMessage: [.simplifiedChinese: "这一条将从本机历史里移除，无法撤销。", .english: "This entry will be removed from the local history and cannot be recovered."],
         .editorCompletionHelp: [.simplifiedChinese: "补全（F5 或 Esc）", .english: "Complete (F5 or Esc)"],
         .objectTreeMenuConnect: [.simplifiedChinese: "连接", .english: "Connect"],
         .objectTreeMenuDisconnect: [.simplifiedChinese: "断开", .english: "Disconnect"],

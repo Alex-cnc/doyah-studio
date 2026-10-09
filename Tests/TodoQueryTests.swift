@@ -367,6 +367,73 @@ final class TodoQueryTests: XCTestCase {
         }
     }
 
+    // MARK: - 本地关键字检索（片 TD-LIST-1 · 派单 T-20261009-026 的 B4）
+
+    func testSearchMatchesTitleCaseInsensitively() {
+        let row = todo("Write Weekly Report")
+        XCTAssertTrue(TodoSearch.matches(row, query: "report"), "标题里含这个词（大小写不同）⇒ 命中")
+        XCTAssertTrue(TodoSearch.matches(row, query: "WRITE"), "整词也在、大小写也不敏感")
+        XCTAssertFalse(TodoSearch.matches(row, query: "周报"), "标题里没有这个词 ⇒ 不命中")
+    }
+
+    func testSearchMissesWhenOnlyOtherFieldsContainTheWord() {
+        // **只看标题**：标签 / 截止时间里有这个词不算命中（否则「搜一个词捞出一堆不相干的行」）。
+        let row = todo("开会", due: at("2026-10-07"), tags: ["周报", "report"])
+        XCTAssertFalse(TodoSearch.matches(row, query: "周报"), "标签里有这个词也不算命中（只看标题）")
+        XCTAssertFalse(TodoSearch.matches(row, query: "report"), "标签里有这个词也不算命中（只看标题）")
+        XCTAssertTrue(TodoSearch.matches(row, query: "开会"), "标题里那两个字仍在")
+    }
+
+    func testSearchEmptyOrWhitespaceKeepsEveryRow() {
+        // 「没在搜」不等于「什么都搜不到」：空词 / 纯空白 ⇒ 一行都不筛掉，**且不动顺序**。
+        let rows = [todo("甲"), todo("乙"), todo("丙")]
+        for query in ["", "   ", "\n"] {
+            XCTAssertEqual(TodoSearch.apply(rows, query: query).map(\.title), ["甲", "乙", "丙"], "词 = 「\(query)」")
+        }
+        XCTAssertEqual(TodoSearch.normalized("  周报  "), "周报", "归一 = 去首尾空白")
+    }
+
+    func testBoardAppliesSearchBeforeFilterAndSort() {
+        let items = [
+            todo("周报-今天", due: at("2026-10-07", 9 * 60), priority: .low),
+            todo("周报-本周", due: at("2026-10-09"), priority: .high),
+            todo("报销单", due: at("2026-10-07", 10 * 60), priority: .high),
+        ]
+        let board = TodoQuery.board(items, filter: .today, search: "周报", window: window, order: .priority)
+        XCTAssertEqual(board.total, 1, "检索与筛选同一层：两条各自筛掉一些行")
+        XCTAssertEqual(board.groups[0].open.map(\.title), ["周报-今天"])
+        // 检索不参与排序：命中的两条仍按当前那一档排（priority：高在前）。
+        let both = TodoQuery.board(items, search: "周报", window: window, order: .priority)
+        XCTAssertEqual(both.groups[0].open.map(\.title), ["周报-本周", "周报-今天"])
+        // 空词 = 不筛（与不传 search 逐字同形）。
+        XCTAssertEqual(
+            TodoQuery.board(items, search: "", window: window).total,
+            TodoQuery.board(items, window: window).total
+        )
+    }
+
+    func testEmptyKindTreatsSearchingAsFilteredOut() {
+        // 搜一个词一条都不命中时，库里明明有任务 ⇒ 不能说「还没有待办」（用户会以为任务丢了）。
+        XCTAssertEqual(TodoQuery.emptyKind(hasAnyTask: true, filter: .all, searching: true), .filteredOut(.all))
+        // 反向对照：没在搜、「全部」档 ⇒ 仍是「一条都没有」那一句（别把这一支也改掉）。
+        XCTAssertEqual(TodoQuery.emptyKind(hasAnyTask: true, filter: .all, searching: false), .none)
+        XCTAssertEqual(TodoQuery.emptyKind(hasAnyTask: false, filter: .all, searching: true), .none, "库里本来就没有 ⇒ 还是「还没有待办」")
+    }
+
+    func testSearchPredicateHasExactlyOneHome() throws {
+        // 检索谓词的**唯一出处**：Core 里那一句在，两个视图里都不许自己写第二份。
+        let core = try source("Core/TodoQuery.swift")
+        XCTAssertTrue(core.contains("localizedCaseInsensitiveContains"), "检索谓词的实现搬走了")
+        XCTAssertTrue(core.contains("public enum TodoSearch"), "检索那一层不在 Core")
+        for file in ["App/Views/TodoCalendarView.swift", "App/Views/NotesPanel.swift"] {
+            let view = try source(file)
+            XCTAssertFalse(
+                view.contains("localizedCaseInsensitiveContains"),
+                "\(file) 自己写了一份匹配（第二套口径）"
+            )
+        }
+    }
+
     // MARK: - 语言表
 
     func testQueryKeysExistInBothLanguages() {

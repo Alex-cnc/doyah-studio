@@ -26,46 +26,16 @@ struct NotesListView: View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             // **中栏的栏头**（队列 `L-184`）：两级导航（架 → 笔记本）搬回左栏、搜索框搬去顶栏，
             // 这一栏只剩「看哪一条」—— 栏头写这一屏有多少条 + **排序条**（第二片新加）。
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                Text(L(.notesTitle))
-                    .font(Theme.font(.title))
-                Text("\(appState.visibleNotes.count)")
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(Theme.text(.secondary))
-                Spacer(minLength: Spacing.xs)
-                // **排序**（队列 `L-184` 第二片）：三档名字与总序都在 Core
-                // （`NotesSortOrder`）—— 视图只画选择器，不自己写比较函数。
-                Picker(L(.notesSortBy), selection: $appState.notesSortOrder) {
-                    ForEach(NotesSortOrder.allCases, id: \.self) { order in
-                        Text(L(order.key)).tag(order)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
-                .help(L(.notesSortBy))
-                .accessibilityIdentifier("notes-sort")
-                // **筛选条**（队列 `L-184` 第三片）：中栏栏头这一枚「只看收藏」。
-                // 它不是第二个状态 —— 绑的就是左栏那一行（`AppState.notesFavoriteOnly` 一处判，
-                // 两个界面面共用一个变量 ⇒ 不可能出现「开关开着、列表在看全部」）。
-                // **图标化**（片 `N2-2`「工具条 图标化」）：星号一枚 + 悬停提示 —— 与 SQL 编辑区
-                // 工具条那些开关同一个形状（`.button` 档的开关本来就是图标按钮）；
-                // 标题 `L(.notesFavoriteOnly)` 保留在 `Label` 里（无障碍／提示仍说得清它是什么）。
-                Toggle(isOn: Binding(
-                    get: { appState.notesFavoriteOnly },
-                    set: { appState.setNotesFavoriteOnly($0) }
-                )) {
-                    Label(L(.notesFavoriteOnly), systemImage: "star")
-                        .labelStyle(.iconOnly)
-                        .font(Theme.font(.icon))
-                }
-                .toggleStyle(.button)
-                .controlSize(.small)
-                .fixedSize()
-                .help(L(.notesFavoriteOnly))
-                .accessibilityIdentifier("notes-favorite-filter")
-            }
-            .padding(.horizontal, Spacing.s)
+            //
+            // **头部固定两行**（片 `N2-LW-238` · 派单 `T-20261009-001` · 前门裁决 `T-20261009-001`）：
+            // 这一栏的整列上限收到 **238pt** 之后，原来那一行**放不下** —— 实测（238 档旧图
+            // `.build/n2lw-shots/after-1352.png`）「`Notes 4`」被挤断成「`Not`」/「`es`」两行、
+            // 排序条被裁到栏外。⇒ 头部改成**两行**（工具条允许分两行）：
+            //   · 第一行 = 标题 + 条数 + 行末那枚「只看收藏」开关；
+            //   · 第二行 = 排序条（`notes-sort`）。
+            // 两行的内容各自都短到 238pt 里放得下（实测：排序条 154pt / 开关 36.5pt），
+            // 且标题与条数**不许断词、不许截断**。见 `listHeader`。
+            listHeader
             if let hint = appState.noteSearchHint {
                 // 这一行是**如实交代**：走的是子串兜底，还是检索压根没跑成 —— 两种都不是
                 // 「没找到」，所以不能只给一个空列表了事。
@@ -178,6 +148,75 @@ struct NotesListView: View {
         // 侧栏底色与工作区侧栏同一令牌（2026-09-30 实测反馈：笔记界面与工作区配色差很大）。
         .scrollContentBackground(.hidden)
         .background(Theme.surface(.sidebar))
+    }
+
+    /// **中栏栏头 = 固定的两行**（片 `N2-LW-238` · 派单 `T-20261009-001`）。
+    ///
+    /// 为什么是**固定的两行**、而不是「一行放不下就自动换行」：这一段里所有量得到的几何都在
+    /// **离屏宿主**（`TestsUISnapshot/NotesLayoutProbeTests.swift`：SwiftUI 的文本不落地成
+    /// `NSView`，只有选择器 / 开关这类 AppKit 承载的控件量得到）—— 自动换行（`ViewThatFits` /
+    /// 流式布局）在那里的落地形状随系统版本变，判据钉不住。固定的两行让「头部内容宽度 ≤ 中栏宽度」
+    /// 在 **238pt** 档下**恒成立**：两行里最宽的一件是排序条（本机实测 154pt），整列可用宽
+    /// 238 − 2×8（`Spacing.s` 左右留白）= 222pt，余量 68pt。
+    ///
+    /// 两行分工（口径与改前的单行一致，只是拆开）：
+    ///   · **第一行** = 标题（`notesTitle`：Notes / 笔记）+ 条数 + 行末那枚**只看收藏**开关；
+    ///   · **第二行** = **排序条**（`notes-sort`，队列 `L-184` 第二片那三档）。
+    ///
+    /// **不许断词、不许截断**：标题与条数各带 `.lineLimit(1)`，标题另加横向 `fixedSize`
+    /// —— 宁可整块不收缩，也不把词拆成两行（238 档旧图里断的正是 `Notes` → `Not` / `es`）。
+    /// **排序条与开关的判定入口一字未动**：`notes-sort` / `notes-favorite-filter` 两个
+    /// `accessibilityIdentifier` 都还在各自那一件上（判据按它挑控件，不靠遍历顺序）。
+    private var listHeader: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                Text(L(.notesTitle))
+                    .font(Theme.font(.title))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Text("\(appState.visibleNotes.count)")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .lineLimit(1)
+                Spacer(minLength: Spacing.xs)
+                // **筛选条**（队列 `L-184` 第三片）：中栏栏头这一枚「只看收藏」。
+                // 它不是第二个状态 —— 绑的就是左栏那一行（`AppState.notesFavoriteOnly` 一处判，
+                // 两个界面面共用一个变量 ⇒ 不可能出现「开关开着、列表在看全部」）。
+                // **图标化**（片 `N2-2`「工具条 图标化」）：星号一枚 + 悬停提示 —— 与 SQL 编辑区
+                // 工具条那些开关同一个形状（`.button` 档的开关本来就是图标按钮）；
+                // 标题 `L(.notesFavoriteOnly)` 保留在 `Label` 里（无障碍／提示仍说得清它是什么）。
+                Toggle(isOn: Binding(
+                    get: { appState.notesFavoriteOnly },
+                    set: { appState.setNotesFavoriteOnly($0) }
+                )) {
+                    Label(L(.notesFavoriteOnly), systemImage: "star")
+                        .labelStyle(.iconOnly)
+                        .font(Theme.font(.icon))
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+                .fixedSize()
+                .help(L(.notesFavoriteOnly))
+                .accessibilityIdentifier("notes-favorite-filter")
+            }
+            HStack(spacing: Spacing.xs) {
+                // **排序**（队列 `L-184` 第二片）：三档名字与总序都在 Core
+                // （`NotesSortOrder`）—— 视图只画选择器，不自己写比较函数。
+                Picker(L(.notesSortBy), selection: $appState.notesSortOrder) {
+                    ForEach(NotesSortOrder.allCases, id: \.self) { order in
+                        Text(L(order.key)).tag(order)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
+                .help(L(.notesSortBy))
+                .accessibilityIdentifier("notes-sort")
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, Spacing.s)
+        .accessibilityIdentifier("notes-list-header")
     }
 
     /// 行右键里的**收藏 / 取消收藏**（队列 `L-184` 第三片）：一个动作两种措辞 —— 当前不是收藏
@@ -680,6 +719,9 @@ struct NotesEditorView: View {
 
     @EnvironmentObject private var appState: AppState
 
+    /// **行内四枚的接线**（片 `WY-1b1`）：编辑面登记它、工具条那四枚按钮读它 —— 同一个实例。
+    @StateObject private var richController = NotesRichTextController()
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             // **顶部编辑工具条**（片 `N2-3b`）：编辑态下，动作住在编辑面**之上**的一条行里
@@ -687,7 +729,7 @@ struct NotesEditorView: View {
             // **只在 `.edit` 出现**：预览态的正文只读，「保存」无处可用（画一枚永远灰着的按钮
             // 就是 `L-50` 那一课）。进编辑那条路见 `NotePreviewBody` 那一支上的双击。
             if appState.editorMode == .edit {
-                NotesEditorToolbar()
+                NotesEditorToolbar(controller: richController)
                 Divider()
             }
             // **栏头搬走了**（队列 `L-184` 三栏重排）：「笔记」这个标题与条数进了中栏栏头
@@ -707,7 +749,11 @@ struct NotesEditorView: View {
             // 两半**共用同一条 `.editorSurface()`**（编辑面底色的唯一出处）：编辑面处数棘轮要求
             // `.editorSurface()` 处数 == 编辑面（`TextEditor(`）处数，所以它只挂在 `TextEditor` 这一支上。
             if appState.editorMode == .edit {
-                TextEditor(text: $appState.noteEditorBody)
+                // **片 `WY-1b1`**：纯文本 `TextEditor` → **富文本面** `NotesRichTextEditor`
+                // （行内标记装进来时解析成属性、`**` / `#` 不再露出；见该文件头注释）。
+                // `.editorSurface()` 仍挂在这一处**编辑面本体**上 —— 底色 / 字色的唯一出处不变，
+                // 处数棘轮（编辑面处数 == `.editorSurface()` 处数）靠这一行保持相等。
+                NotesRichTextEditor(text: $appState.noteEditorBody, controller: richController)
                     .font(Theme.font(.mono))
                     .editorSurface()
                     .overlay(
@@ -784,6 +830,9 @@ struct NotesEditorToolbar: View {
 
     @EnvironmentObject private var appState: AppState
 
+    /// **行内四枚**共用的接线（片 `WY-1b1`）——由 `NotesEditorView` 与编辑面**同一个实例**传下来。
+    @ObservedObject var controller: NotesRichTextController
+
     var body: some View {
         HStack(spacing: Spacing.s) {
             Button {
@@ -812,6 +861,24 @@ struct NotesEditorToolbar: View {
                     .help(appState.noteSaveState.failureReason ?? L(key))
                     .accessibilityIdentifier(NoteAutosave.statusIdentifier)
             }
+            // **行内四枚**（片 `WY-1b1` · 派单 `T-20261009-045` 第 ①②③④ 项）：粗体 / 斜体 /
+            // 下划线 / 笔刷（荧光笔·淡黄）。形态与「保存」**同一档**（纯图标 + 悬停名字，
+            // 工具条上不许出现文字按钮 —— `FR-EXEC-13` 那条口径）；作用在**选区**，选区为空时
+            // 作用在**光标所在词**上（判定与动作本体都在 `NotesTextView.apply(_:)`，这里只转发）。
+            // 图标 / 文案键 / 命令名都取自 `NoteInlineCommand`（唯一出处），不许在这里各写一遍。
+            // **色调是辅助档**（`Theme.text(.secondary)`）：它们是「保存」那一枚的次要动作，
+            // 不抢主动作的注意力（与全 app 一条工具条语言一致）。
+            ForEach(NoteInlineCommand.allCases, id: \.self) { command in
+                Button {
+                    controller.toggle(command)
+                } label: {
+                    Image(systemName: command.symbolName)
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+                .help(L(command.titleKey))
+                .disabled(!canApplyInline)
+                .accessibilityIdentifier("notes-editor-format-\(command.rawValue)")
+            }
             Text(L(.notesSourceHint))
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.secondary))
@@ -828,6 +895,15 @@ struct NotesEditorToolbar: View {
     private var saveStateColor: Color {
         appState.noteSaveState.isFailure ? Theme.status(.warning) : Theme.text(.secondary)
     }
+
+    /// 行内四枚**有没有对象可作用**（片 `WY-1b1`）：空编辑器上它们与「保存」一样**灰着** ——
+    /// 一枚永远可点、点下去什么都不发生的按钮就是 `L-50` 那一课。
+    ///
+    /// **为什么是这一句转发而不是各写一遍判据**：判据的唯一出处仍是
+    /// `AppState.noteEditorHasContent`（`Scripts/check-empty-action-buttons.py` 看着它只定义一次、
+    /// 守卫与 `.disabled` 同一条判断）—— 这里只是**同一个判据的另一个消费点**，
+    /// 视图里不许再自己算一遍（那才是 `L-50` 的病根）。
+    private var canApplyInline: Bool { appState.noteEditorHasContent }
 }
 
 /// **笔记区 = 顶栏 + 三栏**（队列 `L-184`）：需求提出者 2026-10-04 原话「macOS版界面布局可以
@@ -868,7 +944,7 @@ struct NotesAreaView: View {
                             idealWidth: NotesAreaView.listPaneIdealWidth,
                             maxWidth: NotesAreaView.listPaneMaxWidth
                         )
-                    TodoEditorView()
+                    TodoRightPaneView()
                         .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1045,25 +1121,31 @@ struct NotesAreaView: View {
     /// 也就是说：**这一列实际多宽由 `maxWidth` 定**（`minWidth` / `idealWidth` 只在窗口极小、
     /// 或用户拖动分栏时才起作用）。
     ///
-    /// ## 取值（前门裁决 `T-20261008-053` ① · 组长第 277 轮收口：回到 **300** 档）
+    /// ## 取值（前门裁决 `T-20261009-001`：宽度判据取【真机真实窗口】⇒ 收到 **238pt**）
     ///
     /// 「现宽」有两个可读口径，本机都实测过（记在案）：
+    ///   · **A 真机口径**（人类主人按整屏图判 · **本轮以它为准**）：自然打开的 1352pt 宽窗口下
+    ///     旧包中栏落地 **397pt** ⇒ 改后须 **≤ 238pt**（`397 × 0.60 = 238.2`）；
     ///   · **B 离屏口径**（判据可复跑）：离屏宿主 `1100×700` 下中栏改前落地 **520pt**
-    ///     ⇒ 改后须 **≤ 312pt**（`520 × 0.60 = 312`）；
-    ///   · **A 真机口径**（人类主人按整屏图判）：同一旧构建、同一满屏窗口下实测出现过 **397pt** 与
-    ///     **520pt** 两个值 —— 组长第 277 轮逐张看图复核：**自然打开**的窗口量到 **520pt**，而
-    ///     **397pt** 出现在窗口「被放大而非自然打开」那一态 ⇒ **以自然打开窗口的 520pt 为基准**。
+    ///     ⇒ 改后须 **≤ 312pt**（`520 × 0.60 = 312`）。
+    /// 前门裁定（`T-20261009-001` 最要紧条）：「**宽度判据取【真机真实窗口】⇒ 397→300=75.6%
+    /// 未达 ≤60% ⇒ 需重做 N2-LW 到 ≤238pt**（允许工具条分 2 行，头部不许断词），
+    /// **旧 520/300 只作离屏读数留档**」。
     ///
-    /// 基准 = **520** ⇒ `520 × 0.60 = 312` ⇒ **`maxWidth` = 300**（`300 / 520 = 57.7% ≤ 60%`）。
+    ///   · `minWidth`   220 → **132**（×0.60 · 可读性保底，本次不再往下）；
+    ///   · `idealWidth` 300 → `180` → **143**（`180` 是上一版按 520 口径收的值；本次 = `238 × 0.60`
+    ///     取整，与 `maxWidth` 同步收敛）；
+    ///   · `maxWidth`   520 → `300` → **238**（= A 口径 `397 × 0.60 = 238.2` 取整）。
     ///
-    ///   · `minWidth`   220 → **132**（×0.60）；
-    ///   · `idealWidth` 300 → **180**（×0.60）；
-    ///   · `maxWidth`   520 → **300**（×0.577）—— 改前 520 的 60% 是 **312**，而 `520 * 0.60` 在
-    ///     IEEE double 里**恰好**等于 `312.0`（`312.0 <= 520 * 0.60` 只在逐位相等时成立 ⇒ 判据
-    ///     **零余量**，任何一点布局漂移就翻）。取整百 **300** 同样满足「≤60%」，且给判据留出 12pt 余量。
-    ///     （曾按 397 基准试收 **238pt**（commit `a8454d8`），实测**中栏头部控件放不下** ——
-    ///     搜索占位被截断、`Notes` 断成 `Not`/`es` 两行 ⇒ 组长第 277 轮裁定**回到 300 档**；
-    ///     更窄须重排头部 ＝ 扩范围，另立片。）
+    /// ## 238 档与头部重排是**同一步**（本片不拆 · 组长粒度说明）
+    ///
+    /// 只收常量、不重排中栏头部 ⇒ **复现 `a8454d8` 已登记的缺陷**：238 档下头部控件放不下
+    /// （搜索占位被截断、`Notes` 断成 `Not`/`es` 两行、排序条被裁到栏外）。故本片的头部 =
+    /// `NotesListView.listHeader` 的**固定两行**（第一行 标题+条数+「只看收藏」开关 / 第二行 排序条）
+    /// ——「允许工具条分 2 行、头部不许断词」那一句的落地。
+    ///
+    /// 旧 300 档的真机证据图 = `.build/n2lw-shots/N2LW-final-after-300.png`（中栏 `589..1191px`
+    /// = `301.0pt`）；离屏留档 = 上一版 `NotesLayoutProbeTests` 打印的 `改前 520.0pt → 改后 300.0pt`。
     ///
     /// ## 为什么三个数住在这里、不写死在两处调用点
     ///
@@ -1075,8 +1157,8 @@ struct NotesAreaView: View {
     /// **不动的东西**（本次边界）：搜索框 `320→200`（`N2-2` 已定案，一字不改）、最左侧笔记本导航栏
     /// （人类主人明说不在本次范围）、整窗尺寸、`Core/**`、`HSplitView` 用户拖动宽度的持久化（不给它加）。
     private static let listPaneMinWidth: CGFloat = 132
-    private static let listPaneIdealWidth: CGFloat = 180
-    private static let listPaneMaxWidth: CGFloat = 300
+    private static let listPaneIdealWidth: CGFloat = 143
+    private static let listPaneMaxWidth: CGFloat = 238
 
     /// **行末两枚的图标**（人类主人令 `T-20261007-080` 逐字：**笔记本图标 + 闹钟图标**）。
     ///
@@ -1128,9 +1210,15 @@ struct NotesAreaView: View {
         return appState.notes.first { $0.id == id }
     }
 
-    /// 「改」在待办屏的目标：编辑器里那一条（没在编辑 ⇒ 灰着）。
+    /// 「改」在待办屏的目标：**右栏正在显示的那一条**（只读详情，或编辑器里那一条）。
+    ///
+    /// 片 `TD-LIST-1` 之后右栏有两态：点一行 ⇒ 只读详情（自己不带编辑入口）；显式编辑 ⇒ 编辑器。
+    /// 这一枚就是「从详情进编辑」的那条路（行的右键「编辑」是另一条）—— 两态都从这一处读目标，
+    /// 免得「详情那一屏上这枚按钮灰着、换到编辑器上才亮」这种半截行为。
     private var editingTodo: Todo? {
-        guard appState.notesModule == .todos, let id = appState.todoEditingID else { return nil }
+        guard appState.notesModule == .todos else { return nil }
+        if let detail = appState.todoDetailTodo { return detail }
+        guard let id = appState.todoEditingID else { return nil }
         return appState.todos.first { $0.id == id }
     }
 
@@ -1244,6 +1332,119 @@ struct TodoListView: View {
     // 段头与行 → `TodoSectionListView` / `TodoRegionHeader` / `TodoRowView`（本文件下方那一段的**唯一**渲染处）。
 }
 
+/// **待办那一屏的右栏**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）：两态只在这里分。
+///
+/// ① 右栏正在显示某一条（点清单里的一行 ⇒ 只读详情）⇒ `TodoDetailView`；
+/// ② 否则（编辑态 / 新建态）⇒ `TodoEditorView`（原来的那一屏，一字未改）。
+///
+/// 为什么抽成一个**具名的件**、而不是在 `NotesAreaView` 里就地写一个 `if`：
+///   · **两态互斥的口径只有一处**（`appState.todoDetailTodo`：在编辑 / 没选 / 那条已不在库里 ⇒ 都不给详情）。
+///     判据写在两处就会出现「右栏画着详情、另一边以为在编辑」这种半截态；
+///   · **它可以被单独渲染**：待办那一屏整块在 `swift test` 宿主里进不去（切面要拉起通知中心，
+///     见 `TestsUISnapshot/TodoCalendarEntriesProbeTests.swift` 头注释），抽出来才拍得到
+///     「点了某一行之后，右栏长什么样」—— 判据④那两张图拍的就是这一件。
+struct TodoRightPaneView: View {
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        if let todo = appState.todoDetailTodo {
+            TodoDetailView(todo: todo)
+        } else {
+            TodoEditorView()
+        }
+    }
+}
+
+/// **待办只读详情**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）：点清单里的一行 ⇒ 右栏出这一屏。
+///
+/// 四条口径：
+///  ① **只读 ≠ 编辑**：这一屏**一个编辑控件都没有** —— 没有标题输入框、没有「有截止时间」那枚开关、
+///     没有保存与删除（判据：渲染这一屏时取到的文案里**不许出现**编辑器那几句，见探针 甲）。
+///     要改走**两条既有入口**：行的右键「编辑」，或左区顶部那枚「编辑」（都进 `TodoEditorView`）；
+///  ② **拿的都来自 Core**：截止那一句走 `TodoQuery.band`（分带的唯一出处），逾期那枚色走
+///     `TodoDue.isOverdue` —— 本视图不比 `Date`、不自己算「还剩几天」；
+///  ③ **标签是用户数据**（照原样画），其余句子只在语言表里（`L(...)`）；
+///  ④ **没有「备注」这一格**：`Todo` 模型里没有正文 / 备注字段（`Core/Todo.swift`）—— 读数只有
+///     标题 / 完成态 / 截止 / 优先级 / 标签，不凭空造一个永远是空的行（`L-50` 那一课：画不出来的东西
+///     不要画成空态，读者会以为是自己没填）。
+struct TodoDetailView: View {
+
+    let todo: Todo
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            title
+            Divider()
+            row(
+                L(.todoDueLabel),
+                value: L(TodoQuery.band(of: todo, window: appState.todoWindow).key),
+                tone: TodoDue.isOverdue(todo, window: appState.todoWindow)
+                    ? Theme.status(.danger)
+                    : Theme.text(.primary),
+                id: "todo-detail-due"
+            )
+            row(
+                L(.todoPriorityLabel),
+                value: L(todo.priority.key),
+                tone: todo.priority == .high ? Theme.status(.warning) : Theme.text(.primary),
+                id: "todo-detail-priority"
+            )
+            if !todo.tags.isEmpty { tags }
+            Spacer(minLength: 0)
+        }
+        .padding(Spacing.l)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.surface(.content))
+        .accessibilityIdentifier("todo-detail")
+    }
+
+    /// 标题那一行：完成态只有一枚**只读**的记（点它什么也不会发生 —— 完成 / 重开只有清单行上那一枚）。
+    private var title: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            Image(systemName: todo.done ? "checkmark.circle.fill" : "circle")
+                .font(Theme.font(.body))
+                .foregroundStyle(todo.done ? Theme.status(.success) : Theme.text(.secondary))
+                .help(L(todo.done ? .todoSectionCompleted : .todoSectionOpen))
+            Text(TodoPresentation.title(todo) ?? L(.notesUntitled))
+                .font(Theme.font(.title))
+                .lineLimit(2)
+                .accessibilityIdentifier("todo-detail-title")
+            Spacer(minLength: Spacing.xs)
+        }
+    }
+
+    /// 一栏读数：左边是**轴名**（语言表里那句），右边是 Core 给的值（带已经由调用方定好的色）。
+    private func row(_ label: String, value: String, tone: Color, id: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            Text(label)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            Text(value)
+                .font(Theme.font(.body))
+                .foregroundStyle(tone)
+            Spacer(minLength: 0)
+        }
+        .accessibilityIdentifier(id)
+    }
+
+    /// 标签那一行：标签本身是**用户数据**，照原样显示（不翻译、不排序 —— 顺序是用户给的那个顺序）。
+    private var tags: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            Image(systemName: "tag")
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            Text(todo.tags.joined(separator: " "))
+                .font(Theme.font(.body))
+                .lineLimit(2)
+            Spacer(minLength: 0)
+        }
+        .accessibilityIdentifier("todo-detail-tags")
+    }
+}
+
 /// **待办详情 / 编辑器**（队列 `L-100` 界面半第一片）：右栏。
 ///
 /// 与笔记编辑器同一条形状（`L-50`）：**「保存」的灰着与 `AppState.saveTodoFromEditor()` 的守卫
@@ -1283,8 +1484,10 @@ struct TodoEditorView: View {
                 }
             }
             // **四档优先级 = 取值 ⇒ 下拉**（片 `N2-2` 判据①：NotesPanel 的分段条 4 → 1）。
-            // 同一屏的「保存 / 删除」两枚是**动作**（带文字的按钮，且 `NotesEditorSaveProbeTests`
-            // 有一条按文字排版校准的像素判据），本片不动它们。
+            // 同一屏的「保存 / 删除」两枚是**动作**（不是取值）⇒ 优先级那种「四档取值」用下拉。
+            // （当时两枚都带文字，且 `NotesEditorSaveProbeTests` 有一条按文字排版校准的像素判据，
+            // 本片不动它们。**片 `TODO-SV`** 之后「保存」那一枚已改成纯图标 + 悬停 tips（片
+            // `N2-SV` 在笔记面的同一条口径）；「删除」不动 —— 这一句的判据只对「取值 ⇒ 下拉」生效。）
             .pickerStyle(.menu)
             .help(L(.todoPriorityLabel))
             .accessibilityIdentifier("todo-priority")
@@ -1311,19 +1514,22 @@ struct TodoEditorView: View {
     /// 「**保存进工具条**（参考 SQL 界面）」「**不许放底部**」—— 所以整行搬到 `TodoEditorView`
     /// 的第一行（与 `QueryToolbar` 同一个位置关系），底部不再有第二处动作入口。
     /// 两枚按钮的形态、文案、灰 / 亮判据（`todoEditorHasContent`）、`accessibilityIdentifier`
-    /// **一字未改**。
+    /// **一字未改**（片 `N2-3b` 那一轮的口径；**片 `TODO-SV` 之后「保存」那一枚的形态改了** ——
+    /// 图标 + 标题 ⇒ 纯图标 + 悬停 tips，见下面 `editorToolbar` 里那一行注释；「删除」仍是
+    /// 带文字的动作按钮）。
     private var editorToolbar: some View {
         HStack(spacing: Spacing.s) {
-            // 与笔记正文那枚「保存」同形（`N-UI-3`）：图标 + 标题 + 悬停提示。
+            // **纯图标**（片 `TODO-SV` · 派单 `T-20261009-038`）：原先这里是「图标 + 标题」两个字
+            // 的那种 `Label`（旧形态逐字见片 `N2-SV` 在笔记面的同一处），即工具条上的一枚
+            // **文字按钮**；口径 = `NFR-UI-01` / `FR-EXEC-13` / 台账第 27 条「工具·操作类控件
+            // 一律『图标 + 悬停 tips』，禁文字按钮」⇒ 改成**纯图标**，名字只由下面那一句
+            // 悬停提示给（读语言表的 `notesSave`；入口注册 `NSInitialToolTipDelay = 150` ⇒ 即时），
+            // 与**笔记面**那一枚（片 `N2-SV`）同形、同一套设计语言。
+            // **位置、动作、灰 / 亮判据、`accessibilityIdentifier`、快捷键一字未动。**
             Button {
                 Task { await appState.saveTodoFromEditor() }
             } label: {
-                Label {
-                    Text(L(.notesSave))
-                } icon: {
-                    Image(systemName: "square.and.arrow.down")
-                }
-                .labelStyle(.titleAndIcon)
+                Image(systemName: "square.and.arrow.down")
             }
             .help(L(.notesSave))
             .keyboardShortcut(.defaultAction)

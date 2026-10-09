@@ -289,6 +289,21 @@ public enum TodoCalendar {
         calendar.startOfDay(for: date)
     }
 
+    /// **某一天的某个钟点**（片 `TD-CAL-1`：日历「选中日直接新建」把截止预填成该日 **09:00**）。
+    ///
+    /// 为什么这一格合成也要落在 Core（端侧不自己拼 `DateComponents`）：它与 `calendarDay` /
+    /// `shift(days:)` 同族 —— 「某天的某个钟点算哪一刻」同样是**日期算术**，端侧再拼一份就是
+    /// 第二套答案（夏令时切换的那两天，两套会差一小时，且两边各自的用例都会是绿的）。
+    /// 口径与头部那四条一致：**不读系统时钟**、日历由调用方传、坏输入（钟点越界）回 `nil`。
+    public static func moment(hour: Int, minute: Int, on date: Date, calendar: Calendar) -> Date? {
+        guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
+        var components = calendar.dateComponents([.year, .month, .day], from: date)
+        components.hour = hour
+        components.minute = minute
+        components.second = 0
+        return calendar.date(from: components)
+    }
+
     /// ISO 星期（**1 = 周一 … 7 = 周日**）：Foundation 的 `weekday` 是 1 = 周日 … 7 = 周六
     /// ⇒ 换算只有这一处（两处换算就会有两个「周日算第几天」的答案）。
     public static func isoWeekday(of date: Date, calendar: Calendar) -> Int {

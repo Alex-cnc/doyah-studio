@@ -140,6 +140,11 @@
       "path": "App/Views/NotePreviewBody.swift",
       "layer": "app",
       "role": "笔记正文的只读呈现（`NotePreviewBody`：预览态把 `NSTextView.isEditable` 置假，片 `N2-3a`）—— 纯呈现，无网络无库"
+    },
+    {
+      "path": "App/Views/NotesRichTextEditor.swift",
+      "layer": "app",
+      "role": "笔记正文的富文本编辑面（`NotesRichTextEditor` / `NotesTextView` + 行内四枚，片 `WY-1b1`）—— 纯呈现与本地改写，无网络无库"
     }
   ],
   "scopeBeyondIsolation": [
