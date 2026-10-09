@@ -1,10 +1,11 @@
 import Foundation
 
-/// 工作区会话快照（`FR-EDIT-43` · 队列 `L-116` · `Q60` 取 B 的第一片）。
+/// 工作区会话快照（`FR-EDIT-43` · 队列 `L-116` · `Q60` 取 B，两片合起来就是完整口径）。
 ///
-/// 重启应用要回到**上次的工作区 + 页签集**。本片只做页签集；**光标与滚动位置是紧接的下一片**
-/// —— 所以这个结构里**刻意没有**那两个字段（留半扇门比不留更糟：写进去没人读，或者读出来
-/// 与真位置不一致，症状是「恢复完光标跳到一个奇怪的地方」）。
+/// 重启应用要回到**上次的工作区 + 页签集 + 光标与滚动位置**。
+///  · 第一片（`L116-RESTORE-1`）= 页签集 + 上次工作区；
+///  · 第二片（`L116-RESTORE-2`）= **插入点偏移**（`Tab.caretOffset`）与**垂直滚动偏移**
+///    （`Tab.scrollOffset`）—— 这一片补上了，所以下面那两句「刻意没有」的历史口径不再成立。
 ///
 /// 三条纪律（与需求条款一一对应，都有判据）：
 ///  ① **编解码 + 版本兼容**：`Codable` 纯逻辑、可单测；`version` 写进文件，读到**比本版本新**的
@@ -38,17 +39,33 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
     /// 上次选中的页签在 `tabs` 里的下标（越界 = 当作没记过，落回第一个）。
     public var selectedTabIndex: Int?
 
+    /// **选中那一页的插入点偏移**（`L116-RESTORE-2`）：UTF-16 单元数，与 `NSRange.location`
+    /// 同一口径（0 = 文档开头）。`nil` = 没记过（旧快照 / 选中页不是文件 / 没来得及上报）。
+    ///
+    /// 为什么只记**选中那一页**的现场、而不是每页各记一份：会话恢复的落点是「接着上次往下写」——
+    /// 那是**一个**位置（`selectedTabIndex` 指的那一页）。别页的光标位置是「切过去以后的事」，
+    /// 记下来只会多出「恢复完一切页签，每页都跳一下」这种没人要的动静。
+    public var caretOffset: Int?
+
+    /// **选中那一页的垂直滚动偏移**（`L116-RESTORE-2`）：点，与 `NSScrollView` 的 clip view
+    /// 原点同口径。`nil` = 没记过。
+    public var scrollOffset: Double?
+
     public var tabs: [Tab]
 
     public init(
         version: Int = WorkspaceSessionSnapshot.currentVersion,
         workspacePath: String? = nil,
         selectedTabIndex: Int? = nil,
+        caretOffset: Int? = nil,
+        scrollOffset: Double? = nil,
         tabs: [Tab] = []
     ) {
         self.version = version
         self.workspacePath = workspacePath
         self.selectedTabIndex = selectedTabIndex
+        self.caretOffset = caretOffset
+        self.scrollOffset = scrollOffset
         self.tabs = tabs
     }
 
@@ -94,18 +111,23 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
     // MARK: 编码 / 解码
 
     private enum CodingKeys: String, CodingKey {
-        case version, workspacePath, selectedTabIndex, tabs
+        case version, workspacePath, selectedTabIndex, tabs, caretOffset, scrollOffset
     }
 
     /// **版本兼容的读法**：`version` 缺字段（更早的手写文件、或将来裁掉的栏位）按 `1` 读；
     /// 其余字段一律 `decodeIfPresent`，缺了按「没记过」处理 —— 把「文件里少了一栏」当成
     /// 解码失败去炸掉整个会话，代价比少恢复一栏大得多。
+    ///
+    /// 这里也是**旧快照（第一片那份只有页签集、没有光标 / 滚动两栏）读取不崩**的落点：
+    /// 两栏缺席 ⇒ `nil` ⇒ 恢复时**不把光标拽到任何地方**（而不是当成 0 把光标顶到开头）。
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
         workspacePath = try container.decodeIfPresent(String.self, forKey: .workspacePath)
         selectedTabIndex = try container.decodeIfPresent(Int.self, forKey: .selectedTabIndex)
         tabs = try container.decodeIfPresent([Tab].self, forKey: .tabs) ?? []
+        caretOffset = try container.decodeIfPresent(Int.self, forKey: .caretOffset)
+        scrollOffset = try container.decodeIfPresent(Double.self, forKey: .scrollOffset)
     }
 
     /// 从字节解码并**判版本**（比本版本新 ⇒ `Failure.unsupportedVersion`）。
@@ -123,10 +145,16 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
     // MARK: 拍快照
 
     /// 把当前页签集拍成快照（**纯函数**：不落盘、不看文件系统）。
+    ///
+    /// `caretOffset` / `scrollOffset` 是**选中那一页**编辑器现场的读数（UTF-16 偏移 / 点），
+    /// 由调用方（`WorkspaceTabsModel.saveSession()`）从编辑器上报里取。**只对选中页记**
+    /// —— 没有选中页（空集 / 选中项已不在）时这一栏如实空着，不编一个位置出来。
     public static func capture(
         tabs: [WorkspaceTab],
         selectedID: UUID?,
-        workspacePath: String?
+        workspacePath: String?,
+        caretOffset: Int? = nil,
+        scrollOffset: Double? = nil
     ) -> WorkspaceSessionSnapshot {
         var snapshot = WorkspaceSessionSnapshot(
             workspacePath: workspacePath,
@@ -136,6 +164,9 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
         // 存进文件下次也对不上（那才是「恢复了但选不中」的静默错位）。
         if let selectedID, let index = tabs.firstIndex(where: { $0.id == selectedID }) {
             snapshot.selectedTabIndex = index
+            // 光标 / 滚动与「哪一页」是同一件事的三面：选中页认不出来时它们也没有归属。
+            snapshot.caretOffset = caretOffset
+            snapshot.scrollOffset = scrollOffset
         }
         return snapshot
     }
@@ -202,10 +233,36 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
         // 选中的下标越界（手改过的文件 / 页签数变了）⇒ 落回第一个，不猜。
         if let index = snapshot.selectedTabIndex, result.tabs.indices.contains(index) {
             result.selectedTabID = result.tabs[index].id
+            // 插入点 / 滚动：**只有选中的是文件页签**才给落脚点（Home 没有编辑器）。
+            // 越界的偏移一律**夹进文档范围**——「记下来的位置」与「恢复后的文档」长度不一定一致
+            // （文件在两次启动之间被改短了），原样塞给 `setSelectedRange` 会让光标静默跳到别处
+            // 或者干脆不动（两种都是「恢复了但不对」，比不恢复更难查）。
+            if !result.tabs[index].isHome {
+                if let caret = snapshot.caretOffset {
+                    result.caretOffset = clampCaret(caret, in: result.tabs[index].content)
+                }
+                if let scroll = snapshot.scrollOffset {
+                    result.scrollOffset = clampScroll(scroll)
+                }
+            }
         } else {
             result.selectedTabID = result.tabs.first?.id
         }
         return result
+    }
+
+    /// **插入点落脚点**（纯函数）：负数 → 0；超出文档 → 文档末尾。
+    ///
+    /// 口径与 `NSRange.location` 一致（UTF-16 单元），所以用 `content.utf16.count` 量文档长度
+    /// —— 用 `count`（字素簇）在中文 / emoji 上是**另一个数**，会把光标停在实际字符中间。
+    public static func clampCaret(_ offset: Int, in content: String) -> Int {
+        min(max(0, offset), content.utf16.count)
+    }
+
+    /// **滚动落脚点**（纯函数）：负数 → 0。上界不在这里判 —— 文档高度由 `NSScrollView` 按
+    /// 排版结果自己夹（`Core` 不量排版），这里只管「不给出一个倒退的滚动位置」。
+    public static func clampScroll(_ offset: Double) -> Double {
+        max(0, offset)
     }
 
     /// 语言：认标识（登记表里有这一条就用它）；认不出（快照比本版本新 / 表里删过一条）
@@ -235,6 +292,11 @@ public struct WorkspaceSessionRestore: Sendable, Equatable {
     public var selectedTabID: UUID?
     /// 上次的工作区根目录（原样带回来）。
     public var workspacePath: String?
+    /// **选中那一页的插入点落脚点**（已经夹进恢复后文档的范围）。`nil` = 快照里没这一栏 /
+    /// 选中页是 Home —— 这时**不许**把光标拽到任何地方（拽到 0 是「恢复了但跳到开头」的假恢复）。
+    public var caretOffset: Int?
+    /// **选中那一页的滚动落脚点**（已夹成 ≥ 0）。`nil` = 没记过。
+    public var scrollOffset: Double?
     /// 引用的文件**找不到**了（已删 / 已改名 / 读不出）—— 这些页签**仍然在 `tabs` 里**。
     public var missingPaths: [String] = []
     /// 带着**未保存改动**回来的页签（内容原样恢复，且仍是脏的）。
@@ -244,12 +306,16 @@ public struct WorkspaceSessionRestore: Sendable, Equatable {
         tabs: [WorkspaceTab] = [],
         selectedTabID: UUID? = nil,
         workspacePath: String? = nil,
+        caretOffset: Int? = nil,
+        scrollOffset: Double? = nil,
         missingPaths: [String] = [],
         unsavedPaths: [String] = []
     ) {
         self.tabs = tabs
         self.selectedTabID = selectedTabID
         self.workspacePath = workspacePath
+        self.caretOffset = caretOffset
+        self.scrollOffset = scrollOffset
         self.missingPaths = missingPaths
         self.unsavedPaths = unsavedPaths
     }

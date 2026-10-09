@@ -63,7 +63,13 @@ struct WorkspaceAreaView: View {
             onTextChange: { text in tabs.updateContent(text, for: tab.id) },
             onSave: { tabs.save(tab.id) },
             onFormat: { tabs.formatSelected() },
-            onCursorLine: { line in previewCursor.report(line: line) }
+            onCursorLine: { line in previewCursor.report(line: line) },
+            // 会话恢复（`FR-EDIT-43` 第二片）：这一页上次退出时的插入点与滚动位置（取走即没）。
+            takeCursorPlacement: { id in tabs.takeCursorPlacement(for: id) },
+            // 现场读数上报 —— 退出时落快照的输入面（选区变化 / 滚动各报一次）。
+            onCursorPosition: { id, caret, scroll in
+                tabs.reportCursor(tabID: id, caretOffset: caret, scrollOffset: scroll)
+            }
         )
         if tab.language == .markdown && tabs.previewVisible {
             HSplitView {

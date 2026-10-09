@@ -349,8 +349,17 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   探针 `XCTSkip` 到该变量；单跑 = `env DOYAH_UI_SNAPSHOT=1 swift test --filter RetroHost`）。
 #   它落地当轮**漏了接 FILTER**（写下用例却没入口 = 一个都跑不到），由 `check-result-scroll-ledger.py` ⑤ 抓出后补上
 #   —— 与 `TodoCalendarEntriesProbeTests` / `FormatMenuWiringProbeTests` 那两处同一个坏法。
+# + `WorkspaceSessionCursorProbeTests`（片 `L116-RESTORE-2` · 派单 `T-20261009-097` ①：会话恢复第二片 ——
+#   「回填之后编辑器的**插入点与滚动位置**真的设回去了」）。判的是单测够不到的那一半：把一个落脚点交给
+#   真 `CodeEditorView`（与产品接线同形：`takeCursorPlacement` 取走即没），再读 `NSTextView` 上发生了什么：
+#   ① 插入点落在记下的偏移上、且**不选中任何文字**；② 滚动位置设回去了（非零那一档才判得出「设了没」）；
+#   ③ 插入点的**几何**：`firstRect`（窗口坐标）与 `layoutManager.boundingRect`（文本容器坐标）先
+#   **统一到同一个坐标系**（补 `textContainerInset` + `convert(_:from:)`）再比，同坐标系下的差 < 一行；
+#   另有一档**无落脚点**（旧快照 / Home 选中）⇒ 光标与滚动都不许被动过。**不落快照**（判几何不判像素）。
+#   口径（写这条时踩过）：插入点必须取**可见范围内**的行再量 —— 非连续布局下文档中部的 `firstRect`
+#   返回零矩形（离屏量不到）；量不到那一档**交矩阵不交结论**（用例只打印矩阵、不把几何判绿）。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

@@ -25,6 +25,15 @@ struct CodeEditorView: NSViewRepresentable {
     /// 行号由 `Core/CodeLines` 算（与行号列**同一份**实现，界面层不自己数换行）。
     var onCursorLine: ((Int) -> Void)?
 
+    /// **会话恢复的落脚点**（`FR-EDIT-43` 队列 `L-116` 第二片）：取本页上次退出时的
+    /// 插入点与垂直滚动位置。**取走即没**（见 `WorkspaceTabsModel.takeCursorPlacement`）——
+    /// 视图重建时不再放一遍，否则用户挪过的光标会被反复拽回上次退出时的位置。
+    var takeCursorPlacement: ((UUID) -> WorkspaceTabsModel.CursorPlacement?)?
+
+    /// **现场读数上报**（同上）：选区一变 / 滚一帧各报一次，退出时落快照的输入面。
+    /// 与 `onCursorLine` 分开两条：预览只要行号，会话快照要**偏移**（行号换算不回偏移）。
+    var onCursorPosition: ((UUID, Int, Double) -> Void)?
+
     /// 订阅字体偏好：偏好一变，SwiftUI 重跑 `updateNSView` → 编辑器换字体。
     @ObservedObject private var fonts = FontManager.shared
 
@@ -36,6 +45,10 @@ struct CodeEditorView: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSScrollView {
+        // 会话恢复（`FR-EDIT-43` 第二片）：**先读落脚点**再动文本 / 挂代理 —— 设文本会让选区
+        // 回到 0 并触发一次上报，读晚了拿到的是那个 0（见 `references/macos-ui-conventions.md`
+        // 「视图重建类坑」的恢复顺序）。取走即没：视图重建时拿到的就是 `nil`，不再放一遍。
+        let placement = takeCursorPlacement?(tabID)
         let textView = CodeTextView(frame: .zero)
         textView.delegate = context.coordinator
         textView.isRichText = true
@@ -101,6 +114,16 @@ struct CodeEditorView: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
+
+        // ④ **把插入点与滚动位置放回去**（会话恢复）。放在最后一步：文本已设、行号列已算、
+        //    代理已挂、滚动视图已就位 —— 缺任何一样这一步都会落空（光标放不进 / 滚动夹到 0）。
+        if let placement {
+            textView.applyCursor(caretOffset: placement.caretOffset, scrollOffset: placement.scrollOffset)
+        }
+        // 从现在起盯着这个页签的滚动位置（退出时落快照的输入面）。
+        context.coordinator.observeScrolling(in: scrollView)
+        // 放回去之后**如实上报一次** —— 用户什么都不动就退出时，这一栏不该被洗成 0。
+        context.coordinator.reportCursorPosition()
         return scrollView
     }
 
@@ -185,6 +208,7 @@ struct CodeEditorView: NSViewRepresentable {
         /// 这里只负责把 `NSRange.location`（**UTF-16 单元**）交给它。
         func textViewDidChangeSelection(_ notification: Notification) {
             reportCursorLine()
+            reportCursorPosition()
         }
 
         func reportCursorLine() {
@@ -192,6 +216,41 @@ struct CodeEditorView: NSViewRepresentable {
             let location = textView.selectedRange().location
             guard location != NSNotFound else { return }
             parent.onCursorLine?(CodeLines.lineNumber(at: location, in: textView.string))
+        }
+
+        // MARK: 现场读数（FR-EDIT-43 第二片：会话恢复要的插入点与滚动位置）
+
+        /// 盯住这个页签的滚动位置：clip view 的 bounds 一变就上报一次。
+        ///
+        /// 为什么不只在选区变化时上报：**纯滚动**（拖滚动条 / 触控板）不动光标 ——
+        /// 只挂选区那一处的话，「滚到中间然后退出」记下来的还是上次动光标时的位置。
+        func observeScrolling(in scrollView: NSScrollView) {
+            let clip = scrollView.contentView
+            clip.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(clipViewBoundsDidChange(_:)),
+                name: NSView.boundsDidChangeNotification,
+                object: clip
+            )
+        }
+
+        @objc private func clipViewBoundsDidChange(_ notification: Notification) {
+            reportCursorPosition()
+        }
+
+        /// 上报本页的插入点（UTF-16 偏移）与垂直滚动偏移（点）—— 退出时落快照的输入面。
+        func reportCursorPosition() {
+            guard let textView, let tabID = textView.tabID, let onCursorPosition = parent.onCursorPosition else {
+                return
+            }
+            let location = textView.selectedRange().location
+            let scroll = textView.enclosingScrollView?.contentView.bounds.origin.y ?? 0
+            onCursorPosition(tabID, location == NSNotFound ? 0 : location, Double(scroll))
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
         }
 
         /// 延后一次高亮：避免与输入法 / 文本编辑回调重入。
@@ -415,6 +474,41 @@ final class CodeTextView: NSTextView {
         guard let range = CodeLines.range(ofLine: line, in: string) else { return }
         setSelectedRange(NSRange(location: range.location, length: 0))
         scrollRangeToVisible(NSRange(location: range.location, length: 0))
+    }
+
+    // MARK: 会话恢复的落脚点（FR-EDIT-43 · 队列 L-116 第二片）
+
+    /// 把上次退出时的**插入点**与**垂直滚动位置**放回去。
+    ///
+    /// 偏移已经由 `Core` 夹进恢复后的文档范围（`WorkspaceSessionSnapshot.clampCaret` /
+    /// `clampScroll`）；这里再夹一次只是兜住「文本与快照不一致」的时序（文本刚设进来，
+    /// 理论上是一致的）。**不选中任何文字**：会话恢复要的是「接着往下写」，
+    /// 回来时突然高亮一段上一次的选区只会让人以为误触了什么。
+    func applyCursor(caretOffset: Int, scrollOffset: Double) {
+        let length = (string as NSString).length
+        let caret = min(max(0, caretOffset), length)
+        setSelectedRange(NSRange(location: caret, length: 0))
+        applyScrollOffset(scrollOffset)
+    }
+
+    /// 把垂直滚动位置设回去。
+    ///
+    /// 为什么要先 `ensureLayout`：**文档高度是排完版才知道的**，而这里刚把文本设进来 ——
+    /// 不补算这一次，`scroll(to:)` 会被夹到当时已知的文档高度（新建的编辑器≈一行），
+    /// 症状是「恢复完滚动条还在顶上、光标也不在原来的高度」。
+    /// 用 `ensureLayout`（**只补算、不作废**）而不是 `invalidateLayout`：非连续布局下后者会把
+    /// 可见区判成「没排过」⇒ 编辑区整块不画（`references/macos-ui-conventions.md` §十七）。
+    func applyScrollOffset(_ offset: Double) {
+        guard let scrollView = enclosingScrollView else { return }
+        if let layoutManager, let container = textContainer {
+            layoutManager.ensureLayout(for: container)
+        }
+        let clip = scrollView.contentView
+        let documentHeight = scrollView.documentView?.frame.height ?? 0
+        let maxY = max(0, documentHeight - clip.bounds.height)
+        let y = min(max(0, CGFloat(offset)), maxY)
+        clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
+        scrollView.reflectScrolledClipView(clip)
     }
 
     /// 把格式化结果换进编辑器（FR-EDIT-39）。
