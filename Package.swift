@@ -26,7 +26,21 @@ let package = Package(
         // 许可校验要 Ed25519 签名（FR-LIC-01）：用 **swift-crypto** 而不是 Apple 的 CryptoKit ——
         // Core 要保持平台中立（同一个 Core 将来要给 Doyah Notes 的 Windows / 安卓 / 鸿蒙版复用）。
         // 它本来就在依赖树里（NIO SSL 用），这里只是**显式声明**，不新增依赖树。
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0")
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
+        // **周报（Retro）阅读器的装配面**（片 `M7-HOST` · 派单 `T-20261009-080`）：
+        // Retro 的视图层 `DoyahRetroUI` 走**本地路径依赖**取（前门口径：两锚仓在本机并列 ——
+        // `~/dev/doyah/lead/{studio,retro}`）。这里必须是**绝对路径**：Studio 的每个卡片都在
+        // worktree 里（`.worktrees/<卡号>/`，离 Retro 锚仓 6 层上溯、离主仓 1 层）⇒
+        // 相对路径一合回主仓就断。
+        //
+        // Pinned Retro commit: 592b1bcd27ffa023ba3c7890426a2c9a1f31fa0b
+        //   · 该提交（`合入 wt/m7-ui-prod`）起，Retro 的 `platform/macos/Package.swift` 的
+        //     `products:` 才有 `DoyahRetroUI`（前置片 `M7-UI-PROD` 的那一笔）；
+        //   · 指向前门线克隆 `~/.dsh/projects/DoyahRetro`（`master` @ `b057b18`）会报
+        //     `product 'DoyahRetroUI' … not found in package 'macos'` —— 那条路走不通（已实测）。
+        //   · 路径依赖本身**钉不住 commit**（SwiftPM 的 path 依赖吃的是工作树），所以这里
+        //     用一行注释把「本机盘上那份应当是哪一笔」写下来；换锚仓 / 推进锚仓时**同时改这一行**。
+        .package(path: "/Users/alex/dev/doyah/lead/retro/platform/macos")
     ],
     targets: [
         // SQLite 的 vendored C 目标（FR-PLUG-08 / Q23 拍板：桌面各端笔记存储统一到本地 SQLite）。
@@ -73,7 +87,13 @@ let package = Package(
         // 打包成 .app 由 Scripts/build-app.sh 负责。
         .executableTarget(
             name: "DoyahStudioApp",
-            dependencies: ["DoyahCore", "DoyahPlatform"],
+            dependencies: [
+                "DoyahCore",
+                "DoyahPlatform",
+                // 周报阅读器（片 `M7-HOST`）：路径依赖的 identity 是**末段目录名** `macos`
+                // （不是包名 `DoyahRetroCore`）—— 写成包名会报 unknown package。
+                .product(name: "DoyahRetroUI", package: "macos")
+            ],
             path: "App",
             // Resources 由 Scripts/build-app.sh 装进 .app；SwiftPM 不处理 .icns/.png，
             // 不排除会报 unhandled files。
@@ -92,7 +112,14 @@ let package = Package(
         // 用例**默认跳过**（`DOYAH_UI_SNAPSHOT=1` 才跑）—— 快照是取证工具，不是回归门禁。
         .testTarget(
             name: "DoyahUISnapshotTests",
-            dependencies: ["DoyahStudioApp", "DoyahCore", "DoyahPlatform"],
+            dependencies: [
+                "DoyahStudioApp",
+                "DoyahCore",
+                "DoyahPlatform",
+                // 宿主装配探针（片 `M7-HOST`）要**直接**读 Retro 侧的真值
+                // （`ReportListModel.fixed()` 的扫描读数，判据 ④）—— 不靠传递依赖转一手。
+                .product(name: "DoyahRetroUI", package: "macos")
+            ],
             path: "TestsUISnapshot"
         ),
         // 平台适配层的测试单独一个 target：真实书签这类用例必须跑在**真实实现**上，

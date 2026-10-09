@@ -240,6 +240,16 @@ public enum LKey: String, CaseIterable, Sendable {
     case licenseMissing
     case activityNotes
     case menuViewNotes
+    // 周报（Retro）区（片 `M7-HOST` · 派单 `T-20261009-080`）：活动栏视图名 +
+    // 「显示」菜单里的视图切换项 + 宿主两处空态。视图代码在 Retro 仓，本仓只有这几句壳文案。
+    /// 活动栏 / 窗口标题里的视图名（`Doyah Studio - 周报`；英文面出 `Retro`）。
+    case activityRetro
+    /// 「显示」菜单里的视图切换项。
+    case menuViewRetro
+    /// 周报区在 Studio **左栏**的占位（阅读器自带期次列表，左栏没有第二份导航）。
+    case retroSidebarHint
+    /// 阅读器右半边**没选中任何一期**时的空态。
+    case retroReadingEmptyHint
     /// 窗口标题里的品牌段（FR-EDIT-37）：产品名，中英同值。
     case appBrand
     /// 标题栏搜索栏的占位文案（FR-EDIT-37）。
@@ -2507,6 +2517,12 @@ public enum LocalizedStrings {
         .licenseMissing: [.simplifiedChinese: "还没有放许可证（当前呈现 Standard）", .english: "No license yet (Standard is shown)"],
         .activityNotes: [.simplifiedChinese: "笔记", .english: "Notes"],
         .menuViewNotes: [.simplifiedChinese: "笔记视图", .english: "Notes View"],
+        // 周报（Retro）区（片 `M7-HOST`）：视图名 / 视图切换项 / 宿主两处空态。
+        // 英文面刻意保留产品名 `Retro`（`FR-EDIT-37` 需求原话里那组形状就是 `Doyah Studio - Retro`）。
+        .activityRetro: [.simplifiedChinese: "周报", .english: "Retro"],
+        .menuViewRetro: [.simplifiedChinese: "周报视图", .english: "Retro View"],
+        .retroSidebarHint: [.simplifiedChinese: "周报阅读器在右侧", .english: "The weekly-report reader is on the right"],
+        .retroReadingEmptyHint: [.simplifiedChinese: "在左侧选一期周报", .english: "Choose a weekly report on the left"],
         // 窗口标题与标题栏搜索栏（FR-EDIT-37）：品牌名中英同值；占位文案按语言各一份。
         .appBrand: [.simplifiedChinese: "Doyah Studio", .english: "Doyah Studio"],
         .windowSearchPlaceholder: [.simplifiedChinese: "搜索…", .english: "Search…"],

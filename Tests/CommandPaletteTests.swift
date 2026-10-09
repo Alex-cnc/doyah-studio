@@ -333,6 +333,8 @@ final class WindowTitleConventionTests: XCTestCase {
             .database: ("数据库", "Database"),
             .workspace: ("工作区", "Workspace"),
             .notes: ("笔记", "Notes"),
+            // 周报（Retro · 片 `M7-HOST`）：英文面保留产品名（需求原话那组形状就是 `- Retro`）。
+            .retro: ("周报", "Retro"),
         ]
         for item in ActivityBarItem.allCases {
             guard let names = expected[item] else {
