@@ -822,6 +822,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceLanguageLabel
     case workspaceHistoryLoadFailed
     case workspaceHistorySaveFailed
+    // 会话恢复（FR-EDIT-43 · 队列 L-116）：快照读不动 / 存不下 / 页签引用的文件找不到了 / 未保存改动回来了
+    case workspaceSessionLoadFailed
+    case workspaceSessionSaveFailed
+    case workspaceSessionMissingFiles
+    case workspaceSessionUnsavedRestored
     // 关闭有未保存改动的页签：**弹确认框**（FR-EDIT-46，需求提出者 2026-10-03）
     case workspaceCloseConfirmTitle
     case workspaceCloseConfirmMessage
@@ -3047,6 +3052,10 @@ public enum LocalizedStrings {
         .workspaceLanguageLabel: [.simplifiedChinese: "语言：%@", .english: "Language: %@"],
         .workspaceHistoryLoadFailed: [.simplifiedChinese: "读取「最近打开」记录失败：%@（已按空历史继续）", .english: "Could not read the recent-items file: %@ (continuing with an empty list)"],
         .workspaceHistorySaveFailed: [.simplifiedChinese: "保存「最近打开」记录失败：%@", .english: "Could not save the recent-items file: %@"],
+        .workspaceSessionLoadFailed: [.simplifiedChinese: "读取上次会话失败：%@（本次按默认页签启动）", .english: "Could not read the previous session: %@ (starting with the default tabs)"],
+        .workspaceSessionSaveFailed: [.simplifiedChinese: "保存本次会话失败：%@（下次启动会回到更早的页签集）", .english: "Could not save this session: %@ (the next launch will restore an earlier tab set)"],
+        .workspaceSessionMissingFiles: [.simplifiedChinese: "这些页签的源文件已不在原位置，页签仍保留：%@", .english: "The files behind these tabs are no longer at their path; the tabs are kept: %@"],
+        .workspaceSessionUnsavedRestored: [.simplifiedChinese: "已恢复上次未保存的改动（还没写回磁盘），页签仍标「未保存」：%@", .english: "Restored unsaved changes from last time (not yet written to disk); those tabs still read as unsaved: %@"],
         .workspaceCloseConfirmTitle: [.simplifiedChinese: "%@ 有未保存的改动", .english: "%@ has unsaved changes"],
         .workspaceCloseConfirmMessage: [.simplifiedChinese: "关闭前请选择怎么处理这份改动。", .english: "Choose what happens to those changes before closing."],
         .workspaceCloseSaveAndClose: [.simplifiedChinese: "保存并关闭", .english: "Save and close"],

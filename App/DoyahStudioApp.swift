@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import DoyahCore
 
@@ -111,7 +112,17 @@ struct DoyahStudioApp: App {
                     workspaceTabs.openInBrowserTab = { [browser = appState.workspaceBrowser] url in
                         browser.openFileInBrowser(url)
                     }
+                    // 会话恢复（FR-EDIT-43 · 片 `L116-RESTORE-1`）：**启动时**把上次的页签集接回来
+                    // （没有快照 = 第一次启动，保持默认那一页）。写快照那一半在**退出时**
+                    // （下面那条 `willTerminate`）—— 工作区页签带内容，不跟着按键落盘。
+                    workspaceTabs.restoreSession()
                     await workspace.load()
+                }
+                // **退出时落会话快照**（FR-EDIT-43 · 片 `L116-RESTORE-1`）：会话恢复的另一半落点。
+                // 为什么不在「每次变化」时写（浏览器页签走的是那条路）：工作区页签**带内容**，
+                // 跟着按键写盘在编辑器里就是每敲一个字写一次 —— 见 `WorkspaceTabsModel.saveSession()`。
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    workspaceTabs.saveSession()
                 }
                 .tint(accent.accentColor)
                 // 主题三态（FR-EDIT-26）：`nil` = 跟随系统；否则锁定浅 / 深。
