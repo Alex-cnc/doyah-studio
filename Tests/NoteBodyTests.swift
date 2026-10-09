@@ -434,6 +434,53 @@ final class NoteBodyTests: XCTestCase {
         )
     }
 
+    // MARK: 片 `云-编码canonical`（写入面 canonical 编码 · 前置 云D）：确定性序列化
+
+    /// **「同一输入 ⇒ 同一字节」**（前门裁 `T-20261009-134` §二「序列化确定性」；读数出处 `云E`
+    /// `cloud-sync/格式自证-macOS.md` §三.5 / §四 B 层）。两个生效面一起钉：
+    ///   ① **正文**：`NoteBodyCanonical` 的 canonical 编码 —— 落库 `note.spans` 列 / 上行 `content`
+    ///      那一份（写入口 `AppState.encodedSpans` 用的就是它）；
+    ///   ② **元数据**：`NoteStore.save` 的**真落库路**（`title` / `tags` / 时间都在这一份里）。
+    ///
+    /// 为什么这一条是判据而不是「在测试里再抄一份配置」：断言打在**生产这一条**
+    /// （`NoteBodyCanonical` —— 写入口 / 单测 / 探针共用的唯一出处），并钉住**逐字**的 canonical
+    /// 形状（键序 = 字典序 · 紧凑 · `/` 不转义）。默认 `JSONEncoder()` 的键序**跨进程不保序**
+    /// （`云E` 实测 RUN A ≠ RUN B），这一条就是它那半边的机械守卫。
+    func testCanonicalSerializationKeepsContentAndMetadataByteStable() async throws {
+        // ① 正文面：重复编码逐字节相同 + 逐字 canonical 形状（键序 / 紧凑 / `/` 不转义）
+        let body = NoteBody(spans: [
+            NoteSpan(text: "粗体", styles: [.bold]),
+            NoteSpan(text: "链接", link: "https://example.com/a"),
+            NoteSpan(text: "任务", block: .task(checked: true))
+        ])
+        let once = try NoteBodyCanonical.json(body)
+        let twice = try NoteBodyCanonical.json(body)
+        XCTAssertEqual(once, twice, "同一输入重复编码必须逐字节相同")
+        XCTAssertEqual(
+            once,
+            #"{"spans":[{"styles":["bold"],"text":"粗体"},{"link":"https://example.com/a","text":"链接"},{"checked":true,"text":"任务","type":"LIST_CHECKBOX"}],"version":2}"#,
+            "canonical 形状：键按字典序（`spans` 在 `version` 前；`styles` / `link` / `checked` 在 `text` 前）、紧凑、`/` 不转义"
+        )
+        XCTAssertFalse(once.contains("\\/"), "`/` 不得转义成 `\\/`")
+
+        // ② 元数据面：`NoteStore.save` 的真落库路，两次写出的文件必须逐字节相同
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("doyah-canonical-\(UUID().uuidString)", isDirectory: true)
+        let fileURL = directory.appendingPathComponent(NoteStore.fileName)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = NoteStore(fileURL: fileURL)
+        let note = Note(title: "同步格式样例", body: body.body, tags: ["同步", "格式"])
+        try await store.save([note])
+        let firstWrite = try Data(contentsOf: fileURL)
+        try await store.save([note])
+        let secondWrite = try Data(contentsOf: fileURL)
+        XCTAssertEqual(firstWrite, secondWrite, "元数据落库面（title / tags / …）两次写出必须逐字节相同")
+        XCTAssertFalse(
+            String(decoding: firstWrite, as: UTF8.self).contains("\\/"),
+            "元数据面走同一套「`/` 不转义」口径（`NoteStore.save`）"
+        )
+    }
+
     /// 把 `0xRRGGBB` 拆成三通道（Core 测试里没有 AppKit，自己拆一遍，口径与 `NoteHighlight.rgb` 对齐）。
     private static func channels(ofHex hex: UInt32) -> (red: Int, green: Int, blue: Int) {
         (red: Int((hex >> 16) & 0xFF), green: Int((hex >> 8) & 0xFF), blue: Int(hex & 0xFF))

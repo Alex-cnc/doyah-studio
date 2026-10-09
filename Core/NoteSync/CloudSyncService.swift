@@ -731,7 +731,10 @@ public struct NoteLibraryCloudSource: CloudNoteSource {
             tags: note.tags,
             pinned: note.isPinned,
             rev: 0,
-            updatedAt: note.updatedAt,
+            // **归一到 UTC 毫秒**（裁定 ⑲ ②）：本地 `Note.updatedAt` 是全精度 `Date`，而交换面
+            // 走的是毫秒 3 位 —— 不归一的话，「同一次写入」在本地与云端会是两个不等的瞬时
+            // （同一 `rev` 的幂等重放会被判成冲突）。
+            updatedAt: CloudSyncCoding.normalizedToMilliseconds(note.updatedAt),
             deletedAt: nil,
             deviceId: nil
         )
@@ -763,11 +766,26 @@ public enum CloudSyncPreference {
 
 /// 同步面的编解码口径 —— **一处定义**（端点请求体、状态文件、解码都用它，不各写一份）。
 ///
-/// 时间表示（`云E` §四 B4）：交换面归一到 **UTC ISO8601 秒 / 带小数**（服务端 `timestamptz` 的
-/// 标准形态：`2026-10-09T22:02:32.008207+08:00`）；解码**兼容**服务端给的小数秒与偏移，
-/// 也接受纯数值（Unix 秒），于是「三种表示并存」在读取侧不再是坑。
+/// **时间口径（前门裁 ⑲ ② · SRS v3.93 `2bfe63b` §6.4.1.1）**：
+///   · **写入** = ISO 8601 **毫秒 3 位 + 时区偏移**（`2026-10-09T22:40:00.000+08:00`）；
+///   · **读取 / 比对** = 先**归一到 UTC 毫秒**再比（服务端实测形如
+///     `2026-10-09T22:02:32.008207+08:00` —— 小数位不定、带偏移）；
+///   · **禁止时间字段字符串比较** —— 比的是归一后的**瞬时**，不是字面串。
+///
+/// 键序 / 空白 / `/` 转义（`云E` §四 B1/B2/B5 + 裁定 ⑲ ③）：键按**字典序**、**紧凑**、`/` **不转义**、
+/// `null` 只在行级 `deleted_at`。
 enum CloudSyncCoding {
 
+    /// **写入口**：ISO8601 带小数秒，时区 = **本机**（⇒ 偏移形如 `+08:00`，与契约 canonical 样例、
+    /// 服务端 `timestamptz` 的渲染形态同形）。小数位由 `ISO8601DateFormatter` 固定为 **3 位（毫秒）**。
+    private static func writer() -> ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = .current
+        return formatter
+    }
+
+    /// **读入口**：带小数秒的 ISO8601。偏移 / `Z` 由串自带，与本机时区无关。
     private static func fractional() -> ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -782,13 +800,22 @@ enum CloudSyncCoding {
         return formatter
     }
 
-    /// UTC ISO8601（带小数秒）——上行与 `updated_after` 游标都用它。
-    static func iso8601String(_ date: Date) -> String {
-        fractional().string(from: date)
+    /// **归一到 UTC 毫秒**（裁定 ⑲ ②：比对前先归一 —— 服务端给的小数位不定 · 6 位实测）。
+    /// 于是「同一次写入」在两侧、在两种小数位下都得到**同一个 `Date`** —— 时间字段不做字符串比较。
+    static func normalizedToMilliseconds(_ date: Date) -> Date {
+        Date(timeIntervalSince1970: (date.timeIntervalSince1970 * 1000).rounded() / 1000)
     }
 
+    /// **写入**口径：ISO8601 毫秒 3 位 + 时区偏移 —— 上行与 `updated_after` 游标都用它。
+    static func iso8601String(_ date: Date) -> String {
+        writer().string(from: date)
+    }
+
+    /// **读取**口径：ISO8601（小数 1–9 位 / `Z` / ±偏移）或纯数值（Unix 秒）⇒ 归一到 UTC 毫秒。
     static func parseDate(_ string: String) -> Date? {
-        fractional().date(from: string) ?? plain().date(from: string)
+        if let date = fractional().date(from: string) { return normalizedToMilliseconds(date) }
+        if let date = plain().date(from: string) { return normalizedToMilliseconds(date) }
+        return nil
     }
 
     static func decoder() -> JSONDecoder {
@@ -804,7 +831,7 @@ enum CloudSyncCoding {
                 return date
             }
             if let seconds = try? container.decode(Double.self) {
-                return Date(timeIntervalSince1970: seconds)
+                return normalizedToMilliseconds(Date(timeIntervalSince1970: seconds))
             }
             throw DecodingError.dataCorruptedError(
                 in: container, debugDescription: "date is neither ISO8601 string nor number"
@@ -815,7 +842,7 @@ enum CloudSyncCoding {
 
     static func encoder() -> JSONEncoder {
         let encoder = JSONEncoder()
-        // 键序稳定（`云E` §四 B1）+ 不转义 `/`（B5）—— 跨端逐字节比对与冲突判定的前提。
+        // 键序稳定（`云E` §四 B1）+ 不转义 `/`（B5）+ 紧凑（B2）—— 跨端逐字节比对与冲突判定的前提。
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()

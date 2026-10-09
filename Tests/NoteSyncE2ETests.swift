@@ -409,6 +409,43 @@ final class NoteSyncE2ETests: XCTestCase {
         XCTAssertEqual(flushed.pending, 0)
     }
 
+    // MARK: - 判据 ⑤ 时间口径（前门裁 ⑲ ② · SRS v3.93 `2bfe63b` §6.4.1.1）
+
+    /// **写入 = ISO8601 毫秒 3 位 + 时区偏移；读取 / 比对先归一到 UTC 毫秒**。
+    ///
+    /// 三条断言（都与本机时区无关）：① 写入的字面形状（`…T22:40:00.000+08:00` / `…Z`）；
+    /// ② 往返（写 → 读）恢复出**同一个瞬时**；③ 服务端那种 **6 位小数**形态读进来后
+    /// **归一到毫秒** —— 与「同一个毫秒」的三位形态**相等**，且写回来仍是 3 位
+    /// （时间字段**不做字符串比较**，比的是归一后的瞬时）。
+    func testTimestampWriteReadFollowsCanonicalMillisecondRule() throws {
+        let instant = Date(timeIntervalSince1970: 1_790_000_000.123)
+
+        // ① 写入形状：ISO8601 · 毫秒 3 位 · 带时区
+        let written = CloudSyncCoding.iso8601String(instant)
+        XCTAssertTrue(
+            written.range(
+                of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(Z|[+-]\d{2}:\d{2})$"#,
+                options: .regularExpression
+            ) != nil,
+            "写入必须是「ISO8601 · 毫秒 3 位 · 带时区」：\(written)"
+        )
+
+        // ② 往返：写 → 读 ⇒ 同一个瞬时（毫秒精度）
+        let back = try XCTUnwrap(CloudSyncCoding.parseDate(written))
+        XCTAssertEqual(back.timeIntervalSince1970, instant.timeIntervalSince1970, accuracy: 0.000_5)
+
+        // ③ 服务端 6 位小数 ⇒ 归一到毫秒（与三位形态同一瞬时），写回来仍是 3 位
+        let sixDigits = try XCTUnwrap(CloudSyncCoding.parseDate("2026-10-09T22:02:32.008207+08:00"))
+        let threeDigits = try XCTUnwrap(CloudSyncCoding.parseDate("2026-10-09T22:02:32.008+08:00"))
+        XCTAssertEqual(sixDigits, threeDigits, "6 位与 3 位小数必须归一到同一个瞬时（毫秒）")
+        let rewritten = CloudSyncCoding.iso8601String(sixDigits)
+        XCTAssertTrue(
+            rewritten.range(of: #"\.\d{3}(Z|[+-]\d{2}:\d{2})$"#, options: .regularExpression) != nil,
+            "服务端 6 位写回来必须归到 3 位：\(rewritten)"
+        )
+        XCTAssertEqual(CloudSyncCoding.parseDate(rewritten), sixDigits, "写 → 读仍必须同一个瞬时")
+    }
+
     /// 一次性令牌存储（真跑用例里会话只在内存，不碰钥匙串）。
     private final class MemoryTokenStore: NoteSyncTokenStore, @unchecked Sendable {
         private let lock = NSLock()

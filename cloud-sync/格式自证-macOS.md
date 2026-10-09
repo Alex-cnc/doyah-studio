@@ -468,3 +468,199 @@ print("=== ⑤ 判据读数 ===")
 print("清单一：本侧 content 编码面（供前门与安卓侧逐字段比对）")
 print("清单二：不一致处 = \([seg1 == seg2, seg2 == seg3, seg1 == seg3].filter { !$0 }.count)（期望 0）")
 ```
+
+---
+
+## 八 收口：写入面 canonical 编码（片 `云-编码canonical` · 前置 `云D` `t_806b2f9f`）
+
+> 本节是 **§三.5「已知问题 / 修点」的收口**：把 `云E` 登记的那条「跨进程字节不稳」修掉，并把
+> §四 B 层那几项「待装配目标 / 建议值」落成**实现口径**（**两端同源**）。
+> 裁定源 = **前门 ⑲**（SRS **v3.93** `2bfe63b` §6.4.1.1）+ **`T-20261009-134` §二**；读数出处 = 本文件 §一~§三。
+
+### 8.1 改了哪几处（文件级 · **现有文件** · 零新增 `.swift`）
+
+| # | 文件 | 改什么 | 为什么在**这一处** |
+|---|---|---|---|
+| 1 | `Core/NoteBody.swift` | 新增 `enum NoteBodyCanonical`（`encoder()` / `json(_:)`）—— **正文 canonical 编码的唯一出处** | 本文件头部原话「`NoteBody` 的编解码面 = 交换面，**不另起一套序列化**」：写入口 / 单测 / 探针取的都该是**这一条** |
+| 2 | `App/AppState.swift` | `encodedSpans`（`note.spans` 列的**唯一写路**，§〇 实测 `:6916-6917`）改调 `NoteBodyCanonical.json(…)` | **修点原位**；不再就地 `JSONEncoder()`（那样写入口 / 单测 / 探针＝三份配置） |
+| 3 | `Core/NoteSync/CloudSyncService.swift` | `CloudSyncCoding`：**写入**用本机时区 + 毫秒 3 位；**读取**归一到 UTC 毫秒；装配点 `NoteLibraryCloudSource.cloudRow` 把本地 `updatedAt` 归一到毫秒 | 同步面的**时间写入口**（裁定 ⑲ ②） |
+
+`Tests/`：**新增 2 例** ——
+`Tests/NoteBodyTests.swift::testCanonicalSerializationKeepsContentAndMetadataByteStable`（正文面 + 元数据面）·
+`Tests/NoteSyncE2ETests.swift::testTimestampWriteReadFollowsCanonicalMillisecondRule`（时间口径）。
+`Core/NoteSync/SyncCore.swift` **未改**（它**没有**任何编解码调用 —— 卡面写的「同步行编码 · 若涉」= 不涉）。
+
+### 8.2 canonical 规则逐条落位（§四 B 层 → 实现 · **两端同源**）
+
+| 项 | 规则 | 落位 / 现状 |
+|---|---|---|
+| **B1 键排序** | 字典序**升序** | `NoteBodyCanonical.encoder()` 与 `CloudSyncCoding.encoder()` 都是 `.sortedKeys` |
+| **B2 空白** | 交换面**紧凑**（无缩进 / 换行 / 冗余空白）；本地 `notes.json` 仍 `.prettyPrinted`（那是**给人读的落盘文件**，不是交换载体） | 同上；`NoteStore.save` 不变 |
+| **B3 数字** | 整数写整数、浮点按**最短往返**表示、不补尾零 | `JSONEncoder` 默认（§8.3 实测 `size":18` / `rev":3`） |
+| **B4 时间** | **写入** = ISO8601 **毫秒 3 位 + 时区偏移**（`…T22:40:00.000+08:00`）；**读取 / 比对** = 先**归一到 UTC 毫秒**再比，**禁止时间字段字符串比较** | `CloudSyncCoding.writer()` / `.parseDate` / `.normalizedToMilliseconds` |
+| **B5 `/` 转义** | **一律不转义** | 两处编码器都带 `.withoutEscapingSlashes`（裁定 ⑲ ③） |
+| **B6 字段名** | 各自 `CodingKeys`；**content 内部一律不做 snake 化**（`version` / `spans` / `styles` / `…` 原样） | **未改**（裁定 ⑲ ①；行级 12 项映射表属契约 §6.4.1.1，本片不碰） |
+| **null** | 只在**行级** `deleted_at`（可选字段 `nil` = 键缺失） | 未改（裁定 ⑲ ③） |
+
+### 8.3 判据读数（**改前 / 改后 成对** · 跨进程 · 可复跑）
+
+复现（探针源逐字节见 §8.6；**只落 `.build/`，不入库**）：
+
+```bash
+WORKTREE=/Users/alex/dev/doyah/lead/studio/.worktrees/t_fc43a8c2
+"/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc" -O \
+  -sdk "$(/usr/bin/xcrun --sdk macosx --show-sdk-path)" \
+  "$WORKTREE/Core/NoteBody.swift" "$WORKTREE/Core/Localization.swift" \
+  "$WORKTREE/Core/Note.swift" "$WORKTREE/Core/DoyahIdentity.swift" \
+  "$WORKTREE/Core/Notebook.swift" "$WORKTREE/.build/canon-probe/main.swift" \
+  -o "$WORKTREE/.build/canon-probe/probe"
+"$WORKTREE/.build/canon-probe/probe"     # ← 跑**两遍**（跨进程稳定性在这两遍之间判）
+```
+
+**判据 ①（同进程两次编码同一内容 ⇒ 两串 `sha256` 相同）**
+
+| 面 | 改前（默认 `JSONEncoder()`） | 改后（canonical） |
+|---|---|---|
+| RUN A | `d1`=3897e917… · `d2`=311349ae… ⇒ **不同** | `c1` == `c2` = `c49b9045…` ⇒ **相同** ✅ |
+| RUN B | `d1`=89ac015d… · `d2`=e202338c… ⇒ **不同** | `c1` == `c2` = `c49b9045…` ⇒ **相同** ✅ |
+
+**判据 ②（跨进程各跑一次 ⇒ 四次 `sha` 全同）**
+
+| 面 | 字节数 | `sha256`（RUN A / RUN B） |
+|---|---|---|
+| 改前（默认） | 611 | `3897e917…` / `311349ae…` / `89ac015d…` / `e202338c…` ⇒ **四个全不同** |
+| **改后（canonical）** | **608** | **`c49b90457cdc8e530928134ce6e4549d061f26ae30f77573dfd8a235cf47d7c9`（四次全同）** ✅ |
+
+> 608 vs 611 = `.withoutEscapingSlashes` 少掉的三颗反斜杠（`https:\/\/example.com\/a` → `https://example.com/a`）。
+> 与 `云E` §1.3 的 `.sortedKeys` 面（611 B / `1819153e…`，**仍转义**）不是同一个口径 —— 本片按裁定 ⑲ ③ 取**不转义**。
+
+**判据 ③（canonical 生效面覆盖 `content` 与元数据）**
+
+| 面 | 读数 | 判定 |
+|---|---|---|
+| `content`（`note.spans` 列 / 上行 `content`） | `c1 == c2`（608 B）· 跨进程同一 `sha256` | ✅ 生效 |
+| 元数据（`title` / `tags` / 时间，`NoteStore.save` 的落库面） | `m1 == m2`（519 B · `dc712851ab1f74f414afade11aab8a62e303782284a0a50d05bab0b99ea69f43`）· 跨进程同一 `sha256` | ✅ 生效 |
+| 云端行（`CloudSyncCoding.encoder()`） | 与 #1 #2 **同一套两条 flag**（`.sortedKeys` + `.withoutEscapingSlashes`）+ ISO8601 写入口径 | ✅ 同源 |
+
+**canonical 原文（608 B · 逐字节，键序即字典序）**
+
+```
+{"spans":[{"text":"普通文字 "},{"styles":["bold"],"text":"粗体"},{"styles":["italic"],"text":"斜体"},{"styles":["underline"],"text":"下划线"},{"styles":["code"],"text":"代码"},{"color":"#E53935","styles":["color"],"text":"红字"},{"size":18,"styles":["size"],"text":"大字"},{"link":"https://example.com/a","text":"链接"},{"backgroundColor":"#FFF3B0","text":"荧光"},{"text":"第一条","type":"LIST_ORDERED"},{"text":"圆点","type":"LIST_UNORDERED"},{"checked":true,"text":"带勾任务","type":"LIST_CHECKBOX"},{"checked":false,"text":"未勾任务","type":"LIST_CHECKBOX"}],"version":2}
+```
+
+### 8.4 `bash Scripts/verify-core.sh` 读数
+
+见 §8.7（收口重跑 · 与改前成对）。
+
+### 8.5 边界自查
+
+未碰 `Docs/**`（只引用契约与裁定）· 未碰 `Scripts/**`（判据本体零改动）· **零新增 `.swift`**（5 个 `.swift` 全 `M`）·
+未装全局包 · 未提交任何 secret / 口令 / 令牌 · 只**本地 `git commit`**（未 `push` / 未 `fetch` / 未 `rebase`）·
+未碰对侧子树 · `Scripts/path-ownership.json` 未改（`cloud-sync/` 与 `Core/NoteSync/` 已在既有登记内）。
+
+### 8.6 探针源（逐字节 · 可原样重放 · 只落 `.build/`）
+
+```swift
+import Foundation
+import CryptoKit
+
+// 《写入面 canonical 编码 · 跨进程字节稳定》取证探针（片 `云-编码canonical` · macOS 机组）
+//
+// 用法（在出片工作树里跑；探针源只住在 `.build/` 下，**不改产品代码**）：
+//   WORKTREE=/Users/alex/dev/doyah/lead/studio/.worktrees/t_fc43a8c2
+//   mkdir -p "$WORKTREE/.build/canon-probe"
+//   cp <本源> "$WORKTREE/.build/canon-probe/main.swift"
+//   swiftc -O -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
+//     "$WORKTREE/Core/NoteBody.swift" "$WORKTREE/Core/Localization.swift" \
+//     "$WORKTREE/Core/Note.swift" "$WORKTREE/Core/DoyahIdentity.swift" \
+//     "$WORKTREE/Core/Notebook.swift" "$WORKTREE/.build/canon-probe/main.swift" \
+//     -o "$WORKTREE/.build/canon-probe/probe"
+//   "$WORKTREE/.build/canon-probe/probe"    # 跑两遍（跨进程稳定性就在这两遍之间判）
+//
+// 「改后」那一条取的编码器 = `NoteBodyCanonical`（Core/NoteBody.swift）—— 与写入口
+// `App/AppState.swift` 的 `encodedSpans` **同一条**（不是照抄一份配置）。
+// 样例 span 树与 `云E`（本文件 §一.1）逐条相同，便于两片读数对齐。
+
+func sha256Hex(_ data: Data) -> String {
+    SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+}
+
+let spans: [NoteSpan] = [
+    NoteSpan(text: "普通文字 "),
+    NoteSpan(text: "粗体", styles: [.bold]),
+    NoteSpan(text: "斜体", styles: [.italic]),
+    NoteSpan(text: "下划线", styles: [.underline]),
+    NoteSpan(text: "代码", styles: [.code]),
+    NoteSpan(text: "红字", styles: [.color], color: "#E53935"),
+    NoteSpan(text: "大字", styles: [.size], size: 18),
+    NoteSpan(text: "链接", link: "https://example.com/a"),
+    NoteSpan(text: "荧光", backgroundColor: NoteHighlight.backgroundColorHex),
+    NoteSpan(text: "第一条", block: .ordered),
+    NoteSpan(text: "圆点", block: .bullet),
+    NoteSpan(text: "带勾任务", block: .task(checked: true)),
+    NoteSpan(text: "未勾任务", block: .task(checked: false))
+]
+let body = NoteBody(spans: spans)
+
+print("=== ① 改前：默认 `JSONEncoder()`（`云E` §三.5 登记的根因）===")
+let d1 = try JSONEncoder().encode(body)
+let d2 = try JSONEncoder().encode(body)
+print("d1 字节数 = \(d1.count)  sha256 = \(sha256Hex(d1))")
+print("d2 字节数 = \(d2.count)  sha256 = \(sha256Hex(d2))")
+print("d1 == d2 逐字节: \(d1 == d2)")
+
+print("")
+print("=== ② 改后：canonical（`NoteBodyCanonical` = 写入口 `AppState.encodedSpans` 的同一条）===")
+let c1 = try NoteBodyCanonical.encoder().encode(body)
+let c2 = try NoteBodyCanonical.encoder().encode(body)
+print("c1 字节数 = \(c1.count)  sha256 = \(sha256Hex(c1))")
+print("c2 字节数 = \(c2.count)  sha256 = \(sha256Hex(c2))")
+print("c1 == c2 逐字节: \(c1 == c2)")
+print("c1 原文 = \(String(decoding: c1, as: UTF8.self))")
+print("写入口同一条（`NoteBodyCanonical.json`）：\(try NoteBodyCanonical.json(body) == String(decoding: c1, as: UTF8.self))")
+
+print("")
+print("=== ③ 元数据面：`Note` 按 `NoteStore.save` 同一配置（[.prettyPrinted, .sortedKeys, .withoutEscapingSlashes] + .iso8601）===")
+let when = Date(timeIntervalSince1970: 1_790_000_000)
+let note = Note(
+    id: UUID(uuidString: "8C4E2B10-5A7D-4F31-9E62-B0D3C7A95F48")!,
+    title: "同步格式样例",
+    body: body.body,
+    tags: ["同步", "格式"],
+    source: NoteSource(kind: .manual, capturedAt: when),
+    createdAt: when,
+    updatedAt: when,
+    isFavorite: true,
+    isPinned: true
+)
+func metadataEncoder() -> JSONEncoder {
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    return encoder
+}
+let m1 = try metadataEncoder().encode(note)
+let m2 = try metadataEncoder().encode(note)
+print("m1 字节数 = \(m1.count)  sha256 = \(sha256Hex(m1))")
+print("m2 字节数 = \(m2.count)  sha256 = \(sha256Hex(m2))")
+print("m1 == m2 逐字节: \(m1 == m2)")
+```
+
+### 8.7 收口重跑读数（判据 ④）
+
+```
+$ cd /Users/alex/dev/doyah/lead/studio/.worktrees/t_fc43a8c2
+$ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer bash Scripts/verify-core.sh
+ℹ️ 工具链证据: DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer · Xcode 27.0 Build version 27A266a
+...
+	 Executed 2915 tests, with 3 tests skipped and 0 failures (0 unexpected) in 6.069 (6.233) seconds
+ℹ️ Core 单测 2915 项（已写入 .build/core-test-count.txt，供 Scripts/check-doc-numbers.py 对账）
+VERIFY_CORE_EXIT=0
+```
+
+| 项 | 读数 |
+|---|---|
+| 收口重跑 | **exit 0** · **2915 项 · 0 failures**（3 项 skip 为既有：`云D` 的 LIVE 真跑 + UI 快照那几条） |
+| 新增 2 例在跑 | `NoteBodyTests.testCanonicalSerializationKeepsContentAndMetadataByteStable` passed · `NoteSyncE2ETests.testTimestampWriteReadFollowsCanonicalMillisecondRule` passed |
+| 计数推导 | `2906`（本片基线 `e0b9d59` 合入 云F-缺口）+ `7`（父卡 云D 的 `NoteSyncE2E` 新例）+ `2`（本片）**= 2915** |
+| 唯一允许红 | `check-doc-numbers` 的 `[core-tests]`（台账 2832，实测 2915）—— **陈旧红**，归前门 `T-20261009-040`；本片未碰 `Docs/**` 与台账 |
