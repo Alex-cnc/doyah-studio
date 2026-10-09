@@ -229,11 +229,52 @@ final class WorkspaceTabsModel: ObservableObject {
         save(id)
     }
 
-    // MARK: 会话恢复（FR-EDIT-43 · 队列 L-116 · Q60 取 B 的第一片 = **页签集**）
+    // MARK: 会话恢复（FR-EDIT-43 · 队列 L-116 · Q60 取 B：第一片 = **页签集**，第二片 = **光标 + 滚动位置**）
     //
-    // 本片只做页签集（+ 上次工作区）；**光标与滚动位置是紧接的下一片**（同一个文件，避免两卡并行改）。
-    // 快照的编解码 / 版本兼容 / 「文件找不到了」「脏缓冲」两套语义都在 `Core/WorkspaceSession.swift`
-    // （纯逻辑、可单测）；这里只负责**什么时候写、写什么、恢复完怎么说**。
+    // 快照的编解码 / 版本兼容 / 「文件找不到了」「脏缓冲」「插入点与滚动的夹范围」都在
+    // `Core/WorkspaceSession.swift`（纯逻辑、可单测）；这里只负责**什么时候写、写什么、
+    // 恢复完怎么说、以及把落脚点交给编辑器**。
+
+    /// 一页编辑器的**现场读数**（`FR-EDIT-43` 第二片）。
+    ///
+    /// `caret` = UTF-16 偏移（与 `NSRange.location` 同口径）；`scroll` = 垂直滚动偏移（点）。
+    struct CursorReading: Equatable {
+        var caret: Int
+        var scroll: Double
+    }
+
+    /// 各页签最近一次的现场读数。**刻意不是 `@Published`**：用户每挪一次光标 / 每滚一帧都会上报，
+    /// 触发 SwiftUI 重绘等于把打字变成持续重算工具栏（与 `EditorCommandCenter.selections`
+    /// 同一条纪律）。退出时按需读一次即可。
+    private var liveCursors: [UUID: CursorReading] = [:]
+
+    /// 编辑器上报现场读数（`CodeEditorView` 在选区变化 / 滚动时各报一次）。
+    func reportCursor(tabID: UUID, caretOffset: Int, scrollOffset: Double) {
+        liveCursors[tabID] = CursorReading(caret: caretOffset, scroll: scrollOffset)
+    }
+
+    /// 交给编辑器的**落脚点**（会话恢复用）。
+    struct CursorPlacement: Equatable {
+        let tabID: UUID
+        /// 已由 `Core` 夹进恢复后文档范围的插入点（UTF-16 偏移）。
+        let caretOffset: Int
+        /// 已夹成 ≥ 0 的垂直滚动偏移（点）。
+        let scrollOffset: Double
+    }
+
+    /// 等着选中的那一页的编辑器来取的落脚点。`nil` = 这次没有要放回的光标。
+    private var pendingCursorPlacement: CursorPlacement?
+
+    /// 取走本页的落脚点（**取走即没**）。
+    ///
+    /// 为什么是一次性的而不是「一直放在这儿」：视图会因为 `VSplitView` 换分支等原因**重建**
+    /// （见 `references/macos-ui-conventions.md` 的「视图重建类坑」），若每次新建都再放一遍，
+    /// 用户挪过的光标会被**反复拽回**上次退出时的位置 —— 那正是这条功能最容易变成的缺陷。
+    func takeCursorPlacement(for tabID: UUID) -> CursorPlacement? {
+        guard let placement = pendingCursorPlacement, placement.tabID == tabID else { return nil }
+        pendingCursorPlacement = nil
+        return placement
+    }
 
     /// 上次会话的工作区根目录（快照里那一栏）。
     ///
@@ -244,7 +285,8 @@ final class WorkspaceTabsModel: ObservableObject {
     /// 恢复结果的**真实读数**（找不到的文件 / 未保存的改动各自的名单）。`nil` = 本次没恢复过。
     @Published private(set) var sessionRestore: WorkspaceSessionRestore?
 
-    /// **退出时落快照**：把当前页签集 + 上次工作区写进 `workspace-session.json`。
+    /// **退出时落快照**：把当前页签集 + 上次工作区 + 选中页的光标与滚动位置写进
+    /// `workspace-session.json`。
     ///
     /// 返回成没成（与 `save(_:)` 同一形状）；失败**不静默** —— 说清「下次启动会回到更早的页签集」。
     ///
@@ -252,12 +294,17 @@ final class WorkspaceTabsModel: ObservableObject {
     /// 跟着按键写文件在编辑器里就是每敲一个字写一次盘（一页几百 KB）。
     @discardableResult
     func saveSession() -> Bool {
+        // 光标 / 滚动取**选中那一页**的读数（快照只记一个位置，理由见
+        // `WorkspaceSessionSnapshot.caretOffset`）。选中的是 Home ⇒ 本来就没有读数 ⇒ 如实空着。
+        let reading = selectedID.flatMap { liveCursors[$0] }
         let snapshot = WorkspaceSessionSnapshot.capture(
             tabs: tabs,
             selectedID: selectedID,
             // 「上次工作区」= 最近打开的那个工作区目录（`history` 本来就记着它，
             // 见 `record(workspace:)`）—— 不另开一路状态，免得两处说法迟早不一致。
-            workspacePath: history.workspaces.first?.path
+            workspacePath: history.workspaces.first?.path,
+            caretOffset: reading?.caret,
+            scrollOffset: reading?.scroll
         )
         do {
             try sessionStore.save(snapshot)
@@ -268,10 +315,12 @@ final class WorkspaceTabsModel: ObservableObject {
         }
     }
 
-    /// **启动时恢复**：回到上次的页签集（+ 上次工作区）。
+    /// **启动时恢复**：回到上次的页签集（+ 上次工作区 + 选中页的光标与滚动位置）。
     ///
     /// 没有快照 = 第一次启动，保持默认（一个 Home 页）；三句话都必须说出来（不静默）：
     /// 快照读不动 / 有页签的源文件找不到了 / 有未保存改动回来了。
+    /// 光标与滚动**到位之后不吭声**（用户看得见光标就在那儿）—— 但只有**读到落脚点**才动光标，
+    /// 旧快照（第一片那份没有这两栏）里没有 ⇒ 一个都不动。
     func restoreSession() {
         let snapshot: WorkspaceSessionSnapshot?
         do {
@@ -295,6 +344,18 @@ final class WorkspaceTabsModel: ObservableObject {
 
         tabs = restoredTabs
         selectedID = restored.selectedTabID ?? restoredTabs.first?.id
+
+        // 落脚点挂到**选中的那一页**上，等它的编辑器来取（取走即没）。
+        if let caret = restored.caretOffset, let selectedID {
+            pendingCursorPlacement = CursorPlacement(
+                tabID: selectedID,
+                caretOffset: caret,
+                scrollOffset: restored.scrollOffset ?? 0
+            )
+        } else {
+            pendingCursorPlacement = nil
+        }
+
         restoredWorkspacePath = restored.workspacePath
         sessionRestore = restored
 

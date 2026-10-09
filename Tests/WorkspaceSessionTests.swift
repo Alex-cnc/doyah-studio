@@ -38,7 +38,9 @@ final class WorkspaceSessionTests: XCTestCase {
         let snapshot = WorkspaceSessionSnapshot.capture(
             tabs: [home, clean, dirty],
             selectedID: dirty.id,
-            workspacePath: "/tmp/proj"
+            workspacePath: "/tmp/proj",
+            caretOffset: 42,
+            scrollOffset: 128.5
         )
         XCTAssertEqual(snapshot.version, WorkspaceSessionSnapshot.currentVersion)
 
@@ -49,6 +51,8 @@ final class WorkspaceSessionTests: XCTestCase {
         XCTAssertEqual(decoded.version, 1)
         XCTAssertEqual(decoded.workspacePath, "/tmp/proj")
         XCTAssertEqual(decoded.selectedTabIndex, 2)
+        XCTAssertEqual(decoded.caretOffset, 42)
+        XCTAssertEqual(decoded.scrollOffset, 128.5)
         XCTAssertEqual(decoded.tabs.count, 3)
         XCTAssertNil(decoded.tabs[0].path)
         XCTAssertEqual(decoded.tabs[0].title, "首页")
@@ -68,20 +72,29 @@ final class WorkspaceSessionTests: XCTestCase {
         XCTAssertNil(snapshot.tabs[0].unsavedContent)
     }
 
-    /// **本片不碰光标 / 滚动位置**（那是紧接的下一片）—— 快照的字段面就是判据：
-    /// 多出 `cursor` / `scroll` 之类的栏位当场变红，免得「写进去没人读」的半扇门留在文件里。
+    /// **快照的字段面就是判据**：四个顶层栏（第一片）+ 插入点 / 垂直滚动两栏（第二片）。
     ///
-    /// 口径：`selectedTabIndex` 记过才有这一栏（Swift 对 `Optional` 的合成编码是「`nil` 就不写」）
-    /// —— 所以这里选一个页签，把四栏都逼出来。
-    func testSnapshotShapeHasNoCursorOrScrollFields() throws {
+    /// 第一片这里钉的是「多出 `cursor` / `scroll` 当场变红」——本片把门打开了，于是这条判据
+    /// **改成钉新形状**（改成「该有的两栏在、且只有这两栏」，而不是删掉）：判据要跟着意图走，
+    /// 不能因为「它拦住我自己了」就把门拆了。
+    ///
+    /// 口径：`Optional` 的合成编码是「`nil` 就不写」⇒ 选一个页签、给上两个偏移，把六栏都逼出来。
+    func testSnapshotShapeCarriesCaretAndScrollFields() throws {
         let tab = fileTab("/tmp/proj/a.ts", content: "x", saved: "y")
         let snapshot = WorkspaceSessionSnapshot.capture(
             tabs: [tab],
             selectedID: tab.id,
-            workspacePath: "/tmp/proj"
+            workspacePath: "/tmp/proj",
+            caretOffset: 7,
+            scrollOffset: 3.5
         )
         let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as? [String: Any]
-        XCTAssertEqual(Set((json ?? [:]).keys), ["version", "workspacePath", "selectedTabIndex", "tabs"])
+        XCTAssertEqual(
+            Set((json ?? [:]).keys),
+            ["version", "workspacePath", "selectedTabIndex", "tabs", "caretOffset", "scrollOffset"]
+        )
+        // 页签那一层的形状**一个字没加**：光标 / 滚动是「选中那一页」的现场，不是每页各记一份
+        // （多记一份的代价：恢复完一切页签，每页都跳一下）。
         let first = (json?["tabs"] as? [[String: Any]])?.first
         XCTAssertEqual(Set((first ?? [:]).keys), ["path", "title", "language", "unsavedContent"])
     }
@@ -313,5 +326,126 @@ final class WorkspaceSessionTests: XCTestCase {
         XCTAssertNil(restored.selectedTabID)
         XCTAssertTrue(restored.missingPaths.isEmpty)
         XCTAssertTrue(restored.unsavedPaths.isEmpty)
+    }
+
+    // MARK: - ④ 光标 + 滚动位置（队列 L-116 第二片 · 判据 ①②③）
+
+    /// 判据 ① 的第二半：**插入点 / 滚动偏移往返相等**（`capture` → 落盘 → `load` → 逐字段）。
+    func testCaretAndScrollRoundTripThroughDisk() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = WorkspaceSessionStore(fileURL: url)
+
+        // 没有选中页 ⇒ 两栏如实空着（「哪一页」认不出来时它们没有归属，不编一个位置出来）。
+        let unselected = WorkspaceSessionSnapshot.capture(
+            tabs: [fileTab("/tmp/proj/a.ts", content: "a")],
+            selectedID: nil,
+            workspacePath: "/tmp/proj",
+            caretOffset: 1234,
+            scrollOffset: 987.25
+        )
+        XCTAssertNil(unselected.caretOffset)
+        XCTAssertNil(unselected.scrollOffset)
+
+        let live = fileTab("/tmp/proj/a.ts", content: "a")
+        let selected = WorkspaceSessionSnapshot.capture(
+            tabs: [WorkspaceTab.home(title: "首页"), live],
+            selectedID: live.id,
+            workspacePath: "/tmp/proj",
+            caretOffset: 1234,
+            scrollOffset: 987.25
+        )
+        try store.save(selected)
+        let decoded = try XCTUnwrap(try store.load())
+        XCTAssertEqual(decoded, selected)
+        XCTAssertEqual(decoded.caretOffset, 1234)
+        XCTAssertEqual(decoded.scrollOffset, 987.25)
+    }
+
+    /// 恢复：选中的是**文件页签** ⇒ 落脚点在文档范围内时原样带回来。
+    func testRestoreCarriesTheCaretAndScrollOfTheSelectedFile() {
+        let first = fileTab("/tmp/proj/a.ts", content: "a")
+        let second = fileTab("/tmp/proj/b.ts", content: "b")
+        let snapshot = WorkspaceSessionSnapshot.capture(
+            tabs: [first, second],
+            selectedID: second.id,
+            workspacePath: nil,
+            caretOffset: 1,
+            scrollOffset: 24
+        )
+        let restored = WorkspaceSessionSnapshot.restore(from: snapshot) { _ in "0123456789" }
+        XCTAssertEqual(restored.selectedTabID, restored.tabs[1].id)
+        XCTAssertEqual(restored.caretOffset, 1)
+        XCTAssertEqual(restored.scrollOffset, 24)
+    }
+
+    /// 判据 ②：**越界一律夹进恢复后的文档范围** —— 文件在两次启动之间被改短了，
+    /// 原样塞给编辑器会让光标静默跳到别处（比不恢复更难查）。
+    func testRestoreClampsTheCaretIntoTheRestoredDocument() {
+        let tab = fileTab("/tmp/proj/a.ts", content: "x")
+        let snapshot = WorkspaceSessionSnapshot.capture(
+            tabs: [tab],
+            selectedID: tab.id,
+            workspacePath: nil,
+            caretOffset: 9_999,
+            scrollOffset: -12
+        )
+        let restored = WorkspaceSessionSnapshot.restore(from: snapshot) { _ in "let a = 1" }
+        XCTAssertEqual(restored.caretOffset, 9)   // "let a = 1" == 9 个 UTF-16 单元
+        XCTAssertEqual(restored.scrollOffset, 0)  // 负数 → 0（上界由滚动视图按文档高度自己夹）
+    }
+
+    /// 夹范围量的是 **UTF-16 单元**（`NSRange` 口径），**不是字素簇** —— 中文 / emoji 上两者不同数，
+    /// 用 `count` 会把光标停在字符中间。
+    func testCaretIsClampedInUTF16UnitsNotGraphemes() {
+        let family = "👨‍👩‍👧"
+        XCTAssertGreaterThan(
+            family.utf16.count, family.count,
+            "夹具：这个 emoji 的 UTF-16 单元数确实多于字素数（否则这条判据证明不了口径）"
+        )
+        XCTAssertEqual(WorkspaceSessionSnapshot.clampCaret(0, in: family), 0)
+        XCTAssertEqual(WorkspaceSessionSnapshot.clampCaret(-3, in: family), 0)
+        XCTAssertEqual(WorkspaceSessionSnapshot.clampCaret(99, in: family), family.utf16.count)
+        XCTAssertEqual(WorkspaceSessionSnapshot.clampScroll(-1), 0)
+        XCTAssertEqual(WorkspaceSessionSnapshot.clampScroll(12.5), 12.5)
+    }
+
+    /// 判据 ③：**旧快照（第一片那份只有页签集、没有光标 / 滚动两栏）读取不崩** ——
+    /// 缺字段 ⇒ 给默认值「没记过」，**不整条丢**；于是**一个光标都不动**
+    /// （不是把光标顶到开头：那是「恢复了但跳到开头」的假恢复）。
+    func testLegacySnapshotWithoutCursorFieldsReadsWithDefaults() throws {
+        let legacy = #"""
+        {"version":1,"workspacePath":"/tmp/proj","selectedTabIndex":1,
+         "tabs":[{"path":null,"title":"首页","language":"plainText"},
+                 {"path":"/tmp/proj/a.ts","title":"a.ts","language":"typescript"}]}
+        """#
+        let decoded = try WorkspaceSessionSnapshot.decode(from: Data(legacy.utf8))
+        XCTAssertNil(decoded.caretOffset)
+        XCTAssertNil(decoded.scrollOffset)
+        XCTAssertEqual(decoded.tabs.count, 2)
+
+        let restored = WorkspaceSessionSnapshot.restore(from: decoded) { _ in "let a = 1" }
+        XCTAssertEqual(restored.tabs.count, 2)
+        XCTAssertEqual(restored.selectedTabID, restored.tabs[1].id)
+        XCTAssertNil(restored.caretOffset)
+        XCTAssertNil(restored.scrollOffset)
+    }
+
+    /// 选中的是 **Home**（没有编辑器）⇒ 不留落脚点：往一个不存在的编辑器「放回光标」
+    /// 只会变成「一打开就跳到别处」。
+    func testHomeSelectionLeavesNoCursorPlacement() {
+        let home = WorkspaceTab.home(title: "首页")
+        let snapshot = WorkspaceSessionSnapshot.capture(
+            tabs: [home],
+            selectedID: home.id,
+            workspacePath: nil,
+            caretOffset: 5,
+            scrollOffset: 10
+        )
+        let restored = WorkspaceSessionSnapshot.restore(from: snapshot) { _ in nil }
+        XCTAssertEqual(restored.tabs.count, 1)
+        XCTAssertTrue(restored.tabs[0].isHome)
+        XCTAssertNil(restored.caretOffset)
+        XCTAssertNil(restored.scrollOffset)
     }
 }
