@@ -388,7 +388,31 @@ def measure(root: pathlib.Path, entry: dict, problems: list, notes: list):
                 f"（regex {spec['regex']!r} —— 收尾行格式变了）"
             )
             return None
-        return [int(match.group(1)), len(module.DEFAULT_TARGETS)]
+        checked = int(match.group(1))
+        named = len(module.DEFAULT_TARGETS)
+        # **本机台账整批不在盘上**（干净克隆 / 并行工作树 / 另一平台；`AGENT-SPEC.md` §9 第 147 条 ④）
+        # ⇒ 那个脚本会跳过那几份文档，**绝对受检数是「主开发机上的数」，在这台机器上核不了**。
+        # 这时不判红、也不假装核过（第 98 轮 ui-snapshots 那条同款）：改为核一条**与机器无关的
+        # 结构不变量**「受检 + 跳过 == 清单里命名的份数 + 通配命中数」，并如实登记「跳过实测」。
+        # 边界：只缺**一部分**台账（其余在盘上 ⇒ 主开发机上文档被删 / 路径写错）**不走**这条路，
+        # 照旧按绝对数判红 —— 与 `check-doc-tables.py --self-test` 例 4 同一口径。
+        host_absent = [rel for rel in module.SELF_TEST_ABSENT if not (root / rel).exists()]
+        skip_match = re.search(r"⚠ 跳过 (\d+) 份不在本机的文档", output)
+        if host_absent and len(host_absent) == len(module.SELF_TEST_ABSENT) and skip_match:
+            skipped_count = int(skip_match.group(1))
+            glob_matches = sum(int(value) for value in re.findall(r"→ 本机 (\d+) 份", output))
+            if checked + skipped_count != named + glob_matches:
+                problems.append(
+                    f"[{key}] 实测复核失败：受检 {checked} + 跳过 {skipped_count} != 清单 {named} "
+                    f"+ 通配命中 {glob_matches}（本机台账缺席时必须成立的那条结构不变量）"
+                )
+                return None
+            notes.append(
+                f"[{key}] 跳过实测：本机台账不在盘上（受检 {checked} + 跳过 {skipped_count} = 清单 {named} "
+                f"+ 通配 {glob_matches}，结构不变量成立）；绝对受检数只在主开发机上可核 —— 跳过 ≠ 通过"
+            )
+            return None
+        return [checked, named]
 
     if kind == "judge-output":
         # 三书里「N 处 / N 条」类统计（第 80 轮 L-72 ㈢）：这个数**本来就有判据在管** ⇒
