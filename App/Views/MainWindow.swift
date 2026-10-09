@@ -319,6 +319,11 @@ struct MainWindow: View {
         } message: {
             Text(L(.accountUndecidedMessage))
         }
+        // 「账户与同步…」（片 `云F`）：真界面（注册 / 登录 / 同步开关 / 登出 / 多端会话 / 找回入口位）。
+        // 与上面那条 R-23 占位说明并存（本片不改既有入口，见 `AppState.isAccountSyncPresented` 的注释）。
+        .sheet(isPresented: $appState.isAccountSyncPresented) {
+            AccountSyncSheet()
+        }
         .sheet(isPresented: $appState.isAgentSQLPresented) {
             AgentSQLPanel()
         }

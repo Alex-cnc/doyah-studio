@@ -101,7 +101,16 @@ let package = Package(
         ),
         .testTarget(
             name: "DoyahCoreTests",
-            dependencies: ["DoyahCore"],
+            dependencies: [
+                "DoyahCore",
+                // 账号与同步界面（片 `云F`）：本目标里那一条判据要打在**真界面模型**上
+                // （`App/Auth/AccountFlowModel.swift`），而不是在测试里另写一份规则 ——
+                // 所以这里多一条到 App 可执行目标的依赖。SwiftPM 本来就会为
+                // `DoyahUISnapshotTests` 编出 App（测试目标依赖可执行目标是允许的），
+                // 故本条**不增加**构建量；Xcode 工程（`project.yml`）那一侧不跟这条
+                // ——两份构建系统的差异本就是登记过的已知边界（`Docs/发布方案.md` §2）。
+                "DoyahStudioApp",
+            ],
             path: "Tests"
         ),
         // 界面快照（队列 L-01）：用 `ImageRenderer` **离屏渲染真视图树**成 PNG。

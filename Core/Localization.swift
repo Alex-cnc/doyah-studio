@@ -102,6 +102,42 @@ public enum LKey: String, CaseIterable, Sendable {
     case accountUndecidedTitle
     case accountUndecidedMessage
 
+    // 账号与同步界面（片 `云F` · 契约 SRS §6.4「账号与同步界面（最小集）」）
+    //
+    // 一屏六项：注册页 / 登录页 / 同步开关（`S4` 原文）/ 登出 / 多端会话 / 找回入口位。
+    // 三条口径决定这些键怎么切（为什么见 `App/Auth/AccountFlowModel.swift` 的文件注释）：
+    //   · **登录失败只有一句话**（`FR-AUTH-02`）—— 用户名不存在与口令错不可区分；
+    //   · **同步开关默认关**（契约 §10.4 `S3`）—— 开关旁常显 `S4` 那句告知；
+    //   · **没核验就不建账号**（`FR-AUTH-01`）—— 字段校验与「缺核验通道」两条都停在「不建账号」。
+    case menuAccountSync
+    case accountSyncTitle
+    case accountTabSignIn
+    case accountTabSignUp
+    case accountUsernameLabel
+    case accountUsernamePlaceholder
+    case accountPasswordLabel
+    case accountConfirmPasswordLabel
+    case accountSignInAction
+    case accountSignUpAction
+    case accountSignInFailed
+    case accountSignInIncomplete
+    case accountSignUpUnavailable
+    case accountFieldUsernameEmpty
+    case accountFieldUsernameTooShort
+    case accountFieldUsernameInvalid
+    case accountFieldPasswordTooShort
+    case accountFieldConfirmMismatch
+    case accountSignedInLabel
+    case accountMultiDeviceHint
+    case accountSignOutAction
+    case accountSyncToggle
+    case accountSyncNotice
+    case accountSyncHintOn
+    case accountSyncHintOff
+    case accountSyncNeedsSignIn
+    case accountRecoveryEntry
+    case accountRecoveryDeferred
+
     // 外观（FR-EDIT-33）
     case menuAppearance
     /// 主菜单「编辑」里的**格式化代码**（FR-EDIT-39 的菜单入口）。
@@ -2414,6 +2450,37 @@ public enum LocalizedStrings {
         .directoryStatusFailed: [.simplifiedChinese: "书签无法解析，建议重新选择目录", .english: "Bookmark could not be resolved — choose the folder again"],
         .accountUndecidedTitle: [.simplifiedChinese: "账户功能还没定", .english: "The account feature is not decided yet"],
         .accountUndecidedMessage: [.simplifiedChinese: "「登录后提供什么」还没定：模型配额与计费、配置跨机同步、许可校验，三者的架构代价完全不同。在定下来之前这里只放占位入口，不实现登录流程。密钥与密码也不会参与任何同步。", .english: "What signing in should give you is still undecided: model quota and billing, config sync across machines, and licence checks all cost very differently to build. Until that is settled this stays a placeholder — no sign-in flow is implemented, and secrets never take part in any sync."],
+        // 账号与同步界面（片 `云F`）。逐条口径见 `LKey` 里那一段的注释。
+        // `.accountSyncNotice` 是契约 `核心契约.md` §10.4 `S4` 要求**逐字**写出的那一句 ——
+        // 改这句等于改契约告知口径，改前先回去读 §10.4。
+        .menuAccountSync: [.simplifiedChinese: "账户与同步…", .english: "Account & Sync…"],
+        .accountSyncTitle: [.simplifiedChinese: "账户与同步", .english: "Account & Sync"],
+        .accountTabSignIn: [.simplifiedChinese: "登录", .english: "Sign in"],
+        .accountTabSignUp: [.simplifiedChinese: "注册", .english: "Create account"],
+        .accountUsernameLabel: [.simplifiedChinese: "用户名", .english: "Username"],
+        .accountUsernamePlaceholder: [.simplifiedChinese: "登录用的用户名", .english: "Your sign-in username"],
+        .accountPasswordLabel: [.simplifiedChinese: "口令", .english: "Password"],
+        .accountConfirmPasswordLabel: [.simplifiedChinese: "确认口令", .english: "Confirm password"],
+        .accountSignInAction: [.simplifiedChinese: "登录", .english: "Sign in"],
+        .accountSignUpAction: [.simplifiedChinese: "注册", .english: "Create account"],
+        .accountSignInFailed: [.simplifiedChinese: "用户名或口令不对。", .english: "Wrong username or password."],
+        .accountSignInIncomplete: [.simplifiedChinese: "登录没能完成：网络或服务暂时不可用，请稍后重试。", .english: "Sign-in didn't complete — the network or service is unavailable, so try again shortly."],
+        .accountSignUpUnavailable: [.simplifiedChinese: "注册暂未开放：服务端建账号的接口还没接进来，在核验通道就位之前不会建立任何账号。字段校验照常生效。", .english: "Sign-up isn't open yet: the server's account-creation endpoint isn't wired in, and no account is created before a verification channel exists. Field checks still apply."],
+        .accountFieldUsernameEmpty: [.simplifiedChinese: "请先填用户名。", .english: "Enter a username first."],
+        .accountFieldUsernameTooShort: [.simplifiedChinese: "用户名至少 3 个字符。", .english: "A username needs at least 3 characters."],
+        .accountFieldUsernameInvalid: [.simplifiedChinese: "用户名只能用英文字母、数字、下划线或短横线，最长 32 个字符。", .english: "A username uses letters, digits, underscore or hyphen, at most 32 characters."],
+        .accountFieldPasswordTooShort: [.simplifiedChinese: "口令至少 8 个字符。", .english: "A password needs at least 8 characters."],
+        .accountFieldConfirmMismatch: [.simplifiedChinese: "两次输入的口令不一样。", .english: "The two passwords don't match."],
+        .accountSignedInLabel: [.simplifiedChinese: "已登录", .english: "Signed in"],
+        .accountMultiDeviceHint: [.simplifiedChinese: "同一条账号可以在多台设备上同时登录，各端会话互相独立；这里只退出当前设备。", .english: "The same account can be signed in on several devices at once with independent sessions; this only signs out the current device."],
+        .accountSignOutAction: [.simplifiedChinese: "退出登录", .english: "Sign out"],
+        .accountSyncToggle: [.simplifiedChinese: "同步到云端", .english: "Sync to the cloud"],
+        .accountSyncNotice: [.simplifiedChinese: "当前不是端到端加密 —— 内容在云端可读", .english: "This is not end-to-end encrypted — content is readable in the cloud"],
+        .accountSyncHintOn: [.simplifiedChinese: "只同步笔记正文与随正文的元数据；附件单列。", .english: "Only note bodies and their metadata sync; attachments are handled separately."],
+        .accountSyncHintOff: [.simplifiedChinese: "关闭时不会向云端发送任何内容。", .english: "While off, nothing is sent to the cloud."],
+        .accountSyncNeedsSignIn: [.simplifiedChinese: "登录后才能开启云同步。", .english: "Sign in first to turn on cloud sync."],
+        .accountRecoveryEntry: [.simplifiedChinese: "找回 / 重置口令…", .english: "Recover or reset password…"],
+        .accountRecoveryDeferred: [.simplifiedChinese: "这个入口先留着：找回 / 重置的本体还没做。重置后该账号的既有会话会全部作废。", .english: "This entry point is reserved: the reset flow itself isn't built yet. A reset invalidates every existing session for that account."],
         .menuFormat: [.simplifiedChinese: "格式化代码", .english: "Format Code"],
         .menuAppearance: [.simplifiedChinese: "外观…", .english: "Appearance…"],
         .appearanceTitle: [.simplifiedChinese: "外观", .english: "Appearance"],
