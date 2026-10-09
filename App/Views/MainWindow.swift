@@ -64,6 +64,10 @@ struct MainWindow: View {
                 } else {
                     NotesContainerTreeView()
                 }
+            case .retro:
+                // **周报（Retro · 片 `M7-HOST`）**：阅读器自带期次列表（左）与正文（右）两块，
+                // 所以 Studio 左栏这里不再放第二份导航 —— 只留一句占位说明（空栏看着像坏了）。
+                RetroSidebarPlaceholderView()
             }
         }
     }
@@ -159,6 +163,10 @@ struct MainWindow: View {
                 // **三栏**（队列 `L-184`）：左栏 = 侧栏里的两级树（可折叠），中栏 = 列表、
                 // 右栏 = 正文/编辑器、顶栏 = 搜索 + 新建 —— 都在 `NotesAreaView` 里一处装配。
                 NotesAreaView()
+            case .retro:
+                // **周报（Retro · 片 `M7-HOST` · 派单 `T-20261009-080`）**：右边这一整块交给
+                // Retro 仓的 `DoyahRetroUI` —— 本仓只负责装配，视图代码一个字都不复制（`FR-R-13`）。
+                RetroHostView()
             }
             }
             // **窗口标题跟着活动栏走**（FR-EDIT-37，2026-09-30 需求提出者）：

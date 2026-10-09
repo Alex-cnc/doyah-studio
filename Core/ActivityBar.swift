@@ -14,6 +14,13 @@ public enum ActivityBarItem: String, CaseIterable, Sendable, Identifiable {
     case database
     /// 笔记（DOYAH-01）：**Standard 版只有它**（许可证决定显示哪几项）。
     case notes
+    /// 周报（Retro）：**不挂授权 ⇒ 全档可见**（片 `M7-HOST` · 派单 `T-20261009-080`）。
+    ///
+    /// 为什么不给它能力位：`M7` 判据 ① 要的是「**活动栏 Retro 入口可见**」，
+    /// 而 Retro 是「报告阅读器」，不是按档位卖的区（三档里卖的是workspace / database / notes）。
+    /// 于是它的可见性判据 = 「恒真」这一条（见 `LicensePresentation.activityItems`），
+    /// `LicenseCapabilities` 的能力位**一个都不加**（加一个就等于改了卖点矩阵）。
+    case retro
 
     public var id: String { rawValue }
 
@@ -23,6 +30,7 @@ public enum ActivityBarItem: String, CaseIterable, Sendable, Identifiable {
         case .database: return "cylinder.split.1x2"
         case .workspace: return "folder"
         case .notes: return "note.text"
+        case .retro: return "newspaper"
         }
     }
 
@@ -32,6 +40,7 @@ public enum ActivityBarItem: String, CaseIterable, Sendable, Identifiable {
         case .database: return .activityDatabase
         case .workspace: return .activityWorkspace
         case .notes: return .activityNotes
+        case .retro: return .activityRetro
         }
     }
 
@@ -41,6 +50,7 @@ public enum ActivityBarItem: String, CaseIterable, Sendable, Identifiable {
         case .database: return .menuViewDatabase
         case .workspace: return .menuViewWorkspace
         case .notes: return .menuViewNotes
+        case .retro: return .menuViewRetro
         }
     }
 

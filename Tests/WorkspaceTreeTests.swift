@@ -10,12 +10,14 @@ final class ActivityBarTests: XCTestCase {
 
     // MARK: 活动栏
 
-    func testThreeViewItemsWithStableIdentifiers() {
-        XCTAssertEqual(ActivityBarItem.allCases.count, 3)
+    func testFourViewItemsWithStableIdentifiers() {
+        XCTAssertEqual(ActivityBarItem.allCases.count, 4)
         // 顺序 = 栏上的上下位置：工作区在最上面（2026-09-25 需求提出者要求）。
-        XCTAssertEqual(ActivityBarItem.allCases.map(\.rawValue), ["workspace", "database", "notes"])
+        // 周报（Retro · 片 `M7-HOST`）排在最后：它接在三档卖点矩阵（工作区 / 数据库 / 笔记）
+        // **之后**，且**不挂授权**（全档可见，见 `LicensePresentation.activityItems`）。
+        XCTAssertEqual(ActivityBarItem.allCases.map(\.rawValue), ["workspace", "database", "notes", "retro"])
         XCTAssertEqual(ActivityBarItem.allCases.first, .workspace)
-        XCTAssertEqual(Set(ActivityBarItem.allCases.map(\.id)).count, 3)
+        XCTAssertEqual(Set(ActivityBarItem.allCases.map(\.id)).count, 4)
     }
 
     func testViewItemsHaveDistinctSymbolsTitlesAndMenus() {
@@ -35,10 +37,12 @@ final class ActivityBarTests: XCTestCase {
     /// 所以同一项在不同档位下序号不同：Standard 只有笔记 ⇒ 笔记就是 ⌘1。
     func testShortcutIndexesFollowTheOnScreenOrder() {
         let all = ActivityBarItem.allCases
-        XCTAssertEqual(all.compactMap { ActivityBarItem.shortcutIndex(of: $0, in: all) }, [1, 2, 3])
+        XCTAssertEqual(all.compactMap { ActivityBarItem.shortcutIndex(of: $0, in: all) }, [1, 2, 3, 4])
         XCTAssertEqual(ActivityBarItem.shortcutIndex(of: .workspace, in: all), 1)
         XCTAssertEqual(ActivityBarItem.shortcutIndex(of: .database, in: all), 2)
         XCTAssertEqual(ActivityBarItem.shortcutIndex(of: .notes, in: all), 3)
+        // 周报（Retro · 片 `M7-HOST`）：栏上第四项 ⇒ ⌘4（**由可见列表算**，不是写死在项上）。
+        XCTAssertEqual(ActivityBarItem.shortcutIndex(of: .retro, in: all), 4)
 
         // Standard：栏上只剩笔记，它必须占 ⌘1，而不是留一个 ⌘3 让用户去记。
         XCTAssertEqual(ActivityBarItem.shortcutIndex(of: .notes, in: [.notes]), 1)

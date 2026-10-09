@@ -16,6 +16,11 @@ public enum LicensePresentation {
             case .workspace: return capabilities.contains(.workspaces)
             case .database: return capabilities.contains(.database)
             case .notes: return capabilities.contains(.notes)
+            // 周报（Retro · 片 `M7-HOST`）：**不挂授权 ⇒ 全档可见**（恒真）。
+            // 这是刻意的：`M7` 判据 ① 要「入口可见」，而它不在三档卖点矩阵里
+            // —— 所以**不新增能力位**（新增一个就等于改了卖点，见 `ActivityBarItem.retro` 的注释）。
+            // 这一支**不是** `default`：将来再加一个区时，这里必须显式表态（漏了编译期就红）。
+            case .retro: return true
             }
         }
     }

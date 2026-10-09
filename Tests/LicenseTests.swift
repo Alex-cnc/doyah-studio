@@ -169,20 +169,22 @@ final class LicenseTests: XCTestCase {
 final class LicensePresentationTests: XCTestCase {
 
     func testStandardShowsOnlyNotes() {
+        // 周报（Retro · 片 `M7-HOST`）**不挂授权** ⇒ 它**每一档都在**（`M7` 判据 ①：入口可见）。
+        // 所以「Standard 只显示笔记」这条从三档卖点的角度仍然成立：**只有笔记是可卖的那一项**。
         let items = LicensePresentation.activityItems(for: .notesOnly)
-        XCTAssertEqual(items, [.notes], "Standard 只显示笔记")
+        XCTAssertEqual(items, [.notes, .retro], "Standard 的可卖项只有笔记（周报不挂授权，恒在）")
         XCTAssertFalse(items.contains(.workspace), "Standard 下工作区不可达")
         XCTAssertFalse(items.contains(.database), "Standard 下数据库不可达")
     }
 
     func testProShowsToolsButNotNotes() {
         let items = LicensePresentation.activityItems(for: [.workspaces, .database])
-        XCTAssertEqual(items, [.workspace, .database])
+        XCTAssertEqual(items, [.workspace, .database, .retro])
         XCTAssertFalse(items.contains(.notes), "Pro 不含笔记（Q10 的口径：纯 IT 工具类）")
     }
 
     func testUltraShowsEverythingInDeclarationOrder() {
-        XCTAssertEqual(LicensePresentation.activityItems(for: .all), [.workspace, .database, .notes])
+        XCTAssertEqual(LicensePresentation.activityItems(for: .all), [.workspace, .database, .notes, .retro])
     }
 
     /// 任何档位下都能兜底到一个可见项（不会出现"选中项指向不存在的视图"）。

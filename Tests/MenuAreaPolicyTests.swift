@@ -44,10 +44,28 @@ final class MenuAreaPolicyTests: XCTestCase {
     }
 
     /// 每个区至少有一条登记项 —— 否则「联动」在某一个区是空转（改了看不出来）。
+    ///
+    /// **登记在案的豁免**（片 `M7-HOST` · 派单 `T-20261009-080`）：周报（Retro）区本片只落
+    /// 「活动栏入口 + 只读阅读器」，**还没有自己的区专属菜单命令** ⇒ 这里对它是空集。
+    /// 豁免**必须登记在案**，两个方向都判：新加的区忘了给菜单命令 ⇒ 红；
+    /// 已经给了菜单命令却忘了销豁免 ⇒ 也红（陈旧）。
+    private static let areasWithoutMenuCommands: Set<ActivityBarItem> = [.retro]
+
     func testEveryAreaHasAtLeastOneBoundItem() {
         for area in ActivityBarItem.allCases {
             let bound = MenuAreaPolicy.registeredKeys.filter { MenuAreaPolicy.owner(of: $0) == area }
-            XCTAssertFalse(bound.isEmpty, "\(area.rawValue) 区没有任何登记项 ⇒ 这条联动在它上面是空转")
+            if bound.isEmpty {
+                XCTAssertTrue(
+                    Self.areasWithoutMenuCommands.contains(area),
+                    "\(area.rawValue) 区没有任何登记项 ⇒ 这条联动在它上面是空转"
+                        + "（新加的区若确实还没有区专属菜单命令，把它登记进 `areasWithoutMenuCommands` 并写明理由）"
+                )
+            } else {
+                XCTAssertFalse(
+                    Self.areasWithoutMenuCommands.contains(area),
+                    "\(area.rawValue) 已经有登记项了 ⇒ 豁免条目陈旧，请从 `areasWithoutMenuCommands` 删掉它"
+                )
+            }
         }
     }
 
