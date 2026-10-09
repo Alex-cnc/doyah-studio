@@ -1,9 +1,15 @@
+import Foundation
 import XCTest
 @testable import DoyahCore
 
-/// Q8 选 C 后的核心问题：**Markdown ⇄ span 投影到底有损在哪**。
-/// 这些用例就是"有损在哪"的清单（而不是纸面讨论）。
+/// 笔记正文的**权威源与投影**。
+///
+/// **片 `WY-1a` 起**：权威源从 v1 的「Markdown + 样式旁挂」切到 v2 的 `{version: 2, spans: [...]}`，
+/// `body` / `markdown` 降为**单向投影**（由 `spans` 派生）。这些用例就是「投影到底有损在哪」
+/// 与「1→2 迁移保不保真」的清单（而不是纸面讨论）。
 final class NoteBodyTests: XCTestCase {
+
+    // MARK: 行内子集 ↔ span 树
 
     func testMarkdownSubsetProjectsToSpans() {
         let body = NoteBody(markdown: "普通 **加粗** 与 *斜体* 还有 `code`")
@@ -15,12 +21,21 @@ final class NoteBodyTests: XCTestCase {
         XCTAssertTrue(projection.degradations.isEmpty)
     }
 
+    /// **权威源就是 spans**：`body` / `markdown` 是由 spans 派生出来的投影（单向、非存储字段）。
+    func testBodyIsDerivedProjectionOfSpans() {
+        let body = NoteBody(markdown: "a **b** c")
+        XCTAssertEqual(body.spans, NoteBodyProjection.parseInline("a **b** c"), "构造时按 1→2 规则把 md 投影成 spans")
+        XCTAssertEqual(body.body, "a **b** c", "`body` 是 spans 的投影")
+        XCTAssertEqual(body.markdown, body.body, "`markdown` 是 `body` 的兼容别名")
+    }
+
     /// **语言由调用方给定**（队列 L-65）：同一处有损投影，中英各给一句 —— 此前这条降级说明
     /// 写死简体中文 ⇒ 英文界面上它**永远是中文**，而语言表里这 4 个键的英文译文不可达（死译文）。
+    /// v2 起降级发生在 **v1 投影**那一步（`project`），语言仍由调用方给。
     func testDegradationsFollowCallerLanguage() {
-        let body = NoteBody(markdown: "改写后的新句子", sidecar: [NoteSidecarStyle(text: "原来的句子", color: "#1E88E5")])
-        let zh = NoteBodyProjection.toSpans(body, language: .simplifiedChinese).degradations
-        let en = NoteBodyProjection.toSpans(body, language: .english).degradations
+        let sidecar = [NoteSidecarStyle(text: "原来的句子", color: "#1E88E5")]
+        let zh = NoteBodyProjection.project("改写后的新句子", sidecar: sidecar, language: .simplifiedChinese).degradations
+        let en = NoteBodyProjection.project("改写后的新句子", sidecar: sidecar, language: .english).degradations
         XCTAssertEqual(zh.count, 1)
         XCTAssertEqual(en.count, 1)
         XCTAssertNotEqual(zh[0], en[0], "两种语言必须给出不同的句子（否则英文译文不可达）")
@@ -43,18 +58,18 @@ final class NoteBodyTests: XCTestCase {
         let original = NoteBody(markdown: "a **b** c *d* e `f`")
         let restored = NoteBodyProjection.fromSpans(NoteBodyProjection.toSpans(original, language: .simplifiedChinese).spans)
         XCTAssertEqual(restored.markdown, original.markdown)
-        XCTAssertTrue(restored.sidecar.isEmpty)
+        XCTAssertEqual(restored.spans, original.spans)
     }
 
-    /// **有损的第一处**：行内颜色/字号 Markdown 表达不了 → 必须落**旁挂**，不能悄悄丢。
-    func testColorAndSizeGoToSidecarNotIntoMarkdown() {
+    /// **颜色 / 字号落在 span 上**（Markdown 表达不了）⇒ 不进正文投影，但**不许悄悄丢**。
+    func testColorAndSizeStayOnTheSpanNotInMarkdown() {
         let spans = [
             NoteSpan(text: "红色字", styles: [.color], color: "#E53935", size: 18),
             NoteSpan(text: "普通字")
         ]
         let body = NoteBodyProjection.fromSpans(spans)
         XCTAssertEqual(body.markdown, "红色字普通字", "颜色与字号不进 Markdown 正文")
-        XCTAssertEqual(body.sidecar, [NoteSidecarStyle(text: "红色字", occurrence: 0, color: "#E53935", size: 18)])
+        XCTAssertEqual(body.spans, spans, "颜色 / 字号存在 span 上（权威源）")
         // 再投影回来，样式还在
         let back = NoteBodyProjection.toSpans(body, language: .simplifiedChinese)
         XCTAssertEqual(back.spans[0].color, "#E53935")
@@ -62,18 +77,18 @@ final class NoteBodyTests: XCTestCase {
         XCTAssertTrue(back.degradations.isEmpty)
     }
 
-    /// **有损的第二处（也是最要紧的一处）**：AI 改过正文之后，旁挂按"文本+次序"可能定位不到 ——
+    /// **有损的那一处（最要紧的一处）**：AI 改过正文之后，旁挂按「文本 + 次序」可能定位不到 ——
     /// 那时**如实降级**，不猜、不静默丢。
     func testSidecarDegradesWhenTextWasRewritten() {
-        let body = NoteBody(markdown: "改写后的新句子", sidecar: [NoteSidecarStyle(text: "原来的句子", color: "#1E88E5")])
-        let projection = NoteBodyProjection.toSpans(body, language: .simplifiedChinese)
+        let sidecar = [NoteSidecarStyle(text: "原来的句子", color: "#1E88E5")]
+        let projection = NoteBodyProjection.project("改写后的新句子", sidecar: sidecar, language: .simplifiedChinese)
         XCTAssertEqual(projection.spans.map(\.text), ["改写后的新句子"])
         XCTAssertNil(projection.spans[0].color)
         XCTAssertEqual(projection.degradations.count, 1)
         XCTAssertTrue(projection.degradations[0].contains("原来的句子"), "降级要说清是哪一段")
     }
 
-    /// **有损的第三处**：导出 .md 文件时颜色/字号必然丢 —— 必须给人一份降级报告。
+    /// **有损的第二处**：导出 .md 文件时颜色/字号必然丢 —— 必须给人一份降级报告。
     func testExportReportsWhatItLoses() {
         let body = NoteBody(markdown: "正文", sidecar: [NoteSidecarStyle(text: "正文", color: "#E53935", size: 20)])
         let export = NoteBodyProjection.exportMarkdown(body, language: .simplifiedChinese)
@@ -144,15 +159,82 @@ final class NoteBodyTests: XCTestCase {
         XCTAssertEqual(linkFirst[2].styles, [.bold])
     }
 
-    /// **往返**：链接是 Markdown 表达得了的 ⇒ 从 span 树写回去必须原样，**不落旁挂**。
+    /// **往返**：链接是 Markdown 表达得了的 ⇒ 投影到 span 树再投影回文本必须原样。
     func testLinkRoundTripStaysInMarkdown() {
         let body = NoteBody(markdown: "见 [文档](https://example.com/a) 完")
         let projection = NoteBodyProjection.toSpans(body, language: .simplifiedChinese)
         XCTAssertTrue(projection.degradations.isEmpty)
         let restored = NoteBodyProjection.fromSpans(projection.spans)
         XCTAssertEqual(restored.markdown, body.markdown)
-        XCTAssertTrue(restored.sidecar.isEmpty, "链接不许落旁挂")
+        XCTAssertEqual(restored.spans, body.spans)
     }
+
+    // MARK: 片 `WY-1a` 的三条新判据（权威源切 spans）
+
+    /// **判据 ①**：`spans → JSON → spans` **等价**（往返不丢语义）。
+    func testSpansRoundTripThroughJSON() throws {
+        let body = NoteBody(spans: [
+            NoteSpan(text: "普通 "),
+            NoteSpan(text: "粗", styles: [.bold]),
+            NoteSpan(text: "键", link: "https://example.com/a"),
+            NoteSpan(text: "红", styles: [.color], color: "#E53935", size: 18)
+        ])
+        let data = try JSONEncoder().encode(body)
+        let back = try JSONDecoder().decode(NoteBody.self, from: data)
+        XCTAssertEqual(back.version, NoteBodyFormat.currentVersion)
+        XCTAssertEqual(back.spans, body.spans, "spans 往返不许丢语义")
+        XCTAssertEqual(back.body, body.body, "投影由 spans 派生，往返后仍一致")
+    }
+
+    /// **判据 ②**：v1 文档（`{version: 1, markdown, sidecar}`）`migrated()` 后**与旧 md 投影等价**，
+    /// 且旁挂里的**颜色 / 字号不静默丢**。
+    func testV1DocumentMigratesToSpansProjection() throws {
+        let v1 = #"""
+        {"version":1,"markdown":"a **b** c","sidecar":[{"text":"c","occurrence":0,"color":"#E53935","size":20}]}
+        """#
+        let legacy = try JSONDecoder().decode(NoteBody.self, from: Data(v1.utf8))
+        XCTAssertEqual(legacy.version, 1, "v1 文档的解码面仍认得")
+        XCTAssertEqual(legacy.body, "a **b** c", "投影出来就是原来那段 Markdown")
+
+        let migrated = try legacy.migrated()
+        XCTAssertEqual(migrated.version, NoteBodyFormat.currentVersion, "1 → 2")
+
+        // 「与旧 md 投影等价」：迁移后的 spans == v1 投影（project）的 spans
+        let oldProjection = NoteBodyProjection.project(
+            "a **b** c",
+            sidecar: [NoteSidecarStyle(text: "c", occurrence: 0, color: "#E53935", size: 20)],
+            language: .simplifiedChinese
+        )
+        XCTAssertEqual(migrated.spans, oldProjection.spans)
+
+        // 颜色 / 字号没被静默丢 —— 落在 span 上
+        let styled = try XCTUnwrap(migrated.spans.first { $0.text == "c" })
+        XCTAssertEqual(styled.color, "#E53935")
+        XCTAssertEqual(styled.size, 20)
+        XCTAssertTrue(styled.styles.contains(.color))
+        XCTAssertTrue(styled.styles.contains(.size))
+    }
+
+    /// **判据 ③**：**未知 span 字段往返后仍在** —— 为契约 v1.27 的 `link` / `code` 留路
+    /// （本片不新增那两个字段，但模型必须留得住不认识的东西）。
+    func testUnknownSpanFieldsSurviveRoundTrip() throws {
+        let json = #"""
+        {"version":2,"spans":[{"text":"码","code":"swift","nested":{"k":[1,2]},"futureFlag":true}]}
+        """#
+        let body = try JSONDecoder().decode(NoteBody.self, from: Data(json.utf8))
+        XCTAssertEqual(body.spans.count, 1)
+        XCTAssertEqual(body.spans[0].text, "码")
+        XCTAssertEqual(body.spans[0].unknownFields["code"], .string("swift"))
+        XCTAssertEqual(body.spans[0].unknownFields["futureFlag"], .bool(true))
+        XCTAssertEqual(body.spans[0].unknownFields["nested"], .object(["k": .array([.number(1), .number(2)])]))
+
+        // 再写回、再读：未知字段还在
+        let again = try JSONDecoder().decode(NoteBody.self, from: try JSONEncoder().encode(body))
+        XCTAssertEqual(again.spans, body.spans)
+        XCTAssertEqual(again.spans[0].unknownFields["code"], .string("swift"), "未知字段往返不许丢")
+    }
+
+    // MARK: 版本迁移 / 容错
 
     /// **版本迁移**：更高的版本如实拒绝（不猜、不静默降级），同版本/低版本正常。
     func testVersionMigrationRefusesFutureVersions() throws {

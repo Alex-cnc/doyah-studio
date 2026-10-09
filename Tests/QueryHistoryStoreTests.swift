@@ -202,9 +202,9 @@ final class QueryHistoryStoreTests: XCTestCase {
         )
     }
 
-    // MARK: - 判据⑤ 向前兼容：v6 库打开 ⇒ 升到 v7，既有数据一字不动
+    // MARK: - 判据⑤ 向前兼容：v6 库打开 ⇒ 升到最新版（`supportedVersion`），既有数据一字不动
 
-    func testVersionSixDatabaseUpgradesToVersionSevenKeepingExistingRows() async throws {
+    func testVersionSixDatabaseUpgradesToCurrentSchemaKeepingExistingRows() async throws {
         let note = Note(
             title: "存量笔记",
             body: "洞庭湖",
@@ -218,8 +218,8 @@ final class QueryHistoryStoreTests: XCTestCase {
 
         // 打开（这一步就是「旧库遇到新代码」）：rc = 0、版本 +1、既有行数前后同值。
         let database = try NoteDatabase(path: url().path)
-        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion, "v6 库要升到 v7")
-        XCTAssertEqual(database.userVersion, 7)
+        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion, "v6 库要升到最新版（按 `supportedVersion` 认，不写死版号）")
+        XCTAssertGreaterThanOrEqual(database.userVersion, 7, "至少跨过 v7 那一步")
         XCTAssertEqual(try database.noteCount(), 1, "既有 note 行数前后同值")
         let existing = try XCTUnwrap(try database.note(id: note.id))
         XCTAssertEqual(existing.tags, ["骑行"], "既有笔记与标签原样在")
@@ -229,7 +229,7 @@ final class QueryHistoryStoreTests: XCTestCase {
         _ = try await store().append(entry(sql: "SELECT 1", at: now.addingTimeInterval(2)), now: now)
         let reloaded = try await store().load(now: now)
         XCTAssertEqual(reloaded.count, 1)
-        XCTAssertEqual(try NoteDatabase(path: url().path).userVersion, 7, "幂等：再开一次仍是 v7")
+        XCTAssertEqual(try NoteDatabase(path: url().path).userVersion, NoteDatabase.supportedVersion, "幂等：再开一次仍是最新版")
     }
 
     // MARK: - 私有
