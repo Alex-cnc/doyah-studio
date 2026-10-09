@@ -404,6 +404,34 @@ public enum NoteSchemaV8 {
     ]
 }
 
+/// **schema v9**（片 `TD-NOTE` · 派单 `T-20261009-042` ②）：给 `todo` 补一列
+/// **`note`** —— 待办的**备注正文**（纯文本）。
+///
+/// 契约出处：`DoyahNotes/Docs/核心契约.md` §2.13 `Todo` 实体新增 `note` 字段（契约 **v1.28**，
+/// 前门 `T-20261009-050` 落笔）—— 本侧只引用不复制，列名与契约字段同义（`note` → `note`）。
+///
+/// 四条取舍（与 v8 给 `note` 表补 `spans` 同形）：
+///   · **补列、不新表、不新索引**：备注是任务自己的一个状态（与 v3 `favorite` / v4 `pinned` 同形）；
+///     契约明写**不进搜索索引** ⇒ 不给它建索引，也不进 FTS。
+///   · **`NOT NULL DEFAULT ''` 而不是可空**：契约把「空串」定为「没有备注」（与 `title` 同口径），
+///     没有「不知道」这个第三态 ⇒ 用**形状**保证读回来永远是 `String`，行映射不必再拆一层可选。
+///   · **存量行落默认值**：`ALTER TABLE ADD COLUMN ... DEFAULT ''` 让老行当场就有值（`''` = 空备注）
+///     —— 一个字节的用户数据都不改（与 v8 补 `spans` 的 `ALTER` 同一条纪律）。
+///   · **不动既有写路**：`upsert(_ todo:)` 是这一列**唯一**的写入口（编辑走的是同一条任务写路，
+///     不新开第二处「改备注」的口径）。
+public enum NoteSchemaV9 {
+
+    public static let version: Int32 = 9
+
+    /// 这一版**不新增表 / 不新增索引**（只补一列；契约明写备注不进搜索索引）。
+    public static let tables: [String] = []
+    public static let indexes: [String] = []
+
+    public static let ddl: [String] = [
+        "ALTER TABLE todo ADD COLUMN note TEXT NOT NULL DEFAULT '';"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -488,8 +516,9 @@ public final class NoteDatabase {
     public static let fileName = "notes.sqlite3"
 
     /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏、v3 → v4 补置顶、
-    /// v4 → v5 补待办任务清单、v5 → v6 补提醒、v6 → v7 补查询历史、v7 → v8 补正文 spans 列）。
-    public static let supportedVersion = NoteSchemaV8.version
+    /// v4 → v5 补待办任务清单、v5 → v6 补提醒、v6 → v7 补查询历史、v7 → v8 补正文 spans 列、
+    /// v8 → v9 补待办备注 `note` 列）。
+    public static let supportedVersion = NoteSchemaV9.version
 
     private let connection: SQLiteConnection
 
@@ -536,7 +565,7 @@ public final class NoteDatabase {
         (try? connection.scalarInt("PRAGMA foreign_keys")).flatMap { $0 } == 1
     }
 
-    /// 按需建/升级到最新 schema（当前 v6）。**一个事务里做完**：DDL 与版本号一起生效，
+    /// 按需建/升级到最新 schema（当前 v9）。**一个事务里做完**：DDL 与版本号一起生效，
     /// 不会出现「表建了一半、版本已记 2」。
     ///
     /// 逐版升级（不是「按最新版直接建」）：存量库要真的走 v1 → v2 这两步，
@@ -580,6 +609,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV8.version {
                 for statement in NoteSchemaV8.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV8.version)")
+            }
+            if current < NoteSchemaV9.version {
+                for statement in NoteSchemaV9.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV9.version)")
             }
         }
     }
@@ -960,16 +993,19 @@ public final class NoteDatabase {
     /// 不一致）；`due_at` 与 `done` **各写各的**（契约裁决 ①：完成不清截止时间；
     /// 「已完成」这件事由 `setDone` 改，不由重写正文顺带改）；`priority` 认不出的取值
     /// **当没给**（`TodoPriority(raw:)` 已归一，这里只管把归一后的那个串存下去）。
+    /// `note`（备注正文，schema v9）与标题同档 —— 它就是任务自己的一个内容列，**写的路只有这一条**
+    /// （`ON CONFLICT` 段跟着更新它，改备注与改标题走的是同一次 `upsert`）。
     @discardableResult
     public func upsert(_ todo: Todo) throws -> Int64 {
         try connection.transaction {
             try connection.execute(
                 """
                 INSERT INTO todo (
-                    uuid, title, due_at, done, completed_at, priority, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    uuid, title, note, due_at, done, completed_at, priority, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (uuid) DO UPDATE SET
                     title = excluded.title,
+                    note = excluded.note,
                     due_at = excluded.due_at,
                     done = excluded.done,
                     completed_at = excluded.completed_at,
@@ -979,6 +1015,7 @@ public final class NoteDatabase {
                 [
                     .text(todo.id.uuidString),
                     .text(todo.title),
+                    .text(todo.note),
                     todo.dueAt.map { SQLiteValue.real($0.timeIntervalSince1970) } ?? .null,
                     .integer(todo.done ? 1 : 0),
                     todo.completedAt.map { SQLiteValue.real($0.timeIntervalSince1970) } ?? .null,
@@ -1832,6 +1869,7 @@ public final class NoteDatabase {
                 completedAt: row["completed_at"].doubleValue.map { Date(timeIntervalSince1970: $0) },
                 priority: TodoPriority(raw: row.text("priority") ?? ""),
                 tags: tagsByRow[row.int("id") ?? 0] ?? [],
+                note: row.text("note") ?? "",
                 createdAt: Date(timeIntervalSince1970: row["created_at"].doubleValue ?? 0),
                 updatedAt: Date(timeIntervalSince1970: row["updated_at"].doubleValue ?? 0)
             )

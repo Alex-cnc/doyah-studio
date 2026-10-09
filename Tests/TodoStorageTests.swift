@@ -285,4 +285,118 @@ final class TodoStorageTests: XCTestCase {
         let remaining = try await library.todos()
         XCTAssertTrue(remaining.isEmpty)
     }
+
+    // MARK: - ⑦ 备注正文 `note`（schema v9 · 片 `TD-NOTE` · 派单 `T-20261009-042` ②）
+
+    /// 手搭一个 **v8 库**（存量用户：`todo` 表已经有数据、但**还没有 `note` 列**）——
+    /// 「补一列」这条路只能在这么建出来的库上走得到（拿当前代码建的库永远是最新版）。
+    private func makeVersionEightDatabaseWithTodo(_ todo: Todo) throws {
+        let connection = try SQLiteConnection(path: url().path)
+        for statement in NoteSchemaV1.ddl { try connection.execute(statement) }
+        for statement in NoteSchemaV2.ddl { try connection.execute(statement) }
+        for statement in NoteSchemaV3.ddl { try connection.execute(statement) }
+        for statement in NoteSchemaV4.ddl { try connection.execute(statement) }
+        for statement in NoteSchemaV5.ddl { try connection.execute(statement) }
+        for statement in NoteSchemaV6.ddl { try connection.execute(statement) }
+        for statement in NoteSchemaV7.ddl { try connection.execute(statement) }
+        for statement in NoteSchemaV8.ddl { try connection.execute(statement) }
+        try connection.execute(
+            """
+            INSERT INTO todo (uuid, title, due_at, done, completed_at, priority, created_at, updated_at)
+            VALUES (?, ?, NULL, 0, NULL, 'normal', ?, ?);
+            """,
+            [
+                .text(todo.id.uuidString),
+                .text(todo.title),
+                .real(todo.createdAt.timeIntervalSince1970),
+                .real(todo.updatedAt.timeIntervalSince1970)
+            ]
+        )
+        try connection.setPragma("user_version = \(NoteSchemaV8.version)")
+        try connection.close()
+    }
+
+    /// 存量 v8 库升到 **v9**：`note` 列补上、老任务**一个字节不改**、它的备注是**空串**（默认值）。
+    func testVersionEightDatabaseUpgradesAddingNoteColumnWithoutTouchingRows() throws {
+        let existing = sampleTodo(title: "老任务")
+        try makeVersionEightDatabaseWithTodo(existing)
+
+        let database = try makeDatabase()
+        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion, "v8 库要升到最新版")
+        let restored = try XCTUnwrap(try database.todo(id: existing.id))
+        XCTAssertEqual(restored.title, "老任务", "补列不许动既有行")
+        XCTAssertEqual(restored.note, "", "存量行的备注 = 空串（`ALTER ... DEFAULT ''`），不是「读不出来」")
+        // 补列之后写读同一条照样走得通
+        var edited = restored
+        edited.note = "老树新芽"
+        try database.upsert(edited)
+        XCTAssertEqual(try database.todo(id: existing.id)?.note, "老树新芽")
+        // 幂等：再开一次库，版本与数据都不动
+        XCTAssertEqual(try makeDatabase().todo(id: existing.id)?.note, "老树新芽")
+    }
+
+    /// **备注三态读音**（判据 ①：设值 → dump 有值 → 清空 → dump 无值）：
+    /// 空串与「有内容」是两件事，且**换行原样保留**（契约：纯文本、允换行）。
+    func testTodoNoteRoundTripsAndClearsToEmpty() throws {
+        let database = try makeDatabase()
+        var todo = sampleTodo(title: "带备注的")
+        todo.note = "第一行\n第二行"
+        try database.upsert(todo)
+        XCTAssertEqual(try database.todo(id: todo.id)?.note, "第一行\n第二行", "设值 ⇒ dump 有值（换行原样）")
+
+        var empty = try XCTUnwrap(try database.todo(id: todo.id))
+        empty.note = ""
+        try database.upsert(empty)
+        XCTAssertEqual(try database.todo(id: todo.id)?.note, "", "清空 ⇒ dump 无值（空串）")
+
+        // 反向对照：空串与「非空」必须是两个真不同的读数（否则上面那两条是同一个读数在自证）
+        var again = try XCTUnwrap(try database.todo(id: todo.id))
+        again.note = "x"
+        try database.upsert(again)
+        XCTAssertEqual(try database.todo(id: todo.id)?.note, "x")
+        XCTAssertNotEqual(try database.todo(id: todo.id)?.note, "")
+    }
+
+    /// **重启后仍在**（判据 ②）：同一进程内建 → 关连接 → 以**新连接**重开 ⇒ dump 与写入**同值**。
+    func testTodoNoteSurvivesReopen() throws {
+        let todoID: UUID
+        let written: String
+        do {
+            let database = try makeDatabase()
+            var todo = sampleTodo(title: "跨重启")
+            todo.note = "重启前写的备注\n换了一行"
+            try database.upsert(todo)
+            todoID = todo.id
+            written = todo.note
+            try database.close()
+        }
+        let reopened = try makeDatabase()
+        XCTAssertEqual(try reopened.todo(id: todoID)?.note, written, "同一个值的往返必须一字不差")
+    }
+
+    /// **交换面同名同义 + 缺字段不丢条目**（判据 ③）：`note` 进 JSON，带换行原样往返；
+    /// 旧 JSON **没有** `note` 这一格 ⇒ 照常解出来、备注为空（不是「结构不合法」）。
+    func testTodoNoteIsCodableAndToleratesMissingField() throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        var todo = sampleTodo(title: "交换面")
+        todo.note = "带\n换行"
+        let data = try encoder.encode(todo)
+        let text = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(text.contains("\"note\""), "`note` 该出现在交换面里（两端同名同义）：\(text)")
+        XCTAssertEqual(try decoder.decode(Todo.self, from: data).note, "带\n换行", "往返保留原值")
+
+        // 旧备份：没有 `note` 这一格 ⇒ 解出来是空串（缺字段不丢条目）
+        let legacy = """
+        {"id":"\(todo.id.uuidString)","title":"旧备份","done":false,"priority":"normal",\
+        "tags":[],"createdAt":"2024-01-01T00:00:00Z","updatedAt":"2024-01-01T00:00:00Z"}
+        """
+        let legacyData = try XCTUnwrap(legacy.data(using: .utf8))
+        let decoded = try decoder.decode(Todo.self, from: legacyData)
+        XCTAssertEqual(decoded.title, "旧备份")
+        XCTAssertEqual(decoded.note, "", "缺 `note` 的旧备份照常导入、备注为空")
+    }
 }

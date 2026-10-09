@@ -75,6 +75,15 @@ public struct Todo: Identifiable, Codable, Equatable, Sendable {
     /// 标签（**复用** `TagRules` 的口径；空数组 = 无标签，与 `Note.tags` 同口径）。
     public var tags: [String]
 
+    /// **备注正文**（纯文本；契约 `Todo.note` · 片 `TD-NOTE` · 派单 `T-20261009-042` ②）。
+    ///
+    /// 三条口径（逐条取自契约落笔；本侧**不自行发明**）：
+    ///   · **纯文本**（**不做富文本、不进搜索索引**）—— 与 `title` 同一种类型（`String`）；
+    ///   · **允换行**：正文里出现 `\n` 是正常数据，不当结构（不进 `NoteBody` 那套 span 树）；
+    ///   · **空串 = 没有备注**（与 `title` 允许空串同口径；缺字段的旧备份解出来就是 `""`）。
+    /// 它是**内容**，所以「改备注」与改标题同档：刷新 `updatedAt`（裁决 ①③，见 `updatedAt` 的说明）。
+    public var note: String
+
     public var createdAt: Date
 
     /// 最近更新时间。刷新面 = **内容编辑 / 完成 / 重开 / 改期**；
@@ -89,6 +98,7 @@ public struct Todo: Identifiable, Codable, Equatable, Sendable {
         completedAt: Date? = nil,
         priority: TodoPriority = .normal,
         tags: [String] = [],
+        note: String = "",
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -99,7 +109,30 @@ public struct Todo: Identifiable, Codable, Equatable, Sendable {
         self.completedAt = completedAt
         self.priority = priority
         self.tags = tags
+        self.note = note
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    /// **解码**：`note` 是**后加的字段**（缺 `note` 的旧备份 / 旧 JSON 里没有这一格）⇒ 缺字段按空串。
+    /// 不能让它成为「旧数据解不出来」的理由 —— 契约的「**加字段不加版本号**」「**缺字段不丢条目**」
+    /// 正是这个意思（与 `Note.isFavorite` / `isPinned` 同一条口径）。
+    /// （`CodingKeys` 显式写出来：手写 `init(from:)` 之后合成的那一份不再可靠。）
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        dueAt = try container.decodeIfPresent(Date.self, forKey: .dueAt)
+        done = try container.decode(Bool.self, forKey: .done)
+        completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
+        priority = try container.decode(TodoPriority.self, forKey: .priority)
+        tags = try container.decode([String].self, forKey: .tags)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, note, dueAt, done, completedAt, priority, tags, createdAt, updatedAt
     }
 }
