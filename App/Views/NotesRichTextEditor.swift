@@ -21,12 +21,14 @@ import DoyahCore
 ///
 /// ## 与权威源的关系（本片的边界）
 ///
-/// 权威源是 `NoteSpan` 树（片 `WY-1a`）。本片只做「**面**」：绑定进出的仍是**纯文本投影**
-/// （`appState.noteEditorBody`，Markdown 串），四枚按钮改的是内存里那块富文本的属性 ——
-/// **落库（`writeNoteEditor` → `setNoteSpans`）不并入本片**（组长裁决第 4 条：归 `WY-2`）。
-/// 因此 `bold` / `italic` / `code` 经投影往返仍无损（Markdown 表达得了），而
-/// `underline` / `backgroundColor` 是**新字段**（片 `WY-1b1` 加进 `NoteSpan`），Markdown 表达不了 ⇒
-/// 落库那条路接上之前**只存在编辑面这一块内存里**。这一段边界是刻意的，写在 `NoteSpan` 头注释里。
+/// 权威源是 `NoteSpan` 树（片 `WY-1a`）。绑定进出的仍是**纯文本投影**
+/// （`appState.noteEditorBody`，Markdown 串），四枚按钮改的是内存里那块富文本的属性。
+///
+/// **片 `WY-2a` 接上了落库那条路**：编辑面多出一个 `spans` 绑定（权威源那一份），
+/// `writeNoteEditor` 把它经 `setNoteSpans` 写进库的 `spans` 列，`body` 只作为它的单向投影；
+/// 反过来，从库读回来时也**优先按 `spans` 重挂**这一面（`spans` 为空才回退到按 Markdown 投影解析）
+/// —— 否则「打开一条带下划线 / 底色的笔记、再保存一次」就会把库里那几样**静默抹掉**
+/// （Markdown 表达不了它们，回退解析读不回来）。`bold` / `italic` / `code` / `link` 经投影往返无损。
 ///
 /// ## 行号列
 ///
@@ -240,6 +242,10 @@ struct NotesRichTextEditor: NSViewRepresentable {
     /// 正文的**纯文本投影**（Markdown 串）—— 与 `TextEditor` 时代同一个绑定，一字未改写路。
     @Binding var text: String
 
+    /// **正文的权威源那一份**（片 `WY-2a`）：编辑面里那一块 `NSTextStorage` 的 span 树。
+    /// 与 `text` 的关系是**单向投影**（`text` = 由它派生），不回写。
+    @Binding var spans: [NoteSpan]
+
     /// 行内四枚按钮作用的**唯一出口**（工具条与本视图登记的是同一个实例）。
     let controller: NotesRichTextController
 
@@ -268,7 +274,7 @@ struct NotesRichTextEditor: NSViewRepresentable {
 
         configure(textView)
         textView.delegate = context.coordinator
-        context.coordinator.install(text: text, into: textView)
+        context.coordinator.install(text: text, spans: spans, into: textView)
         controller.textView = textView
         return scroll
     }
@@ -279,7 +285,7 @@ struct NotesRichTextEditor: NSViewRepresentable {
         // 回调可能随视图重建换人（工具条与本视图登记的是同一个控制器）⇒ 每次更新都重申一次。
         controller.textView = textView
         configure(textView)
-        context.coordinator.install(text: text, into: textView)
+        context.coordinator.install(text: text, spans: spans, into: textView)
     }
 
     /// 底色 / 字色走**主题令牌**（与另两个 AppKit 编辑面同一档；`check-editor-surface-tokens.py` 的 D 组判这一条）。
@@ -305,25 +311,34 @@ struct NotesRichTextEditor: NSViewRepresentable {
             self.parent = parent
         }
 
-        /// 把绑定里的文本装进富文本面（**只在需要时**重装 —— 见下）。
+        /// 把绑定里的内容装进富文本面（**只在需要时**重装 —— 见下）。
         ///
-        /// 为什么要比一次：敲键那条路是「属性 → Markdown → 绑定 → SwiftUI 更新 → 这里」的环，
+        /// 两个输入（片 `WY-2a`）：**`spans` 是权威源**（非空时以它为准 —— 下划线 / 底色 / 块级
+        /// 这些 Markdown 表达不了的东西只有它带得回来）；`spans` 为空才回退到 `text`
+        /// （Markdown 投影）并按 `NoteBodyProjection.parseInline` 解析 —— v1 存量笔记与
+        /// 判据直接灌正文那一档走的是这条，**解析仍只有那一处出处**
+        /// （`check-markdown-single-source.py`），这里不另起一套。
+        ///
+        /// 为什么要比一次：敲键那条路是「属性 → spans → 绑定 → SwiftUI 更新 → 这里」的环，
         /// 无条件重装会把用户的光标位置与刚上的样式一起抹掉（`L-50` 同族：多做一步反而坏）。
-        /// 比较的两边都是**同一份投影函数**的产物，环就停在这里。
-        func install(text: String, into textView: NotesTextView) {
-            let current = NoteRichAttributes.markdown(from: textView.textStorage ?? NSAttributedString())
-            guard current != text else { return }
+        /// 比较的两边都是**同一份换算函数**（`NoteRichAttributes.spans(from:)`）的产物，环就停在这里。
+        func install(text: String, spans: [NoteSpan], into textView: NotesTextView) {
+            let current = NoteRichAttributes.spans(from: textView.textStorage ?? NSAttributedString())
+            let incoming = spans.isEmpty ? NoteBodyProjection.parseInline(text) : spans
+            guard current != incoming else { return }
             let base = textView.font ?? Theme.nsFont(.mono)
-            let attributed = NoteRichAttributes.attributed(
-                from: NoteBodyProjection.parseInline(text),
-                font: base
-            )
+            let attributed = NoteRichAttributes.attributed(from: incoming, font: base)
             textView.textStorage?.setAttributedString(attributed)
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NotesTextView else { return }
-            let markdown = NoteRichAttributes.markdown(from: textView.textStorage ?? NSAttributedString())
+            // **权威源那一份先回推**（片 `WY-2a`）：spans 是源，Markdown 是它的投影 —— 一次换算，
+            // 两个绑定写的是同一棵树的两个形态（`NoteRichAttributes.markdown(from:)` 内部就是
+            // 「`spans(from:)` → `NoteBodyProjection.markdown(from:)`」，别在这里再算一遍）。
+            let spans = NoteRichAttributes.spans(from: textView.textStorage ?? NSAttributedString())
+            if parent.spans != spans { parent.spans = spans }
+            let markdown = NoteBodyProjection.markdown(from: spans)
             if parent.text != markdown { parent.text = markdown }
         }
     }

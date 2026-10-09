@@ -47,12 +47,16 @@ final class NotesEditorFormatProbeTests: XCTestCase {
     // MARK: - 装配
 
     /// 宿主视图：一块绑在 `@State` 上的富文本面（与 `NotesEditorView` 里那一支同构）。
+    ///
+    /// **片 `WY-2a`**：`NotesRichTextEditor` 多了权威源那个绑定（`spans`）—— 这里留空，
+    /// 于是装内容走的是「按 Markdown 投影解析」那一档（本文件前面三条判据量的就是它）。
     private struct Mounted: View {
         @State var bodyText: String
+        @State var spans: [NoteSpan] = []
         var controller: NotesRichTextController
 
         var body: some View {
-            NotesRichTextEditor(text: $bodyText, controller: controller)
+            NotesRichTextEditor(text: $bodyText, spans: $spans, controller: controller)
                 .frame(width: 640, height: 320)
         }
     }
@@ -506,6 +510,259 @@ final class NotesEditorFormatProbeTests: XCTestCase {
             + " ｜ 编辑态：可编辑面 \(editEditables.count) 块")
 
         UISnapshot.finishManifestIfEnabled()
+    }
+
+    // MARK: - 片 `WY-2a`：编辑器写路径端到端落库（本片主判据）
+
+    /// 「夹具要写笔记库」的前置（与 `NotesLayoutProbeTests` 同一条纪律：`DOYAH_NOTES_DIR` 不在场就跳过
+    /// —— 探针**绝不**往真实用户数据家里写夹具）。
+    private func requireIsolatedNotesDirectory() throws {
+        try XCTSkipIf(
+            (ProcessInfo.processInfo.environment["DOYAH_NOTES_DIR"] ?? "").isEmpty,
+            "本用例要往笔记库写夹具 ⇒ 必须在临时数据家里跑（`DOYAH_NOTES_DIR` 没设就跳过）—— "
+                + "取证脚本 `Scripts/run-manual-verification-probes.sh` 会设它"
+        )
+        // 直跑（`swift test --filter ...`）时那个目录还没人建（取证脚本会建）—— 这里补一次：
+        // 不然 SQLite 报 `CANTOPEN`，会把「目录不存在」误读成「写不进去」。
+        try FileManager.default.createDirectory(
+            at: NoteLibrary.defaultDirectory(), withIntermediateDirectories: true
+        )
+    }
+
+    /// **本片主判据（端到端）**：编辑面里改出**两处 span 级差异** ——
+    /// ① 「加粗」那一段加粗 · ② 整段挂勾选框并**勾上**（`checked=true`）—— ⇒ 触发保存 ⇒
+    /// **重新从库读回**（另开一个 `NoteLibrary` 实例、读同一条）⇒ 两处**同值仍在**；
+    /// 再「退出重开」一次（`edit(_:)` 把这一条重新装进编辑器）⇒ 权威源**还是那一棵**。
+    ///
+    /// ## 改前反例的读数（同一条用例里先量一份，不给说法给读数）
+    ///
+    /// 改前 `writeNoteEditor` 的落库动作**只有** `upsert`（`body` 列），**一处 `setNoteSpans` 都没有**
+    /// ⇒ 两处差异一个都留不住：
+    ///   · ① 加粗：Markdown 表达得了 ⇒ `body` 里剩下 `**` 标记，但 **`spans` 列是 `NULL`**（权威源根本没写）；
+    ///   · ② 勾选框 / 勾选态：Markdown **没有形状** ⇒ `body` 里连痕迹都没有，读回来这一档**根本不存在**
+    ///     （不是「读出来是 false」）；
+    ///   · 同理下划线 / 荧光底色（片 `WY-1b1` 加的两个字段）：只在内存里。
+    /// 反例那一半由 `testWY2aOldWritePathLosesEverySpanLevelDifference` 单独钉住。
+    @MainActor
+    func testWY2aEditorSaveWritesSpansAndTheySurviveReopen() async throws {
+        try requireIsolatedNotesDirectory()
+        let host = makeEditorHost()
+        let load = try UISnapshot.applyLicense(.standard, to: host.state)
+        XCTAssertEqual(load.entitlements.basis, .licensed, "临时许可证没落地 ⇒ 下面读不到笔记能力")
+        XCTAssertTrue(host.state.notesEnabled, "Standard 档必须带笔记能力（capabilities.notes）")
+
+        // ── 编辑面：真 `NotesEditorView`（`editorMode == .edit` 那一支），拿里面的 `NotesTextView` ──
+        host.state.editorMode = .edit
+        host.state.noteEditorTitle = "WY-2a 端到端"
+        let live = UISnapshot.LiveHost(editorSurface(host), size: Self.editorSize, scheme: .light)
+        let textView = try XCTUnwrap(
+            UISnapshot.LiveHost<Never>.findViews(ofType: NotesTextView.self, in: live.hosting).first,
+            "编辑态里那块可编辑富文本面没量到 —— 端到端那条路的入口没了"
+        )
+        let storage = try XCTUnwrap(textView.textStorage, "富文本面必须有 `NSTextStorage`")
+
+        // 在**编辑面本体**上改出那两处差异（与 `NotesTextView.apply(_:)` / `applyBlock(_:)` 落的
+        // 是同一批私有属性键；离屏宿主里 SwiftUI `Button` 派发不了点击，这条边界与 WY-1b1/WY-1b2 同一条）。
+        textView.string = "加粗 任务项"
+        let paragraph = NSRange(location: 0, length: ("加粗 任务项" as NSString).length)
+        storage.beginEditing()
+        storage.addAttribute(.doyahBold, value: true, range: NSRange(location: 0, length: 2))
+        storage.addAttribute(
+            .doyahBlock, value: NoteSpan.Block.task(checked: true).exchangeType, range: paragraph
+        )
+        storage.addAttribute(.doyahChecked, value: true, range: paragraph)
+        storage.endEditing()
+        // 让「这一面被改过」走产品的同一条路（撤销栈 / 绑定回推 / 脏标记）。
+        textView.didChangeText()
+        live.pump(0.3)
+
+        // **接线那一跳**：编辑面改出来的那棵树必须真的回推到了 `AppState`（写库那条路读的是它）。
+        XCTAssertTrue(
+            host.state.noteEditorSpans.contains { $0.styles.contains(.bold) },
+            "① 加粗那一棵没回推到 `AppState.noteEditorSpans` ⇒ 写库那条路拿不到权威源"
+        )
+        XCTAssertTrue(
+            host.state.noteEditorSpans.contains { $0.block == .task(checked: true) },
+            "② 勾选框（已勾）那一棵没回推到 `AppState.noteEditorSpans`"
+        )
+        XCTAssertEqual(
+            host.state.noteEditorBody, "**加粗** 任务项",
+            "`body` 必须是由那棵树派生的**单向投影**（块级不产出标记）"
+        )
+
+        // ── 触发保存（手动「保存」= 产品里那条唯一写路） ──
+        await host.state.saveNoteFromEditor()
+        await live.pumpAsync(seconds: 0.3)
+
+        // ── 重新从库读回（**另一个** `NoteLibrary` 实例、同一条） ──
+        let library = NoteLibrary.defaultLibrary()
+        let reopened = try await library.load()
+        let saved = try XCTUnwrap(
+            reopened.first { $0.title == "WY-2a 端到端" }, "保存之后库里读不到这一条（标题：WY-2a 端到端）"
+        )
+        let persisted = try await library.noteSpans(id: saved.id)
+        let spansJSON = try XCTUnwrap(
+            persisted, "`spans` 列是 `NULL` ⇒ 编辑面那一棵树**根本没落库**（正是改前那条写路的读数）"
+        )
+        XCTAssertTrue(spansJSON.contains("\"LIST_CHECKBOX\""), "交换面里没有块级字面量：\(spansJSON)")
+        XCTAssertTrue(spansJSON.contains("\"checked\":true"), "勾选态没落库：\(spansJSON)")
+        let decoded = try JSONDecoder().decode(NoteBody.self, from: Data(spansJSON.utf8))
+        XCTAssertTrue(decoded.spans.contains { $0.styles.contains(.bold) }, "① 加粗读回来没了")
+        XCTAssertTrue(
+            decoded.spans.contains { $0.block == .task(checked: true) }, "② 勾选框 / 勾选态读回来没了"
+        )
+        // **两列同一份**：落库的 `body` 恒等于那棵树的投影（`NoteBody.body` 同一个函数）。
+        XCTAssertEqual(saved.body, decoded.body, "落库的 `body` 不是 `spans` 那一棵树的投影 ⇒ 两列各说各话")
+        XCTAssertEqual(decoded.body, "**加粗** 任务项", "投影与编辑面上那一份对不上：\(decoded.body)")
+
+        // ── 退出重开（界面那一侧的人令：「重开仍在」） ──
+        // 重新打开这一条 ⇒ 编辑面按**权威源**重挂（`loadEditorSpans`），不是按 Markdown 投影重新解析
+        // —— 后者会把块级 / 下划线 / 底色静默抹掉。
+        host.state.edit(saved)
+        await host.state.awaitPendingNoteSpansLoad()
+        XCTAssertTrue(
+            host.state.noteEditorSpans.contains { $0.block == .task(checked: true) },
+            "退出重开之后编辑面里勾选框丢了 —— 「重开仍在」不成立"
+        )
+        XCTAssertTrue(
+            host.state.noteEditorSpans.contains { $0.styles.contains(.bold) }, "退出重开之后加粗丢了"
+        )
+        print(
+            "📄 WY-2a 主判据：spans 列 = \(spansJSON)"
+                + " ／ 读回 block=\(String(describing: decoded.spans.first { $0.block != nil }?.block))"
+                + " ／ body 投影 = 「\(decoded.body)」／ 重开后编辑面 spans = \(host.state.noteEditorSpans.count) 棵"
+        )
+
+        UISnapshot.finishManifestIfEnabled()
+    }
+
+    /// **改前反例**（本片主判据的反面读数）：**只经 `upsert` 的那条旧写路** —— 那正是改前
+    /// `writeNoteEditor` 的全部落库动作 —— 两处 span 级差异**一个都留不住**：
+    ///
+    ///   · `spans` 列：`NULL`（权威源根本没写）；
+    ///   · 正文解回来（`parseInline`，与编辑面装进来**同一个函数**）：加粗那一档 Markdown 表达得了
+    ///     ⇒ 还剩一个 span；**块级（勾选框）与 `checked` 一档整个不存在**；下划线 / 底色同理。
+    ///
+    /// 这一条不是「再跑一遍同样的判据」，它是**反面**：没有本片这一笔，上面那条主判据的第二、三句
+    /// 一个字都立不住。
+    @MainActor
+    func testWY2aOldWritePathLosesEverySpanLevelDifference() async throws {
+        try requireIsolatedNotesDirectory()
+        // 前置：许可证不给也行（这一条只碰存储层），但库要落在临时家里（上面那句守卫已把住）。
+        let library = NoteLibrary.defaultLibrary()
+        let legacy = try await library.upsert(
+            NoteDraft(title: "WY-2a 反例·只写 body", body: "**加粗** 任务项")
+        )
+        let legacySpans = try await library.noteSpans(id: legacy.id)
+        XCTAssertNil(
+            legacySpans,
+            "反例前置：只写 `body` 的旧写路下 `spans` 列应当是 `NULL`（它从来不碰这一列）"
+        )
+
+        let reparsed = NoteBodyProjection.parseInline(legacy.body)
+        XCTAssertTrue(
+            reparsed.contains { $0.styles.contains(.bold) },
+            "反例·① 加粗：Markdown 表达得了 ⇒ 正文里还留着 `**`，读回来只剩这一档"
+        )
+        XCTAssertFalse(
+            reparsed.contains { $0.block != nil },
+            "反例·② 勾选框 / 勾选态：Markdown 没有形状 ⇒ 旧写路下这一档**根本不存在**（丢了，不是 false）"
+        )
+        XCTAssertFalse(
+            reparsed.contains { $0.styles.contains(.underline) },
+            "反例·③ 下划线（片 `WY-1b1` 的字段）：同样只在内存里，读不回来"
+        )
+        XCTAssertFalse(
+            reparsed.contains { $0.backgroundColor != nil },
+            "反例·④ 荧光底色：同上"
+        )
+        print(
+            "📄 WY-2a 反例（只写 body）：spans 列 = nil ／ 正文解回来 —— 粗=\(reparsed.contains { $0.styles.contains(.bold) })"
+                + " ／ 块级=\(reparsed.contains { $0.block != nil }) ／ 下划线="
+                + "\(reparsed.contains { $0.styles.contains(.underline) }) ／ 底色="
+                + "\(reparsed.contains { $0.backgroundColor != nil })"
+        )
+
+        UISnapshot.finishManifestIfEnabled()
+    }
+
+    /// **判据：单一写入口**（片 `WY-2a`）—— 全仓写 `note.spans` 列的地方**只有** `NoteDatabase.setNoteSpans`
+    /// 一处。三层机械检查（都在源上，不靠人眼）：
+    ///   ① 全仓 `.swift` 里出现「把 `spans` 列写下去」那个 SQL 形状（`spans = ?`）的文件**只有**
+    ///      `Core/NoteStorage/NoteDatabase.swift`；
+    ///   ② 那一处落在 `setNoteSpans` 的函数体里（不是散在别的语句里）；
+    ///   ③ `note` 的 `INSERT` 列表里**没有** `spans`（新建那条路也不许各写一份 —— 正文只从写入口进）。
+    @MainActor
+    func testWY2aSpansColumnHasExactlyOneWriter() throws {
+        let sources = Self.allSwiftSources()
+        XCTAssertGreaterThan(sources.count, 100, "仓里扫到的 `.swift` 只有 \(sources.count) 份 —— 扫描面太小，判据不成立")
+
+        let writers = sources.filter { $0.text.contains("spans = ?") }.map(\.path).sorted()
+        XCTAssertEqual(
+            writers, ["Core/NoteStorage/NoteDatabase.swift"],
+            "写 `spans` 列的地方不止一处：\(writers)"
+        )
+
+        let database = try XCTUnwrap(
+            sources.first { $0.path == "Core/NoteStorage/NoteDatabase.swift" }?.text,
+            "读不到 `NoteDatabase.swift`"
+        )
+        // ② 那一处必须在 `setNoteSpans` 的函数体里。
+        let body = try XCTUnwrap(Self.functionBody(named: "setNoteSpans", in: database), "找不到 `setNoteSpans` 的函数体")
+        XCTAssertTrue(body.contains("spans = ?"), "写 `spans` 的那句不在 `setNoteSpans` 的函数体里")
+        XCTAssertEqual(
+            database.components(separatedBy: "spans = ?").count - 1, 1,
+            "`NoteDatabase.swift` 里 `spans = ?` 出现了不止一次"
+        )
+        // ③ `note` 的 INSERT 列清单里没有 `spans`（新建那条路也走同一个写入口）。
+        let insert = try XCTUnwrap(Self.insertColumnList(of: "note", in: database), "找不到 `note` 的 INSERT 列清单")
+        XCTAssertFalse(insert.contains("spans"), "`note` 的 INSERT 列清单里出现了 `spans`：\(insert)")
+
+        let callSites = sources
+            .filter { $0.text.contains(".setNoteSpans(") }
+            .map(\.path).sorted()
+        print("📄 WY-2a 单一写入口：`spans = ?` 在 \(writers) ／ `setNoteSpans` 全仓命中 \(callSites)")
+
+        UISnapshot.finishManifestIfEnabled()
+    }
+
+    /// 仓里所有 `.swift` 源文件（相对路径 + 内容）—— 跳过 `.build` / `.git`（构建产物不是源）。
+    private static func allSwiftSources() -> [(path: String, text: String)] {
+        var found: [(String, String)] = []
+        guard let walker = FileManager.default.enumerator(at: repositoryRoot, includingPropertiesForKeys: nil) else {
+            return []
+        }
+        for case let url as URL in walker {
+            let relative = url.path.replacingOccurrences(of: repositoryRoot.path + "/", with: "")
+            if relative.hasPrefix(".build") || relative.hasPrefix(".git") {
+                walker.skipDescendants()
+                continue
+            }
+            guard url.pathExtension == "swift" else { continue }
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            found.append((relative, text))
+        }
+        return found
+    }
+
+    /// 从 `func <name>(` 起、到下一个顶层 `\n    func `（或 `\n    }`）为止的那段源文本。
+    private static func functionBody(named name: String, in source: String) -> String? {
+        guard let start = source.range(of: "func \(name)(") else { return nil }
+        let rest = source[start.lowerBound...]
+        for terminator in ["\n    // MARK: ", "\n    /// ", "\n    @discardableResult", "\n    public func ", "\n    private func ", "\n    func "] {
+            if let end = rest.range(of: terminator) {
+                return String(rest[..<end.lowerBound])
+            }
+        }
+        return String(rest)
+    }
+
+    /// `INSERT INTO <table> ( ... )` 的那一段列清单。
+    private static func insertColumnList(of table: String, in source: String) -> String? {
+        guard let start = source.range(of: "INSERT INTO \(table) (") else { return nil }
+        let rest = source[start.upperBound...]
+        guard let end = rest.firstIndex(of: ")") else { return nil }
+        return String(rest[..<end])
     }
 
     // MARK: - 片 `WY-1b2` 的渲染辅助（判据 ①-d / ④ 用真 `NotesEditorView`）

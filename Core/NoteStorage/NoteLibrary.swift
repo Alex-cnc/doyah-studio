@@ -268,6 +268,27 @@ public actor NoteLibrary {
         try open().isPinned(id: id)
     }
 
+    // MARK: - 正文权威源 spans（schema v8 · 片 `WY-2a`）
+
+    /// **写一条笔记的正文权威源 `spans`（JSON）+ 它的 `body` 投影** —— 界面侧（编辑器保存）的
+    /// 唯一写路。落到 `NoteDatabase.setNoteSpans`，那一处是**全仓唯一**写 `spans` 列的地方
+    /// （片 `WY-1a` 立的单一写入口，本片把它接到编辑面上）。
+    ///
+    /// 为什么这一层要有这条转发（而不是让 App 直接拿 `NoteDatabase`）：`FR-PLUG-08` 的口径是
+    /// 「界面与 CLI 只用 `NoteLibrary` 这四件事」—— `NoteDatabase` 的连接与 schema 升级都在这层之下，
+    /// 界面伸手进去就等于把「库表长什么样」焊死在编辑器里（见本文件头注释第 ① 条）。
+    /// 返回**真的改了几行**：认不出的 id ⇒ `0`（调用方按数如实处置，与 `setFavorite` / `setPinned` 同口径）。
+    @discardableResult
+    public func setNoteSpans(_ spans: String, body: String, id: UUID) throws -> Int {
+        try open().setNoteSpans(spans, body: body, id: id)
+    }
+
+    /// 一条笔记的正文权威源（JSON 原样；`nil` = 库里没有这条 **或** 该列还是 `NULL`（v1 存量，未迁移））。
+    /// 两种 `nil` 对读的人是同一件事（这条还没有 v2 权威源），与 `NoteDatabase.noteSpans` 同形。
+    public func noteSpans(id: UUID) throws -> String? {
+        try open().noteSpans(id: id)
+    }
+
     // MARK: - 待办任务清单（schema v5 · 队列 `N-11` 的 macOS 核心层半）
 
     /// 全部任务（**创建时间正序** —— 稳定有序；三档排序口径属契约半，见 `Todo` 的说明）。
