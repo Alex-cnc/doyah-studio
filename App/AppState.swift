@@ -7161,6 +7161,11 @@ final class AppState: ObservableObject {
             // 编辑器已经换到别的笔记上（`written.id != noteBeingEdited`）：这一发写的是**上一条**的
             // 收尾 ⇒ 当前编辑器那份「脏 / 净」由它自己的改动说了算，这里一个字都不碰。
             await reloadNotes()
+            // 片 `云D`：写库成功之后入队 + 尝试上行（在线补传 / 断网留队，`IR-16` / `IR-21`）。
+            // **同步失败不打扰保存**（笔记已在本地库 = 唯一事实源）。
+            if let uid = written.id?.uuidString {
+                await enqueueCloudSync(uid: uid, operation: .upsert)
+            }
             return true
         } catch {
             let reason = ErrorPresenter.message(for: error)
@@ -7171,6 +7176,58 @@ final class AppState: ObservableObject {
             if !automatic { errorMessage = reason }
             return false
         }
+    }
+
+    // MARK: - 云同步触发点（片 `云D` · 上行 `IR-16` / 增量下拉 `IR-15` / 断网重试 `IR-21`）
+
+    /// 上一次云同步的读数（**只留读数**，本片不新画界面）。
+    private(set) var lastCloudSyncReport: CloudSyncService.FlushReport?
+
+    /// 缓存的同步服务（按登录账号 `sub` 换一次）。**网络调用仍只落在 `Core/NoteSync/`** ——
+    /// 这里只是装配缝（与 `AccountFlowModel.liveClient()` 同一条纪律：界面这一层不碰 `URLSession`）。
+    private var cloudSyncService: CloudSyncService?
+    private var cloudSyncSubject: String?
+
+    /// 写库成功之后的**触发点**：入队 + 立刻尝试上行。
+    ///
+    /// 三条口径：
+    ///   · **开关默认关**（`S3`）：`CloudSyncPreference.isEnabled()` 为假 ⇒ 一个字都不发；
+    ///   · **没登录就没有云同步**（`S1`/`S2` 的前提是账号）：本机钥匙串里没有会话 ⇒ 直接让路；
+    ///   · **失败不打扰保存**（笔记已在本地库 = 唯一事实源）：断网只让这一条留在队列里（`IR-21`），
+    ///     不写用户可见错误面 —— 本片不新画同步界面。
+    private func enqueueCloudSync(uid: String, operation: SyncOperation = .upsert) async {
+        guard CloudSyncPreference.isEnabled() else { return }
+        do {
+            let service = try cloudSync()
+            let report = await service.enqueueAndPush(
+                uid: uid, operation: operation, source: NoteLibraryCloudSource()
+            )
+            lastCloudSyncReport = report
+        } catch {
+            // 装配不起来（没会话 / 状态文件坏）：同步这一侧静默让路，保存照常成功。
+        }
+    }
+
+    /// 懒装配同步服务：会话在钥匙串里（`云C`）⇒ 取当前 `access_token` 作数据面认证头；
+    /// 换账号（`sub` 变了）就重建一次，免得把上一个账号的令牌带过去。
+    private func cloudSync() throws -> CloudSyncService {
+        let client = AccountFlowModel.liveClient()
+        guard let session = (try? client.currentSession()) ?? nil else {
+            throw CloudSyncError.notAuthenticated
+        }
+        if let cached = cloudSyncService, cloudSyncSubject == session.subject { return cached }
+        let service = try CloudSyncService.live(
+            environmentID: AccountFlowModel.environmentID,
+            tokenProvider: {
+                guard let token = (try? client.currentSession()) ?? nil else {
+                    throw CloudSyncError.notAuthenticated
+                }
+                return token.accessToken
+            }
+        )
+        cloudSyncService = service
+        cloudSyncSubject = session.subject
+        return service
     }
 
     func deleteNote(id: UUID) async {

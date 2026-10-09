@@ -55,6 +55,7 @@
 		152D3BF03D62E44C305E843A /* AICapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE37FC23299B1643B48049DD /* AICapture.swift */; };
 		157BBBFD05FB6A6698E7D845 /* BackupToolCheckTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2445EA872B7A6DCBF7B2250 /* BackupToolCheckTests.swift */; };
 		158043066792BD5884923C09 /* SlowQueryReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A475C7B4865E90B8BA1687C5 /* SlowQueryReport.swift */; };
+		1612A62CA39130FF0710AD4C /* CloudSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E67FC132901746B384D2257 /* CloudSyncService.swift */; };
 		16752694FED2DB416E80C631 /* ExplainPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A0DA80562FEDBC056407C7 /* ExplainPlanTests.swift */; };
 		16BB86976060FA3499D3C233 /* WorkspaceClosePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77253EB84CA2FF56A9180D88 /* WorkspaceClosePolicyTests.swift */; };
 		1728410C4C53B5C01D20F63C /* AccentTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2BA33923BB4395EBCB00F2 /* AccentTheme.swift */; };
@@ -336,6 +337,7 @@
 		9347E8FC45E57883D752244F /* EgressTabOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEA837F70998F6AE9936F5F /* EgressTabOptions.swift */; };
 		9365826B114A92AF87A7E628 /* SessionMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954706C0B4CCE24F0FF0EDCB /* SessionMonitorTests.swift */; };
 		94F88C9BC426C894917472D6 /* LLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B1D06A03E84DFC10BB96BC /* LLMClient.swift */; };
+		95604616DA38CC0CA1AE5A89 /* NoteSyncE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DCE62A899EE6629A7B909E3 /* NoteSyncE2ETests.swift */; };
 		965850E44C68CBA7DC264B16 /* InlineEditDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2C95AEA6EA2ED725F7B3D4 /* InlineEditDraft.swift */; };
 		96EBF0D15B47E98EEC272394 /* NotePreviewBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = C317B402BCFF61672290359B /* NotePreviewBody.swift */; };
 		96F10283D164671401068C7E /* WorkspaceHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0538856C2036A580994CCCE9 /* WorkspaceHistory.swift */; };
@@ -738,6 +740,7 @@
 		1BC38248EAE4B838A8592036 /* PrivilegeProbeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivilegeProbeTests.swift; sourceTree = "<group>"; };
 		1CA09226CFC59BC808FC721F /* CodeLinesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeLinesTests.swift; sourceTree = "<group>"; };
 		1D89F847961D19F8F1B0D568 /* MenuAreaPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuAreaPolicyTests.swift; sourceTree = "<group>"; };
+		1DCE62A899EE6629A7B909E3 /* NoteSyncE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteSyncE2ETests.swift; sourceTree = "<group>"; };
 		1E949445CD5738E8F1C2DC8B /* ConnectionConfigMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionConfigMigrationTests.swift; sourceTree = "<group>"; };
 		1FB74933E88504B9592BDF0C /* stored.xlsx */ = {isa = PBXFileReference; path = stored.xlsx; sourceTree = "<group>"; };
 		1FF9F725FC2B73D0C59613C1 /* QueryToolbarConventionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryToolbarConventionTests.swift; sourceTree = "<group>"; };
@@ -965,6 +968,7 @@
 		8BEA837F70998F6AE9936F5F /* EgressTabOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EgressTabOptions.swift; sourceTree = "<group>"; };
 		8CC0B057BD7792B8E86FB2EF /* MySQLDialectTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySQLDialectTests.swift; sourceTree = "<group>"; };
 		8D3507D101DF932A3FDBF90E /* NotebookShelfMovePrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookShelfMovePrompt.swift; sourceTree = "<group>"; };
+		8E67FC132901746B384D2257 /* CloudSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncService.swift; sourceTree = "<group>"; };
 		8E6B4EC19B05AD5676D576B7 /* SSLModeDialectTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSLModeDialectTests.swift; sourceTree = "<group>"; };
 		8EDB0CE8EAA3D92E8B9AECA1 /* SavedQueryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedQueryStoreTests.swift; sourceTree = "<group>"; };
 		8F8CA89F40C0640ED3C3B7D4 /* ObjectTreeGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeGroupingTests.swift; sourceTree = "<group>"; };
@@ -1442,6 +1446,7 @@
 				C0539B812A24A5C574EFED68 /* NoteSelectionPromptTests.swift */,
 				67A3A57499249647C0C1A131 /* NoteStoreSQLiteTests.swift */,
 				061B5356FD1BF0893E86D316 /* NoteSyncAuthTests.swift */,
+				1DCE62A899EE6629A7B909E3 /* NoteSyncE2ETests.swift */,
 				302ED0FBCA4478393BBBB414 /* NoteSyncTests.swift */,
 				A80A13B3F1B9B1D0B4BE7148 /* NoteTests.swift */,
 				4A00684C5D12762432788189 /* ObjectDDLTests.swift */,
@@ -1882,6 +1887,7 @@
 			isa = PBXGroup;
 			children = (
 				20B27016A54C2FB1D2043713 /* CloudAuth.swift */,
+				8E67FC132901746B384D2257 /* CloudSyncService.swift */,
 				BDE89117E7DDCC277A547F0F /* SyncCore.swift */,
 				25EB4DFDC65D185FDEAB3093 /* SyncQueue.swift */,
 			);
@@ -2314,6 +2320,7 @@
 				A01CF647E9E3C310536142AF /* CancellationNoise.swift in Sources */,
 				64F71A17B1CBEDBF75DF58F5 /* CellInspector.swift in Sources */,
 				CE8B06FFC36738A19860447E /* CloudAuth.swift in Sources */,
+				1612A62CA39130FF0710AD4C /* CloudSyncService.swift in Sources */,
 				711CBC8EAE01EA883B00DD87 /* CodeCompletion.swift in Sources */,
 				815F228B6E39B82209DC765C /* CodeFormatting.swift in Sources */,
 				8A920C5FAAABA91EF5A844EB /* CodeLanguageDefinitions.swift in Sources */,
@@ -2608,6 +2615,7 @@
 				5D7333EEBC63F75AD234B6EC /* NoteSelectionPromptTests.swift in Sources */,
 				24B35BC4B9DFA48932EA04FF /* NoteStoreSQLiteTests.swift in Sources */,
 				13EBE4794DC56A78DD112A44 /* NoteSyncAuthTests.swift in Sources */,
+				95604616DA38CC0CA1AE5A89 /* NoteSyncE2ETests.swift in Sources */,
 				685C53757643706DCDAD01E3 /* NoteSyncTests.swift in Sources */,
 				90552540FE15C3ECE1B8E828 /* NoteTests.swift in Sources */,
 				D4103A3ABE7BF5CDCA911A70 /* NotebookEditPromptTests.swift in Sources */,
