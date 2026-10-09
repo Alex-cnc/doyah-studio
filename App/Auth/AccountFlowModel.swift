@@ -21,10 +21,14 @@ import DoyahPlatform
 ///  ② **同步开关默认关**（契约 §10.4 `S3`：由用户显式开启；服务端不得代开）。
 ///     开关旁边**常显** `S4` 那句逐字告知 —— 原文落 `Core/Localization.swift` 的
 ///     `.accountSyncNotice`（屏幕上显示的就是它）。
-///  ③ **没核验就不建账号**（`FR-AUTH-01`）：注册页只做字段校验；当前 `CloudAuthClient`
-///     只落了登录 / 刷新 / 登出（`IR-18` 的登录三面），**没有 signUp 面** ⇒ 本片按卡片停手线 ②
-///     **不自行扩接口**：校验通过也只是停在「缺核验通道」这一步，**不建半个账号**（缺口登记为卡片）。
-///  ④ **登出即断同步**：登出后同步开关复位（没有账号就没有「同步到云端」这件事，
+///  ③ **没核验就不建账号**（`FR-AUTH-01`）：注册 = 官方 `signUp` 面（手机号 + 验证码 + 用户名 +
+///     口令；契约 `DoyahNotes 15afd80` · SRS v3.91 §6.4.2 `IR-18` ① ② ③）。三步走完才建账号：
+///     **发码 ⇒ 校验（换 `verification_token`）⇒ 注册**。少任何一步都**不建半个账号**：
+///     字段没过连请求都不发；还没发码就直说「先发码」，不拿一个空 `verification_token` 去试。
+///  ④ **失败只说哪一档没过**（`IR-18` ⑥）：界面**只按服务端 `code` 分支** ——
+///     应答里的 `message` / `error_description` 一律**不进界面**（那串既是英文，
+///     也可能带上服务端内部细节；「哪一档没过」由 `RegistrationFailure` 给）。
+///  ⑤ **登出即断同步**：登出后同步开关复位（没有账号就没有「同步到云端」这件事，
 ///     下次登录要用户再明确开一次 —— 不替用户记着）。
 @MainActor
 final class AccountFlowModel: ObservableObject {
@@ -80,7 +84,12 @@ final class AccountFlowModel: ObservableObject {
 
     /// 注册页的字段问题（`FR-AUTH-01` 的客户端校验面）。**逐条**给出，不只报第一条 ——
     /// 一次报全，用户不必「改一条、再被打回一次」。
+    ///
+    /// 顺序 = 表单上的顺序（手机号 → 验证码 → 用户名 → 口令 → 确认）：
+    /// 报告那一栏也照这个次序排，用户从上往下改一遍就行。
     enum FieldIssue: String, CaseIterable, Equatable {
+        case phoneEmpty
+        case codeEmpty
         case usernameEmpty
         case usernameTooShort
         case usernameInvalid
@@ -89,6 +98,8 @@ final class AccountFlowModel: ObservableObject {
 
         var messageKey: LKey {
             switch self {
+            case .phoneEmpty: return .accountFieldPhoneEmpty
+            case .codeEmpty: return .accountFieldCodeEmpty
             case .usernameEmpty: return .accountFieldUsernameEmpty
             case .usernameTooShort: return .accountFieldUsernameTooShort
             case .usernameInvalid: return .accountFieldUsernameInvalid
@@ -98,13 +109,47 @@ final class AccountFlowModel: ObservableObject {
         }
     }
 
-    /// 注册提交的结果（界面照它画）。两条路**都不建账号**，分开说是因为原因不同。
+    /// 注册失败的**档**（`IR-18` ⑥：界面只按服务端 `code` 分支）。
+    ///
+    /// 每一档背后是一组服务端码的识别（逐字见 `CloudAuthErrorPayload` 那几条），
+    /// 说的都是「哪一关没过」；**应答原文一律不在这一层**（不存、不显示、不进日志）。
+    enum RegistrationFailure: Equatable {
+        /// 手机号或验证码那一关没过（官方 `invalid_phone_number` / `invalid_verification_code`）。
+        case verification
+        /// 发得太频繁（官方 `rate_limit_exceeded`）。
+        case rateLimited
+        /// 用户名已被占用（官方 `username_already_exists`）。
+        case usernameTaken
+        /// 口令不合规 —— 服务端判的强度不足（官方 `weak_password`）。
+        case weakPassword
+        /// 没走到判定（出网失败 / 服务端说了句我们不认识的话）。
+        case incomplete
+
+        /// 这一档要说的话（界面用 `L(…)` 渲染）。写在模型里而不是视图里：
+        /// 「失败该说哪句话」也是判断，判据要能直接读它（`Tests/AccountFlowTests.swift`）。
+        var messageKey: LKey {
+            switch self {
+            case .verification: return .accountSignUpFailedVerification
+            case .rateLimited: return .accountSignUpFailedTooOften
+            case .usernameTaken: return .accountSignUpFailedUsernameTaken
+            case .weakPassword: return .accountSignUpFailedWeakPassword
+            case .incomplete: return .accountSignUpFailedIncomplete
+            }
+        }
+    }
+
+    /// 注册提交的结果（界面照它画）。
+    ///
+    /// **成功不在这里** —— 成功了就是 `status = .signedIn(uid:)`，界面那一支与登录共用
+    /// （不另造一个「注册成功」态；这也是「不建半个账号」在类型上的样子：只有真拿到会话才算数）。
     enum RegistrationOutcome: Equatable {
         /// 字段没过 ⇒ 连请求都不发。
         case fieldIssues([FieldIssue])
-        /// 字段过了，但**没有可用的核验 / 建账号通道** ⇒ 仍然不建账号
-        /// （`FR-AUTH-01` 的「未验证不建账号」这一支在当前接口面上的样子）。
-        case verificationUnavailable
+        /// 字段都填了，但**还没发码**（没有 `verification_id` 就无从校验）⇒ 仍然一个请求都不发，
+        /// 直说「先点发送验证码」；不拿一个空的 `verification_token` 去试着建号。
+        case verificationNotStarted
+        /// 请求发出去了，服务端说没过（`IR-18` ⑥ 按 `code` 分出来的那几档）。
+        case failed(RegistrationFailure)
     }
 
     // MARK: - 字段口径（唯一出处）
@@ -112,22 +157,36 @@ final class AccountFlowModel: ObservableObject {
     /// 用户名长度下限与上限；`FR` 侧只写「用户名 + 密码」，长度是客户端自己的可读口径。
     static let usernameMinimumLength = 3
     static let usernameMaximumLength = 32
-    /// 口令长度下限。**只判长度、不判复杂度**：复杂度规则要么写死在客户端（改了就要发版、
-    /// 且会与将来服务端的规则分叉），要么由服务端在 signUp 时给 —— 那是 signUp 面接线后的事。
+    /// 口令长度下限。**只判长度、不判复杂度**：复杂度规则由**服务端在 signUp 时判**
+    /// （官方那条 `weak_password`，见 `CloudAuthErrorPayload.isWeakPassword`）——
+    /// 客户端再写一套，迟早与服务端分叉，而分叉的那一半（客户端说不行、服务端说行）没人看得见。
     static let passwordMinimumLength = 8
 
     /// 注册页的字段校验 —— **唯一出处**（视图不自己判，判据也读它）。
+    ///
+    /// 手机号与验证码也要判：这两个字段是官方 `signUp` 面的必填项（`IR-18` ③ 的请求体里
+    /// `phone_number` 与 `verification_token` 都在），空着就送等于替用户发一次必然失败的请求。
     ///
     /// 用户名先**去掉首尾空白**（复制粘贴常带），再判空 / 长度 / 字符集；
     /// 字符集刻意收在 ASCII（字母 / 数字 / 下划线 / 短横线）：用户名要进出登录框、
     /// URL 与云端凭据表，中英文混用的名字在这些地方会各自出问题。
     static func registrationIssues(
+        phone: String,
+        code: String,
         username: String,
         password: String,
         confirmation: String
     ) -> [FieldIssue] {
         var issues: [FieldIssue] = []
         let name = username.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append(.phoneEmpty)
+        }
+
+        if code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append(.codeEmpty)
+        }
 
         if name.isEmpty {
             issues.append(.usernameEmpty)
@@ -164,6 +223,27 @@ final class AccountFlowModel: ObservableObject {
         return .incomplete
     }
 
+    /// 注册通道的错误 → 界面那几档失败（`IR-18` ⑥：按服务端 `code` 分支，不直出 message）。
+    ///
+    /// 「凭据错」（`invalidCredentials`）这一支也归 `.incomplete`：注册这条路上它会出现在
+    /// 「服务端把这个号认成了已有账号、且口令不对」这种场合，对用户没有任何可行动的信息 ——
+    /// 说成「网络或服务暂时不可用」比替服务端编一个猜测更诚实。
+    static func registrationFailure(for error: Error) -> RegistrationFailure {
+        guard let auth = error as? CloudAuthError else { return .incomplete }
+        switch auth {
+        case .invalidPhoneNumber, .invalidVerificationCode:
+            return .verification
+        case .rateLimited:
+            return .rateLimited
+        case .usernameTaken:
+            return .usernameTaken
+        case .weakPassword:
+            return .weakPassword
+        case .invalidCredentials, .notAuthenticated, .server, .malformedResponse, .transport:
+            return .incomplete
+        }
+    }
+
     // MARK: - 依赖
 
     private let client: CloudAuthClient
@@ -177,6 +257,11 @@ final class AccountFlowModel: ObservableObject {
     @Published var password = ""
 
     /// 注册页字段。
+    ///
+    /// `phoneNumber` 收**用户填的数字串**（前缀由 `CloudAuthPhoneNumber` 补，界面不拼区号）；
+    /// `verificationCode` 收短信里那几位数字。
+    @Published var phoneNumber = ""
+    @Published var verificationCode = ""
     @Published var newUsername = ""
     @Published var newPassword = ""
     @Published var newConfirmation = ""
@@ -188,6 +273,16 @@ final class AccountFlowModel: ObservableObject {
 
     /// 注册页最近一次提交的结果（`nil` = 还没提交过）。
     @Published private(set) var registrationOutcome: RegistrationOutcome?
+
+    /// 验证码发出去没有（界面据此显示「已发出，请查收」）。
+    ///
+    /// 只管**这一步成没成**；`verification_id` 本身是内部状态（见 `verification`），
+    /// 界面上没有它的位置 —— 用户不需要看见一个服务端标识符。
+    @Published private(set) var verificationSent = false
+
+    /// ① 发码拿到的通道（`IR-18` ①）。**只在内存里**：它是一次注册流程的中间凭据，
+    /// 既不是会话、也不该被持久化（关掉面板就没了，重新走一遍发码即可）。
+    private var verification: CloudAuthVerificationChallenge?
 
     /// 「找回 / 重置口令」入口位：点了只把「本体后置」这件事说清楚（边界：入口位，本体后置）。
     @Published private(set) var showsRecoveryNotice = false
@@ -280,22 +375,121 @@ final class AccountFlowModel: ObservableObject {
         status = .signedOut
     }
 
-    /// 注册页提交（`FR-AUTH-01`）。
+    /// 注册第一步：**发验证码**（`IR-18` ①）。
     ///
-    /// **不建账号是这条路径的常态**，两种原因分开说：
+    /// 只做一件事：把用户填的手机号交给客户端，换一个 `verification_id` 回来。
+    /// 手机号没填就**连请求都不发**（按 `FieldIssue` 报「请填手机号」）。
+    ///
+    /// 这一步与登录态无关（发码不建账号、也不登录）⇒ 状态只在 `.working` 与 `.signedOut` 之间走，
+    /// 成败一并落进 `registrationOutcome`。
+    func sendVerificationCode() async {
+        let phone = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !phone.isEmpty else {
+            registrationOutcome = .fieldIssues([.phoneEmpty])
+            return
+        }
+
+        let client = self.client
+        status = .working
+        registrationOutcome = nil
+
+        let outcome: VerificationOutcome = await Task.detached(priority: .userInitiated) {
+            do {
+                return .success(try client.startVerification(phoneNumber: phone))
+            } catch let error as CloudAuthError {
+                return .failure(error)
+            } catch {
+                return .failure(.transport("unexpected"))
+            }
+        }.value
+
+        status = .signedOut
+        switch outcome {
+        case .success(let challenge):
+            verification = challenge
+            verificationSent = true
+        case .failure(let error):
+            // 失败就把上一次的通道作废：`verification_id` 是与**上一次那个号**绑的，
+            // 留着它会让「换个号再发一次」变成一次错误的对号入座。
+            verification = nil
+            verificationSent = false
+            registrationOutcome = .failed(Self.registrationFailure(for: error))
+        }
+    }
+
+    /// 注册提交（`FR-AUTH-01`）：**校验 ⇒ 注册**，两步都走完才建账号（`IR-18` ②③）。
+    ///
+    /// 三条路都**不建账号**，分开说是因为原因不同：
     ///   · 字段没过 ⇒ 逐条报问题，连请求都不发；
-    ///   · 字段过了但**没有建账号的通道**（`CloudAuthClient` 现状只有登录 / 刷新 / 登出）
-    ///     ⇒ 停在「缺核验通道」这一步。
+    ///   · 字段都填了但**还没发码** ⇒ 直说「先发码」，同样一个请求都不发
+    ///     （没有 `verification_id` 就无从校验；拿一个空 `verification_token` 去试，
+    ///      换回来的只会是一句用户看不懂的服务端错）；
+    ///   · 请求发出去了、服务端说没过 ⇒ 按 `code` 报是哪一档（`IR-18` ⑥）。
     ///
-    /// 于是「未（核验）不建账号」在当前接口面上**恒成立**：根本没有建账号的代码路径，
-    /// 也没有「先建一个再说」的兜底 —— 缺口登记为卡片，由接口面落定后另片接线。
-    func submitRegistration() {
+    /// 成功 ⇒ 走**与登录同一条落会话的路**（`signUp` 的应答本身就是令牌族，
+    /// 见 `CloudAuthClient.signUp`）：`status = .signedIn(uid:)`。
+    /// 于是「未（核验）不建账号」在机械面上恒成立 —— 没有「先建一个再说」的兜底，
+    /// 也没有第二个能建账号的入口。
+    func submitRegistration() async {
         let issues = Self.registrationIssues(
+            phone: phoneNumber,
+            code: verificationCode,
             username: newUsername,
             password: newPassword,
             confirmation: newConfirmation
         )
-        registrationOutcome = issues.isEmpty ? .verificationUnavailable : .fieldIssues(issues)
+        guard issues.isEmpty else {
+            registrationOutcome = .fieldIssues(issues)
+            return
+        }
+
+        guard let challenge = verification else {
+            registrationOutcome = .verificationNotStarted
+            return
+        }
+
+        let phone = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let code = verificationCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = newUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secret = newPassword
+        let client = self.client
+
+        status = .working
+        registrationOutcome = nil
+
+        let outcome: RegistrationAttempt = await Task.detached(priority: .userInitiated) {
+            do {
+                let token = try client.verifyCode(
+                    verificationID: challenge.verificationID,
+                    code: code
+                )
+                return .success(
+                    try client.signUp(
+                        phoneNumber: phone,
+                        verificationToken: token,
+                        username: name,
+                        password: secret
+                    )
+                )
+            } catch let error as CloudAuthError {
+                return .failure(error)
+            } catch {
+                return .failure(.transport("unexpected"))
+            }
+        }.value
+
+        switch outcome {
+        case .success(let session):
+            verification = nil
+            verificationSent = false
+            registrationOutcome = nil
+            status = .signedIn(uid: session.subject)
+        case .failure(let error):
+            // 通道**留着**：用户名被占用 / 口令不合规都是「改一处再提交」的事，
+            // 同一个 `verification_id` 还能用（`verification_token` 还没换出来，没被消耗）。
+            status = .signedOut
+            registrationOutcome = .failed(Self.registrationFailure(for: error))
+        }
     }
 
     /// 「找回 / 重置口令」入口位（本体后置 —— 本片只把这件事说清楚）。
@@ -334,6 +528,18 @@ extension AccountFlowModel {
 /// 出网调用的结果（只在模型内部传递）。写成具名类型而不是 `Result<…, Error>`：
 /// 跨 actor 带走的值都在这两档里，`Error` 那档只可能是 `CloudAuthError`。
 private enum SignInOutcome: Sendable {
+    case success(NoteSyncSession)
+    case failure(CloudAuthError)
+}
+
+/// 「发验证码」那一步的结果（与 `SignInOutcome` 同一形状：跨 actor 只带这两档）。
+private enum VerificationOutcome: Sendable {
+    case success(CloudAuthVerificationChallenge)
+    case failure(CloudAuthError)
+}
+
+/// 「校验 ⇒ 注册」那两步的结果。
+private enum RegistrationAttempt: Sendable {
     case success(NoteSyncSession)
     case failure(CloudAuthError)
 }

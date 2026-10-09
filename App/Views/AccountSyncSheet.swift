@@ -7,6 +7,10 @@ import DoyahCore
 /// 每一项的判断都在 `AccountFlowModel` 里，这里只**照它画**（视图不自己判「字段合不合法」、
 /// 也不自己决定「失败该说哪句话」）。
 ///
+/// 注册页那一半已按官方 `signUp` 面接真（契约 SRS v3.91 §6.4.2 `IR-18` ① ② ③）：
+/// **手机号 → 发送验证码 → 验证码 → 用户名 / 口令 → 注册**，五步里「发码」是一个按钮，
+/// 「注册」那一下**先校验再注册**（两步请求）。界面这一层照旧只认模型。
+///
 /// ## 界面不直接连网（契约 §6.4「接口面纪律」）
 ///
 /// 认证调用打在 `AccountFlowModel` 上，模型只经共享逻辑层的 `CloudAuthClient`
@@ -185,6 +189,24 @@ struct AccountSyncSheet: View {
 
     private var signUpForm: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
+            // 注册走官方 `signUp` 面：**手机号 + 验证码**是它的必填两样（`IR-18` ① ③），
+            // 所以这两栏排在用户名 / 口令之前 —— 顺序就是流程顺序（先发码，再填剩下的）。
+            HStack(spacing: Spacing.s) {
+                TextField(L(.accountPhoneLabel), text: $model.phoneNumber)
+                Button(L(.accountSendCodeAction)) {
+                    Task { await model.sendVerificationCode() }
+                }
+                .disabled(model.status == .working)
+            }
+
+            if model.verificationSent {
+                Text(L(.accountCodeSent))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            TextField(L(.accountCodeLabel), text: $model.verificationCode)
             TextField(
                 L(.accountUsernameLabel),
                 text: $model.newUsername,
@@ -193,17 +215,26 @@ struct AccountSyncSheet: View {
             SecureField(L(.accountPasswordLabel), text: $model.newPassword)
             SecureField(L(.accountConfirmPasswordLabel), text: $model.newConfirmation)
 
-            Button(L(.accountSignUpAction)) {
-                model.submitRegistration()
+            HStack(spacing: Spacing.s) {
+                Button(L(.accountSignUpAction)) {
+                    Task { await model.submitRegistration() }
+                }
+                .disabled(model.status == .working)
+
+                if model.status == .working {
+                    ProgressView().controlSize(.small)
+                }
             }
 
             registrationFeedback
         }
     }
 
-    /// 注册那两条路都**不建账号**，但原因不同 ⇒ 分别说：
+    /// 注册反馈。三条路**都不建账号**，但原因不同 ⇒ 分别说：
     /// ① 字段没过：逐条列出（只读 `AccountFlowModel.RegistrationOutcome`，视图不自己判）；
-    /// ② 字段过了但没有核验 / 建账号通道：如实说明「这里不会替你建出半个账号」。
+    /// ② 字段都填了但还没发码：直说「先点发送验证码」（这一步连请求都不发）；
+    /// ③ 请求发出去了、服务端说没过：说**哪一档**没过（`IR-18` ⑥ 按 code 分的那几档）——
+    ///    这一句来自模型的语言表键，**服务端应答里的原话一个字都不上屏**。
     @ViewBuilder private var registrationFeedback: some View {
         if let outcome = model.registrationOutcome {
             switch outcome {
@@ -215,10 +246,15 @@ struct AccountSyncSheet: View {
                             .foregroundStyle(Theme.status(.danger))
                     }
                 }
-            case .verificationUnavailable:
-                Text(L(.accountSignUpUnavailable))
+            case .verificationNotStarted:
+                Text(L(.accountSignUpNeedsCode))
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
+                    .fixedSize(horizontal: false, vertical: true)
+            case .failed(let failure):
+                Text(L(failure.messageKey))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(failure == .incomplete ? Theme.text(.secondary) : Theme.status(.danger))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

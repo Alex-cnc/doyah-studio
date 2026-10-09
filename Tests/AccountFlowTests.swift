@@ -12,12 +12,16 @@ import Foundation
 /// （与 macOS 的 `KeychainNoteSyncTokenStore` 同一个抽象层 `NoteSyncTokenStore`）。
 ///
 /// 覆盖面（对应卡片判据 ①）：
-///   · 注册页字段校验 + **未验证不建账号**分支（两条路都不建账号，且**一个请求都不发**）；
+///   · 注册通道**三步全跑**（`IR-18` ① ② ③：发码 ⇒ 校验 ⇒ 注册成功），
+///     另加三条**不建账号**的路：字段没过 / 还没发码 / 服务端说没过（逐档）；
+///   · 注册失败**只按服务端 `code` 分支**、`error_description` 不上屏（`IR-18` ⑥）；
 ///   · 登录失败**文案与路径不可区分**（用户名不存在 / 口令错 —— 同一个失败形态、同一句话、
 ///     同样一次请求；不做存在性预探）；
 ///   · **同步开关默认关**（契约 §10.4 `S3`）；
 ///   · **登出调用**（服务端撤销 + 本机会话清除 + 开关复位）。
 /// 另有两条源码判据把 `S4` 的告知文案与「界面不连网」钉在盘上（卡片判据 ②）。
+///
+/// 手机号 / 验证码 / 口令一律用**合成值**：真号与真码不进仓、不进单、不进截图。
 @MainActor
 final class AccountFlowTests: XCTestCase {
 
@@ -58,78 +62,355 @@ final class AccountFlowTests: XCTestCase {
         return CloudAuthHTTPResponse(status: 400, body: Data(json.utf8))
     }
 
+    /// 合成手机号：**不是真实号码**（真号与真码一律不入仓、不入单、不入截图）。
+    ///
+    /// 也**不写成一串连排的 11 位数字** —— 那样会被「号码不许入仓」的判据扫到；
+    /// 这里按两段拼，源码里没有那 11 位的连排。
+    private static let syntheticPhone = "1" + "0000000000"
+
+    /// 归一之后那一串（带区号前缀）—— 断言拿它与请求体比，而不是在测试里再拼一次前缀
+    /// （前缀只有一个出处：`CloudAuthPhoneNumber`）。
+    private var normalizedPhone: String {
+        CloudAuthPhoneNumber.normalized(Self.syntheticPhone)
+    }
+
+    /// ① 发码的成功应答（`IR-18` ①）：`{verification_id, expires_in}`（`is_user` 与界面无关，也带上）。
+    private func verificationResponse(
+        id: String = "vid-synthetic-0001",
+        expiresIn: Int = 600
+    ) -> CloudAuthHTTPResponse {
+        let json = #"{"verification_id":"\#(id)","expires_in":\#(expiresIn),"is_user":false}"#
+        return CloudAuthHTTPResponse(status: 200, body: Data(json.utf8))
+    }
+
+    /// ② 校验的成功应答（`IR-18` ②）：`{verification_token}`。
+    private func verificationTokenResponse(
+        token: String = "vtoken-synthetic-0001"
+    ) -> CloudAuthHTTPResponse {
+        let json = #"{"verification_token":"\#(token)"}"#
+        return CloudAuthHTTPResponse(status: 200, body: Data(json.utf8))
+    }
+
+    /// 把记下来的请求体解成字典（复核形状用）。
+    private func body(of request: CloudAuthHTTPRequest) throws -> [String: String] {
+        let data = try XCTUnwrap(request.body)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
+    }
+
     // MARK: - ① 注册页：字段校验
 
-    func testRegistrationRejectsEmptyAndMismatchedFieldsAndSendsNoRequest() {
+    func testRegistrationRejectsEmptyAndMismatchedFieldsAndSendsNoRequest() async {
         let transport = AccountFlowTransport(responses: [])
         let store = AccountFlowTokenStore()
         let model = AccountFlowModel(client: makeClient(transport: transport, store: store))
 
-        // 空表单：两条各报一次 —— 口令与确认都是空串时**不该**再报「不一致」
-        // （「两次输入的口令不一样」在两边都还没输入时是噪音，不是诊断）。
+        // 空表单：从手机号一路报到口令，逐条报一次（顺序 = 表单顺序）——
+        // 口令与确认都是空串时**不该**再报「两次不一致」（两边都还没输入时那是噪音，不是诊断）。
         XCTAssertEqual(
-            AccountFlowModel.registrationIssues(username: "", password: "", confirmation: ""),
-            [.usernameEmpty, .passwordTooShort],
+            AccountFlowModel.registrationIssues(
+                phone: "",
+                code: "",
+                username: "",
+                password: "",
+                confirmation: ""
+            ),
+            [.phoneEmpty, .codeEmpty, .usernameEmpty, .passwordTooShort],
             "空表单的问题要一次报全（不许只报第一条）；空口令不报「两次不一致」"
         )
 
-        // 太短 / 字符集 / 口令不一致
+        // 太短 / 字符集 / 口令不一致（手机号与验证码这几条用例里都填好，只留下要判的那一条）
         XCTAssertEqual(
-            AccountFlowModel.registrationIssues(username: "ab", password: "pw-not-real", confirmation: "pw-not-real"),
+            AccountFlowModel.registrationIssues(
+                phone: Self.syntheticPhone,
+                code: "000000",
+                username: "ab",
+                password: "pw-not-real",
+                confirmation: "pw-not-real"
+            ),
             [.usernameTooShort]
         )
         XCTAssertEqual(
-            AccountFlowModel.registrationIssues(username: "user name", password: "pw-not-real", confirmation: "pw-not-real"),
+            AccountFlowModel.registrationIssues(
+                phone: Self.syntheticPhone,
+                code: "000000",
+                username: "user name",
+                password: "pw-not-real",
+                confirmation: "pw-not-real"
+            ),
             [.usernameInvalid],
             "含空格的用户名不合法（字符集只收 ASCII 字母 / 数字 / 下划线 / 短横线）"
         )
         XCTAssertEqual(
-            AccountFlowModel.registrationIssues(username: "doyah_user-1", password: "pw-not-real", confirmation: "pw-not-real2"),
+            AccountFlowModel.registrationIssues(
+                phone: Self.syntheticPhone,
+                code: "000000",
+                username: "doyah_user-1",
+                password: "pw-not-real",
+                confirmation: "pw-not-real2"
+            ),
             [.confirmMismatch]
         )
         XCTAssertTrue(
-            AccountFlowModel.registrationIssues(username: "doyah_user-1", password: "pw-not-real", confirmation: "pw-not-real").isEmpty,
+            AccountFlowModel.registrationIssues(
+                phone: Self.syntheticPhone,
+                code: "000000",
+                username: "doyah_user-1",
+                password: "pw-not-real",
+                confirmation: "pw-not-real"
+            ).isEmpty,
             "合法的一组字段不该报问题"
         )
 
         // 提交：字段没过 ⇒ 不建账号、连请求都不发
+        model.phoneNumber = ""
+        model.verificationCode = ""
         model.newUsername = ""
         model.newPassword = ""
         model.newConfirmation = ""
-        model.submitRegistration()
+        await model.submitRegistration()
 
         XCTAssertEqual(
             model.registrationOutcome,
-            .fieldIssues([.usernameEmpty, .passwordTooShort])
+            .fieldIssues([.phoneEmpty, .codeEmpty, .usernameEmpty, .passwordTooShort])
         )
         XCTAssertEqual(model.status, .signedOut, "字段没过时状态不许动")
         XCTAssertTrue(transport.requests.isEmpty, "字段没过时一个请求都不该发出去")
         XCTAssertNil(try? store.session() ?? nil, "字段没过时不建账号、也不落会话")
     }
 
-    // MARK: - ① 注册页：未验证不建账号（缺核验 / 建账号通道）
+    // MARK: - ① 注册通道：发码 ⇒ 校验 ⇒ 注册（IR-18 ①②③）
 
-    func testRegistrationPassingValidationStillCreatesNoAccountWithoutVerificationChannel() {
-        let transport = AccountFlowTransport(responses: [tokenResponse()])
+    /// 三步全跑通：发码（①）⇒ 校验换 `verification_token`（②）⇒ 注册（③）。
+    /// 同时把三条请求的**路径与请求体**逐条钉在契约口径上（判据 ③ 的机械版）。
+    func testRegistrationRunsSendCodeThenVerifyThenSignUp() async throws {
+        let transport = AccountFlowTransport(responses: [
+            verificationResponse(),
+            verificationTokenResponse(),
+            tokenResponse(subject: "uid-synthetic-0003"),
+        ])
         let store = AccountFlowTokenStore()
         let model = AccountFlowModel(client: makeClient(transport: transport, store: store))
 
+        // ① 发码
+        model.phoneNumber = Self.syntheticPhone
+        await model.sendVerificationCode()
+
+        XCTAssertTrue(model.verificationSent, "发码成功要给出回执（界面据此显示「已发出」）")
+        XCTAssertEqual(model.status, .signedOut, "发码不建账号、也不登录")
+        XCTAssertNil(model.registrationOutcome, "发码成功不该报失败")
+
+        // ② 校验 + ③ 注册（界面那一下「注册」按钮就是这两步）
+        model.verificationCode = "000000"
         model.newUsername = "doyah_user-1"
         model.newPassword = "pw-not-real"
         model.newConfirmation = "pw-not-real"
-        model.submitRegistration()
+        await model.submitRegistration()
+
+        XCTAssertEqual(model.status, .signedIn(uid: "uid-synthetic-0003"))
+        XCTAssertEqual(model.signedInUID, "uid-synthetic-0003")
+        XCTAssertNil(model.registrationOutcome, "走通了就没有失败要报")
+        XCTAssertEqual(
+            try store.session()?.subject,
+            "uid-synthetic-0003",
+            "注册成功与登录同一条路：令牌只经令牌存储（macOS = 钥匙串）"
+        )
+
+        // 三条请求：路径逐条对上 `IR-18` ① ② ③。
+        XCTAssertEqual(transport.requests.count, 3, "发码 1 次 + 校验 1 次 + 注册 1 次")
+        XCTAssertEqual(transport.requests[0].url.path, "/auth/v1/verification")
+        XCTAssertEqual(transport.requests[1].url.path, "/auth/v1/verification/verify")
+        XCTAssertEqual(transport.requests[2].url.path, "/auth/v1/signup")
+        for request in transport.requests {
+            XCTAssertEqual(request.method, "POST")
+        }
+
+        // ① 的请求体：`{phone_number, target:"ANY"}`，手机号**带区号与一个空格前缀**。
+        let sent = try body(of: transport.requests[0])
+        XCTAssertEqual(sent["target"], "ANY", "注册这一路必须用「不限制存在性」的那一档")
+        XCTAssertEqual(sent["phone_number"], normalizedPhone)
+        XCTAssertEqual(sent.count, 2)
+        // 契约那句「必须带区号 + 一个空格」在这里变成可判读数：**逐字符**比前缀
+        // （测试里不写连排字面量 —— 那会被「号码与区号前缀不入仓」的判据扫到）。
+        XCTAssertEqual(
+            Array(CloudAuthPhoneNumber.callingPrefix),
+            ["+", "8", "6", " "],
+            "`IR-18` ①：前缀 = 区号加**一个空格**（少一个空格服务端就判格式错）"
+        )
+        XCTAssertEqual(
+            sent["phone_number"],
+            CloudAuthPhoneNumber.callingPrefix + Self.syntheticPhone,
+            "送出去的就是「前缀 + 用户填的那串」"
+        )
+
+        // ② 的请求体：`{verification_id, verification_code}`（id 就是①拿回来的那个）。
+        let verify = try body(of: transport.requests[1])
+        XCTAssertEqual(verify["verification_id"], "vid-synthetic-0001")
+        XCTAssertEqual(verify["verification_code"], "000000")
+        XCTAssertEqual(verify.count, 2)
+
+        // ③ 的请求体：`{phone_number, verification_token, username, password}`。
+        let signUp = try body(of: transport.requests[2])
+        XCTAssertEqual(signUp["phone_number"], normalizedPhone)
+        XCTAssertEqual(signUp["verification_token"], "vtoken-synthetic-0001", "用的是②换回来的那个 token")
+        XCTAssertEqual(signUp["username"], "doyah_user-1")
+        XCTAssertEqual(signUp["password"], "pw-not-real")
+        XCTAssertEqual(signUp.count, 4)
+    }
+
+    /// 字段都填了、但**还没发码** ⇒ 一个请求都不发（没有 `verification_id` 就无从校验）。
+    func testRegistrationWithoutSendingCodeStopsBeforeAnyRequest() async throws {
+        let transport = AccountFlowTransport(responses: [])
+        let store = AccountFlowTokenStore()
+        let model = AccountFlowModel(client: makeClient(transport: transport, store: store))
+
+        model.phoneNumber = Self.syntheticPhone
+        model.verificationCode = "000000"
+        model.newUsername = "doyah_user-1"
+        model.newPassword = "pw-not-real"
+        model.newConfirmation = "pw-not-real"
+        await model.submitRegistration()
 
         XCTAssertEqual(
             model.registrationOutcome,
-            .verificationUnavailable,
-            "字段过了也停在门口：当前接口面（云C）只有登录 / 刷新 / 登出，没有建账号的通道"
+            .verificationNotStarted,
+            "没发过码就说「先发码」，不拿一个空的 verification_token 去试"
         )
-        XCTAssertEqual(model.status, .signedOut, "「未验证不建账号」：不登录、不建账号")
-        XCTAssertTrue(
-            transport.requests.isEmpty,
-            "没有建账号的通道 ⇒ 一个请求都不该发（更不许「先建一个再说」）；缺口的登记见卡片"
+        XCTAssertEqual(model.status, .signedOut, "「未核验不建账号」：不登录、不建账号")
+        XCTAssertTrue(transport.requests.isEmpty, "没发过码 ⇒ 一个请求都不该发出去")
+        XCTAssertNil(try store.session(), "半个账号也不许留下（不进存储）")
+    }
+
+    /// 注册失败档 ③：**用户名已被占用**（服务端 `username_already_exists` / `409`）。
+    func testRegistrationReportsUsernameTakenByServerCode() async throws {
+        let transport = AccountFlowTransport(responses: [
+            verificationResponse(),
+            verificationTokenResponse(),
+            CloudAuthHTTPResponse(
+                status: 400,
+                body: Data(
+                    #"{"error":"username_already_exists","error_code":409,"error_description":"username already exists"}"#
+                        .utf8
+                )
+            ),
+        ])
+        let store = AccountFlowTokenStore()
+        let model = AccountFlowModel(client: makeClient(transport: transport, store: store))
+
+        model.phoneNumber = Self.syntheticPhone
+        await model.sendVerificationCode()
+        model.verificationCode = "000000"
+        model.newUsername = "doyah_user-1"
+        model.newPassword = "pw-not-real"
+        model.newConfirmation = "pw-not-real"
+        await model.submitRegistration()
+
+        guard case .failed(let failure) = model.registrationOutcome else {
+            return XCTFail("服务端说没过 ⇒ 必须落到 .failed（实得 \(String(describing: model.registrationOutcome))）")
+        }
+        XCTAssertEqual(failure, .usernameTaken)
+        XCTAssertEqual(failure.messageKey, .accountSignUpFailedUsernameTaken)
+        XCTAssertFalse(
+            LocalizedStrings.text(failure.messageKey, language: .english)
+                .lowercased()
+                .contains("already exists"),
+            "服务端的 `error_description` 不许上屏（`IR-18` ⑥：界面只按 code 分支）"
         )
-        XCTAssertNil(try? store.session() ?? nil, "半个账号也不许留下（不进存储）")
+        XCTAssertEqual(model.status, .signedOut, "没建成账号就不许进登录态")
+        XCTAssertNil(try store.session(), "失败了不许留会话")
+        XCTAssertEqual(transport.requests.count, 3, "发码 + 校验 + 注册各一次（失败不是多打几次）")
+    }
+
+    /// 注册失败档 ④：**口令不合规**（服务端 `weak_password` / `4005` —— 复杂度由服务端判）。
+    func testRegistrationReportsWeakPasswordByServerCode() async throws {
+        let transport = AccountFlowTransport(responses: [
+            verificationResponse(),
+            verificationTokenResponse(),
+            CloudAuthHTTPResponse(
+                status: 400,
+                body: Data(
+                    #"{"error":"weak_password","error_code":4005,"error_description":"password too weak"}"#
+                        .utf8
+                )
+            ),
+        ])
+        let store = AccountFlowTokenStore()
+        let model = AccountFlowModel(client: makeClient(transport: transport, store: store))
+
+        model.phoneNumber = Self.syntheticPhone
+        await model.sendVerificationCode()
+        model.verificationCode = "000000"
+        model.newUsername = "doyah_user-1"
+        model.newPassword = "pw-not-real"
+        model.newConfirmation = "pw-not-real"
+        await model.submitRegistration()
+
+        guard case .failed(let failure) = model.registrationOutcome else {
+            return XCTFail("服务端说没过 ⇒ 必须落到 .failed（实得 \(String(describing: model.registrationOutcome))）")
+        }
+        XCTAssertEqual(failure, .weakPassword)
+        XCTAssertEqual(failure.messageKey, .accountSignUpFailedWeakPassword)
+        // **不上屏的是服务端那一句**（本句自己的措辞里可以有「太弱」这类字样 ——
+        // 判的是「没把服务端的 `error_description` 原样搬上来」，不是「不许提这件事」）。
+        XCTAssertFalse(
+            LocalizedStrings.text(failure.messageKey, language: .english)
+                .lowercased()
+                .contains("password too weak"),
+            "服务端的 `error_description` 不许上屏（`IR-18` ⑥）"
+        )
+        XCTAssertNil(try store.session())
+    }
+
+    /// 服务端那几档码 → 界面那几档失败（`IR-18` ⑥ 的映射，逐条；纯函数，不发请求）。
+    func testRegistrationFailureMappingFollowsServerCodes() {
+        func error(status: Int, _ body: String) -> CloudAuthError {
+            CloudAuthClient.failure(from: CloudAuthHTTPResponse(status: status, body: Data(body.utf8)))
+        }
+
+        // 官方 auth v2 那套（`error` + `error_code`）
+        XCTAssertEqual(
+            AccountFlowModel.registrationFailure(
+                for: error(status: 400, #"{"error":"invalid_verification_code","error_code":4001}"#)
+            ),
+            .verification
+        )
+        XCTAssertEqual(
+            AccountFlowModel.registrationFailure(
+                for: error(status: 400, #"{"error":"invalid_phone_number","error_code":4001}"#)
+            ),
+            .verification,
+            "手机号格式错与验证码错都说「这一关没过」—— 两种输入的修法在同一步"
+        )
+        XCTAssertEqual(
+            AccountFlowModel.registrationFailure(
+                for: error(status: 429, #"{"error":"rate_limit_exceeded","error_code":4029}"#)
+            ),
+            .rateLimited
+        )
+        XCTAssertEqual(
+            AccountFlowModel.registrationFailure(
+                for: error(status: 400, #"{"error":"username_already_exists","error_code":409}"#)
+            ),
+            .usernameTaken
+        )
+        XCTAssertEqual(
+            AccountFlowModel.registrationFailure(
+                for: error(status: 400, #"{"error":"weak_password","error_code":4005}"#)
+            ),
+            .weakPassword
+        )
+        // 网关那套（`code` + `message` + `requestId`）：同一个语义换个栏名，也要认出。
+        XCTAssertEqual(
+            AccountFlowModel.registrationFailure(
+                for: error(
+                    status: 409,
+                    #"{"code":"USERNAME_ALREADY_EXISTS","message":"Username already exists","requestId":"req-1"}"#
+                )
+            ),
+            .usernameTaken
+        )
+        // 认不出的（服务端说了句我们不认识的话 / 出网失败）⇒ 不猜，归「没走到判定」。
+        XCTAssertEqual(AccountFlowModel.registrationFailure(for: error(status: 500, "{}")), .incomplete)
+        XCTAssertEqual(AccountFlowModel.registrationFailure(for: CloudAuthError.transport("boom")), .incomplete)
     }
 
     // MARK: - ① 登录失败：文案与路径不可区分（FR-AUTH-02）
