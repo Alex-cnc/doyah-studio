@@ -14,7 +14,9 @@
        需要放宽时必须显式 `--force`，好让"放宽"这件事在 code review 里看得见）。
 
 规则：
-    bare-color    裸颜色（Color.orange / NSColor.systemRed / NSColor.labelColor / .separatorColor…）
+    bare-color    裸颜色 —— **字面色值**（`Color.orange` / `NSColor.systemRed` /
+                  `NSColor(calibratedRed:…)` / `Color(red:…)` / `#RRGGBB`）**永远判红**；
+                  **系统语义色不算**（见下「语义色白名单」）。
     bare-font     裸字号（.font(.system(size: 14)) / NSFont.systemFont(ofSize: 14)…）
     bare-spacing  裸间距（.padding(6) / VStack(spacing: 3)…）
     bare-radius   裸圆角（cornerRadius: 5）
@@ -25,6 +27,16 @@
     而"分隔用发丝线"这条规矩在逐屏替换时按屏落实。
 
 豁免：行尾加 `// token-ok` 注释即可跳过该行（必须在注释里写明理由）。
+
+语义色白名单（2026-10-10 · 派单 `T-20261010-035` ② · 前门裁定 B · `origin: human-owner`）：
+    `Scripts/design-token-whitelist.json` **只许登记 `NSColor` 的语义（角色）色** —— 它们
+    **随主题自动适配**、不是"硬编码色值"：`.separatorColor` / `.labelColor` / `.secondaryLabelColor` /
+    `.controlAccentColor` 等不记 `Theme.nsColor(…)` 那一层就是对的，把它判成裸色是**门禁口径**问题、
+    不是产品缺陷（比"立补正片改代码"更对）。
+    **判据 ①** 白名单里的每一条都必须落在 `SEMANTIC_COLOR_UNIVERSE`（NSColor 角色色全集）里 ——
+    有人往里塞 `orange` / `#FF0000`，白名单校验当场判红。
+    **判据 ②（硬边界）** 字面色值一律仍判红：每次运行都真跑反例（`Color(red:…)` / `#RRGGBB` /
+    命名色 / `NSColor.systemXxx` / `NSColor(calibratedRed:…)`）证明闸没被放宽成摆设。
 
 用法：
     python3 Scripts/check-design-tokens.py                # 校验（CI / 提交前）
@@ -41,23 +53,38 @@ import sys
 
 ROOT = pathlib.Path("App")
 BASELINE = pathlib.Path("Scripts/design-token-baseline.json")
+WHITELIST = pathlib.Path("Scripts/design-token-whitelist.json")
 
 SPACING_SCALE = {0, 1, 2, 4, 8, 12, 16, 24, 32}
 FONT_SCALE = {11, 12, 13, 15, 17}
 RADIUS_SCALE = {1, 4, 6, 8, 10}
 
+# 字面色值（硬边界：**永远判红**，不许进白名单）。
 BARE_COLOR = re.compile(
     # 具体色名（橙 / 红 / 蓝…）
     r"\b(?:Color|NSColor)\.(?:orange|red|blue|yellow|green|purple|pink|gray|grey|brown|cyan|indigo|mint|teal)\b"
     r"|\bNSColor\.system(?:Red|Orange|Yellow|Green|Blue|Purple|Pink|Gray|Brown|Teal|Indigo|Mint|Cyan)\b"
     r"|\bNSColor\(calibratedRed:|\bNSColor\(deviceRed:"
-    # 系统的**语义色**也算裸色：设计令牌里有对应的 TextTone / Surface / StatusTone，
-    # 混用系统的 labelColor / separatorColor 会让某一块与相邻面板"差一点点"，
-    # 而"差一点点"正是这次外观改造要消灭的东西（结果网格原先就漏在这条规则外）。
-    r"|\bNSColor\.(?:labelColor|secondaryLabelColor|tertiaryLabelColor|quaternaryLabelColor)\b"
-    r"|\bNSColor\.(?:separatorColor|gridColor|controlBackgroundColor|windowBackgroundColor|textBackgroundColor)\b"
-    r"|\.(?:secondaryLabelColor|tertiaryLabelColor|separatorColor)\b"
+    # SwiftUI 直接给分量的写法 + 十六进制字面量（注释行会被扫前跳过，故文档里的色号不误伤）
+    r"|\bColor\(red:|\bColor\(white:"
+    r"|(?<![0-9A-Za-z_])#[0-9A-Fa-f]{6}(?![0-9A-Za-z])"
 )
+
+# `NSColor` 的**语义（角色）色**全集 —— 随主题自动适配，不是"硬编码色值"。
+# 白名单文件只许从这个集合里挑（判据 ①）；集合外的一律走字面色值那一档。
+SEMANTIC_COLOR_UNIVERSE = frozenset({
+    "labelColor", "secondaryLabelColor", "tertiaryLabelColor", "quaternaryLabelColor",
+    "placeholderTextColor", "separatorColor", "gridColor",
+    "controlAccentColor", "controlTextColor", "disabledControlTextColor",
+    "selectedControlTextColor", "selectedTextColor", "selectedTextBackgroundColor",
+    "selectedContentBackgroundColor", "unemphasizedSelectedTextColor",
+    "unemphasizedSelectedContentBackgroundColor", "keyboardFocusIndicatorColor",
+    "controlBackgroundColor", "windowBackgroundColor", "windowFrameTextColor",
+    "textBackgroundColor", "headerTextColor", "findHighlightColor", "linkColor",
+    "shadowColor",
+})
+SEMANTIC_COLOR_NAME = re.compile(r"\.([A-Za-z]+Color)\b")
+
 FONT_SIZE = re.compile(
     r"\.system\(size:\s*([0-9.]+)|systemFont\(ofSize:\s*([0-9.]+)|monospacedSystemFont\(ofSize:\s*([0-9.]+)"
     r"|monospacedDigitSystemFont\(ofSize:\s*([0-9.]+)"
@@ -85,7 +112,17 @@ def numbers(match: re.Match | None) -> list[float]:
     return [float(group) for group in match.groups() if group is not None]
 
 
-def scan_file(path: pathlib.Path) -> dict[str, int]:
+def bare_color_hit(raw: str, allowed: frozenset[str]) -> bool:
+    """一处裸色 = 字面色值，或**未登记**的系统语义色（白名单里登记过的放行）。"""
+    if BARE_COLOR.search(raw) and "Color.clear" not in raw:
+        return True
+    for name in SEMANTIC_COLOR_NAME.findall(raw):
+        if name in SEMANTIC_COLOR_UNIVERSE and name not in allowed:
+            return True
+    return False
+
+
+def scan_file(path: pathlib.Path, allowed: frozenset[str]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
@@ -97,7 +134,7 @@ def scan_file(path: pathlib.Path) -> dict[str, int]:
         def bump(rule: str) -> None:
             counts[rule] = counts.get(rule, 0) + 1
 
-        if BARE_COLOR.search(raw) and "Color.clear" not in raw:
+        if bare_color_hit(raw, allowed):
             bump("bare-color")
 
         if any(value not in FONT_SCALE for value in numbers(FONT_SIZE.search(raw)) if value):
@@ -135,7 +172,7 @@ def exempt_reason(path: pathlib.Path) -> str | None:
     return None
 
 
-def scan() -> tuple[dict[str, dict[str, int]], dict[str, str]]:
+def scan(allowed: frozenset[str]) -> tuple[dict[str, dict[str, int]], dict[str, str]]:
     result: dict[str, dict[str, int]] = {}
     exempt: dict[str, str] = {}
     for path in sorted(ROOT.rglob("*.swift")):
@@ -143,7 +180,7 @@ def scan() -> tuple[dict[str, dict[str, int]], dict[str, str]]:
         if reason is not None:
             exempt[str(path)] = reason
             continue
-        counts = scan_file(path)
+        counts = scan_file(path, allowed)
         if counts:
             result[str(path)] = counts
     return result, exempt
@@ -163,9 +200,70 @@ def load_baseline() -> dict:
     return json.loads(BASELINE.read_text(encoding="utf-8"))
 
 
+NEGATIVE_SAMPLES = (
+    "let c = Color.orange",
+    "let c = NSColor.systemRed",
+    "let c = NSColor(calibratedRed: 0.1, green: 0.2, blue: 0.3, alpha: 1)",
+    "let c = Color(red: 0.1, green: 0.2, blue: 0.3)",
+    'let c = Color(hex: "#FF00FF")',
+)
+
+
+def load_whitelist() -> tuple[frozenset[str], list[str]]:
+    """读语义色白名单 + 校验「只许语义色」（判据 ①）。返回 (白名单, 问题列表)。"""
+    if not WHITELIST.exists():
+        return frozenset(), [f"语义色白名单文件不存在：{WHITELIST}"]
+    try:
+        data = json.loads(WHITELIST.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        return frozenset(), [f"语义色白名单不是合法 JSON：{error}"]
+    entries = data.get("semanticColors")
+    if not isinstance(entries, list) or not entries:
+        return frozenset(), ["语义色白名单的 semanticColors 缺失或为空（空跑防护）"]
+    problems: list[str] = []
+    allowed: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, str):
+            problems.append(f"白名单条目不是字符串：{entry!r}")
+        elif entry not in SEMANTIC_COLOR_UNIVERSE:
+            problems.append(f"白名单里出现**非语义色**：{entry}（只许 NSColor 角色色）")
+        elif entry in allowed:
+            problems.append(f"白名单条目重复：{entry}")
+        else:
+            allowed.add(entry)
+    return frozenset(allowed), problems
+
+
+def self_check(allowed: frozenset[str]) -> list[str]:
+    """判据 ②：字面量反例必须仍判红；白名单里的放行、未登记的系统语义色仍判红。"""
+    problems: list[str] = []
+    for sample in NEGATIVE_SAMPLES:
+        if not bare_color_hit(sample, allowed):
+            problems.append(f"反例没被拦下（闸被放宽）：{sample}")
+    for name in sorted(allowed):
+        sample = f"let c = Color(nsColor: .{name})"
+        if bare_color_hit(sample, allowed):
+            problems.append(f"白名单里的语义色仍被判裸色：{sample}")
+    for name in sorted(SEMANTIC_COLOR_UNIVERSE - allowed):
+        sample = f"let c = NSColor.{name}"
+        if not bare_color_hit(sample, allowed):
+            problems.append(f"未登记的系统语义色没被判裸色：{sample}")
+    return problems
+
+
 def main() -> int:
     arguments = set(sys.argv[1:])
-    current, exempt = scan()
+    allowed, whitelist_problems = load_whitelist()
+    gate_problems = list(whitelist_problems)
+    if not gate_problems:
+        gate_problems += self_check(allowed)
+    if gate_problems:
+        print("❌ 设计令牌门禁自检失败（判据 ① 白名单只许语义色 / 判据 ② 字面量反例仍判红）：")
+        for problem in gate_problems:
+            print("   " + problem)
+        return 1
+
+    current, exempt = scan(allowed)
     current_totals = totals(current)
     baseline = load_baseline()
 
@@ -173,6 +271,7 @@ def main() -> int:
         print("当前违规统计（App/）：")
         for rule in sorted(current_totals):
             print(f"  {rule:<14} {current_totals[rule]:>5}")
+        print(f"语义色白名单：{len(allowed)} 个（仅语义色校验通过；字面量反例 {len(NEGATIVE_SAMPLES)} 例仍判红）")
         worst = sorted(current.items(), key=lambda item: -sum(item[1].values()))[:8]
         if exempt:
             print("整文件豁免（终端语义一类，不属于界面令牌）：")
@@ -220,14 +319,14 @@ def main() -> int:
     # 校验
     problems: list[str] = []
     for path, counts in current.items():
-        allowed = baseline.get("files", {}).get(path, {})
+        budget = baseline.get("files", {}).get(path, {})
         for rule, value in counts.items():
-            if value > allowed.get(rule, 0):
-                problems.append(f"{path}: {rule} {allowed.get(rule, 0)} → {value}")
+            if value > budget.get(rule, 0):
+                problems.append(f"{path}: {rule} {budget.get(rule, 0)} → {value}")
     for rule, value in current_totals.items():
-        allowed = baseline.get("totals", {}).get(rule, 0)
-        if value > allowed:
-            problems.append(f"合计 {rule} {allowed} → {value}")
+        budget = baseline.get("totals", {}).get(rule, 0)
+        if value > budget:
+            problems.append(f"合计 {rule} {budget} → {value}")
 
     if problems:
         print(f"❌ 设计令牌校验失败（{len(problems)} 处比基线更差）：")
@@ -239,6 +338,7 @@ def main() -> int:
     remaining = sum(current_totals.values())
     exempt_note = f"，另有 {len(exempt)} 个豁免文件" if exempt else ""
     print(f"✅ 令牌校验通过（未比基线更差；仍有 {remaining} 处待迁移：{current_totals}{exempt_note}）")
+    print(f"   语义色白名单 {len(allowed)} 个（判据 ① 仅语义色 · 通过；字面量反例 {len(NEGATIVE_SAMPLES)} 例仍判红 · 判据 ② 通过）")
     return 0
 
 

@@ -1,0 +1,31 @@
+{
+  "comment": "设计令牌棘轮的**语义色白名单**：随主题自动适配的 NSColor 角色色不算「硬编码色值」，混用它们不会让某一块与相邻面板「差一点点」到需要记令牌。**只许语义色** —— 门禁逐条校验每个条目都落在 check-design-tokens.py 的 SEMANTIC_COLOR_UNIVERSE 里，塞进 orange / #FF0000 这类字面色值当场判红。字面色值（Color.orange / NSColor.systemRed / NSColor(calibratedRed:) / Color(red:) / #RRGGBB）**一律不进白名单、一律仍判红**。",
+  "basis": "派单 T-20261010-035 ②（前门裁定 B · token-ok · origin: human-owner）：NotesPanel.swift:1589 的 .stroke(Color(nsColor: .separatorColor)) 被判 bare-color 0→1 属假红 —— 这是门禁口径问题、不是产品缺陷",
+  "semanticColors": [
+    "labelColor",
+    "secondaryLabelColor",
+    "tertiaryLabelColor",
+    "quaternaryLabelColor",
+    "placeholderTextColor",
+    "separatorColor",
+    "gridColor",
+    "controlAccentColor",
+    "controlTextColor",
+    "disabledControlTextColor",
+    "selectedControlTextColor",
+    "selectedTextColor",
+    "selectedTextBackgroundColor",
+    "selectedContentBackgroundColor",
+    "unemphasizedSelectedTextColor",
+    "unemphasizedSelectedContentBackgroundColor",
+    "keyboardFocusIndicatorColor",
+    "controlBackgroundColor",
+    "windowBackgroundColor",
+    "windowFrameTextColor",
+    "textBackgroundColor",
+    "headerTextColor",
+    "findHighlightColor",
+    "linkColor",
+    "shadowColor"
+  ]
+}
