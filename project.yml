@@ -31,12 +31,21 @@ packages:
   PostgresNIO:
     path: Vendor/postgres-nio
 
+# ⚠️ 各目标的 `sources` 一律带 `excludes: [".build"]` —— **点目录是构建残留，不是源码**（任务 `t_7325ffbf`）。
+# 由头（2026-10-08 实测）：`platform/<平台>/` 是**自洽包**布局（`origin/migrate/platform-macos` 的树里
+# `platform/macos/Package.swift` + `platform/macos/TestsUISnapshot/**` 都在 ⇒ 包根就在 `Platform/macOS`），
+# 包自己那份 `.build/` 因此落在目标源目录**之内**；而 `xcodegen` **不读** `.gitignore`，不排除它就会把
+# 残留里的 `.swift` 收进生成物（实测两个残留文件 ⇒ 生成物 +36 行），并**同时把判据那侧的同一条红抵消掉**
+# —— 最坏的那种绿（垃圾进了入库的生成物，还没人说话）。判据侧同口径 = `Scripts/check-release-version.py`
+# 的 C3（磁盘侧跳过点目录 + 反向判「生成物不许引用点目录下的 `.swift`」）。
 targets:
   DoyahCore:
     type: framework
     platform: macOS
     sources:
       - path: Core
+        excludes:
+          - ".build"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: studio.doyah.DoyahCore
@@ -56,6 +65,8 @@ targets:
     platform: macOS
     sources:
       - path: Platform/macOS
+        excludes:
+          - ".build"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: studio.doyah.DoyahPlatform
@@ -83,6 +94,8 @@ targets:
           # 「copy 到 Resources/doyahstudio.png」⇒ `xcodebuild` 报「Multiple commands produce」。
           # macOS 用 AppIcon.icns，不需要它。
           - "Resources/icons"
+          # 构建残留的点目录（口径见上面 `targets:` 前那一段）：`xcodegen` 不读 `.gitignore`。
+          - ".build"
     dependencies:
       - target: DoyahCore
       - target: DoyahPlatform
@@ -109,6 +122,8 @@ targets:
     platform: macOS
     sources:
       - path: Tests
+        excludes:
+          - ".build"
     dependencies:
       - target: DoyahCore
       - target: DoyahPlatform
@@ -122,6 +137,8 @@ targets:
     platform: macOS
     sources:
       - path: TestsPlatform
+        excludes:
+          - ".build"
     dependencies:
       - target: DoyahCore
       - target: DoyahPlatform

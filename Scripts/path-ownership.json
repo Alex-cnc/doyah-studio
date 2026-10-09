@@ -221,6 +221,24 @@
    "reason": "片 WY-1b1（任务 t_32b856f8 · macOS 机组）：`App/Views/` 新增一个视图文件 ⇒ 台账 `scannedFiles` 85 → 86（扫描范围变了要同步台账）",
    "by": "macos",
    "at": "2026-10-09"
+  },
+  {
+   "glob": "Scripts/check-release-version.py",
+   "reason": "任务 t_7325ffbf（macOS 机组）：C3 磁盘侧跳过源目录里的**点目录**（构建残留 —— `platform/<平台>/` 自洽包布局下包根就是目标源目录，实测 `origin/migrate/platform-macos`），并新增反向一条「生成物不许引用点目录下的 `.swift`」；自测例数不变（16 例，锚点未动）",
+   "by": "bighippo",
+   "at": "2026-10-08"
+  },
+  {
+   "glob": "Scripts/verify-all.sh",
+   "reason": "同上（任务 t_7325ffbf）：闭环第 18 项族 ② 的注释跟版 —— 写明「源目录里的点目录不算源码」与反向那一条（只改注释，项数与例数未动）",
+   "by": "bighippo",
+   "at": "2026-10-08"
+  },
+  {
+   "glob": "Scripts/path-ownership.json",
+   "reason": "同上（任务 t_7325ffbf）：本次两处共享面改动（`check-release-version.py` / `verify-all.sh`）的声明登记在本清单",
+   "by": "bighippo",
+   "at": "2026-10-08"
   }
  ],
  "unclassified_allow": [
