@@ -180,6 +180,9 @@ public struct NoteSpan: Equatable, Sendable {
     public enum Style: String, Equatable, Sendable, CaseIterable {
         case bold
         case italic
+        /// **下划线**（片 `WY-1b1` · 派单 `T-20261009-045` 第 ③ 项）：Markdown 表达不了，
+        /// 与 `bold` / `italic` 同形（进 `styles` 集合），即时呈现在富文本编辑面上。
+        case underline
         case code
         /// 行内颜色（Markdown 表达不了，v2 起是 span 自己的字段）
         case color
@@ -198,11 +201,17 @@ public struct NoteSpan: Equatable, Sendable {
     /// 链接 span 的 `text` 是**显示文字**（点之前看见的那几个字）；非链接 span 是 `nil`。
     /// **链接不进 `styles`** —— 它不是粗体那种「样式」，它是**目标**。
     public var link: String?
+    /// **背景高亮色**（片 `WY-1b1` · 派单 `T-20261009-048`：第 ④ 项「笔刷」= 荧光笔·淡黄底色）。
+    ///
+    /// 与 `color`（行内**文字**色）同形：`#RRGGBB` 串，缺省 `nil` = 无底色。**唯一权威值**是
+    /// `NoteHighlight.backgroundColorHex`（本片只做固定淡黄，不做多色选择器 —— 判据作废那条口径）。
+    /// Markdown 表达不了它 ⇒ 不进 `NoteBody.body` 投影（落库归 `WY-2` 的 span 直存）。
+    public var backgroundColor: String?
     /// **不认得的字段原样保留**（前向兼容，见 `NoteJSONValue`）。已知字段名不在此列。
     public var unknownFields: [String: NoteJSONValue]
 
     /// 已知字段名：解码时这些各走各的分支，其余一律进 `unknownFields`。
-    static let knownFieldNames: Set<String> = ["text", "styles", "color", "size", "link"]
+    static let knownFieldNames: Set<String> = ["text", "styles", "color", "size", "link", "backgroundColor"]
 
     public init(
         text: String,
@@ -210,6 +219,7 @@ public struct NoteSpan: Equatable, Sendable {
         color: String? = nil,
         size: Int? = nil,
         link: String? = nil,
+        backgroundColor: String? = nil,
         unknownFields: [String: NoteJSONValue] = [:]
     ) {
         self.text = text
@@ -217,6 +227,7 @@ public struct NoteSpan: Equatable, Sendable {
         self.color = color
         self.size = size
         self.link = link
+        self.backgroundColor = backgroundColor
         self.unknownFields = unknownFields
     }
 }
@@ -237,6 +248,7 @@ extension NoteSpan: Codable {
         var color: String?
         var size: Int?
         var link: String?
+        var backgroundColor: String?
         var unknown: [String: NoteJSONValue] = [:]
         for key in container.allKeys {
             switch key.stringValue {
@@ -247,13 +259,22 @@ extension NoteSpan: Codable {
             case "color": color = try? container.decode(String.self, forKey: key)
             case "size": size = try? container.decode(Int.self, forKey: key)
             case "link": link = try? container.decode(String.self, forKey: key)
+            case "backgroundColor": backgroundColor = try? container.decode(String.self, forKey: key)
             default:
                 if let value = try? container.decode(NoteJSONValue.self, forKey: key) {
                     unknown[key.stringValue] = value
                 }
             }
         }
-        self.init(text: text, styles: styles, color: color, size: size, link: link, unknownFields: unknown)
+        self.init(
+            text: text,
+            styles: styles,
+            color: color,
+            size: size,
+            link: link,
+            backgroundColor: backgroundColor,
+            unknownFields: unknown
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -266,10 +287,24 @@ extension NoteSpan: Codable {
         if let color { try container.encode(color, forKey: DynamicKey(stringValue: "color")) }
         if let size { try container.encode(size, forKey: DynamicKey(stringValue: "size")) }
         if let link { try container.encode(link, forKey: DynamicKey(stringValue: "link")) }
+        if let backgroundColor { try container.encode(backgroundColor, forKey: DynamicKey(stringValue: "backgroundColor")) }
         for (name, value) in unknownFields where !Self.knownFieldNames.contains(name) {
             try container.encode(value, forKey: DynamicKey(stringValue: name))
         }
     }
+}
+
+/// **荧光笔·淡黄的唯一色值出处**（片 `WY-1b1` · 派单 `T-20261009-048`）。
+///
+/// 第 ④ 项「笔刷」的口径是**固定淡黄**（原文那句「颜色可选」**判据作废** ⇒ 本片不做多色选择器）：
+/// 色值只在这里写一次，界面侧经 `Theme.nsColor(hex:)` 取 `NSColor`、写进 `NoteSpan.backgroundColor`
+/// 用的是同一份十六进制串 —— 「一处定义」这条是判据 `TestsUISnapshot/NotesEditorFormatProbeTests.swift`
+/// 与它两侧读的同一个常量。
+public enum NoteHighlight {
+    /// 淡黄底色的数值形态（`0xRRGGBB`）。
+    public static let rgb: UInt32 = 0xFFF3B0
+    /// 淡黄底色的字符串形态（`NoteSpan.backgroundColor` 的权威值）。
+    public static let backgroundColorHex = "#FFF3B0"
 }
 
 /// 投影结果：spans + **如实报出的降级**（哪些样式没能落到 span 上、为什么）。

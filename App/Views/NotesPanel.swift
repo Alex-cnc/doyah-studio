@@ -719,6 +719,9 @@ struct NotesEditorView: View {
 
     @EnvironmentObject private var appState: AppState
 
+    /// **行内四枚的接线**（片 `WY-1b1`）：编辑面登记它、工具条那四枚按钮读它 —— 同一个实例。
+    @StateObject private var richController = NotesRichTextController()
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             // **顶部编辑工具条**（片 `N2-3b`）：编辑态下，动作住在编辑面**之上**的一条行里
@@ -726,7 +729,7 @@ struct NotesEditorView: View {
             // **只在 `.edit` 出现**：预览态的正文只读，「保存」无处可用（画一枚永远灰着的按钮
             // 就是 `L-50` 那一课）。进编辑那条路见 `NotePreviewBody` 那一支上的双击。
             if appState.editorMode == .edit {
-                NotesEditorToolbar()
+                NotesEditorToolbar(controller: richController)
                 Divider()
             }
             // **栏头搬走了**（队列 `L-184` 三栏重排）：「笔记」这个标题与条数进了中栏栏头
@@ -746,7 +749,11 @@ struct NotesEditorView: View {
             // 两半**共用同一条 `.editorSurface()`**（编辑面底色的唯一出处）：编辑面处数棘轮要求
             // `.editorSurface()` 处数 == 编辑面（`TextEditor(`）处数，所以它只挂在 `TextEditor` 这一支上。
             if appState.editorMode == .edit {
-                TextEditor(text: $appState.noteEditorBody)
+                // **片 `WY-1b1`**：纯文本 `TextEditor` → **富文本面** `NotesRichTextEditor`
+                // （行内标记装进来时解析成属性、`**` / `#` 不再露出；见该文件头注释）。
+                // `.editorSurface()` 仍挂在这一处**编辑面本体**上 —— 底色 / 字色的唯一出处不变，
+                // 处数棘轮（编辑面处数 == `.editorSurface()` 处数）靠这一行保持相等。
+                NotesRichTextEditor(text: $appState.noteEditorBody, controller: richController)
                     .font(Theme.font(.mono))
                     .editorSurface()
                     .overlay(
@@ -823,6 +830,9 @@ struct NotesEditorToolbar: View {
 
     @EnvironmentObject private var appState: AppState
 
+    /// **行内四枚**共用的接线（片 `WY-1b1`）——由 `NotesEditorView` 与编辑面**同一个实例**传下来。
+    @ObservedObject var controller: NotesRichTextController
+
     var body: some View {
         HStack(spacing: Spacing.s) {
             Button {
@@ -851,6 +861,24 @@ struct NotesEditorToolbar: View {
                     .help(appState.noteSaveState.failureReason ?? L(key))
                     .accessibilityIdentifier(NoteAutosave.statusIdentifier)
             }
+            // **行内四枚**（片 `WY-1b1` · 派单 `T-20261009-045` 第 ①②③④ 项）：粗体 / 斜体 /
+            // 下划线 / 笔刷（荧光笔·淡黄）。形态与「保存」**同一档**（纯图标 + 悬停名字，
+            // 工具条上不许出现文字按钮 —— `FR-EXEC-13` 那条口径）；作用在**选区**，选区为空时
+            // 作用在**光标所在词**上（判定与动作本体都在 `NotesTextView.apply(_:)`，这里只转发）。
+            // 图标 / 文案键 / 命令名都取自 `NoteInlineCommand`（唯一出处），不许在这里各写一遍。
+            // **色调是辅助档**（`Theme.text(.secondary)`）：它们是「保存」那一枚的次要动作，
+            // 不抢主动作的注意力（与全 app 一条工具条语言一致）。
+            ForEach(NoteInlineCommand.allCases, id: \.self) { command in
+                Button {
+                    controller.toggle(command)
+                } label: {
+                    Image(systemName: command.symbolName)
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+                .help(L(command.titleKey))
+                .disabled(!canApplyInline)
+                .accessibilityIdentifier("notes-editor-format-\(command.rawValue)")
+            }
             Text(L(.notesSourceHint))
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.secondary))
@@ -867,6 +895,15 @@ struct NotesEditorToolbar: View {
     private var saveStateColor: Color {
         appState.noteSaveState.isFailure ? Theme.status(.warning) : Theme.text(.secondary)
     }
+
+    /// 行内四枚**有没有对象可作用**（片 `WY-1b1`）：空编辑器上它们与「保存」一样**灰着** ——
+    /// 一枚永远可点、点下去什么都不发生的按钮就是 `L-50` 那一课。
+    ///
+    /// **为什么是这一句转发而不是各写一遍判据**：判据的唯一出处仍是
+    /// `AppState.noteEditorHasContent`（`Scripts/check-empty-action-buttons.py` 看着它只定义一次、
+    /// 守卫与 `.disabled` 同一条判断）—— 这里只是**同一个判据的另一个消费点**，
+    /// 视图里不许再自己算一遍（那才是 `L-50` 的病根）。
+    private var canApplyInline: Bool { appState.noteEditorHasContent }
 }
 
 /// **笔记区 = 顶栏 + 三栏**（队列 `L-184`）：需求提出者 2026-10-04 原话「macOS版界面布局可以
