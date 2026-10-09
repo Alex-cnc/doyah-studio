@@ -224,4 +224,142 @@ final class WorkspaceSearchContentTests: XCTestCase {
                            "\(file.lastPathComponent) 自己归一化了查询 —— 应改走 Core/WorkspaceSearch")
         }
     }
+
+    // MARK: - ⑤ 替换计划（FR-EDIT-42 的另一半：差异预览 / 可撤销 / 行尾保真 / 规则同源）
+
+    /// 取某个相对路径的条目（构造 `replaceLine` 的入参）。
+    private func entry(for relative: String) throws -> WorkspaceEntry {
+        let url = root.appendingPathComponent(relative)
+        let children = try WorkspaceTree.children(of: url.deletingLastPathComponent(), relativeTo: root)
+        guard let found = children.first(where: { $0.relativePath == relative }) else {
+            throw NSError(domain: "WorkspaceSearchContentTests", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "没有这个条目：\(relative)"])
+        }
+        return found
+    }
+
+    /// 计划给出**逐行差异预览**，且替换后的完整内容与预览出自同一次计算。
+    func testReplacePlanCarriesPreviewAndReplacedText() {
+        let plan = WorkspaceSearch.replacePlan(in: root, query: "agent", replacement: "runner")
+        guard let a = plan.files.first(where: { $0.entry.relativePath == "Core/a.swift" }) else {
+            return XCTFail("Core/a.swift 应当进计划")
+        }
+        XCTAssertEqual(a.count, 2)
+        XCTAssertEqual(a.changes.map(\.line), [1, 3], "行号必须 1 起、带原文")
+        XCTAssertEqual(a.changes.first?.before, "let agent = 1")
+        XCTAssertEqual(a.changes.first?.after, "let runner = 1")
+        XCTAssertEqual(a.replaced, "let runner = 1\n// 第二行\nlet loop = runner\n")
+        XCTAssertEqual(plan.changeCount, plan.files.reduce(0) { $0 + $1.count })
+    }
+
+    /// 只改命中的那些字符，其余一字不动；大小写不敏感也照改。
+    func testReplaceTouchesOnlyMatchedCharacters() {
+        let lower = WorkspaceSearch.applyToLine(
+            "let agent = 1; // agent", normalizedQuery: "agent", replacement: "runner"
+        )
+        XCTAssertEqual(lower.text, "let runner = 1; // runner")
+        XCTAssertEqual(lower.count, 2)
+
+        let upper = WorkspaceSearch.applyToLine(
+            "AGENT 大写", normalizedQuery: WorkspaceSearch.normalize(query: "agent"), replacement: "x"
+        )
+        XCTAssertEqual(upper.text, "x 大写")
+        XCTAssertEqual(upper.count, 1)
+
+        let none = WorkspaceSearch.applyToLine(
+            "没有那个词", normalizedQuery: "agent", replacement: "x"
+        )
+        XCTAssertEqual(none.text, "没有那个词")
+        XCTAssertEqual(none.count, 0)
+    }
+
+    /// **空查询一律拒绝**（灾难的入口），换成同一个词也拒绝。
+    func testReplacePlanRefusesEmptyAndIdenticalQuery() {
+        XCTAssertTrue(WorkspaceSearch.replacePlan(in: root, query: "   ", replacement: "x").isEmpty)
+        XCTAssertTrue(WorkspaceSearch.replacePlan(in: root, query: "agent", replacement: "agent").isEmpty)
+        XCTAssertTrue(WorkspaceSearch.replacePlan(in: root, query: "nomatchhere", replacement: "x").isEmpty)
+    }
+
+    /// **排除规则同源**：忽略名单里的文件不进替换计划；二进制与检索同 —— 记一笔跳过，不假装改过。
+    func testReplacePlanSharesTheSameIgnoreRules() {
+        let plan = WorkspaceSearch.replacePlan(in: root, query: "agent", replacement: "runner")
+        XCTAssertNil(plan.files.first { $0.entry.relativePath.hasPrefix("node_modules/") },
+                     "忽略名单里的目录不许进替换计划")
+        XCTAssertEqual(plan.skips.binary, 1, "二进制文件与检索同：记一笔跳过")
+        XCTAssertNotNil(plan.files.first { $0.entry.relativePath == "Core/a.swift" })
+
+        // 调用方给的忽略名单同样生效（与内容检索同一条口径）。
+        let custom = WorkspaceSearch.replacePlan(in: root, query: "agent", replacement: "runner",
+                                                ignored: ["notes"])
+        XCTAssertNil(custom.files.first { $0.entry.relativePath.hasPrefix("notes/") })
+    }
+
+    /// **唯一出处（机器判据）**：内容检索与替换计划**共用**同一套规则 ——
+    /// 匹配选项一处、跳过判定各一处（都在 `readTextFile` 里）。
+    func testReplaceReusesTheEnginesSingleSourceRules() throws {
+        let code = try codeOnly(source("Core/WorkspaceSearch.swift"))
+        XCTAssertEqual(code.components(separatedBy: "[.caseInsensitive, .diacriticInsensitive]").count - 1, 1,
+                       "匹配选项必须只有一处（检索与替换读同一张表）")
+        for needle in ["skips.binary += 1", "skips.tooLarge += 1", "skips.unreadable += 1"] {
+            XCTAssertEqual(code.components(separatedBy: needle).count - 1, 1,
+                           "\(needle) 必须只有一处（检索与替换共用 readTextFile）")
+        }
+        XCTAssertTrue(code.contains("static func scanTextFiles("),
+                      "有界遍历骨架必须是一处共用的（改了锚点请更新这条判据，不要删掉它）")
+    }
+
+    /// **行尾保真**：CRLF 的文件替换后不整篇变成 LF；LF 的仍是 LF；混排逐行保留、不多空行。
+    func testReplacePreservesLineEndings() throws {
+        try write("Core/crlf.txt", "TARGET first\r\nTARGET second\r\n")
+        try write("Core/lf.txt", "TARGET first\nTARGET second\n")
+        try write("Core/mixed.txt", "TARGET a\nTARGET b\r\nTARGET c")
+
+        let plan = WorkspaceSearch.replacePlan(in: root, query: "target", replacement: "done")
+        let crlf = plan.files.first { $0.entry.relativePath == "Core/crlf.txt" }?.replaced
+        XCTAssertEqual(crlf, "done first\r\ndone second\r\n", "CRLF 必须原样保留")
+        XCTAssertFalse(crlf?.contains("\n\n") ?? true, "不该多出空行")
+        let lf = plan.files.first { $0.entry.relativePath == "Core/lf.txt" }?.replaced
+        XCTAssertEqual(lf, "done first\ndone second\n", "LF 仍是 LF")
+        let mixed = plan.files.first { $0.entry.relativePath == "Core/mixed.txt" }?.replaced
+        XCTAssertEqual(mixed, "done a\ndone b\r\ndone c", "混排逐行保留")
+    }
+
+    /// **全量替换可撤销**：落盘 → 原文确实变了 → 撤销 → 逐字节回到原文。
+    func testReplaceAllIsUndoable() throws {
+        let before = try String(contentsOf: root.appendingPathComponent("Core/a.swift"), encoding: .utf8)
+        let plan = WorkspaceSearch.replacePlan(in: root, query: "agent", replacement: "runner")
+        XCTAssertFalse(plan.isEmpty)
+
+        guard let undo = WorkspaceSearch.apply(plan, in: root) else { return XCTFail("落盘应当成功") }
+        XCTAssertEqual(undo.fileCount, plan.fileCount)
+        let after = try String(contentsOf: root.appendingPathComponent("Core/a.swift"), encoding: .utf8)
+        XCTAssertEqual(after, "let runner = 1\n// 第二行\nlet loop = runner\n")
+
+        XCTAssertTrue(WorkspaceSearch.revert(undo, in: root))
+        let restored = try String(contentsOf: root.appendingPathComponent("Core/a.swift"), encoding: .utf8)
+        XCTAssertEqual(restored, before, "撤销必须逐字节回到原文")
+    }
+
+    /// **单条替换**只改那一行，别的行不动；落盘 / 撤销与全部替换走同一条路。
+    func testSingleLineReplaceTouchesOnlyThatLine() throws {
+        let path = "Core/many.txt"
+        let original = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+        let plan = WorkspaceSearch.replaceLine(
+            in: root, query: "agent", replacement: "runner", entry: try entry(for: path), line: 2
+        )
+        guard let file = plan.files.first else { return XCTFail("单条替换应当给出计划") }
+        XCTAssertEqual(file.changes.map(\.line), [2])
+        XCTAssertEqual(file.count, 1)
+
+        guard let undo = WorkspaceSearch.apply(plan, in: root) else { return XCTFail("落盘应当成功") }
+        let replaced = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+        XCTAssertTrue(replaced.contains("行 2 runner"))
+        XCTAssertTrue(replaced.contains("行 1 agent"), "别的行不许动")
+        XCTAssertTrue(replaced.contains("行 5 agent"))
+
+        _ = WorkspaceSearch.revert(undo, in: root)
+        XCTAssertEqual(
+            try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8), original
+        )
+    }
 }
