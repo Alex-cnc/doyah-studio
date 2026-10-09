@@ -26,7 +26,7 @@
     }
   ],
   "floors": {
-    "families": 43,
+    "families": 44,
     "totalCases": 559,
     "anchorSites": 75,
     "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。"
@@ -468,6 +468,15 @@
       "countRegex": "(\\d+)/\\d+ 项达到预期",
       "why": "队列 L-22 / 闭环第 10 项（笔记模块零网络出口）",
       "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表的零网络出口登记在闭环第 10 项行内，不写负例例数。"
+    },
+    {
+      "key": "network-egress",
+      "script": "Scripts/test-network-egress-gate.py",
+      "args": [],
+      "cases": 15,
+      "countRegex": "结果：(\\d+) 项达到预期，\\d+ 项不符",
+      "why": "Notes SRS v3.94 §6.4 / 闭环第 10 项（全仓网络出口按面分层：白名单 = **文件级显式清单** + 只判**代码出现**（`//` / `///` 注释与字符串字面量里的提及不算出现）+ 装配缝只注入 transport（直接出网判红）+ 台账漏登判红 + 令牌表不许被掏空）",
+      "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表与三书里都不写这条判据的负例例数（登记它的位置 = 本族自己的 runner + 台账 `Scripts/network-egress-whitelist.json`）。"
     },
     {
       "key": "p-parity",
