@@ -183,8 +183,12 @@ final class AccountFlowModel: ObservableObject {
 
     @Published private(set) var status: Status = .signedOut
 
-    /// 云同步开关 —— **默认关**（契约 §10.4 `S3`）。
-    @Published var cloudSyncEnabled = false
+    /// 云同步开关 —— **默认关**（契约 §10.4 `S3`），**持久化**（片 `云D`：写入端 `AppState`
+    /// 的触发点要读它，所以开关不能只活在这一次面板里 —— 两处各读一份就成了「一个开着、
+    /// 一个当关」）。落键与缺省见 `CloudSyncPreference`（Core 侧的**唯一出处**）。
+    @Published var cloudSyncEnabled = CloudSyncPreference.isEnabled() {
+        didSet { CloudSyncPreference.setEnabled(cloudSyncEnabled) }
+    }
 
     /// 注册页最近一次提交的结果（`nil` = 还没提交过）。
     @Published private(set) var registrationOutcome: RegistrationOutcome?
