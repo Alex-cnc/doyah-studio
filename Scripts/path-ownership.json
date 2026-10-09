@@ -271,6 +271,24 @@
    "reason": "跨端互验前置取证面（各端一份 格式自证-<端>.md；本侧 macOS 侧交付云E）",
    "by": "macos",
    "at": "2026-10-09"
+ },
+ {
+   "glob": "Scripts/check-design-tokens.py",
+   "reason": "派单 T-20261010-035 ②（前门裁定 B · token-ok · origin: human-owner）：设计令牌棘轮按「语义色白名单」放行 NSColor 角色色，并加判据 ①（白名单只许语义色）/ 判据 ②（字面量反例仍判红）",
+   "by": "macos",
+   "at": "2026-10-10"
+ },
+ {
+   "glob": "Scripts/design-token-whitelist.json",
+   "reason": "同上：语义色白名单文件本体（新建）",
+   "by": "macos",
+   "at": "2026-10-10"
+ },
+ {
+   "glob": "Scripts/design-token-baseline.json",
+   "reason": "同上：棘轮基线随口径往下拧一格 —— bare-color 5 → 2（四处 .separatorColor 不再算裸色）、bare-spacing 57 → 56（LowerPaneView 陈旧余量一并收掉）",
+   "by": "macos",
+   "at": "2026-10-10"
  }
 ],
  "unclassified_allow": [

@@ -12,7 +12,6 @@
       "bare-textstyle": 26
     },
     "App/Views/AgentSQLPanel.swift": {
-      "bare-color": 1,
       "bare-foreground": 6,
       "bare-spacing": 4,
       "bare-textstyle": 13
@@ -31,13 +30,13 @@
       "bare-textstyle": 3
     },
     "App/Views/DataTaskPanel.swift": {
-      "bare-color": 2,
+      "bare-color": 1,
       "bare-foreground": 29,
       "bare-spacing": 11,
       "bare-textstyle": 53
     },
     "App/Views/DataTaskSpecSheet.swift": {
-      "bare-color": 2,
+      "bare-color": 1,
       "bare-foreground": 6,
       "bare-spacing": 2,
       "bare-textstyle": 16
@@ -58,7 +57,7 @@
       "bare-textstyle": 10
     },
     "App/Views/LowerPaneView.swift": {
-      "bare-spacing": 3
+      "bare-spacing": 2
     },
     "App/Views/PrivilegePanel.swift": {
       "bare-foreground": 4,
@@ -99,9 +98,9 @@
     }
   },
   "totals": {
-    "bare-color": 5,
+    "bare-color": 2,
     "bare-foreground": 102,
-    "bare-spacing": 57,
+    "bare-spacing": 56,
     "bare-textstyle": 189
   }
 }
