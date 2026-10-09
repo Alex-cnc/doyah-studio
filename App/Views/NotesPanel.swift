@@ -1378,14 +1378,52 @@ struct TodoRightPaneView: View {
     }
 }
 
+/// 详情「截止」那一行的**时间形状**（片 `TD-DUE` · 派单 `T-20261009-042` ④）。
+///
+/// 口径 = **与安卓同形**：安卓详情那一格是 `todo.dueAt?.let { TimeText.dueText(it) } ?: 「无截止」`
+/// （`DoyahNotes/platform/android/app/src/main/java/studio/doyah/notes/android/ui/TodoDetailDialog.kt`），
+/// 而 `TimeText.dueText`（同目录 `TimeText.kt`）= **两位月 - 两位日 + 24 小时制分钟**（例 `10-09 09:00`）。
+///
+/// 为什么成形落在界面层这一件、而不是 Core：
+///  · 安卓侧**同一件事也在界面层**（共享层只给「月 / 日」「当日分钟」这类日历算术，拼成
+///    `MM-DD HH:mm` 那一句在 `TimeText` 里）—— 本侧照同一条分工：`dueAt` → 这一行文本只在界面层
+///    这一处，Core 不为它新增文案面；
+///  · **分带词那一套不动**：清单行 / 分组仍走 `TodoQuery.band(...).key`（分带的唯一出处）。
+///
+/// 数字形状**不走本地化**：固定 `en_US_POSIX` 的 `MM-dd HH:mm` —— Swift 的 `dd` 是**月内第几天**
+/// （与安卓 `pad(day)` 同一个数；`HH` = 24 小时制），与安卓侧那句「全数字，无需本地化」同一条口径，
+/// 免得某些区域设置把数字换成别的字形。时区 / 日历仍取本机（与安卓 `TimeZone.getDefault()` 同口径）。
+/// 无截止仍回语言表里既有的「无截止」键（**不新造文案**）。
+enum TodoDueText {
+
+    /// 形状（与安卓 `TimeText.dueText` 同一个形状；判据拿它当读数，见 `TestsUISnapshot/TodoDetailSearchProbeTests.swift`）。
+    static let format = "MM-dd HH:mm"
+
+    /// 固定形状的成形器（唯一的 `DateFormatter` 实例 —— 与 `EgressLogSheet` 那一枚同一条写法）。
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = format
+        return formatter
+    }()
+
+    /// 有截止 ⇒ `MM-DD HH:mm`（例 `10-09 09:00`）；无截止 ⇒ 语言表里既有那一句。
+    static func text(_ dueAt: Date?) -> String {
+        guard let dueAt else { return L(.todoDueNone) }
+        return formatter.string(from: dueAt)
+    }
+}
+
 /// **待办只读详情**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）：点清单里的一行 ⇒ 右栏出这一屏。
 ///
 /// 四条口径：
 ///  ① **只读 ≠ 编辑**：这一屏**一个编辑控件都没有** —— 没有标题输入框、没有「有截止时间」那枚开关、
 ///     没有保存与删除（判据：渲染这一屏时取到的文案里**不许出现**编辑器那几句，见探针 甲）。
 ///     要改走**两条既有入口**：行的右键「编辑」，或左区顶部那枚「编辑」（都进 `TodoEditorView`）；
-///  ② **拿的都来自 Core**：截止那一句走 `TodoQuery.band`（分带的唯一出处），逾期那枚色走
-///     `TodoDue.isOverdue` —— 本视图不比 `Date`、不自己算「还剩几天」；
+///  ② **取值来源**：截止那一句走 `TodoDueText.text`（片 `TD-DUE` · 派单 `T-20261009-042` ④：
+///     与安卓同形的**具体时刻** `MM-DD HH:mm`，例 `10-09 09:00`；无截止回语言表里既有的那一句），
+///     逾期那枚色走 `TodoDue.isOverdue` —— 本视图不比 `Date`、不自己算「还剩几天」。
+///     **分带词那一套只服务清单行 / 分组**（`TodoQuery.band` 仍是分带的唯一出处，一字未动）；
 ///  ③ **标签是用户数据**（照原样画），其余句子只在语言表里（`L(...)`）；
 ///  ④ **「备注」这一格**（片 `TD-NOTE` · 派单 `T-20261009-042` ②）：`Todo` 模型有 `note`（`Core/Todo.swift`）
 ///     之后才画它 —— **空串不画**（`L-50` 那一课：画不出来的东西不要画成空态，读者会以为是自己没填）；
@@ -1403,7 +1441,7 @@ struct TodoDetailView: View {
             Divider()
             row(
                 L(.todoDueLabel),
-                value: L(TodoQuery.band(of: todo, window: appState.todoWindow).key),
+                value: TodoDueText.text(todo.dueAt),
                 tone: TodoDue.isOverdue(todo, window: appState.todoWindow)
                     ? Theme.status(.danger)
                     : Theme.text(.primary),
