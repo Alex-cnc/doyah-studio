@@ -564,6 +564,10 @@ final class AppState: ObservableObject {
     @Published var todoEditorDueAt = Date()
     @Published var todoEditorPriority: TodoPriority = .normal
     @Published var todoEditorTags = ""
+    /// 编辑面里那一格「备注」的正文本（**纯文本、允换行**；契约 `Todo.note` · 片 `TD-NOTE`）。
+    /// 与标题 / 标签一样是**编辑器草稿**：进编辑态时从库里那一份灌进来（`edit(_:)`），
+    /// 新建态清空（`beginNewTodo`），保存时随 `saveTodoFromEditor()` 一起写回。
+    @Published var todoEditorNote = ""
     /// **已完成分区默认折叠**（`FR-NOTE-36` 原文）—— 折叠状态是界面状态，默认值由 Core 给
     /// （`TodoSectionKind.isCollapsedByDefault`），这里不写第二遍。
     @Published var todoCompletedExpanded = !TodoSectionKind.completed.isCollapsedByDefault
@@ -7227,6 +7231,7 @@ final class AppState: ObservableObject {
         todoEditorDueAt = Date()
         todoEditorPriority = .normal
         todoEditorTags = ""
+        todoEditorNote = ""
     }
 
     /// **点清单里的一行 ⇒ 只读详情**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）。
@@ -7259,6 +7264,7 @@ final class AppState: ObservableObject {
         todoEditorDueAt = todo.dueAt ?? Date()
         todoEditorPriority = todo.priority
         todoEditorTags = todo.tags.joined(separator: " ")
+        todoEditorNote = todo.note
         // 档位回显（界面入口半）：这条任务已经挂着提醒 ⇒ 档位选择器落在**它那一档**上
         // （重算不出来 = 那条规则不是四个档位之一 ⇒ 回落默认档，但那条规则照样照实显示）。
         let existing = todoReminders[todo.id]?.spec
@@ -7298,6 +7304,7 @@ final class AppState: ObservableObject {
         value.dueAt = todoEditorHasDue ? todoEditorDueAt : nil
         value.priority = todoEditorPriority
         value.tags = tags
+        value.note = todoEditorNote
         if todoBeingEdited != nil { value.updatedAt = Date() }
         do {
             _ = try await NoteLibrary.defaultLibrary().upsert(value)
@@ -7584,12 +7591,6 @@ final class AppState: ObservableObject {
     /// 换分组档（四档）。
     func setTodoGroupBy(_ groupBy: TodoGroupBy) {
         todoGroupBy = groupBy
-    }
-
-    /// 换**本地检索词**（片 `TD-LIST-1` 的 B4）。切一个字只重画这一屏 —— 与上面三条切换器同一条口径：
-    /// **不重读库、不写库、不改任何一条任务**（`FR-NOTE-39` 的唯一事实源）。
-    func setTodoSearchText(_ text: String) {
-        todoSearchText = text
     }
 
     // MARK: - 待办：日历那一屏（队列 `L-100` 界面半第二片）

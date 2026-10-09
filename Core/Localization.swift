@@ -457,6 +457,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesModuleTodos
     case todosEmpty
     case todoTitlePlaceholder
+    /// 待办备注正文那一格的轴名（片 `TD-NOTE` · 契约 `Todo.note`）：编辑面与只读详情共用这一个词。
+    case todoNoteLabel
     case todoDueLabel
     case todoHasDueLabel
     case todoPriorityLabel
@@ -2693,6 +2695,7 @@ public enum LocalizedStrings {
         .notesModuleTodos: [.simplifiedChinese: "待办", .english: "Todos"],
         .todosEmpty: [.simplifiedChinese: "还没有待办", .english: "No todos yet"],
         .todoTitlePlaceholder: [.simplifiedChinese: "待办标题", .english: "Todo title"],
+        .todoNoteLabel: [.simplifiedChinese: "备注", .english: "Note"],
         .todoDueLabel: [.simplifiedChinese: "截止", .english: "Due"],
         .todoHasDueLabel: [.simplifiedChinese: "有截止时间", .english: "Has due date"],
         .todoPriorityLabel: [.simplifiedChinese: "优先级", .english: "Priority"],

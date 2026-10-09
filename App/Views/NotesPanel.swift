@@ -1387,9 +1387,10 @@ struct TodoRightPaneView: View {
 ///  ② **拿的都来自 Core**：截止那一句走 `TodoQuery.band`（分带的唯一出处），逾期那枚色走
 ///     `TodoDue.isOverdue` —— 本视图不比 `Date`、不自己算「还剩几天」；
 ///  ③ **标签是用户数据**（照原样画），其余句子只在语言表里（`L(...)`）；
-///  ④ **没有「备注」这一格**：`Todo` 模型里没有正文 / 备注字段（`Core/Todo.swift`）—— 读数只有
-///     标题 / 完成态 / 截止 / 优先级 / 标签，不凭空造一个永远是空的行（`L-50` 那一课：画不出来的东西
-///     不要画成空态，读者会以为是自己没填）。
+///  ④ **「备注」这一格**（片 `TD-NOTE` · 派单 `T-20261009-042` ②）：`Todo` 模型有 `note`（`Core/Todo.swift`）
+///     之后才画它 —— **空串不画**（`L-50` 那一课：画不出来的东西不要画成空态，读者会以为是自己没填）；
+///     有备注才出一块**纯文本**（照原样，允换行，不截断）。**只读**：改备注走「编辑」那条既有入口
+///     （`TodoEditorView`），这一屏仍然一个可编辑控件都没有。
 struct TodoDetailView: View {
 
     let todo: Todo
@@ -1415,6 +1416,7 @@ struct TodoDetailView: View {
                 id: "todo-detail-priority"
             )
             if !todo.tags.isEmpty { tags }
+            if !todo.note.isEmpty { note }
             Spacer(minLength: 0)
         }
         .padding(Spacing.l)
@@ -1464,6 +1466,22 @@ struct TodoDetailView: View {
             Spacer(minLength: 0)
         }
         .accessibilityIdentifier("todo-detail-tags")
+    }
+
+    /// 备注那一块（片 `TD-NOTE`）：轴名走语言表（`todoNoteLabel`），正文是**用户数据**照原样画
+    /// （纯文本、允换行 —— 不翻译、不截断、不做 Markdown 渲染；契约明写它不会富文本那套）。
+    private var note: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(L(.todoNoteLabel))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            Text(todo.note)
+                .font(Theme.font(.body))
+                .foregroundStyle(Theme.text(.primary))
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityIdentifier("todo-detail-note")
     }
 }
 
@@ -1516,6 +1534,24 @@ struct TodoEditorView: View {
             TextField(L(.notesTagsPlaceholder), text: $appState.todoEditorTags)
                 .textFieldStyle(.roundedBorder)
                 .font(Theme.font(.caption))
+            // 「备注」这一格（片 `TD-NOTE` · 派单 `T-20261009-042` ②）：契约把备注定为**纯文本、允换行**
+            // ⇒ 用**多行编辑面**（`TextEditor`）而不是单行 `TextField`（单行输入会把换行吃掉）。
+            // 编辑面的底色 / 字色仍走**唯一写法** `.editorSurface()`（契约 §3.31 · 队列 `L-142` 甲2）——
+            // 自己写底色正是内测甲2「同一个窗口两种底」的老毛病。空串 = 没有备注（与标题同口径）。
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(L(.todoNoteLabel))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                TextEditor(text: $appState.todoEditorNote)
+                    .font(Theme.font(.body))
+                    .editorSurface()
+                    .frame(height: 120)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color(nsColor: .separatorColor))
+                    )
+                    .accessibilityIdentifier("todo-note")
+            }
             // 「提醒」那一区（队列 `L-100` 落法 ④ 的界面入口半）：**只对已经在库里的任务画**
             // （新建态还没有 id，`reminder` 表的两个归属列都是外键 —— 挂不到一条还没落库的任务上；
             // 画一枚按不动的按钮就是 `L-50` 那一课）。
