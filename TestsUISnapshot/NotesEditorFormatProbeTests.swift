@@ -692,12 +692,24 @@ final class NotesEditorFormatProbeTests: XCTestCase {
     ///      `Core/NoteStorage/NoteDatabase.swift`；
     ///   ② 那一处落在 `setNoteSpans` 的函数体里（不是散在别的语句里）；
     ///   ③ `note` 的 `INSERT` 列表里**没有** `spans`（新建那条路也不许各写一份 —— 正文只从写入口进）。
+    ///
+    /// ## 扫描面 = 跟踪面（片 `WY-2a-FIX` · 派单 `T-20261009-096`）
+    ///
+    /// ① 的「全仓」过去由 `FileManager.enumerator` 从仓根**递归走全目录**（只跳 `.build` / `.git`）
+    /// 给出 ⇒ 仓根下挂着 `.worktrees/`（并行工作树）时，每个工作树里那份逐字的
+    /// `Core/NoteStorage/NoteDatabase.swift` 都被计入（组长机械复现：锚仓根 `hits=7` ↔ 片工作树根
+    /// `hits=1`），加上本探针自己引用的 `spans = ?` 比对串 ⇒ 这条断言在锚仓里**必红**。
+    /// 现改走 `git ls-files`（见 `allSwiftSources()`）：扫描面 = **跟踪面**，副本天然在外。
+    ///
+    /// ① 的**负例**（判据不弱化的机器凭据）在本方法内：把「混进副本」的清单喂进同一个挑取函数
+    /// ⇒ 本条断言必须报红。判据只换了**扫描面**，三层比对（① 唯一一处 / ② 落在 `setNoteSpans` 体内 /
+    /// ③ `INSERT` 无 `spans`）一个字没动。
     @MainActor
     func testWY2aSpansColumnHasExactlyOneWriter() throws {
         let sources = Self.allSwiftSources()
         XCTAssertGreaterThan(sources.count, 100, "仓里扫到的 `.swift` 只有 \(sources.count) 份 —— 扫描面太小，判据不成立")
 
-        let writers = sources.filter { $0.text.contains("spans = ?") }.map(\.path).sorted()
+        let writers = Self.spansColumnWriters(in: sources)
         XCTAssertEqual(
             writers, ["Core/NoteStorage/NoteDatabase.swift"],
             "写 `spans` 列的地方不止一处：\(writers)"
@@ -718,31 +730,98 @@ final class NotesEditorFormatProbeTests: XCTestCase {
         let insert = try XCTUnwrap(Self.insertColumnList(of: "note", in: database), "找不到 `note` 的 INSERT 列清单")
         XCTAssertFalse(insert.contains("spans"), "`note` 的 INSERT 列清单里出现了 `spans`：\(insert)")
 
+        // ① 的**负例**（判据不弱化 —— 「扫描面 = 跟踪面」不是把判据放松了）：
+        // 副本取 `.worktrees/` 里那份逐字相同的 `NoteDatabase.swift`（旧扫描面下它正是被计入的那一份）。
+        // 改走 `git ls-files` 之后真扫描面里已经没有它 ⇒ 这一条不能靠「再跑一遍真扫描」再现，
+        // 直接把那条清单**喂**进同一个挑取函数：若哪天有人把扫描面改回递归、或把副本混进来，
+        // 下面那条 `writers == [NoteDatabase.swift]` 当场红。
+        let withCopy = sources + [
+            (path: ".worktrees/t_demo/Core/NoteStorage/NoteDatabase.swift", text: database)
+        ]
+        let negativeWriters = Self.spansColumnWriters(in: withCopy)
+        XCTAssertNotEqual(
+            negativeWriters, ["Core/NoteStorage/NoteDatabase.swift"],
+            "负例：扫描面里混进第二处 `spans = ?` 的副本，「只有一处写点」这条断言**必须**报红 —— 实测却仍是一条"
+        )
+        XCTAssertEqual(negativeWriters.count, 2, "负例：混进来的副本没被计入（\(negativeWriters)）")
+
+        // 另一半负例（本文件自身）：探针里引用 `spans = ?` 是判据的**比对串**（输入 / 打印 / 负例），不是写点 ——
+        // 不剔掉自己，上面那条断言同样必红。这两条一起说明「扫描面 = 跟踪面 − 自身」是**必要**的。
+        let selfSource = try String(contentsOfFile: #filePath, encoding: .utf8)
+        let selfHits = selfSource.components(separatedBy: "spans = ?").count - 1
+        XCTAssertGreaterThan(
+            selfHits, 0,
+            "本文件里没有 `spans = ?` 字面量 ⇒ 「扫描面里剔掉自身」这一笔的理由没了（判据前提变了，请复核）"
+        )
+
         let callSites = sources
             .filter { $0.text.contains(".setNoteSpans(") }
             .map(\.path).sorted()
-        print("📄 WY-2a 单一写入口：`spans = ?` 在 \(writers) ／ `setNoteSpans` 全仓命中 \(callSites)")
+        print(
+            "📄 WY-2a 单一写入口：扫描面（跟踪面 − 自身）= \(sources.count) 份 `.swift`"
+                + " ／ `spans = ?` 在 \(writers) ／ `setNoteSpans` 全仓命中 \(callSites)"
+                + " ／ 本文件自身含该字面量 \(selfHits) 处（比对串，已剔除）"
+        )
 
         UISnapshot.finishManifestIfEnabled()
     }
 
-    /// 仓里所有 `.swift` 源文件（相对路径 + 内容）—— 跳过 `.build` / `.git`（构建产物不是源）。
+    /// 从「(相对路径, 内容)」清单里挑出写 `spans` 列的文件 —— 判据 ① 的那把尺子。
+    /// 单独成函数是为了让**负例**也能走同一条路（见 `testWY2aSpansColumnHasExactlyOneWriter`）。
+    private static func spansColumnWriters(in sources: [(path: String, text: String)]) -> [String] {
+        sources.filter { $0.text.contains("spans = ?") }.map(\.path).sorted()
+    }
+
+    /// 仓里**受跟踪**的 `.swift` 源文件（相对路径 + 内容）—— **扫描面 = 跟踪面**。
+    ///
+    /// 改前这里是 `FileManager.default.enumerator` 从仓根**递归走全目录**、只跳 `.build` / `.git`：
+    /// 仓根下挂着 `.worktrees/`（并行工作树，每个里都有一份逐字相同的 `Core/NoteStorage/NoteDatabase.swift`）
+    /// 时，同一处写点被数成多条 ⇒ 本文件的 ① 在**锚仓**里必红（组长机械复现：锚仓根 `hits=7` ↔
+    /// 片工作树根 `hits=1`）。改走 `git ls-files`：只列索引里跟踪的文件 ⇒ `.worktrees/` 那些副本
+    /// 天然落在扫描面之外（`git` 忽略的目录，不是跟踪文件；本仓 `.git/info/exclude` 里就有 `.worktrees/`）。
+    ///
+    /// 另**剔除本文件自身**：探针里引用了 `spans = ?` 这个比对串（判据的输入 / 打印 / 负例，都不是写点），
+    /// 不剔除就会把自己当成第二处写点 —— 与 `.worktrees/` 那条是同一个毛病。
     private static func allSwiftSources() -> [(path: String, text: String)] {
-        var found: [(String, String)] = []
-        guard let walker = FileManager.default.enumerator(at: repositoryRoot, includingPropertiesForKeys: nil) else {
-            return []
-        }
-        for case let url as URL in walker {
-            let relative = url.path.replacingOccurrences(of: repositoryRoot.path + "/", with: "")
-            if relative.hasPrefix(".build") || relative.hasPrefix(".git") {
-                walker.skipDescendants()
-                continue
-            }
-            guard url.pathExtension == "swift" else { continue }
-            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            found.append((relative, text))
+        var found: [(path: String, text: String)] = []
+        for relative in trackedSwiftPaths() {
+            guard let text = try? String(
+                contentsOf: repositoryRoot.appendingPathComponent(relative), encoding: .utf8
+            ) else { continue }
+            found.append((path: relative, text: text))
         }
         return found
+    }
+
+    /// `git ls-files` 给出的**跟踪** `.swift` 清单（仓根相对路径、字典序），已剔除本文件自身。
+    /// `git` 取不到（非仓 / 没有 `git`）时返回空 ⇒ 上面那条 `> 100` 的断言会当场红（响亮地失败，
+    /// 不静默放行 —— 扫描面都不成立时判据也不成立）。
+    private static func trackedSwiftPaths() -> [String] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["git", "-C", repositoryRoot.path, "ls-files", "-z", "--", "*.swift"]
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = Pipe()
+        do {
+            try process.run()
+        } catch {
+            return []
+        }
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return [] }
+        return String(decoding: data, as: UTF8.self)
+            .split(separator: "\0")
+            .map(String.init)
+            .filter { $0 != selfSourceRelativePath }
+            .sorted()
+    }
+
+    /// 本探针自己的仓根相对路径（`#filePath` 去掉仓根前缀）—— 自扫描时要从清单里剔掉的那一份。
+    private static var selfSourceRelativePath: String {
+        URL(fileURLWithPath: #filePath).path
+            .replacingOccurrences(of: repositoryRoot.path + "/", with: "")
     }
 
     /// 从 `func <name>(` 起、到下一个顶层 `\n    func `（或 `\n    }`）为止的那段源文本。
