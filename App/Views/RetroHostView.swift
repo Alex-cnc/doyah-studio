@@ -69,7 +69,7 @@ private struct RetroReadingEmptyState: View {
     var body: some View {
         VStack(spacing: Spacing.s) {
             Image(systemName: "newspaper")
-                .font(.system(size: 28))
+                .imageScale(.large)
                 .foregroundStyle(Theme.text(.tertiary))
             Text(L(.retroReadingEmptyHint))
                 .font(Theme.font(.caption))
@@ -90,7 +90,7 @@ struct RetroSidebarPlaceholderView: View {
         VStack(spacing: Spacing.s) {
             Spacer(minLength: 0)
             Image(systemName: "newspaper")
-                .font(.system(size: 22))
+                .imageScale(.large)
                 .foregroundStyle(Theme.text(.tertiary))
             Text(L(.retroSidebarHint))
                 .font(Theme.font(.caption))
