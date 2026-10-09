@@ -395,6 +395,45 @@ final class NoteBodyTests: XCTestCase {
         XCTAssertEqual(back.spans[0].styles, [.bold])
     }
 
+    // MARK: 片 `WY-2a`（编辑器写路径落库）：`body` 恒等于 spans 的投影
+
+    /// **判据（本片「`body` 投影与 spans 一致」那一半）**：一棵同时带**行内样式**（粗 / 下划线 /
+    /// 荧光底色）与**块级**（勾选框 · 已勾 / 有序编号）的 span 树 ——
+    ///   · `NoteBody.body` **恒等于** `NoteBodyProjection.markdown(from: spans)`（同一个函数，单向）；
+    ///   · `spans → JSON → spans` 往返**逐字同值**（下划线 / 底色 / 块级 / 勾选态四样都不丢）；
+    ///   · 投影里**不出现**块级标记（`1.` / `- ` / `☐`）—— 编号与层级由渲染层生成、不落库（契约不变量⑤）。
+    ///
+    /// 为什么这一条属于本片：落库那两列（`spans` / `body`）由 `NoteDatabase.setNoteSpans` 一次写下，
+    /// 而它的口径就是「`body` = spans 的投影」—— 投影这一半一旦分家，库里就会出现
+    /// 「权威源换了、文本列还是旧的」这种半新半旧。
+    func testWY2aBodyIsExactlyTheProjectionOfSpans() throws {
+        let spans = [
+            NoteSpan(text: "普通 "),
+            NoteSpan(text: "粗", styles: [.bold]),
+            NoteSpan(text: "下划线", styles: [.underline], backgroundColor: NoteHighlight.backgroundColorHex),
+            NoteSpan(text: "任务项", block: .task(checked: true)),
+            NoteSpan(text: "编号项", block: .ordered)
+        ]
+        let body = NoteBody(spans: spans)
+        XCTAssertEqual(
+            body.body, NoteBodyProjection.markdown(from: spans),
+            "`body` 只能由 spans 派生 —— 两处各算一遍就会分家"
+        )
+
+        let back = try JSONDecoder().decode(NoteBody.self, from: try JSONEncoder().encode(body))
+        XCTAssertEqual(back.spans, spans, "往返不许丢语义（含块级与勾选态）")
+        XCTAssertEqual(back.body, body.body, "往返之后投影仍是同一个")
+
+        for marker in ["1.", "- ", "☐", "[x]", "[]"] {
+            XCTAssertFalse(back.body.contains(marker), "投影里冒出了块级标记 \(marker)：\(back.body)")
+        }
+        XCTAssertEqual(back.spans[3].block, .task(checked: true), "勾选态往返丢了")
+        XCTAssertEqual(back.spans[4].block, .ordered, "有序编号往返丢了")
+        XCTAssertEqual(
+            back.spans[2].backgroundColor, NoteHighlight.backgroundColorHex, "荧光底色往返丢了"
+        )
+    }
+
     /// 把 `0xRRGGBB` 拆成三通道（Core 测试里没有 AppKit，自己拆一遍，口径与 `NoteHighlight.rgb` 对齐）。
     private static func channels(ofHex hex: UInt32) -> (red: Int, green: Int, blue: Int) {
         (red: Int((hex >> 16) & 0xFF), green: Int((hex >> 8) & 0xFF), blue: Int(hex & 0xFF))

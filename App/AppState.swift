@@ -479,6 +479,14 @@ final class AppState: ObservableObject {
     @Published var noteEditorBody = "" {
         didSet { noteEditorTextChanged() }
     }
+    /// **编辑器里那一份正文的权威源**（片 `WY-2a`）：编辑面（`NotesRichTextEditor`）每敲一次就把
+    /// 整棵 span 树回推到这里，`writeNoteEditor` 用它经 `setNoteSpans` 落库。
+    ///
+    /// 与 `noteEditorBody` 的关系是**单向投影**：spans 是源，`body` = `NoteBodyProjection.markdown(from:)`。
+    /// 为什么它**没有** `didSet`：它从不单独变 —— 每一次都由编辑面同一批回调（`textDidChange` /
+    /// `install`）与 `noteEditorBody` **一起**推上来，脏标记由 `noteEditorBody` 那一处记（一处记两次
+    /// 就会多出一串重复的停顿计时，`L-172` 同一课）。
+    @Published var noteEditorSpans: [NoteSpan] = []
     @Published var noteEditorTags = "" {
         didSet { noteEditorTextChanged() }
     }
@@ -500,6 +508,9 @@ final class AppState: ObservableObject {
     private var noteEditorDirty = false
     /// 正在跑的计时 / 写库那一发（**唯一一处**：新一轮改动与「切走即存」都会把上一发收掉重排）。
     private var noteAutoSaveTask: Task<Void, Never>?
+    /// 正在跑的「从库里读回正文权威源 spans」那一发（片 `WY-2a`；见 `loadEditorSpans`）。
+    /// 换一条笔记就把它收掉重排 —— 迟到的读数属于上一条，装到当前这一条上就是串内容。
+    private var noteSpansLoadTask: Task<Void, Never>?
     /// 装内容进编辑器期间置真 —— 那三个 `didSet` 据此**不把「装进来的」当成「用户改的」**。
     private var isLoadingNoteEditor = false
     /// 刚落库、还没被 `reloadNotes()` 反映到 `notes` 里的那一份（**读旧列表的窗口期**）。
@@ -510,11 +521,25 @@ final class AppState: ObservableObject {
     ///
     /// 为什么要有它：「切走即存」那些入口**紧接着**就会改写编辑器那三个 `@Published`，
     /// 而写库是异步的 —— 不快照的话，写下去的是**下一条**的内容。
+    ///
+    /// **片 `WY-2a`**：多带一棵 `spans`（正文权威源）。`body` 是它的**单向投影**
+    /// （构造时由 `NoteBodyProjection.markdown(from:)` 派生，与 `NoteBody.body` 同一个函数）——
+    /// 快照里不保留「另一个源的正文」，落库的两列（`spans` / `body`）因此恒为同一棵树的两个形态。
     private struct NoteEditorSnapshot {
         let id: UUID?
         let title: String
+        let spans: [NoteSpan]
         let body: String
         let tags: String
+
+        /// 按「正文那一份 span 树」造一个快照（`body` 由 spans 派生 —— 单向）。
+        init(id: UUID?, title: String, spans: [NoteSpan], tags: String) {
+            self.id = id
+            self.title = title
+            self.spans = spans
+            self.body = NoteBodyProjection.markdown(from: spans)
+            self.tags = tags
+        }
 
         /// 转成落库用的草稿（空标题落 `无标题`，与手动「保存」同一口径）。
         func draft(untitled: String) -> NoteDraft {
@@ -6795,27 +6820,36 @@ final class AppState: ObservableObject {
     /// 用户会看到自己刚敲的字没了。`pendingNoteSnapshot` 就是补这个窗口期的（写完即清）。
     private func loadEditorContent(_ note: Note) {
         if let pending = pendingNoteSnapshot, pending.id == note.id {
-            setNoteEditorContent(id: note.id, title: pending.title, body: pending.body, tags: pending.tags)
+            setNoteEditorContent(
+                id: note.id, title: pending.title, spans: pending.spans, tags: pending.tags
+            )
             return
         }
+        // 先按正文投影（`parseInline` —— 与装进编辑面**同一个函数**）垫上，紧接着从库里把权威源
+        // 读回来换掉（`loadEditorSpans`）：`Note.body` 只是 `spans` 的投影，下划线 / 底色 / 块级
+        // 这些 Markdown 表达不了的东西**只在 `spans` 列里**（片 `WY-2a`）。
         setNoteEditorContent(
             id: note.id,
             title: note.title,
-            body: note.body,
+            spans: NoteBodyProjection.parseInline(note.body),
             tags: note.tags.joined(separator: " ")
         )
+        loadEditorSpans(id: note.id)
     }
 
-    /// **唯一一处**把内容写进编辑器（三个 `@Published` + 正在编辑的 id）。
+    /// **唯一一处**把内容写进编辑器（三个 `@Published` + 权威源 spans + 正在编辑的 id）。
     ///
     /// 为什么要收成一个入口：那三个 `didSet` 是「有改动就自动保存」的判据，而这里是
     /// 「**读进来的，不是用户写的**」那道闸（`isLoadingNoteEditor`）—— 谁再自己逐个赋一次值，
     /// 就会凭空多出一串「改动」：刚点开一条笔记就被自动保存写回去一次（`L-172` 同一课）。
-    private func setNoteEditorContent(id: UUID?, title: String, body: String, tags: String) {
+    /// 片 `WY-2a` 起 `spans` 也是这一处装（它没有 `didSet`，但必须与 `body` **同一批**装上——
+    /// 两处分着装就会出现「正文换了、权威源还是上一条的」）。
+    private func setNoteEditorContent(id: UUID?, title: String, spans: [NoteSpan], tags: String) {
         isLoadingNoteEditor = true
         noteBeingEdited = id
         noteEditorTitle = title
-        noteEditorBody = body
+        noteEditorSpans = spans
+        noteEditorBody = NoteBodyProjection.markdown(from: spans)
         noteEditorTags = tags
         isLoadingNoteEditor = false
         // 装进来 = 与库里一致 ⇒ 不脏，也不该再挂着上一条留下的保存状态。
@@ -6823,10 +6857,73 @@ final class AppState: ObservableObject {
         noteSaveState = .idle
     }
 
+    /// 把库里那一条的**正文权威源**（`spans`）读回来重挂在编辑面上（片 `WY-2a`）。
+    ///
+    /// 为什么要有这一跳：`body` 只是 `spans` 的**单向投影** —— 下划线 / 荧光底色 / 块级三枚
+    /// （勾选框 / 有序 / 无序）在 Markdown 里**没有形状**。不读回来的话，「打开一条带下划线的笔记、
+    /// 再保存一次」会按投影重新解析、把这几个字段**静默抹掉**（那正是 `WY-1b1` 头注释登记的
+    /// 过渡期边界，本片收口它）。
+    ///
+    /// 两条守卫**在读数回来那一刻**再判（不是发起时判）：
+    ///   · 编辑器**还停在**这一条上（用户可能已经点去别的笔记 ⇒ 迟到的读数属于上一条）；
+    ///   · 用户**还没动手改**（`noteEditorDirty` ⇒ 迟到的读数不许盖掉刚敲的字）。
+    private func loadEditorSpans(id: UUID) {
+        noteSpansLoadTask?.cancel()
+        noteSpansLoadTask = Task { [weak self] in
+            guard let self else { return }
+            let spans = await self.readNoteSpans(id: id)
+            guard !Task.isCancelled, let spans else { return }
+            self.applyLoadedSpans(spans, id: id)
+        }
+    }
+
+    /// 从库里读一条笔记的正文权威源（读不回来 / 该列还是 v1 的 NULL ⇒ `nil`，**不猜也不兜底成空树**）。
+    private func readNoteSpans(id: UUID) async -> [NoteSpan]? {
+        guard notesEnabled else { return nil }
+        do {
+            guard let json = try await NoteLibrary.defaultLibrary().noteSpans(id: id) else { return nil }
+            return Self.decodedSpans(json)
+        } catch {
+            // 读权威源失败**不静默**（与 `reloadNotes` 同一条口径：存储层的失败走 `errorMessage`，
+            // 不新造一句文案键）。
+            errorMessage = ErrorPresenter.message(for: error)
+            return nil
+        }
+    }
+
+    /// 把读回来的权威源装上（守卫见 `loadEditorSpans`）。正文一并按它投影一次 —— 两列重新对齐
+    /// （库里那份 `body` 本来就是这棵树的投影，正常这一句一个字节都不改）。
+    private func applyLoadedSpans(_ spans: [NoteSpan], id: UUID) {
+        guard noteBeingEdited == id, !noteEditorDirty else { return }
+        isLoadingNoteEditor = true
+        noteEditorSpans = spans
+        let projected = NoteBodyProjection.markdown(from: spans)
+        if noteEditorBody != projected { noteEditorBody = projected }
+        isLoadingNoteEditor = false
+    }
+
+    /// 等「读回权威源 spans」那一发**收口**（判据要确定性，不能靠 `sleep` 撞 —— 与
+    /// `awaitPendingNoteAutosave()` 同一条理由）。
+    func awaitPendingNoteSpansLoad() async {
+        await noteSpansLoadTask?.value
+    }
+
+    /// span 树 → 落库那份 JSON（`NoteBody` 的编解码面 = 交换面，**不另起一套序列化**）。
+    private static func encodedSpans(_ spans: [NoteSpan]) throws -> String {
+        let data = try JSONEncoder().encode(NoteBody(spans: spans))
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    /// 落库那份 JSON → span 树（读不回来 ⇒ `nil`：不猜、也不静默当成空树）。
+    private static func decodedSpans(_ json: String) -> [NoteSpan]? {
+        guard let body = try? JSONDecoder().decode(NoteBody.self, from: Data(json.utf8)) else { return nil }
+        return body.spans
+    }
+
     func beginNewNote() {
         // **切走即存**（片 `N2-4`）：点「新建」就是离开手上这一条 —— 先把改动落下去再清空。
         flushNoteAutosave()
-        setNoteEditorContent(id: nil, title: "", body: "", tags: "")
+        setNoteEditorContent(id: nil, title: "", spans: [], tags: "")
         // 新建 ⇒ 正文要能写（片 `N2-3a`：`.edit` 是本片之前那一个语义）。
         editorMode = .edit
     }
@@ -6910,16 +7007,40 @@ final class AppState: ObservableObject {
     }
 
     /// 编辑器里这一份的快照（写库与「切走即存」共用的**唯一出处**）。
+    ///
+    /// **片 `WY-2a`**：正文那一份取的是**权威源那棵树**（`editorSpansForSave()`），`body` 由它派生 ——
+    /// 从此写库的两列不会各说各话（`NoteDatabase.setNoteSpans` 把这条写进了它的口径里）。
     private func noteEditorSnapshot() -> NoteEditorSnapshot {
         NoteEditorSnapshot(
-            id: noteBeingEdited, title: noteEditorTitle, body: noteEditorBody, tags: noteEditorTags
+            id: noteBeingEdited, title: noteEditorTitle,
+            spans: editorSpansForSave(), tags: noteEditorTags
         )
+    }
+
+    /// **写库用的正文权威源**（编辑面那一棵 span 树）。
+    ///
+    /// 两条路（判据是**投影一致**，不是「哪一边非空」）：
+    ///   · **编辑面在场**（常态）：它每敲一次就把整棵树与正文**一起**回推
+    ///     （`NotesRichTextEditor.Coordinator.textDidChange`）⇒ 这一棵的投影**恒等于**当前正文，
+    ///     直接用它（下划线 / 底色 / 块级只有它带得住）。
+    ///   · **编辑面不在场 / 这一棵已经过期**（纯数据入口、判据直接灌正文，或正文被单独改过而树没跟上）：
+    ///     按**与装进编辑面同一个函数**（`NoteBodyProjection.parseInline`，Markdown 行内解析的唯一出处）
+    ///     从当前正文投影一份 —— 既不凭空写一条空正文，也不是另起一套解析。
+    ///     **过期那一档必须由正文说了算**：`noteEditorSpans` 是装笔记时按投影垫上的，正文改了它并不会
+    ///     自己变（它没有 `didSet`），拿它当权威源就会把**刚敲的字**整段写回去。
+    private func editorSpansForSave() -> [NoteSpan] {
+        if !noteEditorSpans.isEmpty,
+           NoteBodyProjection.markdown(from: noteEditorSpans) == noteEditorBody {
+            return noteEditorSpans
+        }
+        return NoteBodyProjection.parseInline(noteEditorBody)
     }
 
     /// 手上这一份是不是**就是刚写下去的那一份**（写入期间用户还在敲 ⇒ 判假，见 `writeNoteEditor`）。
     private func noteEditorMatches(_ written: NoteEditorSnapshot) -> Bool {
         written.id == noteBeingEdited
             && written.title == noteEditorTitle
+            && written.spans == editorSpansForSave()
             && written.body == noteEditorBody
             && written.tags == noteEditorTags
     }
@@ -6972,17 +7093,24 @@ final class AppState: ObservableObject {
         var written = snapshot
         do {
             let store = NoteLibrary.defaultLibrary()
+            // **正文权威源**：先把 span 树编成落库那份 JSON（`NoteBody` 的编解码面 —— 与交换面同一份，
+            // 不另起一套序列化）。编不出来就抛，走下面失败那一条，绝不静默写半份。
+            let spansJSON = try Self.encodedSpans(snapshot.spans)
             if let id = snapshot.id {
                 let existing = notes.first { $0.id == id }
                 var merged = snapshot.draft(untitled: L(.notesUntitled))
                 merged.source = existing?.source ?? merged.source
                 _ = try await store.upsert(merged, id: id)
+                // **正文落库：单一写入口**（片 `WY-2a`）。`NoteDatabase.setNoteSpans` 是全仓**唯一**
+                // 一处写 `spans` 列的地方，它把 `spans` 与**由它投影出来的** `body` 同一条语句写下去
+                // —— 于是库里不会出现「权威源换了、文本列还是旧的」这种半新半旧。
+                _ = try await store.setNoteSpans(spansJSON, body: snapshot.body, id: id)
             } else {
                 let saved = try await store.upsert(snapshot.draft(untitled: L(.notesUntitled)))
                 // **新建这一条已经在库里了** ⇒ 编辑器改认它（`noteBeingEdited = saved.id`）：
                 // 否则每一次自动保存都会**再建一条**（敲一会儿就多出好几条几乎一样的笔记）。
                 written = NoteEditorSnapshot(
-                    id: saved.id, title: snapshot.title, body: snapshot.body, tags: snapshot.tags
+                    id: saved.id, title: snapshot.title, spans: snapshot.spans, tags: snapshot.tags
                 )
                 noteBeingEdited = saved.id
                 // **在哪个笔记本里新建就落在哪个笔记本**（队列 `L-97` 界面半第一片）：
@@ -6993,6 +7121,8 @@ final class AppState: ObservableObject {
                 if destination != notesNavigation.directory.resolvedNotebookUid(nil) {
                     _ = try await store.move(noteIDs: [saved.id], toNotebook: destination)
                 }
+                // 新建这一支的正文权威源走同一条写入口（上面那一支的理由逐字适用）。
+                _ = try await store.setNoteSpans(spansJSON, body: snapshot.body, id: saved.id)
             }
             if written.id == noteBeingEdited {
                 // 写入期间用户还在敲（`await` 那一瞬主 actor 是让出来的）⇒ **不能**一句「干净了」

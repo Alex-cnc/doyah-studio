@@ -753,7 +753,13 @@ struct NotesEditorView: View {
                 // （行内标记装进来时解析成属性、`**` / `#` 不再露出；见该文件头注释）。
                 // `.editorSurface()` 仍挂在这一处**编辑面本体**上 —— 底色 / 字色的唯一出处不变，
                 // 处数棘轮（编辑面处数 == `.editorSurface()` 处数）靠这一行保持相等。
-                NotesRichTextEditor(text: $appState.noteEditorBody, controller: richController)
+                NotesRichTextEditor(
+                    text: $appState.noteEditorBody,
+                    // **片 `WY-2a`**：权威源那一份（span 树）也接进来 —— `writeNoteEditor` 靠它经
+                    // `setNoteSpans` 落库；`noteEditorBody` 只是它的单向投影（见 `AppState` 那一处）。
+                    spans: $appState.noteEditorSpans,
+                    controller: richController
+                )
                     .font(Theme.font(.mono))
                     .editorSurface()
                     .overlay(

@@ -400,6 +400,91 @@ final class NoteStoreSQLiteTests: XCTestCase {
         XCTAssertNotEqual(name, NoteDatabase.snapshotFileName(at: Date(timeIntervalSince1970: 1_774_000_002)))
     }
 
+    // MARK: - 正文权威源 spans（schema v8 · 片 `WY-1a` 立的列 · 片 `WY-2a` 接上的写路）
+
+    /// 一条带**行内样式**（粗 / 下划线 / 荧光底色）与**块级**（勾选框 · 已勾）的 span 树，
+    /// 编成落库那份 JSON（与交换面同一份 `NoteBody` 编解码面）。
+    private func sampleSpans() -> (json: String, body: String, spans: [NoteSpan]) {
+        let spans = [
+            NoteSpan(text: "粗", styles: [.bold]),
+            NoteSpan(text: "下划线", styles: [.underline], backgroundColor: NoteHighlight.backgroundColorHex),
+            NoteSpan(text: "任务项", block: .task(checked: true))
+        ]
+        let data = (try? JSONEncoder().encode(NoteBody(spans: spans))) ?? Data()
+        return (String(decoding: data, as: UTF8.self), NoteBodyProjection.markdown(from: spans), spans)
+    }
+
+    /// **「写 spans → 读回同值」**（片 `WY-2a` 的存储那一半）：`setNoteSpans` 写下去之后，
+    /// `spans` 列读回来**逐字同值**、`body` 列**恰好是它的投影**（`NoteBody.body` 同一个函数）。
+    func testSetNoteSpansWritesTheTreeAndItsProjection() throws {
+        let database = try makeDatabase()
+        let note = sampleNote(title: "权威源", body: "旧正文")
+        _ = try database.upsert(note)
+        XCTAssertNil(
+            try database.noteSpans(id: note.id),
+            "前置：`upsert` 不写 `spans`（那正是改前那条写路的全部落库动作）"
+        )
+
+        let sample = sampleSpans()
+        XCTAssertEqual(
+            try database.setNoteSpans(sample.json, body: sample.body, id: note.id), 1,
+            "应当真的改了一行（认得出的 id）"
+        )
+        XCTAssertEqual(try database.noteSpans(id: note.id), sample.json, "`spans` 列读回来必须逐字同值")
+        XCTAssertEqual(try database.note(id: note.id)?.body, sample.body, "`body` 列必须是 `spans` 的投影")
+
+        // 「body 投影与 spans 一致」单独再判一次：从落库那份 JSON 解回来 → 投影 == 落库的 `body` 列。
+        let decoded = try JSONDecoder().decode(NoteBody.self, from: Data(sample.json.utf8))
+        XCTAssertEqual(decoded.spans, sample.spans, "往返不许丢语义")
+        XCTAssertEqual(decoded.body, sample.body, "同一个函数算出来的投影，两处必须一模一样")
+        XCTAssertEqual(
+            decoded.spans.first { $0.text == "任务项" }?.block, .task(checked: true),
+            "勾选态没落库 / 读不回来"
+        )
+        XCTAssertTrue(decoded.spans.contains { $0.styles.contains(.underline) }, "下划线没落库 / 读不回来")
+        XCTAssertEqual(
+            decoded.spans.first { $0.text == "下划线" }?.backgroundColor, NoteHighlight.backgroundColorHex,
+            "荧光底色没落库 / 读不回来"
+        )
+    }
+
+    /// **改正文保存不许把权威源抹掉**：`upsert` 的 `ON CONFLICT` 段不含 `spans`
+    /// （与 `favorite` / `pinned` / `notebook_uid` 同一条教训）—— 再存一次之后 `spans` 还在。
+    func testUpsertKeepsTheSpansColumnUntouched() throws {
+        let database = try makeDatabase()
+        let note = sampleNote(title: "权威源·再存一次")
+        _ = try database.upsert(note)
+        let sample = sampleSpans()
+        _ = try database.setNoteSpans(sample.json, body: sample.body, id: note.id)
+
+        var again = note
+        again.body = "又改了正文"
+        again.tags = ["t1"]
+        _ = try database.upsert(again)
+
+        XCTAssertEqual(
+            try database.noteSpans(id: note.id), sample.json,
+            "再存一次就把权威源抹了 —— 那等于每改一次正文，下划线 / 底色 / 块级全丢"
+        )
+    }
+
+    /// 认不出的 id ⇒ **一行都不匹配**（`0`），不假装写成了（与 `setFavorite` / `setPinned` 同口径）。
+    func testSetNoteSpansOnAnUnknownIDChangesNothing() throws {
+        let database = try makeDatabase()
+        let sample = sampleSpans()
+        XCTAssertEqual(try database.setNoteSpans(sample.json, body: sample.body, id: UUID()), 0)
+        XCTAssertNil(try database.noteSpans(id: UUID()))
+    }
+
+    /// v1 存量（没走过 `setNoteSpans`）读回来是 `nil` —— 不是空串、也不是 `"[]"`：
+    /// 「还没有 v2 权威源」与「权威源是空树」是两件事。
+    func testLegacyNoteHasNoSpansRatherThanAnEmptyTree() throws {
+        let database = try makeDatabase()
+        let note = sampleNote(title: "v1 存量", body: "正文")
+        _ = try database.upsert(note)
+        XCTAssertNil(try database.noteSpans(id: note.id))
+    }
+
     // MARK: - ⑤ 一次性迁移（notes.json → notes.sqlite3）
 
     /// 常规路径：数据全搬过去、旧文件**改名留档**（不删）、再跑一次幂等。
