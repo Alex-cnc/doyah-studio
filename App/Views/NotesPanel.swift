@@ -8,7 +8,7 @@ import SwiftUI
 ///   · **左栏** = 导航（笔记本架 → 笔记本 两级树）—— 由 `MainWindow` 的侧栏承载，可折叠；
 ///   · **中栏** = 这一条列表（本文件 `NotesListView`：标题 + 摘要 + 相对时间）；
 ///   · **右栏** = 正文 / 编辑器（`NotesEditorView`，读写同屏）；
-///   · **顶栏** = 搜索（作用域 = 当前范围 / 全部笔记本）+ 新建（`NotesAreaView`）。
+///   · **顶栏** = 搜索（收起态一枚放大镜图标 · 点它浮出搜索框；作用域 = 当前范围 / 全部笔记本）+ 新建（`NotesAreaView`）。
 ///
 /// 为什么把搜索框从侧栏搬到顶栏：三栏之后侧栏只剩「导航」这一件事（与印象笔记的分工同形），
 /// 而搜索在侧栏里只能搜「当前这一栏」，搬上去之后它管的是**整个笔记模块** —— 这也是
@@ -932,7 +932,7 @@ struct NotesEditorToolbar: View {
 /// 借鉴印象笔记PC端布局」—— **结构借鉴，不抄视觉**（品牌色与既有像素判据一字未动）。
 ///
 /// 四块（左栏由 `MainWindow` 的侧栏承载，可折叠）：
-///   · **顶栏** = 搜索框（作用域 = 当前范围 / 全部笔记本）+ 新建；
+///   · **顶栏** = 搜索（**收起态 = 一枚图标；点击时再出现框子** —— `FR-NOTEUI-04`）+ 新建；
 ///   · **中栏** = `NotesListView`（列表：标题 / 摘要两行 / 相对时间）；
 ///   · **右栏** = `NotesEditorView`（正文 / 编辑器，读写同屏）；
 ///   · **左栏** = `NotesContainerTreeView`（笔记本架 → 笔记本两级树）。
@@ -950,38 +950,54 @@ struct NotesAreaView: View {
 
     @EnvironmentObject private var appState: AppState
 
+    /// 展开态那一枚输入框的焦点（浮出来就把键盘交给它 —— `FR-NOTEUI-04`）。
+    @FocusState private var noteSearchFocused: Bool
+
     var body: some View {
         VStack(spacing: 0) {
             topBar
             Divider()
-            // **两屏各是一套三栏**（队列 `L-100` 界面半第一片）：`FR-NOTE-36` 要「各自入口与列表」，
-            // 所以待办不塞进笔记列表，而是同一副骨架下的另一屏。**两个 `HSplitView` 各写一遍**
-            // 而不是在它内部 `switch`：`HSplitView` 的成员必须是它直接的子视图，
-            // 套一层条件视图会把两栏挤成一栏（布局当场坏掉）。
-            if appState.notesModule == .todos {
-                HSplitView {
-                    TodoPaneView()
-                        .frame(
-                            minWidth: NotesAreaView.listPaneMinWidth,
-                            idealWidth: NotesAreaView.listPaneIdealWidth,
-                            maxWidth: NotesAreaView.listPaneMaxWidth
-                        )
-                    TodoRightPaneView()
-                        .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+            Group {
+                // **两屏各是一套三栏**（队列 `L-100` 界面半第一片）：`FR-NOTE-36` 要「各自入口与列表」，
+                // 所以待办不塞进笔记列表，而是同一副骨架下的另一屏。**两个 `HSplitView` 各写一遍**
+                // 而不是在它内部 `switch`：`HSplitView` 的成员必须是它直接的子视图，
+                // 套一层条件视图会把两栏挤成一栏（布局当场坏掉）。
+                if appState.notesModule == .todos {
+                    HSplitView {
+                        TodoPaneView()
+                            .frame(
+                                minWidth: NotesAreaView.listPaneMinWidth,
+                                idealWidth: NotesAreaView.listPaneIdealWidth,
+                                maxWidth: NotesAreaView.listPaneMaxWidth
+                            )
+                        TodoRightPaneView()
+                            .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    HSplitView {
+                        NotesListView()
+                            .frame(
+                                minWidth: NotesAreaView.listPaneMinWidth,
+                                idealWidth: NotesAreaView.listPaneIdealWidth,
+                                maxWidth: NotesAreaView.listPaneMaxWidth
+                            )
+                        NotesEditorView()
+                            .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                HSplitView {
-                    NotesListView()
-                        .frame(
-                            minWidth: NotesAreaView.listPaneMinWidth,
-                            idealWidth: NotesAreaView.listPaneIdealWidth,
-                            maxWidth: NotesAreaView.listPaneMaxWidth
-                        )
-                    NotesEditorView()
-                        .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+            }
+            // **「点外部收起」那一条路**（`FR-NOTEUI-04` 判据 §三.1 ③）：搜索框浮出来之后，
+            // 列表 / 正文这一块就是「框外」—— 在这里铺一层透明的收起点，点它就收起。
+            // 只挂在**这一块**（不含顶栏那一行）：挂在顶栏上会把刚浮出来的框自己也盖住，
+            // 那样「点图标 → 出框 → 打字」第一步就点不进去了。收起态下这一层不存在（`if` 为假）。
+            .overlay {
+                if appState.notesModule == .notes && appState.noteSearchRevealed {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { appState.collapseNoteSearch() }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .background(Theme.surface(.content))
@@ -1034,8 +1050,9 @@ struct NotesAreaView: View {
     /// 三条刻意的口径：
     ///   · **切换在行末**，而这一行**只设左侧留白、不设右侧留白** ——「最右侧」才真的是最右侧。
     ///     判据①（切换控件右边缘 = 左区行右边缘 ±4 px）由 `TestsUISnapshot/NotesLayoutProbeTests.swift` 钉住；
-    ///   · 「查」**不另发一枚按钮**：搜索框本身就是「查」的入口 —— 搜索只有一处（`L-44`），
-    ///     再发一枚按钮就是第二个入口；
+    ///   · 「查」**不另发一枚按钮**：搜索那一格本身就是「查」的入口 —— 搜索只有一处（`L-44`），
+    ///     再发一枚按钮就是第二个入口。`FR-NOTEUI-04` 之后这一格是**两态**的：
+    ///     收起态 = 一枚放大镜图标、展开态 = 框子（见 `notesSearch`），**仍只有这一个入口**；
     ///   · 搜索那一档仍在**笔记屏**才出现（原口径一字未改）：待办的**本地检索**属 `FR-NOTE-37`，
     ///     它的口径还在契约半 ⇒ 这一屏不给一个搜不出东西的搜索框（`L-50` 同族）。
     ///
@@ -1052,24 +1069,7 @@ struct NotesAreaView: View {
         HStack(spacing: Spacing.s) {
             crudEntries
             if appState.notesModule == .notes {
-                TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)
-                    .textFieldStyle(.roundedBorder)
-                    // **「查」的宽度**：原 320 是这一行的宽度主项（片 `N2-2` 判据④的成对读数里，
-                    // 它一项就占掉 713.5pt 里的 320）。收窄到 200 之后整行 442pt（×0.62）。
-                    .frame(maxWidth: NotesAreaView.searchFieldMaxWidth)
-                    .accessibilityIdentifier("notes-search-field")
-                Picker(L(.notesSearchScopeTitle), selection: $appState.notesSearchScope) {
-                    Text(L(.notesSearchScopeCurrent)).tag(NotesSearchScope.current)
-                    Text(L(.notesSearchScopeAll)).tag(NotesSearchScope.all)
-                }
-                // **作用域改下拉**（片 `N2-2`）：它答的是「这次搜哪儿」——一个**取值**，不是「看哪一屏」。
-                // 与 SQL 编辑区工具条同一设计语言（那边一件分段条都没有，取值一律走下拉菜单）。
-                // 逐处写明理由、保留的分段条另见 `moduleSwitch`。
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
-                .help(L(.notesSearchScopeTitle))
-                .accessibilityIdentifier("notes-search-scope")
+                notesSearch
             }
             Spacer(minLength: Spacing.s)
             moduleSwitch
@@ -1077,6 +1077,74 @@ struct NotesAreaView: View {
         .padding(.leading, Spacing.s)
         .padding(.vertical, Spacing.xs)
         .accessibilityIdentifier("notes-left-actions-row")
+    }
+
+    /// **「查」那一格 = 一枚图标 + 点出来的框子**（`FR-NOTEUI-04` · 人类主人 2026-10-10 原话逐字：
+    /// 「**笔记搜索不要那么大一个框子，有个搜索图标就行，用户点击时再出现框子，跟工作区的搜索
+    /// 保持相同设计语言。**」）。
+    ///
+    /// ## 两态（默认收起）
+    ///   · **收起态**：只有一枚放大镜图标（`SearchRevealButton` —— 与左栏那三枚增改删入口
+    ///     同一个 `ToolbarIconButton`、同一个 28×22 命中区、同样靠 `.help` 说出自己是谁）。
+    ///     这一行上**不再有常驻输入框**吃宽度（`N2-2` 判据④里那一格 200pt 的宽度主项）；
+    ///   · **展开态**：`SearchField { … }` 把框子浮出来 —— **壳是唯一呈现函数**
+    ///     （`App/Views/SearchPresentation.swift`），与工作区标头那个框**是同一段代码**
+    ///     （判据 §三.1 ④：同一呈现函数 / 同一图标形制）。作用域下拉跟着一起出现
+    ///     （`L-97` ⑤：那枚开关只对检索那条路起作用，必须贴着搜索框，不然没人知道它在管谁）。
+    ///
+    /// ## 收起的三条路（判据 §三.1 ③）
+    ///   · **ESC** —— `.onKeyPress(.escape)`，与工作区标头**同一个键盘语义**；
+    ///   · **点外部** —— 展开期间在列表 / 正文那一块铺一层透明的收起点（见 `body` 里那个
+    ///     `.overlay`），点它就收起；
+    ///   · **框里那枚 ×** —— 看得见的入口，不靠猜。
+    ///
+    /// 三条都走 `AppState.collapseNoteSearch()`：**收框 + 清词**是同一处 —— 只收框不清词的话，
+    /// 列表还按一个看不见的词过滤着（症状：界面上没有搜索框，列表却少几条）。
+    @ViewBuilder
+    private var notesSearch: some View {
+        if appState.noteSearchRevealed {
+            SearchField {
+                TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)
+                    .textFieldStyle(.plain)
+                    .font(Theme.font(.caption))
+                    .focused($noteSearchFocused)
+                    .accessibilityIdentifier("notes-search-field")
+                Button {
+                    appState.collapseNoteSearch()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .imageScale(.small)
+                        .foregroundStyle(Theme.text(.tertiary))
+                }
+                .buttonStyle(.plain)
+                .help(L(.commonClose))
+            }
+            .frame(maxWidth: NotesAreaView.searchFieldMaxWidth)
+            .onKeyPress(.escape) {
+                appState.collapseNoteSearch()
+                return .handled
+            }
+            // 浮出来就把键盘交给它（与「点一下就要能打字」同一条口径）。
+            .onAppear { noteSearchFocused = true }
+            Picker(L(.notesSearchScopeTitle), selection: $appState.notesSearchScope) {
+                Text(L(.notesSearchScopeCurrent)).tag(NotesSearchScope.current)
+                Text(L(.notesSearchScopeAll)).tag(NotesSearchScope.all)
+            }
+            // **作用域改下拉**（片 `N2-2`）：它答的是「这次搜哪儿」——一个**取值**，不是「看哪一屏」。
+            // 与 SQL 编辑区工具条同一设计语言（那边一件分段条都没有，取值一律走下拉菜单）。
+            // 逐处写明理由、保留的分段条另见 `moduleSwitch`。
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .fixedSize()
+            .help(L(.notesSearchScopeTitle))
+            .accessibilityIdentifier("notes-search-scope")
+        } else {
+            // 「有个搜索图标就行」：收起态就是这一枚。
+            SearchRevealButton(help: L(.notesSearchPlaceholder)) {
+                appState.revealNoteSearch()
+            }
+            .accessibilityIdentifier("notes-search-toggle")
+        }
     }
 
     /// **左区顶部的增删查改入口**（人类主人令 `T-20261007-004` 第三节第 1 条）。

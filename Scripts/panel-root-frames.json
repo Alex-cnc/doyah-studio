@@ -2,7 +2,7 @@
   "title": "面板根固定尺寸 `.frame(width:height:)` 的处置台账（队列 L-61）",
   "scope": "App/Views/**/*.swift",
   "panelRootMinWidth": 400,
-  "scannedFiles": 88,
+  "scannedFiles": 89,
   "totals": {
     "frames": 37,
     "panelRoots": 21,
@@ -370,5 +370,5 @@
     }
   ],
   "totalsNote": "`frames` / `panelRoots` / `ornaments` 都是**处数**（同一形状出现多次按处数记，例如对象树里三处 12×12 的形状算 3 处）；条目数另计（现 31 条）。",
-  "updated": "2026-10-09（片 `云F` · 账号与同步界面（最小集）· 任务 `t_b51cd0ff`：`App/Views/` 新增一个视图文件 `AccountSyncSheet.swift`（`scannedFiles` 87 → **88**）。**处数与条目数都不变**（37 = 面板根 21 · 装饰 16，35 条）—— 新面板根**只给宽度**（`.frame(width: 520)`，高度由内容算），不是「宽高都是数字字面量」那一类，按判据 F 本就在范围外（`Scripts/check-panel-root-frames.py` 只判两个维度都是字面量的固定尺寸）。上一条：2026-10-01（星空紫「星云皮肤」那一轮 · `T-20261001-037`：鲸鱼娘越界追加的 `App/Views/NebulaBackground.swift`（星云皮肤渲染器 + `NebulaSurface` 包装）纳入本侧 ⇒ 扫描范围 79 → **80**；**处数不变** 36 = 面板根 21 · 装饰 15（新文件里没有「宽高都是数字字面量」的 `.frame`），台账仍 34 条。**订正留痕**：上一版这条说明停留在第 139 轮；本轮只动这一个数）"
+  "updated": "2026-10-10（片 `D166①` · 派单 `T-20261010-166` §三.1 · 任务 `t_22a11347`：`App/Views/` 新增一个视图文件 `SearchPresentation.swift`（**搜索呈现的唯一出处** —— `SearchField` 那个壳 + 收起态 `SearchRevealButton` + 图标符号 `SearchPresentation.symbolName`）⇒ `scannedFiles` 88 → **89**。**处数与条目数都不变**（37 = 面板根 21 · 装饰 16，35 条）—— 新文件里**没有**「宽高都是数字字面量」的 `.frame`（壳的内边距 / 圆角 / 描边全部取自设计令牌），按判据 F 本就在范围外）。上一条：2026-10-09（片 `云F` · 账号与同步界面（最小集）· 任务 `t_b51cd0ff`：`App/Views/` 新增一个视图文件 `AccountSyncSheet.swift`（`scannedFiles` 87 → **88**）。**处数与条目数都不变**（37 = 面板根 21 · 装饰 16，35 条）—— 新面板根**只给宽度**（`.frame(width: 520)`，高度由内容算），不是「宽高都是数字字面量」那一类，按判据 F 本就在范围外（`Scripts/check-panel-root-frames.py` 只判两个维度都是字面量的固定尺寸）。上一条：2026-10-01（星空紫「星云皮肤」那一轮 · `T-20261001-037`：鲸鱼娘越界追加的 `App/Views/NebulaBackground.swift`（星云皮肤渲染器 + `NebulaSurface` 包装）纳入本侧 ⇒ 扫描范围 79 → **80**；**处数不变** 36 = 面板根 21 · 装饰 15（新文件里没有「宽高都是数字字面量」的 `.frame`），台账仍 34 条。**订正留痕**：上一版这条说明停留在第 139 轮；本轮只动这一个数）"
 }
