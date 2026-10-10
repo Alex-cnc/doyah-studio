@@ -63,6 +63,12 @@
  "shared_require_declaration": true,
  "shared_ledger": [
   {
+   "glob": "Scripts/check-doc-versions.py",
+   "reason": "单 T-20261010-079（前门交付补丁 · origin: human-owner）：扫描面同源（仓根 *.md + Docs/**/*.md，与姊妹判据 check-doc-tables 同源）+ 仓根入口件 AGENT-SPEC.md 纳入受检清单 ⇒ 修「仓根入口件三组撞号落在判据面外 ⇒ 假绿」的口径缺口。口径登记：脚本归机组、条文归前门 —— 前门改门禁脚本一律出补丁（doyah-dispatch/assets/patches/）交机组应用并给读数（前门直推 Scripts/** 被本判据拦下）",
+   "by": "hugehippo",
+   "at": "2026-10-10"
+  },
+  {
    "glob": "Scripts/path-ownership.json",
    "reason": "T-20261005-088 ①：契约层落笔面跟版为人类主人 2026-10-05 批准的四类（Docs/** + AGENT-SPEC.md + 仓根 README.md + Scripts/doc-numbers.json）",
    "by": "bighippo",

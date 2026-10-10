@@ -82,12 +82,16 @@ VERSION_DOCS = [
     ("Docs/design/外观方案-v1.md", False),
     ("Docs/design/复盘工具-宿主侧装配需求-20260929.md", False),
     ("Docs/手工验收运行手册.md", False),
+    # 2026-10-10 修（T-20261010-030）：仓根入口件纳入受检清单（此前不在清单 ⇒ 三组撞号全绿）
+    ("AGENT-SPEC.md", False),
 ]
 DEV_RECORD_GLOB = "Docs/开发记录-*.md"
 QUEUE_FILE = "Docs/design/开发循环-任务队列.md"
 
 # 判据 D「受检清单自洽」（第 88 轮，L-88）：有「变更记录」节的文档不许溜出受检清单。
-COVERAGE_ROOT_GLOB = "Docs/**/*.md"
+# 2026-10-10 修（T-20261010-030）：扫描面**与姊妹判据 `check-doc-tables` 同源** = 仓根 `*.md` + `Docs/**/*.md`
+# —— 此前只盖 `Docs/**` ⇒ 仓根入口件 `AGENT-SPEC.md` 的三组撞号在判据外**全绿**（假绿）。
+COVERAGE_ROOT_GLOBS = ["*.md", "Docs/**/*.md"]
 COVERAGE_EXEMPT = {
     "Docs/archive/": "历史归档快照（旧版三书），按「历史引用不回改」不纳入版本纪律",
 }
@@ -217,7 +221,7 @@ def coverage_problems(root: pathlib.Path) -> list[str]:
     """
     listed = {relative for relative, _ in VERSION_DOCS}
     problems: list[str] = []
-    for path in sorted(root.glob(COVERAGE_ROOT_GLOB)):
+    for path in sorted({p for _g in COVERAGE_ROOT_GLOBS for p in root.glob(_g)}):
         relative = identity_text(path.relative_to(root))
         if any(relative.startswith(prefix) for prefix in COVERAGE_EXEMPT):
             continue
@@ -272,7 +276,8 @@ def run(root: pathlib.Path, quiet: bool) -> int:
     if not quiet:
         exempt = "、".join(f"`{prefix}`（{reason}）" for prefix, reason in COVERAGE_EXEMPT.items())
         mark = "❌" if uncovered else "✅"
-        print(f"{mark} 受检清单自洽 —— `{COVERAGE_ROOT_GLOB}` 里带「变更记录」节的文档全部在清单内"
+        _globdesc = " + ".join(COVERAGE_ROOT_GLOBS)
+        print(f"{mark} 受检清单自洽 —— `{_globdesc}` 里带「变更记录」节的文档全部在清单内"
               f"（豁免：{exempt}）")
 
     if problems:
