@@ -415,6 +415,13 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesDefaultNotebookName
     /// 队列 `L-97` 界面半（两级导航）：树顶上那行「全部笔记」（不是容器，是一个范围）。
     case notesAllNotes
+    /// **浮动式书架那一枚入口图标的名字**（`FR-NOTEUI-03` · 派单 `T-20261010-166` §三.2 · 人类主人
+    /// 2026-10-10 原话②：「笔记本管理栏可以节约空间改成浮动式的…」）。
+    ///
+    /// 笔记本架从**固定一栏**改成**浮动覆盖层**之后，「这一栏去哪了」就只剩一枚图标（`FR-NOTEUI-03`：
+    /// 图标 + 提示、**不许文字按钮**）—— 图标自己说不出它是什么，所以这一句同时当**悬停提示**
+    /// 与**无障碍标签**（两处同一句，不另写两个版本）。
+    case notesShelfEntry
     /// 搜索范围那枚开关的无障碍标签（分段控件自己不带标题）。
     case notesSearchScopeTitle
     /// 搜索范围 = 只在当前看的这一块里搜。
@@ -2722,6 +2729,7 @@ public enum LocalizedStrings {
         .notesDefaultShelfName: [.simplifiedChinese: "笔记本架", .english: "Shelf"],
         .notesDefaultNotebookName: [.simplifiedChinese: "笔记本", .english: "Notebook"],
         .notesAllNotes: [.simplifiedChinese: "全部笔记", .english: "All Notes"],
+        .notesShelfEntry: [.simplifiedChinese: "笔记本架", .english: "Shelf"],
         .notesSearchScopeTitle: [.simplifiedChinese: "搜索范围", .english: "Search scope"],
         .notesSearchScopeCurrent: [.simplifiedChinese: "当前范围", .english: "Current scope"],
         .notesSearchScopeAll: [.simplifiedChinese: "全部笔记本", .english: "All notebooks"],

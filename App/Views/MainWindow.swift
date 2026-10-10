@@ -38,6 +38,28 @@ struct MainWindow: View {
     @EnvironmentObject private var workspace: WorkspaceStore
     @State private var contentWidth: CGFloat = 0
     @State private var formMode: ConnectionFormMode?
+    /// **侧栏那一格的可见性**（`FR-NOTEUI-01` · 派单 `T-20261010-166` §三.2 · 人类主人 2026-10-10
+    /// 原话②：「**笔记本管理栏可以节约空间改成浮动式的，把笔记管理左栏放到目前的笔记本管理
+    /// 导航栏去。**」）。
+    ///
+    /// 笔记屏里，笔记本架从「固定占着最左一整栏」改成**浮动覆盖层**（那个浮层的入口挂在笔记列表
+    /// 栏头，见 `NotesListView.shelfEntry`）。那一栏空出来了 —— 于是笔记列表那一列成为**最左**
+    /// 可见的一列（`FR-NOTEUI-01`「笔记列表列位于最左」量的就是它）。
+    ///
+    /// 为什么不是「把树塞进侧栏、再让列表也进侧栏」：`TestsUISnapshot/NotesLayoutProbeTests.swift`
+    /// 那三条既有判据钉的是「**存放笔记列表的那一列**」的整列宽度 / 头部几何 / CRUD 行与首行的
+    /// 上下关系，它们都在 `NotesAreaView` 的三栏骨架里量 —— 把列表搬出那一副骨架会把三条已经
+    /// 成立的判据一起作废（那是**另一件事**，不是本条要做的）。本条只做「那一格不再固定占位」，
+    /// 三栏骨架与它上面所有既有读数一字未动。
+    ///
+    /// 其余活动项（数据库 / 工作区 / 周报）的侧栏是它们自己的导航，照旧 `.all`。
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+
+    /// 侧栏可见性跟着活动栏走（一条口径，两处调用：启动那一次 + 每次切换）。
+    private func syncSidebarVisibility(for item: ActivityBarItem) {
+        // 笔记屏 = 列表自己占最左；其余屏 = 有自己的一栏导航。
+        columnVisibility = item == .notes ? .detailOnly : .all
+    }
 
     /// 侧栏内容由活动栏决定（「看哪个视图」与「视图里看什么」分开）。
     @ViewBuilder
@@ -140,7 +162,7 @@ struct MainWindow: View {
             // 活动栏在 `NavigationSplitView` **外面**：它是应用级 chrome，不属于可调宽的侧栏
             // （与 VS Code 一致 —— 拖拽侧栏宽度时活动栏不动）。
             ActivityBarView()
-            NavigationSplitView {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
                 sidebarContent
                     // **侧栏宽度单点化**（2026-10-06 人类主人实机点验第 1 条「左栏太宽」；派单 `T-20261006-078` §1）：
                     // 原先这里写死 `min 240 / ideal 280 / max 380`，而设计令牌 `Metrics.sidebarWidth`（248）
@@ -201,9 +223,13 @@ struct MainWindow: View {
         // 不持有 `AppState`，所以由窗口把**权威值**（许可证解析之后的那个）喂给它 —— `AppState`
         // 自己发的广播也走同一条路，两条都留着：这条不依赖「观察者装好了没 / 菜单建好了没」的先后。
         .task {
+            // **侧栏那一格也跟着活动栏走**（`FR-NOTEUI-01`）：启动时当前活动项若已是笔记，
+            // 就不要再摆出那一栏（与下面 `onChange` 是同一条口径的两处调用，不是两条）。
+            syncSidebarVisibility(for: appState.selectedActivityItem)
             MainMenuLocalizer.syncAreaVisibility(appState.selectedActivityItem)
         }
         .onChange(of: appState.selectedActivityItem) { _, item in
+            syncSidebarVisibility(for: item)
             MainMenuLocalizer.syncAreaVisibility(item)
         }
         .sheet(item: $formMode) { mode in

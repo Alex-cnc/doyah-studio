@@ -448,6 +448,25 @@ final class AppState: ObservableObject {
     @Published var notesSortOrder: NotesSortOrder = .updatedDesc
     /// 搜索范围那枚开关（当前范围 / 全部笔记本）—— 只影响搜索结果的筛选。
     @Published var notesSearchScope: NotesSearchScope = .current
+    /// **浮动式书架的两态**（`FR-NOTEUI-02`/`-03` · 派单 `T-20261010-166` §三.2 · 人类主人
+    /// 2026-10-10 原话②：「**笔记本管理栏可以节约空间改成浮动式的，把笔记管理左栏放到目前的
+    /// 笔记本管理导航栏去。**」）。
+    ///
+    /// ## 为什么这个状态住在 `AppState`
+    ///
+    /// 「悬停浮出 / 移开收起」是**跨两处视图**的一件事：入口那一枚图标画在**笔记列表的栏头里**
+    /// （左边那一栏的顶部），浮出来的那一块是它上面的**覆盖层**（`NotesAreaView` 的 overlay）。
+    /// 一个视图局部 `@State` 盖不住两处 —— 两处各揣一个的话，「悬停入口 ⇒ 覆盖层出现、移开 ⇒
+    /// 两块一起收」永远对不上（`L-59` 那一课的同一个形状：状态活在哪，决定了它能不能被两处共用）。
+    /// 写入口唯一 = `setNotesShelfRevealed(_:)`。
+    ///
+    /// ## 边界（如实登记）
+    ///
+    /// 这一位记的是**结果**（浮出 / 收起），不是「鼠标坐标」：鼠标进出的判定在视图那一层
+    /// （`.onHover`），这里只留两态。所以探针可以**直接把它摆到「悬停后」那一档**再量几何
+    /// —— 离屏宿主里合成悬停不响应（见 `NotesLayoutProbeTests` 头注释那三条硬边界），
+    /// 「鼠标真悬停」那一下仍归实跑的人眼证据。
+    @Published private(set) var notesShelfRevealed = false
     /// **删除确认框**（队列 `L-97` 界面半第二片）：挂在界面上的那一个删除请求。
     /// 计划从库里**现算**（`NoteLibrary.removalPlan`）——界面算不出来，也不该自己算一遍。
     @Published var pendingContainerRemoval: ContainerRemovalRequest?
@@ -6555,6 +6574,17 @@ final class AppState: ObservableObject {
     /// 当前语义一句话能说清：**开关 = 左栏那一行**。
     func setNotesFavoriteOnly(_ on: Bool) {
         selectNotesScope(on ? .favorites : .all)
+    }
+
+    /// **浮动式书架的唯写入口**（`FR-NOTEUI-02` · 状态见 `notesShelfRevealed`）。
+    ///
+    /// 三条路都走它：入口那一枚图标的**悬停进入**、覆盖层自己的**悬停进入 / 离开**
+    /// （离开＝「移开收起」那一下）、以及**点一下入口**（键盘 / 精确定位的人不必悬停）。
+    ///
+    /// 幂等：`guard` 掉同值写入，免得同一档状态把整棵视图树无谓地推一遍（悬停事件会连发）。
+    func setNotesShelfRevealed(_ revealed: Bool) {
+        guard notesShelfRevealed != revealed else { return }
+        notesShelfRevealed = revealed
     }
 
     /// **收藏 / 取消收藏一条笔记**（队列 `L-184` 第三片）：写库 → 重读 → 界面按重读后的事实重画。

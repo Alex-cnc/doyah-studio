@@ -148,6 +148,32 @@ struct NotesListView: View {
         // 侧栏底色与工作区侧栏同一令牌（2026-09-30 实测反馈：笔记界面与工作区配色差很大）。
         .scrollContentBackground(.hidden)
         .background(Theme.surface(.sidebar))
+        // **浮动覆盖式书架**（`FR-NOTEUI-02`）：覆盖层挂在**这一栏自己**身上 ——
+        // 它盖的就是「存放笔记列表的那一列」。用 `overlay` 而不是 `HStack` 里加一栏，是因为
+        // 判据① 量的正是「**无悬停时列表宽度不变**」（覆盖**非挤压**）：`overlay` 只叠画、
+        // 不参与尺寸协商，这一栏的宽度在这一层上下两态里逐点相同。
+        .overlay(alignment: .topLeading) { shelfLayer }
+    }
+
+    /// **浮动书架那一层的两态**（`FR-NOTEUI-02` · 派单 `T-20261010-166` §三.2）。
+    ///
+    ///   ① **收起态** = 这一层**不存在**（`if` 为假，`EmptyView`）—— 判据① 的对照件：
+    ///      此时列表那一栏的宽度、行数、行矩形与「从来没有过这一层」逐点相同；
+    ///   ② **浮出态** = `NotesShelfPanel` 盖在**同一栏的左上角**（`overlay(alignment: .topLeading)`
+    ///      的锚点 = 这一栏的左上角，面板自己 `maxHeight: .infinity` 吃满高度）⇒
+    ///      判据② 的「frame 重叠且 z 序在上」：两者矩形相交，而面板在 `overlay` 里 ⇒ 画在列表之上。
+    ///
+    /// **「移开 ⇒ 收起」只在这一处写**（判据③）：覆盖层自己的 `.onHover`。为什么入口那一枚不也写
+    /// 一份 —— 见 `NotesListView.shelfEntry` 头注释里那条决定（两处都写会自己和自己抖）。
+    ///
+    /// **只有笔记屏有这一层**：待办屏（`notesModule == .todos`）没有笔记本架这件事
+    /// （`FR-NOTE-36`：两屏各自的入口与列表），所以那一档连层都不挂。
+    @ViewBuilder
+    private var shelfLayer: some View {
+        if appState.notesModule == .notes && appState.notesShelfRevealed {
+            NotesShelfPanel()
+                .onHover { appState.setNotesShelfRevealed($0) }
+        }
     }
 
     /// **中栏栏头 = 固定的两行**（片 `N2-LW-238` · 派单 `T-20261009-001`）。
@@ -170,6 +196,10 @@ struct NotesListView: View {
     private var listHeader: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                // **浮动书架的入口**（`FR-NOTEUI-03`）：这一栏的**最左**那一枚图标 ——
+                // 笔记本架从固定一栏改成浮动覆盖层之后（人类主人 2026-10-10 原话②），
+                // 「架去哪了」就只由这一枚说得清。见 `shelfEntry` 头注释。
+                shelfEntry
                 Text(L(.notesTitle))
                     .font(Theme.font(.title))
                     .lineLimit(1)
@@ -217,6 +247,50 @@ struct NotesListView: View {
         }
         .padding(.horizontal, Spacing.s)
         .accessibilityIdentifier("notes-list-header")
+    }
+
+    /// **浮动式书架那一枚入口图标**（`FR-NOTEUI-03` · 派单 `T-20261010-166` §三.2 · 人类主人
+    /// 2026-10-10 原话②：「**笔记本管理栏可以节约空间改成浮动式的，把笔记管理左栏放到目前的
+    /// 笔记本管理导航栏去。**」）。
+    ///
+    /// ## 它是什么
+    ///
+    /// 笔记本架（架 → 笔记本两级树）原来占着窗口**最左边一整栏**（`MainWindow` 的侧栏）。
+    /// 改成「浮动覆盖式」之后那一栏不再固定占位，于是「架」只剩这一个入口：**一枚图标 + 悬停提示**
+    /// —— `FR-NOTEUI-03` 的「**禁文字按钮**」正是冲原先那枚「＋ 新建笔记本」文字按钮说的。
+    ///
+    /// 三件事各自有出处：
+    ///
+    ///   · **形态** = `ToolbarIconButton`（本工程里「纯图标按钮」的**唯一**出处）。它的 `help`
+    ///     是**构造参数**，所以「有图标没提示」在结构上发生不了 —— `FR-NOTEUI-03` 要的 tips
+    ///     就是它；`accessibilityLabel` 同一句（图标按钮没有文字，提示与无障碍标签是它唯二的说明）。
+    ///   · **图标** = `NotesAreaView.shelfSymbol`，与树里每一行「架」用的是**同一个**符号
+    ///     （`books.vertical`）—— 入口与它所开的那一栏长得一样，不必靠猜。
+    ///   · **悬停 = 浮出 / 移开 = 收起**（`FR-NOTEUI-02`）：**进入**那一半在这里（`true`），
+    ///     **离开**那一半只在覆盖层那一处（`NotesListView.shelfLayer` 的 `.onHover`）。
+    ///
+    /// ## 为什么「离开」不在这里也写一份（这条是决定，不是省事）
+    ///
+    /// 覆盖层浮出来之后**正好盖住这一枚图标**（它俩同处左上角）：鼠标这时只是从图标进了层里，
+    /// 两层跟踪区会**同时**经历一次交接。若两处都写「离开 ⇒ `false`」，交接顺序一旦是先进入后离开，
+    /// 收尾就落在 `false` 上 —— 层收掉、鼠标又还在原来的图标上 ⇒ 再次进入 ⇒ **自己和自己抖**。
+    /// 只留覆盖层那一份之后，「离开」只有一个来源：层被移开 ⇒ 收；而**只要图标还悬停着**，
+    /// 鼠标一定在层里（层盖着它）⇒ 不会出现「悬停着却收掉」。
+    ///
+    /// **点一下也浮出**：键盘 / 触控板用户不必悬停；「可点却静默无反应」是 `L-50` 那一族里最坏的一种。
+    private var shelfEntry: some View {
+        ToolbarIconButton(
+            systemName: NotesAreaView.shelfSymbol,
+            help: L(.notesShelfEntry),
+            isSelected: appState.notesShelfRevealed
+        ) {
+            appState.setNotesShelfRevealed(true)
+        }
+        .accessibilityIdentifier("notes-shelf-entry")
+        .onHover { hovered in
+            // 只认「进入」那一半（见上面那条决定）；`guard` 在 `AppState` 里，重复写同值无副作用。
+            if hovered { appState.setNotesShelfRevealed(true) }
+        }
     }
 
     /// 行右键里的**收藏 / 取消收藏**（队列 `L-184` 第三片）：一个动作两种措辞 —— 当前不是收藏
@@ -312,6 +386,45 @@ struct NotesListView: View {
         let relative = NotePresentation.relative(date)
         guard let argument = relative.argument else { return L(relative.key) }
         return L(relative.key, argument)
+    }
+}
+
+/// **浮动覆盖式书架**（`FR-NOTEUI-02` · 派单 `T-20261010-166` §三.2 · 人类主人 2026-10-10 原话②：
+/// 「**笔记本管理栏可以节约空间改成浮动式的，把笔记管理左栏放到目前的笔记本管理导航栏去。**」）。
+///
+/// ## 它是什么
+///
+/// 笔记本架那一棵两级树（架 → 笔记本，`NotesContainerTreeView`）**原样**放进一个**浮层**里：
+/// 挂在笔记列表那一栏的左上角、吃满那一栏的高度。它**不参与布局**（那一栏的宽度由
+/// `listPane*Width` 三档给，与本层无关）—— 所以「浮出」与「收起」之间，列表的宽度逐点相同，
+/// 这正是判据① 说的「**覆盖非挤压**」。
+///
+/// ## 为什么包一层 `ScrollView`
+///
+/// 两级树的行数随库长（架 × 笔记本），架多了会把浮层撑出窗口下缘 —— 滚动让「架很多」不变成
+/// 「下面的架看不见也够不着」。另有一条工程上的好处：`ScrollView` 在离屏宿主里落地成
+/// `NSScrollView`（真 `NSView`），于是这一层的**矩形**是可量的（判据② 要的「frame 重叠」）；
+/// 纯 SwiftUI 的 `VStack` 在那套宿主里挑不出矩形来（`NotesLayoutProbeTests` 头注释实测）。
+///
+/// ## 它自己没有任何写入
+///
+/// 这一层不持有状态：两态由 `AppState.notesShelfRevealed` 一处给，进入 / 离开由**挂它的那一处**
+/// （`NotesListView.shelfLayer`）接线 —— 一个浮层不需要知道自己是不是浮着。
+struct NotesShelfPanel: View {
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ScrollView {
+                NotesContainerTreeView()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, Spacing.s)
+            }
+            // 浮层右缘那条发丝线：让它与下面的列表**看得出是两层**（否则树行与笔记行连成一片）。
+            HairlineView(vertical: true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.surface(.sidebar))
+        .accessibilityIdentifier("notes-shelf-overlay")
     }
 }
 
@@ -1189,6 +1302,12 @@ struct NotesAreaView: View {
     /// 一个空的图标按钮正是「点不上 / 认不出」那一族，比换个能画出来的符号更糟。
     static let notesModuleSymbol: String =
         NSImage(systemSymbolName: "notebook", accessibilityDescription: nil) != nil ? "notebook" : "book.closed"
+
+    /// **书架入口那一枚的符号**（`FR-NOTEUI-03` · 派单 `T-20261010-166` §三.2）：
+    /// 与两级树里**每一行「架」**用的符号逐字相同（`NotesContainerTreeView` 里 `row(...)` 的
+    /// `systemImage: "books.vertical"`）—— 入口与它打开的那一栏长得一样，认起来不必靠猜。
+    /// 收成常量是为了「入口那一枚」与「它开的东西」只有一处符号来源（改一处两处跟着走）。
+    static let shelfSymbol = "books.vertical"
 
     /// 「待办」那一枚 = 闹钟（`alarm`）。
     static let todosModuleSymbol = "alarm"
