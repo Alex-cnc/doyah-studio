@@ -1039,6 +1039,21 @@ struct NotesAreaView: View {
     ///   · 搜索那一档仍在**笔记屏**才出现（原口径一字未改）：待办的**本地检索**属 `FR-NOTE-37`，
     ///     它的口径还在契约半 ⇒ 这一屏不给一个搜不出东西的搜索框（`L-50` 同族）。
     ///
+    /// **入口图标一簇的间距：一行只用一个值**（`FR-NOTEUI-21` · 派单 `T-20261010-166` §三.3 ·
+    /// 人类主人 2026-10-10 原话逐字「**笔记左栏上面的增改删图标间距太大了，不够精致。**」）。
+    ///
+    /// 这一行里**所有**入口控件之间的水平间距都由这一个 `HStack(spacing:)` 给 ——
+    /// 三枚增删查改入口（`crudEntries`）内部走的是**同一个** `Spacing.xs`，于是从「＋」到这一行里
+    /// 最后一枚入口图标**逐个等距**（判据② 那条「间距方差 ≤ 1pt」量的就是它：
+    /// 4 / 4 / … 的方差 = 0）。
+    ///
+    /// 改前这一处是 `Spacing.s`（8pt），而 `crudEntries` 内部是 `Spacing.xs`（4pt）——
+    /// 同一个「入口图标行」里出现两个间距值：三枚之间 4pt、到紧接着的「查」那一格却跳到 8pt，
+    /// 「等距」当场不成立（方差 4pt² > 1pt²）。收成一处之后这一行只剩一个间距值。
+    ///
+    /// 取值为什么是 `Spacing.xs` 而不是别的：它**已经是** `crudEntries` 内部那个值 ——
+    /// 「等距」的可度量含义就是「同一行里没有第二个值」，所以不是重新选一个，而是**去掉多的那个**。
+    ///
     /// **宽度收敛 ≈40%**（片 `N2-2`）：这一行里能吃宽度的三样各收一处 ——
     ///   ① 增删查改入口 **图标化**（`crudEntries`：156.5 → 92pt）；
     ///   ② 「作用域」由**分段条**改**下拉**（`notes-search-scope`：221 → 134pt，也把这一屏的分段条
@@ -1048,8 +1063,10 @@ struct NotesAreaView: View {
     ///      成对读数的出处 = `TestsUISnapshot/NotesLayoutProbeTests.testN22ExploreMeasurableWidths`
     ///      （活宿主顶带上逐件量：改前 x=[8.0…721.5] / 改后 x=[8.0…450.0]，两端都是 `_FocusRingView`
     ///      与 `PlatformTextFieldAdaptor` 的实测矩形，不是按常量算出来的）。
+    ///      ⚠ 间距由 `Spacing.s` 收到 `Spacing.xs`（`FR-NOTEUI-21`）之后这一行的宽度会再收一点
+    ///      （`N2-2` 那几个成对读数是**当时**的事实，本条不改判它：判据量的是「≤60%」，收得更窄不违判）。
     private var topBar: some View {
-        HStack(spacing: Spacing.s) {
+        HStack(spacing: Spacing.xs) {
             crudEntries
             if appState.notesModule == .notes {
                 TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)
@@ -1083,7 +1100,7 @@ struct NotesAreaView: View {
     ///
     /// 形态 = **纯图标按钮 + 悬停提示**（片 `N2-2`「图标化 · 与 SQL 编辑区同一设计语言」）：
     /// 三枚都走 `App/Views/ToolbarIcon.swift` 的 `ToolbarIconButton` —— 就是 SQL 编辑区工具条
-    /// 那一套（图标 + 固定 28 × 22 命中区 + `.help`），本文件不再自己画第二份。
+    /// 那一套（图标 + 固定 28 × 28 命中区 + `.help`），本文件不再自己画第二份。
     /// **本片之前**「增」是 `labelStyle(.titleAndIcon)`（图标 + 「新建」两个字）⇒ 这一簇量出来
     /// 156.5pt；改成纯图标之后是 92pt（**收敛 ≈41%**，判据④ 的成对读数量到的就是它）。
     /// 字被图标替掉，**去发现性不靠猜**：那一句提示（`L(.notesNew)` / `L(.commonEdit)` /
@@ -1200,7 +1217,7 @@ struct NotesAreaView: View {
     /// button」，正是他要换掉的那件东西。改后：
     ///   · **位置不动**：仍在行末（判据① 右边缘贴齐左区行右边缘，钉的还是这两枚里**右侧那一枚**）；
     ///   · **形态**：两枚 `ToolbarIconButton`（与中列工具条 / SQL 编辑区工具条**同一个**它 ——
-    ///     同尺寸 `28 × 22`、同 `.help` 语言，不新开第二套）；
+    ///     同尺寸 `28 × 28`、同 `.help` 语言，不新开第二套）；
     ///   · **悬停 tips**：`L(.notesTitle)` / `L(.notesModuleTodos)` ⇒ 逐字「笔记」/「待办」；
     ///   · **选中态**：`isSelected` 着色 + 极淡底（不写文字、不加标签）；
     ///   · **可发现性**不靠猜：辅助功能标签 = 同一句提示（探针按它挑控件，不靠遍历顺序）。

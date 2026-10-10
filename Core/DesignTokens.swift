@@ -116,9 +116,25 @@ public enum Metrics {
     public static let planRawMinHeight: CGFloat = 48
     public static let planRawMaxHeight: CGFloat = 260
     public static let planRawLineHeight: CGFloat = 15
-    /// 工具条上的图标按钮尺寸（28 × 22）。
+    /// 工具条上的图标按钮尺寸（**28 × 28** 命中区）。
+    ///
+    /// 2026-10-10（`FR-NOTEUI-21` · 派单 `T-20261010-166` §三.3 · 人类主人原话「**笔记左栏上面的
+    /// 增改删图标间距太大了，不够精致。**」）：高度由 **22 收到 28** —— 契约那条「热区 ≥ 28 × 28」
+    /// 落地的就是这一处（改动前 28 × 22，高那一档不够）。宽 28 一字未动：
+    /// 「相邻 ≤ 8pt」量的就是**命中区之间**的间距（`Spacing.xs` = 4pt），
+    /// 而命中区一旦定了 28，两枚图标**看得见的留白**就由图标自己的字号决定（见 `toolbarIconSize`）。
+    /// 三个面共用这一个值：SQL 编辑区工具条 / 笔记面增删查改入口 / 待办日历翻页 ——
+    /// 改一处三处跟着走（这就是「同一设计语言」的机械含义）。
     public static let toolbarButtonWidth: CGFloat = 28
-    public static let toolbarButtonHeight: CGFloat = 22
+    public static let toolbarButtonHeight: CGFloat = 28
+    /// 工具条图标**画多大**（`TypeScale` 的刻度上取 17）。
+    ///
+    /// 2026-10-10（`FR-NOTEUI-21`）：由「与正文同字号」（13）提到 **17** —— 契约那条
+    /// 「图标 16–18pt」落地的就是这一处。为什么这一档不能省：命中区是 28 × 28，
+    /// 图标只有 13pt 时，相邻两枚之间**看得见的留白**接近 19pt（`28 − 13 + 4`），
+    /// 一簇入口看着就是「稀稀拉拉、不够精致」；画到 17pt 之后同一簇收紧到 ≈15pt。
+    /// 取值落在 `TypeScale` 的刻度上（`Scripts/check-design-tokens.py` 的 `FONT_SCALE` 有 17）。
+    public static let toolbarIconSize: CGFloat = 17
     /// 结果表列的宽度上下限（估算出来的宽度会被夹在这个区间里）。
     public static let minColumnWidth: CGFloat = 40
     public static let maxColumnWidth: CGFloat = 420
