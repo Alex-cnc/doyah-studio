@@ -503,6 +503,12 @@ public enum NoteHighlight {
     public static let rgb: UInt32 = 0xFFF3B0
     /// 淡黄底色的字符串形态（`NoteSpan.backgroundColor` 的权威值）。
     public static let backgroundColorHex = "#FFF3B0"
+    /// **带底色 span 的强制前景色**（片 `WYS-HL-CONTRAST` · 契约 §2.4「可读性义务」）。
+    ///
+    /// 近黑 `#1C1C1E`：浅底（`#FFF3B0`）上对比度 ≈15:1，深浅两套主题都够（≥ 4.5:1，目标 ≥ 7:1）。
+    /// 这条口径是**成对**的 —— 底色是浅色 ⇒ 该段文字一律用这个深色；**禁止浅底 + 浅字**。
+    /// 与 `rgb` / `backgroundColorHex` 一样是「一处定义」：界面侧经 `Theme.nsColor(hex:)` 取 `NSColor`。
+    public static let foregroundRGB: UInt32 = 0x1C1C1E
 }
 
 /// 投影结果：spans + **如实报出的降级**（哪些样式没能落到 span 上、为什么）。

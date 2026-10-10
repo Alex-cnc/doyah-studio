@@ -164,6 +164,13 @@ enum NoteRichAttributes {
     /// 荧光笔底色的 `NSColor`（唯一色值出处 = `NoteHighlight`）。
     static func highlightColor() -> NSColor { Theme.nsColor(hex: NoteHighlight.rgb) }
 
+    /// 带底色 span 的**强制前景色** `NSColor`（唯一色值出处 = `NoteHighlight.foregroundRGB`）。
+    ///
+    /// 片 `WYS-HL-CONTRAST`（契约 §2.4「可读性义务」）：底色是浅色 ⇒ 该段文字一律用近黑，
+    /// 深浅两套主题都成立 —— 修的就是「深色主题下白字压淡黄底、几乎看不清」（人类主人 P0
+    /// 真机缺陷 `T-20261010-088`）。
+    static func highlightForegroundColor() -> NSColor { Theme.nsColor(hex: NoteHighlight.foregroundRGB) }
+
     /// 基准字体 + trait → 实际字体。
     ///
     /// `NSFontManager.convert(_:toHaveTrait:)` 对没有该变体的族会原样退回 —— 所以「能不能显出粗」
@@ -192,7 +199,13 @@ enum NoteRichAttributes {
                 attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
             }
             if span.styles.contains(.code) { attributes[.doyahCode] = true }
-            if span.backgroundColor != nil { attributes[.backgroundColor] = highlightColor() }
+            if span.backgroundColor != nil {
+                attributes[.backgroundColor] = highlightColor()
+                // **可读性义务**（片 `WYS-HL-CONTRAST` · 契约 §2.4）：铺了浅底色就必须把前景色
+                // 一并钉成近黑 —— 否则深色主题的默认白字会压在淡黄底上，几乎看不清
+                // （人类主人 P0 真机缺陷 `T-20261010-088`）。两个色值同出一个 `NoteHighlight`。
+                attributes[.foregroundColor] = highlightForegroundColor()
+            }
             // **块级**（片 `WY-1b2`）：值写的是契约交换面字面量（`NoteSpan.Block.exchangeType`）——
             // 与 span 的 `block` 同一份词表，界面侧不另起命名。勾选框另挂勾选态。
             if let block = span.block {

@@ -1,6 +1,11 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import DoyahCore
+// 片 `WYS-HL-CONTRAST` 的渲染配对探针要打在 App 侧的真换算处 `NoteRichAttributes` 上
+// （`App/Views/NotesRichTextEditor.swift`）—— 本目标本就依赖 `DoyahStudioApp`（见 `Package.swift`），
+// 不新增构建量（`AccountFlowTests` 同款）。
+@testable import DoyahStudioApp
 
 /// 笔记正文的**权威源与投影**。
 ///
@@ -300,6 +305,63 @@ final class NoteBodyTests: XCTestCase {
         XCTAssertEqual(hex, NoteHighlight.backgroundColorHex, "NoteHighlight 的两个形态必须是同一个色值")
     }
 
+    // MARK: 片 `WYS-HL-CONTRAST`（带底色 span 文字强制深色 · 契约 §2.4 可读性义务）
+
+    /// **判据 ①（渲染配对探针）**：带 `backgroundColor` 的 span 走
+    /// `NoteRichAttributes.attributed(from:font:)` 之后，该 run 的 `.foregroundColor` **必须是近黑**
+    /// （`NoteHighlight.foregroundRGB` ≈ `#1C1C1E`）、`.backgroundColor` **仍是**那份淡黄
+    /// （`NoteHighlight.rgb` = `#FFF3B0`）；而**没铺底色的** run **不带** `.foregroundColor`。
+    /// 两句一对照就是「成对读数」：改前带底色那 run 无 `.foregroundColor` ⇒ 深色主题下默认白字压
+    /// 淡黄底、几乎看不清（人类主人 P0 真机缺陷 `T-20261010-088`）。
+    func testHighlightedSpanGetsForcedDarkForeground() {
+        let font = Theme.nsFont(.mono)
+        let spans = [
+            NoteSpan(text: "普通"),
+            NoteSpan(text: "荧光", backgroundColor: NoteHighlight.backgroundColorHex)
+        ]
+        let attributed = NoteRichAttributes.attributed(from: spans, font: font)
+
+        // 成对读数·那半：没铺底色的 run 不强制前景色（不会误伤普通文字的主题色彩）。
+        let plain = attributed.attributes(at: 0, effectiveRange: nil)
+        XCTAssertNil(plain[.foregroundColor], "没铺底色的 run 不该被强制前景色（成对读数的对照项）")
+
+        // 成对读数·这半：带底色的 run 前景色被钉成近黑、底色仍是淡黄。
+        let highlighted = attributed.attributes(at: 2, effectiveRange: nil)
+        XCTAssertEqual(
+            highlighted[.foregroundColor] as? NSColor,
+            Theme.nsColor(hex: NoteHighlight.foregroundRGB),
+            "带底色的 run 必须把前景色钉成近黑 `#1C1C1E`（唯一出处 `NoteHighlight.foregroundRGB`）"
+        )
+        XCTAssertEqual(
+            highlighted[.backgroundColor] as? NSColor,
+            Theme.nsColor(hex: NoteHighlight.rgb),
+            "底色仍是那份淡黄 `#FFF3B0`（本片不动底色）"
+        )
+    }
+
+    /// **判据 ②（对比度算值）**：`#FFF3B0` 与 `#1C1C1E` 的 WCAG 对比度机械算一遍 ——
+    /// 必须 ≥ 4.5:1（目标 ≥ 7:1）。把「可读性义务」从形容词变成算得出来的数：
+    /// 现值 ≈15:1，远高于两档阈值。
+    func testHighlightContrastMeetsReadabilityObligation() {
+        let background = Self.channels(ofHex: NoteHighlight.rgb)
+        let foreground = Self.channels(ofHex: NoteHighlight.foregroundRGB)
+
+        // 前景色必须是那个近黑字面量（不是「随便某个比底色深的色」）。
+        XCTAssertEqual(
+            String(format: "#%02X%02X%02X", foreground.red, foreground.green, foreground.blue),
+            "#1C1C1E",
+            "强制前景色必须是近黑 `#1C1C1E`"
+        )
+
+        let ratio = Self.contrastRatio(foreground, background)
+        print(String(
+            format: "🎨 WYS-HL-CONTRAST ② 对比度：底 #FFF3B0 (L=%.4f) × 字 #1C1C1E (L=%.4f) ⇒ %.2f:1",
+            Self.relativeLuminance(background), Self.relativeLuminance(foreground), ratio
+        ))
+        XCTAssertGreaterThanOrEqual(ratio, 4.5, "带底色文字对比度低于 4.5:1（可读性义务不成立），实测 \(ratio):1")
+        XCTAssertGreaterThanOrEqual(ratio, 7.0, "对比度没到契约的 7:1 目标档，实测 \(ratio):1")
+    }
+
     // MARK: 片 `WY-1b2`（编辑面块级三枚）：`NoteSpan.Block` 三档 + `checked` 落盘
 
     /// **交换面字面量逐字同形**（片 `WY-1b2` · 契约 v1.30 §2.4 / §3.3）：
@@ -484,5 +546,24 @@ final class NoteBodyTests: XCTestCase {
     /// 把 `0xRRGGBB` 拆成三通道（Core 测试里没有 AppKit，自己拆一遍，口径与 `NoteHighlight.rgb` 对齐）。
     private static func channels(ofHex hex: UInt32) -> (red: Int, green: Int, blue: Int) {
         (red: Int((hex >> 16) & 0xFF), green: Int((hex >> 8) & 0xFF), blue: Int(hex & 0xFF))
+    }
+
+    /// WCAG 2.x 相对亮度（sRGB 通道 → 线性 → 加权和）。片 `WYS-HL-CONTRAST` 判据 ② 用。
+    private static func relativeLuminance(_ channels: (red: Int, green: Int, blue: Int)) -> Double {
+        func linear(_ value: Int) -> Double {
+            let c = Double(value) / 255
+            return c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(channels.red) + 0.7152 * linear(channels.green) + 0.0722 * linear(channels.blue)
+    }
+
+    /// WCAG 2.x 对比度 = (L_亮 + 0.05) / (L_暗 + 0.05)。片 `WYS-HL-CONTRAST` 判据 ② 用。
+    private static func contrastRatio(
+        _ a: (red: Int, green: Int, blue: Int),
+        _ b: (red: Int, green: Int, blue: Int)
+    ) -> Double {
+        let lighter = max(relativeLuminance(a), relativeLuminance(b))
+        let darker = min(relativeLuminance(a), relativeLuminance(b))
+        return (lighter + 0.05) / (darker + 0.05)
     }
 }
