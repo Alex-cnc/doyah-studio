@@ -20,7 +20,7 @@
     python3 Scripts/check-doc-tables.py                    # 本机默认清单（缺失的文档跳过并提示）
     python3 Scripts/check-doc-tables.py --require-all       # 缺失即红（主开发机 / CI 用）
     python3 Scripts/check-doc-tables.py <文件...>            # 显式点名：不存在即红
-    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（8 例）
+    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（9 例）
 
 **「文件不存在」的两种语义**（L-33，2026-09-27 第 29 轮；另一平台侧实测提出）：
 
@@ -345,6 +345,30 @@ def check(path: pathlib.Path) -> list[str]:
                     f" -> 上一行末尾 {block[-1].strip()[-30:]!r}，本行开头 {following[:40]!r}"
                 )
 
+        # 判据 F（T-20261011-001 · 2026-10-11）：同一张逻辑表被**空行**截断成两张 —— 两张的
+        # 表头逐格相同 ⇒ 判红。此前抓不到：两张表各自**列数都自洽**，所以上面那条「列数一致」
+        # 看得过去（三书落笔时的定点审计人工抓到一处空行拆表，而门禁全绿 ⇒ 补这条）。
+        # 真要是两张表：表头别写成一样，或中间加小节标题（只有空行的间隔才算「相邻」）。
+        cursor = index
+        while cursor < len(lines) and not lines[cursor].strip():
+            cursor += 1
+        if cursor < len(lines) and lines[cursor].strip().startswith("|"):
+            following_block: list[str] = []
+            probe = cursor
+            while probe < len(lines) and lines[probe].strip().startswith("|"):
+                following_block.append(lines[probe])
+                probe += 1
+            if len(following_block) >= 2:
+                header = [cell.strip() for cell in split_row(block[0])]
+                following_header = [cell.strip() for cell in split_row(following_block[0])]
+                if header == following_header and any(header):
+                    problems.append(
+                        f"{path}:{start + 1}: 与 {path}:{cursor + 1}: 相邻两表**表头逐格相同**"
+                        f"（中间只隔空行）⇒ 疑似一张表被空行截断成两张"
+                        f"（或删掉空行、或把两张表表头写开、或中间加小节标题）"
+                        f" -> {block[0].strip()[:80]}"
+                    )
+
     return problems
 
 
@@ -559,8 +583,10 @@ def main() -> int:
 
 
 # ── 门禁自己的证据（L-33；L-41 补例 5）────────────────────────────────────────
-# **8 例** = 6 个编号例子 + 1 条夹具准备自检 + 1 条跨平台标识（例 8，提案 0005，第 91 轮；
-# runner 的收尾行报「自检通过（8/8）」；文档里说「五例」指的是编号例子数 —— 例数的唯一来源与
+# **9 例** = 8 个编号例子（1~6 + 例 8 + 例 9）+ 1 条夹具准备自检；其中例 8 = 跨平台标识
+# （提案 0005，第 91 轮）、例 9 = 判据 F 两面（空行拆表 · 表头逐格相同 ⇒ 判红 / 表头不同 ⇒ 对照绿，
+# 派单 `T-20261011-001`，2026-10-11）；
+# runner 的收尾行报「自检通过（9/9）」；文档里说「五例」指的是编号例子数 —— 例数的唯一来源与
 # 这处 1 之差见 `Scripts/self-test-counts.json`）。
 # 全部在**临时目录**里跑真实文档副本，末例核对真仓库逐字节未变。
 # 关键一例是「干净克隆 / 另一平台」：只放**被版本控制跟踪的**那几份文档，
@@ -783,6 +809,29 @@ def run_self_test() -> int:
             failures.append(f"例 6 失败：`Docs/archive/` 下的历史快照应豁免，实际 exit {code}\n{output}")
         archive.unlink()
 
+        # 例 9（T-20261011-001 · 2026-10-11）·判据 F 两面：同一张表被**空行**截断成两张
+        # （表头逐格相同）⇒ 判红并指名行号；**对照**（表头不同）= 两张真表 ⇒ exit 0。
+        # 夹具放在扫描面之外（同例 5 的理由：别同时触发判据 E，把两件事混在一条输出里）。
+        total += 1
+        split_table = clone / "fixture/空行拆表.md"
+        split_table.parent.mkdir(exist_ok=True)
+        split_table.write_text(
+            "# 空行拆表\n\n| 甲 | 乙 |\n|---|---|\n| 1 | 2 |\n\n| 甲 | 乙 |\n|---|---|\n| 3 | 4 |\n"
+        )
+        code, output = run([split_table.relative_to(clone).as_posix()], clone)
+        if code == 0:
+            failures.append(f"例 9 失败：表头逐格相同的相邻两表仍 exit 0 —— 判据 F 是空的\n{output}")
+        elif ":3:" not in output or "表头逐格相同" not in output:
+            failures.append(f"例 9 失败：判红了但没有指名「表头逐格相同」与行号（应为 3 / 7）\n{output}")
+        else:
+            split_table.write_text(
+                "# 两张表\n\n| 甲 | 乙 |\n|---|---|\n| 1 | 2 |\n\n| 丙 | 丁 |\n|---|---|\n| 3 | 4 |\n"
+            )
+            code, output = run([split_table.relative_to(clone).as_posix()], clone)
+            if code != 0:
+                failures.append(f"例 9 失败：表头不同的两张表应 exit 0（对照），实际 {code}\n{output}")
+        split_table.unlink()
+
         # 例 4·真仓库（本机）→ exit 0、跳过 0，且**末例核对真仓库逐字节未变**
         total += 1
         before = (repository / "Docs/概要设计.md").read_bytes()
@@ -852,7 +901,7 @@ def run_self_test() -> int:
     suffix = f"，跳过 {len(skipped)} 例" if skipped else ""
     # 收尾行的**头部格式不许动**（`self-test-counts.json` 的 countRegex 就认
     # `自检通过（N/M）`）⇒ 跳过数写在方括号外的 `suffix` 位置，别挤进括号里。
-    print(f"✅ 自检通过（{total}/{total}）{suffix}：干净克隆跳过 13 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 跨平台标识（Windows 形态落回清单写法）/ {tail}")
+    print(f"✅ 自检通过（{total}/{total}）{suffix}：干净克隆跳过 13 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 空行拆表（表头逐格相同）判红且对照（表头不同）不判红 / 跨平台标识（Windows 形态落回清单写法）/ {tail}")
     return 0
 
 
