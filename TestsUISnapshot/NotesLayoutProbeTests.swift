@@ -154,6 +154,23 @@ final class NotesLayoutProbeTests: XCTestCase {
         return (window, hosting)
     }
 
+    /// 与 `makeLive` **同一套装配**（`NotesAreaView` + `areaSize` + `.aqua` + 不上屏），只是返回
+    /// `UISnapshot.LiveHost` —— 片 `D166⑤` 的成对截图要用它的 `captureBothLanguages`。
+    /// 不把 `makeLive` 直接改成返回 `LiveHost`：既有十几条判据按 `(window, hosting)` 取读数，
+    /// 动它就是动那一片的落点（同一条「三份真相」纪律）。
+    @MainActor
+    private func makeCaptureHost(_ host: HostBundle) -> UISnapshot.LiveHost<AnyView> {
+        let root = AnyView(
+            NotesAreaView().snapshotEnvironment(
+                state: host.state,
+                workspace: host.workspace,
+                tabs: host.tabs,
+                terminal: host.terminal
+            )
+        )
+        return UISnapshot.LiveHost(root, size: areaSize, scheme: .light)
+    }
+
     /// **任意视图**的离屏宿主（`makeLive` 的泛型版：口径逐字相同 —— `areaSize`、`.aqua`、泵 `seconds` 秒、
     /// 不上屏）。`N2-LW` 那条判据要在**同一轮运行**里挂**两份**视图（生产 + 改前复刻件），
     /// 而 `makeLive` 的根视图写死了 `NotesAreaView`，所以这里补一个能挂任意视图的。
@@ -1368,5 +1385,506 @@ final class NotesLayoutProbeTests: XCTestCase {
         ] {
             XCTAssertTrue(source.contains(anchor), "源锚点失配：`\(anchor)` 不在 `App/Views/NotesPanel.swift` 里")
         }
+    }
+
+    // MARK: - 片 `D166⑤` · 契约 `FR-NOTEUI-10`：单击正文 ⇒ 出编辑工具条
+
+    /// **单击正文 ⇒ 编辑工具条出现**（`FR-NOTEUI-10` 原话「用户点笔记正文后要立刻显示用于编辑等工具栏」；
+    /// 契约里那条判据逐字 = 「单击后工具栏 `isHidden == false`（dump）」）。
+    ///
+    /// ## 成对读数（两半都不许恒真）
+    ///   ① **起点**：`handleNoteRowClick`（列表里单击，`FR-NOTEUI-13` 的 R1）⇒ `editorMode == .preview`
+    ///      —— 此刻**可编辑面 0 块**、正文贴着右栏顶；
+    ///   ② **单击正文**（`clickCount = 1` 的合成左键按下，投给宿主里那块 `PreviewTextView`；
+    ///      `FR-NOTEUI-13` 的 **R3**）⇒ `editorMode == .edit`、**可编辑富文本面 1 块**、
+    ///      正文被工具条那一行顶下去（≥ 24pt）。
+    ///
+    /// ## 「工具条在场」怎么落成可读事实（边界如实登记）
+    ///
+    /// 编辑工具条是 SwiftUI `HStack`（`accessibilityIdentifier("notes-editor-toolbar")`）——在本机离屏
+    /// 宿主里**不落到 `NSView`**（同文件既有实测：那块宿主里 `NSButton` 0 枚、无障碍树不构建），
+    /// 所以它的矩形这一次**量不到**（读数里如实打印「无读数」）。「工具条出现」于是落成**三件合起来**：
+    ///   · **源锚点**：工具条只画在 `editorMode == .edit` 那一支里
+    ///     （`if appState.editorMode == .edit {` → `NotesEditorToolbar(controller: richController)`）；
+    ///   · **几何**：正文上边缘在单击之后**下移 ≥ 24pt**（工具条那一行占的高度；`N2-3b` 那条判据同款）；
+    ///   · **面**：可编辑富文本面（`NotesTextView`）从 0 块变成 1 块。
+    ///
+    /// 宿主哪天开始给出 `notes-editor-toolbar` 的矩形，本用例**当场直接断言它在场**（自动变强，不用改）。
+    @MainActor
+    func testNoteUI10SingleClickOnTheBodyShowsTheEditingToolbar() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        try await seedOneNote(host)
+        await host.state.reloadNotes()
+        let note = try XCTUnwrap(
+            host.state.visibleNotes.first,
+            "夹具没进列表（`visibleNotes` 是空的）⇒ 「单击正文」那一半没有对象"
+        )
+
+        let live = makeLive(host)
+        func settle() {
+            let deadline = Date().addingTimeInterval(0.5)
+            while Date() < deadline {
+                live.window.layoutIfNeeded()
+                live.hosting.layoutSubtreeIfNeeded()
+                live.hosting.displayIfNeeded()
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            }
+            live.window.layoutIfNeeded()
+            live.hosting.layoutSubtreeIfNeeded()
+        }
+        /// 这一屏上的四件读数：只读预览面 / 可编辑富文本面 / 正文上边缘 / 工具条矩形。
+        func readings() -> (previewBodies: Int, editableSurfaces: Int, bodyTop: CGFloat, toolbar: CGRect?) {
+            let views = UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: live.hosting)
+            let tops = views
+                .filter { $0 is NSTextView }
+                .map { rect(of: $0, in: live.hosting) }
+                .filter { !$0.isEmpty }
+                .map { distanceToTopEdge($0, in: live.hosting) }
+            return (
+                previewBodies: views.filter { $0 is PreviewTextView }.count,
+                editableSurfaces: views.filter { $0 is NotesTextView }.count,
+                bodyTop: tops.min() ?? -1,
+                toolbar: views
+                    .first { $0.accessibilityIdentifier() == "notes-editor-toolbar" }
+                    .map { rect(of: $0, in: live.hosting) }
+            )
+        }
+        func describe(_ r: (previewBodies: Int, editableSurfaces: Int, bodyTop: CGFloat, toolbar: CGRect?)) -> String {
+            let toolbar = r.toolbar.map { "[\(pt($0.minX))…\(pt($0.maxX))]×\(pt($0.height))pt" }
+                ?? "无读数（SwiftUI 件不落 `NSView`）"
+            return "只读预览面=\(r.previewBodies) 块 ／ 可编辑面=\(r.editableSurfaces) 块 ／ "
+                + "正文上边缘=\(pt(r.bodyTop))pt ／ 工具条=\(toolbar)"
+        }
+
+        // ── ① 起点：列表里单击 ⇒ 预览（工具条那一支不画、可编辑面不在）──────────────────
+        host.state.handleNoteRowClick(note, modifiers: [])
+        settle()
+        let before = readings()
+        print("NOTEUI-10 点前：editorMode=\(host.state.editorMode) \(describe(before))")
+        XCTAssertEqual(host.state.editorMode, .preview, "起点不是预览态 —— 成对读数的「点前」那一半不成立")
+        XCTAssertEqual(
+            before.previewBodies, 1,
+            "预览态应当恰好一块只读预览面（`PreviewTextView`，实测 \(before.previewBodies) 块）"
+        )
+        XCTAssertEqual(
+            before.editableSurfaces, 0,
+            "预览态里出现了可编辑富文本面（\(before.editableSurfaces) 块）—— 预览不该可编辑（`FR-NOTEUI-12`）"
+        )
+
+        // ── ② 单击正文（clickCount = 1）⇒ 进编辑、工具条那一支开始画 ────────────────────
+        let body = try XCTUnwrap(
+            UISnapshot.LiveHost<Never>.findViews(ofType: PreviewTextView.self, in: live.hosting).first,
+            "预览态里那块 `PreviewTextView` 没量到 —— 判据的入口没了"
+        )
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown,
+                location: NSPoint(x: 8, y: 8),
+                modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: live.window.windowNumber,
+                context: nil,
+                eventNumber: 1,
+                clickCount: 1,
+                pressure: 1
+            ),
+            "`NSEvent.mouseEvent` 没造出来 ⇒ 这一条判据的输入没了"
+        )
+        body.mouseDown(with: event)
+        settle()
+        let after = readings()
+        print("NOTEUI-10 点后（单击正文）：editorMode=\(host.state.editorMode) \(describe(after))")
+
+        XCTAssertEqual(
+            host.state.editorMode, .edit,
+            "单击正文之后 `editorMode` 还是 \(host.state.editorMode) —— `FR-NOTEUI-10` 不成立"
+        )
+        XCTAssertEqual(
+            after.editableSurfaces, 1,
+            "单击正文之后可编辑富文本面不是 1 块（实测 \(after.editableSurfaces)）—— 进编辑那条路断了"
+        )
+        XCTAssertGreaterThan(
+            after.bodyTop, before.bodyTop + 24,
+            "单击正文之后正文上边缘没有下移出一条工具条的量（点前 \(pt(before.bodyTop))pt / "
+                + "点后 \(pt(after.bodyTop))pt）—— 工具条没出现（`FR-NOTEUI-10`：单击正文即显示编辑工具条）"
+        )
+        if let toolbar = after.toolbar {
+            XCTAssertFalse(toolbar.isEmpty, "工具条那个矩形是空的（`isHidden == false` 量到的不是一块真区域）")
+            XCTAssertNil(before.toolbar, "点前就有工具条的读数 ⇒ 这条成对读数判的不是「出现」")
+        } else {
+            let source = try notesPanelSource()
+            for anchor in [
+                "if appState.editorMode == .edit {",
+                "NotesEditorToolbar(controller: richController)",
+            ] {
+                XCTAssertTrue(
+                    source.contains(anchor),
+                    "宿主不给工具条读数，而源锚点 `\(anchor)` 也不在 —— 判据的落点没了"
+                )
+            }
+            print("NOTEUI-10 工具条矩形：本机离屏宿主不给读数（边界见头注释）⇒ 改判源锚点 + 几何 + 可编辑面三件")
+        }
+    }
+
+    /// **成对截图①**（`FR-NOTEUI-10`）：同一屏的两态 —— **预览**（列表里单击之后）/ **编辑**
+    /// （单击正文之后），中英各一张。图是给人复看的证据（判据在上面的 dump 用例里）。
+    @MainActor
+    func testNoteUI10PairedShotsPreviewThenEdit() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        try await seedOneNote(host)
+        await host.state.reloadNotes()
+        let note = try XCTUnwrap(host.state.visibleNotes.first, "夹具没进列表 ⇒ 两张图没有对象")
+        let live = makeCaptureHost(host)
+
+        host.state.handleNoteRowClick(note, modifiers: [])
+        _ = try live.captureBothLanguages(name: "noteui-05-body-click-preview")
+        XCTAssertEqual(host.state.editorMode, .preview, "「预览」那一张不是在预览态下拍的")
+        host.state.beginEditingCurrentNote()
+        _ = try live.captureBothLanguages(name: "noteui-05-body-click-edit")
+        XCTAssertEqual(host.state.editorMode, .edit, "「编辑」那一张不是在编辑态下拍的")
+    }
+
+    // MARK: - 片 `D166⑤` · 契约 `FR-NOTEUI-15`：工具条上零文字按钮（保存键＝纯图标 + 悬停 tips）
+
+    /// **工具条上不存在带文字标题的按钮**（`FR-NOTEUI-15` 的判据原文；由头 = 人类主人原话
+    /// 「我不要 button，我要图标+tips」）。
+    ///
+    /// ## 两个面各判一遍（笔记面已做 · 待办面 = 本片补的）
+    /// 笔记面「保存」（片 `N2-SV`）与待办面「保存」（片 `TODO-SV`）早已改成纯图标；本片收的是**同屏
+    /// 剩下的三处**：待办工具条的「删除」+ 提醒区那一对「挂提醒 / 移除提醒」——「两处是两段独立的
+    /// 代码，一处改了不等于另一处改了」正是这一族判据存在的理由。
+    ///
+    /// ## 判据（都在盘上，不靠人眼）
+    ///   · **① 源码级（剥掉整行注释之后）**：`App/Views/NotesPanel.swift` 里 `.labelStyle(.titleAndIcon)`
+    ///     的**代码**处数 = **0**。注释里的历史记录**保留**（它们是「这条口径改过什么」的存档，
+    ///     不是活的控件）⇒ 先把**整行注释**剥掉再数，并**反向自检**：原文里仍有 ≥2 处（都在注释里）
+    ///     ⇒ 说明这一剥真的剥到了东西（不是把注释也算进去、也不是空跑）；
+    ///   · **② 三处按钮块逐块逐字**：每块里有 `Image(systemName:`、有 `.help(`，且**没有** `Text(`、
+    ///     **没有** `.labelStyle(.titleAndIcon)`（与 `NotesEditorSaveProbeTests` 对「保存」那一枚的
+    ///     口径同款，只换锚点）。块里的 `.help(` 就是「名字由悬停提示给」那一半。
+    @MainActor
+    func testNoteUI15NoTextTitledToolbarButtonsInTheNotesPanel() throws {
+        let source = try notesPanelSource()
+        let code = Self.strippingLineComments(source)
+        let rawHits = source.components(separatedBy: ".labelStyle(.titleAndIcon)").count - 1
+        let codeHits = code.components(separatedBy: ".labelStyle(.titleAndIcon)").count - 1
+        print("NOTEUI-15 ① `.labelStyle(.titleAndIcon)`：原文 \(rawHits) 处 ／ 剥掉整行注释之后 \(codeHits) 处")
+        XCTAssertGreaterThanOrEqual(
+            rawHits, 2,
+            "原文里一处 `.labelStyle(.titleAndIcon)` 都没有 —— 剥离这一步没剥到东西（空跑防护）"
+        )
+        XCTAssertEqual(
+            codeHits, 0,
+            "代码里还有 \(codeHits) 处 `.labelStyle(.titleAndIcon)` —— 工具条上的文字按钮没收干净"
+                + "（`FR-NOTEUI-15` / 台账第 27 条：工具·操作类控件一律「图标 + 悬停 tips」）"
+        )
+
+        for (label, start, end) in [
+            ("待办·删除", "Task { await appState.saveTodoFromEditor() }", ".accessibilityIdentifier(\"todo-delete\")"),
+            ("提醒·挂提醒", "Task { await appState.attachReminder(to: todo) }", ".accessibilityIdentifier(\"todo-reminder-attach\")"),
+            ("提醒·移除提醒", "Task { await appState.removeReminder(from: todo) }", ".accessibilityIdentifier(\"todo-reminder-remove\")"),
+        ] {
+            let block = Self.sourceRegion(in: source, from: start, to: end)
+            XCTAssertFalse(
+                block.isEmpty,
+                "截不出「\(label)」那一块源码 —— 锚点（动作那一句 / 它自己的标识）被改了，判据自己失效"
+            )
+            print("NOTEUI-15 ② \(label) 那一块源码（逐字）：\n\(block)")
+            // 形态那两条**先剥掉整行注释**再判：本文件的注释里逐字写着旧形态
+            // （「原来是 `Label { Text(…) } + .labelStyle(.titleAndIcon)`」），不剥就会把**存档**
+            // 当成**活的控件**判红 —— 与 ① 同一条口径。
+            let code = Self.strippingLineComments(block)
+            XCTAssertTrue(
+                code.contains("Image(systemName:"),
+                "「\(label)」那一块里连图标都没有 —— 这不是「改纯图标」，是把它掏空了"
+            )
+            XCTAssertTrue(
+                code.contains(".help("),
+                "「\(label)」那一枚没有悬停提示 —— 图标按钮没有文字，提示是它**唯一**一条说明"
+            )
+            XCTAssertFalse(code.contains("Text("), "「\(label)」那一块里还有 `Text(` ⇒ 图标上还挂着文字")
+            XCTAssertFalse(
+                code.contains(".labelStyle(.titleAndIcon)"),
+                "「\(label)」那一块还是 `.labelStyle(.titleAndIcon)` ——「图标 + 文字」的旧形态"
+            )
+        }
+    }
+
+    /// **改前复刻件**（`FR-NOTEUI-15` 的成对截图要一张「改前长什么样」）：只复刻**形态**
+    /// （图标 + 文字那两枚），**不接**产品的状态与判据（`.disabled` / 动作都不在这里）——
+    /// 它存在的唯一理由是与本片的成品并排比一眼。
+    private struct LegacyTextTitledToolbarBand: View {
+        var body: some View {
+            HStack(spacing: Spacing.s) {
+                Image(systemName: "square.and.arrow.down")
+                Label {
+                    Text(L(.todoDelete))
+                } icon: {
+                    Image(systemName: "trash")
+                }
+                .labelStyle(.titleAndIcon)
+                Spacer(minLength: Spacing.s)
+            }
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, Spacing.xs)
+            .background(Theme.surface(.panel))
+        }
+    }
+
+    /// **成对截图②**（`FR-NOTEUI-15`）：待办工具条那一行 —— **改前复刻件**（图标 + 文字，上）
+    /// 与本片**成品**（纯图标 + 悬停 tips，下）上下并排，中英各一张。
+    ///
+    /// ## 为什么是一张图里上下并排、而不是两份宿主
+    /// 本轮实测：同一用例里建**第二份** `UISnapshot.LiveHost` 会抛
+    /// `InvalidTransition { phase: idle, targetPhase: failed(deinit) }`（与判据无关的宿主抖动，
+    /// 第一份单独拍没问题）；而同一份宿主上连着调两次 `captureBothLanguages` 是既有口径里惯用的
+    /// （`testNoteUI10PairedShots…` 就这么干的）。⇒ 两态并排进**同一份宿主、同一张图**：
+    /// 上＝改前复刻件（`LegacyTextTitledToolbarBand`，只复刻形态）、下＝本片成品（`TodoEditorView`
+    /// 的第一行就是那条工具条）。
+    @MainActor
+    func testNoteUI15PairedShotsTodoToolbarLegacyVsProduct() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        // **不碰笔记库**：这一条拍的是**工具条那一行的形态**，而 `todoEditingID`（「删除」那一枚画不画）
+        // 只要 `edit(_:)` 把一条内存里的任务装进编辑器就成立（`edit` 不写库）。
+        // 为什么刻意不种夹具：这条用例与别的用例共用同一个 `DOYAH_NOTES_DIR`，多开一个连接去建库
+        // 会在并行/相邻用例上撞出 `table note already exists` 那类**与判据无关**的抖动。
+        host.state.edit(Todo(title: "D166⑤ 待办工具条截图夹具"))
+        XCTAssertNotNil(host.state.todoEditingID, "待办没进编辑器 ⇒ 「删除」那一枚不会画出来")
+
+        // 高 620pt：上（改前复刻件）+ 下（`TodoEditorView` 整列 —— 工具条 / 标题 / 截止 / 优先级 /
+        // 标签 / 备注）都要留在画面里；矮了 SwiftUI 会把顶上那几行裁掉（实测 220pt 时工具条看不见了）。
+        let size = CGSize(width: 760, height: 620)
+        let live = UISnapshot.LiveHost(
+            AnyView(
+                ZStack {
+                    Theme.surface(.window)
+                    VStack(spacing: 0) {
+                        LegacyTextTitledToolbarBand()
+                        Divider()
+                        TodoEditorView()
+                        Spacer(minLength: 0)
+                    }
+                }
+                .frame(width: size.width, height: size.height)
+                .snapshotEnvironment(
+                    state: host.state, workspace: host.workspace, tabs: host.tabs, terminal: host.terminal
+                )
+            ),
+            size: size,
+            scheme: .light
+        )
+        _ = try live.captureBothLanguages(name: "noteui-05-todo-toolbar-legacy-vs-product")
+    }
+
+    // MARK: - 片 `D166⑤` · 契约 `FR-NOTEUI-19`：默认紧凑（空白不占宽 · 新控件不得把面板撑宽）
+
+    /// 夹具：把一批草稿写进**临时**笔记库（`DOYAH_NOTES_DIR` 不在场就跳过 —— 与 `seedOneNote` 同一条纪律）。
+    @MainActor
+    private func seedNotes(_ host: HostBundle, drafts: [NoteDraft]) async throws {
+        try requireIsolatedNotesDirectory()
+        let load = try UISnapshot.applyLicense(.standard, to: host.state)
+        XCTAssertEqual(load.entitlements.basis, .licensed, "临时许可证没落地")
+        XCTAssertTrue(host.state.notesEnabled, "Standard 档必须带笔记能力")
+        for draft in drafts {
+            _ = try await NoteLibrary.defaultLibrary().upsert(draft)
+        }
+    }
+
+    /// **「默认紧凑」的机器判据**（`FR-NOTEUI-19` 契约逐字：「**默认紧凑**：空白不占宽、新控件不得把
+    /// 面板撑宽（含「行内收敛不算整列缩窄」的口径）」；由头 = 2026-10-08 人类主人指认「左栏」= 笔记列表列）。
+    ///
+    /// ## 三条判据（都在几何上，读数即证据）
+    ///   ① **默认（自然打开）宽度落在紧凑档**：存放笔记列表的那一列（`HSplitView` 左那一子）
+    ///      落地宽度 **≤ `NotesAreaView` 的紧凑上限 238pt**（片 `N2-LW` 定的那一档）；
+    ///   ② **内容不得把面板撑宽**：把夹具从「短标题 / 短来源名」换成一整套**长内容**
+    ///      （长标题 + 长来源连接名 + 长标签）⇒ 同一栏的落地宽度**一字不变**（成对读数，容差 0.5pt）——
+    ///      这一条正是「空白不占宽 / 新控件不得把面板撑宽」的几何内容；
+    ///   ③ **新控件不得越界**：头部那一带（栏内上缘往下 90pt）里 AppKit 量得到的控件**并集宽度 ≤
+    ///      栏宽**、右边缘不越过栏右缘 —— 新加进来的控件把面板「顶出去」会在这一条上当场红。
+    ///
+    /// ## 能判红（否则「都一样」可能是没量着）
+    ///   · **对照件**：同一份长内容挂在**改前那三档**（220 / 300 / 520）的复刻件里 ⇒ 落地宽度
+    ///     **520.0pt** ⇒ 上面两条（≤238、内容不变）在那份上当场红 ⇒ 这把尺子分得开；
+    ///   · **入口下限**：头部带里至少量到 2 件可读控件，一栏都量不到 ⇒ 判红（不许悄悄跳过）。
+    @MainActor
+    func testNoteUI19TheListPaneStaysCompactWhateverTheContent() async throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+
+        /// 长内容那一套（长标题 / 长来源名 / 长标签各一条）——「空白不占宽」的反面用例。
+        let longTitle = String(repeating: "很长的标题很长的标题", count: 6)
+        let longConnection = String(repeating: "long-connection-name-", count: 6)
+
+        /// 量一栏：落地宽度 + 头部带里那几件的并集与最右溢出（口径与 `testNotesListHeaderFits…` 同款）。
+        func measure(_ hosting: NSView, label: String) throws -> (pane: CGFloat, union: CGFloat, overflow: CGFloat, parts: Int) {
+            let split = try XCTUnwrap(
+                UISnapshot.LiveHost<Never>.findViews(ofType: NSSplitView.self, in: hosting).first,
+                "宿主里没有 `NSSplitView` —— `HSplitView` 没落地，量不到「存放笔记列表的那一列」"
+            )
+            let columns = split.subviews
+                .map { (view: $0, rect: rect(of: $0, in: hosting)) }
+                .filter { $0.rect.width > 8 }
+                .sorted { $0.rect.minX < $1.rect.minX }
+            let pane = try XCTUnwrap(columns.first, "`HSplitView` 里量不到列（实测 \(columns.count) 列）")
+            let paneRect = pane.rect
+            let header = UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: pane.view)
+                .filter { $0 !== pane.view }
+                .map { rect(of: $0, in: hosting) }
+                .filter { r in
+                    guard !r.isEmpty, r.width > 1, r.height > 1, r.height <= 40 else { return false }
+                    guard r.minX >= paneRect.minX - 0.5, r.maxX > paneRect.minX else { return false }
+                    let top = distanceToTopEdge(r, in: hosting) - distanceToTopEdge(paneRect, in: hosting)
+                    return top >= -1 && top <= 90
+                }
+                .reduce(into: [CGRect]()) { unique, r in
+                    if !unique.contains(where: { abs($0.minX - r.minX) < 0.5 && abs($0.maxX - r.maxX) < 0.5
+                        && abs($0.minY - r.minY) < 0.5 }) {
+                        unique.append(r)
+                    }
+                }
+            let union = header.reduce(CGRect.null) { $0.union($1) }
+            let overflow = header.map { $0.maxX - paneRect.maxX }.max() ?? 0
+            print(
+                "NOTEUI-19 [\(label)] 栏 x=[\(pt(paneRect.minX))…\(pt(paneRect.maxX))] w=\(pt(paneRect.width))"
+                    + " ｜ 头部件 \(header.count) 件 · 并集 w=\(pt(union.width)) ｜ 最右溢出 \(pt(overflow))pt"
+            )
+            return (paneRect.width, union.width, overflow, header.count)
+        }
+
+        // ── 短内容那一遍 ───────────────────────────────────────────────────────────────
+        try await seedNotes(host, drafts: [NoteDraft(title: "短", body: "正文", source: NoteSource(kind: .manual))])
+        await host.state.reloadNotes()
+        let shortLive = makeLive(host)
+        let short = try measure(shortLive.hosting, label: "短内容")
+
+        // ── 长内容那一遍（**同一栏**，只是夹具换了）────────────────────────────────────────
+        let longHost = makeHost()
+        defer { UISnapshot.clearLicense(from: longHost.state) }
+        try await seedNotes(longHost, drafts: [
+            NoteDraft(
+                title: longTitle,
+                body: String(repeating: "很长的正文。", count: 40),
+                tags: [longTitle],
+                source: NoteSource(kind: .sql, connectionName: longConnection)
+            ),
+        ])
+        await longHost.state.reloadNotes()
+        let longLive = makeLive(longHost)
+        let long = try measure(longLive.hosting, label: "长内容")
+
+        // ── 对照件：改前那三档（220 / 300 / 520）复刻件 + 同一份长内容 ─────────────────────
+        let before = makeOffscreenHost(
+            longHost,
+            HSplitView {
+                NotesListView()
+                    .frame(minWidth: 220, idealWidth: 300, maxWidth: 520)
+                NotesEditorView()
+                    .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        )
+        let legacy = try measure(before.hosting, label: "对照件·改前 520 档")
+
+        // ① 默认（自然打开）宽度落在紧凑档
+        XCTAssertLessThanOrEqual(
+            short.pane, 238.0,
+            "存放笔记列表的那一列默认宽度 \(pt(short.pane))pt ＞ 紧凑档 238.0pt —— 「默认紧凑」不成立"
+        )
+        // ② 内容不得把面板撑宽（成对读数）
+        XCTAssertEqual(
+            long.pane, short.pane, accuracy: 0.5,
+            "换成长内容（长标题 / 长来源名 / 长标签）之后那一栏从 \(pt(short.pane))pt 变成 \(pt(long.pane))pt"
+                + " —— 内容/空白把面板撑宽了（`FR-NOTEUI-19`「空白不占宽」反面）"
+        )
+        // ③ 新控件不得越界
+        XCTAssertGreaterThanOrEqual(
+            short.parts, 2,
+            "头部带里量到的控件不足 2 件（实测 \(short.parts) 件）—— 判据的入口没了"
+        )
+        XCTAssertLessThanOrEqual(
+            short.union, short.pane,
+            "头部内容宽度 \(pt(short.union))pt ＞ 栏宽 \(pt(short.pane))pt —— 新控件把面板顶出去了"
+        )
+        XCTAssertLessThanOrEqual(
+            short.overflow, 0.5,
+            "头部有控件越过栏右缘 \(pt(short.overflow))pt（> 0.5pt 容差）"
+        )
+        // 对照件：同一份内容在改前那三档上必须量得出「更宽」—— 否则上面那两条是空跑。
+        XCTAssertGreaterThan(
+            legacy.pane, 238.0,
+            "对照件（改前 220/300/520 档）量到 \(pt(legacy.pane))pt，没有比紧凑档宽 ⇒ 这把尺子分不开"
+        )
+        // ④ **行内也不许被内容撑开**（源锚点）：那一格（来源名 = 用户可任意长的连接名）与同行的
+        //    标题（`.lineLimit(1)`）/ 摘要（`.lineLimit(2)`）同一套上限 —— 漏了它，长连接名会在
+        //    这条 238pt 的窄栏里折成好几行（本片实测：折了 8 行，行高被撑开 ⇒ 也不叫「紧凑」）。
+        let source = try notesPanelSource()
+        let rowSourceBlock = Self.sourceRegion(
+            in: source,
+            from: "Text(note.source.kind.displayName",
+            to: "Spacer(minLength: Spacing.xs)"
+        )
+        XCTAssertFalse(
+            rowSourceBlock.isEmpty,
+            "截不出列表行「来源名」那一格 —— 锚点被改了，判据自己失效"
+        )
+        XCTAssertTrue(
+            rowSourceBlock.contains(".lineLimit(1)"),
+            "列表行「来源名」那一格没有 `.lineLimit(1)` —— 长连接名会把这一行折成好几行（行高被撑开，"
+                + "同一行的标题 / 摘要都有上限，只有这一格没有）"
+        )
+        print(
+            "NOTEUI-19 成对读数：短内容 \(pt(short.pane))pt ／ 长内容 \(pt(long.pane))pt ／ "
+                + "对照件·改前 520 档 \(pt(legacy.pane))pt（紧凑上限 238.0pt）"
+        )
+    }
+
+    /// **成对截图③**（`FR-NOTEUI-19`）：同一块笔记屏在**短内容**与**长内容**两套夹具下的样子，
+    /// 中英各一张 —— 给人复看「那一栏没有被内容撑宽」（判据在上面的 dump 用例里）。
+    @MainActor
+    func testNoteUI19PairedShotsCompactPaneShortVsLongContent() async throws {
+        let longTitle = String(repeating: "很长的标题很长的标题", count: 6)
+        let longConnection = String(repeating: "long-connection-name-", count: 6)
+
+        let shortHost = makeHost()
+        defer { UISnapshot.clearLicense(from: shortHost.state) }
+        try await seedNotes(shortHost, drafts: [NoteDraft(title: "短", body: "正文", source: NoteSource(kind: .manual))])
+        await shortHost.state.reloadNotes()
+        _ = try makeCaptureHost(shortHost).captureBothLanguages(name: "noteui-05-compact-short-content")
+
+        let longHost = makeHost()
+        defer { UISnapshot.clearLicense(from: longHost.state) }
+        try await seedNotes(longHost, drafts: [
+            NoteDraft(
+                title: longTitle,
+                body: String(repeating: "很长的正文。", count: 40),
+                tags: [longTitle],
+                source: NoteSource(kind: .sql, connectionName: longConnection)
+            ),
+        ])
+        await longHost.state.reloadNotes()
+        _ = try makeCaptureHost(longHost).captureBothLanguages(name: "noteui-05-compact-long-content")
+    }
+
+    /// 截一段源码（首尾锚点都必须找得到；找不到给空串 —— 调用方据此判红，
+    /// 「锚点被改了」不许静默当作「那一段干干净净」）。口径与 `NotesEditorSaveProbeTests.sourceRegion` 同款。
+    private static func sourceRegion(in text: String, from start: String, to end: String) -> String {
+        guard let startRange = text.range(of: start),
+              let endRange = text.range(of: end, range: startRange.upperBound..<text.endIndex) else {
+            return ""
+        }
+        return String(text[startRange.upperBound..<endRange.lowerBound])
+    }
+
+    /// 剥掉**整行注释**（`//` / `///` 开头、允许前导空白的那些行）—— 口径见 `FR-NOTEUI-15` 那两条：
+    /// 注释里逐字写着的旧形态是**存档**（「原来是 `Label { Text(…) }`」），不是活的控件，不剥就会
+    /// 把历史记录当成现行形态判红。只剥**整行**注释，不碰行尾注释、也不碰字符串字面量里的 `//`
+    /// （`App/Views/NotesPanel.swift` 的注释都是整行的 —— 这一刀够用，且不会误伤 URL / 正则之类）。
+    private static func strippingLineComments(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
     }
 }
