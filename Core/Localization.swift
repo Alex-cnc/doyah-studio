@@ -2370,6 +2370,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case importNothingMapped
     case importSampleNote
     case importCopyAtomicNote
+
+    // 插件装配（概设 §4）：诊断行与降级名单。**这些是日志/CLI 面**（同「许可证：…」那一行），
+    // 语言由调用方给（L-47）——界面要英文就传 `.english`，不做"切语言还得重启"那种事。
+    case pluginDiagnosticNone
+    case pluginDiagnosticDegraded
+    case pluginDegradedEntry
+    case pluginListSeparator
+    case pluginListEmpty
 }
 
 public enum LocalizedStrings {
@@ -2392,6 +2400,12 @@ public enum LocalizedStrings {
         .commonRetry: [.simplifiedChinese: "重试", .english: "Retry"],
         .commonCopy: [.simplifiedChinese: "复制", .english: "Copy"],
         .commonOk: [.simplifiedChinese: "好", .english: "OK"],
+
+        .pluginDiagnosticNone: [.simplifiedChinese: "插件：%@ / 降级：无", .english: "Plugins: %@ / degraded: none"],
+        .pluginDiagnosticDegraded: [.simplifiedChinese: "插件：%@ / 降级：%@", .english: "Plugins: %@ / degraded: %@"],
+        .pluginDegradedEntry: [.simplifiedChinese: "%@（%@）", .english: "%@ (%@)"],
+        .pluginListSeparator: [.simplifiedChinese: "；", .english: "; "],
+        .pluginListEmpty: [.simplifiedChinese: "（无）", .english: "none"],
 
         .menuNewQuery: [.simplifiedChinese: "新建查询", .english: "New Query"],
         .menuLanguage: [.simplifiedChinese: "语言", .english: "Language"],

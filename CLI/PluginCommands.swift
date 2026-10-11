@@ -74,7 +74,7 @@ extension DoyahCLI {
         for item in registry.degraded {
             print("degraded: id=\(item.id) | reason=\(item.reason)")
         }
-        print("diagnostic: \(registry.diagnosticLine)")
+        print("diagnostic: \(registry.diagnosticLine())")
         print("readings: active \(registry.active.count) / degraded \(registry.degraded.count)")
 
         // **空目录也返回 1**：没有插件的宿主是"功能整体消失"的合法形态，但脚本不该把它当"装配成功"。

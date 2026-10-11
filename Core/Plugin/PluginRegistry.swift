@@ -48,13 +48,20 @@ public struct PluginRegistry: Equatable, Sendable {
     }
 
     /// 启动诊断行（排障用，同「许可证：…」那一行）：**列明激活与降级**，不打印"一切正常"就完事。
-    public var diagnosticLine: String {
-        let activeText = active.isEmpty ? "（无）" : active.map(\.id).joined(separator: ",")
+    ///
+    /// 语言是**传进来的**（L-47 / 本地化棘轮）：默认中文（日志与 CLI 读它），
+    /// 界面要英文就传 `.english` —— 字面量一律留在这一个文件之外。
+    public func diagnosticLine(language: AppLanguage = .simplifiedChinese) -> String {
+        let empty = LocalizedStrings.text(.pluginListEmpty, language: language)
+        let activeText = active.isEmpty ? empty : active.map(\.id).joined(separator: ",")
         guard !degraded.isEmpty else {
-            return "插件：\(activeText) / 降级：无"
+            return LocalizedStrings.format(.pluginDiagnosticNone, language: language, activeText)
         }
-        let degradedText = degraded.map { "\($0.id)（\($0.reason)）" }.joined(separator: "；")
-        return "插件：\(activeText) / 降级：\(degradedText)"
+        let separator = LocalizedStrings.text(.pluginListSeparator, language: language)
+        let degradedText = degraded
+            .map { LocalizedStrings.format(.pluginDegradedEntry, language: language, $0.id, $0.reason) }
+            .joined(separator: separator)
+        return LocalizedStrings.format(.pluginDiagnosticDegraded, language: language, activeText, degradedText)
     }
 
     /// 某个挂点的所有者（按 `order` 升序，缺省排后）。挂点归属**只此一处**可查。
