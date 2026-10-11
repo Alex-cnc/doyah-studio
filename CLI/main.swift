@@ -101,6 +101,14 @@ struct DoyahCLI {
             exit(runNotesCommand(arguments: Array(arguments.dropFirst())))
         }
 
+        // plugins：插件装配的可脚本化出口（概设 §8 判据 ①）。
+        // 「插件不在 ⇒ 该功能整体消失且不报错」是**可机械判定**的性质，
+        // 但界面里看不出来 —— 给个能 dump 清单、能看降级名单的出口，
+        // 这条判据才不是"我们相信它是这样"。用法见 CLI/PluginCommands.swift。
+        if arguments.first == "plugins" {
+            exit(runPluginsCommand(arguments: Array(arguments.dropFirst())))
+        }
+
         // agent-sql：无界面地跑一遍「自然语言 → SQL」通道（NFR-AI-06 的本地端点验证入口）。
         // 为什么 CLI 要有它：**"指向本地端点即零外发"这件事必须能被脚本验证** ——
         // 图形界面里点一下不算证据，能跑脚本、能核对统一外发日志才算。

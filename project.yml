@@ -96,6 +96,11 @@ targets:
           - "Resources/icons"
           # 构建残留的点目录（口径见上面 `targets:` 前那一段）：`xcodegen` 不读 `.gitignore`。
           - ".build"
+      # 插件面（概设 §7）：内置插件的**清单与资源**随宿主包一起发；
+      # 源码级的插件目录（`Plugins/<id>/*.swift`）由各自 target 收，此处只保证
+      # `plugin.json` 等资源进 `.app`，好让运行期能"认识"装进来的插件。
+      - path: Plugins
+        buildPhase: resources
     dependencies:
       - target: DoyahCore
       - target: DoyahPlatform

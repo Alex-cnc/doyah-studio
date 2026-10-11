@@ -1,0 +1,12 @@
+{
+  "id": "Sample",
+  "displayName": "示例插件",
+  "version": "0.0.1",
+  "apiVersion": 1,
+  "capabilities": [],
+  "contributions": [
+    { "point": "activityBar", "order": 90 },
+    { "point": "statusBar" }
+  ],
+  "storage": "pluginOwned"
+}
