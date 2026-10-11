@@ -88,7 +88,11 @@ extension AICapture {
             title: t(.aiNotePlanTitle, String(review.tasks.count), language: language),
             body: lines.joined(separator: "\n"),
             tags: [t(.aiNoteTagMaintenance, language: language)],
-            source: NoteSource(kind: .maintenance, connectionName: connectionName(from: target))
+            source: NoteSource(
+                kind: .maintenance,
+                connectionName: connectionName(from: target),
+                fingerprint: fingerprint(of: planText, review: review)
+            )
         )
     }
 
@@ -103,6 +107,44 @@ extension AICapture {
         let evidencePart = context.evidence.map(\.sql).joined(separator: "|")
         let advicePart = report.items.map { $0.conclusion + $0.citations.joined() }.joined(separator: "|")
         return stableHash(evidencePart + "#" + advicePart)
+    }
+
+    /// 状态在指纹里的**语言中立**写法。
+    ///
+    /// 界面那句 `stateText` 会随语言变（它是文案），**指纹不许跟着变** ——
+    /// 否则界面切一种语言再存一次，同一份计划就被认成两份了。
+    private static func stateToken(_ state: MaintenanceTask.State) -> String {
+        switch state {
+        case .pending: return "pending"
+        case .approved: return "approved"
+        case .rejected: return "rejected"
+        case .executed: return "executed"
+        case .failed(let note): return "failed:" + note.raw
+        }
+    }
+
+    /// 维护计划的**稳定指纹**（队列 `L-138`；口径同 `Q14=A`「同一份 AI 产物只存一条」）。
+    ///
+    /// 为什么从前没有：`diagnosisNote` 一直给指纹，而 `maintenanceNote` 一个都没给 ——
+    /// 于是「默认不重复存」这条口径对维护计划**结构上不适用**（不是漏判，是没有可判重的依据）。
+    ///
+    /// 两处刻意：
+    ///   ① **逐条状态要算进去**：维护计划会随审批推进（待批 → 已批 / 已拒 → 已执行），
+    ///      不掺状态的话「批准之后再存一次」会被判成同一份而**把新状态丢掉** —— 那比多存一条更糟；
+    ///   ② **语言不进指纹**（见 `stateToken`）。
+    /// 时间同样不掺（与诊断指纹同一条口径：同一份产物再存一次要能被识别出来）。
+    static func fingerprint(of planText: String, review: MaintenancePlanReview) -> String {
+        let planPart = planText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let taskPart = review.tasks.map { task in
+            [
+                task.id,
+                task.kind.rawValue,
+                stateToken(task.state),
+                task.summary,
+                task.reviewNotes.joined(separator: ",")
+            ].joined(separator: "|")
+        }.joined(separator: "|")
+        return stableHash(planPart + "#" + taskPart)
     }
 
     /// 维护任务状态的人话（`MaintenanceTask.State` 同样是 Ultra 侧类型）。

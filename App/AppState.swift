@@ -8303,7 +8303,13 @@ final class AppState: ObservableObject {
     ///
     /// 为什么要存"被拒绝的条目"：那是**过程事实** —— 不记下来，下次模型还会提同一个被限流拒绝的计划，
     /// 而用户已经拒绝过一次了。
-    func saveMaintenanceNote() async {
+    ///
+    /// 判重走**唯一入口** `AICaptureIntake`（队列 `L-138`）：从前这里直接 `upsert`，
+    /// 而 `maintenanceNote` 又没给指纹 —— 「同一份产物只存一条」对维护计划**结构上不适用**。
+    /// 现在与诊断面板同形：默认不重复存、显式要副本才存第二份。
+    ///
+    /// - Parameter forceNew: 显式要副本（界面上的「再存一份」）。
+    func saveMaintenanceNote(forceNew: Bool = false) async {
         // 「存进笔记」按钮住在数据库区里，而笔记是**独立的一块能力**（Pro 不含它）：
         // 不先问一句，这个按钮在 Pro 上就会写进一个用户根本看不到的地方。
         guard notesEnabled else {
@@ -8315,15 +8321,30 @@ final class AppState: ObservableObject {
             return
         }
         do {
-            let store = NoteLibrary.defaultLibrary()
             let draft = AICapture.maintenanceNote(
                 planText: maintenancePlanText,
                 review: review,
                 target: selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? "",
                 language: LocalizationManager.shared.effectiveLanguage
             )
-            let saved = try await store.upsert(draft)
-            maintenanceMessage = L(.diagnosisNoteSaved, saved.title)
+            let result = try await AICaptureIntake.receive(
+                draft,
+                into: NoteLibrary.defaultLibrary(),
+                forceNew: forceNew
+            )
+            switch result.outcome {
+            case .saved:
+                reusedCapturedNote = nil
+                maintenanceMessage = L(.diagnosisNoteSaved, result.note.title)
+            case .savedCopy:
+                reusedCapturedNote = nil
+                maintenanceMessage = L(.diagnosisNoteSavedCopy, result.note.title)
+            case .reusedExisting:
+                // 没重复存 ⇒ 把**已有那条**记下来，界面上给一个「打开那条」的入口（与诊断面板同形）。
+                reusedCapturedNote = result.note
+                maintenanceMessage = L(.diagnosisNoteReused, result.note.title)
+            }
+            await reloadNotes()
         } catch {
             maintenanceMessage = ErrorPresenter.message(for: error)
         }

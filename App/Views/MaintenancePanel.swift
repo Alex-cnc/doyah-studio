@@ -201,6 +201,12 @@ struct MaintenancePanel: View {
                 Task { await appState.saveMaintenanceNote() }
             }
             .disabled(appState.maintenanceReview?.tasks.isEmpty ?? true)
+            // 逃生门（**显式**才存副本）：与诊断面板同形（队列 `L-138`）——
+            // 计划确实要留第二份时走这颗，而不是把默认行为改回"每次都存"。
+            Button(L(.diagnosisSaveNoteCopy)) {
+                Task { await appState.saveMaintenanceNote(forceNew: true) }
+            }
+            .disabled(appState.maintenanceReview?.tasks.isEmpty ?? true)
             Spacer()
             Button(appState.maintenanceIsRunning ? L(.diagnosisGathering) : L(.maintenanceExecuteAction)) {
                 Task { await appState.executeApprovedMaintenanceTasks() }

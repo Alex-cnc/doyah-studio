@@ -187,4 +187,78 @@ final class AICaptureIntakeTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - 6) 维护计划同样按指纹判重（队列 `L-138`）
+
+    /// 夹具：同一份维护计划（指纹 = 计划正文 + 逐条状态，不掺时间、不掺语言）。
+    private func maintenanceDraft(
+        state: MaintenanceTask.State = .pending,
+        language: AppLanguage = .simplifiedChinese
+    ) -> NoteDraft {
+        var task = MaintenanceTask(
+            id: "t1",
+            kind: .vacuum,
+            summary: "整理 customers 表的膨胀",
+            sql: "VACUUM (ANALYZE) public.customers"
+        )
+        task.state = state
+        task.reviewNotes = ["写操作：需要审批"]
+        let review = MaintenancePlanReview(tasks: [task], notes: ["没有高开销任务"], unparsableLines: [])
+        return AICapture.maintenanceNote(
+            planText: "task: vacuum | 整理 customers 表的膨胀 | sql: VACUUM (ANALYZE) public.customers",
+            review: review,
+            target: "postgres@192.168.5.217:5432/dsh_db（8.4.10）",
+            language: language
+        )
+    }
+
+    /// 从前 `maintenanceNote` **一个指纹都不给** ⇒ 「默认不重复存」对维护计划结构上不适用。
+    func testMaintenanceNoteCarriesAFingerprint() {
+        XCTAssertNotNil(
+            maintenanceDraft().source.fingerprint,
+            "维护计划也要有指纹 —— 没有指纹就没有判重的依据"
+        )
+    }
+
+    func testMaintenancePlanSavedTwiceLeavesOneNote() async throws {
+        let store = library()
+        let first = try await AICaptureIntake.receive(maintenanceDraft(), into: store)
+        XCTAssertEqual(first.outcome, .saved)
+
+        let second = try await AICaptureIntake.receive(maintenanceDraft(), into: store)
+        XCTAssertEqual(second.outcome, .reusedExisting, "同一份计划默认不重复存（Q14=A）")
+        XCTAssertEqual(second.note.id, first.note.id, "指回的就是已存的那一条")
+
+        let stored = try await store.load()
+        XCTAssertEqual(stored.count, 1, "同一份计划存两次只许留一条")
+    }
+
+    func testMaintenanceCopyRequestedStoresSecond() async throws {
+        let store = library()
+        _ = try await AICaptureIntake.receive(maintenanceDraft(), into: store)
+        let copy = try await AICaptureIntake.receive(maintenanceDraft(), into: store, forceNew: true)
+        XCTAssertEqual(copy.outcome, .savedCopy, "显式要副本才存第二份")
+
+        let stored = try await store.load()
+        XCTAssertEqual(stored.count, 2)
+    }
+
+    /// 状态推进（待批 → 已批）⇒ **是新的一条**：判重不许把新状态丢掉（那比多存一条更糟）。
+    func testMaintenanceStateAdvanceIsANewNote() async throws {
+        let store = library()
+        _ = try await AICaptureIntake.receive(maintenanceDraft(state: .pending), into: store)
+        let advanced = try await AICaptureIntake.receive(maintenanceDraft(state: .approved), into: store)
+        XCTAssertEqual(advanced.outcome, .saved, "计划推进过 ⇒ 新的一份，不是重复")
+
+        let stored = try await store.load()
+        XCTAssertEqual(stored.count, 2)
+    }
+
+    /// 语言不进指纹：换一种界面语言存同一份计划，认出来的还是同一份（否则切语言就多一条）。
+    func testMaintenanceFingerprintIgnoresLanguage() {
+        XCTAssertEqual(
+            maintenanceDraft(language: .english).source.fingerprint,
+            maintenanceDraft(language: .simplifiedChinese).source.fingerprint
+        )
+    }
 }
