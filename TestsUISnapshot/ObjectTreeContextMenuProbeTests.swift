@@ -1,3 +1,4 @@
+import AppKit
 import Crypto
 import SwiftUI
 import XCTest
@@ -24,6 +25,14 @@ import DoyahCore
 ///     `ObjectTreeActions.isAvailable` 的规则**双向**对账（少一项 / 多一项都判红）；
 ///   · 作用行 —— 拿**产品自己摊平出来的**行数组（`ObjectTreeRows.visibleRows`）喂那个纯函数，
 ///     判「悬停命中 ⇒ 就是那一行」「盒子空 ⇒ 退回选中项（点完立刻右键那条）」「都不成立 ⇒ `nil`」。
+///   · **生产路径**（队列 `L-118`）—— 界面**真正弹的那一份**不是上面那个 SwiftUI 渲染，而是
+///     `App/Views/ObjectTreeAppKitMenu.swift` 现建的真 `NSMenu`（命中行的捕获器自己给出菜单，
+///     见 `ObjectTreeRightClick.swift::menu(for:)`）。只判 SwiftUI 那份 = **判据替一条非生产路径
+///     背书**（两份渲染各写一遍项表，谁漂了都没人看得见）⇒ 每类节点**同时**构造真 NSMenu，
+///     把它的菜单项与同一套 `ObjectTreeActions.isAvailable` 规则、以及 SwiftUI 那份**逐类对账**
+///     （两套菜单同源）。`NSMenu` 离屏可构造 —— 不开窗口、不抢焦点、不要授权。
+///     这一腿还多判两层 SwiftUI 快照量不到的属性：`isEnabled`（生产那一份的真实可用性）与
+///     `attributedTitle` 的破坏性颜色（必须走主题令牌）。
 ///
 /// ## 判不到的（如实登记）
 ///
@@ -223,6 +232,56 @@ final class ObjectTreeContextMenuProbeTests: XCTestCase {
         return pair.records[0]
     }
 
+    // MARK: - 生产那一份（AppKit NSMenu · 队列 `L-118`）
+
+    /// 界面**真正弹的**那一份：`ObjectTreeAppKitMenu.build` 现建一个真 `NSMenu`。
+    ///
+    /// **必须在中文宿主语境里构造**：`L(...)` 在语境外按**用户偏好**出文案（本机偏好不一定
+    /// 是简体中文），期望值会静默错位 —— 与本文件其它期望值同一条纪律。
+    /// 离屏构造即可：不需要窗口、不需要授权、不抢焦点。
+    @MainActor
+    private static func productionMenuItems(_ object: DatabaseObject, host: Host) -> [NSMenuItem] {
+        inHostLanguage(.simplifiedChinese) {
+            ObjectTreeAppKitMenu.build(object: object, appState: host.state, onEdit: nil).items
+        }
+    }
+
+    /// 生产那一份的**菜单项文案**（分隔线不算项 —— 它没有标题）。
+    @MainActor
+    private static func productionMenuTitles(_ object: DatabaseObject, host: Host) -> [String] {
+        productionMenuItems(object, host: host).filter { !$0.isSeparatorItem }.map(\.title)
+    }
+
+    /// 两套菜单对账前的**归一化**：去掉尾部那一个省略号。
+    ///
+    /// 为什么必须归（本轮实测，不是理论）：快照记录的 `localizedStrings` 是 `L(...)` 的**查表结果**
+    /// —— **代码里拼上去的**尾省略号不在其中（实测 `L(.sessionTitle) + "…"` 记成 `服务器会话`、
+    /// `L(.syntheticGenerate) + "…"` 记成 `生成预览`），而 `.strings` 里**自带**省略号的
+    /// （`编辑连接…` / `按条件浏览…`）照旧带着。生产那一份是 AppKit 直接渲的 `NSMenuItem.title`，
+    /// 拼上去的省略号**在**。⇒ 两边对账前都去掉尾部一个 `…`：项集合仍逐项可比，
+    /// 只是不判「谁拼了省略号」那一层（那一层归像素面与人工点验）。
+    private static func withoutTrailingEllipsis(_ titles: Set<String>) -> Set<String> {
+        Set(titles.map { $0.hasSuffix("…") ? String($0.dropLast()) : $0 })
+    }
+
+    /// 把一个色**解析到 sRGB** 再比。
+    ///
+    /// 为什么必须解析（本轮实测）：`Theme.nsColor(ThemeColor)` 每次调用都新建一个**动态**
+    /// `NSColor`（`NSColor(name: nil) { appearance in … }`）⇒ 两个实例**不相等**
+    /// （实测失败信息两侧都是 `Catalog color: #$customDynamic <不同 UUID>`，值相同、身份不同）。
+    /// 两个色必须在**同一个外观**下解析到同一色彩空间，比的才是颜色本身。
+    @MainActor
+    private static func sRGB(_ color: NSColor?, in appearance: NSAppearance?) -> NSColor? {
+        guard let color else { return nil }
+        var resolved: NSColor?
+        if let appearance {
+            appearance.performAsCurrentDrawingAppearance { resolved = color.usingColorSpace(.sRGB) }
+        } else {
+            resolved = color.usingColorSpace(.sRGB)
+        }
+        return resolved
+    }
+
     // MARK: - ① 每一行都是它自己的菜单（七类各一张图）+ 动作项与 Core 双向对账
 
     @MainActor
@@ -280,6 +339,71 @@ final class ObjectTreeContextMenuProbeTests: XCTestCase {
                 )
             }
             Self.assertSignatureItems(kind: kind, observed: observed, labels: labels)
+
+            // 丙bis、**生产那一份**（`ObjectTreeAppKitMenu.build` → 真 NSMenu · 队列 `L-118`）
+            //        上面的 `observed` 来自 SwiftUI 那份渲染 —— 它**已不在生产路径上**（见文件头）。
+            //        界面真正弹的是这一份 ⇒ 两条腿各自都要绿，而且**彼此同源**：
+            let production = Set(Self.productionMenuTitles(object, host: host))
+            XCTAssertFalse(
+                production.isEmpty,
+                "「\(kind.rawValue)」生产那一份一个菜单项都没有 —— 界面右键会弹一张空菜单"
+            )
+            XCTAssertEqual(
+                production.intersection(allActionLabels), expected,
+                "生产路径（ObjectTreeAppKitMenu）的动作项与 ObjectTreeActions 的规则不一致 —— 界面真正弹的就是它"
+            )
+            XCTAssertEqual(
+                Self.withoutTrailingEllipsis(production), Self.withoutTrailingEllipsis(observed),
+                "两套菜单不同源：生产路径 ObjectTreeAppKitMenu 与 SwiftUI 那份 ObjectTreeContextMenu "
+                    + "渲出的菜单项不一致（生产 = \(production.sorted()) / SwiftUI = \(observed.sorted())）"
+            )
+            if kind == .server {
+                XCTAssertTrue(
+                    Self.withoutTrailingEllipsis(serverBase).isSubset(of: Self.withoutTrailingEllipsis(production)),
+                    "生产那一份少了服务器菜单项：\(serverBase.subtracting(production))"
+                )
+            } else {
+                XCTAssertTrue(
+                    Self.withoutTrailingEllipsis(production)
+                        .intersection(Self.withoutTrailingEllipsis(serverBase)).isEmpty,
+                    "「\(kind.rawValue)」生产那一份弹出了服务器菜单项 "
+                        + "\(production.intersection(serverBase))"
+                )
+            }
+
+            // 丙ter、生产那一份**多出来的两层**（SwiftUI 快照量不到，只有真 NSMenu 能判）
+            let productionItems = Self.productionMenuItems(object, host: host)
+            if kind == .server {
+                // 可用性：未连接时「连接」可用、「断开」禁用（`isEnabled` 是生产那一份的真实状态）
+                let connect = productionItems.first { $0.title == Self.text(.simplifiedChinese) { L(.objectTreeMenuConnect) } }
+                let disconnect = productionItems.first { $0.title == Self.text(.simplifiedChinese) { L(.objectTreeMenuDisconnect) } }
+                XCTAssertNotNil(connect, "生产那一份少了「连接」项")
+                XCTAssertEqual(
+                    connect?.isEnabled, !host.state.isObjectTreeConnected,
+                    "「连接」的可用性必须与连接状态相反（连上了就没必要再连）"
+                )
+                XCTAssertEqual(
+                    disconnect?.isEnabled, host.state.isObjectTreeConnected,
+                    "「断开」的可用性必须与连接状态一致"
+                )
+            }
+            if kind == .table {
+                // 破坏性项的红色必须走**主题令牌**（`Theme.nsColor(.danger)`）—— AppKit 那份手写
+                // `NSColor.systemRed` 不会有任何别的判据报红（设计令牌门禁扫的是源码字面量，
+                // 而这里判的是**构造出来的那份菜单**）。
+                for label in [labels[.truncateTable], labels[.dropTable]].compactMap({ $0 }) {
+                    let item = productionItems.first { $0.title == label }
+                    XCTAssertNotNil(item, "生产那一份少了破坏性项「\(label)」")
+                    let color = item?.attributedTitle?
+                        .attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+                    let appearance = NSAppearance(named: .aqua)
+                    XCTAssertEqual(
+                        Self.sRGB(color, in: appearance),
+                        Self.sRGB(Theme.nsColor(.danger), in: appearance),
+                        "破坏性项「\(label)」的红色必须走主题令牌（换主题时要跟着变）"
+                    )
+                }
+            }
         }
     }
 

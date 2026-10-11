@@ -59,7 +59,10 @@ final class ObjectTreeMenuConventionTests: XCTestCase {
         )
         XCTAssertTrue(
             try source("App/Views/ObjectTreeContextMenu.swift").contains("static func items("),
-            "SwiftUI 那份渲染（探针在用）必须保留 —— 它是菜单内容的可渲染判据"
+            "SwiftUI 那份渲染必须保留 —— 它是菜单内容的**可渲染判据**（`UISnapshot` 出中英成对图，"
+                + "AppKit 的 `NSMenu` 出不了图）。**界面真正弹的是** `ObjectTreeAppKitMenu.build` 那一份 ⇒ "
+                + "生产路径由 `TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift` 的"
+                + "**生产路径腿**直接构造真 `NSMenu` 判（队列 `L-118`，两条腿逐类对账「两套菜单同源」）"
         )
         // ② 菜单**挂在每一行上**（2026-09-29 需求提出者第三次投诉后的定案），
         //    整树那份"兜底菜单"已删除：它按悬停/上次选中算目标，什么都没选时会弹出一张**错的**菜单

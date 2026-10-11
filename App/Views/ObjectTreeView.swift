@@ -34,6 +34,12 @@ struct ObjectTreeView: View {
     /// `@State` 一写就让视图作废 → 整棵树重算 → 行视图被重建 → `onHover` 再触发一次 →
     /// 悬停状态来回翻，于是"鼠标停着不动，界面自己闪"。而这个盒子**没有任何观察者**：
     /// 写它不产生一次重绘，右键菜单在**呈现那一刻**读它即可。
+    ///
+    /// ⚠️ **旧口径残迹、别读**（队列 `L-118` ②）：行级 AppKit 菜单落地（2026-09-29）之后，右键走的是
+    /// **命中行自己的对象**（`RowMouseCatcher.makeMenu` → `object: row.object`），生产路径**没有任何读者**
+    /// —— 它只剩「写进去」这一半（下面三处赋值），`ObjectTreeMenuTarget.resolve` 也同此（只由探针与
+    /// 判据读）。删除属 `L-118` 未完项（要连带改 `Scripts/verify-ui-interactions.sh` 的锚点与
+    /// 「鼠标停着不动界面不该闪」那条结构判据），**不要**据它的值下任何结论。
     @State private var hoverBox = HoverBox()
     @State private var isLoadingRoot = false
     @State private var rootError: String?
