@@ -307,6 +307,12 @@
    "reason": "队列 L-109（macOS 侧 · 免授权 · 门禁）：给 Core 展示文本棘轮加第二条判据 —— 写死的英文展示文案（白名单 Scripts/core-localization-english.json；原判据只挡「含汉字」，L-108 那句 \"Home\" 就是这么漏的）。改的是本侧判据面（Core/**），未碰契约层；姊妹读数一字未变（汉字棘轮仍 59 文件 / 619 行 = 原基线）",
    "by": "hugehippo",
    "at": "2026-10-11"
+  },
+  {
+   "glob": "Scripts/test-verify-all-gate.py",
+   "reason": "队列 L-110（macOS 侧 · 免授权 · 门禁）：verify-all.sh 的控制流判据 —— 真脚本原样拷进临时迷你仓 + 桩件注入失败（默认跑法须如实点名「未执行项」、--keep-going 须跑完十八项再汇总、统一 exit 1）。同批登记 self-test-counts 族 `verify-all-gate`（族 45 · 例 618 · 锚点 77）",
+   "by": "hugehippo",
+   "at": "2026-10-11"
   }
 ],
  "unclassified_allow": [

@@ -26,9 +26,9 @@
     }
   ],
   "floors": {
-    "families": 44,
-    "totalCases": 559,
-    "anchorSites": 75,
+    "families": 45,
+    "totalCases": 618,
+    "anchorSites": 77,
     "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。"
   },
   "notCovered": [
@@ -234,7 +234,9 @@
       "countRegex": "自测：(\\d+)/\\d+ 例符合预期",
       "why": "队列 L-56 / 闭环第 4 项（spec §6 待拍板队列的编号与状态纪律）",
       "hostLedgerSelfTest": {
-        "files": ["Docs/智能体助手-开发spec.md"],
+        "files": [
+          "Docs/智能体助手-开发spec.md"
+        ],
         "marker": "（本机台账）—— 干净克隆上跳过",
         "note": "这一族的 `--self-test` 要读 spec 本机台账（`.gitignore` 内、只在主开发机上）⇒ 干净克隆 / 并行工作树 / 另一平台没有它时如实跳过、不打例数（口径 = AGENT-SPEC.md §9 第 147 条 ④）"
       },
@@ -698,7 +700,9 @@
       "countRegex": "自测通过（(\\d+) 例）",
       "why": "队列 L-84 ㈠㈡ + L-89 ㈡ ③（终端多会话页签：五组判断 + 按键映射真的在 Core 里、被单测逐组钉住；界面接线锚点 41 处含「页签头在 Spacer 之前」与「右侧那排六个符号一个不少 + 反向对账棘轮」；工具条那一行已抽成独立视图 LowerPaneTabStrip，能单独离屏渲染）",
       "hostLedgerSelfTest": {
-        "files": ["Docs/design/开发循环-任务队列.md"],
+        "files": [
+          "Docs/design/开发循环-任务队列.md"
+        ],
         "marker": "（本机台账）—— 干净克隆上跳过",
         "note": "这一族的自检夹具含队列台账（`_fixture` / `_digests` 都要读它）⇒ 干净克隆 / 并行工作树 / 另一平台没有它时如实跳过、不打例数（口径 = AGENT-SPEC.md §9 第 147 条 ④）"
       },
@@ -981,7 +985,10 @@
       "countRegex": "自测：(\\d+)/\\d+ 例符合预期",
       "why": "队列 L-150 / 闭环第 4 项（`needs-user` 行必须点名一个仍未决的拍板号 —— 空壳汇总格判红；由头 = `L-10` 成员全决后没人关格，探针每轮替成员问需求提出者）",
       "hostLedgerSelfTest": {
-        "files": ["Docs/design/开发循环-任务队列.md", "Docs/智能体助手-开发spec.md"],
+        "files": [
+          "Docs/design/开发循环-任务队列.md",
+          "Docs/智能体助手-开发spec.md"
+        ],
         "marker": "（本机台账）—— 干净克隆上跳过",
         "note": "这一族的 `--self-test` 要读队列与 spec 两份本机台账（`.gitignore` 内、只在主开发机上）⇒ 干净克隆 / 并行工作树 / 另一平台没有它们时如实跳过、不打例数（口径 = AGENT-SPEC.md §9 第 147 条 ④）"
       },
@@ -1003,6 +1010,22 @@
           "regex": "判据自己的证据（(\\d+) 例",
           "minSites": 1,
           "note": "脚本自己的用法行"
+        }
+      ]
+    },
+    {
+      "key": "verify-all-gate",
+      "script": "Scripts/test-verify-all-gate.py",
+      "args": [],
+      "cases": 8,
+      "countRegex": "夹具 (\\d+)/\\d+ 例达到预期",
+      "why": "队列 L-110 / 闭环本身（`verify-all.sh` 的控制流：默认跑法把「未执行项」如实点出来 + `--keep-going` 跑完再汇总、统一 exit 1）",
+      "anchors": [
+        {
+          "file": "Scripts/verify-all.sh",
+          "regex": "test-verify-all-gate\\.py` 的 \\*\\*(\\d+) 例\\*\\*",
+          "minSites": 1,
+          "note": "头注释（L-110 那一段）"
         }
       ]
     }

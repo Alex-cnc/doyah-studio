@@ -6,6 +6,16 @@ set -euo pipefail
 # 拆开跑过很多次、也就漏跑过很多次（尤其是文档计数与设计令牌这两项），
 # 所以合成一条：**改完代码跑它，十八项全过才算完**。
 #
+# ⚠️ **中止行为与「未执行项」**（队列 L-110，2026-10-11 第 488 轮）：本脚本是 `set -euo pipefail`
+# —— 失败**当场中止**，后面的项**根本没跑**（2026-09-30 实测：第 1 项红了 ⇒ 只能报「第 1 项红」，
+# 当时文档里那句「十八项里只有第 1 项红」是**没有证据**的写法：**未执行 ≠ 通过**）。现在两条都成机制：
+#   · 默认跑法：中止前由 `ERR` 陷阱**自己打印**「失败的是第几项 / 脚本第几行 / **哪些项没跑**」；
+#   · `./Scripts/verify-all.sh --keep-going`：**跑完再汇总** —— 单项失败不中止，收尾给一张
+#     逐项判定表（通过 / 失败（含行号）/ 平台跳过），有失败则统一 `exit 1`；
+#   · 判据自己的证据 = `Scripts/test-verify-all-gate.py` 的 **8 例**（把**本文件原样**拷进临时迷你仓，
+#     桩件注入失败 ⇒ 断言两种跑法各自的话都说得对）。
+# 失败行的行号 → 项号由**本文件自己的项块行**翻译（与 `check-doc-numbers.py` 的 `gate-scan` 同源）。
+#
 #   1. Core 单测（SwiftPM，不需要数据库）+ 平台适配层单测
 #   2. Core 平台中立性（Core 里不得出现平台专属依赖 —— 否则 Linux 编译不过）
 #   3. 本地化：Core 展示文本棘轮（R-45：用户可见文案不得硬编码中文，只能比基线更少）
@@ -132,6 +142,7 @@ set -euo pipefail
 # 默认就是非沙箱构建（交付口径）：./Scripts/build-app.sh
 # 要试沙箱那一面（上架只走沙箱）：DOYAH_SANDBOX=1 ./Scripts/build-app.sh
 
+SCRIPT_PATH="$0"   # L-110：项表要读**本文件自己**（`cd` 之后相对路径就取不到了）
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "${ROOT}"
 
@@ -159,10 +170,13 @@ case "${PLATFORM}" in
 esac
 
 REQUIRE_ALL=0
+KEEP_GOING=0
 for argument in "$@"; do
-  if [ "${argument}" = "--require-all" ]; then
-    REQUIRE_ALL=1
-  fi
+  case "${argument}" in
+    --require-all) REQUIRE_ALL=1 ;;
+    --keep-going) KEEP_GOING=1 ;;
+    *) echo "⚠️ 认不出的参数：${argument}（本脚本只认 --require-all / --keep-going）" >&2 ;;
+  esac
 done
 
 SKIPPED_COUNT=0
@@ -175,6 +189,101 @@ skip_step() {   # skip_step <项号> <说明>
   echo "==> $1/18 ⏭ 跳过（平台不适用：PLATFORM=${PLATFORM}，缺 Xcode 工具链）—— ${2}"
   echo "    等价物见 Docs/概要设计.md §8.3（每端必需项清单）与 §8.5.3（另一平台的 PowerShell 版）"
 }
+
+# ── L-110（2026-10-11 第 488 轮）：失败行的行号 → 项号 + 「未执行项」如实报 ──────────────────
+# 项表**从本文件自己数**（`==> N/M` 项块的行号；与 `check-doc-numbers.py` 的 `gate-scan` 同源），
+# 于是 `ERR` 陷阱里那个行号能翻译成「第几项」。项块行全文只在正文里出现十八次（注释里不写死项块）。
+ITEM_PAIRS=""
+while read -r table_line; do
+  [ -n "${table_line}" ] || continue
+  table_lineno="${table_line%%:*}"
+  table_item="$(printf '%s\n' "${table_line#*:}" | sed -E 's/.*==>[[:space:]]*([0-9]+)\/[0-9]+.*/\1/')"
+  case "${table_item}" in
+    '' | *[!0-9]*) continue ;;
+  esac
+  ITEM_PAIRS="${ITEM_PAIRS}${ITEM_PAIRS:+ }${table_item}:${table_lineno}"
+done <<ITEM_TABLE
+$(grep -nE '==>[[:space:]]*[0-9]+/[0-9]+' "${SCRIPT_PATH}" || true)
+ITEM_TABLE
+
+item_total() {   # 项块数（从本文件数出来的，不手抄）
+  local count=0 pair
+  for pair in ${ITEM_PAIRS}; do count=$((count + 1)); done
+  printf '%s' "${count}"
+}
+
+item_for_line() {   # item_for_line <行号> ⇒ 项号（0 = 第 1 项之前的前导段）
+  local target="$1" best=0 pair
+  for pair in ${ITEM_PAIRS}; do
+    if [ "${pair##*:}" -le "${target}" ]; then best="${pair%%:*}"; fi
+  done
+  printf '%s' "${best}"
+}
+
+platform_skipped_items() {   # 本平台会被 skip_step 跳过的项号（与正文两处调用逐字同条件）
+  if [ "${PLATFORM}" = "macos" ]; then
+    printf ''
+  else
+    printf '1 11'
+  fi
+}
+
+unexecuted_summary() {   # unexecuted_summary <已中止项号> ⇒ 点名「本平台接下来本会跑、但没跑」的项
+  local from="$1" n out="" skipped
+  skipped="$(platform_skipped_items)"
+  for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do
+    if [ "${n}" -le "${from}" ]; then continue; fi
+    case " ${skipped} " in
+      *" ${n} "*) continue ;;
+    esac
+    out="${out}${out:+ / }第 ${n} 项"
+  done
+  if [ -z "${out}" ]; then
+    printf '（无 —— 中止就发生在末项）'
+  else
+    printf '%s' "${out}"
+  fi
+}
+FAILED_ITEMS=""
+FAILED_LINES=""
+FAILED_COUNT=0
+FAILED_ITEM_COUNT=0
+
+on_failure() {   # ERR 陷阱：$1 = 退出码 · $2 = 行号 · $3 = 命令原文
+  local status="$1" line_no="$2" command_text="$3" item
+  item="$(item_for_line "${line_no}")"
+  FAILED_COUNT=$((FAILED_COUNT + 1))
+  FAILED_LINES="${FAILED_LINES}   · 第 ${item} 项（脚本第 ${line_no} 行，退出码 ${status}）：${command_text}
+"
+  case " ${FAILED_ITEMS} " in
+    *" ${item} "*) ;;
+    *)
+      FAILED_ITEMS="${FAILED_ITEMS}${FAILED_ITEMS:+ }${item}"
+      FAILED_ITEM_COUNT=$((FAILED_ITEM_COUNT + 1))
+      ;;
+  esac
+  if [ "${KEEP_GOING}" = "1" ]; then
+    echo "⚠️  第 ${item} 项：脚本第 ${line_no} 行失败（退出码 ${status}）⇒ **记下来接着跑**（--keep-going）"
+    echo "           ${command_text}"
+  else
+    echo ""
+    if [ "${item}" = "0" ]; then
+      echo "⛔ 失败在前导段（脚本第 ${line_no} 行，退出码 ${status}）：${command_text}"
+    else
+      echo "⛔ 第 ${item} 项失败（脚本第 ${line_no} 行，退出码 ${status}）：${command_text}"
+    fi
+    echo "   口径：本脚本是 \`set -euo pipefail\` ⇒ **当场中止**，后面的项**没有跑**。"
+    echo "   **未执行**（本平台接下来本会跑的项）：$(unexecuted_summary "${item}")"
+    echo "   要一次拿到全部项块的覆盖面 ⇒ ./Scripts/verify-all.sh --keep-going（跑完再汇总，统一 exit 1）。"
+    echo "   纪律：**未执行 ≠ 通过** —— 报告里不许把没跑的项说成绿。"
+  fi
+}
+
+trap 'on_failure "$?" "$LINENO" "$BASH_COMMAND"' ERR
+if [ "${KEEP_GOING}" = "1" ]; then
+  set +e
+  echo "==> 跑法：--keep-going（跑完再汇总：单项失败不中止，收尾统一 exit 1；未执行项 = 无）"
+fi
 
 if [ "${PLATFORM}" = "macos" ]; then
   # 第 1 项之前先删掉单测数证据文件：留在盘上的旧值会被 Scripts/check-doc-numbers.py 当成
@@ -768,6 +877,30 @@ python3 Scripts/gen-sqlite-constants.py --self-test
 # （`build-app.sh` 走 `swift build`，不读工程文件）⇒ 过期了编译照过、单测照绿、发布照发。
 python3 Scripts/check-release-version.py
 python3 Scripts/check-release-version.py --self-test
+
+if [ "${KEEP_GOING}" = "1" ]; then
+  echo ""
+  echo "── 逐项判定（--keep-going：跑完再汇总）──────────────────────────────"
+  for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do
+    n_status="✅ 通过"
+    case " ${FAILED_ITEMS} " in
+      *" ${n} "*) n_status="❌ 失败" ;;
+    esac
+    case " $(platform_skipped_items) " in
+      *" ${n} "*) n_status="⏭ 跳过（平台不适用）" ;;
+    esac
+    printf '   第 %2s 项  %s\n' "${n}" "${n_status}"
+  done
+  echo "   合计：项块 $(item_total) 个 · 失败 ${FAILED_ITEM_COUNT} 项（共 ${FAILED_COUNT} 处）· 平台跳过 ${SKIPPED_COUNT} 项"
+fi
+
+if [ "${FAILED_COUNT}" -gt 0 ]; then
+  echo ""
+  echo "❌ --keep-going 汇总：**失败 ${FAILED_COUNT} 处 / ${FAILED_ITEM_COUNT} 项** —— 逐处点名（行号 = 脚本第几行）："
+  echo "${FAILED_LINES}"
+  echo "   覆盖面：**项块 ${FAILED_ITEM_COUNT} 项红之外，其余项都跑了**（未执行项 = 无）；平台跳过 ${SKIPPED_COUNT} 项（跳过 ≠ 通过）。"
+  exit 1
+fi
 
 if [ "${REQUIRE_ALL}" = "1" ] && [ "${SKIPPED_COUNT}" -gt 0 ]; then
   echo "❌ 有 ${SKIPPED_COUNT} 项被跳过，而本次要求「跳过即红」（--require-all）："
