@@ -96,6 +96,15 @@ struct NotesListView: View {
                             Text(note.source.kind.displayName + " · " + (note.source.connectionName ?? "—"))
                                 .font(Theme.font(.caption))
                                 .foregroundStyle(Theme.text(.secondary))
+                                // **默认紧凑**（片 `D166⑤` · `FR-NOTEUI-15`/`-19` 那一条「空白不占宽、
+                                // 新控件不得把面板撑宽」的**行内**那一半）：这一格里放的是**来源名**
+                                // （用户可任意长的连接名）——不给上限时它会在这条 238pt 的窄栏里
+                                // **折成七八行**把行高撑开（本片实测：长连接名那一行折了 8 行）。
+                                // 本行的标题（`.lineLimit(1)`）与摘要（`.lineLimit(2)`）本来就有上限，
+                                // 只有这一格漏了 ⇒ 这里按**同一条设计语言**补上：一行，超出按尾截断
+                                // （`…`），与排序条 / 头部「不许断词、不许截断」那一条不冲突 ——
+                                // 那是**栏头**的口径，这一格是**列表行的元信息**，本来就是截断呈现。
+                                .lineLimit(1)
                             Spacer(minLength: Spacing.xs)
                             // **相对时间**（队列 `L-184` 中栏卡片）：档位由 Core 的
                             // `NotePresentation.relative` 给、句子由语言表给 —— 视图这一层只把
@@ -849,7 +858,9 @@ struct NotesEditorView: View {
             // **顶部编辑工具条**（片 `N2-3b`）：编辑态下，动作住在编辑面**之上**的一条行里
             // —— 与 SQL 编辑区同一条设计语言（`QueryEditorView` 里 `QueryToolbar` 就画在编辑区之上）。
             // **只在 `.edit` 出现**：预览态的正文只读，「保存」无处可用（画一枚永远灰着的按钮
-            // 就是 `L-50` 那一课）。进编辑那条路见 `NotePreviewBody` 那一支上的双击。
+            // 就是 `L-50` 那一课）。进编辑那条路 = **内容区单击**（`FR-NOTEUI-10`：单击正文即显示
+            // 编辑工具条；`PreviewTextView.mouseDown` → `onActivate`）**或双击**（`FR-NOTEUI-13` 的 R4）
+            // —— 两条都走 `NotePreviewBody` 那一支上的同一个回调。
             // **本片之后它在 title 区之下**：正文区第一行让给了 title 区（`FR-NOTEUI-07`），
             // 工具条仍是「画在编辑面之上、贴在正文上边」的那一条（`N2-3b` 判据一字未改）。
             if appState.editorMode == .edit {
@@ -891,9 +902,12 @@ struct NotesEditorView: View {
             } else {
                 NotePreviewBody(
                     text: appState.noteEditorBody,
-                    // **正文被按下 ⇒ 进编辑**（人类主人裁决 `T-20261007-077`：**R3 单击 + R4 双击**）。
+                    // **正文被按下 ⇒ 进编辑**（人类主人裁决 `T-20261007-077`：R3 单击 + R4 双击；
+                    // `FR-NOTEUI-10`「单击正文即显示编辑工具条」就是 R3 这一条）。
                     // 按下这件事由正文那块 `NSTextView`（`PreviewTextView`）自己投出来 ——
                     // 挂在**外层**的手势轮不到（正文自己吃掉鼠标事件，见 `NotePreviewBody` 头注释）。
+                    // **单击 / 双击一个入口**：`PreviewTextView.mouseDown` 任何一次按下都调它，
+                    // 所以「先点列表项进预览、再点正文」这一步单击就够（不需要双击）。
                     onActivate: { appState.beginEditingCurrentNote() }
                 )
                     .overlay(
@@ -905,6 +919,11 @@ struct NotesEditorView: View {
                     // 装进了编辑器）⇒ 这里**只翻模式**，入口 = `AppState.beginEditingCurrentNote()`。
                     // 手势只挂**只读这一支**：编辑态那一支是 `TextEditor`，往上挂点击手势会跟
                     // 正文的选字 / 光标抢事件（`L-50` 同族：手势吃掉正常操作）。
+                    // **片 `D166⑤` 如实登记**：这一支在本机**收不到事件**（正文那块 `PreviewTextView`
+                    // 自己吃掉鼠标事件，见 `NotePreviewBody` 头注释），双击实际生效的那条路是
+                    // `PreviewTextView.mouseDown` → `onActivate`（`FR-NOTEUI-13` 的 R3/R4 都走它）；
+                    // 这一行留着是**同一条语义的第二条表述**（与 `FR-NOTEUI-13` 的四条一一对应），
+                    // 判据不去驱动它（`TestsUISnapshot/NotesLayoutProbeTests.swift` 走的是 AppKit 那一路）。
                     .onTapGesture(count: 2) { appState.beginEditingCurrentNote() }
             }
         }
@@ -1027,7 +1046,11 @@ struct NotesNewEntry: View {
 ///
 /// 三条原话逐条对应：
 ///   · 「**双击编辑 + 顶部编辑工具条**」—— 工具条画在编辑面**之上**（`NotesEditorView` 的第一行），
-///     进编辑那条路 = **内容区双击**（手势挂在 `NotePreviewBody` 那一支上）；
+///     进编辑那条路 = **内容区单击**（片 `D166⑤` 订正 · `FR-NOTEUI-10`「单击正文即显示编辑工具条」
+///     / 人类主人裁决 `T-20261007-077` 的 **R3**）**或双击**（同裁决的 **R4**）——
+///     两条都落在 `NotePreviewBody` 那一支的 `PreviewTextView.mouseDown` → `onActivate` 上
+///     （**不是**只有双击：修前这句注释写的「进编辑那条路 = 内容区双击」是片 `N2-10` 之前的老口径，
+///     `App/Views/NotePreviewBody.swift` 的 `PreviewTextView` 对**任何一次按下**都回调）；
 ///   · 「**保存进工具条**（参考 SQL 界面）」—— 动作住在工具条里，与 SQL 编辑区同一个位置关系
 ///     （`QueryEditorView`：工具条 → 分隔线 → 编辑面）；
 ///   · 「**不许放底部**」—— 原先压在底部的那一行 `HStack`（保存 + 来源提示）本片**整段删除**，
@@ -1937,12 +1960,14 @@ struct TodoEditorView: View {
                     // 才是 `deleteTodo`。判据同「点删除后条目数不变」。
                     appState.requestNoteRemoval()
                 } label: {
-                    Label {
-                        Text(L(.todoDelete))
-                    } icon: {
-                        Image(systemName: "trash")
-                    }
-                    .labelStyle(.titleAndIcon)
+                    // **纯图标**（片 `D166⑤` · `FR-NOTEUI-15`「保存键＝纯图标 + 悬停 tips」的**窗口级**收口）：
+                    // 原先这里是 `Label { Text(L(.todoDelete)) } + .labelStyle(.titleAndIcon)`
+                    // —— 工具条上**第二枚文字按钮**（「保存」那一枚已由片 `TODO-SV` 改掉，这一枚当时没跟）。
+                    // 口径 = `NFR-UI-01` / `FR-EXEC-13` / 台账第 27 条「工具·操作类控件一律『图标 + 悬停 tips』，
+                    // 禁文字按钮」 ⇒ 改成**纯图标**，名字只由下面那一句 `.help(L(.todoDelete))` 给
+                    // （与「保存」那一枚**同形**、同一套设计语言）。
+                    // **位置、动作、`role: .destructive`、`accessibilityIdentifier` 一字未动。**
+                    Image(systemName: "trash")
                 }
                 .help(L(.todoDelete))
                 .accessibilityIdentifier("todo-delete")
@@ -2029,12 +2054,12 @@ struct TodoReminderSection: View {
                 Button {
                     Task { await appState.attachReminder(to: todo) }
                 } label: {
-                    Label {
-                        Text(L(.reminderAttach))
-                    } icon: {
-                        Image(systemName: "bell")
-                    }
-                    .labelStyle(.titleAndIcon)
+                    // **纯图标**（片 `D166⑤` · `FR-NOTEUI-15` 的**窗口级**收口）：原先这里是
+                    // `Label { Text(L(.reminderAttach)) } + .labelStyle(.titleAndIcon)` —— 同一屏上的
+                    // 第二处文字按钮。口径同上（`NFR-UI-01` / 台账第 27 条：图标 + 悬停 tips）；
+                    // 名字只由下面那一句 `.help(L(.reminderAttach))` 给。
+                    // **动作、灰 / 亮判据、`accessibilityIdentifier` 一字未动。**
+                    Image(systemName: "bell")
                 }
                 .help(L(.reminderAttach))
                 .disabled(!entry.canAttach)
@@ -2043,12 +2068,9 @@ struct TodoReminderSection: View {
                     Button(role: .destructive) {
                         Task { await appState.removeReminder(from: todo) }
                     } label: {
-                        Label {
-                            Text(L(.reminderRemove))
-                        } icon: {
-                            Image(systemName: "bell.slash")
-                        }
-                        .labelStyle(.titleAndIcon)
+                        // **纯图标**（同上）：这是本屏第三处文字按钮，一并按同一套设计语言收掉；
+                        // 名字走 `.help(L(.reminderRemove))`。
+                        Image(systemName: "bell.slash")
                     }
                     .help(L(.reminderRemove))
                     .accessibilityIdentifier("todo-reminder-remove")
