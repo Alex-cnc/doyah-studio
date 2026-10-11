@@ -5,7 +5,8 @@
 
 > **这份文件是干什么的**：把两个项目的**全部已定事项、待办、铁律、环境口径**集中成一页可交接的台账。
 > **换环境、换 AI 助理时，把这份文件整份贴给它，它就能接着干**，不必读几十万字原文，也不必让需求提出者重复解释。
-> **版本** v1.296 ｜（**2026-10-11 · 人类主人令（beta1 编排 + 自审流程）**：任务 1~3 = beta1 硬性（10-13 / 10-14 / 10-17）· 任务 4 = 中期路标（只调研）· ★先契约后开发；评审改由本侧自审、自审结论经 TG 直达人类主人手机（只发一行）；契约修订由前门分批落 A~E；上一笔 v1.295 = **2026-10-08 · 人类主人令：下方面板加「历史」页签（记录执行过的 SQL / 命令 · 只在数据库段出现）** —— 只登记不动码：队列 `L-187` + 待拍板台账 4 条 + 派单 `T-20261008-058` 请前门落三书；上一笔 v1.294 = **2026-10-05 · 目录统一 `platform/<平台>/` 的 macOS 机组半（派单 `T-20261005-053`，`origin: human-owner`）**：Retro 本侧落点 `macos/` → `platform/macos/`（提交 `0f71f49` 已推 master，五项闭环绿）· Notes 本侧两格 `platform/macos/` + `platform/ios/` 新建并声明独占（提交 `9a5ecc6` 已推 master，五层逻辑门禁绿）· Studio 本侧 13 条落点整体前移 `platform/macos/`（含 `Tools/` `Vendor/` —— `Package.swift` 的 `path:` 是相对包根）：**走分支 `migrate/platform-macos`（提交 `8c3a20a`），master 未动**；包根搬迁后 Xcode 工具链 `swift build` 绿（1893 单元 / 36.31s）+ `swift test` **2779 例 0 失败**（2 skipped）；缺口 = 根级 `Scripts/**` 仍按旧布局解析（18 份脚本调 `swift build/test`、67 份引用根级 Swift 路径、794 处），未改完前不并入 master；四份独立克隆（`macos-dev` → `~/dev/doyah/macos/{studio,notes,retro}`、`ios-dev` → `~/dev/doyah/ios/notes`）+ 两个 profile 的 `terminal.cwd` 已设。**产品代码一字未改**（只 `git mv` + 清单跟版）。）｜ **上一版 v1.293 ｜（**2026-10-05 · 基本法 v3.0 跟版（macOS 机组 / 铁皮大河马）**：家族组织口径改为**两层组织（总管 + 两机组 · 组长制）+ 信箱三侧（`fatshark` 作废）+ `platform/<平台>/` 目录 + 轮询 3 分钟网格 + 相位** —— 技能仓 `08-doyah-projects` **13 文件**跟版（提交 `b1956ee`、合并 `0d3a392` 已推 `main`）、`sync-skills --check --only doyah-projects` = 一致；新增 **§4 追加**（v3.0 拍板五条）与 **§5 追加**（`T-20261005-049` 完成 / `T-20261005-051` 在办 / 目录迁移缺口登记）；**产品代码一字未改**）｜ **上一版 v1.292** ｜（**2026-10-05 · 开发循环第 197 轮：Studio `L-157` 收口 —— `AGENT-SPEC` §9 课号撞号清扫（六组撞号 `94`/`116`/`123`/`125`/`126`/`130` → `146`~`151` + 六处引用面同批改；§9 号面实测 **151 条 / 1~151 全唯一无缺号**、全仓 **297 处**「§9 第 N 条」引用 **0 处不可解析**）+ **新登记 `L-186`**（§9 列表被 `## 10. 启动流程` 的标题与正文切成两半，**44 条**落在 §10 里）**（文档 + 台账 · **免授权** · 无新增拍板 · **产品代码一字未改**））｜ **上一版 v1.291** ｜（**2026-10-05 · 开发循环第 196 轮：`L-185` 收口 —— 全量快照跑刷新凭证（218 / 109 → 282 / 141）+ 同步 §7 与 `doc-numbers.json`**（文档 + 台账 · 免授权 · 无新增拍板 · **产品代码与脚本一字未改**；**同批回补第一百九十五节**）—— ① 全量跑 `./Scripts/make-ui-snapshots.sh`（不给筛子）**exit 0**：113 用例 / 14 skipped / 0 failures（118.9 s）、收尾「✅ 语言覆盖门禁通过」= **282 张 / 141 组** ⇒ 凭证 `full-run/record.json` 由 09-29 的 218 / 109 重写为 **282 / 141**（`manifestSha256 9603cc17…`）；② 同步 `AGENT-SPEC` §7 门禁行 + §6 资产表注释行 + `Scripts/doc-numbers.json` 的 `ui-snapshots`（value / secondary.value / expect 三处）；③ 证据 = 文档五判据全 rc=0、循环夹具 131/0、提交 `3d74d84` 已推 + `ls-remote` 复核 0·0；④ 教训 = 全量跑实测 ≈ 2 分钟（第 195 轮估成 20~27 分钟 ⇒ 白推一轮））｜（**2026-10-05 · 开发循环第 195 轮：`L-185`（半落）—— 界面快照那一族的两处工具缺陷：`--filter` 未 export 产物目录 + 语言覆盖门禁的 19 项口径定案**（脚本 + 判据 + 登记 · 免授权 · 无新增拍板 · **产品代码一字未改**）—— ① `Scripts/make-ui-snapshots.sh` 补 `export DOYAH_SNAPSHOT_DIR="${OUT}"`；同族两处一并修：`MultiCursorProbeTests` / `ObjectTreeContextMenuProbeTests` 补类级 `tearDown`（单跑一族不再红在「没有 manifest」）、语言覆盖门禁新增 `--partial`（局部清单不许把「这次没拍」读成「条目陈旧」；负例 **10 → 12 例**）。② 证据 = 三族筛选跑 **exit 0**（MultiCursor 6 张 / 3 组 · ObjectTree 22 张 / 11 组 · SQLLineNumber 6 张 / 3 组）、门禁自检 **12/12**。③ 口径定案：`interaction-tree-menu-*` **11 个 = 真界面**（菜单项文案就是判据面）⇒ 出中英成对；`interaction-editor-*` **3** + `sql-line-numbers-*` **3 = 语言无关仪器图** ⇒ 出成对两张 + 逐条登记豁免；删两条**已过期**豁免（`notes-search-fulltext{,-dark}`）。④ **剩** = 全量跑刷新凭证（现仍停在 09-29 的 218 张 / 109 组；改完预计 **282 张 / 141 组**）+ 同步 `AGENT-SPEC` §7 与 `doc-numbers.json` ⇒ 本条仍 `doing`；全量 `verify-all.sh` 未复跑（同机在途件 `CLI/main.swift`）。⑤ 教训落 `AGENT-SPEC` §9 **第 145 条**）｜（**2026-10-05 · 开发循环第 194 轮：`L-100` 判据面 ⑤ 收口 —— 待办那一屏的两张界面快照（清单空态 / 日历月视图）；`L-100` 翻 done；两处工具缺陷入队 `L-185`**）（**2026-10-04 · 开发循环第 191 轮：`L-100` 的组织与检索半 —— 排序（契约 §3.13 到岸）/ 筛选 / 分组 / 视图入口**（代码 + 判据 + 文档 · 免授权 · 无新增拍板 · **契约语义未改** · 节标 `[独占:macos|ios]`）** —— 新增 `Core/TodoSort.swift` + `Core/TodoQuery.swift`（排序三档 / 参照窗口三边界 / 五带 / 五档筛选 / 四档分组 / `board` 唯一入口）+ 语言表 14 键；**同批一处跟版订正** = `dueState` 的逾期边界（`dueAt < now`）按契约 §3.13 第四条改成「未完成 且 早于今天零点」（与对侧同口径），`dueState` / `TodoDueState` 删除；判据 `Tests/TodoQueryTests.swift` **31 例** ⇒ Core 单测 **2737 → 2760 / 0 failures**；**边界** = 界面接线未落（本版不做，见下面 v1.285 的交付面裁决）⇒ `L-100` 仍 doing。｜（**2026-10-04 · 信箱轮询（bighippo）：Alpha 3 交付面裁决落账（派活单 `T-20261004-042` · `origin: human-owner`）** —— 人类主人裁决「按 A：继续做完、按实际交付面出包」：① `Docs/发布计划.md` **v1.31** 新增「本版交付面与实际交付盘点」+「排序条 / 分组筛选的到岸条件」两段（该单 ②③ 两条验收的落点 = 交付面文档）；② 到岸条件 = `N-11` 契约半落笔 ⇒ **已满足**（契约 §2.13 / §3.13 + §6 I10，提交 `68074eb` / 回填 `4f77adc`）⇒ 队列 `L-100` 依赖格同批跟版、本项不再是卡点；③ **出包本轮未做**：本仓有另一侧在途件（`CLI/main.swift` = `L-180`、`Core/WorkspaceSession.swift`）⇒ `verify-all.sh` 第 1 / 4 项必红、按「门禁绿才落档」不落冻结包（原因已写进交付面）；④ **产品代码一字未改**。）｜（**2026-10-04 · 开发循环第 190 轮**：**`L-100` 落法 ④ 的界面半第一片（Core 半）—— 提醒的档位 / 权限三档 / 三句文案**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改** · 节标 `[独占:macos|ios]`）—— 由头 = 契约 **§2.10 末尾**把「提醒在界面上怎么展示与排序、系统通知怎么发」明确划归各端适配层与界面层（既每端各写一次，就落成可断言的形式）；新增 `Core/ReminderPresentation.swift`（`ReminderPreset` 四档 / `ReminderAttachment` / `ReminderPermission` / `ReminderNotificationDecision` / 纯函数 `ReminderPresentation`）+ `Core/Reminder.swift` 补 `ReminderSchedule.momentOfEpoch`（与 `toEpoch` / `dateOfEpoch` 共用同一个日长常量）+ 语言表 **20** 键；五条口径 = 档位 → 规则只有一处（`once`，四个不吃的字段写空）·「有截止时间」是前提（`needsDueDate` / `outOfRange` 不编日期）· **跨零点照算**（`00:20` 提前 1 小时 = 前一天 `23:20`）· 权限三档 × 求解结果每格都有话说（未决 ⇒ 先问不排；认不出兜底到未决）· 一次性说「哪天几点」、重复类只说「几点」（`anchorDate` 是「首次允许的最早日期」）+ 数字槽 `%d`；判据 `Tests/ReminderPresentationTests.swift` **24 例** ⇒ Core 单测 **2713 → 2737**；同批 `reminderListSeparator` 进 `languageNeutralKeys`（标点没有可译的词）+ 三条清单登记 + AGENT-SPEC **§9 第 140 条**（正反两向换算必须共用同一个常量 —— 本轮 `momentOfEpoch` 第一版把分钟算成 0，被用例当场抓住）；**断点** = 系统通知投递面与界面入口未落 ⇒ `FR-NOTE-02` 不翻、人工清单第 7 条仍点不了、`L-100` 仍 doing。**需拍板：无新增**。｜（**2026-10-04 · 开发循环第 189 轮**：**`L-100` 落法 ④ 的存储半 —— 提醒的库表（schema v6）+ 与笔记 / 待办的归属列 + 写读口**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改** · 节标 `[独占:macos|ios]`）—— 新增 `NoteSchemaV6`（`reminder` 表 = §2.10 规格逐列 + `note_id` / `todo_id` 两个归属列**各带 `ON DELETE CASCADE`**）+ `NoteDatabase` 写读口六件 + `NoteLibrary` 门面三件 + `ReminderOwner` / `Reminder` 模型 + 周内取值一对编解码；**归属面按与对侧同一份默认口径落**（提案 `0011` 在办 ⇒ 裁决若不同即改，改点只有那条 `CHECK` 与映射一处）；判据 `Tests/ReminderStorageTests.swift` **+12 例** ⇒ Core 单测 **2701 → 2713**；概要设计 **§3.44**（v2.147）；`AGENT-SPEC` **v1.143**。｜（**2026-10-04 · 开发循环第 188 轮**：**`L-100` 落法 ④ 的 Core 半 —— 提醒的调度语义（macOS 侧第一次有提醒代码）**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改** · 节标 `[独占:macos|ios]`）：新增 `Core/Reminder.swift`（`ReminderRule` / `ReminderUnit` / `ReminderState` / `ReminderCode` / `ReminderMoment` / `ReminderSpec` / `ReminderPlan` / `ReminderSchedule`）；**六条口径逐条取自契约 §3.12**（日历日 + 当日分钟、不做毫秒加法 —— 内部用 UTC 日序做日历算术 / **严格晚于参照时刻** / 一次性过期**不自动改期** / 终止日**含端点** / 规则数据驱动 / **非法输入不抛错**）；**与对侧同口径（引用不复制代码）** = 鸿蒙侧实现跑出来的 **39 例**黄金样例**原样收进** `Tests/Fixtures/reminder-golden-v1.json` 逐字段对拍（比较面只有「日历日 + 当日分钟 + 档位」，`toEpoch` 依赖时区、不进样例）；**日期形态是例外并写明理由**（这一层本身就是跨端比较面 ⇒ 用契约写的 `YYYY-MM-DD` + 当日分钟；`Date` 换算属适配层）；判据 `Tests/ReminderTests.swift` **24 例** + `Tests/ReminderGoldenTests.swift` **1 例** ⇒ Core 单测 **2676 → 2701**；概要设计 **§3.43**（v2.146）；`AGENT-SPEC` **v1.142**。**同批修掉两处本循环自己改坏的判据**（第 186 轮 `Core/TodoCalendar.swift` 漏登记三条清单 / 第 187 轮改名漏改 `Tests/TodoCalendarTests.swift` ⇒ HEAD 测试目标根本编译不过）。**断点** = 提醒的存储与界面入口（一键挂提醒 / 系统通知）未落 ⇒ `L-100` 仍 doing。**需拍板：无新增**。｜（**2026-10-04 · 开发循环第 187 轮**：**`L-100` 的界面半第二片 = 待办日历那一屏**（中栏「清单 / 日历」切换 + 月 / 周视图 + 当天任务）（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）：新增 `App/Views/TodoCalendarView.swift`（`TodoPaneView` / `TodoCalendarPane` / `TodoRescheduleSheet` + 从清单那一屏抽出的 `TodoSectionListView` / `TodoRowView`）；中栏两档 `TodoPane`（与「月 / 周」**是两条轴**）；**界面不算日期**（格子 / 翻页 /「同一天」全回 `TodoCalendar`，判据钉住界面里不出现 `date(byAdding:`）；**日历不写库**（完成 / 重开走既有 `setDone`、改期走既有 `upsert` —— 不新开第三条）；**一行只有一份渲染**（清单与日历共用同一段行渲染 ⇒「改期后清单同步」在形状上成立）；表头与格子同源（`weekdayHeaderKeys` / `weekdayOrder` + 一条把格子星期序列钉在表头列序上的判据）；改期 = 写新 `dueAt` + 刷 `updatedAt`；语言表 **15** 键；判据 **+5 例**，Core 单测 **2671 → 2676**；`DoyahStudioApp` 目标 `swift build` Build complete；概要设计 **§3.42**（v2.145）；`AGENT-SPEC` **v1.141**。**断点** = 与提醒联动 + `TestsUISnapshot/` 两张 + 排序条 / 分组筛选（等契约半 `T-20261004-002`）。**需拍板：无新增**。｜（**2026-10-04 · 开发循环第 186 轮**：**`L-100` 的 Core 半第二片 —— 待办日历的日期算术与投影（月 / 周两档）**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）：新增 `Core/TodoCalendar.swift`（两档取值空间 `TodoCalendarView` + `TodoCalendarCell` / `TodoDayTasks` + `monthCells` / `weekCells` / 日期算术 + **一个铺法** `tasksByDay`）；**口径与对侧 `DoyahNotes/android/.../TodoCalendar.kt` 同口径**（**引用不复制代码****）：一周从**周一**起（ISO 1…7）· 月视图**整周补齐** · 参照时刻与日历**由调用方传**（不读系统时钟）· **脏值回空不抛错**；**无截止的任务不落任何一天**；`FR-NOTE-39` 的「唯一事实源」落成**两条形态判据**（日历那一层的代码里没有写路 · 库里没有日历专属表）；语言表 **2** 键；`Tests/TodoCalendarTests.swift` **22 例** ⇒ Core 单测 **2649 → 2671 / 0 failures**；概要设计 **§3.41**（v2.144）；`AGENT-SPEC` **v1.140**。**断点** = 日历那一屏的界面 + 排序条 / 分组筛选（等契约半 `T-20261004-002`）。**需拍板：无新增**。｜（**2026-10-04 · 开发循环第 185 轮**：**`L-100` 的界面半第一片 —— 待办那一屏的入口 + 清单**（代码 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）：入口 = 笔记区顶部那枚屏切换（`NotesModule`，不是第二根活动栏柱子）；待办那一屏沿用 `L-184` 三栏骨架（左栏待办自己的导航 / 中栏清单 / 右栏详情编辑）；清单 = 分区列表（段头 + 条数 + 截止档位徽标）+ 新建 / 编辑 / 完成 / 删除，**分区 / 段序 / 档位 / 空标题全读 `Core/TodoPresentation`**；`AppState` 六条路 + 语言表 **14** 键；**Core 单测未变** = 2649；**同批补记** = 概要设计 §3.39 的小节正文在第 184 轮漏写过，本轮据实补回。**断点** = 日历那一屏 + 排序条 / 分组筛选（等契约半）。**需拍板：无新增**。｜（**2026-10-04 · 开发循环第 184 轮**：**`L-100` 清单界面的 Core 半 —— 待办清单的三件纯逻辑（分区 / 截止档位 / 空标题）**：**`N-11` 的 macOS 核心层半 —— 待办任务清单（`Todo` 实体 + schema **v5**）**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）—— 人类主人 2026-10-04 令「**今天完成 macOS 版 Notes**」的第二步；`L-184`（三栏界面）已收口，`L-100`（清单 + 日历界面）要开工必须先有任务模型与库表；**契约半归契约层所有者 `bluewhale`**（派单 `T-20261004-002` 仍在办）⇒ 本侧按提案 `0004` 的**已采纳裁决**落实现，**排序口径与交换面 `todos[]` 一字未写**（不自行发明）。落法 = `Core/Todo.swift` + `NoteSchemaV5`（`todo` / `todo_tag`；**与笔记同库同连接**）+ `NoteDatabase` 写读口 + `NoteLibrary` 门面；判据 `Tests/TodoStorageTests.swift` **7 例** ⇒ Core 单测 **2629 → 2636 / 0 failures**；提交 `b9941c5` 已推、`ls-remote` 复核 0·0。｜（**2026-10-04 · 开发循环第 182 轮**：**`L-184` 第四片 = 笔记「置顶」**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）—— 契约 §2.1 `pinned`（「排序第一关键字」）+ §3.9 `query` 的「置顶 → 收藏 → 更新时间倒序」本来就写着、需求条文 `FR-NOTE-18` 的**第一档**（与「收藏」是同一个形状的两个实例）；落法 = `Note.isPinned`（后加字段 ⇒ 自定义解码，缺字段按 `false`）+ schema **v4**（`ALTER TABLE note ADD COLUMN pinned`）+ `NoteDatabase.setPinned` / `isPinned`（**不碰 `updated_at`**；`upsert` 的 `ON CONFLICT` 段刻意不含它 ⇒ 改几个字保存不许静默取消置顶）+ `NoteLibrary.setPinned` / upsert 读回旧行 + `NotesSortOrder.updatedDesc` 的**置顶上浮（压过收藏）** + 界面两处（行上图钉 / 右键「置顶 / 取消置顶」，与收藏各占一条菜单项）+ 语言表 **4** 键；判据 `Tests/NoteNavigationTests.swift` **+2** + `Tests/NotebookStorageTests.swift` **+3**；Core 单测 **2624 → 2629 / 0 failures**；`AGENT-SPEC.md` v1.136；概要设计 v2.140；清单 §10.42；**`L-184` 的「余」清零**）｜**上一版 v1.275 ｜（**2026-10-04 · 开发循环第 181 轮**：**`L-184` 第三片 = 左栏「已收藏」+ 中栏「只看收藏」筛选条**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）—— **一处订正**：契约里本来就有 `favorite`（`DoyahNotes/Docs/核心契约.md` §2.1「收藏｜排序第二关键字，可单独筛选」+ §2.3 `favoriteOnly`；需求条文 `FR-NOTE-18`）⇒ 第 179 / 180 轮记的「需契约加字段」是**读漏**，本轮不再走提案、直接实现：`Note.isFavorite` + schema **v3**（补列）+ `NoteDatabase.setFavorite`（不碰 `updated_at`，`ON CONFLICT` 段刻意不含这一列）+ `NotesScope.favorites` + 默认档**收藏上浮** + 界面三处（左栏一行 / 中栏开关共用同一个状态 / 行上星标 + 右键收藏）+ 语言表 **5** 键；判据 `Tests/NoteNavigationTests.swift` **+4 例** + `Tests/NotebookStorageTests.swift` **+2 例**；Core 单测 **2618 → 2624 / 0 failures**；`AGENT-SPEC.md` **v1.135**（+ §9 第 139 条）；概要设计 **v2.139**；清单 **§10.41**；**`L-184` 翻 done**；余 = 置顶（`FR-NOTE-18` 第一档）未做）（**上一版 v1.274** ｜（**2026-10-04 · 开发循环第 180 轮**：**`L-184` 第二片 = 左栏「最近」/「标签」分组 + 中栏排序条**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · 契约语义未改）—— `NotesScope` 加 `.tag(String)` / `.recent`（**有界**：`recentLimit = 30`）+ 新增 `NotesSortOrder`（三档 · **都是总序**）+ `normalized(_:notes:)`（**标签存亡只在笔记里**）+ `listing(_:scope:searchScope:sort:)` = 中栏列表**唯一入口**（宿主那份 `mostRecentlyUpdatedFirst` 删掉）；左栏加「最近」/标签分组、中栏栏头加排序条；语言表 **6** 条新键；判据 `Tests/NoteNavigationTests.swift` **+6 例**；Core 单测 **2612 → 2618**；`AGENT-SPEC.md` **v1.134**；概要设计 **v2.138**；清单 **§10.40**；**边界**：「已收藏」需契约加字段（`favorite`）⇒ 不擅自扩契约（走提案）；「中栏筛选条」未落 ⇒ `L-184` 仍 **doing**。）（**上一版 v1.273**（**2026-10-04 · 开发循环第 179 轮**：**`L-184` 笔记模块的界面按「三栏」重排**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · 契约语义未改）—— 装配只在一处 = `App/Views/NotesPanel.swift` 新增 `NotesAreaView`（顶栏 搜索+范围+新建 ／ `HSplitView` 中栏列表 + 右栏编辑器）；`MainWindow` 的 `.notes` 两根柱子换位（左栏 = 两级树，**列表从侧栏搬进中栏、搜索框搬上顶栏**）；中栏卡片加**摘要两行 + 相对时间**（纯逻辑落在新文件 `Core/NotePresentation.swift`，语言表 5 条新键）；判据 `Tests/NotePresentationTests.swift` **13 例**；Core 单测 **2599 → 2612**；`AGENT-SPEC.md` **v1.133**；清单 **§10.39**。**边界（如实登记）**：左栏「已收藏」**需契约加字段** ⇒ 本侧不擅自扩契约（留队列 + 提案）；「标签」分组与中栏排序/筛选条未落 ⇒ `L-184` = **doing**；全量 `verify-all.sh` 未复跑（同机在途件 `CLI/main.swift`，第 4 项必红）；`check-self-test-counts` 剩红 = 人工会话 `FR-EDIT-47` 的 alpha 判定条目未登记（非本侧）。）｜
+> **版本** v1.297 ｜（**2026-10-11 · 人类主人令（beta1 编排 + 自审流程）**：任务 1~3 = beta1 硬性（10-13 / 10-14 / 10-17）· 任务 4 = 中期路标（只调研）· ★先契约后开发；评审改由本侧自审、自审结论经 TG 直达人类主人手机（只发一行）；契约修订由前门分批落 A~E；上一笔 v1.295 = **2026-10-08 · 人类主人令：下方面板加「历史」页签（记录执行过的 SQL / 命令 · 只在数据库段出现）** —— 只登记不动码：队列 `L-187` + 待拍板台账 4 条 + 派单 `T-20261008-058` 请前门落三书；上一笔 v1.294 = **2026-10-05 · 目录统一 `platform/<平台>/` 的 macOS 机组半（派单 `T-20261005-053`，`origin: human-owner`）**：Retro 本侧落点 `macos/` → `platform/macos/`（提交 `0f71f49` 已推 master，五项闭环绿）· Notes 本侧两格 `platform/macos/` + `platform/ios/` 新建并声明独占（提交 `9a5ecc6` 已推 master，五层逻辑门禁绿）· Studio 本侧 13 条落点整体前移 `platform/macos/`（含 `Tools/` `Vendor/` —— `Package.swift` 的 `path:` 是相对包根）：**走分支 `migrate/platform-macos`（提交 `8c3a20a`），master 未动**；包根搬迁后 Xcode 工具链 `swift build` 绿（1893 单元 / 36.31s）+ `swift test` **2779 例 0 失败**（2 skipped）；缺口 = 根级 `Scripts/**` 仍按旧布局解析（18 份脚本调 `swift build/test`、67 份引用根级 Swift 路径、794 处），未改完前不并入 master；四份独立克隆（`macos-dev` → `~/dev/doyah/macos/{studio,notes,retro}`、`ios-dev` → `~/dev/doyah/ios/notes`）+ 两个 profile 的 `terminal.cwd` 已设。**产品代码一字未改**（只 `git mv` + 清单跟版）。）｜ **上一版 v1.293 ｜（**2026-10-05 · 基本法 v3.0 跟版（macOS 机组 / 铁皮大河马）**：家族组织口径改为**两层组织（总管 + 两机组 · 组长制）+ 信箱三侧（`fatshark` 作废）+ `platform/<平台>/` 目录 + 轮询 3 分钟网格 + 相位** —— 技能仓 `08-doyah-projects` **13 文件**跟版（提交 `b1956ee`、合并 `0d3a392` 已推 `main`）、`sync-skills --check --only doyah-projects` = 一致；新增 **§4 追加**（v3.0 拍板五条）与 **§5 追加**（`T-20261005-049` 完成 / `T-20261005-051` 在办 / 目录迁移缺口登记）；**产品代码一字未改**）｜ **上一版 v1.292** ｜（**2026-10-05 · 开发循环第 197 轮：Studio `L-157` 收口 —— `AGENT-SPEC` §9 课号撞号清扫（六组撞号 `94`/`116`/`123`/`125`/`126`/`130` → `146`~`151` + 六处引用面同批改；§9 号面实测 **151 条 / 1~151 全唯一无缺号**、全仓 **297 处**「§9 第 N 条」引用 **0 处不可解析**）+ **新登记 `L-186`**（§9 列表被 `## 10. 启动流程` 的标题与正文切成两半，**44 条**落在 §10 里）**（文档 + 台账 · **免授权** · 无新增拍板 · **产品代码一字未改**））｜ **上一版 v1.291** ｜（**2026-10-05 · 开发循环第 196 轮：`L-185` 收口 —— 全量快照跑刷新凭证（218 / 109 → 282 / 141）+ 同步 §7 与 `doc-numbers.json`**（文档 + 台账 · 免授权 · 无新增拍板 · **产品代码与脚本一字未改**；**同批回补第一百九十五节**）—— ① 全量跑 `./Scripts/make-ui-snapshots.sh`（不给筛子）**exit 0**：113 用例 / 14 skipped / 0 failures（118.9 s）、收尾「✅ 语言覆盖门禁通过」= **282 张 / 141 组** ⇒ 凭证 `full-run/record.json` 由 09-29 的 218 / 109 重写为 **282 / 141**（`manifestSha256 9603cc17…`）；② 同步 `AGENT-SPEC` §7 门禁行 + §6 资产表注释行 + `Scripts/doc-numbers.json` 的 `ui-snapshots`（value / secondary.value / expect 三处）；③ 证据 = 文档五判据全 rc=0、循环夹具 131/0、提交 `3d74d84` 已推 + `ls-remote` 复核 0·0；④ 教训 = 全量跑实测 ≈ 2 分钟（第 195 轮估成 20~27 分钟 ⇒ 白推一轮））｜（**2026-10-05 · 开发循环第 195 轮：`L-185`（半落）—— 界面快照那一族的两处工具缺陷：`--filter` 未 export 产物目录 + 语言覆盖门禁的 19 项口径定案**（脚本 + 判据 + 登记 · 免授权 · 无新增拍板 · **产品代码一字未改**）—— ① `Scripts/make-ui-snapshots.sh` 补 `export DOYAH_SNAPSHOT_DIR="${OUT}"`；同族两处一并修：`MultiCursorProbeTests` / `ObjectTreeContextMenuProbeTests` 补类级 `tearDown`（单跑一族不再红在「没有 manifest」）、语言覆盖门禁新增 `--partial`（局部清单不许把「这次没拍」读成「条目陈旧」；负例 **10 → 12 例**）。② 证据 = 三族筛选跑 **exit 0**（MultiCursor 6 张 / 3 组 · ObjectTree 22 张 / 11 组 · SQLLineNumber 6 张 / 3 组）、门禁自检 **12/12**。③ 口径定案：`interaction-tree-menu-*` **11 个 = 真界面**（菜单项文案就是判据面）⇒ 出中英成对；`interaction-editor-*` **3** + `sql-line-numbers-*` **3 = 语言无关仪器图** ⇒ 出成对两张 + 逐条登记豁免；删两条**已过期**豁免（`notes-search-fulltext{,-dark}`）。④ **剩** = 全量跑刷新凭证（现仍停在 09-29 的 218 张 / 109 组；改完预计 **282 张 / 141 组**）+ 同步 `AGENT-SPEC` §7 与 `doc-numbers.json` ⇒ 本条仍 `doing`；全量 `verify-all.sh` 未复跑（同机在途件 `CLI/main.swift`）。⑤ 教训落 `AGENT-SPEC` §9 **第 145 条**）｜（**2026-10-05 · 开发循环第 194 轮：`L-100` 判据面 ⑤ 收口 —— 待办那一屏的两张界面快照（清单空态 / 日历月视图）；`L-100` 翻 done；两处工具缺陷入队 `L-185`**）（**2026-10-04 · 开发循环第 191 轮：`L-100` 的组织与检索半 —— 排序（契约 §3.13 到岸）/ 筛选 / 分组 / 视图入口**（代码 + 判据 + 文档 · 免授权 · 无新增拍板 · **契约语义未改** · 节标 `[独占:macos|ios]`）** —— 新增 `Core/TodoSort.swift` + `Core/TodoQuery.swift`（排序三档 / 参照窗口三边界 / 五带 / 五档筛选 / 四档分组 / `board` 唯一入口）+ 语言表 14 键；**同批一处跟版订正** = `dueState` 的逾期边界（`dueAt < now`）按契约 §3.13 第四条改成「未完成 且 早于今天零点」（与对侧同口径），`dueState` / `TodoDueState` 删除；判据 `Tests/TodoQueryTests.swift` **31 例** ⇒ Core 单测 **2737 → 2760 / 0 failures**；**边界** = 界面接线未落（本版不做，见下面 v1.285 的交付面裁决）⇒ `L-100` 仍 doing。｜（**2026-10-04 · 信箱轮询（bighippo）：Alpha 3 交付面裁决落账（派活单 `T-20261004-042` · `origin: human-owner`）** —— 人类主人裁决「按 A：继续做完、按实际交付面出包」：① `Docs/发布计划.md` **v1.31** 新增「本版交付面与实际交付盘点」+「排序条 / 分组筛选的到岸条件」两段（该单 ②③ 两条验收的落点 = 交付面文档）；② 到岸条件 = `N-11` 契约半落笔 ⇒ **已满足**（契约 §2.13 / §3.13 + §6 I10，提交 `68074eb` / 回填 `4f77adc`）⇒ 队列 `L-100` 依赖格同批跟版、本项不再是卡点；③ **出包本轮未做**：本仓有另一侧在途件（`CLI/main.swift` = `L-180`、`Core/WorkspaceSession.swift`）⇒ `verify-all.sh` 第 1 / 4 项必红、按「门禁绿才落档」不落冻结包（原因已写进交付面）；④ **产品代码一字未改**。）｜（**2026-10-04 · 开发循环第 190 轮**：**`L-100` 落法 ④ 的界面半第一片（Core 半）—— 提醒的档位 / 权限三档 / 三句文案**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改** · 节标 `[独占:macos|ios]`）—— 由头 = 契约 **§2.10 末尾**把「提醒在界面上怎么展示与排序、系统通知怎么发」明确划归各端适配层与界面层（既每端各写一次，就落成可断言的形式）；新增 `Core/ReminderPresentation.swift`（`ReminderPreset` 四档 / `ReminderAttachment` / `ReminderPermission` / `ReminderNotificationDecision` / 纯函数 `ReminderPresentation`）+ `Core/Reminder.swift` 补 `ReminderSchedule.momentOfEpoch`（与 `toEpoch` / `dateOfEpoch` 共用同一个日长常量）+ 语言表 **20** 键；五条口径 = 档位 → 规则只有一处（`once`，四个不吃的字段写空）·「有截止时间」是前提（`needsDueDate` / `outOfRange` 不编日期）· **跨零点照算**（`00:20` 提前 1 小时 = 前一天 `23:20`）· 权限三档 × 求解结果每格都有话说（未决 ⇒ 先问不排；认不出兜底到未决）· 一次性说「哪天几点」、重复类只说「几点」（`anchorDate` 是「首次允许的最早日期」）+ 数字槽 `%d`；判据 `Tests/ReminderPresentationTests.swift` **24 例** ⇒ Core 单测 **2713 → 2737**；同批 `reminderListSeparator` 进 `languageNeutralKeys`（标点没有可译的词）+ 三条清单登记 + AGENT-SPEC **§9 第 140 条**（正反两向换算必须共用同一个常量 —— 本轮 `momentOfEpoch` 第一版把分钟算成 0，被用例当场抓住）；**断点** = 系统通知投递面与界面入口未落 ⇒ `FR-NOTE-02` 不翻、人工清单第 7 条仍点不了、`L-100` 仍 doing。**需拍板：无新增**。｜（**2026-10-04 · 开发循环第 189 轮**：**`L-100` 落法 ④ 的存储半 —— 提醒的库表（schema v6）+ 与笔记 / 待办的归属列 + 写读口**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改** · 节标 `[独占:macos|ios]`）—— 新增 `NoteSchemaV6`（`reminder` 表 = §2.10 规格逐列 + `note_id` / `todo_id` 两个归属列**各带 `ON DELETE CASCADE`**）+ `NoteDatabase` 写读口六件 + `NoteLibrary` 门面三件 + `ReminderOwner` / `Reminder` 模型 + 周内取值一对编解码；**归属面按与对侧同一份默认口径落**（提案 `0011` 在办 ⇒ 裁决若不同即改，改点只有那条 `CHECK` 与映射一处）；判据 `Tests/ReminderStorageTests.swift` **+12 例** ⇒ Core 单测 **2701 → 2713**；概要设计 **§3.44**（v2.147）；`AGENT-SPEC` **v1.143**。｜（**2026-10-04 · 开发循环第 188 轮**：**`L-100` 落法 ④ 的 Core 半 —— 提醒的调度语义（macOS 侧第一次有提醒代码）**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改** · 节标 `[独占:macos|ios]`）：新增 `Core/Reminder.swift`（`ReminderRule` / `ReminderUnit` / `ReminderState` / `ReminderCode` / `ReminderMoment` / `ReminderSpec` / `ReminderPlan` / `ReminderSchedule`）；**六条口径逐条取自契约 §3.12**（日历日 + 当日分钟、不做毫秒加法 —— 内部用 UTC 日序做日历算术 / **严格晚于参照时刻** / 一次性过期**不自动改期** / 终止日**含端点** / 规则数据驱动 / **非法输入不抛错**）；**与对侧同口径（引用不复制代码）** = 鸿蒙侧实现跑出来的 **39 例**黄金样例**原样收进** `Tests/Fixtures/reminder-golden-v1.json` 逐字段对拍（比较面只有「日历日 + 当日分钟 + 档位」，`toEpoch` 依赖时区、不进样例）；**日期形态是例外并写明理由**（这一层本身就是跨端比较面 ⇒ 用契约写的 `YYYY-MM-DD` + 当日分钟；`Date` 换算属适配层）；判据 `Tests/ReminderTests.swift` **24 例** + `Tests/ReminderGoldenTests.swift` **1 例** ⇒ Core 单测 **2676 → 2701**；概要设计 **§3.43**（v2.146）；`AGENT-SPEC` **v1.142**。**同批修掉两处本循环自己改坏的判据**（第 186 轮 `Core/TodoCalendar.swift` 漏登记三条清单 / 第 187 轮改名漏改 `Tests/TodoCalendarTests.swift` ⇒ HEAD 测试目标根本编译不过）。**断点** = 提醒的存储与界面入口（一键挂提醒 / 系统通知）未落 ⇒ `L-100` 仍 doing。**需拍板：无新增**。｜（**2026-10-04 · 开发循环第 187 轮**：**`L-100` 的界面半第二片 = 待办日历那一屏**（中栏「清单 / 日历」切换 + 月 / 周视图 + 当天任务）（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）：新增 `App/Views/TodoCalendarView.swift`（`TodoPaneView` / `TodoCalendarPane` / `TodoRescheduleSheet` + 从清单那一屏抽出的 `TodoSectionListView` / `TodoRowView`）；中栏两档 `TodoPane`（与「月 / 周」**是两条轴**）；**界面不算日期**（格子 / 翻页 /「同一天」全回 `TodoCalendar`，判据钉住界面里不出现 `date(byAdding:`）；**日历不写库**（完成 / 重开走既有 `setDone`、改期走既有 `upsert` —— 不新开第三条）；**一行只有一份渲染**（清单与日历共用同一段行渲染 ⇒「改期后清单同步」在形状上成立）；表头与格子同源（`weekdayHeaderKeys` / `weekdayOrder` + 一条把格子星期序列钉在表头列序上的判据）；改期 = 写新 `dueAt` + 刷 `updatedAt`；语言表 **15** 键；判据 **+5 例**，Core 单测 **2671 → 2676**；`DoyahStudioApp` 目标 `swift build` Build complete；概要设计 **§3.42**（v2.145）；`AGENT-SPEC` **v1.141**。**断点** = 与提醒联动 + `TestsUISnapshot/` 两张 + 排序条 / 分组筛选（等契约半 `T-20261004-002`）。**需拍板：无新增**。｜（**2026-10-04 · 开发循环第 186 轮**：**`L-100` 的 Core 半第二片 —— 待办日历的日期算术与投影（月 / 周两档）**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）：新增 `Core/TodoCalendar.swift`（两档取值空间 `TodoCalendarView` + `TodoCalendarCell` / `TodoDayTasks` + `monthCells` / `weekCells` / 日期算术 + **一个铺法** `tasksByDay`）；**口径与对侧 `DoyahNotes/android/.../TodoCalendar.kt` 同口径**（**引用不复制代码****）：一周从**周一**起（ISO 1…7）· 月视图**整周补齐** · 参照时刻与日历**由调用方传**（不读系统时钟）· **脏值回空不抛错**；**无截止的任务不落任何一天**；`FR-NOTE-39` 的「唯一事实源」落成**两条形态判据**（日历那一层的代码里没有写路 · 库里没有日历专属表）；语言表 **2** 键；`Tests/TodoCalendarTests.swift` **22 例** ⇒ Core 单测 **2649 → 2671 / 0 failures**；概要设计 **§3.41**（v2.144）；`AGENT-SPEC` **v1.140**。**断点** = 日历那一屏的界面 + 排序条 / 分组筛选（等契约半 `T-20261004-002`）。**需拍板：无新增**。｜（**2026-10-04 · 开发循环第 185 轮**：**`L-100` 的界面半第一片 —— 待办那一屏的入口 + 清单**（代码 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）：入口 = 笔记区顶部那枚屏切换（`NotesModule`，不是第二根活动栏柱子）；待办那一屏沿用 `L-184` 三栏骨架（左栏待办自己的导航 / 中栏清单 / 右栏详情编辑）；清单 = 分区列表（段头 + 条数 + 截止档位徽标）+ 新建 / 编辑 / 完成 / 删除，**分区 / 段序 / 档位 / 空标题全读 `Core/TodoPresentation`**；`AppState` 六条路 + 语言表 **14** 键；**Core 单测未变** = 2649；**同批补记** = 概要设计 §3.39 的小节正文在第 184 轮漏写过，本轮据实补回。**断点** = 日历那一屏 + 排序条 / 分组筛选（等契约半）。**需拍板：无新增**。｜（**2026-10-04 · 开发循环第 184 轮**：**`L-100` 清单界面的 Core 半 —— 待办清单的三件纯逻辑（分区 / 截止档位 / 空标题）**：**`N-11` 的 macOS 核心层半 —— 待办任务清单（`Todo` 实体 + schema **v5**）**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）—— 人类主人 2026-10-04 令「**今天完成 macOS 版 Notes**」的第二步；`L-184`（三栏界面）已收口，`L-100`（清单 + 日历界面）要开工必须先有任务模型与库表；**契约半归契约层所有者 `bluewhale`**（派单 `T-20261004-002` 仍在办）⇒ 本侧按提案 `0004` 的**已采纳裁决**落实现，**排序口径与交换面 `todos[]` 一字未写**（不自行发明）。落法 = `Core/Todo.swift` + `NoteSchemaV5`（`todo` / `todo_tag`；**与笔记同库同连接**）+ `NoteDatabase` 写读口 + `NoteLibrary` 门面；判据 `Tests/TodoStorageTests.swift` **7 例** ⇒ Core 单测 **2629 → 2636 / 0 failures**；提交 `b9941c5` 已推、`ls-remote` 复核 0·0。｜（**2026-10-04 · 开发循环第 182 轮**：**`L-184` 第四片 = 笔记「置顶」**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）—— 契约 §2.1 `pinned`（「排序第一关键字」）+ §3.9 `query` 的「置顶 → 收藏 → 更新时间倒序」本来就写着、需求条文 `FR-NOTE-18` 的**第一档**（与「收藏」是同一个形状的两个实例）；落法 = `Note.isPinned`（后加字段 ⇒ 自定义解码，缺字段按 `false`）+ schema **v4**（`ALTER TABLE note ADD COLUMN pinned`）+ `NoteDatabase.setPinned` / `isPinned`（**不碰 `updated_at`**；`upsert` 的 `ON CONFLICT` 段刻意不含它 ⇒ 改几个字保存不许静默取消置顶）+ `NoteLibrary.setPinned` / upsert 读回旧行 + `NotesSortOrder.updatedDesc` 的**置顶上浮（压过收藏）** + 界面两处（行上图钉 / 右键「置顶 / 取消置顶」，与收藏各占一条菜单项）+ 语言表 **4** 键；判据 `Tests/NoteNavigationTests.swift` **+2** + `Tests/NotebookStorageTests.swift` **+3**；Core 单测 **2624 → 2629 / 0 failures**；`AGENT-SPEC.md` v1.136；概要设计 v2.140；清单 §10.42；**`L-184` 的「余」清零**）｜**上一版 v1.275 ｜（**2026-10-04 · 开发循环第 181 轮**：**`L-184` 第三片 = 左栏「已收藏」+ 中栏「只看收藏」筛选条**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · **契约语义未改**）—— **一处订正**：契约里本来就有 `favorite`（`DoyahNotes/Docs/核心契约.md` §2.1「收藏｜排序第二关键字，可单独筛选」+ §2.3 `favoriteOnly`；需求条文 `FR-NOTE-18`）⇒ 第 179 / 180 轮记的「需契约加字段」是**读漏**，本轮不再走提案、直接实现：`Note.isFavorite` + schema **v3**（补列）+ `NoteDatabase.setFavorite`（不碰 `updated_at`，`ON CONFLICT` 段刻意不含这一列）+ `NotesScope.favorites` + 默认档**收藏上浮** + 界面三处（左栏一行 / 中栏开关共用同一个状态 / 行上星标 + 右键收藏）+ 语言表 **5** 键；判据 `Tests/NoteNavigationTests.swift` **+4 例** + `Tests/NotebookStorageTests.swift` **+2 例**；Core 单测 **2618 → 2624 / 0 failures**；`AGENT-SPEC.md` **v1.135**（+ §9 第 139 条）；概要设计 **v2.139**；清单 **§10.41**；**`L-184` 翻 done**；余 = 置顶（`FR-NOTE-18` 第一档）未做）（**上一版 v1.274** ｜（**2026-10-04 · 开发循环第 180 轮**：**`L-184` 第二片 = 左栏「最近」/「标签」分组 + 中栏排序条**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · 契约语义未改）—— `NotesScope` 加 `.tag(String)` / `.recent`（**有界**：`recentLimit = 30`）+ 新增 `NotesSortOrder`（三档 · **都是总序**）+ `normalized(_:notes:)`（**标签存亡只在笔记里**）+ `listing(_:scope:searchScope:sort:)` = 中栏列表**唯一入口**（宿主那份 `mostRecentlyUpdatedFirst` 删掉）；左栏加「最近」/标签分组、中栏栏头加排序条；语言表 **6** 条新键；判据 `Tests/NoteNavigationTests.swift` **+6 例**；Core 单测 **2612 → 2618**；`AGENT-SPEC.md` **v1.134**；概要设计 **v2.138**；清单 **§10.40**；**边界**：「已收藏」需契约加字段（`favorite`）⇒ 不擅自扩契约（走提案）；「中栏筛选条」未落 ⇒ `L-184` 仍 **doing**。）（**上一版 v1.273**（**2026-10-04 · 开发循环第 179 轮**：**`L-184` 笔记模块的界面按「三栏」重排**（代码 + 判据 + 文档 · **免授权** · 无新增拍板 · 契约语义未改）—— 装配只在一处 = `App/Views/NotesPanel.swift` 新增 `NotesAreaView`（顶栏 搜索+范围+新建 ／ `HSplitView` 中栏列表 + 右栏编辑器）；`MainWindow` 的 `.notes` 两根柱子换位（左栏 = 两级树，**列表从侧栏搬进中栏、搜索框搬上顶栏**）；中栏卡片加**摘要两行 + 相对时间**（纯逻辑落在新文件 `Core/NotePresentation.swift`，语言表 5 条新键）；判据 `Tests/NotePresentationTests.swift` **13 例**；Core 单测 **2599 → 2612**；`AGENT-SPEC.md` **v1.133**；清单 **§10.39**。**边界（如实登记）**：左栏「已收藏」**需契约加字段** ⇒ 本侧不擅自扩契约（留队列 + 提案）；「标签」分组与中栏排序/筛选条未落 ⇒ `L-184` = **doing**；全量 `verify-all.sh` 未复跑（同机在途件 `CLI/main.swift`，第 4 项必红）；`check-self-test-counts` 剩红 = 人工会话 `FR-EDIT-47` 的 alpha 判定条目未登记（非本侧）。）｜
+> **v1.297（2026-10-11）**：台账瘦身（派单 `T-20261011-015` · from bluewhale · origin: human-owner） —— 删重复、改指针：§3.1 门禁表整表删（改指针 + 项数只认 `verify-all.sh` 收尾行与 `Scripts/doc-numbers.json`，清掉 12 / 15 / 十八三个互相打架的数）· §4.1.2 ADR 表整表删（自称 29 条、实列 31 行、漏 7 条 ⇒ 改指针到《概要设计》§5）· §2 铁律 3/6 改指针 · §5.5 头部机制段改指针并点明五条已作废口径 · §10 写死本机绝对路径的命令改成仓内脚本 · 唯一权威副本 = 入库那一份。**产品代码一字未动**。
 
 > **v1.296（2026-10-11）**：**人类主人令两笔落账（beta1 编排 + 自审流程）**。① **beta1 编排**（派单 `T-20261011-003`，`origin: human-owner`）：任务 1 插件架构改造（10-13）· 任务 2 AI 助手 MVP（10-14）· 任务 3 AI 助手 M2（10-17）= **beta1 硬性**；任务 4 多 profile / 任务编排 / 交付通道 = **中期路标（只调研 + 需求分析）**；**★先契约后开发** —— 三书修订 + 概设评审未过不开工；契约修订由前门**分批**落（A 已落 `cc73f07` §3.52，B~E 紧接）。② **流程变更**（派单 `T-20261011-004`，`origin: human-owner`）：**评审改由本侧自审**（自审过即可进开发，不等前门 / 不等主人），**自审结论经本侧 Hermes Telegram 通道直达人类主人手机 —— 只发一行、不发过程**；书面结论另留档（锚仓 `cloud-sync/` 或信箱单）。本条是基本法第二十五/三十/三十一条「推送全静默」的**明确例外**（仅限自审结论这一类）。③ **本轮实读**：`FR-AI-16~25` + `NFR-AI-07` 与概设 §3.51（22 条不变量）**已在盘上**（`51fff55`）、§3.52 在 `cc73f07` ⇒ 批 C/D 的**大部分无需再等**；**契约里仍无出处的四项** = 技能库 / 定时 agent / 门控 / 对话记忆（M2 六项里的四项），长上下文压缩检查点只在 `NFR-AI-07` 标题里、无条目 ⇒ 缺口清单已回报前门（`T-20261011-003` 结果段）。④ **门禁读数现状**：全量 `verify-all.sh` **RC=1**（第 4 项判红后 fail-fast，18 项只跑到 4）= 前门 `51fff55` 把两书头部「当前」号各 +1 而**未补变更记录行**（派单 `T-20261011-002` 仍 todo）⇒ 批 B~D 落笔后的「全量尾行读数」**暂无法给出**，请先修 -002。⑤ **TG 通道自证**已发（`sendMessage` `ok=true` · `message_id=24` · chat `1952751681` · 走本机代理 `127.0.0.1:7890`）。
 
@@ -523,10 +524,10 @@
 
 1. **状态只在验证之后改**。代码写完不算完成，跑过脚本/单测拿到 exit 0 才算；SRS 状态位与"已完成"的宣称都要有命令输出支撑。
 2. **需求登记要一次性做完**。一条新需求登记会派生 **6 个出口**：正文定义行 / §10.1 索引（含表头计数）/ §10.2 追溯表 / §10.10 平台等价矩阵 / 规划书能力地图 / 变更记录。漏一个，门禁会红。
-3. **文档改动必须过门禁**：`check-doc-tables.py`（表格列数、小节条数、计数可复现）+ `check-status-consistency.py` + `check-platform-neutrality.py` + `gen-platform-parity.py --check`。
+3. **文档改动必须过门禁** —— 清单与每项口径见《概要设计》§8.3；实跑 `./Scripts/verify-all.sh`，**项数只认它的收尾行 + `Scripts/doc-numbers.json`**（本台账不写死，见 §3.1）。
 4. **不要弹窗要授权**；需要授权的项**写进文档记录**（"待授权/待拍板"），不要因为等确认而停工 —— 能做的一律先做，做完登记。
 5. **提交信息写清楚**：中文、说明改了什么 + 派生出口 + 验证结果（哪条命令、什么结果）。
-6. **不擅自改外部状态**：不在别人的数据库上建库/改 `pg_hba.conf`；不在本机装 MySQL 之类只为跑测试的实例 —— **只给命令，不执行**。
+6. **不擅自改外部状态**：不在别人的数据库上建库/改 `pg_hba.conf`；不在本机装 MySQL 之类只为跑测试的实例 —— **只给命令，不执行**（口径真值源 = 《需求规范书》§0.9；本台账只作指针）。
 7. ~~每台克隆机器各装一次隔离钩子（Notes 仓）~~ **2026-09-27 作废**（隔离撤销）：Notes 仓的 `isolation-check` 层随之下线（队列 L-28）。
 8. **Studio 仓是 PUBLIC**：不要把凭据、内网地址、个人内容写进会被推送的文件；敏感/运营类文档放 `Docs/` 下未入库位置（`.gitignore` 默认忽略 `/Docs/*`，只白名单放行三书与 `Docs/design/*.md`）。
 9. **删除前确认范围**：需求提出者说"清理掉"可能只指部分文件，不是整个目录。
@@ -546,42 +547,15 @@
 | 测试机（Studio 环境卡点） | 主机 `192.168.5.223`（"217"）：网络不通 + `pg_hba.conf` 未放行本机；修法记在 `Docs/design/待人工验收清单.md` |
 | 本机与 GitHub | `gh` 已登录；两边仓库均以 `origin/master` 为准 |
 
-### 3.1 门禁命令清单（接手第一件事就是跑完这两条）
+### 3.1 门禁（清单与口径见《概要设计》§8.3；实跑 `./Scripts/verify-all.sh`）
 
+**这一节不再列举门禁项、也不写死项数。** 理由（人类主人 2026-10-11 令「台账归台账、契约归契约」· 派单 `T-20261011-015`）：门禁清单的真值源在契约层，台账里抄的那份先后写过 **12 / 15 / 十八** 三个互相打架的项数，且「第 11 项」在两处指**不同门禁** ⇒ 新助理会照着过期清单去跑，把没跑的当跑过。
 
-#### Studio 门禁（15 项）
-
-主入口：`Scripts/verify-all.sh`（合并所有门禁，一条命令跑完）
-
-| 项 | 命令 | 位置 | 说明 |
-|---|---|---|---|
-| 1 | `./Scripts/verify-core.sh` | `Scripts/` | Core 单测（SwiftPM，无需数据库）+ 平台适配层单测 |
-| 2 | `python3 Scripts/check-core-portability.py` + `python3 Scripts/check-script-portability.py` | `Scripts/` | **平台中立性两项**：Core 不得出现平台专属依赖；**`Scripts/*.py` 不得把平台相关的路径串当稳定标识用**（`str(<…>.relative_to(<…>))` ⇒ Windows 上清单匹配恒 False、只在那台机器上红 —— 提案 `0005` 采纳，第 91 轮；判据 A 形状禁令 / B 例外台账默认空 / C 空跑防护 / D `--self-test` **8 例**） |
-| 3 | `python3 Scripts/check-core-localization.py` | `Scripts/` | 用户可见文案不得硬编码中文 |
-| 4 | `python3 Scripts/check-doc-tables.py` | `Scripts/` | 文档表格列数与派生计数一致 |
-| 5 | `python3 Scripts/check-terminal-palette.py` | `Scripts/` | 终端配色 JSON 与 Core/文档三方一致 |
-| 6 | `python3 Scripts/check-status-consistency.py` | `Scripts/` | 索引表 ↔ 正文定义行状态一致；**2026-09-26 起还有第 2 段：跨文档状态括注** —— 其它文档里写「编号（状态标记）」而与索引不符即报红 |
-| 7 | `python3 Scripts/check-design-tokens.py` | `Scripts/` | 设计令牌棘轮（裹颜色/字号/间距不得回潮） |
-| 8 | `python3 Scripts/gen-platform-parity.py --check` | `Scripts/` | 平台等价矩阵与 §10.9 登记表一致 |
-| 9 | `python3 Scripts/check-platform-neutrality.py` | `Scripts/` | 需求规范书平台专属词汇棘轮 |
-| 10 | `python3 Scripts/check-palette-wiring.py` + `python3 Scripts/check-sidebar-collapse-state.py` + `python3 Scripts/check-empty-action-buttons.py` | `Scripts/` | 命令面板接线（清单 ↔ 分派器 ↔ 视图绑定）＋ **侧边栏折叠状态的归属**（L-59：状态住 `AppState`、写入口唯一、默认全展开、未分组不许有 `DisclosureGroup`）＋ **空数据按钮的处置**（L-50：每条「内容为空」守卫逐条登记处置 = 灰着 / 给理由 / 够不着按钮；`view-disabled` 那一档的判据属性必须唯一出处，不许两处各写一遍）＋ **命令面板的「行为面」**（第 92 轮 / `L-89` ㈡ ①）：上面那条判的是**源码级**接线，判不住「点下去真的发生了」（2026-09-23 那批缺陷：9 条标志位没人读 / 1 条设错标志位 —— 编译、单测、静态判据全绿）⇒ `TestsUISnapshot/PaletteWiringProbeTests.swift` 把 33 条命令**逐条真点一遍**并断言落点、落点表 ↔ 清单双向对账；取证命令 `./Scripts/run-manual-verification-probes.sh`（与快照同纪律：**不进**本表每轮门禁）＋ **主题与字体那一行**（第 93 轮 / `L-89` ㈡ ②）：清单 `FR-EDIT-26` 的 ③④⑤ —— `TestsUISnapshot/AppearanceFontProbeTests.swift`（`FontManager.beginHostPreference(_:)` 造态、**不落盘**；四态逐条断言手输族之后界面说的话，其中「存在但不是等宽」与「系统里没有这个族」必须是**两句话**；⑤ 是**取样带**像素判据：换族必须变、同族重跑必须逐像素相同、上方只多一句提示必须不变） |
-| 11 | `python3 Scripts/check-note-module-isolation.py` + `python3 Scripts/check-plugin-assembly.py` + `python3 Scripts/check-notes-offline.py` | `Scripts/` | 插件装配链：笔记模块解耦（不背数据库 / Ultra 侧代码；清单自检）+ FR-PLUG-01/02/03/06 与 **ADR-35** 的机械判据（**失败会让闭环非零退出**，2026-09-26 起） |
-| 12 | `python3 Scripts/check-shell-locale-safety.py` | `Scripts/` | 脚本 shell 多字节安全（**2026-09-26 起**）：`Scripts/**/*.sh` 不得出现「裸写 `$变量` 后紧跟非 ASCII 字符」—— macOS 自带 `/bin/bash` 是 **3.2.57**，这种写法会把变量**静默展开成空**（配 `set -u` 则直接 unbound variable 中止脚本），而证据脚本**照常 exit 0、照常打勾**，只是那一行的值空了 |
-| 13 | `python3 Scripts/check-script-env-parameterization.py` | `Scripts/` | 脚本连接信息参数化（**2026-09-26 起**）：连真库的 33 个脚本（清单 `Scripts/real-db-scripts.txt`）一律从 `Scripts/lib/test-env.sh` 取连接信息并打印目标摘要；**清单之外**的脚本不得出现本机集群（55432/55433/55434、`~/tools/pgserver`、`pgdata-*`）或 217 的连接字面量；lib 必须真的持有那些事实（挡住「把字面量删干净」）；清单与证据基线对账 |
-| 14 | `python3 Scripts/check-connection-failure-coverage.py` | `Core/` + `Scripts/` | 连接失败的**文案覆盖面**（**第 7 轮 L-14 起、第 8 轮扩到七组判据**）：驱动错误码（19 个，从 `Vendor/postgres-nio` 的 `PSQLError.Code.Base` **机械提取**）↔ 台账 `Scripts/connection-failure-dispositions.json` 逐条对账 —— 驱动有而台账无（升版新增码会静默落到兜底文案）/ 台账有而驱动无 / 标「翻译」却不在映射里 / 兜底 `default:` 分支被拆或**不再 `return nil`** / 标「中性归因」却不在 `nonConnectionKeys` 里点名或 `neutralKey` 在语言表里对不上 / **SQLSTATE 档（57014）不在名单里、或名单写了却没被读** / 主机名解析前置检查被删或**挪到建连之后** / 证据脚本与「驱动会丢原因」的前提测试不在位。负例 `Scripts/test-connection-failure-gate.py` **19 项**（在临时副本上写坏，不动真仓库） |
-| 15 | `python3 Scripts/check-cli-failure-readability.py` | `CLI/` + `Scripts/` | 命令行失败输出的**可读化覆盖面**（**第 14 轮 L-15 起**）：CLI 有 **57 处**「把失败说给用户看」的输出，此前各写各的（`print("列出表失败：\(error.localizedDescription)")`）—— 打出来是 `The operation couldn't be completed. (PostgresNIO.PSQLError error 1.)`。判据是**结构**判据（哪一行出现「打给用户看的输出 + 原始串」就要求同一行经唯一入口 `CLIFailureText.oneLine`，新增一处裸英文失败输出**当场报红并指名行号**）+ 入口三条口径在位（认得出给方向 / 中性归因 / 认不出**原样**）+ 调用处数棘轮 **57** + 例外（`--json` 出口 4 处，按结构放行）与渠道字段锚点 + 调试转储 **3 处不许被删** + 证据脚本四个锚点。台账 `Scripts/cli-failure-readability.json`；负例 `Scripts/test-cli-failure-readability.py` **12 项**（在临时副本上写坏，末条核对真仓库一个字节没动） |
-| 打包 | `./Scripts/build-app.sh` | `Scripts/` | 打包 .app（沙箱构建） |
-
-#### Notes 门禁（4 层回归 + 构建）
-
-| 层级 | 命令 | 位置 | 说明 |
-|---|---|---|---|
-| L1 编译 | `hvigorw --no-daemon assembleHap --mode module -p product=default -p buildMode=debug` | 工程根 | 0 error / 0 warning |
-| L2 逻辑 | `node tools/logic-check/run.mjs` 或 `bash tools/logic-check/run.sh` | `tools/logic-check/` | 检查层：用例 + 资源 + 迁移（**隔离层 2026-09-27 随撤隔离作废**） |
-| L3 脏数据 | 固化在 `tools/logic-check/cases.ts` | `tools/logic-check/` | 非法JSON、缺字段、未知type、超长正文 |
-| L4 迁移 | `migration-check.py` | `tools/logic-check/` | v1→v2/v3 库结构升级不丢数据 |
-| L5 真机 | `hdc install entry/build/default/outputs/default/entry-default-unsigned.hap` | 工程根 | 模拟器/真机安装验证（阻塞中） |
-
+- **项数与例数的唯一来源** = `./Scripts/verify-all.sh` 的收尾行 + `Scripts/doc-numbers.json`。**本台账不写死。**
+- **清单与每项口径的唯一来源** = 《概要设计》§8.3。
+- **三条入口**：Studio `./Scripts/verify-all.sh`（只验 Core 用 `./Scripts/verify-core.sh`）｜ Notes `bash tools/logic-check/run.sh`（Windows 侧 `tools\logic-check\run.cmd`）｜ Retro 见该仓 `tools/` 下的入口。
+- **每轮交接三件（静态）**：`check-doc-numbers.py` + `check-release-version.py` + `check-self-test-counts.py`（三条都跑才不漏红）。
+- 打包 / 真启动那几项只在**整轮**跑到；`verify-all.sh` **首红即退** ⇒ 「只剩一处红」是伪读数（细则见技能 `doyah-projects`）。
 
 ---
 
@@ -651,44 +625,11 @@
 | 2 | **Markdown 与 JSON 必须内置格式化 schema** —— 这两门语言各要有一条**内置档**（不依赖外部工具、不联网）；**当下事实：JSON ✅ 已有 / Markdown ⬜ 还没有**（形态改成「只用内置」之后点它会如实拒绝） | 「Markdown 和 json 是我今后常用的文本格式，所以必须内置它的格式化 schema」 | SRS `FR-EDIT-39` 追加条文；契约 **§8.1**（schema 四栏）；补档 = 队列 `L-171` |
 | 3 | **关闭有未保存改动的页签 = 弹确认框，不阻塞** —— 点关闭 ⇒ 有改动就弹框给「保存并关闭」「不保存，直接关闭」（+ 取消）；保存失败不关；旧行为「必须先保存才能关闭」**作废** | 「文件打开后被修改，点击关闭时提示必须先保存了才能关闭，这个逻辑有问题，我的期望：用户点击关闭按钮，发现有修改，弹出确认框让用户选择，是保存关闭还是不修改直接退出」 | SRS **`FR-EDIT-46`**（新登记 · 🟡）；契约 **§3.35**；ADR-24 就地标修订；代码 `Core/WorkspaceClose.swift` + 队列 `L-172` |
 
-#### 4.1.2 产品级 ADR 台账（29 条，全文见 `Docs/概要设计.md` §5）
+#### 4.1.2 产品级 ADR 台账
 
-**(b) ADR 表（29 条）**
+**ADR 的全文与编号唯一来源 = `Docs/概要设计.md` §5。本节不再复制那张表。**
 
-| 编号 | 决策 | 影响 | 出处 |
-|---|---|---|---|
-| ADR-01 | 协议层与方言层分离 | 新增数据库类型只加实现，不动界面 | `概要设计.md` §5 |
-| ADR-02 | 执行结果用**事件流**暴露 | 界面与命令行共用同一抽象；大结果不阻塞 | `概要设计.md` §5 |
-| ADR-03 | 服务缓存按 `(连接, 库)` | 支持跨库浏览与数据库下拉 | `概要设计.md` §5 |
-| ADR-05 | DML 影响行数走单一通道 | **契约 §3.2 不变量 3**（评审 R-32 要求收敛为一条） | `概要设计.md` §5 |
-| ADR-06 | 取消 = 另开连接请求服务端中断 | **契约 §3.2 不变量 1/2**；不得只停本地消费 | `概要设计.md` §5 |
-| ADR-07 | 对象树用扁平化行 + 自维护展开状态 | 任意层级可展开、可跨库 | `概要设计.md` §5 |
-| ADR-09 | 本地化：文案键 + 多语言表 + 切换即全量生效 | 新增文案必须齐备（单测强制） | `概要设计.md` §5 |
-| ADR-10 | 查询历史只驻留内存 | DR-02 隐私优先；退出即清空 | `概要设计.md` §5 |
-| ADR-11 | 文件页签不绑定连接 | 未绑定页签可编辑，执行前提示选择连接 | `概要设计.md` §5 |
-| ADR-12 | 页签编号单调生成 | 关闭 / 重命名不影响编号 | `概要设计.md` §5 |
-| ADR-13 | 保存查询与连接配置分文件存储，均不含密码 | 可读可迁移 | `概要设计.md` §5 |
-| ADR-18 | 设计令牌层 + **棘轮式防回潮校验** | 外观一致性可机器校验（§8.3） | `概要设计.md` §5 |
-| ADR-19 | 目录授权凭据**两种模式兼容** | 有能力作用域就作用域，没有就普通凭据；对调用方透明 | `概要设计.md` §5 |
-| ADR-20 | 工作区相对路径**一律相对根** | 展开键与解析输入自洽 | `概要设计.md` §5 |
-| ADR-26 | **国际化是设计的一部分**：界面文案走统一表（1388 键 × 两种语言，运行时可切、不重启、棘轮挡漏翻）；对外 README 中文为源 + 英文对照、同一提交内一起改；**三书暂不出英文版**（产品优先，真有国际协作者由其自行翻译） | 见 §8.4 语言口径；NFR-I18N-03；P7 的双平台口径同源 | `概要设计.md` §5 |
-| ADR-21 | 工作区页签**另起类型**（`WorkspaceTab`），不复用 `QueryTab` | SQL 专用状态与文件编辑状态互不污染（§3.17 不变量 1） | `概要设计.md` §5 |
-| ADR-22 | 着色与补全**共用一份** `CodeSyntax` | 不会出现"看到是关键字、补全却给不出"（§3.17 不变量 2/4） | `概要设计.md` §5 |
-| ADR-23 | 片段插入的光标落点写在 Core（`caretOffset`），界面只搬 | 落点规则可单测、两平台一致（§3.17 不变量 5） | `概要设计.md` §5 |
-| ADR-24 | 打开文件设三道闸（目录 / 大小 / 二进制），脏页签**不许被静默丢弃**（**2026-10-03 修订**：原「脏页签不关」⇒ 改成「**先确认再关**」（`FR-EDIT-46`）） | "能打开但卡死"与"静默丢改动"都比拒绝更糟（§3.17 不变量 6/7）；「拒绝关闭」把用户**挡在门外**，确认才是需求提出者要的 | `概要设计.md` §5 |
-| ADR-25 | 数据库侧代码**阶段性冻结**（只增不改） | 见 SRS v3.180；工作区工作全部落在新增模块上，解冻需显式指示 | `概要设计.md` §5 |
-| ADR-27 | SSH 隧道的**就绪判定用注入的端口探测**，不在 Core 里引平台 socket API | Core 要保持平台中立（可移植性闸门禁止 `import Darwin`），探测交给 App / CLI 各自注入 | `概要设计.md` §5 |
-| ADR-28 | `MySQLDialect` **组合转发** `GBaseDialect`，不抽公共基类 | 数据库侧代码阶段性冻结（ADR-25）：转发是零改动拿到共享 SQL 文本的办法；"只改一边"由一致性单测挡住 | `概要设计.md` §5 |
-| ADR-29 | MySQL 走 **COM_QUERY 文本协议**（`simpleQuery`），不走 prepared statement | 本产品的协议层没有绑定参数（参数由用户写在 SQL 里），文本协议少一次往返，且任何类型都能原样读成字符串 | `概要设计.md` §5 |
-| ADR-30 | MCP 的审批单位是**一次调用**（工具名 + 参数指纹），不是工具名 | 按工具名放行时"允许 query_sql"等于允许任何语句；脚本实测抓到过（§3.22 不变量 5） | `概要设计.md` §5 |
-| ADR-34 | 许可校验**只做签名校验、不做 DRM**（不联网激活、不绑设备、不混淆、不反调试） | macOS 上破解动机低（需求提出者判断）；签名已能挡住手改许可证，复杂度的收益为负。三条底线：离线可用、换机不锁、到期不锁数据。**设备配额（默认 5 台）**是防账号共享的保险丝，靠签名许可证换证或服务端账号执行，与"不联网激活"的张力已在 §3.24 写明 | `概要设计.md` §5 |
-| ADR-35 | 「哪个区可见」**单一判据 + 单一写入口**：`LicensePresentation` 判可见性，`AppState.selectActivityItem` 是唯一入口 | "未授权区不可达"必须是结构性的：新建一个入口（菜单 / 命令面板 / 首页按钮 / 快捷键）只要直接改 `selectedActivityItem` 就能绕过授权，而这类入口只会越加越多。收成 `private(set)` + 一个入口后，漏掉的入口编译期就报错。代价：想改选中项必须走入口（可接受） | `概要设计.md` §5 |
-| ADR-33 | 笔记与 AI 桥都放 **Core**，界面只做呈现 | 契约可单测、两平台共用；界面重写不影响"含不含行数据""来源只记连接名"这些安全不变量（**2026-09-26 注**：笔记功能定义已移交 `DoyahNotes` 工程，本条影响面收窄为宿主侧装配契约，见 §3.23） | `概要设计.md` §5 |
-| ADR-32 | 本机 macOS **只做开发机**：不装数据库、需要真实库的验证一律连 **217** 的专用测试库 | 本机的精简构建会造出"只在本地成立"的结论；且验证脚本会建表 / 插数据 / 删表，跑错库就是事故（SRS §0.9 的 E1~E5） | `概要设计.md` §5 |
-| ADR-31 | 维护任务的**执行入口只收已批准的任务** | 让"逐次审批"成为类型上的约束而不是纪律口号（§3.21 不变量 1） | `概要设计.md` §5 |
-| ADR-36 | **一套许可证覆盖三个能力位**（工作区 / 数据库 / 笔记），不做插件独立授权 | 许可只有一个判据，避免"工具能用、笔记位失效"的半有效状态（§3.24 不变量 5） | `概要设计.md` §5 |
-| ADR-37 | 笔记插件的装配形态 = **同进程内模块**（A） | 视图直接嵌入、上下文零序列化、复用现有解耦门禁；代价是崩溃域不隔离、不能独立发版，**越界只能靠门禁与评审守**（§3.23） | `概要设计.md` §5 |
-
+为什么删（派单 `T-20261011-015`）：这里那张表自称「29 条」、实列 **31 行**，而契约是 **31 行 / `ADR-01~38`** ⇒ 它**漏了 `ADR-04 / 08 / 14 / 15 / 16 / 17 / 38` 共 7 条**，新助理只看台账会以为这 7 条不存在。要看全文：`grep -n '^| ADR-' Docs/概要设计.md`。
 
 ### 4.2 Doyah Notes 决策台账
 
@@ -1088,29 +1029,15 @@
 
 ### 5.5 循环机制（2026-09-26 建立）——「你不在场也能推进」
 
-**第 0 步 · 开工环境核查（协议硬性，间隔压到 1h 以内后必须有）**
+**机制的真值源**（本节只留指针 + 历史的轮次账）：现行协议 = 《循环协议》§3.10 与技能 `doyah-projects`（`references/autonomous-loop-ops.md`）。**下列旧口径已作废，勿照做**（人类主人 2026-10-11 令 · 派单 `T-20261011-015`；2026-10-10 令 `T-20261010-173`）：
 
-间隔可能短于一轮工期（一轮含构建/测试约 10 分钟起，失败会更长），**两轮会叠在同一棵工作区上**。所以每轮开第一件事是读探针给出的**开工判决**：
+- ~~「`verify-all.sh` 必须 **15 项**全绿才落档」~~ ⇒ 项数只认收尾行 + `Scripts/doc-numbers.json`（见 §3.1）。历史上本台账写过 12 / 15 / 十八三个数。
+- ~~节奏阶梯（`todo≥6 → 1h` / `3~5 → 45m` / `2 → 30m` / `1 → 15m`）~~ ⇒ 现行 = **门禁指纹变化才唤醒**；指纹不变**静默**（零模型轮次，绝不为了「证明还在跑」写单或改仓）。
+- ~~载体「每 2 小时一次」，循环按探针建议自行改 `schedule`~~ ⇒ 同上；且 `schedule` **不许自行改**（人类主人经单授权除外，改前改后留痕）。
+- ~~「本仓负责 macOS/iOS 实现 **+ 所有项目的三书定稿**」「三书在大河马侧单点定稿」~~ ⇒ **2026-10-03 起契约层定稿归前门 `bluewhale`**，本侧只读 + 提案。
+- ~~自停条件（队列没有 `todo` 就暂停自己）~~ ⇒ 现行为 = 无外部输入（派单 / 拍板）**不开工**，直接 `[SILENT]`。
 
-| 判决 | 触发条件 | 本轮动作 |
-|---|---|---|
-| **SKIP** | 互斥锁被占用（持有者 PID 存活且锁未超 90 分钟）／ 仍有构建·测试进程在跑（`verify-all`、`make-ui-snapshots`、`swift test`、`xcodebuild`…） | **立即结束，不写任何文件、不改任何状态位**；最终只回复 `[SILENT]`（连空报告都不发，不打扰人） |
-| **TAKEOVER** | 锁僵死（持有者 PID 已死或锁龄 > 90 分钟）且工作区干净、无构建进程 | 覆盖写锁后开工 |
-| **HOLD** | 工作区脏（有未提交改动） | **先判归属**：① 对照上一轮输出判断是否为上轮残work → 能明确归因就**承接续做**并写明"承接第 N 轮"；② 不能归因 → 该条目置 `blocked`，汇报后结束；③ 若是别人（用户手改 / 另一位助理）的改动 → **一律不碰**（不 commit、不 stash、不 checkout）；④ 任何情况都不许 `git add -A` 一把梭 |
-| **GO** | 锁空/僵死可接管 + 工作区干净 + 无构建进程 | **先写锁**再开工：`printf '%s\n%s\n第N轮 <条目>\n' "$PPID" "$(date -Iseconds)" > ~/.hermes/cache/doyah-loop.lock` |
-
-**锁文件**：`~/.hermes/cache/doyah-loop.lock`（记 PID + 起始时间 + 轮次条目）。**收尾无论成败都要 `rm -f` 释放**。探针 `doyah-loop-status.py` 每轮零成本读它并给出判决；五条分支（GO / SKIP×2 / TAKEOVER / HOLD）已实测通过。
-
-**一轮 = 四步**：① 读 spec §5/§7 + 队列，挑第一条可做项 → ② 执行（代码/文档/验证）→ ③ 落档四处（`Docs/开发记录-*.md` 追加一节 + 本 spec §5/§7 更新 + 三书同步 + 队列回写状态与 sha）→ ④ `git commit` + `push`，回到 ①。
-
-**载体**：Hermes cron 任务「**Doyah Studio 开发循环**」（每 2 小时一次，`continuity` 打开 —— 每次能看到上一轮结果，不重复做）。
-
-**节奏阶梯（2026-09-26 用户要求：「随着任务减少，定时任务间隔时间要减少」）**：`todo≥6 → 1h` ｜ `3~5 → 45m` ｜ `2 → 30m` ｜ `1 → 15m` ｜ `0 → 暂停自停`。
-探针 `~/.hermes/scripts/doyah-loop-status.py` 每轮**零成本**数一遍队列并给出建议间隔，循环按它调整自身 `schedule` —— 任务越少跑得越勤，越快收敛到"只剩你拍板"。
-
-**自停条件（重要）**：当队列里**没有 `todo` 条目**（只剩 `blocked` / `needs-user`）时，任务**暂停自己**并把汇总发给你。这样它不会空转烧钱，也不需要你盯着。
-
-**每次迭代的硬约束**：跑完 `./Scripts/verify-all.sh` 必须 **15 项全绿**才落档；不弹窗要授权（需要授权的写进 §6）；**按平台分工**——本仓（本机）负责 **macOS/iOS 端实现**（含跨端共享的 Core）**+ 所有项目的三书定稿**；**Windows / Android / 鸿蒙 端实现归小河马**；**三书（所有项目）的讨论与定稿在大河马侧单点完成**（需求提出者 2026-09-27：「所有项目的三书我会在大河马一侧讨论确定……避免两个Agent互相操作三书导致混乱」）；**小河马只读三书**、按三书实现它负责的平台端（Windows/Android/鸿蒙），要改走提案；本侧改动一律**推远端、本地=远端**；**Linux 口径（2026-09-27 最终）**：**三书继续出**（Linux 需求与契约仍由本侧维护）；**本机（macOS/Apple 侧）与小河马（Windows·Android·鸿蒙 侧）都不实现 Linux 版本**；**三书由需求提出者**手工**带到公司的 Linux 环境（**不在公司电脑上填个人 GitHub 凭据**，无自动拉取）自行实现**（原「只更新三书、不实现 / 三书归公司 Linux 平台」两句均作废，后者是错述）；`Docs/*` 默认未入库，不要 `git add -f`。
+**仍有效**：开工判决（SKIP / TAKEOVER / HOLD / GO）与锁文件 `~/.hermes/cache/doyah-loop.lock` 的读法、以及「别人正在写的文件不碰、禁 `git add -A`」两条纪律 —— 细则见技能。
 
 **第 1 轮已完成（L-01，2026-09-26）：界面快照能力** ——
 
@@ -1498,8 +1425,7 @@
 
 ## 8. 更新协议
 
-> **补一条（2026-09-27 血的教训）**：**改文档版本号时必须三处同步**——① 文档头部「版本 / 当前版本」格；② `Docs/README.md` 里该文档的版本格；③ §变更记录新增行。漏任一处，门禁会红（Studio 侧表格校验 / 状态一致性；Notes 侧 **R17 版本口径**）。
-> **另**：取新版本号要**按该文档自己的当前系列**取（Notes 规划书用的是 **v2.x**，不是 v1.x），且**在循环活着的时候不要硬编码版本号** —— 每轮它都在涨，写死必撞号（本轮真实撞了三行：SRS v3.228 / 规划书 v1.60 / 概要设计 v2.25 都已被循环占用）。做法：**读文件取当前最高号 +1**。
+> **指针**：改**三书**版本号的三处同步口径（头部格 / `Docs/README.md` 版本格 / 变更记录行）见《概要设计》§8.3 与 Notes 侧 R17；**本节只讲这份台账自己怎么长大**。
 （这份 spec 怎么长大）
 
 每次收到新的任务清单或拍板确认，**追加**（不要覆盖历史）：
@@ -1539,48 +1465,12 @@
 
 ## 10. 计数方法（可复跑；数字不许靠印象）
 
-（审计跟踪）
+**不在台账里写死本机绝对路径**（人类主人 2026-10-11 令 · 派单 `T-20261011-015`）：本台账已入库、会跨机器与跨克隆被读，`~/.dsh/projects/...` 一类的路径**随机器与克隆而变** ⇒ 计数一律**在该仓的克隆根下**调用**仓内脚本**：
 
 ```bash
-# Studio FR/NFR/AC 总数与状态分布（从 SRS §10.1 索引表数行）
-python3 -c "
-import re
-text = open('~/.dsh/projects/DoyahStudio/Docs/需求规范书.md').read()
-start = text.find('## 10.1'); end = text.find('## 10.2')
-lines = text[start:end].splitlines()
-fr = [l for l in lines if l.startswith('| FR-')]
-nfr = [l for l in lines if l.startswith('| NFR-')]
-ac = [l for l in lines if l.startswith('| AC-')]
-print('FR', len(fr), 'done', sum('✅' in l for l in fr), 'partial', sum('🟡' in l for l in fr), 'todo', sum('⬜' in l for l in fr))
-print('NFR', len(nfr), 'done', sum('✅' in l for l in nfr), 'partial', sum('🟡' in l for l in nfr), 'todo', sum('⬜' in l for l in nfr))
-print('AC', len(ac))
-"
-
-# Studio 平台等价矩阵条数（与 FR 总数一致，每条 FR 对应一行）
-python3 -c "
-import re
-text = open('~/.dsh/projects/DoyahStudio/Docs/需求规范书.md').read()
-start = text.find('## 10.10'); end = text.find('## 10.11')
-lines = text[start:end].splitlines()
-rows = [l for l in lines if l.startswith('| FR-')]
-print('Parity rows', len(rows))
-"
-
-# Notes FR 总数（唯一编号去重）
-python3 -c "
-import re
-text = open('~/.dsh/projects/DoyahNotes/Docs/需求规范书.md').read()
-fr = set(re.findall(r'FR-[A-Z]{2,4}-\d+', text))
-print('Notes FR', len(fr))
-"
-
-# Notes 任务数与批次
-python3 -c "
-import re
-text = open('~/.dsh/projects/DoyahNotes/Docs/开发任务清单.md').read()
-tasks = len(re.findall(r'^\|\s*T\d+\s*\|', text, re.M))
-batches = len(set(re.findall(r'批次 P\d+', text)))
-print('Tasks', tasks, 'Batches', batches)
-"
+python3 Scripts/report-requirements.py            # Studio 需求计数（FR/NFR/AC 状态分布；加 --open 只看未完成）
+python3 Scripts/gen-platform-parity.py --check    # 平台等价矩阵与 §10.9 登记表一致（改了 FR 定义行要重跑生成器）
+python3 Scripts/check-doc-numbers.py              # 「N 处 / N 条」类统计的唯一来源对账
 ```
 
+Notes / Retro 走**各自仓**的入口（Notes 的 `bash tools/logic-check/run.sh` 文档一致性层已含版本与计数对账）；**别在这里复制别的仓的清单** —— 那些计数的唯一来源在各自仓的台账里。
