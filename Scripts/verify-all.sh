@@ -19,6 +19,12 @@ set -euo pipefail
 #      + **语言是传进来的，不是写死的**（L-47：写死语言的调用点逐条登记 + 死译文双向对账 +
 #        `DiagnosisContext` / `DiagnosisAdvice` 的文本出口必须带 `language:` 形参；见
 #        `check-literal-language.py` 与 `literal-language-dispositions.json`）
+#      + **写死的英文展示文案**（L-109：上面那条汉字棘轮的窄口是 `HAN = 汉字` ⇒ 写死的英文
+#        展示文案全绿（`L-108` 那句 `"Home"` 就是这么漏的）。同一脚本的第二条棘轮 = 白名单
+#        `Scripts/core-localization-english.json`：Core 里「像展示文案的英文字面量」必须逐条
+#        登记并写清 `kind`（为什么它不是展示文案；确实直达界面的写 `displayDebt` = 已登记欠账），
+#        **白名单之外一律报红、白名单只许缩小**；豁免文件（语言表 + 代码语言登记表）逐条登记、
+#        与脚本双向对账）
 #   4. 文档表格列数与派生计数一致
 #      + 变更记录版本号唯一 / 头部版本格可判 / 队列条目号唯一（L-32）
 #      + **文档数字的唯一来源**（L-55：闭环项数 / 单测数 / 快照张数收进台账
@@ -217,6 +223,10 @@ python3 Scripts/test-language-registry-gate.py
 
 echo "==> 3/18 本地化：Core 展示文本棘轮（R-45）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
 python3 Scripts/check-core-localization.py
+# L-109（2026-10-11 第 487 轮）：同一条命令跑**两条**棘轮 —— ① 含汉字的字面量（R-45，基线
+# `Scripts/core-localization-baseline.json`）② 写死的英文展示文案（白名单
+# `Scripts/core-localization-english.json`：白名单之外一律报红、只许缩小；每条登记项带 `kind`）。
+python3 Scripts/check-core-localization.py --self-test
 # L-13：界面语言有两条路 —— `L(...)` 与**显式传语言下去**（`summary(language:)` 之类）。
 # 后者原先取的是**用户选择**（`LocalizationManager.shared.language`），绕过了渲染语境：
 # 第 13 轮读图抓到的真缺陷就是它 —— 中文界面的行详情侧栏写着 `Text · 12 characters`。

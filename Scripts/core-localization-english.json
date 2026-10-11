@@ -1,0 +1,857 @@
+{
+  "note": "「Core 里写死的英文展示文案」白名单 + 棘轮（队列 L-109）。判据与用法见 Scripts/check-core-localization.py 头部（棘轮 B）。口径：**白名单之外一律报红；白名单只许缩小**（盘上已经没有的条目要销账，留着 = 那个串下次写回来会静默过关）。每条的 kind 只认脚本里那套词表；`unclassified` = 抄现状还没分类，**不在词表内 ⇒ 判红** —— 「加一条白名单」必须是一次有意识的分类决定，本文件的 --update-baseline-english 只抄现状、不替人分类。`displayDebt` = 确实直达界面、暂时写死英文的**已登记欠账**（不是放行，当前 0 条）。首版 143 条由 2026-10-11 第 487 轮逐条分类（依据：读源码上下文 + 概要设计 §7「协议入口不许写死语言」），逐条理由见随轮证据 Docs/evidence/L-109-写死英文展示文案-第487轮.md。",
+  "kinds": {
+    "sql": "SQL 方言片段 / 关键字 / 迁移 SQL —— 拼 SQL 用的，不是展示文案",
+    "dbType": "数据库类型名（PG / MySQL 的类型原文）",
+    "wireValue": "协议层取值字面量（如 PG 文本表示里的 `Infinity`）",
+    "explainField": "PG `EXPLAIN` 输出或 JSON 的字段名 —— 解析用，不是展示文案",
+    "driverMessage": "驱动 / 系统错误文本的**匹配子**（`contains` 用）",
+    "serverMessageMatch": "服务端错误原文的匹配子 / 归类用",
+    "internalErrorDescription": "内部错误描述的**机器载荷**（`LocalizedError` 的技术串；人话一律由带 `language:` 的渲染入口给 —— 概要设计 §7「协议入口不许写死语言」）",
+    "protocolToken": "协议 / 接口层的固定串（HTTP 头名、认证方案、JSON-RPC 错误文本、SSL 模式名、MCP 方法名、剪贴板格式名）",
+    "formatPattern": "日期 / 数字格式串",
+    "pathName": "路径 / 目录名",
+    "assetName": "字体 / 资源名",
+    "xmlElementName": "XML 元素 / 属性名（xlsx OOXML）",
+    "cliFlag": "命令行开关",
+    "parseToken": "解析用户文本时要匹配的关键字（如维护计划里的 `cost: high`）",
+    "logOnly": "只进日志",
+    "guardrailPattern": "提示注入检测的模式串",
+    "productName": "产品 / 品牌专名（按 R-53 同族口径不翻）",
+    "sampleValue": "合成数据的样例值",
+    "displayDebt": "**已登记的欠账**：确实直达界面、暂时写死英文 —— 不是放行，棘轮只挡变差"
+  },
+  "pathExempt": {
+    "Localization.swift": "语言表本身（这里就是两语槽位；汉字棘轮同样豁免它）",
+    "CodeLanguageDefinitions.swift": "代码语言的登记表：关键字表 / 语言名 / 补全项 —— 整表都是技术标识，与语言表同一性质；该表里合法的语言显示名（`Plain Text` / `Python`…）是**专名**，按 R-53 同族口径保持协议原文"
+  },
+  "entries": {
+    "ALTER TABLE note ADD COLUMN spans TEXT;": {
+      "kind": "sql",
+      "sites": [
+        "Core/NoteStorage/NoteDatabase.swift:403"
+      ]
+    },
+    "ALTER TABLE todo ADD COLUMN note TEXT NOT NULL DEFAULT '';": {
+      "kind": "sql",
+      "sites": [
+        "Core/NoteStorage/NoteDatabase.swift:431"
+      ]
+    },
+    "Accept": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/LLMClient.swift:162",
+        "Core/NoteSync/CloudAuth.swift:536",
+        "Core/NoteSync/CloudSyncService.swift:671"
+      ]
+    },
+    "Actual Loops": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:315"
+      ]
+    },
+    "Actual Rows": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:314"
+      ]
+    },
+    "Actual Startup Time": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:312"
+      ]
+    },
+    "Actual Total Time": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:313"
+      ]
+    },
+    "Alias": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:292"
+      ]
+    },
+    "Alice": {
+      "kind": "sampleValue",
+      "sites": [
+        "Core/SyntheticData.swift:342"
+      ]
+    },
+    "Allow": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/DatabaseType.swift:122"
+      ]
+    },
+    "Authorization": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/LLMClient.swift:166",
+        "Core/NoteSync/CloudAuth.swift:450",
+        "Core/NoteSync/CloudSyncService.swift:502"
+      ]
+    },
+    "BASE TABLE": {
+      "kind": "sql",
+      "sites": [
+        "Core/ObjectSearch.swift:35"
+      ]
+    },
+    "BEGIN IMMEDIATE": {
+      "kind": "sql",
+      "sites": [
+        "Core/NoteStorage/SQLiteKit.swift:382"
+      ]
+    },
+    "Bearer": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/NoteSync/CloudAuth.swift:49"
+      ]
+    },
+    "Bob": {
+      "kind": "sampleValue",
+      "sites": [
+        "Core/SyntheticData.swift:342"
+      ]
+    },
+    "Calibri": {
+      "kind": "assetName",
+      "sites": [
+        "Core/XLSXWriter.swift:113"
+      ]
+    },
+    "Carol": {
+      "kind": "sampleValue",
+      "sites": [
+        "Core/SyntheticData.swift:342"
+      ]
+    },
+    "Carthage": {
+      "kind": "pathName",
+      "sites": [
+        "Core/WorkspaceTree.swift:48"
+      ]
+    },
+    "Create Function": {
+      "kind": "sql",
+      "sites": [
+        "Core/ObjectDDL.swift:55"
+      ]
+    },
+    "Create View": {
+      "kind": "sql",
+      "sites": [
+        "Core/ObjectDDL.swift:45"
+      ]
+    },
+    "DO NOTHING": {
+      "kind": "sql",
+      "sites": [
+        "Core/DataTaskRun.swift:209"
+      ]
+    },
+    "DO UPDATE SET": {
+      "kind": "sql",
+      "sites": [
+        "Core/DataTaskRun.swift:211"
+      ]
+    },
+    "David": {
+      "kind": "sampleValue",
+      "sites": [
+        "Core/SyntheticData.swift:342"
+      ]
+    },
+    "Disable": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/DatabaseType.swift:120"
+      ]
+    },
+    "Execution Time": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:266"
+      ]
+    },
+    "Execution Time:": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:207"
+      ]
+    },
+    "FOREIGN KEY": {
+      "kind": "sql",
+      "sites": [
+        "Core/ForeignKeyNavigation.swift:103"
+      ]
+    },
+    "FORMAT JSON": {
+      "kind": "sql",
+      "sites": [
+        "Core/SQLGenerator.swift:235"
+      ]
+    },
+    "Filter": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:298"
+      ]
+    },
+    "GBase 8a": {
+      "kind": "productName",
+      "sites": [
+        "Core/DatabaseType.swift:18"
+      ]
+    },
+    "GRANT OPTION FOR": {
+      "kind": "sql",
+      "sites": [
+        "Core/SQLGenerator.swift:623"
+      ]
+    },
+    "Hash Cond": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:299"
+      ]
+    },
+    "IF EXISTS": {
+      "kind": "sql",
+      "sites": [
+        "Core/SQLGenerator.swift:458",
+        "Core/SQLGenerator.swift:563"
+      ]
+    },
+    "Index": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:85"
+      ]
+    },
+    "Index Name": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:297"
+      ]
+    },
+    "Infinity": {
+      "kind": "wireValue",
+      "sites": [
+        "Core/PostgresWireValue.swift:53"
+      ]
+    },
+    "Internal error": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/MCPProtocol.swift:59"
+      ]
+    },
+    "Invalid Request": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/MCPProtocol.swift:53"
+      ]
+    },
+    "Invalid params": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/MCPProtocol.swift:56"
+      ]
+    },
+    "Join Type": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:300"
+      ]
+    },
+    "Markdown": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/ResultClipboard.swift:24"
+      ]
+    },
+    "Method not found": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/MCPProtocol.swift:54"
+      ]
+    },
+    "NO ACTION": {
+      "kind": "sql",
+      "sites": [
+        "Core/SQLGenerator.swift:375"
+      ]
+    },
+    "NOT NULL": {
+      "kind": "sql",
+      "sites": [
+        "Core/SQLGenerator.swift:91",
+        "Core/SQLGenerator.swift:128",
+        "Core/SQLGenerator.swift:131"
+      ]
+    },
+    "Node": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:288"
+      ]
+    },
+    "Node Type": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:288"
+      ]
+    },
+    "PRIMARY KEY": {
+      "kind": "sql",
+      "sites": [
+        "Core/SQLGenerator.swift:129"
+      ]
+    },
+    "Parse error": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/MCPProtocol.swift:52"
+      ]
+    },
+    "Plan": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:259"
+      ]
+    },
+    "Plan Rows": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:310"
+      ]
+    },
+    "Plan Width": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:311"
+      ]
+    },
+    "Planning Time": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:265"
+      ]
+    },
+    "Planning Time:": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:203"
+      ]
+    },
+    "Plans": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:319"
+      ]
+    },
+    "Plugins": {
+      "kind": "pathName",
+      "sites": [
+        "Core/Plugin/PluginManifest.swift:77"
+      ]
+    },
+    "Pods": {
+      "kind": "pathName",
+      "sites": [
+        "Core/WorkspaceTree.swift:48"
+      ]
+    },
+    "Prefer": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/DatabaseType.swift:124",
+        "Core/NoteSync/CloudSyncService.swift:658"
+      ]
+    },
+    "Relation Name": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:290",
+        "Core/ExplainPlan.swift:325"
+      ]
+    },
+    "Relationship": {
+      "kind": "xmlElementName",
+      "sites": [
+        "Core/XLSXReader.swift:384"
+      ]
+    },
+    "Require": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/DatabaseType.swift:126"
+      ]
+    },
+    "SELECT 1": {
+      "kind": "sql",
+      "sites": [
+        "Core/KeepAlive.swift:36",
+        "Core/KeepAlive.swift:37"
+      ]
+    },
+    "SET DEFAULT": {
+      "kind": "sql",
+      "sites": [
+        "Core/SQLGenerator.swift:374"
+      ]
+    },
+    "SET NULL": {
+      "kind": "sql",
+      "sites": [
+        "Core/SQLGenerator.swift:373"
+      ]
+    },
+    "SHOW DATABASES": {
+      "kind": "sql",
+      "sites": [
+        "Core/Dialects.swift:481"
+      ]
+    },
+    "SHOW PROCESSLIST": {
+      "kind": "sql",
+      "sites": [
+        "Core/Dialects.swift:496"
+      ]
+    },
+    "SHOW TABLES": {
+      "kind": "sql",
+      "sites": [
+        "Core/Dialects.swift:515"
+      ]
+    },
+    "SSL encryption": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:537"
+      ]
+    },
+    "START TRANSACTION": {
+      "kind": "sql",
+      "sites": [
+        "Core/MySQLService.swift:428"
+      ]
+    },
+    "Scripts": {
+      "kind": "pathName",
+      "sites": [
+        "Core/LocalSecretStore.swift:141"
+      ]
+    },
+    "Seq Scan": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:80"
+      ]
+    },
+    "Startup Cost": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:308"
+      ]
+    },
+    "Target": {
+      "kind": "xmlElementName",
+      "sites": [
+        "Core/XLSXReader.swift:386"
+      ]
+    },
+    "Total Cost": {
+      "kind": "explainField",
+      "sites": [
+        "Core/ExplainPlan.swift:309"
+      ]
+    },
+    "Unknown error": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/MCPProtocol.swift:138"
+      ]
+    },
+    "Verify CA": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/DatabaseType.swift:128"
+      ]
+    },
+    "Verify Full": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/DatabaseType.swift:130"
+      ]
+    },
+    "Verify Identity": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/DatabaseType.swift:142"
+      ]
+    },
+    "WITH GRANT OPTION": {
+      "kind": "sql",
+      "sites": [
+        "Core/SQLGenerator.swift:614"
+      ]
+    },
+    "being accessed by other users": {
+      "kind": "serverMessageMatch",
+      "sites": [
+        "Core/DatabaseAdmin.swift:175"
+      ]
+    },
+    "bit varying": {
+      "kind": "dbType",
+      "sites": [
+        "Core/ColumnAlignment.swift:31"
+      ]
+    },
+    "broken pipe": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:450"
+      ]
+    },
+    "cannot drop the currently open database": {
+      "kind": "serverMessageMatch",
+      "sites": [
+        "Core/DatabaseAdmin.swift:179"
+      ]
+    },
+    "character varying": {
+      "kind": "dbType",
+      "sites": [
+        "Core/SyntheticSpecBuilder.swift:90",
+        "Core/TableDesign.swift:116"
+      ]
+    },
+    "close failed": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteStorage/SQLiteKit.swift:261"
+      ]
+    },
+    "connection refused": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:426"
+      ]
+    },
+    "connection reset": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:450"
+      ]
+    },
+    "cost: high": {
+      "kind": "parseToken",
+      "sites": [
+        "Core/MaintenancePlan.swift:253"
+      ]
+    },
+    "create function": {
+      "kind": "sql",
+      "sites": [
+        "Core/ObjectDDL.swift:55"
+      ]
+    },
+    "create view": {
+      "kind": "sql",
+      "sites": [
+        "Core/ObjectDDL.swift:45"
+      ]
+    },
+    "current database": {
+      "kind": "serverMessageMatch",
+      "sites": [
+        "Core/DatabaseAdmin.swift:180"
+      ]
+    },
+    "date is neither ISO8601 string nor number": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteSync/CloudSyncService.swift:854"
+      ]
+    },
+    "disregard previous": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentGuardrail.swift:668"
+      ]
+    },
+    "does not exist": {
+      "kind": "serverMessageMatch",
+      "sites": [
+        "Core/DatabaseAdmin.swift:183"
+      ]
+    },
+    "double precision": {
+      "kind": "dbType",
+      "sites": [
+        "Core/ColumnAlignment.swift:28",
+        "Core/ResultExporter.swift:360",
+        "Core/SyntheticSpecBuilder.swift:80"
+      ]
+    },
+    "host not found": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:432"
+      ]
+    },
+    "ignore all previous": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentGuardrail.swift:668"
+      ]
+    },
+    "ignore previous": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentGuardrail.swift:668"
+      ]
+    },
+    "ignore the above": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentGuardrail.swift:668"
+      ]
+    },
+    "insufficient privilege": {
+      "kind": "serverMessageMatch",
+      "sites": [
+        "Core/DatabaseAdmin.swift:189"
+      ]
+    },
+    "is being accessed by other users": {
+      "kind": "serverMessageMatch",
+      "sites": [
+        "Core/DatabaseAdmin.swift:174"
+      ]
+    },
+    "missing tool name": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/MCPSession.swift:224",
+        "Core/MCPSession.swift:226"
+      ]
+    },
+    "must be owner": {
+      "kind": "serverMessageMatch",
+      "sites": [
+        "Core/DatabaseAdmin.swift:186"
+      ]
+    },
+    "must be superuser": {
+      "kind": "serverMessageMatch",
+      "sites": [
+        "Core/DatabaseAdmin.swift:187"
+      ]
+    },
+    "name or service not known": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:432"
+      ]
+    },
+    "network is unreachable": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:444"
+      ]
+    },
+    "no encryption": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:533"
+      ]
+    },
+    "no message": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteStorage/SQLiteKit.swift:231"
+      ]
+    },
+    "no response": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteSync/CloudAuth.swift:652"
+      ]
+    },
+    "no result": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteStorage/NoteDatabase.swift:668"
+      ]
+    },
+    "no route to host": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:444"
+      ]
+    },
+    "nodename nor servname": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:432"
+      ]
+    },
+    "non-http response": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteSync/CloudAuth.swift:660"
+      ]
+    },
+    "note row has no usable uuid": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteStorage/NoteDatabase.swift:2006"
+      ]
+    },
+    "order by": {
+      "kind": "sql",
+      "sites": [
+        "Core/RowBrowsing.swift:122",
+        "Core/RowBrowsing.swift:183",
+        "Core/RowBrowsing.swift:184"
+      ]
+    },
+    "permission denied": {
+      "kind": "serverMessageMatch",
+      "sites": [
+        "Core/DatabaseAdmin.swift:188"
+      ]
+    },
+    "reminder row has no live owner": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteStorage/NoteDatabase.swift:1913"
+      ]
+    },
+    "reminder row has no usable uuid": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteStorage/NoteDatabase.swift:1899"
+      ]
+    },
+    "statement timed out; sending a cancel to the server": {
+      "kind": "logOnly",
+      "sites": [
+        "Core/MySQLService.swift:364"
+      ]
+    },
+    "the connection is closed": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteStorage/SQLiteKit.swift:437"
+      ]
+    },
+    "the legacy notes file exists but cannot be read": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/Note.swift:380",
+        "Core/NoteStorage/NoteLibraryMigration.swift:110"
+      ]
+    },
+    "the notes file exists but cannot be read": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/Note.swift:225"
+      ]
+    },
+    "timed out": {
+      "kind": "driverMessage",
+      "sites": [
+        "Core/ConnectionFailure.swift:435"
+      ]
+    },
+    "timestamp with time zone": {
+      "kind": "dbType",
+      "sites": [
+        "Core/SyntheticSpecBuilder.swift:86",
+        "Core/TableDesign.swift:125",
+        "Core/TableDesign.swift:126"
+      ]
+    },
+    "timestamp without time zone": {
+      "kind": "dbType",
+      "sites": [
+        "Core/SyntheticSpecBuilder.swift:86"
+      ]
+    },
+    "todo row has no usable uuid": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteStorage/NoteDatabase.swift:1955"
+      ]
+    },
+    "tools/call before initialize": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/MCPSession.swift:219"
+      ]
+    },
+    "unexpected response message": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/MCPSession.swift:131"
+      ]
+    },
+    "unsupported JSON value": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/NoteBody.swift:80"
+      ]
+    },
+    "yyyy-MM-dd HH:mm": {
+      "kind": "formatPattern",
+      "sites": [
+        "Core/DataTask.swift:397",
+        "Core/DataTaskPresentation.swift:119",
+        "Core/MemoryGovernance.swift:158"
+      ]
+    },
+    "yyyy-MM-dd HH:mm:ss": {
+      "kind": "formatPattern",
+      "sites": [
+        "Core/AgentAuditPresentation.swift:138",
+        "Core/DataTaskPresentation.swift:150",
+        "Core/SQLArchive.swift:300"
+      ]
+    },
+    "yyyy-MM-dd HH:mm:ss.SSSSSS": {
+      "kind": "formatPattern",
+      "sites": [
+        "Core/SessionMonitor.swift:154"
+      ]
+    },
+    "yyyy-MM-dd HH:mm:ss.SSSSSSxx": {
+      "kind": "formatPattern",
+      "sites": [
+        "Core/SessionMonitor.swift:151"
+      ]
+    },
+    "yyyy-MM-dd HH:mm:ss.SSSxx": {
+      "kind": "formatPattern",
+      "sites": [
+        "Core/SessionMonitor.swift:152"
+      ]
+    },
+    "yyyy-MM-dd HH:mm:ssxx": {
+      "kind": "formatPattern",
+      "sites": [
+        "Core/SessionMonitor.swift:153"
+      ]
+    }
+  }
+}
