@@ -39,6 +39,8 @@ if ! "$PGBIN/pg_ctl" -D "$DATADIR" status >/dev/null 2>&1; then
     "$PGBIN/pg_ctl" -D "$DATADIR" -o "-p ${PORT} -k /tmp" -l /tmp/doyah-copy-pg.log start >/dev/null 2>&1
     STARTED=1
     sleep 2
+    # 起不来就停手（L-189）：不看启动结果的话，脚本会连上同机**另一个克隆**的实例取读数（假绿）
+    doyah_test_env_require_local_cluster "$DATADIR" "$PORT" /tmp/doyah-copy-pg.log
 fi
 doyah_test_env_export_connection
 PGDATABASE="${DOYAH_TEST_ADMIN_DB}" "$CLI" -c "DROP DATABASE IF EXISTS ${DB} WITH (FORCE);" >/dev/null 2>&1

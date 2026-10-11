@@ -80,7 +80,8 @@
 #
 #   doyah_test_env_summary                 一行目标摘要（写进脚本日志）
 #   doyah_test_env_export_connection       导出 PGHOST/PGPORT/PGUSER/PGPASSWORD/PGSSLMODE
-#   doyah_test_env_start_cluster           本地模式 initdb+起集群；远程模式 no-op
+#   doyah_test_env_start_cluster           本地模式 initdb+起集群（起不来即拒绝开工）；远程模式 no-op
+#   doyah_test_env_require_local_cluster   自查「本数据目录自己的实例在跑」（L-189；远程模式 no-op）
 #   doyah_test_env_stop_cluster            只关「本函数起的」那一份，且只在本地模式
 #   doyah_test_env_scratch_name NAME       -> 加前缀的临时库名
 #   doyah_test_env_scratch_db NAME         本地：DROP+CREATE 该库并把 PGDATABASE 指过去；远程：拒绝
@@ -102,6 +103,7 @@
 # ---- 退出码 ---------------------------------------------------------------
 DOYAH_TEST_EXIT_CONFIG=78   # 配置不全 / 前后矛盾（缺哪项在消息里指名）
 DOYAH_TEST_EXIT_REFUSE=77   # 安全拒绝（业务库 / 远程模式下自建库）
+DOYAH_TEST_EXIT_NO_CLUSTER=76   # 本机集群起不来（L-189：不用别人的实例取读数）
 
 # 本文件在 <工程根>/Scripts/lib/ 下 —— 工程根由**本文件位置**推出，不依赖调用方的 cwd
 # （有的脚本先 cd 到工程根，有的不 cd；连接信息不该因此变样）。
@@ -257,6 +259,7 @@ doyah_test_env_export_connection() {
 }
 
 # 本地模式：数据目录没初始化就 initdb，实例没跑就起；远程模式：什么都不做。
+# **起不来就拒绝开工**：起实例之后必须自查「本数据目录自己的实例真在跑」（L-189）。
 doyah_test_env_start_cluster() {
     if [ "${DOYAH_TEST_MODE}" = "remote" ]; then
         return 0
@@ -276,8 +279,38 @@ doyah_test_env_start_cluster() {
             -o "-p ${DOYAH_TEST_PGPORT} -k /tmp" -l /tmp/doyah-test-env-pg.log start >/dev/null 2>&1
         DOYAH_TEST_CLUSTER_STARTED_BY_US="1"
         sleep 2
+        doyah_test_env_require_local_cluster
     fi
     return 0
+}
+
+# 自查「**本数据目录自己的**实例在跑吗」—— 起实例之后必须调用它（L-189）。
+#
+# 为什么需要：`pg_ctl start` 失败时若没人看它，脚本会继续用 `127.0.0.1:<端口>` 连库，而同机
+# 常有**别的克隆**的集群占着同一个端口（实测：那个实例已跑了 5 天 6 小时）⇒ 脚本读到的是
+# **别人的数据目录**、断言照旧全绿 —— 假绿。而「结论是在哪个库上取的」正是本文件存在的理由。
+# 实测：8 个真库脚本里 7 个犯过这一条（`test-inline-edit` / `test-schema-diff` /
+# `test-data-import` / `test-copy-import` / `test-csv-encoding` / `test-table-structure` /
+# `test-table-index-fk`），只有 `test-session-management.sh` 自查。
+#
+# 判据（场景注入）：端口被别的实例占着时，每个脚本必须**非零退出**并点名「自建实例没起来」。
+doyah_test_env_require_local_cluster() {
+    if [ "${DOYAH_TEST_MODE}" = "remote" ]; then
+        return 0
+    fi
+    local datadir="${1:-${DOYAH_TEST_LOCAL_DATADIR}}"
+    local port="${2:-${DOYAH_TEST_PGPORT}}"
+    local logfile="${3:-/tmp/doyah-test-env-pg.log}"
+    if "${DOYAH_TEST_PG_BIN}/pg_ctl" -D "${datadir}" status >/dev/null 2>&1; then
+        return 0
+    fi
+    echo "  ❌ 自建实例没起来（L-189）—— 本脚本停手，不用别人的实例取读数。"
+    echo "     · 数据目录：${datadir}"
+    echo "     · 端口：${port}"
+    echo "     · 启库日志：${logfile}"
+    echo "     · 谁占着这个端口：lsof -nP -iTCP:${port} -sTCP:LISTEN"
+    echo "     · 处置：停掉占端口的实例（多为别的克隆遗留的测试集群）后重跑本脚本。"
+    exit "${DOYAH_TEST_EXIT_NO_CLUSTER}"
 }
 
 # 只关「我们起的」那一份，且只在本地模式。
