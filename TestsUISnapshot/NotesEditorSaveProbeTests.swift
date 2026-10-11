@@ -112,12 +112,28 @@ final class NotesEditorSaveProbeTests: XCTestCase {
     /// 画的尺寸：与清单里那两张空态图同规格（正文编辑器满宽）。
     private static let size = CGSize(width: 900, height: 560)
 
-    /// 按钮落在图上哪一带：**顶部编辑工具条那一带**（片 `N2-3b` 把它从底带搬上来的）。
-    /// 按本机实测（2× 渲染 ⇒ 1120 px 高）：编辑器内边距 16pt ⇒ 工具条 ≈ 16…48pt ⇒ **32…96px**；
-    /// 它下面那一行（标题框）的顶边在 ~130px 之下 ⇒ 取 [0, 100) 只框住工具条，
-    /// 不碰标题框里那个字（碰上了的话「有内容亮」会被标题里那个字判绿 —— 量的就不是按钮了）。
+    /// 按钮落在图上哪一带：**正文区顶部那一带**。
+    ///
+    /// 改前（片 `N2-3b` 起）这一带里只有**顶部编辑工具条**（保存键 + 行内四枚 + 来源提示）；
+    /// **片 `R3-T` 起正文区第一行 = title 区**（`[新建][保存][标题输入]`），工具条下移一行 ⇒
+    /// 这一带现在的住户是 title 区那一行。所以「保存那枚有没有文字」「灰 / 亮」两条像素判据的
+    /// **量程都收到了它自己那一格**（`saveKeyWindowFromX` / `saveKeyWindowToX`，取值 = 布局事实）；
+    /// 本块常量仍是「这一带从宿主顶边起多高」= 两枚按钮所在的那一行（2× 渲染 ⇒ 0…100px = 0…50pt）。
     private static let buttonBandFromTop = 0
     private static let buttonBandToTop = 100
+
+    /// **保存那一枚自己的 x 窗**（px，2× 渲染）—— 片 `R3-T` 之后这一带里**不再只有它一枚**：
+    /// 正文区第一行 = `[新建][保存][标题输入]`（契约 `FR-NOTEUI-09`：人类主人口径「左侧目前是空着，
+    /// 可以放那个新建/保存等按钮」），于是「这枚按钮上没有文字」这条**像素**判据必须收到**它自己
+    /// 那一格**上量，否则 `新建` 的图标、标题框里的占位字与保存状态字都会被算进跨度里
+    /// （**改前实测 203px / x 131…333** —— 那正是这一带换了住户的症状，不是那段代码坏了）。
+    ///
+    /// 取值 = 布局事实（不是调出来的数）：正文区内边距 `Spacing.l` = 16pt → `新建` 命中区
+    /// `Metrics.toolbarButtonWidth` = 28pt → 间距 `Spacing.s` = 8pt ⇒ **保存那一格 x ∈ [52, 80)pt**
+    /// = **[104, 160)px**。口径与 `NotesEditorView.saveEntry` 那一段注释同源
+    /// （「换排版会动这条带，届时按实测重定」）。
+    private static let saveKeyWindowFromX = 104
+    private static let saveKeyWindowToX = 160
 
     @MainActor
     private func makeHost() -> Host {
@@ -166,39 +182,47 @@ final class NotesEditorSaveProbeTests: XCTestCase {
             "清空之后画出来与空态**不是同一张图** ⇒ 「删回灰」这一条不成立"
         )
 
-        // ① 空着灰：按钮那一带只有灰墨水。
-        let emptyBand = bandDarkest(empty)
+        // ① 空着灰：**「保存」那一格**里只有灰墨水。
+        //
+        // **量程收到它自己那一格**（片 `R3-T`）：正文区第一行现在是 `[新建][保存][标题输入]`，
+        // 整带「最暗的那一笔」已经换成 `新建` 的图标（实测量到 64）—— 判据的口径一字未改
+        // （「空编辑器上这枚按钮不减淡」），量的对象跟着排版走（`saveKeyWindowFromX/ToX`）。
+        let emptyKey = bandDarkest(empty, fromX: Self.saveKeyWindowFromX, toX: Self.saveKeyWindowToX)
         XCTAssertGreaterThanOrEqual(
-            emptyBand, 80,
-            "空编辑器上按钮那一带出现了深墨水（最暗亮度 \(emptyBand)，门槛 ≥ 80，实测基准 91）"
+            emptyKey, 80,
+            "空编辑器上「保存」那一格里出现了深墨水（最暗亮度 \(emptyKey)，门槛 ≥ 80，实测基准 91）"
                 + " ⇒ 「保存」在空编辑器上不减淡（队列 L-50 的回归）"
         )
 
-        // ② 有内容亮：同一带里出现深墨水，且变的正是按钮那一带。
-        let typedBand = bandDarkest(typed)
+        // ② 有内容亮：同一格里出现深墨水，且变的正是那一格。
+        let typedKey = bandDarkest(typed, fromX: Self.saveKeyWindowFromX, toX: Self.saveKeyWindowToX)
         XCTAssertLessThanOrEqual(
-            typedBand, 60,
-            "填了字之后按钮那一带**没有**变深（最暗亮度 \(typedBand)，门槛 ≤ 60，实测基准 36）"
+            typedKey, 60,
+            "填了字之后「保存」那一格里**没有**变深（最暗亮度 \(typedKey)，门槛 ≤ 60，实测基准 36）"
                 + " ⇒ 「保存」不会亮（有内容却存不下去）"
         )
-        let buttonCluster = changedPixels(
-            empty, typed, fromTop: Self.buttonBandFromTop, toTop: Self.buttonBandToTop
+        // 反证方向（片 `R3-T` 按新排版重定）：**同一格里**那枚图标必须真的从灰变深 ——
+        // 空态的最暗必须**亮于**有内容态的最暗，否则上面那两条可能量的是两个不同的东西。
+        XCTAssertGreaterThan(
+            emptyKey, typedKey,
+            "「保存」那一格的墨色没有随内容变化（空态最暗 \(emptyKey) / 有内容态最暗 \(typedKey)）"
+                + " ⇒ 这两遍量的不是同一枚按钮"
+        )
+        let keyCluster = changedPixels(
+            empty, typed,
+            fromTop: Self.buttonBandFromTop, toTop: Self.buttonBandToTop,
+            fromX: Self.saveKeyWindowFromX, toX: Self.saveKeyWindowToX
         )
         XCTAssertGreaterThanOrEqual(
-            buttonCluster.count, 2000,
-            "按钮那一带（y ∈ [\(Self.buttonBandFromTop), \(Self.buttonBandToTop))）只变了"
-                + " \(buttonCluster.count) 个像素"
-                + "（实测基准 5028）⇒ 「亮 / 灰」的变化没落在按钮上，判的是别的东西"
-        )
-        // 反证方向：变化**不许只**发生在别处（标题输入框那一域另外还有变化，那是我们填进去的那个字）。
-        XCTAssertGreaterThan(
-            buttonCluster.count, changedPixels(empty, typed, fromTop: 0).count - buttonCluster.count,
-            "变化主要落在按钮之外 ⇒ 这一条判的不是按钮"
+            keyCluster.count, 400,
+            "「保存」那一格（x ∈ [\(Self.saveKeyWindowFromX), \(Self.saveKeyWindowToX))）只变了"
+                + " \(keyCluster.count) 个像素（门槛 400，实测基准见本用例打印）"
+                + " ⇒ 「亮 / 灰」的变化没落在按钮上，判的是别的东西"
         )
 
         // 三张图留档（`.build/`，已在 `.gitignore`）：判据是像素，图是给人复看的。
-        print("📷 notes-save-01-empty 最暗亮度 \(emptyBand)")
-        print("📷 notes-save-02-typed 最暗亮度 \(typedBand) ／ 按钮带差异 \(buttonCluster.count) 像素")
+        print("📷 notes-save-01-empty 那一格最暗亮度 \(emptyKey)")
+        print("📷 notes-save-02-typed 那一格最暗亮度 \(typedKey) ／ 那一格差异 \(keyCluster.count) 像素")
         print("📷 notes-save-03-cleared 与空态差异 0 像素")
     }
 
@@ -435,13 +459,17 @@ final class NotesEditorSaveProbeTests: XCTestCase {
     /// 「**没有文字**」这件事在像素上量到的就是它：改前「图标 + 保存」两个字 ⇒ 深墨水铺满一个字宽
     /// 有余；改后只剩一枚图标 ⇒ 跨度收在一枚图标之内。四个门槛各打一行读数（60 / 90 / 120 / 150），
     /// 便于复看「门槛压在哪儿、为什么压在那儿」。
-    private func darkInkSpan(_ rep: NSBitmapImageRep, below threshold: Int) -> (from: Int, to: Int, count: Int) {
+    private func darkInkSpan(
+        _ rep: NSBitmapImageRep, below threshold: Int, fromX: Int? = nil, toX: Int? = nil
+    ) -> (from: Int, to: Int, count: Int) {
         guard let data = rep.bitmapData else { return (0, 0, 0) }
         var from = Int.max
         var to = 0
         var count = 0
+        let startX = max(0, fromX ?? 0)
+        let endX = min(toX ?? rep.pixelsWide, rep.pixelsWide)
         for y in Self.buttonBandFromTop..<min(Self.buttonBandToTop, rep.pixelsHigh) {
-            for x in 0..<rep.pixelsWide {
+            for x in startX..<endX {
                 let index = y * rep.bytesPerRow + x * rep.samplesPerPixel
                 let value = luminance(Int(data[index]), Int(data[index + 1]), Int(data[index + 2]))
                 if value < threshold {
@@ -562,11 +590,23 @@ final class NotesEditorSaveProbeTests: XCTestCase {
                 + " —— `FR-EXEC-13` / 台账第 27 条「工具·操作类控件禁文字按钮」"
         )
 
+        // **量程收到「保存」那一格**（片 `R3-T`）：这一带现在的住户是 `[新建][保存][标题输入]`，
+        // 整带量出来的跨度会把 `新建` 的图标与标题框里的字算进来（改前实测 203px / x 131…333）。
+        // 口径与阈值都不变，只是量程跟着排版走（`saveKeyWindowFromX` / `saveKeyWindowToX`）。
         for threshold in [60, 90, 120, 150] {
-            let sample = darkInkSpan(rep, below: threshold)
+            let sample = darkInkSpan(
+                rep, below: threshold, fromX: Self.saveKeyWindowFromX, toX: Self.saveKeyWindowToX
+            )
             print("🖼 N2-SV ①-c 亮度 < \(threshold) 的墨水：跨度 \(sample.count) 像素（x \(sample.from)…\(sample.to)）")
         }
-        let ink = darkInkSpan(rep, below: Self.saveInkThreshold)
+        let wholeBand = darkInkSpan(rep, below: Self.saveInkThreshold)
+        print(
+            "🖼 N2-SV ①-c 对照读数（整带，含 `新建` 与标题框）：跨度 \(wholeBand.count) 像素"
+                + "（x \(wholeBand.from)…\(wholeBand.to)）"
+        )
+        let ink = darkInkSpan(
+            rep, below: Self.saveInkThreshold, fromX: Self.saveKeyWindowFromX, toX: Self.saveKeyWindowToX
+        )
         XCTAssertGreaterThan(
             ink.count, 0,
             "工具条那一带里一枚图标都量不到深墨水（亮度门槛 \(Self.saveInkThreshold)）"
@@ -1235,15 +1275,18 @@ final class NotesEditorSaveProbeTests: XCTestCase {
     /// 容差 8（RGB 绝对值之和）：抗锯齿与字体光栅化在两遍之间本来就可能有 1~2 的差，
     /// 而「灰 → 深」这种变化是几十上百的量级（实测 118 → 33）。
     private func changedPixels(
-        _ lhs: NSBitmapImageRep, _ rhs: NSBitmapImageRep, fromTop: Int, toTop: Int? = nil
+        _ lhs: NSBitmapImageRep, _ rhs: NSBitmapImageRep, fromTop: Int, toTop: Int? = nil,
+        fromX: Int? = nil, toX: Int? = nil
     ) -> [(x: Int, y: Int, left: Int, right: Int)] {
         guard let lData = lhs.bitmapData, let rData = rhs.bitmapData else { return [] }
         let lRow = lhs.bytesPerRow, rRow = rhs.bytesPerRow
         let spp = lhs.samplesPerPixel
         var out: [(Int, Int, Int, Int)] = []
         let end = min(toTop ?? lhs.pixelsHigh, lhs.pixelsHigh)
+        let startX = max(0, fromX ?? 0)
+        let endX = min(toX ?? lhs.pixelsWide, lhs.pixelsWide)
         for y in fromTop..<end {
-            for x in 0..<lhs.pixelsWide {
+            for x in startX..<endX {
                 let li = y * lRow + x * spp
                 let ri = y * rRow + x * spp
                 let lr = Int(lData[li]), lg = Int(lData[li + 1]), lb = Int(lData[li + 2])
@@ -1259,14 +1302,19 @@ final class NotesEditorSaveProbeTests: XCTestCase {
 
     /// 按钮那一带里**最暗的墨水亮度**（0 = 纯黑，255 = 纯白）。
     ///
-    /// 为什么用「最暗」而不是平均：这一带（**顶部编辑工具条**，片 `N2-3b` 之后的位置）里
-    /// 除了按钮还有一句灰色的来源提示（`L(.notesSourceHint)`），平均会把两者的差摊平；
-    /// 而「灰着 / 亮着」的区别恰恰就在**最深的那一笔**上 —— 减淡的标签画不出深墨水。
-    private func bandDarkest(_ rep: NSBitmapImageRep) -> Int {
+    /// 为什么用「最暗」而不是平均：这一带里除了按钮还有别的浅色墨水（片 `N2-3b` 那句话的来源提示
+    /// `L(.notesSourceHint)`；片 `R3-T` 之后还有 `新建` 的图标与标题框里的占位字），平均会把两者的
+    /// 差摊平；而「灰着 / 亮着」的区别恰恰就在**最深的那一笔**上 —— 减淡的标签画不出深墨水。
+    ///
+    /// `fromX` / `toX` 给定时只在那一段列里量（`R3-T` 起用它把量程收到**保存那一格**上，见
+    /// `saveKeyWindowFromX` / `saveKeyWindowToX`）。
+    private func bandDarkest(_ rep: NSBitmapImageRep, fromX: Int? = nil, toX: Int? = nil) -> Int {
         guard let data = rep.bitmapData else { return 255 }
         var darkest = 255
+        let startX = max(0, fromX ?? 0)
+        let endX = min(toX ?? rep.pixelsWide, rep.pixelsWide)
         for y in Self.buttonBandFromTop..<min(Self.buttonBandToTop, rep.pixelsHigh) {
-            for x in 0..<rep.pixelsWide {
+            for x in startX..<endX {
                 let index = y * rep.bytesPerRow + x * rep.samplesPerPixel
                 let value = luminance(
                     Int(data[index]), Int(data[index + 1]), Int(data[index + 2])

@@ -824,10 +824,17 @@ struct NotesContainerTreeView: View {
     }
 }
 
-/// 笔记正文（**顶部编辑工具条** + 标题 / 标签 / 正文）。
+/// 笔记正文（**title 区** + 顶部编辑工具条 + 标签 / 正文）。
 ///
-/// 「保存」不在本视图里 —— 片 `N2-3b` 把它搬进了 `NotesEditorToolbar`（本视图的第一行子视图）；
-/// 「新建」也不在这里（进了顶栏 `NotesAreaView`，见下方注释）。
+/// **正文区第一行 = title 区**（片 `R3-T` · 契约 `FR-NOTEUI-07` + `-09`）：
+///   ① `FR-NOTEUI-07`「正文区顶部＝title 区（标题输入为正文第一行）」—— 标题输入是**正文区的
+///      第一行**（改前它是工具栏之下的一条独立 `TextField`）；
+///   ② `FR-NOTEUI-09`「title 区**最左**空位＝新建 / 保存等按钮（图标 + 悬停 tips）」—— 改前
+///      正文区顶部左侧什么都没有（「新建」住在顶栏 `NotesAreaView` 的增删查改行、「保存」住在
+///      `NotesEditorToolbar`）。
+/// 人类主人 2026-10-08 原话（`T-20261008-047` 第二节 B 段逐字）：「**笔记正文区最顶部是 title 区**，
+/// 最右侧是笔记和代办的切换图标，已实现。**左侧目前是空着，可以放那个新建/保存等按钮**」。
+/// 判据、读数与两条边界都写在下面 `titleArea` 那段注释里。
 struct NotesEditorView: View {
 
     @EnvironmentObject private var appState: AppState
@@ -837,19 +844,21 @@ struct NotesEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
+            // **正文区第一行 = title 区**（片 `R3-T`）：最左 = 新建 / 保存，中间 = 标题输入。
+            titleArea
             // **顶部编辑工具条**（片 `N2-3b`）：编辑态下，动作住在编辑面**之上**的一条行里
             // —— 与 SQL 编辑区同一条设计语言（`QueryEditorView` 里 `QueryToolbar` 就画在编辑区之上）。
             // **只在 `.edit` 出现**：预览态的正文只读，「保存」无处可用（画一枚永远灰着的按钮
             // 就是 `L-50` 那一课）。进编辑那条路见 `NotePreviewBody` 那一支上的双击。
+            // **本片之后它在 title 区之下**：正文区第一行让给了 title 区（`FR-NOTEUI-07`），
+            // 工具条仍是「画在编辑面之上、贴在正文上边」的那一条（`N2-3b` 判据一字未改）。
             if appState.editorMode == .edit {
                 NotesEditorToolbar(controller: richController)
                 Divider()
             }
             // **栏头搬走了**（队列 `L-184` 三栏重排）：「笔记」这个标题与条数进了中栏栏头
-            // （`NotesListView`），「新建」进了顶栏（`NotesAreaView`）—— 同一个窗口里不许出现
-            // 两处「新建」，否则两个按钮的灰 / 亮迟早各有一套判据（`L-50` 的老毛病）。
-            TextField(L(.notesUntitled), text: $appState.noteEditorTitle)
-                .textFieldStyle(.roundedBorder)
+            // （`NotesListView`），「新建」进了**正文区顶部 title 区**（本片 `R3-T`）—— 同一个
+            // 窗口里不许出现两处「新建」，否则两个按钮的灰 / 亮迟早各有一套判据（`L-50` 的老毛病）。
             TextField(L(.notesTagsPlaceholder), text: $appState.noteEditorTags)
                 .textFieldStyle(.roundedBorder)
                 .font(Theme.font(.caption))
@@ -906,6 +915,112 @@ struct NotesEditorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.surface(.content))
     }
+
+    // MARK: - title 区（正文区第一行 · 片 `R3-T` · 契约 `FR-NOTEUI-07` + `-09`）
+
+    /// **正文区第一行 = title 区**（契约 `FR-NOTEUI-07`「正文区顶部＝title 区（标题输入为正文第一行）」
+    /// + `-09`「title 区**最左**空位＝新建 / 保存等按钮（图标 + 悬停 tips）」）。
+    ///
+    /// 一格三件事，从左到右（判据量的是这条 x 序 + 它落在正文区**第一行**）：
+    ///   ① **最左 = 新建 / 保存**（`NotesNewEntry` + `saveEntry`）—— 两枚都是**纯图标 + 悬停 tips**
+    ///      （`FR-EXEC-13` / `FR-NOTEUI-15` 那条「工具·操作类控件一律图标 + tips，禁文字按钮」）；
+    ///   ② **中间 = 标题输入**（`notes-editor-title`）—— `.textFieldStyle(.plain)` + `Theme.font(.title)`：
+    ///      它是「正文区顶部那一行」，不是一条带框的表单行（改前它在工具栏之下、带 `.roundedBorder`）；
+    ///   ③ 最右这一格**留空**：`FR-NOTEUI-08`（title 区最右＝笔记/待办切换图标）**已实现并核**，
+    ///      它那两枚图标仍挂在顶栏行末（`NotesAreaView.moduleSwitch`，由 `NotesLayoutProbeTests`
+    ///      的源锚点与「分段控件 0 枚」判据钉住）—— 本片**不搬**它：把一个已达成条目改红，
+    ///      换不来契约里没有的新东西（x 序那一半仍量得到，见下）。
+    ///
+    /// **两条边界（如实登记 · 不许拿「代码里有」替代读数）**：
+    ///   · **标题输入与正文不是同一个文本视图**：标题仍是独立的 `TextField`，正文是
+    ///     `NotesRichTextEditor` / `NotePreviewBody`。契约那条要的是「正文区**顶部第一行** = title 输入」
+    ///     （`T-20261008-047` 判据 4 逐字：「正文区顶部第一行 = title 输入；其最右 = 笔记/待办切换图标；
+    ///     其最左 = 新建/保存按钮」）—— 本片按这个口径落，**不**把标题并进正文那个 `NSTextView`
+    ///     （那会动存储口径与 `FR-RT-10/11` 的权威源，属另一件事）；
+    ///   · **最左那两枚是 SwiftUI `Button`**，在离屏宿主里**不落到 `NSView`**（`NotesEditorSaveProbeTests`
+    ///     头注释实测：`NSButton` 0 枚）⇒ 它们的矩形量不到：x 序那一半由**源锚点**（组在标题框之前）
+    ///     + 标题框 `minX` 的实测读数合成，两条一起看才作数
+    ///     （`TestsUISnapshot/NotesTitleAreaProbeTests.swift`）。
+    private var titleArea: some View {
+        HStack(spacing: Spacing.s) {
+            NotesNewEntry()
+            saveEntry
+            TextField(L(.notesUntitled), text: $appState.noteEditorTitle)
+                .textFieldStyle(.plain)
+                .font(Theme.font(.title))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("notes-editor-title")
+        }
+        .accessibilityIdentifier("notes-title-area")
+    }
+
+    /// **title 区最左那一组里的「保存」**（片 `N2-SV` 的形态一字未改：纯图标 + `.help(L(.notesSave))`
+    /// + 同一条 `.disabled` 判据 + 同一条动作 `saveNoteFromEditor()` + 同一个标识）。
+    ///
+    /// **本片只搬了它的位置**（`NotesEditorToolbar` → title 区最左，`FR-NOTEUI-09` 要的正是这个落点）；
+    /// 「同一个窗口里只许有一个入口」这条纪律（`Tests/NotePresentationTests` 对「新建」的判法）
+    /// 对「保存」同样成立 ⇒ **搬而不是加**。形态 / 动作 / 灰亮判据一字未动，
+    /// `FR-NOTEUI-15` 的形态口径与 `T-20261010-167` 的核读结论都还成立。
+    /// **@ 契约口径的一处冲突（如实登记）**：`FR-NOTEUI-15` 括号里那句「位置仍在工具条」写于
+    /// `FR-NOTEUI-09`（title 区最左＝新建/保存）**之前**；11 号本条与 09 两条并存时，09 的落点更具体
+    /// ⇒ 本片按 09 落，并把这条冲突原样交给前门 / 组长裁（未擅自改契约）。
+    private var saveEntry: some View {
+        HStack(spacing: Spacing.s) {
+            Button {
+                Task { await appState.saveNoteFromEditor() }
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+            }
+            .help(L(.notesSave))
+            .keyboardShortcut(.defaultAction)
+            // 空编辑器上不许「可点却静默无反应」（队列 L-50）：判据属性是**唯一出处**，
+            // 与 `saveNoteFromEditor()` 的第一句内容守卫同一条判断（口径 = 灰着）。
+            // 许可那一档故意不灰 —— Pro 档点下去要给「本档不含笔记」那句人话。
+            .disabled(!appState.noteEditorHasContent)
+            .accessibilityIdentifier("notes-editor-save")
+            // **自动保存的状态**（片 `N2-4`）：只有「有话说」的那三态才画（`.idle` 不占地方）。
+            if let key = appState.noteSaveState.languageKey {
+                Text(L(key))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(saveStateColor)
+                    .help(appState.noteSaveState.failureReason ?? L(key))
+                    .accessibilityIdentifier(NoteAutosave.statusIdentifier)
+            }
+        }
+    }
+
+    /// 保存状态那一枚的颜色（口径与工具条里那一份逐字相同）：**失败换警示色**，
+    /// 「等待落库 / 正在写库」两档是辅助色 —— 它们不是错误，不该抢「保存」那枚的注意力。
+    private var saveStateColor: Color {
+        appState.noteSaveState.isFailure ? Theme.status(.warning) : Theme.text(.secondary)
+    }
+}
+
+/// **「新建」的唯一入口**（人类主人令 `T-20261007-004` 第三节第 1 条 + 本片 `R3-T` 的搬位）：
+/// 建什么由**当前那一屏**决定（笔记 = `beginNewNote()` / 待办 = `beginNewTodo()`）。
+///
+/// **两个落点、同一屏只出现一次**：
+///   · **笔记屏** = 正文区顶部 title 区的最左（本片搬进来的 —— 人类主人原话「左侧目前是空着，
+///     可以放那个新建/保存等按钮」）；
+///   · **待办屏** = 左区顶部增删查改行（待办屏没有 title 区，它的「增」仍在那一行里）。
+///
+/// 形态 = `ToolbarIconButton`（纯图标 + 悬停 tips，与 SQL 编辑区工具条同一套 —— `N2-2` 口径）。
+/// 文案键与 `accessibilityIdentifier` 只写在这一处：`Tests/NotePresentationTests` 数
+/// `L(.notesNew)` 与 `"notes-new"` 各**一处** —— 那是「同一个窗口里只许有一个『新建』入口」
+/// 这条纪律的机器判据（`L-50` 的老毛病：两处入口迟早有两套灰 / 亮判据）。
+struct NotesNewEntry: View {
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        ToolbarIconButton(systemName: "plus", help: L(.notesNew)) {
+            switch appState.notesModule {
+            case .notes: appState.beginNewNote()
+            case .todos: appState.beginNewTodo()
+            }
+        }
+        .accessibilityIdentifier("notes-new")
+    }
 }
 
 /// **顶部编辑工具条**（片 `N2-3b`「顶部编辑工具条」· 人类主人令 `T-20261007-004` 第 4 条）。
@@ -954,32 +1069,12 @@ struct NotesEditorToolbar: View {
 
     var body: some View {
         HStack(spacing: Spacing.s) {
-            Button {
-                Task { await appState.saveNoteFromEditor() }
-            } label: {
-                // **纯图标**（片 `N2-SV`）：没有 `Text`、没有 `Label`、没有 `.labelStyle` ——
-                // 名字走下面那一句 `.help(L(.notesSave))`（即时、与全 app 同一条口径，见头注释）。
-                Image(systemName: "square.and.arrow.down")
-            }
-            .help(L(.notesSave))
-            .keyboardShortcut(.defaultAction)
-            // 空编辑器上不许「可点却静默无反应」（队列 L-50）：判据属性是**唯一出处**，
-            // 与 `saveNoteFromEditor()` 的第一句内容守卫同一条判断（口径 = 灰着）。
-            // 许可那一档故意不灰 —— Pro 档点下去要给「本档不含笔记」那句人话。
-            .disabled(!appState.noteEditorHasContent)
-            .accessibilityIdentifier("notes-editor-save")
-            // **自动保存的状态**（片 `N2-4`）：只有「有话说」的那三态才画 ——
-            // `.idle`（没有未落库的改动）**不占地方**：常态下多一行永远亮着的字会被读成
-            // 「这行本来就长这样」，反而看不出「现在真的有东西没存」（与 `L-50` 同一条口径）。
-            // 三态各有各的话（键在语言表里，中英齐）；失败那一档换警示色、悬停给原因
-            // —— 验收判据⑥「自动保存的失败路径要有可见线索」在界面上的那一份。
-            if let key = appState.noteSaveState.languageKey {
-                Text(L(key))
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(saveStateColor)
-                    .help(appState.noteSaveState.failureReason ?? L(key))
-                    .accessibilityIdentifier(NoteAutosave.statusIdentifier)
-            }
+            // **「保存」本片之后不在这条工具条里**（片 `R3-T` · 契约 `FR-NOTEUI-09`）：
+            // 它连同「保存状态」那一格搬到了 `NotesEditorView` 的 **title 区最左**
+            // （正文区第一行）—— 人类主人原话「左侧目前是空着，可以放那个新建/保存等按钮」。
+            // **搬而不是加**（同一个窗口里只许有一个入口），形态 / 动作 / 灰亮判据一字未改，
+            // 只是住址从这一行换到了上面那一行。契约 `FR-NOTEUI-15` 括号里那句「位置仍在工具条」
+            // 与 09 有冲突，已如实登记在 `NotesEditorView.saveEntry` 的注释里，交前门 / 组长裁。
             // **行内四枚**（片 `WY-1b1` · 派单 `T-20261009-045` 第 ①②③④ 项）：粗体 / 斜体 /
             // 下划线 / 笔刷（荧光笔·淡黄）。形态与「保存」**同一档**（纯图标 + 悬停名字，
             // 工具条上不许出现文字按钮 —— `FR-EXEC-13` 那条口径）；作用在**选区**，选区为空时
@@ -1025,12 +1120,6 @@ struct NotesEditorToolbar: View {
         .accessibilityIdentifier("notes-editor-toolbar")
     }
 
-    /// 状态那一枚的颜色：**失败换警示色**（「有东西没存上」必须一眼看得出来），
-    /// 「等待落库 / 正在写库」两档是辅助色 —— 它们不是错误，不该抢「保存」那枚的注意力。
-    private var saveStateColor: Color {
-        appState.noteSaveState.isFailure ? Theme.status(.warning) : Theme.text(.secondary)
-    }
-
     /// 行内四枚**有没有对象可作用**（片 `WY-1b1`）：空编辑器上它们与「保存」一样**灰着** ——
     /// 一枚永远可点、点下去什么都不发生的按钮就是 `L-50` 那一课。
     ///
@@ -1045,7 +1134,8 @@ struct NotesEditorToolbar: View {
 /// 借鉴印象笔记PC端布局」—— **结构借鉴，不抄视觉**（品牌色与既有像素判据一字未动）。
 ///
 /// 四块（左栏由 `MainWindow` 的侧栏承载，可折叠）：
-///   · **顶栏** = 搜索（**收起态 = 一枚图标；点击时再出现框子** —— `FR-NOTEUI-04`）+ 新建；
+///   · **顶栏** = 搜索（**收起态 = 一枚图标；点击时再出现框子** —— `FR-NOTEUI-04`）+ 增删查改入口
+///     （**不含「新建」**：片 `R3-T` 把它搬进了正文区顶部 title 区最左 —— `FR-NOTEUI-09`，笔记屏只此一处）；
 ///   · **中栏** = `NotesListView`（列表：标题 / 摘要两行 / 相对时间）；
 ///   · **右栏** = `NotesEditorView`（正文 / 编辑器，读写同屏）；
 ///   · **左栏** = `NotesContainerTreeView`（笔记本架 → 笔记本两级树）。
@@ -1156,7 +1246,8 @@ struct NotesAreaView: View {
     /// 「**笔记和代办的增删查改的所有操作都应该是在左侧区域顶部，笔记和代办的切换才放最右侧**」。
     ///
     /// 一行三段（从左到右）：
-    ///   ① **增删查改入口**（`crudEntries`：新建 / 编辑 / 删除，紧跟着就是「查」= 搜索框与作用域）；
+    ///   ① **增删查改入口**（`crudEntries`：编辑 / 删除 —— 「增」本片之后只在**待办屏**这一行出现，
+    ///      笔记屏的那一枚搬去了正文区顶部 title 区最左，`FR-NOTEUI-09`；紧跟着就是「查」= 搜索框与作用域）；
     ///   ② `Spacer`；
     ///   ③ **笔记 / 待办切换**（`moduleSwitch`，行末那**两枚图标**：笔记本 / 闹钟 —— `T-20261007-080`）。
     ///
@@ -1288,19 +1379,22 @@ struct NotesAreaView: View {
     /// `L(.notesDelete)`）一字未动，`accessibilityIdentifier` 也一字未动。
     ///
     /// 三枚都接**既有**的单一入口，不新开第二条写路：
-    ///   · **增** = `beginNewNote()` / `beginNewTodo()`（同一个词、同一枚按钮 —— 建什么由当前那一屏决定）；
+    ///   · **增** = `NotesNewEntry`（`beginNewNote()` / `beginNewTodo()` —— 同一个词、同一枚按钮，
+    ///     建什么由当前那一屏决定；**笔记屏**的那一枚住在正文区顶部 title 区最左，本行只在待办屏出现）；
     ///   · **改** = `edit(_:)`（笔记 = 多选集合里**唯一**那条；待办 = 编辑器里那条）；
     ///   · **删** = `deleteNote(id:)` / `deleteTodo(id:)`（逐条走既有的那一个删除入口）。
     /// 灰 / 亮的口径也一字未改（`.disabled(...)` 还挂在原来的判据属性上）。
     private var crudEntries: some View {
         HStack(spacing: Spacing.xs) {
-            ToolbarIconButton(systemName: "plus", help: L(.notesNew)) {
-                switch appState.notesModule {
-                case .notes: appState.beginNewNote()
-                case .todos: appState.beginNewTodo()
-                }
+            // **「增」只有一个落点、同一屏只出现一次**（片 `R3-T`）：
+            //   · **笔记屏**的「新建」搬到了**正文区顶部 title 区的最左**（`FR-NOTEUI-09`：
+            //     人类主人原话「左侧目前是空着，可以放那个新建/保存等按钮」）；
+            //   · **待办屏**没有 title 区 ⇒ 它的「增」仍留在这一行里。
+            // 两处是**同一个** `NotesNewEntry`（文案键与 `"notes-new"` 各只写一处，
+            // `Tests/NotePresentationTests` 数着）—— 不是两个入口，是同一枚按钮的两个落点。
+            if appState.notesModule == .todos {
+                NotesNewEntry()
             }
-            .accessibilityIdentifier("notes-new")
             ToolbarIconButton(systemName: "pencil", help: L(.commonEdit)) {
                 if let note = singleSelectedNote {
                     appState.edit(note)
