@@ -67,6 +67,7 @@ extension DoyahCLI {
                 .joined(separator: ",")
             print(
                 "id=\(manifest.id) | displayName=\(manifest.displayName) | version=\(manifest.version)"
+                    + " | entryTarget=\(manifest.entryTarget)"
                     + " | apiVersion=\(manifest.apiVersion) | storage=\(manifest.storage.rawValue)"
                     + " | capabilities=\(capabilities) | contributions=\(contributions)"
             )

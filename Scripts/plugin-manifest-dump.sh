@@ -62,16 +62,16 @@ printf '%s\n' "$OUT" | sed 's/^/  | /'
 check "exit code (zero degraded => 0)" "0" "$RC"
 check "manifest id found" "1" "$(printf '%s\n' "$OUT" | grep -c 'id=Sample')"
 FIELDS=0
-for f in displayName version apiVersion storage capabilities contributions; do
+for f in displayName version entryTarget apiVersion storage capabilities contributions; do
   if printf '%s\n' "$OUT" | grep -q "$f="; then FIELDS=$((FIELDS + 1)); fi
 done
-check "six manifest fields printed" "6" "$FIELDS"
+check "seven manifest fields printed" "7" "$FIELDS"
 check "degraded entries" "0" "$(printf '%s\n' "$OUT" | grep -c 'degraded: id=')"
 
 echo "== case 2: broken manifest (apiVersion mismatch) => only that one degrades =="
 mkdir -p "$PROBE_DIR/Bad"
 cat > "$PROBE_DIR/Bad/plugin.json" <<'JSON'
-{ "id": "Bad", "displayName": "Broken Plugin", "version": "0.0.1", "apiVersion": 999,
+{ "id": "Bad", "displayName": "Broken Plugin", "version": "0.0.1", "entryTarget": "DoyahStudio", "apiVersion": 999,
   "capabilities": [], "contributions": [{ "point": "menu" }], "storage": "pluginOwned" }
 JSON
 set +e
@@ -82,6 +82,19 @@ printf '%s\n' "$OUT2" | sed 's/^/  | /'
 check "exit code (degraded present => 1)" "1" "$RC2"
 check "degrade reason names apiVersion" "1" "$(printf '%s\n' "$OUT2" | grep -c 'degraded: id=Bad | reason=apiVersion mismatch')"
 check "degraded list names the plugin" "1" "$(printf '%s\n' "$OUT2" | grep -c 'degraded: id=Bad')"
+
+echo "== case 2b: manifest missing a contract field (entryTarget) => parse failure named, not silent =="
+mkdir -p "$PROBE_DIR/Incomplete"
+cat > "$PROBE_DIR/Incomplete/plugin.json" <<'JSON'
+{ "id": "Incomplete", "displayName": "Incomplete Plugin", "version": "0.0.1", "apiVersion": 1,
+  "capabilities": [], "contributions": [{ "point": "menu" }], "storage": "pluginOwned" }
+JSON
+set +e
+OUT2B="$("$CLI" plugins dump --dir "$PROBE_DIR" 2>&1)"
+RC2B=$?
+set -e
+check "exit code (degraded present => 1)" "1" "$RC2B"
+check "missing field is named (entryTarget)" "1" "$(printf '%s\n' "$OUT2B" | grep -c 'degraded: id=Incomplete | reason=manifest parse failed')"
 
 echo "== case 3: plugin absent (empty dir) => 0 active / 0 degraded / no error output =="
 mkdir -p "$PROBE_DIR/empty"

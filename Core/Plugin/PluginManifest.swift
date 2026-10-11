@@ -12,12 +12,20 @@ import Foundation
 public struct PluginManifest: Codable, Equatable, Sendable {
     /// 挂点声明（概设 §5）：只声明**位置与形态**；「谁能看见」由宿主按能力位裁决。
     public struct Contribution: Codable, Equatable, Sendable {
+        /// 宿主挂点 = **契约 §3.52③ 点名的那些口子**（插件只能经这些接进来）。
+        /// 多一个自定义挂点就等于开了一条"插件自己决定的接线" ⇒ 这里只收契约里有的。
         public enum Point: String, Codable, Sendable, CaseIterable {
             case activityBar
             case mainPaneTab
+            /// Home 区页签（契约与 `mainPaneTab` 并列点名）——首页也是挂点，不是核心特权。
+            case homePaneTab
             case menu
             case settings
             case searchIndex
+            /// 存储工厂：插件走"宿主代管存储"时的插入口（契约 §3.52⑤）。
+            case storageFactory
+            /// 通知与审计投递（契约 §3.52③ 尾项）：插件说话要经宿主这一层。
+            case notificationSink
             case statusBar
             case commandPalette
         }
@@ -41,6 +49,8 @@ public struct PluginManifest: Codable, Equatable, Sendable {
     public let id: String
     public let displayName: String
     public let version: String
+    /// 入口 target（契约 §3.52② 点名字段）：构建只消费它 —— 没有它，"装哪一份代码"就得靠人记。
+    public let entryTarget: String
     /// 宿主 API 版本；不匹配 ⇒ **只降级该插件**（不崩、不静默）。
     public let apiVersion: Int
     public let capabilities: [String]
@@ -54,6 +64,7 @@ public struct PluginManifest: Codable, Equatable, Sendable {
         id: String,
         displayName: String,
         version: String,
+        entryTarget: String,
         apiVersion: Int,
         capabilities: [String],
         contributions: [Contribution],
@@ -62,6 +73,7 @@ public struct PluginManifest: Codable, Equatable, Sendable {
         self.id = id
         self.displayName = displayName
         self.version = version
+        self.entryTarget = entryTarget
         self.apiVersion = apiVersion
         self.capabilities = capabilities
         self.contributions = contributions
