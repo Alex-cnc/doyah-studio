@@ -296,6 +296,7 @@
 		815F228B6E39B82209DC765C /* CodeFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60DEF55F54D69A9E172D205 /* CodeFormatting.swift */; };
 		82B044EFA8A1C2111D8C6FE6 /* TodoSort.swift in Sources */ = {isa = PBXBuildFile; fileRef = 159835686F3A9DDED53103F1 /* TodoSort.swift */; };
 		82CB004A028E02CFA1B86B76 /* SQLFilterInjectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03CC4BD5C33A382651AD0E1F /* SQLFilterInjectionTests.swift */; };
+		82DFE4580A493C555AB4794D /* SearchPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C569EC05559920760625D74 /* SearchPresentation.swift */; };
 		82F625C68D6430AA4581808D /* SyncCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDE89117E7DDCC277A547F0F /* SyncCore.swift */; };
 		83771E1B2A5389925391329A /* minimal.xlsx in Resources */ = {isa = PBXBuildFile; fileRef = 12A982A10B383F94C618BDDD /* minimal.xlsx */; };
 		841D15B542DA92F01FCC98B0 /* TerminalTabsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15EB9B52BCFFF2948FBA8C2 /* TerminalTabsBar.swift */; };
@@ -865,6 +866,7 @@
 		597E6BE3CE2FE46CDAE71714 /* ObjectTreeGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeGrouping.swift; sourceTree = "<group>"; };
 		5BE8C755C14CBC78E2D39FD0 /* SQLArchiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLArchiveTests.swift; sourceTree = "<group>"; };
 		5C4C19EA206CBA5D9F1856A3 /* BrowserContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserContractTests.swift; sourceTree = "<group>"; };
+		5C569EC05559920760625D74 /* SearchPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPresentation.swift; sourceTree = "<group>"; };
 		5C5702F819029A387FA00983 /* SQLiteKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteKitTests.swift; sourceTree = "<group>"; };
 		5C647C7A3CCF71A2255C65D4 /* ObjectTreeRefreshGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeRefreshGateTests.swift; sourceTree = "<group>"; };
 		5CE615327FDB1631692DA408 /* SQLFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLFormatter.swift; sourceTree = "<group>"; };
@@ -1853,6 +1855,7 @@
 				CB65FC24B68864F6845B85C6 /* SafeModeConfirmSheet.swift */,
 				9AB7303AF9FF6357B10BD7D6 /* SaveQuerySheet.swift */,
 				2CBC4F955B6605A2C053F771 /* SchemaDiffPanel.swift */,
+				5C569EC05559920760625D74 /* SearchPresentation.swift */,
 				1B895C59EA1CABB3555C0339 /* ServerObjectsPanel.swift */,
 				DEE57AD6868B45D844B50892 /* SessionPanel.swift */,
 				4826050B3500065064F239F9 /* SQLArchiveSheet.swift */,
@@ -2268,6 +2271,7 @@
 				D0126C6FB1F9F05093FF69BE /* SafeModeConfirmSheet.swift in Sources */,
 				BE2DE91E702AE2D3A5DE9C22 /* SaveQuerySheet.swift in Sources */,
 				B029A38AE33C5B132C1564A8 /* SchemaDiffPanel.swift in Sources */,
+				82DFE4580A493C555AB4794D /* SearchPresentation.swift in Sources */,
 				7C62F3B375789472DC6691CF /* SecureASCIIField.swift in Sources */,
 				735E9D0C68F37FE0840D0EC7 /* ServerObjectsPanel.swift in Sources */,
 				DCCCD1BE40559E92EA8E414D /* SessionPanel.swift in Sources */,
