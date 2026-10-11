@@ -380,7 +380,16 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   它落地当轮**漏了接 FILTER**（写下用例却没入口 = 一个都跑不到），由 `check-result-scroll-ledger.py` ⑤
 #   抓出后补上 —— 与 `TodoCalendarEntriesProbeTests` / `FormatMenuWiringProbeTests` 那几处同一个坏法。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests|NotesSearchRevealProbeTests"
+# + `NotesCrudIconSpacingProbeTests`（`FR-NOTEUI-21` · 派单 `T-20261010-166` §三.3 · 人类主人 2026-10-10
+#   原话「**笔记左栏上面的增改删图标间距太大了，不够精致。**」：左区顶部那三枚增删查改入口的四条判据 ——
+#   ① 活宿主里三枚命中区（`_FocusRingView`）的**相邻间距逐个 ≤ 8pt**；② 间距**方差 ≤ 1pt**（等距）；
+#   ④ 命中区 **≥ 28 × 28**；⑤ 图标 **16–18pt**（字号那一档 + **像素**成对读数：改前 / 改后同一批符号的
+#   可见高度之比必须逐枚等于字号之比）＋ ③ 与 SQL 编辑区工具条**同形**（源锚点 + 两边命中区高逐个相等）
+#   与成对截图。判据 ①② 的读数在**真笔记区**（`NotesAreaView`）上量；④⑤ 另配**改前复刻件**
+#   （13pt 图标 + 28 × 22 命中区）当反例 —— 它必须判红，否则这一族断言是恒真的。
+#   跑法：`DOYAH_UI_SNAPSHOT=1 DOYAH_NOTES_DIR=<临时目录> swift test --filter NotesCrudIconSpacingProbeTests`。
+# `--filter` 传的是**正则**，所以这里用 `|` 连接。
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests|NotesSearchRevealProbeTests|NotesCrudIconSpacingProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
