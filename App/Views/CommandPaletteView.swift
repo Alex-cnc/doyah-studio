@@ -16,13 +16,18 @@ import DoyahCore
 /// 两类项**分两组画**（哪一组在最前由 `CommandPalette.grouped` 按命中的硬软决定），
 /// 但 ↑↓ 与回车走的**只有一条**扁平顺序（`rows`）—— 两份顺序迟早不一致，
 /// 症状是"选中的行"与"高亮的行"不是同一条（`FR-EDIT-44` 标头搜索框栽过）。
+///
+/// **词只留一份**（队列 `L-122` ⑤，2026-10-11 第 493 轮）：面板**不再自己存查询词**
+/// （旧形状 = 本文件 `@State query` + `AppState.commandPaletteSeedQuery` **两处各存一份**），
+/// 输入框直接绑 `AppState.globalSearchQuery` ⇒ 标题栏搜索栏与面板是**同一份词**。
+/// 剩余的合并动作（⌘K 改语义 = 聚焦搜索栏 / 结果搬成「搜索栏正下方下拉」/ 删面板的输入框与 sheet）
+/// 仍待落（需图形会话，见队列 `L-122` 状态格）。
 struct CommandPaletteView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var workspace: WorkspaceStore
     @EnvironmentObject private var workspaceTabs: WorkspaceTabsModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var query = ""
     @State private var selectedIndex = 0
     @FocusState private var isSearchFocused: Bool
 
@@ -36,7 +41,7 @@ struct CommandPaletteView: View {
     private let fileSearchDebounce: UInt64 = 180_000_000
 
     private var commandMatches: [CommandPalette.Match] {
-        CommandPalette.search(query, in: AppCommandCatalog.all(), limit: 40)
+        CommandPalette.search(appState.globalSearchQuery, in: AppCommandCatalog.all(), limit: 40)
     }
 
     private var groups: [CommandPalette.Group] {
@@ -51,12 +56,12 @@ struct CommandPaletteView: View {
             HStack(spacing: Spacing.s) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(Theme.text(.tertiary))
-                TextField(L(.commandPalettePlaceholder), text: $query)
+                TextField(L(.commandPalettePlaceholder), text: $appState.globalSearchQuery)
                     .textFieldStyle(.plain)
                     .font(Theme.font(.body))
                     .focused($isSearchFocused)
                     .onSubmit { run(selectedRow) }
-                    .onChange(of: query) { _, _ in
+                    .onChange(of: appState.globalSearchQuery) { _, _ in
                         selectedIndex = 0
                         scheduleFileSearch()
                     }
@@ -117,15 +122,13 @@ struct CommandPaletteView: View {
         }
         .frame(width: 560, height: 420)
         .background(Theme.surface(.panel))
+        // 查询词**不在这里初始化、也不在这里清掉**（队列 `L-122` ⑤）：输入框绑的就是
+        // `appState.globalSearchQuery` —— 搜索栏里已经打了的词，进面板即生效（同一份词）。
         .onAppear {
-            // 标题栏搜索栏带进来的词（FR-EDIT-37）：落在输入框里，之后就是普通的即时筛选。
-            if let seed = appState.commandPaletteSeedQuery, !seed.isEmpty { query = seed }
             isSearchFocused = true
             scheduleFileSearch()
         }
-        // 种子只生效一次：不在这里清掉的话，下一次用 ⌘K 打开会带着上一次的词。
         .onDisappear {
-            appState.commandPaletteSeedQuery = nil
             pending?.cancel()
             pending = nil
         }
@@ -248,7 +251,7 @@ struct CommandPaletteView: View {
     private func scheduleFileSearch() {
         pending?.cancel()
         pending = nil
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let needle = appState.globalSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty, let root = workspace.rootURL else {
             fileMatches = []
             filesTruncated = false

@@ -50,8 +50,9 @@ struct TitleBarSearchField: View {
                     get: { appState.globalSearchQuery },
                     set: { appState.globalSearchQuery = $0 }
                 ),
-                // 回车把词交给**命令面板**（与 ⌘K 共用一处入口 —— 搜索栏不另做一套搜索）。
-                onSubmit: { appState.presentCommandPalette(seed: appState.globalSearchQuery) }
+                // 回车把**命令面板**打开（`FR-EDIT-25`）：词已经在 `globalSearchQuery` 里，
+                // 面板读的就是它 —— 不再「带一份种子过去」（那是同一份词的第二个家，见 `L-122` ⑤）。
+                onSubmit: { appState.presentCommandPalette() }
             )
             .frame(width: width, height: TitleBarSearchMetrics.boxHeight)
             .help(L(.windowSearchPlaceholder))
@@ -291,7 +292,7 @@ final class TitleBarSearchBoxView: NSView, NSTextFieldDelegate {
     // MARK: 动作
 
     @objc private func handleSubmit() {
-        // 先把词**落定**到绑定（面板的 seed 读的就是它），再交出去 —— 顺序不能反。
+        // 先把词**落定**到绑定（面板读的就是这一份），再交出去 —— 顺序不能反。
         onTextChange?(field.stringValue)
         onSubmit?()
     }

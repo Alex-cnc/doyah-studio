@@ -325,6 +325,12 @@
    "reason": "队列 L-119（macOS 侧 · 免授权 · 门禁）：删掉自检里一处**空转注入**（「把全角空格删掉」的 replace —— 目标文件里全角空格 0 处，一个字节都没改而本例照样报绿）。装饰性动作不算证据，行为逐字不变（例数仍 13）",
    "by": "hugehippo",
    "at": "2026-10-11"
+  },
+  {
+   "glob": "Docs/发布计划.md",
+   "reason": "队列 `L-122` ⑤（词只留一份）落点同步：`FR-EDIT-37` 那条设计句里的 `presentCommandPalette(seed:)` / `commandPaletteSeedQuery` 已删 ⇒ 本侧每轮的规划面（版本地图 / 排期 / 「仍未做」清单）都长在本文件里，登记为常改面（2026-10-11 第 493 轮）",
+   "by": "hugehippo",
+   "at": "2026-10-11"
   }
 ],
  "unclassified_allow": [

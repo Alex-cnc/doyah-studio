@@ -389,18 +389,41 @@ final class WindowTitleConventionTests: XCTestCase {
         // 回车那一处**随搜索栏一起搬进了 `TitleBarSearchField`**（原标题栏搜索栏是系统件，
         // 现在是自绘件）⇒ 锚点跟着搬，判的是同一件事。
         let field = try source("App/Views/TitleBarSearchField.swift")
-        guard field.contains("appState.presentCommandPalette(seed: appState.globalSearchQuery)") else {
+        guard field.contains("appState.presentCommandPalette()") else {
             return XCTFail("回车没有把词交给命令面板 —— 搜索栏成了摆设")
+        }
+        // 回车**不再把词「带过去」**：那一份词已经在 `globalSearchQuery` 里（队列 `L-122` ⑤）——
+        // 旧形状是「把词塞进种子字段再带进面板」，那一份就是第二个家。
+        guard field.contains("appState.globalSearchQuery") else {
+            return XCTFail("搜索栏没有接到 `appState.globalSearchQuery`（唯一那份词）")
         }
     }
 
-    func testPaletteSeedsFromSearchFieldOnce() throws {
-        let text = try source("App/Views/CommandPaletteView.swift")
-        guard text.contains("appState.commandPaletteSeedQuery"), text.contains("query = seed") else {
-            return XCTFail("命令面板没有读标题栏搜索栏带进来的初始查询")
+    /// **词只留一份**（队列 `L-122` ⑤，2026-10-11 第 493 轮）。
+    ///
+    /// 三条否定面各自对应一种「又长出第二份」的写法，每一条都能真注入坏值判红
+    /// （探法：在 `App/Views/CommandPaletteView.swift` 里加回 `@State private var query = ""`
+    ///  ⇒ 本用例红；逐字节还原 ⇒ 绿）：
+    ///  ① 面板自己再存一份 ⇒ 两个输入面各筛各的；
+    ///  ② 再挂一个「面板初始查询」字段 ⇒ 同一份词在两处搬；
+    ///  ③ 面板不读那唯一一份 ⇒ 搜索栏里打的字对面板无效（看着像合并了、其实没有）。
+    func testQueryHasExactlyOneStore() throws {
+        let palette = try source("App/Views/CommandPaletteView.swift")
+        let state = try source("App/AppState.swift")
+
+        XCTAssertFalse(
+            palette.contains("@State private var query"),
+            "命令面板自己又存了一份查询词 —— 面板与搜索栏会各筛各的（L-122 ⑤）"
+        )
+        XCTAssertFalse(
+            state.contains("@Published var commandPaletteSeedQuery"),
+            "`AppState` 里又冒出「面板初始查询」这个字段在搬词 —— 词只留 `globalSearchQuery` 一份（L-122 ⑤）"
+        )
+        guard palette.contains("$appState.globalSearchQuery") else {
+            return XCTFail("面板的输入框没有绑到 `appState.globalSearchQuery`（唯一那份词）")
         }
-        guard text.contains("appState.commandPaletteSeedQuery = nil") else {
-            return XCTFail("种子没有在面板退出时清掉 —— 下一次 ⌘K 会带着上一次的词")
+        guard state.contains("@Published var globalSearchQuery") else {
+            return XCTFail("`globalSearchQuery` 不再是 `@Published` —— 面板不会跟着搜索栏的字重筛")
         }
     }
 }
