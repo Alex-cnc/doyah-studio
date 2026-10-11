@@ -437,6 +437,14 @@ final class AppState: ObservableObject {
     // 不是浮在上面的弹窗；两个入口并存会让人不确定"关掉这个窗口笔记还在不在"。
     @Published var notes: [Note] = []
     @Published var notesQuery = ""
+    /// **「查」那一格的展开态**（`FR-NOTEUI-04` · 人类主人 2026-10-10 原话见
+    /// `App/Views/SearchPresentation.swift`）：**默认收起** —— 左区顶部那一行上不再有一格
+    /// 常驻的搜索框，只有一枚放大镜图标，点它才把框子浮出来。
+    ///
+    /// 状态住在这里（不是视图里的 `@State`）的口径与其它面板一致：**探针要能驱动它**
+    /// —— `TestsUISnapshot/NotesSearchRevealProbeTests.swift` 的「点图标前 / 后」两态读数
+    /// 就是它；视图里的 `@State` 外面读不到、也写不进。
+    @Published var noteSearchRevealed = false
     /// **两级导航的树与归属**（队列 `L-97` 界面半第一片）：架 / 笔记本 + 每条笔记挂在谁名下。
     /// 纯逻辑在 `Core/NoteNavigation.swift`（判据 `Tests/NoteNavigationTests.swift`），这里只做搬运 ——
     /// 宿主层不自己写过滤（「按笔记本筛笔记」只许经 `NotesNavigation.filter`）。
@@ -6486,6 +6494,25 @@ final class AppState: ObservableObject {
         case results(NoteDatabase.SearchResult)
         /// 库没读出来（原因照原样留着，界面上如实说）。
         case failure(String)
+    }
+
+    /// **点那一枚放大镜图标 ⇒ 把搜索框浮出来**（`FR-NOTEUI-04`）。
+    ///
+    /// 「有个搜索图标就行，用户点击时再出现框子」那一句的机器面：图标与框子由
+    /// `App/Views/SearchPresentation.swift` 的**同一呈现函数**给（收起 `SearchRevealButton` /
+    /// 展开 `SearchField`），状态就是这一个布尔值。
+    func revealNoteSearch() {
+        noteSearchRevealed = true
+    }
+
+    /// **收起搜索**（`FR-NOTEUI-04` 判据 §三.1 ③）：ESC / 点外部 / 框里那枚 ×，三条路都走这里。
+    ///
+    /// **收框与清词是同一件事**：只收框不清词的话，列表还按一个**看不见的词**过滤着
+    /// （症状 = 界面上没有搜索框，列表却少几条）—— 清词之后 `.task(id: notesQuery)` 会把
+    /// 全量列表重查回来，用户看到的就是「收起来了，列表也回来了」。
+    func collapseNoteSearch() {
+        noteSearchRevealed = false
+        notesQuery = ""
     }
 
     /// **检索结果的唯一落地出口**（队列 `L-89` ㈡ 第 8 条）。

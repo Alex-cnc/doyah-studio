@@ -365,8 +365,22 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   产物落 `DOYAH_SNAPSHOT_DIR`（不写全量跑凭证 ⇒ 不扰动「快照张数」那条计数）。
 #   它落地当轮**漏了接 FILTER**（写下用例却没入口 = 一个都跑不到），由 `check-result-scroll-ledger.py` ⑤
 #   抓出后补上 —— 与 `TodoCalendarEntriesProbeTests` / `FormatMenuWiringProbeTests` 那几处同一个坏法。
+# + `NotesSearchRevealProbeTests`（片 `D166①` · 派单 `T-20261010-166` §三.1 · 契约 `FR-NOTEUI-04`：
+#   **笔记搜索 = 一枚图标 + 点击浮出的框子**）。四组读数都在**真视图树**上量（离屏活宿主
+#   `1100×700`，与 `NotesLayoutProbeTests.areaSize` 同值）：
+#   ① **改前复刻件**（同一条量法下的常驻框 ⇒ **1 个**）→ **改后收起态**左区顶部那一行里
+#   `NSTextField` **0 个**（「无常驻搜索框」，成对读数、能判红）；② 走产品入口
+#   `AppState.revealNoteSearch()` 之后同一条带里**出现**输入框、占位逐字等于 `L(.notesSearchPlaceholder)`，
+#   且**输入即过滤**（换词 ⇒ 可见列表跟着换，清空 ⇒ 回到夹具那一条）；③ 收起（ESC / 点外部 /
+#   框里那枚 × 共用 `AppState.collapseNoteSearch()`）⇒ 那一行又回到 0 个（**成对读数**，两次必须不等）；
+#   ④ **与工作区搜索同一呈现函数 / 同一图标形制**：两个面各有一处 `SearchField {`（壳只有一处出处
+#   `App/Views/SearchPresentation.swift`）、两个面里都不许再写死「magnifyingglass」字面量、
+#   且两个面渲染出来的框**高逐点相等**（实测都是 13.0pt）。图落 `DOYAH_SNAPSHOT_DIR`
+#   （中英各一 × 三种：笔记收起 / 笔记展开 / 工作区标头那枚框子）。
+#   它落地当轮**漏了接 FILTER**（写下用例却没入口 = 一个都跑不到），由 `check-result-scroll-ledger.py` ⑤
+#   抓出后补上 —— 与 `TodoCalendarEntriesProbeTests` / `FormatMenuWiringProbeTests` 那几处同一个坏法。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests|NotesSearchRevealProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -972,6 +986,96 @@ if failures:
     sys.exit(1)
 print("✓ 两遍都真跑过：查询还在时保存/删除当场生效；旧词的结果与失败都不落地；"
       "切换后没有一次落地来自旧词（终态 = 最后那个词）")
+PY
+
+echo
+echo "==> 笔记搜索那一格（图标 + 点击浮出的框子）：两遍都**真跑过**了吗（跳过 ≠ 通过）"
+python3 - "${OUT_PLAIN}" "${OUT_SANDBOX}" <<'PY'
+import json
+import os
+import sys
+
+
+def load(directory, name):
+    path = os.path.join(directory, f"noteui-04-{name}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+# 期望值只写「不变量」：与证据自洽的关系，而不是把探针里的数字再抄一遍。
+failures = []
+for directory in sys.argv[1:]:
+    base = os.path.basename(directory)
+
+    dump = load(directory, "search-reveal-dump")
+    if dump is None:
+        failures.append(f"{base}：没有 search-reveal-dump 的证据文件 —— 探针没真跑（跳过不算通过）")
+    else:
+        # **改前那一版（复刻件）**：同一条量法必须量出 1 个常驻输入框 —— 否则「收起态 0 个」是空话。
+        if dump.get("legacyRowFieldCount") != 1:
+            failures.append(
+                f"{base}/search-reveal-dump：改前复刻件没量出常驻输入框（{dump.get('legacyRowFieldCount')}）"
+                " —— 量法挑错了带 / 控件类，收起态那个「0 个」说明不了任何事"
+            )
+        # ① 收起态无常驻搜索框 ② 点图标后出现 ③ 收起后又回去 —— 三个读数成对
+        if dump.get("collapsedFieldCount") != 0:
+            failures.append(
+                f"{base}/search-reveal-dump：收起态那一行里还有 {dump.get('collapsedFieldCount')} 个输入框"
+                "（「有个搜索图标就行」没落地）"
+            )
+        if not (dump.get("revealedFieldCount") or 0) >= 1:
+            failures.append(f"{base}/search-reveal-dump：展开态一个输入框都没出现（框子没浮出来）")
+        if not (dump.get("revealedPlaceholders") or []):
+            failures.append(f"{base}/search-reveal-dump：展开态没读到占位 —— 「框子真的画出来了」缺读数")
+        if dump.get("afterCollapseFieldCount") != 0:
+            failures.append(
+                f"{base}/search-reveal-dump：收起之后还留着 {dump.get('afterCollapseFieldCount')} 个输入框"
+                "（ESC / 点外部 收起没落地）"
+            )
+        if dump.get("collapsedFieldCount") == dump.get("revealedFieldCount"):
+            failures.append(f"{base}/search-reveal-dump：收起 / 展开量到同一个数 —— 这一对读数是恒真的")
+        # ②′ 输入即过滤：清空之后要有基准（否则「查不到 ⇒ 0 条」是恒真的）
+        if not (dump.get("unfilteredCount") or 0) >= 1:
+            failures.append(f"{base}/search-reveal-dump：清空搜索词之后可见列表还是 0 条 —— 基准不成立")
+        if dump.get("filteredCount") != 0:
+            failures.append(
+                f"{base}/search-reveal-dump：查不到的词竟然还有 {dump.get('filteredCount')} 条命中"
+                "（输入没即过滤）"
+            )
+
+    parity = load(directory, "search-chrome-parity")
+    if parity is None:
+        failures.append(f"{base}：没有 search-chrome-parity 的证据文件 —— 「同一呈现函数」那条没跑")
+    else:
+        if parity.get("notesFieldHeight") != parity.get("workspaceFieldHeight"):
+            failures.append(
+                f"{base}/search-chrome-parity：两个面框高不等："
+                f"笔记 {parity.get('notesFieldHeight')} vs 工作区 {parity.get('workspaceFieldHeight')}"
+                " —— 有一面在自己画壳"
+            )
+        if parity.get("viewsContainingMagnifyingglassLiteral"):
+            failures.append(
+                f"{base}/search-chrome-parity：这两个面里还写死了放大镜符号："
+                f"{parity.get('viewsContainingMagnifyingglassLiteral')}"
+            )
+
+    # 成对截图（给人判的那一半）：中英各一 × 三种，缺一张 = 没跑
+    for name in (
+        "noteui-04-notes-search-collapsed-zh", "noteui-04-notes-search-collapsed-en",
+        "noteui-04-notes-search-revealed-zh", "noteui-04-notes-search-revealed-en",
+        "noteui-04-workspace-search-field-zh", "noteui-04-workspace-search-field-en",
+    ):
+        if not os.path.exists(os.path.join(directory, f"{name}.png")):
+            failures.append(f"{base}：缺图 {name}.png —— 成对截图没跑齐")
+
+if failures:
+    for item in failures:
+        print(f"✗ {item}")
+    sys.exit(1)
+print("✓ 两遍都真跑过：收起态无常驻框 / 点图标出框 / 收起又回去（三个读数成对）；"
+      "清空有基准且输入即过滤；两个面同一呈现函数且框高相等；成对截图齐（中英各一 × 三种）")
 PY
 
 echo "==> 浏览器页签与下载那条：两遍都**真跑过**了吗（跳过 ≠ 通过）"

@@ -95,10 +95,10 @@ struct WorkspaceHeaderSearch: View {
     // MARK: 输入框
 
     private var field: some View {
-        HStack(spacing: Spacing.xs) {
-            Image(systemName: "magnifyingglass")
-                .imageScale(.small)
-                .foregroundStyle(Theme.text(.tertiary))
+        // **壳走唯一呈现函数**（`FR-NOTEUI-04` · `App/Views/SearchPresentation.swift`）：
+        // 放大镜 + 圆角底 + 描边这一段在 `App/Views/` 里只写一份 —— 笔记面点图标之后
+        // 浮出来的那个框与这一个**是同一段代码**，两个框并排站着才是一套东西。
+        SearchField {
             TextField(L(.workspaceHeaderSearchPlaceholder), text: $query)
                 .textFieldStyle(.plain)
                 .font(Theme.font(.caption))
@@ -128,16 +128,6 @@ struct WorkspaceHeaderSearch: View {
                 .help(L(.commonClose))
             }
         }
-        .padding(.horizontal, Spacing.s)
-        .padding(.vertical, Spacing.xs)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                .fill(Theme.surface(.raised))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                .strokeBorder(Theme.hairline(scheme), lineWidth: Metrics.hairline)
-        )
     }
 
     // MARK: 结果面板
