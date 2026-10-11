@@ -359,7 +359,9 @@ def self_test(root: pathlib.Path) -> int:
         hollow_block = fresh("block-hollow")
         text = (hollow_block / BLOCK_OWNER).read_text(encoding="utf-8")
         text = re.sub(r"MarkdownBlock\(kind:", "MarkdownBlockX(kind:", text)
-        text = text.replace("\u3000", "")   # 只是让 diff 更明显，不改变语义
+        # 这里曾有一句「把全角空格删掉」的 replace（注释写「让 diff 更明显」）—— L-119 扫出它是
+        # **空转注入**：`Core/MarkdownDocument.swift` 里全角空格 0 处，那次改写一个字节都没动，
+        # 而本例照样报绿。装饰性动作不算证据：承重的是上一行的 rename，已删（行为逐字不变）。
         (hollow_block / BLOCK_OWNER).write_text(text, encoding="utf-8")
         cases.append(("块级模型被掏空", bool(check(hollow_block)[0])))
 

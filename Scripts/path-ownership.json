@@ -313,6 +313,18 @@
    "reason": "队列 L-110（macOS 侧 · 免授权 · 门禁）：verify-all.sh 的控制流判据 —— 真脚本原样拷进临时迷你仓 + 桩件注入失败（默认跑法须如实点名「未执行项」、--keep-going 须跑完十八项再汇总、统一 exit 1）。同批登记 self-test-counts 族 `verify-all-gate`（族 45 · 例 618 · 锚点 77）",
    "by": "hugehippo",
    "at": "2026-10-11"
+  },
+  {
+   "glob": "Scripts/check-vendored-sqlite.py",
+   "reason": "队列 L-119（macOS 侧 · 免授权 · 门禁）：负例沙箱改**从台账派生**（`self_test_targets()`）+ 新增前提自检「干净副本必须绿」—— 原先写死的沙箱清单漏了 `wiring.evidenceAnchors` 点名的三份文件 ⇒ 干净副本本来就红 ⇒ 13 条负例**全部假绿**（判据是「内层 rc != 0」）。改的是判据自身的证据面，`--root` 默认值 / 判据语义未动",
+   "by": "hugehippo",
+   "at": "2026-10-11"
+  },
+  {
+   "glob": "Scripts/check-markdown-single-source.py",
+   "reason": "队列 L-119（macOS 侧 · 免授权 · 门禁）：删掉自检里一处**空转注入**（「把全角空格删掉」的 replace —— 目标文件里全角空格 0 处，一个字节都没改而本例照样报绿）。装饰性动作不算证据，行为逐字不变（例数仍 13）",
+   "by": "hugehippo",
+   "at": "2026-10-11"
   }
 ],
  "unclassified_allow": [

@@ -60,19 +60,39 @@ SYSTEM_SQLITE_IMPORT = re.compile(r"^\s*import\s+SQLite3\b", re.MULTILINE)
 # `verify-all.sh` 的项标记形状：`echo "==> 7/17 …"`
 VERIFY_ITEM = re.compile(r"==> (\d+)/(\d+) ")
 
-# 无依赖：只产出 `Vendor/sqlite3/{Package.swift,Sources/CSQLite3/**,LICENSE.txt,PROVENANCE.md}`。
-# 第 18 轮补了两份**接线与锚点所在**的文件：不把它们拷进负例沙箱，第 9 / 10 两条就验不了。
-# 第 30 轮（L-43）再补两份：生成器与它的生成物 —— 第 11 条（生成器绑定）读的就是这两份。
+# 沙箱基座（**不是全集**）：真正要拷哪些路径由 `self_test_targets()` 从台账派生 ——
+# 写死清单的代价（L-119，第 490 轮实测）：台账 `wiring.evidenceAnchors` 点名的三份文件
+# 没进清单 ⇒ 干净副本上 `check_evidence_anchors` 本来就红 ⇒ 下面 13 条负例**全部假绿**
+# （判据是「内层 rc != 0」，而 rc 因为环境原因恒 != 0）。
 SELF_TEST_TARGETS = [
     "Vendor/sqlite3",
     "Scripts/vendored-sqlite.json",
     "Scripts/smoke-vendored-sqlite.py",
     "Scripts/verify-all.sh",
     "Scripts/gen-sqlite-constants.py",
-    "Core/NoteStorage/SQLiteConstants.swift",
     "THIRD-PARTY-NOTICES.md",
     "Package.swift",
 ]
+
+
+def self_test_targets(root: pathlib.Path) -> list[str]:
+    """负例沙箱要拷的路径 —— **从台账派生**（锚点写死过一次，代价见上）。
+
+    由三处派生：交付文件 `files[].path` / `swiftTarget.header` / `licenseFile` /
+    `wiring.evidenceAnchors[].file`，再并上基座里那几份「接线所在」的脚本。
+    台账新增一处证据锚点 ⇒ 沙箱自动跟上，不会又悄悄回到「干净副本也红」的假绿。
+    """
+    ledger = json.loads((root / "Scripts" / "vendored-sqlite.json").read_text(encoding="utf-8"))
+    derived = list(SELF_TEST_TARGETS)
+    derived += [entry["path"] for entry in ledger.get("files", [])]
+    derived.append(ledger["swiftTarget"]["header"])
+    derived.append(ledger["licenseFile"])
+    derived += [anchor["file"] for anchor in ledger.get("wiring", {}).get("evidenceAnchors", [])]
+    ordered: list[str] = []
+    for target in derived:
+        if target not in ordered:
+            ordered.append(target)
+    return ordered
 
 
 def item_blocks(script_text: str) -> dict[int, str]:
@@ -379,10 +399,12 @@ def self_test() -> int:
                 "第 18 项", "第 17 项"), encoding="utf-8")),
     ]
     failures: list[str] = []
-    for index, (label, mutate) in enumerate(cases, start=1):
+
+    def run_case(mutate) -> int:
+        """在**独立临时副本**上跑一次门禁，返回退出码。"""
         with tempfile.TemporaryDirectory(prefix="vendored-sqlite-selftest-") as tmp:
             copy = pathlib.Path(tmp)
-            for relative in SELF_TEST_TARGETS:
+            for relative in self_test_targets(root):
                 source = root / relative
                 target = copy / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -396,7 +418,19 @@ def self_test() -> int:
                 [sys.executable, str(pathlib.Path(__file__).resolve()), "--root", str(copy)],
                 capture_output=True, text=True,
             )
-        ok = result.returncode != 0
+        return result.returncode
+
+    # 前提自检（L-119）：干净副本必须绿。少了它，沙箱只要缺一份文件，下面每条负例
+    # 都会「报红」—— 红的是环境不是篡改，13 条证据一起变成假绿（第 490 轮实测）。
+    clean = run_case(lambda d: None)
+    if clean != 0:
+        failures.append("前提自检：干净副本不绿（沙箱缺文件 ⇒ 下面的负例都是假绿）")
+    print(f"   {'✅' if clean == 0 else '❌'} 前提自检：干净副本必须绿"
+          + ("" if clean == 0 else f" → 实测 rc={clean}"))
+
+    for index, (label, mutate) in enumerate(cases, start=1):
+        returncode = run_case(mutate)
+        ok = returncode != 0
         print(f"   {'✅' if ok else '❌'} 负例 {index}：{label} → 门禁{'报红' if ok else '**没报红**'}")
         if not ok:
             failures.append(label)
