@@ -230,7 +230,7 @@
       "args": [
         "--self-test"
       ],
-      "cases": 8,
+      "cases": 9,
       "countRegex": "自测：(\\d+)/\\d+ 例符合预期",
       "why": "队列 L-56 / 闭环第 4 项（spec §6 待拍板队列的编号与状态纪律）",
       "hostLedgerSelfTest": {

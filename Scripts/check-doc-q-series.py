@@ -27,7 +27,9 @@
 
 **判据**：A 编号可判且唯一｜B 状态词表｜C 关闭行成对（编号划掉 ⇔ 状态首词 `✅` / 已转出）｜
 D §4 ↔ §6 同源（Q17~Q23 = Studio 自己维护的号空间；Q1~Q16 属 Notes 的号空间、Q24+ 在 §4 无条目）｜
-E 空跑防护（解析到的数据行 / 号数 / 对账对数低于下限即判红 ——「一个号都没解析到」不许当通过）。
+E 空跑防护（解析到的数据行 / 号数 / 对账对数低于下限即判红 ——「一个号都没解析到」不许当通过）｜
+F **自检例 1 = 前提自检（绿对照）** —— 未改动的 spec 必须报 **0 问题**、且**真的解析到输入**：
+判据若被改成「把什么都说成问题」，光有一堆负例会**全绿**（队列 `L-119` 的真现场）。
 
 **范围与边界（如实登记）**：
 
@@ -41,7 +43,7 @@ E 空跑防护（解析到的数据行 / 号数 / 对账对数低于下限即判
     python3 Scripts/check-doc-q-series.py                 # 本仓
     python3 Scripts/check-doc-q-series.py --root <目录>    # 夹具仓（自测用）
     python3 Scripts/check-doc-q-series.py --require-all    # 文件不在盘上 ⇒ 判红
-    python3 Scripts/check-doc-q-series.py --self-test      # 判据自己的证据（8 例 + 末例）
+    python3 Scripts/check-doc-q-series.py --self-test      # 判据自己的证据（9 例 + 末例）
 
 退出码：0 = 全绿（或按口径跳过）；1 = 有判红项（逐条点名 `文件:行号`）。
 """
@@ -281,9 +283,15 @@ def sha256(path: pathlib.Path) -> str:
 
 
 class Case:
-    """一条负例：在临时副本上做若干处替换，要求判据报红并点名 expect。"""
+    """一条自检例。
 
-    def __init__(self, name: str, edits: list[tuple[str, str]], expect: str) -> None:
+    - `expect is None` = **前提自检（绿对照）**：夹具**未注入** ⇒ 期望 `check()` 报 0 问题，
+      且**真的解析到了输入**（空跑防护三条下限仍要过 ——「什么都跳过」不许当绿）。
+      没有这一例，「判据被改成把什么都说成问题」时下面每条负例照旧全绿（队列 `L-119`）。
+    - 否则 = **负例**：在临时副本上做若干处替换，要求判据报红并点名 `expect`。
+    """
+
+    def __init__(self, name: str, edits: list[tuple[str, str]], expect: str | None) -> None:
         self.name = name
         self.edits = edits
         self.expect = expect
@@ -291,6 +299,7 @@ class Case:
 
 def self_test_cases() -> list[Case]:
     return [
+        Case("前提自检（绿对照）：未改动的 spec ⇒ 0 问题，且真的解析到输入", [], None),
         Case("同号两条（Q47 的行改成 Q48，与 PG 版本那条撞号）",
              [("| **Q47** ✅ | **WPS 专有格式", "| **Q48** ✅ | **WPS 专有格式")],
              "编号必须唯一"),
@@ -354,12 +363,34 @@ def run_self_test() -> int:
             fixture = pathlib.Path(tmp)
             (fixture / "Docs").mkdir(parents=True)
             (fixture / SPEC_REL).write_text(text)
-            problems, _, _ = check(fixture)
+            problems, _, counts = check(fixture)
 
-        if any(case.expect in problem for problem in problems):
-            print("✅ 例 %d 报红并点名「%s」：%s" % (index, case.expect, case.name))
+        expect = case.expect
+        if expect is None:
+            # 前提自检（绿对照）+ 非空跑：判据若被改成「把什么都说成问题」，这一例当场红；
+            # 判据若「什么都跳过」，也当场红（三条下限必须仍然过 —— 跳过 ≠ 通过）。
+            vacuous = [key for key, low in (("rows", MIN_ROWS), ("numbers", MIN_QNUMBERS),
+                                            ("parity", MIN_PARITY))
+                       if counts.get(key, 0) < low]
+            if not problems and not vacuous:
+                print("✅ 例 %d 绿对照（未改动 ⇒ 0 问题）：%s（数据行 %d / `Q` 号 %d / §4 同源 %d 对）"
+                      % (index, case.name, counts["rows"], counts["numbers"], counts["parity"]))
+            else:
+                print("❌ 例 %d 期望绿却报红（%d 处问题%s）：%s"
+                      % (index, len(problems), " / 空跑防护不达下限" if vacuous else "", case.name))
+                for problem in problems[:4]:
+                    print("     %s" % problem)
+                for key, low in (("rows", MIN_ROWS), ("numbers", MIN_QNUMBERS),
+                                 ("parity", MIN_PARITY)):
+                    if counts.get(key, 0) < low:
+                        print("     空跑防护：%s = %d（下限 %d）" % (key, counts.get(key, 0), low))
+                failures += 1
+            continue
+
+        if any(expect in problem for problem in problems):
+            print("✅ 例 %d 报红并点名「%s」：%s" % (index, expect, case.name))
         else:
-            print("❌ 例 %d 没报红/没点名「%s」：%s" % (index, case.expect, case.name))
+            print("❌ 例 %d 没报红/没点名「%s」：%s" % (index, expect, case.name))
             for problem in problems[:4]:
                 print("     %s" % problem)
             failures += 1

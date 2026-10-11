@@ -448,7 +448,8 @@ python3 Scripts/check-doc-numbers.py --self-test
 # 判据 `Scripts/check-doc-q-series.py`：A 编号可判且唯一 / B 状态只写词表词 / C 关闭行成对 /
 # D §4 ↔ §6 同源（Q17~Q23 = Studio 号空间）/ E 空跑防护（行数 / 号数 / 对账对数下限）。
 # 该文件与 check-doc-tables 那份同属 `.gitignore` 内的本机台账 ⇒ 不在盘上时**跳过 + 高声提示**，
-# `--require-all` 判红；负例 `--self-test` **8 例** + 末例核对真仓库逐字节未变。
+# `--require-all` 判红；负例 `--self-test` **9 例** + 末例核对真仓库逐字节未变（例 1 = 前提自检
+# 「干净副本必须绿」且真的解析到输入 —— 队列 L-119）。
 if [ "${REQUIRE_ALL}" = "1" ]; then
   python3 Scripts/check-doc-q-series.py --require-all
 else
