@@ -1887,4 +1887,111 @@ final class NotesLayoutProbeTests: XCTestCase {
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")
     }
+    // MARK: - FR-NOTEUI-05 核读：工具条「全部收进左栏」的机械 dump（打印型 · 不判红）
+
+    /// **`FR-NOTEUI-05`「工具条全部收进左栏」的机械核读**（前门 `T-20261010-166` §三.4 ① ·
+    /// 片 `D166⑤` 同族核读卡 `t_fc71b8ec`）。
+    ///
+    /// ## 前门给的判据原话
+    ///
+    /// 「**所有控件 `frame.maxX ≤ 左栏右边界`**」——「左栏」按人类主人 2026-10-08 的定义取
+    /// **存放笔记列表的那一列**（原话「我这里说的左栏不是最左侧的笔记本导航栏，是存放笔记列表的左侧」），
+    /// 即本宿主里 `HSplitView` 落地出来的 `NSSplitView` 的**左那一子**（宽 = `listPaneMaxWidth`）。
+    ///
+    /// ## 为什么是**打印型**、不判红（这一条是刻意的）
+    ///
+    /// 本用例是**核读**（先给读数再判），不是实现卡；而契约里「工具条」指**哪一条**在本侧没有唯一出处：
+    ///   · 读法 A = **左区顶部操作行** `notes-left-actions-row`（`crudEntries` ＋ 搜索框 ＋ 作用域
+    ///     ＋ 行末两枚模块切换图标）—— 卡面 ① 的盘上证据（＋ / ✏ / 🗑 三枚）指着它；
+    ///   · 读法 B = **中栏栏头** `listHeader`（标题 / 条数 / 只看收藏 / 排序条）—— 本仓自己的用词把
+    ///     「**工具条分 2 行**」写给了它（`N2-LW-238` 那条前门裁决）。
+    /// 两条读法的读数**并排打出来**，定案归前门；打印型与本文件既有的
+    /// `testN22ExploreMeasurableWidths`（一次性诊断）同一形状 ⇒ **不会**在实现前把整族探针弄红。
+    ///
+    /// ## 量得到 / 量不到（与本文件既有的边界同源）
+    ///
+    /// SwiftUI 的 `Button`（`.buttonStyle(.plain)` + 图标）在这个离屏宿主里**不落地成 `NSView`**
+    /// ⇒ ＋ / ✏ / 🗑 与行末那两枚只量得到它们的 `_FocusRingView` **命中层**（28×22），量不到图标本身；
+    /// 标题 / 条数这类 `Text` 也量不到。所以本 dump 判的是「**量得到的那些控件**有没有越左栏右边界」，
+    /// 不是「工具条里每一个像素」。
+    @MainActor
+    func testNoteUi05ToolbarContainmentDump() throws {
+        let host = makeHost()
+        defer { UISnapshot.clearLicense(from: host.state) }
+        let live = makeLive(host)
+
+        // 左栏 = 存放笔记列表的那一列（`HSplitView` 的左那一子；分隔线按宽 > 8pt 滤掉）。
+        let split = try XCTUnwrap(
+            UISnapshot.LiveHost<Never>.findViews(ofType: NSSplitView.self, in: live.hosting).first,
+            "宿主里没有 `NSSplitView` —— `HSplitView` 没落地，量不到「左栏右边界」"
+        )
+        let columns = split.subviews
+            .map { (view: $0, rect: rect(of: $0, in: live.hosting)) }
+            .filter { $0.rect.width > 8 }
+            .sorted { $0.rect.minX < $1.rect.minX }
+        let pane = try XCTUnwrap(
+            columns.first,
+            "`HSplitView` 里量不到列（实测 \(columns.count) 列）—— 判据量不到「左栏」"
+        )
+        let paneRect = pane.rect
+
+        print(
+            "FR-NOTEUI-05 核读 左栏（存放笔记列表的那一列）= x=[\(pt(paneRect.minX))…\(pt(paneRect.maxX))]"
+                + " w=\(pt(paneRect.width)) ｜ 宿主 \(pt(areaSize.width))×\(pt(areaSize.height))"
+        )
+
+        // 顶带（宿主上缘往下 80pt）里所有可读矩形 —— 覆盖顶部操作行 + 中栏栏头 + 正文侧编辑器工具条。
+        // 高 ≤ 80pt 这一刀把栏内容器视图（`NSSplitView` / `NSHostingView` 那几条 667pt 高的）挡在外面
+        // ——与既有 `testN22ExploreMeasurableWidths` 同一刀。
+        let items = UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: live.hosting)
+            .filter { $0 !== live.hosting }
+            .map { (view: $0, rect: rect(of: $0, in: live.hosting)) }
+            .filter { !$0.rect.isEmpty && $0.rect.width > 1 && $0.rect.height > 1 && $0.rect.height <= 80 }
+            .filter { distanceToTopEdge($0.rect, in: live.hosting) <= 80 }
+            .sorted { distanceToTopEdge($0.rect, in: live.hosting) < distanceToTopEdge($1.rect, in: live.hosting) }
+
+        var topRowMaxX: CGFloat = 0          // 读法 A：顶部操作行（上缘 ≤ 30pt 那一条）
+        var topRowCount = 0
+        var topRowOverflow = 0
+        var headerMaxX: CGFloat = 0          // 读法 B：中栏栏头（起始边落在左栏 x 带里、上缘 > 30pt）
+        var headerCount = 0
+        var headerOverflow = 0
+
+        for item in items {
+            let r = item.rect
+            let top = distanceToTopEdge(r, in: live.hosting)
+            let overflow = r.maxX - paneRect.maxX
+            let startsInPane = r.minX >= paneRect.minX - 0.5 && r.minX < paneRect.maxX
+            let band: String
+            if top <= 30 {
+                band = "A·顶部操作行"
+                topRowCount += 1
+                topRowMaxX = max(topRowMaxX, r.maxX)
+                if overflow > 0.5 { topRowOverflow += 1 }
+            } else if startsInPane {
+                band = "B·中栏栏头"
+                headerCount += 1
+                headerMaxX = max(headerMaxX, r.maxX)
+                if overflow > 0.5 { headerOverflow += 1 }
+            } else {
+                band = "C·正文侧"
+            }
+            let overflowText = overflow > 0.5 ? "+\(pt(overflow))" : "0.0"
+            print(
+                "FR-NOTEUI-05 核读 [\(band)] cls=\(String(describing: type(of: item.view)))"
+                    + " id=\(item.view.accessibilityIdentifier())"
+                    + " x=[\(pt(r.minX))…\(pt(r.maxX))] w=\(pt(r.width)) h=\(pt(r.height)) top=\(pt(top))"
+                    + " 越界=\(overflowText)"
+            )
+        }
+
+        print(
+            "FR-NOTEUI-05 核读 读法 A（工具条 = 顶部操作行 notes-left-actions-row）：可读控件 \(topRowCount) 件 ·"
+                + " 最大 maxX=\(pt(topRowMaxX)) ｜ 左栏右边界=\(pt(paneRect.maxX))（越界 \(topRowOverflow) 件）"
+        )
+        print(
+            "FR-NOTEUI-05 核读 读法 B（工具条 = 中栏栏头 listHeader）：可读控件 \(headerCount) 件 ·"
+                + " 最大 maxX=\(pt(headerMaxX)) ｜ 左栏右边界=\(pt(paneRect.maxX))（越界 \(headerOverflow) 件）"
+        )
+    }
 }
