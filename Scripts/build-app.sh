@@ -27,7 +27,9 @@ set -euo pipefail
 # 产物：dist/DoyahStudio-<发布标签>.app（**发布标签**在下面「发布标签（唯一出处）」一节里定义）
 #   · 交付 / 复测**一律用带版本号的那份**；`dist/DoyahStudio.app` 只是指向最新一份的**软链**（方便入口，
 #     不作身份来源 —— 身份 = 带版本号的实物自身，派活单 `T-20261002-028`）。
-#   · 交付回执：脚本末尾固定打印「产物名 / 构建时间 / sha256 前 8 位 / 本版包含哪些修复」。
+#   · 交付回执：脚本末尾固定打印「产物名 / 目录 / 标签 / 构建时间 / sha256 / 本版包含 / 未含 /
+#     验法」+ 一行 `交付: …`（**身份留痕** —— 四项 + 含片/未含/验法，可整行粘进提交信息；
+#     基本法第三十七条）。
 #
 # 说明：ad-hoc 签名 + entitlements 足以在本机运行（网络客户端 + 默认不带 App Sandbox）。
 # 如果要分发或使用钥匙串的持久授权，请换用自己的开发者证书签名。
@@ -270,24 +272,43 @@ fi
 ln -sfn "$(basename "${APP}")" "${LATEST_LINK}"
 echo "==> 别名：dist/DoyahStudio.app -> $(readlink "${LATEST_LINK}")（身份以带版本号的实物为准）"
 
-# ---- 交付回执（固定四项：产物名 / 构建时间 / sha256 前 8 位 / 本版包含哪些修复）----
+# ---- 交付回执（身份留痕：四项 = 目录 / 标签 / sha256 / 构建时刻；三项 = 含片 / 未含 / 验法）----
 # 人类主人据此回答「我手上这份是不是最新的」。**历史包只增不删**：每个发布标签一个独立目录，
 # 重建只覆盖**同名**的那一个 ⇒ 保留最近 ≥3 个历史包是结构保证，不靠额外的清理步骤。
 BIN_FILE="${APP}/Contents/MacOS/DoyahStudio"
 NOTES_FILE="${ROOT}/dist/发布说明-${RELEASE_LABEL}.md"
+BUILD_TIME="$(date +%Y-%m-%dT%H:%M:%S%z)"
+BIN_SHA="$(shasum -a 256 "${BIN_FILE}" | cut -d' ' -f1)"
 echo ""
 echo "==== 交付回执 ===="
 echo "产物名：$(basename "${APP}")"
-echo "构建时间：$(date +%Y-%m-%dT%H:%M:%S%z)（UTC $(date -u +%Y-%m-%dT%H:%M:%SZ)）"
+echo "目录：${APP}"
+echo "标签：${RELEASE_LABEL}"
+echo "构建时间：${BUILD_TIME}（UTC $(date -u +%Y-%m-%dT%H:%M:%SZ)）"
 echo "sha256（前 8 位）：$(shasum -a 256 "${BIN_FILE}" | cut -c1-8)（二进制 ${BIN_FILE##*/} · $(stat -f %z "${BIN_FILE}") 字节）"
+# 「本版包含」= 发布说明里**以 `本版包含：` 开头的那一行**（该行自带前缀也认，剥掉一个，
+# 免得打印成「本版包含：本版包含：…」）。**不再取文件第一行** —— 本文件的头一行常常是标题
+# （`# …发布说明…`），取它会把标题当成「本版包含」印出来（alpha3.1 实测踩到）。
 if [ -f "${NOTES_FILE}" ]; then
-  # 第一行**自带**前缀也认（剥掉一个，免得打印成「本版包含：本版包含：…」）
-  NOTES_LINE="$(head -1 "${NOTES_FILE}")"
-  NOTES_LINE="${NOTES_LINE#本版包含：}"
+  NOTES_LINE="$(grep -m1 -E '^\*{0,2}本版包含\*{0,2}[：:]' "${NOTES_FILE}" | sed -e 's/^\*\*本版包含\*\*[：:]//' -e 's/^本版包含[：:]//')"
+  [ -n "${NOTES_LINE}" ] || NOTES_LINE="（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 里写一行「本版包含：…」）"
   echo "本版包含：${NOTES_LINE}"
 else
-  echo "本版包含：（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 的第一行写一句，或从交付面文档取）"
+  echo "本版包含：（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 里写一行「本版包含：…」，或从交付面文档取）"
 fi
+# 「未含」= 同一个发布说明里以 `未含：` 开头的那一行；缺了就**如实写未登记**，不猜。
+NOTES_EXCLUDED=""
+if [ -f "${NOTES_FILE}" ]; then
+  NOTES_EXCLUDED="$(grep -m1 -E '^\*{0,2}未含\*{0,2}[：:]' "${NOTES_FILE}" | sed -e 's/^\*\*未含\*\*[：:]//' -e 's/^未含[：:]//')"
+fi
+[ -n "${NOTES_EXCLUDED}" ] || NOTES_EXCLUDED="（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 里写一行「未含：…」）"
+echo "未含：${NOTES_EXCLUDED}"
+echo "验法：shasum -a 256 \"${APP}/Contents/MacOS/DoyahStudio\" ｜ /usr/libexec/PlistBuddy -c 'Print :DoyahReleaseLabel' \"${APP}/Contents/Info.plist\""
+# **交付身份留痕**（基本法第三十七条 · 人类主人 2026-10-11 裁）：四项（目录 / 标签 / sha256 /
+# 构建时刻）+ 三项（含哪些片 / 未含 / 怎么验），一行可**整行粘进提交信息**（载体 (a)）。
+# 卡面 `done` 与「分支已合」都**不算**身份留痕；`sha256` 是**全量**，与 `Contents/MacOS/` 下
+# 那份二进制逐字节对得上（《交付物身份留痕》判据将来由脚本核）。
+echo "交付: 目录=${APP} 标签=${RELEASE_LABEL} sha256=${BIN_SHA} 构建时刻=${BUILD_TIME} 含片=${NOTES_LINE} 未含=${NOTES_EXCLUDED} 验法=shasum -a 256 <目录>/Contents/MacOS/DoyahStudio + PlistBuddy Print :DoyahReleaseLabel"
 echo "目录里的历史包：$(ls -d "${ROOT}"/dist/DoyahStudio-*.app 2>/dev/null | wc -l | tr -d ' ') 个（含本次）"
 echo "=================="
 echo ""
