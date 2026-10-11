@@ -204,6 +204,23 @@ fi
 echo "==> 附带第三方许可声明"
 cp "${ROOT}/THIRD-PARTY-NOTICES.md" "${APP}/Contents/Resources/THIRD-PARTY-NOTICES.md"
 
+# 插件面随包发（概设 §7 · §8 判据⑤「产物含插件目录与清单」）：清单与资源进
+# `Contents/Resources/Plugins/`，**源码（`*.swift`）不进包** —— 与 `project.yml` 里
+# 那条资源登记同口径（源码由各自 target 收）。装配器读的就是这个位置：
+# `PluginManifestLoader.defaultPluginsDirectory()` = `Bundle.main.url(forResource: "Plugins", …)`
+# ⇒ 包内缺它，交付物里 `PluginRegistry` 恒空（而门禁第 10 项只判源码形状，看不见这一格）。
+# shared-surface：交付打包面补「插件目录与清单进包」（概设 §8 判据⑤）—— 只加一段拷贝，既有步骤一字不动
+PLUGINS_SRC="${ROOT}/Plugins"
+if [ -d "${PLUGINS_SRC}" ]; then
+  echo "==> 附带插件目录与清单（Plugins/ ⇒ Contents/Resources/Plugins/）"
+  cp -R "${PLUGINS_SRC}" "${APP}/Contents/Resources/Plugins"
+  find "${APP}/Contents/Resources/Plugins" -name '*.swift' -delete
+  find "${APP}/Contents/Resources/Plugins" -type d -empty -delete
+  find "${APP}/Contents/Resources/Plugins" -name 'plugin.json' -print | sed 's|^|    |'
+else
+  echo "警告：缺少 ${PLUGINS_SRC}（本次包内没有插件目录）"
+fi
+
 # ---- App 沙箱：默认**不带**；带了才是沙箱（上架那一天） ----
 # 交付口径 = 非沙箱包（见文件头与 Docs/发布计划.md §1）。沙箱路径**不许删** ——
 # 上架那天 `DOYAH_SANDBOX=1` 即可切回，两个 entitlements 文件都在仓里。
