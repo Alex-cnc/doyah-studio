@@ -46,6 +46,11 @@ targets:
       - path: Core
         excludes:
           - ".build"
+      # 插件面（概设 §7 P3，2026-10-13）：笔记的**自有逻辑**搬进插件目录后仍编进本 target
+      # （同模块搬家；SwiftPM 侧同一份口径见 `Package.swift` 的 `sources:`）。
+      - path: Plugins/Notes/Sources
+        excludes:
+          - ".build"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: studio.doyah.DoyahCore
@@ -96,10 +101,18 @@ targets:
           - "Resources/icons"
           # 构建残留的点目录（口径见上面 `targets:` 前那一段）：`xcodegen` 不读 `.gitignore`。
           - ".build"
-      # 插件面（概设 §7）：内置插件的**清单与资源**随宿主包一起发；
-      # 源码级的插件目录（`Plugins/<id>/*.swift`）由各自 target 收，此处只保证
-      # `plugin.json` 等资源进 `.app`，好让运行期能"认识"装进来的插件。
-      - path: Plugins
+      # 插件面（概设 §7 P3）：笔记那三个**需要宿主类型**的视图（读 `AppState`）留在宿主模块里，
+      # 但物理位置在插件目录 —— 这样「什么进插件」在盘上一眼可见，跨模块边界则留给后续片。
+      - path: Plugins/Notes/Views
+        excludes:
+          - ".build"
+      # 插件清单随宿主包一起发。**只列 `plugin.json` 本身** —— 把整个 `Plugins/` 当资源收，
+      # 会把插件源码（已由 `DoyahCore` / `DoyahStudio` 两个 target 编译）再复制一份进包。
+      - path: Plugins/Notes/plugin.json
+        buildPhase: resources
+      - path: Plugins/Replay/plugin.json
+        buildPhase: resources
+      - path: Plugins/Sample/plugin.json
         buildPhase: resources
     dependencies:
       - target: DoyahCore

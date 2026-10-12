@@ -684,7 +684,7 @@ final class NotesShelfProbeTests: XCTestCase {
     }
 
     private func notesPanelSource() throws -> String {
-        try String(contentsOf: repoRoot().appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8)
+        try String(contentsOf: repoRoot().appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"), encoding: .utf8)
     }
 
     /// 从源码里抠出一段（从 `marker` 那一行到与之匹配的**顶层** `}`）。拿去当源锚点的范围。

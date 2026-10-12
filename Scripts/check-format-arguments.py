@@ -75,7 +75,7 @@ HERE = Path(__file__).resolve().parent
 REPO_DEFAULT = HERE.parent
 
 LEDGER_REL = "Scripts/format-argument-dispositions.json"
-SCAN_DIRS = ("App", "CLI", "Core")
+SCAN_DIRS = ("App", "CLI", "Core", "Plugins/Notes/Sources", "Plugins/Notes/Views")
 TABLE_REL = "Core/Localization.swift"
 
 # printf 转换符：可选 位置参数 / 标志 / 宽度 / 精度 / 长度修饰，最后是转换符本身。

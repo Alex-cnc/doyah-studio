@@ -29,21 +29,21 @@
     "ALTER TABLE note ADD COLUMN spans TEXT;": {
       "kind": "sql",
       "sites": [
-        "Core/NoteStorage/NoteDatabase.swift:403"
+        "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:403"
       ]
     },
     "ALTER TABLE todo ADD COLUMN note TEXT NOT NULL DEFAULT '';": {
       "kind": "sql",
       "sites": [
-        "Core/NoteStorage/NoteDatabase.swift:431"
+        "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:431"
       ]
     },
     "Accept": {
       "kind": "protocolToken",
       "sites": [
         "Core/LLMClient.swift:162",
-        "Core/NoteSync/CloudAuth.swift:536",
-        "Core/NoteSync/CloudSyncService.swift:671"
+        "Plugins/Notes/Sources/NoteSync/CloudAuth.swift:536",
+        "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift:671"
       ]
     },
     "Actual Loops": {
@@ -92,8 +92,8 @@
       "kind": "protocolToken",
       "sites": [
         "Core/LLMClient.swift:166",
-        "Core/NoteSync/CloudAuth.swift:450",
-        "Core/NoteSync/CloudSyncService.swift:502"
+        "Plugins/Notes/Sources/NoteSync/CloudAuth.swift:450",
+        "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift:502"
       ]
     },
     "BASE TABLE": {
@@ -105,13 +105,13 @@
     "BEGIN IMMEDIATE": {
       "kind": "sql",
       "sites": [
-        "Core/NoteStorage/SQLiteKit.swift:382"
+        "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift:382"
       ]
     },
     "Bearer": {
       "kind": "protocolToken",
       "sites": [
-        "Core/NoteSync/CloudAuth.swift:49"
+        "Plugins/Notes/Sources/NoteSync/CloudAuth.swift:49"
       ]
     },
     "Bob": {
@@ -309,6 +309,12 @@
         "Core/ExplainPlan.swift:288"
       ]
     },
+    "Notes": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/Plugin/PluginMounts.swift:30"
+      ]
+    },
     "PRIMARY KEY": {
       "kind": "sql",
       "sites": [
@@ -373,7 +379,7 @@
       "kind": "protocolToken",
       "sites": [
         "Core/DatabaseType.swift:124",
-        "Core/NoteSync/CloudSyncService.swift:658"
+        "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift:658"
       ]
     },
     "Relation Name": {
@@ -545,7 +551,7 @@
     "close failed": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteStorage/SQLiteKit.swift:261"
+        "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift:261"
       ]
     },
     "connection refused": {
@@ -587,7 +593,7 @@
     "date is neither ISO8601 string nor number": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteSync/CloudSyncService.swift:854"
+        "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift:854"
       ]
     },
     "disregard previous": {
@@ -686,19 +692,19 @@
     "no message": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteStorage/SQLiteKit.swift:231"
+        "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift:231"
       ]
     },
     "no response": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteSync/CloudAuth.swift:652"
+        "Plugins/Notes/Sources/NoteSync/CloudAuth.swift:652"
       ]
     },
     "no result": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteStorage/NoteDatabase.swift:668"
+        "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:668"
       ]
     },
     "no route to host": {
@@ -716,13 +722,13 @@
     "non-http response": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteSync/CloudAuth.swift:660"
+        "Plugins/Notes/Sources/NoteSync/CloudAuth.swift:660"
       ]
     },
     "note row has no usable uuid": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteStorage/NoteDatabase.swift:2006"
+        "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:2006"
       ]
     },
     "order by": {
@@ -742,13 +748,13 @@
     "reminder row has no live owner": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteStorage/NoteDatabase.swift:1913"
+        "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:1913"
       ]
     },
     "reminder row has no usable uuid": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteStorage/NoteDatabase.swift:1899"
+        "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:1899"
       ]
     },
     "statement timed out; sending a cancel to the server": {
@@ -760,20 +766,20 @@
     "the connection is closed": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteStorage/SQLiteKit.swift:437"
+        "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift:437"
       ]
     },
     "the legacy notes file exists but cannot be read": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/Note.swift:380",
-        "Core/NoteStorage/NoteLibraryMigration.swift:110"
+        "Plugins/Notes/Sources/Note.swift:380",
+        "Plugins/Notes/Sources/NoteStorage/NoteLibraryMigration.swift:110"
       ]
     },
     "the notes file exists but cannot be read": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/Note.swift:225"
+        "Plugins/Notes/Sources/Note.swift:225"
       ]
     },
     "timed out": {
@@ -799,7 +805,7 @@
     "todo row has no usable uuid": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteStorage/NoteDatabase.swift:1955"
+        "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:1955"
       ]
     },
     "tools/call before initialize": {
@@ -817,7 +823,7 @@
     "unsupported JSON value": {
       "kind": "internalErrorDescription",
       "sites": [
-        "Core/NoteBody.swift:80"
+        "Plugins/Notes/Sources/NoteBody.swift:80"
       ]
     },
     "yyyy-MM-dd HH:mm": {

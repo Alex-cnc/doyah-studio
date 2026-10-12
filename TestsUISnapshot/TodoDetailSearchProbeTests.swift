@@ -431,9 +431,9 @@ final class TodoDetailSearchProbeTests: XCTestCase {
             calendarSource.contains("localizedCaseInsensitiveContains"),
             "视图里出现了检索谓词 —— 判定必须只在 Core（`TodoSearch`）"
         )
-        let panelSource = try source("App/Views/NotesPanel.swift")
+        let panelSource = try source("Plugins/Notes/Views/NotesPanel.swift")
         for anchor in ["struct TodoDetailView", "struct TodoRightPaneView", "appState.todoDetailTodo"] {
-            XCTAssertTrue(panelSource.contains(anchor), "`App/Views/NotesPanel.swift` 里找不到锚点 `\(anchor)`")
+            XCTAssertTrue(panelSource.contains(anchor), "`Plugins/Notes/Views/NotesPanel.swift` 里找不到锚点 `\(anchor)`")
         }
         let stateSource = try source("App/AppState.swift")
         for anchor in [
@@ -515,7 +515,7 @@ final class TodoDetailSearchProbeTests: XCTestCase {
     ///      也落在同一个形状上（正则判形状，不写死字面量），零点那一档另判一遍（免得被 12 小时制换掉）；
     ///   ② **无截止走既有键**：`TodoDueText.text(nil)` == 语言表里那两句「无截止」（中英各判一遍，
     ///      取值在语言窗口内算）—— 不新造文案；
-    ///   ③ **成对读数**（同一份源码里的计数，改前 → 改后）：`App/Views/NotesPanel.swift` 里
+    ///   ③ **成对读数**（同一份源码里的计数，改前 → 改后）：`Plugins/Notes/Views/NotesPanel.swift` 里
     ///      `TodoQuery.band(of:` **1 ⇒ 0**、`TodoDueText.text(` **0 ⇒ 1**；而清单行 / 分组那一侧
     ///      （`App/Views/TodoCalendarView.swift`）仍是 **2**、`Core/TodoQuery.swift` 的分带本体仍在
     ///      —— **分带读数不许被动**；
@@ -606,12 +606,12 @@ final class TodoDetailSearchProbeTests: XCTestCase {
         func occurrences(_ needle: String, in text: String) -> Int {
             text.components(separatedBy: needle).count - 1
         }
-        let panel = try source("App/Views/NotesPanel.swift")
+        let panel = try source("Plugins/Notes/Views/NotesPanel.swift")
         let calendar = try source("App/Views/TodoCalendarView.swift")
         let query = try source("Core/TodoQuery.swift")
         XCTAssertEqual(
             occurrences("TodoQuery.band(of:", in: panel), 0,
-            "`App/Views/NotesPanel.swift` 里还有分带取值 —— 成对读数：改前 1（详情那一行）⇒ 改后 0"
+            "`Plugins/Notes/Views/NotesPanel.swift` 里还有分带取值 —— 成对读数：改前 1（详情那一行）⇒ 改后 0"
         )
         XCTAssertEqual(
             occurrences("TodoDueText.text(", in: panel), 1,

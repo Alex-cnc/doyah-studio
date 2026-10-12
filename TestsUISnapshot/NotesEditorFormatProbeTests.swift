@@ -247,7 +247,7 @@ final class NotesEditorFormatProbeTests: XCTestCase {
 
     private func notesPanelSource() throws -> String {
         try String(
-            contentsOf: Self.repositoryRoot.appendingPathComponent("App/Views/NotesPanel.swift"),
+            contentsOf: Self.repositoryRoot.appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"),
             encoding: .utf8
         )
     }
@@ -689,7 +689,7 @@ final class NotesEditorFormatProbeTests: XCTestCase {
     /// **判据：单一写入口**（片 `WY-2a`）—— 全仓写 `note.spans` 列的地方**只有** `NoteDatabase.setNoteSpans`
     /// 一处。三层机械检查（都在源上，不靠人眼）：
     ///   ① 全仓 `.swift` 里出现「把 `spans` 列写下去」那个 SQL 形状（`spans = ?`）的文件**只有**
-    ///      `Core/NoteStorage/NoteDatabase.swift`；
+    ///      `Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift`；
     ///   ② 那一处落在 `setNoteSpans` 的函数体里（不是散在别的语句里）；
     ///   ③ `note` 的 `INSERT` 列表里**没有** `spans`（新建那条路也不许各写一份 —— 正文只从写入口进）。
     ///
@@ -697,7 +697,7 @@ final class NotesEditorFormatProbeTests: XCTestCase {
     ///
     /// ① 的「全仓」过去由 `FileManager.enumerator` 从仓根**递归走全目录**（只跳 `.build` / `.git`）
     /// 给出 ⇒ 仓根下挂着 `.worktrees/`（并行工作树）时，每个工作树里那份逐字的
-    /// `Core/NoteStorage/NoteDatabase.swift` 都被计入（组长机械复现：锚仓根 `hits=7` ↔ 片工作树根
+    /// `Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift` 都被计入（组长机械复现：锚仓根 `hits=7` ↔ 片工作树根
     /// `hits=1`），加上本探针自己引用的 `spans = ?` 比对串 ⇒ 这条断言在锚仓里**必红**。
     /// 现改走 `git ls-files`（见 `allSwiftSources()`）：扫描面 = **跟踪面**，副本天然在外。
     ///
@@ -711,12 +711,12 @@ final class NotesEditorFormatProbeTests: XCTestCase {
 
         let writers = Self.spansColumnWriters(in: sources)
         XCTAssertEqual(
-            writers, ["Core/NoteStorage/NoteDatabase.swift"],
+            writers, ["Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift"],
             "写 `spans` 列的地方不止一处：\(writers)"
         )
 
         let database = try XCTUnwrap(
-            sources.first { $0.path == "Core/NoteStorage/NoteDatabase.swift" }?.text,
+            sources.first { $0.path == "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift" }?.text,
             "读不到 `NoteDatabase.swift`"
         )
         // ② 那一处必须在 `setNoteSpans` 的函数体里。
@@ -736,11 +736,11 @@ final class NotesEditorFormatProbeTests: XCTestCase {
         // 直接把那条清单**喂**进同一个挑取函数：若哪天有人把扫描面改回递归、或把副本混进来，
         // 下面那条 `writers == [NoteDatabase.swift]` 当场红。
         let withCopy = sources + [
-            (path: ".worktrees/t_demo/Core/NoteStorage/NoteDatabase.swift", text: database)
+            (path: ".worktrees/t_demo/Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift", text: database)
         ]
         let negativeWriters = Self.spansColumnWriters(in: withCopy)
         XCTAssertNotEqual(
-            negativeWriters, ["Core/NoteStorage/NoteDatabase.swift"],
+            negativeWriters, ["Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift"],
             "负例：扫描面里混进第二处 `spans = ?` 的副本，「只有一处写点」这条断言**必须**报红 —— 实测却仍是一条"
         )
         XCTAssertEqual(negativeWriters.count, 2, "负例：混进来的副本没被计入（\(negativeWriters)）")
@@ -775,7 +775,7 @@ final class NotesEditorFormatProbeTests: XCTestCase {
     /// 仓里**受跟踪**的 `.swift` 源文件（相对路径 + 内容）—— **扫描面 = 跟踪面**。
     ///
     /// 改前这里是 `FileManager.default.enumerator` 从仓根**递归走全目录**、只跳 `.build` / `.git`：
-    /// 仓根下挂着 `.worktrees/`（并行工作树，每个里都有一份逐字相同的 `Core/NoteStorage/NoteDatabase.swift`）
+    /// 仓根下挂着 `.worktrees/`（并行工作树，每个里都有一份逐字相同的 `Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift`）
     /// 时，同一处写点被数成多条 ⇒ 本文件的 ① 在**锚仓**里必红（组长机械复现：锚仓根 `hits=7` ↔
     /// 片工作树根 `hits=1`）。改走 `git ls-files`：只列索引里跟踪的文件 ⇒ `.worktrees/` 那些副本
     /// 天然落在扫描面之外（`git` 忽略的目录，不是跟踪文件；本仓 `.git/info/exclude` 里就有 `.worktrees/`）。

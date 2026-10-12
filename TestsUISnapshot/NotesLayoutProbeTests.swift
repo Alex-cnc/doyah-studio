@@ -264,7 +264,7 @@ final class NotesLayoutProbeTests: XCTestCase {
     }
 
     private func notesPanelSource() throws -> String {
-        try String(contentsOf: repoRoot().appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8)
+        try String(contentsOf: repoRoot().appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"), encoding: .utf8)
     }
 
     // MARK: - 判据① 行末那两枚：旧形态必须消失（`T-20261007-080`）
@@ -299,7 +299,7 @@ final class NotesLayoutProbeTests: XCTestCase {
             "moduleSwitchButton(for: .notes, systemName: NotesAreaView.notesModuleSymbol)",
             "moduleSwitchButton(for: .todos, systemName: NotesAreaView.todosModuleSymbol)",
         ] {
-            XCTAssertTrue(source.contains(anchor), "源锚点失配：\(anchor) 不在 `App/Views/NotesPanel.swift` 里")
+            XCTAssertTrue(source.contains(anchor), "源锚点失配：\(anchor) 不在 `Plugins/Notes/Views/NotesPanel.swift` 里")
         }
     }
 
@@ -359,13 +359,13 @@ final class NotesLayoutProbeTests: XCTestCase {
     ///   ② 正文区那个 `NSTextView` 的 `isEditable` —— 点前 `true`、点后 `false`。
     ///
     /// **为什么 ② 读 `NSTextView.isEditable` 这种底层的数**：只读这件事在 SwiftUI 这一层没有
-    /// 直接读数（实测 `.disabled(_:)` **不改**底层 `isEditable` —— 见 `App/Views/NotePreviewBody.swift`
+    /// 直接读数（实测 `.disabled(_:)` **不改**底层 `isEditable` —— 见 `Plugins/Notes/Views/NotePreviewBody.swift`
     /// 头注释），而「正文真的变成不可编辑」正是这一段要实现的东西 ⇒ 只能读它。
     /// **点前那一次就是对照件**：同一套遍历在 `.edit` 态必须读到 `true` —— 量法若恒读 `false`
     /// （或一个都量不到），这里当场红。
     ///
     /// **怎么算「单击」**：走生产那条入口 `AppState.handleNoteRowClick(_:modifiers:)`
-    /// （行上 `.onTapGesture` 调的就是它，见 `App/Views/NotesPanel.swift:154`），修饰键给**空**
+    /// （行上 `.onTapGesture` 调的就是它，见 `Plugins/Notes/Views/NotesPanel.swift:154`），修饰键给**空**
     /// （无修饰 = Core `NoteSelectionRule.clicked` 口径里的「打开这一条」）。
     ///
     /// **边界（如实登记）**：`onTapGesture` 自己（AppKit 把一次真实鼠标按下认成 tap）不在判据面里 ——
@@ -458,7 +458,7 @@ final class NotesLayoutProbeTests: XCTestCase {
     /// 量法若恒读同一个数（或一个都量不到），这里当场红。
     ///
     /// **怎么算「双击内容区」**：走生产那条入口 `AppState.beginEditingCurrentNote()`
-    /// （`NotePreviewBody` 那一支上 `.onTapGesture(count: 2)` 调的就是它，见 `App/Views/NotesPanel.swift`）。
+    /// （`NotePreviewBody` 那一支上 `.onTapGesture(count: 2)` 调的就是它，见 `Plugins/Notes/Views/NotesPanel.swift`）。
     /// 真实鼠标的双击由 AppKit 判定，不在判据面里 —— 与 `N2-3a` 同一条边界（那一侧也是走入口）。
     @MainActor
     func testN23bDoubleClickOnContentEntersEditingWithTopToolbar() async throws {
@@ -561,7 +561,7 @@ final class NotesLayoutProbeTests: XCTestCase {
     ///
     /// `N2-3b` 与 `T-080` 那两条登记的边界是 **SwiftUI 的手势不响应合成事件**
     /// （`window.sendEvent` ⇒ 事件收下但 `notesModule` 不动）。本用例走的是 **AppKit 那一层**：
-    /// 预览态正文是一个**真 `NSTextView`**（`App/Views/NotePreviewBody.swift` 的
+    /// 预览态正文是一个**真 `NSTextView`**（`Plugins/Notes/Views/NotePreviewBody.swift` 的
     /// `PreviewTextView`），它对 `mouseDown(with:)` 的处置是**同步、确定**的 —— 直接把事件投给
     /// 那个视图即可，绕开 SwiftUI 的手势判定。
     ///
@@ -664,7 +664,7 @@ final class NotesLayoutProbeTests: XCTestCase {
         // **当场判红**，而不是把用例挂死。两条守卫都不绿就直接返回（后面那两下按不下去）。
         guard let preview = body as? PreviewTextView else {
             XCTFail(
-                "预览态正文不是 `PreviewTextView`（`App/Views/NotePreviewBody.swift`）—— "
+                "预览态正文不是 `PreviewTextView`（`Plugins/Notes/Views/NotePreviewBody.swift`）—— "
                     + "R3 / R4 那条「在正文上按下 ⇒ 进编辑」的事件路径不在产品上（实测类型 \(type(of: body))）"
             )
             return
@@ -875,7 +875,7 @@ final class NotesLayoutProbeTests: XCTestCase {
     ///   ② **两枚讲得出名字**：`help:` 是 `ToolbarIconButton` 的**构造参数**（漏了编译不过）；
     ///      本用例用**源锚点**把「两枚的 `help` 取 `L(module.titleKey)`」+「两枚用两个**不同**的
     ///      图标常量（笔记本 / 闹钟）」钉住（口径同 `NotePresentationTests` 的源码锚点）；
-    ///   ③ **不是分段条/文字按钮**：`App/Views/NotesPanel.swift` 里 `moduleSwitch` 不再出现
+    ///   ③ **不是分段条/文字按钮**：`Plugins/Notes/Views/NotesPanel.swift` 里 `moduleSwitch` 不再出现
     ///      `.pickerStyle(.segmented)`（那是旧形态；负向断言，能判红）。
     ///
     /// ## 未验证项（如实登记 · 不许用「代码里有」替代）
@@ -905,7 +905,7 @@ final class NotesLayoutProbeTests: XCTestCase {
             "isSelected: appState.notesModule == module",
             "static let todosModuleSymbol = \"alarm\"",
         ] {
-            XCTAssertTrue(source.contains(anchor), "源锚点失配：`\(anchor)` 不在 `App/Views/NotesPanel.swift` 里")
+            XCTAssertTrue(source.contains(anchor), "源锚点失配：`\(anchor)` 不在 `Plugins/Notes/Views/NotesPanel.swift` 里")
         }
         XCTAssertFalse(
             source.contains("private var moduleSwitch: some View {\n        Picker("),
@@ -1118,7 +1118,7 @@ final class NotesLayoutProbeTests: XCTestCase {
     ///
     ///   · **改后** = 生产的 `NotesAreaView()` 挂进 1100×700 宿主；
     ///   · **改前** = **复刻件**：同一副骨架（`HSplitView` + `NotesListView` + `NotesEditorView`），
-    ///     中栏那三档写**改前那三个数**（`220 / 300 / 520`，与 `App/Views/NotesPanel.swift` 里
+    ///     中栏那三档写**改前那三个数**（`220 / 300 / 520`，与 `Plugins/Notes/Views/NotesPanel.swift` 里
     ///     `listPane*Width` 注释登记的改前值逐字相同），挂进同样大的宿主。
     ///
     /// 两次读数都在本机当场量出来 ⇒ 判据自足（不靠回执里手抄一个数）。本机实测：改前那一列
@@ -1383,7 +1383,7 @@ final class NotesLayoutProbeTests: XCTestCase {
             ".accessibilityIdentifier(\"notes-favorite-filter\")",
             "TextField(L(.notesSearchPlaceholder), text: $appState.notesQuery)",
         ] {
-            XCTAssertTrue(source.contains(anchor), "源锚点失配：`\(anchor)` 不在 `App/Views/NotesPanel.swift` 里")
+            XCTAssertTrue(source.contains(anchor), "源锚点失配：`\(anchor)` 不在 `Plugins/Notes/Views/NotesPanel.swift` 里")
         }
     }
 
@@ -1557,7 +1557,7 @@ final class NotesLayoutProbeTests: XCTestCase {
     /// 代码，一处改了不等于另一处改了」正是这一族判据存在的理由。
     ///
     /// ## 判据（都在盘上，不靠人眼）
-    ///   · **① 源码级（剥掉整行注释之后）**：`App/Views/NotesPanel.swift` 里 `.labelStyle(.titleAndIcon)`
+    ///   · **① 源码级（剥掉整行注释之后）**：`Plugins/Notes/Views/NotesPanel.swift` 里 `.labelStyle(.titleAndIcon)`
     ///     的**代码**处数 = **0**。注释里的历史记录**保留**（它们是「这条口径改过什么」的存档，
     ///     不是活的控件）⇒ 先把**整行注释**剥掉再数，并**反向自检**：原文里仍有 ≥2 处（都在注释里）
     ///     ⇒ 说明这一剥真的剥到了东西（不是把注释也算进去、也不是空跑）；
@@ -1881,7 +1881,7 @@ final class NotesLayoutProbeTests: XCTestCase {
     /// 剥掉**整行注释**（`//` / `///` 开头、允许前导空白的那些行）—— 口径见 `FR-NOTEUI-15` 那两条：
     /// 注释里逐字写着的旧形态是**存档**（「原来是 `Label { Text(…) }`」），不是活的控件，不剥就会
     /// 把历史记录当成现行形态判红。只剥**整行**注释，不碰行尾注释、也不碰字符串字面量里的 `//`
-    /// （`App/Views/NotesPanel.swift` 的注释都是整行的 —— 这一刀够用，且不会误伤 URL / 正则之类）。
+    /// （`Plugins/Notes/Views/NotesPanel.swift` 的注释都是整行的 —— 这一刀够用，且不会误伤 URL / 正则之类）。
     private static func strippingLineComments(_ text: String) -> String {
         text.split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }

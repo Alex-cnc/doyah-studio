@@ -77,10 +77,17 @@ DOC_ANCHORS = {
 
 
 def app_files(root: Path) -> list[Path]:
-    app = root / "App"
-    if not app.is_dir():
-        return []
-    return sorted(path for path in app.rglob("*.swift") if path.is_file())
+    """扫描面 = `App/` + **插件目录下的宿主视图**（`Plugins/Notes/Views/`，2026-10-13 · 概设 §7 P3 搬家）。
+
+    笔记那三个视图物理上搬进了插件目录，但编的仍是宿主模块（它们读 `AppState`）——
+    按「能编辑多行文本的编辑面都要登记」这条口径，它们必须仍在本判据的扫描面里。
+    """
+    files: list[Path] = []
+    for relative in ("App", "Plugins/Notes/Views"):
+        base = root / relative
+        if base.is_dir():
+            files += [path for path in base.rglob("*.swift") if path.is_file()]
+    return sorted(files)
 
 
 def read_text(path: Path) -> str:
@@ -306,9 +313,9 @@ FIXTURE_SOURCES = [
     "App/Views/TitleBarSearchField.swift",
     # 同理（2026-10-08）：台账补登笔记面只读预览正文（`PreviewTextView`，N2-3a）⇒ 它也得进夹具，
     # 否则「原样应当绿（夹具与真仓库同源）」会因为台账指向的文件不在夹具里而红。
-    "App/Views/NotePreviewBody.swift",
+    "Plugins/Notes/Views/NotePreviewBody.swift",
     # 同理（2026-10-09）：台账补登笔记正文富文本编辑面（`NotesTextView`，片 `WY-1b1`）⇒ 它也得进夹具。
-    "App/Views/NotesRichTextEditor.swift",
+    "Plugins/Notes/Views/NotesRichTextEditor.swift",
 ]
 FIXTURE_DOCS = list(DOC_ANCHORS)
 

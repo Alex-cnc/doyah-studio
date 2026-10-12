@@ -30,7 +30,7 @@ import DoyahCore
 ///   ③ **删回灰**：清空之后与空态**逐字节相同**（差异像素 **0**）—— 「删回灰」不是「看着差不多」。
 ///
 /// **判定带随片 `N2-3b` 从底带搬到顶带**：人类主人令 `T-20261007-004` 第 4 条把「保存」搬进了
-/// **顶部编辑工具条**（`App/Views/NotesPanel.swift` 的 `NotesEditorToolbar`）⇒ 它不再落在
+/// **顶部编辑工具条**（`Plugins/Notes/Views/NotesPanel.swift` 的 `NotesEditorToolbar`）⇒ 它不再落在
 /// 底部那一带里。三态断言本身**一字未改**，只重定了量它的那一带 —— 本文件头注释原先就写着
 /// 「判定带与亮度门槛是**按本机实测定的**：换字号 / 换排版会动这条带，届时按实测重定」。
 ///
@@ -82,7 +82,7 @@ import DoyahCore
 /// ## 片 `TODO-SV` 追加的一条（派单 `T-20261009-038`）：**待办面**那枚保存键同口径
 ///
 /// 片 `N2-SV` 把「笔记面」的保存键改成了纯图标；本片把**待办面**（`TodoEditorView` 的
-/// `editorToolbar`，仍在同一个文件 `App/Views/NotesPanel.swift`）那一枚按**同一条口径**改掉
+/// `editorToolbar`，仍在同一个文件 `Plugins/Notes/Views/NotesPanel.swift`）那一枚按**同一条口径**改掉
 /// —— 「工具条上不许有文字按钮」（`NFR-UI-01` / `FR-EXEC-13` / 台账第 27 条）。
 /// 判据沿用片 `N2-SV` 那三路里的两路（①-a AppKit 树扫描 + 对照件 → 「工具条带内带字按钮 = 0」；
 /// ①-b 源码扫描：那一块里不许有 `Text(` / `.titleAndIcon`），另加两处**位置 / 点击路径**的
@@ -488,9 +488,9 @@ final class NotesEditorSaveProbeTests: XCTestCase {
         return hosting.isFlipped ? rect.minY : hosting.bounds.height - rect.maxY
     }
 
-    /// 仓里的 `App/Views/NotesPanel.swift` 源码（判据从**源码**上取的那两半读它）。
+    /// 仓里的 `Plugins/Notes/Views/NotesPanel.swift` 源码（判据从**源码**上取的那两半读它）。
     private func notesPanelSource() throws -> String {
-        try String(contentsOf: Self.repositoryRoot.appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8)
+        try String(contentsOf: Self.repositoryRoot.appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"), encoding: .utf8)
     }
 
     /// **保存键那一块**源码：从动作那一句（`Task { await appState.saveNoteFromEditor() }`）起，
@@ -698,7 +698,7 @@ final class NotesEditorSaveProbeTests: XCTestCase {
         let beforeState = host.state.noteSaveState
         print("🖼 N2-SV ③ 点前：noteSaveState = \(beforeState) ／ 按钮可点 = \(host.state.noteEditorHasContent)")
 
-        // 工具条那枚 `Button` 的动作就是这一句（`App/Views/NotesPanel.swift`）。
+        // 工具条那枚 `Button` 的动作就是这一句（`Plugins/Notes/Views/NotesPanel.swift`）。
         await host.state.saveNoteFromEditor()
 
         let afterState = host.state.noteSaveState
@@ -1116,7 +1116,7 @@ final class NotesEditorSaveProbeTests: XCTestCase {
 
         // ② 源锚点：工具条读的就是这一份状态（判据与界面认同一个名字）。
         let root = Self.repositoryRoot
-        let panel = try String(contentsOf: root.appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8)
+        let panel = try String(contentsOf: root.appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"), encoding: .utf8)
         XCTAssertTrue(
             panel.contains("appState.noteSaveState.languageKey"),
             "`NotesPanel.swift` 里找不到「按状态取文案键」那一处 —— 工具条没有再读这份状态"

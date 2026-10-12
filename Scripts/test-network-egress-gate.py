@@ -31,8 +31,8 @@ LEDGER = "Scripts/network-egress-whitelist.json"
 # 副本需要的最小文件集（门禁会读：台账登记的那 6 个面文件、扫描面里的干净文件、闭环脚本、台账、负例自己）
 TREE_FILES = [
     # 四个「面」登记的 6 个文件（台账里有它 ⇒ 副本必须带上，否则「干净副本」这一例会假红）
-    "Core/NoteSync/CloudSyncService.swift",
-    "Core/NoteSync/CloudAuth.swift",
+    "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift",
+    "Plugins/Notes/Sources/NoteSync/CloudAuth.swift",
     "Core/LLMClient.swift",
     "Core/EgressLog.swift",
     "App/AppState.swift",
@@ -61,6 +61,11 @@ def make_tree() -> Path:
         destination = tree / rel
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, destination)
+    # 台账里的每个扫描根都得在副本里存在（2026-10-13 · P3 搬家后 `Plugins/Notes/**` 也是扫描根）——
+    # 缺一个根 ⇒ 门禁按「扫描根不存在」判红，干净副本那一例会假红。
+    roots = (json.loads((ROOT / LEDGER).read_text(encoding="utf-8")).get("scan") or {}).get("roots") or []
+    for root in roots:
+        (tree / root).mkdir(parents=True, exist_ok=True)
     return tree
 
 
@@ -148,7 +153,7 @@ def main() -> int:
     case_green(
         "白名单面（笔记同步面）文件里出现 URLSession → 仍绿（对照）",
         lambda tree: edit(
-            tree, "Core/NoteSync/CloudSyncService.swift",
+            tree, "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift",
             lambda text: text + "\n// 对照：白名单面文件本来就可以出网\nlet probe = URLSession.shared\n",
         ),
     )

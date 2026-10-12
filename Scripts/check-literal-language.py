@@ -44,7 +44,7 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
   `DiagnosisAdvice.parse` 必须带 `language:`，`App/Views/DiagnosisPanel.swift` 必须把
   `effectiveLanguage` 传下去 —— 只靠 A 挡不住「删掉形参、在函数体里再写死一次」。
   **L-65 第 1 批起**同一判据扩到三处同族出口：`Core/LicenseLoader.swift`（`load` /
-  `licenseDecodeFailureHint` / `summary`）、`Core/NoteBody.swift`（`toSpans` / `exportMarkdown`）、
+  `licenseDecodeFailureHint` / `summary`）、`Plugins/Notes/Sources/NoteBody.swift`（`toSpans` / `exportMarkdown`）、
   `Core/TableImport.swift`（`copySupport` / `preferredWriteMode`）。
   **L-65 第 2 批**：`Core/SSHTunnelProcess.swift`（`start(...)` / `describe(language:)`）。
   **L-65 第 3 / 4 批**再扩四族：`Core/AICapture.swift`（`skillNote` / `sqlNote`）、
@@ -426,7 +426,7 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
             r"func\s+licenseDecodeFailureHint\(language:\s*AppLanguage",
             r"func\s+summary\([\s\S]{0,200}?language:\s*AppLanguage",
         ],
-        "Core/NoteBody.swift": [
+        "Plugins/Notes/Sources/NoteBody.swift": [
             r"func\s+toSpans\([^)]*language:\s*AppLanguage",
             r"func\s+exportMarkdown\([^)]*language:\s*AppLanguage",
         ],

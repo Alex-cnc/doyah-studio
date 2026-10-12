@@ -60,7 +60,11 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "CSQLite3", package: "sqlite3")
             ],
-            path: "Core"
+            path: ".",
+            // 插件面（概设 §7 P3，2026-10-13）：笔记的**自有逻辑**搬进 `Plugins/Notes/Sources/`
+            // 后仍编进 `DoyahCore` 模块（同模块搬家 = 「移动 + 接口收口」，不重写、不引 import 面震荡）；
+            // 需要宿主类型的三个视图在 `Plugins/Notes/Views/`，归 `DoyahStudioApp`（见下一个 target）。
+            sources: ["Core", "Plugins/Notes/Sources"]
         ),
         // 平台适配层：只有这里可以 import 平台专属框架（Security / Darwin …）。
         // Core 不含任何平台依赖，这条边界由模块依赖关系强制，而不是靠自觉 ——
@@ -94,10 +98,14 @@ let package = Package(
                 // （不是包名 `DoyahRetroCore`）—— 写成包名会报 unknown package。
                 .product(name: "DoyahRetroUI", package: "macos")
             ],
-            path: "App",
+            path: ".",
             // Resources 由 Scripts/build-app.sh 装进 .app；SwiftPM 不处理 .icns/.png，
             // 不排除会报 unhandled files。
-            exclude: ["DoyahStudio.entitlements", "Resources"]
+            exclude: ["DoyahStudio.entitlements", "Resources"],
+            // 插件面（概设 §7 P3，2026-10-13）：笔记那三个**需要宿主类型**的视图搬进
+            // `Plugins/Notes/Views/` 后仍编进宿主模块（它们读 `AppState`，跨模块就看不见）。
+            // `exclude` 必须排在 `sources` 之前 —— SwiftPM 对参数顺序有硬要求。
+            sources: ["App", "Plugins/Notes/Views"]
         ),
         .testTarget(
             name: "DoyahCoreTests",

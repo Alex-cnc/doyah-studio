@@ -33,8 +33,8 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
 NOTE_SOURCES = [
-    "Core/Note.swift",
-    "Core/NoteBody.swift",
+    "Plugins/Notes/Sources/Note.swift",
+    "Plugins/Notes/Sources/NoteBody.swift",
     "Core/License.swift",
     "Core/AICapture.swift",
     "Core/AICaptureUltra.swift",
@@ -78,14 +78,15 @@ def record(name: str, found: list[str]) -> None:
 
 def check_01_single_process() -> list[str]:
     found: list[str] = []
-    for directory in ("Core", "App", "CLI"):
+    # 插件目录也算装配面（2026-10-13 · 概设 §7 P3 搬家后，笔记源文件在 `Plugins/Notes/**`）
+    for directory in ("Core", "App", "CLI", "Plugins/Notes/Sources", "Plugins/Notes/Views"):
         for path in sorted((REPO / directory).rglob("*.swift")):
             relative = path.relative_to(REPO).as_posix()
             for number, line in code_lines(relative):
                 for pattern, label in IPC_PATTERNS:
                     if re.search(pattern, line):
                         found.append(f"{relative}:{number}: 出现 {label}（同进程装配，不许有 IPC）")
-    for relative in NOTE_SOURCES + ["App/Views/NotesPanel.swift"]:
+    for relative in NOTE_SOURCES + ["Plugins/Notes/Views/NotesPanel.swift"]:
         if not (REPO / relative).exists():
             found.append(f"{relative}: 笔记源文件不存在（装配链断了？）")
     # 不存在"笔记插件"这种独立 target / product —— 走 Package.swift 的 target 声明星。
@@ -158,24 +159,26 @@ def check_03_one_way_context() -> list[str]:
                 )
 
     # 行数据开关：全仓只有一处能打开，且没有"撤回"入口。
+    # 扫描面含插件目录（2026-10-13 · 概设 §7 P3 搬家后，笔记模型在 `Plugins/Notes/Sources/`）。
     whole_repo = "\n".join(
         path.read_text(encoding="utf-8")
-        for path in sorted((REPO / "Core").glob("*.swift"))
+        for directory in ("Core", "Plugins/Notes/Sources")
+        for path in sorted((REPO / directory).glob("*.swift"))
     )
     open_switches = re.findall(r"rowDataConfirmed\s*=\s*true", whole_repo)
     if len(open_switches) != 1:
-        found.append(f"Core/: 打开\"含行数据\"的地方有 {len(open_switches)} 处（必须恰好 1 处：NoteDraft.withRowData）")
+        found.append(f"Core/ 与 Plugins/Notes/Sources/：打开\"含行数据\"的地方有 {len(open_switches)} 处（必须恰好 1 处：NoteDraft.withRowData）")
     if re.search(r"func\s+(withoutRowData|clearRowData|unsetRowData)", whole_repo):
-        found.append("Core/: 出现了撤回\"含行数据\"标痕的入口（留痕必须不可撤回）")
+        found.append("Core/ 与 Plugins/Notes/Sources/：出现了撤回\"含行数据\"标痕的入口（留痕必须不可撤回）")
 
     # 来源只记连接名：不存口令 / 连接串 / 主机字段。
-    source_block = re.search(r"public struct NoteSource\b.*?\n}\n", read("Core/Note.swift"), re.S)
+    source_block = re.search(r"public struct NoteSource\b.*?\n}\n", read("Plugins/Notes/Sources/Note.swift"), re.S)
     if not source_block:
-        found.append("Core/Note.swift: 找不到 NoteSource 定义")
+        found.append("Plugins/Notes/Sources/Note.swift: 找不到 NoteSource 定义")
     else:
         for banned in ("password", "connectionString", "dsn", "uri"):
             if re.search(rf"\b{banned}\b", source_block.group(0), re.I):
-                found.append(f"Core/Note.swift: NoteSource 里出现 {banned}（来源只许连接名字）")
+                found.append(f"Plugins/Notes/Sources/Note.swift: NoteSource 里出现 {banned}（来源只许连接名字）")
 
     # 笔记侧文件不引用结果行类型。
     for relative in NOTE_SOURCES:

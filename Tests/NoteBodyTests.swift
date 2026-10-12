@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 @testable import DoyahCore
 // 片 `WYS-HL-CONTRAST` 的渲染配对探针要打在 App 侧的真换算处 `NoteRichAttributes` 上
-// （`App/Views/NotesRichTextEditor.swift`）—— 本目标本就依赖 `DoyahStudioApp`（见 `Package.swift`），
+// （`Plugins/Notes/Views/NotesRichTextEditor.swift`）—— 本目标本就依赖 `DoyahStudioApp`（见 `Package.swift`），
 // 不新增构建量（`AccountFlowTests` 同款）。
 @testable import DoyahStudioApp
 

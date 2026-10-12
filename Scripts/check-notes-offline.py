@@ -112,6 +112,15 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
         for path in sorted(core_dir.glob("*.swift")):
             if path.name.startswith(CORE_PREFIXES):
                 on_disk.append(f"Core/{path.name}")
+    # 插件目录（2026-10-13 · 概设 §7 P3 搬家）：笔记源文件的**新落点**也要按名字扫 ——
+    # 只扫 `Core/` 会让搬过去的文件从此不受这条约束（新文件进来没人登记也全绿）。
+    for rel_dir in ("Plugins/Notes/Sources", "Plugins/Notes/Views"):
+        base = root / rel_dir
+        if base.is_dir():
+            prefixes = CORE_PREFIXES if rel_dir.endswith("Sources") else APP_PREFIXES
+            for path in sorted(base.glob("*.swift")):
+                if path.name.startswith(prefixes):
+                    on_disk.append(f"{rel_dir}/{path.name}")
     app_dir = root / "App"
     if app_dir.is_dir():
         for path in sorted(app_dir.rglob("*.swift")):
@@ -149,7 +158,9 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
         )
     else:
         isolation_core = {item for name in reconcile_names for item in lists.get(name, [])}
-        scope_core = {rel for rel in scope_paths if rel.startswith("Core/")}
+        # 「Core 侧」自 2026-10-13（概设 §7 P3 搬家）起含**插件目录里的笔记源文件** ——
+        # `Plugins/Notes/Sources/` 就是原 `Core/Note*` 的新家，漏掉这个前缀会让两份清单假对不上。
+        scope_core = {rel for rel in scope_paths if rel.startswith(("Core/", "Plugins/Notes/Sources/"))}
         for rel in sorted(isolation_core - scope_core):
             problems.append(f"{rel}：解耦门禁把它算作笔记源文件，本台账却没登记（两份清单不许各说各话）")
         for rel in sorted(scope_core - isolation_core):

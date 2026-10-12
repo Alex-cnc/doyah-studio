@@ -231,7 +231,7 @@ final class NotebookStorageTests: XCTestCase {
     }
 
     /// 删笔记本**这一行**不会删掉里面的笔记（`note.notebook_uid` 刻意无外键 ⇒ 没有级联删除；
-    /// 笔记的处置由 `ContainerRemovalPlan` 算，见 `Core/Notebook.swift`）。
+    /// 笔记的处置由 `ContainerRemovalPlan` 算，见 `Plugins/Notes/Sources/Notebook.swift`）。
     func testDeletingANotebookRowKeepsItsNotes() throws {
         let database = try makeDatabase()
         let directory = try database.ensureDefaultContainers(shelfName: "架", notebookName: "笔记本")

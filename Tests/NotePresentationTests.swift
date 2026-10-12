@@ -138,7 +138,7 @@ final class NotePresentationTests: XCTestCase {
     func testThreeColumnWiring() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let window = Self.stripComments(try String(contentsOf: root.appendingPathComponent("App/Views/MainWindow.swift"), encoding: .utf8))
-        let panel = Self.stripComments(try String(contentsOf: root.appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8))
+        let panel = Self.stripComments(try String(contentsOf: root.appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"), encoding: .utf8))
 
         // ① 笔记那一档的右边是「三栏装配件」，左栏（侧栏）是两级树。
         XCTAssertTrue(window.contains("NotesAreaView()"), "`.notes` 的右边必须装配三栏件")

@@ -380,7 +380,7 @@ final class NotesSearchRevealProbeTests: XCTestCase {
             2,
             "搜索框的壳（圆角底 + 描边）在呈现函数里应当正好两处（底一次、描边一次）"
         )
-        for file in ["App/Views/WorkspaceHeaderSearch.swift", "App/Views/NotesPanel.swift"] {
+        for file in ["App/Views/WorkspaceHeaderSearch.swift", "Plugins/Notes/Views/NotesPanel.swift"] {
             let text = try source(file)
             XCTAssertTrue(
                 text.contains("SearchField {"),
@@ -389,17 +389,17 @@ final class NotesSearchRevealProbeTests: XCTestCase {
         }
         // 笔记面那两态的**接线**（探针驱动的是 `AppState` 上那两个入口，所以「图标按钮接的就是它」
         // 这一环必须钉住 —— 与 `NotesLayoutProbeTests` 判「点界面那枚按钮」同一条纪律）。
-        let panel = try source("App/Views/NotesPanel.swift")
+        let panel = try source("Plugins/Notes/Views/NotesPanel.swift")
         for anchor in [
             "SearchRevealButton(help: L(.notesSearchPlaceholder))",
             "appState.revealNoteSearch()",
             "appState.collapseNoteSearch()",
             ".onKeyPress(.escape)",
         ] {
-            XCTAssertTrue(panel.contains(anchor), "`App/Views/NotesPanel.swift` 里找不到锚点 `\(anchor)`")
+            XCTAssertTrue(panel.contains(anchor), "`Plugins/Notes/Views/NotesPanel.swift` 里找不到锚点 `\(anchor)`")
         }
         // 「第二套框」的负向断言：这两个面里都不该再自己画那个圆角底 / 描边。
-        for file in ["App/Views/WorkspaceHeaderSearch.swift", "App/Views/NotesPanel.swift"] {
+        for file in ["App/Views/WorkspaceHeaderSearch.swift", "Plugins/Notes/Views/NotesPanel.swift"] {
             let text = try source(file)
             XCTAssertFalse(
                 text.contains("Image(systemName: \"magnifyingglass\")"),
@@ -409,7 +409,7 @@ final class NotesSearchRevealProbeTests: XCTestCase {
         // 图标符号的**唯一出处**：这两个面里都不许再写死那个符号（其它面 —— 待办日历、
         // 对象树、命令面板 —— 各有自己的 FR，不在本片范围，原样不动）。
         let literalOnTheseFaces = try appViewFilesContaining("\"magnifyingglass\"")
-            .filter { ["App/Views/NotesPanel.swift", "App/Views/WorkspaceHeaderSearch.swift"].contains($0) }
+            .filter { ["Plugins/Notes/Views/NotesPanel.swift", "App/Views/WorkspaceHeaderSearch.swift"].contains($0) }
         XCTAssertTrue(
             literalOnTheseFaces.isEmpty,
             "这两个面里还写死了放大镜符号：\(literalOnTheseFaces) —— 图标形制必须只有一处"

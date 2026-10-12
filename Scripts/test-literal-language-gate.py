@@ -21,8 +21,8 @@ import tempfile
 REPO = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT = "Scripts/check-literal-language.py"
 LEDGER = "Scripts/literal-language-dispositions.json"
-COPY_DIRS = ["Core", "App", "CLI", "Platform", "Scripts"]
-WATCH_DIRS = ["Core", "App", "CLI", "Platform", "Scripts", "Tests"]
+COPY_DIRS = ["Core", "App", "CLI", "Platform", "Scripts", "Plugins/Notes/Sources", "Plugins/Notes/Views"]
+WATCH_DIRS = ["Core", "App", "CLI", "Platform", "Scripts", "Tests", "Plugins/Notes/Sources", "Plugins/Notes/Views"]
 
 
 def digest_tree() -> dict[str, str]:
@@ -42,6 +42,8 @@ def make_copy(root: pathlib.Path) -> pathlib.Path:
     copy = root / "copy"
     copy.mkdir()
     for name in COPY_DIRS:
+        # 嵌套目录（`Plugins/Notes/Sources`）要先建父目录，否则 copytree 直接报父目录不存在。
+        (copy / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(REPO / name, copy / name)
     return copy
 

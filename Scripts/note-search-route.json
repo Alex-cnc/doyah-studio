@@ -33,7 +33,7 @@
   "inMemoryMatcher": {
     "symbol": "NoteSearch.match(",
     "allowedCallers": ["Tests/"],
-    "reason": "内存检索（`Core/Note.swift` 的 `NoteSearch`）在 L-44 之后**不再有界面调用者**：界面走库，它就是一份纯函数参考实现 + 一组单测（`Tests/NoteTests.swift` 5 条，钉住标签命中 / 大小写不敏感 / 空查询倒序这套语义）。保留而不是删掉的理由：语义仍要有人钉住（库那两条路必须与它对得上）；**若读者认为该删，删掉它也只需拆掉那份单测** —— 这件事已登记在开发记录里，不阻塞任何判据。"
+    "reason": "内存检索（`Plugins/Notes/Sources/Note.swift` 的 `NoteSearch`）在 L-44 之后**不再有界面调用者**：界面走库，它就是一份纯函数参考实现 + 一组单测（`Tests/NoteTests.swift` 5 条，钉住标签命中 / 大小写不敏感 / 空查询倒序这套语义）。保留而不是删掉的理由：语义仍要有人钉住（库那两条路必须与它对得上）；**若读者认为该删，删掉它也只需拆掉那份单测** —— 这件事已登记在开发记录里，不阻塞任何判据。"
   },
   "searchLanding": {
     "entry": "searchNotes",

@@ -182,6 +182,7 @@ def parse_project_yml(text: str):
     targets: dict = {}
     current = None
     current_list = None
+    last_source_path = None
     for index in range(start, end):
         raw = lines[index]
         if not raw.strip() or raw.lstrip().startswith("#"):
@@ -199,6 +200,7 @@ def parse_project_yml(text: str):
                 "version_keys": {},
             }
             current_list = None
+            last_source_path = None
             continue
         if current is None:
             continue
@@ -210,8 +212,26 @@ def parse_project_yml(text: str):
         if indent == 4 and not stripped.startswith("- "):
             current_list = None
             continue
+        if indent == 6 and current_list in ("sources", "excludes") and stripped.startswith("- path:"):
+            # 一个目标可以有多段 `sources:` 条目（2026-10-13 · P3 搬家后 `DoyahCore` 有两处：
+            # `Core` + `Plugins/Notes/Sources`）。前一段的 `excludes:` 子列表会把
+            # `current_list` 带走 —— 见到同级（缩进 6）的 `- path:` 就切回 `sources`。
+            value = stripped.split(":", 1)[1].strip().strip('"')
+            targets[current]["source_dirs"].append(value)
+            last_source_path = value
+            current_list = "sources"
+            continue
         if current_list == "sources" and stripped.startswith("- path:"):
-            targets[current]["source_dirs"].append(stripped.split(":", 1)[1].strip().strip('"'))
+            value = stripped.split(":", 1)[1].strip().strip('"')
+            targets[current]["source_dirs"].append(value)
+            last_source_path = value
+            continue
+        if indent == 8 and stripped == "buildPhase: resources" and last_source_path:
+            # `sources:` 里带 `buildPhase: resources` 的条目是**资源**（如三个 `plugin.json`），
+            # 不是源码目录 —— 收进 `source_dirs` 会让 C3 判「源目录不存在」（假红）。
+            if last_source_path in targets[current]["source_dirs"]:
+                targets[current]["source_dirs"].remove(last_source_path)
+            last_source_path = None
             continue
         if current_list == "excludes" and stripped.startswith("- "):
             targets[current]["excludes"].append(stripped[2:].strip().strip('"'))
@@ -870,7 +890,7 @@ FIXTURE_FILES = [
     "Docs/发布计划.md",
     "AGENT-SPEC.md",
 ]
-FIXTURE_LINKS = ["Core", "App", "Platform", "Tests", "TestsPlatform"]
+FIXTURE_LINKS = ["Core", "App", "Platform", "Tests", "TestsPlatform", "Plugins"]
 
 
 def build_fixture(scratch: pathlib.Path, real_root: pathlib.Path) -> pathlib.Path:

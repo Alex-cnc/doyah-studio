@@ -84,7 +84,7 @@ final class NotebookMovePromptTests: XCTestCase {
     func testHostWiringUsesThePromptInsteadOfHardWiringTargets() {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let appState = Self.stripComments(try! String(contentsOf: root.appendingPathComponent("App/AppState.swift"), encoding: .utf8))
-        let panel = Self.stripComments(try! String(contentsOf: root.appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8))
+        let panel = Self.stripComments(try! String(contentsOf: root.appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"), encoding: .utf8))
 
         XCTAssertTrue(appState.contains("func noteMoveTargets("), "目标清单由 AppState 一处给（视图不自己拼）")
         XCTAssertTrue(appState.contains("func moveNotes("), "移动走这一个入口")

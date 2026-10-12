@@ -35,8 +35,8 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parent.parent
 # 只扫"Core 里直接属于笔记"的文件；新增笔记源文件时把它加进来（漏加会被下面的自维护检查抓到）。
 NOTE_SOURCES = [
-    "Core/Note.swift",
-    "Core/NoteBody.swift",
+    "Plugins/Notes/Sources/Note.swift",
+    "Plugins/Notes/Sources/NoteBody.swift",
     "Core/License.swift",
     # 拆分后 `AICapture` 只剩"笔记侧"的映射（诊断 / 维护那两个已移到 AICaptureUltra）
     "Core/AICapture.swift",
@@ -45,30 +45,30 @@ NOTE_SOURCES = [
     "Core/AICaptureIntake.swift",
     # 队列 `L-97` 第一~四片：两层归属的结构模型（架 / 笔记本 + 归属解析 + 删除计划）——
     # 只吃 Foundation 值类型与 `NoteStorage` 协议，不引用数据库侧与 Ultra 侧任何类型
-    "Core/Notebook.swift",
+    "Plugins/Notes/Sources/Notebook.swift",
     # 队列 `L-97` 界面半第一片：宿主装配侧的选中态 / 范围过滤 / 计数 / 新建落点（纯函数，
     # 无网络、无库）—— 它算笔记侧，因为改它的人必须同时受「不许碰网络 / 库」的约束
-    "Core/NoteNavigation.swift",
+    "Plugins/Notes/Sources/NoteNavigation.swift",
     # 队列 `L-97` 界面半第二片：删除确认框的动作 / 顺序 / 文案键（纯值类型，无网络、无库；
     # 只吃 `ContainerRemovalPlan` 与 `LKey`）—— 同上，算笔记侧
-    "Core/NotebookRemovalPrompt.swift",
+    "Plugins/Notes/Sources/NotebookRemovalPrompt.swift",
     # 队列 `L-97` 界面半第三片：跨笔记本移动的目标清单 / 「能不能去」的规则 / 文案键（纯值类型，
     # 无网络、无库；只吃 `NotebookDirectory` / `NotebookPlacement` / `LKey`）—— 同上，算笔记侧
-    "Core/NotebookMovePrompt.swift",
+    "Plugins/Notes/Sources/NotebookMovePrompt.swift",
     # 队列 `L-97` 界面半第四片：新建 / 重命名 / 排序的规则与文案键（纯值类型，无网络、无库；
     # 只吃 `NotebookDirectory` / `NotesScope` / `LKey`）—— 同上，算笔记侧
-    "Core/NotebookEditPrompt.swift",
+    "Plugins/Notes/Sources/NotebookEditPrompt.swift",
     # 队列 `L-97` 界面半第五片：批量多选 / 拖拽载荷 / 落点（纯值类型，无网络、无库；
     # 只吃 `UUID` / `LKey`）—— 同上，算笔记侧
-    "Core/NoteSelectionPrompt.swift",
+    "Plugins/Notes/Sources/NoteSelectionPrompt.swift",
     # 队列 `L-97` 界面半第六片（跨架移动）：目标清单 / 落点判定 / 文案键（纯值类型，无网络、
     # 无库；只吃 `NotebookDirectory` / `LKey`）—— 同上，算笔记侧
-    "Core/NotebookShelfMovePrompt.swift",
+    "Plugins/Notes/Sources/NotebookShelfMovePrompt.swift",
     # 队列 `L-184` 三栏重排：中栏卡片的摘要与相对时间（纯函数，无网络、无库；只吃 `Date` /
     # `Calendar` / `LKey`）—— 同上，算笔记侧
-    "Core/NotePresentation.swift",
+    "Plugins/Notes/Sources/NotePresentation.swift",
     # 队列 `N-11` 的 macOS 核心层半：待办任务清单的**模型**（`Todo` + `TodoPriority`；纯值类型、
-    # 无网络、无库）—— 库表 / 行映射在 `Core/NoteStorage/NoteDatabase.swift`（那一层不在本清单
+    # 无网络、无库）—— 库表 / 行映射在 `Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift`（那一层不在本清单
     # 的扫描面内，它的零网络出口由同一族判据按目录口径另管）
     "Core/Todo.swift",
     # 队列 `L-100` 清单界面（待办清单的三件纯逻辑：分区 / 截止档位 / 空标题）：同上，台账里有它
@@ -112,22 +112,27 @@ BANNED_TYPES = [
 
 
 def check_source_list_is_complete() -> list[str]:
-    """`Core/` 下的笔记源文件必须"要么在清单里、要么在豁免名单里"。"""
+    """笔记源文件必须"要么在清单里、要么在豁免名单里"。
+
+    笔记源文件现在有**两个落点**（2026-10-13 · 概设 §7 P3 搬家）：
+      · `Plugins/Notes/Sources/` —— 插件目录（Note / Notebook / 存储 / 同步 / 视图）；
+      · `Core/` —— 尚未搬家的笔记侧件（`License` / `AICapture` / `Todo` / `Reminder` 族）。
+    两处都要扫 —— 只扫 `Core/` 会让搬过去的新文件**默默不受本门禁约束**（本函数存在的理由）。
+    """
     problems: list[str] = []
-    on_disk = sorted(
-        path.name for path in (REPO / "Core").glob("*.swift")
-        if path.name.startswith("Note") or path.name.startswith("AICapture")
-    )
+    roots = [REPO / "Core", REPO / "Plugins" / "Notes" / "Sources"]
+    candidates = [p for root in roots if root.is_dir() for p in root.glob("*.swift")]
+    on_disk = sorted(p.name for p in candidates if p.name.startswith("Note") or p.name.startswith("AICapture"))
     listed = {pathlib.Path(item).name for item in NOTE_SOURCES + ULTRA_SIDE_SOURCES}
     for name in on_disk:
         if name not in listed:
             problems.append(
-                f"Core/{name}: 新的笔记源文件没进本脚本的清单"
+                f"{name}: 新的笔记源文件没进本脚本的清单"
                 f"（是笔记侧就加进 NOTE_SOURCES，是宿主侧就加进 ULTRA_SIDE_SOURCES）"
             )
-    for name in sorted(listed):
-        if not (REPO / "Core" / name).exists():
-            problems.append(f"Core/{name}: 清单里有、磁盘上没有（改名了？请同步更新本脚本）")
+    for item in NOTE_SOURCES + ULTRA_SIDE_SOURCES:
+        if not (REPO / item).exists():
+            problems.append(f"{item}: 清单里有、磁盘上没有（改名或搬家了？请同步更新本脚本）")
     return problems
 
 

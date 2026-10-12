@@ -384,7 +384,7 @@ final class NotesTitleAreaProbeTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // TestsUISnapshot/
             .deletingLastPathComponent()   // <root>/
-        return try String(contentsOf: root.appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8)
+        return try String(contentsOf: root.appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"), encoding: .utf8)
     }
 
     /// 源码里 `from` 与 `to` 之间那一段（口径与 `NotesEditorSaveProbeTests.sourceRegion` 逐字相同）：
