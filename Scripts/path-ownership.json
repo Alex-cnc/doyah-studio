@@ -9,7 +9,7 @@
   "README.md",
   "Scripts/doc-numbers.json"
  ],
- "contract_note": "契约层（三书）**归 `bluewhale`（蓝色鲸鱼娘）**；平台实现层归各平台助理：`bighippo`=macOS/iOS · `tinyhippo`=安卓/鸿蒙 · `fatshark`=Windows（旧名 `fatfish` 已退役、只保留识别）（2026-10-03 人类主人制度变更 · 派活单 `T-20261003-003`）。**契约层落笔面 = 人类主人 2026-10-05 批准的四类：`Docs/**` + `AGENT-SPEC.md` + 仓根 `README.md` + `Scripts/doc-numbers.json`（计数台账）** ⇒ `--mine bluewhale`（或 `--actor bluewhale`）时**只有 contract_docs 声明的这几类放行**，其余（代码 / 脚本 / 其他文档 / 仓根杂项）一律判红 —— **「产品代码不许越界」这条本体不变**。原始护栏（人类主人 2026-10-03）：「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」；本仓按 10-05 的扩面裁决跟版（依据派单 `T-20261005-088` ①）。三书内部**契约层节 vs `[独占:平台]` 实现层节**的边界由 `check-exclusive-sections.py` 机械判。",
+ "contract_note": "契约层（三书）**归 `bluewhale`（蓝色鲸鱼娘）**；平台实现层归各平台助理（**2026-10-13 均衡令** · 派单 `T-20261013-007`）：`hugehippo`=Apple 全系 · `fatshark`=Windows/鸿蒙 · `babyhippo`=Linux/安卓（旧名 `fatfish` / `bighippo` / `tinyhippo` 已退役、只保留识别）（2026-10-03 人类主人制度变更 · 派活单 `T-20261003-003`）。**契约层落笔面 = 人类主人 2026-10-05 批准的四类：`Docs/**` + `AGENT-SPEC.md` + 仓根 `README.md` + `Scripts/doc-numbers.json`（计数台账）** ⇒ `--mine bluewhale`（或 `--actor bluewhale`）时**只有 contract_docs 声明的这几类放行**，其余（代码 / 脚本 / 其他文档 / 仓根杂项）一律判红 —— **「产品代码不许越界」这条本体不变**。原始护栏（人类主人 2026-10-03）：「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」；本仓按 10-05 的扩面裁决跟版（依据派单 `T-20261005-088` ①）。三书内部**契约层节 vs `[独占:平台]` 实现层节**的边界由 `check-exclusive-sections.py` 机械判。",
  "trees": [
   {
    "id": "macos",
@@ -37,7 +37,7 @@
     "Plugins/"
    ],
    "note": "与派活单 T-20261002-029 给的清单一致，只多一条 `Package.resolved`（SwiftPM 锁文件，属 Swift 族）与 `.cloudbase/`（云后端绑定 —— 片 `云A` 交付物 · 派单 `T-20261009-116` ①，前门裁 `T-20261009-117`：macOS 实现面 = DoyahStudio 仓）；`Scripts/` 单列进 shared（见 shared_note）。",
-   "actor": "bighippo"
+   "actor": "hugehippo"
   },
   {
    "id": "watchos",
@@ -51,7 +51,7 @@
     "platform/watchos/"
    ],
    "note": "2026-10-13 人类主人令：平台词表第七项 `watchos`（Apple 全系归大河马）⇒ 建立声明式落点（只一页 README，无工程 / 无源码）；派单 `T-20261013-004`。`owner = macos` 与 Notes 的 `ios` 树同形：同机组、不同格。",
-   "actor": "bighippo"
+   "actor": "hugehippo"
   },
   {
    "id": "windows",
@@ -61,7 +61,7 @@
     "windows"
    ],
    "contract_side": "nonapple",
-   "label": "Windows 端（Windows 机组：组长 tinyhippo / 组员 windows-dev；Tauri 2 + Vue 3 + TypeScript / Rust）",
+   "label": "Windows 端（黑鳍大肥鲨 · 2026-10-13 均衡令；Tauri 2 + Vue 3 + TypeScript / Rust）",
    "paths": [
     "platform/windows/"
    ],
@@ -77,6 +77,7 @@
  "shared_note": "共享面 = 两侧都写的地方：改它**不算越界**，但要走声明式台账（清单 `shared_ledger` 改前登记 / 本次新增行注 `shared-surface：理由` / 提交信息注 `shared-surface: 理由`），三处都没有理由 ⇒ 判红。`Scripts/` 在派活单 T-20261002-029 里被同时列进「macOS 仓根族」与「共享面」两处 ⇒ 本清单按**共享面**收口：里面的判据（`check-*.py` / `verify-all.sh`）被两侧共同调用，`Scripts/doc-numbers.json` 的 `checkScriptParity` 也是按「闭环引用」写的，判它是某一端专属会与现行事实相抵。要改成 macOS 专属 ⇒ 改这一行 + 记一笔变更。",
  "shared_require_declaration": true,
  "shared_ledger": [
+ {"glob": "Scripts/path-ownership.json", "reason": "派单 T-20261013-007 §四.2（2026-10-13 均衡令）：本清单 trees[].actor 与 contract_note 的演员名按新归属跟版（hugehippo=Apple 全系 / fatshark=Windows+鸿蒙 / babyhippo=Linux+安卓），无判据语义变化", "by": "babyhippo", "at": "2026-10-13"},
    {
      "glob": "Scripts/check-pending-agenda.py",
      "reason": "队列 L-130 ②（2026-10-12 第 501 轮 · 组长常驻直干）：待拍板台账覆盖度判据本体（三类红 = 漏登记 / 台账与原书打架 / 台账陈旧 / 空壳行）；接进闭环第 4 项（项数仍十八，不新增项块）。面外（Notes / Retro 书）本版只计数不判定 —— 接入待前门排期",
