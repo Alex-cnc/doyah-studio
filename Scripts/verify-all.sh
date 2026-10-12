@@ -833,7 +833,7 @@ python3 Scripts/check-cell-decode-coverage.py --self-test
 echo "==> 16/18 越界检查（三书独占节 + 路径归属：改动不得落在对侧节 / 对侧子树上）"
 # 形态 A（2026-09-27 拍板）：三书单点定稿，但「平台实现」层按端独占 —— 标记 `[独占:macos]` /
 # `[独占:windows]` 的节只由该侧改；本机 = macOS 侧。判据与逃生门见脚本头注释。
-# 第二条是**门禁自己的证据**（L-42）：**41 例**负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——（**2026-10-03 订正 23 → 29 → 35**（29 → 35 = 派活单 `T-20261003-003` 的契约所有者 = 演员名 6 例；**35 → 41 = 派活单 `T-20261005-038` 的演员名跟版护栏 6 例**）：实跑 `python3 Scripts/check-exclusive-sections.py --self-test` = **41/41 通过**；数字的唯一来源 = `Scripts/self-test-counts.json` 的 `exclusive-sections`，`check-doc-numbers` 对账）
+# 第二条是**门禁自己的证据**（L-42）：**45 例**负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——（**2026-10-03 订正 23 → 29 → 35**（29 → 35 = 派活单 `T-20261003-003` 的契约所有者 = 演员名 6 例；**35 → 41 = 派活单 `T-20261005-038` 的演员名跟版护栏 6 例**；**41 → 45 = 派单 `T-20261013-005` §四.1 的平台词表 `watchos` 4 例**）：实跑 `python3 Scripts/check-exclusive-sections.py --self-test` = **45/45 通过**；数字的唯一来源 = `Scripts/self-test-counts.json` 的 `exclusive-sections`，`check-doc-numbers` 对账）
 # 判据写完不对已知改动报红，等于没有。两个脚本对外只认退出码，`--self-test` 红了整项就红。
 # 第 33 轮起本脚本是**三副本同源**的「并集」版（提案 0003 裁决：Notes 副本的侧别别名 / `--contract-docs` /
 # 拿不到基线退出 2 + 本侧未跟踪增量），`--base` 显式给了却解析不到**也退出 2**（不许静默放行）。
@@ -842,8 +842,13 @@ echo "==> 16/18 越界检查（三书独占节 + 路径归属：改动不得落�
 # 认**平台名**（`macos` / `windows` …）；用户 shell rc 里设的是化身名 ⇒ 判据按「退役词」退出 2
 # （实测 2026-10-03：`--mine=bluewhale` ⇒ 整项红）。这里按 `uname` **显式**把平台名传给它们，
 # 不在脚本里写死 mac；技能仓那套工具照旧用自己的化身名，互不干扰。
+# 2026-10-13（派单 `T-20261013-004` · 人类主人令「macOS/iOS/watchOS 归大河马」）：Darwin 机的本侧
+# 由单值 `macos` 扩为 **`macos,watchos`** —— 清单里 `watchos` 是**独立一棵树**（`owner = macos` 同一
+# 机组、不同格，与 Notes 的 `ios` 树同形），而 `check-path-ownership.py` 认「命令行给了树 id 就只取
+# 该树」，不写全就把本侧自己的 `platform/watchos/**` 读成对侧。`ios` 格暂不加（Studio 无 ios 树；
+# 加它会让既有 `[独占:ios]` 节由红转绿 —— 属另一次口径变更，见派单一节）。
 case "$(uname -s)" in
-  Darwin) DOYAH_PLATFORM_SIDE=macos ;;
+  Darwin) DOYAH_PLATFORM_SIDE=macos,watchos ;;
   Linux)  DOYAH_PLATFORM_SIDE=linux ;;
   *)      DOYAH_PLATFORM_SIDE=windows ;;
 esac
