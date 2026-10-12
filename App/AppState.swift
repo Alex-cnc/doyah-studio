@@ -702,9 +702,14 @@ final class AppState: ObservableObject {
     /// 当前档位的能力位（没许可证 = Standard，见 `LicenseGate`）。
     var licenseCapabilities: LicenseCapabilities { licenseLoad.entitlements.capabilities }
 
+    /// 插件挂点装配（契约 §3.52④）：缺位的插件，其活动栏项**整体不出现且不报错**。
+    /// 启动时读一次盘（清单是随包发的静态文件）；测试 / 预览可注入。
+    lazy var pluginMounts: PluginMounts = .live(registry: PluginRegistry.loadDefault())
+
     /// 活动栏上**该出现**的那几项（未授权的区不出现，Q11 口径）。
+    /// 两道判据：许可（`LicensePresentation` 那一处）+ 挂点（插件在不在）。
     var visibleActivityItems: [ActivityBarItem] {
-        LicensePresentation.activityItems(for: licenseCapabilities)
+        LicensePresentation.activityItems(for: licenseCapabilities, mounts: pluginMounts)
     }
 
     /// 当前档位是否含笔记。写笔记的入口都要先问这一句：Pro 里笔记区不显示，

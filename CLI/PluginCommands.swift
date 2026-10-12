@@ -77,6 +77,9 @@ extension DoyahCLI {
         }
         print("diagnostic: \(registry.diagnosticLine())")
         print("readings: active \(registry.active.count) / degraded \(registry.degraded.count)")
+        // 挂点读数（契约 §3.52④ 的机械出口）：缺位插件会让自己的活动栏项整体消失。
+        let mounts = PluginMounts.live(registry: registry, pluginsDirectory: directory)
+        print("mounts: \(mounts.unmountedSummary)")
 
         // **空目录也返回 1**：没有插件的宿主是"功能整体消失"的合法形态，但脚本不该把它当"装配成功"。
         return registry.degraded.isEmpty && !registry.active.isEmpty ? 0 : 1

@@ -67,6 +67,7 @@ for f in displayName version entryTarget apiVersion storage capabilities contrib
 done
 check "seven manifest fields printed" "7" "$FIELDS"
 check "degraded entries" "0" "$(printf '%s\n' "$OUT" | grep -c 'degraded: id=')"
+check "activity mounts complete (nothing unmounted)" "1" "$(printf '%s\n' "$OUT" | grep -c 'mounts: unmounted=\[\]')"
 
 echo "== case 2: broken manifest (apiVersion mismatch) => only that one degrades =="
 mkdir -p "$PROBE_DIR/Bad"
@@ -106,6 +107,19 @@ printf '%s\n' "$OUT3" | sed 's/^/  | /'
 check "exit code (no plugin => 1, not an error)" "1" "$RC3"
 check "readings line" "1" "$(printf '%s\n' "$OUT3" | grep -c 'readings: active 0')"
 check "stderr error lines" "0" "$(grep -ci 'error' "$PROBE_DIR/empty.stderr" || true)"
+
+echo "== case 5: plugin removed (Replay) => its activity-bar mount disappears, zero errors =="
+mkdir -p "$PROBE_DIR/uninstall"
+cp -R "$ROOT/Plugins/." "$PROBE_DIR/uninstall/"
+rm -rf "$PROBE_DIR/uninstall/Replay"
+set +e
+OUT5="$("$CLI" plugins dump --dir "$PROBE_DIR/uninstall" 2>&1)"
+RC5=$?
+set -e
+printf '%s\n' "$OUT5" | sed 's/^/  | /'
+check "exit code (remaining plugin active => 0)" "0" "$RC5"
+check "Replay reported as unmounted" "1" "$(printf '%s\n' "$OUT5" | grep -c 'mounts: unmounted=\[Replay\]')"
+check "no error wording in output" "0" "$(printf '%s\n' "$OUT5" | grep -ci 'error' || true)"
 
 echo "== case 4: contract guards (no IPC, no licence judgement in the plugin surface) =="
 # 只算**代码命中**；注意 macOS 的 grep 要 -n 才带行号，否则 "file:content" 无法按行号剔注释：注释里提到 LicensePresentation 是在解释边界（"能力位只有那一处判据"），
