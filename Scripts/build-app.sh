@@ -294,7 +294,12 @@ if [ -f "${NOTES_FILE}" ]; then
   [ -n "${NOTES_LINE}" ] || NOTES_LINE="（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 里写一行「本版包含：…」）"
   echo "本版包含：${NOTES_LINE}"
 else
-  echo "本版包含：（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 里写一行「本版包含：…」，或从交付面文档取）"
+  # `set -euo pipefail` 下 `NOTES_LINE` 必须有值 —— 这条分支此前没赋值，
+  # 而收尾那行 `含片=${NOTES_LINE}` 会以 `unbound variable` 让整脚本退出 1
+  # （实测 2026-10-13：本机克隆的 dist/ 里没有发布说明文件 ⇒ 必炸，且炸在**打包成功之后**，
+  #  看着像打包失败）。口径与 `NOTES_EXCLUDED` 那条一致：**缺了就如实写未登记，不猜**。
+  NOTES_LINE="（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 里写一行「本版包含：…」，或从交付面文档取）"
+  echo "本版包含：${NOTES_LINE}"
 fi
 # 「未含」= 同一个发布说明里以 `未含：` 开头的那一行；缺了就**如实写未登记**，不猜。
 NOTES_EXCLUDED=""
