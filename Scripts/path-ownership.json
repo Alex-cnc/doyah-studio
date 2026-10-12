@@ -40,6 +40,20 @@
    "actor": "bighippo"
   },
   {
+   "id": "watchos",
+   "owner": "macos",
+   "hosts": [
+    "darwin"
+   ],
+   "contract_side": "apple",
+   "label": "watchOS 端（Apple 全系第三端 · 与 macOS 同一机组／同宿主；实现未开工）",
+   "paths": [
+    "platform/watchos/"
+   ],
+   "note": "2026-10-13 人类主人令：平台词表第七项 `watchos`（Apple 全系归大河马）⇒ 建立声明式落点（只一页 README，无工程 / 无源码）；派单 `T-20261013-004`。`owner = macos` 与 Notes 的 `ios` 树同形：同机组、不同格。",
+   "actor": "bighippo"
+  },
+  {
    "id": "windows",
    "owner": "windows",
    "hosts": [
@@ -350,6 +364,18 @@
    "reason": "开发循环第 500 轮（队列 `L-128` · macOS 侧）：本件是**工作台账（非契约）** —— §5.3 第 5 行「提供真实模型端点」改「已办」（云端点联调 3.79 秒四判据全绿，证据 `Docs/evidence/L-128-real-endpoint-第500轮/`）+ 头部版本 `v1.298` 与同号变更记录行",
    "by": "macos",
    "at": "2026-10-12"
+  },
+  {
+   "glob": "Docs/平台实现状态.json",
+   "reason": "派单 T-20261013-004（origin: human-owner · 人类主人 2026-10-13 令）：平台词表新增第七个平台 `watchos` ⇒ 平台等价台账 `platforms` 加一项（label / role / owner / overrides 齐备；Apple 全系归大河马）；改后由 `Scripts/gen-platform-parity.py` 重生成 SRS §10.10 一列并以 `--check` 判漂移",
+   "by": "hugehippo",
+   "at": "2026-10-13"
+  },
+  {
+   "glob": "Scripts/gen-platform-parity.py",
+   "reason": "派单 T-20261013-004（origin: human-owner）：自检夹具 `windows_snapshot` 原先写死列数与列序（5 列 / 3 平台）⇒ 台账加一列即假红，与本文件 docstring ①「加一列的成本必须接近于零」相抵 ⇒ 改为**从台账推**列数与列序（判据面未放宽：表头逐列比对 + 行与表头列数一致 + 每行 `|` 数一致 + Windows 列吃到台账 ✅ 全部保留）",
+   "by": "hugehippo",
+   "at": "2026-10-13"
   }
 ],
  "unclassified_allow": [

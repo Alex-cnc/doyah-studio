@@ -415,9 +415,20 @@ def build_cases() -> list[dict]:
         if row is None:
             raise AssertionError("§10.10 表里找不到 FR-CONN-01 行")
         row_cells = [cell.strip() for cell in row.group(0).strip().strip("|").split("|")]
-        _must(len(row_cells) == 5, f"FR-CONN-01 行不是 5 列：{row_cells}")
-        _must(row_cells[-1] == "✅", f"Windows 列没吃到台账里的 ✅：{row_cells[-1]!r}")
-        mac = row_cells[2]
+        # 列数与列序**从台账推**（不许写死）：台账加一列时本判据不必跟着改 —— 「加一列的成本必须
+        # 接近于零」（本文件 docstring ①）。2026-10-13 台账新增 `watchos` 时正是这里先红了。
+        ledger = json.loads((root / "Docs/平台实现状态.json").read_text(encoding="utf-8"))
+        labels = [entry["label"] for entry in ledger["platforms"].values()]
+        header_line = next((line for line in block.splitlines() if line.startswith("| 编号 |")), None)
+        if header_line is None:
+            raise AssertionError("§10.10 里找不到表头行")
+        cols = [cell.strip() for cell in header_line.strip().strip("|").split("|")]
+        _must(cols == ["编号", "需求摘要", "macOS"] + labels, f"表头列与台账不一致：{cols}")
+        _must(len(row_cells) == len(cols),
+              f"FR-CONN-01 行 {len(row_cells)} 列、表头 {len(cols)} 列：{row_cells}")
+        win = cols.index("Windows")
+        _must(row_cells[win] == "✅", f"Windows 列没吃到台账里的 ✅：{row_cells[win]!r}")
+        mac = row_cells[cols.index("macOS")]
         expected = 1 if mac == "✅" else 0
         header = re.search(r"^\*\*连接与凭据\*\*（.*$", block, re.MULTILINE)
         if header is None:
@@ -427,8 +438,8 @@ def build_cases() -> list[dict]:
             f"分域对齐计数没跟上（macOS 基线 {mac} ⇒ 期望 Windows {expected} 条）：{header.group(0)}",
         )
         _must("移动端（鸿蒙 / 安卓 / iOS）不设列" in text, "移动端不设列的理由没写进表头说明")
-        _must("| 编号 | 需求摘要 | macOS | Linux | Windows |" in block, "表头没出现三平台列")
-        odd = [line for line in block.splitlines() if line.startswith("| FR-") and line.count("|") != 6]
+        odd = [line for line in block.splitlines()
+               if line.startswith("| FR-") and line.count("|") != len(cols) + 1]
         _must(not odd, f"§10.10 里有列数不齐的行：{odd[:2]}")
 
     return [

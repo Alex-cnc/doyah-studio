@@ -6,7 +6,9 @@
 三份**逐字节同一份**（本文件 = 提案 `0003` 裁决后的「并集」版 + 2026-10-02 三仓统一词表版）。
 
 **词表（三仓唯一一份，2026-10-02 人类主人拍板 · 派单 `T-20261002-038`）**
-合法侧名只有**平台名**这六个：`macos` · `ios` · `windows` · `android` · `harmony` · `linux`。
+合法侧名只有**平台名**这七个：`macos` · `ios` · `watchos` · `windows` · `android` · `harmony` · `linux`
+（`watchos` = **2026-10-13 人类主人令新入词表**，派单 `T-20261013-005` / Studio 锚仓提交 `3475fec`：
+Apple 全系 `macos`/`ios`/`watchos` 归 `hugehippo`，非 Apple 全系 `windows`/`linux`/`android`/`harmony` 归 `babyhippo`）。
 - 标记形态：`[独占:<平台名>[|<平台名>…]]` —— **多值用半角竖线**（例 `[独占:windows|android|harmony]`），
   **成员必须都是平台名**。
 - `[开放]` = 台账类节（**节**，不是侧）；**无标记 = 契约层**。
@@ -96,11 +98,13 @@
     python3 Scripts/check-exclusive-sections.py --mine macos --base origin/master   # 提交前默认姿势（显式基线最稳）
     python3 Scripts/check-exclusive-sections.py --mine windows,android,harmony      # 多平台侧（同一台 Windows 机做三端）
     python3 Scripts/check-exclusive-sections.py --contract-owner bluewhale  # 契约层归属（默认 bluewhale = 鲸鱼娘）
-    python3 Scripts/check-exclusive-sections.py --mine bighippo              # 演员名 = 平台集（macOS/iOS）
+    python3 Scripts/check-exclusive-sections.py --mine bighippo              # 演员名 = 平台集（Apple 全系）
+    python3 Scripts/check-exclusive-sections.py --mine watchos               # 第七个平台（watchOS · 2026-10-13 入词表）
     python3 Scripts/check-exclusive-sections.py --contract-docs 核心契约  # 追加契约层锁定的文档
     python3 Scripts/check-exclusive-sections.py --base HEAD~1 --files Docs/概要设计.md
     python3 Scripts/check-exclusive-sections.py --diff-file d.patch       # 用现成 diff（CI / 自测）
-    python3 Scripts/check-exclusive-sections.py --self-test               # 自测 41 例（含判据 ④、未跟踪增量、口径 A 五例、集合语义与旧词护栏、**契约所有者 = 演员名 6 例**）
+    python3 Scripts/check-exclusive-sections.py --self-test               # 自测 45 例（含判据 ④、未跟踪增量、口径 A 五例、集合语义与旧词护栏、**契约所有者 = 演员名 6 例**、
+    #                                                       **新平台 `watchos` 4 例**）
 
 本侧推断：darwin → `macos,ios`（本机同时做 macOS / iOS 实现）；linux → `linux`；其它 → `windows,android,harmony`
 （Windows 机同时做三端）。可用 `--mine` 覆盖，或设环境变量 `DOYAH_SIDE`（钩子按运行方推断侧别，
@@ -122,8 +126,13 @@ CONTRACT_TAG = "contract-change"    # 契约层的显式痕迹（等价豁免，
 ALLOW_SECTION = "exclusive-allow-section"   # 独占节正文里的整节豁免（用于「首建占位节」等）
 OPEN_MARK = "[开放]"               # 开放节：任何一侧都可改（变更记录 / 索引这类台账节）
 DEFAULT_DOCS = ("概要设计", "需求规范书", "产品能力规划说明书")   # 契约锁定范围：三书（可用 --contract-docs 追加）
-# 侧名 = **平台名**（三仓统一词表，2026-10-02 人类主人拍板 · 派单 T-20261002-038）：只有这六个合法。
-PLATFORMS = ("macos", "ios", "windows", "android", "harmony", "linux")
+# shared-surface：派单 T-20261013-005 §四.1（平台词表第七个 `watchos`）—— 本文件是三仓同源副本，
+# 改动属共享面（Notes `tools/` / Retro `tools/` / Studio `Scripts/`）：常量与自测跟着契约词表走，
+# 无功能语义变化（判据口径、退出码、集合语义、契约层锁定面一律不变）。
+# 侧名 = **平台名**（三仓统一词表，2026-10-02 人类主人拍板 · 派单 T-20261002-038）：只要这七个合法
+# （**第七个 `watchos` = 2026-10-13 人类主人令** —— Apple 全系归 `hugehippo`、非 Apple 全系归 `babyhippo`；
+# 契约面见 Studio 锚仓 `AGENT-SPEC.md` 词表行 v1.161 与 `Docs/概要设计.md` v2.163 · 提交 `3475fec`）。
+PLATFORMS = ("macos", "ios", "watchos", "windows", "android", "harmony", "linux")
 # 退役词（旧词表）：归一已删除 —— 旧词一律判红并点名行号（迁移护栏；存量清单见派单 T-20261002-038）。
 RETIRED = ("apple", "nonapple")
 
@@ -139,12 +148,12 @@ def mark_tokens(tok):
 #   · **标记**里只写平台名（`[独占:macos]`），**不写人**；
 #   · **演员名**只出现在**命令行 / 契约所有者**这一轴（`--mine bighippo`、`--contract-owner bluewhale`）。
 # 契约所有者 = 演员名（2026-10-03 人类主人制度变更 · 派单 `T-20261003-003`）：三书的**契约层**归
-# `bluewhale`（蓝色鲸鱼娘）；**平台实现层**（`[独占:<平台名>]` 节）仍归各平台助理：`bighippo` = macOS/iOS、
+# `bluewhale`（蓝色鲸鱼娘）；**平台实现层**（`[独占:<平台名>]` 节）仍归各平台助理：`bighippo` = Apple 全系、
 # `tinyhippo` = 安卓/鸿蒙、`fatshark` = Windows。`bluewhale` **没有平台写权**（空集）—— 所以她对
 # `[独占:*]` 节必然判红；而她的名字要保留下来，供「契约所有者是不是我」这类同一性判定用。
 ACTORS = {
     "bluewhale": (),                      # 契约层（三书）· 蓝色鲸鱼娘
-    "bighippo": ("macos", "ios"),         # 平台实现 · 铁皮大河马（macOS / iOS）
+    "bighippo": ("macos", "ios", "watchos"),  # 平台实现 · 铁皮大河马（Apple 全系；2026-10-13 起含 watchOS）
     "tinyhippo": ("android", "harmony"),  # 平台实现 · 奶牙小河马（安卓 / 鸿蒙）
     "fatshark": ("windows",),             # 平台实现 · 黑鳍大肥鲨（Windows）
 }
@@ -625,6 +634,10 @@ macOS / iOS 实现细节：SwiftUI / Keychain。
 
 非 macOS / iOS 实现细节：待补。
 
+### 8.2 契约 → watchOS 实现（现有）[独占:watchos]
+
+watchOS 实现细节：SwiftUI / WatchConnectivity。
+
 ## 9. 已知边界（分平台）
 
 边界表格。
@@ -697,6 +710,15 @@ macOS / iOS 实现细节：SwiftUI / Keychain。
                  "契约所有者新开无标记节 · 应该通过", mine="macos"))
     r.append(run("## 9. 已知边界（分平台）", "## 9. 已知边界（分平台）[开放]",
                  "非所有者给已有标题追加 [开放]（自我解锁）· 应该报红"))
+
+    # ── 第七个平台 `watchos`（2026-10-13 人类主人令 · 派单 `T-20261013-005`）2 例 ──────────
+    # 由头：词表由六个扩为七个；成对证据 = 「本平台侧改自己那节 ⇒ 绿 / 他平台侧改 ⇒ 红」。
+    r.append(run("watchOS 实现细节：SwiftUI / WatchConnectivity。",
+                 "watchOS 实现细节：本平台侧补的。",
+                 "新平台：`--mine watchos` 改 `[独占:watchos]` 节 · 应该通过", mine="watchos"))
+    r.append(run("watchOS 实现细节：SwiftUI / WatchConnectivity。",
+                 "watchOS 实现细节：windows 侧越界改了。",
+                 "新平台：`--mine windows` 改 `[独占:watchos]` 节（成对负例）· 应该报红"))
 
     # ── 契约所有者 = **演员名**（2026-10-03 人类主人制度变更 · 派单 `T-20261003_003` 系）6 例 ──
     # 由头：三书**契约层**归 `bluewhale`（蓝色鲸鱼娘）；平台实现层仍按**平台名**归各平台助理
@@ -831,6 +853,11 @@ macOS / iOS 实现细节：SwiftUI / Keychain。
               % (label, "✅" if ok else "❌ 不符预期", got, expect))
         return ok
 
+    r.append(run_names("新平台护栏：词表含 `watchos`（七个 · 2026-10-13）",
+                       lambda: PLATFORMS,
+                       ("macos", "ios", "watchos", "windows", "android", "harmony", "linux")))
+    r.append(run_names("新平台护栏：`bighippo` ≡ macos/ios/watchos（Apple 全系）",
+                       lambda: ACTORS.get("bighippo"), ("macos", "ios", "watchos")))
     r.append(run_names("演员名护栏：现行规范名表含 `fatshark` ≡ windows",
                        lambda: ACTORS.get("fatshark"), ("windows",)))
     r.append(run_names("演员名护栏：退役名 `fatfish` 不在规范名表（防回退）",
@@ -872,7 +899,8 @@ def main():
         return self_test()
 
     mine = args.mine or os.environ.get("DOYAH_SIDE") or infer_side()
-    # 词表：**标记** = 平台名（2026-10-02 收口，六个）；**命令行侧名 / 契约所有者** 另收四个演员名
+    # 词表：**标记** = 平台名（2026-10-02 收口六个；2026-10-13 增至七个 `watchos`）；
+    # **命令行侧名 / 契约所有者** 另收四个演员名
     # （2026-10-03 制度变更：契约层归 `bluewhale`，实现层归 `bighippo` / `tinyhippo` / `fatshark`）。
     # 旧词（`apple` / `nonapple`）**不归一**，直接退出 2 —— 否则「侧名」与「标记」会两套词表并存。
     for _who, _val in (("--mine", mine), ("--contract-owner", args.contract_owner)):
