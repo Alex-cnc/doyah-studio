@@ -17,7 +17,13 @@ final class AgentActionGateTests: XCTestCase {
     }
 
     private func submit(_ sql: String, policy: AgentGuardPolicy) -> AgentActionSubmission {
-        AgentActionGate.submit(sql: sql, databaseType: .postgresql, policy: policy, context: context)
+        AgentActionGate.submit(
+            sql: sql,
+            databaseType: .postgresql,
+            policy: policy,
+            context: context,
+            language: .simplifiedChinese
+        )
     }
 
     // MARK: - 只读模式（AC-AI-02）

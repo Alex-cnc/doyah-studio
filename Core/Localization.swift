@@ -1600,6 +1600,9 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentGuardSave
     case agentGuardSaved
     case agentGuardWritesWarning
+    case agentPermissionReadOnlyConnection
+    case agentPermissionMissingCapability
+    case agentPermissionCapabilityCreateDatabase
 
     // 智能体语句类别 / 结果状态 / 风险等级（界面展示用）
     case agentKindReadQuery
@@ -3870,6 +3873,9 @@ public enum LocalizedStrings {
         .agentGuardSave: [.simplifiedChinese: "保存策略", .english: "Save policy"],
         .agentGuardSaved: [.simplifiedChinese: "已保存只读模式与白名单。", .english: "Read-only mode and allowlist saved."],
         .agentGuardWritesWarning: [.simplifiedChinese: "只读模式已关闭：智能体可以发起写操作 / DDL，每次仍需逐次批准。", .english: "Read-only mode is off: the agent may request writes/DDL, each still approved one by one."],
+        .agentPermissionReadOnlyConnection: [.simplifiedChinese: "这条连接标了只读（FR-CONN-17）：智能体不能在这里执行写语句或结构变更，批准也不放行 —— 要写入请改用非只读的连接。语句：%@", .english: "This connection is marked read-only (FR-CONN-17): the agent cannot run writes or schema changes here and approval cannot bypass it. Switch to a non-read-only connection to write. Statement: %@"],
+        .agentPermissionMissingCapability: [.simplifiedChinese: "这条语句要的权限当前连接上没有：%@（本机探测结论 = 不可以，FR-META-11）。请求在发起前就被客户端拦下了 —— 请在服务端授权后重试，或换一个有权限的连接。语句：%@", .english: "This statement needs a privilege the current connection does not have: %@ (the local probe says no, FR-META-11). The client stopped the request before it was sent — grant it on the server or use a connection that has it. Statement: %@"],
+        .agentPermissionCapabilityCreateDatabase: [.simplifiedChinese: "建库 / 删库 / 改库", .english: "create, drop or alter databases"],
 
         .agentKindReadQuery: [.simplifiedChinese: "只读查询", .english: "Read-only query"],
         .agentKindDataChange: [.simplifiedChinese: "数据变更", .english: "Data change"],

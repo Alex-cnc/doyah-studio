@@ -630,6 +630,8 @@ public enum AgentActionGate {
         databaseType: DatabaseType = .postgresql,
         policy: AgentGuardPolicy,
         context: AgentActionRecord.Context = .none,
+        permissions: AgentConnectionPermissions = .unknown,
+        language: AppLanguage,
         at date: Date = Date()
     ) -> AgentActionSubmission {
         // 判定与建单都走归一化后的策略：手改配置文件塞进来的 `unknown` 白名单也不生效。
@@ -638,6 +640,23 @@ public enum AgentActionGate {
             databaseType: databaseType,
             policy: policy.sanitized
         )
+
+        // 客户端连接权限校验（`FR-AI-12` 的客户端半，队列 `L-125`）：越过当前连接权限的请求
+        // **在发起前就被拦下** —— 它连审批单都建不出来（因此也谈不上执行、谈不上把越权语句
+        // 送到服务端）。判定只用连接的属性（`FR-CONN-17` 的只读连接 / `FR-META-11` 的探测结论），
+        // 不看模型说了什么；不知道的能力一律不拦（防御性冗余，不制造假阴性）。
+        // 位置说明：它先于护栏的**结论**（只读连接是连接的属性、不可绕过），但要用护栏给的**分类**。
+        if let finding = AgentPermissionScope.blockingFinding(assessment: assessment, permissions: permissions) {
+            let record = AgentActionRecord.make(
+                sql: sql,
+                assessment: assessment,
+                context: context,
+                outcome: .denied,
+                detail: AgentPermissionScope.message(for: finding, language: language),
+                at: date
+            )
+            return .denied(record)
+        }
 
         guard let approval = AgentApproval.request(
             sql: sql,

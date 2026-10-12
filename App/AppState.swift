@@ -2993,7 +2993,14 @@ final class AppState: ObservableObject {
             sql: sql,
             databaseType: selectedConnection?.dbType ?? .postgresql,
             policy: agentGuardPolicy,
-            context: agentActionContext
+            context: agentActionContext,
+            // 客户端连接权限校验（`FR-AI-12` 客户端半，队列 `L-125`）：事实来自连接自己的属性
+            // （`isReadOnly`，FR-CONN-17）与 `refreshDatabaseCreationPermission` 探到的结论（FR-META-11）。
+            permissions: AgentConnectionPermissions(
+                isReadOnly: selectedConnection?.isReadOnly ?? false,
+                canCreateDatabase: canCreateDatabase
+            ),
+            language: LocalizationManager.shared.effectiveLanguage
         )
 
         await appendAgentAudit(submission.record)
