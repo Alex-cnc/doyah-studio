@@ -861,7 +861,8 @@ DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-exclusive-sections.py --
 # 清单 `shared_ledger` 改前登记理由（glob 命中）/ 本次新增行注 `shared-surface：理由` /
 # 提交信息注 `shared-surface: 理由`，三处都没有理由 ⇒ 判红。本侧由清单 `hosts` 推断
 # （macOS = `darwin` ⇒ macos 端），不写死 —— 换台机器跑不会把运行方当成对侧。
-# 第二条是**门禁自己的证据**：**32 例**（对侧子树 / 共享面未登记 / 清单过期 / 本地落后远端 / 中文路径… / **契约模式 6 例**：契约所有者只许三书、碰代码即拦）。
+# 第二条是**门禁自己的证据**：**38 例**（对侧子树 / 共享面未登记 / 清单过期 / 本地落后远端 / 中文路径… / **契约模式 6 例**：契约所有者只许三书、碰代码即拦 / **均衡令 4 例**（`T-20261013-006`）：现行名 `hugehippo` 改本侧绿 · 改对侧红 · 旧名只作只读别名 · 本仓无 `ios` 子树时 `--mine macos,ios,watchos` 认不出退出 2）。
+# 数字的唯一来源 = 实跑 `python3 Scripts/check-path-ownership.py --self-test`（34 例 → 38 例：均衡令新增 4 例；本注释里的旧值 32 自第 32 轮起就陈旧，本批一并归位）。
 # ⚠️ 同 691 行的道理：这里也**显式**传平台名，不让环境里的 `DOYAH_SIDE`（技能仓那套认化身名）漏进来 ——
 DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-path-ownership.py
 DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-path-ownership.py --self-test
