@@ -30,7 +30,7 @@ public enum LicensePresentation {
             }
         }
         // 挂点过滤 = 对**已许可的项**再筛一次；判据本体（谁许可）仍在上面那一处。
-        // 写成对结果数组的 filter（而不是第二个 `ActivityBarItem.allCases.filter`），
+        // 写成对结果数组的 filter（而不是再写一遍 allCases 上的过滤），
         // 让"能力位过滤恰好一处"这条门禁断言继续成立。
         .filter { mounts.isMounted($0) }
     }

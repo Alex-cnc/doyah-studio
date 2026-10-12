@@ -124,7 +124,10 @@ def check_02_visibility() -> list[str]:
 
     # App 侧的"该显示哪几项"只有一条来源。
     app_state = read("App/AppState.swift")
-    if "LicensePresentation.activityItems(for: licenseCapabilities)" not in app_state:
+    # 2026-10-12（契约 §3.52④ 挂点判据）：调用形态允许带**挂点参数**
+    # —— `activityItems(for:mounts:)` 仍是同一个唯一判据，只是多了"插件在不在"这一半；
+    # 断言因此匹配到实参开头（不带右括号），否则合法实现会被判红。
+    if "LicensePresentation.activityItems(for: licenseCapabilities" not in app_state:
         found.append("App/AppState.swift: visibleActivityItems 不再走 LicensePresentation.activityItems")
     if len(re.findall(r"var visibleActivityItems\b", app_state)) != 1:
         found.append("App/AppState.swift: visibleActivityItems 定义不唯一")
