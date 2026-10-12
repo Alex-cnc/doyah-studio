@@ -10,7 +10,13 @@ public enum LicensePresentation {
     ///
     /// **未授权的区不出现**（不是灰掉诱导）—— 这是 Q11 拍板口径。
     /// 顺序沿用 `ActivityBarItem.allCases`（"谁在上面"只由那里决定，不许在视图里再排一次）。
-    public static func activityItems(for capabilities: LicenseCapabilities) -> [ActivityBarItem] {
+    ///
+    /// `mounts` = **许可之外的那一半**（契约 §3.52④：插件不在 ⇒ 它的挂点整体消失且不报错）。
+    /// 默认 `.disabled` ⇒ 不过滤，单测与预览的老行为一字不变；app 侧传 `.live(...)`。
+    public static func activityItems(
+        for capabilities: LicenseCapabilities,
+        mounts: PluginMounts = .disabled
+    ) -> [ActivityBarItem] {
         ActivityBarItem.allCases.filter { item in
             switch item {
             case .workspace: return capabilities.contains(.workspaces)
@@ -23,6 +29,10 @@ public enum LicensePresentation {
             case .retro: return true
             }
         }
+        // 挂点过滤 = 对**已许可的项**再筛一次；判据本体（谁许可）仍在上面那一处。
+        // 写成对结果数组的 filter（而不是第二个 `ActivityBarItem.allCases.filter`），
+        // 让"能力位过滤恰好一处"这条门禁断言继续成立。
+        .filter { mounts.isMounted($0) }
     }
 
     /// 当前档位下**默认打开哪一项**（原来的选中项在新档位里不可见时用它兜底）。
