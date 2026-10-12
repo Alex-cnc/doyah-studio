@@ -25,9 +25,9 @@ public struct PluginMounts: Equatable, Sendable {
         case .retro:
             return "Replay"
         case .notes:
-            // 笔记**暂不接**：契约 §3.52⑥「既有实现不要求立刻搬家」——
-            // 等笔记真搬进 `Plugins/Notes/` 那一轮再接，否则今天就会把笔记区判没。
-            return nil
+            // 笔记**已搬进 `Plugins/Notes/`**（P3，2026-10-13）：清单与源码同处那一格，
+            // 挂点据此接上 —— 插件不在 ⇒ 笔记那一栏整体消失（契约 §3.52④）。
+            return "Notes"
         case .workspace, .database:
             return nil
         }

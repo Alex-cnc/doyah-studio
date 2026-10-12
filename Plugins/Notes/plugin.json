@@ -1,0 +1,16 @@
+{
+  "id": "Notes",
+  "displayName": "笔记",
+  "version": "0.1.0",
+  "entryTarget": "DoyahStudio",
+  "apiVersion": 1,
+  "capabilities": [],
+  "contributions": [
+    { "point": "activityBar", "order": 30 },
+    { "point": "menu" },
+    { "point": "settings" },
+    { "point": "searchIndex" },
+    { "point": "commandPalette" }
+  ],
+  "storage": "pluginOwned"
+}

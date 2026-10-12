@@ -64,6 +64,8 @@ from typing import Callable
 ROOT = Path(__file__).resolve().parent.parent
 STATE_FILE = "App/AppState.swift"
 VIEW_DIR = "App/Views"
+# 扫描面（2026-10-13 · 概设 §7 P3 搬家）：笔记视图搬进插件目录后仍编进宿主模块。
+VIEW_DIRS = (VIEW_DIR, "Plugins/Notes/Views")
 LEDGER_PATH = "Scripts/empty-action-button-dispositions.json"
 
 FORMS = ("view-disabled", "view-disabled-local", "explain", "internal")
@@ -165,7 +167,7 @@ def scan_guards(repo: Path, predicates: set[str]) -> list[Sighting]:
 
 
 def view_files(repo: Path) -> list[Path]:
-    return sorted((repo / VIEW_DIR).rglob("*.swift"))
+    return sorted(p for base in VIEW_DIRS for p in (repo / base).rglob("*.swift"))
 
 
 class Checker:
@@ -382,6 +384,12 @@ def _fixture(repo: Path, dest: Path) -> None:
     第 59 轮第一版就是这么写的，11 例负例跑到超时）。"""
     dest.mkdir(parents=True, exist_ok=True)
     shutil.copytree(repo / "App", dest / "App", ignore=shutil.ignore_patterns(".build"))
+    # 插件目录下的宿主视图（2026-10-13 · 概设 §7 P3 搬家）：判据的扫描面含这一处，
+    # 夹具不拷它 ⇒ 负例里 `rewrite(.../NotesPanel.swift)` 直接 FileNotFound（假红）。
+    plugin_views = repo / "Plugins" / "Notes" / "Views"
+    if plugin_views.is_dir():
+        shutil.copytree(plugin_views, dest / "Plugins" / "Notes" / "Views",
+                        ignore=shutil.ignore_patterns(".build"))
     (dest / "Scripts").mkdir(exist_ok=True)
     shutil.copy2(repo / LEDGER_PATH, dest / LEDGER_PATH)
     shutil.copy2(repo / "Scripts" / "check-empty-action-buttons.py",
@@ -392,7 +400,7 @@ def _snapshot(repo: Path) -> dict[str, str]:
     import hashlib
 
     out: dict[str, str] = {}
-    for rel in (STATE_FILE, LEDGER_PATH, "App/Views/NotesPanel.swift", "App/Views/SaveQuerySheet.swift"):
+    for rel in (STATE_FILE, LEDGER_PATH, "Plugins/Notes/Views/NotesPanel.swift", "App/Views/SaveQuerySheet.swift"):
         path = repo / rel
         if path.exists():
             out[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -426,7 +434,7 @@ def self_test(repo: Path) -> int:
 
     @case("视图侧处置被删（去掉 .disabled）")
     def _drop_disabled(tmp: Path) -> str | None:
-        rewrite(tmp / "App/Views/NotesPanel.swift",
+        rewrite(tmp / "Plugins/Notes/Views/NotesPanel.swift",
                 ".disabled(!appState.noteEditorHasContent)", "")
         return None if Checker(tmp).run() == 1 else "视图丢了 .disabled，门禁没说话"
 
@@ -471,14 +479,14 @@ def self_test(repo: Path) -> int:
 
     @case("判据属性出现第二处定义")
     def _duplicate_predicate(tmp: Path) -> str | None:
-        rewrite(tmp / "App/Views/NotesPanel.swift",
+        rewrite(tmp / "Plugins/Notes/Views/NotesPanel.swift",
                 "struct NotesEditorView: View {",
                 "struct NotesEditorView: View {\n    var noteEditorHasContent: Bool { true }")
         return None if Checker(tmp).run() == 1 else "判据出现两处定义，门禁没说话"
 
     @case("视图重新推导判据（唯一出处被破）")
     def _view_recomputes(tmp: Path) -> str | None:
-        rewrite(tmp / "App/Views/NotesPanel.swift",
+        rewrite(tmp / "Plugins/Notes/Views/NotesPanel.swift",
                 "    var body: some View {",
                 "    private var hasContentAgain: Bool {\n"
                 "        !appState.noteEditorTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty\n"

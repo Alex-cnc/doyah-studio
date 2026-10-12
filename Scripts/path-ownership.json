@@ -33,7 +33,8 @@
     "Package.swift",
     "Package.resolved",
     "project.yml",
-    "DoyahStudio.xcodeproj/"
+    "DoyahStudio.xcodeproj/",
+    "Plugins/"
    ],
    "note": "与派活单 T-20261002-029 给的清单一致，只多一条 `Package.resolved`（SwiftPM 锁文件，属 Swift 族）与 `.cloudbase/`（云后端绑定 —— 片 `云A` 交付物 · 派单 `T-20261009-116` ①，前门裁 `T-20261009-117`：macOS 实现面 = DoyahStudio 仓）；`Scripts/` 单列进 shared（见 shared_note）。",
    "actor": "bighippo"
@@ -220,7 +221,7 @@
   },
   {
    "glob": "Scripts/notes-offline-gate.json",
-   "reason": "片 WY-1b1（任务 t_32b856f8 · macOS 机组）：新增笔记源文件 `App/Views/NotesRichTextEditor.swift` 登记进零网络出口范围（漏登一个 = 它偷偷不受约束）",
+   "reason": "片 WY-1b1（任务 t_32b856f8 · macOS 机组）：新增笔记源文件 `Plugins/Notes/Views/NotesRichTextEditor.swift` 登记进零网络出口范围（漏登一个 = 它偷偷不受约束）",
    "by": "macos",
    "at": "2026-10-09"
   },

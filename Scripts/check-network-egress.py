@@ -10,8 +10,8 @@
 
 **清单（只许取自 SRS v3.94，不许自造；逐条理由见台账 `Scripts/network-egress-whitelist.json`）**：
 
-  ① **笔记同步面** = `Core/NoteSync/CloudSyncService.swift`（该面唯一出口）
-  ② **认证面**     = `Core/NoteSync/CloudAuth.swift`（单列：认证与同步解耦）
+  ① **笔记同步面** = `Plugins/Notes/Sources/NoteSync/CloudSyncService.swift`（该面唯一出口）
+  ② **认证面**     = `Plugins/Notes/Sources/NoteSync/CloudAuth.swift`（单列：认证与同步解耦）
   ③ **AI 面（既有豁免）** = `Core/LLMClient.swift` + `Core/EgressLog.swift`（传输装饰器）
   ④ **装配缝（不算出口）** = `App/AppState.swift` · `App/Auth/AccountFlowModel.swift`（只注入 transport）
   ⑤ **其余一切文件**出现 `URLSession` / `URLRequest` ⇒ **判红**（并点名 `文件:行号`）

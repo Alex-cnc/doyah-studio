@@ -11,7 +11,7 @@ import DoyahPlatform
 /// · `.edit` —— 「新建」/「改」，以及**双击进编辑**（片 `N2-3b`）⇒ 正文可编辑
 ///   （「新建」/「改」的语义与本片之前一字未改）。
 ///
-/// **只此一处**判「正文那一块可不可编辑」：视图（`App/Views/NotesPanel.swift` 的
+/// **只此一处**判「正文那一块可不可编辑」：视图（`Plugins/Notes/Views/NotesPanel.swift` 的
 /// `NotesEditorView`）与判据（`TestsUISnapshot/NotesLayoutProbeTests.swift`）读的是同一个值。
 ///
 /// **`N2-3a` 只改了一半**（单击 ⇒ 预览）；**双击进编辑**是片 `N2-3b` 补上的那另一半
@@ -446,7 +446,7 @@ final class AppState: ObservableObject {
     /// 就是它；视图里的 `@State` 外面读不到、也写不进。
     @Published var noteSearchRevealed = false
     /// **两级导航的树与归属**（队列 `L-97` 界面半第一片）：架 / 笔记本 + 每条笔记挂在谁名下。
-    /// 纯逻辑在 `Core/NoteNavigation.swift`（判据 `Tests/NoteNavigationTests.swift`），这里只做搬运 ——
+    /// 纯逻辑在 `Plugins/Notes/Sources/NoteNavigation.swift`（判据 `Tests/NoteNavigationTests.swift`），这里只做搬运 ——
     /// 宿主层不自己写过滤（「按笔记本筛笔记」只许经 `NotesNavigation.filter`）。
     @Published var notesNavigation = NotesNavigation(directory: NotebookDirectory(shelves: [], notebooks: []), placements: [])
     /// 界面上「正在看哪一块」：全部 / 某个架 / 某个笔记本 / 某个标签 / 最近。认不出的目标由 Core 归一成 `.all`。
@@ -529,7 +529,7 @@ final class AppState: ObservableObject {
     // MARK: - 自动保存（片 `N2-4` · 人类主人令 `T-20261007-006` 第二节第六条）
 
     /// 编辑器现在这一份的**保存状态**（工具条画它、状态栏说它、机器判据也读它 —— 唯一出处）。
-    /// 口径与停顿窗口在 `Core/NoteStorage/NoteAutosave.swift`。
+    /// 口径与停顿窗口在 `Plugins/Notes/Sources/NoteStorage/NoteAutosave.swift`。
     @Published private(set) var noteSaveState: NoteSaveState = .idle
     /// 编辑器里有没有**还没落库**的改动（`noteSaveState == .idle` ⇔ 没有）。
     private var noteEditorDirty = false

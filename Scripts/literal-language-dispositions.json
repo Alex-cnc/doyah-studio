@@ -33,7 +33,7 @@
       "reason": "**有意为之**：CLI 没有界面语境，语言就该是显式的中文（本轮 L-47 把诊断输出也改成显式传 `AppLanguage.simplifiedChinese`）；另两处是 MCP 审批载荷文案。代价是这两个键的英文译文当前不可达 ⇒ 已登记进 deadKeys，要不要给 CLI 加一个语言开关属新需求（不在本轮）。**L-65 第 2 批补记**：隧道命令那句是 `let language = AppLanguage.simplifiedChinese`（**赋值**，不进本台账的计数 —— 判据量的是 `language: .simplifiedChinese` 这种**传参**形状），随后 `start(language:)` 与 `describe(language:)` 都用它；**别把它当成「没写死」**，命令行说中文是有意的口径，不是遗漏。**L-65 第 5 批补记（5 → 6 处）**：命令行的连库入口 `DatabaseServiceFactory.make(for:password:language:)` 同样显式传 `.simplifiedChinese`（数据库侧那几句失败文案也归命令行）—— 同 `Q43`（2026-09-30 拍板「保持现状」）口径，**不计入清零目标**（清零目标 = 44 处里的 39 处，CLI 那 5 处本就不在内）。"
     },
     {
-      "file": "Core/NoteBody.swift",
+      "file": "Plugins/Notes/Sources/NoteBody.swift",
       "maxSites": 0,
       "reason": "**回归钉（队列 L-65 第 1 批已透传）**：`NoteBodyProjection.toSpans(_:language:)` / `exportMarkdown(_:language:)` 收调用方的语言（降级说明是给人看的话）—— 这里再出现字面语言即红。"
     },

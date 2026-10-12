@@ -195,7 +195,7 @@ final class NotebookEditPromptTests: XCTestCase {
     func testHostWiringUsesTheEditPromptInsteadOfHardWiringRules() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let appState = Self.stripComments(try String(contentsOf: root.appendingPathComponent("App/AppState.swift"), encoding: .utf8))
-        let panel = Self.stripComments(try String(contentsOf: root.appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8))
+        let panel = Self.stripComments(try String(contentsOf: root.appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"), encoding: .utf8))
 
         XCTAssertTrue(appState.contains("func beginNewNotebook("), "新建的入口由 AppState 一处给")
         XCTAssertTrue(appState.contains("func beginRenameContainer("), "重命名的入口由 AppState 一处给")
@@ -227,7 +227,7 @@ final class NotebookEditPromptTests: XCTestCase {
     /// 剥注释之后再找双引号里的汉字 —— 注释里写中文是允许的，那不算文案。
     func testCoreFileKeepsUserFacingTextOutOfStringLiterals() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let source = Self.stripComments(try String(contentsOf: root.appendingPathComponent("Core/NotebookEditPrompt.swift"), encoding: .utf8))
+        let source = Self.stripComments(try String(contentsOf: root.appendingPathComponent("Plugins/Notes/Sources/NotebookEditPrompt.swift"), encoding: .utf8))
         let regex = try NSRegularExpression(pattern: "\"[^\"\\n]*[\\u4E00-\\u9FFF][^\"\\n]*\"")
         let hits = regex.matches(in: source, range: NSRange(source.startIndex..., in: source))
         XCTAssertTrue(hits.isEmpty, "Core 里的用户文案必须走 LKey（实测命中 \\(hits.count) 处）")

@@ -203,7 +203,7 @@ final class NoteSelectionPromptTests: XCTestCase {
             try! String(contentsOf: root.appendingPathComponent("App/AppState.swift"), encoding: .utf8)
         )
         let panel = Self.stripComments(
-            try! String(contentsOf: root.appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8)
+            try! String(contentsOf: root.appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"), encoding: .utf8)
         )
 
         XCTAssertTrue(appState.contains("NoteSelectionRule.clicked("), "点击处置走 Core 规则（视图不自己判修饰键）")

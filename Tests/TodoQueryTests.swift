@@ -360,7 +360,7 @@ final class TodoQueryTests: XCTestCase {
 
     func testViewsDoNotSortOrFilterTodoOrderThemselves() throws {
         // 排序 / 筛 / 分组的**唯一入口**是 Core：界面层不许自己 `sorted(by:)`，也不许再用已退役的 `dueState`。
-        for file in ["App/Views/TodoCalendarView.swift", "App/Views/NotesPanel.swift"] {
+        for file in ["App/Views/TodoCalendarView.swift", "Plugins/Notes/Views/NotesPanel.swift"] {
             let text = try source(file)
             XCTAssertFalse(text.contains("sorted(by:"), "\(file) 自己排序（第二套排法）")
             XCTAssertFalse(text.contains("dueState"), "\(file) 还在用退役的 `dueState`（档位已改为 `TodoQuery.band`）")
@@ -425,7 +425,7 @@ final class TodoQueryTests: XCTestCase {
         let core = try source("Core/TodoQuery.swift")
         XCTAssertTrue(core.contains("localizedCaseInsensitiveContains"), "检索谓词的实现搬走了")
         XCTAssertTrue(core.contains("public enum TodoSearch"), "检索那一层不在 Core")
-        for file in ["App/Views/TodoCalendarView.swift", "App/Views/NotesPanel.swift"] {
+        for file in ["App/Views/TodoCalendarView.swift", "Plugins/Notes/Views/NotesPanel.swift"] {
             let view = try source(file)
             XCTAssertFalse(
                 view.contains("localizedCaseInsensitiveContains"),
@@ -517,7 +517,7 @@ final class TodoQueryTests: XCTestCase {
 
     func testListScreenRendersBoardAndNothingElse() throws {
         // 清单那一屏只消费 `AppState.todoBoard`（唯一查询入口）：不再自己分区、也不自己判空态。
-        let text = Self.strippingComments(try source("App/Views/NotesPanel.swift"))
+        let text = Self.strippingComments(try source("Plugins/Notes/Views/NotesPanel.swift"))
         XCTAssertTrue(text.contains("appState.todoBoard"), "清单那一屏没有走 board")
         XCTAssertTrue(text.contains("appState.todoEmptyKind"), "空态那句话没有走 Core 的判定")
         XCTAssertFalse(text.contains("TodoPresentation.sections("), "清单那一屏自己分区（第二套分区口径）")

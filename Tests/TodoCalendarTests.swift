@@ -331,7 +331,7 @@ final class TodoCalendarTests: XCTestCase {
 
     /// 库里**没有日历专属表**：任务只有 `todo` / `todo_tag` 两张表，日历读的是它们。
     func testStoreHasNoCalendarTable() throws {
-        let text = try source("Core/NoteStorage/NoteDatabase.swift")
+        let text = try source("Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift")
 
         XCTAssertTrue(text.contains("CREATE TABLE todo ("), "清单的表还在（日历读的就是它）")
         XCTAssertFalse(text.contains("CREATE TABLE calendar"), "不许为日历另存一份任务")

@@ -11,7 +11,7 @@
 所以把「只有一份」变成机械判据：
 
   ① **行内解析唯一**：`nextMarker`（行内标记扫描器）与 `linkMarker`（链接扫描器）都只许在
-     `Core/NoteBody.swift` 里出现 —— 别处命中即红（那是第二套行内解析的入口）；一处都没有也红
+     `Plugins/Notes/Sources/NoteBody.swift` 里出现 —— 别处命中即红（那是第二套行内解析的入口）；一处都没有也红
      （扫描面被削过 / 判据空转）。行内标记清单那一个字面量（``["`", "**", "*", "["]``）同理**只许一份**。
      链接扫描器是 2026-10-01（第 146 轮，队列 `L-137` 剩余③）补进来的：链接与粗体一样是**笔记侧
      那一份解析**的产物，别处再写一套链接解析就是同一族的病。
@@ -50,7 +50,7 @@ import tempfile
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
 
-INLINE_OWNER = "Core/NoteBody.swift"
+INLINE_OWNER = "Plugins/Notes/Sources/NoteBody.swift"
 BLOCK_OWNER = "Core/MarkdownDocument.swift"
 PARSE_TESTS = "Tests/MarkdownDocumentTests.swift"
 
@@ -60,7 +60,7 @@ INLINE_MARKER_LIST = '["`", "**", "*", "["]'
 BLOCK_CONSTRUCTOR = "MarkdownBlock("
 SHARED_INLINE_CALL = "NoteBodyProjection.parseInline("
 
-SCAN_DIRS = ("Core", "App", "Platform", "CLI")
+SCAN_DIRS = ("Core", "App", "Platform", "CLI", "Plugins/Notes/Sources", "Plugins/Notes/Views")
 TESTS_DIR = "Tests"
 DEPENDENCY_FILES = ("Package.swift", "project.yml")
 

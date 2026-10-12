@@ -66,13 +66,13 @@
     ],
     "publicHeadersPath": "include",
     "header": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
-    "consumer": "`DoyahCore`（`Core/NoteStorage/`）—— **第 21 轮接线**：根 `Package.swift` 的 `DoyahCore` 目标加 `.product(name: \"CSQLite3\", package: \"sqlite3\")`，绑定层 `Core/NoteStorage/SQLiteKit.swift` 里 `import CSQLite3`（第 18 轮那份草稿当初因「显式模块构建下本地包 clang 模块不进模块表」未接线；本轮实测在 Core 目标里可编译、单测通过）。"
+    "consumer": "`DoyahCore`（`Core/NoteStorage/`）—— **第 21 轮接线**：根 `Package.swift` 的 `DoyahCore` 目标加 `.product(name: \"CSQLite3\", package: \"sqlite3\")`，绑定层 `Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift` 里 `import CSQLite3`（第 18 轮那份草稿当初因「显式模块构建下本地包 clang 模块不进模块表」未接线；本轮实测在 Core 目标里可编译、单测通过）。"
   },
   "wrapper": {
-    "source": "Core/NoteStorage/SQLiteKit.swift",
-    "constants": "Core/NoteStorage/SQLiteConstants.swift（由 Scripts/gen-sqlite-constants.py 从 vendored 头文件生成；`--check` **已接进 `verify-all.sh` 第 18 项**，`--self-test` 五条篡改）",
-    "storage": "Core/NoteStorage/NoteDatabase.swift（schema v1 + 映射 + 检索 + VACUUM INTO 快照）",
-    "migration": "Core/NoteStorage/NoteLibraryMigration.swift（notes.json → notes.sqlite3 一次性迁移）",
+    "source": "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift",
+    "constants": "Plugins/Notes/Sources/NoteStorage/SQLiteConstants.swift（由 Scripts/gen-sqlite-constants.py 从 vendored 头文件生成；`--check` **已接进 `verify-all.sh` 第 18 项**，`--self-test` 五条篡改）",
+    "storage": "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift（schema v1 + 映射 + 检索 + VACUUM INTO 快照）",
+    "migration": "Plugins/Notes/Sources/NoteStorage/NoteLibraryMigration.swift（notes.json → notes.sqlite3 一次性迁移）",
     "tests": "Tests/SQLiteKitTests.swift（绑定层）+ Tests/NoteStoreSQLiteTests.swift（存储层 / 迁移 / 快照）",
     "status": "wired",
     "whyNotSystemLibrary": "口径：不许换系统自带 libsqlite3、也不许引第三方 Swift 封装（GRDB 官方仅 Apple+Linux、Windows 是社区探索；SwiftData / Core Data 为 Apple 独占），否则「Windows 与 macOS 完全一致」不成立。见 FR-PLUG-08。"
@@ -80,7 +80,7 @@
   "generator": {
     "why": "Swift 侧不许引用 C 宏（第 18 轮实测：大量引用会把绑定目标判进 SwiftPM 的显式模块构建档，那一档下 vendored 的 clang 模块进不了模块表 ⇒ `import CSQLite3` 不报错但声明全都「cannot find in scope」）。所以宏的值**从头文件生成**成 Swift 常量 —— 于是多出一份**生成物**，而生成物漂移没有任何症状（编译照过、单测照绿，只有三端行为悄悄不一致）。本节点把「生成器 ↔ 生成物 ↔ vendored 头文件」三者的绑定写死，由本门禁对账。",
     "script": "Scripts/gen-sqlite-constants.py",
-    "output": "Core/NoteStorage/SQLiteConstants.swift",
+    "output": "Plugins/Notes/Sources/NoteStorage/SQLiteConstants.swift",
     "header": "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",
     "versionSource": "头文件里的 `SQLITE_VERSION` 与台账 version 同源（见本文件 version 字段）",
     "inVerifyAll": "Scripts/verify-all.sh 第 18 项",
@@ -141,12 +141,12 @@
         "why": "根包真的把 vendored SQLite 交给了 `DoyahCore` —— 这一行掉了，`import CSQLite3` 就编译不过（正是第 18 轮未接线的那个断点）"
       },
       {
-        "file": "Core/NoteStorage/SQLiteKit.swift",
+        "file": "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift",
         "anchor": "sqlite3_open_v2(",
         "why": "绑定层真的在产品源码里（C 互操作只在这一处，其余地方只经 Swift API）"
       },
       {
-        "file": "Core/NoteStorage/NoteDatabase.swift",
+        "file": "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift",
         "anchor": "tokenize = 'trigram'",
         "why": "中文检索口径落在**生产 schema** 上，而不只是 smoke 脚本里的实验（默认 unicode61 不切中文 —— 第 18 轮实测）"
       },
@@ -171,7 +171,7 @@
         "why": "生成器自己的负例入口（5 条篡改）—— 与门禁本身一样，「接线不进闭环就永远不跑」"
       },
       {
-        "file": "Core/NoteStorage/SQLiteConstants.swift",
+        "file": "Plugins/Notes/Sources/NoteStorage/SQLiteConstants.swift",
         "anchor": "本文件由 `Scripts/gen-sqlite-constants.py` **生成**",
         "why": "生成物**自报生成者**（含「已接进第 18 项」与修法）—— 手改的人第一眼就该看见「别手改」，而不是靠别人记得"
       },

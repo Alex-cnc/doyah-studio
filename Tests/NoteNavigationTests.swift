@@ -437,7 +437,7 @@ final class NoteNavigationTests: XCTestCase {
     func testHostWiringUsesTheNavigationInsteadOfItsOwnFiltering() {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let appState = Self.stripComments(try! String(contentsOf: root.appendingPathComponent("App/AppState.swift"), encoding: .utf8))
-        let panel = Self.stripComments(try! String(contentsOf: root.appendingPathComponent("App/Views/NotesPanel.swift"), encoding: .utf8))
+        let panel = Self.stripComments(try! String(contentsOf: root.appendingPathComponent("Plugins/Notes/Views/NotesPanel.swift"), encoding: .utf8))
 
         XCTAssertTrue(appState.contains("notesNavigation"), "AppState 要持有这份导航")
         XCTAssertTrue(appState.contains("notesScope"), "AppState 要持有选中态")

@@ -70,6 +70,9 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 VIEWS = ROOT / "App" / "Views"
+# 插件目录下的宿主视图（2026-10-13 · 概设 §7 P3 搬家）：笔记那三个视图物理上搬到插件目录，
+# 但编的仍是宿主模块 —— 面板根 frame 这条纪律**跟着代码走**，否则一次搬家就少查 3 份面板。
+PLUGIN_VIEWS_REL = pathlib.Path("Plugins/Notes/Views")
 LEDGER = ROOT / "Scripts" / "panel-root-frames.json"
 
 # 扫描范围与门槛
@@ -214,13 +217,22 @@ class Entry:
         return "panel-root" if self.width >= min_width else "ornament"
 
 
+def view_roots(views: pathlib.Path) -> list[pathlib.Path]:
+    """扫描面 = 传入的视图目录 + 插件目录下的宿主视图（存在才算，夹具里可以只有前者）。"""
+    roots = [views]
+    extra = views.parent.parent / PLUGIN_VIEWS_REL
+    if extra.is_dir():
+        roots.append(extra)
+    return roots
+
+
 def scan(views: pathlib.Path, min_width: int) -> tuple[dict[tuple[str, str, str], Entry],
                                                       dict[tuple[str, str, str], Entry],
                                                       int, int, int]:
     """扫盘。返回 (固定尺寸条目, 令牌尺寸条目, 文件数, 固定尺寸命中数, 令牌尺寸命中数)。"""
     entries: dict[tuple[str, str, str], Entry] = {}
     token_entries: dict[tuple[str, str, str], Entry] = {}
-    files = sorted(views.rglob(VIEW_GLOB))
+    files = sorted(p for base in view_roots(views) for p in base.rglob(VIEW_GLOB))
     for path in files:
         lines = path.read_text(encoding="utf-8").splitlines()
         decls = [(i, SYMBOL.match(line).group(1)) for i, line in enumerate(lines) if SYMBOL.match(line)]
@@ -419,6 +431,9 @@ def self_test() -> int:
         sandbox = tmpdir / "repo"
         shutil.copytree(VIEWS.parent.parent / "App", sandbox / "App",
                         ignore=shutil.ignore_patterns("*.png", "*.jpg"))
+        plugin_views = VIEWS.parent.parent / PLUGIN_VIEWS_REL
+        if plugin_views.is_dir():
+            shutil.copytree(plugin_views, sandbox / PLUGIN_VIEWS_REL)
         base_ledger = tmpdir / "panel-root-frames.json"
         shutil.copyfile(LEDGER, base_ledger)
         fixture_views = sandbox / "App" / "Views"

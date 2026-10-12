@@ -503,7 +503,7 @@ final class NotesCrudIconSpacingProbeTests: XCTestCase {
         ] {
             XCTAssertTrue(component.contains(anchor), "`App/Views/ToolbarIcon.swift` 里找不到锚点 `\(anchor)`")
         }
-        let panel = try source("App/Views/NotesPanel.swift")
+        let panel = try source("Plugins/Notes/Views/NotesPanel.swift")
         for anchor in [
             "ToolbarIconButton(systemName: \"plus\", help: L(.notesNew))",
             "ToolbarIconButton(systemName: \"pencil\", help: L(.commonEdit))",
@@ -514,7 +514,7 @@ final class NotesCrudIconSpacingProbeTests: XCTestCase {
             // 两处一个值 ⇒ 从「＋」到这一行里最后一枚入口图标逐个等距。改前这一处是 `Spacing.s`。
             "private var topBar: some View {\n        HStack(spacing: Spacing.xs) {",
         ] {
-            XCTAssertTrue(panel.contains(anchor), "`App/Views/NotesPanel.swift` 里找不到锚点 `\(anchor)`")
+            XCTAssertTrue(panel.contains(anchor), "`Plugins/Notes/Views/NotesPanel.swift` 里找不到锚点 `\(anchor)`")
         }
         let toolbar = try source("App/Views/QueryToolbar.swift")
         for anchor in ["ToolbarIcon(systemName: systemName)", "Metrics.toolbarButtonHeight"] {

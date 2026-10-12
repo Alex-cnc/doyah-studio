@@ -14,7 +14,7 @@ import DoyahCore
 /// ## 界面不直接连网（契约 §6.4「接口面纪律」）
 ///
 /// 认证调用打在 `AccountFlowModel` 上，模型只经共享逻辑层的 `CloudAuthClient`
-/// （`Core/NoteSync/CloudAuth.swift`）。本文件里**不出现出网传输、也不出现钥匙串** ——
+/// （`Plugins/Notes/Sources/NoteSync/CloudAuth.swift`）。本文件里**不出现出网传输、也不出现钥匙串** ——
 /// 装配缝在 `AccountFlowModel.liveClient()` 一处（`App/Auth/`，不是视图层）。
 ///
 /// ## `S4` 的告知文案（逐字，不许含糊）

@@ -415,13 +415,13 @@
       "shape": "<notebook>",
       "kind": "text",
       "maxSites": 1,
-      "reason": "笔记本名：`App/Views/NotesPanel.swift:80` 的 `if let notebook = appState.notebookName(for: note)` ⇒ `notebook: String`（`App/AppState.swift:6070` 返回 `String?`，此处已解包）；2026-10-03 开发循环第 169 轮队列 `L-97` 界面半第一片"
+      "reason": "笔记本名：`Plugins/Notes/Views/NotesPanel.swift:80` 的 `if let notebook = appState.notebookName(for: note)` ⇒ `notebook: String`（`App/AppState.swift:6070` 返回 `String?`，此处已解包）；2026-10-03 开发循环第 169 轮队列 `L-97` 界面半第一片"
     },
     {
       "shape": "<noteCount>",
       "kind": "number",
       "maxSites": 2,
-      "reason": "笔记条数：`App/AppState.swift:6076/6080` 的 `case .notes(let noteCount)` / `case .notebooksAndNotes(_, let noteCount)` ⇒ `ContainerRemovalSummary` 的关联值（`Core/NotebookRemovalPrompt.swift` 声明为 `Int`），只有 `%d` 槽；2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片（删除确认框）"
+      "reason": "笔记条数：`App/AppState.swift:6076/6080` 的 `case .notes(let noteCount)` / `case .notebooksAndNotes(_, let noteCount)` ⇒ `ContainerRemovalSummary` 的关联值（`Plugins/Notes/Sources/NotebookRemovalPrompt.swift` 声明为 `Int`），只有 `%d` 槽；2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片（删除确认框）"
     },
     {
       "shape": "<notebookCount>",

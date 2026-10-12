@@ -53,11 +53,13 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent.parent
 LEDGER_DEFAULT = "Scripts/note-search-route.json"
 
-ROUTES_FILE = "Core/NoteStorage/NoteDatabase.swift"
-DISCLOSURE_FILE = "Core/NoteStorage/NoteSearchDisclosure.swift"
+ROUTES_FILE = "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift"
+DISCLOSURE_FILE = "Plugins/Notes/Sources/NoteStorage/NoteSearchDisclosure.swift"
 LOCALIZATION_FILE = "Core/Localization.swift"
 UI_STATE_FILE = "App/AppState.swift"
 VIEWS_DIR = "App/Views"
+# 扫描面（2026-10-13 · 概设 §7 P3 搬家）：笔记视图搬进插件目录后仍编进宿主模块。
+VIEWS_DIRS = (VIEWS_DIR, "Plugins/Notes/Views")
 TESTS_DIR = "Tests"
 APP_DIR = "App"
 
@@ -211,9 +213,11 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
     if not pattern:
         problems.append("台账 `viewForbidden.snippet` 为空（判据没得查）")
     else:
-        views = sorted((root / VIEWS_DIR).rglob("*.swift"))
+        # 扫描面含插件目录（2026-10-13 · 概设 §7 P3 搬家）：笔记那三个视图物理上搬进
+        # `Plugins/Notes/Views/`（仍编进宿主模块）—— 只扫 `App/Views` 会让本条**零覆盖而全绿**。
+        views = sorted(p for base in VIEWS_DIRS for p in (root / base).rglob("*.swift"))
         if not views:
-            problems.append(f"{VIEWS_DIR} 下一个源文件都没有 —— 判据取不到输入（空跑不许通过）")
+            problems.append(f"{'、'.join(VIEWS_DIRS)} 下一个源文件都没有 —— 判据取不到输入（空跑不许通过）")
         hits = 0
         for path in views:
             for number, line in enumerate(read(path).splitlines(), start=1):

@@ -3,7 +3,7 @@ import Foundation
 // 查询历史两处**破坏性动作**的界面那一半（队列 `HIST-2` · 契约 `DR-02`「持久化历史 ·
 // **可清空 / 单条删除**」· SRS `FR-EDIT-10` v3.326 扩写）。
 //
-// 形态照抄 `Core/NotebookRemovalPrompt.swift` 的单条删除那一节（同一条形态、同一条理由）：
+// 形态照抄 `Plugins/Notes/Sources/NotebookRemovalPrompt.swift` 的单条删除那一节（同一条形态、同一条理由）：
 //   ① **动作与顺序只有一处**（`clearActions` / `deleteActions`）—— 页签里的两枚按钮、
 //      工具条时钟菜单那条路、判据自己，三处消费者各写一遍就会出现「按钮这条路先问、
 //      菜单那条直接删」这种一半有的行为（本工程同族事故见 `L-143` / `L-172`）；

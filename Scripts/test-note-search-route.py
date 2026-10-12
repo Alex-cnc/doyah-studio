@@ -30,11 +30,11 @@ LEDGER = "Scripts/note-search-route.json"
 
 # 副本需要的最小文件集（门禁会读：路线枚举 / 映射 / 语言表 / 界面状态 / 视图目录 / 台账）
 TREE_FILES = [
-    "Core/NoteStorage/NoteDatabase.swift",
-    "Core/NoteStorage/NoteSearchDisclosure.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteSearchDisclosure.swift",
     "Core/Localization.swift",
     "App/AppState.swift",
-    "App/Views/NotesPanel.swift",
+    "Plugins/Notes/Views/NotesPanel.swift",
     "Tests/NoteTests.swift",
     GATE,
     LEDGER,
@@ -109,20 +109,20 @@ def main() -> int:
     tree = make_tree()
     edit(
         tree,
-        "App/Views/NotesPanel.swift",
+        "Plugins/Notes/Views/NotesPanel.swift",
         "        .padding(.vertical, Spacing.s)",
         "        .padding(.vertical, Spacing.s)\n        .onChange(of: appState.notesQuery) { _, _ in _ = NoteSearch.match(appState.notes, query: appState.notesQuery) }",
     )
     code, output = run(tree)
     record(
-        code != 0 and "App/Views/NotesPanel.swift:" in output and "内存过滤" in output,
+        code != 0 and "Plugins/Notes/Views/NotesPanel.swift:" in output and "内存过滤" in output,
         "视图里出现内存过滤 ⇒ 判红并点名行号",
         output.strip()[-300:],
     )
 
     # 4) 实现与台账不一致（把子串路的交代偷偷改成「不必说」）
     tree = make_tree()
-    edit(tree, "Core/NoteStorage/NoteSearchDisclosure.swift", "return .noteSearchSubstring", "return nil")
+    edit(tree, "Plugins/Notes/Sources/NoteStorage/NoteSearchDisclosure.swift", "return .noteSearchSubstring", "return nil")
     code, output = run(tree)
     record(code != 0 and "两边必须逐条相等" in output, "实现改了、台账没跟 ⇒ 判红", output.strip()[-300:])
 
@@ -130,7 +130,7 @@ def main() -> int:
     tree = make_tree()
     edit(
         tree,
-        "Core/NoteStorage/NoteDatabase.swift",
+        "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift",
         "            case substring",
         "            case substring\n            /// 夹具：新增一条没登记的路线\n            case scratchRoute",
     )
@@ -156,7 +156,7 @@ def main() -> int:
 
     # 8) 空跑防护：路线枚举一条都解析不到
     tree = make_tree()
-    edit(tree, "Core/NoteStorage/NoteDatabase.swift", "public enum Route: String, Equatable, Sendable {", "public enum RouteX: String, Equatable, Sendable {")
+    edit(tree, "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift", "public enum Route: String, Equatable, Sendable {", "public enum RouteX: String, Equatable, Sendable {")
     code, output = run(tree)
     record(code != 0 and "空跑不许通过" in output, "解析不到 `Route` 枚举 ⇒ 判红（空跑不许通过）", output.strip()[-300:])
 

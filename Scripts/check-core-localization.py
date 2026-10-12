@@ -62,6 +62,10 @@ import re
 import sys
 
 CORE = pathlib.Path("Core")
+# 扫描面（2026-10-13 · 概设 §7 P3 搬家）：笔记的**自有逻辑**搬到 `Plugins/Notes/Sources/` 之后，
+# 这两条纪律（「汉字字面量只降不升」与「写死的英文展示文案要登记」）**跟着代码走** ——
+# 棘轮只挡增长 ⇒ 不跟过去就等于「搬一次家把这一族的欠账从账上抹掉」（免费降基线）。
+CORE_SOURCES = (CORE, pathlib.Path("Plugins/Notes/Sources"))
 SRC_SELF = pathlib.Path(__file__)
 BASELINE = pathlib.Path("Scripts/core-localization-baseline.json")
 ENGLISH_LEDGER = pathlib.Path("Scripts/core-localization-english.json")
@@ -126,7 +130,7 @@ def scan() -> tuple[dict[str, int], dict[str, list[int]]]:
     """返回 (每个文件的命中行数, 每个文件的行号列表)。"""
     counts: dict[str, int] = {}
     lines_by_file: dict[str, list[int]] = {}
-    for path in sorted(CORE.rglob("*.swift")):
+    for path in sorted(p for source in CORE_SOURCES for p in source.rglob("*.swift")):
         if path.name in EXEMPT:
             continue
         hits: list[int] = []
@@ -147,7 +151,7 @@ def scan() -> tuple[dict[str, int], dict[str, list[int]]]:
 def english_candidates() -> dict[str, list[str]]:
     """返回 {字面量: ["文件:行", …]} —— 盘上「像写死的英文展示文案」的全部字面量。"""
     found: dict[str, list[str]] = {}
-    for path in sorted(CORE.rglob("*.swift")):
+    for path in sorted(p for source in CORE_SOURCES for p in source.rglob("*.swift")):
         if path.name in ENGLISH_PATH_EXEMPT:
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
@@ -283,11 +287,15 @@ def self_test() -> int:
     import subprocess
     import tempfile
 
-    watched = [ENGLISH_LEDGER, BASELINE, SRC_SELF] + [CORE / name for name in ("WorkspaceTab.swift", "Note.swift")]
+    watched = [ENGLISH_LEDGER, BASELINE, SRC_SELF] + [
+        CORE / "WorkspaceTab.swift",
+        pathlib.Path("Plugins/Notes/Sources/Note.swift"),
+    ]
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in watched}
 
     root = pathlib.Path(tempfile.mkdtemp(prefix="l109-selftest-"))
-    shutil.copytree(CORE, root / "Core")
+    for source in CORE_SOURCES:
+        shutil.copytree(source, root / source)
     (root / "Scripts").mkdir()
     for name in (SRC_SELF.name, ENGLISH_LEDGER.name, BASELINE.name):
         shutil.copy(pathlib.Path("Scripts") / name, root / "Scripts" / name)
