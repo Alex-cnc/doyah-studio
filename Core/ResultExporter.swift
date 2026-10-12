@@ -57,6 +57,54 @@ public enum ResultExportFormat: String, CaseIterable, Sendable {
     }
 }
 
+/// 命令行 / 配置里的「导出格式名」解析失败的原因（队列 `L-124` 片 2）。
+///
+/// 为什么把「认得出但本产品写不出来」与「认不出」分成两档：`et` / `xls` 这类名字**认得出**
+/// —— 它们的容器是旧的**二进制**复合文档（OLE2 / CFB），而我们写出端只有 OOXML
+/// （`.xlsx` = ZIP）一条路，于是用户手上有一条确定的替代路径（导出 `xlsx` 后在表格软件里
+/// 「另存为」）。把它们混进通用那句「不支持的格式（csv / json / …）」等于让用户对着清单
+/// 一个个试；而拼错的名字（`jsonn`）没有任何替代路径可给。两档分开，提示才能各说各的。
+///
+/// 容器真相的实测证据：`Docs/evidence/l-124-et-container-20261012/`（正例 = WPS 自带
+/// `.et` 的魔数是 `d0cf11e0a1b11ae1`；负例 = 把自家导出的 `xlsx` 改名 `.et` ⇒ 判红）。
+/// 导入侧同一个分类早已在 `XLSXReader` 里写着（「.xls（BIFF）与 WPS 的 .et 都不是 xlsx」）
+/// —— 这一档把**出口**接到同一条口径上。
+///
+/// 带外参数 = 用户原样写的那一个名字（`et` / `.et` / `ett` / `xls`）：提示要点名**他写的那个**，
+/// 否则「不能直出」这句话落不到他手上的文件类型上。
+public enum ResultExportFormatNameIssue: Error, Equatable {
+    /// 旧的二进制表格容器：本产品认得出名字、写不出来（见上）。
+    case legacyBinarySheetContainer(String)
+    /// 认不出的名字（原样带回，供调用方写进提示）。
+    case unknown(String)
+}
+
+extension ResultExportFormat {
+    /// 解析命令行 / 配置里的格式名 —— CLI 的 `--format` **唯一入口**（整表与整库两条路共用）。
+    ///
+    /// 收在 Core 而不写在 `CLI/main.swift` 的 `switch` 里，两个理由：
+    /// ① 判定「哪些名字认得出、认得出却写不出的怎么回话」是可被单测钉住的纯逻辑，
+    ///    而 CLI 是 executable target —— 它的 `switch` 单测够不着（这正是这条判定
+    ///    原先只能靠人读代码的原因）；
+    /// ② 同一个判定被 `export --table` / `export --all-tables` 两处调用，写两份必然分叉。
+    ///
+    /// 名字大小写不敏感、前后空白照 `ResultExportEncoding.parse` 的同一口径剥掉。
+    public static func parse(commandLineName raw: String) -> Result<ResultExportFormat, ResultExportFormatNameIssue> {
+        switch raw.lowercased().trimmingCharacters(in: .whitespaces) {
+        case "csv": return .success(.csv)
+        case "json": return .success(.json)
+        case "tsv": return .success(.tsv)
+        case "markdown", "md": return .success(.markdown)
+        case "insert", "sql": return .success(.sqlInsert)
+        case "xlsx", "excel": return .success(.xlsx)
+        // 带点写（`--format .et`）也算 —— 用户眼里格式名就是扩展名。
+        case "et", ".et", "ett", ".ett", "xls", ".xls":
+            return .failure(.legacyBinarySheetContainer(raw))
+        default: return .failure(.unknown(raw))
+        }
+    }
+}
+
 /// 结果导出器（FR-RES-06、FR-IO-01 ~ FR-IO-03）。
 ///
 /// 只做纯数据到文本的转换，不涉及 AppKit，方便单测覆盖：

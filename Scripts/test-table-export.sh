@@ -3,6 +3,9 @@
 #
 # 同时给「COPY … TO STDOUT 走不通」留下**实测证据**（不是靠读代码下结论）：
 # 驱动只实现了 CopyFrom，CopyOut 会在消息解码处失败。
+#
+# §5 另验「**认得出却写不出来**的格式名」（`.et` / `.xls`）要点名 + 替代路径，
+# 且判在入口（不留半截目录）—— 队列 `L-124` 片 2。
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
@@ -130,7 +133,47 @@ for fmt in json tsv insert; do
 done
 
 echo ""
-echo "== 5) 清理现场 =="
+echo "== 5) 认得出却写不出来的格式名（「.et」/「.xls」）要点名，不许只回一句泛泛的（L-124 片 2）=="
+# 由头：队列 L-124 的需求提出者 2026-09-30 拍板 `Q47`「要 .et 直出」。片 1 已实测钉死
+# 「不能自写（容器是 OLE2/CFB 私有流）、不能改名（改名后判红）」；片 2 = 不依赖拍板的零争议半：
+# 用户敲 `--format et` 时**不许**得到「不支持的格式（csv / json / …）」——那把他扔回清单里一个个试。
+# 要的是点名：**这是什么容器** + **替代路径是哪一步**（导 xlsx → 表格软件里另存为）。
+ET_OUT="$("$CLI" export --table small_a --schema "$SCHEMA" --out "$OUTDIR/a.et" --format et 2>&1)"; ET_CODE=$?
+echo "$ET_OUT" | sed 's/^/  /'
+[ "$ET_CODE" -eq 64 ] && check "认得出但写不出的格式名退 64（用法错，不是环境错）" 0 || check "应退 64，实际 ${ET_CODE}" 1
+echo "$ET_OUT" | grep -q "不能直出 .et" && check "点名用户写的那个格式（.et）" 0 || check "应点名 .et" 1
+echo "$ET_OUT" | grep -q "OLE2/CFB" && check "说清它是什么容器（不是 xlsx 改个扩展名）" 0 || check "应说清容器" 1
+echo "$ET_OUT" | grep -q "另存为 .et" && check "给了替代路径（另存为 .et）" 0 || check "应给替代路径" 1
+echo "$ET_OUT" | grep -q "format xlsx" && check "替代路径点到了我们唯一能直出的表格格式（--format xlsx）" 0 || check "应点到 xlsx" 1
+[ ! -e "$OUTDIR/a.et" ] && check "报错时不留下半个文件" 0 || check "不该留下 a.et" 1
+
+# 负例 ①：**认不出**的名字仍走通用那句 —— 不许被上一档吞掉（对他给出「另存为」是指向死路）
+UNK_OUT="$("$CLI" export --table small_a --schema "$SCHEMA" --out "$OUTDIR/a.jj" --format jsonn 2>&1)"; UNK_CODE=$?
+echo "$UNK_OUT" | sed 's/^/  /'
+[ "$UNK_CODE" -eq 64 ] && check "认不出的格式名退 64" 0 || check "应退 64，实际 ${UNK_CODE}" 1
+echo "$UNK_OUT" | grep -q "不支持的格式「jsonn」" && check "认不出的名字走通用那句、并点名原名" 0 || check "应回通用那句" 1
+echo "$UNK_OUT" | grep -q "另存为" && check "认不出的名字**不该**给「另存为」这种替代路径" 1 || check "认不出的名字不给替代路径（正确）" 0
+
+# 负例 ②：`--all-tables` 与整表共用同一条判定，且**判在入口** —— 不留「装了失败信息的半截目录」。
+# 这一条是判在出口时踩到的真现场：每张表各回一句错、目录已经建出来，用户还得自己清。
+ALL_DIR="$OUTDIR/all-et"
+rm -rf "$ALL_DIR"
+ALL_ET_OUT="$("$CLI" export --all-tables --schema "$SCHEMA" --out-dir "$ALL_DIR" --format et 2>&1)"; ALL_ET_CODE=$?
+echo "$ALL_ET_OUT" | sed 's/^/  /'
+[ "$ALL_ET_CODE" -eq 64 ] && check "整库导出同样退 64" 0 || check "应退 64，实际 ${ALL_ET_CODE}" 1
+[ ! -e "$ALL_DIR" ] && check "入口拦下：目录一个都没建（不留半截现场）" 0 || check "不该建出目录" 1
+
+# 反向：`.xls` 是同一族（旧的二进制工作簿）但不许与 `.et` 混说（工具/格式名要各是各的），
+# 而 `excel` 这个**能直出**的别名一个都不许被这一档吞掉。
+XLS_OUT="$("$CLI" export --table small_a --schema "$SCHEMA" --out "$OUTDIR/a.xls" --format xls 2>&1)"
+echo "$XLS_OUT" | sed 's/^/  /'
+echo "$XLS_OUT" | grep -q "不能直出 .xls" && check ".xls 也被点名（旧二进制工作簿，同一族）" 0 || check "应点名 .xls" 1
+echo "$XLS_OUT" | grep -q "WPS 专有" && check ".xls 不许说成「WPS 专有」（分类要准）" 1 || check ".xls 的分类正确（没说成 WPS 专有）" 0
+"$CLI" export --table small_a --schema "$SCHEMA" --out "$OUTDIR/a-alias.xlsx" --format excel >/dev/null 2>&1
+[ -s "$OUTDIR/a-alias.xlsx" ] && check "别名 excel 仍可直出（没被这一档吞掉）" 0 || check "别名 excel 应仍可用" 1
+
+echo ""
+echo "== 6) 清理现场 =="
 PGDATABASE="${DOYAH_TEST_ADMIN_DB}" "$CLI" -c "DROP DATABASE IF EXISTS ${DB};" >/dev/null 2>&1
 echo "  ✅ 已删除临时库 ${DB}"
 

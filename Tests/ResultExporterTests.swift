@@ -193,4 +193,63 @@ final class ResultExporterTests: XCTestCase {
         XCTAssertEqual(Set(ResultExportFormat.allCases.map(\.fileExtension)).count, ResultExportFormat.allCases.count)
         XCTAssertEqual(ResultExportFormat.allCases.filter(\.isBinary), [.xlsx])
     }
+
+    // MARK: - `--format` 名字解析（队列 L-124 片 2）
+
+    /// 正例：CLI 里写过的名字与别名一个都不许因为改造而丢。
+    func testFormatNameParsingKeepsEveryDocumentedNameAndAlias() {
+        let accepted: [(String, ResultExportFormat)] = [
+            ("csv", .csv),
+            ("CSV", .csv),
+            (" json ", .json),
+            ("tsv", .tsv),
+            ("markdown", .markdown),
+            ("md", .markdown),
+            ("insert", .sqlInsert),
+            ("sql", .sqlInsert),
+            ("xlsx", .xlsx),
+            ("excel", .xlsx)
+        ]
+        for (raw, expected) in accepted {
+            XCTAssertEqual(
+                try? ResultExportFormat.parse(commandLineName: raw).get(),
+                expected,
+                "「\(raw)」应当解析成 \(expected)"
+            )
+        }
+    }
+
+    /// 负例 ①：旧的二进制容器（WPS `.et` / Excel 2003 `.xls`）必须落到**自己那一档**，
+    /// 不许混进「认不出」—— 两者给用户的下一句话完全不同（有替代路径 vs 没有）。
+    func testFormatNameParsingSeparatesLegacyBinaryContainersFromUnknownNames() {
+        for raw in ["et", "ET", ".et", ".ET", "ett", ".ett", "xls", ".xls"] {
+            let parsed = ResultExportFormat.parse(commandLineName: raw)
+            guard case .failure(.legacyBinarySheetContainer(let carried)) = parsed else {
+                XCTFail("「\(raw)」应当落到 legacyBinarySheetContainer，实际 \(parsed)")
+                continue
+            }
+            XCTAssertEqual(carried, raw, "原样带回用户写的那个名字，提示才能点名")
+        }
+    }
+
+    /// 负例 ②：拼错的名字 = 认不出，**不许**被上面那一档吞掉（否则会给出「另存为」这种
+    /// 对他毫无意义的替代路径）。顺带钉住空串与只差一个字母的近邻。
+    func testFormatNameParsingRejectsUnknownNames() {
+        for raw in ["jsonn", "cvs", "etx", ".xlsx2", "", "  ", "ett2"] {
+            let parsed = ResultExportFormat.parse(commandLineName: raw)
+            guard case .failure(.unknown(let carried)) = parsed else {
+                XCTFail("「\(raw)」应当落到 unknown，实际 \(parsed)")
+                continue
+            }
+            XCTAssertEqual(carried, raw)
+        }
+    }
+
+    /// 反向：这一档**不许**把 `.xlsx` 也当成「写不出来」—— 它正是我们唯一能直出的表格格式，
+    /// 也是上面那句提示让用户去用的替代路径（判反了，提示就把人指向死路）。
+    func testLegacyContainerBranchDoesNotSwallowXLSX() {
+        XCTAssertEqual(try? ResultExportFormat.parse(commandLineName: "xlsx").get(), .xlsx)
+        XCTAssertEqual(try? ResultExportFormat.parse(commandLineName: ".xlsx").get(), nil,
+                       "带点的 .xlsx 目前不认（`--format` 收的是格式名不是路径）；这条钉住现状，改动要有人拍板")
+    }
 }

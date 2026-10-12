@@ -4823,6 +4823,16 @@ dialect: PostgresDialect
 
     let schema = value(for: "--schema")
 
+    // 格式名在**入口**先解析一次（整表 `--table` / 整库 `--all-tables` 两条路共用同一个判定）：
+    // 认不出、或认得出却写不出来（`.et` / `.xls` 这类旧的二进制容器）都在这里当场退 64。
+    // 为什么不判在出口（`exportQueryToFile`）：`--all-tables` 会先建目录、再逐表导 —— 判在出口
+    // 时用户拿到的是一个装满失败信息的半截目录，而这条命令本来就该在第一行就停住。
+    let formatName = value(for: "--format") ?? "csv"
+    if case .failure(let issue) = ResultExportFormat.parse(commandLineName: formatName) {
+        print(exportFormatNameMessage(issue))
+        return 64
+    }
+
     // 文本编码（FR-IO-07）：默认 UTF-8；`gbk` / `gb2312` / `ansi` 都落到 GB18030
     // （它是那三种的超集）。名字不认就**报错退出**，不静默退回 UTF-8 —— 否则用户以为
     // 拿到的是 GBK 文件，实际是一份 GBK 工具打不开的 UTF-8。
@@ -4837,8 +4847,8 @@ dialect: PostgresDialect
         encoding = .utf8
     }
     if encoding != .utf8 {
-        let formatName = (value(for: "--format") ?? "csv").lowercased()
-        guard formatName == "csv" else {
+        // 只能给 csv；`--format` 已经在入口判定过，这里只判「落到哪个格式」。
+        guard case .success(.csv) = ResultExportFormat.parse(commandLineName: formatName) else {
             print("--encoding \(encoding.shortName) 只对 csv 生效（json / tsv / markdown / insert / xlsx 固定 UTF-8）")
             return 64
         }
@@ -4857,7 +4867,7 @@ dialect: PostgresDialect
         return await exportAllTables(
         schema: schema,
         directory: directory,
-        formatName: value(for: "--format") ?? "csv",
+        formatName: formatName,
         fetchSize: Int(value(for: "--fetch-size") ?? "") ?? CursorPaging.defaultPageSize,
         service: service,
         dialect: dialect,
@@ -4871,6 +4881,7 @@ dialect: PostgresDialect
     guard let query = explicitQuery ?? tableName.map({ tableSelect($0, schema: schema, dialect: dialect) }) else {
         print("用法：export --query \"SELECT …\" | --table <表> | --all-tables --out-dir <目录>")
         print("      --out <文件> [--format csv / json / tsv / markdown / insert / xlsx] [--fetch-size N] [--schema S]")
+        print("      （WPS 的 .et / Excel 2003 的 .xls 不能直出：导 xlsx 后在表格软件里「另存为」）")
         print("      [--encoding utf8 | gb18030]（仅 csv；gb18030 给中文 Windows 的 Excel / WPS）")
         return 64
     }
@@ -4885,7 +4896,7 @@ dialect: PostgresDialect
     // `insert` 格式必须有目标表名：否则会生成 `INSERT INTO "table_name"` —— 引用一张
     // 不存在的表（本轮实测踩到：脚本照着"看着对的 SQL"执行，报 relation "table_name" does not exist）。
     // **宁可现在报错，也不要产出坏 SQL**。
-    if (value(for: "--format") ?? "csv").lowercased().hasPrefix("insert") || (value(for: "--format") ?? "") == "sql",
+    if case .success(.sqlInsert) = ResultExportFormat.parse(commandLineName: formatName),
     tableName == nil {
         print("insert 格式需要 --table <目标表>（否则生成的是引用 `table_name` 的坏 SQL）")
         return 64
@@ -4904,6 +4915,34 @@ dialect: PostgresDialect
     )
 }
 
+/// `--format` 名字解析失败时打给用户的那句话（队列 `L-124` 片 2）。
+///
+/// 为什么分两档说：`et` / `xls` 这种名字**认得出**，回一句「不支持的格式（csv / json / …）」
+/// 把用户扔回清单里一个个试是错的 —— 他手上是哪种文件、下一步该点哪里，这两句里都写死。
+/// 原始名字一律点名（用户写的是 `.et` 就回 `.et`）。
+static func exportFormatNameMessage(_ issue: ResultExportFormatNameIssue) -> String {
+    switch issue {
+        case .legacyBinarySheetContainer(let raw):
+        // 用户写的是扩展名（`et` 与 `.et` 都收），回话时一律带点印出来 —— 他手上的文件就叫那个名字。
+        let name = raw.lowercased().hasPrefix(".") ? raw.lowercased() : "." + raw.lowercased()
+        let kind: String
+        let tool: String
+        if name == ".et" || name == ".ett" {
+            kind = "WPS 专有容器"
+            tool = "WPS"
+        } else {
+            kind = "Excel 2003 及更早的二进制工作簿"
+            tool = "Excel / WPS"
+        }
+        return "不能直出 \(name)：它是 \(kind)（OLE2/CFB 复合文档），不是把 .xlsx 改个扩展名能得到的"
+        + "（实测见 Docs/evidence/l-124-et-container-20261012/）。"
+        + "替代路径：先导出 xlsx（--format xlsx），再用 \(tool) 打开后「另存为 \(name)」"
+        + "（步骤见 Docs/design/WPS-兼容导出说明.md §4）。"
+        case .unknown(let raw):
+        return "不支持的格式「\(raw)」（csv / json / tsv / markdown / insert / xlsx）"
+    }
+}
+
 /// 把一条查询用**服务端游标**逐页取、**流式**写进文件（FR-RES-13 / FR-IO-02 共用的那条路）。
 ///
 /// 抽成函数的原因：整库导出要按表重复调用它 —— 复制一遍就等于两处各自演化。
@@ -4919,15 +4958,10 @@ quiet: Bool,
 encoding: ResultExportEncoding = .utf8
 ) async -> Int32 {
     let format: ResultExportFormat
-    switch formatName.lowercased() {
-        case "csv": format = .csv
-        case "json": format = .json
-        case "tsv": format = .tsv
-        case "markdown", "md": format = .markdown
-        case "insert", "sql": format = .sqlInsert
-        case "xlsx", "excel": format = .xlsx
-        default:
-        print("不支持的格式（csv / json / tsv / markdown / insert / xlsx）")
+    switch ResultExportFormat.parse(commandLineName: formatName) {
+        case .success(let value): format = value
+        case .failure(let issue):
+        print(exportFormatNameMessage(issue))
         return 64
     }
     guard fetchSize > 0 else {
