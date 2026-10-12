@@ -62,6 +62,12 @@
  "shared_note": "共享面 = 两侧都写的地方：改它**不算越界**，但要走声明式台账（清单 `shared_ledger` 改前登记 / 本次新增行注 `shared-surface：理由` / 提交信息注 `shared-surface: 理由`），三处都没有理由 ⇒ 判红。`Scripts/` 在派活单 T-20261002-029 里被同时列进「macOS 仓根族」与「共享面」两处 ⇒ 本清单按**共享面**收口：里面的判据（`check-*.py` / `verify-all.sh`）被两侧共同调用，`Scripts/doc-numbers.json` 的 `checkScriptParity` 也是按「闭环引用」写的，判它是某一端专属会与现行事实相抵。要改成 macOS 专属 ⇒ 改这一行 + 记一笔变更。",
  "shared_require_declaration": true,
  "shared_ledger": [
+   {
+     "glob": "Scripts/check-pending-agenda.py",
+     "reason": "队列 L-130 ②（2026-10-12 第 501 轮 · 组长常驻直干）：待拍板台账覆盖度判据本体（三类红 = 漏登记 / 台账与原书打架 / 台账陈旧 / 空壳行）；接进闭环第 4 项（项数仍十八，不新增项块）。面外（Notes / Retro 书）本版只计数不判定 —— 接入待前门排期",
+     "by": "hugehippo",
+     "at": "2026-10-12"
+   },
   {
    "glob": "Scripts/check-doc-versions.py",
    "reason": "单 T-20261010-079（前门交付补丁 · origin: human-owner）：扫描面同源（仓根 *.md + Docs/**/*.md，与姊妹判据 check-doc-tables 同源）+ 仓根入口件 AGENT-SPEC.md 纳入受检清单 ⇒ 修「仓根入口件三组撞号落在判据面外 ⇒ 假绿」的口径缺口。口径登记：脚本归机组、条文归前门 —— 前门改门禁脚本一律出补丁（doyah-dispatch/assets/patches/）交机组应用并给读数（前门直推 Scripts/** 被本判据拦下）",

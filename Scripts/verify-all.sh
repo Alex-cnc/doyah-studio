@@ -471,6 +471,22 @@ else
   python3 Scripts/check-queue-needs-user.py
 fi
 python3 Scripts/check-queue-needs-user.py --self-test
+# L-130 ②（2026-10-12 第 501 轮）：上面两条管「队列行点名一个仍未决的号」与「§6 自己的编号 / 状态」，
+# 都管不了**唯一汇总处** —— `Docs/design/待拍板台账-三仓.md`（本机台账、`.gitignore` 排除）自己漂了没人知道。
+# 真现场（本判据落地当天抓到）：`Q56` / `Q57` / `Q60` / `Q62` 四条 §6 里 `⏳ 待拍板` **从未进台账**，
+# 而台账快照写着「仍开着 2 条」⇒ 需求提出者读到的清单少 4 条。
+# 判据 `check-pending-agenda.py`：**R1** 面内未决号必须在台账有登记且结论格为 `⏳`（只有号却写成已决
+# 也判红；台账写明理由的「挂起」按 `check-queue-needs-user.py` 同口径放行）· **R2** 台账挂 `⏳` 的行，
+# 首个编号必须在面内原书里仍未决（`Q` ⇒ §6 仍 `⏳`；`L` ⇒ 队列在且非 `done`）· **R3** 挂 `⏳` 却无可解析编号。
+# 面 = Studio `spec §6` + 队列 `needs-user`；**面外**（落点指向 Notes / Retro 书的行）本版**只计数不判定**（收尾行打印）。
+# 台账不在盘上 ⇒ 跳过 + 高声提示，`--require-all` 判红（跳过 ≠ 通过）；负例 `--self-test` **9 例**
+# （含 R1 两级 / R2 / R3 / 空跑防护 / 跳过 / 挂起放行 / 真仓库真内容）。
+if [ "${REQUIRE_ALL}" = "1" ]; then
+  python3 Scripts/check-pending-agenda.py --require-all
+else
+  python3 Scripts/check-pending-agenda.py
+fi
+python3 Scripts/check-pending-agenda.py --self-test
 # L-72 ㈠（2026-09-28 第 65 轮）：上面几条管的是**跨文档的工程设施数字**（闭环项数 / 单测数 /
 # 快照张数），管不了**逐族的负例例数**。真现场两件：① `AGENT-SPEC.md` §6 资产表里那三处 ——
 # 语言透传族的例数写着 10（实测 14）、待拍板队列族写着 7（实测 8）、本项第 17 条注释写着
