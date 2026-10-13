@@ -68,8 +68,8 @@ NOTE_SOURCES = [
     # `Calendar` / `LKey`）—— 同上，算笔记侧
     "Plugins/Notes/Sources/NotePresentation.swift",
     # 队列 `N-11` 的 macOS 核心层半：待办任务清单的**模型**（`Todo` + `TodoPriority`；纯值类型、
-    # 无网络、无库）—— 库表 / 行映射在 `Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift`（那一层不在本清单
-    # 的扫描面内，它的零网络出口由同一族判据按目录口径另管）
+    # 无网络、无库）—— 库表 / 行映射在 `Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift`
+    # （那一层自 2026-10-14 起**也**在本清单里：扫描面改递归后按真路径登记，见文件尾那 5 条）
     "Core/Todo.swift",
     # 队列 `L-100` 清单界面（待办清单的三件纯逻辑：分区 / 截止档位 / 空标题）：同上，台账里有它
     # ⇒ 副本必须带上
@@ -90,6 +90,16 @@ NOTE_SOURCES = [
     # 入口（与对侧 `TodoSort` / `TodoQuery` 同口径）—— 纯函数，无网络、无库、零平台 API
     "Core/TodoSort.swift",
     "Core/TodoQuery.swift",
+    # 2026-10-14（派单 `T-20261010-031` · 合册 `T-20261013-027` · 本条 = 本册表第 18 行）：
+    # 2026-10-13 搬家（概设 §7 P3）后，`NoteStorage/` 是 `Plugins/Notes/Sources/` 下的**子目录**，
+    # 而本函数的扫描面当时是非递归 glob ⇒ 这 5 件在这个自维护检查里**整体看不见**（真仓实测全绿）。
+    # 扫描面改递归后按真路径登记：它们是笔记侧（库表 / 行映射 / 自动保存 / 检索披露），零网络出口
+    # 与「不背数据库代码」两条约束对它们同样成立。
+    "Plugins/Notes/Sources/NoteStorage/NoteAutosave.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteLibrary.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteLibraryMigration.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteSearchDisclosure.swift",
 ]
 
 # 刻意**不在**清单里的笔记相关文件：它们按设计就引用 Ultra 侧类型，属于宿主侧适配层。
@@ -118,16 +128,27 @@ def check_source_list_is_complete() -> list[str]:
       · `Plugins/Notes/Sources/` —— 插件目录（Note / Notebook / 存储 / 同步 / 视图）；
       · `Core/` —— 尚未搬家的笔记侧件（`License` / `AICapture` / `Todo` / `Reminder` 族）。
     两处都要扫 —— 只扫 `Core/` 会让搬过去的新文件**默默不受本门禁约束**（本函数存在的理由）。
+    **2026-10-14 修（派单 `T-20261010-031`）**：两棵树都改成**递归**（`rglob`）并按**仓库相对路径**
+    对账 —— 搬家之后 `NoteStorage/` / `NoteSync/` 是子目录，非递归 glob 会让它们整层在面外
+    （真仓实测 `Plugins/Notes/Sources/NoteStorage/` 5 件在本检查里看不见）。
     """
     problems: list[str] = []
     roots = [REPO / "Core", REPO / "Plugins" / "Notes" / "Sources"]
-    candidates = [p for root in roots if root.is_dir() for p in root.glob("*.swift")]
-    on_disk = sorted(p.name for p in candidates if p.name.startswith("Note") or p.name.startswith("AICapture"))
-    listed = {pathlib.Path(item).name for item in NOTE_SOURCES + ULTRA_SIDE_SOURCES}
-    for name in on_disk:
-        if name not in listed:
+    # 2026-10-14（派单 `T-20261010-031` · 合册 `T-20261013-027`）：`glob` → `rglob` + 按**真路径**对账。
+    # 此前两棵树都是非递归 glob ⇒ `Plugins/Notes/Sources/NoteStorage/` 一层的笔记源文件整体在面外
+    # （真仓实测 5 件全绿）；而 `NOTE_SOURCES` / `ULTRA_SIDE_SOURCES` 本来就写的是**仓库相对路径**
+    # ⇒ 按路径对账比按文件名对账更严（同名不同目录不再互相顶数）。
+    candidates = [p for root in roots if root.is_dir() for p in root.rglob("*.swift")]
+    on_disk = sorted(
+        p.relative_to(REPO).as_posix()
+        for p in candidates
+        if p.name.startswith("Note") or p.name.startswith("AICapture")
+    )
+    listed = set(NOTE_SOURCES + ULTRA_SIDE_SOURCES)
+    for rel in on_disk:
+        if rel not in listed:
             problems.append(
-                f"{name}: 新的笔记源文件没进本脚本的清单"
+                f"{rel}: 新的笔记源文件没进本脚本的清单"
                 f"（是笔记侧就加进 NOTE_SOURCES，是宿主侧就加进 ULTRA_SIDE_SOURCES）"
             )
     for item in NOTE_SOURCES + ULTRA_SIDE_SOURCES:

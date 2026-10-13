@@ -12,9 +12,14 @@
 
   ① **范围声明 ↔ 事实**：台账 `notes-offline-gate.json` 的 `scope` 里每个文件都必须存在
      （改名 / 删除后不更新台账 ⇒ 报红，而不是「扫了 0 个文件所以全绿」）。
-  ② **漏登一个文件也不行**：按文件名扫 `Core/`（`Note*` / `AICapture*` / `License*`）与
-     `App/`（`Note*`）下的实际文件，**必须**都在 `scope` 或 `outOfScope` 里 —— 新增笔记源文件
+  ② **漏登一个文件也不行**：按文件名**递归**扫 `Core/**`（`Note*` / `AICapture*` / `License*`）、
+     `Plugins/Notes/Sources/**`（`Note*` / `AICapture*` / `License*`）、`Plugins/Notes/Views/**` 与
+     `App/**`（`Note*`）下的实际文件，**必须**都在 `scope` 或 `outOfScope` 里 —— 新增笔记源文件
      而忘了登记 ⇒ 当场报红（否则「往范围外新写一个文件」就是绕过本门禁的暗道）。
+     **2026-10-14 修（派单 `T-20261010-031` · 合册 `T-20261013-027`）**：此前 Core 侧与插件侧都是
+     **非递归** `glob("*.swift")`（同一次检查里 App 侧却已是 `rglob`）⇒ **子目录里的笔记源文件整体在面外**
+     （真仓实测 `Plugins/Notes/Sources/NoteStorage/` 的 5 件全绿）。两处改递归，点名改成**真路径**
+     （`path.relative_to(root).as_posix()`；此前是平的 `Core/{name}` ⇒ 递归后会指到**不存在的路径**）。
   ③ **与解耦门禁对账**：`scope` 里的 Core 侧文件集合必须等于
      `check-note-module-isolation.py` 的 `NOTE_SOURCES + ULTRA_SIDE_SOURCES`（**两份清单不许各说各话**）。
   ④ **零网络出口**：范围内每个文件逐行扫令牌表，命中即红并点名 **文件:行号 + 令牌**。
@@ -109,18 +114,22 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
     on_disk: list[str] = []
     core_dir = root / "Core"
     if core_dir.is_dir():
-        for path in sorted(core_dir.glob("*.swift")):
+        # 2026-10-14（T-20261010-031）：`glob` → `rglob` + 真路径点名 —— 子目录里的
+        # 笔记源文件此前整体在面外（同一次检查里 App 侧已经是 rglob，两处形状不一致）。
+        for path in sorted(core_dir.rglob("*.swift")):
             if path.name.startswith(CORE_PREFIXES):
-                on_disk.append(f"Core/{path.name}")
+                on_disk.append(path.relative_to(root).as_posix())
     # 插件目录（2026-10-13 · 概设 §7 P3 搬家）：笔记源文件的**新落点**也要按名字扫 ——
     # 只扫 `Core/` 会让搬过去的文件从此不受这条约束（新文件进来没人登记也全绿）。
     for rel_dir in ("Plugins/Notes/Sources", "Plugins/Notes/Views"):
         base = root / rel_dir
         if base.is_dir():
             prefixes = CORE_PREFIXES if rel_dir.endswith("Sources") else APP_PREFIXES
-            for path in sorted(base.glob("*.swift")):
+            # 同上（T-20261010-031）：`rglob` + 真路径 —— 2026-10-13 搬家后 `NoteStorage/`
+            # `NoteSync/` 都是**子目录**，非递归 glob 会把这两棵树整个漏掉。
+            for path in sorted(base.rglob("*.swift")):
                 if path.name.startswith(prefixes):
-                    on_disk.append(f"{rel_dir}/{path.name}")
+                    on_disk.append(path.relative_to(root).as_posix())
     app_dir = root / "App"
     if app_dir.is_dir():
         for path in sorted(app_dir.rglob("*.swift")):

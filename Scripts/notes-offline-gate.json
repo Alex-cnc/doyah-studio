@@ -54,7 +54,7 @@
     {
       "path": "Core/Todo.swift",
       "layer": "core",
-      "role": "待办任务清单的模型（`Todo` / `TodoPriority`）—— 队列 `N-11` 的 macOS 核心层半；纯值类型，无网络无库（库表与行映射在 `Core/NoteStorage/`，那一层不走本清单的按名扫描）"
+      "role": "待办任务清单的模型（`Todo` / `TodoPriority`）—— 队列 `N-11` 的 macOS 核心层半；纯值类型，无网络无库（库表与行映射在 `Plugins/Notes/Sources/NoteStorage/`，那一层自 2026-10-14 起**也**在本清单的按名扫描里）"
     },
     {
       "path": "Core/TodoPresentation.swift",
@@ -145,6 +145,31 @@
       "path": "Plugins/Notes/Views/NotesRichTextEditor.swift",
       "layer": "app",
       "role": "笔记正文的富文本编辑面（`NotesRichTextEditor` / `NotesTextView` + 行内四枚，片 `WY-1b1`）—— 纯呈现与本地改写，无网络无库"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteStorage/NoteAutosave.swift",
+      "layer": "core",
+      "role": "笔记自动保存（防抖与落盘时机的那一层，库写入的入口之一）—— 纯本地落盘，无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift",
+      "layer": "core",
+      "role": "笔记库表与行映射（schema 版本 + SQLite 读写）—— 本地 SQLite，无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteStorage/NoteLibrary.swift",
+      "layer": "core",
+      "role": "笔记库（`NoteStore` 的 SQLite 实现：库 / 笔记本 / 笔记 / 标签的读写）—— 本地库，无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteStorage/NoteLibraryMigration.swift",
+      "layer": "core",
+      "role": "笔记库结构迁移（旧版 schema 升到当前版，幂等 + 校验）—— 本地库，无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteStorage/NoteSearchDisclosure.swift",
+      "layer": "core",
+      "role": "检索披露（笔记检索的命中如何逐层披露给界面）—— 纯本地，无网络"
     }
   ],
   "scopeBeyondIsolation": [
@@ -322,6 +347,7 @@
   "knownGaps": [
     "① 只判『源码里不出现网络 API』，判不了『运行时真的没有出网』（要真的证明得靠 L-23 ③ 的断网用例：断网跑增/改/查/删/检索/迁移全绿）",
     "② 本门禁只看**笔记模块这几个文件**；宿主侧（AppState / 浏览器 / 智能体）按设计有出网能力，不在本条范围内 —— 那是 NFR-SEC-05 / NFR-SEC-08 的地盘",
-    "③ macOS / Windows 侧的存储引擎是否也换成本地 SQLite 取决于 Q23（需求提出者拍板）；本条只保证『笔记模块自己不带出网能力』，与换不换引擎无关"
+    "③ macOS / Windows 侧的存储引擎是否也换成本地 SQLite 取决于 Q23（需求提出者拍板）；本条只保证『笔记模块自己不带出网能力』，与换不换引擎无关",
+    "④ `Plugins/Notes/Sources/NoteSync/` 子树（`SyncCore` / `SyncQueue` / `CloudSyncService` / **`CloudAuth.swift`（真 HTTP 客户端：`URLSession` / `URLRequest` / `https://`）**）的文件名前缀不命中本门禁的按名扫描面（`Note*` / `AICapture*` / `License*`）⇒ 这棵树有没有出网能力**不在本判据内**；『`NoteSync` 是否属笔记模块』请前门定性：属 ⇒ 走 `exceptions` 逐条登记或改口径；不属 ⇒ 本条即该缺口的登记处。来源：派单 `T-20261010-031`（合册 `T-20261013-027` 本册表第 18 行）"
   ]
 }

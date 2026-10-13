@@ -79,6 +79,13 @@ TREE_FILES = [
     # 片 `WY-1b1`（笔记正文编辑面富文本化）：补登进台账范围 —— 同上，台账里有它 ⇒ 副本必须带上，
     # 否则「干净副本」这一例会因为「台账写了、盘上没有」而假红（同前几条的坑）
     "Plugins/Notes/Views/NotesRichTextEditor.swift",
+    # 2026-10-14（派单 `T-20261010-031`）：`Plugins/Notes/Sources/NoteStorage/` 那 5 件**新进台账范围**
+    # （扫描面改递归后按真路径登记）⇒ 副本必须带上，否则「干净副本」这一例会因「台账写了、盘上没有」假红
+    "Plugins/Notes/Sources/NoteStorage/NoteAutosave.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteLibrary.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteLibraryMigration.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteSearchDisclosure.swift",
     "Tests/NoteTests.swift",
     "Tests/NoteBodyTests.swift",
     "Tests/NoteDataBoundaryTests.swift",
@@ -118,6 +125,13 @@ def run_gate(tree: Path) -> tuple[int, str]:
         return proc.returncode, "；".join(data.get("problems", []))
     except json.JSONDecodeError:
         return proc.returncode, (proc.stdout + proc.stderr).strip()
+
+
+def write_file(tree: Path, rel: str, text: str) -> None:
+    """往副本里落一个件（含子目录）—— 子目录那一轴要用它造负例（T-20261010-031）。"""
+    path = tree / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
 
 
 def edit(tree: Path, rel: str, transform) -> None:
@@ -212,6 +226,48 @@ def main() -> int:
         ),
         "下限",
     )
+
+    print("— 子目录那一轴（2026-10-14 修 · 派单 T-20261010-031）—")
+    # 搬家之后 `NoteStorage/` 是子目录：非递归 glob 会让这一层的笔记源文件整体在面外。
+    case(
+        "子目录里的新笔记源文件 → 报红并点名**真路径**（此前连报都不报）",
+        lambda tree: write_file(tree, "Plugins/Notes/Sources/NoteStorage/NoteProbe.swift", "import Foundation\n"),
+        "Plugins/Notes/Sources/NoteStorage/NoteProbe.swift",
+    )
+    tree = make_tree()
+    write_file(tree, "Plugins/Notes/Sources/NoteStorage/SQLiteProbe.swift", "import Foundation\n")
+    code, problems = run_gate(tree)
+    record(
+        code == 0,
+        "子目录里的非笔记件（前缀不命中）→ 不判红（不许地毯式判红）",
+        f"exit={code}；{problems[:300]}",
+    )
+    shutil.rmtree(tree, ignore_errors=True)
+    tree = make_tree()
+    write_file(tree, "Plugins/Notes/Sources/NoteStorage/NoteProbe.swift", "import Foundation\n")
+    edit_ledger(
+        tree,
+        lambda data: data["scope"].append({
+            "path": "Plugins/Notes/Sources/NoteStorage/NoteProbe.swift",
+            "layer": "core",
+            "role": "负例：子目录里的新件，在两份清单里都登记之后应当转绿",
+        }),
+    )
+    edit(
+        tree, "Scripts/check-note-module-isolation.py",
+        lambda text: text.replace(
+            '    "Core/TodoQuery.swift",',
+            '    "Core/TodoQuery.swift",\n    "Plugins/Notes/Sources/NoteStorage/NoteProbe.swift",',
+            1,
+        ),
+    )
+    code, problems = run_gate(tree)
+    record(
+        code == 0,
+        "子目录新件在两份清单里都登记 → 转绿（登记出口走得通）",
+        f"exit={code}；{problems[:300]}",
+    )
+    shutil.rmtree(tree, ignore_errors=True)
 
     print("— 令牌表不许被掏空 —")
     case(
