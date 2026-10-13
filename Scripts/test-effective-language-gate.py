@@ -120,6 +120,78 @@ def missing_exception_file(app: pathlib.Path):
 case("例外表文件不存在", 1, "不存在", missing_exception_file)
 
 
+# —— 负例 ⑥⑦⑧⑨：逃逸四形（原单 T-20261010-051 ㈠ 的 B / D / E / F）—— 旧码全 rc=0 静默
+def alias_receiver(app: pathlib.Path):
+    (app / "Views" / "ProbeAlias.swift").write_text(
+        "import SwiftUI\n\nstruct ProbeAlias: View {\n"
+        "    var text: String {\n        let mgr = LocalizationManager.shared\n"
+        "        return mgr.language.rawValue\n    }\n"
+        "    var body: some View { Text(text) }\n}\n",
+        encoding="utf-8",
+    )
+
+
+case("别名接收者（把 LocalizationManager.shared 收进 mgr）", 1, "ProbeAlias.swift", alias_receiver)
+
+
+def renamed_environment_object(app: pathlib.Path):
+    (app / "Views" / "ProbeEnv.swift").write_text(
+        "import SwiftUI\n\nstruct ProbeEnv: View {\n"
+        "    @EnvironmentObject private var loc: LocalizationManager\n"
+        "    var body: some View { Text(loc.language.rawValue) }\n}\n",
+        encoding="utf-8",
+    )
+
+
+case("环境对象改名（loc: LocalizationManager）", 1, "ProbeEnv.swift", renamed_environment_object)
+
+
+def split_chain(app: pathlib.Path):
+    (app / "Views" / "ProbeSplit.swift").write_text(
+        "import SwiftUI\n\nlet probeSplit = LocalizationManager\n    .shared\n"
+        "    .language\n\nstruct ProbeSplit: View { var body: some View { Text(probeSplit.rawValue) } }\n",
+        encoding="utf-8",
+    )
+
+
+case("跨行链（.shared / .language 各占一行）", 1, "ProbeSplit.swift", split_chain)
+
+
+def spaced_dots(app: pathlib.Path):
+    (app / "Views" / "ProbeSpace.swift").write_text(
+        "import SwiftUI\n\nlet probeSpace = LocalizationManager .shared .language\n\n"
+        "struct ProbeSpace: View { var body: some View { Text(probeSpace.rawValue) } }\n",
+        encoding="utf-8",
+    )
+
+
+case("点号两侧带空格", 1, "ProbeSpace.swift", spaced_dots)
+
+
+# —— 负例 ⑩⑪：假阳两形（注释 / 字符串字面量）—— 旧码全 rc=1 误红
+def comment_only(app: pathlib.Path):
+    (app / "Views" / "ProbeComment.swift").write_text(
+        "import SwiftUI\n\nlet probeComment = 1 // 不要用 LocalizationManager.shared.language\n"
+        "/* 纪律：不要用 localization.language */\n\n"
+        "struct ProbeComment: View { var body: some View { Text(\"\(probeComment)\") } }\n",
+        encoding="utf-8",
+    )
+
+
+case("注释里的这种写法不算（行尾 + 块注释）", 0, "语言来源门禁通过", comment_only)
+
+
+def literal_only(app: pathlib.Path):
+    (app / "Views" / "ProbeString.swift").write_text(
+        "import SwiftUI\n\nlet probeString = \"别用 LocalizationManager.shared.language 当当前语言\"\n\n"
+        "struct ProbeString: View { var body: some View { Text(probeString) } }\n",
+        encoding="utf-8",
+    )
+
+
+case("字符串字面量里的这种写法不算", 0, "语言来源门禁通过", literal_only)
+
+
 # —— 正例：未改动的副本必须绿
 case("正例（未改动的副本）", 0, "语言来源门禁通过", lambda app: None)
 
