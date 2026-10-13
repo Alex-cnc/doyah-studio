@@ -44,6 +44,9 @@ EXPECTED_WORKTREE = {
     "Scripts/check-note-module-isolation.py",
     "Scripts/check-plugin-assembly.py",
     "Scripts/test-plugin-assembly-gates.py",
+    # 2026-10-14（合册 T-20261013-027 · 原单 T-20261010-046）：本轮起 `cases` 跟版要落在这份
+    # 台账上（7 → 11），它是本工作流**该改**的文件 ⇒ 收场核对时把它算作预期改动。
+    "Scripts/self-test-counts.json",
 }
 
 results = []
@@ -129,6 +132,32 @@ case("FR-PLUG-03 笔记侧入口混进非文本参数", "Core/AICapture.swift",
      replace("        tag: String\n    ) -> NoteDraft {",
              "        tag: String,\n        extra: [String: Any] = [:]\n    ) -> NoteDraft {"),
      ASSEMBLY, 1, "不在白名单")
+
+# ---- FR-PLUG-01 的负例（2026-10-14 · 合册 T-20261013-027 · 原单 T-20261010-046）-----
+# 此前 FR-PLUG-01（同进程 / 无 IPC / 无独立插件 target·product）**一个负例都没有**：
+# 门禁的正则只认 `.target(` / `.testTarget(`（本仓 3 个 target 全是 `.executableTarget(`）、
+# products 的 `.library(` 从不枚举、IPC 扫描根硬编码 `Core/App/CLI/Plugins`（漏掉编译源根
+# `Platform/macOS/`）⇒ 三条通路各有洞而没有任何一层会红。以下五例把这些洞钉住，
+# 后两例是**对手臂**（注释里提 / 嵌套 product 名 ⇒ 不许误报）。
+case("FR-PLUG-01 executableTarget 叫 notes-plugin", "Package.swift",
+     add('.executableTarget(name: "notes-plugin", path: "Plugin")'),
+     ASSEMBLY, 1, "看起来是独立插件 target")
+
+case("FR-PLUG-01 product 叫 NotesPlugin", "Package.swift",
+     add('.library(name: "NotesPlugin", targets: ["DoyahCore"])'),
+     ASSEMBLY, 1, "看起来是独立插件 product")
+
+case("FR-PLUG-01 编译源根里写 IPC（Platform/macOS/）", "Platform/macOS/__NegativeProbe.swift",
+     lambda _: 'import XPC\n\nlet connection = NSXPCConnection(serviceName: "planted")\n',
+     ASSEMBLY, 1, "出现 NSXPCConnection")
+
+case("FR-PLUG-01 对手臂：注释里提 notes-plugin 不算声明星", "Package.swift",
+     add('// 讨论：将来也许会有 .executableTarget(name: "notes-plugin", path: "Plugin")'),
+     ASSEMBLY, 0, "")
+
+case("FR-PLUG-01 对手臂：嵌套 product 名不算声明星", "Package.swift",
+     add('let __extra = .target(name: "VendorShim", dependencies: [.product(name: "NotesKit", package: "notes-kit")])'),
+     ASSEMBLY, 0, "")
 
 # ---- 解耦门禁的负例 ---------------------------------------------------------
 case("FR-PLUG-07 笔记源文件引用 Ultra 侧类型", "Core/AICapture.swift",

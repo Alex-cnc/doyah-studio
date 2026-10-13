@@ -49,6 +49,28 @@
        ADR-35 的赋值点与 `resolveSelection` 口径 / 证据脚本指针 —— 本轮只动「㈠㈡ 两条
        扫描面 + 读数 + 空跑防护 + 点名」。
 
+2026-10-14 修（合册 `T-20261013-027` · 原单 `T-20261010-046` · 第 413 轮判据面缺口样本 50）：
+
+    ① **㈠「不存在笔记插件这种独立 target / product」的判定物改成声明星整块解析**：旧正则
+       只认 `.target(` / `.testTarget(`、且 `name:` 必须是 `(` 后第一个实参，而本仓 3 个
+       target 全是 **`.executableTarget(`**（`Package.swift:77` / `:85` / `:92`），products 里的
+       **`.library(`** 从不被枚举 ⇒ 名为 `notes-plugin` 的 executableTarget 与名为
+       `NotesPlugin` 的 library product 都判绿（样本 50 的 B / C / D 三臂）。现在按**括号配对**
+       取声明星整块（`.target` / `.executableTarget` / `.testTarget` / `.library` /
+       `.executable` / `.plugin` 六种），`name:` 不限位置但只认**括号深度 0** 的那一个
+       （嵌套 `.product(name: …)` 不算），并**先剥整行注释**（注释里提到不算出现）。
+    ② **㈠ 的 IPC 面不再硬编码扫描根**：旧根 `("Core", "App", "CLI", "Plugins/…")` 漏掉
+       **编译源根** `Platform/macOS/`（`Package.swift` 的 `path:` 声明星）等 ⇒ 在那里写
+       `import XPC` 判绿（样本 50 的 G 臂）。现在直接用**全仓面** `face_swift_files()`
+       （与 ㈢ ㈠ 同款、点目录在外）+ 读数 + 同一条 `FACE_FLOOR`；真仓 909 份零命中。
+    ③ **负例（FR-PLUG-01 此前零覆盖）补在** `Scripts/test-plugin-assembly-gates.py`
+       （7 → 11 例）：`executableTarget` 叫 `notes-plugin` / product 叫 `NotesPlugin` /
+       `Platform/macOS/` 里写 IPC 三条判红 + 两条对手臂（注释里的提及、嵌套
+       `.product(name:)` 不算声明星）。**本门禁自己的 `--self-test` 例数不动**（仍 15）——
+       契约层 §6 那一行的跟版归前门（本单边界不许动 `AGENT-SPEC.md`）。
+    ④ **判定物本体一字未动**：IPC 名单 / 类型白名单 / `NoteSource` 禁字段 / 能力位三条 /
+       ADR-35 口径 / 证据脚本指针 —— 本轮只动「FR-PLUG-01 的枚举面 + IPC 面 + 读数 + 负例」。
+
 判据自己的证据：`--self-test` **15 例**（一律在临时夹具树上写坏，真仓零改动）。
 
 用法：
@@ -95,6 +117,56 @@ IPC_PATTERNS = [
     (r"\bxpc_connection\b", "xpc_connection"),
     (r"\bxpc_main\b", "xpc_main"),
 ]
+
+
+# FR-PLUG-01「不存在笔记插件这种独立 target / product」的声明星解析（2026-10-14 ·
+# 原单 T-20261010-046 ㈠）：旧实现的正则只认 `.target(` / `.testTarget(`，而本仓 3 个
+# target 全是 `.executableTarget(`、products 里的 `.library(` 从不枚举 ⇒ 两条都判绿。
+DECL_KINDS = ("target", "executableTarget", "testTarget", "library", "executable", "plugin")
+DECL_PATTERN = re.compile(r"\.(" + "|".join(DECL_KINDS) + r")\s*\(")
+PLUGIN_NAME = re.compile(r"note|plugin|notebook", re.I)
+
+
+def manifest_code(manifest: str) -> str:
+    """剥掉**整行注释**后的清单正文（与 `code_lines()` 同口径：注释里提的不算出现）。
+
+    判定物因此是"真声明星"，不是"全文里出现过这个串"—— `// 将来也许会有
+    .executableTarget(name: "notes-plugin")` 这种注释不判红（对手臂钉住）。
+    登记边界：**行尾注释**（`let x = .target(name: "x") // 说明`）仍按声明解析。
+    """
+    return "\n".join(line for line in manifest.splitlines() if not line.strip().startswith("//"))
+
+
+def declaration_blocks(manifest: str) -> list[tuple[str, str]]:
+    """返回 [(声明星, 整块实参文本)] —— 括号配对；嵌套的 `.product(...)` 也落在块里。"""
+    found: list[tuple[str, str]] = []
+    for match in DECL_PATTERN.finditer(manifest):
+        start = match.end() - 1
+        depth, index = 0, start
+        while index < len(manifest):
+            if manifest[index] == "(":
+                depth += 1
+            elif manifest[index] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            index += 1
+        found.append((match.group(1), manifest[start + 1:index]))
+    return found
+
+
+def top_level_argument(block: str, key: str) -> str | None:
+    """块里括号深度 0 的 `key: "…"` —— 嵌套 `.product(name: …)` 的名字不算本声明的名。"""
+    depth = 0
+    for match in re.finditer(r"[()]|\b" + key + r":\s*\"([^\"]*)\"", block):
+        token = match.group(0)
+        if token == "(":
+            depth += 1
+        elif token == ")":
+            depth -= 1
+        elif depth == 0:
+            return match.group(1)
+    return None
 
 problems: list[str] = []
 passed: list[str] = []
@@ -211,22 +283,33 @@ def record(name: str, found: list[str]) -> None:
 def check_01_single_process() -> list[str]:
     found: list[str] = []
     # 插件目录也算装配面（2026-10-13 · 概设 §7 P3 搬家后，笔记源文件在 `Plugins/Notes/**`）
-    for directory in ("Core", "App", "CLI", "Plugins/Notes/Sources", "Plugins/Notes/Views"):
-        for path in sorted((ROOT / directory).rglob("*.swift")):
-            relative = path.relative_to(ROOT).as_posix()
-            for number, line in code_lines(relative):
+    ipc_face = face_swift_files()
+    readings.append(f"[FR-PLUG-01 ㈠] IPC 面 = 全仓 {len(ipc_face)} 份 Swift 源文件（下限 {FACE_FLOOR}）")
+    for path in ipc_face:
+        relative = path.relative_to(ROOT).as_posix()
+        for number, line in code_lines(relative):
                 for pattern, label in IPC_PATTERNS:
                     if re.search(pattern, line):
                         found.append(f"{relative}:{number}: 出现 {label}（同进程装配，不许有 IPC）")
     for relative in note_sources() + ["Plugins/Notes/Views/NotesPanel.swift"]:
         if not (ROOT / relative).exists():
             found.append(f"{relative}: 笔记源文件不存在（装配链断了？）")
-    # 不存在"笔记插件"这种独立 target / product —— 走 Package.swift 的 target 声明星。
-    manifest = read("Package.swift")
-    for match in re.finditer(r"\.(?:test)?[Tt]arget\(\s*\n?\s*name:\s*\"([^\"]+)\"", manifest):
-        name = match.group(1)
-        if re.search(r"note|plugin|notebook", name, re.I):
-            found.append(f"Package.swift: target \"{name}\" 看起来是独立插件 target（FR-PLUG-01 要求同进程内模块）")
+    # 不存在"笔记插件"这种独立 target / product —— 按 Package.swift 的**声明星整块**解析
+    # （2026-10-14 · 原单 T-20261010-046 ㈠）：`.target` / `.executableTarget` / `.testTarget`
+    # / `.library` / `.executable` / `.plugin` 六种声明星都进面，`name:` 不限位置
+    # （只认括号深度 0 的那一个）；**整行注释先剥掉**（注释里提不算出现）。
+    manifest = manifest_code(read("Package.swift"))
+    blocks = declaration_blocks(manifest)
+    kinds = "、".join(sorted({kind for kind, _ in blocks}))
+    readings.append(f"Package.swift：target/product 声明星 {len(blocks)} 条（{kinds}）")
+    for kind, block in blocks:
+        name = top_level_argument(block, "name")
+        if name and PLUGIN_NAME.search(name):
+            role = "product" if kind == "library" else "target"
+            found.append(
+                f'Package.swift: {kind} "{name}" 看起来是独立插件 {role}'
+                "（FR-PLUG-01 要求同进程内模块）"
+            )
     return found
 
 
