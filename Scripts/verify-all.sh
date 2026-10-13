@@ -527,15 +527,22 @@ python3 Scripts/check-design-tokens.py
 # （头部注释写着「未来会变成 Core/DesignTokens.swift 的真身」）⇒ 方案 D 换值后，它照样出**旧配色**
 # 的图（深色中性灰 + 旧强调色），而逐屏复查 / 定调 / 跨端对照全都建立在这张图上。
 # 判据 `Scripts/check-design-mock-tokens.py`（项数仍十八）：
-#   A 渲染脚本里不许有色值字面量（只豁免 3 个 macOS 交通灯系统外壳色）+ 两条「第二份调色板形态」回归钉
-#   B 渲染脚本必须真的引用令牌（8 类符号，有处数下限 —— 引用被删光就是空跑）
-#   C 渲染入口 `Scripts/render-design-mock.sh` 必须把 `Core/DesignTokens.swift` 编进来
-#   D **逐屏复查**：产品源码（Core / App / Tests / CLI / Platform / Tools / TestsUISnapshot，
-#     现 417 个文件）里不许残留**方案 D 之前的旧调色板值**；豁免只有两处 —— `Core/AccentTheme.swift`
-#     与它的单测（交互强调色是**另一条轴**，用户可切的那三个候选本来就不在 D 的值表里）
-#   E **行为证据**：真跑一遍渲染入口（要求 exit 0 + 自检收尾行 + 张数下限），并判**深色样张的内容底
-#     必须带蓝调**（方案 D 深海军蓝实测 B−R ≈ 45；旧中性灰 ≈ 11 ⇒ 门槛 20）—— 非 macOS 跳过并高声提示
-# L-79 ㈡ 的负例 **13 例**（红/绿成对，夹具一律在临时目录，末例核对真仓库两份文件逐字节未变）。
+#   A 脚本面 `Scripts/**/*.swift` 全登记（新脚本出现即红）：不许有色值字面量（形状全集 = 6/8 位 `0x…`、
+#     `#RRGGBB[AA]`、浮点分量 `NSColor(…Red:…)`；判定物**先剥注释与字符串**；只豁免 3 个 macOS 交通灯
+#     系统外壳色）+ 两条「第二份调色板形态」回归钉
+#   B 渲染脚本必须真的引用令牌（8 类符号**每族 ≥1** = 族级下限 + 总处数下限 —— 引用被删光 / 只留一族
+#     补够处数都是空跑）
+#   C 渲染入口 `Scripts/render-design-mock.sh` 里**未注释掉的** `swiftc` 命令行（含 `\` 续行）必须同时含
+#     `main.swift` + `Core/DesignTokens.swift` + `Core/DesignTheme.swift`（把编译命令注释掉即红）
+#   D **逐屏复查 · 双向**：扫描面 = `Package.swift` 各 target 的 `sources:`/`path:`（**现读对账**，现 10 个面 /
+#     632 个文件）：① 不许残留**方案 D 之前的旧调色板值**（27 个色值）；② 不许**硬写方案 D 真值**（从令牌源
+#     现读 119 个色值）而不过令牌 —— 只放行真值源自身与断言位（Tests / TestsUISnapshot / TestsPlatform）；
+#     豁免两条轴：`Core/AccentTheme.swift` + 单测（交互强调色）、`Core/TerminalPalette.swift` + 单测
+#     （终端 16 色 ANSI 色板）；目录面 / 后缀面 / 文件数 / 真值数四处与 `Scripts/design-mock-baseline.json` 上账
+#   E **行为证据**：真跑一遍渲染入口（要求 exit 0 + 自检收尾行 + 张数 ≥ 15），并判**深色样张的内容底
+#     必须带蓝调**（方案 D 深海军蓝实测 B−R ≈ 45；旧中性灰 ≈ 11 ⇒ 门槛 20）—— 非 macOS 跳过并高声提示；
+#     **跳过时末行不许出现 ✅**，只出 `RESULT=SKIPPED`
+# L-79 ㈡ 的负例 **31 例**（红/绿成对，夹具一律在临时目录，末例核对真仓库三份文件逐字节未变）。
 python3 Scripts/check-design-mock-tokens.py
 python3 Scripts/check-design-mock-tokens.py --self-test
 # L-80 ㈠（2026-09-29 第 77 轮）：上面两条管的是**一套值**（方案 D = 默认主题）画出来的样子，

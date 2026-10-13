@@ -1,0 +1,26 @@
+{
+  "_说明": "合册 T-20261013-027 / 原单 T-20261010-067（样本 69）立的面对账基线：dirs 与 suffixes **增减都报红**（改了面必须同步改本文件并写明理由）；scannedFiles 与 tokenValues 是棘轮（只许涨不许跌，跌 = 削面 = 红）。",
+  "dirs": [
+    "App",
+    "CLI",
+    "Core",
+    "Platform/macOS",
+    "Plugins/Notes/Sources",
+    "Plugins/Notes/Views",
+    "Tests",
+    "TestsPlatform",
+    "TestsUISnapshot",
+    "Tools/LicenseTool"
+  ],
+  "suffixes": {
+    ".swift": 632,
+    ".entitlements": 2,
+    ".png": 10,
+    ".icns": 1,
+    ".md": 1,
+    ".json": 1,
+    ".xlsx": 4
+  },
+  "scannedFiles": 632,
+  "tokenValues": 119
+}

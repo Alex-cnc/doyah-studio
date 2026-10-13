@@ -995,6 +995,13 @@ def self_test(root: pathlib.Path) -> int:
 
         # ㉔ ㈧ 削面无钉：删掉扫描面里一份文件（红 + 点名基线）
         cut = fresh("cut-surface")
+        # 先把**夹具自己**的基线钉在夹具当前读数上，再删一份 —— 这一例只判「删了就红」，
+        # 不受真仓文件数变化影响（真仓基线是棘轮，别轮次会让真仓读数长过基线 ⇒ 旧写法会假绿）。
+        measured = sum(1 for directory in SCAN_DIRS for _ in (cut / directory).rglob("*.swift"))
+        (cut / BASELINE_FILE).write_text(
+            json.dumps({"files": measured, "surfaces": 0,
+                        "note": "自检夹具：这一例只判「删文件 ⇒ 红」那一轴"}, ensure_ascii=False),
+            encoding="utf-8")
         (cut / "App/Views/AppearanceSheet.swift").unlink()
         cases.append((
             "㈧ 扫描面被削（删文件）判红并点名基线",
