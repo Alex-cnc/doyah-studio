@@ -13,6 +13,10 @@ public enum AgentToolRefusal: String, Codable, Equatable, Sendable {
     case unreadable
     case emptyQuery
     case unregistered
+    /// 非白名单命令 / 控制字符（`FR-AI-20` ④）。
+    case commandNotAllowed
+    /// 没批准就想落盘 / 执行（`FR-AI-20` ③④⑤）。
+    case approvalRequired
 }
 
 /// 读文件的输出（结构化 ⇒ 截断**可被断言**，不必靠人话里那句提示）。
@@ -54,6 +58,9 @@ public enum AgentToolOutcome: Equatable, Sendable {
     case search(AgentToolSearchOutput)
     /// 只读语句直接跑出来的结果（`query_db`）。
     case rows(AgentToolRowsOutput)
+    /// 真跑了一条白名单命令（`run_command`）。
+    case command(AgentCommandResult)
+    case wrote(AgentToolFileOutput)
     case refused(AgentToolRefusal, detail: String)
     case needsApproval(AgentApprovalRequest)
 }
@@ -103,13 +110,17 @@ public enum AgentWorkspaceSandbox {
 public struct AgentWorkspaceTools: Sendable {
 
     public var root: URL
+    /// 工具声明的出处（`FR-AI-19`：唯一出处）。默认取标准表；工具实现**不自己命名工具**，按等级来这里取。
+    public var registry: AgentToolRegistry
     /// 读文件的上限（超出即截断并**如实标记**，不静默）。
     public var maxReadBytes: Int
     /// 列目录的上限。
     public var maxDirectoryEntries: Int
 
-    public init(root: URL, maxReadBytes: Int = 262_144, maxDirectoryEntries: Int = 500) {
+    public init(root: URL, registry: AgentToolRegistry = .standard,
+                maxReadBytes: Int = 262_144, maxDirectoryEntries: Int = 500) {
         self.root = root
+        self.registry = registry
         self.maxReadBytes = maxReadBytes
         self.maxDirectoryEntries = maxDirectoryEntries
     }
@@ -215,6 +226,94 @@ public struct AgentWorkspaceTools: Sendable {
 
     public func search(query: String, limit: Int = 50) -> AgentToolOutcome {
         searchStructured(query: query, limit: limit)
+    }
+
+    // MARK: - write_file（③：差异预览 + 逐次审批 + 未批准不落盘）
+
+    /// 备一次写入：**只看不写**，返回要审批的动作（`payload` = 差异预览）。
+    ///
+    /// `tool` 必须来自**注册表**（`FR-AI-19` ①：工具名只许出现在注册表定义处 ⇒ 本文件不写工具名字面量，
+    /// 这一步由判据 `AgentToolRegistrySourceTests` 守着）。
+    public func prepareWrite(path: String, content: String, tool: AgentToolDefinition? = nil) -> AgentToolOutcome {
+        guard let tool = tool ?? registry.writableDefinition else {
+            return .refused(.unregistered, detail: AgentToolLevel.writable.rawValue)
+        }
+        let resolved = AgentWorkspaceSandbox.resolve(path, in: root)
+        guard case .inside(let url) = resolved else {
+            if case .outside(let detail) = resolved { return .refused(.outsideWorkspace, detail: detail) }
+            return .refused(.outsideWorkspace, detail: path)
+        }
+
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+        if exists, isDirectory.boolValue { return .refused(.notAFile, detail: url.lastPathComponent) }
+
+        let before = exists ? ((try? String(contentsOf: url, encoding: .utf8)) ?? "") : ""
+        let relative = relativePath(url)
+        return .needsApproval(AgentApprovalRequest(
+            toolName: tool.name,
+            fingerprint: AgentFingerprint.hash("\(tool.name)|\(relative)|\(content)"),
+            payload: AgentTextDiff.preview(before: before, after: content, path: relative)))
+    }
+
+    /// 真写。**三件事缺一不可**：参数指纹与请求一致、该指纹在已批准集合里、目标仍在工作区内。
+    public func writeFile(path: String, content: String, tool: AgentToolDefinition? = nil,
+                          fingerprint: String, granted: Set<String>) -> AgentToolOutcome {
+        let prepared = prepareWrite(path: path, content: content, tool: tool)
+        guard case .needsApproval(let request) = prepared else { return prepared }
+        guard request.fingerprint == fingerprint, granted.contains(fingerprint) else {
+            return .refused(.approvalRequired, detail: request.fingerprint)
+        }
+        guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else {
+            return .refused(.outsideWorkspace, detail: path)
+        }
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            return .refused(.unreadable, detail: url.lastPathComponent)
+        }
+        return .wrote(AgentToolFileOutput(path: relativePath(url), text: content,
+                                         truncated: false, totalBytes: content.utf8.count))
+    }
+
+    // MARK: - run_command（④：白名单 + 工作目录沙箱 + 未审批不执行）
+
+    /// 备一条命令：白名单与工作区参数先过一遍，过了才生成审批请求。`tool` 同样来自注册表。
+    public func prepareCommand(_ command: String, tool: AgentToolDefinition? = nil,
+                               policy: AgentCommandPolicy = .standard) -> AgentToolOutcome {
+        guard let tool = tool ?? registry.executableDefinition else {
+            return .refused(.unregistered, detail: AgentToolLevel.executable.rawValue)
+        }
+        switch policy.assess(command) {
+        case .refused(let code, let detail):
+            return .refused(code, detail: detail)
+        case .allowed(let executable, let arguments):
+            if let refusal = policy.argumentsStayInsideWorkspace(arguments, root: root) {
+                return .refused(refusal, detail: arguments.joined(separator: " "))
+            }
+            let material = "\(tool.name)|\(executable)|\(arguments.joined(separator: " "))"
+            return .needsApproval(AgentApprovalRequest(toolName: tool.name,
+                                                      fingerprint: AgentFingerprint.hash(material),
+                                                      payload: command))
+        }
+    }
+
+    /// 真跑。工作目录**钉在工作区根**（沙箱）；命令交给注入的执行器（单测不真起进程）。
+    public func runCommand(_ command: String,
+                           tool: AgentToolDefinition? = nil,
+                           fingerprint: String,
+                           granted: Set<String>,
+                           policy: AgentCommandPolicy = .standard,
+                           runner: AgentCommandRunner) -> AgentToolOutcome {
+        let prepared = prepareCommand(command, tool: tool, policy: policy)
+        guard case .needsApproval(let request) = prepared else { return prepared }
+        guard request.fingerprint == fingerprint, granted.contains(fingerprint) else {
+            return .refused(.approvalRequired, detail: request.fingerprint)
+        }
+        guard case .allowed(let executable, let arguments) = policy.assess(command) else {
+            return .refused(.commandNotAllowed, detail: command)
+        }
+        return .command(runner.run(executable: executable, arguments: arguments, workingDirectory: root))
     }
 
     // MARK: - 内部

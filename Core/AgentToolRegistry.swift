@@ -73,15 +73,9 @@ public struct AgentToolDefinition: Equatable, Sendable {
         return text
     }
 
-    /// 指纹：**随 schema 变化而变**（改一个字段 ⇒ 指纹变）。FNV-1a 64，纯函数、不引随机源。
+    /// 指纹：**随 schema 变化而变**（改一个字段 ⇒ 指纹变）。纯函数、不引随机源；实现只有一处（`AgentFingerprint`）。
     public var fingerprint: String {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        let material = [name, schemaJSON, level.rawValue, approval.rawValue].joined(separator: "|")
-        for byte in Array(material.utf8) {
-            hash ^= UInt64(byte)
-            hash = hash &* 0x0000_0100_0000_01b3
-        }
-        return String(hash, radix: 16)
+        AgentFingerprint.hash([name, schemaJSON, level.rawValue, approval.rawValue].joined(separator: "|"))
     }
 
     /// 注入模型的形状（`FR-AI-19` ③）。
@@ -147,6 +141,17 @@ public struct AgentToolRegistry: Sendable {
                                 level: .readOnly, approval: .none,
                                 stage: .secondBatch, enabled: false),
         ])
+    }
+
+    /// 「可写」那一件（`write_file` 一类）—— 按**等级**取，不按名字。
+    /// 这样工具实现里不必写工具名字面量（`FR-AI-19` ① 的源树判据守着那一点），名字仍只有注册表一处。
+    public var writableDefinition: AgentToolDefinition? {
+        definitions.first { $0.level == .writable && $0.enabled }
+    }
+
+    /// 「可执行」那一件（`run_command` 一类）。同上：按等级取。
+    public var executableDefinition: AgentToolDefinition? {
+        definitions.first { $0.level == .executable && $0.enabled }
     }
 
     /// 按名查一处声明。**未登记的名字查不到**（`FR-AI-19` ④：未登记不可被调用）。
