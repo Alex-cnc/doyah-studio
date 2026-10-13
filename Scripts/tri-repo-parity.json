@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "purpose": "三仓「同源副本」身份的唯一来源（合册 T-20261013-027 · 原单 T-20261010-039）：两份同源判据脚本在 Studio / Notes / Retro 三处各自的 sha256 + 行数。判据 = Scripts/check-tri-repo-parity.py（闭环第 16 项）。改任一份都要三仓同改并同步本台账；三份不一致时必须逐仓登记 divergence（原因 + 依据单），否则判红。",
+  "basis": [
+    "T-20261010-039",
+    "T-20261013-027"
+  ],
+  "readingRules": [
+    "sha256 = 唯一身份（逐字节）；行数 = 人读的粗指纹，两者都比。",
+    "另两仓按 repos[].dir 在「三仓父目录」下找（本机 = ~/.dsh/projects）；不在盘上如实跳过、跳过 ≠ 通过（--require-all 时跳过即红）。",
+    "path-ownership.json 与提交钩子按仓定制 ⇒ 不在对账面内（不算分叉）。",
+    "divergence = 三份不一致时的逐仓理由（无理由 = 判红；三份已一致而登记未删也判红）。"
+  ],
+  "floor": 2,
+  "repos": [
+    {
+      "id": "studio",
+      "label": "DoyahStudio",
+      "dir": "DoyahStudio",
+      "self": true
+    },
+    {
+      "id": "notes",
+      "label": "DoyahNotes",
+      "dir": "DoyahNotes"
+    },
+    {
+      "id": "retro",
+      "label": "DoyahRetro",
+      "dir": "DoyahRetro"
+    }
+  ],
+  "copies": [
+    {
+      "file": "check-exclusive-sections.py",
+      "basis": "T-20261010-039",
+      "paths": {
+        "studio": "Scripts/check-exclusive-sections.py",
+        "notes": "tools/logic-check/check-exclusive-sections.py",
+        "retro": "tools/check-exclusive-sections.py"
+      },
+      "expect": {
+        "studio": {
+          "sha256": "2c1f314dc38ccd5abf2c87c8ebbc8cfd3a99111da4087b137487f5b0e2b772fc",
+          "lines": 983
+        },
+        "notes": {
+          "sha256": "2c1f314dc38ccd5abf2c87c8ebbc8cfd3a99111da4087b137487f5b0e2b772fc",
+          "lines": 983
+        },
+        "retro": {
+          "sha256": "2c1f314dc38ccd5abf2c87c8ebbc8cfd3a99111da4087b137487f5b0e2b772fc",
+          "lines": 983
+        }
+      },
+      "divergence": []
+    },
+    {
+      "file": "check-path-ownership.py",
+      "basis": "T-20261010-039",
+      "paths": {
+        "studio": "Scripts/check-path-ownership.py",
+        "notes": "tools/logic-check/check-path-ownership.py",
+        "retro": "tools/check-path-ownership.py"
+      },
+      "expect": {
+        "studio": {
+          "sha256": "588b7db2de277803cca357999405bca5ee19002bd5edbd583fd70e5593fc1a51",
+          "lines": 837
+        },
+        "notes": {
+          "sha256": "7755593234bf5bdfbaa7df6fdbbf0f4c5fc655b2349744eeeaecab812dec8e8f",
+          "lines": 837
+        },
+        "retro": {
+          "sha256": "66f873cf1ae21227149d35aa42a18dfb59ac3c733aa7c613b715481a2666abf1",
+          "lines": 837
+        }
+      },
+      "divergence": [
+        {
+          "repo": "notes",
+          "reason": "本仓那份领先另两份：`platform/windows/` 字面量跟版（单 T-20261006-057）+ 均衡令文案与自测例数 34 → 38 只在 Studio 落地（T-20261013-006 / T-20261013-007 的跟版面）。判据落地即抓到，本侧按本册验收 4 不碰另两仓的 tools/**，已登记请前门裁「另两份是否跟版 / 或本份是否回退」",
+          "basis": "T-20261006-057 / T-20261013-006 / T-20261013-007"
+        },
+        {
+          "repo": "retro",
+          "reason": "本仓那份领先另两份：`platform/windows/` 字面量跟版（单 T-20261006-057）+ 均衡令文案与自测例数 34 → 38 只在 Studio 落地（T-20261013-006 / T-20261013-007 的跟版面）。判据落地即抓到，本侧按本册验收 4 不碰另两仓的 tools/**，已登记请前门裁「另两份是否跟版 / 或本份是否回退」",
+          "basis": "T-20261006-057 / T-20261013-006 / T-20261013-007"
+        }
+      ]
+    }
+  ]
+}

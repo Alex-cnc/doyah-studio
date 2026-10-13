@@ -905,6 +905,17 @@ DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-exclusive-sections.py --
 DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-path-ownership.py
 DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-path-ownership.py --self-test
 
+# 三仓「同源副本」身份对账（合册 `T-20261013-027` · 原单 `T-20261010-039`，2026-10-14）—— 判据自己的证据：`--self-test` **20 例**；判据 = `Scripts/check-tri-repo-parity.py`，两份同源判据
+# （`check-exclusive-sections.py` / `check-path-ownership.py`）在三处（`Studio/Scripts/` · `Notes/tools/logic-check/` ·
+# `Retro/tools/`）的 **sha256 + 行数**逐仓登记在台账 `Scripts/tri-repo-parity.json` —— 改一处要三仓同改，否则判红并
+# 点名「仓 + 文件 + 期望/实测」；三份不一致必须逐仓登记 `divergence`（原因 + 依据单），三份已一致而登记未删也判红。
+# 另两仓不在盘上 ⇒ 如实「跳过 + 高声提示」（跳过 ≠ 通过，`--require-all` 才判红）；台账条目 < 下限或一份都没比成 ⇒ 判红。
+# **判据落地当场抓到活体分叉**：`check-path-ownership.py` 三份 sha 各异（`588b7db2…` / `7755593234…` / `66f873cf…`
+# —— `platform/windows/` 字面量跟版与均衡令文案只在 Studio 落地）⇒ 已在台账 `divergence` 里逐仓登记理由。
+# 夹具一律只在临时目录里写坏，末例核对真仓库三份文件逐字节未变（红绿成对 20 例）。
+python3 Scripts/check-tri-repo-parity.py
+python3 Scripts/check-tri-repo-parity.py --self-test
+
 echo "==> 17/18 vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例 + 现编现跑自证"
 # 为什么这三条必须一起跑（第 18 轮 L-25 第 1 批）：
 #   · 这份 `sqlite3.c` 是 9.5 MB 的**生成文件**，换版本 / 手改一行 / 编译宏掉一个都**不会有症状**，
