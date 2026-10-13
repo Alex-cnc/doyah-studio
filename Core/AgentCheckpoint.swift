@@ -124,14 +124,15 @@ public struct AgentCheckpointStore: Sendable {
 
     static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        // 与 `AgentSessionStore` **同一处口径**（`AgentStoredDate`）：日期精确往返，不许丢低位。
+        encoder.dateEncodingStrategy = AgentStoredDate.encoding
         encoder.outputFormatting = [.sortedKeys]
         return encoder
     }()
 
     static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = AgentStoredDate.decoding
         return decoder
     }()
 

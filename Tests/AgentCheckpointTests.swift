@@ -103,6 +103,16 @@ final class AgentCheckpointTests: XCTestCase {
         }
     }
 
+    // MARK: - 回归：**分数秒**也要精确往返（`.iso8601` / `.secondsSince1970` 都丢低位 —— 本族判据抓过两次）
+
+    func testFractionalTimestampsRoundTripExactly() throws {
+        let store = makeStore()
+        let fractional = AgentCheckpoint(sessionID: "s-f", stepIndex: 1, at: Date())
+        try store.record(fractional)
+        XCTAssertEqual(store.recover(sessionID: "s-f", requestedStep: 1).checkpoint, fractional,
+                       "盘上存储要精确往返，不许悄悄截断到秒")
+    }
+
     // MARK: - 附带取证：按会话隔离（别的会话的记录不许被当成自己的）
 
     func testRecordsAreScopedBySession() throws {

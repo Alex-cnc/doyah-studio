@@ -763,6 +763,12 @@
         "Core/MySQLService.swift:364"
       ]
     },
+    "stored timestamp is not a finite number": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/AgentStoredDate.swift:30"
+      ]
+    },
     "the connection is closed": {
       "kind": "internalErrorDescription",
       "sites": [
