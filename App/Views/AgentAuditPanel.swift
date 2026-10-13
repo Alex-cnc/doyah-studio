@@ -53,8 +53,8 @@ struct AgentAuditPanel: View {
             await appState.refreshAgentAudit()
         }
         .alert(L(.agentAuditClearConfirmTitle), isPresented: $isClearConfirmPresented) {
-            Button(L(.commonCancel), role: .cancel) {}
-            Button(L(.agentAuditClear), role: .destructive) {
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {}
+            ToolbarIconButton(systemName: "xmark.bin", help: L(.agentAuditClear), role: .destructive) {
                 Task { await appState.clearAgentAudit() }
             }
         } message: {
@@ -77,12 +77,12 @@ struct AgentAuditPanel: View {
 
             Spacer()
 
-            Button(L(.agentAuditRefresh)) {
+            ToolbarIconButton(systemName: "arrow.clockwise", help: L(.agentAuditRefresh)) {
                 Task { await appState.refreshAgentAudit() }
             }
             .disabled(appState.isAgentAuditLoading)
 
-            Button(L(.agentAuditClear)) {
+            ToolbarIconButton(systemName: "xmark.bin", help: L(.agentAuditClear)) {
                 isClearConfirmPresented = true
             }
             .disabled(appState.agentAuditRecords.isEmpty)
@@ -104,7 +104,7 @@ struct AgentAuditPanel: View {
             .help(L(.agentAuditExport))
             .disabled(appState.agentAuditRecords.isEmpty)
 
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
         }
     }
 
@@ -168,7 +168,7 @@ struct AgentAuditPanel: View {
             }
             .font(.caption)
 
-            Button(L(.agentApprovalReject), role: .destructive) {
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.agentApprovalReject), role: .destructive) {
                 Task { await appState.rejectAgentAction(id: approval.id) }
             }
             .font(.caption)
@@ -215,7 +215,7 @@ struct AgentAuditPanel: View {
 
             HStack {
                 Spacer()
-                Button(L(.agentGuardSave)) { savePolicy() }
+                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.agentGuardSave)) { savePolicy() }
                     .disabled(isSavingPolicy)
             }
         }

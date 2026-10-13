@@ -102,8 +102,8 @@ struct DataTaskPanel: View {
             AgentApprovalSheet(approval: approval)
         }
         .alert(L(.dataTaskDeleteConfirmTitle), isPresented: $isDeleteConfirmPresented) {
-            Button(L(.commonCancel), role: .cancel) {}
-            Button(L(.dataTaskDelete), role: .destructive) { deleteSelected() }
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {}
+            ToolbarIconButton(systemName: "trash", help: L(.dataTaskDelete), role: .destructive) { deleteSelected() }
         } message: {
             Text(L(.dataTaskDeleteConfirmMessage, draft?.name ?? ""))
         }
@@ -118,14 +118,14 @@ struct DataTaskPanel: View {
 
             Spacer()
 
-            Button(L(.dataTaskNew)) { createNewTask() }
-            Button(L(.dataTaskSpecOpen)) { isSpecSheetPresented = true }
-            Button(L(.dataTaskVersionsOpen)) { isVersionSheetPresented = true }
+            ToolbarIconButton(systemName: "plus", help: L(.dataTaskNew)) { createNewTask() }
+            ToolbarIconButton(systemName: "arrow.up.forward.app", help: L(.dataTaskSpecOpen)) { isSpecSheetPresented = true }
+            ToolbarIconButton(systemName: "arrow.up.forward.app", help: L(.dataTaskVersionsOpen)) { isVersionSheetPresented = true }
                 .disabled(storedDraft == nil)
-            Button(L(.dataTaskRefresh)) {
+            ToolbarIconButton(systemName: "arrow.clockwise", help: L(.dataTaskRefresh)) {
                 Task { await appState.loadDataTasks() }
             }
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
         }
     }
 
@@ -309,7 +309,7 @@ struct DataTaskPanel: View {
                     transformationRow(index)
                 }
             }
-            Button(L(.dataTaskAddTransformation)) {
+            ToolbarIconButton(systemName: "plus", help: L(.dataTaskAddTransformation)) {
                 draft?.transformations.append(.init(kind: .rename))
             }
             .font(.caption)
@@ -434,7 +434,7 @@ struct DataTaskPanel: View {
                 .labelsHidden()
                 .frame(width: 110)
                 Spacer()
-                Button(L(.dataTaskChooseDirectory)) { chooseDirectory() }
+                ToolbarIconButton(systemName: "folder", help: L(.dataTaskChooseDirectory)) { chooseDirectory() }
                 Menu {
                     if appState.storedDirectoryBookmarks.isEmpty {
                         Text(L(.dataTaskNoStoredDirectory))
@@ -458,7 +458,7 @@ struct DataTaskPanel: View {
             directoryStatusRow
 
             if draft?.output != nil {
-                Button(L(.dataTaskExportVerify)) { verifyDirectory() }
+                ToolbarIconButton(systemName: "square.and.arrow.up", help: L(.dataTaskExportVerify)) { verifyDirectory() }
                     .font(.caption)
                     .disabled(directoryStatus?.isUsable != true)
             }
@@ -534,14 +534,14 @@ struct DataTaskPanel: View {
     private var previewSection: some View {
         section(L(.dataTaskSectionPreview), hint: L(.dataTaskDryRunHint)) {
             HStack(spacing: 8) {
-                Button(L(.dataTaskDryRun)) { runDryRun() }
-                Button(L(.dataTaskRevert)) { revertDraft() }
+                ToolbarIconButton(systemName: "play.fill", help: L(.dataTaskDryRun)) { runDryRun() }
+                ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.dataTaskRevert)) { revertDraft() }
                     .disabled(draft == nil)
                 Spacer()
-                Button(L(.dataTaskSave)) { save() }
+                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.dataTaskSave)) { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canSave)
-                Button(L(.dataTaskDelete), role: .destructive) {
+                ToolbarIconButton(systemName: "trash", help: L(.dataTaskDelete), role: .destructive) {
                     isDeleteConfirmPresented = true
                 }
                 .disabled(appState.dataTasks.first { $0.id == draft?.id } == nil)
@@ -703,7 +703,7 @@ struct DataTaskPanel: View {
                 }
 
                 HStack(spacing: 8) {
-                    Button(L(.dataTaskRunNow)) {
+                    ToolbarIconButton(systemName: "play.fill", help: L(.dataTaskRunNow)) {
                         Task { await appState.runDataTaskNow(draft, plannedAt: DataTaskPresentation.plannedAt(decision)) }
                     }
                     .font(.caption)

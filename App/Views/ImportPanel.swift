@@ -67,7 +67,7 @@ struct ImportPanel: View {
                 Text(L(.importTitle))
                     .font(Theme.font(.title))
                 Spacer()
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .disabled(appState.isImportRunning)
             }
@@ -115,8 +115,8 @@ struct ImportPanel: View {
                 set: { if !$0 { pendingConfirmation = nil } }
             )
         ) {
-            Button(L(.commonCancel), role: .cancel) { pendingConfirmation = nil }
-            Button(L(.importExecute), role: .destructive) {
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { pendingConfirmation = nil }
+            ToolbarIconButton(systemName: "play.fill", help: L(.importExecute), role: .destructive) {
                 pendingConfirmation = nil
                 run(bypassingSafetyCheck: true)
             }
@@ -139,7 +139,7 @@ struct ImportPanel: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Button(L(.importChooseFile)) { chooseFile() }
+                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.importChooseFile)) { chooseFile() }
             }
 
             // 不是 UTF-8 就写明按什么编码读的（FR-IO-07）：中文列名 / 值会不会乱码，
@@ -199,7 +199,7 @@ struct ImportPanel: View {
                 TextField("", text: $targetTable)
                     .textFieldStyle(.roundedBorder)
                     .font(Theme.font(.mono))
-                Button(L(.importParse)) { Task { await parse() } }
+                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.importParse)) { Task { await parse() } }
                     .disabled(isParsing || filePath.isEmpty || targetTable.isEmpty)
                 if isParsing { ProgressView().controlSize(.small) }
             }
@@ -384,11 +384,11 @@ struct ImportPanel: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(spacing: Spacing.s) {
-                Button(L(.importExecute)) { run(bypassingSafetyCheck: false) }
+                ToolbarIconButton(systemName: "play.fill", help: L(.importExecute)) { run(bypassingSafetyCheck: false) }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canRun)
                 if appState.isImportRunning {
-                    Button(L(.importStop)) { appState.cancelTableImport() }
+                    ToolbarIconButton(systemName: "stop.fill", help: L(.importStop)) { appState.cancelTableImport() }
                     ProgressView(value: appState.importProgress)
                         .tint(Theme.accentColor)
                         .frame(width: 160)

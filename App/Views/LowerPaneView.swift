@@ -72,8 +72,8 @@ struct LowerPaneView: View {
                 set: { if !$0 { terminal.cancelClose() } }
             )
         ) {
-            Button(L(.terminalTabCloseConfirmAction), role: .destructive) { terminal.confirmClose() }
-            Button(L(.commonCancel), role: .cancel) { terminal.cancelClose() }
+            ToolbarIconButton(systemName: "xmark", help: L(.terminalTabCloseConfirmAction), role: .destructive) { terminal.confirmClose() }
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { terminal.cancelClose() }
         } message: {
             Text(L(.terminalTabCloseConfirmMessage))
         }
@@ -86,10 +86,10 @@ struct LowerPaneView: View {
             )
         ) {
             TextField(L(.terminalTabRename), text: $terminal.renameDraft)
-            Button(L(.commonOk)) {
+            ToolbarIconButton(systemName: "checkmark", help: L(.commonOk)) {
                 if let id = terminal.renamingTab { terminal.rename(id: id, to: terminal.renameDraft) }
             }
-            Button(L(.commonCancel), role: .cancel) { terminal.renamingTab = nil }
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { terminal.renamingTab = nil }
         } message: {
             Text(L(.terminalTabRenameMessage))
         }
@@ -149,8 +149,8 @@ struct LowerPaneView: View {
                     set: { if !$0 { terminal.cancelRestart() } }
                 )
             ) {
-                Button(L(.terminalRestartConfirmAction), role: .destructive) { terminal.confirmRestart() }
-                Button(L(.commonCancel), role: .cancel) { terminal.cancelRestart() }
+                ToolbarIconButton(systemName: "checkmark", help: L(.terminalRestartConfirmAction), role: .destructive) { terminal.confirmRestart() }
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { terminal.cancelRestart() }
             } message: {
                 Text(L(.terminalRestartConfirmMessage))
             }

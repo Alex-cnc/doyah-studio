@@ -50,7 +50,7 @@ struct MaintenancePanel: View {
                 }
             }
             Spacer()
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
         }
         .padding(Spacing.l)
     }
@@ -142,9 +142,9 @@ struct MaintenancePanel: View {
                 }
                 Spacer()
                 if !task.state.isFinished, task.requiresApproval {
-                    Button(L(.maintenanceApproveAction)) { appState.approveMaintenanceTask(id: task.id) }
+                    ToolbarIconButton(systemName: "checkmark.circle", help: L(.maintenanceApproveAction)) { appState.approveMaintenanceTask(id: task.id) }
                         .disabled(task.state == .rejected)
-                    Button(L(.maintenanceRejectAction)) { appState.rejectMaintenanceTask(id: task.id) }
+                    ToolbarIconButton(systemName: "xmark.circle", help: L(.maintenanceRejectAction)) { appState.rejectMaintenanceTask(id: task.id) }
                         .disabled(task.state == .rejected)
                 }
             }
@@ -197,13 +197,13 @@ struct MaintenancePanel: View {
         HStack(spacing: Spacing.m) {
             Button(L(.maintenanceReviewAction)) { appState.reviewMaintenancePlan() }
             // 存进笔记：计划 + 逐条状态与理由（含被拒绝的条目与"没看懂的行"）。
-            Button(L(.maintenanceSaveNote)) {
+            ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.maintenanceSaveNote)) {
                 Task { await appState.saveMaintenanceNote() }
             }
             .disabled(appState.maintenanceReview?.tasks.isEmpty ?? true)
             // 逃生门（**显式**才存副本）：与诊断面板同形（队列 `L-138`）——
             // 计划确实要留第二份时走这颗，而不是把默认行为改回"每次都存"。
-            Button(L(.diagnosisSaveNoteCopy)) {
+            ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.diagnosisSaveNoteCopy)) {
                 Task { await appState.saveMaintenanceNote(forceNew: true) }
             }
             .disabled(appState.maintenanceReview?.tasks.isEmpty ?? true)

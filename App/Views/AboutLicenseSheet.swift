@@ -57,7 +57,7 @@ struct AboutLicenseSheet: View {
             Text(L(.licAboutTitle))
                 .font(Theme.font(.title))
             Spacer()
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
         }
         .padding(Spacing.l)
     }
@@ -88,8 +88,8 @@ struct AboutLicenseSheet: View {
             }
 
             HStack(spacing: Spacing.s) {
-                Button(L(.licAboutOpenFolder)) { revealLicenseFolder() }
-                Button(L(.licAboutReload)) { appState.reloadLicense() }
+                ToolbarIconButton(systemName: "folder", help: L(.licAboutOpenFolder)) { revealLicenseFolder() }
+                ToolbarIconButton(systemName: "arrow.clockwise", help: L(.licAboutReload)) { appState.reloadLicense() }
                 Spacer()
             }
 
@@ -138,7 +138,7 @@ struct AboutLicenseSheet: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                 .keyboardShortcut(.defaultAction)
         }
         .padding(Spacing.l)

@@ -105,11 +105,11 @@ struct ServerObjectsPanel: View {
             ),
             presenting: pendingCommand
         ) { command in
-            Button(L(.serverObjectsConfirm), role: .destructive) {
+            ToolbarIconButton(systemName: "checkmark", help: L(.serverObjectsConfirm), role: .destructive) {
                 pendingCommand = nil
                 Task { await execute(command) }
             }
-            Button(L(.commonCancel), role: .cancel) {
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {
                 pendingCommand = nil
             }
         } message: { command in
@@ -139,7 +139,7 @@ struct ServerObjectsPanel: View {
                 }
             }
             Spacer()
-            Button(L(.serverObjectsRefresh)) {
+            ToolbarIconButton(systemName: "arrow.clockwise", help: L(.serverObjectsRefresh)) {
                 Task { await load() }
             }
             .disabled(isLoading)
@@ -322,8 +322,8 @@ struct ServerObjectsPanel: View {
                 Toggle(L(.serverObjectsCanLogin), isOn: $canLogin)
                 Toggle(L(.serverObjectsSuperuser), isOn: $isSuperuser)
                 Spacer()
-                Button(L(.serverObjectsPreviewCreateRole)) { previewCreateRole() }
-                Button(L(.serverObjectsPreviewDropRole)) { previewDropRole() }
+                ToolbarIconButton(systemName: "plus", help: L(.serverObjectsPreviewCreateRole)) { previewCreateRole() }
+                ToolbarIconButton(systemName: "trash", help: L(.serverObjectsPreviewDropRole)) { previewDropRole() }
             }
         }
     }
@@ -339,8 +339,8 @@ struct ServerObjectsPanel: View {
 
             HStack(spacing: Spacing.s) {
                 Spacer()
-                Button(L(.serverObjectsPreviewCreateExtension)) { previewCreateExtension() }
-                Button(L(.serverObjectsPreviewDropExtension)) { previewDropExtension() }
+                ToolbarIconButton(systemName: "plus", help: L(.serverObjectsPreviewCreateExtension)) { previewCreateExtension() }
+                ToolbarIconButton(systemName: "trash", help: L(.serverObjectsPreviewDropExtension)) { previewDropExtension() }
             }
         }
     }
@@ -378,7 +378,7 @@ struct ServerObjectsPanel: View {
                 }
 
                 HStack(spacing: Spacing.s) {
-                    Button(L(.serverObjectsConfirm)) { requestExecution(command) }
+                    ToolbarIconButton(systemName: "checkmark", help: L(.serverObjectsConfirm)) { requestExecution(command) }
                     Text(L(.serverObjectsDryRunHint))
                         .font(Theme.font(.caption))
                         .foregroundStyle(Theme.text(.tertiary))
@@ -401,7 +401,7 @@ struct ServerObjectsPanel: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                 .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, Spacing.l)

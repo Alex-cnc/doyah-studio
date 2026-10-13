@@ -55,7 +55,7 @@ struct RoutineCandidatesPanel: View {
                 Text(L(.routineCandidatesTitle))
                     .font(Theme.font(.title))
                 Spacer()
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
 
@@ -85,14 +85,14 @@ struct RoutineCandidatesPanel: View {
             ),
             presenting: pendingDelete
         ) { memory in
-            Button(L(.commonCancel), role: .cancel) { pendingDelete = nil }
-            Button(L(.commonDelete), role: .destructive) { deleteMemory(memory) }
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { pendingDelete = nil }
+            ToolbarIconButton(systemName: "trash", help: L(.commonDelete), role: .destructive) { deleteMemory(memory) }
         } message: { memory in
             Text(L(.memoryGovernanceDeleteConfirmMessage, memory.latestSQL))
         }
         .alert(L(.memoryGovernanceClearConfirmTitle), isPresented: $isClearConfirmPresented) {
-            Button(L(.commonCancel), role: .cancel) {}
-            Button(L(.commonDelete), role: .destructive) {
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {}
+            ToolbarIconButton(systemName: "trash", help: L(.commonDelete), role: .destructive) {
                 Task { await appState.clearMemoryEnvironmentLayer() }
             }
         } message: {
@@ -157,10 +157,10 @@ struct RoutineCandidatesPanel: View {
                         }
 
                         HStack(spacing: Spacing.s) {
-                            Button(L(.routineCandidatesInsert)) {
+                            ToolbarIconButton(systemName: "plus", help: L(.routineCandidatesInsert)) {
                                 appState.insertRoutineTemplate(candidate.template)
                             }
-                            Button(L(.routineCandidatesVeto)) {
+                            ToolbarIconButton(systemName: "hand.raised", help: L(.routineCandidatesVeto)) {
                                 Task { await appState.vetoRoutineCandidate(fingerprint: candidate.fingerprint) }
                             }
                             .buttonStyle(.link)
@@ -298,7 +298,7 @@ struct RoutineCandidatesPanel: View {
                     .foregroundStyle(Theme.text(.tertiary))
                 Spacer()
                 // 整层清空不可逆：按钮本身不执行，只负责弹确认（Core 的「清空需确认」纪律）。
-                Button(L(.memoryGovernanceClearLayer)) { isClearConfirmPresented = true }
+                ToolbarIconButton(systemName: "xmark.bin", help: L(.memoryGovernanceClearLayer)) { isClearConfirmPresented = true }
                     .font(Theme.font(.caption))
             }
             Text(L(.memoryGovernanceLayerNote))
@@ -357,12 +357,12 @@ struct RoutineCandidatesPanel: View {
                 .font(Theme.font(.caption))
                 .foregroundStyle(verdict.shouldForget ? Theme.status(.warning) : Theme.text(.secondary))
 
-                Button(isExplained ? L(.commonClose) : L(.memoryGovernanceExplain)) {
+                ToolbarIconButton(systemName: "xmark", help: isExplained ? L(.commonClose) : L(.memoryGovernanceExplain)) {
                     explainedFingerprint = isExplained ? nil : memory.fingerprint
                 }
                 .font(Theme.font(.caption))
 
-                Button(L(.memoryGovernanceDelete)) { pendingDelete = memory }
+                ToolbarIconButton(systemName: "trash", help: L(.memoryGovernanceDelete)) { pendingDelete = memory }
                     .font(Theme.font(.caption))
                 Spacer()
             }

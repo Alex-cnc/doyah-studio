@@ -47,12 +47,12 @@ struct AgentApprovalSheet: View {
             HStack {
                 Spacer()
 
-                Button(L(.agentApprovalReject), role: .destructive) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.agentApprovalReject), role: .destructive) {
                     decide(approve: false)
                 }
                 .disabled(isWorking)
 
-                Button(L(.agentApprovalApprove)) {
+                ToolbarIconButton(systemName: "checkmark.circle", help: L(.agentApprovalApprove)) {
                     decide(approve: true)
                 }
                 .keyboardShortcut(.defaultAction)
