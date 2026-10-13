@@ -1037,6 +1037,17 @@
       "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
       "why": "合册 T-20261013-027（原单 T-20261010-045 · 第 412 轮判据面缺口样本 49）：Core 平台中立性判据原本无空跑防护、无自检、豁免是裸子串 —— 九例真跑（真违规判红 / 字符串字面量里的 portability-ok 不豁免 / 注释位豁免该绿 / 剥注释口径 / Core 不在根上 / 面被砍到底 / 未知参数 / 仓外 CWD 读数 / 真仓逐字节未变）",
       "noAnchorReason": "例数只在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 2 项的调用行都不写本判据的负例例数，而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
+    },
+    {
+      "key": "core-localization",
+      "script": "Scripts/check-core-localization.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 17,
+      "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
+      "why": "合册 T-20261013-027（原单 T-20261010-049 / T-20261010-072 · 第 416/429 轮判据面缺口样本 53/74）：Core 展示文本本地化棘轮原本判定物只认单行双引号串（多行串里的中文整体在面外）、注释当命中、面键用文件基名且赋值不累加、豁免按基名、面无下限且按 CWD 相对路径、零自检。十七例真跑：多行串计入 / 多行串新增判红 / 单行串对照仍红 / 行尾注释不算 / 块注释不算 / 同名不同目录不丢行 / 嵌套 Localization.swift 在面内 / 真语言表按路径豁免 / Core 改名判红 / 面整体搬走判红 / 未知参数 rc=2 / 英文白名单五例 / 对照组绿；末例核对真仓库逐字节未变。",
+      "noAnchorReason": "例数只出现在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 3 项的调用行都不写本判据的负例例数（第 3 项只调 `--self-test`，不写数字），而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本、基线台账与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
     }
   ]
 }
