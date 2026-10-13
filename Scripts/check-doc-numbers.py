@@ -60,11 +60,17 @@
   （不许 `KeyError` 栈）。收尾打印「豁免 N 条（有效 M / 死 K）」。
   **边界（如实登记）**：理由里若用别的措辞写一句**不可证伪**的话（不出现「随…跑」这种可对账形状），
   本判据只管存在性、不管真假 —— ② 只机械核「可对账的那句」。
+- `skipSections`（整节按历史叙述跳过的窗口）**自身三条自证**（合册 `T-20261013-027` / 原单
+  `T-20261010-026`）：① `from` / `to` 在本文件里**都命中且 `from` 在前**（缺 / 倒序 ⇒ 判红）；
+  ② **跳过行数有读数**（打印「skipSections 跳过 N 行」，与「对侧独占节跳过 N 行」同规格 ——
+  跳过 ≠ 通过）；③ **窗口必须闭合**（扫到 EOF 仍在跳过态 ⇒ 判红点名「窗口未闭合」）。
+  原来窗口**无钉**：`to` 一旦不再命中，状态机一路跑到文件末尾（真仓实测：把 §10 改号
+  ⇒ **433 行静默掉出扫描面**，而两份输出逐字节同一）。
 
 用法：
     python3 Scripts/check-doc-numbers.py                # 本仓（默认）
     python3 Scripts/check-doc-numbers.py --root <目录>   # 夹具仓（自测用）
-    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（24 例）
+    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（29 例）
 
 退出码：0 = 全绿；1 = 有判红项。**判红时空跑防护也一起报**（一处都没解析到 ⇒ 不许「零命中 = 通过」）。
 """
@@ -200,6 +206,37 @@ def count_counterpart_lines(root: pathlib.Path, rel: str) -> int:
         if skip_level is not None:
             skipped += 1
     return skipped
+
+
+def scan_skip_sections(root: pathlib.Path, rel: str):
+    """按台账 `skipSections` 逐行走一遍那个状态机，如实报「跳过了多少行」与「哪些窗口没闭合」。
+
+    承合册 `T-20261013-027` / 原单 `T-20261010-026`：窗口原来**无钉** —— `to` 一旦不再命中，
+    跳过态一路跑到文件末尾（实测真仓改一号即 **433 行静默掉出扫描面**），而读数面只有
+    「对侧独占节跳过 N 行」，`skipSections` 跳了多少行**零读数** ⇒ 覆盖面塌掉也看不出来。
+    返回 `(跳过行数, [未闭合窗口的 from 正则])`。"""
+    path = root / rel
+    rules = SKIP_SECTIONS.get(rel, ())
+    if not rules or not path.exists():
+        return 0, []
+    skipped = 0
+    state = None
+    unclosed: list[str] = []
+    for line in path.read_text(encoding="utf-8").split("\n"):
+        if state is not None:
+            skipped += 1
+            if state[1].search(line):
+                state = None
+            continue
+        for from_re, to_re in rules:
+            if from_re.search(line):
+                state = (from_re.pattern, to_re)
+                break
+        if state is not None:
+            skipped += 1
+    if state is not None:
+        unclosed.append(state[0])
+    return skipped, unclosed
 
 
 def load_doc_tables_module(root: pathlib.Path, rel: str, key, problems: list):
@@ -646,6 +683,40 @@ def check_script_parity(root: pathlib.Path, ledger: dict, problems: list, notes:
     return len(scripts)
 
 
+def validate_skip_sections(root: pathlib.Path, ledger: dict, problems: list, notes: list) -> None:
+    """台账 `skipSections` 的**三条自证**（合册 `T-20261013-027` / 原单 `T-20261010-026`）：
+    ① `from` / `to` 在本文件里都命中、且 `from` 在前（缺 / 倒序 ⇒ 判红，不许"窗口开在别处"）；
+    ② **跳过行数有读数**（与「对侧独占节跳过 N 行」同规格 —— 跳过 ≠ 通过）；
+    ③ **窗口必须闭合**（扫到 EOF 仍在跳过态 ⇒ 判红，不许静默跑到文件末尾）。"""
+    for rule in ledger.get("skipSections") or []:
+        rel = rule.get("file") or ""
+        path = root / rel
+        if not path.exists():
+            problems.append(f"skipSections 指向的文件不在盘：{rel}（窗口开在一份不存在的文件上 = 开天窗）")
+            continue
+        lines = path.read_text(encoding="utf-8").split("\n")
+        try:
+            from_re = re.compile(rule.get("from") or "")
+            to_re = re.compile(rule.get("to") or "")
+        except re.error:
+            continue  # 正则不合法已在上面的台账校验里判红
+        from_at = next((i for i, line in enumerate(lines, 1) if from_re.search(line)), None)
+        to_at = next((i for i, line in enumerate(lines, 1) if to_re.search(line)), None)
+        if from_at is None:
+            problems.append(f"{rel}：skipSections 的 from 正则 {from_re.pattern!r} 在本文件里一行都不命中 ⇒ 窗口打不开，这条豁免形同虚设")
+        if to_at is None:
+            problems.append(f"{rel}：skipSections 的 to 正则 {to_re.pattern!r} 在本文件里一行都不命中 ⇒ 窗口关不上")
+        elif from_at is not None and to_at < from_at:
+            problems.append(f"{rel}：skipSections 的 to（:{to_at}）出现在 from（:{from_at}）之前 ⇒ 窗口倒序")
+        skipped, unclosed = scan_skip_sections(root, rel)
+        for pattern in unclosed:
+            problems.append(f"{rel}：skipSections 窗口未闭合（命中 from {pattern} 后到文件末尾都没命中 to —— 状态机会一路跳过到 EOF）")
+        notes.append(
+            f"skipSections 跳过 {skipped} 行：{rel} 的 {from_re.pattern} → {to_re.pattern} 整节按**历史叙述**跳过"
+            f"（{rule.get('reason', '')}）"
+        )
+
+
 def check(root: pathlib.Path):
     problems: list[str] = []
     notes: list[str] = []
@@ -667,13 +738,7 @@ def check(root: pathlib.Path):
             re.compile(rule.get("to", ""))
         except re.error as error:
             problems.append(f"skipSections 的正则不合法（{rule.get('file')}）：{error}")
-    if SKIP_SECTIONS:
-        for rel, rules in SKIP_SECTIONS.items():
-            for _from, _to in rules:
-                notes.append(
-                    f"skipSections 生效：{rel} 的 {_from.pattern} → {_to.pattern} 整节按**历史叙述**跳过"
-                    f"（{next((r['reason'] for r in ledger['skipSections'] if r['file'] == rel), '')}）"
-                )
+    validate_skip_sections(root, ledger, problems, notes)
 
     entries = ledger.get("numbers") or []
     if not entries:
@@ -833,13 +898,18 @@ def build_fixture(
     write_judge: bool = True,
     write_full_run: bool = True,
     record_overrides: dict | None = None,
+    skip_sections: list | None = None,
+    spec_lines: list | None = None,
 ):
     shutil.rmtree(base, ignore_errors=True)
     (base / "Scripts").mkdir(parents=True)
     (base / "Docs").mkdir(parents=True)
     (base / ".build" / "ui-snapshots").mkdir(parents=True)
+    payload = dict(ledger if ledger is not None else FIXTURE_LEDGER)
+    if skip_sections:
+        payload["skipSections"] = skip_sections
     (base / LEDGER_REL).write_text(
-        json.dumps(ledger if ledger is not None else FIXTURE_LEDGER, ensure_ascii=False, indent=2),
+        json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     word = "十八" if gate_items == 18 else "十七"
@@ -858,6 +928,7 @@ def build_fixture(
                 % (word, count, snapshots[0], snapshots[1]),
                 "- 夹具现状行：固定尺寸 **36 处** / 面板根 **21** / 装饰 **15**",
                 "| v1.1 | 2026-01-01 | 历史行：当时是 十七项、单测 1947 项、快照 19 张 / 10 组 |",
+                *(spec_lines or []),
             ]
         )
         + "\n",
@@ -922,8 +993,8 @@ def self_test() -> int:
     real_ledger = (REPO / LEDGER_REL).read_bytes()
     cases = []
 
-    def run(name, mutate, expect_red, expect_text=None):
-        cases.append((name, mutate, expect_red, expect_text))
+    def run(name, mutate, expect_red, expect_text=None, expect_note=None):
+        cases.append((name, mutate, expect_red, expect_text, expect_note))
 
     def clean(base):
         return build_fixture(base)
@@ -1094,18 +1165,47 @@ def self_test() -> int:
     )
     run("㉒ 对手臂：理由点名的入口在盘且确实引用本脚本 ⇒ 绿（不误伤真豁免）", exempt_runner, False)
 
+    # ── `skipSections` 窗口自证（合册 `T-20261013-027` / 原单 `T-20261010-026`）：
+    # 原来「窗口无钉」—— from/to 都不命中、倒序、或到 EOF 都没闭合时，判据一字不报，
+    # 而跳过面可以整段塌掉（真仓实测：改一号 ⇒ 433 行静默掉出扫描面、输出逐字不变）。
+    WINDOW_FROM = r"^## 9\. 夹具常见坑"
+    WINDOW_TO = r"^## 10\. 夹具启动流程"
+    WINDOW_OK = [{"file": "AGENT-SPEC.md", "from": WINDOW_FROM, "to": WINDOW_TO, "reason": "夹具：§9 整节是历史叙述"}]
+    SPEC_WINDOW = ["## 9. 夹具常见坑", "第 N 条：当时是 十七项、单测 1947 项", "## 10. 夹具启动流程", "- 复读"]
+
+    def window_case(sections=None, spec_lines=None):
+        return lambda b: build_fixture(
+            b, skip_sections=sections if sections is not None else WINDOW_OK,
+            spec_lines=spec_lines if spec_lines is not None else SPEC_WINDOW,
+        )
+
+    run("㉓ skipSections 窗口闭合 ⇒ 绿，且读数如实打印跳过行数（跳过 ≠ 通过）",
+        window_case(), False, None, "skipSections 跳过 3 行")
+    run("㉔ 窗口不闭合（`to` 标题改号 ⇒ 扫到 EOF 仍在跳过态）⇒ 判红点名",
+        window_case(spec_lines=["## 9. 夹具常见坑", "第 N 条：当时是 十七项"]), True, "窗口未闭合")
+    run("㉕ `from` 正则在本文件里一行都不命中 ⇒ 判红（窗口打不开 = 豁免形同虚设）",
+        window_case(sections=[{**WINDOW_OK[0], "from": r"^## 99\. 不存在的标题"}]), True, "一行都不命中")
+    run("㉖ `to` 出现在 `from` 之前（窗口倒序）⇒ 判红",
+        window_case(spec_lines=["## 10. 夹具启动流程", "- 复读", "## 9. 夹具常见坑", "第 N 条：当时是 十七项"]),
+        True, "窗口倒序")
+    run("㉗ `skipSections` 指向的文件不在盘 ⇒ 判红（窗口不许开在不存在的文件上）",
+        window_case(sections=[{**WINDOW_OK[0], "file": "Docs/不存在的文件.md"}]), True, "不在盘")
+
     failures = []
     with tempfile.TemporaryDirectory(prefix="doc-numbers-selftest-") as temp:
-        for index, (name, mutate, expect_red, *rest) in enumerate(cases):
+        for index, (name, mutate, expect_red, expect_text, expect_note) in enumerate(cases):
             base = pathlib.Path(temp) / f"case{index}"
             mutate(base)
-            problems, _ = check(base)
+            problems, notes = check(base)
             red = bool(problems)
             if red != expect_red:
                 failures.append(f"{name}：期望{'判红' if expect_red else '绿'}、实际{'判红' if red else '绿'}：{problems[:2]}")
                 continue
-            if rest and rest[0] and not any(rest[0] in p for p in problems):
-                failures.append(f"{name}：判红理由里没有点名「{rest[0]}」：{problems[:2]}")
+            if expect_text and not any(expect_text in p for p in problems):
+                failures.append(f"{name}：判红理由里没有点名「{expect_text}」：{problems[:2]}")
+                continue
+            if expect_note and not any(expect_note in n for n in notes):
+                failures.append(f"{name}：读数里没有「{expect_note}」：{notes[:2]}")
                 continue
             print(f"  ✅ {name}")
 
