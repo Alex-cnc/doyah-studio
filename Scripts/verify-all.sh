@@ -715,7 +715,7 @@ python3 Scripts/check-terminal-tabs.py --self-test
 #     `run-manual-verification-probes.sh --filter` ⇒ 一个都跑不到」，所以这一条按
 #     「`TestsUISnapshot/` 里每个 `*ProbeTests.swift` 都得在 FILTER 里，否则要在豁免表里写明理由」
 #     逐文件对账（实测抓出 `AppearanceAxesProbeTests` 从 2026-09-29 起就没被任何脚本跑过）。
-# 自检用例 `--self-test` **11 例**（红 / 绿成对，夹具在临时目录，末例核对真仓库台账逐字节未变）。
+# 自检用例 `--self-test` **18 例**（红 / 绿成对，夹具在临时目录，末例核对真仓库台账逐字节未变）。
 python3 Scripts/check-result-scroll-ledger.py
 python3 Scripts/check-result-scroll-ledger.py --self-test
 

@@ -14,16 +14,23 @@
      也不许松到没有意义（各有上限档）；
   4. 理由非空（改阈值必须写明为什么，别只改数字）；
   5. **探针真挂在取证脚本上**：`TestsUISnapshot/` 里每个 `*ProbeTests.swift` 都要出现在
-     `Scripts/run-manual-verification-probes.sh` 的 FILTER 里，否则必须在豁免表里写明理由 ——
+     `Scripts/run-manual-verification-probes.sh` 的 `FILTER=` 清单里，否则必须在豁免表里写明理由 ——
      第 96 轮实测过「新用例没接进 `--filter` ⇒ 一个都跑不到」，本判据把这句话变成机械检查
      （落地当轮就抓出 `AppearanceAxesProbeTests` 自 2026-09-29 起没有任何脚本跑它）。
+     **2026-10-14 收口**（合册 `T-20261013-027` · 原单 `T-20261010-034`）：判定物由
+     「整份脚本的**全文**子串命中」改成 **`FILTER="…"` 赋值行**，并加**反向**校验（清单成员必须在
+     盘上有对应文件 ⇒ 僵尸条目判红）、`FILTER=` 行解析不到 ⇒ 判红（空跑防护）、清单条数与
+     盘上份数两条**下限读数** —— 旧实现只要探针名在脚本头部注释里被提过一次就判绿（那句注释逐条
+     列了几乎所有探针名 ⇒ 「写了用例却没接进 `--filter`」那个坑原封不动）。
 
 跑法：`python3 Scripts/check-result-scroll-ledger.py [--self-test]`
 退出码：0 = 全绿；1 = 有红（逐条点名）。
 
-判据自己的证据：`--self-test` **11 例**（红 / 绿成对：真台账绿 / 缺键 / 基线非正数 / 余量不足 /
-上界松到超上限档（两处）/ 理由为空 / 规模缩水 / 探针没挂 FILTER / 豁免没写理由 /
-末例核对真仓库台账逐字节未变且真跑 0 错）。
+判据自己的证据：`--self-test` **18 例**（红 / 绿成对：真台账绿 / 缺键 / 基线非正数 / 余量不足 /
+上界松到超上限档（两处）/ 理由为空 / 规模缩水 / 名只从 `FILTER=` 删掉而注释仍逐条提 ⇒ 必红 /
+新探针只写进注释、不进 `FILTER` ⇒ 必红 / `FILTER=` 有僵尸条目 ⇒ 必红 /
+`FILTER=` 赋值行消失 ⇒ 必红 / 面被掏空 ⇒ 必红 / 零提及负对照 / 豁免没写理由 /
+注释里提无关名字不误报 / 未知参数 rc=2 / 末例核对真仓库台账逐字节未变且真跑 0 错）。
 """
 
 from __future__ import annotations
@@ -32,6 +39,7 @@ import copy
 import hashlib
 import json
 import pathlib
+import re
 import sys
 import tempfile
 
@@ -160,19 +168,74 @@ def ledger_errors(ledger: dict) -> list[str]:
     return errors
 
 
+# `FILTER="…"` 赋值行 —— 判定物**就是这一行**，不是整份脚本的全文（见自检第 ⑨/⑩ 例）。
+FILTER_RE = re.compile(r'^FILTER="([^"]*)"', re.M)
+
+# 面下限（空跑防护）：低于即判红 —— 防「面被掏空 ⇒ 零命中 = 通过」。
+# 2026-10-14 实测：TestsUISnapshot/*ProbeTests.swift 40 份 / FILTER= 成员 39 条（豁免 1 份）。
+# 清单条数不另设下限：面完整时「正向逐份点名」已经保证清单至少 39 条（少一条就点那条的名字）。
+PROBE_FLOOR = 40
+
+
+def filter_members(probes_text: str) -> tuple[list[str] | None, str | None]:
+    """取 `FILTER="…"` 清单（判定物 = **赋值行**）。返回 (成员表, 错因)。
+
+    2026-10-14 收口（合册 `T-20261013-027` · 原单 `T-20261010-034`）：旧实现把判定物写成
+    **整份脚本的全文**，而 `run-manual-verification-probes.sh` 的头部注释逐条列了几乎所有探针名
+    ⇒ 名字只要在注释里被提过一次就判绿（「写了用例却没接进 `--filter`」那个坑原封不动）。
+    现在只认赋值行，并要求**恰好一处**（多处 = 判定物不唯一）。
+    """
+    matches = FILTER_RE.findall(probes_text)
+    if not matches:
+        return None, (
+            "取证脚本里找不到 `FILTER=\"…\"` 赋值行 ⇒ 判定物没了（空跑防护："
+            "不许把「清单消失」当成「全都挂上了」判绿）"
+        )
+    if len(matches) > 1:
+        return None, f"取证脚本里有 {len(matches)} 处 `FILTER=\"…\"` 赋值行 ⇒ 判定物不唯一（要求恰好一处）"
+    return [item.strip() for item in matches[0].split("|") if item.strip()], None
+
+
 def wiring_errors(probes_text: str, probe_files: list[str]) -> list[str]:
-    """探针必须真挂在取证脚本上（第 96 轮那族的坑：写了用例却没接进 `--filter`）。"""
+    """探针必须**真挂在 `FILTER=` 清单里**（第 96 轮那族的坑：写了用例却没接进 `--filter`，
+    一个都跑不到）。两向都判，且都点名到具体名字：
+
+      · 正向：盘上每份 `*ProbeTests.swift` 都得是 `FILTER=` 的成员（豁免表里的除外）；
+      · 反向：`FILTER=` 的每个成员都得在盘上有对应文件（僵尸条目 = 名字留了、文件没了）。
+    """
     errors: list[str] = []
+
+    # 面下限：面被掏空时不许「零命中 = 通过」。
+    if len(probe_files) < PROBE_FLOOR:
+        errors.append(
+            f"TestsUISnapshot/ 里只数到 {len(probe_files)} 份 `*ProbeTests.swift`（下限 {PROBE_FLOOR}）"
+            f" ⇒ 判定面被掏空（空跑防护：面没了不许当全绿）"
+        )
+        return errors
+
+    members, error = filter_members(probes_text)
+    if error:
+        return errors + [error]
+
+    member_set = set(members)
+    on_disk = {name[: -len(".swift")] for name in probe_files}
 
     for name in probe_files:
         stem = name[: -len(".swift")]
         if stem in PROBE_WIRING_EXEMPT:
             continue
-        if stem not in probes_text:
+        if stem not in member_set:
             errors.append(
-                f"探针 TestsUISnapshot/{name} 没挂在 Scripts/run-manual-verification-probes.sh 上 —— "
-                f"「写了用例却没接进 `--filter`」= 一个都跑不到；要么接进 FILTER，要么在 PROBE_WIRING_EXEMPT 里写明理由"
+                f"探针 TestsUISnapshot/{name} 没挂在 Scripts/run-manual-verification-probes.sh 的 "
+                f"`FILTER=` 清单里 —— 「写了用例却没接进 `--filter`」= 一个都跑不到"
+                f"（光在注释里被提到不算）；要么接进 FILTER，要么在 PROBE_WIRING_EXEMPT 里写明理由"
             )
+
+    for stem in sorted(member_set - on_disk):
+        errors.append(
+            f"`FILTER=` 里的 `{stem}` 在 TestsUISnapshot/ 里没有对应文件（僵尸条目）"
+            f" ⇒ 要么删掉这条，要么把文件补回来（清单与盘面必须双向对得上）"
+        )
 
     for stem, reason in PROBE_WIRING_EXEMPT.items():
         if f"{stem}.swift" not in probe_files:
@@ -196,6 +259,10 @@ def run_checks(ledger: dict, probes_text: str, files: list[str]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
+    unknown = [item for item in argv if item != "--self-test"]
+    if unknown:
+        print(f"未知参数：{' '.join(unknown)}（用法：`--self-test`）⇒ 不静默吞掉参数，rc=2")
+        return 2
     if "--self-test" in argv:
         return self_test()
 
@@ -222,7 +289,12 @@ def main(argv: list[str]) -> int:
         f"   行数放大比值上限 {frame['scaleRatioLimit']}×（分母下限 {frame['floorMs']} ms）｜"
         f"常驻内存增量上限 {memory['residentLimitMB']} MB（基线 {memory['measuredDeltaMB']} MB）"
     )
-    print(f"   取证脚本挂载：{len(files)} 份探针，豁免 {len(PROBE_WIRING_EXEMPT)} 份")
+    members, _why = filter_members(probes_text)
+    reading = f"{len(members)} 条" if members is not None else "解析不到"
+    print(
+        f"   取证脚本挂载：FILTER= 清单 {reading} / 盘上 {len(files)} 份探针"
+        f"（面下限 {PROBE_FLOOR}），豁免 {len(PROBE_WIRING_EXEMPT)} 份"
+    )
     for stem in sorted(PROBE_WIRING_EXEMPT):
         print(f"     · 豁免 {stem}：{PROBE_WIRING_EXEMPT[stem]}")
 
@@ -288,21 +360,73 @@ def self_test() -> int:
     fixture["smallRows"] = 100
     expect("规模缩到 100 行（应当红）", True, fixture)
 
-    # ⑨ 探针没挂在取证脚本上（第 96 轮那族的坑）。
+    base_members = filter_members(probes_text)[0]
+
+    def with_filter(text: str, members: list[str]) -> str:
+        return FILTER_RE.sub('FILTER="' + "|".join(members) + '"', text, count=1)
+
+    # ⑨ 名只从 `FILTER=` 赋值行删掉、注释仍逐条提它 ⇒ 必红（旧实现判绿 = 假绿，原单 B 档）。
     expect(
-        "探针没挂进 FILTER（应当红）",
+        "名只从 FILTER= 删掉、注释仍提（应当红）",
+        True,
+        copy.deepcopy(ledger),
+        text=with_filter(probes_text, [m for m in base_members if m != "LargeResultScrollProbeTests"]),
+    )
+
+    # ⑩ 新增探针的文件名**只写进注释**、不进 FILTER ⇒ 必红（原单 B2 档 / 第 96 轮那类事故的形状）。
+    expect(
+        "新探针只写进注释、不进 FILTER（应当红）",
+        True,
+        copy.deepcopy(ledger),
+        text=probes_text + "\n# TestsUISnapshot/PlantedNewProbeTests.swift 判 …（只写在注释里）\n",
+        names=files + ["PlantedNewProbeTests.swift"],
+    )
+
+    # ⑪ 反向：`FILTER=` 里多出一个盘上没有的名字（僵尸条目）⇒ 必红（旧实现不查这一向）。
+    expect(
+        "FILTER= 有盘上没有的僵尸条目（应当红）",
+        True,
+        copy.deepcopy(ledger),
+        text=with_filter(probes_text, base_members + ["ZombieProbeTests"]),
+    )
+
+    # ⑫ `FILTER=` 赋值行整个消失 ⇒ 必红（空跑防护：判定物没了不许当全绿）。
+    expect(
+        "FILTER= 赋值行消失（应当红）",
+        True,
+        copy.deepcopy(ledger),
+        text="\n".join(l for l in probes_text.splitlines() if not l.startswith('FILTER="')) + "\n",
+    )
+
+    # ⑬ 面被掏空（盘上只剩 1 份探针）⇒ 必红（旧实现照旧按「剩下的那份都在全文里」判绿）。
+    expect("面被掏空（盘上只剩 1 份）（应当红）", True, copy.deepcopy(ledger), names=files[:1])
+
+    # ⑭ 负对照：全文零提及（旧实现的真红面）—— 新旧两版都必须红。
+    expect(
+        "全文零提及（应当红）",
         True,
         copy.deepcopy(ledger),
         text=probes_text.replace("LargeResultScrollProbeTests", "SomeOtherProbeTests"),
     )
 
-    # ⑩ 豁免没有理由。
+    # ⑮ 豁免没有理由。旧 ⑩
     global PROBE_WIRING_EXEMPT
     original_exempt = PROBE_WIRING_EXEMPT
     PROBE_WIRING_EXEMPT = {"AppearanceAxesProbeTests": "短"}
     expect("豁免没写理由（应当红）", True, copy.deepcopy(ledger))
     PROBE_WIRING_EXEMPT = original_exempt
 
+    # ⑯ 对手臂：注释里提一个与探针无关的名字（不在盘上、也不在 FILTER）⇒ 不许误报。
+    expect(
+        "注释里提无关名字（不许误报）",
+        False,
+        copy.deepcopy(ledger),
+        text=probes_text + "\n# 顺带提一个跟探针无关的名字 FooProbeTests（既不在盘上、也不在 FILTER）\n",
+    )
+
+    # ⑰ 参数面：未知参数不许静默吞掉（旧实现把 `--nonsense` 当没看见、照旧判绿）。
+    code = main(["--nonsense"])
+    expectations.append((f"{'✓' if code == 2 else '✗'} 未知参数 ⇒ rc=2（实得 {code}）", code == 2))
     # ⑪ 自检不许改真仓库：末例核对台账逐字节未变 + 真跑一遍仍是 0 错。
     digest_after = hashlib.sha256(LEDGER_PATH.read_bytes()).hexdigest()
     ok = digest_before == digest_after and not run_checks(load_ledger(), probes_text, files)
