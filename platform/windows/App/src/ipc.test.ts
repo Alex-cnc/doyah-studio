@@ -31,6 +31,7 @@ describe('ipc', () => {
     // 三方不一致由 Rust 侧那条双向判据与这条快照各抓一半（漏改哪一半都红）。
     expect(Object.values(COMMANDS)).toEqual([
       'app_info',
+      'plugins_manifest',
       'dataset_summary',
       'grid_window',
       'db_connect',

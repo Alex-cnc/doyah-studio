@@ -60,6 +60,86 @@ async fn current_session(state: &State<'_, ShellState>) -> Result<Arc<PgSession>
     })
 }
 
+// ── 插件清单（契约依据 = 概要设计 §3.52；本侧落法 = §8.5.8）────────────────────
+//
+// **单一出处**：清单本体在领域层 `doyah_studio_db::plugins::PLUGINS`（纯逻辑、可单测）。
+// 本命令只做一件事：把那份清单**原样**递给界面，并**附带一次自检结果**。
+//
+// 为什么把自检结果也递过去：契约④要求「插件不在 ⇒ 其挂点整体消失且**不报错**」——
+// 界面据此判"这份清单能不能信"；清单自相矛盾时界面应当**如实报**，而不是静默少画一个入口。
+
+/// 插件清单里的一条（给界面看的形状；字段与领域层一一对应）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginEntry {
+    /// 稳定标识（进视图 id / 挂点键）。
+    pub id: String,
+    /// 展示名（对账用的规范名；界面文案走 `App/src/i18n`）。
+    pub name: String,
+    /// 插件版本。
+    pub version: String,
+    /// 入口 target（界面目录名 = `App/src/plugins/<entry>/`）。
+    pub entry: String,
+    /// 能力位（`workspaces` / `database` / `notes`）。
+    pub capabilities: Vec<String>,
+    /// 需要的宿主挂点（七类之一）。
+    pub mounts: Vec<String>,
+    /// 存储归属（`bundled` = 自带 / `host` = 宿主代管）。
+    pub storage: String,
+    /// **功能本体是否已实现**。骨架阶段为 `false` ⇒ 界面**如实显示"未开工"**。
+    pub implemented: bool,
+}
+
+/// 插件清单 + 自检（界面只消费这一份）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginsManifest {
+    /// 全部插件声明（顺序 = 活动栏展示顺序）。
+    pub plugins: Vec<PluginEntry>,
+    /// 领域层自检发现的问题（空 = 清单自洽）。
+    pub findings: Vec<PluginFinding>,
+}
+
+/// 自检发现的一条问题（`code` 稳定、不本地化；判据按它点名）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginFinding {
+    pub plugin: String,
+    pub code: String,
+    pub detail: String,
+}
+
+/// **插件清单（唯一出处）** —— 界面与构建只消费它（契约②）。
+#[tauri::command]
+fn plugins_manifest() -> PluginsManifest {
+    use doyah_studio_db::plugins as domain;
+
+    PluginsManifest {
+        plugins: domain::PLUGINS
+            .iter()
+            .map(|decl| PluginEntry {
+                id: decl.id.to_string(),
+                name: decl.name.to_string(),
+                version: decl.version.to_string(),
+                entry: decl.entry.to_string(),
+                capabilities: decl.capabilities.iter().map(|c| c.id().to_string()).collect(),
+                mounts: decl.mounts.iter().map(|m| m.id().to_string()).collect(),
+                storage: decl.storage.id().to_string(),
+                implemented: decl.implemented,
+            })
+            .collect(),
+        findings: domain::audit()
+            .into_iter()
+            .map(|f| PluginFinding {
+                plugin: f.plugin,
+                code: f.code.to_string(),
+                detail: f.detail,
+            })
+            .collect(),
+    }
+}
+
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppInfo {
@@ -1616,6 +1696,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
+            plugins_manifest,
             dataset_summary,
             grid_window,
             db_connect,

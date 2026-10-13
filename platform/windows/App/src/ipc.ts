@@ -34,6 +34,8 @@ import { invoke } from '@tauri-apps/api/core'
 
 export const COMMANDS = {
   appInfo: 'app_info',
+  // 插件清单（唯一出处 = 领域层 `Db/src/plugins.rs`；契约依据 = 概设 §3.52 / §8.5.8）
+  pluginsManifest: 'plugins_manifest',
   datasetSummary: 'dataset_summary',
   gridWindow: 'grid_window',
   // 数据库域（真库链路）—— 与 src-tauri/src/lib.rs 的 generate_handler![] 双向一致
@@ -159,6 +161,38 @@ export interface AppInfo {
   buildTime: string
 }
 
+/** 插件清单里的一条（**形状跟领域层 `PluginDecl` 与命令层 `PluginEntry` 一一对应**）。 */
+export interface PluginEntry {
+  /** 稳定标识（进视图 id / 挂点键）。 */
+  id: string
+  /** 对账用的规范名；界面文案走 `i18n`。 */
+  name: string
+  version: string
+  /** 界面目录名 = `App/src/plugins/<entry>/`。 */
+  entry: string
+  /** 能力位：`workspaces` / `database` / `notes`。 */
+  capabilities: string[]
+  /** 需要的宿主挂点（七类之一）。 */
+  mounts: string[]
+  /** 存储归属：`bundled` = 自带 / `host` = 宿主代管。 */
+  storage: string
+  /** **功能本体是否已实现**。骨架阶段为 `false` ⇒ 界面**如实显示"未开工"**。 */
+  implemented: boolean
+}
+
+/** 清单自检发现的一条问题（`code` 稳定、不本地化）。 */
+export interface PluginFinding {
+  plugin: string
+  code: string
+  detail: string
+}
+
+/** 插件清单 + 自检（界面只消费这一份）。 */
+export interface PluginsManifest {
+  plugins: PluginEntry[]
+  findings: PluginFinding[]
+}
+
 export interface DatasetSummary {
   rows: number
   cols: number
@@ -183,6 +217,16 @@ export interface GridWindowRequest {
 }
 
 /** 合成数据集的列名规则（与 Rust `Core::dataset::generate` 逐条一致：每 5 列的第 5 列是短文本）。 */
+/**
+ * 取插件清单（**唯一出处**在领域层；这里只做转发 + 浏览器旁路的空清单）。
+ *
+ * 浏览器旁路给**空清单**而不是编一份假清单：界面据此如实显示"没有插件"，
+ * 与"清单为空 ⇒ 其挂点整体消失且不报错"（契约④）是同一套语义。
+ */
+export async function pluginsManifest(): Promise<PluginsManifest> {
+  return call(COMMANDS.pluginsManifest, {}, () => ({ plugins: [], findings: [] }))
+}
+
 export function mockColumnNames(cols: number): string[] {
   return Array.from({ length: cols }, (_, col) => (col % 5 === 4 ? `label_${col}` : `metric_${col}`))
 }

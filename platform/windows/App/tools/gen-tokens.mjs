@@ -50,7 +50,7 @@ const themesFile = resolve(argValue('--themes-out') ?? resolve(appDir, 'src/them
 const EXPECTED_NUMBERS = {
   spacing: { block: 'Spacing', count: 7 },
   radius: { block: 'Radius', count: 5 },
-  metric: { block: 'Metrics', count: 22 },
+  metric: { block: 'Metrics', count: 23 },
   overlay: { block: 'Overlay', count: 4 }, // Selection + Zebra 各 2 条
   font: { block: 'TypeScale', count: 7 },
 }

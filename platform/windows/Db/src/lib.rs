@@ -27,6 +27,7 @@ pub mod io_csv;
 pub mod markdown;
 pub mod open_as;
 pub mod palette;
+pub mod plugins;
 pub mod replace;
 pub mod reveal;
 pub mod save_guard;
@@ -61,6 +62,11 @@ pub use open_as::{
 pub use palette::{
     match_item, search as palette_search, Item as PaletteItem, Match as PaletteMatch, Tier as PaletteTier,
     KEYWORD_BONUS,
+};
+pub use plugins::{
+    audit as audit_plugins, is_consistent as plugins_consistent, plugin, plugin_ids, plugins_using,
+    Capability as PluginCapability, Finding as PluginFinding, MountPoint, PluginDecl,
+    StorageOwnership, PLUGINS,
 };
 pub use replace::{
     apply_to_line, apply_to_text, decide_apply, plan_file, replacements_in_line, summarise,

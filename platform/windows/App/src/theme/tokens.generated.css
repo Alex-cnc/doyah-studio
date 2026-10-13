@@ -4,7 +4,7 @@
  * 令牌取值的**单一来源** = macOS 侧 Core/DesignTokens.swift（角色与刻度）
  *                        + Core/DesignTheme.swift（每主题一份值表；§8.5.3「令牌取值」属「一样」的五项之一）。
  * 重新生成：node platform/windows/App/tools/gen-tokens.mjs（比对：--check）
- * 源 sha256：role 315922aa3921 / palette 7f53edfb9cd2
+ * 源 sha256：role aeb3b48f588a / palette 7f53edfb9cd2
  *
  * 主题块：`:root` 三态 = 默认主题的值；`[data-theme-scheme="<id>"]` 三态 = 该主题的值
  * （属性选择器特异性更高 ⇒ 写了 data-theme-scheme 时一定压过默认块）。
@@ -45,7 +45,8 @@
   --ds-metric-plan-raw-max-height: 260px;
   --ds-metric-plan-raw-line-height: 15px;
   --ds-metric-toolbar-button-width: 28px;
-  --ds-metric-toolbar-button-height: 22px;
+  --ds-metric-toolbar-button-height: 28px;
+  --ds-metric-toolbar-icon-size: 17px;
   --ds-metric-min-column-width: 40px;
   --ds-metric-max-column-width: 420px;
   /* 排版级差（TypeScale） */

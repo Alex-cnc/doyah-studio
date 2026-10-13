@@ -26,18 +26,45 @@ import {
   type DomAppearance,
 } from './ipc'
 import { applyAppearance, MODE_LABELS, SCHEME_LABELS, systemIsDark } from './shell/appearance'
-import DatabaseView from './views/DatabaseView.vue'
-import WorkspaceView from './views/WorkspaceView.vue'
-import {
-  BUILT_ITEMS,
-  ITEMS,
-  itemGlyph,
-  itemTitle,
-  type ActivityBarItemId,
-} from './shell/activityBar'
+// **视图一律查表，不直连 import**（契约 §3.52-③ 宿主挂点 / §8.5.8）：
+// 核心视图（工作区 / 数据库）与插件视图（笔记 / 回放）登记在**同一张表**里，
+// 这里只按 id 取组件 —— 插件被拔掉时"查不到"，界面**什么都不画、不报错**。
+import { registerCoreSlots } from './views/coreSlots'
+import { installPlugins } from './plugins/registry'
+import { loadPlugins, pluginById } from './shell/plugins'
+import { resolveView } from './shell/pluginRegistry'
+import { itemGlyph, itemTitle, type ActivityBarItemId } from './shell/activityBar'
+// 活动栏项**由清单派生**（核心项 + 插件项）——不再写死一份"已开工清单"（契约 §3.52-②）。
+import { CORE_ACTIVITY_ITEMS, derivedActivityItems } from './shell/activityItems'
 import { activeItem, setActive } from './shell/activityBarStore'
 
 const info = ref<AppInfo | null>(null)
+
+// ── 当前视图：**查表取组件 + 按视图传参**（契约 §3.52-③④ / §8.5.8）──────────────
+//
+// 为什么核心视图与插件视图走同一处：两套机制迟早分叉（加一个视图忘改一处）。
+// 核心视图有各自的入参（工作区的打开信号、数据库的对话框请求），插件视图只需要语言与版本；
+// 这里**按 id 分派**，越界的 id 不硬套参数（宁可少传，也不给别的视图乱塞）。
+const viewComponent = computed(() => resolveView(activeItem.value))
+
+const viewProps = computed<Record<string, unknown>>(() => {
+  const id = activeItem.value
+  if (id === 'workspace') {
+    return {
+      openFileSignal: openFileSignal.value,
+      openFolderSignal: openFolderSignal.value,
+      version: info.value?.version ?? '',
+      language: uiLanguage.value,
+    }
+  }
+  if (id === 'database') {
+    return { dialogRequest: connectionDialogRequest.value, language: uiLanguage.value }
+  }
+  // 插件视图：只给"语言 + 版本"（版本从清单取，避免插件目录再写一遍）。
+  return { language: uiLanguage.value, version: pluginById(id)?.version ?? '' }
+})
+
+
 
 // 命令使用历史（2.9）：**常用优先**的顺序由 Rust 领域层给（这里只存与传）
 const rankedCommands = ref<string[]>([])
@@ -266,15 +293,33 @@ async function refreshAppearance() {
   }
 }
 
-/** 活动栏的显示面：顺序、文案、图标语义都从 `activityBar.ts` 派生（视图里不再排一次）。 */
-const sections = ITEMS.map((id) => ({
-  id,
-  label: itemTitle(id),
-  glyph: itemGlyph(id),
-  ready: BUILT_ITEMS.includes(id),
-}))
+/**
+ * 活动栏的显示面：**顺序与组成由清单派生**（核心项 + 插件项），文案与图标语义仍取自
+ * `activityBar.ts`（那两样是"视图自己的事"，不归清单）。
+ *
+ * `ready` 的口径：
+ *   · 核心项 ⇒ 由 `CORE_ACTIVITY_ITEMS` 定（它们是宿主自带的）；
+ *   · 插件项 ⇒ **取自清单的 `implemented`** —— 本轮两个插件都是 `false`，
+ *     所以点进去**如实显示"未开工"**（不假装能点、也不藏起来）。
+ */
+const sections = computed(() =>
+  derivedActivityItems().map((id) => {
+    const plugin = pluginById(id)
+    return {
+      id,
+      label: itemTitle(id),
+      glyph: itemGlyph(id),
+      ready: CORE_ACTIVITY_ITEMS.includes(id) ? true : (plugin?.implemented ?? false),
+    }
+  }),
+)
 
 onMounted(async () => {
+// 视图装配：**先核心、后插件**（插件装配要读清单，所以先起装载、装上时再登记）。
+// `loadPlugins()` 不 await：界面先起来，清单到位后自动补上插件入口（避免白屏风险）。
+registerCoreSlots()
+void loadPlugins().then(() => installPlugins())
+
   info.value = await appInfo()
   // 外观：读一次偏好并贴上（**读不到就按缺省贴** —— 外观读失败不该挡住界面）
   try {
@@ -376,17 +421,17 @@ function onSelect(id: ActivityBarItemId) {
       />
       <main class="shell__main">
         <div class="shell__stack">
-          <!-- 数据库：真库链路（连库 → 对象树 → SQL → 结果），驱动在 Rust 外壳 -->
-          <DatabaseView v-if="activeItem === 'database'" :dialog-request="connectionDialogRequest" @push-panel="pushPanel" @result-stats="onResultStats" />
-          <WorkspaceView
-            v-else-if="activeItem === 'workspace'"
-            :open-file-signal="openFileSignal"
-            :open-folder-signal="openFolderSignal"
-            :version="info?.version ?? ''"
-            @root-changed="workspaceRoot = $event"
-            @push-panel="pushPanel"
-          />
-          <p v-else class="shell__placeholder">
+          <!-- 当前视图：**一律查表**（核心视图与插件视图同一张表）。
+                 查不到 ⇒ 不画（插件未装 / 视图未登记），**不报错** —— 契约 §3.52-④。 -->
+            <component
+              :is="viewComponent"
+              v-if="viewComponent"
+              v-bind="viewProps"
+              @push-panel="pushPanel"
+              @result-stats="onResultStats"
+              @root-changed="workspaceRoot = $event"
+            />
+            <p v-else class="shell__placeholder">
             {{ itemTitle(activeItem) }}视图尚未开工（⬜ 不半建）。
           </p>
         </div>

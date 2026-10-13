@@ -37,6 +37,17 @@ foreach ($file in $files) {
     $text = [System.IO.File]::ReadAllText($file.FullName, [System.Text.Encoding]::UTF8)
     $checked++
 
+    # **先把注释与字符串字面量剥掉，再做检测**（2026-10-13 修）：
+    # 判据要判的是"代码里用没用到这个 API"，而注释里**写个例子**、或注释里解释这个坑，
+    # 都不该让文件判红（实测踩到：注释里写了那个字面形状 ⇒ 自己被判红）。
+    # 字符串也一并剥：`'readonly('` 这种字面量同理。
+    $code = $text
+    $code = [regex]::Replace($code, '/\*[\s\S]*?\*/', ' ')                 # 块注释
+    $code = [regex]::Replace($code, '(?m)//.*$', ' ')                     # 行注释
+    $code = [regex]::Replace($code, "'(?:\\.|[^'\\])*'", "''")            # 单引号串
+    $code = [regex]::Replace($code, '"(?:\\.|[^"\\])*"', '""')            # 双引号串
+    $code = [regex]::Replace($code, '`(?:\\.|[^`\\])*`', '``')            # 模板串
+
     $imported = New-Object System.Collections.Generic.HashSet[string]
     foreach ($m in [regex]::Matches($text, "import\s*\{([^}]*)\}\s*from\s*'vue'")) {
         $inner = $m.Groups[1].Value
@@ -48,8 +59,14 @@ foreach ($file in $files) {
     }
 
     foreach ($api in $apis) {
+        # 模式：**标识符（不在词/点之内）+ 紧跟的调用括号**。
+        # 这个形状分不清"Vue 的 readonly() 调用"与"TS 的只读数组标注 readonly T[]"——
+        # 实测（2026-10-13）：本仓剥掉注释与字符串后，`readonly (` 形状**一处也没有**
+        # （唯一一处在我的注释里，已改写），所以**不需要**为它加断言；
+        # 加过一版负向断言，结果把泛型调用（`computed<Foo[]>(…)`）一起排除 ⇒ **假绿**，
+        # 被注入自证当场抓出。**宁可保持简单、并在新增此类写法时改代码避开。**
         $pattern = "(?<![A-Za-z0-9_.])" + [regex]::Escape($api) + "\s*\("
-        if ([regex]::IsMatch($text, $pattern)) {
+        if ([regex]::IsMatch($code, $pattern)) {
             if (-not $imported.Contains($api)) {
                 $rel = $file.FullName.Replace($appDir + '\', '')
                 $problems += ($rel + " 用了 " + $api + "( 但没有从 vue 导入它")

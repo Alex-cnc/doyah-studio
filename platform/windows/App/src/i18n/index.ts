@@ -22,6 +22,15 @@ export interface Entry {
 
 /** 语言表：key 用点分层级，便于按区域找。 */
 export const DICT = {
+  // 插件面（契约 §3.52 / 本侧 §8.5.8）
+  'plugin.notes.title': { 'zh-Hans': '笔记', en: 'Notes' },
+  'plugin.retro.title': { 'zh-Hans': '回放', en: 'Retro' },
+  'plugin.notImplemented': {
+    'zh-Hans': '本插件尚未实现（本版只落插件骨架）。功能本体将取自产品能力规划说明书。',
+    en: 'This plugin is not implemented yet (this version only ships the plugin skeleton). Its features will come from the product capability plan.',
+  },
+  'plugin.missingEntry': { 'zh-Hans': '插件入口未登记：{entry}', en: 'Plugin entry not registered: {entry}' },
+
   // IPC 浏览器旁路提示（不是产品路径，但**也要双语**：切英文时不该留中文）
   'ipc.bypass.db': { 'zh-Hans': '浏览器旁路没有真库', en: 'The browser fallback has no real database' },
   'ipc.bypass.workspace': { 'zh-Hans': '浏览器旁路没有工作区', en: 'The browser fallback has no workspace' },
