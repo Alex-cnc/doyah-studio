@@ -210,6 +210,29 @@ FIXTURE_SPEC = """# 需求规范书（夹具）
 """
 
 
+OLD_CODE_MARKER = "FACE_FLOOR"
+
+
+def _old_code_text() -> "str | None":
+    """取"上一版"判据源码：从历史里找第一份**不含本轮新标记**的版本。
+
+    原先这里写的是 `git show HEAD^:…` —— 那在**下一笔提交**（任何一笔，包括别人的）之后
+    就会指到已经改好的版本 ⇒ 这个"旧码对照臂"自己变成假红（实测：HEAD^ 含新版时 12 例里
+    例 5 判红）。按内容认版本才跟着历史走。
+    """
+    listed = subprocess.run(["git", "log", "--format=%H", "-n", "8", "--",
+                             "Scripts/check-status-consistency.py"], cwd=str(REPO),
+                            capture_output=True, text=True)
+    if listed.returncode != 0:
+        return None
+    for sha in listed.stdout.split():
+        shown = subprocess.run(["git", "show", f"{sha}:Scripts/check-status-consistency.py"],
+                               cwd=str(REPO), capture_output=True, text=True)
+        if shown.returncode == 0 and OLD_CODE_MARKER not in shown.stdout:
+            return shown.stdout
+    return None
+
+
 def run_self_test() -> int:
     """判据自己的证据：夹具树上一律真跑，真仓零改动、末例核对逐字节未变。"""
     script = pathlib.Path(__file__).resolve()
@@ -300,11 +323,10 @@ def run_self_test() -> int:
     def check_old_code():
         where = fixture("old-code")
         write(where, "Docs/proposals/planted.md", "正文\n\nFR-AI-11（⬜）还没做\n")
-        old = subprocess.run(["git", "show", "HEAD^:Scripts/check-status-consistency.py"],
-                             cwd=str(REPO), capture_output=True, text=True)
-        if old.returncode != 0:
-            return f"取不到旧码（git show HEAD^ rc={old.returncode}）"
-        (where / "Scripts" / "check-status-consistency.py").write_text(old.stdout, encoding="utf-8")
+        text = _old_code_text()
+        if text is None:
+            return "取不到旧码（git 历史里没有不含本轮标记的版本）"
+        (where / "Scripts" / "check-status-consistency.py").write_text(text, encoding="utf-8")
         completed = subprocess.run([sys.executable, str(where / "Scripts" / "check-status-consistency.py")],
                                    cwd=str(where), capture_output=True, text=True)
         if completed.returncode != 0:

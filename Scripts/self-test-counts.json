@@ -1,1125 +1,1149 @@
 {
-  "version": 1,
-  "purpose": "「门禁自己的证据」（各族负例 / 自检）的例数台账（队列 L-72 ㈠，闭环第 4 项）。为什么要有它：每一族负例的例数此前在 AGENT-SPEC §6 资产表、脚本自己的 docstring、spec 与开发记录里各写一遍 —— 例数被删一个、脚本收尾行格式被改坏、夹具锚点随源码重构失效，谁都说话。实测现场（第 65 轮）：`Scripts/test-plugin-assembly-gates.py` 每次都在第 3 例崩掉（`Core/AICapture.swift` 的 `sqlNote` 签名改成多行 + 多一个 `tag:` 参数，夹具锚点还是老单行签名），而这个脚本**不在闭环里**（14 个 `test-*.py` 里 8 个没人跑）⇒ 谁都没发现。本台账把「例数」变成唯一来源，并由 `Scripts/check-self-test-counts.py` 每轮**真跑一遍**再对账。",
-  "readingRules": [
-    "cases = 权威值 = 这一族**跑起来**数出来的例数（runner 自己把每个例子的结果记进列表再打印总数）。脚本 docstring 里写的数字是**文档**，不是实测 —— 两者不一致就是漂移，改文档。",
-    "measure = 实跑：`python3 <script> <args>`，要求 **exit 0**（runner 崩了 = 这一族的负例根本没跑，属「判据写完不对已知改动报红，等于没有」），再按 `countRegex` 从输出里抓数字。**抓不到就判红**（不许静默跳过）。",
-    "anchors = 文档里的**现状声明**落点（精确上下文正则 + 捕获组 + minSites）：每一处捕获到的数字必须 == cases；写错 / 数字被删光都判红。`expect` 用于「同一格同时写着历史值与现状值」的写法（如 §6 的 `17 → 27 例`）。",
-    "`noAnchorReason` = 该族的例数在版本控制内的文件里**没有落点**（只在 runner 的收尾行里）⇒ 必须写明理由。留空或没锚点又没理由，判红。",
-    "`sourceRatchet` = 可选：例数只在 runner 用 `len()` 算出来、源码里没有字面量的族，另配一条**静态**棘轮（按正则数脚本里的用例定义条数，必须 == cases）—— 否则「删掉一个用例」在 runner 那一侧只是数字变小，文件里什么都没少。",
-    "`hostLedgerSelfTest` = 可选（2026-10-08 · 任务 `t_004a679b`）：这一族的 `--self-test` 要读**真仓库那几份本机台账**（`.gitignore` 内、只在主开发机上）⇒ 干净克隆 / 并行工作树 / 另一平台没有它们时，那几族如实打印「干净克隆上跳过」、退出 0、**不打例数**。判序 = `files` 里每一份都**真缺**、**且**输出里命中 `marker`，两个条件都满足才认跳过（跳过 ≠ 通过，理由写在 `note` 里）；否则照旧判红（收尾行被改坏不许借这条路溜过去）。口径出处 = `AGENT-SPEC.md` §9 第 147 条 ④ —— 在**主开发机**上这条永不生效。",
-    "扫描范围遵守红线第 6 条：对侧独占节（`[独占:windows]` / `[独占:linux]`）内的行整段跳过；变更记录行（`| v1.2x`）整行跳过（历史值本来就该不同）；台账 `skipSections` 里登记的「历史叙述」整节也跳过（现只有 `AGENT-SPEC.md` §9「常见坑」）。",
-    "只扫**版本控制内**的文件（`AGENT-SPEC.md` / `Scripts/*`）：`Docs/智能体助手-开发spec.md`、`Docs/开发记录-*.md`、`Docs/design/开发循环-任务队列.md` 在 `.gitignore` 内、每轮都被写且含大量历史值 ⇒ 不在本台账的锚点范围（边界见 `notCovered`）。",
-    "本台账与 `Scripts/doc-numbers.json`（L-55）分工：那份管**跨文档的工程设施数字**（闭环项数 / 单测数 / 快照张数，同一件事写几处），本份管**逐族的例数**（一族的数字出现在哪几处）。两份都做「台账 ↔ 实测 ↔ 文档」三向对账。"
-  ],
-  "runnerContract": {
-    "exitZero": "每一族 runner 必须 exit 0；非零 ⇒ 判红并原样打印它的输出尾部（那是「证据坏了」的现场）。",
-    "countRegex": "各族自带（各脚本收尾行的格式本来就不同，硬统一格式要改 20+ 个文件、收益只有省事）。用输出里的**最后一处**匹配 —— runner 的收尾行总在最后。",
-    "timeoutSeconds": 900
-  },
-  "skipSections": [
+ "version": 1,
+ "purpose": "「门禁自己的证据」（各族负例 / 自检）的例数台账（队列 L-72 ㈠，闭环第 4 项）。为什么要有它：每一族负例的例数此前在 AGENT-SPEC §6 资产表、脚本自己的 docstring、spec 与开发记录里各写一遍 —— 例数被删一个、脚本收尾行格式被改坏、夹具锚点随源码重构失效，谁都说话。实测现场（第 65 轮）：`Scripts/test-plugin-assembly-gates.py` 每次都在第 3 例崩掉（`Core/AICapture.swift` 的 `sqlNote` 签名改成多行 + 多一个 `tag:` 参数，夹具锚点还是老单行签名），而这个脚本**不在闭环里**（14 个 `test-*.py` 里 8 个没人跑）⇒ 谁都没发现。本台账把「例数」变成唯一来源，并由 `Scripts/check-self-test-counts.py` 每轮**真跑一遍**再对账。",
+ "readingRules": [
+  "cases = 权威值 = 这一族**跑起来**数出来的例数（runner 自己把每个例子的结果记进列表再打印总数）。脚本 docstring 里写的数字是**文档**，不是实测 —— 两者不一致就是漂移，改文档。",
+  "measure = 实跑：`python3 <script> <args>`，要求 **exit 0**（runner 崩了 = 这一族的负例根本没跑，属「判据写完不对已知改动报红，等于没有」），再按 `countRegex` 从输出里抓数字。**抓不到就判红**（不许静默跳过）。",
+  "anchors = 文档里的**现状声明**落点（精确上下文正则 + 捕获组 + minSites）：每一处捕获到的数字必须 == cases；写错 / 数字被删光都判红。`expect` 用于「同一格同时写着历史值与现状值」的写法（如 §6 的 `17 → 27 例`）。",
+  "`noAnchorReason` = 该族的例数在版本控制内的文件里**没有落点**（只在 runner 的收尾行里）⇒ 必须写明理由。留空或没锚点又没理由，判红。",
+  "`sourceRatchet` = 可选：例数只在 runner 用 `len()` 算出来、源码里没有字面量的族，另配一条**静态**棘轮（按正则数脚本里的用例定义条数，必须 == cases）—— 否则「删掉一个用例」在 runner 那一侧只是数字变小，文件里什么都没少。",
+  "`hostLedgerSelfTest` = 可选（2026-10-08 · 任务 `t_004a679b`）：这一族的 `--self-test` 要读**真仓库那几份本机台账**（`.gitignore` 内、只在主开发机上）⇒ 干净克隆 / 并行工作树 / 另一平台没有它们时，那几族如实打印「干净克隆上跳过」、退出 0、**不打例数**。判序 = `files` 里每一份都**真缺**、**且**输出里命中 `marker`，两个条件都满足才认跳过（跳过 ≠ 通过，理由写在 `note` 里）；否则照旧判红（收尾行被改坏不许借这条路溜过去）。口径出处 = `AGENT-SPEC.md` §9 第 147 条 ④ —— 在**主开发机**上这条永不生效。",
+  "扫描范围遵守红线第 6 条：对侧独占节（`[独占:windows]` / `[独占:linux]`）内的行整段跳过；变更记录行（`| v1.2x`）整行跳过（历史值本来就该不同）；台账 `skipSections` 里登记的「历史叙述」整节也跳过（现只有 `AGENT-SPEC.md` §9「常见坑」）。",
+  "只扫**版本控制内**的文件（`AGENT-SPEC.md` / `Scripts/*`）：`Docs/智能体助手-开发spec.md`、`Docs/开发记录-*.md`、`Docs/design/开发循环-任务队列.md` 在 `.gitignore` 内、每轮都被写且含大量历史值 ⇒ 不在本台账的锚点范围（边界见 `notCovered`）。",
+  "本台账与 `Scripts/doc-numbers.json`（L-55）分工：那份管**跨文档的工程设施数字**（闭环项数 / 单测数 / 快照张数，同一件事写几处），本份管**逐族的例数**（一族的数字出现在哪几处）。两份都做「台账 ↔ 实测 ↔ 文档」三向对账。"
+ ],
+ "runnerContract": {
+  "exitZero": "每一族 runner 必须 exit 0；非零 ⇒ 判红并原样打印它的输出尾部（那是「证据坏了」的现场）。",
+  "countRegex": "各族自带（各脚本收尾行的格式本来就不同，硬统一格式要改 20+ 个文件、收益只有省事）。用输出里的**最后一处**匹配 —— runner 的收尾行总在最后。",
+  "timeoutSeconds": 900
+ },
+ "skipSections": [
+  {
+   "file": "AGENT-SPEC.md",
+   "from": "^## 9\\.",
+   "to": "^## 10\\.",
+   "reason": "§9「常见坑」整节是**历史叙述**（每条坑都在讲过去发生过什么、当时的数字是多少，例数还会写成 `11 → 18 例` 这种演进式），与变更记录行同规则跳过；不跳会把「例数涨了」的历史行当成漂移判红"
+  }
+ ],
+ "floors": {
+  "families": 52,
+  "totalCases": 925,
+  "anchorSites": 82,
+  "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。 **2026-10-13 修（合册 T-20261013-027 · 锚点无钉）**：`anchorSites` 由 77 改 76 —— 原先那 1 处是 terminal-tabs 旧锚点（不带上下文）**双命中** L-142 注释行的产物；锚点收紧后按实数登记（不许把假命中当安全余量）。 **2026-10-13（合册 T-20261013-027 第 7 轮 + 人类主人令 T-20261013-042）：新增 `button-icon-only` 族（23 例）、`design-mock-tokens` 13 → 31 例。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-036）：`design-themes` 35 → 42 例（判据 I ② 扩面 + 面对账台账）。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-027）：`doc-numbers` 19 → 24 例（豁免表三条自证）。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-068）：`design-themes` 42 → 54 例（判据 A/D/G/H 的判定物补钉 + 判据 I ④ 的面与 `Package.swift` 对账）。** **2026-10-13（加令 `T-20261013-051`）：`button-icon-only` 23 → 32 例（判据 F/G/H 三条 + `.labelStyle(.iconOnly)` 边界）。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-061）：`browser-tab-ownership` 15 → 26 例（判定物改判代码（剥注释 / 抹字符串）· SRS 定义行锚点唯一化 + 归属格反义 · 面与 `Package.swift` 生产 target 双向对账 + 面外回流判红）。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-060）：`sidebar-collapse` 11 → 23 例（判定物/判定面三处收口）；`totalCases` 799 → 811（同批跟版）。 **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-059）：`vendored-sqlite` 13 → 25 例（判定物改「剥注释后的正文」+ 判定面靠 `Package.swift` 现读 + 判定面与判定物的硬下限 + 两条「注释里提过 vs 代码里长出来」的对手臂 + 判据自坏不再吐栈、退出码 2）；`totalCases` 811 → 823（同批跟版）。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-058）：`cell-decode-coverage` 10 → 23 例（判定物改判代码 + 面靠 `Package.swift` 现读 + 台账三处面缺一即红 + 三处 `index()` 兜底、判据自坏退出码 2 + 两条注释例外逐条登记）；`totalCases` 823 → 836（同批跟版）。** **2026-10-13（合册 `T-20261013-027` · 原单 `T-20261010-057`）：`script-env` 28 → 39 例（九条验收负例 N-12~N-20 + 两条反向臂 N-21/N-22：子目录面/在册豁免/死登记）。 **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-056）：`note-search-route` 15 → 26 例（判定物统一「剥注释 + 抹字符串」· 路线枚举认逗号列表 · 「词是参数」与 `AppState` 属性机械对账 · 语言表认多行条目 · 面按 `Package.swift` 生产 target 现读 + 面下限 7 + 面外根登记（死登记/缩面判红））；`totalCases` 836 → 881（按当日实测跟版）。**** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-026）：`doc-numbers` 24 → 29 例（`skipSections` 窗口三条自证）；`totalCases` 881 → 886（同批跟版）。** **2026-10-14（合册 T-20261013-027 · 原单 T-20261010-028）：`doc-numbers` 29 → 35 例（形状④阿拉伯硬编码三条自证 + 两条台账臂：运行时打印分母写错 ⇒ 判红 / 阿拉伯项号提及超出项数 ⇒ 判红 / 项号枚举与项块数不一致 ⇒ 判红 / 台账未登记 `hardcodedSites` ⇒ 判红 / 登记值与实测不符 ⇒ 判红 + 一条排除形状对手臂（`N 色…` / `第 N 轮…` 改数字不误判））；`totalCases` 886 → 892（同批跟版）。** **2026-10-14（合册 T-20261013-027 · 原单 T-20261010-032）：新增 `status-consistency` 族（12 例 · `check-status-consistency.py` 的跨文档状态括注扫描面对齐姊妹判据 + 空跑防护）⇒ 族 51 / 例 910 / 锚点 80（三条下限按实测登记）。** **2026-10-14（合册 T-20261013-027 · 原单 T-20261010-033）：新增 `plugin-assembly-gate` 族（15 例 · `check-plugin-assembly.py` 的扫描面收口：㈠ 真·全仓面 + 下限读数 / ㈡ 笔记源清单运行时读 + 四条钉 / 参数面）⇒ 族 52 / 例 925 / 锚点 82（三条下限按实测登记）。**"
+ },
+ "notCovered": [
+  "本机台账（`Docs/智能体助手-开发spec.md` / `Docs/开发记录-*.md` / `Docs/design/开发循环-任务队列.md`，均在 `.gitignore` 内）里的例数现状格不在扫描范围 —— 它们每轮都被写、含大量历史值；逐族锚点只落在版本控制内的文件上。「哪些格算现状声明」随 L-72 ㈡/㈢ 一起定。",
+  "`Scripts/check-doc-tables.py` 的「跳过 7 份 / 14 个文件」这类**门禁自述数字**（条目原文 ②）：**第 65 轮（L-72 ㈡）已收** —— 落点是 `Scripts/doc-numbers.json` 的 `doc-tables-lists` / `doc-tables-files`（那两个数不是**例数**，按分工不归本台账）。",
+  "三书里的「N 处 / N 条」类统计（如「写死调用点 14 处」，条目原文 ③）本轮未收 ⇒ 下一批（它的可行性已在 L-55 的台账里验过）。",
+  "本台账只判**例数**，不判例子的**内容**（例 3 到底验的是什么，靠读脚本）—— 也不判「这一族的判据覆盖了该覆盖的口径」（那是每个门禁自己的事）。",
+  "族的**例数语义**：runner 打印的总数含「夹具准备自检」这类非负例条目（如 `check-doc-tables` 6 = 5 个编号例子 + 1 条夹具准备自检）⇒ 台账值 = runner 打印的总数；文档里写「五例」的地方按「编号例子数」写，差 1 时以本台账的 `note` 记明，不假装是同一个数。",
+  "本台账**只登记已经存在的族**：新写的 `test-*.py` / `check-*.py --self-test` 如果没被登记进来，本判据看不见它（`check-*.py` 有 doc-numbers 的「有判据、没闭环」对账兜着，`test-*.py` 只能靠人记得登记）。"
+ ],
+ "families": [
+  {
+   "key": "alpha-fr-dispositions",
+   "script": "Scripts/check-alpha-fr-dispositions.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 11,
+   "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "队列 L-69 ㈢ / 闭环第 5 项（FR 🟡 逐条判定的范围账）",
+   "anchors": [
     {
-      "file": "AGENT-SPEC.md",
-      "from": "^## 9\\.",
-      "to": "^## 10\\.",
-      "reason": "§9「常见坑」整节是**历史叙述**（每条坑都在讲过去发生过什么、当时的数字是多少，例数还会写成 `11 → 18 例` 这种演进式），与变更记录行同规则跳过；不跳会把「例数涨了」的历史行当成漂移判红"
+     "file": "AGENT-SPEC.md",
+     "regex": "check-alpha-fr-dispositions\\.py.{0,2000}?--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表 alpha 范围账行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "负例 `--self-test` (\\d+) 例，一律在临时副本上写坏",
+     "minSites": 1,
+     "note": "闭环第 5 项注释"
     }
-  ],
-  "floors": {
-    "families": 51,
-    "totalCases": 910,
-    "anchorSites": 80,
-    "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。 **2026-10-13 修（合册 T-20261013-027 · 锚点无钉）**：`anchorSites` 由 77 改 76 —— 原先那 1 处是 terminal-tabs 旧锚点（不带上下文）**双命中** L-142 注释行的产物；锚点收紧后按实数登记（不许把假命中当安全余量）。 **2026-10-13（合册 T-20261013-027 第 7 轮 + 人类主人令 T-20261013-042）：新增 `button-icon-only` 族（23 例）、`design-mock-tokens` 13 → 31 例。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-036）：`design-themes` 35 → 42 例（判据 I ② 扩面 + 面对账台账）。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-027）：`doc-numbers` 19 → 24 例（豁免表三条自证）。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-068）：`design-themes` 42 → 54 例（判据 A/D/G/H 的判定物补钉 + 判据 I ④ 的面与 `Package.swift` 对账）。** **2026-10-13（加令 `T-20261013-051`）：`button-icon-only` 23 → 32 例（判据 F/G/H 三条 + `.labelStyle(.iconOnly)` 边界）。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-061）：`browser-tab-ownership` 15 → 26 例（判定物改判代码（剥注释 / 抹字符串）· SRS 定义行锚点唯一化 + 归属格反义 · 面与 `Package.swift` 生产 target 双向对账 + 面外回流判红）。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-060）：`sidebar-collapse` 11 → 23 例（判定物/判定面三处收口）；`totalCases` 799 → 811（同批跟版）。 **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-059）：`vendored-sqlite` 13 → 25 例（判定物改「剥注释后的正文」+ 判定面靠 `Package.swift` 现读 + 判定面与判定物的硬下限 + 两条「注释里提过 vs 代码里长出来」的对手臂 + 判据自坏不再吐栈、退出码 2）；`totalCases` 811 → 823（同批跟版）。** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-058）：`cell-decode-coverage` 10 → 23 例（判定物改判代码 + 面靠 `Package.swift` 现读 + 台账三处面缺一即红 + 三处 `index()` 兜底、判据自坏退出码 2 + 两条注释例外逐条登记）；`totalCases` 823 → 836（同批跟版）。** **2026-10-13（合册 `T-20261013-027` · 原单 `T-20261010-057`）：`script-env` 28 → 39 例（九条验收负例 N-12~N-20 + 两条反向臂 N-21/N-22：子目录面/在册豁免/死登记）。 **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-056）：`note-search-route` 15 → 26 例（判定物统一「剥注释 + 抹字符串」· 路线枚举认逗号列表 · 「词是参数」与 `AppState` 属性机械对账 · 语言表认多行条目 · 面按 `Package.swift` 生产 target 现读 + 面下限 7 + 面外根登记（死登记/缩面判红））；`totalCases` 836 → 881（按当日实测跟版）。**** **2026-10-13（合册 T-20261013-027 · 原单 T-20261010-026）：`doc-numbers` 24 → 29 例（`skipSections` 窗口三条自证）；`totalCases` 881 → 886（同批跟版）。** **2026-10-14（合册 T-20261013-027 · 原单 T-20261010-028）：`doc-numbers` 29 → 35 例（形状④阿拉伯硬编码三条自证 + 两条台账臂：运行时打印分母写错 ⇒ 判红 / 阿拉伯项号提及超出项数 ⇒ 判红 / 项号枚举与项块数不一致 ⇒ 判红 / 台账未登记 `hardcodedSites` ⇒ 判红 / 登记值与实测不符 ⇒ 判红 + 一条排除形状对手臂（`N 色…` / `第 N 轮…` 改数字不误判））；`totalCases` 886 → 892（同批跟版）。** **2026-10-14（合册 T-20261013-027 · 原单 T-20261010-032）：新增 `status-consistency` 族（12 例 · `check-status-consistency.py` 的跨文档状态括注扫描面对齐姊妹判据 + 空跑防护）⇒ 族 51 / 例 910 / 锚点 80（三条下限按实测登记）。**"
+   ]
   },
-  "notCovered": [
-    "本机台账（`Docs/智能体助手-开发spec.md` / `Docs/开发记录-*.md` / `Docs/design/开发循环-任务队列.md`，均在 `.gitignore` 内）里的例数现状格不在扫描范围 —— 它们每轮都被写、含大量历史值；逐族锚点只落在版本控制内的文件上。「哪些格算现状声明」随 L-72 ㈡/㈢ 一起定。",
-    "`Scripts/check-doc-tables.py` 的「跳过 7 份 / 14 个文件」这类**门禁自述数字**（条目原文 ②）：**第 65 轮（L-72 ㈡）已收** —— 落点是 `Scripts/doc-numbers.json` 的 `doc-tables-lists` / `doc-tables-files`（那两个数不是**例数**，按分工不归本台账）。",
-    "三书里的「N 处 / N 条」类统计（如「写死调用点 14 处」，条目原文 ③）本轮未收 ⇒ 下一批（它的可行性已在 L-55 的台账里验过）。",
-    "本台账只判**例数**，不判例子的**内容**（例 3 到底验的是什么，靠读脚本）—— 也不判「这一族的判据覆盖了该覆盖的口径」（那是每个门禁自己的事）。",
-    "族的**例数语义**：runner 打印的总数含「夹具准备自检」这类非负例条目（如 `check-doc-tables` 6 = 5 个编号例子 + 1 条夹具准备自检）⇒ 台账值 = runner 打印的总数；文档里写「五例」的地方按「编号例子数」写，差 1 时以本台账的 `note` 记明，不假装是同一个数。",
-    "本台账**只登记已经存在的族**：新写的 `test-*.py` / `check-*.py --self-test` 如果没被登记进来，本判据看不见它（`check-*.py` 有 doc-numbers 的「有判据、没闭环」对账兜着，`test-*.py` 只能靠人记得登记）。"
-  ],
-  "families": [
+  {
+   "key": "cell-decode-coverage",
+   "script": "Scripts/check-cell-decode-coverage.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 23,
+   "countRegex": "自测通过（(\\d+) 例）",
+   "why": "队列 L-74 / 闭环第 15 项（与 L-15 同一句「可读化」口径，管的是值）：非文本类型那一格的解码 —— 台账 ↔ 源码双向对账 + 被禁出口（String(describing: buffer)）不许回来 + 诚实兜底在位 + 单测逐型锚点 + 真机证据（证据脚本 §7 与 psql 的文本形态逐条相等）；**2026-10-13 合册 T-20261013-027 · 原单 T-20261010-058**：判定物改判**代码**（剥注释等长替换 + 抹字符串）—— 注释掉的 case 不再算「解了」、带 `where` / 关联值 / 跨行的 case 也认、行尾注释不再冒充单测锚点；被禁出口改在**剥注释 + 抹字符串**后判（报**真行号**）；判据面由 `Package.swift` **现读**（面根数硬下限 7）+ 面外生产根判红；台账三处面（`bannedExits` / `tables` / `evidence.sectionAnchor`）缺一即红 + `floors` 增三键；三处 `str.index()` 加兜底（判据自身坏掉 ⇒ 逐条报 issue **不吐栈**、退出码 2）；注释例外的口径按合册逐条登记（`testTokenInComment`）；自测 10 → 23 例。",
+   "anchors": [
     {
-      "key": "alpha-fr-dispositions",
-      "script": "Scripts/check-alpha-fr-dispositions.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 11,
-      "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "队列 L-69 ㈢ / 闭环第 5 项（FR 🟡 逐条判定的范围账）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-alpha-fr-dispositions\\.py.{0,2000}?--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表 alpha 范围账行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "负例 `--self-test` (\\d+) 例，一律在临时副本上写坏",
-          "minSites": 1,
-          "note": "闭环第 5 项注释"
-        }
-      ]
+     "file": "Scripts/verify-all.sh",
+     "regex": "L-74 的负例 \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 15 项注释（例数）"
     },
     {
-      "key": "cell-decode-coverage",
-      "script": "Scripts/check-cell-decode-coverage.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 23,
-      "countRegex": "自测通过（(\\d+) 例）",
-      "why": "队列 L-74 / 闭环第 15 项（与 L-15 同一句「可读化」口径，管的是值）：非文本类型那一格的解码 —— 台账 ↔ 源码双向对账 + 被禁出口（String(describing: buffer)）不许回来 + 诚实兜底在位 + 单测逐型锚点 + 真机证据（证据脚本 §7 与 psql 的文本形态逐条相等）；**2026-10-13 合册 T-20261013-027 · 原单 T-20261010-058**：判定物改判**代码**（剥注释等长替换 + 抹字符串）—— 注释掉的 case 不再算「解了」、带 `where` / 关联值 / 跨行的 case 也认、行尾注释不再冒充单测锚点；被禁出口改在**剥注释 + 抹字符串**后判（报**真行号**）；判据面由 `Package.swift` **现读**（面根数硬下限 7）+ 面外生产根判红；台账三处面（`bannedExits` / `tables` / `evidence.sectionAnchor`）缺一即红 + `floors` 增三键；三处 `str.index()` 加兜底（判据自身坏掉 ⇒ 逐条报 issue **不吐栈**、退出码 2）；注释例外的口径按合册逐条登记（`testTokenInComment`）；自测 10 → 23 例。",
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "L-74 的负例 \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 15 项注释（例数）"
-        },
-        {
-          "file": "Scripts/check-cell-decode-coverage.py",
-          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "脚本自己的 docstring"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-cell-decode-coverage\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表新增行"
-        }
-      ]
+     "file": "Scripts/check-cell-decode-coverage.py",
+     "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "脚本自己的 docstring"
     },
     {
-      "key": "cli-failure-readability",
-      "script": "Scripts/test-cli-failure-readability.py",
-      "args": [],
-      "cases": 34,
-      "countRegex": "通过 (\\d+) 项，失败 0 项",
-      "why": "队列 L-15 / L-20③ / L-66 / 闭环第 15 项（CLI 失败输出可读化）；**2026-10-13 样品 67 收口**（合册 `T-20261013-027` / 原单 `T-20261010-064`）：剥注释 / 真调用点 / 棘轮余量归零 / 面与 `Package.swift` 双向对账",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "test-cli-failure-readability\\.py` \\*\\*(\\d+) → (\\d+) 例\\*\\*",
-          "minSites": 1,
-          "expect": [
-            17,
-            34
-          ],
-          "note": "§6 资产表 CLI 失败可读化行（同一格写着历史值 17 与现状值 34 —— 这一条同时钉住两个数。**2026-10-13 合册 `T-20261013-027` / 原单 `T-20261010-064`：27 → 34**，新增四形各一条负例 + 三条对手臂：注释不算输出 / 注释不算调用点 / 面内新增文件未登记 / 台账登记面外件）"
-        }
-      ]
-    },
-    {
-      "key": "connection-failure-gate",
-      "script": "Scripts/test-connection-failure-gate.py",
-      "args": [],
-      "cases": 22,
-      "countRegex": "结果：(\\d+) 项达到预期，0 项不符",
-      "why": "队列 L-14 / 闭环第 14 项（驱动错误码 ↔ 文案台账）",
-      "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表该行写的是机制（「驱动错误码 ↔ 文案台账」）与台账条目数，不写负例例数。"
-    },
-    {
-      "key": "copy-emphasis",
-      "script": "Scripts/test-copy-emphasis-gate.py",
-      "args": [],
-      "cases": 10,
-      "countRegex": "负例 (\\d+)/\\d+",
-      "why": "队列 L-19 / 闭环第 3 项（文案即所见）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "test-copy-emphasis-gate\\.py` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表文案即所见行"
-        }
-      ]
-    },
-    {
-      "key": "design-mock-tokens",
-      "script": "Scripts/check-design-mock-tokens.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 31,
-      "countRegex": "全部 (\\d+) 例达到预期",
-      "why": "队列 L-79 ㈡ / 闭环第 6 项（与设计令牌棘轮同项）：脚本面不许自带调色板（形状全集 含 8 位与浮点分量，判定物先剥注释与字符串）、必须族级接真令牌、入口的**未注释** swiftc 命令行必须含两份令牌、产品源码双向复查（旧值残留 + 真值硬写）并与 Package.swift 的面对账",
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "L-79 ㈡ 的负例 \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 6 项注释"
-        },
-        {
-          "file": "Scripts/check-design-mock-tokens.py",
-          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "脚本 docstring"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-design-mock-tokens\\.py.{0,2400}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表新增行"
-        }
-      ]
-    },
-    {
-      "key": "design-themes",
-      "script": "Scripts/check-design-themes.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 54,
-      "countRegex": "自测通过（(\\d+) 例）",
-      "why": "队列 L-80 ㈠+㈡ / 闭环第 6 项（与设计令牌棘轮同项）：主题三选一 —— 三套值表角色齐全 + 逐主题 × 深浅两态**独立复算**门槛（本脚本自己实现 WCAG，与 Swift 单测互补）+ 主题名与 Linux 侧对齐 + 推导值不许静默当实际值 + **㈡ 界面入口**（外观面板逐个列出 / 每条三个真实场景画在该主题自己的表面上 / 推导逐条标注 / 强调色入口不许消失 / 宿主覆盖不许写盘）；**L-85 两轴正交（判据 H，第 83 轮）**：深浅轴三态与真值表逐格 / 两轴互不读取（两轴落盘键分开，且各自的写盘点里不许出现对方的键）/ 18 组组合可达（「跟随系统」在系统深浅两态下都取得到值）/ 取色口子 + 角像素断言 + **实测容差**（PNG 往返偏移 ≤4 ⇒ 8）/ 面板显示当前深浅档；**L-155 判据 I（第 154 轮）**：星云皮肤的存在 / 开关 / 三层表面 —— 规则的唯一出处（键字面量只许一处 / 读法不许退回 bool(forKey:) / 生效条件两半都在）/ 绘制侧只许调用那一条规则 / 三层表面各自恰有一处落点 / 面板开关绑唯一写入口且只在星空紫下露面 / 规则单测与像素探针的落点都在位（探针还必须挂着 FILTER）；**2026-10-13（合册 T-20261013-027 · 原单 T-20261010-036）扩面**：判据 I ② 的扫描面从 Core/App/Platform/CLI **四根**（338/586=58%）扩到**入库源码面**（十根 + 仓根 `*.swift`，637 份；`Vendor/` 与点目录显式排除并写明理由）+ 面对账台账 `Scripts/design-themes-key-baseline.json`（根表增减报红 / 面内文件数棘轮 / `allowedKeyHolders` 白名单：未登记 ⇒ 红、登记了却不在盘 ⇒ 陈旧豁免 ⇒ 红、理由为空 ⇒ 红）；负例 35 → 42 例（新增 7：Tests/ 里的未登记第二份 / 面被削到单根 / 面内文件数低于台账 / 台账不在盘 / 陈旧豁免 / 理由为空 / 持有点都已登记的绿臂）；**2026-10-13（合册 T-20261013-027 · 原单 T-20261010-068）判据面补钉**：判据 D 判定物改**`switch` 块内 + 剥注释**（六条真映射整行注释掉 / 搬到块外 ⇒ 红）· 判据 A 改判**身份与顺序**（`DesignTheme.all` 逐格对 `THEME_UI_ORDER` + `of(_:)` 取错值表 ⇒ 红）+ 判点条目数下限 12 · 判据 G 五处判定物剥注释 · 判据 H 串轴检查剥注释（注释提键名不再假阳）+ 组合数改判**真断言形状**（删掉两条 24 断言 ⇒ 红）· 判据 I ④ 的面从写死 `App/` 改为**宿主 target 的 `sources:` 现读**（`App` + `Plugins/Notes/Views`）· 新增判据面 ↔ `Package.swift` 源码目录**双向对账**（新目录落在面外 / 面里多一根没理由的根 ⇒ 红）· `_strip_comments` 补**块注释**且**字符串感知**（字符串里的 `/*` 不吞后面的代码，守卫例）；负例 42 → 54 例（新增 12：语法映射注释掉 / 搬到块外 / 界面顺序倒置 / `of(_:)` 取错表 / `of(_:)` 掏空（空跑）/ 界面入口改成注释 / 串轴注释（绿，假阳已消）/ 组合数真断言被删 / 字符串里的块注释起点（绿）/ 面对账三臂（面外目录·没理由的根·真仓一致））",
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "L-80 ㈠\\+㈡ 的负例 \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 6 项注释（例数）"
-        },
-        {
-          "file": "Scripts/check-design-themes.py",
-          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "脚本自己的 docstring"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-design-themes\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表新增行"
-        }
-      ]
-    },
-    {
-      "key": "doc-numbers",
-      "script": "Scripts/check-doc-numbers.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 38,
-      "countRegex": "自测通过（(\\d+) 例）",
-      "why": "队列 L-55 / 闭环第 4 项（文档数字的唯一来源）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-doc-numbers\\.py.{0,2000}?--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表文档数字行"
-        },
-        {
-          "file": "Scripts/check-doc-numbers.py",
-          "regex": "判据自己的证据（(\\d+) 例）",
-          "minSites": 1,
-          "note": "脚本自己的用法行（原写 9 例 ⇒ 第 65 轮按实跑改正）"
-        }
-      ],
-      "note": "第 91 轮（提案 0005）：新增跨平台标识 1 例（Windows 形态的相对路径必须落回台账键写法）。第 98 轮：新增三条红路（全量跑凭证缺失 / 凭证与清单对不上 / 判据路径与落档脚本脱钩）⇒ 16 → 19 例。 合册 `T-20261013-027`（原单 `T-20261010-027`）：再扩五例 —— 豁免表三条自证的成对读数（死豁免 / 缺 `script` 键 / 理由点名不在盘 / 理由主张『随 X 跑』而 X 未引用本脚本 / 对手臂绿）⇒ 19 → 24 例。 合册 `T-20261013-027`（原单 `T-20261010-026`）：再扩五例 —— `skipSections` 窗口三条自证的成对读数（窗口闭合 ⇒ 绿且读数打印「跳过 N 行」 / 窗口不闭合（`to` 改号 ⇒ 扫到 EOF 仍在跳过态）/ `from` 一行都不命中 / `to` 出现在 `from` 之前（倒序）/ 窗口开在不在盘的文件上）⇒ 24 → 29 例。 合册 `T-20261013-027`（原单 `T-20261010-028`）：再扩六例 —— 形状④（阿拉伯硬编码）三条自证 + 两条台账臂 + 一条排除形状对手臂（`==> $1/18` 的分母 / 阿拉伯项号提及 `第 18 项` / 项号枚举 `for n in 1 … 18`；台账 `measure.hardcodedSites` 缺登记或与实测不符都判红；`N 色角色` / `第 N 轮` 改数字不误判）⇒ 29 → 35 例。 **合册 `T-20261013-027`（原单 `T-20261010-029`）**：35 → 38 例 —— 对侧独占节状态机三条成对臂（相邻同级 ⇒ 逐节跳过 / 本侧节照旧扫描 / 单节对侧照旧跳过）。"
-    },
-    {
-      "key": "doc-q-series",
-      "script": "Scripts/check-doc-q-series.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 9,
-      "countRegex": "自测：(\\d+)/\\d+ 例符合预期",
-      "why": "队列 L-56 / 闭环第 4 项（spec §6 待拍板队列的编号与状态纪律）",
-      "hostLedgerSelfTest": {
-        "files": [
-          "Docs/智能体助手-开发spec.md"
-        ],
-        "marker": "（本机台账）—— 干净克隆上跳过",
-        "note": "这一族的 `--self-test` 要读 spec 本机台账（`.gitignore` 内、只在主开发机上）⇒ 干净克隆 / 并行工作树 / 另一平台没有它时如实跳过、不打例数（口径 = AGENT-SPEC.md §9 第 147 条 ④）"
-      },
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-doc-q-series\\.py.{0,900}?--self-test` \\*\\*(\\d+) 例 \\+ 末例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表待拍板队列行（原写 7 例 ⇒ 第 65 轮按实跑改正）"
-        },
-        {
-          "file": "Scripts/check-doc-q-series.py",
-          "regex": "判据自己的证据（(\\d+) 例 \\+ 末例）",
-          "minSites": 1,
-          "note": "脚本自己的用法行（原写 7 例 ⇒ 同一处漂移）"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "负例 `--self-test` \\*\\*(\\d+) 例\\*\\* \\+ 末例核对真仓库逐字节未变",
-          "minSites": 1,
-          "note": "闭环第 4 项注释（原写 7 例）"
-        }
-      ]
-    },
-    {
-      "key": "doc-tables",
-      "script": "Scripts/check-doc-tables.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 17,
-      "countRegex": "自检通过（(\\d+)/\\d+）",
-      "why": "闭环第 4 项（文档表格列数与派生计数）",
-      "note": "runner 的 9 = **7 个编号例子**（例 1~6 + 例 9）+ 1 条夹具准备自检 + 1 条跨平台标识（例 8，提案 0005 / 第 91 轮）；文档里写「六例」指的是编号例子数，两者不是同一个数（差 1 由本 note 记明）。例 6 = 判据 E 两面（L-89）；例 9 = 判据 F 两面（空行拆表 · 表头逐格相同 ⇒ 判红 / 表头不同 ⇒ 对照绿；派单 `T-20261011-001`，2026-10-11）。例 10~17 = 原单 `T-20261010-070`（样本 72 · 合册 `T-20261013-027` 销账那族）：GFM 无首竖线表（显式点名 + 判据 E 两面）/ 单行竖线不算表 / 加粗开头的续行判红且列表项不误报 / §10.1 表体中断指名行号 / 格内转义竖线不判红 / FR 行缺格报「格数不足」不崩 / tracked 文档被删判红（在场下限）。",
-      "anchors": [
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "门禁自己的证据（(\\d+) 例",
-          "minSites": 1,
-          "note": "脚本自己的用法行（原写「五例」= 没有把夹具准备自检算进去 ⇒ 第 65 轮改成写清 6 例的构成；第 89 轮 L-89 加判据 E 例 6 ⇒ 7 例；2026-10-11 派单 `T-20261011-001` 加判据 F 例 9 ⇒ 9 例）"
-        }
-      ]
-    },
-    {
-      "key": "doc-versions",
-      "script": "Scripts/check-doc-versions.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 16,
-      "countRegex": "负例 (\\d+)/\\d+ 达到预期",
-      "why": "闭环第 4 项（变更记录版本号唯一 / 头部版本格 / 队列条目号唯一 / 受检清单自洽）",
-      "anchors": [
-        {
-          "file": "Scripts/check-doc-versions.py",
-          "regex": "判据自己的证据（(\\d+) 例）",
-          "minSites": 1,
-          "note": "脚本自己的用法行（第 88 轮 L-88 起：此前这族的例数**没有任何锚点**，只有一句 noAnchorReason）"
-        }
-      ],
-      "note": "第 91 轮（提案 0005）：新增跨平台标识 1 例（Windows 形态的相对路径必须落回清单写法）。"
-    },
-    {
-      "key": "effective-language",
-      "script": "Scripts/test-effective-language-gate.py",
-      "args": [],
-      "cases": 7,
-      "countRegex": "(\\d+)/\\d+ 项达到预期",
-      "why": "队列 L-13 / 闭环第 3 项（当前语言只有一个来源）",
-      "noAnchorReason": "例数只在 runner 的收尾行里：§6 资产表（「一条命令闭环」行）与文档里都不写这条判据的负例例数 —— 记载它的位置是 `Scripts/verify-all.sh` 第 3 项注释里的 **7/7**（该注释已在第 13 轮被合并改写、现只留机制描述）。"
-    },
-    {
-      "key": "empty-action-buttons",
-      "script": "Scripts/check-empty-action-buttons.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 11,
-      "countRegex": "负例：(\\d+)/\\d+ 通过",
-      "why": "队列 L-50 / 闭环第 9 项（空数据时按钮的处置）",
-      "anchors": [
-        {
-          "file": "Scripts/check-empty-action-buttons.py",
-          "regex": "负例：`Scripts/test-empty-action-buttons\\.py`（(\\d+) 例）",
-          "minSites": 1,
-          "note": "脚本自己的用法行（门禁的 --self-test 与配对脚本同数：同一批例子的两个入口）"
-        }
-      ]
-    },
-    {
-      "key": "empty-action-buttons-neg",
-      "script": "Scripts/test-empty-action-buttons.py",
-      "args": [],
-      "cases": 11,
-      "countRegex": "负例 (\\d+)/\\d+",
-      "why": "队列 L-50 / 闭环第 9 项（空数据按钮处置的配对负例）",
-      "anchors": [
-        {
-          "file": "Scripts/test-empty-action-buttons.py",
-          "regex": "老规矩）。(\\d+) 例全部在\\*\\*临时夹具仓\\*\\*上写坏",
-          "minSites": 1,
-          "note": "脚本自己的 docstring"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "test-empty-action-buttons\\.py` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表空数据按钮行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "# (\\d+) 例（视图处置被删 / 守卫改回裸判断",
-          "minSites": 1,
-          "note": "闭环第 9 项注释（该注释被折行，例数落在第二行 —— 锚点按「同一行内可判」登记）"
-        }
-      ]
-    },
-    {
-      "key": "exclusive-sections",
-      "script": "Scripts/check-exclusive-sections.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 45,
-      "countRegex": "自测汇总：全部通过（(\\d+)/\\d+）",
-      "why": "队列 L-42 / 闭环第 16 项（三书独占节越界）；2026-10-03（派活单 T-20261003-003）新增 6 例：契约所有者 = 演员名（bluewhale / bighippo / tinyhippo / fatshark，旧名 `fatfish` 只保留识别）；2026-10-05（派单 `T-20261005-038` ①）再 +6 例：演员名跟版护栏（规范名表含 fatshark / 退役名只保留识别 / 防回退成对负例）；2026-10-13（派单 `T-20261013-005` §四.1 · 人类主人令）再 +4 例：平台词表新增第七项 `watchos`（`[独占:watchos]` 下 `--mine watchos` 绿 / `--mine windows` 红成对 2 例 + 词表七项与 `bighippo` ≡ macos/ios/watchos 两条护栏 2 例）",
-      "anchors": [
-        {
-          "file": "Scripts/check-exclusive-sections.py",
-          "regex": "自测 (\\d+) 例（含判据 ④",
-          "minSites": 1,
-          "note": "脚本自己的用法行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "\\*\\*(\\d+) 例\\*\\*负例里含",
-          "minSites": 1,
-          "note": "闭环第 16 项注释（「18 例负例里含『非所有者新开 [开放] 节』这条窄通道」）"
-        }
-      ]
-    },
-    {
-      "key": "format-arguments",
-      "script": "Scripts/check-format-arguments.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 9,
-      "countRegex": "自检 (\\d+)/\\d+ 全过",
-      "why": "队列 L-46 / 闭环第 3 项（语言表模板 ↔ 调用点实参对账）",
-      "anchors": [
-        {
-          "file": "Scripts/check-format-arguments.py",
-          "regex": "门禁自己的证据（(\\d+) 例）",
-          "minSites": 1,
-          "note": "脚本自己的用法行"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-format-arguments\\.py.{0,2000}?--self-test` (\\d+) 例负例",
-          "minSites": 1,
-          "note": "§6 资产表实参对账行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "第二条是\\*\\*门禁自己的证据\\*\\*：(\\d+) 例负例（A / A′ / B / C / D",
-          "minSites": 1,
-          "note": "闭环第 3 项注释"
-        }
-      ]
-    },
-    {
-      "key": "literal-language",
-      "script": "Scripts/test-literal-language-gate.py",
-      "args": [],
-      "cases": 17,
-      "countRegex": "负例自测 (\\d+)/\\d+ 通过",
-      "why": "队列 L-47 / L-65 / 闭环第 3 项（语言是传进来的）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "test-literal-language-gate\\.py` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表语言透传行（原写 10 例 = 第 46 轮的值；第 49/50 轮 L-65 各批又加了 4 例 ⇒ 第 65 轮按实跑改正）"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "test-literal-language-gate\\.py` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 3 项注释（原写 9 例、且例数与脚本名不在同一行 ⇒ 一并改正）"
-        }
-      ]
-    },
-    {
-      "key": "no-endpoint-evidence",
-      "script": "Scripts/test-no-endpoint-evidence.py",
-      "args": [],
-      "cases": 17,
-      "countRegex": "结果：(\\d+) 项通过 / 0 项失败",
-      "why": "队列 L-05（无端点在途项的棘轮复跑器）",
-      "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表该行写的是复跑器与基线，不写负例例数。",
-      "note": "第 65 轮起接进闭环：原 docstring 写「故意不进闭环（verify-all.sh 仍 11 项）—— 它要构建、起库」，而实测它只用临时目录里的**假 runner**（不起库、不构建，0.4 秒）⇒ 前提不成立，而不接进 = 没人跑。"
-    },
-    {
-      "key": "note-search-route",
-      "script": "Scripts/test-note-search-route.py",
-      "args": [],
-      "cases": 26,
-      "countRegex": "结果：(\\d+) 通过 / 0 未达预期",
-      "why": "队列 L-44 / 闭环第 10 项（界面检索走库 + 路线如实标注）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "test-note-search-route\\.py` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表界面检索行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "负例 `test-note-search-route\\.py`（(\\d+) 例：生产点消失",
-          "minSites": 1,
-          "note": "闭环第 10 项注释"
-        }
-      ]
-    },
-    {
-      "key": "notes-offline",
-      "script": "Scripts/test-notes-offline-gate.py",
-      "args": [],
-      "cases": 16,
-      "countRegex": "(\\d+)/\\d+ 项达到预期",
-      "why": "队列 L-22 / 闭环第 10 项（笔记模块零网络出口）；**2026-10-14（派单 T-20261010-031 · 合册 T-20261013-027 本册表第 18 行）**：扫描面改递归（Core/** 与 Plugins/Notes/**）+ 点名改真路径 ⇒ 新增三条负例：子目录里的新笔记源文件判红并点名真路径 / 子目录里的非笔记件不判红（负对照，不许地毯式判红）/ 子目录新件在两份清单里都登记后转绿（登记出口）。13 → 16 例",
-      "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表的零网络出口登记在闭环第 10 项行内，不写负例例数。"
-    },
-    {
-      "key": "network-egress",
-      "script": "Scripts/test-network-egress-gate.py",
-      "args": [],
-      "cases": 15,
-      "countRegex": "结果：(\\d+) 项达到预期，\\d+ 项不符",
-      "why": "Notes SRS v3.94 §6.4 / 闭环第 10 项（全仓网络出口按面分层：白名单 = **文件级显式清单** + 只判**代码出现**（`//` / `///` 注释与字符串字面量里的提及不算出现）+ 装配缝只注入 transport（直接出网判红）+ 台账漏登判红 + 令牌表不许被掏空）",
-      "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表与三书里都不写这条判据的负例例数（登记它的位置 = 本族自己的 runner + 台账 `Scripts/network-egress-whitelist.json`）。"
-    },
-    {
-      "key": "p-parity",
-      "script": "Scripts/check-p-parity.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 8,
-      "countRegex": "负例 (\\d+)/\\d+ 达到预期",
-      "why": "队列 L-45 / 闭环第 7 项（§4 ↔ SRS §10.9 的 P-* 两侧对账）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-p-parity\\.py.{0,600}?--self-test` (\\d+) 例负例",
-          "minSites": 1,
-          "note": "§6 资产表 P-* 两侧对账行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "② `--self-test`：(\\d+) 例负例（未并入权威登记表",
-          "minSites": 1,
-          "note": "闭环第 7 项注释"
-        }
-      ]
-    },
-    {
-      "key": "panel-root-frames",
-      "script": "Scripts/check-panel-root-frames.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 19,
-      "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "队列 L-61 / 闭环第 9 项（面板根固定尺寸 frame 的对齐纪律）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-panel-root-frames\\.py.{0,2000}?--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表面板根对齐行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "负例 `--self-test` (\\d+) 例（含「现造一块既没写",
-          "minSites": 1,
-          "note": "闭环第 9 项注释"
-        }
-      ]
-    },
-    {
-      "key": "platform-parity",
-      "script": "Scripts/gen-platform-parity.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 11,
-      "countRegex": "门禁自检通过（(\\d+)/\\d+",
-      "why": "队列 L-26 / 闭环第 7 项（§10.10 ↔ Docs/平台实现状态.json 台账）",
-      "anchors": [
-        {
-          "file": "Scripts/gen-platform-parity.py",
-          "regex": "门禁自检（(\\d+) 例负例）",
-          "minSites": 1,
-          "note": "脚本自己的用法行"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "gen-platform-parity\\.py.{0,600}?--self-test` (\\d+) 例负例",
-          "minSites": 1,
-          "note": "§6 资产表平台等价矩阵行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "共 (\\d+) 例负例，\\*\\*写坏只发生在临时目录\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 7 项注释"
-        }
-      ]
-    },
-    {
-      "key": "plugin-assembly",
-      "script": "Scripts/test-plugin-assembly-gates.py",
-      "args": [
-        "--check-anchors"
-      ],
-      "cases": 7,
-      "countRegex": "全部 (\\d+) 个负例的夹具锚点都在位",
-      "why": "队列 L-04 / 闭环第 10 项（插件装配链 + 笔记模块解耦）",
-      "note": "跑的是**只读那一半**（`--check-anchors`，不写盘）：完整跑法会临时改真源码，仍按需手工跑（完整跑收尾行报 8 条 = 7 例 + 工作区核对）。",
-      "noAnchorReason": "例数在 runner 里是 `len(results)` 算出来的（源码里没有字面量）⇒ 改由 `sourceRatchet` 静态钉住用例条数。",
-      "sourceRatchet": {
-        "file": "Scripts/test-plugin-assembly-gates.py",
-        "regex": "^case\\(",
-        "note": "静态数脚本里的 `case(` 定义行，必须 == cases —— 否则「删掉一个用例」在 runner 那一侧只是数字变小，文件里什么都没少"
-      }
-    },
-    {
-      "key": "release-version",
-      "script": "Scripts/check-release-version.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 16,
-      "countRegex": "自测通过（(\\d+) 例）",
-      "why": "队列 L-70 / 闭环第 18 项（生成物一致性 · 族 ②：发布产物版本号三处一致 + Xcode 工程不许与 project.yml 漂移）",
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "`--self-test`（(\\d+) 例：三处各改一处",
-          "minSites": 1,
-          "note": "闭环第 18 项注释（族 ② 的例数）"
-        },
-        {
-          "file": "Scripts/check-release-version.py",
-          "regex": "# 判据自己的证据（(\\d+) 例）",
-          "minSites": 1,
-          "note": "脚本自己的用法行"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-release-version\\.py.{0,1200}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表「发布产物版本号三处一致」行"
-        }
-      ]
-    },
-    {
-      "key": "script-env",
-      "script": "Scripts/test-script-env-gates.py",
-      "args": [],
-      "cases": 39,
-      "countRegex": "通过 (\\d+) 项，失败 0 项",
-      "why": "队列 L-06 / 闭环第 13 项（脚本连接信息参数化 + 旁路 217 台账）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "test-script-env-gates\\.py` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表旁路 217 台账行"
-        }
-      ]
-    },
-    {
-      "key": "script-portability",
-      "script": "Scripts/check-script-portability.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 8,
-      "countRegex": "自检：例数 (\\d+) / 通过",
-      "why": "提案 0005 **采纳** / 闭环**第 2 项**（平台中立性那一项的第二条）：`Scripts/*.py` 是两侧都在跑的判据，内部不许把平台相关的路径串（`str(<…>.relative_to(<…>))`）当稳定标识用 —— Windows 上它会和手抄的正斜杠清单匹配恒 False，**只在那台机器上红**。",
-      "note": "8 例 = 干净副本绿 / 写坏一处判红点名 / 还原复绿 / 新增带形状文件判红 / 例外没写理由判红 / 陈旧豁免判红 / 合法例外绿 / 扫描面被砍触发空跑防护；末两条核对真仓库逐字节未变与实跑。",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-script-portability\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表脚本可移植性行"
-        },
-        {
-          "file": "Scripts/check-script-portability.py",
-          "regex": "`--self-test`（\\*\\*(\\d+) 例\\*\\*）",
-          "minSites": 1,
-          "note": "脚本自己的 docstring（判据 D 那一行）"
-        }
-      ]
-    },
-    {
-      "key": "shell-locale",
-      "script": "Scripts/test-shell-locale-safety.py",
-      "args": [],
-      "cases": 9,
-      "countRegex": "结果：(\\d+) 项通过 / 0 项失败",
-      "why": "队列 L-05 / 闭环第 12 项（bash 3.2 变量名坑）",
-      "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表该行（CLI 证据脚本）不写它。",
-      "note": "第 65 轮起接进闭环（原先 14 个 test-*.py 里 8 个没人跑）。"
-    },
-    {
-      "key": "sidebar-collapse",
-      "script": "Scripts/test-sidebar-collapse-state.py",
-      "args": [],
-      "cases": 23,
-      "countRegex": "结果：(\\d+) 通过 / 0 未达预期",
-      "why": "队列 L-59 / 闭环第 9 项（侧边栏折叠状态归属）",
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "test-sidebar-collapse-state\\.py`（(\\d+) 例）",
-          "minSites": 1,
-          "note": "闭环第 9 项注释"
-        }
-      ]
-    },
-    {
-      "key": "sqlite-constants",
-      "script": "Scripts/gen-sqlite-constants.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 5,
-      "countRegex": "负例自检通过（(\\d+) 条篡改全部被抓",
-      "why": "队列 L-43 / 闭环第 18 项（生成物 ↔ vendored 头文件逐字节）",
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "门禁自己的证据（(\\d+) 条篡改：手改生成物一行",
-          "minSites": 1,
-          "note": "闭环第 18 项注释"
-        }
-      ]
-    },
-    {
-      "key": "terminal-tabs",
-      "script": "Scripts/check-terminal-tabs.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 25,
-      "countRegex": "自测通过（(\\d+) 例）",
-      "why": "队列 L-84 ㈠㈡ + L-89 ㈡ ③（终端多会话页签：七组判断 + 按键映射真的在 Core 里、被单测逐组钉住（总数下限 42 = 实测 + 用例函数体非空 / 断言下限）；界面接线锚点 **59 处**含「页签头在 Spacer 之前」与「右侧那排四个符号一个不少 + 反向对账棘轮（调用点数 3 + 画法形状 4）」；工具条那一行已抽成独立视图 LowerPaneTabStrip，能单独离屏渲染。**2026-10-13 修（合册 T-20261013-027 · 原单 T-20261010-065）：判定物一律先剥注释（等长）/ 位置判据判非注释上下文 / 反向棘轮判调用点与画法形状 / Core 文案面认转义写法 / 判定面与 Package.swift 现读对账（面内未登记件承载子终端件 ⇒ 判红）**）",
-      "hostLedgerSelfTest": {
-        "files": [
-          "Docs/design/开发循环-任务队列.md"
-        ],
-        "marker": "（本机台账）—— 干净克隆上跳过",
-        "note": "这一族的自检夹具含队列台账（`_fixture` / `_digests` 都要读它）⇒ 干净克隆 / 并行工作树 / 另一平台没有它时如实跳过、不打例数（口径 = AGENT-SPEC.md §9 第 147 条 ④）"
-      },
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "^# 负例 `--self-test` \\*\\*(\\d+) 例\\*\\*（红 / 绿成对",
-          "minSites": 1,
-          "note": "闭环第 9 项 L-84 注释 —— **2026-10-13 修（合册 T-20261013-027 · 原单 T-20261010-071 同族 · 锚点无钉）**：旧正则不带上下文（`负例 \\`--self-test\\` **N 例**（红 / 绿成对`），按行扫会命中文件里**任何**一条同形注释 —— 实测先命中 `verify-all.sh:589`（L-142 那条）。两族例数此前都是 13，所以这条假命中一直没暴露；L-142 升到 25 例后当场报假红「写的是 25、台账值是 13」。现加行首 `^# 负例 ` 钉住本族那一条。"
-        },
-        {
-          "file": "Scripts/check-terminal-tabs.py",
-          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "脚本自己的 docstring"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-terminal-tabs\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表新增行（随本轮一起落）"
-        }
-      ]
-    },
-    {
-      "key": "ui-snapshot-languages",
-      "script": "Scripts/test-ui-snapshot-languages.py",
-      "args": [],
-      "cases": 12,
-      "countRegex": "(\\d+)/\\d+ 项达到预期",
-      "why": "队列 L-13（界面快照的中英成对 + 语言必须到像素上）",
-      "noAnchorReason": "例数只在 runner 的收尾行里；它随 `Scripts/make-ui-snapshots.sh` 的收尾跑（快照按 L-01 纪律不进每轮闭环），文档里（`Docs/概要设计.md` §8.3 与 `doc-numbers.json` 的豁免条目）不写负例例数。",
-      "note": "第 65 轮起由本判据**也**跑一遍：`check-*.py` 有 doc-numbers 的「有判据、没闭环」对账管着，而 `test-*.py` 此前**没有任何门禁管** ⇒ 8 个没人跑（其中一个已经坏了）。（第 195 轮 · 队列 L-185：`--partial` 的局部清单红/绿成对补两例 ⇒ 10 → 12）"
-    },
-    {
-      "key": "vendored-sqlite",
-      "script": "Scripts/check-vendored-sqlite.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 25,
-      "countRegex": "负例自检通过（(\\d+) 例：",
-      "why": "队列 L-25 / 闭环第 17 项（vendored SQLite 台账对账 + 负例 + 现编现跑）",
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "第二条是\\*\\*门禁自己的证据\\*\\*（\\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 17 项注释（原写「六类篡改 + 证据锚点 + 接线 + 项号自洽共十类」= 第 18 轮的老口径 ⇒ 第 65 轮按实跑改成 13 条 ⇒ 2026-10-13 合册 T-20261013-027 · 原单 T-20261010-059 按实跑改成 25 例：13 → 25，新增「把接线注释掉」「锚点只剩一行注释」「宏被注释掉」「判定面被台账自消」「面外 testTarget 根 / 面外回流」「台账缺字段不留栈」等 12 例，其中 2 条是对手臂（不许误报））"
-        }
-      ]
-    },
-    {
-      "key": "result-scroll-ledger",
-      "script": "Scripts/check-result-scroll-ledger.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 11,
-      "countRegex": "自检：(\\d+) 例",
-      "why": "队列 L-89 ㈡ ④ / 清单 §4 FR-RES-07（大结果集滚动）：探针的每一条上界都从 Scripts/result-scroll-baseline.json 读 ⇒「把上界改松」就等于「改判据」，所以这条判据盯台账本身（字段齐备 / 规模对得上清单原文 1 万行 × 20 列 / 基线为正 / 每条上界对实测基线至少 3 倍余量且不超上限档 / 理由非空）+ 探针必须挂在 run-manual-verification-probes.sh 的 FILTER 上（第 96 轮那族的坑：写了用例没接进 --filter ⇒ 一个都跑不到；落地当轮即抓出 AppearanceAxesProbeTests 自 2026-09-29 起没有任何脚本跑它）",
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "自检用例 `--self-test` \\*\\*(\\d+) 例\\*\\*（红 / 绿成对，夹具在临时目录，末例核对真仓库台账逐字节未变）",
-          "minSites": 1,
-          "note": "闭环第 9 项 L-89 ㈡ ④ 注释（措辞与 terminal-tabs 那一族分开：都叫「负例」时它的宽正则会把本行算进去）"
-        },
-        {
-          "file": "Scripts/check-result-scroll-ledger.py",
-          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "脚本自己的 docstring"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-result-scroll-ledger\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表新增行（随本轮一起落）"
-        }
-      ]
-    },
-    {
-      "key": "language-registry",
-      "script": "Scripts/check-language-registry.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 11,
-      "countRegex": "自检：例数 (\\d+) / 通过",
-      "why": "队列 L-106 / 闭环第 2 项（FR-EDIT-38 ①③：语言表声明式登记的形状 + 高亮色走主题令牌）+ 队列 L-149 剩余②（E 档：默认视图的消费者唯一）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-language-registry\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表「语言表声明式登记 + 高亮色走主题令牌」行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "判据自己的证据两处：`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 2 项注释（L-106 那一段）"
-        }
-      ]
-    },
-    {
-      "key": "language-registry-gate",
-      "script": "Scripts/test-language-registry-gate.py",
-      "args": [],
-      "cases": 4,
-      "countRegex": "例数 (\\d+) / 通过 \\d+ / 失败",
-      "why": "队列 L-106 / 闭环第 2 项（`check-language-registry.py` 的**命令行路径**证据：真仓库 exit 0 / 写坏 exit 1 并点名 / 参数错 exit 2 / 真仓库逐字节未变）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "test-language-registry-gate\\.py.{0,2000}?\\*\\*例数 (\\d+)\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表「语言表声明式登记 + 高亮色走主题令牌」行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "test-language-registry-gate\\.py` \\*\\*例数 (\\d+)\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 2 项注释（L-106 那一段）"
-        }
-      ]
-    },
-    {
-      "key": "editor-line-numbers",
-      "script": "Scripts/check-editor-line-numbers.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 10,
-      "countRegex": "自检：(\\d+) 例，\\d+ 达标，\\d+ 失败",
-      "why": "队列 L-111 / 闭环第 9 项（编辑面的行号列台账：双向对账 + 同一绘制件 + 列宽算法唯一出处 + 三书口径锚点）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-editor-line-numbers\\.py.{0,4000}?\\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表「编辑面的行号列」行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "check-editor-line-numbers\\.py` 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 9 项注释（L-111 那一段）"
-        }
-      ]
-    },
-    {
-      "key": "markdown-single-source",
-      "script": "Scripts/check-markdown-single-source.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 24,
-      "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "队列 L-137 判据 ⑤ / 闭环第 10 项（Markdown 解析只有一份：行内扫描器唯一 · 块级模型唯一产地 · 预览真同源 · 不引第三方）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-markdown-single-source\\.py.{0,2000}?--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表 Markdown 单一口径行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "判据见 `Scripts/check-markdown-single-source\\.py`；负例 `--self-test` (\\d+) 例",
-          "minSites": 1,
-          "note": "闭环第 10 项注释"
-        }
-      ]
-    },
-    {
-      "key": "browser-tab-ownership",
-      "script": "Scripts/check-browser-tab-ownership.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 26,
-      "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "队列 L-149 ③④ + 剩余① / 闭环第 9 项（内置浏览器页签的归属 = 工作区：状态所有者 = App/WorkspaceBrowserModel.swift 只此一处 + 双向对账的允许落点台账 + 数据库侧视图命中即红 + 两条文档条文格必须写「工作区」）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-browser-tab-ownership\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*（绿对照",
-          "minSites": 1,
-          "note": "§6 资产表「内置浏览器页签的归属 = 工作区」行（只认现状声明那一处括号；历史变更行里记的旧例数不回改、也不进判据）"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "判据见 `Scripts/check-browser-tab-ownership\\.py`；负例 `--self-test` (\\d+) 例",
-          "minSites": 1,
-          "note": "闭环第 9 项注释（L-149 ③④ 那一段）"
-        }
-      ]
-    },
-    {
-      "key": "editor-surface-tokens",
-      "script": "Scripts/check-editor-surface-tokens.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 25,
-      "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "队列 L-142（内测清单甲2）/ 闭环第 6 项（编辑面的底色与字色只用主题令牌：每处编辑面都挂唯一写法 .editorSurface() + 台账双向对账（含未登记字形）+ 唯一出处（配对花括号取函数体）+ 另两个 AppKit 编辑面不许退回系统底色 + 空跑防护 + 基线削面判红 + 面与 Package.swift 生产 target 对账）；2026-10-13 升级（合册 T-20261013-027 · 原单 T-20261010-071 · 样本 73）：判定物先剥注释与字符串",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-editor-surface-tokens\\.py.{0,4000}?`--self-test` \\*\\*(\\d+) 例\\*\\*（绿对照",
-          "minSites": 1,
-          "note": "§6 资产表「编辑面的底色与字色」行（只认现状声明那一处括号；历史变更行里记的旧例数不回改、也不进判据）"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "L-142 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 6 项注释（L-142 那一段）"
-        }
-      ]
-    },
-    {
-      "key": "menu-language",
-      "script": "Scripts/check-menu-language.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 19,
-      "countRegex": "自检 (\\d+) 例：\\d+ 通过 / \\d+ 失败",
-      "why": "队列 L-145（内测清单丙2）+ **内测第三批（丙2 下一层，2026-10-02）**/ 闭环第 11 项环内：菜单栏那一层在换语言后不许停在启动语言 —— 第二代把「**展开菜单才插进树里的那一族**」也判上（探针先展开再 dump，判 A/C/B 三段：表内一致 / 语言一致性 / 未覆盖项如实列出 + 必检项两档 硬族+条件族）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-menu-language\\.py.{0,4000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表「菜单栏那一层」行（只认现状声明那一处括号；§9 第 111 条与历史变更行里的旧例数不回改、也不进判据）"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "L-145 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 11 项注释（L-145 那一段）"
-        }
-      ]
-    },
-    {
-      "key": "agent-provider-presets",
-      "script": "Scripts/check-agent-provider-presets.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 9,
-      "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "队列 L-146（内测清单丁3）/ 闭环第 9 项（模型服务预设：端点只有一份出处 = Core/AgentProviderPreset.swift + 界面真的消费目录（遍历 / 选中值 / 模型内容 / 恢复选中 / 自动填充）+ 形状与空跑防护）",
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-agent-provider-presets\\.py.{0,4000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表「模型服务预设」行（只认现状声明那一处括号；§9 第 113 条与历史变更行里的旧例数不回改、也不进判据）"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "L-146 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "闭环第 9 项注释（L-146 那一段）"
-        }
-      ]
-    },
-    {
-      "key": "queue-needs-user",
-      "script": "Scripts/check-queue-needs-user.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 11,
-      "countRegex": "自测：(\\d+)/\\d+ 例符合预期",
-      "why": "队列 L-150 / 闭环第 4 项（`needs-user` 行必须点名一个仍未决的拍板号 —— 空壳汇总格判红；由头 = `L-10` 成员全决后没人关格，探针每轮替成员问需求提出者）",
-      "hostLedgerSelfTest": {
-        "files": [
-          "Docs/design/开发循环-任务队列.md",
-          "Docs/智能体助手-开发spec.md"
-        ],
-        "marker": "（本机台账）—— 干净克隆上跳过",
-        "note": "这一族的 `--self-test` 要读队列与 spec 两份本机台账（`.gitignore` 内、只在主开发机上）⇒ 干净克隆 / 并行工作树 / 另一平台没有它们时如实跳过、不打例数（口径 = AGENT-SPEC.md §9 第 147 条 ④）"
-      },
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-queue-needs-user\\.py.{0,1200}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表「`needs-user` 点名纪律」行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "负例 `--self-test` \\*\\*(\\d+) 例\\*\\*（= 10 条负例 \\+ 末例核对真仓库两份台账逐字节未变",
-          "minSites": 1,
-          "note": "闭环第 4 项注释（L-150 那一段）"
-        },
-        {
-          "file": "Scripts/check-queue-needs-user.py",
-          "regex": "判据自己的证据（(\\d+) 例",
-          "minSites": 1,
-          "note": "脚本自己的用法行"
-        }
-      ]
-    },
-    {
-      "key": "verify-all-gate",
-      "script": "Scripts/test-verify-all-gate.py",
-      "args": [],
-      "cases": 8,
-      "countRegex": "夹具 (\\d+)/\\d+ 例达到预期",
-      "why": "队列 L-110 / 闭环本身（`verify-all.sh` 的控制流：默认跑法把「未执行项」如实点出来 + `--keep-going` 跑完再汇总、统一 exit 1）",
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "test-verify-all-gate\\.py` 的 \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "头注释（L-110 那一段）"
-        }
-      ]
-    },
-    {
-      "key": "core-portability",
-      "script": "Scripts/check-core-portability.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 9,
-      "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "合册 T-20261013-027（原单 T-20261010-045 · 第 412 轮判据面缺口样本 49）：Core 平台中立性判据原本无空跑防护、无自检、豁免是裸子串 —— 九例真跑（真违规判红 / 字符串字面量里的 portability-ok 不豁免 / 注释位豁免该绿 / 剥注释口径 / Core 不在根上 / 面被砍到底 / 未知参数 / 仓外 CWD 读数 / 真仓逐字节未变）",
-      "noAnchorReason": "例数只在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 2 项的调用行都不写本判据的负例例数，而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
-    },
-    {
-      "key": "core-localization",
-      "script": "Scripts/check-core-localization.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 17,
-      "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "合册 T-20261013-027（原单 T-20261010-049 / T-20261010-072 · 第 416/429 轮判据面缺口样本 53/74）：Core 展示文本本地化棘轮原本判定物只认单行双引号串（多行串里的中文整体在面外）、注释当命中、面键用文件基名且赋值不累加、豁免按基名、面无下限且按 CWD 相对路径、零自检。十七例真跑：多行串计入 / 多行串新增判红 / 单行串对照仍红 / 行尾注释不算 / 块注释不算 / 同名不同目录不丢行 / 嵌套 Localization.swift 在面内 / 真语言表按路径豁免 / Core 改名判红 / 面整体搬走判红 / 未知参数 rc=2 / 英文白名单五例 / 对照组绿；末例核对真仓库逐字节未变。",
-      "noAnchorReason": "例数只出现在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 3 项的调用行都不写本判据的负例例数（第 3 项只调 `--self-test`，不写数字），而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本、基线台账与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
-    },
-    {
-      "key": "platform-neutrality",
-      "script": "Scripts/check-platform-neutrality.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 18,
-      "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "合册 T-20261013-027（原单 T-20261010-050 · 第 417 轮判据面缺口样本 54）：平台中立性棘轮原本判定物 = 行的字面形状（加粗编号 / 反引号编号 / 缩进表格 / 两格行四种写法整体掉进报告档）、「需求」列写死第 2 格、豁免是裸子串、未知参数被吞、无自检、`--update-baseline` 一条命令把红变绿且不留痕。十八例真跑：真仓正例 / 四种形状各判红 / 需求列按表头定位 / 证据列不拦 / 无「需求」表头的写法说明表不判红 / 注释位豁免该绿 / 裸 token 不豁免 / 非空基线无 `--confirm` 拒绝 / `--confirm` 覆盖 + 打印 diff + 记 history / 空基线既有行为逐字保留 / 需求规范书缺失判红 / 面被砍到底判红 / 未知参数 rc=2 / 仓外 CWD 读数一致 / 末例真仓逐字节未变。",
-      "noAnchorReason": "例数只出现在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 8 项的调用行都不写本判据的负例例数（第 8 项只调脚本本身，不写数字），而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本、基线台账与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
-    },
-    {
-      "key": "design-tokens",
-      "script": "Scripts/check-design-tokens.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 18,
-      "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "合册 T-20261013-027（原单 T-20261010-019 样本 27 + T-20261010-069 样本 71）：设计令牌门禁的两条逃逸口原本长在被审源码里（行级 `// token-ok` 是整行子串判定、不判理由、无台账、不计数；文件头 `// token-ok-file:` 整文件静默豁免），且面无下限（`App/` 搬走即报「仍有 0 处待迁移」判绿）、`Color.clear` 整行掩蔽、一行只判首个匹配、块注释与行尾注释当命中、判据②第三条结构性死代码、未知参数被吞、全脚本无自检。十八例真跑：真仓正例 / 面消失判红 / 面被砍到底判红 / 块注释不误伤 / 行尾注释不误伤 / 真违规仍判红 / 字符串里的 token-ok 不豁免 / 无理由豁免判红 / 未登记豁免判红 / 已登记该绿 / 台账陈旧判红 / 文件级豁免未登记判红 / Color.clear 不再整行放行 / 单独 Color.clear 该绿 / 第二处命中仍判 / 未知参数 rc=2 / 仓外 CWD 读数一致 / 末例真仓逐字节未变。",
-      "noAnchorReason": "例数只出现在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 6 项的调用行都不写本判据的负例例数（第 6 项只调脚本本身），而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本、基线/白名单/豁免台账与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
-    },
-    {
-      "key": "button-icon-only",
-      "script": "Scripts/check-button-icon-only.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 32,
-      "countRegex": "全部 (\\d+) 例达到预期",
-      "why": "人类主人令 2026-10-13（信箱 T-20261013-042）：水平按钮不得以中/英文文案作可见形态（一律图标）；菜单项保留文字。判定物先剥注释与字符串，菜单块 / 菜单构造件按台账识别，Picker 与自定义行视图如实登记待裁；**2026-10-13 批 6（加令 `T-20261013-051`）**：新增判据 F（纯图标按钮须带提示 / 无障碍标签）/ G（同一动作同一图标）/ H（符号登记进 `Scripts/button-icon-semantics.json`）+ 判据 B 边界（`.labelStyle(.iconOnly)` ⇒ 合格），23 → 32 例",
-      "anchors": [
-        {
-          "file": "Scripts/check-button-icon-only.py",
-          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "脚本 docstring"
-        },
-        {
-          "file": "Scripts/button-icon-inventory.md",
-          "regex": "逐条盘点清单（`T-20261013-042` 第一段）",
-          "minSites": 1,
-          "note": "清单落点（生成物）· 存在性锚点"
-        }
-      ]
-    },
-    {
-      "key": "status-consistency",
-      "script": "Scripts/check-status-consistency.py",
-      "args": [
-        "--self-test"
-      ],
-      "cases": 12,
-      "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
-      "why": "闭环第 4 项（与文档数字 / 版本纪律同项）：§10.1 索引 ↔ 正文定义行 ↔ **其它文档的状态括注** 三向一致。**2026-10-14 修（合册 T-20261013-027 · 原单 T-20261010-032 · 样本 37）**：跨文档括注的扫描面由 `Docs/*.md` + `Docs/design/*.md`（真仓实扫 23 份）改为 `FACE_GLOBS`（仓根 `*.md` + `Docs/**/*.md`，本仓实测 **42 份**）+ 空跑防护（面内份数下限 `FACE_FLOOR` = 42）+ 参数面（`--root` / `--face-floor` / `--self-test`，未知参数 rc=2）；只有份数有下限，命中处数会合法归零（只打印）。",
-      "anchors": [
-        {
-          "file": "Scripts/check-status-consistency.py",
-          "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "脚本自己的 docstring"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "check-status-consistency\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
-          "minSites": 1,
-          "note": "§6 资产表新增行"
-        }
-      ]
+     "file": "AGENT-SPEC.md",
+     "regex": "check-cell-decode-coverage\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表新增行"
     }
-  ]
+   ]
+  },
+  {
+   "key": "cli-failure-readability",
+   "script": "Scripts/test-cli-failure-readability.py",
+   "args": [],
+   "cases": 34,
+   "countRegex": "通过 (\\d+) 项，失败 0 项",
+   "why": "队列 L-15 / L-20③ / L-66 / 闭环第 15 项（CLI 失败输出可读化）；**2026-10-13 样品 67 收口**（合册 `T-20261013-027` / 原单 `T-20261010-064`）：剥注释 / 真调用点 / 棘轮余量归零 / 面与 `Package.swift` 双向对账",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "test-cli-failure-readability\\.py` \\*\\*(\\d+) → (\\d+) 例\\*\\*",
+     "minSites": 1,
+     "expect": [
+      17,
+      34
+     ],
+     "note": "§6 资产表 CLI 失败可读化行（同一格写着历史值 17 与现状值 34 —— 这一条同时钉住两个数。**2026-10-13 合册 `T-20261013-027` / 原单 `T-20261010-064`：27 → 34**，新增四形各一条负例 + 三条对手臂：注释不算输出 / 注释不算调用点 / 面内新增文件未登记 / 台账登记面外件）"
+    }
+   ]
+  },
+  {
+   "key": "connection-failure-gate",
+   "script": "Scripts/test-connection-failure-gate.py",
+   "args": [],
+   "cases": 22,
+   "countRegex": "结果：(\\d+) 项达到预期，0 项不符",
+   "why": "队列 L-14 / 闭环第 14 项（驱动错误码 ↔ 文案台账）",
+   "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表该行写的是机制（「驱动错误码 ↔ 文案台账」）与台账条目数，不写负例例数。"
+  },
+  {
+   "key": "copy-emphasis",
+   "script": "Scripts/test-copy-emphasis-gate.py",
+   "args": [],
+   "cases": 10,
+   "countRegex": "负例 (\\d+)/\\d+",
+   "why": "队列 L-19 / 闭环第 3 项（文案即所见）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "test-copy-emphasis-gate\\.py` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表文案即所见行"
+    }
+   ]
+  },
+  {
+   "key": "design-mock-tokens",
+   "script": "Scripts/check-design-mock-tokens.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 31,
+   "countRegex": "全部 (\\d+) 例达到预期",
+   "why": "队列 L-79 ㈡ / 闭环第 6 项（与设计令牌棘轮同项）：脚本面不许自带调色板（形状全集 含 8 位与浮点分量，判定物先剥注释与字符串）、必须族级接真令牌、入口的**未注释** swiftc 命令行必须含两份令牌、产品源码双向复查（旧值残留 + 真值硬写）并与 Package.swift 的面对账",
+   "anchors": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "L-79 ㈡ 的负例 \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 6 项注释"
+    },
+    {
+     "file": "Scripts/check-design-mock-tokens.py",
+     "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "脚本 docstring"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-design-mock-tokens\\.py.{0,2400}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表新增行"
+    }
+   ]
+  },
+  {
+   "key": "design-themes",
+   "script": "Scripts/check-design-themes.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 54,
+   "countRegex": "自测通过（(\\d+) 例）",
+   "why": "队列 L-80 ㈠+㈡ / 闭环第 6 项（与设计令牌棘轮同项）：主题三选一 —— 三套值表角色齐全 + 逐主题 × 深浅两态**独立复算**门槛（本脚本自己实现 WCAG，与 Swift 单测互补）+ 主题名与 Linux 侧对齐 + 推导值不许静默当实际值 + **㈡ 界面入口**（外观面板逐个列出 / 每条三个真实场景画在该主题自己的表面上 / 推导逐条标注 / 强调色入口不许消失 / 宿主覆盖不许写盘）；**L-85 两轴正交（判据 H，第 83 轮）**：深浅轴三态与真值表逐格 / 两轴互不读取（两轴落盘键分开，且各自的写盘点里不许出现对方的键）/ 18 组组合可达（「跟随系统」在系统深浅两态下都取得到值）/ 取色口子 + 角像素断言 + **实测容差**（PNG 往返偏移 ≤4 ⇒ 8）/ 面板显示当前深浅档；**L-155 判据 I（第 154 轮）**：星云皮肤的存在 / 开关 / 三层表面 —— 规则的唯一出处（键字面量只许一处 / 读法不许退回 bool(forKey:) / 生效条件两半都在）/ 绘制侧只许调用那一条规则 / 三层表面各自恰有一处落点 / 面板开关绑唯一写入口且只在星空紫下露面 / 规则单测与像素探针的落点都在位（探针还必须挂着 FILTER）；**2026-10-13（合册 T-20261013-027 · 原单 T-20261010-036）扩面**：判据 I ② 的扫描面从 Core/App/Platform/CLI **四根**（338/586=58%）扩到**入库源码面**（十根 + 仓根 `*.swift`，637 份；`Vendor/` 与点目录显式排除并写明理由）+ 面对账台账 `Scripts/design-themes-key-baseline.json`（根表增减报红 / 面内文件数棘轮 / `allowedKeyHolders` 白名单：未登记 ⇒ 红、登记了却不在盘 ⇒ 陈旧豁免 ⇒ 红、理由为空 ⇒ 红）；负例 35 → 42 例（新增 7：Tests/ 里的未登记第二份 / 面被削到单根 / 面内文件数低于台账 / 台账不在盘 / 陈旧豁免 / 理由为空 / 持有点都已登记的绿臂）；**2026-10-13（合册 T-20261013-027 · 原单 T-20261010-068）判据面补钉**：判据 D 判定物改**`switch` 块内 + 剥注释**（六条真映射整行注释掉 / 搬到块外 ⇒ 红）· 判据 A 改判**身份与顺序**（`DesignTheme.all` 逐格对 `THEME_UI_ORDER` + `of(_:)` 取错值表 ⇒ 红）+ 判点条目数下限 12 · 判据 G 五处判定物剥注释 · 判据 H 串轴检查剥注释（注释提键名不再假阳）+ 组合数改判**真断言形状**（删掉两条 24 断言 ⇒ 红）· 判据 I ④ 的面从写死 `App/` 改为**宿主 target 的 `sources:` 现读**（`App` + `Plugins/Notes/Views`）· 新增判据面 ↔ `Package.swift` 源码目录**双向对账**（新目录落在面外 / 面里多一根没理由的根 ⇒ 红）· `_strip_comments` 补**块注释**且**字符串感知**（字符串里的 `/*` 不吞后面的代码，守卫例）；负例 42 → 54 例（新增 12：语法映射注释掉 / 搬到块外 / 界面顺序倒置 / `of(_:)` 取错表 / `of(_:)` 掏空（空跑）/ 界面入口改成注释 / 串轴注释（绿，假阳已消）/ 组合数真断言被删 / 字符串里的块注释起点（绿）/ 面对账三臂（面外目录·没理由的根·真仓一致））",
+   "anchors": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "L-80 ㈠\\+㈡ 的负例 \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 6 项注释（例数）"
+    },
+    {
+     "file": "Scripts/check-design-themes.py",
+     "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "脚本自己的 docstring"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-design-themes\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表新增行"
+    }
+   ]
+  },
+  {
+   "key": "doc-numbers",
+   "script": "Scripts/check-doc-numbers.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 38,
+   "countRegex": "自测通过（(\\d+) 例）",
+   "why": "队列 L-55 / 闭环第 4 项（文档数字的唯一来源）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-doc-numbers\\.py.{0,2000}?--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表文档数字行"
+    },
+    {
+     "file": "Scripts/check-doc-numbers.py",
+     "regex": "判据自己的证据（(\\d+) 例）",
+     "minSites": 1,
+     "note": "脚本自己的用法行（原写 9 例 ⇒ 第 65 轮按实跑改正）"
+    }
+   ],
+   "note": "第 91 轮（提案 0005）：新增跨平台标识 1 例（Windows 形态的相对路径必须落回台账键写法）。第 98 轮：新增三条红路（全量跑凭证缺失 / 凭证与清单对不上 / 判据路径与落档脚本脱钩）⇒ 16 → 19 例。 合册 `T-20261013-027`（原单 `T-20261010-027`）：再扩五例 —— 豁免表三条自证的成对读数（死豁免 / 缺 `script` 键 / 理由点名不在盘 / 理由主张『随 X 跑』而 X 未引用本脚本 / 对手臂绿）⇒ 19 → 24 例。 合册 `T-20261013-027`（原单 `T-20261010-026`）：再扩五例 —— `skipSections` 窗口三条自证的成对读数（窗口闭合 ⇒ 绿且读数打印「跳过 N 行」 / 窗口不闭合（`to` 改号 ⇒ 扫到 EOF 仍在跳过态）/ `from` 一行都不命中 / `to` 出现在 `from` 之前（倒序）/ 窗口开在不在盘的文件上）⇒ 24 → 29 例。 合册 `T-20261013-027`（原单 `T-20261010-028`）：再扩六例 —— 形状④（阿拉伯硬编码）三条自证 + 两条台账臂 + 一条排除形状对手臂（`==> $1/18` 的分母 / 阿拉伯项号提及 `第 18 项` / 项号枚举 `for n in 1 … 18`；台账 `measure.hardcodedSites` 缺登记或与实测不符都判红；`N 色角色` / `第 N 轮` 改数字不误判）⇒ 29 → 35 例。 **合册 `T-20261013-027`（原单 `T-20261010-029`）**：35 → 38 例 —— 对侧独占节状态机三条成对臂（相邻同级 ⇒ 逐节跳过 / 本侧节照旧扫描 / 单节对侧照旧跳过）。"
+  },
+  {
+   "key": "doc-q-series",
+   "script": "Scripts/check-doc-q-series.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 9,
+   "countRegex": "自测：(\\d+)/\\d+ 例符合预期",
+   "why": "队列 L-56 / 闭环第 4 项（spec §6 待拍板队列的编号与状态纪律）",
+   "hostLedgerSelfTest": {
+    "files": [
+     "Docs/智能体助手-开发spec.md"
+    ],
+    "marker": "（本机台账）—— 干净克隆上跳过",
+    "note": "这一族的 `--self-test` 要读 spec 本机台账（`.gitignore` 内、只在主开发机上）⇒ 干净克隆 / 并行工作树 / 另一平台没有它时如实跳过、不打例数（口径 = AGENT-SPEC.md §9 第 147 条 ④）"
+   },
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-doc-q-series\\.py.{0,900}?--self-test` \\*\\*(\\d+) 例 \\+ 末例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表待拍板队列行（原写 7 例 ⇒ 第 65 轮按实跑改正）"
+    },
+    {
+     "file": "Scripts/check-doc-q-series.py",
+     "regex": "判据自己的证据（(\\d+) 例 \\+ 末例）",
+     "minSites": 1,
+     "note": "脚本自己的用法行（原写 7 例 ⇒ 同一处漂移）"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "负例 `--self-test` \\*\\*(\\d+) 例\\*\\* \\+ 末例核对真仓库逐字节未变",
+     "minSites": 1,
+     "note": "闭环第 4 项注释（原写 7 例）"
+    }
+   ]
+  },
+  {
+   "key": "doc-tables",
+   "script": "Scripts/check-doc-tables.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 17,
+   "countRegex": "自检通过（(\\d+)/\\d+）",
+   "why": "闭环第 4 项（文档表格列数与派生计数）",
+   "note": "runner 的 9 = **7 个编号例子**（例 1~6 + 例 9）+ 1 条夹具准备自检 + 1 条跨平台标识（例 8，提案 0005 / 第 91 轮）；文档里写「六例」指的是编号例子数，两者不是同一个数（差 1 由本 note 记明）。例 6 = 判据 E 两面（L-89）；例 9 = 判据 F 两面（空行拆表 · 表头逐格相同 ⇒ 判红 / 表头不同 ⇒ 对照绿；派单 `T-20261011-001`，2026-10-11）。例 10~17 = 原单 `T-20261010-070`（样本 72 · 合册 `T-20261013-027` 销账那族）：GFM 无首竖线表（显式点名 + 判据 E 两面）/ 单行竖线不算表 / 加粗开头的续行判红且列表项不误报 / §10.1 表体中断指名行号 / 格内转义竖线不判红 / FR 行缺格报「格数不足」不崩 / tracked 文档被删判红（在场下限）。",
+   "anchors": [
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "门禁自己的证据（(\\d+) 例",
+     "minSites": 1,
+     "note": "脚本自己的用法行（原写「五例」= 没有把夹具准备自检算进去 ⇒ 第 65 轮改成写清 6 例的构成；第 89 轮 L-89 加判据 E 例 6 ⇒ 7 例；2026-10-11 派单 `T-20261011-001` 加判据 F 例 9 ⇒ 9 例）"
+    }
+   ]
+  },
+  {
+   "key": "doc-versions",
+   "script": "Scripts/check-doc-versions.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 16,
+   "countRegex": "负例 (\\d+)/\\d+ 达到预期",
+   "why": "闭环第 4 项（变更记录版本号唯一 / 头部版本格 / 队列条目号唯一 / 受检清单自洽）",
+   "anchors": [
+    {
+     "file": "Scripts/check-doc-versions.py",
+     "regex": "判据自己的证据（(\\d+) 例）",
+     "minSites": 1,
+     "note": "脚本自己的用法行（第 88 轮 L-88 起：此前这族的例数**没有任何锚点**，只有一句 noAnchorReason）"
+    }
+   ],
+   "note": "第 91 轮（提案 0005）：新增跨平台标识 1 例（Windows 形态的相对路径必须落回清单写法）。"
+  },
+  {
+   "key": "effective-language",
+   "script": "Scripts/test-effective-language-gate.py",
+   "args": [],
+   "cases": 7,
+   "countRegex": "(\\d+)/\\d+ 项达到预期",
+   "why": "队列 L-13 / 闭环第 3 项（当前语言只有一个来源）",
+   "noAnchorReason": "例数只在 runner 的收尾行里：§6 资产表（「一条命令闭环」行）与文档里都不写这条判据的负例例数 —— 记载它的位置是 `Scripts/verify-all.sh` 第 3 项注释里的 **7/7**（该注释已在第 13 轮被合并改写、现只留机制描述）。"
+  },
+  {
+   "key": "empty-action-buttons",
+   "script": "Scripts/check-empty-action-buttons.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 11,
+   "countRegex": "负例：(\\d+)/\\d+ 通过",
+   "why": "队列 L-50 / 闭环第 9 项（空数据时按钮的处置）",
+   "anchors": [
+    {
+     "file": "Scripts/check-empty-action-buttons.py",
+     "regex": "负例：`Scripts/test-empty-action-buttons\\.py`（(\\d+) 例）",
+     "minSites": 1,
+     "note": "脚本自己的用法行（门禁的 --self-test 与配对脚本同数：同一批例子的两个入口）"
+    }
+   ]
+  },
+  {
+   "key": "empty-action-buttons-neg",
+   "script": "Scripts/test-empty-action-buttons.py",
+   "args": [],
+   "cases": 11,
+   "countRegex": "负例 (\\d+)/\\d+",
+   "why": "队列 L-50 / 闭环第 9 项（空数据按钮处置的配对负例）",
+   "anchors": [
+    {
+     "file": "Scripts/test-empty-action-buttons.py",
+     "regex": "老规矩）。(\\d+) 例全部在\\*\\*临时夹具仓\\*\\*上写坏",
+     "minSites": 1,
+     "note": "脚本自己的 docstring"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "test-empty-action-buttons\\.py` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表空数据按钮行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "# (\\d+) 例（视图处置被删 / 守卫改回裸判断",
+     "minSites": 1,
+     "note": "闭环第 9 项注释（该注释被折行，例数落在第二行 —— 锚点按「同一行内可判」登记）"
+    }
+   ]
+  },
+  {
+   "key": "exclusive-sections",
+   "script": "Scripts/check-exclusive-sections.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 45,
+   "countRegex": "自测汇总：全部通过（(\\d+)/\\d+）",
+   "why": "队列 L-42 / 闭环第 16 项（三书独占节越界）；2026-10-03（派活单 T-20261003-003）新增 6 例：契约所有者 = 演员名（bluewhale / bighippo / tinyhippo / fatshark，旧名 `fatfish` 只保留识别）；2026-10-05（派单 `T-20261005-038` ①）再 +6 例：演员名跟版护栏（规范名表含 fatshark / 退役名只保留识别 / 防回退成对负例）；2026-10-13（派单 `T-20261013-005` §四.1 · 人类主人令）再 +4 例：平台词表新增第七项 `watchos`（`[独占:watchos]` 下 `--mine watchos` 绿 / `--mine windows` 红成对 2 例 + 词表七项与 `bighippo` ≡ macos/ios/watchos 两条护栏 2 例）",
+   "anchors": [
+    {
+     "file": "Scripts/check-exclusive-sections.py",
+     "regex": "自测 (\\d+) 例（含判据 ④",
+     "minSites": 1,
+     "note": "脚本自己的用法行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "\\*\\*(\\d+) 例\\*\\*负例里含",
+     "minSites": 1,
+     "note": "闭环第 16 项注释（「18 例负例里含『非所有者新开 [开放] 节』这条窄通道」）"
+    }
+   ]
+  },
+  {
+   "key": "format-arguments",
+   "script": "Scripts/check-format-arguments.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 9,
+   "countRegex": "自检 (\\d+)/\\d+ 全过",
+   "why": "队列 L-46 / 闭环第 3 项（语言表模板 ↔ 调用点实参对账）",
+   "anchors": [
+    {
+     "file": "Scripts/check-format-arguments.py",
+     "regex": "门禁自己的证据（(\\d+) 例）",
+     "minSites": 1,
+     "note": "脚本自己的用法行"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-format-arguments\\.py.{0,2000}?--self-test` (\\d+) 例负例",
+     "minSites": 1,
+     "note": "§6 资产表实参对账行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "第二条是\\*\\*门禁自己的证据\\*\\*：(\\d+) 例负例（A / A′ / B / C / D",
+     "minSites": 1,
+     "note": "闭环第 3 项注释"
+    }
+   ]
+  },
+  {
+   "key": "literal-language",
+   "script": "Scripts/test-literal-language-gate.py",
+   "args": [],
+   "cases": 17,
+   "countRegex": "负例自测 (\\d+)/\\d+ 通过",
+   "why": "队列 L-47 / L-65 / 闭环第 3 项（语言是传进来的）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "test-literal-language-gate\\.py` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表语言透传行（原写 10 例 = 第 46 轮的值；第 49/50 轮 L-65 各批又加了 4 例 ⇒ 第 65 轮按实跑改正）"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "test-literal-language-gate\\.py` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 3 项注释（原写 9 例、且例数与脚本名不在同一行 ⇒ 一并改正）"
+    }
+   ]
+  },
+  {
+   "key": "no-endpoint-evidence",
+   "script": "Scripts/test-no-endpoint-evidence.py",
+   "args": [],
+   "cases": 17,
+   "countRegex": "结果：(\\d+) 项通过 / 0 项失败",
+   "why": "队列 L-05（无端点在途项的棘轮复跑器）",
+   "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表该行写的是复跑器与基线，不写负例例数。",
+   "note": "第 65 轮起接进闭环：原 docstring 写「故意不进闭环（verify-all.sh 仍 11 项）—— 它要构建、起库」，而实测它只用临时目录里的**假 runner**（不起库、不构建，0.4 秒）⇒ 前提不成立，而不接进 = 没人跑。"
+  },
+  {
+   "key": "note-search-route",
+   "script": "Scripts/test-note-search-route.py",
+   "args": [],
+   "cases": 26,
+   "countRegex": "结果：(\\d+) 通过 / 0 未达预期",
+   "why": "队列 L-44 / 闭环第 10 项（界面检索走库 + 路线如实标注）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "test-note-search-route\\.py` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表界面检索行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "负例 `test-note-search-route\\.py`（(\\d+) 例：生产点消失",
+     "minSites": 1,
+     "note": "闭环第 10 项注释"
+    }
+   ]
+  },
+  {
+   "key": "notes-offline",
+   "script": "Scripts/test-notes-offline-gate.py",
+   "args": [],
+   "cases": 16,
+   "countRegex": "(\\d+)/\\d+ 项达到预期",
+   "why": "队列 L-22 / 闭环第 10 项（笔记模块零网络出口）；**2026-10-14（派单 T-20261010-031 · 合册 T-20261013-027 本册表第 18 行）**：扫描面改递归（Core/** 与 Plugins/Notes/**）+ 点名改真路径 ⇒ 新增三条负例：子目录里的新笔记源文件判红并点名真路径 / 子目录里的非笔记件不判红（负对照，不许地毯式判红）/ 子目录新件在两份清单里都登记后转绿（登记出口）。13 → 16 例",
+   "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表的零网络出口登记在闭环第 10 项行内，不写负例例数。"
+  },
+  {
+   "key": "network-egress",
+   "script": "Scripts/test-network-egress-gate.py",
+   "args": [],
+   "cases": 15,
+   "countRegex": "结果：(\\d+) 项达到预期，\\d+ 项不符",
+   "why": "Notes SRS v3.94 §6.4 / 闭环第 10 项（全仓网络出口按面分层：白名单 = **文件级显式清单** + 只判**代码出现**（`//` / `///` 注释与字符串字面量里的提及不算出现）+ 装配缝只注入 transport（直接出网判红）+ 台账漏登判红 + 令牌表不许被掏空）",
+   "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表与三书里都不写这条判据的负例例数（登记它的位置 = 本族自己的 runner + 台账 `Scripts/network-egress-whitelist.json`）。"
+  },
+  {
+   "key": "p-parity",
+   "script": "Scripts/check-p-parity.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 8,
+   "countRegex": "负例 (\\d+)/\\d+ 达到预期",
+   "why": "队列 L-45 / 闭环第 7 项（§4 ↔ SRS §10.9 的 P-* 两侧对账）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-p-parity\\.py.{0,600}?--self-test` (\\d+) 例负例",
+     "minSites": 1,
+     "note": "§6 资产表 P-* 两侧对账行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "② `--self-test`：(\\d+) 例负例（未并入权威登记表",
+     "minSites": 1,
+     "note": "闭环第 7 项注释"
+    }
+   ]
+  },
+  {
+   "key": "panel-root-frames",
+   "script": "Scripts/check-panel-root-frames.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 19,
+   "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "队列 L-61 / 闭环第 9 项（面板根固定尺寸 frame 的对齐纪律）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-panel-root-frames\\.py.{0,2000}?--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表面板根对齐行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "负例 `--self-test` (\\d+) 例（含「现造一块既没写",
+     "minSites": 1,
+     "note": "闭环第 9 项注释"
+    }
+   ]
+  },
+  {
+   "key": "platform-parity",
+   "script": "Scripts/gen-platform-parity.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 11,
+   "countRegex": "门禁自检通过（(\\d+)/\\d+",
+   "why": "队列 L-26 / 闭环第 7 项（§10.10 ↔ Docs/平台实现状态.json 台账）",
+   "anchors": [
+    {
+     "file": "Scripts/gen-platform-parity.py",
+     "regex": "门禁自检（(\\d+) 例负例）",
+     "minSites": 1,
+     "note": "脚本自己的用法行"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "gen-platform-parity\\.py.{0,600}?--self-test` (\\d+) 例负例",
+     "minSites": 1,
+     "note": "§6 资产表平台等价矩阵行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "共 (\\d+) 例负例，\\*\\*写坏只发生在临时目录\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 7 项注释"
+    }
+   ]
+  },
+  {
+   "key": "plugin-assembly",
+   "script": "Scripts/test-plugin-assembly-gates.py",
+   "args": [
+    "--check-anchors"
+   ],
+   "cases": 7,
+   "countRegex": "全部 (\\d+) 个负例的夹具锚点都在位",
+   "why": "队列 L-04 / 闭环第 10 项（插件装配链 + 笔记模块解耦）",
+   "note": "跑的是**只读那一半**（`--check-anchors`，不写盘）：完整跑法会临时改真源码，仍按需手工跑（完整跑收尾行报 8 条 = 7 例 + 工作区核对）。",
+   "noAnchorReason": "例数在 runner 里是 `len(results)` 算出来的（源码里没有字面量）⇒ 改由 `sourceRatchet` 静态钉住用例条数。",
+   "sourceRatchet": {
+    "file": "Scripts/test-plugin-assembly-gates.py",
+    "regex": "^case\\(",
+    "note": "静态数脚本里的 `case(` 定义行，必须 == cases —— 否则「删掉一个用例」在 runner 那一侧只是数字变小，文件里什么都没少"
+   }
+  },
+  {
+   "key": "release-version",
+   "script": "Scripts/check-release-version.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 16,
+   "countRegex": "自测通过（(\\d+) 例）",
+   "why": "队列 L-70 / 闭环第 18 项（生成物一致性 · 族 ②：发布产物版本号三处一致 + Xcode 工程不许与 project.yml 漂移）",
+   "anchors": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "`--self-test`（(\\d+) 例：三处各改一处",
+     "minSites": 1,
+     "note": "闭环第 18 项注释（族 ② 的例数）"
+    },
+    {
+     "file": "Scripts/check-release-version.py",
+     "regex": "# 判据自己的证据（(\\d+) 例）",
+     "minSites": 1,
+     "note": "脚本自己的用法行"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-release-version\\.py.{0,1200}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表「发布产物版本号三处一致」行"
+    }
+   ]
+  },
+  {
+   "key": "script-env",
+   "script": "Scripts/test-script-env-gates.py",
+   "args": [],
+   "cases": 39,
+   "countRegex": "通过 (\\d+) 项，失败 0 项",
+   "why": "队列 L-06 / 闭环第 13 项（脚本连接信息参数化 + 旁路 217 台账）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "test-script-env-gates\\.py` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表旁路 217 台账行"
+    }
+   ]
+  },
+  {
+   "key": "script-portability",
+   "script": "Scripts/check-script-portability.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 8,
+   "countRegex": "自检：例数 (\\d+) / 通过",
+   "why": "提案 0005 **采纳** / 闭环**第 2 项**（平台中立性那一项的第二条）：`Scripts/*.py` 是两侧都在跑的判据，内部不许把平台相关的路径串（`str(<…>.relative_to(<…>))`）当稳定标识用 —— Windows 上它会和手抄的正斜杠清单匹配恒 False，**只在那台机器上红**。",
+   "note": "8 例 = 干净副本绿 / 写坏一处判红点名 / 还原复绿 / 新增带形状文件判红 / 例外没写理由判红 / 陈旧豁免判红 / 合法例外绿 / 扫描面被砍触发空跑防护；末两条核对真仓库逐字节未变与实跑。",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-script-portability\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表脚本可移植性行"
+    },
+    {
+     "file": "Scripts/check-script-portability.py",
+     "regex": "`--self-test`（\\*\\*(\\d+) 例\\*\\*）",
+     "minSites": 1,
+     "note": "脚本自己的 docstring（判据 D 那一行）"
+    }
+   ]
+  },
+  {
+   "key": "shell-locale",
+   "script": "Scripts/test-shell-locale-safety.py",
+   "args": [],
+   "cases": 9,
+   "countRegex": "结果：(\\d+) 项通过 / 0 项失败",
+   "why": "队列 L-05 / 闭环第 12 项（bash 3.2 变量名坑）",
+   "noAnchorReason": "例数只在 runner 的收尾行里；§6 资产表该行（CLI 证据脚本）不写它。",
+   "note": "第 65 轮起接进闭环（原先 14 个 test-*.py 里 8 个没人跑）。"
+  },
+  {
+   "key": "sidebar-collapse",
+   "script": "Scripts/test-sidebar-collapse-state.py",
+   "args": [],
+   "cases": 23,
+   "countRegex": "结果：(\\d+) 通过 / 0 未达预期",
+   "why": "队列 L-59 / 闭环第 9 项（侧边栏折叠状态归属）",
+   "anchors": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "test-sidebar-collapse-state\\.py`（(\\d+) 例）",
+     "minSites": 1,
+     "note": "闭环第 9 项注释"
+    }
+   ]
+  },
+  {
+   "key": "sqlite-constants",
+   "script": "Scripts/gen-sqlite-constants.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 5,
+   "countRegex": "负例自检通过（(\\d+) 条篡改全部被抓",
+   "why": "队列 L-43 / 闭环第 18 项（生成物 ↔ vendored 头文件逐字节）",
+   "anchors": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "门禁自己的证据（(\\d+) 条篡改：手改生成物一行",
+     "minSites": 1,
+     "note": "闭环第 18 项注释"
+    }
+   ]
+  },
+  {
+   "key": "terminal-tabs",
+   "script": "Scripts/check-terminal-tabs.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 25,
+   "countRegex": "自测通过（(\\d+) 例）",
+   "why": "队列 L-84 ㈠㈡ + L-89 ㈡ ③（终端多会话页签：七组判断 + 按键映射真的在 Core 里、被单测逐组钉住（总数下限 42 = 实测 + 用例函数体非空 / 断言下限）；界面接线锚点 **59 处**含「页签头在 Spacer 之前」与「右侧那排四个符号一个不少 + 反向对账棘轮（调用点数 3 + 画法形状 4）」；工具条那一行已抽成独立视图 LowerPaneTabStrip，能单独离屏渲染。**2026-10-13 修（合册 T-20261013-027 · 原单 T-20261010-065）：判定物一律先剥注释（等长）/ 位置判据判非注释上下文 / 反向棘轮判调用点与画法形状 / Core 文案面认转义写法 / 判定面与 Package.swift 现读对账（面内未登记件承载子终端件 ⇒ 判红）**）",
+   "hostLedgerSelfTest": {
+    "files": [
+     "Docs/design/开发循环-任务队列.md"
+    ],
+    "marker": "（本机台账）—— 干净克隆上跳过",
+    "note": "这一族的自检夹具含队列台账（`_fixture` / `_digests` 都要读它）⇒ 干净克隆 / 并行工作树 / 另一平台没有它时如实跳过、不打例数（口径 = AGENT-SPEC.md §9 第 147 条 ④）"
+   },
+   "anchors": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "^# 负例 `--self-test` \\*\\*(\\d+) 例\\*\\*（红 / 绿成对",
+     "minSites": 1,
+     "note": "闭环第 9 项 L-84 注释 —— **2026-10-13 修（合册 T-20261013-027 · 原单 T-20261010-071 同族 · 锚点无钉）**：旧正则不带上下文（`负例 \\`--self-test\\` **N 例**（红 / 绿成对`），按行扫会命中文件里**任何**一条同形注释 —— 实测先命中 `verify-all.sh:589`（L-142 那条）。两族例数此前都是 13，所以这条假命中一直没暴露；L-142 升到 25 例后当场报假红「写的是 25、台账值是 13」。现加行首 `^# 负例 ` 钉住本族那一条。"
+    },
+    {
+     "file": "Scripts/check-terminal-tabs.py",
+     "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "脚本自己的 docstring"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-terminal-tabs\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表新增行（随本轮一起落）"
+    }
+   ]
+  },
+  {
+   "key": "ui-snapshot-languages",
+   "script": "Scripts/test-ui-snapshot-languages.py",
+   "args": [],
+   "cases": 12,
+   "countRegex": "(\\d+)/\\d+ 项达到预期",
+   "why": "队列 L-13（界面快照的中英成对 + 语言必须到像素上）",
+   "noAnchorReason": "例数只在 runner 的收尾行里；它随 `Scripts/make-ui-snapshots.sh` 的收尾跑（快照按 L-01 纪律不进每轮闭环），文档里（`Docs/概要设计.md` §8.3 与 `doc-numbers.json` 的豁免条目）不写负例例数。",
+   "note": "第 65 轮起由本判据**也**跑一遍：`check-*.py` 有 doc-numbers 的「有判据、没闭环」对账管着，而 `test-*.py` 此前**没有任何门禁管** ⇒ 8 个没人跑（其中一个已经坏了）。（第 195 轮 · 队列 L-185：`--partial` 的局部清单红/绿成对补两例 ⇒ 10 → 12）"
+  },
+  {
+   "key": "vendored-sqlite",
+   "script": "Scripts/check-vendored-sqlite.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 25,
+   "countRegex": "负例自检通过（(\\d+) 例：",
+   "why": "队列 L-25 / 闭环第 17 项（vendored SQLite 台账对账 + 负例 + 现编现跑）",
+   "anchors": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "第二条是\\*\\*门禁自己的证据\\*\\*（\\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 17 项注释（原写「六类篡改 + 证据锚点 + 接线 + 项号自洽共十类」= 第 18 轮的老口径 ⇒ 第 65 轮按实跑改成 13 条 ⇒ 2026-10-13 合册 T-20261013-027 · 原单 T-20261010-059 按实跑改成 25 例：13 → 25，新增「把接线注释掉」「锚点只剩一行注释」「宏被注释掉」「判定面被台账自消」「面外 testTarget 根 / 面外回流」「台账缺字段不留栈」等 12 例，其中 2 条是对手臂（不许误报））"
+    }
+   ]
+  },
+  {
+   "key": "result-scroll-ledger",
+   "script": "Scripts/check-result-scroll-ledger.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 11,
+   "countRegex": "自检：(\\d+) 例",
+   "why": "队列 L-89 ㈡ ④ / 清单 §4 FR-RES-07（大结果集滚动）：探针的每一条上界都从 Scripts/result-scroll-baseline.json 读 ⇒「把上界改松」就等于「改判据」，所以这条判据盯台账本身（字段齐备 / 规模对得上清单原文 1 万行 × 20 列 / 基线为正 / 每条上界对实测基线至少 3 倍余量且不超上限档 / 理由非空）+ 探针必须挂在 run-manual-verification-probes.sh 的 FILTER 上（第 96 轮那族的坑：写了用例没接进 --filter ⇒ 一个都跑不到；落地当轮即抓出 AppearanceAxesProbeTests 自 2026-09-29 起没有任何脚本跑它）",
+   "anchors": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "自检用例 `--self-test` \\*\\*(\\d+) 例\\*\\*（红 / 绿成对，夹具在临时目录，末例核对真仓库台账逐字节未变）",
+     "minSites": 1,
+     "note": "闭环第 9 项 L-89 ㈡ ④ 注释（措辞与 terminal-tabs 那一族分开：都叫「负例」时它的宽正则会把本行算进去）"
+    },
+    {
+     "file": "Scripts/check-result-scroll-ledger.py",
+     "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "脚本自己的 docstring"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-result-scroll-ledger\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表新增行（随本轮一起落）"
+    }
+   ]
+  },
+  {
+   "key": "language-registry",
+   "script": "Scripts/check-language-registry.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 11,
+   "countRegex": "自检：例数 (\\d+) / 通过",
+   "why": "队列 L-106 / 闭环第 2 项（FR-EDIT-38 ①③：语言表声明式登记的形状 + 高亮色走主题令牌）+ 队列 L-149 剩余②（E 档：默认视图的消费者唯一）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-language-registry\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表「语言表声明式登记 + 高亮色走主题令牌」行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "判据自己的证据两处：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 2 项注释（L-106 那一段）"
+    }
+   ]
+  },
+  {
+   "key": "language-registry-gate",
+   "script": "Scripts/test-language-registry-gate.py",
+   "args": [],
+   "cases": 4,
+   "countRegex": "例数 (\\d+) / 通过 \\d+ / 失败",
+   "why": "队列 L-106 / 闭环第 2 项（`check-language-registry.py` 的**命令行路径**证据：真仓库 exit 0 / 写坏 exit 1 并点名 / 参数错 exit 2 / 真仓库逐字节未变）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "test-language-registry-gate\\.py.{0,2000}?\\*\\*例数 (\\d+)\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表「语言表声明式登记 + 高亮色走主题令牌」行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "test-language-registry-gate\\.py` \\*\\*例数 (\\d+)\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 2 项注释（L-106 那一段）"
+    }
+   ]
+  },
+  {
+   "key": "editor-line-numbers",
+   "script": "Scripts/check-editor-line-numbers.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 10,
+   "countRegex": "自检：(\\d+) 例，\\d+ 达标，\\d+ 失败",
+   "why": "队列 L-111 / 闭环第 9 项（编辑面的行号列台账：双向对账 + 同一绘制件 + 列宽算法唯一出处 + 三书口径锚点）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-editor-line-numbers\\.py.{0,4000}?\\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表「编辑面的行号列」行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "check-editor-line-numbers\\.py` 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 9 项注释（L-111 那一段）"
+    }
+   ]
+  },
+  {
+   "key": "markdown-single-source",
+   "script": "Scripts/check-markdown-single-source.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 24,
+   "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "队列 L-137 判据 ⑤ / 闭环第 10 项（Markdown 解析只有一份：行内扫描器唯一 · 块级模型唯一产地 · 预览真同源 · 不引第三方）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-markdown-single-source\\.py.{0,2000}?--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表 Markdown 单一口径行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "判据见 `Scripts/check-markdown-single-source\\.py`；负例 `--self-test` (\\d+) 例",
+     "minSites": 1,
+     "note": "闭环第 10 项注释"
+    }
+   ]
+  },
+  {
+   "key": "browser-tab-ownership",
+   "script": "Scripts/check-browser-tab-ownership.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 26,
+   "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "队列 L-149 ③④ + 剩余① / 闭环第 9 项（内置浏览器页签的归属 = 工作区：状态所有者 = App/WorkspaceBrowserModel.swift 只此一处 + 双向对账的允许落点台账 + 数据库侧视图命中即红 + 两条文档条文格必须写「工作区」）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-browser-tab-ownership\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*（绿对照",
+     "minSites": 1,
+     "note": "§6 资产表「内置浏览器页签的归属 = 工作区」行（只认现状声明那一处括号；历史变更行里记的旧例数不回改、也不进判据）"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "判据见 `Scripts/check-browser-tab-ownership\\.py`；负例 `--self-test` (\\d+) 例",
+     "minSites": 1,
+     "note": "闭环第 9 项注释（L-149 ③④ 那一段）"
+    }
+   ]
+  },
+  {
+   "key": "editor-surface-tokens",
+   "script": "Scripts/check-editor-surface-tokens.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 25,
+   "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "队列 L-142（内测清单甲2）/ 闭环第 6 项（编辑面的底色与字色只用主题令牌：每处编辑面都挂唯一写法 .editorSurface() + 台账双向对账（含未登记字形）+ 唯一出处（配对花括号取函数体）+ 另两个 AppKit 编辑面不许退回系统底色 + 空跑防护 + 基线削面判红 + 面与 Package.swift 生产 target 对账）；2026-10-13 升级（合册 T-20261013-027 · 原单 T-20261010-071 · 样本 73）：判定物先剥注释与字符串",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-editor-surface-tokens\\.py.{0,4000}?`--self-test` \\*\\*(\\d+) 例\\*\\*（绿对照",
+     "minSites": 1,
+     "note": "§6 资产表「编辑面的底色与字色」行（只认现状声明那一处括号；历史变更行里记的旧例数不回改、也不进判据）"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "L-142 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 6 项注释（L-142 那一段）"
+    }
+   ]
+  },
+  {
+   "key": "menu-language",
+   "script": "Scripts/check-menu-language.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 19,
+   "countRegex": "自检 (\\d+) 例：\\d+ 通过 / \\d+ 失败",
+   "why": "队列 L-145（内测清单丙2）+ **内测第三批（丙2 下一层，2026-10-02）**/ 闭环第 11 项环内：菜单栏那一层在换语言后不许停在启动语言 —— 第二代把「**展开菜单才插进树里的那一族**」也判上（探针先展开再 dump，判 A/C/B 三段：表内一致 / 语言一致性 / 未覆盖项如实列出 + 必检项两档 硬族+条件族）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-menu-language\\.py.{0,4000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表「菜单栏那一层」行（只认现状声明那一处括号；§9 第 111 条与历史变更行里的旧例数不回改、也不进判据）"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "L-145 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 11 项注释（L-145 那一段）"
+    }
+   ]
+  },
+  {
+   "key": "agent-provider-presets",
+   "script": "Scripts/check-agent-provider-presets.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 9,
+   "countRegex": "负例自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "队列 L-146（内测清单丁3）/ 闭环第 9 项（模型服务预设：端点只有一份出处 = Core/AgentProviderPreset.swift + 界面真的消费目录（遍历 / 选中值 / 模型内容 / 恢复选中 / 自动填充）+ 形状与空跑防护）",
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-agent-provider-presets\\.py.{0,4000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表「模型服务预设」行（只认现状声明那一处括号；§9 第 113 条与历史变更行里的旧例数不回改、也不进判据）"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "L-146 的负例 `--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "闭环第 9 项注释（L-146 那一段）"
+    }
+   ]
+  },
+  {
+   "key": "queue-needs-user",
+   "script": "Scripts/check-queue-needs-user.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 11,
+   "countRegex": "自测：(\\d+)/\\d+ 例符合预期",
+   "why": "队列 L-150 / 闭环第 4 项（`needs-user` 行必须点名一个仍未决的拍板号 —— 空壳汇总格判红；由头 = `L-10` 成员全决后没人关格，探针每轮替成员问需求提出者）",
+   "hostLedgerSelfTest": {
+    "files": [
+     "Docs/design/开发循环-任务队列.md",
+     "Docs/智能体助手-开发spec.md"
+    ],
+    "marker": "（本机台账）—— 干净克隆上跳过",
+    "note": "这一族的 `--self-test` 要读队列与 spec 两份本机台账（`.gitignore` 内、只在主开发机上）⇒ 干净克隆 / 并行工作树 / 另一平台没有它们时如实跳过、不打例数（口径 = AGENT-SPEC.md §9 第 147 条 ④）"
+   },
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-queue-needs-user\\.py.{0,1200}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表「`needs-user` 点名纪律」行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "负例 `--self-test` \\*\\*(\\d+) 例\\*\\*（= 10 条负例 \\+ 末例核对真仓库两份台账逐字节未变",
+     "minSites": 1,
+     "note": "闭环第 4 项注释（L-150 那一段）"
+    },
+    {
+     "file": "Scripts/check-queue-needs-user.py",
+     "regex": "判据自己的证据（(\\d+) 例",
+     "minSites": 1,
+     "note": "脚本自己的用法行"
+    }
+   ]
+  },
+  {
+   "key": "verify-all-gate",
+   "script": "Scripts/test-verify-all-gate.py",
+   "args": [],
+   "cases": 8,
+   "countRegex": "夹具 (\\d+)/\\d+ 例达到预期",
+   "why": "队列 L-110 / 闭环本身（`verify-all.sh` 的控制流：默认跑法把「未执行项」如实点出来 + `--keep-going` 跑完再汇总、统一 exit 1）",
+   "anchors": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "test-verify-all-gate\\.py` 的 \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "头注释（L-110 那一段）"
+    }
+   ]
+  },
+  {
+   "key": "core-portability",
+   "script": "Scripts/check-core-portability.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 9,
+   "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "合册 T-20261013-027（原单 T-20261010-045 · 第 412 轮判据面缺口样本 49）：Core 平台中立性判据原本无空跑防护、无自检、豁免是裸子串 —— 九例真跑（真违规判红 / 字符串字面量里的 portability-ok 不豁免 / 注释位豁免该绿 / 剥注释口径 / Core 不在根上 / 面被砍到底 / 未知参数 / 仓外 CWD 读数 / 真仓逐字节未变）",
+   "noAnchorReason": "例数只在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 2 项的调用行都不写本判据的负例例数，而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
+  },
+  {
+   "key": "core-localization",
+   "script": "Scripts/check-core-localization.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 17,
+   "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "合册 T-20261013-027（原单 T-20261010-049 / T-20261010-072 · 第 416/429 轮判据面缺口样本 53/74）：Core 展示文本本地化棘轮原本判定物只认单行双引号串（多行串里的中文整体在面外）、注释当命中、面键用文件基名且赋值不累加、豁免按基名、面无下限且按 CWD 相对路径、零自检。十七例真跑：多行串计入 / 多行串新增判红 / 单行串对照仍红 / 行尾注释不算 / 块注释不算 / 同名不同目录不丢行 / 嵌套 Localization.swift 在面内 / 真语言表按路径豁免 / Core 改名判红 / 面整体搬走判红 / 未知参数 rc=2 / 英文白名单五例 / 对照组绿；末例核对真仓库逐字节未变。",
+   "noAnchorReason": "例数只出现在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 3 项的调用行都不写本判据的负例例数（第 3 项只调 `--self-test`，不写数字），而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本、基线台账与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
+  },
+  {
+   "key": "platform-neutrality",
+   "script": "Scripts/check-platform-neutrality.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 18,
+   "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "合册 T-20261013-027（原单 T-20261010-050 · 第 417 轮判据面缺口样本 54）：平台中立性棘轮原本判定物 = 行的字面形状（加粗编号 / 反引号编号 / 缩进表格 / 两格行四种写法整体掉进报告档）、「需求」列写死第 2 格、豁免是裸子串、未知参数被吞、无自检、`--update-baseline` 一条命令把红变绿且不留痕。十八例真跑：真仓正例 / 四种形状各判红 / 需求列按表头定位 / 证据列不拦 / 无「需求」表头的写法说明表不判红 / 注释位豁免该绿 / 裸 token 不豁免 / 非空基线无 `--confirm` 拒绝 / `--confirm` 覆盖 + 打印 diff + 记 history / 空基线既有行为逐字保留 / 需求规范书缺失判红 / 面被砍到底判红 / 未知参数 rc=2 / 仓外 CWD 读数一致 / 末例真仓逐字节未变。",
+   "noAnchorReason": "例数只出现在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 8 项的调用行都不写本判据的负例例数（第 8 项只调脚本本身，不写数字），而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本、基线台账与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
+  },
+  {
+   "key": "design-tokens",
+   "script": "Scripts/check-design-tokens.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 18,
+   "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "合册 T-20261013-027（原单 T-20261010-019 样本 27 + T-20261010-069 样本 71）：设计令牌门禁的两条逃逸口原本长在被审源码里（行级 `// token-ok` 是整行子串判定、不判理由、无台账、不计数；文件头 `// token-ok-file:` 整文件静默豁免），且面无下限（`App/` 搬走即报「仍有 0 处待迁移」判绿）、`Color.clear` 整行掩蔽、一行只判首个匹配、块注释与行尾注释当命中、判据②第三条结构性死代码、未知参数被吞、全脚本无自检。十八例真跑：真仓正例 / 面消失判红 / 面被砍到底判红 / 块注释不误伤 / 行尾注释不误伤 / 真违规仍判红 / 字符串里的 token-ok 不豁免 / 无理由豁免判红 / 未登记豁免判红 / 已登记该绿 / 台账陈旧判红 / 文件级豁免未登记判红 / Color.clear 不再整行放行 / 单独 Color.clear 该绿 / 第二处命中仍判 / 未知参数 rc=2 / 仓外 CWD 读数一致 / 末例真仓逐字节未变。",
+   "noAnchorReason": "例数只出现在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 6 项的调用行都不写本判据的负例例数（第 6 项只调脚本本身），而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本、基线/白名单/豁免台账与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
+  },
+  {
+   "key": "button-icon-only",
+   "script": "Scripts/check-button-icon-only.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 32,
+   "countRegex": "全部 (\\d+) 例达到预期",
+   "why": "人类主人令 2026-10-13（信箱 T-20261013-042）：水平按钮不得以中/英文文案作可见形态（一律图标）；菜单项保留文字。判定物先剥注释与字符串，菜单块 / 菜单构造件按台账识别，Picker 与自定义行视图如实登记待裁；**2026-10-13 批 6（加令 `T-20261013-051`）**：新增判据 F（纯图标按钮须带提示 / 无障碍标签）/ G（同一动作同一图标）/ H（符号登记进 `Scripts/button-icon-semantics.json`）+ 判据 B 边界（`.labelStyle(.iconOnly)` ⇒ 合格），23 → 32 例",
+   "anchors": [
+    {
+     "file": "Scripts/check-button-icon-only.py",
+     "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "脚本 docstring"
+    },
+    {
+     "file": "Scripts/button-icon-inventory.md",
+     "regex": "逐条盘点清单（`T-20261013-042` 第一段）",
+     "minSites": 1,
+     "note": "清单落点（生成物）· 存在性锚点"
+    }
+   ]
+  },
+  {
+   "key": "status-consistency",
+   "script": "Scripts/check-status-consistency.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 12,
+   "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "闭环第 4 项（与文档数字 / 版本纪律同项）：§10.1 索引 ↔ 正文定义行 ↔ **其它文档的状态括注** 三向一致。**2026-10-14 修（合册 T-20261013-027 · 原单 T-20261010-032 · 样本 37）**：跨文档括注的扫描面由 `Docs/*.md` + `Docs/design/*.md`（真仓实扫 23 份）改为 `FACE_GLOBS`（仓根 `*.md` + `Docs/**/*.md`，本仓实测 **42 份**）+ 空跑防护（面内份数下限 `FACE_FLOOR` = 42）+ 参数面（`--root` / `--face-floor` / `--self-test`，未知参数 rc=2）；只有份数有下限，命中处数会合法归零（只打印）。",
+   "anchors": [
+    {
+     "file": "Scripts/check-status-consistency.py",
+     "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "脚本自己的 docstring"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-status-consistency\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表新增行"
+    }
+   ]
+  },
+  {
+   "key": "plugin-assembly-gate",
+   "script": "Scripts/check-plugin-assembly.py",
+   "args": [
+    "--self-test"
+   ],
+   "cases": 15,
+   "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
+   "why": "闭环第 10 项（插件装配链 FR-PLUG-01/02/03/06 + ADR-35）。**2026-10-14 修（合册 T-20261013-027 · 原单 T-20261010-033 · 样本 38）**：㈠「含行数据开关全仓恰好一处」的面由 `Core/*.swift` 顶层 + `Plugins/Notes/Sources` 顶层（332 份）改成真·全仓（909 份，只排除点目录）+ `FACE_FLOOR` + 读数字面量；㈡ 笔记源清单不再存第二份副本（改运行时从 check-note-module-isolation.py 读，四条钉 = 空面/缩面/陈旧/漏登）；参数面 --root/--face-floor/--note-floor/--self-test。",
+   "anchors": [
+    {
+     "file": "Scripts/check-plugin-assembly.py",
+     "regex": "判据自己的证据：`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "脚本自己的 docstring"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "check-plugin-assembly\\.py.{0,2000}?`--self-test` \\*\\*(\\d+) 例\\*\\*",
+     "minSites": 1,
+     "note": "§6 资产表新增行"
+    }
+   ]
+  }
+ ]
 }
