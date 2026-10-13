@@ -27,10 +27,6 @@
       {
         "script": "Scripts/check-ui-snapshot-languages.py",
         "reason": "随 ./Scripts/make-ui-snapshots.sh 的收尾跑（快照按 L-01 纪律不进每轮闭环）；`Docs/概要设计.md` §8.3 与本台账都指向它。"
-      },
-      {
-        "script": "Scripts/check-button-icon-only.py",
-        "reason": "人类主人令 T-20261013-042 第二段：改到 a 类 0 处才接线（改前基线 277 处，刻意留「改前红」臂）；接线后在 Scripts/verify-all.sh 引用并【删掉本条】（陈旧条目会被 checkScriptParity 判红）。"
       }
     ],
     "testGlob": "Scripts/test-*.py",

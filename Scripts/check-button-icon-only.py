@@ -34,7 +34,13 @@ H. **符号已登记**：用到的图标符号必须在 `Scripts/button-icon-sem
 E. `--inventory` 打印逐条清单（Markdown：界面 / 文件:行 / 控件 / 现行字符 / 拟用图标 / 处置）——
    这份清单是 `T-20261013-042` 第一段的交付物，落点 `Scripts/button-icon-inventory.md`。
 
-判据自己的证据：`--self-test` **36 例**（红/绿成对：文字按钮红 / 图标按钮绿 / 菜单项绿 / 存疑如实登记 / 空串豁免 …）。
+判据自己的证据：`--self-test` **48 例**（红/绿成对：文字按钮红 / 图标按钮绿 / 菜单项绿 / 存疑如实登记 / 空串豁免 / 例外台账三条棘轮 未登记差异·陈旧登记·死登记 各一条负例 …）。
+
+I. **归口改判必须落进例外台账**（信箱 `T-20261014-003` ② · 前门裁定）：不为图标化的 a 类站点逐条登记进
+   `Scripts/button-icon-exceptions.json`（站点指纹 = 文件 + 原形态 · 理由 · 依据（人类主人令号 / 条号）· 关闭条件），
+   台账同时是**契约层待归口清单**；三条棘轮：**未登记差异 ⇒ 红 · 陈旧登记 ⇒ 红 · 死登记 ⇒ 红**。
+   同一动作多枚图标的例外（判据 G）走同一张台账的「动作图标例外」段，同样两条棘轮。
+   本判据已接进 `Scripts/verify-all.sh` 第 3 项（`T-20261014-003` ① 承前：042 判据回到 0 ⇒ 接线）。
 """
 
 from __future__ import annotations
@@ -64,6 +70,10 @@ MIN_FILES = 120          # 实测 127 份 .swift（App + Plugins/Notes/Views + P
 
 # 图标语义台账（加令 `T-20261013-051` ②）：symbol → {动作, 依据}。
 SEMANTICS = "Scripts/button-icon-semantics.json"
+# 例外台账（`T-20261014-003` ②）：归口改判逐条登记（站点指纹 / 理由 / 依据 / 关闭条件）。
+EXCEPTIONS = "Scripts/button-icon-exceptions.json"
+EXCEPTION_SITES = "站点例外"
+EXCEPTION_ACTIONS = "动作图标例外"
 # 组件形态：图标 + 提示 + 无障碍标签**装在组件本体**⇒ 调用点只核 `help:` 实参（组件级断言单独钉）。
 ICON_COMPONENTS = {"ToolbarIconButton": "App/Views/ToolbarIcon.swift"}
 LABEL_STYLE_ICON = re.compile(r"\.labelStyle\s*\(\s*\.iconOnly\s*\)")
@@ -513,7 +523,8 @@ def load_semantics(root: pathlib.Path) -> tuple[dict, list[Issue]]:
     return data["symbols"], []
 
 
-def a11y_and_semantics_issues(root: pathlib.Path, buckets: dict, baseline: dict | None) -> tuple[list[Issue], dict]:
+def a11y_and_semantics_issues(root: pathlib.Path, buckets: dict, baseline: dict | None,
+                              ledger: dict | None = None) -> tuple[list[Issue], dict]:
     """判据 F（纯图标按钮须带提示 / 无障碍标签）+ G（同一动作同一图标）+ H（符号已登记）。"""
     issues: list[Issue] = []
     symbols, ledger_issues = load_semantics(root)
@@ -551,10 +562,14 @@ def a11y_and_semantics_issues(root: pathlib.Path, buckets: dict, baseline: dict 
                                               f"（动作 `{key}` · {row['path']}:{row['line']}）"))
         else:
             stats["uncovered"] += 1
+    registered_actions = (ledger or {}).get(EXCEPTION_ACTIONS, [])
     for key, syms in sorted(actions.items()):
-        if len(syms) > 1:
+        if len(syms) > 1 and not any(_norm(entry.get("动作")) == _norm(key)
+                                     and set(entry.get("图标") or []) == set(syms)
+                                     for entry in registered_actions):
             issues.append(Issue("判据 G", f"同一个动作 `{key}` 用了多个图标 {sorted(syms)}"
                                           f" —— 加令 ② 要求「同一个动作在不同界面用同一个图标」"))
+    stats["actions"] = actions
     if stats["missing"]:
         head = "; ".join(stats["missing"][:3])
         issues.append(Issue("判据 F", f"纯图标按钮**既无提示也无无障碍标签**的有 {len(stats['missing'])} 处"
@@ -590,7 +605,8 @@ def symbol_hint(detail: str) -> str:
     return "**待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话）"
 
 
-def inventory_md(files: list[str], buckets: dict, semantics: dict | None = None) -> str:
+def inventory_md(files: list[str], buckets: dict, semantics: dict | None = None,
+                 ledger: dict | None = None) -> str:
     def label(row: dict) -> str:
         return row["path"].split("/")[-1].replace(".swift", "")
     lines = [
@@ -599,8 +615,9 @@ def inventory_md(files: list[str], buckets: dict, semantics: dict | None = None)
         "- 口径：人类主人 2026-10-13 令 + 前门 18:2x 裁定 ㈠（水平按钮一律图标 / 菜单项保留文字）。",
         "- 加令：`T-20261013-051`（范围确认「全部图标化」不缩面 + 质量硬要求：图标须有明显含义 /"
         " 同一动作同一图标 / 纯图标按钮须带提示或无障碍标签）。",
-        "- 进度：第一段盘点 **277** 处 → 第二段批 1–5 落地 223 处 → 批 6（33 处切换式按钮 +"
-        " 1 处 `.labelStyle(.iconOnly)` 判据校正）⇒ a 类 **20** 处（余 = 弹框 / 内容承载 / 归属待裁）。",
+        "- 进度：第一段盘点 **277** 处 → 第二段批 1–6 落地 257 处 ⇒ 余 **20** 处按人类主人裁决"
+        "（信箱 `T-20261014-003` ①/②）逐条登记进例外台账（弹框 7 / 菜单件 4 / 内容承载 9）；"
+        "批 7 = 判据 F 观察窗修正（假红 27 / 真缺 8 清零 ⇒ F 108/108）。",
         f"- 面：`App/**` + `Plugins/Notes/Views/**` + `Platform/macOS/**` 的**全部** `.swift`（**{len(files)} 份**，不抽样）。",
         f"- 命令：`python3 Scripts/check-button-icon-only.py --inventory`（判定物先剥注释与字符串）。",
         "",
@@ -613,8 +630,13 @@ def inventory_md(files: list[str], buckets: dict, semantics: dict | None = None)
         hint = symbol_hint(row["detail"])
         registered = semantics.get(hint.strip("`"), {}) if semantics else {}
         reasons = registered.get("依据") or "—（本批未落地：见 `T-20261013-042` 结果 §待裁）"
+        entry = next((item for item in (ledger or {}).get(EXCEPTION_SITES, [])
+                      if _norm(item.get("文件")) == _norm(row["path"])
+                      and _norm(item.get("形态")) == _norm(row["detail"])), None)
+        action = ("改图标 + 保留 tooltip/可访问性标签" if entry is None
+                  else f"**例外台账登记**（{entry['归口']} · {EXCEPTIONS}）—— 不图标化") + "（②）"
         lines.append(f"| {index} | {label(row)} | `{row['path']}:{row['line']}` | {row['control']} | "
-                     f"`{row['detail']}` | {hint} | {reasons} | 改图标 + 保留 tooltip/可访问性标签 |")
+                     f"`{row['detail']}` | {hint} | {reasons} | {action} |")
     lines += ["", f"## b 类 · 菜单项（**保留文字**，只盘不改）· {len(buckets['b'])} 处", "",
               "| # | 界面 | 文件:行 | 控件 | 现行字符 | 处置 |", "|---|---|---|---|---|---|"]
     for index, row in enumerate(buckets["b"], 1):
@@ -631,6 +653,115 @@ def inventory_md(files: list[str], buckets: dict, semantics: dict | None = None)
     lines += ["", f"## 空串按钮（豁免：无可见文案）· {len(buckets['empty'])} 处", ""]
     lines += [f"- `{row['path']}:{row['line']}`" for row in buckets["empty"]]
     return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------- 例外台账（`T-20261014-003` ②）
+
+def _norm(text) -> str:
+    return " ".join(str(text).split())
+
+
+def load_exceptions(root: pathlib.Path) -> tuple[dict | None, list[Issue]]:
+    """按钮图标化例外台账（信箱 `T-20261014-003` ② · 人类主人裁决 2026-10-14）。
+
+    前门裁定：**归口改判不得藏在判据之外** —— 改判逐条落进本台账（站点指纹 = 文件 + 原形态 ·
+    理由 · 依据（人类主人令号 / 条号）· 关闭条件），台账同时是**契约层待归口清单**。
+    三条棘轮（各留负例，见 `--self-test`）：**未登记差异 ⇒ 红 · 陈旧登记 ⇒ 红 · 死登记 ⇒ 红**。
+    """
+    path = root / EXCEPTIONS
+    if not path.exists():
+        return None, [Issue(EXCEPTIONS, "例外台账不在盘上 —— 「归口改判已登记」这条断言没有立足点")]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, [Issue(EXCEPTIONS, f"例外台账读不出来：{exc}")]
+    if not isinstance(data, dict) or not isinstance(data.get(EXCEPTION_SITES), list):
+        return None, [Issue(EXCEPTIONS, "例外台账的形状不对（要一个对象，且含站点例外数组）")]
+    return data, []
+
+
+def site_quota(ledger: dict | None) -> dict:
+    """已登记的站点指纹 → 登记**条数**（同文件同形态可能有多处 ⇒ 用计数配对，不用集合）。"""
+    quota: dict = {}
+    for entry in (ledger or {}).get(EXCEPTION_SITES, []):
+        key = (_norm(entry.get("文件")), _norm(entry.get("形态")))
+        quota[key] = quota.get(key, 0) + 1
+    return quota
+
+
+def unregistered_rows(a_rows: list, ledger: dict | None) -> list:
+    """按登记条数逐条抵扣，返回**未登记**的 a 类命中（登记一条只抵一处）。"""
+    quota = site_quota(ledger)
+    out: list = []
+    for row in a_rows:
+        key = (_norm(row["path"]), _norm(row["detail"]))
+        if quota.get(key, 0) > 0:
+            quota[key] -= 1
+            continue
+        out.append(row)
+    return out
+
+
+def exception_ratchets(a_rows: list[dict], ledger: dict | None) -> list[Issue]:
+    """三条棘轮（纯函数 —— 自检直接喂合成数据）。
+
+    ① **未登记差异**：a 类命中既不是图标、也不在本台账里 ⇒ 红；
+    ② **陈旧登记**：登记的文件还在 a 类里，但盘上原形态与台账不一致（站点变过）⇒ 红；
+    ③ **死登记**：登记的文件已不在 a 类命中里（已图标化 / 已删）⇒ 红。
+    外加必填字段核（文件 / 形态 / 归口 / 理由 / 依据 / 关闭条件）。
+    """
+    if ledger is None:
+        return []
+    entries = ledger.get(EXCEPTION_SITES, [])
+    issues: list[Issue] = []
+    for entry in entries:
+        missing = [key for key in ("文件", "形态", "归口", "理由", "依据", "关闭条件")
+                   if not _norm(entry.get(key, ""))]
+        if missing:
+            issues.append(Issue(EXCEPTIONS, f"登记条目缺字段 {missing}：{entry.get('文件', '?')}"))
+    quota = site_quota(ledger)
+    row_counts: dict = {}
+    for row in a_rows:
+        key = (_norm(row["path"]), _norm(row["detail"]))
+        row_counts[key] = row_counts.get(key, 0) + 1
+    row_paths = {_norm(row["path"]) for row in a_rows}
+    for row in unregistered_rows(a_rows, ledger):
+        issues.append(Issue("例外台账", f"未登记差异：{row['path']}:{row['line']} 既不是图标、也不在本台账里"
+                                        f" —— 归口改判不得藏在判据之外（`T-20261014-003` §②）"))
+    for key, count in quota.items():
+        name = key[0]
+        if count <= row_counts.get(key, 0):
+            continue
+        if name not in row_paths:
+            issues.append(Issue("例外台账", f"死登记：{name} 已不再是 a 类命中（已图标化或已删）"
+                                            f" —— 登记要删掉，不然台账变摆设"))
+        else:
+            issues.append(Issue("例外台账", f"陈旧登记：{name} 盘上原形态与台账不一致（或多登记了一条）"
+                                            f" —— 站点变过，要重过一遍再登记"))
+    return issues
+
+
+def action_deviations(actions: dict, ledger: dict | None) -> list[Issue]:
+    """判据 G 的例外 + 两条棘轮（同一个动作用了多枚图标）。"""
+    entries = (ledger or {}).get(EXCEPTION_ACTIONS, [])
+    issues: list[Issue] = []
+    for key, symbols in sorted(actions.items()):
+        if len(symbols) <= 1:
+            continue
+        if not any(_norm(entry.get("动作")) == _norm(key) and set(entry.get("图标") or []) == set(symbols)
+                   for entry in entries):
+            issues.append(Issue("判据 G", f"同一个动作 `{key}` 用了多个图标 {sorted(symbols)}"
+                                          f" —— 加令 ② 要求「同一个动作在不同界面用同一个图标」"
+                                          f"（登记例外见 {EXCEPTIONS}）"))
+    for entry in entries:
+        symbols = actions.get(entry.get("动作"))
+        if not symbols or len(symbols) <= 1:
+            issues.append(Issue("例外台账", f"死登记（动作图标）：`{entry.get('动作')}` 已不再有多图标"
+                                            f" —— 登记要删掉"))
+        elif set(entry.get("图标") or []) != set(symbols):
+            issues.append(Issue("例外台账", f"陈旧登记（动作图标）：`{entry.get('动作')}` 盘上现为 "
+                                            f"{sorted(symbols)}，台账写 {entry.get('图标')} —— 要同步"))
+    return issues
 
 
 # ---------------------------------------------------------------- 自检
@@ -795,6 +926,52 @@ def self_test() -> int:
         cases.append(("㉝ 不借邻居：下一个控件的 `.help(` 不算第一处的 ⇒ 第一处仍判 F 红",
                       "判据 F" in wheres(neighbours[0]) and "判据 F" not in wheres(neighbours[1])))
 
+        def synth(path, detail, line=1):
+            return {"path": path, "line": line, "detail": detail}
+
+        one_site = {EXCEPTION_SITES: [{"文件": "App/Views/A.swift", "形态": "L(.save)",
+                                      "归口": "弹框", "理由": "r", "依据": "b", "关闭条件": "c"}]}
+        cases.append(("㉞ 例外台账 · 未登记差异 ⇒ 红（② 第 1 条棘轮）",
+                      any(i.where == "例外台账" and "未登记差异" in i.reason
+                          for i in exception_ratchets([synth("App/Views/A.swift", "L(.save)"),
+                                                       synth("App/Views/B.swift", "L(.drop)", 9)], one_site))))
+        cases.append(("㉟ 例外台账 · 已登记 ⇒ 不再算未登记差异",
+                      not any("未登记差异" in i.reason for i in exception_ratchets(
+                          [synth("App/Views/A.swift", "L(.save)")], one_site))))
+        cases.append(("㊱ 例外台账 · 陈旧登记（盘上原形态变了）⇒ 红（② 第 2 条棘轮）",
+                      any("陈旧登记" in i.reason for i in exception_ratchets(
+                          [synth("App/Views/A.swift", "L(.commonSave)")], one_site))))
+        cases.append(("㊲ 例外台账 · 死登记（站点已图标化 / 已删）⇒ 红（② 第 3 条棘轮）",
+                      [i.reason.split("：")[0] for i in exception_ratchets(
+                          [synth("App/Views/Z.swift", "L(.x)")], one_site)] == ["未登记差异", "死登记"]))
+        cases.append(("㊳ 例外台账 · 登记条目缺字段 ⇒ 红",
+                      any("缺字段" in i.reason for i in exception_ratchets(
+                          [synth("App/Views/A.swift", "L(.save)")],
+                          {EXCEPTION_SITES: [{"文件": "App/Views/A.swift", "形态": "L(.save)"}]}))))
+        cases.append(("㊺ 例外台账 · 同文件同形态两处只登记一条 ⇒ 另一条仍报未登记差异",
+                      any("未登记差异" in i.reason for i in exception_ratchets(
+                          [synth("App/Views/A.swift", "L(.save)"), synth("App/Views/A.swift", "L(.save)", 9)],
+                          one_site))))
+        deviation = {EXCEPTION_ACTIONS: [{"动作": "commonEdit",
+                                          "图标": ["pencil", "square.and.pencil"],
+                                          "文件": "App/Views/A.swift", "行": 1, "形态": "s",
+                                          "理由": "r", "依据": "b", "关闭条件": "c"}]}
+        cases.append(("㊴ 动作图标例外 · 已登记 ⇒ 判据 G 不再报",
+                      not action_deviations({"commonEdit": {"pencil", "square.and.pencil"}}, deviation)))
+        cases.append(("㊵ 动作图标例外 · 台账与盘上不一致 ⇒ 陈旧 ⇒ 红",
+                      any("陈旧登记" in i.reason for i in action_deviations(
+                          {"commonEdit": {"pencil", "pencil.circle"}}, deviation))))
+        cases.append(("㊶ 动作图标例外 · 动作已不再冲突 ⇒ 死登记 ⇒ 红",
+                      any("死登记" in i.reason for i in action_deviations(
+                          {"commonEdit": {"pencil"}}, deviation))))
+        cases.append(("㊷ 动作图标例外 · 未登记的多图标动作仍判判据 G 红",
+                      any(i.where == "判据 G" for i in action_deviations(
+                          {"commonAdd": {"plus", "plus.circle"}}, deviation))))
+        cases.append(("㊸ 例外台账不在盘上 ⇒ 出声（不静默放行）",
+                      any(i.where == EXCEPTIONS for i in load_exceptions(root / "no-ledger-here")[1])))
+        cases.append(("㊹ 真仓例外台账读得出 + 形状对",
+                      isinstance(load_exceptions(ROOT)[0], dict)))
+
     after = _sha(real_baseline) if real_baseline.exists() else None
     cases.append(("㉑ 真仓库盘点基线逐字节未变", before == after))
 
@@ -823,17 +1000,25 @@ def main(argv: list[str]) -> int:
     results = [scan_file(ROOT, relative) for relative in files]
     buckets = tally(results)
     baseline, issues = load_baseline(ROOT)
+    ledger, ledger_issues = load_exceptions(ROOT)
+    issues += ledger_issues
+    raw_a = buckets["a"]
+    issues += exception_ratchets(raw_a, ledger)
+    buckets = {**buckets, "a": unregistered_rows(raw_a, ledger)}
     issues += assert_issues(files, missing, buckets, baseline)
-    extra, stats = a11y_and_semantics_issues(ROOT, buckets, baseline)
+    extra, stats = a11y_and_semantics_issues(ROOT, buckets, baseline, ledger)
     issues += extra
+    issues += action_deviations(stats.get("actions", {}), ledger)
     semantics, _ledger_issues = load_semantics(ROOT)
     if "--inventory" in argv:
-        print(inventory_md(files, buckets, semantics), end="")
+        print(inventory_md(files, {**buckets, "a": raw_a}, semantics, ledger), end="")
         return 1 if issues else 0
     print("==> 按钮图标化盘点（人类主人令 2026-10-13 · 信箱 T-20261013-042）")
-    print(f"    a 类 水平按钮（**必改**）：{len(buckets['a'])} 处"
+    print(f"    a 类 水平按钮（**必改**）：{len(buckets['a'])} 处（未登记）"
           f"（改前读数 {baseline.get('beforeTextButtons') if baseline else '-'} · 目标 "
           f"{baseline.get('targetTextButtons') if baseline else '-'}）")
+    print(f"    例外台账（②）：站点 {len((ledger or {}).get(EXCEPTION_SITES, []))} 条 · "
+          f"动作图标 {len((ledger or {}).get(EXCEPTION_ACTIONS, []))} 条（{EXCEPTIONS}）")
     print(f"    b 类 菜单项（保留文字）：{len(buckets['b'])} 处"
           f"（其中已是图标 {sum(1 for row in buckets['b'] if row['kind'] == 'icon')} 处）")
     print(f"    已是纯图标（合格）：{len(buckets['icon'])} 处 · 存疑（登记待裁）：{len(buckets['pending'])} 处 · "

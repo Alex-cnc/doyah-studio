@@ -2,7 +2,7 @@
 
 - 口径：人类主人 2026-10-13 令 + 前门 18:2x 裁定 ㈠（水平按钮一律图标 / 菜单项保留文字）。
 - 加令：`T-20261013-051`（范围确认「全部图标化」不缩面 + 质量硬要求：图标须有明显含义 / 同一动作同一图标 / 纯图标按钮须带提示或无障碍标签）。
-- 进度：第一段盘点 **277** 处 → 第二段批 1–5 落地 223 处 → 批 6（33 处切换式按钮 + 1 处 `.labelStyle(.iconOnly)` 判据校正）⇒ a 类 **20** 处（余 = 弹框 / 内容承载 / 归属待裁）。
+- 进度：第一段盘点 **277** 处 → 第二段批 1–6 落地 257 处 ⇒ 余 **20** 处按人类主人裁决 （信箱 `T-20261014-003` ①/②）逐条登记进例外台账（弹框 7 / 菜单件 4 / 内容承载 9）；批 7 = 判据 F 观察窗修正（假红 27 / 真缺 8 清零 ⇒ F 108/108）。
 - 面：`App/**` + `Plugins/Notes/Views/**` + `Platform/macOS/**` 的**全部** `.swift`（**127 份**，不抽样）。
 - 命令：`python3 Scripts/check-button-icon-only.py --inventory`（判定物先剥注释与字符串）。
 
@@ -10,26 +10,26 @@
 
 | # | 界面 | 文件:行 | 控件 | 现行字符 | 拟用图标 | 语义依据 | 处置 |
 |---|---|---|---|---|---|---|---|
-| 1 | AgentAuditPanel | `App/Views/AgentAuditPanel.swift:350` | Button | `HStack(spacing: 8) { Text(AgentAuditPresentation.timestampText(record.` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 2 | AppearanceSheet | `App/Views/AppearanceSheet.swift:493` | Button | `HStack(alignment: .center, spacing: Spacing.m) { Image(systemName: isS` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 3 | AppearanceSheet | `App/Views/AppearanceSheet.swift:592` | Button | `HStack(alignment: .center, spacing: Spacing.m) { Image(systemName: isS` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 4 | DataTaskPanel | `App/Views/DataTaskPanel.swift:200` | Button | `VStack(alignment: .leading, spacing: 2) { HStack(spacing: 4) { Image(s` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 5 | ForeignKeyJumpSheet | `App/Views/ForeignKeyJumpSheet.swift:46` | Button | `HStack { Text(label(for: option)) .font(Theme.font(.body)) Spacer() if` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 6 | LowerPaneTabStrip | `App/Views/LowerPaneTabStrip.swift:108` | Button | `Text(L(QueryHistoryRemovalPrompt.actionTitleKey(action)))` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 7 | LowerPaneTabStrip | `App/Views/LowerPaneTabStrip.swift:130` | Button | `HStack(spacing: Spacing.xs) { Image(systemName: item.symbolName) .font` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 8 | QueryWorkspaceView | `App/Views/QueryWorkspaceView.swift:52` | Button | `tab.isDirty ? : tab.title` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 9 | ServerObjectsPanel | `App/Views/ServerObjectsPanel.swift:253` | Button | `HStack(alignment: .firstTextBaseline, spacing: Spacing.s) { Text(objec` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 10 | SessionPanel | `App/Views/SessionPanel.swift:119` | Button | `L(.sessionTerminateConfirm)` | `checkmark` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 11 | SessionPanel | `App/Views/SessionPanel.swift:125` | Button | `L(.commonCancel)` | `xmark.circle` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 12 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:313` | Button | `Label { Text(L(note.isFavorite ? .notesUnmarkFavorite : .notesMarkFavo` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 13 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:332` | Button | `Label { Text(L(note.isPinned ? .notesUnmarkPinned : .notesMarkPinned))` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 14 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:710` | Button | `Text(L(ContainerEditPrompt.confirmKey))` | `checkmark` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 15 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:717` | Button | `Text(L(ContainerEditPrompt.cancelKey))` | `xmark.circle` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 16 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:738` | Button | `Text(L(ContainerRemovalPrompt.titleKey(for: action, kind: request.kind` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 17 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:756` | Button | `Label { Text(L(direction.titleKey)) } icon: { Image(systemName: direct` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 18 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:776` | Button | `target.isCurrent ? target.name + L(NotebookShelfMovePrompt.currentMark` | `checkmark` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 19 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:804` | Button | `HStack(spacing: Spacing.xs) { Image(systemName: systemImage) .font(The` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
-| 20 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:1242` | Button | `Text(L(action == .cancel ? .notesRemoveCancel : .notesDelete))` | `xmark.circle` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 1 | AgentAuditPanel | `App/Views/AgentAuditPanel.swift:350` | Button | `HStack(spacing: 8) { Text(AgentAuditPresentation.timestampText(record.` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（内容承载 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 2 | AppearanceSheet | `App/Views/AppearanceSheet.swift:493` | Button | `HStack(alignment: .center, spacing: Spacing.m) { Image(systemName: isS` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（内容承载 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 3 | AppearanceSheet | `App/Views/AppearanceSheet.swift:592` | Button | `HStack(alignment: .center, spacing: Spacing.m) { Image(systemName: isS` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（内容承载 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 4 | DataTaskPanel | `App/Views/DataTaskPanel.swift:200` | Button | `VStack(alignment: .leading, spacing: 2) { HStack(spacing: 4) { Image(s` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（内容承载 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 5 | ForeignKeyJumpSheet | `App/Views/ForeignKeyJumpSheet.swift:46` | Button | `HStack { Text(label(for: option)) .font(Theme.font(.body)) Spacer() if` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（内容承载 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 6 | LowerPaneTabStrip | `App/Views/LowerPaneTabStrip.swift:108` | Button | `Text(L(QueryHistoryRemovalPrompt.actionTitleKey(action)))` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（弹框 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 7 | LowerPaneTabStrip | `App/Views/LowerPaneTabStrip.swift:130` | Button | `HStack(spacing: Spacing.xs) { Image(systemName: item.symbolName) .font` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（内容承载 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 8 | QueryWorkspaceView | `App/Views/QueryWorkspaceView.swift:52` | Button | `tab.isDirty ? : tab.title` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（内容承载 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 9 | ServerObjectsPanel | `App/Views/ServerObjectsPanel.swift:253` | Button | `HStack(alignment: .firstTextBaseline, spacing: Spacing.s) { Text(objec` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（内容承载 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 10 | SessionPanel | `App/Views/SessionPanel.swift:119` | Button | `L(.sessionTerminateConfirm)` | `checkmark` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（弹框 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 11 | SessionPanel | `App/Views/SessionPanel.swift:125` | Button | `L(.commonCancel)` | `xmark.circle` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（弹框 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 12 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:313` | Button | `Label { Text(L(note.isFavorite ? .notesUnmarkFavorite : .notesMarkFavo` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（菜单件 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 13 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:332` | Button | `Label { Text(L(note.isPinned ? .notesUnmarkPinned : .notesMarkPinned))` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（菜单件 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 14 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:710` | Button | `Text(L(ContainerEditPrompt.confirmKey))` | `checkmark` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（弹框 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 15 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:717` | Button | `Text(L(ContainerEditPrompt.cancelKey))` | `xmark.circle` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（弹框 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 16 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:738` | Button | `Text(L(ContainerRemovalPrompt.titleKey(for: action, kind: request.kind` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（弹框 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 17 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:756` | Button | `Label { Text(L(direction.titleKey)) } icon: { Image(systemName: direct` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（菜单件 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 18 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:776` | Button | `target.isCurrent ? target.name + L(NotebookShelfMovePrompt.currentMark` | `checkmark` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（菜单件 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 19 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:804` | Button | `HStack(spacing: Spacing.xs) { Image(systemName: systemImage) .font(The` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（内容承载 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
+| 20 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:1242` | Button | `Text(L(action == .cancel ? .notesRemoveCancel : .notesDelete))` | `xmark.circle` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | **例外台账登记**（弹框 · Scripts/button-icon-exceptions.json）—— 不图标化（②） |
 
 ## b 类 · 菜单项（**保留文字**，只盘不改）· 99 处
 
