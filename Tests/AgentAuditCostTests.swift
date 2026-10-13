@@ -200,7 +200,8 @@ final class AgentAuditCostTests: XCTestCase {
         let keys = Set(Mirror(reflecting: record).children.compactMap { $0.label })
         XCTAssertEqual(keys, ["id", "timestamp", "connectionName", "database", "model", "sql", "statementKind",
                               "risk", "findings", "outcome", "detail", "origin", "durationMilliseconds",
-                              "endpoint", "promptTokens", "completionTokens", "totalTokens", "sessionID", "hopIndex"])
+                              "endpoint", "promptTokens", "completionTokens", "totalTokens", "sessionID", "hopIndex",
+                              "chainID"])
         for forbidden in ["apiKey", "authorization", "rows", "data"] {
             XCTAssertFalse(keys.contains(forbidden), "记录里不许有 `\(forbidden)`")
         }

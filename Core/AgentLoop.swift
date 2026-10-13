@@ -118,14 +118,17 @@ public struct AgentLoopContext: Sendable {
     public var baseRequest: LLMRequest
     public var sessionID: String
     public var workspace: String
+    /// 调用链标识（`FR-AI-31` ④）：不给就按会话推一个 —— 同一会话的模型跳 / 工具跳 / 审批跳共用一个值。
+    public var chainID: String
 
     public init(systemPrompt: String, userPrompt: String, baseRequest: LLMRequest,
-                sessionID: String, workspace: String) {
+                sessionID: String, workspace: String, chainID: String? = nil) {
         self.systemPrompt = systemPrompt
         self.userPrompt = userPrompt
         self.baseRequest = baseRequest
         self.sessionID = sessionID
         self.workspace = workspace
+        self.chainID = chainID ?? "chain:\(sessionID)"
     }
 }
 
@@ -246,6 +249,7 @@ public struct AgentLoop: Sendable {
                 usage: usage,
                 sessionID: context.sessionID,
                 hopIndex: steps - 1,
+                chainID: context.chainID,
                 at: startedAt))
 
             guard !invocations.isEmpty else {
@@ -264,7 +268,7 @@ public struct AgentLoop: Sendable {
                     await audit?.record(AgentActionRecord.makeToolCall(
                         toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
                         outcome: .denied, detail: reason,
-                        sessionID: context.sessionID, hopIndex: steps - 1, at: startedAt))
+                        sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                     continue
                 }
                 if let violation = AgentToolSchemaValidator.validate(argumentsJSON: invocation.argumentsJSON,
@@ -276,7 +280,7 @@ public struct AgentLoop: Sendable {
                     await audit?.record(AgentActionRecord.makeToolCall(
                         toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
                         outcome: .denied, detail: violation,
-                        sessionID: context.sessionID, hopIndex: steps - 1, at: startedAt))
+                        sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                     continue
                 }
                 let outcome = dispatcher.dispatch(invocation, approvals: approvals)
@@ -289,7 +293,7 @@ public struct AgentLoop: Sendable {
                     await audit?.record(AgentActionRecord.makeToolCall(
                         toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
                         outcome: .pendingApproval, detail: request.fingerprint,
-                        sessionID: context.sessionID, hopIndex: steps - 1, at: startedAt))
+                        sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                 case .refused(let code, let detail):
                     rejected.append((invocation.name, code.rawValue))
                     observations.append("\(invocation.name): \(code.rawValue)/\(detail)")
@@ -298,7 +302,7 @@ public struct AgentLoop: Sendable {
                     await audit?.record(AgentActionRecord.makeToolCall(
                         toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
                         outcome: .denied, detail: "\(code.rawValue)/\(detail)",
-                        sessionID: context.sessionID, hopIndex: steps - 1, at: startedAt))
+                        sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                 default:
                     executed.append(invocation)
                     let summary = Self.summary(of: outcome)
@@ -308,7 +312,7 @@ public struct AgentLoop: Sendable {
                     await audit?.record(AgentActionRecord.makeToolCall(
                         toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
                         outcome: .executed, detail: summary,
-                        sessionID: context.sessionID, hopIndex: steps - 1, at: startedAt))
+                        sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                 }
             }
         }

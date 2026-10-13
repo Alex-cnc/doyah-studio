@@ -85,13 +85,17 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
     /// 会话与跳序：把「一次两跳对话」串起来（`FR-AI-24` ①）。
     public var sessionID: String?
     public var hopIndex: Int?
+    /// 调用链标识（`FR-AI-31` ④）：同一会话的模型跳 / 工具跳 / 审批跳共用一个值，
+    /// 于是「会话 → 第 N 跳 → 工具调用 → 审批」在导出里能串成一条。
+    public var chainID: String?
 
     /// 补上成本与逐跳字段（**不动既有 `init`** ⇒ 老调用点与老日志都不受影响；
     /// 老日志缺这些键时 Codable 解出 `nil` —— 与 `durationMilliseconds` 当年同一做法）。
     public func withCost(endpoint: String? = nil,
                          usage: LLMUsage? = nil,
                          sessionID: String? = nil,
-                         hopIndex: Int? = nil) -> AgentActionRecord {
+                         hopIndex: Int? = nil,
+                         chainID: String? = nil) -> AgentActionRecord {
         var copy = self
         if let endpoint { copy.endpoint = endpoint }
         if let usage {
@@ -101,6 +105,7 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
         }
         if let sessionID { copy.sessionID = sessionID }
         if let hopIndex { copy.hopIndex = hopIndex }
+        if let chainID { copy.chainID = chainID }
         return copy
     }
 
@@ -193,6 +198,7 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
         usage: LLMUsage? = nil,
         sessionID: String? = nil,
         hopIndex: Int? = nil,
+        chainID: String? = nil,
         at date: Date = Date()
     ) -> AgentActionRecord {
         AgentActionRecord(
@@ -208,7 +214,7 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
             detail: [modelCallDetail, detail].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
             durationMilliseconds: durationMilliseconds,
             origin: .modelCall
-        ).withCost(endpoint: endpoint, usage: usage, sessionID: sessionID, hopIndex: hopIndex)
+        ).withCost(endpoint: endpoint, usage: usage, sessionID: sessionID, hopIndex: hopIndex, chainID: chainID)
     }
 
     /// 工具调用记录（`FR-AI-24` ①：一次两跳对话里那条**工具调用记录**）。
@@ -220,6 +226,7 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
         durationMilliseconds: Int? = nil,
         sessionID: String? = nil,
         hopIndex: Int? = nil,
+        chainID: String? = nil,
         at date: Date = Date()
     ) -> AgentActionRecord {
         AgentActionRecord(
@@ -233,7 +240,7 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
             detail: detail,
             durationMilliseconds: durationMilliseconds,
             origin: .action
-        ).withCost(sessionID: sessionID, hopIndex: hopIndex)
+        ).withCost(sessionID: sessionID, hopIndex: hopIndex, chainID: chainID)
     }
 
     /// 请求摘要的长度上限：审计要能看出「当时让它干什么」，但一条日志不应被指令原文撑爆。
