@@ -61,8 +61,11 @@ G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也
 在 `TestsUISnapshot/NebulaSkinProbeTests.swift`；静态与像素的分工写在那个文件头）：
 
   ① **规则只有一处出处**：键 / 缺省值 / 读法 / 生效条件全在 `Core/NebulaSkinPreference.swift`
-     —— 键的字面量在 `Core`+`App`+`Platform`+`CLI` 里**只许出现一次**（写两处 ⇒ 改一处就让
-     老用户的开关选择静默失效）；读法逐字必须是 `object(forKey:) as? Bool ?? 缺省`
+     —— 键的字面量在**入库源码面**（十根 + 仓根，见 `SWIFT_FACE_ROOTS` 与
+     `Scripts/design-themes-key-baseline.json`）里**只许出现在登记过的落点**（写两处 ⇒ 改一处就让
+     老用户的开关选择静默失效；2026-10-13 按 `T-20261010-036` 把面从 4 根扩到入库源码面 ——
+     扩面前 `Tests/` 里那份「断言键值 = 契约」的第二份在面外，判据看不见）；
+     读法逐字必须是 `object(forKey:) as? Bool ?? 缺省`
      （`bool(forKey:)` 对"从未设过"返回 `false` ⇒ 缺省值被静默改成关）；
   ② **生效条件 = 星空紫 且 开关开**，且 `NebulaBackground.body` **只许调它、不许再写一遍**
      （切片里出现 `.stardust` 即红 —— 两处口径必然分叉）；
@@ -74,16 +77,17 @@ G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也
      `Scripts/run-manual-verification-probes.sh` 的 FILTER（AGENT-SPEC §9 第 104 条：不挂进
      FILTER 的这一族一个都跑不到），以及 Core 侧规则单测的几条点名用例。
 
-判据自己的证据：`--self-test` **35 例**（34 个红/绿成对 + 末例核对真仓库二十份文件逐字节未变；夹具一律在临时目录）。
+判据自己的证据：`--self-test` **42 例**（34 个红/绿成对 + 末例核对真仓库二十份文件逐字节未变；夹具一律在临时目录）。
 
 用法：
     python3 Scripts/check-design-themes.py              # 校验（闭环第 6 项）
-    python3 Scripts/check-design-themes.py --self-test  # 门禁自己的证据（35 例）
+    python3 Scripts/check-design-themes.py --self-test  # 门禁自己的证据（42 例）
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import pathlib
 import re
@@ -180,6 +184,32 @@ NEBULA_TEST_CASES = {
     "testPaintsNebulaTruthTableOverEveryThemeAndSwitchState": "生效条件真值表（4 主题 × 2 态）",
 }
 MIN_NEBULA_SITES = 22   # 判据 I：判点处数下限（空跑防护）
+
+# ---- 判据 I ② 的扫描面（2026-10-13 按 `T-20261010-036` 从 4 根扩到**入库源码面**）-------------
+# 由头（原单现场）：判据 I ② 自称「键字面量**全仓**只许一处」，而实现面只有 Core/App/Platform/CLI
+# 四根（338/586 = 58%）—— 面外**真有一份**同形字面量（`Tests/NebulaSkinPreferenceTests.swift:44`），
+# 而那一份正是判据 I ⑥ 自己要它存在的「规则单测」：判据手里拿着它自己看不见的第二份。
+# 口径：面 = 下表十根（每条带理由）+ 仓根 `*.swift`；`Vendor/` 与点目录**显式排除**并写明理由；
+# 根表 / 面内文件数 / 允许持有点三样都上账 `Scripts/design-themes-key-baseline.json`（增减都报红）。
+SWIFT_FACE_ROOTS = {
+    "Core": "产品核心层（值表 / 令牌 / 偏好规则）",
+    "App": "界面层（外观面板 / 星云绘制 / 三层落点）",
+    "Platform": "平台适配层",
+    "CLI": "命令行入口",
+    "Plugins": "插件源码（Notes）",
+    "Tests": "Core 单测（**含「断言键值 = 契约」的正当第二份**）",
+    "TestsPlatform": "平台面单测",
+    "TestsUISnapshot": "界面快照探针",
+    "Scripts": "门禁脚本自身（脚本要点名那个键才判得动）",
+    "Tools": "工具 target（LicenseTool）",
+}
+SWIFT_FACE_ROOT_GLOB = True   # 仓根 `*.swift`（`Package.swift`）也在面内
+SWIFT_FACE_EXCLUDED = {
+    "Vendor": "第三方代码（不由我们维护 —— 与同族判据对 `Vendor/` 的判定同口径）",
+    "点目录（`.git` / `.worktrees` 等）": "同一份源码的副本，不是「第二处实现」",
+}
+KEY_BASELINE = "Scripts/design-themes-key-baseline.json"   # 面对账台账（根表 / 文件数 / 允许持有点）
+KEY_LITERAL = f'"{NEBULA_TOGGLE_KEY}"'                     # 要唯一化的那个字面量（带引号）
 
 # ---- 台账式常量（每条都带理由；理由为空即红）-------------------------------------------------
 
@@ -892,15 +922,108 @@ def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
 
 # ---------------------------------------------------------------- 判据 I
 
-def _swift_sources(root: pathlib.Path) -> list[pathlib.Path]:
-    """判据 I 的扫描面：`Core` / `App` / `Platform` / `CLI` 里的 `.swift`（判"键字面量只许一处"）。"""
-    found: list[pathlib.Path] = []
-    for folder in ("Core", "App", "Platform", "CLI"):
-        found += sorted((root / folder).rglob("*.swift"))
-    return found
+def _face_files(root: pathlib.Path) -> tuple[list[pathlib.Path], dict[str, int]]:
+    """判据 I ②／③ 的扫描面（**现读**）：`SWIFT_FACE_ROOTS` 各根 rglob `*.swift` + 仓根 `*.swift`。
+
+    同一份源码被两根同时收进来时**去重**（否则一处字面量会被数成两处）。
+    """
+    files: list[pathlib.Path] = []
+    counts: dict[str, int] = {}
+    for folder in SWIFT_FACE_ROOTS:
+        path = root / folder
+        found = sorted(path.rglob("*.swift")) if path.is_dir() else []
+        counts[folder] = len(found)
+        files += found
+    if SWIFT_FACE_ROOT_GLOB:
+        files += sorted(root.glob("*.swift"))
+    unique: list[pathlib.Path] = []
+    seen: set[str] = set()
+    for path in files:
+        key = path.resolve().as_posix()
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return unique, counts
 
 
-def check_nebula_skin(root: pathlib.Path) -> tuple[list[Issue], int]:
+def key_face_snapshot(root: pathlib.Path) -> dict:
+    """面对账快照（现读）：根表各根的文件数 + 面内文件数 + 持有点（`文件:行`）。"""
+    files, counts = _face_files(root)
+    literal = re.compile(re.escape(KEY_LITERAL))
+    holders: list[dict] = []
+    for path in files:
+        text = _strip_comments(path.read_text(encoding="utf-8"))
+        hits = [index for index, line in enumerate(text.splitlines(), 1) if literal.search(line)]
+        if hits:
+            holders.append({"path": path.relative_to(root).as_posix(), "lines": hits})
+    return {"roots": counts, "scannedFiles": len(files), "rootGlob": SWIFT_FACE_ROOT_GLOB,
+            "holders": sorted(holders, key=lambda item: item["path"])}
+
+
+def load_key_baseline(root: pathlib.Path) -> tuple[dict | None, list[Issue]]:
+    """读面对账台账（不在盘 / 读不出 / 形状不对 ⇒ 红；面没有钉就不许通过）。"""
+    path = root / KEY_BASELINE
+    if not path.exists():
+        return None, [Issue(KEY_BASELINE, "面对账台账不在盘上 —— 面没有钉（先落台账再判）")]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        return None, [Issue(KEY_BASELINE, f"面对账台账读不出来：{exc}")]
+    if not isinstance(data, dict):
+        return None, [Issue(KEY_BASELINE, "面对账台账的形状不对（要一个对象）")]
+    return data, []
+
+
+def key_face_issues(snapshot: dict, baseline: dict | None) -> list[Issue]:
+    """面对账（**纯函数**：自检直接喂合成快照，不必搬整棵树）。
+
+    三样都判：根表增减（现读 ↔ 台账）/ 任一根为空（那一块面被削）/ 面内文件数低于台账（棘轮）。
+    """
+    if not baseline:
+        return [Issue(KEY_BASELINE, "面对账台账缺失 —— 面没有钉，不许通过")]
+    issues: list[Issue] = []
+    now, base = snapshot["roots"], baseline.get("roots") or {}
+    # 只比**根名**：某根里多出一个 `.swift` 属正常开发（与同族判据的棘轮口径一致 ——
+    # 缩面才是攻击面）。根表增减 / 任一根为空 / 面内文件数少于台账，三样都判红。
+    if sorted(now) != sorted(base):
+        issues.append(Issue(KEY_BASELINE, f"扫描面的根表明细 现读 {sorted(now)} / 台账 {sorted(base)}"
+                                           f" —— 面的增减都要跟版（改 {KEY_BASELINE} 并写明理由）"))
+    empty = sorted(folder for folder, count in now.items() if count < 1)
+    if empty:
+        issues.append(Issue(KEY_BASELINE, f"面里的根 {empty} 一份 `.swift` 都没有 —— 那一块面被削了，不许通过"))
+    floor = int(baseline.get("scannedFiles") or 0)
+    if snapshot["scannedFiles"] < floor:
+        issues.append(Issue(KEY_BASELINE, f"只扫到 {snapshot['scannedFiles']} 份 `.swift`（台账 {floor}）"
+                                           f" —— 削面：棘轮只许涨不许跌"))
+    return issues
+
+
+def nebula_key_holder_issues(holders: list[dict], baseline: dict | None) -> list[Issue]:
+    """持有点 / 允许清单三态（**纯函数**）：未登记 ⇒ 红；登记了却不在盘 ⇒ 红；理由为空 ⇒ 红。"""
+    allowed = (baseline or {}).get("allowedKeyHolders") or {}
+    found = {item["path"] for item in holders}
+    issues: list[Issue] = []
+    for item in holders:
+        if item["path"] not in allowed:
+            where = "、".join(f"{item['path']}:{line}" for line in item["lines"])
+            issues.append(Issue(item["path"],
+                                f"`{NEBULA_TOGGLE_KEY}` 这个**字面量**也出现在 {where}"
+                                f" —— 未登记的持有点（键写两处，改一处就让老用户的开关选择静默失效）；"
+                                f"确属正当第二份要登记进 `{KEY_BASELINE}` 并写明理由"))
+    for path, reason in sorted(allowed.items()):
+        if not str(reason).strip():
+            issues.append(Issue(KEY_BASELINE, f"台账里 `{path}` 的允许理由为空 —— 无理由的豁免不许留"))
+        if path not in found:
+            issues.append(Issue(KEY_BASELINE, f"台账登记 `{path}` 是正当持有点，但它不在盘上 / 不含那个字面量"
+                                              f" —— 陈旧豁免（改台账并写明理由）"))
+    if not found:
+        issues.append(Issue(NEBULA_PREF_SWIFT, f"面内没有任何文件写出 `{NEBULA_TOGGLE_KEY}`"
+                                               f" —— 规则的唯一出处或面被削了，不许通过"))
+    return issues
+
+
+
+def check_nebula_skin(root: pathlib.Path) -> tuple[list[Issue], int, dict]:
     """星空紫「星云皮肤」的存在 / 开关 / 三层表面（队列 `L-155`）。
 
     与像素探针的分工：这里判**结构上的事实**（规则在哪、条件写没写对、落点在不在、开关接没接上、
@@ -911,11 +1034,15 @@ def check_nebula_skin(root: pathlib.Path) -> tuple[list[Issue], int]:
     issues: list[Issue] = []
     sites = 0
 
+    # 判据 I ② 的面对账（`T-20261010-036` 扩面）：快照与台账先取，后面几条都用它
+    snapshot = key_face_snapshot(root)
+    baseline, baseline_issues = load_key_baseline(root)
+
     # ① 规则的唯一出处：键 / 缺省值 / 读法 / 生效条件
     pref_path = root / NEBULA_PREF_SWIFT
     if not pref_path.exists():
         return [Issue(NEBULA_PREF_SWIFT, "皮肤偏好的规则不存在 —— 判据 I 的前提没了"
-                                         "（键 / 缺省值 / 读法 / 生效条件都应当只在这里写一次）")], sites
+                                         "（键 / 缺省值 / 读法 / 生效条件都应当只在这里写一次）")], sites, snapshot
     pref = _strip_comments(pref_path.read_text(encoding="utf-8"))
 
     sites += 1
@@ -938,19 +1065,12 @@ def check_nebula_skin(root: pathlib.Path) -> tuple[list[Issue], int]:
                             f"生效条件不是「主题是星空紫 **且** 开关开」（缺 `{NEBULA_EFFECT_BODY}`）"
                             f" —— 少前半是「别的主题也长星星」，少后半是「关不掉」"))
 
-    # ② 键字面量全仓**只许一处**（写两处 ⇒ 改一处就让老用户的选择失效，而界面上毫无症状）
-    literal = re.compile(rf'"{re.escape(NEBULA_TOGGLE_KEY)}"')
-    holders = [
-        path.relative_to(root).as_posix()
-        for path in _swift_sources(root)
-        if literal.search(_strip_comments(path.read_text(encoding="utf-8")))
-    ]
+    # ② 键字面量：在**入库源码面**上只许出现在登记过的落点 + 面与台账对账
+    #    （2026-10-13 · `T-20261010-036`：面从 4 根扩到入库源码面；扩面前 `Tests/` 里那份看不见）
     sites += 1
-    if holders != [NEBULA_PREF_SWIFT]:
-        issues.append(Issue(NEBULA_PREF_SWIFT,
-                            f"`{NEBULA_TOGGLE_KEY}` 这个**字面量**出现在 {holders or '空'}"
-                            f"（应当只有 `{NEBULA_PREF_SWIFT}` 一处）"
-                            f" —— 同一个键写两处，改一处就让老用户的选择静默失效"))
+    issues += baseline_issues
+    issues += key_face_issues(snapshot, baseline)
+    issues += nebula_key_holder_issues(snapshot["holders"], baseline)
 
     # ③ 绘制侧只许调用那一条规则，不许自己再写一遍主题判断
     nebula_path = root / NEBULA_SWIFT
@@ -1044,7 +1164,7 @@ def check_nebula_skin(root: pathlib.Path) -> tuple[list[Issue], int]:
     if sites < MIN_NEBULA_SITES:
         issues.append(Issue(NEBULA_PREF_SWIFT, f"判据 I 只判了 {sites} 处（下限 {MIN_NEBULA_SITES}）"
                                               f" —— 扫描面被削过，不许通过"))
-    return issues, sites
+    return issues, sites, snapshot
 
 
 # ---------------------------------------------------------------- 自检
@@ -1072,6 +1192,22 @@ def _fixture(base: pathlib.Path) -> pathlib.Path:
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists():
             shutil.copy(path, target)
+    # 判据 I ② 的扫描面（`T-20261010-036` 扩面后）要求**十根都在、都不空**：
+    # 夹具缺哪一根就补一个替身 —— 真仓的那一根不在夹具里，替身只为了让「面钉」这一格可判。
+    for folder in SWIFT_FACE_ROOTS:
+        target = base / folder
+        target.mkdir(parents=True, exist_ok=True)
+        if not sorted(target.rglob("*.swift")):
+            (target / "__face_stub.swift").write_text("import Foundation\n", encoding="utf-8")
+    # 夹具自己的面对账台账：**按夹具现读写**（根表 / 文件数自洽），
+    # 允许持有点照抄真仓那两条（相对路径在夹具里逐字相同 ⇒ 未登记的第二份照样判红）。
+    fixture_baseline = json.loads((ROOT / KEY_BASELINE).read_text(encoding="utf-8"))
+    fixture_snapshot = key_face_snapshot(base)
+    fixture_baseline["roots"] = fixture_snapshot["roots"]
+    fixture_baseline["scannedFiles"] = fixture_snapshot["scannedFiles"]
+    (base / KEY_BASELINE).parent.mkdir(parents=True, exist_ok=True)
+    (base / KEY_BASELINE).write_text(json.dumps(fixture_baseline, ensure_ascii=False, indent=2),
+                                     encoding="utf-8")
     return base
 
 
@@ -1103,6 +1239,8 @@ def self_test() -> int:
 
     with tempfile.TemporaryDirectory(prefix="doyah-themes-selftest-") as tmp:
         base = _fixture(pathlib.Path(tmp) / "green")
+        base_snapshot = key_face_snapshot(base)
+        base_baseline, _ = load_key_baseline(base)
         # ① 绿：好情况
         cases.append(("好情况（绿）", False, static_issues(base)))
 
@@ -1329,6 +1467,40 @@ def self_test() -> int:
                "let count = 0")
         cases.append(("皮肤：探针不再比像素（红）", True, static_issues(no_compare)))
 
+        # ㉙ 红：同一个键字面量被抄进 `Tests/` 的新文件 ⇒ **未登记** ⇒ 红
+        #     （由头 = `T-20261010-036`：扩面前这条路整体在面外 ⇒ 静默绿）
+        key_dup = _fixture(pathlib.Path(tmp) / "bad-nebula-key-tests")
+        (key_dup / "Tests" / "ProbeNebulaKey.swift").write_text(
+            'import Foundation\nlet duplicatedKey = "ui.nebulaSkin"\n', encoding="utf-8")
+        cases.append(("皮肤：键字面量第二份抄进 Tests/（红）", True, static_issues(key_dup)))
+
+        # ㉚ 红：面被削到单根（`T-20261010-036` 验收 2）—— 合成快照喂纯函数，不必搬整棵树
+        shaved = dict(base_snapshot, roots={"Core": base_snapshot["roots"]["Core"]})
+        cases.append(("皮肤：扫描面被削到单根（红）", True, key_face_issues(shaved, base_baseline)))
+
+        # ㉛ 红：面内文件数低于台账（棘轮只许涨不许跌）
+        fewer = dict(base_snapshot, scannedFiles=base_snapshot["scannedFiles"] - 1)
+        cases.append(("皮肤：面内文件数低于台账（红）", True, key_face_issues(fewer, base_baseline)))
+
+        # ㉜ 红：面对账台账不在盘（面没有钉）
+        cases.append(("皮肤：面对账台账不在盘（红）", True,
+                      load_key_baseline(pathlib.Path(tmp) / "no-baseline-here")[1]))
+
+        # ㉝ 红：台账登记了却不在盘（陈旧豁免）
+        dead = {"allowedKeyHolders": {NEBULA_PREF_SWIFT: "规则的唯一出处",
+                                      "Tests/Gone.swift": "登记过但文件没了"}}
+        cases.append(("皮肤：台账里的持有点不在盘（红）", True,
+                      nebula_key_holder_issues([{"path": NEBULA_PREF_SWIFT, "lines": [28]}], dead)))
+
+        # ㉞ 红：台账里的允许理由为空（无理由的豁免不许留）
+        blank = {"allowedKeyHolders": {NEBULA_TESTS_SWIFT: "   "}}
+        cases.append(("皮肤：允许清单的理由为空（红）", True,
+                      nebula_key_holder_issues([{"path": NEBULA_TESTS_SWIFT, "lines": [44]}], blank)))
+
+        # ㉟ 绿（对手臂）：扩面后真仓那两处持有点都已在台账里登记
+        cases.append(("皮肤：面内持有点都已登记（绿）", False,
+                      nebula_key_holder_issues(base_snapshot["holders"], base_baseline)))
+
     failures = 0
     # 迭代**副本**：这个循环体里将来若有人再 `cases.append(...)`，迭代列表会一直变长
     # ⇒ 自检永不结束（第 83 轮实测：3 例被重复打印 809 次、进程挂住）。
@@ -1370,7 +1542,7 @@ def main(argv: list[str]) -> int:
     issues += entry_issues
     axis_issues, axis_sites = check_two_axis(ROOT)
     issues += axis_issues
-    nebula_issues, nebula_sites = check_nebula_skin(ROOT)
+    nebula_issues, nebula_sites, nebula_snapshot = check_nebula_skin(ROOT)
     issues += nebula_issues
 
     print("==> 主题集（配色方案，队列 L-80 ㈠ ㈡）")
@@ -1384,7 +1556,10 @@ def main(argv: list[str]) -> int:
     print(f"    ⑦ 两轴正交：{axis_sites} 处落点（深浅轴三态 / 两轴互不读取 / "
           f"{len(AXIS_STATES) * len(AXIS_SYSTEM_STATES) * len(THEME_IDS)} 组组合可达 / 组合到像素 / "
           f"面板显示当前深浅档）")
-    print(f"    ⑧ 星云皮肤（队列 L-155）：{nebula_sites} 处落点（规则的唯一出处 / 键字面量只许一处 / "
+    print(f"    ⑧ 星云皮肤（队列 L-155）：{nebula_sites} 处落点（规则的唯一出处 / 键字面量在入库源码面"
+          f"（{len(SWIFT_FACE_ROOTS)} 根 + 仓根）里只许出现在登记过的落点 —— 扫 "
+          f"{nebula_snapshot['scannedFiles']} 份 / 命中 {len(nebula_snapshot['holders'])} 处"
+          f"（{', '.join(h['path'] for h in nebula_snapshot['holders'])}）/ "
           f"生效条件两半都在且绘制侧只许调用 / 三层表面各自恰有一处 / 开关绑唯一写入口且只在星空紫下露面 / "
           f"规则单测与像素探针的落点都在位，探针还挂着 FILTER）")
 

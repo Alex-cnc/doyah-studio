@@ -1,0 +1,37 @@
+{
+  "_说明": "合册 T-20261013-027 / 原单 T-20261010-036 立的面对账台账 —— 判据 I ② 的扫描面（十根 + 仓根 `*.swift`）**现读**与此处逐格对账：根表增减都报红（改了面必须同步改本文件并写明理由）；scannedFiles 是棘轮（只许涨不许跌，跌 = 削面 = 红）；allowedKeyHolders 是「允许持有那个键字面量的落点」白名单（未登记 ⇒ 红；登记了却不在盘 ⇒ 陈旧豁免 ⇒ 红；理由为空 ⇒ 红）。",
+  "roots": {
+    "Core": 214,
+    "App": 119,
+    "Platform": 5,
+    "CLI": 4,
+    "Plugins": 24,
+    "Tests": 218,
+    "TestsPlatform": 2,
+    "TestsUISnapshot": 45,
+    "Scripts": 4,
+    "Tools": 1
+  },
+  "rootReasons": {
+    "Core": "产品核心层（值表 / 令牌 / 偏好规则）",
+    "App": "界面层（外观面板 / 星云绘制 / 三层落点）",
+    "Platform": "平台适配层",
+    "CLI": "命令行入口",
+    "Plugins": "插件源码（Notes）",
+    "Tests": "Core 单测（**含「断言键值 = 契约」的正当第二份**）",
+    "TestsPlatform": "平台面单测",
+    "TestsUISnapshot": "界面快照探针",
+    "Scripts": "门禁脚本自身（脚本要点名那个键才判得动）",
+    "Tools": "工具 target（LicenseTool）"
+  },
+  "rootGlob": true,
+  "scannedFiles": 637,
+  "allowedKeyHolders": {
+    "Core/NebulaSkinPreference.swift": "规则的唯一出处 —— 那个键本身在这里定义（`NEBULA_KEY_DECL`）",
+    "Tests/NebulaSkinPreferenceTests.swift": "「断言键值 = ui.nebulaSkin」是契约本身，属正当第二份（T-20261010-036 登记）：判据 I ⑥ 自己要求这条「规则单测」存在"
+  },
+  "excluded": {
+    "Vendor": "第三方代码（不由我们维护 —— 与同族判据对 `Vendor/` 的判定同口径）",
+    "点目录（`.git` / `.worktrees` 等）": "同一份源码的副本，不是「第二处实现」"
+  }
+}
