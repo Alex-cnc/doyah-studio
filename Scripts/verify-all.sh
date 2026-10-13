@@ -351,7 +351,7 @@ python3 Scripts/check-effective-language.py
 # **原样返回模板**，于是界面上印出的就是 `%@` 本身（中文英文都一样）。
 # 判据四条：A 数字实参落 `%@` 槽 / A′ 字符串字面量落 `%d` 槽 / B 实参数 ≠ 占位符数 /
 # C·D 类型不明的实参必须**逐条登记形状**（台账 `Scripts/format-argument-dispositions.json`）
-# 且命中处数只许不增（棘轮）。第二条是**门禁自己的证据**：9 例负例（A / A′ / B / C / D /
+# 且命中处数只许不增（棘轮）。第二条是**门禁自己的证据**：14 例负例（A / A′ / B / C / D / F / G /
 # 例外陈旧 / 空跑不许通过 …，夹具一律在临时目录，末例核对真仓库文件逐字节未变）。
 python3 Scripts/check-format-arguments.py
 python3 Scripts/check-format-arguments.py --self-test

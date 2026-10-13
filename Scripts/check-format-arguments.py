@@ -16,7 +16,7 @@
 * **调用点侧**：`App/` `CLI/` `Core/` 里 `L(.key, 实参…)` 的调用点（配平括号取实参、
   按深度切逗号 —— 实参本身可能含逗号，例：`ErrorPresenter.message(for: error)`）。
 
-## 四条判据
+## 六条判据
 
 * **A（数字 ⇒ `%@`）** 实参是数字、而该位置的模板转换符是 `%@` ⇒ **红**。
   数字的判定是**保守白名单**（见 `NUMBER_PATTERNS`）：字面整数 / `Int(…)` 之类转换 /
@@ -36,6 +36,14 @@
   ② 每个形状的命中处数不得超登记的 `maxSites`（**棘轮**：只许不增），
   全局未登记总量不得超 `unknownBudget`。
   撤销（命中变少）不判红，只打 `ℹ️` 提示 —— 减少是好事，但不许静默改台账。
+* **F（扫描面不许写死）** 扫描面由 `Package.swift` 的**生产 target** 声明派生（`path:` /
+  `sources:`；测试 target 不进面）—— 生产 target 没声明路径 ⇒ 判红、面里的根盘上不存在 ⇒
+  判红、面为空 ⇒ 判红、台账 `faceExempt` 里的根已不是生产 root ⇒ 判红（死豁免）。
+  旧实现写死五个目录、与 `Package.swift` 无对账：`Platform/macOS` 与 `Tools/LicenseTool`
+  在面外，往里写一处真违规是**静默通过**（成对矩阵 s5/s6）。
+* **G（语言列表不许写死、每个键要覆盖全部语言）** 语言列表由 `Core/Localization.swift` 的
+  `enum AppLanguage` 派生；某个键少了一种语言（或用了枚举外的语言名）⇒ 判红 ——
+  旧实现硬编码两个语言名，加第三语言会**静默漏审**（成对矩阵 s8）。
 * **E（台账不许陈旧）** `exceptions` 里每一条都必须仍对应一处**真存在的**违规，
   `shapes` 里每个形状都必须仍被真实命中 ⇒ 否则**红**（否则台账会变成一份
   「永远绿」的历史垃圾）。**空跑也不许通过**：调用点数为 0、或语言表一个带占位符的
@@ -49,13 +57,18 @@
 * 判定不出类型的实参只被「形状登记 + 棘轮」钉住 —— 形状的 `kind` 写错
   （把真会收 `Int` 的东西登记成 `text`）本门禁**看不见**，这正是 `reason`
   字段要写清「凭哪一行源码判的」的原因。
-* 注释按字符掩掉（`//` 与 `/* */`），字符串字面量里的内容不动。
+* 注释按字符掩掉（`//` 与 `/* */`），字符串字面量里的内容不动；**实参也从掩过的文本切**
+  （旧实现从原文切 ⇒ 实参里的注释把逗号带进来，`documented` 的假红根因，见 s4）。
+* 模板侧槽位：带位置索引（`%2$@`）按索引归位、`*` 宽度/精度各占一个槽；`%1$*2$d` 这种
+  「`*` 自带位置索引」不认（真仓 0 处）。
+* 面由 `Package.swift` **生产 target** 派生；`Tests/` `TestsUISnapshot/` `TestsPlatform/`
+  （测试 target）与 `Vendor/`（独立包）不在面内。
 
 ## 用法
 
     python3 Scripts/check-format-arguments.py            # 判红出口码（闭环第 3 项）
     python3 Scripts/check-format-arguments.py --report   # 人读清单（含形状直方图）
-    python3 Scripts/check-format-arguments.py --self-test # 门禁自己的证据（9 例）
+    python3 Scripts/check-format-arguments.py --self-test # 门禁自己的证据（14 例）
 
 `--self-test` 的夹具一律写在**临时目录**的合成小仓里（不碰真仓库），末例核对
 真仓库三份文件逐字节未变。
@@ -75,12 +88,15 @@ HERE = Path(__file__).resolve().parent
 REPO_DEFAULT = HERE.parent
 
 LEDGER_REL = "Scripts/format-argument-dispositions.json"
-SCAN_DIRS = ("App", "CLI", "Core", "Plugins/Notes/Sources", "Plugins/Notes/Views")
+# **扫描面不写死**：由 `Package.swift` 的生产 target 声明派生（原单 `T-20261010-053` ㈢）。
+# 旧实现写死元组，且与 `Package.swift` 无任何对账 ⇒ `Platform/macOS` 与 `Tools/LicenseTool`
+# 两个生产 root 长期在面外，往里写一处真违规是**静默通过**（成对矩阵 s5）。
+PACKAGE_REL = "Package.swift"
 TABLE_REL = "Core/Localization.swift"
 
 # printf 转换符：可选 位置参数 / 标志 / 宽度 / 精度 / 长度修饰，最后是转换符本身。
-SPEC_RE = re.compile(
-    r"%(?:(\d+)\$)?[-+ #0]*(?:\d+|\*)?(?:\.(?:\d+|\*))?(?:hh|h|ll|l|q|L|z|j|t)?"
+SPEC_SLOT_RE = re.compile(
+    r"%(?:(\d+)\$)?[-+ #0]*(\d+|\*)?(?:\.(\d+|\*))?(?:hh|h|ll|l|q|L|z|j|t)?"
     r"([@diouxXfFeEgGscpn%])"
 )
 
@@ -204,8 +220,107 @@ def read_string_literal(text: str, index: int) -> tuple[str, int]:
 
 
 def specifiers(template: str) -> list[str]:
-    """模板里的转换符序列（`%%` 不算实参位）。"""
-    return [c for c in (m.group(2) for m in SPEC_RE.finditer(template)) if c != "%"]
+    """模板的**实参槽位序列** —— 每个槽收一个实参（`%%` 不是槽）。
+
+    * 带**位置索引**的转换符（`%2$@`）按索引归位（1-based），不带索引的按出现序补位：
+      旧实现只按出现序 ⇒ 同一条模板上「对的判红、错的判绿」（原单 `T-20261010-053` ㈠）。
+    * `*` 宽度 / 精度**各占一个实参槽**（记 `"*"`，那个实参是 `Int`）：旧实现把 `*` 整个
+      丢掉 ⇒ `%-*d` 的正确调用被报「实参数 ≠ 占位符数」。
+    * 补位留下的空洞记 `"?"`（类型未知：不参与槽位交叉检查，只保证计数对得上）。
+    * `%1$*2$d` 这类「`*` 自带位置索引」的写法**不认**（真仓 0 处），如实登记在局限里。
+    """
+    slots: list[str | None] = []
+    cursor = 0
+    for m in SPEC_SLOT_RE.finditer(template):
+        conversion = m.group(4)
+        if conversion == "%":
+            continue
+        stars = [g for g in (m.group(2), m.group(3)) if g == "*"]
+        index = m.group(1)
+        start = int(index) - 1 if index is not None else cursor
+        for offset in range(len(stars)):
+            while len(slots) <= start + offset:
+                slots.append(None)
+            slots[start + offset] = "*"
+        last = start + len(stars)
+        while len(slots) <= last:
+            slots.append(None)
+        slots[last] = conversion
+        cursor = last + 1
+    return [slot if slot is not None else "?" for slot in slots]
+
+
+def production_face(root: Path) -> tuple[list[str], list[str], list[str]]:
+    """从 `Package.swift` 的**生产 target** 声明派生扫描面（原单 `T-20261010-053` ㈢）。
+
+    返回（面 · 未声明 `path:`/`sources:` 的生产 target 名 · 测试 target 名）。
+    测试 target（`DoyahCoreTests` / `DoyahUISnapshotTests` / `DoyahPlatformTests`）**不进面**：
+    那里有意构造反例（直接调 `String(format:)`）。老的写死元组把 `Platform/macOS` 与
+    `Tools/LicenseTool` 两个生产 root 留在面外，且没有任何判据发现 ⇒ 往里写一处真违规是静默通过。
+    """
+    src = mask_comments((root / PACKAGE_REL).read_text(encoding="utf-8"))
+    face: list[str] = []
+    undeclared: list[str] = []
+    tests: list[str] = []
+    for m in re.finditer(r"\.(\w*[Tt]arget)\s*\(", src):
+        kind = m.group(1)
+        open_index = src.index("(", m.end() - 1)
+        block = src[open_index + 1 : match_bracket(src, open_index, "(", ")")]
+        fields: dict[str, str] = {}
+        for piece in split_top_level(block):
+            label, _, value = piece.partition(":")
+            fields.setdefault(label.strip(), value.strip())
+        name = fields.get("name", "?").strip('"')
+        if kind == "testTarget":
+            tests.append(name)
+            continue
+        path = fields.get("path", "")
+        sources = fields.get("sources", "")
+        if not path and not sources:
+            undeclared.append(name or kind)
+            continue
+        base = path.strip().strip('"') or "."
+        items = re.findall(r'"([^"]*)"', sources) if sources else [""]
+        for item in items:
+            rel = (Path(base) / item).as_posix() if item else base
+            if rel.startswith("./"):
+                rel = rel[2:]
+            if rel and rel not in face:
+                face.append(rel)
+    return face, undeclared, tests
+
+
+def parse_language_cases(root: Path) -> list[str]:
+    """`enum AppLanguage` 的各例（语言列表**不写死** —— 旧实现硬编码两个语言名）。"""
+    src = mask_comments((root / TABLE_REL).read_text(encoding="utf-8"))
+    m = re.search(r"\benum\s+AppLanguage\b[^{]*\{", src)
+    if not m:
+        return []
+    open_index = src.index("{", m.start())
+    body = src[open_index + 1 : match_bracket(src, open_index, "{", "}")]
+    return re.findall(r"^[ \t]*case[ \t]+(\w+)", body, re.M)
+
+
+def parse_entry_languages(root: Path) -> dict[str, list[str]]:
+    """每个键**实际写了哪些语言**（按顶层逗号切 ⇒ 模板字符串里的 `.x:` 不会被当语言键）。"""
+    src = (root / TABLE_REL).read_text(encoding="utf-8")
+    anchor = src.find("static let table: [LKey: [AppLanguage: String]]")
+    if anchor < 0:
+        return {}
+    start = src.index("= [", anchor) + 2
+    body = src[start + 1 : match_bracket(src, start)]
+    masked = mask_comments(body)
+    out: dict[str, list[str]] = {}
+    for m in re.finditer(r"\.(\w+)\s*:\s*\[", masked):
+        inner_start = m.end() - 1
+        inner = body[inner_start + 1 : match_bracket(body, inner_start)]
+        langs: list[str] = []
+        for piece in split_top_level(mask_comments(inner)):
+            label = re.match(r"^\s*(?:AppLanguage\s*)?\.(\w+)\s*:", piece)
+            if label and label.group(1) not in langs:
+                langs.append(label.group(1))
+        out[m.group(1)] = langs
+    return out
 
 
 # ── 模板侧 ───────────────────────────────────────────────────────────────────
@@ -272,9 +387,9 @@ def split_top_level(text: str) -> list[str]:
 CALL_RE = re.compile(r"\bL\(\s*\.(\w+)\s*([,)])")
 
 
-def parse_call_sites(root: Path) -> list[dict]:
+def parse_call_sites(root: Path, face: list[str]) -> list[dict]:
     sites: list[dict] = []
-    for sub in SCAN_DIRS:
+    for sub in face:
         directory = root / sub
         if not directory.is_dir():
             continue
@@ -284,7 +399,11 @@ def parse_call_sites(root: Path) -> list[dict]:
             for m in CALL_RE.finditer(masked):
                 open_index = masked.index("(", m.start())
                 close_index = match_bracket(masked, open_index, "(", ")")
-                parts = split_top_level(raw[open_index + 1 : close_index])
+                # 实参从 **masked** 切（原单 `T-20261010-053` ㈡）：从 raw 切会把注释原文
+                # 带进实参，而 `split_top_level` 只认字符串、不认注释 ⇒
+                # `L(.k, /* 一,二 */ "x")` 被切成 2 个实参（假红 5 条）。
+                # 字符串字面量内容在 masked 里**原样保留**（模板侧早就这么做了）。
+                parts = split_top_level(masked[open_index + 1 : close_index])
                 args = [
                     re.sub(r"^await\s+", "", part).strip()
                     for part in parts[1:]
@@ -355,11 +474,11 @@ class Resolver:
     不是给整张表开一条放行通道。
     """
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, face: list[str]) -> None:
         self.functions: dict[str, set[str]] = {}
         self.members: dict[str, set[str]] = {}
 
-        for sub in SCAN_DIRS:
+        for sub in face:
             directory = root / sub
             if not directory.is_dir():
                 continue
@@ -443,9 +562,17 @@ def load_ledger(root: Path) -> dict:
 
 def evaluate(root: Path) -> dict:
     table = parse_language_table(root)
-    sites = parse_call_sites(root)
     ledger = load_ledger(root)
-    resolver = Resolver(root)
+    face, undeclared, test_targets = production_face(root)
+    exempt = {e["root"]: e for e in ledger.get("faceExempt", [])}
+    scan_face = [r for r in face if r not in exempt]
+    languages = parse_language_cases(root)
+    entry_languages = parse_entry_languages(root)
+    sites = parse_call_sites(root, scan_face)
+    resolver = Resolver(root, scan_face)
+    scanned_files = sum(
+        len(list((root / rel).rglob("*.swift"))) for rel in scan_face if (root / rel).is_dir()
+    )
 
     spec_keys = {k: {lang: specifiers(t) for lang, t in v.items()} for k, v in table.items()}
     spec_keys = {k: v for k, v in spec_keys.items() if any(v.values())}
@@ -464,8 +591,47 @@ def evaluate(root: Path) -> dict:
     shape_counter: dict[str, int] = {}
     per_judgement: dict[str, list[str]] = {"A": [], "A′": [], "B": []}
 
+    # F：扫描面（必须能从 Package.swift 机械派生）+ faceExempt 三条棘轮
+    for root_rel in exempt:
+        if root_rel not in face:
+            errors.append(
+                f"❌ [F] 面豁免陈旧：{LEDGER_REL} 的 faceExempt 登记了 `{root_rel}`，"
+                f"但 {PACKAGE_REL} 里没有这个生产 root —— 请删除该条"
+            )
+    for name in undeclared:
+        errors.append(
+            f"❌ [F] 生产 target `{name}` 既没声明 `path:` 也没声明 `sources:` ⇒ "
+            f"它的源根进不了扫描面（面必须能从 {PACKAGE_REL} 机械派生）"
+        )
+    if not scan_face:
+        errors.append(
+            f"❌ [F] 扫描面为空（{PACKAGE_REL} 一个生产源根都派生不出来）—— 空跑不是通过"
+        )
+    for root_rel in scan_face:
+        if not (root / root_rel).is_dir():
+            errors.append(
+                f"❌ [F] 扫描面里的根 `{root_rel}` 在盘上不存在（{PACKAGE_REL} 生产 target 声明了它）"
+            )
+    # G：语言列表（由 `enum AppLanguage` 派生）+ 每个键都要覆盖全部语言
+    if len(languages) < 2:
+        errors.append(
+            f"❌ [G] 从 {TABLE_REL} 的 `enum AppLanguage` 只解析出 {len(languages)} 个语言"
+            f"（{languages}）—— 判据取不到输入（不是通过）"
+        )
+    for key_name, langs in entry_languages.items():
+        missing = [lang for lang in languages if lang not in langs]
+        if missing:
+            errors.append(
+                f"❌ [G] 语言表键 `{key_name}` 缺语言 {missing}"
+                f"（`enum AppLanguage` 有 {len(languages)} 个各例）—— 那种语言下会回落到别的模板"
+            )
+        extra = [lang for lang in langs if lang not in languages]
+        if extra:
+            errors.append(
+                f"❌ [G] 语言表键 `{key_name}` 有 `enum AppLanguage` 之外的语言 {extra}"
+            )
     if not sites:
-        errors.append(f"❌ 一个 `L(...)` 调用点都没扫到（扫描目录 {list(SCAN_DIRS)}）—— 空跑不是通过")
+        errors.append(f"❌ 一个 `L(...)` 调用点都没扫到（扫描面 {scan_face}）—— 空跑不是通过")
     if not spec_keys:
         errors.append("❌ 语言表里一个带占位符的键都没解析到 —— 判据取不到输入（不是通过）")
 
@@ -526,8 +692,12 @@ def evaluate(root: Path) -> dict:
                 if index >= len(specs):
                     continue
                 conv = specs[index]
+                if conv == "?":
+                    continue  # 位置参数留下的空洞：类型未知 ⇒ 不参与槽位交叉检查
                 if kind == "number" and conv == "@":
                     flagged("A", key, file, line, f"{language} 模板第 {index + 1} 位是 `%@`，实参是数字 ⇒ 界面印 `(null)`")
+                if kind == "text" and conv == "*":
+                    flagged("A′", key, file, line, f"{language} 模板第 {index + 1} 位是 `*`（宽度/精度取自实参），实参是字符串 ⇒ 数字槽收字符串")
                 if kind == "text" and conv in "diouxXfFeEgG":
                     flagged("A′", key, file, line, f"{language} 模板第 {index + 1} 位是 `%{conv}`，实参是字符串 ⇒ 数字槽收字符串")
 
@@ -573,6 +743,10 @@ def evaluate(root: Path) -> dict:
         "shape_counter": shape_counter,
         "shapes": shapes,
         "per_judgement": per_judgement,
+        "face": scan_face,
+        "test_targets": test_targets,
+        "scanned_files": scanned_files,
+        "languages": languages,
     }
 
 
@@ -586,6 +760,11 @@ def print_report(result: dict) -> None:
         f"类型不明实参 {result['unknown_total']} 处（预算 {result['unknown_budget']}）；"
         f"已登记形状 {len(result['shapes'])} 个"
     )
+    print(
+        f"扫描面 {len(result['face'])} 个源根（{PACKAGE_REL} 生产 target 派生 · "
+        f"测试 target {len(result['test_targets'])} 个不进面）：{result['scanned_files']} 份 .swift"
+    )
+    print(f"语言 {len(result['languages'])} 个（`enum AppLanguage` 派生）：{result['languages']}")
     for judgement, rows in result["per_judgement"].items():
         print(f"判据 {judgement}：{len(rows)} 处")
         for row in rows:
@@ -614,15 +793,45 @@ def print_report(result: dict) -> None:
 
 FIXTURE_TABLE = '''import Foundation
 
+public enum AppLanguage: String, CaseIterable {
+    case simplifiedChinese = "zh-Hans"
+    case english = "en"
+}
+
 public enum LocalizedStrings {
     static let table: [LKey: [AppLanguage: String]] = [
         .greet: [.simplifiedChinese: "你好 %@，共 %d 条", .english: "Hi %@, %d rows"],
         .rows: [.simplifiedChinese: "共 %d 行", .english: "%d rows"],
         .plain: [.simplifiedChinese: "纯文本", .english: "plain"],
         .label: [.simplifiedChinese: "当前版本：%@", .english: "Current edition: %@"],
+        .pos: [.simplifiedChinese: "%2$@ 与 %1$d", .english: "%2$@ and %1$d"],
+        .star: [.simplifiedChinese: "%-*d 行", .english: "%-*d rows"],
     ]
 }
 '''
+
+# 夹具的 `Package.swift`：扫描面现在**从这里派生**（真仓同款 —— 生产 target 的
+# `path:` / `sources:`）。测试 target 不进面。
+FIXTURE_PACKAGE = '''// swift-tools-version: 5.10
+import PackageDescription
+
+let package = Package(
+    name: "Fixture",
+    targets: [
+        .target(name: "FixtureCore", path: ".", sources: ["Core"]),
+        .executableTarget(name: "FixtureApp", path: ".", sources: ["App"]),
+        .testTarget(name: "FixtureTests", path: "Tests"),
+    ]
+)
+'''
+
+# 面完备性臂：声明一个**新的**生产 root（`Platform`），违规写在那里。
+FIXTURE_PACKAGE_PLATFORM = FIXTURE_PACKAGE.replace(
+    '        .testTarget(name: "FixtureTests", path: "Tests"),',
+    '        .testTarget(name: "FixtureTests", path: "Tests"),\n'
+    '        .target(name: "FixturePlatform", path: "Platform"),',
+)
+FIXTURE_PROBE_PLATFORM = "import Foundation\n\nlet p = L(.greet, 1, 2)\n"
 
 FIXTURE_OK = """import Foundation
 
@@ -671,11 +880,22 @@ FIXTURE_LEDGER = {
 }
 
 
-def write_fixture_tree(base: Path, fixture_source: str, ledger: dict | None = None) -> Path:
+def write_fixture_tree(
+    base: Path,
+    fixture_source: str,
+    ledger: dict | None = None,
+    package_text: str | None = None,
+    extra_files: dict[str, str] | None = None,
+) -> Path:
     root = base / "repo"
     (root / "Core").mkdir(parents=True, exist_ok=True)
     (root / "App").mkdir(parents=True, exist_ok=True)
     (root / "Scripts").mkdir(parents=True, exist_ok=True)
+    (root / PACKAGE_REL).write_text(package_text or FIXTURE_PACKAGE, encoding="utf-8")
+    for rel, text in (extra_files or {}).items():
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
     (root / TABLE_REL).write_text(FIXTURE_TABLE, encoding="utf-8")
     (root / "App/Fixture.swift").write_text(fixture_source, encoding="utf-8")
     payload = FIXTURE_LEDGER if ledger is None else ledger
@@ -756,6 +976,42 @@ def run_self_test() -> int:
             False,
             "",
         ),
+        (
+            "位置参数归位 · 正确调用（`%2$@ 与 %1$d`：数字喂 %d、文字喂 %@）⇒ 判绿",
+            FIXTURE_OK + 'let f = L(.pos, 42, "文字")\n',
+            None,
+            True,
+            "",
+        ),
+        (
+            "位置参数归位 · 错序调用（文字喂 %d、数字喂 %@）⇒ 判红",
+            FIXTURE_OK + 'let f = L(.pos, "文字", 42)\n',
+            None,
+            False,
+            "App/Fixture.swift:11",
+        ),
+        (
+            "`*` 宽度各占一个实参槽（`%-*d` + `L(.star, 3, 42)`）⇒ 判绿",
+            FIXTURE_OK + "let f = L(.star, 3, 42)\n",
+            None,
+            True,
+            "",
+        ),
+        (
+            "实参里的注释不带进实参（`L(.rows, /* 一,二 */ count)`）⇒ 判绿",
+            FIXTURE_OK.replace("L(.rows, count)", "L(.rows, /* 一,二 */ count)"),
+            None,
+            True,
+            "",
+        ),
+        (
+            "面完备性：Package.swift 新增生产 root + 该 root 下的违规 ⇒ 判红",
+            FIXTURE_OK,
+            None,
+            False,
+            "Platform/Probe.swift:3",
+            (FIXTURE_PACKAGE_PLATFORM, {"Platform/Probe.swift": FIXTURE_PROBE_PLATFORM}),
+        ),
     ]
 
     real_files = [REPO_DEFAULT / TABLE_REL, REPO_DEFAULT / "Scripts/verify-all.sh"]
@@ -768,8 +1024,12 @@ def run_self_test() -> int:
     failures = 0
     tmp = Path(tempfile.mkdtemp(prefix="l46-selftest-"))
     try:
-        for index, (title, source, ledger, expect_ok, expect_text) in enumerate(cases, start=1):
-            root = write_fixture_tree(tmp / f"case{index}", source, ledger)
+        for index, case in enumerate(cases, start=1):
+            title, source, ledger, expect_ok, expect_text = case[:5]
+            package_text, extra_files = case[5] if len(case) > 5 else (None, None)
+            root = write_fixture_tree(
+                tmp / f"case{index}", source, ledger, package_text, extra_files
+            )
             if index == 8:
                 # 第 8 例：把语言表里的占位符全删掉 ⇒ 判据取不到输入，必须报红
                 (root / TABLE_REL).write_text(
@@ -796,7 +1056,10 @@ def run_self_test() -> int:
             if p.exists()
         }
         unchanged = before == after
-        print(f"  {'✅' if unchanged else '❌'} 例 9：末例核对真仓库 {len(before)} 份文件逐字节未变")
+        last = len(cases) + 1
+        print(
+            f"  {'✅' if unchanged else '❌'} 例 {last}：末例核对真仓库 {len(before)} 份文件逐字节未变"
+        )
         if not unchanged:
             failures += 1
     finally:
