@@ -26,6 +26,9 @@ LEDGER_REL = "Scripts/connection-failure-dispositions.json"
 # 门禁要看的文件（相对路径 → 临时树里的同一位置）
 FILES = [
     "Vendor/postgres-nio/Sources/PostgresNIO/New/PSQLError.swift",
+    "Vendor/mysql-nio/Sources/MySQLNIO/MySQLError.swift",
+    "Vendor/mysql-nio/Sources/MySQLNIO/Protocol/MySQLProtocol+ErrorCode.swift",
+    "Core/MySQLWording.swift",
     "Core/ConnectionFailure.swift",
     "Core/Localization.swift",
     "Core/PostgresService.swift",
@@ -85,6 +88,32 @@ def write_ledger(tree: Path, data: dict) -> None:
     (tree / LEDGER_REL).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def driver_of(data: dict, driver_id: str) -> dict:
+    """台账里某一支驱动的节点（`drivers[]` 按 id 取）。"""
+    for driver in data.get("drivers", []):
+        if driver.get("id") == driver_id:
+            return driver
+    raise AssertionError(f"台账里没有 id={driver_id} 的驱动（drivers[] 结构变了？）")
+
+
+def expect_green(label: str, mutate) -> None:
+    """拷一棵新树 → 按「动了但不该判红」的写法改 → 门禁必须 rc=0（对手臂）。
+
+    **为什么要有它**：每条判据扩面之后都会多出「面外 / 无关件」这一类误伤风险 ——
+    只测「写坏必红」测不出误伤，两个方向都得钉（与各族的对手臂同一口径）。
+    """
+    tree = make_tree()
+    try:
+        mutate(tree)
+        code, problems = run_gate(tree)
+        if code != 0:
+            record(False, label, f"改了这个不该判红：{problems[:220]}")
+        else:
+            record(True, label)
+    finally:
+        shutil.rmtree(tree, ignore_errors=True)
+
+
 def expect(label: str, mutate, needle: str) -> None:
     """拷一棵新树 → 写坏 → 门禁必须报红且点名 needle。"""
     tree = make_tree()
@@ -121,7 +150,8 @@ def main() -> int:
 
     def stale_ledger(tree: Path) -> None:
         data = ledger_of(tree)
-        data["dispositions"]["ghostCode"] = {"kind": "不翻译", "why": "这个码在驱动里已经不存在了，条目该删"}
+        driver_of(data, "postgres")["dispositions"]["ghostCode"] = {
+            "kind": "不翻译", "why": "这个码在驱动里已经不存在了，条目该删"}
         write_ledger(tree, data)
 
     expect("陈旧条目 → 报红并点名", stale_ledger, "已经不在的码")
@@ -137,7 +167,7 @@ def main() -> int:
 
     def short_why(tree: Path) -> None:
         data = ledger_of(tree)
-        data["dispositions"]["queryCancelled"]["why"] = "不重要"
+        driver_of(data, "postgres")["dispositions"]["queryCancelled"]["why"] = "不重要"
         write_ledger(tree, data)
 
     expect("理由太短 → 报红", short_why, "没有写明处置理由")
@@ -285,6 +315,109 @@ def main() -> int:
             "guard state == \"57014\" else { return nil }", 1))
 
     expect("名单在但没人读 → 报红（登记等于没生效）", unread_sqlstate_list, "没读它")
+
+    print("\n== P) MySQL/GBase 支：驱动新增一个码，台账没登记（样本 46 的活体缺口）")
+
+    def mysql_new_code(tree: Path) -> None:
+        edit(tree, "Vendor/mysql-nio/Sources/MySQLNIO/MySQLError.swift", lambda text: text.replace(
+            "    case closed\n", "    case closed\n    case probeBrandNewCode\n", 1))
+
+    expect("MySQL 驱动新增码未登记 → 报红并点名驱动:码名", mysql_new_code, "MySQL/GBase:probeBrandNewCode")
+
+    print("\n== Q) MySQL/GBase 支：台账陈了（登记了驱动里已经没有的码）")
+
+    def mysql_stale(tree: Path) -> None:
+        data = ledger_of(tree)
+        driver_of(data, "mysql")["dispositions"]["ghostMySQLErrorCode"] = {
+            "kind": "驱动原文", "why": "这个码在驱动里已经不存在了，条目该删"}
+        write_ledger(tree, data)
+
+    expect("MySQL 陈旧条目 → 报红并点名", mysql_stale, "MySQL/GBase:ghostMySQLErrorCode")
+
+    print("\n== R) MySQL 协议数字码表新增一个码（台账逐名名单没跟上）")
+
+    def mysql_protocol_new(tree: Path) -> None:
+        edit(tree, "Vendor/mysql-nio/Sources/MySQLNIO/Protocol/MySQLProtocol+ErrorCode.swift",
+             lambda text: text.replace(
+                 "        /// `SERVER_INIT`\n",
+                 "        /// `PROBE_BRAND_NEW_CODE`\n"
+                 "        public static var PROBE_BRAND_NEW_CODE: Self { 9999 }\n"
+                 "        /// `SERVER_INIT`\n", 1))
+
+    expect("协议码表新增码 → 报红并点名驱动:码名", mysql_protocol_new, "MySQL/GBase:PROBE_BRAND_NEW_CODE")
+
+    print("\n== S) MySQL 协议码表少了一个码（台账留着旧的）")
+
+    def mysql_protocol_drop(tree: Path) -> None:
+        edit(tree, "Vendor/mysql-nio/Sources/MySQLNIO/Protocol/MySQLProtocol+ErrorCode.swift",
+             lambda text: text.replace("        public static var HASHCHK: Self { 1000 }\n", "", 1))
+
+    expect("协议码表少码 → 报红并点名陈旧条目", mysql_protocol_drop, "MySQL/GBase:HASHCHK")
+
+    print("\n== T) MySQL 驱动面被掏空（枚举改名 ⇒ 码表读不出来）")
+
+    def mysql_enum_renamed(tree: Path) -> None:
+        edit(tree, "Vendor/mysql-nio/Sources/MySQLNIO/MySQLError.swift", lambda text: text.replace(
+            "public enum MySQLError:", "public enum MySQLDriverError:", 1))
+
+    expect("读不到 MySQL 码表 → 报红（不许零命中 = 通过）", mysql_enum_renamed, "读不到码表")
+
+    print("\n== U) MySQL 文案出口被删（台账登记的那句没人渲染了）")
+
+    def mysql_exit_gone(tree: Path) -> None:
+        edit(tree, "Core/MySQLWording.swift", lambda text: text.replace(
+            "    public static func copyUnsupported(language: AppLanguage) -> String {",
+            "    public static func copyUnsupportedRenamed(language: AppLanguage) -> String {", 1))
+
+    expect("文案出口不在位 → 报红", mysql_exit_gone, "文案出口不在位")
+
+    print("\n== V) 台账回退成单驱动结构（样本 46 老缺口不许静默回来）")
+
+    def ledger_single_driver(tree: Path) -> None:
+        data = ledger_of(tree)
+        postgres = driver_of(data, "postgres")
+        data["driverCodeSource"] = postgres["driverCodeSource"]
+        data["mapping"] = postgres["mapping"]
+        data["dispositions"] = postgres["dispositions"]
+        data.pop("drivers", None)
+        write_ledger(tree, data)
+
+    expect("drivers[] 被砍回单驱动 → 报红", ledger_single_driver, "没有 `drivers[]`")
+
+    print("\n== V') 对手臂：只改 knownGaps（只报不判）⇒ 照旧绿")
+
+    def mysql_gap_append(tree: Path) -> None:
+        data = ledger_of(tree)
+        driver_of(data, "mysql")["knownGaps"].append("对手臂：knownGaps 是只报不判的档，追加一句不该判红")
+        write_ledger(tree, data)
+
+    expect_green("只有 knownGaps 变了 → 照旧绿", mysql_gap_append)
+
+    print("\n== V'') 对手臂：MySQL 服务文件里改一句无关正文 ⇒ 面内无关件不误伤")
+
+    def mysql_service_untouched(tree: Path) -> None:
+        edit(tree, "Core/MySQLService.swift", lambda text: text.replace(
+            "    // MARK: - 事务", "    // MARK: - 事务（对手臂改的是无关正文）", 1))
+
+    expect_green("改 MySQLService 无关正文 → 照旧绿", mysql_service_untouched)
+
+    print("\n== W) 台账把 MySQL 支的面削了（`protocolCodeSource` 被删 ⇒ 面文件数下限）")
+
+    def ledger_drops_protocol_face(tree: Path) -> None:
+        data = ledger_of(tree)
+        driver_of(data, "mysql").pop("protocolCodeSource", None)
+        write_ledger(tree, data)
+
+    expect("协议码表面被删 → 报红（面文件数 < 下限）", ledger_drops_protocol_face, "面文件")
+
+    print("\n== X) 码数下限要能响（台账写 20 而 Postgres 实测 19）")
+
+    def ledger_overstates_min_codes(tree: Path) -> None:
+        data = ledger_of(tree)
+        driver_of(data, "postgres")["minCodes"] = 20
+        write_ledger(tree, data)
+
+    expect("码数低于下限 → 报红（不许「能读出来 = 通过」）", ledger_overstates_min_codes, "下限 20")
 
     print()
     print(f"结果：{len(passed)} 项达到预期，{len(failed)} 项不符")

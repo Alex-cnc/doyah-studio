@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""门禁：连接失败的**文案覆盖面**（开发循环 L-14 起，闭环第 14 项）。
+"""门禁：连接失败的**文案覆盖面**（开发循环 L-14 起，闭环第 14 项）—— 覆盖本仓**全部连接驱动**：Postgres + MySQL/GBase。
 
-**为什么有它**：驱动是随仓库带走的 Vendor（`Vendor/postgres-nio`），升一次版就可能多出
-新的 `PSQLError.Code`。文案层的 `switch` 有 `default:` 兜底，于是新原因**不会报错、不会崩**，
+**为什么有它**：驱动是随仓库带走的 Vendor（`Vendor/postgres-nio` + `Vendor/mysql-nio`），升一次版就可能多出
+新的驱动码（`PSQLError.Code.Base` / `MySQLError`）。文案层的 `switch` 有 `default:` 兜底，于是新原因**不会报错、不会崩**，
 只会被说成一句与它无关的话 —— 与 L-14 修掉的那件事同一族：
 **代码没坏，话指错了方向**。这类退化没有任何现有门禁看得见（编译过、单测过、文档计数对）。
 
 做法与第 13 项同源：**台账是声明**（`Scripts/connection-failure-dispositions.json`），
 门禁拿七组判据跟事实对账：
 
-  ① 驱动源码里的 `PSQLError.Code.Base` 枚举本身要读得出来（读不出来 → 驱动换了写法，该更新门禁）；
+  ⓪ 台账按 `drivers[]` **分驱动**登记（Postgres / MySQL·GBase），每支一条 —— 单驱动结构装不下第二支；
+  ① 每支驱动源码里的码表本身要读得出来（Postgres = `PSQLError.Code.Base`，MySQL = `MySQLError`；
+     读不出来 / 读出错枚举 → 判红，不许「零命中 = 通过」）；面文件数与码数两条下限都要能响；
   ② 驱动有的码，台账必须有一条处置；台账有的码，驱动里必须还在（陈旧条目也算红）；
   ③ 标「翻译」的必须给出 `caseRef`，且那个 `case` **真的**出现在那段 `switch psqlError.code` 里
      （挡台账撒谎；只出现在文件别处不算）；标「按码说话」的必须写明为什么（空理由 = 等于没登记）；
@@ -28,6 +30,10 @@
      `describeNonConnection`，且**处数不少于台账写的 `minCallSites`** —— `describe` 返回 nil
      时不能只剩英文调试串（L-14 留下的那半件事）。只查「有没有这个调用」不够：这些文件里
      出口常常不止一处（`CLI/main.swift` 两条路），删掉一处剩下的仍能顶数（负例 M/N/O 钉住）。
+
+MySQL/GBase 支另做：`MySQLProtocol.ErrorCode`（协议数字码表）**面 + 面钉 + 逐名对账**
+（台账 `protocolCodeNames` 存名单：新增 / 消失的符号逐名点名，只写个数会让「加一个删一个」顶数）+
+`Core/MySQLWording.swift` 的文案出口面（台账 `wordingExits`，出口被删 ⇒ 判红）。
 
 用法：
     python3 Scripts/check-connection-failure-coverage.py            # 人读结论，失败非零退出
@@ -97,6 +103,40 @@ def driver_codes(text: str) -> list[str]:
     return names
 
 
+def enum_cases(text: str, anchor: str) -> list[str]:
+    """从 `anchor`（枚举声明那一行）起读 `case` 名字，读到枚举体结束为止。
+
+    **为什么要在声明之后按行读**：`vendor` 文件里别的枚举也有 `case`（同一份
+    `MySQLError.swift` 里 `MySQLProtocol.ERR_Packet.DecodeError` 就在别处），
+    在整份文件里找 `case` 等于没找（`region` 那条注释说的同一件事）。
+
+    **停止条件**：遇到 `public …`（计算属性 / 嵌套类型）/ `var …` / 收尾 `}` ——
+    枚举体之后的正文一律不算码。
+    """
+    at = text.find(anchor)
+    if at < 0:
+        return []
+    names: list[str] = []
+    for line in text[at:].splitlines()[1:]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped == "}" or stripped.startswith("public ") or stripped.startswith("var "):
+            break
+        match = re.match(r"case\s+([A-Za-z_][A-Za-z0-9_]*)", stripped)
+        if match:
+            names.append(match.group(1))
+    return names
+
+
+def static_var_names(text: str, anchor: str) -> list[str]:
+    """`public struct <anchor>` 之后那批 `public static var NAME: Self { N }` 的名字。"""
+    at = text.find(anchor)
+    if at < 0:
+        return []
+    return re.findall(r"public static var ([A-Za-z_][A-Za-z0-9_]*): Self \{", text[at:])
+
+
 def driver_switch_body(mapping: str) -> str | None:
     """`describe(psqlError:)` 里那段 `switch psqlError.code` 的正文（到函数结束为止）。
 
@@ -111,6 +151,167 @@ def driver_switch_body(mapping: str) -> str | None:
     return tail[:end] if end > 0 else tail
 
 
+def check_driver_face(root: Path, driver: dict, problems: list[str], notes: list[str]) -> None:
+    """分驱动对账：**面 / 面钉 / 双向对账 / 文案出口面**（Postgres 支另有 ①–⑦ 专判）。
+
+    **为什么单开一段**：样本 46 的缺口就是「覆盖面只落了两个驱动中的一个」——
+    Postgres 有台账有判据，MySQL（`Vendor/mysql-nio`，12 码 + 协议数字码表 1144 条 +
+    `Core/MySQLWording.swift` 8 个出口）既没台账也没判据，往它加码门禁逐字不动。
+    这一段是**支无关**的对账：谁登记的驱动谁都要过，两支用同一套机械规则。
+    """
+    name = driver.get("name") or driver.get("id") or "(未命名驱动)"
+    # 面的文件数：驱动码源（+ 协议码表源）+ 文案映射/出口文件都算面内文件
+    sources = [driver.get("driverCodeSource", "")]
+    if driver.get("protocolCodeSource"):
+        sources.append(driver["protocolCodeSource"])
+    if driver.get("mapping"):
+        sources.append(driver["mapping"])
+    gone_files = [s for s in sources if not (root / s).exists()]
+    if gone_files:
+        problems.append(
+            f"驱动 {name}：台账登记的面文件不存在：{'、'.join(gone_files)}"
+            "（面被掏空 ⇒ 不许「零命中 = 通过」）"
+        )
+        return
+    minimum_files = driver.get("minSourceFiles", len(sources))
+    if len(sources) < minimum_files:
+        problems.append(f"驱动 {name}：面文件 {len(sources)} 份 < 下限 {minimum_files}")
+
+    source_rel = driver["driverCodeSource"]
+    source_text = read(root / source_rel)
+    if driver.get("codeStyle") == "swift-enum":
+        codes = enum_cases(source_text, driver.get("codeAnchor", ""))
+    else:
+        codes = driver_codes(source_text)
+    sentinel = driver.get("sentinel", "")
+    if not codes or (sentinel and sentinel not in codes):
+        problems.append(
+            f"驱动 {name}：从 {source_rel} 里读不到码表（读到的是：{'、'.join(codes) or '空'}）—— "
+            "驱动换了写法（或台账指错了文件），这道门禁该跟着更新，别让它悄悄变成永远绿"
+        )
+        return
+    floor = driver.get("minCodes")
+    if not isinstance(floor, int) or floor < 1:
+        problems.append(f"驱动 {name}：台账没写 `minCodes`（码数下限）—— 零命中不许当通过")
+    elif len(codes) < floor:
+        problems.append(f"驱动 {name}：码表只剩 {len(codes)} 个 < 下限 {floor}（面被削 ⇒ 不许当通过）")
+
+    # 协议数字码表（MySQL/GBase 支）：面 + 面钉 + **逐名对账**
+    # 只钉个数是不够的：加一个删一个仍能顶数（与 L-04/L-05 同族：只登记「有这个数」）。
+    proto_rel = driver.get("protocolCodeSource")
+    if proto_rel:
+        proto_text = read(root / proto_rel)
+        names = static_var_names(proto_text, driver.get("protocolCodeAnchor", ""))
+        if not names:
+            problems.append(
+                f"驱动 {name}：从 {proto_rel} 里读不出协议码表 —— 表被改名或挪走了，该更新门禁"
+            )
+        else:
+            proto_floor = driver.get("minProtocolCodes")
+            if not isinstance(proto_floor, int) or proto_floor < 1:
+                problems.append(f"驱动 {name}：协议码表没写 `minProtocolCodes`（面钉）")
+            elif len(names) < proto_floor:
+                problems.append(
+                    f"驱动 {name}：协议码表只剩 {len(names)} 个 < 下限 {proto_floor}（面被削 ⇒ 不许当通过）"
+                )
+            pinned = (driver.get("protocolCodeNames") or "").split()
+            if not pinned:
+                problems.append(
+                    f"驱动 {name}：台账没写 `protocolCodeNames`（逐名对账的名单）—— "
+                    "只写个数的话，加一个删一个仍能顶数"
+                )
+            else:
+                known = set(pinned)
+                added = [n for n in names if n not in known]
+                dropped = [n for n in pinned if n not in set(names)]
+                if added:
+                    problems.append(
+                        f"驱动 {name}：协议码表里新增了台账没登记的码："
+                        + "、".join(f"{name}:{n}" for n in added[:12])
+                        + "（新码静默落进服务端原文那一档（`.server`）—— "
+                        "去 Scripts/connection-failure-dispositions.json 登记 / 跟版）"
+                    )
+                if dropped:
+                    problems.append(
+                        f"驱动 {name}：台账登记了、驱动里已经不在的协议码："
+                        + "、".join(f"{name}:{n}" for n in dropped[:12]) + "（陈旧条目要删）"
+                    )
+            notes.append(
+                f"驱动 {name}：协议码表 {len(names)} 个（{proto_rel}，台账逐名对账）"
+            )
+
+    # 文案出口面（MySQL/GBase 支）：台账登记的出口必须真的在位（出口被删 = 那一档没话说了）
+    exits = driver.get("wordingExits")
+    if exits is not None:
+        mapping_rel = driver.get("mapping", "")
+        mapping_text = read(root / mapping_rel) if (root / mapping_rel).exists() else ""
+        if not mapping_text:
+            problems.append(f"驱动 {name}：文案出口文件读不到（{mapping_rel}）—— 那句话没地方放")
+        else:
+            absent = [fn for fn in exits if f"func {fn}(" not in mapping_text]
+            if absent:
+                problems.append(
+                    f"驱动 {name}：台账登记的文案出口不在位：{'、'.join(absent)}"
+                    "（文案层被改了，台账要跟着动）"
+                )
+            exit_floor = driver.get("minWordingExits")
+            if not isinstance(exit_floor, int) or exit_floor < 1:
+                problems.append(f"驱动 {name}：文案出口没写 `minWordingExits`（面钉）")
+            elif len(exits) < exit_floor:
+                problems.append(f"驱动 {name}：文案出口只剩 {len(exits)} 个 < 下限 {exit_floor}")
+
+    # ② 驱动 ↔ 台账 双向对账（点名叫「驱动:码」，两支驱动同一套规则）
+    #    Postgres 支由下面那段原判据 ①–⑦ 负责（一字未动）⇒ 这里跳过，同一件事不报两遍
+    if driver.get("id") == "postgres":
+        return
+    dispositions = driver.get("dispositions") or {}
+    kinds = driver.get("kinds") or {}
+    missing = [code for code in codes if code not in dispositions]
+    if missing:
+        problems.append(
+            f"驱动 {name}：驱动里有、台账里没有的码："
+            + "、".join(f"{name}:{code}" for code in missing)
+            + "（新码会静默落到默认文案 —— 去 Scripts/connection-failure-dispositions.json 登记它怎么处置）"
+        )
+    stale = [code for code in dispositions if code not in codes]
+    if stale:
+        problems.append(
+            f"驱动 {name}：台账里有、驱动里已经不在的码："
+            + "、".join(f"{name}:{code}" for code in stale) + "（陈旧条目要删）"
+        )
+
+    # ③ 每条处置本身要成立（kind 由本支自己的 kinds 定义，别的支的 kind 不通用）
+    translated = 0
+    for code in codes:
+        entry = dispositions.get(code)
+        if not isinstance(entry, dict):
+            continue
+        kind = entry.get("kind")
+        why = (entry.get("why") or "").strip()
+        if kind not in kinds:
+            problems.append(f"驱动 {name}：{code} 的 kind={kind!r} 不在本支台账定义的处置种类里")
+            continue
+        if len(why) < MIN_WHY:
+            problems.append(f"驱动 {name}：{code} 没有写明处置理由（why 至少 {MIN_WHY} 字）")
+        if kind == "产品翻译":
+            translated += 1
+            ref = (entry.get("wordingRef") or "").strip()
+            mapping_rel = driver.get("mapping", "")
+            mapping_text = read(root / mapping_rel) if (root / mapping_rel).exists() else ""
+            if not ref:
+                problems.append(f"驱动 {name}：{code} 标了「产品翻译」却没给 wordingRef")
+            elif f"func {ref}(" not in mapping_text:
+                problems.append(
+                    f"驱动 {name}：{code} 说它由 {ref} 渲染，但 {mapping_rel} 里没有这个出口 —— 台账在撒谎"
+                )
+    notes.append(
+        f"驱动 {name}：码 {len(codes)} 个（{source_rel}），台账登记 {len(dispositions)} 条"
+        f"（其中「产品翻译」{translated} 条）"
+    )
+    for gap in driver.get("knownGaps", []):
+        notes.append(f"驱动 {name} · knownGaps（只报不判）：{gap}")
+
+
 def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     notes: list[str] = []
@@ -122,6 +323,21 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
         ledger = json.loads(ledger_file.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
         return [f"台账不是合法 JSON：{error}"], notes
+
+    drivers = ledger.get("drivers")
+    if not isinstance(drivers, list) or not drivers:
+        return [
+            "台账里没有 `drivers[]` —— 连接面不止一支驱动（Postgres / MySQL·GBase），"
+            "单驱动结构（`driverCodeSource` 单值）装不下第二支：这正是样本 46 的缺口"
+            "（往 MySQL 驱动加码，门禁逐字不动），请按 drivers[] 分驱动登记"
+        ], notes
+    for driver in drivers:
+        check_driver_face(root, driver, problems, notes)
+    postgres = next((d for d in drivers if d.get("id") == "postgres"), None)
+    if postgres is None:
+        return ["台账 `drivers[]` 里没有 id=postgres 的那支 —— 覆盖面对账的主干没了"], notes
+    # 下面那段按 **Postgres 支** 的字段读（既有判据一字未动：单驱动时代的字段名照旧）
+    ledger = {**ledger, **postgres}
 
     driver_path = root / ledger.get("driverCodeSource", "")
     mapping_path = root / ledger.get("mapping", "")
@@ -142,7 +358,13 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
             "这道门禁需要跟着更新，别让它悄悄变成永远绿"
         )
         return problems, notes
-    notes.append(f"驱动错误码 {len(codes)} 个（{ledger['driverCodeSource']}）")
+    notes.append(f"驱动 Postgres：码 {len(codes)} 个（{ledger['driverCodeSource']}）")
+    # 码数下限（面钉）：只「读得出来」不够 —— 面被削到只剩几个码也照样读得出来
+    floor = ledger.get("minCodes")
+    if not isinstance(floor, int) or floor < 1:
+        problems.append("驱动 Postgres：台账没写 `minCodes`（码数下限）—— 零命中不许当通过")
+    elif len(codes) < floor:
+        problems.append(f"驱动 Postgres：码表只剩 {len(codes)} 个 < 下限 {floor}（面被削 ⇒ 不许当通过）")
 
     dispositions = ledger.get("dispositions") or {}
     mapping = read(mapping_path)
@@ -389,7 +611,8 @@ def main() -> int:
         for problem in problems:
             print(f"  · {problem}")
         return 1
-    print("\n✅ 驱动错误码与文案台账逐条对得上；兜底不给方向结论；中性归因有话说、有出口；解析前置检查与证据都在位。")
+    print("\n✅ 逐支驱动（每支的码数 / 台账登记数见上）的错误码与文案台账逐条对得上；"
+          "兜底不给方向结论；中性归因有话说、有出口；解析前置检查与证据都在位。")
     return 0
 
 

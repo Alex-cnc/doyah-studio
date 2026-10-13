@@ -127,6 +127,8 @@ set -euo pipefail
 # L-14 修掉的正是这一族：主机名解析不了被驱动压成 `serverClosedConnection`
 # 且不带原因，用户看到的是「与数据库的连接中断了」。门禁把「每个码怎么处置」变成台账
 # （`Scripts/connection-failure-dispositions.json`）与驱动源码、映射文件、解析前置检查、证据脚本逐条对账。
+# 第 32 轮（合册 T-20261013-027 · 原单 T-20261010-042）：覆盖面升为**分驱动**（台账 `drivers[]`：Postgres 19 码 + MySQL/GBase 支 `MySQLError` 12 码 + 协议数字码表 1144 条
+# 逐名名单 + `Core/MySQLWording.swift` 8 个文案出口面）—— 单驱动结构装不下第二支驱动，往 MySQL 加码原先门禁逐字不动。
 # 第 8 轮（R-60）又加了两条：**兜底不许给方向结论**（`default:` 必须 `return nil`），
 # 以及台账标「中性归因」的那 9 个码（用户取消 / 主动断开 / 协议层 / LISTEN 通道…）
 # 必须在 `nonConnectionKeys` 里逐条点名 + 给出语言表键，且**调用方真的接上了这一档**
