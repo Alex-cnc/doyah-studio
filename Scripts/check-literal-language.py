@@ -25,8 +25,14 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
 ## 四条判据
 
 * **A（写死语言的调用点必须逐条登记 + 棘轮）** 扫 `Core/` `App/` `CLI/` `Platform/` 的
-  `*.swift`，找出把**字面语言**（`language: .simplifiedChinese` / `.english`）传给本地化
-  取值入口的每一处，按**文件**归组：文件必须在台账 `Scripts/literal-language-dispositions.json`
+  `*.swift`，找出把**字面语言**传给本地化取值入口的每一处，按**文件**归组。
+  **判定物 = 代码面**（第 39 轮 · 原单 `T-20261010-052` 收口）：先剥**注释与字符串字面量**
+  （等长抹白、行号不动，**插值体算代码** —— 见 `masked_text`），再匹配三种形状：
+  ① `language: .simplifiedChinese`；② **限定枚举** `language: AppLanguage.simplifiedChinese`
+  （单行裸正则认不出这一形：原单实测加个限定名就能让棘轮的账消失）；③ **字面语言先落局部变量
+  再当 `language:` 实参传下去**（`let x = AppLanguage.simplifiedChinese` → `f(language: x)`，
+  **按赋值处记一处**、消费点只作读数 —— 真仓 CLI 一处硬编码喂 12 个实参）。
+  按**文件**归组：文件必须在台账 `Scripts/literal-language-dispositions.json`
   的 `files` 里登记（带 `maxSites` 与 `reason`）。
   未登记的文件 / 超过登记处数 ⇒ **红**；比登记处数**少** ⇒ 只提示（减少是好事，但不许静默改台账）；
   `maxSites: 0` 是**回归钉** —— 本轮已把语言透传的文件（`Core/DiagnosisContext.swift` /
@@ -73,7 +79,8 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
 
 ## 已知局限（照实写在这里，别让下一个人以为它比实际更严）
 
-* 只认得**字面**键与**字面**语言。**动态键**（`LocalizedStrings.text(key, …)` 里 `key` 是变量，
+* 只认得**字面**键与**字面**语言，以及**同文件内按名字**认出的「字面语言落变量再传」。
+  **动态键**（`LocalizedStrings.text(key, …)` 里 `key` 是变量，
   如 `MCPToolCatalog` / `AICapture` 的映射表）看不见 ⇒ 它背后那些键不会被判成死键
   —— 方向是**漏判**（少报），不是误报。
 * **短名取值助手这条漏判已于 L-65 第 4 批堵上**（`local_helpers`）：从前 `CALLEE_OK` 只认
@@ -84,6 +91,12 @@ AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
   现在：只要被调方是**本文件里形参含 `LKey` 的函数**，就按取值入口记账（是否「写死语言」仍由
   「实参里有没有字面语言 / 函数体里有没有写死语言」判）。
 * 一个键**一处引用都没有**时不判（可能是被动态引用）——同理是漏判。
+* **「字面语言落局部变量再传」是按名字追的**（`BINDING` → 同名 `language:` 实参），不判作用域 /
+  遮蔽 / 之后被重新赋值：真仓 `CLI/main.swift` 里三个都叫 `language` 的赋值各自「看见」同一批
+  12 个实参。方向以**多报**为主（宁可让人来看一眼），不是静默少报；真要判到作用域就得引入
+  轻量数据流分析 —— 那一步按原单《停手线》① 需前门先定口径（本册按「按名字」落）。
+* **注释与字符串字面量在判定物里不算命中**（判据 A/B 的写死语言那一侧）；判据 C（源树判据）
+  与键的**发现面**仍按原文扫（不剥）—— 保持既有读数不动。
 * `Tests/` `TestsUISnapshot/` 不在扫描范围：那里有意构造中英两种取值。
 * 台账 `maxSites` 只判「不许增」，不像 L-46 那样把减少也要求同步登记（减少只打提示）。
 
@@ -113,7 +126,16 @@ SCAN_ROOTS = ["Core", "App", "CLI", "Platform"]
 MIN_SOURCE_FILES = 80
 
 # 把字面语言传下去的形状。
-LITERAL = re.compile(r"language:\s*\.(simplifiedChinese|english)\b")
+# 把**字面语言**传下去的形状。判定物 = **代码面**（剥注释与字符串字面量、插值体算代码；
+# 限定的 `AppLanguage.simplifiedChinese` 与点号两侧空白同样算）—— 见 `masked_text` / `literal_sites`。
+LITERAL = re.compile(r"language:\s*(?:AppLanguage\s*)?\.\s*(simplifiedChinese|english)\b")
+# 「字面语言先落**局部变量**、再把变量当 `language:` 实参传下去」的赋值形：
+# `let x = AppLanguage.simplifiedChinese` / `let x: AppLanguage = .english`。
+# 旧判定物（单行裸正则）看不见这形状 —— 真仓 CLI 有活体（见 docstring 「判定物」一段）。
+BINDING = re.compile(
+    r"\b(?:let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*[A-Za-z_][A-Za-z0-9_.]*)?=\s*"
+    r"(?:AppLanguage\s*)?\.\s*(simplifiedChinese|english)\b"
+)
 # 语言表定义行：`.keyName: [.simplifiedChinese: "…", .english: "…"],`
 KEY_DEF = re.compile(r"^\s*\.([A-Za-z][A-Za-z0-9_]*):\s*\[\.simplifiedChinese:")
 # 本地化取值入口的形状：`L(` / `LocalizedStrings.text|format(` / `xxxText(` / `xxxCopy(`（含包装函数）。
@@ -127,6 +149,107 @@ FUNC_DECL = re.compile(r"\bfunc\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 def read(path: pathlib.Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+# —— 判定物 ⓪：剥注释与字符串字面量（等长抹白 ⇒ 行号不动；**插值体是代码**，照常判）
+#
+# 原单（T-20261010-052）实测的两处假阳都出在这里：`LITERAL.finditer(text)` 全文扫描，
+# 注释里写着「不许出现 language: .english」也算命中；反之字符串字面量里写着也算。
+# 本脚本第 557 行对 AICapture 的**负向**判据早就剥了行尾注释 —— 本轮把同一条纪律套到判定物上。
+
+
+def masked_chars(text: str) -> list[str]:
+    """注释与字符串字面量的正文抹成空白（换行保留 ⇒ 行号不移动）。"""
+    out = list(text)
+    n = len(text)
+
+    def blank(start: int, stop: int) -> None:
+        for k in range(start, min(stop, n)):
+            if out[k] != "\n":
+                out[k] = " "
+
+    def hash_count(at: int) -> int:
+        count = 0
+        k = at - 1
+        while k >= 0 and text[k] == "#":
+            count += 1
+            k -= 1
+        return count
+
+    def skip_string(at: int) -> int:
+        """`at` = 开引号；返回闭引号之后的下标。正文抹白，插值体除外。"""
+        hashes = hash_count(at)
+        raw = hashes > 0
+        triple = text.startswith('"' * 3, at)
+        terminator = ('"' * 3 if triple else '"') + ("#" * hashes)
+        blank(at - hashes, at)
+        j = at + (3 if triple else 1)
+        while j < n:
+            if text.startswith(terminator, j):
+                blank(j, j + len(terminator))
+                return j + len(terminator)
+            if not raw and text[j] == "\\":
+                if text[j + 1: j + 2] == "(":
+                    blank(j, j + 2)
+                    j = skip_interpolation(j + 2)
+                    continue
+                blank(j, j + 2)
+                j += 2
+                continue
+            blank(j, j + 1)
+            j += 1
+        return n
+
+    def skip_interpolation(at: int) -> int:
+        """`at` = 插值体第一个字符；体是**代码**（不抹）。返回闭括号之后的下标。"""
+        depth = 1
+        j = at
+        while j < n:
+            if text[j] == '"':
+                j = skip_string(j)
+                continue
+            if text[j] == "(":
+                depth += 1
+            elif text[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    blank(j, j + 1)
+                    return j + 1
+            j += 1
+        return n
+
+
+    i = 0
+    while i < n:
+        if text.startswith("//", i):
+            stop = text.find("\n", i)
+            stop = n if stop < 0 else stop
+            blank(i, stop)
+            i = stop
+        elif text.startswith("/*", i):
+            depth = 1
+            j = i + 2
+            while j < n and depth:
+                if text.startswith("/*", j):
+                    depth += 1
+                    j += 2
+                elif text.startswith("*/", j):
+                    depth -= 1
+                    j += 2
+                else:
+                    j += 1
+            blank(i, j)
+            i = j
+        elif text[i] == '"':
+            i = skip_string(i)
+        else:
+            i += 1
+    return out
+
+
+def masked_text(text: str) -> str:
+    """代码面（等长字符串，可直接用 `finditer` 的 span 去原文本取行号）。"""
+    return "".join(masked_chars(text))
 
 
 def line_of(text: str, index: int) -> int:
@@ -219,9 +342,41 @@ def source_files(root: pathlib.Path) -> list[pathlib.Path]:
 
 
 def literal_sites(rel: str, text: str) -> list[dict]:
-    sites = []
-    for m in LITERAL.finditer(text):
+    """把**代码面**里每一处「把字面语言传下去」收出来（原单 ⓐ ①②③ 的判定物）。
+
+    ① 实参直接写字面语言 —— 含**限定的**枚举（`AppLanguage.simplifiedChinese`）与点号两侧空白；
+    ② 字面语言**先落局部变量、再当 `language:` 实参传下去**（`BINDING` 找到赋值，再用变量名找实参）；
+    ③ 注释与字符串字面量**不算**命中（`masked_text` 等长抹白；**插值体仍是代码**，照常判）。
+
+    已知局限（如实写）：② 是**按名字**的轻量追踪 —— 不判作用域 / 遮蔽 / 之后被重新赋值，
+    同文件内同名变量一律算。方向以**多报**为主（宁可让人来看一眼），不是静默少报。
+    """
+    code = masked_text(text)
+    sites: list[dict] = []
+    for m in LITERAL.finditer(code):
         sites.append({"file": rel, "line": line_of(text, m.start()), "text": line_text_of(text, m.start())})
+    # ② 「字面语言先落局部变量、再当 `language:` 实参传下去」——**按赋值处计一处**。
+    # 为什么不按每个实参逐处计：一处硬编码喂 43 个调用点（真仓 CLI 就是这个形状）若逐个计，
+    # 棘轮会被稀释成一个几十的大数，「又新增一处硬编码」这个信号反而看不出来；
+    # 判定物是「**字面语言写在哪儿**」，所以记在**赋值那一行**，消费点作为读数写在 `via` 里。
+    for bm in BINDING.finditer(code):
+        name = bm.group(1)
+        used = list(re.finditer(r"language:\s*" + re.escape(name) + r"\b", code))
+        if not used:
+            continue  # 赋了字面语言但没当 `language:` 实参传出去 ⇒ 不算「传下去」的调用点
+        first = used[0]
+        sites.append(
+            {
+                "file": rel,
+                "line": line_of(text, bm.start()),
+                "text": line_text_of(text, bm.start()),
+                "via": (
+                    f"字面语言先落局部变量 `{name}`（.{bm.group(2)}），再当 `language:` 实参传出去 "
+                    f"{len(used)} 处（首个 {line_of(text, first.start())} 行）"
+                ),
+            }
+        )
+    sites.sort(key=lambda site: (site["line"], site["text"]))
     return sites
 
 
@@ -245,8 +400,8 @@ def local_helpers(text: str) -> set[str]:
     return names
 
 
-def wrapper_names(text: str) -> set[str]:
-    """文件私有的「写死语言取值助手」：形参里有 `LKey`、函数体里出现字面语言。"""
+def wrapper_names(text: str, code: str) -> set[str]:
+    """文件私有的「写死语言取值助手」：形参里有 `LKey`、函数体里出现字面语言（**代码面**）。"""
     names: set[str] = set()
     for m in FUNC_DECL.finditer(text):
         paren_open = m.end() - 1
@@ -262,13 +417,14 @@ def wrapper_names(text: str) -> set[str]:
         body_end = brace_span(text, brace)
         if body_end is None:
             continue
-        if LITERAL.search(text[brace:body_end]):
+        if LITERAL.search(code[brace:body_end]):
             names.add(m.group(1))
     return names
 
 
 def key_references(rel: str, text: str, keys: dict[str, dict], wrappers: set[str]) -> list[dict]:
     helpers = local_helpers(text)
+    code = masked_text(text)
     refs: list[dict] = []
     for m in re.finditer(r"\.([A-Za-z][A-Za-z0-9_]*)\b", text):
         name = m.group(1)
@@ -286,7 +442,7 @@ def key_references(rel: str, text: str, keys: dict[str, dict], wrappers: set[str
         if not CALLEE_OK.match(callee) and callee not in helpers:
             continue
         # 写死语言：调用点自带字面语言，或经过一个「函数体里写死语言」的文件私有助手。
-        literal = bool(LITERAL.search(segment)) or callee in wrappers
+        literal = bool(LITERAL.search(masked_text(segment))) or callee in wrappers
         refs.append({"key": name, "file": rel, "line": line_of(text, m.start()), "literal": literal})
     return refs
 
@@ -299,8 +455,9 @@ def scan(root: pathlib.Path) -> dict:
     for path in files:
         rel = path.relative_to(root).as_posix()
         text = read(path)
+        code = masked_text(text)
         sites.extend(literal_sites(rel, text))
-        refs.extend(key_references(rel, text, keys, wrapper_names(text)))
+        refs.extend(key_references(rel, text, keys, wrapper_names(text, code)))
     return {"keys": keys, "files": files, "sites": sites, "refs": refs}
 
 

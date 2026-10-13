@@ -281,6 +281,68 @@ def main() -> int:
         if rc == 0 or "ConnectionFormView.swift" not in out or "C " not in out:
             failures.append(f"例 15（测试连接不传语言）应判红且含 C 判据，实测 rc={rc}：\n{out}")
 
+        # 例 16（判定物 ② 限定枚举 · 原单 ⓐ ② · 现状 rc=0 静默）：单行裸正则只认
+        # `language: .simplifiedChinese`，加个限定名 `AppLanguage.` 就整条看不见 ——
+        # 原单实测：把真仓那个语句级调用点改成限定名，棘轮打印「6 → 5 处，减少是好事」并 rc=0。
+        copy = fresh()
+        cases += 1
+        (copy / "Core/ProbeQualifiedEnum.swift").write_text(
+            "import Foundation\n\nfunc planted(_ key: LKey) -> String {\n"
+            "    LocalizedStrings.text(key, language: AppLanguage.simplifiedChinese)\n}\n",
+            encoding="utf-8",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "Core/ProbeQualifiedEnum.swift" not in out or "A " not in out:
+            failures.append(f"例 16（限定枚举传参）应判红并点名 Core/ProbeQualifiedEnum.swift，实测 rc={rc}：\n{out}")
+
+        # 例 17（判定物 ③ 变量转手 · 原单 ⓐ ③ · 现状 rc=0 静默）：字面语言先落局部变量再传。
+        copy = fresh()
+        cases += 1
+        (copy / "Core/ProbeLocalBinding.swift").write_text(
+            "import Foundation\n\nfunc planted(_ key: LKey) -> String {\n"
+            "    let lang = AppLanguage.simplifiedChinese\n"
+            "    return LocalizedStrings.text(key, language: lang)\n}\n",
+            encoding="utf-8",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "Core/ProbeLocalBinding.swift" not in out or "A " not in out:
+            failures.append(f"例 17（变量转手）应判红并点名 Core/ProbeLocalBinding.swift，实测 rc={rc}：\n{out}")
+
+        # 例 18（判定物 ⓪ 假阳 · 原单 ⓐ ① · 现状 rc=1 误红）：只有**注释**里出现该串 ⇒ 判绿
+        # （同脚本第 557 行对 AICapture 的负向判据早就剥了行尾注释，本轮把同一条纪律套到判定物上）。
+        copy = fresh()
+        cases += 1
+        (copy / "Core/ProbeCommentOnly.swift").write_text(
+            "import Foundation\n\n// 说明：本文件里不许出现 language: .english 这种写法\n",
+            encoding="utf-8",
+        )
+        rc, out = run(copy)
+        if rc != 0:
+            failures.append(f"例 18（注释里的该串）应判绿，实测 rc={rc}：\n{out}")
+
+        # 例 19（判定物 ⓪ 假阳 · 原单 ⓐ ① · 现状 rc=1 误红）：只有**字符串字面量**里出现该串 ⇒ 判绿。
+        copy = fresh()
+        cases += 1
+        (copy / "Core/ProbeStringLiteral.swift").write_text(
+            'import Foundation\n\nlet plantedNote = "禁止写法：language: .english"\n',
+            encoding="utf-8",
+        )
+        rc, out = run(copy)
+        if rc != 0:
+            failures.append(f"例 19（字符串字面量里的该串）应判绿，实测 rc={rc}：\n{out}")
+
+        # 例 20（判定物 ② 点号两侧空白 · 原单 ⓐ ② · 现状 rc=0 静默）：`language:  . simplifiedChinese`。
+        copy = fresh()
+        cases += 1
+        (copy / "Core/ProbeDotSpace.swift").write_text(
+            "import Foundation\n\nfunc planted(_ key: LKey) -> String {\n"
+            "    LocalizedStrings.text(key, language:  . simplifiedChinese)\n}\n",
+            encoding="utf-8",
+        )
+        rc, out = run(copy)
+        if rc == 0 or "Core/ProbeDotSpace.swift" not in out or "A " not in out:
+            failures.append(f"例 20（点号两侧空白）应判红并点名 Core/ProbeDotSpace.swift，实测 rc={rc}：\n{out}")
+
     after = digest_tree()
     cases += 1
     if before != after:

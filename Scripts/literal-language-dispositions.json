@@ -1,6 +1,6 @@
 {
-  "note": "「语言是传进来的，不是写死的」台账（队列 L-47）。判据与用法见 Scripts/check-literal-language.py 头部。files = 把**字面语言**传给本地化取值入口的文件（maxSites 是登记时的实测处数，只判「不许增」；0 = 回归钉，本轮已把语言透传的文件钉在这里）。deadKeys = 「有英文译文、却只被写死语言的入口引用」的键 —— 这是**已登记的欠账**，不是放行；新增一个未登记的死键即判红，修好一个就要销账。 **版本 4（队列 L-65 第 5 批 · 开发循环第 123 轮）**：`Core/MySQLService.swift` 一族的语言已透传（落法 = 新增文件 `Core/MySQLWording.swift` 承载渲染，旧文件只留「语言从哪来」的 `language` 属性 —— ADR-25 冻结点，需求提出者 2026-09-30 拍板 `Q42`） ⇒ `maxSites` 9 → **0**（回归钉）、死译文 **8 个键销账（9 → 1）**。 `CLI/main.swift` **5 → 6 处**：命令行的连库入口（`DatabaseServiceFactory.make(… language:)`）也显式说中文 —— 同 `Q43` 口径（命令行没有界面语境，有意为之，**不计入清零目标**）。 清零目标（44 处里的 39 处）**本轮达成**：余 5 处只在 CLI，逐条理由见下表。",
-  "version": 4,
+  "note": "「语言是传进来的，不是写死的」台账（队列 L-47）。判据与用法见 Scripts/check-literal-language.py 头部。files = 把**字面语言**传给本地化取值入口的文件（maxSites 是登记时的实测处数，只判「不许增」；0 = 回归钉，本轮已把语言透传的文件钉在这里）。deadKeys = 「有英文译文、却只被写死语言的入口引用」的键 —— 这是**已登记的欠账**，不是放行；新增一个未登记的死键即判红，修好一个就要销账。 **版本 4（队列 L-65 第 5 批 · 开发循环第 123 轮）**：`Core/MySQLService.swift` 一族的语言已透传（落法 = 新增文件 `Core/MySQLWording.swift` 承载渲染，旧文件只留「语言从哪来」的 `language` 属性 —— ADR-25 冻结点，需求提出者 2026-09-30 拍板 `Q42`） ⇒ `maxSites` 9 → **0**（回归钉）、死译文 **8 个键销账（9 → 1）**。 `CLI/main.swift` **5 → 6 处**：命令行的连库入口（`DatabaseServiceFactory.make(… language:)`）也显式说中文 —— 同 `Q43` 口径（命令行没有界面语境，有意为之，**不计入清零目标**）。 清零目标（44 处里的 39 处）**本轮达成**：余 5 处只在 CLI，逐条理由见下表。 **版本 5（2026-10-14 · 合册 `T-20261013-027` 第 39 轮 · 原单 `T-20261010-052`）**：判据 A 的**判定物升到代码面**（剥注释与字符串字面量，插值体算代码）+ 认**限定的**枚举（`AppLanguage.simplifiedChinese`）+ 认「**字面语言先落局部变量、再当 `language:` 实参传下去**」 ⇒ `CLI/main.swift` **6 → 10 处**：原 6 处（内联传参）读数逐处不变，新增 4 处是**赋值形**的硬编码源头（`:1093` `sessionLanguage` / `:1421` / `:1726` / `:2165` 隧道 —— 最后一处此前只在 reason 里「补记」、不进计数）。**口径（本轮新钉）**：赋值形**按赋值处记一处**，它的消费点不逐个计数（真仓 CLI 一处硬编码喂 12 个 `language:` 实参，逐个计会把棘轮稀释成几十的大数、让「又新增一处硬编码」这个信号看不见）；判定物是「字面语言**写在哪儿**」。",
+  "version": 5,
   "files": [
     {
       "file": "Core/DiagnosisContext.swift",
@@ -29,8 +29,8 @@
     },
     {
       "file": "CLI/main.swift",
-      "maxSites": 6,
-      "reason": "**有意为之**：CLI 没有界面语境，语言就该是显式的中文（本轮 L-47 把诊断输出也改成显式传 `AppLanguage.simplifiedChinese`）；另两处是 MCP 审批载荷文案。代价是这两个键的英文译文当前不可达 ⇒ 已登记进 deadKeys，要不要给 CLI 加一个语言开关属新需求（不在本轮）。**L-65 第 2 批补记**：隧道命令那句是 `let language = AppLanguage.simplifiedChinese`（**赋值**，不进本台账的计数 —— 判据量的是 `language: .simplifiedChinese` 这种**传参**形状），随后 `start(language:)` 与 `describe(language:)` 都用它；**别把它当成「没写死」**，命令行说中文是有意的口径，不是遗漏。**L-65 第 5 批补记（5 → 6 处）**：命令行的连库入口 `DatabaseServiceFactory.make(for:password:language:)` 同样显式传 `.simplifiedChinese`（数据库侧那几句失败文案也归命令行）—— 同 `Q43`（2026-09-30 拍板「保持现状」）口径，**不计入清零目标**（清零目标 = 44 处里的 39 处，CLI 那 5 处本就不在内）。"
+      "maxSites": 10,
+      "reason": "**有意为之**：CLI 没有界面语境，语言就该是显式的中文（本轮 L-47 把诊断输出也改成显式传 `AppLanguage.simplifiedChinese`）；另两处是 MCP 审批载荷文案。代价是这两个键的英文译文当前不可达 ⇒ 已登记进 deadKeys，要不要给 CLI 加一个语言开关属新需求（不在本轮）。**L-65 第 2 批补记**：隧道命令那句是 `let language = AppLanguage.simplifiedChinese`（**赋值**，不进本台账的计数 —— 判据量的是 `language: .simplifiedChinese` 这种**传参**形状），随后 `start(language:)` 与 `describe(language:)` 都用它；**别把它当成「没写死」**，命令行说中文是有意的口径，不是遗漏。**L-65 第 5 批补记（5 → 6 处）**：命令行的连库入口 `DatabaseServiceFactory.make(for:password:language:)` 同样显式传 `.simplifiedChinese`（数据库侧那几句失败文案也归命令行）—— 同 `Q43`（2026-09-30 拍板「保持现状」）口径，**不计入清零目标**（清零目标 = 44 处里的 39 处，CLI 那 5 处本就不在内）。 **判定物跟版（2026-10-14 · 原单 `T-20261010-052` · 合册第 39 轮）**：`maxSites` **6 → 10** —— 新增的 4 处不是新写死的代码，是**原来就存在、旧判定物看不见**的赋值形：`:1093` `let sessionLanguage = AppLanguage.simplifiedChinese`、`:1421` / `:1726` `let language = AppLanguage.simplifiedChinese`、`:2165`（隧道那条命令，此前只在本条 reason 里「补记」、明说不进计数）。同 `Q43` 口径（命令行没有界面语境 ⇒ 中文是显式选择），**登记 ≠ 放行**；要不要给 CLI 加语言开关仍是新需求（不在本册）。"
     },
     {
       "file": "Plugins/Notes/Sources/NoteBody.swift",
