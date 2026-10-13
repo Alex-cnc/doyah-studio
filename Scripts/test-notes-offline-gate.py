@@ -86,6 +86,14 @@ TREE_FILES = [
     "Plugins/Notes/Sources/NoteStorage/NoteLibrary.swift",
     "Plugins/Notes/Sources/NoteStorage/NoteLibraryMigration.swift",
     "Plugins/Notes/Sources/NoteStorage/NoteSearchDisclosure.swift",
+    # 派单 `T-20261010-043`（第 28 行）：前缀无关的 6 件本轮进了面/登记 ⇒ 副本必须带上
+    # （少带一个，「干净副本」那一例会因为「台账写了、盘上没有」而假红）
+    "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift",
+    "Plugins/Notes/Sources/NoteStorage/SQLiteConstants.swift",
+    "Plugins/Notes/Sources/NoteSync/CloudAuth.swift",
+    "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift",
+    "Plugins/Notes/Sources/NoteSync/SyncCore.swift",
+    "Plugins/Notes/Sources/NoteSync/SyncQueue.swift",
     "Tests/NoteTests.swift",
     "Tests/NoteBodyTests.swift",
     "Tests/NoteDataBoundaryTests.swift",
@@ -123,6 +131,19 @@ def run_gate(tree: Path) -> tuple[int, str]:
     try:
         data = json.loads(proc.stdout)
         return proc.returncode, "；".join(data.get("problems", []))
+    except json.JSONDecodeError:
+        return proc.returncode, (proc.stdout + proc.stderr).strip()
+
+
+def run_gate_notes(tree: Path) -> tuple[int, str]:
+    """同上，但要读 `notes`（面外警示走 notes，不走 problems）—— T-20261010-043 用。"""
+    proc = subprocess.run(
+        [sys.executable, str(tree / GATE), "--root", str(tree), "--json"],
+        capture_output=True, text=True,
+    )
+    try:
+        data = json.loads(proc.stdout)
+        return proc.returncode, "；".join(data.get("notes", []))
     except json.JSONDecodeError:
         return proc.returncode, (proc.stdout + proc.stderr).strip()
 
@@ -234,12 +255,19 @@ def main() -> int:
         lambda tree: write_file(tree, "Plugins/Notes/Sources/NoteStorage/NoteProbe.swift", "import Foundation\n"),
         "Plugins/Notes/Sources/NoteStorage/NoteProbe.swift",
     )
+    case(
+        "子目录里前缀不命中的新件 → 判红（**口径已改**：T-20261010-043 把插件树整棵收进面）",
+        lambda tree: write_file(
+            tree, "Plugins/Notes/Sources/NoteStorage/SQLiteProbe.swift", "import Foundation\n"
+        ),
+        "NoteStorage/SQLiteProbe.swift",
+    )
     tree = make_tree()
-    write_file(tree, "Plugins/Notes/Sources/NoteStorage/SQLiteProbe.swift", "import Foundation\n")
+    write_file(tree, "Core/SQLiteProbe.swift", "import Foundation\n")
     code, problems = run_gate(tree)
     record(
         code == 0,
-        "子目录里的非笔记件（前缀不命中）→ 不判红（不许地毯式判红）",
+        "面外（`Core/` 共享目录、前缀不命中）的新件 → 不判红（不许地毯式判红）",
         f"exit={code}；{problems[:300]}",
     )
     shutil.rmtree(tree, ignore_errors=True)
@@ -266,6 +294,33 @@ def main() -> int:
         code == 0,
         "子目录新件在两份清单里都登记 → 转绿（登记出口走得通）",
         f"exit={code}；{problems[:300]}",
+    )
+    shutil.rmtree(tree, ignore_errors=True)
+
+    print("— 第二层洞：前缀无关的件（T-20261010-043）—")
+    case(
+        "NoteSync/ 里新增一个**名字不含前缀**的笔记源文件、台账未登记 → 报红并点名",
+        lambda tree: write_file(
+            tree, "Plugins/Notes/Sources/NoteSync/SyncProbeS28.swift",
+            "public struct SyncProbeS28 {}\n",
+        ),
+        "NoteSync/SyncProbeS28.swift", "不在范围里",
+    )
+    case(
+        "NoteSync/ 整棵子树被删空 → 报红（逐树下限读到 0 份也要拦住）",
+        lambda tree: shutil.rmtree(tree / "Plugins/Notes/Sources/NoteSync"),
+        "只读到 0 份",
+    )
+    tree = make_tree()
+    edit(
+        tree, "Plugins/Notes/Sources/NoteSync/SyncQueue.swift",
+        lambda text: text + "\n// 负例：面外件注入一次出网调用\nlet probe = URLSession.shared\n",
+    )
+    code, notes = run_gate_notes(tree)
+    record(
+        code == 0 and "⚠️" in notes and "SyncQueue.swift" in notes,
+        "面外件命中令牌表 → 打 ⚠️ 警示但**不判红**（面外不许静默）",
+        f"exit={code}；notes={notes[:300]}",
     )
     shutil.rmtree(tree, ignore_errors=True)
 

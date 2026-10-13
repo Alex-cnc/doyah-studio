@@ -24,6 +24,12 @@ helper，**参数就是 Ultra 侧类型**（`fingerprint(of:report:)` / `stateTe
 
 **自维护**：`NOTE_SOURCES` 靠人维护，漏加一个文件＝那个文件偷偷不受约束。所以本脚本每次
 都拿 `Core/` 里的实际文件名与清单对账（见 `check_source_list_is_complete`）。
+
+**2026-10-14 修（派单 `T-20261010-043` · 合册 `T-20261013-027` 本册表第 28 行）**：对账面**不再靠文件名前缀猜** ——
+`Plugins/Notes/Sources/**` 的每一个 `.swift` 都进面（那棵树整棵就是笔记模块），`Core/**` 仍按前缀扫；
+前缀无关的件（库绑定 `SQLiteKit` / `SQLiteConstants`、云同步 `CloudAuth` / `CloudSyncService` / `SyncCore` /
+`SyncQueue`）逐件登记在 `ULTRA_SIDE_SOURCES`（宿主侧适配层：只对账、不套笔记侧禁令），
+「云同步是否属笔记模块」请前门定性。
 """
 
 from __future__ import annotations
@@ -106,6 +112,18 @@ NOTE_SOURCES = [
 # 在这里显式列出（而不是靠"忘了加"），自维护检查才不会误报。
 ULTRA_SIDE_SOURCES = [
     "Core/AICaptureUltra.swift",
+    # 2026-10-14（派单 `T-20261010-043` · 合册 `T-20261013-027` 本册表第 28 行）：插件树里的**名字不含
+    # `Note` / `AICapture` 前缀**那几个件 —— 它们此前连面都进不来（枚举按文件名前缀猜），所以既不在清单里、
+    # 也没人发现。前两个字是**库绑定**（`import CSQLite3`，三端共用的薄封装，不是笔记逻辑），
+    # 后四个是**云同步层**（`import FoundationNetworking` / 真 HTTP 客户端：是否属笔记模块
+    # 待前门定性，见派单 `T-20261010-043` / 离线门禁台账 knownGaps ④）⇒ 按**宿主侧适配层**登记：
+    # 只做「清单 ↔ 磁盘」双向对账，不套笔记侧那两条禁令（它们按设计就用平台模块）。
+    "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift",
+    "Plugins/Notes/Sources/NoteStorage/SQLiteConstants.swift",
+    "Plugins/Notes/Sources/NoteSync/CloudAuth.swift",
+    "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift",
+    "Plugins/Notes/Sources/NoteSync/SyncCore.swift",
+    "Plugins/Notes/Sources/NoteSync/SyncQueue.swift",
 ]
 
 BANNED_IMPORTS = re.compile(r"^\s*import\s+(?!Foundation\b)(\w+)", re.M)
@@ -139,10 +157,16 @@ def check_source_list_is_complete() -> list[str]:
     # （真仓实测 5 件全绿）；而 `NOTE_SOURCES` / `ULTRA_SIDE_SOURCES` 本来就写的是**仓库相对路径**
     # ⇒ 按路径对账比按文件名对账更严（同名不同目录不再互相顶数）。
     candidates = [p for root in roots if root.is_dir() for p in root.rglob("*.swift")]
+    # 2026-10-14（派单 `T-20261010-043`）：**插件树不再按文件名前缀筛** —— `Plugins/Notes/Sources/` 整个
+    # 就是笔记模块的新家，任何 `.swift`（`SQLiteKit` / `CloudAuth` 这种一个前缀都不命中的也算）都必须
+    # 在清单里；只有 `Core/`（共享目录）仍按前缀扫。此前两处都靠前缀猜 ⇒ 子目录里的前缀无关件整体在面外。
+    plugin_tree = str((REPO / "Plugins" / "Notes" / "Sources").resolve())
     on_disk = sorted(
         p.relative_to(REPO).as_posix()
         for p in candidates
-        if p.name.startswith("Note") or p.name.startswith("AICapture")
+        if str(p.resolve()).startswith(plugin_tree + "/")
+        or p.name.startswith("Note")
+        or p.name.startswith("AICapture")
     )
     listed = set(NOTE_SOURCES + ULTRA_SIDE_SOURCES)
     for rel in on_disk:
@@ -188,7 +212,9 @@ def main() -> int:
         return 1
     print(
         f"✅ 笔记模块解耦门禁通过（{checked} 个笔记源文件：无平台 import、"
-        f"无数据库侧类型引用、无 Ultra 侧类型引用；清单与 Core/ 实际文件对账一致）"
+        f"无数据库侧类型引用、无 Ultra 侧类型引用；清单与 `Core/` 实际文件、"
+        f"`Plugins/Notes/Sources/**` 整棵树双向对账一致 —— 其中前缀无关的库绑定 / 云同步件"
+        f"按宿主侧适配层逐件登记）"
     )
     return 0
 

@@ -745,6 +745,8 @@ python3 Scripts/check-plugin-assembly.py
 # http(s) 字面量 / URL(string: …），命中即红并点名文件与行号；范围声明与磁盘事实、
 # 与上面那份解耦清单**两边对账**（漏登一个源文件也是红）。判据与台账见
 # `Scripts/notes-offline-gate.json`（关键令牌不许被拿掉、例外要写明理由且锚点陈旧报红）。
+# 2026-10-14（派单 T-20261010-043）：枚举面改成「插件树整棵进面 + Core/App 按前缀」+ 逐树下限 + 
+# 面外（outOfScope）件命中令牌表打 ⚠️（不判红、不许静默）。**调用方式一字未动**。
 python3 Scripts/check-notes-offline.py
 # Notes SRS **v3.94 §6.4「按面分层的文件级显式清单」**（前门落笔 `987ace7` · 回执 T-20261009-149 ③ ·
 # 收执行侧 ⑰ 相抵上报）：上面那条零网络门禁只扫 `Core/` 下文件名以 `Note` 开头的文件与 `App/Note*`，

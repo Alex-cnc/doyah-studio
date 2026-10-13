@@ -20,6 +20,13 @@
      **非递归** `glob("*.swift")`（同一次检查里 App 侧却已是 `rglob`）⇒ **子目录里的笔记源文件整体在面外**
      （真仓实测 `Plugins/Notes/Sources/NoteStorage/` 的 5 件全绿）。两处改递归，点名改成**真路径**
      （`path.relative_to(root).as_posix()`；此前是平的 `Core/{name}` ⇒ 递归后会指到**不存在的路径**）。
+     **2026-10-14 修（派单 `T-20261010-043` · 合册 `T-20261013-027` 本册表第 28 行）**：
+     插件树（`Plugins/Notes/Sources/**` · `Plugins/Notes/Views/**`）**不再按文件名前缀筛** ——
+     那棵树整个就是笔记模块，任何一个 `.swift` 都得在 `scope` 或 `outOfScope` 里登记；
+     此前靠前缀猜 ⇒ `NoteStorage/SQLiteKit.swift` / `NoteSync/SyncQueue.swift` 这类名字**一个前缀都不命中**，
+     进不了面（与目录深度无关的第二层洞）。`Core/**` 与 `App/**` 是共享目录，仍按前缀扫。
+  ⑧ **面外不许静默出网**：`outOfScope` 里的文件命中令牌表时**打印警示**（不判红）——
+     按设计出网的云同步层要在门禁输出里看得见，而不是靠「不在范围内」静默溜过。
   ③ **与解耦门禁对账**：`scope` 里的 Core 侧文件集合必须等于
      `check-note-module-isolation.py` 的 `NOTE_SOURCES + ULTRA_SIDE_SOURCES`（**两份清单不许各说各话**）。
   ④ **零网络出口**：范围内每个文件逐行扫令牌表，命中即红并点名 **文件:行号 + 令牌**。
@@ -102,8 +109,11 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
             problems.append(f"范围条目 `{rel}` 没写 role —— 说不出它为什么在范围内")
     notes.append(f"范围：{len(scope_paths)} 个源文件（台账声明）")
 
+    out_paths: list[str] = []
     for entry in out_of_scope:
         rel = (entry or {}).get("path", "")
+        if rel:
+            out_paths.append(rel)
         if rel and not (root / rel).exists():
             problems.append(f"豁免名单里的 `{rel}` 不存在了（陈旧条目要删）")
         if len(((entry or {}).get("reason") or "").strip()) < 8:
@@ -111,37 +121,42 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
 
     # ---- ② 漏登一个文件也不行 ------------------------------------------------
     declared = set(scope_paths) | {(entry or {}).get("path") for entry in out_of_scope}
-    on_disk: list[str] = []
-    core_dir = root / "Core"
-    if core_dir.is_dir():
-        # 2026-10-14（T-20261010-031）：`glob` → `rglob` + 真路径点名 —— 子目录里的
-        # 笔记源文件此前整体在面外（同一次检查里 App 侧已经是 rglob，两处形状不一致）。
-        for path in sorted(core_dir.rglob("*.swift")):
-            if path.name.startswith(CORE_PREFIXES):
-                on_disk.append(path.relative_to(root).as_posix())
-    # 插件目录（2026-10-13 · 概设 §7 P3 搬家）：笔记源文件的**新落点**也要按名字扫 ——
-    # 只扫 `Core/` 会让搬过去的文件从此不受这条约束（新文件进来没人登记也全绿）。
-    for rel_dir in ("Plugins/Notes/Sources", "Plugins/Notes/Views"):
+    # 枚举面（T-20261010-043）：插件树**整棵**进面（不按文件名前缀筛）；Core/ 与 App/ 是共享目录，仍按前缀。
+    def subtree_count(rel_dir: str) -> int:
         base = root / rel_dir
-        if base.is_dir():
-            prefixes = CORE_PREFIXES if rel_dir.endswith("Sources") else APP_PREFIXES
-            # 同上（T-20261010-031）：`rglob` + 真路径 —— 2026-10-13 搬家后 `NoteStorage/`
-            # `NoteSync/` 都是**子目录**，非递归 glob 会把这两棵树整个漏掉。
-            for path in sorted(base.rglob("*.swift")):
-                if path.name.startswith(prefixes):
-                    on_disk.append(path.relative_to(root).as_posix())
-    app_dir = root / "App"
-    if app_dir.is_dir():
-        for path in sorted(app_dir.rglob("*.swift")):
-            if path.name.startswith(APP_PREFIXES):
-                on_disk.append(path.relative_to(root).as_posix())
+        return sum(1 for _ in base.rglob("*.swift")) if base.is_dir() else 0
+
+    on_disk: list[str] = []
+    face_trees: dict[str, int] = {}
+    for rel_dir, prefixes in (
+        ("Core", CORE_PREFIXES),
+        ("App", APP_PREFIXES),
+        ("Plugins/Notes/Sources", None),
+        ("Plugins/Notes/Views", None),
+    ):
+        base = root / rel_dir
+        if not base.is_dir():
+            face_trees[rel_dir] = 0
+            continue
+        seen = 0
+        for path in sorted(base.rglob("*.swift")):
+            if prefixes and not path.name.startswith(prefixes):
+                continue
+            seen += 1
+            on_disk.append(path.relative_to(root).as_posix())
+        face_trees[rel_dir] = seen
+    for rel_dir in ("Plugins/Notes/Sources/NoteStorage", "Plugins/Notes/Sources/NoteSync"):
+        face_trees[rel_dir] = subtree_count(rel_dir)
     for rel in on_disk:
         if rel not in declared:
             problems.append(
                 f"{rel}：新的笔记源文件既不在范围里也不在豁免名单里"
                 "（笔记模块的零网络出口靠这份范围站住，漏登等于它偷偷不受约束）"
             )
-    notes.append(f"按文件名扫出 {len(on_disk)} 个笔记相关源文件，逐个已登记")
+    notes.append(
+        f"按枚举面扫出 {len(on_disk)} 个笔记相关源文件，逐个已登记；逐树读数 "
+        + " / ".join(f"{key} {value} 份" for key, value in face_trees.items())
+    )
 
     # ---- ③ 与解耦门禁对账 ----------------------------------------------------
     lists = _isolation_lists(root)
@@ -170,8 +185,16 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
         # 「Core 侧」自 2026-10-13（概设 §7 P3 搬家）起含**插件目录里的笔记源文件** ——
         # `Plugins/Notes/Sources/` 就是原 `Core/Note*` 的新家，漏掉这个前缀会让两份清单假对不上。
         scope_core = {rel for rel in scope_paths if rel.startswith(("Core/", "Plugins/Notes/Sources/"))}
-        for rel in sorted(isolation_core - scope_core):
-            problems.append(f"{rel}：解耦门禁把它算作笔记源文件，本台账却没登记（两份清单不许各说各话）")
+        # T-20261010-043：登记出口有**两个桶** —— `scope`（在零网络出口范围内）与 `outOfScope`
+        # （不在范围内，但要写明理由，且 ⑧ 会对它做面外警示）。两个桶都算「登记过」，对账口径不变。
+        registered_core = scope_core | {
+            rel for rel in out_paths if rel.startswith(("Core/", "Plugins/Notes/Sources/"))
+        }
+        for rel in sorted(isolation_core - registered_core):
+            problems.append(
+                f"{rel}：解耦门禁把它算作笔记源文件，本台账却没登记"
+                "（scope 或 outOfScope 两个桶至少进一个 —— 两份清单不许各说各话）"
+            )
         for rel in sorted(scope_core - isolation_core):
             if rel in beyond:
                 continue
@@ -179,8 +202,9 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
         for rel in sorted(beyond & isolation_core):
             problems.append(f"`scopeBeyondIsolation` 里的 `{rel}` 其实就在解耦清单里（这条超范围登记是陈旧的）")
         notes.append(
-            f"与解耦门禁对账：Core 侧 {len(scope_core)} 个文件双方一致"
-            f"（其中 {len(scope_core - isolation_core)} 个是登记过理由的超范围文件）"
+            f"与解耦门禁对账：Core 侧 {len(registered_core)} 个文件双方一致"
+            f"（其中 {len(scope_core - isolation_core)} 个是登记过理由的超范围文件、"
+            f"{len(registered_core - scope_core)} 个登记在 outOfScope）"
         )
 
     # ---- ④ 零网络出口 --------------------------------------------------------
@@ -199,6 +223,33 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
                         "笔记模块（FR-PLUG-05 ②）不许有出网能力；确有正当用途要在台账 exceptions 里登记理由"
                     )
     notes.append(f"零网络出口：范围 {len(scope_paths)} 个文件 × 令牌表 {len(tokens)} 项，命中 {hits} 处")
+
+    # ---- ⑧ 面外（outOfScope）不许静默出网（T-20261010-043）--------------------
+    for entry in out_of_scope:
+        rel = (entry or {}).get("path", "")
+        if not rel:
+            continue
+        path = root / rel
+        if not path.exists():
+            continue
+        found = [
+            (number, token)
+            for number, line in enumerate(read(path).splitlines(), start=1)
+            for token in tokens
+            if token and token in line
+        ]
+        if found:
+            notes.append(
+                f"⚠️ 面外文件命中令牌表：`{rel}` 命中 {len(found)} 处"
+                f"（首处 {found[0][0]} 行 · `{found[0][1]}`）—— 面外件（测试 / 云同步层）按设计会出网，"
+                "不在本门禁判红范围内，但**不许静默**（定性见该条登记理由与 knownGaps）"
+            )
+        registered_hits = entry.get("bannedTokenHits")
+        if registered_hits is not None and registered_hits != len(found):
+            notes.append(
+                f"⚠️ `{rel}` 台账登记的命中数 {registered_hits} 与实测 {len(found)} 不符"
+                "（面外那份文件的出网面变了；改了就同步台账）"
+            )
 
     # ---- 例外：两端都对账 ----------------------------------------------------
     for entry in exceptions:
@@ -250,6 +301,17 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
             problems.append(
                 f"范围里的关键锚点不在位：`{rel}` 里找不到 `{marker}` —— {item.get('why', '')}"
             )
+    for rel_dir, floor in (floors.get("treeFloors") or {}).items():
+        got = face_trees.get(rel_dir, 0)
+        if got < floor:
+            problems.append(
+                f"枚举面 `{rel_dir}` 只读到 {got} 份、台账下限 {floor} —— 面被削掉了"
+                "（子目录读成 0 也要拦住，不许把「一个子目录都没枚举」当通过）"
+            )
+    notes.append(
+        "逐树下限："
+        + "；".join(f"{key}≥{value}" for key, value in (floors.get("treeFloors") or {}).items())
+    )
     notes.append(f"范围下限：{minimum} 个文件、层级 {'/'.join(floors.get('requiredLayers') or [])}、关键锚点 {len(floors.get('requiredMarkers') or [])} 个")
 
     # ---- ⑦ 接线与证据 --------------------------------------------------------
@@ -308,8 +370,8 @@ def main() -> int:
             print(f"  · {problem}")
         return 1
     print(
-        "\n✅ 笔记模块范围内一个网络 API 都没有（逐行扫令牌表）；范围声明与事实、与解耦门禁两边一致；"
-        "关键令牌仍在表内；门禁已接进闭环。"
+        "\n✅ 笔记模块范围内一个网络 API 都没有（逐行扫令牌表；面外文件的命中逐条打 ⚠️）；"
+        "范围声明与事实、与解耦门禁两边一致；关键令牌仍在表内；门禁已接进闭环。"
     )
     return 0
 

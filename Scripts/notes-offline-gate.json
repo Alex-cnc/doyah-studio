@@ -170,6 +170,16 @@
       "path": "Plugins/Notes/Sources/NoteStorage/NoteSearchDisclosure.swift",
       "layer": "core",
       "role": "检索披露（笔记检索的命中如何逐层披露给界面）—— 纯本地，无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift",
+      "role": "vendored SQLite 的**薄 C 绑定**（三端共用同一份 sqlite3.c，ADR / `check-vendored-sqlite.py` 管着）—— 本地文件库，无网络（T-20261010-043 补登记：这份文件按名字前缀进不了面）",
+      "layer": "core"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteStorage/SQLiteConstants.swift",
+      "role": "SQLite 宏常量的**生成物**（`Scripts/gen-sqlite-constants.py` 生成，verify-all 第 18 项对账）—— 纯常量表，无网络（T-20261010-043 补登记）",
+      "layer": "core"
     }
   ],
   "scopeBeyondIsolation": [
@@ -206,6 +216,30 @@
     {
       "path": "Tests/AICaptureTests.swift",
       "reason": "测试不是随包代码"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteSync/CloudAuth.swift",
+      "bannedTokenHits": 17,
+      "reason": "**真 HTTP 客户端**（`URLSession` / `URLRequest` / `https://{envId}.api.tcloudbasegateway.com`）—— 按设计给云同步登录取令牌（N-06 拍板：腾讯云 CloudBase + 微信注册）。是否属「笔记模块零网络出口」范围**待前门 / 人类主人定性**（原单 T-20261010-043 的政策边界）：属 ⇒ 改登记进 scope 并把命中逐条落 exceptions；不属 ⇒ 本条就是该缺口的登记处。本跳过按「不属」登记，理由写在 knownGaps；判据 ⑧ 每次跑都会把 17 处命中打 ⚠️（不许静默）",
+      "layer": "core"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift",
+      "bannedTokenHits": 5,
+      "reason": "云同步服务面（`URLSession` / `https://` 五处命中）—— 同上：按设计出网，等前门定性；判据 ⑧ 打 ⚠️ 并核对登记命中数",
+      "layer": "core"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteSync/SyncCore.swift",
+      "bannedTokenHits": 0,
+      "reason": "同步核心（本轮实测命中令牌表 0 处）—— 名字前缀不命中按名扫描面，登记在面外只是为了「整棵子树逐件有登记」；若前门定性它属笔记模块，改栏即可",
+      "layer": "core"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteSync/SyncQueue.swift",
+      "bannedTokenHits": 0,
+      "reason": "同步队列（本轮实测命中令牌表 0 处）—— 同上：逐件登记，等前门定性",
+      "layer": "core"
     }
   ],
   "bannedTokens": [
@@ -294,7 +328,7 @@
   ],
   "exceptions": [],
   "scopeFloors": {
-    "minFiles": 4,
+    "minFiles": 36,
     "requiredLayers": [
       "core",
       "app"
@@ -310,7 +344,14 @@
         "marker": "struct NotesListView",
         "why": "笔记面板必须在范围内（活动栏入口，Linux 侧也要有它的入口）"
       }
-    ]
+    ],
+    "treeFloors": {
+      "Core": 8,
+      "Plugins/Notes/Sources": 21,
+      "Plugins/Notes/Sources/NoteStorage": 7,
+      "Plugins/Notes/Sources/NoteSync": 4,
+      "Plugins/Notes/Views": 3
+    }
   },
   "wiring": {
     "verifyAll": "Scripts/verify-all.sh",
@@ -348,6 +389,6 @@
     "① 只判『源码里不出现网络 API』，判不了『运行时真的没有出网』（要真的证明得靠 L-23 ③ 的断网用例：断网跑增/改/查/删/检索/迁移全绿）",
     "② 本门禁只看**笔记模块这几个文件**；宿主侧（AppState / 浏览器 / 智能体）按设计有出网能力，不在本条范围内 —— 那是 NFR-SEC-05 / NFR-SEC-08 的地盘",
     "③ macOS / Windows 侧的存储引擎是否也换成本地 SQLite 取决于 Q23（需求提出者拍板）；本条只保证『笔记模块自己不带出网能力』，与换不换引擎无关",
-    "④ `Plugins/Notes/Sources/NoteSync/` 子树（`SyncCore` / `SyncQueue` / `CloudSyncService` / **`CloudAuth.swift`（真 HTTP 客户端：`URLSession` / `URLRequest` / `https://`）**）的文件名前缀不命中本门禁的按名扫描面（`Note*` / `AICapture*` / `License*`）⇒ 这棵树有没有出网能力**不在本判据内**；『`NoteSync` 是否属笔记模块』请前门定性：属 ⇒ 走 `exceptions` 逐条登记或改口径；不属 ⇒ 本条即该缺口的登记处。来源：派单 `T-20261010-031`（合册 `T-20261013-027` 本册表第 18 行）"
+    "④ `Plugins/Notes/Sources/NoteSync/` 子树（`SyncCore` / `SyncQueue` / `CloudSyncService` / `CloudAuth.swift`（真 HTTP 客户端：`URLSession` / `URLRequest` / `https://`））**已逐件登记在 `outOfScope`**（派单 `T-20261010-043` · 合册 `T-20261013-027` 本册表第 28 行）：它按设计出网（N-06 云化服务），但「是否属笔记模块的零网络出口范围」**待前门 / 人类主人定性** —— 属 ⇒ 改登记进 `scope` 并把命中逐条落 `exceptions`；本判据 ⑧ 每次跑把面外命中打 ⚠️ 并核对台账登记命中数（CloudAuth 17 / CloudSyncService 5），**不许静默**。此前那版缺口（「前缀不命中 ⇒ 整棵树不在判据内」）已由本轮的枚举面收口关闭。"
   ]
 }
