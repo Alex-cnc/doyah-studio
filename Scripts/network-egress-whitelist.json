@@ -1,5 +1,5 @@
 {
-  "_说明": "`Scripts/check-network-egress.py`（全仓网络出口门禁，闭环第 10 项）的台账。清单只许取自 Notes SRS **v3.94** §6.4「按面分层的文件级显式清单」（前门落笔 `987ace7` · 回执 T-20261009-149 ③）；台账写的是**声明**，门禁拿它跟事实对账 —— 判据与台账分家会让『改台账就能过』变成一条暗道，所以面 / 文件 / 理由三样缺一不可。",
+  "_说明": "`Scripts/check-network-egress.py`（**产品源面**网络出口门禁，闭环第 10 项）的台账。清单只许取自 Notes SRS **v3.94** §6.4「按面分层的文件级显式清单」（前门落笔 `987ace7` · 回执 T-20261009-149 ③）；台账写的是**声明**，门禁拿它跟事实对账 —— 判据与台账分家会让『改台账就能过』变成一条暗道，所以面 / 文件 / 理由三样缺一不可。",
   "srs": {
     "doc": "Notes SRS v3.94",
     "commit": "987ace7",
@@ -73,12 +73,21 @@
       "Plugins/Notes/Views"
     ],
     "glob": "*.swift",
-    "commentPolicy": "判定对象 = **代码出现**：`URLSession` / `URLRequest` 出现在 `//` / `///` 行注释、`/* */` 块注释或**字符串字面量**里**不算出现、不判红**（与 `check-core-portability.py` / `check-editor-surface-tokens.py` / `check-design-tokens.py` 同一口径：「注释里提到某个标识不算它还在用」）。例：`Core/DataTaskSpecGenerator.swift:7` 的 `///` 文档注释写着「本类型里没有任何 URLSession / 请求组装」—— 那是**声明不出网**，不判红、也**不进白名单**（白名单只许取自 SRS）。"
+    "commentPolicy": "判定对象 = **代码出现**：`URLSession` / `URLRequest` 出现在 `//` / `///` 行注释、`/* */` 块注释或**字符串字面量**里**不算出现、不判红**（与 `check-core-portability.py` / `check-editor-surface-tokens.py` / `check-design-tokens.py` 同一口径：「注释里提到某个标识不算它还在用」）。例：`Core/DataTaskSpecGenerator.swift:7` 的 `///` 文档注释写着「本类型里没有任何 URLSession / 请求组装」—— 那是**声明不出网**，不判红、也**不进白名单**（白名单只许取自 SRS）。",
+    "excludeDirs": [
+      ".git",
+      ".build",
+      ".worktrees",
+      "DerivedData",
+      "build"
+    ],
+    "scopeNote": "本门禁的面 = 下面 `roots` 逐根列出的**产品源面**（不是「全仓」；原单 T-20261010-040 的措辞缺口）。面外（`CLI/` `Platform/` `Tools/` `Tests*` `Vendor/` `Scripts/*.swift` …）不判，但**面外 .swift 计数**与**面外出现出网令牌的文件**两条读数必须打出来，后者逐条登记在 `outOfFace`。"
   },
   "floors": {
-    "minFilesScanned": 1,
+    "minFilesScanned": 357,
     "minSurfaces": 4,
-    "minRequiredTokens": 2
+    "minRequiredTokens": 2,
+    "minFilesScannedNote": "2026-10-14（合册 T-20261013-027 · 原单 T-20261010-040）由 1 提到实测 **357**（面 = App/ + Core/ + Plugins/Notes/Sources/ + Plugins/Notes/Views/ 下 `*.swift` 实数）；面被削到下限以下即判红。"
   },
   "wiring": {
     "verifyAll": "Scripts/verify-all.sh",
@@ -99,7 +108,92 @@
   ],
   "knownGaps": [
     "① 只判『源码里出现出网 API』，判不了『运行时真的没有出网』（那要靠断网用例与统一外发日志；后者见 NFR-SEC-08）。",
-    "② 只扫 `App/` 与 `Core/`（`Platform/` / `CLI/` / `Tools/` 不在 SRS §6.4 表的口径内）；将来要扩面，须先有前门口径。",
-    "③ 「判定对象 = 代码出现（注释 / 字符串里的提及不算出现）」这条口径尚未写进 SRS v3.94（前门单号 T-20261009-159）。"
-  ]
+    "② 面 = `scan.roots` 逐根列出的**产品源面**（不是「全仓」）。面外（`CLI/` `Platform/` `Tools/` `Tests*` `Vendor/` `Scripts/*.swift` …）不在 SRS §6.4 表的口径内：本门禁不判它们，但「面外 .swift 计数」与「面外出现出网令牌的文件」两条读数必须打出来，后者逐条登记在 `outOfFace`（漏登 / 陈旧 / 死登记都判红，只减不增）；要扩面须先有前门口径。",
+    "③ 「判定对象 = 代码出现（注释 / 字符串里的提及不算出现）」这条口径尚未写进 SRS v3.94（前门单号 T-20261009-159）。",
+    "④ 面外两处已知出网（`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift`）的**定性**未决 —— 记在 `outOfFace` 只让它们不再静默，不等于放行；定性由前门裁（原单 T-20261010-040 ④）。",
+    "⑤ 面内 `Core/LLMStreaming.swift`（FR-AI-16 第二片 · 2026-10-13 新增的流式传输面）出现 7 处令牌但未登记进任何面 ⇒ **本门禁在真仓判红**，待前门按纪律②登记后放行；本侧不擅自扩白名单（原单 T-20261010-040 边界④）。"
+  ],
+  "outOfFace": [
+    {
+      "file": "CLI/main.swift",
+      "tokens": [
+        "URLSession"
+      ],
+      "reason": "第407轮实测的面外活体：CLI 侧装配 transport（当前 HEAD 的 `:122`；原单按 `6a1de15` 记的是 `:113`，行号随提交漂移）。面外不判，但必须逐条登记并打出读数；待前门定性（原单 T-20261010-040 ④：这两处出网是「合法出口」还是「漏网」由前门裁）",
+      "bucket": "production"
+    },
+    {
+      "file": "Platform/macOS/WebKitBrowserEngine.swift",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "第407轮实测的面外活体：内嵌浏览器 `view.load(URLRequest(url:))`（当前 HEAD 的 `:175`）。面外不判，但必须逐条登记并打出读数；待前门定性（原单 T-20261010-040 ④：这两处出网是「合法出口」还是「漏网」由前门裁）",
+      "bucket": "production"
+    },
+    {
+      "file": "Tests/AgentObservationTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/AgentQuotaSessionTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/AgentSQLGeneratorTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/EgressLogTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/LLMRetryTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/LLMStreamTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/LLMStreamingClientTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/NoteSyncE2ETests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLSession"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    }
+  ],
+  "outOfFaceNote": "面外登记（只减不增）：`CLI/` `Platform/` `Tools/` `Tests*` `Vendor/` `Scripts/*.swift` 不在 SRS §6.4 表的口径内 ⇒ 本门禁**不判**它们；但面外出现出网令牌的文件必须逐条登记，漏登 / 陈旧 / 死登记都判红。登记 ≠ 放行：定性由前门裁（原单 T-20261010-040 ④）。"
 }

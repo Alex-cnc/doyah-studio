@@ -40,6 +40,18 @@ TREE_FILES = [
     # 只在**文档注释**里提到 URLSession 的文件（判据 3 的 grep 会数到它，但门禁判红集不含它）：
     # 带上它，才能证明「注释提及 ≠ 出现」这一条真的生效（组长第 371 轮 ④）。
     "Core/DataTaskSpecGenerator.swift",
+    # 台账 `outOfFace`（面外登记）里的 10 个文件 —— 面外登记必须能跟盘上事实对账：
+    # 少带一个，干净副本那一例就会按「面外登记磁盘上不存在 / 陈旧登记」判红（2026-10-14 · 原单 T-20261010-040）。
+    "CLI/main.swift",
+    "Platform/macOS/WebKitBrowserEngine.swift",
+    "Tests/AgentObservationTests.swift",
+    "Tests/AgentQuotaSessionTests.swift",
+    "Tests/AgentSQLGeneratorTests.swift",
+    "Tests/EgressLogTests.swift",
+    "Tests/LLMRetryTests.swift",
+    "Tests/LLMStreamTests.swift",
+    "Tests/LLMStreamingClientTests.swift",
+    "Tests/NoteSyncE2ETests.swift",
     "Scripts/verify-all.sh",
     GATE,
     LEDGER,
@@ -66,6 +78,11 @@ def make_tree() -> Path:
     roots = (json.loads((ROOT / LEDGER).read_text(encoding="utf-8")).get("scan") or {}).get("roots") or []
     for root in roots:
         (tree / root).mkdir(parents=True, exist_ok=True)
+    # 夹具台账跟版（2026-10-14 · 合册 T-20261013-027 · 原单 T-20261010-040）：
+    # 真仓 `floors.minFilesScanned` = 357（面内 `.swift` 实数），夹具树只有十几份 ⇒ 不按夹具下调就
+    # 会让「干净副本应当绿」这一例假红。真仓那个下限由本脚本末段的**静态臂**看住（不得回退到 1）。
+    face_count = sum(1 for base in roots for _ in (tree / base).rglob("*.swift"))
+    edit_ledger(tree, lambda data: data["floors"].update({"minFilesScanned": face_count}))
     return tree
 
 
@@ -236,6 +253,50 @@ def main() -> int:
         "没写明理由",
     )
 
+    print("— 面边界（原单 T-20261010-040）：面外不判，但面外活体必须点名 / 登记 / 棘轮 —")
+    case_red(
+        "面外文件（`CLI/main.swift`）被放进面内 ⇒ 判红并点名（面外确有活体、旧面静默放过）",
+        lambda tree: edit_ledger(tree, lambda data: data["scan"].update(
+            {"roots": data["scan"]["roots"] + ["CLI", "Platform"]})),
+        "CLI/main.swift:", "Platform/macOS/WebKitBrowserEngine.swift:",
+    )
+    case_red(
+        "面外新出现未登记的出网文件（`CLI/EgressLeak.swift`）⇒ 判红点名（面外登记的只减不增棘轮）",
+        lambda tree: (tree / "CLI/EgressLeak.swift").write_text(
+            "import Foundation\nlet leak = URLSession.shared\n", encoding="utf-8"),
+        "CLI/EgressLeak.swift", "面外",
+    )
+    case_green(
+        "面外新增**非**出网文件（`CLI/Notes.swift` 无令牌）⇒ 仍绿（不许地毯式判红）",
+        lambda tree: (tree / "CLI/Notes.swift").write_text(
+            "import Foundation\nlet note = 1\n", encoding="utf-8"),
+    )
+    case_red(
+        "面外登记被掏空（`outOfFace` 清空）⇒ 判红（零登记不许当通过）",
+        lambda tree: edit_ledger(tree, lambda data: data.update({"outOfFace": []})),
+        "零登记不许当通过",
+    )
+    case_red(
+        "面外登记条目陈旧（登记的文件现在一处令牌都不出现）⇒ 判红",
+        lambda tree: edit(
+            tree, "CLI/main.swift",
+            lambda text: "import Foundation\nlet clean = 1\n",
+        ),
+        "陈旧登记",
+    )
+    case_red(
+        "面外登记指到盘上没有的文件 ⇒ 判红（死登记不许留着）",
+        lambda tree: edit_ledger(tree, lambda data: data["outOfFace"][0].update(
+            {"file": "CLI/Ghost.swift"})),
+        "CLI/Ghost.swift", "磁盘上不存在",
+    )
+    case_red(
+        "面内扫描面被削到下限以下 ⇒ 判红（空跑防护：357 那个下限真会响）",
+        lambda tree: edit_ledger(tree, lambda data: data["floors"].update(
+            {"minFilesScanned": data["floors"]["minFilesScanned"] + 50})),
+        "扫描面只有",
+    )
+
     print("— 接线：门禁必须在闭环里真的被调用 —")
     case_red(
         "从 verify-all.sh 删掉本门禁的调用 → 判红（存在但没接线＝红不起来）",
@@ -245,6 +306,14 @@ def main() -> int:
         ),
         "没有本门禁",
     )
+
+    print("— 真仓台账的静态臂（面钉 / 面外登记不得回退）—")
+    real_ledger = json.loads((ROOT / LEDGER).read_text(encoding="utf-8"))
+    real_floor = (real_ledger.get("floors") or {}).get("minFilesScanned") or 0
+    record(real_floor >= 300, "真仓 `floors.minFilesScanned` ≥ 300（面钉不得回退到 1）", f"实际 {real_floor}")
+    real_out = {entry.get("file") for entry in (real_ledger.get("outOfFace") or [])}
+    record({"CLI/main.swift", "Platform/macOS/WebKitBrowserEngine.swift"} <= real_out,
+           "真仓 `outOfFace` 仍登记着两处生产面外活体（不得删已知缺口）", f"实际 {sorted(real_out)}")
 
     print("— 末条：真仓库一个字节没动 —")
     after = snapshot()

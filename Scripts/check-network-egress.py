@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""门禁：全仓网络出口的「按面分层的文件级显式清单」（Notes SRS **v3.94** §6.4 · 前门落笔 `987ace7`）。
+"""门禁：**产品源面**（`scan.roots` 逐根列出）网络出口的「按面分层的文件级显式清单」（Notes SRS **v3.94** §6.4 · 前门落笔 `987ace7`）。
 
 **为什么有它**：`FR-PLUG-05` 的「笔记模块零网络出口」（`check-notes-offline.py`）只扫 `Core/` 下
 文件名以 `Note` / `AICapture` / `License` 开头的文件与 `App/` 下的 `Note*` —— 而 **`Core/NoteSync/`
@@ -14,7 +14,11 @@
   ② **认证面**     = `Plugins/Notes/Sources/NoteSync/CloudAuth.swift`（单列：认证与同步解耦）
   ③ **AI 面（既有豁免）** = `Core/LLMClient.swift` + `Core/EgressLog.swift`（传输装饰器）
   ④ **装配缝（不算出口）** = `App/AppState.swift` · `App/Auth/AccountFlowModel.swift`（只注入 transport）
-  ⑤ **其余一切文件**出现 `URLSession` / `URLRequest` ⇒ **判红**（并点名 `文件:行号`）
+  ⑤ **面内其余一切文件**出现 `URLSession` / `URLRequest` ⇒ **判红**（并点名 `文件:行号`）
+  ⑥ **面外（本门禁不判的方向，但必须报读数 + 登记）** = `CLI/` · `Platform/` · `Tools/` · `Tests*` ·
+     `Vendor/` · `Scripts/*.swift` 等不在 `scan.roots` 里的 `.swift`：每次都要打出「面外 .swift N 份 /
+     其中出现出网令牌 M 份」，M 份逐条登记在台账 `outOfFace` —— **漏登 / 陈旧 / 死登记都判红**（只减不增）。
+     登记 ≠ 放行：面外那两处（CLI / Platform）的**定性**由前门裁（原单 `T-20261010-040` ④）。
 
 **口径（写死，见 SRS v3.94 §6.4 四条纪律）**：
 
@@ -196,7 +200,7 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str], d
                     if surface is None:
                         violations.append(
                             f"{rel}:{number}：命中网络 API `{token}` —— 该文件**不在台账任何一面里**"
-                            f"（`{LEDGER_DEFAULT}`；SRS v3.94 §6.4：其余一切文件不得出现 "
+                            f"（`{LEDGER_DEFAULT}`；SRS v3.94 §6.4：**面内**其余一切文件不得出现 "
                             f"`URLSession` / `URLRequest`）。新增联网文件须前门登记后放行（纪律②）"
                         )
                         continue
@@ -215,6 +219,34 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str], d
                         continue
                     stats["surfaceHits"][token] = stats["surfaceHits"].get(token, 0) + 1
 
+    # ---- ③′ 面外读数与登记（原单 T-20261010-040）----------------------------
+    exclude_dirs = set(scan_cfg.get("excludeDirs") or [".git", ".build", ".worktrees"])
+    face_files: set[str] = set()
+    for base in scan_roots:
+        base_dir = root / base
+        if base_dir.is_dir():
+            for face_path in base_dir.rglob("*.swift"):
+                face_files.add(face_path.relative_to(root).as_posix())
+    out_of_face: list[str] = []
+    for any_path in sorted(root.rglob("*.swift")):
+        rel = any_path.relative_to(root).as_posix()
+        if any(part in exclude_dirs for part in rel.split("/")):
+            continue
+        if rel in face_files:
+            continue
+        out_of_face.append(rel)
+    out_hits: dict[str, list[str]] = {}
+    for rel in out_of_face:
+        try:
+            found = sorted({token for _, code in code_lines(read(root / rel)) for token in tokens if token in code})
+        except OSError as read_error:
+            problems.append(f"面外文件读不了：{rel}（{read_error}）")
+            continue
+        if found:
+            out_hits[rel] = found
+    stats["outOfFaceScanned"] = len(out_of_face)
+    stats["outOfFaceEgress"] = {rel: found for rel, found in out_hits.items()}
+
     problems.extend(violations)
     stats["violations"] = len(violations)
 
@@ -227,6 +259,41 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str], d
         f"扫描 {' + '.join(f'{base}/' for base in scan_roots)} 共 {stats['filesScanned']} 个 .swift；"
         f"命中令牌 {stats['occurrences']} 处（白名单面 {sum(stats['surfaceHits'].values())} 处 · "
         f"装配缝 transport 注入 {seam_allowed} 处）；违规 {stats['violations']} 处"
+    )
+
+    # ---- ③″ 面外登记 ↔ 面外事实（漏登 / 陈旧 / 死登记，只减不增）-------------
+    declared: dict[str, list[str]] = {}
+    for entry in ledger.get("outOfFace") or []:
+        rel = (entry or {}).get("file") or ""
+        if not rel:
+            problems.append("面外登记条目缺 file")
+            continue
+        if len(((entry or {}).get("reason") or "").strip()) < 12:
+            problems.append(f"面外登记 `{rel}` 没写明理由（说不清它为什么算面外已知出网）")
+        if not ((entry or {}).get("tokens") or []):
+            problems.append(f"面外登记 `{rel}` 一个令牌都没写（零令牌的登记等于没登记）")
+        declared[rel] = sorted((entry or {}).get("tokens") or [])
+    if not declared:
+        problems.append("台账 `outOfFace` 一条登记都没有 —— 面外出现出网令牌者必须逐条登记（零登记不许当通过）")
+    for rel, found in sorted(out_hits.items()):
+        if rel not in declared:
+            problems.append(
+                f"{rel}：**面外**文件出现出网令牌 {found}，台账 `outOfFace` 里却没有它的登记 —— "
+                f"面外出现出网令牌不等于放行，须逐条登记（漏登即判红；原单 T-20261010-040）"
+            )
+        elif declared[rel] != found:
+            problems.append(
+                f"面外登记 `{rel}` 写的是 {declared[rel]}、盘上实测 {found} —— 登记与事实不符（陈旧登记）"
+            )
+
+    for rel in sorted(declared):
+        if not (root / rel).exists():
+            problems.append(f"面外登记 `{rel}` 磁盘上不存在（改名 / 删除了？请同步台账；死登记不许留着）")
+        elif rel not in out_hits:
+            problems.append(f"面外登记 `{rel}` 现在一处令牌都不出现了 —— 陈旧登记，请销账（只减不增）")
+    notes.append(
+        f"面外 .swift {len(out_of_face)} 份；其中出现出网令牌 {len(out_hits)} 份"
+        f"（逐条登记在 `outOfFace`，定性待前门）"
     )
 
     # ---- ④ 令牌表不许被掏空 --------------------------------------------------
@@ -275,7 +342,7 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str], d
         problems.append(f"台账只有 {len(surfaces)} 个面、下限 {minimum_surfaces} —— 面被削掉了")
     if stats["occurrences"] == 0:
         problems.append(
-            "空跑防护：全仓一个令牌出现都没命中 —— 白名单里那几个面本来就该有出现，"
+            "空跑防护：面内一个令牌出现都没命中 —— 白名单里那几个面本来就该有出现，"
             "零命中只可能是扫描面 / 正则坏了（零命中不许当通过）"
         )
 
@@ -306,6 +373,8 @@ def main() -> int:
                 "filesScanned": stats["filesScanned"],
                 "occurrences": stats["occurrences"],
                 "violations": stats["violations"],
+                "outOfFaceScanned": stats.get("outOfFaceScanned", 0),
+                "outOfFaceEgress": stats.get("outOfFaceEgress", {}),
                 "problems": problems,
                 "notes": notes,
             },
@@ -322,7 +391,8 @@ def main() -> int:
             print(f"  · {problem}")
         return 1
     print(
-        "\n✅ 全仓网络出口与 Notes SRS v3.94 §6.4 的清单一致：白名单面上出现的令牌都在台账里，"
+        "\n✅ 产品源面（`scan.roots` 逐根列出，**不是全仓**）网络出口与 Notes SRS v3.94 §6.4 的清单一致："
+        "白名单面上出现的令牌都在台账里，"
         "其余文件（只判代码行）一个都没有；装配缝只注入 transport；关键令牌仍在表内；门禁已接进闭环。"
     )
     return 0
