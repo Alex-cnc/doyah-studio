@@ -151,6 +151,7 @@ struct WorkspaceAreaView: View {
                     .font(Theme.font(.caption))
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel(Text(L(.commonClose)))
         }
         .padding(.horizontal, Spacing.s)
         .padding(.vertical, Spacing.xs)

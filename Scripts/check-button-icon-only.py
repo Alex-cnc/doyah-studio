@@ -22,8 +22,11 @@ C. **断言**：a 类命中数 ≤ 基线 `targetTextButtons`（本令的目标 
    基线里同时留 `beforeTextButtons`（改前读数）做**成对留痕**。
 D. **空跑防护**：UI 文件数下限 + 面与 `Package.swift` 对账（面目录不在盘上 ⇒ 红）。
 F. **纯图标按钮须带提示 / 无障碍标签**（加令 `T-20261013-051` ②「升为硬要求」）：纯图标控件必须带
-   `.help(` 与 `.accessibilityLabel(`；组件形态（`ICON_COMPONENTS`，如 `ToolbarIconButton`）的提示与
-   无障碍标签装在组件本体 ⇒ 这里只核调用点给了 `help:` 实参。
+   `.help(` 或 `.accessibilityLabel(`（令原文是「标签 / 提示」**二选一**；「与」的严格面另计读数）；组件形态
+   （`ICON_COMPONENTS`，如 `ToolbarIconButton`）的提示与无障碍标签装在组件本体 ⇒ 这里只核调用点给了 `help:` 实参。
+   观察窗（`modifier_window`）= **控件本体（字符跨度：参数括号 + `{…}` 块 + 必要时 `label: {…}`）+ 紧跟的修饰链**
+   —— 批 7 修（2026-10-14）：旧实现是「固定 8 行 / 遇空行即止」，把多行本体、注释行、
+   `Toggle(isOn: Binding(get:set:))` 形态的 `.help(` 全读丢了（36 处里 27 处是假红）。
 G. **同一个动作 ⇒ 同一个图标**（加令 ②「可机械断言」）：从控件的提示 / 无障碍标签里取动作键（`L(.key)`），
    取该控件的 `systemName:` 字面 —— 同一个动作键出现两枚不同图标 ⇒ 红。
 H. **符号已登记**：用到的图标符号必须在 `Scripts/button-icon-semantics.json` 的 `symbols` 里登记
@@ -31,7 +34,7 @@ H. **符号已登记**：用到的图标符号必须在 `Scripts/button-icon-sem
 E. `--inventory` 打印逐条清单（Markdown：界面 / 文件:行 / 控件 / 现行字符 / 拟用图标 / 处置）——
    这份清单是 `T-20261013-042` 第一段的交付物，落点 `Scripts/button-icon-inventory.md`。
 
-判据自己的证据：`--self-test` **32 例**（红/绿成对：文字按钮红 / 图标按钮绿 / 菜单项绿 / 存疑如实登记 / 空串豁免 …）。
+判据自己的证据：`--self-test` **36 例**（红/绿成对：文字按钮红 / 图标按钮绿 / 菜单项绿 / 存疑如实登记 / 空串豁免 …）。
 """
 
 from __future__ import annotations
@@ -66,7 +69,7 @@ ICON_COMPONENTS = {"ToolbarIconButton": "App/Views/ToolbarIcon.swift"}
 LABEL_STYLE_ICON = re.compile(r"\.labelStyle\s*\(\s*\.iconOnly\s*\)")
 SYMBOL_LITERAL = re.compile(r'systemName:\s*"([^"]+)"')
 ACTION_KEY = re.compile(r"(?:help\s*:\s*|\.help\s*\(\s*)L\(\s*\.([A-Za-z0-9_]+)\s*\)")
-PROBE_LINES = 8          # 提示/无障碍标签的观察窗（行；遇空行或下一控件即止）
+PROBE_LINES = 80         # 窗行数上限（批 7 修：旧值 8 是行数窗，读不到多行控件的尾链）
 
 BUTTON = re.compile(r"\b(Button|Toggle)\s*\(")
 MENU_OPEN = re.compile(r"(?:\bMenu\s*[({]|\bCommandMenu\s*\(|\bCommandGroup\b|\bMenuBarExtra\s*\("
@@ -268,23 +271,99 @@ def classify(code: str, raw: str, start: int) -> dict:
 CONTROL = re.compile(r"\b(Button|Toggle)\s*(?=[({])")
 
 
+def _next_code_line(code_lines: list[str], start: int) -> str:
+    """从 start 起第一条「非空」的剥注释行（空行与纯注释行都算空）。"""
+    for index in range(start, len(code_lines)):
+        if code_lines[index].strip():
+            return code_lines[index]
+    return ""
+
+
+def _control_end(code: str, start: int) -> int | None:
+    """控件起点（`Button` / `Toggle` 的字符偏移）→ **本体结束**的字符偏移。
+
+    与 `classify` 同一套括号语义：先吃参数括号，再吃首个 `{…}` 块，必要时再吃 `label: {…}`。
+    """
+    head = re.match(r"\b(?:Button|Toggle)\s*", code[start:])
+    if not head:
+        return None
+    pos = start + head.end()
+    if code[pos:pos + 1] == "(":
+        close = match_paren(code, pos)
+        if close is None:
+            return None
+        block = code.find("{", close)
+        if block < 0:
+            return None
+        end = block + len(balanced_block(code, block)) + 2
+    else:
+        block = code.find("{", pos)
+        if block < 0:
+            return None
+        end = block + len(balanced_block(code, block)) + 2
+    later = re.match(r"\s*label\s*:\s*\{", code[end:])
+    if later:
+        block = end + later.end() - 1
+        end = block + len(balanced_block(code, block)) + 2
+    return end
+
+
 def modifier_window(code: str, raw: str, line: int, span: int = PROBE_LINES) -> tuple[str, str]:
-    """控件所在行起、至空行或下一个控件为止的窗（剥注释版 + 原文版）。
+    """控件所在行起、穿过**控件本体**与其后紧跟的修饰链为止的窗（剥注释版 + 原文版）。
 
     剥注释版用来找 `.help(` / `.accessibilityLabel(`；原文版用来读 `systemName: "…"` 的字面
-    （剥注释会把字符串抹成空格）。窗被下一个 `Button(` / `Toggle(` 截断 ⇒ 不借邻居的标签充数。
+    （剥注释会把字符串抹成空格）。
+
+    批次 7 修（2026-10-14 · 信箱 `T-20261013-042`）：旧实现是「固定 8 行 / 遇空行或下一控件即止」的
+    **行数窗** —— 多行形态（`Button { 动作 } label: { 图标 }` 的链尾常落在第 9~35 行）、含注释行的本体、
+    `Toggle(isOn: Binding(get:set:))` 这种参数里带闭包的形态**一律读不到** ⇒ 判据 F 原来报的
+    「36 处既无提示也无无障碍标签」里 27 处是**假红**（真仓逐处查过：`BrowserTabView:48/58/68`、
+    `QueryToolbar:347/363/381`、`DataTaskPanel:342`、`NotesPanel:227` 等的 `.help(` 就在本体之后）。
+    现在改用**本体字符跨度**（`_control_end`，与 `classify` 同一套括号语义）+ 修饰链（行首 `.`；
+    中间的空行 / 注释行看其后最近的非空行）—— 到本体与自有链为止，**不借邻居的标签充数**
+    （下一个 `Button` / `Toggle` 永远不在本体的字符跨度里）。
     """
     code_lines, raw_lines = code.splitlines(), raw.splitlines()
     picked_code, picked_raw = [], []
-    for offset in range(span):
-        index = line - 1 + offset
-        if index >= len(code_lines):
-            break
-        text = code_lines[index]
-        if offset and (not text.strip() or CONTROL.match(text.lstrip())):
-            break
-        picked_code.append(text)
+    start_of_line = sum(len(text) + 1 for text in code_lines[:line - 1]) if line >= 1 else 0
+    match = CONTROL.search(code_lines[line - 1]) if 0 < line <= len(code_lines) else None
+    end = _control_end(code, start_of_line + match.start()) if match else None
+
+    def take(index: int) -> None:
+        picked_code.append(code_lines[index])
         picked_raw.append(raw_lines[index] if index < len(raw_lines) else "")
+
+    index = line - 1
+    if end is None:                    # 兜底：判不出本体 ⇒ 退回「遇空行 / 下一控件即止」的行数窗
+        while index < len(code_lines) and len(picked_code) < 8:
+            text = code_lines[index]
+            if index != line - 1 and (not text.strip() or CONTROL.match(text.lstrip())):
+                break
+            take(index)
+            index += 1
+        return "\n".join(picked_code), "\n".join(picked_raw)
+    end_line = code.count("\n", 0, end)
+    while index <= end_line and len(picked_code) < span:
+        take(index)
+        index += 1
+    chain_depth = 0
+    while index < len(code_lines) and len(picked_code) < span:
+        text = code_lines[index]
+        if chain_depth > 0:                       # 修饰链里的多行闭包（如 `.onHover { … }`）继续吃
+            take(index)
+            chain_depth += text.count("{") - text.count("}")
+            index += 1
+            continue
+        if text.strip().startswith("."):
+            take(index)
+            chain_depth += text.count("{") - text.count("}")
+            index += 1
+            continue
+        if not text.strip() and _next_code_line(code_lines, index + 1).strip().startswith("."):
+            take(index)
+            index += 1
+            continue
+        break
     return "\n".join(picked_code), "\n".join(picked_raw)
 
 
@@ -479,8 +558,8 @@ def a11y_and_semantics_issues(root: pathlib.Path, buckets: dict, baseline: dict 
     if stats["missing"]:
         head = "; ".join(stats["missing"][:3])
         issues.append(Issue("判据 F", f"纯图标按钮**既无提示也无无障碍标签**的有 {len(stats['missing'])} 处"
-                                      f"（目标 0 · 批次 6 实测读数 "
-                                      f"{(baseline or {}).get('missingA11y', len(stats['missing']))}） —— 例：{head}"))
+                                      f"（目标 0 · 批 6 假红读数 "
+                                      f"{(baseline or {}).get('missingA11yBefore', len(stats['missing']))}） —— 例：{head}"))
     return issues, stats
 
 
@@ -691,6 +770,30 @@ def self_test() -> int:
         cases.append(("㉙ 台账缺盘 ⇒ 出声（不静默放行）",
                       any(issue.where == SEMANTICS for issue in a11y_and_semantics_issues(
                           root / "no-ledger-here", icon_buckets(), None)[0])))
+
+        long_body = rows_of('Button {\n    tap()\n} label: {\n    // 注释行在窗内\n'
+                            '    Image(systemName: "xmark")\n}\n.buttonStyle(.plain)\n'
+                            '.help(L(.commonClose))\n')
+        cases.append(("㉚ 多行本体 + 链尾 `.help(` ⇒ 判据 F 绿（旧 8 行窗读不到 ⇒ 假红）",
+                      "判据 F" not in wheres(*long_body)))
+        binding_form = rows_of('Toggle(isOn: Binding(\n    get: { flag },\n    set: { flag = $0 }\n'
+                               ')) {\n    // 注释一\n    // 注释二\n'
+                               '    Label(L(.notesFavoriteOnly), systemImage: "star")\n'
+                               '        .labelStyle(.iconOnly)\n}\n.help(L(.notesFavoriteOnly))\n')
+        cases.append(("㉛ `Toggle(isOn: Binding(get:set:))` 参数形态 + 链尾 `.help(` ⇒ 判据 F 绿",
+                      "判据 F" not in wheres(*binding_form)))
+        label_only = rows_of('Button {\n    tap()\n} label: {\n    // 注释一\n    // 注释二\n'
+                             '    // 注释三\n    Image(systemName: "xmark")\n}\n'
+                             '.accessibilityLabel(Text(L(.commonClose)))\n')
+        cases.append(("㉜ 链尾只给 `.accessibilityLabel(` ⇒ 判据 F 绿（令原文二选一）",
+                      "判据 F" not in wheres(*label_only)))
+        neighbours = rows_of('HStack {\n    Button {\n        tap()\n    } label: {\n'
+                             '        Image(systemName: "plus")\n    }\n\n'
+                             '    Button {\n        tap2()\n    } label: {\n'
+                             '        Image(systemName: "minus")\n    }\n'
+                             '    .help(L(.commonDelete))\n}\n')
+        cases.append(("㉝ 不借邻居：下一个控件的 `.help(` 不算第一处的 ⇒ 第一处仍判 F 红",
+                      "判据 F" in wheres(neighbours[0]) and "判据 F" not in wheres(neighbours[1])))
 
     after = _sha(real_baseline) if real_baseline.exists() else None
     cases.append(("㉑ 真仓库盘点基线逐字节未变", before == after))

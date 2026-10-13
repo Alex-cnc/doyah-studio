@@ -114,8 +114,8 @@
 | 77 | ResultTableView | `App/Views/ResultTableView.swift:287` | Button | `L(.exportTSV)` | 保留文字（可选加图标前缀） |
 | 78 | ResultTableView | `App/Views/ResultTableView.swift:288` | Button | `L(.exportMarkdown)` | 保留文字（可选加图标前缀） |
 | 79 | ResultTableView | `App/Views/ResultTableView.swift:289` | Button | `L(.exportSQLInsert)` | 保留文字（可选加图标前缀） |
-| 80 | TableDesignExtrasSection | `App/Views/TableDesignExtrasSection.swift:247` | Button | `L(.referentialActionNone)` | 保留文字（可选加图标前缀） |
-| 81 | TableDesignExtrasSection | `App/Views/TableDesignExtrasSection.swift:249` | Button | `ForeignKeyDraft.labelKey(action)` | 保留文字（可选加图标前缀） |
+| 80 | TableDesignExtrasSection | `App/Views/TableDesignExtrasSection.swift:249` | Button | `L(.referentialActionNone)` | 保留文字（可选加图标前缀） |
+| 81 | TableDesignExtrasSection | `App/Views/TableDesignExtrasSection.swift:251` | Button | `ForeignKeyDraft.labelKey(action)` | 保留文字（可选加图标前缀） |
 | 82 | TerminalTabsBar | `App/Views/TerminalTabsBar.swift:82` | Button | `L(.terminalTabRename)` | 保留文字（可选加图标前缀） |
 | 83 | TerminalTabsBar | `App/Views/TerminalTabsBar.swift:83` | Button | `L(.terminalTabClose)` | 保留文字（可选加图标前缀） |
 | 84 | TodoCalendarView | `App/Views/TodoCalendarView.swift:439` | Button | `L(.commonEdit)` | 保留文字（可选加图标前缀） |
@@ -181,8 +181,8 @@
 
 ## 存疑（登记待裁）· 2 处
 
-- `App/Views/WorkspaceAreaView.swift:224` Button：`homeRow(title: entry.displayName, detail: entry.path, symbol: )`
-- `App/Views/WorkspaceAreaView.swift:247` Button：`homeRow(title: entry.displayName, detail: entry.path, symbol: )`
+- `App/Views/WorkspaceAreaView.swift:225` Button：`homeRow(title: entry.displayName, detail: entry.path, symbol: )`
+- `App/Views/WorkspaceAreaView.swift:248` Button：`homeRow(title: entry.displayName, detail: entry.path, symbol: )`
 
 ## 附录 · 非按钮控件 `Picker`（归口待裁）· 49 处
 

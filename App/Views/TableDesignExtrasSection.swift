@@ -212,6 +212,7 @@ struct TableDesignExtrasSection: View {
                 Image(systemName: "minus.circle")
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel(Text(L(.commonDelete)))
         }
     }
 
@@ -236,6 +237,7 @@ struct TableDesignExtrasSection: View {
                 Image(systemName: "minus.circle")
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel(Text(L(.commonDelete)))
         }
     }
 
@@ -267,6 +269,7 @@ struct TableDesignExtrasSection: View {
                 Image(systemName: "minus.circle")
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel(Text(L(.commonDelete)))
         }
     }
 

@@ -52,6 +52,10 @@ struct ObjectTreeRowContent: View, Equatable {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // 图标化（令 2026-10-13 · 信箱 `T-20261013-042`）：纯图标按钮须带提示 / 无障碍标签。
+                // 文案键复用 `agentChat{Expand,Collapse}`（文案就是「展开 / 收起」，与 `row.isExpanded` 反着给）。
+                .help(row.isExpanded ? L(.agentChatCollapse) : L(.agentChatExpand))
+                .accessibilityLabel(Text(row.isExpanded ? L(.agentChatCollapse) : L(.agentChatExpand)))
             } else {
                 Color.clear.frame(width: 12, height: 12)
             }

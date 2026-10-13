@@ -1,5 +1,5 @@
 {
-  "_说明": "图标语义台账（加令 T-20261013-051 ②）：symbol → 动作 + 语义依据。判据读它做「符号已登记 / 同一动作同一符号」。",
+  "_说明": "图标语义台账（加令 T-20261013-051 ②）：symbol → 动作 + 语义依据。判据读它做「符号已登记 / 同一动作同一符号」。　**2026-10-14 批 7**：判据 F 的观察窗改成「控件本体 + 修饰链」后，判据 G/H 的对账面 58 → 78 处，暴露 8 枚已用未登记的符号（本批补登，依据栏里的动作取自同控件的 `.help(L(.key))`）。",
   "symbols": {
     "icloud": {
       "动作": "accountSyncToggle",
@@ -215,6 +215,38 @@
     "square.and.arrow.down": {
       "动作": "notesSave",
       "依据": "保存笔记 = 存储箭头"
+    },
+    "arrow.up.doc": {
+      "动作": "historyLoadHelp",
+      "依据": "把这条历史载入页签 = 文档向上"
+    },
+    "play.fill": {
+      "动作": "toolbarExecuteHelp",
+      "依据": "执行查询 = 实心播放"
+    },
+    "arrow.up.arrow.down.circle": {
+      "动作": "resultSortClear",
+      "依据": "清除排序 = 圆内上下箭头"
+    },
+    "doc.on.doc": {
+      "动作": "rowDetailCopyValue",
+      "依据": "复制单元格值 = 叠文档"
+    },
+    "arrow.left.arrow.right": {
+      "动作": "commandReplace",
+      "依据": "替换 = 左右箭头（成对）"
+    },
+    "xmark.circle.fill": {
+      "动作": "commonClose",
+      "依据": "关闭 / 收起搜索字段 = 实心圆叉"
+    },
+    "bell": {
+      "动作": "reminderAttach",
+      "依据": "加提醒 = 铃铛"
+    },
+    "bell.slash": {
+      "动作": "reminderRemove",
+      "依据": "移除提醒 = 划掉的铃铛"
     }
   }
 }

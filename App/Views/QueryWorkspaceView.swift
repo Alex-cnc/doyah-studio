@@ -67,6 +67,8 @@ struct QueryWorkspaceView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(appState.tabs.count <= 1 || tab.isExecuting)
+                        .help(L(.workspaceCloseTab))
+                        .accessibilityLabel(Text(L(.workspaceCloseTab)))
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -82,6 +84,8 @@ struct QueryWorkspaceView: View {
                     Image(systemName: "plus")
                 }
                 .buttonStyle(.plain)
+                .help(L(.menuNewQuery))
+                .accessibilityLabel(Text(L(.menuNewQuery)))
                 .padding(.horizontal, 8)
             }
             .padding(.horizontal, 12)
