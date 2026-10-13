@@ -13,6 +13,19 @@ public enum AgentToolApproval: String, Codable, Sendable {
     case required
 }
 
+/// 工具的**能力**（`FR-AI-19` 的登记面）：循环按能力把「模型要调的工具」映射到实现，
+/// 于是实现侧**不必写工具名字面量**（源树判据守的就是那一点）。
+public enum AgentToolCapability: String, Codable, Equatable, Sendable, CaseIterable {
+    case readFile
+    case listDirectory
+    case search
+    case queryDatabase
+    case writeFile
+    case runCommand
+    case readNotes
+    case fetchURL
+}
+
 /// 交付阶段：MVP 六件 / 第二批（`FR-AI-20` ⑥ 要求如实登记，不许写成已做）。
 public enum AgentToolStage: String, Codable, Sendable {
     case mvp
@@ -28,6 +41,8 @@ public struct AgentToolDefinition: Equatable, Sendable {
     public var name: String
     /// 给模型读的一句话（同提示词族口径；不是界面文案）。
     public var summary: String
+    /// 能力（实现在哪一侧认领它；`FR-AI-19` 的登记面）。
+    public var capability: AgentToolCapability
     /// 参数名 → JSON Schema 类型（`string` / `integer` / `boolean`）。
     public var parameters: [String: String]
     /// 必填参数（必须是 `parameters` 的子集）。
@@ -40,6 +55,7 @@ public struct AgentToolDefinition: Equatable, Sendable {
 
     public init(name: String,
                 summary: String,
+                capability: AgentToolCapability,
                 parameters: [String: String] = [:],
                 required: [String] = [],
                 level: AgentToolLevel,
@@ -48,6 +64,7 @@ public struct AgentToolDefinition: Equatable, Sendable {
                 enabled: Bool = true) {
         self.name = name
         self.summary = summary
+        self.capability = capability
         self.parameters = parameters
         self.required = required
         self.level = level
@@ -100,47 +117,60 @@ public struct AgentToolRegistry: Sendable {
         AgentToolRegistry(definitions: [
             AgentToolDefinition(name: "read_file",
                                 summary: "读工作区里的一个文件（只读）",
+                                capability: .readFile,
                                 parameters: ["path": "string"],
                                 required: ["path"],
                                 level: .readOnly, approval: .none),
             AgentToolDefinition(name: "list_dir",
                                 summary: "列工作区里一个目录的条目（只读）",
+                                capability: .listDirectory,
                                 parameters: ["path": "string"],
                                 required: [],
                                 level: .readOnly, approval: .none),
             AgentToolDefinition(name: "search",
                                 summary: "在工作区里按名字或内容搜索（只读）",
+                                capability: .search,
                                 parameters: ["query": "string", "limit": "integer"],
                                 required: ["query"],
                                 level: .readOnly, approval: .none),
             AgentToolDefinition(name: "query_db",
                                 summary: "在连接上跑一条只读查询（写语句要走审批）",
+                                capability: .queryDatabase,
                                 parameters: ["sql": "string"],
                                 required: ["sql"],
                                 level: .readOnly, approval: .none),
             AgentToolDefinition(name: "write_file",
                                 summary: "写工作区里的一个文件（需审批；应用前先出差异）",
+                                capability: .writeFile,
                                 parameters: ["path": "string", "content": "string"],
                                 required: ["path", "content"],
                                 level: .writable, approval: .required),
             AgentToolDefinition(name: "run_command",
                                 summary: "在工作目录沙箱里跑一条白名单命令（需审批）",
+                                capability: .runCommand,
                                 parameters: ["command": "string"],
                                 required: ["command"],
                                 level: .executable, approval: .required),
             AgentToolDefinition(name: "read_notes",
                                 summary: "读笔记（第二批，本档未启用）",
+                                capability: .readNotes,
                                 parameters: ["path": "string"],
                                 required: ["path"],
                                 level: .readOnly, approval: .none,
                                 stage: .secondBatch, enabled: false),
             AgentToolDefinition(name: "fetch_url",
                                 summary: "抓一个 URL（第二批，本档未启用）",
+                                capability: .fetchURL,
                                 parameters: ["url": "string"],
                                 required: ["url"],
                                 level: .readOnly, approval: .none,
                                 stage: .secondBatch, enabled: false),
         ])
+    }
+
+    /// 按**能力**取声明（实现侧因此不必写工具名 —— 见 `FR-AI-19` ① 的源树判据）。
+    public func definition(for capability: AgentToolCapability) -> AgentToolDefinition? {
+        definitions.first { $0.capability == capability && $0.enabled }
     }
 
     /// 「可写」那一件（`write_file` 一类）—— 按**等级**取，不按名字。

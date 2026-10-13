@@ -13,6 +13,8 @@ public enum AgentToolRefusal: String, Codable, Equatable, Sendable {
     case unreadable
     case emptyQuery
     case unregistered
+    /// 被策略拒（只读模式下的写语句等 —— `FR-AI-20` ⑤ / `FR-AI-23` ⑥）。
+    case deniedByPolicy
     /// 非白名单命令 / 控制字符（`FR-AI-20` ④）。
     case commandNotAllowed
     /// 没批准就想落盘 / 执行（`FR-AI-20` ③④⑤）。
@@ -70,6 +72,15 @@ public struct AgentToolRowsOutput: Equatable, Sendable {
     public var columns: [String]
     public var rowCount: Int
     public var statementKind: String
+    /// 失败时的可读原因（脱敏由执行器一侧保证）。
+    public var errorMessage: String?
+
+    public init(columns: [String], rowCount: Int, statementKind: String, errorMessage: String? = nil) {
+        self.columns = columns
+        self.rowCount = rowCount
+        self.statementKind = statementKind
+        self.errorMessage = errorMessage
+    }
 }
 
 /// 工作区路径沙箱（`FR-AI-20` ②）：**唯一**一处判「这个路径在不在工作区里」。
