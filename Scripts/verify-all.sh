@@ -779,7 +779,10 @@ python3 Scripts/test-note-search-route.py
 # `NoteBodyProjection.parseInline(`（至少 4 处 —— 同源判的是调用点，不是注释）/
 # `import` 与依赖声明里不得出现第三方 Markdown 库。另加四条空跑防护（扫描面 / 块构造处数 /
 # 同源调用处数 / 解析层用例数下限）。
-# 判据见 `Scripts/check-markdown-single-source.py`；负例 `--self-test` 13 例
+# 判据见 `Scripts/check-markdown-single-source.py`；负例 `--self-test` 24 例
+# 2026-10-13（合册 T-20261013-027 · 原单 T-20261010-062）：判定物改判**代码**（剥注释与字符串、等长）·
+# 行内标记清单改判**集合**（换函数名 / 换序也红）· 用例须**非空带断言**（下限 36 = 实测）·
+# 面 = `Package.swift` 现读的生产 target 源码目录（补 `Tools/LicenseTool` 那条面外回流口）
 # （行内扫描器出现第二份 / 定义被删 / **链接扫描器出现第二份** / 界面自己造块 / 模型被掏空 /
 # 同源调用被删 / 第三方库两种引法 / 用例文件被删 / 用例被掏空 / 扫描面被削掉 / 绿对照 /
 # 末例真仓库逐字节未变）。
