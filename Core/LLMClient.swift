@@ -13,6 +13,12 @@ public struct LLMRequest: Equatable, Sendable {
     public var userPrompt: String
     public var maxOutputTokens: Int?
     public var temperature: Double?
+    /// 注入模型的工具声明（`FR-AI-16`）。**条数由工具注册表决定**；本类型只搬运、不登记工具。
+    public var tools: [LLMTool]?
+    /// `tool_choice`。`nil` ⇒ 请求体里**不出现**该字段（与改动前逐字节一致的默认）。
+    public var toolChoice: LLMToolChoice?
+    /// 是否走流式 SSE。**默认 `false`** ⇒ 既有调用点的请求体一字不变。
+    public var stream: Bool
 
     public init(
         endpoint: URL,
@@ -22,7 +28,10 @@ public struct LLMRequest: Equatable, Sendable {
         systemPrompt: String,
         userPrompt: String,
         maxOutputTokens: Int? = nil,
-        temperature: Double? = nil
+        temperature: Double? = nil,
+        tools: [LLMTool]? = nil,
+        toolChoice: LLMToolChoice? = nil,
+        stream: Bool = false
     ) {
         self.endpoint = endpoint
         self.model = model
@@ -32,6 +41,9 @@ public struct LLMRequest: Equatable, Sendable {
         self.userPrompt = userPrompt
         self.maxOutputTokens = maxOutputTokens
         self.temperature = temperature
+        self.tools = tools
+        self.toolChoice = toolChoice
+        self.stream = stream
     }
 }
 
@@ -174,7 +186,7 @@ public struct OpenAICompatibleClient: LLMClient {
     public static func makeBody(_ request: LLMRequest) throws -> Data {
         var payload: [String: Any] = [
             "model": request.model,
-            "stream": false,
+            "stream": request.stream,
             "messages": [
                 ["role": "system", "content": request.systemPrompt],
                 ["role": "user", "content": request.userPrompt]
@@ -185,6 +197,13 @@ public struct OpenAICompatibleClient: LLMClient {
         }
         if let temperature = request.temperature {
             payload["temperature"] = temperature
+        }
+        // `FR-AI-16` ①：条数 = 注册表启用条数（本处不筛、不补 —— 传几条发几条）。
+        if let tools = request.tools, !tools.isEmpty {
+            payload["tools"] = try tools.map { try $0.payload() }
+        }
+        if let toolChoice = request.toolChoice {
+            payload["tool_choice"] = toolChoice.payload
         }
 
         do {
