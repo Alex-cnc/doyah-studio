@@ -4,10 +4,11 @@
 
 为什么要有它：那条门禁每轮都绿。而"一直是绿的"有两种可能 —— 口径守住了，或者它根本拦不住
 （第 10 / 11 / 12 / 13 轮各吃过一次：假绿占位图、注释里的假设、只在读图时才看得出来的语言混排、
-以及"有判据没人跑"）。本脚本把 9 种常见退化方式逐个写坏，断言门禁**真的退出码 1 并报出对的原因**。
+以及"有判据没人跑"）。本脚本把 14 种常见退化方式逐个写坏，断言门禁**真的退出码 1 并报出对的原因**。
 
 **只在临时副本上改**：把仓库的 `Core/Localization.swift`、`App/Views/RowDetailPanel.swift`、
-`Scripts/verify-all.sh`、`Scripts/copy-emphasis-exemptions.json` 拷到临时目录，在副本上写坏，
+`Scripts/verify-all.sh`、`Scripts/copy-emphasis-exemptions.json`、`Package.swift`、
+`Tools/LicenseTool/main.swift` 拷到临时目录，在副本上写坏，
 跑门禁时用 `--root` 指过去。**仓库本身一个字节都不动**（末例断言这一点）。
 
 跑法（改门禁 / 改语言表 / 改渲染点之后各跑一次）：
@@ -36,6 +37,19 @@ FIXTURE_FILES = (
     "App/Views/RowDetailPanel.swift",
     "Scripts/verify-all.sh",
     "Scripts/copy-emphasis-exemptions.json",
+    # 判据 F 从这里派生面（生产 target 的 `path:` / `sources:`）；例 14 往这个文件里加生产 target。
+    "Package.swift",
+    # 面外的生产 root（`Package.swift` 的 `.executableTarget`）：例 12 往它里面放渲染点。
+    "Tools/LicenseTool/main.swift",
+)
+
+# 判据 F 派生出的生产 root 里，夹具**没拷到**的那几根用空目录补齐 —— 判据 F 有一条
+# 「面里的根不在盘 ⇒ 判红」，夹具只拷 6 份文件，不补就会让每个负例都先红一次（那会掩盖真判据）。
+FACE_STUB_DIRS = (
+    "CLI",
+    "Platform/macOS",
+    "Plugins/Notes/Sources",
+    "Plugins/Notes/Views",
 )
 
 results: list[tuple[str, bool, str]] = []
@@ -47,6 +61,8 @@ def build_root() -> pathlib.Path:
         destination = root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / relative, destination)
+    for relative in FACE_STUB_DIRS:
+        (root / relative).mkdir(parents=True, exist_ok=True)
     return root
 
 
@@ -58,6 +74,40 @@ def run(root: pathlib.Path) -> tuple[int, str]:
         text=True,
     )
     return proc.returncode, proc.stdout + proc.stderr
+
+
+def match_bracket(text: str, index: int) -> int:
+    """`text[index]` 必须是 `[`，返回配平的 `]` 下标（跳过字符串字面量里的括号）。"""
+    depth, i, in_string = 0, index, False
+    while i < len(text):
+        ch = text[i]
+        if in_string:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    return i
+        i += 1
+    raise AssertionError("括号未配平")
+
+
+def reshape_entry(root: pathlib.Path, key: str, body: str) -> None:
+    """把副本语言表里某个条目的 `[...]` 块换成另一种**合法写法**（顺序 / 空白 / 跨行）。"""
+    path = root / "Core/Localization.swift"
+    text = path.read_text(encoding="utf-8")
+    start = text.index(f".{key}: ")
+    open_index = text.index("[", start)
+    close_index = match_bracket(text, open_index)
+    path.write_text(text[: open_index + 1] + body + text[close_index:], encoding="utf-8")
 
 
 def case(name: str, expect_code: int, expect_texts: list[str], mutate) -> None:
@@ -156,6 +206,72 @@ def main() -> int:
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     case("例 8 例外条目没写理由判红", 1, ["没有写理由"], reasonless_exemption)
+
+    # 例 10：条目形状换个**合法写法**（顺序 / 空白 / 跨行）⇒ 仍然判红并点名（判定物不写死形状）。
+    # 旧判定物把形状逐字钉死（`[` 紧贴 + `.simplifiedChinese` 在前 + `]` 紧贴 + 单行）⇒
+    # 这三条整条不进判定物，既不计数也不判 A（真仓活体 33 条同型）。
+    def reshape_three_ways(root: pathlib.Path) -> None:
+        reshape_entry(root, "objectSearchHint",
+                      '.english: "plain", .simplifiedChinese: "**加粗**文字"')
+        reshape_entry(root, "mcpApprovalHint",
+                      ' .simplifiedChinese: "**加粗**文字", .english: "plain" ')
+        reshape_entry(root, "rowDetailNoSelection",
+                      '\n            .simplifiedChinese: "**加粗**文字",\n'
+                      '            .english: "plain"\n        ')
+
+    case("例 10 形状换合法写法（顺序 / 空白 / 跨行）仍判红",
+         1, ["objectSearchHint", "mcpApprovalHint", "rowDetailNoSelection"], reshape_three_ways)
+
+    # 例 11：判定物是**代码面** —— 行尾注释 / 块注释 / 字符串字面量里的 `LocalizedStringKey`
+    # 一律**不算渲染点**（旧实现只跳「整行注释」⇒ 这三条全假红）。
+    def add_false_positive_sources(root: pathlib.Path) -> None:
+        path = root / "App/Views/RowDetailPanel.swift"
+        extra = (
+            "\n// 探针：整行注释里提一次 LocalizedStringKey\n"
+            "let probeTail = 1 // LocalizedStringKey\n"
+            "/* LocalizedStringKey */\n"
+            'let probeText = "LocalizedStringKey"\n'
+        )
+        path.write_text(path.read_text(encoding="utf-8") + extra, encoding="utf-8")
+
+    case("例 11 注释与字符串字面量里的 `LocalizedStringKey` 不假红", 0, [],
+         add_false_positive_sources)
+
+    # 例 12：面完备性 —— 往**面外的生产 root** `Tools/LicenseTool`（`Package.swift:84` 的
+    # `.executableTarget`）里放一个渲染点 ⇒ 判红（旧面写死四根 ⇒ rc=0、输出与基线逐字同）。
+    def inject_into_license_tool(root: pathlib.Path) -> None:
+        path = root / "Tools/LicenseTool/main.swift"
+        path.write_text(path.read_text(encoding="utf-8")
+                        + '\nlet probe = LocalizedStringKey("probe")\n', encoding="utf-8")
+
+    case("例 12 面外生产 root（Tools/LicenseTool）里的渲染点判红",
+         1, ["Tools/LicenseTool/main.swift"], inject_into_license_tool)
+
+    # 例 13：判据 E 的判定物是**非注释行** —— 把两条调用注释掉 ⇒ 判红（旧实现只做全文子串 ⇒ 判绿）。
+    def comment_out_wiring(root: pathlib.Path) -> None:
+        path = root / "Scripts/verify-all.sh"
+        text = path.read_text(encoding="utf-8")
+        for command in ("python3 Scripts/check-copy-emphasis.py",
+                        "python3 Scripts/test-copy-emphasis-gate.py"):
+            text = text.replace(command + "\n", "# " + command + "\n")
+        path.write_text(text, encoding="utf-8")
+
+    case("例 13 两条调用被注释掉判红（判定物 = 非注释行）", 1, ["没接进闭环"], comment_out_wiring)
+
+    # 例 14：判据 F —— `Package.swift` 里**新增生产 root** 而未纳入面 ⇒ 判红
+    # （面不许写死：新增 root 必须同轮进面，否则往里写违规是静默通过）。
+    def add_new_production_target(root: pathlib.Path) -> None:
+        path = root / "Package.swift"
+        text = path.read_text(encoding="utf-8")
+        text = text.replace(
+            "    targets: [",
+            '    targets: [\n        .executableTarget(name: "ProbeTool", path: "Tools/ProbeTool"),',
+            1,
+        )
+        path.write_text(text, encoding="utf-8")
+
+    case("例 14 新增生产 root 未纳入面判红（判据 F）", 1, ["Tools/ProbeTool"],
+         add_new_production_target)
 
     # 例 9：末例 —— 真仓库那几份夹具逐字节未变（"只在临时副本上写坏"这句话本身要被验证）。
     signature_after = {
