@@ -13,9 +13,18 @@
 1. **唯一来源 = `Scripts/doc-numbers.json`**（照 `Scripts/vendored-sqlite.json` 的做法：
    一份台账登记「值 + 这个值怎么来的 + 文档里有哪些现状声明」）。
 2. **能机械复算的必须复算** —— 判据不看台账的自述，自己算一遍：
-   - `gate-scan`：数 `Scripts/verify-all.sh` 里的 `==> N/M` 项块 ⇒ 编号必须 1..M 连续、
-     写死的 `$((M - SKIPPED_COUNT))` 与中文写法也必须同一个数（本轮实测：`skip_step` 里
-     还有一处写死的 `$1/18`，即同一数字在脚本里有五处）；
+   - `gate-scan`：数 `Scripts/verify-all.sh` 里的 `==> N/M` 项块 ⇒ 编号必须 1..M 连续，
+     **同一个数字的四种形状**都必须等于项块总数：
+     ① `==> N/M` 项块（计数；块那一行里的项号必须与块的序号自洽）·
+     ② 收尾行 `$((M - SKIPPED_COUNT))` · ③ 中文写法「十八项」·
+     ④ **阿拉伯硬编码**（合册 `T-20261013-027` / 原单 `T-20261010-028` 补）：`skip_step` 运行时
+     打印的 `==> $1/18`（**每次跳过都打到用户面前**）/ 阿拉伯项号提及 `第 18 项`（超出项数即判红）/
+     项号枚举 `for n in 1 2 … 18`（必须恰好 1..M）。收尾打印**逐形状落点数**，并与台账
+     `measure.hardcodedSites` **逐形状对账**（实测与登记不一致 ⇒ 判红；缺登记 / 死登记 ⇒ 判红）。
+     原来 ④「被点名了却不在任何形状里」：把 `$1/18` 改成 `$1/19` ⇒ 判据逐字不变（本轮成对实测）。
+     **排除形状**（有限反扫，不是「所有阿拉伯 18 一律判红」）：`N 色角色` · `第 N 轮 L-25`
+     （轮号不是项号）。**边界**：本扫描按行判定，「项号提及」只判「不得超出项数」这一条语义
+     （`第 1 项` / `第 17 项` 这类正文里的项号引用本来就合法，不参与等于总数的比较）；
    - `count-file`：读 `Scripts/verify-core.sh` **同一次运行**写下的 `.build/core-test-count.txt`
      （`verify-all.sh` 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，
      判据如实报「跳过」而不是拿旧值当现状）；
@@ -70,7 +79,7 @@
 用法：
     python3 Scripts/check-doc-numbers.py                # 本仓（默认）
     python3 Scripts/check-doc-numbers.py --root <目录>   # 夹具仓（自测用）
-    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（29 例）
+    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（35 例）
 
 退出码：0 = 全绿；1 = 有判红项。**判红时空跑防护也一起报**（一处都没解析到 ⇒ 不许「零命中 = 通过」）。
 """
@@ -98,6 +107,16 @@ CHANGELOG_ROW = re.compile(r"^\s*\|\s*\*{0,2}v\d+\.\d+")
 GATE_BLOCK = re.compile(r"==>\s*(\d+)/(\d+)")
 GATE_CLOSE = re.compile(r"\$\(\((\d+)\s*-\s*SKIPPED_COUNT\)\)")
 CHINESE_NUMERAL = re.compile(r"(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项")
+# ── 形状④（合册 `T-20261013-027` / 原单 `T-20261010-028`）──────────────────────────────
+# 阿拉伯硬编码：① `skip_step` 运行时打印的 `==> $1/18`（**每次跳过都打到用户面前**）；
+# ② 阿拉伯项号提及 `第 18 项`；③ 项号枚举 `for n in 1 2 … 18`。
+# 原来这三处**不在任何一条形状的覆盖里** ⇒ 项数 18 → 19 时漏改它们，判据**逐字不变**。
+# **排除形状**（无关数字，不许误判 —— 本扫描是有限反扫，不是「所有阿拉伯 18 一律判红」）：
+# `N 色角色`（`verify-all.sh` 里 20 个字段那句）· `第 N 轮 L-25`（**轮号，不是项号**）。
+GATE_SKIP_PRINT = re.compile(r"==>\s*\$\{?(\d+)\}?/(\d+)")
+GATE_ITEM_MENTION = re.compile(r"第\s*(\d+)\s*项")
+GATE_ITEM_ENUM = re.compile(r"^\s*for\s+\w+\s+in\s+((?:\d+\s+)*\d+)\s*;?\s*do\b")
+SHAPE_KEYS = ("gateBlocks", "closeWrites", "chineseNumerals", "skipPrints", "itemMentions", "itemEnumerations")
 
 MEASURE_KINDS = {"gate-scan", "count-file", "snapshot-manifest", "doc-tables-lists", "doc-tables-run", "judge-output"}
 CN_DIGITS = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
@@ -266,6 +285,59 @@ def load_doc_tables_module(root: pathlib.Path, rel: str, key, problems: list):
     return module
 
 
+def gate_hardcoded_sites(text: str, total: int, key: str):
+    """形状①②③④ 的落点计数 + 形状④ 的三条自证。返回 (problems, counts, locations)。
+
+    ① `==> N/M` 项块（计数；块那行里的项号必须与块的序号自洽）· ② 收尾行
+    `$((M - SKIPPED_COUNT))` · ③ 中文写法「十八项」· ④ 阿拉伯硬编码三条（分母 / 项号上限 / 枚举）。
+    """
+    problems: list = []
+    counts = dict.fromkeys(SHAPE_KEYS, 0)
+    locations = {shape: [] for shape in SHAPE_KEYS}
+    for number, line in enumerate(text.splitlines(), 1):
+        block = GATE_BLOCK.search(line)
+        if block:
+            counts["gateBlocks"] += 1
+            locations["gateBlocks"].append(f":{number}")
+            mention = GATE_ITEM_MENTION.search(line)
+            if mention and int(mention.group(1)) != int(block.group(1)):
+                problems.append(
+                    f"[{key}] {GATE_REL}:{number} 形状①那一行自相矛盾：项块 `{block.group(1)}/{block.group(2)}` 里写的是「{mention.group(0)}」"
+                )
+            continue
+        if GATE_CLOSE.search(line):
+            counts["closeWrites"] += 1
+            locations["closeWrites"].append(f":{number}")
+        for _token in CHINESE_NUMERAL.findall(line):
+            counts["chineseNumerals"] += 1
+            locations["chineseNumerals"].append(f":{number}")
+        skip = GATE_SKIP_PRINT.search(line)
+        if skip:
+            counts["skipPrints"] += 1
+            locations["skipPrints"].append(f":{number}")
+            if int(skip.group(2)) != total:
+                problems.append(
+                    f"[{key}] {GATE_REL}:{number} 形状④（运行时打印）的分母写死 {skip.group(2)}，与项块数 {total} 不一致 —— 跳过行会照旧打 /{skip.group(2)}"
+                )
+        for mention in GATE_ITEM_MENTION.finditer(line):
+            counts["itemMentions"] += 1
+            locations["itemMentions"].append(f":{number}")
+            if int(mention.group(1)) > total:
+                problems.append(
+                    f"[{key}] {GATE_REL}:{number} 形状④阿拉伯项号提及「{mention.group(0)}」超出项块数 {total}（{total} 项里没有这一项）"
+                )
+        enum = GATE_ITEM_ENUM.search(line)
+        if enum:
+            counts["itemEnumerations"] += 1
+            locations["itemEnumerations"].append(f":{number}")
+            numbers = [int(value) for value in enum.group(1).split()]
+            if numbers != list(range(1, total + 1)):
+                problems.append(
+                    f"[{key}] {GATE_REL}:{number} 形状④项号枚举与项块数 {total} 不一致：枚举了 {len(numbers)} 个（{numbers[0]}…{numbers[-1]}）"
+                )
+    return problems, counts, locations
+
+
 def measure(root: pathlib.Path, entry: dict, problems: list, notes: list):
     """实测复核：返回实测值列表，或 None（= 本机没有可实测的量 ⇒ 跳过，绝不拿台账自述当真）。"""
     spec = entry.get("measure") or {}
@@ -294,6 +366,32 @@ def measure(root: pathlib.Path, entry: dict, problems: list, notes: list):
         for token in set(CHINESE_NUMERAL.findall(text)):
             if normalize(token) != total:
                 problems.append(f"[{key}] 脚本里中文写法「{token}项」与项块数 {total} 不一致")
+        extra, counts, locations = gate_hardcoded_sites(text, total, key)
+        problems.extend(extra)
+        registered = spec.get("hardcodedSites")
+        if not isinstance(registered, dict):
+            problems.append(
+                f"[{key}] 台账未登记「项数硬编码落点」读数（形状 4 种）—— 形状④（阿拉伯硬编码）必须在 `{LEDGER_REL}` 里逐形状登记，不许只靠临时反扫"
+            )
+        else:
+            for shape in SHAPE_KEYS:
+                if shape not in registered:
+                    problems.append(f"[{key}] 台账的 `hardcodedSites` 缺 `{shape}`（形状 4 种的落点数必须逐形状登记）")
+                elif int(registered[shape]) != counts[shape]:
+                    first = "、".join(locations[shape][:3]) or "无落点"
+                    problems.append(
+                        f"[{key}] 形状 `{shape}` 实测 {counts[shape]} 处，台账登记 {registered[shape]} 处 —— 不一致（率先落点 {GATE_REL}{first}）"
+                    )
+            for shape in registered:
+                if shape not in SHAPE_KEYS:
+                    problems.append(f"[{key}] 台账 `hardcodedSites` 里的 `{shape}` 是死登记（形状 4 种之外）")
+        arabic = counts["skipPrints"] + counts["itemMentions"] + counts["itemEnumerations"]
+        notes.append(
+            f"[{key}] 项数硬编码落点 {sum(counts.values())} 处（形状 4 种）：项块 {counts['gateBlocks']} · 收尾行 "
+            f"{counts['closeWrites']} · 中文 {counts['chineseNumerals']} · 阿拉伯 {arabic}（运行时打印 "
+            f"{counts['skipPrints']} + 项号提及 {counts['itemMentions']} + 项号枚举 {counts['itemEnumerations']}）"
+            f" —— 排除形状（不计）：`N 色…` / `第 N 轮…`"
+        )
         return [total]
 
     if kind == "count-file":
@@ -822,7 +920,19 @@ FIXTURE_LEDGER = {
             "value": 18,
             "unit": "项",
             "spellout": "十八",
-            "measure": {"kind": "gate-scan", "script": "Scripts/verify-all.sh", "expect": [18]},
+            "measure": {
+                "kind": "gate-scan",
+                "script": "Scripts/verify-all.sh",
+                "expect": [18],
+                "hardcodedSites": {
+                    "gateBlocks": 18,
+                    "closeWrites": 1,
+                    "chineseNumerals": 1,
+                    "skipPrints": 1,
+                    "itemMentions": 1,
+                    "itemEnumerations": 1,
+                },
+            },
             "anchors": [
                 {"file": "AGENT-SPEC.md", "regex": "一条命令闭环（\\*\\*([一二三四五六七八九十]+)项\\*\\*）", "minSites": 1},
                 {"file": "Scripts/verify-all.sh", "regex": "跑它，([一二三四五六七八九十]+)项全过", "minSites": 1},
@@ -887,6 +997,25 @@ def judge_fixture_ledger() -> dict:
     return {**FIXTURE_LEDGER, "numbers": [*FIXTURE_LEDGER["numbers"], FIXTURE_JUDGE_ENTRY]}
 
 
+def _fixture_gate_entry(**overrides) -> dict:
+    """夹具台账的 `gate-items` 条目（可覆盖 `measure` 里的字段）—— 形状④ 的两条台账臂用它。"""
+    entry = {**FIXTURE_LEDGER["numbers"][0]}
+    entry["measure"] = {**entry["measure"], **overrides}
+    return entry
+
+
+def _ledger_without_sites() -> dict:
+    entry = _fixture_gate_entry()
+    entry["measure"] = {key: value for key, value in entry["measure"].items() if key != "hardcodedSites"}
+    return {**FIXTURE_LEDGER, "numbers": [entry, *FIXTURE_LEDGER["numbers"][1:]]}
+
+
+def _ledger_sites_override(shape: str, value: int) -> dict:
+    sites = {**FIXTURE_LEDGER["numbers"][0]["measure"]["hardcodedSites"], shape: value}
+    entry = _fixture_gate_entry(hardcodedSites=sites)
+    return {**FIXTURE_LEDGER, "numbers": [entry, *FIXTURE_LEDGER["numbers"][1:]]}
+
+
 def build_fixture(
     base: pathlib.Path,
     ledger: dict | None = None,
@@ -917,6 +1046,14 @@ def build_fixture(
     for index in range(1, gate_items + 1):
         gate.append('echo "==> %d/%d 第 %d 项"' % (index, gate_items, index))
     gate.append('echo "跑 $((%d - SKIPPED_COUNT)) 项"' % gate_items)
+    # 形状④（合册 `T-20261013-027` / 原单 `T-20261010-028`）：阿拉伯硬编码三条
+    # （运行时打印 / 项号提及 / 项号枚举）+ 两条**排除形状**（`N 色…` / `第 N 轮…`，不许误判）。
+    gate.append('skip_step() {   # skip_step <项号> <说明>')
+    gate.append('  echo "==> $1/%d ⏭ 跳过（夹具：平台不适用）"' % gate_items)
+    gate.append('}')
+    gate.append('# 第 %d 项是夹具里最后补的一项' % gate_items)
+    gate.append('for n in %s; do echo "第 $n 项"; done' % " ".join(str(i) for i in range(1, gate_items + 1)))
+    gate.append('# 排除形状（夹具对手臂）：%d 色角色 · 第 %d 轮 L-25' % (18, 18))
     (base / GATE_REL).write_text("\n".join(gate) + "\n", encoding="utf-8")
     (base / "AGENT-SPEC.md").write_text(
         "\n".join(
@@ -1190,6 +1327,49 @@ def self_test() -> int:
         True, "窗口倒序")
     run("㉗ `skipSections` 指向的文件不在盘 ⇒ 判红（窗口不许开在不存在的文件上）",
         window_case(sections=[{**WINDOW_OK[0], "file": "Docs/不存在的文件.md"}]), True, "不在盘")
+
+    # ── 形状④ 阿拉伯硬编码（合册 `T-20261013-027` / 原单 `T-20261010-028`）：
+    # 原来这三处**一条形状都不在**，改一处漏两处 ⇒ 判据逐字不变（成对实测）。
+    run(
+        "㉘ 形状④ 运行时打印的分母写死（`==> $1/18` → `$1/19`）⇒ 判红点名（原来逐字不变）",
+        lambda b: _mutate(b, GATE_REL, "==> $1/18 ", "==> $1/19 "),
+        True,
+        "运行时打印",
+    )
+    run(
+        "㉙ 形状④ 阿拉伯项号提及超出项数（`# 第 18 项` → `# 第 19 项`）⇒ 判红点名",
+        lambda b: _mutate(b, GATE_REL, "# 第 18 项是夹具里最后补的一项", "# 第 19 项是夹具里最后补的一项"),
+        True,
+        "第 19 项",
+    )
+    run(
+        "㉚ 对手臂：排除形状（`18 色角色` / `第 18 轮 L-25`）里的数字改掉 ⇒ 不误判（绿）",
+        lambda b: _mutate(b, GATE_REL, "：18 色角色 · 第 18 轮 L-25", "：19 色角色 · 第 25 轮 L-19"),
+        False,
+    )
+    run(
+        "㉛ 形状④ 项号枚举与项块数不一致（枚举里少一个项号）⇒ 判红点名",
+        lambda b: _mutate(
+            b,
+            GATE_REL,
+            "for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18;",
+            "for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17;",
+        ),
+        True,
+        "项号枚举",
+    )
+    run(
+        "㉜ 台账没登记「项数硬编码落点」读数 ⇒ 判红（不许不登记就当通过）",
+        lambda b: build_fixture(b, ledger=_ledger_without_sites()),
+        True,
+        "台账未登记",
+    )
+    run(
+        "㉝ 台账登记的形状④落点数与实测不符（项块 18 → 17）⇒ 判红点名形状",
+        lambda b: build_fixture(b, ledger=_ledger_sites_override("gateBlocks", 17)),
+        True,
+        "gateBlocks",
+    )
 
     failures = []
     with tempfile.TemporaryDirectory(prefix="doc-numbers-selftest-") as temp:
