@@ -176,10 +176,14 @@ final class AgentAuditPresentationTests: XCTestCase {
     // MARK: - 导出（NFR-AI-03）
 
     /// 导出列顺序是**一份**定义（`csvColumns`），CSV 表头必须与它一致。
+    ///
+    /// `FR-AI-24` ②③ 把这**一份定义**扩了成本与逐跳六列（模型 / 端点 / 三档 token / 会话 / 跳序）——
+    /// 这条判据钉的就是「键集合白名单」，扩充必须是一次**有意识**的改动（就是本次）。
     func testCSVColumnsOrderIsStableAndUsedByExport() async throws {
         XCTAssertEqual(
             AgentAuditLog.csvColumns,
-            ["timestamp", "connection", "database", "model",
+            ["timestamp", "connection", "database", "model", "endpoint",
+             "prompt_tokens", "completion_tokens", "total_tokens", "session", "hop",
              "statement_kind", "risk", "findings", "outcome", "duration_ms", "sql", "detail"]
         )
 

@@ -140,17 +140,21 @@ public struct AgentLoop: Sendable {
     public var registry: AgentToolRegistry
     /// 会话存储（可选：给了就每跳留痕 —— `FR-AI-17` 的接线点）。
     public var sessionStore: AgentSessionStore?
+    /// 审计口（可选：给了就每跳 + 每次工具调用留一条 —— `FR-AI-24` 的接线点，**不新造第二套日志**）。
+    public var audit: (any AgentAuditSink)?
     public var limits: AgentLoopLimits
 
     public init(client: any LLMStreamingClient,
                 dispatcher: any AgentToolDispatcher,
                 registry: AgentToolRegistry = .standard,
                 sessionStore: AgentSessionStore? = nil,
+                audit: (any AgentAuditSink)? = nil,
                 limits: AgentLoopLimits = AgentLoopLimits()) {
         self.client = client
         self.dispatcher = dispatcher
         self.registry = registry
         self.sessionStore = sessionStore
+        self.audit = audit
         self.limits = limits
     }
 
@@ -190,6 +194,7 @@ public struct AgentLoop: Sendable {
             recordTurn(context: context, kind: .model, role: "user", text: summarise(request.userPrompt), at: startedAt)
 
             let stream: AsyncThrowingStream<LLMStreamEvent, Error>
+            let hopStarted = Date()
             do {
                 stream = try await client.stream(request)
             } catch {
@@ -230,6 +235,18 @@ public struct AgentLoop: Sendable {
             steps += 1
             lastText = text
             recordTurn(context: context, kind: .model, role: "assistant", text: text, at: startedAt)
+            // `FR-AI-24` ②：**每一次模型调用**都留一条（含模型 / 端点 / token / 耗时 / 状态）。
+            await audit?.record(AgentActionRecord.makeModelCall(
+                requestSummary: request.userPrompt,
+                model: request.model,
+                durationMilliseconds: Int(Date().timeIntervalSince(hopStarted) * 1000),
+                outcome: .generated,
+                detail: invocations.isEmpty ? nil : "toolCalls:\(invocations.count)",
+                endpoint: OpenAICompatibleClient.chatCompletionsURL(from: request.endpoint).absoluteString,
+                usage: usage,
+                sessionID: context.sessionID,
+                hopIndex: steps - 1,
+                at: startedAt))
 
             guard !invocations.isEmpty else {
                 return AgentLoopResult(outcome: .finished(text: text), steps: steps,
@@ -244,6 +261,10 @@ public struct AgentLoop: Sendable {
                     observations.append("\(invocation.name): \(reason)")
                     recordTurn(context: context, kind: .tool, role: "tool",
                                text: "\(invocation.name) => \(reason)", at: startedAt)
+                    await audit?.record(AgentActionRecord.makeToolCall(
+                        toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                        outcome: .denied, detail: reason,
+                        sessionID: context.sessionID, hopIndex: steps - 1, at: startedAt))
                     continue
                 }
                 if let violation = AgentToolSchemaValidator.validate(argumentsJSON: invocation.argumentsJSON,
@@ -252,6 +273,10 @@ public struct AgentLoop: Sendable {
                     observations.append("\(invocation.name): \(violation)")
                     recordTurn(context: context, kind: .tool, role: "tool",
                                text: "\(invocation.name) => \(violation)", at: startedAt)
+                    await audit?.record(AgentActionRecord.makeToolCall(
+                        toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                        outcome: .denied, detail: violation,
+                        sessionID: context.sessionID, hopIndex: steps - 1, at: startedAt))
                     continue
                 }
                 let outcome = dispatcher.dispatch(invocation, approvals: approvals)
@@ -261,17 +286,29 @@ public struct AgentLoop: Sendable {
                     observations.append("\(invocation.name): \(request.toolName)/\(request.fingerprint)")
                     recordTurn(context: context, kind: .approval, role: "system",
                                text: "\(request.toolName) => \(request.fingerprint)", at: startedAt)
+                    await audit?.record(AgentActionRecord.makeToolCall(
+                        toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                        outcome: .pendingApproval, detail: request.fingerprint,
+                        sessionID: context.sessionID, hopIndex: steps - 1, at: startedAt))
                 case .refused(let code, let detail):
                     rejected.append((invocation.name, code.rawValue))
                     observations.append("\(invocation.name): \(code.rawValue)/\(detail)")
                     recordTurn(context: context, kind: .tool, role: "tool",
                                text: "\(invocation.name) => \(code.rawValue)", at: startedAt)
+                    await audit?.record(AgentActionRecord.makeToolCall(
+                        toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                        outcome: .denied, detail: "\(code.rawValue)/\(detail)",
+                        sessionID: context.sessionID, hopIndex: steps - 1, at: startedAt))
                 default:
                     executed.append(invocation)
                     let summary = Self.summary(of: outcome)
                     observations.append("\(invocation.name): \(summary)")
                     recordTurn(context: context, kind: .tool, role: "tool",
                                text: "\(invocation.name) => \(summary)", at: startedAt)
+                    await audit?.record(AgentActionRecord.makeToolCall(
+                        toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                        outcome: .executed, detail: summary,
+                        sessionID: context.sessionID, hopIndex: steps - 1, at: startedAt))
                 }
             }
         }
@@ -326,5 +363,18 @@ public struct AgentLoop: Sendable {
 
     private func recordStop(_ stop: AgentLoopStop, context: AgentLoopContext, at: Date) {
         recordTurn(context: context, kind: .approval, role: "system", text: stop.reason, at: at)
+    }
+}
+
+/// 审计口（`FR-AI-24`）：循环把**每一跳**与**每一次工具调用**都交给它。
+///
+/// 实现复用既有 `AgentAuditLog`（`NFR-AI-03` 那条线）—— **不新造第二套日志**（`G` 片的源树判据也守着这一点）。
+public protocol AgentAuditSink: Sendable {
+    func record(_ record: AgentActionRecord) async
+}
+
+extension AgentAuditLog: AgentAuditSink {
+    public func record(_ record: AgentActionRecord) async {
+        try? await append(record)
     }
 }

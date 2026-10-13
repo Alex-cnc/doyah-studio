@@ -247,6 +247,7 @@
 		5F7827BF9C877B2FB39CCC78 /* DoyahCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AE8BE22E68AD7A621E98BDCC /* DoyahCore.framework */; };
 		5FBA402C79171E293A80595F /* SyntheticDataPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19E3CB7E6D3980B888AFF49 /* SyntheticDataPanel.swift */; };
 		6189887AB1ADF95EF72BAACB /* GBaseServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91E1700303B19BA16D2E287C /* GBaseServiceTests.swift */; };
+		628223AB2A202678174B312B /* AgentAuditCostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7EC15E690797BEE2093ADD /* AgentAuditCostTests.swift */; };
 		629F5B3FF737A5380A4335A1 /* AgentSQLPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB071DB2DA6452C23CD46929 /* AgentSQLPanel.swift */; };
 		62D98A35E2BD7CE646A17805 /* SQLArchiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BE8C755C14CBC78E2D39FD0 /* SQLArchiveTests.swift */; };
 		632978A79C9F208CD1E77521 /* MaintenancePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F75820D9A89DB3E553F3B1F /* MaintenancePanel.swift */; };
@@ -739,6 +740,7 @@
 		0AD5B59C3A066796F7699405 /* EditorTextSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTextSync.swift; sourceTree = "<group>"; };
 		0B5F19D64CCF43D488459002 /* TerminalCursorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalCursorTests.swift; sourceTree = "<group>"; };
 		0B68F546D474EE56BF9778F9 /* SheetLayoutConventionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetLayoutConventionTests.swift; sourceTree = "<group>"; };
+		0B7EC15E690797BEE2093ADD /* AgentAuditCostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAuditCostTests.swift; sourceTree = "<group>"; };
 		0BE51E2E99933339D8756EB9 /* RowBrowsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowBrowsing.swift; sourceTree = "<group>"; };
 		0C55901A11B93F666427F859 /* PrivilegePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivilegePanel.swift; sourceTree = "<group>"; };
 		0C9683A18ADF2FA806B37658 /* Reminder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reminder.swift; sourceTree = "<group>"; };
@@ -1418,6 +1420,7 @@
 				0D6314BEF661C0BA5867DBD1 /* AffectedRowsTallyTests.swift */,
 				3EF953EDD3AA3E8E6107C2AE /* AgentActionGateTests.swift */,
 				DD8BEEAF04C6EF26D8E673C0 /* AgentApprovalGateTests.swift */,
+				0B7EC15E690797BEE2093ADD /* AgentAuditCostTests.swift */,
 				7815007C874500A351A452A8 /* AgentAuditPresentationTests.swift */,
 				000A8A7276965DF20C0647AE /* AgentAuditTests.swift */,
 				C212F6D8ADAC93F0EF6E59F2 /* AgentCheckpointTests.swift */,
@@ -2726,6 +2729,7 @@
 				4549A5B2B669560EF23F3077 /* AffectedRowsTallyTests.swift in Sources */,
 				97D228518C54168D9906D632 /* AgentActionGateTests.swift in Sources */,
 				28E1E29E06708E368E548859 /* AgentApprovalGateTests.swift in Sources */,
+				628223AB2A202678174B312B /* AgentAuditCostTests.swift in Sources */,
 				191EBDB630508121CC809352 /* AgentAuditPresentationTests.swift in Sources */,
 				D17FC22CD8A5A0F4DED93517 /* AgentAuditTests.swift in Sources */,
 				972033B0910AB2D85C253AF0 /* AgentCheckpointTests.swift in Sources */,

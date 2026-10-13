@@ -75,6 +75,35 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
     /// 可选类型让它们照旧能解码（NFR-AI-03 要求留存耗时）。
     public var durationMilliseconds: Int?
 
+    // MARK: - 成本与逐跳（`FR-AI-24`）
+
+    /// 实际端点 —— 审计要能回答「哪一次用了哪个**端点**」（`FR-AI-24` ④）。
+    public var endpoint: String?
+    public var promptTokens: Int?
+    public var completionTokens: Int?
+    public var totalTokens: Int?
+    /// 会话与跳序：把「一次两跳对话」串起来（`FR-AI-24` ①）。
+    public var sessionID: String?
+    public var hopIndex: Int?
+
+    /// 补上成本与逐跳字段（**不动既有 `init`** ⇒ 老调用点与老日志都不受影响；
+    /// 老日志缺这些键时 Codable 解出 `nil` —— 与 `durationMilliseconds` 当年同一做法）。
+    public func withCost(endpoint: String? = nil,
+                         usage: LLMUsage? = nil,
+                         sessionID: String? = nil,
+                         hopIndex: Int? = nil) -> AgentActionRecord {
+        var copy = self
+        if let endpoint { copy.endpoint = endpoint }
+        if let usage {
+            copy.promptTokens = usage.promptTokens
+            copy.completionTokens = usage.completionTokens
+            copy.totalTokens = usage.totalTokens
+        }
+        if let sessionID { copy.sessionID = sessionID }
+        if let hopIndex { copy.hopIndex = hopIndex }
+        return copy
+    }
+
     public init(
         id: UUID = UUID(),
         timestamp: Date = Date(),
@@ -160,6 +189,10 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
         durationMilliseconds: Int?,
         outcome: Outcome,
         detail: String? = nil,
+        endpoint: String? = nil,
+        usage: LLMUsage? = nil,
+        sessionID: String? = nil,
+        hopIndex: Int? = nil,
         at date: Date = Date()
     ) -> AgentActionRecord {
         AgentActionRecord(
@@ -175,7 +208,32 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
             detail: [modelCallDetail, detail].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
             durationMilliseconds: durationMilliseconds,
             origin: .modelCall
-        )
+        ).withCost(endpoint: endpoint, usage: usage, sessionID: sessionID, hopIndex: hopIndex)
+    }
+
+    /// 工具调用记录（`FR-AI-24` ①：一次两跳对话里那条**工具调用记录**）。
+    public static func makeToolCall(
+        toolName: String,
+        argumentsSummary: String,
+        outcome: Outcome,
+        detail: String? = nil,
+        durationMilliseconds: Int? = nil,
+        sessionID: String? = nil,
+        hopIndex: Int? = nil,
+        at date: Date = Date()
+    ) -> AgentActionRecord {
+        AgentActionRecord(
+            timestamp: date,
+            model: nil,
+            sql: summaryText("\(toolName) \(argumentsSummary)"),
+            statementKind: .unknown,
+            risk: .low,
+            findings: [],
+            outcome: outcome,
+            detail: detail,
+            durationMilliseconds: durationMilliseconds,
+            origin: .action
+        ).withCost(sessionID: sessionID, hopIndex: hopIndex)
     }
 
     /// 请求摘要的长度上限：审计要能看出「当时让它干什么」，但一条日志不应被指令原文撑爆。
@@ -529,8 +587,12 @@ public actor AgentAuditLog {
     }
 
     /// CSV 的列顺序（导出、预览与单测共用同一份定义，避免「导出顺序变了没人发现」）。
+    ///
+    /// `FR-AI-24` ②：**逐条**都要能读出模型 / 端点 / token 用量 / 耗时 / 状态 ⇒ 成本列就在这里加。
     public static let csvColumns: [String] = [
-        "timestamp", "connection", "database", "model",
+        "timestamp", "connection", "database", "model", "endpoint",
+        "prompt_tokens", "completion_tokens", "total_tokens",
+        "session", "hop",
         "statement_kind", "risk", "findings", "outcome", "duration_ms", "sql", "detail"
     ]
 
@@ -541,19 +603,25 @@ public actor AgentAuditLog {
         let formatter = ISO8601DateFormatter()
         var lines = [header]
         for record in try entries() {
-            let fields = [
-                formatter.string(from: record.timestamp),
-                record.connectionName ?? "",
-                record.database ?? "",
-                record.model ?? "",
-                record.statementKind.rawValue,
-                record.risk.rawValue,
-                record.findings.map(\.rawValue).joined(separator: "|"),
-                record.outcome.rawValue,
-                record.durationMilliseconds.map(String.init) ?? "",
-                record.sql,
-                record.detail ?? ""
-            ]
+            // 拆成逐项 append：17 个元素的内联字面量会让类型检查爆掉（编译器报过「reasonable time」）。
+            var fields: [String] = []
+            fields.append(formatter.string(from: record.timestamp))
+            fields.append(record.connectionName ?? "")
+            fields.append(record.database ?? "")
+            fields.append(record.model ?? "")
+            fields.append(record.endpoint ?? "")
+            fields.append(record.promptTokens.map(String.init) ?? "")
+            fields.append(record.completionTokens.map(String.init) ?? "")
+            fields.append(record.totalTokens.map(String.init) ?? "")
+            fields.append(record.sessionID ?? "")
+            fields.append(record.hopIndex.map(String.init) ?? "")
+            fields.append(record.statementKind.rawValue)
+            fields.append(record.risk.rawValue)
+            fields.append(record.findings.map(\.rawValue).joined(separator: "|"))
+            fields.append(record.outcome.rawValue)
+            fields.append(record.durationMilliseconds.map(String.init) ?? "")
+            fields.append(record.sql)
+            fields.append(record.detail ?? "")
             lines.append(fields.map { ResultExporter.escapeCSVField($0) }.joined(separator: ","))
         }
         return AgentAudit.redacted(lines.joined(separator: "\n") + "\n")
