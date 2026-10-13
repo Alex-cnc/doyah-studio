@@ -324,7 +324,8 @@ python3 Scripts/check-script-portability.py
 # 登记表里声明 `defaultView: .browser` 的语言**恰好**是 HTML；`App/` 下读 `defaultView` 的文件
 # **恰好**是台账里那一个（`App/WorkspaceTabsModel.swift`，双向对账），且它必须真的把这一档交给
 # 浏览器那一侧（交接锚点 `openInBrowserTab`）。多一处 = 又一条自己决定「用什么打开」的路。
-# 判据自己的证据两处：`--self-test` **11 例**（夹具一律在临时副本上写坏，末例核对真仓库逐字节未变）
+# 判据自己的证据两处：`--self-test` **16 例**（夹具一律在临时副本上写坏，末例核对真仓库逐字节未变；
+# 2026-10-14 原单 `T-20261010-048` 起，A 档面与盘上发现面双向对账、判定物分辨枚举、非法台账判红）
 # + 入口证据 `Scripts/test-language-registry-gate.py` **例数 4**（走的是**命令行路径**：
 # 真仓库 exit 0 / 写坏 exit 1 并点名到文件 / 参数错 exit 2 / 真仓库逐字节未变 —— 函数路径与
 # 命令行路径的坏法不同，两条都要有人跑）。

@@ -1,0 +1,16 @@
+{
+  "_note": "判据 A 的例外与「同名风格枚举」登记（2026-10-14 建 · 原单 T-20261010-048）。两条都带棘轮：登了却没命中 = 死登记判红；理由不许空。",
+  "exempt": [
+    {
+      "file": "Core/MarkdownEditing.swift",
+      "snippet": "language == .markdown",
+      "reason": "`MarkdownEditingScope.applies(to:)` 是「这一族手感对哪些文档生效」的唯一定义处（同文件上一行自述），它按语言身份分支 —— 改成走 `CodeLanguageDefinition`要给登记表新增一档「这一族的适用面」（产品面改动，超出本合册 `Scripts/**` 落点）⇒ 本轮带理由登记，同时作为请裁项报前门。"
+    }
+  ],
+  "homonymEnums": [
+    {
+      "type": "CodeFormatBuiltin",
+      "reason": "格式化风格枚举（`none` / `whitespace` / `braceIndent` / `sql` / `json` / …）与语言标识**同名**：`Core/CodeFormatting.swift` 的 `switch style { case .sql: … }`switch 的是**工具风格**不是语言身份 ⇒ 不算身份分支（原单 T-20261010-048 ㈢ 的 6 处假阳）。"
+    }
+  ]
+}

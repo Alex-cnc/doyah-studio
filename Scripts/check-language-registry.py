@@ -24,7 +24,16 @@ FR-EDIT-38 ① 要的口径是「**新增语言不改核心代码**」：语言�
 - **A 形状禁令**：语言的**消费方**文件里不许出现"按语言身份分支"的写法
   （`language == .html` / `case .sql:` …）—— 语言知识只允许住在
   `Core/CodeLanguageDefinitions.swift`。逐处点名 `文件:行号`。
-  例外走台账 `Scripts/language-registry-exemptions.json`（默认**空**，每条必须命中、理由不许空）。
+  例外/同名枚举走台账 `Scripts/language-registry-exemptions.json`（每条必须命中、
+  理由不许空；死登记 / 死豁免 / 未登记的枚举一律判红）。
+- **A 档的面自维护**（2026-10-14 修 · 原单 `T-20261010-048`）：声明面 `CONSUMER_FILES`
+  与**盘上发现面**（`App` / `CLI` / `Core` / `Platform` 下引用 `TextLanguage` /
+  `CodeLanguageDefinition` 的生产级 `.swift`）必须**同集合** —— 盘上多一份 ⇒ 判红并点名
+  （新增消费者此前永远看不见），声明了盘上没有 ⇒ 死条目判红。
+- **A 档的判定物分辨枚举**：命中处先解析**主体类型**（`==` 那一侧的标识符 / `case` 所属
+  `switch` 的主体，类型取自同文件的参数与 `let` / `var` 声明）——解析到 `TextLanguage`
+  才是身份分支；解析到别的类型（如 `CodeFormatBuiltin` 这一族「同名风格枚举」）只有
+  **登记过**才放过；解析不出来按身份分支处理（宁可判红，不静默）。
 - **B 登记自洽**：每条登记项必须给全（`displayName` / `fileExtensions` / `syntax`，
   且 `isCode` 为真者必须有注释规则与字符串界定符）；`TextLanguage` 的标识行与登记项
   **同集合**；一个扩展名 / 文件名只能有一个主人。
@@ -37,14 +46,18 @@ FR-EDIT-38 ① 要的口径是「**新增语言不改核心代码**」：语言�
   将来往登记表里加类型时会被漏掉一半；一处都不读 = 口径没落地（`.html` 照旧当文本打开）。
 - **D 空跑防护**：解析到的登记项数 / 标识行数 / 消费方文件数 / `App/` 文件数几条下限，低了即判红
   （正则失配 ⇒ 零命中 ⇒ 假绿，这是这类判据最经典的坏法）。
-- **判据自己的证据**：`--self-test`（**11 例**）：夹具一律建在临时目录的副本上，
+- **判据自己的证据**：`--self-test`（**16 例**）：夹具一律建在临时目录的副本上，
   写坏 ⇒ 判红且点名、还原 ⇒ 绿，末例核对真仓库逐字节未变。
 
 ## 边界（如实登记）
 
-- A 只扫**语言消费方那一族文件**（词法器 / 登记 / 判语言 / 补全 / 两个编辑器 / CLI），
-  不是全仓扫描：`Core/` 里有几百个文件，全扫会把"别的事情里恰好出现的 `.go`"当成违规，
-  假阳性多了判据就会被绕过。
+- A 只扫**语言消费方那一族文件**（发现面：引用语言类型的生产级文件），不是全仓扫描：
+  `Core/` 里有几百个文件，全扫会把"别的事情里恰好出现的 `.go`"当成违规，假阳性多了
+  判据就会被绕过。面靠**发现 + 双向对账**自维护，不再是一份写死的名单。
+- A 的**类型解析是文本级**（不看类型系统）：主体名解析不出类型时**按身份分支判红**
+  （fail-closed），不静默。今天本仓的 7 处命中（6 处同名风格枚举 + 1 处真阳）全部解析得出。
+- 「同名风格枚举」的登记（`homonymEnums`）是**判据侧台账**，不是产品侧豁免：它只说明
+  「这个枚举的 `case .x:` 不是语言身份」，不改变 `CodeFormatBuiltin` 的任何代码。
 - A 剥掉注释后再匹配：判据自己的注释里会**引用**反面写法（`language == .html` 这种），
   那是说明书不是代码 —— 不剥注释的话这条判据第一个红在它自己头上。
 - 视觉半边（切主题 / 切深浅后高亮真的变了）不在本判据：由设计令牌族
@@ -74,14 +87,23 @@ LEDGER = pathlib.Path("Scripts/language-registry-exemptions.json")
 
 # 语言消费方那一族（A 档的扫描面）——「谁按语言身份分支过，就是谁把知识从登记表里搬走了」。
 CONSUMER_FILES = (
+    "App/Views/CodeEditorView.swift",
+    "App/Views/MarkdownPreviewView.swift",
+    "App/WorkspaceTabsModel.swift",
+    "CLI/main.swift",
+    "Core/CodeCompletion.swift",
+    "Core/CodeFormatting.swift",
     "Core/CodeLexer.swift",
     "Core/CodeSyntax.swift",
+    "Core/MarkdownEditing.swift",
     "Core/TextLanguage.swift",
-    "Core/CodeCompletion.swift",
-    "App/Views/CodeEditorView.swift",
-    "App/Views/SQLEditorView.swift",
-    "CLI/main.swift",
+    "Core/WorkspaceSession.swift",
+    "Core/WorkspaceTab.swift",
 )
+# 发现面（2026-10-14 修 · 原单 T-20261010-048）：这些目录下**引用语言类型**的生产级 `.swift`
+# 就是「语言消费方」。声明面必须与它**同集合**（多一份 = 新增消费者没人审；少一份 = 死条目）。
+FACE_DIRS = ("App", "CLI", "Core", "Platform")
+FACE_TOKEN = re.compile(r"\b(?:TextLanguage|CodeLanguageDefinition)\b")
 # C 档：语法色的两个取色点（编辑器）与令牌自己的定义处。
 EDITOR_FILES = ("App/Views/CodeEditorView.swift", "App/Views/SQLEditorView.swift")
 TOKEN_FILE = "Core/DesignTokens.swift"
@@ -104,10 +126,10 @@ BROWSER_VIEW_LANGUAGE = "html"
 # 空跑防护：`App/` 下 `.swift` 的实测条数下限（扫描面被削 ⇒ 假绿）。
 FLOOR_APP_FILES = 90
 
-# 空跑防护下限（本轮实测：18 条登记 / 18 行标识 / 7 个消费方文件）。
+# 空跑防护下限（本轮实测：20 条登记 / 20 行标识 / 12 个消费方文件）。
 FLOOR_DEFINITIONS = 17
 FLOOR_IDENTIFIERS = 17
-FLOOR_CONSUMERS = 7
+FLOOR_CONSUMERS = 12
 FLOOR_EXTENSIONS = 30
 FLOOR_ANCHORS = 6
 
@@ -124,17 +146,82 @@ def strip_comments(text: str) -> str:
     return "\n".join(DASH_LINE_COMMENT.sub("", line) for line in text.splitlines())
 
 
-def load_ledger(root: pathlib.Path) -> tuple[list[dict], list[str]]:
+def load_ledger(root: pathlib.Path) -> tuple[dict, list[str]]:
+    """例外与「同名风格枚举」台账（`Scripts/language-registry-exemptions.json`，2026-10-14 建）。
+
+    文件**必须在盘上**：docstring 一直声明它存在（默认空）⇒ 不在盘 = 说明书在说谎，
+    且「确有必要时登记台账」这条路等于不存在。
+    """
     path = root / LEDGER
     if not path.exists():
-        return [], []
-    entries = json.loads(path.read_text(encoding="utf-8")).get("exempt", [])
-    problems = []
-    for index, entry in enumerate(entries):
+        return {"exempt": [], "homonymEnums": []}, [
+            f"{LEDGER.as_posix()} 不在盘上 —— 判据 A 的例外与同名枚举登记全走它"
+        ]
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    exempt = payload.get("exempt", [])
+    homonyms = payload.get("homonymEnums", [])
+    problems: list[str] = []
+    for index, entry in enumerate(exempt):
         for field in ("file", "snippet", "reason"):
             if not str(entry.get(field, "")).strip():
                 problems.append(f"例外台账第 {index + 1} 条缺 `{field}`（理由不许空）")
-    return entries, problems
+    for index, entry in enumerate(homonyms):
+        if not str(entry.get("type", "")).strip():
+            problems.append(f"同名枚举台账第 {index + 1} 条缺 `type`")
+        elif not str(entry.get("reason", "")).strip():
+            problems.append(f"同名枚举台账第 {index + 1} 条（`{entry['type']}`）缺 `reason`")
+    return {"exempt": exempt, "homonymEnums": homonyms}, problems
+
+
+DECLARED_TYPE = re.compile(r"\b([a-z_][A-Za-z0-9_]*)\s*:\s*([A-Z][A-Za-z0-9_]*)\b")
+
+
+def type_table(text: str) -> dict:
+    """同文件里「标识符 → 类型」的**文本级**表（函数参数 + `:` 类型声明）。
+
+    同名出现于多个不同类型 ⇒ 记 `None`（解析不出 ⇒ 按身份分支判红，不猜）。
+    """
+    seen: dict[str, set] = {}
+    for head in re.finditer(r"func\s+\w+\s*\(([^)]*)\)", text, re.DOTALL):
+        for name, kind in DECLARED_TYPE.findall(head.group(1)):
+            seen.setdefault(name, set()).add(kind)
+    for name, kind in DECLARED_TYPE.findall(text):
+        seen.setdefault(name, set()).add(kind)
+    return {name: (kinds.pop() if len(kinds) == 1 else None) for name, kinds in seen.items()}
+
+
+def switch_subject(lines: list[str], index: int) -> str | None:
+    """命中行所属 `switch` 的主体标识符（向上找最近的 `switch … {`，跳过内层花括号）。"""
+    depth = 0
+    for cursor in range(index - 1, -1, -1):
+        head = re.match(r"^\s*switch\s+(.+?)\s*\{\s*$", lines[cursor])
+        if head and depth <= 0:
+            names = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", head.group(1))
+            return names[-1] if names else None
+        depth += lines[cursor].count("}") - lines[cursor].count("{")
+        if depth < 0:
+            return None
+    return None
+
+
+def discover_consumers(root: pathlib.Path) -> list[str]:
+    """盘上发现面：`FACE_DIRS` 下引用语言类型的**生产级** `.swift`。
+
+    `Tests/` 与 `*Tests.swift`（夹具 / 单测可以拿真身份当输入）与登记文件自己
+    （知识该住的地方）不算消费者。
+    """
+    found: list[str] = []
+    for directory in FACE_DIRS:
+        base = root / directory
+        if not base.exists():
+            continue
+        for path in sorted(base.rglob("*.swift")):
+            relative = path.relative_to(root).as_posix()
+            if path.name.endswith("Tests.swift") or "/Tests/" in relative or relative == DEFINITIONS.as_posix():
+                continue
+            if FACE_TOKEN.search(strip_comments(path.read_text(encoding="utf-8"))):
+                found.append(relative)
+    return sorted(set(found))
 
 
 def identity_patterns(identifier: str) -> tuple[str, ...]:
@@ -146,30 +233,86 @@ def identity_patterns(identifier: str) -> tuple[str, ...]:
     )
 
 
-def check_identity_branches(root: pathlib.Path, identifiers: list[str], ledger: list[dict]) -> tuple[list[str], int, int]:
+def identity_shape(line: str, identifier: str) -> tuple[str, str] | None:
+    """命中形状 + **主体**：`("eq", 另一侧标识符)` / `("case", "")`；不命中 ⇒ `None`。"""
+    escaped = re.escape(identifier)
+    left = re.search(rf"([A-Za-z_][A-Za-z0-9_]*)\s*(?:==|!=)\s*\.{escaped}\b", line)
+    if left:
+        return "eq", left.group(1)
+    right = re.search(rf"\.{escaped}\b\s*(?:==|!=)\s*([A-Za-z_][A-Za-z0-9_]*)", line)
+    if right:
+        return "eq", right.group(1)
+    if re.search(rf"case\s+\.{escaped}\s*:", line):
+        return "case", ""
+    return None
+
+
+def reconcile_face(root: pathlib.Path) -> list[str]:
+    """A 档面的**双向对账**：声明面 `CONSUMER_FILES` ↔ 盘上发现面。"""
     problems: list[str] = []
-    hits = 0
-    scanned = 0
+    discovered = set(discover_consumers(root))
+    declared = set(CONSUMER_FILES)
+    for relative in sorted(discovered - declared):
+        problems.append(
+            f"{relative} 引用语言类型却不在 A 档声明面里 —— 语言消费者多了一份，"
+            f" 而面是一份写死的名单（把这份文件写进 `CONSUMER_FILES`）"
+        )
+    for relative in sorted(declared - discovered):
+        problems.append(
+            f"{relative} 在 A 档声明面里，但盘上不再引用语言类型 —— **死条目**"
+            f"（面要跟着代码走：删掉这一行；它之前在面内也只是空转）"
+        )
+    return problems
+
+
+def check_identity_branches(root: pathlib.Path, identifiers: list[str], ledger: dict) -> tuple[list[str], dict]:
+    problems = reconcile_face(root)
+    homonym_types = {str(entry["type"]) for entry in ledger["homonymEnums"] if str(entry.get("type", "")).strip()}
+    stats = {"judged": 0, "exempt": 0, "homonym": 0, "scanned": 0, "exemptHit": set(), "homonymSeen": set()}
     for relative in CONSUMER_FILES:
         path = root / relative
         if not path.exists():
-            problems.append(f"缺文件：{relative}（扫描面由本脚本的 CONSUMER_FILES 固定）")
+            problems.append(f"缺文件：{relative}（A 档声明面里的文件不在盘上）")
             continue
-        scanned += 1
-        for number, line in enumerate(strip_comments(path.read_text(encoding="utf-8")).splitlines(), start=1):
+        stats["scanned"] += 1
+        text = strip_comments(path.read_text(encoding="utf-8"))
+        lines = text.splitlines()
+        table = type_table(text)
+        for number, line in enumerate(lines, start=1):
             for identifier in identifiers:
-                if not any(re.search(pattern, line) for pattern in identity_patterns(identifier)):
+                shape = identity_shape(line, identifier)
+                if shape is None:
                     continue
-                hits += 1
-                if any(entry["file"] == relative and entry["snippet"] in line for entry in ledger):
+                kind, operand = shape
+                if kind == "case":
+                    subject = switch_subject(lines, number - 1)
+                    resolved = table.get(subject) if subject else None
+                    where = f"`switch {subject}`" if subject else "所属 `switch` 的主体"
+                else:
+                    subject = operand
+                    resolved = table.get(subject)
+                    where = f"`{subject}`"
+                if resolved != "TextLanguage" and resolved in homonym_types:
+                    stats["homonym"] += 1
+                    stats["homonymSeen"].add(resolved)
                     continue
+                if resolved == "TextLanguage":
+                    index = next(
+                        (i for i, entry in enumerate(ledger["exempt"])
+                         if entry.get("file") == relative and str(entry.get("snippet", "")) in line),
+                        None,
+                    )
+                    if index is not None:
+                        stats["exempt"] += 1
+                        stats["exemptHit"].add(index)
+                        continue
+                stats["judged"] += 1
                 problems.append(
-                    f"{relative}:{number} 按语言身份分支（`{identifier}`）——"
-                    f" 语言知识只允许住在 {DEFINITIONS.as_posix()}，"
-                    f"消费方要拿规则请走 `CodeLanguageDefinition`；"
-                    f"确有必要时登记 {LEDGER.as_posix()} 并写理由"
+                    f"{relative}:{number} 按语言身份分支（`{identifier}`）—— {where} 解析到 "
+                    f"{resolved or '未知类型'}；语言知识只允许住在 {DEFINITIONS.as_posix()}，"
+                    f" 消费方要拿规则请走 `CodeLanguageDefinition`；确有必要时登记 {LEDGER.as_posix()} 并写理由"
                 )
-    return problems, hits, scanned
+    return problems, stats
 
 
 def check_definitions(root: pathlib.Path) -> tuple[list[str], dict]:
@@ -327,10 +470,29 @@ def check_default_view_consumers(root: pathlib.Path, browser_views: list[str]) -
     return problems, len(sources), len(found)
 
 
+def ledger_ratchets(ledger: dict, branch: dict) -> list[str]:
+    """死登记棘轮：台账里登了、盘上一次都没命中 ⇒ 判红（豁免与同名枚举两本都一样）。"""
+    problems: list[str] = []
+    for index, entry in enumerate(ledger["exempt"]):
+        if index not in branch["exemptHit"]:
+            problems.append(
+                f"例外台账第 {index + 1} 条（`{entry.get('file', '')}` / `{entry.get('snippet', '')}`）"
+                f" 在盘上没有命中 —— **死豁免**（那处身份分支已被改写或删掉，登记要跟着收回）"
+            )
+    for entry in ledger["homonymEnums"]:
+        kind = str(entry.get("type", "")).strip()
+        if kind and kind not in branch["homonymSeen"]:
+            problems.append(
+                f"同名枚举台账登记的 `{kind}` 一次都没被解析到 —— **死登记**（它已不在任何命中处）"
+            )
+    return problems
+
+
 def run(root: pathlib.Path) -> int:
     problems, stats = check_definitions(root)
     ledger, ledger_problems = load_ledger(root)
-    branch_problems, branch_hits, consumers = check_identity_branches(root, stats["languages"], ledger)
+    branch_problems, branch = check_identity_branches(root, stats["languages"], ledger)
+    branch_problems += ledger_ratchets(ledger, branch)
     color_problems, anchors = check_colors(root)
     view_problems, app_files, view_consumers = check_default_view_consumers(root, stats["browserViews"])
     problems += ledger_problems + branch_problems + color_problems + view_problems
@@ -351,14 +513,16 @@ def run(root: pathlib.Path) -> int:
         problems.append(f"只解析到 {stats['identifiers']} 行语言标识（下限 {FLOOR_IDENTIFIERS}）")
     if stats["extensions"] < FLOOR_EXTENSIONS:
         problems.append(f"只解析到 {stats['extensions']} 条扩展名（下限 {FLOOR_EXTENSIONS}）")
-    if consumers < FLOOR_CONSUMERS:
-        problems.append(f"只扫到 {consumers} 个语言消费方文件（下限 {FLOOR_CONSUMERS}）—— 扫描面失效")
+    if branch["scanned"] < FLOOR_CONSUMERS:
+        problems.append(f"只扫到 {branch['scanned']} 个语言消费方文件（下限 {FLOOR_CONSUMERS}）—— 扫描面失效")
     if anchors < FLOOR_ANCHORS:
         problems.append(f"只找到 {anchors} 处取色锚点（下限 {FLOOR_ANCHORS}）—— 语法色可能没走主题令牌")
 
     print(
         f"语言登记表：{stats['definitions']} 种语言 / {stats['extensions']} 条扩展名 / "
-        f"消费方 {consumers} 个文件 / 语言身份分支 {branch_hits} 处 / 取色锚点 {anchors} 处 / "
+        f"A 档面 {len(CONSUMER_FILES)} 份（盘上发现 {len(discover_consumers(root))} 份，双向对账）/ "
+        f"语言身份分支 {branch['judged']} 处（同名枚举命中 {branch['homonym']} 处 · 豁免 {branch['exempt']} 处）/ "
+        f"取色锚点 {anchors} 处 / "
         f"默认视图消费者 {view_consumers} 个文件（扫 App {app_files} 个 .swift，浏览器档 {stats['browserViews']}）"
     )
     if problems:
@@ -367,7 +531,7 @@ def run(root: pathlib.Path) -> int:
             print(f"   · {problem}")
         return 1
     print(
-        f"✅ 语言登记形状通过：知识只在 {DEFINITIONS.as_posix()}，消费方 0 处身份分支，取色走主题令牌，"
+        f"✅ 语言登记形状通过：知识只在 {DEFINITIONS.as_posix()}，消费方 {branch['judged']} 处身份分支，取色走主题令牌，"
         f"默认视图只有一处消费者（{VIEW_CONSUMER_FILES[0]}）"
     )
     return 0
@@ -389,13 +553,20 @@ CASES: list[str] = [
     "唯一消费者没把浏览器那一档接出去（交接锚点没了）",
     "唯一消费者改成写死扩展名（不再问登记表）",
     "真仓库：判据 exit 0，且夹具前后真文件逐字节未变",
+    "A 档面外多了一份消费者（新文件引用语言类型，声明面没登记）",
+    "A 档面里的死条目（那份文件不再引用语言类型）",
+    "同名枚举未登记（命中处解析到的枚举不在 `homonymEnums` 台账里）",
+    "死豁免（台账登记的那处身份分支已不在盘上）",
+    "例外与同名枚举台账文件整个不在盘上（豁免路径不存在）",
 ]
 FIXTURE_FILES = CONSUMER_FILES + EDITOR_FILES + (
     str(DEFINITIONS.as_posix()),
+    LEDGER.as_posix(),
     TOKEN_FILE,
     # E 档的唯一消费者：自检会改它，所以也要进「真仓库逐字节未变」的对照
     VIEW_CONSUMER_FILES[0],
 )
+STR_LEDGER = LEDGER.as_posix()
 # E 档要扫**整个 `App/`**（「别处也在读」这件事只能靠全量扫描发现）⇒ 夹具得把目录一起搬。
 FIXTURE_TREES = (VIEW_SOURCE_DIR,)
 
@@ -476,6 +647,14 @@ def run_self_test() -> int:
         expect_red(CASES[9], lambda t: mutate(t, VIEW_CONSUMER_FILES[0],
                                               "if CodeLanguageRegistry." + VIEW_CONSUMER_TOKEN + "(forPath: path) == .browser",
                                               'if path.hasSuffix(".html")'))
+        # A 档的面与判定物（2026-10-14 修 · 原单 T-20261010-048）
+        expect_red(CASES[11], lambda t: (t / "Core/PlantedSurfaceConsumer.swift").write_text(
+            "import Foundation\n\nfunc plantedSurface(_ language: TextLanguage) -> Bool { language == .sql }\n",
+            encoding="utf-8"))
+        expect_red(CASES[12], lambda t: mutate(t, "Core/WorkspaceTab.swift", "TextLanguage", "PlantedSurfaceType", 999))
+        expect_red(CASES[13], lambda t: mutate(t, STR_LEDGER, '"type": "CodeFormatBuiltin"', '"type": "PlantedStyleEnum"'))
+        expect_red(CASES[14], lambda t: mutate(t, STR_LEDGER, '"snippet": "language == .markdown"', '"snippet": "language == .markdownX"'))
+        expect_red(CASES[15], lambda t: (t / STR_LEDGER).unlink())
         if snapshot(REPO) != before:
             failures.append("自检改动了真仓库（夹具必须只在临时副本上写坏）")
     finally:
