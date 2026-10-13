@@ -52,12 +52,19 @@
   里有一处「项数仍十七」是陈旧值，**本侧不改**（走提醒），判据在这里如实报「跳过 N 行」。
 - **变更记录行整行跳过**（`| v1.2x` / `| **v2.6x**`）：历史值本来就该不同，那不是漂移。
 - `checkScriptParity`：「有判据、没闭环」那一族 —— `Scripts/check-*.py` 每个都必须被
-  `Scripts/verify-all.sh` 引用，或在台账里逐条登记理由（现有 1 条豁免：快照语言覆盖门禁）。
+  `Scripts/verify-all.sh` 引用，或在台账里逐条登记理由（现有 2 条豁免：快照语言覆盖门禁、
+  界面按钮图标化判据（人类主人令 `T-20261013-042` 第二段未收口前刻意不接线））。
+  **豁免表自身也有三条自证**（合册 `T-20261013-027` / 原单 `T-20261010-027`）：① 每条 `script`
+  必须在盘（不在 = 死豁免 ⇒ 判红）；② 理由里**主张随某入口跑**（「随 `Scripts/…sh` 的收尾跑」）
+  的 ⇒ 核它确实引用本脚本（不引用 ⇒ 判红），其它形式的点名只核存在性；③ 缺 `script` 键 ⇒ 判红点名
+  （不许 `KeyError` 栈）。收尾打印「豁免 N 条（有效 M / 死 K）」。
+  **边界（如实登记）**：理由里若用别的措辞写一句**不可证伪**的话（不出现「随…跑」这种可对账形状），
+  本判据只管存在性、不管真假 —— ② 只机械核「可对账的那句」。
 
 用法：
     python3 Scripts/check-doc-numbers.py                # 本仓（默认）
     python3 Scripts/check-doc-numbers.py --root <目录>   # 夹具仓（自测用）
-    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（19 例）
+    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（24 例）
 
 退出码：0 = 全绿；1 = 有判红项。**判红时空跑防护也一起报**（一处都没解析到 ⇒ 不许「零命中 = 通过」）。
 """
@@ -567,7 +574,21 @@ def check_script_parity(root: pathlib.Path, ledger: dict, problems: list, notes:
     if not scripts:
         problems.append(f"[checkScriptParity] 一个判据脚本都没找到（glob {glob}）—— 零命中不许当通过")
         return 0
-    exempt = {item["script"]: item.get("reason", "") for item in parity.get("exempt") or []}
+    # 豁免表三条自证（合册 `T-20261013-027` · 原单 `T-20261010-027`）：
+    #   ① 每条 `script` **必须在盘**（不在 = 死豁免：脚本改名 / 删除后，旧条目永久留在台账里假装有账）；
+    #   ② `reason` 里**主张随某入口跑**（形如「随 `Scripts/…sh` 的收尾跑」）的 ⇒ 核那个入口在盘
+    #      **且确实引用本脚本**（理由里可机械对账的部分不许是空话；其它形式的点名只核存在性，见判定台账）；
+    #   ③ 缺 `script` 键 ⇒ 判红点名，不许抛 `KeyError` 栈。
+    exempt: dict[str, str] = {}
+    for item in parity.get("exempt") or []:
+        rel = item.get("script")
+        if not isinstance(rel, str) or not rel.strip():
+            problems.append(
+                "[checkScriptParity] 豁免条目缺 `script` 键 —— 没法点名这条豁免放行了哪个脚本"
+                "（豁免条目的形状 = script + reason，缺一不可）"
+            )
+            continue
+        exempt[identity_text(rel.strip())] = item.get("reason", "")
     exempt_seen = set()
     for script in scripts:
         rel = identity_text(script.relative_to(root))
@@ -584,10 +605,44 @@ def check_script_parity(root: pathlib.Path, ledger: dict, problems: list, notes:
     for rel in exempt:
         if rel not in exempt_seen and rel in gate_text:
             problems.append(f"[checkScriptParity] {rel} 已经在闭环里了，台账里的豁免条目陈旧（请删掉）")
+    # ①②③ 豁免表三条自证（同函数头）：死豁免 / 理由点名核 / 读数
+    valid = 0
+    dead = 0
+    suspect = 0
+    for rel, reason in sorted(exempt.items()):
+        if (root / rel).exists():
+            valid += 1
+        else:
+            dead += 1
+            problems.append(
+                f"[checkScriptParity] 死豁免：台账豁免的 {rel} 已不在盘（改名 / 删除？）"
+                f" —— 豁免条目不许永久留着假装有账（补回脚本，或删掉这条）"
+            )
+        for named in re.findall(r"`([^`]*\.(?:sh|py))`", reason or ""):
+            named_rel = identity_text(named.strip())
+            named_path = root / named_rel
+            if not named_path.exists():
+                problems.append(
+                    f"[checkScriptParity] 豁免 {rel} 的理由点名了 `{named_rel}`，但它不在盘"
+                    f" —— 理由里可核对的部分不许是空话"
+                )
+                continue
+            if not re.search(rf"随\s*`{re.escape(named)}`[^。；\n]*跑", reason or ""):
+                continue
+            if pathlib.Path(rel).name not in named_path.read_text(encoding="utf-8", errors="replace"):
+                suspect += 1
+                problems.append(
+                    f"[checkScriptParity] 豁免 {rel} 的理由说「随 `{named_rel}` 的收尾跑」，"
+                    f"但 `{named_rel}` 里没有引用 {pathlib.Path(rel).name} —— 理由与磁盘不符"
+                )
     notes.append(
         f"[checkScriptParity] 判据脚本 {len(scripts)} 个：被闭环引用 {len(scripts) - len(exempt_seen)} 个、"
         f"登记豁免 {len(exempt_seen)} 个"
     )
+    exempt_note = f"[checkScriptParity] 豁免 {len(exempt)} 条（有效 {valid} / 死 {dead}）"
+    if suspect:
+        exempt_note += f"，另有 {suspect} 条理由未过（见判红）"
+    notes.append(exempt_note)
     return len(scripts)
 
 
@@ -986,6 +1041,58 @@ def self_test() -> int:
         True,
         "脱钩",
     )
+
+    # ── 豁免表三条自证（合册 `T-20261013-027` · 原单 `T-20261010-027`）--------------------
+    def exempt_ledger(reason: str, script: str = "Scripts/check-exempt.py") -> dict:
+        return {
+            **FIXTURE_LEDGER,
+            "checkScriptParity": {
+                **FIXTURE_LEDGER["checkScriptParity"],
+                "exempt": [{"script": script, "reason": reason}],
+            },
+        }
+
+    def exempt_runner(base: pathlib.Path) -> None:
+        """对手臂夹具：理由点名的入口在盘，且它确实引用被豁免的脚本。"""
+        build_fixture(base, ledger=exempt_ledger("随 `Scripts/fixture-snap.sh` 的收尾跑"))
+        (base / "Scripts" / "fixture-snap.sh").write_text("python3 Scripts/check-exempt.py\n", encoding="utf-8")
+
+    run(
+        "⑱ 死豁免：台账豁免的脚本已不在盘（改名 / 删除）⇒ 判红点名，不许静默容忍",
+        lambda b: build_fixture(
+            b,
+            ledger={**FIXTURE_LEDGER, "checkScriptParity": {**FIXTURE_LEDGER["checkScriptParity"], "exempt": [
+                {"script": "Scripts/check-exempt.py", "reason": "夹具：已登记理由的豁免条目"},
+                {"script": "Scripts/check-gone.py", "reason": "夹具：这条豁免指向的脚本已被删除"},
+            ]}},
+        ),
+        True,
+        "死豁免",
+    )
+    run(
+        "⑲ 豁免条目缺 `script` 键 ⇒ 判红点名（不许抛 KeyError 栈）",
+        lambda b: build_fixture(
+            b,
+            ledger={**FIXTURE_LEDGER, "checkScriptParity": {**FIXTURE_LEDGER["checkScriptParity"], "exempt": [
+                {"reason": "夹具：只有理由、没有 script 键"},
+            ]}},
+        ),
+        True,
+        "缺 `script` 键",
+    )
+    run(
+        "⑳ 理由点名的入口脚本不在盘 ⇒ 判红（理由里可核对的那部分不许是空话）",
+        lambda b: build_fixture(b, ledger=exempt_ledger("随 `Scripts/nowhere-snap.sh` 的收尾跑")),
+        True,
+        "不在盘",
+    )
+    run(
+        "㉑ 理由主张「随 X 的收尾跑」而 X 里没引用本脚本 ⇒ 判红（理由与磁盘不符）",
+        lambda b: build_fixture(b, ledger=exempt_ledger("随 `Scripts/verify-all.sh` 的收尾跑")),
+        True,
+        "没有引用",
+    )
+    run("㉒ 对手臂：理由点名的入口在盘且确实引用本脚本 ⇒ 绿（不误伤真豁免）", exempt_runner, False)
 
     failures = []
     with tempfile.TemporaryDirectory(prefix="doc-numbers-selftest-") as temp:
