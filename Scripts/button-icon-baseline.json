@@ -1,0 +1,11 @@
+{
+  "_说明": "按钮图标化盘点基线（人类主人令 2026-10-13 · 信箱 T-20261013-042）。`targetTextButtons` = 本令的目标（水平按钮不得以字符文案为可见形态 ⇒ 0）；`beforeTextButtons` = 改前实测读数（成对留痕：改前红 / 改完绿）。`menuItems` 与 `uiFiles` 是空跑防护读数。改完那一轮把 target 保持 0、before 保持 277 不动（不要改历史读数），并在提交信息里写明。",
+  "targetTextButtons": 0,
+  "beforeTextButtons": 277,
+  "beforeMenuItems": 99,
+  "beforeIconButtons": 67,
+  "beforePending": 2,
+  "beforePickers": 49,
+  "uiFiles": 127,
+  "measured": "2026-10-13"
+}
