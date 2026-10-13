@@ -1028,6 +1028,15 @@
           "note": "头注释（L-110 那一段）"
         }
       ]
+    },
+    {
+      "key": "core-portability",
+      "script": "Scripts/check-core-portability.py",
+      "args": ["--self-test"],
+      "cases": 9,
+      "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
+      "why": "合册 T-20261013-027（原单 T-20261010-045 · 第 412 轮判据面缺口样本 49）：Core 平台中立性判据原本无空跑防护、无自检、豁免是裸子串 —— 九例真跑（真违规判红 / 字符串字面量里的 portability-ok 不豁免 / 注释位豁免该绿 / 剥注释口径 / Core 不在根上 / 面被砍到底 / 未知参数 / 仓外 CWD 读数 / 真仓逐字节未变）",
+      "noAnchorReason": "例数只在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 2 项的调用行都不写本判据的负例例数，而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
     }
   ]
 }
