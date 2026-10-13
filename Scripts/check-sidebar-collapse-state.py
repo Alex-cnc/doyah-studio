@@ -13,14 +13,18 @@
 `@State`，症状要再等人点一遍才会被发现（正是本工程反复栽的那个形状）。
 
 判据（每条都能指名 文件:行号）：
-  ① **视图不许自己揣着折叠状态** —— `App/Views/` 里出现「`@State` 且名字含 collapse」即红；
-  ② **状态由 `AppState` 持有、默认全展开** —— 声明行必须是 `@Published private(set)` 且初值是
-     空集合（一进来就把组都收起来，会让人以为连接没了）；
-  ③ **写入口唯一** —— 对 `collapsedConnectionGroups` 的 `insert` / `remove` 只许出现在
-     `setConnectionGroup(_:collapsed:)` 体内（集合本身是 `private(set)`，所以这是**结构性**的，
-     不是靠自觉）；
+  ① **视图不许自己揣着折叠状态** —— 判定物 =「`@State` + 集合类型 + 折叠语义的名字」
+     （词汇面 `collaps|fold|收起|展开|折叠`，不再只认英文 `collapse` 一个词；声明允许折行）
+     ＋ **结构那一臂**：任何视图局部集合只要做了 `DisclosureGroup(isExpanded:)` 的绑定源即红
+     （名字不在词汇面里也逃不掉）。已有例外逐条登记在 `VIEW_LOCAL_EXEMPTIONS`（只加不减）；
+  ② **状态由 `AppState` 持有、默认全展开** —— 声明必须是 `@Published private(set)` 且初值是
+     空集合（`[]` 与 `Set()` 等价；声明折两行也算 —— 判定物是「在不在 / 空不空」，不是排版）；
+  ③ **写入口唯一** —— 对 `collapsedConnectionGroups` 的**任何**变异（九种集合写法 + 直接赋值）
+     只许出现在 `setConnectionGroup(_:collapsed:)` 体内（集合本身是 `private(set)`，所以这是
+     **结构性**的，不是靠自觉）；
   ④ **视图的绑定必须经 appState** —— `appState.isConnectionGroupCollapsed(` 与
-     `appState.setConnectionGroup(` 都要在；视图里不许再出现**本地**折叠集合的判断；
+     `appState.setConnectionGroup(` 都要在；视图里不许再出现**本地**折叠集合的判断
+     （`appState.` 是唯一白名单 —— `holder.collapsedGroups` 这种点号访问也判红）；
   ⑤ **未分组那一段不许有折叠** —— 它是兜底容器（折起来等于把没归类的连接藏了）：
      `sectionView` 的 `isUngrouped` 分支里出现 `DisclosureGroup` 即红；
   ⑥ **空跑防护** —— 三个文件必须在、该解析出来的东西解析不出来即红（本仓库踩过两次
@@ -57,6 +61,28 @@ STATE_READER = "func isConnectionGroupCollapsed("
 VIEW_READ_SNIPPET = "appState.isConnectionGroupCollapsed("
 VIEW_WRITE_SNIPPET = "appState.setConnectionGroup("
 UNGROUPED_GUARD = "if section.isUngrouped {"
+
+# ③ 判定物：集合的**等价变异写法** —— 不只 `insert` / `remove`（样本 64 实测：其余写法全逃逸）
+MUTATION_METHODS = (
+    "insert", "remove", "removeAll", "subtract", "formUnion",
+    "union", "intersection", "symmetricDifference", "update",
+)
+MUTATION_PATTERN = rf"{STATE_PROPERTY}\s*\.\s*(?:{'|'.join(MUTATION_METHODS)})\s*\("
+ASSIGNMENT_PATTERN = rf"(?<![\w.]){STATE_PROPERTY}\s*(?:[+\-*/%&|^])?=(?!=)"
+
+# ① 判定物：折叠语义的**词汇面**（不再只认英文 `collapse` 一个词）+ 集合类型形状
+FOLD_NAME_PATTERN = r"(collaps|fold|收起|展开|折叠)"
+COLLECTION_TYPE_PATTERN = r"(?:Set\s*<|\[[^\]]*\])"
+WINDOW = 3  # 声明允许折行：从关键字那行起，最多向后拼 3 行（排版不属于判定物）
+
+# 已有例外（**只加不减 · 逐条登记**）：键 = `(相对路径, 属性名)` + 理由；未登记的命中一律判红。
+VIEW_LOCAL_EXEMPTIONS = {
+    ("App/Views/ObjectTreeView.swift", "expandedIDs"):
+        "对象树的展开态（树视图局部持有；该视图不随活动栏分支重建 —— L-59 的由头是 "
+        "ConnectionListView 那种按活动栏分支创建的视图）· 登记为已有例外、请前门核归口",
+}
+
+APPSTATE_PREFIX = "appState."
 
 
 def read(path: Path) -> str:
@@ -99,6 +125,49 @@ def function_body(text: str, signature: str) -> str | None:
     return None
 
 
+def declaration_window(lines: list[str], needle: str) -> tuple[int, str] | None:
+    """找一条**允许折行**的属性声明：含 `needle` 的首行 + 其后 `WINDOW-1` 行拼成一行。
+
+    判定物是「声明在不在 / 是不是 `private(set)` / 初值空不空」，与**排版**无关 ——
+    样本 64 实测：合法的两行声明（`@Published private(set)` 换行再写 `var …`）会被旧判据
+    误判成「找不到声明」（假阳）。
+    """
+    for index, line in enumerate(lines):
+        if needle in line:
+            start = max(0, index - 1)  # `@Published` 可能与 `var …` 折成两行 ⇒ 向前多取一行
+            end = index
+            for offset in range(WINDOW):
+                if index + offset >= len(lines):
+                    break
+                end = index + offset
+                if "=" in lines[end]:
+                    break
+            return index + 1, " ".join(part.strip() for part in lines[start : end + 1])
+    return None
+
+
+def view_local_collections(lines: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """视图里「`@State` + 集合类型」的声明（允许折行）⇒ `(行号, 属性名)`。"""
+    hits: list[tuple[int, str]] = []
+    texts = [text for _number, text in lines]
+    for index, text in enumerate(texts):
+        if "@State" not in text:
+            continue
+        window = " ".join(part.strip() for part in texts[index : index + WINDOW])
+        match = re.search(rf"\bvar\s+(\w+)\s*:\s*{COLLECTION_TYPE_PATTERN}", window)
+        if match:
+            hits.append((index + 1, match.group(1)))
+    return hits
+
+
+def is_local_collapsed_groups(line: str) -> bool:
+    """**本地** `collapsedGroups` 吗（旧物带点号豁免 ⇒ `holder.collapsedGroups` 逃逸）。"""
+    for match in re.finditer(r"\bcollapsedGroups\b", line):
+        if not line[: match.start()].endswith(APPSTATE_PREFIX):
+            return True
+    return False
+
+
 def check(root: Path) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     notes: list[str] = []
@@ -130,58 +199,97 @@ def check(root: Path) -> tuple[list[str], list[str]]:
     if not views:
         return [f"{VIEWS_DIR} 下一个源文件都没有 —— 判据取不到输入（空跑不许通过）"], notes
     for path in views:
-        for number, line in code_lines(read(path)):
-            if "@State" in line and re.search(r"collapse", line, re.I):
-                problems.append(
-                    f"{path.relative_to(root)}:{number}：视图里出现 `@State` 折叠状态 —— "
-                    "折叠状态必须住在 `AppState`（视图由活动栏分支创建，会被整个重建 ⇒ 状态归零）"
-                )
+        rel = path.relative_to(root).as_posix()
+        view_lines = code_lines(read(path))
+        local = view_local_collections(view_lines)
+        declared = False
+        for number, name in local:
+            if not re.search(FOLD_NAME_PATTERN, name, re.I):
+                continue
+            declared = True
+            if (rel, name) in VIEW_LOCAL_EXEMPTIONS:
+                continue
+            problems.append(
+                f"{rel}:{number}：视图里出现 `@State` 折叠状态 `{name}` —— "
+                "折叠状态必须住在 `AppState`（视图由活动栏分支创建，会被整个重建 ⇒ 状态归零）；"
+                "已有例外逐条登记在 `VIEW_LOCAL_EXEMPTIONS`，未登记不许豁免"
+            )
+        # 结构那一臂：**任何**视图局部集合只要做了 `DisclosureGroup(isExpanded:)` 的绑定源就判红
+        # （名字不在词汇面里也逃不掉 —— 展开态的寿命由「谁需要它活着」决定，不看它叫什么）
+        if not declared and any("DisclosureGroup(" in text for _number, text in view_lines):
+            names = {name for _number, name in local}
+            for number, line in view_lines:
+                if "isExpanded:" not in line:
+                    continue
+                for name in sorted(names):
+                    if re.search(rf"\b{name}\b", line):
+                        problems.append(
+                            f"{rel}:{number}：视图局部集合 `{name}` 是 "
+                            "`DisclosureGroup(isExpanded:)` 的绑定源 —— 展开态须住进 `AppState`"
+                        )
+                        break
     notes.append(f"{VIEWS_DIR}：{len(views)} 个源文件里没有视图局部的折叠状态")
 
-    # ② 状态由 AppState 持有、默认全展开
-    declaration = None
-    for line in state_code.splitlines():
-        if STATE_PROPERTY in line and "@Published" in line:
-            declaration = line
-            break
-    if declaration is None:
+    # ② 状态由 AppState 持有、默认全展开（判定物允许折行；空初值 `[]` 与 `Set()` 等价）
+    located = declaration_window(state_code.splitlines(), STATE_PROPERTY)
+    if located is None:
         problems.append(
             f"{STATE_FILE}：找不到 `@Published … {STATE_PROPERTY}` 的声明 —— "
             "折叠状态没有活人管（第 ③ 条也就无从谈起）"
         )
     else:
+        declaration_line, declaration = located
+        if "@Published" not in declaration:
+            problems.append(
+                f"{STATE_FILE}:{declaration_line}：`{STATE_PROPERTY}` 不在 `@Published` 上 —— "
+                "折叠状态不可观察（视图不会跟着重画）"
+            )
         if "private(set)" not in declaration:
             problems.append(
                 f"{STATE_FILE}：`{STATE_PROPERTY}` 不是 `private(set)` —— "
                 f"写入口就不止 `{STATE_WRITER}…)` 一个了（口径分叉就是这么来的）"
             )
-        if "=[]" not in declaration.replace(" ", ""):
+        empty = re.search(rf"=\s*(\[\]|Set\s*(?:<[^>]*>)?\s*\(\s*\))", declaration)
+        if empty is None:
             problems.append(
                 f"{STATE_FILE}：`{STATE_PROPERTY}` 的初值不是空集合 —— "
                 "默认必须全部展开（一进来就把组都收起来，会让人以为连接没了）"
             )
-        if "private(set)" in declaration and "=[]" in declaration.replace(" ", ""):
+        if "@Published" in declaration and "private(set)" in declaration and empty:
             notes.append(f"折叠状态：`@Published private(set) var {STATE_PROPERTY}: Set<String> = []`")
 
-    # ③ 写入口唯一：insert / remove 只许在 `setConnectionGroup` 体内
-    mutations = re.findall(rf"{STATE_PROPERTY}\s*\.\s*(insert|remove)\s*\(", state_code)
+    # ③ 写入口唯一：对集合的**任何**变异（九种集合写法 + 直接赋值）只许在 `setConnectionGroup` 体内
+    state_lines = state_code.splitlines()
+
+    def is_mutation(text: str) -> bool:
+        """这一行在变异那个集合吗（`insert` / `remove` / `removeAll` / `subtract` /
+        `formUnion` / `union` / `intersection` / `symmetricDifference` / `update` + 直接赋值）。"""
+        return bool(re.search(MUTATION_PATTERN, text) or re.search(ASSIGNMENT_PATTERN, text))
+
+    mutations = [number for number, text in enumerate(state_lines, 1) if is_mutation(text)]
     body = function_body(state_code, STATE_WRITER)
-    inside = 0
-    if body is not None:
-        inside = len(re.findall(rf"{STATE_PROPERTY}\s*\.\s*(insert|remove)\s*\(", body))
+    writer_line = next(
+        (number for number, text in enumerate(state_lines, 1) if STATE_WRITER in text), None
+    )
+    body_span: set[int] = set()
+    if body is not None and writer_line is not None:
+        body_span = set(range(writer_line, writer_line + len(body.splitlines())))
+    inside = [number for number in mutations if number in body_span]
     if not mutations:
         problems.append(
             f"{STATE_FILE}：`{STATE_WRITER}…)` 里一处 `{STATE_PROPERTY}.insert/remove` 都没有 —— "
             "写入口是空的（判据取不到输入，空跑不许通过）"
         )
-    elif inside != len(mutations):
+    elif len(inside) != len(mutations):
+        outside = [number for number in mutations if number not in body_span]
         problems.append(
-            f"{STATE_FILE}：对 `{STATE_PROPERTY}` 的增删共 {len(mutations)} 处，"
-            f"其中只有 {inside} 处在 `{STATE_WRITER}…)` 体内 —— "
-            "写入口必须唯一（集合是 `private(set)`，别处碰它就只能靠自觉）"
+            f"{STATE_FILE}：对 `{STATE_PROPERTY}` 的变异共 {len(mutations)} 处，"
+            f"其中只有 {len(inside)} 处在 `{STATE_WRITER}…)` 体内 —— "
+            "写入口必须唯一（集合是 `private(set)`，别处碰它就只能靠自觉）；"
+            f"体外行号 {outside}"
         )
     else:
-        notes.append(f"写入口唯一：`{STATE_WRITER}…)` 体内 {inside} 处增删，别处 0 处")
+        notes.append(f"写入口唯一：`{STATE_WRITER}…)` 体内 {len(inside)} 处增删，别处 0 处")
 
     # ④ 视图的绑定必须经 appState，且不许再有本地集合判断
     for snippet, why in (
@@ -194,10 +302,10 @@ def check(root: Path) -> tuple[list[str], list[str]]:
                 "（接线一断，状态就是视图局部的，症状与 L-59 同款）"
             )
     for number, line in code_lines(view_text):
-        if re.search(r"(?<![.\w])collapsedGroups\b", line):
+        if is_local_collapsed_groups(line):
             problems.append(
                 f"{VIEW_FILE}:{number}：视图里还有**本地**折叠集合 `collapsedGroups` —— "
-                "它就是 `@State` 那版的残留形状"
+                "它就是 `@State` 那版的残留形状（只有经 `appState.` 的点号访问才允许）"
             )
 
     # ⑤ 未分组那一段不许有折叠（兜底容器：折起来等于把没归类的连接藏了）

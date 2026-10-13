@@ -638,7 +638,7 @@ python3 Scripts/check-palette-wiring.py
 # （「记不住折叠状态」）：`ConnectionListView` 的局部 `@State` 随活动栏分支重建归零，而当时
 # 所有门禁全绿。判据 = 视图不许有局部折叠状态 / 状态必须是 `@State`-free 的 `AppState` 属性
 # 且 `private(set)`、写入口唯一、默认全展开 / 视图绑定必须经 appState / 未分组那一段不许有折叠 /
-# 空跑防护；台账式常量在脚本里，负例 `Scripts/test-sidebar-collapse-state.py`（11 例）。
+# 空跑防护；台账式常量在脚本里，负例 `Scripts/test-sidebar-collapse-state.py`（23 例）。
 # 行为那一半（重建前后像素逐字节相同）在 `TestsUISnapshot/UISnapshotSidebarStateTests.swift`，
 # 按 L-01 的纪律不进每轮门禁（要 `DOYAH_UI_SNAPSHOT=1`）。
 python3 Scripts/check-sidebar-collapse-state.py

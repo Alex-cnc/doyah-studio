@@ -209,6 +209,139 @@ def main() -> int:
         output.strip()[-300:],
     )
 
+    # 11) 等价写法之一 `removeAll()`（旧判定物只数 insert / remove ⇒ 逃逸）
+    tree = make_tree()
+    edit(tree, STATE, READER, '    func nukeAll() {\n        collapsedConnectionGroups.removeAll()\n    }\n\n' + READER)
+    code, output = run(tree)
+    record(
+        code != 0 and "写入口必须唯一" in output,
+        "`removeAll()` 在 `setConnectionGroup` 之外 ⇒ 判红",
+        output.strip()[-300:],
+    )
+
+    # 12) 直接赋值 `= []`
+    tree = make_tree()
+    edit(tree, STATE, READER, '    func resetAll() {\n        collapsedConnectionGroups = []\n    }\n\n' + READER)
+    code, output = run(tree)
+    record(
+        code != 0 and "写入口必须唯一" in output,
+        "直接赋值 `= []` 在 `setConnectionGroup` 之外 ⇒ 判红",
+        output.strip()[-300:],
+    )
+
+    # 13) 集合运算 `subtract` / `formUnion` / `union`（三条等价写法）
+    for label, statement in (
+        ("subtract([...])", 'collapsedConnectionGroups.subtract(["生产环境"])'),
+        ("formUnion([...])", 'collapsedConnectionGroups.formUnion(["生产环境"])'),
+        ("= ….union([...])", 'collapsedConnectionGroups = collapsedConnectionGroups.union(["生产环境"])'),
+    ):
+        tree = make_tree()
+        edit(
+            tree,
+            STATE,
+            READER,
+            f'    func poke() {{\n        {statement}\n    }}\n\n' + READER,
+        )
+        code, output = run(tree)
+        record(
+            code != 0 and "写入口必须唯一" in output,
+            f"集合运算 `{label}` 在 `setConnectionGroup` 之外 ⇒ 判红",
+            output.strip()[-300:],
+        )
+
+    # 14) 对照：`remove` 放体外仍须判红（不许削软）
+    tree = make_tree()
+    edit(tree, STATE, READER, '    func drop() {\n        collapsedConnectionGroups.remove("生产环境")\n    }\n\n' + READER)
+    code, output = run(tree)
+    record(
+        code != 0 and "写入口必须唯一" in output,
+        "`remove` 在 `setConnectionGroup` 之外 ⇒ 判红（对照不许削软）",
+        output.strip()[-300:],
+    )
+
+    # 15) 换名字的视图局部折叠状态（`foldedGroups` —— 旧判定物只认英文 `collapse` ⇒ 逃逸）
+    tree = make_tree()
+    edit(tree, VIEW, LOCAL_DECL, LOCAL_DECL + "\n    @State private var foldedGroups: Set<String> = []\n")
+    code, output = run(tree)
+    record(
+        code != 0 and "必须住在 `AppState`" in output and "foldedGroups" in output,
+        "`@State … foldedGroups: Set<String>`（名字不含 collapse）⇒ 判红",
+        output.strip()[-300:],
+    )
+
+    # 16) 点号访问助手对象里的折叠集合（旧判定物带点号豁免 ⇒ 逃逸）
+    tree = make_tree()
+    edit(
+        tree,
+        VIEW,
+        LOCAL_DECL,
+        LOCAL_DECL
+        + "\n    @State private var holder = GroupHolder()\n"
+        + "\n    private func poke() { holder.collapsedGroups.insert(\"x\") }\n",
+    )
+    code, output = run(tree)
+    record(
+        code != 0 and "本地**折叠集合" in output,
+        "`holder.collapsedGroups.insert(…)`（点号访问）⇒ 判红",
+        output.strip()[-300:],
+    )
+
+    # 17) 假阳修复：合法两行声明（`@Published private(set)` 换行再写 `var …`）⇒ 判绿
+    tree = make_tree()
+    edit(
+        tree,
+        STATE,
+        DECLARATION,
+        "    @Published private(set)\n    var collapsedConnectionGroups: Set<String> = []",
+    )
+    code, output = run(tree)
+    record(code == 0, "声明折成两行 ⇒ 判绿（判定物是「在不在」，不是排版）", output.strip()[-300:])
+
+    # 18) 假阳修复：等价空初值 `= Set()` ⇒ 判绿
+    tree = make_tree()
+    edit(
+        tree,
+        STATE,
+        DECLARATION,
+        "    @Published private(set) var collapsedConnectionGroups: Set<String> = Set()",
+    )
+    code, output = run(tree)
+    record(code == 0, "初值 `= Set()`（语义就是空集合）⇒ 判绿", output.strip()[-300:])
+
+    # 19) 对手臂（不误报）：视图里与折叠无关的局部集合 / 标量状态 ⇒ 判绿
+    tree = make_tree()
+    edit(
+        tree,
+        VIEW,
+        LOCAL_DECL,
+        LOCAL_DECL
+        + "\n    @State private var selectedIDs: Set<Int> = []\n"
+        + "\n    @State private var isBusy: Bool = false\n",
+    )
+    code, output = run(tree)
+    record(
+        code == 0,
+        "视图里无关的 `@State` 集合 / 标量 ⇒ 判绿（名字不在折叠词汇面里）",
+        output.strip()[-300:],
+    )
+
+    # 20) 结构那一臂：**任何**视图局部集合做了 `DisclosureGroup(isExpanded:)` 的绑定源 ⇒ 判红
+    tree = make_tree()
+    edit(tree, VIEW, LOCAL_DECL, LOCAL_DECL + "\n    @State private var picked: Set<String> = []\n")
+    edit(
+        tree,
+        VIEW,
+        "            DisclosureGroup(isExpanded: Binding(",
+        "            DisclosureGroup(isExpanded: Binding(get: { picked.contains(\"x\") }, set: { _ in })) {"
+        " EmptyView() }\n            DisclosureGroup(isExpanded: Binding(",
+    )
+    code, output = run(tree)
+    record(
+        code != 0 and "DisclosureGroup(isExpanded:)" in output,
+        "名字不在词汇面里的视图局部集合做了展开态绑定源 ⇒ 判红（结构臂）",
+        output.strip()[-300:],
+    )
+
     # 10) 主仓库一个字节没动
     after = {rel: digest(ROOT / rel) for rel in TREE_FILES}
     record(
