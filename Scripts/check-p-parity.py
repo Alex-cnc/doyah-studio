@@ -15,7 +15,7 @@
 4. 历史实证（第 27 轮）：`P-15` 在 §4 是「SSH 隧道」、在 SRS §10.9 是「笔记存储引擎」——
    **同号不同物**，靠人读才发现，已按「§10.9 为权威登记表」让号（SSH 隧道 → `P-25`）。
 
-判据（三类）：
+判据（四类）：
 
 - **A 双向覆盖**：§10.9 的编号集合与 §4 的编号集合必须**相等**；各自多出的号逐条点名。
 - **B 同号同物**：两侧同号行的**领域**必须指同一件事。归一化 = 去掉 `**` 与反引号 →
@@ -25,6 +25,22 @@
   只要有一号没有**同时**出现在 §4 与 §10.9，就判红 —— 「已落条但未并入」不许静默（该节的
   合并动作本来就是契约侧的活；它自己那条「待契约侧并入」的注是该节作者的事，本门禁不去改它）。
 
+- **D 同侧编号唯一**：**同一张登记表内部**同号两条 ⇒ 判红并**逐行点名**（`P-01` 在一张表里出现两次）。
+  由头 = 汇总册 `T-20261013-027` 第 32 轮（原单 `T-20261010-047`）：旧实现 `parse_registry` 用 dict
+  **后行覆盖前行**、判据 A 只比**集合**（天然去重）⇒ 同侧重复定义行**不在任何判据里**（实测：在真
+  `P-13` 行之前插一行「同号、另一个领域」⇒ 旧码 rc=0、输出与基线逐字同；逐字重复行同样 rc=0）。
+  **只判同一张表内部** —— §8.5.5（`[独占:windows]` 的续排节）里提到已并入的同号是**合法过渡态**，
+  归判据 C 管，不在这里判。
+
+本判据**仍然不做**的三件事（免得下次有人以为查过了）：
+
+- **不判「必须一致的行为」列**（跨平台契约正文）：两侧正文**本来就有繁简差**（2026-10-14 实测
+  §10.9 ↔ §4 同一号两栏归一后逐字相等 **10 / 27** 条、不同 **17 / 27** 条）⇒ 判「逐字」还是判
+  「逐条台账登记」是**契约层口径**、需前门定（汇总册 `T-20261013-027` 第 32 轮按原单《停手线》②
+  **停手待裁**）。本轮**先不判**：本门禁接在 `verify-all.sh` 第 7 项里，判了就是**每轮 17 处假红**。
+- **领域归一仍截到首个 `（` 之前**（原设计，不变）：改成「不截括号」会让 `P-16` 当场判红 —— §10.9 写
+  `多库驱动（`FR-DRV-09` / `FR-DRV-08`）`、§4 写 `多库驱动（FR-DRV-09 / 08）`（括号内写法不同）。
+  同属上面那条待裁口径；本侧按边界**不动 `Docs/**`**（本文件与 §§10.9 / §4 正文一字未改）。
 本判据**不做**的两件事（免得下次有人以为查过了）：
 
 - **不判行序**：SRS §10.9 本来就不是按号排的（`P-14` 在 `P-13` 之前），判序只会造假红；
@@ -91,9 +107,14 @@ def normalize_domain(text: str) -> str:
     return " ".join(plain.split())
 
 
-def parse_registry(body: list[tuple[int, str]]) -> dict[str, tuple[int, str]]:
-    """解析登记表：编号 → (行号, 领域原文)。只认**定义行**（首格就是编号）。"""
-    rows: dict[str, tuple[int, str]] = {}
+def parse_registry(body: list[tuple[int, str]]) -> dict[str, list[tuple[int, str]]]:
+    """解析登记表：编号 → [(行号, 领域原文), …]（**保留同号多行**，判据 D 要看它）。
+
+    旧实现是 `rows[号] = (行号, 领域)` —— 同侧出现两个同号定义行时**后行静默覆盖前行**，
+    而判据 A 比的是 `set(...)`（天然去重）⇒ 重复行**一处判据都碰不到**（2026-10-14 汇总册
+    `T-20261013-027` 第 32 轮实测）。现在把每次出现都留下。
+    """
+    rows: dict[str, list[tuple[int, str]]] = {}
     for lineno, line in body:
         match = DEFINITION_ROW.match(line)
         if not match:
@@ -101,8 +122,13 @@ def parse_registry(body: list[tuple[int, str]]) -> dict[str, tuple[int, str]]:
         cells = [cell.strip() for cell in re.split(r"(?<!\\)\|", line)]
         if len(cells) < 3:
             continue
-        rows[match.group(1)] = (lineno, cells[2])
+        rows.setdefault(match.group(1), []).append((lineno, cells[2]))
     return rows
+
+
+def effective(rows: dict[str, list[tuple[int, str]]], number: str) -> tuple[int, str]:
+    """该号在**本表**里的生效行 = **最后一条**（旧实现的 dict 覆盖语义 ⇒ 判据 A/B/C 行为一字不变）。"""
+    return rows[number][-1]
 
 
 def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
@@ -142,13 +168,13 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     only_srs = sorted(set(srs_rows) - set(design_rows))
     only_design = sorted(set(design_rows) - set(srs_rows))
     for number in only_srs:
-        lineno, domain = srs_rows[number]
+        lineno, domain = effective(srs_rows, number)
         problems.append(
             f"{SRS}:{lineno}：`{number}`（{normalize_domain(domain)}）只在 §10.9 登记，§4 没有 —— "
             f"两张表自称一一对应，缺一边就是「编号空间断档」"
         )
     for number in only_design:
-        lineno, domain = design_rows[number]
+        lineno, domain = effective(design_rows, number)
         problems.append(
             f"{DESIGN}:{lineno}：`{number}`（{normalize_domain(domain)}）只在 §4 登记，§10.9 没有 —— "
             f"§10.9 是权威登记表（编号冲突以它为准），未登记的差异按契约「必须一致」处理"
@@ -161,8 +187,8 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     # B 同号同物
     mismatches = 0
     for number in sorted(set(srs_rows) & set(design_rows)):
-        srs_lineno, srs_domain = srs_rows[number]
-        design_lineno, design_domain = design_rows[number]
+        srs_lineno, srs_domain = effective(srs_rows, number)
+        design_lineno, design_domain = effective(design_rows, number)
         left, right = normalize_domain(srs_domain), normalize_domain(design_domain)
         if left != right:
             mismatches += 1
@@ -173,6 +199,26 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
             )
     if not mismatches:
         notes.append(f"同号同物：两侧共有编号 {len(set(srs_rows) & set(design_rows))} 条，领域归一后逐条一致")
+
+    # D 同侧编号唯一（同一张登记表内部不许同号两条 —— 后行会静默覆盖前行）
+    dup_sides = 0
+    for label, rows in ((SRS, srs_rows), (DESIGN, design_rows)):
+        for number in sorted(rows):
+            occurrences = rows[number]
+            if len(occurrences) < 2:
+                continue
+            dup_sides += 1
+            sites = " / ".join(f"{label}:{lineno}" for lineno, _ in occurrences)
+            problems.append(
+                f"{label}：`{number}` 在**同一张登记表里出现 {len(occurrences)} 次**（{sites}）—— "
+                f"同侧同号两条不许存在：解析按**后行生效**，前行会被**静默吞掉**（判据 A 只比集合、看不出来）。"
+                f"（本判据只判同一张表内部；§8.5.5 那种「先落条、待并入」的续排提到同号不算 —— 归判据 C）"
+            )
+    if not dup_sides:
+        notes.append(
+            f"编号唯一：§10.9 定义行 {sum(len(v) for v in srs_rows.values())} 行 / "
+            f"§4 定义行 {sum(len(v) for v in design_rows.values())} 行，两侧同号重复 0 处"
+        )
 
     # C §8.5.5 已落条但未并入
     windows_body = section(design_lines, WINDOWS_HEADING, WINDOWS_STOP)
@@ -218,7 +264,7 @@ def run(root: pathlib.Path, quiet: bool) -> int:
         print(f"\n❌ P-* 对账不通过（{len(problems)} 处）")
         return 1
     if not quiet:
-        print("\n✅ P-* 对账通过（双向覆盖 + 同号同物 + §8.5.5 无未并入条目）")
+        print("\n✅ P-* 对账通过（双向覆盖 + 同号同物 + 编号唯一 + §8.5.5 无未并入条目）")
     return 0
 
 
@@ -303,6 +349,22 @@ CASES = [
          "| P-01 | GUI 框架与控件 | 信息架构 | 控件树 |\n"
          "| P-02 | 凭据存储 | 不落配置文件 | 钥匙串 |\n", ""),
      ["解析不到"], 1),
+    ("同侧同号两条（后行会静默覆盖前行 —— 旧码输出与基线逐字同）",
+     GOOD_SRS.replace(
+         "| P-01 | GUI 框架与控件 | 信息架构 | 控件树 | §0.8 |",
+         "| P-01 | 终端实现（探针） | 信息架构 | 控件树 | §0.8 |\n"
+         "| P-01 | GUI 框架与控件 | 信息架构 | 控件树 | §0.8 |"),
+     GOOD_DESIGN, ["P-01", "同一张登记表里出现 2 次", "静默吞掉"], 1),
+    ("同侧逐字重复行（集合去重看不见）",
+     GOOD_SRS.replace(
+         "| P-02 | 凭据存储 | 不落配置文件 | 钥匙串 | NFR-SEC-01 |",
+         "| P-02 | 凭据存储 | 不落配置文件 | 钥匙串 | NFR-SEC-01 |\n"
+         "| P-02 | 凭据存储 | 不落配置文件 | 钥匙串 | NFR-SEC-01 |"),
+     GOOD_DESIGN, ["P-02", "同一张登记表里出现 2 次"], 1),
+    ("对手臂：§8.5.5 续排节里重复提到同一号 ⇒ 不判红（跨节同号是合法过渡态）",
+     GOOD_SRS,
+     GOOD_DESIGN.replace("`P-01` 甲｜`P-02` 乙。", "`P-01` 甲｜`P-01` 甲续｜`P-02` 乙。"),
+     [], 0),
 ]
 
 
