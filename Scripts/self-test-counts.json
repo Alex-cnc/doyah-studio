@@ -1054,11 +1054,24 @@
     {
       "key": "platform-neutrality",
       "script": "Scripts/check-platform-neutrality.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 18,
       "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
       "why": "合册 T-20261013-027（原单 T-20261010-050 · 第 417 轮判据面缺口样本 54）：平台中立性棘轮原本判定物 = 行的字面形状（加粗编号 / 反引号编号 / 缩进表格 / 两格行四种写法整体掉进报告档）、「需求」列写死第 2 格、豁免是裸子串、未知参数被吞、无自检、`--update-baseline` 一条命令把红变绿且不留痕。十八例真跑：真仓正例 / 四种形状各判红 / 需求列按表头定位 / 证据列不拦 / 无「需求」表头的写法说明表不判红 / 注释位豁免该绿 / 裸 token 不豁免 / 非空基线无 `--confirm` 拒绝 / `--confirm` 覆盖 + 打印 diff + 记 history / 空基线既有行为逐字保留 / 需求规范书缺失判红 / 面被砍到底判红 / 未知参数 rc=2 / 仓外 CWD 读数一致 / 末例真仓逐字节未变。",
       "noAnchorReason": "例数只出现在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 8 项的调用行都不写本判据的负例例数（第 8 项只调脚本本身，不写数字），而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本、基线台账与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
+    },
+    {
+      "key": "design-tokens",
+      "script": "Scripts/check-design-tokens.py",
+      "args": [
+        "--self-test"
+      ],
+      "cases": 18,
+      "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
+      "why": "合册 T-20261013-027（原单 T-20261010-019 样本 27 + T-20261010-069 样本 71）：设计令牌门禁的两条逃逸口原本长在被审源码里（行级 `// token-ok` 是整行子串判定、不判理由、无台账、不计数；文件头 `// token-ok-file:` 整文件静默豁免），且面无下限（`App/` 搬走即报「仍有 0 处待迁移」判绿）、`Color.clear` 整行掩蔽、一行只判首个匹配、块注释与行尾注释当命中、判据②第三条结构性死代码、未知参数被吞、全脚本无自检。十八例真跑：真仓正例 / 面消失判红 / 面被砍到底判红 / 块注释不误伤 / 行尾注释不误伤 / 真违规仍判红 / 字符串里的 token-ok 不豁免 / 无理由豁免判红 / 未登记豁免判红 / 已登记该绿 / 台账陈旧判红 / 文件级豁免未登记判红 / Color.clear 不再整行放行 / 单独 Color.clear 该绿 / 第二处命中仍判 / 未知参数 rc=2 / 仓外 CWD 读数一致 / 末例真仓逐字节未变。",
+      "noAnchorReason": "例数只出现在 runner 的收尾行里：`AGENT-SPEC.md` §6 资产表与 `Scripts/verify-all.sh` 第 6 项的调用行都不写本判据的负例例数（第 6 项只调脚本本身），而这两处分别是契约层与既有闭环调用面 —— 合册 T-20261013-027 的边界只许改本脚本、基线/白名单/豁免台账与 `Scripts/self-test-counts.json`，故按台账口径登记 noAnchorReason。"
     }
   ]
 }

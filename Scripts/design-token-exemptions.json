@@ -1,0 +1,16 @@
+{
+  "comment": "设计令牌逃逸口台账（合册 T-20261013-027 · 原单 T-20261010-019 ⓐ / T-20261010-069 ①）：行级与文件级豁免都必须登记在此；未登记 ⇒ 判红；盘上已无该标记 ⇒ 陈旧判红。",
+  "lines": [
+    {
+      "file": "App/Views/LowerPaneTabStrip.swift",
+      "line": 143,
+      "reason": "徽标胶囊的实测内边距，设计令牌表没有 5 这一档（加档会牵动全仓棘轮基线）；与抽取前逐字一致"
+    },
+    {
+      "file": "App/Views/LowerPaneTabStrip.swift",
+      "line": 144,
+      "reason": "同上，1pt 是胶囊的最小内边距；Spacing 刻度从 2 起，取 2 会改像素"
+    }
+  ],
+  "files": []
+}
