@@ -20,7 +20,7 @@
     python3 Scripts/check-doc-tables.py                    # 本机默认清单（缺失的文档跳过并提示）
     python3 Scripts/check-doc-tables.py --require-all       # 缺失即红（主开发机 / CI 用）
     python3 Scripts/check-doc-tables.py <文件...>            # 显式点名：不存在即红
-    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（9 例）
+    python3 Scripts/check-doc-tables.py --self-test          # 门禁自己的证据（17 例）
 
 **「文件不存在」的两种语义**（L-33，2026-09-27 第 29 轮；另一平台侧实测提出）：
 
@@ -54,7 +54,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 无跳过行）—— 在台账不在盘上时**跳过 + 高声提示**：既不崩（例 5 原先直接 `FileNotFoundError`），
 也不假红（例 4 原先把「干净克隆必然缺台账」读成「文档被删」）。口径同上面这一条，出处 =
 `AGENT-SPEC.md` §9 第 147 条 ④（本机台账类判据一律「不在盘上就跳过 + 高声提示」）。**在
-主开发机上这两例照旧必须真跑、一条都不放宽**（`--self-test` 的例数仍是 8，不因跳过而改）。
+主开发机上这两例照旧必须真跑、一条都不放宽**（`--self-test` 的例数仍是 17，不因跳过而改）。
 
 **L-41（2026-09-27 第 35 轮）：覆盖范围补上「每轮必改的两份台账」** —— 此前清单只有 11 个文件，
 而循环**每轮都在改**的 `Docs/智能体助手-开发spec.md` 与 `Docs/design/开发循环-任务队列.md`
@@ -245,13 +245,112 @@ COVERAGE_EXEMPT = {
 }
 
 
+DELIMITER_ROW = re.compile(r"^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$")
+
+
+def unescaped_pipes(text: str) -> int:
+    """数**未转义**的 `|`（`\\|` 是格内的字面竖线，不算分隔符）。"""
+    count = 0
+    escaped = False
+    for character in text:
+        if escaped:
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif character == "|":
+            count += 1
+    return count
+
+
+def pipes_outside_code(text: str) -> int:
+    """数**行内代码（反引号）之外**的未转义竖线 —— 真续行的行尾会带着表格的格分隔竖线。"""
+    return unescaped_pipes(re.sub(r"`[^`]*`", "", text))
+
+
+def is_delimiter_row(line: str) -> bool:
+    """GFM 表格的第二行（`--- | ---`，两端竖线可有可无、可带对齐冒号）。"""
+    return bool(DELIMITER_ROW.match(line.strip()))
+
+
+def is_table_row(line: str) -> bool:
+    """一行是不是**表行**：行首竖线可有可无（GFM 允许省略两端竖线）。
+
+    判定物从「行首字面 `|`」（原单 T-20261010-070 ㈠ 的病根）升到 GFM 的合法写法：
+    剥掉首尾空白后**还有未转义的 `|`** 就是表行。
+    """
+    text = line.strip()
+    if not text:
+        return False
+    return text.startswith("|") or unescaped_pipes(text) > 0
+
+
+def starts_new_block(text: str) -> bool:
+    """下一行是不是**自己开了新块**（标题 / 引用 / 围栏 / 列表 …）⇒ 不算上一张表的续行。
+
+    收窄（原单 ㈣）：`**加粗**` 开头的真续行**不再放走**（`**` 不是块首标记）；
+    `-` / `*` / `+` 只有在**后面跟空白**时才算列表项（`*强调*` / `-3 度` 不算）。
+    """
+    if text.startswith(("|", "#", ">", "`", "<")):
+        return True
+    if text.startswith("**"):
+        # 加粗开头：**真续行**（行内还带 ≥ 2 个表格分隔竖线 ⇒ 是被硬换行截断的行尾）判红；
+        # 完整的加粗引导句（`**独占标记（2026-09-27 形态 A…）**：…` 这类散文 —— 原单 ㈣ 的真仓活体
+        # = `Docs/概要设计.md:11-12`）仍算「新块」、不误报。口径 = 行内竖线个数（如实登记的边界）。
+        return pipes_outside_code(text) < 2
+    if len(text) >= 3 and set(text) <= set("-*_ \t"):
+        # 分隔线 / setext 下划线（`---` / `***` / `___`）—— 自己就是一个块，不是续行
+        return True
+    return text[0] in "-*+" and (len(text) == 1 or text[1].isspace())
+
+
+def table_blocks(lines: list[str]) -> list[tuple[int, list[str]]]:
+    """按 GFM 口径切**表格块**：(起点行号（0 起）, 行列表)；块长 < 2 不算表。
+
+    这是「什么算表格」的**唯一入口** —— `check()` 与 `has_table_row()` 都走它
+    （原单 ㈢：判据 E 的「有一行以 `|` 开头」与 `check()` 的「块 ≥ 2 行」原先各一套口径）。
+    两条路各自保守：
+      · **带首竖线**（绝大多数存量表）：与以前逐字节相同的口径（连续 `|` 开头的行）；
+      · **无首竖线**（GFM 合法写法，原单 ㈠）：首行含未转义竖线**且第二行是分隔行**才算表 ——
+        靠分隔行把「表格」与「散文里出现了一个竖线」分开，存量散文不受影响。
+    """
+    blocks: list[tuple[int, list[str]]] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.strip().startswith("|"):
+            start = index
+            rows: list[str] = []
+            while index < len(lines) and lines[index].strip().startswith("|"):
+                rows.append(lines[index])
+                index += 1
+            if len(rows) >= 2:
+                blocks.append((start, rows))
+            continue
+        if (
+            unescaped_pipes(line.strip()) > 0
+            and index + 1 < len(lines)
+            and is_delimiter_row(lines[index + 1])
+        ):
+            start = index
+            rows = [line]
+            cursor = index + 1
+            while cursor < len(lines) and is_table_row(lines[cursor]):
+                rows.append(lines[cursor])
+                cursor += 1
+            blocks.append((start, rows))
+            index = cursor
+            continue
+        index += 1
+    return blocks
+
+
 def has_table_row(path: pathlib.Path) -> bool:
-    """文档里有一行以 `|` 开头 = 有表格（表格块至少两行才判，见 `check()`）。"""
+    """文档里**确实有一张表**（≥ 2 个表行；行首竖线可有可无，与 `check()` 同一个入口）。"""
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
         return False
-    return any(line.startswith("|") for line in lines)
+    return bool(table_blocks(lines))
 
 
 def identity_text(value) -> str:
@@ -323,25 +422,9 @@ def split_row(line: str) -> list[str]:
 
 def check(path: pathlib.Path) -> list[str]:
     problems: list[str] = []
-    lines = path.read_text().splitlines()
+    lines = path.read_text(encoding="utf-8").splitlines()
 
-    index = 0
-    while index < len(lines):
-        line = lines[index]
-        if not line.strip().startswith("|"):
-            index += 1
-            continue
-
-        # 一张表：连续的 | 开头行
-        start = index
-        block: list[str] = []
-        while index < len(lines) and lines[index].strip().startswith("|"):
-            block.append(lines[index])
-            index += 1
-
-        if len(block) < 2:
-            continue
-
+    for start, block in table_blocks(lines):
         expected = len(split_row(block[0]))
         for offset, row in enumerate(block):
             cells = split_row(row)
@@ -354,16 +437,14 @@ def check(path: pathlib.Path) -> list[str]:
                     f"{path}:{start + offset + 1}: 出现 '||'（疑似两行被合并）-> {row.strip()[:80]}"
                 )
 
-        # 表格行被**硬换行**拆成多个物理行：续行落到表格外，单元格文字被截断，
-        # 而按行数 / 列数都发现不了（2026-09-23 FR-EDIT-34 那一行就是这样躺了很久）。
-        #
-        # 判据取"表格块紧跟一行非表格、非空、且不像新块开头" —— 先用窄判据（末格以
-        # `；，、：（` 结尾或反引号未闭合）试过，结果**负例都抓不住**（等于摆设）。
-        # 改宽后实测全仓 7 份文档只命中 1 处，且那处是合法的 `<!-- … -->` 标记，
-        # 于是把 `<` 开头的行也排除掉 —— 误报为 0，而真事故能抓住。
+        # 表格行被**硬换行**拆成多个物理行：续行落到表格外，单元格文字被截断，按行数 / 列数都
+        # 发现不了（2026-09-23 FR-EDIT-34 那一行就是这样躺了很久）。判据 = 「表格块紧跟一行
+        # **自己没开新块**的非空行」；「什么算新块」收进 `starts_new_block()`（原单
+        # T-20261010-070 ㈣：`**加粗**` 开头的真续行原先被 `*` 一并放走 ⇒ 逃逸）。
+        index = start + len(block)
         if index < len(lines):
             following = lines[index].lstrip()
-            if following and not following.startswith(("|", "#", ">", "-", "*", "`", "<")):
+            if following and not starts_new_block(following):
                 problems.append(
                     f"{path}:{index + 1}: 疑似**表格续行**（上一行单元格没写完就被换行）"
                     f" -> 上一行末尾 {block[-1].strip()[-30:]!r}，本行开头 {following[:40]!r}"
@@ -407,7 +488,7 @@ def check_section_heading_counts() -> list[str]:
     if not srs.exists():
         return [f"{srs}: 文件不存在"]
 
-    lines = srs.read_text().splitlines()
+    lines = srs.read_text(encoding="utf-8").splitlines()
     heading = re.compile(r"^(#{3,4}) (\d+\.\d*)\s*.*?（(\d+) 条）")
     problems: list[str] = []
 
@@ -443,7 +524,7 @@ def check_requirement_counts() -> list[str]:
         return [f"{srs}: 文件不存在"]
 
     problems: list[str] = []
-    lines = srs.read_text().splitlines()
+    lines = srs.read_text(encoding="utf-8").splitlines()
 
     # 1) §10.1 的计数行
     declared = None
@@ -467,9 +548,18 @@ def check_requirement_counts() -> list[str]:
 
     rows: list[list[str]] = []
     index = lines.index(header) + 2
+    # 表体切分**与 `check()` 一套口径**（`split_row`，认格内合法转义 `\|` —— 原单 ㈤(b)：
+    # 原先这里是 `strip("|").split("|")`，按本仓纪律在格里写 `\|` 反而判红）。
     while index < len(lines) and lines[index].startswith("|"):
-        rows.append([cell.strip() for cell in lines[index].strip("|").split("|")])
+        rows.append([cell.strip() for cell in split_row(lines[index])])
         index += 1
+    # 表体中断显式化（原单 ㈤(a)）：表体后面紧跟一行**仍是表行形状**（`FR-…` 开头、行首多一个
+    # 空格之类）却没被连上 ⇒ 原先静默读成 0 行、派生数变成 (0, 0, 0, 0)，一条「解析中断」都不说。
+    if index < len(lines) and re.match(r"^\s{1,3}\|?\s*(FR|NFR|AC|DR|IR)-", lines[index]):
+        problems.append(
+            f"{srs}:{index + 1}: §10.1 表体在此中断（该行行首不是 `|`，但它仍是表行形状 ⇒ "
+            f"后续行未被解析、计数会算成 0）-> {lines[index].strip()[:80]}"
+        )
 
     identifiers = [row[0] for row in rows]
     if len(set(identifiers)) != len(identifiers):
@@ -487,12 +577,20 @@ def check_requirement_counts() -> list[str]:
         )
 
     # 3) 由索引派生出的 FR 状态分布 —— 能力规划说明书必须与它一致
-    statuses = Counter(row[3] for row in fr)
+    # 取格兜底（原单 ㈥）：FR 行缺一格原先直接 `IndexError` 崩掉、已收集的诊断**全丢**
+    # （CI 里「判红」与「脚本崩了」不可分）；现在先报「格数不足」，再按现有格子算下去。
+    short_rows = [number for number, row in enumerate(rows, 1) if len(row) < 4]
+    if short_rows:
+        problems.append(
+            f"{srs}: §10.1 有 {len(short_rows)} 条索引行**格数不足 4**（表体行序 {short_rows[:6]}）"
+            f" ⇒ 疑似缺「状态」格，派生数按现有格子算（旧版这里会直接崩掉、已收集的诊断全丢）"
+        )
+    statuses = Counter(row[3] for row in fr if len(row) > 3)
     derived = (len(fr), statuses.get("✅", 0), statuses.get("🟡", 0), statuses.get("⬜", 0))
 
     if not capability.exists():
         return problems
-    text = capability.read_text()
+    text = capability.read_text(encoding="utf-8")
 
     match = re.search(r"\*\*(\d+) 条需求：(\d+) ✅ / (\d+) 🟡 / (\d+) ⬜\*\*", text)
     if match is None:
@@ -571,6 +669,29 @@ def main() -> int:
         checked += 1
         problems.extend(check(path))
 
+    # 在场下限（原单 T-20261010-070 ㈡）：以前缺件只 `skipped.append` —— 删掉一份 tracked 文档
+    # （判据 ③④ 依赖的《产品能力规划说明书》），派生对账就**随它一起消失**，本件自己看不出来
+    # （原先靠兄弟判据 `check-doc-numbers.py` 的绝对数兜住 ⇒ 摘掉兄弟判据即失守）。现在两条判：
+    #   · 受检数 + 跳过数 == 受检面（构造上必等；不等 = 本脚本自己算错，判红，不静默）；
+    #   · 跳过的那几份里**不在** `.gitignore` 排除名单里的 = 主开发机上文档被删 / 路径写错 ⇒ 判红。
+    if checked + len(skipped) != len(targets):
+        problems.append(
+            f"内部一致性问题：受检 {checked} + 跳过 {len(skipped)} != 受检面 {len(targets)}"
+            f"（算面这一步自己写错了 ⇒ 判红，免得静默）"
+        )
+    ignored_targets = gitignored_documents()
+    if skipped and ignored_targets is None:
+        print(
+            f"⚠ 无法与 `.gitignore` 对账（不在 git 仓库里 / git 不可用）⇒ 上面跳过的 {len(skipped)} 份"
+            "**未**被证明是本机台账；请人工确认是不是被删或路径写错。"
+        )
+    elif skipped:
+        hard_missing = [target for target in skipped if target not in ignored_targets]
+        if hard_missing:
+            problems.append(
+                f"受检清单里有 {len(hard_missing)} 份文档不在盘上、也不在 `.gitignore` 排除名单里"
+                f"（= 被删或路径写错；本件自己判红，不靠兄弟判据）：{hard_missing[:8]}"
+            )
     problems.extend(check_requirement_counts())
     problems.extend(check_section_heading_counts())
     problems.extend(coverage_problems())
@@ -607,10 +728,11 @@ def main() -> int:
 
 
 # ── 门禁自己的证据（L-33；L-41 补例 5）────────────────────────────────────────
-# **9 例** = 8 个编号例子（1~6 + 例 8 + 例 9）+ 1 条夹具准备自检；其中例 8 = 跨平台标识
+# **17 例** = 15 个编号例子（例 1~9 + 例 10~17 = 原单 `T-20261010-070` 那族 8 例）+ 1 条夹具准备自检；
+# 其中例 8 = 跨平台标识
 # （提案 0005，第 91 轮）、例 9 = 判据 F 两面（空行拆表 · 表头逐格相同 ⇒ 判红 / 表头不同 ⇒ 对照绿，
 # 派单 `T-20261011-001`，2026-10-11）；
-# runner 的收尾行报「自检通过（9/9）」；文档里说「五例」指的是编号例子数 —— 例数的唯一来源与
+# runner 的收尾行报「自检通过（17/17）」；文档里说「五例」指的是编号例子数 —— 例数的唯一来源与
 # 这处 1 之差见 `Scripts/self-test-counts.json`）。
 # 全部在**临时目录**里跑真实文档副本，末例核对真仓库逐字节未变。
 # 关键一例是「干净克隆 / 另一平台」：只放**被版本控制跟踪的**那几份文档，
@@ -625,7 +747,7 @@ def main() -> int:
 # 原先例 5 直接 `FileNotFoundError`（闭环第 4 项当轮必崩，与当轮改动无关）、例 4 把缺席读成
 # 「文档被删或路径写错」而假红。口径出处 = `AGENT-SPEC.md` §9 第 147 条 ④（本机台账类判据
 # 一律「不在盘上就跳过 + 高声提示」，`--require-all` 才判红）。跳过的只是**这两例**，其余各例照跑；
-# 例数仍是 8（跳过不改总数、也不许静默）。
+# 例数仍是 17（跳过不改总数、也不许静默）。
 
 SELF_TEST_TRACKED = [
     "Docs/design/store/README.md",
@@ -743,6 +865,15 @@ def run_self_test() -> int:
             if any((clone / relative).exists() for relative in SELF_TEST_ABSENT):
                 failures.append("夹具准备失败：被 .gitignore 排除的文档不该出现在临时目录里")
 
+
+        # 夹具里立一个**真的 git 仓库**（`gitignored_documents()` 靠 `git check-ignore`）：`.gitignore`
+        # 逐条列出 `SELF_TEST_ABSENT`（那批就是「被 .gitignore 排除的本机台账」）⇒ 例 1 的「跳过 12 份」
+        # 是**经对账**的（与 gitignore 名单核过），例 17 才能验「tracked 文档被删 ⇒ 判红」（原单 ㈡）。
+        subprocess.run(["git", "init", "-q"], cwd=str(clone), capture_output=True, text=True)
+        (clone / ".gitignore").write_text(
+            "\n".join(SELF_TEST_ABSENT) + "\n", encoding="utf-8"
+        )
+
         # 例 1·干净克隆（默认清单，缺 12 份）→ exit 0 且**高声提示**、不得静默
         total += 1
         code, output = run([], clone)
@@ -779,7 +910,7 @@ def run_self_test() -> int:
         total += 1
         anchor = "| **L-54** |"
         queue_source = repository / "Docs/design/开发循环-任务队列.md"
-        broken = queue_source.read_text() if queue_source.exists() else None
+        broken = queue_source.read_text(encoding="utf-8") if queue_source.exists() else None
         if broken is None and not host_ledgers_absent_entirely:
             # 主开发机（其余本机台账在盘上）却缺这一份 ⇒ 文档被删或路径写错，判红。
             failures.append(
@@ -860,6 +991,138 @@ def run_self_test() -> int:
                 failures.append(f"例 9 失败：表头不同的两张表应 exit 0（对照），实际 {code}\n{output}")
         split_table.unlink()
 
+        # ── 原单 T-20261010-070 的负例族（例 10~17；合册 T-20261013-027 销账）────────────
+
+        # 例 10（㈠）·GFM 无首竖线的表格：显式点名 ⇒ 判红「列数 2 != 表头 3」；
+        # 对照臂 = 同一内容**带首竖线**（标准写法）⇒ 同样的读数（「行首竖线」不再是唯一入口）。
+        total += 1
+        gfm = clone / "fixture/无首竖线表.md"
+        gfm.parent.mkdir(exist_ok=True)
+        gfm.write_text("# 无首竖线\n\n甲 | 乙 | 丙\n--- | --- | ---\n1 | 2\n", encoding="utf-8")
+        code, output = run([gfm.relative_to(clone).as_posix()], clone)
+        gfm.write_text("# 标准写法\n\n| 甲 | 乙 | 丙 |\n|---|---|---|\n| 1 | 2 |\n", encoding="utf-8")
+        code_arm, output_arm = run([gfm.relative_to(clone).as_posix()], clone)
+        if code == 0 or "列数 2 != 表头 3" not in output:
+            failures.append(
+                f"例 10 失败：无首竖线的表格（少一格）应判红并报「列数 2 != 表头 3」，实际 rc={code}\n{output}"
+            )
+        elif code_arm == 0 or "列数 2 != 表头 3" not in output_arm:
+            failures.append(
+                f"例 10 失败：对照臂（标准写法）读数应与无首竖线写法一致，实际 rc={code_arm}\n{output_arm}"
+            )
+        gfm.unlink()
+
+        # 例 11（㈠ 的判据 E 面）·无首竖线的表格放进扫描面且不被点名 ⇒ 判据 E 也要看得见
+        total += 1
+        gfm_doc = clone / "Docs/新-无首竖线表-未登记.md"
+        gfm_doc.write_text("# 新台账\n\n甲 | 乙\n--- | ---\n1 | 2\n", encoding="utf-8")
+        code, output = run([], clone)
+        if code == 0:
+            failures.append(
+                f"例 11 失败：带（无首竖线）表格却不在清单里的文档没被判红 —— 判据 E 还是「行首竖线」口径（原单 ㈠）\n{output}"
+            )
+        elif "Docs/新-无首竖线表-未登记.md 有表格却不在受检清单里" not in output:
+            failures.append(f"例 11 失败：判红了但没有点名那份文档\n{output}")
+        gfm_doc.unlink()
+
+        # 例 12（㈢）·判据 E 与 check() 口径对齐：正文只有一行含竖线 ⇒ 块长 < 2 不算表 ⇒ 不判
+        total += 1
+        single = clone / "Docs/单行竖线-不算表.md"
+        single.write_text("# 单行\n\n| 只是散文里的一个竖线\n", encoding="utf-8")
+        code, output = run([], clone)
+        if code != 0:
+            failures.append(
+                f"例 12 失败：只有一行竖线的文档不该算表格（块长 < 2 不算，原单 ㈢），实际 rc={code}\n{output}"
+            )
+        single.unlink()
+        # 例 13（㈣）·续行白名单收紧：`**加粗**` 开头的真续行 ⇒ 判红；`- 列表项` ⇒ 不误报
+        total += 1
+        cont = clone / "fixture/续行白名单.md"
+        cont.parent.mkdir(exist_ok=True)
+        cont.write_text("# 续行\n\n| 甲 | 乙 |\n|---|---|\n| 1 | 2 |\n**加粗**尾巴 | 3 | 4 |\n", encoding="utf-8")
+        code, output = run([cont.relative_to(clone).as_posix()], clone)
+        if code == 0:
+            failures.append(
+                f"例 13 失败：`**加粗**` 开头的续行仍 exit 0 —— `*` 把它一并放走了（原单 ㈣）\n{output}"
+            )
+        elif "疑似**表格续行**" not in output:
+            failures.append(f"例 13 失败：判红了但没有报「疑似**表格续行**」\n{output}")
+        else:
+            cont.write_text("# 续行\n\n| 甲 | 乙 |\n|---|---|\n| 1 | 2 |\n- 列表项\n", encoding="utf-8")
+            code, output = run([cont.relative_to(clone).as_posix()], clone)
+            if code != 0:
+                failures.append(
+                    f"例 13 失败：`- 列表项` 自己开了新块、不该算续行（对照臂），实际 rc={code}\n{output}"
+                )
+        cont.unlink()
+
+        # 例 14（㈤(a)）·§10.1 表体中断：首条数据行行首多一个空格 ⇒ 判红 + 报行号 + 「表体在此中断」
+        total += 1
+        srs_copy = clone / "Docs/需求规范书.md"
+        original_srs = srs_copy.read_text(encoding="utf-8")
+        srs_lines = original_srs.splitlines()
+        header_at = srs_lines.index("| 编号 | 所属域 / 章节 | 层次 | 状态 |")
+        srs_lines[header_at + 2] = " " + srs_lines[header_at + 2]
+        srs_copy.write_text("\n".join(srs_lines) + "\n", encoding="utf-8")
+        code, output = run([], clone)
+        if code == 0:
+            failures.append(f"例 14 失败：§10.1 表体被行首空格打断仍 exit 0（原单 ㈤(a)）\n{output}")
+        elif "表体在此中断" not in output or f":{header_at + 3}:" not in output:
+            failures.append(
+                f"例 14 失败：判红了但没有报「表体在此中断」与行号（应为 {header_at + 3}）\n{output}"
+            )
+        srs_copy.write_text(original_srs, encoding="utf-8")
+
+        # 例 15（㈤(b)）·一套切分口径：§10.1 格内写合法转义（反斜杠 + 竖线）⇒ rc=0（旧版此处判红）
+        total += 1
+        srs_lines = original_srs.splitlines()
+        row_at = header_at + 2
+        cells = srs_lines[row_at].split("|")
+        cells[2] = cells[2] + chr(92) + "| 浏览器"
+        srs_lines[row_at] = "|".join(cells)
+        srs_copy.write_text("\n".join(srs_lines) + "\n", encoding="utf-8")
+        code, output = run([], clone)
+        if code != 0:
+            failures.append(
+                f"例 15 失败：§10.1 格内写合法转义的竖线不该判红（切分要与 split_row 一套口径，原单 ㈤(b)），实际 rc={code}\n{output}"
+            )
+        srs_copy.write_text(original_srs, encoding="utf-8")
+        # 例 16（㈥）·取格兜底：FR 行缺一格 ⇒ 打印已收集的诊断 + 「格数不足」，不许 IndexError
+        total += 1
+        srs_lines = original_srs.splitlines()
+        cells = srs_lines[row_at].split("|")
+        del cells[3]
+        srs_lines[row_at] = "|".join(cells)
+        srs_copy.write_text("\n".join(srs_lines) + "\n", encoding="utf-8")
+        code, output = run([], clone)
+        if code == 0:
+            failures.append(f"例 16 失败：FR 行缺一格应判红（原单 ㈥）\n{output}")
+        elif "Traceback" in output or "IndexError" in output:
+            failures.append(
+                f"例 16 失败：缺一格时崩了（IndexError / traceback）—— 已收集的诊断全丢\n{output}"
+            )
+        elif "格数不足 4" not in output or "❌ 表格校验失败" not in output:
+            failures.append(
+                f"例 16 失败：判红了但没有报「格数不足 4」/ 没有把人读的失败清单打出来\n{output}"
+            )
+        srs_copy.write_text(original_srs, encoding="utf-8")
+
+        # 例 17（㈡）·在场下限：删掉一份 tracked 文档（不在 .gitignore 名单里）⇒ 本件自己判红并点名
+        total += 1
+        capability_doc = clone / "Docs/产品能力规划说明书.md"
+        capability_backup = capability_doc.read_text(encoding="utf-8")
+        capability_doc.unlink()
+        code, output = run([], clone)
+        if code == 0:
+            failures.append(
+                f"例 17 失败：删掉 tracked 文档（不在 .gitignore 名单里）仍 exit 0 —— 面无下限（原单 ㈡）\n{output}"
+            )
+        elif "产品能力规划说明书.md" not in output or "被删或路径写错" not in output:
+            failures.append(
+                f"例 17 失败：判红了但没有点名被删的文档 / 没说「被删或路径写错」\n{output}"
+            )
+        capability_doc.write_text(capability_backup, encoding="utf-8")
+
         # 例 4·真仓库（本机）→ exit 0、跳过 0，且**末例核对真仓库逐字节未变**
         total += 1
         before = (repository / "Docs/概要设计.md").read_bytes()
@@ -929,7 +1192,7 @@ def run_self_test() -> int:
     suffix = f"，跳过 {len(skipped)} 例" if skipped else ""
     # 收尾行的**头部格式不许动**（`self-test-counts.json` 的 countRegex 就认
     # `自检通过（N/M）`）⇒ 跳过数写在方括号外的 `suffix` 位置，别挤进括号里。
-    print(f"✅ 自检通过（{total}/{total}）{suffix}：干净克隆跳过 12 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 空行拆表（表头逐格相同）判红且对照（表头不同）不判红 / 跨平台标识（Windows 形态落回清单写法）/ {tail}")
+    print(f"✅ 自检通过（{total}/{total}）{suffix}：干净克隆跳过 12 份且 exit 0 / --require-all 判红 / 显式点名判红 / 写坏一行被判红并指名行号 / 带表格不在清单判红且归档豁免 / 空行拆表（表头逐格相同）判红且对照（表头不同）不判红 / 跨平台标识（Windows 形态落回清单写法）/ GFM 无首竖线表也判（显式点名 + 判据 E 两面）/ 单行竖线不算表 / 加粗开头的续行判红且列表项不误报 / §10.1 表体中断指名行号 / 格内转义竖线不判红 / FR 行缺格报「格数不足」不崩 / tracked 文档被删判红（在场下限）/ {tail}")
     return 0
 
 
