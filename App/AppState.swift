@@ -3408,7 +3408,8 @@ final class AppState: ObservableObject {
     func generateAgentSQL(
         instruction: String,
         schema: AgentSQLGenerator.SchemaSummary,
-        currentStatement: String?
+        currentStatement: String?,
+        observation: AgentObservation? = nil
     ) async throws -> AgentSQLGenerator.Result {
         let started = Date()
         do {
@@ -3416,7 +3417,8 @@ final class AppState: ObservableObject {
                 request: AgentSQLGenerator.Request(
                     instruction: instruction,
                     schema: schema,
-                    currentStatement: currentStatement
+                    currentStatement: currentStatement,
+                    observation: observation
                 ),
                 configuration: agentConfiguration,
                 apiKey: agentAPIKey,
@@ -3424,10 +3426,12 @@ final class AppState: ObservableObject {
                 policy: agentGuardPolicy,
                 // 传**累计账本**，否则配额永远触发不了（见 agentQuotaLedger 的说明）。
                 ledger: agentQuotaLedger,
-                client: OpenAICompatibleClient(
+                client: RetryingLLMClient(
+                    base: OpenAICompatibleClient(
                     transport: EgressRecordingTransport(
                         origin: "智能体 · 用自然语言生成 SQL",
                         wrapped: URLSessionTransport()
+                    )
                     )
                 )
             )
