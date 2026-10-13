@@ -127,6 +127,13 @@ struct DoyahCLI {
             exit(code)
         }
 
+        // agent-sql-stream：**流式**通道的脚本取证入口（FR-AI-16 ② ⑥）。
+        // 为什么单开一条而不改 agent-sql：流式的判据要在「真进程 + 真 HTTP + 真 SSE」下跑一遍，
+        // 且不许把整段那条路的行为搅在一起 —— 两条路各证各的。
+        if arguments.first == "agent-sql-stream" {
+            exit(await runAgentSQLStreamCommand(arguments: Array(arguments.dropFirst())))
+        }
+
         // archive-add：用**产品的归档写入器**追加一条记录（FR-EDIT-31）。
         // 存在的理由：记忆层的验证必须用真归档格式 —— 手编格式验的是"我以为的格式"，
         // 本轮就踩过（手写文件解析出 0 条）。
