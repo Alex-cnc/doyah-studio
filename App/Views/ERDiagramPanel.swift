@@ -89,30 +89,24 @@ struct ERDiagramPanel: View {
             TextField("", text: $schema)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 140)
-            Button(L(.erDiagramGenerate)) { Task { await load() } }
+            ToolbarIconButton(systemName: "wand.and.stars", help: L(.erDiagramGenerate)) { Task { await load() } }
                 .disabled(isLoading)
             if isLoading { ProgressView().controlSize(.small) }
 
             Spacer()
 
-            Button {
+            ToolbarIconButton(systemName: "doc.on.doc", help: L(.erDiagramCopyMermaid)) {
                 copyDiagram { $0.mermaid() }
-            } label: {
-                Label(L(.erDiagramCopyMermaid), systemImage: "doc.on.doc")
             }
             .disabled(diagram?.isEmpty ?? true)
 
-            Button {
+            ToolbarIconButton(systemName: "doc.on.doc", help: L(.erDiagramCopyDOT)) {
                 copyDiagram { $0.dot() }
-            } label: {
-                Label(L(.erDiagramCopyDOT), systemImage: "doc.on.doc")
             }
             .disabled(diagram?.isEmpty ?? true)
 
-            Button {
+            ToolbarIconButton(systemName: "square.and.arrow.up", help: L(.erDiagramExport)) {
                 exportMermaid()
-            } label: {
-                Label(L(.erDiagramExport), systemImage: "square.and.arrow.up")
             }
             .disabled(diagram?.isEmpty ?? true)
         }
@@ -299,14 +293,14 @@ struct ERDiagramPanel: View {
                     Image(systemName: "plus.magnifyingglass")
                 }
                 .help(L(.erDiagramZoomIn))
-                Button(L(.erDiagramFit)) {
+                ToolbarIconButton(systemName: "arrow.up.left.and.arrow.down.right", help: L(.erDiagramFit)) {
                     scale = 1
                     lastScale = 1
                     offset = .zero
                     lastOffset = .zero
                 }
             }
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                 .keyboardShortcut(.escape, modifiers: [])
         }
         .padding(.horizontal, Spacing.l)

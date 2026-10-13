@@ -52,8 +52,8 @@ struct WorkspaceExplorerView: View {
             ),
             presenting: pendingDeletion
         ) { entry in
-            Button(L(.commonCancel), role: .cancel) { pendingDeletion = nil }
-            Button(L(.workspaceDeleteConfirmAction), role: .destructive) {
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { pendingDeletion = nil }
+            ToolbarIconButton(systemName: "checkmark", help: L(.workspaceDeleteConfirmAction), role: .destructive) {
                 if workspace.delete(entry), selectedPath == entry.relativePath { selectedPath = nil }
                 pendingDeletion = nil
             }
@@ -279,24 +279,14 @@ struct WorkspaceExplorerView: View {
                 .accessibilityIdentifier("workspace-action-plus-\(entry.relativePath)")
             }
 
-            Button {
+            ToolbarIconButton(systemName: "minus", help: L(.workspaceDeleteToTrash)) {
                 pendingDeletion = entry
-            } label: {
-                rowActionIcon("minus", help: L(.workspaceDeleteToTrash))
             }
-            .buttonStyle(.plain)
-            .help(L(.workspaceDeleteToTrash))
-            .accessibilityLabel(L(.workspaceDeleteToTrash))
             .accessibilityIdentifier("workspace-action-minus-\(entry.relativePath)")
 
-            Button {
+            ToolbarIconButton(systemName: "pencil", help: L(.workspaceRename)) {
                 beginRename(entry)
-            } label: {
-                rowActionIcon("pencil", help: L(.workspaceRename))
             }
-            .buttonStyle(.plain)
-            .help(L(.workspaceRename))
-            .accessibilityLabel(L(.workspaceRename))
             .accessibilityIdentifier("workspace-action-pencil-\(entry.relativePath)")
         }
     }
@@ -373,7 +363,7 @@ struct WorkspaceExplorerView: View {
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.secondary))
                 .fixedSize(horizontal: false, vertical: true)
-            Button(L(.workspaceChoose)) {
+            ToolbarIconButton(systemName: "folder", help: L(.workspaceChoose)) {
                 Task { await workspace.pickAndChoose() }
             }
             .padding(.top, Spacing.xs)

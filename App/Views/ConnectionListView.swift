@@ -168,11 +168,11 @@ struct ConnectionListView: View {
             ),
             presenting: pendingDeletion
         ) { configuration in
-            Button(L(.commonDelete), role: .destructive) {
+            ToolbarIconButton(systemName: "trash", help: L(.commonDelete), role: .destructive) {
                 pendingDeletion = nil
                 Task { await appState.deleteConnection(configuration) }
             }
-            Button(L(.commonCancel), role: .cancel) {
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {
                 pendingDeletion = nil
             }
         } message: { configuration in
@@ -180,9 +180,7 @@ struct ConnectionListView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button(action: onAdd) {
-                    Label(L(.connectionNew), systemImage: "plus")
-                }
+                ToolbarIconButton(systemName: "plus", help: L(.connectionNew), action: onAdd)
             }
         }
     }

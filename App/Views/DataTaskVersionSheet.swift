@@ -34,7 +34,7 @@ struct DataTaskVersionSheet: View {
                 Text(L(.dataTaskVersionsTitle))
                     .font(Theme.font(.title))
                 Spacer()
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
 
@@ -75,8 +75,8 @@ struct DataTaskVersionSheet: View {
             ),
             presenting: pendingRollback
         ) { version in
-            Button(L(.commonCancel), role: .cancel) { pendingRollback = nil }
-            Button(L(.dataTaskVersionsRollback), role: .destructive) { rollback(version) }
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { pendingRollback = nil }
+            ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.dataTaskVersionsRollback), role: .destructive) { rollback(version) }
         } message: { version in
             Text(L(.dataTaskVersionsRollbackConfirmMessage, version.number))
         }
@@ -199,7 +199,7 @@ struct DataTaskVersionSheet: View {
                 .foregroundStyle(Theme.text(.secondary))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button(L(.dataTaskVersionsRollback)) { pendingRollback = version }
+            ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.dataTaskVersionsRollback)) { pendingRollback = version }
                 .font(Theme.font(.caption))
                 .disabled(isRollingBack)
         }

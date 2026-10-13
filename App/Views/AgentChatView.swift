@@ -113,10 +113,9 @@ struct AgentChatView: View {
             if case .pendingApproval = card.outcome {
                 HStack(spacing: 8) {
                     Text(L(.agentChatApprovalPending)).font(.caption).foregroundStyle(.secondary)
-                    Button(L(.agentChatApprovalApprove)) { model.approve(card.id) }
-                        .buttonStyle(.borderedProminent)
+                    ToolbarIconButton(systemName: "checkmark.circle", help: L(.agentChatApprovalApprove)) { model.approve(card.id) }
                         .controlSize(.small)
-                    Button(L(.agentChatApprovalDeny)) { model.deny(card.id) }
+                    ToolbarIconButton(systemName: "xmark.circle", help: L(.agentChatApprovalDeny)) { model.deny(card.id) }
                         .controlSize(.small)
                 }
             }
@@ -156,10 +155,9 @@ struct AgentChatView: View {
                     .onSubmit { if model.canSend { model.send() } }
                 if model.isRunning {
                     Text(L(.agentChatRunning)).font(.caption).foregroundStyle(.secondary)
-                    Button(L(.agentChatStop)) { model.stop() }
+                    ToolbarIconButton(systemName: "stop.fill", help: L(.agentChatStop)) { model.stop() }
                 } else {
-                    Button(L(.agentChatSend)) { model.send() }
-                        .buttonStyle(.borderedProminent)
+                    ToolbarIconButton(systemName: "paperplane", help: L(.agentChatSend)) { model.send() }
                         .disabled(!model.canSend)
                 }
             }

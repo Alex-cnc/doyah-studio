@@ -94,13 +94,13 @@ struct EgressLogSheet: View {
                 .labelsHidden()
                 .frame(maxWidth: 180)
                 .disabled(tabOptions.isEmpty)
-                Button(L(.egressExportJSON)) {
+                ToolbarIconButton(systemName: "square.and.arrow.up", help: L(.egressExportJSON)) {
                     Task { await appState.exportEgressLog(asCSV: false) }
                 }
-                Button(L(.egressExportCSV)) {
+                ToolbarIconButton(systemName: "square.and.arrow.up", help: L(.egressExportCSV)) {
                     Task { await appState.exportEgressLog(asCSV: true) }
                 }
-                Button(L(.egressClear)) { isClearConfirmPresented = true }
+                ToolbarIconButton(systemName: "xmark.bin", help: L(.egressClear)) { isClearConfirmPresented = true }
                     .disabled(appState.egressEntries.isEmpty)
             }
             Text(L(.egressSubtitle))
@@ -214,17 +214,17 @@ struct EgressLogSheet: View {
                     .foregroundStyle(Theme.status(.danger))
             }
             Spacer()
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                 .keyboardShortcut(.defaultAction)
         }
         .confirmationDialog(
             L(.egressClearConfirmTitle),
             isPresented: $isClearConfirmPresented
         ) {
-            Button(L(.egressClear), role: .destructive) {
+            ToolbarIconButton(systemName: "xmark.bin", help: L(.egressClear), role: .destructive) {
                 Task { await appState.clearEgressLog() }
             }
-            Button(L(.commonCancel), role: .cancel) {}
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {}
         } message: {
             Text(L(.egressClearConfirmMessage))
         }

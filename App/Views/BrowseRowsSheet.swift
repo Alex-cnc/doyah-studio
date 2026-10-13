@@ -106,13 +106,13 @@ struct BrowseRowsSheet: View {
 
             HStack {
                 Spacer()
-                Button(L(.commonCancel)) { onDismiss() }
-                Button(L(.browseSheetCount)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) { onDismiss() }
+                ToolbarIconButton(systemName: "tablecells", help: L(.browseSheetCount)) {
                     appState.countRows(object, filter: resolvedFilter)
                     onDismiss()
                 }
                 .disabled(previewIsError)
-                Button(L(.browseSheetBrowse)) {
+                ToolbarIconButton(systemName: "tablecells", help: L(.browseSheetBrowse)) {
                     appState.browseRows(object, filter: resolvedFilter)
                     onDismiss()
                 }
