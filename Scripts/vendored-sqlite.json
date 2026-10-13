@@ -88,7 +88,7 @@
     "shapeLimit": "引用形状 = `SQLiteMacro.<小写>Macro`（成员名 `[a-z0-9_]`）。写成 camelCase 的引用生成器**看不见**，后果不是静默而是那个常量不生成 ⇒ Swift 编译报「cannot find in scope」（当场作响，故未做成机械判据）。"
   },
   "wiring": {
-    "gate": "Scripts/check-vendored-sqlite.py（--self-test 跑负例：篡改十三种，门禁必须报红 —— 含证据锚点陈旧 / 闭环接线被删 / 闭环没跑负例 / 台账项号不符（第 17 项与 generator 第 18 项两处都判）/ 项数声明漏改 / 生成器没进闭环）",
+    "gate": "Scripts/check-vendored-sqlite.py（--self-test 跑 **25 例**：篡改 22 条必须报红 + 对手臂 3 条不许误报 —— 含证据锚点陈旧 / **接线被注释掉**（手工停用最常见那一形）/ **锚点被重构掉只剩一行注释** / **编译宏被注释掉** / **台账判定面被自削（requiredCompileOptions 清空 + 宏全删）** / **面外 testTarget 根与面外回流** / 台账缺字段不留栈 / 闭环项号与项数声明 / 生成器没进闭环）；另有前提自检：干净副本必须绿（L-119）",
     "negativeCases": "Scripts/check-vendored-sqlite.py --self-test",
     "smoke": "Scripts/smoke-vendored-sqlite.py（把 sqlite3.c 现编成可执行文件，跑版本 / 宏 / WAL / 参数化读写 / FTS5 与中文四条 / DQS=0 共 13 条断言）",
     "acquisition": "Scripts/vendor-sqlite3.sh",
@@ -180,6 +180,16 @@
         "anchor": "#define SQLITE_OK",
         "why": "头文件是宏值的唯一来源（第 18 项逐字节比对的另一头）；这一行被改 ⇒ 生成物过期"
       }
-    ]
+    ],
+    "docAnchors": [
+      {
+        "file": "Plugins/Notes/Sources/NoteStorage/SQLiteConstants.swift",
+        "anchor": "本文件由 `Scripts/gen-sqlite-constants.py` **生成**",
+        "why": "**唯一一条有意住在注释里的锚点**：这一条的要义就是「生成物自己张口说自己是生成的、别手改」—— 它本来就该是注释（判据默认读剥注释后的正文，故在此显式登记；未登记的锚点不许豁免，见 check-vendored-sqlite.py 的 check_evidence_anchors）"
+      }
+    ],
+    "face": "判定面**不写死目录**：由根 `Package.swift` 的 target 现读（`sources:` 优先，其次 `path:`，再次 target 名；多根如 `Core` + `Plugins/Notes/Sources` 一并进面），与 `PRODUCT_DIRS` 里真在盘上的那几个取并集；**根数下限 8** 写死在判据里（面被削成一个目录即判红）。两臂：面内扫 `import SQLite3` + **面外回流**（面外目录里出现 `import SQLite3` 也判红）—— 原单 T-20261010-059 ㈣ P3 实测：旧版写死 6 个目录名 ⇒ 同为 test 的 `TestsPlatform/` / `TestsUISnapshot/` 静默在面外。",
+    "floors": "判定面 / 判定物的**硬下限**写死在判据里（不读台账，台账被清空时下限不该跟着消失）：`files[]` ≥ 3 · `requiredCompileOptions` ≥ 4 · `evidenceAnchors` ≥ 1 · 判定面根 ≥ 8。由头 = 原单 T-20261010-059 ㈢ P5：清空 `requiredCompileOptions` + 删光 vendored 宏 ⇒ 旧版 rc=0，成功行还自己把证据写成「0 条编译宏」。",
+    "evidenceBasis": "判定物口径（同批）：凡判「在盘上 / 在闭环里」一律读**剥注释后的正文**（`.sh` 走活行：整行 `#` 丢掉；`.py` 剥 `#`；C 族剥 `//` 与块注释；`.md` 原样），`import` 那类再抹掉字符串字面量；退出码 0 = 绿 / 1 = 判红 / 2 = **判据自身坏掉**（不留栈、已收集诊断照打）。"
   }
 }
