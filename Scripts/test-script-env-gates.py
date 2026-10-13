@@ -27,6 +27,8 @@ GATE = SCRIPTS / "check-script-env-parameterization.py"
 LIB = SCRIPTS / "lib" / "test-env.sh"
 MANIFEST = SCRIPTS / "real-db-scripts.txt"
 BYPASS = SCRIPTS / "remote-bypass-scripts.json"
+SUBDIR = SCRIPTS / "shell-face-subdirs.json"
+BASELINE = SCRIPTS / "real-db-evidence-baseline.json"
 
 SAMPLE = SCRIPTS / "test-er-diagram.sh"
 passed = []
@@ -146,6 +148,81 @@ def gate_negatives():
         BYPASS.write_text("{ 这不是 JSON", encoding="utf-8")
         expect_gate_red("N-11 旁路台账不是合法 JSON → 门禁报红（解析失败不静默）", "不是合法 JSON")
         BYPASS.write_text(registry_text, encoding="utf-8")
+
+        # ---- N-12~N-22：合册 T-20261013-027 第 19 轮（原单 T-20261010-057 ㈠~㈦）----
+        probe = SCRIPTS / "zzprobe-comment.sh"
+        sub = SCRIPTS / "zzprobe-subdir"
+
+        # N-12 ㈠ 注释里提旧端口（顶层非清单脚本）⇒ 判绿（旧版 rc=1，与真写死同一条话术）
+        probe.write_text('#!/bin/bash\n# 迁移说明：旧端口 55433 已废弃，勿再使用\n', encoding="utf-8")
+        expect_gate_green("N-12 注释里提过旧端口 55433 → 判绿（提及不算写死）")
+
+        # N-13 ㈠ 字符串字面量里提旧端口 ⇒ 判绿（旧版 rc=1）
+        probe.write_text('#!/bin/bash\necho "端口 55433 见文档"\n', encoding="utf-8")
+        expect_gate_green("N-13 字符串里提过旧端口 55433 → 判绿")
+
+        # N-14 ㈠对照 不许削软：同一脚本真在代码行写死 ⇒ 仍判红并点名
+        probe.write_text('#!/bin/bash\nPORT=55433\n', encoding="utf-8")
+        expect_gate_red("N-14 对照：真在代码行写死 PORT=55433 → 仍判红（剥注释/字符串没削软判据）", "55433")
+
+        # N-15 ㈡ 假绿：清单脚本的真 source / 摘要调用被**注释掉**（字面量留在注释里）⇒ 判红
+        SAMPLE.write_text(text.replace('source "$(cd "$(dirname "$0")" && pwd)/lib/test-env.sh"',
+                                       '# source "$(cd "$(dirname "$0")" && pwd)/lib/test-env.sh"')
+                              .replace("doyah_test_env_summary", "# doyah_test_env_summary"),
+                          encoding="utf-8")
+        expect_gate_red("N-15 source 与摘要调用被注释掉（字面量留在注释里）→ 判红（旧版 rc=0 假绿）", "source")
+        SAMPLE.write_text(text, encoding="utf-8")
+
+        # N-16 ㈢ 面·子目录：未登记的子目录里写死端口 ⇒ 判红（旧版 rc=0、连计数都不动）
+        sub.mkdir(exist_ok=True)
+        (sub / "zzprobe_face.sh").write_text('#!/bin/bash\nPORT=55433\n', encoding="utf-8")
+        expect_gate_red("N-16 未登记子目录里写死 55433 → 判红（旧版面外，rc=0）", "55433")
+        (sub / "zzprobe_face.sh").unlink()
+        sub.rmdir()
+
+        # N-17 ㈣ 面·账号：清单外脚本写死账号 / 库名 ⇒ 判红（旧版 rc=0）
+        probe.write_text('#!/bin/bash\nexport PGUSER=postgres PGDATABASE=postgres\n', encoding="utf-8")
+        expect_gate_red("N-17 清单外脚本写死 PGUSER=postgres / PGDATABASE=postgres → 判红", "写死的账号")
+        probe.unlink()
+
+        # N-18 ㈤ 判据④ 缺件：挪走证据基线 ⇒ 判红（旧版 rc=0 静默跳过）
+        stash = BASELINE.with_name(BASELINE.name + ".zzprobe")
+        BASELINE.rename(stash)
+        try:
+            expect_gate_red("N-18 证据基线缺件 → 判红（旧版无 else、静默跳过）", BASELINE.name)
+        finally:
+            stash.rename(BASELINE)
+
+        # N-19 ㈥ 假阳·行尾注释：行尾注释里提旁路 token ⇒ 判绿（旧版 rc=1）
+        probe.write_text('#!/bin/bash\necho ok  # 参考 DOYAH_TEST_REMOTE_HOST\n', encoding="utf-8")
+        expect_gate_green("N-19 行尾注释里提 DOYAH_TEST_REMOTE_* → 判绿")
+        probe.unlink()
+
+        # N-20 ㈦ 假绿·lib 行尾注释：档位端口只留在行尾注释里 ⇒ 判红（旧版 rc=0 假绿）
+        LIB.write_text(lib_text.replace("_doyah_test_profile_port=55434",
+                                        "_doyah_test_profile_port=0  # 旧值 _doyah_test_profile_port=55434"),
+                       encoding="utf-8")
+        expect_gate_red("N-20 lib 档位端口只在行尾注释里 → 判红（旧版 rc=0 假绿）", "slowquery")
+        LIB.write_text(lib_text, encoding="utf-8")
+
+        # N-21 反向臂：在册且 exempt 的子目录同样内容 ⇒ 判绿（证明登记表真的在生效，不是摆设）
+        registry_text = SUBDIR.read_text(encoding="utf-8")
+        registry = json.loads(registry_text)
+        sub.mkdir()
+        (sub / "zzprobe_face.sh").write_text('#!/bin/bash\nPORT=55433\n', encoding="utf-8")
+        registry["entries"].append({"dir": "zzprobe-subdir", "exempt": True, "reason": "反向臂：临时豁免"})
+        SUBDIR.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
+        expect_gate_green("N-21 在册豁免的子目录里同样写死 55433 → 判绿（登记表生效）")
+        SUBDIR.write_text(registry_text, encoding="utf-8")
+        (sub / "zzprobe_face.sh").unlink()
+        sub.rmdir()
+
+        # N-22 反向臂：子目录在册却没有 .sh ⇒ 死登记判红（陈旧登记与漏登记一样要命）
+        registry = json.loads(registry_text)
+        registry["entries"].append({"dir": "zzprobe-ghost", "exempt": True, "reason": "反向臂：死的"})
+        SUBDIR.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
+        expect_gate_red("N-22 面登记表登记了没有 .sh 的子目录 → 判红（死登记）", "死登记")
+        SUBDIR.write_text(registry_text, encoding="utf-8")
 
     expect_gate_green("还原后门禁全绿")
 
