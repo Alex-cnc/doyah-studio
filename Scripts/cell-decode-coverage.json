@@ -60,7 +60,10 @@
     "testTokens": 28,
     "formatterCases": 15,
     "evidenceSameCases": 35,
-    "evidenceTokens": 15
+    "evidenceTokens": 15,
+    "bannedExits": 3,
+    "tables": 3,
+    "evidenceSectionAnchor": 1
   },
   "types": [
     {
@@ -259,7 +262,9 @@
       "file": "formatter",
       "anchor": "3912: 1082,",
       "testToken": "daterange",
-      "why": "边界的时间写法沿用本产品既有的 ISO 8601（与 psql 不同，登记在证据脚本的有意不同表里）。"
+      "why": "边界的时间写法沿用本产品既有的 ISO 8601（与 psql 不同，登记在证据脚本的有意不同表里）。",
+      "testTokenInComment": true,
+      "testTokenCommentWhy": "该型在单测里没有小写 token 出现在代码里 —— 钉住它的是测试函数 testDateRangeKeepsItsBounds（用 oid 3912 真造载荷、断言两端文本）与载荷注释里逐字点名的 SQL 字面量 `daterange('2026-01-01','2026-02-01')`；判据面改判「剥注释」后按合册口径**逐条登记**（未登记不许豁免，见 T-20261010-058 验收第 13 条：只许新增登记）。"
     },
     {
       "name": "tsrange",
@@ -277,7 +282,9 @@
       "file": "formatter",
       "anchor": "3910: 1184,",
       "testToken": "tstzrange",
-      "why": "边界含空白 ⇒ 按 PG 的规矩给边界加引号。"
+      "why": "边界含空白 ⇒ 按 PG 的规矩给边界加引号。",
+      "testTokenInComment": true,
+      "testTokenCommentWhy": "该型在单测里没有小写 token 出现在代码里 —— 钉住它的是测试函数 testTimestampWithZoneRangeKeepsItsOwnText（用 oid 3910 真造载荷、断言两端文本）与载荷注释里逐字点名的 SQL 字面量 `tstzrange('2026-01-01+08','2026-02-01+08')`；判据面改判「剥注释」后按合册口径**逐条登记**（未登记不许豁免，见 T-20261010-058 验收第 13 条：只许新增登记）。"
     },
     {
       "name": "int4multirange",
