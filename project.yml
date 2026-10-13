@@ -110,9 +110,7 @@ targets:
       # 会把插件源码（已由 `DoyahCore` / `DoyahStudio` 两个 target 编译）再复制一份进包。
       - path: Plugins/Notes/plugin.json
         buildPhase: resources
-      - path: Plugins/Replay/plugin.json
-        buildPhase: resources
-      - path: Plugins/Sample/plugin.json
+      - path: Plugins/Retro/plugin.json
         buildPhase: resources
     dependencies:
       - target: DoyahCore
