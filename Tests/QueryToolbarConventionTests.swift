@@ -174,7 +174,14 @@ final class QueryToolbarConventionTests: XCTestCase {
         ]
         for (relative, minimum) in ratchet.sorted(by: { $0.key < $1.key }) {
             let text = try source(relative)
-            let count = text.components(separatedBy: ".help(").count - 1
+            // 计数面 = 两种写法之和（2026-10-13 人类主人令「按钮一律图标」）：纯图标按钮改走仓内唯一
+            // 出处组件 `ToolbarIconButton(systemName:help:)` —— 名称提示变成**构造参数** `help:`，
+            // 字面 `.help(` 搬进组件本体（`App/Views/ToolbarIcon.swift`，由
+            // `WorkspaceRowAffordanceTests.testRowActionsCarryNames` 钉住）。
+            // 口径不变：每一枚图标按钮都得交出名称；只是不再绑死一种字面形状。
+            let literal = text.components(separatedBy: ".help(").count - 1
+            let argument = text.components(separatedBy: "help:").count - 1
+            let count = literal + argument
             XCTAssertGreaterThanOrEqual(
                 count, minimum,
                 "\(relative) 的 .help( 只剩 \(count) 处（下限 \(minimum)）—— 图标按钮的名称提示被删了？"
