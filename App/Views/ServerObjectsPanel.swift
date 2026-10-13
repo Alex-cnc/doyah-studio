@@ -319,8 +319,16 @@ struct ServerObjectsPanel: View {
             }
 
             HStack(spacing: Spacing.l) {
-                Toggle(L(.serverObjectsCanLogin), isOn: $canLogin)
-                Toggle(L(.serverObjectsSuperuser), isOn: $isSuperuser)
+                Toggle(isOn: $canLogin) {
+                    Image(systemName: "person.badge.key")
+                }
+                .help(L(.serverObjectsCanLogin))
+                .accessibilityLabel(Text(L(.serverObjectsCanLogin)))
+                Toggle(isOn: $isSuperuser) {
+                    Image(systemName: "crown")
+                }
+                .help(L(.serverObjectsSuperuser))
+                .accessibilityLabel(Text(L(.serverObjectsSuperuser)))
                 Spacer()
                 ToolbarIconButton(systemName: "plus", help: L(.serverObjectsPreviewCreateRole)) { previewCreateRole() }
                 ToolbarIconButton(systemName: "trash", help: L(.serverObjectsPreviewDropRole)) { previewDropRole() }

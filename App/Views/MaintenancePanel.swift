@@ -74,8 +74,12 @@ struct MaintenancePanel: View {
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.secondary))
                 .fixedSize(horizontal: false, vertical: true)
-            Toggle(L(.maintenanceAllowMultiple), isOn: $appState.maintenanceAllowMultipleHighCost)
-                .font(Theme.font(.caption))
+            Toggle(isOn: $appState.maintenanceAllowMultipleHighCost) {
+                Image(systemName: "square.stack.3d.up")
+            }
+            .help(L(.maintenanceAllowMultiple))
+            .accessibilityLabel(Text(L(.maintenanceAllowMultiple)))
+            .font(Theme.font(.caption))
         }
     }
 

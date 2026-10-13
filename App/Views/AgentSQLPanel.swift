@@ -92,8 +92,16 @@ struct AgentSQLPanel: View {
                 .lineLimit(2...4)
 
             HStack(spacing: 16) {
-                Toggle(L(.agentSQLIncludeTables), isOn: $includeTables)
-                Toggle(L(.agentSQLIncludeStatement), isOn: $includeStatement)
+                Toggle(isOn: $includeTables) {
+                    Image(systemName: "tablecells")
+                }
+                .help(L(.agentSQLIncludeTables))
+                .accessibilityLabel(Text(L(.agentSQLIncludeTables)))
+                Toggle(isOn: $includeStatement) {
+                    Image(systemName: "doc.plaintext")
+                }
+                .help(L(.agentSQLIncludeStatement))
+                .accessibilityLabel(Text(L(.agentSQLIncludeStatement)))
             }
             .font(.caption)
 

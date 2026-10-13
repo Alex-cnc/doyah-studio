@@ -80,7 +80,7 @@ struct WorkspaceTabStrip: View {
             Button {
                 openFileFromPanel()
             } label: {
-                Image(systemName: "folder.badge.plus")
+                Image(systemName: "doc.text")
                     .font(Theme.font(.caption))
             }
             .buttonStyle(.borderless)

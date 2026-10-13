@@ -16,8 +16,12 @@ struct SQLArchiveSheet: View {
             Text(L(.archiveTitle))
                 .font(.headline)
 
-            Toggle(L(.archiveEnable), isOn: $appState.isSQLArchiveEnabled)
-                .toggleStyle(.switch)
+            Toggle(isOn: $appState.isSQLArchiveEnabled) {
+                Image(systemName: "archivebox")
+            }
+            .help(L(.archiveEnable))
+            .accessibilityLabel(Text(L(.archiveEnable)))
+            .toggleStyle(.switch)
 
             Text(L(.archiveEnableHint))
                 .font(.caption)

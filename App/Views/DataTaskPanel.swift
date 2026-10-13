@@ -167,8 +167,12 @@ struct DataTaskPanel: View {
         VStack(alignment: .leading, spacing: 6) {
             TextField(L(.dataTaskSearchPlaceholder), text: $query, prompt: Text(L(.dataTaskSearchPlaceholder)))
                 .textFieldStyle(.roundedBorder)
-            Toggle(L(.dataTaskOnlyEnabled), isOn: $onlyEnabled)
-                .font(.caption)
+            Toggle(isOn: $onlyEnabled) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+            }
+            .help(L(.dataTaskOnlyEnabled))
+            .accessibilityLabel(Text(L(.dataTaskOnlyEnabled)))
+            .font(.caption)
 
             if visibleTasks.isEmpty {
                 Text(appState.dataTasks.isEmpty ? L(.dataTaskListEmpty) : L(.agentAuditFilteredEmpty))
@@ -402,8 +406,12 @@ struct DataTaskPanel: View {
                 .labelsHidden()
                 .frame(width: 140)
 
-                Toggle(L(.dataTaskEnabled), isOn: binding(\.isEnabled, default: true))
-                    .font(.caption)
+                Toggle(isOn: binding(\.isEnabled, default: true)) {
+                    Image(systemName: "play.circle")
+                }
+                .help(L(.dataTaskEnabled))
+                .accessibilityLabel(Text(L(.dataTaskEnabled)))
+                .font(.caption)
                 Spacer()
             }
 

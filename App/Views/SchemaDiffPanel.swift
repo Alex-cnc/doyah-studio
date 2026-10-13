@@ -83,7 +83,11 @@ struct SchemaDiffPanel: View {
                         .frame(width: 140)
                 }
 
-                Toggle(L(.schemaDiffAllowDrop), isOn: $allowsDrop)
+                Toggle(isOn: $allowsDrop) {
+                    Image(systemName: "trash")
+                }
+                .help(L(.schemaDiffAllowDrop))
+                .accessibilityLabel(Text(L(.schemaDiffAllowDrop)))
 
                 Spacer()
             }

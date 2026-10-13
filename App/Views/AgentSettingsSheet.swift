@@ -33,7 +33,11 @@ struct AgentSettingsSheet: View {
                 .font(.headline)
 
             Form {
-                Toggle(L(.agentEnabled), isOn: $isEnabled)
+                Toggle(isOn: $isEnabled) {
+                    Image(systemName: "cpu")
+                }
+                .help(L(.agentEnabled))
+                .accessibilityLabel(Text(L(.agentEnabled)))
                 Text(L(.agentEnabledHint))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -79,8 +83,12 @@ struct AgentSettingsSheet: View {
                         .foregroundStyle(.secondary)
 
                     if appState.hasAgentAPIKey {
-                        Toggle(L(.agentAPIKeyClear), isOn: $clearAPIKey)
-                            .font(.caption)
+                        Toggle(isOn: $clearAPIKey) {
+                            Image(systemName: "key.slash")
+                        }
+                        .help(L(.agentAPIKeyClear))
+                        .accessibilityLabel(Text(L(.agentAPIKeyClear)))
+                        .font(.caption)
                     }
                 }
             }

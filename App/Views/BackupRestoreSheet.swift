@@ -191,8 +191,12 @@ struct BackupRestoreSheet: View {
             }
 
             HStack(spacing: Spacing.l) {
-                Toggle(L(.backupRestoreClean), isOn: $restoreClean)
-                    .toggleStyle(.checkbox)
+                Toggle(isOn: $restoreClean) {
+                    Image(systemName: "eraser")
+                }
+                .help(L(.backupRestoreClean))
+                .accessibilityLabel(Text(L(.backupRestoreClean)))
+                .toggleStyle(.checkbox)
 
                 Stepper(
                     value: $restoreJobs,

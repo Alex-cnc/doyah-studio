@@ -45,8 +45,12 @@ struct DataTaskSpecSheet: View {
                 TextField(L(.dataTaskSpecHints), text: $hints)
                     .textFieldStyle(.roundedBorder)
                     .font(.caption)
-                Toggle(L(.agentSQLIncludeTables), isOn: $includeTables)
-                    .font(.caption)
+                Toggle(isOn: $includeTables) {
+                    Image(systemName: "tablecells")
+                }
+                .help(L(.agentSQLIncludeTables))
+                .accessibilityLabel(Text(L(.agentSQLIncludeTables)))
+                .font(.caption)
             }
 
             VStack(alignment: .leading, spacing: 4) {

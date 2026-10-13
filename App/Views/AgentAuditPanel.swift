@@ -183,7 +183,11 @@ struct AgentAuditPanel: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Toggle(L(.agentReadOnlyMode), isOn: $guardPolicy.readOnly)
+            Toggle(isOn: $guardPolicy.readOnly) {
+                Image(systemName: "lock")
+            }
+            .help(L(.agentReadOnlyMode))
+            .accessibilityLabel(Text(L(.agentReadOnlyMode)))
 
             Text(L(.agentReadOnlyHint))
                 .font(.caption2)
@@ -197,7 +201,11 @@ struct AgentAuditPanel: View {
             HStack(spacing: 14) {
                 // 只列「可以进白名单」的类别：`unknown` 永远需要审批（见 Core 的 allowlistableKinds）。
                 ForEach(AgentGuardPolicy.allowlistableKinds, id: \.self) { kind in
-                    Toggle(kind.text, isOn: binding(for: kind))
+                    Toggle(isOn: binding(for: kind)) {
+                        Image(systemName: kind.guardIconName)
+                    }
+                    .help(kind.text)
+                    .accessibilityLabel(Text(kind.text))
                         .font(.caption)
                 }
             }
@@ -460,5 +468,21 @@ struct AgentAuditPanel: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+
+/// 白名单语句类别 → 图标（加令 `T-20261013-051` ②：图标须有明显含义、同一动作同一图标）。
+/// 五类各一枚，避免「同级多枚同形图标 ⇒ 认不出是哪个类别」。
+private extension AgentStatementKind {
+    var guardIconName: String {
+        switch self {
+        case .readQuery: return "doc.text.magnifyingglass"
+        case .dataChange: return "square.and.pencil"
+        case .schemaChange: return "wrench.and.screwdriver"
+        case .privilegeChange: return "lock.open"
+        case .sessionControl: return "arrow.clockwise.circle"
+        case .unknown: return "questionmark.circle"
+        }
     }
 }

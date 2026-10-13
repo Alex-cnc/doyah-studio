@@ -264,7 +264,11 @@ struct ConnectionFormView: View {
                 // 只读连接（FR-CONN-17）：客户端拒绝写语句。
                 // 说明文案点明"这是本机保护、不替代数据库权限"，免得用户以为它是权限控制。
                 VStack(alignment: .leading, spacing: 2) {
-                    Toggle(L(.connectionFormReadOnly), isOn: $isReadOnly)
+                    Toggle(isOn: $isReadOnly) {
+                        Image(systemName: "lock")
+                    }
+                    .help(L(.connectionFormReadOnly))
+                    .accessibilityLabel(Text(L(.connectionFormReadOnly)))
                     Text(L(.connectionFormReadOnlyHint))
                         .font(Theme.font(.caption))
                         .foregroundStyle(Theme.text(.secondary))
@@ -336,7 +340,11 @@ struct ConnectionFormView: View {
     @ViewBuilder
     private var sshSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
-            Toggle(L(.sshEnableLabel), isOn: $sshEnabled)
+            Toggle(isOn: $sshEnabled) {
+                Image(systemName: "terminal")
+            }
+            .help(L(.sshEnableLabel))
+            .accessibilityLabel(Text(L(.sshEnableLabel)))
 
             if sshEnabled {
                 Text(L(.sshSectionSubtitle))
@@ -398,7 +406,11 @@ struct ConnectionFormView: View {
                             .foregroundStyle(Theme.text(.secondary))
                         TextField(L(.sshKeyPathPlaceholder), text: $sshKeyPath)
                             .textFieldStyle(.roundedBorder)
-                        Toggle(L(.sshKeyEncryptedLabel), isOn: $sshKeyEncrypted)
+                        Toggle(isOn: $sshKeyEncrypted) {
+                            Image(systemName: "lock.doc")
+                        }
+                        .help(L(.sshKeyEncryptedLabel))
+                        .accessibilityLabel(Text(L(.sshKeyEncryptedLabel)))
                     }
                 }
 

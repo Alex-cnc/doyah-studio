@@ -44,7 +44,11 @@ struct ConnectionSettingsSheet: View {
 
     private var keepAliveSection: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
-            Toggle(L(.connectionSettingsKeepAliveToggle), isOn: $appState.isKeepAliveEnabled)
+            Toggle(isOn: $appState.isKeepAliveEnabled) {
+                Image(systemName: "waveform.path.ecg")
+            }
+            .help(L(.connectionSettingsKeepAliveToggle))
+            .accessibilityLabel(Text(L(.connectionSettingsKeepAliveToggle)))
 
             Stepper(
                 L(.connectionSettingsKeepAliveInterval, appState.keepAliveIntervalSeconds),

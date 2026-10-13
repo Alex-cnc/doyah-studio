@@ -64,13 +64,25 @@ struct ExecutionPlanPanel: View {
 
     private var options: some View {
         HStack(spacing: Spacing.l) {
-            Toggle(L(.planAnalyze), isOn: $appState.planRunAnalyze)
-                .font(Theme.font(.caption))
-            Toggle(L(.planBuffers), isOn: $appState.planIncludeBuffers)
-                .font(Theme.font(.caption))
-            Toggle(L(.planFormatJSON), isOn: $appState.planUseJSON)
-                .font(Theme.font(.caption))
-                .disabled(appState.selectedConnection?.dbType != .postgresql)
+            Toggle(isOn: $appState.planRunAnalyze) {
+                Image(systemName: "stethoscope")
+            }
+            .help(L(.planAnalyze))
+            .accessibilityLabel(Text(L(.planAnalyze)))
+            .font(Theme.font(.caption))
+            Toggle(isOn: $appState.planIncludeBuffers) {
+                Image(systemName: "memorychip")
+            }
+            .help(L(.planBuffers))
+            .accessibilityLabel(Text(L(.planBuffers)))
+            .font(Theme.font(.caption))
+            Toggle(isOn: $appState.planUseJSON) {
+                Image(systemName: "curlybraces")
+            }
+            .help(L(.planFormatJSON))
+            .accessibilityLabel(Text(L(.planFormatJSON)))
+            .font(Theme.font(.caption))
+            .disabled(appState.selectedConnection?.dbType != .postgresql)
             Spacer()
         }
     }

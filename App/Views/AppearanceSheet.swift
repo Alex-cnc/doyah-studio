@@ -288,7 +288,11 @@ struct AppearanceSheet: View {
             // 别的主题没有"星云"语义，摆一个永远无效的开关只会让人困惑。
             if designTheme.theme == .stardust {
                 Divider().padding(.vertical, Spacing.xs)
-                Toggle(L(.appearanceNebulaSkin), isOn: nebulaSkinBinding)
+                Toggle(isOn: nebulaSkinBinding) {
+                    Image(systemName: "sparkles")
+                }
+                .help(L(.appearanceNebulaSkin))
+                .accessibilityLabel(Text(L(.appearanceNebulaSkin)))
                 Text(L(.appearanceNebulaSkinHint))
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.tertiary))
@@ -366,8 +370,12 @@ struct AppearanceSheet: View {
                 }
                 .labelsHidden()
                 .frame(width: 140)
-                Toggle(L(.terminalCursorBlink), isOn: cursorBlinkBinding)
-                    .font(Theme.font(.caption))
+                Toggle(isOn: cursorBlinkBinding) {
+                    Image(systemName: "cursorarrow")
+                }
+                .help(L(.terminalCursorBlink))
+                .accessibilityLabel(Text(L(.terminalCursorBlink)))
+                .font(Theme.font(.caption))
                 Spacer()
             }
             Text(L(.terminalCursorHint))

@@ -272,10 +272,11 @@ struct RoutineCandidatesPanel: View {
         return VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(L(.memoryGovernanceRecordingTitle))
                 .font(Theme.font(.bodyStrong))
-            Toggle(
-                L(.memoryGovernanceRecordingToggle),
-                isOn: $appState.suppressesCurrentExecutionRecording
-            )
+            Toggle(isOn: $appState.suppressesCurrentExecutionRecording) {
+                Image(systemName: "record.circle")
+            }
+            .help(L(.memoryGovernanceRecordingToggle))
+            .accessibilityLabel(Text(L(.memoryGovernanceRecordingToggle)))
             .font(Theme.font(.caption))
             Text(policy.shouldRecord
                 ? L(.memoryGovernanceRecordingOff, policy.reason)

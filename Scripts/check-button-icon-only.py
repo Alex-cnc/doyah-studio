@@ -21,10 +21,17 @@ B. **逐处分类**（判定物**先剥注释与字符串**）：`Button(` 的�
 C. **断言**：a 类命中数 ≤ 基线 `targetTextButtons`（本令的目标 = **0**）⇒ 改前红、改完绿；
    基线里同时留 `beforeTextButtons`（改前读数）做**成对留痕**。
 D. **空跑防护**：UI 文件数下限 + 面与 `Package.swift` 对账（面目录不在盘上 ⇒ 红）。
+F. **纯图标按钮须带提示 / 无障碍标签**（加令 `T-20261013-051` ②「升为硬要求」）：纯图标控件必须带
+   `.help(` 与 `.accessibilityLabel(`；组件形态（`ICON_COMPONENTS`，如 `ToolbarIconButton`）的提示与
+   无障碍标签装在组件本体 ⇒ 这里只核调用点给了 `help:` 实参。
+G. **同一个动作 ⇒ 同一个图标**（加令 ②「可机械断言」）：从控件的提示 / 无障碍标签里取动作键（`L(.key)`），
+   取该控件的 `systemName:` 字面 —— 同一个动作键出现两枚不同图标 ⇒ 红。
+H. **符号已登记**：用到的图标符号必须在 `Scripts/button-icon-semantics.json` 的 `symbols` 里登记
+   （动作 + 语义依据）；未登记 ⇒ 红。
 E. `--inventory` 打印逐条清单（Markdown：界面 / 文件:行 / 控件 / 现行字符 / 拟用图标 / 处置）——
    这份清单是 `T-20261013-042` 第一段的交付物，落点 `Scripts/button-icon-inventory.md`。
 
-判据自己的证据：`--self-test` **23 例**（红/绿成对：文字按钮红 / 图标按钮绿 / 菜单项绿 / 存疑如实登记 / 空串豁免 …）。
+判据自己的证据：`--self-test` **32 例**（红/绿成对：文字按钮红 / 图标按钮绿 / 菜单项绿 / 存疑如实登记 / 空串豁免 …）。
 """
 
 from __future__ import annotations
@@ -51,6 +58,15 @@ MENU_FILES = {
     "App/MainMenuLocalizer.swift": "菜单**标题**本地化器（按语言改写菜单项 title）—— 不产出任何 `Button`（登记在册即可）",
 }
 MIN_FILES = 120          # 实测 127 份 .swift（App + Plugins/Notes/Views + Platform/macOS）
+
+# 图标语义台账（加令 `T-20261013-051` ②）：symbol → {动作, 依据}。
+SEMANTICS = "Scripts/button-icon-semantics.json"
+# 组件形态：图标 + 提示 + 无障碍标签**装在组件本体**⇒ 调用点只核 `help:` 实参（组件级断言单独钉）。
+ICON_COMPONENTS = {"ToolbarIconButton": "App/Views/ToolbarIcon.swift"}
+LABEL_STYLE_ICON = re.compile(r"\.labelStyle\s*\(\s*\.iconOnly\s*\)")
+SYMBOL_LITERAL = re.compile(r'systemName:\s*"([^"]+)"')
+ACTION_KEY = re.compile(r"(?:help\s*:\s*|\.help\s*\(\s*)L\(\s*\.([A-Za-z0-9_]+)\s*\)")
+PROBE_LINES = 8          # 提示/无障碍标签的观察窗（行；遇空行或下一控件即止）
 
 BUTTON = re.compile(r"\b(Button|Toggle)\s*\(")
 MENU_OPEN = re.compile(r"(?:\bMenu\s*[({]|\bCommandMenu\s*\(|\bCommandGroup\b|\bMenuBarExtra\s*\("
@@ -196,6 +212,10 @@ def _kind_from_blob(blob: str) -> dict:
     text = " ".join(blob.split())
     if not text:
         return {"kind": "unclear", "detail": "（空标签）"}
+    # `.labelStyle(.iconOnly)`：带文字标签但**可见形态只剩图标** ⇒ 合格（判据 B 的边界，2026-10-13 批 6 补）
+    if LABEL_STYLE_ICON.search(blob) and (ICON_ONLY.search(blob) or ICON_HELPER.search(blob)
+                                          or re.search(r"\bsystemImage\s*:", blob)):
+        return {"kind": "icon", "detail": text[:70]}
     if ICON_ONLY.search(blob) and not STRINGY.search(blob):
         return {"kind": "icon", "detail": text[:70]}
     if ICON_HELPER.search(blob) and not STRINGY.search(blob):
@@ -248,6 +268,26 @@ def classify(code: str, raw: str, start: int) -> dict:
 CONTROL = re.compile(r"\b(Button|Toggle)\s*(?=[({])")
 
 
+def modifier_window(code: str, raw: str, line: int, span: int = PROBE_LINES) -> tuple[str, str]:
+    """控件所在行起、至空行或下一个控件为止的窗（剥注释版 + 原文版）。
+
+    剥注释版用来找 `.help(` / `.accessibilityLabel(`；原文版用来读 `systemName: "…"` 的字面
+    （剥注释会把字符串抹成空格）。窗被下一个 `Button(` / `Toggle(` 截断 ⇒ 不借邻居的标签充数。
+    """
+    code_lines, raw_lines = code.splitlines(), raw.splitlines()
+    picked_code, picked_raw = [], []
+    for offset in range(span):
+        index = line - 1 + offset
+        if index >= len(code_lines):
+            break
+        text = code_lines[index]
+        if offset and (not text.strip() or CONTROL.match(text.lstrip())):
+            break
+        picked_code.append(text)
+        picked_raw.append(raw_lines[index] if index < len(raw_lines) else "")
+    return "\n".join(picked_code), "\n".join(picked_raw)
+
+
 def scan_file(root: pathlib.Path, relative: str) -> dict:
     raw = (root / relative).read_text(encoding="utf-8", errors="ignore")
     code = strip_noncode(raw)   # 保长度 ⇒ 需要看原文（如空串标签）时按同偏移查 raw
@@ -275,6 +315,7 @@ def scan_file(root: pathlib.Path, relative: str) -> dict:
             info["control"] = control.group(1)
             info["line"] = code.count("\n", 0, index) + 1
             info["in_menu"] = "menu" in frames
+            info["probe"], info["probe_raw"] = modifier_window(code, raw, info["line"])
             rows.append(info)
             index = control.end()
             continue
@@ -379,6 +420,70 @@ def assert_issues(files: list[str], missing: list[str], buckets: dict,
     return issues
 
 
+def load_semantics(root: pathlib.Path) -> tuple[dict, list[Issue]]:
+    """图标语义台账（加令 `T-20261013-051` ②）。"""
+    path = root / SEMANTICS
+    if not path.exists():
+        return {}, [Issue(SEMANTICS, "图标语义台账不在盘上 —— 「符号已登记」这条断言没有立足点")]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, [Issue(SEMANTICS, f"图标语义台账读不出来：{exc}")]
+    if not isinstance(data, dict) or not isinstance(data.get("symbols"), dict):
+        return {}, [Issue(SEMANTICS, "图标语义台账的形状不对（要 {\"symbols\": {…}}）")]
+    return data["symbols"], []
+
+
+def a11y_and_semantics_issues(root: pathlib.Path, buckets: dict, baseline: dict | None) -> tuple[list[Issue], dict]:
+    """判据 F（纯图标按钮须带提示 / 无障碍标签）+ G（同一动作同一图标）+ H（符号已登记）。"""
+    issues: list[Issue] = []
+    symbols, ledger_issues = load_semantics(root)
+    issues += ledger_issues
+    stats = {"icons": len(buckets["icon"]), "ok": 0, "missing": [], "pairs": 0, "uncovered": 0,
+             "help_only": []}
+    actions: dict[str, set] = {}
+    for row in buckets["icon"]:
+        blob = row.get("detail", "") + "\n" + row.get("probe", "")
+        helper = next((name for name in ICON_COMPONENTS if name in blob), None)
+        if helper:
+            # 组件形态：提示与无障碍标签装在组件本体（另有一条核心用例钉着）⇒ 这里只核调用点给了 help:
+            if "help:" in blob:
+                stats["ok"] += 1
+            else:
+                stats["missing"].append(f"{row['path']}:{row['line']}（{helper} 调用点缺 help: 实参）")
+        else:
+            # 加令 ② 原文是「可访问性标签 / 悬浮提示」（二选一即算满足）；「与」的严格面另计读数（提案，待前门裁）
+            has_help = ".help(" in blob or "help:" in blob
+            has_label = ".accessibilityLabel(" in blob
+            if has_help or has_label:
+                stats["ok"] += 1
+                if has_help and not has_label:
+                    stats["help_only"].append(f"{row['path']}:{row['line']}")
+            else:
+                stats["missing"].append(f"{row['path']}:{row['line']} {row.get('detail', '')[:38]}")
+        found_symbol = SYMBOL_LITERAL.search(row.get("probe_raw", ""))
+        found_action = ACTION_KEY.search(blob)
+        if found_symbol and found_action:
+            stats["pairs"] += 1
+            key, symbol = found_action.group(1), found_symbol.group(1)
+            actions.setdefault(key, set()).add(symbol)
+            if symbol not in symbols:
+                issues.append(Issue("判据 H", f"图标 `{symbol}` 未登记进 {SEMANTICS}"
+                                              f"（动作 `{key}` · {row['path']}:{row['line']}）"))
+        else:
+            stats["uncovered"] += 1
+    for key, syms in sorted(actions.items()):
+        if len(syms) > 1:
+            issues.append(Issue("判据 G", f"同一个动作 `{key}` 用了多个图标 {sorted(syms)}"
+                                          f" —— 加令 ② 要求「同一个动作在不同界面用同一个图标」"))
+    if stats["missing"]:
+        head = "; ".join(stats["missing"][:3])
+        issues.append(Issue("判据 F", f"纯图标按钮**既无提示也无无障碍标签**的有 {len(stats['missing'])} 处"
+                                      f"（目标 0 · 批次 6 实测读数 "
+                                      f"{(baseline or {}).get('missingA11y', len(stats['missing']))}） —— 例：{head}"))
+    return issues, stats
+
+
 SYMBOL_HINTS = (
     ("close", "xmark"), ("cancel", "xmark.circle"), ("ok", "checkmark"), ("confirm", "checkmark"),
     ("save", "square.and.arrow.down"), ("delete", "trash"), ("drop", "trash"), ("remove", "trash"),
@@ -406,24 +511,31 @@ def symbol_hint(detail: str) -> str:
     return "**待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话）"
 
 
-def inventory_md(files: list[str], buckets: dict) -> str:
+def inventory_md(files: list[str], buckets: dict, semantics: dict | None = None) -> str:
     def label(row: dict) -> str:
         return row["path"].split("/")[-1].replace(".swift", "")
     lines = [
         "# 按钮图标化 · 逐条盘点清单（`T-20261013-042` 第一段）",
         "",
         "- 口径：人类主人 2026-10-13 令 + 前门 18:2x 裁定 ㈠（水平按钮一律图标 / 菜单项保留文字）。",
+        "- 加令：`T-20261013-051`（范围确认「全部图标化」不缩面 + 质量硬要求：图标须有明显含义 /"
+        " 同一动作同一图标 / 纯图标按钮须带提示或无障碍标签）。",
+        "- 进度：第一段盘点 **277** 处 → 第二段批 1–5 落地 223 处 → 批 6（33 处切换式按钮 +"
+        " 1 处 `.labelStyle(.iconOnly)` 判据校正）⇒ a 类 **20** 处（余 = 弹框 / 内容承载 / 归属待裁）。",
         f"- 面：`App/**` + `Plugins/Notes/Views/**` + `Platform/macOS/**` 的**全部** `.swift`（**{len(files)} 份**，不抽样）。",
         f"- 命令：`python3 Scripts/check-button-icon-only.py --inventory`（判定物先剥注释与字符串）。",
         "",
         f"## a 类 · 水平按钮（**必改**）· {len(buckets['a'])} 处",
         "",
-        "| # | 界面 | 文件:行 | 控件 | 现行字符 | 拟用图标 | 处置 |",
-        "|---|---|---|---|---|---|---|",
+        "| # | 界面 | 文件:行 | 控件 | 现行字符 | 拟用图标 | 语义依据 | 处置 |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for index, row in enumerate(buckets["a"], 1):
+        hint = symbol_hint(row["detail"])
+        registered = semantics.get(hint.strip("`"), {}) if semantics else {}
+        reasons = registered.get("依据") or "—（本批未落地：见 `T-20261013-042` 结果 §待裁）"
         lines.append(f"| {index} | {label(row)} | `{row['path']}:{row['line']}` | {row['control']} | "
-                     f"`{row['detail']}` | {symbol_hint(row['detail'])} | 改图标 + 保留 tooltip/可访问性标签 |")
+                     f"`{row['detail']}` | {hint} | {reasons} | 改图标 + 保留 tooltip/可访问性标签 |")
     lines += ["", f"## b 类 · 菜单项（**保留文字**，只盘不改）· {len(buckets['b'])} 处", "",
               "| # | 界面 | 文件:行 | 控件 | 现行字符 | 处置 |", "|---|---|---|---|---|---|"]
     for index, row in enumerate(buckets["b"], 1):
@@ -460,6 +572,20 @@ def self_test() -> int:
     with tempfile.TemporaryDirectory(prefix="doyah-btn-selftest-") as tmp:
         root = pathlib.Path(tmp)
         counter = [0]
+        (root / "Scripts").mkdir(parents=True, exist_ok=True)
+        (root / SEMANTICS).write_text(
+            json.dumps({"symbols": {"pencil": {"动作": "commonEdit", "依据": "编辑 = 铅笔"}}},
+                       ensure_ascii=False), encoding="utf-8")
+
+        def icon_row(detail: str, probe: str = "", probe_raw: str = "") -> dict:
+            return {"path": "App/Views/Probe.swift", "line": 1, "control": "Button",
+                    "detail": detail, "probe": probe, "probe_raw": probe_raw}
+
+        def icon_buckets(*rows: dict) -> dict:
+            return {"a": [], "b": [], "icon": list(rows), "pending": [], "empty": [], "pickers": []}
+
+        def wheres(*rows: dict) -> set:
+            return {issue.where for issue in a11y_and_semantics_issues(root, icon_buckets(*rows), None)[0]}
 
         def rows_of(text: str, relative: str = "App/Views/Probe.swift") -> list[dict]:
             counter[0] += 1
@@ -530,6 +656,42 @@ def self_test() -> int:
                       bool(assert_issues(enough, ["Platform/macOS"], empty_buckets, good_baseline))))
         cases.append(("⑳ 基线不在盘上 ⇒ 红", bool(load_baseline(root / "no-baseline")[1])))
 
+        cases.append(("㉒ `.labelStyle(.iconOnly)` 的 Label 标签 ⇒ 合格（可见形态只剩图标）",
+                      kinds('Toggle(isOn: $y) { Label(L(.notesFavoriteOnly), systemImage: "star")'
+                            '.labelStyle(.iconOnly) }\n') == ["icon"]))
+        cases.append(("㉓ 纯图标按钮既无提示也无无障碍标签 ⇒ 判据 F 红",
+                      "判据 F" in wheres(icon_row('Image(systemName: "xmark")'))))
+        cases.append(("㉔′ 只有 `.help(`（令原文「标签 / 提示」二选一）⇒ 判据 F 绿 + 计入严格面读数",
+                      "判据 F" not in wheres(icon_row('Image(systemName: "xmark")', ".help(L(.commonClose))"))))
+        cases.append(("㉔ 带 `.help(` + `.accessibilityLabel(` ⇒ 判据 F 绿",
+                      "判据 F" not in wheres(icon_row(
+                          'Image(systemName: "xmark")',
+                          ".help(L(.commonClose))\n.accessibilityLabel(Text(L(.commonClose)))"))))
+        cases.append(("㉕ 组件形态（`ToolbarIconButton` + `help:` 实参）⇒ 判据 F 绿",
+                      "判据 F" not in wheres(icon_row(
+                          'ToolbarIconButton(systemName: "trash", help: L(.drop)) { drop() }'))))
+        cases.append(("㉖ 同一个动作两枚图标 ⇒ 判据 G 红",
+                      "判据 G" in wheres(
+                          icon_row('Image(systemName: "pencil")',
+                                   ".help(L(.commonEdit))\n.accessibilityLabel(Text(L(.commonEdit)))",
+                                   'Image(systemName: "pencil")'),
+                          icon_row('Image(systemName: "square.and.pencil")',
+                                   ".help(L(.commonEdit))\n.accessibilityLabel(Text(L(.commonEdit)))",
+                                   'Image(systemName: "square.and.pencil")'))))
+        cases.append(("㉗ 图标未登记进台账 ⇒ 判据 H 红",
+                      "判据 H" in wheres(icon_row(
+                          'Image(systemName: "ladybug")',
+                          ".help(L(.commonEdit))\n.accessibilityLabel(Text(L(.commonEdit)))",
+                          'Image(systemName: "ladybug")'))))
+        cases.append(("㉘ 已登记 + 动作一致 ⇒ 判据 G/H 绿",
+                      not wheres(icon_row(
+                          'Image(systemName: "pencil")',
+                          ".help(L(.commonEdit))\n.accessibilityLabel(Text(L(.commonEdit)))",
+                          'Image(systemName: "pencil")'))))
+        cases.append(("㉙ 台账缺盘 ⇒ 出声（不静默放行）",
+                      any(issue.where == SEMANTICS for issue in a11y_and_semantics_issues(
+                          root / "no-ledger-here", icon_buckets(), None)[0])))
+
     after = _sha(real_baseline) if real_baseline.exists() else None
     cases.append(("㉑ 真仓库盘点基线逐字节未变", before == after))
 
@@ -559,8 +721,11 @@ def main(argv: list[str]) -> int:
     buckets = tally(results)
     baseline, issues = load_baseline(ROOT)
     issues += assert_issues(files, missing, buckets, baseline)
+    extra, stats = a11y_and_semantics_issues(ROOT, buckets, baseline)
+    issues += extra
+    semantics, _ledger_issues = load_semantics(ROOT)
     if "--inventory" in argv:
-        print(inventory_md(files, buckets), end="")
+        print(inventory_md(files, buckets, semantics), end="")
         return 1 if issues else 0
     print("==> 按钮图标化盘点（人类主人令 2026-10-13 · 信箱 T-20261013-042）")
     print(f"    a 类 水平按钮（**必改**）：{len(buckets['a'])} 处"
@@ -571,6 +736,11 @@ def main(argv: list[str]) -> int:
     print(f"    已是纯图标（合格）：{len(buckets['icon'])} 处 · 存疑（登记待裁）：{len(buckets['pending'])} 处 · "
           f"无可见文案豁免：{len(buckets['empty'])} 处 · Picker（附录·归口待裁）：{len(buckets['pickers'])} 处")
     print(f"    面：{len(files)} 份 .swift（App + Plugins/Notes/Views + Platform/macOS，不抽样）")
+    print(f"    判据 F 提示 / 无障碍标签：合格 {stats['ok']}/{stats['icons']} 处 · "
+          f"缺 {len(stats['missing'])} 处（目标 0）")
+    print(f"    判据 F 严格面读数（提案 · 待前门裁）：有提示但无无障碍标签 {len(stats['help_only'])} 处")
+    print(f"    判据 G/H 动作↔图标对账：{stats['pairs']} 处 · 未覆盖（符号是变量 / 取不到动作键）"
+          f"{stats['uncovered']} 处 · 语义台账符号 {len(semantics)} 枚")
     if issues:
         print(f"\n❌ {len(issues)} 处未过：")
         for issue in issues:

@@ -265,8 +265,12 @@ struct AccountSyncSheet: View {
     private var syncSection: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             // 默认关（口径 ②）：开关的初值由模型给，视图不设默认。
-            Toggle(L(.accountSyncToggle), isOn: $model.cloudSyncEnabled)
-                .disabled(!model.canUseCloudSync)
+            Toggle(isOn: $model.cloudSyncEnabled) {
+                Image(systemName: "icloud")
+            }
+            .help(L(.accountSyncToggle))
+            .accessibilityLabel(Text(L(.accountSyncToggle)))
+            .disabled(!model.canUseCloudSync)
 
             // `S4` 那句告知**常显**（不随开关状态藏起来）—— 「开启处必须写明」是契约原文，
             // 藏进 tooltip 就等于没写。屏幕上的字来自语言表 `.accountSyncNotice`（逐字见文件头注释）。

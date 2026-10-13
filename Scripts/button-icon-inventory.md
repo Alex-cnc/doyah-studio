@@ -1,67 +1,35 @@
 # 按钮图标化 · 逐条盘点清单（`T-20261013-042` 第一段）
 
 - 口径：人类主人 2026-10-13 令 + 前门 18:2x 裁定 ㈠（水平按钮一律图标 / 菜单项保留文字）。
+- 加令：`T-20261013-051`（范围确认「全部图标化」不缩面 + 质量硬要求：图标须有明显含义 / 同一动作同一图标 / 纯图标按钮须带提示或无障碍标签）。
+- 进度：第一段盘点 **277** 处 → 第二段批 1–5 落地 223 处 → 批 6（33 处切换式按钮 + 1 处 `.labelStyle(.iconOnly)` 判据校正）⇒ a 类 **20** 处（余 = 弹框 / 内容承载 / 归属待裁）。
 - 面：`App/**` + `Plugins/Notes/Views/**` + `Platform/macOS/**` 的**全部** `.swift`（**127 份**，不抽样）。
 - 命令：`python3 Scripts/check-button-icon-only.py --inventory`（判定物先剥注释与字符串）。
 
-## a 类 · 水平按钮（**必改**）· 54 处
+## a 类 · 水平按钮（**必改**）· 20 处
 
-| # | 界面 | 文件:行 | 控件 | 现行字符 | 拟用图标 | 处置 |
-|---|---|---|---|---|---|---|
-| 1 | AccountSyncSheet | `App/Views/AccountSyncSheet.swift:268` | Toggle | `L(.accountSyncToggle)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 2 | AgentAuditPanel | `App/Views/AgentAuditPanel.swift:186` | Toggle | `L(.agentReadOnlyMode)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 3 | AgentAuditPanel | `App/Views/AgentAuditPanel.swift:200` | Toggle | `kind.text` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 4 | AgentAuditPanel | `App/Views/AgentAuditPanel.swift:342` | Button | `HStack(spacing: 8) { Text(AgentAuditPresentation.timestampText(record.` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 5 | AgentSQLPanel | `App/Views/AgentSQLPanel.swift:95` | Toggle | `L(.agentSQLIncludeTables)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 6 | AgentSQLPanel | `App/Views/AgentSQLPanel.swift:96` | Toggle | `L(.agentSQLIncludeStatement)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 7 | AgentSettingsSheet | `App/Views/AgentSettingsSheet.swift:36` | Toggle | `L(.agentEnabled)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 8 | AgentSettingsSheet | `App/Views/AgentSettingsSheet.swift:82` | Toggle | `L(.agentAPIKeyClear)` | `xmark.bin` | 改图标 + 保留 tooltip/可访问性标签 |
-| 9 | AppearanceSheet | `App/Views/AppearanceSheet.swift:291` | Toggle | `L(.appearanceNebulaSkin)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 10 | AppearanceSheet | `App/Views/AppearanceSheet.swift:369` | Toggle | `L(.terminalCursorBlink)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 11 | AppearanceSheet | `App/Views/AppearanceSheet.swift:485` | Button | `HStack(alignment: .center, spacing: Spacing.m) { Image(systemName: isS` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 12 | AppearanceSheet | `App/Views/AppearanceSheet.swift:584` | Button | `HStack(alignment: .center, spacing: Spacing.m) { Image(systemName: isS` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 13 | BackupRestoreSheet | `App/Views/BackupRestoreSheet.swift:194` | Toggle | `L(.backupRestoreClean)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 14 | ConnectionFormView | `App/Views/ConnectionFormView.swift:267` | Toggle | `L(.connectionFormReadOnly)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 15 | ConnectionFormView | `App/Views/ConnectionFormView.swift:339` | Toggle | `L(.sshEnableLabel)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 16 | ConnectionFormView | `App/Views/ConnectionFormView.swift:401` | Toggle | `L(.sshKeyEncryptedLabel)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 17 | ConnectionSettingsSheet | `App/Views/ConnectionSettingsSheet.swift:47` | Toggle | `L(.connectionSettingsKeepAliveToggle)` | `gearshape` | 改图标 + 保留 tooltip/可访问性标签 |
-| 18 | DataTaskPanel | `App/Views/DataTaskPanel.swift:170` | Toggle | `L(.dataTaskOnlyEnabled)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 19 | DataTaskPanel | `App/Views/DataTaskPanel.swift:196` | Button | `VStack(alignment: .leading, spacing: 2) { HStack(spacing: 4) { Image(s` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 20 | DataTaskPanel | `App/Views/DataTaskPanel.swift:405` | Toggle | `L(.dataTaskEnabled)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 21 | DataTaskSpecSheet | `App/Views/DataTaskSpecSheet.swift:48` | Toggle | `L(.agentSQLIncludeTables)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 22 | ExecutionPlanPanel | `App/Views/ExecutionPlanPanel.swift:67` | Toggle | `L(.planAnalyze)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 23 | ExecutionPlanPanel | `App/Views/ExecutionPlanPanel.swift:69` | Toggle | `L(.planBuffers)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 24 | ExecutionPlanPanel | `App/Views/ExecutionPlanPanel.swift:71` | Toggle | `L(.planFormatJSON)` | `text.alignleft` | 改图标 + 保留 tooltip/可访问性标签 |
-| 25 | ForeignKeyJumpSheet | `App/Views/ForeignKeyJumpSheet.swift:46` | Button | `HStack { Text(label(for: option)) .font(Theme.font(.body)) Spacer() if` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 26 | ImportPanel | `App/Views/ImportPanel.swift:167` | Toggle | `L(.importHasHeader)` | `square.and.arrow.down` | 改图标 + 保留 tooltip/可访问性标签 |
-| 27 | LowerPaneTabStrip | `App/Views/LowerPaneTabStrip.swift:108` | Button | `Text(L(QueryHistoryRemovalPrompt.actionTitleKey(action)))` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 28 | LowerPaneTabStrip | `App/Views/LowerPaneTabStrip.swift:130` | Button | `HStack(spacing: Spacing.xs) { Image(systemName: item.symbolName) .font` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 29 | MaintenancePanel | `App/Views/MaintenancePanel.swift:77` | Toggle | `L(.maintenanceAllowMultiple)` | `checkmark.circle` | 改图标 + 保留 tooltip/可访问性标签 |
-| 30 | PrivilegePanel | `App/Views/PrivilegePanel.swift:188` | Toggle | `L(.privilegeWithGrantOption)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 31 | QueryWorkspaceView | `App/Views/QueryWorkspaceView.swift:52` | Button | `tab.isDirty ? : tab.title` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 32 | ResultTableView | `App/Views/ResultTableView.swift:261` | Toggle | `Label(L(.commonEdit), systemImage: )` | `pencil` | 改图标 + 保留 tooltip/可访问性标签 |
-| 33 | ResultTableView | `App/Views/ResultTableView.swift:271` | Toggle | `Label(L(.rowDetailTitle), systemImage: )` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 34 | RoutineCandidatesPanel | `App/Views/RoutineCandidatesPanel.swift:275` | Toggle | `L(.memoryGovernanceRecordingToggle)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 35 | SQLArchiveSheet | `App/Views/SQLArchiveSheet.swift:19` | Toggle | `L(.archiveEnable)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 36 | SchemaDiffPanel | `App/Views/SchemaDiffPanel.swift:86` | Toggle | `L(.schemaDiffAllowDrop)` | `trash` | 改图标 + 保留 tooltip/可访问性标签 |
-| 37 | ServerObjectsPanel | `App/Views/ServerObjectsPanel.swift:253` | Button | `HStack(alignment: .firstTextBaseline, spacing: Spacing.s) { Text(objec` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 38 | ServerObjectsPanel | `App/Views/ServerObjectsPanel.swift:322` | Toggle | `L(.serverObjectsCanLogin)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 39 | ServerObjectsPanel | `App/Views/ServerObjectsPanel.swift:323` | Toggle | `L(.serverObjectsSuperuser)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 40 | SessionPanel | `App/Views/SessionPanel.swift:119` | Button | `L(.sessionTerminateConfirm)` | `checkmark` | 改图标 + 保留 tooltip/可访问性标签 |
-| 41 | SessionPanel | `App/Views/SessionPanel.swift:125` | Button | `L(.commonCancel)` | `xmark.circle` | 改图标 + 保留 tooltip/可访问性标签 |
-| 42 | SyntheticDataPanel | `App/Views/SyntheticDataPanel.swift:93` | Toggle | `L(.syntheticOverwrite)` | `square.and.pencil` | 改图标 + 保留 tooltip/可访问性标签 |
-| 43 | TableDesignExtrasSection | `App/Views/TableDesignExtrasSection.swift:201` | Toggle | `L(.tableDesignIndexUnique)` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 44 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:227` | Toggle | `Label(L(.notesFavoriteOnly), systemImage: ) .labelStyle(.iconOnly) .fo` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 45 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:313` | Button | `Label { Text(L(note.isFavorite ? .notesUnmarkFavorite : .notesMarkFavo` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 46 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:332` | Button | `Label { Text(L(note.isPinned ? .notesUnmarkPinned : .notesMarkPinned))` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 47 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:710` | Button | `Text(L(ContainerEditPrompt.confirmKey))` | `checkmark` | 改图标 + 保留 tooltip/可访问性标签 |
-| 48 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:717` | Button | `Text(L(ContainerEditPrompt.cancelKey))` | `xmark.circle` | 改图标 + 保留 tooltip/可访问性标签 |
-| 49 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:738` | Button | `Text(L(ContainerRemovalPrompt.titleKey(for: action, kind: request.kind` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 50 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:756` | Button | `Label { Text(L(direction.titleKey)) } icon: { Image(systemName: direct` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 51 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:776` | Button | `target.isCurrent ? target.name + L(NotebookShelfMovePrompt.currentMark` | `checkmark` | 改图标 + 保留 tooltip/可访问性标签 |
-| 52 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:804` | Button | `HStack(spacing: Spacing.xs) { Image(systemName: systemImage) .font(The` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
-| 53 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:1242` | Button | `Text(L(action == .cancel ? .notesRemoveCancel : .notesDelete))` | `xmark.circle` | 改图标 + 保留 tooltip/可访问性标签 |
-| 54 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:1862` | Toggle | `Text(L(.todoHasDueLabel)) .font(Theme.font(.caption))` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | 改图标 + 保留 tooltip/可访问性标签 |
+| # | 界面 | 文件:行 | 控件 | 现行字符 | 拟用图标 | 语义依据 | 处置 |
+|---|---|---|---|---|---|---|---|
+| 1 | AgentAuditPanel | `App/Views/AgentAuditPanel.swift:350` | Button | `HStack(spacing: 8) { Text(AgentAuditPresentation.timestampText(record.` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 2 | AppearanceSheet | `App/Views/AppearanceSheet.swift:493` | Button | `HStack(alignment: .center, spacing: Spacing.m) { Image(systemName: isS` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 3 | AppearanceSheet | `App/Views/AppearanceSheet.swift:592` | Button | `HStack(alignment: .center, spacing: Spacing.m) { Image(systemName: isS` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 4 | DataTaskPanel | `App/Views/DataTaskPanel.swift:200` | Button | `VStack(alignment: .leading, spacing: 2) { HStack(spacing: 4) { Image(s` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 5 | ForeignKeyJumpSheet | `App/Views/ForeignKeyJumpSheet.swift:46` | Button | `HStack { Text(label(for: option)) .font(Theme.font(.body)) Spacer() if` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 6 | LowerPaneTabStrip | `App/Views/LowerPaneTabStrip.swift:108` | Button | `Text(L(QueryHistoryRemovalPrompt.actionTitleKey(action)))` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 7 | LowerPaneTabStrip | `App/Views/LowerPaneTabStrip.swift:130` | Button | `HStack(spacing: Spacing.xs) { Image(systemName: item.symbolName) .font` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 8 | QueryWorkspaceView | `App/Views/QueryWorkspaceView.swift:52` | Button | `tab.isDirty ? : tab.title` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 9 | ServerObjectsPanel | `App/Views/ServerObjectsPanel.swift:253` | Button | `HStack(alignment: .firstTextBaseline, spacing: Spacing.s) { Text(objec` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 10 | SessionPanel | `App/Views/SessionPanel.swift:119` | Button | `L(.sessionTerminateConfirm)` | `checkmark` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 11 | SessionPanel | `App/Views/SessionPanel.swift:125` | Button | `L(.commonCancel)` | `xmark.circle` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 12 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:313` | Button | `Label { Text(L(note.isFavorite ? .notesUnmarkFavorite : .notesMarkFavo` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 13 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:332` | Button | `Label { Text(L(note.isPinned ? .notesUnmarkPinned : .notesMarkPinned))` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 14 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:710` | Button | `Text(L(ContainerEditPrompt.confirmKey))` | `checkmark` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 15 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:717` | Button | `Text(L(ContainerEditPrompt.cancelKey))` | `xmark.circle` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 16 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:738` | Button | `Text(L(ContainerRemovalPrompt.titleKey(for: action, kind: request.kind` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 17 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:756` | Button | `Label { Text(L(direction.titleKey)) } icon: { Image(systemName: direct` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 18 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:776` | Button | `target.isCurrent ? target.name + L(NotebookShelfMovePrompt.currentMark` | `checkmark` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 19 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:804` | Button | `HStack(spacing: Spacing.xs) { Image(systemName: systemImage) .font(The` | **待定**（口径未定：语义近似的 SF Symbol 有多枚，需设计一句话） | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
+| 20 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:1242` | Button | `Text(L(action == .cancel ? .notesRemoveCancel : .notesDelete))` | `xmark.circle` | —（本批未落地：见 `T-20261013-042` 结果 §待裁） | 改图标 + 保留 tooltip/可访问性标签 |
 
 ## b 类 · 菜单项（**保留文字**，只盘不改）· 99 处
 
@@ -95,10 +63,10 @@
 | 26 | DoyahStudioCommands | `App/DoyahStudioCommands.swift:229` | Button | `L(.lowerPaneToggle)` | 保留文字（可选加图标前缀） |
 | 27 | DoyahStudioCommands | `App/DoyahStudioCommands.swift:239` | Toggle | `language.displayName` | 保留文字（可选加图标前缀） |
 | 28 | AgentAuditPanel | `App/Views/AgentAuditPanel.swift:94` | Button | `format.text` | 保留文字（可选加图标前缀） |
-| 29 | AgentSettingsSheet | `App/Views/AgentSettingsSheet.swift:57` | Button | `name` | 保留文字（可选加图标前缀） |
+| 29 | AgentSettingsSheet | `App/Views/AgentSettingsSheet.swift:61` | Button | `name` | 保留文字（可选加图标前缀） |
 | 30 | ConnectionListView | `App/Views/ConnectionListView.swift:47` | Button | `L(.commonEdit)` | 保留文字（可选加图标前缀） |
 | 31 | ConnectionListView | `App/Views/ConnectionListView.swift:50` | Button | `L(.commonDelete)` | 保留文字（可选加图标前缀） |
-| 32 | DataTaskPanel | `App/Views/DataTaskPanel.swift:443` | Button | `bookmark.displayName` | 保留文字（可选加图标前缀） |
+| 32 | DataTaskPanel | `App/Views/DataTaskPanel.swift:451` | Button | `bookmark.displayName` | 保留文字（可选加图标前缀） |
 | 33 | ObjectTreeContextMenu | `App/Views/ObjectTreeContextMenu.swift:122` | Button | `L(.tableDesignTitle)` | 保留文字（可选加图标前缀） |
 | 34 | ObjectTreeContextMenu | `App/Views/ObjectTreeContextMenu.swift:130` | Button | `L(.treeActionBrowseRows, ObjectTreeActions.defaultBrowseLimit)` | 保留文字（可选加图标前缀） |
 | 35 | ObjectTreeContextMenu | `App/Views/ObjectTreeContextMenu.swift:136` | Button | `L(.treeActionSelectTemplate)` | 保留文字（可选加图标前缀） |
@@ -139,15 +107,15 @@
 | 70 | QueryToolbar | `App/Views/QueryToolbar.swift:326` | Button | `query.name` | 保留文字（可选加图标前缀） |
 | 71 | ResultClientViewBar | `App/Views/ResultClientViewBar.swift:126` | Button | `meta.name` | 保留文字（可选加图标前缀） |
 | 72 | ResultClientViewBar | `App/Views/ResultClientViewBar.swift:140` | Button | `filterOperatorLabel(op)` | 保留文字（可选加图标前缀） |
-| 73 | ResultTableView | `App/Views/ResultTableView.swift:280` | Button | `L(.exportCSV)` | 保留文字（可选加图标前缀） |
-| 74 | ResultTableView | `App/Views/ResultTableView.swift:281` | Button | `L(.exportCSVGB18030)` | 保留文字（可选加图标前缀） |
-| 75 | ResultTableView | `App/Views/ResultTableView.swift:282` | Button | `L(.exportJSON)` | 保留文字（可选加图标前缀） |
-| 76 | ResultTableView | `App/Views/ResultTableView.swift:283` | Button | `L(.exportXLSX)` | 保留文字（可选加图标前缀） |
-| 77 | ResultTableView | `App/Views/ResultTableView.swift:285` | Button | `L(.exportTSV)` | 保留文字（可选加图标前缀） |
-| 78 | ResultTableView | `App/Views/ResultTableView.swift:286` | Button | `L(.exportMarkdown)` | 保留文字（可选加图标前缀） |
-| 79 | ResultTableView | `App/Views/ResultTableView.swift:287` | Button | `L(.exportSQLInsert)` | 保留文字（可选加图标前缀） |
-| 80 | TableDesignExtrasSection | `App/Views/TableDesignExtrasSection.swift:243` | Button | `L(.referentialActionNone)` | 保留文字（可选加图标前缀） |
-| 81 | TableDesignExtrasSection | `App/Views/TableDesignExtrasSection.swift:245` | Button | `ForeignKeyDraft.labelKey(action)` | 保留文字（可选加图标前缀） |
+| 73 | ResultTableView | `App/Views/ResultTableView.swift:282` | Button | `L(.exportCSV)` | 保留文字（可选加图标前缀） |
+| 74 | ResultTableView | `App/Views/ResultTableView.swift:283` | Button | `L(.exportCSVGB18030)` | 保留文字（可选加图标前缀） |
+| 75 | ResultTableView | `App/Views/ResultTableView.swift:284` | Button | `L(.exportJSON)` | 保留文字（可选加图标前缀） |
+| 76 | ResultTableView | `App/Views/ResultTableView.swift:285` | Button | `L(.exportXLSX)` | 保留文字（可选加图标前缀） |
+| 77 | ResultTableView | `App/Views/ResultTableView.swift:287` | Button | `L(.exportTSV)` | 保留文字（可选加图标前缀） |
+| 78 | ResultTableView | `App/Views/ResultTableView.swift:288` | Button | `L(.exportMarkdown)` | 保留文字（可选加图标前缀） |
+| 79 | ResultTableView | `App/Views/ResultTableView.swift:289` | Button | `L(.exportSQLInsert)` | 保留文字（可选加图标前缀） |
+| 80 | TableDesignExtrasSection | `App/Views/TableDesignExtrasSection.swift:247` | Button | `L(.referentialActionNone)` | 保留文字（可选加图标前缀） |
+| 81 | TableDesignExtrasSection | `App/Views/TableDesignExtrasSection.swift:249` | Button | `ForeignKeyDraft.labelKey(action)` | 保留文字（可选加图标前缀） |
 | 82 | TerminalTabsBar | `App/Views/TerminalTabsBar.swift:82` | Button | `L(.terminalTabRename)` | 保留文字（可选加图标前缀） |
 | 83 | TerminalTabsBar | `App/Views/TerminalTabsBar.swift:83` | Button | `L(.terminalTabClose)` | 保留文字（可选加图标前缀） |
 | 84 | TodoCalendarView | `App/Views/TodoCalendarView.swift:439` | Button | `L(.commonEdit)` | 保留文字（可选加图标前缀） |
@@ -167,49 +135,49 @@
 | 98 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:615` | Button | `Label { Text(L(NotebookShelfMovePrompt.noTargetKey)) } icon: { Image(s` | 保留文字（可选加图标前缀） |
 | 99 | NotesPanel | `Plugins/Notes/Views/NotesPanel.swift:631` | Button | `Label { Text(L(ContainerRemovalPrompt.menuTitleKey(for: .notebook))) }` | 保留文字（可选加图标前缀） |
 
-## 已合格 · 已是纯图标按钮 · 74 处
+## 已合格 · 已是纯图标按钮 · 108 处
 
+- `App/Views/AccountSyncSheet.swift:268`
 - `App/Views/ActivityBarView.swift:68`
 - `App/Views/ActivityBarView.swift:110`
+- `App/Views/AgentAuditPanel.swift:186`
+- `App/Views/AgentAuditPanel.swift:204`
 - `App/Views/AgentChatView.swift:90`
+- `App/Views/AgentSQLPanel.swift:95`
+- `App/Views/AgentSQLPanel.swift:100`
+- `App/Views/AgentSettingsSheet.swift:36`
+- `App/Views/AgentSettingsSheet.swift:86`
+- `App/Views/AppearanceSheet.swift:291`
+- `App/Views/AppearanceSheet.swift:373`
+- `App/Views/BackupRestoreSheet.swift:194`
 - `App/Views/BrowserTabView.swift:48`
 - `App/Views/BrowserTabView.swift:58`
 - `App/Views/BrowserTabView.swift:68`
-- `App/Views/DataTaskPanel.swift:338`
+- `App/Views/ConnectionFormView.swift:267`
+- `App/Views/ConnectionFormView.swift:343`
+- `App/Views/ConnectionFormView.swift:409`
+- `App/Views/ConnectionSettingsSheet.swift:47`
+- `App/Views/DataTaskPanel.swift:170`
+- `App/Views/DataTaskPanel.swift:342`
+- `App/Views/DataTaskPanel.swift:409`
+- `App/Views/DataTaskSpecSheet.swift:48`
 - `App/Views/ERDiagramPanel.swift:288`
 - `App/Views/ERDiagramPanel.swift:292`
+- `App/Views/ExecutionPlanPanel.swift:67`
+- `App/Views/ExecutionPlanPanel.swift:73`
+- `App/Views/ExecutionPlanPanel.swift:79`
+- `App/Views/ImportPanel.swift:167`
 - `App/Views/LowerPaneTabStrip.swift:170`
 - `App/Views/LowerPaneView.swift:246`
 - `App/Views/LowerPaneView.swift:257`
 - `App/Views/LowerPaneView.swift:322`
+- `App/Views/MaintenancePanel.swift:77`
 - `App/Views/ObjectTreeRowContent.swift:45`
 - `App/Views/ObjectTreeToolbar.swift:48`
 - `App/Views/ObjectTreeToolbar.swift:56`
+- `App/Views/PrivilegePanel.swift:188`
 - `App/Views/QueryToolbar.swift:180`
-- `App/Views/QueryToolbar.swift:279`
-- `App/Views/QueryToolbar.swift:298`
-- `App/Views/QueryToolbar.swift:347`
-- `App/Views/QueryToolbar.swift:363`
-- `App/Views/QueryToolbar.swift:381`
-- `App/Views/QueryToolbar.swift:396`
-- `App/Views/QueryWorkspaceView.swift:62`
-- `App/Views/QueryWorkspaceView.swift:79`
-- `App/Views/ResultClientViewBar.swift:35`
-- `App/Views/ResultClientViewBar.swift:52`
-- `App/Views/ResultClientViewBar.swift:98`
-- `App/Views/ResultClientViewBar.swift:168`
-- `App/Views/ResultClientViewBar.swift:182`
-- `App/Views/ResultPagerBar.swift:39`
-- `App/Views/ResultPagerBar.swift:48`
-- `App/Views/ResultPagerBar.swift:62`
-- `App/Views/ResultPagerBar.swift:71`
-- `App/Views/RowDetailPanel.swift:202`
-- `App/Views/TableDesignExtrasSection.swift:84`
-- `App/Views/TableDesignExtrasSection.swift:91`
-- `App/Views/TableDesignExtrasSection.swift:134`
-- `App/Views/TableDesignExtrasSection.swift:205`
-- `App/Views/TableDesignExtrasSection.swift:229`
-- …… 共 74 处（余 34 处）
+- …… 共 108 处（余 68 处）
 
 ## 存疑（登记待裁）· 2 处
 
@@ -219,13 +187,13 @@
 ## 附录 · 非按钮控件 `Picker`（归口待裁）· 49 处
 
 - `App/Views/AccountSyncSheet.swift:137` ``
-- `App/Views/AgentAuditPanel.swift:262` ``
-- `App/Views/AgentAuditPanel.swift:271` ``
-- `App/Views/AgentSettingsSheet.swift:45` `L(.agentProvider)`
+- `App/Views/AgentAuditPanel.swift:270` ``
+- `App/Views/AgentAuditPanel.swift:279` ``
+- `App/Views/AgentSettingsSheet.swift:49` `L(.agentProvider)`
 - `App/Views/AppearanceSheet.swift:93` ``
 - `App/Views/AppearanceSheet.swift:121` `L(.appearanceMonoFamily)`
-- `App/Views/AppearanceSheet.swift:339` ``
-- `App/Views/AppearanceSheet.swift:362` ``
+- `App/Views/AppearanceSheet.swift:343` ``
+- `App/Views/AppearanceSheet.swift:366` ``
 - `App/Views/BackupRestoreSheet.swift:64` ``
 - `App/Views/BackupRestoreSheet.swift:73` `L(.backupRestoreFormat)`
 - `App/Views/BackupRestoreSheet.swift:182` ``
@@ -233,20 +201,20 @@
 - `App/Views/ConnectionDialectSection.swift:100` `L(.connectionFormSSLMode)`
 - `App/Views/ConnectionFormView.swift:233` ``
 - `App/Views/ConnectionFormView.swift:247` ``
-- `App/Views/ConnectionFormView.swift:384` ``
-- `App/Views/ConnectionFormView.swift:427` ``
-- `App/Views/DataTaskPanel.swift:323` ``
-- `App/Views/DataTaskPanel.swift:370` ``
-- `App/Views/DataTaskPanel.swift:397` ``
-- `App/Views/DataTaskPanel.swift:429` ``
+- `App/Views/ConnectionFormView.swift:392` ``
+- `App/Views/ConnectionFormView.swift:439` ``
+- `App/Views/DataTaskPanel.swift:327` ``
+- `App/Views/DataTaskPanel.swift:374` ``
+- `App/Views/DataTaskPanel.swift:401` ``
+- `App/Views/DataTaskPanel.swift:437` ``
 - `App/Views/DataTaskVersionSheet.swift:153` ``
 - `App/Views/DatabasePropertiesSheet.swift:42` `L(.dbPropsAllowConnections)`
 - `App/Views/EgressLogSheet.swift:68` ``
 - `App/Views/EgressLogSheet.swift:77` ``
 - `App/Views/EgressLogSheet.swift:88` ``
 - `App/Views/ImportPanel.swift:158` ``
-- `App/Views/ImportPanel.swift:178` ``
-- `App/Views/ImportPanel.swift:311` ``
+- `App/Views/ImportPanel.swift:182` ``
+- `App/Views/ImportPanel.swift:315` ``
 - `App/Views/ObjectTreeToolbar.swift:36` ``
 - `App/Views/PrivilegePanel.swift:162` `L(.privilegeObjectKind)`
 - `App/Views/QueryContextBar.swift:19` `L(.contextServer)`
@@ -255,8 +223,8 @@
 - `App/Views/ResultPagerBar.swift:25` ``
 - `App/Views/ResultTableView.swift:244` ``
 - `App/Views/RoutineCandidatesPanel.swift:62` ``
-- `App/Views/RoutineCandidatesPanel.swift:342` ``
-- `App/Views/SchemaDiffPanel.swift:105` ``
+- `App/Views/RoutineCandidatesPanel.swift:343` ``
+- `App/Views/SchemaDiffPanel.swift:109` ``
 - `App/Views/ServerObjectsPanel.swift:152` ``
 - `App/Views/TodoCalendarView.swift:41` `L(.notesModuleTodos)`
 - `App/Views/TodoCalendarView.swift:96` `L(.todoPaneCalendar)`
@@ -265,8 +233,8 @@
 - `App/Views/TodoCalendarView.swift:602` `L(.todoGroupLabel)`
 - `Plugins/Notes/Views/NotesPanel.swift:244` `L(.notesSortBy)`
 - `Plugins/Notes/Views/NotesPanel.swift:1369` `L(.notesSearchScopeTitle)`
-- `Plugins/Notes/Views/NotesPanel.swift:1876` `L(.todoPriorityLabel)`
-- `Plugins/Notes/Views/NotesPanel.swift:2007` `L(.reminderSection)`
+- `Plugins/Notes/Views/NotesPanel.swift:1878` `L(.todoPriorityLabel)`
+- `Plugins/Notes/Views/NotesPanel.swift:2009` `L(.reminderSection)`
 
 ## 空串按钮（豁免：无可见文案）· 4 处
 

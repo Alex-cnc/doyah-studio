@@ -164,9 +164,13 @@ struct ImportPanel: View {
                 .labelsHidden()
                 .frame(width: 160)
                 .onChange(of: format) { _, newValue in handleFormatChange(newValue) }
-                Toggle(L(.importHasHeader), isOn: $hasHeader)
-                    .font(Theme.font(.caption))
-                    .disabled(format == .json)
+                Toggle(isOn: $hasHeader) {
+                    Image(systemName: "list.dash.header.rectangle")
+                }
+                .help(L(.importHasHeader))
+                .accessibilityLabel(Text(L(.importHasHeader)))
+                .font(Theme.font(.caption))
+                .disabled(format == .json)
                 Spacer()
             }
 

@@ -1860,9 +1860,11 @@ struct TodoEditorView: View {
             TextField(L(.todoTitlePlaceholder), text: $appState.todoEditorTitle)
                 .textFieldStyle(.roundedBorder)
             Toggle(isOn: $appState.todoEditorHasDue) {
-                Text(L(.todoHasDueLabel))
+                Image(systemName: "calendar.badge.clock")
                     .font(Theme.font(.caption))
             }
+            .help(L(.todoHasDueLabel))
+            .accessibilityLabel(Text(L(.todoHasDueLabel)))
             .accessibilityIdentifier("todo-has-due")
             if appState.todoEditorHasDue {
                 DatePicker(

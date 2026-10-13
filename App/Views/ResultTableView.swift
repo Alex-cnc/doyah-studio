@@ -259,8 +259,9 @@ struct ResultTableView: View {
             // 没有来源表时**不禁用**这个开关：禁用等于静默拒绝，用户不知道为什么点不动；
             // 进去之后条上会用人话说明"这个结果来自手写 SQL，猜不出表名"。
             Toggle(isOn: editToggle(for: result)) {
-                Label(L(.commonEdit), systemImage: "square.and.pencil")
+                Image(systemName: "pencil")
             }
+            .accessibilityLabel(Text(L(.commonEdit)))
             .toggleStyle(.button)
             .disabled(result.columns.isEmpty)
             .help(L(.inlineEditPreviewTitle))
@@ -269,8 +270,9 @@ struct ResultTableView: View {
             // 没有列可展示时**禁用而不是隐藏**：能力要让人看见（结果表自己空着的时候
             // 打开一个空侧栏只会更让人费解）。
             Toggle(isOn: $isRowDetailPresented) {
-                Label(L(.rowDetailTitle), systemImage: "sidebar.trailing")
+                Image(systemName: "sidebar.trailing")
             }
+            .accessibilityLabel(Text(L(.rowDetailTitle)))
             .toggleStyle(.button)
             .disabled(result.columns.isEmpty)
             .help(L(.rowDetailTitle))

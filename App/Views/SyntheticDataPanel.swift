@@ -90,8 +90,12 @@ struct SyntheticDataPanel: View {
                         .font(Theme.font(.data))
                         .frame(width: 90)
                 }
-                Toggle(L(.syntheticOverwrite), isOn: $overwrite)
-                    .font(Theme.font(.caption))
+                Toggle(isOn: $overwrite) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+                .help(L(.syntheticOverwrite))
+                .accessibilityLabel(Text(L(.syntheticOverwrite)))
+                .font(Theme.font(.caption))
                 Spacer()
                 ToolbarIconButton(systemName: "wand.and.stars", help: L(.syntheticGenerate)) {
                     Task { await regenerate() }

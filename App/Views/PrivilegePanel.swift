@@ -185,8 +185,12 @@ struct PrivilegePanel: View {
                     .frame(width: 200)
             }
 
-            Toggle(L(.privilegeWithGrantOption), isOn: $withGrantOption)
-                .font(.caption)
+            Toggle(isOn: $withGrantOption) {
+                Image(systemName: "key.horizontal")
+            }
+            .help(L(.privilegeWithGrantOption))
+            .accessibilityLabel(Text(L(.privilegeWithGrantOption)))
+            .font(.caption)
 
             statementPreview
 

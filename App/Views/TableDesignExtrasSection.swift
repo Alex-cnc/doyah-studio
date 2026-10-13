@@ -198,8 +198,12 @@ struct TableDesignExtrasSection: View {
                 .textFieldStyle(.roundedBorder).font(Theme.font(.monoSmall)).frame(width: 150)
             TextField(L(.tableDesignIndexColumns), text: draft.columns)
                 .textFieldStyle(.roundedBorder).font(Theme.font(.monoSmall)).frame(width: 170)
-            Toggle(L(.tableDesignIndexUnique), isOn: draft.isUnique)
-                .font(Theme.font(.caption))
+            Toggle(isOn: draft.isUnique) {
+                Image(systemName: "equal.circle")
+            }
+            .help(L(.tableDesignIndexUnique))
+            .accessibilityLabel(Text(L(.tableDesignIndexUnique)))
+            .font(Theme.font(.caption))
             TextField(L(.tableDesignIndexWhere), text: draft.whereClause)
                 .textFieldStyle(.roundedBorder).font(Theme.font(.monoSmall))
             Button {
