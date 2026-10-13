@@ -245,7 +245,12 @@ public struct AgentWorkspaceTools: Sendable {
     ///
     /// `tool` 必须来自**注册表**（`FR-AI-19` ①：工具名只许出现在注册表定义处 ⇒ 本文件不写工具名字面量，
     /// 这一步由判据 `AgentToolRegistrySourceTests` 守着）。
-    public func prepareWrite(path: String, content: String, tool: AgentToolDefinition? = nil) -> AgentToolOutcome {
+    public func prepareWrite(path: String, content: String, tool: AgentToolDefinition? = nil,
+                             guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false)) -> AgentToolOutcome {
+        // ⑥ 只读模式下写类工具**连审批单都建不出来**（沿用 `AgentGuardrail` 的既有口径）
+        guard !guardPolicy.readOnly else {
+            return .refused(.deniedByPolicy, detail: AgentToolLevel.writable.rawValue)
+        }
         guard let tool = tool ?? registry.writableDefinition else {
             return .refused(.unregistered, detail: AgentToolLevel.writable.rawValue)
         }
@@ -269,8 +274,9 @@ public struct AgentWorkspaceTools: Sendable {
 
     /// 真写。**三件事缺一不可**：参数指纹与请求一致、该指纹在已批准集合里、目标仍在工作区内。
     public func writeFile(path: String, content: String, tool: AgentToolDefinition? = nil,
+                          guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false),
                           fingerprint: String, granted: Set<String>) -> AgentToolOutcome {
-        let prepared = prepareWrite(path: path, content: content, tool: tool)
+        let prepared = prepareWrite(path: path, content: content, tool: tool, guardPolicy: guardPolicy)
         guard case .needsApproval(let request) = prepared else { return prepared }
         guard request.fingerprint == fingerprint, granted.contains(fingerprint) else {
             return .refused(.approvalRequired, detail: request.fingerprint)
@@ -291,7 +297,12 @@ public struct AgentWorkspaceTools: Sendable {
 
     /// 备一条命令：白名单与工作区参数先过一遍，过了才生成审批请求。`tool` 同样来自注册表。
     public func prepareCommand(_ command: String, tool: AgentToolDefinition? = nil,
+                               guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false),
                                policy: AgentCommandPolicy = .standard) -> AgentToolOutcome {
+        // ⑥ 只读模式下执行类工具**连审批单都建不出来**
+        guard !guardPolicy.readOnly else {
+            return .refused(.deniedByPolicy, detail: AgentToolLevel.executable.rawValue)
+        }
         guard let tool = tool ?? registry.executableDefinition else {
             return .refused(.unregistered, detail: AgentToolLevel.executable.rawValue)
         }
@@ -312,11 +323,12 @@ public struct AgentWorkspaceTools: Sendable {
     /// 真跑。工作目录**钉在工作区根**（沙箱）；命令交给注入的执行器（单测不真起进程）。
     public func runCommand(_ command: String,
                            tool: AgentToolDefinition? = nil,
+                           guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false),
                            fingerprint: String,
                            granted: Set<String>,
                            policy: AgentCommandPolicy = .standard,
                            runner: AgentCommandRunner) -> AgentToolOutcome {
-        let prepared = prepareCommand(command, tool: tool, policy: policy)
+        let prepared = prepareCommand(command, tool: tool, guardPolicy: guardPolicy, policy: policy)
         guard case .needsApproval(let request) = prepared else { return prepared }
         guard request.fingerprint == fingerprint, granted.contains(fingerprint) else {
             return .refused(.approvalRequired, detail: request.fingerprint)
