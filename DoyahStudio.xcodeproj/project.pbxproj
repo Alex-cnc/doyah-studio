@@ -229,6 +229,7 @@
 		55CC7A81EFD4AAEC725E3157 /* InflateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7655EC1824BE636291008C9 /* InflateTests.swift */; };
 		55EBE957E86DBF4DFB70FF6E /* TextLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B99C971DED47BB56A504E0 /* TextLanguage.swift */; };
 		5669F9E5BCC4D04B8CCC20DF /* ConnectionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7FA41D01ABFD587BF546BA /* ConnectionListView.swift */; };
+		56B2E78E2189164D7499D820 /* AgentChatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 819B44625FDC3DF21782E4F7 /* AgentChatTests.swift */; };
 		56C48377D6FC25AA5A1DDE36 /* TerminalWorkingDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82DF35806715FCEDFFB47102 /* TerminalWorkingDirectory.swift */; };
 		5782CBEDCBEA2A2DFC301F4A /* CloudSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9C788FBC8BF62708BE76C5 /* CloudSyncService.swift */; };
 		587BA79A28ABE2C29B592ED7 /* SQLLexerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 204DB56ADDF8FD107EA2A460 /* SQLLexerTests.swift */; };
@@ -404,6 +405,7 @@
 		A6CD2A676C82B5EF8CDAA111 /* ResultClipboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E330BD910206A5A2FC0916 /* ResultClipboardTests.swift */; };
 		A6F3AFE5FC2B7900EAF50F0D /* DatabaseType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1306D14741E0119FBE2797D3 /* DatabaseType.swift */; };
 		A726F8DC61BC52287B14ADD2 /* SecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD446AD2AB1D8CE114FCAA83 /* SecretStore.swift */; };
+		A7AD02150650894E82DC7E7D /* AgentChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF0B7D44AE99D0916F15C8BD /* AgentChat.swift */; };
 		A7EE02E7E1D241F8FC786220 /* DesignTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 411406E0D589B5D0A66F59E7 /* DesignTheme.swift */; };
 		A80D9DF381FF11BD637D7B99 /* TableImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 905DC1D632F4A5353C687800 /* TableImport.swift */; };
 		A8CC4F4B065EE2D87A195AD4 /* SchemaDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FAC342296394F961CB246F9 /* SchemaDiff.swift */; };
@@ -1001,6 +1003,7 @@
 		808E88169388D310FAAD743C /* ColumnAlignment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColumnAlignment.swift; sourceTree = "<group>"; };
 		80AC5464368C1F00AA095A9A /* BackupExecution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupExecution.swift; sourceTree = "<group>"; };
 		80AFDBF937A6105266028A60 /* AgentApprovalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalSheet.swift; sourceTree = "<group>"; };
+		819B44625FDC3DF21782E4F7 /* AgentChatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentChatTests.swift; sourceTree = "<group>"; };
 		827BFBC75132F11765F97263 /* LicensePublicKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensePublicKey.swift; sourceTree = "<group>"; };
 		82DF35806715FCEDFFB47102 /* TerminalWorkingDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalWorkingDirectory.swift; sourceTree = "<group>"; };
 		838A5752B2C493D28B14E904 /* TodoCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoCalendarView.swift; sourceTree = "<group>"; };
@@ -1170,6 +1173,7 @@
 		CD73C25E354E2EF319313021 /* QueryHistoryPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryHistoryPrompt.swift; sourceTree = "<group>"; };
 		CDE7FD3151693215F320D13B /* MemoryGovernance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryGovernance.swift; sourceTree = "<group>"; };
 		CE3404D30FCA9C5CBBAB8DBD /* CodeCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeCompletion.swift; sourceTree = "<group>"; };
+		CF0B7D44AE99D0916F15C8BD /* AgentChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentChat.swift; sourceTree = "<group>"; };
 		CF0B97CE0F60557E9F1BB533 /* FoundationSecurityScopedBookmarking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationSecurityScopedBookmarking.swift; sourceTree = "<group>"; };
 		CF6E61F35A0EBE3CC7AE3339 /* TerminalStartupHint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalStartupHint.swift; sourceTree = "<group>"; };
 		CFA3C7C0790F9AE4AB8DBF3B /* ResultClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultClipboard.swift; sourceTree = "<group>"; };
@@ -1426,6 +1430,7 @@
 				7815007C874500A351A452A8 /* AgentAuditPresentationTests.swift */,
 				000A8A7276965DF20C0647AE /* AgentAuditTests.swift */,
 				C832054AE3CF1D9FE445D968 /* AgentChainTests.swift */,
+				819B44625FDC3DF21782E4F7 /* AgentChatTests.swift */,
 				C212F6D8ADAC93F0EF6E59F2 /* AgentCheckpointTests.swift */,
 				DE4176D5EC996BBFD83F43DC /* AgentConfigurationTests.swift */,
 				ED94ED7EAA4E6496BF8B0C84 /* AgentContextTests.swift */,
@@ -1668,6 +1673,7 @@
 				FCA86E784694F9EA61BE9A01 /* AgentApprovalGate.swift */,
 				58FF3DBC1AC4199232081EB5 /* AgentAudit.swift */,
 				4954FA9E22FBF93DE1356406 /* AgentAuditPresentation.swift */,
+				CF0B7D44AE99D0916F15C8BD /* AgentChat.swift */,
 				29E26E5EB1EDA11309428D17 /* AgentCheckpoint.swift */,
 				58B02660D8B8E303FF05487F /* AgentCommandPolicy.swift */,
 				2CED571C6976F25B83F91A71 /* AgentConfiguration.swift */,
@@ -2493,6 +2499,7 @@
 				AF8D9840A67F41333E72BF88 /* AgentApprovalGate.swift in Sources */,
 				E5D5A828CDACC6D6F1B5A4F1 /* AgentAudit.swift in Sources */,
 				E2AD3015CFCF91879D4DEA2C /* AgentAuditPresentation.swift in Sources */,
+				A7AD02150650894E82DC7E7D /* AgentChat.swift in Sources */,
 				5B3DEECC35427D2FFD26AC46 /* AgentCheckpoint.swift in Sources */,
 				055FABFF6BB7D3524C11C8D6 /* AgentCommandPolicy.swift in Sources */,
 				C0FE5F86ED61AA436B3BE0CC /* AgentConfiguration.swift in Sources */,
@@ -2736,6 +2743,7 @@
 				191EBDB630508121CC809352 /* AgentAuditPresentationTests.swift in Sources */,
 				D17FC22CD8A5A0F4DED93517 /* AgentAuditTests.swift in Sources */,
 				A616EB25145F81BE1F392CC2 /* AgentChainTests.swift in Sources */,
+				56B2E78E2189164D7499D820 /* AgentChatTests.swift in Sources */,
 				972033B0910AB2D85C253AF0 /* AgentCheckpointTests.swift in Sources */,
 				299724539D789B6F94195F43 /* AgentConfigurationTests.swift in Sources */,
 				D466908E4E7BAD6FB7A9B247 /* AgentContextTests.swift in Sources */,

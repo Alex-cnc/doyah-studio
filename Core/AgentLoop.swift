@@ -1,5 +1,22 @@
 import Foundation
 
+/// 循环的**进度事件**（`FR-AI-25` ②：界面要的是**增量**，不是等整段）。
+public enum AgentLoopEvent: Equatable, Sendable {
+    case hopStarted(index: Int)
+    /// 模型增量（流式渲染就吃这个）。
+    case delta(String)
+    case toolStarted(name: String)
+    /// 工具结束时的**档位**（机器形态：`executed` / `denied` / `pendingApproval` / …）。
+    case toolFinished(name: String, outcome: String)
+    case stopped(AgentLoopStop)
+    case failed(String)
+}
+
+/// 进度观察口（界面实现它；**不改变循环的判定口径**，只是把过程如实说出来）。
+public protocol AgentLoopObserver: Sendable {
+    func observe(_ event: AgentLoopEvent) async
+}
+
 /// 一次要执行的工具调用（模型给出的名字 + 参数 JSON）。
 public struct AgentToolInvocation: Equatable, Sendable {
     public var name: String
@@ -145,6 +162,8 @@ public struct AgentLoop: Sendable {
     public var sessionStore: AgentSessionStore?
     /// 审计口（可选：给了就每跳 + 每次工具调用留一条 —— `FR-AI-24` 的接线点，**不新造第二套日志**）。
     public var audit: (any AgentAuditSink)?
+    /// 进度口（可选：界面用它做流式渲染 —— `FR-AI-25` 的接线点）。
+    public var observer: (any AgentLoopObserver)?
     public var limits: AgentLoopLimits
 
     public init(client: any LLMStreamingClient,
@@ -152,12 +171,14 @@ public struct AgentLoop: Sendable {
                 registry: AgentToolRegistry = .standard,
                 sessionStore: AgentSessionStore? = nil,
                 audit: (any AgentAuditSink)? = nil,
+                observer: (any AgentLoopObserver)? = nil,
                 limits: AgentLoopLimits = AgentLoopLimits()) {
         self.client = client
         self.dispatcher = dispatcher
         self.registry = registry
         self.sessionStore = sessionStore
         self.audit = audit
+        self.observer = observer
         self.limits = limits
     }
 
@@ -175,6 +196,7 @@ public struct AgentLoop: Sendable {
         while true {
             // ③ 令牌上限：**停在发送之前**（一次请求都不发）
             if limits.tokensAlreadySpent + usage.billableTokens >= limits.maxTotalTokens {
+                await observer?.observe(.stopped(.tokenLimit(limits.maxTotalTokens)))
                 recordStop(.tokenLimit(limits.maxTotalTokens), context: context, at: startedAt)
                 return AgentLoopResult(outcome: .stopped(.tokenLimit(limits.maxTotalTokens)),
                                        steps: steps, executedTools: executed, rejectedTools: rejected,
@@ -182,12 +204,14 @@ public struct AgentLoop: Sendable {
             }
             // ④ 取消：**在下一跳之前停**（已产生的工具结果已经在会话里留痕）
             if isCancelled() {
+                await observer?.observe(.stopped(.cancelled))
                 recordStop(.cancelled, context: context, at: startedAt)
                 return AgentLoopResult(outcome: .stopped(.cancelled), steps: steps,
                                        executedTools: executed, rejectedTools: rejected, usage: usage, text: "")
             }
             // ② 步数上限：模型还想跳也不给了，**如实报上限值**
             if steps >= limits.maxSteps {
+                await observer?.observe(.stopped(.stepLimit(limits.maxSteps)))
                 recordStop(.stepLimit(limits.maxSteps), context: context, at: startedAt)
                 return AgentLoopResult(outcome: .stopped(.stepLimit(limits.maxSteps)), steps: steps,
                                        executedTools: executed, rejectedTools: rejected, usage: usage, text: "")
@@ -195,12 +219,14 @@ public struct AgentLoop: Sendable {
 
             let request = makeRequest(context: context, observations: observations)
             recordTurn(context: context, kind: .model, role: "user", text: summarise(request.userPrompt), at: startedAt)
+            await observer?.observe(.hopStarted(index: steps))
 
             let stream: AsyncThrowingStream<LLMStreamEvent, Error>
             let hopStarted = Date()
             do {
                 stream = try await client.stream(request)
             } catch {
+                await observer?.observe(.failed(error.localizedDescription))
                 return AgentLoopResult(outcome: .failed(error.localizedDescription), steps: steps,
                                        executedTools: executed, rejectedTools: rejected, usage: usage, text: "")
             }
@@ -212,6 +238,7 @@ public struct AgentLoop: Sendable {
                     switch event {
                     case .textDelta(let piece):
                         text += piece
+                        await observer?.observe(.delta(piece))
                     case .usage(let reported, _):
                         usage = reported
                     case .toolCallDelta(let index, let id, let name, let fragment):
@@ -226,6 +253,7 @@ public struct AgentLoop: Sendable {
                     }
                 }
             } catch {
+                await observer?.observe(.failed(error.localizedDescription))
                 return AgentLoopResult(outcome: .failed(error.localizedDescription), steps: steps + 1,
                                        executedTools: executed, rejectedTools: rejected, usage: usage, text: text)
             }
@@ -263,6 +291,8 @@ public struct AgentLoop: Sendable {
                     let reason = AgentToolRefusal.unregistered.rawValue
                     rejected.append((invocation.name, reason))
                     observations.append("\(invocation.name): \(reason)")
+                    await observer?.observe(.toolStarted(name: invocation.name))
+                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied"))
                     recordTurn(context: context, kind: .tool, role: "tool",
                                text: "\(invocation.name) => \(reason)", at: startedAt)
                     await audit?.record(AgentActionRecord.makeToolCall(
@@ -275,6 +305,8 @@ public struct AgentLoop: Sendable {
                                                                     against: definition) {
                     rejected.append((invocation.name, violation))
                     observations.append("\(invocation.name): \(violation)")
+                    await observer?.observe(.toolStarted(name: invocation.name))
+                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied"))
                     recordTurn(context: context, kind: .tool, role: "tool",
                                text: "\(invocation.name) => \(violation)", at: startedAt)
                     await audit?.record(AgentActionRecord.makeToolCall(
@@ -284,8 +316,10 @@ public struct AgentLoop: Sendable {
                     continue
                 }
                 let outcome = dispatcher.dispatch(invocation, approvals: approvals)
+                await observer?.observe(.toolStarted(name: invocation.name))
                 switch outcome {
                 case .needsApproval(let request):
+                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "pendingApproval"))
                     rejected.append((invocation.name, AgentToolRefusal.approvalRequired.rawValue))
                     observations.append("\(invocation.name): \(request.toolName)/\(request.fingerprint)")
                     recordTurn(context: context, kind: .approval, role: "system",
@@ -295,6 +329,7 @@ public struct AgentLoop: Sendable {
                         outcome: .pendingApproval, detail: request.fingerprint,
                         sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                 case .refused(let code, let detail):
+                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied"))
                     rejected.append((invocation.name, code.rawValue))
                     observations.append("\(invocation.name): \(code.rawValue)/\(detail)")
                     recordTurn(context: context, kind: .tool, role: "tool",
@@ -305,6 +340,7 @@ public struct AgentLoop: Sendable {
                         sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                 default:
                     executed.append(invocation)
+                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "executed"))
                     let summary = Self.summary(of: outcome)
                     observations.append("\(invocation.name): \(summary)")
                     recordTurn(context: context, kind: .tool, role: "tool",

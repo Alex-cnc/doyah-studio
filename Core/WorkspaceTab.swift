@@ -7,29 +7,48 @@ import Foundation
 /// 完全无关的状态 —— 最后会变成一个谁都不敢改的万能类。所以工作区页签**另起类型**，
 /// 与 `QueryTab` 并列，各自演进。
 public struct WorkspaceTab: Identifiable, Sendable, Equatable {
+
+    /// 页签的种类（`FR-AI-25` ①）：**对话页签是 Home 区页签条上的一种**，不是新开一个侧栏 / 分栏。
+    public enum Kind: String, Sendable, Equatable, CaseIterable {
+        /// Home 欢迎页（工作区的落脚点）。
+        case home
+        /// 文件页。
+        case file
+        /// 智能体对话页签。
+        case agentChat
+    }
+
     public let id: UUID
     /// 页签标题（文件页 = 文件名；**Home 页由调用点从语言表取** —— `L(.workspaceTabHome)` → 中文「首页」/ 英文 `Home`。
     /// Core 不认识语言表（`L(_:)` 在 App 侧），所以这里**不写死任何文案**）。
     public var title: String
-    /// 文件路径；`nil` = **Home 欢迎页**（工作区的默认页签，FR-EDIT-35）。
+    /// 文件路径；`nil` = **Home 欢迎页或对话页签**（后者看 `kind`）。
     public var path: String?
     public var language: TextLanguage
     /// 当前内容。
     public var content: String
     /// 上次读盘 / 存盘时的内容 —— `dirty` 由它俩比出来，不额外维护一个布尔（布尔迟早与内容不一致）。
     public var savedContent: String
+    /// 种类。**由既有字段推出来**：`path == nil` ⇒ Home，否则文件页；
+    /// 对话页签是显式传入的第三种（老调用点一个字都不用改）。
+    public var kind: Kind
 
-    public init(id: UUID = UUID(), title: String, path: String? = nil, language: TextLanguage, content: String = "", savedContent: String? = nil) {
+    public init(id: UUID = UUID(), title: String, path: String? = nil, language: TextLanguage,
+                content: String = "", savedContent: String? = nil, kind: Kind? = nil) {
         self.id = id
         self.title = title
         self.path = path
         self.language = language
         self.content = content
         self.savedContent = savedContent ?? content
+        self.kind = kind ?? (path == nil ? .home : .file)
     }
 
-    /// 是不是 Home 页。
-    public var isHome: Bool { path == nil }
+    /// 是不是 Home 欢迎页（**注意：对话页签不是它**）。
+    public var isHome: Bool { kind == .home }
+
+    /// 是不是对话页签（`FR-AI-25`）。
+    public var isAgentChat: Bool { kind == .agentChat }
 
     /// 有未保存改动。
     public var isDirty: Bool { content != savedContent }
@@ -48,7 +67,12 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
     ///
     /// **标题由调用点传入**：Core 里不许出现展示文案 —— 之前这里写死 `"Home"`，中文界面也显示 Home（`L-108`）。
     public static func home(title: String) -> WorkspaceTab {
-        WorkspaceTab(title: title, language: .plainText)
+        WorkspaceTab(title: title, language: .plainText, kind: .home)
+    }
+
+    /// 对话页签（`FR-AI-25` ①）。标题同样由调用点从语言表取。
+    public static func agentChat(title: String) -> WorkspaceTab {
+        WorkspaceTab(title: title, language: .plainText, kind: .agentChat)
     }
 
     /// 存盘成功：把"已保存内容"对齐到当前内容。
@@ -64,6 +88,17 @@ public enum WorkspaceTabSet {
     public static func title(for path: String) -> String {
         let name = (path as NSString).lastPathComponent
         return name.isEmpty ? path : name
+    }
+
+    /// 打开对话页签：**已经有就复用**（同一个对话开成两个页签 = 两条流各写各的，用户会看花眼）。
+    /// 与 `opening(path:…)` 同一条纪律。
+    public static func openingAgentChat(title: String,
+                                        in tabs: [WorkspaceTab]) -> (tabs: [WorkspaceTab], selected: UUID) {
+        if let existing = tabs.first(where: { $0.isAgentChat }) {
+            return (tabs, existing.id)
+        }
+        let tab = WorkspaceTab.agentChat(title: title)
+        return (tabs + [tab], tab.id)
     }
 
     /// 打开一个文件：
