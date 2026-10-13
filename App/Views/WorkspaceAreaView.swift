@@ -108,11 +108,8 @@ struct WorkspaceAreaView: View {
                 Button {
                     tabs.togglePreview()
                 } label: {
-                    Label(
-                        L(.workspacePreviewToggle),
-                        systemImage: tabs.previewVisible ? "sidebar.right" : "sidebar.squares.right"
-                    )
-                    .font(Theme.font(.caption))
+                    Image(systemName: tabs.previewVisible ? "sidebar.right" : "sidebar.squares.right")
+                        .font(Theme.font(.caption))
                 }
                 .buttonStyle(.borderless)
                 .help(L(.workspacePreviewToggle))
@@ -207,15 +204,17 @@ struct WorkspaceHomeView: View {
             Button {
                 openFileFromPanel()
             } label: {
-                Label(L(.workspaceOpenFileButton), systemImage: "doc.text")
+                Image(systemName: "doc.text")
             }
+            .help(L(.workspaceOpenFileButton))
 
             if workspace.rootURL == nil {
                 Button {
                     Task { await workspace.pickAndChoose() }
                 } label: {
-                    Label(L(.workspaceChooseFolderButton), systemImage: "folder")
+                    Image(systemName: "folder")
                 }
+                .help(L(.workspaceChooseFolderButton))
             }
         }
     }

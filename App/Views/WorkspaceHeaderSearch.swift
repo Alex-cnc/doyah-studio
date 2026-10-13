@@ -199,7 +199,7 @@ struct WorkspaceHeaderSearch: View {
                         .buttonStyle(.plain)
                         .font(Theme.font(.caption))
                 }
-                Button(L(.workspaceReplaceAll)) { schedulePlan() }
+                ToolbarIconButton(systemName: "rectangle.and.pencil.and.ellipsis", help: L(.workspaceReplaceAll)) { schedulePlan() }
                     .buttonStyle(.plain)
                     .font(Theme.font(.caption))
                     .disabled(searchedQuery.isEmpty)
@@ -275,7 +275,7 @@ struct WorkspaceHeaderSearch: View {
                 .frame(maxHeight: replacePreviewMaxHeight)
 
                 HStack(spacing: Spacing.s) {
-                    Button(L(.commandReplace)) { applyPlan() }
+                    ToolbarIconButton(systemName: "arrow.2.squarepath", help: L(.commandReplace)) { applyPlan() }
                         .buttonStyle(.plain)
                         .font(Theme.font(.caption))
                     ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) { plan = .empty }

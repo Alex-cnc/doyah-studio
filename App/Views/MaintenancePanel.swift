@@ -195,7 +195,7 @@ struct MaintenancePanel: View {
 
     private var footer: some View {
         HStack(spacing: Spacing.m) {
-            Button(L(.maintenanceReviewAction)) { appState.reviewMaintenancePlan() }
+            ToolbarIconButton(systemName: "magnifyingglass.circle", help: L(.maintenanceReviewAction)) { appState.reviewMaintenancePlan() }
             // 存进笔记：计划 + 逐条状态与理由（含被拒绝的条目与"没看懂的行"）。
             ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.maintenanceSaveNote)) {
                 Task { await appState.saveMaintenanceNote() }

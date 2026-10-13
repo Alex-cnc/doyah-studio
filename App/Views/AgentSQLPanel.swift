@@ -54,7 +54,7 @@ struct AgentSQLPanel: View {
                     }
                     // 提交审批（FR-AI-09）：写操作 / DDL 必须逐次批准；只读查询无需审批，
                     // 但也**不会被自动执行** —— 依旧只放进新页签。
-                    Button(L(.agentSQLSubmit)) {
+                    ToolbarIconButton(systemName: "paperplane", help: L(.agentSQLSubmit)) {
                         Task { await submitForApproval() }
                     }
                     .disabled(submittedSQL == editableSQL)

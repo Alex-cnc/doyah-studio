@@ -101,7 +101,7 @@ struct PrivilegePanel: View {
                 .frame(width: 200)
                 .onSubmit { Task { await load() } }
 
-            Button(L(.privilegeLoad)) {
+            ToolbarIconButton(systemName: "arrow.clockwise", help: L(.privilegeLoad)) {
                 Task { await load() }
             }
             .disabled(isLoading || !PrivilegeProbe.isValidRoleName(role))
@@ -198,7 +198,7 @@ struct PrivilegePanel: View {
                 }
                 .disabled(revokeStatement == nil)
 
-                Button(L(.privilegeGrant)) {
+                ToolbarIconButton(systemName: "plus.circle", help: L(.privilegeGrant)) {
                     Task { await apply(revoke: false) }
                 }
                 .keyboardShortcut(.defaultAction)

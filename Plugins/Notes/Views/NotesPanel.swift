@@ -472,12 +472,8 @@ struct NotesContainerTreeView: View {
                 Button {
                     appState.beginNewNotebook()
                 } label: {
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: "plus")
-                        Text(L(NotebookCreation.menuTitleKey))
-                            .lineLimit(1)
-                    }
-                    .font(Theme.font(.caption))
+                    Image(systemName: "plus")
+                        .font(Theme.font(.caption))
                 }
                 .buttonStyle(.plain)
                 .help(L(NotebookCreation.menuTitleKey))

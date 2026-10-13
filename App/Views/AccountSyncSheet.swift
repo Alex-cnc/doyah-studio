@@ -123,7 +123,7 @@ struct AccountSyncSheet: View {
                 .foregroundStyle(Theme.text(.tertiary))
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button(L(.accountSignOutAction)) {
+            ToolbarIconButton(systemName: "rectangle.portrait.and.arrow.right", help: L(.accountSignOutAction)) {
                 Task { await model.signOut() }
             }
             .disabled(model.status == .working)
@@ -159,7 +159,7 @@ struct AccountSyncSheet: View {
             SecureField(L(.accountPasswordLabel), text: $model.password)
 
             HStack(spacing: Spacing.s) {
-                Button(L(.accountSignInAction)) {
+                ToolbarIconButton(systemName: "person.crop.circle.badge.checkmark", help: L(.accountSignInAction)) {
                     Task { await model.signIn() }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -216,7 +216,7 @@ struct AccountSyncSheet: View {
             SecureField(L(.accountConfirmPasswordLabel), text: $model.newConfirmation)
 
             HStack(spacing: Spacing.s) {
-                Button(L(.accountSignUpAction)) {
+                ToolbarIconButton(systemName: "person.crop.circle.badge.plus", help: L(.accountSignUpAction)) {
                     Task { await model.submitRegistration() }
                 }
                 .disabled(model.status == .working)
@@ -292,7 +292,7 @@ struct AccountSyncSheet: View {
 
     private var recoverySection: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Button(L(.accountRecoveryEntry)) {
+            ToolbarIconButton(systemName: "key", help: L(.accountRecoveryEntry)) {
                 model.requestPasswordRecovery()
             }
 

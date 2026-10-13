@@ -61,14 +61,12 @@ struct TransactionControl: View {
         target: TransactionMode,
         current: TransactionMode
     ) -> some View {
-        Button {
+        ToolbarIconButton(
+            systemName: target == .autoCommit ? "bolt" : "hand.raised",
+            help: title,
+            isSelected: current == target
+        ) {
             Task { await appState.setTransactionMode(target, for: tab.id) }
-        } label: {
-            if current == target {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
         }
     }
 

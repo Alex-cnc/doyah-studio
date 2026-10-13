@@ -43,10 +43,8 @@ struct SessionPanel: View {
             HStack {
                 Text(L(.sessionTitle)).font(Theme.font(.title))
                 Spacer()
-                Button {
+                ToolbarIconButton(systemName: "arrow.clockwise", help: L(.sessionRefresh)) {
                     Task { await reload() }
-                } label: {
-                    Label(L(.sessionRefresh), systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
                 .disabled(isLoading)
@@ -94,7 +92,7 @@ struct SessionPanel: View {
                 .disabled(selectedPID == nil)
                 .help(L(.sessionCancelStatementHelp))
 
-                Button(L(.sessionTerminate)) {
+                ToolbarIconButton(systemName: "stop.circle", help: L(.sessionTerminate)) {
                     pendingTerminate = sessions.first { $0.pid == selectedPID }
                 }
                 .disabled(selectedPID == nil)

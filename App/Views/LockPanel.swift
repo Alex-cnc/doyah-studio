@@ -136,7 +136,7 @@ struct LockPanel: View {
                 Spacer()
 
                 if let blocker = wait.blockingPids.first, blocker != wait.pid {
-                    Button(L(.lockShowBlocker)) {
+                    ToolbarIconButton(systemName: "scope", help: L(.lockShowBlocker)) {
                         highlightedPid = blocker
                     }
                     .controlSize(.small)

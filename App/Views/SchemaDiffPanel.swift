@@ -248,7 +248,7 @@ struct SchemaDiffPanel: View {
             ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) {
                 dismiss()
             }
-            Button(L(.schemaDiffCompare)) {
+            ToolbarIconButton(systemName: "arrow.left.arrow.right", help: L(.schemaDiffCompare)) {
                 Task { await compare() }
             }
             .keyboardShortcut(.defaultAction)

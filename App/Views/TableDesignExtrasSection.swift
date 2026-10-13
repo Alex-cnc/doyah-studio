@@ -84,14 +84,16 @@ struct TableDesignExtrasSection: View {
                 Button {
                     newConstraints.append(TableConstraintDraft())
                 } label: {
-                    Label(L(.tableDesignAddConstraint), systemImage: "plus")
+                    Image(systemName: "plus.circle")
                 }
+                .help(L(.tableDesignAddConstraint))
                 .buttonStyle(.borderless)
                 Button {
                     newForeignKeys.append(ForeignKeyDraft())
                 } label: {
-                    Label(L(.tableDesignAddForeignKey), systemImage: "plus")
+                    Image(systemName: "link.badge.plus")
                 }
+                .help(L(.tableDesignAddForeignKey))
                 .buttonStyle(.borderless)
             }
             if isEditing {
@@ -130,8 +132,9 @@ struct TableDesignExtrasSection: View {
             Text(title).font(Theme.font(.bodyStrong))
             Spacer()
             Button(action: add) {
-                Label(L(.tableDesignAddIndex), systemImage: "plus")
+                Image(systemName: "plus.square")
             }
+            .help(L(.tableDesignAddIndex))
             .buttonStyle(.borderless)
         }
     }

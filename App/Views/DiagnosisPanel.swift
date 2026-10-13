@@ -107,7 +107,10 @@ struct DiagnosisPanel: View {
                         .stroke(Theme.surface(.panel), lineWidth: 1)
                 )
             HStack {
-                Button(appState.diagnosisIsGathering ? L(.diagnosisGathering) : L(.diagnosisGather)) {
+                ToolbarIconButton(
+                    systemName: appState.diagnosisIsGathering ? "hourglass" : "stethoscope",
+                    help: appState.diagnosisIsGathering ? L(.diagnosisGathering) : L(.diagnosisGather)
+                ) {
                     Task { await appState.gatherDiagnosisEvidence(sql: sql) }
                 }
                 .disabled(appState.diagnosisIsGathering || sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -219,7 +222,7 @@ struct DiagnosisPanel: View {
                         .stroke(Theme.surface(.panel), lineWidth: 1)
                 )
             HStack {
-                Button(L(.diagnosisParse)) { appState.parseDiagnosisReply() }
+                ToolbarIconButton(systemName: "wand.and.stars", help: L(.diagnosisParse)) { appState.parseDiagnosisReply() }
                     .disabled(appState.diagnosisReply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 // 存进笔记（DOYAH-10）：只存**采纳的结论 + 可复跑取证**，不含结果行数据。
                 // 同一份产物默认**不重复存**（队列 L-134 / Q14=A）—— 判定与写库都在

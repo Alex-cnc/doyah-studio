@@ -163,7 +163,7 @@ struct AgentAuditPanel: View {
 
             Spacer()
 
-            Button(L(.agentApprovalReview)) {
+            ToolbarIconButton(systemName: "doc.text.magnifyingglass", help: L(.agentApprovalReview)) {
                 appState.presentAgentApproval(approval)
             }
             .font(.caption)

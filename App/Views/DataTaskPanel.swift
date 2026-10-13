@@ -711,7 +711,10 @@ struct DataTaskPanel: View {
                     .disabled(appState.dataTasks.first { $0.id == draft.id } == nil)
 
                     if let stored = appState.dataTasks.first(where: { $0.id == draft.id }) {
-                        Button(stored.isEnabled ? L(.dataTaskDisable) : L(.dataTaskEnable)) {
+                        ToolbarIconButton(
+                            systemName: stored.isEnabled ? "pause.circle" : "play.circle",
+                            help: stored.isEnabled ? L(.dataTaskDisable) : L(.dataTaskEnable)
+                        ) {
                             Task { await toggleEnabled(stored) }
                         }
                         .font(.caption)
