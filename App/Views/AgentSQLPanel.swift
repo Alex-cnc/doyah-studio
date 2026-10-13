@@ -30,7 +30,7 @@ struct AgentSQLPanel: View {
                 Text(L(.agentSQLTitle))
                     .font(.headline)
                 Spacer()
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
             }
 
             instructionSection
@@ -44,11 +44,11 @@ struct AgentSQLPanel: View {
                 Spacer()
 
                 if result != nil {
-                    Button(L(.agentSQLCopy)) {
+                    ToolbarIconButton(systemName: "doc.on.doc", help: L(.agentSQLCopy)) {
                         copyToPasteboard(editableSQL)
                         appState.statusMessage = L(.agentSQLCopied)
                     }
-                    Button(L(.agentSQLInsertNewTab)) {
+                    ToolbarIconButton(systemName: "plus", help: L(.agentSQLInsertNewTab)) {
                         appState.openGeneratedSQLInNewTab(editableSQL)
                         dismiss()
                     }
@@ -60,7 +60,7 @@ struct AgentSQLPanel: View {
                     .disabled(submittedSQL == editableSQL)
                 }
 
-                Button(L(.agentSQLGenerate)) {
+                ToolbarIconButton(systemName: "wand.and.stars", help: L(.agentSQLGenerate)) {
                     Task { await generate() }
                 }
                 .keyboardShortcut(.defaultAction)

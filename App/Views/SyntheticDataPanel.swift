@@ -93,7 +93,7 @@ struct SyntheticDataPanel: View {
                 Toggle(L(.syntheticOverwrite), isOn: $overwrite)
                     .font(Theme.font(.caption))
                 Spacer()
-                Button(L(.syntheticGenerate)) {
+                ToolbarIconButton(systemName: "wand.and.stars", help: L(.syntheticGenerate)) {
                     Task { await regenerate() }
                 }
                 .disabled(isLoading)
@@ -183,15 +183,15 @@ struct SyntheticDataPanel: View {
 
             HStack {
                 Spacer()
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button(L(.syntheticExport)) {
+                ToolbarIconButton(systemName: "square.and.arrow.up", help: L(.syntheticExport)) {
                     guard let spec else { return }
                     appState.exportSyntheticInsert(spec, rows: rows, overwrite: overwrite)
                 }
                 .disabled(rows.isEmpty || spec == nil)
                 // 写入是**有副作用**的动作，放在最后且走审批 —— 位置本身就是提示。
-                Button(L(.syntheticWrite)) {
+                ToolbarIconButton(systemName: "square.and.pencil", help: L(.syntheticWrite)) {
                     Task {
                         guard let spec else { return }
                         await appState.writeSyntheticData(spec, rows: rows, overwrite: overwrite)

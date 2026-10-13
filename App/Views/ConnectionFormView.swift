@@ -145,7 +145,7 @@ struct ConnectionFormView: View {
 
                 Spacer()
 
-                Button(L(.commonCancel)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
                     dismiss()
                 }
             }
@@ -164,7 +164,7 @@ struct ConnectionFormView: View {
                             .fixedSize(horizontal: false, vertical: true)
                         if let copy = bannerCopyText, copy != bannerMessage {
                             HStack(spacing: Spacing.s) {
-                                Button(L(.connectionFormCopyFullError)) {
+                                ToolbarIconButton(systemName: "doc.on.doc", help: L(.connectionFormCopyFullError)) {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(copy, forType: .string)
                                 }
@@ -192,7 +192,7 @@ struct ConnectionFormView: View {
                         TextField(L(.connectionFormURLPlaceholder), text: $urlText)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { importFromURL() }
-                        Button(L(.connectionFormURLImportAction)) {
+                        ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.connectionFormURLImportAction)) {
                             importFromURL()
                         }
                         .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -309,14 +309,14 @@ struct ConnectionFormView: View {
             Divider()
 
             HStack {
-                Button(isTesting ? L(.connectionFormTesting) : L(.connectionFormTest)) {
+                ToolbarIconButton(systemName: "bolt", help: isTesting ? L(.connectionFormTesting) : L(.connectionFormTest)) {
                     testConnection()
                 }
                 .disabled(isTesting || !isValid)
 
                 Spacer()
 
-                Button(L(.commonSave)) {
+                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.commonSave)) {
                     onSave(makeConfiguration(), password, resolvedSSHPassword)
                 }
                 .keyboardShortcut(.defaultAction)
@@ -450,7 +450,7 @@ struct ConnectionFormView: View {
                 }
 
                 HStack(spacing: Spacing.s) {
-                    Button(isTestingTunnel ? L(.sshTestRunning) : L(.sshTestButton)) {
+                    ToolbarIconButton(systemName: "play.fill", help: isTestingTunnel ? L(.sshTestRunning) : L(.sshTestButton)) {
                         testTunnel()
                     }
                     .disabled(isTestingTunnel || !sshIssueMessages.isEmpty)

@@ -61,7 +61,7 @@ struct DiagnosisPanel: View {
                 }
             }
             Spacer()
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
         }
         .padding(Spacing.l)
     }
@@ -75,7 +75,7 @@ struct DiagnosisPanel: View {
             // 「没重复存」时给一条**跳过去**的路（队列 L-134 口径①）：只说一句「之前存过」，
             // 等于让用户自己去列表里翻。
             if appState.reusedCapturedNote != nil {
-                Button(L(.diagnosisOpenCaptured)) {
+                ToolbarIconButton(systemName: "arrow.up.forward.app", help: L(.diagnosisOpenCaptured)) {
                     appState.revealReusedCapturedNote()
                     dismiss()
                 }
@@ -184,7 +184,7 @@ struct DiagnosisPanel: View {
                 .foregroundStyle(Theme.text(.secondary))
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
-                Button(L(.commonCopy)) {
+                ToolbarIconButton(systemName: "doc.on.doc", help: L(.commonCopy)) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(promptText, forType: .string)
                 }
@@ -224,13 +224,13 @@ struct DiagnosisPanel: View {
                 // 存进笔记（DOYAH-10）：只存**采纳的结论 + 可复跑取证**，不含结果行数据。
                 // 同一份产物默认**不重复存**（队列 L-134 / Q14=A）—— 判定与写库都在
                 // `AICaptureIntake` 一处，这里只负责把结果说给人听。
-                Button(L(.diagnosisSaveNote)) {
+                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.diagnosisSaveNote)) {
                     Task { await appState.saveDiagnosisNote() }
                 }
                 .disabled((appState.diagnosisReport?.items.isEmpty ?? true))
                 // 逃生门（**显式**才存副本）：同一份产物确实要留第二份时走这颗，
                 // 而不是把默认行为改回“每次都存”——那样又变回两条。
-                Button(L(.diagnosisSaveNoteCopy)) {
+                ToolbarIconButton(systemName: "doc.on.doc", help: L(.diagnosisSaveNoteCopy)) {
                     Task { await appState.saveDiagnosisNote(forceNew: true) }
                 }
                 .disabled((appState.diagnosisReport?.items.isEmpty ?? true))
@@ -268,7 +268,7 @@ struct DiagnosisPanel: View {
                             .font(Theme.font(.mono))
                             .textSelection(.enabled)
                         HStack {
-                            Button(L(.diagnosisInsertSQL)) {
+                            ToolbarIconButton(systemName: "plus", help: L(.diagnosisInsertSQL)) {
                                 appState.putDiagnosisSQLInEditor(suggested)
                             }
                         }

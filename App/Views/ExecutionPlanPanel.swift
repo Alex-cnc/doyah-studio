@@ -52,13 +52,13 @@ struct ExecutionPlanPanel: View {
 
             Spacer()
 
-            Button(L(.planRun)) {
+            ToolbarIconButton(systemName: "play.fill", help: L(.planRun)) {
                 Task { await appState.runExecutionPlan(for: tabID) }
             }
             .keyboardShortcut(.defaultAction)
             .disabled(appState.executionPlanIsLoading)
 
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
         }
     }
 

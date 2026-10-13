@@ -92,11 +92,11 @@ struct AgentSettingsSheet: View {
             HStack {
                 Spacer()
 
-                Button(L(.commonCancel)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
                     dismiss()
                 }
 
-                Button(L(.agentSave)) {
+                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.agentSave)) {
                     save()
                 }
                 .keyboardShortcut(.defaultAction)

@@ -48,12 +48,12 @@ struct LockPanel: View {
 
                 Spacer()
 
-                Button(L(.lockRefresh)) {
+                ToolbarIconButton(systemName: "arrow.clockwise", help: L(.lockRefresh)) {
                     Task { await load() }
                 }
                 .disabled(isLoading)
 
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
             }
 
             if let errorText {

@@ -61,7 +61,7 @@ struct PrivilegePanel: View {
                 Text(L(.privilegeTitle))
                     .font(.headline)
                 Spacer()
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
             }
 
             roleRow
@@ -193,7 +193,7 @@ struct PrivilegePanel: View {
             HStack {
                 Spacer()
 
-                Button(L(.privilegeRevoke)) {
+                ToolbarIconButton(systemName: "minus.circle", help: L(.privilegeRevoke)) {
                     Task { await apply(revoke: true) }
                 }
                 .disabled(revokeStatement == nil)

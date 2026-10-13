@@ -42,20 +42,19 @@ struct SQLArchiveSheet: View {
             }
 
             HStack {
-                Button(L(.archiveChooseDirectory)) {
+                ToolbarIconButton(systemName: "folder", help: L(.archiveChooseDirectory)) {
                     Task { await appState.chooseSQLArchiveDirectory() }
                 }
 
                 if let path = appState.sqlArchiveDirectoryPath {
-                    Button(L(.archiveOpenFolder)) {
+                    ToolbarIconButton(systemName: "folder", help: L(.archiveOpenFolder)) {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                     }
-                    .buttonStyle(.link)
                 }
 
                 Spacer()
 
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
         }

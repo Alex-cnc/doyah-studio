@@ -103,7 +103,7 @@ struct ConnectionSettingsSheet: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button(L(.commonClose)) {
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) {
                 dismiss()
             }
             .keyboardShortcut(.defaultAction)

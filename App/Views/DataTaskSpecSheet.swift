@@ -30,7 +30,7 @@ struct DataTaskSpecSheet: View {
                 Text(L(.dataTaskSpecTitle))
                     .font(.headline)
                 Spacer()
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -83,14 +83,14 @@ struct DataTaskSpecSheet: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 if result != nil {
-                    Button(L(.dataTaskSpecApply)) {
+                    ToolbarIconButton(systemName: "checkmark", help: L(.dataTaskSpecApply)) {
                         if let definition = result?.definition {
                             onApply(definition)
                             dismiss()
                         }
                     }
                 }
-                Button(L(.dataTaskSpecGenerate)) {
+                ToolbarIconButton(systemName: "wand.and.stars", help: L(.dataTaskSpecGenerate)) {
                     Task { await generate() }
                 }
                 .keyboardShortcut(.defaultAction)

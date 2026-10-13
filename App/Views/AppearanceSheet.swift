@@ -130,7 +130,7 @@ struct AppearanceSheet: View {
                 TextField(L(.appearanceMonoFamilyCustom), text: $typedFamily)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { applyTypedFamily() }
-                Button(L(.appearanceMonoApply)) { applyTypedFamily() }
+                ToolbarIconButton(systemName: "checkmark", help: L(.appearanceMonoApply)) { applyTypedFamily() }
                     .disabled(typedFamily.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
@@ -460,7 +460,7 @@ struct AppearanceSheet: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                 .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, Spacing.l)

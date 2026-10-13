@@ -375,17 +375,17 @@ struct ResultTableView: View {
 
                 Spacer()
 
-                Button(L(.inlineEditAppendRow)) { activeSheet = .insert }
+                ToolbarIconButton(systemName: "plus", help: L(.inlineEditAppendRow)) { activeSheet = .insert }
                     .disabled(result.columns.isEmpty)
 
-                Button(L(.inlineEditDiscard)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.inlineEditDiscard)) {
                     draftStore.draft.discard()
                 }
                 .disabled(draftStore.draft.isEmpty)
 
                 if isPlanning { ProgressView().controlSize(.small) }
 
-                Button(L(.inlineEditPreview)) {
+                ToolbarIconButton(systemName: "eye", help: L(.inlineEditPreview)) {
                     Task { await prepareInlineEdit(for: result) }
                 }
                 .disabled(draftStore.draft.isEmpty || isPlanning)

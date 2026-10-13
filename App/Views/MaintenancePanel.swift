@@ -208,7 +208,7 @@ struct MaintenancePanel: View {
             }
             .disabled(appState.maintenanceReview?.tasks.isEmpty ?? true)
             Spacer()
-            Button(appState.maintenanceIsRunning ? L(.diagnosisGathering) : L(.maintenanceExecuteAction)) {
+            ToolbarIconButton(systemName: "play.fill", help: appState.maintenanceIsRunning ? L(.diagnosisGathering) : L(.maintenanceExecuteAction)) {
                 Task { await appState.executeApprovedMaintenanceTasks() }
             }
             .keyboardShortcut(.defaultAction)

@@ -79,7 +79,7 @@ struct AccountSyncSheet: View {
 
             HStack(spacing: Spacing.s) {
                 Spacer()
-                Button(L(.commonClose)) {
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
@@ -193,7 +193,7 @@ struct AccountSyncSheet: View {
             // 所以这两栏排在用户名 / 口令之前 —— 顺序就是流程顺序（先发码，再填剩下的）。
             HStack(spacing: Spacing.s) {
                 TextField(L(.accountPhoneLabel), text: $model.phoneNumber)
-                Button(L(.accountSendCodeAction)) {
+                ToolbarIconButton(systemName: "paperplane", help: L(.accountSendCodeAction)) {
                     Task { await model.sendVerificationCode() }
                 }
                 .disabled(model.status == .working)

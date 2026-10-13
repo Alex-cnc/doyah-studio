@@ -49,7 +49,7 @@ struct BackupRestoreSheet: View {
                 Text(L(.backupRestoreTitle))
                     .font(Theme.font(.title))
                 Spacer()
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
 
@@ -80,7 +80,7 @@ struct BackupRestoreSheet: View {
 
             HStack {
                 TextField(L(.backupRestoreArchive), text: $archivePath)
-                Button(L(.backupRestoreChoose)) { choosePath() }
+                ToolbarIconButton(systemName: "folder", help: L(.backupRestoreChoose)) { choosePath() }
             }
 
             if kind == .restore {
@@ -106,7 +106,7 @@ struct BackupRestoreSheet: View {
             }
 
             HStack(spacing: Spacing.s) {
-                Button(L(.backupRestoreCheck)) {
+                ToolbarIconButton(systemName: "checkmark.circle", help: L(.backupRestoreCheck)) {
                     isChecking = true
                     Task {
                         diagnosis = await appState.diagnoseBackupTool(draft, password: nil)
@@ -115,7 +115,7 @@ struct BackupRestoreSheet: View {
                 }
                 .disabled(isChecking || !isDraftRunnable)
 
-                Button(kind == .restore ? L(.backupRestoreRunRestore) : L(.backupRestoreRun)) {
+                ToolbarIconButton(systemName: "play.fill", help: kind == .restore ? L(.backupRestoreRunRestore) : L(.backupRestoreRun)) {
                     Task { await run() }
                 }
                 .keyboardShortcut(.defaultAction)

@@ -87,7 +87,7 @@ struct SessionPanel: View {
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
                 Spacer()
-                Button(L(.sessionCancelStatement)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.sessionCancelStatement)) {
                     guard let selectedPID else { return }
                     Task { await cancelStatement(pid: selectedPID) }
                 }
@@ -100,7 +100,7 @@ struct SessionPanel: View {
                 .disabled(selectedPID == nil)
                 .help(L(.sessionTerminateHelp))
 
-                Button(L(.commonClose)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
         }

@@ -195,7 +195,7 @@ struct WorkspaceHeaderSearch: View {
                     .textFieldStyle(.plain)
                     .font(Theme.font(.caption))
                 if undo != nil {
-                    Button(L(.menuSystemUndo)) { undoReplace() }
+                    ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.menuSystemUndo)) { undoReplace() }
                         .buttonStyle(.plain)
                         .font(Theme.font(.caption))
                 }
@@ -278,7 +278,7 @@ struct WorkspaceHeaderSearch: View {
                     Button(L(.commandReplace)) { applyPlan() }
                         .buttonStyle(.plain)
                         .font(Theme.font(.caption))
-                    Button(L(.commonCancel)) { plan = .empty }
+                    ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) { plan = .empty }
                         .buttonStyle(.plain)
                         .font(Theme.font(.caption))
                     Spacer(minLength: 0)

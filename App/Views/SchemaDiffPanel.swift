@@ -227,10 +227,10 @@ struct SchemaDiffPanel: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radius.card))
 
                 HStack(spacing: Spacing.s) {
-                    Button(didCopy ? L(.schemaDiffCopied) : L(.schemaDiffCopy)) {
+                    ToolbarIconButton(systemName: "doc.on.doc", help: didCopy ? L(.schemaDiffCopied) : L(.schemaDiffCopy)) {
                         copyScript(plan)
                     }
-                    Button(L(.schemaDiffOpenInTab)) {
+                    ToolbarIconButton(systemName: "arrow.up.forward.app", help: L(.schemaDiffOpenInTab)) {
                         appState.openSQLInNewTab(plan.statements.joined(separator: ";\n") + ";")
                         dismiss()
                     }
@@ -245,7 +245,7 @@ struct SchemaDiffPanel: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button(L(.commonClose)) {
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) {
                 dismiss()
             }
             Button(L(.schemaDiffCompare)) {
