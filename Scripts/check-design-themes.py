@@ -20,9 +20,11 @@
 
 判据（任一不过即失败）
 ----------------------
-A. **主题集**：`Core/DesignTheme.swift` 的 `case <名> = "<id>"` 集合与顺序必须等于台账里的三个
-   （`tech-blue` / `bean-green` / `rose-gold` / `stardust`），且 `DesignTheme.all` 把四个主题**都**列了出来
-   （列漏一个 = 用户选不到它）。
+A. **主题集**：`Core/DesignTheme.swift` 的 `case <名> = "<id>"` 集合与顺序必须等于台账（`tech-blue` /
+   `bean-green` / `rose-gold` / `stardust`）；`DesignTheme.all` 把四个主题**都**列了出来、且**界面顺序
+   逐格**等于台账 `THEME_UI_ORDER`（列漏一个 = 用户选不到它；顺序变了 = 用户看到的次序变了 —— 判的是
+   **身份与顺序**，不是「数个数」）；`ThemePalette.of(_:)` 每一支必须取**同名**值表（取错表 = 那个主题
+   整屏用的是别人的颜色）。判点处数有下限（空跑防护）。
 B. **四套值表角色齐全**：每个 `ThemePalette` 块必须含全部 20 个字段（18 个色角色 + 发丝线两参数），
    缺一个即红 —— 缺角色在 Swift 里是编译错误，但"新加一套表时少写一行"这类改动会先在
    **复制粘贴的中间态**里存在；`of(_:)` 的 switch 必须三支齐全（每个主题都取得到值）。
@@ -34,6 +36,8 @@ C. **独立复算门槛**（本脚本自己实现，不看 Swift 的实现）：
 D. **语法色必须仍挂在家族角色上**：`Core/DesignTokens.swift` 的 `SyntaxTone.color(in:)` 六行映射
    逐行对账（keyword→accentGlow / string→warm / number→teal / function→accent /
    identifier→primary / comment→tertiary）—— 谁把某个语法色改回硬编码，六档就与家族脱钩。
+   判定物 = **`switch` 块内的非注释代码**（先切片、再剥注释）：先前在整份文件上找、也不剥注释，
+   六条真映射整行注释掉仍绿（原单 `T-20261010-068` ㈠），映射搬到块外也照样绿。
 E. **主题名与 Linux 侧对齐 + 待值登记成对**：
    ① `Core/Localization.swift` 里四个主题名键的中文值必须是「科技蓝 / 豆芽绿 / 玫瑰金 / 星空紫」，
       且 `Docs/design/外观方案-v1.md` §9 的主题表里三行**同名**（双向覆盖，缺一即红）；
@@ -51,7 +55,8 @@ G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也
    ④ `AccentTheme.all` 入口不许消失（FR-EDIT-33 的「强调色可配置」是已交付能力，要收得先改 SRS 与判据）；
    ⑤ 宿主语境覆盖（`beginHostTheme` / `endHostTheme`）**不许写盘**（拍一张快照不许改用户偏好 ——
    语言那条路定过这个口径），而 `select(_:)` **必须**写盘。判点只看**那一段源码切片**，不看整文件
-   （否则"别处写过一句"就顶数 —— 第 77 轮自检例 ⑨/⑮ 两次栽在这上面）。
+   （否则"别处写过一句"就顶数 —— 第 77 轮自检例 ⑨/⑮ 两次栽在这上面）；且判定物
+   **先剥注释**（注释里留一句「入口还在」不算实现 —— 原单 `T-20261010-068` ㈢）。
 
 判据 I（**星空紫「星云皮肤」的存在 / 开关 / 三层表面**，队列 `L-155`，第 154 轮）
 ------------------------------------------------------------------------------------
@@ -70,18 +75,21 @@ G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也
   ② **生效条件 = 星空紫 且 开关开**，且 `NebulaBackground.body` **只许调它、不许再写一遍**
      （切片里出现 `.stardust` 即红 —— 两处口径必然分叉）；
   ③ **三层表面（侧栏 / 内容区 / 下方面板）各自恰有一处落点**：少了那一层没皮肤、
-     多了那一层重复铺（观感与性能都是问题）；
+     多了那一层重复铺（观感与性能都是问题）；面 = **宿主 target 的 `sources:` 现读**
+     （`App` + `Plugins/Notes/Views`，不写死 `App/`）；
   ④ **界面那个开关接到唯一写入口**（`designTheme.setNebulaSkinEnabled`，绑本地 `@State` 就落不了盘），
      且**只在星空紫下出现**（别的主题下摆一个点了没反应的开关是把用户绕晕）；
   ⑤ 两族的落点都在位：像素探针（三张主角 + 逐像素比对口子 + 阈值出处）**必须挂进**
      `Scripts/run-manual-verification-probes.sh` 的 FILTER（AGENT-SPEC §9 第 104 条：不挂进
      FILTER 的这一族一个都跑不到），以及 Core 侧规则单测的几条点名用例。
 
-判据自己的证据：`--self-test` **42 例**（34 个红/绿成对 + 末例核对真仓库二十份文件逐字节未变；夹具一律在临时目录）。
+判据自己的证据：`--self-test` **54 例**（53 个红/绿成对 + 末例核对真仓库二十一份文件逐字节未变；
+夹具一律在临时目录）；判据面与 `Package.swift` 的 target 源码目录**双向对账**（新目录落在面外 / 面里
+多一根没理由的根 ⇒ 判红）。
 
 用法：
     python3 Scripts/check-design-themes.py              # 校验（闭环第 6 项）
-    python3 Scripts/check-design-themes.py --self-test  # 门禁自己的证据（42 例）
+    python3 Scripts/check-design-themes.py --self-test  # 门禁自己的证据（54 例）
 """
 
 from __future__ import annotations
@@ -143,6 +151,10 @@ AXIS_TEST_CASES = {
     "testStorageKeysAreSeparateAndNamespaced": "两轴落盘键分开",
 }
 MIN_AXIS_SITES = 30   # 判据 H：判点处数下限（空跑防护：扫描面被削即红）
+# 组合数（3 态 × 2 系统态 × 4 主题 = 24）在单测里必须是**真断言形状**的条数下限：
+# `combinations.count` 与 `Set(combinations).count` 各一条（少一条 = 少一种「重复组合」判法）。
+AXIS_COMBO_ASSERTIONS = 2
+
 
 # ---- 判据 I（星云皮肤：存在 / 开关 / 三层表面；队列 L-155）的台账（每条都带理由）----------------
 NEBULA_SWIFT = "App/Views/NebulaBackground.swift"          # 绘制侧（Canvas + 三层强度）
@@ -208,6 +220,14 @@ SWIFT_FACE_EXCLUDED = {
     "Vendor": "第三方代码（不由我们维护 —— 与同族判据对 `Vendor/` 的判定同口径）",
     "点目录（`.git` / `.worktrees` 等）": "同一份源码的副本，不是「第二处实现」",
 }
+PACKAGE_SWIFT = "Package.swift"                              # 判据面与它逐条对账（`path:` / `sources:`）
+# 面里有、但**不是**任何 target 源码目录的根（每条必须带理由；理由为空即红）。
+# 由头（原单 `T-20261010-068` ㈥）：面原先与 `Package.swift` 完全没有对账 —— `Tools/LicenseTool/`
+# （`Package.swift` 的**生产 target**）落在面外，在那里抄一份键字面量判据看不见。
+FACE_ROOTS_NOT_A_TARGET = {
+    "Scripts": "门禁脚本自身（不是 SwiftPM target —— 脚本要点名那个键才判得动）",
+}
+
 KEY_BASELINE = "Scripts/design-themes-key-baseline.json"   # 面对账台账（根表 / 文件数 / 允许持有点）
 KEY_LITERAL = f'"{NEBULA_TOGGLE_KEY}"'                     # 要唯一化的那个字面量（带引号）
 
@@ -217,6 +237,15 @@ KEY_LITERAL = f'"{NEBULA_TOGGLE_KEY}"'                     # 要唯一化的那�
 # 2026-10-01（T-20261001-031）：加第 4 个「星空紫」（需求提出者要的「比科技蓝更梦幻」那一档）。
 # 认的是**声明顺序**，不是界面顺序 —— 界面顺序（`DesignTheme.all`，科技蓝打头）由判据 A 另判。
 THEME_IDS = ["tech-blue", "bean-green", "rose-gold", "stardust"]
+# 界面**列出**的顺序（= `Core/DesignTheme.all` 的书写顺序，科技蓝打头）—— 判据 A 逐格对账。
+# 由头（原单 `T-20261010-068` ㈡）：`Core/DesignTheme.swift:188` 的台账注释原文写着「界面顺序
+# （`DesignTheme.all`，科技蓝打头）由判据 A **另判**」，而判据 A 原先只数个数（顺序倒置仍绿）
+# ⇒ 判据与自述相抵。改这张表 = 改用户看到的主题次序，须同时改三书 §9 与台账。
+THEME_UI_ORDER = ["techBlue", "stardust", "beanGreen", "roseGold"]
+# 枚举 case 名（= 声明顺序）：`ThemePalette.of(_:)` 的每一支必须取**同名**值表。
+THEME_CASE_NAMES = ["techBlue", "beanGreen", "roseGold", "stardust"]
+MIN_THEME_SET_SITES = 12  # 判据 A 的判点**条目数**下限（4 声明 + 4 界面顺序 + 4 逐格映射；削即红）
+
 THEME_NAMES_ZH = {
     "tech-blue": "科技蓝",
     "bean-green": "豆芽绿",
@@ -368,14 +397,75 @@ def theme_ids_in_source(root: pathlib.Path) -> list[str]:
 
 
 def _strip_comments(text: str) -> str:
-    """剥掉 `//` 行注释（判"这段源码里写死了什么"时，注释里提到它不算）。
+    """剥掉注释（`//` 行注释与 `/* */` 块注释），**字符串字面量里的一律不算**。
 
     为什么必须有这一步：`NebulaBackground` 的说明注释里**原文就写着**
     「在这里再写一遍 `== .stardust && …` 只会让两处慢慢分叉」—— 不剥注释，
     判据会把这句**说明文字**当成"第二处实现"而误判（第 154 轮实测）。
-    本仓的 Swift 源码不用块注释 `/* */`，所以只处理行注释。
+
+    2026-10-13（合册 `T-20261013-027` · 原单 `T-20261010-068` 第 ⑥ 条）之前，这里只按
+    `line.split("//", 1)[0]` 处理行注释、且**不看字符串**，两个后果都实测过：① 判据 H 的串轴检查
+    被一句「注意：这里绝不许出现 `appearance.mode`」的说明注释顶成红（假阳）；② 块注释里的说明
+    又完全不剥（假绿）。⇒ 改为逐字符扫：行注释与块注释都剥，且**只在字符串外认注释起点**
+    （本仓有 14 处 `/*` 落在字符串里，如 `head.hasPrefix("/*")` —— 当成块注释起点会把后面的真代码
+    整段吞掉）。**边界（如实登记）**：字符串字面量本身**保留**（判定物都是代码形状；写在字符串里的
+    文本不构成本判据的实现或断言，属登记过的边界，不是漏判）。
     """
-    return "\n".join(line.split("//", 1)[0] for line in text.splitlines())
+    out: list[str] = []
+    i, n = 0, len(text)
+    in_line = False
+    block_depth = 0
+    in_string = False
+    quote = ""
+    while i < n:
+        char = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+        if in_string:
+            out.append(char)
+            if char == "\\" and nxt:
+                out.append(nxt)
+                i += 2
+                continue
+            if char == quote:
+                in_string = False
+            i += 1
+            continue
+        if in_line:
+            if char == "\n":
+                in_line = False
+                out.append(char)
+            i += 1
+            continue
+        if block_depth:
+            if char == "*" and nxt == "/":
+                block_depth -= 1
+                i += 2
+                continue
+            if char == "/" and nxt == "*":
+                block_depth += 1
+                i += 2
+                continue
+            if char == "\n":
+                out.append(char)
+            i += 1
+            continue
+        if char == "/" and nxt == "/":
+            in_line = True
+            i += 2
+            continue
+        if char == "/" and nxt == "*":
+            block_depth = 1
+            i += 2
+            continue
+        if char in "\"'":
+            in_string = True
+            quote = char
+            out.append(char)
+            i += 1
+            continue
+        out.append(char)
+        i += 1
+    return "".join(out)
 
 
 def _type_slice(text: str, marker: str, closing: str = "\n}") -> str | None:
@@ -407,19 +497,30 @@ def check_theme_set(root: pathlib.Path) -> list[Issue]:
     if not all_match:
         issues.append(Issue(THEMES_SWIFT, "找不到 `DesignTheme.all` —— 判据 A 的前提没了"))
         return issues
-    listed = set(re.findall(r"\.(\w+)", all_match.group(1)))
-    if len(listed) != len(THEME_IDS):
-        issues.append(Issue(THEMES_SWIFT, f"`DesignTheme.all` 只列了 {len(listed)} 个主题"
-                                         f"（应为 {len(THEME_IDS)}）—— 漏列的主题用户选不到"))
+    listed = re.findall(r"\.(\w+)", all_match.group(1))
+    if listed != THEME_UI_ORDER:
+        issues.append(Issue(THEMES_SWIFT, f"`DesignTheme.all` 是 {listed}，台账登记的界面顺序是"
+                                         f" {THEME_UI_ORDER} —— 判的是**身份与顺序**：列漏一个用户选不到，"
+                                         f"顺序变了用户看到的次序就变了（改台账要同时改三书 §9）"))
     of_match = re.search(r"public static func of\(_ theme: DesignTheme\) -> ThemePalette \{(.*?)\n    \}",
                          text, re.S)
     if not of_match:
         issues.append(Issue(THEMES_SWIFT, "找不到 `ThemePalette.of(_:)` —— 判据 A 的前提没了"))
     else:
-        branches = set(re.findall(r"case \.(\w+):", of_match.group(1)))
-        if len(branches) != len(THEME_IDS):
-            issues.append(Issue(THEMES_SWIFT, f"`ThemePalette.of(_:)` 只覆盖 {len(branches)} 个主题"
+        pairs = dict(re.findall(r"case \.(\w+): return \.(\w+)", of_match.group(1)))
+        for case_name in THEME_CASE_NAMES:
+            if pairs.get(case_name) != case_name:
+                issues.append(Issue(THEMES_SWIFT,
+                                    f"`ThemePalette.of(_:)` 里 `.{case_name}` 取的是"
+                                    f" `.{pairs.get(case_name)}` 的值表 —— 取错表 = 那个主题整屏"
+                                    f"用的是别人的颜色"))
+        if len(pairs) != len(THEME_IDS):
+            issues.append(Issue(THEMES_SWIFT, f"`ThemePalette.of(_:)` 只覆盖 {len(pairs)} 个主题"
                                              f"（应为 {len(THEME_IDS)}）—— 少的那一个取不到值"))
+    sites = len(ids) + len(listed) + len(pairs)      # 声明集 + 界面顺序 + 逐格映射（实读条数）
+    if sites < MIN_THEME_SET_SITES:
+        issues.append(Issue(THEMES_SWIFT, f"判据 A 只判到 {sites} 个条目（下限 {MIN_THEME_SET_SITES}）"
+                                         f" —— 判点被削过，不许通过"))
     return issues
 
 
@@ -569,15 +670,23 @@ def check_syntax_binding(root: pathlib.Path) -> list[Issue]:
     text = (root / TOKENS_SWIFT).read_text(encoding="utf-8")
     block = re.search(r"public func color\(in theme: DesignTheme\) -> ThemeColor \{\n        switch self \{\n(.*?)\n        \}",
                       text, re.S)
-    lines = re.findall(r"case \.(\w+): return (\w+)\.(\w+)\.color\(in: theme\)", text)
+    if block is None:
+        issues.append(Issue(TOKENS_SWIFT, "语法六档的映射块找不到（判据 D 的前提没了）"))
+        return issues
+    # 判定物 = **`switch` 块内的非注释代码**（原单 `T-20261010-068` ㈠）：先前拿整份文件去
+    # `re.findall`（`block` 的捕获组从未被用过）⇒ 六条真映射**整行注释掉**仍绿（判据照打
+    # 「6 条映射对账」），映射搬到块外也照样绿。
+    body = _strip_comments(block.group(1))
+    lines = re.findall(r"case \.(\w+): return (\w+)\.(\w+)\.color\(in: theme\)", body)
     mapping = {tone: role for tone, family, role in lines}
+    if len(mapping) != len(SYNTAX_BINDING):
+        issues.append(Issue(TOKENS_SWIFT, f"`switch` 块里只有 {len(mapping)} 条映射"
+                                         f"（应为 {len(SYNTAX_BINDING)}）—— 少的那几档与家族脱钩"))
     for tone, role in SYNTAX_BINDING.items():
         if mapping.get(tone) != role:
             issues.append(Issue(TOKENS_SWIFT,
                                 f"语法 {tone} 应挂 {role}，实测 {mapping.get(tone)}"
                                 f" —— 六档与家族脱钩就是留了一个孤立的语法色"))
-    if block is None:
-        issues.append(Issue(TOKENS_SWIFT, "语法六档的映射块找不到（判据 D 的前提没了）"))
     return issues
 
 
@@ -651,8 +760,11 @@ def check_ui_entry(root: pathlib.Path) -> tuple[list[Issue], int]:
     panel_path = root / APPEARANCE_SWIFT
     if not panel_path.exists():
         return [Issue(APPEARANCE_SWIFT, "「外观」面板文件不存在 —— 主题入口无处落地")], sites
-    panel = panel_path.read_text(encoding="utf-8")
-    line_count = len(panel.splitlines())
+    panel_raw = panel_path.read_text(encoding="utf-8")
+    line_count = len(panel_raw.splitlines())
+    # 判定物一律**先剥注释**（原单 `T-20261010-068` ㈢：先前是裸子串 —— 把真用法改成注释行，
+    # 判据照样打「界面入口已接上」）。
+    panel = _strip_comments(panel_raw)
     sites += 1
     if line_count < MIN_PANEL_LINES:
         issues.append(Issue(APPEARANCE_SWIFT, f"面板只有 {line_count} 行（下限 {MIN_PANEL_LINES}）"
@@ -724,7 +836,7 @@ def check_ui_entry(root: pathlib.Path) -> tuple[list[Issue], int]:
     if not manager_path.exists():
         issues.append(Issue(THEME_MANAGER_SWIFT, "主题运行时对象不存在"))
     else:
-        manager = manager_path.read_text(encoding="utf-8")
+        manager = _strip_comments(manager_path.read_text(encoding="utf-8"))
         sites += 2
         if "func beginHostTheme(" not in manager or "func endHostTheme(" not in manager:
             issues.append(Issue(THEME_MANAGER_SWIFT, "没有宿主语境的进入 / 退出接口"
@@ -748,9 +860,10 @@ def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
     H 管的是**两轴之间**的规矩。四条都是「不做就是没做」：
       ① 深浅轴三态齐全 + 真值表逐格 + 未知值回落「跟随系统」；
       ② 两轴**互不读取**：两个落盘键分开，且各自的写盘点里不许出现对方的键
-         —— 串轴的表现是「切了主题，深浅档被顺手重置」，用户看不出原因；
+         —— 串轴的表现是「切了主题，深浅档被顺手重置」，用户看不出原因（串轴检查**先剥注释**：
+         注释里提一句键名不算串轴；原单 `T-20261010-068` ㈣）；
       ③ 组合**可达**：3 态 × 2 系统态 × 4 主题 = 24 组，且「跟随系统」在系统深浅两态下都有值
-         （只测一态时，另一态可能落在看不清的颜色上 —— 这正是「随系统主题」的全部风险）；
+         （只测一态时，另一态可能落在看不清的颜色上 —— 这正是「随系统主题」的全部风险）；组合数按**真断言形状**判（注释里写 24 不算 —— 原单 ㈤）；
       ④ 组合**到像素**：快照角像素（铺的 `window` 底）必须等于该主题该档的 `window` 值 ——
          要有取色口子、有断言、有**实测出来的**容差（PNG 往返偏移 ≤4 ⇒ 8；不是拍脑袋定的）。
     """
@@ -810,7 +923,9 @@ def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
     if not manager_path.exists():
         issues.append(Issue(THEME_MANAGER_SWIFT, "配色轴的运行时对象不存在"))
     else:
-        manager = manager_path.read_text(encoding="utf-8")
+        # 判定物**先剥注释**（原单 `T-20261010-068` ㈣：先前是裸子串 —— 一句说明注释里提一下
+        # `appearance.mode` 就把绿变红，而「两轴不许串」这句话本身也顶数）。
+        manager = _strip_comments(manager_path.read_text(encoding="utf-8"))
         sites += 1
         for leak in (AXIS_APPEARANCE_KEY, AXIS_APPEARANCE_TERMINAL_KEY):
             if leak in manager:
@@ -822,7 +937,7 @@ def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
     if not app_state_path.exists():
         issues.append(Issue(APP_STATE_SWIFT, "根状态不存在 —— 判据 H 的前提没了"))
     else:
-        app_state = app_state_path.read_text(encoding="utf-8")
+        app_state = _strip_comments(app_state_path.read_text(encoding="utf-8"))
         sites += 2
         if "Storage.appKey" not in app_state:
             issues.append(Issue(APP_STATE_SWIFT, "深浅档没有落盘（找不到 `AppearancePreference.Storage.appKey`）"
@@ -846,9 +961,20 @@ def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
             if anchor not in axes_tests:
                 issues.append(Issue(AXES_TESTS_SWIFT, f"组合枚举里少了{why}（找不到 `{anchor}`）—— 24 组走不全"))
         sites += 1
-        if str(combos) not in axes_tests:
+        # 组合数必须是**真断言形状**（原单 `T-20261010-068` ㈤：先前只认子串 `24`，而该文件
+        # 三处**注释**里都写着「24」⇒ 两条真断言删掉仍绿）；判定物先剥注释。
+        axes_code = _strip_comments(axes_tests)
+        counted = re.findall(r"XCTAssertEqual\([^,\n]*\.count,\s*(\d+)", axes_code)
+        combos_asserts = [value for value in counted if int(value) == combos]
+        if not counted:
             issues.append(Issue(AXES_TESTS_SWIFT,
-                                f"单测里没有组合数 {combos}（3 态 × 2 系统态 × 4 主题）—— 少走几组也看不出来"))
+                                f"单测里没有「组合数」的真断言（形如 `XCTAssertEqual(….count, {combos})`）"
+                                f" —— 注释里写着 {combos} 不算数"))
+        elif len(combos_asserts) < AXIS_COMBO_ASSERTIONS:
+            issues.append(Issue(AXES_TESTS_SWIFT,
+                                f"组合数 {combos} 的真断言只有 {len(combos_asserts)} 条"
+                                f"（下限 {AXIS_COMBO_ASSERTIONS}：`combinations.count` 与"
+                                f" `Set(combinations).count` 各一条）—— 少一条就少了一种「重复组合」判法"))
         for name, why in AXIS_TEST_CASES.items():
             sites += 1
             if f"func {name}(" not in axes_tests:
@@ -919,6 +1045,84 @@ def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
         issues.append(Issue(APPEARANCE_PREF_SWIFT, f"判据 H 只判了 {sites} 处（下限 {MIN_AXIS_SITES}）"
                                                   f" —— 扫描面被削过，不许通过"))
     return issues, sites
+
+# ---------------------------------------------------------------- 面对账（与 `Package.swift`）
+
+def package_targets(root: pathlib.Path) -> list[dict]:
+    """从 `Package.swift` **现读**出每个 target 的 `path:` 与 `sources:`（判据面逐条与它对账）。
+
+    为什么要对账（原单 `T-20261010-068` ㈥ 现场）：判据 I ② 自称「键字面量**全仓**只许一处」，
+    而面原先写死四根目录 —— `Tools/LicenseTool/`（`Package.swift` 的**生产 target**）落在面外，
+    在那里抄一份键字面量判据看不见。**新 target / 新源码目录落在面外 ⇒ 判红**，面不许静默变窄。
+    """
+    lines = (root / PACKAGE_SWIFT).read_text(encoding="utf-8").splitlines()
+    targets: list[dict] = []
+    current: dict | None = None
+    for line in lines:
+        stripped = line.strip()
+        if current is None:
+            if re.match(r"^\.(?:executableTarget|target|testTarget)\(", stripped):
+                current = {"path": None, "sources": []}
+            continue
+        if re.match(r"^\),?$", stripped):
+            targets.append(current)
+            current = None
+            continue
+        match = re.match(r'^path:\s*"([^"]+)"', stripped)
+        if match:
+            current["path"] = match.group(1)
+        match = re.match(r"^sources:\s*\[(.*)\]", stripped)
+        if match:
+            current["sources"] = [item.strip().strip('"') for item in match.group(1).split(",")
+                                  if item.strip()]
+    return targets
+
+
+def package_source_dirs(root: pathlib.Path) -> set[str]:
+    """会被编进产品的 Swift 源码目录集合（有 `sources:` 的就是那一列，否则 `path` 本身）。
+
+    `path: "."` = 仓根，那种 target 一定带 `sources:`（本仓两份都是）；真没有的话不进面，
+    由 `face_vs_package_issues` 的「没有对应 target 的根」那一半兜住。
+    """
+    dirs: set[str] = set()
+    for target in package_targets(root):
+        if target["sources"]:
+            dirs.update(target["sources"])
+        elif target["path"] and target["path"] != ".":
+            dirs.add(target["path"])
+    return dirs
+
+
+def host_source_dirs(root: pathlib.Path) -> list[str]:
+    """**宿主界面 target**（含 `App` 的那份）的 `sources:` —— 判据 I ④ 的面。
+
+    为什么不再写死 `App/`：那样 `Plugins/Notes/Views/`（2026-10-13 起编进宿主模块的笔记视图）
+    整体在面外 —— 在那里再铺一层星云，判据看不见。读不出 ⇒ 空表，调用侧判红。
+    """
+    for target in package_targets(root):
+        if "App" in target["sources"]:
+            return list(target["sources"])
+    return []
+
+
+def face_vs_package_issues(source_dirs, face_roots, registered_non_target) -> list[Issue]:
+    """判据面 ↔ `Package.swift` 源码目录的**双向**对账（纯函数：自检直接喂合成集合）。"""
+    issues: list[Issue] = []
+    for source in sorted(source_dirs):
+        if not any(source == face_root or source.startswith(face_root + "/") for face_root in face_roots):
+            issues.append(Issue(PACKAGE_SWIFT, f"`Package.swift` 的源码目录 `{source}` 落在判据面外"
+                                               f" —— 面里没有覆盖它的根（面 = {sorted(face_roots)}）："
+                                               f"在那个目录里抄一份键字面量，判据看不见"))
+    for face_root in sorted(face_roots):
+        if any(source == face_root or source.startswith(face_root + "/") for source in source_dirs):
+            continue
+        reason = (registered_non_target or {}).get(face_root, "")
+        if not reason.strip():
+            issues.append(Issue(PACKAGE_SWIFT, f"面里的根 `{face_root}` 既不是任何 target 的源码目录、"
+                                               f"也没登记理由 —— 面与 `Package.swift` 对不上账"
+                                               f"（要留在面里就得写进 `FACE_ROOTS_NOT_A_TARGET`）"))
+    return issues
+
 
 # ---------------------------------------------------------------- 判据 I
 
@@ -1095,7 +1299,21 @@ def check_nebula_skin(root: pathlib.Path) -> tuple[list[Issue], int, dict]:
                                 " —— 生效条件只许有一处出处（判据 I ②）"))
 
     # ④ 三层表面各自**恰有一处**落点
-    app_files = sorted((root / "App").rglob("*.swift"))
+    #    面 = **宿主 target 的 `sources:` 现读**（原单 `T-20261010-068` ㈥ 的另一半：先前写死
+    #    `App/`，于是 `Plugins/Notes/Views/` 那一片整体在面外 —— 在那里再铺一层星云判据看不见）。
+    host_dirs = host_source_dirs(root)
+    sites += 1
+    if not host_dirs:
+        issues.append(Issue(PACKAGE_SWIFT, "读不出宿主 target 的源码目录"
+                                          "（`Package.swift` 里含 `App` 的那份 `sources:`）"
+                                          " —— 判据 I ④ 的面无从对账"))
+    app_files: list[pathlib.Path] = []
+    for folder in host_dirs:
+        folder_path = root / folder
+        if not folder_path.is_dir():
+            issues.append(Issue(PACKAGE_SWIFT, f"宿主 target 的源码目录 `{folder}` 不在盘 —— 面缺一块"))
+            continue
+        app_files += sorted(folder_path.rglob("*.swift"))
     for label, (expected_file, marker) in NEBULA_LAYER_SITES.items():
         hits: list[str] = []
         for path in app_files:
@@ -1179,7 +1397,7 @@ def _fixture(base: pathlib.Path) -> pathlib.Path:
                      APPEARANCE_SWIFT, THEME_MANAGER_SWIFT, APPEARANCE_PREF_SWIFT, APP_STATE_SWIFT,
                      AXES_TESTS_SWIFT, AXES_PROBE_SWIFT, SNAPSHOT_KIT_SWIFT, PANELS_TESTS_SWIFT,
                      NEBULA_SWIFT, NEBULA_PREF_SWIFT, MAIN_WINDOW_SWIFT, LOWER_PANE_SWIFT,
-                     NEBULA_PROBE_SWIFT, NEBULA_TESTS_SWIFT, PROBE_RUNNER_SH):
+                     NEBULA_PROBE_SWIFT, NEBULA_TESTS_SWIFT, PROBE_RUNNER_SH, PACKAGE_SWIFT):
         target = base / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / relative, target)
@@ -1199,6 +1417,14 @@ def _fixture(base: pathlib.Path) -> pathlib.Path:
         target.mkdir(parents=True, exist_ok=True)
         if not sorted(target.rglob("*.swift")):
             (target / "__face_stub.swift").write_text("import Foundation\n", encoding="utf-8")
+
+    # 判据 I ④ 的面 = **宿主 target 的 `sources:`**（`Package.swift` 现读；见 `host_source_dirs`）
+    # ⇒ 那几根也要有替身，否则夹具里「宿主面缺一块」会替真仓判红。
+    for folder in host_source_dirs(ROOT) or ["App"]:
+        target = base / folder
+        target.mkdir(parents=True, exist_ok=True)
+        if not sorted(target.rglob("*.swift")):
+            (target / "__host_face_stub.swift").write_text("import Foundation\n", encoding="utf-8")
     # 夹具自己的面对账台账：**按夹具现读写**（根表 / 文件数自洽），
     # 允许持有点照抄真仓那两条（相对路径在夹具里逐字相同 ⇒ 未登记的第二份照样判红）。
     fixture_baseline = json.loads((ROOT / KEY_BASELINE).read_text(encoding="utf-8"))
@@ -1223,7 +1449,7 @@ def self_test() -> int:
                APPEARANCE_SWIFT, THEME_MANAGER_SWIFT, APPEARANCE_PREF_SWIFT, APP_STATE_SWIFT,
                AXES_TESTS_SWIFT, AXES_PROBE_SWIFT, SNAPSHOT_KIT_SWIFT, PANELS_TESTS_SWIFT,
                NEBULA_SWIFT, NEBULA_PREF_SWIFT, MAIN_WINDOW_SWIFT, LOWER_PANE_SWIFT,
-               NEBULA_PROBE_SWIFT, NEBULA_TESTS_SWIFT, PROBE_RUNNER_SH)
+               NEBULA_PROBE_SWIFT, NEBULA_TESTS_SWIFT, PROBE_RUNNER_SH, PACKAGE_SWIFT)
     before = {name: _sha(ROOT / name) for name in watched}
 
     def static_issues(fixture: pathlib.Path) -> list[Issue]:
@@ -1501,6 +1727,91 @@ def self_test() -> int:
         cases.append(("皮肤：面内持有点都已登记（绿）", False,
                       nebula_key_holder_issues(base_snapshot["holders"], base_baseline)))
 
+        # ㊱ 红（判据 D）：六条真映射**整行注释掉** ⇒ 红
+        #     （原单 `T-20261010-068` ㈠：旧版拿整份文件 `re.findall` ⇒ 注释掉仍绿）
+        syntax_commented = _fixture(pathlib.Path(tmp) / "bad-syntax-commented")
+        _patch(syntax_commented / TOKENS_SWIFT,
+               "        case .keyword: return AccentFamily.accentGlow.color(in: theme)",
+               "        // case .keyword: return AccentFamily.accentGlow.color(in: theme)")
+        cases.append(("语法映射整行注释掉（红）", True, check_syntax_binding(syntax_commented)))
+
+        # ㊲ 红（判据 D）：映射**搬到 `switch` 块外** ⇒ 红（判定物只在块内找）
+        syntax_moved = _fixture(pathlib.Path(tmp) / "bad-syntax-moved")
+        moved_path = syntax_moved / TOKENS_SWIFT
+        moved_text = moved_path.read_text(encoding="utf-8")
+        moved_line = "        case .comment: return TextTone.tertiary.color(in: theme)\n"
+        assert moved_line in moved_text
+        moved_path.write_text(moved_text.replace(moved_line, "", 1)
+                              + "\n// 映射搬到块外（负例）\n" + moved_line, encoding="utf-8")
+        cases.append(("语法映射搬到 switch 块外（红）", True, check_syntax_binding(syntax_moved)))
+        # ㊳ 红（判据 A）：`DesignTheme.all` 顺序倒置 ⇒ 红（判的是身份与顺序，不是数个数）
+        reordered = _fixture(pathlib.Path(tmp) / "bad-ui-order")
+        _patch(reordered / THEMES_SWIFT,
+               "public static let all: [DesignTheme] = [.techBlue, .stardust, .beanGreen, .roseGold]",
+               "public static let all: [DesignTheme] = [.stardust, .roseGold, .beanGreen, .techBlue]")
+        cases.append(("界面顺序倒置（红）", True, check_theme_set(reordered)))
+
+        # ㊴ 红（判据 A）：`of(_:)` 某一支取错值表（星空紫取到科技蓝的表）⇒ 红
+        of_block = "        case .techBlue: return .techBlue\n        case .beanGreen: return .beanGreen\n        case .roseGold: return .roseGold\n        case .stardust: return .stardust\n"
+        wrong_table = _fixture(pathlib.Path(tmp) / "bad-of-table")
+        _patch(wrong_table / THEMES_SWIFT, of_block,
+               of_block.replace("case .stardust: return .stardust", "case .stardust: return .techBlue"))
+        cases.append(("of(_:) 取错值表（红）", True, check_theme_set(wrong_table)))
+
+        # ㊵ 红（判据 A · 空跑）：`of(_:)` 被掏空 ⇒ 条目数低于下限 ⇒ 红
+        hollow_of = _fixture(pathlib.Path(tmp) / "bad-of-hollow")
+        _patch(hollow_of / THEMES_SWIFT, of_block, "")
+        cases.append(("of(_:) 被掏空（空跑，红）", True, check_theme_set(hollow_of)))
+        # ㊶ 红（判据 G）：主题列表与强调色入口两处**真用法改成注释** ⇒ 红
+        #     （原单 `T-20261010-068` ㈢：旧版是裸子串 ⇒ 注释里留一句就算「入口还在」）
+        commented_entry = _fixture(pathlib.Path(tmp) / "bad-entry-commented")
+        _patch(commented_entry / APPEARANCE_SWIFT,
+               "            ForEach(DesignTheme.all) { candidate in",
+               "            // ForEach(DesignTheme.all) { candidate in")
+        _patch(commented_entry / APPEARANCE_SWIFT,
+               "            ForEach(AccentTheme.all) { theme in",
+               "            // ForEach(AccentTheme.all) { theme in")
+        cases.append(("界面入口改成注释（红）", True, check_ui_entry(commented_entry)[0]))
+
+        # ㊷ 绿（判据 H · 假阳已消 —— 成对臂）：配色轴对象里**注释**提一句 `appearance.mode` ⇒ 绿
+        comment_only = _fixture(pathlib.Path(tmp) / "ok-axis-comment")
+        leak_file = comment_only / THEME_MANAGER_SWIFT
+        leak_file.write_text(leak_file.read_text(encoding="utf-8")
+                            + "\n// 说明注释：这里绝不许出现 appearance.mode 这个键\n", encoding="utf-8")
+        cases.append(("串轴检查：注释里提键名（绿）", False, check_two_axis(comment_only)[0]))
+        # ㊸ 红（判据 H）：删掉 `24` 组的两条真断言（注释里仍有「24」）⇒ 红
+        weak_combo = _fixture(pathlib.Path(tmp) / "bad-combo-assert")
+        _patch(weak_combo / AXES_TESTS_SWIFT,
+               'XCTAssertEqual(combinations.count, 24, "3 态 × 2 系统态 × 4 主题 = 24")',
+               "XCTAssertTrue(combinations.count > 0)")
+        _patch(weak_combo / AXES_TESTS_SWIFT,
+               'XCTAssertEqual(Set(combinations).count, 24, "组合有重复")',
+               "XCTAssertTrue(Set(combinations).count > 0)")
+        cases.append(("组合数真断言被删（红）", True, check_two_axis(weak_combo)[0]))
+
+        # ㊹ 绿（注释扫描守卫）：字符串里的 `/*` 不许吞掉后面的真代码
+        #     （本仓 14 处 `/*` 落在字符串里，如 `head.hasPrefix("/*")`）
+        string_guard = _fixture(pathlib.Path(tmp) / "ok-string-block-comment")
+        _patch(string_guard / APPEARANCE_SWIFT,
+               "            ForEach(DesignTheme.all) { candidate in",
+               '            let probePrefix = "/*"\n'
+               "            ForEach(DesignTheme.all) { candidate in")
+        cases.append(("注释扫描：字符串里的块注释起点（绿）", False, check_ui_entry(string_guard)[0]))
+        # ㊺ 红（面对账）：`Package.swift` 的源码目录落在判据面外 ⇒ 红
+        cases.append(("面对账：源码目录落在面外（红）", True,
+                      face_vs_package_issues({"Tools/LicenseTool", "Widgets/Extra"},
+                                             {"Tools": "工具 target", "Scripts": "脚本面"},
+                                             {"Scripts": "脚本面"})))
+
+        # ㊻ 红（面对账）：面里多一根既不是 target、又没登记理由的根 ⇒ 红
+        cases.append(("面对账：面里多一根没理由的根（红）", True,
+                      face_vs_package_issues({"Core"}, {"Core": "核心层", "Ghost": "没有 target"}, {})))
+
+        # ㊼ 绿（面对账 · 对手臂）：真仓的 target 源码目录与面逐条对得上
+        cases.append(("面对账：真仓 target 目录与面一致（绿）", False,
+                      face_vs_package_issues(package_source_dirs(ROOT), SWIFT_FACE_ROOTS,
+                                             FACE_ROOTS_NOT_A_TARGET)))
+
     failures = 0
     # 迭代**副本**：这个循环体里将来若有人再 `cases.append(...)`，迭代列表会一直变长
     # ⇒ 自检永不结束（第 83 轮实测：3 例被重复打印 809 次、进程挂住）。
@@ -1517,7 +1828,7 @@ def self_test() -> int:
     unchanged = before == after
     if not unchanged:
         failures += 1
-    print(f"{'✅' if unchanged else '❌'} 真仓库二十份文件逐字节未变")
+    print(f"{'✅' if unchanged else '❌'} 真仓库二十一份文件逐字节未变")
     total = len(cases) + 1
     print(f"自测通过（{total} 例）" if failures == 0 else f"自测失败：{failures}/{total} 例不符")
     return 0 if failures == 0 else 1
@@ -1544,6 +1855,8 @@ def main(argv: list[str]) -> int:
     issues += axis_issues
     nebula_issues, nebula_sites, nebula_snapshot = check_nebula_skin(ROOT)
     issues += nebula_issues
+    issues += face_vs_package_issues(package_source_dirs(ROOT), SWIFT_FACE_ROOTS,
+                                     FACE_ROOTS_NOT_A_TARGET)
 
     print("==> 主题集（配色方案，队列 L-80 ㈠ ㈡）")
     print(f"    ① 主题集：{len(theme_ids_in_source(ROOT))} 个（台账 {len(THEME_IDS)} 个：{', '.join(THEME_IDS)}）")
@@ -1562,6 +1875,10 @@ def main(argv: list[str]) -> int:
           f"（{', '.join(h['path'] for h in nebula_snapshot['holders'])}）/ "
           f"生效条件两半都在且绘制侧只许调用 / 三层表面各自恰有一处 / 开关绑唯一写入口且只在星空紫下露面 / "
           f"规则单测与像素探针的落点都在位，探针还挂着 FILTER）")
+
+    print(f"    ⑨ 面对账（`Package.swift` 现读）：{len(package_source_dirs(ROOT))} 个 target 源码目录"
+          f" ↔ 面 {len(SWIFT_FACE_ROOTS)} 根（宿主面 = {', '.join(host_source_dirs(ROOT))}；"
+          f"非 target 的根已登记 {len(FACE_ROOTS_NOT_A_TARGET)} 条理由）")
 
     if len(theme_ids_in_source(ROOT)) < MIN_THEMES:
         issues.append(Issue(THEMES_SWIFT, f"主题数 {len(theme_ids_in_source(ROOT))} < 下限 {MIN_THEMES}"))
@@ -1586,7 +1903,7 @@ def main(argv: list[str]) -> int:
           "界面入口（主题列表 + 每主题三个真实场景 + 推导逐条标注）已接上；"
           "两轴正交（深浅三态 × 配色四主题 = 24 组组合、跟随系统两态都过门槛、组合已到像素上）；"
           "星云皮肤（队列 L-155：规则唯一出处 + 三层表面各一处落点 + 开关绑唯一写入口且只在星空紫下露面 + "
-          "规则单测与像素探针的落点都在位）")
+          "规则单测与像素探针的落点都在位 + 判据面与 `Package.swift` 的 target 源码目录双向对账）")
     return 0
 
 
