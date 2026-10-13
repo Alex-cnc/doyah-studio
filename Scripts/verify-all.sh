@@ -764,9 +764,12 @@ python3 Scripts/check-network-egress.py
 # 两处落地形状各只出现一次且都在出口体内 / `runSearch()` 两条分支都经出口且不自己落地 /
 # `runSearch()` 不读搜索框（词是参数）/ `searchNotes()` 真的走到 `runSearch()`。
 # 判据与台账见 `Scripts/check-note-search-route.py` / `Scripts/note-search-route.json`；
-# 负例 `test-note-search-route.py`（15 例：生产点消失 / 第二条路 / 视图过滤 / 台账与实现不一致 /
+# 负例 `test-note-search-route.py`（26 例：生产点消失 / 第二条路 / 视图过滤 / 台账与实现不一致 /
 # 新增路线没登记 / 语言表缺中文 / 死键 / 两处空跑防护 / 落地出口的词比对被删 / 一条分支绕过出口 /
-# 落地形状多出一处 / 查库那一步又读搜索框 / 真仓库逐字节未变）。
+# 落地形状多出一处 / 查库那一步又读搜索框 / **合册 T-20261013-027 · 原单 T-20261010-056 新增十一条**：
+# 逗号列表路线 / 改名后的搜索框属性 / 块注释假阳 / 字符串假阳 / 注释冒充引用（死键）/ 多行条目 /
+# 面外回流（`Platform/macOS` 检索路 · `Core` 内存检索）/ 面内新增不误报 / 逗号列表已登记不误报 /
+# 生产面缩面（删 target）/ 面外根死登记 / 真仓库逐字节未变）。
 python3 Scripts/check-note-search-route.py
 python3 Scripts/test-note-search-route.py
 # L-137（2026-09-30 第 130 轮）：**Markdown 解析只有一份，预览只许消费它** ——
