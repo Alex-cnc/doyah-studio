@@ -66,8 +66,17 @@ F. **㈡ 界面接线在位**（第 82 轮补；**第 96 轮 `L-89` ㈡ ③ 扩*
 `manual-check-terminal-strip-*` 读图 / 像素判据承担，真人点验承担主诉场景（一个页签跑
 `dsh-tui`、另一个执行命令，互不干扰）。
 
-判据自己的证据：`--self-test` **13 例**（红 / 绿成对；夹具一律在临时目录；末例核对真仓库
-**有盘的十五份**文件逐字节未变）。
+判据自己的证据：`--self-test` **25 例**（红 / 绿成对；夹具一律在临时目录；末例核对真仓库
+**有盘的十七份**文件逐字节未变）。
+
+**2026-10-13 修（合册 `T-20261013-027` · 原单 `T-20261010-065` · 样本 68）**：① 注释不再当代码
+—— 判定物一律先**剥注释**（`strip_comments`，字符串感知、等长替换 ⇒ 行号与列位都不动）；
+② 位置判据改判**非注释上下文**里的出现；③ 反向棘轮改判剥注释后的**调用点**与**画法形状**
+（二级条数 `Button {` 块数 —— 标识符换个前缀就绕不过去了）；④ Core 的「不出人话」认
+`"\\u{7EC8}\\u{7AEF}"` 这类**转义**写法；⑤ 行尾 `//` 与 `/*…*/` 里的中文 / 被禁符号不再误伤；
+⑥ **判定面与 `Package.swift` 现读对账**（面内未登记件承载子终端件 ⇒ 判红并点名）；
+⑦ `TEST_FLOOR` 收到实测（42）并新增「用例函数体非空 + 断言下限」。未知参数一律 `rc=2`
+（旧实现把 `--bogus` 吞掉照跑）。
 
 ⚠️ **已知先红（2026-10-08 实测，非本族引入）**：`Docs/design/开发循环-任务队列.md` **全仓不存在**
 （`git log --all` 无此路径）⇒ 例 1（绿路基线）与「口径锚点 2 处」这一条会报红，
@@ -82,6 +91,7 @@ F. **㈡ 界面接线在位**（第 82 轮补；**第 96 轮 `L-89` ㈡ ③ 扩*
 from __future__ import annotations
 
 import hashlib
+import json
 import pathlib
 import re
 import shutil
@@ -145,7 +155,7 @@ TEST_ANCHORS = {
     # T-2 片：一键启动的名字优先序（预设名 ＞ 前台进程名，用户重命名仍优先）+ 重启要不要问。
     "一键启动与重启": "testLaunchTitleWinsOverForegroundProcessButNotOverRename",
 }
-TEST_FLOOR = 34
+TEST_FLOOR = 42
 
 # C：页签那一族文案键（㈠ 登记、㈡ 使用）。
 KEYS = [
@@ -288,6 +298,129 @@ HAN = re.compile(r"[\u4e00-\u9fff]")
 STRING_LITERAL = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"')
 
 
+# ㈠（2026-10-13 · 合册 T-20261013-027 · 原单 T-20261010-065 · 样本 68）：**注释不是代码**。
+# 旧实现有一整族「注释充数」的假绿 —— `if anchor in text` 认的是**原文子串**，于是
+# 「把那一行注释掉」与「那一行在位」读数逐字相同（现场：API 锚点 / `iconButton(` 调用 /
+# `.help(` / 语言表整条 / 单测用例锚点，五处一个长相）。修法 = 判定物一律先在**剥了注释**的
+# 文本上取，且替换**等长**（行号与列位都不动 —— 位置判据要比 `find()` 的下标，不等长就全错）。
+# 字符串字面量**按原样保留**：判定物里有一半是字符串里的记号（`"trash"` / `"terminal-…"`）。
+UNICODE_ESCAPE = re.compile(r"\\u\{([0-9A-Fa-f]{1,6})\}")
+
+
+def strip_comments(text: str) -> str:
+    """把注释抹成**等长空格**（字符串感知、支持块注释嵌套）。
+
+    为什么自己扫而不是上正则：Swift 里 `"// 不是注释"` 是字符串、`/* /* 嵌套 */ */` 合法，
+    一行正则两面都会判错。等长替换的额外好处是**下标可比** —— 位置判据（页签头在 `Spacer`
+    之前）拿到的偏移量与原文件一一对应。
+    """
+    out: list[str] = []
+    index = 0
+    length = len(text)
+    in_line = False
+    depth = 0
+    in_string = False
+    escaped = False
+    while index < length:
+        char = text[index]
+        following = text[index + 1] if index + 1 < length else ""
+        if in_line:
+            out.append("\n" if char == "\n" else " ")
+            in_line = char != "\n"
+        elif depth > 0:
+            if char == "*" and following == "/":
+                depth -= 1
+                out.append("  ")
+                index += 2
+                continue
+            if char == "/" and following == "*":
+                depth += 1
+                out.append("  ")
+                index += 2
+                continue
+            out.append("\n" if char == "\n" else " ")
+        elif in_string:
+            out.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+            out.append(char)
+        elif char == "/" and following == "/":
+            in_line = True
+            out.append("  ")
+            index += 2
+            continue
+        elif char == "/" and following == "*":
+            depth = 1
+            out.append("  ")
+            index += 2
+            continue
+        else:
+            out.append(char)
+        index += 1
+    return "".join(out)
+
+
+def visible_han(literal: str) -> bool:
+    """字面量里有没有中文 —— **转义也算**（㈣）。
+
+    第 82 轮现场（样本 68 · P2）：`"\\u{7EC8}\\u{7AEF}"` 与 `"终端"` 是同一句话，
+    而旧实现只认源码里的 U+4E00–9FFF 字面字符 ⇒ 转义写法**整条绕过**「Core 不出人话」。
+    """
+    if HAN.search(literal):
+        return True
+    for code in UNICODE_ESCAPE.findall(literal):
+        if HAN.search(chr(int(code, 16))):
+            return True
+    return False
+
+
+# ㈥（2026-10-13 · 合册 T-20261013-027 · 原单 T-20261010-065）：**判定面与 `Package.swift` 对账**。
+#
+# 旧实现的面 = **15 个写死路径**，与包清单**无对账** —— 现场（样本 68 · P4c/P4d）：新建
+# `App/Views/Extra68.swift` 里写 `TerminalTabsBar(terminal:)`（子终端件）、或在
+# `Core/Extra68Core.swift` 里写「终端」，判据读数与基线**逐字相同**（一声不响）。
+# 面 = 包清单**现读**的 target 源码目录；登记的判定件必须在面内；面内**未登记**的文件不许
+# 承载子终端件（每个符号的家写在 `CARRIER_OWNERS` 里）；面内文件数按**棘轮**（只许涨）。
+PACKAGE = "Package.swift"
+FACE_TARGETS = ["DoyahCore", "DoyahStudioApp", "DoyahCoreTests", "DoyahUISnapshotTests"]
+# 面内 `.swift` 文件数的**下限**（2026-10-13 现读值；棘轮：只许涨不许跌 —— 缩面才是攻击面，
+# 新增 `.swift` 是正常开发）。降这个数要同时改这里与提交信息里的理由。
+FACE_FILE_FLOOR = {
+    "Core": 214, "Plugins/Notes/Sources": 21, "App": 119,
+    "Plugins/Notes/Views": 3, "Tests": 218, "TestsUISnapshot": 45,
+}
+# 「子终端件」的**家**：符号 → 允许承载它的文件（新文件不在名单里 ⇒ 判红并点名）。
+# 这份名单**穷举过**（2026-10-13 现读；`TestsUISnapshot/QueryHistoryPaneProbeTests.swift` 那一处
+# 是它为了拍「历史」段整块面板而真用到 `LowerPaneTabStrip` —— 是正当用法，登记在此）。
+CARRIER_OWNERS = {
+    "TerminalTabsBar(": [SUB_TOOLBAR],
+    "TerminalPaneStatus(": [SUB_TOOLBAR],
+    "LowerPaneTabStrip(": [LOWER_PANE, "TestsUISnapshot/QueryHistoryPaneProbeTests.swift"],
+    "TerminalSubToolbar(": [LOWER_PANE],
+    "TerminalLaunchCommand": [MODEL],
+    "TerminalTabCommand": [MODEL],
+    "restartDecision": [MODEL],
+}
+# R-45 的**先红基线**（面内未登记件的「Core 不出人话」那一面）：本仓 Core 目录现读 **67 / 214 份**
+# 文件都有中文字面量 —— 那是 R-45 的**全局收口**（别单的活）。判据的做法不是放宽面，而是**把债记下来**：
+# 台账里那份名单 = 允许仍然写中文的**历史件**；名单**双向判** —— 不在名单里而写了中文 ⇒ 判红
+# （新件不许再添债）；在名单里却**不再**写中文 ⇒ 也判红（死豁免，防抄名单混过去）。
+HAN_LEDGER = "Scripts/terminal-tabs-han-baseline.json"
+# 判定面登记件（面内枚举时的「已登记」集合）—— `PLAN` / `QUEUE` 是 Docs 口径件、不在面内。
+FACE_REGISTERED = [MODEL, TABLE, TESTS, PANE, SESSION, TABS_MODEL, TABS_BAR, LOWER_PANE,
+                   STRIP, SUB_TOOLBAR, TERMINAL_VIEW, PROBE, SUB_PROBE]
+# 二级条「右侧四枚」的**反向对账（画法形状）**：那一份文件里 `Button {` 的块数 = 登记枚数。
+# 为什么数「块数」而不是数标识符前缀：现场（样本 68 · P8）—— 新画的第 5 枚只要把标识符写成
+# `"terminal5-extra"`（不以 `terminal-` 开头），前缀计数就永远看不见它。
+SUB_TOOLBAR_DRAWN_SHAPES = 4
+
+
 class Issue:
     def __init__(self, where: str, reason: str) -> None:
         self.where = where
@@ -303,9 +436,15 @@ def _read(root: pathlib.Path, relative: str) -> str:
 
 
 def code_lines(text: str) -> list[tuple[int, str]]:
-    """只留代码行（`//` 注释不算 —— 注释里必然有中文）。"""
-    return [(number, line) for number, line in enumerate(text.splitlines(), 1)
-            if not line.strip().startswith("//")]
+    """只留代码行 —— **注释整条剥掉**（不只行首 `//`）。
+
+    2026-10-13（合册 `T-20261013-027` · 原单 `T-20261010-065` · 样本 68 ㈤）：旧实现只丢
+    「以 `//` 开头」的行 ⇒ ① **行尾注释**里的中文串被当成代码里的字面量（假阳）；②
+    `/* arrow.clockwise 已随 T-1a 搬走 */` 这种**路标块注释**在层级断言里被当成真写了该符号
+    （假阳）—— 而搬走时要留的正是这种路标。剥注释是按 Swift 的真语法走（字符串感知、等长替换），
+    字符串字面量本身**保留**：判定物里有一半是字符串里的记号（`"trash"` / `"terminal-…"`）。
+    """
+    return [(number, line) for number, line in enumerate(strip_comments(text).splitlines(), 1)]
 
 
 def check_model(root: pathlib.Path) -> tuple[list[Issue], int]:
@@ -315,15 +454,16 @@ def check_model(root: pathlib.Path) -> tuple[list[Issue], int]:
     if not model.strip():
         return [Issue(MODEL, "模型文件不在盘上（判据取不到输入，不许当通过）")], 0
     sites = 0
+    code = strip_comments(model)
     for group, anchors in API_ANCHORS.items():
         for anchor in anchors:
-            if anchor not in model:
+            if anchor not in code:
                 issues.append(Issue(f"{MODEL}[{group}]", f"缺 API 锚点 `{anchor}`"))
             else:
                 sites += 1
     for number, line in code_lines(model):
         for literal in STRING_LITERAL.findall(line):
-            if HAN.search(literal):
+            if visible_han(literal):
                 issues.append(Issue(
                     f"{MODEL}:{number}",
                     f"代码行里有中文字面量「{literal}」—— Core 只出逻辑，人话走语言表（R-45）",
@@ -378,8 +518,9 @@ def check_keys(root: pathlib.Path) -> tuple[list[Issue], int]:
     if not table.strip():
         return [Issue(TABLE, "语言表不在盘上")], 0
     complete = 0
+    table_code = strip_comments(table)
     for key in KEYS:
-        body = _entry_body(table, key)
+        body = _entry_body(table_code, key)
         if body is None:
             issues.append(Issue(TABLE, f"语言表里没有 `.{key}`"))
             continue
@@ -398,13 +539,226 @@ def check_tests(root: pathlib.Path) -> tuple[list[Issue], int]:
     tests = _read(root, TESTS)
     if not tests.strip():
         return [Issue(TESTS, "单测文件不在盘上（判据取不到输入，不许当通过）")], 0
+    code = strip_comments(tests)
     for group, anchor in TEST_ANCHORS.items():
-        if anchor not in tests:
+        if anchor not in code:
             issues.append(Issue(f"{TESTS}[{group}]", f"缺用例锚点 `{anchor}`（这一组的判据悬空了）"))
-    count = len(re.findall(r"func test", tests))
+    count = len(re.findall(r"func test", code))
     if count < TEST_FLOOR:
         issues.append(Issue(TESTS, f"用例只有 {count} 个、下限 {TEST_FLOOR} —— 测试被掏空了"))
+    # ⑧（2026-10-13）：锚点在位 ≠ 用例还在干活 —— 逐个行为组看**函数体**：
+    # 空体（锚点还在、断言没了）或一条断言都没有（`#expect` / `XCTAssert` 全无），都判红。
+    for group, anchor in TEST_ANCHORS.items():
+        body = _function_body(code, anchor)
+        if body is None:
+            continue
+        if not body.strip():
+            issues.append(Issue(
+                f"{TESTS}[{group}]", f"用例 `{anchor}` 的函数体是空的 —— 锚点还在、断言没了"))
+        elif not re.search(r"#expect\(|XCTAssert", body):
+            issues.append(Issue(
+                f"{TESTS}[{group}]", f"用例 `{anchor}` 里一条断言都没有 —— 锚点还在、它什么都不验"))
     return issues, count
+
+
+
+
+def _han_ledger(root: pathlib.Path) -> set[str] | None:
+    """R-45 先红基线台账里的文件名集合（读不到 / 读不动 ⇒ `None` = 判红，不当通过）。"""
+    text = _read(root, HAN_LEDGER)
+    if not text.strip():
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return {str(item) for item in data.get("coreFilesWithChineseLiterals", [])}
+
+
+def _blocks(text: str, opener: str) -> list[str]:
+    """取 `opener` 起的那一整段（**按括号配对走、字符串里的括号不算**）。"""
+    found: list[str] = []
+    index = 0
+    while True:
+        at = text.find(opener, index)
+        if at < 0:
+            return found
+        index = at + len(opener)
+        depth = 0
+        in_string = False
+        escaped = False
+        for position in range(at + len(opener) - 1, len(text)):
+            char = text[position]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+            elif char in "([":
+                depth += 1
+            elif char in ")]":
+                depth -= 1
+                if depth == 0:
+                    found.append(text[at:position + 1])
+                    index = position + 1
+                    break
+        else:
+            return found
+
+
+def package_targets(root: pathlib.Path) -> dict[str, list[str]] | None:
+    """包清单**现读**每个 target 的源码目录（面 = 声明面，不是判据手抄的清单）。"""
+    text = _read(root, PACKAGE)
+    if not text.strip():
+        return None
+    code = strip_comments(text)
+    targets: dict[str, list[str]] = {}
+    for opener in (".target(", ".executableTarget(", ".testTarget("):
+        for block in _blocks(code, opener):
+            name = re.search(r'name:\s*"([^"]+)"', block)
+            if not name:
+                continue
+            base = re.search(r'path:\s*"([^"]+)"', block)
+            sources = re.search(r"sources:\s*\[([^\]]*)\]", block)
+            prefix = "" if base is None or base.group(1) == "." else base.group(1) + "/"
+            if sources:
+                dirs = [prefix + item.strip().strip('"')
+                        for item in sources.group(1).split(",") if item.strip()]
+            elif base is not None and base.group(1) != ".":
+                dirs = [base.group(1)]
+            else:
+                dirs = [name.group(1)]
+            targets.setdefault(name.group(1), []).extend(dirs)
+    return targets
+
+
+def face_dirs(targets: dict[str, list[str]]) -> list[str]:
+    dirs: list[str] = []
+    for name in FACE_TARGETS:
+        for directory in targets.get(name, []):
+            if directory not in dirs:
+                dirs.append(directory)
+    return dirs
+
+
+def check_face(root: pathlib.Path, strict: bool = True) -> tuple[list[Issue], int]:
+    """㈥：面（包清单现读的 target 源码目录）+ 面内未登记件不许承载子终端件。
+
+    `strict=False` 只在自检夹具上跑（夹具是**修剪过的树**：面目录不全、文件数远低于下限）——
+    只跳过「面目录必须在盘 / 文件数下限」这两条，**承载件与语义字面量那两条照跑**
+    （新补的负例全靠它们）。
+    """
+    issues: list[Issue] = []
+    sites = 0
+    targets = package_targets(root)
+    if targets is None:
+        return [Issue(PACKAGE, "包清单不在盘上 —— 面对账取不到输入，不许当通过")], 0
+    for name in FACE_TARGETS:
+        if name not in targets:
+            issues.append(Issue(PACKAGE, f"面里点名的 target 在包清单里找不到：`{name}`"))
+        else:
+            sites += 1
+    dirs = face_dirs(targets)
+    han_ledger = _han_ledger(root)
+    hit_legacy: set[str] = set()
+    for relative in FACE_REGISTERED:
+        if not any(relative.startswith(directory + "/") for directory in dirs):
+            issues.append(Issue(
+                relative, f"登记的判定件落在**面外**（面 = {dirs}）—— 面与清单两边都得改"))
+        else:
+            sites += 1
+    for directory in dirs:
+        path = root / directory
+        if not path.is_dir():
+            if strict:
+                issues.append(Issue(directory, "面目录不在盘上 —— 面被削了（包清单还声明着它）"))
+            continue
+        count = len(list(path.rglob("*.swift")))
+        floor = FACE_FILE_FLOOR.get(directory)
+        if floor is None:
+            issues.append(Issue(
+                directory, "这个面目录没在 `FACE_FILE_FLOOR` 里登记下限 —— 新面要连下限一起登记"))
+        elif count < floor:
+            issues.append(Issue(
+                directory, f"面内 `.swift` 只剩 {count} 份（台账下限 {floor}）—— 面被削了"))
+        sites += 1
+        for file in sorted(path.rglob("*.swift")):
+            relative = file.relative_to(root).as_posix()
+            if relative in FACE_REGISTERED:
+                continue
+            code = strip_comments(file.read_text(encoding="utf-8", errors="ignore"))
+            carried = [symbol for symbol in CARRIER_OWNERS
+                       if symbol in code and relative not in CARRIER_OWNERS[symbol]]
+            if carried:
+                issues.append(Issue(
+                    relative,
+                    f"面内**未登记**的文件承载子终端件 `{carried[0]}`（它的家是 "
+                    f"{CARRIER_OWNERS[carried[0]]}）—— 新件要么登记进判定面，要么别长在这儿"
+                ))
+            elif directory == "Core" or directory.startswith("Core/") \
+                    or directory == "Plugins/Notes/Sources":
+                # R-45：Core target 的代码行里不许有中文字面量（**转义写法也算**，见 `visible_han`）。
+                # 不在先红基线名单里 ⇒ 判红；在名单里 ⇒ 记一笔（下面判「死豁免」）。
+                found = [literal for literal in STRING_LITERAL.findall(code)
+                         if visible_han(literal)]
+                if found and (han_ledger is None or relative not in han_ledger):
+                    issues.append(Issue(
+                        relative,
+                        f"面内未登记的件里出现中文字面量「{found[0]}」—— Core 只出逻辑、人话走语言表"
+                        f"（R-45）；确有理由就登记进 `{HAN_LEDGER}` 的先红基线（连着理由一起）"
+                    ))
+                elif found:
+                    hit_legacy.add(relative)
+    if han_ledger is None:
+        issues.append(Issue(HAN_LEDGER, "R-45 先红基线不在盘上 —— 这一面取不到输入，不许当通过"))
+    else:
+        sites += 1
+        for relative in sorted(han_ledger):
+            if relative in hit_legacy:
+                continue
+            # 只在「文件还在盘上」时判死豁免：夹具是修剪过的树，不在盘上的条目不算账。
+            if (root / relative).is_file():
+                issues.append(Issue(
+                    HAN_LEDGER,
+                    f"死豁免：`{relative}` 不再写中文字面量了 —— 从先红基线里删掉它（名单不许积灰）"))
+    return issues, sites
+
+
+def _function_body(code: str, name: str) -> str | None:
+    """取 `func <name>(` 的函数体（**按花括号配对走、字符串里的花括号不算**）。"""
+    at = code.find("func " + name + "(")
+    if at < 0:
+        return None
+    brace = code.find("{", at)
+    if brace < 0:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for position in range(brace, len(code)):
+        char = code[position]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return code[brace + 1:position]
+    return None
 
 
 def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
@@ -421,8 +775,9 @@ def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
         if not text.strip():
             issues.append(Issue(relative, "文件不在盘上（判据取不到输入，不许当通过）"))
             continue
+        code = strip_comments(text)
         for label, anchor in anchors:
-            if anchor in text:
+            if anchor in code:
                 sites += 1
             else:
                 issues.append(Issue(f"{relative}[{label}]", f"缺接线锚点 `{anchor}`"))
@@ -438,8 +793,13 @@ def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
     if not sub.strip():
         issues.append(Issue(SUB_TOOLBAR, "文件不在盘上（判据取不到输入，不许当通过）"))
         return issues, sites
-    bar = sub.find("TerminalTabsBar(terminal: terminal)")
-    spacer = sub.find("Spacer(minLength: 8)")
+    # ㈡（2026-10-13 · 样本 68 · P9）：位置判据比的是**非注释上下文**里的下标。
+    # 现场：把真页签头挪到 `Spacer(minLength: 8)` 之后、再在 Spacer 之前留一行**注释**写着同一串
+    # ⇒ 旧实现（`sub.find(...)` 在原文上找）读到的是那行注释，读数与基线**逐字相同**。
+    # `strip_comments` 是**等长**替换 ⇒ 剥注释后的下标与原文件一一对应，比对仍然成立。
+    sub_code = strip_comments(sub)
+    bar = sub_code.find("TerminalTabsBar(terminal: terminal)")
+    spacer = sub_code.find("Spacer(minLength: 8)")
     if bar < 0 or spacer < 0:
         issues.append(Issue(
             f"{SUB_TOOLBAR}[口径①左侧]",
@@ -455,7 +815,7 @@ def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
 
     # **层级断言**（2026-10-08 人类主人原话）：外层页签条上不得再出现子终端项。
     # 只看**代码行**（注释里提到这些名字是正常的 —— 路标注释正是搬走时要留的）。
-    strip_code = "\n".join(line for _, line in code_lines(strip))
+    strip_code = strip_comments(strip)
     for symbol, note in LAYER_FORBIDDEN:
         if symbol in strip_code:
             issues.append(Issue(
@@ -467,7 +827,7 @@ def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
             sites += 1
 
     for symbol in RIGHT_SIDE_BUTTONS:
-        if symbol not in strip:
+        if symbol not in strip_code:
             issues.append(Issue(
                 f"{STRIP}[口径①右侧按钮不动]",
                 f"右侧按钮 `{symbol}` 不见了 —— 口径①明说「右侧现有按钮一律不动」",
@@ -477,7 +837,7 @@ def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
 
     # 反向对账（第 96 轮补）：这一行里画按钮的**调用点**数必须等于登记值 + 1（定义那一处）。
     # 只判「登记过的符号在不在」是不够的 —— 新画一个没登记的按钮，正向那条一条都不会响。
-    call_sites = strip.count("iconButton(")
+    call_sites = strip_code.count("iconButton(")
     expected_call_sites = RIGHT_SIDE_CALL_SITES + 1
     if call_sites != expected_call_sites:
         issues.append(Issue(
@@ -496,16 +856,16 @@ def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
     # 那是**假绿**（隔壁有提示、这一枚没有，判据照样过）。
     for identifier, note in SUB_TOOLBAR_ACTIONS:
         marker = f'accessibilityIdentifier("{identifier}")'
-        at = sub.find(marker)
+        at = sub_code.find(marker)
         if at < 0:
             issues.append(Issue(
                 f"{SUB_TOOLBAR}[右侧四枚]",
                 f"{note} 那枚不见了：缺 `{marker}`（人类主人原话点名了它）",
             ))
             continue
-        start = sub.rfind("Button {", 0, at)
-        next_button = sub.find("Button {", at)
-        block = sub[start if start >= 0 else 0: next_button if next_button >= 0 else len(sub)]
+        start = sub_code.rfind("Button {", 0, at)
+        next_button = sub_code.find("Button {", at)
+        block = sub_code[start if start >= 0 else 0: next_button if next_button >= 0 else len(sub_code)]
         if ".help(" not in block:
             issues.append(Issue(
                 f"{SUB_TOOLBAR}[右侧四枚]",
@@ -514,12 +874,18 @@ def check_app(root: pathlib.Path) -> tuple[list[Issue], int]:
         else:
             sites += 1
 
-    # 反向对账（`T-2` 片）：二级条里画的**枚数**必须等于登记表长度。
-    drawn = sub.count('accessibilityIdentifier("terminal-')
-    if drawn != len(SUB_TOOLBAR_ACTIONS):
+    # 反向对账（`T-2` 片 · ㈢ 2026-10-13 改判**画法形状**）：二级条里画的**枚数**必须等于登记值。
+    # 旧实现数的是标识符**前缀**（`accessibilityIdentifier("terminal-`）—— 现场（样本 68 · P8）：
+    # 新画的第 5 枚只要把标识符写成 `"terminal5-extra"`（不以 `terminal-` 开头），前缀计数就
+    # 永远看不见它（读数与基线逐字同）。改判两样都数：`Button {` 的**块数** 与
+    # `accessibilityIdentifier(` 的**出现数**，两者都 == `SUB_TOOLBAR_DRAWN_SHAPES`。
+    drawn_shapes = len(re.findall(r"\bButton\s*\{", sub_code))
+    drawn_ids = sub_code.count("accessibilityIdentifier(")
+    if drawn_shapes != SUB_TOOLBAR_DRAWN_SHAPES or drawn_ids != SUB_TOOLBAR_DRAWN_SHAPES:
         issues.append(Issue(
             f"{SUB_TOOLBAR}[右侧四枚·反向对账]",
-            f"二级条里画了 {drawn} 枚（登记的是 {len(SUB_TOOLBAR_ACTIONS)} 枚）"
+            f"二级条里画了 {drawn_shapes} 枚按钮（`accessibilityIdentifier` {drawn_ids} 处），"
+            f"登记的是 {SUB_TOOLBAR_DRAWN_SHAPES} 枚"
             f"—— 多画了没登记的按钮，还是把登记过的那枚删了？（两边都得改）",
         ))
     else:
@@ -559,7 +925,7 @@ def check_docs(root: pathlib.Path) -> tuple[list[Issue], int, int]:
     return issues, hits, expected
 
 
-def run(root: pathlib.Path) -> tuple[list[Issue], dict[str, int]]:
+def run(root: pathlib.Path, strict_face: bool = True) -> tuple[list[Issue], dict[str, int]]:
     issues: list[Issue] = []
     stats: dict[str, int] = {}
 
@@ -578,6 +944,11 @@ def run(root: pathlib.Path) -> tuple[list[Issue], dict[str, int]]:
     app_issues, app_sites = check_app(root)
     issues += app_issues
     stats["appSites"] = app_sites
+
+    # ㈥：面 —— 与 `Package.swift` 现读的 target 源码目录对账（`strict_face=False` 只在自检夹具上）。
+    face_issues, face_sites = check_face(root, strict=strict_face)
+    issues += face_issues
+    stats["faceSites"] = face_sites
 
     doc_issues, doc_hits, doc_expected = check_docs(root)
     issues += doc_issues
@@ -598,10 +969,13 @@ def run(root: pathlib.Path) -> tuple[list[Issue], dict[str, int]]:
         issues.append(Issue("空跑防护", f"文案键只有 {stats['keys']}/{len(KEYS)} 个中英齐"))
     if stats["docHits"] < stats["docExpected"]:
         issues.append(Issue("空跑防护", f"口径锚点只命中 {stats['docHits']}/{stats['docExpected']} 处"))
+    expected_face = len(FACE_REGISTERED) + len(FACE_TARGETS) + len(FACE_FILE_FLOOR) + 1
+    if strict_face and stats["faceSites"] < expected_face:
+        issues.append(Issue("空跑防护", f"面对账只命中 {stats['faceSites']}/{expected_face} 处"))
     return issues, stats
 
 
-FIXTURE_FILES = [MODEL, TABLE, TESTS, PLAN, QUEUE,
+FIXTURE_FILES = [MODEL, TABLE, TESTS, PLAN, QUEUE, PACKAGE, HAN_LEDGER,
                  PANE, SESSION, TABS_MODEL, TABS_BAR, LOWER_PANE, STRIP, SUB_TOOLBAR,
                  TERMINAL_VIEW, PROBE, SUB_PROBE]
 
@@ -619,7 +993,7 @@ def _digests(root: pathlib.Path) -> dict[str, str]:
 
 
 def _fixture(base: pathlib.Path) -> pathlib.Path:
-    """把判据盯着的十五份文件原样拷进临时目录（**只在副本上写坏**）。
+    """把判据盯着的十七份文件原样拷进临时目录（**只在副本上写坏**）。
 
     盘上没有的那几份跳过（同 `_digests` 的理由：缺文件由 `check_docs` 报红，不该让自测连跑都跑不起来）。
     """
@@ -643,7 +1017,7 @@ def _rewrite(path: pathlib.Path, old: str, new: str) -> bool:
 
 def self_test(root: pathlib.Path) -> int:
     # 本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）⇒ 本族自检**如实跳过 + 高声提示**、
-    # 退出 0（口径出处 = `AGENT-SPEC.md` §9 第 147 条 ④）：夹具里那十三份文件含**队列台账**
+    # 退出 0（口径出处 = `AGENT-SPEC.md` §9 第 147 条 ④）：夹具里那十七份文件含**队列台账**
     # （`_fixture` / `_digests` 都要读它），硬跑必崩 —— 而崩在干净克隆上与当轮改动无关。
     if not (root / QUEUE).is_file():
         print("⚠️ 自测需要 %s（本机台账）—— 干净克隆上跳过" % QUEUE)
@@ -664,7 +1038,7 @@ def self_test(root: pathlib.Path) -> int:
     # 例 2（A · 红路）：拿掉一个 API 锚点 ⇒ 点名报红。
     with_fixture = _fixture(root)
     _rewrite(with_fixture / MODEL, "public mutating func select(numbered", "public mutating func selectNumbered")
-    issues, _ = run(with_fixture)
+    issues, _ = run(with_fixture, strict_face=False)
     record(any("select(numbered" in str(issue) for issue in issues),
            "例 2（A）API 锚点被拿掉 ⇒ 报红并点名", "；".join(str(issue) for issue in issues[:3]))
     shutil.rmtree(with_fixture, ignore_errors=True)
@@ -672,7 +1046,7 @@ def self_test(root: pathlib.Path) -> int:
     # 例 3（B · 红路）：Core 代码行里塞一句中文字面量 ⇒ 报红。
     with_fixture = _fixture(root)
     _rewrite(with_fixture / MODEL, "public enum TerminalTabTitle {", 'public enum TerminalTabTitle {\n    static let bad = "终端"')
-    issues, _ = run(with_fixture)
+    issues, _ = run(with_fixture, strict_face=False)
     record(any("中文字面量" in str(issue) for issue in issues),
            "例 3（B）Core 代码行出现中文字面量 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
     shutil.rmtree(with_fixture, ignore_errors=True)
@@ -681,7 +1055,7 @@ def self_test(root: pathlib.Path) -> int:
     with_fixture = _fixture(root)
     _rewrite(with_fixture / TABLE, '.terminalTabExited: [.simplifiedChinese: "已退出", .english: "Exited"]',
              '.terminalTabExited: [.simplifiedChinese: "已退出"]')
-    issues, _ = run(with_fixture)
+    issues, _ = run(with_fixture, strict_face=False)
     record(any("缺英文" in str(issue) for issue in issues),
            "例 4（C）语言表缺英文译文 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
     shutil.rmtree(with_fixture, ignore_errors=True)
@@ -689,7 +1063,7 @@ def self_test(root: pathlib.Path) -> int:
     # 例 5（D · 红路）：单测里一个行为组的锚点被改名 ⇒ 报红。
     with_fixture = _fixture(root)
     _rewrite(with_fixture / TESTS, "func testDeriveTitleStripsLoginShellDash", "func testTitleDerivation")
-    issues, _ = run(with_fixture)
+    issues, _ = run(with_fixture, strict_face=False)
     record(any("testDeriveTitleStripsLoginShellDash" in str(issue) for issue in issues),
            "例 5（D）行为组的用例锚点被改名 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
     shutil.rmtree(with_fixture, ignore_errors=True)
@@ -700,7 +1074,7 @@ def self_test(root: pathlib.Path) -> int:
     with_fixture = _fixture(root)
     if (with_fixture / QUEUE).is_file():
         _rewrite(with_fixture / QUEUE, "tab 头切换", "页签切换")
-        issues, _ = run(with_fixture)
+        issues, _ = run(with_fixture, strict_face=False)
         record(any("口径被删" in str(issue) for issue in issues),
                "例 6（E）队列里的需求原话被改写 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
     else:
@@ -714,7 +1088,7 @@ def self_test(root: pathlib.Path) -> int:
     spacer_line = "            Spacer(minLength: 8)\n"
     moved = _rewrite(with_fixture / SUB_TOOLBAR, bar_line, "")
     moved = moved and _rewrite(with_fixture / SUB_TOOLBAR, spacer_line, spacer_line + bar_line)
-    issues, _ = run(with_fixture)
+    issues, _ = run(with_fixture, strict_face=False)
     record(moved and any("口径①左侧" in str(issue) for issue in issues),
            "例 7（F）页签头被挪到 Spacer 之后 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
     shutil.rmtree(with_fixture, ignore_errors=True)
@@ -722,7 +1096,7 @@ def self_test(root: pathlib.Path) -> int:
     # 例 8（F · 红路）：右侧那个「收起」按钮被顺手换掉 ⇒ 报红（口径①：右侧按钮不动）。
     with_fixture = _fixture(root)
     _rewrite(with_fixture / STRIP, 'iconButton("chevron.down"', 'iconButton("chevron.forward"')
-    issues, _ = run(with_fixture)
+    issues, _ = run(with_fixture, strict_face=False)
     record(any("右侧按钮" in str(issue) for issue in issues),
            "例 8（F）右侧按钮被挪走 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
     shutil.rmtree(with_fixture, ignore_errors=True)
@@ -731,7 +1105,7 @@ def self_test(root: pathlib.Path) -> int:
     # （这正是第 82 轮探针先撞上的坑：确认了却关不掉）。
     with_fixture = _fixture(root)
     _rewrite(with_fixture / TABS_MODEL, "close(id: id, force: true)", "close(id: id)")
-    issues, _ = run(with_fixture)
+    issues, _ = run(with_fixture, strict_face=False)
     record(any("force" in str(issue) for issue in issues),
            "例 9（F）「确认之后真的关」被删 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
     shutil.rmtree(with_fixture, ignore_errors=True)
@@ -740,7 +1114,7 @@ def self_test(root: pathlib.Path) -> int:
     with_fixture = _fixture(root)
     _rewrite(with_fixture / PROBE, "func testTwoTabsRunIndependentShellsAndSurviveTabSwitching",
              "func testTwoTabs")
-    issues, _ = run(with_fixture)
+    issues, _ = run(with_fixture, strict_face=False)
     record(any("主诉场景" in str(issue) for issue in issues),
            "例 10（F）探针的主诉场景用例锚点被改名 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
     shutil.rmtree(with_fixture, ignore_errors=True)
@@ -748,7 +1122,7 @@ def self_test(root: pathlib.Path) -> int:
     # 例 11（F · 红路）：界面自己判定按键（不再交给 Core）⇒ 报红。
     with_fixture = _fixture(root)
     _rewrite(with_fixture / TERMINAL_VIEW, "TerminalTabs.command(", "Self.tabCommandIgnoringCore(")
-    issues, _ = run(with_fixture)
+    issues, _ = run(with_fixture, strict_face=False)
     record(any("Core 判定" in str(issue) for issue in issues),
            "例 11（F）按键判定离开 Core ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
     shutil.rmtree(with_fixture, ignore_errors=True)
@@ -772,7 +1146,7 @@ def self_test(root: pathlib.Path) -> int:
              '            .accessibilityIdentifier("terminal-restart")\n'
              '            .accessibilityIdentifier("terminal-extra-bonus")\n')
     _rewrite(with_fixture / SUB_TOOLBAR, "            .help(L(.terminalClearBuffer))\n", "")
-    issues, _ = run(with_fixture)
+    issues, _ = run(with_fixture, strict_face=False)
     texts = [str(issue) for issue in issues]
     record(
         any("一个不少" in text for text in texts)
@@ -783,9 +1157,150 @@ def self_test(root: pathlib.Path) -> int:
     )
     shutil.rmtree(with_fixture, ignore_errors=True)
 
-    # 例 13（反过来核一遍）：所有写坏都发生在副本上 —— 真仓库（有盘的）十五份文件必须逐字节未变。
+    # 例 13（㈠ A · 红路）：API 锚点被**注释掉**（不是删掉）⇒ 报红并点名。
+    # 这是样本 68 的第一个现场：旧实现 `anchor in text` 认的是原文子串 ⇒ 读数与基线**逐字相同**。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / MODEL, "public mutating func select(numbered",
+             "// public mutating func select(numbered")
+    issues, _ = run(with_fixture, strict_face=False)
+    record(any("select(numbered" in str(issue) for issue in issues),
+           "例 13（㈠ A）API 锚点被注释掉 ⇒ 报红并点名", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 14（㈠ F · 红路）：真 `iconButton(` 调用被**注释掉** ⇒ 反向对账棘轮报红（旧实现数子串）。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / STRIP, 'iconButton("chevron.down", help: L(.lowerPaneHide)) {',
+             '// iconButton("chevron.down", help: L(.lowerPaneHide)) {')
+    issues, _ = run(with_fixture, strict_face=False)
+    record(any("一个不少" in str(issue) for issue in issues),
+           "例 14（㈠ F）右侧按钮的调用点被注释掉 ⇒ 棘轮报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 15（㈠ F · 红路）：图标按钮的 `.help(` 被注释掉 ⇒ 报红（注释不是提示）。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / SUB_TOOLBAR, "            .help(L(.terminalClearBuffer))",
+             "            // .help(L(.terminalClearBuffer))")
+    issues, _ = run(with_fixture, strict_face=False)
+    record(any("没有 `.help(` 提示" in str(issue) for issue in issues),
+           "例 15（㈠ F）`.help(` 被注释掉 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 16（㈠ D · 红路）：行为组的用例锚点被**注释掉** ⇒ 报红（旧实现 D 组同样只认子串）。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / TESTS, "func testDeriveTitleStripsLoginShellDash",
+             "// func testDeriveTitleStripsLoginShellDash")
+    issues, _ = run(with_fixture, strict_face=False)
+    record(any("testDeriveTitleStripsLoginShellDash" in str(issue) for issue in issues),
+           "例 16（㈠ D）用例锚点被注释掉 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 17（㈠ C · 红路）：语言表里整条**注释掉** ⇒ 报红（英文界面已掉回中文，读数不再逐字同）。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / TABLE,
+             '.terminalTabExited: [.simplifiedChinese: "已退出", .english: "Exited"]',
+             '// .terminalTabExited（整条注释掉）')
+    issues, _ = run(with_fixture, strict_face=False)
+    record(any("语言表里没有 `.terminalTabExited`" in str(issue) for issue in issues),
+           "例 17（㈠ C）语言表整条被注释掉 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 18（㈡ 位置 · 红路）：真页签头挪到 `Spacer(minLength: 8)` **之后**，并在 Spacer 之前
+    # **留一行注释**写着同一串 —— 旧实现读到的是那行注释（读数与基线逐字同）⇒ 现在必须报红。
+    with_fixture = _fixture(root)
+    bar_line = "            TerminalTabsBar(terminal: terminal)\n"
+    spacer_line = "            Spacer(minLength: 8)\n"
+    moved = _rewrite(with_fixture / SUB_TOOLBAR, bar_line,
+                     "            // 已挪走：TerminalTabsBar(terminal: terminal)\n")
+    moved = moved and _rewrite(with_fixture / SUB_TOOLBAR, spacer_line, spacer_line + bar_line)
+    issues, _ = run(with_fixture, strict_face=False)
+    record(moved and any("口径①左侧" in str(issue) for issue in issues),
+           "例 18（㈡ 位置）挪走之后靠一行注释冒充原位 ⇒ 仍报红",
+           "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 19（㈢ 反向棘轮 · 红路）：二级条多画第 5 枚、且标识符**不以 `terminal-` 开头**
+    # ⇒ 报红（旧实现数的是前缀，这一枚它永远看不见 —— 样本 68 · P8 的现场）。
+    with_fixture = _fixture(root)
+    extra = ('            Button {\n                terminal.clearActiveBuffer()\n'
+             '            } label: {\n                Image(systemName: "star")\n            }\n'
+             '            .accessibilityIdentifier("terminal5-extra")\n')
+    _rewrite(with_fixture / SUB_TOOLBAR, '            .accessibilityIdentifier("terminal-restart")\n',
+             '            .accessibilityIdentifier("terminal-restart")\n' + extra)
+    issues, _ = run(with_fixture, strict_face=False)
+    record(any("右侧四枚·反向对账" in str(issue) for issue in issues),
+           "例 19（㈢）第 5 枚按钮的标识符不以前缀开头 ⇒ 仍报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 20（㈣ · 红路）：Core 里写 `"\u{7EC8}\u{7AEF}"`（转义的中文）⇒ 报红。
+    # 旧实现只认源码里的 U+4E00–9FFF 字面字符 ⇒ 同一句话换个写法就整条绕过「Core 不出人话」。
+    with_fixture = _fixture(root)
+    escaped = '    static let bad = "' + r'\u{7EC8}\u{7AEF}' + '"\n'
+    _rewrite(with_fixture / MODEL, "public enum TerminalTabTitle {",
+             "public enum TerminalTabTitle {\n" + escaped)
+    issues, _ = run(with_fixture, strict_face=False)
+    record(any("中文字面量" in str(issue) for issue in issues),
+           "例 20（㈣）转义写法的中文 ⇒ 报红", "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 21（㈤ 对手臂 · 绿路）：**行尾注释**里写中文 ⇒ 不再误伤（旧实现把注释里的引号串当字面量）。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / MODEL, "public enum TerminalTabTitle {",
+             "public enum TerminalTabTitle { // 终端页签的标题")
+    issues, _ = run(with_fixture, strict_face=False)
+    record(not any("中文字面量" in str(issue) for issue in issues),
+           "例 21（㈤）行尾注释里的中文 ⇒ 不报红（同一串真写成代码时见例 3）",
+           "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 22（㈤ 对手臂 · 绿路）：**块注释**里写被禁符号 `arrow.clockwise`（搬走时要留的路标）
+    # ⇒ 不再误伤层级断言；同处真写代码时见例 12 那一族（外层条上写就报红）。
+    with_fixture = _fixture(root)
+    _rewrite(with_fixture / STRIP, "struct LowerPaneTabStrip",
+             "/* arrow.clockwise 已随 T-1a 搬走 */\nstruct LowerPaneTabStrip")
+    issues, _ = run(with_fixture, strict_face=False)
+    record(not any("层级" in str(issue) for issue in issues),
+           "例 22（㈤）块注释里的被禁符号 ⇒ 不报红（路标注释是正常的）",
+           "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 23（㈥ 面 · 红路）：**面内新文件**承载子终端件（`App/Views/Extra68.swift` 里画
+    # `TerminalTabsBar(terminal:)`）⇒ 报红并点名（旧实现面是 15 个写死路径，这一件它看不见）。
+    with_fixture = _fixture(root)
+    extra_view = with_fixture / "App/Views/Extra68.swift"
+    extra_view.write_text('struct Extra68: View {\n'
+                          '    var body: some View { TerminalTabsBar(terminal: terminal) }\n'
+                          '}\n', encoding="utf-8")
+    issues, _ = run(with_fixture, strict_face=False)
+    record(any("Extra68.swift" in str(issue) and "承载子终端件" in str(issue) for issue in issues),
+           "例 23（㈥）面内未登记的新件承载子终端件 ⇒ 报红并点名",
+           "；".join(str(issue) for issue in issues[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 24（㈥ 面 · 红路 · 两臂）：① **面内新的 Core 件**里写中文字面量 ⇒ 报红（旧实现只读写死的
+    # 那一份模型 —— 新建 Core 件写「终端」它一声不响）；② **死豁免**：先红基线名单点着的件
+    # 不再写中文 ⇒ 也报红（名单不许积灰）。
+    with_fixture = _fixture(root)
+    (with_fixture / "Core/Extra68Core.swift").write_text('let bad68 = "终端"\n', encoding="utf-8")
+    issues, _ = run(with_fixture, strict_face=False)
+    texts = [str(issue) for issue in issues]
+    first = any("Extra68Core.swift" in text and "中文字面量" in text for text in texts)
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    with_fixture = _fixture(root)
+    listed = json.loads((with_fixture / HAN_LEDGER).read_text(encoding="utf-8"))
+    stale = listed.get("coreFilesWithChineseLiterals", [])
+    if stale:
+        (with_fixture / stale[0]).write_text("let clean68 = 1\n", encoding="utf-8")
+        issues, _ = run(with_fixture, strict_face=False)
+        texts = [str(issue) for issue in issues]
+    record(first and any("死豁免" in text for text in texts),
+           "例 24（㈥）面内新 Core 件写中文 ⇒ 报红；先红基线里的件不再写中文 ⇒ 死豁免报红",
+           "；".join(texts[:3]))
+    shutil.rmtree(with_fixture, ignore_errors=True)
+
+    # 例 25（反过来核一遍）：所有写坏都发生在副本上 —— 真仓库（有盘的）十七份文件必须逐字节未变。
     after = _digests(root)
-    record(before == after, "例 13 真仓库（有盘的十五份）文件逐字节未变",
+    record(before == after, "例 25 真仓库（有盘的十七份）文件逐字节未变",
            "；".join(f"{name} 变了" for name in after if before[name] != after[name]))
 
     for ok, label, detail in results:
@@ -802,6 +1317,20 @@ def main(argv: list[str]) -> int:
     root = pathlib.Path(__file__).resolve().parent.parent
     if "--root" in argv:
         root = pathlib.Path(argv[argv.index("--root") + 1]).resolve()
+    index = 1  # argv[0] 是脚本自己的路径
+    while index < len(argv):
+        item = argv[index]
+        if item == "--root":
+            if index + 1 >= len(argv):
+                print("❌ `--root` 后面少了一个路径")
+                return 2
+            index += 2
+            continue
+        if item == "--self-test":
+            index += 1
+            continue
+        print(f"❌ 未知参数 `{item}` —— 判据不接受它（旧实现吞掉照跑，读数就是假的）")
+        return 2
     if "--self-test" in argv:
         return self_test(root)
 
