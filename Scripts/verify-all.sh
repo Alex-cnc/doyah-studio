@@ -581,8 +581,12 @@ python3 Scripts/check-design-themes.py --self-test
 #     且只此一处定义）
 #   D 另两个编辑面（AppKit `NSTextView`）仍是令牌色，不许退回 `NSColor.textBackgroundColor`
 #   E 空跑防护（扫描面文件数 / 编辑面处数 / 台账条数）
-#   F 编辑面不许自己再画一层底色（除唯一出处）
-# L-142 的负例 `--self-test` **13 例**（红 / 绿成对，夹具一律在临时副本，末例核对真仓库逐字节未变）。
+#   F 编辑面不许自己再画一层底色（除唯一出处；与 B 共用同一条修饰链，允许空行）
+#   G 面对账（扫描面 ↔ `Package.swift` 生产 target 的 path:/sources:；面外出现编辑面标识 ⇒ 红）
+#   2026-10-13 升级（合册 T-20261013-027 · 原单 T-20261010-071）：判定物先剥注释与字符串
+#   （行尾注释 / 块注释中间行不再假阳）· 未登记字形判红点名 · 判据 C 取配对花括号函数体 ·
+#   禁用令牌收窄（`#if` / `#available` / `#Preview` 不再假阳）· 基线削面无钉
+# L-142 的负例 `--self-test` **25 例**（红 / 绿成对，夹具一律在临时副本，末例核对真仓库逐字节未变）。
 python3 Scripts/check-editor-surface-tokens.py
 python3 Scripts/check-editor-surface-tokens.py --self-test
 

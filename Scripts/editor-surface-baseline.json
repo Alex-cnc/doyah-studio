@@ -1,0 +1,6 @@
+{
+  "files": 120,
+  "surfaces": 8,
+  "measured": "2026-10-13",
+  "note": "面无基线钉（合册 T-20261013-027 · 原单 T-20261010-071 ㈧）：扫描面（App/ + Plugins/Notes/Views）里的 .swift 文件数与多行编辑面处数的**实测读数**。低于这两个数 ⇒ Scripts/check-editor-surface-tokens.py 判红（删文件 / 移走视图不许静默缩面）。有实质变化时如实更新本文件并在提交信息里写明。"
+}
