@@ -94,10 +94,10 @@ struct EgressLogSheet: View {
                 .labelsHidden()
                 .frame(maxWidth: 180)
                 .disabled(tabOptions.isEmpty)
-                ToolbarIconButton(systemName: "square.and.arrow.up", help: L(.egressExportJSON)) {
+                ToolbarIconButton(systemName: "curlybraces", help: L(.egressExportJSON)) {
                     Task { await appState.exportEgressLog(asCSV: false) }
                 }
-                ToolbarIconButton(systemName: "square.and.arrow.up", help: L(.egressExportCSV)) {
+                ToolbarIconButton(systemName: "tablecells", help: L(.egressExportCSV)) {
                     Task { await appState.exportEgressLog(asCSV: true) }
                 }
                 ToolbarIconButton(systemName: "xmark.bin", help: L(.egressClear)) { isClearConfirmPresented = true }

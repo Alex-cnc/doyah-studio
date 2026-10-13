@@ -148,11 +148,10 @@ struct BrowserTabView: View {
                 Text(L(.browserRestoredHint))
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
-                Button(L(.browserReload)) {
+                ToolbarIconButton(systemName: "arrow.clockwise", help: L(.browserReload)) {
                     let engine = browser.browserEngine(for: page)
                     Task { await engine.reload() }
                 }
-                .buttonStyle(.borderedProminent)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if page.url == nil {

@@ -55,12 +55,12 @@ struct SafeModeConfirmSheet: View {
             HStack {
                 Spacer()
 
-                Button(L(.safetyConfirmCancel)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.safetyConfirmCancel)) {
                     onCancel()
                     dismiss()
                 }
 
-                Button(L(.safetyConfirmRun), role: .destructive) {
+                ToolbarIconButton(systemName: "checkmark", help: L(.safetyConfirmRun), role: .destructive) {
                     onConfirm()
                     dismiss()
                 }

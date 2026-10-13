@@ -36,11 +36,11 @@ struct CreateDatabaseSheet: View {
             HStack {
                 Spacer()
 
-                Button(L(.commonCancel)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
                     dismiss()
                 }
 
-                Button(L(.createDatabaseConfirm)) {
+                ToolbarIconButton(systemName: "checkmark", help: L(.createDatabaseConfirm)) {
                     submit()
                 }
                 .keyboardShortcut(.defaultAction)

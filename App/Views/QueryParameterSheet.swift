@@ -68,13 +68,13 @@ struct QueryParameterSheet: View {
 
             HStack {
                 Spacer()
-                Button(L(.commonCancel)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
                     appState.cancelPendingQueryParameters()
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
 
-                Button(L(.queryParameterRun)) {
+                ToolbarIconButton(systemName: "play.fill", help: L(.queryParameterRun)) {
                     Task {
                         await appState.runPendingQueryParameters(values: collected())
                         if appState.pendingQueryParameters == nil { dismiss() }

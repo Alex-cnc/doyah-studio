@@ -100,7 +100,7 @@ struct ERDiagramPanel: View {
             }
             .disabled(diagram?.isEmpty ?? true)
 
-            ToolbarIconButton(systemName: "doc.on.doc", help: L(.erDiagramCopyDOT)) {
+            ToolbarIconButton(systemName: "square.on.square", help: L(.erDiagramCopyDOT)) {
                 copyDiagram { $0.dot() }
             }
             .disabled(diagram?.isEmpty ?? true)

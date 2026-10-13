@@ -37,11 +37,11 @@ struct SaveQuerySheet: View {
             HStack {
                 Spacer()
 
-                Button(L(.commonCancel)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
                     dismiss()
                 }
 
-                Button(isDuplicate(trimmedName) ? L(.saveQueryOverwrite) : L(.commonSave)) {
+                ToolbarIconButton(systemName: "square.and.arrow.down", help: isDuplicate(trimmedName) ? L(.saveQueryOverwrite) : L(.commonSave)) {
                     onSave(trimmedName)
                     dismiss()
                 }
@@ -89,11 +89,11 @@ struct GoToLineSheet: View {
             HStack {
                 Spacer()
 
-                Button(L(.commonCancel)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
                     dismiss()
                 }
 
-                Button(L(.goToLineConfirm)) {
+                ToolbarIconButton(systemName: "checkmark", help: L(.goToLineConfirm)) {
                     if let parsedLine {
                         onGo(parsedLine, parsedColumn)
                     }

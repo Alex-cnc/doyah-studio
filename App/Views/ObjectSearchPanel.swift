@@ -220,10 +220,10 @@ struct ObjectSearchPanel: View {
 
             Spacer()
 
-            Button(L(.objectSearchBrowse)) { browseSelected() }
+            ToolbarIconButton(systemName: "magnifyingglass", help: L(.objectSearchBrowse)) { browseSelected() }
                 .disabled(!canBrowse)
 
-            Button(L(.commonClose)) { dismiss() }
+            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
                 .keyboardShortcut(.cancelAction)
         }
     }

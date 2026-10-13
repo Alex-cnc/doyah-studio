@@ -100,9 +100,9 @@ struct WorkspaceTabStrip: View {
             titleVisibility: .visible,
             presenting: tabs.pendingClose
         ) { request in
-            Button(L(.workspaceCloseSaveAndClose)) { tabs.resolvePendingClose(.saveAndClose) }
-            Button(L(.workspaceCloseDiscardChanges), role: .destructive) { tabs.resolvePendingClose(.discardChanges) }
-            Button(L(.workspaceCloseCancel), role: .cancel) { tabs.cancelPendingClose() }
+            ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.workspaceCloseSaveAndClose)) { tabs.resolvePendingClose(.saveAndClose) }
+            ToolbarIconButton(systemName: "trash", help: L(.workspaceCloseDiscardChanges), role: .destructive) { tabs.resolvePendingClose(.discardChanges) }
+            ToolbarIconButton(systemName: "xmark.circle", help: L(.workspaceCloseCancel), role: .cancel) { tabs.cancelPendingClose() }
         } message: { _ in
             Text(L(.workspaceCloseConfirmMessage))
         }

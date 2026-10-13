@@ -54,11 +54,11 @@ struct DropDatabaseSheet: View {
             HStack {
                 Spacer()
 
-                Button(L(.commonCancel)) {
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
                     dismiss()
                 }
 
-                Button(L(.dropDbConfirm), role: .destructive) {
+                ToolbarIconButton(systemName: "checkmark", help: L(.dropDbConfirm), role: .destructive) {
                     onConfirm(databaseName)
                     dismiss()
                 }

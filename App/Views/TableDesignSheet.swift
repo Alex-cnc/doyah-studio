@@ -91,12 +91,9 @@ struct TableDesignSheet: View {
             HStack {
                 Text(L(.tableDesignColumns)).font(.subheadline).bold()
                 Spacer()
-                Button {
+                ToolbarIconButton(systemName: "plus", help: L(.tableDesignAddColumn)) {
                     columns.append(TableColumnDefinition(typeName: "text"))
-                } label: {
-                    Label(L(.tableDesignAddColumn), systemImage: "plus")
                 }
-                .buttonStyle(.borderless)
                 .disabled(isLoading)
             }
 
@@ -150,9 +147,9 @@ struct TableDesignSheet: View {
 
             HStack {
                 Spacer()
-                Button(L(.commonCancel)) { dismiss() }
+                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button(isEditing ? L(.tableDesignApply) : L(.tableDesignCreate)) {
+                ToolbarIconButton(systemName: "pencil", help: isEditing ? L(.tableDesignApply) : L(.tableDesignCreate)) {
                     onSubmit(TableDesignSubmission(
                         name: tableName,
                         schema: trimmedSchema,

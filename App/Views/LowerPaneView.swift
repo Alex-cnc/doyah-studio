@@ -212,15 +212,10 @@ struct LowerPaneView: View {
 
             Spacer(minLength: 8)
 
-            Button {
+            ToolbarIconButton(systemName: "trash", help: L(.historyClear)) {
                 appState.requestClearQueryHistory()
-            } label: {
-                Label(L(.historyClear), systemImage: "trash")
-                    .font(Theme.font(.caption))
             }
-            .buttonStyle(.borderless)
             .disabled(!appState.canClearQueryHistory)
-            .help(L(.historyClear))
         }
         .padding(.horizontal, Spacing.s)
         .padding(.vertical, Spacing.xs)

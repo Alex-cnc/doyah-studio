@@ -70,13 +70,8 @@ struct ResultClientViewBar: View {
                 .fixedSize()
 
             if !filters.isEmpty {
-                Button(L(.resultFilterGenerateWhere)) { onGenerateWhere?() }
-                    .buttonStyle(.borderless)
-                    .font(Theme.font(.caption))
-                    .help(L(.resultFilterGenerateWhere))
-                Button(L(.resultFilterClear)) { onClearFilters?() }
-                    .buttonStyle(.borderless)
-                    .font(Theme.font(.caption))
+                ToolbarIconButton(systemName: "wand.and.stars", help: L(.resultFilterGenerateWhere)) { onGenerateWhere?() }
+                ToolbarIconButton(systemName: "xmark.bin", help: L(.resultFilterClear)) { onClearFilters?() }
             }
         }
         .padding(.horizontal, Spacing.m)

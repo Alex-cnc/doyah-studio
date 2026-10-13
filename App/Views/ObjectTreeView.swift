@@ -80,7 +80,7 @@ struct ObjectTreeView: View {
                         .foregroundStyle(Theme.text(.secondary))
                         .lineLimit(4)
                         .textSelection(.enabled)
-                    Button(L(.commonRetry)) {
+                    ToolbarIconButton(systemName: "arrow.clockwise", help: L(.commonRetry)) {
                         Task { await reloadRoot() }
                     }
                     .controlSize(.small)
