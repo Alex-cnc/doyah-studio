@@ -59,6 +59,13 @@
 - **扫描范围遵守红线第 6 条**：对侧独占节（`[独占:windows]` / `[独占:linux]`）内的行整段跳过
   —— 本侧不改对侧节，本侧也不拿它判红。本轮实测的现场：`Docs/概要设计.md` §8.5.3（`[独占:windows]`）
   里有一处「项数仍十七」是陈旧值，**本侧不改**（走提醒），判据在这里如实报「跳过 N 行」。
+  **同批补钉（合册 `T-20261013-027` / 原单 `T-20261010-029`）**：「结束上一段跳过」与「开启新段跳过」
+  原来是 `if` / `elif` ⇒ 同一行只做前者 —— **相邻的两个同级对侧独占节，第二个整节漏跳过**（真仓实测：
+  `Docs/概要设计.md` 的 §8.5.8.2 / §8.5.8.4 / §8.5.8.6 / §8.5.8.8 四节体 + §8.6 `[独占:linux]` 整节，
+  共 **71 行**原来被当**本侧条文**扫描）。已改为两段独立判定（本文件 `read_lines` 与
+  `count_counterpart_lines` 同批；姊妹件 `Scripts/check-self-test-counts.py` 同一份结构一并改），
+  并加三条自证：相邻同级 ⇒ **逐节**跳过（旧码漏 / 新码不漏）· 本侧 `[独占:macos]` 节**照旧扫描**
+  （不许把修复做成越权免检）· 单节对侧照旧跳过（不自伤）。
 - **变更记录行整行跳过**（`| v1.2x` / `| **v2.6x**`）：历史值本来就该不同，那不是漂移。
 - `checkScriptParity`：「有判据、没闭环」那一族 —— `Scripts/check-*.py` 每个都必须被
   `Scripts/verify-all.sh` 引用，或在台账里逐条登记理由（现有 2 条豁免：快照语言覆盖门禁、
@@ -79,7 +86,7 @@
 用法：
     python3 Scripts/check-doc-numbers.py                # 本仓（默认）
     python3 Scripts/check-doc-numbers.py --root <目录>   # 夹具仓（自测用）
-    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（35 例）
+    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（38 例）
 
 退出码：0 = 全绿；1 = 有判红项。**判红时空跑防护也一起报**（一处都没解析到 ⇒ 不许「零命中 = 通过」）。
 """
@@ -195,9 +202,12 @@ def read_lines(root: pathlib.Path, rel: str, skip_changelog: bool = True):
         heading = HEADING.match(line)
         if heading:
             level = len(heading.group(1))
+            # **两段独立判定**（合册 `T-20261013-027` / 原单 `T-20261010-029`）：原来这两件事挂在
+            # `if` / `elif` 上 ⇒ 同一行只做前者 —— **相邻的两个同级对侧独占节，第二个整节漏跳过**
+            # （真仓 `Docs/概要设计.md` §8.5 `[独占:windows]` → §8.6 `[独占:linux]`：后者整节体被当本侧条文扫描）。
             if skip_level is not None and level <= skip_level:
                 skip_level = None
-            elif COUNTERPART_SECTION.search(line):
+            if skip_level is None and COUNTERPART_SECTION.search(line):
                 skip_level = level
         if skip_level is not None:
             continue
@@ -218,9 +228,12 @@ def count_counterpart_lines(root: pathlib.Path, rel: str) -> int:
         heading = HEADING.match(line)
         if heading:
             level = len(heading.group(1))
+            # **两段独立判定**（合册 `T-20261013-027` / 原单 `T-20261010-029`）：原来这两件事挂在
+            # `if` / `elif` 上 ⇒ 同一行只做前者 —— **相邻的两个同级对侧独占节，第二个整节漏跳过**
+            # （真仓 `Docs/概要设计.md` §8.5 `[独占:windows]` → §8.6 `[独占:linux]`：后者整节体被当本侧条文扫描）。
             if skip_level is not None and level <= skip_level:
                 skip_level = None
-            elif COUNTERPART_SECTION.search(line):
+            if skip_level is None and COUNTERPART_SECTION.search(line):
                 skip_level = level
         if skip_level is not None:
             skipped += 1
@@ -1029,6 +1042,7 @@ def build_fixture(
     record_overrides: dict | None = None,
     skip_sections: list | None = None,
     spec_lines: list | None = None,
+    counterpart_lines: list | None = None,
 ):
     shutil.rmtree(base, ignore_errors=True)
     (base / "Scripts").mkdir(parents=True)
@@ -1066,6 +1080,9 @@ def build_fixture(
                 "- 夹具现状行：固定尺寸 **36 处** / 面板根 **21** / 装饰 **15**",
                 "| v1.1 | 2026-01-01 | 历史行：当时是 十七项、单测 1947 项、快照 19 张 / 10 组 |",
                 *(spec_lines or []),
+                # 对侧独占节（合册 `T-20261013-027` / 原单 `T-20261010-029`）：夹具把「相邻同级」
+                # 与「单节」两种形态都铺得出来 —— 旧码在第二个同级节的标题行上漏开启跳过。
+                *(counterpart_lines or []),
             ]
         )
         + "\n",
@@ -1370,6 +1387,34 @@ def self_test() -> int:
         True,
         "gateBlocks",
     )
+
+    # ── 对侧独占节状态机（合册 `T-20261013-027` / 原单 `T-20261010-029`）：
+    # 原来「结束上一段跳过」与「开启新段跳过」挂在 `if` / `elif` 上 ⇒ 同一行只做前者：
+    # **相邻的两个同级对侧节，第二个整节漏跳过**（判据把它当**本侧条文**扫 —— 真仓 71 行）。
+    COUNTERPART_ADJACENT = [
+        "### 夹具对侧 A [独占:windows]",
+        "- 夹具：单测 **1947** 项",
+        "### 夹具对侧 B [独占:linux]",
+        "- 夹具：单测 **1947** 项",
+    ]
+    COUNTERPART_SINGLE = [
+        "### 夹具对侧 A [独占:windows]",
+        "- 夹具：单测 **1947** 项",
+    ]
+    OWN_SIDE = [
+        "### 夹具本侧 [独占:macos]",
+        "- 夹具：单测 **1947** 项",
+    ]
+
+    def counterpart_case(lines):
+        return lambda b: build_fixture(b, counterpart_lines=lines)
+
+    run("㉞ 相邻同级对侧节 ⇒ **逐节**跳过（旧码只跳第一节：`elif` 把「开启新段」挡掉）",
+        counterpart_case(COUNTERPART_ADJACENT), False, None, "因对侧独占节被跳过的行 20 行")
+    run("㉟ 本侧 `[独占:macos]` 节**照旧扫描**（修复不许做成越权免检）⇒ 节体里的陈旧数判红",
+        counterpart_case(OWN_SIDE), True, "写的是「1947」")
+    run("㊱ 单节对侧照旧跳过（不自伤）⇒ 绿 + 跳过行数读数 8 行",
+        counterpart_case(COUNTERPART_SINGLE), False, None, "因对侧独占节被跳过的行 12 行")
 
     failures = []
     with tempfile.TemporaryDirectory(prefix="doc-numbers-selftest-") as temp:

@@ -134,9 +134,12 @@ def read_lines(root: pathlib.Path, rel: str):
         heading = HEADING.match(line)
         if heading:
             level = len(heading.group(1))
+            # **两段独立判定**（合册 `T-20261013-027` / 原单 `T-20261010-029`）：与
+            # `Scripts/check-doc-numbers.py` 同一份结构、同一个缺陷 —— `elif` 让「结束上一段跳过」
+            # 挡掉「开启新段跳过」，相邻同级对侧节的第二节整节漏跳过。
             if skip_level is not None and level <= skip_level:
                 skip_level = None
-            elif COUNTERPART_SECTION.search(line):
+            if skip_level is None and COUNTERPART_SECTION.search(line):
                 skip_level = level
         if skip_level is not None:
             continue
