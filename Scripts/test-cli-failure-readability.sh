@@ -144,7 +144,12 @@ rm -f "${BAD_JSON}"
 echo ""
 echo "== 6) 交叉核对：源码里没有裸的英文失败输出（与门禁同一条判据，这里独立算一遍）"
 BARE_FILE="$PWD/.build/cli-failure-bare-lines.txt"
-grep -n "error\.localizedDescription" CLI/main.swift \
+# 面 = `Package.swift` 生产 target `DoyahCLI` 的 `path: "CLI"` 下全部 `.swift`（与门禁同一面；
+# 从前这里只 grep `CLI/main.swift` —— 面内新增一份源码里的裸英文输出两边都看不见）。
+# 本节的 shell 侧只做**粗对账**（丢掉整行注释；行尾注释与块注释不剥），精确口径在门禁里
+# （门禁 `strip_comments` 之后判，且面与 `Package.swift` 双向对账）。
+grep -n "error\.localizedDescription" CLI/*.swift \
+    | grep -vE ":[0-9]+:[[:space:]]*//" \
     | grep -E "print\(|FileHandle.standardError.write\(" \
     | grep -v "CLIFailureText.oneLine" \
     | grep -v '"ok":false' \
@@ -153,10 +158,13 @@ BARE_COUNT="$(wc -l < "${BARE_FILE}" | tr -d ' ')"
 [ "${BARE_COUNT}" = "0" ] \
     && check "打给用户看的失败行都经同一个入口（裸英文 ${BARE_COUNT} 处）" 0 \
     || { echo "    裸的：$(head -3 "${BARE_FILE}")"; check "打给用户看的失败行都经同一个入口" 1; }
-ENTRY_CALLS="$(grep -cE "CLIFailureText\.(oneLine|block)\(" CLI/main.swift | tr -d ' ')"
+# 处数按**调用点个数**（不是行数）：门禁的精确下限是 61（= 剥注释后的真值、余量 0），
+# 这里只做「不小于 57」的粗棘轮（下限口径归门禁，证据脚本不重复登记精确值）；
+# 本节的 grep **不剥注释** ⇒ 会比门禁多算注释里的那 1 处（实测 62 vs 门禁 61），口径以门禁为准。
+ENTRY_CALLS="$(grep -oE "CLIFailureText\.(oneLine|block)\(" CLI/*.swift | wc -l | tr -d ' ')"
 [ "${ENTRY_CALLS}" -ge 57 ] \
-    && check "入口真的在接线（${ENTRY_CALLS} 处 ≥ 57，反向棘轮）" 0 \
-    || check "入口真的在接线（只剩 ${ENTRY_CALLS} 处）" 1
+    && check "入口真的在接线（${ENTRY_CALLS} 个调用点 ≥ 57，反向棘轮）" 0 \
+    || check "入口真的在接线（只剩 ${ENTRY_CALLS} 个调用点）" 1
 grep -q "ConnectionFailure.describeNonConnection" CLI/CLIFailureText.swift \
     && check "入口里中性归因那一档在位" 0 || check "入口里中性归因那一档在位" 1
 grep -q "CLIFailureText\.\(describeNonConnection\|describeServerSide\)(" CLI/main.swift \

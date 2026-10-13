@@ -5,8 +5,8 @@
     "file": "CLI/CLIFailureText.swift",
     "call": "CLIFailureText.oneLine(",
     "callAlternates": ["CLIFailureText.block("],
-    "minCallSites": 57,
-    "minCallSitesWhy": "**57 处**（L-15 一轮改造的处数：print / stderr 的所有用户可见失败行）。只查「入口存在」是不够的 —— 把调用删回去、或只写个不接线的 helper，门禁都得报红。处数写小了是台账撒谎（少掉的路径又退回英文调试串），写大了当场报红。**第 47 轮的口径**：入口有两种呈现（`oneLine` 一行 / `block` 多行），**加起来仍必须是 57** —— 三条主路（诊断 / 查询失败）改用多行版是「链收进 `description`」的必然结果，不是漏了两处；所以台账要记 `callAlternates`，只数一种形式会把这两处算成丢失（门禁与证据脚本都按**两种形式合计**判）。",
+    "minCallSites": 61,
+    "minCallSitesWhy": "**57 处**（L-15 一轮改造的处数：print / stderr 的所有用户可见失败行）。只查「入口存在」是不够的 —— 把调用删回去、或只写个不接线的 helper，门禁都得报红。**2026-10-13 改（合册 `T-20261013-027` · 原单 `T-20261010-064` · 样本 67 的 ㈢ / 验收第 7 条）**：下限从 57 改 **61 = 真值**，且门禁改判**余量必须为 0**（真值 > 下限 ⇒ 报红点名「静默余量」）—— 从前 60 vs 57 那 3 处余量能把「删掉 3 条真调用」吞掉；计数也从 `str.count` 子串改判**剥注释后的真调用点**（注释里的记号不再充数），并新增 `CLI/AgentStreamCommand.swift` 那一处（面扩到 `Package.swift` 的生产 target 后当场抓到的裸英文失败输出，同轮改走入口）。处数写小了是台账撒谎（少掉的路径又退回英文调试串），写大了当场报红。**第 47 轮的口径**：入口有两种呈现（`oneLine` 一行 / `block` 多行），**加起来仍必须是 57** —— 三条主路（诊断 / 查询失败）改用多行版是「链收进 `description`」的必然结果，不是漏了两处；所以台账要记 `callAlternates`，只数一种形式会把这两处算成丢失（门禁与证据脚本都按**两种形式合计**判）。",
     "chainFunction": "static func description(_ error: any Error",
     "chainWhy": "**可读化链只写一份**：四档（`describe` → `describeNonConnection` → `describeServerSide` → 原样）收在 `CLIFailureText.description`，一行版取 `oneLine`、多行版取 `block`。第 47 轮把 CLI 三条主路（诊断 / 查询失败 / 对象树）里各抄一遍的 if/else 链**收掉**了 —— 否则「加一档」要回来改三处，正是 L-15 收掉的那种写法。所以 `chainOnlyIn` 之外的扫描文件里**不许**再出现 `ConnectionFailure.describeNonConnection(` / `describeServerSide(`。",
     "chainOnlyIn": "CLI/CLIFailureText.swift",
@@ -19,7 +19,12 @@
     ]
   },
   "outputScan": {
-    "files": ["CLI/main.swift"],
+    "face": {
+      "packageFile": "Package.swift",
+      "target": "DoyahCLI",
+      "why": "**面从 `Package.swift` 现读**（样本 67 的 ㈣）：生产 target `DoyahCLI` 的 `path: \"CLI\"` 下全部 `.swift` 才是这条判据该守的面 —— 从前 `files` **写死单文件**（`CLI/main.swift`），面内新增一份源码里的裸英文失败输出门禁 rc=0 与基线逐字同（原单 P4 实测：`CLI/Extra67.swift`）。门禁按**双向**对账：面内有文件没登记 ⇒ 红（面一漏全漏）；登记了面外的东西 ⇒ 红。"
+    },
+    "files": ["CLI/main.swift", "CLI/AgentStreamCommand.swift", "CLI/PluginCommands.swift", "CLI/CLIFailureText.swift"],
     "printMarkers": ["print(", "FileHandle.standardError.write("],
     "rawMarker": "error.localizedDescription",
     "jsonExemptMarkers": ["{\"ok\":false", "jsonQuoted("],
@@ -36,9 +41,9 @@
   "plumbing": [
     {
       "anchor": "let raw = error.localizedDescription",
-      "count": 1,
+      "count": 2,
       "reachesUser": false,
-      "why": "**MCP 工具载荷里失败那一份的原串**（队列 L-66 ㈡，第 54 轮落地拍板口径 ①）：三处失败（对象树 / 查询 / 写文件）现在共用 `mcpFailure(...)` 这一个生产点 —— 原串只进载荷的 `text` 字段（**一字不变**：可搜、可上报），人话在同一条的 `textHuman` 字段里（`CLIFailureText.oneLine`，**同一个可读化入口**）⇒ **原串不再直接给人看**。逐处登记见本台账 `mcpHalves`。"
+      "why": "**MCP 工具载荷里失败那一份的原串**（队列 L-66 ㈡，第 54 轮落地拍板口径 ①）：三处失败（对象树 / 查询 / 写文件）现在共用 `mcpFailure(...)` 这一个生产点 —— 原串只进载荷的 `text` 字段（**一字不变**：可搜、可上报），人话在同一条的 `textHuman` 字段里（`CLIFailureText.oneLine`，**同一个可读化入口**）⇒ **原串不再直接给人看**。逐处登记见本台账 `mcpHalves`。**2026-10-13 面扩后的读数**：同一条字面量在面内出现 **2 处** —— `CLI/CLIFailureText.swift`（入口自己那份局部变量）与 `CLI/main.swift` 的 `mcpFailure(...)`（本条真正钉的 MCP 生产点）；处数按实数登记（对不上即报红）。"
     },
     {
       "anchor": "raw: error.localizedDescription,",

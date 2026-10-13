@@ -75,7 +75,7 @@ func runAgentSQLStreamCommand(arguments: [String]) async -> Int32 {
     } catch {
         // 断流那条路会到这里：如实说，且**不宣称拿到完整回复**。
         print("")
-        print("生成失败：\(error.localizedDescription)")
+        print("生成失败：\(CLIFailureText.oneLine(error))")
         return 67
     }
 

@@ -28,8 +28,11 @@ GATE_NAME = "check-cli-failure-readability.py"
 LEDGER_REL = "Scripts/cli-failure-readability.json"
 
 FILES = [
+    "Package.swift",
     "CLI/main.swift",
     "CLI/CLIFailureText.swift",
+    "CLI/AgentStreamCommand.swift",
+    "CLI/PluginCommands.swift",
     "App/Utilities/ErrorPresenter.swift",
     "App/AppState.swift",
     "Core/ConnectionFailure.swift",
@@ -37,6 +40,7 @@ FILES = [
     "Core/MCPSession.swift",
     "Core/AICaptureUltra.swift",
     "Scripts/test-cli-failure-readability.sh",
+    "Scripts/test-mcp.sh",
 ]
 
 passed: list[str] = []
@@ -97,6 +101,25 @@ def expect(label: str, mutate, needle: str) -> None:
             record(False, label, f"报红了但没提到「{needle}」：{problems[:220]}")
         else:
             record(True, label)
+    finally:
+        shutil.rmtree(tree, ignore_errors=True)
+
+
+
+def expect_green(label: str, mutate) -> None:
+    """拷一棵新树 → 只做「本来就不该报红」的改动 → 门禁必须**仍是绿的**（对手臂）。
+
+    为什么要有对手臂：注释 / 字符串里的记号被判成代码时，**一句说明注释就能把绿变红** ——
+    这类假阳只有「改动不该报红」的断言抓得住（样本 67 的 ㈠）。
+    """
+    tree = make_tree()
+    try:
+        mutate(tree)
+        code, problems = run_gate(tree)
+        if code == 0:
+            record(True, label)
+        else:
+            record(False, label, "门禁报红了（这条改动不该报红）：" + problems[:220])
     finally:
         shutil.rmtree(tree, ignore_errors=True)
 
@@ -334,6 +357,79 @@ def main() -> int:
             "finish(_ invocation: Invocation, text result: String)", 1))
 
     expect("MCP 载荷形状退回单串 → 报红", finish_back_to_single_string, "MCPToolResult")
+
+    print("\n== AA) 注释不是代码：注释里那一串不算「打给用户看的失败输出」（对手臂：必须**仍绿**）")
+
+    def commented_fake_site(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            "    static func main() async {",
+            "    static func main() async {\n"
+            "        // print(\"新功能失败：\\(error.localizedDescription)\")\n",
+            1))
+
+    expect_green("注释里的假输出 → 仍绿（注释不是代码）", commented_fake_site)
+
+    print("\n== AB) 同一形状写成真代码（对手臂的对手臂：这条必须报红）")
+
+    def real_fake_site(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            "    static func main() async {",
+            "    static func main() async {\n"
+            "        print(\"新功能失败：\\(error.localizedDescription)\")\n",
+            1))
+
+    expect("同一串写成真代码 → 报红并点名行号与标签", real_fake_site, "裸的英文失败输出")
+
+    print("\n== AC) 行尾注释冒充入口（老写法：真裸英文输出 + 行尾注释里写着该走入口）")
+
+    def trailing_comment_as_entry(tree: Path) -> None:
+        edit(tree, "CLI/main.swift", lambda text: text.replace(
+            "    static func main() async {",
+            "    static func main() async {\n"
+            "        print(\"新功能失败：\\(error.localizedDescription)\")  // 应改 CLIFailureText.oneLine(error)\n",
+            1))
+
+    expect("真裸英文 + 行尾注释提入口 → 报红（注释不算调用点）", trailing_comment_as_entry, "裸的英文失败输出")
+
+    print("\n== AD) 注释充数：删掉 13 处真调用、补 13 行注释（老写法把注释也算进棘轮）")
+
+    def comments_as_calls(tree: Path) -> None:
+        def mutate(text: str) -> str:
+            text = text.replace("CLIFailureText.oneLine(error)", "\"失败\"", 13)
+            return text.replace(
+                "    static func main() async {",
+                "    static func main() async {\n"
+                + "".join("        // CLIFailureText.oneLine(error)\n" for _ in range(13)),
+                1)
+        edit(tree, "CLI/main.swift", mutate)
+
+    expect("注释里的入口记号 → 不算调用点（棘轮报红）", comments_as_calls, "入口只剩")
+
+    print("\n== AE) 面：面内新增一份源码，台账没跟（面从 `Package.swift` 的 target 目录现读）")
+
+    def unregistered_face_file(tree: Path) -> None:
+        (tree / "CLI" / "Extra67.swift").write_text("import Foundation\n\n// 面内新增的一份源码（台账未登记）\n", encoding="utf-8")
+
+    expect("面内新增文件未登记 → 报红并点名文件", unregistered_face_file, "Extra67.swift")
+
+    print("\n== AF) 对手臂：同一份新文件登记进台账（面一致 ⇒ 绿）")
+
+    def registered_face_file(tree: Path) -> None:
+        (tree / "CLI" / "Extra67.swift").write_text("import Foundation\n\n// 面内新增的一份源码（已登记）\n", encoding="utf-8")
+        data = ledger_of(tree)
+        data["outputScan"]["files"].append("CLI/Extra67.swift")
+        write_ledger(tree, data)
+
+    expect_green("面内新增文件登记进台账 → 仍绿", registered_face_file)
+
+    print("\n== AG) 台账登记了面外的东西（登记错了或者目标换了）")
+
+    def ledger_outside_face(tree: Path) -> None:
+        data = ledger_of(tree)
+        data["outputScan"]["files"].append("CLI/Nowhere.swift")
+        write_ledger(tree, data)
+
+    expect("台账登记面外文件 → 报红", ledger_outside_face, "面外")
 
     print("\n== K) 真仓库一个字节没动（负例都在副本上做）")
     changed = [rel for rel, digest in before.items() if hashlib.sha256((ROOT / rel).read_bytes()).hexdigest() != digest]

@@ -48,6 +48,13 @@
      出现即红）；③ 生产点原串与人话各取一处（原串 = `localizedDescription`、人话 = 同一个可读化入口）；
      ④ **三处失败一处不少**（只查 helper 存在的话，某一处改回单串照样绿）。
 
+**面与注释（样本 67 收口，2026-10-13 · 合册 `T-20261013-027`）** —— 判定物与面各补两条：
+① **注释不是代码**：行级判定与棘轮计数一律先 `strip_comments`（字符串感知、等长替换），
+注释里的 `print(...)` 不再假阳、注释里的入口记号不再**冒充调用点**（㈠ ㈡）；
+② **面与 `Package.swift` 对账**：`outputScan.face` 现读生产 target 的 `path:`，
+面内源码与 `outputScan.files` **双向**对账（面内新增文件没登记 ⇒ 红；登记了面外的东西 ⇒ 红）（㈣）；
+③ **棘轮余量归零**：`minCallSites` 必须等于真值（少写 = 静默余量 = 台账撒谎）（㈢ / 验收第 7 条）。
+
 用法：
     python3 Scripts/check-cli-failure-readability.py            # 人读结论，失败非零退出
     python3 Scripts/check-cli-failure-readability.py --json     # 机器读
@@ -70,7 +77,113 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def output_sites(text: str, print_markers: list[str], raw_marker: str, call: str) -> list[tuple[int, str]]:
+def packaged_target(text: str, target_name: str) -> str | None:
+    """`Package.swift` 里某个 target 声明的括号内文本；找不到返回 None。
+
+    为什么要有它（样本 67 的 ㈣）：面从前是台账**写死**的 `files: ["CLI/main.swift"]`，
+    与 `Package.swift` 的生产 target（`path: "CLI"`）**无对账** —— 面内新增一份 `.swift`
+    里的裸英文失败输出，门禁 rc=0 与基线逐字同（面一漏全漏）。
+    """
+    needle = f'name: "{target_name}"'
+    at = text.find(needle)
+    if at < 0:
+        return None
+    opening = text.rfind("(", 0, at)
+    if opening < 0:
+        return None
+    depth = 0
+    for index in range(opening, len(text)):
+        if text[index] == "(":
+            depth += 1
+        elif text[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return text[opening:index + 1]
+    return None
+
+
+def strip_comments(text: str) -> str:
+    """行注释 / 块注释 → **等长空格**（字符串感知；行号与列位都不动）。
+
+    为什么必须剥（样本 67 的 ㈠ / ㈡）：判定物从前是**行内原文子串**（`x in line`），
+    于是一句注释就能让绿变红（`// print("…\\(error.localizedDescription)")` 与真裸英文**话术逐字相同**），
+    反过来注释里的入口记号还能**冒充调用点**（真裸英文 + 行尾注释 `// 应改 CLIFailureText.oneLine(` ⇒ 绿）。
+    注释不是代码 —— 「打给用户看的失败输出」与「入口调用点」这两件事只该在**代码**里找。
+    **边界如实写**：字符串字面量本身保留（`error.localizedDescription` 出现在插值里是代码）；
+    Swift 的多行字符串（三引号）按逐行处理（本件面内无这种写法，真仓 rc=0 佐证）。
+    """
+    out = []
+    index = 0
+    length = len(text)
+    line_comment = False
+    block_depth = 0
+    in_string = False
+    while index < length:
+        char = text[index]
+        following = text[index + 1] if index + 1 < length else ""
+        if line_comment:
+            if char == "\n":
+                line_comment = False
+                out.append(char)
+            else:
+                out.append(" ")
+            index += 1
+            continue
+        if block_depth:
+            if char == "/" and following == "*":
+                block_depth += 1
+                out.append("  ")
+                index += 2
+                continue
+            if char == "*" and following == "/":
+                block_depth -= 1
+                out.append("  ")
+                index += 2
+                continue
+            out.append("\n" if char == "\n" else " ")
+            index += 1
+            continue
+        if in_string:
+            if char == "\\" and following:
+                out.append(char + following)
+                index += 2
+                continue
+            if char == '"':
+                in_string = False
+            out.append(char)
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "/" and following == "/":
+            line_comment = True
+            out.append("  ")
+            index += 2
+            continue
+        elif char == "/" and following == "*":
+            block_depth = 1
+            out.append("  ")
+            index += 2
+            continue
+        out.append(char)
+        index += 1
+    return "".join(out)
+
+
+def call_sites(text: str, forms: list[str]) -> int:
+    """入口的**真调用点**处数（剥注释 + 形状带括号与实参）。
+
+    为什么不是 `text.count(form)`（样本 67 的 ㈢）：子串计数把**注释里的记号**也算进去 ——
+    删掉 13 行真调用、补 10 行注释 ⇒ 计数照旧「达标」，13 条路径已经退回英文调试串。
+    """
+    code = strip_comments(text)
+    total = 0
+    for form in forms:
+        total += len(re.findall(r"(?<![\w.])" + re.escape(form) + r"[^)]", code))
+    return total
+
+
+def output_sites(text: str, print_markers: list[str], raw_marker: str, call: str) -> list[tuple[int, str, str]]:
     """每一处「打给用户看的失败输出」：行号 + 原文。
 
     选行条件是「输出调用 + 原始串**或**入口调用」——**两者都要选**：只看原始串的话，
@@ -79,12 +192,15 @@ def output_sites(text: str, print_markers: list[str], raw_marker: str, call: str
     而计数与结论都是假的）。
     """
     sites = []
-    for index, line in enumerate(text.splitlines(), start=1):
-        if raw_marker not in line and call not in line:
+    code_lines = strip_comments(text).splitlines()
+    raw_lines = text.splitlines()
+    for index, code_line in enumerate(code_lines, start=1):
+        if raw_marker not in code_line and call not in code_line:
             continue
-        if not any(marker in line for marker in print_markers):
+        if not any(marker in code_line for marker in print_markers):
             continue
-        sites.append((index, line.strip()))
+        shown = raw_lines[index - 1].strip() if index <= len(raw_lines) else code_line.strip()
+        sites.append((index, shown, code_line))
     return sites
 
 
@@ -143,6 +259,59 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
     if not scan_files or not print_markers or not raw_marker or not json_markers:
         return ["台账 `outputScan` 不完整（要有 files / printMarkers / rawMarker / jsonExemptMarkers）"], notes
 
+    # ---- ⓪ 面与 `Package.swift` 对账（样本 67 的 ㈣） --------------------------
+    face_spec = scan.get("face") or {}
+    if not face_spec.get("packageFile") or not face_spec.get("target"):
+        problems.append(
+            "台账缺 `outputScan.face`（面与 `Package.swift` 的生产 target 对账）—— 面写死单文件时，"
+            "面内新增的源码文件里的失败输出**门禁看不见**（样本 67 的 P4：新增 `CLI/Extra67.swift` "
+            "内含一处裸英文失败输出，改前 rc=0 与基线逐字同）"
+        )
+    else:
+        package_path = root / face_spec["packageFile"]
+        if not package_path.exists():
+            problems.append(f"面对账：{face_spec['packageFile']} 不存在（面无法现读）")
+        else:
+            block = packaged_target(read(package_path), face_spec["target"])
+            if block is None:
+                problems.append(
+                    f"面对账：{face_spec['packageFile']} 里找不到 target `{face_spec['target']}` —— "
+                    "目标改名 / 删掉时面会静默清空"
+                )
+            else:
+                found = re.search(r'path:\s*"([^"]+)"', block)
+                if not found:
+                    problems.append(f"面对账：target `{face_spec['target']}` 没写 `path:`（面从哪来不明）")
+                else:
+                    face_dir = root / found.group(1)
+                    face = sorted(item.relative_to(root).as_posix() for item in face_dir.rglob("*.swift")) if face_dir.is_dir() else []
+                    if not face:
+                        problems.append(
+                            f"面对账：target `{face_spec['target']}` 的目录 `{found.group(1)}` 下没有 `.swift`"
+                            "（空面 = 判据守的是空气）"
+                        )
+                    else:
+                        unregistered = [rel for rel in face if rel not in scan_files]
+                        outside = [rel for rel in scan_files if rel not in face]
+                        if unregistered:
+                            problems.append(
+                                f"面对账：面（`{face_spec['packageFile']}` 的 target `{face_spec['target']}` · 目录 `{found.group(1)}`）"
+                                f"里有 {len(unregistered)} 份源码没被台账 `outputScan.files` 登记："
+                                + "、".join(unregistered)
+                                + " —— 面写死时这些文件里的失败输出**门禁看不见**（改完要同步台账）"
+                            )
+                        if outside:
+                            problems.append(
+                                "面对账：台账 `outputScan.files` 登记了**面外**的东西："
+                                + "、".join(outside)
+                                + " —— 面与 `Package.swift` 不一致（登记错了，或者目标换了）"
+                            )
+                        if not unregistered and not outside:
+                            notes.append(
+                                f"面与 `{face_spec['packageFile']}` 对账一致（target `{face_spec['target']}` · "
+                                f"目录 `{found.group(1)}` · {len(face)} 份 `.swift`）"
+                            )
+
     call = entry["call"]
     alternates = entry.get("callAlternates") or []
     entry_forms = [call] + [alt for alt in alternates if isinstance(alt, str) and alt]
@@ -156,11 +325,13 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
         if not path.exists():
             problems.append(f"扫描目标不存在：{rel}")
             continue
-        for line_no, line in output_sites(read(path), print_markers, raw_marker, call):
-            if any(marker in line for marker in json_markers):
+        for line_no, line, code_line in output_sites(read(path), print_markers, raw_marker, call):
+            # 判定一律在**剥掉注释的代码行**上做（样本 67 的 ㈠ ㈡）：注释里的记号既不算输出、
+            # 也不算「经了入口」—— 展示给人的仍取原始行（看到的就是开发者屏幕上那一行）。
+            if any(marker in code_line for marker in json_markers):
                 json_exempt += 1
                 continue
-            if any(form in line for form in entry_forms):
+            if any(form in code_line for form in entry_forms):
                 via_entry += 1
                 continue
             bare.append(f"{rel}:{line_no}（{label_of(line)}）")
@@ -174,9 +345,12 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
     notes.append(f"经入口的输出 {via_entry} 处；按结构放行的机器可读出口 {json_exempt} 处")
 
     # ---- ② 反向棘轮：入口真的在接线（处数只增不减） --------------------------
-    helper_text = read(helper_path)
+    helper_text = strip_comments(read(helper_path))
     cli_text = "\n".join(read(root / rel) for rel in scan_files if (root / rel).exists())
-    actual_calls = sum(cli_text.count(form) for form in entry_forms)
+    cli_code = strip_comments(cli_text)
+    # 子串计数换成**真调用点计数**（剥注释 + 形状带括号与实参）：注释里的记号不再充数
+    # （样本 67 的 ㈢：删 13 行真调用 + 补 10 行注释 ⇒ 旧写法读「正好达标」）。
+    actual_calls = call_sites(cli_text, entry_forms)
     minimum = entry.get("minCallSites")
     if not isinstance(minimum, int) or minimum < 1:
         problems.append(
@@ -188,8 +362,16 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
             f"入口只剩 {actual_calls} 处调用（{' / '.join(entry_forms)}），台账要求至少 {minimum} 处 —— "
             "少掉的路径已经退回英文调试串（这就是本条要挡的那件事）"
         )
+    elif actual_calls > minimum:
+        problems.append(
+            f"入口调用 **{actual_calls}** 处、台账下限只写 {minimum} 处 —— {actual_calls - minimum} 处"
+            "**静默余量**：有人删掉这么多真调用、给注释里补几个记号，棘轮照样绿（下限要跟真值，"
+            "少写就是台账撒谎）。真值 = 剥注释后的真调用点处数（样本 67 的 ㈢ / 验收第 7 条）"
+        )
     else:
-        notes.append(f"入口调用 {actual_calls} 处（台账下限 {minimum}；记法 {' / '.join(entry_forms)}）")
+        notes.append(
+            f"入口调用 {actual_calls} 处（台账下限 {minimum} = 真值，余量 0；记法 {' / '.join(entry_forms)}）"
+        )
 
     # ---- ③ 入口自己的四档口径必须在位 ---------------------------------------
     contract = entry.get("contract") or []
@@ -225,7 +407,7 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
         for rel in scan_files:
             if rel == chain_only_in or not (root / rel).exists():
                 continue
-            text = read(root / rel)
+            text = strip_comments(read(root / rel))
             for token in ("ConnectionFailure.describeNonConnection(", "ConnectionFailure.describeServerSide("):
                 if token in text:
                     problems.append(
@@ -289,7 +471,7 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
     if not dump_marker or not isinstance(dump_min, int):
         problems.append("台账缺 `debugDumps.marker` / `debugDumps.minCount`")
     else:
-        found = cli_text.count(dump_marker)
+        found = cli_code.count(dump_marker)
         if found < dump_min:
             problems.append(
                 f"调试转储 `{dump_marker}` 只剩 {found} 处，台账要求至少 {dump_min} 处 —— "
@@ -309,7 +491,7 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
                 continue
             if len(why) < 8:
                 problems.append(f"{kind} {anchor[:40]}…：没写明理由")
-            found = cli_text.count(anchor)
+            found = cli_code.count(anchor)
             if found == 0:
                 problems.append(
                     f"{kind}：台账登记的锚点在 CLI 里找不到了（陈旧条目要删）—— `{anchor[:60]}`"
