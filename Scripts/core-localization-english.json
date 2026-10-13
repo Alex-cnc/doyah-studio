@@ -616,6 +616,12 @@
         "Core/SyntheticSpecBuilder.swift:80"
       ]
     },
+    "empty path": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/AgentWorkspaceTools.swift:81"
+      ]
+    },
     "host not found": {
       "kind": "driverMessage",
       "sites": [
