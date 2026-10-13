@@ -115,10 +115,12 @@ struct DoyahCLI {
         if arguments.first == "agent-sql" {
             let code = await runAgentSQLCommand(
             arguments: Array(arguments.dropFirst()),
-            client: OpenAICompatibleClient(
+            client: RetryingLLMClient(
+            base: OpenAICompatibleClient(
             transport: EgressRecordingTransport(
             origin: "CLI · 自然语言生成 SQL",
             wrapped: URLSessionTransport()
+            )
             )
             )
             )
@@ -4729,7 +4731,8 @@ client: any LLMClient
         return 64
     }
     // 指令是第一个不以 `--` 开头的自由参数。
-    let flagsWithValue: Set<String> = ["--endpoint", "--model", "--schema", "--api-key"]
+    let flagsWithValue: Set<String> = ["--endpoint", "--model", "--schema", "--api-key",
+                                       "--last-error", "--last-code", "--last-rows", "--last-kind"]
     var instruction: String?
     var skipNext = false
     for argument in arguments {
@@ -4760,6 +4763,27 @@ client: any LLMClient
     )
     let apiKey = value(for: "--api-key")
 
+    // 回灌（`FR-AI-30` ②）的脚本取证入口：把「上一次执行发生了什么」喂给下一跳。
+    // 失败文本走 `--last-error`、`SQLSTATE` 走 `--last-code`、影响行数走 `--last-rows`；
+    // 都不给 ⇒ `observation = nil`（提示词与改动前逐字节一致）。
+    let lastError = value(for: "--last-error")
+    let lastCode = value(for: "--last-code")
+    let lastRows = value(for: "--last-rows").flatMap { Int($0) }
+    let lastKind: AgentObservation.StatementKind = {
+        switch value(for: "--last-kind") ?? "query" {
+        case "write": return .write
+        case "ddl": return .ddl
+        default: return .query
+        }
+    }()
+    let observation: AgentObservation? = (lastError != nil || lastCode != nil || lastRows != nil)
+        ? AgentObservation(statementKind: lastKind,
+                           outcome: (lastError != nil || lastCode != nil) ? .failed : .succeeded,
+                           errorCode: lastCode,
+                           errorMessage: lastError,
+                           affectedRows: lastRows)
+        : nil
+
     print("端点：\(endpoint)")
     print("本地端点判定：\(configuration.requiresAPIKey ? "否（需要 API Key）" : "是（免 API Key）")")
     print("")
@@ -4771,7 +4795,8 @@ client: any LLMClient
         schema: AgentSQLGenerator.SchemaSummary(tables: tables.map {
             AgentSQLGenerator.SchemaSummary.Table(name: $0, columns: [])
         }),
-        currentStatement: nil
+        currentStatement: nil,
+        observation: observation
         ),
         configuration: configuration,
         apiKey: apiKey,
