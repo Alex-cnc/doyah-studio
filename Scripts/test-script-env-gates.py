@@ -15,6 +15,7 @@
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -241,6 +242,72 @@ def lib_behavior():
     record(code == 0 and "R=192.168.5.217/5432/zxvmax" in out,
            "B-14 217 只读段的连接信息也来自 lib", out.strip()[:160])
 
+    port_occupancy_cases()
+
+
+PG_CTL_STUB = """#!/bin/bash
+# 假 pg_ctl：只够判「起实例」那一段的分支（start 落标记、status 读标记），不真起库。
+datadir=""
+prev=""
+cmd=""
+for arg in "$@"; do
+  [ "${prev}" = "-D" ] && datadir="${arg}"
+  prev="${arg}"
+  cmd="${arg}"
+done
+case "${cmd}" in
+  status) [ -f "${datadir}/doyah-fake-running" ] && exit 0 || exit 3 ;;
+  start) mkdir -p "${datadir}" && : > "${datadir}/doyah-fake-running" && exit 0 || exit 1 ;;
+  stop) rm -f "${datadir}/doyah-fake-running"; exit 0 ;;
+esac
+exit 1
+"""
+
+INITDB_STUB = """#!/bin/bash
+# 假 initdb：只把 PG_VERSION 落进数据目录（够让 start_cluster 走完「没初始化就初始化」那一支）。
+datadir=""
+prev=""
+for arg in "$@"; do
+  [ "${prev}" = "-D" ] && datadir="${arg}"
+  prev="${arg}"
+done
+mkdir -p "${datadir}" && printf '18\\n' > "${datadir}/PG_VERSION"
+"""
+
+def port_occupancy_cases():
+    """⑦C（T-20261013-036）：本机档端口被占 ⇒ 出声 + 75；端口空闲 ⇒ 静默。成对自检。
+
+    为什么要有它（真缺陷）：本机档三档端口是固定的，而同机常有别的克隆的测试集群常驻占着
+    同一个端口（实测 55433 被别的克隆的 postmaster 占住数日）⇒ `pg_ctl start` 必败、且失败
+    只写进日志 ⇒ 脚本侧看到非零退出、有时一行输出都没有，现场像「判据自己坏了」。
+    这里注入一个**真监听**（占用）与一个空端口（空闲），各跑一次 `doyah_test_env_start_cluster`。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        fake_bin = Path(tmp) / "fake-pg-bin"
+        fake_bin.mkdir()
+        for name, body in (("pg_ctl", PG_CTL_STUB), ("initdb", INITDB_STUB)):
+            stub = fake_bin / name
+            stub.write_text(body, encoding="utf-8")
+            stub.chmod(0o755)
+        datadir = Path(tmp) / "pgdata"
+        common = {"DOYAH_TEST_PG_BIN": str(fake_bin), "DOYAH_TEST_LOCAL_DATADIR": str(datadir)}
+
+        with socket.socket() as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen(1)
+            busy_port = str(server.getsockname()[1])
+            code, out = probe(dict(common, DOYAH_TEST_LOCAL_PORT=busy_port),
+                              after="doyah_test_env_start_cluster\n")
+        record(code == 75 and busy_port in out and "别的实例" in out and "pid" in out,
+               "B-15 本机档端口被别的实例占着 → 点名占者 + exit 75（不静默）", out.strip()[:240])
+
+        with socket.socket() as spare:
+            spare.bind(("127.0.0.1", 0))
+            free_port = str(spare.getsockname()[1])
+        code, out = probe(dict(common, DOYAH_TEST_LOCAL_PORT=free_port),
+                          after="doyah_test_env_start_cluster\n")
+        record(code == 0 and "端口" not in out and "❌" not in out,
+               "B-16 端口空闲 → 静默起群（一行都不多打；反向对照，防这条闸恒红）", out.strip()[:240])
 
 def main():
     print("== 门禁与 lib 的自检（负例 + 行为）")

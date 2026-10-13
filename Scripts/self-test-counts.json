@@ -27,7 +27,7 @@
   ],
   "floors": {
     "families": 45,
-    "totalCases": 618,
+    "totalCases": 620,
     "anchorSites": 77,
     "note": "空跑防护：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红（防「台账被掏空 ⇒ 零命中 = 通过」）。"
   },
@@ -609,7 +609,7 @@
       "key": "script-env",
       "script": "Scripts/test-script-env-gates.py",
       "args": [],
-      "cases": 26,
+      "cases": 28,
       "countRegex": "通过 (\\d+) 项，失败 0 项",
       "why": "队列 L-06 / 闭环第 13 项（脚本连接信息参数化 + 旁路 217 台账）",
       "anchors": [
@@ -1032,7 +1032,9 @@
     {
       "key": "core-portability",
       "script": "Scripts/check-core-portability.py",
-      "args": ["--self-test"],
+      "args": [
+        "--self-test"
+      ],
       "cases": 9,
       "countRegex": "判据自检：(\\d+) 条中 \\d+ 条达到预期",
       "why": "合册 T-20261013-027（原单 T-20261010-045 · 第 412 轮判据面缺口样本 49）：Core 平台中立性判据原本无空跑防护、无自检、豁免是裸子串 —— 九例真跑（真违规判红 / 字符串字面量里的 portability-ok 不豁免 / 注释位豁免该绿 / 剥注释口径 / Core 不在根上 / 面被砍到底 / 未知参数 / 仓外 CWD 读数 / 真仓逐字节未变）",

@@ -81,6 +81,7 @@
 #   doyah_test_env_summary                 一行目标摘要（写进脚本日志）
 #   doyah_test_env_export_connection       导出 PGHOST/PGPORT/PGUSER/PGPASSWORD/PGSSLMODE
 #   doyah_test_env_start_cluster           本地模式 initdb+起集群（起不来即拒绝开工）；远程模式 no-op
+#   doyah_test_env_require_port_free       本机档起集群**之前**先看端口在谁手里（⑦C：被占 ⇒ 点名 + 75）
 #   doyah_test_env_require_local_cluster   自查「本数据目录自己的实例在跑」（L-189；远程模式 no-op）
 #   doyah_test_env_stop_cluster            只关「本函数起的」那一份，且只在本地模式
 #   doyah_test_env_scratch_name NAME       -> 加前缀的临时库名
@@ -104,6 +105,7 @@
 DOYAH_TEST_EXIT_CONFIG=78   # 配置不全 / 前后矛盾（缺哪项在消息里指名）
 DOYAH_TEST_EXIT_REFUSE=77   # 安全拒绝（业务库 / 远程模式下自建库）
 DOYAH_TEST_EXIT_NO_CLUSTER=76   # 本机集群起不来（L-189：不用别人的实例取读数）
+DOYAH_TEST_EXIT_PORT_BUSY=75   # 本机档端口被**别的实例**占着（起集群必败 ⇒ 停手并点名；⑦C）
 
 # 本文件在 <工程根>/Scripts/lib/ 下 —— 工程根由**本文件位置**推出，不依赖调用方的 cwd
 # （有的脚本先 cd 到工程根，有的不 cd；连接信息不该因此变样）。
@@ -258,6 +260,45 @@ doyah_test_env_export_connection() {
     export PGSSLMODE="${DOYAH_TEST_PGSSLMODE}"
 }
 
+# 起集群之前先问一句：本机档这个端口在谁手里（⑦C · 人类主人 2026-10-13 裁定 C）。
+#
+# 为什么要（真缺陷）：本机档三档端口是**固定**的（见上面的档位表），而同机常有**别的克隆**的
+# 测试集群常驻占着同一个端口（实测 2026-10-06 14:01 起 55433 被别的克隆的 postmaster
+# `pid 36043` 占住、已跑数日）⇒ 那时 `pg_ctl start` 必败，而失败只写进
+# `/tmp/doyah-test-env-pg.log`：脚本侧看到的是**非零退出、有时一行输出都没有** ——
+# 现场看起来像「判据自己坏了」，真因却是**别人的集群占着端口**。
+# 所以这里把占者的 pid / 命令行 / 数据目录**点名**打出来，并以退出码 75 停手。
+#
+# 判据（成对自检 = `Scripts/test-script-env-gates.py` 的 B-15 / B-16）：
+#   端口被别的实例占着 ⇒ **出声** + `rc=75`；端口空闲 ⇒ **静默**（一行都不多打）。
+doyah_test_env_require_port_free() {
+    if [ "${DOYAH_TEST_MODE}" = "remote" ]; then
+        return 0
+    fi
+    local port="${1:-${DOYAH_TEST_PGPORT}}"
+    # 我们自己的实例在跑 ⇒ 端口当然是我们占的，不报
+    if [ -n "${DOYAH_TEST_PG_BIN}" ] && [ -x "${DOYAH_TEST_PG_BIN}/pg_ctl" ] &&
+        "${DOYAH_TEST_PG_BIN}/pg_ctl" -D "${DOYAH_TEST_LOCAL_DATADIR}" status >/dev/null 2>&1; then
+        return 0
+    fi
+    local _doyah_test_holder
+    _doyah_test_holder="$(lsof -nP -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null | awk 'NR > 1 { print $2; exit }')"
+    if [ -z "${_doyah_test_holder}" ]; then
+        return 0
+    fi
+    local _doyah_test_holder_cmd _doyah_test_holder_args
+    _doyah_test_holder_cmd="$(ps -p "${_doyah_test_holder}" -o comm= 2>/dev/null || true)"
+    _doyah_test_holder_args="$(ps -p "${_doyah_test_holder}" -o args= 2>/dev/null || true)"
+    echo "  ❌ 起不了本机测试集群：端口 ${port} 已被**别的实例**占着（⑦C）—— 本脚本停手，不是判据失败。"
+    echo "     · 占端口的进程：${_doyah_test_holder_cmd}（pid ${_doyah_test_holder}）"
+    echo "     · 它的命令行：${_doyah_test_holder_args}"
+    echo "     · 本脚本要用的数据目录：${DOYAH_TEST_LOCAL_DATADIR}"
+    echo "     · 处置（三选一）：① 停掉那个实例（多为别的克隆遗留的常驻测试集群）后重跑；"
+    echo "                      ② 换端口：DOYAH_TEST_LOCAL_PORT=<空闲端口>；"
+    echo "                      ③ 连远程专用库：给齐 DOYAH_TEST_PGHOST/PGPORT/PGUSER/PGDATABASE。"
+    exit "${DOYAH_TEST_EXIT_PORT_BUSY}"
+}
+
 # 本地模式：数据目录没初始化就 initdb，实例没跑就起；远程模式：什么都不做。
 # **起不来就拒绝开工**：起实例之后必须自查「本数据目录自己的实例真在跑」（L-189）。
 doyah_test_env_start_cluster() {
@@ -269,6 +310,7 @@ doyah_test_env_start_cluster() {
         echo "   本机过渡模式需要它；或改用远程模式（给齐 DOYAH_TEST_PGHOST/PGPORT/PGUSER/PGDATABASE）。"
         exit "${DOYAH_TEST_EXIT_CONFIG}"
     fi
+    doyah_test_env_require_port_free
     if [ ! -f "${DOYAH_TEST_LOCAL_DATADIR}/PG_VERSION" ]; then
         mkdir -p "${DOYAH_TEST_LOCAL_DATADIR}" || exit "${DOYAH_TEST_EXIT_CONFIG}"
         "${DOYAH_TEST_PG_BIN}/initdb" -D "${DOYAH_TEST_LOCAL_DATADIR}" -U "${DOYAH_TEST_PGUSER}" \
