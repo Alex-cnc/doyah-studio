@@ -53,14 +53,14 @@ check() {
   fi
 }
 
-echo "== case 1: in-repo Plugins/ (expect 1 active, 0 degraded) =="
+echo "== case 1: in-repo Plugins/ (expect 2 active — Notes / Retro, 0 degraded) =="
 set +e
 OUT="$("$CLI" plugins dump --dir "$ROOT/Plugins" 2>&1)"
 RC=$?
 set -e
 printf '%s\n' "$OUT" | sed 's/^/  | /'
 check "exit code (zero degraded => 0)" "0" "$RC"
-check "manifest id found" "1" "$(printf '%s\n' "$OUT" | grep -c 'id=Sample')"
+check "manifest id found" "1" "$(printf '%s\n' "$OUT" | grep -c 'id=Retro')"
 FIELDS=0
 for f in displayName version entryTarget apiVersion storage capabilities contributions; do
   if printf '%s\n' "$OUT" | grep -q "$f="; then FIELDS=$((FIELDS + 1)); fi
@@ -108,17 +108,17 @@ check "exit code (no plugin => 1, not an error)" "1" "$RC3"
 check "readings line" "1" "$(printf '%s\n' "$OUT3" | grep -c 'readings: active 0')"
 check "stderr error lines" "0" "$(grep -ci 'error' "$PROBE_DIR/empty.stderr" || true)"
 
-echo "== case 5: plugin removed (Replay) => its activity-bar mount disappears, zero errors =="
+echo "== case 5: plugin removed (Retro) => its activity-bar mount disappears, zero errors =="
 mkdir -p "$PROBE_DIR/uninstall"
 cp -R "$ROOT/Plugins/." "$PROBE_DIR/uninstall/"
-rm -rf "$PROBE_DIR/uninstall/Replay"
+rm -rf "$PROBE_DIR/uninstall/Retro"
 set +e
 OUT5="$("$CLI" plugins dump --dir "$PROBE_DIR/uninstall" 2>&1)"
 RC5=$?
 set -e
 printf '%s\n' "$OUT5" | sed 's/^/  | /'
 check "exit code (remaining plugin active => 0)" "0" "$RC5"
-check "Replay reported as unmounted" "1" "$(printf '%s\n' "$OUT5" | grep -c 'mounts: unmounted=\[Replay\]')"
+check "Retro reported as unmounted" "1" "$(printf '%s\n' "$OUT5" | grep -c 'mounts: unmounted=\[Retro\]')"
 check "no error wording in output" "0" "$(printf '%s\n' "$OUT5" | grep -ci 'error' || true)"
 
 echo "== case 4: contract guards (no IPC, no licence judgement in the plugin surface) =="

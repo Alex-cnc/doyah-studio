@@ -779,7 +779,10 @@ python3 Scripts/test-note-search-route.py
 # `NoteBodyProjection.parseInline(`（至少 4 处 —— 同源判的是调用点，不是注释）/
 # `import` 与依赖声明里不得出现第三方 Markdown 库。另加四条空跑防护（扫描面 / 块构造处数 /
 # 同源调用处数 / 解析层用例数下限）。
-# 判据见 `Scripts/check-markdown-single-source.py`；负例 `--self-test` 13 例
+# 判据见 `Scripts/check-markdown-single-source.py`；负例 `--self-test` 24 例
+# 2026-10-13（合册 T-20261013-027 · 原单 T-20261010-062）：判定物改判**代码**（剥注释与字符串、等长）·
+# 行内标记清单改判**集合**（换函数名 / 换序也红）· 用例须**非空带断言**（下限 36 = 实测）·
+# 面 = `Package.swift` 现读的生产 target 源码目录（补 `Tools/LicenseTool` 那条面外回流口）
 # （行内扫描器出现第二份 / 定义被删 / **链接扫描器出现第二份** / 界面自己造块 / 模型被掏空 /
 # 同源调用被删 / 第三方库两种引法 / 用例文件被删 / 用例被掏空 / 扫描面被削掉 / 绿对照 /
 # 末例真仓库逐字节未变）。
@@ -799,11 +802,15 @@ python3 Scripts/check-markdown-single-source.py --self-test
 # **状态所有者另判一处（队列 `L-149` 剩余①，第 135 轮）**：浏览器状态必须住在
 # `App/WorkspaceBrowserModel.swift`（那个类只此一处定义）—— 挂回 `AppState` 的 `@Published` 上，
 # 引擎每回报一次标题 / 加载中都要重算整个窗口（同族的病见 `QueryEditorBuffer`）。
-# 判据见 `Scripts/check-browser-tab-ownership.py`；负例 `--self-test` 15 例
+# 判据见 `Scripts/check-browser-tab-ownership.py`；负例 `--self-test` 26 例（判定物在代码上判 + SRS 定义行锚点唯一化 + 面与 `Package.swift` 对账）
 # （绿对照 / 数据库侧塞回状态引用 / 数据库侧塞回视图渲染 / 页签条不再引用 / 内容区不再渲染 /
 #  状态被写回 AppState / 数据库侧读 selectedBrowserID / 状态所有者类被改名 /
 #  SRS 条文改回旧措辞 / 契约视图契约行改回旧措辞 / SRS 条文行被删 / 工作区视图被删 /
-#  契约行被删 / 无关文件改动不误报 / 末例真仓库逐字节未变）。
+#  契约行被删 / 无关文件改动不误报 / 末例真仓库逐字节未变 /
+#  2026-10-13（合册 T-20261013-027 · 原单 T-20261010-061）新增十一例：真用法改名只留一行注释 /
+#  同名改名不留注释（对照）/ DB 侧注释提标识 / DB 侧字符串提标识 / SRS 定义行整行删 /
+#  定义行标题改名 / 定义行行首形状 / 归属格反义 / 面外回流（`Platform/macOS`）/
+#  新增生产 target 落面外 / 面内新增无关 `.swift` 不误报）。
 python3 Scripts/check-browser-tab-ownership.py
 python3 Scripts/check-browser-tab-ownership.py --self-test
 

@@ -1,0 +1,27 @@
+{
+  "id": "Retro",
+  "displayName": "复盘",
+  "version": "0.1.0",
+  "entryTarget": "DoyahRetroUI",
+  "apiVersion": 1,
+  "capabilities": [],
+  "contributions": [
+    {
+      "point": "activityBar",
+      "order": 40
+    },
+    {
+      "point": "mainPaneTab"
+    },
+    {
+      "point": "homePaneTab"
+    },
+    {
+      "point": "menu"
+    },
+    {
+      "point": "statusBar"
+    }
+  ],
+  "storage": "pluginOwned"
+}

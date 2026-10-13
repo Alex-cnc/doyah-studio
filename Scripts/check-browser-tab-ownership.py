@@ -7,6 +7,13 @@
 **本质上 html 也是一种文件**」（数据库侧是 **SQL 这门语言的工作台**）。第 131 轮把展示层搬了过去，
 但**这件事此前没有任何东西看得见** —— 挪回数据库侧、或搬走了没接上，编译照过、单测照绿。
 
+**判定物一律在代码上判**：注释抹成等长空格、字符串**内容**抹掉 —— 一行注释不再冒充落点，
+字符串里提过的标识也不算命中（2026-10-13 合册 `T-20261013-027` · 原单 `T-20261010-061`）。
+**面 = `App/`**，并与 `Package.swift` **现读**的生产 target 源码目录**双向对账**：面外的生产根
+逐条登记理由（理由为空 / 不是生产目录 ⇒ 判红），七个标识在面外出现 ⇒ 判红（面外回流口）。
+**SRS 定义行锚点唯一化**：编号列 = `FR-EDIT-34` + 行首形状 `| FR-EDIT-34 | ` + 标题格含
+`**内嵌浏览器页签（工作区，完整浏览器）**`，三者齐才认定义行（恰一行：0 行 / >1 行 / 形状变了
+都判红并指名行号）；归属格除写「工作区」外还判**反义**形态（`不属工作区` / `非工作区` 都是子串）。
 判据 = 一份**双向对账**的允许落点台账（`App/` 下出现下列标识的文件必须登记过，登记的必须真的命中）：
     `browserPages` / `selectedBrowserPage` / `selectedBrowserID` / `browserEngines` /
     `BrowserTabView` / `openBrowserTab` / `browserTabButton`
@@ -31,6 +38,7 @@ import argparse
 import hashlib
 import json
 import pathlib
+import re
 import shutil
 import sys
 import tempfile
@@ -69,7 +77,22 @@ HLD_CONTRACT_LINE = "**视图契约**"
 OWNED_WORD = "工作区"
 FORBIDDEN_WORD = "编辑器区"
 
-MIN_APP_FILES = 90    # 实测 104（`App/` 下 `.swift`）
+MIN_APP_FILES = 90    # 实测 119（`App/` 下 `.swift`）—— 原写 104 已陈旧（2026-10-13 订正）
+PACKAGE = "Package.swift"
+SRS_TITLE_BOLD = "**内嵌浏览器页签（工作区，完整浏览器）**"
+# 面 = `App/`（本判据的落点台账就在这一层）。`Package.swift` **现读**出来的其余生产
+# target 源码目录必须逐条登记理由（理由为空 / 不是生产目录 ⇒ 判红）；登记了的根也会被扫，
+# 七个标识在面外出现即红（原单 ㈤ 的面外回流口）。
+FACE_ROOTS_REGISTERED = {
+    "Core": "生产 target 源码目录（浏览器状态机 / 页签模型那一层）—— 台账只登记 `App/` 展示层",
+    "Plugins/Notes/Sources": "插件生产源码（笔记插件那一层）—— 同上",
+    "Platform/macOS": "生产 target 源码目录（`WKWebView` 引擎那一层）—— 同上",
+    "CLI": "生产 target 源码目录（命令行入口）—— 同上",
+    "Tools/LicenseTool": "生产 target 源码目录（授权工具）—— 同上",
+    "Plugins/Notes/Views": "插件生产视图（笔记插件那一层）—— 同上",
+}
+# 归属格的**反义**形态：`（不属工作区）` / `（非工作区）` 都是「工作区」的子串，判据不能只判子串。
+NEGATED_OWNED = re.compile(r"(不属|不属于|不是|不在|不归|非)(于|是|属|在|归)?" + OWNED_WORD)
 
 
 def read(path: pathlib.Path) -> str:
@@ -78,6 +101,161 @@ def read(path: pathlib.Path) -> str:
 
 def rel(root: pathlib.Path, path: pathlib.Path) -> str:
     return path.relative_to(root).as_posix()
+
+
+def strip_comments(text: str) -> str:
+    """注释抹成**等长空格**（字符串感知 / 块注释可嵌套）⇒ 行号与列位都不动。
+
+    为什么自己扫：Swift 里 `"// 不是注释"` 是字符串、`/* /* 嵌套 */ */` 合法，一行正则两面都判错。
+    """
+    out: list[str] = []
+    index, length = 0, len(text)
+    in_line, depth, in_string, escaped = False, 0, False, False
+    while index < length:
+        char = text[index]
+        following = text[index + 1] if index + 1 < length else ""
+        if in_line:
+            out.append("\n" if char == "\n" else " ")
+            in_line = char != "\n"
+        elif depth:
+            if char == "*" and following == "/":
+                depth -= 1
+                out.append("  ")
+                index += 2
+                continue
+            if char == "/" and following == "*":
+                depth += 1
+                out.append("  ")
+                index += 2
+                continue
+            out.append("\n" if char == "\n" else " ")
+        elif in_string:
+            out.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+            out.append(char)
+        elif char == "/" and following == "/":
+            in_line = True
+            out.append("  ")
+            index += 2
+            continue
+        elif char == "/" and following == "*":
+            depth = 1
+            out.append("  ")
+            index += 2
+            continue
+        else:
+            out.append(char)
+        index += 1
+    return "".join(out)
+
+
+def blank_strings(text: str) -> str:
+    """字符串字面量的**内容**抹成等长空格（引号本身留着）—— 字符串里提过的标识不算落点。"""
+    out: list[str] = []
+    index, length = 0, len(text)
+    in_string, escaped = False, False
+    while index < length:
+        char = text[index]
+        if in_string:
+            if char == "\n":
+                out.append("\n")
+            elif escaped:
+                out.append(" ")
+                escaped = False
+            elif char == "\\":
+                out.append(" ")
+                escaped = True
+            elif char == '"':
+                out.append('"')
+                in_string = False
+            else:
+                out.append(" ")
+        elif char == '"':
+            in_string = True
+            out.append('"')
+        else:
+            out.append(char)
+        index += 1
+    return "".join(out)
+
+
+def _blocks(text: str, opener: str) -> list[str]:
+    """取 `opener` 起的那一整段（按括号配对走）。"""
+    found: list[str] = []
+    index = 0
+    while True:
+        at = text.find(opener, index)
+        if at < 0:
+            return found
+        depth = 0
+        for position in range(at + len(opener) - 1, len(text)):
+            char = text[position]
+            if char in "([":
+                depth += 1
+            elif char in ")]":
+                depth -= 1
+                if depth == 0:
+                    found.append(text[at:position + 1])
+                    index = position + 1
+                    break
+        else:
+            return found
+
+
+def package_production_dirs(root: pathlib.Path) -> list[str] | None:
+    """包清单**现读**生产 target 的源码目录（面 = 声明面，不是判据手抄的清单）。"""
+    path = root / PACKAGE
+    if not path.exists():
+        return None
+    code = strip_comments(read(path))
+    directories: list[str] = []
+    for opener in (".target(", ".executableTarget("):
+        for block in _blocks(code, opener):
+            name = re.search(r'name:\s*"([^"]+)"', block)
+            if not name:
+                continue
+            base = re.search(r'path:\s*"([^"]+)"', block)
+            sources = re.search(r"sources:\s*\[([^\]]*)\]", block)
+            prefix = "" if base is None or base.group(1) == "." else base.group(1) + "/"
+            if sources:
+                items = [prefix + item.strip().strip('"')
+                         for item in sources.group(1).split(",") if item.strip()]
+            elif base is not None and base.group(1) != ".":
+                items = [base.group(1)]
+            else:
+                items = [name.group(1)]
+            for item in items:
+                if item not in directories:
+                    directories.append(item)
+    return directories
+
+
+def out_of_face_sources(root: pathlib.Path) -> dict[str, str]:
+    """面外生产根（登记在 `FACE_ROOTS_REGISTERED`）下的全部 `.swift`。"""
+    sources: dict[str, str] = {}
+    for dirname in sorted(FACE_ROOTS_REGISTERED):
+        base = root / dirname
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*.swift")):
+            sources[rel(root, path)] = read(path)
+    return sources
+
+
+def lines_of(rows: list[tuple[int, str]]) -> str:
+    return "、".join(str(number) for number, _ in rows) or "无"
+
+
+def cells(line: str) -> list[str]:
+    """GFM 表格行 → 单元格（去首尾竖线）：`|FR-EDIT-34 |…` 与 `| FR-EDIT-34 |…` 都认得出编号列。"""
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
 
 def app_sources(root: pathlib.Path, problems: list[str]) -> dict[str, str]:
@@ -108,23 +286,27 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     notes: list[str] = []
     sources = app_sources(root, problems)
+    # **判定物一律在代码上判**（原单 ㈠ 假绿 / ㈡ 假阳的根）：
+    # `code` = 注释抹成等长空格；`bare` = 再把字符串内容抹掉（字符串里提过的标识不算落点）。
+    code = {name: strip_comments(text) for name, text in sources.items()}
+    bare = {name: blank_strings(text) for name, text in code.items()}
 
     # ①b 状态所有者：浏览器状态必须住在工作区模型里，而那个类**只此一处**定义
     if STATE_OWNER not in sources:
         problems.append(f"`{STATE_OWNER}` 不在扫描面里 —— 浏览器页签的状态所有者不见了（判据悬空）")
-    elif STATE_OWNER_CLASS not in sources[STATE_OWNER]:
+    elif STATE_OWNER_CLASS not in code[STATE_OWNER]:
         problems.append(
             f"`{STATE_OWNER}` 里找不到 `{STATE_OWNER_CLASS}` —— 状态所有者被改名 / 被掏空"
         )
     else:
         notes.append(f"状态所有者 = `{STATE_OWNER}`（`{STATE_OWNER_CLASS}`）")
-    for name, text in sources.items():
+    for name, text in code.items():
         if name != STATE_OWNER and STATE_OWNER_CLASS in text:
             problems.append(f"`{name}` 里也声明了 `{STATE_OWNER_CLASS}` —— 状态所有者只能有一处")
 
     # ② 双向对账：允许落点 ⊆ 台账，台账 ⊆ 允许落点
     for token, allowed in sorted(LEDGER.items()):
-        found = hits(sources, token)
+        found = hits(bare, token)
         for name in sorted(allowed):
             if name not in found:
                 problems.append(
@@ -148,26 +330,47 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     if not srs.exists():
         problems.append(f"`{SRS}` 不在 —— 条文侧无从判起")
     else:
-        rows = [
-            line for line in read(srs).splitlines()
-            if line.startswith(f"| {SRS_ENTRY} |") and SRS_ENTRY_TITLE in line
-        ]
-        if not rows:
+        numbered = [(number, line)
+                    for number, line in enumerate(read(srs).splitlines(), 1)
+                    if cells(line) and cells(line)[0] == SRS_ENTRY]
+        definition_rows = [(number, line) for number, line in numbered
+                           if line.startswith(f"| {SRS_ENTRY} |") and SRS_TITLE_BOLD in line]
+        near_miss = [(number, line) for number, line in numbered
+                     if SRS_TITLE_BOLD in line and (number, line) not in definition_rows]
+        if not definition_rows:
             problems.append(
-                f"`{SRS}` 里找不到 `{SRS_ENTRY}` 的条文行（含「{SRS_ENTRY_TITLE}」）—— 空跑：条目被改名 / 被挪走"
+                f"`{SRS}` 里找不到 `{SRS_ENTRY}` 的**定义行**（编号列 = `{SRS_ENTRY}` 且标题格含"
+                f" `{SRS_TITLE_BOLD}` 的那一行）—— 空跑：定义行被删 / 标题被改名 / 行首形状不再规范"
+                f"；与 `{SRS_ENTRY}` 有关的表格行：{lines_of(numbered)}"
             )
-        else:
-            cells = rows[0].split("|")
-            definition = cells[2] if len(cells) > 2 else ""
+        elif len(definition_rows) > 1:
+            problems.append(
+                f"`{SRS}` 里 `{SRS_ENTRY}` 的定义行只能有一处，实测 {len(definition_rows)} 处"
+                f"（行号 {lines_of(definition_rows)}）—— 定义行锚点不唯一 ⇒ 判据会判到别的行上"
+            )
+        for number, _ in near_miss:
+            problems.append(
+                f"`{SRS}` 第 {number} 行的行首形状不再是 `| {SRS_ENTRY} | `—— 定义行只认规范形状，"
+                "形状变了不许静默转判别的行"
+            )
+        if len(definition_rows) == 1:
+            row_cells = cells(definition_rows[0][1])
+            definition = row_cells[1] if len(row_cells) > 1 else ""
             if OWNED_WORD not in definition:
                 problems.append(
                     f"`{SRS}` 的 `{SRS_ENTRY}` 条文没写「{OWNED_WORD}」—— 归属没落进条文（浏览器属文件那一侧）"
+                )
+            negated = NEGATED_OWNED.search(re.sub(r"[*`\s]", "", definition))
+            if negated:
+                problems.append(
+                    f"`{SRS}` 的 `{SRS_ENTRY}` 条文的归属格是**反义**形态（「{negated.group(0)}」）——"
+                    f" 「{OWNED_WORD}」在那儿只是个子串，归属没落进条文"
                 )
             if FORBIDDEN_WORD in definition:
                 problems.append(
                     f"`{SRS}` 的 `{SRS_ENTRY}` 条文仍把浏览器钉在「{FORBIDDEN_WORD}」—— 那是数据库 SQL 工作台"
                 )
-            elif OWNED_WORD in definition:
+            elif OWNED_WORD in definition and not negated:
                 notes.append(f"{SRS} `{SRS_ENTRY}` 条文：归属 =「{OWNED_WORD}」，且不再出现「{FORBIDDEN_WORD}」")
 
     hld = root / HLD
@@ -196,6 +399,40 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
             problems.append(f"`{name}` 不在扫描面里 —— 工作区侧的落点不见了")
     if not (set(EXEMPT) & set(sources)):
         problems.append("两处豁免文件一个都不在扫描面里 —— 台账与盘上对不上")
+    # ⓪ 面与 `Package.swift` 现读对账（原单 ㈤：面外生产根 = 唯一的静默回流口）
+    production = package_production_dirs(root)
+    strays: list[str] = []
+    if production is None:
+        problems.append(f"`{PACKAGE}` 不在盘上 / 读不出 target —— 面对账没有输入，不许当通过")
+    else:
+        outside = [directory for directory in production
+                   if directory != APP_DIR and directory not in FACE_ROOTS_REGISTERED]
+        if outside:
+            problems.append(
+                f"生产 target 的源码目录落在判据面外：{outside} —— 面外回流没人管"
+                "（该根要么进面、要么在 `FACE_ROOTS_REGISTERED` 里登记理由）"
+            )
+        for registered, reason in sorted(FACE_ROOTS_REGISTERED.items()):
+            if registered not in production:
+                problems.append(
+                    f"登记的面外根 `{registered}` 不是 `{PACKAGE}` 的生产 target 源码目录 —— 死登记"
+                )
+            elif not reason.strip():
+                problems.append(f"登记的面外根 `{registered}` **理由为空** —— 空理由不是理由")
+        for name, text in out_of_face_sources(root).items():
+            judged = blank_strings(strip_comments(text))
+            for token in sorted(LEDGER):
+                for number, line in enumerate(judged.splitlines(), 1):
+                    if token in line:
+                        strays.append(f"{name}:{number}")
+                        problems.append(
+                            f"`{name}`:{number} 出现 `{token}` —— **面外回流**：那是生产 target 的源码目录、"
+                            "不在本判据的落点台账面上（七个标识只许出现在 `App/` 的台账落点里）"
+                        )
+    notes.append(
+        f"面与 `{PACKAGE}` 对账一致：生产 target 源码目录 {len(production or [])} 个 · "
+        f"面 = `{APP_DIR}/`（1 根）+ 登记的面外根 {len(FACE_ROOTS_REGISTERED)} 个 · 面外命中 {len(strays)} 处"
+    )
     notes.append(
         f"扫描面 App/ {len(sources)} 个 `.swift`；台账 {len(LEDGER)} 个标识 / {len(EXEMPT)} 处豁免"
     )
@@ -252,8 +489,8 @@ def _sha(path: pathlib.Path) -> str:
 
 
 def _fixture(destination: pathlib.Path, root: pathlib.Path) -> pathlib.Path:
-    """把扫描面（`App/` 全部 `.swift`）+ 两份文档复制成一份临时副本。"""
-    for dirname in (APP_DIR, "Docs"):
+    """副本 = `App/` 全部 `.swift` + 面外生产根（只 `.swift`）+ 包清单 + 两份文档。"""
+    for dirname in (APP_DIR, "Docs") + tuple(sorted(FACE_ROOTS_REGISTERED)):
         source = root / dirname
         if not source.is_dir():
             continue
@@ -262,11 +499,27 @@ def _fixture(destination: pathlib.Path, root: pathlib.Path) -> pathlib.Path:
                 continue
             if dirname == "Docs" and path.name not in (pathlib.Path(SRS).name, pathlib.Path(HLD).name):
                 continue
+            if dirname not in (APP_DIR, "Docs") and path.suffix != ".swift":
+                continue
             relative = path.relative_to(source)
             target = destination / dirname / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
+    if (root / PACKAGE).exists():
+        shutil.copy2(root / PACKAGE, destination / PACKAGE)
     return destination
+
+
+def _rewrite(path: pathlib.Path, old: str, new: str) -> None:
+    """把 `old` **全部**替换成 `new`（`_patch` 只换第一处）。"""
+    text = path.read_text(encoding="utf-8")
+    if old not in text:
+        raise AssertionError(f"夹具写坏失败：`{old}` 不在 {path.name} 里")
+    path.write_text(text.replace(old, new), encoding="utf-8")
+
+
+def _append(path: pathlib.Path, line: str) -> None:
+    path.write_text(path.read_text(encoding="utf-8") + line + "\n", encoding="utf-8")
 
 
 def _patch(path: pathlib.Path, old: str, new: str) -> None:
@@ -354,6 +607,101 @@ def self_test(root: pathlib.Path) -> int:
         line = [item for item in hld_text.splitlines() if HLD_CONTRACT_LINE in item][0]
         _patch(hld_back / HLD, line, line.replace(OWNED_WORD, FORBIDDEN_WORD, 1))
         cases.append((f"{HLD} 视图契约行改回「{FORBIDDEN_WORD}」", bool(check(hld_back)[0])))
+
+        # ②③ 假绿 / 对照：注释充当落点（原单 ㈠ 的 P1 / P1′）
+        commented = fresh("area-renamed-with-comment")
+        _rewrite(commented / WORKSPACE_VIEWS[1], "selectedBrowserPage", "keptBrowserPage")
+        _append(commented / WORKSPACE_VIEWS[1], "// selectedBrowserPage 归工作区")
+        cases.append((
+            "假绿 · 工作区内容区把真用法改名、只留一行注释 ⇒ 判红（旧版 rc=0）",
+            bool(check(commented)[0]),
+        ))
+
+        renamed_only = fresh("area-renamed-silent")
+        _rewrite(renamed_only / WORKSPACE_VIEWS[1], "selectedBrowserPage", "keptBrowserPage")
+        cases.append((
+            "对照 · 同样改名、不留注释 ⇒ 仍判红（不许削软）",
+            bool(check(renamed_only)[0]),
+        ))
+
+        # ④⑤ 假阳：注释 / 字符串字面量被当成落点（原单 ㈡ 的 P2 / P3）
+        db_comment = fresh("db-side-comment")
+        _append(db_comment / DB_SIDE_VIEW, "// 浏览器（browserPages）归工作区，本视图零命中")
+        cases.append((
+            "假阳 · 数据库侧视图加一行注释提 browserPages ⇒ 判绿（旧版 rc=1）",
+            not check(db_comment)[0],
+        ))
+
+        db_string = fresh("db-side-string")
+        _patch(db_string / DB_SIDE_VIEW, "    var body: some View {",
+               '    var body: some View {\n        let _s = "BrowserTabView"')
+        cases.append((
+            "假阳 · 同视图加字符串字面量 `\"BrowserTabView\"` ⇒ 判绿（旧版 rc=1）",
+            not check(db_string)[0],
+        ))
+
+        # ⑥⑦⑧⑨ 假绿：定义行锚点唯一化（整行删 / 标题改名 / 行首形状 / 归属格反义）
+        definition_line = [line for line in read(root / SRS).splitlines()
+                           if line.startswith(f"| {SRS_ENTRY} |") and SRS_TITLE_BOLD in line][0]
+
+        dropped = fresh("srs-definition-dropped")
+        (dropped / SRS).write_text(
+            "\n".join(item for item in read(dropped / SRS).splitlines() if item != definition_line),
+            encoding="utf-8",
+        )
+        cases.append((
+            "假绿 · SRS 定义行整行删掉 ⇒ 判红且点名「定义行」（旧版转判摘要行 rc=0）",
+            any("定义行" in problem for problem in check(dropped)[0]),
+        ))
+
+        retitled = fresh("srs-title-renamed")
+        _patch(retitled / SRS, definition_line,
+               definition_line.replace(SRS_TITLE_BOLD, "**内嵌 browser 页签（工作区，完整浏览器）**", 1))
+        cases.append((
+            "假绿 · SRS 定义行标题改名 ⇒ 判红且点名「定义行」（旧版 rc=0）",
+            any("定义行" in problem for problem in check(retitled)[0]),
+        ))
+
+        reshaped = fresh("srs-row-shape")
+        _patch(reshaped / SRS, definition_line,
+               definition_line.replace(f"| {SRS_ENTRY} |", f"|{SRS_ENTRY} |", 1))
+        cases.append((
+            "假绿 · SRS 定义行行首形状改成 `|FR-EDIT-34 |` ⇒ 判红且点名「行首形状」",
+            any("行首形状" in problem for problem in check(reshaped)[0]),
+        ))
+
+        negated_owned = fresh("srs-negated-owned")
+        _patch(negated_owned / SRS, definition_line,
+               definition_line.replace("在**工作区**新增", "在**不属工作区**新增", 1))
+        cases.append((
+            "假绿 · SRS 归属格写成反义（不属工作区）⇒ 判红且点名「反义」",
+            any("反义" in problem for problem in check(negated_owned)[0]),
+        ))
+
+        # ⑩ 假绿：面外回流（生产 target 的源码目录不在判据的落点台账面上）
+        outside = fresh("out-of-face-token")
+        probe = outside / "Platform/macOS/ProbeS61.swift"
+        probe.parent.mkdir(parents=True, exist_ok=True)
+        probe.write_text("let probe = browserPages\n", encoding="utf-8")
+        cases.append((
+            "假绿 · 标识落 Platform/macOS（登记的生产根、非判据面）⇒ 判红且点名「面外回流」",
+            any("面外回流" in problem for problem in check(outside)[0]),
+        ))
+
+        new_target = fresh("new-production-root")
+        _patch(new_target / PACKAGE, "    targets: [\n",
+               '    targets: [\n        .target(name: "Widgets61", path: "Widgets/Extra"),\n')
+        cases.append((
+            "假绿 · `Package.swift` 新增生产 target 落面外 ⇒ 判红且点名「落在判据面外」",
+            any("落在判据面外" in problem for problem in check(new_target)[0]),
+        ))
+
+        brand_new = fresh("brand-new-inside")
+        (brand_new / APP_DIR / "Views" / "BrandNew61.swift").write_text("import SwiftUI\n", encoding="utf-8")
+        cases.append((
+            "对手臂 · 面内正常新增一份无关 `.swift` ⇒ 判绿（不误报）",
+            not check(brand_new)[0],
+        ))
 
         # ⑧⑨⑩⑪ 红/绿：空跑防护与「不误报」两头都要钉住
         no_srs_row = fresh("no-srs-row")

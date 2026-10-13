@@ -18,12 +18,14 @@ public struct PluginMounts: Equatable, Sendable {
 
     /// 活动栏项 → **背书它的插件 id**；`nil` = **基础核心**，不受插件有无影响。
     ///
-    /// 这张映射表就是「什么进插件」的落地形态（契约 §3.52①）：首批 = 回放、笔记；
+    /// 这张映射表就是「什么进插件」的落地形态（契约 §3.52①）：首批 = **Retro**、笔记；
     /// 基础核心 = 编辑器 / 工作区 / 终端 / 数据库 / 文件与搜索 / 设置与凭据。
     public static func ownerPluginID(of item: ActivityBarItem) -> String? {
         switch item {
         case .retro:
-            return "Replay"
+            // 产品名 = **Retro**（需求提出者 2026-10-14 纠正：不是 `Replay`）——
+            // 与清单 `Plugins/Retro/plugin.json` 的 `id` 必须逐字一致。
+            return "Retro"
         case .notes:
             // 笔记**已搬进 `Plugins/Notes/`**（P3，2026-10-13）：清单与源码同处那一格，
             // 挂点据此接上 —— 插件不在 ⇒ 笔记那一栏整体消失（契约 §3.52④）。
