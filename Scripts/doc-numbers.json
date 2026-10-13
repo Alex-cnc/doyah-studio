@@ -22,7 +22,7 @@
   "checkScriptParity": {
     "glob": "Scripts/check-*.py",
     "mustBeReferencedIn": "Scripts/verify-all.sh",
-    "note": "『有判据、没闭环』那一族的机械防线：目录里的每个判据脚本都必须被闭环引用，或者在本台账里逐条登记理由。",
+    "note": "『有判据、没闭环』那一族的机械防线：目录里的每个判据脚本都必须被闭环引用，或者在本台账里逐条登记理由。 **第二张网（合册 `T-20261013-027` · 原单 `T-20261010-037`）**：「门禁自己的证据」脚本 `Scripts/test-*.py` 原先同时落在两条网外（本 `glob` 只收 `check-*.py`，第 4 项只做「台账 → 盘」）⇒ 盘上新增一份 `test-*.py` 时两条网都静默。现加 `testGlob` 第二张网：权威面 = `Scripts/self-test-counts.json` 的 `families[].script`，**双向**对账（盘上未登记 ⇒ 红；台账指到不在盘的脚本 ⇒ 红）+ 面下限 `testFloor` + `testExempt`（与 `exempt` 同形）。",
     "exempt": [
       {
         "script": "Scripts/check-ui-snapshot-languages.py",
@@ -32,7 +32,11 @@
         "script": "Scripts/check-button-icon-only.py",
         "reason": "人类主人令 T-20261013-042 第二段：改到 a 类 0 处才接线（改前基线 277 处，刻意留「改前红」臂）；接线后在 Scripts/verify-all.sh 引用并【删掉本条】（陈旧条目会被 checkScriptParity 判红）。"
       }
-    ]
+    ],
+    "testGlob": "Scripts/test-*.py",
+    "testAuthority": "Scripts/self-test-counts.json",
+    "testFloor": 17,
+    "testExempt": []
   },
   "numbers": [
     {

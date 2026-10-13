@@ -86,7 +86,7 @@
 用法：
     python3 Scripts/check-doc-numbers.py                # 本仓（默认）
     python3 Scripts/check-doc-numbers.py --root <目录>   # 夹具仓（自测用）
-    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（38 例）
+    python3 Scripts/check-doc-numbers.py --self-test     # 判据自己的证据（44 例）
 
 退出码：0 = 全绿；1 = 有判红项。**判红时空跑防护也一起报**（一处都没解析到 ⇒ 不许「零命中 = 通过」）。
 """
@@ -107,6 +107,8 @@ import tempfile
 REPO = pathlib.Path(__file__).resolve().parent.parent
 LEDGER_REL = "Scripts/doc-numbers.json"
 GATE_REL = "Scripts/verify-all.sh"
+# 第二张网的权威台账（合册 `T-20261013-027` / 原单 `T-20261010-037`）
+TEST_AUTHORITY_REL = "Scripts/self-test-counts.json"
 
 HEADING = re.compile(r"^(#{1,6})\s")
 COUNTERPART_SECTION = re.compile(r"\[独占:(windows|linux)\]")
@@ -794,6 +796,111 @@ def check_script_parity(root: pathlib.Path, ledger: dict, problems: list, notes:
     return len(scripts)
 
 
+def check_test_script_parity(root: pathlib.Path, ledger: dict, problems: list, notes: list) -> int:
+    """第二张网（合册 `T-20261013-027` · 原单 `T-20261010-037`）：「门禁自己的证据」脚本
+    `Scripts/test-*.py` 原先**同时落在两条对账网外** —— `checkScriptParity` 的台账 `glob`
+    只收 `check-*.py`；`Scripts/check-self-test-counts.py`（闭环第 4 项）只做「台账 → 盘」。
+    盘上新增一份 `test-*.py`（形同真门禁证据）时两份判据**都静默**（第 65 轮原始病复发形态）。
+    这里按原单建议 ⓐ 补**第二张网**：权威面 = `Scripts/self-test-counts.json` 的
+    `families[].script`，**双向**对账（盘上没登记 ⇒ 判红；台账指到不在盘的脚本 ⇒ 判红），
+    外加面下限（空跑防护）与 `testExempt`（与 `checkScriptParity` 的 `exempt` 同形：script + reason）。
+    """
+    parity = ledger.get("checkScriptParity") or {}
+    glob = parity.get("testGlob")
+    authority = parity.get("testAuthority")
+    if not glob or not authority:
+        problems.append(
+            "[checkTestScriptParity] 台账缺 testGlob / testAuthority —— 第二张网不许被静默关掉"
+        )
+        return 0
+    floor = parity.get("testFloor")
+    if not isinstance(floor, int) or floor <= 0:
+        problems.append("[checkTestScriptParity] 台账缺 testFloor（面下限）—— 空跑防护不许缺席")
+        return 0
+    authority_path = root / authority
+    if not authority_path.exists():
+        problems.append(f"[checkTestScriptParity] 找不到权威台账 {authority}（第二张网的唯一来源）")
+        return 0
+    try:
+        authority_data = json.loads(authority_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as error:
+        problems.append(f"[checkTestScriptParity] 权威台账 {authority} 读不动 / 不是合法 JSON（{error}）")
+        return 0
+    families = authority_data.get("families") if isinstance(authority_data, dict) else None
+    if not isinstance(families, list) or not families:
+        problems.append(
+            f"[checkTestScriptParity] 权威台账 {authority} 的 families 缺失或为空 —— 零命中不许当通过"
+        )
+        return 0
+    registered: dict[str, str] = {}
+    for item in families:
+        rel = item.get("script") if isinstance(item, dict) else None
+        if not isinstance(rel, str) or not rel.strip():
+            problems.append(
+                f"[checkTestScriptParity] {authority} 有族缺 `script` 键 —— 第二张网没法对账（不许静默跳过）"
+            )
+            continue
+        registered[identity_text(rel.strip())] = str(item.get("key") or "")
+    exempt: dict[str, str] = {}
+    for item in parity.get("testExempt") or []:
+        rel = item.get("script")
+        if not isinstance(rel, str) or not rel.strip():
+            problems.append(
+                "[checkTestScriptParity] 豁免条目缺 `script` 键 —— 没法点名这条豁免放行了哪个脚本"
+            )
+            continue
+        exempt[identity_text(rel.strip())] = item.get("reason", "")
+    scripts = sorted((root / glob.rsplit("/", 1)[0]).glob(glob.rsplit("/", 1)[1]))
+    if not scripts:
+        problems.append(
+            f"[checkTestScriptParity] 面内零命中：{glob} 一份都没扫到（下限 {floor}）"
+            " —— 零命中不许当通过（盘上没证据 ≠ 证据全绿）"
+        )
+        return 0
+    exempt_seen = set()
+    for script in scripts:
+        rel = identity_text(script.relative_to(root))
+        if rel in registered:
+            continue
+        if rel in exempt:
+            exempt_seen.add(rel)
+            if not exempt[rel].strip():
+                problems.append(f"[checkTestScriptParity] 豁免没写理由：{rel}")
+            continue
+        problems.append(
+            f"[checkTestScriptParity] {rel} 不在 {authority} 的 families 里"
+            "（盘上有、台账没登记 —— 门禁自己的证据不许在两条网之外长出来）"
+        )
+    for rel in sorted(registered):
+        if not pathlib.PurePosixPath(rel).match(glob):
+            continue
+        if not (root / rel).exists():
+            problems.append(
+                f"[checkTestScriptParity] {authority} 的 families 把 {rel} 指到不在盘的文件"
+                "（死登记 —— 脚本改名 / 删除后台账假装有账）"
+            )
+    for rel in sorted(exempt):
+        if rel in registered:
+            problems.append(
+                f"[checkTestScriptParity] {rel} 已经在 {authority} 里登记了，台账的豁免条目陈旧（请删掉）"
+            )
+        elif not (root / rel).exists():
+            problems.append(
+                f"[checkTestScriptParity] 死豁免：台账豁免的 {rel} 已不在盘（改名 / 删除？）"
+            )
+    if len(scripts) < floor:
+        problems.append(
+            f"[checkTestScriptParity] 扫描面只剩 {len(scripts)} 份 {glob}（下限 {floor}）"
+            " —— 面被掏空（收掉子树 / 改 glob）当场判红"
+        )
+    in_face_registered = [r for r in registered if pathlib.PurePosixPath(r).match(glob)]
+    notes.append(
+        f"[checkTestScriptParity] test 脚本 {len(scripts)} 份（下限 {floor}）："
+        f"台账登记 {len(in_face_registered)} 份、登记豁免 {len(exempt_seen)} 份"
+    )
+    return len(scripts)
+
+
 def validate_skip_sections(root: pathlib.Path, ledger: dict, problems: list, notes: list) -> None:
     """台账 `skipSections` 的**三条自证**（合册 `T-20261013-027` / 原单 `T-20261010-026`）：
     ① `from` / `to` 在本文件里都命中、且 `from` 在前（缺 / 倒序 ⇒ 判红，不许"窗口开在别处"）；
@@ -912,6 +1019,8 @@ def check(root: pathlib.Path):
 
     # F 「有判据、没闭环」
     hits += check_script_parity(root, ledger, problems, notes)
+    # F2 「门禁自己的证据」的**第二张网**（合册 `T-20261013-027` / 原单 `T-20261010-037`）
+    hits += check_test_script_parity(root, ledger, problems, notes)
 
     notes.append(f"[scope] 文档落点命中 {hits} 处；因对侧独占节被跳过的行 {skipped_docs} 行（红线第 6 条：本侧不改的，本侧也不拿它判红）")
     return problems, notes
@@ -925,6 +1034,10 @@ FIXTURE_LEDGER = {
         "glob": "Scripts/check-*.py",
         "mustBeReferencedIn": "Scripts/verify-all.sh",
         "exempt": [{"script": "Scripts/check-exempt.py", "reason": "夹具：已登记理由的豁免条目"}],
+        "testGlob": "Scripts/test-*.py",
+        "testAuthority": "Scripts/self-test-counts.json",
+        "testFloor": 2,
+        "testExempt": [],
     },
     "numbers": [
         {
@@ -1124,6 +1237,23 @@ def build_fixture(
         (full_dir / FULL_RUN_RECORD).write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
     (base / "Scripts" / "check-fine.py").write_text("# fine\n", encoding="utf-8")
     (base / "Scripts" / "check-exempt.py").write_text("# exempt\n", encoding="utf-8")
+    # 第二张网（合册 `T-20261013-027` / 原单 `T-20261010-037`）的夹具面：
+    # 盘上两份 `test-*.py` + 权威台账 `families[].script` 两份登记。
+    (base / "Scripts" / "test-fine.py").write_text("# fine\n", encoding="utf-8")
+    (base / "Scripts" / "test-extra.py").write_text("# extra\n", encoding="utf-8")
+    (base / TEST_AUTHORITY_REL).write_text(
+        json.dumps(
+            {
+                "families": [
+                    {"key": "fixture-fine", "script": "Scripts/test-fine.py", "cases": 1},
+                    {"key": "fixture-extra", "script": "Scripts/test-extra.py", "cases": 1},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     if write_judge:
         lines = ["import sys"]
         if judge_text is not None:
@@ -1415,6 +1545,66 @@ def self_test() -> int:
         counterpart_case(OWN_SIDE), True, "写的是「1947」")
     run("㊱ 单节对侧照旧跳过（不自伤）⇒ 绿 + 跳过行数读数 8 行",
         counterpart_case(COUNTERPART_SINGLE), False, None, "因对侧独占节被跳过的行 12 行")
+
+    # ── 第二张网（合册 `T-20261013-027` / 原单 `T-20261010-037`）：`Scripts/test-*.py` **双向**对账 ──
+    # 原来这 17 份「门禁自己的证据」同时落在两条对账网外：`checkScriptParity` 的 glob 只收
+    # `check-*.py`，`check-self-test-counts.py` 只做「台账 → 盘」⇒ 盘上新增一份 `test-*.py` 时
+    # 两份判据**都静默**（第 65 轮原始病复发形态）。
+    def test_net_case(action):
+        def build(base):
+            build_fixture(base)
+            action(base)
+        return build
+
+    def drop_family(base, key):
+        path = base / TEST_AUTHORITY_REL
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["families"] = [f for f in data["families"] if f.get("key") != key]
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def add_family(base, rel):
+        path = base / TEST_AUTHORITY_REL
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["families"] = [*data["families"], {"key": "fixture-ghost", "script": rel, "cases": 1}]
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    run(
+        "㊲ 盘上多一份 `Scripts/test-planted.py`（台账没登记）⇒ 判红点名（修前：两份判据都静默）",
+        test_net_case(lambda b: (b / "Scripts" / "test-planted.py").write_text("# planted\n", encoding="utf-8")),
+        True,
+        "test-planted.py",
+    )
+    run(
+        "㊳ 反向：台账里某族的 `script` 删掉（盘上那份 `test-*.py` 仍在）⇒ 判红「盘上有、台账没登记」",
+        test_net_case(lambda b: drop_family(b, "fixture-extra")),
+        True,
+        "test-extra.py",
+    )
+    run(
+        "㊴ 台账把 test 脚本指到不在盘的文件（死登记）⇒ 判红点名",
+        test_net_case(lambda b: add_family(b, "Scripts/test-ghost.py")),
+        True,
+        "test-ghost.py",
+    )
+    run(
+        "㊵ 面被掏空（盘上零份 `test-*.py`）⇒ 判红，不许「零命中 = 通过」",
+        test_net_case(lambda b: [(b / "Scripts" / name).unlink() for name in ("test-fine.py", "test-extra.py")]),
+        True,
+        "零命中",
+    )
+    run(
+        "㊶ 面缩水（盘上只剩 1 份、低于下限 2）⇒ 判红点名下限",
+        test_net_case(lambda b: ((b / "Scripts" / "test-extra.py").unlink(), drop_family(b, "fixture-extra"))),
+        True,
+        "下限 2",
+    )
+    run(
+        "㊷ 对手臂：全登记 ⇒ 绿（不误伤真面），读数如实打印面内份数与台账登记份数",
+        test_net_case(lambda b: None),
+        False,
+        None,
+        "test 脚本 2 份（下限 2）：台账登记 2 份",
+    )
 
     failures = []
     with tempfile.TemporaryDirectory(prefix="doc-numbers-selftest-") as temp:
