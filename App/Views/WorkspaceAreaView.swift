@@ -12,6 +12,8 @@ struct WorkspaceAreaView: View {
     @EnvironmentObject private var tabs: WorkspaceTabsModel
     /// 浏览器页签的状态所有者（队列 `L-149` 剩余①）—— 与 `WorkspaceTabsModel` 同一条口径。
     @EnvironmentObject private var browser: WorkspaceBrowserModel
+    /// 对话页签的状态所有者（`FR-AI-25`）—— 同上：独立模型，与工作区页签并列。
+    @EnvironmentObject private var agentChat: AgentChatModel
     /// 预览的跟随滚动输入面（队列 `L-137`）：**独立对象**，光标每换一行只惊动预览那一侧。
     @StateObject private var previewCursor = MarkdownPreviewCursorModel()
 
@@ -38,6 +40,9 @@ struct WorkspaceAreaView: View {
         } else if let tab = tabs.selectedTab {
             if tab.isHome {
                 WorkspaceHomeView()
+            } else if tab.isAgentChat {
+                // 对话页签：**就在 Home 区这一格里**呈现（不自带侧栏 / 分栏 —— `FR-AI-25` ①）。
+                AgentChatView(model: agentChat)
             } else {
                 VStack(spacing: 0) {
                     editorArea(tab: tab)

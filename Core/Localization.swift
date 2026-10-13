@@ -876,6 +876,21 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceHomeWelcome
     case workspaceHomeSubtitle
     case workspaceTabHome
+    // 对话页签（`FR-AI-25`）
+    case agentChatTabTitle
+    case agentChatPlaceholder
+    case agentChatSend
+    case agentChatStop
+    case agentChatRunning
+    case agentChatApprovalPending
+    case agentChatApprovalApprove
+    case agentChatApprovalDeny
+    case agentChatApprovalApplied
+    case agentChatEndpointNotConfigured
+    case agentChatEndpointUnreachable
+    case agentChatDone
+    case agentChatExpand
+    case agentChatCollapse
     case workspaceHomeBuildLine
     case workspaceHomeCopyright
     case workspaceRecentFiles
@@ -3175,6 +3190,21 @@ public enum LocalizedStrings {
         .workspaceHomeWelcome: [.simplifiedChinese: "欢迎回来", .english: "Welcome back"],
         .workspaceHomeSubtitle: [.simplifiedChinese: "左边选工作区，点文件就能在编辑器里打开；配色与补全按文件类型自动匹配。", .english: "Pick a workspace on the left, then click a file to open it here. Highlighting and completion follow the file type."],
         .workspaceTabHome: [.simplifiedChinese: "首页", .english: "Home"],
+        // 对话页签（`FR-AI-25`）
+        .agentChatTabTitle: [.simplifiedChinese: "对话", .english: "Chat"],
+        .agentChatPlaceholder: [.simplifiedChinese: "说点什么…", .english: "Ask something…"],
+        .agentChatSend: [.simplifiedChinese: "发送", .english: "Send"],
+        .agentChatStop: [.simplifiedChinese: "停", .english: "Stop"],
+        .agentChatRunning: [.simplifiedChinese: "在跑…", .english: "Running…"],
+        .agentChatApprovalPending: [.simplifiedChinese: "等你批：先看要改什么", .english: "Waiting for you: review first"],
+        .agentChatApprovalApprove: [.simplifiedChinese: "批准", .english: "Approve"],
+        .agentChatApprovalDeny: [.simplifiedChinese: "拒绝", .english: "Deny"],
+        .agentChatApprovalApplied: [.simplifiedChinese: "已应用", .english: "Applied"],
+        .agentChatEndpointNotConfigured: [.simplifiedChinese: "还没配模型端点 —— 先在「智能体设置」里配好再聊。", .english: "No model endpoint configured yet — set it up in Agent Settings first."],
+        .agentChatEndpointUnreachable: [.simplifiedChinese: "端点连不上 —— 检查地址 / 网络，或先在设置里试一次连接。", .english: "Endpoint unreachable — check the address / network, or test the connection in settings."],
+        .agentChatDone: [.simplifiedChinese: "这一轮说完了。", .english: "That's a wrap for this round."],
+        .agentChatExpand: [.simplifiedChinese: "展开", .english: "Expand"],
+        .agentChatCollapse: [.simplifiedChinese: "收起", .english: "Collapse"],
         .workspaceHomeBuildLine: [.simplifiedChinese: "版本 %@（构建 %@）", .english: "Version %@ (build %@)"],
         .workspaceHomeCopyright: [.simplifiedChinese: "© 2026 DoyahStudio · 本机优先：数据与文件不出这台机器", .english: "© 2026 DoyahStudio · Local first: your data and files stay on this machine"],
         .workspaceRecentFiles: [.simplifiedChinese: "最近打开的文件", .english: "Recent files"],

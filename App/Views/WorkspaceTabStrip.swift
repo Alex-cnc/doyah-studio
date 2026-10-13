@@ -67,6 +67,16 @@ struct WorkspaceTabStrip: View {
                 .help(L(.workspaceSaveButton))
             }
 
+            // 对话页签入口（`FR-AI-25` ①）：**就在这条页签条上**开一个对话页签 —— 不另开侧栏。
+            Button {
+                tabs.openAgentChat()
+            } label: {
+                Image(systemName: "bubble.left.and.text.bubble.right")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            .help(L(.agentChatTabTitle))
+
             Button {
                 openFileFromPanel()
             } label: {

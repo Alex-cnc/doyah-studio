@@ -82,6 +82,13 @@ final class WorkspaceTabsModel: ObservableObject {
         selectedID = id
     }
 
+    /// 打开对话页签（`FR-AI-25` ①）：**已经有就复用** —— 与文件页签同一条纪律。
+    func openAgentChat() {
+        let outcome = WorkspaceTabSet.openingAgentChat(title: L(.agentChatTabTitle), in: tabs)
+        tabs = outcome.tabs
+        selectedID = outcome.selected
+    }
+
     func openHome() {
         if let home = tabs.first(where: { $0.isHome }) {
             selectedID = home.id

@@ -17,6 +17,8 @@ struct DoyahStudioApp: App {
     @StateObject private var workspace = WorkspaceStore.shared
     /// 工作区页签（FR-EDIT-35 / 36）：与数据库页签**并列**的另一套页签。
     @StateObject private var workspaceTabs = WorkspaceTabsModel()
+    /// 对话页签的状态所有者（`FR-AI-25`）。
+    @StateObject private var agentChat = AgentChatModel()
 
     init() {
         // **单实例保护**：同一个 bundle 通常只允许一个进程在跑。
@@ -96,6 +98,22 @@ struct DoyahStudioApp: App {
                 .environmentObject(designTheme)
                 .environmentObject(workspace)
                 .environmentObject(workspaceTabs)
+                .environmentObject(agentChat)
+                .onAppear {
+                    // 对话页签的接线（`FR-AI-25`）：端点状态取自智能体设置；循环与「兑现批准」都由 `AppState` 出。
+                    agentChat.endpointProvider = { appState.agentChatEndpointState }
+                    agentChat.makeLoop = { prompt, observer in
+                        guard let rootPath = workspace.rootPath else { return nil }
+                        return appState.makeAgentChatLoop(prompt: prompt,
+                                                          sessionID: agentChat.sessionID,
+                                                          workspacePath: rootPath,
+                                                          observer: observer)
+                    }
+                    agentChat.applyApproval = { card in
+                        guard let rootPath = workspace.rootPath else { return false }
+                        return await appState.applyAgentChatApproval(card: card, workspacePath: rootPath)
+                    }
+                }
                 .task {
                     // 工作区 → 终端启动目录：把工作区路径交给终端（它只在启动那一刻读）。
                     workspace.onWorkspaceChanged = { [terminal, workspaceTabs] path in

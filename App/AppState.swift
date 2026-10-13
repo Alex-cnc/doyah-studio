@@ -2851,6 +2851,60 @@ final class AppState: ObservableObject {
     /// 当前生效的护栏 / 审批策略：只读模式与白名单来自配置（FR-AI-09）。
     var agentGuardPolicy: AgentGuardPolicy { agentConfiguration.effectiveGuardPolicy }
 
+    // MARK: - 对话页签的接线（`FR-AI-25`）
+
+    /// 端点状态：**没配就是没配**（连不连得上要等真发一次才知道 —— 失败那一档由失败回执如实转成 `unreachable`）。
+    var agentChatEndpointState: AgentChatEndpointState {
+        let endpoint = agentConfiguration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = agentConfiguration.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !endpoint.isEmpty, URL(string: endpoint) != nil, !model.isEmpty else { return .notConfigured }
+        return .ready(model: model, endpoint: endpoint)
+    }
+
+    /// 造一条对话循环：流式网关（`FR-AI-16`）+ 循环（`FR-AI-18`）+ 六个工具（`FR-AI-19/20`）+ 审计（`FR-AI-24`）。
+    ///
+    /// 造不出来（端点没配 / 地址不合法）⇒ 返回 `nil` —— 界面那边**如实拦**，不假装在跑。
+    func makeAgentChatLoop(prompt: String,
+                           sessionID: String,
+                           workspacePath: String,
+                           observer: any AgentLoopObserver) -> (loop: AgentLoop, context: AgentLoopContext)? {
+        guard case .ready(let model, let endpoint) = agentChatEndpointState,
+              let url = URL(string: endpoint) else { return nil }
+        let request = LLMRequest(endpoint: url,
+                                 model: model,
+                                 apiKey: agentAPIKey,
+                                 timeoutSeconds: agentConfiguration.timeoutSeconds,
+                                 systemPrompt: "",
+                                 userPrompt: prompt)
+        let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath))
+        // 工作区那五个工具接上；查库 / 跑命令这一版**不给**（Host 没注入 ⇒ 调用时如实拒 `unavailable`，不假装能做）。
+        let dispatcher = AgentStandardDispatcher(workspace: tools, guardPolicy: agentGuardPolicy)
+        let loop = AgentLoop(client: OpenAICompatibleStreamingClient(),
+                             dispatcher: dispatcher,
+                             registry: .standard,
+                             audit: AgentAuditLog.shared,
+                             observer: observer)
+        let context = AgentLoopContext(systemPrompt: "", userPrompt: prompt,
+                                       baseRequest: request, sessionID: sessionID, workspace: workspacePath)
+        return (loop, context)
+    }
+
+    /// 兑现一次已批准的写（`FR-AI-23` ④：批准之后才应用）。
+    func applyAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> Bool {
+        guard let fingerprint = card.approvalFingerprint,
+              let arguments = AgentToolArguments.parse(card.arguments),
+              let definition = AgentToolRegistry.standard.definition(named: card.name) else { return false }
+        let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath))
+        let outcome = tools.writeFile(path: arguments["path"] ?? "",
+                                      content: arguments["content"] ?? "",
+                                      tool: definition,
+                                      guardPolicy: agentGuardPolicy,
+                                      fingerprint: fingerprint,
+                                      granted: [fingerprint])
+        if case .wrote = outcome { return true }
+        return false
+    }
+
     /// 保存只读模式与白名单（复用配置持久化，不另开一份存储）。
     @discardableResult
     func saveAgentGuardPolicy(_ policy: AgentGuardPolicy) async -> Bool {

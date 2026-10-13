@@ -147,8 +147,9 @@ final class AgentChatTests: XCTestCase {
 
     /// 源树判据：**对话界面不许自立门户**（不得用侧栏 / 分栏容器承载对话）。
     ///
-    /// 现在一个都还没有（界面是下一片）—— 这条判据的价值在下一片落地后生效；
-    /// 它同时守着「提对话的文件数不许是零之外的意外增长」这件事由下一片的接线判据接管。
+    /// 范围 = **对话界面自己的文件**（文件名带 `AgentChat`），不是「任何提到对话的文件」——
+    /// 早先那版按**内容**筛，把 `WorkspaceAreaView.swift` 也圈了进来：那个文件里本来就有 Markdown 预览用的
+    /// `HSplitView`（与对话无关），于是判据误报。**判据要按「这个文件是干什么的」划范围**，不是按它提到谁。
     func testChatSurfaceDoesNotBringItsOwnSidebarOrSplitContainer() {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let views = root.appendingPathComponent("App/Views")
@@ -157,7 +158,8 @@ final class AgentChatTests: XCTestCase {
         }
         let chatFiles = enumerator.compactMap { $0 as? URL }
             .filter { $0.pathExtension == "swift" }
-            .filter { (try? String(contentsOf: $0, encoding: .utf8))?.contains("AgentChat") == true }
+            .filter { $0.lastPathComponent.contains("AgentChat") }
+        XCTAssertFalse(chatFiles.isEmpty, "对话界面文件一个都没扫到 ⇒ 判据自己失效了（不许空跑成绿）")
         for file in chatFiles {
             let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
             for forbidden in ["NavigationSplitView", "HSplitView", "VSplitView", "Sidebar"] {

@@ -81,6 +81,14 @@ public struct AgentToolCard: Identifiable, Equatable, Sendable {
         default: return nil
         }
     }
+
+    /// 等审批时的**指纹**（界面拿它去兑现那一次批准）。
+    public var approvalFingerprint: String? {
+        switch outcome {
+        case .pendingApproval(let fingerprint, _), .approved(let fingerprint, _): return fingerprint
+        default: return nil
+        }
+    }
 }
 
 /// 端点配置状态（`FR-AI-25` ⑤：**连不上就如实说，不假装在跑**）。
@@ -146,6 +154,12 @@ public struct AgentChatState: Equatable, Sendable {
         guard let index = messages.lastIndex(where: { $0.isStreaming }) else { return }
         messages[index].isStreaming = false
         if messages[index].text.isEmpty { messages.remove(at: index) }
+    }
+
+    /// 这一轮跑完了（收尾 + 不再显示「在跑」）。
+    public mutating func finishRun() {
+        endStreaming()
+        isRunning = false
     }
 
     public mutating func appendNotice(_ code: String) {

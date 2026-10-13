@@ -15,6 +15,10 @@ public enum AgentToolRefusal: String, Codable, Equatable, Sendable {
     case unregistered
     /// 被策略拒（只读模式下的写语句等 —— `FR-AI-20` ⑤ / `FR-AI-23` ⑥）。
     case deniedByPolicy
+    /// 参数取不出来（不是对象 / 值类型不对）—— 如实拒，**不猜**。
+    case badArguments
+    /// 这一侧没接上实现（宿主没注入工具）—— 如实说，不假装能做。
+    case unavailable
     /// 非白名单命令 / 控制字符（`FR-AI-20` ④）。
     case commandNotAllowed
     /// 没批准就想落盘 / 执行（`FR-AI-20` ③④⑤）。
