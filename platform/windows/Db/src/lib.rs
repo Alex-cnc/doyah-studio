@@ -9,8 +9,9 @@
 //! 本文件先落几片：**连接配置模型**（`config`）· **连接串解析 / 导出**（`url`）·
 //! **服务端条件浏览**（`browse`，FR-DATA-02）。对象树、SQL 执行面按 `platform/windows/版本计划.md` 继续。
 
-pub mod appearance;
 pub mod admin;
+pub mod agent;
+pub mod appearance;
 pub mod browse;
 pub mod code_lines;
 pub mod command_history;
@@ -45,6 +46,11 @@ pub mod writeback;
 
 pub use appearance::{
     Appearance, AppearanceMode, ColorScheme, DomAppearance,
+};
+pub use agent::{
+    classify as classify_sql, decide as decide_agent_action, redact as redact_credentials,
+    risk_points, wrap_untrusted, Approval, ApprovalError, ApprovalState, AuditEntry, AuditOutcome,
+    Decision as AgentDecision, Endpoint, Gate, GateVerdict, Quota, QuotaError, RiskPoint, SqlClass,
 };
 pub use admin::{
     confirm_drop, format_bytes, format_duration, grant_sql, maintenance_commands, sort_sessions,
