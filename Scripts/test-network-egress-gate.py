@@ -30,11 +30,13 @@ LEDGER = "Scripts/network-egress-whitelist.json"
 
 # 副本需要的最小文件集（门禁会读：台账登记的那 6 个面文件、扫描面里的干净文件、闭环脚本、台账、负例自己）
 TREE_FILES = [
-    # 四个「面」登记的 6 个文件（台账里有它 ⇒ 副本必须带上，否则「干净副本」这一例会假红）
+    # 四个「面」登记的 7 个文件（台账里有它 ⇒ 副本必须带上，否则「干净副本」这一例会假红）
     "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift",
     "Plugins/Notes/Sources/NoteSync/CloudAuth.swift",
     "Core/LLMClient.swift",
     "Core/EgressLog.swift",
+    # AI 面第 3 件（FR-AI-16 流式面 · 2026-10-14 按前门 `T-20261014-207` ① 登记）：
+    "Core/LLMStreaming.swift",
     "App/AppState.swift",
     "App/Auth/AccountFlowModel.swift",
     # 只在**文档注释**里提到 URLSession 的文件（判据 3 的 grep 会数到它，但门禁判红集不含它）：

@@ -17,6 +17,8 @@
   ① **笔记同步面** = `Plugins/Notes/Sources/NoteSync/CloudSyncService.swift`（该面唯一出口）
   ② **认证面**     = `Plugins/Notes/Sources/NoteSync/CloudAuth.swift`（单列：认证与同步解耦）
   ③ **AI 面（既有豁免）** = `Core/LLMClient.swift` + `Core/EgressLog.swift`（传输装饰器）
+     + `Core/LLMStreaming.swift`（FR-AI-16 流式传输面 · **2026-10-14 补登**：前门 `T-20261014-207` ①
+     裁「必须登记进联网文件面，不许为了 `rc=0` 排除在面外」；SRS §6.4 表第 3 行文件枚举待前门落笔）
   ④ **装配缝（不算出口）** = `App/AppState.swift` · `App/Auth/AccountFlowModel.swift`（只注入 transport）
   ⑤ **白名单面以外的一切文件**（全仓已在扫描面内）出现 `URLSession` / `URLRequest` ⇒ **判红**（并点名 `文件:行号`）
   ⑥ **非白名单面但已登记**（台账 `outOfFace`：`CLI/` · `Platform/` · `Tests*` …）：每次打出读数，
