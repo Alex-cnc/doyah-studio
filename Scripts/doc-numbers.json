@@ -106,7 +106,7 @@
     {
       "key": "core-tests",
       "label": "Core 单测项数（verify-core.sh 实测）",
-      "value": 3062,
+      "value": 3070,
       "unit": "项",
       "measure": {
         "kind": "count-file",
