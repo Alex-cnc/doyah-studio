@@ -395,18 +395,18 @@
         "Core/XLSXReader.swift:384"
       ]
     },
-    "Replay": {
-      "kind": "protocolToken",
-      "sites": [
-        "Core/Plugin/PluginMounts.swift:26"
-      ],
-      "reason": "插件清单里的**身份令牌**（插件 id），不是展示文案；界面上的名字来自清单 displayName"
-    },
     "Require": {
       "kind": "protocolToken",
       "sites": [
         "Core/DatabaseType.swift:126"
       ]
+    },
+    "Retro": {
+      "kind": "protocolToken",
+      "sites": [
+        "Core/Plugin/PluginMounts.swift:28"
+      ],
+      "reason": "插件清单里的**身份令牌**（插件 id），不是展示文案；界面上的名字来自清单 displayName（中文 =「复盘」）。2026-10-14 由 `Replay` 改名而来（需求提出者命名订正：回放 → Retro），分类与理由随旧条目原样沿用"
     },
     "SELECT 1": {
       "kind": "sql",
