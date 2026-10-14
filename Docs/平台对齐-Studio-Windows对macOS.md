@@ -5,7 +5,7 @@
 >
 > **用途**：`fatshark`（Windows / Harmony 侧）对齐 macOS 版 Doyah Studio 开发进度时的**逐条索引** —— 每行 = 一条需求 → 所属域 → 层次 → macOS 状态 → **macOS 落点（去这里读实现）** → Windows 现状。
 >
-> **统计**：需求 **262** 条 · 有落点 **174** 条 · 追溯表有行未标路径 **17** 条 · 无追溯行（落点列 `—`）**71** 条 · 台账 Windows `overrides` **65 条**（缺失一律按 `⬜` 记 —— 整列 `⬜` = Windows Studio 未开工）。
+> **统计**：需求 **262** 条 · 有落点 **174** 条 · 追溯表有行未标路径 **17** 条 · 无追溯行（落点列 `—`）**71** 条 · 台账 Windows `overrides` **91 条**（缺失一律按 `⬜` 记 —— 整列 `⬜` = Windows Studio 未开工）。
 > §10.2 里另有 **5** 行不是需求编号（分组行 / 决定行，如 `NFR-PERF / COMP`），它们不对应单条需求 ⇒ 不进本索引。
 >
 > **口径**：`macOS` 列 = §10.1 状态格的**第一个取值**；`macOS 落点` = §10.2 该条所在行的**反引号片段**（前 3 个 + 「等 N 处」；同一编号出现在多行时取**最后一行**；范围行展开到每一条）。**无追溯行写 `—`、有行未标路径写「（追溯表有行、未标路径）」—— 两种都不编落点**。
@@ -58,9 +58,9 @@
 | FR-AI-29 | 3.12 AI 智能体 | 常用增强 | ⬜ | `TaskScheduler`、`FR-AI-15`、`Docs/概要设计.md` | ⬜ |
 | FR-AI-30 | 3.12 AI 智能体 | 常用增强 | ⬜ | `FR-AI-30`、`FR-AI-31`、`Docs/概要设计.md` 等 8 处 | ⬜ |
 | FR-AI-31 | 3.12 AI 智能体 | 常用增强 | ⬜ | `FR-AI-30`、`FR-AI-31`、`Docs/概要设计.md` 等 8 处 | ⬜ |
-| FR-BLD-01 | 3.11 构建与工具链 | 基线必备 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ⬜ |
+| FR-BLD-01 | 3.11 构建与工具链 | 基线必备 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
 | FR-BLD-02 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ⬜ |
-| FR-BLD-03 | 3.11 构建与工具链 | 基线必备 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ⬜ |
+| FR-BLD-03 | 3.11 构建与工具链 | 基线必备 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
 | FR-BLD-04 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ⬜ |
 | FR-BLD-05 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ⬜ |
 | FR-BLD-06 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ⬜ |
@@ -76,11 +76,11 @@
 | FR-CONN-02 | 3.1 连接与凭据 | 基线必备 | ✅ | `App/Views/ConnectionListView.swift`、`ConnectionFormView.swift`、`Core/ConnectionConfig.swift` 等 4 处 | ✅ |
 | FR-CONN-03 | 3.1 连接与凭据 | 常用增强 | ✅ | `App/Views/ConnectionListView.swift`、`ConnectionFormView.swift`、`Core/ConnectionConfig.swift` 等 4 处 | ⬜ |
 | FR-CONN-04 | 3.1 连接与凭据 | 基线必备 | ✅ | `App/Views/MainWindow.swift`、`.sheet(item:)`、`ConnectionFormMode` | ✅ |
-| FR-CONN-05 | 3.1 连接与凭据 | 基线必备 | ✅ | `App/Views/ConnectionListView.swift`、`confirmationDialog`、`AppState.deleteConnection` 等 4 处 | ⬜ |
+| FR-CONN-05 | 3.1 连接与凭据 | 基线必备 | ✅ | `App/Views/ConnectionListView.swift`、`confirmationDialog`、`AppState.deleteConnection` 等 4 处 | ✅ |
 | FR-CONN-06 | 3.1 连接与凭据 | 基线必备 | ✅ | `Core/ConnectionConfig.isValid`、`App/Views/ConnectionFormView.swift::isValid` | ✅ |
 | FR-CONN-07 | 3.1 连接与凭据 | 基线必备 | ✅ | `Core/KeychainHelper.swift`、`App/AppState.swift::updateConnection` | ✅ |
 | FR-CONN-08 | 3.1 连接与凭据 | 常用增强 | ✅ | `Core/KeychainHelper.swift`、`App/AppState.swift::updateConnection` | ✅ |
-| FR-CONN-09 | 3.1 连接与凭据 | 基线必备 | ✅ | `ConnectionFormView.testConnection`、`Core/PostgresService.connect` | ⬜ |
+| FR-CONN-09 | 3.1 连接与凭据 | 基线必备 | ✅ | `ConnectionFormView.testConnection`、`Core/PostgresService.connect` | ✅ |
 | FR-CONN-10 | 3.1 连接与凭据 | 进阶可选 | ✅ | `Core/ConnectionConfig.swift` | ✅ |
 | FR-CONN-11 | 3.1 连接与凭据 | 进阶可选 | ✅ | `AppState.restoredConnectionID(in:)`、`rememberSelectedConnection()`、`UserDefaults` | ✅ |
 | FR-CONN-12 | 3.1 连接与凭据 | 常用增强 | ✅ | `App/Views/QueryContextBar.swift`、`AppState.selectedConnectionID` | ✅ |
@@ -108,11 +108,11 @@
 | FR-DIAG-03 | 3.7 性能与诊断 | 进阶可选 | 🟡 | `pg_stat_statements` | ⬜ |
 | FR-DIAG-04 | 3.7 性能与诊断 | 进阶可选 | 🟡 | `pg_stat_statements` | ⬜ |
 | FR-DIAG-05 | 3.7 性能与诊断 | 进阶可选 | ✅ | — | ✅ |
-| FR-DRV-01 | 3.10 驱动与方言兼容 | 基线必备 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ⬜ |
+| FR-DRV-01 | 3.10 驱动与方言兼容 | 基线必备 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ✅ |
 | FR-DRV-02 | 3.10 驱动与方言兼容 | 常用增强 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ⬜ |
-| FR-DRV-03 | 3.10 驱动与方言兼容 | 基线必备 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ⬜ |
-| FR-DRV-04 | 3.10 驱动与方言兼容 | 基线必备 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ⬜ |
-| FR-DRV-05 | 3.10 驱动与方言兼容 | 基线必备 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ⬜ |
+| FR-DRV-03 | 3.10 驱动与方言兼容 | 基线必备 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ✅ |
+| FR-DRV-04 | 3.10 驱动与方言兼容 | 基线必备 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ✅ |
+| FR-DRV-05 | 3.10 驱动与方言兼容 | 基线必备 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ✅ |
 | FR-DRV-06 | 3.10 驱动与方言兼容 | 基线必备 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ⬜ |
 | FR-DRV-07 | 3.10 驱动与方言兼容 | 常用增强 | ✅ | `Core/DatabaseService.swift`、`PostgresService.swift`、`Dialects.swift` 等 4 处 | ⬜ |
 | FR-DRV-08 | 3.10 驱动与方言兼容 | 进阶可选 | 🟡 | `Core/Dialects.swift::GBaseDialect`、`Core/StatementSplitter.swift`、`DELIMITER` | ⬜ |
@@ -131,8 +131,8 @@
 | FR-EDIT-12 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `QueryEditorView.diagnostics` | ✅ |
 | FR-EDIT-13 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/Views/QueryWorkspaceView.swift`、`VSplitView` | ⬜ |
 | FR-EDIT-14 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/Views/QueryToolbar.swift`、`App/Views/SaveQuerySheet.swift`、`Core/SavedQueryStore.swift` 等 4 处 | ⬜ |
-| FR-EDIT-15 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/AppState.swift::openFileFromPanel / openFile`、`App/Views/QueryToolbar.swift`、`App/Views/QueryWorkspaceView.swift` | ⬜ |
-| FR-EDIT-16 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `AppState.saveCurrentFile / writeFile`、`QueryToolbar`、`Menu(primaryAction:)` | ⬜ |
+| FR-EDIT-15 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/AppState.swift::openFileFromPanel / openFile`、`App/Views/QueryToolbar.swift`、`App/Views/QueryWorkspaceView.swift` | ✅ |
+| FR-EDIT-16 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `AppState.saveCurrentFile / writeFile`、`QueryToolbar`、`Menu(primaryAction:)` | ✅ |
 | FR-EDIT-17 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ⬜ |
 | FR-EDIT-18 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ⬜ |
 | FR-EDIT-19 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ⬜ |
@@ -165,22 +165,22 @@
 | FR-EDIT-46 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/WorkspaceClose.swift`、`App/WorkspaceTabsModel.swift`、`requestClose` 等 8 处 | ⬜ |
 | FR-EDIT-47 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/MarkdownEditing.swift`、`MarkdownListEditing.continuation`、`App/Views/CodeEditorView.swift` 等 7 处 | ⬜ |
 | FR-EDIT-48 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/MarkdownEditing.swift`、`toggleTask`、`App/Views/CodeEditorView.swift::performKeyEquivalent` | ⬜ |
-| FR-EXEC-01 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/AppState.swift::executeQuery`、`Core/PostgresService.swift::performExecute`、`StatementSplitter.swift` | ⬜ |
-| FR-EXEC-02 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/AppState.swift::executeQuery`、`Core/PostgresService.swift::performExecute`、`StatementSplitter.swift` | ⬜ |
+| FR-EXEC-01 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/AppState.swift::executeQuery`、`Core/PostgresService.swift::performExecute`、`StatementSplitter.swift` | ✅ |
+| FR-EXEC-02 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/AppState.swift::executeQuery`、`Core/PostgresService.swift::performExecute`、`StatementSplitter.swift` | ✅ |
 | FR-EXEC-03 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/AppState.swift::executeQuery`、`Core/PostgresService.swift::performExecute`、`StatementSplitter.swift` | ⬜ |
 | FR-EXEC-04 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `QueryTab.results`、`App/Views/ResultTableView.swift`、`ResultGrid.swift` | ⬜ |
 | FR-EXEC-05 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `QueryTab.results`、`App/Views/ResultTableView.swift`、`ResultGrid.swift` | ⬜ |
-| FR-EXEC-06 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `AppState`、`closeTab` | ⬜ |
+| FR-EXEC-06 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `AppState`、`closeTab` | ✅ |
 | FR-EXEC-07 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `AppState`、`closeTab` | ⬜ |
 | FR-EXEC-08 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `PostgresService.cancel()`、`pg_cancel_backend`、`AppState.cancelQuery` 等 4 处 | ⬜ |
 | FR-EXEC-09 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `AppState.ensureService`、`connectTasks` | ⬜ |
 | FR-EXEC-10 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `PostgresService.reportsAffectedRows(_:)`、`PostgresQueryMetadata.rows`、`QueryResult.affectedRows` | ⬜ |
 | FR-EXEC-11 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `Core/DatabaseService.swift`、`PostgresService.begin/commit/rollback` | ⬜ |
 | FR-EXEC-12 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `AppState.executeQuery` | ⬜ |
-| FR-EXEC-13 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/Views/QueryToolbar.swift`、`QueryEditorView`、`AppState.startQuery/cancelQuery` | ⬜ |
+| FR-EXEC-13 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/Views/QueryToolbar.swift`、`QueryEditorView`、`AppState.startQuery/cancelQuery` | ✅ |
 | FR-EXEC-14 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `Core/ExecutionScope.swift`、`AppState.executeQuery`、`App/ExecutionScopeTitle.swift` 等 5 处 | ⬜ |
 | FR-EXEC-15 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/TransactionSession.swift`、`App/Views/TransactionControl.swift`、`AppState.executeQuery` | ⬜ |
-| FR-EXEC-16 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `Core/ExecutionSafety.swift`、`AppState.executeQuery`、`App/Views/SafeModeConfirmSheet.swift` 等 4 处 | ⬜ |
+| FR-EXEC-16 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `Core/ExecutionSafety.swift`、`AppState.executeQuery`、`App/Views/SafeModeConfirmSheet.swift` 等 4 处 | ✅ |
 | FR-EXEC-17 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `Core/SQLParameters.swift`、`App/Views/QueryParameterSheet.swift`、`AppState.executeQuery` 等 4 处 | ⬜ |
 | FR-IO-01 | 3.9 导入导出与备份 | 基线必备 | ✅ | （追溯表有行、未标路径） | ✅ |
 | FR-IO-02 | 3.9 导入导出与备份 | 常用增强 | 🟡 | `COPY … TO / FROM STDIN` | ⬜ |
@@ -204,13 +204,13 @@
 | FR-META-13 | 3.4 对象浏览与元数据 | 常用增强 | 🟡 | `Core/ObjectTreeActions.swift`、`App/Views/ObjectTreeView.swift`、`AppState.performTreeAction` | ⬜ |
 | FR-META-14 | 3.4 对象浏览与元数据 | 基线必备 | ✅ | `Core/ObjectTreeActions.swift`、`App/Views/ObjectTreeView.swift`、`AppState.performTreeAction` | ✅ |
 | FR-META-15 | 3.4 对象浏览与元数据 | 进阶可选 | 🟡 | — | ⬜ |
-| FR-PLUG-01 | 3.13 插件装配 | 基线必备 | ✅ | `Core/Note*.swift`、`AICapture*.swift`、`App/Views/NotesPanel.swift` | ⬜ |
-| FR-PLUG-02 | 3.13 插件装配 | 基线必备 | ✅ | `Core/ActivityBar.swift`、`case notes`、`Core/LicensePresentation.swift` 等 4 处 | ⬜ |
-| FR-PLUG-03 | 3.13 插件装配 | 基线必备 | ✅ | `Core/AICapture.swift`、`Core/Note.swift`、`NoteDraft` 等 5 处 | ⬜ |
+| FR-PLUG-01 | 3.13 插件装配 | 基线必备 | ✅ | `Core/Note*.swift`、`AICapture*.swift`、`App/Views/NotesPanel.swift` | ✅ |
+| FR-PLUG-02 | 3.13 插件装配 | 基线必备 | ✅ | `Core/ActivityBar.swift`、`case notes`、`Core/LicensePresentation.swift` 等 4 处 | ✅ |
+| FR-PLUG-03 | 3.13 插件装配 | 基线必备 | ✅ | `Core/AICapture.swift`、`Core/Note.swift`、`NoteDraft` 等 5 处 | ✅ |
 | FR-PLUG-04 | 3.13 插件装配 | 常用增强 | ✅ | `Core/Note.swift`、`NoteStore.defaultFileURL`、`legacyFileURL` 等 11 处 | ⬜ |
 | FR-PLUG-05 | 3.13 插件装配 | 基线必备 | 🟡 | `linux/`、`Scripts/check-notes-offline.py`、`Scripts/notes-offline-gate.json` 等 4 处 | ⬜ |
-| FR-PLUG-06 | 3.13 插件装配 | 基线必备 | ✅ | `Core/License.swift`、`LicenseCapabilities.all` | ⬜ |
-| FR-PLUG-07 | 3.13 插件装配 | 基线必备 | ✅ | `Scripts/check-note-module-isolation.py` | ⬜ |
+| FR-PLUG-06 | 3.13 插件装配 | 基线必备 | ✅ | `Core/License.swift`、`LicenseCapabilities.all` | ✅ |
+| FR-PLUG-07 | 3.13 插件装配 | 基线必备 | ✅ | `Scripts/check-note-module-isolation.py` | ✅ |
 | FR-PLUG-08 | 3.13 插件装配 | 基线必备 | 🟡 | `Core/NoteStorage/`、`SQLiteKit`、`NoteDatabase` 等 9 处 | ⬜ |
 | FR-RES-01 | 3.3 结果集与导出 | 基线必备 | ✅ | `App/Views/ResultGrid.swift`、`ResultTableView.swift`、`Core/PostgresCellFormatter.swift` | ✅ |
 | FR-RES-02 | 3.3 结果集与导出 | 常用增强 | ✅ | `App/Views/ResultGrid.swift`、`ResultTableView.swift`、`Core/PostgresCellFormatter.swift` | ✅ |
@@ -257,13 +257,13 @@
 | NFR-PERF-02 | 4.1 NFR-PERF | 基线必备 | 🟡 | — | ⬜ |
 | NFR-PERF-03 | 4.1 NFR-PERF | 基线必备 | 🟡 | — | ⬜ |
 | NFR-PERF-04 | 4.1 NFR-PERF | 基线必备 | 🟡 | — | ⬜ |
-| NFR-PERF-05 | 4.1 NFR-PERF | 基线必备 | ✅ | — | ⬜ |
-| NFR-PERF-06 | 4.1 NFR-PERF | 基线必备 | ✅ | — | ⬜ |
-| NFR-REL-01 | 4.2 NFR-REL | 基线必备 | ✅ | — | ⬜ |
-| NFR-REL-02 | 4.2 NFR-REL | 基线必备 | ✅ | — | ⬜ |
+| NFR-PERF-05 | 4.1 NFR-PERF | 基线必备 | ✅ | — | ✅ |
+| NFR-PERF-06 | 4.1 NFR-PERF | 基线必备 | ✅ | — | ✅ |
+| NFR-REL-01 | 4.2 NFR-REL | 基线必备 | ✅ | — | ✅ |
+| NFR-REL-02 | 4.2 NFR-REL | 基线必备 | ✅ | — | ✅ |
 | NFR-REL-03 | 4.2 NFR-REL | 基线必备 | ✅ | — | ⬜ |
-| NFR-REL-04 | 4.2 NFR-REL | 基线必备 | ✅ | — | ⬜ |
-| NFR-REL-05 | 4.2 NFR-REL | 基线必备 | ✅ | — | ⬜ |
+| NFR-REL-04 | 4.2 NFR-REL | 基线必备 | ✅ | — | ✅ |
+| NFR-REL-05 | 4.2 NFR-REL | 基线必备 | ✅ | — | ✅ |
 | NFR-SEC-01 | 4.3 NFR-SEC | 基线必备 | ✅ | — | ⬜ |
 | NFR-SEC-02 | 4.3 NFR-SEC | 基线必备 | ✅ | — | ⬜ |
 | NFR-SEC-03 | 4.3 NFR-SEC | 基线必备 | ✅ | — | ⬜ |
