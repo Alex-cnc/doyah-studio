@@ -900,6 +900,23 @@ public final class NoteDatabase {
         try connection.scalarText("SELECT spans FROM note WHERE uuid = ?", [.text(id.uuidString)])
     }
 
+    /// **已经有 v2 权威源的行数**（`spans IS NOT NULL`）—— 迁移读数的分母，只服务迁移结论。
+    public func migratedSpanCount() throws -> Int {
+        Int(try connection.scalarInt("SELECT count(*) FROM note WHERE spans IS NOT NULL") ?? 0)
+    }
+
+    /// **待迁移的正文行**（`FR-RT-11` · 片 `WY-2b`）：`spans` 还是 `NULL` 的那些笔记 —— 即正文
+    /// 权威源的迁移面（v1 存量）。**含墓碑行**：正文既然还在库里，它的权威源就该有；墓碑不迁会让
+    /// 「已删但可恢复 / 参与同步」的那些笔记永远停在半新半旧。按 `uuid` 稳定有序，读数可复算。
+    public func legacyBodyRows() throws -> [NoteBodyMigrationRunner.Row] {
+        try connection
+            .query("SELECT uuid, body FROM note WHERE spans IS NULL ORDER BY uuid ASC")
+            .compactMap { row in
+                guard let raw = row.text("uuid"), let id = UUID(uuidString: raw) else { return nil }
+                return NoteBodyMigrationRunner.Row(id: id, body: row.text("body") ?? "")
+            }
+    }
+
     // MARK: - 读
 
     public func noteCount() throws -> Int {
