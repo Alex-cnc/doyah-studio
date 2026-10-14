@@ -7,7 +7,7 @@ import DoyahCore
 /// 「历史」页签（`FR-EDIT-10` v3.326 扩写 / `DR-02`）的 **App 侧探针**（队列 `HIST-2` ·
 /// 派单 `T-20261009-018` / `T-20261009-010`）。
 ///
-/// ## 这个文件要钉住的三件事（卡上的判据 2 / 3 / 4）
+/// ## 这个文件要钉住的三件事（卡上的判据 2 / 3 / 4）+ 归档接线（`HIST-ARCH` · 判据 ①②③）
 ///
 /// ① **段条件（`FR-EDIT-10`）**：「历史」**只在 Database 客户端段出现**；切到工作区段 ⇒ 页签
 ///    **不可见**，且若正选中它 ⇒ **自动落到该段可用页签（终端）**；切回 Database 段 ⇒
@@ -300,6 +300,81 @@ final class QueryHistoryPaneProbeTests: XCTestCase {
         XCTAssertEqual(afterDelete.count, 2, "确认后库该少 1 条")
         XCTAssertFalse(afterDelete.contains { $0.id == victim.id }, "删掉的必须正是被点的那一条")
         print("[HIST-2] 戊 单条删确认后：内存 \(host.state.queryHistory.count) 条 / 库 \(afterDelete.count) 条")
+    }
+
+    // MARK: - 判据 5：归档接线（`HIST-ARCH` · 片 `T-20261009-010` 判据 ①②③）
+
+    /// 「历史行 → 归档」这条线要**真的接上**：视图锚点与文案在位、点了**落盘一条**、
+    /// 目录取不到时**不静默吞**。
+    ///
+    /// 两半都判的理由：甲（无工作区）= 真机最常见的失败态，只出声不写盘；乙（有工作区）走的是
+    /// **真写盘**那条路（工作区 `queries/` 下当天那个 `.sql`），探针用临时工作区拿读数、不碰用户目录。
+    /// 锚点只能证「接了」，写盘才能证「接了以后有结果」—— 两类读数分开给。
+    @MainActor
+    func testHistoryRowArchiveActionWritesArchiveFile() async throws {
+        let root = UISnapshot.packageRoot
+        let pane = try read("App/Views/LowerPaneView.swift", from: root)
+        XCTAssertTrue(pane.contains("archiveHistoryEntry"), "历史行没有接 `AppState.archiveHistoryEntry`")
+        XCTAssertTrue(pane.contains("L(.historyArchive)"), "「归档」这条文案没进视图（图标按钮要讲得出名字）")
+        XCTAssertTrue(pane.contains("L(.historyArchiveHelp)"), "「归档」的悬停提示没进视图")
+
+        let host = try makeHost()
+
+        // 甲：没有工作区、也没有归档书签 ⇒ 如实说「未授权」（点了没反应是这里最忌的）。
+        host.state.workspacePathProvider = { nil }
+        let before = host.state.statusMessage
+        host.state.archiveHistoryEntry(
+            QueryHistory(connectionID: UUID(), sql: "SELECT 'no-dir'", succeeded: true)
+        )
+        _ = await waitUntil { host.state.statusMessage != before }
+        XCTAssertEqual(
+            host.state.statusMessage,
+            L(.archiveDirectoryNotAuthorized),
+            "目录取不到时必须说出原因"
+        )
+        print("[HIST-ARCH] 甲 无目录：statusMessage=\(host.state.statusMessage)")
+
+        // 乙：工作区指到临时目录 ⇒ 真的落盘一条，状态句报出目录名与当天条数。
+        let workspace = UISnapshot.outputDirectory
+            .deletingLastPathComponent()
+            .appendingPathComponent("hist-archive-scratch-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        host.state.workspacePathProvider = { workspace.path }
+
+        let queries = workspace.appendingPathComponent("queries", isDirectory: true)
+        let marker = "SELECT 'hist-arch-probe'"
+        host.state.archiveHistoryEntry(
+            QueryHistory(connectionID: UUID(), sql: marker, succeeded: true)
+        )
+        let wrote = await waitUntil {
+            let files = (try? FileManager.default.contentsOfDirectory(atPath: queries.path)) ?? []
+            return files.contains { $0.hasSuffix(".sql") }
+        }
+        XCTAssertTrue(wrote, "点了「归档」没落盘（`\(queries.path)` 下没有 .sql）")
+
+        let files = try FileManager.default.contentsOfDirectory(atPath: queries.path)
+            .filter { $0.hasSuffix(".sql") }
+        let archiveFile = queries.appendingPathComponent(try XCTUnwrap(files.first))
+        let body = try String(contentsOf: archiveFile, encoding: .utf8)
+        XCTAssertTrue(body.contains(marker), "落盘的归档文件里没有那条 SQL")
+
+        let expected = L(.archiveSaved, workspace.lastPathComponent, 1)
+        _ = await waitUntil { host.state.statusMessage == expected }
+        XCTAssertEqual(host.state.statusMessage, expected, "状态句该报出目录名与当天条数")
+        print("[HIST-ARCH] 乙 有工作区：files=\(files) statusMessage=\(host.state.statusMessage)")
+    }
+
+    /// 等到条件成立 —— **异步**等（与 `BrowserTabDownloadProbeTests.waitUntil` 同一条口径）：
+    /// 归档那条写盘在 `Task {}` 里跑，同步泵运行循环等不到它；`Task.sleep` 让出主 actor 才放得进来。
+    @MainActor
+    private func waitUntil(_ condition: () -> Bool, timeout: TimeInterval = 10) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return true }
+            try? await Task.sleep(nanoseconds: 40_000_000)
+        }
+        return condition()
     }
 
     // MARK: - 工具
