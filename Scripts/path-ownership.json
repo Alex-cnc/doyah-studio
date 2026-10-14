@@ -2,14 +2,14 @@
  "version": 1,
  "repo": "DoyahStudio",
  "purpose": "「盘上的路径归谁」的唯一清单（判据 = 同目录的 check-path-ownership.py，三仓同源；三仓副本见该脚本 docstring）。清单可以各仓不同，判据逻辑逐字节同一份。",
- "contract_owner": "bluewhale",
+ "contract_owner": "hugehippo",
  "contract_docs": [
   "Docs/",
   "AGENT-SPEC.md",
   "README.md",
   "Scripts/doc-numbers.json"
  ],
- "contract_note": "契约层（三书）**归 `bluewhale`（蓝色鲸鱼娘）**；平台实现层归各平台助理（**2026-10-13 均衡令** · 派单 `T-20261013-007`）：`hugehippo`=Apple 全系 · `fatshark`=Windows/鸿蒙 · `babyhippo`=Linux/安卓（旧名 `fatfish` / `bighippo` / `tinyhippo` 已退役、只保留识别）（2026-10-03 人类主人制度变更 · 派活单 `T-20261003-003`）。**契约层落笔面 = 人类主人 2026-10-05 批准的四类：`Docs/**` + `AGENT-SPEC.md` + 仓根 `README.md` + `Scripts/doc-numbers.json`（计数台账）** ⇒ `--mine bluewhale`（或 `--actor bluewhale`）时**只有 contract_docs 声明的这几类放行**，其余（代码 / 脚本 / 其他文档 / 仓根杂项）一律判红 —— **「产品代码不许越界」这条本体不变**。原始护栏（人类主人 2026-10-03）：「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」；本仓按 10-05 的扩面裁决跟版（依据派单 `T-20261005-088` ①）。三书内部**契约层节 vs `[独占:平台]` 实现层节**的边界由 `check-exclusive-sections.py` 机械判。",
+ "contract_note": "契约层（三书）**归 `hugehippo`（铁皮大河马）**（**2026-10-15 人类主人令 · 基本法第四十八条 / 之二**：原 `bluewhale` 的交出 —— 她自本令起只保留公众号写作助理与地缘政治分析周报，**既无契约权、也无平台写权**）；平台实现层归各平台助理（**2026-10-13 均衡令** · 派单 `T-20261013-007`）：`hugehippo`=Apple 全系 · `fatshark`=Windows/鸿蒙 · `babyhippo`=Linux/安卓（旧名 `fatfish` / `bighippo` / `tinyhippo` 已退役、只保留识别）（2026-10-03 人类主人制度变更 · 派活单 `T-20261003-003`）。**契约层落笔面 = 人类主人 2026-10-05 批准的四类：`Docs/**` + `AGENT-SPEC.md` + 仓根 `README.md` + `Scripts/doc-numbers.json`（计数台账）** ⇒ `--mine bluewhale`（或 `--actor bluewhale`）时**只有 contract_docs 声明的这几类放行**，其余（代码 / 脚本 / 其他文档 / 仓根杂项）一律判红 —— **「产品代码不许越界」这条本体不变**。原始护栏（人类主人 2026-10-03）：「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」（**该护栏 2026-10-15 随第四十八条移交**：现受让方 = `hugehippo`）；本仓按 10-05 的扩面裁决跟版（依据派单 `T-20261005-088` ①）。三书内部**契约层节 vs `[独占:平台]` 实现层节**的边界由 `check-exclusive-sections.py` 机械判。",
  "trees": [
   {
    "id": "macos",
@@ -93,14 +93,24 @@
  "shared_note": "共享面 = 两侧都写的地方：改它**不算越界**，但要走声明式台账（清单 `shared_ledger` 改前登记 / 本次新增行注 `shared-surface：理由` / 提交信息注 `shared-surface: 理由`），三处都没有理由 ⇒ 判红。`Scripts/` 在派活单 T-20261002-029 里被同时列进「macOS 仓根族」与「共享面」两处 ⇒ 本清单按**共享面**收口：里面的判据（`check-*.py` / `verify-all.sh`）被两侧共同调用，`Scripts/doc-numbers.json` 的 `checkScriptParity` 也是按「闭环引用」写的，判它是某一端专属会与现行事实相抵。要改成 macOS 专属 ⇒ 改这一行 + 记一笔变更。",
  "shared_require_declaration": true,
  "shared_ledger": [
- {"glob": "Scripts/path-ownership.json", "reason": "派单 T-20261014-016 ②（2026-10-14 人类主人令：Doyah Studio 补 Linux 端 · 归 babyhippo）：新增 linux 树（paths Platform/linux/ + platform/linux/ · actor babyhippo）—— 此前该树不在登记里、归属门禁盖不到 platform/linux/**；无既有判据语义变化", "by": "babyhippo", "at": "2026-10-14"},
-  {"glob": "Scripts/path-ownership.json", "reason": "派单 T-20261013-007 §四.2（2026-10-13 均衡令）：本清单 trees[].actor 与 contract_note 的演员名按新归属跟版（hugehippo=Apple 全系 / fatshark=Windows+鸿蒙 / babyhippo=Linux+安卓），无判据语义变化", "by": "babyhippo", "at": "2026-10-13"},
-   {
-     "glob": "Scripts/check-pending-agenda.py",
-     "reason": "队列 L-130 ②（2026-10-12 第 501 轮 · 组长常驻直干）：待拍板台账覆盖度判据本体（三类红 = 漏登记 / 台账与原书打架 / 台账陈旧 / 空壳行）；接进闭环第 4 项（项数仍十八，不新增项块）。面外（Notes / Retro 书）本版只计数不判定 —— 接入待前门排期",
-     "by": "hugehippo",
-     "at": "2026-10-12"
-   },
+  {
+   "glob": "Scripts/path-ownership.json",
+   "reason": "派单 T-20261014-016 ②（2026-10-14 人类主人令：Doyah Studio 补 Linux 端 · 归 babyhippo）：新增 linux 树（paths Platform/linux/ + platform/linux/ · actor babyhippo）—— 此前该树不在登记里、归属门禁盖不到 platform/linux/**；无既有判据语义变化",
+   "by": "babyhippo",
+   "at": "2026-10-14"
+  },
+  {
+   "glob": "Scripts/path-ownership.json",
+   "reason": "派单 T-20261013-007 §四.2（2026-10-13 均衡令）：本清单 trees[].actor 与 contract_note 的演员名按新归属跟版（hugehippo=Apple 全系 / fatshark=Windows+鸿蒙 / babyhippo=Linux+安卓），无判据语义变化",
+   "by": "babyhippo",
+   "at": "2026-10-13"
+  },
+  {
+   "glob": "Scripts/check-pending-agenda.py",
+   "reason": "队列 L-130 ②（2026-10-12 第 501 轮 · 组长常驻直干）：待拍板台账覆盖度判据本体（三类红 = 漏登记 / 台账与原书打架 / 台账陈旧 / 空壳行）；接进闭环第 4 项（项数仍十八，不新增项块）。面外（Notes / Retro 书）本版只计数不判定 —— 接入待前门排期",
+   "by": "hugehippo",
+   "at": "2026-10-12"
+  },
   {
    "glob": "Scripts/check-doc-versions.py",
    "reason": "单 T-20261010-079（前门交付补丁 · origin: human-owner）：扫描面同源（仓根 *.md + Docs/**/*.md，与姊妹判据 check-doc-tables 同源）+ 仓根入口件 AGENT-SPEC.md 纳入受检清单 ⇒ 修「仓根入口件三组撞号落在判据面外 ⇒ 假绿」的口径缺口。口径登记：脚本归机组、条文归前门 —— 前门改门禁脚本一律出补丁（doyah-dispatch/assets/patches/）交机组应用并给读数（前门直推 Scripts/** 被本判据拦下）",
@@ -119,7 +129,7 @@
    "by": "macos",
    "at": "2026-10-02"
   },
- {
+  {
    "glob": "Scripts/check-script-portability.py",
    "reason": "单 T-20261006-057（前门授权）：只改旧路径字面量 windows/ → platform/windows/（判据逻辑与断言一字不动）",
    "by": "tinyhippo",
@@ -298,44 +308,44 @@
    "reason": "同上（片 `云F` · 任务 t_b51cd0ff）：本次共享面改动的声明登记在本清单",
    "by": "macos",
    "at": "2026-10-09"
- },
- {
+  },
+  {
    "glob": "Scripts/run-manual-verification-probes.sh",
    "reason": "片 `云批-补正`（任务 t_ce3ce7cc · macOS 机组）：`TestsUISnapshot/AccountSyncSheetProbeTests.swift`（片 `云F` 落地当轮漏接 FILTER ⇒ 用例一个都跑不到）补进探针清单 —— 由 `check-result-scroll-ledger.py` ⑤ 点名；共享脚本两侧逐字节同一份",
    "by": "macos",
    "at": "2026-10-09"
- },
- {
+  },
+  {
    "glob": "Scripts/path-ownership.json",
    "reason": "同上（片 `云批-补正` · 任务 t_ce3ce7cc）：本次两处共享面改动的声明登记在本清单",
    "by": "macos",
    "at": "2026-10-09"
- },
- {
+  },
+  {
    "glob": "cloud-sync/**",
    "reason": "跨端互验前置取证面（各端一份 格式自证-<端>.md；本侧 macOS 侧交付云E）",
    "by": "macos",
    "at": "2026-10-09"
- },
- {
+  },
+  {
    "glob": "Scripts/check-design-tokens.py",
    "reason": "派单 T-20261010-035 ②（前门裁定 B · token-ok · origin: human-owner）：设计令牌棘轮按「语义色白名单」放行 NSColor 角色色，并加判据 ①（白名单只许语义色）/ 判据 ②（字面量反例仍判红）",
    "by": "macos",
    "at": "2026-10-10"
- },
- {
+  },
+  {
    "glob": "Scripts/design-token-whitelist.json",
    "reason": "同上：语义色白名单文件本体（新建）",
    "by": "macos",
    "at": "2026-10-10"
- },
- {
+  },
+  {
    "glob": "Scripts/design-token-baseline.json",
    "reason": "同上：棘轮基线随口径往下拧一格 —— bare-color 5 → 2（四处 .separatorColor 不再算裸色）、bare-spacing 57 → 56（LowerPaneView 陈旧余量一并收掉）",
    "by": "macos",
    "at": "2026-10-10"
- },
- {
+  },
+  {
    "glob": "Scripts/build-app.sh",
    "reason": "派单 T-20261011-009（基本法第三十五条 · 交付物身份留痕 · origin: human-owner）：交付回执由「固定四项（产物名/构建时间/sha256 前 8 位/本版包含）」扩为**身份留痕七项**（目录 / 标签 / 全量 sha256 / 构建时刻 / 含片 / 未含 / 验法）+ 一行可整行粘进提交信息的 `交付: …`；顺带修一处真缺陷 —— 「本版包含」原先取发布说明**首行**，而首行常是标题（alpha3.1 实测把 `# …发布说明…` 当成本版包含印出来）⇒ 改为按 `本版包含：` / `未含：` 标号行取。共享面理由：build-app.sh 在 `Scripts/`（两侧共同调用的判据族）下、交付面对两侧同形",
    "by": "hugehippo",
@@ -395,29 +405,35 @@
    "by": "hugehippo",
    "at": "2026-10-13"
   },
- {
+  {
    "glob": "Scripts/path-ownership.json",
    "reason": "单 T-20261013-006（origin: human-owner · 2026-10-13 均衡令）：责任侧映射按新归属核对 —— macos / watchos 两棵树的 actor 由退役名 `bighippo` 改为现行名 `hugehippo`（Apple 全系）；windows 树 actor 仍 `fatshark`（本令恢复其 Windows/Harmony 归属）；contract_note 与 windows 标签里的旧侧名同批跟版",
    "by": "hugehippo",
    "at": "2026-10-13"
   },
- {
+  {
    "glob": "Scripts/check-path-ownership.py",
    "reason": "单 T-20261013-006：演员名轴按现行规范名跟版（ACTOR_PLATFORMS = hugehippo / babyhippo / fatshark；`bighippo` / `tinyhippo` / `fatfish` 降为只读别名）+ 自测加例（34 → 38）；三仓同源副本，Retro tools/ 同批",
    "by": "hugehippo",
    "at": "2026-10-13"
   },
- {
+  {
    "glob": "Scripts/verify-all.sh",
    "reason": "单 T-20261013-006：闭环第 16 / 17 项注释跟版 —— 路径归属那条自述例数由**陈旧的 32** 改为实测 38，并写明 2026-10-13 均衡令下 Darwin 机本侧 = `macos,watchos`（`ios` 格按 T-004 登记的边界暂不加）",
    "by": "hugehippo",
    "at": "2026-10-13"
   },
- {
+  {
    "glob": "Docs/平台实现状态.json",
    "reason": "单 T-20261013-006：平台等价台账 owner 字段按 2026-10-13 均衡令核对 —— windows ⇒ `fatshark`（Windows/Harmony）、linux ⇒ `babyhippo`（Linux/Android）、watchos ⇒ `hugehippo`（T-004 已落）；改后由 gen-platform-parity.py 重生成 §10.10 并以 --check 判漂移",
    "by": "hugehippo",
    "at": "2026-10-13"
+  },
+  {
+   "glob": "Scripts/path-ownership.json",
+   "reason": "基本法第四十八条 / 之二（2026-10-15 人类主人令）：契约所有者由 `bluewhale` 改判 `hugehippo` —— 交接机制的「路径归属白名单」一项（法条 ③ 要求逐项改到 `hugehippo` 名下 + 成对读数）。判据语义不变（契约层落笔面 = 四类不变）。",
+   "by": "hugehippo",
+   "at": "2026-10-15"
   }
  ],
  "unclassified_allow": [

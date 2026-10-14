@@ -34,7 +34,7 @@ Apple 全系 `macos`/`ios`/`watchos` 归 `hugehippo`、`windows`/`harmony` 归 `
 
   1. `[独占:<平台名>]`  —— 标记集合里含本侧的侧才能改（例：`### 2.3 契约 → Linux 实现 [独占:linux]`）
   2. `[开放]`    —— 台账类节（变更记录 / 索引）：**任何一侧**都能追加，含自己平台的行
-  3. 无标记      —— **契约层**：**只有契约所有者**（`--contract-owner`，默认 **`bluewhale`** = 蓝色鲸鱼娘，
+  3. 无标记      —— **契约层**：**只有契约所有者**（`--contract-owner`，默认 **`hugehippo`** = 铁皮大河马，
                     **2026-10-03 人类主人制度变更 · 派单 `T-20261003-003`**：三书契约层归鲸鱼娘，平台实现层归各
                     平台助理 —— `hugehippo` Apple 全系 · `fatshark` Windows／鸿蒙 · `babyhippo` Linux／安卓）能改；
                     其他侧要么走提案（`Docs/proposals/`），要么在改动行 / 上一行 / 提交信息注
@@ -98,7 +98,7 @@ Apple 全系 `macos`/`ios`/`watchos` 归 `hugehippo`、`windows`/`harmony` 归 `
     python3 Scripts/check-exclusive-sections.py                          # 自动推断本侧，基线默认 origin/master
     python3 Scripts/check-exclusive-sections.py --mine macos --base origin/master   # 提交前默认姿势（显式基线最稳）
     python3 Scripts/check-exclusive-sections.py --mine windows,android,harmony      # 多平台侧（同一台 Windows 机做三端）
-    python3 Scripts/check-exclusive-sections.py --contract-owner bluewhale  # 契约层归属（默认 bluewhale = 鲸鱼娘）
+    python3 Scripts/check-exclusive-sections.py --contract-owner hugehippo  # 契约层归属（默认 hugehippo = 大河马 · 2026-10-15 第四十八条）
     python3 Scripts/check-exclusive-sections.py --mine hugehippo             # 演员名 = 平台集（Apple 全系）
     python3 Scripts/check-exclusive-sections.py --mine babyhippo             # 演员名 = 平台集（Linux / 安卓）
     python3 Scripts/check-exclusive-sections.py --mine watchos               # 第七个平台（watchOS · 2026-10-13 入词表）
@@ -151,14 +151,14 @@ def mark_tokens(tok):
 # 平台集，无功能语义变化（判据口径 / 退出码 / 集合语义 / 契约层锁定面 / 自测例数 45 一律不变）。
 # 演员名（四规范名）↔ 平台集 —— 与「标记只表达平台」不冲突：
 #   · **标记**里只写平台名（`[独占:macos]`），**不写人**；
-#   · **演员名**只出现在**命令行 / 契约所有者**这一轴（`--mine hugehippo`、`--contract-owner bluewhale`）。
+#   · **演员名**只出现在**命令行 / 契约所有者**这一轴（`--mine hugehippo`、`--contract-owner hugehippo`）。
 # 契约所有者 = 演员名（2026-10-03 人类主人制度变更 · 派单 `T-20261003-003`）：三书的**契约层**归
-# `bluewhale`（蓝色鲸鱼娘）；**平台实现层**（`[独占:<平台名>]` 节）归各平台助理（**2026-10-13 均衡令 · 派单
+# `hugehippo`（铁皮大河马 —— **2026-10-15 人类主人令 · 基本法第四十八条**：原 `bluewhale` 的交出；本条为最新组织令）；**平台实现层**（`[独占:<平台名>]` 节）归各平台助理（**2026-10-13 均衡令 · 派单
 # `T-20261013-007`**）：`hugehippo` = Apple 全系、`fatshark` = Windows / 鸿蒙、`babyhippo` = Linux / 安卓。
-# `bluewhale` **没有平台写权**（空集）—— 所以她对
+# `bluewhale`（蓝色鲸鱼娘）**自 2026-10-15 起只保留写作与地缘周报**（第四十八条之二）⇒ **既无契约权、也没有平台写权**（空集）；她对
 # `[独占:*]` 节必然判红；而她的名字要保留下来，供「契约所有者是不是我」这类同一性判定用。
 ACTORS = {
-    "bluewhale": (),                       # 契约层（三书）· 蓝色鲸鱼娘（无平台写权）
+    "bluewhale": (),                       # 蓝色鲸鱼娘 · 2026-10-15 起只做写作/地缘周报：无契约权、无平台写权
     "hugehippo": ("macos", "ios", "watchos"),  # 平台实现 · 铁皮大河马（Apple 全系 · 2026-10-13 均衡令）
     "fatshark": ("windows", "harmony"),    # 平台实现 · 黑鳍大肥鲨（Windows／鸿蒙 · 均衡令起重回派单通道）
     "babyhippo": ("linux", "android"),     # 平台实现 · 奶牙小河马（Linux／安卓 · 2026-10-13 均衡令）
@@ -169,7 +169,7 @@ ACTORS = {
 # （均衡令又重排了平台归属，两个旧名仍是旧名）。留着它们只为**不把历史单 / 历史提交判红** —— 命令行
 # 给了退役名照样认得出（展开成同一个平台集），但打印一条提示点名「退役旧名 / 现行规范名」。
 LEGACY_ACTORS = {"fatfish": "fatshark", "bighippo": "hugehippo", "tinyhippo": "babyhippo"}
-DEFAULT_CONTRACT_OWNER = "bluewhale"
+DEFAULT_CONTRACT_OWNER = "hugehippo"
 
 
 def expand(tok):
@@ -728,7 +728,7 @@ watchOS 实现细节：SwiftUI / WatchConnectivity。
                  "新平台：`--mine windows` 改 `[独占:watchos]` 节（成对负例）· 应该报红"))
 
     # ── 契约所有者 = **演员名**（2026-10-03 人类主人制度变更 · 派单 `T-20261003_003` 系）6 例 ──
-    # 由头：三书**契约层**归 `bluewhale`（蓝色鲸鱼娘）；平台实现层仍按**平台名**归各平台助理
+    # 由头：三书**契约层**归契约所有者（2026-10-15 起 = `hugehippo`；改前 = `bluewhale`）；平台实现层仍按**平台名**归各平台助理
     # （`hugehippo` = Apple 全系、`fatshark` = Windows／鸿蒙、`babyhippo` = Linux／安卓 —— 2026-10-13 均衡令）。
     # 成对证据：同一条契约行上「所有者改 ⇒ 绿 / 平台助理改 ⇒ 红」，以及「所有者碰实现层节 ⇒ 红」。
     r.append(run("契约正文，只有契约所有者能改。", "契约正文（蓝鲸娘第二版）。",
@@ -900,7 +900,7 @@ def main():
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--contract-owner", default=DEFAULT_CONTRACT_OWNER,
-                    help="契约层（无独占标记）的所有者 = **演员名**，默认 `bluewhale`（蓝色鲸鱼娘 · 契约层）"
+                    help="契约层（无独占标记）的所有者 = **演员名**，默认 `hugehippo`（铁皮大河马 · 契约层 · 2026-10-15 第四十八条）"
                          "；也可写平台名（旧姿势）")
     ap.add_argument("--contract-docs", nargs="*", default=None,
                     help="契约层锁定的文档名片段（默认三书：概要设计 / 需求规范书 / 产品能力规划说明书）")
@@ -912,7 +912,7 @@ def main():
     mine = args.mine or os.environ.get("DOYAH_SIDE") or infer_side()
     # 词表：**标记** = 平台名（2026-10-02 收口六个；2026-10-13 增至七个 `watchos`）；
     # **命令行侧名 / 契约所有者** 另收四个演员名
-    # （2026-10-03 制度变更：契约层归 `bluewhale`，实现层归各平台助理 `hugehippo` / `fatshark` / `babyhippo`
+    # （2026-10-15 第四十八条：契约层归 `hugehippo`（原 `bluewhale`）；实现层归各平台助理 `hugehippo` / `fatshark` / `babyhippo`
     # —— 2026-10-13 均衡令重排后）。
     # 旧词（`apple` / `nonapple`）**不归一**，直接退出 2 —— 否则「侧名」与「标记」会两套词表并存。
     for _who, _val in (("--mine", mine), ("--contract-owner", args.contract_owner)):
