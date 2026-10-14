@@ -313,6 +313,32 @@ struct NotesRichTextEditor: NSViewRepresentable {
         textView.insertionPointColor = Theme.nsColor(TextTone.primary)
         textView.font = Theme.nsFont(.mono)
         textView.textContainerInset = NSSize(width: Spacing.s, height: Spacing.s)
+        // **最后一步必须是补配对**：上面那行 `textColor` 是**整篇**涂的（见 `reassertHighlightPairing`）。
+        Self.reassertHighlightPairing(in: textView)
+    }
+
+    /// **把「底色 + 强制近黑」这一对补回去**（契约 §2.4「可读性义务」）。
+    ///
+    /// ⚠ 2026-10-14 补（派单 `T-20261014-011` 取证探针抓出来的**第二处**真缺陷）：
+    /// `textView.textColor` 是**整篇**涂的，而 `configure` 在**每次** `updateNSView` 里都会跑
+    /// ⇒ 带底色段落的强制前景色被拆散，文字回到主题色（深色主题 = 浅色 `#CAD0DC`）压在底色上
+    /// ≈1.4:1 —— **人类主人那个 P0（看不清）原地复现**，而且是在真界面上、不在测试里。
+    /// 所以每次涂完主题色都要把那一对补回来。「成对」的落点共有三处
+    /// （载入既有 span / 点笔刷 / 主题重涂），**色值只有一处出处** = `NoteRichAttributes` 的两个取色函数。
+    static func reassertHighlightPairing(in textView: NotesTextView) {
+        guard let storage = textView.textStorage else { return }
+        let full = NSRange(location: 0, length: storage.length)
+        guard full.length > 0 else { return }
+        storage.beginEditing()
+        storage.enumerateAttribute(.backgroundColor, in: full, options: []) { value, range, _ in
+            guard value != nil else { return }
+            storage.addAttribute(
+                .foregroundColor,
+                value: NoteRichAttributes.highlightForegroundColor(),
+                range: range
+            )
+        }
+        storage.endEditing()
     }
 
     /// 与 `NSTextViewDelegate` 之间的桥：**用户敲键 ⇒ 投影回绑定**。
@@ -506,10 +532,23 @@ final class NotesTextView: NSTextView {
         storage.beginEditing()
         if turningOff {
             storage.removeAttribute(.backgroundColor, range: range)
+            // **成对拆**：底色撤了，强制前景色也一起撤 —— 否则这一段留在「黑字但没底色」的假状态里
+            // （关掉笔刷后文字颜色回不到主题色）。
+            storage.removeAttribute(.foregroundColor, range: range)
         } else {
             storage.addAttribute(
                 .backgroundColor,
                 value: NoteRichAttributes.highlightColor(),
+                range: range
+            )
+            // **成对落地**（契约 §2.4「可读性义务」）：铺底色的同时把这一段文字钉成近黑。
+            // ⚠ 2026-10-14 补（派单 `T-20261014-011` 取证探针抓出来的真缺陷）：本路原先**只铺底色**
+            // —— 深色主题下文字仍是主题的浅色（`textPrimary` = `#CAD0DC`）⇒ 浅字压浅底 ≈1.4:1，
+            // 人类主人那个 P0（看不清）在这条路上**原地复现**。成对这件事在**两条路**上都要落：
+            // 本路（笔刷点下去）与 `NoteRichAttributes.attributes(from:font:)`（载入既有 span）。
+            storage.addAttribute(
+                .foregroundColor,
+                value: NoteRichAttributes.highlightForegroundColor(),
                 range: range
             )
         }

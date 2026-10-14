@@ -309,8 +309,8 @@ final class NoteBodyTests: XCTestCase {
 
     /// **判据 ①（渲染配对探针）**：带 `backgroundColor` 的 span 走
     /// `NoteRichAttributes.attributed(from:font:)` 之后，该 run 的 `.foregroundColor` **必须是近黑**
-    /// （`NoteHighlight.foregroundRGB` ≈ `#1C1C1E`）、`.backgroundColor` **仍是**那份淡黄
-    /// （`NoteHighlight.rgb` = `#FFF3B0`）；而**没铺底色的** run **不带** `.foregroundColor`。
+    /// （`NoteHighlight.foregroundRGB` ≈ `#1C1C1E`）、`.backgroundColor` **仍是**那份荧光笔黄
+    /// （`NoteHighlight.rgb` = `#E9D68C`）；而**没铺底色的** run **不带** `.foregroundColor`。
     /// 两句一对照就是「成对读数」：改前带底色那 run 无 `.foregroundColor` ⇒ 深色主题下默认白字压
     /// 淡黄底、几乎看不清（人类主人 P0 真机缺陷 `T-20261010-088`）。
     func testHighlightedSpanGetsForcedDarkForeground() {
@@ -335,13 +335,13 @@ final class NoteBodyTests: XCTestCase {
         XCTAssertEqual(
             highlighted[.backgroundColor] as? NSColor,
             Theme.nsColor(hex: NoteHighlight.rgb),
-            "底色仍是那份淡黄 `#FFF3B0`（本片不动底色）"
+            "底色是荧光笔黄 `#E9D68C`（唯一出处 `NoteHighlight.rgb`，2026-10-14 加深一档）"
         )
     }
 
-    /// **判据 ②（对比度算值）**：`#FFF3B0` 与 `#1C1C1E` 的 WCAG 对比度机械算一遍 ——
+    /// **判据 ②（对比度算值）**：`NoteHighlight.rgb` 与 `NoteHighlight.foregroundRGB` 的 WCAG 对比度机械算一遍 ——
     /// 必须 ≥ 4.5:1（目标 ≥ 7:1）。把「可读性义务」从形容词变成算得出来的数：
-    /// 现值 ≈15:1，远高于两档阈值。
+    /// 现值 ≈11.72:1（人类主人 2026-10-14 把底色加深一档后；加深前的 `#FFF3B0` 时 ≈15.15:1），远高于两档阈值。
     func testHighlightContrastMeetsReadabilityObligation() {
         let background = Self.channels(ofHex: NoteHighlight.rgb)
         let foreground = Self.channels(ofHex: NoteHighlight.foregroundRGB)
@@ -354,9 +354,12 @@ final class NoteBodyTests: XCTestCase {
         )
 
         let ratio = Self.contrastRatio(foreground, background)
+        // 色值**从常量取**（不写字面量）⇒ 谁改色值，这条打印跟着走，不会印出过期读数。
+        let bgHex = String(format: "#%02X%02X%02X", background.red, background.green, background.blue)
+        let fgHex = String(format: "#%02X%02X%02X", foreground.red, foreground.green, foreground.blue)
         print(String(
-            format: "🎨 WYS-HL-CONTRAST ② 对比度：底 #FFF3B0 (L=%.4f) × 字 #1C1C1E (L=%.4f) ⇒ %.2f:1",
-            Self.relativeLuminance(background), Self.relativeLuminance(foreground), ratio
+            format: "🎨 WYS-HL-CONTRAST ② 对比度：底 %@ (L=%.4f) × 字 %@ (L=%.4f) ⇒ %.2f:1",
+            bgHex, Self.relativeLuminance(background), fgHex, Self.relativeLuminance(foreground), ratio
         ))
         XCTAssertGreaterThanOrEqual(ratio, 4.5, "带底色文字对比度低于 4.5:1（可读性义务不成立），实测 \(ratio):1")
         XCTAssertGreaterThanOrEqual(ratio, 7.0, "对比度没到契约的 7:1 目标档，实测 \(ratio):1")

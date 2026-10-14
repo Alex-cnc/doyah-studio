@@ -492,20 +492,24 @@ extension NoteSpan: Codable {
     }
 }
 
-/// **荧光笔·淡黄的唯一色值出处**（片 `WY-1b1` · 派单 `T-20261009-048`）。
+/// **荧光笔·黄色的唯一色值出处**（片 `WY-1b1` · 派单 `T-20261009-048`；色值 **2026-10-14 加深一档** = `#E9D68C`）。
 ///
-/// 第 ④ 项「笔刷」的口径是**固定淡黄**（原文那句「颜色可选」**判据作废** ⇒ 本片不做多色选择器）：
+/// 第 ④ 项「笔刷」的口径是**固定一色**（原文那句「颜色可选」**判据作废** ⇒ 本片不做多色选择器）：
 /// 色值只在这里写一次，界面侧经 `Theme.nsColor(hex:)` 取 `NSColor`、写进 `NoteSpan.backgroundColor`
 /// 用的是同一份十六进制串 —— 「一处定义」这条是判据 `TestsUISnapshot/NotesEditorFormatProbeTests.swift`
 /// 与它两侧读的同一个常量。
 public enum NoteHighlight {
-    /// 淡黄底色的数值形态（`0xRRGGBB`）。
-    public static let rgb: UInt32 = 0xFFF3B0
-    /// 淡黄底色的字符串形态（`NoteSpan.backgroundColor` 的权威值）。
-    public static let backgroundColorHex = "#FFF3B0"
+    /// 荧光笔底色的数值形态（`0xRRGGBB`）。
+    ///
+    /// **2026-10-14 加深一档**（人类主人再裁 · 派单 `T-20261014-011`）：`#FFF3B0` → **`#E9D68C`**
+    /// （与旧值**同色相、深一档**，保住「淡黄荧光笔」的可辨识性）。由头 = 旧底色太浅（相对亮度 ≈0.88）⇒
+    /// 配浅色字对比度只有 **1.12:1**，远低于可读性义务的 4.5:1。
+    public static let rgb: UInt32 = 0xE9D68C
+    /// 荧光笔底色的字符串形态（`NoteSpan.backgroundColor` 的权威值）。
+    public static let backgroundColorHex = "#E9D68C"
     /// **带底色 span 的强制前景色**（片 `WYS-HL-CONTRAST` · 契约 §2.4「可读性义务」）。
     ///
-    /// 近黑 `#1C1C1E`：浅底（`#FFF3B0`）上对比度 ≈15:1，深浅两套主题都够（≥ 4.5:1，目标 ≥ 7:1）。
+    /// 近黑 `#1C1C1E`：底 `#E9D68C` 上对比度 **≈11.72:1**（旧底 `#FFF3B0` 时 ≈15.15:1），深浅两套主题都够（≥ 4.5:1，目标 ≥ 7:1）。
     /// 这条口径是**成对**的 —— 底色是浅色 ⇒ 该段文字一律用这个深色；**禁止浅底 + 浅字**。
     /// 与 `rgb` / `backgroundColorHex` 一样是「一处定义」：界面侧经 `Theme.nsColor(hex:)` 取 `NSColor`。
     public static let foregroundRGB: UInt32 = 0x1C1C1E
