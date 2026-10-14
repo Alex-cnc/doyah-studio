@@ -66,6 +66,22 @@
     "platform/windows/"
    ],
    "actor": "fatshark"
+  },
+  {
+   "id": "linux",
+   "owner": "linux",
+   "hosts": [
+    "linux"
+   ],
+   "contract_side": "nonapple",
+   "label": "Linux 端（奶牙小河马 · 2026-10-14 人类主人令「Doyah Studio 全量 PC 端还要补一个 Linux 平台，小河马负责的」；Tauri 2 + 系统 WebView = WebKitGTK + 复用 Windows 侧同一套 Vue 3 / TypeScript 前端）",
+   "paths": [
+    "Platform/linux/",
+    "platform/linux/"
+   ],
+   "actor": "babyhippo",
+   "note": "派单 T-20261014-016 ②：本树此前**不在归属登记里** ⇒ 归属门禁盖不到 `platform/linux/**`（改它既不判红也不判绿 = 无网）。两种拼写都登记（`Platform/linux/` 与 `platform/linux/`）：本仓盘上是**大小写不敏感的合成目录**（`Platform/macOS/` 与 `platform/watchos/` 两种受控拼写并存），`git add` 会把新建的 `platform/linux/` **归一到既有 `Platform/`**（实测 `git status` 打 `?? Platform/linux/`），而判据 `fnmatch` / `has_prefix` **区分大小写** ⇒ 只登记一种会漏判。",
+   "status": "⬜ 未开工（2026-10-14 开工：骨架 = 本目录 README + build.sh；应用工程属骨架落地片）"
   }
  ],
  "shared": [
@@ -77,7 +93,8 @@
  "shared_note": "共享面 = 两侧都写的地方：改它**不算越界**，但要走声明式台账（清单 `shared_ledger` 改前登记 / 本次新增行注 `shared-surface：理由` / 提交信息注 `shared-surface: 理由`），三处都没有理由 ⇒ 判红。`Scripts/` 在派活单 T-20261002-029 里被同时列进「macOS 仓根族」与「共享面」两处 ⇒ 本清单按**共享面**收口：里面的判据（`check-*.py` / `verify-all.sh`）被两侧共同调用，`Scripts/doc-numbers.json` 的 `checkScriptParity` 也是按「闭环引用」写的，判它是某一端专属会与现行事实相抵。要改成 macOS 专属 ⇒ 改这一行 + 记一笔变更。",
  "shared_require_declaration": true,
  "shared_ledger": [
- {"glob": "Scripts/path-ownership.json", "reason": "派单 T-20261013-007 §四.2（2026-10-13 均衡令）：本清单 trees[].actor 与 contract_note 的演员名按新归属跟版（hugehippo=Apple 全系 / fatshark=Windows+鸿蒙 / babyhippo=Linux+安卓），无判据语义变化", "by": "babyhippo", "at": "2026-10-13"},
+ {"glob": "Scripts/path-ownership.json", "reason": "派单 T-20261014-016 ②（2026-10-14 人类主人令：Doyah Studio 补 Linux 端 · 归 babyhippo）：新增 linux 树（paths Platform/linux/ + platform/linux/ · actor babyhippo）—— 此前该树不在登记里、归属门禁盖不到 platform/linux/**；无既有判据语义变化", "by": "babyhippo", "at": "2026-10-14"},
+  {"glob": "Scripts/path-ownership.json", "reason": "派单 T-20261013-007 §四.2（2026-10-13 均衡令）：本清单 trees[].actor 与 contract_note 的演员名按新归属跟版（hugehippo=Apple 全系 / fatshark=Windows+鸿蒙 / babyhippo=Linux+安卓），无判据语义变化", "by": "babyhippo", "at": "2026-10-13"},
    {
      "glob": "Scripts/check-pending-agenda.py",
      "reason": "队列 L-130 ②（2026-10-12 第 501 轮 · 组长常驻直干）：待拍板台账覆盖度判据本体（三类红 = 漏登记 / 台账与原书打架 / 台账陈旧 / 空壳行）；接进闭环第 4 项（项数仍十八，不新增项块）。面外（Notes / Retro 书）本版只计数不判定 —— 接入待前门排期",
