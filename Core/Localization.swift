@@ -363,6 +363,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case licenseNotesNotIncluded
     case noteLostSize
     case noteExportDegraded
+    case noteHTMLLostStyle
+    case noteHTMLLostUnknownField
     case menuNotes
     case notesNew
     case notesSave
@@ -2727,6 +2729,8 @@ public enum LocalizedStrings {
         .licenseNotesNotIncluded: [.simplifiedChinese: "当前版本不含笔记（Standard / Ultra 才有）", .english: "This edition does not include notes (only Standard and Ultra do)"],
         .noteLostSize: [.simplifiedChinese: "字号 %@", .english: "size %@"],
         .noteExportDegraded: [.simplifiedChinese: "Markdown 表达不了，导出后丢失：「%@」%@", .english: "Markdown cannot express this; lost on export: %@ %@"],
+        .noteHTMLLostStyle: [.simplifiedChinese: "样式值 %@ 渲不出来（%@），导出 HTML 时按无样式处理", .english: "Style value %@ cannot be rendered (%@); exported as unstyled"],
+        .noteHTMLLostUnknownField: [.simplifiedChinese: "文字「%@」上有一个不认得的字段 %@，没有渲出来", .english: "Note text %@ carries unknown field %@, which was not rendered"],
         .menuNotes: [.simplifiedChinese: "笔记…", .english: "Notes…"],
         .notesNew: [.simplifiedChinese: "新建", .english: "New"],
         .notesSave: [.simplifiedChinese: "保存", .english: "Save"],
