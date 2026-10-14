@@ -180,6 +180,16 @@
       "path": "Plugins/Notes/Sources/NoteStorage/SQLiteConstants.swift",
       "role": "SQLite 宏常量的**生成物**（`Scripts/gen-sqlite-constants.py` 生成，verify-all 第 18 项对账）—— 纯常量表，无网络（T-20261010-043 补登记）",
       "layer": "core"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteStorage/NoteBodyMigration.swift",
+      "layer": "core",
+      "role": "旧正文迁移执行器（片 `WY-2b` · `FR-RT-11`）—— 只读库、只写本机数据家与备份目录，纯本地，无出口。"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteHTMLExport.swift",
+      "layer": "core",
+      "role": "导出转换层 HTML 半（片 `WY-3a` · 派单 `T-20261008-050` 判据 4）—— 纯函数：`NoteBody` → HTML 字符串，不读盘、不联网。"
     }
   ],
   "scopeBeyondIsolation": [

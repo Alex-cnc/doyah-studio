@@ -43,6 +43,9 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 NOTE_SOURCES = [
     "Plugins/Notes/Sources/Note.swift",
     "Plugins/Notes/Sources/NoteBody.swift",
+    # 片 `WY-3a`（派单 `T-20261008-050` 判据 4）：导出转换层 HTML 半 —— 纯函数（`NoteBody` → HTML 字符串），
+    # 只吃 Foundation 与 Core 的 `NoteBody` / `MarkdownDocument`，不读盘、不联网、不碰库
+    "Plugins/Notes/Sources/NoteHTMLExport.swift",
     "Core/License.swift",
     # 拆分后 `AICapture` 只剩"笔记侧"的映射（诊断 / 维护那两个已移到 AICaptureUltra）
     "Core/AICapture.swift",
@@ -124,6 +127,13 @@ ULTRA_SIDE_SOURCES = [
     "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift",
     "Plugins/Notes/Sources/NoteSync/SyncCore.swift",
     "Plugins/Notes/Sources/NoteSync/SyncQueue.swift",
+    # 2026-10-14（片 `WY-2b` · 派单 `T-20261008-050` 判据 3）：旧正文迁移执行器要出**备份指纹**
+    # （`FR-RT-11` 判据 ③ 字面要求打印 `sha256`）⇒ 它 `import Crypto`（swift-crypto）。这是**三端共用的
+    # 跨平台哈希绑定**，与许可链 `Core/LicenseSignature.swift` 同一条绑定、同一个理由（CryptoKit 只在
+    # Apple 平台上）；笔记侧那条「只许 `import Foundation`」的禁令要挡的是**平台模块**，不是它。
+    # 备选（在笔记模块里手搓一份 SHA-256）更差 ⇒ 按宿主侧适配层登记：**仍留在离线门禁的零网络出口范围内**
+    # （`Scripts/notes-offline-gate.json` 的 `scope`），只是不套笔记侧那两条禁令。
+    "Plugins/Notes/Sources/NoteStorage/NoteBodyMigration.swift",
 ]
 
 BANNED_IMPORTS = re.compile(r"^\s*import\s+(?!Foundation\b)(\w+)", re.M)
