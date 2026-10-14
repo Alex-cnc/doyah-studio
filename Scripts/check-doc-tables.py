@@ -616,8 +616,15 @@ def check_requirement_counts() -> list[str]:
         (identifier.rsplit("-", 1)[0], row[3]) for identifier, row in zip(identifiers, rows) if identifier.startswith("FR-")
     )
     per_domain = Counter(identifier.rsplit("-", 1)[0] for identifier in identifiers if identifier.startswith("FR-"))
+    # 域名的第二段**容许数字后缀**（2026-10-14 · 派单 `T-20261014-023`；`Scripts/**` 是 macOS 侧的面）：
+    # 原先 `FR-[A-Z]+` 只认纯字母域名 ⇒ `FR-R-01`（Retro 那族；索引编号 `FR-R-01-01`）与下面的
+    # `per_domain`（由索引 `rsplit("-", 1)[0]` 推出，正是 `FR-R-01`）**永不相等** —— 结构性死结：
+    # 判据等一个它自己正则匹配不上的域 ⇒ 前门按主人令把 74 条 `FR-R-*` 登进 SRS §10.1、并在 §2 逐域
+    # 补齐 15 行之后仍判红「第 2 节缺少这些功能域的行 …」。
+    # 放宽后仍锚在**大写字母**开头、后缀只收 `-数字`（可重复，与推导口径 `rsplit("-", 1)[0]` 同族）；
+    # 一旦匹配到的域不在索引里，`per_domain.get` 给 0 ⇒ 照样按「写 N、数出 0」判红（放宽 ≠ 放水）。
     row_pattern = re.compile(
-        r"^\| \*\*(FR-[A-Z]+)\*\*[^|]*\|[^|]*\| (\d+) \| (\d+) \| (\d+) \| (\d+) \|",
+        r"^\| \*\*(FR-[A-Z]+(?:-\d+)*)\*\*[^|]*\|[^|]*\| (\d+) \| (\d+) \| (\d+) \| (\d+) \|",
         re.MULTILINE,
     )
     for domain, total, done, partial, todo in row_pattern.findall(text):
