@@ -429,6 +429,55 @@ impl std::error::Error for BundleError {}
 /// 一条"以 `--` 开头"的独立语句，调用方只能靠"是否以 `--` 开头"去丢它 —— 而那样会把
 /// **注释后面紧跟的真语句一起丢掉**（临时目录真跑抓到：`SET statement_timeout` 整条消失，
 /// 用户设的超时静默没生效，这正是本函数存在的理由）。
+/// 探测「从当前位置起，是否正好是某个 dollar-quote 定界符」。
+///
+/// `first` = 已经取出的那个字符（总是 `$`）；`rest` = 其后的输入流。
+/// `delim` 含首尾 `$`，所以除了首字符还要比对 `delim.len() - 1` 个字符。
+///
+/// 为什么不用 `Peekable` 的 `peek` 逐个看：`peek` 只看一个，定界符可能长于 1；
+/// 这里克隆一份迭代器往后走 —— 字符数少、语句拆分不在热路径上，**正确优先**。
+fn starts_with_at(delim: &str, first: char, rest: &std::iter::Peekable<std::str::Chars<'_>>) -> bool {
+    let expected: Vec<char> = delim.chars().collect();
+    if expected.first() != Some(&first) {
+        return false;
+    }
+    let mut probe = rest.clone();
+    for want in expected.iter().skip(1) {
+        match probe.next() {
+            Some(c) if c == *want => {}
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// 从 `$` 之后的位置识别 dollar-quote 定界符（`$$` 或 `$tag$`）。
+///
+/// 返回**完整定界符**（含首尾 `$`）。认不出返回 `None`（那就只是个普通的 `$`，例如
+/// 占位符 `$1` —— 它后面跟的是数字，不是合法的 tag）。
+///
+/// tag 规则（PG 文档）：与标识符同 —— 首字符不能是数字，可含下划线；空 tag（`$$`）也合法。
+fn dollar_delimiter(rest: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<String> {
+    let mut tag = String::new();
+    loop {
+        match rest.peek() {
+            Some('$') => {
+                rest.next();
+                return Some(format!("${}$", tag));
+            }
+            Some(c) if (c.is_ascii_alphanumeric() || *c == '_') && tag.len() < 64 => {
+                // 首个 tag 字符不能是数字（`$1` 是占位符，不是 dollar-quote）
+                if tag.is_empty() && c.is_ascii_digit() {
+                    return None;
+                }
+                tag.push(*c);
+                rest.next();
+            }
+            _ => return None,
+        }
+    }
+}
+
 pub fn split_statements(sql: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current = String::new();
@@ -437,8 +486,31 @@ pub fn split_statements(sql: &str) -> Vec<String> {
     let mut in_double = false;
     let mut in_line_comment = false;
     let mut in_block_comment = false;
+    // **PostgreSQL dollar-quote**（FR-DRV-06）：`$$…$$` 与 `$tag$…$tag$` 里的分号不算语句边界。
+    // 为什么必须有这一条：函数体整段就是 dollar-quote 包起来的，里面全是分号 ——
+    // 不认它就会把一个函数拆成七八段，执行面再逐段发出去必然语法错。
+    // `Some(定界符)` = 正在 dollar-quote 里（存完整定界符，收尾要逐字比对）。
+    let mut dollar_open: Option<String> = None;
 
     while let Some(c) = chars.next() {
+        // 在 dollar-quote 里：**只认完整定界符的收尾**，其余一律原样收进当前语句。
+        //
+        // 为什么用「前缀探测」而不是 `current.ends_with(open)`：后者会把**内容里恰好出现的
+        // 定界符形状**也当成收尾（例如 `$$ … $x$ … $$` 里那个 `$x$`），把语句提前截断。
+        // 前缀探测看的是**输入流当前位置**，与已累积内容无关，判定与扫描位置一一对应。
+        if let Some(open) = dollar_open.clone() {
+            if c == '$' && starts_with_at(&open, c, &chars) {
+                // 收尾：把定界符剩下的字符吃掉（首字符已由 `chars.next()` 取走）
+                for _ in 1..open.len() {
+                    chars.next();
+                }
+                current.push_str(&open);
+                dollar_open = None;
+            } else {
+                current.push(c);
+            }
+            continue;
+        }
         if in_line_comment {
             if c == '\n' {
                 in_line_comment = false;
@@ -495,6 +567,21 @@ pub fn split_statements(sql: &str) -> Vec<String> {
                     out.push(statement);
                 }
                 current.clear();
+            }
+            // dollar-quote 开头：`$$` 或 `$tag$`（tag 为标识符字符）
+            '$' => {
+                let mut probe = chars.clone();
+                match dollar_delimiter(&mut probe) {
+                    Some(delim) => {
+                        // 吃掉定界符剩下的部分（已消费的 `$` 之外）
+                        for _ in 1..delim.len() {
+                            chars.next();
+                        }
+                        current.push_str(&delim);
+                        dollar_open = Some(delim);
+                    }
+                    None => current.push(c),
+                }
             }
             _ => current.push(c),
         }
@@ -825,6 +912,52 @@ mod tests {
             first,
             "迁移过的再迁一次不许变（否则每次加载都在改文件）"
         );
+    }
+
+    // ── FR-DRV-06：语句拆分按方言（PostgreSQL 跳过 dollar-quote）─────────────────
+    //
+    // 为什么值得四条：函数体整段是 dollar-quote 包的，里面全是分号；
+    // 不认它就会把一个函数拆成七八段 —— 执行面逐段发出去必然语法错，
+    // 而这种错**只在真库上才炸**，单测不写就发现不了。
+
+    #[test]
+    fn a_dollar_quoted_body_is_one_statement() {
+        let sql = "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END $$ LANGUAGE plpgsql;";
+        let parts = split_statements(sql);
+        assert_eq!(parts.len(), 1, "dollar-quote 里的分号不算边界；实测拆成 {parts:?}");
+    }
+
+    #[test]
+    fn a_tagged_dollar_quote_keeps_its_semicolons() {
+        let sql = "SELECT $tag$ a; b; c $tag$; SELECT 2;";
+        let parts = split_statements(sql);
+        assert_eq!(parts.len(), 2, "带 tag 的 dollar-quote 同样要整体保留；实测 {parts:?}");
+        assert!(parts[0].contains("a; b; c"), "第一段应含 doc 内的分号");
+    }
+
+    #[test]
+    fn a_dollar_quote_containing_another_delimiter_shape_does_not_end_early() {
+        // 内容里出现 `$x$`：**不是**收尾（收尾必须是同一个定界符）
+        let sql = "SELECT $$ outer $x$ inner $$; SELECT 2;";
+        let parts = split_statements(sql);
+        assert_eq!(parts.len(), 2, "内层形状不得提前收尾；实测 {parts:?}");
+        assert!(parts[0].contains("$x$"), "内层形状应原样保留");
+    }
+
+    #[test]
+    fn a_positional_placeholder_is_not_a_dollar_quote() {
+        // `$1` 是占位符，不是 dollar-quote 开头（tag 首字符不能是数字）
+        let sql = "SELECT $1; SELECT 2;";
+        let parts = split_statements(sql);
+        assert_eq!(parts.len(), 2, "$1 不应吞掉分号；实测 {parts:?}");
+    }
+
+    #[test]
+    fn an_unterminated_dollar_quote_swallows_the_tail_instead_of_panicking() {
+        // 未收尾（写坏了）⇒ 余下全算一段，**不 panic**（执行面另行报错）
+        let sql = "SELECT $$ never closed; SELECT 2;";
+        let parts = split_statements(sql);
+        assert_eq!(parts.len(), 1, "未收尾应整段保留；实测 {parts:?}");
     }
 
     #[test]
