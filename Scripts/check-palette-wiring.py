@@ -85,7 +85,7 @@ _GAP_REASON = (
     "不进每轮门禁 ⇒ **没有每轮判据看得见**（本判据补的就是这一格）。补落点要改 `TestsUISnapshot/**`"
     "（测试面取舍）⇒ 归前门裁；补完必须同轮销掉本条登记（陈旧登记判红）。"
 )
-KNOWN_WIRING_GAPS = [{"id": gid, "reason": _GAP_REASON, "owner": "bluewhale（前门）"} for gid in _GAP_IDS]
+KNOWN_WIRING_GAPS = [{"id": gid, "reason": _GAP_REASON, "owner": "hugehippo（前门）"} for gid in _GAP_IDS]
 
 
 def strip_comments_and_strings(text: str) -> str:
