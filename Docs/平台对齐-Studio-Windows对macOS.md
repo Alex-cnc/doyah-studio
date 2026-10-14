@@ -5,7 +5,7 @@
 >
 > **用途**：`fatshark`（Windows / Harmony 侧）对齐 macOS 版 Doyah Studio 开发进度时的**逐条索引** —— 每行 = 一条需求 → 所属域 → 层次 → macOS 状态 → **macOS 落点（去这里读实现）** → Windows 现状。
 >
-> **统计**：需求 **262** 条 · 有落点 **174** 条 · 追溯表有行未标路径 **17** 条 · 无追溯行（落点列 `—`）**71** 条 · 台账 Windows `overrides` **85 条**（缺失一律按 `⬜` 记 —— 整列 `⬜` = Windows Studio 未开工）。
+> **统计**：需求 **262** 条 · 有落点 **174** 条 · 追溯表有行未标路径 **17** 条 · 无追溯行（落点列 `—`）**71** 条 · 台账 Windows `overrides` **94 条**（缺失一律按 `⬜` 记 —— 整列 `⬜` = Windows Studio 未开工）。
 > §10.2 里另有 **5** 行不是需求编号（分组行 / 决定行，如 `NFR-PERF / COMP`），它们不对应单条需求 ⇒ 不进本索引。
 >
 > **口径**：`macOS` 列 = §10.1 状态格的**第一个取值**；`macOS 落点` = §10.2 该条所在行的**反引号片段**（前 3 个 + 「等 N 处」；同一编号出现在多行时取**最后一行**；范围行展开到每一条）。**无追溯行写 `—`、有行未标路径写「（追溯表有行、未标路径）」—— 两种都不编落点**。
@@ -167,19 +167,19 @@
 | FR-EDIT-48 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/MarkdownEditing.swift`、`toggleTask`、`App/Views/CodeEditorView.swift::performKeyEquivalent` | ⬜ |
 | FR-EXEC-01 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/AppState.swift::executeQuery`、`Core/PostgresService.swift::performExecute`、`StatementSplitter.swift` | ✅ |
 | FR-EXEC-02 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/AppState.swift::executeQuery`、`Core/PostgresService.swift::performExecute`、`StatementSplitter.swift` | ✅ |
-| FR-EXEC-03 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/AppState.swift::executeQuery`、`Core/PostgresService.swift::performExecute`、`StatementSplitter.swift` | ⬜ |
-| FR-EXEC-04 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `QueryTab.results`、`App/Views/ResultTableView.swift`、`ResultGrid.swift` | ⬜ |
-| FR-EXEC-05 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `QueryTab.results`、`App/Views/ResultTableView.swift`、`ResultGrid.swift` | ⬜ |
+| FR-EXEC-03 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/AppState.swift::executeQuery`、`Core/PostgresService.swift::performExecute`、`StatementSplitter.swift` | ✅ |
+| FR-EXEC-04 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `QueryTab.results`、`App/Views/ResultTableView.swift`、`ResultGrid.swift` | ✅ |
+| FR-EXEC-05 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `QueryTab.results`、`App/Views/ResultTableView.swift`、`ResultGrid.swift` | ✅ |
 | FR-EXEC-06 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `AppState`、`closeTab` | ✅ |
 | FR-EXEC-07 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `AppState`、`closeTab` | ⬜ |
-| FR-EXEC-08 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `PostgresService.cancel()`、`pg_cancel_backend`、`AppState.cancelQuery` 等 4 处 | ⬜ |
-| FR-EXEC-09 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `AppState.ensureService`、`connectTasks` | ⬜ |
-| FR-EXEC-10 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `PostgresService.reportsAffectedRows(_:)`、`PostgresQueryMetadata.rows`、`QueryResult.affectedRows` | ⬜ |
-| FR-EXEC-11 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `Core/DatabaseService.swift`、`PostgresService.begin/commit/rollback` | ⬜ |
-| FR-EXEC-12 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `AppState.executeQuery` | ⬜ |
+| FR-EXEC-08 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `PostgresService.cancel()`、`pg_cancel_backend`、`AppState.cancelQuery` 等 4 处 | ✅ |
+| FR-EXEC-09 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `AppState.ensureService`、`connectTasks` | ✅ |
+| FR-EXEC-10 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `PostgresService.reportsAffectedRows(_:)`、`PostgresQueryMetadata.rows`、`QueryResult.affectedRows` | ✅ |
+| FR-EXEC-11 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `Core/DatabaseService.swift`、`PostgresService.begin/commit/rollback` | ✅ |
+| FR-EXEC-12 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `AppState.executeQuery` | ✅ |
 | FR-EXEC-13 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/Views/QueryToolbar.swift`、`QueryEditorView`、`AppState.startQuery/cancelQuery` | ✅ |
 | FR-EXEC-14 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `Core/ExecutionScope.swift`、`AppState.executeQuery`、`App/ExecutionScopeTitle.swift` 等 5 处 | ⬜ |
-| FR-EXEC-15 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/TransactionSession.swift`、`App/Views/TransactionControl.swift`、`AppState.executeQuery` | ⬜ |
+| FR-EXEC-15 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/TransactionSession.swift`、`App/Views/TransactionControl.swift`、`AppState.executeQuery` | ✅ |
 | FR-EXEC-16 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `Core/ExecutionSafety.swift`、`AppState.executeQuery`、`App/Views/SafeModeConfirmSheet.swift` 等 4 处 | ✅ |
 | FR-EXEC-17 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `Core/SQLParameters.swift`、`App/Views/QueryParameterSheet.swift`、`AppState.executeQuery` 等 4 处 | ⬜ |
 | FR-IO-01 | 3.9 导入导出与备份 | 基线必备 | ✅ | （追溯表有行、未标路径） | ✅ |
