@@ -1,0 +1,22 @@
+# Doyah Studio · Linux 端 · 平台适配层（Platform/Linux）
+#
+# **只有这一层谈 Linux 专有能力**（§8.6.1 第 4 行）：WebView 运行时探测 / 系统密钥环 /
+# PTY 与 shell 探测 / `.desktop` 集成 / 字体与输入法。
+#
+# 本片（骨架）**不引任何第三方依赖**：探测全部走标准库的**存在性检查**（环境变量 + 库文件路径），
+# 不手写 FFI（§8.6.1 明文禁止）、不 dlopen。真绑定（WebKitGTK 版本查询 / Secret Service 调用 /
+# portable-pty 起真终端）留后续片，接入时依赖只许加在本文件，且必须在
+# `Platform/linux/README.md` 的「未接网清单」里销账。
+[package]
+name = "doyah-studio-linux-platform"
+version = "0.0.0"
+edition = "2021"
+description = "Doyah Studio · Linux 端平台适配层（能力探测与可读缺失提示）"
+publish = false
+
+[lib]
+name = "doyah_studio_linux_platform"
+path = "src/lib.rs"
+
+[dependencies]
+doyah-studio-core = { path = "../../Core" }

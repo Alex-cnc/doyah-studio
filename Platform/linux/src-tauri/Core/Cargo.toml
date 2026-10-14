@@ -1,0 +1,22 @@
+# Doyah Studio · Linux 端 · 领域层（Core）
+#
+# **边界（判据 = Platform/linux/Tools/check-linux-skeleton.py 的 B / C 两条）**：
+#   GUI / 平台 crate（tauri / wry / tao / winit / gtk* / webkit2gtk / keyring / portable-pty …）
+#   不得出现在本文件的依赖段，也不得出现在本 crate 的任何 .rs 里；
+#   平台专有 std（std::os::unix / windows）与 FFI 形状（extern "C" / #[link( / libc::）同样判红。
+#   平台能力只在 Platform/Linux/ —— 「领域层边界由工程结构强制」（§8.6.1）。
+#
+# 现状：**零第三方依赖**（标准库之外一条不引）。放开面（日后按需、逐条登记）：
+#   rusqlite（笔记存储分层 §3.25）一类，须先过边界判据的 GUI/平台清单。
+[package]
+name = "doyah-studio-core"
+version = "0.0.0"   # 刻意不参与「发布产物版本号一个值三处一致」的口径（那三处见 Tools/release-version.json）
+edition = "2021"
+description = "Doyah Studio · Linux 端领域层（纯逻辑：零依赖 / 零 UI / 零平台能力）"
+publish = false
+
+[lib]
+name = "doyah_studio_core"
+path = "src/lib.rs"
+
+[dependencies]
