@@ -63,6 +63,13 @@ enum NoteInlineCommand: String, CaseIterable, Sendable {
     case italic
     case underline
     case highlight
+    /// **行内代码**（`T-20261009-009` 的余项 · 契约 `NoteSpan.Style.code` ⇒ 落 `styles` 集合，
+    /// 与粗 / 斜 / 下划线同一条路）。旧卡自述「无片承接」⇒ 2026-10-14 由组长亲做补齐。
+    case code
+    /// **链接**（同一余项 · 落 `NoteSpan.link`，**不进 `styles`**）。唯一需要额外输入的一枚
+    /// ⇒ 它的按钮先开一个小弹层取 URL（`NotesEditorToolbar` 的 `linkSheet`），再调 `setLink(_:)`；
+    /// `apply(_:)` 里这一档是**空动作**（见那里的注释）。
+    case link
 
     /// SF Symbols 名（纯图标按钮：名字只由悬停提示给，见 `NotesEditorToolbar`）。
     var symbolName: String {
@@ -71,6 +78,8 @@ enum NoteInlineCommand: String, CaseIterable, Sendable {
         case .italic: return "italic"
         case .underline: return "underline"
         case .highlight: return "highlighter"
+        case .code: return "chevron.left.forwardslash.chevron.right"
+        case .link: return "link"
         }
     }
 
@@ -81,8 +90,14 @@ enum NoteInlineCommand: String, CaseIterable, Sendable {
         case .italic: return .notesFormatItalic
         case .underline: return .notesFormatUnderline
         case .highlight: return .notesFormatHighlight
+        case .code: return .notesFormatCode
+        case .link: return .notesFormatLink
         }
     }
+
+    /// 这一档要不要**先取一个输入**（当前只有链接：URL）。工具条据此分岔：要输入的开弹层、
+    /// 不要的直接 `toggle(_:)`。放在枚举上是为了「哪几档需要输入」这件事也只有一处出处。
+    var needsInput: Bool { self == .link }
 
     /// 探针用来**挑控件**的标识（由枚举派生 ⇒ 新增一档编译期就得给标识；`NotesModule` 同款）。
     var accessibilityIdentifier: String { "notes-editor-format-\(rawValue)" }
@@ -146,6 +161,8 @@ extension NSAttributedString.Key {
     static let doyahItalic = NSAttributedString.Key("com.doyah.note.italic")
     static let doyahUnderline = NSAttributedString.Key("com.doyah.note.underline")
     static let doyahCode = NSAttributedString.Key("com.doyah.note.code")
+    /// 行内链接目标（`NoteSpan.link`）：**不进 `styles`**、单独一个属性键（与 `doyahCode` 同族）。
+    static let doyahLink = NSAttributedString.Key("com.doyah.note.link")
     /// **块级类型**（片 `WY-1b2`）：值 = 契约交换面字面量（`LIST_ORDERED` / `LIST_UNORDERED` /
     /// `LIST_CHECKBOX`）—— 与 span 的 `block` 同一份词表（`NoteSpan.Block.exchangeType`），
     /// 界面这一侧**不另起一套**命名。
@@ -199,6 +216,9 @@ enum NoteRichAttributes {
                 attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
             }
             if span.styles.contains(.code) { attributes[.doyahCode] = true }
+            // **链接**（`T-20261009-009` 余项补齐）：目标落 `NoteSpan.link`，**不进 `styles`**
+            // （与 `code` 不同档：链接是可选的**目标**，不是字形）。属性键与读回同源。
+            if let link = span.link { attributes[.doyahLink] = link }
             if span.backgroundColor != nil {
                 attributes[.backgroundColor] = highlightColor()
                 // **可读性义务**（片 `WYS-HL-CONTRAST` · 契约 §2.4）：铺了浅底色就必须把前景色
@@ -231,12 +251,14 @@ enum NoteRichAttributes {
             if attributes[.doyahItalic] != nil { styles.insert(.italic) }
             if attributes[.doyahUnderline] != nil { styles.insert(.underline) }
             if attributes[.doyahCode] != nil { styles.insert(.code) }
+            // **链接目标**（余项补齐）：与 `styles` 分开读（`link` 不是样式档）。
+            let link = attributes[.doyahLink] as? String
             let background = attributes[.backgroundColor] != nil ? NoteHighlight.backgroundColorHex : nil
             // **块级**（片 `WY-1b2`）：按交换面字面量还原（认不出 ⇒ 就当普通文本 span）。
             let blockRaw = attributes[.doyahBlock] as? String
             let checked = (attributes[.doyahChecked] as? Bool) ?? false
             let block = blockRaw.flatMap { NoteSpan.Block.from(exchangeType: $0, checked: checked) }
-            spans.append(NoteSpan(text: text, styles: styles, backgroundColor: background, block: block))
+            spans.append(NoteSpan(text: text, styles: styles, link: link, backgroundColor: background, block: block))
             guard runRange.length > 0 else { break }
             index = runRange.location + runRange.length
         }
@@ -402,6 +424,13 @@ final class NotesTextView: NSTextView {
             toggleUnderline(in: range)
         case .highlight:
             toggleHighlight(in: range)
+        case .code:
+            toggleCode(in: range)
+        case .link:
+            // 链接这一档**不走本入口**：它要一个 URL（唯一需要输入的档）⇒ 工具条先开弹层取 URL，
+            // 再调 `setLink(_:)`。这里刻意空动作；枚举上 `needsInput == true`，工具条不会调到这条路
+            // （判据：`NoteInlineCommand.allCases.filter(\.needsInput) == [.link]`）。
+            return
         }
         // 让「这一面被改过」这件事走产品的同一条路（撤销栈 / 绑定投影 / 脏标记）。
         didChangeText()
@@ -554,6 +583,61 @@ final class NotesTextView: NSTextView {
         }
         storage.endEditing()
     }
+
+    // MARK: - 余项补齐：行内代码 / 链接（`T-20261009-009`）
+
+    /// **行内代码**（契约 `NoteSpan.Style.code`）：与下划线同形的**可切换**档 ——
+    /// 一枚 `.doyahCode` 属性 + 等宽字体；再点一次拆掉（两样一起拆，不留「等宽但没标 code」的假状态）。
+    ///
+    /// 字体用 `NSFont.monospacedSystemFont`（系统等宽），**不引第三套字体常量**。
+    private func toggleCode(in range: NSRange) {
+        guard let storage = textStorage else { return }
+        guard range.length > 0, NSMaxRange(range) <= storage.length else { return }
+        let turningOff = storage.attribute(.doyahCode, at: range.location, effectiveRange: nil) != nil
+        let base = (storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont)
+            ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        storage.beginEditing()
+        if turningOff {
+            storage.removeAttribute(.doyahCode, range: range)
+            storage.addAttribute(.font, value: base, range: range)
+        } else {
+            storage.addAttribute(.doyahCode, value: true, range: range)
+            storage.addAttribute(
+                .font,
+                value: NSFont.monospacedSystemFont(ofSize: base.pointSize, weight: .regular),
+                range: range
+            )
+        }
+        storage.endEditing()
+    }
+
+    /// **链接**（契约 `NoteSpan.link`）：作用在选区 / 光标所在词上；`nil` / 空串 = 撤掉该段的链接。
+    ///
+    /// 与 `code` 不同档：链接落的是**目标**（`doyahLink`），**不进 `styles`** ⇒
+    /// 富文本 → span 树读回时也单独读（`NoteRichAttributes.spans(from:)`）。
+    func setLink(_ url: String?) {
+        guard let storage = textStorage else { return }
+        let range = targetRange()
+        guard range.length > 0, NSMaxRange(range) <= storage.length else { return }
+        let trimmed = url?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        storage.beginEditing()
+        if trimmed.isEmpty {
+            storage.removeAttribute(.doyahLink, range: range)
+        } else {
+            storage.addAttribute(.doyahLink, value: trimmed, range: range)
+        }
+        storage.endEditing()
+        didChangeText()
+    }
+
+    /// 选区 / 光标所在词上已有的链接目标（没有 ⇒ `nil`）。弹框预填用 —— 与 `setLink(_:)` 读的是
+    /// **同一个** `targetRange()`（两处各算一遍范围迟早分家）。
+    func currentLink() -> String? {
+        guard let storage = textStorage else { return nil }
+        let range = targetRange()
+        guard range.length > 0, NSMaxRange(range) <= storage.length else { return nil }
+        return storage.attribute(.doyahLink, at: range.location, effectiveRange: nil) as? String
+    }
 }
 
 /// 工具条那**行内四枚**与编辑面之间的**唯一接线**（片 `WY-1b1`）。
@@ -582,5 +666,15 @@ final class NotesRichTextController: ObservableObject {
     /// 勾选框的勾选态（片 `WY-1b2`）：作用在当前段落的勾选框上（判据用它模拟「勾一下」）。
     func setChecked(_ checked: Bool) {
         textView?.setChecked(checked)
+    }
+
+    /// **链接那一枚**的接线（`T-20261009-009` 余项）：唯一需要输入的档 —— 工具条取到 URL 后调这里。
+    func setLink(_ url: String?) {
+        textView?.setLink(url)
+    }
+
+    /// 选区 / 光标所在词上**已有的链接目标**（没有 ⇒ `nil`）：弹框打开时预填，免得重打一遍。
+    func currentLink() -> String? {
+        textView?.currentLink()
     }
 }

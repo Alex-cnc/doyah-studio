@@ -126,8 +126,8 @@ final class NotesEditorFormatProbeTests: XCTestCase {
     @MainActor
     func testFormatProbeFourButtonsEachChangeTheSelection() throws {
         XCTAssertEqual(
-            NoteInlineCommand.allCases.count, 4,
-            "工具条那行内四枚是**四**条命令（粗 / 斜 / 下划线 / 笔刷）——实测 \(NoteInlineCommand.allCases.count) 条"
+            NoteInlineCommand.allCases.count, 6,
+            "工具条那行内枚是**六**条命令（粗 / 斜 / 下划线 / 笔刷 / 行内代码 / 链接）——实测 \(NoteInlineCommand.allCases.count) 条"
         )
 
         let surface = try makeSurface(text: "ABCDEFGH")
@@ -315,11 +315,65 @@ final class NotesEditorFormatProbeTests: XCTestCase {
         print("📄 WY-1b2 \(label) 悬停名字：中「\(chinese)」／ 英「\(english)」")
     }
 
-    // MARK: 判据 ① 七枚按钮齐 + 每枚带 help
+    // MARK: 判据 ① 九枚按钮齐 + 每枚带 help
+
+    /// **余项补齐的两枚**（`T-20261009-009`「链接 / 行内代码」· 2026-10-14 组长亲做）：
+    ///
+    ///   ① 行内代码 = **成对落 / 成对拆**（标记 + 等宽字体两样一起，不留「等宽但没标 code」的假状态）；
+    ///   ② 链接 = 落目标 / 预填读回同一处 / **空串即撤**；
+    ///   ③ 两样都能**读回 span 树**（富文本 → span 那一半，与写进去的那一半同源）。
+    @MainActor
+    func testCodeAndLinkCommands() throws {
+        let surface = try makeSurface(text: "ABCDEFGH")
+        let textView = surface.textView
+        guard let storage = textView.textStorage else {
+            return XCTFail("富文本面必须有 `NSTextStorage`")
+        }
+        let range = NSRange(location: 0, length: 4)
+        textView.setSelectedRange(range)
+        let baseSize = (storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize
+
+        // ① 行内代码：点一下 ⇒ `doyahCode` 在 + 字体换等宽；再点一下 ⇒ 两样一起拆。
+        surface.controller.toggle(.code)
+        XCTAssertNotNil(storage.attribute(.doyahCode, at: 0, effectiveRange: nil), "点了行内代码就该有标记")
+        let codeFont = storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+        XCTAssertTrue(
+            codeFont?.fontDescriptor.symbolicTraits.contains(.monoSpace) ?? false,
+            "行内代码应当换等宽字体（实测 \(codeFont?.fontName ?? "nil")）"
+        )
+        surface.controller.toggle(.code)
+        XCTAssertNil(storage.attribute(.doyahCode, at: 0, effectiveRange: nil), "再点一次要**成对拆**标记")
+        XCTAssertEqual(
+            (storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize, baseSize,
+            "拆掉标记时字号不许变（字体要回原样）"
+        )
+
+        // ② 链接：落目标 / 预填读的是同一处 / 空串（含纯空白）即撤。
+        surface.controller.setLink("https://example.com/x5")
+        XCTAssertEqual(
+            storage.attribute(.doyahLink, at: 0, effectiveRange: nil) as? String, "https://example.com/x5",
+            "链接目标应当落在 `doyahLink` 上"
+        )
+        XCTAssertEqual(surface.controller.currentLink(), "https://example.com/x5", "预填读回同一处")
+        surface.controller.setLink("   ")
+        XCTAssertNil(storage.attribute(.doyahLink, at: 0, effectiveRange: nil), "空串 = 撤掉链接")
+
+        // ③ 读回 span 树（两样都在）。
+        surface.controller.toggle(.code)
+        surface.controller.setLink("https://example.com/rt")
+        XCTAssertEqual(surface.controller.currentLink(), "https://example.com/rt")
+        let spans = NoteRichAttributes.spans(from: storage.attributedSubstring(from: range))
+        XCTAssertTrue(spans.contains { $0.styles.contains(.code) }, "读回的 span 应当带 `code` 档")
+        XCTAssertTrue(
+            spans.contains { $0.link == "https://example.com/rt" },
+            "读回的 span 应当带链接目标（实测 \(spans.map(\.link))）"
+        )
+    }
+
 
     @MainActor
     func testBlockProbeToolbarHasSevenIconButtons() throws {
-        // ①-a 逐枚枚举标识：行内四枚 + 块级三枚 = **七枚**（顺序固定）。
+        // ①-a 逐枚枚举标识：行内六枚 + 块级三枚 = **九枚**（顺序固定）。
         let identifiers = Self.toolbarIdentifiers
         print("📄 WY-1b2 ①-a 工具条标识（\(identifiers.count) 枚）：\(identifiers)")
         XCTAssertEqual(
@@ -329,18 +383,27 @@ final class NotesEditorFormatProbeTests: XCTestCase {
                 "notes-editor-format-italic",
                 "notes-editor-format-underline",
                 "notes-editor-format-highlight",
+                "notes-editor-format-code",
+                "notes-editor-format-link",
                 "notes-editor-block-checkbox",
                 "notes-editor-block-ordered",
                 "notes-editor-block-unordered",
             ],
-            "工具条应当**恰好**是那七枚（行内四枚 + 块级三枚）—— 实测 \(identifiers.count) 枚"
+            "工具条应当**恰好**是那九枚（行内六枚 + 块级三枚）—— 实测 \(identifiers.count) 枚"
         )
 
-        // ①-a（续）每枚带**图标**：七个符号名非空、互不相同（各写一遍迟早撞车）。
+        // ①-a（续）每枚带**图标**：九个符号名非空、互不相同（各写一遍迟早撞车）。
         let symbols = NoteInlineCommand.allCases.map(\.symbolName) + NoteBlockCommand.allCases.map(\.symbolName)
-        XCTAssertEqual(symbols.count, 7, "图标数不是七")
+        XCTAssertEqual(symbols.count, 9, "图标数不是九")
         XCTAssertTrue(symbols.allSatisfy { !$0.isEmpty }, "有空图标：\(symbols)")
-        XCTAssertEqual(Set(symbols).count, 7, "七枚里有重名的图标：\(symbols)")
+        XCTAssertEqual(Set(symbols).count, 9, "九枚里有重名的图标：\(symbols)")
+
+        // ①-a（续二）「哪几档要先取输入」只有链接一档（`T-20261009-009` 余项补齐）——
+        // 工具条据此分岔（要输入的开弹框），规则写在枚举上只有一处出处。
+        XCTAssertEqual(
+            NoteInlineCommand.allCases.filter(\.needsInput), [.link],
+            "需要先取输入的档只应有链接一枚"
+        )
 
         // ①-b 每枚带 **help**（悬停名字）：中英都非空且不同。
         for command in NoteInlineCommand.allCases {

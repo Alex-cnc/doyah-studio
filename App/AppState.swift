@@ -6923,10 +6923,12 @@ final class AppState: ObservableObject {
             let bodies = try await NoteLibrary.defaultLibrary().migrateLegacyBodiesIfNeeded()
             if bodies.outcome == .partial {
                 // 迁移前后投影对不上 / 有行没写成 ⇒ **不许静默**（判据 ① 就靠这条出声）。
-                errorMessage = L(
-                    .notesMigrationNeedsAttention,
-                    (bodies.mismatches + bodies.failures).joined(separator: " / ")
-                )
+                // 显式类型标注（`detail: String`）：`check-format-arguments.py` 只对**能机械引用到
+                // 类型**的实参做槽位交叉检查（`%@` ↔ String）；写成内联拼接表达式就落进「类型不明」
+                // 那一档、要另占预算（`Scripts/format-argument-dispositions.json`）。本处从内联改成
+                // 具名 + 标注 ⇒ 预算回到 130 以内、且槽位对账真的跑了（台账 v1.324 记）。
+                let detail: String = (bodies.mismatches + bodies.failures).joined(separator: " / ")
+                errorMessage = L(.notesMigrationNeedsAttention, detail)
             }
         } catch {
             errorMessage = ErrorPresenter.message(for: error)

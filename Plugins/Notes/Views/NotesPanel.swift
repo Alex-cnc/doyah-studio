@@ -1086,6 +1086,10 @@ struct NotesEditorToolbar: View {
     /// **行内四枚**共用的接线（片 `WY-1b1`）——由 `NotesEditorView` 与编辑面**同一个实例**传下来。
     @ObservedObject var controller: NotesRichTextController
 
+    /// **链接弹框**的输入（`T-20261009-009` 余项）：工具条那几枚里唯一需要额外输入的一档。
+    @State private var linkURL: String = ""
+    @State private var showingLinkAlert = false
+
     var body: some View {
         HStack(spacing: Spacing.s) {
             // **「保存」本片之后不在这条工具条里**（片 `R3-T` · 契约 `FR-NOTEUI-09`）：
@@ -1103,7 +1107,15 @@ struct NotesEditorToolbar: View {
             // 不抢主动作的注意力（与全 app 一条工具条语言一致）。
             ForEach(NoteInlineCommand.allCases, id: \.self) { command in
                 Button {
-                    controller.toggle(command)
+                    // **唯一需要输入的一档**（链接）：先开弹框取 URL，再调 `setLink(_:)`；
+                    // 「哪几档要输入」只由枚举的 `needsInput` 一处说了算（`L-50` 同一课：规则一改
+                    // 就有两处不一致）。
+                    if command.needsInput {
+                        linkURL = controller.currentLink() ?? ""
+                        showingLinkAlert = true
+                    } else {
+                        controller.toggle(command)
+                    }
                 } label: {
                     Image(systemName: command.symbolName)
                         .foregroundStyle(Theme.text(.secondary))
@@ -1137,6 +1149,24 @@ struct NotesEditorToolbar: View {
         .padding(.vertical, Spacing.xs)
         .background(Theme.surface(.panel))
         .accessibilityIdentifier("notes-editor-toolbar")
+        // **链接输入弹框**（`T-20261009-009` 余项补齐）：工具条那九枚里**唯一需要输入的档**。
+        // 弹框按钮只支持 `Text` 标签（Apple：alert 里非 `Text` 标签的控件整块被省略 —— 与容器编辑框
+        // 同一条注记）⇒ 这两枚保持文字形态；「确定」的灰亮读的是与工具条那九枚**同一个**判据。
+        // 空串 = 撤掉链接（`setLink` 里那一条语义），所以「确定」不因空串而灰。
+        .alert(L(.notesLinkTitle), isPresented: $showingLinkAlert) {
+            TextField(L(.notesLinkPlaceholder), text: $linkURL)
+            Button {
+                controller.setLink(linkURL)
+            } label: {
+                Text(L(ContainerEditPrompt.confirmKey))
+            }
+            .help(L(ContainerEditPrompt.confirmKey))
+            .disabled(!canApplyInline)
+            Button(role: .cancel) {} label: {
+                Text(L(ContainerEditPrompt.cancelKey))
+            }
+            .help(L(ContainerEditPrompt.cancelKey))
+        }
     }
 
     /// 行内四枚**有没有对象可作用**（片 `WY-1b1`）：空编辑器上它们与「保存」一样**灰着** ——
