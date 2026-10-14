@@ -418,7 +418,7 @@ else
 fi
 # 这一半是门禁自己的证据（L-33；L-41 补例 5；L-89 补例 6）：干净克隆跳过 12 份且 exit 0 /
 # --require-all 判红 / 显式点名判红 / **写坏一行被判红并指名行号** / **带表格却不在清单判红且归档豁免** /
-# 真仓库 50 份受检无跳过（49 份命名 + 1 份通配；
+# 真仓库 51 份受检无跳过（50 份命名 + 1 份通配；
 # **末例核对真仓库逐字节未变**）。
 # **本项里那几处「要看本机台账」的地方在干净克隆 / 并行工作树 / 另一平台上如实报「跳过」**
 # （2026-10-08 · 任务 `t_004a679b` · 口径 = `AGENT-SPEC.md` §9 第 147 条 ④）：`check-doc-tables
@@ -649,6 +649,12 @@ python3 Scripts/check-p-parity.py --self-test
 # （每条需求去哪个文件读 macOS 实现）⇒ `Docs/平台对齐-Studio-Windows对macOS.md` 有生成器。
 # `--check` = 产出件与三书 §10.1/§10.2 + 台账一致（需求索引或追溯表一变、产出件没重跑就报红）。
 python3 Scripts/gen-studio-win-align.py --check
+# 派单 `T-20261014-025`（人类主人令 2026-10-14 追问「怎么到现在你还没有 macOS 的任务清单？」）：
+# 上面几条管的是**矩阵本身**（§10.10 ↔ 台账）；这一条管**派生视图** —— 人读的完成度面
+# `Docs/任务清单-按平台.md`（`PC-BOARD-001`）的每一格是不是从 §10.10 **逐列重算**来的
+# （不符即判红；§10.10 表头 / 本文件一览行读不到 ⇒ **空跑判红**；`--self-test` 15 例负例）。
+python3 Scripts/check-board-parity.py
+python3 Scripts/check-board-parity.py --self-test
 
 echo "==> 8/18 平台中立性棘轮"
 python3 Scripts/check-platform-neutrality.py

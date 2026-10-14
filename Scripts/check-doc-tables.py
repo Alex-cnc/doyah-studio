@@ -36,7 +36,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。现在：
 
 **这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 12 份** /
-**49 份命名 + 1 条通配 = 实跑 50 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
+**50 份命名 + 1 条通配 = 实跑 51 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
 `doc-tables-files`）；判据 `Scripts/check-doc-numbers.py` 每次**自己算一遍**（导入本模块读清单 +
 `git check-ignore` 实测 + 真跑本脚本）再与本文件 / `Scripts/verify-all.sh` / `AGENT-SPEC.md` 里每一处
 写法对账 —— 本文件里的数字都是**引用**，改口径改台账。
@@ -50,7 +50,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 （跳过的永远是整份文档，不是文档里的某项检查）。
 
 **自检也不许硬读本机台账**（2026-10-08 · 任务 `t_004a679b`）：`--self-test` 里**依赖真仓库那几份
-本机台账**的两例 —— 例 5（写坏队列副本一行）与例 4 的真仓库断言（49 份命名全在 / 实跑 50 个文件 /
+本机台账**的两例 —— 例 5（写坏队列副本一行）与例 4 的真仓库断言（50 份命名全在 / 实跑 51 个文件 /
 无跳过行）—— 在台账不在盘上时**跳过 + 高声提示**：既不崩（例 5 原先直接 `FileNotFoundError`），
 也不假红（例 4 原先把「干净克隆必然缺台账」读成「文档被删」）。口径同上面这一条，出处 =
 `AGENT-SPEC.md` §9 第 147 条 ④（本机台账类判据一律「不在盘上就跳过 + 高声提示」）。**在
@@ -108,6 +108,10 @@ DEFAULT_TARGETS = [
     # 平台对齐件入库（`.gitignore` 白名单 + 本清单 + `verify-all.sh` 第 7 项 `--check`）⇒
     # 受控夹具 36 → 37；被 `.gitignore` 排除的仍是 12 份（它是入库件）。
     "Docs/平台对齐-Studio-Windows对macOS.md",
+    # 2026-10-14 · 派单 `T-20261014-025`（人类主人令 2026-10-14 追问「怎么到现在你还没有 macOS 的任务清单？」）：
+    # 派生视图《任务清单 · 按平台》入库（`.gitignore` 白名单 + 本清单 + 闭环第 7 项
+    # `Scripts/check-board-parity.py`）；被 `.gitignore` 排除的仍是 12 份（它是入库件）。
+    "Docs/任务清单-按平台.md",
     "Docs/design/开发循环-任务队列.md",
     # L-130（2026-09-30）：三仓统一待拍板台账（本机台账，`.gitignore` 排除）
     "Docs/design/待拍板台账-三仓.md",
@@ -808,6 +812,9 @@ SELF_TEST_TRACKED = [
     # 平台对齐件入库（`.gitignore` 白名单 + 本清单 + `verify-all.sh` 第 7 项 `--check`）⇒
     # 受控夹具 36 → 37；被 `.gitignore` 排除的仍是 12 份（它是入库件）。
     "Docs/平台对齐-Studio-Windows对macOS.md",
+    # 2026-10-14 · 派单 `T-20261014-025`：派生视图《任务清单 · 按平台》入库 ⇒ 受控夹具 **37 → 38**
+    # （被 `.gitignore` 排除的仍是 12 份；本名单必须与「清单里入库的那批」逐条相同）
+    "Docs/任务清单-按平台.md",
 ]
 
 SELF_TEST_ABSENT = [
@@ -896,7 +903,7 @@ def run_self_test() -> int:
             failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
         elif "⚠ 跳过 12 份" not in output:
             failures.append(f"例 1 失败：没有高声提示「跳过 12 份」（不得静默通过）\n{output}")
-        elif "✅ 表格校验通过（37 个文件，跳过 12 份）" not in output:
+        elif "✅ 表格校验通过（38 个文件，跳过 12 份）" not in output:
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
             failures.append(f"例 1 失败：通配清单没有显式打印匹配份数（L-41）\n{output}")
@@ -1146,7 +1153,7 @@ def run_self_test() -> int:
         if code != 0:
             failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
         elif host_ledgers_absent_entirely:
-            # 真仓库里那几份本机台账**整批**不在盘上 ⇒「49 份命名全在 / 不许出现跳过行 / 实跑 50 个文件」
+            # 真仓库里那几份本机台账**整批**不在盘上 ⇒「50 份命名全在 / 不许出现跳过行 / 实跑 51 个文件」
             # 这三条**在这台机器上核不了**（口径同例 5）⇒ 本项跳过 + 高声提示；
             # 仍然断言另一半：缺台账时如实报「跳过」，不是崩、也不是静默。
             # （只缺一部分时走下面的严格分支 —— 那是主开发机上文档被删。）
@@ -1156,15 +1163,15 @@ def run_self_test() -> int:
                 )
             else:
                 skipped.append(
-                    "例 4（真仓库 49 份命名文档全在、实跑 50 个文件、无跳过行）："
+                    "例 4（真仓库 50 份命名文档全在、实跑 51 个文件、无跳过行）："
                     f"{len(absent_host_ledgers)} 份本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）"
                 )
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 49 份命名文档应全在（不得出现跳过行）\n{output}")
+            failures.append(f"例 4 失败：真仓库 50 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
             failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
-        elif "✅ 表格校验通过（50 个文件）" not in output:
-            failures.append(f"例 4 失败：收尾行应为 50 个文件（49 份命名 + 1 份通配）\n{output}")
+        elif "✅ 表格校验通过（51 个文件）" not in output:
+            failures.append(f"例 4 失败：收尾行应为 51 个文件（50 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
 
@@ -1192,10 +1199,10 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 49 份无跳过）只在**真跑过**时才算数；
+    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 50 份无跳过）只在**真跑过**时才算数；
     # 跳过时如实换掉措辞（跳过的例不许冒充跑过 —— 跳过 ≠ 通过）。
     tail = (
-        "真仓库 49 份无跳过"
+        "真仓库 50 份无跳过"
         if not skipped
         else "真仓库那两例在这台机器上不适用（本机台账不在盘上，见上面的跳过提示）"
     )
