@@ -57,7 +57,10 @@ GROUP_RE = re.compile(
 )
 ALIGN_RE = re.compile(r"([^\s/]+)\s*(\d+)")
 CELL_RE = re.compile(r"✅\s*(\d+)\s*/\s*🟡\s*(\d+)\s*/\s*⬜\s*(\d+)")
-ID_RE = re.compile(r"FR-[A-Z]+-\d+")
+ID_RE = re.compile(r"FR-[A-Z]+-\d+(?:-\d+)?")   # 两级编号（如 Retro 域的 `FR-R-01-01`）必须整串认：
+                                                # 旧式 `FR-[A-Z]+-\d+` 会把 `FR-R-01-01` 截成 `FR-R-01`
+                                                # ⇒ §3 的编号集合比对既报「漏 74 条」又报「多 15 条 + 重复项」
+                                                # （2026-10-14 修 · 由头 = 派单 `T-20261014-025` 的交付件）
 BLANK_LINE_RE = re.compile(r"^- \*\*macOS 的 ⬜（(?P<count>\d+) 条）\*\*：(?P<ids>.+)$")
 PARTIAL_LINE_RE = re.compile(r"^- \*\*macOS 的 🟡（(?P<count>\d+) 条 · 按域）\*\*：(?P<items>.+)$")
 
@@ -452,22 +455,38 @@ def build_cases() -> list[dict]:
             _edit(work / srs, old, new, count)
         return setup
 
+    # 夹具里的数字**一律现读**（不写死）：真值源多一域 / 改一个数，夹具自己跟着走。
+    # 2026-10-14 跟版（§10.10 由生成器重写 204 → 278 行）时，写死的旧值让 5 条夹具
+    # 「目标串不存在」而**假红**（夹具准备失败）⇒ 改成从盘上现读。
+    text = board.read_text(encoding="utf-8") if board.exists() else ""
+    mac_row = re.search(r"^\| macOS \|.*$", text, re.M)
+    # 按 `|` 切格再取「纯数字格」—— 用正则 `\|\s*(\d+)\s*\|` 会因吃掉定界符而隔一个漏一个（实测只取到 2 个数）。
+    mac_cells = [int(c) for c in mac_row.group(0).split("|") if c.strip().isdigit()] if mac_row else []
+    assert len(mac_cells) == 4, f"夹具取不到 macOS 一览行的四个数：{mac_cells}"
+    mac_pct = re.search(r"\*\*(\d+)%\*\*", mac_row.group(0)).group(1)
+    MAC = {"total": mac_cells[0], "done": mac_cells[1], "mid": mac_cells[2], "blank": mac_cells[3]}
+    MAC_CELLS = f"| {MAC['total']} | {MAC['done']} | {MAC['mid']} | {MAC['blank']} |"
+    MAC_CELLS_DONE_MINUS_1 = f"| {MAC['total']} | {MAC['done'] - 1} | {MAC['mid']} | {MAC['blank']} |"
+    MAC_CELLS_TOTAL_MINUS_1 = f"| {MAC['total'] - 1} | {MAC['done']} | {MAC['mid']} | {MAC['blank']} |"
+    MAC_BLANK_PCT = f"| {MAC['blank']} | **{mac_pct}%** |"
+    MAC_BLANK_DECL = f"- **macOS 的 ⬜（{MAC['blank']} 条）**"
+
     return [
         {"name": "① 未改动的副本 ⇒ 全绿（对照）", "steps": [([], 0, "逐列一致")]},
         {
-            "name": "② §1 一览的 ✅ 计数写错（macOS 129 → 128）",
-            "setup": edit_board("| 204 | 129 | 56 | 19 |", "| 204 | 128 | 56 | 19 |"),
-            "steps": [([], 1, "重算 129")],
+            "name": f"② §1 一览的 ✅ 计数写错（macOS {MAC['done']} → {MAC['done'] - 1}）",
+            "setup": edit_board(MAC_CELLS, MAC_CELLS_DONE_MINUS_1),
+            "steps": [([], 1, f"重算 {MAC['done']}")],
         },
         {
-            "name": "③ §1 完成度与重算不符（63% → 90%）",
-            "setup": edit_board("| 19 | **63%** |", "| 19 | **90%** |"),
+            "name": f"③ §1 完成度与重算不符（{mac_pct}% → 90%）",
+            "setup": edit_board(MAC_BLANK_PCT, f"| {MAC['blank']} | **90%** |"),
             "steps": [([], 1, "完成度 90%")],
         },
         {
-            "name": "④ §1 项数写错（204 → 203）",
-            "setup": edit_board("| 204 | 129 | 56 | 19 |", "| 203 | 129 | 56 | 19 |"),
-            "steps": [([], 1, "项数 203")],
+            "name": f"④ §1 项数写错（{MAC['total']} → {MAC['total'] - 1}）",
+            "setup": edit_board(MAC_CELLS, MAC_CELLS_TOTAL_MINUS_1),
+            "steps": [([], 1, f"项数 {MAC['total'] - 1}")],
         },
         {
             "name": "⑤ §1 缺一行（Windows 行被改名）",
@@ -478,7 +497,7 @@ def build_cases() -> list[dict]:
             "name": "⑥ §1 多一行（给移动端造 iOS 行）",
             "setup": edit_board(
                 "台账已设列，实现未开工 |",
-                "台账已设列，实现未开工 |\n| iOS | 对侧 | 204 | 0 | 0 | 204 | **0%** | 造出来的一行 |",
+                f"台账已设列，实现未开工 |\n| iOS | 对侧 | {MAC['total']} | 0 | 0 | {MAC['total']} | **0%** | 造出来的一行 |",
             ),
             "steps": [([], 1, "多出 `iOS` 行")],
         },
@@ -498,9 +517,9 @@ def build_cases() -> list[dict]:
             "steps": [([], 1, "编号集合")],
         },
         {
-            "name": "⑩ §3 macOS ⬜ 的声明条数写错（19 → 18）",
-            "setup": edit_board("- **macOS 的 ⬜（19 条）**", "- **macOS 的 ⬜（18 条）**"),
-            "steps": [([], 1, "声明 18 条")],
+            "name": f"⑩ §3 macOS ⬜ 的声明条数写错（{MAC['blank']} → {MAC['blank'] - 1}）",
+            "setup": edit_board(MAC_BLANK_DECL, f"- **macOS 的 ⬜（{MAC['blank'] - 1} 条）**"),
+            "steps": [([], 1, f"声明 {MAC['blank'] - 1} 条")],
         },
         {
             "name": "⑪ §3 macOS 🟡 的逐域分布写错（SQL 15 → 14）",
