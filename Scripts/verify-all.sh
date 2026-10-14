@@ -418,7 +418,7 @@ else
 fi
 # 这一半是门禁自己的证据（L-33；L-41 补例 5；L-89 补例 6）：干净克隆跳过 12 份且 exit 0 /
 # --require-all 判红 / 显式点名判红 / **写坏一行被判红并指名行号** / **带表格却不在清单判红且归档豁免** /
-# 真仓库 49 份受检无跳过（48 份命名 + 1 份通配；
+# 真仓库 50 份受检无跳过（49 份命名 + 1 份通配；
 # **末例核对真仓库逐字节未变**）。
 # **本项里那几处「要看本机台账」的地方在干净克隆 / 并行工作树 / 另一平台上如实报「跳过」**
 # （2026-10-08 · 任务 `t_004a679b` · 口径 = `AGENT-SPEC.md` §9 第 147 条 ④）：`check-doc-tables
@@ -644,6 +644,11 @@ python3 Scripts/gen-platform-parity.py --self-test
 # 它顺带把「对侧在 §8.5.5 先落条、待契约侧并入」这个流程变成判红项：不并入就一直是红的。
 python3 Scripts/check-p-parity.py
 python3 Scripts/check-p-parity.py --self-test
+# 派单 `T-20261014-015`（人类主人令 2026-10-14「`fatshark` 要对齐 macOS 版开发进度」）：
+# 上面两条管的是 §10.10 那张**矩阵**（谁到哪了）；Windows 侧还要一张**落点索引**
+# （每条需求去哪个文件读 macOS 实现）⇒ `Docs/平台对齐-Studio-Windows对macOS.md` 有生成器。
+# `--check` = 产出件与三书 §10.1/§10.2 + 台账一致（需求索引或追溯表一变、产出件没重跑就报红）。
+python3 Scripts/gen-studio-win-align.py --check
 
 echo "==> 8/18 平台中立性棘轮"
 python3 Scripts/check-platform-neutrality.py
