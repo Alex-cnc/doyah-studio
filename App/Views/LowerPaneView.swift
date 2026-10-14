@@ -221,7 +221,7 @@ struct LowerPaneView: View {
         .padding(.vertical, Spacing.xs)
     }
 
-    /// 历史里的一行：结果标记 + 时间 + 语句摘要，右侧两枚（载入 / 删除）。
+    /// 历史里的一行：结果标记 + 时间 + 语句摘要，右侧三枚（载入 / 归档 / 删除）。
     ///
     /// 「删除」只是**先挂请求**（`DR-02` 单条删的二次确认入口）；「载入」走的是与时钟菜单
     /// 那一项**同一个**入口 `AppState.loadHistory(_:into:)`。
@@ -253,6 +253,19 @@ struct LowerPaneView: View {
             // 没有查询页签（所有页签都关掉了）时载入没有落点 ⇒ 灰着，而不是点了没反应。
             .disabled(tab == nil)
             .help(L(.historyLoadHelp))
+
+            // 「归档」（`HIST-ARCH` · `FR-EDIT-10`：某条历史 → `Core/SQLArchive`）：
+            // 与「执行期归档」走同一条写盘路（`AppState.archiveHistoryEntry` 收成一处，
+            // 这里只搬动作、不自己拼路径）。图标 + `.help`（`NFR-UI-01`）。
+            Button {
+                appState.archiveHistoryEntry(entry)
+            } label: {
+                Image(systemName: "archivebox")
+                    .font(Theme.font(.caption))
+            }
+            .buttonStyle(.borderless)
+            .help(L(.historyArchiveHelp))
+            .accessibilityLabel(Text(L(.historyArchive)))
 
             Button {
                 appState.requestDeleteHistory(entry)
