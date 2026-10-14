@@ -86,7 +86,7 @@ import {
   userSchemas,
   type ColumnsByTable,
 } from './objectTree'
-import {
+import {executionTarget,
   filterCompletions,
   highlightPieces,
   keywordCompletions,
@@ -1506,7 +1506,8 @@ async function run() {
   busy.value = '执行中…'
   clearFailure()
   try {
-    result.value = await dbQuery(sql.value)
+    // FR-EXEC-14 同一口径（单条执行也认选区）
+    result.value = await dbQuery(currentExecutionSql())
   } catch (e) {
     result.value = null
     failure.value = describeError(e)
@@ -1566,12 +1567,33 @@ function acceptCompletion(item?: CompletionItem) {
   void refreshHighlight()
 }
 
+/** 当前编辑器里的**选区文本**（没有选区 / 不是 textarea ⇒ 空串）。 */
+function selectedSql(): string {
+  const area = sqlArea.value
+  if (!area) return ''
+  const begin = area.selectionStart ?? 0
+  const end = area.selectionEnd ?? 0
+  if (end <= begin) return ''
+  return area.value.slice(begin, end)
+}
+
+/**
+ * **执行目标**（FR-EXEC-14）：有选区只跑选中的那段，没有选区跑整篇 —— 自动判定。
+ *
+ * 判定规则全在 `sql/editor.ts::executionTarget`（纯函数、有判据）；
+ * 这里只负责把选区从 DOM 取出来喂给它，**不在这里重判一遍**（两处判必然分叉）。
+ */
+function currentExecutionSql(): string {
+  return executionTarget(sql.value, selectedSql()).sql
+}
+
 /** **多段执行**：一次提交多条，逐段报告；显示"先看失败、否则看最后一句"。 */
 async function runBatch(analyze: boolean) {
   busy.value = analyze ? '生成并执行计划…' : '执行中…'
   clearFailure()
   try {
-    let text = sql.value
+    // FR-EXEC-14：有选区只跑选中的那段（用户框出来就是要跑那段）。
+    let text = currentExecutionSql()
     if (analyze) {
       // EXPLAIN 只对单条：多段会被拒（并说明为什么），这里如实把拒绝端出来
       text = await explainStatement(sql.value, true)

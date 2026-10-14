@@ -142,3 +142,42 @@ export function outcomeSummary(outcome: { ok: boolean; result: { rows?: unknown[
   }
   return `${result.rows?.length ?? 0} 行`
 }
+
+// ── FR-EXEC-14：执行目标判定（有选区只跑选中的那段，没有选区跑整篇）────────────────
+//
+// 契约原文：「**有选区只跑选中的那段，没有选区跑整篇** —— 自动判定，不需要用户先设『运行范围』」。
+//
+// 三条口径（都是"用户会怎么想"）：
+//   ① **选区非空（去掉空白后）就以选区为准** —— 用户框出来就是要跑那一段；
+//   ② 选区是**空白**（手抖拖了几个空格）⇒ **不算选区**，按整篇走（不能因为框了空格就什么都不跑）；
+//   ③ 结果**原样返回文本**（不 trim）—— 行号映射、错误定位都要靠原始偏移，trim 掉就错位了。
+//
+// 为什么做成纯函数：判定规则（什么时候用选区）与取文本（怎么切）是两件事，
+// 后者可单测；而且界面里那段 DOM 取值逻辑不该再判一遍"算不算选区"（两处判必然分叉）。
+
+/** 执行目标的取值来源（界面拿去显示"这次跑的是选区还是整篇"）。 */
+export type ExecutionSource = 'selection' | 'whole'
+
+/** 执行目标判定结果。 */
+export interface ExecutionTarget {
+  /** 真正要执行的 SQL 文本（**原样**，不 trim）。 */
+  sql: string
+  /** 这次跑的是选区还是整篇。 */
+  source: ExecutionSource
+}
+
+/**
+ * 判定这一跑要执行什么。
+ *
+ * @param whole     整篇文本（编辑器当前内容）
+ * @param selection 选区文本；没有选区传 `null` 或空串
+ */
+export function executionTarget(whole: string, selection: string | null | undefined): ExecutionTarget {
+  const picked = selection ?? ''
+  // 口径②：只含空白 ⇒ 不算选区
+  if (picked.trim().length > 0) {
+    return { sql: picked, source: 'selection' }
+  }
+  return { sql: whole, source: 'whole' }
+}
+

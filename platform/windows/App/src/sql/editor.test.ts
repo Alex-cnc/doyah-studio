@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  executionTarget,
   filterCompletions,
   highlightPieces,
   keywordCompletions,
@@ -119,5 +120,43 @@ describe('sql/editor', () => {
     expect(outcomeSummary({ ok: true, result: { columns: [], rows: [], affected: 3 } })).toBe('影响 3 行')
     expect(outcomeSummary({ ok: true, result: { columns: ['a'], rows: [1, 2], affected: null } })).toBe('2 行')
     expect(outcomeSummary({ ok: true, result: null })).toBe('完成')
+  })
+})
+
+// ── FR-EXEC-14：执行目标判定 ───────────────────────────────────────────────────
+//
+// 守四条：选区优先 / 空白选区不算 / 整篇不 trim / 来源标注如实。
+
+describe('FR-EXEC-14 执行目标判定', () => {
+  it('有选区 ⇒ 只跑选区', () => {
+    const r = executionTarget('SELECT 1;\nSELECT 2;', 'SELECT 2;')
+    expect(r.source).toBe('selection')
+    expect(r.sql).toBe('SELECT 2;')
+  })
+
+  it('没有选区 ⇒ 跑整篇', () => {
+    const r = executionTarget('SELECT 1;\nSELECT 2;', null)
+    expect(r.source).toBe('whole')
+    expect(r.sql).toBe('SELECT 1;\nSELECT 2;')
+  })
+
+  it('选区只有空白 ⇒ 不算选区，按整篇走（不能因为框了空格就什么都不跑）', () => {
+    for (const blank of ['', '   ', '\n\t ']) {
+      const r = executionTarget('SELECT 1;', blank)
+      expect(r.source, `选区=${JSON.stringify(blank)}`).toBe('whole')
+      expect(r.sql).toBe('SELECT 1;')
+    }
+  })
+
+  it('整篇原样返回（不 trim —— trim 会让行号与错误定位错位）', () => {
+    const whole = '  SELECT 1;\n\n'
+    const r = executionTarget(whole, '')
+    expect(r.sql).toBe(whole)
+  })
+
+  it('选区原样返回（含前导空白也要原样带出去）', () => {
+    const withIndent = '    SELECT 1;'
+    const r = executionTarget('x', withIndent)
+    expect(r.sql).toBe(withIndent)
   })
 })
