@@ -17,6 +17,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
+import ActionIcon from '../views/ActionIcon.vue'
 import { t as translate, type UiLanguage } from '../i18n'
 import { terminalClose, terminalOpen, terminalRead, terminalWrite, type TerminalChunk } from '../ipc'
 import { createSessionState, feed, keyToBytes, neighborAfterClose, type TerminalSessionState } from './terminal'
@@ -229,7 +230,7 @@ const activeEntries = computed(() => (active.value === 'problems' ? problems.val
         <span v-if="tab.count > 0" class="panel__tab-count">{{ tab.count }}</span>
       </button>
       <span class="panel__spacer" />
-      <button class="panel__act" type="button" :title="tr('panel.collapse')" @click="emit('collapse')">⌄</button>
+      <button class="panel__act" type="button" :title="tr('panel.collapse')" @click="emit('collapse')"><ActionIcon name="chevronDown" size="12" /></button>
     </div>
 
     <div class="panel__body">
@@ -252,7 +253,8 @@ const activeEntries = computed(() => (active.value === 'problems' ? problems.val
               role="button"
               :title="tr('panel.terminal.close')"
               @click.stop="closeSession(session.id)"
-              >×</span
+              >
+                  <ActionIcon name="close" size="11" /></span
             >
           </button>
           <button
@@ -261,7 +263,7 @@ const activeEntries = computed(() => (active.value === 'problems' ? problems.val
             :title="tr('panel.terminal.new')"
             @click="openSession"
           >
-            ＋
+            <ActionIcon name="plus" size="12" />
           </button>
         </div>
         <p v-if="lastError" class="panel__term-error">{{ lastError }}</p>

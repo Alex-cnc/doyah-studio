@@ -5,6 +5,7 @@
 // `len` 行，**不持有整份结果集**。三候选的取舍结论仍以基准读数为准（见 §8.5.6-3 与
 // `platform/windows/Bench/grid/README.md`），本片不替它下结论。
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import ActionIcon from './ActionIcon.vue'
 import { DEFAULT_GRID_SEED, datasetSummary, gridWindow } from '../ipc'
 import { poolSlots, windowForScroll } from '../grid/windowing'
 
@@ -144,9 +145,14 @@ watch(
         列
         <input :value="cols" type="number" min="1" max="60" @input="emit('update:cols', Number(($event.target as HTMLInputElement).value) || 1)" />
       </label>
-      <button class="results__button" type="button" @click="emit('update:orderDesc', !orderDesc)">
-        排序：{{ orderDesc ? '降序' : '升序' }}
-      </button>
+      <button
+          class="results__button results__button--icon"
+          type="button"
+          :title="orderDesc ? '排序：降序' : '排序：升序'"
+          @click="emit('update:orderDesc', !orderDesc)"
+        >
+          <ActionIcon :name="orderDesc ? 'sortDesc' : 'sortAsc'" />
+        </button>
       <span class="results__meta">
         本片 {{ loaded }} 行 / 窗口 {{ plan.start }}–{{ plan.start + plan.len }} · {{ lastMs }} ms ·
         估算 {{ (bytes / 1048576).toFixed(1) }} MB（字节估算，不含 WebView2 侧持有量）
@@ -209,6 +215,15 @@ watch(
   border-radius: var(--ds-radius-control);
   font-family: var(--ds-font-stack-mono);
   font-size: var(--ds-font-data-size);
+}
+
+/* 纯图标按钮（T-20261013-053） */
+.results__button--icon {
+  width: var(--ds-metric-control-height);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .results__button {

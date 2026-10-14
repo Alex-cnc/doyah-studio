@@ -13,6 +13,7 @@
 -->
 <script setup lang="ts">
 import type { HistoryEntry, SavedConnection } from '../ipc'
+import ActionIcon from './ActionIcon.vue'
 import { t as translate, type UiLanguage } from '../i18n'
 
 const props = defineProps<{
@@ -62,7 +63,7 @@ function connectionSubtitle(connection: SavedConnection): string {
     <p class="home__meta">{{ tr('home.version', { version: props.version }) }}</p>
     <p class="home__meta">{{ tr('home.privacy') }}</p>
 
-    <button class="home__open" type="button" @click="emit('open-file')">📂 {{ tr('home.openFile') }}</button>
+    <button class="home__open home__open--icon" type="button" :title="tr('home.openFile')" @click="emit('open-file')"><ActionIcon name="openFolder" /></button>
 
     <div class="home__columns">
       <!-- ① 最近打开的文件 -->
@@ -98,7 +99,7 @@ function connectionSubtitle(connection: SavedConnection): string {
             >
               <span class="home__item-name">
                 {{ entry.displayName }}
-                <span v-if="entry.path === props.currentRoot" class="home__tick" :title="tr('home.current')">✓</span>
+                <span v-if="entry.path === props.currentRoot" class="home__tick" :title="tr('home.current')"><ActionIcon name="check" size="12" /></span>
               </span>
               <span class="home__item-path">{{ ellipsize(entry.path) }}</span>
             </button>

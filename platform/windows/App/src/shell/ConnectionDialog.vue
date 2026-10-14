@@ -14,6 +14,7 @@
 // 的 id → 档位映射在 `shell/connectionDialog.ts`（那份映射与命令清单对账，不另造一套）。
 
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import ActionIcon from '../views/ActionIcon.vue'
 import ConnectionLabel from './ConnectionLabel.vue'
 import { groupConnections } from './connectionDisplay'
 import { connectionDialogTitleKey, looseNumber, type ConnectionDialogMode } from './connectionDialog'
@@ -144,8 +145,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       <header class="dlg__head">
         <h2 class="dlg__title">{{ title }}</h2>
         <button class="dlg__close" type="button" :title="tr('db.connectionDialog.close')" @click="emit('close')">
-          ✕
-        </button>
+            <ActionIcon name="close" size="12" />
+          </button>
       </header>
 
       <!-- 连接表单：字段与行为逐条照搬自 DatabaseView 主区（原 `form.db__bar`） -->
@@ -228,18 +229,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <span>{{ tr('db.remember') }}</span>
           <input v-model="remember" type="checkbox" />
         </label>
-        <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy || !ready">
-          {{ info ? tr('db.reconnect') : tr('db.connect') }}
-        </button>
-        <button v-if="info" class="db__btn" type="button" :disabled="!!busy" @click="emit('disconnect')">
-          {{ tr('db.disconnect') }}
-        </button>
-        <button class="db__btn" type="button" :disabled="!!busy" @click="emit('load-objects')">
-          {{ tr('db.loadObjects') }}
-        </button>
-        <button class="db__btn" type="button" :disabled="!!busy || !ready" @click="emit('save')">
-          {{ tr('db.saveToConnections') }}
-        </button>
+        <button class="db__btn db__btn--icon db__btn--primary" type="submit" :disabled="!!busy || !ready" :title="info ? tr('db.reconnect') : tr('db.connect')"><ActionIcon name="play" /></button>
+        <button v-if="info" class="db__btn db__btn--icon" type="button" :disabled="!!busy" :title="tr('db.disconnect')" @click="emit('disconnect')"><ActionIcon name="stop" /></button>
+        <button class="db__btn db__btn--icon" type="button" :disabled="!!busy" :title="tr('db.loadObjects')" @click="emit('load-objects')"><ActionIcon name="refresh" /></button>
+        <button class="db__btn db__btn--icon" type="button" :disabled="!!busy || !ready" :title="tr('db.saveToConnections')" @click="emit('save')"><ActionIcon name="save" /></button>
         <span v-if="busy" class="db__busy">{{ busy }}</span>
       </form>
 
@@ -259,7 +252,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             :aria-label="tr('db.urlImport')"
           />
         </label>
-        <button class="db__btn" type="button" @click="emit('import-url')">{{ tr('db.urlImport.button') }}</button>
+        <button class="db__btn db__btn--icon" type="button" :title="tr('db.urlImport.button')" @click="emit('import-url')"><ActionIcon name="upload" /></button>
         <span v-if="urlImportNote" class="db__note">{{ urlImportNote }}</span>
       </div>
 
@@ -281,7 +274,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
               :title="tr('db.connections.groupToggle', { name: group.group })"
               @click="emit('toggle-group', group.group)"
             >
-              <span class="db__chevron">{{ isCollapsed(group.group) ? '▸' : '▾' }}</span>
+              <span class="db__chevron"><ActionIcon :name="isCollapsed(group.group) ? 'chevronRight' : 'chevronDown'" size="12" /></span>
               {{ groupTitle(group.group) }}
             </button>
             <p v-else class="db__group-title">{{ groupTitle(group.group) }}</p>
@@ -310,13 +303,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                   <span class="db__conn-sub">{{ connectionSubtitle(c) }}</span>
                 </button>
                 <button
-                  class="db__conn-del"
+                    class="db__conn-del"
                   type="button"
                   title="删除这条连接（并清掉它的凭据）"
                   @click="emit('remove', c)"
                 >
-                  ✕
-                </button>
+                    <ActionIcon name="trash" size="12" />
+                  </button>
               </div>
             </template>
           </div>
@@ -428,6 +421,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   border: var(--ds-metric-hairline) solid var(--ds-hairline);
   border-radius: var(--ds-radius-control);
   font-family: var(--ds-font-stack);
+}
+
+/* 纯图标按钮（T-20261013-053）：方形命中区，图形居中；文字不进 DOM。 */
+.db__btn--icon {
+  width: var(--ds-metric-control-height);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .db__btn {

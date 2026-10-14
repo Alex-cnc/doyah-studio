@@ -7,6 +7,7 @@
 //   · **纯逻辑层**（`workspace/logic.ts`）管显示串与树的展开/键盘走位（有 13 例单测）。
 //   · 本组件只管状态与排版。
 
+import ActionIcon from './ActionIcon.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   workspaceClosed,
@@ -1076,11 +1077,11 @@ function onTreeKeydown(event: KeyboardEvent) {
         <input v-model="showHidden" type="checkbox" @change="root && loadLevel('')" />
         显示隐藏项
       </label>
-      <button class="ws__btn ws__btn--primary" type="submit" :disabled="!!busy">打开</button>
-      <button v-if="root" class="ws__btn" type="button" :disabled="!!busy" @click="closeWorkspace">关闭工作区</button>
+      <button class="ws__btn ws__btn--icon ws__btn--primary" type="submit" :disabled="!!busy" title="打开工作区"><ActionIcon name="openFolder" /></button>
+      <button v-if="root" class="ws__btn ws__btn--icon" type="button" :disabled="!!busy" @click="closeWorkspace" title="关闭工作区"><ActionIcon name="closeFolder" /></button>
       <template v-if="root">
-        <button class="ws__btn" type="button" @click="createIn('', false)">新建文件</button>
-        <button class="ws__btn" type="button" @click="createIn('', true)">新建文件夹</button>
+        <button class="ws__btn ws__btn--icon" type="button" @click="createIn('', false)" title="新建文件"><ActionIcon name="newFile" /></button>
+        <button class="ws__btn ws__btn--icon" type="button" @click="createIn('', true)" title="新建文件夹"><ActionIcon name="newFolder" /></button>
       </template>
       <span v-if="busy" class="ws__note">{{ busy }}</span>
       <span v-if="revealed" class="ws__note">{{ revealed }}</span>
@@ -1102,10 +1103,10 @@ function onTreeKeydown(event: KeyboardEvent) {
         预览替换
       </button>
       <template v-if="replacePreview">
-        <button class="ws__btn ws__btn--primary" type="button" @click="applyReplace(false)">执行替换</button>
-        <button class="ws__btn" type="button" :disabled="!replacePreview" @click="replacePreview = null">取消</button>
+        <button class="ws__btn ws__btn--icon ws__btn--primary" type="button" @click="applyReplace(false)" title="执行替换"><ActionIcon name="check" /></button>
+        <button class="ws__btn ws__btn--icon" type="button" :disabled="!replacePreview" @click="replacePreview = null" title="取消"><ActionIcon name="close" /></button>
       </template>
-      <button class="ws__btn" type="submit" :disabled="searching">搜索</button>
+      <button class="ws__btn ws__btn--icon" type="submit" :disabled="searching" title="搜索"><ActionIcon name="search" /></button>
       <span v-if="searchResult" class="ws__note">
         命中 {{ searchHitCount }} 条<template v-if="searchResult.truncated">（**已达上限 {{ searchResult.limit }}**，不是全部）</template>
         <template v-if="searchByContent">
@@ -1116,7 +1117,7 @@ function onTreeKeydown(event: KeyboardEvent) {
           </template>
         </template>
       </span>
-      <button v-if="searchResult" class="ws__act" type="button" title="清掉结果" @click="searchResult = null">✕</button>
+      <button v-if="searchResult" class="ws__act" type="button" title="清掉结果" @click="searchResult = null"><ActionIcon name="close" size="12" /></button>
     </form>
     <!-- 替换预览（2.4）：**先让人看清影响面**（几个文件、各几处）再落盘 -->
     <div v-if="replacePreview" class="ws__hits">
@@ -1181,8 +1182,8 @@ function onTreeKeydown(event: KeyboardEvent) {
           ><template v-if="confirming.truncated"> 项以上</template> 项</template
         >。会**移到回收站**（可撤销）。
       </p>
-      <button class="ws__btn ws__btn--primary" type="button" @click="confirmDelete">移到回收站</button>
-      <button class="ws__btn" type="button" @click="confirming = null">取消</button>
+      <button class="ws__btn ws__btn--icon ws__btn--primary" type="button" @click="confirmDelete" title="移到回收站"><ActionIcon name="trash" /></button>
+      <button class="ws__btn ws__btn--icon" type="button" @click="confirming = null" title="取消"><ActionIcon name="close" /></button>
     </div>
 
     <div class="ws__body">
@@ -1317,7 +1318,7 @@ function onTreeKeydown(event: KeyboardEvent) {
             <!-- 格式化的回执（2.6）：**必须说清用了哪一个工具 / 内置做了什么** -->
             <div v-if="formatNote" class="ws__stale" role="status">
               <p class="ws__stale-msg">{{ formatNote }}</p>
-              <button class="ws__btn" type="button" @click="formatNote = ''">知道了</button>
+              <button class="ws__btn ws__btn--icon" type="button" @click="formatNote = ''" title="知道了"><ActionIcon name="check" /></button>
             </div>
             <!-- 保存冲突（2.3）：**拒绝保存**之后要给人一条出路（覆盖 / 先比对） -->
             <div v-if="saveReport && (saveReport.decision.kind === 'conflict' || saveReport.note)" class="ws__stale" role="alert">
@@ -1437,6 +1438,15 @@ function onTreeKeydown(event: KeyboardEvent) {
   border: var(--ds-metric-hairline) solid var(--ds-hairline);
   border-radius: var(--ds-radius-control);
   cursor: pointer;
+}
+
+/* 纯图标按钮（T-20261013-053）：方形命中区，图形居中；文字不进 DOM。 */
+.ws__btn--icon {
+  width: var(--ds-metric-control-height);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ws__btn--primary {

@@ -8,6 +8,7 @@
 //   · 未连接：按钮可用但一按就给可读原因（不做"灰着但不说为什么"）。
 
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import ActionIcon from './ActionIcon.vue'
 import {
   LAB_CONNECTION,
   connectionDelete,
@@ -2166,19 +2167,18 @@ async function probe() {
           </table>
 
           <div class="db__writeback">
-            <button class="db__btn" type="button" @click="addDraftColumn">{{ t('designer.addColumn') }}</button>
-            <button class="db__btn db__btn--primary" type="button" @click="previewDdl">{{ t('designer.generate') }}</button>
+            <button class="db__btn db__btn--icon" type="button" @click="addDraftColumn" :title="t('designer.addColumn')"><ActionIcon name="plus" /></button>
+            <button class="db__btn db__btn--icon db__btn--primary" type="button" @click="previewDdl" :title="t('designer.generate')"><ActionIcon name="wand" /></button>
             <button
-              class="db__btn"
-              type="button"
-              :disabled="runnableDdl.length === 0"
-              @click="applyDdl"
-            >
-              执行非破坏性（{{ runnableDdl.length }} 句）
-            </button>
-            <button class="db__btn" type="button" :disabled="ddlPlan.length === 0" @click="copyDdl">
-              复制全部语句
-            </button>
+                class="db__btn db__btn--icon"
+                type="button"
+                :disabled="runnableDdl.length === 0"
+                :title="`执行非破坏性（${runnableDdl.length} 句）`"
+                @click="applyDdl"
+              >
+                <ActionIcon name="play" />
+              </button>
+            <button class="db__btn db__btn--icon" type="button" :disabled="ddlPlan.length === 0" title="复制全部语句" @click="copyDdl"><ActionIcon name="copy" /></button>
             <span v-if="blockedDdl.length" class="db__note">
               其中 {{ blockedDdl.length }} 句是**破坏性**的：只生成、不自动执行，请复制出去自己确认后跑
             </span>
@@ -2224,8 +2224,8 @@ async function probe() {
               <span>ORDER BY（只写列与方向）</span>
               <input v-model="browseOrder" type="text" spellcheck="false" placeholder="例如 id DESC" />
             </label>
-            <button class="db__btn" type="button" @click="previewBrowse">生成 SQL</button>
-            <button class="db__btn db__btn--primary" type="button" @click="runBrowse">{{ t('sql.run') }}</button>
+            <button class="db__btn db__btn--icon" type="button" @click="previewBrowse" title="生成 SQL"><ActionIcon name="wand" /></button>
+            <button class="db__btn db__btn--icon db__btn--primary" type="button" @click="runBrowse" :title="t('sql.run')"><ActionIcon name="play" /></button>
           </div>
           <p v-if="browseError" class="db__failure-msg">{{ browseError }}</p>
           <pre v-if="sqlText" class="db__sql-preview">{{ sqlText }}</pre>
@@ -2261,7 +2261,9 @@ async function probe() {
               ✕
             </button>
           </div>
-          <button class="db__qtab-add" type="button" title="新建查询页签" @click="newQueryTab">＋</button>
+          <button class="db__qtab-add" type="button" title="新建查询页签" @click="newQueryTab">
+                  <ActionIcon name="plus" />
+                </button>
         </div>
         <form class="db__sql" @submit.prevent="runBatch(false)">
           <!-- 编辑面：**高亮层在下面（透明文字）+ 真 textarea 在上面**。
@@ -2312,10 +2314,10 @@ async function probe() {
               </select>
             </label>
             <span v-if="info" class="db__bar-sep" />
-            <button class="db__btn db__btn--primary" type="submit" :disabled="!!busy">{{ t('sql.run') }}</button>
-            <button class="db__btn" type="button" :disabled="!busy" @click="cancelRunning">{{ t('sql.cancel') }}</button>
-            <button class="db__btn" type="button" :disabled="!!busy" @click="showPlan">{{ t('sql.planOnly') }}</button>
-            <button class="db__btn" type="button" :disabled="!!busy" @click="runBatch(true)">{{ t('sql.runWithPlan') }}</button>
+            <button class="db__btn db__btn--icon db__btn--primary" type="submit" :disabled="!!busy" :title="t('sql.run')"><ActionIcon name="play" /></button>
+            <button class="db__btn db__btn--icon" type="button" :disabled="!busy" @click="cancelRunning" :title="t('sql.cancel')"><ActionIcon name="stop" /></button>
+            <button class="db__btn db__btn--icon" type="button" :disabled="!!busy" @click="showPlan" :title="t('sql.planOnly')"><ActionIcon name="code" /></button>
+            <button class="db__btn db__btn--icon" type="button" :disabled="!!busy" @click="runBatch(true)" :title="t('sql.runWithPlan')"><ActionIcon name="flask" /></button>
           <button
             class="db__btn"
             type="button"
@@ -2376,17 +2378,16 @@ async function probe() {
                   命中 {{ visible.length }} / 共 {{ result.rows.length }} 行 ·
                   第 {{ paged.page }} / {{ paged.pageCount }} 页（本页 {{ shownRows.length }} 行）
                 </span>
-                <button class="db__btn" type="button" :disabled="paged.page <= 1" @click="page = paged.page - 1">
-                  上一页
-                </button>
+                <button class="db__btn db__btn--icon" type="button" :disabled="paged.page <= 1" title="上一页" @click="page = paged.page - 1"><ActionIcon name="chevronLeft" /></button>
                 <button
-                  class="db__btn"
-                  type="button"
-                  :disabled="paged.page >= paged.pageCount"
-                  @click="page = paged.page + 1"
-                >
-                  下一页
-                </button>
+                    class="db__btn db__btn--icon"
+                    type="button"
+                    :disabled="paged.page >= paged.pageCount"
+                    title="下一页"
+                    @click="page = paged.page + 1"
+                  >
+                    <ActionIcon name="chevronRight" />
+                  </button>
                 <label class="db__freeze">
                   每页
                   <input v-model.number="pageSize" type="number" min="1" @change="page = 1" />
@@ -2414,12 +2415,13 @@ async function probe() {
                 </button>
                 <button class="db__btn" type="button" @click="ioOpen = !ioOpen">{{ t('grid.io') }}</button>
                 <button
-                  class="db__btn"
-                  type="button"
-                  @click="adminOpen = !adminOpen; if (adminOpen) loadAdmin()"
-                >
-                  管理面板…
-                </button>
+                    class="db__btn db__btn--icon"
+                    type="button"
+                    title="管理面板"
+                    @click="adminOpen = !adminOpen; if (adminOpen) loadAdmin()"
+                  >
+                    <ActionIcon name="sliders" />
+                  </button>
                 <span v-if="copied" class="db__note">{{ copied }}</span>
               </div>
 
@@ -2427,8 +2429,8 @@ async function probe() {
               <div v-if="adminOpen" class="db__io">
                 <p class="db__browse-title">
                   库（{{ adminDatabases.length }}）· 会话（{{ adminSessions.length }}）
-                  <button class="db__btn" type="button" @click="loadAdmin">{{ t('admin.refresh') }}</button>
-                  <button class="db__btn" type="button" @click="loadMaintenance">{{ t('admin.maintenance') }}</button>
+                  <button class="db__btn db__btn--icon" type="button" :title="t('admin.refresh')" @click="loadAdmin"><ActionIcon name="refresh" /></button>
+                  <button class="db__btn db__btn--icon" type="button" :title="t('admin.maintenance')" @click="loadMaintenance"><ActionIcon name="sliders" /></button>
                   <button
                     class="db__btn"
                     type="button"
@@ -2510,9 +2512,7 @@ async function probe() {
                     placeholder="目标文件路径，例如 D:\\tmp\\export.csv"
                     aria-label="导出目标路径"
                   />
-                  <button class="db__btn db__btn--primary" type="button" :disabled="!!busy" @click="runExport">
-                    导出到文件
-                  </button>
+                  <button class="db__btn db__btn--icon db__btn--primary" type="button" :disabled="!!busy" title="导出到文件" @click="runExport"><ActionIcon name="download" /></button>
                   <span v-if="exportNote" class="db__note">{{ exportNote }}</span>
                 </div>
 
@@ -2538,13 +2538,14 @@ async function probe() {
                   </label>
                   <button class="db__btn" type="button" @click="runPreviewImport">{{ t('io.preview') }}</button>
                   <button
-                    class="db__btn db__btn--primary"
-                    type="button"
-                    :disabled="!importPreview || !!busy"
-                    @click="runImportNow"
-                  >
-                    导入（一个事务）
-                  </button>
+                      class="db__btn db__btn--icon db__btn--primary"
+                      type="button"
+                      :disabled="!importPreview || !!busy"
+                      title="导入（一个事务）"
+                      @click="runImportNow"
+                    >
+                      <ActionIcon name="upload" />
+                    </button>
                 </div>
 
                 <div v-if="importPreview" class="db__dml">
@@ -2583,32 +2584,33 @@ async function probe() {
                   双击单元格改值（主键：{{ primaryKey.join(' + ') }}）· 已改 {{ editCount }} 处
                 </span>
                 <button
-                  class="db__btn"
-                  type="button"
-                  :disabled="editCount === 0"
-                  @click="previewDml"
-                >
-                  生成 SQL（先看清）
-                </button>
+                    class="db__btn db__btn--icon"
+                    type="button"
+                    :disabled="editCount === 0"
+                    title="生成 SQL（先看清）"
+                    @click="previewDml"
+                  >
+                    <ActionIcon name="wand" />
+                  </button>
                 <button
-                  class="db__btn"
-                  type="button"
-                  :disabled="!readOnly && pendingDml.length === 0"
-                  @click="submitWriteback(true)"
-                >
-                  试跑（跑完回滚）
-                </button>
+                    class="db__btn db__btn--icon"
+                    type="button"
+                    :disabled="!readOnly && pendingDml.length === 0"
+                    title="试跑（跑完回滚）"
+                    @click="submitWriteback(true)"
+                  >
+                    <ActionIcon name="flask" />
+                  </button>
                 <button
-                  class="db__btn db__btn--primary"
-                  type="button"
-                  :disabled="readOnly || pendingDml.length === 0"
-                  @click="submitWriteback(false)"
-                >
-                  提交（一次事务）
-                </button>
-                <button v-if="editCount > 0" class="db__btn" type="button" @click="cellEdits = {}; pendingDml = []">
-                  放弃改动
-                </button>
+                    class="db__btn db__btn--icon db__btn--primary"
+                    type="button"
+                    :disabled="readOnly || pendingDml.length === 0"
+                    title="提交（一次事务）"
+                    @click="submitWriteback(false)"
+                  >
+                    <ActionIcon name="check" />
+                  </button>
+                <button v-if="editCount > 0" class="db__btn db__btn--icon" type="button" title="放弃改动" @click="cellEdits = {}; pendingDml = []"><ActionIcon name="undo" /></button>
               </div>
 
               <!-- 将执行的语句（**提交前必须先有它**） -->
@@ -2690,7 +2692,7 @@ async function probe() {
             <aside v-if="detail" class="db__detail">
               <p class="db__detail-title">
                 第 {{ detail.index + 1 }} 行 · {{ detail.fields.length }} 个字段
-                <button class="db__btn" type="button" @click="detail = null">关闭</button>
+                <button class="db__btn db__btn--icon" type="button" title="关闭" @click="detail = null"><ActionIcon name="close" /></button>
               </p>
               <dl class="db__detail-list">
                 <template v-for="f in detail.fields" :key="f.columnName">
@@ -2825,6 +2827,15 @@ async function probe() {
   border: var(--ds-metric-hairline) solid var(--ds-hairline);
   border-radius: var(--ds-radius-control);
   cursor: pointer;
+}
+
+/* 纯图标按钮（T-20261013-053）：方形命中区，图形居中；文字不进 DOM。 */
+.db__btn--icon {
+  width: var(--ds-metric-control-height);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .db__btn--primary {
