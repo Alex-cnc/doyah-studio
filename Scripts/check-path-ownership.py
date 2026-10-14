@@ -121,7 +121,7 @@ def declaration_reason(text: str):
 #   `fatshark` = Windows / Harmony · `babyhippo` = Linux / Android。旧侧名 `bighippo` / `tinyhippo`
 #   （2026-10-08 两道改名令）降为**只读别名**：历史单 / 历史提交不判红，新写法一律用现行名。
 # 与「标记只表达平台」不冲突：**路径清单**里各端子树仍按平台分（tree.id = macos / windows / android…），
-# 演员名只出现在**命令行这一轴**（`--mine hugehippo` ≡ `--mine macos,ios,watchos`；`bluewhale` 无平台集 ⇒ 契约模式）。
+# 演员名只出现在**命令行这一轴**（`--mine hugehippo` ≡ `--mine macos,ios,watchos`；**2026-10-15 移交（派单 `T-20261015-005`）**：契约所有者改挂 `hugehippo`（兼任 Apple 全系）· `bluewhale` 留作历史契约所有者（空平台集））。
 ACTOR_PLATFORMS = {"bluewhale": (), "hugehippo": ("macos", "ios", "watchos"),
                    "babyhippo": ("linux", "android"), "fatshark": ("windows", "harmony")}
 # **退役 / 旧侧名 → 现行规范名**（只保留识别，**不得再作为现行名**；派单 `T-20261005-038` ① ·
@@ -131,7 +131,7 @@ ACTOR_PLATFORMS = {"bluewhale": (), "hugehippo": ("macos", "ios", "watchos"),
 # 照样展开成同一个平台集（提示一条「退役旧名」）。
 LEGACY_ACTOR_ALIASES = {"bighippo": "hugehippo", "tinyhippo": "babyhippo",
                         "fatfish": "fatshark"}
-DEFAULT_CONTRACT_OWNER = "bluewhale"
+DEFAULT_CONTRACT_OWNER = "hugehippo"
 
 
 def norm(p: str) -> str:
@@ -241,7 +241,7 @@ class Manifest:
         `tok` 可以是：tree id（`macos` / `windows` / `android` / `harmony`）· tree 的 owner 名 ·
         契约侧名 · **演员名**（`hugehippo` / `babyhippo` / `fatshark`；旧名 `bighippo` / `tinyhippo` / `fatfish`
         只保留识别 ⇒ 展开成它名下的子树；
-        2026-10-03 制度变更）。契约所有者（`bluewhale`，平台集为空）由 `evaluate()` 走**契约模式**。
+        2026-10-03 制度变更）。契约所有者 = `hugehippo`（**兼任 Apple 全系实现侧** · 2026-10-15 移交）：三书契约层放行 + 其余路径走常规判据；历史所有者 `bluewhale`（平台集为空）仍走**独占契约模式**（只许三书）。
         """
         want = LEGACY_ACTOR_ALIASES.get(tok, tok)      # 退役侧名 → 现行名（识别保留）
         if want in ACTOR_PLATFORMS and ACTOR_PLATFORMS[want]:
@@ -316,7 +316,15 @@ def evaluate(paths, man: Manifest, mine: str, inline=None, commit_note=None):
     counts = {"shared": 0, "mine": 0, "other": 0, "unregistered": 0, "allow": 0}
     out, reds = [], []
     # —— 契约模式（2026-10-03 制度变更）：`mine` = 契约所有者 ⇒ 只许处理三书，碰到别的就拦 ——
-    if (mine or "").strip().lower() == (man.contract_owner or DEFAULT_CONTRACT_OWNER):
+    # —— 契约模式（2026-10-03 制度变更；**2026-10-15 移交扩面** · 派单 `T-20261015-005`）——
+    # 契约所有者由 `bluewhale`（**空平台集** = 纯契约身份）改挂 `hugehippo`（**兼任 Apple 全系实现侧**）
+    # ⇒ 判据分两支：① 所有者**无**平台写权（历史 `bluewhale`、`--contract-owner macos` 旧姿势）＝ 原样
+    #    「只许三书」独占；② 所有者**有**平台写权（`hugehippo`）＝ **叠加**：三书契约层放行，
+    #    其余路径走常规判据（自己的平台子树 ✅ / 对侧子树判红 / 共享面照登记 / 未登记照判红）。
+    owner_name = (man.contract_owner or DEFAULT_CONTRACT_OWNER).strip().lower()
+    owner_plats = set(ACTOR_PLATFORMS.get(LEGACY_ACTOR_ALIASES.get(owner_name, owner_name), ()))
+    is_cowner = (mine or "").strip().lower() == owner_name
+    if is_cowner and not owner_plats:
         if not man.contract_docs:
             return EXIT_SKIP, ["⚠️ 契约模式判不了：清单里没登记 `contract_docs`（三书清单）"
                                " —— 契约所有者 = %s；补清单前不判绿" % man.contract_owner], counts
@@ -332,11 +340,17 @@ def evaluate(paths, man: Manifest, mine: str, inline=None, commit_note=None):
         code = EXIT_RED if reds else EXIT_PASS
         return code, out + reds, counts
     mine_ids, mode = man.side_of(mine)
+
     if mine_ids is None:
         return EXIT_SKIP, ["⚠️ 认不出本侧（`--mine %s`）—— 清单里的端 = %s，契约侧 = %s"
                            % (mine, "、".join(t.get("id", "?") for t in man.trees),
                               "、".join(sorted({t.get("contract_side", "?") for t in man.trees})))], counts
     for raw in sorted(set(norm(p) for p in paths if norm(p))):
+        if is_cowner and any(has_prefix(raw, d) for d in (man.contract_docs or [])):
+            counts["mine"] += 1
+            out.append("✅ 契约层（三书）：%s ⇒ 归 `%s`（所有者兼任实现侧 ⇒ 按契约层放行）"
+                       % (raw, man.contract_owner))
+            continue
         kind, hit, tree = classify(raw, man)
         if kind == "shared":
             counts["shared"] += 1
@@ -489,7 +503,7 @@ FIXTURE = {
         {"id": "windows", "owner": "windows", "contract_side": "nonapple",
          "label": "Windows 端（Tauri 2 + Rust）", "paths": ["platform/windows/"]},
     ],
-    "contract_owner": "bluewhale",
+    "contract_owner": "hugehippo",
     "contract_docs": ["Docs/需求规范书.md", "Docs/概要设计.md"],
     "shared": ["Docs/", "tools/", "AGENT-SPEC.md"],
     "unclassified_allow": [{"path": "README.md", "reason": "仓根门面"}],
@@ -677,13 +691,12 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     # 契约定：三书**契约层**归 `bluewhale`；平台实现层按平台名归各平台助理。护栏原话（人类主人）：
     # 「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」。成对证据：同一条改动上
     # 「所有者改 ⇒ 绿 / 碰非三书 ⇒ 红」，以及「演员名 ≡ 平台集」这层映射真的生效。
-    check("㉔ 契约所有者 `bluewhale` 改三书 ⇒ 绿", EXIT_PASS,
-          paths=["Docs/需求规范书.md"], mine="bluewhale", wants=["契约层（三书）"])
-    check("㉕ 契约所有者碰到代码 ⇒ 红（护栏：有涉及代码提交就拦）", EXIT_RED,
-          paths=["App/Views/A.swift"], mine="bluewhale",
-          wants=["契约层护栏", "只能处理三书", "Docs/需求规范书.md"])
-    check("㉖ 契约所有者碰脚本 / 仓根杂项 ⇒ 也红（三书之外的都拦，含共享面与白名单）", EXIT_RED,
-          paths=["tools/hack.py", "README.md"], mine="bluewhale", wants=["契约层护栏"])
+    check("㉔ 契约所有者 `hugehippo` 改三书 ⇒ 绿", EXIT_PASS,
+          paths=["Docs/需求规范书.md"], mine="hugehippo", wants=["契约层（三书）"])
+    check("㉕ 契约所有者（兼任 Apple 实现侧）改自己平台子树 ⇒ 绿（2026-10-15 **叠加判据**）", EXIT_PASS,
+          paths=["App/Views/A.swift"], mine="hugehippo", wants=["本侧子树"])
+    check("㉖ 契约所有者碰共享面脚本 ⇒ 仍红（三书之外照常规判据：共享面未登记）", EXIT_RED,
+          paths=["tools/hack.py"], mine="hugehippo", wants=["共享面未登记"])
     check("㉗ 演员名 `bighippo` ≡ `macos,ios`：改 macOS 子树 ⇒ 绿", EXIT_PASS,
           paths=["App/Views/A.swift"], mine="bighippo", wants=["本侧子树"])
     check("㉘ 演员名 `tinyhippo` ≡ 安卓/鸿蒙：改 windows 子树 ⇒ 红（跨平台仍越界）", EXIT_RED,
@@ -745,7 +758,7 @@ def main(argv=None) -> int:
     ap.add_argument("--manifest", default=None, help="换清单（默认：脚本同目录）")
     ap.add_argument("--repo", default=None, help="仓根（默认：脚本所在仓的 git 顶层）")
     ap.add_argument("--actor", default=None,
-                    help="执行者（演员名 · 2026-10-13 均衡令）：`bluewhale`(=契约模式，只许三书) / "
+                    help="执行者（演员名 · 2026-10-13 均衡令）：`hugehippo`(=**现行契约所有者**：契约层 + 自己 Apple 子树叠加) / `bluewhale`(=历史契约所有者：只许三书) / "
                          "`hugehippo`(macOS,iOS,watchOS = Apple 全系) / `babyhippo`(Linux,Android) / "
                          "`fatshark`(Windows,Harmony)；旧名 `bighippo` / `tinyhippo` / `fatfish` 保留识别；"
                          "等价于 `--mine <演员名>`")

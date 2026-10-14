@@ -202,8 +202,19 @@ def allowed(tok, mine):
     return bool(expand(tok) & expand(mine))
 
 
-def same_side(a, b):
-    """两侧是否算同一侧（集合相交）—— 契约所有者判定用（演员名 ↔ 平台名不同侧 ⇒ 不相交）。"""
+def same_side(a, b, owner_axis=False):
+    """两侧是否算同一侧 —— 契约所有者判定用。
+    `owner_axis=True`（`b` = `contract_owner`）时按**收紧判据**：契约所有者改挂 `hugehippo`
+    （**兼任** Apple 全系实现侧 · 2026-10-15 移交 · 派单 `T-20261015-005`）后，若仍按集合相交判，
+    `--mine macos` 会被算成契约所有者 ⇒ 契约层锁对 Apple 侧失效（旧设计靠 `bluewhale` 的**空平台集**
+    取得这个区分度）⇒ **所有者一方是「有平台集」的演员名时，必须同名**（退役旧名先归一到现行名）。
+    其余情形（含 `--mine hugehippo` vs `--contract-owner macos` 旧姿势、对侧平台列举）保持集合相交语义。
+    """
+    ta = {LEGACY_ACTORS.get(t, t) for t in mark_tokens(a)}
+    tb = {LEGACY_ACTORS.get(t, t) for t in mark_tokens(b)}
+    owners = {t for t in tb if t in ACTORS and ACTORS[t]} if owner_axis else set()
+    if owners:
+        return ta == owners
     return bool(expand(a) & expand(b))
 
 
@@ -465,7 +476,7 @@ def check(files, mine, theirs, base, diff_text, quiet=False, contract_owner="app
                 #    契约层锁定的文档里新开一个「谁都能写」的节。只看**纯插入**的标题行（len(items)==1），
                 #    `-`/`+` 成对的标题改动走下面的普通判定（改标题行本身已属契约层改动）；
                 #    新开 `[开放]` 台账节同样判红 —— 「先解锁再改」就是靠这个绕开锁定的。
-                if (kind == "+" and len(items) == 1 and not same_side(mine, contract_owner)
+                if (kind == "+" and len(items) == 1 and not same_side(mine, contract_owner, owner_axis=True)
                         and any(d in os.path.basename(path) for d in contract_docs)
                         and HEADING_RE.match(content) and not MARKER_RE.search(content)):
                     newsecs.append((path, line1, content.strip()[:80]))
@@ -497,7 +508,7 @@ def check(files, mine, theirs, base, diff_text, quiet=False, contract_owner="app
                 if k != "contract":
                     continue          # [开放] / 无标题：放行
                 checked += 1
-                if not same_side(mine, contract_owner):
+                if not same_side(mine, contract_owner, owner_axis=True):
                     contracts.append((path, line1, title or enclosing_title(lines, line0),
                                       content.strip()[:80]))
     # 去重：同一文件的同一处改动只报一次（newsecs 的元素只有 (path, line) 两元组）
@@ -731,19 +742,23 @@ watchOS 实现细节：SwiftUI / WatchConnectivity。
     # 由头：三书**契约层**归契约所有者（2026-10-15 起 = `hugehippo`；改前 = `bluewhale`）；平台实现层仍按**平台名**归各平台助理
     # （`hugehippo` = Apple 全系、`fatshark` = Windows／鸿蒙、`babyhippo` = Linux／安卓 —— 2026-10-13 均衡令）。
     # 成对证据：同一条契约行上「所有者改 ⇒ 绿 / 平台助理改 ⇒ 红」，以及「所有者碰实现层节 ⇒ 红」。
-    r.append(run("契约正文，只有契约所有者能改。", "契约正文（蓝鲸娘第二版）。",
-                 "演员名：契约所有者 `bluewhale` 改契约层 · 应该通过", mine="bluewhale", owner="bluewhale"))
-    r.append(run("契约正文，只有契约所有者能改。", "契约正文：大河马直接改了。",
-                 "演员名：`hugehippo`（Apple 全系）改契约层 · 应该报红", mine="hugehippo", owner="bluewhale",
+    # **2026-10-15 移交（派单 `T-20261015-005`）**：现行契约所有者 = `hugehippo`（**兼任** Apple 全系实现侧）。
+    # 成对证据：① 所有者同名 ⇒ 绿 / 其他平台侧 ⇒ 红；② 所有者碰**自己的** `[独占:macos|ios]` 节 ⇒ 绿；
+    # ③ **收紧判据**：`--mine macos`（平台名）**不顶替**演员名所有者 ⇒ 契约层判红。
+    r.append(run("契约正文，只有契约所有者能改。", "契约正文（大河马第二版）。",
+                 "演员名：现行契约所有者 `hugehippo` 改契约层 · 应该通过", mine="hugehippo", owner="hugehippo"))
+    r.append(run("契约正文，只有契约所有者能改。", "契约正文：大肥鲨直接改了。",
+                 "演员名：`fatshark`（Windows／鸿蒙）改契约层 · 应该报红", mine="fatshark", owner="hugehippo",
                  expect_text="contract-change"))
-    r.append(run("契约正文，只有契约所有者能改。", "契约正文：小河马直接改了。",
-                 "演员名：`babyhippo`（Linux／安卓）改契约层 · 应该报红", mine="babyhippo", owner="bluewhale"))
-    r.append(run("台账行。", "台账行。\n\n## 11. 新契约节\n\n蓝鲸娘开的新契约节。",
+    r.append(run("契约正文，只有契约所有者能改。", "契约正文：平台名侧直接改了。",
+                 "收紧判据：契约所有者 = **演员名** ⇒ `--mine macos`（平台名）改契约层 · 应该报红",
+                 mine="macos", owner="hugehippo"))
+    r.append(run("台账行。", "台账行。\n\n## 11. 新契约节\n\n大河马开的新契约节。",
                  "演员名：契约所有者新开无标记节（判据 ④ 对所有者不设限）· 应该通过",
-                 mine="bluewhale", owner="bluewhale"))
-    r.append(run("macOS / iOS 实现细节：SwiftUI / Keychain。", "macOS / iOS 实现细节：蓝鲸娘改了实现层。",
-                 "演员名：契约所有者碰 `[独占:macos|ios]` 实现层节 · 应该报红（她没有平台写权）",
-                 mine="bluewhale", owner="bluewhale"))
+                 mine="hugehippo", owner="hugehippo"))
+    r.append(run("macOS / iOS 实现细节：SwiftUI / Keychain。", "macOS / iOS 实现细节：大河马改了实现层。",
+                 "演员名：契约所有者**兼任** Apple 实现侧 ⇒ 碰 `[独占:macos|ios]` 节 · 应该通过（2026-10-15 移交）",
+                 mine="hugehippo", owner="hugehippo"))
     r.append(run("契约正文，只有契约所有者能改。", "契约正文（旧姿势：平台名所有者）。",
                  "兼容：`--contract-owner macos` 旧姿势仍可用 · 应该通过", mine="macos", owner="macos"))
 
