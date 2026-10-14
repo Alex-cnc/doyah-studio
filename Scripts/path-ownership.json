@@ -65,7 +65,8 @@
    "paths": [
     "platform/windows/"
    ],
-   "actor": "fatshark"
+   "actor": "babyhippo",
+   "note": " ｜ **2026-10-15 人类主人令**：大肥鲨交出全部开发工作、由奶牙小河马 `babyhippo` 承接 ⇒ 本树 `actor` fatshark → babyhippo（派单 `/接线/顺序` 等口径随之改道）。"
   },
   {
    "id": "linux",
@@ -432,6 +433,12 @@
   {
    "glob": "Scripts/path-ownership.json",
    "reason": "基本法第四十八条 / 之二（2026-10-15 人类主人令）：契约所有者由 `bluewhale` 改判 `hugehippo` —— 交接机制的「路径归属白名单」一项（法条 ③ 要求逐项改到 `hugehippo` 名下 + 成对读数）。判据语义不变（契约层落笔面 = 四类不变）。",
+   "by": "hugehippo",
+   "at": "2026-10-15"
+  },
+  {
+   "glob": "windows 树（actor）",
+   "reason": "人类主人 2026-10-15 令：承接大肥鲨全部开发 ⇒ Windows/鸿蒙 归属 actor fatshark → babyhippo（承 派单 T-20261015-403 的共享面登记）",
    "by": "hugehippo",
    "at": "2026-10-15"
   }
