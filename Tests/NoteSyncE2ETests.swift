@@ -274,6 +274,56 @@ final class NoteSyncE2ETests: XCTestCase {
         XCTAssertEqual(transport.rows["note-conf"]?.content, "{\"v\":\"local\"}")
     }
 
+    /// **反例：胜者是服务端那一版 ⇒ 判负版一个上行都不许发。**
+    ///
+    /// 这一格是 `T-20261014-411` §三 抓到的真缺陷的判据（旧代码在 `.conflict` 里**无条件** `upload(outgoing)`）：
+    /// 当 `SyncResolution.decide` 把胜者判给服务端那一版时，`outgoing` 恰是**判负版**，
+    /// 上行它 = 判负版覆盖胜版 = **跨端静默丢数据**（探针 P6 实测服务端现存成了 `{"v":"macOS-older"}`）。
+    /// 与上一个用例**成对**：那半个测「本地胜 ⇒ 上行」，这半个测「服务端胜 ⇒ 不上行」。
+    func testConflictWinnerIsServerDoesNotUploadLosingVersion() throws {
+        let transport = FakePostgrest()
+        // 服务端已有一条 rev 2、**时刻更晚**的版本 —— 按 `decide` 它就是这一跳的胜者。
+        transport.rows["note-lose"] = row(uid: "note-lose", rev: 2, updatedAt: 600, content: "{\"v\":\"server-newer\"}")
+        let service = try makeService(transport)
+
+        // 本机也改了同一条：rev 相同（2）但时刻更早 ⇒ 冲突，**判负的是本机这版**。
+        let local = row(uid: "note-lose", rev: 2, updatedAt: 500, content: "{\"v\":\"macOS-older\"}")
+        let merge = try service.push(row: local, rev: 2)
+
+        XCTAssertEqual(merge.verdict, .conflict, "同 rev 不同内容 ⇒ 留两版")
+        XCTAssertEqual(merge.primary.payload, "{\"v\":\"server-newer\"}", "胜者是服务端那一版")
+        // 正题①：判负版不许上行（只要发过一个 POST 就是错版覆盖胜版）。
+        XCTAssertTrue(
+            transport.requests.filter { $0.method == "POST" }.isEmpty,
+            "胜者不是本机这版 ⇒ 不许上行；实发方法序列 = \(transport.requests.map(\.method))"
+        )
+        // 正题②：服务端胜版**逐字节不变**。
+        XCTAssertEqual(transport.rows["note-lose"]?.content, "{\"v\":\"server-newer\"}", "服务端胜版不许被覆盖")
+        // 正题③：不上行 ≠ 丢 —— 判负版落冲突副本，原文可查。
+        XCTAssertEqual(service.conflicts.count, 1)
+        XCTAssertEqual(service.conflicts.first?.losing.payload, "{\"v\":\"macOS-older\"}")
+        XCTAssertEqual(service.conflicts.first?.winnerRev, 2)
+    }
+
+    /// **成对读数**：胜者是本机这版 ⇒ **恰好上行一次**（与上一条的「一次都不发」成对）。
+    func testConflictWinnerIsOutgoingUploadsExactlyOnce() throws {
+        let transport = FakePostgrest()
+        transport.rows["note-win"] = row(uid: "note-win", rev: 2, updatedAt: 500, content: "{\"v\":\"server\"}")
+        let service = try makeService(transport)
+
+        let local = row(uid: "note-win", rev: 2, updatedAt: 600, content: "{\"v\":\"local\"}")
+        let merge = try service.push(row: local, rev: 2)
+
+        XCTAssertEqual(merge.verdict, .conflict)
+        XCTAssertEqual(merge.primary.payload, "{\"v\":\"local\"}", "胜者是本机这版")
+        XCTAssertEqual(
+            transport.requests.filter { $0.method == "POST" }.count, 1,
+            "胜者是本机这版 ⇒ 恰好一次上行；实发方法序列 = \(transport.requests.map(\.method))"
+        )
+        XCTAssertEqual(transport.rows["note-win"]?.content, "{\"v\":\"local\"}")
+        XCTAssertEqual(service.conflicts.first?.losing.payload, "{\"v\":\"server\"}", "判负的服务端那版仍留副本")
+    }
+
     /// 冲突副本**落盘**（不是只在内存里）：换一个服务实例重新读盘，第二版仍在 —— 这一条给的是
     /// 「判据 ⑥ 的第二版落在哪里」的可复现读数（文件路径 + 文件正文都打印出来）。
     func testConflictCopyLandsInPersistedStateFile() throws {

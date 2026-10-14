@@ -476,8 +476,14 @@ public final class CloudSyncService: @unchecked Sendable {
         case .accepted:
             try upload(outgoing, token: token)
         case .conflict:
-            // 两版都留：胜者上行，负者落冲突副本。**不许静默丢数据**（契约 §6.4「冲突合并」）。
-            try upload(outgoing, token: token)
+            // 两版都留：**只有胜者是 `outgoing` 时才上行**。
+            // 胜者是服务端那一版时**绝不上行** —— 否则 `outgoing`（判负版）会覆盖胜版，
+            // 就是**跨端静默丢数据**（`T-20261014-411` §三 定向探针实测：P4 `primary` 是另一端那版、
+            // P6 服务端现存却是 `{"v":"macOS-older"}`）。
+            // 「不上行」不等于丢：判负版紧接着落冲突副本（`recordConflict`）⇒ 两端收敛到胜者 + 留两版。
+            if isOutgoingWinner(merge, outgoing: outgoing) {
+                try upload(outgoing, token: token)
+            }
             if let losing = merge.conflict { recordConflict(losing, winnerRev: merge.primary.rev) }
         }
 
@@ -485,6 +491,15 @@ public final class CloudSyncService: @unchecked Sendable {
         try stateStore.save(state)
         ledger.apply(merge.primary)
         return merge
+    }
+
+    /// `outgoing` 这一版是不是**胜者**（= `SyncResolution.decide` 给出的 `primary`）。
+    ///
+    /// `.conflict` 只可能出现在「`rev` 相同、内容或时刻不同」的两条之间，此时 `primary` 必然是
+    /// `incoming`（= `outgoing.record`，本机这版更新）或 `local`（= 服务端那版更新）之一
+    /// ⇒ `primary == outgoing.record` 就是「`outgoing` 胜」。判负版**不许上行**（会覆盖胜版）。
+    private func isOutgoingWinner(_ merge: SyncMerge, outgoing: CloudNoteRow) -> Bool {
+        merge.primary == outgoing.record
     }
 
     // MARK: `IR-15` 增量下拉
