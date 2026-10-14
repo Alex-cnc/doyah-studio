@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Doyah Studio · Linux 端默认能力集（骨架片：核心命令面 + 系统文件选择器；与 Windows 侧同一插件面，前端同源才不出现死入口）",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default"]
+}

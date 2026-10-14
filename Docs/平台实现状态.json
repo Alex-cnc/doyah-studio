@@ -10,8 +10,8 @@
     },
     "linux": {
       "label": "Linux",
-      "role": "自用第三端（只服务需求提出者；公司环境实现）",
-      "owner": "奶牙小河马（`babyhippo` · Linux/Android 侧）—— 自用第三端，实现在公司机器（本仓只维护契约与差异登记）",
+      "role": "Doyah Studio 全量 PC 端第三端（2026-10-14 人类主人令：本仓实现开工）",
+      "owner": "奶牙小河马（`babyhippo` · Linux/Android 侧）—— 自用第三端；实现面在 `platform/linux/`，平台设计层写概设 §8.6 `[独占:linux]`",
       "overrides": {}
     },
     "windows": {

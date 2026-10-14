@@ -1,5 +1,5 @@
 {
-  "_说明": "`Scripts/check-network-egress.py`（**产品源面**网络出口门禁，闭环第 10 项）的台账。清单只许取自 Notes SRS **v3.94** §6.4「按面分层的文件级显式清单」（前门落笔 `987ace7` · 回执 T-20261009-149 ③）；台账写的是**声明**，门禁拿它跟事实对账 —— 判据与台账分家会让『改台账就能过』变成一条暗道，所以面 / 文件 / 理由三样缺一不可。",
+  "_说明": "`Scripts/check-network-egress.py`（**全仓**网络出口门禁，闭环第 10 项）的台账。清单只许取自 Notes SRS **v3.94** §6.4「按面分层的文件级显式清单」（前门落笔 `987ace7` · 回执 T-20261009-149 ③）；**扫描面 = 全仓**（前门裁 `T-20261014-204` 第 9 条，原单 `T-20261010-016/017/018`）。台账写的是**声明**，门禁拿它跟事实对账 —— 判据与台账分家会让『改台账就能过』变成一条暗道，所以面 / 文件 / 理由三样缺一不可。",
   "srs": {
     "doc": "Notes SRS v3.94",
     "commit": "987ace7",
@@ -66,12 +66,6 @@
     }
   ],
   "scan": {
-    "roots": [
-      "App",
-      "Core",
-      "Plugins/Notes/Sources",
-      "Plugins/Notes/Views"
-    ],
     "glob": "*.swift",
     "commentPolicy": "判定对象 = **代码出现**：`URLSession` / `URLRequest` 出现在 `//` / `///` 行注释、`/* */` 块注释或**字符串字面量**里**不算出现、不判红**（与 `check-core-portability.py` / `check-editor-surface-tokens.py` / `check-design-tokens.py` 同一口径：「注释里提到某个标识不算它还在用」）。例：`Core/DataTaskSpecGenerator.swift:7` 的 `///` 文档注释写着「本类型里没有任何 URLSession / 请求组装」—— 那是**声明不出网**，不判红、也**不进白名单**（白名单只许取自 SRS）。",
     "excludeDirs": [
@@ -81,13 +75,24 @@
       "DerivedData",
       "build"
     ],
-    "scopeNote": "本门禁的面 = 下面 `roots` 逐根列出的**产品源面**（不是「全仓」；原单 T-20261010-040 的措辞缺口）。面外（`CLI/` `Platform/` `Tools/` `Tests*` `Vendor/` `Scripts/*.swift` …）不判，但**面外 .swift 计数**与**面外出现出网令牌的文件**两条读数必须打出来，后者逐条登记在 `outOfFace`。"
+    "scopeNote": "扫描面 = **全仓**（前门裁 `T-20261014-204` 第 9 条：「以**声明**为准，把扫描面扩到全仓 —— **不许收窄声明去迁就脚本**」· 原单 `T-20261010-016/017/018`：其中 17 的缺口正是「SRS §6.4 表末行『其余一切文件』全仓口径 ↔ 实现侧只扫 `App/`+`Core/`」）。`scope` 必须是 `repo`（判据⑦面钉）；`excludeDirs` 只许放生成物 / 稀疏检出副本；实测扫描面漏掉不在排除名单里的 `.swift` ⇒ 判红。白名单面（SRS §6.4 表 1~4 行）以外的出网文件逐条登记在 `outOfFace`（**登记 ≠ 放行**，定性由前门裁）。",
+    "scope": "repo",
+    "excludeDirsAllowed": [
+      ".git",
+      ".build",
+      ".worktrees",
+      "DerivedData",
+      "build"
+    ],
+    "excludeDirsAllowedNote": "排除名单的**钉**（2026-10-14 · 合册 `T-20261013-027` 清册第 11 行 · 原单 `T-20261010-018`）：`excludeDirs` 的每一项都必须在这里登记 —— 把真源码目录塞进排除名单就能静默缩面，故「未登记的排除项」判红。这五项全是生成物 / 稀疏检出副本。"
   },
   "floors": {
-    "minFilesScanned": 357,
+    "minFilesScanned": 911,
     "minSurfaces": 4,
     "minRequiredTokens": 2,
-    "minFilesScannedNote": "2026-10-14（合册 T-20261013-027 · 原单 T-20261010-040）由 1 提到实测 **357**（面 = App/ + Core/ + Plugins/Notes/Sources/ + Plugins/Notes/Views/ 下 `*.swift` 实数）；面被削到下限以下即判红。"
+    "minFilesScannedNote": "2026-10-14（合册 `T-20261013-027` · 清册第 9~11 行 · 前门 `T-20261014-204` 第 9 条「面扩到全仓」）：由 **357**（旧「产品源面」= `App/` + `Core/` + `Plugins/Notes/Sources/` + `Plugins/Notes/Views/` 实数）提到**本跳实测 911**（= 全仓 `.swift` 数，排除名单 `.git` / `.build` / `.worktrees` / `DerivedData` / `build` 之后）。下限按**只增不减**取 911：同日更晚落地的 Linux 端片 `a08656e` 再 +1 ⇒ 读数 **912**，仍在可接受的只增一侧（收窄到 911 以下才判红）。",
+    "minRegisteredEgress": 10,
+    "minRegisteredEgressNote": "2026-10-14（合册 `T-20261013-027` · 清册第 9~11 行 · 前门 `T-20261014-204` 第 9 条）：非白名单面**已登记**的出网文件条数下限 = **10**（实测）。前门令「**登记不许抹**」⇒ 删掉一条登记，就没人再看见面外实测的真出网 ⇒ 本条判红。"
   },
   "wiring": {
     "verifyAll": "Scripts/verify-all.sh",
@@ -108,9 +113,9 @@
   ],
   "knownGaps": [
     "① 只判『源码里出现出网 API』，判不了『运行时真的没有出网』（那要靠断网用例与统一外发日志；后者见 NFR-SEC-08）。",
-    "② 面 = `scan.roots` 逐根列出的**产品源面**（不是「全仓」）。面外（`CLI/` `Platform/` `Tools/` `Tests*` `Vendor/` `Scripts/*.swift` …）不在 SRS §6.4 表的口径内：本门禁不判它们，但「面外 .swift 计数」与「面外出现出网令牌的文件」两条读数必须打出来，后者逐条登记在 `outOfFace`（漏登 / 陈旧 / 死登记都判红，只减不增）；要扩面须先有前门口径。",
+    "② 面 = **全仓**（前门 `T-20261014-204` 第 9 条钉死）：白名单面（SRS §6.4 表 1~4 行）以外的 `.swift` 不判出网合法性，但必须逐条登记在 `outOfFace`（漏登 / 陈旧 / 死登记 / 抹登记都判红，条数下限 `floors.minRegisteredEgress`）；面不许由被审台账单方面改窄 —— `scan.scope != \"repo\"` 或实测漏掉不在排除名单里的文件 ⇒ 判据⑦判红（原单 `T-20261010-018`）。",
     "③ 「判定对象 = 代码出现（注释 / 字符串里的提及不算出现）」这条口径尚未写进 SRS v3.94（前门单号 T-20261009-159）。",
-    "④ 面外两处已知出网（`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift`）的**定性**未决 —— 记在 `outOfFace` 只让它们不再静默，不等于放行；定性由前门裁（原单 T-20261010-040 ④）。",
+    "④ 非白名单面两处已知生产出网（`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift`）的**定性**未决 —— 记在 `outOfFace` 只让它们不再静默，不等于放行；定性由前门裁（原单 `T-20261010-040` ④）。",
     "⑤ 面内 `Core/LLMStreaming.swift`（FR-AI-16 第二片 · 2026-10-13 新增的流式传输面）出现 7 处令牌但未登记进任何面 ⇒ **本门禁在真仓判红**，待前门按纪律②登记后放行；本侧不擅自扩白名单（原单 T-20261010-040 边界④）。"
   ],
   "outOfFace": [
@@ -195,5 +200,5 @@
       "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
     }
   ],
-  "outOfFaceNote": "面外登记（只减不增）：`CLI/` `Platform/` `Tools/` `Tests*` `Vendor/` `Scripts/*.swift` 不在 SRS §6.4 表的口径内 ⇒ 本门禁**不判**它们；但面外出现出网令牌的文件必须逐条登记，漏登 / 陈旧 / 死登记都判红。登记 ≠ 放行：定性由前门裁（原单 T-20261010-040 ④）。"
+  "outOfFaceNote": "登记类（只减不增）：`scan.scope = repo` ⇒ 这些文件**已经在扫描面内**，但不在 SRS §6.4 白名单面里 ⇒ 逐条登记（漏登 / 陈旧 / 死登记 / **抹登记**都判红；条数下限 `floors.minRegisteredEgress` = 10）。**登记 ≠ 放行**：`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift` 两处生产活体的定性由前门裁（原单 `T-20261010-040` ④）。"
 }

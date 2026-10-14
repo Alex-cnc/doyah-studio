@@ -1,0 +1,19 @@
+# Doyah Studio · Linux 端 · 无界面验证入口（Cli）
+#
+# §8.6.1 第 3 行：「子命令 + 退出码表 + `--json`」。
+# **零第三方依赖**：`--json` 由源码手写 —— 保证它在**任何**宿主上都能跑（含非 Linux 开发机）。
+# 边界：本 crate 只许依赖 Core 与 Platform/Linux，不许引 GUI 面。
+[package]
+name = "doyah-studio-linux-cli"
+version = "0.0.0"
+edition = "2021"
+description = "Doyah Studio · Linux 端无界面验证入口（子命令 + 退出码表 + --json）"
+publish = false
+
+[[bin]]
+name = "doyah-studio-cli"
+path = "src/main.rs"
+
+[dependencies]
+doyah-studio-core = { path = "../Core" }
+doyah-studio-linux-platform = { path = "../Platform/Linux" }

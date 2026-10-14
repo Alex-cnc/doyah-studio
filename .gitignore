@@ -32,6 +32,10 @@ xcuserdata/
 !/Docs/产品能力规划说明书.md
 !/Docs/概要设计.md
 !/Docs/平台实现状态.json
+# 平台对齐件（Windows 侧对齐 macOS 的逐条索引）：**契约层派生件**，必须入库 —— 对侧靠 GitHub 读，
+#   本机不可见就等于没产出。产出者是 `Scripts/gen-studio-win-align.py`（真值源 = 三书 §10.1/§10.2 + 平台实现状态.json）。
+#   派单 `T-20261014-015`（人类主人令 2026-10-14：`fatshark` 要对齐 macOS 版 Doyah Studio 的开发进度）。
+!/Docs/平台对齐-Studio-Windows对macOS.md
 # 工作台账（非契约）—— 人类主人令 2026-10-11「台账归台账，契约归契约」· 派单 T-20261011-014：
 #   台账正当存在，但不得冒充契约；它此前与三书同被 `/Docs/*` 排除 ⇒ 家族看不到、无法审计、无法回溯。
 #   本行把它收进库；本件身份（非契约 · 真值源=三书）写在它标题下的声明行里。
@@ -83,5 +87,10 @@ platform/windows/循环台账.md
 # 本侧打出来的安装包（MSI / NSIS）：与 target/ 同源（Tauri bundler 的产物），只是我把它
 # 复制到仓内一个稳定目录方便取用 ⇒ 同样不进版本库（一打包就变、几个 MB、无版本价值）
 platform/windows/dist-packages/
+# ── Linux 端（babyhippo）：Rust / 前端 的构建产物与生成物 ──
+# 同源前端（Platform/windows/App/dist）已在 Windows 段忽略；本端只多这几行。
+platform/linux/src-tauri/target/
+platform/linux/src-tauri/gen/
+platform/linux/dist-packages/
 *.pyc
 __pycache__/

@@ -8,7 +8,7 @@
 ## 三书：跨平台的共享事实源
 
 **目标端（2026-09-26 口径）**：**macOS 与 Windows 版必须完全一致**（同一个产品的两个平台实现，
-只有平台与编程语言不同）；**Linux = 自用第三端**（只服务需求提出者，由需求提出者手工带三书到公司环境实现）；
+只有平台与编程语言不同）；**Linux = 自用第三端**（只服务需求提出者，由需求提出者手工带三书到本仓实现）；
 **移动端不属本工程**（移动端 = Doyah Notes）。三书**必须入库**，用 GitHub 同步版本 ——
 任何一侧改了契约，另一侧跟着改。
 
@@ -23,6 +23,7 @@
 | 文件 | 说明 |
 |---|---|
 | [平台实现状态.json](平台实现状态.json) | 各平台实现状态的**唯一**登记处：`platforms.<名>.overrides`（编号 → 状态）；**macOS 不在台账里登记**（它是基线） |
+| [平台对齐-Studio-Windows对macOS.md](平台对齐-Studio-Windows对macOS.md) | **Windows 侧对齐 macOS 的逐条派生索引**（编号 → 域 → 层次 → macOS 状态 → **macOS 落点（实现文件）** → Windows 现状）：`fatshark` 对齐开发进度时的查询入口；由 `Scripts/gen-studio-win-align.py` 产出、**勿手工编辑** |
 
 三书里的术语约定见 `需求规范书.md` §0.8：`【契约】` = 两侧必须一致，
 `【macOS】` = 可替换的实现细节。需求书 §3/§4 的「状态」列是 **macOS 基线**，
@@ -36,9 +37,10 @@ python3 Scripts/gen-platform-parity.py --self-test  # 上一半自己的证据�
 python3 Scripts/check-platform-neutrality.py        # 需求书里的平台专属词汇不得比基线更差
 python3 Scripts/check-doc-tables.py                 # 表格列数与派生计数一致
 python3 Scripts/check-doc-versions.py               # 变更记录版本号唯一 / 头部版本格可判 / 队列条目号唯一（L-32）
+python3 Scripts/gen-studio-win-align.py --check # 上述「平台对齐件」与三书 §10.1/§10.2 + 平台实现状态.json 一致（闭环第 7 项）
 ```
 
-五项都已挂进 `Scripts/verify-all.sh`（第 4 / 7 / 8 项），改完文档跑它即可。
+六项都已挂进 `Scripts/verify-all.sh`（第 4 / 7 / 8 项），改完文档跑它即可。
 
 ## 产品文档
 

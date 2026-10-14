@@ -1,0 +1,54 @@
+# Doyah Studio · Linux 端应用工程（骨架片 · 派单 T-20261014-016）
+#
+# 归属：babyhippo（奶牙小河马）· 平台设计层 = Docs/概要设计.md §8.6 `[独占:linux]`
+#
+# 结构（与 §8.6.1 的层表逐行对应）：
+#   .                      表示层外壳（Tauri 2 + 系统 WebView = WebKitGTK；前端与 Windows 侧**同源**）
+#   Core/                  领域层（纯逻辑：零第三方依赖 / 零 UI 依赖 / 零平台能力）
+#   Cli/                   无界面验证入口（子命令 + 退出码表 + --json）
+#   Platform/Linux/        平台适配层（只有这一层谈 Linux 专有能力）
+#
+# 前端同源：本工作区**没有** App/ 目录 —— 前端就是 Windows 侧那一套
+#   `Platform/windows/App/`（见 tauri.conf.json 的 build.frontendDist / devUrl）。
+#   「两侧是同一套前端源码，Linux 只换外壳与平台适配层」（§8.6.1 前端复用边界）。
+#   判据 = Tools/check-linux-skeleton.py 的 D 条（同源 + 本地不另存一份）。
+
+[workspace]
+resolver = "2"
+members = ["Core", "Cli", "Platform/Linux"]
+
+[package]
+name = "doyah-studio-linux-shell"
+version = "0.3.0"
+edition = "2021"
+description = "Doyah Studio Linux 侧表示层外壳（Tauri 2 + WebKitGTK；前端复用 Platform/windows/App）"
+license = "UNLICENSED"
+publish = false
+
+[lib]
+name = "doyah_studio_linux_shell"
+path = "src/lib.rs"
+
+[[bin]]
+name = "doyah-studio"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# 领域层（本端自有 Rust 域层；GUI / 平台依赖不得进入它 —— 判据 check-linux-skeleton.py B、C 两条）
+doyah-studio-core = { path = "Core" }
+# 平台适配层：只有它谈 Linux 专有能力（WebViewGTK / 密钥环 / PTY / 通知 / 剪贴板 / 托盘）
+doyah-studio-linux-platform = { path = "Platform/Linux" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+# 系统文件 / 文件夹选择器（Tauri 2 官方对话框插件）—— 与 Windows 侧同一插件面
+# （前端同源 ⇒ 调用的命令面必须一致，否则同一份前端在 Linux 上的入口会变成死路）
+tauri-plugin-dialog = "2"
+
+[features]
+# Tauri 2 的「自定义协议」档：发布构建用它把前端资源嵌进可执行文件。
+# 默认不开 —— 骨架片的自测（cargo test）不需要，而它会把前端产物绑进编译。
+custom-protocol = ["tauri/custom-protocol"]

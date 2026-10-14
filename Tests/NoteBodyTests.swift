@@ -569,4 +569,115 @@ final class NoteBodyTests: XCTestCase {
         let darker = min(relativeLuminance(a), relativeLuminance(b))
         return (lighter + 0.05) / (darker + 0.05)
     }
+
+    // MARK: 导出转换层 · HTML 半（片 `WY-3a` · 派单 `T-20261008-050` 判据 4）
+
+    /// 判据 4 前半：粗 / 斜 / 下划线 / 行内代码 / 颜色 / 字号都进 HTML（**不是被丢掉**）。
+    func testHTMLExportCarriesInlineStyles() {
+        let body = NoteBody(spans: [
+            NoteSpan(text: "粗", styles: [.bold]),
+            NoteSpan(text: "斜", styles: [.italic]),
+            NoteSpan(text: "下", styles: [.underline]),
+            NoteSpan(text: "码", styles: [.code]),
+            NoteSpan(text: "红", styles: [.color], color: "#FF0000"),
+            NoteSpan(text: "大", styles: [.size], size: 18),
+        ])
+        let result = NoteHTMLExport.exportHTML(body, language: .simplifiedChinese)
+        XCTAssertTrue(result.html.contains("<b>粗</b>"))
+        XCTAssertTrue(result.html.contains("<i>斜</i>"))
+        XCTAssertTrue(result.html.contains("<u>下</u>"))
+        XCTAssertTrue(result.html.contains("<code>码</code>"))
+        XCTAssertTrue(result.html.contains("color:#FF0000"))
+        XCTAssertTrue(result.html.contains("font-size:18px"))
+        XCTAssertTrue(result.degradations.isEmpty, "没有丢东西就不许报降级：\(result.degradations)")
+    }
+
+    /// 判据 4：标题（`# ` 行，层级由 `MarkdownDocument` 判）与列表（`span.block`）各自成块。
+    func testHTMLExportRendersHeadingAndListBlocks() {
+        let body = NoteBody(spans: [
+            NoteSpan(text: "# 标题\n"),
+            NoteSpan(text: "一条", block: .bullet),
+            NoteSpan(text: "\n"),
+            NoteSpan(text: "二条", block: .bullet),
+        ])
+        let result = NoteHTMLExport.exportHTML(body, language: .simplifiedChinese)
+        XCTAssertTrue(result.html.contains("<h1>标题</h1>"), result.html)
+        XCTAssertTrue(result.html.contains("<ul>\n<li>一条</li>"))
+        XCTAssertTrue(result.html.contains("<li>二条</li>"))
+    }
+
+    /// 用户文本里的标记一律**转义**：不许把用户写的 `&` / `<` 当标签放出去。
+    func testHTMLExportEscapesMarkup() {
+        let body = NoteBody(spans: [NoteSpan(text: "5 < 6 & \"引\" 与 **星号**")])
+        let result = NoteHTMLExport.exportHTML(body, language: .simplifiedChinese)
+        XCTAssertTrue(result.html.contains("5 &lt; 6 &amp; &quot;引&quot; 与 **星号**"), result.html)
+        XCTAssertFalse(result.html.contains("< 6"))
+    }
+
+    /// 荧光底色 → `<mark>`；链接 → `<a href>`（目标进属性、**同样要转义**）。
+    func testHTMLExportRendersHighlightAndLink() {
+        let body = NoteBody(spans: [
+            NoteSpan(text: "荧光", backgroundColor: "#E9D68C"),
+            NoteSpan(text: "点我", link: "https://example.com/a?b=1&c=2"),
+        ])
+        let result = NoteHTMLExport.exportHTML(body, language: .simplifiedChinese)
+        XCTAssertTrue(result.html.contains("<mark style=\"background-color:#E9D68C\">荧光</mark>"), result.html)
+        XCTAssertTrue(result.html.contains("<a href=\"https://example.com/a?b=1&amp;c=2\">点我</a>"), result.html)
+    }
+
+    /// 任务项 → `<li><input type="checkbox">`，勾选状态如实带出；两项共一个 `<ul>`。
+    func testHTMLExportRendersTaskCheckbox() {
+        let body = NoteBody(spans: [
+            NoteSpan(text: "要办", block: .task(checked: true)),
+            NoteSpan(text: "\n"),
+            NoteSpan(text: "没办", block: .task(checked: false)),
+        ])
+        let result = NoteHTMLExport.exportHTML(body, language: .simplifiedChinese)
+        XCTAssertTrue(result.html.contains("<li><input type=\"checkbox\" checked disabled> 要办</li>"), result.html)
+        XCTAssertTrue(result.html.contains("<li><input type=\"checkbox\" disabled> 没办</li>"), result.html)
+        XCTAssertEqual(result.html.components(separatedBy: "<ul>").count - 1, 1, "同一个列表不许被拆成两个：\(result.html)")
+    }
+
+    /// **不许静默**：渲不出来的样式值（不是 `#RRGGBB`）要报降级，且**不许**把它写进 `style=`。
+    func testHTMLExportReportsUnrenderableStyleValue() {
+        let body = NoteBody(spans: [NoteSpan(text: "怪", styles: [.color], color: "red")])
+        let result = NoteHTMLExport.exportHTML(body, language: .simplifiedChinese)
+        XCTAssertEqual(result.degradations.count, 1, "\(result.degradations)")
+        XCTAssertTrue(result.degradations[0].contains("red"), result.degradations[0])
+        XCTAssertFalse(result.html.contains("style=\"color:red\""))
+        XCTAssertTrue(result.html.contains("怪"))
+    }
+
+    /// **前向兼容的另一半**：span 上不认得的字段（未来版本写的）留得住（模型），也要**说得出**（这里）。
+    func testHTMLExportReportsUnknownFields() {
+        var span = NoteSpan(text: "未来")
+        span.unknownFields = ["highlight": .string("#FFFF00")]
+        let result = NoteHTMLExport.exportHTML(NoteBody(spans: [span]), language: .simplifiedChinese)
+        XCTAssertEqual(result.degradations.count, 1, "\(result.degradations)")
+        XCTAssertTrue(result.degradations[0].contains("highlight"), result.degradations[0])
+    }
+
+    /// 语言由调用方给定（与 Markdown 半同口径）＋ 落一份导出样本到临时目录，
+    /// 供闭环用 `python3` 的 `HTMLParser` 真解析一遍（判据 4 的机械核）。
+    func testHTMLExportFollowsLanguageAndDumpsSample() throws {
+        var span = NoteSpan(text: "未来")
+        span.unknownFields = ["highlight": .string("#FFFF00")]
+        let english = NoteHTMLExport.exportHTML(NoteBody(spans: [span]), language: .english)
+        XCTAssertTrue(english.degradations[0].contains("which was not rendered"), english.degradations[0])
+
+        let sample = NoteBody(spans: [
+            NoteSpan(text: "# 标题\n"),
+            NoteSpan(text: "正文 ", styles: []),
+            NoteSpan(text: "粗", styles: [.bold]),
+            NoteSpan(text: " 与 "),
+            NoteSpan(text: "彩", styles: [.color], color: "#FF0000"),
+            NoteSpan(text: "\n"),
+            NoteSpan(text: "条目", block: .bullet),
+        ])
+        let result = NoteHTMLExport.exportHTML(sample, language: .simplifiedChinese, title: "样张")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("doyah-note-html-export-sample.html")
+        try result.html.write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        print("HTML-EXPORT-SAMPLE=\(url.path)")
+    }
 }

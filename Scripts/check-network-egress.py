@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""门禁：**产品源面**（`scan.roots` 逐根列出）网络出口的「按面分层的文件级显式清单」（Notes SRS **v3.94** §6.4 · 前门落笔 `987ace7`）。
+"""门禁：**全仓**网络出口的「按面分层的文件级显式清单」（Notes SRS **v3.94** §6.4 · 前门落笔 `987ace7`）。
+
+**扫描面 = 全仓**（前门裁 `T-20261014-204` 第 9 条：「以**声明**为准，把扫描面扩到全仓 —— **不许收窄声明
+去迁就脚本**」，原单 `T-20261010-016/017/018`）：台账 `scan.scope` 必须是 `repo`；排除名单（`scan.excludeDirs`）
+只许放生成物 / 稀疏检出副本；「面比声明窄」由本门禁自己实测判红 —— 一行台账缩不了面。
 
 **为什么有它**：`FR-PLUG-05` 的「笔记模块零网络出口」（`check-notes-offline.py`）只扫 `Core/` 下
 文件名以 `Note` / `AICapture` / `License` 开头的文件与 `App/` 下的 `Note*` —— 而 **`Core/NoteSync/`
@@ -14,11 +18,12 @@
   ② **认证面**     = `Plugins/Notes/Sources/NoteSync/CloudAuth.swift`（单列：认证与同步解耦）
   ③ **AI 面（既有豁免）** = `Core/LLMClient.swift` + `Core/EgressLog.swift`（传输装饰器）
   ④ **装配缝（不算出口）** = `App/AppState.swift` · `App/Auth/AccountFlowModel.swift`（只注入 transport）
-  ⑤ **面内其余一切文件**出现 `URLSession` / `URLRequest` ⇒ **判红**（并点名 `文件:行号`）
-  ⑥ **面外（本门禁不判的方向，但必须报读数 + 登记）** = `CLI/` · `Platform/` · `Tools/` · `Tests*` ·
-     `Vendor/` · `Scripts/*.swift` 等不在 `scan.roots` 里的 `.swift`：每次都要打出「面外 .swift N 份 /
-     其中出现出网令牌 M 份」，M 份逐条登记在台账 `outOfFace` —— **漏登 / 陈旧 / 死登记都判红**（只减不增）。
-     登记 ≠ 放行：面外那两处（CLI / Platform）的**定性**由前门裁（原单 `T-20261010-040` ④）。
+  ⑤ **白名单面以外的一切文件**（全仓已在扫描面内）出现 `URLSession` / `URLRequest` ⇒ **判红**（并点名 `文件:行号`）
+  ⑥ **非白名单面但已登记**（台账 `outOfFace`：`CLI/` · `Platform/` · `Tests*` …）：每次打出读数，
+     逐条登记 **漏登 / 陈旧 / 死登记 / 抹登记都判红**（只减不增；条数下限 `floors.minRegisteredEgress`）。
+     **登记 ≠ 放行**：`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift` 两处生产面活体的
+     **定性**由前门裁（原单 `T-20261010-040` ④）。
+  ⑦ **面钉**：`scan.scope != "repo"` 或实测扫描面漏掉不在排除名单里的 `.swift` ⇒ 判红（原单 `T-20261010-018`）。
 
 **口径（写死，见 SRS v3.94 §6.4 四条纪律）**：
 
@@ -133,7 +138,8 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str], d
     required = [token for token in (ledger.get("requiredTokens") or []) if token]
     surfaces = ledger.get("surfaces") or []
     scan_cfg = ledger.get("scan") or {}
-    scan_roots = scan_cfg.get("roots") or ["App", "Core"]
+    exclude_dirs = set(scan_cfg.get("excludeDirs") or [".git", ".build", ".worktrees"])
+    declared_scope = (scan_cfg.get("scope") or "").strip()
     floors = ledger.get("floors") or {}
     wiring = ledger.get("wiring") or {}
 
@@ -176,124 +182,131 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str], d
                 except re.error as pattern_error:
                     problems.append(f"装配缝的 allowPatterns 正则不合法：{pattern_error}")
 
-    # ---- ② 逐文件扫（只判**代码行**；注释里的提及不算出现）--------------------
+    # ---- ② 逐文件扫（**全仓**：与声明「其余一切文件」同源；只判**代码行**）------
+    declared: dict[str, list[str]] = {}
+    for entry in ledger.get("outOfFace") or []:
+        entry_rel = (entry or {}).get("file") or ""
+        if not entry_rel:
+            problems.append("登记类条目缺 file")
+            continue
+        if len(((entry or {}).get("reason") or "").strip()) < 12:
+            problems.append(f"登记类 `{entry_rel}` 没写明理由（说不清它为什么算出网登记）")
+        if not ((entry or {}).get("tokens") or []):
+            problems.append(f"登记类 `{entry_rel}` 一个令牌都没写（零令牌的登记等于没登记）")
+        declared[entry_rel] = sorted((entry or {}).get("tokens") or [])
+    if not declared:
+        problems.append(
+            "台账 `outOfFace` 一条登记都没有 —— 非白名单面出现出网令牌者必须逐条登记（零登记不许当通过）"
+        )
     for token in tokens:
         stats["surfaceHits"][token] = 0
     violations: list[str] = []
     occurrence_files: set[str] = set()
+    registered_seen: dict[str, list[str]] = {}
+    scanned_files: set[str] = set()
+    excluded_files: list[str] = []
     seam_allowed = 0
-    for base in scan_roots:
-        base_dir = root / base
-        if not base_dir.is_dir():
-            problems.append(f"扫描根不存在：{base}/")
-            continue
-        for path in sorted(base_dir.rglob("*.swift")):
-            rel = path.relative_to(root).as_posix()
-            stats["filesScanned"] += 1
-            surface = surface_of.get(rel)
-            for number, code in code_lines(read(path)):
-                for token in tokens:
-                    if token not in code:
-                        continue
-                    stats["occurrences"] += 1
-                    occurrence_files.add(rel)
-                    if surface is None:
-                        violations.append(
-                            f"{rel}:{number}：命中网络 API `{token}` —— 该文件**不在台账任何一面里**"
-                            f"（`{LEDGER_DEFAULT}`；SRS v3.94 §6.4：**面内**其余一切文件不得出现 "
-                            f"`URLSession` / `URLRequest`）。新增联网文件须前门登记后放行（纪律②）"
-                        )
-                        continue
-                    if surface == "seam":
-                        remainder = code
-                        for pattern in seam_patterns:
-                            remainder = pattern.sub("", remainder)
-                        if token in remainder:
-                            violations.append(
-                                f"{rel}:{number}：装配缝文件命中**直接出网调用** `{token}` —— "
-                                f"装配缝只许**注入 transport**（`URLSessionTransport(` / "
-                                f"`URLSessionCloudAuthTransport(`），不得直接出网（SRS v3.94 §6.4 纪律③）"
-                            )
-                        else:
-                            seam_allowed += 1
-                        continue
-                    stats["surfaceHits"][token] = stats["surfaceHits"].get(token, 0) + 1
-
-    # ---- ③′ 面外读数与登记（原单 T-20261010-040）----------------------------
-    exclude_dirs = set(scan_cfg.get("excludeDirs") or [".git", ".build", ".worktrees"])
-    face_files: set[str] = set()
-    for base in scan_roots:
-        base_dir = root / base
-        if base_dir.is_dir():
-            for face_path in base_dir.rglob("*.swift"):
-                face_files.add(face_path.relative_to(root).as_posix())
-    out_of_face: list[str] = []
-    for any_path in sorted(root.rglob("*.swift")):
-        rel = any_path.relative_to(root).as_posix()
+    for path in sorted(root.rglob("*.swift")):
+        rel = path.relative_to(root).as_posix()
         if any(part in exclude_dirs for part in rel.split("/")):
+            excluded_files.append(rel)
             continue
-        if rel in face_files:
-            continue
-        out_of_face.append(rel)
-    out_hits: dict[str, list[str]] = {}
-    for rel in out_of_face:
-        try:
-            found = sorted({token for _, code in code_lines(read(root / rel)) for token in tokens if token in code})
-        except OSError as read_error:
-            problems.append(f"面外文件读不了：{rel}（{read_error}）")
-            continue
-        if found:
-            out_hits[rel] = found
-    stats["outOfFaceScanned"] = len(out_of_face)
-    stats["outOfFaceEgress"] = {rel: found for rel, found in out_hits.items()}
-
+        scanned_files.add(rel)
+        stats["filesScanned"] += 1
+        surface = surface_of.get(rel)
+        hit_tokens: list[str] = []
+        for number, code in code_lines(read(path)):
+            for token in tokens:
+                if token not in code:
+                    continue
+                stats["occurrences"] += 1
+                occurrence_files.add(rel)
+                if token not in hit_tokens:
+                    hit_tokens.append(token)
+                if surface is None:
+                    if rel in declared:
+                        continue  # 非白名单面但已登记（登记 ≠ 放行；定性由前门裁）
+                    violations.append(
+                        f"{rel}:{number}：命中网络 API `{token}` —— 全仓扫描面（SRS v3.94 §6.4 表末行"
+                        f"「其余一切文件」）里它**既不在台账任何一面里、也不在登记清单 `outOfFace` 里**"
+                        f"（`{LEDGER_DEFAULT}`）⇒ 新增联网文件须前门登记后放行（纪律②）"
+                    )
+                    continue
+                if surface == "seam":
+                    remainder = code
+                    for pattern in seam_patterns:
+                        remainder = pattern.sub("", remainder)
+                    if token in remainder:
+                        violations.append(
+                            f"{rel}:{number}：装配缝文件命中**直接出网调用** `{token}` —— "
+                            f"装配缝只许**注入 transport**（`URLSessionTransport(` / "
+                            f"`URLSessionCloudAuthTransport(`），不得直接出网（SRS v3.94 §6.4 纪律③）"
+                        )
+                    else:
+                        seam_allowed += 1
+                    continue
+                stats["surfaceHits"][token] = stats["surfaceHits"].get(token, 0) + 1
+        if rel in declared:
+            registered_seen[rel] = sorted(hit_tokens)
+    stats["excludedSwift"] = len(excluded_files)
+    stats["outOfFaceScanned"] = stats["filesScanned"] - len([r for r in scanned_files if r in surface_of])
+    stats["outOfFaceEgress"] = dict(registered_seen)
     problems.extend(violations)
     stats["violations"] = len(violations)
-
-    # ---- ③ 台账 ↔ 扫描对账（漏登一个文件也不行）-------------------------------
-    for rel in sorted(occurrence_files):
-        if rel not in surface_of:
-            # 已由 ② 逐条报出；这里只保证「有出现的文件集合 ⊆ 台账登记的集合」这条结构不变量也在。
-            continue
+    # ---- ③ 面钉：声明「全仓」与实测同源（一行台账缩不了面 · 原单 T-20261010-018）----
+    if declared_scope != "repo":
+        problems.append(
+            f"台账 `scan.scope` = {declared_scope!r}、不是 `repo` —— 声明（SRS v3.94 §6.4 表末行「其余一切文件」）"
+            "是**全仓**，扫描面不许由被审台账自己改窄（一行台账即可缩面 = 静默失守）"
+        )
+    allowed_excluded = set(scan_cfg.get("excludeDirsAllowed") or [])
+    if not allowed_excluded:
+        problems.append(
+            "台账 `scan.excludeDirsAllowed` 是空的 —— 排除名单没有钉：把真源码目录塞进 `excludeDirs` 就能静默缩面"
+            "（原单 T-20261010-018 那一类「一行台账即可缩面」）"
+        )
+    stray_excluded = sorted(exclude_dirs - allowed_excluded)
+    if stray_excluded:
+        problems.append(
+            f"排除名单里出现**未登记**的项：{stray_excluded} —— 排除名单只许放生成物 / 稀疏检出副本，"
+            f"且必须写进 `scan.excludeDirsAllowed`（把真源码目录塞进来 = 静默缩面，判红）"
+        )
+    unseen = [
+        rel for rel in (p.relative_to(root).as_posix() for p in root.rglob("*.swift"))
+        if rel not in scanned_files and not any(part in exclude_dirs for part in rel.split("/"))
+    ]
+    if unseen:
+        problems.append(
+            f"扫描面漏掉了 {len(unseen)} 份**不在排除名单内**的 .swift（前几份：{unseen[:3]}）—— 面比声明窄；"
+            "排除名单只许放生成物 / 稀疏检出副本，且必须写在 `scan.excludeDirs` 里"
+        )
+    buckets: dict[str, int] = {}
+    for rel in excluded_files:
+        for part in rel.split("/"):
+            if part in exclude_dirs:
+                buckets[part] = buckets.get(part, 0) + 1
+                break
+    bucket_text = "、".join(f"{part}/ {count}" for part, count in sorted(buckets.items(), key=lambda kv: -kv[1]))
     notes.append(
-        f"扫描 {' + '.join(f'{base}/' for base in scan_roots)} 共 {stats['filesScanned']} 个 .swift；"
+        f"扫描面 = **全仓** {stats['filesScanned']} 份 .swift（排除名单内 {len(excluded_files)} 份：{bucket_text}）；"
         f"命中令牌 {stats['occurrences']} 处（白名单面 {sum(stats['surfaceHits'].values())} 处 · "
-        f"装配缝 transport 注入 {seam_allowed} 处）；违规 {stats['violations']} 处"
+        f"装配缝 transport 注入 {seam_allowed} 处 · 非白名单面已登记文件 {len(registered_seen)} 份）；"
+        f"违规 {stats['violations']} 处"
     )
-
-    # ---- ③″ 面外登记 ↔ 面外事实（漏登 / 陈旧 / 死登记，只减不增）-------------
-    declared: dict[str, list[str]] = {}
-    for entry in ledger.get("outOfFace") or []:
-        rel = (entry or {}).get("file") or ""
-        if not rel:
-            problems.append("面外登记条目缺 file")
-            continue
-        if len(((entry or {}).get("reason") or "").strip()) < 12:
-            problems.append(f"面外登记 `{rel}` 没写明理由（说不清它为什么算面外已知出网）")
-        if not ((entry or {}).get("tokens") or []):
-            problems.append(f"面外登记 `{rel}` 一个令牌都没写（零令牌的登记等于没登记）")
-        declared[rel] = sorted((entry or {}).get("tokens") or [])
-    if not declared:
-        problems.append("台账 `outOfFace` 一条登记都没有 —— 面外出现出网令牌者必须逐条登记（零登记不许当通过）")
-    for rel, found in sorted(out_hits.items()):
-        if rel not in declared:
+    # ---- ③″ 非白名单面登记 ↔ 事实（陈旧 / 死登记，只减不增）------------------
+    for rel, found in sorted(registered_seen.items()):
+        if declared.get(rel) != found:
             problems.append(
-                f"{rel}：**面外**文件出现出网令牌 {found}，台账 `outOfFace` 里却没有它的登记 —— "
-                f"面外出现出网令牌不等于放行，须逐条登记（漏登即判红；原单 T-20261010-040）"
+                f"登记 `{rel}` 写的是 {declared.get(rel)}、盘上实测 {found} —— 登记与事实不符（陈旧登记）"
             )
-        elif declared[rel] != found:
-            problems.append(
-                f"面外登记 `{rel}` 写的是 {declared[rel]}、盘上实测 {found} —— 登记与事实不符（陈旧登记）"
-            )
-
     for rel in sorted(declared):
-        if not (root / rel).exists():
-            problems.append(f"面外登记 `{rel}` 磁盘上不存在（改名 / 删除了？请同步台账；死登记不许留着）")
-        elif rel not in out_hits:
-            problems.append(f"面外登记 `{rel}` 现在一处令牌都不出现了 —— 陈旧登记，请销账（只减不增）")
+        if rel not in scanned_files:
+            problems.append(f"登记 `{rel}` 磁盘上不存在（改名 / 删除了？请同步台账；死登记不许留着）")
+        elif rel not in registered_seen:
+            problems.append(f"登记 `{rel}` 现在一处令牌都不出现了 —— 陈旧登记，请销账（只减不增）")
     notes.append(
-        f"面外 .swift {len(out_of_face)} 份；其中出现出网令牌 {len(out_hits)} 份"
-        f"（逐条登记在 `outOfFace`，定性待前门）"
+        f"非白名单面 .swift {stats['outOfFaceScanned']} 份；其中出现出网令牌 {len(registered_seen)} 份"
+        f"（逐条登记在 `outOfFace`，定性待前门 · 登记条数下限 `floors.minRegisteredEgress`）"
     )
 
     # ---- ④ 令牌表不许被掏空 --------------------------------------------------
@@ -340,6 +353,12 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str], d
     minimum_surfaces = floors.get("minSurfaces") or 0
     if len(surfaces) < minimum_surfaces:
         problems.append(f"台账只有 {len(surfaces)} 个面、下限 {minimum_surfaces} —— 面被削掉了")
+    minimum_registered = floors.get("minRegisteredEgress") or 0
+    if len(declared) < minimum_registered:
+        problems.append(
+            f"登记清单被抹：`outOfFace` 只剩 {len(declared)} 条、下限 {minimum_registered} —— "
+            f"删掉登记就没人再看见「非白名单面实测的真出网」（前门令：**登记不许抹** · 原单 T-20261010-040）"
+        )
     if stats["occurrences"] == 0:
         problems.append(
             "空跑防护：面内一个令牌出现都没命中 —— 白名单里那几个面本来就该有出现，"
@@ -371,6 +390,7 @@ def main() -> int:
             {
                 "ok": not problems,
                 "filesScanned": stats["filesScanned"],
+                "excludedSwift": stats.get("excludedSwift", 0),
                 "occurrences": stats["occurrences"],
                 "violations": stats["violations"],
                 "outOfFaceScanned": stats.get("outOfFaceScanned", 0),
@@ -391,9 +411,9 @@ def main() -> int:
             print(f"  · {problem}")
         return 1
     print(
-        "\n✅ 产品源面（`scan.roots` 逐根列出，**不是全仓**）网络出口与 Notes SRS v3.94 §6.4 的清单一致："
-        "白名单面上出现的令牌都在台账里，"
-        "其余文件（只判代码行）一个都没有；装配缝只注入 transport；关键令牌仍在表内；门禁已接进闭环。"
+        "\n✅ **全仓**网络出口与 Notes SRS v3.94 §6.4 的清单一致：白名单面上出现的令牌都在台账里，"
+        "其余文件（只判代码行）一个都没有；装配缝只注入 transport；非白名单面的出网文件逐条已登记；"
+        "关键令牌仍在表内；门禁已接进闭环。"
     )
     return 0
 
