@@ -190,6 +190,52 @@ final class NotesEditorFormatProbeTests: XCTestCase {
             highlight, Theme.nsColor(hex: NoteHighlight.rgb),
             "底色必须是**一处定义**的那份淡黄（`NoteHighlight`）——不是各写一遍的另一个黄"
         )
+        // **成对落地**（契约 §2.4 可读性义务 · 2026-10-14 补）：点笔刷这条路**也必须**把文字钉成近黑。
+        // 这条判据是**真缺陷抓出来的**（派单 `T-20261014-011` 取证探针）：原先本路只铺底色 ⇒
+        // 深色主题下文字仍是主题浅色（`textPrimary` = `#CAD0DC`）压在新底色上 ≈1.4:1，P0 原地复现。
+        XCTAssertEqual(
+            storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor,
+            Theme.nsColor(hex: NoteHighlight.foregroundRGB),
+            "点一下笔刷：底色与前景色必须**成对**落下 —— 这一段文字该被钉成近黑 `#1C1C1E`"
+                + "（只铺底色不修字 = 深色主题下浅字压浅底，人类主人 P0）"
+        )
+
+        // 关掉笔刷：底色与强制前景色**一起**撤（留黑字没底色也是假状态）。
+        textView.setSelectedRange(range)
+        surface.controller.toggle(.highlight)
+        XCTAssertNil(
+            storage.attribute(.backgroundColor, at: 0, effectiveRange: nil),
+            "再点一下笔刷：底色必须撤掉"
+        )
+        XCTAssertNil(
+            storage.attribute(.foregroundColor, at: 0, effectiveRange: nil),
+            "再点一下笔刷：强制前景色也要一起撤（成对拆）——留着就是「黑字没底色」的假状态"
+        )
+
+        // **重排/主题重涂之后这一对仍在**（真界面条件：`configure` 每次 `updateNSView` 都跑，
+        // 里面那行 `textView.textColor` 是整篇涂的）。这条是**第二处真缺陷**抓出来的：
+        // 修前 `settle()` 一跑，前景色就回到主题色（深色主题 = 浅色）⇒ P0 原地复现。
+        surface.controller.toggle(.highlight)
+        XCTAssertEqual(
+            storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor,
+            Theme.nsColor(hex: NoteHighlight.foregroundRGB),
+            "铺底色后先确认一次（重排前）"
+        )
+        surface.host.settle()
+        surface.host.pump(0.3)
+        XCTAssertEqual(
+            storage.attribute(.backgroundColor, at: 0, effectiveRange: nil) as? NSColor,
+            Theme.nsColor(hex: NoteHighlight.rgb),
+            "重排之后底色还要在"
+        )
+        XCTAssertEqual(
+            storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor,
+            Theme.nsColor(hex: NoteHighlight.foregroundRGB),
+            "**重排 / 主题重涂之后**强制近黑还必须活着 —— 否则深色主题下浅字压浅底（P0 复现）"
+        )
+        // 收尾：撤掉底色，别把状态留给后面的断言。
+        textView.setSelectedRange(range)
+        surface.controller.toggle(.highlight)
         let highlightNote = highlight == Theme.nsColor(hex: NoteHighlight.rgb) ? "淡黄 ✓" : "不是淡黄"
         print(
             "📄 WY-1b1 ② 四枚：粗(trait=\(boldTrait)) ／ 斜(trait=\(italicTrait)) ／ "

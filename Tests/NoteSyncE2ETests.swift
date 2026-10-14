@@ -478,7 +478,7 @@ final class NoteSyncE2ETests: XCTestCase {
         let exchange = NoteBodyExchange.json(body)
         XCTAssertEqual(
             exchange,
-            ##"{"version":2,"spans":[{"type":"TEXT","content":"普通文字","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000"}},{"type":"TEXT","content":"粗体","styles":{"bold":true,"italic":false,"underline":false,"fontSize":16,"color":"#000000"}},{"type":"TEXT","content":"链接","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000"},"link":"https://example.com/a"},{"type":"TEXT","content":"荧光","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000","backgroundColor":"#FFF3B0"}},{"type":"LIST_CHECKBOX","content":"带勾任务","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000"},"checked":true}]}"##,
+            ##"{"version":2,"spans":[{"type":"TEXT","content":"普通文字","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000"}},{"type":"TEXT","content":"粗体","styles":{"bold":true,"italic":false,"underline":false,"fontSize":16,"color":"#000000"}},{"type":"TEXT","content":"链接","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000"},"link":"https://example.com/a"},{"type":"TEXT","content":"荧光","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000","backgroundColor":"\##(NoteHighlight.backgroundColorHex)"}},{"type":"LIST_CHECKBOX","content":"带勾任务","styles":{"bold":false,"italic":false,"underline":false,"fontSize":16,"color":"#000000"},"checked":true}]}"##,
             "交换面 canonical 形状（键序 / 类型 / styles 对象 / 有值才写）"
         )
         XCTAssertFalse(exchange.contains("\\/"), "`/` 不得转义成 `\\/`")
