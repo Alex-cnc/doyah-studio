@@ -73,16 +73,13 @@ def make_tree() -> Path:
         destination = tree / rel
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, destination)
-    # 台账里的每个扫描根都得在副本里存在（2026-10-13 · P3 搬家后 `Plugins/Notes/**` 也是扫描根）——
-    # 缺一个根 ⇒ 门禁按「扫描根不存在」判红，干净副本那一例会假红。
-    roots = (json.loads((ROOT / LEDGER).read_text(encoding="utf-8")).get("scan") or {}).get("roots") or []
-    for root in roots:
-        (tree / root).mkdir(parents=True, exist_ok=True)
-    # 夹具台账跟版（2026-10-14 · 合册 T-20261013-027 · 原单 T-20261010-040）：
-    # 真仓 `floors.minFilesScanned` = 357（面内 `.swift` 实数），夹具树只有十几份 ⇒ 不按夹具下调就
-    # 会让「干净副本应当绿」这一例假红。真仓那个下限由本脚本末段的**静态臂**看住（不得回退到 1）。
-    face_count = sum(1 for base in roots for _ in (tree / base).rglob("*.swift"))
-    edit_ledger(tree, lambda data: data["floors"].update({"minFilesScanned": face_count}))
+    # 夹具台账跟版（2026-10-14 · 合册 `T-20261013-027` · 清册第 9~11 行 · 前门 `T-20261014-204` 第 9 条）：
+    # 扫描面已由「产品源面四根」改成**全仓** ⇒ 夹具树自己数一遍 `.swift`（真仓下限 911 由末段**静态臂**看住），
+    # 登记条数下限也按真仓台账现值对齐 —— 否则「干净副本应当绿」这一例会假红。
+    tree_swift = sum(1 for _ in tree.rglob("*.swift"))
+    registered = len(json.loads((ROOT / LEDGER).read_text(encoding="utf-8")).get("outOfFace") or [])
+    edit_ledger(tree, lambda data: data["floors"].update(
+        {"minFilesScanned": tree_swift, "minRegisteredEgress": registered}))
     return tree
 
 
@@ -253,18 +250,36 @@ def main() -> int:
         "没写明理由",
     )
 
-    print("— 面边界（原单 T-20261010-040）：面外不判，但面外活体必须点名 / 登记 / 棘轮 —")
+    print("— 面钉与登记棘轮（原单 T-20261010-018 / T-20261010-040）：面 = **全仓**、登记不许抹 —")
     case_red(
-        "面外文件（`CLI/main.swift`）被放进面内 ⇒ 判红并点名（面外确有活体、旧面静默放过）",
-        lambda tree: edit_ledger(tree, lambda data: data["scan"].update(
-            {"roots": data["scan"]["roots"] + ["CLI", "Platform"]})),
-        "CLI/main.swift:", "Platform/macOS/WebKitBrowserEngine.swift:",
+        "台账把 `scan.scope` 改窄（改回产品源面）⇒ 判红（面钉⑦：一行台账缩不了面 · 原单 T-20261010-018）",
+        lambda tree: edit_ledger(tree, lambda data: data["scan"].update({"scope": "product"})),
+        "scan.scope", "不是 `repo`",
+    )
+    case_red(
+        "把真源码目录塞进排除名单（`excludeDirs` 加 `CLI`）⇒ 判红（排除名单也有钉）",
+        lambda tree: edit_ledger(tree, lambda data: data["scan"]["excludeDirs"].append("CLI")),
+        "未登记", "CLI",
+    )
+    case_red(
+        "排除名单的钉被掏空（`excludeDirsAllowed` 清空）⇒ 判红（排除名单没有钉）",
+        lambda tree: edit_ledger(tree, lambda data: data["scan"].update({"excludeDirsAllowed": []})),
+        "排除名单没有钉",
+    )
+    def drop_registration(tree):
+        edit_ledger(tree, lambda data: data.update({
+            "outOfFace": [e for e in data["outOfFace"] if e["file"] != "CLI/main.swift"]}))
+        (tree / "CLI/main.swift").unlink()
+    case_red(
+        "登记被抹（删掉 `CLI/main.swift` 的登记 + 文件）⇒ 判红（前门令：**登记不许抹**）",
+        drop_registration,
+        "登记清单被抹",
     )
     case_red(
         "面外新出现未登记的出网文件（`CLI/EgressLeak.swift`）⇒ 判红点名（面外登记的只减不增棘轮）",
         lambda tree: (tree / "CLI/EgressLeak.swift").write_text(
             "import Foundation\nlet leak = URLSession.shared\n", encoding="utf-8"),
-        "CLI/EgressLeak.swift", "面外",
+        "CLI/EgressLeak.swift", "不在登记清单",
     )
     case_green(
         "面外新增**非**出网文件（`CLI/Notes.swift` 无令牌）⇒ 仍绿（不许地毯式判红）",
@@ -277,7 +292,7 @@ def main() -> int:
         "零登记不许当通过",
     )
     case_red(
-        "面外登记条目陈旧（登记的文件现在一处令牌都不出现）⇒ 判红",
+        "已登记文件现在一处令牌都不出现（陈旧登记）⇒ 判红",
         lambda tree: edit(
             tree, "CLI/main.swift",
             lambda text: "import Foundation\nlet clean = 1\n",
@@ -291,7 +306,7 @@ def main() -> int:
         "CLI/Ghost.swift", "磁盘上不存在",
     )
     case_red(
-        "面内扫描面被削到下限以下 ⇒ 判红（空跑防护：357 那个下限真会响）",
+        "全仓扫描面被削到下限以下 ⇒ 判红（空跑防护：911 那个下限真会响）",
         lambda tree: edit_ledger(tree, lambda data: data["floors"].update(
             {"minFilesScanned": data["floors"]["minFilesScanned"] + 50})),
         "扫描面只有",
@@ -307,10 +322,19 @@ def main() -> int:
         "没有本门禁",
     )
 
-    print("— 真仓台账的静态臂（面钉 / 面外登记不得回退）—")
+    print("— 真仓台账的静态臂（面钉 / 排除名单钉 / 登记不得回退）—")
     real_ledger = json.loads((ROOT / LEDGER).read_text(encoding="utf-8"))
-    real_floor = (real_ledger.get("floors") or {}).get("minFilesScanned") or 0
-    record(real_floor >= 300, "真仓 `floors.minFilesScanned` ≥ 300（面钉不得回退到 1）", f"实际 {real_floor}")
+    real_scan = real_ledger.get("scan") or {}
+    real_floors = real_ledger.get("floors") or {}
+    real_floor = real_floors.get("minFilesScanned") or 0
+    record(real_floor >= 900, "真仓 `floors.minFilesScanned` ≥ 900（全仓面钉不得回退）", f"实际 {real_floor}")
+    record((real_scan.get("scope") or "") == "repo",
+           "真仓 `scan.scope` == `repo`（声明 = 全仓，不得改窄）", f"实际 {real_scan.get('scope')!r}")
+    record(len(real_scan.get("excludeDirsAllowed") or []) >= 5,
+           "真仓 `scan.excludeDirsAllowed` ≥ 5 项（排除名单有钉）",
+           f"实际 {real_scan.get('excludeDirsAllowed')}")
+    real_reg_floor = real_floors.get("minRegisteredEgress") or 0
+    record(real_reg_floor >= 10, "真仓 `floors.minRegisteredEgress` ≥ 10（**登记不许抹**）", f"实际 {real_reg_floor}")
     real_out = {entry.get("file") for entry in (real_ledger.get("outOfFace") or [])}
     record({"CLI/main.swift", "Platform/macOS/WebKitBrowserEngine.swift"} <= real_out,
            "真仓 `outOfFace` 仍登记着两处生产面外活体（不得删已知缺口）", f"实际 {sorted(real_out)}")
