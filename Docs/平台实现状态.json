@@ -103,13 +103,7 @@
         "FR-PLUG-02": "✅",
         "FR-PLUG-03": "✅",
         "FR-PLUG-06": "✅",
-        "FR-PLUG-07": "✅",
-        "NFR-PERF-05": "✅",
-        "NFR-PERF-06": "✅",
-        "NFR-REL-01": "✅",
-        "NFR-REL-02": "✅",
-        "NFR-REL-04": "✅",
-        "NFR-REL-05": "✅"
+        "FR-PLUG-07": "✅"
       }
     }
   },
