@@ -6915,6 +6915,22 @@ final class AppState: ObservableObject {
         } else if engine.didMigrate {
             statusMessage = L(.notesEngineMigrated, engine.noteCount)
         }
+        // **旧正文迁移**（`FR-RT-11` · 片 `WY-2b`）：v1 存量笔记的正文（Markdown 文本、`spans` 为
+        // `NULL`）迁成 v2 权威源（span 树）—— **迁移前的全量原文先落盘备份**
+        //（`note-bodies-backup.json`，同名在盘则顺延 `-2`）。同样**幂等**：库里每条都有 `spans`
+        // 之后，这一步只是一次 `SELECT … WHERE spans IS NULL` 的开销。
+        do {
+            let bodies = try await NoteLibrary.defaultLibrary().migrateLegacyBodiesIfNeeded()
+            if bodies.outcome == .partial {
+                // 迁移前后投影对不上 / 有行没写成 ⇒ **不许静默**（判据 ① 就靠这条出声）。
+                errorMessage = L(
+                    .notesMigrationNeedsAttention,
+                    (bodies.mismatches + bodies.failures).joined(separator: " / ")
+                )
+            }
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
         // 两层归属（队列 L-97 第二片）：一次性把「缺归属」的笔记落进默认笔记本 —— **幂等**，
         // 常态下这一步只是两次 SELECT 的开销。默认容器的名字从语言表给（Core 不许写死文案：
         // 名字是要落库、要显示给用户的数据）。

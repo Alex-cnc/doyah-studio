@@ -289,6 +289,34 @@ public actor NoteLibrary {
         try open().noteSpans(id: id)
     }
 
+    /// **旧正文迁移**（`FR-RT-11` · 片 `WY-2b`）：把 v1 存量笔记的正文（Markdown 文本、`spans` 为
+    /// `NULL`）迁成 v2 权威源（span 树 JSON）；**迁移前的全量原文先落盘备份**。
+    ///
+    /// 判据（`FR-RT-11` 原文三条）：① 迁移前后投影一致 ⇒ `Report.mismatches` 为空；
+    /// ② 二次迁移无 diff ⇒ 第二跑 `written == 0` 且 `backupName == nil`；③ 备份文件在盘 ⇒ `Report.backupURL`。
+    ///
+    /// 备份落点缺省 = 数据家（`databaseURL` 所在目录）；`backupDirectory` 可覆盖（测试用临时目录）。
+    /// 库还不存在 ⇒ 如实返回空读数（**不顺手建一个空库**，与 `load()` / `todos()` 同一条纪律）。
+    public func migrateLegacyBodiesIfNeeded(
+        backupDirectory: URL? = nil,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> NoteBodyMigrationRunner.Report {
+        // `DOYAH_NOTES_DIR` 覆盖（脚本 / 测试把数据挪到临时目录）⇒ **主动让路**：那是「数据家在别处」
+        // 的信号，照迁只会把真实用户的正文迁进临时目录 —— 与 `NoteLibraryMigration.migrateIfNeeded`
+        // 第 5 条同一条纪律。（显式给了 `backupDirectory` 的调用点 = 测试，不受这条影响。）
+        if backupDirectory == nil, let override = environment["DOYAH_NOTES_DIR"], !override.isEmpty {
+            return NoteBodyMigrationRunner.emptyReport(outcome: .skippedOverridden)
+        }
+        // 库还不存在 ⇒ 没有要搬的东西（**不顺手建一个空库**，与 `load()` / `todos()` 同纪律）。
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else {
+            return NoteBodyMigrationRunner.emptyReport(outcome: .nothingToMigrate)
+        }
+        return try NoteBodyMigrationRunner.run(
+            store: NoteBodyMigrationDatabaseStore(database: open()),
+            sink: FileNoteBodyMigrationSink(directory: backupDirectory ?? databaseURL.deletingLastPathComponent())
+        )
+    }
+
     // MARK: - 待办任务清单（schema v5 · 队列 `N-11` 的 macOS 核心层半）
 
     /// 全部任务（**创建时间正序** —— 稳定有序；三档排序口径属契约半，见 `Todo` 的说明）。
@@ -410,5 +438,31 @@ public actor NoteLibrary {
     /// 比代码新的库由 `NoteDatabase` 抛 `unsupportedSchemaVersion` —— 这里不吞，让 `loadOutcome()` 如实报出来。
     private func open() throws -> NoteDatabase {
         try NoteDatabase(path: databaseURL.path)
+    }
+}
+
+/// `NoteBodyMigrationStore` 的 SQLite 落地：把迁移执行器接到 `NoteDatabase`。
+///
+/// 写走 `NoteDatabase.setNoteSpans` —— 那是**全仓唯一**写 `spans` 列的地方（片 `WY-1a` 立的单一
+/// 写入口，`WY-2a` 把它接到编辑面、本片把它接到迁移面）：迁移不另开一条写路，就不会出现
+/// 「权威源换了、`body` 投影还是旧的」这种半新半旧。
+struct NoteBodyMigrationDatabaseStore: NoteBodyMigrationStore {
+    let database: NoteDatabase
+
+    func legacyRows() throws -> [NoteBodyMigrationRunner.Row] {
+        try database.legacyBodyRows()
+    }
+
+    func storedSpans(id: UUID) throws -> String? {
+        try database.noteSpans(id: id)
+    }
+
+    func alreadyMigratedCount() throws -> Int {
+        try database.migratedSpanCount()
+    }
+
+    @discardableResult
+    func writeSpans(_ spans: String, body: String, id: UUID) throws -> Int {
+        try database.setNoteSpans(spans, body: body, id: id)
     }
 }
