@@ -90,7 +90,7 @@
     "minFilesScanned": 911,
     "minSurfaces": 4,
     "minRequiredTokens": 2,
-    "minFilesScannedNote": "2026-10-14（合册 `T-20261013-027` · 清册第 9~11 行 · 前门 `T-20261014-204` 第 9 条「面扩到全仓」）：由 **357**（旧「产品源面」= `App/` + `Core/` + `Plugins/Notes/Sources/` + `Plugins/Notes/Views/` 实数）提到实测 **911**（= 全仓 `.swift` 数，排除名单 `.git` / `.build` / `.worktrees` / `DerivedData` / `build` 之后）；面被削到下限以下即判红。",
+    "minFilesScannedNote": "2026-10-14（合册 `T-20261013-027` · 清册第 9~11 行 · 前门 `T-20261014-204` 第 9 条「面扩到全仓」）：由 **357**（旧「产品源面」= `App/` + `Core/` + `Plugins/Notes/Sources/` + `Plugins/Notes/Views/` 实数）提到**本跳实测 911**（= 全仓 `.swift` 数，排除名单 `.git` / `.build` / `.worktrees` / `DerivedData` / `build` 之后）。下限按**只增不减**取 911：同日更晚落地的 Linux 端片 `a08656e` 再 +1 ⇒ 读数 **912**，仍在可接受的只增一侧（收窄到 911 以下才判红）。",
     "minRegisteredEgress": 10,
     "minRegisteredEgressNote": "2026-10-14（合册 `T-20261013-027` · 清册第 9~11 行 · 前门 `T-20261014-204` 第 9 条）：非白名单面**已登记**的出网文件条数下限 = **10**（实测）。前门令「**登记不许抹**」⇒ 删掉一条登记，就没人再看见面外实测的真出网 ⇒ 本条判红。"
   },
