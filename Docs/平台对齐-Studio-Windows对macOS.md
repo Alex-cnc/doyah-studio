@@ -5,7 +5,7 @@
 >
 > **用途**：`fatshark`（Windows / Harmony 侧）对齐 macOS 版 Doyah Studio 开发进度时的**逐条索引** —— 每行 = 一条需求 → 所属域 → 层次 → macOS 状态 → **macOS 落点（去这里读实现）** → Windows 现状。
 >
-> **统计**：需求 **262** 条 · 有落点 **174** 条 · 追溯表有行未标路径 **17** 条 · 无追溯行（落点列 `—`）**71** 条 · 台账 Windows `overrides` **94 条**（缺失一律按 `⬜` 记 —— 整列 `⬜` = Windows Studio 未开工）。
+> **统计**：需求 **262** 条 · 有落点 **174** 条 · 追溯表有行未标路径 **17** 条 · 无追溯行（落点列 `—`）**71** 条 · 台账 Windows `overrides` **116 条**（缺失一律按 `⬜` 记 —— 整列 `⬜` = Windows Studio 未开工）。
 > §10.2 里另有 **5** 行不是需求编号（分组行 / 决定行，如 `NFR-PERF / COMP`），它们不对应单条需求 ⇒ 不进本索引。
 >
 > **口径**：`macOS` 列 = §10.1 状态格的**第一个取值**；`macOS 落点` = §10.2 该条所在行的**反引号片段**（前 3 个 + 「等 N 处」；同一编号出现在多行时取**最后一行**；范围行展开到每一条）。**无追溯行写 `—`、有行未标路径写「（追溯表有行、未标路径）」—— 两种都不编落点**。
@@ -134,35 +134,35 @@
 | FR-EDIT-15 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/AppState.swift::openFileFromPanel / openFile`、`App/Views/QueryToolbar.swift`、`App/Views/QueryWorkspaceView.swift` | ✅ |
 | FR-EDIT-16 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `AppState.saveCurrentFile / writeFile`、`QueryToolbar`、`Menu(primaryAction:)` | ✅ |
 | FR-EDIT-17 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ⬜ |
-| FR-EDIT-18 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ⬜ |
+| FR-EDIT-18 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ✅ |
 | FR-EDIT-19 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ⬜ |
 | FR-EDIT-20 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ⬜ |
-| FR-EDIT-21 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ⬜ |
-| FR-EDIT-22 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ⬜ |
-| FR-EDIT-23 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `App/Views/QueryToolbar.swift::helpButton` | ⬜ |
-| FR-EDIT-24 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/TabNumberGenerator.swift`、`AppState.tabNumbers` | ⬜ |
-| FR-EDIT-25 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | （追溯表有行、未标路径） | ⬜ |
+| FR-EDIT-21 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ✅ |
+| FR-EDIT-22 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift` 等 5 处 | ✅ |
+| FR-EDIT-23 | 3.2 SQL 编辑与执行 | 进阶可选 | ✅ | `App/Views/QueryToolbar.swift::helpButton` | ✅ |
+| FR-EDIT-24 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/TabNumberGenerator.swift`、`AppState.tabNumbers` | ✅ |
+| FR-EDIT-25 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | （追溯表有行、未标路径） | ✅ |
 | FR-EDIT-26 | 3.2 SQL 编辑与执行 | 进阶可选 | 🟡 | （追溯表有行、未标路径） | ⬜ |
 | FR-EDIT-27 | 3.2 SQL 编辑与执行 | 进阶可选 | 🟡 | （追溯表有行、未标路径） | ⬜ |
-| FR-EDIT-28 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/ShortcutCatalog.swift`、`App/Views/QueryToolbar.swift` | ⬜ |
-| FR-EDIT-29 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/TerminalTabs.swift`、`TerminalTabTitle`、`TerminalTab` 等 16 处 | ⬜ |
-| FR-EDIT-30 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/LowerPaneTab.swift`、`Core/TabLog.swift`、`App/Views/LowerPaneView.swift` | ⬜ |
+| FR-EDIT-28 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `App/ShortcutCatalog.swift`、`App/Views/QueryToolbar.swift` | ✅ |
+| FR-EDIT-29 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/TerminalTabs.swift`、`TerminalTabTitle`、`TerminalTab` 等 16 处 | ✅ |
+| FR-EDIT-30 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/LowerPaneTab.swift`、`Core/TabLog.swift`、`App/Views/LowerPaneView.swift` | ✅ |
 | FR-EDIT-31 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/SQLArchive.swift`、`Core/SQLArchiveStore.swift`、`App/AppState.swift` 等 5 处 | ⬜ |
-| FR-EDIT-32 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Docs/design/外观方案-v1.md` | ⬜ |
-| FR-EDIT-33 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/AccentTheme.swift`、`App/AccentManager.swift`、`.tint` 等 12 处 | ⬜ |
+| FR-EDIT-32 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Docs/design/外观方案-v1.md` | ✅ |
+| FR-EDIT-33 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/AccentTheme.swift`、`App/AccentManager.swift`、`.tint` 等 12 处 | ✅ |
 | FR-EDIT-34 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | — | ⬜ |
-| FR-EDIT-35 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/WorkspaceTab.swift`、`Core/WorkspaceHistory.swift`、`Core/WorkspaceHistoryStore.swift` 等 7 处 | ⬜ |
-| FR-EDIT-36 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/TextLanguage.swift`、`Core/CodeSyntax.swift`、`Core/CodeLexer.swift` 等 7 处 | ⬜ |
-| FR-EDIT-37 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/ActivityBar.swift`、`WindowTitle`、`Core/Localization.swift` 等 23 处 | ⬜ |
-| FR-EDIT-38 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/CodeLanguageDefinitions.swift`、`detect`、`TextLanguage` 等 21 处 | ⬜ |
-| FR-EDIT-39 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/CodeFormatting.swift`、`CodeFormatProcessRunning`、`Core/CodeLanguageDefinitions.swift` 等 10 处 | ⬜ |
+| FR-EDIT-35 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/WorkspaceTab.swift`、`Core/WorkspaceHistory.swift`、`Core/WorkspaceHistoryStore.swift` 等 7 处 | ✅ |
+| FR-EDIT-36 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/TextLanguage.swift`、`Core/CodeSyntax.swift`、`Core/CodeLexer.swift` 等 7 处 | ✅ |
+| FR-EDIT-37 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/ActivityBar.swift`、`WindowTitle`、`Core/Localization.swift` 等 23 处 | ✅ |
+| FR-EDIT-38 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/CodeLanguageDefinitions.swift`、`detect`、`TextLanguage` 等 21 处 | ✅ |
+| FR-EDIT-39 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/CodeFormatting.swift`、`CodeFormatProcessRunning`、`Core/CodeLanguageDefinitions.swift` 等 10 处 | ✅ |
 | FR-EDIT-40 | 3.2 SQL 编辑与执行 | 常用增强 | ⬜ | `Core/AIAssist.swift`、`App/Views/AIAssistPanel.swift`、`Core/ModelEndpoint.swift` | ⬜ |
-| FR-EDIT-41 | 3.2 SQL 编辑与执行 | 常用增强 | ⬜ | `Core/WorkspaceTree.swift`、`App/Views/WorkspaceExplorerView.swift` | ⬜ |
-| FR-EDIT-42 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/WorkspaceSearch.swift`、`App/Views/WorkspaceSearchPanel.swift` | ⬜ |
-| FR-EDIT-43 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/WorkspaceSession.swift`、`App/WorkspaceTabsModel.swift` | ⬜ |
-| FR-EDIT-44 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/WorkspaceSearch.swift`、`FR-EDIT-42`、`App/Views/WorkspaceHeaderSearch.swift` | ⬜ |
-| FR-EDIT-45 | 3.2 SQL 编辑与执行 | 常用增强 | ⬜ | `Core/`、`App/Views/MarkdownPreview.swift`、`Core/MarkdownDocument.swift` 等 10 处 | ⬜ |
-| FR-EDIT-46 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/WorkspaceClose.swift`、`App/WorkspaceTabsModel.swift`、`requestClose` 等 8 处 | ⬜ |
+| FR-EDIT-41 | 3.2 SQL 编辑与执行 | 常用增强 | ⬜ | `Core/WorkspaceTree.swift`、`App/Views/WorkspaceExplorerView.swift` | ✅ |
+| FR-EDIT-42 | 3.2 SQL 编辑与执行 | 常用增强 | ✅ | `Core/WorkspaceSearch.swift`、`App/Views/WorkspaceSearchPanel.swift` | ✅ |
+| FR-EDIT-43 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/WorkspaceSession.swift`、`App/WorkspaceTabsModel.swift` | ✅ |
+| FR-EDIT-44 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/WorkspaceSearch.swift`、`FR-EDIT-42`、`App/Views/WorkspaceHeaderSearch.swift` | ✅ |
+| FR-EDIT-45 | 3.2 SQL 编辑与执行 | 常用增强 | ⬜ | `Core/`、`App/Views/MarkdownPreview.swift`、`Core/MarkdownDocument.swift` 等 10 处 | ✅ |
+| FR-EDIT-46 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/WorkspaceClose.swift`、`App/WorkspaceTabsModel.swift`、`requestClose` 等 8 处 | ✅ |
 | FR-EDIT-47 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/MarkdownEditing.swift`、`MarkdownListEditing.continuation`、`App/Views/CodeEditorView.swift` 等 7 处 | ⬜ |
 | FR-EDIT-48 | 3.2 SQL 编辑与执行 | 常用增强 | 🟡 | `Core/MarkdownEditing.swift`、`toggleTask`、`App/Views/CodeEditorView.swift::performKeyEquivalent` | ⬜ |
 | FR-EXEC-01 | 3.2 SQL 编辑与执行 | 基线必备 | ✅ | `App/AppState.swift::executeQuery`、`Core/PostgresService.swift::performExecute`、`StatementSplitter.swift` | ✅ |
