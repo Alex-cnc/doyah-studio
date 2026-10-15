@@ -217,4 +217,49 @@ final class MarkdownEditingTests: XCTestCase {
         }
         return output.joined(separator: "\n")
     }
+
+    // MARK: - `FR-EDIT-48` ⑤ 菜单入口（与 ⌘L **同一个入口**）
+
+    /// 需求 ⑤ 原话：「**同一动作在菜单里也给一个条目（与快捷键同一个入口）**」。
+    ///
+    /// 判据钉四件（全部机械可核；`sourcePath` 同本文件既有写法）：
+    /// ① 主菜单「编辑」那一组里**真的有这一项**，且用**无占位符的菜单键**（切换语言时才自愈）；
+    /// ② 这一项走 AppKit first-responder 派发到 `CodeEditorView.toggleMarkdownTaskFromMenu` ——
+    ///    **不是另写一份逻辑**（否则「同一个入口」就是空话）；
+    /// ③ 共用入口 `toggleMarkdownTaskCheckbox()` 在盘上，⌘L 与菜单项都指向它；
+    /// ④ 该键已进 `MenuLocalization.menuKeys`，中英文案在册（否则切语言后这一项停在旧语言）。
+    func testToggleTaskMenuItemSharesShortcutEntry() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+
+        let commands = try String(
+            contentsOf: root.appendingPathComponent("App/DoyahStudioCommands.swift"), encoding: .utf8)
+        XCTAssertTrue(commands.contains("CommandGroup(after: .pasteboard)"),
+                      "主菜单「编辑」那一组不在盘上 —— 菜单项要长在用户按名字找的地方")
+        XCTAssertTrue(commands.contains("L(.menuToggleTaskCheckbox)"),
+                      "「编辑」里没有任务框勾选那一项（FR-EDIT-48 ⑤ 未实现）")
+        XCTAssertTrue(commands.contains("#selector(CodeTextView.toggleMarkdownTaskFromMenu(_:))"),
+                      "菜单项没有走与 ⌘L 相同的入口（first-responder 派发到 CodeTextView ⇒ 违反 ⑤「同一个入口」）")
+
+        let editor = try String(
+            contentsOf: root.appendingPathComponent("App/Views/CodeEditorView.swift"), encoding: .utf8)
+        XCTAssertTrue(editor.contains("func toggleMarkdownTaskCheckbox() -> Bool"),
+                      "共用入口不在盘上")
+        XCTAssertTrue(editor.contains("@objc func toggleMarkdownTaskFromMenu("),
+                      "菜单落点（@objc）不在盘上 ⇒ 菜单项打不到编辑器")
+        XCTAssertTrue(editor.contains("MarkdownListEditing.toggleTask(in: string, selection: selectedRange())"),
+                      "共用入口没有复用核心层翻转逻辑")
+        XCTAssertTrue(editor.contains("toggleMarkdownTaskCheckbox() {"),
+                      "⌘L 那一条没有走共用入口")
+
+        let menuKeys = try String(
+            contentsOf: root.appendingPathComponent("Core/MenuLocalization.swift"), encoding: .utf8)
+        XCTAssertTrue(menuKeys.contains(".menuToggleTaskCheckbox,"),
+                      ".menuToggleTaskCheckbox 没进菜单键表 ⇒ 切语言后这一项停在旧语言")
+        XCTAssertEqual(LocalizedStrings.text(.menuToggleTaskCheckbox, language: .simplifiedChinese),
+                       "翻转任务框勾选")
+        XCTAssertEqual(LocalizedStrings.text(.menuToggleTaskCheckbox, language: .english),
+                       "Toggle Task Checkbox")
+    }
 }

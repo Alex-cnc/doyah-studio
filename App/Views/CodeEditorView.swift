@@ -404,13 +404,13 @@ final class CodeTextView: NSTextView {
             onSave?()
             return true
         }
-        // ⌘L：勾 / 取消勾选**光标所在行**的任务框（`FR-EDIT-48`）。
+        // ⌘L：勾 / 取消勾选**光标所在行**的任务框（`FR-EDIT-48`）。**与菜单项 `L(.menuToggleTaskCheckbox)`
+        // 共用一个入口**（`toggleMarkdownTaskCheckbox()`；需求 ⑤ 原话「同一动作在菜单里也给一个条目（与快捷键
+        // 同一个入口）」）。
         // 只认「恰好 ⌘」这一个修饰键 —— 带 ⇧ 的 ⇧⌘L 是应用菜单里的另一件事，不抢。
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.command],
            event.charactersIgnoringModifiers?.lowercased() == "l",
-           MarkdownEditingScope.applies(to: completionLanguage),
-           let plan = MarkdownListEditing.toggleTask(in: string, selection: selectedRange()) {
-            applyMarkdownPlan(plan)
+           toggleMarkdownTaskCheckbox() {
             return true
         }
         // ⇧⌘F：格式化代码（FR-EDIT-39）。与 ⌘S 同一条理由 —— SwiftUI 的 `.keyboardShortcut`
@@ -421,6 +421,25 @@ final class CodeTextView: NSTextView {
             return true
         }
         return super.performKeyEquivalent(with: event)
+    }
+
+    // MARK: FR-EDIT-48 ⑤ —— 菜单入口（与 ⌘L 共用）
+
+    /// 菜单项 `L(.menuToggleTaskCheckbox)` 的落点：AppKit 按 first responder 把动作派到**当前编辑器**，
+    /// 与 ⌘L 走的是**同一个方法**（`toggleMarkdownTaskCheckbox()`）⇒ 需求 ⑤ 的「同一个入口」。
+    @objc func toggleMarkdownTaskFromMenu(_ sender: Any?) {
+        _ = toggleMarkdownTaskCheckbox()
+    }
+
+    /// 翻转光标所在行的任务框（`[ ]` ⇄ `[x]`），只动方框里那一个字符、等长替换。
+    /// **⌘L 与菜单项共用此入口**；非 Markdown 文档 ⇒ 返回 `false`（按键不吞，交还系统；菜单项则无事发生）。
+    @discardableResult
+    func toggleMarkdownTaskCheckbox() -> Bool {
+        guard MarkdownEditingScope.applies(to: completionLanguage),
+              let plan = MarkdownListEditing.toggleTask(in: string, selection: selectedRange())
+        else { return false }
+        applyMarkdownPlan(plan)
+        return true
     }
 
     // MARK: Markdown 编辑手感（FR-EDIT-47 / FR-EDIT-48）

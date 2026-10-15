@@ -48,6 +48,15 @@ struct DoyahStudioCommands: Commands {
                 workspaceTabs.formatSelected()
             }
             .keyboardShortcut(AppShortcut.formatCode.key, modifiers: AppShortcut.formatCode.modifiers)
+
+            // **任务框勾选翻转**（`FR-EDIT-48` ⑤：菜单里也给一个条目，且**与 ⌘L 同一个入口**）。
+            // 为什么不挂 `.keyboardShortcut`：⌘L 由编辑器自己 `performKeyEquivalent` 消费（文本视图拿到焦点时
+            // SwiftUI 的快捷键收不到这个按键，同 ⇧⌘F 那条注释的理由）；这里挂第二处只会变成摆设。
+            // 走 AppKit 标准的 first-responder 派发 ⇒ 打在当前编辑器（`CodeTextView`，⌘L 也长在它身上）上，
+            // 与 ⌘L 落到**同一个方法**。
+            Button(L(.menuToggleTaskCheckbox)) {
+                NSApp.sendAction(#selector(CodeTextView.toggleMarkdownTaskFromMenu(_:)), to: nil, from: nil)
+            }
         }
 
         CommandGroup(replacing: .newItem) {

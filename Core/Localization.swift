@@ -167,6 +167,8 @@ public enum LKey: String, CaseIterable, Sendable {
     /// 与页签条那条 `workspaceFormatMenuItem`（带 `%@` 快捷键占位符）分开：这一条要进
     /// `MenuLocalization.menuKeys` 由菜单自愈改标题，而带 `%@` 的键反查重命名会把 `%@` 原样写出来。
     case menuFormat
+    /// `FR-EDIT-48` ⑤：Markdown 任务框勾选翻转（菜单项，与 ⌘L 同一入口）。
+    case menuToggleTaskCheckbox
     case appearanceTitle
     case appearanceAccentSection
     case appearanceAccentHint
@@ -2568,6 +2570,7 @@ public enum LocalizedStrings {
         .accountRecoveryEntry: [.simplifiedChinese: "找回 / 重置口令…", .english: "Recover or reset password…"],
         .accountRecoveryDeferred: [.simplifiedChinese: "这个入口先留着：找回 / 重置的本体还没做。重置后该账号的既有会话会全部作废。", .english: "This entry point is reserved: the reset flow itself isn't built yet. A reset invalidates every existing session for that account."],
         .menuFormat: [.simplifiedChinese: "格式化代码", .english: "Format Code"],
+        .menuToggleTaskCheckbox: [.simplifiedChinese: "翻转任务框勾选", .english: "Toggle Task Checkbox"],
         .menuAppearance: [.simplifiedChinese: "外观…", .english: "Appearance…"],
         .appearanceTitle: [.simplifiedChinese: "外观", .english: "Appearance"],
         .appearanceAccentSection: [.simplifiedChinese: "强调色", .english: "Accent Color"],

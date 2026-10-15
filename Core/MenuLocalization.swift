@@ -67,6 +67,8 @@ public enum MenuLocalization {
         .schemaDiffTitle,
         .lowerPaneToggle,
         .menuFormat,
+        // 任务框勾选翻转（FR-EDIT-48 ⑤）：菜单叶子项同样要能运行时切语言。
+        .menuToggleTaskCheckbox,
         .menuRelaunchApp,
         // **「笔记」菜单**（`N-UI-4`）：顶层菜单标题 + 它的叶子项。
         //
