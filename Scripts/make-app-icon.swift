@@ -24,7 +24,11 @@ let masterURL = root.appendingPathComponent("App/Resources/AppIcon-1024.png")
 let iconsetURL = root.appendingPathComponent(".build/AppIcon.iconset")
 let icnsURL = root.appendingPathComponent("App/Resources/AppIcon.icns")
 
-let watermarkCrop: CGFloat = 180
+// 底部裁切高度（去 Seedream 水印）：默认 180；**源画本身无水印时用环境变量关掉**
+//   ICON_WATERMARK_CROP=0 swift Scripts/make-app-icon.swift
+// 2026-10-15 加：项目吉祥物新画法（奶油圆底 · 2048² · 无水印）入库时实测 —— 硬裁 180 会把构图切歪，故开此口。
+let watermarkCrop: CGFloat = ProcessInfo.processInfo.environment["ICON_WATERMARK_CROP"]
+    .flatMap { Double($0) }.map { CGFloat($0) } ?? 180
 let canvas: CGFloat = 1024
 let iconInset: CGFloat = 100           // (1024 - 824) / 2
 let cornerRadius: CGFloat = 183        // ≈ 0.2225 × 824
