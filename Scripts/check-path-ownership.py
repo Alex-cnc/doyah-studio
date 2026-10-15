@@ -727,8 +727,8 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
           paths=["tools/hack.py"], mine="hugehippo", wants=["共享面未登记"])
     check("㉗ 演员名 `bighippo` ≡ `macos,ios`：改 macOS 子树 ⇒ 绿", EXIT_PASS,
           paths=["App/Views/A.swift"], mine="bighippo", wants=["本侧子树"])
-    check("㉘ 演员名 `tinyhippo` ≡ 安卓/鸿蒙：改 windows 子树 ⇒ 红（跨平台仍越界）", EXIT_RED,
-          paths=["platform/windows/Core/src/lib.rs"], mine="tinyhippo", wants=["对侧子树"])
+    check("㉘ 演员名 `tinyhippo` ≡ 安卓/鸿蒙/Windows（终裁）：改 macOS 子树 ⇒ 红（跨平台仍越界）", EXIT_RED,
+          paths=["App/Views/A.swift"], mine="tinyhippo", wants=["对侧子树"])
     check("㉙ 演员名现行规范名 `fatshark` ≡ windows：改 windows 子树 ⇒ 绿", EXIT_PASS,
           paths=["platform/windows/Core/src/lib.rs"], mine="fatshark", wants=["本侧子树"])
     # ㉚ / ㉛ 演员名跟版护栏（2026-10-05 · 派单 `T-20261005-038` ①）：旧名 `fatfish` 退役
