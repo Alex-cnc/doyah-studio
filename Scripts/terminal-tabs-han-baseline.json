@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "why": "R-45（人话走语言表）在 Core 目录上的**先红基线**：这份名单是 2026-10-13 现读的历史债，由头 = R-45 的全局收口属**别单**（本判据只把「终端页签」这件事判进面内）。名单**双向判** —— 不在名单里写中文 ⇒ 判红（新件不许再添债）；在名单里却不再写中文 ⇒ 也判红（死豁免，防抄名单混过去）。",
+  "why": "R-45（人话走语言表）在 Core 目录上的**先红基线**：这份名单是 2026-10-13 现读的历史债，由头 = R-45 的全局收口属**别单**（本判据只把「终端页签」这件事判进面内）。名单**双向判** —— 不在名单里写中文 ⇒ 判红（新件不许再添债）；在名单里却不再写中文 ⇒ 也判红（死豁免，防抄名单混过去）。 ｜2026-10-15 追加登记 1 份（`Plugins/Notes/Sources/NoteStorage/NoteBodyMigration.swift`）：本件是笔记正文迁移执行器，`Report.failures` / `mismatches` 里的串是**诊断记账**（行 id + 底层错误 + 字数目测），不是 UI 文案；迁移界面接线时**人话标签在 App 层按语言表渲染** —— 该收口随 R-45 全局收口一并做（别单），故此处按判据口径登记留痕。",
   "measured": "2026-10-13",
   "coreFilesWithChineseLiterals": [
     "Core/AgentAudit.swift",
@@ -69,6 +69,7 @@
     "Core/TerminalPalette.swift",
     "Core/TextFileDecoder.swift",
     "Core/XLSXReader.swift",
-    "Core/XLSXWriter.swift"
+    "Core/XLSXWriter.swift",
+    "Plugins/Notes/Sources/NoteStorage/NoteBodyMigration.swift"
   ]
 }

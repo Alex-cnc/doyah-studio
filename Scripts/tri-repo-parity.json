@@ -41,16 +41,16 @@
       },
       "expect": {
         "studio": {
-          "sha256": "2c1f314dc38ccd5abf2c87c8ebbc8cfd3a99111da4087b137487f5b0e2b772fc",
-          "lines": 983
+          "sha256": "6e6b4ad1937414b14f50ff8f682bd734aa1205033803b8c10e708cb4d6d82072",
+          "lines": 998
         },
         "notes": {
-          "sha256": "2c1f314dc38ccd5abf2c87c8ebbc8cfd3a99111da4087b137487f5b0e2b772fc",
-          "lines": 983
+          "sha256": "129649dc2a2ef7fb0c07252618a93034201c350b49620edf0c329f7f2646ee32",
+          "lines": 997
         },
         "retro": {
-          "sha256": "2c1f314dc38ccd5abf2c87c8ebbc8cfd3a99111da4087b137487f5b0e2b772fc",
-          "lines": 983
+          "sha256": "996ad010231484853eaedb9e94b5bcbbc9361713a7b7913524c99671fd2ee462",
+          "lines": 997
         }
       },
       "divergence": []
@@ -65,30 +65,19 @@
       },
       "expect": {
         "studio": {
-          "sha256": "588b7db2de277803cca357999405bca5ee19002bd5edbd583fd70e5593fc1a51",
-          "lines": 837
+          "sha256": "caa76d5031e11d0316644a0695e265396cb7414b780ddedec54e0c4884669a29",
+          "lines": 850
         },
         "notes": {
-          "sha256": "7755593234bf5bdfbaa7df6fdbbf0f4c5fc655b2349744eeeaecab812dec8e8f",
-          "lines": 837
+          "sha256": "d0e39d1a9e27624b24f28abd1fb752d689b65fd82b7036948c99365446e61b6a",
+          "lines": 853
         },
         "retro": {
-          "sha256": "66f873cf1ae21227149d35aa42a18dfb59ac3c733aa7c613b715481a2666abf1",
-          "lines": 837
+          "sha256": "caa76d5031e11d0316644a0695e265396cb7414b780ddedec54e0c4884669a29",
+          "lines": 850
         }
       },
-      "divergence": [
-        {
-          "repo": "notes",
-          "reason": "本仓那份领先另两份：`platform/windows/` 字面量跟版（单 T-20261006-057）+ 均衡令文案与自测例数 34 → 38 只在 Studio 落地（T-20261013-006 / T-20261013-007 的跟版面）。判据落地即抓到，本侧按本册验收 4 不碰另两仓的 tools/**，已登记请前门裁「另两份是否跟版 / 或本份是否回退」",
-          "basis": "T-20261006-057 / T-20261013-006 / T-20261013-007"
-        },
-        {
-          "repo": "retro",
-          "reason": "本仓那份领先另两份：`platform/windows/` 字面量跟版（单 T-20261006-057）+ 均衡令文案与自测例数 34 → 38 只在 Studio 落地（T-20261013-006 / T-20261013-007 的跟版面）。判据落地即抓到，本侧按本册验收 4 不碰另两仓的 tools/**，已登记请前门裁「另两份是否跟版 / 或本份是否回退」",
-          "basis": "T-20261006-057 / T-20261013-006 / T-20261013-007"
-        }
-      ]
+      "divergence": []
     }
   ]
 }
