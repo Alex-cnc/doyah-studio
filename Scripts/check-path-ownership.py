@@ -122,6 +122,7 @@ def declaration_reason(text: str):
 #   （2026-10-08 两道改名令）降为**只读别名**：历史单 / 历史提交不判红，新写法一律用现行名。
 # 与「标记只表达平台」不冲突：**路径清单**里各端子树仍按平台分（tree.id = macos / windows / android…），
 # 演员名只出现在**命令行这一轴**（`--mine hugehippo` ≡ `--mine macos,ios,watchos`；**2026-10-15 移交（派单 `T-20261015-005`）**：契约所有者改挂 `hugehippo`（兼任 Apple 全系）· `bluewhale` 留作历史契约所有者（空平台集））。
+# 口径（2026-10-15 · 答对侧 `T-20261015-207` 结果 §③）：**归属真值 = `trees[].actor`**（`windows` → `babyhippo`，2026-10-15 承接大肥鲨）；本表里的 `fatshark` 条目 = **退役侧名的只读映射**（识别历史单 / 历史提交用，不是归属声明）；现行名 `babyhippo` 的展开集**已含 `windows`** ⇒ 两侧不抵。
 ACTOR_PLATFORMS = {"bluewhale": (), "hugehippo": ("macos", "ios", "watchos", "linux"),
                    "fatshark": ("windows", "harmony"), "babyhippo": ("android", "harmony", "windows")}
 # **退役 / 旧侧名 → 现行规范名**（只保留识别，**不得再作为现行名**；派单 `T-20261005-038` ① ·
