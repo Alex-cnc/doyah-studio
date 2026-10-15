@@ -122,8 +122,8 @@ def declaration_reason(text: str):
 #   （2026-10-08 两道改名令）降为**只读别名**：历史单 / 历史提交不判红，新写法一律用现行名。
 # 与「标记只表达平台」不冲突：**路径清单**里各端子树仍按平台分（tree.id = macos / windows / android…），
 # 演员名只出现在**命令行这一轴**（`--mine hugehippo` ≡ `--mine macos,ios,watchos`；**2026-10-15 移交（派单 `T-20261015-005`）**：契约所有者改挂 `hugehippo`（兼任 Apple 全系）· `bluewhale` 留作历史契约所有者（空平台集））。
-ACTOR_PLATFORMS = {"bluewhale": (), "hugehippo": ("macos", "ios", "watchos", "linux", "harmony"),
-                   "fatshark": ("windows",), "babyhippo": ("android",)}
+ACTOR_PLATFORMS = {"bluewhale": (), "hugehippo": ("macos", "ios", "watchos", "linux"),
+                   "fatshark": ("windows", "harmony"), "babyhippo": ("android", "harmony", "windows")}
 # **退役 / 旧侧名 → 现行规范名**（只保留识别，**不得再作为现行名**；派单 `T-20261005-038` ① ·
 # 2026-10-13 均衡令扩到 `bighippo` / `tinyhippo` 两道改名令留下的旧名）：
 # 2026-10-04 家族改名令（`T-20261004-028`）后 Windows dsh = `fatshark`，旧名 `fatfish` 退役
@@ -737,13 +737,13 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     check("㉚ 退役侧名 `fatfish` 仍可识别（历史单 / 历史提交不判红）：≡ windows ⇒ 绿", EXIT_PASS,
           paths=["platform/windows/Core/src/lib.rs"], mine="fatfish", wants=["本侧子树"])
     # ── ㉜~㉟ 2026-10-13 均衡令：演员名轴按现行规范名跟版（派单 `T-20261013-006`）──────────────
-    # 令文归属（2026-10-15 终裁后）= `hugehippo` Apple 全系 + Linux + **鸿蒙** · `fatshark` Windows ·
+    # 令文归属（2026-10-15 终裁后）= `hugehippo` Apple 全系 + **Linux** · `fatshark` Windows/Harmony ·
     # `babyhippo` Linux/Android；`bighippo` / `tinyhippo`（2026-10-08 两道改名令）降为**只读别名**。
     # 成对证据：现行名改本侧子树绿 / 改对侧子树红；本仓没有子树的平台名（`ios`）⇒ 认不出、退出 2。
     check("㉛ 防回退：现行规范名表 = hugehippo / babyhippo / fatshark（三个旧名不在表内）",
-          True, raw_ok=lambda: ACTOR_PLATFORMS.get("hugehippo") == ("macos", "ios", "watchos", "linux", "harmony")
-          and ACTOR_PLATFORMS.get("babyhippo") == ("android",)
-          and ACTOR_PLATFORMS.get("fatshark") == ("windows",)
+          True, raw_ok=lambda: ACTOR_PLATFORMS.get("hugehippo") == ("macos", "ios", "watchos", "linux")
+          and ACTOR_PLATFORMS.get("babyhippo") == ("android", "harmony", "windows")
+          and ACTOR_PLATFORMS.get("fatshark") == ("windows", "harmony")
           and not ("bighippo" in ACTOR_PLATFORMS or "tinyhippo" in ACTOR_PLATFORMS
                    or "fatfish" in ACTOR_PLATFORMS))
     check("㉜ 现行名 `hugehippo` ≡ macos,ios,watchos：改 macOS 子树 ⇒ 绿", EXIT_PASS,
@@ -757,7 +757,7 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
           True, raw_ok=lambda: LEGACY_ACTOR_ALIASES.get("bighippo") == "hugehippo"
           and LEGACY_ACTOR_ALIASES.get("tinyhippo") == "babyhippo"
           and LEGACY_ACTOR_ALIASES.get("fatfish") == "fatshark"
-          and ACTOR_PLATFORMS[LEGACY_ACTOR_ALIASES["bighippo"]] == ("macos", "ios", "watchos", "linux", "harmony"))
+          and ACTOR_PLATFORMS[LEGACY_ACTOR_ALIASES["bighippo"]] == ("macos", "ios", "watchos", "linux"))
 
     bad = [r for r in results if not r[1]]
     for name, ok, code, expect, text in results:
