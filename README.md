@@ -1,5 +1,9 @@
 # Doyah Studio
 
+<p align="center">
+  <img src="Docs/design/brand/doyah-studio-mascot-512.png" width="148" alt="Doyah Studio 吉祥物 · 项目标识">
+</p>
+
 **中文** · [English](README.en.md)
 
 macOS 上的**原生数据库工作台**（Swift / SwiftUI，无 JVM、无 Electron）：连库、写查询、看结果、导数据，
@@ -8,6 +12,7 @@ macOS 上的**原生数据库工作台**（Swift / SwiftUI，无 JVM、无 Elect
 它和别的客户端的差别**不在模型更强，而在"敢用"**：智能体默认关闭，写操作逐次审批，
 所有外发请求进同一份可查看 / 可导出 / 可清空的日志；**没有模型端点时，全部既有功能完整可用**。
 
+- **项目标识（吉祥物）**：法斗幼犬 —— `Docs/design/brand/`（首屏用 `-512` 展示件，原图 2048 存档）（说明见 [`Docs/design/brand/README.md`](Docs/design/brand/README.md)）
 - 产品名 **Doyah Studio**，包标识 `studio.doyah.DoyahStudio`
 - 当前支持的数据库：**PostgreSQL**（多数据库是产品方向：方言层与驱动层按可插拔设计，
   GBase 8a 为下一个目标 —— 其方言与 SQL 生成层已实现，但**没有实例可验证**，技术验证说明保存在开发者本地）

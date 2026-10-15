@@ -1,5 +1,9 @@
 # Doyah Studio
 
+<p align="center">
+  <img src="Docs/design/brand/doyah-studio-mascot-512.png" width="148" alt="Doyah Studio mascot · project mark">
+</p>
+
 [中文](README.md) · **English**
 
 A **native database workbench for macOS** (Swift / SwiftUI — no JVM, no Electron): connect, write queries,
