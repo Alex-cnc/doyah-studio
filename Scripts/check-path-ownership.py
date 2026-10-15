@@ -332,10 +332,38 @@ def evaluate(paths, man: Manifest, mine: str, inline=None, commit_note=None):
             if any(has_prefix(raw, d) for d in man.contract_docs):
                 counts["mine"] += 1
                 out.append("✅ 契约层（三书）：%s ⇒ 归 `%s`" % (raw, man.contract_owner))
+            elif _plats and any(has_prefix(raw, s) for s in (getattr(man, "shared", None) or [])):
+                # —— 2026-10-15 人类主人令（原话逐字）：「以前是单独用一个主管来维护三书不碰代码，
+                #    现在大河马兼任三书维护就不能只限制在三书了，有 2 个角色」——
+                #    ⇒ **兼任平台侧的契约所有者 = 双角色**：共享面（本就是「改它不算越界，走声明式台账」）
+                #    与非契约模式**同一口径**判定；纯契约所有者（如 `bluewhale`：不是任何树的 actor）
+                #    不走此支 ⇒ 老行为逐字不变。
+                counts["shared"] += 1
+                reason = ledger_reason(raw, man)
+                src = "台账" if reason else None
+                if not reason:
+                    ir = inline.get(raw)
+                    if ir:
+                        reason, src = ir, "新增行注记"
+                    elif commit_note:
+                        reason, src = commit_note, "提交信息"
+                if reason or not man.require_declaration:
+                    out.append("✅ 共享面（兼任平台侧 · 已声明）：%s ⇒ %s（%s）"
+                               % (raw, src or "本仓关闭了声明要求",
+                                  (reason or man.data.get("shared_note", ""))[:80]))
+                else:
+                    reds.append("❌ 共享面未登记：%s ⇒ 在清单 `shared_ledger` 里改前登记理由（glob 命中），"
+                                "或在本次新增行注 `%s：理由`，或提交信息写 `%s: 理由`" % (raw, TAG, TAG))
+            elif _plats and any(has_prefix(raw, a.get("path", ""))
+                                for a in (man.data.get("unclassified_allow") or [])):
+                counts["allow"] += 1
+                out.append("✅ 白名单（兼任平台侧）：%s ⇒ 清单 `unclassified_allow` 放行" % raw)
             else:
                 counts["other"] += 1
-                reds.append("❌ 契约层护栏：%s ⇒ `%s` 只能处理三书（%s）—— 人类主人护栏"
-                            "「有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」"
+                reds.append("❌ 契约层护栏：%s ⇒ `%s` 只能处理三书（%s）%s —— 人类主人令"
+                            "（2026-10-05 原话「有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」；"
+                            "2026-10-15 修令「以前是单独用一个主管来维护三书不碰代码，现在大河马兼任三书维护"
+                            "就不能只限制在三书了，有 2 个角色」）"
                             % (raw, man.contract_owner, "、".join(man.contract_docs)))
         code = EXIT_RED if reds else EXIT_PASS
         return code, out + reds, counts
