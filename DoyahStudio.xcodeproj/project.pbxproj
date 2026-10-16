@@ -291,6 +291,7 @@
 		6DEB6DD8F3F019B104D3BCA0 /* MacDirectoryAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F082A7887E9AA193457FEF1 /* MacDirectoryAccess.swift */; };
 		6E3EA4756C1188F14087DE6A /* NoteBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF045F99F88EF46BDB9A54BA /* NoteBody.swift */; };
 		6EABD3BA71A9E5180EABF19E /* TextFileDecoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 406BE0A26EAD5D6089DA6093 /* TextFileDecoderTests.swift */; };
+		6EC41D48E5BFF3E144571C59 /* WindowMaterialRelief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01D5D10CBACDDFFB3D6B5517 /* WindowMaterialRelief.swift */; };
 		6EE6E483E67945FF3B549AAD /* ServerObjects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56D190F5C7F64C20850697F0 /* ServerObjects.swift */; };
 		6FBBCD3CD12D639CD391D9A5 /* AgentTextDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20361C5F673D8DEC2BCD52F1 /* AgentTextDiff.swift */; };
 		700BE0024972472C8527A871 /* WorkspaceTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6893EE381EAE05CE98026369 /* WorkspaceTree.swift */; };
@@ -748,6 +749,7 @@
 		00D982DD9446F818E5AD8268 /* DatabasePropertiesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabasePropertiesSheet.swift; sourceTree = "<group>"; };
 		00EF3E7E0570569505B391D4 /* LowerPaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowerPaneView.swift; sourceTree = "<group>"; };
 		018B8A87C7C0918E28F7FC22 /* ResultGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultGrid.swift; sourceTree = "<group>"; };
+		01D5D10CBACDDFFB3D6B5517 /* WindowMaterialRelief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowMaterialRelief.swift; sourceTree = "<group>"; };
 		01FFDFE74B1A85A5F07C9E2E /* LLMRetryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMRetryTests.swift; sourceTree = "<group>"; };
 		022D8FF5154D72912F8BC564 /* SSHTunnelSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHTunnelSecrets.swift; sourceTree = "<group>"; };
 		02538859AC6E1393A8861787 /* TabLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabLogTests.swift; sourceTree = "<group>"; };
@@ -2076,6 +2078,7 @@
 				DC7C23FC1D7DA0DAE8E75B23 /* ToolbarIcon.swift */,
 				992A75252443C4E40D52E6FF /* TransactionControl.swift */,
 				0942C617F0A43CF5CFAD0379 /* WallpaperBackground.swift */,
+				01D5D10CBACDDFFB3D6B5517 /* WindowMaterialRelief.swift */,
 				B42BA6FB2BD86E07D258CBAA /* WorkspaceAreaView.swift */,
 				F897F3BE80C90983918EF78C /* WorkspaceExplorerView.swift */,
 				FE5A9C955CB7BB35D8981040 /* WorkspaceHeaderSearch.swift */,
@@ -2572,6 +2575,7 @@
 				C72C9F752F3B7AA849C0548A /* ToolbarIcon.swift in Sources */,
 				9B0148202D3B244638012BC0 /* TransactionControl.swift in Sources */,
 				272A54DEAD24A4C4B91A1D1E /* WallpaperBackground.swift in Sources */,
+				6EC41D48E5BFF3E144571C59 /* WindowMaterialRelief.swift in Sources */,
 				E8A05180915CBB8589A01C38 /* WorkspaceAreaView.swift in Sources */,
 				C871958C73906AF20D289462 /* WorkspaceBrowserModel.swift in Sources */,
 				BF8E2C671A67797E0FB06FB2 /* WorkspaceExplorerView.swift in Sources */,

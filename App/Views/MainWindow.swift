@@ -68,6 +68,11 @@ struct MainWindow: View {
         // 所以云气与星点都给满。`NebulaSurface` 先铺表面令牌色再叠星云 ——
         // 主题不是星空紫、或用户关了皮肤时，它**逐像素回到纯色表面**。
         NebulaSurface(surface: .sidebar, layer: .sidebar) {
+            // **壁纸皮肤**：这一栏外面那层**系统材质**要让路，否则照片永远透不上来
+            // （实测症状：内容区看得见照片、侧栏是一块平的灰）。判定与可逆还原都在那一件里。
+            WindowMaterialRelief()
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
             switch appState.selectedActivityItem {
             case .database:
                 ConnectionListView(
