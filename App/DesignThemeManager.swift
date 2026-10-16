@@ -41,6 +41,8 @@ final class DesignThemeManager: ObservableObject {
         // 皮肤开关：键 / 缺省值 / 读法**都住在 Core**（`NebulaSkinPreference`）——
         // 规则只有一处，`Tests/NebulaSkinPreferenceTests.swift` 能直接跑它。
         isNebulaSkinEnabled = NebulaSkinPreference.isEnabled(in: .standard)
+        // 壁纸开关同一条口径（规则住 Core：`WallpaperSkinPreference`，`Tests/WallpaperSkinTests.swift` 直接跑它）。
+        isWallpaperSkinEnabled = WallpaperSkinPreference.isEnabled(in: .standard)
     }
 
     /// 进入宿主语境（快照用）：返回进入前的那一个，调用方负责还原。
@@ -85,11 +87,30 @@ final class DesignThemeManager: ObservableObject {
         static let key = NebulaSkinPreference.key
     }
 
+    /// **壁纸皮肤**开关（第 5 套主题「深空苍穹」· 人类主人 2026-10-16 选定档 3）。
+    ///
+    /// **默认开**（他看过三档效果图之后点了这一档），但必须可关 —— 与星云皮肤同一个理由：
+    /// 「我就想安静用」的退路 + 故障兜底（关掉后逐像素回到纯色表面）。
+    /// **只对声明了壁纸的主题生效**（生效条件在 Core：`WallpaperSkinPreference.paintsWallpaper`）。
+    @Published private(set) var isWallpaperSkinEnabled: Bool
+
+    /// 壁纸开关的持久化键（**唯一定义在 Core**，这里不再写第二份字面量）。
+    enum WallpaperSkinStorage {
+        static let key = WallpaperSkinPreference.key
+    }
+
     /// 开关皮肤。**只在星空紫下才有视觉差别**，但开关本身对所有主题都记住 ——
     /// 这样"切到星空紫 → 切走 → 再切回来"能回到用户上次的选择。
     func setNebulaSkinEnabled(_ enabled: Bool) {
         guard enabled != isNebulaSkinEnabled else { return }
         isNebulaSkinEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: NebulaSkinStorage.key)
+    }
+
+    /// 开关壁纸皮肤。同样只在声明了壁纸的主题下看得见差别，但选择对所有主题都记住。
+    func setWallpaperSkinEnabled(_ enabled: Bool) {
+        guard enabled != isWallpaperSkinEnabled else { return }
+        isWallpaperSkinEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: WallpaperSkinStorage.key)
     }
 }

@@ -216,6 +216,14 @@ struct AppearanceSheet: View {
         )
     }
 
+    /// 壁纸皮肤开关的绑定（第 5 套主题「深空苍穹」· 人类主人 2026-10-16 选定档 3）。同走 `DesignThemeManager`。
+    private var wallpaperSkinBinding: Binding<Bool> {
+        Binding(
+            get: { designTheme.isWallpaperSkinEnabled },
+            set: { designTheme.setWallpaperSkinEnabled($0) }
+        )
+    }
+
     private var cursorBlinkBinding: Binding<Bool> {
         Binding(
             get: { appState.terminalCursorPreference.appearance.blinks },
@@ -296,6 +304,21 @@ struct AppearanceSheet: View {
                 .help(L(.appearanceNebulaSkin))
                 .accessibilityLabel(Text(L(.appearanceNebulaSkin)))
                 Text(L(.appearanceNebulaSkinHint))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.tertiary))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // 壁纸皮肤：同样**由主题声明**（`DesignTheme.wallpaper != nil`）——
+            // 没声明壁纸的主题不摆这个开关（摆一个永远无效的开关只会让人困惑）。
+            if designTheme.theme.wallpaper != nil {
+                Divider().padding(.vertical, Spacing.xs)
+                Toggle(isOn: wallpaperSkinBinding) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                }
+                .help(L(.appearanceWallpaperSkin))
+                .accessibilityLabel(Text(L(.appearanceWallpaperSkin)))
+                Text(L(.appearanceWallpaperSkinHint))
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.tertiary))
                     .fixedSize(horizontal: false, vertical: true)

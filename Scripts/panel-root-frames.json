@@ -2,7 +2,7 @@
   "title": "面板根固定尺寸 `.frame(width:height:)` 的处置台账（队列 L-61）",
   "scope": "App/Views/**/*.swift",
   "panelRootMinWidth": 400,
-  "scannedFiles": 91,
+  "scannedFiles": 92,
   "totals": {
     "frames": 39,
     "panelRoots": 23,
@@ -390,5 +390,5 @@
     }
   ],
   "totalsNote": "`frames` / `panelRoots` / `ornaments` 都是**处数**（同一形状出现多次按处数记，例如对象树里三处 12×12 的形状算 3 处）；条目数另计（现 31 条）。",
-  "updated": "2026-10-16（FR-AI-27 片 3：AgentScheduleSheet / AgentScheduleEditor 两个面板根登记 · 路线 explicit-alignment）"
+  "updated": "2026-10-16（FR-AI-27 片 3 两个面板根 + 壁纸层新文件 `App/Views/WallpaperBackground.swift`）"
 }

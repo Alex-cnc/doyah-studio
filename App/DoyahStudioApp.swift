@@ -82,6 +82,10 @@ struct DoyahStudioApp: App {
     var body: some Scene {
         WindowGroup {
             MainWindow()
+                // **壁纸皮肤**（第 5 套主题「深空苍穹」）：照片铺在整个窗口的**最底层**，
+                // 上面每一层表面按值表定值半透明（`Theme.surface` 一处收口）⇒ 照片从面板底下透出来。
+                // 没声明壁纸的主题 / 开关关掉时这一层什么都不画（判定在 Core 那一个函数里）。
+                .background(WallpaperBackground())
                 .environmentObject(appState)
                 // 查询编辑器缓冲（队列 `L-148`）：**必须单独注入** —— 它刻意不是 `AppState`
                 // 的 `@Published` 属性，就是为了让"每键写文本"只重算观测它的那一小块，

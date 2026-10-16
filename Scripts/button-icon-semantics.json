@@ -255,6 +255,10 @@
     "clock.badge.exclamationmark": {
       "动作": "agentScheduleMissed",
       "依据": "错过窗口 = 带感叹号的时钟"
+    },
+    "photo.on.rectangle.angled": {
+      "动作": "appearanceWallpaperSkinToggle",
+      "依据": "壁纸皮肤 = 一张铺在表面之下的照片（相框图标）"
     }
   }
 }

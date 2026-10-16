@@ -34,6 +34,20 @@ enum Theme {
     static var designTheme: DesignTheme { DesignThemeManager.shared.theme }
 
     static func surface(_ surface: Surface) -> Color {
+        // **壁纸皮肤**（第 5 套主题「深空苍穹」）：开着时表面按**值表里的定值**半透明，
+        // 照片就从面板底下透出来。口径收在这一层 —— 上百处调用点仍然只写 `Theme.surface(.panel)`，
+        // 不该有任何一处自己写 `.opacity(0.4)` 去模拟这件事（那会让"哪个主题更透"有两处口径）。
+        guard let spec = WallpaperSkinPreference.activeSpec(theme: designTheme, in: .standard) else {
+            return opaqueSurface(surface)
+        }
+        return opaqueSurface(surface).opacity(spec.opacity(of: surface))
+    }
+
+    /// **不透视**的表面色（令牌原值，永远满不透明）。
+    ///
+    /// 谁要用它：① 壁纸的**蒙版** —— 它本来就是"压照片的那层玻璃"，若自己也是半透明的，
+    /// 值表里的定值会被再乘一遍、当场失真；② 任何"要盖住下面"的场合（含资源缺失时的兜底底色）。
+    static func opaqueSurface(_ surface: Surface) -> Color {
         Color(nsColor: nsColor(surface.color(in: designTheme)))
     }
 
