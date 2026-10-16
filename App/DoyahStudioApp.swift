@@ -125,6 +125,25 @@ struct DoyahStudioApp: App {
                         Task { await appState.refreshSQLArchiveStatus() }
                     }
                     appState.workspacePathProvider = { [workspace] in workspace.rootPath }
+                    // `FR-AI-27` 定时 agent 的接线：到点起的那一次会话**走手动那条路**（同一个 `AgentChatModel`）
+                    // ⇒ 循环里的写 / 执行类动作仍逐次审批（`FR-AI-09` / `FR-AI-23`），定时不构成授权。
+                    // 起不来（没打开工作区 / 工作区不是这一条的 / 端点没配 / 上一条还在跑）⇒ 如实回 false，
+                    // 由 AppState 记一条带原因的失败（失败不静默）。
+                    appState.agentScheduleRunner = { entry, _ in
+                        workspaceTabs.openAgentChat()
+                        guard let root = workspace.rootPath else { return false }
+                        let target = entry.target.workspace.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !target.isEmpty,
+                           target != root,
+                           URL(fileURLWithPath: root).lastPathComponent != target {
+                            return false
+                        }
+                        agentChat.input = entry.target.prompt
+                        await agentChat.send()
+                        return agentChat.isRunning
+                    }
+                    await appState.loadAgentSchedules()
+                    appState.startAgentScheduleTicker()
                     // 工作区打开文件的路由（队列 `L-149` 剩余②）：登记表说「默认用浏览器打开」的
                     // 那一类（`.html` / `.htm`）交给浏览器页签。**交接只在这里接一次** ——
                     // 工作区那一侧问的是登记表，浏览器状态留在它自己的模型里。

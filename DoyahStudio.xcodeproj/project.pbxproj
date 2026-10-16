@@ -8,10 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		00280248C40E9ED4C42A0E57 /* QueryParameterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 197141A48EA970273FA7662F /* QueryParameterSheet.swift */; };
+		003EBE40B07945D265DC0C78 /* AgentScheduleSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE88C455BEA41CC5DCA66FDB /* AgentScheduleSheet.swift */; };
 		0081E6FCAE3DAD6494FFF134 /* ForeignKeyNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D3A44567FE80AFA3F8B483 /* ForeignKeyNavigationTests.swift */; };
 		00E6FDDC2B25085359F7F8DE /* TerminalPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D3375A98184E174C9A0AA0 /* TerminalPalette.swift */; };
 		0103FBC77D31C1F94CC8FF2B /* DatabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90DDD432E4C4DC252CB68B19 /* DatabaseService.swift */; };
 		022FE76F61C45BD1BD79D39F /* DatabaseStatsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CC7D76CFA338A70A6260E3 /* DatabaseStatsPanel.swift */; };
+		026262DDE6A8D601FADB4652 /* AgentMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F452692B52252484312A5E7 /* AgentMemory.swift */; };
 		02BDAA17AE2E380C6355DF01 /* RelaunchPromptSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DED32A6DA6CBEB76DEF69D65 /* RelaunchPromptSheet.swift */; };
 		03945AFC30144B581BB9BF15 /* AICaptureIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15EA5A067372702ECA118F1E /* AICaptureIntakeTests.swift */; };
 		0394AD1D5C8AD1315DD6958A /* MySQLDialect.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C42FB59DE835B483DA20B8 /* MySQLDialect.swift */; };
@@ -586,6 +588,7 @@
 		E81B1B93A80700086592855C /* DoyahCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AE8BE22E68AD7A621E98BDCC /* DoyahCore.framework */; };
 		E84BE03B7A668F01FFB3C909 /* TabNumberGeneratorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE5EE6C4CE6C8F008C27BCF3 /* TabNumberGeneratorTests.swift */; };
 		E85A89C3470D3EB96CD33719 /* DoyahIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65BA9B67F01D433DA2A8BFA /* DoyahIdentity.swift */; };
+		E871566C4404A8F48B08DDDB /* AgentMemoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE20F261125CF104AFFCF4D /* AgentMemoryTests.swift */; };
 		E8A05180915CBB8589A01C38 /* WorkspaceAreaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42BA6FB2BD86E07D258CBAA /* WorkspaceAreaView.swift */; };
 		E8EBD87D5041B611DA9BD62C /* DatabasePropertiesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D982DD9446F818E5AD8268 /* DatabasePropertiesSheet.swift */; };
 		E98618FE27BB2C124A44A19F /* PostgresNIO in Frameworks */ = {isa = PBXBuildFile; productRef = EC5B4BB49589C87A167B620B /* PostgresNIO */; };
@@ -627,6 +630,7 @@
 		FB1E6A9D602A6886087C2A51 /* ObjectSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0617E0916A6BD1B7054386BB /* ObjectSearch.swift */; };
 		FC3F12236C57927E7AC91063 /* QueryContextBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F531012660AE649A3E60DE06 /* QueryContextBar.swift */; };
 		FC85EB0D8444F432CF82058F /* DiagnosisContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F405923EAC3A1E865182CB2 /* DiagnosisContext.swift */; };
+		FCA839AC0739E4FCC7E801DB /* AgentMemoryContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CDA3B64DB10713F1728A5E /* AgentMemoryContext.swift */; };
 		FCC23E451E7FE3FA99F16E35 /* MCPApprovalQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F19F5EDD378A35166D4D17A /* MCPApprovalQueueTests.swift */; };
 		FE35E3810DEFD319BAAFF219 /* XLSXWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F5C57F60F0F1E1E2C89F7C /* XLSXWriter.swift */; };
 		FEC74F57A182616110D412B4 /* NotePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536F7AC577675B31275433D7 /* NotePresentationTests.swift */; };
@@ -851,6 +855,7 @@
 		2E7741FC99170EFDCE590F2B /* TableDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableDesign.swift; sourceTree = "<group>"; };
 		2EA01EAA0B2A03401CAB1C75 /* ConnectionURL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionURL.swift; sourceTree = "<group>"; };
 		2F19F5EDD378A35166D4D17A /* MCPApprovalQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPApprovalQueueTests.swift; sourceTree = "<group>"; };
+		2F452692B52252484312A5E7 /* AgentMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMemory.swift; sourceTree = "<group>"; };
 		2FA9BC13ECDD5F55C022FA60 /* LLMTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMTool.swift; sourceTree = "<group>"; };
 		301F4E6D7D02702F8786EEAD /* ObjectTreeContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeContextMenu.swift; sourceTree = "<group>"; };
 		302ED0FBCA4478393BBBB414 /* NoteSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteSyncTests.swift; sourceTree = "<group>"; };
@@ -1138,6 +1143,7 @@
 		ACFD8D16A3D98206B3360207 /* AgentChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentChatView.swift; sourceTree = "<group>"; };
 		AD290F66ED9157B540E9314B /* TerminalScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalScreen.swift; sourceTree = "<group>"; };
 		AE5EE6C4CE6C8F008C27BCF3 /* TabNumberGeneratorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNumberGeneratorTests.swift; sourceTree = "<group>"; };
+		AE88C455BEA41CC5DCA66FDB /* AgentScheduleSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentScheduleSheet.swift; sourceTree = "<group>"; };
 		AE8BE22E68AD7A621E98BDCC /* DoyahCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DoyahCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF045F99F88EF46BDB9A54BA /* NoteBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteBody.swift; sourceTree = "<group>"; };
 		AF095683A0EEA088CF92DEEE /* SQLiteKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteKit.swift; sourceTree = "<group>"; };
@@ -1190,6 +1196,7 @@
 		C27D2C0AA221130675814205 /* SQLLexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLLexer.swift; sourceTree = "<group>"; };
 		C28E149309607B58E5E5B711 /* SecureDirectoryAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureDirectoryAccessTests.swift; sourceTree = "<group>"; };
 		C3748518A54E8411DA38CBDD /* AgentStandardDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStandardDispatcher.swift; sourceTree = "<group>"; };
+		C4CDA3B64DB10713F1728A5E /* AgentMemoryContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMemoryContext.swift; sourceTree = "<group>"; };
 		C517A1A1B4B4514BF4F08D18 /* CodeCommentToggleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeCommentToggleTests.swift; sourceTree = "<group>"; };
 		C56192A3D808E0C2551DA7F4 /* AgentDatabaseTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDatabaseTool.swift; sourceTree = "<group>"; };
 		C5C7F36AA8240C6D9D43E9B6 /* DataTaskRunTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataTaskRunTests.swift; sourceTree = "<group>"; };
@@ -1249,6 +1256,7 @@
 		DA5F1CC03A72965275949B56 /* NoteBodyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteBodyTests.swift; sourceTree = "<group>"; };
 		DA8A077CB29D0472C39F1DBE /* DatabaseAdmin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseAdmin.swift; sourceTree = "<group>"; };
 		DABC9218C68A29D899756CFB /* CodeLexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeLexer.swift; sourceTree = "<group>"; };
+		DAE20F261125CF104AFFCF4D /* AgentMemoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMemoryTests.swift; sourceTree = "<group>"; };
 		DB00B9FB2D8ED6E1E439AB79 /* KeepAliveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeepAliveTests.swift; sourceTree = "<group>"; };
 		DB2565DCD6CF06E98BE41BD1 /* PostgresService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostgresService.swift; sourceTree = "<group>"; };
 		DB4625DEF9E733412EF73BAD /* ObjectTreeMenuConventionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectTreeMenuConventionTests.swift; sourceTree = "<group>"; };
@@ -1476,6 +1484,7 @@
 				7D4940466E9017F520B00E2D /* AgentGuardrailTests.swift */,
 				D1C3AE1A444533DB999EDE55 /* AgentInvocationGateTests.swift */,
 				E7872605F07E1B409E911D89 /* AgentLoopTests.swift */,
+				DAE20F261125CF104AFFCF4D /* AgentMemoryTests.swift */,
 				DC8CA7A52D3005A19644DA32 /* AgentObservationTests.swift */,
 				DF7C394015AA9DC23401F9FD /* AgentPermissionScopeTests.swift */,
 				EF5D58A9830E661605DBDAC0 /* AgentProviderPresetTests.swift */,
@@ -1731,6 +1740,8 @@
 				31D3B91CABD7149C6E834E82 /* AgentGuardrail.swift */,
 				434B4D4E41ECEA2620F549AC /* AgentInvocationGate.swift */,
 				281099CBEF014AE9DAC0A3F4 /* AgentLoop.swift */,
+				2F452692B52252484312A5E7 /* AgentMemory.swift */,
+				C4CDA3B64DB10713F1728A5E /* AgentMemoryContext.swift */,
 				D34AE75B223280FBFC079441 /* AgentObservation.swift */,
 				332A355055D1347938AAECA9 /* AgentPermissionScope.swift */,
 				4E90269552831D6ADF037A66 /* AgentProviderPreset.swift */,
@@ -1972,6 +1983,7 @@
 				80AFDBF937A6105266028A60 /* AgentApprovalSheet.swift */,
 				6AAD43F5A66DD3DFDC93C224 /* AgentAuditPanel.swift */,
 				ACFD8D16A3D98206B3360207 /* AgentChatView.swift */,
+				AE88C455BEA41CC5DCA66FDB /* AgentScheduleSheet.swift */,
 				DF6DCCB6D442954E11D81E31 /* AgentSettingsSheet.swift */,
 				BB071DB2DA6452C23CD46929 /* AgentSQLPanel.swift */,
 				77C287E893A560BD09D297C3 /* AppearanceSheet.swift */,
@@ -2437,6 +2449,7 @@
 				2D17B1E4BE84636F89C09159 /* AgentPresentation.swift in Sources */,
 				DAD994C97FD74DED0DE45A00 /* AgentQueryExecutorBridge.swift in Sources */,
 				629F5B3FF737A5380A4335A1 /* AgentSQLPanel.swift in Sources */,
+				003EBE40B07945D265DC0C78 /* AgentScheduleSheet.swift in Sources */,
 				D0024AAA06FD0FC11F6E95D7 /* AgentSettingsSheet.swift in Sources */,
 				B385DB8C374D76D47D501E06 /* AppCommandCatalog.swift in Sources */,
 				9D287090E567FE896A4CC5B4 /* AppRelauncher.swift in Sources */,
@@ -2574,6 +2587,8 @@
 				A19567BCE24A662AEB9A4956 /* AgentGuardrail.swift in Sources */,
 				DF47820BA707B5C4407812EE /* AgentInvocationGate.swift in Sources */,
 				4A5FCFDDAA56FE21FD8EB740 /* AgentLoop.swift in Sources */,
+				026262DDE6A8D601FADB4652 /* AgentMemory.swift in Sources */,
+				FCA839AC0739E4FCC7E801DB /* AgentMemoryContext.swift in Sources */,
 				516AA82F678C5069BED9C243 /* AgentObservation.swift in Sources */,
 				A1A796F301BB4CBEF18B8110 /* AgentPermissionScope.swift in Sources */,
 				D0CEB91C9FBA2EC221E6395A /* AgentProviderPreset.swift in Sources */,
@@ -2826,6 +2841,7 @@
 				CDB29C1868B909E884DD90BF /* AgentGuardrailTests.swift in Sources */,
 				8EE090D78FA945D18FB618F3 /* AgentInvocationGateTests.swift in Sources */,
 				D31240D78CEC67750A6AEFE8 /* AgentLoopTests.swift in Sources */,
+				E871566C4404A8F48B08DDDB /* AgentMemoryTests.swift in Sources */,
 				CC320734748C7E37F6112EA2 /* AgentObservationTests.swift in Sources */,
 				DA193282984AED96907F2D94 /* AgentPermissionScopeTests.swift in Sources */,
 				D8227FD47486B446D8500DF2 /* AgentProviderPresetTests.swift in Sources */,

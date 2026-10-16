@@ -4338,6 +4338,199 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - 定时 agent（FR-AI-27）：到点起会话、错过只提示、停用不排期
+
+    /// 定时条目（盘上是唯一事实源，这里是面板这一份）。
+    @Published var agentSchedules: [AgentScheduleEntry] = []
+    /// 执行历史（⑤ 的落盘读回）。
+    @Published var agentScheduleRuns: [AgentScheduleRunRecord] = []
+    /// 每条目最近一次的判定档（面板与判据都读它，不各算一份）。
+    @Published var agentScheduleDecisions: [UUID: ScheduleDecision] = [:]
+    /// 有错过窗口的那一条（② 的界面半：默认不补跑，面板据此摆「是否现在执行」）。
+    @Published var agentScheduleMissedEntryID: UUID?
+    @Published var isAgentSchedulePresented = false
+
+    private let agentScheduleStore = AgentScheduleStore.shared
+    private var agentScheduleTicker: Task<Void, Never>?
+    /// 同一个计划时刻只跑一次（与数据任务同一口径：审批被拒 / 起不来都不许每 30 秒重试一遍）。
+    private var agentScheduleLastAttempts: [UUID: Date] = [:]
+
+    /// 宽限 5 分钟（打开客户端时「刚过期一会儿」仍算到点，真错过的才提示）、节拍 30 秒 —— 与数据任务同口径。
+    static let agentScheduleGrace: TimeInterval = 300
+    static let agentScheduleTickInterval: Duration = .seconds(30)
+
+    /// 宿主注入：把「该起一次会话」真起起来（打开对话页签 → 填提示词 → 发）。
+    /// 返回 `false` = 起不来（照实记一条失败，不静默）。**不在这里判断能不能执行** ——
+    /// 写 / 执行类动作仍走既有审批闸门（`FR-AI-09` / `FR-AI-23`），定时不构成授权。
+    var agentScheduleRunner: ((AgentScheduleEntry, Date) async -> Bool)?
+
+    /// 启动 App 侧调度 tick（幂等；窗口出现时调一次）。判定是纯时间计算（Core），这里只负责「隔一会儿问一次」。
+    func startAgentScheduleTicker() {
+        guard agentScheduleTicker == nil else { return }
+        agentScheduleTicker = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.tickAgentSchedules()
+                try? await Task.sleep(for: AppState.agentScheduleTickInterval)
+            }
+        }
+    }
+
+    func stopAgentScheduleTicker() {
+        agentScheduleTicker?.cancel()
+        agentScheduleTicker = nil
+    }
+
+    /// 读条目与历史（打开面板 / 起 tick 前各一次）。
+    func loadAgentSchedules() async {
+        do {
+            agentSchedules = try await agentScheduleStore.entries()
+            agentScheduleRuns = try await agentScheduleStore.runs()
+        } catch {
+            agentSchedules = []
+            agentScheduleRuns = []
+        }
+        refreshAgentScheduleDecisions()
+    }
+
+    func saveAgentSchedule(_ entry: AgentScheduleEntry) async {
+        _ = try? await agentScheduleStore.save(entry)
+        await loadAgentSchedules()
+    }
+
+    func setAgentScheduleEnabled(_ isEnabled: Bool, id: UUID) async {
+        _ = try? await agentScheduleStore.setEnabled(isEnabled, id: id)
+        await loadAgentSchedules()
+    }
+
+    func deleteAgentSchedule(id: UUID) async {
+        try? await agentScheduleStore.delete(id: id)
+        if agentScheduleMissedEntryID == id { agentScheduleMissedEntryID = nil }
+        await loadAgentSchedules()
+    }
+
+    /// 最近一次**成功**触发的时刻 —— 判定与「下次执行」都用它（不另存一份）。
+    func agentScheduleLastSuccessfulRun(for entryID: UUID) -> Date? {
+        AgentScheduleLedger(records: agentScheduleRuns).lastSuccessfulRun(for: entryID)
+    }
+
+    /// 最近一次留痕（列表行那一句「最近一跑」用）。
+    func agentScheduleLatestRun(for entryID: UUID) -> AgentScheduleRunRecord? {
+        agentScheduleRuns.last { $0.entryID == entryID }
+    }
+
+    /// 某条目当前的判定；没 tick 过时给一个即时判定（不写状态）。
+    func agentScheduleDecision(for entry: AgentScheduleEntry, now: Date = Date()) -> ScheduleDecision {
+        agentScheduleDecisions[entry.id]
+            ?? AgentSchedulePlanner.decision(
+                for: entry,
+                now: now,
+                lastRun: agentScheduleLastSuccessfulRun(for: entry.id),
+                grace: Self.agentScheduleGrace
+            )
+    }
+
+    private func refreshAgentScheduleDecisions() {
+        let now = Date()
+        var decisions: [UUID: ScheduleDecision] = [:]
+        for entry in agentSchedules {
+            decisions[entry.id] = AgentSchedulePlanner.decision(
+                for: entry,
+                now: now,
+                lastRun: agentScheduleLastSuccessfulRun(for: entry.id),
+                grace: Self.agentScheduleGrace
+            )
+        }
+        agentScheduleDecisions = decisions
+        agentScheduleMissedEntryID = agentSchedules.first { isMissed(decisions[$0.id]) }?.id
+    }
+
+    /// 用户确认「现在就执行那一次错过的」（②：只有这里能让错过的那一次跑起来；留痕记的仍是**原**计划时刻）。
+    func runMissedAgentScheduleNow() async {
+        guard let entryID = agentScheduleMissedEntryID,
+              let entry = agentSchedules.first(where: { $0.id == entryID }) else { return }
+        let lastRun = agentScheduleLastSuccessfulRun(for: entryID)
+        let plan = AgentSchedulePlanner.plan(
+            for: entry,
+            now: Date(),
+            lastRun: lastRun,
+            confirmedMissed: true,
+            grace: Self.agentScheduleGrace
+        )
+        if case .missed(let plannedAt, _) = AgentSchedulePlanner.decision(
+            for: entry, now: Date(), lastRun: lastRun, grace: Self.agentScheduleGrace
+        ) {
+            agentScheduleLastAttempts[entryID] = plannedAt
+        }
+        await applyAgentSchedulePlan(plan, entry: entry)
+        agentScheduleMissedEntryID = nil
+    }
+
+    func dismissAgentScheduleMissed() {
+        // 只把提示收起来（同一计划时刻仍不补跑：`agentScheduleLastAttempts` 已经把它钉住）。
+        if let entryID = agentScheduleMissedEntryID {
+            if let decision = agentScheduleDecisions[entryID], case .missed(let plannedAt, _) = decision {
+                agentScheduleLastAttempts[entryID] = plannedAt
+            }
+        }
+        agentScheduleMissedEntryID = nil
+    }
+
+    /// 判定是不是「错过」这一档（`ScheduleDecision` 只给了 `isDue`，这里不往 Core 件加东西）。
+    private func isMissed(_ decision: ScheduleDecision?) -> Bool {
+        guard let decision else { return false }
+        if case .missed = decision { return true }
+        return false
+    }
+
+    /// 走一次调度判定：到点的起会话、错过的摆提示（**默认不补跑**）、停用与未到的一律不动（④）。
+    func tickAgentSchedules() async {
+        guard !agentSchedules.isEmpty else { return }
+        let now = Date()
+        for entry in agentSchedules {
+            let lastRun = agentScheduleLastSuccessfulRun(for: entry.id)
+            let decision = AgentSchedulePlanner.decision(
+                for: entry, now: now, lastRun: lastRun, grace: Self.agentScheduleGrace
+            )
+            agentScheduleDecisions[entry.id] = decision
+            let plan = AgentSchedulePlanner.plan(
+                for: entry, now: now, lastRun: lastRun, grace: Self.agentScheduleGrace
+            )
+            await applyAgentSchedulePlan(plan, entry: entry)
+        }
+        agentScheduleMissedEntryID = agentSchedules.first { entry in
+            isMissed(agentScheduleDecisions[entry.id])
+                && agentScheduleLastAttempts[entry.id] == nil
+        }?.id
+    }
+
+    /// 把一份计划落到盘上（留痕）并（到点 / 已确认错过时）起一次会话。
+    private func applyAgentSchedulePlan(_ plan: AgentScheduleRunPlan, entry: AgentScheduleEntry) async {
+        switch plan {
+        case .idle(let reason):
+            // 错过窗口：记一条 **skipped** —— 它正是「没补跑」的证据（同一计划时刻只记一次）。
+            guard case .missed(let plannedAt, _) = reason else { return }
+            if let attempted = agentScheduleLastAttempts[entry.id], attempted >= plannedAt { return }
+            agentScheduleLastAttempts[entry.id] = plannedAt
+            guard let record = plan.record(entryID: entry.id, startedAt: Date(),
+                                           detail: L(.agentScheduleRunNotStarted)) else { return }
+            try? await agentScheduleStore.appendRun(record)
+
+        case .run(let plannedAt, _):
+            if let attempted = agentScheduleLastAttempts[entry.id], attempted >= plannedAt { return }
+            agentScheduleLastAttempts[entry.id] = plannedAt
+            guard let record = plan.record(entryID: entry.id, startedAt: Date()) else { return }
+            try? await agentScheduleStore.appendRun(record)
+            let started = await agentScheduleRunner?(entry, plannedAt) ?? false
+            _ = try? await agentScheduleStore.finishRun(
+                id: record.id,
+                status: started ? .succeeded : .failed,
+                at: Date(),
+                detail: started ? L(.agentScheduleRunStarted) : L(.agentScheduleRunNotStarted)
+            )
+        }
+        agentScheduleRuns = (try? await agentScheduleStore.runs()) ?? agentScheduleRuns
+    }
+
     // MARK: - 执行计划（FR-DIAG-01）
 
     /// 对当前页签的语句跑 `EXPLAIN` 并解析成计划树。

@@ -247,6 +247,14 @@
     "bell.slash": {
       "动作": "reminderRemove",
       "依据": "移除提醒 = 划掉的铃铛"
+    },
+    "clock.arrow.circlepath": {
+      "动作": "agentScheduleOpen",
+      "依据": "定时 = 时钟（面板入口）"
+    },
+    "clock.badge.exclamationmark": {
+      "动作": "agentScheduleMissed",
+      "依据": "错过窗口 = 带感叹号的时钟"
     }
   }
 }

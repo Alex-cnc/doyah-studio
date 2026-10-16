@@ -8,6 +8,8 @@ import DoyahCore
 struct AgentChatView: View {
 
     @ObservedObject var model: AgentChatModel
+    /// 定时 agent 面板的入口（`FR-AI-27`）：面板本身读的是 `AppState` 里的条目与历史。
+    @EnvironmentObject private var appState: AppState
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -17,6 +19,9 @@ struct AgentChatView: View {
             composer
         }
         .onAppear { model.refreshEndpoint() }
+        .sheet(isPresented: $appState.isAgentSchedulePresented) {
+            AgentScheduleSheet().environmentObject(appState)
+        }
     }
 
     // MARK: - 消息流 + 卡片
@@ -159,6 +164,11 @@ struct AgentChatView: View {
                 } else {
                     ToolbarIconButton(systemName: "paperplane", help: L(.agentChatSend)) { Task { await model.send() } }
                         .disabled(!model.canSend)
+                }
+                // 定时 agent 的入口（`FR-AI-27`）：面板里设「什么时候起一次会话」；
+                // 起不起得来、要不要审批都归既有那条路（定时不构成授权）。
+                ToolbarIconButton(systemName: "clock.arrow.circlepath", help: L(.agentScheduleTitle)) {
+                    appState.isAgentSchedulePresented = true
                 }
             }
         }
