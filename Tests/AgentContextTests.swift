@@ -131,4 +131,31 @@ final class AgentContextTests: XCTestCase {
             XCTAssertFalse(Set(Mirror(reflecting: payload.sections[0]).children.compactMap { $0.label }).contains(forbidden))
         }
     }
+
+    // MARK: - 接线段：系统提示不许是空串（`FR-AI-16` / `FR-AI-22`）
+
+    /// 由头：`App/AppState.swift` 曾把 `systemPrompt` 写死成 `""` —— 模型看不到身份、工具面与数据边界。
+    /// 判据钉四件：① 基础提示非空且含身份 / 模型 / 端点 / 工具名 / 数据边界 / 审批规矩；
+    /// ② 完整提示含工作区路径与挂上来的上下文；③ 截断与挡掉的段**如实标注**（不静默）；
+    /// ④ 源码面：`AppState` 里**不许再出现**空 `systemPrompt: ""`，且必须引用装配器。
+    func testSystemPromptIsWiredAndNotEmpty() throws {
+        let base = AgentSystemPrompt.base(model: "qwen-test", endpoint: "http://127.0.0.1:11434/v1")
+        XCTAssertFalse(base.isEmpty, "系统提示是空串 ⇒ 模型看不到身份 / 工具 / 边界")
+        for key in ["qwen-test", "http://127.0.0.1:11434/v1", "read_file", "run_command",
+                    "数据边界", "先出差异", "不许假装"] {
+            XCTAssertTrue(base.contains(key), "系统提示里缺「\(key)」")
+        }
+        let full = AgentSystemPrompt.build(model: "m", endpoint: "e", workspacePath: "/tmp/ws",
+                                           references: [.terminalTail(text: "hello-tail")])
+        XCTAssertTrue(full.contains("/tmp/ws"), "完整提示没带工作区路径")
+        XCTAssertTrue(full.contains("hello-tail"), "挂上来的上下文没进提示")
+        XCTAssertTrue(full.contains("本次上下文"), "上下文段没有标明来源（`FR-AI-22`）")
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let app = try String(contentsOf: root.appendingPathComponent("App/AppState.swift"), encoding: .utf8)
+        XCTAssertFalse(app.contains("systemPrompt: \"\""), "AppState 里仍有空 systemPrompt ⇒ 接线没做")
+        XCTAssertTrue(app.contains("AgentSystemPrompt."), "AppState 没有引用系统提示装配（`AgentSystemPrompt`）")
+    }
 }

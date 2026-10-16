@@ -2870,11 +2870,14 @@ final class AppState: ObservableObject {
                            observer: any AgentLoopObserver) -> (loop: AgentLoop, context: AgentLoopContext)? {
         guard case .ready(let model, let endpoint) = agentChatEndpointState,
               let url = URL(string: endpoint) else { return nil }
+        // 系统提示（`FR-AI-16`/`FR-AI-22`）：此前是空串 —— 模型看不到身份 / 工具面 / 数据边界。
+        // 上下文引用（@文件 · 目录 · 选中 · 页签 · 终端尾部 · schema 摘要）的挂载见下一片。
+        let systemPrompt = AgentSystemPrompt.base(model: model, endpoint: endpoint)
         let request = LLMRequest(endpoint: url,
                                  model: model,
                                  apiKey: agentAPIKey,
                                  timeoutSeconds: agentConfiguration.timeoutSeconds,
-                                 systemPrompt: "",
+                                 systemPrompt: systemPrompt,
                                  userPrompt: prompt)
         let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath))
         // 工作区那五个工具接上；查库 / 跑命令这一版**不给**（Host 没注入 ⇒ 调用时如实拒 `unavailable`，不假装能做）。
@@ -2884,7 +2887,7 @@ final class AppState: ObservableObject {
                              registry: .standard,
                              audit: AgentAuditLog.shared,
                              observer: observer)
-        let context = AgentLoopContext(systemPrompt: "", userPrompt: prompt,
+        let context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: prompt,
                                        baseRequest: request, sessionID: sessionID, workspace: workspacePath)
         return (loop, context)
     }
