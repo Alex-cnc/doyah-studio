@@ -483,6 +483,58 @@ final class CodeTextView: NSTextView {
         return true
     }
 
+    // MARK: 编程助手基础能力（FR-EDIT-49 / FR-EDIT-50）
+    //
+    // 与 Markdown 手感同一条理由：`NSTextView` 的默认输入不认识"配对 / 跳引号"，而"光标在编辑器里"
+    // 正是要配对的那一刻。**判据全在 `Core/CodeAutoPairing`**（纯函数，`Tests/CodeAutoPairingTests.swift`），
+    // 这里只负责把计划搬过去；Core 说 `nil`（多字符 / IME 候选 / 这条口径不适用）就原样交还默认实现。
+
+    /// 语言族：Markdown 一族不配引号（写中文时 `'` 就是引号本身），代码族全配。
+    var pairingFamily: CodeAutoPairing.LanguageFamily {
+        MarkdownEditingScope.applies(to: completionLanguage) ? .prose : .code
+    }
+
+    /// 敲字符：左括号 / 引号配对，闭合符该跳就跳，选中再打 = 包住（`FR-EDIT-49`）。
+    ///
+    /// 只认"用户敲下的单字符"：`replacementRange.location != NSNotFound` 是替换选区 / 输入法上屏，
+    /// 多字符是粘贴 —— 这些一律走默认实现，别去猜用户在干什么。
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        if replacementRange.location == NSNotFound,
+           let typed = string as? String,
+           let plan = CodeAutoPairing.plan(
+               typed: typed, in: self.string, selection: selectedRange(), family: pairingFamily
+           ),
+           applyPairingPlan(plan) {
+            return
+        }
+        super.insertText(string, replacementRange: replacementRange)
+    }
+
+    /// 退格：光标夹在**空的**一对里（`(|)`）⇒ 一次删掉两个，不为一个自动补上的字符多按一次（`FR-EDIT-49`）。
+    override func deleteBackward(_ sender: Any?) {
+        if let plan = CodeAutoPairing.backspacePlan(in: string, selection: selectedRange()),
+           applyPairingPlan(plan) {
+            return
+        }
+        super.deleteBackward(sender)
+    }
+
+    /// 把 Core 算好的配对计划落到编辑器上（与 `applyMarkdownPlan` 同一条路：撤销 / 着色 / 模型都会跟上）。
+    /// 返回 `false` = 没落成（越界 / 被 `shouldChangeText` 拒）⇒ 调用方**交还默认实现**，不悄悄吞掉这个键。
+    @discardableResult
+    func applyPairingPlan(_ plan: CodePairingPlan) -> Bool {
+        guard let storage = textStorage, plan.range.location >= 0,
+              plan.range.location + plan.range.length <= storage.length else { return false }
+        guard shouldChangeText(in: plan.range, replacementString: plan.replacement) else { return false }
+        storage.replaceCharacters(in: plan.range, with: plan.replacement)
+        didChangeText()
+        let caret = min(max(0, plan.caret), storage.length)
+        let length = min(plan.selectionLength, storage.length - caret)
+        setSelectedRange(NSRange(location: caret, length: max(0, length)))
+        scrollRangeToVisible(NSRange(location: caret, length: 0))
+        return true
+    }
+
     /// 跳到第 `line` 行（1 起）：把光标挪过去并滚到可见（`FR-EDIT-44` 的「回车跳到命中行」）。
     ///
     /// 两条口径：
