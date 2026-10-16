@@ -80,7 +80,7 @@ build_and_package() {
     return 4
   fi
   if [ ! -d "$FRONT_DIR/node_modules" ]; then
-    say "== 同源前端依赖未装 ⇒ npm ci（workdir=$FRONT_DIR）=="
+    say "== 同源前端依赖未装 ⇒ npm ci（workdir=${FRONT_DIR}）=="
     ( cd "$FRONT_DIR" && npm ci )
   else
     say "== 同源前端依赖已在盘上（$FRONT_DIR/node_modules）⇒ 跳过 npm ci =="
