@@ -24,6 +24,7 @@ public enum MenuLocalization {
     public static let menuKeys: [LKey] = [
         .menuNewQuery,
         .menuAgent,
+        .menuAgentOpenChat,
         .menuAgentSettings,
         .menuAgentGenerateSQL,
         // 诊断这条查询（FR-AI-03）：菜单叶子项同样要能运行时切语言。

@@ -112,6 +112,16 @@ struct DoyahStudioCommands: Commands {
         }
 
         CommandMenu(L(.menuAgent)) {
+            // **人手上的入口**（人类主人 2026-10-16 实机反馈原话：「除了设置，也找不到打开 AI 助手的菜单了」）。
+            // 在此之前**只有定时任务那条路**会 `openAgentChat()`（`DoyahStudioApp` 里 `agentScheduleRunner`），
+            // 人手上没有入口 ⇒ 功能在、按名字找不到，等于没有（与「编辑下无格式化菜单」同一类漏）。
+            Button(L(.menuAgentOpenChat)) {
+                workspaceTabs.openAgentChat()
+            }
+            .keyboardShortcut(AppShortcut.agentChat.key, modifiers: AppShortcut.agentChat.modifiers)
+
+            Divider()
+
             Button(L(.menuAgentSettings)) {
                 appState.isAgentSettingsPresented = true
             }

@@ -44,6 +44,8 @@ enum AppShortcut: CaseIterable {
 
     /// 智能体审批与审计面板（FR-AI-09）。
     case agentAudit
+    /// 打开 AI 助手对话（人类主人口径里的「AI 助手」；界面上这个菜单叫「智能体」）。
+    case agentChat
 
     /// 统一外发日志面板（NFR-SEC-08）。
     case egressLog
@@ -98,6 +100,7 @@ enum AppShortcut: CaseIterable {
         case .safeMode: return "s"
         case .confirmAllWrites: return "w"
         case .agentAudit: return "a"
+        case .agentChat: return "i"
         case .egressLog: return "e"
         case .newBrowserTab: return "b"
         case .dataTask: return "t"
@@ -117,7 +120,7 @@ enum AppShortcut: CaseIterable {
             return [.command]
         case .stop:
             return [.command]
-        case .check, .executionPlan, .saveFileAs, .savedQueries, .history, .clearEditor, .format, .formatCode, .agentAudit, .egressLog, .newBrowserTab, .dataTask, .help, .terminal, .archive:
+        case .check, .executionPlan, .saveFileAs, .savedQueries, .history, .clearEditor, .format, .formatCode, .agentAudit, .agentChat, .egressLog, .newBrowserTab, .dataTask, .help, .terminal, .archive:
             return [.command, .shift]
         case .replace, .safeMode, .confirmAllWrites,
              .selectNextOccurrence, .addCursorAbove, .addCursorBelow:
