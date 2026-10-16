@@ -65,16 +65,16 @@
       },
       "expect": {
         "studio": {
-          "sha256": "caa76d5031e11d0316644a0695e265396cb7414b780ddedec54e0c4884669a29",
-          "lines": 850
+          "sha256": "5d18eb7be2904ebe0c564b2b27afd3aa5def5d79546ed949a7211032a09b3776",
+          "lines": 879
         },
         "notes": {
-          "sha256": "d0e39d1a9e27624b24f28abd1fb752d689b65fd82b7036948c99365446e61b6a",
-          "lines": 853
+          "sha256": "6348235135b859aefea0e228db883e9bc1b53454ae245c8106de4638cfe7f746",
+          "lines": 883
         },
         "retro": {
-          "sha256": "caa76d5031e11d0316644a0695e265396cb7414b780ddedec54e0c4884669a29",
-          "lines": 850
+          "sha256": "5d18eb7be2904ebe0c564b2b27afd3aa5def5d79546ed949a7211032a09b3776",
+          "lines": 879
         }
       },
       "divergence": []

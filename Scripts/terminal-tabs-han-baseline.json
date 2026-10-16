@@ -70,6 +70,7 @@
     "Core/TextFileDecoder.swift",
     "Core/XLSXReader.swift",
     "Core/XLSXWriter.swift",
-    "Plugins/Notes/Sources/NoteStorage/NoteBodyMigration.swift"
+    "Plugins/Notes/Sources/NoteStorage/NoteBodyMigration.swift",
+    "Core/AgentSystemPrompt.swift"
   ]
 }
