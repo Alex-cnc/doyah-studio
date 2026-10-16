@@ -420,6 +420,14 @@ final class CodeTextView: NSTextView {
             onFormat?()
             return true
         }
+        // ⌘/：注释切换（`FR-EDIT-51`）。**只认恰好 ⌘** —— ⌘? 与 ⌘/ 在中文输入法下会撞车，
+        // 所以这里按 `charactersIgnoringModifiers` 判（不按键盘布局）。
+        // 注释符取自当前语言的 `CodeSyntax`（与着色 / 补全同一份），核心代码里没有第二种语言知识。
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.command],
+           event.charactersIgnoringModifiers == "/",
+           toggleLineComment() {
+            return true
+        }
         return super.performKeyEquivalent(with: event)
     }
 
@@ -519,20 +527,42 @@ final class CodeTextView: NSTextView {
         super.deleteBackward(sender)
     }
 
-    /// 把 Core 算好的配对计划落到编辑器上（与 `applyMarkdownPlan` 同一条路：撤销 / 着色 / 模型都会跟上）。
-    /// 返回 `false` = 没落成（越界 / 被 `shouldChangeText` 拒）⇒ 调用方**交还默认实现**，不悄悄吞掉这个键。
+    /// 把 Core 算好的一次编辑落到编辑器上 —— **所有编辑动作的唯一落点**（配对 / 注释切换都走它）。
+    ///
+    /// 走 `shouldChangeText` → `replaceCharacters` → `didChangeText`：这样 ⌘Z 一步回得到改动之前，
+    /// `didChangeText` 又会带上模型、行号列与着色。
+    /// 返回 `false` = 没落成（越界 / 被 `shouldChangeText` 拒）⇒ 调用方应当**交还默认实现**，
+    /// 而不是把这个按键悄悄吞掉。
+    @discardableResult
+    func applyEditPlan(range: NSRange, replacement: String, caret: Int, selectionLength: Int = 0) -> Bool {
+        guard let storage = textStorage, range.location >= 0,
+              range.location + range.length <= storage.length else { return false }
+        guard shouldChangeText(in: range, replacementString: replacement) else { return false }
+        storage.replaceCharacters(in: range, with: replacement)
+        didChangeText()
+        let newCaret = min(max(0, caret), storage.length)
+        let length = min(max(0, selectionLength), storage.length - newCaret)
+        setSelectedRange(NSRange(location: newCaret, length: length))
+        scrollRangeToVisible(NSRange(location: newCaret, length: 0))
+        return true
+    }
+
     @discardableResult
     func applyPairingPlan(_ plan: CodePairingPlan) -> Bool {
-        guard let storage = textStorage, plan.range.location >= 0,
-              plan.range.location + plan.range.length <= storage.length else { return false }
-        guard shouldChangeText(in: plan.range, replacementString: plan.replacement) else { return false }
-        storage.replaceCharacters(in: plan.range, with: plan.replacement)
-        didChangeText()
-        let caret = min(max(0, plan.caret), storage.length)
-        let length = min(plan.selectionLength, storage.length - caret)
-        setSelectedRange(NSRange(location: caret, length: max(0, length)))
-        scrollRangeToVisible(NSRange(location: caret, length: 0))
-        return true
+        applyEditPlan(range: plan.range, replacement: plan.replacement,
+                      caret: plan.caret, selectionLength: plan.selectionLength)
+    }
+
+    /// 注释切换（`FR-EDIT-51`）：**语言从当前文档来、注释符从语言表来** —— 本文件里不出现任何具体注释符
+    /// （语言知识只有 `Core/CodeLanguageDefinitions.swift` 一处，新增语言因此不改核心代码）。
+    /// 返回 `false` = 这门语言没登记行注释符 / 没什么可动的 ⇒ 按键**不吞**，交还系统。
+    @discardableResult
+    func toggleLineComment() -> Bool {
+        let syntax = CodeLanguageRegistry.definition(of: completionLanguage).syntax
+        guard let plan = CodeCommentToggling.plan(in: string, selection: selectedRange(), syntax: syntax)
+        else { return false }
+        return applyEditPlan(range: plan.range, replacement: plan.replacement,
+                             caret: plan.caret, selectionLength: plan.selectionLength)
     }
 
     /// 跳到第 `line` 行（1 起）：把光标挪过去并滚到可见（`FR-EDIT-44` 的「回车跳到命中行」）。

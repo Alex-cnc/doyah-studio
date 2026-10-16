@@ -2880,8 +2880,24 @@ final class AppState: ObservableObject {
                                  systemPrompt: systemPrompt,
                                  userPrompt: prompt)
         let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath))
-        // 工作区那五个工具接上；查库 / 跑命令这一版**不给**（Host 没注入 ⇒ 调用时如实拒 `unavailable`，不假装能做）。
-        let dispatcher = AgentStandardDispatcher(workspace: tools, guardPolicy: agentGuardPolicy)
+        // 六个 MVP 工具**全接上**（`FR-AI-20` ①）：
+        // · 工作区五个（读 / 列目录 / 搜 / 写 / 跑命令）⇒ `AgentWorkspaceTools` + 真起进程的 `AgentLocalCommandRunner`；
+        // · 查库（`query_db`）⇒ `AgentDatabaseTool` + 挂在**当前连接**上的 `AgentConnectionQueryExecutor`
+        //   （**A 口径**：只回结构 / 行数 / 语句类型，**行数据不出本机** —— 由 `AgentQueryExecution` 的类型保证）。
+        // 写文件与跑命令仍**逐次审批**（`FR-AI-09` / `FR-AI-23`）：判定只在 `AgentGuardPolicy` + `prepare*` 那一处，
+        // 不在这里重判。缺连接 / 起不来进程都**如实拒**，不假装能做。
+        let databaseTool = AgentDatabaseTool(
+            policy: agentGuardPolicy,
+            databaseType: selectedConnection?.dbType ?? .postgresql,
+            executor: AgentConnectionQueryExecutor { [weak self] sql in
+                guard let self else { throw AppError.notConnected }
+                return try await self.runAgentDatabaseQuery(sql)
+            }
+        )
+        let dispatcher = AgentStandardDispatcher(workspace: tools,
+                                                database: databaseTool,
+                                                commandRunner: AgentLocalCommandRunner(),
+                                                guardPolicy: agentGuardPolicy)
         let loop = AgentLoop(client: OpenAICompatibleStreamingClient(),
                              dispatcher: dispatcher,
                              registry: .standard,
@@ -2892,12 +2908,57 @@ final class AppState: ObservableObject {
         return (loop, context)
     }
 
+    /// `query_db` 的宿主实现（`FR-AI-20` ①）：对着**当前选中连接**跑一次 SQL，
+    /// 只回**结构化结果**（列名 / 影响行数 / 语句类型）—— **行数据在这里就地丢弃**（A 口径）。
+    ///
+    /// 两条既有纪律照旧：
+    /// · 计数走 `AffectedRowsTally`（**全工程唯一计数入口**，R-32）—— 不在这里自己 `switch` 累加；
+    /// · 起服务走既有的 `ensureService`（与手工执行同一条路），不另开一个连接。
+    private func runAgentDatabaseQuery(_ sql: String) async throws -> AgentQueryExecution {
+        guard let configuration = selectedConnection else { throw AppError.notConnected }
+        let service = try await ensureService(for: configuration,
+                                              database: queryDatabase(for: configuration))
+        var tally = AffectedRowsTally()
+        var columns: [String] = []
+        for try await event in service.execute(sql, options: .default, handle: ExecutionHandle()) {
+            switch event {
+            case .resultSet(let result):
+                columns = result.columns.map(\.name)     // 只取**列名**：行数据到此为止
+                tally.absorb(event)
+            case .finished(let summary):
+                tally.absorb(event)
+                if let affected = summary.affectedRows, affected > 0 {
+                    return AgentQueryExecution(columns: columns,
+                                               affectedRows: affected,
+                                               statementKind: Self.statementKind(of: sql))
+                }
+            default:
+                tally.absorb(event)
+            }
+        }
+        return AgentQueryExecution(columns: columns,
+                                   affectedRows: tally.total,
+                                   statementKind: Self.statementKind(of: sql))
+    }
+
+    /// 语句类型（`query_db` 回灌里那一格）：取首个关键字并大写。
+    ///
+    /// **只作说明用，不参与任何判定** —— 判定权在 `AgentGuardrail` / `AgentDatabaseTool.plan`，
+    /// 这里另立一套就会分叉（R-32 同族：判定只许有一个出处）。
+    private static func statementKind(of sql: String) -> String {
+        let first = sql.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: { $0.isWhitespace || $0 == ";" || $0 == "(" })
+            .first ?? ""
+        return String(first).uppercased()
+    }
+
     /// 兑现一次已批准的写（`FR-AI-23` ④：批准之后才应用）。
     func applyAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> Bool {
         guard let fingerprint = card.approvalFingerprint,
               let arguments = AgentToolArguments.parse(card.arguments),
               let definition = AgentToolRegistry.standard.definition(named: card.name) else { return false }
         let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath))
+        // ① 写文件那一档（`FR-AI-23` ④）。
         let outcome = tools.writeFile(path: arguments["path"] ?? "",
                                       content: arguments["content"] ?? "",
                                       tool: definition,
@@ -2905,6 +2966,17 @@ final class AppState: ObservableObject {
                                       fingerprint: fingerprint,
                                       granted: [fingerprint])
         if case .wrote = outcome { return true }
+        // ② 跑命令那一档（`FR-AI-20`）：**同一张单、同一份指纹** —— 兑现在这里。
+        // 判定**不在这里重做**：`runCommand` 内部会拿这张单的指纹再核一次，并再走一次白名单
+        //（对不上 ⇒ `.refused`，不执行）。换句话说，这里只是"把已批准的那一条送进执行器"，
+        // 真正的闸始终只有一处。
+        let commandOutcome = tools.runCommand(arguments["command"] ?? "",
+                                              tool: definition,
+                                              guardPolicy: agentGuardPolicy,
+                                              fingerprint: fingerprint,
+                                              granted: [fingerprint],
+                                              runner: AgentLocalCommandRunner())
+        if case .command = commandOutcome { return true }
         return false
     }
 

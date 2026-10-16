@@ -315,7 +315,14 @@ public struct AgentLoop: Sendable {
                         sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                     continue
                 }
-                let outcome = dispatcher.dispatch(invocation, approvals: approvals)
+                // 工具分发走 **detached**（`FR-AI-20` 接线的前置条件）：`AgentToolDispatcher.dispatch` 是**同步**契约，
+                // 而宿主 `AppState` 是 `@MainActor`、本循环也从主 actor 起 —— 执行器（如 `query_db` 的查库）内部
+                // 要等异步 IO，若在**主 actor 上**同步等，主 actor 腾不出来 ⇒ **死锁**。挪进 detached 之后主 actor
+                // 始终可被 `MainActor.run` 取用，而**同步契约照旧**（不动 Core 协议、不动既有工具单测）。
+                // 循环自身不碰 UI 状态；观察者与审计都是 async 接口（各自回自己的 actor），与本次改动无关。
+                let outcome = await Task.detached(priority: .userInitiated) {
+                    dispatcher.dispatch(invocation, approvals: approvals)
+                }.value
                 await observer?.observe(.toolStarted(name: invocation.name))
                 switch outcome {
                 case .needsApproval(let request):
