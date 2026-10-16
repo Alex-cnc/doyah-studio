@@ -98,10 +98,12 @@ public struct TerminalTextWrapper {
     }
 }
 
-/// CLI 里一条会话的 token 账（**可判的纯数字那半**；给人看的措辞由 CLI 自己拼）。
+/// 一条会话的 token 账（**可判的纯数字那半**；给人看的措辞由调用方拼）。
+///
+/// 两侧共用：CLI 的流式打印与 App 的对话框状态条各记各的账，形状同一个（免得两处口径漂移）。
 ///
 /// 由头（人类主人 2026-10-17）：「要加上模型信息，**会话已消耗的 token** 等信息，可以参考 Hermes 的 cli 界面」。
-public struct CLITokenUsage: Equatable, Sendable {
+public struct TokenUsageLedger: Equatable, Sendable {
 
     /// 本次会话**请求次数**（每拿到一条用量就算一次）。
     public private(set) var requests = 0

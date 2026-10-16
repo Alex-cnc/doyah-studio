@@ -63,7 +63,7 @@ final class TerminalWrapTests: XCTestCase {
     // MARK: - 会话 token 账
 
     func testSessionUsageAccumulatesAndNeverTreatsMissingAsZero() {
-        var usage = CLITokenUsage()
+        var usage = TokenUsageLedger()
         XCTAssertFalse(usage.add(prompt: 100, completion: 20))
         XCTAssertFalse(usage.add(prompt: 200, completion: 30))
         XCTAssertEqual(usage.requests, 2)

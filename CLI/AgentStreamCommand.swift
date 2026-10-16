@@ -60,7 +60,7 @@ func runAgentSQLStreamCommand(arguments: [String]) async -> Int32 {
     // **模型信息摆在最前面**（人类主人 2026-10-17：「要加上模型信息，会话已消耗的 token 等信息，
     // 可以参考 Hermes 的 cli 界面」）—— 开跑之前就看得见"这次是谁在回答、端点在哪、按多少列折行"。
     let columns = currentTerminalColumns()
-    var session = CLITokenUsage()
+    var session = TokenUsageLedger()
     var wrapper = TerminalTextWrapper(columns: columns)
     print("模型：\(model)")
     print("端点：\(endpoint.absoluteString)")

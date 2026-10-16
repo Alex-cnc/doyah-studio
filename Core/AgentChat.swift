@@ -185,6 +185,17 @@ public struct AgentChatState: Equatable, Sendable {
         if messages[index].text.isEmpty { messages.remove(at: index) }
     }
 
+    /// **会话标题**（状态行最右那格 —— 人类主人 2026-10-17：「hermes 还有一个会话标题在最右侧我觉得挺好」）。
+    ///
+    /// 取**首条提问**（真值，不另调模型生成标题 —— 生成标题要额外花 token，第十条：成本是一等公民）。
+    /// 超长截断，换行压成空格；还没有提问 ⇒ `nil`（那格就不出现，不留空壳）。
+    public var sessionTitle: String? {
+        guard let first = messages.first(where: { $0.role == .user })?.text else { return nil }
+        let flat = first.split(whereSeparator: { $0.isNewline }).joined(separator: " ")
+        guard !flat.isEmpty else { return nil }
+        return flat.count <= 28 ? flat : String(flat.prefix(28)) + "…"
+    }
+
     /// 这一轮跑完了（收尾 + 不再显示「在跑」）。
     public mutating func finishRun() {
         endStreaming()

@@ -1680,6 +1680,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceDiskChangedHint
     case menuAgentOpenChat
     case agentChatStepsTitle
+    case agentStatusModel
+    case agentStatusContext
+    case agentStatusSession
+    case agentStatusElapsed
+    case agentStatusWorkspace
+    case agentStatusWritesOn
+    case agentStatusWritesOff
+    case agentStatusNoUsage
     case agentChatStepNo
     case agentTestConnection
     case agentTestRunning
@@ -3289,6 +3297,14 @@ public enum LocalizedStrings {
         .workspaceDiskChangedHint: [.simplifiedChinese: "磁盘上「%@」已变，但这一页签有未保存改动 —— 已保留你的改动", .english: "「%@」 changed on disk, but this tab has unsaved edits — your edits were kept"],
         .agentTestConnection: [.simplifiedChinese: "测试连接", .english: "Test connection"],
         .agentChatStepsTitle: [.simplifiedChinese: "本次任务 · %@ 步", .english: "This task · %@ steps"],
+        .agentStatusModel: [.simplifiedChinese: "模型 %@", .english: "Model %@"],
+        .agentStatusContext: [.simplifiedChinese: "上下文 %@ token（上次请求输入）", .english: "ctx %@ tokens (last request in)"],
+        .agentStatusSession: [.simplifiedChinese: "本会话 %@ 次 · 输入 %@ / 输出 %@ / 合计 %@ token", .english: "Session %@ calls · in %@ / out %@ / total %@ tokens"],
+        .agentStatusElapsed: [.simplifiedChinese: "耗时 %@ 秒", .english: "%@ s"],
+        .agentStatusWorkspace: [.simplifiedChinese: "工作区 %@", .english: "Workspace %@"],
+        .agentStatusWritesOn: [.simplifiedChinese: "写确认：开", .english: "Write confirm: on"],
+        .agentStatusWritesOff: [.simplifiedChinese: "写确认：关", .english: "Write confirm: off"],
+        .agentStatusNoUsage: [.simplifiedChinese: "端点未回用量", .english: "no usage from endpoint"],
         .agentChatStepNo: [.simplifiedChinese: "第 %@ 步", .english: "Step %@"],
         .menuAgentOpenChat: [.simplifiedChinese: "打开对话", .english: "Open chat"],
         .agentTestRunning: [.simplifiedChinese: "正在测试…", .english: "Testing…"],

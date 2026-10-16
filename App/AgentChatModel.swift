@@ -26,6 +26,29 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 宿主注入：端点状态（界面出现 / 设置改过之后取一次）。
     var endpointProvider: () -> AgentChatEndpointState = { .notConfigured }
 
+    /// 本会话累计（**每次跑完把这一轮的用量并进来**）。两侧共用 `TokenUsageLedger`，口径同一个。
+    @Published private(set) var sessionUsage = TokenUsageLedger()
+    /// 上一轮跑完用了多少秒（`nil` = 还没跑过）。
+    @Published private(set) var lastElapsedSeconds: Double?
+    /// 端点读数（状态条那几格）。
+    var endpointState: AgentChatEndpointState { state.endpoint }
+
+    /// **上下文占用读数** = **上一次请求的输入 token**（端点自己报的那个数）。
+    ///
+    /// 为什么用「上次请求输入」而不是"会话累计"：会话累计是**花掉的总量**，上下文占用是**当前这一窗有多满** ——
+    /// 两件事。Hermes 那格 `~227K/1M` 说的是后者。**百分比不给**：那要模型窗口大小，仓里没有这张表
+    /// （如实登记，要加就在设置里补一格「上下文窗口」）。
+    @Published private(set) var lastPromptTokens: Int?
+
+    /// 会话标题（状态行最右）。
+    var sessionTitle: String? { state.sessionTitle }
+
+    /// 吞吐（token/秒）：**只在这两样都有读数时给**，算不出来就不显示（不编）。
+    var tokensPerSecond: Double? {
+        guard let seconds = lastElapsedSeconds, seconds > 0.05, sessionUsage.completionTokens > 0 else { return nil }
+        return Double(sessionUsage.completionTokens) / seconds
+    }
+
     let sessionID: String
     private let cancellation = CancellationFlag()
     private var task: Task<Void, Never>?
@@ -110,10 +133,14 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             gate.record(.proceed, for: trigger)
         }
         input = ""
+        let started = Date()
         task = Task { [weak self] in
             let result = await prepared.loop.run(context: prepared.context,
                                                  isCancelled: { [cancellation] in cancellation.isSet })
-            await MainActor.run { self?.finish(result) }
+            await MainActor.run {
+                self?.lastElapsedSeconds = Date().timeIntervalSince(started)
+                self?.finish(result)
+            }
         }
     }
 
@@ -159,6 +186,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     private func finish(_ result: AgentLoopResult) {
         state.finishRun()
+        // 用量并进会话账（缺值不当 0 累加 —— 与 CLI 侧同一口径）。
+        sessionUsage.add(prompt: result.usage.promptTokens, completion: result.usage.completionTokens)
+        if let prompt = result.usage.promptTokens { lastPromptTokens = prompt }
         switch result.outcome {
         case .finished:
             state.appendNotice("finished")

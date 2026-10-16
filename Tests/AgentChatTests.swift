@@ -199,4 +199,29 @@ final class AgentChatTests: XCTestCase {
             }
         }
     }
+
+    /// 状态行最右那格：**会话标题**（取首条提问，不另调模型生成）。
+    func testSessionTitleComesFromTheFirstPromptAndIsTruncated() {
+        var state = AgentChatState()
+        XCTAssertNil(state.sessionTitle, "还没提问 ⇒ 那格不出现（不留空壳）")
+        ready(&state)
+        state.beginRun(prompt: "修好滚动")
+        XCTAssertEqual(state.sessionTitle, "修好滚动")
+
+        // 一轮跑完再问第二句：标题仍跟**首条**（不跟最后一条）
+        state.finishRun()
+        state.beginRun(prompt: "第二问不该顶掉标题")
+        XCTAssertEqual(state.sessionTitle, "修好滚动", "标题跟首条提问，不跟最后一条")
+
+        // 超长 ⇒ 截断到 28 字 + 省略号（换行也压成空格）
+        var long = AgentChatState()
+        ready(&long)
+        long.beginRun(prompt: String(repeating: "长", count: 40))
+        XCTAssertEqual(long.sessionTitle, String(repeating: "长", count: 28) + "…", "超长截断到 28 字 + 省略号")
+
+        var multiline = AgentChatState()
+        ready(&multiline)
+        multiline.beginRun(prompt: "第一行\n第二行")
+        XCTAssertEqual(multiline.sessionTitle, "第一行 第二行", "换行压成空格（是一行标题，不是两行）")
+    }
 }
