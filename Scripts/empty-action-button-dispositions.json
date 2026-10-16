@@ -212,6 +212,12 @@
       "predicate": "canClearQueryHistory",
       "view": "App/Views/LowerPaneView.swift",
       "reason": "**历史页签的「清空」（片 `HIST-2` / 派单 `T-20261009-018`、`T-20261009-010`）**：历史为空时那枚「清空」**灰着** —— 空列表上「清空」没有可落的动作。判据属性 `canClearQueryHistory` 在 `AppState` 里**只定义一次**（体 = `!queryHistory.isEmpty`），守卫（`requestClearQueryHistory`）与视图侧 `.disabled(!appState.canClearQueryHistory)` 读的是**同一条判断**；视图不许再自己写一遍 `queryHistory.isEmpty`。同一条路也是工具条时钟菜单那一项的清空入口（`DR-02`：可清空）—— 两处都在**确认框**之后才落库。"
+    },
+    {
+      "func": "saveAgentConfiguration",
+      "guard": "!endpoint.isEmpty, URL(string: endpoint) != nil, !model.isEmpty",
+      "form": "internal",
+      "reason": "端点/模型没配 ⇒ 派生 `.notConfigured`（**不是在拦某个按钮**：判据属性 `agentChatEndpointState` 由 `DoyahStudioApp` 当 `endpointProvider` 交给对话区如实呈现「未配置」，发送路径在同一条判据上如实拦——`App/AppState.swift:2871` 造不出循环就返回 nil，不假装在跑）。台账归属名沿用判据的机械归属（往上找最近 `func` = `saveAgentConfiguration`）；实际定义处是同一类型里的 计算属性 `agentChatEndpointState`（L2857）。"
     }
   ]
 }
