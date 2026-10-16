@@ -112,16 +112,19 @@ struct DoyahStudioCommands: Commands {
         }
 
         CommandMenu(L(.menuAgent)) {
-            // **人手上的入口**（人类主人 2026-10-16 实机反馈原话：「除了设置，也找不到打开 AI 助手的菜单了」）。
-            // 在此之前**只有定时任务那条路**会 `openAgentChat()`（`DoyahStudioApp` 里 `agentScheduleRunner`），
-            // 人手上没有入口 ⇒ 功能在、按名字找不到，等于没有（与「编辑下无格式化菜单」同一类漏）。
+            // **本菜单的口径（人类主人 2026-10-16）**：「系统级根菜单是 AI Agent，下面二级菜单就是设置、打开对话这种」，
+            // 且「**要跟其他系统菜单保持一致的逻辑**」⇒ 沿用其他菜单的写法：**一个根菜单 + 平铺叶子项**（本文件里
+            // 谁也不造子菜单）、同类动作之间用 `Divider()` 分组、**子项不重复父名词**（语境由根菜单给）。
+            //
+            // 「打开对话」为什么必须在这里：在此之前**只有定时任务那条路**会 `openAgentChat()`，人手上没有入口
+            // —— 功能在、按名字找不到，等于没有（与内测清单 `#2`「编辑下无格式化菜单」同类漏）。
             Button(L(.menuAgentOpenChat)) {
                 workspaceTabs.openAgentChat()
             }
             .keyboardShortcut(AppShortcut.agentChat.key, modifiers: AppShortcut.agentChat.modifiers)
 
-            Divider()
-
+            // 这一项的文案前面**带根名词**，是为满足「标题唯一」：菜单切语言靠**标题反查**键
+            // （`MenuLocalization.key(forTitle:)`），裸「设置…」会与系统「设置…」撞车 ⇒ 反查歧义、切语言时串项。
             Button(L(.menuAgentSettings)) {
                 appState.isAgentSettingsPresented = true
             }
@@ -129,32 +132,11 @@ struct DoyahStudioCommands: Commands {
 
             Divider()
 
+            // —— 生成（把手上的库 / 表变成产物）
             Button(L(.menuAgentGenerateSQL)) {
                 appState.isAgentSQLPresented = true
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
-
-            // 诊断这条查询（FR-AI-03）：与 ⌘K 的 `diagnoseQuery` 打开同一个面板。
-            Button(L(.menuDiagnoseQuery)) {
-                appState.openDiagnosis()
-            }
-
-            // 维护任务编排（FR-AI-04）：与 ⌘K 的 `maintenanceTasks` 打开同一个面板。
-            Button(L(.menuMaintenanceTasks)) {
-                appState.openMaintenance()
-            }
-
-            // 笔记（DOYAH-01/03）：与 ⌘K 的 `notes` 打开同一个面板。
-            Button(L(.menuNotes)) {
-                appState.openNotes()
-            }
-
-            // 外部调用审批（FR-AI-10 界面那一半）：与 ⌘K 的 `mcpApprovals` 打开同一个面板。
-            Button(L(.menuMCPApprovals)) {
-                appState.openMCPApprovals()
-            }
-
-            Divider()
 
             Button(L(.menuDataTask)) {
                 appState.isDataTaskPresented = true
@@ -162,6 +144,22 @@ struct DoyahStudioCommands: Commands {
             .keyboardShortcut(AppShortcut.dataTask.key, modifiers: AppShortcut.dataTask.modifiers)
 
             Divider()
+
+            // —— 分析（对当前库 / 当前查询的判定）
+            Button(L(.menuDiagnoseQuery)) {
+                appState.openDiagnosis()
+            }
+
+            Button(L(.menuMaintenanceTasks)) {
+                appState.openMaintenance()
+            }
+
+            Divider()
+
+            // —— 安全与留痕（谁批的、它到底做了什么）
+            Button(L(.menuMCPApprovals)) {
+                appState.openMCPApprovals()
+            }
 
             Button(L(.menuAgentAudit)) {
                 appState.isAgentAuditPresented = true
@@ -172,6 +170,9 @@ struct DoyahStudioCommands: Commands {
                 appState.isEgressLogPresented = true
             }
             .keyboardShortcut(AppShortcut.egressLog.key, modifiers: AppShortcut.egressLog.modifiers)
+
+            // 「笔记…」本日移出本菜单：笔记有自己的活动栏区与根菜单（`MenuAreaPolicy` 里 `.menuNotes → .notes`，
+            // 只在笔记区显示）—— 挂在 AI 菜单下是**跨域**，语义才真的乱。
         }
 
         // **「笔记」菜单**（`N-UI-4`：进笔记面出、离开收起）。与正文面同构 ——
