@@ -15,6 +15,10 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     /// 宿主注入：给一个提示词，造一条**已经配好上下文**的循环（端点 / 模型 / 密钥 / 工具都在宿主那侧组装）。
     /// 造不出来 ⇒ 如实报，不假装在跑。
+    /// `FR-AI-28` 门控：**没有新内容就不发请求**（省 token）。
+    /// 判定是纯函数（`Core/AgentInvocationGate`），挡下留痕也在这一个类型里 —— 宿主无需干预，
+    /// 也不接受宿主来"放行/挡下"（门控只回答"要不要问模型"，回答不了"能不能执行"）。
+    var gate = AgentInvocationGate()
     /// 造循环。**是 `async` 的**：建循环时要现取一次本次上下文（`FR-AI-22`：当前连接的表结构摘要等），那一步是 IO。
     var makeLoop: ((String, any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)?)?
     /// 宿主注入：真正把一次批准**兑现**（写盘 / 跑命令）。返回是否成功。
@@ -70,12 +74,32 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         guard !prompt.isEmpty else { return }
         state.beginRun(prompt: prompt)
         guard state.isRunning else { return }   // 不能发时 `beginRun` 已如实出提示，这里不许往下走
-        input = ""
         cancellation.reset()
         guard let prepared = await makeLoop?(prompt, self) else {
             state.apply(.failed("loopUnavailable"))
             return
         }
+        // `FR-AI-28` 门控：**没有新内容就不发请求**（省 token）。
+        //
+        // 放在 `makeLoop` **之后**、`loop.run` **之前** —— 因为指纹要覆盖**整段提示词**（含本次上下文），
+        // 而上下文是 `makeLoop` 里现取的。同样的问法再来一次 ⇒ 提示词逐字相同 ⇒ 挡下。
+        //
+        // **边界**（条文写死）：门控只决定"要不要问模型"；「能不能执行」仍归 `AgentGuardrail` + 审批队列 ——
+        // 本处不碰那件事，也**不许**顺手把提示词改了（放行的语义就是"当它没来过"）。
+        let trigger = AgentGateTrigger(
+            source: "chat",
+            digest: AgentFingerprint.hash(prepared.context.systemPrompt + "\u{1}" + prepared.context.userPrompt),
+            at: Date()
+        )
+        switch gate.decide(trigger) {
+        case .skipped(let reason):
+            gate.record(.skipped(reason: reason), for: trigger)
+            state.apply(.failed(reason))       // 如实说"为什么没发"，不静默；**输入框不清空**（用户改一个字就能再发）
+            return
+        case .proceed:
+            gate.record(.proceed, for: trigger)
+        }
+        input = ""
         task = Task { [weak self] in
             let result = await prepared.loop.run(context: prepared.context,
                                                  isCancelled: { [cancellation] in cancellation.isSet })
