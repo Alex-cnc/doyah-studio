@@ -100,6 +100,24 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
                                        fingerprint: request.fingerprint,
                                        granted: approvals)
 
+        case .editFile:
+            guard let workspace else { return .refused(.unavailable, detail: definition.capability.rawValue) }
+            // 与 `writeFile` 同一口径：**先出单**（指纹由工具自己算），再按单上的指纹看有没有批准。
+            let preparedEdit = workspace.prepareEdit(path: arguments["path"] ?? "",
+                                                     oldString: arguments["old_string"] ?? "",
+                                                     newString: arguments["new_string"] ?? "",
+                                                     tool: definition,
+                                                     guardPolicy: guardPolicy)
+            guard case .needsApproval(let editRequest) = preparedEdit else { return preparedEdit }
+            guard approvals.contains(editRequest.fingerprint) else { return preparedEdit }
+            return workspace.editFile(path: arguments["path"] ?? "",
+                                      oldString: arguments["old_string"] ?? "",
+                                      newString: arguments["new_string"] ?? "",
+                                      tool: definition,
+                                      guardPolicy: guardPolicy,
+                                      fingerprint: editRequest.fingerprint,
+                                      granted: approvals)
+
         case .runCommand:
             guard let workspace, let commandRunner else {
                 return .refused(.unavailable, detail: definition.capability.rawValue)

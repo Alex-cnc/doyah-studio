@@ -9,7 +9,7 @@ final class AgentToolRegistryTests: XCTestCase {
     // MARK: - ② 每条声明字段齐全，且**指纹随 schema 变化而变**
 
     func testEveryEntryCarriesAllDeclaredFieldsAndAFingerprintThatTracksTheSchema() {
-        XCTAssertEqual(registry.definitions.count, 8, "标准表 = MVP 六件 + 第二批两件（如实登记，不写成已做）")
+        XCTAssertEqual(registry.definitions.count, 9, "标准表 = MVP 七件（2026-10-16 增 `edit_file`：定点改代码）+ 第二批两件（如实登记，不写成已做）")
         for definition in registry.definitions {
             XCTAssertFalse(definition.name.isEmpty, "name 不许空")
             XCTAssertFalse(definition.summary.isEmpty, "summary 不许空")
@@ -48,12 +48,12 @@ final class AgentToolRegistryTests: XCTestCase {
 
     func testInjectedToolsEqualTheEnabledEntriesExactly() {
         let enabled = registry.enabledDefinitions
-        XCTAssertEqual(enabled.count, 6, "MVP 六件（第二批两件不启用）")
+        XCTAssertEqual(enabled.count, 7, "MVP 七件（第二批两件不启用）—— 含 2026-10-16 增的 `edit_file`")
         XCTAssertEqual(registry.enabledTools.map(\.name), enabled.map(\.name), "一条不多、一条不少，顺序也一致")
 
         // 与 `LLMRequest` 那条通道接得上：工具名与 schema 原样进 payload
         let tools = registry.enabledTools
-        XCTAssertEqual(Set(tools.map(\.name)), Set(["read_file", "list_dir", "search", "query_db", "write_file", "run_command"]))
+        XCTAssertEqual(Set(tools.map(\.name)), Set(["read_file", "list_dir", "search", "query_db", "write_file", "edit_file", "run_command"]))
         let request = LLMRequest(endpoint: URL(string: "http://127.0.0.1:11434/v1")!, model: "m",
                                  systemPrompt: "s", userPrompt: "u", tools: tools, toolChoice: .automatic, stream: true)
         let body = try? OpenAICompatibleClient.makeBody(request)

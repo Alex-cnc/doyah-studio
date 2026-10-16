@@ -21,6 +21,8 @@ public enum AgentToolCapability: String, Codable, Equatable, Sendable, CaseItera
     case search
     case queryDatabase
     case writeFile
+    /// **定点改代码**（`edit_file`）：按唯一锚点换一段 —— 与整篇重写分开一件，因为两者风险不同。
+    case editFile
     case runCommand
     case readNotes
     case fetchURL
@@ -144,6 +146,12 @@ public struct AgentToolRegistry: Sendable {
                                 capability: .writeFile,
                                 parameters: ["path": "string", "content": "string"],
                                 required: ["path", "content"],
+                                level: .writable, approval: .required),
+            AgentToolDefinition(name: "edit_file",
+                                summary: "定点改工作区里的一个文件：按**唯一锚点**换掉一段（需审批；应用前先出差异）",
+                                capability: .editFile,
+                                parameters: ["path": "string", "old_string": "string", "new_string": "string"],
+                                required: ["path", "old_string", "new_string"],
                                 level: .writable, approval: .required),
             AgentToolDefinition(name: "run_command",
                                 summary: "在工作目录沙箱里跑一条白名单命令（需审批）",

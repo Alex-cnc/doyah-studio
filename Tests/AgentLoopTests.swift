@@ -86,7 +86,7 @@ final class AgentLoopTests: XCTestCase {
         XCTAssertTrue(second.contains("a.txt"))
 
         // 工具进注入面：请求里带 tools
-        XCTAssertEqual(client.requests[0].tools?.count, 6, "注入条数 = 注册表启用条数")
+        XCTAssertEqual(client.requests[0].tools?.count, 7, "注入条数 = 注册表启用条数（2026-10-16 起 7 件：含 `edit_file`）")
         XCTAssertEqual(client.requests[0].stream, true, "循环走流式")
 
         // **留痕**：会话里模型跳与工具跳都在

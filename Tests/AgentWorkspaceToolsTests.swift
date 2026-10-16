@@ -124,4 +124,75 @@ final class AgentWorkspaceToolsTests: XCTestCase {
         if case .outside = AgentWorkspaceSandbox.resolve("/tmp/elsewhere.txt", in: root) {} else { XCTFail("工作区外要判 outside") }
         if case .outside = AgentWorkspaceSandbox.resolve("", in: root) {} else { XCTFail("空路径要判 outside") }
     }
+
+    // MARK: - edit_file：定点改代码（2026-10-16 · 人类主人令「AI 编程应该就是那个定点改代码」）
+
+    /// 定点替换：**唯一命中**才换，其余一字不动。
+    func testApplyingEditReplacesTheOnlyOccurrenceAndTouchesNothingElse() {
+        let text = "第一行\nneedle 在这里\n第三行\n"
+        XCTAssertEqual(AgentWorkspaceTools.applyingEdit(to: text, oldString: "needle", newString: "换掉了"),
+                       "第一行\n换掉了 在这里\n第三行\n")
+    }
+
+    /// **两条硬线**：锚点 0 次命中（你不知道现在长什么样）与多次命中（你改的不是你想改的那一处）**都拒**。
+    func testApplyingEditRefusesMissingOrAmbiguousAnchors() {
+        let twice = "needle\nneedle\n"
+        XCTAssertNil(AgentWorkspaceTools.applyingEdit(to: twice, oldString: "needle", newString: "x"),
+                     "多次命中必须拒 —— 绝不替人猜\"第一处\"，那正是 AI 改代码最容易悄悄改错地方的地方")
+        XCTAssertNil(AgentWorkspaceTools.applyingEdit(to: twice, oldString: "这段没有", newString: "x"),
+                     "0 次命中必须拒")
+        XCTAssertNil(AgentWorkspaceTools.applyingEdit(to: twice, oldString: "", newString: "x"),
+                     "空锚点拒")
+    }
+
+    /// 备单要**带差异预览**，拒的时候要**如实报出命中几次**（0 与多次的处置理由不一样，不许混成一句"改不了"）。
+    func testPrepareEditPreviewsTheDiffAndReportsAnchorHits() {
+        guard case .needsApproval(let request) = tools.prepareEdit(path: "dir/other.md", oldString: "needle",
+                                                                  newString: "换掉了") else {
+            return XCTFail("唯一锚点应当能备单")
+        }
+        XCTAssertTrue(request.payload.contains("needle"), "审批单要带差异预览：\(request.payload)")
+        XCTAssertFalse(request.fingerprint.isEmpty, "指纹不许空（兑单靠它）")
+
+        guard case .refused(_, let detail) = tools.prepareEdit(path: "dir/other.md", oldString: "这段没有",
+                                                              newString: "x") else {
+            return XCTFail("锚点对不上应当拒")
+        }
+        XCTAssertEqual(detail, "anchorHits:0", "拒的时候要报出命中几次")
+    }
+
+    /// **未批准不落盘**（与 `write_file` 同一口径），批准后才改，且只改锚点那一处。
+    func testEditFileWithoutApprovalLeavesTheDiskUntouched() throws {
+        let url = root.appendingPathComponent("dir/other.md")
+        let before = try String(contentsOf: url, encoding: .utf8)
+        guard case .needsApproval(let request) = tools.prepareEdit(path: "dir/other.md", oldString: "needle",
+                                                                  newString: "换掉了") else {
+            return XCTFail("应当备单")
+        }
+        guard case .refused(let code, _) = tools.editFile(path: "dir/other.md", oldString: "needle",
+                                                          newString: "换掉了",
+                                                          fingerprint: request.fingerprint, granted: []) else {
+            return XCTFail("没批准不该落盘")
+        }
+        XCTAssertEqual(code, .approvalRequired)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), before, "未批准时盘上必须一字未动")
+
+        guard case .wrote(let output) = tools.editFile(path: "dir/other.md", oldString: "needle",
+                                                       newString: "换掉了",
+                                                       fingerprint: request.fingerprint,
+                                                       granted: [request.fingerprint]) else {
+            return XCTFail("批准后应当落盘")
+        }
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "别的文件里也有 换掉了\n")
+        XCTAssertEqual(output.path, "dir/other.md")
+    }
+
+    /// 越界（工作区之外）一律拒 —— 与只读件同一道沙箱。
+    func testEditFileRefusesPathsOutsideTheWorkspace() {
+        guard case .refused(let code, _) = tools.prepareEdit(path: "../outside.txt", oldString: "a",
+                                                             newString: "b") else {
+            return XCTFail("越界必须拒")
+        }
+        XCTAssertEqual(code, .outsideWorkspace)
+    }
 }

@@ -297,6 +297,76 @@ public struct AgentWorkspaceTools: Sendable {
                                          truncated: false, totalBytes: content.utf8.count))
     }
 
+    // MARK: - edit_file（定点改代码：唯一锚点 + 逐次审批 + 未批准不落盘）
+
+    /// 定点替换的**纯函数**（单测直接打这一条）：锚点必须**命中且唯一**。
+    ///
+    /// 两种情况都返回 `nil`（= 拒）：
+    /// · **0 次命中** ⇒ 锚点对不上（文件被改过 / 记错了）—— 不是"改不动"，是"你不知道现在长什么样"；
+    /// · **多次命中** ⇒ 锚点不唯一 —— 绝不替人猜"第一处"：那正是 AI 改代码最容易悄悄改错地方的地方。
+    public static func applyingEdit(to text: String, oldString: String, newString: String) -> String? {
+        guard !oldString.isEmpty else { return nil }
+        let hits = text.components(separatedBy: oldString).count - 1
+        guard hits == 1 else { return nil }
+        return text.replacingOccurrences(of: oldString, with: newString)
+    }
+
+    /// 备一次定点修改：**只看不写**，返回要审批的动作（`payload` = 差异预览）。
+    public func prepareEdit(path: String, oldString: String, newString: String,
+                            tool: AgentToolDefinition? = nil,
+                            guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false)) -> AgentToolOutcome {
+        guard !guardPolicy.readOnly else {
+            return .refused(.deniedByPolicy, detail: AgentToolLevel.writable.rawValue)
+        }
+        guard let tool = tool ?? registry.definition(for: .editFile) else {
+            return .refused(.unregistered, detail: AgentToolLevel.writable.rawValue)
+        }
+        guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else {
+            return .refused(.outsideWorkspace, detail: path)
+        }
+        guard let before = try? String(contentsOf: url, encoding: .utf8) else {
+            return .refused(.unreadable, detail: url.lastPathComponent)
+        }
+        guard let after = Self.applyingEdit(to: before, oldString: oldString, newString: newString) else {
+            // **如实报数**：把"命中几次"写进 detail —— 0 与多次的处置理由不一样，别混成一句"改不了"。
+            let hits = oldString.isEmpty ? 0 : before.components(separatedBy: oldString).count - 1
+            return .refused(.badArguments, detail: "anchorHits:\(hits)")
+        }
+        let relative = relativePath(url)
+        return .needsApproval(AgentApprovalRequest(
+            toolName: tool.name,
+            fingerprint: AgentFingerprint.hash("\(tool.name)|\(relative)|\(oldString)|\(newString)"),
+            payload: AgentTextDiff.preview(before: before, after: after, path: relative)))
+    }
+
+    /// 真改。**三件事缺一不可**（与 `writeFile` 同一口径）：参数指纹与请求一致、该指纹在已批准集合里、目标仍在工作区内。
+    public func editFile(path: String, oldString: String, newString: String,
+                         tool: AgentToolDefinition? = nil,
+                         guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false),
+                         fingerprint: String, granted: Set<String>) -> AgentToolOutcome {
+        let prepared = prepareEdit(path: path, oldString: oldString, newString: newString,
+                                   tool: tool, guardPolicy: guardPolicy)
+        guard case .needsApproval(let request) = prepared else { return prepared }
+        guard request.fingerprint == fingerprint, granted.contains(fingerprint) else {
+            return .refused(.approvalRequired, detail: request.fingerprint)
+        }
+        guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else {
+            return .refused(.outsideWorkspace, detail: path)
+        }
+        // **临写前再读一次盘**：审批这段时间里文件可能被改过 ⇒ 锚点必须**此刻**仍然唯一。
+        guard let before = try? String(contentsOf: url, encoding: .utf8),
+              let after = Self.applyingEdit(to: before, oldString: oldString, newString: newString) else {
+            return .refused(.badArguments, detail: "anchorStale")
+        }
+        do {
+            try after.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            return .refused(.unreadable, detail: url.lastPathComponent)
+        }
+        return .wrote(AgentToolFileOutput(path: relativePath(url), text: after,
+                                         truncated: false, totalBytes: after.utf8.count))
+    }
+
     // MARK: - run_command（④：白名单 + 工作目录沙箱 + 未审批不执行）
 
     /// 备一条命令：白名单与工作区参数先过一遍，过了才生成审批请求。`tool` 同样来自注册表。
