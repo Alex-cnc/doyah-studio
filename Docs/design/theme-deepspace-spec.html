@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Doyah Studio · 主题实现规范：深空苍穹</title>
+<style>
+:root{--bg:#05070D;--panel:#0A0F1A;--card:#111827;--bd:#1B2436;--t1:#E6EDF7;--t2:#94A3B8;--t3:#64748B;--ac:#5EEAD4;--ac2:#60A5FA}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t1);font:15px/1.7 -apple-system,"PingFang SC",system-ui,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:36px 22px 80px}
+h1{font-size:26px;letter-spacing:.04em;margin:0 0 6px}
+.sub{color:var(--t3);font-size:13px;margin-bottom:26px}
+h2{font-size:18px;margin:34px 0 12px;padding-left:11px;border-left:3px solid var(--ac);letter-spacing:.03em}
+h3{font-size:15px;margin:22px 0 8px;color:var(--ac2)}
+p,li{color:var(--t2);font-size:14px}
+b,strong{color:var(--t1)}
+code{background:rgba(94,234,212,.1);color:var(--ac);padding:1px 6px;border-radius:4px;font-size:13px}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--bd)}
+th{color:var(--t3);font-weight:500;font-size:12px;letter-spacing:.08em}
+td{color:var(--t2)} td:first-child{color:var(--t1)}
+.sw{display:inline-block;width:15px;height:15px;border-radius:4px;vertical-align:-3px;margin-right:8px;border:1px solid rgba(255,255,255,.12)}
+.box{background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:16px 18px;margin:14px 0}
+.warn{border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.05)}
+.ok{border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.05)}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:13px}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;background:rgba(94,234,212,.12);color:var(--ac);border:1px solid rgba(94,234,212,.25)}
+a{color:var(--ac)}
+hr{border:0;border-top:1px solid var(--bd);margin:30px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>深空苍穹 · 主题实现规范</h1>
+<div class="sub">Doyah Studio · 视觉主题 · v1.0 · 2026-10-16 · 交付：铁皮大河马（实现方）</div>
+
+<div class="box">
+<b>一句话目标</b>：<b>近黑四层景深 + 冷光微量点缀 + 发光只给焦点</b>。<br>
+<b>不是</b>「更紫」——科幻的高级感来自 <b>黑与微光</b>，不来自彩色铺底。
+</div>
+
+<h2>一、为什么现有「星空紫」不达标</h2>
+<table>
+<tr><th>问题</th><th>原因</th></tr>
+<tr><td>显廉价科幻</td><td>饱和紫大面积铺底 ⇒ 赛博朋克刻板印象；科幻感来自「黑 + 微光」</td></tr>
+<tr><td>界面发闷、层次糊</td><td>只有一层紫 ⇒ 侧栏 / 卡片 / 正文挤在同一明度上，只能靠加亮来救，越救越土</td></tr>
+<tr><td>对比度难做</td><td>紫底上正文发灰，深色主题的 AA 判据最先在这里翻车</td></tr>
+</table>
+
+<h2>二、令牌表（照抄即可）</h2>
+
+<h3>① 深空底 · 四层景深</h3>
+<table>
+<tr><th>令牌</th><th>值</th><th>用途</th></tr>
+<tr><td><code>bg.base</code></td><td><span class="sw" style="background:#05070D"></span><span class="mono">#05070D</span></td><td>窗口底（<b>近黑，不用纯黑 #000</b>）</td></tr>
+<tr><td><code>bg.panel</code></td><td><span class="sw" style="background:#0A0F1A"></span><span class="mono">#0A0F1A</span></td><td>侧栏 / 主容器</td></tr>
+<tr><td><code>bg.card</code></td><td><span class="sw" style="background:#111827"></span><span class="mono">#111827</span></td><td>列表项 / 浮动卡片 / 输入框</td></tr>
+<tr><td><code>border.subtle</code></td><td><span class="sw" style="background:#1B2436"></span><span class="mono">#1B2436</span></td><td>分隔线 / 描边</td></tr>
+</table>
+
+<h3>② 星云点缀（只做氛围，不做主体）</h3>
+<table>
+<tr><th>令牌</th><th>值</th><th>不透明度</th><th>用法</th></tr>
+<tr><td><code>nebula.violet</code></td><td><span class="sw" style="background:#7C5CFF"></span><span class="mono">#7C5CFF</span></td><td>8~12%</td><td>顶栏或左上角径向渐变</td></tr>
+<tr><td><code>nebula.cyan</code></td><td><span class="sw" style="background:#38BDF8"></span><span class="mono">#38BDF8</span></td><td>12%</td><td>右下角径向渐变</td></tr>
+<tr><td><code>nebula.magenta</code></td><td><span class="sw" style="background:#F472B6"></span><span class="mono">#F472B6</span></td><td>6%</td><td>仅一处（制造纵深）</td></tr>
+</table>
+<p>渐变<b>只出现在边角或顶栏</b>；<b>禁止铺满</b>（那是游戏启动页，不是工作界面）。</p>
+
+<h3>③ 主强调（交互 / 选中）</h3>
+<table>
+<tr><th>令牌</th><th>值</th><th>用途</th></tr>
+<tr><td><code>accent.primary</code></td><td><span class="sw" style="background:#5EEAD4"></span><span class="mono">#5EEAD4</span></td><td>选中 / 焦点 / 主按钮（等离子青）</td></tr>
+<tr><td><code>accent.alt</code></td><td><span class="sw" style="background:#60A5FA"></span><span class="mono">#60A5FA</span></td><td>次强调 / 链接（等离子蓝）</td></tr>
+<tr><td><code>accent.dim</code></td><td><span class="sw" style="background:rgba(94,234,212,.14)"></span><span class="mono">rgba(94,234,212,.14)</span></td><td>选中行底 / 悬停底</td></tr>
+</table>
+
+<h3>④ 文字（深底上必须提亮）</h3>
+<table>
+<tr><th>令牌</th><th>值</th><th>对比度要求</th></tr>
+<tr><td><code>text.primary</code></td><td><span class="sw" style="background:#E6EDF7"></span><span class="mono">#E6EDF7</span></td><td>≥ 4.5:1（实测约 15:1）</td></tr>
+<tr><td><code>text.secondary</code></td><td><span class="sw" style="background:#94A3B8"></span><span class="mono">#94A3B8</span></td><td>≥ 4.5:1</td></tr>
+<tr><td><code>text.disabled</code></td><td><span class="sw" style="background:#64748B"></span><span class="mono">#64748B</span></td><td>≥ 3:1（禁用态可放宽但要能读）</td></tr>
+</table>
+
+<h3>⑤ 语义色（深底上提亮）</h3>
+<table>
+<tr><th>令牌</th><th>值</th></tr>
+<tr><td><code>state.success</code></td><td><span class="sw" style="background:#34D399"></span><span class="mono">#34D399</span></td></tr>
+<tr><td><code>state.warning</code></td><td><span class="sw" style="background:#FBBF24"></span><span class="mono">#FBBF24</span></td></tr>
+<tr><td><code>state.danger</code></td><td><span class="sw" style="background:#F87171"></span><span class="mono">#F87171</span></td></tr>
+</table>
+
+<h3>⑥ 质感与动效</h3>
+<table>
+<tr><th>令牌</th><th>建议值</th><th>说明</th></tr>
+<tr><td><code>effect.blur</code></td><td>backdrop-blur <b>20~30px</b></td><td>侧栏 / 浮层 / 顶栏</td></tr>
+<tr><td><code>effect.glow</code></td><td>0 0 10px accent@35%</td><td><b>只给焦点元素</b>（选中 / 运行中）</td></tr>
+<tr><td><code>effect.grid</code></td><td>1px 线 · 不透明度 <b>5~6%</b> · 44px 栅格</td><td>「舱内感」；<b>不超过 2% 视觉强度</b></td></tr>
+<tr><td><code>effect.border-grad</code></td><td>1px 渐变（上亮下暗）</td><td>顶栏下沿 / 卡片描边</td></tr>
+<tr><td><code>motion.duration</code></td><td><b>150~250ms</b></td><td>禁常驻动画</td></tr>
+</table>
+
+<h2>三、实现落点（重要）</h2>
+<div class="box warn">
+<b>必须做成「一套令牌值」，不是新的代码路径。</b><br>
+家族已有主题令牌机制（星空紫等主题 = 同一套令牌的不同取值）⇒ 本主题应<b>新增一组令牌取值</b>，
+走现有令牌注入链路；<b>禁止</b>为某个主题单写分支（否则四套主题各自写死 = 维护地狱）。
+</div>
+
+<h2>四、验收判据（可核，不是"看着好看"）</h2>
+<div class="box ok">
+<b>① 对比度读数</b>：正文 ≥4.5:1 · 大字 ≥3:1；<b>每个语义色在各自底色上复测</b>（深色主题最常在这里翻车）。<br>
+<b>② 无纯黑纯白</b>存在（除强调元素）。<br>
+<b>③ 全屏截图检查</b>：发光<b>只出现在焦点态</b>（如活动栏选中 + 主按钮），别无他处发光。<br>
+<b>④ 色板数量</b> ≤ 本节定义数（防止"改着改着变 40 个颜色"）。<br>
+<b>⑤ 三点截图校验</b>：主界面 / 侧栏 / 弹窗 —— 三处都要保持四层景深。
+</div>
+
+<h2>五、附件</h2>
+<ul>
+<li><b>可交互预览页</b>（含「深空苍穹 ↔ 星空紫」一键对照）：本目录 <code>preview-deepspace.html</code></li>
+<li><b>公网可看</b>：<a href="https://raw.githack.com/Alex-cnc/doyah-studio/master/Docs/design/preview-deepspace.html">raw.githack 链接</a></li>
+<li><b>对照图</b>（两主题上下并排）：见会话内图，或请前门补一张</li>
+</ul>
+
+<hr>
+<div class="sub">本件 = 设计规范（非契约、非产品代码）；实现与验收由 Studio 平台侧负责。命名后可入主题列表（建议名：<b>深空苍穹 / Deep Space</b>）。</div>
+
+</div>
+</body>
+</html>
