@@ -216,7 +216,15 @@ struct AppearanceSheet: View {
         )
     }
 
-    /// 壁纸皮肤开关的绑定（第 5 套主题「深空苍穹」· 人类主人 2026-10-16 选定档 3）。同走 `DesignThemeManager`。
+    /// 壁纸**档位**的绑定（稳 / 中 / 震撼 —— 人类主人 2026-10-16 要的「可以调节」）。
+    private var wallpaperStrengthBinding: Binding<Int> {
+        Binding(
+            get: { designTheme.wallpaperStrength },
+            set: { designTheme.setWallpaperStrength($0) }
+        )
+    }
+
+    /// 壁纸皮肤开关的绑定（两张壁纸由人类主人 2026-10-16 命名）。同走 `DesignThemeManager`。
     private var wallpaperSkinBinding: Binding<Bool> {
         Binding(
             get: { designTheme.isWallpaperSkinEnabled },
@@ -318,10 +326,23 @@ struct AppearanceSheet: View {
                 }
                 .help(L(.appearanceWallpaperSkin))
                 .accessibilityLabel(Text(L(.appearanceWallpaperSkin)))
-                Text(L(.appearanceWallpaperSkinHint))
+                Text("\(L(designTheme.theme.wallpaper?.nameKey ?? .appearanceWallpaperSkin)) · \(L(.appearanceWallpaperSkinHint))")
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.tertiary))
                     .fixedSize(horizontal: false, vertical: true)
+                // 三档（稳 / 中 / 震撼）：档越大 = 面板越透 = 照片越明显。
+                // 三档的**每一档**都过同一套下限（判据逐档管），所以"可调"不等于"能调到字看不清"。
+                if let spec = designTheme.theme.wallpaper {
+                    Picker("", selection: wallpaperStrengthBinding) {
+                        ForEach(1...max(spec.levelCount, 1), id: \.self) { strength in
+                            Text(L(spec.level(strength).nameKey)).tag(strength)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .help(L(.appearanceWallpaperSkin))
+                    .accessibilityLabel(Text(L(.appearanceWallpaperSkin)))
+                }
             }
         }
         .padding(.horizontal, Spacing.l)

@@ -5,8 +5,9 @@ import SwiftUI
 /// 「壁纸皮肤」的绘制层（第 5 套主题「深空苍穹」· 人类主人 2026-10-16 看过效果图之后选定 **档 3**）。
 ///
 /// **这一层只做两件事**：把照片按「铺满窗口」画出来，再按值表里的**蒙版**压住它的亮度。
-/// 资源名 / 四段蒙版 / 各表面不透明度**全部来自 `Core` 的值表**（`DesignTheme.wallpaper`），
+/// 资源名 / 四段蒙版 / 各表面不透明度**全部来自 `Core` 的值表**（`DesignTheme.wallpaper` 的**当前档**），
 /// 这里一个数字都不写死 —— 与 `NebulaBackground` 同一条纪律：**不为某个主题单写分支**。
+/// 档位（稳 / 中 / 震撼）由人类主人在「外观」面板上选，值仍是定值（每一档各一组，判据逐档管）。
 ///
 /// **邻居的分工**（三层，互不代偿）：
 /// - 照片在最底层（本层，挂在窗口根的 `.background` 上）；
@@ -30,9 +31,10 @@ struct WallpaperBackground: View {
     var body: some View {
         // 生效条件只问 Core 那**一个**函数（主题声明了壁纸 ∧ 开关开）——
         // 在这里再写一遍 `theme == .deepSpace && …` 只会让两处慢慢分叉。
-        if let spec = WallpaperSkinPreference.activeSpec(theme: themeManager.theme, in: .standard) {
+        if let spec = WallpaperSkinPreference.activeSpec(theme: themeManager.theme, in: .standard),
+           let level = WallpaperSkinPreference.activeLevel(theme: themeManager.theme, in: .standard) {
             photo(spec)
-                .overlay(mask(spec))
+                .overlay(mask(level))
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -55,9 +57,9 @@ struct WallpaperBackground: View {
     }
 
     /// 蒙版：用**这个主题自己的窗口底色**去压（深空苍穹的底是 `#05070D`，不是随便一个黑）。
-    private func mask(_ spec: WallpaperSkinSpec) -> some View {
+    private func mask(_ level: WallpaperSkinLevel) -> some View {
         LinearGradient(
-            stops: spec.maskStops.map {
+            stops: level.maskStops.map {
                 Gradient.Stop(color: Theme.opaqueSurface(.window).opacity($0.alpha), location: $0.location)
             },
             startPoint: .top,

@@ -99,6 +99,19 @@ final class DesignThemeManager: ObservableObject {
         static let key = WallpaperSkinPreference.key
     }
 
+    /// 当前主题的**壁纸档位**（1 起：稳 / 中 / 震撼 —— 人类主人 2026-10-16 原话「这个档位是可以调节的吧」）。
+    ///
+    /// 按**主题**存（`ui.wallpaperStrength.<主题 id>`）：切主题不会把另一张壁纸的档位带过去；
+    /// 缺省 = 那张壁纸的 `defaultLevel`（他在效果图上挑的那一档）。
+    var wallpaperStrength: Int { WallpaperSkinPreference.strength(for: theme, in: .standard) }
+
+    /// 改档位（唯一写入口）。档位不是 `@Published`（它是**按主题**算出来的），
+    /// 所以改完显式喊一声让界面重画 —— 否则「拖了选择器但界面不跟」。
+    func setWallpaperStrength(_ value: Int) {
+        WallpaperSkinPreference.setStrength(value, for: theme, in: .standard)
+        objectWillChange.send()
+    }
+
     /// 开关皮肤。**只在星空紫下才有视觉差别**，但开关本身对所有主题都记住 ——
     /// 这样"切到星空紫 → 切走 → 再切回来"能回到用户上次的选择。
     func setNebulaSkinEnabled(_ enabled: Bool) {

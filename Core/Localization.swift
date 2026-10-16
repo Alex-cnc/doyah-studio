@@ -190,6 +190,13 @@ public enum LKey: String, CaseIterable, Sendable {
     /// 壁纸皮肤（第 5 套主题「深空苍穹」落地件 · 人类主人 2026-10-16 选定档 3）。
     case appearanceWallpaperSkin
     case appearanceWallpaperSkinHint
+    /// 两张在册壁纸的显示名（人类主人 2026-10-16 命名）。
+    case wallpaperCityLake
+    /// 壁纸的三档观感（隐→显）。
+    case wallpaperLevelSteady
+    case wallpaperLevelBalanced
+    case wallpaperLevelVivid
+    case wallpaperCosmicCliff
     /// 主题配套强调色的名字（`AccentTheme.nameKey` 与主题名分开：主题名是给用户看的，
     /// 强调色名给"实心按钮上那两个字的缩写"用）。
     case accentBeanGreen
@@ -2615,6 +2622,11 @@ public enum LocalizedStrings {
         .appearanceNebulaSkin: [.simplifiedChinese: "星云皮肤", .english: "Nebula skin"],
         .appearanceNebulaSkinHint: [.simplifiedChinese: "在表面上叠加星云云气与星点（星空紫：NASA「宇宙悬崖」观感；深空苍穹：规范页的紫 / 青 / 品红三色，只走边角）。关闭后回到纯色表面。", .english: "Overlays nebula clouds and stars on surfaces that declare them (Star Purple: NASA Cosmic Cliffs; Deep Space: the spec's violet / cyan / magenta, corners only). Turn off for plain surfaces."],
         .appearanceWallpaperSkin: [.simplifiedChinese: "壁纸皮肤", .english: "Wallpaper skin"],
+        .wallpaperCityLake: [.simplifiedChinese: "城市之湖", .english: "City Lake"],
+        .wallpaperLevelSteady: [.simplifiedChinese: "稳", .english: "Steady"],
+        .wallpaperLevelBalanced: [.simplifiedChinese: "中", .english: "Balanced"],
+        .wallpaperLevelVivid: [.simplifiedChinese: "震撼", .english: "Vivid"],
+        .wallpaperCosmicCliff: [.simplifiedChinese: "宇宙悬崖", .english: "Cosmic Cliff"],
         .appearanceWallpaperSkinHint: [.simplifiedChinese: "在表面**之下**垫一张照片，面板半透明透出它（只对声明了壁纸的主题生效；不透明度与蒙版都是定值，改观感改的是值表）。关闭后逐像素回到纯色表面。", .english: "Puts a photo *behind* the surfaces and makes them translucent (only for themes that declare a wallpaper; both the mask and the opacities are fixed values — tune the value table, not the view). Turn off for plain surfaces."],
         .appearanceDesignThemeSection: [.simplifiedChinese: "主题（配色方案）", .english: "Theme (Color Scheme)"],
         .appearanceDesignThemeHint: [.simplifiedChinese: "一个主题是一组令牌值（底色基调 + 强调色家族 + 语法着色），不是只换一个强调色；选定后立即生效并记住。", .english: "A theme is a whole set of token values (base surfaces + accent family + syntax colours), not just one accent colour; it takes effect immediately and is remembered."],

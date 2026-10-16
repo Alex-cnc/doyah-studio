@@ -37,10 +37,10 @@ enum Theme {
         // **壁纸皮肤**（第 5 套主题「深空苍穹」）：开着时表面按**值表里的定值**半透明，
         // 照片就从面板底下透出来。口径收在这一层 —— 上百处调用点仍然只写 `Theme.surface(.panel)`，
         // 不该有任何一处自己写 `.opacity(0.4)` 去模拟这件事（那会让"哪个主题更透"有两处口径）。
-        guard let spec = WallpaperSkinPreference.activeSpec(theme: designTheme, in: .standard) else {
+        guard let level = WallpaperSkinPreference.activeLevel(theme: designTheme, in: .standard) else {
             return opaqueSurface(surface)
         }
-        return opaqueSurface(surface).opacity(spec.opacity(of: surface))
+        return opaqueSurface(surface).opacity(level.opacity(of: surface))
     }
 
     /// **不透视**的表面色（令牌原值，永远满不透明）。
