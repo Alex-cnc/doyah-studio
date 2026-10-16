@@ -2,11 +2,11 @@
   "title": "面板根固定尺寸 `.frame(width:height:)` 的处置台账（队列 L-61）",
   "scope": "App/Views/**/*.swift",
   "panelRootMinWidth": 400,
-  "scannedFiles": 92,
+  "scannedFiles": 93,
   "totals": {
-    "frames": 39,
+    "frames": 40,
     "panelRoots": 23,
-    "ornaments": 16
+    "ornaments": 17
   },
   "intentVocab": {
     "content-stretches": "这个面板根里有能撑满高度的容器（`ScrollView` / `List` / `Table` / `Form`（滚动容器）/ `GeometryReader` / 显式的 `maxHeight: .infinity`）⇒ 内容本来就填满这个尺寸，**居中与顶对齐视觉等价**（`stretchProbe` 要在同一个视图类型里真的存在）",
@@ -387,8 +387,17 @@
       "intent": "explicit-alignment",
       "alignment": ".topLeading",
       "note": "源码显式写 `alignment: .topLeading` —— 编辑表单，字段自上而下排，顶对齐是有意的"
+    },
+    {
+      "file": "App/Views/MainWindow.swift",
+      "symbol": "MainWindow",
+      "frame": "width: 1, height: 1",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "壁纸皮肤（`NFR` 无关 · 外观线）：挂在侧栏里、**不参与布局**的 1×1 探针 —— 它只为了拿到\n该视图在 AppKit 视图树里的位置，好沿祖先链找到包着侧栏的那层系统材质（`NSVisualEffectView`）并把混合目标改成窗口内（否则照片被那层材质挡掉）。尺寸写 1×1 是「零占位」的表示，不是面板根，也不该给 `alignment`。"
     }
   ],
   "totalsNote": "`frames` / `panelRoots` / `ornaments` 都是**处数**（同一形状出现多次按处数记，例如对象树里三处 12×12 的形状算 3 处）；条目数另计（现 31 条）。",
-  "updated": "2026-10-16（FR-AI-27 片 3 两个面板根 + 壁纸层新文件 `App/Views/WallpaperBackground.swift`）"
+  "updated": "2026-10-16 壁纸皮肤：侧栏材质让路的 1×1 探针登记（scannedFiles 92→93 · frames 39→40 · ornaments 16→17）"
 }

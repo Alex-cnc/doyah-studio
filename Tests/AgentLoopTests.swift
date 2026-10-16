@@ -231,4 +231,72 @@ final class AgentLoopTests: XCTestCase {
         private var value = 0
         func next() -> Int { value += 1; return value }
     }
+
+    // MARK: - ⑥ 检查点（`NFR-AI-08` ①）：每 N 跳落点 ⇒ 重启可续跑、已完成的跳**不重放**
+
+    /// 契约的机械可判点就是**假端点侧的请求条数** —— 所以这里逐条数 `requests`。
+    func testCheckpointLandsEveryNHopsThenResumeSendsNoReplayedRequest() async {
+        let checkpoints = AgentCheckpointStore(directory: directory)
+        let first = ScriptedStreamingClient([
+            toolEvent(name: "read_file", arguments: #"{"path":"a.txt"}"#),
+            [.textDelta("完成"), .finished(reason: "stop"), .done],
+        ])
+        let loop1 = AgentLoop(client: first, dispatcher: RecordingDispatcher(), sessionStore: store,
+                              checkpointStore: checkpoints, checkpointEvery: 1)
+        let firstResult = await loop1.run(context: context)
+
+        XCTAssertEqual(firstResult.steps, 2)
+        XCTAssertNil(firstResult.resumedFromStep, "第一次跑不是续跑")
+        XCTAssertEqual(firstResult.skippedSteps, 0)
+        let recovery = checkpoints.recover(sessionID: "s-loop", requestedStep: 0)
+        XCTAssertEqual(recovery.checkpoint?.stepIndex, 1, "最后一跳（index 1）跑完就该落盘")
+        XCTAssertEqual(recovery.skippedLines, 0, "刚落完的点不该有坏行")
+
+        // **重启**：新循环 + 新客户端、同一目录同一会话 ⇒ 前两跳的请求一个都不许重发。
+        let second = ScriptedStreamingClient([[.textDelta("接着跑"), .finished(reason: "stop"), .done]])
+        let loop2 = AgentLoop(client: second, dispatcher: RecordingDispatcher(), sessionStore: store,
+                              checkpointStore: checkpoints, checkpointEvery: 1)
+        let resumed = await loop2.run(context: context, requestedStep: 1)
+
+        XCTAssertEqual(second.requests.count, 1, "已完成的跳**不重放**：第 0 / 第 1 跳的请求都不许再发")
+        XCTAssertEqual(resumed.resumedFromStep, 1, "从第 1 跳接上")
+        XCTAssertEqual(resumed.steps, 3, "第 1 跳之后接着跑 ⇒ 跳数从 3 起")
+        XCTAssertEqual(resumed.skippedSteps, 0, "停在 1、可用点就是 1 ⇒ 没退")
+    }
+
+    /// 负例：检查点**坏**（截断行）⇒ 落到**上一可用点**并**如实报数**，不许静默从头。
+    func testCorruptCheckpointFallsBackToPreviousUsablePointAndReports() async throws {
+        let checkpoints = AgentCheckpointStore(directory: directory)
+        let client = ScriptedStreamingClient([
+            toolEvent(name: "read_file", arguments: #"{"path":"a.txt"}"#),
+            toolEvent(name: "read_file", arguments: #"{"path":"a.txt"}"#),
+            toolEvent(name: "read_file", arguments: #"{"path":"a.txt"}"#),
+            toolEvent(name: "read_file", arguments: #"{"path":"a.txt"}"#),
+            [.textDelta("完"), .finished(reason: "stop"), .done],
+        ])
+        let loop = AgentLoop(client: client, dispatcher: RecordingDispatcher(), sessionStore: store,
+                             checkpointStore: checkpoints, checkpointEvery: 2)
+        _ = await loop.run(context: context)
+
+        // 末尾塞一行坏的（模拟截断 / 坏盘）
+        let handle = try FileHandle(forWritingTo: checkpoints.fileURL)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data("{坏行".utf8))
+        try handle.close()
+
+        let recovery = checkpoints.recover(sessionID: "s-loop", requestedStep: 4)
+        XCTAssertEqual(recovery.skippedLines, 1, "坏行要计数（丢了就说）")
+        XCTAssertEqual(recovery.checkpoint?.stepIndex, 3, "落到上一可用点：每 2 跳落点 ⇒ 最后可用点是第 3 跳")
+        XCTAssertEqual(recovery.skippedSteps, 1, "以为自己停在第 4 跳 ⇒ 实退 1 跳，如实报数")
+    }
+
+    /// ④ 白名单：检查点里只有摘要 —— 指纹可区分不同内容，且**不是**内容本身。
+    func testCheckpointDigestIsAFingerprintNotTheContent() {
+        let a = AgentLoop.digest(of: ["read_file: 内容 A"])
+        let b = AgentLoop.digest(of: ["read_file: 内容 B"])
+        XCTAssertNotEqual(a, b)
+        XCTAssertEqual(a.count, 16)
+        XCTAssertNil(a.range(of: "内容"), "指纹里不该出现正文")
+        XCTAssertEqual(a, AgentLoop.digest(of: ["read_file: 内容 A"]), "同内容同指纹")
+    }
 }

@@ -106,14 +106,14 @@
     {
       "key": "core-tests",
       "label": "Core 单测项数（verify-core.sh 实测）",
-      "value": 3232,
+      "value": 3235,
       "unit": "项",
       "measure": {
         "kind": "count-file",
         "file": ".build/core-test-count.txt",
         "regex": "(\\d+)",
         "expect": [
-          3232
+          3235
         ],
         "writtenBy": "Scripts/verify-core.sh（同一次运行写出；verify-all.sh 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，判据如实报『跳过』而不是拿旧值当现状）"
       },
@@ -406,7 +406,7 @@
     {
       "key": "panel-root-frames",
       "label": "App/Views 里「宽高都是数字字面量」的固定尺寸 `.frame(width:height:)` 处数（= 面板根 + 装饰）",
-      "value": 39,
+      "value": 40,
       "unit": "处",
       "secondary": {
         "label": "其中面板根",
@@ -414,16 +414,16 @@
       },
       "tertiary": {
         "label": "其中装饰（非面板根）",
-        "value": 16
+        "value": 17
       },
       "measure": {
         "kind": "judge-output",
         "script": "Scripts/check-panel-root-frames.py",
         "regex": "固定尺寸 frame (\\d+) 处（面板根 (\\d+) · 装饰 (\\d+)）",
         "expect": [
-          39,
+          40,
           23,
-          16
+          17
         ],
         "note": "**真跑一遍**那个判据（默认参数、cwd = 仓根），要求 `exit 0`，再从它的人读输出抓三个数；脚本不在盘 / 跑不过 / 抓不到都判红（它的输出是这三个数的唯一来源）。三个数不是独立的三件事：39 = 面板根 23 + 装饰 16。"
       },
