@@ -1649,6 +1649,21 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentRiskLow
     case agentRiskElevated
     case agentRiskDestructive
+    // 定时 agent（FR-AI-27）
+    case agentScheduleTitle
+    case agentScheduleEmpty
+    case agentScheduleNew
+    case agentScheduleTargetLabel
+    case agentScheduleTargetConversation
+    case agentScheduleTargetAgentTask
+    case agentSchedulePromptLabel
+    case agentScheduleWorkspaceLabel
+    case agentScheduleHistory
+    case agentScheduleHistoryEmpty
+    case agentScheduleNeverRun
+    case agentScheduleDeleteConfirm
+    case agentScheduleWithheld
+    case agentScheduleExecuted
 
     // 数据任务（FR-AI-05 / FR-AI-06 / FR-AI-08）
     case menuDataTask
@@ -3222,6 +3237,21 @@ public enum LocalizedStrings {
         .agentChatEndpointNotConfigured: [.simplifiedChinese: "还没配模型端点 —— 先在「智能体设置」里配好再聊。", .english: "No model endpoint configured yet — set it up in Agent Settings first."],
         .agentChatEndpointUnreachable: [.simplifiedChinese: "端点连不上 —— 检查地址 / 网络，或先在设置里试一次连接。", .english: "Endpoint unreachable — check the address / network, or test the connection in settings."],
         .agentChatDone: [.simplifiedChinese: "这一轮说完了。", .english: "That's a wrap for this round."],
+        // 定时 agent（FR-AI-27）：目标档位 / 面板文案 / 历史。词表与既有键能合的就合（状态与时间全走 dataTask*）。
+        .agentScheduleTitle: [.simplifiedChinese: "定时 agent", .english: "Scheduled agents"],
+        .agentScheduleEmpty: [.simplifiedChinese: "还没有定时条目。定时只决定「什么时候起一次会话」——危险动作仍然逐次审批。", .english: "No scheduled entries yet. A schedule only decides when a session starts — dangerous actions still need approval every time."],
+        .agentScheduleNew: [.simplifiedChinese: "新建定时…", .english: "New schedule…"],
+        .agentScheduleTargetLabel: [.simplifiedChinese: "定时目标", .english: "Target"],
+        .agentScheduleTargetConversation: [.simplifiedChinese: "对话", .english: "Conversation"],
+        .agentScheduleTargetAgentTask: [.simplifiedChinese: "Agent 任务", .english: "Agent task"],
+        .agentSchedulePromptLabel: [.simplifiedChinese: "提示词", .english: "Prompt"],
+        .agentScheduleWorkspaceLabel: [.simplifiedChinese: "工作区", .english: "Workspace"],
+        .agentScheduleHistory: [.simplifiedChinese: "执行历史", .english: "Run history"],
+        .agentScheduleHistoryEmpty: [.simplifiedChinese: "还没有执行记录。", .english: "No runs yet."],
+        .agentScheduleNeverRun: [.simplifiedChinese: "还没跑过", .english: "Never run"],
+        .agentScheduleDeleteConfirm: [.simplifiedChinese: "删除这条定时？它的执行历史一并删掉。", .english: "Delete this schedule? Its run history goes with it."],
+        .agentScheduleWithheld: [.simplifiedChinese: "被扣下 %d 条（未审批不执行）", .english: "%d held back (nothing runs without approval)"],
+        .agentScheduleExecuted: [.simplifiedChinese: "执行了 %d 条", .english: "%d executed"],
         .agentChatExpand: [.simplifiedChinese: "展开", .english: "Expand"],
         .agentChatCollapse: [.simplifiedChinese: "收起", .english: "Collapse"],
         .workspaceHomeBuildLine: [.simplifiedChinese: "版本 %@（构建 %@）", .english: "Version %@ (build %@)"],
