@@ -38,32 +38,63 @@ final class AgentChatTests: XCTestCase {
 
     // MARK: - ③ 工具卡片：可展开，未登记的调用也如实显示为「被拒」+ 原因
 
-    func testToolCallsBecomeExpandableCardsAndRefusalsShowTheirReason() {
+    /// ③ 过程聚合（**2026-10-17 人类主人口径**）：「智能体自己执行的命令这些信息应该是在**同一条信息中滚动**，
+    /// 避免刷屏」 —— 改前每调一次工具就开一张卡片（一跑十几跳就是一屏）；现在自跑的工具**只并进同一条过程消息**，
+    /// 卡片只留给**要人动手**的那几种（等审批 / 已批 / 已应用）。
+    ///
+    /// 同时判**步骤清单**（人类主人同日第二令：「用户可以看到你正在执行到哪一步了」）。
+    func testSelfRunToolsGatherIntoOneProgressMessageAndOnlyApprovalsBecomeCards() {
         var state = AgentChatState()
         ready(&state)
         state.beginRun(prompt: "读文件")
+
+        state.apply(.hopStarted(index: 0))
         state.apply(.toolStarted(name: "read_file"))
-        XCTAssertEqual(state.cards.count, 1)
-        XCTAssertEqual(state.cards[0].outcome, .running)
-        XCTAssertFalse(state.cards[0].expanded, "默认收起")
-
         state.apply(.toolFinished(name: "read_file", outcome: "executed"))
-        XCTAssertEqual(state.cards[0].outcome, .executed("executed"))
-        XCTAssertEqual(state.cards[0].statusCode, "executed")
+        state.apply(.toolStarted(name: "list_dir"))
+        state.apply(.toolFinished(name: "list_dir", outcome: "executed"))
 
-        state.toggleExpanded(cardID: state.cards[0].id)
-        XCTAssertTrue(state.cards[0].expanded, "能展开")
+        XCTAssertTrue(state.cards.isEmpty, "自跑的工具**不再**逐条开卡片（改前这里是 2 张）")
+        let progress = state.messages.filter { $0.role == .tool }
+        XCTAssertEqual(progress.count, 1, "自跑的命令收在**同一条**过程消息里（不刷屏）")
+        XCTAssertEqual(progress[0].text.components(separatedBy: "\n").count, 2, "两次工具 = 同一块里两行")
+        XCTAssertTrue(progress[0].text.contains("✓"), "跑完**就地**把那一行收尾")
 
-        // 未登记的调用：**不执行**，但卡片如实标被拒 + 原因
         state.apply(.toolStarted(name: "delete_everything"))
         state.apply(.toolFinished(name: "delete_everything", outcome: "denied"))
-        XCTAssertEqual(state.cards.last?.outcome, .denied("denied"))
+        XCTAssertEqual(state.messages.filter { $0.role == .tool }.count, 1, "被拒的也进同一块")
+        XCTAssertTrue(state.messages.last?.text.contains("✗ denied") ?? false, "被拒原因如实摆在那一行")
 
-        let reasonCard = state.cards.last!.id
-        state.markDenied(cardID: reasonCard, reason: "unregistered")
-        XCTAssertEqual(state.cards.last?.outcome, .denied("unregistered"))
-        XCTAssertEqual(state.cards.last?.statusCode, "denied:unregistered")
-        XCTAssertTrue(state.cards.last!.outcome.isTerminal)
+        // 步骤清单：第 1 步在跑，带着它跑过的工具名
+        XCTAssertEqual(state.steps.count, 1, "一跳 = 一行（清单在输入框上方）")
+        XCTAssertEqual(state.steps[0].index, 1)
+        XCTAssertEqual(state.steps[0].tools, ["read_file", "list_dir", "delete_everything"])
+        XCTAssertEqual(state.steps[0].status, .running)
+
+        // **要人动手的**才开卡片（等审批 ⇒ 逐张可点）
+        let id = state.requestApproval(name: "write_file", fingerprint: "fp-1", preview: "- a\n+ b")
+        XCTAssertEqual(state.cards.count, 1)
+        XCTAssertEqual(state.cards[0].outcome, .pendingApproval(fingerprint: "fp-1", preview: "- a\n+ b"))
+        XCTAssertTrue(state.cards[0].expanded, "审批卡默认展开（要看见改什么）")
+        state.toggleExpanded(cardID: id)
+        XCTAssertFalse(state.cards[0].expanded, "能收起")
+        XCTAssertTrue(state.approve(cardID: id))
+        XCTAssertEqual(state.cards[0].outcome, .approved(fingerprint: "fp-1", preview: "- a\n+ b"))
+        XCTAssertTrue(state.markApplied(cardID: id))
+        XCTAssertEqual(state.cards[0].statusCode, "applied")
+
+        // 跑完 ⇒ 最后一步收尾
+        state.finishRun()
+        XCTAssertEqual(state.steps[0].status, .done)
+
+        // 新一轮 ⇒ 清单**另起**（上一轮的步骤不混进来），过程块也另起
+        state.beginRun(prompt: "再来")
+        XCTAssertTrue(state.steps.isEmpty, "新一轮 = 新任务，清单重新起")
+        state.apply(.hopStarted(index: 0))
+        state.apply(.toolStarted(name: "search"))
+        XCTAssertEqual(state.messages.filter { $0.role == .tool }.count, 2, "新一轮另起一块")
+        XCTAssertEqual(state.steps.count, 1)
+        XCTAssertEqual(state.steps[0].index, 1, "新一轮从第 1 步起")
     }
 
     // MARK: - ④ 内联审批：**批准之前先看见要改什么**；批准后才应用；授权按次

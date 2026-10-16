@@ -91,6 +91,29 @@ public struct AgentToolCard: Identifiable, Equatable, Sendable {
     }
 }
 
+/// 一步（= 循环里的**一跳**）在界面上的样子。
+///
+/// 由头（人类主人 2026-10-17）：「DSH-tui 在对话输入框上面的那个**任务清单**也挺好，
+/// 用户可以看到你**正在执行到哪一步**了」⇒ 把「走到哪了」做成输入框上方的一块清单，
+/// 而不是让用户自己去正文里找。
+public struct AgentChatStep: Identifiable, Equatable, Sendable {
+    public enum Status: String, Equatable, Sendable { case running, done, failed }
+
+    public let id: UUID
+    /// 第几步（1 起）。
+    public var index: Int
+    public var status: Status
+    /// 这一步里跑过的工具名（按发生顺序，允许重复 —— 同一工具两次就是两笔）。
+    public var tools: [String]
+
+    public init(id: UUID = UUID(), index: Int, status: Status = .running, tools: [String] = []) {
+        self.id = id
+        self.index = index
+        self.status = status
+        self.tools = tools
+    }
+}
+
 /// 端点配置状态（`FR-AI-25` ⑤：**连不上就如实说，不假装在跑**）。
 public enum AgentChatEndpointState: Equatable, Sendable {
     /// 还没配端点 —— 界面如实说「没配」，且**不许发**。
@@ -119,16 +142,20 @@ public struct AgentChatState: Equatable, Sendable {
 
     public var messages: [AgentChatMessage]
     public var cards: [AgentToolCard]
+    /// 本次任务的步骤清单（输入框上方那块）。
+    public var steps: [AgentChatStep]
     public var endpoint: AgentChatEndpointState
     public var isRunning: Bool
     /// 已批准的指纹（**按次**：批准一次只能兑现一次，兑现后从集合里移走）。
     public var grants: Set<String>
 
     public init(messages: [AgentChatMessage] = [], cards: [AgentToolCard] = [],
+                steps: [AgentChatStep] = [],
                 endpoint: AgentChatEndpointState = .notConfigured, isRunning: Bool = false,
                 grants: Set<String> = []) {
         self.messages = messages
         self.cards = cards
+        self.steps = steps
         self.endpoint = endpoint
         self.isRunning = isRunning
         self.grants = grants
@@ -146,6 +173,8 @@ public struct AgentChatState: Equatable, Sendable {
         }
         messages.append(AgentChatMessage(role: .user, text: prompt))
         messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true))
+        // 新一轮 = 新任务 ⇒ 清单**重新起**（上一轮的步骤不混进来）。
+        steps = []
         isRunning = true
     }
 
@@ -160,6 +189,10 @@ public struct AgentChatState: Equatable, Sendable {
     public mutating func finishRun() {
         endStreaming()
         isRunning = false
+        // 收尾：最后一步没被标成失败就是走完了（`failed` / `stopped` 那两条路各自标过）。
+        if let index = steps.indices.last, steps[index].status == .running {
+            steps[index].status = .done
+        }
     }
 
     public mutating func appendNotice(_ code: String) {
@@ -170,7 +203,10 @@ public struct AgentChatState: Equatable, Sendable {
 
     public mutating func apply(_ event: AgentLoopEvent) {
         switch event {
-        case .hopStarted:
+        case .hopStarted(let hopIndex):
+            // 每跳 = 清单里的一步。**用事件自带的跳号**（0 起）换算成「第 N 步」（1 起）——
+            // 不自己数数：续跑（`NFR-AI-08`）时跳号会从中间起，自己数会显示成「第 1 步」。
+            steps.append(AgentChatStep(index: hopIndex + 1))
             endStreaming()
             if messages.last?.role != .assistant || messages.last?.isStreaming == false {
                 messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true))
@@ -183,23 +219,52 @@ public struct AgentChatState: Equatable, Sendable {
                 messages.append(AgentChatMessage(role: .assistant, text: piece, isStreaming: true))
             }
         case .toolStarted(let name):
-            cards.append(AgentToolCard(name: name, arguments: ""))
+            // **自跑的命令收在同一条过程消息里**（人类主人 2026-10-17 实机反馈原话：「智能体自己执行的命令
+            // 这些信息应该是在同一条信息中滚动，避免刷屏」）。改前：每调一次工具就 `cards.append` 一张卡片
+            // ⇒ 一跑十几跳就是一屏卡片。现在卡片**只留给要人动手的那几种**（等审批 / 已批 / 已应用，
+            // 见 `requestApproval`）—— 那些必须逐张可点，不能并进正文。
+            appendProgressLine(Self.progressBullet + name)
+            if let index = steps.indices.last { steps[index].tools.append(name) }
         case .toolFinished(let name, let outcome):
-            guard let index = cards.lastIndex(where: { $0.name == name && $0.outcome == .running }) else { return }
-            switch outcome {
-            case "executed": cards[index].outcome = .executed(outcome)
-            case "denied": cards[index].outcome = .denied("denied")
-            default: cards[index].outcome = .denied(outcome)
-            }
+            // **就地收尾同一行**（同一行改状态，不新开行、不新开块）。
+            closeProgressLine(tool: name, mark: outcome == "executed" ? "✓" : "✗ " + outcome)
         case .stopped(let stop):
             endStreaming()
             appendNotice(stop.reason)
             isRunning = false
+            if let index = steps.indices.last { steps[index].status = .failed }
         case .failed(let message):
             endStreaming()
             appendNotice("failed:\(message)")
             isRunning = false
+            if let index = steps.indices.last { steps[index].status = .failed }
         }
+    }
+
+    // MARK: - 过程行（自跑的命令都在这条消息里）
+
+    /// 过程行的前缀（给人看的形状；判据只认「同一块」这一点）。
+    private static let progressBullet = "▸ "
+
+    /// 把一行过程**追加到既有那块**里；没有块就新开一条。
+    ///
+    /// 合并口径：只并进**最近那块、且其后没有新的用户提问**（新提问 = 新一轮，块要分开）。
+    private mutating func appendProgressLine(_ line: String) {
+        if let index = messages.lastIndex(where: { $0.role == .tool }),
+           !messages[(index + 1)...].contains(where: { $0.role == .user }) {
+            messages[index].text += "\n" + line
+        } else {
+            messages.append(AgentChatMessage(role: .tool, text: line))
+        }
+    }
+
+    /// 把某个工具**那一行**就地收尾（同一行改状态，不新开行）。
+    private mutating func closeProgressLine(tool: String, mark: String) {
+        guard let index = messages.lastIndex(where: { $0.role == .tool }) else { return }
+        var lines = messages[index].text.components(separatedBy: "\n")
+        guard let row = lines.lastIndex(where: { $0.hasPrefix(Self.progressBullet + tool) }) else { return }
+        lines[row] += "  " + mark
+        messages[index].text = lines.joined(separator: "\n")
     }
 
     /// 工具调用被拒时**把原因摆在卡片上**（`FR-AI-25` ③：未登记的调用也如实显示）。

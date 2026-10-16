@@ -47,6 +47,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     var messages: [AgentChatMessage] { state.messages }
     var cards: [AgentToolCard] { state.cards }
+    /// 输入框上方那块清单（一步步走）。
+    var steps: [AgentChatStep] { state.steps }
     var isRunning: Bool { state.isRunning }
     var grants: Set<String> { state.grants }
 
@@ -57,6 +59,14 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         case "endpointUnreachable": return L(.agentChatEndpointUnreachable)
         default: return nil
         }
+    }
+
+    /// 自动滚动用的**单调读数**（消息条数 + 全部正文长度 + 卡片数）。
+    ///
+    /// 为什么不用 `messages.last?.text` 当读数：流式那条**不一定是最后一条** —— 过程块会排在它下面
+    /// （`AgentChat.swift` 的 `appendProgressLine`）⇒ 只看最后一条，逐段出现时界面滚不动。
+    var scrollTick: Int {
+        state.messages.reduce(state.messages.count + state.cards.count + state.steps.count) { $0 + $1.text.count }
     }
 
     var canSend: Bool {

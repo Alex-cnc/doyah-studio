@@ -16,6 +16,10 @@ struct AgentChatView: View {
         VStack(spacing: 0) {
             transcript
             Divider()
+            // **输入框上面的任务清单**（人类主人 2026-10-17：「DSH-tui 那个任务清单也挺好，
+            // 用户可以看到你正在执行到哪一步了」）—— 行内一行一步，只在本轮有步骤时出现。
+            taskList
+            Divider()
             composer
         }
         .onAppear { model.refreshEndpoint() }
@@ -26,18 +30,39 @@ struct AgentChatView: View {
 
     // MARK: - 消息流 + 卡片
 
+    /// 底部锚的 id（自动滚动用）。
+    private static let bottomAnchor = "agentChatBottom"
+
     private var transcript: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                ForEach(model.messages) { message in
-                    messageRow(message)
+        // **跟着最新内容走**（人类主人 2026-10-17 实机反馈：「对话框不自动滚动到最新位置，要手工拖动」）。
+        // 读数取 `model.scrollTick`（消息条数 + 正文总长 + 卡片数）—— 流式逐段出现、过程块追加、
+        // 卡片新增，任何一种都会让读数变大 ⇒ 一次滚动跟随；只在**内容真的变了**时动手，不空转。
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(model.messages) { message in
+                        messageRow(message)
+                    }
+                    ForEach(model.cards) { card in
+                        toolCard(card)
+                    }
+                    Color.clear.frame(height: 1).id(Self.bottomAnchor)
                 }
-                ForEach(model.cards) { card in
-                    toolCard(card)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .onChange(of: model.scrollTick) { _ in follow(proxy) }
+            .onChange(of: model.isRunning) { _ in follow(proxy) }
+            .onAppear { follow(proxy, animated: false) }
+        }
+    }
+
+    /// 滚到底。**不抢正在往上翻的人的手**：只在内容变化时执行，且用户点「回到最新」也能主动调它。
+    private func follow(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        if animated {
+            withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(Self.bottomAnchor, anchor: .bottom) }
+        } else {
+            proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
         }
     }
 
@@ -139,6 +164,51 @@ struct AgentChatView: View {
         case .denied: return "xmark.octagon"
         case .pendingApproval, .approved: return "hand.raised"
         case .applied: return "checkmark.seal"
+        }
+    }
+
+    // MARK: - 任务清单（走到哪了）
+
+    @ViewBuilder
+    private var taskList: some View {
+        if !model.steps.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L(.agentChatStepsTitle, "\(model.steps.count)"))
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(model.steps) { step in
+                    HStack(spacing: 6) {
+                        Image(systemName: mark(for: step))
+                            .foregroundStyle(tint(for: step))
+                            .font(.caption)
+                        Text(L(.agentChatStepNo, "\(step.index)"))
+                            .font(.caption)
+                        Text(step.tools.joined(separator: " · "))
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func mark(for step: AgentChatStep) -> String {
+        switch step.status {
+        case .running: return "circle.dotted"
+        case .done: return "checkmark.circle"
+        case .failed: return "xmark.octagon"
+        }
+    }
+
+    private func tint(for step: AgentChatStep) -> Color {
+        switch step.status {
+        case .running: return .accentColor
+        case .done: return .secondary
+        case .failed: return .orange
         }
     }
 
