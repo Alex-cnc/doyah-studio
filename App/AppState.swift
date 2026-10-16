@@ -2886,6 +2886,17 @@ final class AppState: ObservableObject {
         if let tab = selectedTab {
             references.append(.activeTab(title: tab.title, kind: "query"))
         }
+        // `FR-AI-29` 对话记忆（跨会话长期记忆）的**接线段**：记忆进上下文只有这一个口 ——
+        // `AgentMemoryContext.references` 自己按 `FR-AI-15` 的口径挑「还该记的」（该忘的不挂），
+        // 本处**不重挑、不拼提示词、不新增第七个 case**（产出的是既有 `AgentContextReference`）。
+        // 读不回来（这一工作区还没有记忆 / 整份文件读不了）⇒ **这一段不带**，而不是编一个空壳出来
+        //（与本函数上面那条「取不到摘要就不带」同一条口径）。
+        // 隔离的第二层（连接）在这里落到读法上：选了连接就只看那个连接的记忆。
+        let memoryRead = AgentMemoryStore(directory: AgentMemoryStore.defaultDirectory)
+            .entries(workspace: workspacePath, connection: selectedConnection?.name)
+        if !memoryRead.entries.isEmpty {
+            references.append(contentsOf: AgentMemoryContext.references(from: memoryRead.entries, now: Date()))
+        }
         let systemPrompt = AgentSystemPrompt.build(model: model, endpoint: endpoint,
                                                    workspacePath: workspacePath,
                                                    references: references)
