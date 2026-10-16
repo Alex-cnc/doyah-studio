@@ -202,6 +202,25 @@ else
   echo "警告：缺少 ${ICON}，应用将没有图标（可用 Scripts/make-app-icon.swift 重新生成）"
 fi
 
+# 壁纸皮肤的两张照片（2026-10-16）：`Core/WallpaperSkin.swift` 的值表按**资源名**取图
+# （`NSImage(named: "wallpaper-city-lake")` ⇒ 找的就是包内 `Contents/Resources/<名>.jpg`）。
+# **这一格必须点名拷贝**：SwiftPM 侧 `Package.swift` 把 `Resources` 整目录 exclude 掉了
+# （注释原话「Resources 由 Scripts/build-app.sh 装进 .app；SwiftPM 不处理 .icns/.png」）——
+# 所以"把图放进 App/Resources"**不等于**它会进包。2026-10-16 实测踩过：改了资源名没跟这一格，
+# 打出来的包里一张壁纸都没有，而 App 侧有兜底（取不到图就退回主题纯色）**不会崩**，
+# 只是"功能静默消失"——正是那种只靠人工点验才看得见、判据全绿也拦不住的漏。
+# 因此这里**数一遍**：盘上有几张就必须进包几张；一张都没有 ⇒ 直接报错退出（不许静默出一个没壁纸的包）。
+WALLPAPERS=$(ls "${ROOT}"/App/Resources/wallpaper-*.jpg 2>/dev/null || true)
+if [ -z "${WALLPAPERS}" ]; then
+  echo "错误：${ROOT}/App/Resources 里没有 wallpaper-*.jpg —— 壁纸皮肤会静默失效（值表见 Core/WallpaperSkin.swift）" >&2
+  exit 1
+fi
+echo "==> 附带壁纸（App/Resources/wallpaper-*.jpg ⇒ Contents/Resources/）"
+for WALLPAPER in ${WALLPAPERS}; do
+  cp "${WALLPAPER}" "${APP}/Contents/Resources/"
+  echo "    $(basename "${WALLPAPER}")"
+done
+
 # 第三方许可声明随产品分发（审核与合规都要能随包拿到）
 echo "==> 附带第三方许可声明"
 cp "${ROOT}/THIRD-PARTY-NOTICES.md" "${APP}/Contents/Resources/THIRD-PARTY-NOTICES.md"

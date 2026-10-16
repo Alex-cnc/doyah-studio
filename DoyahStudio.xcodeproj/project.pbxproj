@@ -200,7 +200,6 @@
 		4826956BCF6850AB9D586F91 /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D1F80CF80EC31AE7E1F47 /* ResultView.swift */; };
 		4826ED87B59CC2AF2601DE91 /* TerminalPaletteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB831B773F36BDAE39A9CCD1 /* TerminalPaletteTests.swift */; };
 		491A62EEFAB918EAC604765E /* ResultExportEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86147C51C5A0090DF3A2B5AF /* ResultExportEncoding.swift */; };
-		497D9A51037E62AD6DC7655C /* wallpaper-deep-space.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 0E3DC3F7A42D778C3C4638D0 /* wallpaper-deep-space.jpg */; };
 		4A5FCFDDAA56FE21FD8EB740 /* AgentLoop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281099CBEF014AE9DAC0A3F4 /* AgentLoop.swift */; };
 		4A6F670A7788406154601242 /* TodoCalendar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DF4ACD80B85618462BD7DDF /* TodoCalendar.swift */; };
 		4A8D7610B06D143B9152792B /* AgentSQLGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7BEDB3799C434B744FC52C /* AgentSQLGenerator.swift */; };
@@ -476,6 +475,7 @@
 		BBEAED9CE8B198413893118F /* LLMRetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FFDFE74B1A85A5F07C9E2E /* LLMRetryTests.swift */; };
 		BC917DF604913D756BD1857D /* DiagnosisAdvice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02D4757D7B666A30E77C41A8 /* DiagnosisAdvice.swift */; };
 		BCAFE3A076077C167B897D25 /* TerminalCursorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B5F19D64CCF43D488459002 /* TerminalCursorTests.swift */; };
+		BCDFEC460895EC7AA9876D92 /* wallpaper-city-lake.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 7A6F07A37300236EFA745766 /* wallpaper-city-lake.jpg */; };
 		BD1B4A7A6E22B8BD7CA5AD44 /* NoteBodyMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB54154E8242E75454CB0FE /* NoteBodyMigration.swift */; };
 		BDB1A4B25840ADA54F47A579 /* WorkspaceFileOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD907E052C0790DC02A09520 /* WorkspaceFileOperations.swift */; };
 		BE2DE91E702AE2D3A5DE9C22 /* SaveQuerySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AB7303AF9FF6357B10BD7D6 /* SaveQuerySheet.swift */; };
@@ -636,6 +636,7 @@
 		FC85EB0D8444F432CF82058F /* DiagnosisContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F405923EAC3A1E865182CB2 /* DiagnosisContext.swift */; };
 		FCA839AC0739E4FCC7E801DB /* AgentMemoryContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CDA3B64DB10713F1728A5E /* AgentMemoryContext.swift */; };
 		FCC23E451E7FE3FA99F16E35 /* MCPApprovalQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F19F5EDD378A35166D4D17A /* MCPApprovalQueueTests.swift */; };
+		FDC9FA1DE5F6968F307BC54B /* wallpaper-cosmic-cliff.jpg in Resources */ = {isa = PBXBuildFile; fileRef = BDF7D491B35ED46BE1021C5F /* wallpaper-cosmic-cliff.jpg */; };
 		FE35E3810DEFD319BAAFF219 /* XLSXWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F5C57F60F0F1E1E2C89F7C /* XLSXWriter.swift */; };
 		FEC74F57A182616110D412B4 /* NotePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536F7AC577675B31275433D7 /* NotePresentationTests.swift */; };
 		FF00FCCE44E0A051012D245A /* CodeLexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABC9218C68A29D899756CFB /* CodeLexer.swift */; };
@@ -784,7 +785,6 @@
 		0D14EB82DF73913D9D7B8455 /* WorkspaceTabsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTabsModel.swift; sourceTree = "<group>"; };
 		0D6314BEF661C0BA5867DBD1 /* AffectedRowsTallyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffectedRowsTallyTests.swift; sourceTree = "<group>"; };
 		0DED1D9E78B85B01D68B7A09 /* ArchiveLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveLocation.swift; sourceTree = "<group>"; };
-		0E3DC3F7A42D778C3C4638D0 /* wallpaper-deep-space.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "wallpaper-deep-space.jpg"; sourceTree = "<group>"; };
 		0E7BB3CBE064FC847854CC37 /* ConnectionInfoTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionInfoTextTests.swift; sourceTree = "<group>"; };
 		0F405923EAC3A1E865182CB2 /* DiagnosisContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosisContext.swift; sourceTree = "<group>"; };
 		0F8AD5BFE8B80A1E7A16885D /* CodeLines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeLines.swift; sourceTree = "<group>"; };
@@ -1027,6 +1027,7 @@
 		7815007C874500A351A452A8 /* AgentAuditPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAuditPresentationTests.swift; sourceTree = "<group>"; };
 		78D054047B42AF0EA1AAD3D8 /* WorkspaceFileOperationsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceFileOperationsTests.swift; sourceTree = "<group>"; };
 		79053CA98E09A20CE34634EC /* DoyahStudio-unsandboxed.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "DoyahStudio-unsandboxed.entitlements"; sourceTree = "<group>"; };
+		7A6F07A37300236EFA745766 /* wallpaper-city-lake.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "wallpaper-city-lake.jpg"; sourceTree = "<group>"; };
 		7AD0B7353ADAAB4A7427E1A5 /* LicensePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensePresentation.swift; sourceTree = "<group>"; };
 		7AD7AD2E539DA21145AF89FD /* RoutineCandidate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutineCandidate.swift; sourceTree = "<group>"; };
 		7B16F41ABC0CF30FFE985C46 /* HoverHint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverHint.swift; sourceTree = "<group>"; };
@@ -1187,6 +1188,7 @@
 		BDB21052F30097E679588FE2 /* MCPApprovalPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPApprovalPanel.swift; sourceTree = "<group>"; };
 		BDC12DD817E51B87E18B61DF /* ResultTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultTableView.swift; sourceTree = "<group>"; };
 		BDCF23F8D3E3089C40D15756 /* CodeFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeFormattingTests.swift; sourceTree = "<group>"; };
+		BDF7D491B35ED46BE1021C5F /* wallpaper-cosmic-cliff.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "wallpaper-cosmic-cliff.jpg"; sourceTree = "<group>"; };
 		BE56678A8B8A6CFB527514E3 /* NoteSelectionPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteSelectionPrompt.swift; sourceTree = "<group>"; };
 		BEC292F264A082306792978B /* ActivityBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityBarView.swift; sourceTree = "<group>"; };
 		BFA7F2F57FDE8976E8677044 /* MemoryRetentionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryRetentionTests.swift; sourceTree = "<group>"; };
@@ -1963,7 +1965,8 @@
 			isa = PBXGroup;
 			children = (
 				C8E04EF4EEEC4C09F5408DF4 /* AppIcon.icns */,
-				0E3DC3F7A42D778C3C4638D0 /* wallpaper-deep-space.jpg */,
+				7A6F07A37300236EFA745766 /* wallpaper-city-lake.jpg */,
+				BDF7D491B35ED46BE1021C5F /* wallpaper-cosmic-cliff.jpg */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -2417,7 +2420,8 @@
 				A2AE70CAB293C4F4434CDAE4 /* AppIcon.icns in Resources */,
 				075106CD37547369839BFAB9 /* plugin.json in Resources */,
 				79C6059EBC5BA726C94D5CC5 /* plugin.json in Resources */,
-				497D9A51037E62AD6DC7655C /* wallpaper-deep-space.jpg in Resources */,
+				BCDFEC460895EC7AA9876D92 /* wallpaper-city-lake.jpg in Resources */,
+				FDC9FA1DE5F6968F307BC54B /* wallpaper-cosmic-cliff.jpg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
