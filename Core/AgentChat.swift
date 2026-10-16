@@ -144,6 +144,12 @@ public struct AgentChatState: Equatable, Sendable {
     public var cards: [AgentToolCard]
     /// 本次任务的步骤清单（输入框上方那块）。
     public var steps: [AgentChatStep]
+    /// **当前动作**（输入框上方那一行 —— 对齐 dsh-tui 的 `🌙 … Firing a command … · 1s`）。
+    ///
+    /// 命门在**就地更新、不追加**：开跑时写上，收尾时清掉 ⇒ 无论跑多少跳，这一行永远只占**一行**
+    /// （人类主人 2026-10-17 口径：「执行的命令都是在 cli 对话框上面**一行滚动**而已，不会刷屏」）。
+    /// 与「过程块」的分工：过程块留**走过哪些步**（可回看），这一行只显示**此刻在干什么**。
+    public var currentAction: String?
     public var endpoint: AgentChatEndpointState
     public var isRunning: Bool
     /// 已批准的指纹（**按次**：批准一次只能兑现一次，兑现后从集合里移走）。
@@ -200,6 +206,7 @@ public struct AgentChatState: Equatable, Sendable {
     public mutating func finishRun() {
         endStreaming()
         isRunning = false
+        currentAction = nil
         // 收尾：最后一步没被标成失败就是走完了（`failed` / `stopped` 那两条路各自标过）。
         if let index = steps.indices.last, steps[index].status == .running {
             steps[index].status = .done
@@ -229,25 +236,30 @@ public struct AgentChatState: Equatable, Sendable {
             } else {
                 messages.append(AgentChatMessage(role: .assistant, text: piece, isStreaming: true))
             }
-        case .toolStarted(let name):
+        case .toolStarted(let name, let summary):
             // **自跑的命令收在同一条过程消息里**（人类主人 2026-10-17 实机反馈原话：「智能体自己执行的命令
             // 这些信息应该是在同一条信息中滚动，避免刷屏」）。改前：每调一次工具就 `cards.append` 一张卡片
             // ⇒ 一跑十几跳就是一屏卡片。现在卡片**只留给要人动手的那几种**（等审批 / 已批 / 已应用，
             // 见 `requestApproval`）—— 那些必须逐张可点，不能并进正文。
-            appendProgressLine(Self.progressBullet + name)
+            appendProgressLine(Self.progressBullet + name + (summary.isEmpty ? "" : " · " + summary))
             if let index = steps.indices.last { steps[index].tools.append(name) }
-        case .toolFinished(let name, let outcome):
-            // **就地收尾同一行**（同一行改状态，不新开行、不新开块）。
-            closeProgressLine(tool: name, mark: outcome == "executed" ? "✓" : "✗ " + outcome)
+            currentAction = summary.isEmpty ? name : "\(name)(\(summary))"
+        case .toolFinished(let name, let outcome, let millis):
+            // **就地收尾同一行**（同一行改状态，不新开行、不新开块）+ 如实报耗时。
+            closeProgressLine(tool: name,
+                              mark: (outcome == "executed" ? "✓" : "✗ " + outcome) + Self.durationSuffix(millis))
+            currentAction = nil
         case .stopped(let stop):
             endStreaming()
             appendNotice(stop.reason)
             isRunning = false
+            currentAction = nil
             if let index = steps.indices.last { steps[index].status = .failed }
         case .failed(let message):
             endStreaming()
             appendNotice("failed:\(message)")
             isRunning = false
+            currentAction = nil
             if let index = steps.indices.last { steps[index].status = .failed }
         }
     }
@@ -267,6 +279,12 @@ public struct AgentChatState: Equatable, Sendable {
         } else {
             messages.append(AgentChatMessage(role: .tool, text: line))
         }
+    }
+
+    /// 耗时的显示后缀（`0.3s` / `1.2s`）；`nil` = 这一步没真跑 ⇒ **不显示**（不报假耗时）。
+    static func durationSuffix(_ millis: Int?) -> String {
+        guard let millis else { return "" }
+        return String(format: " · %.1fs", Double(millis) / 1000)
     }
 
     /// 把某个工具**那一行**就地收尾（同一行改状态，不新开行）。

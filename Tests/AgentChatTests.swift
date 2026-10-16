@@ -49,19 +49,24 @@ final class AgentChatTests: XCTestCase {
         state.beginRun(prompt: "读文件")
 
         state.apply(.hopStarted(index: 0))
-        state.apply(.toolStarted(name: "read_file"))
-        state.apply(.toolFinished(name: "read_file", outcome: "executed"))
-        state.apply(.toolStarted(name: "list_dir"))
-        state.apply(.toolFinished(name: "list_dir", outcome: "executed"))
+        state.apply(.toolStarted(name: "read_file", summary: "/a/b.md"))
+        XCTAssertEqual(state.currentAction, "read_file(/a/b.md)",
+                       "输入框上方那一行 = **此刻在干什么**（名称 + 参数摘要）")
+        state.apply(.toolFinished(name: "read_file", outcome: "executed", millis: 320))
+        XCTAssertNil(state.currentAction, "这一件跑完 ⇒ 那一行立刻清掉（就地更新，不追加）")
+        state.apply(.toolStarted(name: "list_dir", summary: "Core"))
+        state.apply(.toolFinished(name: "list_dir", outcome: "executed", millis: 15))
 
         XCTAssertTrue(state.cards.isEmpty, "自跑的工具**不再**逐条开卡片（改前这里是 2 张）")
         let progress = state.messages.filter { $0.role == .tool }
         XCTAssertEqual(progress.count, 1, "自跑的命令收在**同一条**过程消息里（不刷屏）")
         XCTAssertEqual(progress[0].text.components(separatedBy: "\n").count, 2, "两次工具 = 同一块里两行")
         XCTAssertTrue(progress[0].text.contains("✓"), "跑完**就地**把那一行收尾")
+        XCTAssertTrue(progress[0].text.contains("/a/b.md"), "那一行要带**参数摘要**（Hermes 的 `$ echo ...` 那个位置）")
+        XCTAssertTrue(progress[0].text.contains("0.3s"), "那一行要带**耗时**（Hermes 每步后面那个 `0.3s`）")
 
-        state.apply(.toolStarted(name: "delete_everything"))
-        state.apply(.toolFinished(name: "delete_everything", outcome: "denied"))
+        state.apply(.toolStarted(name: "delete_everything", summary: ""))
+        state.apply(.toolFinished(name: "delete_everything", outcome: "denied", millis: nil))
         XCTAssertEqual(state.messages.filter { $0.role == .tool }.count, 1, "被拒的也进同一块")
         XCTAssertTrue(state.messages.last?.text.contains("✗ denied") ?? false, "被拒原因如实摆在那一行")
 
@@ -70,6 +75,7 @@ final class AgentChatTests: XCTestCase {
         XCTAssertEqual(state.steps[0].index, 1)
         XCTAssertEqual(state.steps[0].tools, ["read_file", "list_dir", "delete_everything"])
         XCTAssertEqual(state.steps[0].status, .running)
+        XCTAssertNil(state.currentAction, "收尾后当前动作要清掉（那一行不留在屏幕上）")
 
         // **要人动手的**才开卡片（等审批 ⇒ 逐张可点）
         let id = state.requestApproval(name: "write_file", fingerprint: "fp-1", preview: "- a\n+ b")
@@ -91,7 +97,7 @@ final class AgentChatTests: XCTestCase {
         state.beginRun(prompt: "再来")
         XCTAssertTrue(state.steps.isEmpty, "新一轮 = 新任务，清单重新起")
         state.apply(.hopStarted(index: 0))
-        state.apply(.toolStarted(name: "search"))
+        state.apply(.toolStarted(name: "search", summary: "锚点"))
         XCTAssertEqual(state.messages.filter { $0.role == .tool }.count, 2, "新一轮另起一块")
         XCTAssertEqual(state.steps.count, 1)
         XCTAssertEqual(state.steps[0].index, 1, "新一轮从第 1 步起")

@@ -19,12 +19,13 @@ struct AgentChatView: View {
             // **输入框上面的任务清单**（人类主人 2026-10-17：「DSH-tui 那个任务清单也挺好，
             // 用户可以看到你正在执行到哪一步了」）—— 行内一行一步，只在本轮有步骤时出现。
             taskList
+            currentActionRow
             Divider()
             composer
             // **信息面**（人类主人 2026-10-17：「参考 Hermes 的 cli 界面」+ dsh-tui 输入框下那条状态行）：
             // 摆在**输入框下面**，与两边一致。
             Divider()
-            statusBar
+            statusBlock
         }
         .onAppear { model.refreshEndpoint() }
         .sheet(isPresented: $appState.isAgentSchedulePresented) {
@@ -221,58 +222,81 @@ struct AgentChatView: View {
         }
     }
 
+    /// **当前动作**（输入框上方**一行**）—— dsh-tui 的 `🌙 … Firing a command … · 1s` 那一格。
+    /// 命门是**就地更新、不追加**：跑一百跳也只占这一行（不刷屏）。
+    @ViewBuilder
+    private var currentActionRow: some View {
+        if let action = model.currentAction {
+            HStack(spacing: 6) {
+                Image(systemName: "circle.dotted").foregroundStyle(Color.accentColor)
+                Text(action)
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(L(.agentChatRunning2))
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 4)
+        }
+    }
+
     // MARK: - 信息面（输入框下面那条状态行）
 
-    /// 一条紧凑状态行：**模型 · 会话累计 token · 耗时 · 吞吐 · 工作区 · 写确认档**。
+    /// **状态块**（输入框**下面** —— dsh-tui 的位置），两行：
     ///
-    /// **如实登记（不编）**：Hermes / dsh-tui 那三格我们**现在没有真值源** ——
-    /// ① 上下文占用 % / `227K/1M` 要**模型窗口大小**（仓里没有这张表）；
-    /// ② 缓存命中率要端点回 cache 读数（我们的 `LLMUsage` 只解了输入/输出/合计）；
-    /// ③ 花费要**价目表**（同样不在仓里）。⇒ 三格**宁缺不假**：要加，得先在设置里补那张表或那个读数。
-    private var statusBar: some View {
-        HStack(spacing: 8) {
-            if case .ready(let modelName, let endpoint) = model.endpointState {
-                Text(L(.agentStatusModel, modelName))
-                // 端点那格给**主机名**（`ready` 带的是字符串，不是 URL —— 先解一次，解不出就原样显示）。
-                Text(URL(string: endpoint)?.host ?? endpoint).foregroundStyle(.secondary)
-            } else {
-                Text(L(.agentChatEndpointNotConfigured)).foregroundStyle(.secondary)
-            }
-
-            if model.sessionUsage.requests > 0 {
-                Text(L(.agentStatusSession,
-                       "\(model.sessionUsage.requests)",
-                       "\(model.sessionUsage.promptTokens)",
-                       "\(model.sessionUsage.completionTokens)",
-                       "\(model.sessionUsage.totalTokens)"))
-                if model.sessionUsage.responsesWithoutUsage > 0 {
-                    Text(L(.agentStatusNoUsage)).foregroundStyle(.orange)
+    /// - 第 1 行（右对齐）：**上下文读数** + **会话累计 token**（dsh 的 `14k/1.0M 1.4%` 那一格）
+    /// - 第 2 行：模型 · 端点主机 · 耗时 · 吞吐 · 工作区 · 写确认档 · **最右 = 会话标题**（Hermes 的那一格）
+    ///
+    /// **如实登记：宁缺不假**。dsh 还有 `cache 96.6%` 与 `≈¥0.02`、Hermes 还有 `~23%` 占比 ——
+    /// 那三样要**真值源**（端点的 cache 读数 / 价目表 / 模型窗口大小），仓里都没有 ⇒ 这三格**不放数**。
+    /// 要加，先在设置里补那张表或那个读数（已在提交信息里登记）。
+    private var statusBlock: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 8) {
+                Spacer()
+                if let context = model.lastPromptTokens {
+                    Text(L(.agentStatusContext, "\(context)"))
+                }
+                if model.sessionUsage.requests > 0 {
+                    Text(L(.agentStatusSession,
+                           "\(model.sessionUsage.requests)",
+                           "\(model.sessionUsage.promptTokens)",
+                           "\(model.sessionUsage.completionTokens)",
+                           "\(model.sessionUsage.totalTokens)"))
+                    if model.sessionUsage.responsesWithoutUsage > 0 {
+                        Text(L(.agentStatusNoUsage)).foregroundStyle(.orange)
+                    }
                 }
             }
 
-            if let context = model.lastPromptTokens {
-                Text(L(.agentStatusContext, "\(context)"))
-            }
-            if let seconds = model.lastElapsedSeconds {
-                Text(L(.agentStatusElapsed, String(format: "%.1f", seconds)))
-            }
-            if let rate = model.tokensPerSecond {
-                Text(String(format: "%.0f token/s", rate)).foregroundStyle(.secondary)
-            }
+            HStack(spacing: 8) {
+                if case .ready(let modelName, let endpoint) = model.endpointState {
+                    Text(L(.agentStatusModel, modelName))
+                    Text(URL(string: endpoint)?.host ?? endpoint).foregroundStyle(.secondary)
+                } else {
+                    Text(L(.agentChatEndpointNotConfigured)).foregroundStyle(.secondary)
+                }
+                if let seconds = model.lastElapsedSeconds {
+                    Text(L(.agentStatusElapsed, String(format: "%.1f", seconds)))
+                }
+                if let rate = model.tokensPerSecond {
+                    Text(String(format: "%.0f token/s", rate)).foregroundStyle(.secondary)
+                }
+                if let root = WorkspaceStore.shared.rootPath, !root.isEmpty {
+                    Text(L(.agentStatusWorkspace, URL(fileURLWithPath: root).lastPathComponent))
+                }
+                Text(appState.isConfirmAllWritesEnabled ? L(.agentStatusWritesOn) : L(.agentStatusWritesOff))
+                    .foregroundStyle(appState.isConfirmAllWritesEnabled ? Color.secondary : Color.orange)
 
-            Spacer()
+                Spacer()
 
-            if let root = WorkspaceStore.shared.rootPath, !root.isEmpty {
-                Text(L(.agentStatusWorkspace, URL(fileURLWithPath: root).lastPathComponent))
-            }
-            Text(appState.isConfirmAllWritesEnabled ? L(.agentStatusWritesOn) : L(.agentStatusWritesOff))
-                .foregroundStyle(appState.isConfirmAllWritesEnabled ? Color.secondary : Color.orange)
-
-            // **会话标题**摆在**最右**（与 Hermes 一致）。取首条提问，不另花钱生成。
-            if let title = model.sessionTitle {
-                Text("» " + title)
-                    .foregroundStyle(.secondary)
-                    .help(title)
+                // **会话标题在最右**（人类主人 2026-10-17：「最右侧加上 hermes 有的那个会话标题就完美了」）。
+                // 取首条提问，不另花钱生成；没有提问时这格不出现（不留空壳）。
+                if let title = model.sessionTitle {
+                    Text("» " + title).foregroundStyle(.secondary).help(title)
+                }
             }
         }
         .font(.caption)

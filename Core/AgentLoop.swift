@@ -5,9 +5,13 @@ public enum AgentLoopEvent: Equatable, Sendable {
     case hopStarted(index: Int)
     /// 模型增量（流式渲染就吃这个）。
     case delta(String)
-    case toolStarted(name: String)
-    /// 工具结束时的**档位**（机器形态：`executed` / `denied` / `pendingApproval` / …）。
-    case toolFinished(name: String, outcome: String)
+    /// 工具开跑。`summary` = **一行参数摘要**（`AgentToolSummary` 压出来的；空 = 没有可报的）。
+    case toolStarted(name: String, summary: String)
+    /// 工具结束时的**档位**（机器形态：`executed` / `denied` / `pendingApproval` / …）+ **这一跳花了多少毫秒**。
+    ///
+    /// `millis` 是给**过程行**用的（Hermes CLI 每步后面那个 `0.3s`）：`nil` = 这一步没真跑
+    /// （未登记 / 参数不合规 —— 当场拒的，不该报一个假的耗时）。
+    case toolFinished(name: String, outcome: String, millis: Int?)
     case stopped(AgentLoopStop)
     case failed(String)
 }
@@ -340,8 +344,9 @@ public struct AgentLoop: Sendable {
                     let reason = AgentToolRefusal.unregistered.rawValue
                     rejected.append((invocation.name, reason))
                     observations.append("\(invocation.name): \(reason)")
-                    await observer?.observe(.toolStarted(name: invocation.name))
-                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied"))
+                    await observer?.observe(.toolStarted(name: invocation.name,
+                                                         summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
+                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied", millis: nil))
                     recordTurn(context: context, kind: .tool, role: "tool",
                                text: "\(invocation.name) => \(reason)", at: startedAt)
                     await audit?.record(AgentActionRecord.makeToolCall(
@@ -354,8 +359,9 @@ public struct AgentLoop: Sendable {
                                                                     against: definition) {
                     rejected.append((invocation.name, violation))
                     observations.append("\(invocation.name): \(violation)")
-                    await observer?.observe(.toolStarted(name: invocation.name))
-                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied"))
+                    await observer?.observe(.toolStarted(name: invocation.name,
+                                                         summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
+                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied", millis: nil))
                     recordTurn(context: context, kind: .tool, role: "tool",
                                text: "\(invocation.name) => \(violation)", at: startedAt)
                     await audit?.record(AgentActionRecord.makeToolCall(
@@ -369,13 +375,17 @@ public struct AgentLoop: Sendable {
                 // 要等异步 IO，若在**主 actor 上**同步等，主 actor 腾不出来 ⇒ **死锁**。挪进 detached 之后主 actor
                 // 始终可被 `MainActor.run` 取用，而**同步契约照旧**（不动 Core 协议、不动既有工具单测）。
                 // 循环自身不碰 UI 状态；观察者与审计都是 async 接口（各自回自己的 actor），与本次改动无关。
+                // **计时**：过程行要如实报这一步花了多久（Hermes 每步后面那个 `0.3s`）。
+                let toolStartedAt = Date()
                 let outcome = await Task.detached(priority: .userInitiated) {
                     dispatcher.dispatch(invocation, approvals: approvals)
                 }.value
-                await observer?.observe(.toolStarted(name: invocation.name))
+                let toolMillis = Int(Date().timeIntervalSince(toolStartedAt) * 1000)
+                await observer?.observe(.toolStarted(name: invocation.name,
+                                                     summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
                 switch outcome {
                 case .needsApproval(let request):
-                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "pendingApproval"))
+                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "pendingApproval", millis: toolMillis))
                     rejected.append((invocation.name, AgentToolRefusal.approvalRequired.rawValue))
                     observations.append("\(invocation.name): \(request.toolName)/\(request.fingerprint)")
                     recordTurn(context: context, kind: .approval, role: "system",
@@ -385,7 +395,7 @@ public struct AgentLoop: Sendable {
                         outcome: .pendingApproval, detail: request.fingerprint,
                         sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                 case .refused(let code, let detail):
-                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied"))
+                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied", millis: toolMillis))
                     rejected.append((invocation.name, code.rawValue))
                     observations.append("\(invocation.name): \(code.rawValue)/\(detail)")
                     recordTurn(context: context, kind: .tool, role: "tool",
@@ -396,7 +406,7 @@ public struct AgentLoop: Sendable {
                         sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                 default:
                     executed.append(invocation)
-                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "executed"))
+                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "executed", millis: toolMillis))
                     let summary = Self.summary(of: outcome)
                     observations.append("\(invocation.name): \(summary)")
                     recordTurn(context: context, kind: .tool, role: "tool",

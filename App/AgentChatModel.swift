@@ -40,6 +40,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// （如实登记，要加就在设置里补一格「上下文窗口」）。
     @Published private(set) var lastPromptTokens: Int?
 
+    /// 当前动作（输入框上方那一行）。
+    var currentAction: String? { state.currentAction }
+
     /// 会话标题（状态行最右）。
     var sessionTitle: String? { state.sessionTitle }
 

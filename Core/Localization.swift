@@ -1680,6 +1680,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceDiskChangedHint
     case menuAgentOpenChat
     case agentChatStepsTitle
+    case agentChatRunning2
     case agentStatusModel
     case agentStatusContext
     case agentStatusSession
@@ -3298,6 +3299,7 @@ public enum LocalizedStrings {
         .agentTestConnection: [.simplifiedChinese: "测试连接", .english: "Test connection"],
         .agentChatStepsTitle: [.simplifiedChinese: "本次任务 · %@ 步", .english: "This task · %@ steps"],
         .agentStatusModel: [.simplifiedChinese: "模型 %@", .english: "Model %@"],
+        .agentChatRunning2: [.simplifiedChinese: "跑着呢", .english: "running"],
         .agentStatusContext: [.simplifiedChinese: "上下文 %@ token（上次请求输入）", .english: "ctx %@ tokens (last request in)"],
         .agentStatusSession: [.simplifiedChinese: "本会话 %@ 次 · 输入 %@ / 输出 %@ / 合计 %@ token", .english: "Session %@ calls · in %@ / out %@ / total %@ tokens"],
         .agentStatusElapsed: [.simplifiedChinese: "耗时 %@ 秒", .english: "%@ s"],
