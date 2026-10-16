@@ -22,7 +22,7 @@ final class AppearanceAxesTests: XCTestCase {
 
     private let thresholds = ColorContrast.Threshold.self
 
-    /// 两轴组合的**一次性枚举**（判据 D/E 的公共入口）：24 组，顺序固定便于逐组定位。
+    /// 两轴组合的**一次性枚举**（判据 D/E 的公共入口）：30 组，顺序固定便于逐组定位。
     /// 放在测试里而不是生产代码里：生产侧两轴本来就是分开取的（`AppearancePreference` 管深浅、
     /// `DesignThemeManager` 管配色），**没有**一个「组合对象」；这里要的只是把组合逐个走一遍。
     private struct Combination: Hashable {
@@ -138,19 +138,19 @@ final class AppearanceAxesTests: XCTestCase {
 
     // MARK: - ③ 可组合：笛卡尔积逐个走一遍
 
-    /// 24 组：不重、不漏，且每轴每个取值都出现了正确的次数（4 主题各 6 组、3 态各 8 组、2 系统态各 12 组）。
+    /// 30 组：不重、不漏，且每轴每个取值都出现了正确的次数（5 主题各 6 组、3 态各 10 组、2 系统态各 15 组）。
     func testAxisMatrixCoversEveryCombinationExactlyOnce() {
         let combinations = Self.matrix
-        XCTAssertEqual(combinations.count, 24, "3 态 × 2 系统态 × 4 主题 = 24")
-        XCTAssertEqual(Set(combinations).count, 24, "组合有重复")
+        XCTAssertEqual(combinations.count, 30, "3 态 × 2 系统态 × 5 主题 = 30")
+        XCTAssertEqual(Set(combinations).count, 30, "组合有重复")
         for theme in DesignTheme.all {
             XCTAssertEqual(combinations.filter { $0.theme == theme }.count, 6)
         }
         for appearance in AppearancePreference.allCases {
-            XCTAssertEqual(combinations.filter { $0.appearance == appearance }.count, 8)
+            XCTAssertEqual(combinations.filter { $0.appearance == appearance }.count, 10)
         }
         for systemIsDark in Self.systemStates {
-            XCTAssertEqual(combinations.filter { $0.systemIsDark == systemIsDark }.count, 12)
+            XCTAssertEqual(combinations.filter { $0.systemIsDark == systemIsDark }.count, 15)
         }
     }
 

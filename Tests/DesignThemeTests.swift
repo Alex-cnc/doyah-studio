@@ -15,22 +15,24 @@ final class DesignThemeTests: XCTestCase {
 
     // MARK: 主题集
 
-    func testFourThemesWithStableUniqueIdentifiers() {
-        XCTAssertEqual(DesignTheme.all.count, 4)
-        XCTAssertEqual(Set(DesignTheme.all.map(\.id)).count, 4)
+    func testFiveThemesWithStableUniqueIdentifiers() {
+        XCTAssertEqual(DesignTheme.all.count, 5)
+        XCTAssertEqual(Set(DesignTheme.all.map(\.id)).count, 5)
         // id 是持久化用的（`ui.designTheme`），写死在这里防止有人顺手改名把用户的选择弄丢
-        XCTAssertEqual(DesignTheme.all.map(\.id), ["tech-blue", "stardust", "bean-green", "rose-gold"])
+        XCTAssertEqual(DesignTheme.all.map(\.id),
+                       ["tech-blue", "stardust", "deep-space", "bean-green", "rose-gold"])
         // 与 Linux 侧同名的三个主题（需求提出者给的名：科技蓝 / 豆芽绿 / 玫瑰金）
         XCTAssertEqual(DesignTheme.all[0], .techBlue, "科技蓝是默认值，排在第一个")
         XCTAssertEqual(DesignTheme.fallback, .techBlue)
     }
 
     func testEachThemeHasItsOwnNameKey() {
-        XCTAssertEqual(Set(DesignTheme.all.map(\.nameKey)).count, 4)
+        XCTAssertEqual(Set(DesignTheme.all.map(\.nameKey)).count, 5)
         XCTAssertEqual(DesignTheme.techBlue.nameKey, .designThemeTechBlue)
         XCTAssertEqual(DesignTheme.beanGreen.nameKey, .designThemeBeanGreen)
         XCTAssertEqual(DesignTheme.roseGold.nameKey, .designThemeRoseGold)
         XCTAssertEqual(DesignTheme.stardust.nameKey, .designThemeStardust)
+        XCTAssertEqual(DesignTheme.deepSpace.nameKey, .designThemeDeepSpace)
         // 名字必须是**双语都在**的（缺一条就会出现英文界面上露出中文主题名）
         for theme in DesignTheme.all {
             let table = LocalizedStrings.table[theme.nameKey]
@@ -62,11 +64,39 @@ final class DesignThemeTests: XCTestCase {
         // 星空紫 = 需求提出者给的观感（NASA 韦伯「宇宙悬崖」取色）⇒ **是实际值**，不是推导草案
         XCTAssertFalse(DesignTheme.stardust.isDerivedDraft,
                        "星空紫的值来自需求提出者给的观感，在界面上标「推导草案」就是说假话")
+        // 深空苍穹：深色侧逐值是交付件（规范页）给的 ⇒ 也不是推导草案
+        // （只有浅色侧是本侧按同一套门槛推的，那一半在值表注释与《外观方案》§9 里标着）
+        XCTAssertFalse(DesignTheme.deepSpace.isDerivedDraft,
+                       "深空苍穹的深色值来自交付件规范页，不是「等 Linux 侧实际色值」那件事")
     }
 
-    // MARK: 四套值表
+    // MARK: 星云皮肤的声明（2026-10-16 泛化：从写死星空紫改成由主题声明）
 
-    /// 四套表都要真的存在、id 对得上，且**互不相同**（防"复制一份改了名字"）。
+    /// 「哪些主题画星云」是**主题自己声明**的，而且恰好是那两个 —— 新增主题必须显式决定。
+    func testOnlyTheThemesThatDeclareItPaintTheNebula() {
+        XCTAssertEqual(Set(DesignTheme.all.filter(\.paintsNebula)), [.stardust, .deepSpace])
+        XCTAssertFalse(DesignTheme.techBlue.paintsNebula)
+        XCTAssertFalse(DesignTheme.beanGreen.paintsNebula)
+        XCTAssertFalse(DesignTheme.roseGold.paintsNebula)
+    }
+
+    /// 声明要星云的主题，值表里必须真的带着云气与星点的**配色**（空表 = 声明了却没内容）。
+    func testDeclaredNebulaThemesCarryTheirOwnTones() {
+        for theme in DesignTheme.all where theme.paintsNebula {
+            let tones = theme.nebulaTones
+            XCTAssertFalse(tones.cloudsDark.isEmpty, "\(theme.id) 声明要星云却没有深色云气配色")
+            XCTAssertFalse(tones.cloudsLight.isEmpty, "\(theme.id) 声明要星云却没有浅色云气配色")
+            XCTAssertGreaterThanOrEqual(tones.starTints.count, 3, "\(theme.id) 的星点三档要齐")
+            XCTAssertTrue(tones.cloudsDark.allSatisfy { $0.alpha > 0 && $0.alpha <= 1 },
+                          "\(theme.id) 有云气透明度越界")
+        }
+        // 两个主题的配色必须**真的不同**（复制一份改了名字 = 主题只换了一半）
+        XCTAssertNotEqual(DesignTheme.stardust.nebulaTones, DesignTheme.deepSpace.nebulaTones)
+    }
+
+    // MARK: 五套值表
+
+    /// 五套表都要真的存在、id 对得上，且**互不相同**（防"复制一份改了名字"）。
     func testEveryThemeHasItsOwnPalette() {
         var seen: Set<String> = []
         for theme in DesignTheme.all {
@@ -94,6 +124,10 @@ final class DesignThemeTests: XCTestCase {
         XCTAssertGreaterThan((beanContent >> 8) & 0xFF, beanContent & 0xFF, "豆芽绿的深色底应当偏绿")
         // 玫瑰金：红最重（暖）
         XCTAssertGreaterThan((roseContent >> 16) & 0xFF, roseContent & 0xFF, "玫瑰金的深色底应当偏暖")
+        // 深空苍穹：近黑 + 冷光 —— 深色底三通道都极低，且蓝分量不低于绿（不能是暖调）
+        let deepContent = DesignTheme.deepSpace.palette.content.dark
+        XCTAssertGreaterThanOrEqual(deepContent & 0xFF, (deepContent >> 8) & 0xFF, "深空苍穹的深色底应当偏冷（蓝不低于绿）")
+        XCTAssertLessThan(deepContent & 0xFF, 0x40, "深空苍穹的深色底是「近黑」，蓝分量不该高")
     }
 
     /// 状态色的**色相不随主题漂移**（成功是绿、警告是黄、危险是红）——

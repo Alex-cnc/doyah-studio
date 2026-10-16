@@ -111,14 +111,17 @@ final class NebulaSkinPreferenceTests: XCTestCase {
         XCTAssertTrue(NebulaSkinPreference.isEnabled(in: reopened))
     }
 
-    // MARK: - ④ 生效条件：星空紫 且 开关开（唯一出处）
+    // MARK: - ④ 生效条件：主题声明要星云 且 开关开（唯一出处）
 
-    /// 生效条件的**真值表**：四个主题 × 开关两态 = 8 组，只有「星空紫 + 开」这一组为真。
+    /// 生效条件的**真值表**：五个主题 × 开关两态 = 10 组，只有「声明要星云的主题 + 开」这些组为真。
+    ///
+    /// 2026-10-16 泛化：从前判的是 `theme == .stardust` 这一条写死的式子；现在判「主题自己声明」
+    /// （`DesignTheme.paintsNebula`）+ 开关。**主题集变了这里要一起改**（否则新主题默认没被判过）。
     func testPaintsNebulaTruthTableOverEveryThemeAndSwitchState() {
         var trueCount = 0
         for theme in DesignTheme.all {
             for enabled in [true, false] {
-                let expected = (theme == .stardust) && enabled
+                let expected = theme.paintsNebula && enabled
                 XCTAssertEqual(
                     NebulaSkinPreference.paintsNebula(theme: theme, isSkinEnabled: enabled),
                     expected,
@@ -127,22 +130,29 @@ final class NebulaSkinPreferenceTests: XCTestCase {
                 if expected { trueCount += 1 }
             }
         }
-        XCTAssertEqual(trueCount, 1, "8 组里**恰好**一组为真（星空紫 + 开）—— 多一组就是皮肤跑到别的主题上了")
+        XCTAssertEqual(trueCount, 2, "10 组里恰好两组为真（星空紫 + 开、深空苍穹 + 开）")
         XCTAssertEqual(
-            DesignTheme.all.count * 2, 8,
-            "组合数是 4 主题 × 2 态：主题集变了这里要一起改（否则新主题默认没被判过）"
+            DesignTheme.all.count * 2, 10,
+            "组合数是 5 主题 × 2 态：主题集变了这里要一起改（否则新主题默认没被判过）"
         )
     }
 
-    /// 星空紫 + 关 = 不画（用户可以关掉它）；别的主题 + 开 = 也不画（不许偷偷给所有主题加星星）。
-    func testOnlyStardustWithSwitchOnPaints() {
-        XCTAssertTrue(NebulaSkinPreference.paintsNebula(theme: .stardust, isSkinEnabled: true))
-        XCTAssertFalse(NebulaSkinPreference.paintsNebula(theme: .stardust, isSkinEnabled: false))
-        for theme in DesignTheme.all where theme != .stardust {
+    /// 声明要星云的主题 + 关 = 不画（用户可以关掉它）；没声明的主题 + 开 = 也不画
+    /// （不许偷偷给所有主题加星星）。
+    func testOnlyThemesThatDeclareNebulaPaintIt() {
+        for theme in DesignTheme.all where theme.paintsNebula {
+            XCTAssertTrue(NebulaSkinPreference.paintsNebula(theme: theme, isSkinEnabled: true),
+                          "\(theme.id) 声明了要星云，开关开着就该画")
+            XCTAssertFalse(NebulaSkinPreference.paintsNebula(theme: theme, isSkinEnabled: false),
+                           "\(theme.id) 的开关关掉了就不许画")
+        }
+        for theme in DesignTheme.all where !theme.paintsNebula {
             XCTAssertFalse(
                 NebulaSkinPreference.paintsNebula(theme: theme, isSkinEnabled: true),
-                "\(theme.id) 也画了星云 —— 那是走样（需求提出者要的是「星空紫这一档的皮肤」）"
+                "\(theme.id) 没声明要星云却也画了 —— 那是走样"
             )
         }
+        // 声明要星云的必须**恰好**是这两个（新增主题要在值表里显式决定，不许默认跟着长星星）。
+        XCTAssertEqual(Set(DesignTheme.all.filter(\.paintsNebula)), [.stardust, .deepSpace])
     }
 }

@@ -38,12 +38,17 @@ public enum NebulaSkinPreference {
         defaults.object(forKey: key) as? Bool ?? defaultEnabled
     }
 
-    /// **视觉生效条件**：星云只在这一个组合下画。
+    /// **视觉生效条件**：星云 = 「**主题声明要它** ∧ **开关开着**」。
     ///
-    /// 这个函数是那个组合的**唯一出处** —— `NebulaBackground` 的 `body` 调它，
+    /// 2026-10-16 泛化（深空苍穹那一单）：从前这里写的是 `theme == .stardust && isSkinEnabled` ——
+    /// 「哪些主题有星云」被钉死在这一个函数里，新主题想画云气**只能改这里**（= 为某个主题单写分支，
+    /// 规范页 §三 点名禁止的事）。现在后半段（开关）仍归这里，前半段（主题要不要）**由主题自己声明**
+    /// （`DesignTheme.paintsNebula`）：值表侧说「我是什么」，规则侧说「怎么组合」。
+    ///
+    /// 这个函数仍是那个组合的**唯一出处** —— `NebulaBackground` 的 `body` 调它，
     /// 门禁（`Scripts/check-design-themes.py` 判据 I）也判它。写在两处会让
     /// "皮肤偷偷跑到别的主题上"变成一次没人发现的复制粘贴。
     public static func paintsNebula(theme: DesignTheme, isSkinEnabled: Bool) -> Bool {
-        theme == .stardust && isSkinEnabled
+        theme.paintsNebula && isSkinEnabled
     }
 }

@@ -12,23 +12,24 @@ final class AccentThemeTests: XCTestCase {
     /// 2026-09-29（L-80 ㈠）：候选从 3 个变 5 个 —— 新增的两个是**主题配套**的强调色
     /// （豆芽绿 / 玫瑰金）。2026-10-01（星空紫皮肤那一轮，队列 `L-153`）：新增星空紫，变 6 个。`all` 现在的用途有两处（见 `AccentTheme.all` 的注释）：
     /// 解析旧配置 + 给"彼此可分辨"这类判据提供全集。
-    func testSixCandidatesWithStableUniqueIdentifiers() {
-        XCTAssertEqual(AccentTheme.all.count, 6)
-        XCTAssertEqual(Set(AccentTheme.all.map(\.id)).count, 6)
+    func testSevenCandidatesWithStableUniqueIdentifiers() {
+        XCTAssertEqual(AccentTheme.all.count, 7)
+        XCTAssertEqual(Set(AccentTheme.all.map(\.id)).count, 7)
         // id 是持久化用的，写死在这里防止有人顺手改名把用户的选择弄丢
         XCTAssertEqual(
             AccentTheme.all.map(\.id),
-            ["whale-blue", "deep-teal", "whale-magenta", "bean-green", "rose-gold", "stardust"]
+            ["whale-blue", "deep-teal", "whale-magenta", "bean-green", "rose-gold", "stardust", "deep-space"]
         )
     }
 
     func testEachCandidateHasItsOwnNameKey() {
-        XCTAssertEqual(Set(AccentTheme.all.map(\.nameKey)).count, 6)
+        XCTAssertEqual(Set(AccentTheme.all.map(\.nameKey)).count, 7)
         XCTAssertEqual(AccentTheme.whaleBlue.nameKey, .accentWhaleBlue)
         XCTAssertEqual(AccentTheme.deepTeal.nameKey, .accentDeepTeal)
         XCTAssertEqual(AccentTheme.whaleMagenta.nameKey, .accentWhaleMagenta)
         XCTAssertEqual(AccentTheme.beanGreen.nameKey, .accentBeanGreen)
         XCTAssertEqual(AccentTheme.roseGold.nameKey, .accentRoseGold)
+        XCTAssertEqual(AccentTheme.deepSpace.nameKey, .accentDeepSpace)
     }
 
     /// 两个候选取自 dsh-tui 鲸鱼自身的调色板：品牌同源的证据写进测试，免得日后被"优化"掉。

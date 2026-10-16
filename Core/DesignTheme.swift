@@ -34,6 +34,12 @@ public enum DesignTheme: String, CaseIterable, Identifiable, Sendable {
     case roseGold = "rose-gold"
     /// 星空紫：深空靛紫系（2026-10-01 新增 —— 需求提出者要的「比科技蓝更梦幻」那一档，星际猎人的星云感）。
     case stardust = "stardust"
+    /// 深空苍穹：近黑四层景深 + 等离子青（2026-10-16 新增 —— 交付件 `Docs/design/theme-deepspace-spec.html`
+    /// 的实现规范；人类主人令「做一个深空苍穹主题」）。
+    ///
+    /// 与星空紫的分工：星空紫是**靛紫**（紫罗兰色相 + 星云铺得满），深空苍穹是**近黑 + 冷光点缀**
+    /// （规范页原话：科幻感来自「黑 + 微光」，不来自彩色铺底）。
+    case deepSpace = "deep-space"
 
     public var id: String { rawValue }
 
@@ -44,6 +50,7 @@ public enum DesignTheme: String, CaseIterable, Identifiable, Sendable {
         case .beanGreen: return .designThemeBeanGreen
         case .roseGold: return .designThemeRoseGold
         case .stardust: return .designThemeStardust
+        case .deepSpace: return .designThemeDeepSpace
         }
     }
 
@@ -55,7 +62,29 @@ public enum DesignTheme: String, CaseIterable, Identifiable, Sendable {
     /// 2026-10-01（T-20261001-031）：原先写成「不是科技蓝就算推导」—— 星空紫的值来自需求提出者
     /// 给的观感（NASA 韦伯「宇宙悬崖」NGC 3324 取色），是**实际值**；按旧写法它会被界面标成
     /// 「推导草案」，那就是在界面上说假话。改成逐主题点名，新增主题必须显式决定自己算不算推导。
+    ///
+    /// 2026-10-16：**深空苍穹也不算推导草案** —— 深色侧的每个值都来自交付件
+    /// `Docs/design/theme-deepspace-spec.html` 的令牌表（给定值，不是本侧凑的）；只有**浅色侧**
+    /// 一整套是本侧按同一套门槛推导的，那半边在值表注释与《外观方案》§9 里**逐条标着「推导」**
+    /// （它不属「等 Linux 侧实际色值」这件事 —— 深空苍穹是本侧新增主题，Linux 侧无对应）。
     public var isDerivedDraft: Bool { self == .beanGreen || self == .roseGold }
+
+    /// 这一主题**要不要画「星云皮肤」**（2026-10-16 泛化）。
+    ///
+    /// 从前这件事写死在 `NebulaSkinPreference.paintsNebula` 里（`theme == .stardust`），
+    /// 于是「哪些主题有星云」这一条**只能有一个答案**：新主题想画云气就得改那个函数
+    /// （规范页 §三 点名禁止的「为某个主题单写分支」）。
+    /// 现在反过来：**由主题自己声明**，`NebulaSkinPreference` 只负责「声明 ∧ 开关」这个组合。
+    ///
+    /// 为什么两个主题都画：星空紫的星云是「云气 + 星点」（紫罗兰），深空苍穹的是「角落星云」
+    /// （规范页 §二② 的紫 / 青 / 品红三色，只走边角）。两者共用同一套绘制（`NebulaBackground`），
+    /// 只是强度与色调跟着主题走。
+    public var paintsNebula: Bool {
+        switch self {
+        case .stardust, .deepSpace: return true
+        case .techBlue, .beanGreen, .roseGold: return false
+        }
+    }
 
     /// 该主题**配套的交互强调色**（选中行 / 主按钮 / 焦点环）。
     ///
@@ -68,6 +97,17 @@ public enum DesignTheme: String, CaseIterable, Identifiable, Sendable {
         case .beanGreen: return .beanGreen
         case .roseGold: return .roseGold
         case .stardust: return .stardust
+        // 深空苍穹：**自带配套强调色「深空蓝」**（`AccentTheme.deepSpace` = `#007CE8`）。
+        // 为什么不是 `#5EEAD4`（规范页的主强调）：交互强调色要过「白底 ≥3.0」那一档，
+        // 而 `#5EEAD4` 白底实测只有 **1.48** —— 它只适合当深底上的**发光 / 文字**（值表里的
+        // `accent` 就是它），当选中条 / 主按钮 / 焦点环的填充色不达标。
+        // 为什么不是复用「深海青」`#17A2A2`：它白底只剩 3.12，而本主题的浅色面板（`#F1F4F8`）
+        // 会把它压到 **2.83** ⇒ `DesignThemeTests.testEachThemeHasAMatchingAccentVisibleOnItsOwnSurfaces`
+        // 当场判红；把它压暗又会被判「与既有六个候选太像」（`testCandidatesAreDistinguishableFromEachOther`）。
+        // 三条约束（白底 / 每个主题的深色底 / 与既有候选 ≥0.3）一交，青族里可用的只剩**偏蓝的深青蓝**：
+        // `#007CE8`（色相 208°，正是规范页 `accent.alt #60A5FA` 那一族的深版）——
+        // 白底 4.17 / 自身浅色面板 3.77 / 自身深色底 4.62 / 与最近候选距离 0.323，四条全过。
+        case .deepSpace: return .deepSpace
         }
     }
 
@@ -75,7 +115,8 @@ public enum DesignTheme: String, CaseIterable, Identifiable, Sendable {
     public var palette: ThemePalette { ThemePalette.of(self) }
 
     /// 用户可选的顺序 = 界面里的顺序（科技蓝在首位：它是默认值，也是 Linux 侧同名的那一个）。
-    public static let all: [DesignTheme] = [.techBlue, .stardust, .beanGreen, .roseGold]
+    /// 2026-10-16：深空苍穹排在星空紫之后（两个「深」主题相邻，再往后是两组浅底主题）。
+    public static let all: [DesignTheme] = [.techBlue, .stardust, .deepSpace, .beanGreen, .roseGold]
 
     /// 默认与回退都是科技蓝（产品改造前的现状就是这一组值）。
     public static let fallback = DesignTheme.techBlue
@@ -137,6 +178,7 @@ public struct ThemePalette: Equatable, Sendable {
         case .beanGreen: return .beanGreen
         case .roseGold: return .roseGold
         case .stardust: return .stardust
+        case .deepSpace: return .deepSpace
         }
     }
 
@@ -277,4 +319,139 @@ public struct ThemePalette: Equatable, Sendable {
         hairlineLight: 0xCFD4DE,
         hairlineDarkAlpha: 0.10
     )
+
+    // MARK: 深空苍穹（2026-10-16 · 交付件 `Docs/design/theme-deepspace-spec.html`）
+    //
+    // **深色侧 = 规范页的给定值**（逐条对得上，不是本侧凑的）：
+    //   · 四层底 `bg.base #05070D` → `window`｜`bg.panel #0A0F1A` → `sidebar`｜
+    //     `bg.card #111827` → `content`；机制要**五档**表面，规范只给四层 ⇒ 由后两层之间
+    //     再推 `panel #18202F` / `raised #1F2940`（每档只挪一点点明度，保持「近黑」的观感）；
+    //   · `border.subtle #1B2436` → 折成既有的「白 × 透明度」口径（`hairlineDarkAlpha` 0.10，
+    //     与另外四个主题同值 —— 这一档是**机制口径**，不是某一主题的审美）；
+    //   · 文字：`text.primary #E6EDF7` → `textPrimary`｜`text.secondary #94A3B8` → `textSecondary`｜
+    //     `text.disabled #64748B` → `textDisabled`；机制要五档 ⇒ `textBright` 提亮到 `#F2F6FC`
+    //     （强对比 ≥7 那一档）、`textTertiary` 取 `#7C8CA3`（辅助 ≥3.0 那一档）。
+    //   · 强调：`accent.primary #5EEAD4` → `accent`（等离子青）｜`accent.alt #60A5FA` → `accentGlow`；
+    //     `accentTeal` / `accentWarm` / `accentSoft` 是**语法六档与分类色要用的角色**（规范页没给）
+    //     ⇒ 本侧按「同一族色相铺开」推：`#2DD4BF`（更沉的青，给数字）· `#D9B48F`（暖砂，给字符串）·
+    //     `#5A6B85`（低饱和青灰，只做装饰）。
+    //
+    // **浅色侧 = 本侧推导**（规范页只给了深色；按同一套门槛与同一套结构推一遍）：
+    //   · 表面 = 冷灰蓝四级（`content` 纯白最亮，浅色不变式）；文字四档往深走；
+    //   · 强调家族下压到白底可读（`accentGlow #1D4ED8` / `accentTeal #0F766E` / `accent #0E7490`）。
+    //   · 表面四档与另外几套同构（`content` 白 → `panel`/`sidebar` 冷灰蓝 → `window` 再低一档）——
+    //     **不自创「近白面板」那种偏门档**：面板与内容之间的距离（`ColorContrast.distance` 口径）
+    //     必须 ≥0.02，把面板压到近白就只剩 0.0134（实测被 `DesignTokensTests` 当场判红）。
+    //
+    // **与规范页的一处显式偏离（如实登记）**：规范 §二⑤ 的深色语义色给的是 `#34D399`，
+    //   本表用**全部主题共用的** `#4ADE80`（成功）/ `#FBBF24`（警告）/ `#F87171`（危险）——
+    //   仓内有一条更硬的纪律「语义色的色相不随主题漂移」（`DesignThemeTests.testStatusHuesDoNotDriftAcrossThemes`
+    //   逐值对账），且语义色本来就不该成为某一主题的装饰。色相同为绿 / 黄 / 红，观感一致。
+    public static let deepSpace = ThemePalette(
+        id: .deepSpace,
+        window: ThemeColor(light: 0xEAEEF4, dark: 0x05070D),
+        sidebar: ThemeColor(light: 0xF1F4F8, dark: 0x0A0F1A),
+        content: ThemeColor(light: 0xFFFFFF, dark: 0x111827),
+        panel: ThemeColor(light: 0xF1F4F8, dark: 0x18202F),
+        raised: ThemeColor(light: 0xFFFFFF, dark: 0x1F2940),
+        textBright: ThemeColor(light: 0x0B111C, dark: 0xF2F6FC),
+        textPrimary: ThemeColor(light: 0x1C2534, dark: 0xE6EDF7),
+        textSecondary: ThemeColor(light: 0x46536B, dark: 0x94A3B8),
+        textTertiary: ThemeColor(light: 0x5D6B85, dark: 0x7C8CA3),
+        textDisabled: ThemeColor(light: 0xA6B0C2, dark: 0x64748B),
+        success: ThemeColor(light: 0x16704A, dark: 0x4ADE80),
+        warning: ThemeColor(light: 0x92600B, dark: 0xFBBF24),
+        danger: ThemeColor(light: 0xC2321F, dark: 0xF87171),
+        accent: ThemeColor(light: 0x0E7490, dark: 0x5EEAD4),
+        accentGlow: ThemeColor(light: 0x1D4ED8, dark: 0x60A5FA),
+        accentSoft: ThemeColor(light: 0x54657F, dark: 0x5A6B85),
+        accentTeal: ThemeColor(light: 0x0F766E, dark: 0x2DD4BF),
+        accentWarm: ThemeColor(light: 0x8A6A3B, dark: 0xD9B48F),
+        hairlineLight: 0xC9D6E5,
+        hairlineDarkAlpha: 0.10
+    )
+}
+
+// MARK: - 星云皮肤的配色（值表的一部分：新主题想说「我也有云气」，不必改绘制代码）
+
+/// 一团云气的**配色**（色值 + 基础透明度）。
+///
+/// **位置 / 半径 / 层倍率不在这里** —— 那是绘制侧的形状（`App/Views/NebulaBackground.swift`）；
+/// 归到值表的是「这个主题的云气是什么颜色、多浓」，与令牌值同一条纪律：
+/// **换主题 = 换一组值**，不为某个主题改代码。
+public struct NebulaCloud: Equatable, Sendable {
+    public var hex: UInt32
+    /// 基础透明度（绘制侧再乘该层的强度倍率：阅读区更克制）。
+    public var alpha: Double
+
+    public init(hex: UInt32, alpha: Double) {
+        self.hex = hex
+        self.alpha = alpha
+    }
+}
+
+/// 一个主题的星云皮肤配色。
+public struct NebulaSkinTones: Equatable, Sendable {
+    /// 深色态逐团云气（顺序对应绘制侧的形状表；多了会被忽略，少了就是没铺满）。
+    public var cloudsDark: [NebulaCloud]
+    /// 浅色态逐团云气（浅色下云气更淡）。
+    public var cloudsLight: [NebulaCloud]
+    /// 星点三档色（最亮 / 中 / 暗）。
+    public var starTints: [UInt32]
+    /// 亮星的星芒色。
+    public var brightStarTint: UInt32
+
+    public init(cloudsDark: [NebulaCloud], cloudsLight: [NebulaCloud],
+                starTints: [UInt32], brightStarTint: UInt32) {
+        self.cloudsDark = cloudsDark
+        self.cloudsLight = cloudsLight
+        self.starTints = starTints
+        self.brightStarTint = brightStarTint
+    }
+}
+
+public extension DesignTheme {
+
+    /// 这一主题的星云配色（只有 `paintsNebula` 为真的主题才有内容）。
+    ///
+    /// 星空紫 = NASA「宇宙悬崖」的法（靛蓝为主、边缘透紫）；
+    /// 深空苍穹 = 规范页 §二② 的法（紫 `#7C5CFF` / 青 `#38BDF8` / 品红 `#F472B6`，
+    /// **只走边角**，所以基础透明度整体比星空紫更低一档）。
+    var nebulaTones: NebulaSkinTones {
+        switch self {
+        case .stardust:
+            return NebulaSkinTones(
+                cloudsDark: [NebulaCloud(hex: 0x1E3A6E, alpha: 0.50),
+                             NebulaCloud(hex: 0x2A4A82, alpha: 0.34),
+                             NebulaCloud(hex: 0x3A2F6B, alpha: 0.30),
+                             NebulaCloud(hex: 0x16264A, alpha: 0.44),
+                             NebulaCloud(hex: 0x4A3D7A, alpha: 0.22)],
+                cloudsLight: [NebulaCloud(hex: 0xD8E0F5, alpha: 0.55),
+                              NebulaCloud(hex: 0xC8D4F0, alpha: 0.38),
+                              NebulaCloud(hex: 0xE0D8F0, alpha: 0.32),
+                              NebulaCloud(hex: 0xE8EDF8, alpha: 0.42)],
+                starTints: [0xE4D7F8, 0xD8E0FA, 0xC0CCE8],
+                brightStarTint: 0xE4D7F8
+            )
+
+        case .deepSpace:
+            return NebulaSkinTones(
+                cloudsDark: [NebulaCloud(hex: 0x7C5CFF, alpha: 0.30),
+                             NebulaCloud(hex: 0x38BDF8, alpha: 0.26),
+                             NebulaCloud(hex: 0xF472B6, alpha: 0.16),
+                             NebulaCloud(hex: 0x35507F, alpha: 0.34)],
+                cloudsLight: [NebulaCloud(hex: 0xDCE6F5, alpha: 0.52),
+                              NebulaCloud(hex: 0xE4EEFA, alpha: 0.36),
+                              NebulaCloud(hex: 0xE8E4F6, alpha: 0.26),
+                              NebulaCloud(hex: 0xF0F4FA, alpha: 0.40)],
+                starTints: [0xE6F6FF, 0xD8E8FA, 0xC2D4E8],
+                brightStarTint: 0xE6F6FF
+            )
+
+        // 其余三个主题不画星云（`paintsNebula == false`）—— 值仍然给一份「中性空表」，
+        // 免得将来有人误以为「空数组」是漏写（绘制侧根本不会走到这里）。
+        case .techBlue, .beanGreen, .roseGold:
+            return NebulaSkinTones(cloudsDark: [], cloudsLight: [], starTints: [], brightStarTint: 0xFFFFFF)
+        }
+    }
 }

@@ -284,9 +284,11 @@ struct AppearanceSheet: View {
                 .foregroundStyle(Theme.text(.tertiary))
                 .fixedSize(horizontal: false, vertical: true)
 
-            // **星云皮肤开关**：只在「星空紫」下出现 ——
+            // **星云皮肤开关**：只在「声明要星云」的主题下出现（星空紫 / 深空苍穹）——
             // 别的主题没有"星云"语义，摆一个永远无效的开关只会让人困惑。
-            if designTheme.theme == .stardust {
+            // 「哪些主题有星云」**由主题自己声明**（2026-10-16 泛化：从写死的 `.stardust`
+            // 改成问 `paintsNebula`）—— 新主题要说「我也有云气」，改的是它的值表，不是这里。
+            if designTheme.theme.paintsNebula {
                 Divider().padding(.vertical, Spacing.xs)
                 Toggle(isOn: nebulaSkinBinding) {
                     Image(systemName: "sparkles")

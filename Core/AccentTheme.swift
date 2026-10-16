@@ -92,13 +92,28 @@ public struct AccentTheme: Equatable, Sendable, Identifiable {
         fillHex: 0x5568D8
     )
 
+    /// 深空苍穹的配套强调色「深空蓝」（青蓝系，2026-10-16 新增 —— 「深空苍穹」主题自带）。
+    ///
+    /// 取 `#5EEAD4`（规范页的主强调）**不行**：白底只有 1.48，达不到「非文本组件 ≥3.0」。
+    /// 取现有「深海青」`#17A2A2` 也不行：白底只剩 3.12，本主题的浅色面板再一压就是 2.83。
+    /// 三条约束（白底 ≥3.0 · 每个主题的深色 content ≥3.0 · 与既有六个候选距离 ≥0.3）求交，
+    /// 落在**青蓝族**里的可行值就是它：`#007CE8`（色相 208°）——
+    /// 白底 4.17 / 自身浅色面板 3.77 / 自身深色底 4.62 / 与最近候选（鲸鱼蓝）距离 0.323。
+    /// `fill` = 压暗一档的 `#0073DF`，压白字 4.65（过 4.5）。
+    public static let deepSpace = AccentTheme(
+        id: "deep-space",
+        nameKey: .accentDeepSpace,
+        accentHex: 0x007CE8,
+        fillHex: 0x0073DF
+    )
+
     /// 全部候选。
     ///
     /// 界面不再逐条列强调色（「外观」面板的强调色列表**升格为主题下拉**，每个主题自带配套值，
     /// 见 `DesignTheme.accent`）；这一份集合仍然要有两个用途：
     ///   ① **解析旧配置** —— 用户以前挑过的 `deep-teal` / `whale-magenta` 得继续认得出来；
     ///   ② 给「几个强调色彼此可分辨」「配套值不是随便挑的」这类判据提供全集。
-    public static let all: [AccentTheme] = [whaleBlue, deepTeal, whaleMagenta, beanGreen, roseGold, stardust]
+    public static let all: [AccentTheme] = [whaleBlue, deepTeal, whaleMagenta, beanGreen, roseGold, stardust, deepSpace]
 
     /// 默认与回退都是鲸鱼蓝（与 App 图标同系）。
     public static let fallback = AccentTheme.whaleBlue

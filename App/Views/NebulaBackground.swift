@@ -83,29 +83,30 @@ struct NebulaBackground: View {
 
     /// 星云云气：几团大半径、极低透明度的径向渐变叠加 —— 要的是"云气"，不是"色块"。
     ///
+    /// **形状归这里、配色归值表**（2026-10-16 泛化）：位置 / 半径 / 层倍率是绘制侧的形；
+    /// 色值与基础透明度来自 `DesignTheme.nebulaTones` —— 新主题要说「我的云气是这个色调」，
+    /// 改的是 Core 的值表，这里一行都不用动。
+    ///
     /// 位置用**归一化坐标**（0~1），与窗口尺寸解耦（约束 2）。
     private func drawClouds(into context: inout GraphicsContext, size: CGSize, dark: Bool) {
-        // (中心 x, 中心 y, 半径占长边比例, 色值, 基础透明度)
-        // 色相取自 NASA 原图实测：靛蓝 `#1E3A6E` 为主，边缘透出紫 `#3A2F6B` / `#4A3D7A`。
-        let clouds: [(Double, Double, Double, UInt32, Double)] = dark ? [
-            (0.12, 0.88, 0.62, 0x1E3A6E, 0.50),
-            (0.48, 0.72, 0.55, 0x2A4A82, 0.34),
-            (0.88, 0.92, 0.52, 0x3A2F6B, 0.30),
-            (0.30, 0.30, 0.48, 0x16264A, 0.44),
-            (0.78, 0.26, 0.42, 0x4A3D7A, 0.22),
-        ] : [
-            (0.12, 0.88, 0.62, 0xD8E0F5, 0.55),
-            (0.48, 0.72, 0.55, 0xC8D4F0, 0.38),
-            (0.88, 0.92, 0.52, 0xE0D8F0, 0.32),
-            (0.30, 0.30, 0.48, 0xE8EDF8, 0.42),
+        // (中心 x, 中心 y, 半径占长边比例) —— 与主题无关的形状表。
+        let shapes: [(Double, Double, Double)] = [
+            (0.12, 0.88, 0.62),
+            (0.48, 0.72, 0.55),
+            (0.88, 0.92, 0.52),
+            (0.30, 0.30, 0.48),
+            (0.78, 0.26, 0.42),
         ]
-
+        let clouds = dark ? themeManager.theme.nebulaTones.cloudsDark
+                          : themeManager.theme.nebulaTones.cloudsLight
         let scale = layer.cloudScale
-        for (cx, cy, r, hex, alpha) in clouds {
+        for (index, shape) in shapes.enumerated() where index < clouds.count {
+            let (cx, cy, r) = shape
+            let cloud = clouds[index]
             let center = CGPoint(x: size.width * cx, y: size.height * cy)
             let radius = max(size.width, size.height) * r
-            let a = alpha * scale
-            let color = Color(nsColor: Theme.nsColor(hex: hex))
+            let a = cloud.alpha * scale
+            let color = Color(nsColor: Theme.nsColor(hex: cloud.hex))
             context.fill(
                 Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
                                        width: radius * 2, height: radius * 2)),
@@ -134,8 +135,12 @@ struct NebulaBackground: View {
             let (radius, alpha): (Double, Double) = r > 0.94 ? (1.6, dark ? 0.90 : 0.45)
                                                  : r > 0.80 ? (1.05, dark ? 0.68 : 0.34)
                                                  : (0.65, dark ? 0.38 : 0.20)
-            // 星光带紫（NASA 原图实测高光 `#E4D7F8`）
-            let tint: UInt32 = r > 0.88 ? 0xE4D7F8 : (r > 0.5 ? 0xD8E0FA : 0xC0CCE8)
+            // 星光色取自值表（三档：最亮 / 中 / 暗）—— 与云气同一口径。
+            let tints = themeManager.theme.nebulaTones.starTints
+            let tint: UInt32 = {
+                guard tints.count >= 3 else { return tints.last ?? 0xFFFFFF }
+                return r > 0.88 ? tints[0] : (r > 0.5 ? tints[1] : tints[2])
+            }()
             context.fill(
                 Path(ellipseIn: CGRect(x: x - radius, y: y - radius,
                                        width: radius * 2, height: radius * 2)),
@@ -153,6 +158,7 @@ struct NebulaBackground: View {
         }
         // 数量 = 每 400pt 见方一颗，上限 3 颗 —— 多了就不是"点缀"了。
         let count = min(3, max(1, Int(size.width * size.height / 400 / 400)))
+        let tint = themeManager.theme.nebulaTones.brightStarTint
         for _ in 0..<count {
             let cx = size.width * rnd()
             let cy = size.height * rnd()
@@ -160,11 +166,11 @@ struct NebulaBackground: View {
             var path = Path()
             path.move(to: CGPoint(x: cx - len, y: cy)); path.addLine(to: CGPoint(x: cx + len, y: cy))
             path.move(to: CGPoint(x: cx, y: cy - len)); path.addLine(to: CGPoint(x: cx, y: cy + len))
-            context.stroke(path, with: .color(Color(nsColor: Theme.nsColor(hex: 0xE4D7F8)).opacity(0.42)), lineWidth: 0.7)
+            context.stroke(path, with: .color(Color(nsColor: Theme.nsColor(hex: tint)).opacity(0.42)), lineWidth: 0.7)
             // 中心一颗小亮点
             context.fill(
                 Path(ellipseIn: CGRect(x: cx - 1.4, y: cy - 1.4, width: 2.8, height: 2.8)),
-                with: .color(Color(nsColor: Theme.nsColor(hex: 0xE4D7F8)).opacity(0.75))
+                with: .color(Color(nsColor: Theme.nsColor(hex: tint)).opacity(0.75))
             )
         }
     }
