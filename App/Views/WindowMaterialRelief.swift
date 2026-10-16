@@ -73,8 +73,13 @@ struct WindowMaterialRelief: NSViewRepresentable {
                         if Self.originals[key] == nil {
                             Self.originals[key] = (effect.material, effect.state, effect.blendingMode)
                         }
-                        effect.state = .inactive
-                        effect.material = .clear
+                        // **踩过的坑**：第一版写 `effect.material = .clear` —— macOS 的
+                        // `NSVisualEffectView.Material` **没有** `.clear` 这个成员，编译就红
+                        // （而当时打包脚本把失败吞了、拿旧二进制出包，于是"看似修好了"）。
+                        // 正解是换**混合目标**：默认的 `.behindWindow` 取的是"窗口背后"（桌面）⇒
+                        // 照片（画在窗口内容里）永远进不来；改成 `.withinWindow` 之后这层材质
+                        // 取的是**窗口自己内容**里的像素 —— 照片就在底下，于是那一栏跟着照片走。
+                        effect.blendingMode = .withinWindow
                     } else if let original = Self.originals[key] {
                         effect.material = original.material
                         effect.state = original.state

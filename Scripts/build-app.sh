@@ -89,7 +89,11 @@ build_product() {
   local arch_args=()
   if [ -n "${arch}" ]; then arch_args=(--arch "${arch}"); fi
   echo "==> 编译 DoyahStudioApp (${CONFIGURATION}${arch:+, ${arch}})" >&2
-  "${SWIFT}" build \
+  # **失败必须当场停**（2026-10-16 实机踩到）：原先这一步的返回码没被检查，
+  # 编译红了脚本照样往下走，把 SCRATCH 里**上一次的旧二进制**装进 .app 并打印「完成」——
+  # 于是"发出去的包里没有这处改动"，而脚本 rc=0、看日志也像成功。这比崩溃更坏：
+  # 崩溃你会知道，静默出旧包则要靠人肉点验才发现。
+  if ! "${SWIFT}" build \
     --product DoyahStudioApp \
     --configuration "${CONFIGURATION}" \
     --disable-sandbox \
@@ -99,6 +103,10 @@ build_product() {
     --manifest-cache local \
     ${arch_args[@]+"${arch_args[@]}"} \
     -Xswiftc -disable-sandbox >&2
+  then
+    echo "错误：swift build 失败 —— 不再继续打包（否则会把上一次的旧二进制打成一个看似成功的包）" >&2
+    exit 1
+  fi
   local bin_dir
   bin_dir="$("${SWIFT}" build \
     --configuration "${CONFIGURATION}" \

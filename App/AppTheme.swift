@@ -43,6 +43,19 @@ enum Theme {
         return opaqueSurface(surface).opacity(level.opacity(of: surface))
     }
 
+    /// 终端底色（**终端调色板**的颜色，不走 `Surface` 令牌）。
+    ///
+    /// 终端底色原本写死不透明 ⇒ 不管壁纸开不开，那一整块都把照片挡掉（人类主人 2026-10-16 实机点验：
+    /// 「terminal 区域都是挡住了壁纸」）。这里按值表的 `terminalOpacity` 透出照片，
+    /// 同时保住文本可读性（不是"越透越好"）。
+    static func terminalBackground(_ palette: TerminalPalette) -> NSColor {
+        let base = nsColor(palette.background)
+        guard let level = WallpaperSkinPreference.activeLevel(theme: designTheme, in: .standard) else {
+            return base
+        }
+        return base.withAlphaComponent(level.terminalOpacity)
+    }
+
     /// **不透视**的表面色（令牌原值，永远满不透明）。
     ///
     /// 谁要用它：① 壁纸的**蒙版** —— 它本来就是"压照片的那层玻璃"，若自己也是半透明的，

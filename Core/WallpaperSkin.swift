@@ -76,11 +76,15 @@ public struct WallpaperSkinLevel: Equatable, Sendable {
     /// 为什么按表面分开而不是一个全局值：阅读区（`content`）比工具条（`panel`）更「实」——
     /// 长时间注视的地方文字要更稳，而 chrome 那一层可以更透（观感也更「玻璃」）。
     public let surfaceOpacity: [Surface: Double]
+    /// 终端底色的不透明度（终端底色是**终端调色板**的颜色、不走 `Surface` 令牌，
+    /// 所以原来整块把照片挡住；壁纸生效时按这一格透出照片，同时保住文本可读性）。
+    public let terminalOpacity: Double
 
-    public init(nameKey: LKey, maskStops: [WallpaperMaskStop], surfaceOpacity: [Surface: Double]) {
+    public init(nameKey: LKey, maskStops: [WallpaperMaskStop], surfaceOpacity: [Surface: Double], terminalOpacity: Double) {
         self.nameKey = nameKey
         self.maskStops = maskStops
         self.surfaceOpacity = surfaceOpacity
+        self.terminalOpacity = terminalOpacity
     }
 
     /// 这一表面在本档下的不透明度（没登记的按**最实**处理：宁可看不见照片，也不让文字发飘）。
@@ -145,7 +149,8 @@ public extension WallpaperSkinSpec {
                     WallpaperMaskStop(location: 0.74, alpha: 0.64),
                     WallpaperMaskStop(location: 1.00, alpha: 0.80),
                 ],
-                surfaceOpacity: [.window: 0.68, .sidebar: 0.68, .content: 0.72, .panel: 0.52, .raised: 0.86]
+                surfaceOpacity: [.window: 0.46, .sidebar: 0.46, .content: 0.52, .panel: 0.40, .raised: 0.70],
+                terminalOpacity: 0.72
             ),
             WallpaperSkinLevel(
                 nameKey: .wallpaperLevelBalanced,
@@ -155,7 +160,8 @@ public extension WallpaperSkinSpec {
                     WallpaperMaskStop(location: 0.74, alpha: 0.50),
                     WallpaperMaskStop(location: 1.00, alpha: 0.68),
                 ],
-                surfaceOpacity: [.window: 0.54, .sidebar: 0.54, .content: 0.58, .panel: 0.38, .raised: 0.74]
+                surfaceOpacity: [.window: 0.34, .sidebar: 0.34, .content: 0.42, .panel: 0.28, .raised: 0.60],
+                terminalOpacity: 0.64
             ),
             WallpaperSkinLevel(
                 nameKey: .wallpaperLevelVivid,
@@ -166,7 +172,8 @@ public extension WallpaperSkinSpec {
                     WallpaperMaskStop(location: 0.74, alpha: 0.36),
                     WallpaperMaskStop(location: 1.00, alpha: 0.54),
                 ],
-                surfaceOpacity: [.window: 0.40, .sidebar: 0.40, .content: 0.44, .panel: 0.30, .raised: 0.62]
+                surfaceOpacity: [.window: 0.24, .sidebar: 0.24, .content: 0.32, .panel: 0.20, .raised: 0.50],
+                terminalOpacity: 0.58
             ),
         ],
         defaultLevel: 3
@@ -191,7 +198,8 @@ public extension WallpaperSkinSpec {
                     WallpaperMaskStop(location: 0.74, alpha: 0.70),
                     WallpaperMaskStop(location: 1.00, alpha: 0.82),
                 ],
-                surfaceOpacity: [.window: 0.54, .sidebar: 0.54, .content: 0.60, .panel: 0.46, .raised: 0.74]
+                surfaceOpacity: [.window: 0.44, .sidebar: 0.44, .content: 0.52, .panel: 0.38, .raised: 0.66],
+                terminalOpacity: 0.76
             ),
             WallpaperSkinLevel(
                 nameKey: .wallpaperLevelBalanced,
@@ -203,7 +211,8 @@ public extension WallpaperSkinSpec {
                     WallpaperMaskStop(location: 0.74, alpha: 0.62),
                     WallpaperMaskStop(location: 1.00, alpha: 0.76),
                 ],
-                surfaceOpacity: [.window: 0.46, .sidebar: 0.46, .content: 0.52, .panel: 0.36, .raised: 0.66]
+                surfaceOpacity: [.window: 0.34, .sidebar: 0.34, .content: 0.42, .panel: 0.28, .raised: 0.56],
+                terminalOpacity: 0.70
             ),
             WallpaperSkinLevel(
                 nameKey: .wallpaperLevelVivid,
@@ -213,7 +222,8 @@ public extension WallpaperSkinSpec {
                     WallpaperMaskStop(location: 0.74, alpha: 0.52),
                     WallpaperMaskStop(location: 1.00, alpha: 0.70),
                 ],
-                surfaceOpacity: [.window: 0.38, .sidebar: 0.38, .content: 0.44, .panel: 0.28, .raised: 0.58]
+                surfaceOpacity: [.window: 0.28, .sidebar: 0.28, .content: 0.36, .panel: 0.22, .raised: 0.48],
+                terminalOpacity: 0.64
             ),
         ],
         defaultLevel: 2

@@ -58,7 +58,7 @@ final class TerminalHostView: NSView, NSMenuItemValidation {
         self.cellSize = Self.measure(font)
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = Theme.nsColor(palette.background).cgColor
+        layer?.backgroundColor = Theme.terminalBackground(palette).cgColor
     }
 
     /// 应用偏好（外观 / 字号）。
@@ -80,7 +80,7 @@ final class TerminalHostView: NSView, NSMenuItemValidation {
         if self.appearancePreference != appearance {
             self.appearancePreference = appearance
             runCache.removeAll()
-            layer?.backgroundColor = Theme.nsColor(palette.background).cgColor
+            layer?.backgroundColor = Theme.terminalBackground(palette).cgColor
             needsDisplay = true
         }
         // 让屏幕模型能回答 `OSC 10/11/12`（前景 / 背景 / 光标色查询）：
@@ -168,7 +168,7 @@ final class TerminalHostView: NSView, NSMenuItemValidation {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         runCache.removeAll()
-        layer?.backgroundColor = Theme.nsColor(palette.background).cgColor
+        layer?.backgroundColor = Theme.terminalBackground(palette).cgColor
         needsDisplay = true
     }
 

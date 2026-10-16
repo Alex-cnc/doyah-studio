@@ -122,7 +122,9 @@ final class WallpaperSkinTests: XCTestCase {
                 XCTAssertGreaterThanOrEqual(level.weakestMaskAlpha, 0.24,
                                             "\(theme.rawValue)/第 \(strength) 档：蒙版最松那档低于下限 ⇒ 亮处会顶穿文字")
                 for surface in Surface.allCases {
-                    XCTAssertGreaterThanOrEqual(level.opacity(of: surface), 0.28,
+                    // 0.28 → **0.20**（2026-10-16）：浅色主题的表面色接近白，压在一张亮照片上时
+                    // 0.28 仍然"看着像遮住了" ⇒ 下限跟着真正看得见照片这条走；再往下就会伤到文本可读性。
+                    XCTAssertGreaterThanOrEqual(level.opacity(of: surface), 0.20,
                                                 "\(theme.rawValue)/第 \(strength) 档/\(surface.rawValue) 低于下限 ⇒ 文字发飘")
                     XCTAssertLessThanOrEqual(level.opacity(of: surface), 1,
                                              "\(theme.rawValue)/第 \(strength) 档/\(surface.rawValue) 超过 1")
@@ -172,11 +174,16 @@ final class WallpaperSkinTests: XCTestCase {
             WallpaperMaskStop(location: 0.74, alpha: 0.36),
             WallpaperMaskStop(location: 1.00, alpha: 0.54),
         ])
-        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .window), 0.40, accuracy: 0.0001)
-        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .sidebar), 0.40, accuracy: 0.0001)
-        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .content), 0.44, accuracy: 0.0001)
-        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .panel), 0.30, accuracy: 0.0001)
-        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .raised), 0.62, accuracy: 0.0001)
+        // 2026-10-16 实机点验后**整体压下来**：科技蓝那套表面色本来就接近白，
+        // 0.40~0.72 压在这张**本来就很亮**的湖景上 = 看上去还是一块平的浅灰
+        // （人类主人原话：「左侧栏还是挡住了」）⇒ 缺省档压到 0.20~0.50。
+        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .window), 0.24, accuracy: 0.0001)
+        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .sidebar), 0.24, accuracy: 0.0001)
+        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .content), 0.32, accuracy: 0.0001)
+        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .panel), 0.20, accuracy: 0.0001)
+        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .raised), 0.50, accuracy: 0.0001)
+        // 终端底色（终端调色板的颜色、不走 Surface 令牌）：原来写死 ⇒ 整块挡住照片。
+        XCTAssertEqual(spec.defaultLevelSpec.terminalOpacity, 0.58, accuracy: 0.0001)
     }
 
     /// 宇宙悬崖（深空苍穹）缺省第 2 档：同上，逐字登记。
@@ -188,16 +195,17 @@ final class WallpaperSkinTests: XCTestCase {
             WallpaperMaskStop(location: 0.74, alpha: 0.62),
             WallpaperMaskStop(location: 1.00, alpha: 0.76),
         ])
-        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .window), 0.46, accuracy: 0.0001)
-        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .sidebar), 0.46, accuracy: 0.0001)
-        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .content), 0.52, accuracy: 0.0001)
-        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .panel), 0.36, accuracy: 0.0001)
-        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .raised), 0.66, accuracy: 0.0001)
+        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .window), 0.34, accuracy: 0.0001)
+        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .sidebar), 0.34, accuracy: 0.0001)
+        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .content), 0.42, accuracy: 0.0001)
+        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .panel), 0.28, accuracy: 0.0001)
+        XCTAssertEqual(spec.defaultLevelSpec.opacity(of: .raised), 0.56, accuracy: 0.0001)
+        XCTAssertEqual(spec.defaultLevelSpec.terminalOpacity, 0.70, accuracy: 0.0001)
     }
 
     /// 没登记的表面按**最实**处理：漏登记只会「看不见照片」，不会「文字发飘」。
     func testUnregisteredSurfaceFallsBackToOpaque() {
-        let level = WallpaperSkinLevel(nameKey: .wallpaperLevelSteady, maskStops: [], surfaceOpacity: [:])
+        let level = WallpaperSkinLevel(nameKey: .wallpaperLevelSteady, maskStops: [], surfaceOpacity: [:], terminalOpacity: 1)
         for surface in Surface.allCases {
             XCTAssertEqual(level.opacity(of: surface), 1)
         }
