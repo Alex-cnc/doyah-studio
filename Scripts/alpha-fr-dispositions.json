@@ -126,6 +126,58 @@
       ]
     },
     {
+      "id": "FR-AI-17",
+      "domain": "3.12 AI 智能体",
+      "reason": "device-instance",
+      "reasonText": "会话持久化已接线（每跳落 .jsonl）；**界面回放需人工点验**",
+      "marker": "**[alpha 不含]**（会话持久化已接线（每跳落 .jsonl）；**界面回放需人工点验**）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/AgentContextTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-AI-20",
+      "domain": "3.12 AI 智能体",
+      "reason": "device-instance",
+      "reasonText": "六个 MVP 工具已全部接线（query_db 只回结构 / 行数 / 语句类型 —— 行数据不出本机）；**端到端需真实模型端点与凭据**",
+      "marker": "**[alpha 不含]**（六个 MVP 工具已全部接线（query_db 只回结构 / 行数 / 语句类型 —— 行数据不出本机）；**端到端需真实模型端点与凭据**）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/AgentContextTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-AI-22",
+      "domain": "3.12 AI 智能体",
+      "reason": "device-instance",
+      "reasonText": "上下文第一批（表结构摘要 + 活跃页签）已挂载；文件 / 选中 / 终端尾部三类待接；**端到端需真实模型端点**",
+      "marker": "**[alpha 不含]**（上下文第一批（表结构摘要 + 活跃页签）已挂载；文件 / 选中 / 终端尾部三类待接；**端到端需真实模型端点**）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/AgentContextTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-AI-28",
+      "domain": "3.12 AI 智能体",
+      "reason": "device-instance",
+      "reasonText": "门控已交付（同指纹不重复发请求、挡下留痕可导出）；**界面「仍然发送」按钮待接**，端到端需真实端点",
+      "marker": "**[alpha 不含]**（门控已交付（同指纹不重复发请求、挡下留痕可导出）；**界面「仍然发送」按钮待接**，端到端需真实端点）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/AgentInvocationGateTests.swift"
+        }
+      ]
+    },
+    {
       "id": "FR-CONN-15",
       "domain": "3.1 连接与凭据",
       "reason": "open-defect",
@@ -380,6 +432,159 @@
         },
         {
           "path": "Tests/CommandPaletteTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-EDIT-38",
+      "domain": "3.2 SQL 编辑与执行",
+      "reason": "not-implemented",
+      "reasonText": "Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围",
+      "marker": "**[alpha 不含]**（Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Scripts/check-language-registry.py"
+        },
+        {
+          "path": "Scripts/test-language-registry-gate.py"
+        },
+        {
+          "path": "Tests/CodeLanguageRegistryTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-EDIT-39",
+      "domain": "3.2 SQL 编辑与执行",
+      "reason": "ui-click",
+      "reasonText": "代码格式化的界面点击与观感待人工点验（形态已订正为**只用内置**：不探 `PATH`、不联网；认不出语言与规则空转都如实拒绝）",
+      "marker": "**[alpha 不含]**（界面点击与观感待人工点验；形态 = **只用内置**（2026-10-03 订正，原口径「外部优先 ⇒ 回退内置」已作废），规则与三种结局由 `Tests/CodeFormattingTests.swift` 逐条判）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/CodeFormattingTests.swift"
+        },
+        {
+          "path": "Core/CodeFormatting.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-EDIT-43",
+      "domain": "3.2 SQL 编辑与执行",
+      "reason": "not-implemented",
+      "reasonText": "第二片「光标 + 滚动」未交付（在飞 t_849ac541）；第一片「页签集会话恢复」已交付（锚仓 99cc05b）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Core/WorkspaceSession.swift"
+        },
+        {
+          "path": "Tests/WorkspaceSessionTests.swift"
+        },
+        {
+          "path": "App/WorkspaceTabsModel.swift"
+        }
+      ],
+      "marker": "**[alpha 不含]**（第二片「光标 + 滚动」未交付（在飞 `t_849ac541`）；第一片已交付）"
+    },
+    {
+      "id": "FR-EDIT-44",
+      "domain": "3.2 SQL 编辑与执行",
+      "reason": "ui-click",
+      "reasonText": "工作区标头搜索框的界面点击与观感待人工点验（分组与顺序 / 键盘行走 / 行号换算 / 跳过计数已有 30 条 Core 判据；「点下去真的跳到那一行」需人看）",
+      "marker": "**[alpha 不含]**（界面点击与观感待人工点验）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/WorkspaceHeaderSearchTests.swift"
+        },
+        {
+          "path": "Tests/WorkspaceSearchContentTests.swift"
+        },
+        {
+          "path": "App/Views/WorkspaceHeaderSearch.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-EDIT-46",
+      "domain": "3.2 SQL 编辑与执行",
+      "reason": "ui-click",
+      "reasonText": "关闭有未保存改动的页签 = 确认框：界面点击待人工点验（规则层有 8 例 Core 判据（7 条规则 + 1 条源码判据）—— 干净页签不弹框 / 脏页签弹且动作与顺序固定 / 取消不关 / 保存失败不关 / 丢弃必关；真点关闭按钮看到框、三个动作各点一遍需人看）",
+      "marker": "**[alpha 不含]**（界面点击待人工点验）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/WorkspaceClosePolicyTests.swift"
+        },
+        {
+          "path": "Core/WorkspaceClose.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-EDIT-47",
+      "domain": "3.2 SQL 编辑与执行",
+      "reason": "ui-click",
+      "reasonText": "Markdown 列表续行的界面回车手感待人工点验（规则层有 17 例判据含续行各组；真在编辑器里按回车接着写下一项需人看）",
+      "marker": "**[alpha 不含]**（界面回车手感待人工点验；清单 §10.33）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Core/MarkdownEditing.swift"
+        },
+        {
+          "path": "App/Views/CodeEditorView.swift"
+        },
+        {
+          "path": "Tests/MarkdownEditingTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-EDIT-48",
+      "domain": "3.2 SQL 编辑与执行",
+      "reason": "ui-click",
+      "reasonText": "Markdown 任务框勾选翻转（⌘L）的界面按键待人工点验（规则层判据同上；界面 9 步见清单 §10.33）",
+      "marker": "**[alpha 不含]**（界面按键待人工点验；清单 §10.33）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Core/MarkdownEditing.swift"
+        },
+        {
+          "path": "App/Views/CodeEditorView.swift"
+        },
+        {
+          "path": "Tests/MarkdownEditingTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-EDIT-49",
+      "domain": "3.2 SQL 编辑与执行",
+      "reason": "ui-click",
+      "reasonText": "Core 逻辑（配对 / 跳引号 / 包选区 / 删整对）与判据已交付；**手感需人工点验**（补不补、光标是否在中间、退格是否删整对、Markdown 里引号是否不补）",
+      "marker": "**[alpha 不含]**（Core 逻辑（配对 / 跳引号 / 包选区 / 删整对）与判据已交付；**手感需人工点验**（补不补、光标是否在中间、退格是否删整对、Markdown 里引号是否不补））",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/CodeAutoPairingTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-EDIT-51",
+      "domain": "3.2 SQL 编辑与执行",
+      "reason": "ui-click",
+      "reasonText": "Core 逻辑（注释符只从语言表来、空行不动、取消时连空格一起去掉）与判据已交付；**手感需人工点验**（⌘/ 在中文输入法下是否按键正常）",
+      "marker": "**[alpha 不含]**（Core 逻辑（注释符只从语言表来、空行不动、取消时连空格一起去掉）与判据已交付；**手感需人工点验**（⌘/ 在中文输入法下是否按键正常））",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/CodeCommentToggleTests.swift"
         }
       ]
     },
@@ -720,133 +925,6 @@
           "path": "Scripts/test-server-objects.sh"
         }
       ]
-    },
-    {
-      "id": "FR-EDIT-38",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "not-implemented",
-      "reasonText": "Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围",
-      "marker": "**[alpha 不含]**（Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/check-language-registry.py"
-        },
-        {
-          "path": "Scripts/test-language-registry-gate.py"
-        },
-        {
-          "path": "Tests/CodeLanguageRegistryTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-39",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "代码格式化的界面点击与观感待人工点验（形态已订正为**只用内置**：不探 `PATH`、不联网；认不出语言与规则空转都如实拒绝）",
-      "marker": "**[alpha 不含]**（界面点击与观感待人工点验；形态 = **只用内置**（2026-10-03 订正，原口径「外部优先 ⇒ 回退内置」已作废），规则与三种结局由 `Tests/CodeFormattingTests.swift` 逐条判）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/CodeFormattingTests.swift"
-        },
-        {
-          "path": "Core/CodeFormatting.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-44",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "工作区标头搜索框的界面点击与观感待人工点验（分组与顺序 / 键盘行走 / 行号换算 / 跳过计数已有 30 条 Core 判据；「点下去真的跳到那一行」需人看）",
-      "marker": "**[alpha 不含]**（界面点击与观感待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/WorkspaceHeaderSearchTests.swift"
-        },
-        {
-          "path": "Tests/WorkspaceSearchContentTests.swift"
-        },
-        {
-          "path": "App/Views/WorkspaceHeaderSearch.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-46",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "关闭有未保存改动的页签 = 确认框：界面点击待人工点验（规则层有 8 例 Core 判据（7 条规则 + 1 条源码判据）—— 干净页签不弹框 / 脏页签弹且动作与顺序固定 / 取消不关 / 保存失败不关 / 丢弃必关；真点关闭按钮看到框、三个动作各点一遍需人看）",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/WorkspaceClosePolicyTests.swift"
-        },
-        {
-          "path": "Core/WorkspaceClose.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-47",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "Markdown 列表续行的界面回车手感待人工点验（规则层有 17 例判据含续行各组；真在编辑器里按回车接着写下一项需人看）",
-      "marker": "**[alpha 不含]**（界面回车手感待人工点验；清单 §10.33）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Core/MarkdownEditing.swift"
-        },
-        {
-          "path": "App/Views/CodeEditorView.swift"
-        },
-        {
-          "path": "Tests/MarkdownEditingTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-48",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "Markdown 任务框勾选翻转（⌘L）的界面按键待人工点验（规则层判据同上；界面 9 步见清单 §10.33）",
-      "marker": "**[alpha 不含]**（界面按键待人工点验；清单 §10.33）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Core/MarkdownEditing.swift"
-        },
-        {
-          "path": "App/Views/CodeEditorView.swift"
-        },
-        {
-          "path": "Tests/MarkdownEditingTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-43",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "not-implemented",
-      "reasonText": "第二片「光标 + 滚动」未交付（在飞 t_849ac541）；第一片「页签集会话恢复」已交付（锚仓 99cc05b）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Core/WorkspaceSession.swift"
-        },
-        {
-          "path": "Tests/WorkspaceSessionTests.swift"
-        },
-        {
-          "path": "App/WorkspaceTabsModel.swift"
-        }
-      ],
-      "marker": "**[alpha 不含]**（第二片「光标 + 滚动」未交付（在飞 `t_849ac541`）；第一片已交付）"
     }
   ]
 }
