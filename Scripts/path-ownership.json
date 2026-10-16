@@ -9,11 +9,11 @@
     "README.md",
     "Scripts/doc-numbers.json"
   ],
-  "contract_note": "契约层（三书）**归 `hugehippo`（铁皮大河马）**（**2026-10-15 人类主人令 · 基本法第四十八条 / 之二**：原 `bluewhale` 的交出 —— 她自本令起只保留公众号写作助理与地缘政治分析周报，**既无契约权、也无平台写权**）；平台实现层归各平台助理（**2026-10-13 均衡令** · 派单 `T-20261013-007`）：`hugehippo`=Apple 全系 · `fatshark`=Windows/鸿蒙 · `babyhippo`=Linux/安卓（旧名 `fatfish` / `bighippo` / `tinyhippo` 已退役、只保留识别）（2026-10-03 人类主人制度变更 · 派活单 `T-20261003-003`）。**契约层落笔面 = 人类主人 2026-10-05 批准的四类：`Docs/**` + `AGENT-SPEC.md` + 仓根 `README.md` + `Scripts/doc-numbers.json`（计数台账）** ⇒ `--actor hugehippo` 时：**contract_docs 声明的这几类放行**，**且**因新所有者**兼任 Apple 全系实现侧**（macos / ios / watchos），其平台子树与共享面改走**常规判据**（对侧子树 / 未登记照旧判红）—— 即契约模式从「只许三书」的**独占**改为**叠加**（2026-10-15 判据跟版，`check-path-ownership.py` 同批）；平台集为空的历史所有者（`bluewhale` / `--contract-owner <平台名>` 旧姿势）仍走**独占**，其余（代码 / 脚本 / 其他文档 / 仓根杂项）一律判红 —— **「产品代码不许越界」这条本体不变**。原始护栏（人类主人 2026-10-03）：「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」（**该护栏 2026-10-15 随第四十八条移交**：现受让方 = `hugehippo`）；本仓按 10-05 的扩面裁决跟版（依据派单 `T-20261005-088` ①）。三书内部**契约层节 vs `[独占:平台]` 实现层节**的边界由 `check-exclusive-sections.py` 机械判。",
+  "contract_note": "**2026-10-16 人类主人定案：不再设「分组键」、两轴合一，`owner` 直接写侧名** ⇒ `hugehippo` = macOS / iOS / watchOS / Linux；`babyhippo` = Windows / Android / 鸿蒙。**归属真值 = `trees[].actor`**；退役侧名（`fatshark` / `fatfish` / `bighippo` / `tinyhippo`）只作识别用。",
   "trees": [
     {
       "id": "macos",
-      "owner": "macos",
+      "owner": "hugehippo",
       "hosts": [
         "darwin"
       ],
@@ -41,7 +41,7 @@
     },
     {
       "id": "watchos",
-      "owner": "macos",
+      "owner": "hugehippo",
       "hosts": [
         "darwin"
       ],
@@ -55,13 +55,13 @@
     },
     {
       "id": "windows",
-      "owner": "windows",
+      "owner": "babyhippo",
       "hosts": [
         "win32",
         "windows"
       ],
       "contract_side": "nonapple",
-      "label": "Windows 端（黑鳍大肥鲨 · 2026-10-13 均衡令；Tauri 2 + Vue 3 + TypeScript / Rust）",
+      "label": "Windows 端（小河马 babyhippo；Tauri 2 + Vue 3 + TypeScript / Rust）",
       "paths": [
         "platform/windows/"
       ],
@@ -70,12 +70,12 @@
     },
     {
       "id": "linux",
-      "owner": "linux",
+      "owner": "hugehippo",
       "hosts": [
         "linux"
       ],
       "contract_side": "nonapple",
-      "label": "Linux 端（奶牙小河马 · 2026-10-14 人类主人令「Doyah Studio 全量 PC 端还要补一个 Linux 平台，小河马负责的」；Tauri 2 + 系统 WebView = WebKitGTK + 复用 Windows 侧同一套 Vue 3 / TypeScript 前端）",
+      "label": "Linux 端（铁皮大河马 hugehippo · 2026-10-15 归 hugehippo，原 2026-10-14 人类主人令「Doyah Studio 全量 PC 端还要补一个 Linux 平台，小河马负责的」；Tauri 2 + 系统 WebView = WebKitGTK + 复用 Windows 侧同一套 Vue 3 / TypeScript 前端）",
       "paths": [
         "Platform/linux/",
         "platform/linux/"
