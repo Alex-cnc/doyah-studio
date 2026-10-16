@@ -2867,12 +2867,28 @@ final class AppState: ObservableObject {
     func makeAgentChatLoop(prompt: String,
                            sessionID: String,
                            workspacePath: String,
-                           observer: any AgentLoopObserver) -> (loop: AgentLoop, context: AgentLoopContext)? {
+                           observer: any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)? {
         guard case .ready(let model, let endpoint) = agentChatEndpointState,
               let url = URL(string: endpoint) else { return nil }
-        // 系统提示（`FR-AI-16`/`FR-AI-22`）：此前是空串 —— 模型看不到身份 / 工具面 / 数据边界。
-        // 上下文引用（@文件 · 目录 · 选中 · 页签 · 终端尾部 · schema 摘要）的挂载见下一片。
-        let systemPrompt = AgentSystemPrompt.base(model: model, endpoint: endpoint)
+        // `FR-AI-22` 上下文供给（第一批：**当前连接的表结构摘要 + 活跃页签**）：
+        // · 摘要**与 NL→SQL 共用同一处**（`agentSchemaSummary`）—— 不另起一份；表数 / 列数预算（NFR-AI-01）也只有一处；
+        // · 取不到摘要（没连库 / 元数据拿不到）⇒ **不带这一段**，而不是编一个空壳出来；
+        // · 文件 / 选中 / 终端尾部三类挂在编辑器侧那条路上（下一片），此处不假装带上。
+        var references: [AgentContextReference] = []
+        if let summary = try? await agentSchemaSummary(includeTableList: true) {
+            references.append(.schemaSummary(
+                database: selectedConnection?.database ?? "",
+                tables: summary.tables.map {
+                    AgentContextReference.Table(schema: $0.schema ?? "", name: $0.name,
+                                                columns: $0.columns.map(\.name))
+                }))
+        }
+        if let tab = selectedTab {
+            references.append(.activeTab(title: tab.title, kind: "query"))
+        }
+        let systemPrompt = AgentSystemPrompt.build(model: model, endpoint: endpoint,
+                                                   workspacePath: workspacePath,
+                                                   references: references)
         let request = LLMRequest(endpoint: url,
                                  model: model,
                                  apiKey: agentAPIKey,
@@ -2901,6 +2917,8 @@ final class AppState: ObservableObject {
         let loop = AgentLoop(client: OpenAICompatibleStreamingClient(),
                              dispatcher: dispatcher,
                              registry: .standard,
+                             // `FR-AI-17` 会话持久化：每跳落一份 `.jsonl`（与其余本机数据同一处，不另开文件体系）。
+                             sessionStore: AgentSessionStore(directory: AgentSessionStore.defaultDirectory),
                              audit: AgentAuditLog.shared,
                              observer: observer)
         let context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: prompt,

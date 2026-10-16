@@ -152,12 +152,12 @@ struct AgentChatView: View {
                 TextField(L(.agentChatPlaceholder), text: $model.input)
                     .textFieldStyle(.roundedBorder)
                     .focused($inputFocused)
-                    .onSubmit { if model.canSend { model.send() } }
+                    .onSubmit { if model.canSend { Task { await model.send() } } }
                 if model.isRunning {
                     Text(L(.agentChatRunning)).font(.caption).foregroundStyle(.secondary)
                     ToolbarIconButton(systemName: "stop.fill", help: L(.agentChatStop)) { model.stop() }
                 } else {
-                    ToolbarIconButton(systemName: "paperplane", help: L(.agentChatSend)) { model.send() }
+                    ToolbarIconButton(systemName: "paperplane", help: L(.agentChatSend)) { Task { await model.send() } }
                         .disabled(!model.canSend)
                 }
             }

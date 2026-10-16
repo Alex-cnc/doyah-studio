@@ -15,7 +15,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     /// 宿主注入：给一个提示词，造一条**已经配好上下文**的循环（端点 / 模型 / 密钥 / 工具都在宿主那侧组装）。
     /// 造不出来 ⇒ 如实报，不假装在跑。
-    var makeLoop: ((String, any AgentLoopObserver) -> (loop: AgentLoop, context: AgentLoopContext)?)?
+    /// 造循环。**是 `async` 的**：建循环时要现取一次本次上下文（`FR-AI-22`：当前连接的表结构摘要等），那一步是 IO。
+    var makeLoop: ((String, any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)?)?
     /// 宿主注入：真正把一次批准**兑现**（写盘 / 跑命令）。返回是否成功。
     var applyApproval: ((AgentToolCard) async -> Bool)?
     /// 宿主注入：端点状态（界面出现 / 设置改过之后取一次）。
@@ -64,14 +65,14 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     // MARK: - 界面动作
 
-    func send() {
+    func send() async {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
         state.beginRun(prompt: prompt)
         guard state.isRunning else { return }   // 不能发时 `beginRun` 已如实出提示，这里不许往下走
         input = ""
         cancellation.reset()
-        guard let prepared = makeLoop?(prompt, self) else {
+        guard let prepared = await makeLoop?(prompt, self) else {
             state.apply(.failed("loopUnavailable"))
             return
         }

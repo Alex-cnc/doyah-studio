@@ -104,10 +104,11 @@ struct DoyahStudioApp: App {
                     agentChat.endpointProvider = { appState.agentChatEndpointState }
                     agentChat.makeLoop = { prompt, observer in
                         guard let rootPath = workspace.rootPath else { return nil }
-                        return appState.makeAgentChatLoop(prompt: prompt,
-                                                          sessionID: agentChat.sessionID,
-                                                          workspacePath: rootPath,
-                                                          observer: observer)
+                        // `await`：建循环时会现取一次本次上下文（`FR-AI-22` 的表结构摘要），那是 IO。
+                        return await appState.makeAgentChatLoop(prompt: prompt,
+                                                               sessionID: agentChat.sessionID,
+                                                               workspacePath: rootPath,
+                                                               observer: observer)
                     }
                     agentChat.applyApproval = { card in
                         guard let rootPath = workspace.rootPath else { return false }
