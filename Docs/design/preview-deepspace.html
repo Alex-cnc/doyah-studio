@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="deepspace">
+<head>
+<meta charset="utf-8">
+<title>Doyah Studio · 主题预览：深空苍穹</title>
+<style>
+/* ============ 令牌层：一套令牌，两个取值 ============ */
+:root{
+  --bg-base:#05070D; --bg-panel:#0A0F1A; --bg-card:#111827; --bg-elev:#161F2E;
+  --border-subtle:#1B2436; --border-strong:#243049;
+  --txt-1:#E6EDF7; --txt-2:#94A3B8; --txt-3:#64748B;
+  --accent:#5EEAD4; --accent-2:#60A5FA; --accent-dim:rgba(94,234,212,.14);
+  --ok:#34D399; --warn:#FBBF24; --danger:#F87171;
+  --nl-violet:rgba(124,92,255,.11); --nl-cyan:rgba(56,189,248,.12); --nl-magenta:rgba(244,114,182,.06);
+  --glow:0 0 10px rgba(94,234,212,.35); --grid:rgba(148,163,184,.055);
+  --blur:blur(24px); --motion:200ms; --radius:10px;
+}
+/* 「星空紫」对照：饱和紫铺底 —— 故意做出"廉价科幻"的手感 */
+html[data-theme="nebula"]{
+  --bg-base:#1A0B2E; --bg-panel:#241041; --bg-card:#2E1552; --bg-elev:#3A1B64;
+  --border-subtle:#4A2580; --border-strong:#5E30A0;
+  --txt-1:#F2E9FF; --txt-2:#C4A9E8; --txt-3:#9370BE;
+  --accent:#C084FC; --accent-2:#E879F9; --accent-dim:rgba(192,132,252,.18);
+  --nl-violet:rgba(192,132,252,.28); --nl-cyan:rgba(232,121,249,.18); --nl-magenta:rgba(255,0,200,.12);
+  --glow:0 0 14px rgba(192,132,252,.55); --grid:rgba(230,200,255,.07);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:#020306;color:var(--txt-1);
+  font:14px/1.55 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  letter-spacing:.01em;overflow:hidden;display:grid;place-items:center;
+  transition:background var(--motion) ease,color var(--motion) ease;
+}
+/* 微网格（1~2% 才有"舱内"感，超了抢内容） */
+.grid{position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:44px 44px;}
+/* 星云：只在三处边角，绝不满铺 */
+.neb{position:absolute;pointer-events:none;filter:blur(2px);transition:background var(--motion) ease}
+.neb.a{top:-18%;left:-12%;width:52%;height:52%;background:radial-gradient(circle,var(--nl-violet),transparent 68%)}
+.neb.b{bottom:-24%;right:-10%;width:56%;height:56%;background:radial-gradient(circle,var(--nl-cyan),transparent 70%)}
+.neb.c{top:34%;right:8%;width:24%;height:24%;background:radial-gradient(circle,var(--nl-magenta),transparent 72%)}
+/* 星点：极稀疏、静态 */
+.stars{position:absolute;inset:0;pointer-events:none}
+.stars i{position:absolute;width:1.5px;height:1.5px;border-radius:50%;background:#DCE7FF;opacity:.5}
+.stars i:nth-child(1){top:9%;left:18%}   .stars i:nth-child(2){top:16%;left:63%}
+.stars i:nth-child(3){top:27%;left:38%;opacity:.28} .stars i:nth-child(4){top:44%;left:82%;opacity:.34}
+.stars i:nth-child(5){top:61%;left:12%;opacity:.3}  .stars i:nth-child(6){top:72%;left:47%;opacity:.4}
+.stars i:nth-child(7){top:83%;left:71%;opacity:.24} .stars i:nth-child(8){top:35%;left:95%;opacity:.3}
+
+/* ============ 舞台：固定 1440×900，按屏幕等比缩放（手机上看不走样） ============ */
+.stage{position:relative;width:1440px;height:900px;flex:none;
+  transform-origin:center center;
+  border-radius:14px;overflow:hidden;background:var(--bg-base);
+  box-shadow:0 0 0 1px var(--border-subtle),0 30px 90px rgba(0,0,0,.65)}
+.app{height:900px !important}
+
+/* ============ 布局 ============ */
+.app{position:relative;display:flex;flex-direction:column}
+/* 顶栏：毛玻璃 + 1px 渐变描边 */
+.titlebar{display:flex;align-items:center;gap:14px;height:48px;padding:0 14px;
+  background:linear-gradient(180deg,rgba(10,15,26,.86),rgba(10,15,26,.62));
+  backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border-bottom:1px solid var(--border-subtle);position:relative;z-index:3}
+.titlebar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(94,234,212,.42),rgba(56,189,248,.28),transparent);opacity:.8}
+.dots{display:flex;gap:7px}
+.dots b{width:11px;height:11px;border-radius:50%;display:block;background:#2B3A52}
+.dots b:nth-child(1){background:#F87171}.dots b:nth-child(2){background:#FBBF24}.dots b:nth-child(3){background:#34D399}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;letter-spacing:.06em}
+.brand .mark{width:20px;height:20px;border-radius:6px;background:conic-gradient(from 210deg,#5EEAD4,#60A5FA,#7C5CFF,#5EEAD4);
+  box-shadow:0 0 12px rgba(94,234,212,.45)}
+.brand small{color:var(--txt-3);font-weight:400;letter-spacing:.02em}
+.tabs{display:flex;gap:6px;margin-left:10px}
+.tab{padding:5px 12px;border-radius:8px 8px 0 0;color:var(--txt-2);font-size:12.5px;border:1px solid transparent}
+.tab.on{color:var(--txt-1);background:var(--bg-panel);border-color:var(--border-subtle);border-bottom-color:transparent}
+.spacer{flex:1}
+.switch{display:flex;gap:4px;padding:3px;border:1px solid var(--border-subtle);border-radius:9px;background:rgba(17,24,39,.5)}
+.switch button{all:unset;cursor:pointer;padding:4px 11px;border-radius:7px;font-size:12px;color:var(--txt-2)}
+.switch button.on{background:var(--accent-dim);color:var(--accent);box-shadow:var(--glow)}
+
+.body{flex:1;display:flex;min-height:0}
+/* 活动栏 */
+.rail{width:52px;background:rgba(10,15,26,.72);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0}
+.rail span{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--txt-3);font-size:16px}
+.rail span.on{color:var(--accent);background:var(--accent-dim);box-shadow:var(--glow)}
+/* 侧栏 */
+.side{width:236px;background:rgba(10,15,26,.6);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border-right:1px solid var(--border-subtle);padding:12px 10px;overflow:hidden}
+.h{font-size:11px;letter-spacing:.14em;color:var(--txt-3);text-transform:uppercase;margin:4px 6px 9px}
+.tree{font-size:13px}
+.tree div{padding:5px 8px;border-radius:7px;color:var(--txt-2);display:flex;gap:7px;align-items:center}
+.tree div:hover{background:rgba(148,163,184,.07);color:var(--txt-1)}
+.tree div.on{background:var(--accent-dim);color:var(--accent)}
+.tree .lv2{padding-left:22px}.tree .lv3{padding-left:38px}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+/* 主区 */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.editor{flex:1.05;min-height:0;display:flex;background:rgba(5,7,13,.55);border-bottom:1px solid var(--border-subtle)}
+.gutter{padding:14px 10px 14px 16px;text-align:right;color:#3D4B63;font-size:12.5px;user-select:none}
+.code{padding:14px 18px;font-size:13px;overflow:auto;flex:1}
+.code .k{color:#7C5CFF}.code .f{color:#5EEAD4}.code .s{color:#FBBF24}.code .c{color:#4B5A73}
+.code .n{color:#94A3B8}
+.results{flex:.85;min-height:0;display:flex;flex-direction:column}
+.rhead{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--border-subtle);color:var(--txt-2);font-size:12.5px}
+.pill{padding:2px 8px;border-radius:999px;font-size:11.5px;background:rgba(52,211,153,.12);color:var(--ok);border:1px solid rgba(52,211,153,.25)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:7px 14px;border-bottom:1px solid rgba(27,36,54,.7)}
+th{color:var(--txt-3);font-weight:500;font-size:11.5px;letter-spacing:.06em}
+td{color:var(--txt-2)} td.id{color:var(--txt-1)}
+tr:hover td{background:rgba(94,234,212,.05)}
+/* AI 面板 */
+.ai{width:312px;background:rgba(10,15,26,.62);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border-left:1px solid var(--border-subtle);display:flex;flex-direction:column}
+.ai .hd{padding:12px 14px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:8px;font-size:13px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.msgs{flex:1;padding:14px;display:flex;flex-direction:column;gap:12px;overflow:auto}
+.msg{max-width:88%;padding:9px 12px;border-radius:12px;font-size:12.8px;line-height:1.6}
+.msg.me{align-self:flex-end;background:var(--accent-dim);border:1px solid rgba(94,234,212,.24);color:var(--txt-1)}
+.msg.ai{align-self:flex-start;background:var(--bg-card);border:1px solid var(--border-subtle);color:var(--txt-2)}
+.msg code{background:rgba(5,7,13,.6);padding:1px 4px;border-radius:4px;color:var(--accent);font-size:12px}
+.input{margin:12px;padding:10px 12px;border-radius:10px;background:var(--bg-card);border:1px solid var(--border-subtle);
+  color:var(--txt-3);font-size:12.5px;display:flex;align-items:center;justify-content:space-between}
+.input b{color:var(--accent);font-weight:600}
+/* 状态栏 */
+.status{height:32px;display:flex;align-items:center;gap:18px;padding:0 16px;font-size:12px;color:var(--txt-3);
+  background:rgba(10,15,26,.86);backdrop-filter:var(--blur);border-top:1px solid var(--border-subtle)}
+.status .ok{color:var(--ok)}
+/* 令牌条 */
+.tokens{position:absolute;left:50%;transform:translateX(-50%);bottom:44px;display:flex;gap:8px;padding:8px 12px;border-radius:12px;
+  background:rgba(5,7,13,.82);backdrop-filter:var(--blur);border:1px solid var(--border-subtle);z-index:9}
+.tokens i{width:22px;height:22px;border-radius:6px;display:block;border:1px solid rgba(255,255,255,.09)}
+.tokens span{font-size:11px;color:var(--txt-3);align-self:center;margin-right:2px}
+.hint{position:absolute;top:56px;left:50%;transform:translateX(-50%);font-size:11.5px;color:var(--txt-3);
+  background:rgba(5,7,13,.7);padding:4px 12px;border-radius:999px;border:1px solid var(--border-subtle);z-index:9}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+<div class="grid"></div>
+<div class="neb a"></div><div class="neb b"></div><div class="neb c"></div>
+<div class="stars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+<div class="hint">点右上角切换：<b>深空苍穹</b> ↔ <b>星空紫</b>（同一套令牌，两个取值）</div>
+
+<div class="app">
+  <div class="titlebar">
+    <div class="dots"><b></b><b></b><b></b></div>
+    <div class="brand"><span class="mark"></span>Doyah Studio <small>· 深空苍穹</small></div>
+    <div class="tabs"><div class="tab on">查询.sql</div><div class="tab">笔记 · 灵感</div><div class="tab">行情</div></div>
+    <div class="spacer"></div>
+    <div class="switch">
+      <button id="b-deep" class="on" onclick="setT('deepspace')">深空苍穹</button>
+      <button id="b-neb" onclick="setT('nebula')">星空紫</button>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="rail">
+      <span class="on">◈</span><span>▤</span><span>⌘</span><span>▦</span><span>◔</span>
+    </div>
+
+    <div class="side">
+      <div class="h">对象浏览器</div>
+      <div class="tree">
+        <div class="lv2">▾ localhost:5433</div>
+        <div class="lv3 on">▸ doyah_prod</div>
+        <div class="lv3" style="padding-left:54px">▾ public</div>
+        <div style="padding-left:70px">▦ notes</div>
+        <div style="padding-left:70px">▦ trade_log</div>
+        <div style="padding-left:70px">▦ sync_queue</div>
+        <div class="lv3" style="padding-left:54px">▸ analytics</div>
+        <div class="lv2">▸ localhost:6379</div>
+      </div>
+      <div class="h" style="margin-top:18px">最近</div>
+      <div class="tree"><div>⟳ 慢查询 TOP20</div><div>⟳ 笔记增量同步核对</div></div>
+    </div>
+
+    <div class="main">
+      <div class="editor">
+        <div class="gutter mono">1<br>2<br>3<br>4<br>5<br>6</div>
+        <div class="code mono">
+          <div><span class="c">-- 豆丫科技 · 笔记增量同步核对</span></div>
+          <div><span class="k">select</span> <span class="n">n.id</span>, <span class="n">n.title</span>, <span class="n">n.updated_at</span>, <span class="n">q.state</span></div>
+          <div><span class="k">from</span> <span class="n">notes</span> <span class="n">n</span></div>
+          <div><span class="k">join</span> <span class="n">sync_queue</span> <span class="n">q</span> <span class="k">on</span> <span class="n">q.note_id</span> = <span class="n">n.id</span></div>
+          <div><span class="k">where</span> <span class="n">n.updated_at</span> &gt; <span class="f">now</span>() - <span class="k">interval</span> <span class="s">'24 hours'</span></div>
+          <div><span class="k">order by</span> <span class="n">n.updated_at</span> <span class="k">desc</span>;</div>
+        </div>
+      </div>
+      <div class="results">
+        <div class="rhead"><span class="pill">✓ 执行成功 · 128 ms</span><span class="mono">4 行</span><span class="spacer"></span><span class="mono">已截断：否</span></div>
+        <table>
+          <thead><tr><th>id</th><th>title</th><th>updated_at</th><th>state</th></tr></thead>
+          <tbody>
+            <tr><td class="id mono">10427</td><td>深空主题的色板备忘</td><td class="mono">2026-10-16 14:02</td><td><span class="pill">已同步</span></td></tr>
+            <tr><td class="id mono">10426</td><td>调音器 · 音准漂移记录</td><td class="mono">2026-10-16 13:41</td><td><span class="pill" style="background:rgba(251,191,36,.12);color:var(--warn);border-color:rgba(251,191,36,.25)">待上行</span></td></tr>
+            <tr><td class="id mono">10425</td><td>豆丫的第一张照片</td><td class="mono">2026-10-16 11:20</td><td><span class="pill">已同步</span></td></tr>
+            <tr><td class="id mono">10424</td><td>商标 9/42 类勾选草稿</td><td class="mono">2026-10-16 09:58</td><td><span class="pill">已同步</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ai">
+      <div class="hd"><span class="dot"></span>AI 助手 <span style="color:var(--txt-3);font-size:11.5px">· 已接入</span></div>
+      <div class="msgs">
+        <div class="msg ai">「深空苍穹」的对比度我按令牌复算了一遍：正文 <code>#E6EDF7</code> 在 <code>#05070D</code> 上是 15.4:1，远超 AA。</div>
+        <div class="msg me">把发光收一收，只留选中态。</div>
+        <div class="msg ai">已收：<code>glow</code> 只作用于 <code>.on</code> 与主按钮，模糊半径 10px —— 全屏只有两处发光。</div>
+      </div>
+      <div class="input"><span>问点什么…</span><b>⌘⏎</b></div>
+    </div>
+  </div>
+
+  <div class="status">
+    <span class="ok">● 已连接 localhost:5433</span><span>PostgreSQL 18.0</span><span>UTF-8</span><span class="spacer"></span>
+    <span>主题：深空苍穹</span><span>v1.0</span>
+  </div>
+</div>
+
+<div class="tokens">
+  <span>令牌</span>
+  <i style="background:#05070D"></i><i style="background:#0A0F1A"></i><i style="background:#111827"></i><i style="background:#1B2436"></i>
+  <i style="background:#5EEAD4"></i><i style="background:#60A5FA"></i><i style="background:#7C5CFF"></i>
+  <i style="background:#E6EDF7"></i><i style="background:#94A3B8"></i><i style="background:#34D399"></i><i style="background:#FBBF24"></i><i style="background:#F87171"></i>
+</div>
+</div>
+
+<script>
+function fit(){
+  var s = Math.min(window.innerWidth/1470, window.innerHeight/930);
+  var st = document.getElementById('stage');
+  if(st) st.style.transform = 'scale(' + (s>1?1:s) + ')';
+}
+window.addEventListener('resize', fit); window.addEventListener('orientationchange', fit); fit();
+
+function setT(t){
+  document.documentElement.dataset.theme = t;
+  document.getElementById('b-deep').classList.toggle('on', t==='deepspace');
+  document.getElementById('b-neb').classList.toggle('on', t==='nebula');
+  document.querySelector('.brand small').textContent = t==='deepspace' ? '· 深空苍穹' : '· 星空紫';
+  document.querySelector('.status span:last-child').previousElementSibling.textContent =
+    '主题：' + (t==='deepspace' ? '深空苍穹' : '星空紫');
+}
+</script>
+</body>
+</html>
