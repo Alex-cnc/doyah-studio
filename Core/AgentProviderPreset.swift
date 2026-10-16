@@ -73,7 +73,7 @@ public enum AgentProviderCatalog {
     public static let all: [AgentProviderPreset] = [
         AgentProviderPreset(id: "openai", labelKey: .agentProviderOpenAI, endpoint: "https://api.openai.com/v1", models: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"]),
         AgentProviderPreset(id: "anthropic", labelKey: .agentProviderAnthropic, endpoint: "https://api.anthropic.com/v1", models: ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"]),
-        AgentProviderPreset(id: "deepseek", labelKey: .agentProviderDeepSeek, endpoint: "https://api.deepseek.com/v1", models: ["deepseek-chat", "deepseek-reasoner"]),
+        AgentProviderPreset(id: "deepseek", labelKey: .agentProviderDeepSeek, endpoint: "https://api.deepseek.com/v1", models: ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"]),
         AgentProviderPreset(id: "qwen", labelKey: .agentProviderQwen, endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", models: ["qwen-max", "qwen-plus", "qwen-turbo", "qwen-long"]),
         AgentProviderPreset(id: "zhipu", labelKey: .agentProviderZhipu, endpoint: "https://open.bigmodel.cn/api/paas/v4", models: ["glm-4-plus", "glm-4-air", "glm-4-flash"]),
         AgentProviderPreset(id: "moonshot", labelKey: .agentProviderMoonshot, endpoint: "https://api.moonshot.cn/v1", models: ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"]),

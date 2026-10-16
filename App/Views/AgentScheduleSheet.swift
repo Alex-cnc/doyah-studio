@@ -114,8 +114,10 @@ struct AgentScheduleSheet: View {
                 ))
                 .labelsHidden()
                 .help(L(.dataTaskEnabled))
-                ToolbarIconButton(systemName: "pencil", help: L(.commonEdit)) { editing = entry }
-                ToolbarIconButton(systemName: "trash", help: L(.commonDelete)) {
+                // 同上：这是**面板里的行内操作**，走系统标准按钮（图标化只保留给主界面工具条）。
+                Button(L(.commonEdit)) { editing = entry }
+                    .buttonStyle(.borderless)
+                Button(L(.commonDelete)) {
                     Task { await appState.deleteAgentSchedule(id: entry.id) }
                 }
             }

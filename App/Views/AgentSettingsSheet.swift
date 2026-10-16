@@ -24,6 +24,9 @@ struct AgentSettingsSheet: View {
     @State private var maxTotalTokens = ""
     /// 新输入的 Key；为空表示「不改动已保存的 Key」。
     @State private var apiKeyInput = ""
+    /// 连接测试的结果行（`nil` = 还没测过）。
+    @State private var testLine: String?
+    @State private var isTesting = false
     @State private var clearAPIKey = false
     @State private var isLoaded = false
 
@@ -97,17 +100,42 @@ struct AgentSettingsSheet: View {
 
             statusSection
 
-            HStack {
+            // **这一块是"二次配置界面"，一律走 macOS 标准按钮**（人类主人 2026-10-16 订正：
+            // 「这些弹出对话框、二次配置界面还是标准的系统按钮和风格，主界面的工具条这些直接面对使用者的界面，
+            // 才考虑图标化」）—— 原先这里两枚纯图标按钮（叉 / 下载箭头）是理解偏差，已改回文字按钮。
+            HStack(spacing: 10) {
+                Button(L(.agentTestConnection)) {
+                    isTesting = true
+                    testLine = L(.agentTestRunning)
+                    Task {
+                        let result = await appState.testAgentConnection()
+                        switch result {
+                        case .passed(let model, let millis):
+                            testLine = L(.agentTestPassed, model, "\(millis)")
+                        case .failed(let reason):
+                            testLine = L(.agentTestFailed, reason)
+                        }
+                        isTesting = false
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(isTesting)
+
+                if let testLine {
+                    Text(testLine)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
                 Spacer()
 
-                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
-                    dismiss()
-                }
+                Button(L(.commonCancel)) { dismiss() }
+                    .buttonStyle(.bordered)
 
-                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.agentSave)) {
-                    save()
-                }
-                .keyboardShortcut(.defaultAction)
+                Button(L(.agentSave)) { save() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)

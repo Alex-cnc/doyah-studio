@@ -3630,6 +3630,44 @@ final class AppState: ObservableObject {
         await appendAgentAudit(record)
     }
 
+    // MARK: - 连接测试（人类主人 2026-10-16 要求：配置界面要有一个「测试」按钮）
+
+    /// 一次连接测试的结果：**两态如实分开**（通了给模型与用时；不通给原因原文），不合并成一个含混的结论。
+    enum AgentConnectionTest: Equatable {
+        case passed(model: String, millis: Int)
+        case failed(String)
+    }
+
+    /// 真发一次**最小的**模型往返（不是"假装试一下"）。
+    ///
+    /// 三条纪律：① 走**和 Agent 循环同一个**流式客户端与请求构造（不另起一套、不硬编码 URL）；
+    /// ② **不绕过闸门** —— 总开关关着 / 配置不完整 / 缺密钥时，这次请求会被既有判定挡下，错误原文如实回传
+    /// （测试**不等于**放行，它只是一次真实往返）；③ **不写会话留痕**（它不是对话内容）。
+    /// 如实登记：这条路与循环一样走**默认流式传输**，所以它**不进** `egress-log.jsonl`（那份日志记的是
+    /// 非流式传输那一条路）—— 配通没配通仍以 App 里的结果行为准。
+    func testAgentConnection() async -> AgentConnectionTest {
+        let configuration = agentConfiguration
+        guard let url = URL(string: configuration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)),
+              !configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .failed(L(.agentTestMisconfigured))
+        }
+        let request = LLMRequest(endpoint: url, model: configuration.model,
+                                 systemPrompt: "这是一次连接测试。", userPrompt: "回复两个字：收到。")
+        // 用**与 Agent 循环同一个**流式客户端（`AppState` 里那条循环也是这么造的），不另起一套。
+        let client = OpenAICompatibleStreamingClient()
+        let started = Date()
+        do {
+            let stream = try await client.stream(request)
+            for try await event in stream {
+                if case .done = event { break }
+            }
+            return .passed(model: configuration.model,
+                           millis: Int(Date().timeIntervalSince(started) * 1000))
+        } catch {
+            return .failed(ErrorPresenter.message(for: error))
+        }
+    }
+
     /// 把生成结果放进**新页签**的编辑器里（不覆盖用户正在写的内容，也不执行）。
     func openGeneratedSQLInNewTab(_ sql: String) {
         openSQLInNewTab(sql, status: L(.agentSQLNotExecuted))
