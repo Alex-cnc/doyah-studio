@@ -5990,6 +5990,75 @@ final class AppState: ObservableObject {
         return types
     }
 
+    // MARK: - 工作区文件监听（实时感知磁盘改动 ⇒ 页签重载）
+
+    /// 工作区文件监听（FSEvents 挂工作区根；来由见 `WorkspaceFileWatcher` 注释）。
+    private var workspaceWatcher: WorkspaceFileWatcher?
+    /// **磁盘已变、但页签里有未保存改动**的那些页签 —— 界面据此让人决定是否以磁盘为准（**不许悄悄覆盖**）。
+    @Published var diskChangedTabIDs: Set<UUID> = []
+
+    /// 开始监听（宿主设好工作区根之后调一次；换工作区再调一次）。
+    func startWorkspaceWatching(root: String) {
+        let watcher = workspaceWatcher ?? WorkspaceFileWatcher()
+        workspaceWatcher = watcher
+        watcher.start(root: root) { [weak self] paths in
+            Task { @MainActor in self?.handleDiskChanges(paths) }
+        }
+    }
+
+    func stopWorkspaceWatching() {
+        workspaceWatcher?.stop()
+        workspaceWatcher = nil
+    }
+
+    /// 磁盘变了一批路径：文件树刷新 + 开着这些文件的页签重载。
+    private func handleDiskChanges(_ paths: [String]) {
+        Task { await WorkspaceStore.shared.refresh() }
+        let changed = Set(paths)
+        for index in tabs.indices {
+            guard let url = tabs[index].fileURL, changed.contains(url.path) else { continue }
+            reloadTab(at: index, force: false)
+        }
+    }
+
+    /// 重载一个页签的正文（`force` = 人已表态"以磁盘为准"）。
+    ///
+    /// **有未保存改动就不覆盖** —— 只记进 `diskChangedTabIDs` 由界面问人：丢数据不可逆，
+    /// "编辑器看着没变"只是误会，两者不对等，所以这里一律站人这一边。
+    func reloadTab(at index: Int, force: Bool) {
+        guard tabs.indices.contains(index), let url = tabs[index].fileURL else { return }
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        let id = tabs[index].id
+        if text == tabs[index].sql {
+            // 内容没变（多半是**自己刚存的**触发的事件）⇒ 只清标记，不动正文。
+            diskChangedTabIDs.remove(id)
+            return
+        }
+        if tabs[index].isDirty && !force {
+            diskChangedTabIDs.insert(id)
+            statusMessage = L(.workspaceDiskChangedHint, url.lastPathComponent)
+            return
+        }
+        tabs[index].sql = text
+        tabs[index].isDirty = false
+        diskChangedTabIDs.remove(id)
+        statusMessage = L(.workspaceReloadedFromDisk, url.lastPathComponent)
+    }
+
+    /// 人确认「以磁盘为准重载这一页签」。
+    func reloadTabFromDisk(id: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        reloadTab(at: index, force: true)
+    }
+
+    /// 工作区根**之外**的文件按单文件监听（根之内的由整根监听覆盖，不用重复挂）。
+    private func noteOpenedFileForWatching(_ url: URL) {
+        guard let watcher = workspaceWatcher else { return }
+        let root = WorkspaceStore.shared.rootPath ?? ""
+        if !root.isEmpty, url.path.hasPrefix(root) { return }
+        watcher.watch(file: url.path)
+    }
+
     /// 打开系统面板选择 SQL / 文本文件，内容载入新页签（默认不绑定连接）。
     func openFileFromPanel() {
         let panel = NSOpenPanel()
@@ -6013,6 +6082,7 @@ final class AppState: ObservableObject {
             tabs.append(tab)
             selectedTabID = tab.id
             statusMessage = url.lastPathComponent
+            noteOpenedFileForWatching(url)
         } catch {
             errorMessage = L(.fileOpenFailed, error.localizedDescription)
         }

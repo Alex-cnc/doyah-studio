@@ -1677,6 +1677,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentScheduleNeverRun
     case agentScheduleDeleteConfirm
     case agentScheduleWithheld
+    case workspaceDiskChangedHint
+    case workspaceReloadedFromDisk
     case agentScheduleRunStarted
     case agentScheduleRunNotStarted
     case agentScheduleExecuted
@@ -3276,6 +3278,8 @@ public enum LocalizedStrings {
         .agentScheduleNeverRun: [.simplifiedChinese: "还没跑过", .english: "Never run"],
         .agentScheduleDeleteConfirm: [.simplifiedChinese: "删除这条定时？它的执行历史一并删掉。", .english: "Delete this schedule? Its run history goes with it."],
         .agentScheduleWithheld: [.simplifiedChinese: "被扣下 %d 条（未审批不执行）", .english: "%d held back (nothing runs without approval)"],
+        .workspaceDiskChangedHint: [.simplifiedChinese: "磁盘上「%@」已变，但这一页签有未保存改动 —— 已保留你的改动", .english: "「%@」 changed on disk, but this tab has unsaved edits — your edits were kept"],
+        .workspaceReloadedFromDisk: [.simplifiedChinese: "已按磁盘重载「%@」", .english: "Reloaded 「%@」 from disk"],
         .agentScheduleRunStarted: [.simplifiedChinese: "已起会话（这一跳；会话本身的成败见对话页签与审计）", .english: "Session started (this hop only — the session's own outcome lives in the chat tab and the audit)"],
         .agentScheduleRunNotStarted: [.simplifiedChinese: "没起来：没有可用会话（未打开工作区 / 端点未配 / 上一条还在跑）", .english: "Not started: no session was available (no workspace, no endpoint, or one is still running)"],
         .agentScheduleExecuted: [.simplifiedChinese: "执行了 %d 条", .english: "%d executed"],

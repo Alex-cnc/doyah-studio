@@ -129,6 +129,11 @@ struct DoyahStudioApp: App {
                         Task { await appState.refreshSQLArchiveStatus() }
                     }
                     appState.workspacePathProvider = { [workspace] in workspace.rootPath }
+                    // **工作区文件监听**（人类主人 2026-10-16 点名「工作区是实时加载或感知文件的修改重载的」）：
+                    // 助手 / 外部编辑器 / git 改的是磁盘，编辑器手里是内存正文 —— 没有它屏幕上是旧内容。
+                    if let root = workspace.rootPath, !root.isEmpty {
+                        appState.startWorkspaceWatching(root: root)
+                    }
                     // `FR-AI-27` 定时 agent 的接线：到点起的那一次会话**走手动那条路**（同一个 `AgentChatModel`）
                     // ⇒ 循环里的写 / 执行类动作仍逐次审批（`FR-AI-09` / `FR-AI-23`），定时不构成授权。
                     // 起不来（没打开工作区 / 工作区不是这一条的 / 端点没配 / 上一条还在跑）⇒ 如实回 false，
