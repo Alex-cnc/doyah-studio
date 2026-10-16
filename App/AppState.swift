@@ -3651,7 +3651,12 @@ final class AppState: ObservableObject {
               !configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .failed(L(.agentTestMisconfigured))
         }
+        // **踩过的坑（2026-10-16 实机 401）**：第一版这里漏了 `apiKey` ⇒ 发出去的是**裸请求**，
+        // 端点原样回 401，看上去像"用户的 key 不对"。密钥是靠 `LLMRequest.apiKey` 进 `Authorization` 头的
+        // （`LLMClient.swift` 里那一处唯一出口）—— 任何新造的请求都必须显式带上它，否则必然 401。
         let request = LLMRequest(endpoint: url, model: configuration.model,
+                                 apiKey: agentAPIKey,
+                                 timeoutSeconds: configuration.timeoutSeconds,
                                  systemPrompt: "这是一次连接测试。", userPrompt: "回复两个字：收到。")
         // 用**与 Agent 循环同一个**流式客户端（`AppState` 里那条循环也是这么造的），不另起一套。
         let client = OpenAICompatibleStreamingClient()
