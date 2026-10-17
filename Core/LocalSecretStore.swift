@@ -313,11 +313,14 @@ public final class FileSecretStore: SecretStore, @unchecked Sendable {
 
 /// 智能体 API Key 的文件形态存储（同上，单条目）。
 public final class FileAgentKeyStore: AgentKeyStore, @unchecked Sendable {
-    private let entryKey = "agent.api-key"
+    /// 缺省条目键（**老单档**用；从老配置迁移来的档 `secretKey` 也是它 ⇒ 已存的 key 仍读得回来）。
+    public static let defaultEntryKey = "agent.api-key"
+    private let entryKey: String
     private let fileURLs: [URL]
     private let lock = NSLock()
 
-    public init(fileURL: URL? = nil) {
+    public init(fileURL: URL? = nil, entryKey: String = FileAgentKeyStore.defaultEntryKey) {
+        self.entryKey = entryKey
         if let fileURL {
             self.fileURLs = [fileURL]
         } else {

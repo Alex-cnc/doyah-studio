@@ -2814,7 +2814,25 @@ final class AppState: ObservableObject {
 
     /// 保存智能体配置；`apiKey` 传 `nil` 表示不改动已保存的 Key，传空串表示清除。
     @discardableResult
-    func saveAgentConfiguration(_ configuration: AgentConfiguration, apiKey: String?) async -> Bool {
+    func saveAgentConfiguration(_ incoming: AgentConfiguration, apiKey: String?) async -> Bool {
+        // **多档（`FR-AI-32`）不许被"保存一次"吃掉**：面板这一版只编辑**当前档**（多档编辑面在下一笔），
+        // 它交上来的是一个"单档形状"的草稿 ⇒ 在这里把**别档原样留住**，只更新当前档那一格，
+        // 再取草稿的全局三格（总开关 / 配额 / 护栏）。留住别档是宿主（真值持有者）的责任，不是面板的。
+        var configuration = incoming
+        if let edited = incoming.activeProfile, let existing = agentConfiguration.activeProfile {
+            var merged = existing
+            merged.name = edited.name
+            merged.presetID = edited.presetID
+            merged.endpoint = edited.endpoint
+            merged.model = edited.model
+            merged.timeoutSeconds = edited.timeoutSeconds
+            configuration = agentConfiguration
+            configuration.updateProfile(merged)
+            configuration.isEnabled = incoming.isEnabled
+            configuration.quota = incoming.quota
+            configuration.guardPolicy = incoming.guardPolicy
+        }
+
         do {
             try await agentConfigurationStore.save(configuration)
             agentConfiguration = configuration

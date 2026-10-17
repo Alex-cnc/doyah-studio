@@ -1,5 +1,45 @@
 import Foundation
 
+/// 一个**模型档**（`FR-AI-32` 模型多档配置与切换）。
+///
+/// 为什么要有档：一个用户手上通常不止一个模型（本地 Ollama 跑便宜活、云端跑难活；写作一个、代码一个）
+/// —— 从前只能配一组 `endpoint` / `model`，换一次就得把上一组**擦掉**。
+///
+/// **密钥不进这里**：档里只存**钥匙串条目键名**（`secretKey`），密钥本体永远在钥匙串
+/// （与 `FR-AI-01` 的「配置里没有 API Key 字段」同一条纪律）。
+public struct AgentProfile: Codable, Equatable, Sendable, Identifiable {
+
+    public var id: String
+    /// 给人看的名字（界面可直接用；从老单档迁移来的档名是 ASCII 的 `default` —— Core 不写汉字字面量）。
+    public var name: String
+    /// 提供商预设 id（`AgentProviderPreset`；`nil` = 手工填的）。
+    public var presetID: String?
+    public var endpoint: String
+    public var model: String
+    public var timeoutSeconds: TimeInterval
+    /// 钥匙串条目键（**只存键名**）。
+    public var secretKey: String
+
+    public init(id: String = UUID().uuidString, name: String, presetID: String? = nil,
+                endpoint: String = "", model: String = "",
+                timeoutSeconds: TimeInterval = AgentConfiguration.defaultTimeoutSeconds,
+                secretKey: String? = nil) {
+        self.id = id
+        self.name = name
+        self.presetID = presetID
+        self.endpoint = endpoint
+        self.model = model
+        self.timeoutSeconds = timeoutSeconds
+        self.secretKey = secretKey ?? AgentProfile.defaultSecretKey(for: id)
+    }
+
+    /// 新建档的钥匙串条目键（**一档一把，互不覆盖**）。
+    public static func defaultSecretKey(for id: String) -> String { "agent.api-key.\(id)" }
+
+    /// **从老单档迁移出来的那一档**沿用的旧条目键 —— 保证用户**已经存过的 key 仍读得回来**。
+    public static let legacySecretKey = "agent.api-key"
+}
+
 /// 智能体接入配置（FR-AI-01）。
 ///
 /// 设计要点：
@@ -12,12 +52,26 @@ public struct AgentConfiguration: Codable, Equatable, Sendable {
 
     /// 总开关（FR-AI-01）。关闭时**零外发**，与端点 / 模型 / 密钥是否配好无关。
     public var isEnabled: Bool
-    /// OpenAI 兼容端点，例如 `http://127.0.0.1:11434/v1`（Ollama）、`https://api.example.com/v1`。
-    public var endpoint: String
-    /// 模型名，例如 `qwen2.5:7b`、`gpt-4o-mini`。
-    public var model: String
-    /// 单次请求超时（秒）。
-    public var timeoutSeconds: TimeInterval
+    /// **模型档清单**（`FR-AI-32`）：**至少一档**，不许为空（空 = 没有可用的配置）。
+    public var profiles: [AgentProfile]
+    /// 当前档的 id。指不到（被删 / 老文件里没写）时**退回第一档**（自愈，不留"没有当前档"这种状态）。
+    public var activeProfileID: String?
+
+    /// 当前档。
+    public var activeProfile: AgentProfile? {
+        if let id = activeProfileID, let hit = profiles.first(where: { $0.id == id }) { return hit }
+        return profiles.first
+    }
+
+    /// OpenAI 兼容端点（**当前档的镜像，只读**）。
+    ///
+    /// 为什么是计算属性而不是再存一份：**单一真值源** —— 存两份必然漂移（改了档不改镜像、或反过来）。
+    /// 全仓没有第二处写这三个字段（写入只经档的增删改 `updateProfile` / `addProfile`）。
+    public var endpoint: String { activeProfile?.endpoint ?? "" }
+    /// 模型名（当前档的镜像，只读）。
+    public var model: String { activeProfile?.model ?? "" }
+    /// 单次请求超时（当前档的镜像，只读）。
+    public var timeoutSeconds: TimeInterval { activeProfile?.timeoutSeconds ?? Self.defaultTimeoutSeconds }
     /// 成本与配额（NFR-AI-04）。
     public var quota: AgentQuota
     /// 审批 / 护栏策略（FR-AI-09、FR-AI-12）：只读模式与白名单。
@@ -32,21 +86,32 @@ public struct AgentConfiguration: Codable, Equatable, Sendable {
         model: String = "",
         timeoutSeconds: TimeInterval = AgentConfiguration.defaultTimeoutSeconds,
         quota: AgentQuota = AgentQuota(),
-        guardPolicy: AgentGuardPolicy = .readOnlyDefault
+        guardPolicy: AgentGuardPolicy = .readOnlyDefault,
+        profiles: [AgentProfile]? = nil,
+        activeProfileID: String? = nil
     ) {
         self.isEnabled = isEnabled
-        self.endpoint = endpoint
-        self.model = model
-        self.timeoutSeconds = timeoutSeconds
         self.quota = quota
         self.guardPolicy = guardPolicy
+        // 老形状（只给端点 / 模型 / 超时）⇒ **包成第一档**，沿用旧条目键（key 不丢）。
+        let list = profiles ?? [AgentProfile(id: "default", name: "default",
+                                             endpoint: endpoint, model: model,
+                                             timeoutSeconds: timeoutSeconds,
+                                             secretKey: AgentProfile.legacySecretKey)]
+        self.profiles = list.isEmpty
+            ? [AgentProfile(id: "default", name: "default", secretKey: AgentProfile.legacySecretKey)]
+            : list
+        self.activeProfileID = activeProfileID ?? self.profiles.first?.id
     }
 
     private enum CodingKeys: String, CodingKey {
         case isEnabled
+        // 老字段（**只用于解码**：迁移成第一档；新文件不再写它们 —— 免得两个真值源）。
         case endpoint
         case model
         case timeoutSeconds
+        case profiles
+        case activeProfileID
         case quota
         case guardPolicy
     }
@@ -59,13 +124,71 @@ public struct AgentConfiguration: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false
-        self.endpoint = try container.decodeIfPresent(String.self, forKey: .endpoint) ?? ""
-        self.model = try container.decodeIfPresent(String.self, forKey: .model) ?? ""
-        self.timeoutSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .timeoutSeconds)
+        // **迁移**：老 `agent.json` 只有一组端点 / 模型 ⇒ 原地变成第 1 档（id `default`），
+        // 并**沿用旧条目键** `agent.api-key` —— 用户已存的密钥一个字都不用重填。
+        let legacyEndpoint = try container.decodeIfPresent(String.self, forKey: .endpoint) ?? ""
+        let legacyModel = try container.decodeIfPresent(String.self, forKey: .model) ?? ""
+        let legacyTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .timeoutSeconds)
             ?? AgentConfiguration.defaultTimeoutSeconds
+        let decodedProfiles = try container.decodeIfPresent([AgentProfile].self, forKey: .profiles) ?? []
+        if decodedProfiles.isEmpty {
+            let migrated = AgentProfile(id: "default", name: "default",
+                                        endpoint: legacyEndpoint, model: legacyModel,
+                                        timeoutSeconds: legacyTimeout,
+                                        secretKey: AgentProfile.legacySecretKey)
+            self.profiles = [migrated]
+            self.activeProfileID = migrated.id
+        } else {
+            self.profiles = decodedProfiles
+            let stored = try container.decodeIfPresent(String.self, forKey: .activeProfileID)
+            self.activeProfileID = (stored.flatMap { id in decodedProfiles.contains { $0.id == id } ? id : nil })
+                ?? decodedProfiles.first?.id
+        }
         self.quota = try container.decodeIfPresent(AgentQuota.self, forKey: .quota) ?? AgentQuota()
         self.guardPolicy = (try container.decodeIfPresent(AgentGuardPolicy.self, forKey: .guardPolicy)
             ?? .readOnlyDefault).sanitized
+    }
+
+    /// 手写编码：**只写新形状**（`profiles` + `activeProfileID`），不写老镜像字段 ——
+    /// 两个真值源必然漂移（第十二条：不许自己发明口径）。代价如实登记：**老构建读新文件会看到空端点**。
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(isEnabled, forKey: .isEnabled)
+        try container.encode(profiles, forKey: .profiles)
+        try container.encodeIfPresent(activeProfileID, forKey: .activeProfileID)
+        try container.encode(quota, forKey: .quota)
+        try container.encode(guardPolicy, forKey: .guardPolicy)
+    }
+
+    // MARK: - 档的增删改（写入的唯一入口）
+
+    /// 改某一档（改不到就什么都不做 —— **不静默造一个新档**）。
+    public mutating func updateProfile(_ profile: AgentProfile) {
+        guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else { return }
+        profiles[index] = profile
+    }
+
+    /// 加一档（默认切过去）。
+    public mutating func addProfile(_ profile: AgentProfile, makeActive: Bool = true) {
+        profiles.append(profile)
+        if makeActive { activeProfileID = profile.id }
+    }
+
+    /// 删一档。**至少留一档**（删到空 ⇒ 拒绝，返回 `false`）—— 没有档 = 没有可用的配置。
+    @discardableResult
+    public mutating func removeProfile(id: String) -> Bool {
+        guard profiles.count > 1, let index = profiles.firstIndex(where: { $0.id == id }) else { return false }
+        profiles.remove(at: index)
+        if activeProfileID == id { activeProfileID = profiles.first?.id }
+        return true
+    }
+
+    /// 切档（切到不存在的档 ⇒ 拒绝）。
+    @discardableResult
+    public mutating func setActiveProfile(id: String) -> Bool {
+        guard profiles.contains(where: { $0.id == id }) else { return false }
+        activeProfileID = id
+        return true
     }
 
     /// 默认超时（秒）。
