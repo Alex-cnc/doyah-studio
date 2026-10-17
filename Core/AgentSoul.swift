@@ -169,16 +169,23 @@ public enum AgentSoul {
         return try? String(contentsOf: url, encoding: .utf8)
     }
 
+    /// 工作区名可能写成 `~/dev`（人类主人的口径就是波浪号）——
+    /// `URL(fileURLWithPath:)` **不展开 `~`**（会当成一个叫 `~` 的相对目录），所以这里先展开。
+    public static func expandedPath(_ path: String) -> String {
+        (path as NSString).expandingTildeInPath
+    }
+
     /// 从工作区读 L1 正文（`<workspace>/.doyah/soul-role.md`）。取不到 ⇒ `nil`。
     public static func roleText(workspacePath: String) -> String? {
-        let url = URL(fileURLWithPath: workspacePath).appendingPathComponent(roleRelativePath)
+        let url = URL(fileURLWithPath: expandedPath(workspacePath))
+            .appendingPathComponent(roleRelativePath)
         return try? String(contentsOf: url, encoding: .utf8)
     }
 
     /// 一次性组装（App 侧调这一个）。
     public static func load(workspacePath: String, bundle: Bundle = .main) -> AgentSoulComposition {
         let corePath = "\(bundle.bundlePath)/Contents/Resources/\(coreFileName)"
-        let rolePath = URL(fileURLWithPath: workspacePath)
+        let rolePath = URL(fileURLWithPath: expandedPath(workspacePath))
             .appendingPathComponent(roleRelativePath).path
         let core = inspect(coreText(bundle: bundle), kind: .core, path: corePath)
         let role = inspect(roleText(workspacePath: workspacePath), kind: .role, path: rolePath)

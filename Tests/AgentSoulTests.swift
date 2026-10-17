@@ -89,4 +89,13 @@ final class AgentSoulTests: XCTestCase {
         XCTAssertFalse(layer!.text.hasPrefix("# "), "层正文不该以一级标题开头")
         XCTAssertTrue(layer!.text.contains("人类最忠诚的伙伴"))
     }
+
+    /// ⑦ 工作区名写成 `~/dev` 时必须展开成家目录（`URL(fileURLWithPath:)` 不会自己展开 `~`）。
+    func testTildeWorkspacePathIsExpanded() {
+        let expanded = AgentSoul.expandedPath("~/dev")
+        XCTAssertEqual(expanded, NSHomeDirectory() + "/dev")
+        XCTAssertFalse(expanded.hasPrefix("~"), "波浪号不许留到路径里")
+        // 已经是绝对路径的不许被动过
+        XCTAssertEqual(AgentSoul.expandedPath("/Users/alex/dev"), "/Users/alex/dev")
+    }
 }
