@@ -2928,7 +2928,8 @@ final class AppState: ObservableObject {
                                  timeoutSeconds: agentConfiguration.timeoutSeconds,
                                  systemPrompt: systemPrompt,
                                  userPrompt: prompt)
-        let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath))
+        let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath),
+                                               harmStopLog: .default)
         // 六个 MVP 工具**全接上**（`FR-AI-20` ①）：
         // · 工作区五个（读 / 列目录 / 搜 / 写 / 跑命令）⇒ `AgentWorkspaceTools` + 真起进程的 `AgentLocalCommandRunner`；
         // · 查库（`query_db`）⇒ `AgentDatabaseTool` + 挂在**当前连接**上的 `AgentConnectionQueryExecutor`
@@ -3008,7 +3009,8 @@ final class AppState: ObservableObject {
         guard let fingerprint = card.approvalFingerprint,
               let arguments = AgentToolArguments.parse(card.arguments),
               let definition = AgentToolRegistry.standard.definition(named: card.name) else { return false }
-        let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath))
+        let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath),
+                                               harmStopLog: .default)
         // ① 写文件那一档（`FR-AI-23` ④）。
         let outcome = tools.writeFile(path: arguments["path"] ?? "",
                                       content: arguments["content"] ?? "",

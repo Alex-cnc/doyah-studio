@@ -23,6 +23,9 @@ public enum AgentToolRefusal: String, Codable, Equatable, Sendable {
     case commandNotAllowed
     /// 没批准就想落盘 / 执行（`FR-AI-20` ③④⑤）。
     case approvalRequired
+    /// **伤害性动作被刹停**（`FR-AI-34`）：不进审批队列、不执行，**立刻停并告诉你**。
+    /// 与 `deniedByPolicy` 分开：那条是"此刻策略不许"，这条是"这事本身有害"。
+    case harmStopped
 }
 
 /// 读文件的输出（结构化 ⇒ 截断**可被断言**，不必靠人话里那句提示）。
@@ -131,13 +134,17 @@ public struct AgentWorkspaceTools: Sendable {
     public var maxReadBytes: Int
     /// 列目录的上限。
     public var maxDirectoryEntries: Int
+    /// 停手记录（`FR-AI-34`）：给了就把每次刹停留痕；不给（单测）就不写文件。
+    public var harmStopLog: AgentHarmStopLog?
 
     public init(root: URL, registry: AgentToolRegistry = .standard,
-                maxReadBytes: Int = 262_144, maxDirectoryEntries: Int = 500) {
+                maxReadBytes: Int = 262_144, maxDirectoryEntries: Int = 500,
+                harmStopLog: AgentHarmStopLog? = nil) {
         self.root = root
         self.registry = registry
         self.maxReadBytes = maxReadBytes
         self.maxDirectoryEntries = maxDirectoryEntries
+        self.harmStopLog = harmStopLog
     }
 
     // MARK: - read_file
@@ -373,6 +380,15 @@ public struct AgentWorkspaceTools: Sendable {
     public func prepareCommand(_ command: String, tool: AgentToolDefinition? = nil,
                                guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false),
                                policy: AgentCommandPolicy = .standard) -> AgentToolOutcome {
+        // **「忠」的第一道：伤害性动作及时刹停**（`FR-AI-34`）。
+        // 放在**最前**，先于只读闸门、先于白名单、先于审批：
+        // · 有害就是有害，与"此刻是不是只读模式"无关；
+        // · **不建审批单** —— 不是"排队等批"，而是连单都不给（L0：不等指令、不打折扣、不给自己找"这次例外"）；
+        // · 顺手留一条停手记录（"我没做过什么"要能被查）。
+        if let signal = AgentHarmStop.inspect(command: command) {
+            harmStopLog?.record(signal)
+            return .refused(.harmStopped, detail: "\(signal.category.rawValue):\(signal.marker)")
+        }
         // ⑥ 只读模式下执行类工具**连审批单都建不出来**
         guard !guardPolicy.readOnly else {
             return .refused(.deniedByPolicy, detail: AgentToolLevel.executable.rawValue)

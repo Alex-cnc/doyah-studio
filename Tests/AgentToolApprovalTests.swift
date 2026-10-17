@@ -101,10 +101,22 @@ final class AgentToolApprovalTests: XCTestCase {
         } else { XCTFail("工作区外连审批单都不该建") }
     }
 
+    /// 伤害性命令的拒因**先于**白名单判定（`FR-AI-34`：有害就是有害，与策略无关）——
+    /// 故 `rm -rf` 这类拿到的是 `.harmStopped` 而非 `.commandNotAllowed`（2026-10-17 起的行为变更）。
+    func testHarmfulCommandsAreRefusedAsHarmStopNotAsAllowlistMiss() {
+        for command in ["rm -rf /", "cat a.txt; rm -rf /"] {
+            if case .refused(let code, _) = tools.prepareCommand(command) {
+                XCTAssertEqual(code, .harmStopped, "\(command) 应当被刹停闸门挡下")
+            } else {
+                XCTFail("\(command) 不该通过")
+            }
+        }
+    }
+
     // MARK: - ④ 命令白名单 + 工作目录沙箱 + 未审批不执行
 
     func testNonWhitelistedCommandsAndControlCharactersAreRefused() {
-        for command in ["rm -rf /", "sh -c ls", "/bin/ls", "sed -i s/a/b/ target.txt", "cat a.txt; rm -rf /",
+        for command in ["sh -c ls", "/bin/ls", "sed -i s/a/b/ target.txt",
                         "cat a.txt | grep x", "echo hi > out.txt", "ls `whoami`"] {
             if case .refused(let code, _) = tools.prepareCommand(command) {
                 XCTAssertEqual(code, .commandNotAllowed, "\(command) 应当被白名单/词法挡下")
