@@ -50,8 +50,16 @@ public enum AgentSystemPrompt {
                              workspacePath: String,
                              references: [AgentContextReference],
                              limits: AgentContextLimits = AgentContextLimits(),
-                             tools: [AgentToolDefinition] = AgentToolRegistry.standard.definitions) -> String {
-        var parts: [String] = [base(model: model, endpoint: endpoint, tools: tools)]
+                             tools: [AgentToolDefinition] = AgentToolRegistry.standard.definitions,
+                             soul: AgentSoulComposition? = nil) -> String {
+        // **灵魂是固定层，排在最前**（`FR-AI-34`）：L0 与 L1 的任何要求都不得被后面各段相抵。
+        // 不给 = 这一路调用没有灵魂（既有测试不必改）；给了就必须完整可用（缺项由 `AgentSoul.compose` 如实写进文本）。
+        var parts: [String] = []
+        if let soul {
+            parts.append(soul.section)
+            parts.append("")
+        }
+        parts.append(base(model: model, endpoint: endpoint, tools: tools))
         parts.append("")
         parts.append("【工作区】\(workspacePath)")
         if !references.isEmpty {

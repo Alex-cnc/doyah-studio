@@ -218,6 +218,11 @@ fi
 # 打出来的包里一张壁纸都没有，而 App 侧有兜底（取不到图就退回主题纯色）**不会崩**，
 # 只是"功能静默消失"——正是那种只靠人工点验才看得见、判据全绿也拦不住的漏。
 # 因此这里**数一遍**：盘上有几张就必须进包几张；一张都没有 ⇒ 直接报错退出（不许静默出一个没壁纸的包）。
+# 灵魂 L0（2026-10-17）：`Core/AgentSoul.swift` 按**文件名**从包内 `Contents/Resources/soul-L0.md` 读；
+# 与壁纸同理 —— 放盘上不等于进包（`Resources` 整目录被 SwiftPM exclude），**这里点名拷贝**，缺了直接报错。
+SOUL="${ROOT}/App/Resources/soul-L0.md"
+if [ ! -f "${SOUL}" ]; then echo "❌ 灵魂文件缺失：${SOUL}（App 会如实报 L0 未载入，但不许就这么出包）" >&2; exit 1; fi
+cp "${SOUL}" "${APP}/Contents/Resources/soul-L0.md"
 WALLPAPERS=$(ls "${ROOT}"/App/Resources/wallpaper-*.jpg 2>/dev/null || true)
 if [ -z "${WALLPAPERS}" ]; then
   echo "错误：${ROOT}/App/Resources 里没有 wallpaper-*.jpg —— 壁纸皮肤会静默失效（值表见 Core/WallpaperSkin.swift）" >&2

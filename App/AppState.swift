@@ -2915,9 +2915,13 @@ final class AppState: ObservableObject {
         if !memoryRead.entries.isEmpty {
             references.append(contentsOf: AgentMemoryContext.references(from: memoryRead.entries, now: Date()))
         }
+        // 灵魂（`FR-AI-34`）：L0 读包内 `soul-L0.md`、L1 读 `<工作区>/.doyah/soul-role.md`；
+        // 缺项由 `AgentSoul.compose` **如实写进提示词**（不静默当没有），缺 L0 属缺陷。
+        let soul = AgentSoul.load(workspacePath: workspacePath)
         let systemPrompt = AgentSystemPrompt.build(model: model, endpoint: endpoint,
                                                    workspacePath: workspacePath,
-                                                   references: references)
+                                                   references: references,
+                                                   soul: soul)
         let request = LLMRequest(endpoint: url,
                                  model: model,
                                  apiKey: agentAPIKey,
