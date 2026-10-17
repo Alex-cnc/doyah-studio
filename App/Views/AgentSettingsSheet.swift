@@ -29,6 +29,8 @@ struct AgentSettingsSheet: View {
     @State private var isTesting = false
     @State private var clearAPIKey = false
     @State private var isLoaded = false
+    /// 授权粒度（`FR-AI-34`）：任务范围内代签 = 少问；每个动作都问 = 老行为。
+    @State private var scopeMode: AgentTaskScope.Mode = .taskScope
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -77,6 +79,18 @@ struct AgentSettingsSheet: View {
                     TextField(L(.agentMaxRequests), text: $maxRequests)
                     TextField(L(.agentMaxOutputTokens), text: $maxOutputTokens)
                     TextField(L(.agentMaxTotalTokens), text: $maxTotalTokens)
+                }
+
+                Section(L(.agentScopeSection)) {
+                    Picker(L(.agentScopeSection), selection: $scopeMode) {
+                        Text(L(.agentScopeTaskScope)).tag(AgentTaskScope.Mode.taskScope)
+                        Text(L(.agentScopeAskEach)).tag(AgentTaskScope.Mode.askEachAction)
+                    }
+                    .pickerStyle(.radioGroup)
+                    .labelsHidden()
+                    Text(L(.agentScopeFootnote))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section(L(.agentAPIKey)) {
@@ -157,6 +171,7 @@ struct AgentSettingsSheet: View {
             maxRequests = configuration.quota.maxRequestsPerSession.map(String.init) ?? ""
             maxOutputTokens = configuration.quota.maxOutputTokensPerRequest.map(String.init) ?? ""
             maxTotalTokens = configuration.quota.maxTotalTokens.map(String.init) ?? ""
+            scopeMode = configuration.scopeMode
         }
     }
 
@@ -229,7 +244,9 @@ struct AgentSettingsSheet: View {
             // **护栏策略不许省略**（本面板没有它的编辑面）：省略就是拿 `.readOnlyDefault` 覆写，
             // 会把用户在「审批与审计」面板里设的只读模式与白名单一起抹掉 ——
             // `AgentConfigurationStore.save` 是**整份覆写**、不做字段合并（L-146 顺带修）。
-            guardPolicy: appState.agentConfiguration.guardPolicy
+            guardPolicy: appState.agentConfiguration.guardPolicy,
+            // 授权粒度（`FR-AI-34`）：默认 `.taskScope`（少问）；设置里可改回逐次批。
+            scopeMode: scopeMode
         )
     }
 

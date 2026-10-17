@@ -72,6 +72,8 @@ public struct AgentConfiguration: Codable, Equatable, Sendable {
     public var model: String { activeProfile?.model ?? "" }
     /// 单次请求超时（当前档的镜像，只读）。
     public var timeoutSeconds: TimeInterval { activeProfile?.timeoutSeconds ?? Self.defaultTimeoutSeconds }
+    /// 授权粒度（`FR-AI-34`）：任务范围内代签 / 每个动作都问。
+    public var scopeMode: AgentTaskScope.Mode
     /// 成本与配额（NFR-AI-04）。
     public var quota: AgentQuota
     /// 审批 / 护栏策略（FR-AI-09、FR-AI-12）：只读模式与白名单。
@@ -87,12 +89,14 @@ public struct AgentConfiguration: Codable, Equatable, Sendable {
         timeoutSeconds: TimeInterval = AgentConfiguration.defaultTimeoutSeconds,
         quota: AgentQuota = AgentQuota(),
         guardPolicy: AgentGuardPolicy = .readOnlyDefault,
+        scopeMode: AgentTaskScope.Mode = .taskScope,
         profiles: [AgentProfile]? = nil,
         activeProfileID: String? = nil
     ) {
         self.isEnabled = isEnabled
         self.quota = quota
         self.guardPolicy = guardPolicy
+        self.scopeMode = scopeMode
         // 老形状（只给端点 / 模型 / 超时）⇒ **包成第一档**，沿用旧条目键（key 不丢）。
         let list = profiles ?? [AgentProfile(id: "default", name: "default",
                                              endpoint: endpoint, model: model,
@@ -113,6 +117,7 @@ public struct AgentConfiguration: Codable, Equatable, Sendable {
         case profiles
         case activeProfileID
         case quota
+        case scopeMode
         case guardPolicy
     }
 
@@ -145,6 +150,9 @@ public struct AgentConfiguration: Codable, Equatable, Sendable {
                 ?? decodedProfiles.first?.id
         }
         self.quota = try container.decodeIfPresent(AgentQuota.self, forKey: .quota) ?? AgentQuota()
+        // 授权粒度（`FR-AI-34`）：缺省 = 任务范围内代签（少问）；想回到逐次批就设成 askEachAction。
+        self.scopeMode = (try container.decodeIfPresent(AgentTaskScope.Mode.self, forKey: .scopeMode)
+            ?? .taskScope)
         self.guardPolicy = (try container.decodeIfPresent(AgentGuardPolicy.self, forKey: .guardPolicy)
             ?? .readOnlyDefault).sanitized
     }

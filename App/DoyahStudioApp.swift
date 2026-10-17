@@ -106,6 +106,8 @@ struct DoyahStudioApp: App {
                 .onAppear {
                     // 对话页签的接线（`FR-AI-25`）：端点状态取自智能体设置；循环与「兑现批准」都由 `AppState` 出。
                     agentChat.endpointProvider = { appState.agentChatEndpointState }
+                    // 授权粒度（`FR-AI-34`）：默认任务范围内代签（少问）；设置里可改回逐次批。
+                    agentChat.scopeProvider = { appState.agentConfiguration.scopeMode }
                     agentChat.makeLoop = { prompt, observer in
                         guard let rootPath = workspace.rootPath else { return nil }
                         // `await`：建循环时会现取一次本次上下文（`FR-AI-22` 的表结构摘要），那是 IO。

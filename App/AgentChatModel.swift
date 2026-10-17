@@ -23,6 +23,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     var makeLoop: ((String, any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)?)?
     /// 宿主注入：真正把一次批准**兑现**（写盘 / 跑命令）。返回是否成功。
     var applyApproval: ((AgentToolCard) async -> Bool)?
+    /// 宿主注入：授权粒度（`FR-AI-34`）。缺省 = 任务范围内代签；设成 `.askEachAction` 就回到每个动作都问。
+    var scopeProvider: () -> AgentTaskScope.Mode = { .taskScope }
     /// 宿主注入：端点状态（界面出现 / 设置改过之后取一次）。
     var endpointProvider: () -> AgentChatEndpointState = { .notConfigured }
 
@@ -108,6 +110,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     func send() async {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
+        // 授权粒度按设置走（**每次开跑前定一次**：本轮中途不换口径，免得一半问一半不问）。
+        state.taskScope = AgentTaskScope(mode: scopeProvider())
         state.beginRun(prompt: prompt)
         guard state.isRunning else { return }   // 不能发时 `beginRun` 已如实出提示，这里不许往下走
         cancellation.reset()

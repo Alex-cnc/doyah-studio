@@ -154,6 +154,12 @@ public struct AgentChatState: Equatable, Sendable {
     public var isRunning: Bool
     /// 已批准的指纹（**按次**：批准一次只能兑现一次，兑现后从集合里移走）。
     public var grants: Set<String>
+    /// 授权粒度（`FR-AI-34`）：默认「任务范围内代签」，受保护路径与超上限转人工。
+    /// 设成 `.askEach` 就回到"每个动作都问"的老行为。
+    /// **Core 默认仍是逐次批**（不改既有语义、不动老判据）；由宿主按用户设置切成 `.taskScope`。
+    public var taskScope: AgentTaskScope = .askEach
+    /// 本轮**代签**过的动作（事后可审；与 `grants` 不同：`grants` 会被 `markApplied` 用掉，这里永久留痕）。
+    public private(set) var autoApprovals: [AgentAutoApproval] = []
 
     public init(messages: [AgentChatMessage] = [], cards: [AgentToolCard] = [],
                 steps: [AgentChatStep] = [],
@@ -302,16 +308,40 @@ public struct AgentChatState: Equatable, Sendable {
         cards[index].outcome = .denied(reason)
     }
 
+    /// 一条**代签**记录（"我没问就做了"要能被查、被推翻）。
+    public struct AgentAutoApproval: Equatable, Sendable {
+        public var tool: String
+        public var fingerprint: String
+        public var preview: String
+        public var reason: String
+    }
+
     // MARK: - 审批（④）
 
     /// 某个写 / 执行工具要审批 —— **批准之前先把要改什么摆出来**。
     @discardableResult
     public mutating func requestApproval(name: String, fingerprint: String, preview: String) -> UUID {
-        let card = AgentToolCard(name: name, arguments: preview,
-                                 outcome: .pendingApproval(fingerprint: fingerprint, preview: preview),
-                                 expanded: true)
-        cards.append(card)
-        return card.id
+        // **任务范围内代签**（`FR-AI-34`）：用户说一句"把这个修好"，不该再被问二十次。
+        // 代签**不绕过护栏** —— 沙箱与伤害刹停都在工具层更早生效；这里只是"这一步要不要人手点一下"。
+        // 代签必须**可见可审**：卡片建出来就是已批态，另记一条 `autoApprovals`（理由带出处）。
+        switch AgentScopeGate.judge(tool: name, preview: preview,
+                                    autoApprovedCount: autoApprovals.count, scope: taskScope) {
+        case .autoApproved(let reason):
+            let card = AgentToolCard(name: name, arguments: preview,
+                                     outcome: .approved(fingerprint: fingerprint, preview: preview),
+                                     expanded: false)
+            cards.append(card)
+            grants.insert(fingerprint)
+            autoApprovals.append(AgentAutoApproval(tool: name, fingerprint: fingerprint,
+                                                   preview: preview, reason: reason))
+            return card.id
+        case .needsHuman:
+            let card = AgentToolCard(name: name, arguments: preview,
+                                     outcome: .pendingApproval(fingerprint: fingerprint, preview: preview),
+                                     expanded: true)
+            cards.append(card)
+            return card.id
+        }
     }
 
     /// 批准（**只加一条按次授权**；应用是另一步 —— 见 `markApplied`）。

@@ -1472,6 +1472,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentModel
     case agentModelPlaceholder
     case agentTimeout
+    case agentScopeSection
+    case agentScopeTaskScope
+    case agentScopeAskEach
+    case agentScopeFootnote
     case agentQuotaSection
     case agentMaxRequests
     case agentMaxOutputTokens
@@ -3858,6 +3862,10 @@ public enum LocalizedStrings {
         .agentModel: [.simplifiedChinese: "模型名", .english: "Model"],
         .agentModelPlaceholder: [.simplifiedChinese: "qwen2.5:7b", .english: "gpt-4o-mini"],
         .agentTimeout: [.simplifiedChinese: "超时（秒）", .english: "Timeout (seconds)"],
+        .agentScopeSection: [.simplifiedChinese: "授权粒度", .english: "Approval granularity"],
+        .agentScopeTaskScope: [.simplifiedChinese: "任务范围内自动放行（少问）", .english: "Auto-approve within the task (fewer prompts)"],
+        .agentScopeAskEach: [.simplifiedChinese: "每个动作都问我", .english: "Ask me for every action"],
+        .agentScopeFootnote: [.simplifiedChinese: "自动放行只覆盖工作区内的写与命令；受保护路径（.git / .secrets / 灵魂文件等）、超上限、以及任何伤害性动作仍然会停下来问你。每次自动放行都留痕可查。", .english: "Auto-approval covers writes and commands inside the workspace only. Protected paths (.git / .secrets / soul files), over-limit, and anything harmful still stop and ask. Every auto-approval is recorded."],
         .agentQuotaSection: [.simplifiedChinese: "配额（留空表示不限）", .english: "Quota (blank means unlimited)"],
         .agentMaxRequests: [.simplifiedChinese: "单次会话调用次数上限", .english: "Max requests per session"],
         .agentMaxOutputTokens: [.simplifiedChinese: "单次输出 token 上限", .english: "Max output tokens per request"],
