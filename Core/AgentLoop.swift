@@ -12,6 +12,9 @@ public enum AgentLoopEvent: Equatable, Sendable {
     /// `millis` 是给**过程行**用的（Hermes CLI 每步后面那个 `0.3s`）：`nil` = 这一步没真跑
     /// （未登记 / 参数不合规 —— 当场拒的，不该报一个假的耗时）。
     case toolFinished(name: String, outcome: String, millis: Int?)
+    /// **这一跳失败、按策略再试一次**（`FR-AI-30`）：说清第几次、等多久、上一个错误是什么。
+    /// 过程面据此显示一行「重试 1/3（0.5s 后）· 连接中断」，而不是让用户以为卡死了。
+    case retrying(attempt: Int, after: TimeInterval, reason: String)
     case stopped(AgentLoopStop)
     case failed(String)
 }
@@ -170,6 +173,9 @@ public struct AgentLoop: Sendable {
     public var client: any LLMStreamingClient
     public var dispatcher: any AgentToolDispatcher
     public var registry: AgentToolRegistry
+    /// 重试策略（`FR-AI-30` ①）：**只为「值得再试」的失败**加一次机会（transport / 408 / 429 / 5xx）。
+    /// 硬规矩：**已经产出半截内容就不再重试** —— 重试会把前半段文本重复一遍，比失败更糟。
+    public var retryPolicy: LLMRetryPolicy = LLMRetryPolicy()
     /// 会话存储（可选：给了就每跳留痕 —— `FR-AI-17` 的接线点）。
     public var sessionStore: AgentSessionStore?
     /// 审计口（可选：给了就每跳 + 每次工具调用留一条 —— `FR-AI-24` 的接线点，**不新造第二套日志**）。
@@ -266,20 +272,15 @@ public struct AgentLoop: Sendable {
             recordTurn(context: context, kind: .model, role: "user", text: summarise(request.userPrompt), at: startedAt)
             await observer?.observe(.hopStarted(index: steps))
 
-            let stream: AsyncThrowingStream<LLMStreamEvent, Error>
             let hopStarted = Date()
-            do {
-                stream = try await client.stream(request)
-            } catch {
-                await observer?.observe(.failed(error.localizedDescription))
-                return AgentLoopResult(outcome: .failed(error.localizedDescription), steps: steps,
-                                       executedTools: executed, rejectedTools: rejected, usage: usage, text: "")
-            }
-
             var text = ""
             var pending: [Int: (id: String?, name: String?, arguments: String)] = [:]
+            var retries = 0
+            var lastFailure: String? = nil
+            while true {
             do {
-                for try await event in stream {
+                let openedStream = try await client.stream(request)
+                for try await event in openedStream {
                     switch event {
                     case .textDelta(let piece):
                         text += piece
@@ -297,10 +298,49 @@ public struct AgentLoop: Sendable {
                         break
                     }
                 }
+                break   // 这一跳读完 ⇒ 跳出重试循环
             } catch {
-                await observer?.observe(.failed(error.localizedDescription))
-                return AgentLoopResult(outcome: .failed(error.localizedDescription), steps: steps + 1,
+                // `FR-AI-30` ①：**分档**再决定要不要再试一次。
+                let llmError = error as? LLMError
+                let retryable = llmError.map { retryPolicy.isRetryable($0) } ?? false
+                // **已经产出半截内容 ⇒ 一次都不重试**（重试会把前半段重复一遍，比失败更糟）。
+                let hasPartial = !text.isEmpty || !pending.isEmpty
+                let canRetry = retryable && !hasPartial && retries < retryPolicy.maxAttempts
+                if canRetry {
+                    retries += 1
+                    lastFailure = error.localizedDescription
+                    let wait = retryPolicy.delayBeforeRetry(retries)
+                    await observer?.observe(.retrying(attempt: retries, after: wait,
+                                                      reason: error.localizedDescription))
+                    if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+                    if isCancelled() {
+                        await observer?.observe(.failed("cancelled"))
+                        return AgentLoopResult(outcome: .failed("cancelled"), steps: steps,
+                                               executedTools: executed, rejectedTools: rejected, usage: usage, text: text)
+                    }
+                    continue
+                }
+                // 如实停：说清是"重试用尽 / 不可重试 / 已有半截"
+                let why: String
+                if hasPartial { why = "partialOutput" }
+                else if !retryable { why = "notRetryable" }
+                else { why = "retriesExhausted" }
+                let detail = "\(why) · retries:\(retries)\(lastFailure.map { " · last:\($0)" } ?? "")"
+                await observer?.observe(.failed(detail))
+                await audit?.record(AgentActionRecord.makeModelCall(
+                    requestSummary: request.userPrompt,
+                    model: request.model,
+                    durationMilliseconds: Int(Date().timeIntervalSince(hopStarted) * 1000),
+                    outcome: .failed,
+                    detail: detail,
+                    endpoint: request.endpoint.absoluteString,
+                    usage: usage,
+                    sessionID: context.sessionID,
+                    hopIndex: steps,
+                    chainID: context.chainID))
+                return AgentLoopResult(outcome: .failed(detail), steps: steps,
                                        executedTools: executed, rejectedTools: rejected, usage: usage, text: text)
+            }
             }
             let invocations = pending.keys.sorted().map { index -> AgentToolInvocation in
                 let entry = pending[index] ?? (id: nil, name: nil, arguments: "")
@@ -317,7 +357,9 @@ public struct AgentLoop: Sendable {
                 model: request.model,
                 durationMilliseconds: Int(Date().timeIntervalSince(hopStarted) * 1000),
                 outcome: .generated,
-                detail: invocations.isEmpty ? nil : "toolCalls:\(invocations.count)",
+                detail: [invocations.isEmpty ? nil : "toolCalls:\(invocations.count)",
+                         retries > 0 ? "retries:\(retries)" : nil]
+                    .compactMap { $0 }.joined(separator: " · "),
                 endpoint: OpenAICompatibleClient.chatCompletionsURL(from: request.endpoint).absoluteString,
                 usage: usage,
                 sessionID: context.sessionID,

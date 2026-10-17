@@ -227,6 +227,9 @@ public struct AgentChatState: Equatable, Sendable {
 
     public mutating func apply(_ event: AgentLoopEvent) {
         switch event {
+        case .retrying(let attempt, let after, let reason):
+            // 过程行里追一句：**第几次重试、等多久、为什么** —— 别让人以为卡死了。
+            appendProgressLine("retry \(attempt): \(reason) (\(String(format: "%.1f", after))s)")
         case .hopStarted(let hopIndex):
             // 每跳 = 清单里的一步。**用事件自带的跳号**（0 起）换算成「第 N 步」（1 起）——
             // 不自己数数：续跑（`NFR-AI-08`）时跳号会从中间起，自己数会显示成「第 1 步」。
