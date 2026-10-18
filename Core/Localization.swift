@@ -1692,6 +1692,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatRunning2
     case agentStatusModel
     case agentStatusContext
+    /// 压缩读数（`NFR-AI-08` ③）：已压缩 N 段 · 估算省下 M token。
+    case agentStatusCompressed
     case agentStatusSession
     case agentStatusElapsed
     case agentStatusWorkspace
@@ -3315,6 +3317,7 @@ public enum LocalizedStrings {
         .agentStatusModel: [.simplifiedChinese: "模型 %@", .english: "Model %@"],
         .agentChatRunning2: [.simplifiedChinese: "跑着呢", .english: "running"],
         .agentStatusContext: [.simplifiedChinese: "上下文 %@ token（上次请求输入）", .english: "ctx %@ tokens (last request in)"],
+        .agentStatusCompressed: [.simplifiedChinese: "已压缩 %@ 段 · 省 ≈%@ token", .english: "compressed %@ · saved ≈%@ tokens"],
         .agentStatusSession: [.simplifiedChinese: "本会话 %@ 次 · 输入 %@ / 输出 %@ / 合计 %@ token", .english: "Session %@ calls · in %@ / out %@ / total %@ tokens"],
         .agentStatusElapsed: [.simplifiedChinese: "耗时 %@ 秒", .english: "%@ s"],
         .agentStatusWorkspace: [.simplifiedChinese: "工作区 %@", .english: "Workspace %@"],

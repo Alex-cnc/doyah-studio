@@ -294,6 +294,15 @@ struct AgentChatView: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 8) {
                 Spacer()
+                // **压缩读数**（`NFR-AI-08` ③）：压了几段、约省多少 token —— 压缩不许静默。
+                // 只在真压过时出现（`nil` 不留空壳）；`.help` 里是「最早被压掉的那一段」的摘要。
+                if let compression = model.contextCompression {
+                    Text(L(.agentStatusCompressed,
+                           "\(compression.entries)",
+                           "\(compression.estimatedTokensSaved)"))
+                        .foregroundStyle(.orange)
+                        .help(compression.earliest)
+                }
                 if let context = model.lastPromptTokens {
                     Text(L(.agentStatusContext, "\(context)"))
                 }

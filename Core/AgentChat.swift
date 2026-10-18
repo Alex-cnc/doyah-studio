@@ -141,6 +141,24 @@ public enum AgentChatEndpointState: Equatable, Sendable {
     }
 }
 
+/// **压缩读数**（`NFR-AI-08` ③）：界面上那一行「压了几段 / 省了多少 token」吃它。
+///
+/// 只放**报得出来的数**：压掉的条目数、估算省下的 token、留下几条、最早被压掉的那条摘要
+/// （摘要留着是为了人点一下能看见「丢了哪些」）。累加口径 = 本会话跨轮累计（`apply` 里加）。
+public struct AgentChatCompressionReading: Equatable, Sendable {
+    public var entries: Int
+    public var estimatedTokensSaved: Int
+    public var kept: Int
+    public var earliest: String
+
+    public init(entries: Int = 0, estimatedTokensSaved: Int = 0, kept: Int = 0, earliest: String = "") {
+        self.entries = entries
+        self.estimatedTokensSaved = estimatedTokensSaved
+        self.kept = kept
+        self.earliest = earliest
+    }
+}
+
 /// 对话状态（**纯值 + 纯转移** —— 与 `WorkspaceTabSet` 同一条纪律：规则在 Core、状态在 App 的薄壳里）。
 public struct AgentChatState: Equatable, Sendable {
 
@@ -164,6 +182,9 @@ public struct AgentChatState: Equatable, Sendable {
     public var taskScope: AgentTaskScope = .askEach
     /// 本轮**代签**过的动作（事后可审；与 `grants` 不同：`grants` 会被 `markApplied` 用掉，这里永久留痕）。
     public private(set) var autoApprovals: [AgentAutoApproval] = []
+    /// **压缩读数**（`NFR-AI-08` ③）：跨轮累计 —— 压了几段、估算省了多少 token。
+    /// `nil` = 这个会话一次都没压过（界面那一行就不出现，不留空壳）。
+    public private(set) var contextCompression: AgentChatCompressionReading?
 
     public init(messages: [AgentChatMessage] = [], cards: [AgentToolCard] = [],
                 steps: [AgentChatStep] = [],
@@ -274,6 +295,17 @@ public struct AgentChatState: Equatable, Sendable {
             isRunning = false
             currentAction = nil
             if let index = steps.indices.last { steps[index].status = .failed }
+        case .contextCompressed(let entries, let tokensSaved, let kept, let earliest):
+            // `NFR-AI-08` ③：压缩**不许静默** —— 读数是**跨轮累计**（这一轮压了两段、上一轮压了一段 ⇒ 三段）。
+            // 只改这一个字段，不往消息流里塞一条：它是**读数**，不是过程（人类主人 2026-10-18：
+            // 「压缩了几轮、省了多少 token，界面上要有一行」—— 那一行在状态块里，不刷屏）。
+            let previous = contextCompression
+            contextCompression = AgentChatCompressionReading(
+                entries: (previous?.entries ?? 0) + entries,
+                estimatedTokensSaved: (previous?.estimatedTokensSaved ?? 0) + tokensSaved,
+                kept: kept,
+                earliest: earliest.isEmpty ? (previous?.earliest ?? "") : earliest
+            )
         }
     }
 

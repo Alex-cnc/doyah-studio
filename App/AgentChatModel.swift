@@ -52,6 +52,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 会话标题（状态行最右）。
     var sessionTitle: String? { state.sessionTitle }
 
+    /// **压缩读数**（`NFR-AI-08` ③）：界面上那一行「已压缩 N 段 · 省 ≈M token」。
+    var contextCompression: AgentChatCompressionReading? { state.contextCompression }
+
     /// 吞吐（token/秒）：**只在这两样都有读数时给**，算不出来就不显示（不编）。
     var tokensPerSecond: Double? {
         guard let seconds = lastElapsedSeconds, seconds > 0.05, sessionUsage.completionTokens > 0 else { return nil }

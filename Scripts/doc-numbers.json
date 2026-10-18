@@ -106,14 +106,14 @@
     {
       "key": "core-tests",
       "label": "Core 单测项数（verify-core.sh 实测）",
-      "value": 3341,
+      "value": 3350,
       "unit": "项",
       "measure": {
         "kind": "count-file",
         "file": ".build/core-test-count.txt",
         "regex": "(\\d+)",
         "expect": [
-          3341
+          3350
         ],
         "writtenBy": "Scripts/verify-core.sh（同一次运行写出；verify-all.sh 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，判据如实报『跳过』而不是拿旧值当现状）"
       },
@@ -200,9 +200,9 @@
         "kind": "doc-tables-lists",
         "module": "Scripts/check-doc-tables.py",
         "expect": [
-                    12,
-                    40
-                ],
+          12,
+          40
+        ],
         "note": "导入那个模块读它的清单（**权威算法是它自己的 `gitignored_documents()`**）+ `git check-ignore -z` 实测「被排除的确实是这 7 份」+ 与自检夹具 `SELF_TEST_ABSENT` / `SELF_TEST_TRACKED` **逐条**对账（清单改了没改夹具即判红）；不在 git 仓库里时 git 侧复核如实报「跳过」，不假装核过"
       },
       "anchors": [
@@ -333,10 +333,10 @@
           "file": "Scripts/check-doc-tables.py",
           "regex": "\\*\\*(\\d+) 份命名 \\+ (\\d+) 条通配 = 实跑 (\\d+) 份\\*\\*",
           "expect": [
-                    52,
-                    1,
-                    53
-                ],
+            52,
+            1,
+            53
+          ],
           "minSites": 1,
           "note": "docstring：本轮新增的「数字的唯一来源」段"
         },
@@ -393,10 +393,10 @@
           "file": "AGENT-SPEC.md",
           "regex": "\\*\\*(\\d+) 份命名 \\+ (\\d+) 条通配 = 实跑 (\\d+) 份\\*\\*",
           "expect": [
-                    52,
-                    1,
-                    53
-                ],
+            52,
+            1,
+            53
+          ],
           "minSites": 1,
           "note": "§6 资产表（本轮新增落点）"
         }

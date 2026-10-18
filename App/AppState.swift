@@ -2987,7 +2987,11 @@ final class AppState: ObservableObject {
                              // `FR-AI-17` 会话持久化：每跳落一份 `.jsonl`（与其余本机数据同一处，不另开文件体系）。
                              sessionStore: AgentSessionStore(directory: AgentSessionStore.defaultDirectory),
                              audit: AgentAuditLog.shared,
-                             observer: observer)
+                             observer: observer,
+                             // `NFR-AI-08` ③ 压缩：超预算才动手，界面上那一行读数就是它报出来的。
+                             // 阈值是**参数**（契约只钉「有损但可数可报」）—— 24k 字符 ≈ 6k token，远小于常见窗口，
+                             // 留出工具返回与模型输出的余量。
+                             compressionBudget: AgentContextCompressionBudget())
         let context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: promptWithNotes,
                                        baseRequest: request, sessionID: sessionID, workspace: workspacePath)
         return (loop, context)
