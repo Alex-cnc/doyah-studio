@@ -68,6 +68,8 @@ struct WorkspaceAreaView: View {
             onTextChange: { text in tabs.updateContent(text, for: tab.id) },
             onSave: { tabs.save(tab.id) },
             onFormat: { tabs.formatSelected() },
+            // 行内灰字的路径候选按工作区取表（`FR-EDIT-57` 最后一块）。
+            workspaceRoot: workspace.rootURL,
             onCursorLine: { line in previewCursor.report(line: line) },
             // 会话恢复（`FR-EDIT-43` 第二片）：这一页上次退出时的插入点与滚动位置（取走即没）。
             takeCursorPlacement: { id in tabs.takeCursorPlacement(for: id) },

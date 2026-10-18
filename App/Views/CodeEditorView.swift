@@ -21,6 +21,9 @@ struct CodeEditorView: NSViewRepresentable {
     /// 触发格式化（菜单项与 ⇧⌘F 都调它）。
     var onFormat: () -> Void
 
+    /// 当前工作区根（行内灰字的**路径候选**按它取表，`FR-EDIT-57`）。`nil` = 没有工作区 ⇒ 不补路径。
+    var workspaceRoot: URL?
+
     /// 光标行上报（1 起）—— 工作区 Markdown 预览的**跟随滚动**输入面（队列 `L-137`）。
     /// 行号由 `Core/CodeLines` 算（与行号列**同一份**实现，界面层不自己数换行）。
     var onCursorLine: ((Int) -> Void)?
@@ -105,6 +108,8 @@ struct CodeEditorView: NSViewRepresentable {
         context.coordinator.textView = textView
         context.coordinator.language = language
         textView.completionLanguage = language
+        // 路径候选的表按工作区取（`ensure` 是幂等的：根没变、表没过期就立刻返回）。
+        textView.workspaceRoot = workspaceRoot
         context.coordinator.applyHighlighting()
         // 首次上报光标行：页签刚打开时预览就该对齐到文档开头，而不是等第一次移动光标。
         context.coordinator.reportCursorLine()
@@ -160,6 +165,9 @@ struct CodeEditorView: NSViewRepresentable {
         let languageChanged = context.coordinator.language != language
         context.coordinator.language = language
         textView.completionLanguage = language
+        // 路径候选：换了工作区就地换表；表过期（30 秒）则后台重搭，界面不等它。
+        textView.workspaceRoot = workspaceRoot
+        WorkspacePathIndex.shared.ensure(root: workspaceRoot)
         let textChanged = textView.string != text
         if textChanged {
             context.coordinator.isApplyingExternalText = true
@@ -359,8 +367,40 @@ final class CodeTextView: NSTextView {
                 )
                 .map { InlineGhostCandidate(insertText: $0.insertText, kind: $0.kind) }
         }
+        // 路径候选（`FR-EDIT-57` 最后一块）：表来自 `WorkspacePathIndex`（后台搭、30 秒过期），
+        // 这里只把"当前那一份"递进去 —— 前缀边界与口径全在 `PathGhostCompletion` 里。
+        overlay.pathIndex = { WorkspacePathIndex.shared.candidates }
         return overlay
     }()
+
+    /// 这个编辑器看的是哪个工作区（路径候选按它取表）。由 SwiftUI 侧在创建 / 更新时投递。
+    var workspaceRoot: URL? {
+        didSet {
+            guard workspaceRoot != oldValue else { return }
+            WorkspacePathIndex.shared.ensure(root: workspaceRoot)
+            observePathIndexIfNeeded()
+            refreshGhost()
+        }
+    }
+
+    /// 表搭完的广播（只挂一次；视图去了窗口再挂回来时不会重复注册）。
+    private var pathIndexObserver: NSObjectProtocol?
+
+    private func observePathIndexIfNeeded() {
+        guard pathIndexObserver == nil else { return }
+        pathIndexObserver = NotificationCenter.default.addObserver(
+            forName: WorkspacePathIndex.didChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // 表晚到时补画一次：灰字是画出来的，晚一拍出现没有任何副作用（见 `WorkspacePathIndex`）。
+            self?.refreshGhost()
+        }
+    }
+
+    deinit {
+        if let pathIndexObserver { NotificationCenter.default.removeObserver(pathIndexObserver) }
+    }
 
     /// 当前该画的灰字（`nil` = 不画）。**只画、不写**：它从不进 `textStorage`，
     /// 所以撤销栈 / 保存的文件 / 复制走的文本里都没有它。想让它进正文只有 `Tab` 一条路。

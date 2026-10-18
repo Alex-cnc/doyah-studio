@@ -112,6 +112,34 @@ public enum InlineGhostCompletion {
     /// 行内上下文判定（字符串 / 注释）的行长上限：更长的行（压缩过的 JS 之类）直接跳过那次判定。
     public static let maximumLineLengthForContextScan = 4_000
 
+    /// **门槛**：所有灰字都要先过的四件事（开关 / 单空选区 / 光标夹回文档 / 不在字符串注释里）。
+    ///
+    /// 为什么抽出来：候选分成两路（`suggestion` 走词法、`pathSuggestion` 走工作区路径，
+    /// 见 `Core/InlineGhostPathCompletion.swift`），但"这一刻该不该出灰字"的**前四道门**是同一套。
+    /// 各写一遍的话，两条路迟早在这四件事上漂移 —— 而漂移的表现是"同一个位置词补全不出、路径补全出"，
+    /// 这种不一致用户看不见原因，只会觉得编辑器神经。
+    struct GhostGate {
+        let ns: NSString
+        let caret: Int
+    }
+
+    static func gate(
+        in text: String,
+        selection: NSRange,
+        language: TextLanguage,
+        enabled: Bool
+    ) -> GhostGate? {
+        guard enabled else { return nil }
+        // 有选区 ⇒ 不出：一按 Tab 就把用户选中的内容换掉，是最坏的那种"智能"。
+        guard selection.length == 0 else { return nil }
+        let ns = text as NSString
+        // 越界的光标（理论上不会有）夹回文档，而不是让它算出一段不存在的文本。
+        let caret = min(max(0, selection.location), ns.length)
+        // 在字符串 / 注释里不出（按本行判定，边界见类型注释）。
+        if isInsideCommentOrString(ns: ns, caret: caret, language: language) { return nil }
+        return GhostGate(ns: ns, caret: caret)
+    }
+
     /// 算一条灰字建议（**候选来自语言表 / 文档词**，工作区代码编辑器这条路）。
     /// `nil` = 这一刻不该出灰字（每个 `nil` 的理由都写在上面的口径里）。
     ///
@@ -157,13 +185,12 @@ public enum InlineGhostCompletion {
         candidateProvider: (String) -> [InlineGhostCandidate],
         enabled: Bool = true
     ) -> InlineGhostSuggestion? {
-        guard enabled else { return nil }
-        // 有选区 ⇒ 不出：一按 Tab 就把用户选中的内容换掉，是最坏的那种"智能"。
-        guard selection.length == 0 else { return nil }
-        let ns = text as NSString
-
-        // 越界的光标（理论上不会有）夹回文档，而不是让它算出一段不存在的文本。
-        let caret = min(max(0, selection.location), ns.length)
+        // 前四道门（开关 / 单空选区 / 光标夹回 / 字符串注释）与路径那一路**同一份**。
+        guard let gate = gate(in: text, selection: selection, language: language, enabled: enabled) else {
+            return nil
+        }
+        let ns = gate.ns
+        let caret = gate.caret
 
         // 光标右边还是词字符 ⇒ 用户在词中间改东西（`return|Value` 这种），不是"正在打字等补全"。
         if caret < ns.length, isIdentifierBody(ns.character(at: caret)) { return nil }
@@ -175,9 +202,6 @@ public enum InlineGhostCompletion {
         guard prefixRange.length > 0 else { return nil }
         let prefix = ns.substring(with: prefixRange)
         guard prefix.count >= minimumPrefixLength, !prefix.allSatisfy({ $0.isNumber }) else { return nil }
-
-        // 在字符串 / 注释里不出（按本行判定，边界见类型注释）。
-        if isInsideCommentOrString(ns: ns, caret: caret, language: language) { return nil }
 
         // 候选只有一份（各自域的）：代码侧 = `CodeCompletion`，SQL 侧 = `QueryCompletion`。
         // 两处各算一套必然漂移，所以候选从这里进来、口径留在这里。
@@ -212,7 +236,7 @@ public enum InlineGhostCompletion {
     /// 光标是否落在**本行**的注释或字符串里。
     ///
     /// 只切当前这一行（见类型注释的"已知边界"）：每次击键都跑，整篇重切在大文档上是真卡顿。
-    private static func isInsideCommentOrString(ns: NSString, caret: Int, language: TextLanguage) -> Bool {
+    static func isInsideCommentOrString(ns: NSString, caret: Int, language: TextLanguage) -> Bool {
         let lineRange = ns.lineRange(for: NSRange(location: caret, length: 0))
         // 行首可能带换行符（`lineRange` 含行尾的 `\n`）；去掉它，让行内偏移与文本对得上。
         let raw = ns.substring(with: lineRange)
@@ -234,7 +258,7 @@ public enum InlineGhostCompletion {
     }
 
     /// 词字符 = 字母 / 数字 / 下划线（与 `CodeCompletion.words` 抽词的界一致）。
-    private static func isIdentifierBody(_ codeUnit: unichar) -> Bool {
+    static func isIdentifierBody(_ codeUnit: unichar) -> Bool {
         guard let scalar = UnicodeScalar(codeUnit) else { return false }
         return CharacterSet.alphanumerics.contains(scalar) || scalar == "_"
     }

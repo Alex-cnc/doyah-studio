@@ -30,6 +30,12 @@ final class GhostTextOverlay {
     /// 候选来源（`nil` = 这一层还没接上候选 ⇒ 一条都不出，而不是瞎猜）。
     var candidateProvider: ((String) -> [InlineGhostCandidate])?
 
+    /// **路径候选表**（`nil` = 本编辑面不做路径补全，例如数据库 SQL 编辑器）。
+    ///
+    /// 为什么是"取表"而不是"给候选"：路径的前缀边界与词不一样（含 `/`、`@` 标记），
+    /// 扫前缀的活必须和口径待在一起（`PathGhostCompletion.pathSuggestion`），这里只把表递过去。
+    var pathIndex: (() -> [WorkspacePathCandidate])?
+
     /// 接受灰字时怎么落到缓冲区 —— **由宿主给**（各编辑器的插入语义不一样：
     /// 工作区编辑器走 `applyEditPlan`，SQL 编辑器走自己的单光标替换）。
     var apply: ((InlineGhostSuggestion) -> Bool)?
@@ -54,17 +60,48 @@ final class GhostTextOverlay {
     func refresh() {
         guard let host else { setSuggestion(nil); return }
         // 组字期间不算：输入法候选还没上屏，这时的前缀不是用户想补的词。
-        guard enabled, !host.hasMarkedText(), let candidateProvider else {
+        guard enabled, !host.hasMarkedText() else {
             setSuggestion(nil)
             return
         }
-        let suggested = InlineGhostCompletion.suggestion(
-            in: host.string,
-            selection: host.selectedRange(),
-            language: language,
-            candidateProvider: candidateProvider,
-            enabled: enabled
-        )
+        let selection = host.selectedRange()
+        var suggested: InlineGhostSuggestion?
+        var decidedByPath = false
+
+        // **先问路径那一路**：`@` / 相对路径是更具体的意图，它一旦说"在写路径"就把词法候选让开
+        // （`notPath` 才交还词法；`nothing` 是"确实是路径但没得补"，不许退化成词补全）。
+        if let pathIndex {
+            switch PathGhostCompletion.pathSuggestion(
+                in: host.string,
+                selection: selection,
+                language: language,
+                index: pathIndex(),
+                enabled: enabled
+            ) {
+            case .suggestion(let value):
+                suggested = value
+                decidedByPath = true
+            case .nothing:
+                decidedByPath = true
+            case .notPath:
+                break
+            }
+        }
+
+        if !decidedByPath {
+            guard let candidateProvider else {
+                setSuggestion(nil)
+                return
+            }
+            suggested = InlineGhostCompletion.suggestion(
+                in: host.string,
+                selection: selection,
+                language: language,
+                candidateProvider: candidateProvider,
+                enabled: enabled
+            )
+        }
+
         if let suggested, key(suggested) == dismissedKey {
             setSuggestion(nil)
             return
