@@ -34,6 +34,10 @@ export const DICT = {
   // IPC 浏览器旁路提示（不是产品路径，但**也要双语**：切英文时不该留中文）
   'ipc.bypass.db': { 'zh-Hans': '浏览器旁路没有真库', en: 'The browser fallback has no real database' },
   'ipc.bypass.workspace': { 'zh-Hans': '浏览器旁路没有工作区', en: 'The browser fallback has no workspace' },
+  'ipc.bypass.sqlFormat': {
+    'zh-Hans': '浏览器旁路里没有格式化器（真格式化由外壳按「外部工具优先 → 内置兜底」判定），文本一个字都没动。',
+    en: 'The browser fallback has no formatter (the shell decides external-first, then builtin), so the text is untouched.',
+  },
   'ipc.bypass.terminal': { 'zh-Hans': '浏览器旁路没有真终端', en: 'The browser fallback has no real terminal' },
   'ipc.bypass.hint': {
     'zh-Hans': '请在 Tauri 外壳里{action}（npm run tauri dev）。',
@@ -434,18 +438,24 @@ export const DICT = {
   'sql.gotoTip': { 'zh-Hans': '跳到指定行或「行:列」（Ctrl+G）', en: 'Jump to a line or line:column (Ctrl+G)' },
   'sql.gotoLabel': { 'zh-Hans': '行 / 行:列', en: 'Line / line:column' },
   'sql.gotoGo': { 'zh-Hans': '跳转', en: 'Go' },
-  // 编辑菜单（FR-EDIT-17）：一个入口管五件事 —— 本轮落四件（查找替换 / 跳行 / 缩进 / 清除），
-  // 格式化 SQL（FR-EDIT-22）下一轮补；**菜单里现在不放点了没反应的项**（假入口比没有入口更糟）。
+  // 编辑菜单（FR-EDIT-17）：一个入口管五件事 —— 五件全接上了真动作
+  // （查找替换 / 跳行 / 缩进 / 清除 / 格式化 SQL）。**菜单里不放点了没反应的项**：假入口比没有入口更糟。
   'sql.editMenu': { 'zh-Hans': '编辑', en: 'Edit' },
   'sql.editMenu.tip': {
-    'zh-Hans': '编辑菜单：查找 / 替换 · 跳到行或列 · 缩进 / 反缩进 · 清除查询',
-    en: 'Edit menu: find / replace · go to line · indent / outdent · clear query',
+    'zh-Hans': '编辑菜单：查找 / 替换 · 跳到行或列 · 缩进 / 反缩进 · 清除查询 · 格式化 SQL',
+    en: 'Edit menu: find / replace · go to line · indent / outdent · clear query · format SQL',
   },
   'sql.edit.find': { 'zh-Hans': '查找 / 替换…', en: 'Find / replace…' },
   'sql.edit.goto': { 'zh-Hans': '跳到行或列…', en: 'Go to line…' },
   'sql.edit.indent': { 'zh-Hans': '缩进选中行', en: 'Indent selected lines' },
   'sql.edit.outdent': { 'zh-Hans': '反缩进选中行', en: 'Outdent selected lines' },
   'sql.edit.clear': { 'zh-Hans': '清除查询', en: 'Clear query' },
+  // 格式化 SQL（FR-EDIT-22）：回执必须说清「用了什么引擎 / 没改动 / 为什么拒绝」——
+  // 真做的只有关键字大写（不重排空白），所以入口文案也不写「美化」这种含糊词。
+  'sql.edit.format': { 'zh-Hans': '格式化 SQL（关键字大写）', en: 'Format SQL (uppercase keywords)' },
+  'sql.format.empty': { 'zh-Hans': '编辑器里没有 SQL 可格式化', en: 'Nothing to format in the editor' },
+  'sql.format.failed': { 'zh-Hans': '格式化没有跑成：{reason}', en: 'Formatting failed: {reason}' },
+  'sql.format.dismiss': { 'zh-Hans': '知道了', en: 'Dismiss' },
   // 查找 / 替换条（FR-EDIT-18）：读数与"没有匹配"都必须写出来 —— 安静不是结论
   'sql.find.label': { 'zh-Hans': '查找', en: 'Find' },
   'sql.find.replaceLabel': { 'zh-Hans': '替换为', en: 'Replace with' },

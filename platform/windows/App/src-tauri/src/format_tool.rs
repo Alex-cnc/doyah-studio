@@ -862,4 +862,16 @@ mod builtin_format_tests {
         let outcome = format_sql_keywords(sql, TextLanguage::Sql);
         assert!(outcome.content.contains("SELECT select_count FROM t"), "{}", outcome.content);
     }
+
+    #[test]
+    fn formatting_sql_twice_changes_nothing_the_second_time() {
+        // 幂等 = 界面上「再点一次格式化」不会来回改（用户最容易在这里失去信任）。
+        // 第二遍必须**一个字都不动**，也让「没有需要改的地方」那句有真依据。
+        let messy = "select a, b from t where c = 'select' -- select\n";
+        let once = format_sql_keywords(messy, TextLanguage::Sql);
+        let twice = format_sql_keywords(&once.content, TextLanguage::Sql);
+        assert_eq!(twice.content, once.content, "第二遍不许再动");
+        assert!(twice.changed_lines == 0, "第二遍的改动行数必须是 0");
+        assert!(!twice.invariant_failed);
+    }
 }

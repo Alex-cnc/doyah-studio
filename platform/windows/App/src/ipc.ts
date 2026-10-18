@@ -55,6 +55,8 @@ export const COMMANDS = {
   highlightSql: 'highlight_sql',
   // 编辑面静态检查（FR-EDIT-03 / FR-EDIT-56）：规则只在领域层 `Db/src/lint.rs` 判一遍
   diagnoseSql: 'diagnose_sql',
+  // 格式化 SQL（FR-EDIT-22）：查询编辑面没有文件 ⇒ 单独一条命令（语言固定 SQL、无路径检查）
+  sqlFormat: 'sql_format',
   // 写回与事务（1.4：一批一次事务 / 主键定位 / 只读拦截 / 危险语句判定）
   dbWriteBatch: 'db_write_batch',
   dbPrimaryKey: 'db_primary_key',
@@ -1883,6 +1885,23 @@ export function workspaceFormatContent(
     { workspaceRoot, relativePath, content, preferBuiltin },
     () => ({ content, changed: false, note: '（浏览器旁路没有工作区）', engine: 'refused', problem: null }),
   )
+}
+
+/**
+ * 格式化**编辑面里的一段 SQL**（FR-EDIT-22）—— 查询还没有文件，所以不走 `workspaceFormatContent`
+ * （那条要工作区根 + 相对路径，为的是语言探测与路径安全，这里两样都不需要）。
+ *
+ * 浏览器旁路**如实拒绝**（不发一个假的「已格式化」）：真格式化由外壳按
+ * 「外部工具优先 → 内置兜底 → 如实拒绝」那条定案判定。
+ */
+export function formatSql(sql: string, preferBuiltin = false): Promise<FormatOutcome> {
+  return call(COMMANDS.sqlFormat, { sql, preferBuiltin }, () => ({
+    content: sql,
+    changed: false,
+    note: tNow('ipc.bypass.sqlFormat'),
+    engine: 'refused',
+    problem: 'browser',
+  }))
 }
 
 // ── 内置终端（W-C 底部终端 · 2.7 · S-9b）：界面侧的四个包装 ───────────────────────────────

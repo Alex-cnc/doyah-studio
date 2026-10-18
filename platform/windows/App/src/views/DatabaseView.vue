@@ -28,6 +28,7 @@ import {
   explainStatement,
   highlightSql,
   diagnoseSql,
+  formatSql,
   dbWriteBatch,
   dbPrimaryKey,
   editsToDml,
@@ -1899,9 +1900,17 @@ function onEditorKeydown(event: KeyboardEvent): void {
     return
   }
 
+  // ⓪'' Ctrl+Shift+F 格式化 SQL（FR-EDIT-22）—— **必须排在 Ctrl+F 之前**：
+  // 否则带 shift 的这一档会先被查找条吃掉（同一个 key，分享同一条分支）。
+  if (mod && event.shiftKey && !event.altKey && (event.key === 'f' || event.key === 'F')) {
+    event.preventDefault()
+    void formatQuery()
+    return
+  }
+
   // ⓪' Ctrl+F 查找 / Ctrl+H 替换（FR-EDIT-18）：只开浮层，**不改文本**。
   // 必须 preventDefault —— 否则 WebView2 自己会弹一个浏览器查找条，两个查找条同时出现。
-  if (mod && !event.altKey && (event.key === 'f' || event.key === 'F')) {
+  if (mod && !event.shiftKey && !event.altKey && (event.key === 'f' || event.key === 'F')) {
     event.preventDefault()
     openFind('find')
     return
@@ -2265,6 +2274,61 @@ function menuIndent(delta: 1 | -1): void {
 function menuClear(): void {
   closeEditMenu()
   clearSql()
+}
+
+// ── 格式化 SQL（FR-EDIT-22）────────────────────────────────────────────────────────────
+//
+// 规则**不在这一层**：外壳 `format_tool::format_content` 按「外部工具优先 → 内置兜底 → 如实拒绝」
+// 判一遍（与按文件格式化同一套，不在这里另写一份 —— 同一规则两处实现必然分叉）。
+// 组件只做三件事：取目标文本、把结果落回编辑器、把回执如实说出来。
+//
+// 三条口径：
+//   ① **有选区只格式化选中段** —— 整篇格式化会把用户没在看的部分一起改掉，一次按键改全身不值当；
+//   ② **没改动就一个字都不动**（连高亮都不重算），并说「检查过了，没有需要改的地方」；
+//   ③ **拒绝要说清为什么** —— `engine === 'refused'`（浏览器旁路 / 认不出语言）时回执用告警色，
+//      不许把「没格式化」说成「已格式化」（安静不是结论）。
+const formatNote = ref('')
+/** 回执是「没跑成」那一类（拒绝 / 出错）⇒ 用告警色，别和「已格式化」长一个样 */
+const formatNoteBad = ref(false)
+const formatBusy = ref(false)
+
+async function formatQuery(preferBuiltin = false): Promise<void> {
+  if (formatBusy.value) return
+  const area = sqlArea.value
+  const selection = area ? editorSelection(area) : { start: caretOffset.value, end: caretOffset.value }
+  const hasSelection = selection.end > selection.start
+  const target = hasSelection ? sql.value.slice(selection.start, selection.end) : sql.value
+  if (!target.trim()) {
+    formatNote.value = t('sql.format.empty')
+    formatNoteBad.value = true
+    return
+  }
+  formatBusy.value = true
+  try {
+    const outcome = await formatSql(target, preferBuiltin)
+    formatNote.value = outcome.note
+    formatNoteBad.value = outcome.engine === 'refused'
+    // ② 没改动 ⇒ 编辑器一个字都不动（也不重算高亮：文本没变，重算只是白花时间）
+    if (!outcome.changed) return
+    const next = hasSelection
+      ? sql.value.slice(0, selection.start) + outcome.content + sql.value.slice(selection.end)
+      : outcome.content
+    // 光标：有选区 ⇒ 选中「格式化后的那一段」（用户看得出改了哪儿）；整篇 ⇒ 原光标位置夹到新长度内
+    const caret = hasSelection
+      ? selection.start + outcome.content.length
+      : Math.min(caretOffset.value, outcome.content.length)
+    await applyEdit({ text: next, selection: { start: caret, end: caret } })
+  } catch (e) {
+    formatNote.value = t('sql.format.failed', { reason: describeError(e).message })
+    formatNoteBad.value = true
+  } finally {
+    formatBusy.value = false
+  }
+}
+
+function menuFormat(): void {
+  closeEditMenu()
+  void formatQuery()
 }
 
 // ── 编辑面静态检查上屏（FR-EDIT-03 检查器 → FR-EDIT-56 画出来）────────────────────────
@@ -3155,6 +3219,20 @@ async function probe() {
             </button>
             <span v-if="findNote" class="db__find-note" data-testid="find-note" role="status">{{ findNote }}</span>
           </div>
+          <!-- 格式化 SQL 的回执（FR-EDIT-22）：说清用了哪个引擎 / 没改动 / 为什么拒绝。
+               拒绝那一类用告警色 —— 不许和「已格式化」长一个样（安静不是结论）。 -->
+          <p
+            v-if="formatNote"
+            class="db__format-note"
+            :class="{ 'db__format-note--bad': formatNoteBad }"
+            data-testid="format-note"
+            role="status"
+          >
+            <span>{{ formatNote }}</span>
+            <button class="db__btn" type="button" data-testid="format-note-dismiss" @click="formatNote = ''">
+              {{ t('sql.format.dismiss') }}
+            </button>
+          </p>
           <p class="db__editor-keys">{{ t('sql.keys') }}</p>
           <ul v-if="completions.length" class="db__completions">
             <li v-for="(c, i) in visibleCompletions" :key="`${c.kind}:${c.text}`">
@@ -3185,8 +3263,8 @@ async function probe() {
               </select>
             </label>
             <span v-if="info" class="db__bar-sep" />
-            <!-- 编辑菜单（FR-EDIT-17）：一个入口管五件事。本轮四件全接上了真动作，
-                 格式化 SQL（FR-EDIT-22）等下一轮领域层格式化器落地再加 —— 不放点了没反应的项。 -->
+            <!-- 编辑菜单（FR-EDIT-17）：一个入口管五件事，五件全接上了真动作
+                 （查找替换 / 格式化 SQL / 跳行列 / 缩进 / 清除）—— 不放点了没反应的项。 -->
             <div class="db__edit-menu">
               <button
                 class="db__btn"
@@ -3204,6 +3282,19 @@ async function probe() {
                   <li>
                     <button class="db__menu-item" type="button" role="menuitem" data-testid="edit-menu-find" @click="menuFind">
                       {{ t('sql.edit.find') }}
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      class="db__menu-item"
+                      type="button"
+                      role="menuitem"
+                      data-testid="edit-menu-format"
+                      :disabled="!sql.trim()"
+                      :title="t('sql.edit.format')"
+                      @click="menuFormat"
+                    >
+                      {{ t('sql.edit.format') }}
                     </button>
                   </li>
                   <li>
@@ -4510,6 +4601,20 @@ async function probe() {
 }
 .db__find-note {
   color: var(--ds-color-text-secondary);
+}
+
+/* 格式化 SQL 的回执（FR-EDIT-22）：与查找条同一条视觉带；拒绝/出错走告警色，
+   并且**和成功态长得不一样**（同一句话两种结果的差别要在颜色上看得出来）。 */
+.db__format-note {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  margin: 0 0 var(--ds-spacing-xs);
+  font-size: var(--ds-font-caption-size);
+  color: var(--ds-color-text-secondary);
+}
+.db__format-note--bad {
+  color: var(--ds-color-status-warning);
 }
 
 /* 诊断下划线（FR-EDIT-56）：出问题的范围在字下加虚下划线 —— 只做"哪一段有问题"，

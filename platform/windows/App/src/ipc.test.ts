@@ -47,6 +47,7 @@ describe('ipc', () => {
       'explain_statement',
       'highlight_sql',
       'diagnose_sql',
+      'sql_format',
       'db_write_batch',
       'db_primary_key',
       'edits_to_dml',
@@ -126,5 +127,18 @@ describe('ipc', () => {
     expect(LAB_CONNECTION.database).toBe('doyah_lab')
     expect(LAB_CONNECTION.sslMode).toBe('disable')
     expect(LAB_CONNECTION.password).toBeUndefined()
+  })
+
+  it('格式化 SQL 的浏览器旁路如实拒绝（不假装格式化过）', async () => {
+    // 真格式化在外壳里（外部工具优先 → 内置兜底）；浏览器旁路没有它 ⇒
+    // 必须**原样返回 + 说清没跑 + engine=refused**，否则界面会把"没动"显示成"已格式化"。
+    const { formatSql } = await import('./ipc')
+    const sql = 'select id from t'
+    const outcome = await formatSql(sql)
+    expect(outcome.content).toBe(sql)
+    expect(outcome.changed).toBe(false)
+    expect(outcome.engine).toBe('refused')
+    expect(outcome.problem).toBe('browser')
+    expect(outcome.note.trim().length).toBeGreaterThan(0)
   })
 })

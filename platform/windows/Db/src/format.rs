@@ -72,7 +72,9 @@ impl Builtin {
             Builtin::None => "不做任何事",
             Builtin::Whitespace => "只去掉行尾空白（字符串与注释里的空白一个字都不动）",
             Builtin::BraceIndent => "按花括号层级重排缩进",
-            Builtin::Sql => "SQL 关键字大小写与分行",
+            // **只写它真做的事**：这一档只把关键字转大写，**不重排空白、不换行**
+            // （旧文案写「大小写与分行」是夸大 —— 实现里明写了不做重排）。
+            Builtin::Sql => "只把 SQL 关键字转成大写（字符串与注释里的字一个都不动，不重排空白）",
         }
     }
 }
@@ -386,6 +388,22 @@ mod tests {
         let clean = format_whitespace("let a = 1;\n", TextLanguage::Rust);
         assert_eq!(clean.formatted, "let a = 1;\n");
         assert_eq!(clean.trimmed_lines + clean.skipped_lines, 0);
+    }
+
+    #[test]
+    fn every_builtin_description_names_the_change_it_really_makes() {
+        // 界面上那句「内置只做了什么」必须与实现逐条对得上 —— 这是上一轮真踩到的坑：
+        // SQL 档原本写「大小写与分行」，而实现只转大写、一个字都不重排（那是**夸大**）。
+        // 口径：每一档的描述里必须出现它真做的动作，且**不许出现它没做的动作**。
+        assert!(Builtin::Whitespace.description().contains("行尾空白"));
+        assert!(Builtin::BraceIndent.description().contains("缩进"));
+        let sql = Builtin::Sql.description();
+        assert!(sql.contains("大写"), "SQL 档要说出它真做的动作：{sql}");
+        assert!(!sql.contains("分行"), "不许声称会分行（实现里一个字都不重排）：{sql}");
+        assert!(sql.contains("不重排"), "要把「不重排空白」写清楚，别让用户以为会美化：{sql}");
+        // 不可用的那一档必须直说「不做任何事」，不能留空让人猜
+        assert_eq!(Builtin::None.description(), "不做任何事");
+        assert!(!Builtin::None.is_available());
     }
 
     #[test]

@@ -1749,6 +1749,21 @@ fn workspace_format_content(
     ))
 }
 
+/// 格式化**编辑面里的一段 SQL**（`FR-EDIT-22`）—— 与 `workspace_format_content` 同一套规则，
+/// 只差一处：**查询还没有文件**（它是内存里的一段文本）⇒ 语言固定为 SQL，也不必过路径安全检查。
+///
+/// 规则仍只在 `format_tool::format_content` 里判一遍（外部工具优先 → 内置兜底 → 如实拒绝），
+/// 本层不另写一份格式化器：同一个规则两处实现必然分叉。
+#[tauri::command]
+fn sql_format(sql: String, prefer_builtin: Option<bool>) -> format_tool::FormatOutcome {
+    format_tool::format_content(
+        doyah_studio_db::TextLanguage::Sql,
+        false,
+        &sql,
+        prefer_builtin.unwrap_or(false),
+    )
+}
+
 // ── 内置终端（W-C 底部终端 · S-9a 起 PTY，S-9c 起**经领域层**）：四条命令，本文件不碰 PTY 库 ──
 //
 // S-9c 起命令走 `terminal_bridge::`：真字节喂进领域层屏幕模型（`TerminalScreen`）、
@@ -1850,6 +1865,7 @@ pub fn run() {
             explain_statement,
             highlight_sql,
             diagnose_sql,
+            sql_format,
             db_write_batch,
             db_primary_key,
             edits_to_dml,
