@@ -77,6 +77,16 @@ enum AppShortcut: CaseIterable {
     case addCursorAbove
     case addCursorBelow
 
+    /// 工作区 Markdown 的**任务框勾选翻转**（`FR-EDIT-48` ⑤）。
+    ///
+    /// **为什么菜单上挂的是 ⌥⌘L 而不是需求原文的 ⌘L**：⌘L 在本产品里已经归
+    /// 「跳到行」（`.goToLine`，SQL 编辑器「编辑」菜单那条）—— `T-20261018-204` 拆这件事时
+    /// 实测到**同键两处注册会互吃**（与 `.selectNextOccurrence` 当初让出 ⌘D 同一条教训：
+    /// 一个窗口里同一组修饰键只能有一个主人）。需求 ② 原话「若快捷键被系统或其它菜单项抢了，
+    /// **换一个不冲突的键并在菜单里显示出来，不许「有快捷键但按了没反应」**」⇒ 菜单这一条用 ⌥⌘L；
+    /// 编辑器里那条 ⌘L 仍保留（没被抢的时候它就是最顺手的那个），两处落到同一个方法。
+    case toggleTaskCheckbox
+
     var key: KeyEquivalent {
         switch self {
         case .execute: return .return
@@ -92,6 +102,7 @@ enum AppShortcut: CaseIterable {
         case .find: return "f"
         case .replace: return "f"
         case .goToLine: return "l"
+        case .toggleTaskCheckbox: return "l"
         case .indent: return "]"
         case .outdent: return "["
         case .clearEditor: return "k"
@@ -123,7 +134,7 @@ enum AppShortcut: CaseIterable {
         case .check, .executionPlan, .saveFileAs, .savedQueries, .history, .clearEditor, .format, .formatCode, .agentAudit, .agentChat, .egressLog, .newBrowserTab, .dataTask, .help, .terminal, .archive:
             return [.command, .shift]
         case .replace, .safeMode, .confirmAllWrites,
-             .selectNextOccurrence, .addCursorAbove, .addCursorBelow:
+             .selectNextOccurrence, .addCursorAbove, .addCursorBelow, .toggleTaskCheckbox:
             return [.command, .option]
         }
     }

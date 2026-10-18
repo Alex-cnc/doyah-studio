@@ -535,7 +535,14 @@ final class CodeTextView: NSTextView {
         // 共用一个入口**（`toggleMarkdownTaskCheckbox()`；需求 ⑤ 原话「同一动作在菜单里也给一个条目（与快捷键
         // 同一个入口）」）。
         // 只认「恰好 ⌘」这一个修饰键 —— 带 ⇧ 的 ⇧⌘L 是应用菜单里的另一件事，不抢。
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.command],
+        //
+        // **判掩码时先把三枚「不是用户按的」标志摘掉**（`T-20261018-204`）：`⌘L` 原先用
+        // `intersection(.deviceIndependentFlagsMask) == [.command]` 判，而大写锁开着时真实事件带着
+        // `.capsLock`（长按 Fn 时带 `.function`、部分键盘带 `.numericPad`）⇒ 掩码一不等就**静默放行**
+        // ——按了没反应、也没有任何提示，属于最难查的那一类。不是用户按的键就不该参与「恰好 ⌘」的判决。
+        var toggleTaskModifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        toggleTaskModifiers.subtract([.capsLock, .numericPad, .function])
+        if toggleTaskModifiers == [.command],
            event.charactersIgnoringModifiers?.lowercased() == "l",
            toggleMarkdownTaskCheckbox() {
             return true

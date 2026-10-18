@@ -57,6 +57,17 @@ struct DoyahStudioCommands: Commands {
             Button(L(.menuToggleTaskCheckbox)) {
                 NSApp.sendAction(#selector(CodeTextView.toggleMarkdownTaskFromMenu(_:)), to: nil, from: nil)
             }
+            // **菜单这一条必须挂真键等效**（`T-20261018-204` · 人类主人 2026-10-18 原话「快捷键不起作用」）：
+            // 原先这里故意不挂 —— 理由是「⌘L 由编辑器自己 `performKeyEquivalent` 消费，挂第二处只是摆设」。
+            // 那条理由只对「编辑器先拿到事件」成立；实测（`TestsUISnapshot/MarkdownEditingKeyProbeTests`）：
+            // 同一窗口里**再有一个 SwiftUI `.keyboardShortcut("l", [.command])`** 就会先赢，编辑器
+            // 永远收不到 —— 而本产品确实还有第二处 ⌘L（`.goToLine`）⇒ 「按了没反应」正是这么来的。
+            // 于是菜单这一条改用不冲突的 **⌥⌘L**（键的定义在 `AppShortcut.toggleTaskCheckbox`，偏差写在
+            // 需求行与帮助面板里，不静默改需求）；编辑器里那条 ⌘L 保留，两处落到**同一个方法**（需求 ⑤）。
+            .keyboardShortcut(
+                AppShortcut.toggleTaskCheckbox.key,
+                modifiers: AppShortcut.toggleTaskCheckbox.modifiers
+            )
         }
 
         CommandGroup(replacing: .newItem) {
