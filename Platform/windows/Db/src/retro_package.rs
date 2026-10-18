@@ -32,7 +32,14 @@ pub struct Card {
     pub period: String,
     /// 标题（`index.json` 的 `title`）。
     pub title: String,
-    /// 日期范围起点（`YYYY-MM-DD`；包里没写就是空串 —— 界面如实显示「未标注」）。
+    /// 发布日（`index.json` 的 `published`，`IR-05` 不变量 4 的契约字段）。
+    ///
+    /// 与 `generated_at` **不是一件事**：`published` 是「这份周报对外发布的日期」（契约必填），
+    /// `generatedAt` 是「生成侧跑完那一刻的墙上时间」（契约没要求、生成侧自愿写）。
+    /// 早先这里把 `publishedAt` 当生成时间兜底 ⇒ 真包（只写 `published`）在卡片上**一个时间都读不出来**，
+    /// 而「拿发布日冒充生成时间」又会把两件事混成一件 —— 所以拆成两个字段，各显示各的。
+    pub published: String,
+    /// 日期范围起点（`YYYY-MM-DD`；包里没写就按期号推导，推导不出才是空串 —— 界面如实显示「未标注」）。
     pub date_start: String,
     /// 日期范围终点。
     pub date_end: String,
@@ -40,7 +47,9 @@ pub struct Card {
     pub tags: Vec<String>,
     /// 封面（包内相对路径，已过白名单；没有 / 不合法 ⇒ `None`）。
     pub cover: Option<String>,
-    /// 生成时间（包的 `generatedAt` / `publishedAt`；没写就是空串）。
+    /// 生成时间（包的 `generatedAt` / `createdAt`；没写就是空串）。
+    ///
+    /// **不再拿 `published` 兜底**：契约只要求 `published`，把它显示成「生成」就是换了意思。
     pub generated_at: String,
 }
 
@@ -176,6 +185,9 @@ fn pick_str<'a>(value: &'a serde_json::Value, keys: &[&str]) -> Option<&'a str> 
 
 /// 日期范围：认 `{ "start": "...", "end": "..." }`、`"2026-10-12 ~ 2026-10-18"`
 /// 与平铺的 `dateStart` / `dateEnd` 三种写法（**都写在契约里**过的形状，不是猜的）。
+///
+/// 包里**一个范围字段都没写**时返回 `("", "")` —— 由调用方按期号推导（见 `period_range`），
+/// 这里不擅自编一个区间。
 fn parse_range(value: &serde_json::Value) -> (String, String) {
     if let Some(range) = value.get("dateRange") {
         if let Some(pair) = range.as_object() {
@@ -202,6 +214,117 @@ fn split_range_text(text: &str) -> (String, String) {
     }
     let only = text.trim().to_string();
     (only.clone(), only)
+}
+
+/// 公历日期 → 距 1970-01-01 的天数（Howard Hinnant 的 `days_from_civil`：纯整数、无依赖，
+/// `Db` 只依赖 `serde`，不为一个日期算术引 chrono）。
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = year - i64::from(month <= 2);
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let yoe = year - era * 400;
+    let mp = (month + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+/// 天数 → 公历 `(年, 月, 日)`（同一套算法的反向）。
+fn civil_from_days(days: i64) -> (i64, i64, i64) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    (year + i64::from(month <= 2), month, day)
+}
+
+/// ISO 星期（周一 = 1 … 周日 = 7）。
+fn iso_weekday(days: i64) -> i64 {
+    (days + 3).rem_euclid(7) + 1
+}
+
+/// 天数 → `YYYY-MM-DD`。
+fn format_day(days: i64) -> String {
+    let (year, month, day) = civil_from_days(days);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+/// `YYYY-MM-DD` / `YYYYMMDD` → 天数；`2026-02-31` 这种「看着像日期」的输入回算后对不上 ⇒ `None`。
+fn parse_day(text: &str) -> Option<i64> {
+    let bytes = text.as_bytes();
+    let (year, month, day) = if text.len() == 8 && text.chars().all(|c| c.is_ascii_digit()) {
+        (text[0..4].parse().ok()?, text[4..6].parse().ok()?, text[6..8].parse().ok()?)
+    } else if text.len() == 10 && bytes[4] == b'-' && bytes[7] == b'-' {
+        (text[0..4].parse().ok()?, text[5..7].parse().ok()?, text[8..10].parse().ok()?)
+    } else {
+        return None;
+    };
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let days = days_from_civil(year, month, day);
+    if civil_from_days(days) != (year, month, day) {
+        return None;
+    }
+    Some(days)
+}
+
+/// 期号 → 日期范围（`FR-R-13-08` ① 的「日期范围」）。
+///
+/// 契约包（`IR-05` 不变量 4）只写 `published` 与期号，**没有范围字段**；而卡片要显示「日期范围」。
+/// 口径（**确定性算术，不是猜**）：
+///   · `YYYY-Www`（ISO 周）⇒ 那一周的**周一到周日**（`2026-W40` = `2026-09-28 → 2026-10-04`）；
+///     年份与周号对不上（那一年没有第 53 周）⇒ `None`；
+///   · `YYYYMMDD` / `YYYY-MM-DD` ⇒ 当日；
+///   · 其余形态 ⇒ `None`（界面如实说「未标注」）。
+///
+/// 只在**包里一个范围字段都没写**时才用它 —— 包里写了就以包为准。
+pub fn period_range(period: &str) -> Option<(String, String)> {
+    let text = period.trim();
+    if let Some((year, week)) = split_iso_week(text) {
+        let jan4 = days_from_civil(year, 1, 4);
+        let monday = jan4 - (iso_weekday(jan4) - 1);
+        let start = monday + (week - 1) * 7;
+        // ISO 周的归属年 = 那一周**周四**所在的年；对不上说明这个年没有第 `week` 周。
+        if civil_from_days(start + 3).0 != year {
+            return None;
+        }
+        return Some((format_day(start), format_day(start + 6)));
+    }
+    let day = parse_day(text)?;
+    let one = format_day(day);
+    Some((one.clone(), one))
+}
+
+/// `2026-W40` / `2026-w40` → `(2026, 40)`。
+fn split_iso_week(text: &str) -> Option<(i64, i64)> {
+    let (year, rest) = text.split_once('-')?;
+    if year.len() != 4 || !year.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let week = rest.strip_prefix('W').or_else(|| rest.strip_prefix('w'))?;
+    if week.len() != 2 || !week.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let year: i64 = year.parse().ok()?;
+    let week: i64 = week.parse().ok()?;
+    if !(1..=53).contains(&week) {
+        return None;
+    }
+    Some((year, week))
+}
+
+/// 卡片排序键：有生成时间就按生成时间，没有就按发布日（契约包只有发布日）。
+fn sort_key(card: &Card) -> &str {
+    if card.generated_at.is_empty() {
+        &card.published
+    } else {
+        &card.generated_at
+    }
 }
 
 /// 标签：只认字符串数组（也认单字符串），去空白、去重、保序。
@@ -274,8 +397,18 @@ pub fn card_of(source: &Source<'_>) -> Result<(Card, Vec<String>), Problem> {
         }
     }
 
-    let (date_start, date_end) = parse_range(&value);
-    let generated_at = pick_str(&value, &["generatedAt", "generated_at", "publishedAt", "published_at", "createdAt"])
+    let (mut date_start, mut date_end) = parse_range(&value);
+    if date_start.is_empty() && date_end.is_empty() {
+        // 契约包不写范围 ⇒ 按期号推（ISO 周 = 周一到周日）；推不出来就留空，界面说「未标注」。
+        if let Some((start, end)) = period_range(&period) {
+            date_start = start;
+            date_end = end;
+        }
+    }
+    let published = pick_str(&value, &["published", "publishedAt", "published_at"])
+        .unwrap_or("")
+        .to_string();
+    let generated_at = pick_str(&value, &["generatedAt", "generated_at", "createdAt", "created_at"])
         .unwrap_or("")
         .to_string();
 
@@ -302,6 +435,7 @@ pub fn card_of(source: &Source<'_>) -> Result<(Card, Vec<String>), Problem> {
         Card {
             period,
             title,
+            published,
             date_start,
             date_end,
             tags: parse_tags(&value),
@@ -331,8 +465,8 @@ pub fn collect(sources: &[Source<'_>]) -> (Vec<Card>, Vec<Problem>) {
         }
     }
     cards.sort_by(|a, b| {
-        b.generated_at
-            .cmp(&a.generated_at)
+        sort_key(b)
+            .cmp(sort_key(a))
             .then_with(|| b.period.cmp(&a.period))
     });
     problems.sort_by(|a, b| a.period.cmp(&b.period).then_with(|| a.message.cmp(&b.message)));
@@ -502,6 +636,87 @@ mod tests {
         ] {
             assert!(normalize_asset_path(bad).is_err(), "{bad:?} 不该通过");
         }
+    }
+
+    // ── 契约字段（`IR-05` 不变量 4）与期号 → 日期范围（`FR-R-12-05` ② 真样本那轮）────────
+
+    #[test]
+    fn a_contract_package_shows_its_published_date_and_derives_the_week_range() {
+        // 真包就是这六个字段（`id` / `title` / `published` / `summary` / `cover` / `media_count`），
+        // 没有 dateStart / generatedAt —— 早先解析器不认 published，卡片上时间与范围都是空的。
+        let index = r#"{
+            "id": "2026-W40",
+            "title": "国际趋势分析周报 · 2026-W40",
+            "published": "2026-10-05",
+            "summary": "端到端样例包",
+            "cover": "assets/trend-01.png",
+            "media_count": 3
+        }"#;
+        let assets = vec!["trend-01.png".to_string()];
+        let (cards, problems) = collect(&[source("2026-W40", Some(index), true, &assets)]);
+        assert!(problems.is_empty(), "{problems:?}");
+        let card = &cards[0];
+        assert_eq!(card.published, "2026-10-05");
+        assert_eq!(card.date_start, "2026-09-28", "期号是 ISO 周 ⇒ 范围取那一周的周一");
+        assert_eq!(card.date_end, "2026-10-04");
+        assert_eq!(card.generated_at, "", "发布日不是生成时间，不许冒充");
+        assert_eq!(card.cover.as_deref(), Some("assets/trend-01.png"));
+    }
+
+    #[test]
+    fn an_explicit_range_in_the_package_beats_the_derived_one() {
+        let index = r#"{"title":"写了范围","published":"2026-10-19","dateRange":"2026-10-13 ~ 2026-10-16"}"#;
+        let (cards, _) = collect(&[source("2026-W42", Some(index), true, &[])]);
+        assert_eq!(cards[0].date_start, "2026-10-13");
+        assert_eq!(cards[0].date_end, "2026-10-16");
+    }
+
+    #[test]
+    fn a_week_period_maps_to_its_monday_through_sunday() {
+        assert_eq!(
+            period_range("2026-W40"),
+            Some(("2026-09-28".to_string(), "2026-10-04".to_string()))
+        );
+        // 跨年周：2026-W01 的周一落在 2025-12-29
+        assert_eq!(
+            period_range("2026-W01"),
+            Some(("2025-12-29".to_string(), "2026-01-04".to_string()))
+        );
+        // 2026 有第 53 周，2025 没有 ⇒ 后者推不出来（不编一个下一年的日期）
+        assert_eq!(
+            period_range("2026-W53"),
+            Some(("2026-12-28".to_string(), "2027-01-03".to_string()))
+        );
+        assert_eq!(period_range("2025-W53"), None);
+        assert_eq!(period_range("2026-W54"), None);
+        assert_eq!(period_range("2026-W00"), None);
+    }
+
+    #[test]
+    fn a_compact_period_maps_to_its_own_day_and_other_shapes_derive_nothing() {
+        assert_eq!(
+            period_range("20261005"),
+            Some(("2026-10-05".to_string(), "2026-10-05".to_string()))
+        );
+        assert_eq!(
+            period_range("2026-10-05"),
+            Some(("2026-10-05".to_string(), "2026-10-05".to_string()))
+        );
+        for bad in ["2026-02-31", "第40周", "2026-W4", "2026W40", "", "2026-W4x"] {
+            assert_eq!(period_range(bad), None, "{bad:?} 不该推出日期");
+        }
+    }
+
+    #[test]
+    fn contract_packages_are_ordered_by_published_date_newest_first() {
+        let older = r#"{"title":"旧","published":"2026-09-28"}"#;
+        let newer = r#"{"title":"新","published":"2026-10-05"}"#;
+        let (cards, _) = collect(&[
+            source("2026-W40", Some(older), true, &[]),
+            source("2026-W41", Some(newer), true, &[]),
+        ]);
+        let periods: Vec<&str> = cards.iter().map(|c| c.period.as_str()).collect();
+        assert_eq!(periods, vec!["2026-W41", "2026-W40"]);
     }
 
     #[test]

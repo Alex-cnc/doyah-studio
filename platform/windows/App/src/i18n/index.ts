@@ -128,9 +128,13 @@ export const DICT = {
   'plugin.retro.monthLabel': { 'zh-Hans': '{month} 月', en: 'Month {month}' },
   'plugin.retro.unknownYear': { 'zh-Hans': '年份未标注', en: 'Year not stated' },
   'plugin.retro.unknownMonth': { 'zh-Hans': '月份未标注', en: 'Month not stated' },
-  // 卡片上的封面与生成时间（FR-R-13-08 判据① 的最后两个字段）
+  // 卡片上的封面与时间（FR-R-13-08 判据① 的最后几个字段）
+  //
+  // **发布日与生成时间是两件事**（`IR-05` 不变量 4 只要求 `published`，生成时间是生成侧自愿写的）：
+  // 早先只认 `generatedAt`，契约包（只有 `published`）在卡片上一个时间都不显示。
   'plugin.retro.generatedAt': { 'zh-Hans': '生成 {t}', en: 'Generated {t}' },
   'plugin.retro.noGeneratedAt': { 'zh-Hans': '生成时间未标注', en: 'Generated time not stated' },
+  'plugin.retro.publishedAt': { 'zh-Hans': '发布 {t}', en: 'Published {t}' },
   'plugin.retro.coverAlt': { 'zh-Hans': '{title} 的封面', en: 'Cover of {title}' },
   'plugin.retro.coverLoading': { 'zh-Hans': '封面读取中…', en: 'Reading the cover…' },
   'plugin.retro.coverFailed': { 'zh-Hans': '封面读不出来', en: 'The cover could not be read' },

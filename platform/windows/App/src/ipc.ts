@@ -718,6 +718,8 @@ export interface RetroCard {
   cover: string | null
   /** 生成时间（包里没写就是空串）。 */
   generatedAt: string
+  /** 发布日（`IR-05` 不变量 4 的契约字段；没写就是空串）—— 与生成时间不是一件事。 */
+  published: string
 }
 
 /** 一处「读不出来」（逐条显示，不让整批失败）。 */

@@ -138,6 +138,7 @@ function card(period: string, title: string, extra: Partial<RetroCard> = {}): Re
     tags: ['周报'],
     cover: null,
     generatedAt: '2026-10-18T09:30:00+08:00',
+    published: '',
     ...extra,
   }
 }
@@ -648,6 +649,31 @@ describe('RetroView 周报阅读面', () => {
     // 墙上时间照抄（不按时区再转一次），缺了就如实写「未标注」
     expect(stamps[0]).toContain('2026-10-18 09:30')
     expect(stamps[1]).toContain('生成时间未标注')
+  })
+
+  it('a_contract_package_shows_its_published_date_and_not_as_a_generated_time', async () => {
+    // 契约包（`IR-05` 不变量 4）：只有 `published`，没有 `generatedAt` ——
+    // 早先解析器不认 `published`，这种包在卡片上一个时间都不显示。
+    state.snapshot.cards = [
+      card('2026-W40', '契约包', {
+        published: '2026-10-05',
+        generatedAt: '',
+        dateStart: '2026-09-28',
+        dateEnd: '2026-10-04',
+      }),
+      card('2026-W41', '老包没发布日', { published: '' }),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    const published = wrapper.findAll('[data-role="retro-published"]')
+    expect(published).toHaveLength(1)
+    expect(published[0].text()).toContain('发布 2026-10-05')
+    // 发布日**不冒充**生成时间：那一格仍如实说「未标注」
+    const stamps = wrapper.findAll('[data-role="retro-generated"]').map((node) => node.text())
+    expect(stamps[0]).toContain('生成时间未标注')
+    // 范围照包的（Rust 已按期号推好），界面不再自己算
+    expect(wrapper.text()).toContain('2026-09-28')
   })
 
   // ── 正文块级渲染（`FR-R-13-08` 判据②：标题层级 / 表格 / 引用 / 列表与源文一致）──────────

@@ -954,6 +954,168 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // ── 真样本（对侧 `DoyahRetro` 仓的 `Fixtures/`，见同目录 `tests/fixtures/retro/README.md`）──
+    //
+    // 为什么单独立一组：上面的用例都是**本侧自造**的 JSON / 正文，它们证明「我们认自己写的形状」；
+    // `FR-R-12-05` ② 要证明的是「**对侧按契约产出的真包**，本侧能导入、能渲染、字段不丢」。
+    // 夹具是逐字节复制过来的，本侧只读不改 —— 对不齐就改本侧解析（或走提案改契约），不改夹具。
+
+    /// 真样本夹具根（`App/src-tauri/tests/fixtures/retro`）。
+    fn fixtures() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join("retro")
+    }
+
+    #[test]
+    fn the_cross_side_sample_package_is_listed_with_every_contract_field() {
+        let snapshot = RetroStore::new(fixtures()).snapshot().expect("扫真样本目录");
+        let sample = snapshot
+            .cards
+            .iter()
+            .find(|card| card.period == "2026-W40")
+            .unwrap_or_else(|| panic!("真样本 2026-W40 没进列表：{:?}", snapshot.problems));
+        assert_eq!(sample.title, "国际趋势分析周报 · 2026-W40");
+        // 契约（`IR-05` 不变量 4）只写 `published`，不写 `generatedAt` / `dateRange`
+        assert_eq!(sample.published, "2026-10-05");
+        assert_eq!(sample.date_start, "2026-09-28", "ISO 周 ⇒ 范围取那一周周一到周日");
+        assert_eq!(sample.date_end, "2026-10-04");
+        assert_eq!(sample.cover.as_deref(), Some("assets/trend-01.png"));
+
+        // 坏 JSON 的那一期不进列表，但**必须被点名**（不静默）
+        assert!(snapshot.cards.iter().all(|card| card.period != "2026-W45"));
+        assert!(
+            snapshot
+                .problems
+                .iter()
+                .any(|problem| problem.period == "2026-W45" && problem.message.contains("不是合法 JSON")),
+            "{:?}",
+            snapshot.problems
+        );
+    }
+
+    #[test]
+    fn the_sample_report_classifies_images_video_and_the_external_link() {
+        let report = RetroStore::new(fixtures()).report("2026-W40").expect("读真样本正文");
+        let state_of = |target: &str| {
+            report
+                .media
+                .iter()
+                .find(|media| media.target == target)
+                .map(|media| media.state)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "正文里的 {target} 没被判定：{:?}",
+                        report.media.iter().map(|m| m.target.clone()).collect::<Vec<_>>()
+                    )
+                })
+        };
+        assert_eq!(state_of("assets/trend-01.png"), MediaState::Ok);
+        assert_eq!(state_of("assets/trend-02.png"), MediaState::Ok);
+        assert_eq!(state_of("assets/clip.mp4"), MediaState::Ok);
+        assert_eq!(
+            state_of("https://example.com/doyah/weekly/clip.mp4"),
+            MediaState::External,
+            "外链不许当本地文件加载（视图内不出网）"
+        );
+        let video = report
+            .media
+            .iter()
+            .find(|media| media.target == "assets/clip.mp4")
+            .expect("本地视频那一条");
+        assert_eq!(video.mime.as_deref(), Some("video/mp4"), "界面靠 MIME 决定画播放器");
+        assert!(video.path.is_some(), "能播的媒体要有绝对落点");
+    }
+
+    #[test]
+    fn the_negative_fixtures_are_reported_one_by_one_instead_of_crashing() {
+        // W41：白名单外格式（文件真在盘上）⇒ Unsupported
+        let w41 = RetroStore::new(fixtures()).report("2026-W41").expect("读 W41");
+        for target in ["assets/raw.avi", "assets/raw.mov"] {
+            let media = w41.media.iter().find(|m| m.target == target).expect("该被判定的媒体");
+            assert_eq!(media.state, MediaState::Unsupported, "{target} 不在白名单");
+            assert!(media.reason.is_some(), "{target} 要给一条可读原因");
+        }
+        // W42：白名单内格式但盘上没有 ⇒ Missing
+        let w42 = RetroStore::new(fixtures()).report("2026-W42").expect("读 W42");
+        assert!(w42.media.iter().any(|m| m.state == MediaState::Missing), "{:?}", w42.media);
+        // W43：`../outside.png` 越界 ⇒ Rejected（不是 Missing，也不是 Ok）
+        let w43 = RetroStore::new(fixtures()).report("2026-W43").expect("读 W43");
+        assert!(
+            w43.media.iter().any(|m| m.state == MediaState::Rejected),
+            "{:?}",
+            w43.media
+        );
+    }
+
+    #[test]
+    fn importing_the_real_sample_twice_is_idempotent() {
+        let dest = root("import-sample");
+        let store = RetroStore::new(&dest);
+        let src = fixtures().join("2026-W40");
+        let source = src.to_str().expect("夹具路径是 UTF-8");
+
+        let first = store.import(source).expect("导入真样本");
+        assert_eq!(
+            first.state,
+            retro_package::ImportState::Imported,
+            "{}",
+            first.message
+        );
+
+        let second = store.import(source).expect("再导一次");
+        assert_eq!(
+            second.state,
+            retro_package::ImportState::Already,
+            "同包重导必须是幂等：{}",
+            second.message
+        );
+        // 落点里的正文与源**逐字节相同**（幂等不是「看起来一样」）
+        let from_source = std::fs::read(src.join("report.md")).expect("读源正文");
+        let at_target = std::fs::read(Path::new(&second.path).join("report.md")).expect("读落点正文");
+        assert_eq!(from_source, at_target);
+
+        let snapshot = store.snapshot().expect("扫落点");
+        assert_eq!(snapshot.cards.len(), 1, "幂等不能多出一张卡");
+        assert_eq!(snapshot.cards[0].period, "2026-W40");
+        let _ = std::fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn importing_the_whole_fixture_folder_reports_the_bad_period_and_keeps_the_good_ones() {
+        let dest = root("import-batch");
+        let store = RetroStore::new(&dest);
+        let batch = store
+            .import_batch(fixtures().to_str().expect("夹具路径是 UTF-8"))
+            .expect("整批导入真样本");
+
+        let state_of = |period: &str| {
+            batch
+                .items
+                .iter()
+                .find(|item| item.period == period)
+                .map(|item| item.state)
+                .unwrap_or_else(|| panic!("{period} 没出现在逐条结果里"))
+        };
+        for period in ["2026-W40", "2026-W41", "2026-W42", "2026-W43"] {
+            assert_eq!(
+                state_of(period),
+                retro_package::ImportState::Imported,
+                "{period} 是合法包，该导进来"
+            );
+        }
+        assert_eq!(
+            state_of("2026-W45"),
+            retro_package::ImportState::Rejected,
+            "坏 index.json 必须逐条报 rejected，且一个字节都不写"
+        );
+        assert_eq!(batch.items.len(), 5, "五个子目录各一条结果");
+        assert_eq!(batch.scanned, 6, "README.md 这种普通文件只计数（skipped）");
+        assert!(std::fs::read_dir(dest.join("2026-W45")).is_err(), "被拒的那期不该落盘");
+        let _ = std::fs::remove_dir_all(&dest);
+    }
+
     /// 判据②（`FR-R-13-08`）：「右区按 `report.md` 渲染，标题层级 / 表格 / 引用 / 列表与源文一致」。
     ///
     /// 为什么从**盘上真实包**读而不是直接调 `markdown::parse`：判据要证明的是这条链

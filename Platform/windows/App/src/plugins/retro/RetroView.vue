@@ -196,6 +196,16 @@ function generatedText(card: RetroCard): string {
   return at ? tr('plugin.retro.generatedAt', { t: at }) : tr('plugin.retro.noGeneratedAt')
 }
 
+/**
+ * 发布日（`IR-05` 不变量 4 的契约字段）：写就画一行，没写就**不画这一行**。
+ *
+ * 为什么不复用「生成时间」那格：两者不是一件事（发布日 = 对外发布日期，生成时间 = 生成侧跑完那一刻）。
+ * 契约包只写 `published`，拼进「生成」那格就是把一件事实说成另一件。
+ */
+function publishedText(card: RetroCard): string {
+  return tr('plugin.retro.publishedAt', { t: formatGeneratedAt(card.published) })
+}
+
 // ── 封面缩略图（`FR-R-13-08` 判据① 的「封面缩略图」）──────────────────────────────
 // 三条口径：① 路径合法性 / 在不在包里已由 Rust 判过（`retro_package`），这里只取字节；
 // ② 字节走既有的 `retroAsset` 命令（**不开 asset 协议**，CSP 仍是「出网只走 IPC」）；
@@ -742,6 +752,12 @@ onMounted(() => {
                       <span class="retro__range">{{ rangeText(card) }}</span>
                     </span>
                     <span class="retro__generated" data-role="retro-generated">{{ generatedText(card) }}</span>
+                    <span
+                      v-if="card.published"
+                      class="retro__published"
+                      data-role="retro-published"
+                      >{{ publishedText(card) }}</span
+                    >
                     <span v-if="card.tags.length" class="retro__tags">
                       <span v-for="tag in card.tags" :key="tag" class="retro__tag">{{ tag }}</span>
                     </span>
@@ -1106,6 +1122,12 @@ onMounted(() => {
 }
 .retro__generated {
   color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+}
+/* 发布日（`IR-05` 不变量 4）：与生成时间同一档小字，但**不抢**主行 —— 契约包只有这一个日期。 */
+.retro__published {
+  color: var(--ds-color-text-secondary);
   font-size: var(--ds-font-caption-size);
   font-variant-numeric: tabular-nums;
 }

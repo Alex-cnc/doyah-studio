@@ -16,6 +16,7 @@ function card(period: string, extra: Partial<RetroCard> = {}): RetroCard {
     tags: ['周报'],
     cover: null,
     generatedAt: '2026-10-18T09:30:00+08:00',
+    published: '',
     ...extra,
   }
 }
