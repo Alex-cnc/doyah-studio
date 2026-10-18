@@ -110,6 +110,10 @@ struct AgentChatView: View {
         case "finished": return L(.agentChatDone)
         case "endpointNotConfigured": return L(.agentChatEndpointNotConfigured)
         case "endpointUnreachable": return L(.agentChatEndpointUnreachable)
+        // 撤销那三种结局各说各的（`FR-AI-25` ⑤）：被又改过 ≠ 写盘失败 ≠ 宿主没接。
+        case "drifted": return L(.agentChatUndoDrifted)
+        case "failed": return L(.agentChatUndoFailed)
+        case "noUndoer": return L(.agentChatUndoUnavailable)
         default: return code
         }
     }
@@ -145,6 +149,15 @@ struct AgentChatView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            // ③「展开可见**用的哪个模型与端点**」（`FR-AI-25` ③）：每张卡展开都带这一行 ——
+            // 不能只靠底部状态行（那里是「这一轮」的读数，卡片可能属于上一轮 / 上一个端点）。
+            // 端点没配 / 连不上就**如实说**，不写死、不假装在跑。
+            if card.expanded, let line = endpointLine {
+                Text(line)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
             if case .pendingApproval = card.outcome {
                 HStack(spacing: 8) {
                     Text(L(.agentChatApprovalPending)).font(.caption).foregroundStyle(.secondary)
@@ -155,11 +168,35 @@ struct AgentChatView: View {
                 }
             }
             if case .applied = card.outcome {
-                Text(L(.agentChatApprovalApplied)).font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text(L(.agentChatApprovalApplied)).font(.caption).foregroundStyle(.secondary)
+                    // **一步撤销**（`FR-AI-25` ⑤）：点了就把这次写入退回去，文件逐字节回到应用前。
+                    // 只出现在「已应用」这一档 —— 别的状态没有可撤的东西。
+                    ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.agentChatUndo)) {
+                        model.undo(card.id)
+                    }
+                    .controlSize(.small)
+                }
+            }
+            if case .undone = card.outcome {
+                Text(L(.agentChatUndone)).font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(10)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// 卡片上那一行「用的哪个模型与端点」（`FR-AI-25` ③）。
+    /// 端点没配 / 连不上 ⇒ 如实说（不写死、不假装在跑），与底部状态行同一个真值源（`model.endpointState`）。
+    private var endpointLine: String? {
+        switch model.endpointState {
+        case .ready(let model, let endpoint):
+            return L(.agentStatusModel, model) + " · " + (URL(string: endpoint)?.host ?? endpoint)
+        case .notConfigured:
+            return L(.agentChatEndpointNotConfigured)
+        case .unreachable:
+            return L(.agentChatEndpointUnreachable)
+        }
     }
 
     private func icon(for card: AgentToolCard) -> String {
@@ -169,6 +206,7 @@ struct AgentChatView: View {
         case .denied: return "xmark.octagon"
         case .pendingApproval, .approved: return "hand.raised"
         case .applied: return "checkmark.seal"
+        case .undone: return "arrow.uturn.backward.circle"
         }
     }
 

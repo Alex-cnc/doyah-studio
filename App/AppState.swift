@@ -3037,21 +3037,75 @@ final class AppState: ObservableObject {
         return String(first).uppercased()
     }
 
+    /// 已应用写入的账（`FR-AI-25` ⑤ 一步撤销用）。
+    ///
+    /// 放在 `AppState` 而不是视图模型里：撤销要在**工作区根**下解析路径、要动**页签缓冲区**，
+    /// 这两样都只有这里同时握着。账本身（记录 / 取原文 / 一步撤销取哪一条）是 Core 的纯值
+    /// `AgentEditJournal` —— 判据在那边咬，这里只做接线。
+    private var agentEditJournal = AgentEditJournal()
+
     /// 兑现一次已批准的写（`FR-AI-23` ④：批准之后才应用）。
+    ///
+    /// `FR-AI-25` ⑤ 的两半都在这一段里：
+    /// · **落到编辑器缓冲区**：写盘之后，若这份文件正开在某个页签且**没有未保存改动**，
+    ///   立刻把新正文推进缓冲区（不用等文件监听那一拍）；有未保存改动 ⇒ 缓冲区不动，
+    ///   交给既有的「磁盘已改」提示（`reloadTab(force: false)` 的老口径，站人这一边）。
+    /// · **留下可撤销的原文**：写之前把 `before` 读下来记账 —— 账记在**写成功之后**，
+    ///   写失败就不该留下一条「能撤销」的空账。
     func applyAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> Bool {
         guard let fingerprint = card.approvalFingerprint,
               let arguments = AgentToolArguments.parse(card.arguments),
               let definition = AgentToolRegistry.standard.definition(named: card.name) else { return false }
-        let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath),
-                                               harmStopLog: .default)
+        let root = URL(fileURLWithPath: workspacePath)
+        let tools = AgentWorkspaceTools(root: root, harmStopLog: .default)
+        let targetPath = arguments["path"] ?? ""
+        // **先读原文**：撤销要用的就是它（应用前不存在 ⇒ nil）。
+        let beforeText: String? = {
+            guard case .file(let output) = tools.readFile(path: targetPath) else { return nil }
+            return output.truncated ? nil : output.text
+        }()
+        // 截断过就不记「原文」：拿半截正文当撤销目标会把文件删短 —— 宁可不给撤销，也不给错的撤销。
+        let canRestore = beforeText != nil || !fileExists(at: targetPath, root: root)
+
+        // 按**能力**分派，不按工具名试错（试错的代价是「第一次尝试被拒」也留痕，
+        // 而这一步正是要把「批了的那一条」原样送进执行器）。
+        switch definition.capability {
         // ① 写文件那一档（`FR-AI-23` ④）。
-        let outcome = tools.writeFile(path: arguments["path"] ?? "",
-                                      content: arguments["content"] ?? "",
-                                      tool: definition,
-                                      guardPolicy: agentGuardPolicy,
-                                      fingerprint: fingerprint,
-                                      granted: [fingerprint])
-        if case .wrote = outcome { return true }
+        case .writeFile:
+            let outcome = tools.writeFile(path: targetPath,
+                                          content: arguments["content"] ?? "",
+                                          tool: definition,
+                                          guardPolicy: agentGuardPolicy,
+                                          fingerprint: fingerprint,
+                                          granted: [fingerprint])
+            guard case .wrote(let written) = outcome else { return false }
+            if canRestore {
+                agentEditJournal.record(cardID: card.id, path: written.path,
+                                        before: beforeText, after: written.text)
+            }
+            syncEditorBuffer(path: written.path, root: root)
+            return true
+        // ①' 定点改代码那一档：与整篇重写**同一套**兑现与撤销（差异预览、逐次指纹、逐字节撤销）。
+        // 这一段此前**没有**：`edit_file` 有审批单、Dispatcher 也认，但从界面批了之后没人兑现 ——
+        // 「批了没落地」比「不给批」更坏，所以随本轮的「应用 + 撤销」一起补上。
+        case .editFile:
+            let outcome = tools.editFile(path: targetPath,
+                                         oldString: arguments["old_string"] ?? "",
+                                         newString: arguments["new_string"] ?? "",
+                                         tool: definition,
+                                         guardPolicy: agentGuardPolicy,
+                                         fingerprint: fingerprint,
+                                         granted: [fingerprint])
+            guard case .wrote(let written) = outcome else { return false }
+            if canRestore {
+                agentEditJournal.record(cardID: card.id, path: written.path,
+                                        before: beforeText, after: written.text)
+            }
+            syncEditorBuffer(path: written.path, root: root)
+            return true
+        default:
+            break
+        }
         // ② 跑命令那一档（`FR-AI-20`）：**同一张单、同一份指纹** —— 兑现在这里。
         // 判定**不在这里重做**：`runCommand` 内部会拿这张单的指纹再核一次，并再走一次白名单
         //（对不上 ⇒ `.refused`，不执行）。换句话说，这里只是"把已批准的那一条送进执行器"，
@@ -3064,6 +3118,44 @@ final class AppState: ObservableObject {
                                               runner: AgentLocalCommandRunner())
         if case .command = commandOutcome { return true }
         return false
+    }
+
+    /// **一步撤销**（`FR-AI-25` ⑤）：把这张卡片已经落盘的改动退回去。
+    ///
+    /// 结局分三种，界面话不一样（不许压成一句「撤不了」）：
+    /// · `.success` —— 文件已逐字节回到应用前（或应用前本来没有 ⇒ 已删掉）；
+    /// · `.failure("drifted")` —— 应用之后文件又被改过（人 / 别的工具）⇒ **不回退**，让人先看正文；
+    /// · `.failure("failed")` —— 写盘出错 / 路径越界 / 账上没有这一笔，可原样重试或如实报。
+    func undoAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> AgentChatModel.UndoResult {
+        guard let edit = agentEditJournal.entry(for: card.id) else { return .failure("failed") }
+        let reverter = AgentEditReverter(root: URL(fileURLWithPath: workspacePath))
+        switch reverter.revert(edit) {
+        case .restored, .removed:
+            agentEditJournal.markUndone(card.id)
+            syncEditorBuffer(path: edit.path, root: URL(fileURLWithPath: workspacePath))
+            return .success
+        case .refused(_, let detail):
+            // `drifted` 是「不改」而不是「没改成」—— 单独一档，界面上说的是「先看正文」。
+            return .failure(detail == "drifted" ? "drifted" : "failed")
+        }
+    }
+
+    /// 文件在不在（撤销账用：应用前不存在 ⇒ 撤销 = 删）。
+    private func fileExists(at path: String, root: URL) -> Bool {
+        guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    /// 把磁盘上的新正文同步进正开着的那个页签（`FR-AI-25` ⑤ 的界面半）。
+    ///
+    /// 判定是 Core 的纯函数（`AgentEditBufferPlan`）：开着且**没有未保存改动**才重载。
+    /// 走既有的 `reloadTab(force: false)` —— 一份文件只有一个重载出口，不为撤销再写第二条。
+    private func syncEditorBuffer(path: String, root: URL) {
+        guard let index = tabs.firstIndex(where: { $0.fileURL?.path == root.appendingPathComponent(path).path })
+        else { return }
+        let plan = AgentEditBufferPlan.action(hasOpenTab: true, isDirty: tabs[index].isDirty)
+        guard plan == .reload else { return }
+        reloadTab(at: index, force: false)
     }
 
     /// 保存只读模式与白名单（复用配置持久化，不另开一份存储）。

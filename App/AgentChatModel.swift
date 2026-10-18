@@ -23,6 +23,10 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     var makeLoop: ((String, any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)?)?
     /// 宿主注入：真正把一次批准**兑现**（写盘 / 跑命令）。返回是否成功。
     var applyApproval: ((AgentToolCard) async -> Bool)?
+    /// 宿主注入：把一次**已经应用**的改动撤回去（`FR-AI-25` ⑤：一步撤销，文件逐字节回到应用前）。
+    /// 撤销目标由宿主按卡片号从账上找 —— 这里只传卡片，不传「要写什么」：
+    /// 原文只该存在一处（Core 的 `AgentEditJournal`），界面与视图模型都不许自己记一份。
+    var undoApplied: ((AgentToolCard) async -> UndoResult)?
     /// 宿主注入：授权粒度（`FR-AI-34`）。缺省 = 任务范围内代签；设成 `.askEachAction` 就回到每个动作都问。
     var scopeProvider: () -> AgentTaskScope.Mode = { .taskScope }
     /// 宿主注入：端点状态（界面出现 / 设置改过之后取一次）。
@@ -179,6 +183,43 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     func deny(_ cardID: UUID) {
         _ = state.deny(cardID: cardID)
+    }
+
+    /// **一步撤销**（`FR-AI-25` ⑤）：把这张卡片已经落盘的改动退回去。
+    ///
+    /// 三处纪律：
+    /// · 只从「已应用」出发（`state.canUndo`）—— 别的状态点它没有意义，直接不响应；
+    /// · 撤不了就**如实说为什么**（`undoFailed` / `undoDrifted`），卡片留在「已应用」，
+    ///   绝不把卡片改成「已撤销」而文件其实没回去；
+    /// · 宿主没接这条 ⇒ 如实报 `noUndoer`（与 `noApplier` 同一条规矩：不假装撤了）。
+    func undo(_ cardID: UUID) {
+        guard state.canUndo(cardID: cardID),
+              let card = state.cards.first(where: { $0.id == cardID }) else { return }
+        guard let undoApplied else {
+            state.appendNotice("noUndoer")
+            return
+        }
+        Task { [weak self] in
+            let result = await undoApplied(card)
+            await MainActor.run {
+                guard let self else { return }
+                switch result {
+                case .success:
+                    self.state.markUndone(cardID: cardID)
+                case .failure(let code):
+                    // 失败原因**机器码**（`drifted` = 应用之后文件又被改过），人话在界面翻。
+                    self.state.appendNotice(code)
+                }
+            }
+        }
+    }
+
+    /// 撤销的结局。用结果类型而不是 `Bool`：撤销失败有两种**处置不同**的原因
+    /// （`drifted` = 文件被又改过 ⇒ 人要先看清正文；`failed` = 写盘出错 ⇒ 可以原样重试），
+    /// 一个 `false` 会把这两件事压成同一句「撤不了」。
+    enum UndoResult: Equatable {
+        case success
+        case failure(String)
     }
 
     func toggle(_ cardID: UUID) {

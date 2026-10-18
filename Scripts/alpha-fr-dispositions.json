@@ -925,6 +925,58 @@
           "path": "Scripts/test-server-objects.sh"
         }
       ]
+    },
+    {
+      "id": "FR-AI-25",
+      "domain": "3.12 AI 智能体",
+      "reason": "ui-click",
+      "reasonText": "对话页签五项已落（位置 / 流式 / 卡片（含模型与端点）/ 内联审批 / 一步撤销）；界面点击与观感需人工点验",
+      "marker": "**[alpha 不含]**（对话页签五项已落（位置 / 流式 / 卡片（含模型与端点）/ 内联审批 / 一步撤销）；界面点击与观感需人工点验）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/AgentEditJournalTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-AI-26",
+      "domain": "3.12 AI 智能体",
+      "reason": "not-implemented",
+      "reasonText": "技能库 Core 已交付（加载校验 / 按需披露 / 渲染，技能不执行工具）；登记档数据与界面入口待接；端到端需真实模型端点",
+      "marker": "**[alpha 不含]**（技能库 Core 已交付（加载校验 / 按需披露 / 渲染，技能不执行工具）；登记档数据与界面入口待接；端到端需真实模型端点）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/AgentSkillLibraryTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-AI-27",
+      "domain": "3.12 AI 智能体",
+      "reason": "ui-click",
+      "reasonText": "定时 agent Core 两片 + App tick 与面板已交付；面板真点一遍与「停用后假端点收 0 次请求」的集成取证归人工点验",
+      "marker": "**[alpha 不含]**（定时 agent Core 两片 + App tick 与面板已交付；面板真点一遍与「停用后假端点收 0 次请求」的集成取证归人工点验）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/AgentScheduleTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-AI-29",
+      "domain": "3.12 AI 智能体",
+      "reason": "not-implemented",
+      "reasonText": "对话记忆 Core 已落进 master（事实源 + 治理面 + 派生索引 + 进上下文的唯一入口）；治理界面与会话侧写入提炼未落",
+      "marker": "**[alpha 不含]**（对话记忆 Core 已落进 master（事实源 + 治理面 + 派生索引 + 进上下文的唯一入口）；治理界面与会话侧写入提炼未落）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/AgentMemoryTests.swift"
+        }
+      ]
     }
   ]
 }

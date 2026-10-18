@@ -37,10 +37,13 @@ public enum AgentToolCardOutcome: Equatable, Sendable {
     case approved(fingerprint: String, preview: String)
     /// 应用完成。
     case applied(fingerprint: String)
+    /// 已撤销（`FR-AI-25` ⑤）：应用之后人点了一下「撤销」，文件已回到应用前。
+    /// 与 `denied` 分开：被拒是**没动过文件**，撤销是**动过又退回去了** —— 审计上不是一回事。
+    case undone(fingerprint: String)
 
     public var isTerminal: Bool {
         switch self {
-        case .executed, .denied, .applied: return true
+        case .executed, .denied, .applied, .undone: return true
         case .running, .pendingApproval, .approved: return false
         }
     }
@@ -71,6 +74,7 @@ public struct AgentToolCard: Identifiable, Equatable, Sendable {
         case .pendingApproval: return "pendingApproval"
         case .approved: return "approved"
         case .applied: return "applied"
+        case .undone: return "undone"
         }
     }
 
@@ -375,6 +379,25 @@ public struct AgentChatState: Equatable, Sendable {
         cards[index].outcome = .applied(fingerprint: fingerprint)
         grants.remove(fingerprint)
         return true
+    }
+
+    /// 撤销完成（`FR-AI-25` ⑤）：卡片从「已应用」变「已撤销」。
+    ///
+    /// **只允许从 `applied` 转**：还在跑 / 等审批 / 被拒的卡片点撤销没有意义（文件没被改过），
+    /// 允许转就是给界面留一条「点了没反应但状态变了」的假路径。
+    @discardableResult
+    public mutating func markUndone(cardID: UUID) -> Bool {
+        guard let index = cards.firstIndex(where: { $0.id == cardID }),
+              case .applied(let fingerprint) = cards[index].outcome else { return false }
+        cards[index].outcome = .undone(fingerprint: fingerprint)
+        return true
+    }
+
+    /// 这张卡片现在能不能撤销（界面据此决定「撤销」按钮出不出现）。
+    public func canUndo(cardID: UUID) -> Bool {
+        guard let card = cards.first(where: { $0.id == cardID }) else { return false }
+        if case .applied = card.outcome { return true }
+        return false
     }
 
     public mutating func toggleExpanded(cardID: UUID) {

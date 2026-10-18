@@ -120,6 +120,12 @@ struct DoyahStudioApp: App {
                         guard let rootPath = workspace.rootPath else { return false }
                         return await appState.applyAgentChatApproval(card: card, workspacePath: rootPath)
                     }
+                    // `FR-AI-25` ⑤ 一步撤销：撤销只认宿主手里那本账（Core `AgentEditJournal`），
+                    // 界面不另存原文 —— 否则「撤销回哪一版」会出现两个答案。
+                    agentChat.undoApplied = { card in
+                        guard let rootPath = workspace.rootPath else { return .failure("failed") }
+                        return await appState.undoAgentChatApproval(card: card, workspacePath: rootPath)
+                    }
                     // `FR-AI-22` ② 工作区现场读数（当前文件 / 选中范围 / 终端尾部）：
                     // 取数在界面（三样分属三个模型，`AppState` 不持有），换算是纯函数
                     // （`AgentWorkspaceSnapshot`），带不带 / 谁在前 / 留尾由 Core 裁。
