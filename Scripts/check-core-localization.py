@@ -152,9 +152,12 @@ ENGLISH_KINDS = {
     "assetName": "字体 / 资源名",
     "xmlElementName": "XML 元素 / 属性名（xlsx OOXML）",
     "cliFlag": "命令行开关",
-    "parseToken": "解析用户文本时要匹配的关键字（如维护计划里的 `cost: high`）",
+    "parseToken": "解析文本时要匹配的关键字（用户输入 / 模型输出同一口径，如维护计划里的 `cost: high`、"
+                  "「宣称完成」的 `Done` / `Completed`）—— 匹配用，不是展示文案",
     "logOnly": "只进日志",
-    "guardrailPattern": "提示注入检测的模式串",
+    "guardrailPattern": "护栏判据的模式串（`contains` 匹配用，不是展示文案）：提示注入检测 / "
+                        "危险命令与不可逆动作识别（`rm -rf` / `git push --force` / `diskutil erase` …）/ "
+                        "密钥形态识别（`BEGIN PRIVATE KEY` …）—— 三种都只进判定，不上界面",
     "productName": "产品 / 品牌专名（按 R-53 同族口径不翻）",
     "sampleValue": "合成数据的样例值",
     "displayDebt": "**已登记的欠账**：确实直达界面、暂时写死英文 —— 不是放行，棘轮只挡变差",

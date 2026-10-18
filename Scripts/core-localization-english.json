@@ -14,9 +14,9 @@
     "assetName": "字体 / 资源名",
     "xmlElementName": "XML 元素 / 属性名（xlsx OOXML）",
     "cliFlag": "命令行开关",
-    "parseToken": "解析用户文本时要匹配的关键字（如维护计划里的 `cost: high`）",
+    "parseToken": "解析文本时要匹配的关键字（用户输入 / 模型输出同一口径，如维护计划里的 `cost: high`、「宣称完成」的 `Done` / `Completed`）—— 匹配用，不是展示文案",
     "logOnly": "只进日志",
-    "guardrailPattern": "提示注入检测的模式串",
+    "guardrailPattern": "护栏判据的模式串（`contains` 匹配用，不是展示文案）：提示注入检测 / 危险命令与不可逆动作识别（`rm -rf` / `git push --force` / `diskutil erase` …）/ 密钥形态识别（`BEGIN PRIVATE KEY` …）—— 三种都只进判定，不上界面",
     "productName": "产品 / 品牌专名（按 R-53 同族口径不翻）",
     "sampleValue": "合成数据的样例值",
     "displayDebt": "**已登记的欠账**：确实直达界面、暂时写死英文 —— 不是放行，棘轮只挡变差"
@@ -108,6 +108,13 @@
         "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift:382"
       ]
     },
+    "BEGIN PRIVATE KEY": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentSoul.swift:97"
+      ],
+      "why": "Core/AgentSoul.swift:97 secretMarkers —— 密钥形态识别，命中即拒载"
+    },
     "Bearer": {
       "kind": "protocolToken",
       "sites": [
@@ -137,6 +144,13 @@
       "sites": [
         "Core/WorkspaceTree.swift:48"
       ]
+    },
+    "Completed": {
+      "kind": "parseToken",
+      "sites": [
+        "Core/AgentCompletionVerifier.swift:121"
+      ],
+      "why": "Core/AgentCompletionVerifier.swift:121 assertionMarkers 同上"
     },
     "Create Function": {
       "kind": "sql",
@@ -173,6 +187,13 @@
       "sites": [
         "Core/DatabaseType.swift:120"
       ]
+    },
+    "Done": {
+      "kind": "parseToken",
+      "sites": [
+        "Core/AgentCompletionVerifier.swift:121"
+      ],
+      "why": "Core/AgentCompletionVerifier.swift:121 assertionMarkers —— 解析模型「宣称完成」的关键字"
     },
     "Execution Time": {
       "kind": "explainField",
@@ -271,6 +292,13 @@
         "Core/ExplainPlan.swift:300"
       ]
     },
+    "Library/Application Support": {
+      "kind": "pathName",
+      "sites": [
+        "Core/AgentHarmStop.swift:139"
+      ],
+      "why": "Core/AgentHarmStop.swift:139 兜底目录路径（URL 拼接用，不是文案）"
+    },
     "Markdown": {
       "kind": "protocolToken",
       "sites": [
@@ -320,6 +348,13 @@
       "sites": [
         "Core/SQLGenerator.swift:129"
       ]
+    },
+    "PRIVATE KEY-----": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentSoul.swift:97"
+      ],
+      "why": "Core/AgentSoul.swift:97 secretMarkers 的另一半（PEM 尾行）"
     },
     "Parse error": {
       "kind": "protocolToken",
@@ -584,6 +619,13 @@
         "Core/ObjectDDL.swift:45"
       ]
     },
+    "curl --upload-file": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentHarmStop.swift:72"
+      ],
+      "why": "Core/AgentHarmStop.swift:72 数据外发判定（hit(.dataEgress, …)）"
+    },
     "current database": {
       "kind": "serverMessageMatch",
       "sites": [
@@ -595,6 +637,20 @@
       "sites": [
         "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift:854"
       ]
+    },
+    "diskutil erase": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentHarmStop.swift:54"
+      ],
+      "why": "Core/AgentHarmStop.swift:54 磁盘擦除 marker 数组"
+    },
+    "diskutil reformat": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentHarmStop.swift:54"
+      ],
+      "why": "Core/AgentHarmStop.swift:54 磁盘重格式化 marker 数组"
     },
     "disregard previous": {
       "kind": "guardrailPattern",
@@ -621,6 +677,27 @@
       "sites": [
         "Core/AgentWorkspaceTools.swift:81"
       ]
+    },
+    "git push": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentHarmStop.swift:62"
+      ],
+      "why": "Core/AgentHarmStop.swift:62 contains(\"git push\") —— 强推判定的必要条件"
+    },
+    "git push --force": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentHarmStop.swift:64"
+      ],
+      "why": "Core/AgentHarmStop.swift:64 hit(.forcedRemoteWrite, \"git push --force\")"
+    },
+    "git push -f": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentHarmStop.swift:65"
+      ],
+      "why": "Core/AgentHarmStop.swift:65 hit(.forcedRemoteWrite, \"git push -f\")"
     },
     "host not found": {
       "kind": "driverMessage",
@@ -683,6 +760,21 @@
         "Core/ConnectionFailure.swift:432"
       ]
     },
+    "nc -e": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentHarmStop.swift:77",
+        "Core/AgentHarmStop.swift:77"
+      ],
+      "why": "Core/AgentHarmStop.swift:77 hit(.remoteShell, \"nc -e\")"
+    },
+    "ncat -e": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentHarmStop.swift:77"
+      ],
+      "why": "Core/AgentHarmStop.swift:77 反向 shell 判定的第二个 marker"
+    },
     "network is unreachable": {
       "kind": "driverMessage",
       "sites": [
@@ -731,6 +823,13 @@
         "Plugins/Notes/Sources/NoteSync/CloudAuth.swift:660"
       ]
     },
+    "none of the claims cite a tool result of this run": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Core/AgentCompletionVerifier.swift:232"
+      ],
+      "why": "Core/AgentCompletionVerifier.swift:232 report.detail —— 机器载荷（判据核对用），人话由带 language: 的渲染入口给"
+    },
     "note row has no usable uuid": {
       "kind": "internalErrorDescription",
       "sites": [
@@ -762,6 +861,13 @@
       "sites": [
         "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:1899"
       ]
+    },
+    "rm -rf": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentHarmStop.swift:59"
+      ],
+      "why": "Core/AgentHarmStop.swift:59 hit(.destructiveDeletion, \"rm -rf\") —— 危险动作分类里的 marker"
     },
     "statement timed out; sending a cancel to the server": {
       "kind": "logOnly",
