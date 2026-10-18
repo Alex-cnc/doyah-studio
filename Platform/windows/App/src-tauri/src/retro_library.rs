@@ -514,6 +514,149 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// 判据②（`FR-R-13-08`）：「右区按 `report.md` 渲染，标题层级 / 表格 / 引用 / 列表与源文一致」。
+    ///
+    /// 为什么从**盘上真实包**读而不是直接调 `markdown::parse`：判据要证明的是这条链
+    /// （读文件 → 解码 → 解析 → 回给界面）整体成立，`markdown.rs` 自己的单测只证明它那一层。
+    #[test]
+    fn a_real_report_keeps_its_heading_levels_table_quote_and_nested_list() {
+        let dir = root("structure");
+        let body = concat!(
+            "# 芯片周报\n\n",
+            "## 一、本周行情\n\n",
+            "### 1.1 存储器\n\n",
+            "| 品类 | 涨幅 | 备注 |\n",
+            "| :--- | :---: | ---: |\n",
+            "| DRAM | +3.2% | 现货 |\n",
+            "| NAND | -1.1% | 合约 |\n\n",
+            "---\n\n",
+            "> 行情只做记录，不构成建议。\n\n",
+            "- 供给端\n",
+            "  - 三大厂减产\n\n",
+            "1. 需求端回升\n",
+        );
+        write_package(&dir, "2026-W42", Some(r#"{"title":"结构"}"#), Some(body));
+        let report = RetroStore::new(&dir).report("2026-W42").expect("读正文");
+
+        let kinds: Vec<&str> = report
+            .document
+            .blocks
+            .iter()
+            .map(|block| match &block.kind {
+                markdown::BlockKind::Heading { .. } => "heading",
+                markdown::BlockKind::Paragraph { .. } => "paragraph",
+                markdown::BlockKind::Table { .. } => "table",
+                markdown::BlockKind::Quote { .. } => "quote",
+                markdown::BlockKind::ListItem { .. } => "item",
+                markdown::BlockKind::Rule => "rule",
+                markdown::BlockKind::CodeFence { .. } => "code",
+                markdown::BlockKind::Media { .. } => "media",
+            })
+            .collect();
+        assert_eq!(
+            kinds,
+            ["heading", "heading", "heading", "table", "rule", "quote", "item", "item"],
+            "块序列要按源文顺序，不许把表格 / 引用 / 列表降级成段落"
+        );
+
+        // 标题层级原样保留（不塌成同一级）
+        let levels: Vec<u8> = report
+            .document
+            .blocks
+            .iter()
+            .filter_map(|block| match &block.kind {
+                markdown::BlockKind::Heading { level, .. } => Some(*level),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(levels, [1, 2, 3]);
+
+        // 表格：三列 + 对齐按 `:---` / `:---:` / `---:` + 两行两列都对上
+        let table = report
+            .document
+            .blocks
+            .iter()
+            .find_map(|block| match &block.kind {
+                markdown::BlockKind::Table {
+                    alignments,
+                    header,
+                    rows,
+                } => Some((alignments, header, rows)),
+                _ => None,
+            })
+            .expect("表格块");
+        assert_eq!(table.0.len(), 3);
+        assert_eq!(
+            *table.0,
+            [
+                markdown::ColumnAlignment::Left,
+                markdown::ColumnAlignment::Center,
+                markdown::ColumnAlignment::Right
+            ]
+        );
+        let head: Vec<&str> = table.1.iter().map(|cell| cell[0].text.as_str()).collect();
+        assert_eq!(head, ["品类", "涨幅", "备注"]);
+        assert_eq!(table.2.len(), 2, "两行数据");
+        assert_eq!(table.2[1][1][0].text, "-1.1%");
+
+        // 引用：里面是真的段落块（不是把整段当纯文本）
+        let quote = report
+            .document
+            .blocks
+            .iter()
+            .find_map(|block| match &block.kind {
+                markdown::BlockKind::Quote { children } => Some(children),
+                _ => None,
+            })
+            .expect("引用块");
+        assert_eq!(quote.len(), 1);
+        match &quote[0].kind {
+            markdown::BlockKind::Paragraph { spans } => assert!(
+                spans.iter().any(|span| span.text.contains("不构成建议")),
+                "引用里的段落：{:?}",
+                spans
+            ),
+            other => panic!("引用里应是段落：{other:?}"),
+        }
+
+        // 列表：无序两项（第二项是嵌套子项，进 children）+ 有序项带序号 1
+        let items: Vec<&markdown::Block> = report
+            .document
+            .blocks
+            .iter()
+            .filter(|block| matches!(&block.kind, markdown::BlockKind::ListItem { .. }))
+            .collect();
+        assert_eq!(items.len(), 2, "顶层两条（嵌套项不算顶层）");
+        match &items[0].kind {
+            markdown::BlockKind::ListItem {
+                number,
+                checked,
+                spans,
+                children,
+            } => {
+                assert!(number.is_none() && checked.is_none(), "无序、非任务项");
+                assert_eq!(spans[0].text, "供给端");
+                assert_eq!(children.len(), 1, "缩进的子项要进 children");
+                match &children[0].kind {
+                    markdown::BlockKind::ListItem { spans, .. } => {
+                        assert_eq!(spans[0].text, "三大厂减产")
+                    }
+                    other => panic!("子项应是列表条目：{other:?}"),
+                }
+            }
+            other => panic!("{other:?}"),
+        }
+        match &items[1].kind {
+            markdown::BlockKind::ListItem { number, spans, .. } => {
+                assert_eq!(*number, Some(1), "有序列表的序号要带过来");
+                assert_eq!(spans[0].text, "需求端回升");
+            }
+            other => panic!("{other:?}"),
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_period_that_tries_to_escape_the_root_is_refused_before_reading() {
         let dir = root("escape");

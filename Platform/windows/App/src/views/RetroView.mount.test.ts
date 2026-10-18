@@ -11,7 +11,7 @@
 //   ⑥ 切到打不开的一期 ⇒ 上一期的正文**不许残留**（否则用户以为看的是这一期）。
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import type { MdDocument, RetroCard, RetroMedia, RetroProblem, RetroSnapshot } from '../ipc'
+import type { MdDocument, MdSpan, RetroCard, RetroMedia, RetroProblem, RetroSnapshot } from '../ipc'
 
 const state: {
   snapshot: RetroSnapshot
@@ -478,5 +478,132 @@ describe('RetroView 周报阅读面', () => {
     // 墙上时间照抄（不按时区再转一次），缺了就如实写「未标注」
     expect(stamps[0]).toContain('2026-10-18 09:30')
     expect(stamps[1]).toContain('生成时间未标注')
+  })
+
+  // ── 正文块级渲染（`FR-R-13-08` 判据②：标题层级 / 表格 / 引用 / 列表与源文一致）──────────
+  //
+  // 这一组钉的是「解析结果 → 界面」的最后一段：块模型只有 Rust 一份实现（`Db/src/markdown.rs`），
+  // 这里按同一份形状喂进来，断言 DOM 与源文逐项对上。`tsc` 从不校验模板，只有挂载能证明接线对。
+
+  const span = (value: string): MdSpan => ({ text: value, bold: false, italic: false, code: false, target: null })
+
+  /** 一份含标题三层 / 表格 / 引用 / 两级列表 / 分隔线的正文（与 Rust 侧那条端到端测试同形）。 */
+  function structureDocument(): MdDocument {
+    return {
+      version: 1,
+      blocks: [
+        { line: 1, kind: { type: 'heading', level: 1, spans: [span('芯片周报')] } },
+        { line: 3, kind: { type: 'heading', level: 2, spans: [span('一、本周行情')] } },
+        { line: 5, kind: { type: 'heading', level: 3, spans: [span('1.1 存储器')] } },
+        {
+          line: 7,
+          kind: {
+            type: 'table',
+            alignments: ['left', 'center', 'right'],
+            header: [[span('品类')], [span('涨幅')], [span('备注')]],
+            rows: [
+              [[span('DRAM')], [span('+3.2%')], [span('现货')]],
+              [[span('NAND')], [span('-1.1%')], [span('合约')]],
+            ],
+          },
+        },
+        { line: 14, kind: { type: 'rule' } },
+        {
+          line: 16,
+          kind: {
+            type: 'quote',
+            children: [{ line: 16, kind: { type: 'paragraph', spans: [span('行情只做记录，不构成建议。')] } }],
+          },
+        },
+        {
+          line: 18,
+          kind: {
+            type: 'listItem',
+            number: null,
+            checked: null,
+            spans: [span('供给端')],
+            children: [
+              { line: 19, kind: { type: 'listItem', number: null, checked: null, spans: [span('三大厂减产')], children: [] } },
+            ],
+          },
+        },
+        { line: 21, kind: { type: 'listItem', number: 1, checked: null, spans: [span('需求端回升')], children: [] } },
+      ],
+    }
+  }
+
+  /** 打开哪一期就把这份正文挂上去（判据只看渲染，不看取数）。 */
+  async function mountStructure(): Promise<ReturnType<typeof mount>> {
+    state.snapshot.cards = [card('2026-W42', '芯片与半导体 · 第 42 周')]
+    state.reports['2026-W42'] = structureDocument()
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+    return wrapper
+  }
+
+  it('heading_levels_keep_their_level_text_and_size_tier', async () => {
+    const wrapper = await mountStructure()
+    const headings = wrapper.findAll('.retro-md__heading')
+    // 层级按源文：h1 / h2 / h3，不塌成同一个标签
+    expect(headings.map((node) => node.element.tagName)).toEqual(['H1', 'H2', 'H3'])
+    expect(headings.map((node) => node.text())).toEqual(['芯片周报', '一、本周行情', '1.1 存储器'])
+    // 字号分档走 data-level（样式按档取令牌；UA 缺省的 h5/h6 会小过正文）
+    expect(headings.map((node) => node.attributes('data-level'))).toEqual(['1', '2', '3'])
+  })
+
+  it('a_table_keeps_its_columns_cells_and_alignment_and_scrolls_when_wide', async () => {
+    const wrapper = await mountStructure()
+    // 宽了横向滚动，不把右区撑破
+    const scroller = wrapper.get('[data-role="retro-table-scroll"]')
+    const table = scroller.get('.retro-md__table')
+
+    const headers = table.findAll('th')
+    expect(headers.map((cell) => cell.text())).toEqual(['品类', '涨幅', '备注'])
+    const cells = table.findAll('td')
+    expect(cells.map((cell) => cell.text())).toEqual(['DRAM', '+3.2%', '现货', 'NAND', '-1.1%', '合约'])
+    // 对齐按源文的 :--: 落（列序不能错位）
+    expect((headers[0].element as HTMLElement).style.textAlign).toBe('left')
+    expect((headers[1].element as HTMLElement).style.textAlign).toBe('center')
+    expect((headers[2].element as HTMLElement).style.textAlign).toBe('right')
+    expect((cells[1].element as HTMLElement).style.textAlign).toBe('center')
+    // 两行数据（不是把行并成一行，也不是只画表头）
+    expect(table.findAll('tbody tr')).toHaveLength(2)
+  })
+
+  it('a_quote_renders_its_nested_paragraph_in_place', async () => {
+    const wrapper = await mountStructure()
+    const quote = wrapper.get('blockquote')
+    expect(quote.text()).toContain('行情只做记录，不构成建议。')
+    // 引用里是真的段落块（不是把整段当纯文本塞进来）
+    expect(quote.find('.retro-md__p').exists()).toBe(true)
+    // 位置也按源文序：引用排在表格之后、列表之前
+    const order = wrapper.findAll('[data-line]').map((node) => node.attributes('data-line'))
+    expect(order.indexOf('16')).toBeGreaterThan(order.indexOf('7'))
+    expect(order.indexOf('16')).toBeLessThan(order.indexOf('18'))
+  })
+
+  it('lists_keep_their_markers_and_nest_one_indent_per_level', async () => {
+    const wrapper = await mountStructure()
+    const items = wrapper.findAll('.retro-md__item')
+    // 两条顶层 + 一条嵌套
+    expect(items).toHaveLength(3)
+    expect(items[0].text()).toContain('供给端')
+    expect(items[2].text()).toContain('需求端回升')
+    // 记号按源文：无序是圆点、有序是序号
+    expect(items[0].get('.retro-md__bullet').text()).toBe('•')
+    expect(items[2].get('.retro-md__bullet').text()).toBe('1.')
+    // 嵌套层级缩进递增（父 0px / 子 18px），并且层级数一路带下去
+    const parent = items.find((node) => node.attributes('data-level') === '0' && node.text().includes('供给端'))!
+    const child = items.find((node) => node.attributes('data-level') === '1')!
+    expect((parent.element as HTMLElement).style.paddingLeft).toBe('0px')
+    expect((child.element as HTMLElement).style.paddingLeft).toBe('18px')
+    expect(child.attributes('data-level')).toBe('1')
+  })
+
+  it('a_rule_and_the_block_order_match_the_source', async () => {
+    const wrapper = await mountStructure()
+    expect(wrapper.findAll('hr.retro-md__rule')).toHaveLength(1)
   })
 })

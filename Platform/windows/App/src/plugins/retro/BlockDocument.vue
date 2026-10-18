@@ -10,6 +10,7 @@
 //
 // 纪律：只读 —— 本组件不产生任何编辑控件（模型里也没有，结构上挡住）。
 
+import { computed } from 'vue'
 import type { MdBlock, MdDocument, MdSpan, RetroMedia } from '../../ipc'
 import { t as translate, type UiLanguage } from '../../i18n'
 
@@ -22,6 +23,8 @@ const props = defineProps<{
   media?: MediaSlot[]
   /** 界面语言（由外壳传下来；不给就按中文）。 */
   language?: UiLanguage
+  /** 嵌套层级（列表 / 引用递归时由父层传下来；顶层不传 = 0）。 */
+  level?: number
 }>()
 
 const emit = defineEmits<{
@@ -42,10 +45,13 @@ function inlineClass(span: MdSpan): string[] {
   return classes
 }
 
-/** 列表嵌套缩进（一层一档）。 */
+/** 列表嵌套缩进（一层一档；`level` 由父层递归传下来，不靠 CSS 猜）。 */
 function indent(level: number): string {
   return `${Math.max(0, level) * 18}px`
 }
+
+/** 这一层是第几层（顶层没传 = 0）。 */
+const depth = computed(() => Math.max(0, props.level ?? 0))
 
 function keyOf(block: MdBlock, index: number): string {
   return `${block.line}-${index}`
@@ -106,11 +112,12 @@ function zoomIn(url: string, alt: string): void {
 <template>
   <div class="retro-md">
     <template v-for="(block, index) in document.blocks" :key="keyOf(block, index)">
-      <!-- 标题：层级按源文给（1~6），不改写 -->
+      <!-- 标题：层级按源文给（1~6），不改写；字号按档走令牌，不靠 UA 缺省（h5/h6 会小过正文） -->
       <component
         :is="`h${Math.min(6, Math.max(1, block.kind.type === 'heading' ? block.kind.level : 1))}`"
         v-if="block.kind.type === 'heading'"
         class="retro-md__heading"
+        :data-level="Math.min(6, Math.max(1, block.kind.level))"
         :data-line="block.line"
       >
         <span v-for="(span, i) in block.kind.spans" :key="i" :class="inlineClass(span)">{{ span.text }}</span>
@@ -164,12 +171,13 @@ function zoomIn(url: string, alt: string): void {
         </span>
       </figure>
 
-      <!-- 引用（递归） -->
+      <!-- 引用（递归；层数只增不重算缩进，横向留白交给 blockquote 自己） -->
       <blockquote v-else-if="block.kind.type === 'quote'" class="retro-md__quote" :data-line="block.line">
         <BlockDocument
           :document="childDocument(block.kind.children)"
           :media="props.media"
           :language="props.language"
+          :level="depth"
           @zoom="emit('zoom', $event)"
         />
       </blockquote>
@@ -177,38 +185,46 @@ function zoomIn(url: string, alt: string): void {
       <!-- 分隔线 -->
       <hr v-else-if="block.kind.type === 'rule'" class="retro-md__rule" :data-line="block.line" />
 
-      <!-- 表格 -->
-      <table v-else-if="block.kind.type === 'table'" class="retro-md__table" :data-line="block.line">
-        <thead>
-          <tr>
-            <th
-              v-for="(cell, c) in block.kind.header"
-              :key="c"
-              :style="{ textAlign: block.kind.alignments[c] === 'none' ? 'left' : block.kind.alignments[c] }"
-            >
-              <span v-for="(span, i) in cell" :key="i" :class="inlineClass(span)">{{ span.text }}</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(row, r) in block.kind.rows" :key="r">
-            <td
-              v-for="(cell, c) in row"
-              :key="c"
-              :style="{ textAlign: block.kind.alignments[c] === 'none' ? 'left' : block.kind.alignments[c] }"
-            >
-              <span v-for="(span, i) in cell" :key="i" :class="inlineClass(span)">{{ span.text }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <!-- 表格（列多了横向滚动，不撑破右区） -->
+      <div
+        v-else-if="block.kind.type === 'table'"
+        class="retro-md__table-scroll"
+        data-role="retro-table-scroll"
+        :data-line="block.line"
+      >
+        <table class="retro-md__table">
+          <thead>
+            <tr>
+              <th
+                v-for="(cell, c) in block.kind.header"
+                :key="c"
+                :style="{ textAlign: block.kind.alignments[c] === 'none' ? 'left' : block.kind.alignments[c] }"
+              >
+                <span v-for="(span, i) in cell" :key="i" :class="inlineClass(span)">{{ span.text }}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, r) in block.kind.rows" :key="r">
+              <td
+                v-for="(cell, c) in row"
+                :key="c"
+                :style="{ textAlign: block.kind.alignments[c] === 'none' ? 'left' : block.kind.alignments[c] }"
+              >
+                <span v-for="(span, i) in cell" :key="i" :class="inlineClass(span)">{{ span.text }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <!-- 列表条目（嵌套走 children 递归） -->
       <div
         v-else-if="block.kind.type === 'listItem'"
         class="retro-md__item"
         :data-line="block.line"
-        :style="{ paddingLeft: indent(0) }"
+        :data-level="depth"
+        :style="{ paddingLeft: indent(depth) }"
       >
         <span class="retro-md__bullet">
           <template v-if="block.kind.checked !== null">
@@ -224,6 +240,7 @@ function zoomIn(url: string, alt: string): void {
             :document="childDocument(block.kind.children)"
             :media="props.media"
             :language="props.language"
+            :level="depth + 1"
             @zoom="emit('zoom', $event)"
           />
         </span>
@@ -245,6 +262,24 @@ export default { name: 'BlockDocument' }
 }
 .retro-md__heading {
   margin: var(--ds-spacing-s) 0 var(--ds-spacing-xs);
+  font-weight: 600;
+}
+/* 标题层级按档走令牌（UA 缺省的 h5/h6 是 0.83em/0.67em，比正文还小，看着像脚注）。
+   1 级 = 显示字号、2 级 = 标题字号、3 级及以下 = 正文字号；4~6 用次级色区分。 */
+.retro-md__heading[data-level='1'] {
+  font-size: var(--ds-font-display-size);
+}
+.retro-md__heading[data-level='2'] {
+  font-size: var(--ds-font-title-size);
+}
+.retro-md__heading[data-level='3'] {
+  font-size: var(--ds-font-body-size);
+}
+.retro-md__heading[data-level='4'],
+.retro-md__heading[data-level='5'],
+.retro-md__heading[data-level='6'] {
+  font-size: var(--ds-font-body-size);
+  color: var(--ds-color-text-secondary);
 }
 .retro-md__p {
   margin: 0 0 var(--ds-spacing-s);
@@ -312,8 +347,13 @@ export default { name: 'BlockDocument' }
   color: var(--ds-color-text-secondary);
   font-size: var(--ds-font-caption-size);
 }
-.retro-md__table {
+/* 宽表格：横向滚动，别把右区撑破（`FR-R-13-08` 判据②的可见前提） */
+.retro-md__table-scroll {
   margin: 0 0 var(--ds-spacing-s);
+  max-width: 100%;
+  overflow-x: auto;
+}
+.retro-md__table {
   border-collapse: collapse;
 }
 .retro-md__table th,
