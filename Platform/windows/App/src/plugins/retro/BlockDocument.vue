@@ -13,6 +13,7 @@
 import { computed } from 'vue'
 import type { MdBlock, MdDocument, MdSpan, RetroMedia } from '../../ipc'
 import { t as translate, type UiLanguage } from '../../i18n'
+import { headingAnchor } from './outline'
 
 /** 媒体槽位：判定（Rust 给的）+ 界面拉回来的 blob URL（`null` = 还没到 / 读不出来）。 */
 export type MediaSlot = RetroMedia & { url: string | null }
@@ -32,6 +33,13 @@ const props = defineProps<{
    * 这样「谁真去开」只有一处，失败原因也只有一处能写。
    */
   openFailures?: Record<string, string>
+  /**
+   * 「大纲里当前点中的那一行」（`FR-R-13-08` ① 目录锚点）。
+   *
+   * 由 `RetroView` 持有：本组件只负责**在该行上画一条强调线**，不做滚动、不记状态 ——
+   * 滚动要的是滚动容器的 ref，那是父层的事；这里若自己存一份，两处状态迟早不同步。
+   */
+  activeLine?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -64,6 +72,11 @@ const depth = computed(() => Math.max(0, props.level ?? 0))
 
 function keyOf(block: MdBlock, index: number): string {
   return `${block.line}-${index}`
+}
+
+/** 标题块的 DOM id（与大纲条目同一个拼法：`outline::headingAnchor`）。 */
+function headingId(line: number): string {
+  return headingAnchor(line)
 }
 
 function childDocument(blocks: MdBlock[]): MdDocument {
@@ -126,6 +139,8 @@ function zoomIn(url: string, alt: string): void {
         :is="`h${Math.min(6, Math.max(1, block.kind.type === 'heading' ? block.kind.level : 1))}`"
         v-if="block.kind.type === 'heading'"
         class="retro-md__heading"
+        :class="{ 'retro-md__heading--active': activeLine === block.line }"
+        :id="headingId(block.line)"
         :data-level="Math.min(6, Math.max(1, block.kind.level))"
         :data-line="block.line"
       >
@@ -288,28 +303,36 @@ export default { name: 'BlockDocument' }
 <style scoped>
 /* 只用设计令牌（裸值棘轮会判红）。 */
 .retro-md {
-  font-size: var(--ds-font-body-size);
+  /* 字号缩放只在这一层给：`--retro-doc-scale` 由 `RetroView` 的档位 class 写在容器上
+     （小 0.92 / 标准 1 / 大 1.14）；没给就是 1 —— 老观感一个像素都不变。 */
+  font-size: calc(var(--ds-font-body-size) * var(--retro-doc-scale, 1));
   line-height: var(--ds-metric-list-row-height);
 }
 .retro-md__heading {
   margin: var(--ds-spacing-s) 0 var(--ds-spacing-xs);
   font-weight: 600;
 }
+/* 大纲里当前点中的那一节：左边一条强调线（只改观感，不插任何节点 —— 包内容与渲染模型都不动） */
+.retro-md__heading--active {
+  padding-left: var(--ds-spacing-s);
+  border-left: var(--ds-metric-hairline) solid var(--ds-color-accent-accent);
+  color: var(--ds-color-accent-accent);
+}
 /* 标题层级按档走令牌（UA 缺省的 h5/h6 是 0.83em/0.67em，比正文还小，看着像脚注）。
    1 级 = 显示字号、2 级 = 标题字号、3 级及以下 = 正文字号；4~6 用次级色区分。 */
 .retro-md__heading[data-level='1'] {
-  font-size: var(--ds-font-display-size);
+  font-size: calc(var(--ds-font-display-size) * var(--retro-doc-scale, 1));
 }
 .retro-md__heading[data-level='2'] {
-  font-size: var(--ds-font-title-size);
+  font-size: calc(var(--ds-font-title-size) * var(--retro-doc-scale, 1));
 }
 .retro-md__heading[data-level='3'] {
-  font-size: var(--ds-font-body-size);
+  font-size: calc(var(--ds-font-body-size) * var(--retro-doc-scale, 1));
 }
 .retro-md__heading[data-level='4'],
 .retro-md__heading[data-level='5'],
 .retro-md__heading[data-level='6'] {
-  font-size: var(--ds-font-body-size);
+  font-size: calc(var(--ds-font-body-size) * var(--retro-doc-scale, 1));
   color: var(--ds-color-text-secondary);
 }
 .retro-md__p {
@@ -323,7 +346,7 @@ export default { name: 'BlockDocument' }
   border: var(--ds-metric-hairline) solid var(--ds-hairline);
   border-radius: var(--ds-radius-control);
   font-family: var(--ds-font-stack-mono);
-  font-size: var(--ds-font-mono-size);
+  font-size: calc(var(--ds-font-mono-size) * var(--retro-doc-scale, 1));
   overflow: auto;
 }
 .retro-md__quote {

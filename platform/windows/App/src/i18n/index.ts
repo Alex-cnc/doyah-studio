@@ -87,6 +87,20 @@ export const DICT = {
     en: 'Open this period folder in File Explorer',
   },
   'plugin.retro.revealFailed': { 'zh-Hans': '打不开所在文件夹', en: 'Could not open the folder' },
+  // 显示设定：字号三档 + 目录锚点（`FR-R-13-08` ①；只改「怎么看」，不动包）
+  'plugin.retro.fontAria': { 'zh-Hans': '正文字号', en: 'Report text size' },
+  'plugin.retro.fontSmaller': { 'zh-Hans': '小一号', en: 'Smaller' },
+  'plugin.retro.fontLarger': { 'zh-Hans': '大一号', en: 'Larger' },
+  'plugin.retro.font.sm': { 'zh-Hans': '小', en: 'Small' },
+  'plugin.retro.font.md': { 'zh-Hans': '标准', en: 'Standard' },
+  'plugin.retro.font.lg': { 'zh-Hans': '大', en: 'Large' },
+  'plugin.retro.outlineToggle': { 'zh-Hans': '大纲 · {n} 节', en: 'Outline · {n}' },
+  'plugin.retro.outlineHint': {
+    'zh-Hans': '按标题跳到那一节（只读，不改包内容）',
+    en: 'Jump to a section by its heading (read-only; the package is untouched)',
+  },
+  'plugin.retro.outlineAria': { 'zh-Hans': '正文目录', en: 'Report outline' },
+  'plugin.retro.outlineUntitled': { 'zh-Hans': '（无标题）', en: '(untitled)' },
   'plugin.retro.emptyImportHint': {
     'zh-Hans': '也可以点上面的「导入包…」，把一个包复制进来。',
     en: 'Or use “Import a package…” above to copy one in.',

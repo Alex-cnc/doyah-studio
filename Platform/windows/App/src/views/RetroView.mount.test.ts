@@ -183,6 +183,8 @@ beforeEach(() => {
   state.batchCalls = []
   state.revealCalls = []
   state.revealFailure = null
+  // 显示设定（字号档）落在 localStorage：逐条测之间清干净，免得上一档带进来
+  globalThis.localStorage?.clear?.()
   // happy-dom 没实现 blob URL：给一个确定性的替身（判据只关心「挂上了没有」）
   let counter = 0
   Object.assign(URL, {
@@ -938,4 +940,148 @@ describe('RetroView 周报阅读面', () => {
     expect(failure.text()).toContain('库里没有这一期')
     expect(failure.text()).toContain('刷新')
   })
+
+  // ── 显示设定：目录锚点 + 字号三档（`FR-R-13-08` ①；只改怎么看，不动包）────────────
+
+  it('the_outline_lists_every_heading_with_its_level_and_text', async () => {
+    state.snapshot.cards = [card('2026-W43', '本期')]
+    state.reports['2026-W43'] = headings()
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+
+    // 面板默认收起：有标题才有这个入口，条数写在按钮上
+    const toggle = wrapper.get('[data-role="retro-outline-toggle"]')
+    expect(toggle.text()).toContain('大纲 · 3 节')
+    expect(wrapper.find('[data-role="retro-outline"]').exists()).toBe(false)
+    await toggle.trigger('click')
+
+    const items = wrapper.findAll('[data-role="retro-outline-item"]')
+    expect(items).toHaveLength(3)
+    expect(items.map((item) => item.text())).toEqual(['本周速览', '进展', '安卓'])
+    // 层级按源文（1 / 2 / 3），不是一律拉平
+    expect(items.map((item) => item.attributes('data-level'))).toEqual(['1', '2', '3'])
+    // 段落不进大纲（只查大纲面板，不查正文 —— 正文里当然有那段）
+    expect(wrapper.get('[data-role="retro-outline"]').text()).not.toContain('正文段落')
+  })
+
+  it('clicking_an_outline_entry_marks_only_that_heading', async () => {
+    state.snapshot.cards = [card('2026-W43', '本期')]
+    state.reports['2026-W43'] = headings()
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-role="retro-outline-toggle"]').trigger('click')
+
+    // 还没点时：正文里没有任何一节被标成当前
+    expect(wrapper.findAll('.retro-md__heading--active')).toHaveLength(0)
+
+    await wrapper.findAll('[data-role="retro-outline-item"]')[1].trigger('click')
+    const active = wrapper.findAll('.retro-md__heading--active')
+    expect(active).toHaveLength(1)
+    // 标的是「进展」那一节（行 5），且锚点 id 与大纲条目同一个拼法
+    expect(active[0].text()).toBe('进展')
+    expect(active[0].attributes('id')).toBe('retro-h-5')
+    expect(wrapper.findAll('[data-role="retro-outline-item"]')[1].attributes('aria-current')).toBe('location')
+    expect(wrapper.findAll('[data-role="retro-outline-item"]')[0].attributes('aria-current')).toBeUndefined()
+
+    // 再点另一条：只留一个当前项（不是越点越多）
+    await wrapper.findAll('[data-role="retro-outline-item"]')[2].trigger('click')
+    const after = wrapper.findAll('.retro-md__heading--active')
+    expect(after).toHaveLength(1)
+    expect(after[0].text()).toBe('安卓')
+    // 只读：点大纲不重读正文、不触发任何导入 / 打开目录
+    expect(state.reportCalls).toEqual(['2026-W43'])
+    expect(state.importCalls).toEqual([])
+    expect(state.revealCalls).toEqual([])
+  })
+
+  it('a_report_without_headings_offers_no_outline_at_all', async () => {
+    state.snapshot.cards = [card('2026-W43', '本期')]
+    state.reports['2026-W43'] = heading('只有一节')
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+    // 一个标题也算大纲（能跳），但没有标题时不该出现一个「0 条」的空入口
+    expect(wrapper.find('[data-role="retro-outline-toggle"]').exists()).toBe(true)
+
+    state.reports['2026-W43'] = { version: 1, blocks: [{ line: 1, kind: { type: 'paragraph', spans: [{ text: '纯正文', bold: false, italic: false, code: false, target: null }] } }] }
+    state.snapshot.cards = [card('2026-W43', '本期'), card('2026-W44', '下一期')]
+    state.reports['2026-W44'] = state.reports['2026-W43']
+    const second = mount(RetroView)
+    await flushPromises()
+    await second.get('[data-period="2026-W44"]').trigger('click')
+    await flushPromises()
+    expect(second.find('[data-role="retro-outline-toggle"]').exists()).toBe(false)
+    expect(second.find('[data-role="retro-outline"]').exists()).toBe(false)
+  })
+
+  it('the_font_tier_changes_the_container_class_without_reloading_the_report', async () => {
+    state.snapshot.cards = [card('2026-W43', '本期')]
+    state.reports['2026-W43'] = headings()
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+
+    const document_ = () => wrapper.get('[data-role="retro-document"]')
+    expect(document_().classes()).toContain('retro__document--md')
+    expect(wrapper.get('[data-role="retro-font-current"]').text()).toBe('标准')
+
+    await wrapper.get('[data-role="retro-font-up"]').trigger('click')
+    expect(document_().classes()).toContain('retro__document--lg')
+    expect(wrapper.get('[data-role="retro-font-current"]').text()).toBe('大')
+    // 偏好落进 localStorage（下次开应用还是这一档）
+    expect(globalThis.localStorage.getItem('doyah.retro.docFont')).toBe('lg')
+    // 到顶就停：大档时「更大」是灰的
+    expect(wrapper.get('[data-role="retro-font-up"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-role="retro-font-down"]').trigger('click')
+    await wrapper.get('[data-role="retro-font-down"]').trigger('click')
+    expect(document_().classes()).toContain('retro__document--sm')
+    expect(globalThis.localStorage.getItem('doyah.retro.docFont')).toBe('sm')
+    expect(wrapper.get('[data-role="retro-font-down"]').attributes('disabled')).toBeDefined()
+
+    // 只改观感：正文没被重读（`FR-R-13-08` ①「显示设定不得改变包内容」）
+    expect(state.reportCalls).toEqual(['2026-W43'])
+    expect(state.importCalls).toEqual([])
+    expect(state.batchCalls).toEqual([])
+  })
+
+  it('switching_period_clears_the_outline_selection', async () => {
+    state.snapshot.cards = [card('2026-W43', '本期'), card('2026-W42', '上一期')]
+    state.reports['2026-W43'] = headings()
+    state.reports['2026-W42'] = heading('上一期正文')
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-role="retro-outline-toggle"]').trigger('click')
+    await wrapper.findAll('[data-role="retro-outline-item"]')[1].trigger('click')
+    expect(wrapper.findAll('.retro-md__heading--active')).toHaveLength(1)
+
+    // 换一期：上一期的「当前节」不许跟着过来（否则用户以为看的是这一节）
+    await wrapper.get('[data-period="2026-W42"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.retro-md__heading--active')).toHaveLength(0)
+    // 新一期只有一个标题 ⇒ 大纲按钮的条数跟着变
+    expect(wrapper.get('[data-role="retro-outline-toggle"]').text()).toContain('大纲 · 1 节')
+  })
 })
+
+/** 三个标题 + 一段正文（大纲判据的夹具：层级 1 / 2 / 3，行号 1 / 5 / 9）。 */
+function headings(): MdDocument {
+  const span = (text: string) => ({ text, bold: false, italic: false, code: false, target: null })
+  return {
+    version: 1,
+    blocks: [
+      { line: 1, kind: { type: 'heading', level: 1, spans: [span('本周速览')] } },
+      { line: 2, kind: { type: 'paragraph', spans: [span('正文段落')] } },
+      { line: 5, kind: { type: 'heading', level: 2, spans: [span('进展')] } },
+      { line: 9, kind: { type: 'heading', level: 3, spans: [span('安卓')] } },
+    ],
+  }
+}

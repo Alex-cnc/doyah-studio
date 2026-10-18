@@ -33,6 +33,15 @@ import {
 } from '../../ipc'
 import { pickFolder } from '../../shell/pluginRegistry'
 import { t as translate, type UiLanguage } from '../../i18n'
+import {
+  docFontClass,
+  readDocFontSize,
+  stepDocFontSize,
+  storeDocFontSize,
+  type DocFontSize,
+  type KeyValueStore,
+} from './docPrefs'
+import { outlineOf, type OutlineEntry } from './outline'
 
 const props = defineProps<{
   /** 界面语言（由外壳传下来；不给就按中文）。 */
@@ -378,6 +387,59 @@ async function revealSelected(): Promise<void> {
   }
 }
 
+// ── 显示设定：目录锚点 + 字号三档（`FR-R-13-08` ①）────────────────────────────────
+//
+// 口径：**显示设定只改「怎么看」，一个字节都不写回包** —— 大纲是正文标题的派生
+// （`outline.ts` 纯函数），字号是容器上的一个 class；两者都不触发 IPC 写命令，也不重读正文。
+
+/** 大纲面板是否展开（默认收起：周报多是通读，面板摊着白占位置）。 */
+const outlineOpen = ref(false)
+/** 大纲里当前跳到的那一行（`null` = 还没跳过）；切期一并清掉。 */
+const activeLine = ref<number | null>(null)
+/** 正文容器（滚动要它的 ref —— `scrollIntoView` 得先有容器才能找节点）。 */
+const docEl = ref<HTMLElement | null>(null)
+
+const outlineEntries = computed<OutlineEntry[]>(() => outlineOf(document.value))
+
+/** 取 localStorage（隐私模式下**访问**这一层就可能抛 ⇒ 当「没有存储」）。 */
+function prefs(): KeyValueStore | null {
+  try {
+    const store = (globalThis as { localStorage?: KeyValueStore }).localStorage
+    return store ?? null
+  } catch {
+    return null
+  }
+}
+
+/** 字号档（冷启动读回上次的；读不出 = 标准档，判定在 `docPrefs`）。 */
+const fontSize = ref<DocFontSize>(readDocFontSize(prefs()))
+
+/** 容器 class：`retro__document` + 档位 class（CSS 只认这三个名字）。 */
+const documentClasses = computed(() => ['retro__document', docFontClass(fontSize.value)])
+
+/** 换档并记住（记不住只丢偏好，正文照旧）。 */
+function setFontSize(next: DocFontSize): void {
+  fontSize.value = next
+  storeDocFontSize(prefs(), next)
+}
+
+/** 加一档 / 减一档（到头停住，不绕回 —— 绕回会像点错了）。 */
+function stepFont(direction: -1 | 1): void {
+  setFontSize(stepDocFontSize(fontSize.value, direction))
+}
+
+/** 点大纲：标成当前 + 滚到那一段（节点不在就只标高亮，不假装滚了）。 */
+function jumpToHeading(entry: OutlineEntry): void {
+  activeLine.value = entry.line
+  const host = docEl.value
+  if (!host) return
+  const target = host.querySelector<HTMLElement>(`[id="${entry.id}"]`)
+  if (!target) return
+  if (typeof target.scrollIntoView === 'function') {
+    target.scrollIntoView({ block: 'start' })
+  }
+}
+
 /** 打开一期。切期时先清掉上一期的正文 —— 不留残留（`FR-R-12-02` ③）。 */
 async function open(card: RetroCard): Promise<void> {
   selected.value = card.period
@@ -388,6 +450,7 @@ async function open(card: RetroCard): Promise<void> {
   zoom.value = null
   openFailures.value = {}
   revealFailure.value = null
+  activeLine.value = null
   releaseMedia()
   try {
     const report = await retroReport(card.period)
@@ -726,7 +789,68 @@ onMounted(() => {
           >
             {{ tr('plugin.retro.reveal') }}
           </button>
+          <!-- 字号三档（`FR-R-13-08` ①「显示设定」）：只改容器 class，不碰包 -->
+          <span v-if="document" class="retro__font" role="group" :aria-label="tr('plugin.retro.fontAria')">
+            <button
+              class="retro__font-step"
+              type="button"
+              data-role="retro-font-down"
+              :disabled="fontSize === 'sm'"
+              :title="tr('plugin.retro.fontSmaller')"
+              @click="stepFont(-1)"
+            >
+              A−
+            </button>
+            <span class="retro__font-current" data-role="retro-font-current">
+              {{ tr(`plugin.retro.font.${fontSize}` as Parameters<typeof translate>[0]) }}
+            </span>
+            <button
+              class="retro__font-step"
+              type="button"
+              data-role="retro-font-up"
+              :disabled="fontSize === 'lg'"
+              :title="tr('plugin.retro.fontLarger')"
+              @click="stepFont(1)"
+            >
+              A+
+            </button>
+          </span>
+          <!-- 目录锚点（`FR-R-13-08` ①）：有标题才有面板，空文档不画一个「0 条」 -->
+          <button
+            v-if="outlineEntries.length"
+            class="retro__refresh"
+            type="button"
+            data-role="retro-outline-toggle"
+            :aria-expanded="outlineOpen"
+            :title="tr('plugin.retro.outlineHint')"
+            @click="outlineOpen = !outlineOpen"
+          >
+            {{ tr('plugin.retro.outlineToggle', { n: outlineEntries.length }) }}
+          </button>
         </header>
+        <!-- 大纲：条目 = 正文标题（层级按源文缩进；当前那一节带左侧强调线） -->
+        <nav
+          v-if="outlineOpen && outlineEntries.length"
+          class="retro__outline"
+          data-role="retro-outline"
+          :aria-label="tr('plugin.retro.outlineAria')"
+        >
+          <ul class="retro__outline-list">
+            <li v-for="entry in outlineEntries" :key="entry.id">
+              <button
+                class="retro__outline-item"
+                type="button"
+                data-role="retro-outline-item"
+                :data-level="entry.level"
+                :data-line="entry.line"
+                :aria-current="activeLine === entry.line ? 'location' : undefined"
+                @click="jumpToHeading(entry)"
+              >
+                {{ entry.text || tr('plugin.retro.outlineUntitled') }}
+              </button>
+            </li>
+          </ul>
+        </nav>
         <p v-if="revealFailure" class="retro__failure" data-role="retro-reveal-failure">
           {{ tr('plugin.retro.revealFailed') }}：{{ revealFailure.message }}
           <span v-if="revealFailure.hint" class="retro__failure-hint">{{ revealFailure.hint }}</span>
@@ -736,7 +860,7 @@ onMounted(() => {
           {{ tr('plugin.retro.reportFailed') }}：{{ reportFailure.message }}
           <span v-if="reportFailure.hint" class="retro__failure-hint">{{ reportFailure.hint }}</span>
         </p>
-        <div v-else-if="document" class="retro__document" data-role="retro-document">
+        <div v-else-if="document" ref="docEl" :class="documentClasses" data-role="retro-document">
           <!-- 媒体汇总（`FR-R-13-09` ③④）：逐条报告的同时给一条看得见的合计，省得一行行找 -->
           <p v-if="mediaTroubleTotal" class="retro__media-summary" data-role="retro-media-summary">
             {{ tr('plugin.retro.mediaSummary', { n: mediaTroubleTotal, detail: mediaTroubleDetail }) }}
@@ -746,6 +870,7 @@ onMounted(() => {
             :media="media"
             :language="lang"
             :open-failures="openFailures"
+            :active-line="activeLine"
             @zoom="openZoom"
             @open-external="openExternalTarget"
           />
@@ -1076,6 +1201,88 @@ onMounted(() => {
 }
 .retro__document {
   flex: 1;
+}
+/* 字号三档（`FR-R-13-08` ①「显示设定：字号」）：只在容器上写一个缩放变量 ——
+   `BlockDocument` 的正文 / 标题 / 代码按它算，媒体说明与表头这类界面件**不缩放**。 */
+.retro__document--sm {
+  --retro-doc-scale: 0.92;
+}
+.retro__document--md {
+  --retro-doc-scale: 1;
+}
+.retro__document--lg {
+  --retro-doc-scale: 1.14;
+}
+/* 字号按钮组：与「刷新 / 打开文件夹」同一套控制件令牌（不新造尺寸与颜色） */
+.retro__font {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+}
+.retro__font-step {
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border: var(--ds-hairline) solid var(--ds-color-hairline-light);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-panel);
+  color: var(--ds-color-text-secondary);
+  font: inherit;
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
+}
+.retro__font-step:disabled {
+  color: var(--ds-color-text-disabled);
+  cursor: default;
+}
+.retro__font-current {
+  min-width: var(--ds-spacing-xl);
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+/* 大纲面板（目录锚点）：一行一条，层级越深越往里缩；当前那一节与正文里的强调线对应 */
+.retro__outline {
+  padding: var(--ds-spacing-s) 0;
+  border-bottom: var(--ds-hairline) solid var(--ds-color-hairline-light);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.retro__outline-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+  list-style: none;
+}
+.retro__outline-item {
+  width: 100%;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border: 0;
+  border-left: var(--ds-hairline) solid transparent;
+  border-radius: var(--ds-radius-control);
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  font: inherit;
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+.retro__outline-item:hover {
+  background: var(--ds-color-surface-panel);
+  color: var(--ds-color-text-primary);
+}
+.retro__outline-item[aria-current='location'] {
+  border-left-color: var(--ds-color-accent-accent);
+  color: var(--ds-color-accent-accent);
+}
+/* 层级缩进（按源文 1~6，两档够用：一级顶格、其余缩一档） */
+.retro__outline-item[data-level='2'] {
+  padding-left: var(--ds-spacing-m);
+}
+.retro__outline-item[data-level='3'],
+.retro__outline-item[data-level='4'],
+.retro__outline-item[data-level='5'],
+.retro__outline-item[data-level='6'] {
+  padding-left: var(--ds-spacing-l);
 }
 /* 媒体汇总条（`FR-R-13-09` ③④）：一条看得见的合计，不是第二套状态机 */
 .retro__media-summary {
