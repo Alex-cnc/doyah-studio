@@ -40,6 +40,13 @@ public enum AgentLoopEvent: Equatable, Sendable {
     /// 为什么单独来一条而不是塞进 `finished`：**完成**与**答完**是两件事 ——
     /// 「跑完了这一轮」不等于「这件事做成了」，界面要能分开报（SRS 负例：把自报当完成）。
     case completionChecked(code: String, citations: Int)
+    /// **长跑监控报警**（`FR-AI-31` ③）：卡住 / 空转 / 反复重试 / 预算将尽 —— 都要让用户看见。
+    ///
+    /// `kind` 是机器码（`stalled` / `spinning` / `retryStorm` / `budgetApproaching` / `budgetExhausted`），
+    /// `observed` 是观测值、`threshold` 是阈值（0 = 这一档没有阈值）。三个数一起给，
+    /// 界面才能说「已 95 秒没有进展（阈值 90）」而不是一句「卡住了」。
+    /// **同类只来一次**：告警是让人做决定的，不是刷屏的（去重在 `AgentRunMonitor` 里）。
+    case monitorAlert(kind: String, observed: Int, threshold: Int)
 }
 
 /// 进度观察口（界面实现它；**不改变循环的判定口径**，只是把过程如实说出来）。
@@ -116,6 +123,9 @@ public struct AgentLoopLimits: Equatable, Sendable {
 public enum AgentLoopStop: Equatable, Sendable {
     case stepLimit(Int)
     case tokenLimit(Int)
+    /// **配额拦下**（`NFR-AI-04` + `FR-AI-31` ③）：调用次数 / 累计 token 到顶 —— 停在发送之前，
+    /// 并把配额自己那句可读原因带出来（不是一句「停了」）。
+    case quotaLimit(String)
     case cancelled
 
     /// 供回灌 / 界面读的原因串（**机器形态**：带数值与档位，人话由渲染入口给）。
@@ -123,6 +133,7 @@ public enum AgentLoopStop: Equatable, Sendable {
         switch self {
         case .stepLimit(let limit): return "stepLimit:\(limit)"
         case .tokenLimit(let limit): return "tokenLimit:\(limit)"
+        case .quotaLimit(let detail): return "quotaLimit:\(detail)"
         case .cancelled: return "cancelled"
         }
     }
@@ -167,6 +178,10 @@ public struct AgentLoopResult: Equatable, Sendable {
     ///
     /// 只有「模型给了最终答复」那一跳才会算它 —— 停止 / 失败时不评完成（那两种本来就不叫完成）。
     public var completion: AgentCompletionReport?
+    /// **本次运行结束时的配额账本**（`NFR-AI-04`）：调用方拿它回写会话账，否则跨运行累计会丢
+    /// （丢了就等于「配额在真实路径上永远不会触发」那条第 1 项缺口又回来了）。
+    /// `nil` = 这一轮没接配额（旧行为**逐字不变**）。
+    public var quotaLedger: AgentQuotaLedger?
 
     public static func == (lhs: AgentLoopResult, rhs: AgentLoopResult) -> Bool {
         lhs.outcome == rhs.outcome && lhs.steps == rhs.steps && lhs.text == rhs.text
@@ -237,6 +252,16 @@ public struct AgentLoop: Sendable {
     /// **完成判据验证器**（`FR-AI-31` ②）：给了就只在「模型给最终答复」时复核一次。
     /// 不给 = 旧行为**逐字不变**（既有判据一条都不必改）。
     public var completionVerifier: AgentCompletionVerifier?
+    /// **配额**（`NFR-AI-04`）：给了就在**每一跳发送之前**判定一次（次数 / 累计 token），
+    /// 超限如实停并给出配额自己那句可读原因 —— 此前对话这条路上根本没接配额
+    /// （`AgentQuota` 只接在自然语言生成 SQL 那条路上）⇒ 长跑时会把配额悄悄烧掉。
+    /// 不给 = 旧行为**逐字不变**。
+    public var quota: AgentQuota?
+    /// 配额账本（`NFR-AI-04`）：调用方把**本次运行之前**已经用掉的量交进来。
+    public var quotaLedger: AgentQuotaLedger
+    /// **长跑监控**（`FR-AI-31` ③）：给了就按跳 / 按重试 / 按预算产出可读告警。
+    /// 不给 = 不产出告警（旧行为逐字不变）。
+    public var monitor: AgentRunMonitor?
     public var limits: AgentLoopLimits
 
     public init(client: any LLMStreamingClient,
@@ -249,6 +274,9 @@ public struct AgentLoop: Sendable {
                 checkpointEvery: Int = 5,
                 compressionBudget: AgentContextCompressionBudget? = nil,
                 completionVerifier: AgentCompletionVerifier? = nil,
+                quota: AgentQuota? = nil,
+                quotaLedger: AgentQuotaLedger = .empty,
+                monitor: AgentRunMonitor? = nil,
                 limits: AgentLoopLimits = AgentLoopLimits()) {
         self.client = client
         self.dispatcher = dispatcher
@@ -260,6 +288,9 @@ public struct AgentLoop: Sendable {
         self.checkpointEvery = checkpointEvery
         self.compressionBudget = compressionBudget
         self.completionVerifier = completionVerifier
+        self.quota = quota
+        self.quotaLedger = quotaLedger
+        self.monitor = monitor
         self.limits = limits
     }
 
@@ -285,6 +316,26 @@ public struct AgentLoop: Sendable {
         // **`FR-AI-31` ② 的证据台账**：本次运行里工具层**真的**产出了什么（写盘 / 改文件 / 命令 / 读过）。
         // 只进不出 —— 模型引用得对它才算数（见 `AgentCompletionVerifier`）。
         var evidence: [AgentCompletionEvidence] = []
+        // **`FR-AI-31` ③ 长跑监控**：本次运行的观察器（没接线 ⇒ nil，一条告警都不产）。
+        var monitor = self.monitor
+        // 配额账本：调用方交进来的是「本次运行**之前**已经用掉的」；本次运行里逐跳累加。
+        var quotaLedger = self.quotaLedger
+
+        /// 报一条监控告警（事件给界面 + 会话留痕可查）。同类只报一次的去重在 `AgentRunMonitor` 里。
+        func raise(_ alert: AgentRunAlert) async {
+            await observer?.observe(.monitorAlert(kind: alert.kind.rawValue,
+                                                  observed: alert.observed,
+                                                  threshold: alert.threshold))
+            recordTurn(context: context, kind: .approval, role: "system", text: alert.code, at: startedAt)
+        }
+
+        /// 收尾：把压缩读数的**累计**与**配额账本**一并落到返回值上（两条都是「调用方要回写」的东西）。
+        /// 没接压缩 / 没接配额 ⇒ 对应字段保持原样（`nil`），旧行为逐字不变。
+        func seal(_ result: AgentLoopResult) -> AgentLoopResult {
+            var copy = compression.applied(to: result)
+            copy.quotaLedger = quota == nil ? nil : quotaLedger
+            return copy
+        }
 
         // **`NFR-AI-08` ① 开跑前先看有没有可用的检查点**：
         // 有 ⇒ 已跑完的跳**一个请求都不重发**（把 `steps` 推到该点之后）；
@@ -308,11 +359,30 @@ public struct AgentLoop: Sendable {
         }
 
         while true {
+            // **配额**（`NFR-AI-04` + `FR-AI-31` ③）：**发送之前**判定 —— 超限如实停，
+            // 原因用配额自己那句可读话（不是一句「停了」）。此前对话这条路上根本没接配额。
+            if let quota {
+                let requested = quota.maxOutputTokensPerRequest
+                if var running = monitor {
+                    let alerts = running.checkBudget(quota: quota, ledger: quotaLedger,
+                                                     requestedOutputTokens: requested)
+                    monitor = running
+                    for alert in alerts { await raise(alert) }
+                }
+                let decision = quota.decision(ledger: quotaLedger, requestedOutputTokens: requested)
+                if !decision.isAllowed {
+                    await observer?.observe(.stopped(.quotaLimit(decision.message)))
+                    recordStop(.quotaLimit(decision.message), context: context, at: startedAt)
+                    return seal(AgentLoopResult(
+                        outcome: .stopped(.quotaLimit(decision.message)), steps: steps,
+                        executedTools: executed, rejectedTools: rejected, usage: usage, text: ""))
+                }
+            }
             // ③ 令牌上限：**停在发送之前**（一次请求都不发）
             if limits.tokensAlreadySpent + usage.billableTokens >= limits.maxTotalTokens {
                 await observer?.observe(.stopped(.tokenLimit(limits.maxTotalTokens)))
                 recordStop(.tokenLimit(limits.maxTotalTokens), context: context, at: startedAt)
-                return compression.applied(to: AgentLoopResult(
+                return seal(AgentLoopResult(
                     outcome: .stopped(.tokenLimit(limits.maxTotalTokens)),
                     steps: steps, executedTools: executed, rejectedTools: rejected,
                     usage: usage, text: ""))
@@ -321,7 +391,7 @@ public struct AgentLoop: Sendable {
             if isCancelled() {
                 await observer?.observe(.stopped(.cancelled))
                 recordStop(.cancelled, context: context, at: startedAt)
-                return compression.applied(to: AgentLoopResult(
+                return seal(AgentLoopResult(
                     outcome: .stopped(.cancelled), steps: steps,
                     executedTools: executed, rejectedTools: rejected, usage: usage, text: ""))
             }
@@ -329,7 +399,7 @@ public struct AgentLoop: Sendable {
             if steps >= limits.maxSteps {
                 await observer?.observe(.stopped(.stepLimit(limits.maxSteps)))
                 recordStop(.stepLimit(limits.maxSteps), context: context, at: startedAt)
-                return compression.applied(to: AgentLoopResult(
+                return seal(AgentLoopResult(
                     outcome: .stopped(.stepLimit(limits.maxSteps)), steps: steps,
                     executedTools: executed, rejectedTools: rejected, usage: usage, text: ""))
             }
@@ -359,6 +429,8 @@ public struct AgentLoop: Sendable {
                     switch event {
                     case .textDelta(let piece):
                         text += piece
+                        // 有增量 = 有进展（看门狗据此判「卡住」，`FR-AI-31` ③）。
+                        monitor?.noteProgress()
                         await observer?.observe(.delta(piece))
                     case .usage(let reported, _):
                         usage = reported
@@ -387,10 +459,16 @@ public struct AgentLoop: Sendable {
                     let wait = retryPolicy.delayBeforeRetry(retries)
                     await observer?.observe(.retrying(attempt: retries, after: wait,
                                                       reason: error.localizedDescription))
+                    // **反复重试要报出来**（`FR-AI-31` ③）：越过阈值就出一条告警，不让它悄悄耗到上限。
+                    if var running = monitor {
+                        let alert = running.recordRetry()
+                        monitor = running
+                        if let alert { await raise(alert) }
+                    }
                     if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
                     if isCancelled() {
                         await observer?.observe(.failed("cancelled"))
-                        return compression.applied(to: AgentLoopResult(
+                        return seal(AgentLoopResult(
                             outcome: .failed("cancelled"), steps: steps,
                             executedTools: executed, rejectedTools: rejected, usage: usage, text: text))
                     }
@@ -414,7 +492,7 @@ public struct AgentLoop: Sendable {
                     sessionID: context.sessionID,
                     hopIndex: steps,
                     chainID: context.chainID))
-                return compression.applied(to: AgentLoopResult(
+                return seal(AgentLoopResult(
                     outcome: .failed(detail), steps: steps,
                     executedTools: executed, rejectedTools: rejected, usage: usage, text: text))
             }
@@ -427,6 +505,18 @@ public struct AgentLoop: Sendable {
             }
             steps += 1
             lastText = text
+            // **配额记账**（`NFR-AI-04`）：一跳 = 一次模型调用 —— 次数 +1、token 按端点报的量累加。
+            // 边界如实登记：客户端不数 token，端点若不回用量则 token 那一项不涨（次数仍然管用）。
+            if let quota {
+                quotaLedger = quota.record(ledger: quotaLedger, usedTokens: usage.billableTokens)
+            }
+            // **空转检测**（`FR-AI-31` ③）：把这一跳的形态喂给监控 —— 同样的工具 + 同样的参数
+            // 连着 N 跳，模型就是在原地打转，得有人知道（而不是等步数上限把它掐掉）。
+            if var running = monitor {
+                let alert = running.recordHop(signature: Self.hopSignature(invocations: invocations, text: text))
+                monitor = running
+                if let alert { await raise(alert) }
+            }
             recordTurn(context: context, kind: .model, role: "assistant", text: text, at: startedAt)
             // `FR-AI-24` ②：**每一次模型调用**都留一条（含模型 / 端点 / token / 耗时 / 状态）。
             await audit?.record(AgentActionRecord.makeModelCall(
@@ -459,7 +549,7 @@ public struct AgentLoop: Sendable {
                     await observer?.observe(.completionChecked(code: verdict.code,
                                                                citations: verdict.citations.count))
                 }
-                return compression.applied(to: AgentLoopResult(
+                return seal(AgentLoopResult(
                     outcome: .finished(text: text), steps: steps,
                     executedTools: executed, rejectedTools: rejected, usage: usage, text: text,
                     resumedFromStep: resumedFromStep, skippedSteps: skippedSteps,
@@ -511,6 +601,8 @@ public struct AgentLoop: Sendable {
                     dispatcher.dispatch(invocation, approvals: approvals)
                 }.value
                 let toolMillis = Int(Date().timeIntervalSince(toolStartedAt) * 1000)
+                // 工具开跑 = 有进展（看门狗据此判「卡住」）。
+                monitor?.noteProgress()
                 await observer?.observe(.toolStarted(name: invocation.name,
                                                      summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
                 switch outcome {
@@ -634,6 +726,15 @@ public struct AgentLoop: Sendable {
 
     private func summarise(_ text: String) -> String {
         text.split(separator: "\n").first.map(String.init) ?? text
+    }
+
+    /// **一跳的形态指纹**（`FR-AI-31` ③ 空转检测）：要工具 ⇒ 工具名 + 参数指纹；只要答复 ⇒ 答复指纹。
+    ///
+    /// 用 `AgentFingerprint`（全工程同一处哈希），**不另立算法**；形态相同 = 模型在重复同一动作。
+    static func hopSignature(invocations: [AgentToolInvocation], text: String) -> String {
+        guard !invocations.isEmpty else { return "text:" + AgentFingerprint.hash(text) }
+        let parts = invocations.map { "\($0.name)#\(AgentFingerprint.hash($0.argumentsJSON))" }
+        return "tools:" + parts.joined(separator: "|")
     }
 
     /// **`FR-AI-31` ②：从一次工具结果里认领「可机械复核的证据」**。

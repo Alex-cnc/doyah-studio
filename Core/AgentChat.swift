@@ -213,6 +213,29 @@ public struct AgentChatCompletionReading: Equatable, Sendable {
     }
 }
 
+/// **长跑监控读数**（`FR-AI-31` ③）：界面上那一行「长跑告警 · 空转 3 跳」吃它。
+///
+/// `nil` = 这一轮没跑飞（那格不出现，不留空壳）。`kind` 是机器码：
+/// `stalled` / `spinning` / `retryStorm` / `budgetApproaching` / `budgetExhausted`；
+/// `observed` = 观测值、`threshold` = 阈值（0 = 这一档没有阈值）、`alerts` = 本轮累计报过几条。
+/// 为什么留 `alerts`：告警**同类只报一次**，但「这一轮到底响过几次」事后要能回答。
+public struct AgentChatMonitorReading: Equatable, Sendable {
+    public var kind: String
+    public var observed: Int
+    public var threshold: Int
+    public var alerts: Int
+
+    public init(kind: String, observed: Int, threshold: Int = 0, alerts: Int = 1) {
+        self.kind = kind
+        self.observed = observed
+        self.threshold = threshold
+        self.alerts = alerts
+    }
+
+    /// 是不是「卡住」那一档（界面据此上更重的颜色 —— 卡住是要人动手的）。
+    public var isStalled: Bool { kind == AgentRunAlertKind.stalled.rawValue }
+}
+
 /// 对话状态（**纯值 + 纯转移** —— 与 `WorkspaceTabSet` 同一条纪律：规则在 Core、状态在 App 的薄壳里）。
 public struct AgentChatState: Equatable, Sendable {
 
@@ -245,6 +268,15 @@ public struct AgentChatState: Equatable, Sendable {
     /// **完成判据读数**（`FR-AI-31` ②）：这一轮模型有没有拿得出可复核的完成证据。
     /// 每开一次跑就清一次（与续跑读数同一条口径：上一轮的结论不许冒充这一轮）。
     public private(set) var completionReading: AgentChatCompletionReading?
+    /// **长跑监控读数**（`FR-AI-31` ③）：这一轮跑飞过没有、哪一档、观测值多少。
+    /// 每开一次跑就清一次（同上：上一轮的告警不许冒充这一轮）。
+    public private(set) var monitorReading: AgentChatMonitorReading?
+    /// 看门狗的心跳（`FR-AI-31` ③「卡住」）：最近一次有进展的时刻。
+    /// 为什么放在状态里而不是监控器里：看门狗住在界面（按秒 tick），而监控器住在循环里（按跳喂）——
+    /// 两边共用 `AgentRunMonitor.stallAlert` 这一条判定，阈值只有一份。
+    public private(set) var lastProgressAt: Date?
+    /// 这一轮已经报过「卡住」没有（同类只报一次 —— 告警不刷屏）。
+    public private(set) var stallReported = false
 
     public init(messages: [AgentChatMessage] = [], cards: [AgentToolCard] = [],
                 steps: [AgentChatStep] = [],
@@ -276,6 +308,10 @@ public struct AgentChatState: Equatable, Sendable {
         resumeReading = nil
         // 上一轮的完成判据结论同样不许冒充这一轮（`FR-AI-31` ②）。
         completionReading = nil
+        // 长跑告警与心跳：新一轮从零起算（`FR-AI-31` ③）。
+        monitorReading = nil
+        lastProgressAt = Date()
+        stallReported = false
         isRunning = true
     }
 
@@ -292,6 +328,10 @@ public struct AgentChatState: Equatable, Sendable {
         steps = []
         resumeReading = nil
         completionReading = nil
+        // 续跑同样是「新的一轮跑」：告警与心跳从零起算（`FR-AI-31` ③）。
+        monitorReading = nil
+        lastProgressAt = Date()
+        stallReported = false
         isRunning = true
     }
 
@@ -331,6 +371,9 @@ public struct AgentChatState: Equatable, Sendable {
     // MARK: - 循环进度（② 增量 / ③ 卡片）
 
     public mutating func apply(_ event: AgentLoopEvent) {
+        // 收到任何事件都算「有进展」的迹象 —— 心跳在这一处刷（看门狗吃它，`FR-AI-31` ③「卡住」那一档）。
+        // 放在最前面而不是每个 case 里各写一遍：漏一个 case 就会出现「明明在动、界面却说卡住」。
+        noteProgress()
         switch event {
         case .retrying(let attempt, let after, let reason):
             // 过程行里追一句：**第几次重试、等多久、为什么** —— 别让人以为卡死了。
@@ -415,7 +458,44 @@ public struct AgentChatState: Equatable, Sendable {
             resumeReading = AgentChatResumeReading(fromStep: fromStep,
                                                    skippedSteps: skipped,
                                                    skippedCheckpointLines: skippedLines)
+        case .monitorAlert(let kind, let observed, let threshold):
+            // `FR-AI-31` ③：跑飞了**不许静默** —— 读数进状态块那一行，另出一条可读提示
+            //（与写冲突 / 完成未验证同一条口径：码留给界面翻，别让人去读机器码）。
+            applyMonitor(AgentRunAlert(kind: AgentRunAlertKind(rawValue: kind) ?? .spinning,
+                                       observed: observed, threshold: threshold))
         }
+    }
+
+    // MARK: - 长跑监控（`FR-AI-31` ③）
+
+    /// **有进展**（增量到了 / 工具动了 / 跳开始了）：界面把它喂进来，看门狗据此判「卡住」。
+    public mutating func noteProgress(at now: Date = Date()) {
+        guard isRunning else { return }
+        lastProgressAt = now
+    }
+
+    /// **看门狗**：距上次进展超过阈值 ⇒ 报一次「卡住」（同类只报一次）。
+    ///
+    /// 为什么这一档不在循环里判：循环正卡在 `await` 里，它自己腾不出来报「我卡住了」；
+    /// 由界面按秒 tick 才是真的「卡住能看见」。判定本身共用 `AgentRunMonitor.stallAlert`。
+    @discardableResult
+    public mutating func checkStall(now: Date = Date(),
+                                    limits: AgentRunMonitorLimits = AgentRunMonitorLimits()) -> AgentRunAlert? {
+        guard isRunning, !stallReported else { return nil }
+        let idle = Int(now.timeIntervalSince(lastProgressAt ?? now))
+        guard let alert = AgentRunMonitor.stallAlert(idleSeconds: idle, limits: limits) else { return nil }
+        applyMonitor(alert)
+        return alert
+    }
+
+    /// 把一条告警落进读数 + 出一条可读提示。
+    private mutating func applyMonitor(_ alert: AgentRunAlert) {
+        if alert.kind == .stalled { stallReported = true }
+        monitorReading = AgentChatMonitorReading(kind: alert.kind.rawValue,
+                                                observed: alert.observed,
+                                                threshold: alert.threshold,
+                                                alerts: (monitorReading?.alerts ?? 0) + 1)
+        appendNotice("monitor:\(alert.kind.rawValue)")
     }
 
     // MARK: - 过程行（自跑的命令都在这条消息里）

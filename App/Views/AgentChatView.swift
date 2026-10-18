@@ -121,7 +121,38 @@ struct AgentChatView: View {
         case "noApplier": return L(.agentChatApplyFailed)
         // `FR-AI-31` ②：**它说做完了，但拿不出可复核的证据** —— 这一条要让人看懂，不是一声「完成」。
         case "completionUnverified": return L(.agentChatCompletionUnverified)
-        default: return code
+        // `FR-AI-31` ③：**跑飞了** 五种形态各说各的（读数在状态块那一行，这一句进消息流）。
+        case "monitor:stalled": return L(.agentChatMonitorStalled)
+        case "monitor:spinning": return L(.agentChatMonitorSpinning)
+        case "monitor:retryStorm": return L(.agentChatMonitorRetryStorm)
+        case "monitor:budgetApproaching": return L(.agentChatMonitorBudgetApproaching)
+        case "monitor:budgetExhausted": return L(.agentChatMonitorBudgetExhausted)
+        default:
+            // `NFR-AI-04`：配额把这个请求拦在发送之前 —— 把「是哪个上限、用掉多少」原样带出来，
+            // 而不是一句「停了」（配额自己那句话就是原因）。
+            let quotaPrefix = "quotaLimit:"
+            if code.hasPrefix(quotaPrefix) {
+                return L(.agentChatQuotaStopped, String(code.dropFirst(quotaPrefix.count)))
+            }
+            return code
+        }
+    }
+
+    /// 长跑告警的**一句话读数**（`FR-AI-31` ③）：机器码在这里翻成人话，观测值与阈值原样带出来。
+    private func monitorText(_ reading: AgentChatMonitorReading) -> String {
+        switch reading.kind {
+        case "stalled":
+            return L(.agentMonitorStalled, "\(reading.observed)", "\(reading.threshold)")
+        case "spinning":
+            return L(.agentMonitorSpinning, "\(reading.observed)")
+        case "retryStorm":
+            return L(.agentMonitorRetryStorm, "\(reading.observed)")
+        case "budgetApproaching":
+            return L(.agentMonitorBudget, "\(reading.observed)", "\(reading.threshold)")
+        case "budgetExhausted":
+            return L(.agentMonitorBudgetOut, "\(reading.observed)", "\(reading.threshold)")
+        default:
+            return reading.kind
         }
     }
 
@@ -333,6 +364,13 @@ struct AgentChatView: View {
                 }
                 if let context = model.lastPromptTokens {
                     Text(L(.agentStatusContext, "\(context)"))
+                }
+                // **长跑监控读数**（`FR-AI-31` ③）：卡住 / 空转 / 反复重试 / 配额将尽 —— 跑飞不许静默。
+                // 只在真报过时出现（`nil` 不留空壳）；卡住那一档用更重的颜色（那要人动手）。
+                if let monitor = model.monitorReading {
+                    Text(L(.agentStatusMonitor, monitorText(monitor)))
+                        .foregroundStyle(monitor.isStalled ? Color.red : Color.orange)
+                        .help(L(.agentStatusMonitor, monitorText(monitor)))
                 }
                 if model.sessionUsage.requests > 0 {
                     Text(L(.agentStatusSession,

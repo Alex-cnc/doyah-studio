@@ -930,6 +930,30 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatApplyFailed
     /// `FR-AI-31` ②：模型说完成但拿不出可复核的证据。
     case agentChatCompletionUnverified
+    /// `FR-AI-31` ③：状态块那一行「长跑告警 · …」（%@ = 具体哪一档）。
+    case agentStatusMonitor
+    /// `FR-AI-31` ③：卡住——已 %@ 秒没有进展（阈值 %@）。
+    case agentMonitorStalled
+    /// `FR-AI-31` ③：空转——连续 %@ 跳同一形态。
+    case agentMonitorSpinning
+    /// `FR-AI-31` ③：反复重试——已重试 %@ 次。
+    case agentMonitorRetryStorm
+    /// `FR-AI-31` ③：配额将尽（已用 %@ / 上限 %@）。
+    case agentMonitorBudget
+    /// `FR-AI-31` ③：配额已用尽（已用 %@ / 上限 %@）。
+    case agentMonitorBudgetOut
+    /// `FR-AI-31` ③：卡住的可读提示（与读数那一行分开：读数在状态块，这句进消息流）。
+    case agentChatMonitorStalled
+    /// `FR-AI-31` ③：空转的可读提示。
+    case agentChatMonitorSpinning
+    /// `FR-AI-31` ③：反复重试的可读提示。
+    case agentChatMonitorRetryStorm
+    /// `FR-AI-31` ③：配额将尽的可读提示。
+    case agentChatMonitorBudgetApproaching
+    /// `FR-AI-31` ③：配额已用尽的可读提示。
+    case agentChatMonitorBudgetExhausted
+    /// `NFR-AI-04` + `FR-AI-31` ③：配额把这个请求拦在发送之前（%@ = 配额自己那句原因）。
+    case agentChatQuotaStopped
     case workspaceHomeBuildLine
     case workspaceHomeCopyright
     case workspaceRecentFiles
@@ -3320,6 +3344,19 @@ public enum LocalizedStrings {
         .agentChatWriteStale: [.simplifiedChinese: "这个文件在你批准之后被改过 —— 没有拿旧审批盖上去，先看清现在的内容再决定。", .english: "This file changed after you approved — the approval was not written over it; review the current content first."],
         .agentChatApplyFailed: [.simplifiedChinese: "没落成盘 —— 写盘出错或目标不可写，可以再点一次。", .english: "The write did not land — the disk write failed or the target is not writable; you can try again."],
         .agentChatCompletionUnverified: [.simplifiedChinese: "模型说做完了，但拿不出可复核的证据 —— 这一轮**未验证**（不把「它说完了」当完成，请自己看一眼结果）。", .english: "The model claims it is done but cites no verifiable evidence — this run stays unverified; do not take the claim as completion."],
+        // `FR-AI-31` ③ 长跑监控：五种跑飞形态各说各的话（读数一行 + 消息流一句）。
+        .agentStatusMonitor: [.simplifiedChinese: "长跑告警 · %@", .english: "run alert · %@"],
+        .agentMonitorStalled: [.simplifiedChinese: "已 %@ 秒无进展（阈值 %@）", .english: "no progress for %@ s (threshold %@)"],
+        .agentMonitorSpinning: [.simplifiedChinese: "空转 %@ 跳", .english: "spinning %@ hops"],
+        .agentMonitorRetryStorm: [.simplifiedChinese: "重试 %@ 次", .english: "retried %@ times"],
+        .agentMonitorBudget: [.simplifiedChinese: "配额将尽 %@/%@", .english: "budget nearly used %@/%@"],
+        .agentMonitorBudgetOut: [.simplifiedChinese: "配额用尽 %@/%@", .english: "budget exhausted %@/%@"],
+        .agentChatMonitorStalled: [.simplifiedChinese: "这一轮已经很久没有进展 —— 可以再等等，也可以点停止（不会静默把配额烧完）。", .english: "This run has stalled — wait a bit longer, or stop it (it will not silently burn the rest of the quota)."],
+        .agentChatMonitorSpinning: [.simplifiedChinese: "模型在原地打转（连着几跳同一个动作）—— 可以点停止，或补一句更具体的要求。", .english: "The model is going in circles (same action several hops in a row) — stop it, or add a more specific instruction."],
+        .agentChatMonitorRetryStorm: [.simplifiedChinese: "模型调用在反复重试 —— 端点可能不稳，重试次数已越过阈值。", .english: "Model calls keep retrying — the endpoint looks unstable; retries passed the threshold."],
+        .agentChatMonitorBudgetApproaching: [.simplifiedChinese: "配额已经用掉八成 —— 再超就会被拦下，这一轮请留意还剩多少活。", .english: "Quota is four-fifths used — the next overrun gets blocked; keep an eye on what is left this run."],
+        .agentChatMonitorBudgetExhausted: [.simplifiedChinese: "配额已用尽 —— 下一次调用会被拦下（不会静默继续烧）。", .english: "Quota is used up — the next call will be blocked (no silent burning)."],
+        .agentChatQuotaStopped: [.simplifiedChinese: "配额拦下了这一次请求：%@", .english: "Quota blocked this request: %@"],
         // 定时 agent（FR-AI-27）：目标档位 / 面板文案 / 历史。词表与既有键能合的就合（状态与时间全走 dataTask*）。
         .agentScheduleTitle: [.simplifiedChinese: "定时 agent", .english: "Scheduled agents"],
         .agentScheduleEmpty: [.simplifiedChinese: "还没有定时条目。定时只决定「什么时候起一次会话」——危险动作仍然逐次审批。", .english: "No scheduled entries yet. A schedule only decides when a session starts — dangerous actions still need approval every time."],
