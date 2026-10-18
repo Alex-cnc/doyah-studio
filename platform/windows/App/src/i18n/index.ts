@@ -141,6 +141,13 @@ export const DICT = {
   },
   'plugin.retro.filterClear': { 'zh-Hans': '清除筛选', en: 'Clear the filter' },
   'plugin.retro.match': { 'zh-Hans': '{m} / {n} 期匹配', en: '{m} of {n} period(s) match' },
+  // 长文分段渲染（`FR-R-12-02` ②「1 万字级不卡」的可见读数）
+  'plugin.retro.docStats': { 'zh-Hans': '{blocks} 段 · 约 {chars} 字', en: '{blocks} blocks · ~{chars} chars' },
+  'plugin.retro.windowShown': {
+    'zh-Hans': '已渲染 {shown} / {total} 段（往下滚接着渲染，还剩 {remaining} 段）',
+    en: 'Rendered {shown} of {total} blocks (scroll down to continue, {remaining} left)',
+  },
+  'plugin.retro.showAll': { 'zh-Hans': '显示全部 {n} 段', en: 'Show all {n} blocks' },
   // 左栏排序档位（`FR-R-12-01` 判据②「期号可排序」）
   'plugin.retro.sortAria': { 'zh-Hans': '左栏排序', en: 'Sort the period list' },
   'plugin.retro.sort.default': {

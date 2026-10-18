@@ -11,7 +11,7 @@
 //   ⑥ 切到打不开的一期 ⇒ 上一期的正文**不许残留**（否则用户以为看的是这一期）。
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import type { MdDocument, MdSpan, RetroCard, RetroMedia, RetroProblem, RetroSnapshot } from '../ipc'
+import type { MdBlock, MdDocument, MdSpan, RetroCard, RetroMedia, RetroProblem, RetroSnapshot } from '../ipc'
 
 const state: {
   snapshot: RetroSnapshot
@@ -146,6 +146,7 @@ vi.mock('../shell/pluginRegistry', async (importOriginal) => ({
 }))
 
 import RetroView from '../plugins/retro/RetroView.vue'
+import { DOC_WINDOW_FIRST } from '../plugins/retro/docWindow'
 
 function heading(text: string): MdDocument {
   return {
@@ -1326,9 +1327,169 @@ describe('RetroView 周报阅读面', () => {
     // 新一期只有一个标题 ⇒ 大纲按钮的条数跟着变
     expect(wrapper.get('[data-role="retro-outline-toggle"]').text()).toContain('大纲 · 1 节')
   })
+  // ── 长文分段渲染（`FR-R-12-02` ②「1 万字级不卡」的可见面）────────────────────────
+  // 口径：首屏块数有上界、页脚如实写剩余、滚到快到底续一窗、大纲能跳到远处那一段、
+  // 「显示全部」永远可达、切期回到首屏。
+
+  it('a_ten_thousand_word_report_renders_one_window_first_and_says_how_much_is_left', async () => {
+    state.snapshot.cards = [card('2026-W43', '长文')]
+    state.reports['2026-W43'] = longReport(200)
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+
+    const document_ = wrapper.get('[data-role="retro-document"]')
+    // 首屏只画一窗（不是把 200 块一次塞进 DOM）
+    expect(document_.findAll('.retro-md__p, .retro-md__heading')).toHaveLength(DOC_WINDOW_FIRST)
+    const footer = wrapper.get('[data-role="retro-window"]')
+    expect(footer.text()).toContain(`已渲染 ${DOC_WINDOW_FIRST} / 200`)
+    expect(footer.text()).toContain(`还剩 ${200 - DOC_WINDOW_FIRST} 段`)
+    // 页头读数：200 块 / 10,000 字（字数从块模型直接数）
+    const stats = wrapper.get('[data-role="retro-doc-stats"]').text()
+    expect(stats).toContain('200 段')
+    expect(stats).toContain('10000 字')
+  })
+
+  it('a_short_report_is_rendered_whole_and_shows_no_window_footer', async () => {
+    state.snapshot.cards = [card('2026-W43', '短的')]
+    state.reports['2026-W43'] = headings()
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-role="retro-document"]').findAll('.retro-md__p, .retro-md__heading')).toHaveLength(4)
+    // 短周报一个像素都不变：不画分段页脚、不画「显示全部」
+    expect(wrapper.find('[data-role="retro-window"]').exists()).toBe(false)
+  })
+
+  it('scrolling_near_the_bottom_renders_the_next_window', async () => {
+    state.snapshot.cards = [card('2026-W43', '长文')]
+    state.reports['2026-W43'] = longReport(200)
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+
+    const body = wrapper.get('.retro__body')
+    // happy-dom 不排版：把滚动容器的三件读数按真界面塞进去
+    Object.defineProperty(body.element, 'scrollHeight', { value: 2000, configurable: true })
+    Object.defineProperty(body.element, 'clientHeight', { value: 600, configurable: true })
+    Object.defineProperty(body.element, 'scrollTop', { value: 900, configurable: true })
+    await body.trigger('scroll')
+    await flushPromises()
+    // 距底 500（> 400 的余量）⇒ 不动，别提前把 DOM 铺满
+    expect(wrapper.get('[data-role="retro-document"]').findAll('.retro-md__p')).toHaveLength(DOC_WINDOW_FIRST)
+
+    Object.defineProperty(body.element, 'scrollTop', { value: 1400, configurable: true })
+    await body.trigger('scroll')
+    await flushPromises()
+    expect(wrapper.get('[data-role="retro-document"]').findAll('.retro-md__p')).toHaveLength(DOC_WINDOW_FIRST + 60)
+    expect(wrapper.get('[data-role="retro-window"]').text()).toContain(`已渲染 ${DOC_WINDOW_FIRST + 60} / 200`)
+    // 正文没重读（分段只是显示设定）
+    expect(state.reportCalls).toEqual(['2026-W43'])
+  })
+
+  it('jumping_from_the_outline_renders_the_far_section_before_scrolling_to_it', async () => {
+    state.snapshot.cards = [card('2026-W43', '长文')]
+    state.reports['2026-W43'] = longReportWithHeadings(200)
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-role="retro-outline-toggle"]').trigger('click')
+
+    const items = wrapper.findAll('[data-role="retro-outline-item"]')
+    const last = items[items.length - 1]
+    const lastLine = Number(last.attributes('data-line'))
+    await last.trigger('click')
+    await flushPromises()
+
+    // 目标那一节真的在 DOM 里（先铺窗再滚），且带上「当前节」的强调线
+    const active = wrapper.findAll('.retro-md__heading--active')
+    expect(active).toHaveLength(1)
+    expect(active[0].attributes('id')).toBe(`retro-h-${lastLine}`)
+    // 窗口铺到了那一块（只扩不缩）；页脚读数跟着变
+    expect(wrapper.get('[data-role="retro-window"]').text()).toContain(`/ 200`)
+    expect(wrapper.findAll('.retro-md__heading, .retro-md__p').length).toBeGreaterThanOrEqual(lastLine)
+  })
+
+  it('show_all_renders_every_block_and_the_footer_goes_quiet', async () => {
+    state.snapshot.cards = [card('2026-W43', '长文')]
+    state.reports['2026-W43'] = longReport(200)
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-role="retro-show-all"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-role="retro-document"]').findAll('.retro-md__p')).toHaveLength(200)
+    // 全铺满后没有「还剩」可写，也没有再点一次的意义
+    expect(wrapper.find('[data-role="retro-show-all"]').exists()).toBe(false)
+    expect(wrapper.get('[data-role="retro-window"]').text()).toContain('已渲染 200 / 200')
+  })
+
+  it('switching_periods_returns_to_the_first_window_and_keeps_nothing_behind', async () => {
+    state.snapshot.cards = [card('2026-W43', '长文'), card('2026-W42', '短的')]
+    state.reports['2026-W43'] = longReport(200)
+    state.reports['2026-W42'] = headings()
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-role="retro-show-all"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-role="retro-document"]').findAll('.retro-md__p')).toHaveLength(200)
+
+    // 切到短的一期：全量、无页脚
+    await wrapper.get('[data-period="2026-W42"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-role="retro-document"]').findAll('.retro-md__p')).toHaveLength(1)
+    expect(wrapper.find('[data-role="retro-window"]').exists()).toBe(false)
+
+    // 再切回长文：回到**首屏**，上一期的「显示全部」不许带过来
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-role="retro-document"]').findAll('.retro-md__p')).toHaveLength(DOC_WINDOW_FIRST)
+    expect(wrapper.get('[data-role="retro-window"]').text()).toContain(`已渲染 ${DOC_WINDOW_FIRST} / 200`)
+  })
 })
 
-/** 三个标题 + 一段正文（大纲判据的夹具：层级 1 / 2 / 3，行号 1 / 5 / 9）。 */
+/** 10,000 字级长文：200 块 × 每块 50 字（无空白 ⇒ 字数可精确断言）。 */
+function longReport(blocks: number): MdDocument {
+  const out: MdBlock[] = []
+  for (let index = 0; index < blocks; index += 1) {
+    out.push({
+      line: index + 1,
+      kind: { type: 'paragraph' as const, spans: [{ text: '芯'.repeat(50), bold: false, italic: false, code: false, target: null }] },
+    })
+  }
+  return { version: 1, blocks: out }
+}
+
+/** 带标题的长文（大纲跳转用）：每 20 块一个标题，行号 = 下标 + 1。 */
+function longReportWithHeadings(blocks: number): MdDocument {
+  const out: MdBlock[] = []
+  for (let index = 0; index < blocks; index += 1) {
+    if (index % 20 === 0) {
+      out.push({
+        line: index + 1,
+        kind: {
+          type: 'heading' as const,
+          level: 2,
+          spans: [{ text: `第 ${index / 20 + 1} 节`, bold: false, italic: false, code: false, target: null }],
+        },
+      })
+    } else {
+      out.push({
+        line: index + 1,
+        kind: { type: 'paragraph' as const, spans: [{ text: '正文', bold: false, italic: false, code: false, target: null }] },
+      })
+    }
+  }
+  return { version: 1, blocks: out }
+}
 function headings(): MdDocument {
   const span = (text: string) => ({ text, bold: false, italic: false, code: false, target: null })
   return {

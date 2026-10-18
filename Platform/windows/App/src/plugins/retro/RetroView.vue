@@ -10,10 +10,19 @@
 //   ③ **坏包要说出来**：读不出来的期逐条列在左栏底部（缺 index / 缺正文 / 编码错 / 封面越界），
 //      不让它静默消失 —— 用户放进去的包没出现，必须能查到哪里不对。
 
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import BlockDocument, { type MediaSlot } from './BlockDocument.vue'
 import { coverMime, formatGeneratedAt } from './cardMeta'
 import { CARD_SORTS, sortCards, type CardSort } from './cardSort'
+import {
+  blocksFor,
+  docStats,
+  firstWindow,
+  nearBottom,
+  nextWindow,
+  windowForLine,
+  windowOf,
+} from './docWindow'
 import { filterCards, groupCards } from './periodIndex'
 import {
   openExternal,
@@ -77,6 +86,44 @@ const reportLoading = ref(false)
 const selectedCard = computed<RetroCard | null>(
   () => cards.value.find((card) => card.period === selected.value) ?? null,
 )
+
+// ── 长文分段渲染（`FR-R-12-02` ②「1 万字级不卡」的可机械验证半边）──────────────────
+// 三条口径（全在 `docWindow.ts`，这里只存数字与转发）：
+// ① 短周报（≤ 阈值）走**同一份数组引用**，渲染路径一个像素都不变；
+// ② 长文首屏只画前若干块，页脚如实写「已渲染 X / Y 段」，滚到距底 400px 内自动续；
+// ③ 「显示全部」永远在，且大纲跳转会先把窗口铺到目标块 —— 分段不能变成「有的内容看不到」。
+const shown = ref(0)
+const windowInfo = computed(() => windowOf(document.value, shown.value))
+const stats = computed(() => (document.value ? docStats(document.value) : null))
+/** 交给 `BlockDocument` 的那份（短文档就是原来那份引用）。 */
+const visibleDocument = computed<MdDocument | null>(() => {
+  if (!document.value) return null
+  return { version: document.value.version, blocks: blocksFor(document.value, shown.value) }
+})
+
+/** 页脚那句：已渲染 / 总数 / 还剩几段。 */
+const windowText = computed(() =>
+  tr('plugin.retro.windowShown', {
+    shown: windowInfo.value.shown,
+    total: windowInfo.value.total,
+    remaining: windowInfo.value.remaining,
+  }),
+)
+
+/** 滚到快到底 ⇒ 再铺一窗（**只增不减**；尺寸读不到就不动）。 */
+function onBodyScroll(): void {
+  const host = bodyEl.value
+  const doc = document.value
+  if (!host || !doc) return
+  if (!windowInfo.value.limited) return
+  if (!nearBottom({ scrollTop: host.scrollTop, clientHeight: host.clientHeight, scrollHeight: host.scrollHeight })) return
+  shown.value = nextWindow(shown.value, doc.blocks.length)
+}
+
+/** 一键铺满（长文里要用页内查找时的那条路）。 */
+function showEverything(): void {
+  shown.value = document.value?.blocks.length ?? 0
+}
 
 // ── 左栏的折叠与过滤（`FR-R-13-08` 判据①）──────────────────────────────────────────
 // 三条口径：① 归组 / 过滤都在纯函数里（`periodIndex.ts`），这里只画；
@@ -286,6 +333,7 @@ async function refresh(): Promise<void> {
     if (selected.value && !snapshot.cards.some((card) => card.period === selected.value)) {
       selected.value = ''
       document.value = null
+      shown.value = 0
       reportFailure.value = null
       reportBytes.value = 0
       releaseMedia()
@@ -501,6 +549,8 @@ const outlineOpen = ref(false)
 const activeLine = ref<number | null>(null)
 /** 正文容器（滚动要它的 ref —— `scrollIntoView` 得先有容器才能找节点）。 */
 const docEl = ref<HTMLElement | null>(null)
+/** 滚动容器（`.retro__body`）：长文续窗要读它的 scrollTop / scrollHeight。 */
+const bodyEl = ref<HTMLElement | null>(null)
 
 const outlineEntries = computed<OutlineEntry[]>(() => outlineOf(document.value))
 
@@ -531,9 +581,17 @@ function stepFont(direction: -1 | 1): void {
   setFontSize(stepDocFontSize(fontSize.value, direction))
 }
 
-/** 点大纲：标成当前 + 滚到那一段（节点不在就只标高亮，不假装滚了）。 */
-function jumpToHeading(entry: OutlineEntry): void {
+/** 点大纲：标成当前 + 滚到那一段（节点不在就先把窗口铺到它，铺不到就只标高亮，不假装滚了）。 */
+async function jumpToHeading(entry: OutlineEntry): Promise<void> {
   activeLine.value = entry.line
+  const doc = document.value
+  if (!doc) return
+  // 目标还落在没渲染的那一段里 ⇒ **先扩窗**（只扩不缩），等 DOM 落地再找节点
+  const needed = windowForLine(doc, entry.line, shown.value)
+  if (needed > shown.value) {
+    shown.value = needed
+    await nextTick()
+  }
   const host = docEl.value
   if (!host) return
   const target = host.querySelector<HTMLElement>(`[id="${entry.id}"]`)
@@ -547,6 +605,9 @@ function jumpToHeading(entry: OutlineEntry): void {
 async function open(card: RetroCard): Promise<void> {
   selected.value = card.period
   document.value = null
+  // 切期回到首屏：上一期的窗口与滚动位置都不许带进这一期
+  shown.value = 0
+  if (bodyEl.value) bodyEl.value.scrollTop = 0
   reportFailure.value = null
   reportBytes.value = 0
   reportLoading.value = true
@@ -563,6 +624,8 @@ async function open(card: RetroCard): Promise<void> {
   try {
     const report = await retroReport(card.period)
     document.value = report.document
+    // 首屏块数由纯函数给（短文档 = 全量，长文档 = 前若干块）
+    shown.value = firstWindow(report.document.blocks.length)
     reportBytes.value = report.bytes
     void loadMedia(card.period, report.media)
   } catch (error) {
@@ -891,7 +954,7 @@ onMounted(() => {
     </aside>
 
     <!-- 右：正文 -->
-    <div class="retro__body">
+    <div ref="bodyEl" class="retro__body" @scroll="onBodyScroll">
       <p v-if="!selected" class="retro__hint retro__hint--center" data-role="retro-pick">
         {{ tr('plugin.retro.pickOne') }}
       </p>
@@ -901,6 +964,9 @@ onMounted(() => {
           <p class="retro__body-meta">
             <code class="retro__period">{{ selected }}</code>
             <span v-if="selectedCard" class="retro__range">{{ rangeText(selectedCard) }}</span>
+            <span v-if="stats" class="retro__stats" data-role="retro-doc-stats">
+              {{ tr('plugin.retro.docStats', { blocks: stats.blocks, chars: stats.chars }) }}
+            </span>
             <span v-if="reportBytes" class="retro__bytes">{{ reportBytes }} B</span>
           </p>
           <!-- 打开所在文件夹（本机存储的可见面）：只传期号，路径在 Rust 侧拼 -->
@@ -1024,7 +1090,7 @@ onMounted(() => {
             {{ tr('plugin.retro.mediaSummary', { n: mediaTroubleTotal, detail: mediaTroubleDetail }) }}
           </p>
           <BlockDocument
-            :document="document"
+            :document="visibleDocument ?? document"
             :media="media"
             :language="lang"
             :open-failures="openFailures"
@@ -1032,6 +1098,19 @@ onMounted(() => {
             @zoom="openZoom"
             @open-external="openExternalTarget"
           />
+          <!-- 长文分段渲染（`FR-R-12-02` ②）：页脚如实写「已渲染 X / Y 段」+ 一条铺满的路 -->
+          <div v-if="windowInfo.limited" class="retro__window" data-role="retro-window">
+            <span class="retro__window-count" data-role="retro-window-count">{{ windowText }}</span>
+            <button
+              v-if="windowInfo.remaining > 0"
+              class="retro__refresh"
+              type="button"
+              data-role="retro-show-all"
+              @click="showEverything"
+            >
+              {{ tr('plugin.retro.showAll', { n: windowInfo.total }) }}
+            </button>
+          </div>
         </div>
       </template>
     </div>
@@ -1381,6 +1460,26 @@ onMounted(() => {
 }
 .retro__document {
   flex: 1;
+}
+/* 正文读数（块数 / 字数，`FR-R-12-02` ②）：与字节数并列的小字，不抢标题行 */
+.retro__stats {
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+}
+/* 长文分段页脚：一行读数 + 一条铺满的按钮（与「刷新」同一套控制件令牌） */
+.retro__window {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  margin-top: var(--ds-spacing-m);
+  padding-top: var(--ds-spacing-s);
+  border-top: var(--ds-metric-hairline) solid var(--ds-color-hairline-light);
+}
+.retro__window-count {
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
 }
 /* 字号三档（`FR-R-13-08` ①「显示设定：字号」）：只在容器上写一个缩放变量 ——
    `BlockDocument` 的正文 / 标题 / 代码按它算，媒体说明与表头这类界面件**不缩放**。 */
