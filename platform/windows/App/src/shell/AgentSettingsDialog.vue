@@ -53,7 +53,7 @@ const draft = ref<AgentConfiguration>({
   preset: 'custom',
 })
 const keyDraft = ref('')
-const busy = ref<'' | 'save' | 'key' | 'clear'>('')
+const busy = ref<'' | 'save' | 'key' | 'clear' | 'quota'>('')
 const failure = ref<{ message: string; hint: string } | null>(null)
 const note = ref('')
 
@@ -176,6 +176,34 @@ async function clearKey(): Promise<void> {
 const storageText = computed(() =>
   snapshot.value?.keyStorage === 'dpapi' ? tr('agent.key.storage.dpapi') : tr('agent.key.storage.unavailable'),
 )
+
+// ── 本小时配额读数（FR-AI-01 的「每小时上限」在设置面上也要看得见）────────────────────
+// 现在这条读数**只有**在生成弹层里才看得到 —— 用户在设置里改上限时，看不到「这一小时已经用掉几次」，
+// 于是把上限从 60 改成 5 也不知道自己其实当场就满额了。读数由外壳给（同一本滑窗台账、同一处算），
+// 界面只负责显示：**不自己算**，自己算就会与真闸门分叉。
+const quotaFull = computed(() => snapshot.value !== null && snapshot.value.quota.remaining === 0)
+/** 满额时还要等几分钟（向上取整，最少 1 —— 说「0 分钟后」等于骗人）。 */
+const quotaWaitMinutes = computed(() => {
+  const secs = snapshot.value?.quota.retryAfterSecs ?? 0
+  return Math.max(1, Math.ceil(secs / 60))
+})
+
+/**
+ * 只重取读数：**不动正在填的草稿**（刷新读数不该把用户没保存的输入清掉）。
+ * 为什么需要它：弹层可能一直开着，而期间在编辑器里发过几次生成 —— 读数不刷新就是陈的。
+ */
+async function refreshQuota(): Promise<void> {
+  if (busy.value) return
+  busy.value = 'quota'
+  failure.value = null
+  try {
+    snapshot.value = await agentSettingsGet()
+  } catch (error) {
+    failure.value = readable(error)
+  } finally {
+    busy.value = ''
+  }
+}
 </script>
 
 <template>
@@ -278,6 +306,36 @@ const storageText = computed(() =>
             data-testid="agent-hourly"
           />
         </label>
+        <!-- 本小时配额读数：改上限时也看得见「已经用掉几次」（否则把 60 改成 5 会当场满额而不自知） -->
+        <div v-if="snapshot" class="agent__quota" data-testid="agent-quota">
+          <p
+            class="agent__quota-text"
+            :class="{ 'agent__quota-text--full': quotaFull }"
+            data-testid="agent-quota-text"
+          >
+            <template v-if="quotaFull">
+              {{ tr('agent.quota.full', { limit: snapshot.quota.limit, minutes: quotaWaitMinutes }) }}
+            </template>
+            <template v-else>
+              {{
+                tr('agent.quota.used', {
+                  used: snapshot.quota.used,
+                  limit: snapshot.quota.limit,
+                  remaining: snapshot.quota.remaining,
+                })
+              }}
+            </template>
+          </p>
+          <button
+            type="button"
+            class="agent__secondary agent__quota-refresh"
+            :disabled="busy !== ''"
+            data-testid="agent-quota-refresh"
+            @click="refreshQuota"
+          >
+            {{ tr('agent.quota.refresh') }}
+          </button>
+        </div>
         <button type="button" class="agent__primary" :disabled="busy !== ''" data-testid="agent-save" @click="save">
           {{ busy === 'save' ? tr('agent.saving') : tr('agent.save') }}
         </button>
@@ -491,6 +549,33 @@ const storageText = computed(() =>
 .agent__note {
   color: var(--ds-color-accent-teal);
   font-size: var(--ds-font-caption-size);
+}
+
+.agent__quota {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-content);
+}
+
+.agent__quota-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--ds-color-text-secondary);
+  font-family: var(--ds-font-stack-mono);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent__quota-text--full {
+  color: var(--ds-color-accent-warm);
+}
+
+.agent__quota-refresh {
+  flex: none;
 }
 
 .agent__label {

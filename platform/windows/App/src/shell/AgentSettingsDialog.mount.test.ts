@@ -23,6 +23,7 @@ const state: {
     keyStorage: 'dpapi',
     keyNote: null,
     configPath: 'C:/Users/x/AppData/Roaming/DoyahStudio/agent.json',
+    quota: { limit: 60, used: 0, remaining: 60, windowSecs: 3600, retryAfterSecs: 0 },
   },
   failure: null,
   saved: [],
@@ -70,6 +71,7 @@ beforeEach(() => {
     keyStorage: 'dpapi',
     keyNote: null,
     configPath: 'C:/Users/x/AppData/Roaming/DoyahStudio/agent.json',
+    quota: { limit: 60, used: 0, remaining: 60, windowSecs: 3600, retryAfterSecs: 0 },
   }
 })
 
@@ -171,5 +173,53 @@ describe('智能体设置弹层', () => {
     const error = wrapper.get('[data-testid="agent-error"]').text()
     expect(error).toContain('坏 JSON')
     expect(error).toContain('先备份再删掉它')
+  })
+
+  it('设置面上就看得见「本小时已用 N/M（还剩 K 次）」', async () => {
+    state.snapshot = {
+      ...state.snapshot,
+      quota: { limit: 60, used: 3, remaining: 57, windowSecs: 3600, retryAfterSecs: 0 },
+    }
+    const wrapper = mountDialog()
+    await flushPromises()
+    const text = wrapper.get('[data-testid="agent-quota-text"]').text()
+    expect(text).toContain('3/60')
+    expect(text).toContain('还剩 57 次')
+  })
+
+  it('满额时不写「还剩 0 次」了事，而是说清还要等几分钟', async () => {
+    state.snapshot = {
+      ...state.snapshot,
+      config: { ...state.snapshot.config, hourlyLimit: 5 },
+      quota: { limit: 5, used: 5, remaining: 0, windowSecs: 3600, retryAfterSecs: 600 },
+    }
+    const wrapper = mountDialog()
+    await flushPromises()
+    const text = wrapper.get('[data-testid="agent-quota-text"]').text()
+    expect(text).toContain('满额')
+    expect(text).toContain('10 分钟')
+    // 满额态要能一眼看出来（走的是「暖色」那一档，不是同一片灰字）
+    expect(wrapper.get('[data-testid="agent-quota-text"]').classes()).toContain('agent__quota-text--full')
+  })
+
+  it('「刷新读数」重取快照，但不把没保存的草稿清掉', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(wrapper.get('[data-testid="agent-quota-text"]').text()).toContain('0/60')
+
+    // 用户在弹层开着的时候在编辑器里发了几次生成 ⇒ 台账变了
+    state.snapshot = {
+      ...state.snapshot,
+      quota: { limit: 60, used: 4, remaining: 56, windowSecs: 3600, retryAfterSecs: 0 },
+    }
+    await wrapper.get('[data-testid="agent-endpoint"]').setValue('http://localhost:11434/v1')
+    await wrapper.get('[data-testid="agent-quota-refresh"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="agent-quota-text"]').text()).toContain('4/60')
+    // 刷新只换读数：草稿里没保存的端点还在（刷新把用户输入清掉是另一种数据丢失）
+    expect((wrapper.get('[data-testid="agent-endpoint"]').element as HTMLInputElement).value).toBe(
+      'http://localhost:11434/v1',
+    )
   })
 })

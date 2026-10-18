@@ -664,6 +664,15 @@ export const DICT = {
   },
   'agent.timeout': { 'zh-Hans': '超时（秒）', en: 'Timeout (s)' },
   'agent.hourlyLimit': { 'zh-Hans': '每小时上限', en: 'Hourly limit' },
+  'agent.quota.used': {
+    'zh-Hans': '本小时已用 {used}/{limit}（还剩 {remaining} 次）',
+    en: '{used}/{limit} used this hour ({remaining} left)',
+  },
+  'agent.quota.full': {
+    'zh-Hans': '本小时已满额（上限 {limit} 次）：约 {minutes} 分钟后才有空位，期间「AI 生成…」会被拦住（一条请求都不发）。',
+    en: 'Hourly limit reached ({limit} used): about {minutes} min until a slot frees up — generation is refused until then (nothing is sent).',
+  },
+  'agent.quota.refresh': { 'zh-Hans': '刷新读数', en: 'Refresh' },
   'agent.save': { 'zh-Hans': '保存设置', en: 'Save settings' },
   'agent.saving': { 'zh-Hans': '保存中…', en: 'Saving…' },
   'agent.saved': { 'zh-Hans': '已保存', en: 'Saved' },

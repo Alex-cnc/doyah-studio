@@ -769,6 +769,8 @@ export interface AgentSettingsSnapshot {
   keyNote: string | null
   /** 配置文件路径（让用户知道去哪儿看）。 */
   configPath: string
+  /** 本小时的配额读数（与生成面的拦面同源；界面只显示，不自己算）。 */
+  quota: AgentQuotaStatus
 }
 
 /** 浏览器旁路的状态（**只服务开发自测**：刷新即丢；真形态在 Tauri 外壳里落盘 + DPAPI）。 */
@@ -820,6 +822,14 @@ function bypassAgentSnapshot(): AgentSettingsSnapshot {
     keyStorage: 'unavailable',
     keyNote: null,
     configPath: '(浏览器旁路：没有落盘)',
+    // 旁路不记配额账（刷新即丢的环境里记账没有意义）：读数照实给 0，并让上限跟配置走。
+    quota: {
+      limit: bypassAgent.config.hourlyLimit,
+      used: 0,
+      remaining: bypassAgent.config.hourlyLimit,
+      windowSecs: 3600,
+      retryAfterSecs: 0,
+    },
   }
 }
 

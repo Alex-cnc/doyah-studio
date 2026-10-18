@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateReport};
 use doyah_studio_db::agent_history::HistoryLedger;
-use doyah_studio_db::agent_quota::QuotaLedger;
+use doyah_studio_db::agent_quota::{now_secs, QuotaLedger, QuotaStatus};
 use serde::Serialize;
 
 use crate::postgres::DbFailure;
@@ -44,6 +44,9 @@ pub struct AgentSettingsSnapshot {
     pub key_note: Option<String>,
     /// 配置文件路径（让用户知道去哪儿看）。
     pub config_path: String,
+    /// 本小时的配额读数（**与生成面的拦面读同一本滑窗台账**；界面只显示，不自己算 ——
+    /// 自己算就会出现「设置里说还剩 5 次、点生成却被拦住」这种最难查的分叉）。
+    pub quota: QuotaStatus,
 }
 
 impl AgentSettingsStore {
@@ -233,10 +236,13 @@ impl AgentSettingsStore {
         })
     }
 
-    /// 当前快照（配置 + 裁决 + 密钥状态）。
+    /// 当前快照（配置 + 裁决 + 密钥状态 + 本小时配额读数）。
     pub fn snapshot(&self) -> Result<AgentSettingsSnapshot, DbFailure> {
         let config = self.load()?;
         let key_present = self.key_present();
+        // 配额读数与 `agent_generate` 的拦面同源（同一本账 + 同一处算）：上限用**盘上那份配置**的
+        // `hourly_limit`（不是界面草稿里的值 —— 没保存的上限不该让读数看起来已经生效）。
+        let quota = self.load_quota().status(now_secs(), config.hourly_limit);
         Ok(AgentSettingsSnapshot {
             gate: evaluate(&config, key_present),
             config,
@@ -244,6 +250,7 @@ impl AgentSettingsStore {
             key_storage: dpapi::STORAGE.to_string(),
             key_note: self.key_note(),
             config_path: self.config_path.display().to_string(),
+            quota,
         })
     }
 
@@ -521,5 +528,50 @@ mod tests {
         let store = tmp_store("history-broken");
         std::fs::write(store.history_path(), "{ 这不是 JSON").unwrap();
         assert!(store.load_history().is_empty());
+    }
+
+    #[test]
+    fn the_settings_snapshot_carries_this_hour_s_quota_reading() {
+        let store = tmp_store("quota-reading");
+        store
+            .save(&AgentConfiguration {
+                hourly_limit: 5,
+                ..Default::default()
+            })
+            .unwrap();
+        let now = now_secs();
+        let mut ledger = store.load_quota();
+        assert!(ledger.admit(now, 5).0);
+        assert!(ledger.admit(now, 5).0);
+        store.save_quota(&ledger).unwrap();
+
+        let snapshot = store.snapshot().unwrap();
+        assert_eq!(snapshot.quota.limit, 5, "上限要取盘上那份配置");
+        assert_eq!(snapshot.quota.used, 2);
+        assert_eq!(snapshot.quota.remaining, 3);
+        assert_eq!(snapshot.quota.retry_after_secs, 0, "没满却说要等");
+    }
+
+    #[test]
+    fn a_full_window_reads_as_full_with_a_wait_instead_of_a_silent_zero() {
+        let store = tmp_store("quota-full");
+        store
+            .save(&AgentConfiguration {
+                hourly_limit: 1,
+                ..Default::default()
+            })
+            .unwrap();
+        let mut ledger = store.load_quota();
+        assert!(ledger.admit(now_secs(), 1).0);
+        store.save_quota(&ledger).unwrap();
+
+        let snapshot = store.snapshot().unwrap();
+        assert_eq!(snapshot.quota.used, 1);
+        assert_eq!(snapshot.quota.remaining, 0);
+        assert!(
+            snapshot.quota.retry_after_secs > 0,
+            "满额了却说不用等：{:?}",
+            snapshot.quota
+        );
     }
 }
