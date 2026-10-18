@@ -26,6 +26,11 @@ final class WorkspaceFileWatcher {
     private var onChanges: (([String]) -> Void)?
 
     private var stream: FSEventStreamRef?
+    /// FSEvents 上下文里 `passRetained(self)` 的那个指针 —— `stop()` 里成对 release。
+    /// **必须 retain**：不 retain 时监听器一旦先释放，FSEvents 线程回调 `takeUnretainedValue()`
+    /// 就是对一个已释放对象 `objc_msgSend` ⇒ 直接 SIGSEGV（2026-10-18 实测：启动即崩，
+    /// 崩溃线程 `studio.doyah.workspace-watcher`，栈顶 `closure #1 in WorkspaceFileWatcher.start`）。
+    private var streamContextPointer: UnsafeMutableRawPointer?
     /// 单文件监听（工作区根之外）。
     private var fileSources: [String: DispatchSourceFileSystemObject] = [:]
 
@@ -51,9 +56,13 @@ final class WorkspaceFileWatcher {
         stop()
         self.onChanges = onChanges
 
+        // **passRetained**：让 FSEvents 自己持有监听器，直到 `stop()` 成对 release。
+        // 用 passUnretained 是崩溃的根因（见 `streamContextPointer` 注释）。
+        let info = Unmanaged.passRetained(self).toOpaque()
+        streamContextPointer = info
         var context = FSEventStreamContext(
             version: 0,
-            info: Unmanaged.passUnretained(self).toOpaque(),
+            info: info,
             retain: nil, release: nil, copyDescription: nil
         )
         let flags = UInt32(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer)
@@ -78,7 +87,12 @@ final class WorkspaceFileWatcher {
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
             debounce,
             FSEventStreamCreateFlags(flags)
-        ) else { return }
+        ) else {
+            // 建流失败 ⇒ 把上面的 retain 退回去，否则监听器永远不释放
+            Unmanaged<WorkspaceFileWatcher>.fromOpaque(info).release()
+            streamContextPointer = nil
+            return
+        }
 
         self.stream = stream
         FSEventStreamSetDispatchQueue(stream, queue)
@@ -92,6 +106,11 @@ final class WorkspaceFileWatcher {
             FSEventStreamRelease(stream)
         }
         stream = nil
+        // 与 `start()` 的 passRetained 配对：先 invalidate（不再有回调），再 release
+        if let pointer = streamContextPointer {
+            Unmanaged<WorkspaceFileWatcher>.fromOpaque(pointer).release()
+            streamContextPointer = nil
+        }
         for (_, source) in fileSources { source.cancel() }
         fileSources = [:]
         onChanges = nil
