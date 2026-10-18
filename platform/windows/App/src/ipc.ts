@@ -83,6 +83,10 @@ export const COMMANDS = {
   connectionsList: 'connections_list',
   connectionSave: 'connection_save',
   connectionDelete: 'connection_delete',
+  // 已保存查询（FR-EDIT-14：落盘 + 重名覆盖）
+  savedQueriesList: 'saved_queries_list',
+  savedQuerySave: 'saved_query_save',
+  savedQueryDelete: 'saved_query_delete',
   // 连接配置面收口（S-1a）：逐项校验 / 换引擎联动默认值 / 从 URL 导入
   connectionValidate: 'connection_validate',
   connectionTypeDefaults: 'connection_type_defaults',
@@ -503,6 +507,92 @@ export function connectionSave(request: ConnectionSaveRequest): Promise<SavedCon
 
 export function connectionDelete(id: string): Promise<SavedConnection[]> {
   return call(COMMANDS.connectionDelete, { id }, () => [] as SavedConnection[])
+}
+
+// ── 已保存查询（FR-EDIT-14）──────────────────────────────────────────────────────────────
+//
+// 形状与领域层 `Db/src/saved_query.rs` 一一对应（`rename_all = "camelCase"`）。
+// 口径：**同名 = 覆盖**，但**未确认覆盖时服务端不写盘**（回 `saved: false` + `conflict`）——
+// 冲突不走错误通道，界面才不用去匹配错误文案。
+
+/** 一条已保存查询。 */
+export interface SavedQuery {
+  id: string
+  name: string
+  sql: string
+  connectionId?: string | null
+  connectionName?: string | null
+  database?: string | null
+  /** 保存时刻（ISO-8601 UTC，服务端给）。 */
+  savedAt: string
+  schemaVersion: number
+}
+
+export interface SavedQuerySaveRequest {
+  id: string
+  name: string
+  sql: string
+  connectionId?: string | null
+  connectionName?: string | null
+  database?: string | null
+  /** 同名时是否覆盖（`false` ⇒ 回冲突、不写盘）。 */
+  overwrite: boolean
+}
+
+export interface SavedQuerySaveReport {
+  /** 这次是否真的写盘。 */
+  saved: boolean
+  /** 冲突时给出既有那条（界面据此提示「覆盖保存」）。 */
+  conflict?: SavedQuery | null
+  /** 写盘后的完整列表。 */
+  queries: SavedQuery[]
+}
+
+/** 浏览器旁路的内存表（**只服务开发自测**：刷新即丢；真形态在 Tauri 外壳里落盘）。 */
+let bypassSavedQueries: SavedQuery[] = []
+
+function bypassSaveQuery(request: SavedQuerySaveRequest): SavedQuerySaveReport {
+  const name = request.name.trim()
+  const key = name.toLowerCase()
+  const sameName = bypassSavedQueries.find((q) => q.name.trim().toLowerCase() === key)
+  const sameId = bypassSavedQueries.find((q) => q.id === request.id)
+  if (sameName && sameName.id !== request.id && !request.overwrite) {
+    return { saved: false, conflict: sameName, queries: [...bypassSavedQueries] }
+  }
+  const record: SavedQuery = {
+    id: sameId?.id ?? sameName?.id ?? request.id,
+    name,
+    sql: request.sql,
+    connectionId: request.connectionId ?? null,
+    connectionName: request.connectionName ?? null,
+    database: request.database ?? null,
+    savedAt: new Date().toISOString(),
+    schemaVersion: 1,
+  }
+  const target = sameId ?? sameName
+  bypassSavedQueries = target
+    ? bypassSavedQueries.map((q) => (q.id === target.id ? record : q))
+    : [...bypassSavedQueries, record]
+  return { saved: true, conflict: null, queries: [...bypassSavedQueries] }
+}
+
+export function savedQueriesList(): Promise<SavedQuery[]> {
+  return call(COMMANDS.savedQueriesList, {}, () => [...bypassSavedQueries])
+}
+
+export function savedQuerySave(request: SavedQuerySaveRequest): Promise<SavedQuerySaveReport> {
+  return call(COMMANDS.savedQuerySave, { ...request }, () => bypassSaveQuery(request))
+}
+
+export function savedQueryDelete(id: string): Promise<SavedQuery[]> {
+  return call(
+    COMMANDS.savedQueryDelete,
+    { id },
+    () => {
+      bypassSavedQueries = bypassSavedQueries.filter((q) => q.id !== id)
+      return [...bypassSavedQueries]
+    },
+  )
 }
 
 /** 表单逐项校验（FR-CONN-06）：端口按**文本**校验，`0` / `65536` / 非数字都当场拒。 */

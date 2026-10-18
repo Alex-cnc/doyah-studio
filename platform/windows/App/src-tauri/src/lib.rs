@@ -12,6 +12,9 @@ pub mod postgres;
 /// 本文件与其它文件只许经 `pty::` 接口调用，不许直接依赖 PTY crate（判据见
 /// `Tools/check-platform-parity.ps1` 第五道「PTY 隔离」）。
 pub mod pty;
+/// 已保存查询的落盘（FR-EDIT-14）：模型与「同名覆盖」判定在领域层
+/// `doyah_studio_db::saved_query`，本模块只管「放哪儿、怎么取」。
+pub mod saved_queries;
 /// 底部终端「端到端接线」层（W-C 底部终端 · S-9c）：把 `pty::` 的真字节喂进领域层
 /// 屏幕模型 / 按键编码 / 页签会话，令 `Db/src/terminal*.rs` 那 29 例**由真字节流驱动**。
 /// 只经 `pty::` 接口调用，本模块**不许出现 PTY crate 名**（判据同第五道「PTY 隔离」）。
@@ -21,6 +24,8 @@ mod query;
 pub mod search;
 
 pub use connections::{config_from_form, ConnectionStore};
+#[allow(unused_imports)]
+pub use saved_queries::SavedQueryStore;
 pub use postgres::{
     ConnectParams, ConnectReport, DatabaseInfo, DbFailure, PgSession, ProbeReport, QueryResult,
     ServerInfo, StartupOutcome, StatementOutcome, TableNode, TableShape, TableStats,
@@ -44,6 +49,8 @@ pub struct ShellState {
     pub db: AsyncMutex<Option<Arc<PgSession>>>,
     /// 连接列表的落盘位置与凭据读写（口令走系统凭据管理器，不进配置文件）。
     pub connections: ConnectionStore,
+    /// 已保存查询的落盘位置（FR-EDIT-14；与连接配置分两个文件，见 `saved_queries.rs` 头注）。
+    pub saved_queries: SavedQueryStore,
     /// **当前连接是不是只读**（FR-CONN-17）：写回与危险判定都要看它。
     ///
     /// 为什么用原子布尔而不是塞进会话：只读是**连接级配置**的一部分，而"当前连接"这个槽
@@ -479,6 +486,100 @@ fn connection_delete(
     id: String,
 ) -> Result<Vec<doyah_studio_db::config::ConnectionConfig>, DbFailure> {
     state.connections.remove(&id)
+}
+
+// ── 已保存查询（FR-EDIT-14 / DR-04）───────────────────────────────────────────────────────
+
+/// 已保存查询的列表（首次使用返回空表，不是错误）。
+#[tauri::command]
+fn saved_queries_list(
+    state: State<'_, ShellState>,
+) -> Result<Vec<doyah_studio_db::saved_query::SavedQuery>, DbFailure> {
+    state.saved_queries.load()
+}
+
+/// 保存一条查询的结果。
+///
+/// **同名冲突不是错误**（`saved: false` + `conflict`）：需求原文要的是「重名提示覆盖保存」，
+/// 若走错误通道，界面只能靠匹配错误文案去分支 —— 那种分支是最脆的一种。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedQuerySaveReport {
+    /// 这次是否真的写盘（冲突且用户没确认覆盖 ⇒ false）。
+    pub saved: bool,
+    /// 冲突时给出**既有那条**（界面据此提示「覆盖保存」）。
+    pub conflict: Option<doyah_studio_db::saved_query::SavedQuery>,
+    /// 写盘后的完整列表（`saved=false` 时是原样）。
+    pub queries: Vec<doyah_studio_db::saved_query::SavedQuery>,
+}
+
+/// 保存一条查询（**同名 = 覆盖，但要先经用户确认**）。
+///
+/// 时间戳在这里给（领域层不读时钟，单测才能确定）；名字去空白、空名 / 空 SQL 当场拒。
+#[tauri::command]
+fn saved_query_save(
+    state: State<'_, ShellState>,
+    id: String,
+    name: String,
+    sql: String,
+    connection_id: Option<String>,
+    connection_name: Option<String>,
+    database: Option<String>,
+    overwrite: bool,
+) -> Result<SavedQuerySaveReport, DbFailure> {
+    let mut query = doyah_studio_db::saved_query::SavedQuery::new(id, name, sql).sanitized();
+    query.connection_id = connection_id.filter(|v| !v.trim().is_empty());
+    query.connection_name = connection_name.filter(|v| !v.trim().is_empty());
+    query.database = database.filter(|v| !v.trim().is_empty());
+    query.saved_at = connections::now_iso8601();
+
+    if let Some(field) = query.problems().first() {
+        let (message, hint) = match field {
+            doyah_studio_db::saved_query::SavedQueryField::Name => (
+                "查询名不能为空，且不能超过 120 个字符".to_string(),
+                "给它起一个便于在列表里认出来的名字（例如「月度对账」）。".to_string(),
+            ),
+            doyah_studio_db::saved_query::SavedQueryField::Sql => (
+                "编辑器里没有可保存的 SQL".to_string(),
+                "先写一条 SQL 再保存。".to_string(),
+            ),
+        };
+        return Err(DbFailure { message, hint });
+    }
+
+    let mut list = state.saved_queries.load()?;
+    match doyah_studio_db::saved_query::save_into(&mut list, query.clone(), overwrite) {
+        doyah_studio_db::saved_query::SaveVerdict::Conflict(existing) => {
+            Ok(SavedQuerySaveReport {
+                saved: false,
+                conflict: Some(existing),
+                queries: list,
+            })
+        }
+        _ => {
+            state.saved_queries.save(&list, &query.saved_at)?;
+            Ok(SavedQuerySaveReport {
+                saved: true,
+                conflict: None,
+                queries: list,
+            })
+        }
+    }
+}
+
+/// 删一条已保存查询（按 id）。返回删完的列表。
+#[tauri::command]
+fn saved_query_delete(
+    state: State<'_, ShellState>,
+    id: String,
+) -> Result<Vec<doyah_studio_db::saved_query::SavedQuery>, DbFailure> {
+    let mut list = state.saved_queries.load()?;
+    if doyah_studio_db::saved_query::remove_by_id(&mut list, &id).is_none() {
+        // 本来就没有 ⇒ 不算失败（幂等），但**如实**把现状回给界面
+        return Ok(list);
+    }
+    state.saved_queries.save(&list, &connections::now_iso8601())?;
+    Ok(list)
 }
 
 /// 生成**服务端条件浏览**的 SQL（FR-DATA-02；**只生成、不执行**）。
@@ -1717,6 +1818,7 @@ pub fn run() {
             cache: Mutex::new(ViewCache::new()),
             db: AsyncMutex::new(None),
             connections: ConnectionStore::new(ConnectionStore::default_path()),
+            saved_queries: SavedQueryStore::new(SavedQueryStore::default_path()),
             read_only: std::sync::atomic::AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
@@ -1746,6 +1848,9 @@ pub fn run() {
             connections_list,
             connection_save,
             connection_delete,
+            saved_queries_list,
+            saved_query_save,
+            saved_query_delete,
             connection_validate,
             connection_type_defaults,
             connection_import_url,

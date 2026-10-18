@@ -116,7 +116,7 @@ impl ConnectionStore {
 }
 
 /// 现在时刻（ISO-8601 / UTC）—— **不引时间库**：配置包里这一项只是"什么时候导出的"。
-fn now_iso8601() -> String {
+pub fn now_iso8601() -> String {
     // 从系统时钟取秒数，手工折成 ISO-8601（够用且无依赖）
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

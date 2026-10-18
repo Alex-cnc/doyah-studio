@@ -420,6 +420,43 @@ export const DICT = {
   'sql.rows': { 'zh-Hans': '{n} 行', en: '{n} rows' },
   'sql.truncated': { 'zh-Hans': '（服务端回来 {returned} 行，已截断，只显示前 {shown} 行）', en: '(server returned {returned}; truncated to {shown})' },
 
+  // 保存查询（FR-EDIT-14）：按钮在执行之前；同名会先问「覆盖保存」
+  'saveQuery.save': { 'zh-Hans': '保存查询', en: 'Save query' },
+  'saveQuery.saveTip': {
+    'zh-Hans': '把当前页签的 SQL 存下来（可命名；同名会先问要不要覆盖）',
+    en: 'Save the current tab SQL (you can name it; a duplicate name asks before overwriting)',
+  },
+  'saveQuery.list': { 'zh-Hans': '已保存', en: 'Saved' },
+  'saveQuery.listTip': {
+    'zh-Hans': '已保存的查询：可回填到当前页签或新页签',
+    en: 'Saved queries: refill the current tab or open one in a new tab',
+  },
+  'saveQuery.title': { 'zh-Hans': '保存查询', en: 'Save query' },
+  'saveQuery.nameLabel': { 'zh-Hans': '查询名', en: 'Query name' },
+  'saveQuery.namePlaceholder': { 'zh-Hans': '给这条 SQL 起个名字', en: 'Name this SQL' },
+  'saveQuery.submit': { 'zh-Hans': '保存', en: 'Save' },
+  'saveQuery.overwrite': { 'zh-Hans': '覆盖保存', en: 'Overwrite' },
+  'saveQuery.cancel': { 'zh-Hans': '取消', en: 'Cancel' },
+  'saveQuery.nameRequired': {
+    'zh-Hans': '先给这条查询起个名字（不能只有空格）',
+    en: 'Give this query a name first (spaces alone do not count)',
+  },
+  'saveQuery.sqlRequired': { 'zh-Hans': '编辑器里没有可保存的 SQL', en: 'There is no SQL in the editor to save' },
+  'saveQuery.conflict': {
+    'zh-Hans': '已有同名查询「{name}」（存于 {time}）—— 覆盖会替换它，不会多出一条',
+    en: 'A query named “{name}” already exists (saved at {time}) — overwriting replaces it instead of adding a second one',
+  },
+  'saveQuery.saved': { 'zh-Hans': '已保存「{name}」', en: 'Saved “{name}”' },
+  'saveQuery.refilled': { 'zh-Hans': '已回填「{name}」', en: 'Refilled “{name}”' },
+  'saveQuery.failed': { 'zh-Hans': '保存失败：{reason}', en: 'Save failed: {reason}' },
+  'saveQuery.empty': { 'zh-Hans': '还没有保存过查询', en: 'No saved queries yet' },
+  'saveQuery.refill': { 'zh-Hans': '回填', en: 'Refill' },
+  'saveQuery.refillTip': { 'zh-Hans': '把这条 SQL 放回当前页签（替换编辑器内容）', en: 'Put this SQL back into the current tab (replaces the editor content)' },
+  'saveQuery.refillNew': { 'zh-Hans': '新页签', en: 'New tab' },
+  'saveQuery.refillNewTip': { 'zh-Hans': '在新页签打开这条 SQL（当前页签不动）', en: 'Open this SQL in a new tab (the current tab is untouched)' },
+  'saveQuery.delete': { 'zh-Hans': '删除', en: 'Delete' },
+  'saveQuery.deleteTip': { 'zh-Hans': '删掉这条已保存查询（不动数据库里的任何数据）', en: 'Delete this saved query (the database is not touched)' },
+
   // 写回
   'write.preview': { 'zh-Hans': '生成 SQL（先看清）', en: 'Generate SQL (preview first)' },
   'write.dryRun': { 'zh-Hans': '试跑（跑完回滚）', en: 'Dry run (rollback)' },

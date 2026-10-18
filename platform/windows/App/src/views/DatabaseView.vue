@@ -17,6 +17,9 @@ import {
   connectionTypeDefaults,
   connectionValidate,
   connectionsList,
+  savedQueriesList,
+  savedQueryDelete,
+  savedQuerySave,
   dbConnect,
   dbDisconnect,
   dbQuery,
@@ -48,6 +51,7 @@ import {
   type FieldProblem,
   type QueryResult,
   type SavedConnection,
+  type SavedQuery,
   type ServerInfo,
   type RowField,
   type StartupOutcome,
@@ -78,6 +82,12 @@ import ConnectionLabel from '../shell/ConnectionLabel.vue'
 import ConnectionDialog from '../shell/ConnectionDialog.vue'
 import type { ConnectionDialogMode } from '../shell/connectionDialog'
 import NodeIcon from './NodeIcon.vue'
+import {
+  savedQuerySourceLabel,
+  savedQuerySqlPreview,
+  savedQueryTimeLabel,
+  suggestQueryName,
+} from './savedQueries'
 import { serverMenuActions, type ServerMenuAction } from './serverMenu'
 import {
   columnLabel,
@@ -991,6 +1001,128 @@ function closeQueryTab(id: string): void {
   afterQueryTabSwitch()
 }
 
+// ── 保存查询（FR-EDIT-14）：落在 `%APPDATA%\DoyahStudio\saved-queries.json` ──────────────
+//
+// 三条口径（都在判据里锁着）：
+// ① 保存 / 已保存两个按钮在**执行按钮之前**（需求原文点名「在执行按钮之前」）；
+// ② **同名 = 覆盖**，但未确认覆盖前**服务端不写盘**（回 `saved:false` + `conflict`）——
+//    所以「提示覆盖保存」不是一句提示，而是真的没存进去，用户点「覆盖保存」才替换；
+// ③ 回填两条路：当前页签（替换编辑器内容）与**新页签**（当前页签一字不动）。
+//
+// 名字的合规与「同名」判定全在领域层（`Db/src/saved_query.rs`），这里只做显示与转交。
+const savedQueries = ref<SavedQuery[]>([])
+const saveQueryPanelOpen = ref(false)
+const saveQueryName = ref('')
+const saveQueryError = ref('')
+const savedQueryMenuOpen = ref(false)
+/** 冲突时摆出来的**既有那条**（非空 ⇒ 面板上的按钮变成「覆盖保存」）。 */
+const pendingOverwrite = ref<SavedQuery | null>(null)
+/** 一次操作的结果话（保存成功 / 已回填），显示在按钮旁。 */
+const savedQueryNote = ref('')
+const savedQueryBusy = ref(false)
+
+/** 读列表：失败**如实说**，不当成「没有已保存查询」。 */
+async function loadSavedQueries(): Promise<void> {
+  try {
+    savedQueries.value = await savedQueriesList()
+  } catch (error) {
+    saveQueryError.value = t('saveQuery.failed', { reason: describeError(error).message })
+  }
+}
+
+/** 打开保存面板：名字预填「第一行有内容的 SQL」，冲突态清零。 */
+function openSaveQueryPanel(): void {
+  stashActiveQuery()
+  saveQueryName.value = suggestQueryName(sql.value, activeQueryTabRecord.value?.title ?? '')
+  saveQueryError.value = ''
+  pendingOverwrite.value = null
+  saveQueryPanelOpen.value = true
+}
+
+function closeSaveQueryPanel(): void {
+  saveQueryPanelOpen.value = false
+  pendingOverwrite.value = null
+  saveQueryError.value = ''
+}
+
+/**
+ * 提交保存。`overwrite` 只在用户点了「覆盖保存」时为真 —— 界面**不自己判**同名，
+ * 服务端说冲突就摆出既有那条（两处各判一遍的下场：界面以为不同名、服务端覆盖了）。
+ */
+async function submitSaveQuery(overwrite = false): Promise<void> {
+  const name = saveQueryName.value.trim()
+  if (!name) {
+    saveQueryError.value = t('saveQuery.nameRequired')
+    return
+  }
+  if (!sql.value.trim()) {
+    saveQueryError.value = t('saveQuery.sqlRequired')
+    return
+  }
+  savedQueryBusy.value = true
+  saveQueryError.value = ''
+  try {
+    const report = await savedQuerySave({
+      id: crypto.randomUUID(),
+      name,
+      sql: sql.value,
+      connectionId: connectedConnection.value?.id ?? null,
+      connectionName: connectedConnection.value?.name ?? null,
+      database: info.value?.database ?? null,
+      overwrite,
+    })
+    savedQueries.value = report.queries
+    if (!report.saved) {
+      // 冲突：**没有写盘**。把既有那条摆出来，按钮换成「覆盖保存」。
+      pendingOverwrite.value = report.conflict ?? null
+      return
+    }
+    pendingOverwrite.value = null
+    saveQueryPanelOpen.value = false
+    savedQueryNote.value = t('saveQuery.saved', { name })
+  } catch (error) {
+    saveQueryError.value = t('saveQuery.failed', { reason: describeError(error).message })
+  } finally {
+    savedQueryBusy.value = false
+  }
+}
+
+/** 回填一条已保存查询（当前页签 / 新页签）。 */
+function refillSavedQuery(query: SavedQuery, intoNewTab: boolean): void {
+  savedQueryMenuOpen.value = false
+  closeSaveQueryPanel()
+  if (intoNewTab) {
+    stashActiveQuery()
+    const tab: QueryTab = { id: crypto.randomUUID(), title: query.name, sql: query.sql }
+    queryTabs.value.push(tab)
+    activeQueryTab.value = tab.id
+    sql.value = query.sql
+    afterQueryTabSwitch()
+  } else {
+    sql.value = query.sql
+    stashActiveQuery()
+    void refreshHighlight()
+    void refreshCompletions()
+  }
+  savedQueryNote.value = t('saveQuery.refilled', { name: query.name })
+}
+
+/** 删一条（**只删这份登记**，不动数据库里的任何数据）。 */
+async function deleteSavedQuery(id: string): Promise<void> {
+  try {
+    savedQueries.value = await savedQueryDelete(id)
+    if (pendingOverwrite.value?.id === id) pendingOverwrite.value = null
+  } catch (error) {
+    saveQueryError.value = t('saveQuery.failed', { reason: describeError(error).message })
+  }
+}
+
+/** 展开 / 收起已保存清单（展开时重读一遍：文件是唯一事实源，可能被同一台机器的另一个窗口改过）。 */
+function toggleSavedQueryMenu(): void {
+  savedQueryMenuOpen.value = !savedQueryMenuOpen.value
+  if (savedQueryMenuOpen.value) void loadSavedQueries()
+}
+
 const sqlText = ref('')
 // 单行详情（FR-DATA-05）：宽表竖排看、长 JSON 格式化看 —— **纯计算**，值检查在领域层
 const detail = ref<{ index: number; fields: RowField[] } | null>(null)
@@ -1096,6 +1228,8 @@ onMounted(async () => {
   } catch (e) {
     failure.value = describeError(e)
   }
+  // 已保存查询（FR-EDIT-14）：一进来就读一遍，工具栏上的计数才是真的
+  await loadSavedQueries()
   // 编辑器一进来就上一次高亮（纯计算，失败了也只是退回纯文本）
   await refreshHighlight()
   // 表单逐项校验：一进来先跑一次（"保存 / 连接"按钮的可用性以它为准）
@@ -2787,6 +2921,29 @@ async function probe() {
               </select>
             </label>
             <span v-if="info" class="db__bar-sep" />
+            <!-- 保存查询（FR-EDIT-14）：**在执行按钮之前**（需求原文点名的位置）。
+                 两个入口：存当前页签 / 打开已保存清单（回填到当前或新页签）。 -->
+            <button
+              class="db__btn"
+              type="button"
+              :disabled="!sql.trim()"
+              :title="t('saveQuery.saveTip')"
+              data-testid="save-query-open"
+              @click="openSaveQueryPanel"
+            >
+              {{ t('saveQuery.save') }}
+            </button>
+            <button
+              class="db__btn"
+              type="button"
+              :title="t('saveQuery.listTip')"
+              :aria-expanded="savedQueryMenuOpen ? 'true' : 'false'"
+              data-testid="saved-query-toggle"
+              @click="toggleSavedQueryMenu"
+            >
+              {{ t('saveQuery.list') }} ({{ savedQueries.length }})
+            </button>
+            <span v-if="savedQueryNote" class="db__note" data-testid="saved-query-note">{{ savedQueryNote }}</span>
             <button class="db__btn db__btn--icon db__btn--primary" type="submit" :disabled="!!busy" :title="t('sql.run')"><ActionIcon name="play" /></button>
             <button class="db__btn db__btn--icon" type="button" :disabled="!busy" @click="cancelRunning" :title="t('sql.cancel')"><ActionIcon name="stop" /></button>
             <button class="db__btn db__btn--icon" type="button" :disabled="!!busy" @click="showPlan" :title="t('sql.planOnly')"><ActionIcon name="code" /></button>
@@ -2810,6 +2967,77 @@ async function probe() {
             </span>
           </div>
         </form>
+
+        <!-- 保存查询面板（FR-EDIT-14）：名字预填、空名当场拒、**同名先问覆盖**（未确认前服务端没写盘） -->
+        <div v-if="saveQueryPanelOpen" class="db__save-query" data-testid="save-query-panel">
+          <label class="db__save-query-label">
+            <span>{{ t('saveQuery.nameLabel') }}</span>
+            <input
+              v-model="saveQueryName"
+              class="db__save-query-input"
+              data-testid="save-query-name"
+              spellcheck="false"
+              :placeholder="t('saveQuery.namePlaceholder')"
+              @keydown.enter.prevent="submitSaveQuery(!!pendingOverwrite)"
+              @keydown.esc.prevent="closeSaveQueryPanel"
+            />
+          </label>
+          <button
+            class="db__btn db__btn--primary"
+            type="button"
+            :disabled="savedQueryBusy"
+            data-testid="save-query-submit"
+            @click="submitSaveQuery(!!pendingOverwrite)"
+          >
+            {{ pendingOverwrite ? t('saveQuery.overwrite') : t('saveQuery.submit') }}
+          </button>
+          <button class="db__btn" type="button" data-testid="save-query-cancel" @click="closeSaveQueryPanel">
+            {{ t('saveQuery.cancel') }}
+          </button>
+          <p v-if="pendingOverwrite" class="db__save-query-warn" data-testid="save-query-conflict" role="alert">
+            {{
+              t('saveQuery.conflict', {
+                name: pendingOverwrite.name,
+                time: savedQueryTimeLabel(pendingOverwrite.savedAt) || '—',
+              })
+            }}
+          </p>
+          <p v-if="saveQueryError" class="db__save-query-error" data-testid="save-query-error" role="alert">
+            {{ saveQueryError }}
+          </p>
+        </div>
+
+        <!-- 已保存清单（FR-EDIT-14）：每条两路回填 + 删除；空表如实说「还没有」 -->
+        <div v-if="savedQueryMenuOpen" class="db__saved-queries" data-testid="saved-query-list">
+          <p v-if="!savedQueries.length" class="db__saved-empty" data-testid="saved-query-empty">
+            {{ t('saveQuery.empty') }}
+          </p>
+          <ul v-else class="db__saved-list">
+            <li v-for="q in savedQueries" :key="q.id" class="db__saved-item">
+              <div class="db__saved-head">
+                <span class="db__saved-name">{{ q.name }}</span>
+                <span v-if="savedQuerySourceLabel(q)" class="db__saved-source">{{ savedQuerySourceLabel(q) }}</span>
+              </div>
+              <p class="db__saved-sql">{{ savedQuerySqlPreview(q) }}</p>
+              <div class="db__saved-actions">
+                <button class="db__btn" type="button" :title="t('saveQuery.refillTip')" @click="refillSavedQuery(q, false)">
+                  {{ t('saveQuery.refill') }}
+                </button>
+                <button class="db__btn" type="button" :title="t('saveQuery.refillNewTip')" @click="refillSavedQuery(q, true)">
+                  {{ t('saveQuery.refillNew') }}
+                </button>
+                <button
+                  class="db__btn db__btn--icon"
+                  type="button"
+                  :title="t('saveQuery.deleteTip')"
+                  @click="deleteSavedQuery(q.id)"
+                >
+                  <ActionIcon name="trash" />
+                </button>
+              </div>
+            </li>
+          </ul>
+        </div>
 
         <!-- 分隔条（FR-EDIT-13）：编辑区与结果区之间那条**能拖**的线。
              口径：两区各 ≥120px；↑↓ 步进、双击复位；焦点可落在条上（键盘用户也能调）。 -->
@@ -3633,6 +3861,120 @@ async function probe() {
   align-items: center;
   gap: var(--ds-spacing-s);
   margin-top: var(--ds-spacing-xs);
+}
+
+/* ── 保存查询（FR-EDIT-14）：面板 = 一条输入 + 两个按钮；清单 = 每条两路回填 ───────────── */
+
+.db__save-query,
+.db__saved-queries {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  margin-top: var(--ds-spacing-xs);
+  padding: var(--ds-spacing-s);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-raised);
+}
+
+.db__saved-queries {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.db__save-query-label {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__save-query-input {
+  min-width: 22rem;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  font: inherit;
+}
+
+.db__save-query-input:focus-visible {
+  outline: var(--ds-metric-hairline) solid var(--ds-color-accent-accent);
+  outline-offset: 1px;
+}
+
+/* 冲突与失败都是**要人读**的话：占一整行，不与按钮挤在一起 */
+.db__save-query-warn,
+.db__save-query-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__save-query-warn {
+  color: var(--ds-color-status-warning);
+}
+
+.db__save-query-error {
+  color: var(--ds-color-status-danger);
+}
+
+.db__saved-empty {
+  margin: 0;
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__saved-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 16rem;
+  overflow: auto;
+}
+
+.db__saved-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border-radius: var(--ds-radius-control);
+}
+
+.db__saved-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-spacing-s);
+}
+
+.db__saved-name {
+  color: var(--ds-color-text-primary);
+}
+
+.db__saved-source,
+.db__saved-sql {
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+  margin: 0;
+}
+
+/* SQL 摘要与编辑器同一套字体：看到的就是那一份文本 */
+.db__saved-sql {
+  font-family: var(--ds-font-stack);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db__saved-actions {
+  display: flex;
+  gap: var(--ds-spacing-xs);
 }
 
 /* ── SQL 编辑面（1.2）：高亮层 + 真 textarea 叠放 / 补全清单 / 逐段结果 ─────────────── */

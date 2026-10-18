@@ -33,6 +33,7 @@ pub mod plugins;
 pub mod replace;
 pub mod reveal;
 pub mod save_guard;
+pub mod saved_query;
 pub mod search;
 pub mod sql;
 pub mod staleness;
