@@ -129,3 +129,50 @@ export function stepForTextChange(before: string, after: string, atMs: number): 
   const atEnd = kind === 'delete' ? prefix + removed : prefix + added
   return { kind, at: prefix, atEnd, atMs }
 }
+
+// ── 每页签一份栈（FR-EDIT-60 的页签条款）─────────────────────────────────────
+//
+// 病：全局只有一份栈，而切页签是**整篇换文本** ⇒ 按下 Ctrl+Z 命中 `drifted` ⇒ 重建栈。
+// 那条守卫守住了「不许把 A 页签撤到 B 页签」，代价是**切一下就丢历史**：在查询 1 里改了三步，
+// 去查询 2 看一眼再回来，撤销只剩一句「历史已重置」。
+//
+// 口径：栈按页签 id 存（`undoStacks[tabId]`），切页签 = 存回旧页签 / 装上新页签那一份；
+// 没记过就**按当前这份文本**起一个空栈 —— 新页签不继承别的页签历史。
+export type UndoStacks = Record<string, UndoState>
+
+/**
+ * 取某页签的栈。**返回的那一份，栈顶必须等于 `text`**（= 屏幕上此刻的全文）：
+ * 对不上说明这个页签的文本在离开期间被整篇换掉了（回填 / 打开表），此时起新栈，
+ * 绝不把旧历史接着用 —— 那是同一条「不许跨文档撤销」的另一面。
+ */
+export function takeUndoStack(stacks: UndoStacks, tabId: string, text: string, caret: number): UndoState {
+  const existing = stacks[tabId]
+  if (existing && existing.states[existing.index]?.text === text) return existing
+  return newUndoState({ text, selection: { start: caret, end: caret } })
+}
+
+/** 存回某页签（**返回新表，不改入参**）。 */
+export function putUndoStack(stacks: UndoStacks, tabId: string, state: UndoState): UndoStacks {
+  return { ...stacks, [tabId]: state }
+}
+
+/** 关掉页签时连栈一起丢掉（否则每关一张都留 100 步全文本，内存只涨不落）。 */
+export function dropUndoStack(stacks: UndoStacks, tabId: string): UndoStacks {
+  if (!(tabId in stacks)) return stacks
+  const next = { ...stacks }
+  delete next[tabId]
+  return next
+}
+
+/**
+ * 往上压之前先对齐：栈顶与 `before`（这次改动之前的全文）不一致 ⇒ **用 `before` 起新栈**。
+ *
+ * 为什么非要这一条：`drifted` 只在「按撤销」那一刻才被发现。若用户在整篇替换之后**先打字再撤**，
+ * 那一笔会直接压在旧历史上，两份文档被接成一条线 —— 撤销把「回填前的旧 SQL」拉进当前页签。
+ * 这类跨文档撤销不会报错、也不会崩，只会静默改坏内容，所以放在纯逻辑里做，不靠调用方记得。
+ */
+export function alignedUndoState(state: UndoState, before: string, caret: number): UndoState {
+  const top = state.states[state.index]
+  if (top && top.text === before) return state
+  return newUndoState({ text: before, selection: { start: caret, end: caret } })
+}

@@ -464,8 +464,13 @@ export const DICT = {
   'sql.undo.exhausted': { 'zh-Hans': '已经撤到最早一步了', en: 'Already at the earliest step' },
   'sql.redo.exhausted': { 'zh-Hans': '没有可重做的步骤', en: 'Nothing to redo' },
   'sql.undo.rebuilt': {
-    'zh-Hans': '这块内容刚被整篇换过（切页签 / 回填），撤销栈已重置',
-    en: 'The editor content was replaced wholesale (tab switch / refill) — the undo history was reset',
+    'zh-Hans': '这块内容刚被整篇换过（回填已保存查询 / 打开表 / 换成 AI 结果），撤销栈已重置',
+    en: 'The content was replaced wholesale (refilled query / opened table / AI result) — the undo history was reset',
+  },
+  // 页签徽标：**切走再回来历史还在**（第 26 轮：每页签一份栈），这件事要有可见面。
+  'sql.tabUndoDepth': {
+    'zh-Hans': '这张页签还能撤 {n} 步（切走再回来历史还在）',
+    en: '{n} step(s) still undoable in this tab (history survives switching away)',
   },
   'sql.edit.goto': { 'zh-Hans': '跳到行或列…', en: 'Go to line…' },
   'sql.edit.indent': { 'zh-Hans': '缩进选中行', en: 'Indent selected lines' },

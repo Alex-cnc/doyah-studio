@@ -7,7 +7,7 @@
 //   · 截断：`truncated` 为真时**如实说**（不静默少给行）；
 //   · 未连接：按钮可用但一按就给可读原因（不做"灰着但不说为什么"）。
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import ActionIcon from './ActionIcon.vue'
 import {
   LAB_CONNECTION,
@@ -176,14 +176,19 @@ import { SPLIT_MIN_PANE, SPLIT_STEP, clampSplitHeight, stepSplitHeight } from '.
 // 撤销 / 重做（FR-EDIT-60）：栈与三档结论在 `workspace/undoStack.ts`。
 // 合并规则**复用** `editing.ts` 的 `shouldCoalesce`（一处判，不在这里再写一份）。
 import {
+  alignedUndoState,
+  dropUndoStack,
   newUndoState,
+  putUndoStack,
   pushUndo,
   redoDepth,
   redoOnce,
   stepForTextChange,
+  takeUndoStack,
   undoDepth,
   undoOnce,
   type UndoSnapshot,
+  type UndoStacks,
   type UndoState,
 } from '../workspace/undoStack'
 
@@ -1083,6 +1088,9 @@ function selectQueryTab(id: string): void {
   if (!target) return
   activeQueryTab.value = id
   sql.value = target.sql
+  // 第 26 轮：**装上这张页签自己的撤销历史**（离开那张的栈在每次记步时就已存回，
+  // 见 `publishUndo`）。不再走「文本对不上 ⇒ 重建栈」那条路，历史跨页签保留。
+  loadUndoForTab(id)
   afterQueryTabSwitch()
 }
 
@@ -1098,6 +1106,8 @@ function newQueryTab(): void {
   queryTabs.value.push(tab)
   activeQueryTab.value = tab.id
   sql.value = ''
+  // 新页签按它自己的空文本起一个空栈 —— **不继承**上一张页签的历史
+  loadUndoForTab(tab.id)
   afterQueryTabSwitch()
 }
 
@@ -1129,11 +1139,14 @@ function closeQueryTab(id: string): void {
   tabNote.value = ''
   const wasActive = activeQueryTab.value === id
   queryTabs.value.splice(index, 1)
+  // 关掉的页签连它的撤销历史一起丢掉（否则关一张就留一栈全文本；也避免 id 复用时接上旧历史）
+  undoStacks.value = dropUndoStack(undoStacks.value, id)
   if (!wasActive) return
   // 关掉的是当前页签 ⇒ 落到剩下最后一张（与 macOS `closeTab` 一致）
   const next = queryTabs.value[queryTabs.value.length - 1]
   activeQueryTab.value = next.id
   sql.value = next.sql
+  loadUndoForTab(next.id)
   afterQueryTabSwitch()
 }
 
@@ -1257,6 +1270,8 @@ function refillSavedQuery(query: SavedQuery, intoNewTab: boolean): void {
     queryTabs.value.push(tab)
     activeQueryTab.value = tab.id
     sql.value = query.sql
+    // 新页签从空栈起（回填的是「新的一段 SQL」，不是把旧历史搬过来）
+    loadUndoForTab(tab.id)
     afterQueryTabSwitch()
   } else {
     sql.value = query.sql
@@ -2249,6 +2264,10 @@ async function applyEdit(result: EditResult): Promise<void> {
 // 之后按 Ctrl+Z 要么什么都不发生、要么把整段 SQL 退回到很早以前。现象就是「格式化之后一撤销 SQL 没了」。
 //
 // 口径：连续输入合并一步、行级编辑各一步（判断在 `undoStack.ts`，合并规则复用 `shouldCoalesce`）。
+// **每页签一份**（第 26 轮）：`undoStacks[tabId]` 是权威副本，`undoState` 只是当前页签那一份的
+// 工作引用 —— 切页签时存回旧的、装上新的，于是「切走再回来」历史还在，而 A 的文本
+// 也绝不会被撤进 B（两侧各自成对：栈顶恒等于该页签自己的文本）。
+const undoStacks = shallowRef<UndoStacks>({})
 let undoState: UndoState = newUndoState({ text: sql.value, selection: { start: 0, end: 0 } })
 const undoSteps = ref(0)
 const redoSteps = ref(0)
@@ -2256,12 +2275,41 @@ const redoSteps = ref(0)
 const undoNote = ref('')
 
 function publishUndo(): void {
+  undoStacks.value = putUndoStack(undoStacks.value, activeQueryTab.value, undoState)
   undoSteps.value = undoDepth(undoState)
   redoSteps.value = redoDepth(undoState)
 }
 
+/**
+ * 装上某页签的栈（**只换栈，不动文本**）：没记过 ⇒ 按它现在的文本起一个空栈。
+ * 切 / 新建 / 关掉当前页签后都走这一处，别在各处自己 new 一个 —— 那会把历史漏掉。
+ */
+function loadUndoForTab(tabId: string): void {
+  undoState = takeUndoStack(undoStacks.value, tabId, sql.value, caretOffset.value)
+  publishUndo()
+}
+
+/**
+ * 某页签**还能撤几步**（页签徽标读它）。
+ *
+ * 为什么按页签的权威文本核一遍：整篇替换（回填已保存查询 / 打开表 / 换成 AI 结果）**不让栈失效**，
+ * 而是让「栈顶 ≠ 页签文本」这件事自己暴露 —— 徽标若照旧报 N，就是在说「这里能撤 N 步」而其实撤不动。
+ * 对不上就报 0，等下一次编辑（`alignedUndoState` 会重起一栈）再如实涨。
+ */
+function undoableOf(tabId: string): number {
+  const state = undoStacks.value[tabId]
+  if (!state) return 0
+  const text =
+    tabId === activeQueryTab.value ? sql.value : queryTabs.value.find((tab) => tab.id === tabId)?.sql
+  if (state.states[state.index]?.text !== text) return 0
+  return undoDepth(state)
+}
+
 /** 行级编辑记一步（移行 / 注释 / 缩进 / 格式化 / 替换 / 片段）：各算一步，永不与前一步合并。 */
 function recordLineEdit(text: string, selection: EditorSelection): void {
+  // 栈顶与「改动前」的全文对不上（整篇替换过）⇒ 先用改动前那一份起新栈。
+  // 少了这一步，这一笔会压在**上一份文档**的历史上，撤销就把回填前的旧 SQL 拉回来。
+  undoState = alignedUndoState(undoState, sql.value, caretOffset.value)
   undoState = pushUndo(
     undoState,
     { text, selection },
@@ -2275,6 +2323,7 @@ function recordLineEdit(text: string, selection: EditorSelection): void {
 function recordTyping(before: string, after: string, caretAfter: number): void {
   const step = stepForTextChange(before, after, Date.now())
   if (!step) return
+  undoState = alignedUndoState(undoState, before, caretAfter)
   undoState = pushUndo(undoState, { text: after, selection: { start: caretAfter, end: caretAfter } }, step)
   publishUndo()
   undoNote.value = ''
@@ -3571,6 +3620,13 @@ async function probe() {
             >
               {{ tab.title }}
             </button>
+            <!-- 这张页签切回来还能撤几步（第 26 轮：每页签一份栈）——「历史跨页签保留」要有可见面 -->
+            <span
+              v-if="undoableOf(tab.id) > 0"
+              class="db__qtab-undo"
+              data-testid="qtab-undo-depth"
+              :title="t('sql.tabUndoDepth', { n: undoableOf(tab.id) })"
+            >⟲{{ undoableOf(tab.id) }}</span>
             <button
               class="db__qtab-close"
               type="button"
@@ -5718,6 +5774,20 @@ th.db__grid-head[style] {
   color: var(--ds-color-text-tertiary);
   cursor: pointer;
   font-size: var(--ds-font-caption-size);
+}
+
+/* 页签上的「还能撤几步」徽标（第 26 轮）：低调到不抢视线，但看得见数字 */
+.db__qtab-undo {
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.db__qtab--active .db__qtab-undo {
+  color: var(--ds-color-accent-accent);
+  opacity: 1;
 }
 
 .db__qtab-close:disabled {

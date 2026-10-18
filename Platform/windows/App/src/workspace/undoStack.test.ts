@@ -8,13 +8,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   UNDO_LIMIT,
+  alignedUndoState,
+  dropUndoStack,
   newUndoState,
+  putUndoStack,
   pushUndo,
   redoDepth,
   redoOnce,
   stepForTextChange,
+  takeUndoStack,
   undoDepth,
   undoOnce,
+  type UndoStacks,
   type UndoState,
 } from './undoStack'
 
@@ -172,5 +177,70 @@ describe('上限与漂移', () => {
     state = lineEdit(state, 'b', 1, 1000)
     expect(undoOnce(state, '别的页签里的 SQL').kind).toBe('drifted')
     expect(redoOnce(state, '别的页签里的 SQL').kind).toBe('drifted')
+  })
+})
+
+// ── 每页签一份栈（第 26 轮 · FR-EDIT-60 的页签条款）──────────────────────────
+//
+// 判据只判**存 / 取 / 丢**这三件的规则；「切页签之后 Ctrl+Z 真的撤对了」是接线，交给挂载测
+// （`views/DatabaseView.perTabUndo.test.ts`）。否定面：不继承别人的历史、不许跨文档撤销。
+describe('每页签一份栈', () => {
+  it('没记过的页签 ⇒ 按它自己的文本起一个空栈（撤销报「没得撤」，不是 drifted）', () => {
+    const state = takeUndoStack({}, 'tab-b', 'select 2', 8)
+    expect(undoDepth(state)).toBe(0)
+    expect(state.states).toHaveLength(1)
+    expect(undoOnce(state, 'select 2').kind).toBe('exhausted')
+  })
+
+  it('存过再取回 ⇒ 逐字同一份（历史跨页签保留）', () => {
+    let stacks: UndoStacks = {}
+    const edited = lineEdit(newUndoState({ text: 'one', selection: at(3) }), 'one two', 3, 1000)
+    stacks = putUndoStack(stacks, 'tab-a', edited)
+    const back = takeUndoStack(stacks, 'tab-a', 'one two', 7)
+    expect(back.states.map((s) => s.text)).toEqual(['one', 'one two'])
+    expect(undoDepth(back)).toBe(1)
+    const undone = undoOnce(back, 'one two')
+    expect(undone.kind).toBe('applied')
+    if (undone.kind === 'applied') expect(undone.snapshot.text).toBe('one')
+  })
+
+  it('栈顶与当前文本对不上（这个页签的文本被整篇换过）⇒ 起新栈，绝不把旧历史接上去', () => {
+    let stacks: UndoStacks = {}
+    const edited = lineEdit(newUndoState({ text: 'one', selection: at(3) }), 'one two', 3, 1000)
+    stacks = putUndoStack(stacks, 'tab-a', edited)
+    const fresh = takeUndoStack(stacks, 'tab-a', '完全换过的一段', 4)
+    expect(undoDepth(fresh)).toBe(0)
+    expect(fresh.states).toHaveLength(1)
+    expect(fresh.states[0].text).toBe('完全换过的一段')
+  })
+
+  it('putUndoStack 不改入参；dropUndoStack 只删一个键，别的页签的栈原样留着', () => {
+    const a = newUndoState({ text: 'a', selection: at(1) })
+    const b = newUndoState({ text: 'b', selection: at(1) })
+    const before = putUndoStack(putUndoStack({}, 'a', a), 'b', b)
+    const frozen = JSON.stringify(before)
+    const after = putUndoStack(before, 'a', newUndoState({ text: 'a2', selection: at(2) }))
+    expect(JSON.stringify(before)).toBe(frozen)
+    expect(after.a).not.toBe(a)
+    const dropped = dropUndoStack(after, 'a')
+    expect(Object.keys(dropped)).toEqual(['b'])
+    expect(dropped.b).toBe(b)
+    // 表里没有这个键 ⇒ 返回同一份表（不做无意义的复制）
+    expect(dropUndoStack(dropped, 'nope')).toBe(dropped)
+  })
+
+  it('整篇替换之后先打字：那一笔压在新的一份上（不许跨文档撤销）', () => {
+    const stale = lineEdit(newUndoState({ text: '旧文档', selection: at(3) }), '旧文档改', 3, 1000)
+    const aligned = alignedUndoState(stale, '新文档', 3)
+    const after = type(aligned, '新文档', '新文档x', 4, 2000)
+    expect(undoDepth(after)).toBe(1)
+    const back = undoOnce(after, '新文档x')
+    expect(back.kind).toBe('applied')
+    if (back.kind === 'applied') expect(back.snapshot.text).toBe('新文档')
+  })
+
+  it('栈顶与改动前文本一致时，对齐不动栈（不白扔历史）', () => {
+    const state = lineEdit(newUndoState({ text: 'a', selection: at(1) }), 'ab', 2, 1000)
+    expect(alignedUndoState(state, 'ab', 2)).toBe(state)
   })
 })
