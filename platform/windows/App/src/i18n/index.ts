@@ -530,6 +530,14 @@ export const DICT = {
     en: 'No match (literal search, not regex)',
   },
   'sql.find.note': { 'zh-Hans': '替换了 {n} 处', en: 'Replaced {n}' },
+  'sql.find.noteNext': {
+    'zh-Hans': '替换了 {n} 处 · 下一处已选中',
+    en: 'Replaced {n} · next match selected',
+  },
+  'sql.find.noteDone': {
+    'zh-Hans': '替换了 {n} 处 · 已替完，没有别的匹配了',
+    en: 'Replaced {n} · done, no other matches left',
+  },
   'sql.find.placeholder': { 'zh-Hans': '要查的文字', en: 'Text to find' },
   'sql.find.replacePlaceholder': { 'zh-Hans': '替成什么（字面量）', en: 'Replacement (literal)' },
   'sql.find.emptyQuery': { 'zh-Hans': '先输入要查的文字', en: 'Type something to find first' },

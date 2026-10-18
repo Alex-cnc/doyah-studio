@@ -6,10 +6,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   findMatches,
+  mapOffsetAfterReplaceAll,
   matchIndexAt,
   readout,
   replaceAll,
   replaceOne,
+  selectionAfterReplace,
   stepMatch,
 } from './findReplace'
 
@@ -124,5 +126,69 @@ describe('替换全部', () => {
     const result = replaceAll('select 1', 'zzz', 'x')
     expect(result.text).toBe('select 1')
     expect(result.count).toBe(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 「替换之后光标 / 选区落在哪」（FR-EDIT-48 的等长替换条款：等长替换 ⇒ 光标与选区都不动）
+// 这两族以前没有判据，于是「全部替换」把光标甩到文末、「替换一处」把选区塌成光标，两个毛病
+// 都活到了人工点验。判据放在纯逻辑层：挂载测只证明"接线接了"，算得对要在这里钉死。
+// ─────────────────────────────────────────────────────────────────────────────
+describe('替换全部之后的光标落点', () => {
+  it('等长替换 ⇒ 光标逐字符不动（不再甩到文末）', () => {
+    const text = 'select 1 from a where b from c'
+    expect(mapOffsetAfterReplaceAll(text, 'from', 'FROM', 20)).toBe(20)
+    expect(mapOffsetAfterReplaceAll(text, 'from', 'FROM', 20)).not.toBe(text.length)
+  })
+
+  it('替换串变长 ⇒ 只按它前面那几处替换的长度差往后推', () => {
+    // 'a-a-a' 里三处 'a' 各变长 1；光标在下标 3 的那一段之前已经过两处 ⇒ 3 + 2
+    expect(mapOffsetAfterReplaceAll('a-a-a', 'a', 'aa', 3)).toBe(5)
+  })
+
+  it('替换让全文变短 ⇒ 光标夹在新长度里（不落在文本之外）', () => {
+    expect(mapOffsetAfterReplaceAll('aaaa', 'a', '', 10)).toBe(0)
+  })
+
+  it('光标压在命中中间 ⇒ 跟到这一段替换串的末尾', () => {
+    // 'select' 从 0 到 6，光标在下标 3；换成 7 个字之后应当落在替换串之后（7）
+    expect(mapOffsetAfterReplaceAll('select 1', 'select', 'SELECTX', 3)).toBe(7)
+  })
+
+  it('一处都没有 ⇒ 位置原样（不乱动光标）', () => {
+    expect(mapOffsetAfterReplaceAll('abc', 'zz', 'x', 2)).toBe(2)
+  })
+})
+
+describe('替换一处之后的选区', () => {
+  it('还有下一处 ⇒ 选中下一处（看得见下一个要替的是谁）', () => {
+    // 'from from' 把第一处替成 'FROM' ⇒ 剩下的那处在 5..9
+    expect(selectionAfterReplace('FROM from', 'from', 'FROM', 0)).toEqual({ start: 5, end: 9, more: true })
+  })
+
+  it('已替完 ⇒ 选区留在刚替换出来的那一段（不塌陷、不跳到别处）', () => {
+    // 等长替换：这段与替换前的选区逐字符重合 ⇒ 光标不位移
+    expect(selectionAfterReplace('x FROM', 'from', 'FROM', 2)).toEqual({ start: 2, end: 6, more: false })
+  })
+
+  it('变长替换的最后一处 ⇒ 选中整段替换串（光标不丢在段落外面）', () => {
+    expect(selectionAfterReplace('x ABCD', 'ab', 'ABCD', 2)).toEqual({ start: 2, end: 6, more: false })
+  })
+
+  it('后面没有了但前面还有 ⇒ 绕回第一处（与「下一处」按钮同口径）', () => {
+    expect(selectionAfterReplace('q q Z', 'q', 'Z', 4)).toEqual({ start: 0, end: 1, more: true })
+  })
+
+  it('刚替出来的那段仍然命中（大小写不敏感档）时，不当成"下一处"', () => {
+    // 只有一处 'from'：替完之后文本里仍能查到 'from'（就是刚替出来的 'FROM'），不许原地绕圈
+    expect(selectionAfterReplace('x FROM', 'from', 'FROM', 2).more).toBe(false)
+  })
+
+  it('区分大小写档下替换出来的那段不再命中 ⇒ 同样落到"已替完"', () => {
+    expect(selectionAfterReplace('x FROM', 'from', 'FROM', 2, { caseSensitive: true })).toEqual({
+      start: 2,
+      end: 6,
+      more: false,
+    })
   })
 })

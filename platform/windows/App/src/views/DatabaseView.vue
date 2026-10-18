@@ -161,10 +161,12 @@ import { offsetOfJump, parseJumpInput } from '../workspace/navigation'
 // 查找 / 替换（FR-EDIT-18）：字面量匹配、非重叠、替换串里的 `$&` 当字面量 —— 规则与 19 条单测同在一处。
 import {
   findMatches,
+  mapOffsetAfterReplaceAll,
   matchIndexAt,
   readout,
   replaceAll,
   replaceOne,
+  selectionAfterReplace,
   stepMatch,
 } from '../workspace/findReplace'
 // 诊断上屏（B1 第三批 · FR-EDIT-56）：规则在领域层 `Db/src/lint.rs`，这里只把区间叠到高亮片段上。
@@ -2652,19 +2654,31 @@ function stepFind(direction: 1 | -1): void {
   syncFindSelection(stepMatch(matches.length, findCurrent.value, direction))
 }
 
-/** 替换结果落回编辑器（与编辑键同一条路：先写全文，nextTick 后摆光标）。 */
-async function commitFoundText(text: string, caret: number): Promise<void> {
-  recordLineEdit(text, { start: caret, end: caret })
+/**
+ * 替换结果落回编辑器（与编辑键同一条路：先写全文，nextTick 后摆**选区**）。
+ *
+ * 收的是一段选区而不是一个光标 —— 「替换一处」要把选区摆到**下一处命中**上（看得见下一个
+ * 改的是谁），「全部替换」要把它留在原处（等长替换时逐字符不动，见 `mapOffsetAfterReplaceAll`）。
+ * 焦点只在**人不在查找条里**时才抢回编辑器：正在替换输入框里连着改词时抢焦点会打不进去字。
+ */
+async function commitFoundText(text: string, range: EditorSelection): Promise<void> {
+  recordLineEdit(text, range)
   sql.value = text
   await refreshHighlight()
   await nextTick()
   const area = sqlArea.value
-  if (area) area.setSelectionRange(caret, caret)
-  caretOffset.value = caret
+  if (area) {
+    const active = document.activeElement
+    const inFindBar = !!active && typeof (active as HTMLElement).closest === 'function'
+      && !!(active as HTMLElement).closest('[data-testid="find-bar"]')
+    if (!inFindBar) area.focus()
+    area.setSelectionRange(range.start, range.end)
+  }
+  caretOffset.value = range.end
   stashActiveQuery()
   void refreshCompletions()
-  // 文本变了 ⇒ 命中列表重算，光标处那一处成为"当前"
-  findCurrent.value = matchIndexAt(findHits.value, caret)
+  // 文本变了 ⇒ 命中列表重算，选区起点那一处成为"当前"
+  findCurrent.value = matchIndexAt(findHits.value, range.start)
 }
 
 function replaceCurrent(): void {
@@ -2677,7 +2691,8 @@ function replaceCurrent(): void {
     findNote.value = t('sql.find.none')
     return
   }
-  const result = replaceOne(sql.value, findTerm.value, findReplacement.value, matches[findCurrent.value], {
+  const start = matches[findCurrent.value]
+  const result = replaceOne(sql.value, findTerm.value, findReplacement.value, start, {
     caseSensitive: findCaseSensitive.value,
   })
   if (!result.count) {
@@ -2686,8 +2701,12 @@ function replaceCurrent(): void {
     findCurrent.value = matchIndexAt(findHits.value, caretOffset.value)
     return
   }
-  void commitFoundText(result.text, result.caret)
-  findNote.value = t('sql.find.note', { n: 1 })
+  // 替换一处之后选区落在哪：还有下一处就选中它，没了就选中刚替换出来的那一段（等长 ⇒ 原地不动）
+  const selection = selectionAfterReplace(result.text, findTerm.value, findReplacement.value, start, {
+    caseSensitive: findCaseSensitive.value,
+  })
+  void commitFoundText(result.text, { start: selection.start, end: selection.end })
+  findNote.value = selection.more ? t('sql.find.noteNext', { n: 1 }) : t('sql.find.noteDone', { n: 1 })
 }
 
 function replaceAllFound(): void {
@@ -2695,14 +2714,28 @@ function replaceAllFound(): void {
     findNote.value = t('sql.find.emptyQuery')
     return
   }
-  const result = replaceAll(sql.value, findTerm.value, findReplacement.value, {
+  const before = sql.value
+  const result = replaceAll(before, findTerm.value, findReplacement.value, {
     caseSensitive: findCaseSensitive.value,
   })
   if (!result.count) {
     findNote.value = t('sql.find.none')
     return
   }
-  void commitFoundText(result.text, result.caret)
+  // 光标与选区**留在原处**（等长替换 ⇒ 逐字符不动）：不再甩到文末
+  const area = sqlArea.value
+  const from = area ? area.selectionStart : caretOffset.value
+  const to = area ? area.selectionEnd : caretOffset.value
+  const mappedFrom = mapOffsetAfterReplaceAll(before, findTerm.value, findReplacement.value, from, {
+    caseSensitive: findCaseSensitive.value,
+  })
+  const mappedTo = mapOffsetAfterReplaceAll(before, findTerm.value, findReplacement.value, to, {
+    caseSensitive: findCaseSensitive.value,
+  })
+  void commitFoundText(result.text, {
+    start: Math.min(mappedFrom, mappedTo),
+    end: Math.max(mappedFrom, mappedTo),
+  })
   findNote.value = t('sql.find.note', { n: result.count })
 }
 

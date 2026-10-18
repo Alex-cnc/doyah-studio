@@ -96,10 +96,88 @@ export function replaceOne(
 }
 
 /**
+ * 替换全部之后，把「替换前的位置」换算成新文本里的同一位置（FR-EDIT-48 的等长替换条款）。
+ *
+ * 口径：
+ *   · **等长替换（替代串与查询串同长）⇒ 原样返回** —— 一个字都没多没少，光标凭什么跑
+ *     （旧实现回包的是 `out.length`，于是「全部替换」把光标甩到文末、视口跟着滚到底，
+ *     用户丢了刚才在看的那一行；等长替换下这一幕尤其刺眼）；
+ *   · 长度有变 ⇒ 只累计**整段落在 offset 之前**的那些替换带来的长度差；
+ *   · offset 落在某一处命中**中间**（选区压着要替的文字）⇒ 落到那一段替换串的末尾；
+ *   · 结果夹在 `[0, 新长度]`（替换也可能让全文变短）。
+ */
+export function mapOffsetAfterReplaceAll(
+  text: string,
+  query: string,
+  replacement: string,
+  offset: number,
+  options: FindOptions = {},
+): number {
+  const starts = findMatches(text, query, options)
+  if (!starts.length) return Math.min(Math.max(offset, 0), text.length)
+  const delta = replacement.length - query.length
+  let shift = 0
+  for (const start of starts) {
+    const end = start + query.length
+    if (end <= offset) {
+      shift += delta
+      continue
+    }
+    if (start <= offset) {
+      // 光标压在命中中间：跟到这一段替换串的末尾（不留在被替掉的旧文字里）
+      return Math.min(start + shift + replacement.length, text.length + delta * starts.length)
+    }
+    break
+  }
+  const length = text.length + delta * starts.length
+  return Math.min(Math.max(offset + shift, 0), length)
+}
+
+/** 替换一处之后该选中哪一段（`start` = 被替换那段**在新文本里**的起点）。 */
+export interface ReplaceSelection {
+  start: number
+  end: number
+  /** 还有别的命中可替（false = 刚替的就是最后一处） */
+  more: boolean
+}
+
+/**
+ * 替换一处之后选区落在哪（FR-EDIT-48：等长替换不许顶掉选区与光标）。
+ *
+ *   · **还有下一处命中 ⇒ 选中它**：看得见下一个要替的是哪一段，连按「替换」不用猜
+ *     （旧行为是塌成光标停在替换串末尾，读数和选区都不动，用户不知道下一个改的是谁）；
+ *   · 下一处在后面找不到、但前面还有 ⇒ 绕回第一处（与「下一处」按钮同口径）；
+ *   · **一处都不剩 ⇒ 选中刚替换出来的那一段**：等长替换时这段与替换前的选区**逐字符重合**
+ *     （光标不位移），变长变短时选中整段替换串（不会把光标丢在段落外面）。
+ */
+export function selectionAfterReplace(
+  text: string,
+  query: string,
+  replacement: string,
+  start: number,
+  options: FindOptions = {},
+): ReplaceSelection {
+  const replacedEnd = start + replacement.length
+  const matches = findMatches(text, query, options)
+  // 刚替出来的那一段如果**仍然命中**（大小写不敏感档下 `from` → `FROM` 就是），不算"下一处"
+  const others = matches.filter((m) => m !== start)
+  const after = others.find((m) => m >= replacedEnd)
+  if (after !== undefined) return { start: after, end: after + query.length, more: true }
+  if (others.length) {
+    const first = others[0]
+    return { start: first, end: first + query.length, more: true }
+  }
+  return { start, end: replacedEnd, more: false }
+}
+
+/**
  * 替换全部。
  *
  * 替换串是**字面量**（见文件头 ①）：`$&` 在这里就是一个美元符号加和号。
  * 替换串里含查询串也没关系 —— 从原文一次扫描拼出新串，不在结果上再扫一遍（不会自己喂自己）。
+ *
+ * 回包里的 `caret` 是「文末」这个历史口径（有单测盯着），界面**不再用它摆光标** ——
+ * 替换全部后光标留在原处，换算走 `mapOffsetAfterReplaceAll`。
  */
 export function replaceAll(
   text: string,

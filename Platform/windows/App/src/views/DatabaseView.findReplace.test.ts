@@ -274,3 +274,76 @@ describe('FR-EDIT-18 查找 / 替换：Ctrl+F 开、读数与选区、替换落�
     mounted.wrapper.unmount()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FR-EDIT-48 的等长替换条款：「等长替换 ⇒ 光标与选区都不动」
+// 老行为两个毛病都在这两条判据上现形：全部替换把光标甩到文末、替换一处把选区塌成光标。
+// ─────────────────────────────────────────────────────────────────────────────
+describe('FR-EDIT-48 替换之后的落点：等长替换不许顶掉光标与选区', () => {
+  it('全部替换（等长）后光标还在原处 —— 不再被甩到文末', async () => {
+    const mounted = await mountView()
+    const text = 'select 1 from a where b from c'
+    await setText(mounted, text, 0)
+    press(editorOf(mounted), { key: 'h', ctrlKey: true })
+    await settle()
+    await typeInto(mounted, 'find-term', 'from')
+    await typeInto(mounted, 'find-replacement', 'FROM')
+    // 打查询词时选区会被摆到第一处命中（既有行为）；这里把光标摆回第 20 个字符（'where' 之后）当基线
+    const before = editorOf(mounted)
+    before.setSelectionRange(20, 20)
+    expect(before.selectionStart).toBe(20)
+
+    await mounted.wrapper.find('[data-testid="find-replace-all"]').trigger('click')
+    await settle()
+
+    const area = editorOf(mounted)
+    expect(area.value).toBe('select 1 FROM a where b FROM c')
+    expect(area.selectionStart).toBe(20)
+    expect(area.selectionEnd).toBe(20)
+
+    mounted.restore()
+    mounted.wrapper.unmount()
+  })
+
+  it('替换一处后选区落在下一处命中（看得见下一个要替的是谁），回执说清', async () => {
+    const mounted = await mountView()
+    await setText(mounted, 'from from', 0)
+    press(editorOf(mounted), { key: 'h', ctrlKey: true })
+    await settle()
+    await typeInto(mounted, 'find-term', 'from')
+    await typeInto(mounted, 'find-replacement', 'FROM')
+
+    await mounted.wrapper.find('[data-testid="find-replace"]').trigger('click')
+    await settle()
+
+    const area = editorOf(mounted)
+    expect(area.value).toBe('FROM from')
+    expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('from')
+    expect(area.selectionStart).toBe(5)
+    expect(mounted.wrapper.find('[data-testid="find-note"]').text()).toContain('下一处已选中')
+
+    mounted.restore()
+    mounted.wrapper.unmount()
+  })
+
+  it('最后一处替完之后选区留在刚替换出来的那一段（不塌陷、不跳到别处）', async () => {
+    const mounted = await mountView()
+    await setText(mounted, 'select from', 0)
+    press(editorOf(mounted), { key: 'h', ctrlKey: true })
+    await settle()
+    await typeInto(mounted, 'find-term', 'from')
+    await typeInto(mounted, 'find-replacement', 'FROM')
+
+    await mounted.wrapper.find('[data-testid="find-replace"]').trigger('click')
+    await settle()
+
+    const area = editorOf(mounted)
+    expect(area.value).toBe('select FROM')
+    expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('FROM')
+    expect(area.selectionStart).toBe(7)
+    expect(mounted.wrapper.find('[data-testid="find-note"]').text()).toContain('已替完')
+
+    mounted.restore()
+    mounted.wrapper.unmount()
+  })
+})
