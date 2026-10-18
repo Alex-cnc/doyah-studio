@@ -78,6 +78,7 @@ export const COMMANDS = {
   // 备份（FR-IO-04：封装本机 pg_dump —— 先摊命令行，再真跑）
   backupPlan: 'backup_plan',
   backupRun: 'backup_run',
+  backupCancel: 'backup_cancel',
   previewImport: 'preview_import',
   runImport: 'run_import',
   xlsxToCsv: 'xlsx_to_csv',
@@ -1473,6 +1474,18 @@ export function backupPlan(request: BackupRequest): Promise<BackupPlanReport> {
 /** **真跑备份**：子进程起 `pg_dump`，回执带退出码与日志尾部。 */
 export function backupRun(request: BackupRequest): Promise<BackupReport> {
   return call(COMMANDS.backupRun, { request }, () => {
+    throw bypassDb('ipc.action.backup') as DbFailure
+  })
+}
+
+/**
+ * **取消正在跑的备份**（`true` = 确实有一次在跑、已收到取消请求）。
+ *
+ * 不是「本地不等了」：外壳会终止 `pg_dump` 进程，并把这次留下的半截产物删掉 ——
+ * 于是「取消」不会给盘上留一个看起来有备份的 0 字节文件。
+ */
+export function backupCancel(): Promise<boolean> {
+  return call(COMMANDS.backupCancel, {}, () => {
     throw bypassDb('ipc.action.backup') as DbFailure
   })
 }

@@ -993,6 +993,42 @@ async fn backup_inputs(
     Ok((target, request.path.trim().to_string()))
 }
 
+/// **备份的取消槽**（同一刻只许一次备份）：`(运行序号, 取消旗)`。
+///
+/// 为什么是全局单槽而不是「每条命令带自己的句柄」：界面一次只开一个备份弹层，而 `pg_dump`
+/// 两次同时跑会互相抢同一个目标路径 —— 与其让它们撞，不如**第二次直接拒掉**并说清是谁在跑。
+static BACKUP_CANCEL_SLOT: std::sync::Mutex<Option<(u64, backup::CancelFlag)>> =
+    std::sync::Mutex::new(None);
+/// 运行序号（只用于「释放时确认槽里还是我这一面旗」，防止 A 跑完把 B 的旗清掉）。
+static BACKUP_RUN_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// 占住取消槽并拿到自己这面旗（已有备份在跑 ⇒ 拒绝，不排队）。
+fn install_backup_cancel() -> Result<(u64, backup::CancelFlag), DbFailure> {
+    let mut slot = BACKUP_CANCEL_SLOT
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if let Some((seq, _)) = slot.as_ref() {
+        return Err(DbFailure {
+            message: format!("已经有一次备份在跑（第 {seq} 次），先等它结束或取消它"),
+            hint: "同时跑两个 pg_dump 会互相抢同一个目标文件，所以这里不排队。".to_string(),
+        });
+    }
+    let seq = BACKUP_RUN_SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    let flag = backup::CancelFlag::new();
+    *slot = Some((seq, flag.clone()));
+    Ok((seq, flag))
+}
+
+/// 跑完释放槽（只在槽里还是**我这一次**时才清，别把别人的旗抹掉）。
+fn release_backup_cancel(seq: u64) {
+    let mut slot = BACKUP_CANCEL_SLOT
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if matches!(slot.as_ref(), Some((current, _)) if *current == seq) {
+        *slot = None;
+    }
+}
+
 /// **备份计划**：找到程序、拼好参数、把命令行摊出来（**不起任何进程**）。
 #[tauri::command]
 async fn backup_plan(
@@ -1057,14 +1093,38 @@ async fn backup_run(
         database: target.database.clone(),
     };
     // 子进程是**阻塞**的（大库要跑几分钟）：挪到阻塞线程池，别把 async 运行时占住。
-    tauri::async_runtime::spawn_blocking(move || {
-        backup::run(&plan, password.as_deref(), sslmode.as_deref())
+    // 取消旗先占槽再进线程 —— 界面在跑的时候按下「取消」才能摸到同一面旗。
+    let (seq, cancel) = install_backup_cancel()?;
+    let running_flag = cancel.clone();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        backup::run_cancellable(&plan, password.as_deref(), sslmode.as_deref(), &running_flag)
     })
     .await
     .map_err(|error| DbFailure {
         message: format!("备份线程没能起起来：{error}"),
         hint: "这属实现缺陷：请保留现场并报告。".to_string(),
-    })?
+    });
+    release_backup_cancel(seq);
+    outcome?
+}
+
+/// **取消正在跑的备份**：置位取消旗 ⇒ 子进程被终止 ⇒ **这次留下的半截产物被删掉**
+/// （`pg_dump -F c` 先建文件再连服务器，强杀后不清就会剩一个 0 字节的「看起来有备份」）。
+///
+/// 返回值 `true` = 确实有一次备份收到了取消请求（它会在几十毫秒内以「备份已取消」结束）；
+/// `false` = 当时没有备份在跑（界面上的键本该是灰的，这里如实说没有可取消的东西）。
+#[tauri::command]
+async fn backup_cancel() -> Result<bool, DbFailure> {
+    let slot = BACKUP_CANCEL_SLOT
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    match slot.as_ref() {
+        Some((_, flag)) => {
+            flag.cancel();
+            Ok(true)
+        }
+        None => Ok(false),
+    }
 }
 
 /// **预览导入**：读文件 → 解析 → 与目标表列对账（**不碰数据库**）。
@@ -2218,6 +2278,7 @@ pub fn run() {
             export_to_file,
             backup_plan,
             backup_run,
+            backup_cancel,
             preview_import,
             run_import,
             xlsx_to_csv,

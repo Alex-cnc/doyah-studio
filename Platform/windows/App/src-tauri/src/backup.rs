@@ -22,10 +22,47 @@
 //! 程序找不到 ⇒ 说清「去哪儿找过」并把候选位置列出来（不静默退化成一句「失败」）；
 //! 退出码非零 ⇒ 服务端/`pg_dump` 的原话原样保留，附一句「怎么看」。
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use crate::postgres::DbFailure;
+
+/// 轮询子进程的间隔：太密白烧 CPU（每 100ms 一次 `try_wait` 对一次备份可忽略），
+/// 太疏则「点了取消还要等好几秒才停」—— 用户对取消的容忍度比对进度条低得多。
+const CANCEL_POLL: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// **取消旗**（一次备份一个）：界面按「取消」⇒ 外壳置位 ⇒ `run_cancellable` 看见就杀掉子进程。
+///
+/// 为什么用「轮询 + `kill`」而不是等它自己结束：`pg_dump` 一次性备份一个大库可能几分钟，
+/// 期间它不读 stdin、也不响应 Ctrl-C 之外的信号 —— 用户在界面上已经决定不要这份备份了，
+/// 唯一的出路是终止进程。代价是**强杀**（Windows 上是 `TerminateProcess`）：进程不会做清理，
+/// 于是**半截产物必须由我们来删**（见 `clear_partial`），这条与失败路径是同一条口径。
+#[derive(Debug, Clone)]
+pub struct CancelFlag(Arc<AtomicBool>);
+
+impl CancelFlag {
+    pub fn new() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+
+    /// 置位（可重复调；已经取消过就保持取消）。
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
+impl Default for CancelFlag {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// 回执里带的日志字符上限（只留尾部）。
 pub const LOG_LIMIT: usize = 4000;
@@ -301,8 +338,25 @@ pub fn tail_log(text: &str, limit: usize) -> (String, usize) {
     (tail, skip)
 }
 
-/// 跑一份计划。`password` / `sslmode` 都走**环境变量**（不进 argv）。
+/// 跑一份计划（**不关心取消**：内部用一面永远不会被置位的旗）。
+///
+/// 需要「跑着能停」就调 `run_cancellable`，把界面按下去的那面旗传进来。
 pub fn run(plan: &BackupPlan, password: Option<&str>, sslmode: Option<&str>) -> Result<BackupReport, DbFailure> {
+    run_cancellable(plan, password, sslmode, &CancelFlag::new())
+}
+
+/// 跑一份计划，**跑着可以被取消**。`password` / `sslmode` 都走环境变量（不进 argv）。
+///
+/// 与 `Command::output()` 的区别（为什么不用它）：
+///   · `output()` 会一直阻塞到子进程结束 —— 期间**没有任何地方**能把「用户点了取消」传进来；
+///   · 它把 stdout / stderr 读到内存才返回，于是也不存在「边跑边知道它说了什么」。
+/// 这里改成「起进程 → 两路读线程（漏读会因 pipe 满把子进程憋死）→ 每 100ms 看一眼旗」。
+pub fn run_cancellable(
+    plan: &BackupPlan,
+    password: Option<&str>,
+    sslmode: Option<&str>,
+    cancel: &CancelFlag,
+) -> Result<BackupReport, DbFailure> {
     let program = plan.program.clone().ok_or_else(|| DbFailure {
         message: "没有可用的 pg_dump 程序，备份没有开始".to_string(),
         hint: "先在「程序」一格填 pg_dump 的完整路径（自动查找的结果会显示在同一处）。".to_string(),
@@ -317,7 +371,7 @@ pub fn run(plan: &BackupPlan, password: Option<&str>, sslmode: Option<&str>) -> 
     }
 
     let started = std::time::Instant::now();
-    // 动手前的存在性：**失败后只清我们自己造出来的东西**（见 `clear_partial`）
+    // 动手前的存在性：**取消 / 失败后只清我们自己造出来的东西**（见 `clear_partial`）
     let existed_before = plan.target.exists();
     let mut command = Command::new(&program);
     command
@@ -328,14 +382,70 @@ pub fn run(plan: &BackupPlan, password: Option<&str>, sslmode: Option<&str>) -> 
     for (key, value) in &envs {
         command.env(key, value);
     }
-    let output = command.output().map_err(|err| DbFailure {
+    let mut child = command.spawn().map_err(|err| DbFailure {
         message: format!("起不来 pg_dump：{err}"),
         hint: format!("确认 {} 能直接运行（杀毒软件拦截 / 权限不足都会这样报）。", program.display()),
     })?;
+
+    // 两路读线程：**必须同时读**。子进程往满的 pipe 里写会阻塞 —— 只读 stdout 的话，
+    // 一个话多的 `pg_dump`（stderr 上进度信息不少）会把两边都卡死。
+    // 注：join 这两个线程的前提是**管子由子进程自己握着**（`pg_dump` 不起孙子进程）；若哪天改成
+    // 经 shell 包一层，kill 只杀 shell，孙子进程仍握着管子 ⇒ 取消退化成「等它跑完」。
+    let mut stdout_pipe = match child.stdout.take() {
+        Some(pipe) => pipe,
+        None => {
+            return Err(DbFailure {
+                message: "拿不到 pg_dump 的输出管道，备份没有开始".to_string(),
+                hint: "这属实现缺陷：请保留现场并报告。".to_string(),
+            })
+        }
+    };
+    let mut stderr_pipe = match child.stderr.take() {
+        Some(pipe) => pipe,
+        None => {
+            return Err(DbFailure {
+                message: "拿不到 pg_dump 的错误输出管道，备份没有开始".to_string(),
+                hint: "这属实现缺陷：请保留现场并报告。".to_string(),
+            })
+        }
+    };
+    let out_reader = std::thread::spawn(move || {
+        let mut buffer = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut buffer);
+        buffer
+    });
+    let err_reader = std::thread::spawn(move || {
+        let mut buffer = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut buffer);
+        buffer
+    });
+
+    let mut cancelled = false;
+    let status = loop {
+        if cancel.is_cancelled() {
+            // 强杀（Windows 上是 TerminateProcess）：pg_dump 自己不会收尾，
+            // 半截产物由下面的 `clear_partial` 收拾 —— 与失败路径同一条口径。
+            let _ = child.kill();
+            cancelled = true;
+            break child.wait().ok();
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) => std::thread::sleep(CANCEL_POLL),
+            Err(err) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(DbFailure {
+                    message: format!("等待 pg_dump 时出错：{err}（备份可能没跑完）"),
+                    hint: "这属实现缺陷：请保留现场并报告。".to_string(),
+                });
+            }
+        }
+    };
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stdout = String::from_utf8_lossy(&out_reader.join().unwrap_or_default()).to_string();
+    let stderr = String::from_utf8_lossy(&err_reader.join().unwrap_or_default()).to_string();
     let combined = match (stdout.trim().is_empty(), stderr.trim().is_empty()) {
         (true, true) => String::new(),
         (true, false) => stderr,
@@ -343,13 +453,35 @@ pub fn run(plan: &BackupPlan, password: Option<&str>, sslmode: Option<&str>) -> 
         (false, false) => format!("{stderr}\n{stdout}"),
     };
     let (log, trimmed) = tail_log(&combined, LOG_LIMIT);
-    // 失败回执要用第一行，而 `log` 会被移进回执 —— 先取出来，别在移动之后再借
+    // 失败 / 取消回执要用第一行，而 `log` 会被移进回执 —— 先取出来，别在移动之后再借
     let headline = first_line(&log);
 
+    // 取消的结局**与失败分开说**：它不是「备份出错了」，是「你叫停了，我们把它留下的东西清了」。
+    if cancelled {
+        let cleaned = clear_partial(&plan.target, plan.format, existed_before);
+        let tail_note = if combined.trim().is_empty() {
+            String::new()
+        } else {
+            format!("子进程最后说：{headline}。")
+        };
+        return Err(DbFailure {
+            message: format!("备份已取消：你在第 {} ms 叫停了它，这次没有产出可用的备份", elapsed_ms),
+            hint: format!(
+                "{tail_note}{}",
+                match cleaned {
+                    Some(note) => format!("{note}。还想备份就再点一次「开始备份」。"),
+                    None => "盘上没有留下半截产物。还想备份就再点一次「开始备份」。".to_string(),
+                }
+            ),
+        });
+    }
+
+    let exit_code = status.as_ref().and_then(|status| status.code());
+    let success = status.as_ref().map(|status| status.success()).unwrap_or(false);
     let bytes = produced_bytes(&plan.target, plan.format);
     let report = BackupReport {
         display: plan.display(),
-        exit_code: output.status.code(),
+        exit_code,
         log,
         log_trimmed_chars: trimmed,
         bytes,
@@ -358,11 +490,11 @@ pub fn run(plan: &BackupPlan, password: Option<&str>, sslmode: Option<&str>) -> 
         format: plan.format,
     };
 
-    if output.status.success() {
+    if success {
         return Ok(report);
     }
     // 失败：把子进程的原话端出去（**不加工成「备份失败」四个字**）
-    let code = match output.status.code() {
+    let code = match exit_code {
         Some(code) => format!("退出码 {code}"),
         None => "进程被意外终止（没有退出码）".to_string(),
     };
@@ -661,5 +793,75 @@ mod tests {
         let (whole, none) = tail_log("short", 40);
         assert_eq!(whole, "short");
         assert_eq!(none, 0);
+    }
+
+    /// 取消旗：一开始是没取消，置位之后一直是取消（可重复置位）。
+    #[test]
+    fn the_cancel_flag_starts_clear_and_stays_set() {
+        let flag = CancelFlag::new();
+        assert!(!flag.is_cancelled());
+        flag.cancel();
+        assert!(flag.is_cancelled());
+        flag.cancel();
+        assert!(flag.is_cancelled());
+        // 克隆共享同一面旗（外壳装进槽里、界面按下去，必须是同一面）
+        let clone = flag.clone();
+        clone.cancel();
+        assert!(flag.is_cancelled());
+    }
+
+    /// **取消真的能停下子进程**，并且**它留下的半截产物被清掉**。
+    ///
+    /// 两条断言缺一不可：只断言「回执说已取消」会放过「取消只回了一句好话、进程还在跑」；
+    /// 只断言「进程停了」会放过「强杀留下的 0 字节文件被当备份」。`pg_dump -F c` 正是
+    /// **先建文件、再连服务器**，所以「取消 ⇒ 删掉这次建的」与失败路径是同一条数据安全口径。
+    #[test]
+    fn a_cancel_stops_a_long_child_and_clears_what_it_left() {
+        let dir = std::env::temp_dir().join(format!("doyah-backup-cancel-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("建临时目录");
+        let target = dir.join("half.dump");
+        // 起一个约 10 秒的子进程（不依赖 PostgreSQL）。**必须是直接子进程**，不许经 `cmd /C` 包一层：
+        // 那样子进程是孙进程，kill 只杀 cmd，孙进程还握着管子 ⇒ 读线程要等它自己跑完（9 秒），
+        // 「取消」就变成了「等到结束」—— 这条踩过，判据当场红。
+        let plan = BackupPlan {
+            program: Some(PathBuf::from(if cfg!(windows) { "ping" } else { "sleep" })),
+            args: if cfg!(windows) {
+                vec!["-n".into(), "10".into(), "127.0.0.1".into()]
+            } else {
+                vec!["10".into()]
+            },
+            target: target.clone(),
+            format: BackupFormat::Custom,
+            database: "shop".to_string(),
+        };
+
+        let cancel = CancelFlag::new();
+        let flag = cancel.clone();
+        let made = target.clone();
+        // 复刻 `pg_dump` 的时序：进程起来之后先把目标文件建出来
+        let maker = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let _ = std::fs::write(&made, b"");
+        });
+        let stopper = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(600));
+            flag.cancel();
+        });
+
+        let started = std::time::Instant::now();
+        let err = run_cancellable(&plan, None, None, &cancel)
+            .expect_err("取消必须是 Err —— 不许交出一份看起来成功的回执");
+        let elapsed = started.elapsed();
+        maker.join().expect("造半截文件的线程");
+        stopper.join().expect("置位线程");
+
+        assert!(err.message.contains("已取消"), "{}", err.message);
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "取消了却还在等子进程跑完：{elapsed:?}"
+        );
+        assert!(!target.exists(), "取消后不许留下半截产物：{}", target.display());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

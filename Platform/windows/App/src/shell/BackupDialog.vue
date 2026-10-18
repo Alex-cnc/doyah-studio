@@ -17,6 +17,7 @@
 import { computed, ref, watch } from 'vue'
 import { t as translate, type DictKey, type UiLanguage } from '../i18n'
 import {
+  backupCancel,
   backupPlan,
   backupRun,
   type BackupFormat,
@@ -51,6 +52,12 @@ const plan = ref<BackupPlanReport | null>(null)
 const report = ref<BackupReport | null>(null)
 const failure = ref<DbFailure | null>(null)
 const busy = ref(false)
+/** 取消请求已经发出去、还没看到结局（键在这个窗口里不许再点第二次）。 */
+const cancelling = ref(false)
+/** 这次的结局是「你按了取消」（与失败分开措辞 —— 它不是出错）。 */
+const cancelled = ref(false)
+/** 取消键按下去却没人可取消 / IPC 出错时的如实说明。 */
+const cancelNote = ref<string | null>(null)
 /** 计划自己的失败（连接没开 / 命令没起）—— 与「跑备份失败」分开摆，不然用户分不清是哪一步。 */
 const planFailure = ref<DbFailure | null>(null)
 
@@ -99,6 +106,9 @@ async function refreshPlan(): Promise<void> {
 async function run(): Promise<void> {
   if (!canRun.value) return
   busy.value = true
+  cancelling.value = false
+  cancelled.value = false
+  cancelNote.value = null
   failure.value = null
   report.value = null
   try {
@@ -111,10 +121,35 @@ async function run(): Promise<void> {
     })
   } catch (error) {
     failure.value = readable(error)
+    // 「你按了取消」与「备份出错」是两件事：前者不该用报错的口气讲
+    cancelled.value = failure.value.message.includes('已取消')
   } finally {
     busy.value = false
+    cancelling.value = false
     // 跑完重算一次：目标现在多半已存在，命令行区应当如实变成「不覆盖既有文件」那一档
     void refreshPlan()
+  }
+}
+
+/**
+ * **取消**：请外壳终止 `pg_dump` 子进程（强杀），半截产物由外壳删掉。
+ *
+ * 这里只发请求、不自己收拾战场 —— 界面不清文件、不判成败，与「判不在界面」同一条口径。
+ */
+async function cancel(): Promise<void> {
+  if (!busy.value || cancelling.value) return
+  cancelling.value = true
+  cancelNote.value = null
+  try {
+    const accepted = await backupCancel()
+    // 没有备份在跑就别装作取消了：如实说，并放开键（用户可能刚跑完）
+    if (!accepted) {
+      cancelling.value = false
+      cancelNote.value = tr('backup.cancelIdle')
+    }
+  } catch (error) {
+    cancelling.value = false
+    cancelNote.value = readable(error).message
   }
 }
 
@@ -138,6 +173,9 @@ watch(
     report.value = null
     failure.value = null
     planFailure.value = null
+    cancelNote.value = null
+    cancelled.value = false
+    cancelling.value = false
     databaseOverride.value = ''
     void refreshPlan()
   },
@@ -242,7 +280,21 @@ watch(
           >
             {{ busy ? tr('backup.running') : tr('backup.run') }}
           </button>
+          <!-- 跑着才露出来：大库跑起来之后唯一的出路就是这里 -->
+          <button
+            v-if="busy"
+            type="button"
+            class="backup__cancel"
+            data-testid="backup-cancel"
+            :disabled="cancelling"
+            @click="cancel"
+          >
+            {{ cancelling ? tr('backup.cancelling') : tr('backup.cancel') }}
+          </button>
         </div>
+        <p v-if="cancelNote" class="backup__hint" data-testid="backup-cancel-idle">
+          {{ cancelNote }}
+        </p>
 
         <!-- ③ 跑完了：成功 / 失败两档，**都带日志尾部** -->
         <div v-if="report" class="backup__result" data-testid="backup-result">
@@ -266,6 +318,10 @@ watch(
           <p class="backup__error" data-testid="backup-failure-message">
             {{ failure.message }}
             <span v-if="failure.hint" class="backup__hint"> — {{ failure.hint }}</span>
+          </p>
+          <!-- 取消的结局：说明这是强杀 + 半截产物已清（别把盘上旧文件当成这一份） -->
+          <p v-if="cancelled" class="backup__hint" data-testid="backup-cancelled-hint">
+            {{ tr('backup.cancelledHint') }}
           </p>
         </div>
       </template>
@@ -313,7 +369,8 @@ watch(
 }
 
 .backup__close,
-.backup__run {
+.backup__run,
+.backup__cancel {
   padding: var(--ds-spacing-xs) var(--ds-spacing-m);
   border: 1px solid var(--ds-hairline);
   border-radius: var(--ds-radius-control);
@@ -322,7 +379,8 @@ watch(
   cursor: pointer;
 }
 
-.backup__run:disabled {
+.backup__run:disabled,
+.backup__cancel:disabled {
   cursor: default;
   color: var(--ds-color-text-secondary);
 }

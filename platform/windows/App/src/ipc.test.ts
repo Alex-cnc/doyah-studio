@@ -63,6 +63,7 @@ describe('ipc', () => {
       'export_to_file',
       'backup_plan',
       'backup_run',
+      'backup_cancel',
       'preview_import',
       'run_import',
       'xlsx_to_csv',

@@ -798,6 +798,13 @@ export const DICT = {
   'backup.preview': { 'zh-Hans': '将要执行的命令行', en: 'Command line that will run' },
   'backup.run': { 'zh-Hans': '开始备份', en: 'Start backup' },
   'backup.running': { 'zh-Hans': '备份中…', en: 'Backing up…' },
+  'backup.cancel': { 'zh-Hans': '取消备份', en: 'Cancel backup' },
+  'backup.cancelling': { 'zh-Hans': '正在取消…（pg_dump 收到信号后停下）', en: 'Cancelling… (pg_dump stops once it gets the signal)' },
+  'backup.cancelIdle': { 'zh-Hans': '没有备份在跑，没什么可取消的。', en: 'No backup is running, so there is nothing to cancel.' },
+  'backup.cancelledHint': {
+    'zh-Hans': '取消是强杀子进程：这次留下的半截文件已由外壳删掉，别把盘上的旧文件当成这一份。',
+    en: 'Cancelling kills the child process: the half-written file from this run has been removed, so do not mistake an older file for this attempt.',
+  },
   'backup.needPath': { 'zh-Hans': '先填写到哪儿，这里就会显示将要执行的命令行。', en: 'Fill in the target path and the exact command line will show up here.' },
   'backup.ok': {
     'zh-Hans': '备份完成：{bytes} 字节 → {path}（耗时 {ms} ms）',

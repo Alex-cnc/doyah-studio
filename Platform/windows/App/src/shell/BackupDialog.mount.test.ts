@@ -19,7 +19,24 @@ const state: {
   runFailure: { message: string; hint: string } | null
   planCalls: number
   runCalls: number
-} = { plan: null, planFailure: null, report: null, runFailure: null, planCalls: 0, runCalls: 0 }
+  /** 让 `backupRun` 挂住不返回（用来验「跑着的时候」这一档） */
+  hold: boolean
+  /** 挂住的那次怎么收尾（由用例决定：成功还是取消） */
+  settle: { resolve: (value: BackupReport) => void; reject: (reason: unknown) => void } | null
+  cancelCalls: number
+  cancelAccepts: boolean
+} = {
+  plan: null,
+  planFailure: null,
+  report: null,
+  runFailure: null,
+  planCalls: 0,
+  runCalls: 0,
+  hold: false,
+  settle: null,
+  cancelCalls: 0,
+  cancelAccepts: true,
+}
 
 vi.mock('../ipc', () => ({
   backupPlan: vi.fn(async () => {
@@ -29,8 +46,17 @@ vi.mock('../ipc', () => ({
   }),
   backupRun: vi.fn(async () => {
     state.runCalls += 1
+    if (state.hold) {
+      return await new Promise<BackupReport>((resolve, reject) => {
+        state.settle = { resolve, reject }
+      })
+    }
     if (state.runFailure) throw state.runFailure
     return state.report
+  }),
+  backupCancel: vi.fn(async () => {
+    state.cancelCalls += 1
+    return state.cancelAccepts
   }),
 }))
 
@@ -90,6 +116,10 @@ beforeEach(() => {
   state.runFailure = null
   state.planCalls = 0
   state.runCalls = 0
+  state.hold = false
+  state.settle = null
+  state.cancelCalls = 0
+  state.cancelAccepts = true
 })
 
 describe('备份弹层（FR-IO-04）', () => {
@@ -194,5 +224,57 @@ describe('备份弹层（FR-IO-04）', () => {
     expect(wrapper.get('[data-testid="backup-no-connection"]').text()).toContain('还没有连接')
     expect(wrapper.find('[data-testid="backup-path"]').exists()).toBe(false)
     expect(state.planCalls).toBe(0)
+  })
+
+  it('跑着时露出「取消备份」，点了请外壳终止进程，文案变「正在取消…」', async () => {
+    state.hold = true
+    const wrapper = mountDialog()
+    await typePath(wrapper, 'D:\\backup\\shop.dump')
+    // 没跑的时候不该有这个键（它只在「跑着」这个窗口里有意义）
+    expect(wrapper.find('[data-testid="backup-cancel"]').exists()).toBe(false)
+
+    void wrapper.get('[data-testid="backup-run"]').trigger('click')
+    await flushPromises()
+
+    const cancelButton = wrapper.get('[data-testid="backup-cancel"]')
+    expect(cancelButton.text()).toContain('取消备份')
+    await cancelButton.trigger('click')
+    await flushPromises()
+
+    expect(state.cancelCalls).toBe(1)
+    // 请求已发出、结局没到：键要变成「正在取消…」且不许再点第二次
+    const pending = wrapper.get('[data-testid="backup-cancel"]')
+    expect(pending.text()).toContain('正在取消')
+    expect(pending.attributes('disabled')).toBeDefined()
+
+    // 外壳以 Err 收尾（强杀 + 半截产物已清）；界面要把它当「取消」而不是「备份出错」
+    state.settle?.reject({
+      message: '备份已取消：你在第 800 ms 叫停了它，这次没有产出可用的备份',
+      hint: '已删掉这次留下的半截产物：D:\\backup\\shop.dump',
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="backup-failure-message"]').text()).toContain('已取消')
+    expect(wrapper.get('[data-testid="backup-cancelled-hint"]').text()).toContain('强杀')
+    // 跑完了：取消键退场，回到「开始备份」可再点
+    expect(wrapper.find('[data-testid="backup-cancel"]').exists()).toBe(false)
+  })
+
+  it('取消键按下去却没人可取消时，如实说「没有备份在跑」而不是装作取消了', async () => {
+    state.hold = true
+    state.cancelAccepts = false
+    const wrapper = mountDialog()
+    await typePath(wrapper, 'D:\\backup\\shop.dump')
+    void wrapper.get('[data-testid="backup-run"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="backup-cancel"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="backup-cancel-idle"]').text()).toContain('没有备份在跑')
+    // 键回到「取消备份」（还能再试），不是卡在「正在取消」
+    expect(wrapper.get('[data-testid="backup-cancel"]').text()).toContain('取消备份')
+    state.settle?.resolve(report())
+    await flushPromises()
   })
 })
