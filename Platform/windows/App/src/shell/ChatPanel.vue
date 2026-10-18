@@ -13,7 +13,8 @@
   ⑦ **工具调用 + 内联审批**（`FR-AI-18`）：模型想读工作区里的文件时，流里出现一张卡片逐件写明路径，
       **不点就一次都不执行**；每件各自「允许读取 / 拒绝」，**全部决定之后**一次交给 Rust 侧
       （沙箱判路径、执行、把全部结果一次回灌给模型再答一次），「拒绝」也如实告诉模型别编。
-      一条回答里点了多件时逐件列出、逐件决定（一件都不丢），执行账（读到多少字符 / 截没截断）留在面板底部。
+      一条回答里点了多件时逐件列出、逐件决定（一件都不丢），**读到的文件进面板底部那一栏**：
+      哪几份（同一份合并成一行）、各多少字符、截断没有；被拒绝 / 没读到的也单列，用户才知道模型不知道什么。
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -31,6 +32,7 @@ import {
 } from '../ipc'
 import { t as translate, type DictKey, type UiLanguage } from '../i18n'
 import { CHAT_MAX_TURNS, budgetOf, outgoingTurns, questionCount, withReply } from './chatThread'
+import { contextOf } from './chatContext'
 
 const props = defineProps<{
   /** 界面语言（由工作区视图传下来）。 */
@@ -98,6 +100,11 @@ const budget = computed(() => budgetOf(turns.value, draft.value))
 const canSend = computed(() => !sending.value && draft.value.trim().length > 0)
 /** 已决定的件数（卡片底部「已决定 M / N」）：少一件就一件都不发。 */
 const decidedCount = computed(() => pendingDecisions.value.filter((decision) => decision !== null).length)
+/**
+ * 「这一轮模型读到了哪几份文件」（`FR-AI-18` 收口）：同一份只算一行、字符取最后一次读到的，
+ * 被拒绝 / 没读到的单独列出来并写明原因 —— 用户要知道模型**不知道**什么。
+ */
+const context = computed(() => contextOf(toolRuns.value))
 
 function readable(error: unknown): { message: string; hint: string } {
   const asFailure = error as { message?: string; hint?: string } | null
@@ -173,14 +180,6 @@ function toolPath(call: AgentToolCall): string {
   } catch {
     return ''
   }
-}
-
-/** 一条工具账的读法（同一段话既给中文也给英文，都走语言表）。 */
-function describeRun(run: AgentToolRun): string {
-  if (!run.approved) return tr('chat.tool.denied', { path: run.path })
-  if (!run.ok) return tr('chat.tool.failed', { path: run.path, problem: run.problem })
-  const base = tr('chat.tool.allowed', { path: run.path, chars: run.chars })
-  return run.truncated ? base + ' ' + tr('chat.tool.truncated', { chars: run.chars }) : base
 }
 
 /**
@@ -502,9 +501,29 @@ function clear() {
           {{ streamed > 0 ? tr('chat.streamed', { n: streamed }) : tr('chat.wholeBody') }}
         </span>
       </p>
-      <ul v-if="toolRuns.length" class="chat__tool-runs" data-testid="chat-tool-runs">
-        <li v-for="(run, index) in toolRuns" :key="index">{{ describeRun(run) }}</li>
-      </ul>
+      <!-- 这一轮模型读到了什么（`FR-AI-18` 收口）：同份合并、字符数如实报，没读到 / 被拒绝的单独列 -->
+      <section v-if="context.files.length || context.misses.length" class="chat__ctx" data-testid="chat-context">
+        <p class="chat__ctx-title" data-testid="chat-context-title">
+          {{ tr('chat.context.title', { files: context.files.length, chars: context.chars }) }}
+        </p>
+        <ul class="chat__ctx-list" data-testid="chat-tool-runs">
+          <li v-for="file in context.files" :key="file.key" class="chat__ctx-row" data-testid="chat-context-file">
+            <span class="chat__ctx-path">{{ file.path || file.name }}</span>
+            <span class="chat__ctx-chars">{{ tr('chat.context.chars', { chars: file.chars }) }}</span>
+            <span v-if="file.reads > 1" class="chat__ctx-note">{{ tr('chat.context.reads', { n: file.reads }) }}</span>
+            <span v-if="file.truncated" class="chat__ctx-note">{{ tr('chat.context.truncated') }}</span>
+          </li>
+          <li v-for="miss in context.misses" :key="miss.key" class="chat__ctx-row" data-testid="chat-context-miss">
+            <span class="chat__ctx-path">{{ miss.path || miss.name }}</span>
+            <span class="chat__ctx-chars">
+              {{ miss.reason === 'denied'
+                ? tr('chat.context.denied')
+                : tr('chat.context.failed', { problem: miss.problem }) }}
+            </span>
+          </li>
+        </ul>
+        <p class="chat__ctx-hint" data-testid="chat-context-note">{{ tr('chat.context.note') }}</p>
+      </section>
       <ul v-if="limitations.length" class="chat__limits" data-testid="chat-limits">
         <li v-for="line in limitations" :key="line">{{ line }}</li>
       </ul>
@@ -722,9 +741,38 @@ function clear() {
   cursor: default;
   opacity: 0.5;
 }
-.chat__tool-runs {
+/* 「这一轮读到了什么」（`FR-AI-18` 收口）：一栏读数，不抢正文的位置；没读到的那几行用次级色 */
+.chat__ctx {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+  border-top: var(--ds-metric-hairline) solid var(--ds-color-hairline-light);
+  padding-top: var(--ds-spacing-xs);
+}
+.chat__ctx-title {
+  margin: 0;
+  color: var(--ds-color-accent-accent);
+  font-size: var(--ds-font-caption-size);
+}
+.chat__ctx-list {
   margin: 0;
   padding-left: var(--ds-spacing-m);
+  font-size: var(--ds-font-caption-size);
+  color: var(--ds-color-text-secondary);
+}
+.chat__ctx-row {
+  word-break: break-all;
+}
+.chat__ctx-path {
+  color: var(--ds-color-text-primary);
+}
+.chat__ctx-chars,
+.chat__ctx-note {
+  margin-left: var(--ds-spacing-xs);
+  font-variant-numeric: tabular-nums;
+}
+.chat__ctx-hint {
+  margin: 0;
   color: var(--ds-color-text-tertiary);
   font-size: var(--ds-font-caption-size);
 }

@@ -497,4 +497,47 @@ describe('对话工具调用', () => {
     expect(wrapper.find('[data-testid="chat-thread"]').text()).toContain('a.ts 里是 A')
     expect(wrapper.find('[data-testid="chat-tool-card"]').exists()).toBe(false)
   })
+
+  it('读到的文件进「这一轮读到了什么」：同份只一行、字符如实报，被拒绝的单列（清空后消失）', async () => {
+    chatMocks.agentChatStream.mockResolvedValue(
+      pending([call('call_1', 'src/a.ts'), call('call_2', 'src/b.ts')]),
+    )
+    chatMocks.agentChatToolResume.mockResolvedValue({
+      runs: [
+        { name: 'read_file', path: 'src/a.ts', approved: true, ok: true, chars: 128, truncated: true, problem: '' },
+        { name: 'read_file', path: 'src/b.ts', approved: false, ok: false, chars: 0, truncated: false, problem: '' },
+      ],
+      reply: answered('a.ts 我读了前 128 字符，b.ts 没看到。'),
+    })
+    const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
+    await ask(wrapper, '看看 src/a.ts 和 src/b.ts')
+
+    await wrapper.findAll('[data-testid="chat-tool-allow"]')[0].trigger('click')
+    await flushPromises()
+    await wrapper.findAll('[data-testid="chat-tool-deny"]')[1].trigger('click')
+    await flushPromises()
+
+    // 标题只报「真的进了上下文的那一份」与它的字符数（拒绝那件 0 字符，不能算进去）
+    const title = wrapper.find('[data-testid="chat-context-title"]').text()
+    expect(title).toContain('1')
+    expect(title).toContain('128')
+
+    const files = wrapper.findAll('[data-testid="chat-context-file"]')
+    expect(files.length).toBe(1)
+    expect(files[0].text()).toContain('src/a.ts')
+    expect(files[0].text()).toContain('128')
+    // 截断要如实说，不许让用户以为模型看到了全文
+    expect(files[0].text()).toContain('截断')
+
+    // 被拒绝那件单独一行：用户要知道模型**没**看到它
+    const miss = wrapper.find('[data-testid="chat-context-miss"]')
+    expect(miss.text()).toContain('src/b.ts')
+    expect(miss.text()).toContain('拒绝')
+    expect(wrapper.find('[data-testid="chat-context-note"]').text()).toContain('当次回答')
+
+    // 清空对话 ⇒ 这一栏一起清掉（不留上一轮的读数冒充「模型现在知道」）
+    await wrapper.find('[data-testid="chat-clear"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="chat-context"]').exists()).toBe(false)
+  })
 })

@@ -782,16 +782,20 @@ export const DICT = {
   'chat.tool.noPath': { 'zh-Hans': '（模型没给路径）', en: '(no path given)' },
   'chat.tool.allow': { 'zh-Hans': '允许读取', en: 'Allow' },
   'chat.tool.deny': { 'zh-Hans': '拒绝', en: 'Deny' },
-  'chat.tool.allowed': {
-    'zh-Hans': '已允许读取 {path}：交给模型 {chars} 字符',
-    en: 'Allowed {path} — {chars} chars given to the model',
+  // 「这一轮模型读到了什么」（FR-AI-18 收口）：同份合并、字符如实报、没读到 / 被拒绝的单列
+  'chat.context.title': {
+    'zh-Hans': '这一轮模型读到了 {files} 份文件 · 共 {chars} 字符',
+    en: 'The model read {files} file(s) · {chars} chars',
   },
-  'chat.tool.truncated': {
-    'zh-Hans': '（文件太长，只给了前 {chars} 字符）',
-    en: '(file too long — only the first {chars} chars)',
+  'chat.context.chars': { 'zh-Hans': '{chars} 字符', en: '{chars} chars' },
+  'chat.context.reads': { 'zh-Hans': '读了 {n} 次（按最后一次算）', en: 'read {n} times (last one counts)' },
+  'chat.context.truncated': { 'zh-Hans': '已截断，只给了前一段', en: 'truncated — only the head was given' },
+  'chat.context.denied': { 'zh-Hans': '你拒绝了：模型没看到它', en: 'denied — the model never saw it' },
+  'chat.context.failed': { 'zh-Hans': '没读到：{problem}', en: 'could not read: {problem}' },
+  'chat.context.note': {
+    'zh-Hans': '文件内容只在当次回答里给过模型：再问一句不会自动带上（它要再看会重新申请）。',
+    en: 'File contents reach the model only for that one answer — a later question does not carry them (it will ask again).',
   },
-  'chat.tool.denied': { 'zh-Hans': '你拒绝了读取 {path}：模型只能按已有信息回答', en: 'You denied reading {path} — the model answers without it' },
-  'chat.tool.failed': { 'zh-Hans': '没有读到 {path}：{problem}', en: 'Could not read {path}: {problem}' },
   'chat.tool.unknown': {
     'zh-Hans': '模型点了没登记的工具「{name}」：不执行（只允许读文件）',
     en: 'The model asked for unregistered tool “{name}” — not executed (only file reading is allowed)',
