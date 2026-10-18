@@ -91,6 +91,7 @@ from collections import Counter
 
 DEFAULT_TARGETS = [
     "Docs/人工点验清单-20261018.md",
+    "Docs/人工点验清单-20261018-重分版.md",
     "Docs/产品能力规划说明书.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
@@ -779,6 +780,7 @@ def main() -> int:
 
 SELF_TEST_TRACKED = [
     "Docs/人工点验清单-20261018.md",
+    "Docs/人工点验清单-20261018-重分版.md",
     "Docs/design/store/README.md",
     "Docs/需求规范书.md",
     "Docs/design/规划-工作区Markdown预览与内置浏览器-20260930.md",
