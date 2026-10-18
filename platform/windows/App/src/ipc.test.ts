@@ -86,6 +86,7 @@ describe('ipc', () => {
       'agent_generate_preview',
       'agent_generate_sql',
       'agent_history_list',
+      'agent_audit_list',
       'connection_validate',
       'connection_type_defaults',
       'connection_import_url',

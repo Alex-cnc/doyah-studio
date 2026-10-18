@@ -669,6 +669,16 @@ fn agent_history_list(
     state.agent_settings.load_history().all_recent()
 }
 
+/// **外发审计**（`FR-AI-09` 的审计半）：每一次外发尝试留的那一条痕（新的在前）。
+///
+/// 只读一条命令：**不触发任何外发**、也不改盘上的东西（写审计只发生在生成那一刻）。
+/// 读盘失败按空账回（口径见 `Db::agent_audit` 模块头）—— 审计面坏掉不该让生成功能不可用，
+/// 但界面上「一条都没有」与「读不出来」必须分得开（`AgentAuditDialog` 会先取快照再取这份清单）。
+#[tauri::command]
+fn agent_audit_list(state: State<'_, ShellState>) -> Vec<doyah_studio_db::agent_audit::AuditRecord> {
+    state.agent_settings.load_audit().all_recent()
+}
+
 /// 生成**服务端条件浏览**的 SQL（FR-DATA-02；**只生成、不执行**）。
 ///
 /// 契约要点（与对侧 `Core/RowBrowsing.swift` 同一口径）：
@@ -2052,6 +2062,7 @@ pub fn run() {
             agent_generate_preview,
             agent_generate_sql,
             agent_history_list,
+            agent_audit_list,
             connection_validate,
             connection_type_defaults,
             connection_import_url,

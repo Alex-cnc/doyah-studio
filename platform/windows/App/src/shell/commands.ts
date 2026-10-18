@@ -154,6 +154,15 @@ export const COMMANDS_LIST: readonly Command[] = [
     groupKey: 'cmdGroup.agent',
     scope: { kind: 'global' },
   },
+  {
+    // 智能体审计记录（FR-AI-09 的审计半）：每一次外发尝试一条痕，落点是弹层
+    // （`shell/AgentAuditDialog.vue`）。与「生成历史」分开 —— 那个在生成弹层里。
+    id: 'agent.audit',
+    titleKey: 'cmd.agent.audit',
+    keywords: ['agent', 'ai', 'audit', 'egress', 'log', '审计', '外发', '记录'],
+    groupKey: 'cmdGroup.agent',
+    scope: { kind: 'global' },
+  },
 ]
 
 /** 按 id 取命令（分派器用；找不到就是 `undefined`，**不编一个**）。 */

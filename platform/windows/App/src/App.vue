@@ -13,6 +13,7 @@ import { pickFolder } from './shell/dialogs'
 import { connectionDialogModeForCommand, type ConnectionDialogMode } from './shell/connectionDialog'
 import BottomPanel from './shell/BottomPanel.vue'
 import AgentSettingsDialog from './shell/AgentSettingsDialog.vue'
+import AgentAuditDialog from './shell/AgentAuditDialog.vue'
 import { setLanguage, t as translate, type UiLanguage } from './i18n'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
@@ -158,6 +159,9 @@ let connectionDialogSeq = 0
 /** 智能体设置弹层（FR-AI-01）：只有一个开关位 —— 配置与裁决都在弹层自己那一侧。 */
 const agentSettingsOpen = ref(false)
 
+/** 审计记录弹层（FR-AI-09 的审计半）：同样只留开关位，清单由弹层自己取。 */
+const agentAuditOpen = ref(false)
+
 /** 命令点中了连接面：切到数据库视图（弹层在那一侧）并递一次开弹层请求。 */
 function requestConnectionDialog(mode: ConnectionDialogMode) {
   setActive('database')
@@ -225,6 +229,11 @@ async function runCommand(command: Command) {
       // 智能体设置（FR-AI-01）：弹层自己取快照（配置 + 裁决 + 密钥在不在），
       // 外壳不持有那一路状态 —— 它只有一个开关位。
       agentSettingsOpen.value = true
+      return
+    }
+    case 'agent.audit': {
+      // 审计记录（FR-AI-09）：弹层每次打开自己取一份清单（可能刚在编辑器里发过生成）。
+      agentAuditOpen.value = true
       return
     }
     default:
@@ -544,6 +553,8 @@ function onSelect(id: ActivityBarItemId) {
     <StatusBar :info="info" :rows="rows" :cols="cols" :loaded="loaded" :total="total" :language="uiLanguage" />
     <!-- 智能体设置弹层（FR-AI-01）：入口 = 命令面板「智能体设置…」 -->
     <AgentSettingsDialog :open="agentSettingsOpen" :language="uiLanguage" @close="agentSettingsOpen = false" />
+    <!-- 智能体审计记录弹层（FR-AI-09 的审计半）：入口 = 命令面板「智能体审计记录…」 -->
+    <AgentAuditDialog :open="agentAuditOpen" :language="uiLanguage" @close="agentAuditOpen = false" />
   </div>
 </template>
 

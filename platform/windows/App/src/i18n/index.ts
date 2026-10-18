@@ -92,6 +92,7 @@ export const DICT = {
   'cmdGroup.database': { 'zh-Hans': '数据库', en: 'Database' },
   'cmdGroup.appearance': { 'zh-Hans': '外观', en: 'Appearance' },
   'cmd.agent.settings': { 'zh-Hans': '智能体设置…', en: 'Agent settings…' },
+  'cmd.agent.audit': { 'zh-Hans': '智能体审计记录…', en: 'Agent audit log…' },
   'cmdGroup.agent': { 'zh-Hans': '智能体', en: 'Agent' },
   'cmdGroup.history': { 'zh-Hans': '面板', en: 'Palette' },
 
@@ -673,6 +674,31 @@ export const DICT = {
     en: 'Hourly limit reached ({limit} used): about {minutes} min until a slot frees up — generation is refused until then (nothing is sent).',
   },
   'agent.quota.refresh': { 'zh-Hans': '刷新读数', en: 'Refresh' },
+
+  // 智能体审计记录（FR-AI-09 的审计半）：每条 = 一次外发尝试，含「一条都没发出去」的那几次。
+  'audit.title': { 'zh-Hans': '智能体审计记录', en: 'Agent audit log' },
+  'audit.close': { 'zh-Hans': '关闭', en: 'Close' },
+  'audit.note': {
+    'zh-Hans':
+      '每一条 = 一次外发尝试。被总开关 / 配置不全 / 每小时上限挡住的那几次也在（它们一条请求都没发出去）；问句与失败原因在写入前已抹掉形似凭据的片段。',
+    en:
+      'Each row is one outbound attempt. Refused attempts (switch off, incomplete config, hourly limit) are logged too — nothing was sent for those. Credential-shaped fragments are scrubbed before anything is written.',
+  },
+  'audit.empty': {
+    'zh-Hans': '还没有任何外发尝试（用「AI 生成…」发过之后这里就会有一条）。',
+    en: 'No outbound attempts yet — one row appears after the first AI generation.',
+  },
+  'audit.refresh': { 'zh-Hans': '刷新', en: 'Refresh' },
+  'audit.verdict.ok': { 'zh-Hans': '成功', en: 'Sent' },
+  'audit.verdict.failed': { 'zh-Hans': '失败', en: 'Failed' },
+  'audit.verdict.blocked': { 'zh-Hans': '被闸门挡住', en: 'Refused (gate)' },
+  'audit.verdict.throttled': { 'zh-Hans': '被每小时上限挡住', en: 'Refused (hourly limit)' },
+  'audit.egress.sent': { 'zh-Hans': '已出网', en: 'left this machine' },
+  'audit.egress.notSent': { 'zh-Hans': '未出网', en: 'nothing left' },
+  'audit.summary.empty': { 'zh-Hans': '（没有记到问句）', en: '(no question recorded)' },
+  'audit.model': { 'zh-Hans': '模型 {model}', en: 'model {model}' },
+  'audit.tables': { 'zh-Hans': '发出去 {n} 张表', en: '{n} table(s) sent' },
+  'audit.duration': { 'zh-Hans': '{ms} 毫秒', en: '{ms} ms' },
   'agent.save': { 'zh-Hans': '保存设置', en: 'Save settings' },
   'agent.saving': { 'zh-Hans': '保存中…', en: 'Saving…' },
   'agent.saved': { 'zh-Hans': '已保存', en: 'Saved' },

@@ -14,6 +14,7 @@
 use std::path::{Path, PathBuf};
 
 use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateReport};
+use doyah_studio_db::agent_audit::AuditLedger;
 use doyah_studio_db::agent_history::HistoryLedger;
 use doyah_studio_db::agent_quota::{now_secs, QuotaLedger, QuotaStatus};
 use serde::Serialize;
@@ -170,6 +171,41 @@ impl AgentSettingsStore {
         }
         std::fs::write(&path, ledger.to_json()).map_err(|e| DbFailure {
             message: format!("写生成历史失败：{e}（{}）", path.display()),
+            hint: "确认该文件可写（可能被杀毒软件 / 权限限制）。".to_string(),
+        })
+    }
+
+    /// 审计台账的落点：与配置同目录的 `agent-audit.json`（**第三份文件**，理由同历史：
+    /// 配额是安全上限（坏了拒发）、历史是回看（坏了少看）、审计是「发过什么」的交代（坏了按空账，
+    /// 但**写不进去要说**）—— 三种失败语义，三个文件）。
+    pub fn audit_path(&self) -> PathBuf {
+        self.config_path.with_file_name("agent-audit.json")
+    }
+
+    /// 读审计台账。文件不存在 / 读不出来 / 坏 JSON ⇒ **空账**（口径见 `Db::agent_audit` 模块头）。
+    pub fn load_audit(&self) -> AuditLedger {
+        let path = self.audit_path();
+        match std::fs::read_to_string(&path) {
+            Ok(text) => AuditLedger::from_json(&text),
+            Err(_) => AuditLedger::default(),
+        }
+    }
+
+    /// 写审计台账。**写不进去要报错**（调用方据此在结果里如实说「这一次没能记进审计记录」），
+    /// 但**不阻断发送**：审计写不上是「事后说不清」，而拒发是「现在办不成事」—— 前者更该被说出来，
+    /// 后者不该被它连坐。
+    pub fn save_audit(&self, ledger: &AuditLedger) -> Result<(), DbFailure> {
+        let path = self.audit_path();
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).map_err(|e| DbFailure {
+                    message: format!("建审计目录失败：{e}（{}）", parent.display()),
+                    hint: "确认该目录可写。".to_string(),
+                })?;
+            }
+        }
+        std::fs::write(&path, ledger.to_json()).map_err(|e| DbFailure {
+            message: format!("写审计记录失败：{e}（{}）", path.display()),
             hint: "确认该文件可写（可能被杀毒软件 / 权限限制）。".to_string(),
         })
     }

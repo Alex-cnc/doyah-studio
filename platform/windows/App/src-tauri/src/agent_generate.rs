@@ -17,6 +17,7 @@
 
 use std::time::{Duration, Instant};
 
+use doyah_studio_db::agent_audit::{AuditRecord, AuditVerdict};
 use doyah_studio_db::agent_config::{evaluate, AgentGateReport, GateState};
 use doyah_studio_db::agent_history::HistoryEntry;
 use doyah_studio_db::agent_nl2sql::{build_request, parse_reply, TableBrief};
@@ -136,7 +137,30 @@ pub fn generate(
     let key_present = store.key_present();
     let gate = evaluate(&config, key_present);
     if gate.state != GateState::Ready {
-        // 闸门不放行 ⇒ 零外发（连客户端都不建）。
+        // 闸门不放行 ⇒ 零外发（连客户端都不建）。**但这一次要留痕**：
+        // 「为什么没发出去」和「发了什么」一样要能事后查（FR-AI-09）。
+        let detail = if gate.issues.is_empty() {
+            "外发闸门不放行：总开关关闭".to_string()
+        } else {
+            format!(
+                "外发闸门不放行：{}",
+                gate.issues
+                    .iter()
+                    .map(|issue| issue.code())
+                    .collect::<Vec<_>>()
+                    .join("、")
+            )
+        };
+        let _ = record_audit(
+            store,
+            AuditVerdict::Blocked,
+            &config.model,
+            &config.endpoint,
+            question,
+            &detail,
+            0,
+            0,
+        );
         return Ok(GenerateReply::Blocked { gate });
     }
     let outgoing = build_request(&config, question, tables).map_err(|err| DbFailure {
@@ -149,7 +173,23 @@ pub fn generate(
     let mut ledger = store.load_quota();
     let (admitted, quota) = ledger.admit(now_secs(), config.hourly_limit);
     if !admitted {
-        // 满了：一条请求都不发。
+        // 满了：一条请求都不发 —— **同样留痕**（满额也是「说清楚为什么」的一次）。
+        let detail = format!(
+            "本小时已满额（上限 {} 次，已用 {} 次）：约 {} 分钟后才有空位",
+            quota.limit,
+            quota.used,
+            (quota.retry_after_secs + 59) / 60
+        );
+        let _ = record_audit(
+            store,
+            AuditVerdict::Throttled,
+            &config.model,
+            &config.endpoint,
+            question,
+            &detail,
+            0,
+            0,
+        );
         return Ok(GenerateReply::Throttled { quota });
     }
     store.save_quota(&ledger).map_err(|err| DbFailure {
@@ -178,41 +218,100 @@ pub fn generate(
     if let Some(secret) = store.key_secret() {
         request = request.header(reqwest::header::AUTHORIZATION, format!("Bearer {secret}"));
     }
-    let response = request.send().map_err(|err| {
-        let timeout = err.is_timeout();
-        DbFailure {
-            message: if timeout {
-                format!(
-                    "请求超时（{} 秒）：模型服务没有在时限内回话。",
-                    config.timeout_secs
-                )
-            } else {
-                format!("请求发不出去：{err}")
-            },
-            hint: if timeout {
-                "把「单次请求超时」调大，或换一个更近的端点。".to_string()
-            } else {
-                "确认端点地址与网络（远端还需代理 / 防火墙放行）；本地端点的服务是否在跑。".to_string()
-            },
+    let response = match request.send() {
+        Ok(response) => response,
+        Err(err) => {
+            let timeout = err.is_timeout();
+            let failure = DbFailure {
+                message: if timeout {
+                    format!(
+                        "请求超时（{} 秒）：模型服务没有在时限内回话。",
+                        config.timeout_secs
+                    )
+                } else {
+                    format!("请求发不出去：{err}")
+                },
+                hint: if timeout {
+                    "把「单次请求超时」调大，或换一个更近的端点。".to_string()
+                } else {
+                    "确认端点地址与网络（远端还需代理 / 防火墙放行）；本地端点的服务是否在跑。"
+                        .to_string()
+                },
+            };
+            // 这一次**真的出网了**（连接已发起）⇒ 记 Failed。
+            let note = record_audit(
+                store,
+                AuditVerdict::Failed,
+                &outgoing.model,
+                &outgoing.url,
+                question,
+                &failure.message,
+                started.elapsed().as_millis() as u64,
+                tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
+            );
+            return Err(with_audit_note(failure, note));
         }
-    })?;
+    };
 
     let status = response.status();
-    let raw = response.text().map_err(|err| DbFailure {
-        message: format!("回包读不出来：{err}"),
-        hint: "重试一次；仍然不行就换端点。".to_string(),
-    })?;
+    let raw = match response.text() {
+        Ok(raw) => raw,
+        Err(err) => {
+            let failure = DbFailure {
+                message: format!("回包读不出来：{err}"),
+                hint: "重试一次；仍然不行就换端点。".to_string(),
+            };
+            let note = record_audit(
+                store,
+                AuditVerdict::Failed,
+                &outgoing.model,
+                &outgoing.url,
+                question,
+                &failure.message,
+                started.elapsed().as_millis() as u64,
+                tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
+            );
+            return Err(with_audit_note(failure, note));
+        }
+    };
     if !status.is_success() {
-        return Err(DbFailure {
+        let failure = DbFailure {
             message: format!("模型服务返回 HTTP {}：{}", status.as_u16(), excerpt(&raw, 300)),
             hint: "401 / 403 多为密钥不对或没有权限；404 多为端点路径不对（要的是 OpenAI 兼容的 /v1）；429 是配额或限流。"
                 .to_string(),
-        });
+        };
+        let note = record_audit(
+            store,
+            AuditVerdict::Failed,
+            &outgoing.model,
+            &outgoing.url,
+            question,
+            &failure.message,
+            started.elapsed().as_millis() as u64,
+            tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
+        );
+        return Err(with_audit_note(failure, note));
     }
-    let answer = parse_reply(&raw, tables).map_err(|err| DbFailure {
-        message: err.to_string(),
-        hint: "换一个模型（有些模型不爱按代码块回话）或重试一次。".to_string(),
-    })?;
+    let answer = match parse_reply(&raw, tables) {
+        Ok(answer) => answer,
+        Err(err) => {
+            let failure = DbFailure {
+                message: err.to_string(),
+                hint: "换一个模型（有些模型不爱按代码块回话）或重试一次。".to_string(),
+            };
+            let note = record_audit(
+                store,
+                AuditVerdict::Failed,
+                &outgoing.model,
+                &outgoing.url,
+                question,
+                &failure.message,
+                started.elapsed().as_millis() as u64,
+                tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
+            );
+            return Err(with_audit_note(failure, note));
+        }
+    };
 
     // 记一条历史（**只在成功后**：被挡住 / 报错 / 解析失败的那一次不是「可回看的结果」）。
     // 落盘失败**不阻断**（与配额台账相反：历史写不上只是回看不到，配额写不上是上限失效），
@@ -234,17 +333,77 @@ pub fn generate(
         ));
     }
 
+    let elapsed_ms = started.elapsed().as_millis() as u64;
+
+    // 审计：**成功也要记**（这一次确实发出去了、用的哪个模型、发出去多少张表）。
+    // 写不进去要如实说 —— 审计是事后交代，静默丢一条等于「说不清」。
+    if let Some(note) = record_audit(
+        store,
+        AuditVerdict::Ok,
+        &outgoing.model,
+        &outgoing.url,
+        question,
+        "",
+        elapsed_ms,
+        tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
+    ) {
+        limitations.push(format!(
+            "这一次没能记进审计记录（{note}）—— 结果仍然可用，但「刚才发过什么」这条事后查不到。"
+        ));
+    }
+
     Ok(GenerateReply::Generated(GenerateOutcome {
         sql: answer.sql,
         explanation: answer.explanation,
         tables_used: answer.tables_used,
         model: outgoing.model,
-        elapsed_ms: started.elapsed().as_millis() as u64,
+        elapsed_ms,
         table_count: tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
         quota,
         limitations,
         history: ledger.all_recent(),
     }))
+}
+
+/// 记一条审计（`FR-AI-09`）：**四种结局都记** —— 成功、失败、被闸门挡住、被配额挡住。
+///
+/// 返回 `Option<String>` = 写不进去时的可读原因（调用方必须**说出来**，别咽掉）；
+/// 但没有理由因为它而拒发 / 改判：审计是事后交代，不是通行证。
+#[allow(clippy::too_many_arguments)]
+fn record_audit(
+    store: &AgentSettingsStore,
+    verdict: AuditVerdict,
+    model: &str,
+    endpoint: &str,
+    question: &str,
+    detail: &str,
+    duration_ms: u64,
+    table_count: usize,
+) -> Option<String> {
+    let mut ledger = store.load_audit();
+    ledger.append(AuditRecord::record(
+        verdict,
+        model,
+        endpoint,
+        question,
+        detail,
+        duration_ms,
+        table_count,
+        now_secs(),
+    ));
+    store.save_audit(&ledger).err().map(|err| err.message)
+}
+
+/// 把「审计没记上」这件事挂到错误消息后面：**不改变原错误**（它才是用户要处理的），
+/// 但也不让「这一次没留下痕」被静默吞掉。
+fn with_audit_note(mut failure: DbFailure, note: Option<String>) -> DbFailure {
+    if let Some(note) = note {
+        failure.message = format!(
+            "{}（另外：这一次没能记进审计记录：{note}）",
+            failure.message
+        );
+    }
+    failure
 }
 
 fn excerpt(text: &str, limit: usize) -> String {
@@ -282,6 +441,8 @@ mod tests {
         let _ = std::fs::remove_file(store.quota_path());
         // 历史同理（留着上一轮的记录会让「只记了一条」这类断言直接失真）。
         let _ = std::fs::remove_file(store.history_path());
+        // 审计同理：留着上一轮的痕，「这一次留了几条」就说不清。
+        let _ = std::fs::remove_file(store.audit_path());
         store
     }
 
@@ -442,6 +603,133 @@ mod tests {
         };
         assert!(err.message.contains("401"), "{}", err.message);
         assert!(err.message.contains("bad key"), "{}", err.message);
+    }
+
+    // ── 审计（`FR-AI-09`）：**四种结局各留一条**，成功失败都要能事后说得清 ─────────────
+
+    #[test]
+    fn a_successful_generation_leaves_one_audit_record_saying_it_did_leave() {
+        let body = serde_json::json!({
+            "choices": [{ "message": { "content": "```sql\nSELECT count(*) FROM public.orders;\n```" } }]
+        })
+        .to_string();
+        let leaked: &'static str = Box::leak(body.into_boxed_str());
+        let (endpoint, _seen) = fake_endpoint("200 OK", leaked);
+        let store = tmp_store("audit-ok");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "fake-model".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+
+        assert!(matches!(
+            generate(&store, "订单总数", &[orders()]).unwrap(),
+            GenerateReply::Generated(_)
+        ));
+
+        let records = store.load_audit().all_recent();
+        assert_eq!(records.len(), 1, "一次成功只该留一条痕：{records:?}");
+        assert_eq!(records[0].verdict, AuditVerdict::Ok);
+        assert!(
+            records[0].verdict.left_the_machine(),
+            "成功的那次当然出网了"
+        );
+        assert_eq!(records[0].model, "fake-model");
+        assert_eq!(records[0].table_count, 1, "发出去几张表要记下来");
+        assert!(records[0].summary.contains("订单总数"), "{records:?}");
+    }
+
+    #[test]
+    fn a_blocked_attempt_is_audited_even_though_nothing_left_the_machine() {
+        // 否定面的另一半：**没发出去**也要留一条 —— 否则「我怎么什么都没查到」无法回答。
+        let store = tmp_store("audit-blocked");
+        assert!(matches!(
+            generate(&store, "随便", &[]).unwrap(),
+            GenerateReply::Blocked { .. }
+        ));
+        let records = store.load_audit().all_recent();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].verdict, AuditVerdict::Blocked);
+        assert!(!records[0].verdict.left_the_machine());
+        assert!(
+            records[0].detail.contains("总开关"),
+            "挡住的原因要写清：{}",
+            records[0].detail
+        );
+        assert_eq!(records[0].duration_ms, 0, "没发出去就没有往返耗时");
+    }
+
+    #[test]
+    fn a_throttled_attempt_is_audited_next_to_the_one_that_got_through() {
+        let body = serde_json::json!({
+            "choices": [{ "message": { "content": "```sql\nSELECT 1;\n```" } }]
+        })
+        .to_string();
+        let leaked: &'static str = Box::leak(body.into_boxed_str());
+        let (endpoint, _seen) = fake_endpoint("200 OK", leaked);
+        let store = tmp_store("audit-throttled");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                hourly_limit: 1,
+                timeout_secs: 2,
+                ..Default::default()
+            })
+            .unwrap();
+
+        assert!(matches!(
+            generate(&store, "第一发", &[orders()]).unwrap(),
+            GenerateReply::Generated(_)
+        ));
+        assert!(matches!(
+            generate(&store, "第二发", &[orders()]).unwrap(),
+            GenerateReply::Throttled { .. }
+        ));
+
+        let records = store.load_audit().all_recent();
+        assert_eq!(records.len(), 2, "成功一发 + 满额一发，各一条：{records:?}");
+        assert_eq!(records[0].verdict, AuditVerdict::Throttled, "新的在前");
+        assert!(!records[0].verdict.left_the_machine());
+        assert!(records[0].detail.contains("满额"), "{}", records[0].detail);
+        assert_eq!(records[1].verdict, AuditVerdict::Ok);
+    }
+
+    #[test]
+    fn a_failed_request_is_audited_and_the_secret_in_the_server_text_is_scrubbed() {
+        // 端点在回包里夹了一句形似口令的话：审计要**照实记这次失败**，但凭据不许跟着落盘。
+        let body = "{\"error\":\"password = 'hunter2' 不对\"}".to_string();
+        let leaked: &'static str = Box::leak(body.into_boxed_str());
+        let (endpoint, _seen) = fake_endpoint("500 Internal Server Error", leaked);
+        let store = tmp_store("audit-failed");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+
+        assert!(
+            generate(&store, "随便", &[]).is_err(),
+            "500 不该被当成成功"
+        );
+
+        let records = store.load_audit().all_recent();
+        assert_eq!(records.len(), 1, "失败也要留一条：{records:?}");
+        assert_eq!(records[0].verdict, AuditVerdict::Failed);
+        assert!(records[0].verdict.left_the_machine(), "连接已经发出去了");
+        assert!(records[0].detail.contains("500"), "{}", records[0].detail);
+        assert!(
+            !records[0].detail.contains("hunter2"),
+            "服务端原话里的口令被原样写进了审计：{}",
+            records[0].detail
+        );
     }
 
     #[test]

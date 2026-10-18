@@ -105,6 +105,7 @@ export const COMMANDS = {
   agentGeneratePreview: 'agent_generate_preview',
   agentGenerateSql: 'agent_generate_sql',
   agentHistoryList: 'agent_history_list',
+  agentAuditList: 'agent_audit_list',
   // 连接配置面收口（S-1a）：逐项校验 / 换引擎联动默认值 / 从 URL 导入
   connectionValidate: 'connection_validate',
   connectionTypeDefaults: 'connection_type_defaults',
@@ -900,6 +901,36 @@ export function agentGenerateSql(
  */
 export function agentHistoryList(): Promise<AgentHistoryEntry[]> {
   return call(COMMANDS.agentHistoryList, {}, () => [] as AgentHistoryEntry[])
+}
+
+/**
+ * 一条审计记录（`Db/src/agent_audit.rs` 的 `AuditRecord`）。
+ *
+ * 与生成历史**分开的两件事**：历史只记成功的那一次（「可回看的结果」）；
+ * 审计记**每一次外发尝试**，含被闸门 / 配额挡住、根本没过网的那几次（「为什么没发出去」也要能查）。
+ * 键集合是白名单：**结构上没有承载结果集行数据的字段**（`NFR-AI-01`）。
+ */
+export interface AgentAuditRecord {
+  /** 时刻（epoch 秒；0 = 不知道）。 */
+  atSecs: number
+  /** 结局：成功 / 失败（过网了） / 被闸门挡住 / 被每小时上限挡住（都没过网）。 */
+  verdict: 'ok' | 'failed' | 'blocked' | 'throttled'
+  model: string
+  /** 目标端点（**已脱敏**：`https://user:pw@host` 的口令段被抹掉）。 */
+  endpoint: string
+  /** 问句摘要（已脱敏、超长截断）。 */
+  summary: string
+  /** 失败原因 / 决策理由（已脱敏）。 */
+  detail: string
+  /** 往返耗时（毫秒；没过网的那几次是 0）。 */
+  durationMs: number
+  /** 随请求外发的表数。 */
+  tableCount: number
+}
+
+/** 外发审计清单（**新的在前**；只读，不触发任何外发）。 */
+export function agentAuditList(): Promise<AgentAuditRecord[]> {
+  return call(COMMANDS.agentAuditList, {}, () => [] as AgentAuditRecord[])
 }
 
 /** 表单逐项校验（FR-CONN-06）：端口按**文本**校验，`0` / `65536` / 非数字都当场拒。 */
