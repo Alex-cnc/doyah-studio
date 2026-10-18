@@ -94,13 +94,13 @@ struct EgressLogSheet: View {
                 .labelsHidden()
                 .frame(maxWidth: 180)
                 .disabled(tabOptions.isEmpty)
-                ToolbarIconButton(systemName: "curlybraces", help: L(.egressExportJSON)) {
+                DialogActionButton(systemName: "curlybraces", title: L(.egressExportJSON)) {
                     Task { await appState.exportEgressLog(asCSV: false) }
                 }
-                ToolbarIconButton(systemName: "tablecells", help: L(.egressExportCSV)) {
+                DialogActionButton(systemName: "tablecells", title: L(.egressExportCSV)) {
                     Task { await appState.exportEgressLog(asCSV: true) }
                 }
-                ToolbarIconButton(systemName: "xmark.bin", help: L(.egressClear)) { isClearConfirmPresented = true }
+                DialogActionButton(systemName: "xmark.bin", title: L(.egressClear)) { isClearConfirmPresented = true }
                     .disabled(appState.egressEntries.isEmpty)
             }
             Text(L(.egressSubtitle))
@@ -214,17 +214,17 @@ struct EgressLogSheet: View {
                     .foregroundStyle(Theme.status(.danger))
             }
             Spacer()
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                 .keyboardShortcut(.defaultAction)
         }
         .confirmationDialog(
             L(.egressClearConfirmTitle),
             isPresented: $isClearConfirmPresented
         ) {
-            ToolbarIconButton(systemName: "xmark.bin", help: L(.egressClear), role: .destructive) {
+            DialogActionButton(systemName: "xmark.bin", title: L(.egressClear), role: .destructive) {
                 Task { await appState.clearEgressLog() }
             }
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {}
+            DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel), role: .cancel) {}
         } message: {
             Text(L(.egressClearConfirmMessage))
         }

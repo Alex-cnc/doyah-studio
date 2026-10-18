@@ -61,7 +61,7 @@ struct PrivilegePanel: View {
                 Text(L(.privilegeTitle))
                     .font(.headline)
                 Spacer()
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
             }
 
             roleRow
@@ -101,7 +101,7 @@ struct PrivilegePanel: View {
                 .frame(width: 200)
                 .onSubmit { Task { await load() } }
 
-            ToolbarIconButton(systemName: "arrow.clockwise", help: L(.privilegeLoad)) {
+            DialogActionButton(systemName: "arrow.clockwise", title: L(.privilegeLoad)) {
                 Task { await load() }
             }
             .disabled(isLoading || !PrivilegeProbe.isValidRoleName(role))
@@ -186,7 +186,7 @@ struct PrivilegePanel: View {
             }
 
             Toggle(isOn: $withGrantOption) {
-                Image(systemName: "key.horizontal")
+                Label(L(.privilegeWithGrantOption), systemImage: "key.horizontal")
             }
             .help(L(.privilegeWithGrantOption))
             .accessibilityLabel(Text(L(.privilegeWithGrantOption)))
@@ -197,12 +197,12 @@ struct PrivilegePanel: View {
             HStack {
                 Spacer()
 
-                ToolbarIconButton(systemName: "minus.circle", help: L(.privilegeRevoke)) {
+                DialogActionButton(systemName: "minus.circle", title: L(.privilegeRevoke)) {
                     Task { await apply(revoke: true) }
                 }
                 .disabled(revokeStatement == nil)
 
-                ToolbarIconButton(systemName: "plus.circle", help: L(.privilegeGrant)) {
+                DialogActionButton(systemName: "plus.circle", title: L(.privilegeGrant)) {
                     Task { await apply(revoke: false) }
                 }
                 .keyboardShortcut(.defaultAction)

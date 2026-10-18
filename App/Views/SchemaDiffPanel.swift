@@ -84,7 +84,7 @@ struct SchemaDiffPanel: View {
                 }
 
                 Toggle(isOn: $allowsDrop) {
-                    Image(systemName: "trash")
+                    Label(L(.schemaDiffAllowDrop), systemImage: "trash")
                 }
                 .help(L(.schemaDiffAllowDrop))
                 .accessibilityLabel(Text(L(.schemaDiffAllowDrop)))
@@ -231,10 +231,10 @@ struct SchemaDiffPanel: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radius.card))
 
                 HStack(spacing: Spacing.s) {
-                    ToolbarIconButton(systemName: "doc.on.doc", help: didCopy ? L(.schemaDiffCopied) : L(.schemaDiffCopy)) {
+                    DialogActionButton(systemName: "doc.on.doc", title: didCopy ? L(.schemaDiffCopied) : L(.schemaDiffCopy)) {
                         copyScript(plan)
                     }
-                    ToolbarIconButton(systemName: "arrow.up.forward.app", help: L(.schemaDiffOpenInTab)) {
+                    DialogActionButton(systemName: "arrow.up.forward.app", title: L(.schemaDiffOpenInTab)) {
                         appState.openSQLInNewTab(plan.statements.joined(separator: ";\n") + ";")
                         dismiss()
                     }
@@ -249,10 +249,10 @@ struct SchemaDiffPanel: View {
     private var footer: some View {
         HStack {
             Spacer()
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) {
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) {
                 dismiss()
             }
-            ToolbarIconButton(systemName: "arrow.left.arrow.right", help: L(.schemaDiffCompare)) {
+            DialogActionButton(systemName: "arrow.left.arrow.right", title: L(.schemaDiffCompare)) {
                 Task { await compare() }
             }
             .keyboardShortcut(.defaultAction)

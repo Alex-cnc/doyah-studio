@@ -89,23 +89,23 @@ struct ERDiagramPanel: View {
             TextField("", text: $schema)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 140)
-            ToolbarIconButton(systemName: "wand.and.stars", help: L(.erDiagramGenerate)) { Task { await load() } }
+            DialogActionButton(systemName: "wand.and.stars", title: L(.erDiagramGenerate)) { Task { await load() } }
                 .disabled(isLoading)
             if isLoading { ProgressView().controlSize(.small) }
 
             Spacer()
 
-            ToolbarIconButton(systemName: "doc.on.doc", help: L(.erDiagramCopyMermaid)) {
+            DialogActionButton(systemName: "doc.on.doc", title: L(.erDiagramCopyMermaid)) {
                 copyDiagram { $0.mermaid() }
             }
             .disabled(diagram?.isEmpty ?? true)
 
-            ToolbarIconButton(systemName: "square.on.square", help: L(.erDiagramCopyDOT)) {
+            DialogActionButton(systemName: "square.on.square", title: L(.erDiagramCopyDOT)) {
                 copyDiagram { $0.dot() }
             }
             .disabled(diagram?.isEmpty ?? true)
 
-            ToolbarIconButton(systemName: "square.and.arrow.up", help: L(.erDiagramExport)) {
+            DialogActionButton(systemName: "square.and.arrow.up", title: L(.erDiagramExport)) {
                 exportMermaid()
             }
             .disabled(diagram?.isEmpty ?? true)
@@ -286,21 +286,21 @@ struct ERDiagramPanel: View {
             Spacer()
             HStack(spacing: Spacing.xs) {
                 Button { scale = max(0.2, scale - 0.1); lastScale = scale } label: {
-                    Image(systemName: "minus.magnifyingglass")
+                    Label(L(.erDiagramZoomOut), systemImage: "minus.magnifyingglass")
                 }
                 .help(L(.erDiagramZoomOut))
                 Button { scale = min(3, scale + 0.1); lastScale = scale } label: {
-                    Image(systemName: "plus.magnifyingglass")
+                    Label(L(.erDiagramZoomIn), systemImage: "plus.magnifyingglass")
                 }
                 .help(L(.erDiagramZoomIn))
-                ToolbarIconButton(systemName: "arrow.up.left.and.arrow.down.right", help: L(.erDiagramFit)) {
+                DialogActionButton(systemName: "arrow.up.left.and.arrow.down.right", title: L(.erDiagramFit)) {
                     scale = 1
                     lastScale = 1
                     offset = .zero
                     lastOffset = .zero
                 }
             }
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                 .keyboardShortcut(.escape, modifiers: [])
         }
         .padding(.horizontal, Spacing.l)

@@ -30,7 +30,7 @@ struct DataTaskSpecSheet: View {
                 Text(L(.dataTaskSpecTitle))
                     .font(.headline)
                 Spacer()
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -46,7 +46,7 @@ struct DataTaskSpecSheet: View {
                     .textFieldStyle(.roundedBorder)
                     .font(.caption)
                 Toggle(isOn: $includeTables) {
-                    Image(systemName: "tablecells")
+                    Label(L(.agentSQLIncludeTables), systemImage: "tablecells")
                 }
                 .help(L(.agentSQLIncludeTables))
                 .accessibilityLabel(Text(L(.agentSQLIncludeTables)))
@@ -87,14 +87,14 @@ struct DataTaskSpecSheet: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 if result != nil {
-                    ToolbarIconButton(systemName: "checkmark", help: L(.dataTaskSpecApply)) {
+                    DialogActionButton(systemName: "checkmark", title: L(.dataTaskSpecApply)) {
                         if let definition = result?.definition {
                             onApply(definition)
                             dismiss()
                         }
                     }
                 }
-                ToolbarIconButton(systemName: "wand.and.stars", help: L(.dataTaskSpecGenerate)) {
+                DialogActionButton(systemName: "wand.and.stars", title: L(.dataTaskSpecGenerate)) {
                     Task { await generate() }
                 }
                 .keyboardShortcut(.defaultAction)

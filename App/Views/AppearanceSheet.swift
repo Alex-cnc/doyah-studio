@@ -130,7 +130,7 @@ struct AppearanceSheet: View {
                 TextField(L(.appearanceMonoFamilyCustom), text: $typedFamily)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { applyTypedFamily() }
-                ToolbarIconButton(systemName: "checkmark", help: L(.appearanceMonoApply)) { applyTypedFamily() }
+                DialogActionButton(systemName: "checkmark", title: L(.appearanceMonoApply)) { applyTypedFamily() }
                     .disabled(typedFamily.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
@@ -307,7 +307,7 @@ struct AppearanceSheet: View {
             if designTheme.theme.paintsNebula {
                 Divider().padding(.vertical, Spacing.xs)
                 Toggle(isOn: nebulaSkinBinding) {
-                    Image(systemName: "sparkles")
+                    Label(L(.appearanceNebulaSkin), systemImage: "sparkles")
                 }
                 .help(L(.appearanceNebulaSkin))
                 .accessibilityLabel(Text(L(.appearanceNebulaSkin)))
@@ -322,7 +322,7 @@ struct AppearanceSheet: View {
             if designTheme.theme.wallpaper != nil {
                 Divider().padding(.vertical, Spacing.xs)
                 Toggle(isOn: wallpaperSkinBinding) {
-                    Image(systemName: "photo.on.rectangle.angled")
+                    Label(L(.appearanceWallpaperSkin), systemImage: "photo.on.rectangle.angled")
                 }
                 .help(L(.appearanceWallpaperSkin))
                 .accessibilityLabel(Text(L(.appearanceWallpaperSkin)))
@@ -417,7 +417,7 @@ struct AppearanceSheet: View {
                 .labelsHidden()
                 .frame(width: 140)
                 Toggle(isOn: cursorBlinkBinding) {
-                    Image(systemName: "cursorarrow")
+                    Label(L(.terminalCursorBlink), systemImage: "cursorarrow")
                 }
                 .help(L(.terminalCursorBlink))
                 .accessibilityLabel(Text(L(.terminalCursorBlink)))
@@ -514,7 +514,7 @@ struct AppearanceSheet: View {
     private var footer: some View {
         HStack {
             Spacer()
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                 .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, Spacing.l)

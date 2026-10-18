@@ -105,11 +105,11 @@ struct ServerObjectsPanel: View {
             ),
             presenting: pendingCommand
         ) { command in
-            ToolbarIconButton(systemName: "checkmark", help: L(.serverObjectsConfirm), role: .destructive) {
+            DialogActionButton(systemName: "checkmark", title: L(.serverObjectsConfirm), role: .destructive) {
                 pendingCommand = nil
                 Task { await execute(command) }
             }
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {
+            DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel), role: .cancel) {
                 pendingCommand = nil
             }
         } message: { command in
@@ -139,7 +139,7 @@ struct ServerObjectsPanel: View {
                 }
             }
             Spacer()
-            ToolbarIconButton(systemName: "arrow.clockwise", help: L(.serverObjectsRefresh)) {
+            DialogActionButton(systemName: "arrow.clockwise", title: L(.serverObjectsRefresh)) {
                 Task { await load() }
             }
             .disabled(isLoading)
@@ -320,18 +320,18 @@ struct ServerObjectsPanel: View {
 
             HStack(spacing: Spacing.l) {
                 Toggle(isOn: $canLogin) {
-                    Image(systemName: "person.badge.key")
+                    Label(L(.serverObjectsCanLogin), systemImage: "person.badge.key")
                 }
                 .help(L(.serverObjectsCanLogin))
                 .accessibilityLabel(Text(L(.serverObjectsCanLogin)))
                 Toggle(isOn: $isSuperuser) {
-                    Image(systemName: "crown")
+                    Label(L(.serverObjectsSuperuser), systemImage: "crown")
                 }
                 .help(L(.serverObjectsSuperuser))
                 .accessibilityLabel(Text(L(.serverObjectsSuperuser)))
                 Spacer()
-                ToolbarIconButton(systemName: "plus", help: L(.serverObjectsPreviewCreateRole)) { previewCreateRole() }
-                ToolbarIconButton(systemName: "trash", help: L(.serverObjectsPreviewDropRole)) { previewDropRole() }
+                DialogActionButton(systemName: "plus", title: L(.serverObjectsPreviewCreateRole)) { previewCreateRole() }
+                DialogActionButton(systemName: "trash", title: L(.serverObjectsPreviewDropRole)) { previewDropRole() }
             }
         }
     }
@@ -347,8 +347,8 @@ struct ServerObjectsPanel: View {
 
             HStack(spacing: Spacing.s) {
                 Spacer()
-                ToolbarIconButton(systemName: "plus", help: L(.serverObjectsPreviewCreateExtension)) { previewCreateExtension() }
-                ToolbarIconButton(systemName: "trash", help: L(.serverObjectsPreviewDropExtension)) { previewDropExtension() }
+                DialogActionButton(systemName: "plus", title: L(.serverObjectsPreviewCreateExtension)) { previewCreateExtension() }
+                DialogActionButton(systemName: "trash", title: L(.serverObjectsPreviewDropExtension)) { previewDropExtension() }
             }
         }
     }
@@ -386,7 +386,7 @@ struct ServerObjectsPanel: View {
                 }
 
                 HStack(spacing: Spacing.s) {
-                    ToolbarIconButton(systemName: "checkmark", help: L(.serverObjectsConfirm)) { requestExecution(command) }
+                    DialogActionButton(systemName: "checkmark", title: L(.serverObjectsConfirm)) { requestExecution(command) }
                     Text(L(.serverObjectsDryRunHint))
                         .font(Theme.font(.caption))
                         .foregroundStyle(Theme.text(.tertiary))
@@ -409,7 +409,7 @@ struct ServerObjectsPanel: View {
     private var footer: some View {
         HStack {
             Spacer()
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                 .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, Spacing.l)

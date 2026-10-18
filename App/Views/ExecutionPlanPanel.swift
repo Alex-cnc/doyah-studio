@@ -52,32 +52,32 @@ struct ExecutionPlanPanel: View {
 
             Spacer()
 
-            ToolbarIconButton(systemName: "play.fill", help: L(.planRun)) {
+            DialogActionButton(systemName: "play.fill", title: L(.planRun)) {
                 Task { await appState.runExecutionPlan(for: tabID) }
             }
             .keyboardShortcut(.defaultAction)
             .disabled(appState.executionPlanIsLoading)
 
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
         }
     }
 
     private var options: some View {
         HStack(spacing: Spacing.l) {
             Toggle(isOn: $appState.planRunAnalyze) {
-                Image(systemName: "stethoscope")
+                Label(L(.planAnalyze), systemImage: "stethoscope")
             }
             .help(L(.planAnalyze))
             .accessibilityLabel(Text(L(.planAnalyze)))
             .font(Theme.font(.caption))
             Toggle(isOn: $appState.planIncludeBuffers) {
-                Image(systemName: "memorychip")
+                Label(L(.planBuffers), systemImage: "memorychip")
             }
             .help(L(.planBuffers))
             .accessibilityLabel(Text(L(.planBuffers)))
             .font(Theme.font(.caption))
             Toggle(isOn: $appState.planUseJSON) {
-                Image(systemName: "curlybraces")
+                Label(L(.planFormatJSON), systemImage: "curlybraces")
             }
             .help(L(.planFormatJSON))
             .accessibilityLabel(Text(L(.planFormatJSON)))

@@ -79,7 +79,7 @@ struct AccountSyncSheet: View {
 
             HStack(spacing: Spacing.s) {
                 Spacer()
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) {
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
@@ -123,7 +123,7 @@ struct AccountSyncSheet: View {
                 .foregroundStyle(Theme.text(.tertiary))
                 .fixedSize(horizontal: false, vertical: true)
 
-            ToolbarIconButton(systemName: "rectangle.portrait.and.arrow.right", help: L(.accountSignOutAction)) {
+            DialogActionButton(systemName: "rectangle.portrait.and.arrow.right", title: L(.accountSignOutAction)) {
                 Task { await model.signOut() }
             }
             .disabled(model.status == .working)
@@ -159,7 +159,7 @@ struct AccountSyncSheet: View {
             SecureField(L(.accountPasswordLabel), text: $model.password)
 
             HStack(spacing: Spacing.s) {
-                ToolbarIconButton(systemName: "person.crop.circle.badge.checkmark", help: L(.accountSignInAction)) {
+                DialogActionButton(systemName: "person.crop.circle.badge.checkmark", title: L(.accountSignInAction)) {
                     Task { await model.signIn() }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -193,7 +193,7 @@ struct AccountSyncSheet: View {
             // 所以这两栏排在用户名 / 口令之前 —— 顺序就是流程顺序（先发码，再填剩下的）。
             HStack(spacing: Spacing.s) {
                 TextField(L(.accountPhoneLabel), text: $model.phoneNumber)
-                ToolbarIconButton(systemName: "paperplane", help: L(.accountSendCodeAction)) {
+                DialogActionButton(systemName: "paperplane", title: L(.accountSendCodeAction)) {
                     Task { await model.sendVerificationCode() }
                 }
                 .disabled(model.status == .working)
@@ -216,7 +216,7 @@ struct AccountSyncSheet: View {
             SecureField(L(.accountConfirmPasswordLabel), text: $model.newConfirmation)
 
             HStack(spacing: Spacing.s) {
-                ToolbarIconButton(systemName: "person.crop.circle.badge.plus", help: L(.accountSignUpAction)) {
+                DialogActionButton(systemName: "person.crop.circle.badge.plus", title: L(.accountSignUpAction)) {
                     Task { await model.submitRegistration() }
                 }
                 .disabled(model.status == .working)
@@ -266,7 +266,7 @@ struct AccountSyncSheet: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             // 默认关（口径 ②）：开关的初值由模型给，视图不设默认。
             Toggle(isOn: $model.cloudSyncEnabled) {
-                Image(systemName: "icloud")
+                Label(L(.accountSyncToggle), systemImage: "icloud")
             }
             .help(L(.accountSyncToggle))
             .accessibilityLabel(Text(L(.accountSyncToggle)))
@@ -296,7 +296,7 @@ struct AccountSyncSheet: View {
 
     private var recoverySection: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            ToolbarIconButton(systemName: "key", help: L(.accountRecoveryEntry)) {
+            DialogActionButton(systemName: "key", title: L(.accountRecoveryEntry)) {
                 model.requestPasswordRecovery()
             }
 

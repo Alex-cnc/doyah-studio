@@ -205,7 +205,7 @@ struct RowDetailPanel: View {
             pasteboard.clearContents()
             pasteboard.setString(raw, forType: .string)
         } label: {
-            Image(systemName: "doc.on.doc")
+            Label(L(.rowDetailCopyValue), systemImage: "doc.on.doc")
         }
         .buttonStyle(.borderless)
         .disabled(raw == nil)

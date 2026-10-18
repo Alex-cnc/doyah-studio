@@ -499,10 +499,10 @@ struct TodoRescheduleSheet: View {
             .datePickerStyle(.compact)
             .accessibilityIdentifier("todo-reschedule-picker")
             HStack(spacing: Spacing.s) {
-                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) { appState.cancelReschedule() }
+                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) { appState.cancelReschedule() }
                     .keyboardShortcut(.cancelAction)
                     .accessibilityIdentifier("todo-reschedule-cancel")
-                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.commonSave)) {
+                DialogActionButton(systemName: "square.and.arrow.down", title: L(.commonSave)) {
                     Task { await appState.applyReschedule() }
                 }
                 .keyboardShortcut(.defaultAction)

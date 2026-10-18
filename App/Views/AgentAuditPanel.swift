@@ -53,8 +53,8 @@ struct AgentAuditPanel: View {
             await appState.refreshAgentAudit()
         }
         .alert(L(.agentAuditClearConfirmTitle), isPresented: $isClearConfirmPresented) {
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {}
-            ToolbarIconButton(systemName: "xmark.bin", help: L(.agentAuditClear), role: .destructive) {
+            DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel), role: .cancel) {}
+            DialogActionButton(systemName: "xmark.bin", title: L(.agentAuditClear), role: .destructive) {
                 Task { await appState.clearAgentAudit() }
             }
         } message: {
@@ -77,12 +77,12 @@ struct AgentAuditPanel: View {
 
             Spacer()
 
-            ToolbarIconButton(systemName: "arrow.clockwise", help: L(.agentAuditRefresh)) {
+            DialogActionButton(systemName: "arrow.clockwise", title: L(.agentAuditRefresh)) {
                 Task { await appState.refreshAgentAudit() }
             }
             .disabled(appState.isAgentAuditLoading)
 
-            ToolbarIconButton(systemName: "xmark.bin", help: L(.agentAuditClear)) {
+            DialogActionButton(systemName: "xmark.bin", title: L(.agentAuditClear)) {
                 isClearConfirmPresented = true
             }
             .disabled(appState.agentAuditRecords.isEmpty)
@@ -104,7 +104,7 @@ struct AgentAuditPanel: View {
             .help(L(.agentAuditExport))
             .disabled(appState.agentAuditRecords.isEmpty)
 
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
         }
     }
 
@@ -163,12 +163,12 @@ struct AgentAuditPanel: View {
 
             Spacer()
 
-            ToolbarIconButton(systemName: "doc.text.magnifyingglass", help: L(.agentApprovalReview)) {
+            DialogActionButton(systemName: "doc.text.magnifyingglass", title: L(.agentApprovalReview)) {
                 appState.presentAgentApproval(approval)
             }
             .font(.caption)
 
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.agentApprovalReject), role: .destructive) {
+            DialogActionButton(systemName: "xmark.circle", title: L(.agentApprovalReject), role: .destructive) {
                 Task { await appState.rejectAgentAction(id: approval.id) }
             }
             .font(.caption)
@@ -184,7 +184,7 @@ struct AgentAuditPanel: View {
                 .foregroundStyle(.secondary)
 
             Toggle(isOn: $guardPolicy.readOnly) {
-                Image(systemName: "lock")
+                Label(L(.agentReadOnlyMode), systemImage: "lock")
             }
             .help(L(.agentReadOnlyMode))
             .accessibilityLabel(Text(L(.agentReadOnlyMode)))
@@ -201,8 +201,9 @@ struct AgentAuditPanel: View {
             HStack(spacing: 14) {
                 // 只列「可以进白名单」的类别：`unknown` 永远需要审批（见 Core 的 allowlistableKinds）。
                 ForEach(AgentGuardPolicy.allowlistableKinds, id: \.self) { kind in
+                    // 对话框（审批面板）里要讲清「这是哪一类」，纯图标说不出类别 ⇒ 图标 + 文字
                     Toggle(isOn: binding(for: kind)) {
-                        Image(systemName: kind.guardIconName)
+                        Label(kind.text, systemImage: kind.guardIconName)
                     }
                     .help(kind.text)
                     .accessibilityLabel(Text(kind.text))
@@ -223,7 +224,7 @@ struct AgentAuditPanel: View {
 
             HStack {
                 Spacer()
-                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.agentGuardSave)) { savePolicy() }
+                DialogActionButton(systemName: "square.and.arrow.down", title: L(.agentGuardSave)) { savePolicy() }
                     .disabled(isSavingPolicy)
             }
         }

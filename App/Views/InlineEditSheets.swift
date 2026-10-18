@@ -81,9 +81,9 @@ struct InlineEditPreviewSheet: View {
 
             HStack(spacing: Spacing.s) {
                 Spacer()
-                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) { dismiss() }
+                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                ToolbarIconButton(systemName: "pencil", help: L(.inlineEditCommit)) {
+                DialogActionButton(systemName: "pencil", title: L(.inlineEditCommit)) {
                     onRun()
                     dismiss()
                 }
@@ -150,9 +150,9 @@ struct InlineEditInsertSheet: View {
 
             HStack(spacing: Spacing.s) {
                 Spacer()
-                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) { dismiss() }
+                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                ToolbarIconButton(systemName: "checkmark", help: L(.inlineEditInsertConfirm)) { add() }
+                DialogActionButton(systemName: "checkmark", title: L(.inlineEditInsertConfirm)) { add() }
                     .keyboardShortcut(.defaultAction)
             }
         }

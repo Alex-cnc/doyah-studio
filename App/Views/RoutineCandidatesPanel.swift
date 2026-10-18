@@ -55,7 +55,7 @@ struct RoutineCandidatesPanel: View {
                 Text(L(.routineCandidatesTitle))
                     .font(Theme.font(.title))
                 Spacer()
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
 
@@ -85,14 +85,14 @@ struct RoutineCandidatesPanel: View {
             ),
             presenting: pendingDelete
         ) { memory in
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { pendingDelete = nil }
-            ToolbarIconButton(systemName: "trash", help: L(.commonDelete), role: .destructive) { deleteMemory(memory) }
+            DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel), role: .cancel) { pendingDelete = nil }
+            DialogActionButton(systemName: "trash", title: L(.commonDelete), role: .destructive) { deleteMemory(memory) }
         } message: { memory in
             Text(L(.memoryGovernanceDeleteConfirmMessage, memory.latestSQL))
         }
         .alert(L(.memoryGovernanceClearConfirmTitle), isPresented: $isClearConfirmPresented) {
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {}
-            ToolbarIconButton(systemName: "trash", help: L(.commonDelete), role: .destructive) {
+            DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel), role: .cancel) {}
+            DialogActionButton(systemName: "trash", title: L(.commonDelete), role: .destructive) {
                 Task { await appState.clearMemoryEnvironmentLayer() }
             }
         } message: {
@@ -157,10 +157,10 @@ struct RoutineCandidatesPanel: View {
                         }
 
                         HStack(spacing: Spacing.s) {
-                            ToolbarIconButton(systemName: "plus", help: L(.routineCandidatesInsert)) {
+                            DialogActionButton(systemName: "plus", title: L(.routineCandidatesInsert)) {
                                 appState.insertRoutineTemplate(candidate.template)
                             }
-                            ToolbarIconButton(systemName: "hand.raised", help: L(.routineCandidatesVeto)) {
+                            DialogActionButton(systemName: "hand.raised", title: L(.routineCandidatesVeto)) {
                                 Task { await appState.vetoRoutineCandidate(fingerprint: candidate.fingerprint) }
                             }
                             .buttonStyle(.link)
@@ -273,7 +273,7 @@ struct RoutineCandidatesPanel: View {
             Text(L(.memoryGovernanceRecordingTitle))
                 .font(Theme.font(.bodyStrong))
             Toggle(isOn: $appState.suppressesCurrentExecutionRecording) {
-                Image(systemName: "record.circle")
+                Label(L(.memoryGovernanceRecordingToggle), systemImage: "record.circle")
             }
             .help(L(.memoryGovernanceRecordingToggle))
             .accessibilityLabel(Text(L(.memoryGovernanceRecordingToggle)))
@@ -299,7 +299,7 @@ struct RoutineCandidatesPanel: View {
                     .foregroundStyle(Theme.text(.tertiary))
                 Spacer()
                 // 整层清空不可逆：按钮本身不执行，只负责弹确认（Core 的「清空需确认」纪律）。
-                ToolbarIconButton(systemName: "xmark.bin", help: L(.memoryGovernanceClearLayer)) { isClearConfirmPresented = true }
+                DialogActionButton(systemName: "xmark.bin", title: L(.memoryGovernanceClearLayer)) { isClearConfirmPresented = true }
                     .font(Theme.font(.caption))
             }
             Text(L(.memoryGovernanceLayerNote))
@@ -358,12 +358,12 @@ struct RoutineCandidatesPanel: View {
                 .font(Theme.font(.caption))
                 .foregroundStyle(verdict.shouldForget ? Theme.status(.warning) : Theme.text(.secondary))
 
-                ToolbarIconButton(systemName: "xmark", help: isExplained ? L(.commonClose) : L(.memoryGovernanceExplain)) {
+                DialogActionButton(systemName: "xmark", title: isExplained ? L(.commonClose) : L(.memoryGovernanceExplain)) {
                     explainedFingerprint = isExplained ? nil : memory.fingerprint
                 }
                 .font(Theme.font(.caption))
 
-                ToolbarIconButton(systemName: "trash", help: L(.memoryGovernanceDelete)) { pendingDelete = memory }
+                DialogActionButton(systemName: "trash", title: L(.memoryGovernanceDelete)) { pendingDelete = memory }
                     .font(Theme.font(.caption))
                 Spacer()
             }

@@ -495,7 +495,7 @@ struct ConnectionSwitchSheet: View {
 
             HStack(spacing: Spacing.s) {
                 Spacer()
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
         }

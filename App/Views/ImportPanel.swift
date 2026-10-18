@@ -67,7 +67,7 @@ struct ImportPanel: View {
                 Text(L(.importTitle))
                     .font(Theme.font(.title))
                 Spacer()
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .disabled(appState.isImportRunning)
             }
@@ -115,8 +115,8 @@ struct ImportPanel: View {
                 set: { if !$0 { pendingConfirmation = nil } }
             )
         ) {
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { pendingConfirmation = nil }
-            ToolbarIconButton(systemName: "play.fill", help: L(.importExecute), role: .destructive) {
+            DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel), role: .cancel) { pendingConfirmation = nil }
+            DialogActionButton(systemName: "play.fill", title: L(.importExecute), role: .destructive) {
                 pendingConfirmation = nil
                 run(bypassingSafetyCheck: true)
             }
@@ -139,7 +139,7 @@ struct ImportPanel: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.importChooseFile)) { chooseFile() }
+                DialogActionButton(systemName: "square.and.arrow.down", title: L(.importChooseFile)) { chooseFile() }
             }
 
             // 不是 UTF-8 就写明按什么编码读的（FR-IO-07）：中文列名 / 值会不会乱码，
@@ -165,7 +165,7 @@ struct ImportPanel: View {
                 .frame(width: 160)
                 .onChange(of: format) { _, newValue in handleFormatChange(newValue) }
                 Toggle(isOn: $hasHeader) {
-                    Image(systemName: "list.dash.header.rectangle")
+                    Label(L(.importHasHeader), systemImage: "list.dash.header.rectangle")
                 }
                 .help(L(.importHasHeader))
                 .accessibilityLabel(Text(L(.importHasHeader)))
@@ -203,7 +203,7 @@ struct ImportPanel: View {
                 TextField("", text: $targetTable)
                     .textFieldStyle(.roundedBorder)
                     .font(Theme.font(.mono))
-                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.importParse)) { Task { await parse() } }
+                DialogActionButton(systemName: "square.and.arrow.down", title: L(.importParse)) { Task { await parse() } }
                     .disabled(isParsing || filePath.isEmpty || targetTable.isEmpty)
                 if isParsing { ProgressView().controlSize(.small) }
             }
@@ -388,11 +388,11 @@ struct ImportPanel: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(spacing: Spacing.s) {
-                ToolbarIconButton(systemName: "play.fill", help: L(.importExecute)) { run(bypassingSafetyCheck: false) }
+                DialogActionButton(systemName: "play.fill", title: L(.importExecute)) { run(bypassingSafetyCheck: false) }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canRun)
                 if appState.isImportRunning {
-                    ToolbarIconButton(systemName: "stop.fill", help: L(.importStop)) { appState.cancelTableImport() }
+                    DialogActionButton(systemName: "stop.fill", title: L(.importStop)) { appState.cancelTableImport() }
                     ProgressView(value: appState.importProgress)
                         .tint(Theme.accentColor)
                         .frame(width: 160)

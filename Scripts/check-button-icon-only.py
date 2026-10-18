@@ -280,6 +280,17 @@ def classify(code: str, raw: str, start: int) -> dict:
 
 CONTROL = re.compile(r"\b(Button|Toggle)\s*(?=[({])")
 
+# 对话框 / 弹层 / 面板面（人类主人 2026-10-18：「二级对话框里基本都还是图标，没有恢复按钮语义」）
+# 口径：**对话框是竖向表单，省不出空间 ⇒ 按钮保留文字**（图标 + 文字都行，纯图标不行）。
+# 判法只看文件名（`XxxSheet` / `XxxDialog` / `XxxWizard` / `XxxPanel` / `XxxPopover`）——
+# 这几类文件在本仓就是"弹出来的二级面"，不按目录、不按内容猜；**只算 App / Platform/macOS**
+# —— `Plugins/Notes/Views/NotesPanel` 是插件里的侧栏（不是弹出来的二级面），照图标化口径走。
+DIALOG_SURFACE = re.compile(r"^(?:App|Platform/macOS)/.+?/?(?:\w*(?:Sheet|Dialog|Wizard|Panel|Popover))\w*\.swift$")
+
+
+def is_dialog_surface(relative: str) -> bool:
+    return bool(DIALOG_SURFACE.search(relative))
+
 
 def _next_code_line(code_lines: list[str], start: int) -> str:
     """从 start 起第一条「非空」的剥注释行（空行与纯注释行都算空）。"""
@@ -456,6 +467,12 @@ def tally(results: list[dict]) -> dict:
         for row in result["rows"]:
             if row["in_menu"]:
                 out["b"].append(row)
+            elif is_dialog_surface(row["path"]):
+                # 对话框面的动作按钮：**必须有文字**。图标 + 文字也算合格。
+                if row["kind"] == "icon":
+                    out.setdefault("dialog_icon", []).append(row)
+                else:
+                    out["b"].append(row)
             elif row["kind"] == "text":
                 out["a"].append(row)
             elif row["kind"] == "icon":
@@ -499,6 +516,11 @@ def assert_issues(files: list[str], missing: list[str], buckets: dict,
     if not baseline:
         issues.append(Issue(BASELINE, f"盘点基线缺失（{BASELINE}）—— 断言没有立足点"))
         return issues
+    dialog_icons = buckets.get("dialog_icon", [])
+    if dialog_icons:
+        head = "; ".join(f"{row['path']}:{row['line']}" for row in dialog_icons[:3])
+        issues.append(Issue("判据 J", f"对话框 / 弹层里还有 {len(dialog_icons)} 处**纯图标动作按钮**"
+                                      f"（口径：二级面对话框保留文字语义，至少 图标 + 文字）—— 例：{head}"))
     target = int(baseline.get("targetTextButtons", 0))
     count = len(buckets["a"])
     if count > target:
@@ -1005,6 +1027,15 @@ def main(argv: list[str]) -> int:
     raw_a = buckets["a"]
     issues += exception_ratchets(raw_a, ledger)
     buckets = {**buckets, "a": unregistered_rows(raw_a, ledger)}
+    # 对话框里的纯图标按钮：「例外台账」登记过的（文件 + 行，容 ±3 行）放行；
+    # 其余交给判据 J 判红 —— 登记是**显式归口**，不是静默放过。
+    if ledger:
+        registered = {(entry.get("文件"), int(entry.get("行", -99)))
+                      for entry in ledger.get(EXCEPTION_SITES, [])}
+        buckets = {**buckets, "dialog_icon": [
+            row for row in buckets.get("dialog_icon", [])
+            if not any(row["path"] == path and abs(row["line"] - line) <= 3
+                       for path, line in registered)]}
     issues += assert_issues(files, missing, buckets, baseline)
     extra, stats = a11y_and_semantics_issues(ROOT, buckets, baseline, ledger)
     issues += extra

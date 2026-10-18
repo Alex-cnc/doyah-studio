@@ -48,12 +48,12 @@ struct LockPanel: View {
 
                 Spacer()
 
-                ToolbarIconButton(systemName: "arrow.clockwise", help: L(.lockRefresh)) {
+                DialogActionButton(systemName: "arrow.clockwise", title: L(.lockRefresh)) {
                     Task { await load() }
                 }
                 .disabled(isLoading)
 
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
             }
 
             if let errorText {
@@ -136,7 +136,7 @@ struct LockPanel: View {
                 Spacer()
 
                 if let blocker = wait.blockingPids.first, blocker != wait.pid {
-                    ToolbarIconButton(systemName: "scope", help: L(.lockShowBlocker)) {
+                    DialogActionButton(systemName: "scope", title: L(.lockShowBlocker)) {
                         highlightedPid = blocker
                     }
                     .controlSize(.small)

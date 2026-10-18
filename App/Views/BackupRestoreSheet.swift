@@ -49,7 +49,7 @@ struct BackupRestoreSheet: View {
                 Text(L(.backupRestoreTitle))
                     .font(Theme.font(.title))
                 Spacer()
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
 
@@ -80,7 +80,7 @@ struct BackupRestoreSheet: View {
 
             HStack {
                 TextField(L(.backupRestoreArchive), text: $archivePath)
-                ToolbarIconButton(systemName: "folder", help: L(.backupRestoreChoose)) { choosePath() }
+                DialogActionButton(systemName: "folder", title: L(.backupRestoreChoose)) { choosePath() }
             }
 
             if kind == .restore {
@@ -106,7 +106,7 @@ struct BackupRestoreSheet: View {
             }
 
             HStack(spacing: Spacing.s) {
-                ToolbarIconButton(systemName: "checkmark.circle", help: L(.backupRestoreCheck)) {
+                DialogActionButton(systemName: "checkmark.circle", title: L(.backupRestoreCheck)) {
                     isChecking = true
                     Task {
                         diagnosis = await appState.diagnoseBackupTool(draft, password: nil)
@@ -115,7 +115,7 @@ struct BackupRestoreSheet: View {
                 }
                 .disabled(isChecking || !isDraftRunnable)
 
-                ToolbarIconButton(systemName: "play.fill", help: kind == .restore ? L(.backupRestoreRunRestore) : L(.backupRestoreRun)) {
+                DialogActionButton(systemName: "play.fill", title: kind == .restore ? L(.backupRestoreRunRestore) : L(.backupRestoreRun)) {
                     Task { await run() }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -192,7 +192,7 @@ struct BackupRestoreSheet: View {
 
             HStack(spacing: Spacing.l) {
                 Toggle(isOn: $restoreClean) {
-                    Image(systemName: "eraser")
+                    Label(L(.backupRestoreClean), systemImage: "eraser")
                 }
                 .help(L(.backupRestoreClean))
                 .accessibilityLabel(Text(L(.backupRestoreClean)))

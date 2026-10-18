@@ -65,7 +65,7 @@ struct MCPApprovalPanel: View {
                     .foregroundStyle(Theme.text(.secondary))
             }
             Spacer()
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
         }
         .padding(Spacing.l)
     }
@@ -79,11 +79,11 @@ struct MCPApprovalPanel: View {
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
                 Spacer()
-                ToolbarIconButton(systemName: "checkmark.circle", help: L(.mcpApprovalAllow)) {
+                DialogActionButton(systemName: "checkmark.circle", title: L(.mcpApprovalAllow)) {
                     appState.decideMCPApproval(requestID: request.id, approved: true)
                 }
                 .keyboardShortcut(.defaultAction)
-                ToolbarIconButton(systemName: "xmark.circle", help: L(.mcpApprovalDeny)) {
+                DialogActionButton(systemName: "xmark.circle", title: L(.mcpApprovalDeny)) {
                     appState.decideMCPApproval(requestID: request.id, approved: false)
                 }
             }
@@ -112,7 +112,7 @@ struct MCPApprovalPanel: View {
 
     private var footer: some View {
         HStack(spacing: Spacing.m) {
-            ToolbarIconButton(systemName: "arrow.clockwise", help: L(.mcpApprovalRefresh)) { appState.refreshMCPApprovals() }
+            DialogActionButton(systemName: "arrow.clockwise", title: L(.mcpApprovalRefresh)) { appState.refreshMCPApprovals() }
             Spacer()
             Text(L(.mcpApprovalQueuePath, appState.mcpApprovalStore.directory.path))
                 .font(Theme.font(.caption))

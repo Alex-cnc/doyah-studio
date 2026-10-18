@@ -17,7 +17,7 @@ struct SQLArchiveSheet: View {
                 .font(.headline)
 
             Toggle(isOn: $appState.isSQLArchiveEnabled) {
-                Image(systemName: "archivebox")
+                Label(L(.archiveEnable), systemImage: "archivebox")
             }
             .help(L(.archiveEnable))
             .accessibilityLabel(Text(L(.archiveEnable)))
@@ -46,19 +46,19 @@ struct SQLArchiveSheet: View {
             }
 
             HStack {
-                ToolbarIconButton(systemName: "folder", help: L(.archiveChooseDirectory)) {
+                DialogActionButton(systemName: "folder", title: L(.archiveChooseDirectory)) {
                     Task { await appState.chooseSQLArchiveDirectory() }
                 }
 
                 if let path = appState.sqlArchiveDirectoryPath {
-                    ToolbarIconButton(systemName: "folder", help: L(.archiveOpenFolder)) {
+                    DialogActionButton(systemName: "folder", title: L(.archiveOpenFolder)) {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                     }
                 }
 
                 Spacer()
 
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
         }

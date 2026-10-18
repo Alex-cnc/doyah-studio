@@ -45,7 +45,7 @@ struct ConnectionSettingsSheet: View {
     private var keepAliveSection: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             Toggle(isOn: $appState.isKeepAliveEnabled) {
-                Image(systemName: "waveform.path.ecg")
+                Label(L(.connectionSettingsKeepAliveToggle), systemImage: "waveform.path.ecg")
             }
             .help(L(.connectionSettingsKeepAliveToggle))
             .accessibilityLabel(Text(L(.connectionSettingsKeepAliveToggle)))
@@ -107,7 +107,7 @@ struct ConnectionSettingsSheet: View {
     private var footer: some View {
         HStack {
             Spacer()
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) {
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) {
                 dismiss()
             }
             .keyboardShortcut(.defaultAction)

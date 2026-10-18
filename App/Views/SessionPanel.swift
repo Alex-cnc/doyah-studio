@@ -43,7 +43,7 @@ struct SessionPanel: View {
             HStack {
                 Text(L(.sessionTitle)).font(Theme.font(.title))
                 Spacer()
-                ToolbarIconButton(systemName: "arrow.clockwise", help: L(.sessionRefresh)) {
+                DialogActionButton(systemName: "arrow.clockwise", title: L(.sessionRefresh)) {
                     Task { await reload() }
                 }
                 .buttonStyle(.borderless)
@@ -85,20 +85,20 @@ struct SessionPanel: View {
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
                 Spacer()
-                ToolbarIconButton(systemName: "xmark.circle", help: L(.sessionCancelStatement)) {
+                DialogActionButton(systemName: "xmark.circle", title: L(.sessionCancelStatement)) {
                     guard let selectedPID else { return }
                     Task { await cancelStatement(pid: selectedPID) }
                 }
                 .disabled(selectedPID == nil)
                 .help(L(.sessionCancelStatementHelp))
 
-                ToolbarIconButton(systemName: "stop.circle", help: L(.sessionTerminate)) {
+                DialogActionButton(systemName: "stop.circle", title: L(.sessionTerminate)) {
                     pendingTerminate = sessions.first { $0.pid == selectedPID }
                 }
                 .disabled(selectedPID == nil)
                 .help(L(.sessionTerminateHelp))
 
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
         }

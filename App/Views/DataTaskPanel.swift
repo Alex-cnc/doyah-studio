@@ -102,8 +102,8 @@ struct DataTaskPanel: View {
             AgentApprovalSheet(approval: approval)
         }
         .alert(L(.dataTaskDeleteConfirmTitle), isPresented: $isDeleteConfirmPresented) {
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {}
-            ToolbarIconButton(systemName: "trash", help: L(.dataTaskDelete), role: .destructive) { deleteSelected() }
+            DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel), role: .cancel) {}
+            DialogActionButton(systemName: "trash", title: L(.dataTaskDelete), role: .destructive) { deleteSelected() }
         } message: {
             Text(L(.dataTaskDeleteConfirmMessage, draft?.name ?? ""))
         }
@@ -118,14 +118,14 @@ struct DataTaskPanel: View {
 
             Spacer()
 
-            ToolbarIconButton(systemName: "plus", help: L(.dataTaskNew)) { createNewTask() }
-            ToolbarIconButton(systemName: "arrow.up.forward.app", help: L(.dataTaskSpecOpen)) { isSpecSheetPresented = true }
-            ToolbarIconButton(systemName: "arrow.up.forward.app", help: L(.dataTaskVersionsOpen)) { isVersionSheetPresented = true }
+            DialogActionButton(systemName: "plus", title: L(.dataTaskNew)) { createNewTask() }
+            DialogActionButton(systemName: "arrow.up.forward.app", title: L(.dataTaskSpecOpen)) { isSpecSheetPresented = true }
+            DialogActionButton(systemName: "arrow.up.forward.app", title: L(.dataTaskVersionsOpen)) { isVersionSheetPresented = true }
                 .disabled(storedDraft == nil)
-            ToolbarIconButton(systemName: "arrow.clockwise", help: L(.dataTaskRefresh)) {
+            DialogActionButton(systemName: "arrow.clockwise", title: L(.dataTaskRefresh)) {
                 Task { await appState.loadDataTasks() }
             }
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
         }
     }
 
@@ -168,7 +168,7 @@ struct DataTaskPanel: View {
             TextField(L(.dataTaskSearchPlaceholder), text: $query, prompt: Text(L(.dataTaskSearchPlaceholder)))
                 .textFieldStyle(.roundedBorder)
             Toggle(isOn: $onlyEnabled) {
-                Image(systemName: "line.3.horizontal.decrease.circle")
+                Label(L(.dataTaskOnlyEnabled), systemImage: "line.3.horizontal.decrease.circle")
             }
             .help(L(.dataTaskOnlyEnabled))
             .accessibilityLabel(Text(L(.dataTaskOnlyEnabled)))
@@ -313,7 +313,7 @@ struct DataTaskPanel: View {
                     transformationRow(index)
                 }
             }
-            ToolbarIconButton(systemName: "plus", help: L(.dataTaskAddTransformation)) {
+            DialogActionButton(systemName: "plus", title: L(.dataTaskAddTransformation)) {
                 draft?.transformations.append(.init(kind: .rename))
             }
             .font(.caption)
@@ -344,7 +344,7 @@ struct DataTaskPanel: View {
                         draft?.transformations.remove(at: index)
                     }
                 } label: {
-                    Image(systemName: "minus.circle")
+                    Label(L(.commonDelete), systemImage: "minus.circle")
                 }
                 .buttonStyle(.plain)
                 .help(L(.dataTaskRemoveTransformation))
@@ -407,7 +407,7 @@ struct DataTaskPanel: View {
                 .frame(width: 140)
 
                 Toggle(isOn: binding(\.isEnabled, default: true)) {
-                    Image(systemName: "play.circle")
+                    Label(L(.dataTaskEnabled), systemImage: "play.circle")
                 }
                 .help(L(.dataTaskEnabled))
                 .accessibilityLabel(Text(L(.dataTaskEnabled)))
@@ -442,7 +442,7 @@ struct DataTaskPanel: View {
                 .labelsHidden()
                 .frame(width: 110)
                 Spacer()
-                ToolbarIconButton(systemName: "folder", help: L(.dataTaskChooseDirectory)) { chooseDirectory() }
+                DialogActionButton(systemName: "folder", title: L(.dataTaskChooseDirectory)) { chooseDirectory() }
                 Menu {
                     if appState.storedDirectoryBookmarks.isEmpty {
                         Text(L(.dataTaskNoStoredDirectory))
@@ -466,7 +466,7 @@ struct DataTaskPanel: View {
             directoryStatusRow
 
             if draft?.output != nil {
-                ToolbarIconButton(systemName: "square.and.arrow.up", help: L(.dataTaskExportVerify)) { verifyDirectory() }
+                DialogActionButton(systemName: "square.and.arrow.up", title: L(.dataTaskExportVerify)) { verifyDirectory() }
                     .font(.caption)
                     .disabled(directoryStatus?.isUsable != true)
             }
@@ -542,14 +542,14 @@ struct DataTaskPanel: View {
     private var previewSection: some View {
         section(L(.dataTaskSectionPreview), hint: L(.dataTaskDryRunHint)) {
             HStack(spacing: 8) {
-                ToolbarIconButton(systemName: "play.fill", help: L(.dataTaskDryRun)) { runDryRun() }
-                ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.dataTaskRevert)) { revertDraft() }
+                DialogActionButton(systemName: "play.fill", title: L(.dataTaskDryRun)) { runDryRun() }
+                DialogActionButton(systemName: "arrow.uturn.backward", title: L(.dataTaskRevert)) { revertDraft() }
                     .disabled(draft == nil)
                 Spacer()
-                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.dataTaskSave)) { save() }
+                DialogActionButton(systemName: "square.and.arrow.down", title: L(.dataTaskSave)) { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canSave)
-                ToolbarIconButton(systemName: "trash", help: L(.dataTaskDelete), role: .destructive) {
+                DialogActionButton(systemName: "trash", title: L(.dataTaskDelete), role: .destructive) {
                     isDeleteConfirmPresented = true
                 }
                 .disabled(appState.dataTasks.first { $0.id == draft?.id } == nil)
@@ -711,7 +711,7 @@ struct DataTaskPanel: View {
                 }
 
                 HStack(spacing: 8) {
-                    ToolbarIconButton(systemName: "play.fill", help: L(.dataTaskRunNow)) {
+                    DialogActionButton(systemName: "play.fill", title: L(.dataTaskRunNow)) {
                         Task { await appState.runDataTaskNow(draft, plannedAt: DataTaskPresentation.plannedAt(decision)) }
                     }
                     .font(.caption)
@@ -719,9 +719,9 @@ struct DataTaskPanel: View {
                     .disabled(appState.dataTasks.first { $0.id == draft.id } == nil)
 
                     if let stored = appState.dataTasks.first(where: { $0.id == draft.id }) {
-                        ToolbarIconButton(
+                        DialogActionButton(
                             systemName: stored.isEnabled ? "pause.circle" : "play.circle",
-                            help: stored.isEnabled ? L(.dataTaskDisable) : L(.dataTaskEnable)
+                            title: stored.isEnabled ? L(.dataTaskDisable) : L(.dataTaskEnable)
                         ) {
                             Task { await toggleEnabled(stored) }
                         }

@@ -75,7 +75,7 @@ struct ForeignKeyJumpSheet: View {
     private var footer: some View {
         HStack {
             Spacer()
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
+            DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) {
                 dismiss()
             }
             .keyboardShortcut(.cancelAction)

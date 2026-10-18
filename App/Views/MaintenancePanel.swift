@@ -50,7 +50,7 @@ struct MaintenancePanel: View {
                 }
             }
             Spacer()
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
         }
         .padding(Spacing.l)
     }
@@ -75,7 +75,7 @@ struct MaintenancePanel: View {
                 .foregroundStyle(Theme.text(.secondary))
                 .fixedSize(horizontal: false, vertical: true)
             Toggle(isOn: $appState.maintenanceAllowMultipleHighCost) {
-                Image(systemName: "square.stack.3d.up")
+                Label(L(.maintenanceAllowMultiple), systemImage: "square.stack.3d.up")
             }
             .help(L(.maintenanceAllowMultiple))
             .accessibilityLabel(Text(L(.maintenanceAllowMultiple)))
@@ -146,9 +146,9 @@ struct MaintenancePanel: View {
                 }
                 Spacer()
                 if !task.state.isFinished, task.requiresApproval {
-                    ToolbarIconButton(systemName: "checkmark.circle", help: L(.maintenanceApproveAction)) { appState.approveMaintenanceTask(id: task.id) }
+                    DialogActionButton(systemName: "checkmark.circle", title: L(.maintenanceApproveAction)) { appState.approveMaintenanceTask(id: task.id) }
                         .disabled(task.state == .rejected)
-                    ToolbarIconButton(systemName: "xmark.circle", help: L(.maintenanceRejectAction)) { appState.rejectMaintenanceTask(id: task.id) }
+                    DialogActionButton(systemName: "xmark.circle", title: L(.maintenanceRejectAction)) { appState.rejectMaintenanceTask(id: task.id) }
                         .disabled(task.state == .rejected)
                 }
             }
@@ -199,20 +199,20 @@ struct MaintenancePanel: View {
 
     private var footer: some View {
         HStack(spacing: Spacing.m) {
-            ToolbarIconButton(systemName: "magnifyingglass.circle", help: L(.maintenanceReviewAction)) { appState.reviewMaintenancePlan() }
+            DialogActionButton(systemName: "magnifyingglass.circle", title: L(.maintenanceReviewAction)) { appState.reviewMaintenancePlan() }
             // 存进笔记：计划 + 逐条状态与理由（含被拒绝的条目与"没看懂的行"）。
-            ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.maintenanceSaveNote)) {
+            DialogActionButton(systemName: "square.and.arrow.down", title: L(.maintenanceSaveNote)) {
                 Task { await appState.saveMaintenanceNote() }
             }
             .disabled(appState.maintenanceReview?.tasks.isEmpty ?? true)
             // 逃生门（**显式**才存副本）：与诊断面板同形（队列 `L-138`）——
             // 计划确实要留第二份时走这颗，而不是把默认行为改回"每次都存"。
-            ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.diagnosisSaveNoteCopy)) {
+            DialogActionButton(systemName: "square.and.arrow.down", title: L(.diagnosisSaveNoteCopy)) {
                 Task { await appState.saveMaintenanceNote(forceNew: true) }
             }
             .disabled(appState.maintenanceReview?.tasks.isEmpty ?? true)
             Spacer()
-            ToolbarIconButton(systemName: "play.fill", help: appState.maintenanceIsRunning ? L(.diagnosisGathering) : L(.maintenanceExecuteAction)) {
+            DialogActionButton(systemName: "play.fill", title: appState.maintenanceIsRunning ? L(.diagnosisGathering) : L(.maintenanceExecuteAction)) {
                 Task { await appState.executeApprovedMaintenanceTasks() }
             }
             .keyboardShortcut(.defaultAction)

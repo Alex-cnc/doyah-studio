@@ -65,7 +65,7 @@ struct DatabaseStatsPanel: View {
                 }
             }
             Spacer()
-            ToolbarIconButton(systemName: "arrow.clockwise", help: L(.databaseStatsRefresh)) {
+            DialogActionButton(systemName: "arrow.clockwise", title: L(.databaseStatsRefresh)) {
                 Task { await load() }
             }
             .disabled(isLoading)
@@ -225,7 +225,7 @@ struct DatabaseStatsPanel: View {
     private var footer: some View {
         HStack {
             Spacer()
-            ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) {
+            DialogActionButton(systemName: "xmark", title: L(.commonClose)) {
                 dismiss()
             }
             .keyboardShortcut(.defaultAction)

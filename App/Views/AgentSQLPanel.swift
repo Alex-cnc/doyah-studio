@@ -30,7 +30,7 @@ struct AgentSQLPanel: View {
                 Text(L(.agentSQLTitle))
                     .font(.headline)
                 Spacer()
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
             }
 
             instructionSection
@@ -44,23 +44,23 @@ struct AgentSQLPanel: View {
                 Spacer()
 
                 if result != nil {
-                    ToolbarIconButton(systemName: "doc.on.doc", help: L(.agentSQLCopy)) {
+                    DialogActionButton(systemName: "doc.on.doc", title: L(.agentSQLCopy)) {
                         copyToPasteboard(editableSQL)
                         appState.statusMessage = L(.agentSQLCopied)
                     }
-                    ToolbarIconButton(systemName: "plus", help: L(.agentSQLInsertNewTab)) {
+                    DialogActionButton(systemName: "plus", title: L(.agentSQLInsertNewTab)) {
                         appState.openGeneratedSQLInNewTab(editableSQL)
                         dismiss()
                     }
                     // 提交审批（FR-AI-09）：写操作 / DDL 必须逐次批准；只读查询无需审批，
                     // 但也**不会被自动执行** —— 依旧只放进新页签。
-                    ToolbarIconButton(systemName: "paperplane", help: L(.agentSQLSubmit)) {
+                    DialogActionButton(systemName: "paperplane", title: L(.agentSQLSubmit)) {
                         Task { await submitForApproval() }
                     }
                     .disabled(submittedSQL == editableSQL)
                 }
 
-                ToolbarIconButton(systemName: "wand.and.stars", help: L(.agentSQLGenerate)) {
+                DialogActionButton(systemName: "wand.and.stars", title: L(.agentSQLGenerate)) {
                     Task { await generate() }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -93,12 +93,12 @@ struct AgentSQLPanel: View {
 
             HStack(spacing: 16) {
                 Toggle(isOn: $includeTables) {
-                    Image(systemName: "tablecells")
+                    Label(L(.agentSQLIncludeTables), systemImage: "tablecells")
                 }
                 .help(L(.agentSQLIncludeTables))
                 .accessibilityLabel(Text(L(.agentSQLIncludeTables)))
                 Toggle(isOn: $includeStatement) {
-                    Image(systemName: "doc.plaintext")
+                    Label(L(.agentSQLIncludeStatement), systemImage: "doc.plaintext")
                 }
                 .help(L(.agentSQLIncludeStatement))
                 .accessibilityLabel(Text(L(.agentSQLIncludeStatement)))

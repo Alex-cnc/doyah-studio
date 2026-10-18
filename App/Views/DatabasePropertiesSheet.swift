@@ -56,11 +56,11 @@ struct DatabasePropertiesSheet: View {
             HStack {
                 Spacer()
 
-                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
+                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) {
                     dismiss()
                 }
 
-                ToolbarIconButton(systemName: "checkmark", help: L(.dbPropsApply)) {
+                DialogActionButton(systemName: "checkmark", title: L(.dbPropsApply)) {
                     onApply(alterations)
                     dismiss()
                 }

@@ -91,13 +91,13 @@ struct SyntheticDataPanel: View {
                         .frame(width: 90)
                 }
                 Toggle(isOn: $overwrite) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
+                    Label(L(.syntheticOverwrite), systemImage: "arrow.triangle.2.circlepath")
                 }
                 .help(L(.syntheticOverwrite))
                 .accessibilityLabel(Text(L(.syntheticOverwrite)))
                 .font(Theme.font(.caption))
                 Spacer()
-                ToolbarIconButton(systemName: "wand.and.stars", help: L(.syntheticGenerate)) {
+                DialogActionButton(systemName: "wand.and.stars", title: L(.syntheticGenerate)) {
                     Task { await regenerate() }
                 }
                 .disabled(isLoading)
@@ -187,15 +187,15 @@ struct SyntheticDataPanel: View {
 
             HStack {
                 Spacer()
-                ToolbarIconButton(systemName: "xmark", help: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                ToolbarIconButton(systemName: "square.and.arrow.up", help: L(.syntheticExport)) {
+                DialogActionButton(systemName: "square.and.arrow.up", title: L(.syntheticExport)) {
                     guard let spec else { return }
                     appState.exportSyntheticInsert(spec, rows: rows, overwrite: overwrite)
                 }
                 .disabled(rows.isEmpty || spec == nil)
                 // 写入是**有副作用**的动作，放在最后且走审批 —— 位置本身就是提示。
-                ToolbarIconButton(systemName: "square.and.pencil", help: L(.syntheticWrite)) {
+                DialogActionButton(systemName: "square.and.pencil", title: L(.syntheticWrite)) {
                     Task {
                         guard let spec else { return }
                         await appState.writeSyntheticData(spec, rows: rows, overwrite: overwrite)

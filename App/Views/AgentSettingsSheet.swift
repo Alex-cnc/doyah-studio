@@ -48,7 +48,7 @@ struct AgentSettingsSheet: View {
 
             Form {
                 Toggle(isOn: $isEnabled) {
-                    Image(systemName: "cpu")
+                    Label(L(.agentEnabled), systemImage: "cpu")
                 }
                 .help(L(.agentEnabled))
                 .accessibilityLabel(Text(L(.agentEnabled)))
@@ -148,7 +148,7 @@ struct AgentSettingsSheet: View {
 
                     if appState.hasAgentAPIKey {
                         Toggle(isOn: $clearAPIKey) {
-                            Image(systemName: "key.slash")
+                            Label(L(.agentAPIKeyClear), systemImage: "key.slash")
                         }
                         .help(L(.agentAPIKeyClear))
                         .accessibilityLabel(Text(L(.agentAPIKeyClear)))
