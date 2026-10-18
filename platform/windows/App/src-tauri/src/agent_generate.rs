@@ -21,7 +21,9 @@ use doyah_studio_db::agent_advisor;
 use doyah_studio_db::agent_audit::{AuditRecord, AuditVerdict};
 use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateReport, GateState};
 use doyah_studio_db::agent_history::HistoryEntry;
-use doyah_studio_db::agent_nl2sql::{build_request, parse_reply, Outgoing, TableBrief};
+use doyah_studio_db::agent_nl2sql::{
+    build_chat_request, build_request, parse_reply, ChatMessage, Outgoing, TableBrief,
+};
 use doyah_studio_db::agent_quota::{now_secs, QuotaStatus};
 use doyah_studio_db::agent_retry::{
     classify_status, classify_transport, AttemptNote, RetryClass, RetryPolicy,
@@ -689,6 +691,123 @@ pub fn ask(store: &AgentSettingsStore, brief: &str) -> Result<AskReply, DbFailur
         quota,
         limitations,
         attempts,
+    })
+}
+
+/// 对话一次发送的结局（`FR-AI-25` 对话页签；与 [`AskReply`] 同构 —— 挡住 / 满额 / 真发出去）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum ChatReply {
+    /// 没放行：**一条请求都没发**。
+    Blocked {
+        /// 逐条理由（界面按短码查语言表）。
+        gate: AgentGateReport,
+    },
+    /// 本小时配额已满：**一条请求都没发**。
+    Throttled {
+        /// 满额时的读数。
+        quota: QuotaStatus,
+    },
+    /// 放行并完成：正文原样交回（**没有被解读、也没有被执行**）。
+    Answered {
+        /// 模型正文。
+        text: String,
+        /// 实际使用的模型名。
+        model: String,
+        /// 往返耗时（毫秒）。
+        elapsed_ms: u64,
+        /// 发完这一次之后的配额读数。
+        quota: QuotaStatus,
+        /// 已知缺口（如实显示）。
+        limitations: Vec<String>,
+        /// 这一发的**尝试账**（成功也带）。
+        attempts: Vec<AttemptNote>,
+        /// 这一段对话一共几条消息（含这一问；界面拿来显示轮次）。
+        turns: usize,
+    },
+}
+
+/// 对话这一次的已知缺口（随结果一起回，界面照实说）。
+pub const CHAT_LIMITATIONS: [&str; 2] = [
+    "对话只保存在这一次运行里：关掉页签或重开应用就没了（按工作区落盘的会话记录还没接）。",
+    "模型给的语句只落在对话正文里，本应用**不执行**它 —— 要用就自己复制到编辑器里跑。",
+];
+
+/// **对话这一次**（`FR-AI-25` 对话页签第一片）：把整段历史发出去，只回正文。
+///
+/// 与 `generate` / `ask` 共用同一套闸门 / 配额 / 审计 / 重试 —— 对话不是「第三条外发通道」，
+/// 它只是**换了一份提示词与多轮历史**的同一条通道（关掉总开关，这里同样一条请求都发不出去）。
+pub fn chat(store: &AgentSettingsStore, turns: &[ChatMessage]) -> Result<ChatReply, DbFailure> {
+    let config = store.load()?;
+    let question = turns
+        .last()
+        .map(|turn| turn.content.clone())
+        .unwrap_or_default();
+    if let Some(gate) = gate_refusal(store, &config, &question)? {
+        return Ok(ChatReply::Blocked { gate });
+    }
+    let outgoing = build_chat_request(&config, turns).map_err(|err| DbFailure {
+        message: err.to_string(),
+        hint: "改一下这段对话（空消息 / 太长 / 结尾是模型的话）再发。".to_string(),
+    })?;
+
+    // 配额：与生成面 / 诊断面同一条台账（对话一样烧钱）。
+    let quota = match quota_admission(store, &config, &question)? {
+        Ok(quota) => quota,
+        Err(quota) => return Ok(ChatReply::Throttled { quota }),
+    };
+
+    let started = Instant::now();
+    let sent = send_with_retry(store, &config, &outgoing, &question, 0).map_err(|err| err.failure)?;
+    let attempts = sent.attempts;
+    let raw = sent.raw;
+    let text = match agent_advisor::parse_reply(&raw) {
+        Ok(text) => text,
+        Err(err) => {
+            let failure = DbFailure {
+                message: err.to_string(),
+                hint: "换一个模型（有些模型把正文放在别的字段里），或改用「生成 SQL」那条路。"
+                    .to_string(),
+            };
+            let note = record_audit(
+                store,
+                AuditVerdict::Failed,
+                &outgoing.model,
+                &outgoing.url,
+                &question,
+                &failure.message,
+                started.elapsed().as_millis() as u64,
+                0,
+            );
+            return Err(with_audit_note(failure, note));
+        }
+    };
+    let elapsed_ms = started.elapsed().as_millis() as u64;
+
+    let mut limitations: Vec<String> = CHAT_LIMITATIONS.iter().map(|line| line.to_string()).collect();
+    if let Some(note) = record_audit(
+        store,
+        AuditVerdict::Ok,
+        &outgoing.model,
+        &outgoing.url,
+        &question,
+        "",
+        elapsed_ms,
+        0,
+    ) {
+        limitations.push(format!(
+            "这一次没能记进审计记录（{note}）—— 结果仍然可用，但「刚才发过什么」这条事后查不到。"
+        ));
+    }
+
+    Ok(ChatReply::Answered {
+        text,
+        model: outgoing.model,
+        elapsed_ms,
+        quota,
+        limitations,
+        attempts,
+        turns: turns.len(),
     })
 }
 
@@ -1616,6 +1735,101 @@ mod tests {
         ));
         match ask(&store, "e1 执行计划").unwrap() {
             AskReply::Throttled { quota } => {
+                assert_eq!(quota.used, 1);
+                assert_eq!(quota.limit, 1);
+            }
+            other => panic!("满额了还发：{other:?}"),
+        }
+    }
+
+    // ── 对话（`FR-AI-25` 对话页签第一片）──────────────────────────────────────────
+    // 三条判据：真把历史发出去 / 关掉总开关零请求 / 走同一条配额台账。
+
+    fn chat_turn(role: &str, content: &str) -> ChatMessage {
+        ChatMessage {
+            role: role.to_string(),
+            content: content.to_string(),
+        }
+    }
+
+    #[test]
+    fn a_chat_send_puts_the_whole_history_in_the_request_body() {
+        let (endpoint, seen) = fake_endpoint("200 OK", advisor_body());
+        let store = tmp_store("chat-send");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        let turns = vec![
+            chat_turn("user", "第一问：orders 有几行"),
+            chat_turn("assistant", "历史上模型这么答过"),
+            chat_turn("user", "第二问：那按天分呢"),
+        ];
+        match chat(&store, &turns).unwrap() {
+            ChatReply::Answered { turns: count, text, .. } => {
+                assert_eq!(count, 3);
+                assert!(!text.is_empty());
+            }
+            other => panic!("该真发一次：{other:?}"),
+        }
+        // 服务端侧核对：历史逐条在正文里（不是只发最后一句）。
+        let request = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(request.contains("第一问：orders 有几行"), "{request}");
+        assert!(request.contains("历史上模型这么答过"), "{request}");
+        assert!(request.contains("第二问：那按天分呢"), "{request}");
+        // 审计记的问句是**这一问**，不是整段历史。
+        let audit = store.load_audit();
+        let last = audit.all_recent().first().cloned().unwrap();
+        assert!(last.summary.contains("第二问"));
+        // 配额真记了一次。
+        assert_eq!(store.load_quota().status(now_secs(), 60).used, 1);
+    }
+
+    #[test]
+    fn a_chat_send_with_the_switch_off_never_reaches_the_server() {
+        let (endpoint, seen) = fake_endpoint("200 OK", advisor_body());
+        let store = tmp_store("chat-blocked");
+        store
+            .save(&AgentConfiguration {
+                enabled: false,
+                endpoint,
+                model: "m".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        match chat(&store, &[chat_turn("user", "问一句")]).unwrap() {
+            ChatReply::Blocked { gate } => assert_eq!(gate.state, GateState::Disabled),
+            other => panic!("关着总开关还发了请求：{other:?}"),
+        }
+        assert!(
+            seen.recv_timeout(Duration::from_millis(300)).is_err(),
+            "一条请求都不该到服务端"
+        );
+    }
+
+    #[test]
+    fn a_chat_send_over_the_hourly_limit_does_not_send_and_says_so() {
+        let (endpoint, _seen) = fake_endpoint("200 OK", advisor_body());
+        let store = tmp_store("chat-throttle");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                hourly_limit: 1,
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(matches!(
+            chat(&store, &[chat_turn("user", "第一问")]).unwrap(),
+            ChatReply::Answered { .. }
+        ));
+        match chat(&store, &[chat_turn("user", "第二问")]).unwrap() {
+            ChatReply::Throttled { quota } => {
                 assert_eq!(quota.used, 1);
                 assert_eq!(quota.limit, 1);
             }

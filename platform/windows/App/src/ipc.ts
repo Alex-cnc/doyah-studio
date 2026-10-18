@@ -139,6 +139,7 @@ export const COMMANDS = {
   agentGenerateSql: 'agent_generate_sql',
   // 问诊断一次（FR-AI-03 第二片）：把面板上那份资料块原样发出去，只回正文
   agentDiagnosisAsk: 'agent_diagnosis_ask',
+  agentChatSend: 'agent_chat_send',
   agentHistoryList: 'agent_history_list',
   agentAuditList: 'agent_audit_list',
   // 连接配置面收口（S-1a）：逐项校验 / 换引擎联动默认值 / 从 URL 导入
@@ -1093,6 +1094,34 @@ export type AgentAskReply =
       attempts: AgentAttemptNote[]
     }
 
+/**
+ * 对话里的一轮消息（`FR-AI-25` 对话页签）。
+ *
+ * 角色只有两种：`user` / `assistant`（系统提示由 Rust 那侧自己加，界面传不进去）。
+ */
+export interface AgentChatTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/** 一次对话发送的结局 —— 与「问诊断」同构：挡住 / 满额 / 真发出去。 */
+export type AgentChatReply =
+  | { status: 'blocked'; gate: AgentGateReport }
+  | { status: 'throttled'; quota: AgentQuotaStatus }
+  | {
+      status: 'answered'
+      /** 模型正文（**不执行**）。 */
+      text: string
+      model: string
+      elapsedMs: number
+      quota: AgentQuotaStatus
+      limitations: string[]
+      /** 这一发的尝试账（成功也带）。 */
+      attempts: AgentAttemptNote[]
+      /** 这一段对话一共几条消息（含这一问）。 */
+      turns: number
+    }
+
 /** 设置快照：配置 + 裁决 + 密钥在不在 + 两个路径。 */
 export interface AgentSettingsSnapshot {
   config: AgentConfiguration
@@ -1244,6 +1273,18 @@ export function agentGenerateSql(
  */
 export function agentDiagnosisAsk(brief: string): Promise<AgentAskReply> {
   return call(COMMANDS.agentDiagnosisAsk, { brief }, () => {
+    throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
+  })
+}
+
+/**
+ * **对话一次**（`FR-AI-25` 对话页签第一片）：把整段历史原样发出去，只回正文。
+ *
+ * 历史逐条透传（界面不改写、不裁剪）；系统提示由 Rust 那侧自己加。
+ * 与生成 / 诊断共用同一条通道：总开关关着 / 满额都会在这里被挡住，**一条请求都不发**。
+ */
+export function agentChatSend(turns: readonly AgentChatTurn[]): Promise<AgentChatReply> {
+  return call(COMMANDS.agentChatSend, { turns }, () => {
     throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
   })
 }

@@ -49,6 +49,7 @@ export const ACTION_ICONS = {
   importFile: 'upload',
   dryRun: 'flask',                  // 试跑（跑完回滚）
   generate: 'wand',                 // 生成 SQL / 语句
+  chat: 'chatBubble',               // 与模型对话（"说话"≠"生成"：两个动作不共形）
   admin: 'sliders',                 // 管理面板
   readOnly: 'lock',
   // 排序与翻页

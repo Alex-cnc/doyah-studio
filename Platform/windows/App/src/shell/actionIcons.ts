@@ -28,6 +28,7 @@ export type ActionGlyph =
   | 'search'        // 搜索：放大镜
   | 'replace'       // 替换：两个箭头 + 交换（区别于 search）
   | 'preview'       // 预览：眼睛
+  | 'chatBubble'    // 与模型对话：对话气泡（"说话"的通用记号，不是侧栏、也不是"生成"）
   // ── 通用动作 ──────────────────────────────────────────────────
   | 'plus'          // 新建/新增：加号
   | 'close'         // 关闭/取消：叉
@@ -58,7 +59,7 @@ export type ActionGlyph =
 /** 全部图标名（判据按它断言"用到的名字必须已登记"）。 */
 export const ACTION_GLYPHS: readonly ActionGlyph[] = [
   'openFolder', 'closeFolder', 'newFile', 'newFolder', 'save', 'diff', 'trash',
-  'search', 'replace', 'preview',
+  'search', 'replace', 'preview', 'chatBubble',
   'plus', 'close', 'check', 'pencil', 'copy', 'play', 'stop', 'eraser',
   'download', 'upload', 'flask', 'wand', 'code', 'sliders', 'lock',
   'sortAsc', 'sortDesc', 'chevronLeft', 'chevronRight', 'chevronDown', 'chevronUp',
@@ -81,6 +82,7 @@ export const ACTION_SEMANTICS: Record<ActionGlyph, string> = {
   search: '放大镜＝搜索（业界唯一解）',
   replace: '双子箭头互换＝替换（与"搜索"的放大镜明显不同形，避免两动作混）',
   preview: '眼睛＝预览（"先看一眼"的最直白记号）',
+  chatBubble: '对话气泡＝与模型对话（"说话"的通用记号；与"魔法棒＝生成"明确分开，避免两动作混形）',
   plus: '加号＝新建／新增（最普认的正向动作）',
   close: '叉＝关闭／取消（同一动作全仓一律用叉，绝不与"删除"混）',
   check: '勾＝确认／提交（正向终态动作）',

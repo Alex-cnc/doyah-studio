@@ -312,6 +312,7 @@ export const DICT = {
     en: '© 2026 DoyahStudio · local-first: your data and files stay on this machine',
   },
   'home.openFile': { 'zh-Hans': '打开文件…', en: 'Open file…' },
+  'home.chat': { 'zh-Hans': '与模型对话', en: 'Chat with the model' },
   'home.recentFiles': { 'zh-Hans': '最近打开的文件', en: 'Recent files' },
   'home.recentFiles.empty': { 'zh-Hans': '还没有打开过文件。', en: 'No files opened yet.' },
   'home.recentWorkspaces': { 'zh-Hans': '最近打开的工作区', en: 'Recent workspaces' },
@@ -741,6 +742,42 @@ export const DICT = {
   'agent.gate.missing': { 'zh-Hans': '还不能外发，缺这几项：', en: 'Cannot send yet — missing:' },
   'agent.scope.local': { 'zh-Hans': '本机端点，无需密钥', en: 'local endpoint, no key needed' },
   'agent.scope.remote': { 'zh-Hans': '远端端点', en: 'remote endpoint' },
+
+  // 对话页签（FR-AI-25 第一片）：多轮对话 + 三种「没发出去」各说各的
+  'chat.title': { 'zh-Hans': '对话', en: 'Chat' },
+  'chat.you': { 'zh-Hans': '你', en: 'You' },
+  'chat.model': { 'zh-Hans': '模型', en: 'Model' },
+  'chat.placeholder': {
+    'zh-Hans': '问一句（比如「这个库有哪些表」「这条 SQL 慢在哪儿」）',
+    en: 'Ask something (e.g. "which tables are in this database?")',
+  },
+  'chat.send': { 'zh-Hans': '发送', en: 'Send' },
+  'chat.sending': { 'zh-Hans': '正在等模型回话…', en: 'Waiting for the model…' },
+  'chat.clear': { 'zh-Hans': '清空对话', en: 'Clear' },
+  'chat.empty': { 'zh-Hans': '还没有对话：下面写一句开始。', en: 'No messages yet — type below to start.' },
+  'chat.hint': { 'zh-Hans': 'Enter 发送 · Shift+Enter 换行', en: 'Enter to send · Shift+Enter for a new line' },
+  'chat.budget': {
+    'zh-Hans': '{turns} 条 / {chars} 字符（上限 {limitTurns} 条 / {limitChars} 字符）',
+    en: '{turns} message(s) / {chars} chars (limit {limitTurns} / {limitChars})',
+  },
+  'chat.tooLong': {
+    'zh-Hans': '这一段对话太长了（{turns} 条 / {chars} 字符，上限 {limitTurns} 条 / {limitChars} 字符）。',
+    en: 'This conversation is too long ({turns} message(s) / {chars} chars; limit {limitTurns} / {limitChars}).',
+  },
+  'chat.tooLongHint': {
+    'zh-Hans': '先点「清空对话」再问 —— 这里不会悄悄丢掉最早的几轮（丢了模型会答得莫名其妙）。',
+    en: 'Clear the conversation and ask again — nothing is silently dropped here.',
+  },
+  'chat.blocked': { 'zh-Hans': '外发被挡住：一条请求都没发。', en: 'Blocked — no request was sent.' },
+  'chat.throttled': {
+    'zh-Hans': '本小时配额已满（已用 {used} / 上限 {limit}），约 {minutes} 分钟后才有空位。这一条没有发出去。',
+    en: 'Hourly quota is full ({used} / {limit}); about {minutes} minute(s) until a slot. This one was not sent.',
+  },
+  'chat.answered': {
+    'zh-Hans': '模型 {model} · {ms} 毫秒 · 第 {n} 问 · 本次共 {turns} 条消息',
+    en: 'Model {model} · {ms} ms · question {n} · {turns} message(s) sent',
+  },
+  'chat.attempts': { 'zh-Hans': '共尝试 {n} 次（退避后重试过）', en: 'tried {n} times (retried after backoff)' },
 
   // 对话式诊断（FR-AI-03）：先摊证据，再粘模型回复；结论必须有依据
   'diag.entry': { 'zh-Hans': '诊断…', en: 'Diagnose…' },

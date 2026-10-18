@@ -814,6 +814,18 @@ fn agent_diagnosis_ask(
     agent_generate::ask(&state.agent_settings, &brief)
 }
 
+/// **对话一次**（`FR-AI-25` 对话页签第一片）：把整段历史原样发出去，只回正文。
+///
+/// 与生成 / 诊断共用同一条外发通道（闸门 / 配额 / 审计 / 重试都在 `agent_generate` 里）——
+/// 关掉总开关，这里同样一条请求都发不出去。本命令**不执行**任何语句。
+#[tauri::command]
+fn agent_chat_send(
+    state: State<'_, ShellState>,
+    turns: Vec<doyah_studio_db::agent_nl2sql::ChatMessage>,
+) -> Result<agent_generate::ChatReply, DbFailure> {
+    agent_generate::chat(&state.agent_settings, &turns)
+}
+
 /// 生成历史（`FR-AI-02` 的回看面）：一打开弹层就能看到以前问过什么。
 ///
 /// 只读一条命令：**不触发任何外发**，也不改盘上的东西（写历史只发生在生成成功那一刻）。
@@ -2867,6 +2879,7 @@ pub fn run() {
             agent_generate_preview,
             agent_generate_sql,
             agent_diagnosis_ask,
+            agent_chat_send,
             agent_history_list,
             agent_audit_list,
             connection_validate,

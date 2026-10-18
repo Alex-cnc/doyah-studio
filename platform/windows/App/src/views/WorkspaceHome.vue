@@ -40,6 +40,8 @@ const emit = defineEmits<{
   (event: 'open-file'): void
   (event: 'open-workspace', path: string): void
   (event: 'open-connection', id: string): void
+  /** 打开对话页签（`FR-AI-25` 第一片）：工作区里的一类页签，不是侧栏也不是弹层。 */
+  (event: 'open-chat'): void
 }>()
 
 /** 路径太长时中间省略（图里那些路径也是截过的，但**保留头尾**便于分辨）。 */
@@ -64,6 +66,12 @@ function connectionSubtitle(connection: SavedConnection): string {
     <p class="home__meta">{{ tr('home.privacy') }}</p>
 
     <button class="home__open home__open--icon" type="button" :title="tr('home.openFile')" @click="emit('open-file')"><ActionIcon name="openFolder" /></button>
+
+    <!-- 对话入口（`FR-AI-25` 第一片）：开的是**工作区页签**，不是侧栏、不是弹层 -->
+    <button class="home__chat" type="button" data-testid="home-chat" @click="emit('open-chat')">
+      <ActionIcon name="chatBubble" />
+      {{ tr('home.chat') }}
+    </button>
 
     <div class="home__columns">
       <!-- ① 最近打开的文件 -->
@@ -169,6 +177,27 @@ function connectionSubtitle(connection: SavedConnection): string {
 }
 
 .home__open:hover {
+  border-color: var(--ds-color-accent-accent);
+}
+
+/* 对话入口：与「打开文件…」同一行、同一套令牌（不另造一套按钮样式） */
+.home__chat {
+  margin: var(--ds-spacing-m) 0 var(--ds-spacing-m) var(--ds-spacing-s);
+  height: var(--ds-metric-control-height);
+  padding: 0 var(--ds-spacing-m);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-text-primary);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-body-size);
+  cursor: pointer;
+}
+
+.home__chat:hover {
   border-color: var(--ds-color-accent-accent);
 }
 

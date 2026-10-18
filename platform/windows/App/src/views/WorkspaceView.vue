@@ -61,6 +61,7 @@ import { dominantEndingLabel, lineNumberText, segmentsForLine, sliceSegments } f
 import { highlightPieces } from '../workspace/highlights'
 import MarkdownPreview from './MarkdownPreview.vue'
 import WorkspaceHome from './WorkspaceHome.vue'
+import ChatPanel from '../shell/ChatPanel.vue'
 // 系统选择器（W-A-1）：Home「打开文件…」用它调起**真**的文件对话框 —— 唯一调用点在 `shell/dialogs.ts`
 import { pickFile } from '../shell/dialogs'
 import {
@@ -482,9 +483,18 @@ interface OpenTab {
   cursorLine: number
   /** 这个位置是**怎么恢复来的**（只有不确定时才提醒用户） */
   cursorHow: 'exact' | 'byAnchor' | 'clamped'
+  /**
+   * 页签种类：`file`（含 Home，默认）/ `chat`（`FR-AI-25` 对话页签）。
+   *
+   * 为什么用可选字段：既有页签全部是文件，加一个必填字段要把十几处构造点全改一遍；
+   * 缺省 = `file` 与既有语义逐字一致（`ChatPanel` 只认 `chat`）。
+   */
+  kind?: 'file' | 'chat'
 }
 
 const HOME_ID = 'home'
+/** 对话页签的固定 id（**只此一个**：同一时刻只开一段对话，不做多会话——那要等会话落盘那一片）。 */
+const CHAT_ID = 'chat'
 
 const root = ref('')
 
@@ -658,6 +668,34 @@ function homeTab(): OpenTab {
     cursorLine: 1,
     cursorHow: 'exact',
   }
+}
+
+/** 对话页签（`FR-AI-25` 第一片）：挂在**工作区页签条**上、占编辑区、可关（与文件页签同列）。 */
+function chatTab(): OpenTab {
+  return {
+    id: CHAT_ID,
+    title: '对话',
+    relativePath: null,
+    content: '',
+    languageKey: 'lang.plainText',
+    saved: '',
+    cursorLine: 1,
+    cursorHow: 'exact',
+    kind: 'chat',
+  }
+}
+
+/**
+ * 打开（或切到）对话页签。
+ *
+ * 同一时刻只开一个：已经开着就**选中它**，不再叠第二个 —— 两段并行的对话会让人分不清
+ * 哪一句发给了哪个上下文（多会话要等「会话按工作区落盘」那一片一起做）。
+ */
+function openChatTab() {
+  if (!tabs.value.some((tab) => tab.kind === 'chat')) {
+    tabs.value = [...tabs.value, chatTab()]
+  }
+  selectedTabId.value = CHAT_ID
 }
 
 async function loadLevel(relativePath: string) {
@@ -868,8 +906,9 @@ function closeTab(id: string) {
   const index = tabs.value.findIndex((t) => t.id === id)
   if (index >= 0) void rememberCursor(tabs.value[index])
   if (index < 0) return
-  const isHome = tabs.value[index].relativePath === null
-  if (isHome) return // Home 关不掉（领域规则）
+  // Home 关不掉（领域规则）；对话页签**可以关**（它只是工作区里的一类页签）。
+  const isHome = tabs.value[index].relativePath === null && tabs.value[index].kind !== 'chat'
+  if (isHome) return
   const remaining = tabs.value.filter((t) => t.id !== id)
   tabs.value = remaining
   if (selectedTabId.value === id) {
@@ -1260,12 +1299,14 @@ function onTreeKeydown(event: KeyboardEvent) {
             <button class="ws__tab-name" type="button" role="tab" :aria-selected="tab.id === selectedTabId" @click="switchTab(tab.id)">
               {{ tabLabel(tab.title, tab.content !== tab.saved) }}
             </button>
-            <button v-if="tab.relativePath !== null" class="ws__tab-close" type="button" title="关闭页签" @click="closeTab(tab.id)">✕</button>
+            <button v-if="tab.relativePath !== null || tab.kind === 'chat'" class="ws__tab-close" type="button" title="关闭页签" @click="closeTab(tab.id)">✕</button>
           </div>
         </div>
 
         <div class="ws__editor">
-          <template v-if="activeTab && activeTab.relativePath === null">
+          <!-- 对话页签（`FR-AI-25` 第一片）：占编辑区、挂在页签条上（**旁路 Home 的文件面**） -->
+          <ChatPanel v-if="activeTab && activeTab.kind === 'chat'" :language="props.language" />
+          <template v-else-if="activeTab && activeTab.relativePath === null">
               <WorkspaceHome
                 :language="props.language"
                 :recent-files="history?.files ?? []"
@@ -1276,6 +1317,7 @@ function onTreeKeydown(event: KeyboardEvent) {
                 @open-file="homeOpenFile"
                 @open-workspace="openRecentWorkspace"
                 @open-connection="homeOpenConnection"
+                @open-chat="openChatTab"
               />
               <p v-if="openHint" class="ws__home-line">{{ openHint }}</p>
             </template>
