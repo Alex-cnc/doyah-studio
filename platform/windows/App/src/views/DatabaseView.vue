@@ -29,6 +29,9 @@ import {
   highlightSql,
   diagnoseSql,
   formatSql,
+  scanSqlParameters,
+  bindSqlParameters,
+  type ParameterScan,
   dbWriteBatch,
   dbPrimaryKey,
   editsToDml,
@@ -90,6 +93,16 @@ import {
   suggestQueryName,
 } from './savedQueries'
 import { serverMenuActions, type ServerMenuAction } from './serverMenu'
+import {
+  PARAM_KINDS,
+  bindingLines,
+  canSubmit,
+  initialRows,
+  missingNames,
+  toValues,
+  unusedHint,
+  type ParamRow,
+} from './queryParams'
 import {
   columnLabel,
   groupByKind,
@@ -927,6 +940,14 @@ interface QueryTab {
   id: string
   title: string
   sql: string
+  /**
+   * 这张页签是不是**正在执行**（`FR-EXEC-07`：执行中的页签不可关闭）。
+   *
+   * 为什么放在页签上而不是用一个全局标记：执行虽然是全局单条，但「哪张页签在跑」
+   * 是有归属的 —— 关错页签会把正在跑的那条结果与它的上下文一起丢掉。
+   * 成功 / 失败 / 取消三条路都在 `finally` 里清掉，不漏一个出口。
+   */
+  running: boolean
 }
 
 /** 页签编号生成器（**只增不减**，编号不复用）。 */
@@ -944,7 +965,12 @@ function queryTabTitle(n: number): string {
 const DEFAULT_QUERY_SQL = 'select id, name, balance from app.accounts order by id limit 20'
 /** 查询页签（至少一张：关到最后一张时按钮是灰的，见模板 `queryTabs.length <= 1`）。 */
 const queryTabs = ref<QueryTab[]>([
-  { id: crypto.randomUUID(), title: queryTabTitle(nextQueryTabNumber()), sql: DEFAULT_QUERY_SQL },
+  {
+    id: crypto.randomUUID(),
+    title: queryTabTitle(nextQueryTabNumber()),
+    sql: DEFAULT_QUERY_SQL,
+    running: false,
+  },
 ])
 /** 当前选中的页签 id（模板里 `tab.id === activeQueryTab` 用它判高亮）。 */
 const activeQueryTab = ref(queryTabs.value[0].id)
@@ -989,18 +1015,44 @@ function selectQueryTab(id: string): void {
 /** 新建一张空页签并选中（编号不复用）。 */
 function newQueryTab(): void {
   stashActiveQuery()
-  const tab: QueryTab = { id: crypto.randomUUID(), title: queryTabTitle(nextQueryTabNumber()), sql: '' }
+  const tab: QueryTab = {
+    id: crypto.randomUUID(),
+    title: queryTabTitle(nextQueryTabNumber()),
+    sql: '',
+    running: false,
+  }
   queryTabs.value.push(tab)
   activeQueryTab.value = tab.id
   sql.value = ''
   afterQueryTabSwitch()
 }
 
-/** 关一张页签：最后一张不许关（模板已按 `queryTabs.length <= 1` 把按钮置灰，这里是**同一口径的兜底**）。 */
+/**
+ * 给某张页签打「正在执行」的标（`FR-EXEC-07`）。
+ *
+ * 唯一的写入口：执行函数在 `try` 前置真、在 `finally` 置假 —— 成功 / 失败 / 取消 / 提前 return
+ * 都走同一个出口，这样才不会有「跑完了但页签永远关不掉」这种反向 bug。
+ */
+function markTabRunning(id: string, running: boolean): void {
+  const tab = queryTabs.value.find((item) => item.id === id)
+  if (tab) tab.running = running
+}
+
+/** 页签条上的一句回执（被拦下的操作要**说出为什么**，不能只是没反应）。 */
+const tabNote = ref('')
+
+/** 关一张页签：最后一张不许关；**执行中的页签也不许关**（`FR-EXEC-07`）。 */
 function closeQueryTab(id: string): void {
   if (queryTabs.value.length <= 1) return
+  const target = queryTabs.value.find((tab) => tab.id === id)
+  // 执行中：按钮已置灰，这里是**同一口径的兜底**（键盘 / 程序化调用也拦得住），并给出可见原因
+  if (target?.running) {
+    tabNote.value = t('sql.tabRunningBlocked', { title: target.title })
+    return
+  }
   const index = queryTabs.value.findIndex((tab) => tab.id === id)
   if (index < 0) return
+  tabNote.value = ''
   const wasActive = activeQueryTab.value === id
   queryTabs.value.splice(index, 1)
   if (!wasActive) return
@@ -1103,7 +1155,7 @@ function refillSavedQuery(query: SavedQuery, intoNewTab: boolean): void {
   closeSaveQueryPanel()
   if (intoNewTab) {
     stashActiveQuery()
-    const tab: QueryTab = { id: crypto.randomUUID(), title: query.name, sql: query.sql }
+    const tab: QueryTab = { id: crypto.randomUUID(), title: query.name, sql: query.sql, running: false }
     queryTabs.value.push(tab)
     activeQueryTab.value = tab.id
     sql.value = query.sql
@@ -1673,16 +1725,147 @@ async function loadTables() {
   await loadSchemas()
 }
 
+// ── 查询参数填值面板（FR-EXEC-17）──────────────────────────────────────────────────────
+//
+// 口径（都在判据里）：
+// ① **有占位符才弹**：没参数的一条普通查询不该被面板打断；
+// ② **缺值不许执行**：缺哪个一次说全（与领域层 `BindError::Missing` 同一个口径）；
+// ③ **绑定结果只用于本次执行**：编辑器里的 `:name` / `$1` 原样留着 —— 它是可复用的模板；
+// ④ 类型**用户选**、默认文本（猜类型的代价是整条语句失败）。
+
+/** 面板开着没。 */
+const paramOpen = ref(false)
+/** 待执行的原文（占位符还在），绑定基于它。 */
+const paramText = ref('')
+/** 这一次执行走哪条路（单条 / 批量 / EXPLAIN ANALYZE）。 */
+const paramMode = ref<'run' | 'batch' | 'analyze'>('run')
+/** 面板上的参数行。 */
+const paramRows = ref<ParamRow[]>([])
+const paramError = ref('')
+const paramBusy = ref(false)
+/** 绑定回执（说清每个参数变成了什么）。 */
+const paramNote = ref('')
+const paramNoteBad = ref(false)
+
+function openParameterPanel(text: string, scan: ParameterScan, mode: 'run' | 'batch' | 'analyze'): void {
+  paramText.value = text
+  paramMode.value = mode
+  paramRows.value = initialRows(scan.sites)
+  paramError.value = ''
+  paramNote.value = ''
+  paramNoteBad.value = false
+  paramOpen.value = true
+}
+
+function closeParameterPanel(): void {
+  paramOpen.value = false
+  paramRows.value = []
+  paramError.value = ''
+}
+
+/** 取消 = 这条语句**没有执行**（说出来，别让人以为已经跑过了）。 */
+function cancelParameters(): void {
+  closeParameterPanel()
+  paramNote.value = t('sql.params.cancelled')
+  paramNoteBad.value = false
+}
+
+/** 提交：绑定 → 执行（绑定失败就停在面板里，不去打扰服务端）。 */
+async function submitParameters(): Promise<void> {
+  const missing = missingNames(paramRows.value)
+  if (missing.length) {
+    paramError.value = t('sql.params.missing', { names: missing.join('、') })
+    return
+  }
+  paramBusy.value = true
+  paramError.value = ''
+  try {
+    const bound = await bindSqlParameters(paramText.value, toValues(paramRows.value))
+    const list = bindingLines(bound)
+      .map((line) => t('sql.params.boundLine', { name: line.name, kind: t(kindLabelKey(line.kind)), literal: line.literal }))
+      .join('；')
+    paramNote.value = t('sql.params.bound', { list })
+    const unused = unusedHint(bound)
+    if (unused) {
+      // 多半是拼错：**说**出来，但不拦执行（SQL 里没有那个参数，执行本身是安全的）
+      paramNote.value = `${paramNote.value} ${t('sql.params.unused', { names: unused })}`
+      paramNoteBad.value = true
+    } else {
+      paramNoteBad.value = false
+    }
+    const text = bound.sql
+    closeParameterPanel()
+    await executeText(text, paramMode.value)
+  } catch (e) {
+    paramError.value = t('sql.params.failed', { reason: describeError(e).message })
+  } finally {
+    paramBusy.value = false
+  }
+}
+
+/** 类型下拉的文案键（面板与回执共用一处）。 */
+function kindLabelKey(kind: ParamRow['kind']): 'sql.params.kind.text' | 'sql.params.kind.number' | 'sql.params.kind.boolean' | 'sql.params.kind.null' {
+  switch (kind) {
+    case 'number':
+      return 'sql.params.kind.number'
+    case 'boolean':
+      return 'sql.params.kind.boolean'
+    case 'null':
+      return 'sql.params.kind.null'
+    default:
+      return 'sql.params.kind.text'
+  }
+}
+
+/** 面板能不能点「执行」（缺一个就不许 —— 模板与兜底同一个判据）。 */
+const paramReady = computed(() => canSubmit(paramRows.value))
+
+/**
+ * **执行入口的闸**：先扫占位符 —— 有就弹面板，没有就直接执行。
+ *
+ * 扫描失败（IPC 异常）时**不拦执行**也不装作没事：记一句失败，然后照常执行
+ * （此时占位符会由服务端报语法错，用户至少看得到真实原因）。
+ */
+async function beginExecution(text: string, mode: 'run' | 'batch' | 'analyze'): Promise<void> {
+  try {
+    const scan = await scanSqlParameters(text)
+    if (scan.sites.length > 0) {
+      openParameterPanel(text, scan, mode)
+      return
+    }
+  } catch (e) {
+    failure.value = describeError(e)
+  }
+  await executeText(text, mode)
+}
+
+/** 按路子执行（绑定后的语句 / 无参数语句都走这里）。 */
+async function executeText(text: string, mode: 'run' | 'batch' | 'analyze'): Promise<void> {
+  if (mode === 'run') {
+    await runText(text)
+  } else {
+    await runBatchText(text, mode === 'analyze')
+  }
+}
+
 async function run() {
+  // FR-EXEC-14 同一口径（单条执行也认选区）；FR-EXEC-17 先在 `beginExecution` 里看有没有参数
+  await beginExecution(currentExecutionSql(), 'run')
+}
+
+/** 单条执行（**已定文本**）：页签的「执行中」标在 `finally` 里清，三个出口都不漏。 */
+async function runText(text: string): Promise<void> {
+  const tabId = activeQueryTab.value
+  markTabRunning(tabId, true)
   busy.value = '执行中…'
   clearFailure()
   try {
-    // FR-EXEC-14 同一口径（单条执行也认选区）
-    result.value = await dbQuery(currentExecutionSql())
+    result.value = await dbQuery(text)
   } catch (e) {
     result.value = null
     failure.value = describeError(e)
   } finally {
+    markTabRunning(tabId, false)
     busy.value = ''
   }
 }
@@ -2407,18 +2590,26 @@ function currentExecutionSql(): string {
 
 /** **多段执行**：一次提交多条，逐段报告；显示"先看失败、否则看最后一句"。 */
 async function runBatch(analyze: boolean) {
+  // FR-EXEC-17：有占位符先填值（EXPLAIN 那条路也一样 —— 占位符原样发给服务端只会报语法错）
+  await beginExecution(currentExecutionSql(), analyze ? 'analyze' : 'batch')
+}
+
+/** 多段执行（**已定文本**）：与 `runText` 同一口径 —— 执行中标在 `finally` 里清。 */
+async function runBatchText(text: string, analyze: boolean) {
+  const tabId = activeQueryTab.value
+  markTabRunning(tabId, true)
   busy.value = analyze ? '生成并执行计划…' : '执行中…'
   clearFailure()
   try {
     // FR-EXEC-14：有选区只跑选中的那段（用户框出来就是要跑那段）。
-    let text = currentExecutionSql()
+    let pending = text
     if (analyze) {
       // EXPLAIN 只对单条：多段会被拒（并说明为什么），这里如实把拒绝端出来
-      text = await explainStatement(sql.value, true)
+      pending = await explainStatement(pending, true)
     } else {
       // **危险语句先要确认**（1.4）：无 WHERE 的 UPDATE/DELETE、DROP、TRUNCATE。
       // 判定在领域层（只认能确凿认出来的），界面只负责弹框；只读连接会被判 forbidden、直接拒。
-      const risk = await statementRisk(text)
+      const risk = await statementRisk(pending)
       if (risk === 'forbidden') {
         failure.value = {
           message: '这条连接标了只读：写语句不发送。',
@@ -2431,12 +2622,11 @@ async function runBatch(analyze: boolean) {
           '这条语句被判定为破坏性操作（无 WHERE 的写语句，或 DROP / TRUNCATE）。\n\n确认要执行吗？',
         )
         if (!ok) {
-          busy.value = ''
           return
         }
       }
     }
-    outcomes.value = await dbRunBatch(text)
+    outcomes.value = await dbRunBatch(pending)
     const pick = pickDisplayedOutcome(outcomes.value)
     shownOutcome.value = pick
     if (pick !== null) {
@@ -2450,6 +2640,7 @@ async function runBatch(analyze: boolean) {
     outcomes.value = []
     failure.value = describeError(e)
   } finally {
+    markTabRunning(tabId, false)
     busy.value = ''
   }
 }
@@ -3071,8 +3262,15 @@ async function probe() {
             <button
               class="db__qtab-close"
               type="button"
-              :disabled="queryTabs.length <= 1"
-              :title="queryTabs.length <= 1 ? '最后一个页签不能关（要收起来请切到别的视图）' : '关闭这个查询页签'"
+              data-testid="qtab-close"
+              :disabled="queryTabs.length <= 1 || tab.running"
+              :title="
+                tab.running
+                  ? t('sql.tabRunningTip', { title: tab.title })
+                  : queryTabs.length <= 1
+                    ? '最后一个页签不能关（要收起来请切到别的视图）'
+                    : '关闭这个查询页签'
+              "
               @click="closeQueryTab(tab.id)"
             >
               ✕
@@ -3081,7 +3279,57 @@ async function probe() {
           <button class="db__qtab-add" type="button" title="新建查询页签" @click="newQueryTab">
                   <ActionIcon name="plus" />
                 </button>
+          <!-- 被拦下的操作要**说出原因**（`FR-EXEC-07`）：只把按钮置灰而不解释，用户只会以为界面坏了 -->
+          <span v-if="tabNote" class="db__qtab-note" role="alert" data-testid="qtab-note">{{ tabNote }}</span>
         </div>
+        <!-- 查询参数填值面板（FR-EXEC-17）：**有占位符才出现**；缺值不许执行；
+             绑定结果只用于本次执行（编辑器里的 `:name` / `$1` 原样留着）。 -->
+        <form v-if="paramOpen" class="db__params" data-testid="param-panel" @submit.prevent="submitParameters">
+          <div class="db__params-head">
+            <span class="db__params-title">{{ t('sql.params.title', { n: paramRows.length }) }}</span>
+            <span class="db__params-tip">{{ t('sql.params.tip') }}</span>
+          </div>
+          <div v-for="(row, i) in paramRows" :key="row.name" class="db__params-row" :data-testid="`param-row-${i}`">
+            <code class="db__params-name" :data-testid="`param-name-${i}`">{{ row.name }}</code>
+            <span v-if="row.occurrences > 1" class="db__params-count">{{
+              t('sql.params.occurrences', { n: row.occurrences })
+            }}</span>
+            <select
+              v-model="row.kind"
+              class="db__params-kind"
+              :data-testid="`param-kind-${i}`"
+              :aria-label="t('sql.params.kind')"
+            >
+              <option v-for="kind in PARAM_KINDS" :key="kind" :value="kind">{{ t(kindLabelKey(kind)) }}</option>
+            </select>
+            <input
+              v-model="row.value"
+              class="db__params-value"
+              :data-testid="`param-value-${i}`"
+              spellcheck="false"
+              :disabled="row.kind === 'null'"
+              :placeholder="row.kind === 'null' ? t('sql.params.nullHint') : t('sql.params.value')"
+              @input="row.touched = true"
+            />
+          </div>
+          <p v-if="paramError" class="db__params-error" role="alert" data-testid="param-error">{{ paramError }}</p>
+          <div class="db__params-actions">
+            <button
+              class="db__btn db__btn--primary"
+              type="submit"
+              :disabled="!paramReady || paramBusy"
+              data-testid="param-run"
+            >
+              {{ t('sql.params.submit') }}
+            </button>
+            <button class="db__btn" type="button" data-testid="param-cancel" @click="cancelParameters">
+              {{ t('sql.params.cancel') }}
+            </button>
+          </div>
+        </form>
+        <p v-if="paramNote" class="db__params-note" :class="{ 'db__params-note--bad': paramNoteBad }" role="status" data-testid="param-note">{{
+          paramNote
+        }}</p>
         <form class="db__sql" @submit.prevent="runBatch(false)">
           <!-- 编辑面：**高亮层在下面（透明文字）+ 真 textarea 在上面**。
                两层共用同一份字体与内边距（否则光标与字会错位，这是这种做法的经典坑）。 -->
@@ -5034,6 +5282,92 @@ th.db__grid-head[style] {
 
 .db__qtab-add:hover {
   color: var(--ds-color-accent-accent);
+}
+
+/* 页签条上的拦截回执（FR-EXEC-07）：置灰的按钮旁边必须有一句话说明为什么 */
+.db__qtab-note {
+  margin-left: var(--ds-spacing-s);
+  color: var(--ds-color-status-warning);
+  font-size: var(--ds-font-caption-size);
+}
+
+/* 查询参数填值面板（FR-EXEC-17）：行 = 名字 + 次数 + 类型 + 值 */
+.db__params {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+  margin: 0 0 var(--ds-spacing-xs);
+  padding: var(--ds-spacing-s);
+  background: var(--ds-color-surface-content);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__params-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ds-spacing-s);
+}
+
+.db__params-title {
+  color: var(--ds-color-text-primary);
+  font-weight: 600;
+}
+
+.db__params-tip {
+  color: var(--ds-color-text-secondary);
+}
+
+.db__params-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+}
+
+.db__params-name {
+  min-width: 12ch;
+  color: var(--ds-color-accent-accent);
+}
+
+.db__params-count {
+  color: var(--ds-color-text-secondary);
+}
+
+.db__params-kind,
+.db__params-value {
+  padding: 0 var(--ds-spacing-xs);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__params-value {
+  flex: 1;
+  min-width: 16ch;
+}
+
+.db__params-error {
+  margin: 0;
+  color: var(--ds-color-status-danger);
+}
+
+.db__params-actions {
+  display: flex;
+  gap: var(--ds-spacing-s);
+}
+
+.db__params-note {
+  margin: 0 0 var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+
+.db__params-note--bad {
+  color: var(--ds-color-status-warning);
 }
 
 .db__context {

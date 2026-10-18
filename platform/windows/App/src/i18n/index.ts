@@ -456,6 +456,40 @@ export const DICT = {
   'sql.format.empty': { 'zh-Hans': '编辑器里没有 SQL 可格式化', en: 'Nothing to format in the editor' },
   'sql.format.failed': { 'zh-Hans': '格式化没有跑成：{reason}', en: 'Formatting failed: {reason}' },
   'sql.format.dismiss': { 'zh-Hans': '知道了', en: 'Dismiss' },
+
+  // 查询参数（FR-EXEC-17）：填值面板 + 执行中页签不可关闭的说明
+  'sql.params.title': { 'zh-Hans': '这条语句有 {n} 个参数，先填值', en: 'This statement has {n} parameter(s) — fill them in first' },
+  'sql.params.tip': {
+    'zh-Hans': '编辑器里的占位符不会被替换；绑定只用于这一次执行。',
+    en: 'The placeholders in the editor stay as they are; binding applies to this run only.',
+  },
+  'sql.params.occurrences': { 'zh-Hans': '出现 {n} 次', en: 'appears {n} times' },
+  'sql.params.kind': { 'zh-Hans': '类型', en: 'type' },
+  'sql.params.value': { 'zh-Hans': '值', en: 'value' },
+  'sql.params.kind.text': { 'zh-Hans': '文本', en: 'text' },
+  'sql.params.kind.number': { 'zh-Hans': '数字', en: 'number' },
+  'sql.params.kind.boolean': { 'zh-Hans': '布尔', en: 'boolean' },
+  'sql.params.kind.null': { 'zh-Hans': 'NULL', en: 'NULL' },
+  'sql.params.nullHint': { 'zh-Hans': 'NULL 不需要填值', en: 'NULL needs no value' },
+  'sql.params.missing': { 'zh-Hans': '还缺这些参数：{names}', en: 'Still missing values for: {names}' },
+  'sql.params.submit': { 'zh-Hans': '填好，执行', en: 'Run with these values' },
+  'sql.params.cancel': { 'zh-Hans': '取消', en: 'Cancel' },
+  'sql.params.cancelled': { 'zh-Hans': '已取消：这条语句没有执行。', en: 'Cancelled: nothing was executed.' },
+  'sql.params.bound': { 'zh-Hans': '参数已绑定：{list}', en: 'Parameters bound: {list}' },
+  'sql.params.boundLine': { 'zh-Hans': '{name} → {kind} {literal}', en: '{name} → {kind} {literal}' },
+  'sql.params.unused': {
+    'zh-Hans': '另外还给了 SQL 里没有的参数：{names}（可能是拼错）。',
+    en: 'Also got values for parameters the SQL does not use: {names} (probably a typo).',
+  },
+  'sql.params.failed': { 'zh-Hans': '绑定没有成功：{reason}', en: 'Binding failed: {reason}' },
+  'sql.tabRunningTip': {
+    'zh-Hans': '{title} 正在执行查询，不能关闭（等它跑完，或点「取消」）',
+    en: '{title} is running a query and cannot be closed (wait for it, or press Cancel)',
+  },
+  'sql.tabRunningBlocked': {
+    'zh-Hans': '{title} 正在执行查询：不能关闭。要停下请先点「取消」。',
+    en: '{title} is running a query: it cannot be closed. Press Cancel to stop it first.',
+  },
   // 查找 / 替换条（FR-EDIT-18）：读数与"没有匹配"都必须写出来 —— 安静不是结论
   'sql.find.label': { 'zh-Hans': '查找', en: 'Find' },
   'sql.find.replaceLabel': { 'zh-Hans': '替换为', en: 'Replace with' },

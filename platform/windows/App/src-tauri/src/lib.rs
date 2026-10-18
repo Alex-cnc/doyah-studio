@@ -38,6 +38,7 @@ use tauri::State;
 use tokio::sync::Mutex as AsyncMutex;
 
 use doyah_studio_db::db_type::DatabaseType;
+use doyah_studio_db::sql_params;
 
 /// 外壳状态：视图缓存（数据集 + 排序置换）+ 当前数据库会话。tauri 里跨命令共享的可变状态。
 ///
@@ -1764,6 +1765,24 @@ fn sql_format(sql: String, prefer_builtin: Option<bool>) -> format_tool::FormatO
     )
 }
 
+#[tauri::command]
+fn sql_parameters(sql: String) -> sql_params::ScanOutcome {
+    sql_params::scan(&sql)
+}
+
+/// 把参数值**绑定**进语句（`FR-EXEC-17`）。
+///
+/// 返回的是**只用于本次执行**的语句：编辑器里那行占位符原样留着（可复用模板）。
+/// 缺值 / 填错在绑定前就拦下（`Missing` 一次报全，`BadValue` 点明是哪个参数）——
+/// 不把半成品丢给服务端替我们报语法错。
+#[tauri::command]
+fn sql_bind_parameters(
+    sql: String,
+    values: Vec<sql_params::ParamValue>,
+) -> Result<sql_params::BindOutcome, String> {
+    sql_params::bind(&sql, &values).map_err(|error| error.to_string())
+}
+
 // ── 内置终端（W-C 底部终端 · S-9a 起 PTY，S-9c 起**经领域层**）：四条命令，本文件不碰 PTY 库 ──
 //
 // S-9c 起命令走 `terminal_bridge::`：真字节喂进领域层屏幕模型（`TerminalScreen`）、
@@ -1866,6 +1885,8 @@ pub fn run() {
             highlight_sql,
             diagnose_sql,
             sql_format,
+            sql_parameters,
+            sql_bind_parameters,
             db_write_batch,
             db_primary_key,
             edits_to_dml,

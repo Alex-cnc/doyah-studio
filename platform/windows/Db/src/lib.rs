@@ -37,6 +37,7 @@ pub mod save_guard;
 pub mod saved_query;
 pub mod search;
 pub mod sql;
+pub mod sql_params;
 pub mod staleness;
 pub mod text_index;
 pub mod title_bar_search;
@@ -93,6 +94,11 @@ pub use search::{
     DEFAULT_PER_FILE_LIMIT, DEFAULT_RESULT_LIMIT, DEFAULT_SNIPPET_LIMIT,
 };
 pub use sql::{explain, spans, tokenize, StatementSpan, Token, TokenKind};
+pub use sql_params::{
+    bind as bind_parameters, scan as scan_parameters, BindError as ParameterBindError,
+    BindOutcome as ParameterBindOutcome, BoundParam as BoundParameter, ParamKind, ParamSite,
+    ParamValue, ScanOutcome as ParameterScan,
+};
 pub use ddl::{
     add_foreign_key, alter_table, create_index, drop_constraint, drop_index, drop_table,
     executable_subset, has_destructive, ColumnChange, ColumnDef as DdlColumnDef, DdlError,

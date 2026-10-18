@@ -48,6 +48,8 @@ describe('ipc', () => {
       'highlight_sql',
       'diagnose_sql',
       'sql_format',
+      'sql_parameters',
+      'sql_bind_parameters',
       'db_write_batch',
       'db_primary_key',
       'edits_to_dml',

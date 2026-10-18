@@ -57,6 +57,9 @@ export const COMMANDS = {
   diagnoseSql: 'diagnose_sql',
   // 格式化 SQL（FR-EDIT-22）：查询编辑面没有文件 ⇒ 单独一条命令（语言固定 SQL、无路径检查）
   sqlFormat: 'sql_format',
+  // 查询参数（FR-EXEC-17）：扫描占位符 / 绑定值 —— 两条都是纯函数，不碰连接
+  sqlParameters: 'sql_parameters',
+  sqlBindParameters: 'sql_bind_parameters',
   // 写回与事务（1.4：一批一次事务 / 主键定位 / 只读拦截 / 危险语句判定）
   dbWriteBatch: 'db_write_batch',
   dbPrimaryKey: 'db_primary_key',
@@ -1902,6 +1905,58 @@ export function formatSql(sql: string, preferBuiltin = false): Promise<FormatOut
     engine: 'refused',
     problem: 'browser',
   }))
+}
+
+// ── 查询参数（FR-EXEC-17）───────────────────────────────────────────────────────────────
+//
+// 两条命令都是**纯函数**（扫描 / 绑定），不碰连接：界面在执行前先扫一次决定「弹不弹填值面板」，
+// 用户填完再绑定，绑定结果**只用于本次执行**（编辑器里的占位符原样留着 —— 它是可复用的模板）。
+//
+// 为什么类型要用户选而不是界面猜：`where name = :name` 填 `2`，猜成数字会得到 `text = integer`，
+// 整条语句失败；猜成文本则永远成立。所以默认文本，数字 / 布尔 / NULL 都要用户明确选。
+
+/** 参数值写进语句时的类型（**用户选**，不猜）。 */
+export type ParamKind = 'text' | 'number' | 'boolean' | 'null'
+
+/** 一个参数站点（去重后）。 */
+export interface ParamSite {
+  name: string
+  occurrences: number
+  positional: boolean
+}
+
+export interface ParameterScan {
+  sites: ParamSite[]
+  hasParameters: boolean
+}
+
+export interface ParamValue {
+  name: string
+  value: string
+  kind: ParamKind
+}
+
+export interface BoundParameter {
+  name: string
+  occurrences: number
+  kind: ParamKind
+  literal: string
+}
+
+export interface ParameterBindOutcome {
+  sql: string
+  params: BoundParameter[]
+  unused: string[]
+}
+
+/** 扫一遍 SQL 里的 `:name` / `$1`（字符串 / 注释 / dollar-quote 里的一律不算）。 */
+export function scanSqlParameters(sql: string): Promise<ParameterScan> {
+  return call(COMMANDS.sqlParameters, { sql }, () => ({ sites: [], hasParameters: false }))
+}
+
+/** 绑定参数（缺值 / 数字格式不对时**抛错**，错误话直接可显示）。 */
+export function bindSqlParameters(sql: string, values: ParamValue[]): Promise<ParameterBindOutcome> {
+  return call(COMMANDS.sqlBindParameters, { sql, values }, () => ({ sql, params: [], unused: [] }))
 }
 
 // ── 内置终端（W-C 底部终端 · 2.7 · S-9b）：界面侧的四个包装 ───────────────────────────────
