@@ -227,6 +227,50 @@ final class AgentLoopTests: XCTestCase {
                      "没有必填项的工具，空参数就是合法调用")
     }
 
+    // MARK: - ⑦ 界面口径（`FR-AI-18` ②③④）：机器码 ↔ 人话之间只有一处解析
+
+    /// `reason` 是循环与界面之间唯一的约定 ⇒ **写得出去也要读得回来**（改了格式两边一起改）。
+    func testStopReasonParsesBackToTheSameStop() {
+        let stops: [AgentLoopStop] = [
+            .stepLimit(3), .tokenLimit(10), .cancelled, .quotaLimit("requestLimit:3/3"),
+        ]
+        for stop in stops {
+            XCTAssertEqual(AgentLoopStop.parse(reason: stop.reason), stop,
+                           "\(stop.reason) 要能原样解析回同一个停止方式")
+        }
+        // 负例：认不出就 `nil`（不猜、不把陌生码当取消 —— 否则界面会把别的事故说成「用户取消」）。
+        for bogus in ["", "stepLimit:", "stepLimit:3x", "tokenLimit: 10", "quotaLimit:",
+                      "cancelledx", "StepLimit:3", "删库"] {
+            XCTAssertNil(AgentLoopStop.parse(reason: bogus), "\(bogus) 不该解析出停止方式")
+        }
+    }
+
+    /// 循环真跑出来的读数也要能被界面那条渲染路认出来（防「Core 改了格式、界面还是原样印机器码」）。
+    func testLoopStopOutcomeIsParseableByTheRenderer() async {
+        let forever = (0..<5).map { _ in toolEvent(name: "read_file", arguments: #"{"path":"a.txt"}"#) }
+        let limited = AgentLoop(client: ScriptedStreamingClient(forever), dispatcher: RecordingDispatcher(),
+                                sessionStore: store, limits: AgentLoopLimits(maxSteps: 2))
+        let stepped = await limited.run(context: context)
+        guard case .stopped(let stepStop) = stepped.outcome else {
+            return XCTFail("该如实停，实际 \(stepped.outcome)")
+        }
+        XCTAssertEqual(AgentLoopStop.parse(reason: stepStop.reason), .stepLimit(2))
+
+        let cancelledClient = ScriptedStreamingClient([
+            toolEvent(name: "read_file", arguments: #"{"path":"a.txt"}"#),
+            [.textDelta("不该走到这一跳"), .done],
+        ])
+        let counter = Counter()
+        let stopped = await AgentLoop(client: cancelledClient, dispatcher: RecordingDispatcher(),
+                                      sessionStore: store)
+            .run(context: context, isCancelled: { counter.next() > 1 })
+        guard case .stopped(let cancelStop) = stopped.outcome else {
+            return XCTFail("取消该如实停，实际 \(stopped.outcome)")
+        }
+        XCTAssertEqual(AgentLoopStop.parse(reason: cancelStop.reason), .cancelled,
+                       "界面上要能翻成「用户取消」，不是原样印 cancelled")
+    }
+
     private final class Counter: @unchecked Sendable {
         private var value = 0
         func next() -> Int { value += 1; return value }

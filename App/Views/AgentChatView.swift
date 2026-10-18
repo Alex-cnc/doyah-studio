@@ -128,12 +128,21 @@ struct AgentChatView: View {
         case "monitor:budgetApproaching": return L(.agentChatMonitorBudgetApproaching)
         case "monitor:budgetExhausted": return L(.agentChatMonitorBudgetExhausted)
         default:
-            // `NFR-AI-04`：配额把这个请求拦在发送之前 —— 把「是哪个上限、用掉多少」原样带出来，
-            // 而不是一句「停了」（配额自己那句话就是原因）。
-            let quotaPrefix = "quotaLimit:"
-            if code.hasPrefix(quotaPrefix) {
-                return L(.agentChatQuotaStopped, String(code.dropFirst(quotaPrefix.count)))
+            // `FR-AI-18` ②③④：循环「如实停」的三种机器码（`stepLimit:3` / `tokenLimit:10` /
+            // `cancelled`）此前落到这里原样印出去 ⇒ 界面上写着 `cancelled`，人既看不懂也看不出
+            // 是不是自己按的停。解析只认 Core 的那一处（`AgentLoopStop.parse(reason:)`），
+            // 本函数只负责把解析结果翻成话 —— 前缀判断不许在这里写第二份。
+            if let stop = AgentLoopStop.parse(reason: code) {
+                switch stop {
+                // 实参一律**显式构造**（`Int(...)` / `String(...)`）：本仓的类型判定只认类型级与
+                // 全局函数，模式绑定变量（`let limit`）它判不出类型 ⇒ 会把 `%d` 槽喂进未登记形状。
+                case .cancelled: return L(.agentChatStopCancelled)
+                case .stepLimit(let limit): return L(.agentChatStopStepLimit, Int(limit))
+                case .tokenLimit(let limit): return L(.agentChatStopTokenLimit, Int(limit))
+                case .quotaLimit(let detail): return L(.agentChatQuotaStopped, String(detail))
+                }
             }
+            // 认不出的码原样交回（宁可见机器码，也不假装成别的话 —— 但已知的四种一个都不许落到这里）。
             return code
         }
     }

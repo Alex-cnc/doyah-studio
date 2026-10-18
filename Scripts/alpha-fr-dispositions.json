@@ -1,1020 +1,1036 @@
 {
-  "version": 1,
-  "release": "v0.2.0-alpha",
-  "updatedAt": "2026-10-18",
-  "rule": "FR 🟡 逐条判定（队列 L-69 条件 ③）：能机器验的补证据（脚本 + 断言数，可复跑）；不能机器验的（需人工点击 / 需真机 / 需外部实例）逐条标 [alpha 不含]，状态格仍 🟡 不改 ✅。",
-  "reasonBranches": {
-    "environment": "本机物理不可能：无实例 / 无扩展 / 无二进制 / 沙箱限制（v0.1.0-alpha 同一批，标记沿用）",
-    "ui-click": "界面点击 / 观感只能人工（需求提出者点验批次）",
-    "device-instance": "需真机 / 外部实例 / 外部软件",
-    "not-implemented": "本 alpha 明确不含的未做功能",
-    "needs-decision": "等需求提出者拍板",
-    "open-defect": "点验发现的缺陷，已开队列条（修完复验后才可能销）"
-  },
-  "items": [
-    {
-      "id": "FR-AI-03",
-      "domain": "3.12 AI 智能体",
-      "reason": "device-instance",
-      "reasonText": "真实模型端点未接（需端点与凭据）；界面入口待人工点验",
-      "marker": "**[alpha 不含]**（真实模型端点未接（需端点与凭据）；界面入口待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/run-no-endpoint-evidence.sh"
-        },
-        {
-          "path": "Scripts/test-diagnosis.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-04",
-      "domain": "3.12 AI 智能体",
-      "reason": "device-instance",
-      "reasonText": "真实模型端点未接（需端点与凭据）；界面入口待人工点验",
-      "marker": "**[alpha 不含]**（真实模型端点未接（需端点与凭据）；界面入口待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/run-no-endpoint-evidence.sh"
-        },
-        {
-          "path": "Scripts/test-maintenance.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-07",
-      "domain": "3.12 AI 智能体",
-      "reason": "ui-click",
-      "reasonText": "合成数据面板界面点击待人工点验（真机往返已验）",
-      "marker": "**[alpha 不含]**（合成数据面板界面点击待人工点验（真机往返已验））",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-synthetic-data.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-10",
-      "domain": "3.12 AI 智能体",
-      "reason": "not-implemented",
-      "reasonText": "host 方向仍为批处理式且 resources/read 未做；真 MCP 对端待外部实例",
-      "marker": "**[alpha 不含]**（host 方向仍为批处理式且 resources/read 未做；真 MCP 对端待外部实例）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/run-no-endpoint-evidence.sh"
-        },
-        {
-          "path": "Scripts/test-mcp.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-11",
-      "domain": "3.12 AI 智能体",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-spec-versioning.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-12",
-      "domain": "3.12 AI 智能体",
-      "reason": "device-instance",
-      "reasonText": "注入端到端未验（缺模型端点与实例）；连接权限的客户端校验未做",
-      "marker": "**[alpha 不含]**（注入端到端未验（缺模型端点与实例）；连接权限的客户端校验未做）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-14",
-      "domain": "3.12 AI 智能体",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-routine-candidates.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-15",
-      "domain": "3.12 AI 智能体",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-memory-governance.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-17",
-      "domain": "3.12 AI 智能体",
-      "reason": "device-instance",
-      "reasonText": "会话持久化已接线（每跳落 .jsonl）；**界面回放需人工点验**",
-      "marker": "**[alpha 不含]**（会话持久化已接线（每跳落 .jsonl）；**界面回放需人工点验**）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/AgentContextTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-20",
-      "domain": "3.12 AI 智能体",
-      "reason": "device-instance",
-      "reasonText": "六个 MVP 工具已全部接线（query_db 只回结构 / 行数 / 语句类型 —— 行数据不出本机）；**端到端需真实模型端点与凭据**",
-      "marker": "**[alpha 不含]**（六个 MVP 工具已全部接线（query_db 只回结构 / 行数 / 语句类型 —— 行数据不出本机）；**端到端需真实模型端点与凭据**）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/AgentContextTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-22",
-      "domain": "3.12 AI 智能体",
-      "reason": "device-instance",
-      "reasonText": "上下文第一批（表结构摘要 + 活跃页签）已挂载；文件 / 选中 / 终端尾部三类待接；**端到端需真实模型端点**",
-      "marker": "**[alpha 不含]**（上下文第一批（表结构摘要 + 活跃页签）已挂载；文件 / 选中 / 终端尾部三类待接；**端到端需真实模型端点**）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/AgentContextTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-28",
-      "domain": "3.12 AI 智能体",
-      "reason": "device-instance",
-      "reasonText": "门控已交付（同指纹不重复发请求、挡下留痕可导出）；**界面「仍然发送」按钮待接**，端到端需真实端点",
-      "marker": "**[alpha 不含]**（门控已交付（同指纹不重复发请求、挡下留痕可导出）；**界面「仍然发送」按钮待接**，端到端需真实端点）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/AgentInvocationGateTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-CONN-15",
-      "domain": "3.1 连接与凭据",
-      "reason": "open-defect",
-      "reasonText": "2026-09-27 点验未过：折叠状态活不过一次活动栏切换，已开队列 L-59，修完复验",
-      "marker": "**[alpha 不含]**（2026-09-27 点验未过：折叠状态活不过一次活动栏切换，已开队列 L-59，修完复验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-connection-groups.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-CONN-18",
-      "domain": "3.1 连接与凭据",
-      "reason": "environment",
-      "reasonText": "仅剩真跳板机的真实握手待环境（「沙箱下不能起 ssh」那条已随 2026-09-29 拍板消解）",
-      "marker": "**[alpha 不含]**（仅剩真跳板机的真实握手待环境）",
-      "markerPreExisting": true,
-      "evidence": [
-        {
-          "path": "Scripts/test-ssh-tunnel.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-DATA-02",
-      "domain": "3.5 数据编辑与写回",
-      "reason": "ui-click",
-      "reasonText": "界面呈现待人工点验",
-      "marker": "**[alpha 不含]**（界面呈现待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-table-structure.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-DATA-05",
-      "domain": "3.5 数据编辑与写回",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-row-detail.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-DATA-06",
-      "domain": "3.5 数据编辑与写回",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-fk-navigation.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-DDL-03",
-      "domain": "3.6 表结构与 DDL",
-      "reason": "ui-click",
-      "reasonText": "界面呈现待人工点验",
-      "marker": "**[alpha 不含]**（界面呈现待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-table-index-fk.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-DDL-04",
-      "domain": "3.6 表结构与 DDL",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-schema-diff.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-DIAG-03",
-      "domain": "3.7 性能与诊断",
-      "reason": "environment",
-      "reasonText": "本机 pgserver 精简构建无扩展目录 → pg_stat_statements 装不上",
-      "marker": "**[alpha 不含]**（本机 pgserver 精简构建无扩展目录 → pg_stat_statements 装不上）",
-      "markerPreExisting": true,
-      "evidence": [
-        {
-          "path": "Scripts/test-slow-queries.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-DIAG-04",
-      "domain": "3.7 性能与诊断",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-database-stats.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-DRV-08",
-      "domain": "3.10 驱动与方言兼容",
-      "reason": "environment",
-      "reasonText": "无 GBase 8a 实例（方言层与驱动已实现，未端到端验）",
-      "marker": "**[alpha 不含]**（无 GBase 8a 实例（方言层与驱动已实现，未端到端验））",
-      "markerPreExisting": true,
-      "evidence": [
-        {
-          "path": "Scripts/test-mysql-driver.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-25",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/check-palette-wiring.py"
-        },
-        {
-          "path": "Scripts/test-command-palette.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-26",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "主题三态 / 字体字号观感需人工看一眼",
-      "marker": "**[alpha 不含]**（主题三态 / 字体字号观感需人工看一眼）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        },
-        {
-          "path": "Scripts/make-ui-snapshots.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-27",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        },
-        {
-          "path": "Scripts/make-ui-snapshots.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-29",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "environment",
-      "reasonText": "sixel / kitty 图形未做；界面未人工验收（多会话页签的界面与判定均已交付、待点验）；「沙箱下 ^C 不可靠」那条已随 2026-09-29 拍板消解",
-      "marker": "**[alpha 不含]**（sixel / kitty 图形未做；界面未人工验收（多会话页签的界面与判定均已交付、待点验）；「沙箱下 ^C 不可靠」那条已随 2026-09-29 拍板消解）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/build-app.sh"
-        },
-        {
-          "path": "Scripts/test-terminal-modes.sh"
-        },
-        {
-          "path": "Scripts/test-terminal-palette.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-34",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "GUI 点击与下载观感待人工点验",
-      "marker": "**[alpha 不含]**（GUI 点击与下载观感待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        },
-        {
-          "path": "Scripts/make-ui-snapshots.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-35",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "界面切换与点击待人工点验",
-      "marker": "**[alpha 不含]**（界面切换与点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/verify-core.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-36",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-workspace-editor.sh"
-        },
-        {
-          "path": "Scripts/verify-all.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-37",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/verify-all.sh"
-        },
-        {
-          "path": "Tests/CommandPaletteTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-38",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "not-implemented",
-      "reasonText": "Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围",
-      "marker": "**[alpha 不含]**（Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/check-language-registry.py"
-        },
-        {
-          "path": "Scripts/test-language-registry-gate.py"
-        },
-        {
-          "path": "Tests/CodeLanguageRegistryTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-39",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "代码格式化的界面点击与观感待人工点验（形态已订正为**只用内置**：不探 `PATH`、不联网；认不出语言与规则空转都如实拒绝）",
-      "marker": "**[alpha 不含]**（界面点击与观感待人工点验；形态 = **只用内置**（2026-10-03 订正，原口径「外部优先 ⇒ 回退内置」已作废），规则与三种结局由 `Tests/CodeFormattingTests.swift` 逐条判）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/CodeFormattingTests.swift"
-        },
-        {
-          "path": "Core/CodeFormatting.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-43",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "not-implemented",
-      "reasonText": "第二片「光标 + 滚动」未交付（在飞 t_849ac541）；第一片「页签集会话恢复」已交付（锚仓 99cc05b）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Core/WorkspaceSession.swift"
-        },
-        {
-          "path": "Tests/WorkspaceSessionTests.swift"
-        },
-        {
-          "path": "App/WorkspaceTabsModel.swift"
-        }
-      ],
-      "marker": "**[alpha 不含]**（第二片「光标 + 滚动」未交付（在飞 `t_849ac541`）；第一片已交付）"
-    },
-    {
-      "id": "FR-EDIT-44",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "工作区标头搜索框的界面点击与观感待人工点验（分组与顺序 / 键盘行走 / 行号换算 / 跳过计数已有 30 条 Core 判据；「点下去真的跳到那一行」需人看）",
-      "marker": "**[alpha 不含]**（界面点击与观感待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/WorkspaceHeaderSearchTests.swift"
-        },
-        {
-          "path": "Tests/WorkspaceSearchContentTests.swift"
-        },
-        {
-          "path": "App/Views/WorkspaceHeaderSearch.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-46",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "关闭有未保存改动的页签 = 确认框：界面点击待人工点验（规则层有 8 例 Core 判据（7 条规则 + 1 条源码判据）—— 干净页签不弹框 / 脏页签弹且动作与顺序固定 / 取消不关 / 保存失败不关 / 丢弃必关；真点关闭按钮看到框、三个动作各点一遍需人看）",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/WorkspaceClosePolicyTests.swift"
-        },
-        {
-          "path": "Core/WorkspaceClose.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-47",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "Markdown 列表续行的界面回车手感待人工点验（规则层有 17 例判据含续行各组；真在编辑器里按回车接着写下一项需人看）",
-      "marker": "**[alpha 不含]**（界面回车手感待人工点验；清单 §10.33）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Core/MarkdownEditing.swift"
-        },
-        {
-          "path": "App/Views/CodeEditorView.swift"
-        },
-        {
-          "path": "Tests/MarkdownEditingTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-48",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "Markdown 任务框勾选翻转（⌘L）的界面按键待人工点验（规则层判据同上；界面 9 步见清单 §10.33）",
-      "marker": "**[alpha 不含]**（界面按键待人工点验；清单 §10.33）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Core/MarkdownEditing.swift"
-        },
-        {
-          "path": "App/Views/CodeEditorView.swift"
-        },
-        {
-          "path": "Tests/MarkdownEditingTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-49",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "Core 逻辑（配对 / 跳引号 / 包选区 / 删整对）与判据已交付；**手感需人工点验**（补不补、光标是否在中间、退格是否删整对、Markdown 里引号是否不补）",
-      "marker": "**[alpha 不含]**（Core 逻辑（配对 / 跳引号 / 包选区 / 删整对）与判据已交付；**手感需人工点验**（补不补、光标是否在中间、退格是否删整对、Markdown 里引号是否不补））",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/CodeAutoPairingTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-51",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "Core 逻辑（注释符只从语言表来、空行不动、取消时连空格一起去掉）与判据已交付；**手感需人工点验**（⌘/ 在中文输入法下是否按键正常）",
-      "marker": "**[alpha 不含]**（Core 逻辑（注释符只从语言表来、空行不动、取消时连空格一起去掉）与判据已交付；**手感需人工点验**（⌘/ 在中文输入法下是否按键正常））",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/CodeCommentToggleTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-EDIT-57",
-      "domain": "3.2 SQL 编辑与执行",
-      "reason": "ui-click",
-      "reasonText": "行内灰字（词法 / SQL / 路径三路）实现全落、行为判据全绿；观感与手感（画法 / 出现时机 / Tab 接受顺不顺手）只能人工点验",
-      "marker": "**[alpha 不含]**（行内灰字的观感与手感（画法 / 出现时机 / Tab 接受顺不顺手）只能人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/InlineGhostCompletionTests.swift"
-        },
-        {
-          "path": "Tests/InlineGhostSQLTests.swift"
-        },
-        {
-          "path": "Tests/InlineGhostPathTests.swift"
-        },
-        {
-          "path": "App/Views/GhostTextOverlay.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-IO-02",
-      "domain": "3.9 导入导出与备份",
-      "reason": "environment",
-      "reasonText": "vendor 驱动只实现 CopyFrom，缺 COPY … TO STDOUT",
-      "marker": "**[alpha 不含]**（vendor 驱动只实现 CopyFrom，缺 COPY … TO STDOUT）",
-      "markerPreExisting": true,
-      "evidence": [
-        {
-          "path": "Scripts/test-cursor-export.sh"
-        },
-        {
-          "path": "Scripts/test-table-export.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-IO-03",
-      "domain": "3.9 导入导出与备份",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-copy-import.sh"
-        },
-        {
-          "path": "Scripts/test-data-import.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-IO-04",
-      "domain": "3.9 导入导出与备份",
-      "reason": "device-instance",
-      "reasonText": "仅剩 217 专用库的真实还原待外部实例（「沙箱下起子进程的临时例外待拍板」那条已随 2026-09-29 拍板消解）",
-      "marker": "**[alpha 不含]**（仅剩 217 专用库的真实还原待外部实例；「沙箱下起子进程的临时例外」那条已随 2026-09-29 拍板消解）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/build-app.sh"
-        },
-        {
-          "path": "Scripts/test-backup-restore.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-IO-05",
-      "domain": "3.9 导入导出与备份",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-restore-resume.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-IO-06",
-      "domain": "3.9 导入导出与备份",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工；真实软件（Excel / Numbers）产出的文件待人工",
-      "marker": "**[alpha 不含]**（界面点击待人工；真实软件（Excel / Numbers）产出的文件待人工）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/make-xlsx-fixtures.py"
-        },
-        {
-          "path": "Scripts/test-data-import.sh"
-        },
-        {
-          "path": "Scripts/test-xlsx-import.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-META-02",
-      "domain": "3.4 对象浏览与元数据",
-      "reason": "environment",
-      "reasonText": "无 GBase 8a 实例 → 端到端 0 次",
-      "marker": "**[alpha 不含]**（无 GBase 8a 实例 → 端到端 0 次）",
-      "markerPreExisting": true,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-META-09",
-      "domain": "3.4 对象浏览与元数据",
-      "reason": "ui-click",
-      "reasonText": "界面未点（展开 / 空态 / 失败态三步已在待人工验收清单 §5）",
-      "marker": "**[alpha 不含]**（界面未点（展开 / 空态 / 失败态三步已在待人工验收清单 §5））",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        },
-        {
-          "path": "Scripts/make-ui-snapshots.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-META-10",
-      "domain": "3.4 对象浏览与元数据",
-      "reason": "ui-click",
-      "reasonText": "失败隔离与重试步骤待人工点验",
-      "marker": "**[alpha 不含]**（失败隔离与重试步骤待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-connection-errors.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-META-12",
-      "domain": "3.4 对象浏览与元数据",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-object-search.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-META-13",
-      "domain": "3.4 对象浏览与元数据",
-      "reason": "ui-click",
-      "reasonText": "界面呈现待人工确认",
-      "marker": "**[alpha 不含]**（界面呈现待人工确认）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-object-ddl.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-META-15",
-      "domain": "3.4 对象浏览与元数据",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        },
-        {
-          "path": "Scripts/make-ui-snapshots.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-PLUG-05",
-      "domain": "3.13 插件装配",
-      "reason": "not-implemented",
-      "reasonText": "验收要点 ①③④未做（源码在本仓，按平台口径非本侧）",
-      "marker": "**[alpha 不含]**（验收要点 ①③④未做（源码在本仓，按平台口径非本侧））",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/check-notes-offline.py"
-        },
-        {
-          "path": "Scripts/test-notes-offline-gate.py"
-        }
-      ]
-    },
-    {
-      "id": "FR-PLUG-08",
-      "domain": "3.13 插件装配",
-      "reason": "ui-click",
-      "reasonText": "界面点击点验待人工；打包项按平台口径非本侧",
-      "marker": "**[alpha 不含]**（界面点击点验待人工；打包项按平台口径非本侧）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/check-note-search-route.py"
-        },
-        {
-          "path": "Scripts/test-note-search-route.py"
-        },
-        {
-          "path": "Scripts/verify-all.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-RES-07",
-      "domain": "3.3 结果集与导出",
-      "reason": "device-instance",
-      "reasonText": "大表实测待人工（NFR-PERF-02 的阻塞）",
-      "marker": "**[alpha 不含]**（大表实测待人工（NFR-PERF-02 的阻塞））",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-RES-08",
-      "domain": "3.3 结果集与导出",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        },
-        {
-          "path": "Scripts/make-ui-snapshots.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-RES-09",
-      "domain": "3.3 结果集与导出",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        },
-        {
-          "path": "Scripts/make-ui-snapshots.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-RES-10",
-      "domain": "3.3 结果集与导出",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/alpha-main-chain-v0.2.sh"
-        },
-        {
-          "path": "Scripts/make-ui-snapshots.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-RES-12",
-      "domain": "3.3 结果集与导出",
-      "reason": "ui-click",
-      "reasonText": "界面粘贴待人工点验",
-      "marker": "**[alpha 不含]**（界面粘贴待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-result-copy.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-RES-13",
-      "domain": "3.3 结果集与导出",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-cursor-export.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-RES-14",
-      "domain": "3.3 结果集与导出",
-      "reason": "device-instance",
-      "reasonText": "Excel / Numbers 打开需人工（外部软件）",
-      "marker": "**[alpha 不含]**（Excel / Numbers 打开需人工（外部软件））",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-xlsx-export.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-SESS-01",
-      "domain": "3.8 会话与服务器管理",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-session-management.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-SESS-02",
-      "domain": "3.8 会话与服务器管理",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-session-management.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-SESS-03",
-      "domain": "3.8 会话与服务器管理",
-      "reason": "ui-click",
-      "reasonText": "界面点击待人工点验",
-      "marker": "**[alpha 不含]**（界面点击待人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Scripts/test-server-objects.sh"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-25",
-      "domain": "3.12 AI 智能体",
-      "reason": "ui-click",
-      "reasonText": "对话页签五项已落（位置 / 流式 / 卡片（含模型与端点）/ 内联审批 / 一步撤销）；界面点击与观感需人工点验",
-      "marker": "**[alpha 不含]**（对话页签五项已落（位置 / 流式 / 卡片（含模型与端点）/ 内联审批 / 一步撤销）；界面点击与观感需人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/AgentEditJournalTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-26",
-      "domain": "3.12 AI 智能体",
-      "reason": "not-implemented",
-      "reasonText": "技能库 Core 已交付（加载校验 / 按需披露 / 渲染，技能不执行工具）；登记档数据与界面入口待接；端到端需真实模型端点",
-      "marker": "**[alpha 不含]**（技能库 Core 已交付（加载校验 / 按需披露 / 渲染，技能不执行工具）；登记档数据与界面入口待接；端到端需真实模型端点）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/AgentSkillLibraryTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-27",
-      "domain": "3.12 AI 智能体",
-      "reason": "ui-click",
-      "reasonText": "定时 agent Core 两片 + App tick 与面板已交付；面板真点一遍与「停用后假端点收 0 次请求」的集成取证归人工点验",
-      "marker": "**[alpha 不含]**（定时 agent Core 两片 + App tick 与面板已交付；面板真点一遍与「停用后假端点收 0 次请求」的集成取证归人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/AgentScheduleTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-29",
-      "domain": "3.12 AI 智能体",
-      "reason": "not-implemented",
-      "reasonText": "对话记忆 Core 已落进 master（事实源 + 治理面 + 派生索引 + 进上下文的唯一入口）；治理界面与会话侧写入提炼未落",
-      "marker": "**[alpha 不含]**（对话记忆 Core 已落进 master（事实源 + 治理面 + 派生索引 + 进上下文的唯一入口）；治理界面与会话侧写入提炼未落）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/AgentMemoryTests.swift"
-        }
-      ]
-    },
-    {
-      "id": "FR-AI-31",
-      "domain": "3.12 AI 智能体",
-      "reason": "ui-click",
-      "reasonText": "四件（并发 / 完成判据 / 长跑监控 / 调用链）已落、判据 17 例；告警的界面观感与真端点上的长跑行为只能人工点验",
-      "marker": "**[alpha 不含]**（界面观感与真端点上的长跑行为归人工点验）",
-      "markerPreExisting": false,
-      "evidence": [
-        {
-          "path": "Tests/AgentRunMonitorTests.swift"
-        },
-        {
-          "path": "Core/AgentRunMonitor.swift"
-        }
-      ]
+ "version": 1,
+ "release": "v0.2.0-alpha",
+ "updatedAt": "2026-10-18",
+ "rule": "FR 🟡 逐条判定（队列 L-69 条件 ③）：能机器验的补证据（脚本 + 断言数，可复跑）；不能机器验的（需人工点击 / 需真机 / 需外部实例）逐条标 [alpha 不含]，状态格仍 🟡 不改 ✅。",
+ "reasonBranches": {
+  "environment": "本机物理不可能：无实例 / 无扩展 / 无二进制 / 沙箱限制（v0.1.0-alpha 同一批，标记沿用）",
+  "ui-click": "界面点击 / 观感只能人工（需求提出者点验批次）",
+  "device-instance": "需真机 / 外部实例 / 外部软件",
+  "not-implemented": "本 alpha 明确不含的未做功能",
+  "needs-decision": "等需求提出者拍板",
+  "open-defect": "点验发现的缺陷，已开队列条（修完复验后才可能销）"
+ },
+ "items": [
+  {
+   "id": "FR-AI-03",
+   "domain": "3.12 AI 智能体",
+   "reason": "device-instance",
+   "reasonText": "真实模型端点未接（需端点与凭据）；界面入口待人工点验",
+   "marker": "**[alpha 不含]**（真实模型端点未接（需端点与凭据）；界面入口待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/run-no-endpoint-evidence.sh"
+    },
+    {
+     "path": "Scripts/test-diagnosis.sh"
     }
-  ]
+   ]
+  },
+  {
+   "id": "FR-AI-04",
+   "domain": "3.12 AI 智能体",
+   "reason": "device-instance",
+   "reasonText": "真实模型端点未接（需端点与凭据）；界面入口待人工点验",
+   "marker": "**[alpha 不含]**（真实模型端点未接（需端点与凭据）；界面入口待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/run-no-endpoint-evidence.sh"
+    },
+    {
+     "path": "Scripts/test-maintenance.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-07",
+   "domain": "3.12 AI 智能体",
+   "reason": "ui-click",
+   "reasonText": "合成数据面板界面点击待人工点验（真机往返已验）",
+   "marker": "**[alpha 不含]**（合成数据面板界面点击待人工点验（真机往返已验））",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-synthetic-data.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-10",
+   "domain": "3.12 AI 智能体",
+   "reason": "not-implemented",
+   "reasonText": "host 方向仍为批处理式且 resources/read 未做；真 MCP 对端待外部实例",
+   "marker": "**[alpha 不含]**（host 方向仍为批处理式且 resources/read 未做；真 MCP 对端待外部实例）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/run-no-endpoint-evidence.sh"
+    },
+    {
+     "path": "Scripts/test-mcp.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-11",
+   "domain": "3.12 AI 智能体",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-spec-versioning.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-12",
+   "domain": "3.12 AI 智能体",
+   "reason": "device-instance",
+   "reasonText": "注入端到端未验（缺模型端点与实例）；连接权限的客户端校验未做",
+   "marker": "**[alpha 不含]**（注入端到端未验（缺模型端点与实例）；连接权限的客户端校验未做）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-14",
+   "domain": "3.12 AI 智能体",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-routine-candidates.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-15",
+   "domain": "3.12 AI 智能体",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-memory-governance.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-17",
+   "domain": "3.12 AI 智能体",
+   "reason": "device-instance",
+   "reasonText": "会话持久化已接线（每跳落 .jsonl）；**界面回放需人工点验**",
+   "marker": "**[alpha 不含]**（会话持久化已接线（每跳落 .jsonl）；**界面回放需人工点验**）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/AgentContextTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-20",
+   "domain": "3.12 AI 智能体",
+   "reason": "device-instance",
+   "reasonText": "六个 MVP 工具已全部接线（query_db 只回结构 / 行数 / 语句类型 —— 行数据不出本机）；**端到端需真实模型端点与凭据**",
+   "marker": "**[alpha 不含]**（六个 MVP 工具已全部接线（query_db 只回结构 / 行数 / 语句类型 —— 行数据不出本机）；**端到端需真实模型端点与凭据**）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/AgentContextTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-22",
+   "domain": "3.12 AI 智能体",
+   "reason": "device-instance",
+   "reasonText": "上下文第一批（表结构摘要 + 活跃页签）已挂载；文件 / 选中 / 终端尾部三类待接；**端到端需真实模型端点**",
+   "marker": "**[alpha 不含]**（上下文第一批（表结构摘要 + 活跃页签）已挂载；文件 / 选中 / 终端尾部三类待接；**端到端需真实模型端点**）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/AgentContextTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-28",
+   "domain": "3.12 AI 智能体",
+   "reason": "device-instance",
+   "reasonText": "门控已交付（同指纹不重复发请求、挡下留痕可导出）；**界面「仍然发送」按钮待接**，端到端需真实端点",
+   "marker": "**[alpha 不含]**（门控已交付（同指纹不重复发请求、挡下留痕可导出）；**界面「仍然发送」按钮待接**，端到端需真实端点）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/AgentInvocationGateTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-CONN-15",
+   "domain": "3.1 连接与凭据",
+   "reason": "open-defect",
+   "reasonText": "2026-09-27 点验未过：折叠状态活不过一次活动栏切换，已开队列 L-59，修完复验",
+   "marker": "**[alpha 不含]**（2026-09-27 点验未过：折叠状态活不过一次活动栏切换，已开队列 L-59，修完复验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-connection-groups.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-CONN-18",
+   "domain": "3.1 连接与凭据",
+   "reason": "environment",
+   "reasonText": "仅剩真跳板机的真实握手待环境（「沙箱下不能起 ssh」那条已随 2026-09-29 拍板消解）",
+   "marker": "**[alpha 不含]**（仅剩真跳板机的真实握手待环境）",
+   "markerPreExisting": true,
+   "evidence": [
+    {
+     "path": "Scripts/test-ssh-tunnel.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-DATA-02",
+   "domain": "3.5 数据编辑与写回",
+   "reason": "ui-click",
+   "reasonText": "界面呈现待人工点验",
+   "marker": "**[alpha 不含]**（界面呈现待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-table-structure.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-DATA-05",
+   "domain": "3.5 数据编辑与写回",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-row-detail.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-DATA-06",
+   "domain": "3.5 数据编辑与写回",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-fk-navigation.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-DDL-03",
+   "domain": "3.6 表结构与 DDL",
+   "reason": "ui-click",
+   "reasonText": "界面呈现待人工点验",
+   "marker": "**[alpha 不含]**（界面呈现待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-table-index-fk.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-DDL-04",
+   "domain": "3.6 表结构与 DDL",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-schema-diff.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-DIAG-03",
+   "domain": "3.7 性能与诊断",
+   "reason": "environment",
+   "reasonText": "本机 pgserver 精简构建无扩展目录 → pg_stat_statements 装不上",
+   "marker": "**[alpha 不含]**（本机 pgserver 精简构建无扩展目录 → pg_stat_statements 装不上）",
+   "markerPreExisting": true,
+   "evidence": [
+    {
+     "path": "Scripts/test-slow-queries.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-DIAG-04",
+   "domain": "3.7 性能与诊断",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-database-stats.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-DRV-08",
+   "domain": "3.10 驱动与方言兼容",
+   "reason": "environment",
+   "reasonText": "无 GBase 8a 实例（方言层与驱动已实现，未端到端验）",
+   "marker": "**[alpha 不含]**（无 GBase 8a 实例（方言层与驱动已实现，未端到端验））",
+   "markerPreExisting": true,
+   "evidence": [
+    {
+     "path": "Scripts/test-mysql-driver.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-25",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/check-palette-wiring.py"
+    },
+    {
+     "path": "Scripts/test-command-palette.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-26",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "主题三态 / 字体字号观感需人工看一眼",
+   "marker": "**[alpha 不含]**（主题三态 / 字体字号观感需人工看一眼）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    },
+    {
+     "path": "Scripts/make-ui-snapshots.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-27",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    },
+    {
+     "path": "Scripts/make-ui-snapshots.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-29",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "environment",
+   "reasonText": "sixel / kitty 图形未做；界面未人工验收（多会话页签的界面与判定均已交付、待点验）；「沙箱下 ^C 不可靠」那条已随 2026-09-29 拍板消解",
+   "marker": "**[alpha 不含]**（sixel / kitty 图形未做；界面未人工验收（多会话页签的界面与判定均已交付、待点验）；「沙箱下 ^C 不可靠」那条已随 2026-09-29 拍板消解）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/build-app.sh"
+    },
+    {
+     "path": "Scripts/test-terminal-modes.sh"
+    },
+    {
+     "path": "Scripts/test-terminal-palette.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-34",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "GUI 点击与下载观感待人工点验",
+   "marker": "**[alpha 不含]**（GUI 点击与下载观感待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    },
+    {
+     "path": "Scripts/make-ui-snapshots.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-35",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "界面切换与点击待人工点验",
+   "marker": "**[alpha 不含]**（界面切换与点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/verify-core.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-36",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-workspace-editor.sh"
+    },
+    {
+     "path": "Scripts/verify-all.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-37",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/verify-all.sh"
+    },
+    {
+     "path": "Tests/CommandPaletteTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-38",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "not-implemented",
+   "reasonText": "Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围",
+   "marker": "**[alpha 不含]**（Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/check-language-registry.py"
+    },
+    {
+     "path": "Scripts/test-language-registry-gate.py"
+    },
+    {
+     "path": "Tests/CodeLanguageRegistryTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-39",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "代码格式化的界面点击与观感待人工点验（形态已订正为**只用内置**：不探 `PATH`、不联网；认不出语言与规则空转都如实拒绝）",
+   "marker": "**[alpha 不含]**（界面点击与观感待人工点验；形态 = **只用内置**（2026-10-03 订正，原口径「外部优先 ⇒ 回退内置」已作废），规则与三种结局由 `Tests/CodeFormattingTests.swift` 逐条判）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/CodeFormattingTests.swift"
+    },
+    {
+     "path": "Core/CodeFormatting.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-43",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "not-implemented",
+   "reasonText": "第二片「光标 + 滚动」未交付（在飞 t_849ac541）；第一片「页签集会话恢复」已交付（锚仓 99cc05b）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Core/WorkspaceSession.swift"
+    },
+    {
+     "path": "Tests/WorkspaceSessionTests.swift"
+    },
+    {
+     "path": "App/WorkspaceTabsModel.swift"
+    }
+   ],
+   "marker": "**[alpha 不含]**（第二片「光标 + 滚动」未交付（在飞 `t_849ac541`）；第一片已交付）"
+  },
+  {
+   "id": "FR-EDIT-44",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "工作区标头搜索框的界面点击与观感待人工点验（分组与顺序 / 键盘行走 / 行号换算 / 跳过计数已有 30 条 Core 判据；「点下去真的跳到那一行」需人看）",
+   "marker": "**[alpha 不含]**（界面点击与观感待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/WorkspaceHeaderSearchTests.swift"
+    },
+    {
+     "path": "Tests/WorkspaceSearchContentTests.swift"
+    },
+    {
+     "path": "App/Views/WorkspaceHeaderSearch.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-46",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "关闭有未保存改动的页签 = 确认框：界面点击待人工点验（规则层有 8 例 Core 判据（7 条规则 + 1 条源码判据）—— 干净页签不弹框 / 脏页签弹且动作与顺序固定 / 取消不关 / 保存失败不关 / 丢弃必关；真点关闭按钮看到框、三个动作各点一遍需人看）",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/WorkspaceClosePolicyTests.swift"
+    },
+    {
+     "path": "Core/WorkspaceClose.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-47",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "Markdown 列表续行的界面回车手感待人工点验（规则层有 17 例判据含续行各组；真在编辑器里按回车接着写下一项需人看）",
+   "marker": "**[alpha 不含]**（界面回车手感待人工点验；清单 §10.33）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Core/MarkdownEditing.swift"
+    },
+    {
+     "path": "App/Views/CodeEditorView.swift"
+    },
+    {
+     "path": "Tests/MarkdownEditingTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-48",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "Markdown 任务框勾选翻转（⌘L）的界面按键待人工点验（规则层判据同上；界面 9 步见清单 §10.33）",
+   "marker": "**[alpha 不含]**（界面按键待人工点验；清单 §10.33）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Core/MarkdownEditing.swift"
+    },
+    {
+     "path": "App/Views/CodeEditorView.swift"
+    },
+    {
+     "path": "Tests/MarkdownEditingTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-49",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "Core 逻辑（配对 / 跳引号 / 包选区 / 删整对）与判据已交付；**手感需人工点验**（补不补、光标是否在中间、退格是否删整对、Markdown 里引号是否不补）",
+   "marker": "**[alpha 不含]**（Core 逻辑（配对 / 跳引号 / 包选区 / 删整对）与判据已交付；**手感需人工点验**（补不补、光标是否在中间、退格是否删整对、Markdown 里引号是否不补））",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/CodeAutoPairingTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-51",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "Core 逻辑（注释符只从语言表来、空行不动、取消时连空格一起去掉）与判据已交付；**手感需人工点验**（⌘/ 在中文输入法下是否按键正常）",
+   "marker": "**[alpha 不含]**（Core 逻辑（注释符只从语言表来、空行不动、取消时连空格一起去掉）与判据已交付；**手感需人工点验**（⌘/ 在中文输入法下是否按键正常））",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/CodeCommentToggleTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-EDIT-57",
+   "domain": "3.2 SQL 编辑与执行",
+   "reason": "ui-click",
+   "reasonText": "行内灰字（词法 / SQL / 路径三路）实现全落、行为判据全绿；观感与手感（画法 / 出现时机 / Tab 接受顺不顺手）只能人工点验",
+   "marker": "**[alpha 不含]**（行内灰字的观感与手感（画法 / 出现时机 / Tab 接受顺不顺手）只能人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/InlineGhostCompletionTests.swift"
+    },
+    {
+     "path": "Tests/InlineGhostSQLTests.swift"
+    },
+    {
+     "path": "Tests/InlineGhostPathTests.swift"
+    },
+    {
+     "path": "App/Views/GhostTextOverlay.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-IO-02",
+   "domain": "3.9 导入导出与备份",
+   "reason": "environment",
+   "reasonText": "vendor 驱动只实现 CopyFrom，缺 COPY … TO STDOUT",
+   "marker": "**[alpha 不含]**（vendor 驱动只实现 CopyFrom，缺 COPY … TO STDOUT）",
+   "markerPreExisting": true,
+   "evidence": [
+    {
+     "path": "Scripts/test-cursor-export.sh"
+    },
+    {
+     "path": "Scripts/test-table-export.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-IO-03",
+   "domain": "3.9 导入导出与备份",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-copy-import.sh"
+    },
+    {
+     "path": "Scripts/test-data-import.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-IO-04",
+   "domain": "3.9 导入导出与备份",
+   "reason": "device-instance",
+   "reasonText": "仅剩 217 专用库的真实还原待外部实例（「沙箱下起子进程的临时例外待拍板」那条已随 2026-09-29 拍板消解）",
+   "marker": "**[alpha 不含]**（仅剩 217 专用库的真实还原待外部实例；「沙箱下起子进程的临时例外」那条已随 2026-09-29 拍板消解）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/build-app.sh"
+    },
+    {
+     "path": "Scripts/test-backup-restore.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-IO-05",
+   "domain": "3.9 导入导出与备份",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-restore-resume.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-IO-06",
+   "domain": "3.9 导入导出与备份",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工；真实软件（Excel / Numbers）产出的文件待人工",
+   "marker": "**[alpha 不含]**（界面点击待人工；真实软件（Excel / Numbers）产出的文件待人工）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/make-xlsx-fixtures.py"
+    },
+    {
+     "path": "Scripts/test-data-import.sh"
+    },
+    {
+     "path": "Scripts/test-xlsx-import.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-META-02",
+   "domain": "3.4 对象浏览与元数据",
+   "reason": "environment",
+   "reasonText": "无 GBase 8a 实例 → 端到端 0 次",
+   "marker": "**[alpha 不含]**（无 GBase 8a 实例 → 端到端 0 次）",
+   "markerPreExisting": true,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-META-09",
+   "domain": "3.4 对象浏览与元数据",
+   "reason": "ui-click",
+   "reasonText": "界面未点（展开 / 空态 / 失败态三步已在待人工验收清单 §5）",
+   "marker": "**[alpha 不含]**（界面未点（展开 / 空态 / 失败态三步已在待人工验收清单 §5））",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    },
+    {
+     "path": "Scripts/make-ui-snapshots.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-META-10",
+   "domain": "3.4 对象浏览与元数据",
+   "reason": "ui-click",
+   "reasonText": "失败隔离与重试步骤待人工点验",
+   "marker": "**[alpha 不含]**（失败隔离与重试步骤待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-connection-errors.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-META-12",
+   "domain": "3.4 对象浏览与元数据",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-object-search.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-META-13",
+   "domain": "3.4 对象浏览与元数据",
+   "reason": "ui-click",
+   "reasonText": "界面呈现待人工确认",
+   "marker": "**[alpha 不含]**（界面呈现待人工确认）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-object-ddl.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-META-15",
+   "domain": "3.4 对象浏览与元数据",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    },
+    {
+     "path": "Scripts/make-ui-snapshots.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-PLUG-05",
+   "domain": "3.13 插件装配",
+   "reason": "not-implemented",
+   "reasonText": "验收要点 ①③④未做（源码在本仓，按平台口径非本侧）",
+   "marker": "**[alpha 不含]**（验收要点 ①③④未做（源码在本仓，按平台口径非本侧））",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/check-notes-offline.py"
+    },
+    {
+     "path": "Scripts/test-notes-offline-gate.py"
+    }
+   ]
+  },
+  {
+   "id": "FR-PLUG-08",
+   "domain": "3.13 插件装配",
+   "reason": "ui-click",
+   "reasonText": "界面点击点验待人工；打包项按平台口径非本侧",
+   "marker": "**[alpha 不含]**（界面点击点验待人工；打包项按平台口径非本侧）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/check-note-search-route.py"
+    },
+    {
+     "path": "Scripts/test-note-search-route.py"
+    },
+    {
+     "path": "Scripts/verify-all.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-RES-07",
+   "domain": "3.3 结果集与导出",
+   "reason": "device-instance",
+   "reasonText": "大表实测待人工（NFR-PERF-02 的阻塞）",
+   "marker": "**[alpha 不含]**（大表实测待人工（NFR-PERF-02 的阻塞））",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-RES-08",
+   "domain": "3.3 结果集与导出",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    },
+    {
+     "path": "Scripts/make-ui-snapshots.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-RES-09",
+   "domain": "3.3 结果集与导出",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    },
+    {
+     "path": "Scripts/make-ui-snapshots.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-RES-10",
+   "domain": "3.3 结果集与导出",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/alpha-main-chain-v0.2.sh"
+    },
+    {
+     "path": "Scripts/make-ui-snapshots.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-RES-12",
+   "domain": "3.3 结果集与导出",
+   "reason": "ui-click",
+   "reasonText": "界面粘贴待人工点验",
+   "marker": "**[alpha 不含]**（界面粘贴待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-result-copy.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-RES-13",
+   "domain": "3.3 结果集与导出",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-cursor-export.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-RES-14",
+   "domain": "3.3 结果集与导出",
+   "reason": "device-instance",
+   "reasonText": "Excel / Numbers 打开需人工（外部软件）",
+   "marker": "**[alpha 不含]**（Excel / Numbers 打开需人工（外部软件））",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-xlsx-export.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-SESS-01",
+   "domain": "3.8 会话与服务器管理",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-session-management.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-SESS-02",
+   "domain": "3.8 会话与服务器管理",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-session-management.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-SESS-03",
+   "domain": "3.8 会话与服务器管理",
+   "reason": "ui-click",
+   "reasonText": "界面点击待人工点验",
+   "marker": "**[alpha 不含]**（界面点击待人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Scripts/test-server-objects.sh"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-25",
+   "domain": "3.12 AI 智能体",
+   "reason": "ui-click",
+   "reasonText": "对话页签五项已落（位置 / 流式 / 卡片（含模型与端点）/ 内联审批 / 一步撤销）；界面点击与观感需人工点验",
+   "marker": "**[alpha 不含]**（对话页签五项已落（位置 / 流式 / 卡片（含模型与端点）/ 内联审批 / 一步撤销）；界面点击与观感需人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/AgentEditJournalTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-26",
+   "domain": "3.12 AI 智能体",
+   "reason": "not-implemented",
+   "reasonText": "技能库 Core 已交付（加载校验 / 按需披露 / 渲染，技能不执行工具）；登记档数据与界面入口待接；端到端需真实模型端点",
+   "marker": "**[alpha 不含]**（技能库 Core 已交付（加载校验 / 按需披露 / 渲染，技能不执行工具）；登记档数据与界面入口待接；端到端需真实模型端点）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/AgentSkillLibraryTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-27",
+   "domain": "3.12 AI 智能体",
+   "reason": "ui-click",
+   "reasonText": "定时 agent Core 两片 + App tick 与面板已交付；面板真点一遍与「停用后假端点收 0 次请求」的集成取证归人工点验",
+   "marker": "**[alpha 不含]**（定时 agent Core 两片 + App tick 与面板已交付；面板真点一遍与「停用后假端点收 0 次请求」的集成取证归人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/AgentScheduleTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-29",
+   "domain": "3.12 AI 智能体",
+   "reason": "not-implemented",
+   "reasonText": "对话记忆 Core 已落进 master（事实源 + 治理面 + 派生索引 + 进上下文的唯一入口）；治理界面与会话侧写入提炼未落",
+   "marker": "**[alpha 不含]**（对话记忆 Core 已落进 master（事实源 + 治理面 + 派生索引 + 进上下文的唯一入口）；治理界面与会话侧写入提炼未落）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/AgentMemoryTests.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-31",
+   "domain": "3.12 AI 智能体",
+   "reason": "ui-click",
+   "reasonText": "四件（并发 / 完成判据 / 长跑监控 / 调用链）已落、判据 17 例；告警的界面观感与真端点上的长跑行为只能人工点验",
+   "marker": "**[alpha 不含]**（界面观感与真端点上的长跑行为归人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/AgentRunMonitorTests.swift"
+    },
+    {
+     "path": "Core/AgentRunMonitor.swift"
+    }
+   ]
+  },
+  {
+   "id": "FR-AI-18",
+   "domain": "3.12 AI 智能体",
+   "reason": "ui-click",
+   "reasonText": "五条验收要点机器可判且全绿（两跳 / 步数上限 / 令牌上限停在发送之前 / 取消留痕 / 未登记与坏参数不执行，判据 13 例）；面板上点「停止」的手感与三种停止提示的观感只能人工点验",
+   "marker": "**[alpha 不含]**（界面观感与「点停止」的手感需人工点验）",
+   "markerPreExisting": false,
+   "evidence": [
+    {
+     "path": "Tests/AgentLoopTests.swift"
+    },
+    {
+     "path": "Core/AgentLoop.swift"
+    }
+   ]
+  }
+ ]
 }

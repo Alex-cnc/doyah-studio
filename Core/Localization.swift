@@ -954,6 +954,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatMonitorBudgetExhausted
     /// `NFR-AI-04` + `FR-AI-31` ③：配额把这个请求拦在发送之前（%@ = 配额自己那句原因）。
     case agentChatQuotaStopped
+    /// `FR-AI-18` ④：这一轮被用户停止（界面要标「用户取消」，不许原样印 `cancelled`）。
+    case agentChatStopCancelled
+    /// `FR-AI-18` ②：到了步数上限（%d 跳）—— 如实停且报明上限值。
+    case agentChatStopStepLimit
+    /// `FR-AI-18` ③：到了令牌上限（%d）—— 停在发送之前。
+    case agentChatStopTokenLimit
     case workspaceHomeBuildLine
     case workspaceHomeCopyright
     case workspaceRecentFiles
@@ -3383,6 +3389,11 @@ public enum LocalizedStrings {
         .agentChatMonitorBudgetApproaching: [.simplifiedChinese: "配额已经用掉八成 —— 再超就会被拦下，这一轮请留意还剩多少活。", .english: "Quota is four-fifths used — the next overrun gets blocked; keep an eye on what is left this run."],
         .agentChatMonitorBudgetExhausted: [.simplifiedChinese: "配额已用尽 —— 下一次调用会被拦下（不会静默继续烧）。", .english: "Quota is used up — the next call will be blocked (no silent burning)."],
         .agentChatQuotaStopped: [.simplifiedChinese: "配额拦下了这一次请求：%@", .english: "Quota blocked this request: %@"],
+        // `FR-AI-18` ②③④：三种「如实停」各说各的 —— 步数上限 / 令牌上限 / 用户取消。
+        // 界面此前把这三串机器码原样印出来（`stepLimit:3` / `cancelled`）⇒ 人看不懂，也不知道是不是自己按的停。
+        .agentChatStopStepLimit: [.simplifiedChinese: "到了步数上限（%d 跳）—— 如实停在这里，不是说完。可以补一句更具体的要求再跑一轮。", .english: "Step limit reached (%d hops) — stopping honestly here, not finishing. Add a more specific instruction to run another round."],
+        .agentChatStopTokenLimit: [.simplifiedChinese: "到了令牌上限（%d）—— 下一次请求没有发出就停了，不会半截继续烧。", .english: "Token limit reached (%d) — the next request was not sent, so nothing keeps burning."],
+        .agentChatStopCancelled: [.simplifiedChinese: "这一轮已被你停止（已跑过的工具结果都留着）。", .english: "You stopped this run (results from tools already run are kept)."],
         // 定时 agent（FR-AI-27）：目标档位 / 面板文案 / 历史。词表与既有键能合的就合（状态与时间全走 dataTask*）。
         .agentScheduleTitle: [.simplifiedChinese: "定时 agent", .english: "Scheduled agents"],
         .agentScheduleEmpty: [.simplifiedChinese: "还没有定时条目。定时只决定「什么时候起一次会话」——危险动作仍然逐次审批。", .english: "No scheduled entries yet. A schedule only decides when a session starts — dangerous actions still need approval every time."],

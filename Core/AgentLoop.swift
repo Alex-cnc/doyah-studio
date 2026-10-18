@@ -137,6 +137,32 @@ public enum AgentLoopStop: Equatable, Sendable {
         case .cancelled: return "cancelled"
         }
     }
+
+    /// 原因串 → 停止方式（`FR-AI-18` ②③④：界面把机器码翻成人话时**只认这一处**解析）。
+    ///
+    /// 为什么要把解析放在 Core：`reason` 是循环与界面之间唯一的约定 —— 生产端（这里）与
+    /// 消费端（对话页签的状态提示）各写一份前缀判断，改一处忘一处就会出现「界面上原样印着
+    /// `stepLimit:3`」这种机器码露脸（`FR-AI-18` ④ 要求界面标「用户取消」，不是标 `cancelled`）。
+    /// 认不出 ⇒ `nil`，由调用方决定怎么兜（**不猜**、不把陌生码当取消）。
+    public static func parse(reason: String) -> AgentLoopStop? {
+        if reason == AgentLoopStop.cancelled.reason { return .cancelled }
+        if reason.hasPrefix("stepLimit:") {
+            // 数值必须**整段**是整数（`stepLimit:3x` / 空串一律不认）。
+            guard let value = Int(reason.dropFirst("stepLimit:".count)) else { return nil }
+            return .stepLimit(value)
+        }
+        if reason.hasPrefix("tokenLimit:") {
+            guard let value = Int(reason.dropFirst("tokenLimit:".count)) else { return nil }
+            return .tokenLimit(value)
+        }
+        let quotaPrefix = "quotaLimit:"
+        if reason.hasPrefix(quotaPrefix) {
+            let detail = String(reason.dropFirst(quotaPrefix.count))
+            // 配额那句原因本身可以带冒号（如 `requestLimit:3/3`）⇒ 原样交回，不再切。
+            return detail.isEmpty ? nil : .quotaLimit(detail)
+        }
+        return nil
+    }
 }
 
 public enum AgentLoopOutcome: Equatable, Sendable {
