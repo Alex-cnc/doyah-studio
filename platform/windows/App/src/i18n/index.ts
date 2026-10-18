@@ -43,6 +43,21 @@ export const DICT = {
   'plugin.retro.pickOne': { 'zh-Hans': '左侧选一期看正文', en: 'Pick a period on the left to read it' },
   'plugin.retro.problems': { 'zh-Hans': '有 {n} 处读不出来', en: '{n} item(s) could not be read' },
   'plugin.retro.noDate': { 'zh-Hans': '日期未标注', en: 'Date not stated' },
+  // 左栏折叠与过滤（FR-R-13-08 判据①）
+  'plugin.retro.filterHint': {
+    'zh-Hans': '按标题 / 期号 / 标签过滤',
+    en: 'Filter by title, period or tag',
+  },
+  'plugin.retro.filterClear': { 'zh-Hans': '清除筛选', en: 'Clear the filter' },
+  'plugin.retro.match': { 'zh-Hans': '{m} / {n} 期匹配', en: '{m} of {n} period(s) match' },
+  'plugin.retro.noMatch': {
+    'zh-Hans': '没有匹配「{q}」的期',
+    en: 'No period matches “{q}”',
+  },
+  'plugin.retro.yearLabel': { 'zh-Hans': '{year} 年', en: '{year}' },
+  'plugin.retro.monthLabel': { 'zh-Hans': '{month} 月', en: 'Month {month}' },
+  'plugin.retro.unknownYear': { 'zh-Hans': '年份未标注', en: 'Year not stated' },
+  'plugin.retro.unknownMonth': { 'zh-Hans': '月份未标注', en: 'Month not stated' },
   'plugin.retro.reportFailed': { 'zh-Hans': '这一期的正文打不开', en: 'This report could not be opened' },
   'plugin.retro.loadFailed': { 'zh-Hans': '读包目录失败', en: 'Could not read the package folders' },
   // 正文媒体（FR-R-12-03：图片 / 视频就地渲染，读不出来就地占位）

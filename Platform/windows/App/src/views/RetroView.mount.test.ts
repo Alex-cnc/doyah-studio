@@ -283,4 +283,151 @@ describe('RetroView 周报阅读面', () => {
     await wrapper.get('.retro__zoom-close').trigger('click')
     expect(wrapper.find('[data-role="retro-zoom"]').exists()).toBe(false)
   })
+
+  // ── 左栏按年·月折叠 + 关键词过滤（FR-R-13-08 判据①）────────────────────────────
+
+  it('cards_are_grouped_by_year_then_month_with_counts_on_the_headers', async () => {
+    state.snapshot.cards = [
+      card('2026-W42', '十月中', { dateStart: '2026-10-12', dateEnd: '2026-10-18' }),
+      card('2026-W39', '九月末', { dateStart: '2026-09-21', dateEnd: '2026-09-27' }),
+      card('2025-W50', '去年末', { dateStart: '2025-12-08', dateEnd: '2025-12-14' }),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    const years = wrapper.findAll('.retro__year')
+    expect(years).toHaveLength(2)
+    // 年表头：文字 + 该年卡片数（3 期里 2 期在 2026）
+    expect(wrapper.get('[data-role="retro-year-2026"]').text()).toContain('2026 年')
+    expect(wrapper.get('[data-role="retro-year-2026"]').text()).toContain('2')
+    expect(wrapper.get('[data-role="retro-year-2025"]').text()).toContain('1')
+    // 月表头：10 月 / 9 月
+    expect(wrapper.get('[data-role="retro-month-2026-10"]').text()).toContain('10 月')
+    expect(wrapper.get('[data-role="retro-month-2026-09"]').text()).toContain('9 月')
+    // 卡片顺序保持上游给的「新在前」
+    expect(wrapper.findAll('.retro__card').map((node) => node.attributes('data-period'))).toEqual([
+      '2026-W42',
+      '2026-W39',
+      '2025-W50',
+    ])
+  })
+
+  it('a_card_without_dates_or_a_year_shaped_name_lands_in_an_explicit_unknown_group', async () => {
+    state.snapshot.cards = [card('试做-第3期', '没日期的', { dateStart: '', dateEnd: '' })]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    // 不编年份：如实写「年份未标注 / 月份未标注」
+    const year = wrapper.get('[data-role="retro-year-unknown"]')
+    expect(year.text()).toContain('年份未标注')
+    expect(wrapper.get('[data-role="retro-month-unknown-unknown"]').text()).toContain('月份未标注')
+    expect(wrapper.findAll('.retro__card')).toHaveLength(1)
+  })
+
+  it('folding_a_year_hides_its_cards_and_unfolding_brings_them_back', async () => {
+    state.snapshot.cards = [
+      card('2026-W42', '今年的'),
+      card('2025-W50', '去年的', { dateStart: '2025-12-08', dateEnd: '2025-12-14' }),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    expect(wrapper.findAll('.retro__card')).toHaveLength(2)
+
+    const head = wrapper.get('[data-role="retro-year-2026"]')
+    expect(head.attributes('aria-expanded')).toBe('true')
+    await head.trigger('click')
+    expect(head.attributes('aria-expanded')).toBe('false')
+    // 只收起这一年：另一年的卡片还在（收起不是「清空」）
+    expect(wrapper.findAll('.retro__card').map((node) => node.attributes('data-period'))).toEqual(['2025-W50'])
+
+    await head.trigger('click')
+    expect(head.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.findAll('.retro__card')).toHaveLength(2)
+  })
+
+  it('folding_a_month_leaves_the_other_month_of_the_same_year_open', async () => {
+    state.snapshot.cards = [
+      card('2026-W42', '十月', { dateStart: '2026-10-12' }),
+      card('2026-W39', '九月', { dateStart: '2026-09-21' }),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    await wrapper.get('[data-role="retro-month-2026-10"]').trigger('click')
+    expect(wrapper.findAll('.retro__card').map((node) => node.attributes('data-period'))).toEqual(['2026-W39'])
+    // 年表头还在（收起月份不该连带收起整年）
+    expect(wrapper.get('[data-role="retro-year-2026"]').attributes('aria-expanded')).toBe('true')
+  })
+
+  it('typing_a_keyword_narrows_the_list_and_shows_how_many_match', async () => {
+    state.snapshot.cards = [
+      card('2026-W42', '芯片与半导体 · 第 42 周', { tags: ['周报', '半导体'] }),
+      card('2026-W41', '新能源车 · 第 41 周', { tags: ['周报'] }),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    await wrapper.get('[data-role="retro-filter"]').setValue('半导体')
+    await flushPromises()
+
+    expect(wrapper.findAll('.retro__card').map((node) => node.attributes('data-period'))).toEqual(['2026-W42'])
+    expect(wrapper.get('[data-role="retro-count"]').text()).toContain('1 / 2 期匹配')
+    // 清空按钮出现（键鼠都关掉筛选，不必删字）
+    await wrapper.get('[data-role="retro-filter-clear"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.retro__card')).toHaveLength(2)
+    expect(wrapper.get('[data-role="retro-count"]').text()).toContain('共 2 期')
+  })
+
+  it('a_filter_expands_a_folded_group_so_the_hit_is_never_hidden', async () => {
+    state.snapshot.cards = [
+      card('2026-W42', '芯片与半导体 · 第 42 周', { tags: ['半导体'] }),
+      card('2025-W50', '去年的', { dateStart: '2025-12-08', dateEnd: '2025-12-14' }),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    // 先收起 2026，再筛「半导体」——命中项必须可见，不能藏在折叠组里
+    await wrapper.get('[data-role="retro-year-2026"]').trigger('click')
+    expect(wrapper.findAll('.retro__card').map((node) => node.attributes('data-period'))).toEqual(['2025-W50'])
+
+    await wrapper.get('[data-role="retro-filter"]').setValue('半导体')
+    await flushPromises()
+    expect(wrapper.findAll('.retro__card').map((node) => node.attributes('data-period'))).toEqual(['2026-W42'])
+  })
+
+  it('clearing_the_filter_restores_the_fold_state_the_user_left', async () => {
+    state.snapshot.cards = [
+      card('2026-W42', '芯片与半导体 · 第 42 周', { tags: ['半导体'] }),
+      card('2025-W50', '去年的', { dateStart: '2025-12-08', dateEnd: '2025-12-14' }),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    await wrapper.get('[data-role="retro-year-2026"]').trigger('click')
+    await wrapper.get('[data-role="retro-filter"]').setValue('半导体')
+    await flushPromises()
+    await wrapper.get('[data-role="retro-filter-clear"]').trigger('click')
+    await flushPromises()
+
+    // 筛选期间强制展开，但清空后回到用户原来收着的样子（不是被悄悄改成全展开）
+    expect(wrapper.get('[data-role="retro-year-2026"]').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.findAll('.retro__card').map((node) => node.attributes('data-period'))).toEqual(['2025-W50'])
+  })
+
+  it('a_keyword_that_matches_nothing_says_so_with_the_keyword_instead_of_a_blank_list', async () => {
+    state.snapshot.cards = [card('2026-W42', '芯片与半导体 · 第 42 周')]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    await wrapper.get('[data-role="retro-filter"]').setValue('量子计算')
+    await flushPromises()
+
+    expect(wrapper.findAll('.retro__card')).toHaveLength(0)
+    const note = wrapper.get('[data-role="retro-no-match"]')
+    expect(note.text()).toContain('没有匹配')
+    expect(note.text()).toContain('量子计算')
+    // 空态那句「还没有周报」不许冒充「筛不到」（包是在的）
+    expect(wrapper.find('[data-role="retro-empty"]').exists()).toBe(false)
+  })
 })

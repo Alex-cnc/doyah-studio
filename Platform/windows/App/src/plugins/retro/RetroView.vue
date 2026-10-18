@@ -10,6 +10,7 @@
 
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import BlockDocument, { type MediaSlot } from './BlockDocument.vue'
+import { filterCards, groupCards } from './periodIndex'
 import {
   retroAsset,
   retroPackages,
@@ -52,6 +53,53 @@ const reportLoading = ref(false)
 const selectedCard = computed<RetroCard | null>(
   () => cards.value.find((card) => card.period === selected.value) ?? null,
 )
+
+// ── 左栏的折叠与过滤（`FR-R-13-08` 判据①）──────────────────────────────────────────
+// 三条口径：① 归组 / 过滤都在纯函数里（`periodIndex.ts`），这里只画；
+// ② 卡片顺序沿用 Rust 给的「新在前」，分组只做保序切分；
+// ③ **正在筛选时组一律展开**（折叠状态照旧记着，清空筛选后恢复）——
+//    筛出 1 期却藏在折叠组里，看起来就像「没有结果」。
+const query = ref('')
+/** 折叠状态：`y:<年>` / `m:<年>-<月>`（在 `Set` 里 = 收起来了）。 */
+const folded = ref<Set<string>>(new Set())
+
+const filtering = computed(() => query.value.trim().length > 0)
+const filtered = computed(() => filterCards(cards.value, query.value))
+const groups = computed(() => groupCards(filtered.value))
+
+function groupKey(kind: 'y' | 'm', year: string, month = ''): string {
+  return kind === 'y' ? `y:${year}` : `m:${year}-${month}`
+}
+
+/** 筛选期间一律展开（见上面第 ③ 条）。 */
+function isFolded(key: string): boolean {
+  if (filtering.value) return false
+  return folded.value.has(key)
+}
+
+/** 折叠状态整份换新（`Set` 原地 mutate 不会触发模板重算）。 */
+function toggleFold(key: string): void {
+  const next = new Set(folded.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  folded.value = next
+}
+
+function onQueryInput(event: Event): void {
+  query.value = (event.target as HTMLInputElement).value
+}
+
+/** 年表头：有年就写「2026 年」，没有就如实说「年份未标注」。 */
+function yearLabel(year: string): string {
+  return year ? tr('plugin.retro.yearLabel', { year }) : tr('plugin.retro.unknownYear')
+}
+
+/** 月表头：`10` → 「10 月」（去掉前导零），空串就如实说「月份未标注」。 */
+function monthLabel(month: string): string {
+  if (!month) return tr('plugin.retro.unknownMonth')
+  return tr('plugin.retro.monthLabel', { month: String(Number(month)) })
+}
+
 
 /** 正文里的媒体：判定（Rust 给的）+ 拉回来的 blob URL（`null` = 还没到 / 读不出来）。 */
 const media = ref<MediaSlot[]>([])
@@ -184,8 +232,36 @@ onMounted(() => {
       </header>
 
       <p v-if="cards.length" class="retro__count" data-role="retro-count">
-        {{ tr('plugin.retro.count', { n: cards.length }) }}
+        {{
+          filtering
+            ? tr('plugin.retro.match', { m: filtered.length, n: cards.length })
+            : tr('plugin.retro.count', { n: cards.length })
+        }}
       </p>
+
+      <!-- 关键词过滤（`FR-R-13-08` 判据①）：空白分隔多个词是「都要命中」 -->
+      <div v-if="cards.length" class="retro__filter">
+        <input
+          class="retro__filter-input"
+          type="search"
+          data-role="retro-filter"
+          :value="query"
+          :placeholder="tr('plugin.retro.filterHint')"
+          :aria-label="tr('plugin.retro.filterHint')"
+          @input="onQueryInput"
+        />
+        <button
+          v-if="query"
+          class="retro__filter-clear"
+          type="button"
+          data-role="retro-filter-clear"
+          :title="tr('plugin.retro.filterClear')"
+          :aria-label="tr('plugin.retro.filterClear')"
+          @click="query = ''"
+        >
+          ×
+        </button>
+      </div>
 
       <p v-if="loading" class="retro__hint">{{ tr('plugin.retro.loading') }}</p>
 
@@ -201,24 +277,67 @@ onMounted(() => {
         <p class="retro__empty-hint">{{ tr('plugin.retro.emptyHint', { root }) }}</p>
       </div>
 
-      <ul v-if="cards.length" class="retro__cards">
-        <li v-for="card in cards" :key="card.period">
+      <!-- 没有匹配：说清楚 + 带上关键词（不许画一片空白） -->
+      <p v-if="filtering && !filtered.length" class="retro__hint" data-role="retro-no-match">
+        {{ tr('plugin.retro.noMatch', { q: query.trim() }) }}
+      </p>
+
+      <ul v-if="groups.length" class="retro__groups">
+        <li v-for="group in groups" :key="group.year" class="retro__year" :data-year="group.year">
           <button
-            class="retro__card"
-            :class="{ 'retro__card--active': card.period === selected }"
+            class="retro__year-head"
             type="button"
-            :data-period="card.period"
-            @click="open(card)"
+            :data-role="`retro-year-${group.year || 'unknown'}`"
+            :aria-expanded="!isFolded(groupKey('y', group.year))"
+            @click="toggleFold(groupKey('y', group.year))"
           >
-            <span class="retro__card-title">{{ card.title }}</span>
-            <span class="retro__card-meta">
-              <code class="retro__period">{{ card.period }}</code>
-              <span class="retro__range">{{ rangeText(card) }}</span>
-            </span>
-            <span v-if="card.tags.length" class="retro__tags">
-              <span v-for="tag in card.tags" :key="tag" class="retro__tag">{{ tag }}</span>
-            </span>
+            <span class="retro__caret" :class="{ 'retro__caret--folded': isFolded(groupKey('y', group.year)) }"
+              >▾</span
+            >
+            <span class="retro__group-label">{{ yearLabel(group.year) }}</span>
+            <span class="retro__group-count">{{ group.count }}</span>
           </button>
+
+          <ul v-if="!isFolded(groupKey('y', group.year))" class="retro__months">
+            <li v-for="month in group.months" :key="month.month" class="retro__month" :data-month="month.month">
+              <button
+                class="retro__month-head"
+                type="button"
+                :data-role="`retro-month-${group.year || 'unknown'}-${month.month || 'unknown'}`"
+                :aria-expanded="!isFolded(groupKey('m', group.year, month.month))"
+                @click="toggleFold(groupKey('m', group.year, month.month))"
+              >
+                <span
+                  class="retro__caret"
+                  :class="{ 'retro__caret--folded': isFolded(groupKey('m', group.year, month.month)) }"
+                  >▾</span
+                >
+                <span class="retro__group-label">{{ monthLabel(month.month) }}</span>
+                <span class="retro__group-count">{{ month.cards.length }}</span>
+              </button>
+
+              <ul v-if="!isFolded(groupKey('m', group.year, month.month))" class="retro__cards">
+                <li v-for="card in month.cards" :key="card.period">
+                  <button
+                    class="retro__card"
+                    :class="{ 'retro__card--active': card.period === selected }"
+                    type="button"
+                    :data-period="card.period"
+                    @click="open(card)"
+                  >
+                    <span class="retro__card-title">{{ card.title }}</span>
+                    <span class="retro__card-meta">
+                      <code class="retro__period">{{ card.period }}</code>
+                      <span class="retro__range">{{ rangeText(card) }}</span>
+                    </span>
+                    <span v-if="card.tags.length" class="retro__tags">
+                      <span v-for="tag in card.tags" :key="tag" class="retro__tag">{{ tag }}</span>
+                    </span>
+                  </button>
+                </li>
+              </ul>
+            </li>
+          </ul>
         </li>
       </ul>
 
@@ -349,6 +468,93 @@ onMounted(() => {
   color: var(--ds-color-text-tertiary);
   font-size: var(--ds-font-caption-size);
   word-break: break-all;
+}
+.retro__filter {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.retro__filter-input {
+  width: 100%;
+  height: var(--ds-metric-control-height);
+  padding: 0 var(--ds-spacing-s);
+  border: var(--ds-hairline) solid var(--ds-color-hairline-light);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-panel);
+  color: var(--ds-color-text-primary);
+  font: inherit;
+  font-size: var(--ds-font-caption-size);
+}
+.retro__filter-input::placeholder {
+  color: var(--ds-color-text-disabled);
+}
+.retro__filter-clear {
+  position: absolute;
+  right: var(--ds-spacing-xs);
+  padding: 0 var(--ds-spacing-xs);
+  border: none;
+  background: transparent;
+  color: var(--ds-color-text-tertiary);
+  font: inherit;
+  font-size: var(--ds-font-body-size);
+  cursor: pointer;
+}
+.retro__filter-clear:hover {
+  color: var(--ds-color-text-primary);
+}
+.retro__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-s);
+  list-style: none;
+}
+.retro__months,
+.retro__cards {
+  list-style: none;
+}
+.retro__months {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+  padding-left: var(--ds-spacing-xs);
+}
+.retro__year-head,
+.retro__month-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-spacing-xs);
+  width: 100%;
+  padding: var(--ds-spacing-hair) var(--ds-spacing-xs);
+  border: none;
+  border-radius: var(--ds-radius-control);
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  font: inherit;
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+.retro__year-head:hover,
+.retro__month-head:hover {
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-text-primary);
+}
+.retro__year-head .retro__group-label {
+  font-weight: 600;
+  color: var(--ds-color-text-primary);
+}
+.retro__caret {
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+}
+.retro__caret--folded {
+  transform: rotate(-90deg);
+}
+.retro__group-count {
+  margin-left: auto;
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
 }
 .retro__cards {
   display: flex;
