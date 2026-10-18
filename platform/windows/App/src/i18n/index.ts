@@ -101,6 +101,27 @@ export const DICT = {
   },
   'plugin.retro.outlineAria': { 'zh-Hans': '正文目录', en: 'Report outline' },
   'plugin.retro.outlineUntitled': { 'zh-Hans': '（无标题）', en: '(untitled)' },
+  // 显示设定第三项：导出（`FR-R-13-08` ①）—— 复制出去，包本身一个字节不动
+  'plugin.retro.export': { 'zh-Hans': '导出…', en: 'Export…' },
+  'plugin.retro.exporting': { 'zh-Hans': '导出中…', en: 'Exporting…' },
+  'plugin.retro.exportHint': {
+    'zh-Hans': '把这一期（index.json + report.md + assets/）复制到你选的目录；包本身不改',
+    en: 'Copy this period (index.json + report.md + assets/) to a folder you pick; the package itself is untouched',
+  },
+  'plugin.retro.exportPickTitle': {
+    'zh-Hans': '选一个导出到哪儿（会在里面建一个以期号命名的子目录）',
+    en: 'Pick where to export (a sub-folder named after the period is created inside)',
+  },
+  'plugin.retro.exportFailed': { 'zh-Hans': '导出失败', en: 'Export failed' },
+  'plugin.retro.exportShow': { 'zh-Hans': '打开导出目录', en: 'Show the export folder' },
+  'plugin.retro.exportShowHint': {
+    'zh-Hans': '在资源管理器里打开刚导出的那一份',
+    en: 'Open the exported copy in File Explorer',
+  },
+  'plugin.retro.exportShowFailed': {
+    'zh-Hans': '打不开导出目录',
+    en: 'Could not open the export folder',
+  },
   'plugin.retro.emptyImportHint': {
     'zh-Hans': '也可以点上面的「导入包…」，把一个包复制进来。',
     en: 'Or use “Import a package…” above to copy one in.',

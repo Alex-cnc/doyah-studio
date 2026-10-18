@@ -712,6 +712,29 @@ fn retro_reveal(
     state.retro.reveal(&period)
 }
 
+/// 导出某一期到用户选的目录（`FR-R-13-08` 显示设定第三项：导出）。
+///
+/// 两个参数都由**系统选择器 / 左侧列表**来（`period` 只认库里的期，`target` 必须是已存在的目录），
+/// 判定全在 `retro_library::RetroStore::export`：源包只读、同名永不覆盖、不留半截。
+#[tauri::command]
+fn retro_export(
+    state: State<'_, ShellState>,
+    period: String,
+    target: String,
+) -> Result<retro_library::RetroExport, DbFailure> {
+    state.retro.export(&period, &target)
+}
+
+/// 在资源管理器里打开**导出目录**（路径 = 目标目录 + 期号在 Rust 侧再拼一次，不收任意路径）。
+#[tauri::command]
+fn retro_export_reveal(
+    state: State<'_, ShellState>,
+    period: String,
+    target: String,
+) -> Result<doyah_studio_db::RevealPlan, DbFailure> {
+    state.retro.export_reveal(&period, &target)
+}
+
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
 //
 // 四条命令都很薄：**判定在领域层**（`doyah_studio_db::agent_config::evaluate`），本层只做
@@ -2448,6 +2471,8 @@ pub fn run() {
             retro_import,
             retro_import_batch,
             retro_reveal,
+            retro_export,
+            retro_export_reveal,
             agent_settings_get,
             agent_settings_save,
             agent_key_save,

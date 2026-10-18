@@ -39,6 +39,11 @@ const state: {
   batchCalls: string[]
   revealCalls: string[]
   revealFailure: { message: string; hint: string } | null
+  exportCalls: Array<[string, string]>
+  exportRevealCalls: Array<[string, string]>
+  exportResult: { period: string; state: string; message: string; path: string }
+  exportFailure: { message: string; hint: string } | null
+  exportRevealFailure: { message: string; hint: string } | null
 } = {
   snapshot: { root: 'C:\\Users\\Alex\\AppData\\Roaming\\DoyahStudio\\retro\\packages', cards: [], problems: [] },
   snapshotFailure: null,
@@ -60,6 +65,11 @@ const state: {
   batchCalls: [],
   revealCalls: [],
   revealFailure: null,
+  exportCalls: [],
+  exportRevealCalls: [],
+  exportResult: { period: '2026-W43', state: 'exported', message: '已导出到 D:\\out\\2026-W43', path: 'D:\\out\\2026-W43' },
+  exportFailure: null,
+  exportRevealFailure: null,
 }
 
 vi.mock('../ipc', () => ({
@@ -103,6 +113,21 @@ vi.mock('../ipc', () => ({
     return {
       program: 'explorer.exe',
       args: [`C:\\Users\\Alex\\AppData\\Roaming\\DoyahStudio\\retro\\packages\\${period}`],
+      workingDirectory: null,
+      used: 'explorer',
+    }
+  }),
+  retroExport: vi.fn(async (period: string, target: string) => {
+    state.exportCalls.push([period, target])
+    if (state.exportFailure) throw state.exportFailure
+    return state.exportResult
+  }),
+  retroExportReveal: vi.fn(async (period: string, target: string) => {
+    state.exportRevealCalls.push([period, target])
+    if (state.exportRevealFailure) throw state.exportRevealFailure
+    return {
+      program: 'explorer.exe',
+      args: [`${target}\\${period}`],
       workingDirectory: null,
       used: 'explorer',
     }
@@ -184,6 +209,11 @@ beforeEach(() => {
   state.batchCalls = []
   state.revealCalls = []
   state.revealFailure = null
+  state.exportCalls = []
+  state.exportRevealCalls = []
+  state.exportResult = { period: '2026-W43', state: 'exported', message: '已导出到 D:\\out\\2026-W43', path: 'D:\\out\\2026-W43' }
+  state.exportFailure = null
+  state.exportRevealFailure = null
   // 显示设定（字号档）落在 localStorage：逐条测之间清干净，免得上一档带进来
   globalThis.localStorage?.clear?.()
   // happy-dom 没实现 blob URL：给一个确定性的替身（判据只关心「挂上了没有」）
@@ -965,6 +995,130 @@ describe('RetroView 周报阅读面', () => {
     const failure = wrapper.get('[data-role="retro-reveal-failure"]')
     expect(failure.text()).toContain('库里没有这一期')
     expect(failure.text()).toContain('刷新')
+  })
+
+  // ── 导出（`FR-R-13-08` 显示设定第三项）：选目录 ⇒ 复制 ⇒ 打开所在文件夹 ──────────────
+
+  it('exporting_asks_for_a_folder_copies_the_period_there_and_opens_it', async () => {
+    state.snapshot.cards = [card('2026-W43', '本期')]
+    state.reports['2026-W43'] = heading('正文')
+    state.pickedFolder = 'D:\\out'
+    state.exportResult = {
+      period: '2026-W43',
+      state: 'exported',
+      message: '已导出到 D:\\out\\2026-W43',
+      path: 'D:\\out\\2026-W43',
+    }
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-role="retro-export"]').trigger('click')
+    await flushPromises()
+
+    // 选目录一次 + 命令真被调用（期号 + 目标目录两段都由界面给，路径在 Rust 侧拼）
+    expect(state.pickCalls).toBe(1)
+    expect(state.exportCalls).toEqual([['2026-W43', 'D:\\out']])
+    // 需求口径「复制 ⇒ 打开所在文件夹」：成功后自动开一次，且只开这一期的导出目录
+    expect(state.exportRevealCalls).toEqual([['2026-W43', 'D:\\out']])
+    const line = wrapper.get('[data-role="retro-export-result"]')
+    expect(line.attributes('data-state')).toBe('exported')
+    expect(line.text()).toContain('已导出到 D:\\out\\2026-W43')
+
+    // 还能再点一次「打开导出目录」（自动打开失败 / 用户关掉窗口之后）
+    await wrapper.get('[data-role="retro-export-show"]').trigger('click')
+    await flushPromises()
+    expect(state.exportRevealCalls).toEqual([
+      ['2026-W43', 'D:\\out'],
+      ['2026-W43', 'D:\\out'],
+    ])
+  })
+
+  it('cancelling_the_export_picker_copies_nothing_and_says_nothing', async () => {
+    state.snapshot.cards = [card('2026-W43', '本期')]
+    state.reports['2026-W43'] = heading('正文')
+    state.pickedFolder = null
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-role="retro-export"]').trigger('click')
+    await flushPromises()
+
+    expect(state.pickCalls).toBe(1)
+    expect(state.exportCalls).toEqual([])
+    expect(state.exportRevealCalls).toEqual([])
+    expect(wrapper.find('[data-role="retro-export-result"]').exists()).toBe(false)
+    expect(wrapper.find('[data-role="retro-export-failure"]').exists()).toBe(false)
+  })
+
+  it('an_export_that_hits_an_edited_copy_says_conflict_and_does_not_open_the_folder', async () => {
+    state.snapshot.cards = [card('2026-W43', '本期')]
+    state.reports['2026-W43'] = heading('正文')
+    state.pickedFolder = 'D:\\out'
+    state.exportResult = {
+      period: '2026-W43',
+      state: 'conflict',
+      message: 'D:\\out\\2026-W43 已存在且内容不同：保留它，没有覆盖（需要新的一份就先改名或换目录）',
+      path: 'D:\\out\\2026-W43',
+    }
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-role="retro-export"]').trigger('click')
+    await flushPromises()
+
+    const line = wrapper.get('[data-role="retro-export-result"]')
+    expect(line.attributes('data-state')).toBe('conflict')
+    expect(line.text()).toContain('没有覆盖')
+    // 没写出新的一份：不自动弹资源管理器（但用户仍可自己点开看那一份）
+    expect(state.exportRevealCalls).toEqual([])
+    expect(wrapper.find('[data-role="retro-export-show"]').exists()).toBe(true)
+  })
+
+  it('an_export_that_fails_says_why_and_offers_no_open_button', async () => {
+    state.snapshot.cards = [card('2026-W43', '本期')]
+    state.reports['2026-W43'] = heading('正文')
+    state.pickedFolder = 'D:\\out'
+    state.exportResult = {
+      period: '2026-W43',
+      state: 'failed',
+      message: '复制失败：拒绝访问（临时目录已清掉，库里那份没动）',
+      path: 'D:\\out\\2026-W43',
+    }
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-role="retro-export"]').trigger('click')
+    await flushPromises()
+
+    const line = wrapper.get('[data-role="retro-export-result"]')
+    expect(line.attributes('data-state')).toBe('failed')
+    expect(line.text()).toContain('拒绝访问')
+    expect(wrapper.find('[data-role="retro-export-show"]').exists()).toBe(false)
+    expect(state.exportRevealCalls).toEqual([])
+  })
+
+  it('an_export_command_that_fails_outright_shows_the_message_and_the_hint', async () => {
+    state.snapshot.cards = [card('2026-W43', '本期')]
+    state.reports['2026-W43'] = heading('正文')
+    state.pickedFolder = 'D:\\out'
+    state.exportFailure = { message: '不能导出到这一期自己的目录里：D:\\out', hint: '换一个目录（比如桌面 / 文档）' }
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-role="retro-export"]').trigger('click')
+    await flushPromises()
+
+    const failure = wrapper.get('[data-role="retro-export-failure"]')
+    expect(failure.text()).toContain('不能导出到这一期自己的目录里')
+    expect(failure.text()).toContain('换一个目录')
+    expect(wrapper.find('[data-role="retro-export-result"]').exists()).toBe(false)
   })
 
   // ── 显示设定：目录锚点 + 字号三档（`FR-R-13-08` ①；只改怎么看，不动包）────────────

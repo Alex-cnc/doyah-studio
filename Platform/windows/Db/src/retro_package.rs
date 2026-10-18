@@ -91,6 +91,33 @@ pub fn existing_decision(same_bytes: bool) -> ImportState {
     }
 }
 
+/// **导出**一次的结果态（`FR-R-13-08` 显示设定第三项：导出）。
+///
+/// 与导入同一套裁决（`existing_decision` 回答的是同一件事：落点已有同名目录时怎么办），
+/// 只是名字按「导出」说人话 —— 界面不拿 `imported` 去描述一次导出。
+/// 领域层只回答「落点已有同名目录时怎么办」；**拷贝与逐字节比较在外壳**。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExportState {
+    /// 这次真的写出一份（落点此前不存在）。
+    Exported,
+    /// 落点已有同名目录且**逐字节相同** ⇒ 不重复写、不覆盖（同目录重导不叠版本）。
+    Already,
+    /// 落点已有同名目录但内容不同 ⇒ **不覆盖**（可能是用户自己改过的），如实报冲突。
+    Conflict,
+    /// 落点建不出来 / 拷到一半失败 ⇒ 临时目录已清掉，源包一个字节没动。
+    Failed,
+}
+
+/// 导出落点已有同名目录时的裁决（口径与 `existing_decision` 逐条对齐，只换成导出的说法）。
+pub fn export_decision(same_bytes: bool) -> ExportState {
+    if same_bytes {
+        ExportState::Already
+    } else {
+        ExportState::Conflict
+    }
+}
+
 /// 一个包的**盘上事实**（目录名 + 两个文件的内容 / 在否）—— 由外壳填，本层只判。
 pub struct Source<'a> {
     /// 目录名（= 期号）。
@@ -770,6 +797,26 @@ mod tests {
             existing_decision(false),
             ImportState::Conflict,
             "内容不同 ⇒ 冲突（保留库里那份），绝不静默覆盖用户的原包"
+        );
+    }
+
+    // ── 导出裁决（`FR-R-13-08` 显示设定第三项）────────────────────────────────
+
+    #[test]
+    fn exporting_the_same_content_twice_is_already_so_no_second_copy_is_stacked() {
+        assert_eq!(
+            export_decision(true),
+            ExportState::Already,
+            "同目录重导同一份 ⇒「已导出」，不叠「副本 (2)」这类派生"
+        );
+    }
+
+    #[test]
+    fn an_edited_export_target_is_a_conflict_so_the_users_copy_survives() {
+        assert_eq!(
+            export_decision(false),
+            ExportState::Conflict,
+            "落点那份被改过 ⇒ 冲突：保留用户改的那份，绝不静默覆盖"
         );
     }
 }

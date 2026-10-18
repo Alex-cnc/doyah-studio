@@ -481,7 +481,24 @@ pub struct RetroBatchImport {
     pub skipped: usize,
 }
 
-/// 临时目录序号（同一进程里连续导入不撞名）。
+/// 一次导出的结果（`FR-R-13-08` 显示设定第三项：导出 —— 选目录 ⇒ 复制 ⇒ 打开所在文件夹）。
+///
+/// 口径与导入同一套（`FR-R-12-04`）：**源包只读**（导出前后包目录逐字节不变）、
+/// 落点同名 **永不覆盖**（可能是用户自己改过的那份）、不留半截。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetroExport {
+    /// 期号（= 源目录名）。
+    pub period: String,
+    /// 结果态（`exported` / `already` / `conflict` / `failed`）—— 界面照这个说话，不再自己判一遍。
+    pub state: retro_package::ExportState,
+    /// 一句人话（成功说导出到哪；`already` / `conflict` 说为什么没覆盖）。
+    pub message: String,
+    /// 落点（`<目标目录>/<期号>/`；`failed` 时它可能不存在）。
+    pub path: String,
+}
+
+/// 临时目录序号（同一进程里连续导入 / 导出不撞名）。
 static IMPORT_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 impl RetroStore {
@@ -680,6 +697,165 @@ impl RetroStore {
         })
     }
 
+    /// 导出某一期到用户选的目录（`FR-R-13-08` 显示设定第三项）。
+    ///
+    /// 四条口径：
+    /// 1. **源包只读** —— 只从 `<库根>/<期号>/` 读，一个字节都不写回（导出前后包目录逐字节不变）；
+    /// 2. **落点 = `<目标目录>/<期号>/`** —— 同一目录导多期不互相踩，也不在目标里散落一堆文件；
+    /// 3. **同名永不覆盖** —— 逐字节相同 ⇒ `already`；不同 ⇒ `conflict`（那可能是用户改过的那份）；
+    /// 4. **不留半截** —— 拷进 `.export-<pid>-<seq>-<期号>` 临时目录 → 复核逐字节相同 → 改名；
+    ///    任何一步失败只删自己那份临时目录。
+    ///
+    /// 目标目录**落在源包内**（或就是源包）时直接拒：临时目录会跑进被复制的树里，`copy_tree` 会边拷边读自己。
+    pub fn export(&self, period: &str, target: &str) -> Result<RetroExport, DbFailure> {
+        let period = self.checked_period(period)?;
+        let source = self.root.join(&period);
+        let text = target.trim();
+        if text.is_empty() {
+            return Err(DbFailure {
+                message: "没有给出导出到哪个目录".to_string(),
+                hint: "点「导出…」用系统选择器选一个目录；会在里面建一个以期号命名的子目录。"
+                    .to_string(),
+            });
+        }
+        let target_dir = Path::new(text);
+        if !target_dir.is_dir() {
+            return Err(DbFailure {
+                message: format!("这不是一个目录：{text}"),
+                hint: "导出要选一个**已存在**的目录；选目录，不要选文件。".to_string(),
+            });
+        }
+        if let (Ok(source_real), Ok(target_real)) = (source.canonicalize(), target_dir.canonicalize()) {
+            if target_real == source_real || target_real.starts_with(&source_real) {
+                return Err(DbFailure {
+                    message: format!("不能导出到这一期自己的目录里：{text}"),
+                    hint: "换一个目录（比如桌面 / 文档）：导出是**拷贝出去**，不能拷进被拷的那份里。"
+                        .to_string(),
+                });
+            }
+        }
+        let dest = target_dir.join(&period);
+        if dest.exists() {
+            let state = retro_package::export_decision(same_tree(&source, &dest));
+            let message = match state {
+                retro_package::ExportState::Already => {
+                    format!("已导出（{} 与库里那份逐字节相同，未覆盖）", dest.display())
+                }
+                _ => format!(
+                    "{} 已存在且内容不同：保留它，没有覆盖（需要新的一份就先改名或换目录）",
+                    dest.display()
+                ),
+            };
+            return Ok(RetroExport {
+                period,
+                state,
+                message,
+                path: dest.display().to_string(),
+            });
+        }
+        let seq = IMPORT_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let staging = target_dir.join(format!(".export-{}-{seq}-{period}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&staging);
+        let failed = |reason: String| RetroExport {
+            period: period.clone(),
+            state: retro_package::ExportState::Failed,
+            message: reason,
+            path: dest.display().to_string(),
+        };
+        if let Err(reason) = copy_tree(&source, &staging) {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Ok(failed(format!(
+                "复制失败：{reason}（临时目录已清掉，库里那份没动）"
+            )));
+        }
+        // 复核：拷出来的必须与库里那份逐字节相同（源在拷贝过程中被改 / 丢了文件都报出来，不落一个不完整的一份）。
+        if !same_tree(&source, &staging) {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Ok(failed(
+                "复制出来的内容与库里那份不一致（临时目录已清掉，库里那份没动；再导一次）"
+                    .to_string(),
+            ));
+        }
+        if let Err(error) = std::fs::rename(&staging, &dest) {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Ok(failed(format!(
+                "落位失败：{error}（临时目录已清掉，库里那份没动）"
+            )));
+        }
+        Ok(RetroExport {
+            period,
+            state: retro_package::ExportState::Exported,
+            message: format!("已导出到 {}", dest.display()),
+            path: dest.display().to_string(),
+        })
+    }
+
+    /// 导出目录的「打开所在文件夹」**计划**（只算不启动）—— 路径 = 目标目录 + 期号再拼一次。
+    ///
+    /// 与 `reveal_plan` 同一套口径：**不收任意路径**，两段都校验（期号走 `validate_period`，
+    /// 目标必须是目录），拼出来的那一份必须真的在盘上。
+    pub fn export_reveal_plan(
+        &self,
+        period: &str,
+        target: &str,
+    ) -> Result<doyah_studio_db::RevealPlan, DbFailure> {
+        let period = self.checked_period(period)?;
+        let text = target.trim();
+        if text.is_empty() {
+            return Err(DbFailure {
+                message: "没有给出导出目录".to_string(),
+                hint: "先点「导出…」选一个目录，再打开它。".to_string(),
+            });
+        }
+        let target_dir = Path::new(text);
+        if !target_dir.is_dir() {
+            return Err(DbFailure {
+                message: format!("导出目录不在了：{text}"),
+                hint: "目录可能被移动或删除；重新导出一次即可。".to_string(),
+            });
+        }
+        let dir = target_dir.join(&period);
+        if !dir.is_dir() {
+            return Err(DbFailure {
+                message: format!("这个目录里还没有这一期：{}", dir.display()),
+                hint: "先点「导出…」把这一期导出到这个目录。".to_string(),
+            });
+        }
+        Ok(doyah_studio_db::explorer_plan(
+            true,
+            &dir.display().to_string(),
+        ))
+    }
+
+    /// 真的在资源管理器里打开导出目录（**不等进程**）。
+    pub fn export_reveal(
+        &self,
+        period: &str,
+        target: &str,
+    ) -> Result<doyah_studio_db::RevealPlan, DbFailure> {
+        let plan = self.export_reveal_plan(period, target)?;
+        spawn_plan(&plan)?;
+        Ok(plan)
+    }
+
+    /// 期号 → 校验 + 源包目录（**只认库里的期**；导出 / 打开都以它为准）。
+    fn checked_period(&self, period: &str) -> Result<String, DbFailure> {
+        let period = period.trim().to_string();
+        if let Err(reason) = retro_package::validate_period(&period) {
+            return Err(DbFailure {
+                message: format!("期号不可用：{reason}"),
+                hint: "从左侧列表里选一期再操作。".to_string(),
+            });
+        }
+        if !self.root.join(&period).is_dir() {
+            return Err(DbFailure {
+                message: format!("库里没有这一期：{period}"),
+                hint: "点「刷新」看看它还在不在（包可能被移到别处了）。".to_string(),
+            });
+        }
+        Ok(period)
+    }
+
     /// 「打开所在文件夹」的**计划**（只算不启动）：期号合法 + 库里真有这一期 ⇒ 资源管理器计划。
     ///
     /// 与 `fs::reveal_entry` 同一套口径：路径由库根拼出来（**不接受**从前端来的任意路径），
@@ -708,18 +884,24 @@ impl RetroStore {
     /// 真的在资源管理器里打开这一期目录（**不等进程**：explorer 把已有窗口提到前面就返回）。
     pub fn reveal(&self, period: &str) -> Result<doyah_studio_db::RevealPlan, DbFailure> {
         let plan = self.reveal_plan(period)?;
-        std::process::Command::new(&plan.program)
-            .args(&plan.args)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|error| DbFailure {
-                message: format!("启动资源管理器失败：{error}（{}）", plan.program),
-                hint: "确认这台机器上资源管理器可用（PATH 里能找到）。".to_string(),
-            })?;
+        spawn_plan(&plan)?;
         Ok(plan)
     }
+}
+
+/// 真启动一个系统计划（**不等进程**：explorer 把已有窗口提到前面就返回）。
+fn spawn_plan(plan: &doyah_studio_db::RevealPlan) -> Result<(), DbFailure> {
+    std::process::Command::new(&plan.program)
+        .args(&plan.args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|error| DbFailure {
+            message: format!("启动资源管理器失败：{error}（{}）", plan.program),
+            hint: "确认这台机器上资源管理器可用（PATH 里能找到）。".to_string(),
+        })?;
+    Ok(())
 }
 
 /// 拼一条导入结果（`path` 只为读数 —— 失败时它可能还不存在）。
@@ -1664,6 +1846,164 @@ mod tests {
         // 期号走领域层校验：越界写法连路径都不该拼出来
         let escape = store.reveal_plan("../outside").unwrap_err();
         assert!(escape.message.contains("期号不可用"), "{}", escape.message);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // ── 导出（`FR-R-13-08` 显示设定第三项：选目录 ⇒ 复制 ⇒ 打开所在文件夹）──────────────
+
+    /// 一棵树的逐字节快照（相对路径 + 内容）—— 用来断言「拷出来的一模一样 / 源包没被动过」。
+    fn tree_bytes(root: &Path) -> Vec<(String, Vec<u8>)> {
+        list_tree(root)
+            .expect("列树")
+            .into_iter()
+            .map(|rel| {
+                let bytes = std::fs::read(root.join(&rel)).expect("读文件");
+                (rel.to_string_lossy().replace('\\', "/"), bytes)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_export_copies_every_file_and_leaves_the_package_byte_for_byte_untouched() {
+        let base = root("export-copy");
+        let lib = base.join("lib");
+        let out = base.join("out");
+        std::fs::create_dir_all(&out).expect("建导出目录");
+        write_package(&lib, "2026-W43", Some(r#"{"title":"一期"}"#), Some("# 标题\n\n正文"));
+        std::fs::write(lib.join("2026-W43/assets/curve.png"), [1u8, 2, 3, 4]).expect("写图");
+        let before = tree_bytes(&lib.join("2026-W43"));
+        let store = RetroStore::new(&lib);
+
+        let result = store
+            .export("2026-W43", &out.display().to_string())
+            .expect("导出");
+        assert_eq!(result.state, retro_package::ExportState::Exported);
+        assert!(result.message.contains("已导出"), "{}", result.message);
+        assert!(
+            out.join("2026-W43").is_dir(),
+            "落点 = <目标目录>/<期号>/（同目录导多期不互相踩）"
+        );
+        assert_eq!(
+            tree_bytes(&out.join("2026-W43")),
+            before,
+            "导出的每一份文件都要逐字节等于库里那份"
+        );
+        assert_eq!(
+            tree_bytes(&lib.join("2026-W43")),
+            before,
+            "导出是只读源：包目录一个字节都不许变"
+        );
+        let leftovers: Vec<String> = std::fs::read_dir(&out)
+            .expect("读目标目录")
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .filter(|name| name.starts_with(".export-"))
+            .collect();
+        assert!(leftovers.is_empty(), "不留半截临时目录：{leftovers:?}");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn exporting_the_same_period_twice_says_already_and_does_not_stack_versions() {
+        let base = root("export-twice");
+        let lib = base.join("lib");
+        let out = base.join("out");
+        std::fs::create_dir_all(&out).expect("建导出目录");
+        write_package(&lib, "2026-W43", Some(r#"{"title":"一期"}"#), Some("正文"));
+        let store = RetroStore::new(&lib);
+        let target = out.display().to_string();
+
+        let first = store.export("2026-W43", &target).expect("第一次导出");
+        assert_eq!(first.state, retro_package::ExportState::Exported);
+        let before = tree_bytes(&out.join("2026-W43"));
+
+        let second = store.export("2026-W43", &target).expect("第二次导出");
+        assert_eq!(
+            second.state,
+            retro_package::ExportState::Already,
+            "同样的内容再导一次不该叠版本、也不该覆盖：{}",
+            second.message
+        );
+        assert!(second.message.contains("未覆盖"), "{}", second.message);
+        assert_eq!(
+            tree_bytes(&out.join("2026-W43")),
+            before,
+            "already 必须一个字节都不写"
+        );
+        let names: Vec<String> = std::fs::read_dir(&out)
+            .expect("读目标目录")
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(
+            names,
+            vec!["2026-W43".to_string()],
+            "目标目录里只该有这一期的目录，不出现「副本 (2)」这类派生：{names:?}"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn an_export_the_user_edited_is_a_conflict_and_stays_untouched() {
+        let base = root("export-conflict");
+        let lib = base.join("lib");
+        let out = base.join("out");
+        std::fs::create_dir_all(&out).expect("建导出目录");
+        write_package(&lib, "2026-W43", Some(r#"{"title":"一期"}"#), Some("库里那份"));
+        let store = RetroStore::new(&lib);
+        let target = out.display().to_string();
+        assert_eq!(
+            store.export("2026-W43", &target).expect("先导出一份").state,
+            retro_package::ExportState::Exported
+        );
+        // 用户在导出的那份上改了一笔
+        let exported_report = out.join("2026-W43/report.md");
+        std::fs::write(&exported_report, "我自己改过的").expect("改导出件");
+        let source_before = tree_bytes(&lib.join("2026-W43"));
+
+        let again = store.export("2026-W43", &target).expect("再导一次");
+        assert_eq!(
+            again.state,
+            retro_package::ExportState::Conflict,
+            "内容不同 ⇒ 判冲突，不覆盖：{}",
+            again.message
+        );
+        assert!(again.message.contains("没有覆盖"), "{}", again.message);
+        assert_eq!(
+            std::fs::read(&exported_report).expect("读导出件"),
+            "我自己改过的".as_bytes(),
+            "用户改过的那份必须原样留着"
+        );
+        assert_eq!(
+            tree_bytes(&lib.join("2026-W43")),
+            source_before,
+            "冲突这一路也不许动源包"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn exporting_into_the_package_itself_is_refused() {
+        let base = root("export-inside");
+        let lib = base.join("lib");
+        write_package(&lib, "2026-W43", Some(r#"{"title":"一期"}"#), Some("正文"));
+        let store = RetroStore::new(&lib);
+        let package = lib.join("2026-W43");
+        let before = tree_bytes(&package);
+
+        let same = store
+            .export("2026-W43", &package.display().to_string())
+            .unwrap_err();
+        assert!(same.message.contains("不能导出到这一期自己的目录"), "{}", same.message);
+        let inside = store
+            .export("2026-W43", &package.join("assets").display().to_string())
+            .unwrap_err();
+        assert!(inside.message.contains("不能导出到这一期自己的目录"), "{}", inside.message);
+        assert_eq!(
+            tree_bytes(&package),
+            before,
+            "被拒的那两次不许在包目录里留下任何东西"
+        );
         let _ = std::fs::remove_dir_all(&base);
     }
 }

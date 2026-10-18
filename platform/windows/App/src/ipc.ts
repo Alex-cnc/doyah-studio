@@ -119,6 +119,10 @@ export const COMMANDS = {
   retroImportBatch: 'retro_import_batch',
   // 在资源管理器里打开这一期的包目录（本机存储的可见面：只收期号，路径在 Rust 侧拼）
   retroReveal: 'retro_reveal',
+  // 导出一期到用户选的目录（FR-R-13-08 显示设定第三项：只读源 / 同名永不覆盖 / 不留半截）
+  retroExport: 'retro_export',
+  // 打开导出目录（路径 = 目标目录 + 期号在 Rust 侧再拼一次，不收任意路径）
+  retroExportReveal: 'retro_export_reveal',
   // 智能体设置（FR-AI-01：总开关 / 端点 / 模型 / 配额；密钥单独存，永不回显）
   agentSettingsGet: 'agent_settings_get',
   agentSettingsSave: 'agent_settings_save',
@@ -859,6 +863,42 @@ export function retroImportBatch(source: string): Promise<RetroBatchImport> {
 export function retroReveal(period: string): Promise<RevealPlan> {
   if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
   return invoke(COMMANDS.retroReveal, { period })
+}
+
+/**
+ * 导出一期到一个用户选的目录（`FR-R-13-08` 显示设定第三项）。
+ *
+ * 回的是**判定结果**（`exported` / `already` / `conflict` / `failed` + 一句人话）：
+ * 源包只读、同名永不覆盖、不留半截全在 Rust 侧（`RetroStore::export`），**前端不判第二遍**。
+ * `path` = 落点 `<目标目录>/<期号>/`（界面拿它说「导出到哪儿」）。
+ */
+export type RetroExportState = 'exported' | 'already' | 'conflict' | 'failed'
+
+export interface RetroExport {
+  /** 期号（= 源目录名）。 */
+  period: string
+  /** 结果态。 */
+  state: RetroExportState
+  /** 一句人话（成功说导出到哪；`already` / `conflict` 说为什么没覆盖）。 */
+  message: string
+  /** 落点（`<目标目录>/<期号>/`；`failed` 时可能不存在）。 */
+  path: string
+}
+
+export function retroExport(period: string, target: string): Promise<RetroExport> {
+  if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
+  return invoke(COMMANDS.retroExport, { period, target })
+}
+
+/**
+ * 在资源管理器里打开**导出目录**。
+ *
+ * 只收「目标目录 + 期号」两段，路径在 Rust 侧再拼一次并校验（界面给不了任意路径）；
+ * 返回真的用了哪个程序（界面据此说一句人话）。
+ */
+export function retroExportReveal(period: string, target: string): Promise<RevealPlan> {
+  if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
+  return invoke(COMMANDS.retroExportReveal, { period, target })
 }
 
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────

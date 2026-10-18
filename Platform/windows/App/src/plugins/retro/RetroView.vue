@@ -17,6 +17,8 @@ import { filterCards, groupCards } from './periodIndex'
 import {
   openExternal,
   retroAsset,
+  retroExport,
+  retroExportReveal,
   retroImport,
   retroImportBatch,
   retroPackages,
@@ -26,6 +28,7 @@ import {
   type MdDocument,
   type RetroBatchImport,
   type RetroCard,
+  type RetroExport,
   type RetroImport,
   type RetroImportState,
   type RetroMedia,
@@ -397,6 +400,79 @@ async function revealSelected(): Promise<void> {
   }
 }
 
+// ── 导出（`FR-R-13-08` 显示设定第三项：选目录 ⇒ 复制 ⇒ 打开所在文件夹）────────────────
+//
+// 三条口径：
+// ① **选择器仍只有一处**（`pickFolder`），与导入共用同一份系统对话框；
+// ② **判定不在前端**：`exported` / `already` / `conflict` / `failed` 与那句人话都是 Rust 回的，
+//    这里只摆原话（与导入同一套纪律，不自己判第二遍）；
+// ③ **导出完就在那儿**：真写出一份（或落点早已有同一份）就把导出目录打开 —— 需求口径就是
+//    「复制 ⇒ 打开所在文件夹」；打不开只在下面记一句，**不改导出结果**（导出确实成功了）。
+
+/** 正在导出（按钮置灰，防连点导两份）。 */
+const exporting = ref(false)
+/** 上一次导出的结果（`null` = 这一期还没导过；切期清掉）。 */
+const exportResult = ref<RetroExport | null>(null)
+/** 导出彻底失败（连判定都没拿到：不是目录 / 命令报错）。 */
+const exportFailure = ref<DbFailure | null>(null)
+/** 上一次导出到的目录（「打开导出目录」用它；切期清掉）。 */
+const exportTarget = ref<string | null>(null)
+/** 打开导出目录失败（与导出本身的失败分开记）。 */
+const exportShowFailure = ref<DbFailure | null>(null)
+const exportShowing = ref(false)
+
+async function exportSelected(): Promise<void> {
+  const period = selected.value
+  if (!period || exporting.value) return
+  exportFailure.value = null
+  exportResult.value = null
+  exportShowFailure.value = null
+  let target: string | null = null
+  try {
+    target = await pickFolder({ title: tr('plugin.retro.exportPickTitle') })
+  } catch (error) {
+    exportFailure.value = describeError(error)
+    return
+  }
+  // 取消不是失败：什么都不做、什么都不说
+  if (!target) return
+  exporting.value = true
+  try {
+    const result = await retroExport(period, target)
+    // 中途切期：结果属于刚导的那一期，别挂到当前这一期上
+    if (selected.value !== period) return
+    exportResult.value = result
+    exportTarget.value = result.state === 'failed' ? null : target
+    if (result.state === 'exported' || result.state === 'already') {
+      try {
+        await retroExportReveal(period, target)
+      } catch (error) {
+        if (selected.value === period) exportShowFailure.value = describeError(error)
+      }
+    }
+  } catch (error) {
+    exportFailure.value = describeError(error)
+  } finally {
+    exporting.value = false
+  }
+}
+
+/** 再开一次导出目录（自动打开失败 / 用户关掉窗口后想看时用）。 */
+async function showExportFolder(): Promise<void> {
+  const period = selected.value
+  const target = exportTarget.value
+  if (!period || !target || exportShowing.value) return
+  exportShowing.value = true
+  exportShowFailure.value = null
+  try {
+    await retroExportReveal(period, target)
+  } catch (error) {
+    exportShowFailure.value = describeError(error)
+  } finally {
+    exportShowing.value = false
+  }
+}
+
 // ── 显示设定：目录锚点 + 字号三档（`FR-R-13-08` ①）────────────────────────────────
 //
 // 口径：**显示设定只改「怎么看」，一个字节都不写回包** —— 大纲是正文标题的派生
@@ -461,6 +537,11 @@ async function open(card: RetroCard): Promise<void> {
   openFailures.value = {}
   revealFailure.value = null
   activeLine.value = null
+  // 导出结果属于「刚导的那一期」：切期就清掉，免得把上一期的落点挂到这一期
+  exportResult.value = null
+  exportFailure.value = null
+  exportTarget.value = null
+  exportShowFailure.value = null
   releaseMedia()
   try {
     const report = await retroReport(card.period)
@@ -805,6 +886,17 @@ onMounted(() => {
           >
             {{ tr('plugin.retro.reveal') }}
           </button>
+          <!-- 导出（`FR-R-13-08` ① 显示设定第三项）：复制出去，包本身一个字节不动 -->
+          <button
+            class="retro__refresh"
+            type="button"
+            data-role="retro-export"
+            :disabled="exporting"
+            :title="tr('plugin.retro.exportHint')"
+            @click="exportSelected"
+          >
+            {{ exporting ? tr('plugin.retro.exporting') : tr('plugin.retro.export') }}
+          </button>
           <!-- 字号三档（`FR-R-13-08` ①「显示设定」）：只改容器 class，不碰包 -->
           <span v-if="document" class="retro__font" role="group" :aria-label="tr('plugin.retro.fontAria')">
             <button
@@ -870,6 +962,28 @@ onMounted(() => {
         <p v-if="revealFailure" class="retro__failure" data-role="retro-reveal-failure">
           {{ tr('plugin.retro.revealFailed') }}：{{ revealFailure.message }}
           <span v-if="revealFailure.hint" class="retro__failure-hint">{{ revealFailure.hint }}</span>
+        </p>
+        <!-- 导出结果（`exported` / `already` / `conflict` 都是 Rust 判完的原话）+ 打开导出目录 -->
+        <p v-if="exportResult" class="retro__hint" data-role="retro-export-result" :data-state="exportResult.state">
+          {{ exportResult.message }}
+          <button
+            v-if="exportTarget"
+            class="retro__refresh"
+            type="button"
+            data-role="retro-export-show"
+            :disabled="exportShowing"
+            :title="tr('plugin.retro.exportShowHint')"
+            @click="showExportFolder"
+          >
+            {{ tr('plugin.retro.exportShow') }}
+          </button>
+        </p>
+        <p v-if="exportFailure" class="retro__failure" data-role="retro-export-failure">
+          {{ tr('plugin.retro.exportFailed') }}：{{ exportFailure.message }}
+          <span v-if="exportFailure.hint" class="retro__failure-hint">{{ exportFailure.hint }}</span>
+        </p>
+        <p v-if="exportShowFailure" class="retro__failure" data-role="retro-export-show-failure">
+          {{ tr('plugin.retro.exportShowFailed') }}：{{ exportShowFailure.message }}
         </p>
         <p v-if="reportLoading" class="retro__hint">{{ tr('plugin.retro.loading') }}</p>
         <p v-else-if="reportFailure" class="retro__failure" data-role="retro-report-failure">

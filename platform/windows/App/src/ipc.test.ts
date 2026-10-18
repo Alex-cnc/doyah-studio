@@ -93,6 +93,8 @@ describe('ipc', () => {
       'retro_import',
       'retro_import_batch',
       'retro_reveal',
+      'retro_export',
+      'retro_export_reveal',
       'agent_settings_get',
       'agent_settings_save',
       'agent_key_save',
