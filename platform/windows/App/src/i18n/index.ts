@@ -591,6 +591,14 @@ export const DICT = {
     en: 'This SQL is never auto-executed: the button below only puts it in the editor; you still press run.',
   },
   'agent.generate.insert': { 'zh-Hans': '写入编辑器', en: 'Put in editor' },
+  'agent.generate.saveAsQuery': {
+    'zh-Hans': '存成已保存查询',
+    en: 'Save as saved query',
+  },
+  'agent.generate.saveAsQueryTip': {
+    'zh-Hans': '把这段 SQL 存进「已保存」（编辑器内容不动；保存面板里还能改名、同名会先问覆盖）',
+    en: 'Store this SQL under Saved (the editor is untouched; you can rename it there, and a duplicate name asks before overwriting)',
+  },
   'agent.generate.desktopOnly': {
     'zh-Hans': '浏览器预览里没有外发通道，生成功能只在桌面应用里可用。',
     en: 'The browser preview has no outbound channel; this works in the desktop app only.',
@@ -671,6 +679,12 @@ export const DICT = {
     en: 'Give this query a name first (spaces alone do not count)',
   },
   'saveQuery.sqlRequired': { 'zh-Hans': '编辑器里没有可保存的 SQL', en: 'There is no SQL in the editor to save' },
+  // 保存面板的两种来源：默认存编辑器；从「AI 生成」过来时存的是**生成的那一段**（编辑器不动）。
+  // 这句必须显示 —— 否则用户会以为存的是编辑器里的内容（存错东西比存不上更糟）。
+  'saveQuery.sourceGenerated': {
+    'zh-Hans': '要存的是「AI 生成」的那段 SQL —— 编辑器里的内容不动',
+    en: 'Saving the SQL that the assistant generated — the editor content stays untouched',
+  },
   'saveQuery.conflict': {
     'zh-Hans': '已有同名查询「{name}」（存于 {time}）—— 覆盖会替换它，不会多出一条',
     en: 'A query named “{name}” already exists (saved at {time}) — overwriting replaces it instead of adding a second one',

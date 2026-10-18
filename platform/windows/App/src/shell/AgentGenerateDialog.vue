@@ -31,6 +31,14 @@ const emit = defineEmits<{
   (event: 'close'): void
   /** 把生成的 SQL 交给编辑器（**只写文本，不执行**）。 */
   (event: 'insert', sql: string): void
+  /**
+   * 把生成的 SQL 交给视图去「存成已保存查询」。
+   *
+   * 为什么由视图去存、而不在本弹层里调保存 IPC：保存这条路上已经有一份**唯一入口**
+   * （工具栏的保存面板：同名先问覆盖、写盘后刷新列表）。弹层自己再存一遍 = 第二份判重与第二份
+   * 冲突提示，两处迟早不一致。所以这里只把文本交出去，保存仍只有一条路。
+   */
+  (event: 'save-as', sql: string): void
 }>()
 
 function tr(key: DictKey, vars?: Record<string, string | number>): string {
@@ -124,6 +132,12 @@ async function generate(): Promise<void> {
 function insert(): void {
   if (!result.value) return
   emit('insert', result.value.sql)
+}
+
+/** 交给视图存成已保存查询（**不写编辑器、不执行** —— 视图那边走的是同一条保存入口）。 */
+function saveAsQuery(): void {
+  if (!result.value || !result.value.sql.trim()) return
+  emit('save-as', result.value.sql)
 }
 </script>
 
@@ -237,9 +251,21 @@ function insert(): void {
           <li v-for="line in result.limitations" :key="line">{{ line }}</li>
         </ul>
         <p class="gen__never">{{ tr('agent.generate.neverRuns') }}</p>
-        <button type="button" class="gen__btn gen__btn--primary" data-testid="generate-insert" @click="insert">
-          {{ tr('agent.generate.insert') }}
-        </button>
+        <div class="gen__result-actions">
+          <button type="button" class="gen__btn gen__btn--primary" data-testid="generate-insert" @click="insert">
+            {{ tr('agent.generate.insert') }}
+          </button>
+          <!-- 第二条出路：不写编辑器、不执行，直接交给视图的保存面板（同一条保存入口） -->
+          <button
+            type="button"
+            class="gen__btn"
+            data-testid="generate-save-as-query"
+            :title="tr('agent.generate.saveAsQueryTip')"
+            @click="saveAsQuery"
+          >
+            {{ tr('agent.generate.saveAsQuery') }}
+          </button>
+        </div>
       </section>
     </div>
   </div>
@@ -362,6 +388,14 @@ function insert(): void {
   margin: 0;
   font-size: var(--ds-font-body-size);
   font-weight: 600;
+}
+
+/* 结果区的两颗按钮（写入编辑器 / 存成已保存查询）：窄窗口下换行，不挤成一条 */
+.gen__result-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  flex-wrap: wrap;
 }
 
 /* 三段裁决：靠**左侧色条**区分，不新增底色（底色会与主题的层级语义打架） */

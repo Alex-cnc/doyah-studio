@@ -154,6 +154,22 @@ describe('AgentGenerateDialog（FR-AI-02）', () => {
     expect(state.generateCalls).toBe(1)
   })
 
+  it('生成后点「存成已保存查询」：只把这段 SQL 交出去，不发第二次生成、也不写编辑器', async () => {
+    const wrapper = mountDialog()
+    await askAndPreview(wrapper)
+    await wrapper.find('[data-testid="generate-send"]').trigger('click')
+    await flushPromises()
+
+    const saveAs = wrapper.find('[data-testid="generate-save-as-query"]')
+    expect(saveAs.exists()).toBe(true)
+    await saveAs.trigger('click')
+
+    expect(wrapper.emitted('save-as')).toEqual([['SELECT count(*) FROM public.orders;']])
+    // 否定面：保存不是「写入编辑器」，也不是再发一次请求
+    expect(wrapper.emitted('insert')).toBeUndefined()
+    expect(state.generateCalls).toBe(1)
+  })
+
   it('闸门在发送那一刻才被挡住时，如实显示裁决而不是假装成功', async () => {
     state.reply = {
       status: 'blocked',

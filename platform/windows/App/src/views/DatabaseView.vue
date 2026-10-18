@@ -1138,6 +1138,16 @@ const pendingOverwrite = ref<SavedQuery | null>(null)
 /** 一次操作的结果话（保存成功 / 已回填），显示在按钮旁。 */
 const savedQueryNote = ref('')
 const savedQueryBusy = ref(false)
+/**
+ * **这一次要存的那段 SQL**（来源可以不是编辑器）。
+ *
+ * 为什么要一个变量而不是直接读 `sql.value`：保存面板现在有两个入口 —— 工具栏（存编辑器当前内容）
+ * 与「AI 生成」结果区（存**生成的那段**，编辑器内容不动）。两处必须走**同一份**面板与同一套
+ * 判重/覆盖规则，所以差异只落在「这段 SQL 从哪里来」这一格上。
+ */
+const saveQueryTargetSql = ref('')
+/** 这次的面板是不是从「AI 生成」过来的（是 ⇒ 面板上明写「要存的是生成的那段，编辑器不动」）。 */
+const saveQueryFromGenerator = ref(false)
 
 /** 读列表：失败**如实说**，不当成「没有已保存查询」。 */
 async function loadSavedQueries(): Promise<void> {
@@ -1148,10 +1158,19 @@ async function loadSavedQueries(): Promise<void> {
   }
 }
 
-/** 打开保存面板：名字预填「第一行有内容的 SQL」，冲突态清零。 */
-function openSaveQueryPanel(): void {
+/**
+ * 打开保存面板。`sourceSql` 不传 ⇒ 存编辑器当前内容（工具栏那条路，行为与之前一字不差）；
+ * 传了 ⇒ 存**那段文本**（「AI 生成」结果区那条路：生成结果不必先进编辑器就能存下来）。
+ *
+ * ⚠️ 模板里必须写成 `openSaveQueryPanel()`：写 `@click="openSaveQueryPanel"` 会把 MouseEvent
+ * 当成 `sourceSql` 传进来 —— 那会存下一段 `[object Object]`，而且看着像「保存成功了」。
+ */
+function openSaveQueryPanel(sourceSql?: string): void {
   stashActiveQuery()
-  saveQueryName.value = suggestQueryName(sql.value, activeQueryTabRecord.value?.title ?? '')
+  const fromGenerator = typeof sourceSql === 'string'
+  saveQueryTargetSql.value = fromGenerator ? sourceSql : sql.value
+  saveQueryFromGenerator.value = fromGenerator
+  saveQueryName.value = suggestQueryName(saveQueryTargetSql.value, activeQueryTabRecord.value?.title ?? '')
   saveQueryError.value = ''
   pendingOverwrite.value = null
   saveQueryPanelOpen.value = true
@@ -1161,6 +1180,7 @@ function closeSaveQueryPanel(): void {
   saveQueryPanelOpen.value = false
   pendingOverwrite.value = null
   saveQueryError.value = ''
+  saveQueryFromGenerator.value = false
 }
 
 /**
@@ -1173,7 +1193,10 @@ async function submitSaveQuery(overwrite = false): Promise<void> {
     saveQueryError.value = t('saveQuery.nameRequired')
     return
   }
-  if (!sql.value.trim()) {
+  // 校验与写盘都认 `saveQueryTargetSql`（这一格才是「本次要存的东西」；读 `sql.value` 会把
+  // 「AI 生成 → 存」这条路上编辑器里的旧内容存进去）。
+  const target = saveQueryTargetSql.value
+  if (!target.trim()) {
     saveQueryError.value = t('saveQuery.sqlRequired')
     return
   }
@@ -1183,7 +1206,7 @@ async function submitSaveQuery(overwrite = false): Promise<void> {
     const report = await savedQuerySave({
       id: crypto.randomUUID(),
       name,
-      sql: sql.value,
+      sql: target,
       connectionId: connectedConnection.value?.id ?? null,
       connectionName: connectedConnection.value?.name ?? null,
       database: info.value?.database ?? null,
@@ -1197,6 +1220,7 @@ async function submitSaveQuery(overwrite = false): Promise<void> {
     }
     pendingOverwrite.value = null
     saveQueryPanelOpen.value = false
+    saveQueryFromGenerator.value = false
     savedQueryNote.value = t('saveQuery.saved', { name })
   } catch (error) {
     saveQueryError.value = t('saveQuery.failed', { reason: describeError(error).message })
@@ -1689,6 +1713,18 @@ function applyGeneratedSql(text: string): void {
   void refreshHighlight()
   void refreshCompletions()
   void nextTick(() => sqlArea.value?.focus())
+}
+
+/**
+ * 「AI 生成」结果区点「存成已保存查询」：关弹层，走**同一条保存面板**，只是这次要存的是生成的那段。
+ *
+ * 三条都不做：不写编辑器（用户没点「写入编辑器」）、不执行、不跳过面板（面板里还能改名；
+ * 同名仍由服务端先报冲突、用户确认才覆盖）。
+ */
+function saveGeneratedSql(text: string): void {
+  if (!text.trim()) return
+  generateOpen.value = false
+  openSaveQueryPanel(text)
 }
 
 /** 类型分组标题的文案（种类名走语言表；认不出的种类如实归到「其他」）。 */
@@ -3691,7 +3727,7 @@ async function probe() {
               :disabled="!sql.trim()"
               :title="t('saveQuery.saveTip')"
               data-testid="save-query-open"
-              @click="openSaveQueryPanel"
+              @click="openSaveQueryPanel()"
             >
               {{ t('saveQuery.save') }}
             </button>
@@ -3743,6 +3779,10 @@ async function probe() {
 
         <!-- 保存查询面板（FR-EDIT-14）：名字预填、空名当场拒、**同名先问覆盖**（未确认前服务端没写盘） -->
         <div v-if="saveQueryPanelOpen" class="db__save-query" data-testid="save-query-panel">
+          <!-- 来源是「AI 生成」时明写这一句：不然用户会以为存的是编辑器里的内容 -->
+          <p v-if="saveQueryFromGenerator" class="db__save-query-source" data-testid="save-query-source">
+            {{ t('saveQuery.sourceGenerated') }}
+          </p>
           <label class="db__save-query-label">
             <span>{{ t('saveQuery.nameLabel') }}</span>
             <input
@@ -4296,6 +4336,7 @@ async function probe() {
     :language="language"
     @close="generateOpen = false"
     @insert="applyGeneratedSql"
+    @save-as="saveGeneratedSql"
   />
 </template>
 
@@ -4752,10 +4793,16 @@ async function probe() {
 
 /* 冲突与失败都是**要人读**的话：占一整行，不与按钮挤在一起 */
 .db__save-query-warn,
-.db__save-query-error {
+.db__save-query-error,
+.db__save-query-source {
   flex-basis: 100%;
   margin: 0;
   font-size: var(--ds-font-caption-size);
+}
+
+/* 「要存的是 AI 生成的那段」：提示色而不是警告色（它不是问题，是要紧的口径） */
+.db__save-query-source {
+  color: var(--ds-color-text-secondary);
 }
 
 .db__save-query-warn {
