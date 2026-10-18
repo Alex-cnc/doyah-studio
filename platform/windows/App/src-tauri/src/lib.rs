@@ -1231,6 +1231,47 @@ async fn db_run_ddl(
     session.run_ddl(&statements).await
 }
 
+/// **抓一份库结构快照**（FR-DDL-04）：对比要的两侧都从这里拿。
+///
+/// `label` 是界面给这一侧起的名字（如「上周的库」），会原样进报告 —— 界面上显示的是它，
+/// 不是本层猜的「基准 / 目标」。
+#[tauri::command]
+async fn schema_snapshot(
+    state: State<'_, ShellState>,
+    schema: String,
+    label: Option<String>,
+    taken_at: Option<i64>,
+) -> Result<doyah_studio_db::schema_diff::SchemaSnapshot, DbFailure> {
+    if schema.trim().is_empty() {
+        return Err(DbFailure {
+            message: "schema 是空的：不知道抓哪个 schema 的结构".to_string(),
+            hint: "先选一个 schema（默认 public）再抓快照。".to_string(),
+        });
+    }
+    let session = current_session(&state).await?;
+    session
+        .schema_snapshot(
+            label.as_deref().map(str::trim).filter(|l| !l.is_empty()).unwrap_or("当前库"),
+            schema.trim(),
+            taken_at.unwrap_or(0),
+        )
+        .await
+}
+
+/// **两份快照 → 差异 + 有序同步脚本**（FR-DDL-04）。
+///
+/// **纯函数、不连库**：两侧都是快照，所以两个库不在同一次会话里也能比。
+/// 生成失败（空表名 / 零列表）不进 Err，而是逐条落进报告里的 `skipped` —— 界面要能
+/// 「一边报差异、一边说这条为什么不生成」，而不是整块报错什么都看不到。
+#[tauri::command]
+fn schema_diff_plan(
+    base: doyah_studio_db::schema_diff::SchemaSnapshot,
+    target: doyah_studio_db::schema_diff::SchemaSnapshot,
+    allow_drop: Option<bool>,
+) -> doyah_studio_db::schema_diff::SchemaDiffReport {
+    doyah_studio_db::schema_diff::diff(&base, &target, allow_drop.unwrap_or(false))
+}
+
 /// 单行详情的**值检查**（FR-DATA-05）：宽表竖排看、长 JSON 格式化看。///
 /// 纯计算（判定形态 + 给展示文本与元信息），**不碰数据库** —— 输入就是界面上那一行。
 /// 要点：NULL 与空串分开；JSON **必须真能解析**才当 JSON（半截日志按文本显示）；
@@ -1926,6 +1967,8 @@ pub fn run() {
             db_table_shape,
             generate_ddl,
             db_run_ddl,
+            schema_snapshot,
+            schema_diff_plan,
             export_to_file,
             preview_import,
             run_import,

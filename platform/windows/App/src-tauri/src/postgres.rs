@@ -13,6 +13,7 @@
 
 use doyah_studio_db::config::ConnectionConfig;
 use doyah_studio_db::ddl::ColumnDef;
+use doyah_studio_db::schema_diff::{assemble_snapshot, SchemaSnapshot, SnapshotColumnRow};
 use doyah_studio_db::tree::{
     assemble_columns, CappedRows, ColumnRow, ObjectKind, ObjectNode, TableColumns,
     METADATA_ROW_LIMIT,
@@ -766,6 +767,66 @@ impl PgSession {
         }
 
         Ok(TableShape { schema: schema.to_string(), table: table.to_string(), columns, indexes, constraints })
+    }
+
+    /// **抓一份库结构快照**（FR-DDL-04）：一个 schema 的全部表 + 列 + 主键。
+    ///
+    /// 口径：
+    /// ① **两条 SQL，一次抓完**（列一条、主键一条）—— 不逐表问（几十张表会变几十次往返，
+    ///    且中途有人改结构时两次读数对不上）；
+    /// ② 类型走 `format_type`（服务端原文，与表设计器同源），可空 / 默认值走 `pg_attribute` /
+    ///    `pg_attrdef`：`information_schema.columns` 对继承与域类型的覆盖不如目录表稳；
+    /// ③ **只收普通表与分区表**（`relkind in ('r','p')`）：视图没有"同步结构"这回事，
+    ///    收进来会让同步脚本生成一堆执行不了的 `ALTER`；
+    /// ④ 组装交给领域层 `schema_diff::assemble_snapshot`（组装规则只有一份，判据钉同一份）。
+    pub async fn schema_snapshot(
+        &self,
+        label: &str,
+        schema: &str,
+        taken_at: i64,
+    ) -> Result<SchemaSnapshot, DbFailure> {
+        let columns_sql = "SELECT c.relname, a.attname, \
+                                  pg_catalog.format_type(a.atttypid, a.atttypmod) AS col_type, \
+                                  NOT a.attnotnull AS is_nullable, \
+                                  pg_catalog.pg_get_expr(d.adbin, d.adrelid) AS default_expr \
+                           FROM pg_catalog.pg_attribute a \
+                           JOIN pg_catalog.pg_class c ON c.oid = a.attrelid \
+                           JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+                           LEFT JOIN pg_catalog.pg_attrdef d \
+                             ON d.adrelid = a.attrelid AND d.adnum = a.attnum \
+                           WHERE n.nspname = $1 AND c.relkind IN ('r','p') \
+                             AND a.attnum > 0 AND NOT a.attisdropped \
+                           ORDER BY c.relname, a.attnum";
+        let mut rows: Vec<SnapshotColumnRow> = Vec::new();
+        for row in self
+            .client
+            .query(columns_sql, &[&schema])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?
+        {
+            rows.push((row.get(0), row.get(1), row.get(2), row.get(3), row.get(4)));
+        }
+
+        let pk_sql = "SELECT t.relname, a.attname \
+                      FROM pg_catalog.pg_index ix \
+                      JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid \
+                      JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace \
+                      JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON TRUE \
+                      JOIN pg_catalog.pg_attribute a \
+                        ON a.attrelid = t.oid AND a.attnum = k.attnum \
+                      WHERE n.nspname = $1 AND ix.indisprimary AND t.relkind IN ('r','p') \
+                      ORDER BY t.relname, k.ord";
+        let mut primary_keys: Vec<(String, String)> = Vec::new();
+        for row in self
+            .client
+            .query(pk_sql, &[&schema])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?
+        {
+            primary_keys.push((row.get(0), row.get(1)));
+        }
+
+        Ok(assemble_snapshot(label, schema, taken_at, &rows, &primary_keys))
     }
 
     /// **按序执行一批 DDL**（1.5 段）。逐句报告（哪句成、哪句败、各耗时），与多段执行同一形状。

@@ -70,6 +70,9 @@ export const COMMANDS = {
   dbTableShape: 'db_table_shape',
   generateDdl: 'generate_ddl',
   dbRunDdl: 'db_run_ddl',
+  // Schema 对比与同步（FR-DDL-04）：快照对快照 —— 两个库不在同一次会话里也能比
+  schemaSnapshot: 'schema_snapshot',
+  schemaDiffPlan: 'schema_diff_plan',
   // 导入导出（1.6：CSV / JSON / Excel；原子落盘、一个事务写入）
   exportToFile: 'export_to_file',
   previewImport: 'preview_import',
@@ -946,6 +949,92 @@ export function generateDdl(request: {
 export function dbRunDdl(statements: string[]): Promise<StatementOutcome[]> {
   return call(COMMANDS.dbRunDdl, { statements }, () => {
     throw bypassDb('ipc.action.run') as DbFailure
+  })
+}
+
+// ── Schema 对比与同步（FR-DDL-04）────────────────────────────────────────────────────
+
+/** 快照里的一列：**只有结构与名，没有数据**。 */
+export interface SnapshotColumn {
+  name: string
+  dataType: string
+  isNullable: boolean
+  defaultExpr: string | null
+}
+
+/** 快照里的一张表。 */
+export interface SnapshotTable {
+  name: string
+  columns: SnapshotColumn[]
+  primaryKey: string[]
+}
+
+/** 一份库结构快照（一个 schema 一张）。 */
+export interface SchemaSnapshot {
+  label: string
+  schema: string
+  takenAt: number
+  tables: SnapshotTable[]
+}
+
+export type TableDiffStatus = 'create' | 'drop' | 'alter' | 'same'
+
+/** 一张表的差异摘要。 */
+export interface TableDiff {
+  table: string
+  status: TableDiffStatus
+  addedColumns: string[]
+  removedColumns: string[]
+  alteredColumns: string[]
+  primaryKeyDiffers: boolean
+}
+
+/** 看见了但**没生成语句**的差异（"没做"必须说出来）。 */
+export interface SkippedChange {
+  table: string
+  what: string
+  reason: string
+}
+
+/** 对比报告（脚本有序：建表 → 改表 → 删表）。 */
+export interface SchemaDiffReport {
+  baseLabel: string
+  targetLabel: string
+  baseTableCount: number
+  targetTableCount: number
+  tableDiffs: TableDiff[]
+  statements: DdlStatement[]
+  skipped: SkippedChange[]
+  allowDrop: boolean
+  destructiveCount: number
+  createdTables: number
+  alteredTables: number
+  droppedTables: number
+}
+
+/**
+ * **抓一份结构快照**（`FR-DDL-04`）：对比的两侧都从这条命令拿。
+ *
+ * 浏览器旁路没有真库 ⇒ 抛带原因的错误（面板据它显示「这里没有真库」，不用空快照冒充「空库」）。
+ */
+export function schemaSnapshot(schema: string, label: string): Promise<SchemaSnapshot> {
+  return call(
+    COMMANDS.schemaSnapshot,
+    { schema, label, takenAt: Date.now() },
+    () => {
+      throw bypassDb('ipc.action.schemaSnapshot') as DbFailure
+    },
+  )
+}
+
+/** **两份快照 → 差异 + 同步脚本**（纯函数，不连库；`allowDrop` 默认关）。 */
+export function schemaDiffPlan(
+  base: SchemaSnapshot,
+  target: SchemaSnapshot,
+  allowDrop = false,
+): Promise<SchemaDiffReport> {
+  return call(COMMANDS.schemaDiffPlan, { base, target, allowDrop }, () => {
+    throw bypassDb('ipc.action.schemaDiff') as DbFailure
   })
 }
 

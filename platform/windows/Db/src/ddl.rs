@@ -300,6 +300,57 @@ pub fn alter_table(
     Ok(out)
 }
 
+/// 生成**建表**语句（FR-DDL-04 的同步脚本要用它）。
+///
+/// 口径：
+/// ① 列定义走与 `ALTER` 同一份 `column_spec`（同一个类型原文 / NOT NULL / DEFAULT）——
+///    「新列怎么写」只此一处，别在这里另拼一遍；
+/// ② 主键按快照里给的顺序写进表体（`PRIMARY KEY (a, b)`），空则**不写**（不替用户造主键）；
+/// ③ 一句 `CREATE TABLE` 建整张表：表不存在才到这一步，逐列 `ADD` 会多出 N 次往返；
+/// ④ 标 `Additive`（只加东西），与 `ddl::drop_table` 的 `Destructive` 相对。
+pub fn create_table(
+    schema: Option<&str>,
+    table: &str,
+    columns: &[ColumnDef],
+    primary_key: &[String],
+) -> Result<DdlStatement, DdlError> {
+    if table.trim().is_empty() {
+        return Err(DdlError {
+            message: "表名是空的：不知道要建哪张表".to_string(),
+            hint: "快照里那张表的表名是空的 —— 先确认快照文件没被手改坏。".to_string(),
+        });
+    }
+    if columns.is_empty() {
+        return Err(DdlError {
+            message: format!("表 {} 在基准里一列都没有：没列就建不出表", table.trim()),
+            hint: "PostgreSQL 支持零列表，但同步脚本给不出来 —— 这张表请手工建。".to_string(),
+        });
+    }
+    if columns.iter().any(|c| c.name.trim().is_empty()) {
+        return Err(DdlError {
+            message: format!("表 {} 里有一列没名字", table.trim()),
+            hint: "列名是从快照里读的；快照里出现空列名说明它被改坏了。".to_string(),
+        });
+    }
+    let target = crate::writeback::qualified(schema, table);
+    let mut body: Vec<String> = columns.iter().map(|c| format!("  {}", column_spec(c))).collect();
+    if !primary_key.is_empty() {
+        let names = primary_key
+            .iter()
+            .map(|c| quote_ident(c))
+            .collect::<Vec<_>>()
+            .join(", ");
+        body.push(format!("  PRIMARY KEY ({names})"));
+    }
+    let bare = format!("CREATE TABLE {target} (\n{}\n);", body.join(",\n"));
+    Ok(with_comment(
+        &format!("建表 {}（基准有、目标没有；只加东西，可直接执行）", table.trim()),
+        bare,
+        StatementClass::Additive,
+        "建表",
+    ))
+}
+
 /// 生成**新建索引**语句。
 pub fn create_index(
     schema: Option<&str>,
@@ -632,6 +683,32 @@ mod tests {
         assert_eq!(t.class, StatementClass::Destructive);
         assert!(t.bare.contains("DROP TABLE \"app\".\"orders\""));
         assert!(t.sql.contains("丢全部数据"));
+    }
+
+    #[test]
+    fn create_table_writes_every_column_and_the_primary_key_in_order() {
+        let statement = create_table(
+            Some("app"),
+            "orders",
+            &[
+                col("id", "bigint", false, Some("nextval('orders_id_seq')")),
+                col("memo", "text", true, None),
+            ],
+            &["id".to_string()],
+        )
+        .unwrap();
+        assert_eq!(statement.class, StatementClass::Additive);
+        assert!(statement.bare.starts_with("CREATE TABLE \"app\".\"orders\""));
+        assert!(statement.bare.contains("\"id\" bigint NOT NULL DEFAULT nextval('orders_id_seq')"));
+        assert!(statement.bare.contains("\"memo\" text"));
+        assert!(statement.bare.contains("PRIMARY KEY (\"id\")"));
+    }
+
+    #[test]
+    fn create_table_without_columns_says_why_instead_of_writing_broken_sql() {
+        let error = create_table(None, "empty", &[], &[]).unwrap_err();
+        assert!(error.message.contains("一列都没有"), "实际：{}", error.message);
+        assert!(!error.hint.is_empty(), "失败要给下一步做什么");
     }
 
     #[test]

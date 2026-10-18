@@ -97,6 +97,7 @@ import ConnectionLabel from '../shell/ConnectionLabel.vue'
 import ConnectionDialog from '../shell/ConnectionDialog.vue'
 import type { ConnectionDialogMode } from '../shell/connectionDialog'
 import NodeIcon from './NodeIcon.vue'
+import SchemaDiffPanel from './SchemaDiffPanel.vue'
 import {
   savedQuerySourceLabel,
   savedQuerySqlPreview,
@@ -651,6 +652,15 @@ async function runImportNow() {
 // ① 维护命令与杀会话**只生成文本**——面板里没有"执行"按钮，只有"复制"；
 // ② 会话列表按**危害**排（等锁优先），与领域层排序一致；
 // ③ 删库确认要**逐字打库名**，判定在领域层（这里只把结果显示出来）。
+
+// Schema 对比与同步（FR-DDL-04）：面板自己持两侧快照，本页只负责开关与「脚本进编辑器」
+const schemaDiffOpen = ref(false)
+
+/** 把同步脚本放进编辑器（**只放不执行**：执行仍走编辑器 + 危险分级那套动线）。 */
+function openSchemaScript(text: string): void {
+  sql.value = text
+  tabNote.value = t('schema.openedNote')
+}
 
 const adminOpen = ref(false)
 const adminDatabases = ref<DatabaseInfo[]>([])
@@ -3836,6 +3846,15 @@ async function probe() {
                 <button
                     class="db__btn db__btn--icon"
                     type="button"
+                    :title="t('schema.open')"
+                    data-testid="schema-open-panel"
+                    @click="schemaDiffOpen = !schemaDiffOpen"
+                  >
+                    <ActionIcon name="diff" />
+                  </button>
+                <button
+                    class="db__btn db__btn--icon"
+                    type="button"
                     title="管理面板"
                     @click="adminOpen = !adminOpen; if (adminOpen) loadAdmin()"
                   >
@@ -3843,6 +3862,14 @@ async function probe() {
                   </button>
                 <span v-if="copied" class="db__note">{{ copied }}</span>
               </div>
+
+              <!-- Schema 对比与同步（FR-DDL-04）：两侧各自抓快照 → 差异 → 同步脚本（只生成、不执行） -->
+              <SchemaDiffPanel
+                v-if="schemaDiffOpen"
+                :language="language"
+                @close="schemaDiffOpen = false"
+                @open-sql="openSchemaScript"
+              />
 
               <!-- 管理面（1.7）：读数只读；维护 / 杀会话**只生成语句**，面板里没有执行按钮 -->
               <div v-if="adminOpen" class="db__io">

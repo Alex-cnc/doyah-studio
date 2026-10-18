@@ -58,6 +58,8 @@ describe('ipc', () => {
       'db_table_shape',
       'generate_ddl',
       'db_run_ddl',
+      'schema_snapshot',
+      'schema_diff_plan',
       'export_to_file',
       'preview_import',
       'run_import',

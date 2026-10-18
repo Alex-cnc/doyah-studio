@@ -55,6 +55,8 @@ export const DICT = {
   'ipc.action.import': { 'zh-Hans': '导入', en: 'import' },
   'ipc.action.openWorkspace': { 'zh-Hans': '打开工作区', en: 'open a workspace' },
   'ipc.action.terminal': { 'zh-Hans': '起终端会话', en: 'start a terminal session' },
+  'ipc.action.schemaSnapshot': { 'zh-Hans': '抓结构快照', en: 'take a structure snapshot' },
+  'ipc.action.schemaDiff': { 'zh-Hans': '对比结构', en: 'compare schemas' },
   'ipc.confirm.dbName': {
     'zh-Hans': '库名不一致，没有删除（这是防误删的闸）',
     en: 'Database name does not match; nothing was dropped (this is the guard against accidents)',
@@ -603,6 +605,58 @@ export const DICT = {
   'io.importButton': { 'zh-Hans': '导入（一个事务）', en: 'Import (one transaction)' },
 
   // 管理面
+  // ── Schema 对比与同步（FR-DDL-04）────────────────────────────────────────────────
+  'schema.title': { 'zh-Hans': 'Schema 对比与同步', en: 'Compare and sync schemas' },
+  'schema.open': { 'zh-Hans': '结构对比', en: 'Compare schemas' },
+  'schema.close': { 'zh-Hans': '关闭', en: 'Close' },
+  'schema.base': { 'zh-Hans': '基准（左）', en: 'Base (left)' },
+  'schema.target': { 'zh-Hans': '目标（右）', en: 'Target (right)' },
+  'schema.baseHint': {
+    'zh-Hans': '左 = 你想要的结构，右 = 要被改的结构；同步脚本只会把右侧改成左侧的样子。',
+    en: 'Left is the structure you want, right is the one to change: the sync script only turns the right side into the left one.',
+  },
+  'schema.schemaName': { 'zh-Hans': 'schema', en: 'schema' },
+  'schema.capture': { 'zh-Hans': '抓当前结构', en: 'Capture current structure' },
+  'schema.slotEmpty': { 'zh-Hans': '还没抓', en: 'not captured yet' },
+  'schema.slotFilled': { 'zh-Hans': '{schema} · {tables} 张表 · {when}', en: '{schema} · {tables} tables · {when}' },
+  'schema.compare': { 'zh-Hans': '对比', en: 'Compare' },
+  'schema.allowDrop': { 'zh-Hans': '允许删除（会生成 DROP）', en: 'Allow drops (generates DROP)' },
+  'schema.allowDropNote': {
+    'zh-Hans': '默认关闭：删表 / 删列只列出、不生成语句，跳过了什么会在下方逐条报出来。',
+    en: 'Off by default: extra tables/columns are listed but no DROP is generated, and every skip is reported below.',
+  },
+  'schema.copy': { 'zh-Hans': '复制同步脚本', en: 'Copy sync script' },
+  'schema.openInEditor': { 'zh-Hans': '在编辑器打开', en: 'Open in editor' },
+  'schema.busy': { 'zh-Hans': '抓取中…', en: 'Capturing…' },
+  'schema.needBoth': { 'zh-Hans': '两侧都要先抓一份快照才能对比', en: 'Capture both sides before comparing' },
+  'schema.inSync': {
+    'zh-Hans': '两侧结构一致：没有语句，也没有被跳过的差异。',
+    en: 'Both sides match: no statements and nothing skipped.',
+  },
+  'schema.diffTitle': { 'zh-Hans': '差异（{n} 张表）', en: 'Differences ({n} tables)' },
+  'schema.statementTitle': {
+    'zh-Hans': '同步脚本（{n} 条，其中删除类 {m} 条）',
+    en: 'Sync script ({n} statements, {m} destructive)',
+  },
+  'schema.skippedTitle': { 'zh-Hans': '跳过的差异（{n} 条）', en: 'Skipped differences ({n})' },
+  'schema.status.create': { 'zh-Hans': '基准有、目标没有 → 建表', en: 'only in base → create' },
+  'schema.status.drop': { 'zh-Hans': '目标多出来的 → 删表', en: 'only in target → drop' },
+  'schema.status.alter': { 'zh-Hans': '两侧都有、结构不同 → 改表', en: 'both sides, structure differs → alter' },
+  'schema.status.same': { 'zh-Hans': '一致', en: 'same' },
+  'schema.addedCols': { 'zh-Hans': '加 {n} 列', en: '+{n} columns' },
+  'schema.removedCols': { 'zh-Hans': '删 {n} 列', en: '-{n} columns' },
+  'schema.alteredCols': { 'zh-Hans': '改 {n} 列', en: '~{n} columns' },
+  'schema.pkDiffers': { 'zh-Hans': '主键不同（只报告、不生成）', en: 'primary key differs (reported, not generated)' },
+  'schema.copyDone': { 'zh-Hans': '已复制 {n} 条语句', en: 'Copied {n} statements' },
+  'schema.openedNote': {
+    'zh-Hans': '同步脚本已放进编辑器（未执行）',
+    en: 'The sync script was put into the editor (not executed)',
+  },
+  'schema.copyFailed': {
+    'zh-Hans': '复制失败：外壳不给剪贴板权限（可手动选中脚本复制）',
+    en: 'Copy failed: no clipboard permission (select the script and copy it manually)',
+  },
+
   'admin.title': { 'zh-Hans': '库与会话', en: 'Databases and sessions' },
   'admin.refresh': { 'zh-Hans': '刷新', en: 'Refresh' },
   'admin.maintenance': { 'zh-Hans': '生成维护命令', en: 'Generate maintenance commands' },
