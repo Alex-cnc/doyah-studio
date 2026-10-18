@@ -146,17 +146,28 @@ struct MainWindow: View {
                 // 编辑的滚动位置与撤销栈一起弄丢。这条把手只改面板自身的高度，**层级不变**。
                 LowerPaneResizeHandle(
                     height: appState.lowerPaneHeight,
-                    available: lowerPaneAvailableHeight
-                ) { appState.lowerPaneHeight = $0 }
+                    available: lowerPaneAvailableHeight,
+                    commit: { appState.lowerPaneHeight = $0
+                        // 拖得出高度 ⇒ 面板必须是展开的（折叠态从下面往上拖同样走这里）。
+                        appState.isLowerPaneVisible = true
+                    },
+                    collapse: { appState.isLowerPaneVisible = false }
+                )
                 LowerPaneView(tab: appState.selectedTab, isCollapsed: collapsed)
                     // 高度提示**由面板自己那一层算**（`LowerPaneSizing`）：
                     // 折叠态必须是「不设约束」，否则这里会留下一条比标题栏宽的空白带
                     // （2026-09-30 需求提出者实测缺陷，队列 `L-121`—— 原来这里写死
                     //  `.frame(minHeight: 90, idealHeight: 200)`，折叠后那 90pt 的框还在）。
-                    .frame(
-                        minHeight: LowerPaneSizing.minHeight(collapsed: collapsed),
-                        idealHeight: lowerPaneIdealHeight(collapsed: collapsed)
-                    )
+                    // **展开态钉死高度**（`FR-EDIT-29` 人工点验不过的修法）：原来这里是
+                    // `.frame(minHeight:idealHeight:)` 两个提示，而面板内部通篇
+                    // `maxHeight: .infinity` ⇒ 父级 VStack 按「两个可伸缩子视图」分配剩余高度，
+                    // 理想高度只是个愿望，拖出来的值落不到布局上，分隔条一动不动。
+                    // 折叠态给 `nil`：让面板按标题栏一行自量（`L-121` 的空白带口径不变）。
+                    .frame(height: LowerPaneResize.panelHeight(
+                        dragged: appState.lowerPaneHeight,
+                        collapsed: collapsed,
+                        available: lowerPaneAvailableHeight
+                    ))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -538,21 +549,35 @@ struct ConnectionSwitchSheet: View {
     }
 }
 
-// MARK: - L-181：下方面板顶边的拖拽把手
+// MARK: - L-181 / FR-EDIT-29：下方面板顶边的拖拽把手
 
-/// 下方面板顶边的**拖拽把手**（队列 `L-181`）。
+/// 下方面板顶边的**拖拽把手**（队列 `L-181`；`FR-EDIT-29` 人工点验不过后重做）。
 ///
-/// 形态：一条发丝线 + 一个 8pt 高的命中区（2pt 的线谁也点不着 —— 判据①「随时能拖」要真能拖）。
-/// 拖动按**相对位移**算：按下那一刻的高度记在 `startHeight`，不记这个的话一按就跳。
+/// **第一版为什么不灵**（人类主人 2026-10-18 点验原话「不能拖拽面板高度」的根因）：
+/// 面板那一层只给了 `.frame(minHeight:idealHeight:)` 两个**提示**，而面板内部的终端内容
+/// 是 `.frame(maxHeight: .infinity)`（可伸缩）⇒ 父级 `VStack` 把可用高度分给两个可伸缩
+/// 子视图，**理想高度只是个愿望**：拖出来的值改不动真正的布局，分隔条自然一动不动。
+/// 现在：展开态**钉死**高度（`LowerPaneResize.panelHeight` 给的确定值），拖一下就是一下。
+///
+/// 形态：一条发丝线 + 一个 8pt 高的命中区（2pt 的线谁也点不着）。拖动按**相对位移**算：
+/// 按下那一刻的高度记在引用盒里（不进 `@State` —— 父视图每帧重算时 `@State` 可能被换掉，
+/// 起点一丢就成了「越拖越快」）。
 struct LowerPaneResizeHandle: View {
     /// 当前高度（来自 `AppState`，持久化）。
     let height: CGFloat
     /// 可用高度：拿窗口内容高度当代理（`nil` ⇒ 由 Core 走兜底上限）。
     let available: CGFloat?
-    /// 写回（已由 Core 夹过范围）。
+    /// 写回（已由 Core 夹过范围）。写回即视为「要看见面板」⇒ 由调用点负责展开。
     let commit: (CGFloat) -> Void
+    /// 拖到最小高度以下 ⇒ 折叠（高度值**不改**，展开时原样恢复）。
+    let collapse: () -> Void
 
-    @State private var startHeight: CGFloat?
+    /// 拖拽起点（引用盒，见类型注释）。
+    @State private var origin = DragOrigin()
+
+    final class DragOrigin {
+        var height: CGFloat?
+    }
 
     var body: some View {
         ZStack {
@@ -567,25 +592,27 @@ struct LowerPaneResizeHandle: View {
                 .gesture(
                     DragGesture(minimumDistance: 1)
                         .onChanged { value in
-                            let base = startHeight ?? height
-                            if startHeight == nil { startHeight = base }
-                            // 往上拖（translation.height < 0）＝ 面板更高。
-                            commit(base - value.translation.height)
+                            let base = origin.height ?? height
+                            origin.height = base
+                            switch LowerPaneResize.outcome(
+                                startHeight: base,
+                                translation: value.translation.height,
+                                available: available
+                            ) {
+                            case let .resize(next): commit(next)
+                            case .collapse: collapse()
+                            }
                         }
-                        .onEnded { _ in startHeight = nil }
+                        .onEnded { _ in origin.height = nil }
                 )
         }
         .frame(height: 8)
+        // 判据 / 点验抓手：这一条是「面板能拖」的唯一入口，界面快照与探针都按它找。
+        .accessibilityIdentifier("lower-pane-resize-handle")
     }
 }
 
 private extension MainWindow {
-    /// 展开态的理想高度：**拖过就用拖出来的**（`AppState` 持久化），没拖过用默认口径（`L-181`）。
-    func lowerPaneIdealHeight(collapsed: Bool) -> CGFloat? {
-        guard !collapsed else { return LowerPaneSizing.idealHeight(collapsed: true) }
-        return LowerPaneSizing.clamped(height: appState.lowerPaneHeight, available: lowerPaneAvailableHeight)
-    }
-
     /// 可用高度：**窗口内容高度**当代理。
     /// 刻意不引 `GeometryReader` —— 那一层裹上去会动到编辑器所在子树的结构（见 `SQLEditorView.swift:58`）。
     var lowerPaneAvailableHeight: CGFloat? {

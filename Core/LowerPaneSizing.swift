@@ -61,3 +61,37 @@ public enum LowerPaneSizing {
         return min(max(height, lower), upper)
     }
 }
+
+
+// MARK: 拖拽落点（`FR-EDIT-29` 人工点验不过：面板高度拖不动）
+
+/// 一次拖拽的落点：要么是夹取后的新高度，要么「拖到最小高度以下 ⇒ 折叠」。
+public enum LowerPaneDragOutcome: Equatable {
+    case resize(CGFloat)
+    case collapse
+}
+
+/// 把「按下那一刻的高度 + 本帧位移」算成落点 —— **纯逻辑，可单测**。
+///
+/// 方向口径与视图一致：`translation.height < 0`（往上拖）＝ 面板变高。
+/// 低于最小高度**不是「夹到最小」而是「折叠」**（与 VS Code 一致）：夹到最小的话，
+/// 用户继续往下拖时面板纹丝不动，看不出「再往下就是收起」这层意思。
+public enum LowerPaneResize {
+
+    public static func outcome(startHeight: CGFloat, translation: CGFloat, available: CGFloat?) -> LowerPaneDragOutcome {
+        let raw = startHeight - translation
+        guard raw >= LowerPaneSizing.draggableMinHeight else { return .collapse }
+        return .resize(LowerPaneSizing.clamped(height: raw, available: available))
+    }
+
+    /// 面板该被**钉死**的高度（`nil` = 不设约束，折叠态按内容自量 —— `L-121` 的口径不变）。
+    ///
+    /// 为什么要返回确定值而不是 `.idealHeight` 提示（2026-10-18 人类主人点验缺陷的根因）：
+    /// 面板内部的终端 / 结果区是 `.frame(maxHeight: .infinity)`（可伸缩），而父级 `VStack`
+    /// 里内容区同样可伸缩 ⇒ 可用高度在两者之间分配，**理想高度只是愿望**：拖出来的值
+    /// 改不动真正的布局，分隔条就不动。钉成确定值以后，拖一下就是一下。
+    public static func panelHeight(dragged: CGFloat, collapsed: Bool, available: CGFloat?) -> CGFloat? {
+        guard !collapsed else { return LowerPaneSizing.minHeight(collapsed: true) }
+        return LowerPaneSizing.clamped(height: dragged, available: available)
+    }
+}
