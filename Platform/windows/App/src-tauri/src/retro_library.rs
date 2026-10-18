@@ -442,10 +442,275 @@ fn list_assets(dir: &Path) -> Vec<String> {
     names
 }
 
+// ── 包导入（`FR-R-12-04` ① 幂等 / ③ 逐条报错、不写半截）──────────────────────────────
+//
+// 三条口径：
+// 1. **先判后拷**：包不合法（缺 index / 缺正文 / 编码错 / 期号不合法）⇒ 一个字节都不写；
+// 2. **幂等**：落点已有同名期且内容逐字节相同 ⇒ 报「已导入」，不新增条目、不覆盖；
+// 3. **不留半截**：先拷进 `.import-<pid>-<seq>-<期号>` 临时目录（隐藏目录，扫描器本来就会跳过），
+//    验过再改名；任何一步失败都删掉自己那份临时目录，**已有包一个字节不碰**。
+
+/// 一次导入的结果（界面照这个报一句人话：态 + 原因 + 落点）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetroImport {
+    /// 期号（= 源目录名）。
+    pub period: String,
+    /// 结果态：`imported` / `already` / `conflict` / `rejected` / `failed`。
+    pub state: retro_package::ImportState,
+    /// 一句人话（成功说落到哪，失败说为什么）。
+    pub message: String,
+    /// 落点路径（`imported` 是新包；`already` / `conflict` 是库里那一份）。
+    pub path: String,
+}
+
+/// 临时目录序号（同一进程里连续导入不撞名）。
+static IMPORT_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+impl RetroStore {
+    /// 导入一个包（`source` = 用户用系统选择器选中的**包目录**，目录名即期号）。
+    ///
+    /// 返回 `Ok` = 判定完成（`rejected` / `conflict` 是**逐条报**的结果，不是程序错误）；
+    /// `Err` 只留给「连判都判不了」（空串 / 源不是目录）。
+    pub fn import(&self, source: &str) -> Result<RetroImport, DbFailure> {
+        let text = source.trim();
+        if text.is_empty() {
+            return Err(DbFailure {
+                message: "没有给出要导入的包目录".to_string(),
+                hint: "点「导入包…」用系统选择器选一个包目录；目录名就是期号。".to_string(),
+            });
+        }
+        let src = Path::new(text);
+        if !src.is_dir() {
+            return Err(DbFailure {
+                message: format!("这不是一个目录：{text}"),
+                hint: "包 = 一个目录（里面要有 index.json / report.md）；选目录，不要选文件。"
+                    .to_string(),
+            });
+        }
+        let Some(period) = src.file_name().and_then(|name| name.to_str()).map(str::to_string) else {
+            return Ok(import_result(
+                text,
+                retro_package::ImportState::Rejected,
+                "目录名不是合法 UTF-8：期号无从取，这一包没导入".to_string(),
+                src,
+            ));
+        };
+        if let Err(reason) = retro_package::validate_period(&period) {
+            return Ok(import_result(
+                &period,
+                retro_package::ImportState::Rejected,
+                format!("期号不可用：{reason}"),
+                src,
+            ));
+        }
+        // ① 先判：这个包画不画得出来（缺件 / 编码错 / JSON 坏都在这一步报，一个字节都不写）。
+        if let Err(reason) = validate_package(src, &period) {
+            return Ok(import_result(
+                &period,
+                retro_package::ImportState::Rejected,
+                reason,
+                src,
+            ));
+        }
+        let target = self.root.join(&period);
+        if target.exists() {
+            let state = retro_package::existing_decision(same_tree(src, &target));
+            let message = match state {
+                retro_package::ImportState::Already => {
+                    "已导入（与库里那份逐字节相同，未覆盖）".to_string()
+                }
+                _ => "库里已有同名期且内容不同：保留原包，没有覆盖".to_string(),
+            };
+            return Ok(import_result(&period, state, message, &target));
+        }
+        // ② 先拷进临时目录，验过再改名 —— 失败只删自己那份。
+        if let Err(error) = std::fs::create_dir_all(&self.root) {
+            return Err(DbFailure {
+                message: format!("建包目录失败：{error}（{}）", self.root.display()),
+                hint: "确认 %APPDATA% 可写，或换一台机器上的可写位置。".to_string(),
+            });
+        }
+        let seq = IMPORT_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let staging = self
+            .root
+            .join(format!(".import-{}-{seq}-{period}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&staging);
+        if let Err(reason) = copy_tree(src, &staging) {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Ok(import_result(
+                &period,
+                retro_package::ImportState::Failed,
+                format!("复制失败：{reason}（临时目录已清掉，库里原有的包没动）"),
+                &target,
+            ));
+        }
+        // 拷完再验一次：源在拷贝过程中被改 / 拷贝丢文件 ⇒ 宁可报出来，也不落一个坏包。
+        if let Err(reason) = validate_package(&staging, &period) {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Ok(import_result(
+                &period,
+                retro_package::ImportState::Rejected,
+                format!("复制出来的包读不出来：{reason}（临时目录已清掉）"),
+                &target,
+            ));
+        }
+        if let Err(error) = std::fs::rename(&staging, &target) {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Ok(import_result(
+                &period,
+                retro_package::ImportState::Failed,
+                format!("落位失败：{error}（临时目录已清掉）"),
+                &target,
+            ));
+        }
+        Ok(import_result(
+            &period,
+            retro_package::ImportState::Imported,
+            format!("已导入到 {}", target.display()),
+            &target,
+        ))
+    }
+}
+
+/// 拼一条导入结果（`path` 只为读数 —— 失败时它可能还不存在）。
+fn import_result(
+    period: &str,
+    state: retro_package::ImportState,
+    message: String,
+    path: &Path,
+) -> RetroImport {
+    RetroImport {
+        period: period.to_string(),
+        state,
+        message,
+        path: path.display().to_string(),
+    }
+}
+
+/// 校验一个包目录能不能画出来（与 `snapshot` 同一套判定：缺 index / 缺正文 / 编码错 / 字段缺）。
+fn validate_package(dir: &Path, period: &str) -> Result<(), String> {
+    let index_text = read_text(&dir.join(retro_package::INDEX_FILE))?;
+    let report_path = dir.join(retro_package::REPORT_FILE);
+    let bytes = match std::fs::read(&report_path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err("包里没有 report.md（正文是契约三件之一）".to_string())
+        }
+        Err(error) => return Err(format!("读 report.md 失败：{error}")),
+    };
+    if let Err(reason) = retro_package::decode_report(&bytes) {
+        return Err(format!("report.md 读不出来：{reason}"));
+    }
+    let assets = list_assets(&dir.join(retro_package::ASSET_DIR));
+    let source = retro_package::Source {
+        dir_name: period,
+        index_json: index_text.as_deref(),
+        has_report: true,
+        assets: &assets,
+    };
+    retro_package::card_of(&source)
+        .map(|_| ())
+        .map_err(|problem| problem.message)
+}
+
+/// 递归复制（不跟随符号链接：包里出现链接就当场拒，别把包外的东西拖进来）。
+fn copy_tree(src: &Path, dst: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst).map_err(|error| format!("建 {} 失败：{error}", dst.display()))?;
+    let entries =
+        std::fs::read_dir(src).map_err(|error| format!("读 {} 失败：{error}", src.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("遍历 {} 失败：{error}", src.display()))?;
+        let path = entry.path();
+        let file_type = entry
+            .file_type()
+            .map_err(|error| format!("读 {} 的类型失败：{error}", path.display()))?;
+        if file_type.is_symlink() {
+            return Err(format!(
+                "{} 是符号链接：包只认实体文件与目录",
+                path.display()
+            ));
+        }
+        let out = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_tree(&path, &out)?;
+        } else if file_type.is_file() {
+            std::fs::copy(&path, &out)
+                .map_err(|error| format!("复制 {} 失败：{error}", path.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// 两棵目录树**逐字节**比（文件名集合相同 + 每个文件内容相同）。任一读不出来 ⇒ 当作不同。
+fn same_tree(left: &Path, right: &Path) -> bool {
+    match (list_tree(left), list_tree(right)) {
+        (Ok(left_files), Ok(right_files)) if left_files == right_files => left_files
+            .iter()
+            .all(|rel| same_file(&left.join(rel), &right.join(rel))),
+        _ => false,
+    }
+}
+
+/// 目录下的**相对文件路径**清单（排序；目录不进清单 —— 空目录差异不影响「这期是不是同一份」）。
+fn list_tree(root: &Path) -> Result<Vec<PathBuf>, String> {
+    fn walk(base: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+        let entries =
+            std::fs::read_dir(dir).map_err(|error| format!("读 {} 失败：{error}", dir.display()))?;
+        for entry in entries {
+            let entry = entry.map_err(|error| format!("遍历 {} 失败：{error}", dir.display()))?;
+            let path = entry.path();
+            let file_type = entry
+                .file_type()
+                .map_err(|error| format!("读 {} 的类型失败：{error}", path.display()))?;
+            if file_type.is_dir() {
+                walk(base, &path, out)?;
+            } else if file_type.is_file() {
+                if let Ok(rel) = path.strip_prefix(base) {
+                    out.push(rel.to_path_buf());
+                }
+            }
+        }
+        Ok(())
+    }
+    let mut files = Vec::new();
+    walk(root, root, &mut files)?;
+    files.sort();
+    Ok(files)
+}
+
+/// 两个文件内容相同（分块比，不把整份读进内存 —— 媒体可能有几百 MB）。
+fn same_file(left: &Path, right: &Path) -> bool {
+    use std::io::Read;
+    let (Ok(mut a), Ok(mut b)) = (std::fs::File::open(left), std::fs::File::open(right)) else {
+        return false;
+    };
+    let mut buf_a = vec![0u8; 64 * 1024];
+    let mut buf_b = vec![0u8; 64 * 1024];
+    loop {
+        let read_a = match a.read(&mut buf_a) {
+            Ok(n) => n,
+            Err(_) => return false,
+        };
+        let read_b = match b.read(&mut buf_b) {
+            Ok(n) => n,
+            Err(_) => return false,
+        };
+        if read_a != read_b {
+            return false;
+        }
+        if read_a == 0 {
+            return true;
+        }
+        if buf_a[..read_a] != buf_b[..read_b] {
+            return false;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
     fn root(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("doyah-retro-{}-{tag}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -806,5 +1071,159 @@ mod tests {
             );
             assert!(failure.hint.contains("http"), "{bad} 的提示要写清只认 http / https：{}", failure.hint);
         }
+    }
+
+    // ── 包导入（`FR-R-12-04` ① 幂等 / ③ 逐条报错不写半截）──────────────────────────
+
+    /// 库里有没有遗留的临时目录（`.import-*`）—— 判据③的「不留半截」看这个。
+    fn staging_leftovers(root: &Path) -> Vec<String> {
+        let Ok(entries) = std::fs::read_dir(root) else {
+            return Vec::new();
+        };
+        entries
+            .flatten()
+            .filter_map(|entry| entry.file_name().to_str().map(str::to_string))
+            .filter(|name| name.starts_with('.'))
+            .collect()
+    }
+
+    #[test]
+    fn importing_a_readable_package_copies_it_in_and_it_shows_in_the_list() {
+        let base = root("import-ok");
+        let inbox = base.join("inbox");
+        let lib = base.join("lib");
+        write_package(
+            &inbox,
+            "2026-W43",
+            Some(r#"{"title":"导入的周报","dateRange":"2026-10-19 ~ 2026-10-25"}"#),
+            Some("# 导入的周报\n\n段落"),
+        );
+        // 媒体也要跟着包一起进来（判据①「正文与媒体随包落本机」）
+        std::fs::write(inbox.join("2026-W43").join("assets").join("a.png"), b"\x89PNG-ish").expect("写媒体");
+
+        let store = RetroStore::new(&lib);
+        let source = inbox.join("2026-W43");
+        let result = store.import(&source.display().to_string()).expect("导入");
+        assert_eq!(result.state, retro_package::ImportState::Imported, "{}", result.message);
+        assert_eq!(result.period, "2026-W43");
+
+        let snapshot = store.snapshot().expect("扫目录");
+        assert_eq!(snapshot.cards.len(), 1, "导进来就该在列表里");
+        assert_eq!(snapshot.cards[0].title, "导入的周报");
+        assert!(snapshot.problems.is_empty(), "{:?}", snapshot.problems);
+        assert!(
+            lib.join("2026-W43").join("assets").join("a.png").is_file(),
+            "媒体没跟进来：{}",
+            result.message
+        );
+        assert!(staging_leftovers(&lib).is_empty(), "不许留临时目录：{:?}", staging_leftovers(&lib));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn importing_the_same_package_twice_reports_already_and_never_duplicates_it() {
+        let base = root("import-twice");
+        let inbox = base.join("inbox");
+        let lib = base.join("lib");
+        write_package(&inbox, "2026-W43", Some(r#"{"title":"同一份"}"#), Some("正文"));
+        let source = inbox.join("2026-W43").display().to_string();
+        let store = RetroStore::new(&lib);
+
+        let first = store.import(&source).expect("第一次导入");
+        assert_eq!(first.state, retro_package::ImportState::Imported, "{}", first.message);
+        let second = store.import(&source).expect("第二次导入");
+        assert_eq!(
+            second.state,
+            retro_package::ImportState::Already,
+            "同包重复导入必须报「已导入」而不是再写一份：{}",
+            second.message
+        );
+        assert_eq!(store.snapshot().expect("扫目录").cards.len(), 1, "不许出现重复条目");
+        assert!(staging_leftovers(&lib).is_empty());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_different_package_at_the_same_period_is_refused_and_the_library_copy_is_untouched() {
+        let base = root("import-conflict");
+        let inbox = base.join("inbox");
+        let lib = base.join("lib");
+        write_package(&inbox, "2026-W43", Some(r#"{"title":"新的"}"#), Some("新的正文"));
+        write_package(&lib, "2026-W43", Some(r#"{"title":"库里的"}"#), Some("库里的正文"));
+        let store = RetroStore::new(&lib);
+        let source = inbox.join("2026-W43").display().to_string();
+
+        let result = store.import(&source).expect("导入流程走完");
+        assert_eq!(result.state, retro_package::ImportState::Conflict, "{}", result.message);
+        let kept = std::fs::read_to_string(lib.join("2026-W43").join("report.md")).expect("读库里正文");
+        assert_eq!(kept, "库里的正文", "同名期不许被覆盖（用户的原包是证据）");
+        assert_eq!(store.snapshot().expect("扫目录").cards[0].title, "库里的");
+        assert!(staging_leftovers(&lib).is_empty());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_package_without_a_body_is_refused_with_a_reason_and_writes_nothing() {
+        let base = root("import-nobody");
+        let inbox = base.join("inbox");
+        let lib = base.join("lib");
+        write_package(&inbox, "2026-W44", Some(r#"{"title":"只有 index"}"#), None);
+        let store = RetroStore::new(&lib);
+
+        let result = store.import(&inbox.join("2026-W44").display().to_string()).expect("导入流程走完");
+        assert_eq!(result.state, retro_package::ImportState::Rejected, "{}", result.message);
+        assert!(result.message.contains("report.md"), "原因要点名缺哪件：{}", result.message);
+        // 先判后拷：拒收必须发生在**拷贝之前**（拷完才发现＝已经写过一个坏包）
+        assert!(
+            !result.message.contains("复制出来的包"),
+            "先判后拷：{}",
+            result.message
+        );
+        assert!(!lib.join("2026-W44").exists(), "拒了就不许落目录");
+        assert!(staging_leftovers(&lib).is_empty(), "拒了也不许留临时目录");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn an_index_that_is_not_valid_json_is_refused_before_anything_is_copied() {
+        let base = root("import-badjson");
+        let inbox = base.join("inbox");
+        let lib = base.join("lib");
+        // 缺 title：领域层判「这一期画不出卡」
+        write_package(&inbox, "2026-W45", Some(r#"{"dateRange":"2026-10-19 ~ 2026-10-25"}"#), Some("正文"));
+        let store = RetroStore::new(&lib);
+        let result = store.import(&inbox.join("2026-W45").display().to_string()).expect("导入流程走完");
+        assert_eq!(result.state, retro_package::ImportState::Rejected, "{}", result.message);
+        // 同样要「先判后拷」：坏 JSON 不该被复制一份再报
+        assert!(!result.message.contains("复制出来的包"), "先判后拷：{}", result.message);
+        assert!(!lib.join("2026-W45").exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_period_name_that_cannot_be_a_directory_key_is_refused() {
+        let base = root("import-badperiod");
+        let inbox = base.join("inbox");
+        let lib = base.join("lib");
+        let long_name = "9".repeat(70); // 期号上限 64 字符
+        write_package(&inbox, &long_name, Some(r#"{"title":"期号太长"}"#), Some("正文"));
+        let store = RetroStore::new(&lib);
+        let result = store.import(&inbox.join(&long_name).display().to_string()).expect("导入流程走完");
+        assert_eq!(result.state, retro_package::ImportState::Rejected, "{}", result.message);
+        assert!(result.message.contains("期号"), "{}", result.message);
+        assert!(staging_leftovers(&lib).is_empty());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn importing_something_that_is_not_a_directory_is_an_error_not_a_silent_success() {
+        let base = root("import-file");
+        let file = base.join("single-file.txt");
+        std::fs::write(&file, "不是包".as_bytes()).expect("写文件");
+        let store = RetroStore::new(&base.join("lib"));
+        let failure = store.import(&file.display().to_string()).unwrap_err();
+        assert!(failure.message.contains("不是一个目录"), "{}", failure.message);
+        assert!(!failure.hint.is_empty(), "要告诉用户怎么办");
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

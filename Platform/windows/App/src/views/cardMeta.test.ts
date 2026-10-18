@@ -3,7 +3,9 @@
 // 时间那一串退化形状全在这里钉住：换一台机器（不同时区）跑出来的数字必须一样，
 // 所以判据直接断言「按包里写的墙上时间显示」，而不是 `toLocaleString()` 之类的本地化结果。
 import { describe, expect, it } from 'vitest'
-import { coverMime, formatGeneratedAt } from './cardMeta'
+// 本文件放在 `views/`（不在插件目录里）：插件目录的判据 `check-plugins.mjs` 不许 import `vitest`，
+// 而纯函数测试必须在仓里跑得动 ⇒ 测试住宿主侧，被测函数住插件侧，判据一条不放宽。
+import { coverMime, formatGeneratedAt } from '../plugins/retro/cardMeta'
 
 describe('formatGeneratedAt 生成时间', () => {
   it('an_iso_time_with_an_offset_keeps_the_wall_clock_it_was_written_with', () => {

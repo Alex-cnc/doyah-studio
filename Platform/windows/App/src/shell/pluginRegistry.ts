@@ -107,3 +107,18 @@ export function lazyPluginView(entry: string): Component {
   }
   return defineAsyncComponent(load as () => Promise<Component>)
 }
+
+// ── 宿主能力（插件只从这里拿，**不许** import shell 的其它模块）──────────────────────
+//
+// 由头（`FR-R-12-04` 包导入）：插件要弹系统「选文件夹」对话框，但插件边界判据
+// （`check-plugins.mjs` ④）只许插件 import 挂点契约 + 公共面（`i18n` / `ipc` / `vue`）——
+// 让插件直接 import `shell/dialogs` 会把 shell 内部结构暴露给插件，插件也就跟着宿主改。
+//
+// 做法：把「弹选择器」收成**契约上的一项宿主能力**。实现仍只有一处（`shell/dialogs.ts`），
+// 插件只认识这个函数名 —— 宿主换实现（换插件、换权限）不牵动任何插件代码。
+
+/** 弹系统「选择文件夹」对话框：返回绝对路径；用户取消或非真外壳 ⇒ `null`。 */
+export async function pickFolder(options: { title?: string } = {}): Promise<string | null> {
+  const { pickFolder: open } = await import('./dialogs')
+  return open(options)
+}

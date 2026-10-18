@@ -113,6 +113,8 @@ export const COMMANDS = {
   retroAsset: 'retro_asset',
   // 外链交给系统默认处理（FR-R-13-09 ②：视图内不嵌 iframe、也不自己出网）
   openExternal: 'open_external',
+  // 导入一个周报包（FR-R-12-04 ①③：幂等 + 逐条报错、不写半截；判定全在 Rust）
+  retroImport: 'retro_import',
   // 智能体设置（FR-AI-01：总开关 / 端点 / 模型 / 配额；密钥单独存，永不回显）
   agentSettingsGet: 'agent_settings_get',
   agentSettingsSave: 'agent_settings_save',
@@ -794,6 +796,30 @@ export function retroAsset(period: string, target: string): Promise<ArrayBuffer>
 export function openExternal(url: string): Promise<{ program: string; args: string[]; scheme: string }> {
   if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
   return invoke(COMMANDS.openExternal, { url })
+}
+
+/**
+ * 导入一个周报包（`FR-R-12-04` ①③）—— `source` = 系统选择器选中的**包目录**绝对值。
+ *
+ * 回的是**判定结果**（`imported` / `already` / `conflict` / `rejected` / `failed` + 一句原因）：
+ * 幂等、逐条报错、不写半截全在 Rust 侧（`RetroStore::import`），**前端不判第二遍**。
+ */
+export type RetroImportState = 'imported' | 'already' | 'conflict' | 'rejected' | 'failed'
+
+export interface RetroImport {
+  /** 期号（= 源目录名）。 */
+  period: string
+  /** 结果态。 */
+  state: RetroImportState
+  /** 一句人话（成功说落到哪，失败说为什么）。 */
+  message: string
+  /** 落点路径（`imported` 是新包；`already` / `conflict` 是库里那一份）。 */
+  path: string
+}
+
+export function retroImport(source: string): Promise<RetroImport> {
+  if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
+  return invoke(COMMANDS.retroImport, { source })
 }
 
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────

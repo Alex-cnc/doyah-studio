@@ -3,8 +3,9 @@
 // 挂载测只能证明「画出来了」；归组键的退化情形（没日期 / 没月份 / 期号也不像年份）
 // 在这里逐条钉住，否则界面只是「看起来分了组」。
 import { describe, expect, it } from 'vitest'
-import type { RetroCard } from '../../ipc'
-import { filterCards, groupCards, periodKey } from './periodIndex'
+// 同 `cardMeta.test.ts`：测试住 `views/`、被测函数住插件目录 —— 插件边界判据（不许 import vitest）不变。
+import type { RetroCard } from '../ipc'
+import { filterCards, groupCards, periodKey } from '../plugins/retro/periodIndex'
 
 function card(period: string, extra: Partial<RetroCard> = {}): RetroCard {
   return {

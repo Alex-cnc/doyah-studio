@@ -2,7 +2,9 @@
 // 回放插件 · 周报阅读面（FR-R-12-01 左列表 / FR-R-12-02 右正文 · FR-R-13-08 的 M0 只读）
 //
 // 三条纪律：
-//   ① **只读**：本组件不产生任何写回包的动作（没有保存 / 编辑 / 导入按钮）；
+//   ① **不改写已有包**：本组件不编辑、不保存、不覆盖任何已存在的期；唯一的写入动作是
+//      「导入包…」—— 那是把**新**包复制进库（`FR-R-12-04`），落盘与判定全在 Rust 侧，
+//      前端只把结果原话摆出来；
 //   ② **不自带第二套解析**：卡片字段与正文块全部由 Rust（领域层 `retro_package` +
 //      `markdown::parse`）判完送来，这里只画；
 //   ③ **坏包要说出来**：读不出来的期逐条列在左栏底部（缺 index / 缺正文 / 编码错 / 封面越界），
@@ -15,14 +17,17 @@ import { filterCards, groupCards } from './periodIndex'
 import {
   openExternal,
   retroAsset,
+  retroImport,
   retroPackages,
   retroReport,
   type DbFailure,
   type MdDocument,
   type RetroCard,
+  type RetroImport,
   type RetroMedia,
   type RetroProblem,
 } from '../../ipc'
+import { pickFolder } from '../../shell/pluginRegistry'
 import { t as translate, type UiLanguage } from '../../i18n'
 
 const props = defineProps<{
@@ -253,6 +258,46 @@ async function refresh(): Promise<void> {
   }
 }
 
+// ── 导入一个包（`FR-R-12-04` ①③）───────────────────────────────────────────────────
+//
+// 三条口径：
+// ① **选择器只有一处**：目录由挂点契约的宿主能力 `pickFolder` 弹（实现在 `shell/dialogs.ts`；
+//    插件不许直接 import shell 内部模块 —— 判据 `check-plugins.mjs` ④）；
+// ② **判定不在前端**：幂等 / 冲突 / 拒收都是 Rust 回的结果态，这里只把原话摆出来；
+// ③ **导进来就要在列表里**：成功后立刻 `refresh()`，用户点一下就能看见新的一期（否则等于没导入）。
+
+/** 正在导入（按钮置灰，防连点导两份）。 */
+const importing = ref(false)
+/** 上一次导入的结果（成功 / 幂等 / 冲突 / 拒收都从这里显示）。 */
+const importResult = ref<RetroImport | null>(null)
+/** 导入彻底失败（连判定都没拿到：不是目录 / 命令报错）。 */
+const importFailure = ref<DbFailure | null>(null)
+
+async function importPackage(): Promise<void> {
+  if (importing.value) return
+  importFailure.value = null
+  importResult.value = null
+  let source: string | null = null
+  try {
+    source = await pickFolder({ title: tr('plugin.retro.importPickTitle') })
+  } catch (error) {
+    importFailure.value = describeError(error)
+    return
+  }
+  // 用户取消：什么都不做（不报错、不提示 —— 取消不是失败）
+  if (!source) return
+  importing.value = true
+  try {
+    importResult.value = await retroImport(source)
+    // 导进来 / 已存在 / 冲突：三种情况都重扫一遍（冲突时列表要如实显示库里那一份）
+    await refresh()
+  } catch (error) {
+    importFailure.value = describeError(error)
+  } finally {
+    importing.value = false
+  }
+}
+
 /** 打开一期。切期时先清掉上一期的正文 —— 不留残留（`FR-R-12-02` ③）。 */
 async function open(card: RetroCard): Promise<void> {
   selected.value = card.period
@@ -339,7 +384,31 @@ onMounted(() => {
         <button class="retro__refresh" type="button" :disabled="loading" @click="refresh">
           {{ tr('plugin.retro.refresh') }}
         </button>
+        <button
+          class="retro__refresh"
+          type="button"
+          data-role="retro-import"
+          :disabled="importing"
+          :title="tr('plugin.retro.importHint')"
+          @click="importPackage"
+        >
+          {{ importing ? tr('plugin.retro.importing') : tr('plugin.retro.import') }}
+        </button>
       </header>
+
+      <!-- 导入结果（`FR-R-12-04` ①③）：成功 / 已导入 / 冲突 / 拒收都如实说一句 -->
+      <p
+        v-if="importResult"
+        class="retro__count"
+        :data-state="importResult.state"
+        data-role="retro-import-result"
+      >
+        {{ importResult.message }}
+      </p>
+      <p v-if="importFailure" class="retro__failure" data-role="retro-import-failure">
+        {{ tr('plugin.retro.importFailed') }}：{{ importFailure.message }}
+        <span v-if="importFailure.hint" class="retro__failure-hint">{{ importFailure.hint }}</span>
+      </p>
 
       <p v-if="cards.length" class="retro__count" data-role="retro-count">
         {{
@@ -385,6 +454,7 @@ onMounted(() => {
       <div v-if="!loading && !cards.length && !loadFailure" class="retro__empty" data-role="retro-empty">
         <p class="retro__empty-title">{{ tr('plugin.retro.empty') }}</p>
         <p class="retro__empty-hint">{{ tr('plugin.retro.emptyHint', { root }) }}</p>
+        <p class="retro__empty-hint">{{ tr('plugin.retro.emptyImportHint') }}</p>
       </div>
 
       <!-- 没有匹配：说清楚 + 带上关键词（不许画一片空白） -->

@@ -24,6 +24,11 @@ const state: {
   reportCalls: string[]
   openCalls: string[]
   openFailures: Record<string, { message: string; hint: string }>
+  pickedFolder: string | null
+  pickCalls: number
+  importResult: { period: string; state: string; message: string; path: string }
+  importFailure: { message: string; hint: string } | null
+  importCalls: string[]
 } = {
   snapshot: { root: 'C:\\Users\\Alex\\AppData\\Roaming\\DoyahStudio\\retro\\packages', cards: [], problems: [] },
   snapshotFailure: null,
@@ -35,6 +40,11 @@ const state: {
   reportCalls: [],
   openCalls: [],
   openFailures: {},
+  pickedFolder: null,
+  pickCalls: 0,
+  importResult: { period: '2026-W43', state: 'imported', message: '已导入到 C:\\...\\2026-W43', path: 'C:\\...\\2026-W43' },
+  importFailure: null,
+  importCalls: [],
 }
 
 vi.mock('../ipc', () => ({
@@ -60,6 +70,22 @@ vi.mock('../ipc', () => ({
     const failure = state.openFailures[url]
     if (failure) throw failure
     return { program: 'rundll32.exe', args: ['url.dll,FileProtocolHandler', url], scheme: url.startsWith('https') ? 'https' : 'http' }
+  }),
+  retroImport: vi.fn(async (source: string) => {
+    state.importCalls.push(source)
+    if (state.importFailure) throw state.importFailure
+    return state.importResult
+  }),
+}))
+
+// 目录选择器（`FR-R-12-04`）：插件经**挂点契约的宿主能力** `pickFolder` 拿选择器
+// （实现仍在 `shell/dialogs.ts`，插件边界判据不许插件直接 import shell 内部模块）。
+// 打桩这一处即断言「点按钮 ⇒ 选择器真的被调」，不用假装系统对话框存在。
+vi.mock('../shell/pluginRegistry', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../shell/pluginRegistry')>()),
+  pickFolder: vi.fn(async () => {
+    state.pickCalls += 1
+    return state.pickedFolder
   }),
 }))
 
@@ -116,6 +142,11 @@ beforeEach(() => {
   state.reportCalls = []
   state.openCalls = []
   state.openFailures = {}
+  state.pickedFolder = null
+  state.pickCalls = 0
+  state.importResult = { period: '2026-W43', state: 'imported', message: '已导入到 C:\\...\\2026-W43', path: 'C:\\...\\2026-W43' }
+  state.importFailure = null
+  state.importCalls = []
   // happy-dom 没实现 blob URL：给一个确定性的替身（判据只关心「挂上了没有」）
   let counter = 0
   Object.assign(URL, {
@@ -706,5 +737,74 @@ describe('RetroView 周报阅读面', () => {
   it('a_rule_and_the_block_order_match_the_source', async () => {
     const wrapper = await mountStructure()
     expect(wrapper.findAll('hr.retro-md__rule')).toHaveLength(1)
+  })
+
+  // ── 包导入（`FR-R-12-04` ①③）──────────────────────────────────────────────────
+  // 四件事：点按钮真弹选择器 · 取消不报错 · 导进来立刻在列表里 · 拒收/失败把原因原话摆出来。
+
+  it('clicking_import_opens_the_folder_picker_and_puts_the_new_period_in_the_list', async () => {
+    state.pickedFolder = 'D:\\inbox\\2026-W43'
+    state.importResult = {
+      period: '2026-W43',
+      state: 'imported',
+      message: '已导入到 C:\\...\\packages\\2026-W43',
+      path: 'C:\\...\\packages\\2026-W43',
+    }
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    // 导入成功后重扫会多出这一期（外壳侧真把包复制进来了）
+    state.snapshot.cards = [card('2026-W43', '芯片周报 · 第 43 周')]
+    await wrapper.get('[data-role="retro-import"]').trigger('click')
+    await flushPromises()
+
+    expect(state.pickCalls).toBe(1)
+    expect(state.importCalls).toEqual(['D:\\inbox\\2026-W43'])
+    expect(wrapper.get('[data-role="retro-import-result"]').text()).toContain('已导入到')
+    // 「导进来」必须真的出现在左列表（否则等于没导入）
+    expect(wrapper.text()).toContain('芯片周报 · 第 43 周')
+  })
+
+  it('cancelling_the_picker_imports_nothing_and_says_nothing', async () => {
+    state.pickedFolder = null
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-role="retro-import"]').trigger('click')
+    await flushPromises()
+
+    expect(state.pickCalls).toBe(1)
+    expect(state.importCalls).toEqual([])
+    expect(wrapper.find('[data-role="retro-import-result"]').exists()).toBe(false)
+    expect(wrapper.find('[data-role="retro-import-failure"]').exists()).toBe(false)
+  })
+
+  it('a_refused_package_shows_the_reason_verbatim_instead_of_staying_silent', async () => {
+    state.pickedFolder = 'D:\\inbox\\2026-W44'
+    state.importResult = {
+      period: '2026-W44',
+      state: 'rejected',
+      message: '包里没有 report.md（正文是契约三件之一）',
+      path: 'D:\\inbox\\2026-W44',
+    }
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-role="retro-import"]').trigger('click')
+    await flushPromises()
+
+    const line = wrapper.get('[data-role="retro-import-result"]')
+    expect(line.attributes('data-state')).toBe('rejected')
+    expect(line.text()).toContain('report.md')
+  })
+
+  it('an_import_that_fails_outright_shows_the_message_and_the_hint', async () => {
+    state.pickedFolder = 'D:\\not-a-folder'
+    state.importFailure = { message: '这不是一个目录：D:\\not-a-folder', hint: '选目录，不要选文件。' }
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-role="retro-import"]').trigger('click')
+    await flushPromises()
+
+    const line = wrapper.get('[data-role="retro-import-failure"]')
+    expect(line.text()).toContain('不是一个目录')
+    expect(line.text()).toContain('选目录，不要选文件。')
   })
 })

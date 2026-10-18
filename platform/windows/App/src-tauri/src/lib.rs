@@ -677,6 +677,17 @@ fn open_external(url: String) -> Result<doyah_studio_db::ExternalPlan, DbFailure
     retro_library::open_external(&url)
 }
 
+/// 导入一个周报包（`FR-R-12-04` ① 幂等 / ③ 逐条报错不写半截）。
+///
+/// 源目录由**系统选择器**选（前端 `shell/dialogs.ts` 唯一调用点），本命令只收一个绝对路径。
+/// 判定全在 `retro_library::RetroStore::import`：先判包合不合法 → 已有同名期比字节 →
+/// 拷进临时目录再改名；界面拿回的 `state` 就是唯一裁决（`imported` / `already` / `conflict` /
+/// `rejected` / `failed`），前端不再自己判第二遍。
+#[tauri::command]
+fn retro_import(state: State<'_, ShellState>, source: String) -> Result<retro_library::RetroImport, DbFailure> {
+    state.retro.import(&source)
+}
+
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
 //
 // 四条命令都很薄：**判定在领域层**（`doyah_studio_db::agent_config::evaluate`），本层只做
@@ -2410,6 +2421,7 @@ pub fn run() {
             retro_report,
             retro_asset,
             open_external,
+            retro_import,
             agent_settings_get,
             agent_settings_save,
             agent_key_save,

@@ -35,6 +35,22 @@ export const DICT = {
   'plugin.retro.loading': { 'zh-Hans': '正在读包目录…', en: 'Reading the package folders…' },
   'plugin.retro.count': { 'zh-Hans': '共 {n} 期', en: '{n} period(s)' },
   'plugin.retro.refresh': { 'zh-Hans': '刷新', en: 'Refresh' },
+  // 包导入（FR-R-12-04 ①③）：选择器 + 结果原话（成功 / 已导入 / 冲突 / 拒收都由 Rust 判）
+  'plugin.retro.import': { 'zh-Hans': '导入包…', en: 'Import a package…' },
+  'plugin.retro.importing': { 'zh-Hans': '导入中…', en: 'Importing…' },
+  'plugin.retro.importHint': {
+    'zh-Hans': '选一个周报包目录（目录名就是期号）',
+    en: 'Pick a report package folder (the folder name is the period)',
+  },
+  'plugin.retro.importPickTitle': {
+    'zh-Hans': '选择周报包目录',
+    en: 'Pick a report package folder',
+  },
+  'plugin.retro.importFailed': { 'zh-Hans': '导入失败', en: 'Import failed' },
+  'plugin.retro.emptyImportHint': {
+    'zh-Hans': '也可以点上面的「导入包…」，把一个包复制进来。',
+    en: 'Or use “Import a package…” above to copy one in.',
+  },
   'plugin.retro.empty': { 'zh-Hans': '还没有周报', en: 'No weekly reports yet' },
   'plugin.retro.emptyHint': {
     'zh-Hans': '把一个周报包（index.json + report.md + assets/）放进这个目录，再点刷新：{root}',

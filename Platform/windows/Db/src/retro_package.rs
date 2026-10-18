@@ -54,6 +54,34 @@ pub struct Problem {
     pub message: String,
 }
 
+/// 导入一个周报包的结果态（`FR-R-12-04` ① / ③）。
+///
+/// 判定在领域层，**逐字节比较与拷贝在外壳**（`App/src-tauri/src/retro_library.rs`）：
+/// 本层只回答「同名期已存在时该怎么办」这一条口径问题。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ImportState {
+    /// 这一次真的复制进来了。
+    Imported,
+    /// 落点已有同名期且**内容逐字节相同** ⇒ 幂等：不新增条目、不覆盖（①）。
+    Already,
+    /// 落点已有同名期但内容不同 ⇒ 判冲突，**不覆盖用户的包**。
+    Conflict,
+    /// 包本身不合法（缺 `index.json` / 缺 `report.md` / 编码错 / 期号不合法）⇒ 一个字节都不写（③）。
+    Rejected,
+    /// 复制中途失败（磁盘 / 权限）：临时目录已删除，目标目录不存在。
+    Failed,
+}
+
+/// 落点已有同名期时的裁决：内容相同 ⇒ 幂等；不同 ⇒ 冲突（**永不覆盖**）。
+pub fn existing_decision(same_bytes: bool) -> ImportState {
+    if same_bytes {
+        ImportState::Already
+    } else {
+        ImportState::Conflict
+    }
+}
+
 /// 一个包的**盘上事实**（目录名 + 两个文件的内容 / 在否）—— 由外壳填，本层只判。
 pub struct Source<'a> {
     /// 目录名（= 期号）。
@@ -508,5 +536,25 @@ mod tests {
         assert_eq!(cards_a, cards_b);
         assert_eq!(problems_a, problems_b);
         assert_eq!(cards_a[0].tags, vec!["周报".to_string(), "半导体".to_string()]);
+    }
+
+    // ── 导入裁决（`FR-R-12-04` ① / ③ 的领域口径）────────────────────────────────
+
+    #[test]
+    fn identical_content_at_the_same_period_is_idempotent_not_a_second_copy() {
+        assert_eq!(
+            existing_decision(true),
+            ImportState::Already,
+            "同一份包导两次必须报「已导入」，否则用户会看到两条同期"
+        );
+    }
+
+    #[test]
+    fn different_content_at_the_same_period_is_a_conflict_so_nothing_is_overwritten() {
+        assert_eq!(
+            existing_decision(false),
+            ImportState::Conflict,
+            "内容不同 ⇒ 冲突（保留库里那份），绝不静默覆盖用户的原包"
+        );
     }
 }
