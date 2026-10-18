@@ -90,6 +90,7 @@ import sys
 from collections import Counter
 
 DEFAULT_TARGETS = [
+    "Docs/人工点验清单-20261018.md",
     "Docs/产品能力规划说明书.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
