@@ -171,6 +171,19 @@ import {
 import { decoratePieces } from '../workspace/diagnostics'
 // 分隔条（FR-EDIT-13）：夹紧与步进是纯算术，摆在 `splitPane.ts`；组件只做测量、指针与 inline 高度。
 import { SPLIT_MIN_PANE, SPLIT_STEP, clampSplitHeight, stepSplitHeight } from './splitPane'
+// 撤销 / 重做（FR-EDIT-60）：栈与三档结论在 `workspace/undoStack.ts`。
+// 合并规则**复用** `editing.ts` 的 `shouldCoalesce`（一处判，不在这里再写一份）。
+import {
+  newUndoState,
+  pushUndo,
+  redoDepth,
+  redoOnce,
+  stepForTextChange,
+  undoDepth,
+  undoOnce,
+  type UndoSnapshot,
+  type UndoState,
+} from '../workspace/undoStack'
 
 // **界面语言（1.8 双语）**：与标题栏同一套取值（zh-Hans / en）
 // 口径：语言表只覆盖**界面外壳**；正文说明与服务端提示仍是中文（已在版本计划里登记未落）。
@@ -2197,10 +2210,25 @@ function editorSelection(area: HTMLTextAreaElement): EditorSelection {
   return { start: area.selectionStart ?? 0, end: area.selectionEnd ?? 0 }
 }
 
-/** 把一次编辑结果落到编辑器上：新全文 + 新选区 + 重算高亮与页签草稿。 */
+/** 把一版文本与新选区落到编辑器上（**不记账**）：新全文 + 新选区 + 重算高亮与页签草稿。 */
+async function writeEditor(snapshot: UndoSnapshot): Promise<void> {
+  sql.value = snapshot.text
+  await refreshHighlight()
+  await nextTick()
+  const area = sqlArea.value
+  if (area) {
+    area.selectionStart = snapshot.selection.start
+    area.selectionEnd = snapshot.selection.end
+  }
+  caretOffset.value = snapshot.selection.end
+  stashActiveQuery()
+  void refreshCompletions()
+}
+
+/** 把一次编辑结果落到编辑器上：先记一步撤销，再写全文 + 摆光标 + 重算高亮与页签草稿。 */
 async function applyEdit(result: EditResult): Promise<void> {
   if (result.text === sql.value) {
-    // 内容没变（例如移行到边界是 no-op）：只摆光标，不重算高亮
+    // 内容没变（例如移行到边界是 no-op）：只摆光标，不重算高亮，也不记一步空的撤销
     const area = sqlArea.value
     if (area) {
       area.selectionStart = result.selection.start
@@ -2208,17 +2236,96 @@ async function applyEdit(result: EditResult): Promise<void> {
     }
     return
   }
-  sql.value = result.text
-  await refreshHighlight()
-  await nextTick()
-  const area = sqlArea.value
-  if (area) {
-    area.selectionStart = result.selection.start
-    area.selectionEnd = result.selection.end
+  recordLineEdit(result.text, result.selection)
+  await writeEditor({ text: result.text, selection: result.selection })
+}
+
+// ── 撤销 / 重做（FR-EDIT-60）──
+//
+// 为什么要自己记账：编辑器是 `<textarea>`，**原生撤销只认它自己的输入流**。本编辑器有大量
+// 程序化写入（格式化 / 缩进 / 注释切换 / 片段插入 / 替换）—— 走过这些路径，那条流就断了：
+// 之后按 Ctrl+Z 要么什么都不发生、要么把整段 SQL 退回到很早以前。现象就是「格式化之后一撤销 SQL 没了」。
+//
+// 口径：连续输入合并一步、行级编辑各一步（判断在 `undoStack.ts`，合并规则复用 `shouldCoalesce`）。
+let undoState: UndoState = newUndoState({ text: sql.value, selection: { start: 0, end: 0 } })
+const undoSteps = ref(0)
+const redoSteps = ref(0)
+/** 撤销面的一句回执（没得撤 / 栈被重建）：**不沉默** —— 按了没反应和「本来就没得撤」必须分得开。 */
+const undoNote = ref('')
+
+function publishUndo(): void {
+  undoSteps.value = undoDepth(undoState)
+  redoSteps.value = redoDepth(undoState)
+}
+
+/** 行级编辑记一步（移行 / 注释 / 缩进 / 格式化 / 替换 / 片段）：各算一步，永不与前一步合并。 */
+function recordLineEdit(text: string, selection: EditorSelection): void {
+  undoState = pushUndo(
+    undoState,
+    { text, selection },
+    { kind: 'line', at: selection.start, atEnd: selection.end, atMs: Date.now() },
+  )
+  publishUndo()
+  undoNote.value = ''
+}
+
+/** 打字记一步：位置由 `stepForTextChange` 从前后两版文本推出来（与光标追踪无关）。 */
+function recordTyping(before: string, after: string, caretAfter: number): void {
+  const step = stepForTextChange(before, after, Date.now())
+  if (!step) return
+  undoState = pushUndo(undoState, { text: after, selection: { start: caretAfter, end: caretAfter } }, step)
+  publishUndo()
+  undoNote.value = ''
+}
+
+/**
+ * 撤销 / 重做。三档结论各说各的话：
+ * 撤了（把那一版连同选区写回编辑器）/ 没得撤（如实说）/ 栈对不上屏幕（**重建栈并直说**）。
+ */
+async function applyUndoOrRedo(direction: 'undo' | 'redo'): Promise<void> {
+  const outcome = direction === 'undo' ? undoOnce(undoState, sql.value) : redoOnce(undoState, sql.value)
+  if (outcome.kind === 'applied') {
+    undoState = outcome.state
+    publishUndo()
+    undoNote.value = ''
+    await writeEditor(outcome.snapshot)
+    return
   }
-  caretOffset.value = result.selection.end
-  stashActiveQuery()
+  if (outcome.kind === 'drifted') {
+    // 文本被整篇换掉（切页签 / 回填已保存查询 / 打开文件）：旧栈记的是**另一份**文本，
+    // 拿它去撤就是「把 A 页签的 SQL 撤到 B 页签里」—— 宁可重建栈并说清，也不猜。
+    undoState = newUndoState({
+      text: sql.value,
+      selection: { start: caretOffset.value, end: caretOffset.value },
+    })
+    publishUndo()
+    undoNote.value = t('sql.undo.rebuilt')
+    return
+  }
+  undoNote.value = direction === 'undo' ? t('sql.undo.exhausted') : t('sql.redo.exhausted')
+}
+
+function menuUndo(): void {
+  closeEditMenu()
+  void applyUndoOrRedo('undo')
+}
+
+function menuRedo(): void {
+  closeEditMenu()
+  void applyUndoOrRedo('redo')
+}
+
+/** 打字入口：**先记账再刷新**（记账要用「打字前」的光标，syncCaret 会把它盖掉）。 */
+function onEditorInput(event: Event): void {
+  const area = event.target as HTMLTextAreaElement
+  const before = sql.value
+  const after = area.value
+  recordTyping(before, after, area.selectionStart ?? after.length)
+  sql.value = after
+  void refreshHighlight()
   void refreshCompletions()
+  syncCaret()
+  stashActiveQuery()
 }
 
 /**
@@ -2232,6 +2339,20 @@ function onEditorKeydown(event: KeyboardEvent): void {
   if (!area) return
   const selection = editorSelection(area)
   const mod = event.ctrlKey || event.metaKey
+
+  // ⓪'''' 撤销 / 重做（FR-EDIT-60）：Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y。**必须自己接管**——
+  // textarea 的原生撤销只认它自己的输入流，程序化写入（格式化 / 缩进 / 片段）之后按下去
+  // 要么没反应、要么把整段内容退回到很早以前；接管后一律 preventDefault，不让两套栈打架。
+  if (mod && !event.altKey && (event.key === 'z' || event.key === 'Z')) {
+    event.preventDefault()
+    void applyUndoOrRedo(event.shiftKey ? 'redo' : 'undo')
+    return
+  }
+  if (mod && !event.shiftKey && !event.altKey && (event.key === 'y' || event.key === 'Y')) {
+    event.preventDefault()
+    void applyUndoOrRedo('redo')
+    return
+  }
 
   // ⓪ Ctrl+G 跳行列（FR-EDIT-19）：只开面板，**不改文本**
   if (mod && (event.key === 'g' || event.key === 'G')) {
@@ -2533,6 +2654,7 @@ function stepFind(direction: 1 | -1): void {
 
 /** 替换结果落回编辑器（与编辑键同一条路：先写全文，nextTick 后摆光标）。 */
 async function commitFoundText(text: string, caret: number): Promise<void> {
+  recordLineEdit(text, { start: caret, end: caret })
   sql.value = text
   await refreshHighlight()
   await nextTick()
@@ -3498,12 +3620,12 @@ async function probe() {
             >{{ piece.text }}</span></pre>
             <textarea
               ref="sqlArea"
-              v-model="sql"
+              :value="sql"
               :style="editorStyle"
               spellcheck="false"
               rows="3"
               aria-label="SQL"
-              @input="refreshHighlight(); refreshCompletions(); syncCaret(); stashActiveQuery()"
+              @input="onEditorInput"
               @keyup="onEditorKeyup"
               @click="refreshCompletions(); syncCaret()"
               @select="syncCaret()"
@@ -3638,6 +3760,14 @@ async function probe() {
               {{ t('sql.format.dismiss') }}
             </button>
           </p>
+          <!-- 撤销面的回执（FR-EDIT-60）：没得撤 / 栈被重建这两类**必须说出来** ——
+               「按了没反应」和「本来就没得撤」分不开，就会变成用户反复按 Ctrl+Z 猜。 -->
+          <p v-if="undoNote" class="db__format-note" data-testid="undo-note" role="status">
+            <span>{{ undoNote }}</span>
+            <button class="db__btn" type="button" data-testid="undo-note-dismiss" @click="undoNote = ''">
+              {{ t('sql.format.dismiss') }}
+            </button>
+          </p>
           <p class="db__editor-keys">{{ t('sql.keys') }}</p>
           <ul v-if="completions.length" class="db__completions">
             <li v-for="(c, i) in visibleCompletions" :key="`${c.kind}:${c.text}`">
@@ -3684,6 +3814,32 @@ async function probe() {
               <template v-if="editMenuOpen">
                 <div class="db__menu-backdrop" data-testid="edit-menu-backdrop" @click.stop="closeEditMenu" />
                 <ul class="db__menu db__menu--dropdown" role="menu" data-testid="edit-menu">
+                  <li>
+                    <button
+                      class="db__menu-item"
+                      type="button"
+                      role="menuitem"
+                      data-testid="edit-menu-undo"
+                      :disabled="undoSteps === 0"
+                      :title="t('sql.edit.undoTip')"
+                      @click="menuUndo"
+                    >
+                      {{ t('sql.edit.undo') }}
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      class="db__menu-item"
+                      type="button"
+                      role="menuitem"
+                      data-testid="edit-menu-redo"
+                      :disabled="redoSteps === 0"
+                      :title="t('sql.edit.redoTip')"
+                      @click="menuRedo"
+                    >
+                      {{ t('sql.edit.redo') }}
+                    </button>
+                  </li>
                   <li>
                     <button class="db__menu-item" type="button" role="menuitem" data-testid="edit-menu-find" @click="menuFind">
                       {{ t('sql.edit.find') }}

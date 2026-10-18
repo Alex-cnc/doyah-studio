@@ -415,8 +415,8 @@ export const DICT = {
   'sql.run': { 'zh-Hans': '执行', en: 'Run' },
   // 编辑器按键提示（B1 接线后可见面：告诉用户这几组键存在，否则只有摸到的人知道）
   'sql.keys': {
-    'zh-Hans': 'Ctrl+/ 注释 · Alt+↑↓ 移行 · Alt+Shift+↓ 复制行 · Tab 缩进 · 回车自动缩进 · 括号自动配对 · Ctrl+F 查找 · Ctrl+G 跳行列',
-    en: 'Ctrl+/ comment · Alt+↑↓ move line · Alt+Shift+↓ duplicate · Tab indent · Enter auto-indent · auto-pair brackets · Ctrl+F find · Ctrl+G go to line',
+    'zh-Hans': 'Ctrl+Z 撤销 · Ctrl+Shift+Z 重做 · Ctrl+/ 注释 · Alt+↑↓ 移行 · Alt+Shift+↓ 复制行 · Tab 缩进 · 回车自动缩进 · 括号自动配对 · Ctrl+F 查找 · Ctrl+G 跳行列',
+    en: 'Ctrl+Z undo · Ctrl+Shift+Z redo · Ctrl+/ comment · Alt+↑↓ move line · Alt+Shift+↓ duplicate · Tab indent · Enter auto-indent · auto-pair brackets · Ctrl+F find · Ctrl+G go to line',
   },
   // 补全清单的键盘提示（B1 收尾）：↑↓ 与回车能用这件事必须写在脸上，否则只有摸到的人知道
   'sql.completionKeys': {
@@ -452,6 +452,21 @@ export const DICT = {
     en: 'Edit menu: find / replace · go to line · indent / outdent · clear query · format SQL',
   },
   'sql.edit.find': { 'zh-Hans': '查找 / 替换…', en: 'Find / replace…' },
+  // 撤销 / 重做（FR-EDIT-60）：菜单里这两项空栈时是灰的，标题写清键位 ——
+  // 键位与「连续输入合并一步」的口径都写在这儿，帮助面（`sql.keys`）另有一行。
+  'sql.edit.undo': { 'zh-Hans': '撤销', en: 'Undo' },
+  'sql.edit.redo': { 'zh-Hans': '重做', en: 'Redo' },
+  'sql.edit.undoTip': {
+    'zh-Hans': '撤销上一步编辑（Ctrl+Z）；一段连续输入算一步',
+    en: 'Undo the last edit (Ctrl+Z); a run of typing counts as one step',
+  },
+  'sql.edit.redoTip': { 'zh-Hans': '重做（Ctrl+Shift+Z / Ctrl+Y）', en: 'Redo (Ctrl+Shift+Z / Ctrl+Y)' },
+  'sql.undo.exhausted': { 'zh-Hans': '已经撤到最早一步了', en: 'Already at the earliest step' },
+  'sql.redo.exhausted': { 'zh-Hans': '没有可重做的步骤', en: 'Nothing to redo' },
+  'sql.undo.rebuilt': {
+    'zh-Hans': '这块内容刚被整篇换过（切页签 / 回填），撤销栈已重置',
+    en: 'The editor content was replaced wholesale (tab switch / refill) — the undo history was reset',
+  },
   'sql.edit.goto': { 'zh-Hans': '跳到行或列…', en: 'Go to line…' },
   'sql.edit.indent': { 'zh-Hans': '缩进选中行', en: 'Indent selected lines' },
   'sql.edit.outdent': { 'zh-Hans': '反缩进选中行', en: 'Outdent selected lines' },
