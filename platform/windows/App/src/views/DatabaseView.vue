@@ -101,6 +101,7 @@ import ConnectionLabel from '../shell/ConnectionLabel.vue'
 import ConnectionDialog from '../shell/ConnectionDialog.vue'
 import BackupDialog from '../shell/BackupDialog.vue'
 import AgentGenerateDialog from '../shell/AgentGenerateDialog.vue'
+import DiagnosisDialog from '../shell/DiagnosisDialog.vue'
 import type { ConnectionDialogMode } from '../shell/connectionDialog'
 import NodeIcon from './NodeIcon.vue'
 import SchemaDiffPanel from './SchemaDiffPanel.vue'
@@ -1910,6 +1911,31 @@ function applyGeneratedSql(text: string): void {
   generateOpen.value = false
   void refreshHighlight()
   void refreshCompletions()
+  void nextTick(() => sqlArea.value?.focus())
+}
+
+// ── 对话式诊断（FR-AI-03）────────────────────────────────────────────────────
+//
+// 面板自己不调模型：它取证据（执行计划 / 锁阻塞 / 慢查询 / 表统计）摊成资料块，用户复制去问
+// 任意模型，再把回复粘回来解读。视图这侧只有两句交接：把编辑器里那句 SQL 传下去、
+// 把**采纳的建议**追加进编辑器（**不执行**、也不覆盖用户已写的内容）。
+
+const diagnosisOpen = ref(false)
+const diagnosisSql = ref('')
+
+/** 打开诊断面板：把当前编辑器里的整段 SQL 交下去（面板只读它，不改它）。 */
+function openDiagnosis(): void {
+  diagnosisSql.value = sql.value
+  diagnosisOpen.value = true
+}
+
+/** 建议追加到编辑器末尾（**不覆盖**已有 SQL；执行仍是用户自己那一步）。 */
+function applyDiagnosisSql(text: string): void {
+  const suggestion = text.trim()
+  if (!suggestion) return
+  const base = sql.value.replace(/\s+$/, '')
+  const next = base.length > 0 ? `${base}\n\n${suggestion}` : suggestion
+  void applyEdit({ text: next, selection: { start: next.length, end: next.length } })
   void nextTick(() => sqlArea.value?.focus())
 }
 
@@ -3913,6 +3939,15 @@ async function probe() {
             <button class="db__status-goto" type="button" :title="t('sql.gotoTip')" @click="openGoto">
               {{ t('sql.gotoOpen') }}
             </button>
+            <button
+              class="db__status-goto"
+              type="button"
+              :title="t('diag.entryTip')"
+              data-testid="editor-diagnose"
+              @click="openDiagnosis"
+            >
+              {{ t('diag.entry') }}
+            </button>
           </div>
           <!-- 问题条（FR-EDIT-56）：静态检查的结果**画出来** —— 编辑器里那几处加虚下划线，
                这里列成可点的行（点一条就把光标搬到那一处）。检查器在领域层，这里只显示。 -->
@@ -4836,6 +4871,15 @@ async function probe() {
     @close="generateOpen = false"
     @insert="applyGeneratedSql"
     @save-as="saveGeneratedSql"
+  />
+
+  <!-- 对话式诊断（FR-AI-03）：面板只取证据 + 解读粘贴回来的回复；建议只**追加**进编辑器，不执行 -->
+  <DiagnosisDialog
+    :open="diagnosisOpen"
+    :language="language"
+    :sql="diagnosisSql"
+    @close="diagnosisOpen = false"
+    @insert="applyDiagnosisSql"
   />
 
   <!-- 备份（FR-IO-04）：外观与「导出结果」不是一件事 —— 这里备份的是**整个库** -->
