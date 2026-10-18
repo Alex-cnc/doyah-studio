@@ -14,6 +14,7 @@ import {
   type AgentGeneratePreview,
   type AgentGateReport,
   type AgentIssue,
+  type AgentQuotaStatus,
   type AgentTableBrief,
   agentGeneratePreview,
   agentGenerateSql,
@@ -68,6 +69,8 @@ const question = ref('')
 const preview = ref<AgentGeneratePreview | null>(null)
 const result = ref<AgentGenerateOutcome | null>(null)
 const blocked = ref<AgentGateReport | null>(null)
+/** 本小时配额满了被拦下（**一条请求都没发**）—— 与「闸门没放行」分开显示，用户才知道是等一等而不是去改设置。 */
+const throttled = ref<AgentQuotaStatus | null>(null)
 const failure = ref<{ message: string; hint: string } | null>(null)
 const busy = ref<'' | 'preview' | 'generate'>('')
 
@@ -78,19 +81,41 @@ watch(
     preview.value = null
     result.value = null
     blocked.value = null
+    throttled.value = null
     failure.value = null
   },
 )
 
 const gate = computed<AgentGateReport | null>(() => blocked.value ?? preview.value?.gate ?? null)
-const canGenerate = computed(() => !!preview.value && preview.value.gate.state === 'ready' && !busy.value)
+/** 配额读数：被拦的读数 > 发完之后的读数 > 预览里的读数（都由 Rust 侧给，界面不自己算）。 */
+const quota = computed<AgentQuotaStatus | null>(
+  () => throttled.value ?? result.value?.quota ?? preview.value?.quota ?? null,
+)
+const canGenerate = computed(
+  () =>
+    !!preview.value &&
+    preview.value.gate.state === 'ready' &&
+    !busy.value &&
+    (quota.value?.remaining ?? 0) > 0,
+)
 const questionReady = computed(() => question.value.trim().length > 0)
+
+/** 「还要等多久」的写法：超过一分钟给分 + 秒，否则只给秒。 */
+function waitLabel(secs: number): string {
+  const whole = Math.max(0, Math.round(secs))
+  const minutes = Math.floor(whole / 60)
+  const seconds = whole % 60
+  return minutes > 0
+    ? tr('agent.generate.quotaWaitMin', { m: minutes, s: seconds })
+    : tr('agent.generate.quotaWaitSec', { s: seconds })
+}
 
 async function showPreview(): Promise<void> {
   if (busy.value || !questionReady.value) return
   busy.value = 'preview'
   failure.value = null
   blocked.value = null
+  throttled.value = null
   result.value = null
   try {
     preview.value = await agentGeneratePreview(question.value, props.tables)
@@ -106,11 +131,17 @@ async function generate(): Promise<void> {
   if (!canGenerate.value) return
   busy.value = 'generate'
   failure.value = null
+  throttled.value = null
   try {
     const reply = await agentGenerateSql(question.value, props.tables)
     if (reply.status === 'blocked') {
       blocked.value = reply.gate
       result.value = null
+    } else if (reply.status === 'throttled') {
+      // 本小时满了：**一条请求都没发**。读数直接取回包里那份（不自己算「还要等多久」）。
+      throttled.value = reply.quota
+      result.value = null
+      blocked.value = null
     } else {
       result.value = {
         sql: reply.sql,
@@ -119,6 +150,7 @@ async function generate(): Promise<void> {
         model: reply.model,
         elapsedMs: reply.elapsedMs,
         tableCount: reply.tableCount,
+        quota: reply.quota,
         limitations: reply.limitations,
       }
     }
@@ -196,6 +228,37 @@ function saveAsQuery(): void {
 
       <p v-if="failure" class="gen__error" data-testid="generate-error" role="alert">
         {{ failure.message }}<span v-if="failure.hint" class="gen__error-hint"> — {{ failure.hint }}</span>
+      </p>
+
+      <!-- 配额读数：发之前就能看到还剩几次；满了就点名还要等多久（灰按钮不解释 = 用户不知道能干什么） -->
+      <p
+        v-if="quota"
+        class="gen__quota"
+        :class="{ 'gen__quota--full': quota.remaining === 0 }"
+        data-testid="generate-quota"
+      >
+        <template v-if="quota.remaining > 0">
+          {{
+            tr('agent.generate.quotaLeft', {
+              used: quota.used,
+              limit: quota.limit,
+              remaining: quota.remaining,
+            })
+          }}
+        </template>
+        <template v-else>
+          {{ tr('agent.generate.quotaFull', { limit: quota.limit, wait: waitLabel(quota.retryAfterSecs) }) }}
+        </template>
+      </p>
+
+      <!-- 真发被配额拦下：说清「这次一条都没发」，与「闸门没放行」分开显示 -->
+      <p v-if="throttled" class="gen__error" data-testid="generate-throttled" role="alert">
+        {{
+          tr('agent.generate.throttled', {
+            limit: throttled.limit,
+            wait: waitLabel(throttled.retryAfterSecs),
+          })
+        }}
       </p>
 
       <!-- 裁决：一句话说清「现在能不能发」；不能发就逐条点名 -->
@@ -431,6 +494,18 @@ function saveAsQuery(): void {
 
 .gen__error-hint {
   color: var(--ds-color-text-secondary);
+}
+
+/* 配额读数：等宽数字（同一行里的数字换行时也不跳动），满额时用警示色 */
+.gen__quota {
+  margin: 0;
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.gen__quota--full {
+  color: var(--ds-color-status-warning);
 }
 
 .gen__warn {

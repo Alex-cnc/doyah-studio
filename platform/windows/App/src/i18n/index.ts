@@ -574,6 +574,21 @@ export const DICT = {
   'agent.generate.sendButton': { 'zh-Hans': '发送并生成', en: 'Send and generate' },
   'agent.generate.sending': { 'zh-Hans': '等待模型回话…', en: 'Waiting for the model…' },
   'agent.generate.tableCount': { 'zh-Hans': '随请求外发 {n} 张表', en: '{n} table(s) go out with the request' },
+  // 每小时配额（FR-AI-02 第三片）：读数 / 满了还要等多久 / 被拦时说清「一条都没发」
+  'agent.generate.quotaLeft': {
+    'zh-Hans': '本小时已用 {used}/{limit}（还剩 {remaining} 次）',
+    en: '{used}/{limit} used this hour ({remaining} left)',
+  },
+  'agent.generate.quotaFull': {
+    'zh-Hans': '本小时额度已用完（上限 {limit} 次），{wait}后可再发',
+    en: 'Hourly budget used up (limit {limit}); available again in {wait}',
+  },
+  'agent.generate.quotaWaitMin': { 'zh-Hans': '{m} 分 {s} 秒', en: '{m}m {s}s' },
+  'agent.generate.quotaWaitSec': { 'zh-Hans': '{s} 秒', en: '{s}s' },
+  'agent.generate.throttled': {
+    'zh-Hans': '本小时已发满 {limit} 次 —— 这一次一条请求都没有发出去；{wait}后可再发。',
+    en: 'Hourly limit of {limit} reached — nothing was sent this time; try again in {wait}.',
+  },
   'agent.generate.outgoing': { 'zh-Hans': '将要外发的内容（逐字，就是你上一步看到的这份）', en: 'Exactly what will be sent' },
   'agent.generate.dropped': {
     'zh-Hans': '另有 {n} 张表因上限没有列出（表太多反而会写错 SQL）',

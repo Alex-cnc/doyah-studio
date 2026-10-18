@@ -45,12 +45,21 @@ const TABLES: AgentTableBrief[] = [
   { schema: 'public', name: 'orders', columns: [{ name: 'id', dataType: 'bigint' }] },
 ]
 
+const READY_QUOTA = {
+  limit: 60,
+  used: 3,
+  remaining: 57,
+  windowSecs: 3600,
+  retryAfterSecs: 0,
+}
+
 const READY_PREVIEW: AgentGeneratePreview = {
   gate: { state: 'ready', scope: 'remote', model: 'deepseek-chat', issues: [] },
   url: 'https://api.example.com/v1/chat/completions',
   human: '数据库 schema（只有表名、列名与类型；没有行数据）：\n- public.orders(id bigint)\n\n请只输出一段 SQL…',
   tableCount: 1,
   dropped: 0,
+  quota: READY_QUOTA,
 }
 
 function mountDialog() {
@@ -75,7 +84,10 @@ beforeEach(() => {
     model: 'deepseek-chat',
     elapsedMs: 321,
     tableCount: 1,
-    limitations: ['每小时上限（配额）在本片尚未计数：现在不会因为超量被拦。'],
+    quota: { limit: 60, used: 4, remaining: 56, windowSecs: 3600, retryAfterSecs: 0 },
+    limitations: [
+      '每小时上限按「真发出去的请求」计（含超时 / 报错的那一次）：防的是重试风暴，不是给云端对账单。',
+    ],
   }
   state.failure = null
   state.previewCalls = 0
@@ -106,6 +118,7 @@ describe('AgentGenerateDialog（FR-AI-02）', () => {
       human: '…',
       tableCount: 1,
       dropped: 0,
+      quota: READY_QUOTA,
     }
     const wrapper = mountDialog()
     await askAndPreview(wrapper)
@@ -126,6 +139,7 @@ describe('AgentGenerateDialog（FR-AI-02）', () => {
       human: '…',
       tableCount: 1,
       dropped: 0,
+      quota: READY_QUOTA,
     }
     const wrapper = mountDialog()
     await askAndPreview(wrapper)
@@ -143,8 +157,8 @@ describe('AgentGenerateDialog（FR-AI-02）', () => {
     expect(state.generateCalls).toBe(1)
     expect(wrapper.find('[data-testid="generate-sql"]').text()).toContain('SELECT count(*)')
     expect(wrapper.find('[data-testid="generate-tables"]').text()).toContain('public.orders')
-    // 已知缺口必须显示（配额还没计数 —— 不许让用户以为已经生效）
-    expect(wrapper.find('[data-testid="generate-limits"]').text()).toContain('配额')
+    // 已知缺口必须显示（配额口径 —— 不许让用户以为「按账单算」）
+    expect(wrapper.find('[data-testid="generate-limits"]').text()).toContain('每小时上限')
     expect(wrapper.find('[data-testid="generate-insert"]').exists()).toBe(true)
     await wrapper.find('[data-testid="generate-insert"]').trigger('click')
     const emitted = wrapper.emitted('insert')
@@ -190,5 +204,56 @@ describe('AgentGenerateDialog（FR-AI-02）', () => {
     const error = wrapper.find('[data-testid="generate-error"]').text()
     expect(error).toContain('请求超时')
     expect(error).toContain('把超时调大')
+  })
+
+  // ── 每小时配额（FR-AI-02 第三片）──────────────────────────────────────────
+  it('预览这一步就显示本小时还剩几次，发完立刻 +1（读数来自回包，界面不自己算）', async () => {
+    const wrapper = mountDialog()
+    await askAndPreview(wrapper)
+    const before = wrapper.find('[data-testid="generate-quota"]').text()
+    expect(before).toContain('3/60')
+    expect(before).toContain('还剩 57 次')
+
+    await wrapper.find('[data-testid="generate-send"]').trigger('click')
+    await flushPromises()
+    const after = wrapper.find('[data-testid="generate-quota"]').text()
+    expect(after).toContain('4/60')
+    expect(after).toContain('还剩 56 次')
+  })
+
+  it('配额满了时发送键是灰的，并点名还要等多久（灰按钮不解释 = 用户不知道能干什么）', async () => {
+    state.preview = {
+      ...READY_PREVIEW,
+      quota: { limit: 60, used: 60, remaining: 0, windowSecs: 3600, retryAfterSecs: 125 },
+    }
+    const wrapper = mountDialog()
+    await askAndPreview(wrapper)
+    expect(wrapper.find('[data-testid="generate-send"]').attributes('disabled')).toBeDefined()
+    const quota = wrapper.find('[data-testid="generate-quota"]').text()
+    expect(quota).toContain('额度已用完')
+    expect(quota).toContain('2 分 5 秒')
+  })
+
+  it('真发被配额拦下时说清「一条都没发」，且不显示结果区、不发出 insert / save-as', async () => {
+    state.reply = {
+      status: 'throttled',
+      quota: { limit: 1, used: 1, remaining: 0, windowSecs: 3600, retryAfterSecs: 90 },
+    }
+    const wrapper = mountDialog()
+    await askAndPreview(wrapper)
+    await wrapper.find('[data-testid="generate-send"]').trigger('click')
+    await flushPromises()
+
+    const throttled = wrapper.find('[data-testid="generate-throttled"]').text()
+    expect(throttled).toContain('一条请求都没有发出去')
+    expect(throttled).toContain('1 分 30 秒')
+    // 否定面：没有结果区，也没有任何交出去的文本
+    expect(wrapper.find('[data-testid="generate-sql"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="generate-insert"]').exists()).toBe(false)
+    expect(wrapper.emitted('insert')).toBeUndefined()
+    expect(wrapper.emitted('save-as')).toBeUndefined()
+    // 发送键随后变灰（读数显示已满）
+    expect(wrapper.find('[data-testid="generate-send"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="generate-quota"]').text()).toContain('额度已用完')
   })
 })

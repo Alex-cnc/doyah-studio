@@ -31,6 +31,7 @@ vi.mock('../ipc', async (importOriginal) => {
         human: '表：public.orders(id bigint)',
         tableCount: 1,
         dropped: 0,
+        quota: { limit: 60, used: 0, remaining: 60, windowSecs: 3600, retryAfterSecs: 0 },
       }),
     agentGenerateSql: () => {
       control.generateCalls += 1
@@ -42,6 +43,7 @@ vi.mock('../ipc', async (importOriginal) => {
         model: 'm',
         elapsedMs: 12,
         tableCount: 1,
+        quota: { limit: 60, used: 1, remaining: 59, windowSecs: 3600, retryAfterSecs: 0 },
         limitations: ['生成结果不会自动执行。'],
       })
     },

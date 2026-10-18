@@ -9,7 +9,9 @@
 //! ② **密钥只进请求头**（`Authorization: Bearer …`），正文里没有它，错误信息里也不会带出来；
 //! ③ **生成结果只回文本**：本文件**不调用任何执行入口**（`Db` 连接不在这里出现）——
 //!    「永不自动执行」在形状上成立，不靠界面自觉；
-//! ④ 预设之外的东西（配额计数）不在本片：每小时上限**尚未计数**，如实写在结果里由界面显示。
+//! ④ **每小时上限是真闸门**：放行后、建客户端前先记一次账（`Db::agent_quota` 的滑窗台账），
+//!    满了就回 [`GenerateReply::Throttled`] —— **一条请求都不发**；台账写不进去也**不发**
+//!    （否则上限会静默失效）。计的是「真发出去的请求」，含超时 / 报错的那一次。
 //!
 //! 契约等价物：macOS 侧 `App/Agent/AgentSqlGenerationService.swift`。
 
@@ -17,6 +19,7 @@ use std::time::{Duration, Instant};
 
 use doyah_studio_db::agent_config::{evaluate, AgentGateReport, GateState};
 use doyah_studio_db::agent_nl2sql::{build_request, parse_reply, TableBrief};
+use doyah_studio_db::agent_quota::{now_secs, QuotaStatus};
 use serde::Serialize;
 
 use crate::agent_settings::AgentSettingsStore;
@@ -36,6 +39,8 @@ pub struct GeneratePreview {
     pub table_count: usize,
     /// 因上限没列出去的表数（界面要如实说）。
     pub dropped: usize,
+    /// 本小时的配额读数（**发之前**就能看到还剩几次 —— 否则用户只会在点下去之后撞墙）。
+    pub quota: QuotaStatus,
 }
 
 /// 一次生成的结果（**只有文本**）。
@@ -54,11 +59,13 @@ pub struct GenerateOutcome {
     pub elapsed_ms: u64,
     /// 随请求外发的表数（用户可据此判断「我到底发了多少东西出去」）。
     pub table_count: usize,
+    /// 发完这一次之后的配额读数（`used` 已含本次）。
+    pub quota: QuotaStatus,
     /// 本片的已知缺口（**如实显示**，不让用户以为配额已经生效）。
     pub limitations: Vec<String>,
 }
 
-/// 生成请求的两种结局：被闸门挡住（零外发），或者真的发了并解析成功。
+/// 生成请求的三种结局：被闸门挡住（零外发）、被配额挡住（零外发）、或者真的发了并解析成功。
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum GenerateReply {
@@ -67,13 +74,18 @@ pub enum GenerateReply {
         /// 逐条理由（界面按短码查语言表）。
         gate: AgentGateReport,
     },
+    /// 本小时配额已满：**一条请求都没发**（`retryAfterSecs` 告诉界面还要等多久）。
+    Throttled {
+        /// 满额时的读数（`limit` / `used` / `retry_after_secs`）。
+        quota: QuotaStatus,
+    },
     /// 放行并完成：结果只在这里，**没有被执行**。
     Generated(GenerateOutcome),
 }
 
 /// 本片的已知缺口（写进结果里，随界面显示）。
 pub const LIMITATIONS: [&str; 2] = [
-    "每小时上限（配额）在本片尚未计数：现在不会因为超量被拦。",
+    "每小时上限按「真发出去的请求」计（含超时 / 报错的那一次）：防的是重试风暴，不是给云端对账单。",
     "生成结果不会自动执行；要留下就点结果区的「存成已保存查询」（存的是这段文本，编辑器内容不动）。",
 ];
 
@@ -85,6 +97,8 @@ pub fn preview(
 ) -> Result<GeneratePreview, DbFailure> {
     let config = store.load()?;
     let gate = evaluate(&config, store.key_present());
+    // 配额读数：预览就要能给「还剩几次」，否则用户只能点下去撞墙。
+    let quota = store.load_quota().status(now_secs(), config.hourly_limit);
     match build_request(&config, question, tables) {
         Ok(outgoing) => Ok(GeneratePreview {
             gate,
@@ -92,6 +106,7 @@ pub fn preview(
             human: outgoing.human,
             table_count: tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
             dropped: tables.len().saturating_sub(doyah_studio_db::agent_nl2sql::MAX_TABLES),
+            quota,
         }),
         // 问题为空时也要能看「哪一步不让发」：给一份不带问题的正文，把原因交给 `gate` / 调用方。
         Err(err) => Err(DbFailure {
@@ -117,6 +132,22 @@ pub fn generate(
     let outgoing = build_request(&config, question, tables).map_err(|err| DbFailure {
         message: err.to_string(),
         hint: "先写一句要查什么（比如「最近 7 天每天的订单数」）。".to_string(),
+    })?;
+
+    // 配额：**装配之后再记**（问题为空这类参数错误不该白占一次额度），**建客户端之前**记
+    // （记不上就不发 —— 否则每小时上限形同不存在）。
+    let mut ledger = store.load_quota();
+    let (admitted, quota) = ledger.admit(now_secs(), config.hourly_limit);
+    if !admitted {
+        // 满了：一条请求都不发。
+        return Ok(GenerateReply::Throttled { quota });
+    }
+    store.save_quota(&ledger).map_err(|err| DbFailure {
+        message: format!(
+            "{} 这次没有发送：记不了账就不发，否则「每小时上限」等于没有。",
+            err.message
+        ),
+        hint: err.hint,
     })?;
 
     let client = reqwest::blocking::Client::builder()
@@ -179,6 +210,7 @@ pub fn generate(
         model: outgoing.model,
         elapsed_ms: started.elapsed().as_millis() as u64,
         table_count: tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
+        quota,
         limitations: LIMITATIONS.iter().map(|line| line.to_string()).collect(),
     }))
 }
@@ -214,6 +246,8 @@ mod tests {
         let store = AgentSettingsStore::new(dir.join("agent.json"), dir.join("agent-key.bin"));
         let _ = std::fs::remove_file(&store.config_path);
         let _ = std::fs::remove_file(&store.key_path);
+        // 配额台账也要清：同一 tag 的目录若留着上一轮的账，会读成「已用过 N 次」。
+        let _ = std::fs::remove_file(store.quota_path());
         store
     }
 
@@ -339,7 +373,13 @@ mod tests {
                 assert_eq!(outcome.sql, "SELECT count(*) FROM public.orders;");
                 assert_eq!(outcome.tables_used, vec!["public.orders".to_string()]);
                 assert_eq!(outcome.model, "fake-model");
-                assert!(outcome.limitations.iter().any(|line| line.contains("配额")));
+                assert!(outcome
+                    .limitations
+                    .iter()
+                    .any(|line| line.contains("每小时上限")));
+                // 这一次是真发出去的 ⇒ 配额读数已经含它。
+                assert_eq!(outcome.quota.used, 1);
+                assert_eq!(outcome.quota.remaining, 59);
             }
             other => panic!("假端点没有回包：{other:?}"),
         }
@@ -368,5 +408,107 @@ mod tests {
         };
         assert!(err.message.contains("401"), "{}", err.message);
         assert!(err.message.contains("bad key"), "{}", err.message);
+    }
+
+    #[test]
+    fn the_hourly_limit_stops_the_request_before_it_is_sent() {
+        let body = serde_json::json!({
+            "choices": [{ "message": { "content": "```sql\nSELECT 1;\n```" } }]
+        })
+        .to_string();
+        let leaked: &'static str = Box::leak(body.into_boxed_str());
+        let (endpoint, seen) = fake_endpoint("200 OK", leaked);
+        let store = tmp_store("quota-blocks");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                hourly_limit: 1,
+                // 假端点只接一次：真发第二发会等到超时 —— 让这条判据在机制失效时快速转红而不是挂住。
+                timeout_secs: 2,
+                ..Default::default()
+            })
+            .unwrap();
+
+        match generate(&store, "第一发", &[orders()]).unwrap() {
+            GenerateReply::Generated(outcome) => assert_eq!(outcome.quota.used, 1),
+            other => panic!("第一发就被拦了：{other:?}"),
+        }
+
+        match generate(&store, "第二发", &[orders()]).unwrap() {
+            GenerateReply::Throttled { quota } => {
+                assert_eq!(quota.limit, 1);
+                assert_eq!(quota.used, 1);
+                assert_eq!(quota.remaining, 0);
+                assert!(quota.retry_after_secs > 0, "满额了却说不用等：{quota:?}");
+            }
+            other => panic!("上限 1 却放了第二发：{other:?}"),
+        }
+
+        // 否定面：假端点只收到**一条**请求（第二发一条字节都没发出去）。
+        let first = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(first.contains("第一发"), "{first}");
+        assert!(
+            seen.try_recv().is_err(),
+            "第二发真的发出去了：配额没有挡住外发"
+        );
+        // 台账落盘：重启后仍记得这一次（否则上限重启即归零）。
+        assert_eq!(store.load_quota().sent_at.len(), 1);
+    }
+
+    #[test]
+    fn a_preview_shows_how_many_requests_are_left_in_the_hour() {
+        let body = serde_json::json!({
+            "choices": [{ "message": { "content": "```sql\nSELECT 1;\n```" } }]
+        })
+        .to_string();
+        let leaked: &'static str = Box::leak(body.into_boxed_str());
+        let (endpoint, _seen) = fake_endpoint("200 OK", leaked);
+        let store = tmp_store("quota-preview");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+
+        let before = preview(&store, "订单总数", &[orders()]).unwrap();
+        assert_eq!(before.quota.used, 0);
+        assert_eq!(before.quota.remaining, before.quota.limit);
+
+        assert!(matches!(
+            generate(&store, "订单总数", &[orders()]).unwrap(),
+            GenerateReply::Generated(_)
+        ));
+
+        let after = preview(&store, "订单总数", &[orders()]).unwrap();
+        assert_eq!(after.quota.used, 1, "预览读数没跟上已经发出去的那一次");
+        assert_eq!(after.quota.remaining, before.quota.limit - 1);
+    }
+
+    #[test]
+    fn an_unwritable_quota_ledger_refuses_to_send_instead_of_silently_dropping_the_limit() {
+        let (endpoint, seen) = fake_endpoint("200 OK", "{}");
+        let store = tmp_store("quota-unwritable");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        // 台账路径被一个**目录**占住 ⇒ 写必然失败（Windows / Linux 都是）。
+        std::fs::create_dir_all(store.quota_path()).unwrap();
+        let err = match generate(&store, "随便", &[orders()]) {
+            Ok(reply) => panic!("记不了账还发了请求：{reply:?}"),
+            Err(err) => err,
+        };
+        assert!(err.message.contains("没有发送"), "{}", err.message);
+        assert!(seen.try_recv().is_err(), "记不了账却真的外发了");
+        let _ = std::fs::remove_dir_all(store.quota_path());
     }
 }

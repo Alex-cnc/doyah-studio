@@ -14,6 +14,7 @@
 use std::path::{Path, PathBuf};
 
 use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateReport};
+use doyah_studio_db::agent_quota::QuotaLedger;
 use serde::Serialize;
 
 use crate::postgres::DbFailure;
@@ -97,6 +98,40 @@ impl AgentSettingsStore {
         })?;
         std::fs::write(&self.config_path, text).map_err(|e| DbFailure {
             message: format!("写智能体配置失败：{e}（{}）", self.config_path.display()),
+            hint: "确认该文件可写（可能被杀毒软件 / 权限限制）。".to_string(),
+        })
+    }
+
+    /// 配额台账的落点：与配置同目录的 `agent-quota.json`（**不是**配置文件的一部分 ——
+    /// 配置由用户手填、台账由程序写，两份混在一起会让「导出配置」把计数带走，也会让手改配置的人
+    /// 一不留神把台账写坏）。
+    pub fn quota_path(&self) -> PathBuf {
+        self.config_path.with_file_name("agent-quota.json")
+    }
+
+    /// 读配额台账。文件不存在 / 读不出来 / 内容是坏 JSON ⇒ **空账**（口径见 `Db::agent_quota` 模块头：
+    /// 一本坏账不许把人锁死一小时）。这里**不报错**，因为配额读不出来不该让生成功能整个不可用。
+    pub fn load_quota(&self) -> QuotaLedger {
+        let path = self.quota_path();
+        match std::fs::read_to_string(&path) {
+            Ok(text) => QuotaLedger::from_json(&text),
+            Err(_) => QuotaLedger::default(),
+        }
+    }
+
+    /// 写配额台账。**写不进去要报错**（调用方据此拒绝发送）：静默失败的后果是「每小时上限」形同不存在。
+    pub fn save_quota(&self, ledger: &QuotaLedger) -> Result<(), DbFailure> {
+        let path = self.quota_path();
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).map_err(|e| DbFailure {
+                    message: format!("建配额台账目录失败：{e}（{}）", parent.display()),
+                    hint: "确认该目录可写。".to_string(),
+                })?;
+            }
+        }
+        std::fs::write(&path, ledger.to_json()).map_err(|e| DbFailure {
+            message: format!("写配额台账失败：{e}（{}）", path.display()),
             hint: "确认该文件可写（可能被杀毒软件 / 权限限制）。".to_string(),
         })
     }

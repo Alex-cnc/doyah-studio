@@ -686,7 +686,21 @@ export interface AgentTableBrief {
   columns: AgentColumnBrief[]
 }
 
-/** 「先看要发什么」的结果（**不含任何行数据**）。 */
+/**
+ * 本小时的配额读数（`FR-AI-01` 的「每小时上限」在 `FR-AI-02` 的拦面上）。
+ *
+ * 口径由领域层（`Db/src/agent_quota.rs`）给：`used` 按上限截断、`retryAfterSecs` 在没满时是 0。
+ * 界面**不自己算**这些数（自己算就会与真闸门分叉）。
+ */
+export interface AgentQuotaStatus {
+  limit: number
+  used: number
+  remaining: number
+  windowSecs: number
+  /** 满了的话还要等多少秒；没满 = 0。 */
+  retryAfterSecs: number
+}
+
 export interface AgentGeneratePreview {
   gate: AgentGateReport
   /** 将要请求的完整地址。 */
@@ -696,6 +710,8 @@ export interface AgentGeneratePreview {
   tableCount: number
   /** 因上限没列出去的表数（界面要如实说）。 */
   dropped: number
+  /** 发之前就能看到的配额读数。 */
+  quota: AgentQuotaStatus
 }
 
 /** 一次生成的结果（**只有文本，没有被执行**）。 */
@@ -706,13 +722,16 @@ export interface AgentGenerateOutcome {
   model: string
   elapsedMs: number
   tableCount: number
+  /** 发完这一次之后的配额读数（`used` 已含本次）。 */
+  quota: AgentQuotaStatus
   /** 本片的已知缺口（配额尚未计数等），界面必须显示。 */
   limitations: string[]
 }
 
-/** 生成的两种结局：被闸门挡住（零外发）或真的发了。 */
+/** 生成的三种结局：被闸门挡住（零外发）、被配额挡住（零外发）、或真的发了。 */
 export type AgentGenerateReply =
   | { status: 'blocked'; gate: AgentGateReport }
+  | { status: 'throttled'; quota: AgentQuotaStatus }
   | ({ status: 'generated' } & AgentGenerateOutcome)
 
 /** 设置快照：配置 + 裁决 + 密钥在不在 + 两个路径。 */
