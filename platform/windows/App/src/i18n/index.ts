@@ -763,6 +763,22 @@ export const DICT = {
     en: 'server sent it in one piece (no streaming)',
   },
   'chat.clear': { 'zh-Hans': '清空对话', en: 'Clear' },
+  'chat.new': { 'zh-Hans': '新建对话', en: 'New chat' },
+  'chat.untitled': { 'zh-Hans': '未命名对话', en: 'Untitled chat' },
+  'chat.asked': { 'zh-Hans': '问 {count} 次', en: '{count} asked' },
+  'chat.sessionsHint': {
+    'zh-Hans': '同一工作区可以有多段对话：换话题点「新建对话」，上一段仍留在盘上',
+    en: 'A workspace can hold several conversations — start a new one and the old one stays on disk',
+  },
+  'chat.broken': {
+    'zh-Hans': '有 {count} 段对话记录读不出来（已跳过，其余段照常可用）',
+    en: '{count} conversation file(s) could not be read (skipped; the rest still work)',
+  },
+  'chat.brokenMark': { 'zh-Hans': '读不出来', en: 'unreadable' },
+  'chat.sessionsProblem': {
+    'zh-Hans': '对话列表没读出来：{problem}',
+    en: 'Could not list conversations: {problem}',
+  },
   // 工具调用 + 内联审批（FR-AI-18）：卡片上的每一句都说出「要做什么 / 读到了什么」
   'chat.tool.title': { 'zh-Hans': '模型想调用工具（需要你点一下）', en: 'The model wants to use a tool — your call' },
   'chat.tool.titleCount': {

@@ -884,32 +884,67 @@ async fn agent_chat_tool_resume(
     })?
 }
 
-/// **读这个工作区的对话**（`FR-AI-17`）：打开对话页签 / 换工作区时调一次。
+/// **读这个工作区的对话**（`FR-AI-17`）：打开对话页签 / 换工作区 / 切段时调一次。
 ///
 /// 只读一条命令：**不触发任何外发**、也不改盘上的东西（写只发生在 [`agent_chat_save`]）。
+/// `id` 省略 ⇒ 读「当前那段」（指针 → 最新 → 默认段）。
 /// 文件不存在 = 第一次打开 = 空对话；文件坏了 / 属于别的工作区 ⇒ 空对话 + `notes` 里说清原因。
 #[tauri::command]
 fn agent_chat_load(
     state: State<'_, ShellState>,
     workspace: String,
+    id: Option<String>,
 ) -> agent_chat_sessions::ChatSessionReport {
-    state.agent_chat_sessions.load(&workspace)
+    match id {
+        Some(id) if !id.trim().is_empty() => state.agent_chat_sessions.load_id(&workspace, &id),
+        _ => state.agent_chat_sessions.load(&workspace),
+    }
+}
+
+/// **这个工作区的对话列表**（`FR-AI-17` ⑤）：界面下拉用 —— 每段一行（标题 / 问数 / 时刻），
+/// 读不出来的那段**单列并计数**，其余段照常可用。
+///
+/// 只读一条命令：**不触发任何外发**、也不改盘上的东西。
+#[tauri::command]
+fn agent_chat_list(
+    state: State<'_, ShellState>,
+    workspace: String,
+) -> agent_chat_sessions::ChatSessionList {
+    state.agent_chat_sessions.list(&workspace)
+}
+
+/// **开一段新对话**（`FR-AI-17`）：换话题不必「清空」（清空等于把上一段扔了）。
+///
+/// 当前段本来就是空的 ⇒ 原样返回它（连点两次不会造出两个空段）。
+/// 这一条**会落一份空会话**：新建的段立刻出现在列表里，重开也不会消失。
+#[tauri::command]
+fn agent_chat_new(
+    state: State<'_, ShellState>,
+    workspace: String,
+) -> Result<agent_chat_sessions::ChatSessionReport, DbFailure> {
+    let at = doyah_studio_db::agent_quota::now_secs();
+    state.agent_chat_sessions.new_session(&workspace, at)
 }
 
 /// **把这个工作区的对话落盘**（`FR-AI-17`）：每成功一问之后调一次。
 ///
-/// 归属工作区为空 ⇒ 可读失败（没有「按工作区一份」可言，界面据此说「这次不会存」）。
+/// `id` 省略 ⇒ 写默认段（升级前那一段的兼容路径）。归属工作区为空 ⇒ 可读失败
+/// （没有「按工作区一份」可言，界面据此说「这次不会存」）。
 /// 超上限 / 超长会被裁到上限**并回报条数**（`dropped` / `clipped` / `invalid`），不静默丢。
 #[tauri::command]
 fn agent_chat_save(
     state: State<'_, ShellState>,
     workspace: String,
+    id: Option<String>,
     turns: Vec<doyah_studio_db::agent_nl2sql::ChatMessage>,
 ) -> Result<agent_chat_sessions::ChatSessionSaved, DbFailure> {
     let at = doyah_studio_db::agent_quota::now_secs();
-    state
-        .agent_chat_sessions
-        .save(&workspace, &turns, at)
+    match id {
+        Some(id) if !id.trim().is_empty() => state
+            .agent_chat_sessions
+            .save_id(&workspace, &id, &turns, at),
+        _ => state.agent_chat_sessions.save(&workspace, &turns, at),
+    }
 }
 
 /// 生成历史（`FR-AI-02` 的回看面）：一打开弹层就能看到以前问过什么。
@@ -2969,6 +3004,8 @@ pub fn run() {
             agent_chat_send,
             agent_chat_tool_resume,
             agent_chat_load,
+            agent_chat_list,
+            agent_chat_new,
             agent_chat_save,
             agent_history_list,
             agent_audit_list,

@@ -132,7 +132,154 @@ pub fn is_usable_workspace(workspace: &str) -> bool {
 /// 任何一种拼进文件名都会变成「路径穿越」或「在别的目录建文件」的入口。哈希之后文件名只含
 /// `[a-z0-9-]`，**归属信息放在文件内部**（读的时候校验）。
 pub fn file_name_for(workspace: &str) -> String {
-    format!("chat-{:016x}.json", fnv1a64(&workspace_key(workspace)))
+    file_name_for_id(workspace, DEFAULT_ID)
+}
+
+/// 老段（升级前那一段）的段号。**保留 `1`** ⇒ 升级后老文件 `chat-<哈希>.json` 逐字节照旧读得到，
+/// 不需要迁移、不搬家。
+pub const DEFAULT_ID: &str = "1";
+
+/// 文件名的公共前缀（段号、指针文件都长在它后面）。
+pub fn file_stem_for(workspace: &str) -> String {
+    format!("chat-{:016x}", fnv1a64(&workspace_key(workspace)))
+}
+
+/// 段号归一：**只认 ASCII 数字**。段号来自磁盘文件名与界面，两者都不可信 ——
+/// 归一不了就是空串（调用方当默认段处理），于是 `..` / 分隔符 / 盘符同样进不了文件名。
+pub fn normalize_id(id: &str) -> String {
+    let trimmed = id.trim();
+    if trimmed.is_empty() || !trimmed.chars().all(|c| c.is_ascii_digit()) {
+        return String::new();
+    }
+    let digits = trimmed.trim_start_matches('0');
+    if digits.is_empty() {
+        "0".to_string()
+    } else {
+        digits.to_string()
+    }
+}
+
+/// 某个工作区里**第 N 段**对话的文件名：默认段用老名字（逐字节兼容），其余段加后缀。
+pub fn file_name_for_id(workspace: &str, id: &str) -> String {
+    let stem = file_stem_for(workspace);
+    let id = normalize_id(id);
+    if id.is_empty() || id == DEFAULT_ID {
+        format!("{stem}.json")
+    } else {
+        format!("{stem}-{id}.json")
+    }
+}
+
+/// 从磁盘上的文件名反解出段号（只认**本工作区**的名字）。
+///
+/// 为什么按定长前缀切：哈希是定长 16 位十六进制，`chat-<别的哈希>.json` 与
+/// `chat-<本哈希>-2.json` 形状不同 ⇒ 别的工作区的文件永远不会被当成本工作区的一段。
+pub fn parse_session_id(workspace: &str, file_name: &str) -> Option<String> {
+    let stem = file_stem_for(workspace);
+    if file_name == format!("{stem}.json") {
+        return Some(DEFAULT_ID.to_string());
+    }
+    let rest = file_name.strip_prefix(&format!("{stem}-"))?;
+    let digits = rest.strip_suffix(".json")?;
+    let id = normalize_id(digits);
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
+}
+
+/// 下一段的段号 = 现有最大段号 + 1（空表 ⇒ `1`，已有 `1` ⇒ `2`…）。
+/// 认不出的段号不算数（它们是磁盘上的垃圾名字，不该把号推到天上去）。
+pub fn next_session_id(existing: &[String]) -> String {
+    let mut max = 0u64;
+    for id in existing {
+        if let Ok(value) = normalize_id(id).parse::<u64>() {
+            max = max.max(value);
+        }
+    }
+    (max + 1).to_string()
+}
+
+/// 列表里一段对话的**摘要**（标题由第一句提问派生 —— 落盘形状不动，升级前的旧文件照样有标题）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionSummary {
+    /// 段号。
+    pub id: String,
+    /// 标题（第一句提问，单行，[`MAX_TITLE_CHARS`] 字符截断；没有提问 ⇒ 空串）。
+    pub title: String,
+    /// 这段里问了几句。
+    pub questions: usize,
+    /// 留存的消息条数。
+    pub messages: usize,
+    /// 最后一次写入的时刻（epoch 秒）。
+    pub updated_secs: u64,
+    /// 读不出来 / 属于别的工作区 / 版本不认识 ⇒ 写清原因（这一段**跳过**，其余段照常可用）。
+    pub problem: Option<String>,
+}
+
+/// 标题最多多少字符。
+pub const MAX_TITLE_CHARS: usize = 40;
+
+/// 标题 = 第一句**用户**消息压成一行（换行 / 多空白折成一个空格），超 [`MAX_TITLE_CHARS`] 补 `…`。
+pub fn title_of(messages: &[ChatMessage]) -> String {
+    let Some(first) = messages
+        .iter()
+        .find(|message| message.role.trim() == "user" && !message.content.trim().is_empty())
+    else {
+        return String::new();
+    };
+    let flat = first
+        .content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut title: String = flat.chars().take(MAX_TITLE_CHARS).collect();
+    if flat.chars().count() > MAX_TITLE_CHARS {
+        title.push('…');
+    }
+    title
+}
+
+/// 把「读回来的会话 + 读的时候说的话」压成列表里的一行。
+pub fn summarize(id: &str, session: &ChatSession, notes: &[String]) -> SessionSummary {
+    // 「空会话 + 有话要说」= 这一份用不了（坏文件 / 别的工作区 / 版本更新）⇒ 跳过并计数。
+    // 合法的空对话（清空后那段）同样空，但一句话都没有 ⇒ 不算坏。
+    let problem = if session.is_empty() && !notes.is_empty() {
+        Some(notes.join(" "))
+    } else {
+        None
+    };
+    SessionSummary {
+        id: normalize_id(id),
+        title: title_of(&session.messages),
+        questions: session.questions(),
+        messages: session.messages.len(),
+        updated_secs: session.updated_secs,
+        problem,
+    }
+}
+
+/// 新的在前；同一时刻按段号**数值**排（`10` 排在 `2` 后面，不按字符串比）。
+pub fn newest_first(mut entries: Vec<SessionSummary>) -> Vec<SessionSummary> {
+    entries.sort_by(|a, b| {
+        b.updated_secs.cmp(&a.updated_secs).then_with(|| {
+            let left = a.id.parse::<u64>().unwrap_or(0);
+            let right = b.id.parse::<u64>().unwrap_or(0);
+            left.cmp(&right)
+        })
+    });
+    entries
+}
+
+/// 指针文件（`.active`）里的内容 ⇒ 段号。**只认数字**，认不出 = 没有指针（调用方退回默认段）。
+pub fn active_from_text(text: Option<&str>) -> Option<String> {
+    let id = normalize_id(text?);
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
 }
 
 fn fnv1a64(text: &str) -> u64 {
@@ -468,5 +615,106 @@ mod tests {
         assert!(kept.ends_with('…'));
         // 按字节切会把中文切成半个字（字节边界也不该破）。
         assert!(std::str::from_utf8(kept.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn segments_of_one_workspace_never_collide_with_another_workspace() {
+        // 段 1 用老名字 ⇒ 升级后老对话照旧读得到（逐字节兼容）。
+        assert_eq!(file_name_for_id("D:/work/demo", DEFAULT_ID), file_name_for("D:/work/demo"));
+        assert_eq!(file_name_for_id("D:/work/demo", "1"), file_name_for("D:/work/demo"));
+        // 段 2 起加后缀，且解回来还是 2。
+        let second = file_name_for_id("D:/work/demo", "2");
+        assert_eq!(parse_session_id("D:/work/demo", &second), Some("2".to_string()));
+        assert_eq!(
+            parse_session_id("D:/work/demo", &file_name_for("D:/work/demo")),
+            Some(DEFAULT_ID.to_string())
+        );
+        // 另一工作区的文件**绝不**被当成本工作区的一段（负例）。
+        let other = file_name_for_id("D:/work/other", "2");
+        assert_ne!(other, second);
+        assert_eq!(parse_session_id("D:/work/demo", &other), None);
+        assert_eq!(parse_session_id("D:/work/demo", &file_name_for("D:/work/other")), None);
+        // 临时文件 / 乱七八糟的名字都不算一段。
+        for junk in [
+            format!("{}.json.tmp", file_stem_for("D:/work/demo")),
+            format!("{}-2.json.tmp", file_stem_for("D:/work/demo")),
+            format!("{}-.json", file_stem_for("D:/work/demo")),
+            format!("{}-x.json", file_stem_for("D:/work/demo")),
+            "chat-whatever.json".to_string(),
+        ] {
+            assert_eq!(parse_session_id("D:/work/demo", &junk), None, "{junk}");
+        }
+        // 段号来自界面 / 文件名，两者都不可信：路径穿越进不了文件名（负例）。
+        for hostile in ["../../evil", "C:\\Windows", "a/2", "  "] {
+            let name = file_name_for_id("D:/work/demo", hostile);
+            assert!(!name.contains("..") && !name.contains('/') && !name.contains('\\'), "{hostile} ⇒ {name}");
+            assert_eq!(name, file_name_for("D:/work/demo"), "{hostile} ⇒ 落回默认段");
+        }
+        // `01` 与 `1` 是同一段（否则同一段会有两个文件）。
+        assert_eq!(file_name_for_id("D:/work/demo", "01"), file_name_for("D:/work/demo"));
+    }
+
+    #[test]
+    fn the_next_segment_is_never_reused() {
+        assert_eq!(next_session_id(&[]), "1", "空表 ⇒ 老段位置");
+        assert_eq!(next_session_id(&["1".to_string()]), "2");
+        assert_eq!(next_session_id(&["2".to_string()]), "3");
+        assert_eq!(
+            next_session_id(&["1".to_string(), "3".to_string()]),
+            "4",
+            "取最大 + 1，不填洞（填洞会让「最近那段」与段号顺序打架）"
+        );
+        assert_eq!(
+            next_session_id(&["1".to_string(), "garbage".to_string()]),
+            "2",
+            "认不出的名字不该把号推上天"
+        );
+    }
+
+    #[test]
+    fn a_title_is_the_first_question_flattened_to_one_line() {
+        let messages = vec![
+            turn("assistant", "先说的话不该当标题"),
+            turn("user", "这个库里\n有哪些表？"),
+            turn("user", "第二个问题"),
+        ];
+        assert_eq!(title_of(&messages), "这个库里 有哪些表？");
+        assert_eq!(title_of(&[turn("assistant", "只有模型在说")]), "", "没有提问就没有标题");
+        let long = "问".repeat(MAX_TITLE_CHARS + 5);
+        let title = title_of(&[turn("user", &long)]);
+        assert_eq!(title.chars().count(), MAX_TITLE_CHARS + 1);
+        assert!(title.ends_with('…'), "截断要看得出来：{title}");
+    }
+
+    #[test]
+    fn the_list_puts_the_newest_first_and_says_which_segment_is_broken() {
+        let older = summarize(
+            "1",
+            &bounded("D:/work/demo", &[turn("user", "老问题")], 10).session,
+            &[],
+        );
+        let newer = summarize(
+            "2",
+            &bounded("D:/work/demo", &[turn("user", "新问题")], 30).session,
+            &[],
+        );
+        // 坏文件：读出来是空会话 + 有话要说 ⇒ 单列 problem（跳过并计数），不影响别的段。
+        let broken = summarize("3", &ChatSession::empty("D:/work/demo"), &["这份对话记录读不出来".to_string()]);
+        assert!(broken.problem.is_some());
+        assert_eq!(broken.messages, 0);
+        // 合法的空对话（清空后那段）不算坏。
+        let empty = summarize("4", &ChatSession::empty("D:/work/demo"), &[]);
+        assert!(empty.problem.is_none());
+
+        let sorted = newest_first(vec![older.clone(), newer.clone(), broken.clone(), empty]);
+        assert_eq!(
+            sorted.iter().map(|entry| entry.id.as_str()).collect::<Vec<_>>(),
+            vec!["2", "1", "3", "4"],
+            "按时刻新的在前；同一时刻（0）按段号数值排"
+        );
+        assert_eq!(sorted[0].title, "新问题");
+        assert_eq!(active_from_text(Some(" 2\n")), Some("2".to_string()));
+        assert_eq!(active_from_text(Some("../../evil")), None);
+        assert_eq!(active_from_text(None), None);
     }
 }

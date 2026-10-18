@@ -110,6 +110,8 @@ describe('ipc', () => {
       'agent_chat_send',
       'agent_chat_tool_resume',
       'agent_chat_load',
+      'agent_chat_list',
+      'agent_chat_new',
       'agent_chat_save',
       'agent_history_list',
       'agent_audit_list',

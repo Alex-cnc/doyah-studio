@@ -143,6 +143,8 @@ export const COMMANDS = {
   agentChatToolResume: 'agent_chat_tool_resume',
   // 对话会话按工作区落盘（FR-AI-17）：读 / 写各一条，只动本机文件、不外发
   agentChatLoad: 'agent_chat_load',
+  agentChatList: 'agent_chat_list',
+  agentChatNew: 'agent_chat_new',
   agentChatSave: 'agent_chat_save',
   agentHistoryList: 'agent_history_list',
   agentAuditList: 'agent_audit_list',
@@ -1185,6 +1187,8 @@ export interface AgentToolResume {
  * 界面照实显示，**不假装读到了一份完整的历史**。
  */
 export interface AgentChatSession {
+  /** 段号（`FR-AI-17`：同一工作区可以有多段对话；空工作区为空串）。 */
+  id: string
   workspace: string
   /** 会话文件路径；没打开工作区时为空串。 */
   path: string
@@ -1195,8 +1199,32 @@ export interface AgentChatSession {
   questions: number
 }
 
+/** 列表里的一段对话（标题由第一句提问派生）。 */
+export interface AgentChatSessionEntry {
+  id: string
+  /** 标题；没有提问 ⇒ 空串（界面自己说「新对话」）。 */
+  title: string
+  questions: number
+  messages: number
+  updatedSecs: number
+  /** 这一段读不出来 / 属于别的工作区 / 版本不认识 ⇒ 原因（这一段跳过，其余段照常可用）。 */
+  problem: string | null
+}
+
+/** 一个工作区的对话列表：各段 + 坏文件计数 + 当前段。 */
+export interface AgentChatSessionList {
+  dir: string
+  entries: AgentChatSessionEntry[]
+  /** 有几段读不出来（跳过并计数，不静默丢）。 */
+  broken: number
+  /** 当前是哪一段（指针文件；没有指针 = 最新那段）。 */
+  active: string
+}
+
 /** 落盘结果：写到哪儿、实际几条、裁掉/截断/丢弃各几条（都要说出来）。 */
 export interface AgentChatSaved {
+  /** 写到哪一段。 */
+  id: string
   path: string
   messages: number
   dropped: number
@@ -1424,13 +1452,15 @@ export async function agentChatToolResume(
 }
 
 /**
- * **读这个工作区的对话**（`FR-AI-17`）：打开页签 / 换工作区时调一次。
+ * **读这个工作区的对话**（`FR-AI-17`）：打开页签 / 换工作区 / 切段时调一次。
  *
  * 只读：**不触发外发**、不改盘上的东西。文件不存在就是空对话（第一次打开）。
+ * `id` 省略 ⇒ 读「当前那段」（指针 → 最新 → 默认段）。
  * 读不出来 / 属于别的工作区 ⇒ 空对话 + `notes` 里说清（界面照实显示）。
  */
-export function agentChatLoad(workspace: string): Promise<AgentChatSession> {
-  return call(COMMANDS.agentChatLoad, { workspace }, () => ({
+export function agentChatLoad(workspace: string, id?: string): Promise<AgentChatSession> {
+  return call(COMMANDS.agentChatLoad, { workspace, id: id ?? null }, () => ({
+    id: id ?? '',
     workspace,
     path: '',
     messages: [],
@@ -1442,12 +1472,42 @@ export function agentChatLoad(workspace: string): Promise<AgentChatSession> {
 }
 
 /**
- * **把这个工作区的对话落盘**（`FR-AI-17`）：每成功一问之后调一次。
+ * **这个工作区的对话列表**（`FR-AI-17`）：各段的标题 / 问数 / 时刻 + 坏文件计数 + 当前段。
  *
- * 归属工作区为空 ⇒ 可读失败（界面据此说「这次不会存」）；超上限 / 超长会被裁到上限**并回报条数**。
+ * 只读：不触发外发、不改盘上的东西。目录不存在就是空列表（第一次用，不是错误）。
  */
-export function agentChatSave(workspace: string, turns: readonly AgentChatTurn[]): Promise<AgentChatSaved> {
-  return call(COMMANDS.agentChatSave, { workspace, turns }, () => {
+export function agentChatList(workspace: string): Promise<AgentChatSessionList> {
+  return call(COMMANDS.agentChatList, { workspace }, () => ({
+    dir: '',
+    entries: [],
+    broken: 0,
+    active: '',
+  }))
+}
+
+/**
+ * **开一段新对话**（`FR-AI-17`）：换话题不必「清空」（清空等于把上一段扔了）。
+ *
+ * 当前段本来就是空的 ⇒ Rust 侧原样返回它（连点两次不会造出两个空段）。
+ */
+export function agentChatNew(workspace: string): Promise<AgentChatSession> {
+  return call(COMMANDS.agentChatNew, { workspace }, () => {
+    throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
+  })
+}
+
+/**
+ * **把这一段对话落盘**（`FR-AI-17`）：每成功一问之后调一次。
+ *
+ * `id` 省略 ⇒ 写默认段（升级前那一段的兼容路径）。归属工作区为空 ⇒ 可读失败
+ * （界面据此说「这次不会存」）；超上限 / 超长会被裁到上限**并回报条数**。
+ */
+export function agentChatSave(
+  workspace: string,
+  turns: readonly AgentChatTurn[],
+  id?: string,
+): Promise<AgentChatSaved> {
+  return call(COMMANDS.agentChatSave, { workspace, id: id ?? null, turns }, () => {
     throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
   })
 }

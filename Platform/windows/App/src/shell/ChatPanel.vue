@@ -19,11 +19,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
+  agentChatList,
   agentChatLoad,
+  agentChatNew,
   agentChatSave,
   agentChatStream,
   agentChatToolResume,
   type AgentChatReply,
+  type AgentChatSessionEntry,
   type AgentChatTurn,
   type AgentGateReport,
   type AgentIssue,
@@ -77,6 +80,17 @@ const thread = ref<HTMLElement | null>(null)
 
 /** 这段对话落在哪个文件（空 = 还没读到 / 没打开工作区）。 */
 const sessionPath = ref('')
+/**
+ * 当前是**哪一段**（`FR-AI-17` 续：一个工作区可以有多段对话）。
+ * 空 = 还没读到 / 没打开工作区 —— 落盘时由 Rust 侧决定写默认段。
+ */
+const sessionId = ref('')
+/** 这个工作区盘上有哪几段（标题由第一句提问派生；新的在前）。 */
+const sessions = ref<AgentChatSessionEntry[]>([])
+/** 有几段读不出来（**跳过并计数**，其余段照常可用）。 */
+const brokenSessions = ref(0)
+/** 列表读不出来的原因（列表坏掉不该让对话不可用，但也不许静默）。 */
+const sessionsProblem = ref('')
 /** 读回来时交代的话（坏文件 / 属于别的工作区 / 跳过了几条）。 */
 const sessionNotes = ref<string[]>([])
 /** 读回了几条（只在刚打开时显示一行，之后清掉 —— 它说明的是「读回来了」这件事）。 */
@@ -135,7 +149,9 @@ async function persist(next: AgentChatTurn[]) {
   const workspace = workspaceId.value
   if (!workspace) return
   try {
-    const saved = await agentChatSave(workspace, next)
+    // 写「当前那段」：段号来自读回来的那一段（空 ⇒ Rust 侧写默认段并回段号）。
+    const saved = await agentChatSave(workspace, next, sessionId.value || undefined)
+    sessionId.value = saved.id ?? ''
     sessionPath.value = saved.path
     saveFailure.value = null
     restored.value = 0
@@ -143,13 +159,41 @@ async function persist(next: AgentChatTurn[]) {
       saved.dropped > 0 || saved.clipped > 0
         ? { kept: saved.messages, dropped: saved.dropped, clipped: saved.clipped }
         : null
+    // 落了盘 ⇒ 列表里的标题 / 问数也跟着变（读的是同一批文件，不另存一份）。
+    void refreshSessions()
   } catch (error) {
     saveFailure.value = readable(error).message
   }
 }
 
-/** 打开时（以及换工作区时）读回这个工作区上一次的对话（`FR-AI-17`）。 */
-async function reload() {
+/** 重新读这个工作区盘上有哪几段（只读，不改盘上的东西）。 */
+async function refreshSessions() {
+  const workspace = workspaceId.value
+  if (!workspace) {
+    sessions.value = []
+    brokenSessions.value = 0
+    sessionsProblem.value = ''
+    return
+  }
+  try {
+    const list = await agentChatList(workspace)
+    sessions.value = list.entries
+    brokenSessions.value = list.broken
+    sessionsProblem.value = ''
+  } catch (error) {
+    // 列表坏掉不该让对话不可用：照常能问能答，但**说清**列表没读出来。
+    sessions.value = []
+    brokenSessions.value = 0
+    sessionsProblem.value = readable(error).message
+  }
+}
+
+/**
+ * 打开这个工作区的对话（`FR-AI-17`）：打开页签 / 换工作区 / 切段时调一次。
+ *
+ * `id` 省略 ⇒ 读「当前那段」（指针 → 最新 → 默认段）。
+ */
+async function reload(id?: string) {
   const workspace = workspaceId.value
   turns.value = []
   sessionNotes.value = []
@@ -157,13 +201,21 @@ async function reload() {
   trimmed.value = null
   saveFailure.value = null
   sessionPath.value = ''
-  if (!workspace) return
+  const wanted = String(id ?? sessionId.value ?? '').trim()
+  if (!workspace) {
+    sessionId.value = ''
+    sessions.value = []
+    brokenSessions.value = 0
+    return
+  }
   try {
-    const session = await agentChatLoad(workspace)
+    const session = await agentChatLoad(workspace, wanted ? wanted : undefined)
+    sessionId.value = session.id ?? ''
     turns.value = session.messages
     sessionPath.value = session.path
     sessionNotes.value = session.notes
     restored.value = session.messages.length
+    await refreshSessions()
     await scrollToEnd()
   } catch (error) {
     // 读不出来不该让对话不可用：当空对话开始，但要说清为什么（不静默）。
@@ -172,9 +224,48 @@ async function reload() {
   }
 }
 
+/** 切到另一段（已经在这段就不动：免得把正在敲的草稿冲掉）。 */
+async function openSession(id: string) {
+  if (!workspaceId.value || id === sessionId.value || sending.value || deciding.value) return
+  sessionId.value = id
+  draft.value = ''
+  await reload(id)
+}
+
+function onSessionPick(event: Event) {
+  const value = (event.target as HTMLSelectElement | null)?.value ?? ''
+  if (value) void openSession(value)
+}
+
+/**
+ * 开一段新对话（`FR-AI-17` 续）：**换话题不必「清空」**（清空 = 把上一段扔了）。
+ * Rust 侧会落一份空会话并回段号；当前段本来就是空的 ⇒ 原样返回它。
+ */
+async function newConversation() {
+  const workspace = workspaceId.value
+  if (!workspace || sending.value || deciding.value) return
+  failure.value = null
+  try {
+    const session = await agentChatNew(workspace)
+    draft.value = ''
+    await reload(session.id)
+  } catch (error) {
+    failure.value = readable(error)
+  }
+}
+
+/** 下拉里一行：标题（没有提问 ⇒「新对话」）+ 问数；读不出来的那段如实标出来。 */
+function sessionLabel(entry: AgentChatSessionEntry): string {
+  const name = entry.title.trim() || tr('chat.untitled')
+  if (entry.problem) return `${name} · ${tr('chat.brokenMark')}`
+  return `${name} · ${tr('chat.asked', { count: entry.questions })}`
+}
+
 onMounted(reload)
-// 换工作区 ⇒ 换一段对话：不重读的话，旧工作区的消息会被写进新工作区那份文件里。
+// 换工作区 ⇒ 换一段对话：**段号也要清掉**（否则会拿上一个工作区的段号去读这个工作区的文件），
+// 不重读的话旧工作区的消息会被写进新工作区那份文件里。
 watch(workspaceId, () => {
+  sessionId.value = ''
   void reload()
 })
 
@@ -352,6 +443,19 @@ function clear() {
   <section class="chat" data-testid="chat-panel">
     <header class="chat__head">
       <h3 class="chat__title">{{ tr('chat.title') }}</h3>
+      <!-- 一个工作区可以有多段对话（`FR-AI-17` 续）：换话题不必「清空」（清空 = 把上一段扔了） -->
+      <select
+        v-if="sessions.length"
+        class="chat__select"
+        :title="tr('chat.sessionsHint')"
+        data-testid="chat-session-select"
+        :value="sessionId"
+        @change="onSessionPick"
+      >
+        <option v-for="entry in sessions" :key="entry.id" :value="entry.id">
+          {{ sessionLabel(entry) }}
+        </option>
+      </select>
       <span class="chat__budget" data-testid="chat-budget">
         {{ tr('chat.budget', {
           turns: budget.turns,
@@ -360,10 +464,26 @@ function clear() {
           limitChars: budget.limitChars,
         }) }}
       </span>
+      <button
+        class="chat__act"
+        type="button"
+        :disabled="!workspaceId || sending"
+        data-testid="chat-new"
+        @click="newConversation"
+      >
+        {{ tr('chat.new') }}
+      </button>
       <button class="chat__act" type="button" :disabled="turns.length === 0 && !draft" data-testid="chat-clear" @click="clear">
         {{ tr('chat.clear') }}
       </button>
     </header>
+    <!-- 读不出来的那几段：**单列并计数**（其余段照常可用，不静默丢） -->
+    <p v-if="brokenSessions" class="chat__broken" data-testid="chat-broken">
+      {{ tr('chat.broken', { count: brokenSessions }) }}
+    </p>
+    <p v-if="sessionsProblem" class="chat__broken" data-testid="chat-sessions-problem">
+      {{ tr('chat.sessionsProblem', { problem: sessionsProblem }) }}
+    </p>
 
     <div ref="thread" class="chat__thread" data-testid="chat-thread">
       <p v-if="turns.length === 0" class="chat__empty">{{ tr('chat.empty') }}</p>
@@ -565,6 +685,22 @@ function clear() {
   display: flex;
   align-items: baseline;
   gap: var(--ds-spacing-s);
+  flex-wrap: wrap;
+}
+.chat__select {
+  background: none;
+  border: var(--ds-metric-hairline) solid var(--ds-color-hairline-light);
+  border-radius: var(--ds-radius-control);
+  color: inherit;
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  min-width: 0;
+  padding: var(--ds-spacing-hair) var(--ds-spacing-s);
+}
+.chat__broken {
+  margin: 0;
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
 }
 .chat__title {
   margin: 0;

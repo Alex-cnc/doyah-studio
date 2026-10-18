@@ -9,6 +9,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 const chatMocks = vi.hoisted(() => ({
   agentChatStream: vi.fn(),
   agentChatLoad: vi.fn(),
+  agentChatList: vi.fn(),
+  agentChatNew: vi.fn(),
   agentChatSave: vi.fn(),
   agentChatToolResume: vi.fn(),
 }))
@@ -19,6 +21,8 @@ vi.mock('../ipc', async (importOriginal) => {
     ...actual,
     agentChatStream: chatMocks.agentChatStream,
     agentChatLoad: chatMocks.agentChatLoad,
+    agentChatList: chatMocks.agentChatList,
+    agentChatNew: chatMocks.agentChatNew,
     agentChatSave: chatMocks.agentChatSave,
     agentChatToolResume: chatMocks.agentChatToolResume,
   }
@@ -32,9 +36,12 @@ const quota = { limit: 60, used: 1, remaining: 59, windowSecs: 3600, retryAfterS
 beforeEach(() => {
   chatMocks.agentChatStream.mockReset()
   chatMocks.agentChatLoad.mockReset()
+  chatMocks.agentChatList.mockReset()
+  chatMocks.agentChatNew.mockReset()
   chatMocks.agentChatSave.mockReset()
   // 缺省：这份工作区没有旧会话；落盘成功但只是记账（每条用例自己覆盖）
   chatMocks.agentChatLoad.mockResolvedValue({
+    id: '1',
     workspace: 'D:/work/demo',
     path: 'C:/Users/x/AppData/Roaming/DoyahStudio/chat/chat-0123456789abcdef.json',
     messages: [],
@@ -43,7 +50,25 @@ beforeEach(() => {
     notes: [],
     questions: 0,
   })
+  // 缺省：盘上一段都没有（下拉不出现）—— 每条用例自己覆盖
+  chatMocks.agentChatList.mockResolvedValue({
+    dir: 'C:/Users/x/AppData/Roaming/DoyahStudio/chat',
+    entries: [],
+    broken: 0,
+    active: '1',
+  })
+  chatMocks.agentChatNew.mockResolvedValue({
+    id: '2',
+    workspace: 'D:/work/demo',
+    path: 'C:/Users/x/AppData/Roaming/DoyahStudio/chat/chat-0123456789abcdef-2.json',
+    messages: [],
+    skipped: 0,
+    clipped: 0,
+    notes: [],
+    questions: 0,
+  })
   chatMocks.agentChatSave.mockResolvedValue({
+    id: '1',
     path: 'C:/Users/x/AppData/Roaming/DoyahStudio/chat/chat-0123456789abcdef.json',
     messages: 2,
     dropped: 0,
@@ -178,7 +203,7 @@ describe('对话会话按工作区落盘', () => {
     const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
     await flushPromises()
 
-    expect(chatMocks.agentChatLoad).toHaveBeenCalledWith('D:/work/demo')
+    expect(chatMocks.agentChatLoad).toHaveBeenCalledWith('D:/work/demo', undefined)
     const thread = wrapper.find('[data-testid="chat-thread"]').text()
     expect(thread).toContain('上次问：这个库有哪些表')
     expect(thread).toContain('上次答：三张表')
@@ -284,7 +309,7 @@ describe('对话会话按工作区落盘', () => {
     // 换成 beta：读的是 beta 那一份（缺省桩 = 空对话）
     await wrapper.setProps({ workspace: 'D:/work/beta' })
     await flushPromises()
-    expect(chatMocks.agentChatLoad).toHaveBeenLastCalledWith('D:/work/beta')
+    expect(chatMocks.agentChatLoad).toHaveBeenLastCalledWith('D:/work/beta', undefined)
     expect(wrapper.find('[data-testid="chat-thread"]').text()).not.toContain('alpha 的表')
 
     chatMocks.agentChatStream.mockResolvedValueOnce(answered('beta 的回答', 1))
@@ -296,6 +321,7 @@ describe('对话会话按工作区落盘', () => {
 
   it('清空对话 ⇒ 连盘上那份也清掉（否则重开页签又会读回来）', async () => {
     chatMocks.agentChatLoad.mockResolvedValue({
+      id: '1',
       workspace: 'D:/work/demo',
       path: 'C:/x/chat-aa.json',
       messages: [
@@ -312,8 +338,119 @@ describe('对话会话按工作区落盘', () => {
     chatMocks.agentChatSave.mockClear()
     await wrapper.find('[data-testid="chat-clear"]').trigger('click')
     await flushPromises()
-    expect(chatMocks.agentChatSave).toHaveBeenCalledWith('D:/work/demo', [])
+    // 清的是**当前这一段**（段号一起带上：不许把别的段清掉）
+    expect(chatMocks.agentChatSave).toHaveBeenCalledWith('D:/work/demo', [], '1')
     expect(wrapper.find('[data-testid="chat-thread"]').text()).toContain('还没有对话')
+  })
+
+  // 多段对话（`FR-AI-17` 续）：判「切段真的换历史 / 新建真的起一段空的 / 坏的那段单独计数」。
+  it('同一个工作区两段 ⇒ 下拉里都看得见；切段换的是那一段的历史，落盘也写那一段', async () => {
+    chatMocks.agentChatLoad.mockImplementation(async (_workspace: string, id?: string) => {
+      const which = id ?? '1'
+      return {
+        id: which,
+        workspace: 'D:/work/demo',
+        path: `C:/x/chat-aa-${which}.json`,
+        messages:
+          which === '2'
+            ? [{ role: 'user', content: '第二段的问题' }, { role: 'assistant', content: '第二段的回答' }]
+            : [{ role: 'user', content: '第一段的问题' }, { role: 'assistant', content: '第一段的回答' }],
+        skipped: 0,
+        clipped: 0,
+        notes: [],
+        questions: 1,
+      }
+    })
+    chatMocks.agentChatList.mockResolvedValue({
+      dir: 'C:/x',
+      entries: [
+        { id: '2', title: '第二段的问题', questions: 1, messages: 2, updatedSecs: 30, problem: null },
+        { id: '1', title: '第一段的问题', questions: 1, messages: 2, updatedSecs: 10, problem: null },
+      ],
+      broken: 0,
+      active: '1',
+    })
+    const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="chat-thread"]').text()).toContain('第一段的问题')
+    const options = wrapper.findAll('[data-testid="chat-session-select"] option')
+    expect(options.length).toBe(2)
+    // 下拉里写的是「标题 · 问数」（不是文件名 / 段号）
+    expect(options[0].text()).toContain('第二段的问题')
+    expect(options[0].text()).toContain('问 1 次')
+
+    // 切到第 2 段 ⇒ 读的是那一段（带段号），消息流换成它
+    const select = wrapper.find('[data-testid="chat-session-select"]')
+    ;(select.element as HTMLSelectElement).value = '2'
+    await select.trigger('change')
+    await flushPromises()
+    expect(chatMocks.agentChatLoad).toHaveBeenLastCalledWith('D:/work/demo', '2')
+    const thread = wrapper.find('[data-testid="chat-thread"]').text()
+    expect(thread).toContain('第二段的问题')
+    expect(thread).not.toContain('第一段的问题')
+
+    // 在这一段里提问 ⇒ 落盘带的是第 2 段的段号（不许写回第 1 段）
+    chatMocks.agentChatStream.mockResolvedValueOnce(answered('接着答', 3))
+    await ask(wrapper, '接着问')
+    const saved = chatMocks.agentChatSave.mock.calls.at(-1)!
+    expect(saved[0]).toBe('D:/work/demo')
+    expect(saved[2]).toBe('2')
+    expect(JSON.stringify(saved[1])).toContain('接着问')
+  })
+
+  it('新建对话 ⇒ 起一段新的（空流），下一次落盘写新段号；清空不再是换话题的唯一办法', async () => {
+    // 没有段号 ⇒ 读到当前段（老话题）；带段号 ⇒ 那一段（新段是空的）
+    chatMocks.agentChatLoad.mockImplementation(async (_workspace: string, id?: string) => ({
+      id: id ?? '1',
+      workspace: 'D:/work/other',
+      path: `C:/x/chat-bb${id ? `-${id}` : ''}.json`,
+      messages: id ? [] : [{ role: 'user', content: '老话题的问题' }],
+      skipped: 0,
+      clipped: 0,
+      notes: [],
+      questions: id ? 0 : 1,
+    }))
+    const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/other' } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="chat-thread"]').text()).toContain('老话题的问题')
+
+    await wrapper.find('[data-testid="chat-new"]').trigger('click')
+    await flushPromises()
+    expect(chatMocks.agentChatNew).toHaveBeenCalledWith('D:/work/other')
+    // 新段是空的（老那段的正文不许留在界面上）
+    const thread = wrapper.find('[data-testid="chat-thread"]').text()
+    expect(thread).toContain('还没有对话')
+    expect(thread).not.toContain('老话题的问题')
+
+    chatMocks.agentChatStream.mockResolvedValueOnce(answered('新话题的回答', 1))
+    await ask(wrapper, '新话题的问题')
+    const saved = chatMocks.agentChatSave.mock.calls.at(-1)!
+    expect(saved[2]).toBe('2')
+    expect(JSON.stringify(saved[1])).not.toContain('老话题')
+  })
+
+  it('有段读不出来 ⇒ 页头如实计数，其余段照常可选（不因为一段坏了整个列表不可用）', async () => {
+    chatMocks.agentChatList.mockResolvedValue({
+      dir: 'C:/x',
+      entries: [
+        { id: '1', title: '好的一段', questions: 2, messages: 4, updatedSecs: 20, problem: null },
+        { id: '2', title: '', questions: 0, messages: 0, updatedSecs: 0, problem: '这份对话记录读不出来' },
+      ],
+      broken: 1,
+      active: '1',
+    })
+    const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
+    await flushPromises()
+
+    const broken = wrapper.find('[data-testid="chat-broken"]').text()
+    expect(broken).toContain('1')
+    expect(broken).toContain('读不出来')
+    // 好的那段照常在下拉里且可用
+    const options = wrapper.findAll('[data-testid="chat-session-select"] option')
+    expect(options.length).toBe(2)
+    expect(options[0].text()).toContain('好的一段')
+    expect(options[1].text()).toContain('读不出来')
   })
 })
 
