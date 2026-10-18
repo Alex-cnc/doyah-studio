@@ -730,13 +730,15 @@ pub enum ChatReply {
         /// **真收到几段**（`FR-AI-16` ①：0 = 服务端无视 `stream`、整段回来；≥1 = 逐段到的）。
         deltas: usize,
     },
-    /// 模型点了一件工具（`FR-AI-18`）：**还没执行**，等用户在卡片上点允许 / 拒绝。
+    /// 模型点了工具（`FR-AI-18`）：**还没执行**，等用户在卡片上逐件点允许 / 拒绝。
     ///
+    /// `calls` 是**这一条回答里的全部调用**（可能多件）：一件都不许丢 —— 只认第一件、其余静默，
+    /// 用户会以为模型只想读一个文件，而它其实还点了别的。
     /// 这一跳**真出过一次网**（配额与审计都记了），所以这三个读数一并交回 ——
     /// 用户看到的不是「什么都没发生」，而是「发了一次、模型要读文件、等你点」。
     ToolPending {
-        /// 模型点的工具（名字 + 参数原文；界面只画路径，不猜）。
-        call: ChatToolCall,
+        /// 模型点的全部工具（名字 + 参数原文；界面只画路径，不猜）。空表不会出现。
+        calls: Vec<ChatToolCall>,
         /// 这一跳模型同时说的正文（有的模型边说边点；空串表示没有）。
         text: String,
         /// 实际使用的模型名。
@@ -761,7 +763,7 @@ pub enum ChatReply {
 pub const CHAT_LIMITATIONS: [&str; 3] = [
     "流是逐段到的：中途断掉时已经画出来的那部分会留着，但不会自动补全 —— 重发一次即可。",
     "模型给的语句只落在对话正文里，本应用**不执行**它 —— 要用就自己复制到编辑器里跑。",
-    "工具只有一件只读的「读取工作区里的文件」，每次都要你点「允许读取」；不写文件、不执行语句。",
+    "工具只有一件只读的「读取工作区里的文件」：模型一条回答里可能连着点几件，每件都要你单独点允许或拒绝；不写文件、不执行语句。",
 ];
 
 /// **对话这一次**（`FR-AI-25` 对话页签第一片）：把整段历史发出去，只回正文。
@@ -789,19 +791,19 @@ pub fn chat_stream(
     turns: &[ChatMessage],
     sink: &mut dyn FnMut(&str),
 ) -> Result<ChatReply, DbFailure> {
-    chat_stream_with(store, turns, None, sink)
+    chat_stream_with(store, turns, &[], sink)
 }
 
 /// **带工具状态**的对话（`FR-AI-18`）：与 [`chat_stream`] 完全同一条通道，
 /// 只是这次请求里带着工具清单，可能带回「模型点了某件工具」。
 ///
-/// `pending` = 上一跳的工具调用 + 用户点完之后拿到的结果（`None` = 这一问的第一跳）。
-/// **工具结果只从参数进来**：本层不执行任何工具（执行在 [`chat_tool_decide`] 那一侧），
+/// `pending` = 上一跳模型点的**全部**工具 + 用户点完之后拿到的结果（空表 = 这一问的第一跳）。
+/// **工具结果只从参数进来**：本层不执行任何工具（执行在 [`chat_tool_resume`] 那一侧），
 /// 所以「模型想读什么」与「真读到了什么」是两条分开的路，谁也替不了谁。
 pub fn chat_stream_with(
     store: &AgentSettingsStore,
     turns: &[ChatMessage],
-    pending: Option<(&ChatToolCall, &str)>,
+    pending: &[(&ChatToolCall, &str)],
     sink: &mut dyn FnMut(&str),
 ) -> Result<ChatReply, DbFailure> {
     let config = store.load()?;
@@ -1021,24 +1023,26 @@ pub fn chat_stream_with(
 
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
-    // 模型点了工具（`FR-AI-18`）：这一跳**真出过网**（配额、审计照记），然后**停下来等人点** ——
-    // 不自己执行、不替用户点。执行与回灌在 `chat_tool_decide` 那一侧。
-    if let Some(call) = calls.into_iter().next() {
+    // 模型点了工具（`FR-AI-18`）：这一跳**真出过网**（配额、审计照记），然后**停下来等人逐件点** ——
+    // 不自己执行、不替用户点。**全部**调用一起交回（只认第一件会让用户漏看别的）。
+    // 执行与回灌在 `chat_tool_resume` 那一侧。
+    if !calls.is_empty() {
         let mut limitations: Vec<String> = Vec::new();
+        let names: Vec<&str> = calls.iter().map(|call| call.name.as_str()).collect();
         if let Some(note) = record_audit(
             store,
             AuditVerdict::Ok,
             &outgoing.model,
             &outgoing.url,
             &question,
-            &format!("工具调用：{}（等用户批准）", call.name),
+            &format!("工具调用 {} 件：{}（等用户逐件批准）", calls.len(), names.join(", ")),
             elapsed_ms,
             0,
         ) {
             limitations.push(format!("这一次没能记进审计记录（{note}）—— 工具调用仍然可以继续。"));
         }
         return Ok(ChatReply::ToolPending {
-            call,
+            calls,
             text,
             model: outgoing.model,
             elapsed_ms,
@@ -1104,12 +1108,14 @@ pub struct ToolRun {
     pub problem: String,
 }
 
-/// 用户点完允许 / 拒绝之后的结果：卡片读数 + 模型拿到结果后的最终回答。
+/// 用户逐件点完之后的结果：**每一件**的执行账 + 模型拿到结果后的最终回答。
+///
+/// `runs` 与当初的 `calls` 一一对应、顺序一致 —— 界面靠这个把「哪一行账」对回「哪一件工具」。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ToolDecision {
-    /// 这一件工具的执行账。
-    pub run: ToolRun,
+pub struct ToolResume {
+    /// 这一批工具的执行账（每件一条，顺序同调用顺序）。
+    pub runs: Vec<ToolRun>,
     /// 回灌之后模型的回答（与普通对话同一个 [`ChatReply`]；也可能再次点工具）。
     pub reply: ChatReply,
 }
@@ -1121,56 +1127,82 @@ pub const TOOL_DENIED_NOTE: &str =
 /// 交给模型的单次工具正文上限（字符）。超了如实标注截断 —— 悄悄砍掉会让模型以为文件只有这么长。
 pub const TOOL_RESULT_MAX_CHARS: usize = 8_000;
 
-/// 用户点了允许 / 拒绝之后：执行（或记下拒绝）+ 把结果回灌给模型（`FR-AI-18`）。
+/// 用户逐件点完之后：执行（或记下拒绝）**全部**结果，**一次请求**回灌给模型（`FR-AI-18`）。
 ///
-/// **执行只在这一条路上**，且只认 [`CHAT_READ_FILE_TOOL`] 这一件：别的名字连读都不读。
-pub fn chat_tool_decide(
+/// 三条口径：
+/// ① **执行只在这一条路上**，且只认 [`CHAT_READ_FILE_TOOL`]：别的名字连读都不读；
+/// ② `approvals` 与 `calls` 必须**逐件对齐**（条数不等 ⇒ 直接拒发，不默认成允许 / 拒绝）——
+///    静默补一个 `false` 会让「少点了一件」看起来像「用户拒绝了」；
+/// ③ 全部结果**一次回灌**：逐件各发一发 = 同一回答被拆成 N 次出网（N 次配额 / N 次审计），
+///    而且模型看到的上下文是残缺的。
+pub fn chat_tool_resume(
     store: &AgentSettingsStore,
     workspace: &str,
     turns: &[ChatMessage],
-    call: &ChatToolCall,
-    approved: bool,
+    calls: &[ChatToolCall],
+    approvals: &[bool],
     sink: &mut dyn FnMut(&str),
-) -> Result<ToolDecision, DbFailure> {
-    let path = read_file_path(&call.arguments).unwrap_or_default();
-    let read = if !approved {
-        ToolRead {
-            content: TOOL_DENIED_NOTE.to_string(),
-            chars: 0,
-            truncated: false,
-            ok: false,
-            problem: String::new(),
-        }
-    } else if call.name.trim() != CHAT_READ_FILE_TOOL {
-        ToolRead {
-            content: format!(
-                "没有执行：工具「{}」不在只读白名单里（只允许 {CHAT_READ_FILE_TOOL}）。",
-                call.name
+) -> Result<ToolResume, DbFailure> {
+    if calls.is_empty() {
+        return Err(DbFailure {
+            message: "没有待批的工具调用：这次一个字都没发。".to_string(),
+            hint: "重新问一次；模型再点工具时会重新出卡片。".to_string(),
+        });
+    }
+    if approvals.len() != calls.len() {
+        return Err(DbFailure {
+            message: format!(
+                "批准结果与工具数量对不上（{} 件工具 / {} 个决定）：这次没有发出去。",
+                calls.len(),
+                approvals.len()
             ),
-            chars: 0,
-            truncated: false,
-            ok: false,
-            problem: "不在白名单".to_string(),
-        }
-    } else {
-        read_workspace_file(workspace, &path)
-    };
-    let run = ToolRun {
-        name: call.name.clone(),
-        path,
-        approved,
-        ok: read.ok,
-        chars: read.chars,
-        truncated: read.truncated,
-        problem: read.problem.clone(),
-    };
-    let reply = chat_stream_with(
-        store,
-        turns,
-        Some((call, read.content.as_str())),
-        sink,
-    )?;
-    Ok(ToolDecision { run, reply })
+            hint: "每一件工具都要单独点允许或拒绝；全部点完才会一起交给模型。".to_string(),
+        });
+    }
+    let mut runs: Vec<ToolRun> = Vec::with_capacity(calls.len());
+    // 结果与调用一一对应（顺序一致）：回灌时 `tool_call_id` 逐件对齐。
+    let mut results: Vec<(ChatToolCall, String)> = Vec::with_capacity(calls.len());
+    for (call, approved) in calls.iter().zip(approvals.iter()) {
+        let path = read_file_path(&call.arguments).unwrap_or_default();
+        let read = if !approved {
+            ToolRead {
+                content: TOOL_DENIED_NOTE.to_string(),
+                chars: 0,
+                truncated: false,
+                ok: false,
+                problem: String::new(),
+            }
+        } else if call.name.trim() != CHAT_READ_FILE_TOOL {
+            ToolRead {
+                content: format!(
+                    "没有执行：工具「{}」不在只读白名单里（只允许 {CHAT_READ_FILE_TOOL}）。",
+                    call.name
+                ),
+                chars: 0,
+                truncated: false,
+                ok: false,
+                problem: "不在白名单".to_string(),
+            }
+        } else {
+            read_workspace_file(workspace, &path)
+        };
+        runs.push(ToolRun {
+            name: call.name.clone(),
+            path,
+            approved: *approved,
+            ok: read.ok,
+            chars: read.chars,
+            truncated: read.truncated,
+            problem: read.problem.clone(),
+        });
+        results.push((call.clone(), read.content));
+    }
+    let pending: Vec<(&ChatToolCall, &str)> = results
+        .iter()
+        .map(|(call, result)| (call, result.as_str()))
+        .collect();
+    let reply = chat_stream_with(store, turns, &pending, sink)?;
+    Ok(ToolResume { runs, reply })
 }
 
 /// 读一次工作区里的文本文件（**只读、只认相对路径、不许跳出工作区**）。
@@ -1363,7 +1395,7 @@ fn read_sse_stream(
             if byte == b'\n' {
                 let current = String::from_utf8_lossy(&line).to_string();
                 line.clear();
-                if let Some(event) = parse_sse_line(&current) {
+                for event in parse_sse_line(&current) {
                     apply_sse_event(event, &mut text, &mut deltas, &mut finished, &mut calls, sink)?;
                 }
             } else {
@@ -1374,7 +1406,7 @@ fn read_sse_stream(
     // 最后一行可能没有换行符收尾（服务端断开 / 省略末尾换行）。
     if !line.is_empty() {
         let current = String::from_utf8_lossy(&line).to_string();
-        if let Some(event) = parse_sse_line(&current) {
+        for event in parse_sse_line(&current) {
             apply_sse_event(event, &mut text, &mut deltas, &mut finished, &mut calls, sink)?;
         }
     }
@@ -1435,25 +1467,38 @@ fn apply_sse_event(
     Ok(())
 }
 
-/// 解析一行 SSE。**不是 `data:` 行就回 `None`**（`event:` / 注释 / 空行都不算错）。
-fn parse_sse_line(line: &str) -> Option<SseEvent> {
-    let payload = line.trim_end_matches('\r').strip_prefix("data:")?.trim();
+/// 解析一行 SSE（`FR-AI-18` 第二片：**一行可以出多帧事件**，所以回 `Vec`）。
+///
+/// 为什么不是 `Option`：`delta.tool_calls` 在协议里是**数组**，一帧里并列多件是合法的
+/// （有的端点第一帧就把所有调用的 name 一起给出）。旧实现每行只取第一件、其余静默丢掉 ——
+/// 用户看到「模型只想读一个文件」，其实它点了两个，第二个既没执行也没人知道。
+///
+/// **不是 `data:` 行就回空表**（`event:` / 注释 / 空行都不算错）。
+fn parse_sse_line(line: &str) -> Vec<SseEvent> {
+    let Some(payload) = line.trim_end_matches('\r').strip_prefix("data:") else {
+        return Vec::new();
+    };
+    let payload = payload.trim();
     if payload.is_empty() {
-        return None;
+        return Vec::new();
     }
     if payload == "[DONE]" {
-        return Some(SseEvent::Done);
+        return vec![SseEvent::Done];
     }
-    let value: serde_json::Value = serde_json::from_str(payload).ok()?;
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else {
+        return Vec::new();
+    };
     if let Some(message) = value
         .get("error")
         .and_then(|error| error.get("message"))
         .and_then(|message| message.as_str())
     {
-        return Some(SseEvent::Error(message.to_string()));
+        return vec![SseEvent::Error(message.to_string())];
     }
     let choice = value.get("choices").and_then(|choices| choices.get(0));
+    let mut events: Vec<SseEvent> = Vec::new();
     // 工具调用增量（`FR-AI-18`）：位置在 `delta.tool_calls[i]`，名字与参数可能**分几帧**到。
+    // 同一帧里并列的**每一件都要出**（`index` 决定它是第几件，交给 apply 侧按 index 拼）。
     if let Some(list) = choice
         .and_then(|choice| choice.get("delta"))
         .and_then(|delta| delta.get("tool_calls"))
@@ -1481,7 +1526,7 @@ fn parse_sse_line(line: &str) -> Option<SseEvent> {
                 .unwrap_or("")
                 .to_string();
             if id.is_some() || name.is_some() || !arguments.is_empty() {
-                return Some(SseEvent::ToolCall {
+                events.push(SseEvent::ToolCall {
                     index,
                     id,
                     name,
@@ -1496,17 +1541,20 @@ fn parse_sse_line(line: &str) -> Option<SseEvent> {
         .and_then(|content| content.as_str())
     {
         if !chunk.is_empty() {
-            return Some(SseEvent::Delta(chunk.to_string()));
+            events.push(SseEvent::Delta(chunk.to_string()));
         }
     }
-    let reason = choice
-        .and_then(|choice| choice.get("finish_reason"))
-        .and_then(|reason| reason.as_str())
-        .unwrap_or("");
-    if !reason.is_empty() {
-        return Some(SseEvent::Finished);
+    // 收尾标记只在**这一帧没有别的内容**时补：有工具调用 / 正文的帧本来就不是收尾帧。
+    if events.is_empty() {
+        let reason = choice
+            .and_then(|choice| choice.get("finish_reason"))
+            .and_then(|reason| reason.as_str())
+            .unwrap_or("");
+        if !reason.is_empty() {
+            events.push(SseEvent::Finished);
+        }
     }
-    None
+    events
 }
 
 /// 记一条审计（`FR-AI-09`）：**四种结局都记** —— 成功、失败、被闸门挡住、被配额挡住。
@@ -2735,6 +2783,7 @@ mod tests {
         let dir = fixture_root().join(format!("doyah-tool-ws-{tag}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("notes.txt"), "重试三次。").unwrap();
+        std::fs::write(dir.join("other.txt"), "另一份文件。").unwrap();
         std::fs::write(
             fixture_root().join(secret_name()),
             "不该被读到",
@@ -2759,7 +2808,7 @@ mod tests {
         let turns = vec![chat_turn("user", "看一下 notes.txt 里写了什么")];
 
         let call = match chat(&store, &turns).unwrap() {
-            ChatReply::ToolPending { call, .. } => call,
+            ChatReply::ToolPending { calls, .. } => calls.into_iter().next().expect("该有至少一件工具"),
             other => panic!("模型点了工具就该停下来等人点：{other:?}"),
         };
         assert_eq!(call.name, "read_file");
@@ -2772,18 +2821,19 @@ mod tests {
         assert!(first.contains("read_file"), "{first}");
 
         // 允许之后：文件内容要真出现在第二发请求里（role: tool + tool_call_id 成对）。
-        let decision = chat_tool_decide(
+        let decision = chat_tool_resume(
             &store,
             workspace.to_str().unwrap(),
             &turns,
-            &call,
-            true,
+            &[call],
+            &[true],
             &mut |_| {},
         )
         .unwrap();
-        assert!(decision.run.approved);
-        assert!(decision.run.ok, "{:?}", decision.run.problem);
-        assert!(decision.run.chars > 0);
+        let run = &decision.runs[0];
+        assert!(run.approved);
+        assert!(run.ok, "{:?}", run.problem);
+        assert!(run.chars > 0);
         let second = seen.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(second.contains("tool_call_id"), "{second}");
         assert!(second.contains("重试三次"), "读到的内容要回灌给模型：{second}");
@@ -2804,29 +2854,116 @@ mod tests {
         let workspace = tool_workspace("deny");
         let turns = vec![chat_turn("user", "看一下 notes.txt 里写了什么")];
         let call = match chat(&store, &turns).unwrap() {
-            ChatReply::ToolPending { call, .. } => call,
+            ChatReply::ToolPending { calls, .. } => calls.into_iter().next().expect("该有至少一件工具"),
             other => panic!("该等到审批：{other:?}"),
         };
         // 先把第一发（带工具清单那一次）取走，下面取到的才是回灌那一次。
         let _first = seen.recv_timeout(Duration::from_secs(5)).unwrap();
-        let decision = chat_tool_decide(
+        let decision = chat_tool_resume(
             &store,
             workspace.to_str().unwrap(),
             &turns,
-            &call,
-            false,
+            &[call],
+            &[false],
             &mut |_| {},
         )
         .unwrap();
-        assert!(!decision.run.approved);
-        assert!(!decision.run.ok);
-        assert_eq!(decision.run.chars, 0);
+        let run = &decision.runs[0];
+        assert!(!run.approved);
+        assert!(!run.ok);
+        assert_eq!(run.chars, 0);
         let second = seen.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(second.contains("用户拒绝了"), "被拒要如实告诉模型：{second}");
         assert!(
             !second.contains("重试三次"),
             "拒绝了就不许把文件内容发出去：{second}"
         );
+    }
+
+    /// 一条回答里**并列两件**工具调用：第一帧里两件的名字一起到，参数再分帧补齐。
+    ///
+    /// 这一帧正是旧实现的缺口：`parse_sse_line` 每行只返回第一件 ⇒ 第二件静默消失。
+    const SSE_TWO_TOOL_CALLS: &str = concat!(
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[",
+        "{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"note\"}},",
+        "{\"index\":1,\"id\":\"call_2\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"oth\"}}",
+        "]}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[",
+        "{\"index\":0,\"function\":{\"arguments\":\"s.txt\\\"}\"}},",
+        "{\"index\":1,\"function\":{\"arguments\":\"er.txt\\\"}\"}}",
+        "]}}]}\n\n",
+        "data: [DONE]\n\n",
+    );
+
+    #[test]
+    fn two_tool_calls_in_one_answer_are_both_kept_and_go_back_in_one_request() {
+        let (endpoint, seen) =
+            fake_endpoint_script(vec![("200 OK", SSE_TWO_TOOL_CALLS), ("200 OK", SSE_ANSWER)]);
+        let store = streaming_store("chat-tool-two", endpoint);
+        let workspace = tool_workspace("two");
+        let turns = vec![chat_turn("user", "看一下 notes.txt 和 other.txt")];
+
+        let calls = match chat(&store, &turns).unwrap() {
+            ChatReply::ToolPending { calls, .. } => calls,
+            other => panic!("两件工具都该停下来等人点：{other:?}"),
+        };
+        assert_eq!(calls.len(), 2, "一条回答里两件，一件都不许丢：{calls:?}");
+        assert_eq!(calls[0].id, "call_1");
+        assert_eq!(calls[1].id, "call_2");
+        assert_eq!(calls[0].arguments, "{\"path\":\"notes.txt\"}", "分帧参数要拼回整份");
+        assert_eq!(calls[1].arguments, "{\"path\":\"other.txt\"}", "第二件也要拼回整份");
+
+        let _first = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        // 逐件决定：第一件允许、第二件拒绝 ⇒ **一次**请求把两份结果一起回灌。
+        let decision =
+            chat_tool_resume(&store, workspace.to_str().unwrap(), &turns, &calls, &[true, false], &mut |_| {})
+                .unwrap();
+        assert_eq!(decision.runs.len(), 2, "每件都要有一条账");
+        assert!(decision.runs[0].ok, "{:?}", decision.runs[0].problem);
+        assert!(decision.runs[0].chars > 0);
+        assert!(!decision.runs[1].approved);
+        assert_eq!(decision.runs[1].path, "other.txt");
+
+        let second = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(
+            second.matches("\"tool_call_id\"").count(),
+            2,
+            "两件结果各一条 tool 消息：{second}"
+        );
+        assert!(second.contains("call_1") && second.contains("call_2"), "{second}");
+        assert!(second.contains("重试三次"), "允许的那份要回灌：{second}");
+        assert!(second.contains("用户拒绝了"), "拒绝的那份要如实告诉模型：{second}");
+        assert!(
+            !second.contains("另一份文件。"),
+            "拒绝的就不许把内容发出去：{second}"
+        );
+    }
+
+    #[test]
+    fn a_decision_count_that_does_not_match_the_calls_sends_nothing() {
+        let (endpoint, seen) =
+            fake_endpoint_script(vec![("200 OK", SSE_TWO_TOOL_CALLS), ("200 OK", SSE_ANSWER)]);
+        let store = streaming_store("chat-tool-mismatch", endpoint);
+        let workspace = tool_workspace("mismatch");
+        let turns = vec![chat_turn("user", "看一下 notes.txt 和 other.txt")];
+        let calls = match chat(&store, &turns).unwrap() {
+            ChatReply::ToolPending { calls, .. } => calls,
+            other => panic!("该等到审批：{other:?}"),
+        };
+        let _first = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+
+        // 两件工具只给了一个决定 ⇒ **一条请求都不许发**（不许静默补一个「拒绝」）。
+        let failure = chat_tool_resume(
+            &store,
+            workspace.to_str().unwrap(),
+            &turns,
+            &calls,
+            &[true],
+            &mut |_| {},
+        )
+        .unwrap_err();
+        assert!(failure.message.contains("对不上"), "{}", failure.message);
+        assert!(seen.try_recv().is_err(), "对不上就不许再出网");
     }
 
     #[test]

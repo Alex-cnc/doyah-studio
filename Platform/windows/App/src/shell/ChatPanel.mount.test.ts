@@ -10,7 +10,7 @@ const chatMocks = vi.hoisted(() => ({
   agentChatStream: vi.fn(),
   agentChatLoad: vi.fn(),
   agentChatSave: vi.fn(),
-  agentChatToolDecide: vi.fn(),
+  agentChatToolResume: vi.fn(),
 }))
 
 vi.mock('../ipc', async (importOriginal) => {
@@ -20,7 +20,7 @@ vi.mock('../ipc', async (importOriginal) => {
     agentChatStream: chatMocks.agentChatStream,
     agentChatLoad: chatMocks.agentChatLoad,
     agentChatSave: chatMocks.agentChatSave,
-    agentChatToolDecide: chatMocks.agentChatToolDecide,
+    agentChatToolResume: chatMocks.agentChatToolResume,
   }
 })
 
@@ -374,11 +374,13 @@ describe('对话逐段渲染', () => {
 })
 
 // 工具调用 + 内联审批（`FR-AI-18`）：判「卡片写明要读哪个文件 / 不点就不执行 /
-// 允许后才真发第二次请求 / 拒绝也算一条账」。
+// 全部点完才一次发出去 / 允许与拒绝都各有一条账」。
 describe('对话工具调用', () => {
-  const pending = {
+  const call = (id: string, path: string) => ({ id, name: 'read_file', arguments: JSON.stringify({ path }) })
+
+  const pending = (calls: ReturnType<typeof call>[]) => ({
     status: 'toolPending' as const,
-    call: { id: 'call_1', name: 'read_file', arguments: '{"path":"src/main.ts"}' },
+    calls,
     text: '',
     model: 'm',
     elapsedMs: 8,
@@ -386,7 +388,7 @@ describe('对话工具调用', () => {
     attempts: [{ attempt: 1, outcome: 'ok' as const, status: 200, delayMs: 0, detail: '' }],
     turns: 1,
     deltas: 0,
-  }
+  })
 
   const answered = (text: string) => ({
     status: 'answered' as const,
@@ -400,9 +402,9 @@ describe('对话工具调用', () => {
     deltas: 1,
   })
 
-  const run = (approved: boolean) => ({
+  const run = (path: string, approved: boolean) => ({
     name: 'read_file',
-    path: 'src/main.ts',
+    path,
     approved,
     ok: approved,
     chars: approved ? 42 : 0,
@@ -411,9 +413,9 @@ describe('对话工具调用', () => {
   })
 
   it('模型点工具 ⇒ 卡片写明路径，不点就一次都不执行；点允许后才真发并显示读数', async () => {
-    chatMocks.agentChatStream.mockResolvedValue(pending)
-    chatMocks.agentChatToolDecide.mockResolvedValue({
-      run: run(true),
+    chatMocks.agentChatStream.mockResolvedValue(pending([call('call_1', 'src/main.ts')]))
+    chatMocks.agentChatToolResume.mockResolvedValue({
+      runs: [run('src/main.ts', true)],
       reply: answered('这个文件导出了 start()。'),
     })
     const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
@@ -422,26 +424,26 @@ describe('对话工具调用', () => {
     // 卡片出来了，且**什么都没执行**
     expect(wrapper.find('[data-testid="chat-tool-card"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="chat-tool-ask"]').text()).toContain('src/main.ts')
-    expect(chatMocks.agentChatToolDecide).not.toHaveBeenCalled()
+    expect(chatMocks.agentChatToolResume).not.toHaveBeenCalled()
 
     await wrapper.find('[data-testid="chat-tool-allow"]').trigger('click')
     await flushPromises()
 
-    const [workspace, turns, call, approved] = chatMocks.agentChatToolDecide.mock.calls[0]
+    const [workspace, turns, calls, approvals] = chatMocks.agentChatToolResume.mock.calls[0]
     expect(workspace).toBe('D:/work/demo')
     expect(turns).toEqual([{ role: 'user', content: '看一下 src/main.ts' }])
-    expect(call.name).toBe('read_file')
-    expect(approved).toBe(true)
+    expect(calls).toEqual([call('call_1', 'src/main.ts')])
+    expect(approvals).toEqual([true])
     // 最终回答进流里、执行账留着、卡片消失（同一件事不会追问第二次）
     expect(wrapper.find('[data-testid="chat-thread"]').text()).toContain('这个文件导出了 start()。')
     expect(wrapper.find('[data-testid="chat-tool-runs"]').text()).toContain('42')
     expect(wrapper.find('[data-testid="chat-tool-card"]').exists()).toBe(false)
   })
 
-  it('点拒绝 ⇒ 带 approved=false 再发一次，账上写清「你拒绝了」', async () => {
-    chatMocks.agentChatStream.mockResolvedValue(pending)
-    chatMocks.agentChatToolDecide.mockResolvedValue({
-      run: run(false),
+  it('点拒绝 ⇒ 带 [false] 再发一次，账上写清「你拒绝了」', async () => {
+    chatMocks.agentChatStream.mockResolvedValue(pending([call('call_1', 'src/main.ts')]))
+    chatMocks.agentChatToolResume.mockResolvedValue({
+      runs: [run('src/main.ts', false)],
       reply: answered('没有读到文件，我只能按你贴的内容回答。'),
     })
     const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
@@ -450,8 +452,49 @@ describe('对话工具调用', () => {
     await wrapper.find('[data-testid="chat-tool-deny"]').trigger('click')
     await flushPromises()
 
-    expect(chatMocks.agentChatToolDecide.mock.calls[0][3]).toBe(false)
+    expect(chatMocks.agentChatToolResume.mock.calls[0][3]).toEqual([false])
     expect(wrapper.find('[data-testid="chat-tool-runs"]').text()).toContain('拒绝')
     expect(wrapper.find('[data-testid="chat-thread"]').text()).toContain('没有读到文件')
+  })
+
+  it('一条回答里两件 ⇒ 逐件列出；只点一件仍零调用，两件都点完才一次交给模型', async () => {
+    chatMocks.agentChatStream.mockResolvedValue(
+      pending([call('call_1', 'src/a.ts'), call('call_2', 'src/b.ts')]),
+    )
+    chatMocks.agentChatToolResume.mockResolvedValue({
+      runs: [run('src/a.ts', true), run('src/b.ts', false)],
+      reply: answered('a.ts 里是 A，b.ts 我没读。'),
+    })
+    const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
+    await ask(wrapper, '看一下 src/a.ts 和 src/b.ts')
+
+    // 两件都在卡片上，且一件都还没点
+    const rows = wrapper.findAll('[data-testid="chat-tool-ask"]')
+    expect(rows.length).toBe(2)
+    expect(rows[0].text()).toContain('src/a.ts')
+    expect(rows[1].text()).toContain('src/b.ts')
+    expect(wrapper.find('[data-testid="chat-tool-progress"]').text()).toContain('0 / 2')
+
+    // 只点第一件 ⇒ **一次都不发**（不许拿半批决定去问模型）
+    await wrapper.findAll('[data-testid="chat-tool-allow"]')[0].trigger('click')
+    await flushPromises()
+    expect(chatMocks.agentChatToolResume).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="chat-tool-progress"]').text()).toContain('1 / 2')
+    expect(wrapper.findAll('[data-testid="chat-tool-mark"]')[0].text()).toContain('已允许')
+
+    // 第二件点拒绝 ⇒ 走一次，带着两件的决定与两件工具
+    await wrapper.findAll('[data-testid="chat-tool-deny"]')[1].trigger('click')
+    await flushPromises()
+    expect(chatMocks.agentChatToolResume).toHaveBeenCalledTimes(1)
+    const [, , calls, approvals] = chatMocks.agentChatToolResume.mock.calls[0]
+    expect(calls).toEqual([call('call_1', 'src/a.ts'), call('call_2', 'src/b.ts')])
+    expect(approvals).toEqual([true, false])
+
+    // 两件各有一条账，最终回答进流里
+    const runs = wrapper.find('[data-testid="chat-tool-runs"]').text()
+    expect(runs).toContain('src/a.ts')
+    expect(runs).toContain('src/b.ts')
+    expect(wrapper.find('[data-testid="chat-thread"]').text()).toContain('a.ts 里是 A')
+    expect(wrapper.find('[data-testid="chat-tool-card"]').exists()).toBe(false)
   })
 })

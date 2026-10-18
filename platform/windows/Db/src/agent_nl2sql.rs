@@ -428,18 +428,22 @@ fn build_chat_request_with_stream(
     turns: &[ChatMessage],
     stream: bool,
 ) -> Result<Outgoing, Nl2SqlError> {
-    build_chat_request_full(config, turns, None, false, stream)
+    build_chat_request_full(config, turns, &[], false, stream)
 }
 
 /// **带工具**的对话请求（`FR-AI-18`）：与 [`build_chat_request`] 同一份校验，额外带 `tools`。
 ///
-/// `pending` = 上一跳模型点的工具 + 已拿到的结果（`None` = 这一问的第一次请求）。
-/// 带上它时消息数组末尾会多两条：`assistant`（含 `tool_calls`）与 `tool`（含结果）——
-/// 形状照 OpenAI 兼容协议，服务端才认得出「结果回灌给哪一次调用」。
+/// `pending` = 上一跳模型点的**全部**工具 + 已拿到的结果（空表 = 这一问的第一次请求）。
+/// 带上它时消息数组末尾会多 **1 + N** 条：**一条** `assistant`（含 N 个 `tool_calls`）与 **N 条**
+/// `role: tool`（`tool_call_id` 逐件对齐）—— 这是 OpenAI 兼容协议认的形状。
+///
+/// 为什么是「一条 assistant 带全部调用」而不是每件各发一发：逐件各发一次请求 = 同一回答被拆成 N 次出网
+/// （N 次配额、N 次审计），而且模型在第二发里看到的「上一次点了什么」是残缺的。协议侧也不接受
+/// 「两条 assistant 各带一件、却都属于同一轮」这种拼法 ⇒ **一次回灌**是唯一正确形状。
 pub fn build_chat_request_with_tools(
     config: &AgentConfiguration,
     turns: &[ChatMessage],
-    pending: Option<(&ChatToolCall, &str)>,
+    pending: &[(&ChatToolCall, &str)],
 ) -> Result<Outgoing, Nl2SqlError> {
     build_chat_request_full(config, turns, pending, true, true)
 }
@@ -447,7 +451,7 @@ pub fn build_chat_request_with_tools(
 fn build_chat_request_full(
     config: &AgentConfiguration,
     turns: &[ChatMessage],
-    pending: Option<(&ChatToolCall, &str)>,
+    pending: &[(&ChatToolCall, &str)],
     tools: bool,
     stream: bool,
 ) -> Result<Outgoing, Nl2SqlError> {
@@ -486,30 +490,38 @@ fn build_chat_request_full(
     let mut all: Vec<serde_json::Value> = Vec::with_capacity(messages.len() + 1);
     all.push(serde_json::json!({ "role": "system", "content": CHAT_SYSTEM_PROMPT }));
     all.extend(messages);
-    // 工具结果回灌：`assistant`（带 tool_calls）+ `tool`（带结果）两条必须成对，且 id 原样带回。
-    if let Some((call, result)) = pending {
-        if call.name.trim() != CHAT_READ_FILE_TOOL {
-            return Err(Nl2SqlError::UnknownChatTool(call.name.clone()));
-        }
-        if call.id.trim().is_empty() {
-            return Err(Nl2SqlError::ReplyShape(
-                "工具调用没有 id：回灌不了结果（服务端要按 id 对账）".to_string(),
-            ));
+    // 工具结果回灌（`FR-AI-18`）：**一条** `assistant`（带 N 个 tool_calls）+ **N 条** `role: tool`。
+    // 先把 N 件全部校验完再落笔 —— 有一件没登记 / 没 id 就整发拒绝，不许「能装配几件算几件」。
+    if !pending.is_empty() {
+        let mut tool_calls: Vec<serde_json::Value> = Vec::with_capacity(pending.len());
+        for (call, _) in pending {
+            if call.name.trim() != CHAT_READ_FILE_TOOL {
+                return Err(Nl2SqlError::UnknownChatTool(call.name.clone()));
+            }
+            if call.id.trim().is_empty() {
+                return Err(Nl2SqlError::ReplyShape(
+                    "工具调用没有 id：回灌不了结果（服务端要按 id 对账）".to_string(),
+                ));
+            }
+            tool_calls.push(serde_json::json!({
+                "id": call.id,
+                "type": "function",
+                "function": { "name": call.name, "arguments": call.arguments }
+            }));
         }
         all.push(serde_json::json!({
             "role": "assistant",
             "content": "",
-            "tool_calls": [{
-                "id": call.id,
-                "type": "function",
-                "function": { "name": call.name, "arguments": call.arguments }
-            }]
+            "tool_calls": tool_calls
         }));
-        all.push(serde_json::json!({
-            "role": "tool",
-            "tool_call_id": call.id,
-            "content": result
-        }));
+        // 顺序与调用顺序一致：`tool_call_id` 逐件对齐，服务端按 id 认领，不靠位置猜。
+        for (call, result) in pending {
+            all.push(serde_json::json!({
+                "role": "tool",
+                "tool_call_id": call.id,
+                "content": result
+            }));
+        }
     }
 
     let human = turns
@@ -960,7 +972,7 @@ mod tests {
     fn a_tool_request_carries_the_registry_and_the_result_goes_back_as_a_tool_message() {
         let config = chat_config();
         let turns = vec![turn("user", "读一下 notes.txt")];
-        let first = build_chat_request_with_tools(&config, &turns, None).unwrap();
+        let first = build_chat_request_with_tools(&config, &turns, &[]).unwrap();
         assert!(first.body.contains("\"tools\""), "{}", first.body);
         assert!(first.body.contains(CHAT_READ_FILE_TOOL), "{}", first.body);
         assert!(first.body.contains("\"tool_choice\":\"auto\""), "{}", first.body);
@@ -974,7 +986,7 @@ mod tests {
             name: CHAT_READ_FILE_TOOL.to_string(),
             arguments: "{\"path\":\"notes.txt\"}".to_string(),
         };
-        let follow = build_chat_request_with_tools(&config, &turns, Some((&call, "文件内容"))).unwrap();
+        let follow = build_chat_request_with_tools(&config, &turns, &[(&call, "文件内容")]).unwrap();
         assert!(follow.body.contains("\"tool_call_id\":\"call_1\""), "{}", follow.body);
         assert!(follow.body.contains("文件内容"), "{}", follow.body);
         assert!(follow.body.contains("\"tool_calls\""), "{}", follow.body);
@@ -986,9 +998,74 @@ mod tests {
             arguments: "{}".to_string(),
         };
         assert_eq!(
-            build_chat_request_with_tools(&config, &turns, Some((&bad, "x"))).unwrap_err(),
+            build_chat_request_with_tools(&config, &turns, &[(&bad, "x")]).unwrap_err(),
             Nl2SqlError::UnknownChatTool("run_command".to_string())
         );
+    }
+
+    #[test]
+    fn two_tool_results_go_back_as_one_assistant_message_with_two_tool_messages() {
+        let config = chat_config();
+        let turns = vec![turn("user", "读一下 a.ts 和 b.ts")];
+        let first = ChatToolCall {
+            id: "call_a".to_string(),
+            name: CHAT_READ_FILE_TOOL.to_string(),
+            arguments: "{\"path\":\"a.ts\"}".to_string(),
+        };
+        let second = ChatToolCall {
+            id: "call_b".to_string(),
+            name: CHAT_READ_FILE_TOOL.to_string(),
+            arguments: "{\"path\":\"b.ts\"}".to_string(),
+        };
+        let body = build_chat_request_with_tools(
+            &config,
+            &turns,
+            &[(&first, "甲文件内容"), (&second, "乙文件内容")],
+        )
+        .unwrap()
+        .body;
+        let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let messages = parsed.get("messages").unwrap().as_array().unwrap();
+        let assistants = messages
+            .iter()
+            .filter(|message| message.get("role").and_then(|role| role.as_str()) == Some("assistant"))
+            .count();
+        assert_eq!(assistants, 1, "两条 assistant 各带一件不是合法形状：{body}");
+        let calls = messages
+            .iter()
+            .find(|message| message.get("tool_calls").is_some())
+            .and_then(|message| message.get("tool_calls"))
+            .and_then(|calls| calls.as_array())
+            .unwrap();
+        assert_eq!(calls.len(), 2, "两件都要在同一条 assistant 里：{body}");
+        assert_eq!(calls[0]["id"], "call_a");
+        assert_eq!(calls[1]["id"], "call_b");
+        let tool_messages: Vec<&serde_json::Value> = messages
+            .iter()
+            .filter(|message| message.get("role").and_then(|role| role.as_str()) == Some("tool"))
+            .collect();
+        assert_eq!(tool_messages.len(), 2, "每件结果各一条 tool 消息：{body}");
+        assert_eq!(tool_messages[0]["tool_call_id"], "call_a");
+        assert_eq!(tool_messages[0]["content"], "甲文件内容");
+        assert_eq!(tool_messages[1]["tool_call_id"], "call_b");
+        assert_eq!(tool_messages[1]["content"], "乙文件内容");
+
+        // 否定面：多件里只要有一件没登记 / 空 id，**整发**拒绝（不许装配一半就发出去）。
+        let bad = ChatToolCall {
+            id: "call_c".to_string(),
+            name: "run_command".to_string(),
+            arguments: "{}".to_string(),
+        };
+        assert_eq!(
+            build_chat_request_with_tools(&config, &turns, &[(&first, "x"), (&bad, "y")]).unwrap_err(),
+            Nl2SqlError::UnknownChatTool("run_command".to_string())
+        );
+        let no_id = ChatToolCall {
+            id: "  ".to_string(),
+            name: CHAT_READ_FILE_TOOL.to_string(),
+            arguments: "{\"path\":\"a.ts\"}".to_string(),
+        };
+        assert!(build_chat_request_with_tools(&config, &turns, &[(&first, "x"), (&no_id, "y")]).is_err());
     }
 
     #[test]

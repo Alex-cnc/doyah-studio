@@ -847,24 +847,32 @@ async fn agent_chat_send(
     })?
 }
 
-/// **用户点了允许 / 拒绝之后**（`FR-AI-18`）：执行那件只读工具，把结果回灌给模型再要一次回答。
+/// **用户逐件点完允许 / 拒绝之后**（`FR-AI-18`）：执行那批只读工具，把**全部**结果一次回灌给模型再要一次回答。
 ///
 /// 与前一条同样走 `spawn_blocking`（等回包期间界面不能冻住，逐段正文才画得出来）。
-/// 执行只发生在 Rust 侧：前端传进来的只是「哪一件工具 + 点的是允许还是拒绝」。
+/// 执行只发生在 Rust 侧：前端传进来的只是「哪几件工具 + 每件点的允许还是拒绝」。
+/// `approvals` 与 `calls` 条数对不上 ⇒ 直接拒发（不替用户补一个默认决定）。
 #[tauri::command]
-async fn agent_chat_tool_decide(
+async fn agent_chat_tool_resume(
     state: State<'_, ShellState>,
     workspace: String,
     turns: Vec<doyah_studio_db::agent_nl2sql::ChatMessage>,
-    call: doyah_studio_db::agent_nl2sql::ChatToolCall,
-    approved: bool,
+    calls: Vec<doyah_studio_db::agent_nl2sql::ChatToolCall>,
+    approvals: Vec<bool>,
     on_delta: tauri::ipc::Channel<String>,
-) -> Result<agent_generate::ToolDecision, DbFailure> {
+) -> Result<agent_generate::ToolResume, DbFailure> {
     let store = state.agent_settings.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        agent_generate::chat_tool_decide(&store, &workspace, &turns, &call, approved, &mut |chunk| {
-            let _ = on_delta.send(chunk.to_string());
-        })
+        agent_generate::chat_tool_resume(
+            &store,
+            &workspace,
+            &turns,
+            &calls,
+            &approvals,
+            &mut |chunk| {
+                let _ = on_delta.send(chunk.to_string());
+            },
+        )
     })
     .await
     .map_err(|err| DbFailure {
@@ -2956,7 +2964,7 @@ pub fn run() {
             agent_generate_sql,
             agent_diagnosis_ask,
             agent_chat_send,
-            agent_chat_tool_decide,
+            agent_chat_tool_resume,
             agent_chat_load,
             agent_chat_save,
             agent_history_list,

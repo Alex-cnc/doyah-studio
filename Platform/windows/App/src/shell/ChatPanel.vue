@@ -10,9 +10,10 @@
   ⑤ **不执行**：模型给的语句只是正文，本组件没有任何执行入口。
 
   ⑥ **逐段到就画**（`FR-AI-16` ①）：回答边到边写，底部读数说「逐段 N 段」或「该服务端整段返回」。
-  ⑦ **工具调用 + 内联审批**（`FR-AI-18`）：模型想读工作区里的文件时，流里出现一张卡片写明路径，
-      **不点就一次都不执行**；点「允许读取」才真读（Rust 侧沙箱判路径），读完把内容回灌给模型再答一次，
-      「拒绝」也如实告诉模型别编。执行账（读到多少字符 / 截没截断）留在面板底部。
+  ⑦ **工具调用 + 内联审批**（`FR-AI-18`）：模型想读工作区里的文件时，流里出现一张卡片逐件写明路径，
+      **不点就一次都不执行**；每件各自「允许读取 / 拒绝」，**全部决定之后**一次交给 Rust 侧
+      （沙箱判路径、执行、把全部结果一次回灌给模型再答一次），「拒绝」也如实告诉模型别编。
+      一条回答里点了多件时逐件列出、逐件决定（一件都不丢），执行账（读到多少字符 / 截没截断）留在面板底部。
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -20,7 +21,7 @@ import {
   agentChatLoad,
   agentChatSave,
   agentChatStream,
-  agentChatToolDecide,
+  agentChatToolResume,
   type AgentChatReply,
   type AgentChatTurn,
   type AgentGateReport,
@@ -81,8 +82,10 @@ const restored = ref(0)
 const saveFailure = ref<string | null>(null)
 /** 上一次落盘裁掉 / 截断了什么（有才显示）。 */
 const trimmed = ref<{ kept: number; dropped: number; clipped: number } | null>(null)
-/** 模型点的那一件工具（`FR-AI-18`）：有值就在消息流里画审批卡片，等用户点。 */
-const pendingCall = ref<AgentToolCall | null>(null)
+/** 模型点的那批工具（`FR-AI-18`）：非空就在消息流里画审批卡片，逐件等用户点。 */
+const pendingCalls = ref<AgentToolCall[]>([])
+/** 每件的决定：`null` = 还没点；`true` = 允许；`false` = 拒绝。与 `pendingCalls` 逐位对齐。 */
+const pendingDecisions = ref<(boolean | null)[]>([])
 /** 那一跳模型同时说的正文（有的模型边说边点）。 */
 const pendingText = ref('')
 /** 正在执行（点完之后等第二次回答）：按钮要灰着，避免连点两下批准两次。 */
@@ -93,6 +96,8 @@ const toolRuns = ref<AgentToolRun[]>([])
 const workspaceId = computed(() => (props.workspace ?? '').trim())
 const budget = computed(() => budgetOf(turns.value, draft.value))
 const canSend = computed(() => !sending.value && draft.value.trim().length > 0)
+/** 已决定的件数（卡片底部「已决定 M / N」）：少一件就一件都不发。 */
+const decidedCount = computed(() => pendingDecisions.value.filter((decision) => decision !== null).length)
 
 function readable(error: unknown): { message: string; hint: string } {
   const asFailure = error as { message?: string; hint?: string } | null
@@ -198,7 +203,9 @@ async function handleReply(reply: AgentChatReply, asked: AgentChatTurn[]) {
     return
   }
   if (reply.status === 'toolPending') {
-    pendingCall.value = reply.call
+    pendingCalls.value = reply.calls
+    // 每一件都从「还没点」开始：模型一次点了两件，不许因为第一件点过就替第二件作主。
+    pendingDecisions.value = reply.calls.map(() => null)
     pendingText.value = reply.text
     limitations.value = []
     streamed.value = reply.deltas
@@ -212,7 +219,8 @@ async function handleReply(reply: AgentChatReply, asked: AgentChatTurn[]) {
     return
   }
   turns.value = withReply(asked, reply.text)
-  pendingCall.value = null
+  pendingCalls.value = []
+  pendingDecisions.value = []
   pendingText.value = ''
   streamed.value = reply.deltas
   limitations.value = reply.limitations
@@ -250,7 +258,8 @@ async function send() {
   sending.value = true
   partial.value = ''
   streamed.value = 0
-  pendingCall.value = null
+  pendingCalls.value = []
+  pendingDecisions.value = []
   pendingText.value = ''
   await scrollToEnd()
   try {
@@ -270,27 +279,42 @@ async function send() {
 }
 
 /**
- * 用户点了允许 / 拒绝（`FR-AI-18`）：交给 Rust 侧执行（或记下拒绝），拿回执行账与最终回答。
+ * 用户点了某一件的允许 / 拒绝（`FR-AI-18`）：先只记下这一件的决定。
  *
- * 卡片在点完之后**留在流里**（账在下面那行如实写着），用户可以对照「读到多少字符」判断模型答得对不对。
+ * **全部决定之后**才把整批交给 Rust 侧执行并回灌 —— 一次请求、一次出网。
+ * 「是否全定了」只在 [`resume`] 里判一次（判两处就会出现「一处改了、另一处还在挡」的假绿）。
  */
-async function decide(approved: boolean) {
-  const call = pendingCall.value
-  if (!call || deciding.value || sending.value) return
+async function decide(index: number, approved: boolean) {
+  if (deciding.value || sending.value) return
+  if (index < 0 || index >= pendingCalls.value.length) return
+  if (pendingDecisions.value[index] !== null) return
+  const next = [...pendingDecisions.value]
+  next[index] = approved
+  pendingDecisions.value = next
+  await scrollToEnd()
+  await resume()
+}
+
+/** 把这一批（每件一个决定）一次交给 Rust 侧：执行 / 记拒绝 + 回灌 + 要最终回答。 */
+async function resume() {
+  const calls = [...pendingCalls.value]
+  if (!calls.length || pendingDecisions.value.some((decision) => decision === null)) return
+  const approvals = pendingDecisions.value.map((decision) => decision === true)
   deciding.value = true
   failure.value = null
   partial.value = ''
   streamed.value = 0
   const asked = turns.value
   try {
-    const decision = await agentChatToolDecide(workspaceId.value, asked, call, approved, (chunk) => {
+    const resumed = await agentChatToolResume(workspaceId.value, asked, calls, approvals, (chunk) => {
       partial.value += chunk
       void scrollToEnd()
     })
-    toolRuns.value = [...toolRuns.value, decision.run]
-    pendingCall.value = null
+    toolRuns.value = [...toolRuns.value, ...resumed.runs]
+    pendingCalls.value = []
+    pendingDecisions.value = []
     pendingText.value = ''
-    await handleReply(decision.reply, asked)
+    await handleReply(resumed.reply, asked)
   } catch (error) {
     failure.value = readable(error)
   } finally {
@@ -310,7 +334,8 @@ function clear() {
   trimmed.value = null
   partial.value = ''
   streamed.value = 0
-  pendingCall.value = null
+  pendingCalls.value = []
+  pendingDecisions.value = []
   pendingText.value = ''
   toolRuns.value = []
   // 清空也要落盘：否则重开页签会把刚清掉的对话又读回来（「点了清空却说没清」）。
@@ -350,35 +375,53 @@ function clear() {
         <p class="chat__who">{{ tr('chat.model') }}</p>
         <pre class="chat__body">{{ partial }}</pre>
       </article>
-      <!-- 模型点工具（`FR-AI-18`）：卡片上写明要读哪个文件，允许 / 拒绝由人点 -->
-      <aside v-if="pendingCall" class="chat__tool" data-testid="chat-tool-card" role="group">
-        <p class="chat__tool-title">{{ tr('chat.tool.title') }}</p>
-        <p class="chat__tool-line" data-testid="chat-tool-ask">
-          {{ pendingCall.name === 'read_file'
-            ? tr('chat.tool.readFile', { path: toolPath(pendingCall) || tr('chat.tool.noPath') })
-            : tr('chat.tool.unknown', { name: pendingCall.name }) }}
+      <!-- 模型点工具（`FR-AI-18`）：卡片上逐件写明要读哪个文件，每件各自允许 / 拒绝 -->
+      <aside v-if="pendingCalls.length" class="chat__tool" data-testid="chat-tool-card" role="group">
+        <p class="chat__tool-title">
+          {{ pendingCalls.length > 1
+            ? tr('chat.tool.titleCount', { count: pendingCalls.length })
+            : tr('chat.tool.title') }}
         </p>
         <pre v-if="pendingText" class="chat__body">{{ pendingText }}</pre>
-        <div class="chat__tool-actions">
-          <button
-            class="chat__tool-allow"
-            type="button"
-            :disabled="deciding || pendingCall.name !== 'read_file'"
-            data-testid="chat-tool-allow"
-            @click="decide(true)"
-          >
-            {{ tr('chat.tool.allow') }}
-          </button>
-          <button
-            class="chat__act"
-            type="button"
-            :disabled="deciding"
-            data-testid="chat-tool-deny"
-            @click="decide(false)"
-          >
-            {{ tr('chat.tool.deny') }}
-          </button>
+        <div
+          v-for="(call, index) in pendingCalls"
+          :key="call.id || index"
+          class="chat__tool-row"
+          :data-testid="`chat-tool-row-${index}`"
+        >
+          <p class="chat__tool-line" data-testid="chat-tool-ask">
+            {{ call.name === 'read_file'
+              ? tr('chat.tool.readFile', { path: toolPath(call) || tr('chat.tool.noPath') })
+              : tr('chat.tool.unknown', { name: call.name }) }}
+          </p>
+          <div class="chat__tool-actions">
+            <button
+              class="chat__tool-allow"
+              type="button"
+              :disabled="deciding || call.name !== 'read_file' || pendingDecisions[index] !== null"
+              data-testid="chat-tool-allow"
+              @click="decide(index, true)"
+            >
+              {{ tr('chat.tool.allow') }}
+            </button>
+            <button
+              class="chat__act"
+              type="button"
+              :disabled="deciding || pendingDecisions[index] !== null"
+              data-testid="chat-tool-deny"
+              @click="decide(index, false)"
+            >
+              {{ tr('chat.tool.deny') }}
+            </button>
+            <!-- 点过的这件留在原地写明「已允许 / 已拒绝」：不许点完就变回一枚普通按钮 -->
+            <span v-if="pendingDecisions[index] !== null" class="chat__tool-mark" data-testid="chat-tool-mark">
+              {{ pendingDecisions[index] ? tr('chat.tool.allowedMark') : tr('chat.tool.deniedMark') }}
+            </span>
+          </div>
         </div>
+        <p v-if="pendingCalls.length > 1" class="chat__tool-progress" data-testid="chat-tool-progress">
+          {{ tr('chat.tool.progress', { done: decidedCount, total: pendingCalls.length }) }}
+        </p>
       </aside>
       <p v-if="sending || deciding" class="chat__waiting" data-testid="chat-sending">
         {{ partial ? tr('chat.streaming', { chars: partial.length }) : tr('chat.sending') }}
@@ -642,6 +685,24 @@ function clear() {
   margin: 0;
   font-size: var(--ds-font-body-size);
   word-break: break-all;
+}
+/* 一件工具一行（`FR-AI-18` 第二片）：模型一条回答里点了多件时，每件各自允许 / 拒绝 */
+.chat__tool-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+  padding-top: var(--ds-spacing-hair);
+  border-top: var(--ds-metric-hairline) solid var(--ds-color-hairline-light);
+}
+.chat__tool-mark {
+  align-self: center;
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+}
+.chat__tool-progress {
+  margin: 0;
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
 }
 .chat__tool-actions {
   display: flex;

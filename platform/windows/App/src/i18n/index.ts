@@ -765,6 +765,16 @@ export const DICT = {
   'chat.clear': { 'zh-Hans': '清空对话', en: 'Clear' },
   // 工具调用 + 内联审批（FR-AI-18）：卡片上的每一句都说出「要做什么 / 读到了什么」
   'chat.tool.title': { 'zh-Hans': '模型想调用工具（需要你点一下）', en: 'The model wants to use a tool — your call' },
+  'chat.tool.titleCount': {
+    'zh-Hans': '模型想连着读 {count} 个文件（每件都要你点一下）',
+    en: 'The model wants to read {count} files — approve each one',
+  },
+  'chat.tool.progress': {
+    'zh-Hans': '已决定 {done} / {total}；全部决定后一起交给模型（一次请求）',
+    en: '{done} of {total} decided — all decisions go to the model in one request',
+  },
+  'chat.tool.allowedMark': { 'zh-Hans': '已允许', en: 'allowed' },
+  'chat.tool.deniedMark': { 'zh-Hans': '已拒绝', en: 'denied' },
   'chat.tool.readFile': {
     'zh-Hans': '读取工作区里的文件：{path}',
     en: 'Read a file in the workspace: {path}',

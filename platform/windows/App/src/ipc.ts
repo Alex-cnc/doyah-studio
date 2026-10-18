@@ -140,7 +140,7 @@ export const COMMANDS = {
   // 问诊断一次（FR-AI-03 第二片）：把面板上那份资料块原样发出去，只回正文
   agentDiagnosisAsk: 'agent_diagnosis_ask',
   agentChatSend: 'agent_chat_send',
-  agentChatToolDecide: 'agent_chat_tool_decide',
+  agentChatToolResume: 'agent_chat_tool_resume',
   // 对话会话按工作区落盘（FR-AI-17）：读 / 写各一条，只动本机文件、不外发
   agentChatLoad: 'agent_chat_load',
   agentChatSave: 'agent_chat_save',
@@ -1130,7 +1130,8 @@ export type AgentChatReply =
   | {
       /** 模型点了一件工具（`FR-AI-18`）：**还没执行**，等用户在卡片上点允许 / 拒绝。 */
       status: 'toolPending'
-      call: AgentToolCall
+      /** 这一条回答里的**全部**调用（可能多件；每件都要单独点）。 */
+      calls: AgentToolCall[]
       /** 模型同时说的正文（可能为空串）。 */
       text: string
       model: string
@@ -1159,9 +1160,9 @@ export interface AgentToolRun {
   problem: string
 }
 
-/** 点完允许 / 拒绝之后：执行账 + 模型拿到结果后的回答（还可能再点工具）。 */
-export interface AgentToolDecision {
-  run: AgentToolRun
+/** 逐件点完之后：**每一件**的执行账（顺序同调用顺序）+ 模型拿到结果后的回答（还可能再点工具）。 */
+export interface AgentToolResume {
+  runs: AgentToolRun[]
   reply: AgentChatReply
 }
 
@@ -1379,30 +1380,32 @@ export async function agentChatStream(
 }
 
 /**
- * **用户点了允许 / 拒绝之后**（`FR-AI-18`）：执行那件只读工具，把结果回灌给模型再要一次回答。
+ * **用户逐件点了允许 / 拒绝之后**（`FR-AI-18`）：执行那批只读工具，把**全部**结果一次回灌给模型再要一次回答。
  *
- * 前端只说「哪一件 + 点的是哪个」——**执行在 Rust 侧**（工作区沙箱 / 白名单 / 截断都在那儿判），
- * 界面拿回的是可读账（`run`）与最终回答（`reply`，形状与普通对话一致，也可能再次点工具）。
+ * 前端只说「哪几件 + 每件点的是哪个」——**执行在 Rust 侧**（工作区沙箱 / 白名单 / 截断都在那儿判），
+ * 界面拿回的是逐件可读账（`runs`，顺序同 `calls`）与最终回答（`reply`，形状与普通对话一致，也可能再次点工具）。
+ *
+ * 条数与 `calls` 对不上时 Rust 侧直接拒发（不替用户补一个默认决定）。
  */
-export async function agentChatToolDecide(
+export async function agentChatToolResume(
   workspace: string,
   turns: readonly AgentChatTurn[],
-  call: AgentToolCall,
-  approved: boolean,
+  calls: readonly AgentToolCall[],
+  approvals: readonly boolean[],
   onDelta: (chunk: string) => void,
-): Promise<AgentToolDecision> {
+): Promise<AgentToolResume> {
   if (!inTauri()) {
     throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
   }
   const channel = new Channel<string>()
   channel.onmessage = (chunk) => onDelta(chunk)
-  return (await invoke(COMMANDS.agentChatToolDecide, {
+  return (await invoke(COMMANDS.agentChatToolResume, {
     workspace,
     turns,
-    call,
-    approved,
+    calls,
+    approvals,
     onDelta: channel,
-  })) as AgentToolDecision
+  })) as AgentToolResume
 }
 
 /**
