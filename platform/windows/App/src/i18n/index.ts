@@ -619,6 +619,28 @@ export const DICT = {
   'diag.reject.orphan_suggestion': { 'zh-Hans': '这条建议前面没有已采纳的结论', en: 'suggestion has no accepted conclusion before it' },
   'diag.gathering': { 'zh-Hans': '正在取证据…', en: 'Gathering evidence…' },
   'diag.gatherFailed': { 'zh-Hans': '取证据失败：{message}', en: 'Could not gather evidence: {message}' },
+  // 问模型（FR-AI-03 第二片）：把资料块按「设置」里的端点真发一次
+  'diag.ask': { 'zh-Hans': '问模型…', en: 'Ask the model…' },
+  'diag.ask.tip': {
+    'zh-Hans': '点它会把这整份资料块发给「设置」里的端点（总开关关着就一条都不发）。',
+    en: 'This sends the whole brief to the endpoint configured in Settings (nothing leaves while the master switch is off).',
+  },
+  'diag.ask.working': { 'zh-Hans': '正在问模型…', en: 'Asking the model…' },
+  'diag.ask.blocked': { 'zh-Hans': '没有发出去：外发闸门不放行。', en: 'Nothing was sent: the egress gate refused.' },
+  'diag.ask.throttled': {
+    'zh-Hans': '没有发出去：本小时额度已满（约 {minutes} 分钟后才有空位）。',
+    en: 'Nothing was sent: this hour is used up (a slot frees up in about {minutes} min).',
+  },
+  'diag.ask.answered': {
+    'zh-Hans': '{model} 回话（{ms} 毫秒）：已填进下面的回复框并解读。',
+    en: '{model} replied in {ms} ms — filled into the reply box below and read.',
+  },
+  'diag.ask.failed': { 'zh-Hans': '问模型失败：{reason}', en: 'Asking the model failed: {reason}' },
+  'diag.ask.needsBrief': {
+    'zh-Hans': '资料块还是空的：等证据取回来再问，或者自己把证据贴进回复框。',
+    en: 'The brief is still empty: wait for the evidence, or paste it into the reply box yourself.',
+  },
+  'diag.ask.limits': { 'zh-Hans': '这一次的已知缺口：', en: 'Known gaps for this run:' },
   'agent.issue.endpointMissing': { 'zh-Hans': '端点地址', en: 'endpoint URL' },
   'agent.issue.modelMissing': { 'zh-Hans': '模型名', en: 'model name' },
   'agent.issue.keyMissing': { 'zh-Hans': 'API Key（远端端点必填）', en: 'API key (required for remote endpoints)' },

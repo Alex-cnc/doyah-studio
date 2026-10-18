@@ -694,6 +694,19 @@ fn agent_generate_sql(
     agent_generate::generate(&state.agent_settings, &question, &tables)
 }
 
+/// **问诊断一次**（`FR-AI-03`）：把面板上那份资料块原样发出去，只回正文。
+///
+/// 与 `agent_generate_sql` 共用同一条外发通道（闸门 / 配额 / 审计都在 `agent_generate` 里）——
+/// 关掉总开关，这里同样一条请求都发不出去；回来的正文由界面按「结论必须有依据」逐条解读，
+/// 本命令**不执行**任何语句。
+#[tauri::command]
+fn agent_diagnosis_ask(
+    state: State<'_, ShellState>,
+    brief: String,
+) -> Result<agent_generate::AskReply, DbFailure> {
+    agent_generate::ask(&state.agent_settings, &brief)
+}
+
 /// 生成历史（`FR-AI-02` 的回看面）：一打开弹层就能看到以前问过什么。
 ///
 /// 只读一条命令：**不触发任何外发**，也不改盘上的东西（写历史只发生在生成成功那一刻）。
@@ -2351,6 +2364,7 @@ pub fn run() {
             agent_key_clear,
             agent_generate_preview,
             agent_generate_sql,
+            agent_diagnosis_ask,
             agent_history_list,
             agent_audit_list,
             connection_validate,

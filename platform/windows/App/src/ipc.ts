@@ -114,6 +114,8 @@ export const COMMANDS = {
   // 自然语言 → SQL（FR-AI-02：先看要发什么 → 再真发一次；结果只进编辑器，不执行）
   agentGeneratePreview: 'agent_generate_preview',
   agentGenerateSql: 'agent_generate_sql',
+  // 问诊断一次（FR-AI-03 第二片）：把面板上那份资料块原样发出去，只回正文
+  agentDiagnosisAsk: 'agent_diagnosis_ask',
   agentHistoryList: 'agent_history_list',
   agentAuditList: 'agent_audit_list',
   // 连接配置面收口（S-1a）：逐项校验 / 换引擎联动默认值 / 从 URL 导入
@@ -825,6 +827,24 @@ export type AgentGenerateReply =
   | { status: 'throttled'; quota: AgentQuotaStatus }
   | ({ status: 'generated' } & AgentGenerateOutcome)
 
+/**
+ * 一次「问诊断」的结局（`FR-AI-03` 第二片）—— 与生成面同构，但回的是**正文原文**。
+ *
+ * 三种结局都要界面上说得清：挡住（连请求都没发）/ 满额（本小时没额度了）/ 真发出去拿到正文。
+ */
+export type AgentAskReply =
+  | { status: 'blocked'; gate: AgentGateReport }
+  | { status: 'throttled'; quota: AgentQuotaStatus }
+  | {
+      status: 'answered'
+      /** 模型正文（**不解读、不执行**；解读在 `workspace/agentDiagnosis.ts`）。 */
+      text: string
+      model: string
+      elapsedMs: number
+      quota: AgentQuotaStatus
+      limitations: string[]
+    }
+
 /** 设置快照：配置 + 裁决 + 密钥在不在 + 两个路径。 */
 export interface AgentSettingsSnapshot {
   config: AgentConfiguration
@@ -956,6 +976,18 @@ export function agentGenerateSql(
   tables: AgentTableBrief[],
 ): Promise<AgentGenerateReply> {
   return call(COMMANDS.agentGenerateSql, { question, tables }, () => {
+    throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
+  })
+}
+
+/**
+ * **问诊断一次**（`FR-AI-03` 第二片）：把面板上那份资料块**原样**发出去，只回正文。
+ *
+ * 外发正文由 Rust 那侧装配（与面板上显示的是同一份文本 + 一段固定输出纪律），界面不自己拼提示词。
+ * 与生成面共用同一条通道：总开关关着 / 满额都会在这里被挡住，**一条请求都不发**。
+ */
+export function agentDiagnosisAsk(brief: string): Promise<AgentAskReply> {
+  return call(COMMANDS.agentDiagnosisAsk, { brief }, () => {
     throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
   })
 }

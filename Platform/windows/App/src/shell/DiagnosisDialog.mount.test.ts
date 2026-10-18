@@ -16,6 +16,9 @@ const replies = vi.hoisted(() => {
     slowError: null as Error | null,
     risk: 'confirm' as string,
     riskCalls: [] as string[],
+    /** 问模型那一路的回包（每个用例自己摆）。 */
+    ask: null as unknown,
+    askCalls: [] as string[],
   }
 })
 
@@ -23,6 +26,10 @@ vi.mock('../ipc', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../ipc')>()
   return {
     ...actual,
+    agentDiagnosisAsk: vi.fn(async (brief: string) => {
+      replies.askCalls.push(brief)
+      return replies.ask
+    }),
     explainStatement: vi.fn(async () => replies.plan),
     dbQuery: vi.fn(async (sql: string) => {
       if (sql.includes('pg_locks')) return { ...replies.locks, rows: [], numRows: [], returned: 0, affected: null }
@@ -115,5 +122,65 @@ describe('诊断面板', () => {
     const wrapper = mount(DiagnosisDialog, { props: { open: false, language: 'zh-Hans', sql: 'select 1' } })
     await flushPromises()
     expect(wrapper.find('[data-testid="diagnosis-panel"]').exists()).toBe(false)
+  })
+
+  // ── 问模型（FR-AI-03 第二片）：资料块原样发出去，回来的正文直接解读 ──────────────
+
+  it('点「问模型」把屏幕上那份资料块原样发出去，回复填进回复框并已解读', async () => {
+    replies.ask = {
+      status: 'answered',
+      text: '结论: 这条查询在做全表扫描 [依据: e1]\n建议: create index on orders(buyer_id)',
+      model: 'fake-model',
+      elapsedMs: 42,
+      quota: { limit: 60, used: 1, remaining: 59, windowSecs: 3600, retryAfterSecs: 0 },
+      limitations: ['这一次的问答只进审计，不进「生成历史」。'],
+    }
+    replies.askCalls = []
+    const wrapper = await mountDialog()
+    const shown = (wrapper.find('[data-testid="diagnosis-brief"]').element as HTMLTextAreaElement).value
+
+    await wrapper.find('[data-testid="diagnosis-ask"]').trigger('click')
+    await flushPromises()
+
+    // 发出去的必须**就是**屏幕上那份（同一份文本，界面不另拼）
+    expect(replies.askCalls).toEqual([shown])
+    const box = wrapper.find('[data-testid="diagnosis-reply"]').element as HTMLTextAreaElement
+    expect(box.value).toContain('全表扫描')
+    // 自动解读：采纳 2 条（结论 + 建议），且建议的风险判定仍走 statementRisk
+    expect(wrapper.find('[data-testid="diagnosis-accepted-count"]').text()).toContain('2')
+    expect(replies.riskCalls).toEqual(['create index on orders(buyer_id)'])
+    expect(wrapper.find('[data-testid="diagnosis-ask-note"]').text()).toContain('fake-model')
+    expect(wrapper.find('[data-testid="diagnosis-ask-limits"]').text()).toContain('只进审计')
+  })
+
+  it('闸门不放行时逐条说缺什么，且**不清掉**用户已经粘进来的回复（否定面）', async () => {
+    replies.ask = {
+      status: 'blocked',
+      gate: { state: 'missing', scope: 'remote', model: '', issues: [{ code: 'modelMissing' }, { code: 'keyMissing' }] },
+    }
+    const wrapper = await mountDialog()
+    await wrapper.find('[data-testid="diagnosis-reply"]').setValue('我自己粘的一句回复')
+
+    await wrapper.find('[data-testid="diagnosis-ask"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="diagnosis-ask-note"]').text()).toContain('没有发出去')
+    const issues = wrapper.findAll('[data-testid="diagnosis-ask-issues"] li').map((node) => node.text())
+    expect(issues.join('\\n')).toContain('模型名')
+    expect(issues.join('\\n')).toContain('API Key')
+    // 没拿到正文 ⇒ 回复框里的字**一个都不许动**
+    const box = wrapper.find('[data-testid="diagnosis-reply"]').element as HTMLTextAreaElement
+    expect(box.value).toBe('我自己粘的一句回复')
+  })
+
+  it('本小时满额时说清还要等多久（也是一条请求都没发）', async () => {
+    replies.ask = {
+      status: 'throttled',
+      quota: { limit: 5, used: 5, remaining: 0, windowSecs: 3600, retryAfterSecs: 120 },
+    }
+    const wrapper = await mountDialog()
+    await wrapper.find('[data-testid="diagnosis-ask"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="diagnosis-ask-note"]').text()).toContain('2 分钟')
   })
 })

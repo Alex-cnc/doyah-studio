@@ -92,6 +92,7 @@ describe('ipc', () => {
       'agent_key_clear',
       'agent_generate_preview',
       'agent_generate_sql',
+      'agent_diagnosis_ask',
       'agent_history_list',
       'agent_audit_list',
       'connection_validate',

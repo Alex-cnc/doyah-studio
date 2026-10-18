@@ -1,17 +1,28 @@
 <script setup lang="ts">
-// **对话式诊断**（`FR-AI-03`）—— 这个面板**不调用任何模型**：它取证据、摊资料块，
-// 模型回复由用户自己粘回来解读（本机没有端点时也能用，这也是需求提出者要的形状）。
+// **对话式诊断**（`FR-AI-03`）—— 两条路都能走，由用户选：
+//   ① **问模型**：把这一整份资料块按「设置」里的端点真发一次，回来的正文直接填进回复框并解读；
+//   ② **自己粘**：把资料块拷去任意聊天窗口问，再把回复粘回来解读（本机没有端点时这条路照样能用）。
 //
 // 三条口径（与领域/表示层的分工一致）：
 //   ① **取数只用既有命令**：执行计划走 `explainStatement`（EXPLAIN，不加 ANALYZE），
 //      慢查询走 `slowQueries`（版本感知 + 扩展缺失给可读三步），锁与表统计走通用 `dbQuery`。
 //   ② **判断全在 `workspace/agentDiagnosis.ts`**：证据三态、资料块拼法、回复解析、拒绝理由都在那里，
-//      本组件只显示 —— 两处各判一次必然分叉。
+//      本组件只显示 —— 两处各判一次必然分叉。**发出去的正文也由 Rust 装配**（屏幕上这份 + 一段固定纪律），
+//      界面不自己拼提示词（否则「看到的」与「发出去的」不是一件事）。
 //   ③ **建议只放进编辑器**：能不能执行由既有 `statementRisk` 判并显示，本组件不执行任何 SQL。
 
 import { computed, ref, watch } from 'vue'
 import { t as translate, type DictKey, type UiLanguage } from '../i18n'
-import { dbQuery, explainStatement, slowQueries, statementRisk, type DbFailure } from '../ipc'
+import {
+  agentDiagnosisAsk,
+  dbQuery,
+  explainStatement,
+  slowQueries,
+  statementRisk,
+  type AgentGateReport,
+  type AgentIssue,
+  type DbFailure,
+} from '../ipc'
 import {
   buildBrief,
   evidenceFromPlan,
@@ -54,6 +65,23 @@ const copyNote = ref('')
 /** 每条建议的风险判定（`safe` / `confirm` / `forbidden`），按 SQL 文本索引。 */
 const riskBySql = ref<Record<string, string>>({})
 
+/** 问模型那一路的状态（与「自己粘」互不干扰：问失败也不该清掉用户已经粘进来的字）。 */
+const asking = ref(false)
+const askNote = ref('')
+const askError = ref('')
+const askGate = ref<AgentGateReport | null>(null)
+const askLimitations = ref<string[]>([])
+
+const ISSUE_KEYS: Record<AgentIssue['code'], DictKey> = {
+  endpointMissing: 'agent.issue.endpointMissing',
+  modelMissing: 'agent.issue.modelMissing',
+  keyMissing: 'agent.issue.keyMissing',
+  endpointScheme: 'agent.issue.endpointScheme',
+  endpointHost: 'agent.issue.endpointHost',
+  timeoutOutOfRange: 'agent.issue.timeoutOutOfRange',
+  hourlyLimitOutOfRange: 'agent.issue.hourlyLimitOutOfRange',
+}
+
 const brief = computed(() => buildBrief(items.value, (spec: EvidenceSpec) => tr(spec.titleKey)))
 
 function titleOf(item: EvidenceItem): string {
@@ -80,6 +108,10 @@ async function gather(): Promise<void> {
   reply.value = ''
   copyNote.value = ''
   riskBySql.value = {}
+  askNote.value = ''
+  askError.value = ''
+  askGate.value = null
+  askLimitations.value = []
   const collected: EvidenceItem[] = []
   try {
     for (const spec of plan) {
@@ -128,6 +160,46 @@ async function copyBrief(): Promise<void> {
     copyNote.value = tr('diag.copied')
   } catch (error) {
     copyNote.value = tr('diag.copyFailed', { reason: readable(error) })
+  }
+}
+
+/**
+ * **问模型**（`FR-AI-03` 第二片）：把面板上这份资料块原样发出去，回来的正文填进回复框并直接解读。
+ *
+ * 三种「没拿到回复」的处境都要在界面上说清：闸门不放行（逐条列缺什么）/ 本小时满额（还要等多久）/
+ * 请求失败（可读原因）。**只有真拿到正文才动回复框** —— 挡住时不该把用户已粘进来的字清掉。
+ */
+async function askModel(): Promise<void> {
+  askNote.value = ''
+  askError.value = ''
+  askGate.value = null
+  askLimitations.value = []
+  if (!brief.value.text.trim()) {
+    askError.value = tr('diag.ask.needsBrief')
+    return
+  }
+  asking.value = true
+  try {
+    const answer = await agentDiagnosisAsk(brief.value.text)
+    if (answer.status === 'blocked') {
+      askGate.value = answer.gate
+      askNote.value = tr('diag.ask.blocked')
+      return
+    }
+    if (answer.status === 'throttled') {
+      askNote.value = tr('diag.ask.throttled', {
+        minutes: Math.max(1, Math.ceil(answer.quota.retryAfterSecs / 60)),
+      })
+      return
+    }
+    reply.value = answer.text
+    askLimitations.value = answer.limitations
+    askNote.value = tr('diag.ask.answered', { model: answer.model, ms: answer.elapsedMs })
+    await readReply()
+  } catch (error) {
+    askError.value = tr('diag.ask.failed', { reason: readable(error) })
+  } finally {
+    asking.value = false
   }
 }
 
@@ -216,8 +288,29 @@ function rejectReason(reason: AdviceParseResult['rejected'][number]['reason']): 
         <button class="diag__btn" type="button" data-testid="diagnosis-copy" @click="copyBrief">
           {{ tr('diag.copy') }}
         </button>
+        <button
+          class="diag__btn diag__btn--primary"
+          type="button"
+          data-testid="diagnosis-ask"
+          :disabled="asking"
+          @click="askModel"
+        >
+          {{ tr('diag.ask') }}
+        </button>
         <span v-if="copyNote" class="diag__note" data-testid="diagnosis-copy-note">{{ copyNote }}</span>
       </div>
+      <p class="diag__tip" data-testid="diagnosis-ask-tip">{{ tr('diag.ask.tip') }}</p>
+      <p v-if="asking" class="diag__note" data-testid="diagnosis-asking">{{ tr('diag.ask.working') }}</p>
+      <p v-else-if="askNote" class="diag__note" data-testid="diagnosis-ask-note">{{ askNote }}</p>
+      <p v-if="askError" class="diag__error" data-testid="diagnosis-ask-error">{{ askError }}</p>
+      <ul v-if="askGate && askGate.issues.length" class="diag__issues" data-testid="diagnosis-ask-issues">
+        <li v-for="issue in askGate.issues" :key="issue.code + String(issue.detail ?? '')">
+          {{ tr(ISSUE_KEYS[issue.code], issue.detail === undefined ? {} : { detail: String(issue.detail) }) }}
+        </li>
+      </ul>
+      <ul v-if="askLimitations.length" class="diag__limits" data-testid="diagnosis-ask-limits">
+        <li v-for="(line, i) in askLimitations" :key="`l:${i}`">{{ line }}</li>
+      </ul>
     </section>
 
     <section class="diag__reply">
@@ -444,5 +537,19 @@ function rejectReason(reason: AdviceParseResult['rejected'][number]['reason']): 
 .diag__unrecognized li {
   color: var(--ds-color-text-secondary);
   font-size: var(--ds-font-caption-size);
+}
+.diag__issues,
+.diag__limits {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+  font-size: var(--ds-font-caption-size);
+}
+.diag__issues li {
+  color: var(--ds-color-status-danger);
+}
+.diag__limits li {
+  color: var(--ds-color-text-tertiary);
 }
 </style>
