@@ -119,6 +119,14 @@ export const COMMANDS_LIST: readonly Command[] = [
     scope: { kind: 'view', view: 'database' },
   },
   {
+    // 备份（FR-IO-04）：入口在数据库视图的工具栏，命令面板只做发现与分派
+    id: 'database.backup',
+    titleKey: 'cmd.database.backup',
+    keywords: ['backup', 'dump', 'pg_dump', '备份'],
+    groupKey: 'cmdGroup.database',
+    scope: { kind: 'view', view: 'database' },
+  },
+  {
     id: 'history.clear',
     titleKey: 'cmd.history.clear',
     keywords: ['clear history', 'usage', 'frecency'],

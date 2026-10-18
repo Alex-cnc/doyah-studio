@@ -19,6 +19,8 @@ pub mod postgres;
 /// 本文件与其它文件只许经 `pty::` 接口调用，不许直接依赖 PTY crate（判据见
 /// `Tools/check-platform-parity.ps1` 第五道「PTY 隔离」）。
 pub mod pty;
+/// 备份（`FR-IO-04` 的 Windows 侧）：封装本机 `pg_dump` —— 命令行先摊出来、口令只进环境变量。
+pub mod backup;
 /// 已保存查询的落盘（FR-EDIT-14）：模型与「同名覆盖」判定在领域层
 /// `doyah_studio_db::saved_query`，本模块只管「放哪儿、怎么取」。
 pub mod saved_queries;
@@ -924,6 +926,145 @@ pub struct ExportReport {
     /// 服务端还有更多行没取回来（超过上限）
     pub truncated: bool,
     pub bytes: usize,
+}
+
+// ── 备份（FR-IO-04 · 封装本机 pg_dump）────────────────────────────────────────────
+//
+// 与导出的分工（两者常被混成一件事，这里钉清楚）：
+//   · 导出（`export_to_file`）= 把**一条查询的结果**写成 CSV/JSON，用户自己挑列挑行；
+//   · 备份（本段）= 把**整个数据库**做成一份能整库还原的归档，一致性由 `pg_dump` 的快照保证。
+// 所以备份不经过驱动、不经过领域层：它是一条**子进程**，本层负责「命令怎么拼、口令怎么给、
+// 日志怎么带回」。
+
+/// 备份请求（界面 → 外壳）。**口令不在里面**：按 `connectionId` 从系统凭据里取。
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupRequest {
+    /// 当前连接的 id（口令按它取；取不到就当这条连接没有口令）
+    pub connection_id: String,
+    /// 备份写到哪儿（文件或目录的完整路径）
+    pub path: String,
+    /// 三档格式
+    pub format: backup::BackupFormat,
+    /// 备份哪个库（留空 = 当前连接的库）—— 同服务器上换一个库备份不必重连
+    #[serde(default)]
+    pub database: Option<String>,
+    /// 手动指定 `pg_dump` 路径（留空 = 自动找：PATH → 各盘 PostgreSQL 安装目录）
+    #[serde(default)]
+    pub program: Option<String>,
+}
+
+/// 计划回执：**只算不跑** —— 界面先把它摊给用户看（需求原文「展示实际命令行」）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupPlanReport {
+    /// 找到的程序（`null` ⇒ 界面显示「程序找不到」那一档）
+    pub program: Option<String>,
+    /// 可复制的命令行（口令位置写 `PGPASSWORD=***`）
+    pub display: String,
+    pub database: String,
+    pub target: String,
+    pub format: backup::BackupFormat,
+    /// 现在就跑会立刻失败的原因（程序找不到 / 目标已存在 / 路径空）—— **计划照样摊出来**，
+    /// 用户能看着命令行自己判断哪儿不对，而不是只收到一句「失败」。
+    pub problem: Option<DbFailure>,
+}
+
+/// 备份的「连哪儿、备份哪个库」+ 已 trim 的目标路径。
+async fn backup_inputs(
+    state: &State<'_, ShellState>,
+    request: &BackupRequest,
+) -> Result<(backup::BackupTarget, String), DbFailure> {
+    let session = current_session(state).await?;
+    let info = session.info().clone();
+    let database = request
+        .database
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(&info.database)
+        .to_string();
+    let target = backup::BackupTarget {
+        host: info.host.clone(),
+        port: info.port,
+        user: info.user.clone(),
+        database,
+    };
+    Ok((target, request.path.trim().to_string()))
+}
+
+/// **备份计划**：找到程序、拼好参数、把命令行摊出来（**不起任何进程**）。
+#[tauri::command]
+async fn backup_plan(
+    state: State<'_, ShellState>,
+    request: BackupRequest,
+) -> Result<BackupPlanReport, DbFailure> {
+    let (target, path) = backup_inputs(&state, &request).await?;
+    let (program, mut problem) = match backup::find_program(request.program.as_deref()) {
+        Ok(found) => (Some(found), None),
+        Err(failure) => (None, Some(failure)),
+    };
+    // 程序缺失与目标问题**各说一次**；两个都有时先报程序（没有程序，路径怎么写都跑不了）。
+    if problem.is_none() {
+        if let Err(failure) = backup::check_target(&path, request.format) {
+            problem = Some(failure);
+        }
+    }
+    let plan = backup::BackupPlan {
+        program: program.clone(),
+        args: backup::plan_args(&target, &path, request.format),
+        target: std::path::PathBuf::from(&path),
+        format: request.format,
+        database: target.database.clone(),
+    };
+    Ok(BackupPlanReport {
+        program: program.map(|path| path.display().to_string()),
+        display: plan.display(),
+        database: plan.database.clone(),
+        target: path,
+        format: request.format,
+        problem,
+    })
+}
+
+/// **真跑备份**：口令进 `PGPASSWORD`、`sslmode` 进 `PGSSLMODE`，日志尾部原样带回。
+#[tauri::command]
+async fn backup_run(
+    state: State<'_, ShellState>,
+    request: BackupRequest,
+) -> Result<backup::BackupReport, DbFailure> {
+    let (target, path) = backup_inputs(&state, &request).await?;
+    let program = backup::find_program(request.program.as_deref())?;
+    let target_path = backup::check_target(&path, request.format)?;
+    // 口令：取不到就是取不到（trust / 证书认证的库本来就没有口令），不编一个空串
+    let password = connections::recall_password(&request.connection_id)
+        .ok()
+        .flatten();
+    let sslmode = state
+        .connections
+        .load()
+        .ok()
+        .and_then(|list| {
+            list.into_iter()
+                .find(|config| config.id == request.connection_id)
+        })
+        .map(|config| config.ssl_mode.raw_value().to_string());
+    let plan = backup::BackupPlan {
+        program: Some(program),
+        args: backup::plan_args(&target, &path, request.format),
+        target: target_path,
+        format: request.format,
+        database: target.database.clone(),
+    };
+    // 子进程是**阻塞**的（大库要跑几分钟）：挪到阻塞线程池，别把 async 运行时占住。
+    tauri::async_runtime::spawn_blocking(move || {
+        backup::run(&plan, password.as_deref(), sslmode.as_deref())
+    })
+    .await
+    .map_err(|error| DbFailure {
+        message: format!("备份线程没能起起来：{error}"),
+        hint: "这属实现缺陷：请保留现场并报告。".to_string(),
+    })?
 }
 
 /// **预览导入**：读文件 → 解析 → 与目标表列对账（**不碰数据库**）。
@@ -2075,6 +2216,8 @@ pub fn run() {
             schema_snapshot,
             schema_diff_plan,
             export_to_file,
+            backup_plan,
+            backup_run,
             preview_import,
             run_import,
             xlsx_to_csv,

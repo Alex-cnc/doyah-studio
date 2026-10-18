@@ -75,6 +75,9 @@ export const COMMANDS = {
   schemaDiffPlan: 'schema_diff_plan',
   // 导入导出（1.6：CSV / JSON / Excel；原子落盘、一个事务写入）
   exportToFile: 'export_to_file',
+  // 备份（FR-IO-04：封装本机 pg_dump —— 先摊命令行，再真跑）
+  backupPlan: 'backup_plan',
+  backupRun: 'backup_run',
   previewImport: 'preview_import',
   runImport: 'run_import',
   xlsxToCsv: 'xlsx_to_csv',
@@ -1414,6 +1417,63 @@ export function exportToFile(
 ): Promise<ExportReport> {
   return call(COMMANDS.exportToFile, { sql, path, format, maxRows }, () => {
     throw bypassDb('ipc.action.export') as DbFailure
+  })
+}
+
+// ── 备份（FR-IO-04：封装本机 pg_dump）────────────────────────────────────────────────
+//
+// 两段式：`backupPlan` 只算不跑（把**命令行**摊出来给用户看），`backupRun` 才真起子进程。
+// 口令不进这两个参数里的任何一个 —— 外壳按 `connectionId` 从系统凭据里取，只进环境变量。
+
+/** 备份格式（与 `pg_dump -F` 一一对应）。 */
+export type BackupFormat = 'plain' | 'custom' | 'directory'
+
+/** 备份计划回执（**不含口令**；`problem` = 现在就跑会立刻失败的原因）。 */
+export interface BackupPlanReport {
+  /** 找到的 `pg_dump`（`null` ⇒ 本机没有 / 指定的不对） */
+  program: string | null
+  /** 可复制的命令行（口令位置写 `PGPASSWORD=***`） */
+  display: string
+  database: string
+  target: string
+  format: BackupFormat
+  problem: DbFailure | null
+}
+
+/** 备份结局（**成功失败都带日志尾部与退出码**）。 */
+export interface BackupReport {
+  display: string
+  exitCode: number | null
+  log: string
+  /** 前面还有多少字符没带回来（没截断就是 0） */
+  logTrimmedChars: number
+  bytes: number
+  elapsedMs: number
+  target: string
+  format: BackupFormat
+}
+
+export interface BackupRequest {
+  connectionId: string
+  path: string
+  format: BackupFormat
+  /** 备份哪个库（留空 = 当前连接的库） */
+  database?: string
+  /** 手动指定 `pg_dump` 路径（留空 = 自动找） */
+  program?: string
+}
+
+/** **备份计划**：只算命令行，不起任何进程。 */
+export function backupPlan(request: BackupRequest): Promise<BackupPlanReport> {
+  return call(COMMANDS.backupPlan, { request }, () => {
+    throw bypassDb('ipc.action.backup') as DbFailure
+  })
+}
+
+/** **真跑备份**：子进程起 `pg_dump`，回执带退出码与日志尾部。 */
+export function backupRun(request: BackupRequest): Promise<BackupReport> {
+  return call(COMMANDS.backupRun, { request }, () => {
+    throw bypassDb('ipc.action.backup') as DbFailure
   })
 }
 

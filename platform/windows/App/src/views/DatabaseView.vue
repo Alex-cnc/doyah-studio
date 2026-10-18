@@ -96,6 +96,7 @@ import {
 } from '../shell/connectionDisplay'
 import ConnectionLabel from '../shell/ConnectionLabel.vue'
 import ConnectionDialog from '../shell/ConnectionDialog.vue'
+import BackupDialog from '../shell/BackupDialog.vue'
 import AgentGenerateDialog from '../shell/AgentGenerateDialog.vue'
 import type { ConnectionDialogMode } from '../shell/connectionDialog'
 import NodeIcon from './NodeIcon.vue'
@@ -188,6 +189,8 @@ const emit = defineEmits<{
  */
 const props = defineProps<{
   dialogRequest?: { mode: ConnectionDialogMode; seq: number } | null
+  /** 备份弹层的「开一次」请求序号（FR-IO-04）—— 与连接弹层同一套口径 */
+  backupRequest?: number | null
 }>()
 
 /** 连接弹层的开合与档位 —— **状态归本视图**（弹层件只画与上报，不持有连接状态）。 */
@@ -1397,6 +1400,16 @@ watch(
   (request) => {
     if (!request) return
     openConnectionDialog(request.mode)
+  },
+)
+
+/** 备份弹层（FR-IO-04）：状态归本视图（它要当前连接与当前库）。序号变化即开一次。 */
+const backupOpen = ref(false)
+watch(
+  () => props.backupRequest,
+  (seq) => {
+    if (!seq) return
+    backupOpen.value = true
   },
 )
 
@@ -3965,6 +3978,16 @@ async function probe() {
                   >
                     <ActionIcon name="sliders" />
                   </button>
+                <!-- 备份（FR-IO-04）：入口就摆在这一排工具里 —— 命令面板的同名命令也走它 -->
+                <button
+                    class="db__btn"
+                    type="button"
+                    data-testid="backup-open"
+                    :title="t('cmd.database.backup')"
+                    @click="backupOpen = true"
+                  >
+                    {{ t('cmd.database.backup') }}
+                  </button>
                 <span v-if="copied" class="db__note">{{ copied }}</span>
               </div>
 
@@ -4337,6 +4360,15 @@ async function probe() {
     @close="generateOpen = false"
     @insert="applyGeneratedSql"
     @save-as="saveGeneratedSql"
+  />
+
+  <!-- 备份（FR-IO-04）：外观与「导出结果」不是一件事 —— 这里备份的是**整个库** -->
+  <BackupDialog
+    :open="backupOpen"
+    :language="language"
+    :connection-id="connectedConnection?.id ?? null"
+    database=""
+    @close="backupOpen = false"
   />
 </template>
 

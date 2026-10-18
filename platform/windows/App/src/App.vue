@@ -70,7 +70,12 @@ const viewProps = computed<Record<string, unknown>>(() => {
     }
   }
   if (id === 'database') {
-    return { dialogRequest: connectionDialogRequest.value, language: uiLanguage.value }
+    return {
+      dialogRequest: connectionDialogRequest.value,
+      // 备份弹层（FR-IO-04）：与连接弹层同一套「序号」口径 —— 布尔量在"开着"时是静默的
+      backupRequest: backupRequestSeq.value,
+      language: uiLanguage.value,
+    }
   }
   // 插件视图：只给"语言 + 版本"（版本从清单取，避免插件目录再写一遍）。
   return { language: uiLanguage.value, version: pluginById(id)?.version ?? '' }
@@ -156,6 +161,9 @@ function openPaletteWithSearch(query: string) {
 const connectionDialogRequest = ref<{ mode: ConnectionDialogMode; seq: number } | null>(null)
 let connectionDialogSeq = 0
 
+/** 备份弹层（FR-IO-04）的**开一次**请求：递的是序号，同档连点两次也会重开。 */
+const backupRequestSeq = ref(0)
+
 /** 智能体设置弹层（FR-AI-01）：只有一个开关位 —— 配置与裁决都在弹层自己那一侧。 */
 const agentSettingsOpen = ref(false)
 
@@ -167,6 +175,12 @@ function requestConnectionDialog(mode: ConnectionDialogMode) {
   setActive('database')
   connectionDialogSeq += 1
   connectionDialogRequest.value = { mode, seq: connectionDialogSeq }
+}
+
+/** 备份弹层（FR-IO-04）：**与连接弹层同一套「序号」口径** —— 连点两次应当重开一份新计划。 */
+function requestBackupDialog() {
+  setActive('database')
+  backupRequestSeq.value += 1
 }
 
 function onGlobalKeydown(event: KeyboardEvent) {
@@ -234,6 +248,11 @@ async function runCommand(command: Command) {
     case 'agent.audit': {
       // 审计记录（FR-AI-09）：弹层每次打开自己取一份清单（可能刚在编辑器里发过生成）。
       agentAuditOpen.value = true
+      return
+    }
+    case 'database.backup': {
+      // 备份（FR-IO-04）：弹层在数据库视图那一侧（它要当前连接与当前库）—— 这里只递一次「开」请求。
+      requestBackupDialog()
       return
     }
     default:

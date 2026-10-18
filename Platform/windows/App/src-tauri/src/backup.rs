@@ -1,0 +1,665 @@
+//! **备份**（`FR-IO-04` 的 Windows 侧落法）：封装本机 `pg_dump`。
+//!
+//! ## 为什么是「起子进程」而不是自己写导出
+//!
+//! 备份要一致快照（`pg_dump` 自己会开可重复读事务）、要三种格式（plain / custom / directory）、
+//! 要处理大对象与序列 —— 自己拼 `COPY` 只能做到「看起来像备份」。三书写的就是「封装 `pg_dump`
+//! / `pg_restore`，**展示实际命令行与执行日志**」：命令行要真的能看见，日志要真的是子进程吐的那份。
+//!
+//! ## 四条口径（每条都对应一个已发生过的坑）
+//!
+//! 1. **口令只走环境变量 `PGPASSWORD`**：绝不进 `argv`（进 argv 就会出现在 `ps` / 任务管理器 /
+//!    我们自己的日志里），也绝不进 `display()` 的字符串（那里写 `PGPASSWORD=***`）。
+//! 2. **命令行先摊出来再跑**：`plan()` 只算不跑，界面把 `display()` 摆给用户看 —— 这是需求的
+//!    原文要求，也是「我到底对你的库做了什么」的答案。
+//! 3. **不覆盖既有备份**：目标已存在 ⇒ 拒绝并说明（备份是「怕丢」的东西，静默覆盖等于用新的一次
+//!    赌旧的那份没用）。目录形式（`-F d`）另有 `pg_dump` 自己的要求：目标目录必须不存在。
+//! 4. **日志尾部有上限**：一次大库备份的日志可以几十万行 —— 回执只带**尾部**，并在被截断时
+//!    如实说「前面还有 N 字符没带回来」。真要看全文，日志里给出的就是用户自己选的路径旁边。
+//!
+//! ## 失败一律带可读信息
+//!
+//! 程序找不到 ⇒ 说清「去哪儿找过」并把候选位置列出来（不静默退化成一句「失败」）；
+//! 退出码非零 ⇒ 服务端/`pg_dump` 的原话原样保留，附一句「怎么看」。
+
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+use crate::postgres::DbFailure;
+
+/// 回执里带的日志字符上限（只留尾部）。
+pub const LOG_LIMIT: usize = 4000;
+
+/// 备份格式（与 `pg_dump -F` 一一对应）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BackupFormat {
+    /// `-F p`：纯 SQL 文本（能直接看、能 psql 直接灌）
+    Plain,
+    /// `-F c`：自定义归档（体积小、可 `pg_restore --section` 选段）
+    Custom,
+    /// `-F d`：目录形式（可并行 `--jobs`，但目标目录必须不存在）
+    Directory,
+}
+
+impl BackupFormat {
+    /// `pg_dump -F` 的取值。
+    pub fn pg_dump_flag(self) -> &'static str {
+        match self {
+            Self::Plain => "p",
+            Self::Custom => "c",
+            Self::Directory => "d",
+        }
+    }
+
+    /// 这一档产出的是**目录**还是**文件**（决定「目标已存在」怎么判、体积怎么算）。
+    pub fn produces_directory(self) -> bool {
+        matches!(self, Self::Directory)
+    }
+
+    /// 档位的中文短名（回执里用；界面文案仍走 i18n，这里只给日志/命令回执）。
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Plain => "纯 SQL",
+            Self::Custom => "自定义归档",
+            Self::Directory => "目录形式",
+        }
+    }
+}
+
+/// 连到哪台服务器、备份哪个库（从**当前会话**里取，不从配置里猜）。
+#[derive(Debug, Clone)]
+pub struct BackupTarget {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub database: String,
+}
+
+/// 一份**还没跑**的备份计划。
+#[derive(Debug, Clone)]
+pub struct BackupPlan {
+    /// 找到的程序（找不到就是 `None` —— 计划仍可展示，跑不了）
+    pub program: Option<PathBuf>,
+    /// `pg_dump` 的参数（**口令不在这里面**）
+    pub args: Vec<String>,
+    pub target: PathBuf,
+    pub format: BackupFormat,
+    pub database: String,
+}
+
+impl BackupPlan {
+    /// **给用户看的命令行**：口令位置写 `PGPASSWORD=***`；带空格的参数加引号。
+    pub fn display(&self) -> String {
+        let program = match &self.program {
+            Some(path) => path.display().to_string(),
+            None => "pg_dump".to_string(),
+        };
+        display_command(&program, &self.args, true)
+    }
+}
+
+/// 拼一条可读的命令行（`mask_password` ⇒ 前面挂 `PGPASSWORD=***`）。
+pub fn display_command(program: &str, args: &[String], mask_password: bool) -> String {
+    let mut parts: Vec<String> = Vec::with_capacity(args.len() + 2);
+    if mask_password {
+        parts.push("PGPASSWORD=***".to_string());
+    }
+    parts.push(quote_if_needed(program));
+    for arg in args {
+        parts.push(quote_if_needed(arg));
+    }
+    parts.join(" ")
+}
+
+/// 含空白或引号的参数加双引号（只为**可读 / 可复制**，真正执行走 argv，不经过 shell）。
+fn quote_if_needed(value: &str) -> String {
+    if value.is_empty() || value.chars().any(|c| c.is_whitespace() || c == '"') {
+        format!("\"{}\"", value.replace('"', "\\\""))
+    } else {
+        value.to_string()
+    }
+}
+
+/// 纯函数：`pg_dump` 的参数表。
+///
+/// 口径：**只放「连哪儿、备份哪个库、什么格式、写到哪」**。加密 / 压缩 / 并行都不在这里猜 ——
+/// 猜出来的默认值会让「同一条命令两次产出不同」，而备份最怕的就是不可复现。
+pub fn plan_args(target: &BackupTarget, path: &str, format: BackupFormat) -> Vec<String> {
+    vec![
+        "-h".to_string(),
+        target.host.clone(),
+        "-p".to_string(),
+        target.port.to_string(),
+        "-U".to_string(),
+        target.user.clone(),
+        "-d".to_string(),
+        target.database.clone(),
+        "-F".to_string(),
+        format.pg_dump_flag().to_string(),
+        "-f".to_string(),
+        path.to_string(),
+    ]
+}
+
+/// 校验目标路径，并按格式判「已存在」。
+///
+/// 三条不同的拒绝理由（**分开说**，因为它们对用户意味着不同的下一步）：
+/// 路径空 / 目录形式要求目标不存在 / 覆盖已有备份必须由用户自己先处理。
+pub fn check_target(path: &str, format: BackupFormat) -> Result<PathBuf, DbFailure> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err(DbFailure {
+            message: "还没填备份写到哪儿".to_string(),
+            hint: "填一个完整路径（例如 D:\\backup\\shop-20261018.dump）；目录形式（-F d）填一个尚不存在的目录。"
+                .to_string(),
+        });
+    }
+    let target = PathBuf::from(trimmed);
+    if target.exists() {
+        return Err(if format.produces_directory() {
+            DbFailure {
+                message: format!("{} 已经存在，而目录形式的备份要求目标目录不存在", target.display()),
+                hint: "换一个新目录名（pg_dump 会自己建它）；要重做请自己先把旧目录挪走。".to_string(),
+            }
+        } else {
+            DbFailure {
+                message: format!("{} 已经存在 —— 备份不覆盖既有文件", target.display()),
+                hint: "换一个文件名，或自己先把旧备份挪走（覆盖等于用这一次赌上一次没用）。".to_string(),
+            }
+        });
+    }
+    Ok(target)
+}
+
+/// 从一堆候选里挑**版本最高**的一个（纯函数，供 `find_program` 用与单测判）。
+///
+/// 版本按「点分段、逐段比数字」排；认不出版本的排最后（不让怪名字挤掉真版本）。
+pub fn best_candidate(candidates: &[(String, PathBuf)]) -> Option<PathBuf> {
+    let mut best: Option<(Vec<u32>, &PathBuf)> = None;
+    for (version, path) in candidates {
+        let parsed: Vec<u32> = version
+            .split('.')
+            .filter_map(|part| part.trim().parse::<u32>().ok())
+            .collect();
+        let replace = match &best {
+            None => true,
+            Some((current, _)) => parsed > *current,
+        };
+        if replace {
+            best = Some((parsed, path));
+        }
+    }
+    best.map(|(_, path)| path.clone())
+}
+
+/// 找 `pg_dump`：**显式路径 → PATH → 各盘 PostgreSQL 安装目录**（新版本优先）。
+///
+/// 为什么还要扫安装目录：Windows 上 PostgreSQL 装完**默认不进 PATH**，而 `pg_dump` 就在那里。
+/// 只认 PATH 的话，用户明明装了数据库客户端却得到「找不到程序」，那种失败最难解释。
+pub fn find_program(explicit: Option<&str>) -> Result<PathBuf, DbFailure> {
+    if let Some(given) = explicit.map(str::trim).filter(|text| !text.is_empty()) {
+        let path = PathBuf::from(given);
+        if path.is_file() {
+            return Ok(path);
+        }
+        return Err(DbFailure {
+            message: format!("指定的程序不是可执行文件：{}", path.display()),
+            hint: "填 pg_dump 的完整路径（Windows 一般在 C:\\Program Files\\PostgreSQL\\<版本>\\bin\\pg_dump.exe）；留空则自动找。".to_string(),
+        });
+    }
+
+    let mut searched: Vec<String> = Vec::new();
+    if let Some(found) = on_path() {
+        return Ok(found);
+    }
+    searched.push("PATH".to_string());
+
+    let mut candidates: Vec<(String, PathBuf)> = Vec::new();
+    let mut roots: Vec<PathBuf> = vec![PathBuf::from(r"C:\Program Files\PostgreSQL")];
+    if let Ok(extra) = std::env::var("DOYAH_PG_ROOT") {
+        if !extra.trim().is_empty() {
+            roots.insert(0, PathBuf::from(extra));
+        }
+    }
+    for root in &roots {
+        searched.push(format!("{}\\<版本>\\bin", root.display()));
+        let Ok(entries) = std::fs::read_dir(root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let program = entry.path().join("bin").join(program_name());
+            if program.is_file() {
+                let version = entry.file_name().to_string_lossy().to_string();
+                candidates.push((version, program));
+            }
+        }
+    }
+    if let Some(found) = best_candidate(&candidates) {
+        return Ok(found);
+    }
+
+    Err(DbFailure {
+        message: "找不到 pg_dump（本机没装 PostgreSQL 客户端，或装在了别处）".to_string(),
+        hint: format!(
+            "找过这些地方：{}。要么装 PostgreSQL 客户端，要么在上面「程序」一格填 pg_dump 的完整路径。",
+            searched.join(" / ")
+        ),
+    })
+}
+
+/// 平台上的可执行文件名。
+fn program_name() -> &'static str {
+    if cfg!(windows) {
+        "pg_dump.exe"
+    } else {
+        "pg_dump"
+    }
+}
+
+/// 在 `PATH` 里找（**只看是不是真文件**，不执行 —— 执行留到 `run`）。
+fn on_path() -> Option<PathBuf> {
+    let raw = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&raw) {
+        let candidate = dir.join(program_name());
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+/// 一次备份的结局（**成功与失败都带日志与退出码**）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupReport {
+    /// 展示用的命令行（口令打码）
+    pub display: String,
+    /// 退出码（进程被信号干掉时是 `None`）
+    pub exit_code: Option<i32>,
+    /// **日志尾部**（stdout + stderr 按发生顺序拼）
+    pub log: String,
+    /// 前面还有多少字符没带回来（没截断就是 0）
+    pub log_trimmed_chars: usize,
+    /// 产出的字节数（目录形式是其中各文件之和）
+    pub bytes: u64,
+    /// 耗时（毫秒）
+    pub elapsed_ms: u64,
+    /// 备份写到哪儿
+    pub target: String,
+    pub format: BackupFormat,
+}
+
+/// 日志只留尾部：返回（尾部文本，被砍掉的字符数）。
+pub fn tail_log(text: &str, limit: usize) -> (String, usize) {
+    let total = text.chars().count();
+    if total <= limit {
+        return (text.to_string(), 0);
+    }
+    let skip = total - limit;
+    let tail: String = text.chars().skip(skip).collect();
+    (tail, skip)
+}
+
+/// 跑一份计划。`password` / `sslmode` 都走**环境变量**（不进 argv）。
+pub fn run(plan: &BackupPlan, password: Option<&str>, sslmode: Option<&str>) -> Result<BackupReport, DbFailure> {
+    let program = plan.program.clone().ok_or_else(|| DbFailure {
+        message: "没有可用的 pg_dump 程序，备份没有开始".to_string(),
+        hint: "先在「程序」一格填 pg_dump 的完整路径（自动查找的结果会显示在同一处）。".to_string(),
+    })?;
+
+    let mut envs: Vec<(String, String)> = Vec::new();
+    if let Some(secret) = password.filter(|value| !value.is_empty()) {
+        envs.push(("PGPASSWORD".to_string(), secret.to_string()));
+    }
+    if let Some(mode) = sslmode.filter(|value| !value.trim().is_empty()) {
+        envs.push(("PGSSLMODE".to_string(), mode.trim().to_lowercase()));
+    }
+
+    let started = std::time::Instant::now();
+    // 动手前的存在性：**失败后只清我们自己造出来的东西**（见 `clear_partial`）
+    let existed_before = plan.target.exists();
+    let mut command = Command::new(&program);
+    command
+        .args(&plan.args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for (key, value) in &envs {
+        command.env(key, value);
+    }
+    let output = command.output().map_err(|err| DbFailure {
+        message: format!("起不来 pg_dump：{err}"),
+        hint: format!("确认 {} 能直接运行（杀毒软件拦截 / 权限不足都会这样报）。", program.display()),
+    })?;
+    let elapsed_ms = started.elapsed().as_millis() as u64;
+
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let combined = match (stdout.trim().is_empty(), stderr.trim().is_empty()) {
+        (true, true) => String::new(),
+        (true, false) => stderr,
+        (false, true) => stdout,
+        (false, false) => format!("{stderr}\n{stdout}"),
+    };
+    let (log, trimmed) = tail_log(&combined, LOG_LIMIT);
+    // 失败回执要用第一行，而 `log` 会被移进回执 —— 先取出来，别在移动之后再借
+    let headline = first_line(&log);
+
+    let bytes = produced_bytes(&plan.target, plan.format);
+    let report = BackupReport {
+        display: plan.display(),
+        exit_code: output.status.code(),
+        log,
+        log_trimmed_chars: trimmed,
+        bytes,
+        elapsed_ms,
+        target: plan.target.display().to_string(),
+        format: plan.format,
+    };
+
+    if output.status.success() {
+        return Ok(report);
+    }
+    // 失败：把子进程的原话端出去（**不加工成「备份失败」四个字**）
+    let code = match output.status.code() {
+        Some(code) => format!("退出码 {code}"),
+        None => "进程被意外终止（没有退出码）".to_string(),
+    };
+    let hint = if combined.to_lowercase().contains("password")
+        || combined.contains("口令")
+        || combined.contains("authentication")
+    {
+        "口令被拒：核对连接里的用户名与口令（口令只进环境变量，不进命令行）。"
+    } else if combined.contains("does not exist") || combined.contains("不存在") {
+        "库名或路径不对：确认数据库名，以及目标路径的上级目录存在且可写。"
+    } else {
+        "看上面子进程的原话；日志尾部已带回，完整输出由 pg_dump 打印。"
+    };
+    Err(DbFailure {
+        message: format!("pg_dump {code}：{headline}"),
+        hint: match clear_partial(&plan.target, plan.format, existed_before) {
+            Some(note) => format!("{hint}（{note}；本次耗时 {elapsed_ms} ms）"),
+            None => format!("{hint}（本次耗时 {elapsed_ms} ms）"),
+        },
+    })
+}
+
+/// 失败后收拾**这次留下的半截产物**。
+///
+/// 这是本轮由真 `pg_dump` 判出来的一条真缺陷：`pg_dump -F c` **先建文件、再连服务器**，
+/// 连不上时盘上会留一个 0 字节（或半截）的 `*.dump` —— 而备份最危险的情形正是
+/// 「看起来有一份、其实是空的」。
+///
+/// 口径：**只删我们这次建的**（`existed_before == false` 且现在存在）—— 目标此前不存在是
+/// `check_target` 的前提，所以删掉它等于精确回到动手前的状态；之前就存在的东西一个字节都不碰。
+///
+/// 返回值：`None` = 没有要收拾的；`Some(说明)` = 收拾掉了 / 没能收拾（都要如实说出去）。
+fn clear_partial(target: &Path, format: BackupFormat, existed_before: bool) -> Option<String> {
+    if existed_before || !target.exists() {
+        return None;
+    }
+    let outcome = if format.produces_directory() {
+        std::fs::remove_dir_all(target)
+    } else {
+        std::fs::remove_file(target)
+    };
+    Some(match outcome {
+        Ok(()) => format!("已删掉这次留下的半截产物：{}", target.display()),
+        Err(err) => format!(
+            "这次留下了半截产物 {}（删不掉：{err}）—— 请自己删掉，别把它当可用备份",
+            target.display()
+        ),
+    })
+}
+
+/// 失败回执里只带**第一行**（日志尾部整段在 `BackupReport.log`，别把两者搅在一起）。
+fn first_line(text: &str) -> String {
+    text.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("（子进程没有输出）")
+        .to_string()
+}
+
+/// 产出的字节数：文件取长度，目录取其中各文件之和（读不出来算 0 —— 体积是附注，不是判据）。
+fn produced_bytes(target: &Path, format: BackupFormat) -> u64 {
+    if !format.produces_directory() {
+        return std::fs::metadata(target).map(|meta| meta.len()).unwrap_or(0);
+    }
+    fn sum(dir: &Path) -> u64 {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return 0;
+        };
+        entries
+            .flatten()
+            .map(|entry| {
+                let path = entry.path();
+                if path.is_dir() {
+                    sum(&path)
+                } else {
+                    std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0)
+                }
+            })
+            .sum()
+    }
+    sum(target)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn target() -> BackupTarget {
+        BackupTarget {
+            host: "db.internal".to_string(),
+            port: 5432,
+            user: "doyah".to_string(),
+            database: "shop".to_string(),
+        }
+    }
+
+    /// 三档格式的旗标与「产出是文件还是目录」必须成对成立 —— 混淆这两件事会判错「目标已存在」。
+    #[test]
+    fn each_format_maps_to_one_pg_dump_flag() {
+        assert_eq!(BackupFormat::Plain.pg_dump_flag(), "p");
+        assert_eq!(BackupFormat::Custom.pg_dump_flag(), "c");
+        assert_eq!(BackupFormat::Directory.pg_dump_flag(), "d");
+        assert!(BackupFormat::Directory.produces_directory());
+        assert!(!BackupFormat::Plain.produces_directory());
+        assert!(!BackupFormat::Custom.produces_directory());
+    }
+
+    /// **口令不许进 argv**：参数表里只有「连哪儿 / 哪个库 / 什么格式 / 写到哪」。
+    #[test]
+    fn the_plan_never_carries_a_password_in_argv() {
+        let args = plan_args(&target(), r"D:\backup\shop.dump", BackupFormat::Custom);
+        assert_eq!(
+            args.join(" "),
+            r"-h db.internal -p 5432 -U doyah -d shop -F c -f D:\backup\shop.dump"
+        );
+        let joined = args.join(" ");
+        for forbidden in ["PGPASSWORD", "password", "secret="] {
+            assert!(!joined.contains(forbidden), "argv 里出现了 {forbidden}");
+        }
+    }
+
+    /// 展示的命令行：口令打码、带空格的路径加引号 —— 用户会照着它粘到终端里复现。
+    #[test]
+    fn the_display_command_masks_the_password_and_quotes_spaces() {
+        let args = plan_args(&target(), r"C:\my backups\shop.dump", BackupFormat::Plain);
+        let shown = display_command(r"C:\Program Files\PostgreSQL\18\bin\pg_dump.exe", &args, true);
+        assert!(shown.starts_with("PGPASSWORD=*** "), "打码前缀缺失：{shown}");
+        assert!(shown.contains(r#""C:\Program Files\PostgreSQL\18\bin\pg_dump.exe""#));
+        assert!(shown.contains(r#""C:\my backups\shop.dump""#));
+        assert!(!shown.contains("PGPASSWORD=abc"), "口令被写进了展示串：{shown}");
+        // 不带打码前缀时（程序自己跑的时候）不许凭空多出一段
+        let plain = display_command("pg_dump", &args, false);
+        assert!(!plain.contains("PGPASSWORD"));
+    }
+
+    /// 空目标：拒绝并**说清楚该怎么填**（不是静默跑一次 `-f ""`）。
+    #[test]
+    fn an_empty_target_is_refused_before_anything_runs() {
+        let err = check_target("   ", BackupFormat::Plain).expect_err("空路径应当被拒");
+        assert!(err.message.contains("还没填"), "{}", err.message);
+        assert!(err.hint.contains("路径"), "{}", err.hint);
+    }
+
+    /// 目录形式与文件形式的「已存在」是**两条不同的理由**（下一步动作不同）。
+    #[test]
+    fn an_existing_target_is_refused_with_reason_matching_the_format() {
+        let dir = std::env::temp_dir().join(format!("doyah-backup-target-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("建临时目录");
+
+        let as_directory = check_target(&dir.display().to_string(), BackupFormat::Directory)
+            .expect_err("目录形式遇到既有目录应当被拒");
+        assert!(as_directory.message.contains("目标目录不存在"), "{}", as_directory.message);
+
+        let file = dir.join("shop.dump");
+        std::fs::write(&file, b"old").expect("写临时文件");
+        let as_file = check_target(&file.display().to_string(), BackupFormat::Custom)
+            .expect_err("文件形式遇到既有文件应当被拒");
+        assert!(as_file.message.contains("不覆盖既有文件"), "{}", as_file.message);
+
+        // 不存在的路径：放行，并**原样**返回（不做路径改写）
+        let fresh = dir.join("new.dump");
+        let target = check_target(&fresh.display().to_string(), BackupFormat::Custom).expect("新路径应当放行");
+        assert_eq!(target, fresh);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 版本排序：`18 > 9`（按数字段比，不按字符串比 —— 字符串会把 9 排在 18 前面）。
+    #[test]
+    fn the_newest_installation_wins() {
+        let candidates = vec![
+            ("9.6".to_string(), PathBuf::from(r"C:\pg\9.6\bin\pg_dump.exe")),
+            ("18".to_string(), PathBuf::from(r"C:\pg\18\bin\pg_dump.exe")),
+            ("17.2".to_string(), PathBuf::from(r"C:\pg\17.2\bin\pg_dump.exe")),
+        ];
+        assert_eq!(
+            best_candidate(&candidates),
+            Some(PathBuf::from(r"C:\pg\18\bin\pg_dump.exe"))
+        );
+        // 认不出版本的排最后
+        let odd = vec![
+            ("nightly".to_string(), PathBuf::from("x")),
+            ("16".to_string(), PathBuf::from("y")),
+        ];
+        assert_eq!(best_candidate(&odd), Some(PathBuf::from("y")));
+        assert_eq!(best_candidate(&[]), None);
+    }
+
+    /// 显式指定一个不存在的程序：**点名那个路径并给出典型位置**（不是一句「找不到」）。
+    #[test]
+    fn a_missing_program_names_where_it_looked() {
+        let err = find_program(Some(r"D:\nope\pg_dump.exe")).expect_err("不存在的路径应当报错");
+        assert!(err.message.contains(r"D:\nope\pg_dump.exe"), "{}", err.message);
+        assert!(err.hint.contains("pg_dump.exe"), "{}", err.hint);
+        // 留空 ⇒ 走自动查找；本机装了客户端就该找得到，没装就该报「找过这些地方」
+        match find_program(None) {
+            Ok(path) => assert!(path.is_file(), "找到的路径必须是真文件：{}", path.display()),
+            Err(msg) => assert!(msg.hint.contains("找过这些地方"), "{}", msg.hint),
+        }
+    }
+
+    /// **真起一次子进程**：退出码、日志、耗时都要如实带回来（用 `cmd` 起，不依赖 PostgreSQL）。
+    #[test]
+    fn a_real_child_process_reports_exit_code_and_log() {
+        let ok = run(
+            &BackupPlan {
+                program: Some(PathBuf::from(if cfg!(windows) { "cmd" } else { "sh" })),
+                args: if cfg!(windows) {
+                    vec!["/C".into(), "echo backup-ok".into()]
+                } else {
+                    vec!["-c".into(), "echo backup-ok".into()]
+                },
+                target: PathBuf::from("unused"),
+                format: BackupFormat::Plain,
+                database: "unused".to_string(),
+            },
+            None,
+            None,
+        )
+        .expect("起子进程应当成功");
+        assert_eq!(ok.exit_code, Some(0));
+        assert!(ok.log.contains("backup-ok"), "日志里没有子进程的原话：{}", ok.log);
+
+        let failed = run(
+            &BackupPlan {
+                program: Some(PathBuf::from(if cfg!(windows) { "cmd" } else { "sh" })),
+                args: if cfg!(windows) {
+                    vec!["/C".into(), "echo boom 1>&2 & exit 3".into()]
+                } else {
+                    vec!["-c".into(), "echo boom 1>&2; exit 3".into()]
+                },
+                target: PathBuf::from("unused"),
+                format: BackupFormat::Plain,
+                database: "unused".to_string(),
+            },
+            None,
+            None,
+        )
+        .expect_err("非零退出必须是 Err");
+        assert!(failed.message.contains("退出码 3"), "{}", failed.message);
+        assert!(failed.message.contains("boom"), "{}", failed.message);
+    }
+
+    /// 没有程序就不许「跑」——回执必须说清没开始（不能产出一个空报告冒充成功）。
+    #[test]
+    fn a_plan_without_a_program_refuses_to_run() {
+        let err = run(
+            &BackupPlan {
+                program: None,
+                args: vec![],
+                target: PathBuf::from("x"),
+                format: BackupFormat::Plain,
+                database: "shop".to_string(),
+            },
+            None,
+            None,
+        )
+        .expect_err("没有程序应当拒绝");
+        assert!(err.message.contains("没有开始"), "{}", err.message);
+    }
+
+    /// **半截产物只清我们自己造的那个**：动手前就存在的东西一个字节都不碰（备份失败时
+    /// `pg_dump -F c` 会先建文件再连服务器，不清就留下一个 0 字节的「看起来有备份」）。
+    #[test]
+    fn a_failed_run_only_clears_what_this_run_created() {
+        let dir = std::env::temp_dir().join(format!("doyah-backup-partial-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("建临时目录");
+
+        // ① 这次造的（此前不存在）⇒ 清掉并说明
+        let ours = dir.join("ours.dump");
+        std::fs::write(&ours, b"").expect("写半截文件");
+        let note = clear_partial(&ours, BackupFormat::Custom, false).expect("应当有说明");
+        assert!(note.contains("已删掉"), "{note}");
+        assert!(!ours.exists(), "我们造的半截文件应当被删掉");
+
+        // ② 动手前就存在的（`existed_before = true`）⇒ 一个字节都不碰
+        let older = dir.join("older.dump");
+        std::fs::write(&older, b"real backup").expect("写旧备份");
+        assert!(clear_partial(&older, BackupFormat::Custom, true).is_none());
+        assert_eq!(std::fs::read(&older).expect("旧备份还在"), b"real backup");
+
+        // ③ 什么都没造出来 ⇒ 没有可收拾的
+        assert!(clear_partial(&dir.join("never.dump"), BackupFormat::Plain, false).is_none());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 日志截尾：留**尾部**，并如实报被砍掉多少（前面才是「开始备份」那几行）。
+    #[test]
+    fn the_log_keeps_the_tail_and_says_how_much_was_cut() {
+        let text: String = (0..100).map(|i| format!("line-{i}\n")).collect();
+        let (tail, cut) = tail_log(&text, 40);
+        assert_eq!(tail.chars().count(), 40);
+        assert_eq!(cut, text.chars().count() - 40);
+        assert!(tail.ends_with("line-99\n"), "尾部不含最后一行：{tail}");
+
+        let (whole, none) = tail_log("short", 40);
+        assert_eq!(whole, "short");
+        assert_eq!(none, 0);
+    }
+}

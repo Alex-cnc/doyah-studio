@@ -76,6 +76,7 @@ export const DICT = {
   'cmd.database.editConnection': { 'zh-Hans': '编辑连接', en: 'Edit connection' },
   'cmd.database.runQuery': { 'zh-Hans': '执行查询', en: 'Run query' },
   'cmd.database.explain': { 'zh-Hans': '查看执行计划', en: 'Show query plan' },
+  'cmd.database.backup': { 'zh-Hans': '备份数据库…', en: 'Back up database…' },
   'cmd.database.export': { 'zh-Hans': '导出结果', en: 'Export results' },
   'cmd.database.import': { 'zh-Hans': '导入数据', en: 'Import data' },
   'cmd.appearance.followSystem': { 'zh-Hans': '外观跟随系统', en: 'Follow system appearance' },
@@ -770,6 +771,45 @@ export const DICT = {
   'saveQuery.refillNewTip': { 'zh-Hans': '在新页签打开这条 SQL（当前页签不动）', en: 'Open this SQL in a new tab (the current tab is untouched)' },
   'saveQuery.delete': { 'zh-Hans': '删除', en: 'Delete' },
   'saveQuery.deleteTip': { 'zh-Hans': '删掉这条已保存查询（不动数据库里的任何数据）', en: 'Delete this saved query (the database is not touched)' },
+
+  // 备份（FR-IO-04：封装本机 pg_dump —— 命令行先摊出来，再真跑）
+  'backup.title': { 'zh-Hans': '备份数据库', en: 'Back up database' },
+  'backup.close': { 'zh-Hans': '关闭', en: 'Close' },
+  'backup.note': {
+    'zh-Hans':
+      '备份会起本机的 pg_dump 子进程：一致性由它的快照保证。口令只经环境变量传给它，不进命令行、也不进日志。',
+    en: 'The backup runs the local pg_dump as a child process (its snapshot is what makes the dump consistent). The password is passed via an environment variable only: never on the command line, never in the log.',
+  },
+  'backup.path': { 'zh-Hans': '写到', en: 'Write to' },
+  'backup.pathHint': {
+    'zh-Hans': '完整路径，例如 D:\\backup\\shop-20261018.dump；目录形式填一个尚不存在的目录。',
+    en: 'A full path, e.g. D:\\backup\\shop-20261018.dump; for the directory format give a directory that does not exist yet.',
+  },
+  'backup.format': { 'zh-Hans': '格式', en: 'Format' },
+  'backup.format.plain': { 'zh-Hans': '纯 SQL（能直接看、能 psql 灌）', en: 'Plain SQL (readable, psql can load it)' },
+  'backup.format.custom': { 'zh-Hans': '自定义归档（体积小、可分段还原）', en: 'Custom archive (smaller, --section restores)' },
+  'backup.format.directory': { 'zh-Hans': '目录形式（可并行，目标目录须不存在）', en: 'Directory (parallelisable; target must not exist)' },
+  'backup.database': { 'zh-Hans': '备份哪个库', en: 'Database to back up' },
+  'backup.databaseHint': { 'zh-Hans': '留空 = 当前连接的库', en: 'Empty = the connected database' },
+  'backup.program': { 'zh-Hans': 'pg_dump 程序', en: 'pg_dump program' },
+  'backup.programHint': { 'zh-Hans': '留空 = 自动找（PATH → PostgreSQL 安装目录）', en: 'Empty = auto-detect (PATH, then the PostgreSQL install dirs)' },
+  'backup.programFound': { 'zh-Hans': '找到：{path}', en: 'Found: {path}' },
+  'backup.programMissing': { 'zh-Hans': '没找到 pg_dump，所以还跑不了', en: 'pg_dump was not found, so it cannot run yet' },
+  'backup.preview': { 'zh-Hans': '将要执行的命令行', en: 'Command line that will run' },
+  'backup.run': { 'zh-Hans': '开始备份', en: 'Start backup' },
+  'backup.running': { 'zh-Hans': '备份中…', en: 'Backing up…' },
+  'backup.needPath': { 'zh-Hans': '先填写到哪儿，这里就会显示将要执行的命令行。', en: 'Fill in the target path and the exact command line will show up here.' },
+  'backup.ok': {
+    'zh-Hans': '备份完成：{bytes} 字节 → {path}（耗时 {ms} ms）',
+    en: 'Backup finished: {bytes} bytes → {path} ({ms} ms)',
+  },
+  'backup.failed': { 'zh-Hans': '备份失败（退出码 {code}）', en: 'Backup failed (exit code {code})' },
+  'backup.noCode': { 'zh-Hans': 'pg_dump 被意外终止，没有退出码', en: 'pg_dump was terminated without an exit code' },
+  'backup.log': { 'zh-Hans': 'pg_dump 的输出', en: 'pg_dump output' },
+  'backup.logEmpty': { 'zh-Hans': '（这次它一个字也没输出）', en: '(it printed nothing this time)' },
+  'backup.logTrimmed': { 'zh-Hans': '日志只带回尾部：前面还有 {n} 个字符没显示。', en: 'Only the log tail came back: {n} characters before it are not shown.' },
+  'backup.planRefresh': { 'zh-Hans': '重算命令行', en: 'Recompute the command line' },
+  'backup.noConnection': { 'zh-Hans': '还没有连接数据库：备份要连的是当前连接。', en: 'No database is connected: a backup targets the current connection.' },
 
   // 写回
   'write.preview': { 'zh-Hans': '生成 SQL（先看清）', en: 'Generate SQL (preview first)' },
