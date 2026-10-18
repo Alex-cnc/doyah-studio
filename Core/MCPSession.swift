@@ -349,6 +349,17 @@ public struct MCPClientSession: Sendable {
     public struct RemoteTool: Equatable, Sendable {
         public var name: String
         public var description: String
+        /// 远端给的 `inputSchema`（**原样 JSON 文本**；没给 ⇒ `nil`）。
+        ///
+        /// `FR-AI-21` ① 要「工具名与参数原样透传」—— schema 是参数形状的声明，重编一遍就等于
+        /// 替远端改了契约（`oneOf` / `enum` / 嵌套对象在我们「参数名 → 类型」的表里根本表达不了）。
+        public var schemaJSON: String?
+
+        public init(name: String, description: String, schemaJSON: String? = nil) {
+            self.name = name
+            self.description = description
+            self.schemaJSON = schemaJSON
+        }
     }
 
     public private(set) var isInitialized = false
@@ -425,7 +436,9 @@ public struct MCPClientSession: Sendable {
             if let list = result["tools"]?.arrayValue {
                 tools = list.compactMap { item in
                     guard let name = item["name"]?.stringValue else { return nil }
-                    return RemoteTool(name: name, description: item["description"]?.stringValue ?? "")
+                    return RemoteTool(name: name,
+                                      description: item["description"]?.stringValue ?? "",
+                                      schemaJSON: item["inputSchema"]?.jsonText)
                 }
             }
             // `tools/call` 的结果：把文本内容拼起来（图片等其它类型原样说明类型，不装作看不见）。

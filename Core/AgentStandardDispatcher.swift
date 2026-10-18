@@ -44,6 +44,8 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
     public var database: AgentDatabaseTool?
     /// 命令执行器（真起进程的那一侧在这里注入；不给 ⇒ 执行类如实拒）。
     public var commandRunner: AgentCommandRunner?
+    /// MCP 桥（用户自配 server 的调用面，`FR-AI-21`；不给 ⇒ MCP 工具如实拒 `mcpNotConfigured`）。
+    public var mcp: MCPClientCalling?
     /// 只读 / 写审批的策略（`FR-AI-23` ⑥：只读模式下写类**连单都建不出来**）。
     public var guardPolicy: AgentGuardPolicy
 
@@ -51,6 +53,7 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
                 workspace: AgentWorkspaceTools? = nil,
                 database: AgentDatabaseTool? = nil,
                 commandRunner: AgentCommandRunner? = nil,
+                mcp: MCPClientCalling? = nil,
                 guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false,
                                                                  requireApprovalForHighRisk: true,
                                                                  requireApprovalForWrites: true)) {
@@ -58,6 +61,7 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
         self.workspace = workspace
         self.database = database
         self.commandRunner = commandRunner
+        self.mcp = mcp
         self.guardPolicy = guardPolicy
     }
 
@@ -141,6 +145,34 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
         case .readNotes, .fetchURL:
             // 第二批：**登记在册但未启用** —— 如实拒，不假装能做。
             return .refused(.unregistered, detail: definition.capability.rawValue)
+
+        case .mcpTool:
+            // **`FR-AI-21`**：用户自配 server 上的工具。三件事按顺序：
+            // ① 桥没接 ⇒ 如实说「未配置」（不假回退到内置工具去"顶一下"）；
+            // ② 工具级开关置「必须审批」⇒ **先出单**（工具名 + 参数原文），没批准不执行；
+            // ③ 名字与参数**原样**交给远端（不改名、不补参），远端的错原样带回来。
+            guard let mcp else { return .refused(.mcpNotConfigured, detail: definition.name) }
+            if definition.approval == .required {
+                // 指纹按**次**算：工具名 + 参数原文（换参数 ⇒ 换指纹 ⇒ 重新批，`FR-AI-23` ④ 同口径）。
+                let fingerprint = AgentFingerprint.hash([
+                    definition.name, invocation.argumentsJSON, definition.level.rawValue,
+                ].joined(separator: "|"))
+                let request = AgentApprovalRequest(toolName: definition.name,
+                                                   fingerprint: fingerprint,
+                                                   payload: "\(definition.name)\n\(invocation.argumentsJSON)")
+                guard approvals.contains(fingerprint) else { return .needsApproval(request) }
+            }
+            switch mcp.call(tool: definition.name, argumentsJSON: invocation.argumentsJSON) {
+            case .result(let call):
+                return .mcp(call)
+            case .failure(let code, let detail):
+                switch code {
+                case "badArguments": return .refused(.badArguments, detail: "\(code)/\(detail)")
+                case "unknownTool": return .refused(.unregistered, detail: "\(code)/\(detail)")
+                case "notConnected": return .refused(.mcpNotConfigured, detail: "\(code)/\(detail)")
+                default: return .refused(.mcpUnreachable, detail: "\(code)/\(detail)")
+                }
+            }
         }
     }
 }

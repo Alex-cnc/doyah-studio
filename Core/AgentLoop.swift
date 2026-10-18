@@ -84,6 +84,10 @@ public enum AgentToolSchemaValidator {
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return "not-an-object"
         }
+        // **原样透传**（`FR-AI-21` ①）：MCP 工具的声明来自远端，本地没有它的参数表 ——
+        // 按本地表挑参数会把远端认识的字段判成 `unknown` 并整条拒掉。这里只判「是不是一个 JSON 对象」，
+        // 参数形状由远端自己校验（它才是那份 schema 的主人）。
+        if definition.passesArgumentsThrough { return nil }
         for key in definition.required where object[key] == nil {
             return "missing:\(key)"
         }
@@ -807,6 +811,14 @@ public struct AgentLoop: Sendable {
         case .rows(let rows): return "rows:\(rows.rowCount):\(rows.statementKind)"
         case .command(let command): return "command:\(command.exitCode)"
         case .wrote(let file): return "wrote:\(file.path):\(file.totalBytes)"
+        case .mcp(let call):
+            // **`FR-AI-21` ①：「结果回灌进模型」** —— 远端正文必须真的进下一跳的观察段，
+            // 只报一句「执行成功」等于模型什么也没看见（这条工具的价值全在正文里）。
+            // 有界：超过 1500 字符**如实标注截断**（不静默截），并保留 server / tool 与错误位。
+            let body = call.text.count > 1500
+                ? String(call.text.prefix(1500)) + "\n[truncated:\(call.text.utf8.count)]"
+                : call.text
+            return "mcp:\(call.server)/\(call.tool):\(call.isError ? "error" : "ok")\n\(body)"
         case .needsApproval(let request): return "approval:\(request.fingerprint)"
         case .refused(let code, _): return "refused:\(code.rawValue)"
         }

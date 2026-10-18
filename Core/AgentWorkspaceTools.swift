@@ -31,6 +31,11 @@ public enum AgentToolRefusal: String, Codable, Equatable, Sendable {
     case writeConflict
     /// **批准之后目标被改过**（`FR-AI-31` ① 的负例「静默覆盖」）：不拿旧审批盖新内容，如实说重新来过。
     case staleTarget
+    /// **这一侧没配 MCP server / 这个工具没有归属 server**（`FR-AI-21` ⑤：如实说「未配置」，
+    /// 不许假回退、不许静默消失）。与 `unavailable` 分开：那条是"宿主没接实现"，这条是"用户还没配"。
+    case mcpNotConfigured
+    /// **配了但连不上**（`FR-AI-21` ⑤）：`detail` 带机器码与原因（`spawnFailed/...` / `timeout/...`）。
+    case mcpUnreachable
 }
 
 /// 读文件的输出（结构化 ⇒ 截断**可被断言**，不必靠人话里那句提示）。
@@ -85,6 +90,8 @@ public enum AgentToolOutcome: Equatable, Sendable {
     /// 真跑了一条白名单命令（`run_command`）。
     case command(AgentCommandResult)
     case wrote(AgentToolFileOutput)
+    /// 用户自配 MCP server 上的工具跑完（`FR-AI-21`）：远端正文**原样** + 是不是远端报的错。
+    case mcp(MCPClientToolCall)
     case refused(AgentToolRefusal, detail: String)
     case needsApproval(AgentApprovalRequest)
 }

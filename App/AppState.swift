@@ -2900,6 +2900,54 @@ final class AppState: ObservableObject {
     /// 那条纪律）。界面在启动时把这个口接上；没接（单测 / 老路径）⇒ 这一段**如实不带**。
     var agentWorkspaceFactsProvider: (@MainActor () -> AgentWorkspaceFacts)?
 
+    /// **MCP 桥**（`FR-AI-21`）：用户自配 server 的连接与工具登记。
+    ///
+    /// 一次会话内复用（不每条消息重起进程）；改过配置调 `resetAgentMCP()` 重来。
+    /// 关掉的 server 在 `discover` 里连计划都不生成 —— 这里没有「悄悄起一下」的路径。
+    private var agentMCPBridge: MCPClientBridge?
+    private var agentMCPRegistry: AgentToolRegistry?
+    /// 每条 server 的连接状态（含**连不上 / 坏配置 / 关掉**三种）—— 界面读它，不静默消失。
+    @Published private(set) var agentMCPReports: [MCPClientServerReport] = []
+    /// 配置文件本身读不出来时的原因（与「一条都没配」分开记）。
+    @Published private(set) var agentMCPLoadError: String?
+
+    /// 连上用户自配的 MCP server，并把远端工具并进**同一张**注册表（`FR-AI-21` ①）。
+    ///
+    /// 起进程是同步阻塞的 ⇒ 挪进 `detached`：一条慢 server 不许把主 actor（整个窗口）拖住。
+    private func agentMCPReady() async -> (registry: AgentToolRegistry, bridge: MCPClientBridge?) {
+        if let agentMCPRegistry { return (agentMCPRegistry, agentMCPBridge) }
+        let configuration: MCPClientConfiguration
+        switch MCPClientConfiguration.load() {
+        case .success(let loaded):
+            configuration = loaded ?? MCPClientConfiguration()
+            agentMCPLoadError = nil
+        case .failure(let error):
+            // 读不出来就**当没配**，但把原因留下来 —— 界面要能说「配置读不了：…」，
+            // 而不是让用户对着一个「未配置」发呆。
+            configuration = MCPClientConfiguration()
+            agentMCPLoadError = error.detail
+        }
+        let bridge = MCPClientBridge(configuration: configuration,
+                                     inheritedEnvironment: ProcessInfo.processInfo.environment) { _, plan in
+            MCPStdioTransport(plan: plan)
+        }
+        let reports = await Task.detached(priority: .userInitiated) { bridge.discover() }.value
+        let merged = AgentToolRegistry.standard.merging(bridge.discoveredDefinitions())
+        agentMCPBridge = bridge
+        agentMCPRegistry = merged.registry
+        agentMCPReports = reports
+        return (merged.registry, bridge)
+    }
+
+    /// 改过 MCP 配置（或想重连）⇒ 关掉旧进程、下次对话重新发现。
+    func resetAgentMCP() {
+        agentMCPBridge?.shutdown()
+        agentMCPBridge = nil
+        agentMCPRegistry = nil
+        agentMCPReports = []
+        agentMCPLoadError = nil
+    }
+
     /// 造一条对话循环：流式网关（`FR-AI-16`）+ 循环（`FR-AI-18`）+ 六个工具（`FR-AI-19/20`）+ 审计（`FR-AI-24`）。
     ///
     /// 造不出来（端点没配 / 地址不合法）⇒ 返回 `nil` —— 界面那边**如实拦**，不假装在跑。
@@ -2995,13 +3043,19 @@ final class AppState: ObservableObject {
                 return try await self.runAgentDatabaseQuery(sql)
             }
         )
-        let dispatcher = AgentStandardDispatcher(workspace: tools,
+        // `FR-AI-21`：先把用户自配的 MCP server 接上（发现的工具并进同一张注册表）。
+        // 没配 / 连不上都不影响既有六个工具 —— 状态另记一份（`agentMCPReports`）如实报。
+        let mcpReady = await agentMCPReady()
+        let dispatcher = AgentStandardDispatcher(registry: mcpReady.registry,
+                                                workspace: tools,
                                                 database: databaseTool,
                                                 commandRunner: AgentLocalCommandRunner(),
+                                                // `FR-AI-21`：远端工具走同一条分发（名字原样、结果原样回灌）。
+                                                mcp: mcpReady.bridge,
                                                 guardPolicy: agentGuardPolicy)
         let loop = AgentLoop(client: OpenAICompatibleStreamingClient(),
                              dispatcher: dispatcher,
-                             registry: .standard,
+                             registry: mcpReady.registry,
                              // `FR-AI-17` 会话持久化：每跳落一份 `.jsonl`（与其余本机数据同一处，不另开文件体系）。
                              sessionStore: AgentSessionStore(directory: AgentSessionStore.defaultDirectory),
                              audit: AgentAuditLog.shared,
@@ -3095,7 +3149,8 @@ final class AppState: ObservableObject {
     func applyAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> AgentChatModel.ApplyResult {
         guard let fingerprint = card.approvalFingerprint,
               let arguments = AgentToolArguments.parse(card.arguments),
-              let definition = AgentToolRegistry.standard.definition(named: card.name) else { return .failure("applyFailed") }
+              let definition = (agentMCPRegistry ?? AgentToolRegistry.standard).definition(named: card.name)
+                ?? AgentToolRegistry.standard.definition(named: card.name) else { return .failure("applyFailed") }
         let root = URL(fileURLWithPath: workspacePath)
         let tools = AgentWorkspaceTools(root: root, harmStopLog: .default)
         let targetPath = arguments["path"] ?? ""
@@ -3158,6 +3213,16 @@ final class AppState: ObservableObject {
                 return .failure(code.rawValue)
             default:
                 return .failure("applyFailed")
+            }
+        // ② MCP 工具那一档（`FR-AI-21` ④）：用户在页签里点了「批准」⇒ **这一次**才真的发给远端。
+        // 名字与参数原样（卡片上存的就是模型给的那份），远端报错原样回来（不改写成「成功」）。
+        case .mcpTool:
+            guard let mcp = agentMCPBridge else { return .failure(AgentToolRefusal.mcpNotConfigured.rawValue) }
+            switch mcp.call(tool: card.name, argumentsJSON: card.arguments) {
+            case .result(let call):
+                return call.isError ? .failure("mcpRemoteError") : .success
+            case .failure(let code, _):
+                return .failure(code)
             }
         default:
             break

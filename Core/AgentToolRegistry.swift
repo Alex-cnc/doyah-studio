@@ -26,6 +26,9 @@ public enum AgentToolCapability: String, Codable, Equatable, Sendable, CaseItera
     case runCommand
     case readNotes
     case fetchURL
+    /// **用户自配 MCP server 上的工具**（`FR-AI-21`）：名字与参数**原样透传**，
+    /// 这一侧不解释、不改写、不补全 —— 于是「同一个工具在两个客户端里名字不同」这件事不发生。
+    case mcpTool
 }
 
 /// 交付阶段：MVP 六件 / 第二批（`FR-AI-20` ⑥ 要求如实登记，不许写成已做）。
@@ -54,6 +57,12 @@ public struct AgentToolDefinition: Equatable, Sendable {
     public var stage: AgentToolStage
     /// 是否注入给模型（`FR-AI-19` ③：注入条数 = 本表**启用**条数）。
     public var enabled: Bool
+    /// **远端给的 JSON Schema 原文**（只有 MCP 工具用）：有它时 `schemaJSON` **原样返回** ——
+    /// 远端 schema 的形状（`oneOf` / `enum` / 嵌套对象）不该由我们用「参数名 → 类型」重编一遍。
+    public var schemaOverride: String?
+    /// 参数是否**原样透传**给远端（`FR-AI-21` ①：工具名与参数不改名、不改形状）。
+    /// `true` ⇒ 循环只判「是不是一个 JSON 对象」，不按本地声明的参数表挑三拣四（远端自己校验）。
+    public var passesArgumentsThrough: Bool
 
     public init(name: String,
                 summary: String,
@@ -63,7 +72,9 @@ public struct AgentToolDefinition: Equatable, Sendable {
                 level: AgentToolLevel,
                 approval: AgentToolApproval,
                 stage: AgentToolStage = .mvp,
-                enabled: Bool = true) {
+                enabled: Bool = true,
+                schemaOverride: String? = nil,
+                passesArgumentsThrough: Bool = false) {
         self.name = name
         self.summary = summary
         self.capability = capability
@@ -73,10 +84,13 @@ public struct AgentToolDefinition: Equatable, Sendable {
         self.approval = approval
         self.stage = stage
         self.enabled = enabled
+        self.schemaOverride = schemaOverride
+        self.passesArgumentsThrough = passesArgumentsThrough
     }
 
-    /// 参数的 JSON Schema（**由声明生成**，不手抄第二份）。
+    /// 参数的 JSON Schema（**由声明生成**，不手抄第二份）；远端 schema 有原文时**原文优先**。
     public var schemaJSON: String {
+        if let schemaOverride, !schemaOverride.isEmpty { return schemaOverride }
         var properties: [String: [String: String]] = [:]
         for (key, type) in parameters { properties[key] = ["type": type] }
         let payload: [String: Any] = [
@@ -210,5 +224,25 @@ public struct AgentToolRegistry: Sendable {
     /// 表里有没有这条声明（不等于允许调用 —— 允许与否还要看等级与审批）。
     public func isRegistered(_ name: String) -> Bool {
         definition(named: name) != nil
+    }
+
+    /// 把**另一批**声明并进来（`FR-AI-21`：发现到的 MCP 工具进同一张表）。
+    ///
+    /// **与已有名字冲突的条目一律不并**（结果里把它们交回调用方）—— 远端工具**不许**顶掉内置工具的
+    /// 名字：那会让「模型说要 `write_file`」这句话的含义随用户配了什么 server 而变。
+    /// 同名冲突由调用方如实登记进连接状态（不静默丢）。
+    public func merging(_ extra: [AgentToolDefinition]) -> (registry: AgentToolRegistry, conflicts: [String]) {
+        var existing = Set(definitions.map(\.name))
+        var merged = definitions
+        var conflicts: [String] = []
+        for definition in extra {
+            if existing.contains(definition.name) {
+                conflicts.append(definition.name)
+                continue
+            }
+            existing.insert(definition.name)
+            merged.append(definition)
+        }
+        return (AgentToolRegistry(definitions: merged), conflicts)
     }
 }

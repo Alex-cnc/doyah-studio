@@ -919,7 +919,7 @@ def run_self_test() -> int:
             failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
         elif "⚠ 跳过 12 份" not in output:
             failures.append(f"例 1 失败：没有高声提示「跳过 12 份」（不得静默通过）\n{output}")
-        elif "✅ 表格校验通过（38 个文件，跳过 12 份）" not in output:
+        elif "✅ 表格校验通过（40 个文件，跳过 12 份）" not in output:
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
             failures.append(f"例 1 失败：通配清单没有显式打印匹配份数（L-41）\n{output}")
@@ -1179,15 +1179,15 @@ def run_self_test() -> int:
                 )
             else:
                 skipped.append(
-                    "例 4（真仓库 50 份命名文档全在、实跑 51 个文件、无跳过行）："
+                    "例 4（真仓库 52 份命名文档全在、实跑 53 个文件、无跳过行）："
                     f"{len(absent_host_ledgers)} 份本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）"
                 )
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 50 份命名文档应全在（不得出现跳过行）\n{output}")
+            failures.append(f"例 4 失败：真仓库 52 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
             failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
-        elif "✅ 表格校验通过（51 个文件）" not in output:
-            failures.append(f"例 4 失败：收尾行应为 51 个文件（50 份命名 + 1 份通配）\n{output}")
+        elif "✅ 表格校验通过（53 个文件）" not in output:
+            failures.append(f"例 4 失败：收尾行应为 53 个文件（52 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
 
@@ -1215,10 +1215,10 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 50 份无跳过）只在**真跑过**时才算数；
+    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 52 份无跳过）只在**真跑过**时才算数；
     # 跳过时如实换掉措辞（跳过的例不许冒充跑过 —— 跳过 ≠ 通过）。
     tail = (
-        "真仓库 50 份无跳过"
+        "真仓库 52 份无跳过"
         if not skipped
         else "真仓库那两例在这台机器上不适用（本机台账不在盘上，见上面的跳过提示）"
     )
