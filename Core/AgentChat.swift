@@ -189,6 +189,30 @@ public struct AgentChatResumeReading: Equatable, Sendable {
     }
 }
 
+/// **完成判据读数**（`FR-AI-31` ②）：界面上那一行「完成判据 ✓ N 条 / 未验证 · 原因」吃它。
+///
+/// `nil` = 这一轮没出现完成声明、也没接验证器（那格不出现，不留空壳）。
+/// 为什么**不**用「跑完了」冒充：一轮跑完（`finished`）只是模型给了答复；
+/// 「这件事做成了没有」是另一问，答案由 `AgentCompletionVerifier` 按当次证据给。
+public struct AgentChatCompletionReading: Equatable, Sendable {
+    /// 机器码：`verified:N` / `unverified:<reason>` / `notClaimed`。
+    public var code: String
+    public var citations: Int
+
+    public init(code: String, citations: Int = 0) {
+        self.code = code
+        self.citations = citations
+    }
+
+    public var isVerified: Bool { code.hasPrefix("verified") }
+    public var isUnverified: Bool { code.hasPrefix("unverified") }
+    /// 原因码（`unverified:` 之后那段；没原因就是空串）。
+    public var reason: String {
+        let prefix = "unverified:"
+        return code.hasPrefix(prefix) ? String(code.dropFirst(prefix.count)) : ""
+    }
+}
+
 /// 对话状态（**纯值 + 纯转移** —— 与 `WorkspaceTabSet` 同一条纪律：规则在 Core、状态在 App 的薄壳里）。
 public struct AgentChatState: Equatable, Sendable {
 
@@ -218,6 +242,9 @@ public struct AgentChatState: Equatable, Sendable {
     /// **续跑读数**（`NFR-AI-08` ⑤）：这一轮是不是从检查点接上的。
     /// 每开一次跑就清一次（`beginRun` / `beginResume`）—— 不该让上一轮的读数冒充这一轮。
     public private(set) var resumeReading: AgentChatResumeReading?
+    /// **完成判据读数**（`FR-AI-31` ②）：这一轮模型有没有拿得出可复核的完成证据。
+    /// 每开一次跑就清一次（与续跑读数同一条口径：上一轮的结论不许冒充这一轮）。
+    public private(set) var completionReading: AgentChatCompletionReading?
 
     public init(messages: [AgentChatMessage] = [], cards: [AgentToolCard] = [],
                 steps: [AgentChatStep] = [],
@@ -247,6 +274,8 @@ public struct AgentChatState: Equatable, Sendable {
         steps = []
         // 上一轮的续跑读数不许冒充这一轮（`NFR-AI-08` ⑤）。
         resumeReading = nil
+        // 上一轮的完成判据结论同样不许冒充这一轮（`FR-AI-31` ②）。
+        completionReading = nil
         isRunning = true
     }
 
@@ -262,6 +291,7 @@ public struct AgentChatState: Equatable, Sendable {
         }
         steps = []
         resumeReading = nil
+        completionReading = nil
         isRunning = true
     }
 
@@ -371,6 +401,14 @@ public struct AgentChatState: Equatable, Sendable {
                 kept: kept,
                 earliest: earliest.isEmpty ? (previous?.earliest ?? "") : earliest
             )
+        case .completionChecked(let code, let citations):
+            // `FR-AI-31` ②：完成判据**不许静默** —— 复核过了就把结论摆出来。
+            // 读数进状态块那一行；`unverified` 另出**一条可读提示**（人类主人要看懂「它说做完了，但没验证」），
+            // 与写冲突那两种拒因同一条口径：码留给界面翻，别让人去读机器码。
+            completionReading = AgentChatCompletionReading(code: code, citations: citations)
+            if code.hasPrefix("unverified") {
+                appendNotice("completionUnverified")
+            }
         case .resumed(let fromStep, let skipped, let skippedLines):
             // `NFR-AI-08` ⑤：续跑**不许静默** —— 三个数原样落到读数里（从第几跳接上 / 退了几跳 / 坏了几行），
             // 界面那一行吃它。与压缩同一条口径：这是**读数**，不往消息流里塞一条。

@@ -928,6 +928,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatWriteStale
     /// 兑现那一步没成（写盘 / 路径 / 宿主没接）—— 与撤销那三种结局分开。
     case agentChatApplyFailed
+    /// `FR-AI-31` ②：模型说完成但拿不出可复核的证据。
+    case agentChatCompletionUnverified
     case workspaceHomeBuildLine
     case workspaceHomeCopyright
     case workspaceRecentFiles
@@ -1704,6 +1706,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentStatusResumed
     /// 续跑时读检查点跳过的坏行数。
     case agentStatusResumeBadLines
+    /// `FR-AI-31` ②：完成判据复核通过（%@ = 引用条数）。
+    case agentStatusCompletionVerified
+    /// `FR-AI-31` ②：模型声称完成，但复核不通过 —— 如实说「未验证」。
+    case agentStatusCompletionUnverified
     /// 「继续上次」那个按钮的文字（带上「接着第几跳跑」）。
     case agentChatContinue
     case agentStatusSession
@@ -3313,6 +3319,7 @@ public enum LocalizedStrings {
         .agentChatWriteBusy: [.simplifiedChinese: "这个文件正有另一次写入在进行 —— 这一次没有落盘，等它写完再来。", .english: "Another write to this file is in progress — nothing was written this time; try again once it finishes."],
         .agentChatWriteStale: [.simplifiedChinese: "这个文件在你批准之后被改过 —— 没有拿旧审批盖上去，先看清现在的内容再决定。", .english: "This file changed after you approved — the approval was not written over it; review the current content first."],
         .agentChatApplyFailed: [.simplifiedChinese: "没落成盘 —— 写盘出错或目标不可写，可以再点一次。", .english: "The write did not land — the disk write failed or the target is not writable; you can try again."],
+        .agentChatCompletionUnverified: [.simplifiedChinese: "模型说做完了，但拿不出可复核的证据 —— 这一轮**未验证**（不把「它说完了」当完成，请自己看一眼结果）。", .english: "The model claims it is done but cites no verifiable evidence — this run stays unverified; do not take the claim as completion."],
         // 定时 agent（FR-AI-27）：目标档位 / 面板文案 / 历史。词表与既有键能合的就合（状态与时间全走 dataTask*）。
         .agentScheduleTitle: [.simplifiedChinese: "定时 agent", .english: "Scheduled agents"],
         .agentScheduleEmpty: [.simplifiedChinese: "还没有定时条目。定时只决定「什么时候起一次会话」——危险动作仍然逐次审批。", .english: "No scheduled entries yet. A schedule only decides when a session starts — dangerous actions still need approval every time."],
@@ -3336,6 +3343,8 @@ public enum LocalizedStrings {
         .agentStatusCompressed: [.simplifiedChinese: "已压缩 %@ 段 · 省 ≈%@ token", .english: "compressed %@ · saved ≈%@ tokens"],
         .agentStatusResumed: [.simplifiedChinese: "已续上（第 %@ 跳）· 退回 %@ 跳", .english: "resumed at hop %@ · %@ hops rolled back"],
         .agentStatusResumeBadLines: [.simplifiedChinese: "读检查点时跳过了 %@ 个坏行（截断 / 读不出）", .english: "skipped %@ unreadable checkpoint lines"],
+        .agentStatusCompletionVerified: [.simplifiedChinese: "完成判据 ✓ %@ 条证据（本次真跑过、此刻盘上仍成立）", .english: "completion verified · %@ citations (produced this run, still true on disk)"],
+        .agentStatusCompletionUnverified: [.simplifiedChinese: "完成判据未验证", .english: "completion unverified"],
         .agentChatContinue: [.simplifiedChinese: "继续上次（接着第 %@ 跳跑，已完成的跳不重放）", .english: "Continue last run (from hop %@; finished hops are not replayed)"],
         .agentStatusSession: [.simplifiedChinese: "本会话 %@ 次 · 输入 %@ / 输出 %@ / 合计 %@ token", .english: "Session %@ calls · in %@ / out %@ / total %@ tokens"],
         .agentStatusElapsed: [.simplifiedChinese: "耗时 %@ 秒", .english: "%@ s"],

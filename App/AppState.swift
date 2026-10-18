@@ -2997,7 +2997,10 @@ final class AppState: ObservableObject {
                              // `NFR-AI-08` ③ 压缩：超预算才动手，界面上那一行读数就是它报出来的。
                              // 阈值是**参数**（契约只钉「有损但可数可报」）—— 24k 字符 ≈ 6k token，远小于常见窗口，
                              // 留出工具返回与模型输出的余量。
-                             compressionBudget: AgentContextCompressionBudget())
+                             compressionBudget: AgentContextCompressionBudget(),
+                             // `FR-AI-31` ② 完成判据：模型说「完成」时按**当次工具证据 + 盘上现状**复核，
+                             // 拿不出就如实说「未验证」。复核要读盘 ⇒ 给它工作区根（相对路径都相对它）。
+                             completionVerifier: AgentCompletionVerifier(workspaceRoot: workspaceRoot))
         let context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: promptWithNotes,
                                        baseRequest: request, sessionID: sessionID, workspace: workspacePath,
                                        checkpointScopeID: checkpointScopeID)

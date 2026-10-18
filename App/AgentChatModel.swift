@@ -64,6 +64,10 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// **续跑读数**（`NFR-AI-08` ⑤）：界面上那一行「已续上 … · 退回 N 跳」。`nil` = 这一轮不是续跑。
     var resumeReading: AgentChatResumeReading? { state.resumeReading }
 
+    /// **完成判据读数**（`FR-AI-31` ②）：`verified:N` / `unverified:<reason>` / `notClaimed`。
+    /// `nil` = 这一轮没有完成声明（也没接验证器）。
+    var completionReading: AgentChatCompletionReading? { state.completionReading }
+
     /// 吞吐（token/秒）：**只在这两样都有读数时给**，算不出来就不显示（不编）。
     var tokensPerSecond: Double? {
         guard let seconds = lastElapsedSeconds, seconds > 0.05, sessionUsage.completionTokens > 0 else { return nil }
