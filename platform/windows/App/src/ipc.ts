@@ -79,6 +79,7 @@ export const COMMANDS = {
   adminDatabases: 'admin_databases',
   adminSessions: 'admin_sessions',
   adminTableStats: 'admin_table_stats',
+  slowQueries: 'slow_queries',
   maintenanceSql: 'maintenance_sql',
   terminateSql: 'terminate_sql',
   grantPreview: 'grant_preview',
@@ -1067,6 +1068,36 @@ export interface TableStats {
   lastAnalyze: string
 }
 
+/** 慢查询排行的一行（文本已按字符截断；`truncated` 为真时界面要如实说「已截断」）。 */
+export interface SlowQueryRow {
+  query: string
+  calls: number
+  totalMs: number
+  meanMs: number
+  /** 该语句累计影响 / 返回的行数（服务端口径） */
+  rows: number
+  truncated: boolean
+}
+
+/**
+ * 慢查询排行回包（FR-DIAG-03）。
+ *
+ * **`available: false` 不是错误**：它带一句可读原因 + 三步安装指引 ——
+ * 界面上绝不能用「空列表」冒充「没有慢查询」（那是假绿）。
+ */
+export interface SlowQueryReport {
+  available: boolean
+  installed: boolean
+  availableExtension: boolean
+  preloaded: boolean
+  reason: string | null
+  steps: string[]
+  /** 本次用的时间列名（PG12 是 `total_time`，13 起是 `total_exec_time`） */
+  totalColumn: string
+  meanColumn: string
+  rowsOut: SlowQueryRow[]
+}
+
 /** 一条维护命令（**只生成、不执行**；每条都带代价说明）。 */
 export interface MaintenanceCommand {
   sql: string
@@ -1092,6 +1123,28 @@ export function adminSessions(): Promise<SessionRow[]> {
 export function adminTableStats(schema: string): Promise<TableStats[]> {
   return call(COMMANDS.adminTableStats, { schema }, () => [] as TableStats[])
 }
+
+/**
+ * **慢查询排行**（FR-DIAG-03）：`sort` 只能是 `total` / `mean` / `calls`。
+ *
+ * 浏览器旁路没有真库 ⇒ 回一个 `available: false` + 原因（不是抛错 —— 面板要能说清「这里没有真库」）。
+ */
+export function slowQueries(sort: SlowQuerySortKey, limit = 20): Promise<SlowQueryReport> {
+  return call(COMMANDS.slowQueries, { sort, limit }, () => ({
+    available: false,
+    installed: false,
+    availableExtension: false,
+    preloaded: false,
+    reason: '浏览器旁路没有真库：慢查询排行要在 Tauri 外壳里连上服务端才读得到。',
+    steps: [],
+    totalColumn: '',
+    meanColumn: '',
+    rowsOut: [],
+  }) as SlowQueryReport)
+}
+
+/** 排行口径（与领域层 `SlowQuerySort::parse` 认的字符串一一对应）。 */
+export type SlowQuerySortKey = 'total' | 'mean' | 'calls'
 
 /** **维护命令**（只生成、不执行）。 */
 export function maintenanceSql(schema: string | undefined, table: string): Promise<MaintenanceCommand[]> {

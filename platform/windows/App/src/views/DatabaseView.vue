@@ -50,6 +50,17 @@ import {
   exportToFile,
   previewImport,
   runImport,
+  // 库与服务器管理面（1.7）：这些名字此前**在模板/脚本里被调用、却没有 import** ——
+  // `tsc --noEmit` 不校验 .vue，所以编译期无声；一点「管理面板」就在 try 里抛
+  // ReferenceError，用户看到的是「ipcAdminDatabases is not defined」。本片补上。
+  adminDatabases as ipcAdminDatabases,
+  adminSessions as ipcAdminSessions,
+  adminTableStats as ipcAdminTableStats,
+  maintenanceSql as ipcMaintenanceSql,
+  terminateSql as ipcTerminateSql,
+  slowQueries as ipcSlowQueries,
+  type SlowQueryReport,
+  type SlowQuerySortKey,
   type ConnectParams,
   type DbFailure,
   type FieldProblem,
@@ -660,6 +671,8 @@ async function loadAdmin() {
       adminStats.value = await ipcAdminTableStats(resultSource.value.schema)
     }
     adminNote.value = ''
+    // 慢查询排行与前三块一起取（面板一打开就有读数；扩展不可用时同样给指引）
+    await loadSlowQueries()
   } catch (e) {
     failure.value = describeError(e)
   } finally {
@@ -704,6 +717,37 @@ async function copyAdminCommands() {
   }
   setTimeout(() => (copied.value = ''), 2500)
 }
+
+// ── 慢查询排行（FR-DIAG-03）────────────────────────────────────────────────────────────
+//
+// 三条口径：
+// ① **扩展不可用不是错误**：面板要显示「为什么 + 三步怎么办」，绝不能用空列表冒充
+//    「没有慢查询」（那是假绿：用户会以为库很健康）；
+// ② 排序口径三种（总耗时 / 平均耗时 / 调用次数），切换即重取 —— 口径字符串与领域层
+//    `SlowQuerySort::parse` 一一对应，**不在前端另编一套**；
+// ③ 失败给可读原因（原话 + 提示），不是静默空表。
+const slowSort = ref<SlowQuerySortKey>('total')
+const slowReport = ref<SlowQueryReport | null>(null)
+const slowNote = ref('')
+
+async function loadSlowQueries() {
+  try {
+    slowReport.value = await ipcSlowQueries(slowSort.value)
+    slowNote.value = ''
+  } catch (e) {
+    // 读不到就说清读不到：清掉旧回包，免得把上一次的行当成这一次的
+    slowReport.value = null
+    slowNote.value = describeError(e)
+  }
+}
+
+/** 排序文案（只在界面上用；口径键 = 领域层认的那三个字符串）。 */
+const SLOW_SORT_LABELS: { key: SlowQuerySortKey; label: string }[] = [
+  { key: 'total', label: '总耗时' },
+  { key: 'mean', label: '平均耗时' },
+  { key: 'calls', label: '调用次数' },
+]
+
 /**
  * 连接列表分组（布局对齐 macOS 封面图）：图里左栏是「连接列表」下有分组标题（示例：未分组）。
  *
@@ -3856,6 +3900,50 @@ async function probe() {
                       </span>
                     </li>
                   </ul>
+                </details>
+
+                <!-- 慢查询排行（FR-DIAG-03）：扩展不可用给原因 + 三步，**不用空列表冒充「没有慢查询」** -->
+                <details open data-testid="slow-queries">
+                  <summary class="db__note">慢查询排行（pg_stat_statements；时间列按服务端版本取）</summary>
+                  <div class="db__writeback">
+                    <label class="db__freeze">
+                      排序
+                      <select v-model="slowSort" class="db__select" data-testid="slow-sort" @change="loadSlowQueries">
+                        <option v-for="s in SLOW_SORT_LABELS" :key="s.key" :value="s.key">{{ s.label }}</option>
+                      </select>
+                    </label>
+                    <button class="db__btn" type="button" data-testid="slow-refresh" @click="loadSlowQueries">
+                      刷新排行
+                    </button>
+                    <span v-if="slowReport && slowReport.available" class="db__note" data-testid="slow-columns">
+                      时间列 {{ slowReport.totalColumn }} / {{ slowReport.meanColumn }}
+                    </span>
+                  </div>
+
+                  <p v-if="slowNote" class="db__note" data-testid="slow-note">{{ slowNote }}</p>
+
+                  <template v-if="slowReport && !slowReport.available">
+                    <p class="db__note" data-testid="slow-unavailable">{{ slowReport.reason }}</p>
+                    <ol class="db__dml-list" data-testid="slow-steps">
+                      <li v-for="(step, index) in slowReport.steps" :key="index">{{ step }}</li>
+                    </ol>
+                  </template>
+
+                  <template v-else-if="slowReport && slowReport.available">
+                    <p v-if="slowReport.rowsOut.length === 0" class="db__note" data-testid="slow-empty">
+                      排行读回来了 0 条：扩展在，但这台服务端还没有语句被记账（或当前用户只看得见自己的查询）
+                    </p>
+                    <ol v-else class="db__dml-list" data-testid="slow-rows">
+                      <li v-for="(row, index) in slowReport.rowsOut" :key="index">
+                        <span class="db__kind">
+                          {{ row.calls }} 次 · 共 {{ row.totalMs }} ms · 平均 {{ row.meanMs }} ms ·
+                          影响 {{ row.rows }} 行
+                          <template v-if="row.truncated">· 文本已截断</template>
+                        </span>
+                        <pre class="db__sql-preview">{{ row.query }}</pre>
+                      </li>
+                    </ol>
+                  </template>
                 </details>
 
                 <div v-if="adminCommands.length" class="db__dml">

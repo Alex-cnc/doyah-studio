@@ -22,6 +22,9 @@ use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 /// 一次查询最多实体化多少行（超过就如实报截断）。
 pub const MAX_QUERY_ROWS: usize = 5000;
 
+/// 慢查询排行里一条语句的文本上限（字符数；超过按字符截断并如实标「已截断」）。
+pub const QUERY_TEXT_LIMIT: usize = 200;
+
 /// 结果集：列名 + 行（每格是文本或 NULL）+ 数值形态 + 截断标记 + 影响行数。
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1083,6 +1086,67 @@ impl PgSession {
                 last_analyze: row.get(6),
             })
             .collect())
+    }
+
+    /// **慢查询排行**（FR-DIAG-03）：先探可用性（视图在 / 扩展文件在 / 已预加载），
+    /// **不可用就不发排行 SQL** —— 空列表会被读成「没有慢查询」，那是假绿。
+    ///
+    /// 可用性判定与排行 SQL 都在领域层 `slow_query`（版本感知列名 / 三种排序 / 过滤自身），
+    /// 本层只做「问服务端 + 把文本列解析成数」。
+    pub async fn slow_queries(
+        &self,
+        sort: doyah_studio_db::slow_query::SlowQuerySort,
+        limit: usize,
+    ) -> Result<doyah_studio_db::slow_query::SlowQueryReport, DbFailure> {
+        use doyah_studio_db::slow_query as sq;
+        let probe = self
+            .client
+            .query(sq::availability_sql(), &[])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        let state = match probe.first() {
+            Some(row) => sq::Availability {
+                installed: row.get(0),
+                available: row.get(1),
+                preloaded: row.get(2),
+            },
+            // 一问三答连一行都没有：如实当成「都不可用」，不假装能查
+            None => sq::Availability { installed: false, available: false, preloaded: false },
+        };
+        if !state.usable() {
+            return Ok(sq::SlowQueryReport::unavailable(state));
+        }
+        let sql = sq::ranking_sql(sort, &self.info.version, limit);
+        let rows = self
+            .client
+            .query(&sql, &[])
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        let mut out: Vec<sq::SlowQueryRow> = Vec::with_capacity(rows.len());
+        for row in rows {
+            let text: String = row.get(0);
+            let (query, truncated) = sq::truncate_query(&text, QUERY_TEXT_LIMIT);
+            out.push(sq::SlowQueryRow {
+                query,
+                calls: row.get::<_, String>(1).parse().unwrap_or(0),
+                total_ms: row.get::<_, String>(2).parse().unwrap_or(0.0),
+                mean_ms: row.get::<_, String>(3).parse().unwrap_or(0.0),
+                rows: row.get::<_, String>(4).parse().unwrap_or(0),
+                truncated,
+            });
+        }
+        let major = sq::version_major(&self.info.version);
+        Ok(sq::SlowQueryReport {
+            available: true,
+            installed: true,
+            available_extension: state.available,
+            preloaded: state.preloaded,
+            reason: None,
+            steps: Vec::new(),
+            total_column: sq::SlowQuerySort::TotalTime.column(major).to_string(),
+            mean_column: sq::SlowQuerySort::MeanTime.column(major).to_string(),
+            rows_out: out,
+        })
     }
 
 /// 快速自检（`--probe` 用）：连上、能问出一行、能列出表。

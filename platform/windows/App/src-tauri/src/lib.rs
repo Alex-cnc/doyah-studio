@@ -1030,6 +1030,24 @@ async fn admin_table_stats(
     session.table_stats(&schema).await
 }
 
+/// **慢查询排行**（FR-DIAG-03）。扩展不可用**不是错误**：回包里 `available=false` +
+/// 一句可读原因 + 三步安装指引 —— 界面上要读得出来「为什么不行、下一步做什么」。
+#[tauri::command]
+async fn slow_queries(
+    state: State<'_, ShellState>,
+    sort: String,
+    limit: Option<u32>,
+) -> Result<doyah_studio_db::slow_query::SlowQueryReport, DbFailure> {
+    let parsed = doyah_studio_db::slow_query::SlowQuerySort::parse(&sort).ok_or_else(|| DbFailure {
+        message: format!("认不出的排序口径：{sort}"),
+        hint: "只能用 total（总耗时）/ mean（平均耗时）/ calls（调用次数）这三个之一。".to_string(),
+    })?;
+    let session = current_session(&state).await?;
+    session
+        .slow_queries(parsed, limit.map(|n| n as usize).unwrap_or(doyah_studio_db::slow_query::DEFAULT_LIMIT))
+        .await
+}
+
 /// **维护命令**（只生成、不执行 —— 版本计划原文要求）。
 #[tauri::command]
 fn maintenance_sql(
@@ -1915,6 +1933,7 @@ pub fn run() {
             admin_databases,
             admin_sessions,
             admin_table_stats,
+            slow_queries,
             maintenance_sql,
             terminate_sql,
             grant_preview,

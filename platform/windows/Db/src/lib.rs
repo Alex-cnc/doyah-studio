@@ -36,6 +36,7 @@ pub mod reveal;
 pub mod save_guard;
 pub mod saved_query;
 pub mod search;
+pub mod slow_query;
 pub mod sql;
 pub mod sql_params;
 pub mod staleness;

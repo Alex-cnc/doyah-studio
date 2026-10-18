@@ -65,6 +65,7 @@ describe('ipc', () => {
       'admin_databases',
       'admin_sessions',
       'admin_table_stats',
+      'slow_queries',
       'maintenance_sql',
       'terminate_sql',
       'grant_preview',
