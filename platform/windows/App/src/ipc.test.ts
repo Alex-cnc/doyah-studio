@@ -86,6 +86,8 @@ describe('ipc', () => {
       'archive_read',
       'archive_write',
       'archive_days',
+      'retro_packages',
+      'retro_report',
       'agent_settings_get',
       'agent_settings_save',
       'agent_key_save',

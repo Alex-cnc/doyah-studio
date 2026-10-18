@@ -38,6 +38,7 @@ pub mod open_as;
 pub mod palette;
 pub mod plugins;
 pub mod replace;
+pub mod retro_package;
 pub mod reveal;
 pub mod save_guard;
 pub mod saved_query;

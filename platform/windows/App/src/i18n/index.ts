@@ -31,6 +31,22 @@ export const DICT = {
   },
   'plugin.missingEntry': { 'zh-Hans': '插件入口未登记：{entry}', en: 'Plugin entry not registered: {entry}' },
 
+  // Retro 周报包（FR-R-12-01 / -02 · FR-R-13-08 的 M0 只读面）
+  'plugin.retro.loading': { 'zh-Hans': '正在读包目录…', en: 'Reading the package folders…' },
+  'plugin.retro.count': { 'zh-Hans': '共 {n} 期', en: '{n} period(s)' },
+  'plugin.retro.refresh': { 'zh-Hans': '刷新', en: 'Refresh' },
+  'plugin.retro.empty': { 'zh-Hans': '还没有周报', en: 'No weekly reports yet' },
+  'plugin.retro.emptyHint': {
+    'zh-Hans': '把一个周报包（index.json + report.md + assets/）放进这个目录，再点刷新：{root}',
+    en: 'Put a weekly report package (index.json + report.md + assets/) into this folder, then refresh: {root}',
+  },
+  'plugin.retro.pickOne': { 'zh-Hans': '左侧选一期看正文', en: 'Pick a period on the left to read it' },
+  'plugin.retro.problems': { 'zh-Hans': '有 {n} 处读不出来', en: '{n} item(s) could not be read' },
+  'plugin.retro.noDate': { 'zh-Hans': '日期未标注', en: 'Date not stated' },
+  'plugin.retro.reportFailed': { 'zh-Hans': '这一期的正文打不开', en: 'This report could not be opened' },
+  'plugin.retro.loadFailed': { 'zh-Hans': '读包目录失败', en: 'Could not read the package folders' },
+  'ipc.action.retro': { 'zh-Hans': '打开周报', en: 'open a weekly report' },
+
   // IPC 浏览器旁路提示（不是产品路径，但**也要双语**：切英文时不该留中文）
   'ipc.bypass.db': { 'zh-Hans': '浏览器旁路没有真库', en: 'The browser fallback has no real database' },
   'ipc.bypass.workspace': { 'zh-Hans': '浏览器旁路没有工作区', en: 'The browser fallback has no workspace' },

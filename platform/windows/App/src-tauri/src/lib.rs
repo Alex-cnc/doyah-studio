@@ -27,6 +27,10 @@ pub mod saved_queries;
 /// 查询自动归档的落盘（FR-EDIT-31）：**条目格式与「同一条 SQL 累计次数」在领域口径**
 /// `App/src/workspace/archive.ts`；本模块只管 `queries/<YYYY-MM-DD>.sql` 的读写与日期键校验。
 pub mod archive;
+/// Retro 周报包读盘（FR-R-12-01 / -02 · FR-R-13-08 的 M0 只读面）：
+/// 扫 `%APPDATA%\DoyahStudio\retro\packages\<期号>\`，判定全在领域层
+/// `doyah_studio_db::retro_package`，正文交给既有 `markdown::parse`。
+pub mod retro_library;
 /// 底部终端「端到端接线」层（W-C 底部终端 · S-9c）：把 `pty::` 的真字节喂进领域层
 /// 屏幕模型 / 按键编码 / 页签会话，令 `Db/src/terminal*.rs` 那 29 例**由真字节流驱动**。
 /// 只经 `pty::` 接口调用，本模块**不许出现 PTY crate 名**（判据同第五道「PTY 隔离」）。
@@ -68,6 +72,8 @@ pub struct ShellState {
     pub saved_queries: SavedQueryStore,
     /// 查询自动归档的落盘根（FR-EDIT-31；`queries/<YYYY-MM-DD>.sql`，见 `archive.rs` 头注）。
     pub archive: archive::ArchiveStore,
+    /// Retro 周报包目录（`FR-R-12`；`retro/packages/<期号>/`，见 `retro_library.rs` 头注）。
+    pub retro: retro_library::RetroStore,
     /// 智能体配置与密钥的落盘位置（FR-AI-01；配置与密钥**分两份文件**，见 `agent_settings.rs` 头注）。
     pub agent_settings: AgentSettingsStore,
     /// **当前连接是不是只读**（FR-CONN-17）：写回与危险判定都要看它。
@@ -628,6 +634,27 @@ fn archive_write(
 #[tauri::command]
 fn archive_days(state: State<'_, ShellState>) -> Result<Vec<archive::ArchiveDay>, DbFailure> {
     state.archive.days()
+}
+
+// ── Retro 周报包（FR-R-12-01 / -02 · FR-R-13-08 的 M0 只读面）──────────────────────────
+//
+// 两条命令都很薄：**什么算一张卡 / 什么算一处问题 / 路径合不合法**全在领域层
+// `doyah_studio_db::retro_package`；本层只决定「扫哪儿、读哪些字节」。
+// 只读：这两条命令**没有任何写路径**（`FR-R-13-08` ③：视图里不产生写回包的动作）。
+
+/// 扫包目录（根路径 + 能画出来的期 + 读不出来的地方，逐条）。
+#[tauri::command]
+fn retro_packages(state: State<'_, ShellState>) -> Result<retro_library::RetroSnapshot, DbFailure> {
+    state.retro.snapshot()
+}
+
+/// 读一期的正文并解析成渲染模型（`period` 只认扫出来的目录名）。
+#[tauri::command]
+fn retro_report(
+    state: State<'_, ShellState>,
+    period: String,
+) -> Result<retro_library::RetroReport, DbFailure> {
+    state.retro.report(&period)
 }
 
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
@@ -2319,6 +2346,7 @@ pub fn run() {
             connections: ConnectionStore::new(ConnectionStore::default_path()),
             saved_queries: SavedQueryStore::new(SavedQueryStore::default_path()),
             archive: archive::ArchiveStore::new(archive::ArchiveStore::default_root()),
+            retro: retro_library::RetroStore::new(retro_library::RetroStore::default_root()),
             agent_settings: AgentSettingsStore::default_store(),
             read_only: std::sync::atomic::AtomicBool::new(false),
         })
@@ -2358,6 +2386,8 @@ pub fn run() {
             archive_read,
             archive_write,
             archive_days,
+            retro_packages,
+            retro_report,
             agent_settings_get,
             agent_settings_save,
             agent_key_save,

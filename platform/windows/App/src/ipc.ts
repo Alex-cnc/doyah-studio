@@ -106,6 +106,9 @@ export const COMMANDS = {
   archiveRead: 'archive_read',
   archiveWrite: 'archive_write',
   archiveDays: 'archive_days',
+  // Retro 周报包（FR-R-12-01 / -02）：只读扫目录 + 读一期正文
+  retroPackages: 'retro_packages',
+  retroReport: 'retro_report',
   // 智能体设置（FR-AI-01：总开关 / 端点 / 模型 / 配额；密钥单独存，永不回显）
   agentSettingsGet: 'agent_settings_get',
   agentSettingsSave: 'agent_settings_save',
@@ -681,6 +684,73 @@ export function archiveDays(): Promise<ArchiveDay[]> {
       .map(([dateKey, content]) => ({ dateKey, bytes: new TextEncoder().encode(content).length }))
       .sort((left, right) => (left.dateKey < right.dateKey ? 1 : left.dateKey > right.dateKey ? -1 : 0)),
   )
+}
+
+// ── Retro 周报包（FR-R-12-01 / -02 · FR-R-13-08 的 M0 只读面）────────────────────────────
+//
+// 形状与领域层 `Db/src/retro_package.rs` 一一对应（`rename_all = "camelCase"`）。
+// **判定不在这一层**：什么算一张卡、封面路径合不合法由 Rust 判完再给 ——
+// 前端照着画，出错只显示「哪里读不出来」。
+
+/** 一张周报卡片（左侧列表的一项）。 */
+export interface RetroCard {
+  /** 期号（= 包目录名；排序键与「打开哪一期」的键）。 */
+  period: string
+  /** 标题。 */
+  title: string
+  /** 日期范围起点（`YYYY-MM-DD`；包里没写就是空串）。 */
+  dateStart: string
+  /** 日期范围终点。 */
+  dateEnd: string
+  /** 标签（已去重）。 */
+  tags: string[]
+  /** 封面（包内相对路径；没有 / 不合法时为 null）。 */
+  cover: string | null
+  /** 生成时间（包里没写就是空串）。 */
+  generatedAt: string
+}
+
+/** 一处「读不出来」（逐条显示，不让整批失败）。 */
+export interface RetroProblem {
+  /** 出问题的期号（目录名）。 */
+  period: string
+  /** 可读原因。 */
+  message: string
+}
+
+/** 一次扫描的结果。 */
+export interface RetroSnapshot {
+  /** 扫描根（空态要把这个路径显示给用户）。 */
+  root: string
+  cards: RetroCard[]
+  problems: RetroProblem[]
+}
+
+/** 一期的正文（已解析成渲染模型）。 */
+export interface RetroReport {
+  period: string
+  /** 正文文件路径。 */
+  path: string
+  /** 正文字节数。 */
+  bytes: number
+  /** 渲染模型（解析在 Rust 领域层 `markdown::parse`）。 */
+  document: MdDocument
+}
+
+/** 扫包目录（浏览器旁路：空库 + 一句说明用的根路径）。 */
+export function retroPackages(): Promise<RetroSnapshot> {
+  return call(COMMANDS.retroPackages, {}, () => ({
+    root: '',
+    cards: [],
+    problems: [],
+  }))
+}
+
+/** 读一期的正文；`period` 只认扫出来的目录名（Rust 侧会再校验一次）。 */
+export function retroReport(period: string): Promise<RetroReport> {
+  return call(COMMANDS.retroReport, { period }, () => {
+    throw bypassWorkspace('ipc.action.retro') as unknown as RetroReport
+  })
 }
 
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────

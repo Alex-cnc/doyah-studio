@@ -1,9 +1,23 @@
 <script setup lang="ts">
-// 回放插件 · 视图壳（**本轮 = 骨架，功能本体未做**）
+// 回放插件 · 周报阅读面（FR-R-12-01 左列表 / FR-R-12-02 右正文 · FR-R-13-08 的 M0 只读）
 //
-// 与笔记壳同一套口径：只证明"插件能装能拔"，功能本体未做就**如实显示"未开工"**。
-// 功能本体的出处 = `Docs/产品能力规划说明书.md`（回放能力）；本壳不猜它长什么样。
+// 三条纪律：
+//   ① **只读**：本组件不产生任何写回包的动作（没有保存 / 编辑 / 导入按钮）；
+//   ② **不自带第二套解析**：卡片字段与正文块全部由 Rust（领域层 `retro_package` +
+//      `markdown::parse`）判完送来，这里只画；
+//   ③ **坏包要说出来**：读不出来的期逐条列在左栏底部（缺 index / 缺正文 / 编码错 / 封面越界），
+//      不让它静默消失 —— 用户放进去的包没出现，必须能查到哪里不对。
 
+import { computed, onMounted, ref } from 'vue'
+import BlockDocument from './BlockDocument.vue'
+import {
+  retroPackages,
+  retroReport,
+  type DbFailure,
+  type MdDocument,
+  type RetroCard,
+  type RetroProblem,
+} from '../../ipc'
 import { t as translate, type UiLanguage } from '../../i18n'
 
 const props = defineProps<{
@@ -13,46 +27,371 @@ const props = defineProps<{
   version?: string
 }>()
 
-/** 本组件的文案帮手。 */
-function tr(key: Parameters<typeof translate>[0]): string {
-  return translate(key, props.language ?? 'zh-Hans')
+const lang = computed<UiLanguage>(() => props.language ?? 'zh-Hans')
+
+function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
+  return translate(key, lang.value, vars)
 }
+
+/** 扫描结果（根路径 / 能画的期 / 读不出来的地方）。 */
+const cards = ref<RetroCard[]>([])
+const problems = ref<RetroProblem[]>([])
+const root = ref('')
+const loading = ref(false)
+const loadFailure = ref<DbFailure | null>(null)
+
+/** 当前选中期的正文（`document` 为 `null` = 还没选）。 */
+const selected = ref('')
+const document = ref<MdDocument | null>(null)
+const reportBytes = ref(0)
+const reportFailure = ref<DbFailure | null>(null)
+const reportLoading = ref(false)
+
+const selectedCard = computed<RetroCard | null>(
+  () => cards.value.find((card) => card.period === selected.value) ?? null,
+)
+
+function describeError(error: unknown): DbFailure {
+  if (error && typeof error === 'object' && 'message' in error && 'hint' in error) return error as DbFailure
+  return { message: error instanceof Error ? error.message : String(error), hint: '' }
+}
+
+/** 日期范围：两端都有就「起 → 止」，只有一端就那一端，都没有就说「未标注」（不编一个日期）。 */
+function rangeText(card: RetroCard): string {
+  if (card.dateStart && card.dateEnd) return `${card.dateStart} → ${card.dateEnd}`
+  if (card.dateStart) return card.dateStart
+  if (card.dateEnd) return card.dateEnd
+  return tr('plugin.retro.noDate')
+}
+
+/** 扫一遍包目录。选中项还在就保留，不在了就清掉（别让右区停在已经不存在的期上）。 */
+async function refresh(): Promise<void> {
+  loading.value = true
+  loadFailure.value = null
+  try {
+    const snapshot = await retroPackages()
+    root.value = snapshot.root
+    cards.value = snapshot.cards
+    problems.value = snapshot.problems
+    if (selected.value && !snapshot.cards.some((card) => card.period === selected.value)) {
+      selected.value = ''
+      document.value = null
+      reportFailure.value = null
+      reportBytes.value = 0
+    }
+  } catch (error) {
+    loadFailure.value = describeError(error)
+    cards.value = []
+    problems.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 打开一期。切期时先清掉上一期的正文 —— 不留残留（`FR-R-12-02` ③）。 */
+async function open(card: RetroCard): Promise<void> {
+  selected.value = card.period
+  document.value = null
+  reportFailure.value = null
+  reportBytes.value = 0
+  reportLoading.value = true
+  try {
+    const report = await retroReport(card.period)
+    document.value = report.document
+    reportBytes.value = report.bytes
+  } catch (error) {
+    reportFailure.value = describeError(error)
+  } finally {
+    reportLoading.value = false
+  }
+}
+
+onMounted(() => {
+  void refresh()
+})
 </script>
 
 <template>
-  <section class="plugin-view" data-plugin="retro">
-    <header class="plugin-view__head">
-      <h2 class="plugin-view__title">{{ tr('plugin.retro.title') }}</h2>
-      <span v-if="props.version" class="plugin-view__version">v{{ props.version }}</span>
-    </header>
-    <p class="plugin-view__hint">{{ tr('plugin.notImplemented') }}</p>
+  <section class="retro" data-plugin="retro">
+    <!-- 左：周报卡片列表 -->
+    <aside class="retro__list">
+      <header class="retro__list-head">
+        <h2 class="retro__title">{{ tr('plugin.retro.title') }}</h2>
+        <span v-if="props.version" class="retro__version">v{{ props.version }}</span>
+        <button class="retro__refresh" type="button" :disabled="loading" @click="refresh">
+          {{ tr('plugin.retro.refresh') }}
+        </button>
+      </header>
+
+      <p v-if="cards.length" class="retro__count" data-role="retro-count">
+        {{ tr('plugin.retro.count', { n: cards.length }) }}
+      </p>
+
+      <p v-if="loading" class="retro__hint">{{ tr('plugin.retro.loading') }}</p>
+
+      <!-- 读不出来：逐条列出（不静默） -->
+      <p v-if="loadFailure" class="retro__failure" data-role="retro-load-failure">
+        {{ tr('plugin.retro.loadFailed') }}：{{ loadFailure.message }}
+        <span v-if="loadFailure.hint" class="retro__failure-hint">{{ loadFailure.hint }}</span>
+      </p>
+
+      <!-- 空态：给出放包目录（用户得知道包该放哪儿） -->
+      <div v-if="!loading && !cards.length && !loadFailure" class="retro__empty" data-role="retro-empty">
+        <p class="retro__empty-title">{{ tr('plugin.retro.empty') }}</p>
+        <p class="retro__empty-hint">{{ tr('plugin.retro.emptyHint', { root }) }}</p>
+      </div>
+
+      <ul v-if="cards.length" class="retro__cards">
+        <li v-for="card in cards" :key="card.period">
+          <button
+            class="retro__card"
+            :class="{ 'retro__card--active': card.period === selected }"
+            type="button"
+            :data-period="card.period"
+            @click="open(card)"
+          >
+            <span class="retro__card-title">{{ card.title }}</span>
+            <span class="retro__card-meta">
+              <code class="retro__period">{{ card.period }}</code>
+              <span class="retro__range">{{ rangeText(card) }}</span>
+            </span>
+            <span v-if="card.tags.length" class="retro__tags">
+              <span v-for="tag in card.tags" :key="tag" class="retro__tag">{{ tag }}</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+
+      <!-- 坏包逐条（放在列表下方，不占正文位置） -->
+      <details v-if="problems.length" class="retro__problems" data-role="retro-problems">
+        <summary>{{ tr('plugin.retro.problems', { n: problems.length }) }}</summary>
+        <ul>
+          <li v-for="(problem, index) in problems" :key="`${problem.period}-${index}`">
+            <code class="retro__period">{{ problem.period }}</code>
+            <span class="retro__problem-text">{{ problem.message }}</span>
+          </li>
+        </ul>
+      </details>
+    </aside>
+
+    <!-- 右：正文 -->
+    <div class="retro__body">
+      <p v-if="!selected" class="retro__hint retro__hint--center" data-role="retro-pick">
+        {{ tr('plugin.retro.pickOne') }}
+      </p>
+      <template v-else>
+        <header class="retro__body-head">
+          <h3 class="retro__body-title">{{ selectedCard?.title ?? selected }}</h3>
+          <p class="retro__body-meta">
+            <code class="retro__period">{{ selected }}</code>
+            <span v-if="selectedCard" class="retro__range">{{ rangeText(selectedCard) }}</span>
+            <span v-if="reportBytes" class="retro__bytes">{{ reportBytes }} B</span>
+          </p>
+        </header>
+        <p v-if="reportLoading" class="retro__hint">{{ tr('plugin.retro.loading') }}</p>
+        <p v-else-if="reportFailure" class="retro__failure" data-role="retro-report-failure">
+          {{ tr('plugin.retro.reportFailed') }}：{{ reportFailure.message }}
+          <span v-if="reportFailure.hint" class="retro__failure-hint">{{ reportFailure.hint }}</span>
+        </p>
+        <div v-else-if="document" class="retro__document" data-role="retro-document">
+          <BlockDocument :document="document" />
+        </div>
+      </template>
+    </div>
   </section>
 </template>
 
 <style scoped>
-.plugin-view {
+/* 只用设计令牌（本侧铁律：不写裸值，令牌棘轮会判红）。 */
+.retro {
   display: flex;
-  flex-direction: column;
-  gap: var(--ds-spacing-s);
-  padding: var(--ds-spacing-m);
   height: 100%;
   color: var(--ds-color-text-primary);
 }
-.plugin-view__head {
+.retro__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-s);
+  width: var(--ds-metric-sidebar-width);
+  padding: var(--ds-spacing-m);
+  background: var(--ds-color-surface-sidebar);
+  border-right: var(--ds-hairline) solid var(--ds-color-hairline-light);
+  overflow-y: auto;
+}
+.retro__list-head {
   display: flex;
   align-items: baseline;
   gap: var(--ds-spacing-s);
 }
-.plugin-view__title {
+.retro__title {
   font-size: var(--ds-font-title-size);
   font-weight: 600;
 }
-.plugin-view__version {
+.retro__version {
   color: var(--ds-color-text-tertiary);
   font-size: var(--ds-font-caption-size);
 }
-.plugin-view__hint {
+.retro__refresh {
+  margin-left: auto;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border: var(--ds-hairline) solid var(--ds-color-hairline-light);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-panel);
+  color: var(--ds-color-text-secondary);
+  font: inherit;
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
+}
+.retro__refresh:disabled {
+  color: var(--ds-color-text-disabled);
+  cursor: default;
+}
+.retro__count {
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+}
+.retro__hint {
   color: var(--ds-color-text-secondary);
   font-size: var(--ds-font-body-size);
+}
+.retro__hint--center {
+  margin: auto;
+}
+.retro__empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+  padding: var(--ds-spacing-s);
+  border: var(--ds-hairline) dashed var(--ds-color-hairline-light);
+  border-radius: var(--ds-radius-card);
+}
+.retro__empty-title {
+  font-size: var(--ds-font-body-size);
+}
+.retro__empty-hint {
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  word-break: break-all;
+}
+.retro__cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+  list-style: none;
+}
+.retro__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+  width: 100%;
+  padding: var(--ds-spacing-s);
+  border: var(--ds-hairline) solid transparent;
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-color-surface-panel);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.retro__card:hover {
+  border-color: var(--ds-color-hairline-light);
+}
+.retro__card--active {
+  border-color: var(--ds-color-accent-accent);
+  background: var(--ds-color-surface-raised);
+}
+.retro__card-title {
+  font-size: var(--ds-font-body-size);
+  font-weight: 600;
+}
+.retro__card-meta {
+  display: flex;
+  gap: var(--ds-spacing-s);
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+}
+.retro__period {
+  color: var(--ds-color-text-secondary);
+  font-family: var(--ds-font-stack-mono);
+  font-size: var(--ds-font-mono-small-size);
+}
+.retro__range {
+  font-variant-numeric: tabular-nums;
+}
+.retro__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-spacing-hair);
+}
+.retro__tag {
+  padding: 0 var(--ds-spacing-xs);
+  border-radius: var(--ds-radius-badge);
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-accent-teal);
+  font-size: var(--ds-font-caption-size);
+}
+.retro__problems {
+  margin-top: auto;
+  color: var(--ds-color-status-warning);
+  font-size: var(--ds-font-caption-size);
+}
+.retro__problems ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+  margin-top: var(--ds-spacing-xs);
+  list-style: none;
+}
+.retro__problems li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+}
+.retro__problem-text {
+  color: var(--ds-color-status-danger);
+}
+.retro__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--ds-spacing-s);
+  padding: var(--ds-spacing-m);
+  overflow-y: auto;
+}
+.retro__body-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+  padding-bottom: var(--ds-spacing-s);
+  border-bottom: var(--ds-hairline) solid var(--ds-color-hairline-light);
+}
+.retro__body-title {
+  font-size: var(--ds-font-title-size);
+  font-weight: 600;
+}
+.retro__body-meta {
+  display: flex;
+  gap: var(--ds-spacing-s);
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+}
+.retro__bytes {
+  font-variant-numeric: tabular-nums;
+}
+.retro__failure {
+  padding: var(--ds-spacing-s);
+  border: var(--ds-hairline) solid var(--ds-color-status-danger);
+  border-radius: var(--ds-radius-card);
+  color: var(--ds-color-status-danger);
+  font-size: var(--ds-font-caption-size);
+}
+.retro__failure-hint {
+  display: block;
+  margin-top: var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+}
+.retro__document {
+  flex: 1;
 }
 </style>
