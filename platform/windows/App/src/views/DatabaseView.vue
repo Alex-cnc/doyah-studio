@@ -90,12 +90,14 @@ import {
   type ColumnsByTable,
 } from './objectTree'
 import {executionTarget,
+  applyCompletionItem,
   filterCompletions,
   highlightPieces,
   keywordCompletions,
   objectCompletions,
   outcomeSummary,
   pickDisplayedOutcome,
+  snippetCompletions,
   wordBeforeCaret,
   type CompletionItem,
 } from '../sql/editor'
@@ -1572,21 +1574,29 @@ async function refreshCompletions() {
     completions.value = []
     return
   }
-  const items = [...keywordCompletions(), ...objectCompletions(loadedObjects.value)]
+  const items = [
+    ...keywordCompletions(),
+    ...snippetCompletions(),
+    ...objectCompletions(loadedObjects.value),
+  ]
   completions.value = filterCompletions(items, word)
   completionIndex.value = 0
 }
 
-/** Tab / 回车接受当前候选：把光标前那个词换成候选文本。 */
+/**
+ * Tab / 回车接受当前候选：把光标前那个词换成候选内容。
+ *
+ * 片段候选（`sel` / `ins` / `upd` / `del`）插入的是**展开后的模板**，光标落在模板里的 `$0`
+ * —— 落笔逻辑在纯函数 `applyCompletionItem`（那里有行为单测），这里只负责摆光标与刷新。
+ */
 function acceptCompletion(item?: CompletionItem) {
   const chosen = item ?? completions.value[completionIndex.value]
   const area = sqlArea.value
   if (!chosen || !area) return
   const caret = area.selectionStart ?? sql.value.length
-  const word = wordBeforeCaret(sql.value, caret)
-  sql.value = sql.value.slice(0, caret - word.length) + chosen.text + sql.value.slice(caret)
+  const result = applyCompletionItem(sql.value, caret, chosen)
   completions.value = []
-  void refreshHighlight()
+  void applyEdit({ text: result.text, selection: { start: result.caret, end: result.caret } })
 }
 
 // ── 编辑键（B1 接线 · 第一批 6 条）：注释切换 / 移行 / 复制行 / 回车缩进 / Tab 缩进 / 自动配对 ──

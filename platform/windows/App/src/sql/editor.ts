@@ -4,15 +4,21 @@
 // 塞进 .vue 里就只能靠人眼看。这里只放"给什么输入、出什么结果"，不碰 DOM、不调 IPC。
 
 import type { SqlToken } from '../ipc'
+import { expandSnippet } from '../workspace/assist'
 
 /** 补全候选项。 */
 export interface CompletionItem {
-  /** 插入文本 */
+  /** 插入文本（片段候选时 = 触发词，真正插入的是 `snippet` 展开结果） */
   text: string
-  /** 分类（界面用来分组 / 显示依据：关键字 / 对象 / 列） */
-  kind: 'keyword' | 'object' | 'column' | 'schema'
+  /** 分类（界面用来分组 / 显示依据：关键字 / 对象 / 列 / 片段） */
+  kind: 'keyword' | 'object' | 'column' | 'schema' | 'snippet'
   /** 显示用的说明（例如对象来自哪个 schema） */
   detail: string
+  /**
+   * FR-EDIT-59 片段模板（只有 `kind === 'snippet'` 才有）。
+   * 语法与 `workspace/assist.ts::expandSnippet` 同源：`${n:默认值}` 占位、`$0` 最终光标。
+   */
+  snippet?: string
 }
 
 /** 光标处正在输入的"词"（用于补全过滤）：从光标往前取连续的标识符字符。 */
@@ -65,6 +71,54 @@ export function keywordCompletions(): CompletionItem[] {
   return COMPLETION_KEYWORDS.map((text) => ({ text, kind: 'keyword' as const, detail: '关键字' }))
 }
 
+// ── FR-EDIT-59 片段（结构补全）：触发词短、骨架长 ────────────────────────────────────
+//
+// 口径：① 触发词是**小写短词**（`sel` / `ins` / `upd` / `del`），因为它要在候选里跟关键字一起被前缀过滤命中；
+// ② 模板里的占位一律给**可读默认值**（`${1:table}`），展开后用户能直接改，而不是看到一堆 `$1`；
+// ③ `$0` 只有一个（最终光标），没有就落在插入文本末尾 —— 这条由 `assist.expandSnippet` 保证。
+//
+// 为什么四个而不是几十个：片段表是**用户要背的东西**，多了等于没有（主人明确「没用过的功能别照搬」）。
+export const COMPLETION_SNIPPETS: { trigger: string; body: string; detail: string }[] = [
+  { trigger: 'sel', body: 'SELECT ${1:*}\nFROM ${2:table}\nWHERE ${3:cond}$0', detail: '片段 · 查询骨架' },
+  { trigger: 'ins', body: 'INSERT INTO ${1:table} (${2:col})\nVALUES (${3:value})$0', detail: '片段 · 插入' },
+  { trigger: 'upd', body: 'UPDATE ${1:table}\nSET ${2:col} = ${3:value}\nWHERE ${4:cond}$0', detail: '片段 · 更新' },
+  { trigger: 'del', body: 'DELETE FROM ${1:table}\nWHERE ${2:cond}$0', detail: '片段 · 删除' },
+]
+
+/** 片段候选（插入时展开模板）。 */
+export function snippetCompletions(): CompletionItem[] {
+  return COMPLETION_SNIPPETS.map((entry) => ({
+    text: entry.trigger,
+    kind: 'snippet' as const,
+    detail: entry.detail,
+    snippet: entry.body,
+  }))
+}
+
+/**
+ * 接受一个候选：把光标前那个词换成候选内容，光标落在该落的地方。
+ *
+ * 两种候选走同一条落笔逻辑，只是「插什么、光标放哪」不同：
+ * · 普通候选 ⇒ 插 `text`，光标在插入文本之后；
+ * · 片段候选 ⇒ 先 `expandSnippet` 展开（`${n:默认}` 取默认值、`$0` 决定光标），再插。
+ *
+ * 单独抽成纯函数的原因：落笔逻辑（替换哪个区间、光标摆哪）是**最容易在 .vue 里写错**的一段，
+ * 而它完全可以单测 —— 片段插进去后光标差一格，用户每次都要手动挪，这种错不该靠肉眼发现。
+ */
+export function applyCompletionItem(
+  text: string,
+  caret: number,
+  item: CompletionItem,
+): { text: string; caret: number } {
+  const at = Math.min(Math.max(caret, 0), text.length)
+  const word = wordBeforeCaret(text, at)
+  const start = at - word.length
+  const inserted = item.snippet
+    ? expandSnippet(item.snippet)
+    : { text: item.text, caret: item.text.length }
+  return { text: text.slice(0, start) + inserted.text + text.slice(at), caret: start + inserted.caret }
+}
+
 /**
  * 把已加载的对象变成候选。
  *
@@ -96,6 +150,10 @@ export interface HighlightPiece {
  * ② 单元位置越界或乱序时**不崩**：按可信的部分渲染，剩下的当普通文本 —— 编辑器不能因为
  *    一次分词异常就白屏（我正在打字时尤其如此）；
  * ③ 空输入给空片段。
+ *
+ * 偏移口径：`tokens[].start/end` 是 **JS 字符串下标（UTF-16 码元）** —— 领域层
+ * `sql::tokenize` 给字节偏移，IPC 边界（`highlight_sql`）已按 `Db/src/text_index.rs` 换算过。
+ * 别在这里再折算一次：汉字 3 字节 / 1 码元，重复折算会把中文 SQL 切碎。
  */
 export function highlightPieces(sql: string, tokens: SqlToken[]): HighlightPiece[] {
   const out: HighlightPiece[] = []

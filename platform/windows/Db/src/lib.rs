@@ -36,6 +36,7 @@ pub mod save_guard;
 pub mod search;
 pub mod sql;
 pub mod staleness;
+pub mod text_index;
 pub mod title_bar_search;
 pub mod tree;
 pub mod terminal;

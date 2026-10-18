@@ -560,16 +560,34 @@ fn explain_statement(sql: String, analyze: Option<bool>) -> Result<String, DbFai
 ///
 /// 为什么分词在 Rust 侧：高亮的"什么算字符串 / 什么算注释"必须与执行时切分**同一套规则**，
 /// 两边各写一套必然漂移（前端字符串里一个 `--` 就能让高亮与执行对不上）。
+///
+/// **偏移在边界换成 JS 下标**（UTF-16 码元）：领域层 `sql::tokenize` 给的是字节偏移，前端
+/// `slice` 按码元切 —— 纯 ASCII 时两者相等，所以这个错长期没露头；SQL 里一有中文注释 /
+/// 中文字符串，字节口径就比前端多算（汉字 3 字节 / 1 码元），整段颜色错位。
+/// 换算法见 `Db/src/text_index.rs`，前端不再自带换算逻辑。
 #[tauri::command]
 fn highlight_sql(sql: String) -> Vec<doyah_studio_db::sql::Token> {
-    doyah_studio_db::sql::tokenize(&sql)
+    let mut tokens = doyah_studio_db::sql::tokenize(&sql);
+    let map = doyah_studio_db::text_index::byte_to_utf16_map(&sql);
+    for token in &mut tokens {
+        token.start = doyah_studio_db::text_index::byte_to_utf16(&map, token.start);
+        token.end = doyah_studio_db::text_index::byte_to_utf16(&map, token.end);
+    }
+    tokens
 }
 
 /// FR-EDIT-03 / FR-EDIT-56 静态检查：诊断只在领域层判一遍（`Db/src/lint.rs`），界面只负责画。
-/// 偏移是**字符下标**（前端直接 `slice`），不是字节 —— 含中文注释的 SQL 才不会错位。
+/// 偏移同样是**可直接 `slice` 的 JS 下标** —— 检查器内部按码点算，这里换成 UTF-16 码元，
+/// 于是「表情 + 中文」的 SQL 里下划线也不会偏一格。
 #[tauri::command]
 fn diagnose_sql(sql: String) -> Vec<doyah_studio_db::lint::Diagnostic> {
-    doyah_studio_db::lint::diagnose(&sql)
+    let mut diagnostics = doyah_studio_db::lint::diagnose(&sql);
+    let map = doyah_studio_db::text_index::char_to_utf16_map(&sql);
+    for diagnostic in &mut diagnostics {
+        diagnostic.start = doyah_studio_db::text_index::char_to_utf16(&map, diagnostic.start);
+        diagnostic.end = doyah_studio_db::text_index::char_to_utf16(&map, diagnostic.end);
+    }
+    diagnostics
 }
 
 // ── 写回与事务（1.4：一批一次事务 / 主键定位 / 只读拦截 / 危险语句确认）──────────────────

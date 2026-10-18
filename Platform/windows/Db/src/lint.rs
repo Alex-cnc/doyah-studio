@@ -9,9 +9,10 @@
 //!   ④ 括号不配平（多余右括号 / 左括号没闭合 / 配对种类不一致）。
 //!
 //! 三条口径：
-//!   · **偏移是字符下标（0 基）**，不是字节 —— 前端 `String.prototype.slice` 按 UTF-16 单元切；
-//!     本仓既有的 `highlight_sql` 用的是字节口径，含中文注释后会错位（那条隐患不在本模块复制，
-//!     已登记在运行日志里）。用例 `a_chinese_comment_before_the_problem_does_not_shift_the_mark` 守这条。
+//!   · **偏移是码点下标（0 基）**，本模块内部按 `char` 算；IPC 边界（`diagnose_sql`）再用
+//!     `text_index::char_to_utf16_map` 换成 **UTF-16 码元**（= JS 字符串下标），前端直接 `slice`。
+//!     高亮分词（`highlight_sql`）现在走同一条换算（字节 → 码元），两条命令的偏移口径已统一。
+//!     用例 `a_chinese_comment_before_the_problem_does_not_shift_the_mark` 守这条。
 //!   · 范围 `[start, end)`；`end == start` 的空区间不产出（没有可画的位置）。
 //!   · 消息是**给人看的一句中文**（正文说明不跟界面语言走，与既有服务端提示同口径）。
 

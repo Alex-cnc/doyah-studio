@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyCompletionItem,
   executionTarget,
   filterCompletions,
   highlightPieces,
@@ -7,6 +8,7 @@ import {
   objectCompletions,
   outcomeSummary,
   pickDisplayedOutcome,
+  snippetCompletions,
   wordBeforeCaret,
   type CompletionItem,
 } from './editor'
@@ -158,5 +160,92 @@ describe('FR-EXEC-14 执行目标判定', () => {
     const withIndent = '    SELECT 1;'
     const r = executionTarget('x', withIndent)
     expect(r.sql).toBe(withIndent)
+  })
+})
+
+// ── 高亮偏移口径（2026-10-18 修的真实缺陷）：JS 下标是 UTF-16 码元，不是字节 ──────────────
+describe('高亮偏移口径 = JS 字符串下标（UTF-16 码元）', () => {
+  const sql = "select 1 -- 中文注释\nselect '😀' from t"
+  /** JS 下标（`String.indexOf` / `length` 就是码元口径）。 */
+  const jsTokens = (): SqlToken[] => {
+    const comment = sql.indexOf('-- 中文注释')
+    const emojiString = sql.indexOf("'😀'")
+    const from = sql.indexOf('from')
+    return [
+      { kind: 'keyword', start: 0, end: 6 },
+      { kind: 'number', start: 7, end: 8 },
+      { kind: 'line_comment', start: comment, end: comment + '-- 中文注释'.length },
+      { kind: 'string', start: emojiString, end: emojiString + "'😀'".length },
+      { kind: 'keyword', start: from, end: from + 4 },
+    ]
+  }
+
+  it('中文注释 + 表情之后的关键字仍被单独切出来（片段的文字就是原文那一段）', () => {
+    const pieces = highlightPieces(sql, jsTokens())
+    expect(pieces.map((p) => p.text).join('')).toBe(sql)
+    expect(pieces).toContainEqual({ text: 'from', kind: 'keyword' })
+    expect(pieces).toContainEqual({ text: '-- 中文注释', kind: 'line_comment' })
+    expect(pieces).toContainEqual({ text: "'😀'", kind: 'string' })
+  })
+
+  it('给字节偏移会切歪（这就是被修掉的缺陷，不许回退）', () => {
+    const encoder = new TextEncoder()
+    const byteAt = (index: number): number => encoder.encode(sql.slice(0, index)).length
+    const byteTokens = jsTokens().map((token) => ({
+      ...token,
+      start: byteAt(token.start),
+      end: byteAt(token.end),
+    }))
+    const pieces = highlightPieces(sql, byteTokens)
+    expect(pieces.some((p) => p.text === 'from' && p.kind === 'keyword')).toBe(false)
+  })
+})
+
+// ── FR-EDIT-59 片段：补全清单里的一类候选，接受后展开模板 ──────────────────────────────
+describe('片段补全（FR-EDIT-59）', () => {
+  it('片段表有 4 个触发词，模板都带一个 $0（最终光标）', () => {
+    const items = snippetCompletions()
+    expect(items.map((i) => i.text)).toEqual(['sel', 'ins', 'upd', 'del'])
+    for (const item of items) {
+      expect(item.kind, item.text).toBe('snippet')
+      expect(item.snippet, item.text).toContain('$0')
+      // 说明要能让人看懂这是片段（界面直接显示 detail）
+      expect(item.detail, item.text).toContain('片段')
+    }
+  })
+
+  it('片段候选与关键字同列：前缀 se 既能命中 SELECT 也能命中 sel', () => {
+    const items = filterCompletions([...keywordCompletions(), ...snippetCompletions()], 'se')
+    expect(items.some((i) => i.text === 'SELECT' && i.kind === 'keyword')).toBe(true)
+    expect(items.some((i) => i.text === 'sel' && i.kind === 'snippet')).toBe(true)
+  })
+
+  it('接受片段 ⇒ 插入展开后的骨架、占位换成默认值、光标落在 $0', () => {
+    const sel = snippetCompletions().find((i) => i.text === 'sel')!
+    const result = applyCompletionItem('sel', 3, sel)
+    expect(result.text).toBe('SELECT *\nFROM table\nWHERE cond')
+    expect(result.text).not.toContain('${')
+    expect(result.caret).toBe(result.text.length)
+  })
+
+  it('$0 在中间时光标落在那里，不是文末', () => {
+    const item: CompletionItem = { text: 'x', kind: 'snippet', detail: '片段 · 试', snippet: 'SELECT $0 FROM t' }
+    const result = applyCompletionItem('x', 1, item)
+    expect(result.text).toBe('SELECT  FROM t')
+    expect(result.caret).toBe(7)
+  })
+
+  it('普通候选仍走老口径：替换光标前的词、光标在插入文本之后', () => {
+    const item: CompletionItem = { text: 'SELECT', kind: 'keyword', detail: '关键字' }
+    const result = applyCompletionItem('sel from', 3, item)
+    expect(result.text).toBe('SELECT from')
+    expect(result.caret).toBe(6)
+  })
+
+  it('词中间接受候选只替换光标前那个词，右边的文字不动', () => {
+    const item: CompletionItem = { text: 'count', kind: 'keyword', detail: '关键字' }
+    const result = applyCompletionItem('select cou(*) from t', 10, item)
+    expect(result.text).toBe('select count(*) from t')
+    expect(result.caret).toBe(12)
   })
 })
