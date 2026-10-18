@@ -624,6 +624,12 @@ fn archive_write(
     state.archive.write(&date_key, &content)
 }
 
+/// 盘上真的有归档的日子（新的在前）—— 面板的日期切换按这份清单画。
+#[tauri::command]
+fn archive_days(state: State<'_, ShellState>) -> Result<Vec<archive::ArchiveDay>, DbFailure> {
+    state.archive.days()
+}
+
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
 //
 // 四条命令都很薄：**判定在领域层**（`doyah_studio_db::agent_config::evaluate`），本层只做
@@ -2338,6 +2344,7 @@ pub fn run() {
             saved_query_delete,
             archive_read,
             archive_write,
+            archive_days,
             agent_settings_get,
             agent_settings_save,
             agent_key_save,

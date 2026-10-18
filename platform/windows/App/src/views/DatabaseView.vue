@@ -22,6 +22,7 @@ import {
   savedQuerySave,
   archiveRead,
   archiveWrite,
+  archiveDays,
   dbConnect,
   dbDisconnect,
   dbQuery,
@@ -111,6 +112,7 @@ import {
 } from './savedQueries'
 import {
   archiveDate,
+  archiveDayChoices,
   incomingEntry,
   mergeArchiveEntry,
   parseArchive,
@@ -1318,8 +1320,12 @@ function toggleSavedQueryMenu(): void {
 // ③ 把一条回填进编辑器。**失败不归档**：归档记的是「跑成功过的东西」，失败在错误面里说。
 const archiveEntries = ref<ArchiveEntry[]>([])
 const archiveOpen = ref(false)
-/** 今天（本地时区）：归档文件按天分，界面默认看今天这份。 */
+/** **正在看**的那一天（本地时区）；默认今天。 */
 const archiveDay = ref(archiveDate(Date.now()))
+/** **今天**（本地时区）：写入日永远是它 —— 与「正在看哪天」分开（翻到昨天再执行，不能写进昨天）。 */
+const archiveToday = ref(archiveDate(Date.now()))
+/** 盘上真有归档的日子（新的在前）：面板顶部的日期切换按它画。 */
+const archiveDaysOnDisk = ref<string[]>([])
 const archivePathLabel = ref('')
 const archiveBytes = ref(0)
 const archiveNote = ref('')
@@ -1347,7 +1353,10 @@ async function recordArchive(
 ): Promise<void> {
   const usable = statements.filter((item) => item.sql.trim())
   if (!usable.length) return
-  const day = archiveDay.value
+  // **写今天**：`archiveDay` 是「正在看哪天」，可能被用户翻到从前 —— 拿它当写入日会把新语句
+  // 并进历史文件里（第 27 轮的实现就是这个毛病）。日子按写入这一刻算，跨零点也照实算新的一天。
+  const day = archiveDate(Date.now())
+  archiveToday.value = day
   const context = archiveContext()
   archiveError.value = ''
   try {
@@ -1370,20 +1379,34 @@ async function recordArchive(
     }
     if (content !== before) {
       const written = await archiveWrite(day, content)
-      archivePathLabel.value = written.path
-      archiveBytes.value = written.bytes
-    } else {
+      if (archiveDay.value === day) {
+        archivePathLabel.value = written.path
+        archiveBytes.value = written.bytes
+      }
+    } else if (archiveDay.value === day) {
       archivePathLabel.value = file.path
       archiveBytes.value = file.bytes
     }
-    archiveEntries.value = parseArchive(content).slice().reverse()
+    if (archiveDay.value === day) archiveEntries.value = parseArchive(content).slice().reverse()
+    // 今天这份可能刚建出来 ⇒ 日期切换里要冒出「今天」这一格
+    void loadArchiveDays()
     archiveNote.value = capped ? t('archive.full') : t('archive.saved', { runs })
   } catch (error) {
     archiveError.value = t('archive.failed', { reason: describeError(error).message })
   }
 }
 
-/** 读今天这份归档（文件是唯一事实源：展开面板就重读一遍）。 */
+/** 读盘上真有归档的日子（新的在前）。读不出来只清空切换条，**不挡「看今天」**。 */
+async function loadArchiveDays(): Promise<void> {
+  archiveToday.value = archiveDate(Date.now())
+  try {
+    archiveDaysOnDisk.value = (await archiveDays()).map((day) => day.dateKey)
+  } catch {
+    archiveDaysOnDisk.value = []
+  }
+}
+
+/** 读正在看的那一天（文件是唯一事实源：展开面板 / 换日子都重读一遍）。 */
 async function loadArchive(): Promise<void> {
   archiveError.value = ''
   try {
@@ -1396,9 +1419,21 @@ async function loadArchive(): Promise<void> {
   }
 }
 
+/** 换一天看（同一天不重读；换天先清掉上一天的提示）。 */
+function pickArchiveDay(day: string): void {
+  if (day === archiveDay.value) return
+  archiveDay.value = day
+  archiveNote.value = ''
+  archiveError.value = ''
+  void loadArchive()
+}
+
 function toggleArchive(): void {
   archiveOpen.value = !archiveOpen.value
-  if (archiveOpen.value) void loadArchive()
+  if (archiveOpen.value) {
+    void loadArchiveDays()
+    void loadArchive()
+  }
 }
 
 /** 一条归档的读数行：次数 · 最近一次 · 耗时 · 行数（没有的格子不画）。 */
@@ -4264,11 +4299,28 @@ async function probe() {
           </ul>
         </div>
 
-        <!-- 查询自动归档（FR-EDIT-31）：今天跑过的 SQL —— 次数 / 最近 / 耗时 / 行数；
-             点一条回填编辑器。底部把**文件路径与字节数**摊出来（「到底写哪儿了」不该靠猜）。 -->
+        <!-- 查询自动归档（FR-EDIT-31）：跑过的 SQL —— 次数 / 最近 / 耗时 / 行数；点一条回填编辑器。
+             按天一个文件，顶部一排日子切换（今天 + 盘上其它有归档的日子）。
+             底部把**文件路径与字节数**摊出来（「到底写哪儿了」不该靠猜）。 -->
         <div v-if="archiveOpen" class="db__saved-queries" data-testid="archive-panel">
+          <div class="db__archive-days" data-testid="archive-days" role="group" :aria-label="t('archive.daysAria')">
+            <button
+              v-for="day in archiveDayChoices(archiveDaysOnDisk, archiveToday)"
+              :key="day"
+              class="db__btn"
+              :class="{ 'db__btn--primary': day === archiveDay }"
+              type="button"
+              :title="t('archive.dayTip')"
+              :aria-pressed="day === archiveDay ? 'true' : 'false'"
+              data-testid="archive-day"
+              :data-day="day"
+              @click="pickArchiveDay(day)"
+            >
+              {{ day === archiveToday ? `${t('archive.today')} · ${day.slice(5)}` : day.slice(5) }}
+            </button>
+          </div>
           <p v-if="!archiveEntries.length" class="db__saved-empty" data-testid="archive-empty">
-            {{ t('archive.empty', { day: archiveDay }) }}
+            {{ archiveDay === archiveToday ? t('archive.empty', { day: archiveDay }) : t('archive.emptyDay', { day: archiveDay }) }}
           </p>
           <ul v-else class="db__saved-list">
             <li v-for="entry in archiveEntries" :key="`${entry.lastAt}-${entry.title}-${entry.sql.slice(0, 24)}`" class="db__saved-item" data-testid="archive-item">
@@ -5222,6 +5274,14 @@ async function probe() {
 .db__saved-queries {
   flex-direction: column;
   align-items: stretch;
+}
+
+/* 归档日期切换（FR-EDIT-31）：一排小按钮 —— 父容器是 column，这里要自己横过来并允许换行 */
+.db__archive-days {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
 }
 
 .db__save-query-label {

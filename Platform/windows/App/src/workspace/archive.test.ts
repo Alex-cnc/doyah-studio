@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ARCHIVE_MAX_CHARS,
   archiveDate,
+  archiveDayChoices,
   archivePath,
   archiveTime,
   incomingEntry,
@@ -102,5 +103,26 @@ describe('FR-EDIT-31 查询自动归档', () => {
   it('空内容解析成空清单（第一次使用的样子）', () => {
     expect(parseArchive('')).toEqual([])
     expect(parseArchive('\n\n  \n')).toEqual([])
+  })
+})
+
+// 日期切换的口径（面板顶部那排按钮画哪些日子）
+describe('归档日期切换的可选日（archiveDayChoices）', () => {
+  it('今天必须在里面（当天还没执行过语句时盘上还没有这份文件）', () => {
+    expect(archiveDayChoices([], '2026-10-19')).toEqual(['2026-10-19'])
+  })
+
+  it('盘上的日子并进来、新的在前、去重（今天重复出现也只一格）', () => {
+    expect(archiveDayChoices(['2026-10-17', '2026-10-19', '2026-10-18'], '2026-10-19')).toEqual([
+      '2026-10-19',
+      '2026-10-18',
+      '2026-10-17',
+    ])
+  })
+
+  it('非法日期键不出现（手放的 / 别的工具写的文件不该给一个点了就读不出来的按钮）', () => {
+    expect(
+      archiveDayChoices(['2026-13-01', '2026-10-32', '20261018', '2026-10-1', 'notes', ''], '2026-10-19'),
+    ).toEqual(['2026-10-19'])
   })
 })

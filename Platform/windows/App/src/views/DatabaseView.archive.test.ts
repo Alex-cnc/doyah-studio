@@ -47,10 +47,17 @@ vi.mock('../ipc', async (importOriginal) => {
       control.files.set(dateKey, content)
       return { dateKey, path: `queries/${dateKey}.sql`, content, bytes: content.length }
     }),
+    // 日期切换读的那份清单：从种下的文件派生（真实现扫目录，这里扫内存）
+    archiveDays: vi.fn(async () =>
+      [...control.files.keys()]
+        .map((dateKey) => ({ dateKey, bytes: new TextEncoder().encode(control.files.get(dateKey) ?? '').length }))
+        .sort((left, right) => (left.dateKey < right.dateKey ? 1 : left.dateKey > right.dateKey ? -1 : 0)),
+    ),
   }
 })
 
 import DatabaseView from './DatabaseView.vue'
+import { archiveDate } from '../workspace/archive'
 
 async function mountView() {
   const errors: string[] = []
@@ -162,6 +169,57 @@ describe('FR-EDIT-31 查询自动归档（接线）', () => {
     expect(note).toContain('磁盘满了')
     // 结果区还在（执行本身是成功的）
     expect(mounted.wrapper.text()).toContain('total')
+
+    mounted.restore()
+    mounted.wrapper.unmount()
+  })
+
+  it('盘上有前几天：面板给出一排日子，点昨天就列昨天那份（不是今天的）', async () => {
+    const today = archiveDate(Date.now())
+    const yesterday = archiveDate(Date.now() - 24 * 60 * 60 * 1000)
+    control.files.set(
+      yesterday,
+      `-- 08:00:00 ${JSON.stringify({ title: '昨天的对账', runs: 1, first: '08:00:00', last: '08:00:00' })}\nselect 'yesterday';\n\n`,
+    )
+
+    const mounted = await mountView()
+    await mounted.wrapper.find('[data-testid="archive-toggle"]').trigger('click')
+    await flushPromises()
+
+    const days = mounted.wrapper.findAll('[data-testid="archive-day"]')
+    expect(days.map((node) => node.attributes('data-day'))).toEqual([today, yesterday])
+    // 默认看今天：今天盘上还没有文件 ⇒ 如实说今天没有（而不是把昨天的条目端上来）
+    expect(textAt(mounted.wrapper, 'archive-empty')).toContain(today)
+
+    await days[1].trigger('click')
+    await flushPromises()
+
+    expect(mounted.wrapper.findAll('[data-testid="archive-item"]')).toHaveLength(1)
+    expect(mounted.wrapper.text()).toContain('昨天的对账')
+    expect(textAt(mounted.wrapper, 'archive-file')).toContain(yesterday)
+
+    mounted.restore()
+    mounted.wrapper.unmount()
+  })
+
+  it('翻到昨天再执行语句：新 SQL 写进今天那份，昨天那份一个字节不动（查看日 ≠ 写入日）', async () => {
+    const today = archiveDate(Date.now())
+    const yesterday = archiveDate(Date.now() - 24 * 60 * 60 * 1000)
+    const yesterdayContent = `-- 08:00:00 ${JSON.stringify({ title: '昨天的对账', runs: 1, first: '08:00:00', last: '08:00:00' })}\nselect 'yesterday';\n\n`
+    control.files.set(yesterday, yesterdayContent)
+
+    const mounted = await mountView()
+    await mounted.wrapper.find('[data-testid="archive-toggle"]').trigger('click')
+    await flushPromises()
+    await mounted.wrapper.findAll('[data-testid="archive-day"]')[1].trigger('click')
+    await flushPromises()
+
+    await runSql(mounted.wrapper, 'select 9 as total;')
+
+    expect(control.writes).toHaveLength(1)
+    expect(control.writes[0].dateKey).toBe(today)
+    expect(control.files.get(yesterday)).toBe(yesterdayContent)
+    expect(control.files.get(today) ?? '').toContain('select 9 as total;')
 
     mounted.restore()
     mounted.wrapper.unmount()

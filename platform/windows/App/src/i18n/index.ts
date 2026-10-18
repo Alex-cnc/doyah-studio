@@ -803,10 +803,14 @@ export const DICT = {
   // 查询自动归档（FR-EDIT-31：执行过的 SQL 按天落盘；同一条只累计次数）
   'archive.button': { 'zh-Hans': '归档', en: 'Archive' },
   'archive.listTip': {
-    'zh-Hans': '今天执行过的 SQL（按天落在 DoyahStudio\\queries\\ 下）',
-    en: 'SQL executed today (one file per day under DoyahStudio\\queries\\)',
+    'zh-Hans': '执行过的 SQL（按天落在 DoyahStudio\\queries\\ 下，可翻看前几天）',
+    en: 'Executed SQL (one file per day under DoyahStudio\\queries\\ — earlier days can be browsed)',
   },
+  'archive.daysAria': { 'zh-Hans': '归档日期', en: 'Archive days' },
+  'archive.today': { 'zh-Hans': '今天', en: 'Today' },
+  'archive.dayTip': { 'zh-Hans': '看这一天的归档（一天一份文件）', en: "Show this day's archive (one file per day)" },
   'archive.empty': { 'zh-Hans': '今天（{day}）还没有归档：执行一条查询就会自动记下来', en: 'Nothing archived for {day} yet — running a query records it automatically' },
+  'archive.emptyDay': { 'zh-Hans': '{day} 这一天没有归档', en: 'Nothing was archived on {day}' },
   'archive.untitled': { 'zh-Hans': '未命名页签', en: 'Untitled tab' },
   'archive.runs': { 'zh-Hans': '执行 {runs} 次', en: 'ran {runs}×' },
   'archive.elapsed': { 'zh-Hans': '{ms} 毫秒', en: '{ms} ms' },

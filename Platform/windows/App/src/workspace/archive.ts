@@ -60,6 +60,28 @@ export function archivePath(epochMs: number): string {
   return `${ARCHIVE_DIR}/${archiveDate(epochMs)}.sql`
 }
 
+/**
+ * 日期键口径（与外壳 `is_date_key` 同一条）：`YYYY-MM-DD`，月 01~12、日 01~31。
+ *
+ * 为什么不查闰年：差一天不可能拼出别的路径，而「路径安全」才是这条校验的目的。
+ */
+const DAY_KEY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
+
+/**
+ * 面板上可选的日期（**新的在前**）= 盘上真有归档的日子 ∪ 今天。
+ *
+ * ① **今天必须在里面**：当天还没执行过语句时盘上还没有这份文件，但用户仍要能点「今天」；
+ * ② 非法键（手放的文件 / 别的工具写的）一律不出现 —— 点了只会得到一句「读不出来」；
+ * ③ 排序按日期键字符串降序（`YYYY-MM-DD` 定长，字典序就是时间序）。
+ */
+export function archiveDayChoices(onDisk: string[], today: string): string[] {
+  const seen = new Set<string>([today])
+  for (const key of onDisk) {
+    if (DAY_KEY.test(key)) seen.add(key)
+  }
+  return [...seen].sort((left, right) => (left < right ? 1 : left > right ? -1 : 0))
+}
+
 /** 条目头：`-- 09:05:07 {"title":"查询 1","runs":1,…}`（单行；JSON 里不会有换行）。 */
 const HEADER = /^-- (\d{2}:\d{2}:\d{2}) (\{.*\})\s*$/
 

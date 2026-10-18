@@ -105,6 +105,7 @@ export const COMMANDS = {
   // 查询自动归档（FR-EDIT-31：执行过的 SQL 按天落盘；格式与合并规则在 `workspace/archive.ts`）
   archiveRead: 'archive_read',
   archiveWrite: 'archive_write',
+  archiveDays: 'archive_days',
   // 智能体设置（FR-AI-01：总开关 / 端点 / 模型 / 配额；密钥单独存，永不回显）
   agentSettingsGet: 'agent_settings_get',
   agentSettingsSave: 'agent_settings_save',
@@ -661,6 +662,23 @@ export function archiveWrite(dateKey: string, content: string): Promise<ArchiveF
     bypassArchive.set(dateKey, content)
     return bypassArchiveFile(dateKey, content)
   })
+}
+
+/** 盘上一天归档的读数（日期切换用）。 */
+export interface ArchiveDay {
+  /** 日期键 `YYYY-MM-DD`。 */
+  dateKey: string
+  /** 文件字节数（UTF-8）。 */
+  bytes: number
+}
+
+/** 盘上真的有归档的日子（新的在前）；目录还不存在时是空清单。 */
+export function archiveDays(): Promise<ArchiveDay[]> {
+  return call(COMMANDS.archiveDays, {}, () =>
+    [...bypassArchive.entries()]
+      .map(([dateKey, content]) => ({ dateKey, bytes: new TextEncoder().encode(content).length }))
+      .sort((left, right) => (left.dateKey < right.dateKey ? 1 : left.dateKey > right.dateKey ? -1 : 0)),
+  )
 }
 
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────

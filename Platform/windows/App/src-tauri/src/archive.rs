@@ -28,6 +28,16 @@ pub struct ArchiveFile {
     pub bytes: usize,
 }
 
+/// 盘上一天归档的读数（日期键 + 字节数）—— 面板的日期切换就按这份清单画。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveDay {
+    /// 日期键（`YYYY-MM-DD`）。
+    pub date_key: String,
+    /// 该文件的字节数（UTF-8；界面的「多大」读数）。
+    pub bytes: usize,
+}
+
 /// 归档目录 + 按天取文件。
 pub struct ArchiveStore {
     /// 归档根目录（`...\DoyahStudio\queries`）。
@@ -80,6 +90,47 @@ impl ArchiveStore {
             bytes: content.len(),
             content,
         })
+    }
+
+    /// 盘上**真的有归档**的日子（新的在前）。
+    ///
+    /// 只认 `<YYYY-MM-DD>.sql` 且日期键过校验 —— 归档目录里别的文件（用户手放的、别的工具写的）
+    /// 不算归档，也不该出现在界面上（点了只会得到一个「读不出来」）。
+    /// 目录还不存在 ⇒ 空清单（第一次使用不是错误）。
+    pub fn days(&self) -> Result<Vec<ArchiveDay>, DbFailure> {
+        let entries = match std::fs::read_dir(&self.root) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => {
+                return Err(DbFailure {
+                    message: format!("读归档目录失败：{error}（{}）", self.root.display()),
+                    hint: "确认该目录可读；它只是文本归档，删掉只丢历史记录。".to_string(),
+                })
+            }
+        };
+        let mut days = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            let Some(date_key) = name.strip_suffix(".sql") else {
+                continue;
+            };
+            if !is_date_key(date_key) {
+                continue;
+            }
+            let bytes = entry.metadata().map(|meta| meta.len() as usize).unwrap_or(0);
+            days.push(ArchiveDay {
+                date_key: date_key.to_string(),
+                bytes,
+            });
+        }
+        days.sort_by(|left, right| right.date_key.cmp(&left.date_key));
+        Ok(days)
     }
 
     /// 写一天的内容（**整份覆盖**：文件就是唯一事实源，不做增量追加）。
@@ -175,6 +226,26 @@ mod tests {
         store.write("2026-10-18", "新的一天\n").unwrap();
         assert_eq!(store.read("2026-10-17").unwrap().content, "旧的一天\n");
         assert_eq!(store.read("2026-10-18").unwrap().content, "新的一天\n");
+    }
+
+    #[test]
+    fn days_lists_only_real_archive_files_newest_first() {
+        let store = tmp_store("days");
+        assert!(store.days().unwrap().is_empty(), "目录还不存在时应当是空清单");
+
+        store.write("2026-10-17", "旧的一天\n").unwrap();
+        store.write("2026-10-19", "新的一天\n").unwrap();
+        // 诱饵：日期键非法、后缀不对、压根不是归档 —— 一个都不许出现在日期切换里
+        std::fs::write(store.root.join("2026-13-01.sql"), "x").unwrap();
+        std::fs::write(store.root.join("2026-10-18.sql.bak"), "x").unwrap();
+        std::fs::write(store.root.join("notes.txt"), "x").unwrap();
+        std::fs::create_dir_all(store.root.join("2026-10-16.sql")).unwrap();
+
+        let days = store.days().unwrap();
+        let keys: Vec<&str> = days.iter().map(|day| day.date_key.as_str()).collect();
+        assert_eq!(keys, vec!["2026-10-19", "2026-10-17"]);
+        assert_eq!(days[0].bytes, "新的一天\n".len());
+        assert_eq!(days[1].bytes, "旧的一天\n".len());
     }
 
     #[test]
