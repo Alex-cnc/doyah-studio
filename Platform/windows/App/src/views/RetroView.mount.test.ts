@@ -22,6 +22,8 @@ const state: {
   assetCalls: Array<[string, string]>
   reportFailures: Record<string, { message: string; hint: string }>
   reportCalls: string[]
+  openCalls: string[]
+  openFailures: Record<string, { message: string; hint: string }>
 } = {
   snapshot: { root: 'C:\\Users\\Alex\\AppData\\Roaming\\DoyahStudio\\retro\\packages', cards: [], problems: [] },
   snapshotFailure: null,
@@ -31,6 +33,8 @@ const state: {
   assetCalls: [],
   reportFailures: {},
   reportCalls: [],
+  openCalls: [],
+  openFailures: {},
 }
 
 vi.mock('../ipc', () => ({
@@ -50,6 +54,12 @@ vi.mock('../ipc', () => ({
     state.assetCalls.push([period, target])
     if (state.assetFailures.includes(target)) throw { message: `包里没有这个媒体：${target}`, hint: '' }
     return new ArrayBuffer(8)
+  }),
+  openExternal: vi.fn(async (url: string) => {
+    state.openCalls.push(url)
+    const failure = state.openFailures[url]
+    if (failure) throw failure
+    return { program: 'rundll32.exe', args: ['url.dll,FileProtocolHandler', url], scheme: url.startsWith('https') ? 'https' : 'http' }
   }),
 }))
 
@@ -104,6 +114,8 @@ beforeEach(() => {
   state.assetCalls = []
   state.reportFailures = {}
   state.reportCalls = []
+  state.openCalls = []
+  state.openFailures = {}
   // happy-dom 没实现 blob URL：给一个确定性的替身（判据只关心「挂上了没有」）
   let counter = 0
   Object.assign(URL, {
@@ -282,6 +294,95 @@ describe('RetroView 周报阅读面', () => {
     // 关掉
     await wrapper.get('.retro__zoom-close').trigger('click')
     expect(wrapper.find('[data-role="retro-zoom"]').exists()).toBe(false)
+  })
+
+  // ── 外链交给系统默认处理 + 媒体汇总（FR-R-13-09 ②③④）─────────────────────────
+
+  it('an_external_media_offers_a_click_that_hands_it_to_the_system_instead_of_loading_it', async () => {
+    const url = 'https://example.com/clip.mp4'
+    state.snapshot.cards = [card('2026-W42', '外链视频')]
+    state.reports['2026-W42'] = mediaDocument('video', '外部录屏', url)
+    state.reportMedia['2026-W42'] = [mediaSlot(url, 'external', { reason: '外链：视图内不加载（防出网），需要时自己用浏览器打开' })]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+
+    // 视图内不加载：没有 video、也没有去取字节
+    expect(wrapper.find('[data-role="retro-media-video"]').exists()).toBe(false)
+    expect(state.assetCalls).toEqual([])
+    // 但要有可点的入口（判据②：不许留白）
+    const button = wrapper.get('[data-role="retro-media-open"]')
+    expect(button.text()).toBe('用系统默认打开')
+    await button.trigger('click')
+    await flushPromises()
+    expect(state.openCalls).toEqual([url])
+  })
+
+  it('a_link_the_system_refuses_says_why_in_place_and_the_placeholder_stays', async () => {
+    const url = 'https://example.com/blocked.mp4'
+    state.snapshot.cards = [card('2026-W42', '被拒的外链')]
+    state.reports['2026-W42'] = mediaDocument('video', '外部录屏', url)
+    state.reportMedia['2026-W42'] = [mediaSlot(url, 'external')]
+    state.openFailures[url] = { message: '这个链接不能打开：只支持 http / https 外链：file:///C:/Windows/win.ini', hint: '' }
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-role="retro-media-open-failure"]').exists()).toBe(false)
+    await wrapper.get('[data-role="retro-media-open"]').trigger('click')
+    await flushPromises()
+
+    // 失败要说原因（服务端原话），占位不许消失、也不许假装成功
+    expect(wrapper.get('[data-role="retro-media-open-failure"]').text()).toContain('这个链接不能打开')
+    expect(wrapper.get('[data-role="retro-media-note"]').text()).toContain('外链')
+    expect(wrapper.find('[data-role="retro-media-video"]').exists()).toBe(false)
+  })
+
+  it('media_that_cannot_be_shown_inline_is_summarised_in_one_line_with_a_breakdown', async () => {
+    state.snapshot.cards = [card('2026-W42', '三种问题')]
+    state.reports['2026-W42'] = {
+      version: 1,
+      blocks: [
+        { line: 1, kind: { type: 'media', media: 'image', alt: '缺的', target: 'assets/gone.png' } },
+        { line: 3, kind: { type: 'media', media: 'video', alt: '外链', target: 'https://example.com/a.mp4' } },
+        { line: 5, kind: { type: 'media', media: 'video', alt: '老格式', target: 'assets/old.avi' } },
+      ],
+    }
+    state.reportMedia['2026-W42'] = [
+      mediaSlot('assets/gone.png', 'missing', { reason: '包里没有 assets/gone.png' }),
+      mediaSlot('https://example.com/a.mp4', 'external', { reason: '外链：视图内不加载' }),
+      mediaSlot('assets/old.avi', 'unsupported', { reason: '格式不在白名单（avi）：只认图片与 mp4 / m4v' }),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+
+    const summary = wrapper.get('[data-role="retro-media-summary"]')
+    expect(summary.text()).toContain('3 处')
+    expect(summary.text()).toContain('缺失 1')
+    expect(summary.text()).toContain('外链 1')
+    expect(summary.text()).toContain('格式不支持 1')
+    // 分项是照判定数出来的：三处各一个占位，没有一个变成图 / 视频
+    expect(wrapper.findAll('[data-role="retro-media-note"]')).toHaveLength(3)
+    expect(wrapper.find('[data-role="retro-media-image"]').exists()).toBe(false)
+    expect(wrapper.find('[data-role="retro-media-video"]').exists()).toBe(false)
+  })
+
+  it('a_report_whose_media_all_render_has_no_summary_strip', async () => {
+    state.snapshot.cards = [card('2026-W42', '都正常')]
+    state.reports['2026-W42'] = mediaDocument('image', '图', 'assets/curve.png')
+    state.reportMedia['2026-W42'] = [mediaSlot('assets/curve.png')]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+
+    // 否定面：全好了就不许再挂一条「0 处」的横幅（那是噪声，也是假报告）
+    expect(wrapper.find('[data-role="retro-media-summary"]').exists()).toBe(false)
+    expect(wrapper.find('[data-role="retro-media-image"]').exists()).toBe(true)
   })
 
   // ── 左栏按年·月折叠 + 关键词过滤（FR-R-13-08 判据①）────────────────────────────

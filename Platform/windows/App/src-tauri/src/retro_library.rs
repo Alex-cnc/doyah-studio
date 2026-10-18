@@ -298,6 +298,32 @@ impl RetroStore {
 /// 媒体字节上限（256 MiB）：再大就不一次读进内存了 —— 宁可如实说「太大」。
 pub const MAX_MEDIA_BYTES: u64 = 256 * 1024 * 1024;
 
+/// 把正文里的一处外链交给**系统默认处理**（`FR-R-13-09` ②）。
+///
+/// 两层分工：
+/// - **领域层** `doyah_studio_db::external_plan`：只认 http / https、拒空白与控制字符、
+///   给出「程序 + 独立参数」（不经 shell）；
+/// - **本层**：把拒绝翻成两句人话（原话 + 怎么办），并真启动 —— **不等进程**
+///   （浏览器 / 播放器立刻返回，等它会卡住界面线程）。
+pub fn open_external(url: &str) -> Result<doyah_studio_db::ExternalPlan, DbFailure> {
+    let plan = doyah_studio_db::external_plan(url).map_err(|reason| DbFailure {
+        message: format!("这个链接不能打开：{reason}"),
+        hint: "外链只支持 http / https。file: / javascript: / ms-* 这类协议一点就在本机执行东西，本视图不交给系统。"
+            .to_string(),
+    })?;
+    std::process::Command::new(&plan.program)
+        .args(&plan.args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|error| DbFailure {
+            message: format!("交给系统默认处理失败：{error}（{}）", plan.program),
+            hint: "确认 rundll32.exe 可用（Windows 自带）；被安全软件拦下时也会走到这里。".to_string(),
+        })?;
+    Ok(plan)
+}
+
 /// 递归收集正文里的媒体引用（同一目标只留一次，保序）。
 fn collect_media(blocks: &[markdown::Block], out: &mut Vec<(markdown::MediaKind, String)>) {
     for block in blocks {
@@ -757,5 +783,28 @@ mod tests {
         let bad_period = store.asset("..", "assets/a.png").unwrap_err();
         assert!(bad_period.message.contains("期号不可用"), "{}", bad_period.message);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── 外链交给系统默认处理（`FR-R-13-09` ②）──────────────────────────────────────
+
+    /// 判据②的**否定面**：不是 http / https 的链接**在启动任何进程之前**就被拒，
+    /// 且给的是两句人话（原话 + 怎么办）。这一段不会 spawn —— 断言失败也污染不到环境。
+    #[test]
+    fn a_link_that_is_not_http_is_refused_before_anything_is_started() {
+        for bad in [
+            "file:///C:/Windows/win.ini",
+            "javascript:alert(1)",
+            "ms-msdt:/id PCWDiagnostic",
+            "",
+            "https://exa mple.com/a.mp4",
+        ] {
+            let failure = open_external(bad).unwrap_err();
+            assert!(
+                failure.message.contains("这个链接不能打开"),
+                "{bad} ⇒ {}",
+                failure.message
+            );
+            assert!(failure.hint.contains("http"), "{bad} 的提示要写清只认 http / https：{}", failure.hint);
+        }
     }
 }

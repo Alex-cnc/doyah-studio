@@ -99,7 +99,10 @@ pub use replace::{
     apply_to_line, apply_to_text, decide_apply, plan_file, replacements_in_line, summarise,
     FileChange, LineChange, ReplaceError, Replacement,
 };
-pub use reveal::{ensure_inside, explorer_plan, pick_terminal, terminal_plan, RevealPlan, TerminalKind};
+pub use reveal::{
+    ensure_inside, explorer_plan, external_plan, pick_terminal, terminal_plan, ExternalPlan, RevealPlan,
+    TerminalKind,
+};
 pub use save_guard::{
     decide_overwrite, decide_save, explain_conflict, SaveDecision,
 };

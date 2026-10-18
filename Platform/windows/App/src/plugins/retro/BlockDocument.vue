@@ -25,11 +25,20 @@ const props = defineProps<{
   language?: UiLanguage
   /** 嵌套层级（列表 / 引用递归时由父层传下来；顶层不传 = 0）。 */
   level?: number
+  /**
+   * 外链打开失败的原因（键 = 正文里写的原文）。
+   *
+   * 由 `RetroView` 持有并传下来：组件本身**不调 IPC**（插件只发事件），
+   * 这样「谁真去开」只有一处，失败原因也只有一处能写。
+   */
+  openFailures?: Record<string, string>
 }>()
 
 const emit = defineEmits<{
   /** 点图片放大（浮层由 `RetroView` 画 —— 插件里只发事件）。 */
   (event: 'zoom', payload: { url: string; alt: string }): void
+  /** 点「用系统默认打开」（`FR-R-13-09` ②：视图内不加载外链，交给系统）。 */
+  (event: 'openExternal', target: string): void
 }>()
 
 function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
@@ -168,6 +177,24 @@ function zoomIn(url: string, alt: string): void {
           <span v-if="slotOf(block.kind.target)?.reason" class="retro-md__media-reason">
             {{ slotOf(block.kind.target)?.reason }}
           </span>
+          <!-- 外链：视图内不加载，点击交给系统默认处理（`FR-R-13-09` ②）；失败就地显示原因 -->
+          <button
+            v-if="slotOf(block.kind.target)?.state === 'external'"
+            class="retro-md__media-open"
+            type="button"
+            data-role="retro-media-open"
+            :title="tr('plugin.retro.mediaOpenHint')"
+            @click="emit('openExternal', block.kind.target)"
+          >
+            {{ tr('plugin.retro.mediaOpenExternal') }}
+          </button>
+          <span
+            v-if="props.openFailures?.[block.kind.target]"
+            class="retro-md__media-open-failure"
+            data-role="retro-media-open-failure"
+          >
+            {{ props.openFailures?.[block.kind.target] }}
+          </span>
         </span>
       </figure>
 
@@ -178,7 +205,9 @@ function zoomIn(url: string, alt: string): void {
           :media="props.media"
           :language="props.language"
           :level="depth"
+          :open-failures="props.openFailures"
           @zoom="emit('zoom', $event)"
+          @open-external="emit('openExternal', $event)"
         />
       </blockquote>
 
@@ -241,7 +270,9 @@ function zoomIn(url: string, alt: string): void {
             :media="props.media"
             :language="props.language"
             :level="depth + 1"
+            :open-failures="props.openFailures"
             @zoom="emit('zoom', $event)"
+            @open-external="emit('openExternal', $event)"
           />
         </span>
       </div>
@@ -345,6 +376,25 @@ export default { name: 'BlockDocument' }
 }
 .retro-md__media-reason {
   color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+/* 外链按钮：与「刷新」同一套控制件令牌（不新造尺寸 / 颜色） */
+.retro-md__media-open {
+  align-self: flex-start;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border: var(--ds-metric-hairline) solid var(--ds-color-hairline-light);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-panel);
+  color: var(--ds-color-text-primary);
+  font: inherit;
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
+}
+.retro-md__media-open:hover {
+  border-color: var(--ds-color-accent-accent);
+}
+.retro-md__media-open-failure {
+  color: var(--ds-color-status-danger);
   font-size: var(--ds-font-caption-size);
 }
 /* 宽表格：横向滚动，别把右区撑破（`FR-R-13-08` 判据②的可见前提） */

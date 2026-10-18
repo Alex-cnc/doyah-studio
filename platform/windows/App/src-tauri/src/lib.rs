@@ -668,6 +668,15 @@ fn retro_asset(
     state.retro.asset(&period, &target).map(tauri::ipc::Response::new)
 }
 
+/// 把正文里的一处外链交给**系统默认处理**（`FR-R-13-09` ②：视图内不嵌 iframe、也不自己出网）。
+///
+/// 判定在领域层 `doyah_studio_db::external_plan`（只认 http / https）；本层只做两件事：
+/// 把拒绝翻成人话、真启动（**不等进程** —— 浏览器 / 播放器会立刻返回）。
+#[tauri::command]
+fn open_external(url: String) -> Result<doyah_studio_db::ExternalPlan, DbFailure> {
+    retro_library::open_external(&url)
+}
+
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
 //
 // 四条命令都很薄：**判定在领域层**（`doyah_studio_db::agent_config::evaluate`），本层只做
@@ -2400,6 +2409,7 @@ pub fn run() {
             retro_packages,
             retro_report,
             retro_asset,
+            open_external,
             agent_settings_get,
             agent_settings_save,
             agent_key_save,

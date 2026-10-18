@@ -126,6 +126,57 @@ pub fn terminal_plan(
     })
 }
 
+/// 外链的打开计划（`FR-R-13-09` ②「外链 ⇒ 点击打开系统默认处理」）。
+///
+/// 与 `RevealPlan` 分开：那个描述的是「用哪个终端 / 资源管理器打开一个**本机路径**」，
+/// 这个描述的是「把一个**网上的地址**交给系统默认处理程序」—— 两者可执行程序与风险面都不同，
+/// 合成一个结构会让「used 是哪一个程序」这句话在两个语境里含义漂移。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalPlan {
+    /// 可执行程序（Windows 自带：`rundll32.exe`）。
+    pub program: String,
+    /// 参数。`url.dll,FileProtocolHandler` 必须是**独立的一个参数**，地址再是下一个。
+    pub args: Vec<String>,
+    /// 只可能是 `http` / `https`（回给界面写文案用）。
+    pub scheme: String,
+}
+
+/// 外链校验 + 打开计划。
+///
+/// **只认 `http` / `https`**，理由是这是机械闸而不是礼貌：
+/// - 包是别人给的，正文里写什么链接都有可能；`file:`（打开本机文件）、`javascript:`、
+///   `ms-msdt:` / `search-ms:` 这类协议**点一下就在本机执行东西**，不能只靠界面自觉；
+/// - 空白与控制字符一律拒：真 URL 不会有裸空格 / 换行，带这些字符只可能来自伪造的正文；
+/// - 走 `rundll32 url.dll,FileProtocolHandler`（**不经 shell、不做字符串拼接**）：
+///   地址始终是一个独立参数，因此不存在「引号逃逸后再接一条命令」的空间。
+pub fn external_plan(url: &str) -> Result<ExternalPlan, String> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Err("链接是空的".to_string());
+    }
+    if trimmed.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(format!("链接里有空白或控制字符：{trimmed}"));
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    let scheme = if lower.starts_with("https://") {
+        "https"
+    } else if lower.starts_with("http://") {
+        "http"
+    } else {
+        return Err(format!("只支持 http / https 外链：{trimmed}"));
+    };
+    let rest = &trimmed[scheme.len() + 3..];
+    if rest.is_empty() || rest.starts_with('/') {
+        return Err(format!("链接里没有主机名：{trimmed}"));
+    }
+    Ok(ExternalPlan {
+        program: "rundll32.exe".to_string(),
+        args: vec!["url.dll,FileProtocolHandler".to_string(), trimmed.to_string()],
+        scheme: scheme.to_string(),
+    })
+}
+
 /// 路径校验：**只许工作区内**（字符串层；解链接那一遍在表示层）。
 pub fn ensure_inside(workspace_root: &str, candidate: &str) -> Result<(), String> {
     if crate::workspace::is_contained(candidate, workspace_root) {
@@ -211,5 +262,63 @@ mod tests {
         assert!(text.contains("\"workingDirectory\":null"), "{text}");
         let back: RevealPlan = serde_json::from_str(&text).unwrap();
         assert_eq!(back, plan);
+    }
+
+    // ── 外链交给系统默认处理（`FR-R-13-09` ②）──────────────────────────────────────
+
+    #[test]
+    fn an_http_link_is_handed_to_the_system_default_handler_as_one_argument() {
+        for (url, scheme) in [
+            ("https://example.com/a.mp4", "https"),
+            ("http://example.com:8080/v?id=1&t=2", "http"),
+            ("HTTPS://Example.com/A.MP4", "https"),
+            // 非 ASCII 在 URL 里本该是百分号编码，但真包里的手写正文可能直接写中文 —— 不作恶就放行
+            ("https://example.com/周报.mp4", "https"),
+        ] {
+            let plan = external_plan(url).unwrap_or_else(|reason| panic!("{url} ⇒ {reason}"));
+            assert_eq!(plan.program, "rundll32.exe");
+            // 关键：协议处理器与地址是**两个独立参数**（不经 shell、不拼接）
+            assert_eq!(plan.args.len(), 2, "{url}");
+            assert_eq!(plan.args[0], "url.dll,FileProtocolHandler");
+            assert_eq!(plan.args[1], url);
+            assert_eq!(plan.scheme, scheme);
+        }
+    }
+
+    #[test]
+    fn a_link_that_would_run_something_locally_is_refused() {
+        for bad in [
+            "file:///C:/Windows/win.ini",
+            "javascript:alert(1)",
+            "ms-msdt:/id PCWDiagnostic",
+            "search-ms:query=secret",
+            "vbscript:msgbox(1)",
+            "\\\\server\\share\\a.mp4",
+            "C:\\Windows\\win.ini",
+            "//example.com/a.mp4",
+            "https://",
+            "https:///a.mp4",
+            "",
+            "   ",
+        ] {
+            let error = external_plan(bad).unwrap_err();
+            assert!(!error.is_empty(), "{bad} 要给出可读原因");
+        }
+    }
+
+    #[test]
+    fn a_link_with_whitespace_or_control_characters_is_refused() {
+        for bad in [
+            "https://example.com/a b.mp4",
+            "https://example.com/a.mp4\r\nstart calc",
+            "https://example.com/a\tb.mp4",
+            "https://exa mple.com/a.mp4",
+        ] {
+            let error = external_plan(bad).unwrap_err();
+            assert!(error.contains("空白") || error.contains("主机名"), "{bad} ⇒ {error}");
+        }
+        // 两端的空白是**提交前被裁剪的**（正文里手写的行尾空格不该让链接打不开）
+        let trimmed = external_plan("  https://example.com/a.mp4  ").unwrap();
+        assert_eq!(trimmed.args[1], "https://example.com/a.mp4");
     }
 }

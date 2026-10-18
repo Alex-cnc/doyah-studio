@@ -82,6 +82,21 @@ export const DICT = {
   },
   'plugin.retro.mediaZoomHint': { 'zh-Hans': '点开看大图', en: 'Click to enlarge' },
   'plugin.retro.mediaClose': { 'zh-Hans': '关闭', en: 'Close' },
+  // 外链交给系统默认处理（FR-R-13-09 ②）
+  'plugin.retro.mediaOpenExternal': { 'zh-Hans': '用系统默认打开', en: 'Open with the system default' },
+  'plugin.retro.mediaOpenHint': {
+    'zh-Hans': '交给系统默认处理（浏览器 / 播放器），视图内不加载外链',
+    en: 'Hand it to the system default (browser / player); external links are not loaded inside this view',
+  },
+  // 媒体问题汇总（FR-R-13-09 ③④：「报告一条」要一眼看得见）
+  'plugin.retro.mediaSummary': {
+    'zh-Hans': '有 {n} 处媒体没有内联显示（{detail}），正文里各有占位',
+    en: '{n} media item(s) not shown inline ({detail}); each has a placeholder in the text',
+  },
+  'plugin.retro.mediaSummaryMissing': { 'zh-Hans': '缺失 {n}', en: 'missing {n}' },
+  'plugin.retro.mediaSummaryExternal': { 'zh-Hans': '外链 {n}', en: 'external {n}' },
+  'plugin.retro.mediaSummaryUnsupported': { 'zh-Hans': '格式不支持 {n}', en: 'unsupported format {n}' },
+  'plugin.retro.mediaSummaryRejected': { 'zh-Hans': '路径不合法 {n}', en: 'path not allowed {n}' },
   'ipc.action.retro': { 'zh-Hans': '打开周报', en: 'open a weekly report' },
 
   // IPC 浏览器旁路提示（不是产品路径，但**也要双语**：切英文时不该留中文）

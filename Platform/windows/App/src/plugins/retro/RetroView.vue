@@ -13,6 +13,7 @@ import BlockDocument, { type MediaSlot } from './BlockDocument.vue'
 import { coverMime, formatGeneratedAt } from './cardMeta'
 import { filterCards, groupCards } from './periodIndex'
 import {
+  openExternal,
   retroAsset,
   retroPackages,
   retroReport,
@@ -106,6 +107,57 @@ function monthLabel(month: string): string {
 const media = ref<MediaSlot[]>([])
 /** 点图放大的浮层（`null` = 没开）。 */
 const zoom = ref<{ url: string; alt: string } | null>(null)
+/** 外链打开失败的原因（键 = 正文里写的原文；切期清空）。 */
+const openFailures = ref<Record<string, string>>({})
+
+/**
+ * 媒体汇总（`FR-R-13-09` 判据③④的「报告一条」）：
+ * 判定 `ok` 的不算问题（哪怕字节还在路上，那是「正在读」而不是「显示不出来」）。
+ */
+const mediaTrouble = computed(() => {
+  const counts = { missing: 0, external: 0, unsupported: 0, rejected: 0 }
+  for (const slot of media.value) {
+    if (slot.state === 'missing') counts.missing += 1
+    else if (slot.state === 'external') counts.external += 1
+    else if (slot.state === 'unsupported') counts.unsupported += 1
+    else if (slot.state === 'rejected') counts.rejected += 1
+  }
+  return counts
+})
+
+const mediaTroubleTotal = computed(
+  () => mediaTrouble.value.missing + mediaTrouble.value.external + mediaTrouble.value.unsupported + mediaTrouble.value.rejected,
+)
+
+/** 汇总条里的分项（只写非 0 的那几项，不让「缺失 0」占字数）。 */
+const mediaTroubleDetail = computed(() => {
+  const parts: string[] = []
+  const c = mediaTrouble.value
+  if (c.missing) parts.push(tr('plugin.retro.mediaSummaryMissing', { n: c.missing }))
+  if (c.external) parts.push(tr('plugin.retro.mediaSummaryExternal', { n: c.external }))
+  if (c.unsupported) parts.push(tr('plugin.retro.mediaSummaryUnsupported', { n: c.unsupported }))
+  if (c.rejected) parts.push(tr('plugin.retro.mediaSummaryRejected', { n: c.rejected }))
+  return parts.join(' · ')
+})
+
+/**
+ * 点「用系统默认打开」（`FR-R-13-09` ②）：交给系统，**视图内不加载、不出网**。
+ *
+ * 失败就地写原因（键 = 正文原文），下次点同一个链接会先清掉旧原因 ——
+ * 否则「上次失败」会一直挂着，看起来像这次也没成。
+ */
+async function openExternalTarget(target: string): Promise<void> {
+  if (openFailures.value[target]) {
+    const cleared = { ...openFailures.value }
+    delete cleared[target]
+    openFailures.value = cleared
+  }
+  try {
+    await openExternal(target)
+  } catch (error) {
+    openFailures.value = { ...openFailures.value, [target]: describeError(error).message }
+  }
+}
 
 function describeError(error: unknown): DbFailure {
   if (error && typeof error === 'object' && 'message' in error && 'hint' in error) return error as DbFailure
@@ -209,6 +261,7 @@ async function open(card: RetroCard): Promise<void> {
   reportBytes.value = 0
   reportLoading.value = true
   zoom.value = null
+  openFailures.value = {}
   releaseMedia()
   try {
     const report = await retroReport(card.period)
@@ -454,11 +507,17 @@ onMounted(() => {
           <span v-if="reportFailure.hint" class="retro__failure-hint">{{ reportFailure.hint }}</span>
         </p>
         <div v-else-if="document" class="retro__document" data-role="retro-document">
+          <!-- 媒体汇总（`FR-R-13-09` ③④）：逐条报告的同时给一条看得见的合计，省得一行行找 -->
+          <p v-if="mediaTroubleTotal" class="retro__media-summary" data-role="retro-media-summary">
+            {{ tr('plugin.retro.mediaSummary', { n: mediaTroubleTotal, detail: mediaTroubleDetail }) }}
+          </p>
           <BlockDocument
             :document="document"
             :media="media"
             :language="lang"
+            :open-failures="openFailures"
             @zoom="openZoom"
+            @open-external="openExternalTarget"
           />
         </div>
       </template>
@@ -787,6 +846,16 @@ onMounted(() => {
 }
 .retro__document {
   flex: 1;
+}
+/* 媒体汇总条（`FR-R-13-09` ③④）：一条看得见的合计，不是第二套状态机 */
+.retro__media-summary {
+  margin-bottom: var(--ds-spacing-s);
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border: var(--ds-hairline) dashed var(--ds-color-status-warning);
+  border-radius: var(--ds-radius-badge);
+  color: var(--ds-color-status-warning);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
 }
 .retro__zoom {
   position: fixed;

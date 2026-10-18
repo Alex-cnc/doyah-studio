@@ -111,6 +111,8 @@ export const COMMANDS = {
   retroReport: 'retro_report',
   // 媒体字节（FR-R-12-03）：回 ArrayBuffer，界面建 blob URL（不开 asset 协议）
   retroAsset: 'retro_asset',
+  // 外链交给系统默认处理（FR-R-13-09 ②：视图内不嵌 iframe、也不自己出网）
+  openExternal: 'open_external',
   // 智能体设置（FR-AI-01：总开关 / 端点 / 模型 / 配额；密钥单独存，永不回显）
   agentSettingsGet: 'agent_settings_get',
   agentSettingsSave: 'agent_settings_save',
@@ -781,6 +783,17 @@ export function retroReport(period: string): Promise<RetroReport> {
 export function retroAsset(period: string, target: string): Promise<ArrayBuffer> {
   if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
   return invoke<ArrayBuffer>(COMMANDS.retroAsset, { period, target })
+}
+
+/**
+ * 把一处外链交给**系统默认处理**（`FR-R-13-09` ②）。
+ *
+ * 回的是「交给谁」这件事的事实（程序 + 协议），错误里带可读原因；
+ * **只支持 http / https** —— 判定在 Rust 领域层 `external_plan`，前端不自己判协议。
+ */
+export function openExternal(url: string): Promise<{ program: string; args: string[]; scheme: string }> {
+  if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
+  return invoke(COMMANDS.openExternal, { url })
 }
 
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
