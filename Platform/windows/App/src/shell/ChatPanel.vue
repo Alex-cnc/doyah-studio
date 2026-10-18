@@ -9,10 +9,10 @@
       没打开工作区时如实说「这次不会存」；
   ⑤ **不执行**：模型给的语句只是正文，本组件没有任何执行入口。
 
-  这一版**没有**做的（如实写在面板底部「已知限制」里，由 Rust 回包带过来）：
-  工具调用卡片 / 内联审批。
-
   ⑥ **逐段到就画**（`FR-AI-16` ①）：回答边到边写，底部读数说「逐段 N 段」或「该服务端整段返回」。
+  ⑦ **工具调用 + 内联审批**（`FR-AI-18`）：模型想读工作区里的文件时，流里出现一张卡片写明路径，
+      **不点就一次都不执行**；点「允许读取」才真读（Rust 侧沙箱判路径），读完把内容回灌给模型再答一次，
+      「拒绝」也如实告诉模型别编。执行账（读到多少字符 / 截没截断）留在面板底部。
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -20,9 +20,13 @@ import {
   agentChatLoad,
   agentChatSave,
   agentChatStream,
+  agentChatToolDecide,
+  type AgentChatReply,
   type AgentChatTurn,
   type AgentGateReport,
   type AgentIssue,
+  type AgentToolCall,
+  type AgentToolRun,
 } from '../ipc'
 import { t as translate, type DictKey, type UiLanguage } from '../i18n'
 import { CHAT_MAX_TURNS, budgetOf, outgoingTurns, questionCount, withReply } from './chatThread'
@@ -77,6 +81,14 @@ const restored = ref(0)
 const saveFailure = ref<string | null>(null)
 /** 上一次落盘裁掉 / 截断了什么（有才显示）。 */
 const trimmed = ref<{ kept: number; dropped: number; clipped: number } | null>(null)
+/** 模型点的那一件工具（`FR-AI-18`）：有值就在消息流里画审批卡片，等用户点。 */
+const pendingCall = ref<AgentToolCall | null>(null)
+/** 那一跳模型同时说的正文（有的模型边说边点）。 */
+const pendingText = ref('')
+/** 正在执行（点完之后等第二次回答）：按钮要灰着，避免连点两下批准两次。 */
+const deciding = ref(false)
+/** 已经执行过的工具账（允许了没有 / 读到多少），按发生顺序留在流里。 */
+const toolRuns = ref<AgentToolRun[]>([])
 
 const workspaceId = computed(() => (props.workspace ?? '').trim())
 const budget = computed(() => budgetOf(turns.value, draft.value))
@@ -148,6 +160,74 @@ watch(workspaceId, () => {
   void reload()
 })
 
+/** 工具卡片上显示的路径（从参数 JSON 里取；取不到就给空串，界面如实说「没给路径」）。 */
+function toolPath(call: AgentToolCall): string {
+  try {
+    const parsed = JSON.parse(call.arguments) as { path?: unknown }
+    return typeof parsed.path === 'string' ? parsed.path.trim() : ''
+  } catch {
+    return ''
+  }
+}
+
+/** 一条工具账的读法（同一段话既给中文也给英文，都走语言表）。 */
+function describeRun(run: AgentToolRun): string {
+  if (!run.approved) return tr('chat.tool.denied', { path: run.path })
+  if (!run.ok) return tr('chat.tool.failed', { path: run.path, problem: run.problem })
+  const base = tr('chat.tool.allowed', { path: run.path, chars: run.chars })
+  return run.truncated ? base + ' ' + tr('chat.tool.truncated', { chars: run.chars }) : base
+}
+
+/**
+ * 一条回包的三种落法（普通对话与「工具点完之后的第二次回答」共用一份）：
+ * 挡住 / 满额照旧各说各的；**点工具 ⇒ 停下来等用户点**（不自动执行、不替用户决定）；
+ * 真回答 ⇒ 进消息流并落盘。
+ */
+async function handleReply(reply: AgentChatReply, asked: AgentChatTurn[]) {
+  if (reply.status === 'blocked') {
+    gate.value = reply.gate
+    limitations.value = []
+    return
+  }
+  if (reply.status === 'throttled') {
+    throttled.value = {
+      used: reply.quota.used,
+      limit: reply.quota.limit,
+      retryAfterSecs: reply.quota.retryAfterSecs,
+    }
+    return
+  }
+  if (reply.status === 'toolPending') {
+    pendingCall.value = reply.call
+    pendingText.value = reply.text
+    limitations.value = []
+    streamed.value = reply.deltas
+    info.value = {
+      model: reply.model,
+      elapsedMs: reply.elapsedMs,
+      attempts: reply.attempts.length,
+      turns: reply.turns,
+    }
+    await scrollToEnd()
+    return
+  }
+  turns.value = withReply(asked, reply.text)
+  pendingCall.value = null
+  pendingText.value = ''
+  streamed.value = reply.deltas
+  limitations.value = reply.limitations
+  info.value = {
+    model: reply.model,
+    elapsedMs: reply.elapsedMs,
+    attempts: reply.attempts.length,
+    turns: reply.turns,
+  }
+  // 只在这一问**真拿到回复之后**落盘：没发出去 / 还在等审批的那一问答不进历史，
+  // 落盘也不该替它编一条（否则重开时会看到一段「模型答过」的假历史）。
+  await persist(turns.value)
+  await scrollToEnd()
+}
+
 async function send() {
   failure.value = null
   gate.value = null
@@ -170,6 +250,8 @@ async function send() {
   sending.value = true
   partial.value = ''
   streamed.value = 0
+  pendingCall.value = null
+  pendingText.value = ''
   await scrollToEnd()
   try {
     // 逐段到的正文先画在「正在写」那条气泡里；**最终正文仍以返回值为准**（流只是显示）。
@@ -177,38 +259,42 @@ async function send() {
       partial.value += chunk
       void scrollToEnd()
     })
-    if (reply.status === 'blocked') {
-      gate.value = reply.gate
-      // 没发出去 ⇒ 这一问留在消息流里（用户不用重敲），但没有模型回复。
-      limitations.value = []
-      return
-    }
-    if (reply.status === 'throttled') {
-      throttled.value = {
-        used: reply.quota.used,
-        limit: reply.quota.limit,
-        retryAfterSecs: reply.quota.retryAfterSecs,
-      }
-      return
-    }
-    turns.value = withReply(asked, reply.text)
-    streamed.value = reply.deltas
-    limitations.value = reply.limitations
-    info.value = {
-      model: reply.model,
-      elapsedMs: reply.elapsedMs,
-      attempts: reply.attempts.length,
-      turns: reply.turns,
-    }
-    // 只在这一问**真拿到回复之后**落盘：没发出去的那一问答不进历史，
-    // 落盘也不该替它编一条（否则重开时会看到一段「模型答过」的假历史）。
-    await persist(turns.value)
-    await scrollToEnd()
+    await handleReply(reply, asked)
   } catch (error) {
     // 失败也**把这句问题留在流里**：重发时用户只按一次，不用重新敲。
     failure.value = readable(error)
   } finally {
     sending.value = false
+    partial.value = ''
+  }
+}
+
+/**
+ * 用户点了允许 / 拒绝（`FR-AI-18`）：交给 Rust 侧执行（或记下拒绝），拿回执行账与最终回答。
+ *
+ * 卡片在点完之后**留在流里**（账在下面那行如实写着），用户可以对照「读到多少字符」判断模型答得对不对。
+ */
+async function decide(approved: boolean) {
+  const call = pendingCall.value
+  if (!call || deciding.value || sending.value) return
+  deciding.value = true
+  failure.value = null
+  partial.value = ''
+  streamed.value = 0
+  const asked = turns.value
+  try {
+    const decision = await agentChatToolDecide(workspaceId.value, asked, call, approved, (chunk) => {
+      partial.value += chunk
+      void scrollToEnd()
+    })
+    toolRuns.value = [...toolRuns.value, decision.run]
+    pendingCall.value = null
+    pendingText.value = ''
+    await handleReply(decision.reply, asked)
+  } catch (error) {
+    failure.value = readable(error)
+  } finally {
+    deciding.value = false
     partial.value = ''
   }
 }
@@ -224,6 +310,9 @@ function clear() {
   trimmed.value = null
   partial.value = ''
   streamed.value = 0
+  pendingCall.value = null
+  pendingText.value = ''
+  toolRuns.value = []
   // 清空也要落盘：否则重开页签会把刚清掉的对话又读回来（「点了清空却说没清」）。
   void persist([])
 }
@@ -261,7 +350,37 @@ function clear() {
         <p class="chat__who">{{ tr('chat.model') }}</p>
         <pre class="chat__body">{{ partial }}</pre>
       </article>
-      <p v-if="sending" class="chat__waiting" data-testid="chat-sending">
+      <!-- 模型点工具（`FR-AI-18`）：卡片上写明要读哪个文件，允许 / 拒绝由人点 -->
+      <aside v-if="pendingCall" class="chat__tool" data-testid="chat-tool-card" role="group">
+        <p class="chat__tool-title">{{ tr('chat.tool.title') }}</p>
+        <p class="chat__tool-line" data-testid="chat-tool-ask">
+          {{ pendingCall.name === 'read_file'
+            ? tr('chat.tool.readFile', { path: toolPath(pendingCall) || tr('chat.tool.noPath') })
+            : tr('chat.tool.unknown', { name: pendingCall.name }) }}
+        </p>
+        <pre v-if="pendingText" class="chat__body">{{ pendingText }}</pre>
+        <div class="chat__tool-actions">
+          <button
+            class="chat__tool-allow"
+            type="button"
+            :disabled="deciding || pendingCall.name !== 'read_file'"
+            data-testid="chat-tool-allow"
+            @click="decide(true)"
+          >
+            {{ tr('chat.tool.allow') }}
+          </button>
+          <button
+            class="chat__act"
+            type="button"
+            :disabled="deciding"
+            data-testid="chat-tool-deny"
+            @click="decide(false)"
+          >
+            {{ tr('chat.tool.deny') }}
+          </button>
+        </div>
+      </aside>
+      <p v-if="sending || deciding" class="chat__waiting" data-testid="chat-sending">
         {{ partial ? tr('chat.streaming', { chars: partial.length }) : tr('chat.sending') }}
       </p>
     </div>
@@ -340,6 +459,9 @@ function clear() {
           {{ streamed > 0 ? tr('chat.streamed', { n: streamed }) : tr('chat.wholeBody') }}
         </span>
       </p>
+      <ul v-if="toolRuns.length" class="chat__tool-runs" data-testid="chat-tool-runs">
+        <li v-for="(run, index) in toolRuns" :key="index">{{ describeRun(run) }}</li>
+      </ul>
       <ul v-if="limitations.length" class="chat__limits" data-testid="chat-limits">
         <li v-for="line in limitations" :key="line">{{ line }}</li>
       </ul>
@@ -498,6 +620,51 @@ function clear() {
   margin: 0;
   padding-left: var(--ds-spacing-m);
   color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+/* 工具审批卡片（`FR-AI-18`）：显眼到「不点就没法继续」，但不用危险色（它只是问一句） */
+.chat__tool {
+  align-self: flex-start;
+  max-width: 86%;
+  border: var(--ds-metric-hairline) solid var(--ds-color-accent-accent);
+  border-radius: var(--ds-radius-card);
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+}
+.chat__tool-title {
+  margin: 0;
+  font-size: var(--ds-font-caption-size);
+  color: var(--ds-color-accent-accent);
+}
+.chat__tool-line {
+  margin: 0;
+  font-size: var(--ds-font-body-size);
+  word-break: break-all;
+}
+.chat__tool-actions {
+  display: flex;
+  gap: var(--ds-spacing-s);
+}
+.chat__tool-allow {
+  background: var(--ds-color-accent-accent);
+  border: none;
+  border-radius: var(--ds-radius-control);
+  color: var(--ds-color-text-bright);
+  cursor: pointer;
+  font-size: var(--ds-font-caption-size);
+  padding: var(--ds-spacing-hair) var(--ds-spacing-s);
+}
+.chat__tool-allow:disabled,
+.chat__tool-actions .chat__act:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.chat__tool-runs {
+  margin: 0;
+  padding-left: var(--ds-spacing-m);
+  color: var(--ds-color-text-tertiary);
   font-size: var(--ds-font-caption-size);
 }
 /* 会话存放位置 / 读回的交代 / 存盘失败（`FR-AI-17`）：一行说明，不抢正文的位置 */

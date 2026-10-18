@@ -102,6 +102,8 @@ pub enum Nl2SqlError {
     ChatTooLong { turns: usize, chars: usize },
     /// 对话最后一条不是用户消息 —— 没有「这一问」，发出去只是重放历史。
     ChatEndsWithAssistant,
+    /// 模型点了一件**没登记**的工具（只读白名单之外）：不执行、也不把结果编出来。
+    UnknownChatTool(String),
 }
 
 impl Nl2SqlError {
@@ -115,6 +117,7 @@ impl Nl2SqlError {
             Self::UnknownChatRole(_) => "unknownChatRole",
             Self::ChatTooLong { .. } => "chatTooLong",
             Self::ChatEndsWithAssistant => "chatEndsWithAssistant",
+            Self::UnknownChatTool(_) => "unknownChatTool",
         }
     }
 
@@ -125,6 +128,7 @@ impl Nl2SqlError {
             Self::ReplyShape(detail) | Self::NoSql(detail) => detail,
             Self::UnknownChatRole(detail) => detail,
             Self::EmptyChatTurn(_) | Self::ChatTooLong { .. } | Self::ChatEndsWithAssistant => "",
+            Self::UnknownChatTool(detail) => detail,
         }
     }
 }
@@ -151,6 +155,10 @@ impl std::fmt::Display for Nl2SqlError {
             Self::ChatEndsWithAssistant => write!(
                 f,
                 "对话最后一条是模型的回复，不是你的问题：先写一句要问什么再发送。"
+            ),
+            Self::UnknownChatTool(detail) => write!(
+                f,
+                "模型想调用一件没登记的工具「{detail}」：本程序只执行只读白名单里的工具，这一件不执行。"
             ),
         }
     }
@@ -281,7 +289,6 @@ pub struct ChatMessage {
 
 /// 一段对话最多几条消息（超了**如实拒绝并报数**，不静默截断历史）。
 pub const CHAT_MAX_TURNS: usize = 40;
-
 /// 一段对话最多多少字符（消息正文合计；同样如实报数）。
 pub const CHAT_MAX_CHARS: usize = 60_000;
 
@@ -291,6 +298,108 @@ pub const CHAT_MAX_CHARS: usize = 60_000;
 pub const CHAT_SYSTEM_PROMPT: &str = "你是 Doyah Studio（数据库开发工具）里的对话助手。\
 回答用简体中文，简洁、给结论再给依据。用户问到 SQL 时给出可复制的语句，但不要声称已经执行过任何语句 —— \
 本程序不会执行你给的语句，执行永远由用户自己点。不要编造表名与列名：需要结构信息时先问用户。";
+
+/// 只读工具的唯一名字（`FR-AI-18` 第一片）。
+///
+/// **白名单只有这一件**：模型点到别的名字一律不执行（`Nl2SqlError::UnknownChatTool`）——
+/// 「能读文件」是这轮给它的全部能力，不给第二条路。
+pub const CHAT_READ_FILE_TOOL: &str = "read_file";
+
+/// 一件工具调用（模型点了哪件、要什么参数、回灌时用哪个 id 对账）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatToolCall {
+    /// 服务端给的调用 id（回灌 `role: tool` 时必须原样带回去）。
+    pub id: String,
+    /// 工具名（只认 [`CHAT_READ_FILE_TOOL`]）。
+    pub name: String,
+    /// 参数原文（JSON 字符串，原样交给执行侧解析；本层不猜）。
+    pub arguments: String,
+}
+
+/// 发给端点的工具清单（OpenAI 兼容的 `tools`）。
+///
+/// 只有一件只读工具：读**当前工作区里**的一个文本文件。说明里写明「需要用户批准」——
+/// 模型据此知道这一跳可能被拒，被拒后应当如实告诉用户缺什么，而不是编内容。
+pub fn chat_tools_spec() -> serde_json::Value {
+    serde_json::json!([{
+        "type": "function",
+        "function": {
+            "name": CHAT_READ_FILE_TOOL,
+            "description": "读取当前工作区里的一个文本文件（相对路径）。这一步需要用户逐次批准：被拒时不要编造文件内容。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "相对工作区根的文件路径，例如 src/main.ts；不许绝对路径、不许 .. 跳出工作区。"
+                    }
+                },
+                "required": ["path"]
+            }
+        }
+    }])
+}
+
+/// 从**整段**回包里取工具调用（服务端无视 `stream` 时会走这条路）。
+///
+/// 只认 `choices[0].message.tool_calls`；读不出来就回空表（**不猜**，也不把正文当成调用）。
+pub fn parse_tool_calls(raw: &str) -> Vec<ChatToolCall> {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let Some(list) = value
+        .get("choices")
+        .and_then(|choices| choices.get(0))
+        .and_then(|choice| choice.get("message"))
+        .and_then(|message| message.get("tool_calls"))
+        .and_then(|calls| calls.as_array())
+    else {
+        return out;
+    };
+    for item in list {
+        let Some(function) = item.get("function") else {
+            continue;
+        };
+        let name = function
+            .get("name")
+            .and_then(|name| name.as_str())
+            .unwrap_or("")
+            .to_string();
+        if name.trim().is_empty() {
+            continue;
+        }
+        let arguments = function
+            .get("arguments")
+            .map(|args| match args {
+                serde_json::Value::String(text) => text.clone(),
+                other => other.to_string(),
+            })
+            .unwrap_or_default();
+        out.push(ChatToolCall {
+            id: item
+                .get("id")
+                .and_then(|id| id.as_str())
+                .unwrap_or("")
+                .to_string(),
+            name,
+            arguments,
+        });
+    }
+    out
+}
+
+/// 从工具参数里取要读的文件路径（`{"path": "..."}`）；取不到就 `None`（执行侧如实拒绝）。
+pub fn read_file_path(arguments: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(arguments).ok()?;
+    let path = value.get("path")?.as_str()?.trim().to_string();
+    if path.is_empty() {
+        None
+    } else {
+        Some(path)
+    }
+}
 
 /// 装配一次对话请求（**领域层唯一出处**：形状 / 上限 / 角色校验都在这里）。
 ///
@@ -317,6 +426,29 @@ pub fn build_chat_request_streaming(
 fn build_chat_request_with_stream(
     config: &AgentConfiguration,
     turns: &[ChatMessage],
+    stream: bool,
+) -> Result<Outgoing, Nl2SqlError> {
+    build_chat_request_full(config, turns, None, false, stream)
+}
+
+/// **带工具**的对话请求（`FR-AI-18`）：与 [`build_chat_request`] 同一份校验，额外带 `tools`。
+///
+/// `pending` = 上一跳模型点的工具 + 已拿到的结果（`None` = 这一问的第一次请求）。
+/// 带上它时消息数组末尾会多两条：`assistant`（含 `tool_calls`）与 `tool`（含结果）——
+/// 形状照 OpenAI 兼容协议，服务端才认得出「结果回灌给哪一次调用」。
+pub fn build_chat_request_with_tools(
+    config: &AgentConfiguration,
+    turns: &[ChatMessage],
+    pending: Option<(&ChatToolCall, &str)>,
+) -> Result<Outgoing, Nl2SqlError> {
+    build_chat_request_full(config, turns, pending, true, true)
+}
+
+fn build_chat_request_full(
+    config: &AgentConfiguration,
+    turns: &[ChatMessage],
+    pending: Option<(&ChatToolCall, &str)>,
+    tools: bool,
     stream: bool,
 ) -> Result<Outgoing, Nl2SqlError> {
     if turns.is_empty() {
@@ -354,18 +486,50 @@ fn build_chat_request_with_stream(
     let mut all: Vec<serde_json::Value> = Vec::with_capacity(messages.len() + 1);
     all.push(serde_json::json!({ "role": "system", "content": CHAT_SYSTEM_PROMPT }));
     all.extend(messages);
+    // 工具结果回灌：`assistant`（带 tool_calls）+ `tool`（带结果）两条必须成对，且 id 原样带回。
+    if let Some((call, result)) = pending {
+        if call.name.trim() != CHAT_READ_FILE_TOOL {
+            return Err(Nl2SqlError::UnknownChatTool(call.name.clone()));
+        }
+        if call.id.trim().is_empty() {
+            return Err(Nl2SqlError::ReplyShape(
+                "工具调用没有 id：回灌不了结果（服务端要按 id 对账）".to_string(),
+            ));
+        }
+        all.push(serde_json::json!({
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "id": call.id,
+                "type": "function",
+                "function": { "name": call.name, "arguments": call.arguments }
+            }]
+        }));
+        all.push(serde_json::json!({
+            "role": "tool",
+            "tool_call_id": call.id,
+            "content": result
+        }));
+    }
 
     let human = turns
         .last()
         .map(|turn| turn.content.clone())
         .unwrap_or_default();
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": config.model.trim(),
         "temperature": 0,
         "stream": stream,
         "messages": all,
-    })
-    .to_string();
+    });
+    if tools {
+        // 带工具那一跳的额外两位：清单与「由模型自己决定用不用」。
+        if let Some(map) = body.as_object_mut() {
+            map.insert("tools".to_string(), chat_tools_spec());
+            map.insert("tool_choice".to_string(), serde_json::json!("auto"));
+        }
+    }
+    let body = body.to_string();
     Ok(Outgoing {
         url: chat_url(&config.endpoint),
         body,
@@ -788,5 +952,55 @@ mod tests {
         let text = err.to_string();
         assert!(text.contains(&CHAT_MAX_TURNS.to_string()), "要报上限：{text}");
         assert!(text.contains(&turns.len().to_string()), "要报实际条数：{text}");
+    }
+
+    // ── 工具调用（`FR-AI-18`）────────────────────────────────────────────────────
+
+    #[test]
+    fn a_tool_request_carries_the_registry_and_the_result_goes_back_as_a_tool_message() {
+        let config = chat_config();
+        let turns = vec![turn("user", "读一下 notes.txt")];
+        let first = build_chat_request_with_tools(&config, &turns, None).unwrap();
+        assert!(first.body.contains("\"tools\""), "{}", first.body);
+        assert!(first.body.contains(CHAT_READ_FILE_TOOL), "{}", first.body);
+        assert!(first.body.contains("\"tool_choice\":\"auto\""), "{}", first.body);
+        assert!(
+            !first.body.contains("\"role\":\"tool\""),
+            "第一发还没有结果，不该凭空多一条 tool 消息"
+        );
+
+        let call = ChatToolCall {
+            id: "call_1".to_string(),
+            name: CHAT_READ_FILE_TOOL.to_string(),
+            arguments: "{\"path\":\"notes.txt\"}".to_string(),
+        };
+        let follow = build_chat_request_with_tools(&config, &turns, Some((&call, "文件内容"))).unwrap();
+        assert!(follow.body.contains("\"tool_call_id\":\"call_1\""), "{}", follow.body);
+        assert!(follow.body.contains("文件内容"), "{}", follow.body);
+        assert!(follow.body.contains("\"tool_calls\""), "{}", follow.body);
+
+        // 没登记的工具名一律不装配（白名单在领域层就拦住，不靠外壳记得）。
+        let bad = ChatToolCall {
+            id: "call_2".to_string(),
+            name: "run_command".to_string(),
+            arguments: "{}".to_string(),
+        };
+        assert_eq!(
+            build_chat_request_with_tools(&config, &turns, Some((&bad, "x"))).unwrap_err(),
+            Nl2SqlError::UnknownChatTool("run_command".to_string())
+        );
+    }
+
+    #[test]
+    fn tool_calls_are_read_from_a_whole_body_and_a_missing_path_is_not_invented() {
+        let raw = "{\"choices\":[{\"message\":{\"tool_calls\":[{\"id\":\"c9\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"a.txt\\\"}\"}}]}}]}";
+        let calls = parse_tool_calls(raw);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "c9");
+        assert_eq!(calls[0].name, CHAT_READ_FILE_TOOL);
+        assert_eq!(read_file_path(&calls[0].arguments).as_deref(), Some("a.txt"));
+        // 没有工具调用 / 参数坏了都回空，不编。
+        assert!(parse_tool_calls("{\"choices\":[{\"message\":{\"content\":\"hi\"}}]}").is_empty());
+        assert_eq!(read_file_path("not json"), None);
     }
 }

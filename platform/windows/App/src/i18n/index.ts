@@ -763,6 +763,29 @@ export const DICT = {
     en: 'server sent it in one piece (no streaming)',
   },
   'chat.clear': { 'zh-Hans': '清空对话', en: 'Clear' },
+  // 工具调用 + 内联审批（FR-AI-18）：卡片上的每一句都说出「要做什么 / 读到了什么」
+  'chat.tool.title': { 'zh-Hans': '模型想调用工具（需要你点一下）', en: 'The model wants to use a tool — your call' },
+  'chat.tool.readFile': {
+    'zh-Hans': '读取工作区里的文件：{path}',
+    en: 'Read a file in the workspace: {path}',
+  },
+  'chat.tool.noPath': { 'zh-Hans': '（模型没给路径）', en: '(no path given)' },
+  'chat.tool.allow': { 'zh-Hans': '允许读取', en: 'Allow' },
+  'chat.tool.deny': { 'zh-Hans': '拒绝', en: 'Deny' },
+  'chat.tool.allowed': {
+    'zh-Hans': '已允许读取 {path}：交给模型 {chars} 字符',
+    en: 'Allowed {path} — {chars} chars given to the model',
+  },
+  'chat.tool.truncated': {
+    'zh-Hans': '（文件太长，只给了前 {chars} 字符）',
+    en: '(file too long — only the first {chars} chars)',
+  },
+  'chat.tool.denied': { 'zh-Hans': '你拒绝了读取 {path}：模型只能按已有信息回答', en: 'You denied reading {path} — the model answers without it' },
+  'chat.tool.failed': { 'zh-Hans': '没有读到 {path}：{problem}', en: 'Could not read {path}: {problem}' },
+  'chat.tool.unknown': {
+    'zh-Hans': '模型点了没登记的工具「{name}」：不执行（只允许读文件）',
+    en: 'The model asked for unregistered tool “{name}” — not executed (only file reading is allowed)',
+  },
   'chat.empty': { 'zh-Hans': '还没有对话：下面写一句开始。', en: 'No messages yet — type below to start.' },
   'chat.hint': { 'zh-Hans': 'Enter 发送 · Shift+Enter 换行', en: 'Enter to send · Shift+Enter for a new line' },
   'chat.budget': {

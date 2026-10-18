@@ -140,6 +140,7 @@ export const COMMANDS = {
   // 问诊断一次（FR-AI-03 第二片）：把面板上那份资料块原样发出去，只回正文
   agentDiagnosisAsk: 'agent_diagnosis_ask',
   agentChatSend: 'agent_chat_send',
+  agentChatToolDecide: 'agent_chat_tool_decide',
   // 对话会话按工作区落盘（FR-AI-17）：读 / 写各一条，只动本机文件、不外发
   agentChatLoad: 'agent_chat_load',
   agentChatSave: 'agent_chat_save',
@@ -1126,6 +1127,43 @@ export type AgentChatReply =
       /** 真收到几段（`FR-AI-16` ①：0 = 服务端整段返回，没按流回）。 */
       deltas: number
     }
+  | {
+      /** 模型点了一件工具（`FR-AI-18`）：**还没执行**，等用户在卡片上点允许 / 拒绝。 */
+      status: 'toolPending'
+      call: AgentToolCall
+      /** 模型同时说的正文（可能为空串）。 */
+      text: string
+      model: string
+      elapsedMs: number
+      quota: AgentQuotaStatus
+      attempts: AgentAttemptNote[]
+      turns: number
+      deltas: number
+    }
+
+/** 模型点的一件工具（名字 + 参数原文；界面只画路径，不猜）。 */
+export interface AgentToolCall {
+  id: string
+  name: string
+  arguments: string
+}
+
+/** 一次工具执行的可读账（卡片上显示「允许了没有 / 读到多少 / 截没截断」）。 */
+export interface AgentToolRun {
+  name: string
+  path: string
+  approved: boolean
+  ok: boolean
+  chars: number
+  truncated: boolean
+  problem: string
+}
+
+/** 点完允许 / 拒绝之后：执行账 + 模型拿到结果后的回答（还可能再点工具）。 */
+export interface AgentToolDecision {
+  run: AgentToolRun
+  reply: AgentChatReply
+}
 
 /**
  * 一个工作区的对话会话（`FR-AI-17`）：读回来的一整段 + 读的时候发生了什么。
@@ -1338,6 +1376,33 @@ export async function agentChatStream(
   const channel = new Channel<string>()
   channel.onmessage = (chunk) => onDelta(chunk)
   return (await invoke(COMMANDS.agentChatSend, { turns, onDelta: channel })) as AgentChatReply
+}
+
+/**
+ * **用户点了允许 / 拒绝之后**（`FR-AI-18`）：执行那件只读工具，把结果回灌给模型再要一次回答。
+ *
+ * 前端只说「哪一件 + 点的是哪个」——**执行在 Rust 侧**（工作区沙箱 / 白名单 / 截断都在那儿判），
+ * 界面拿回的是可读账（`run`）与最终回答（`reply`，形状与普通对话一致，也可能再次点工具）。
+ */
+export async function agentChatToolDecide(
+  workspace: string,
+  turns: readonly AgentChatTurn[],
+  call: AgentToolCall,
+  approved: boolean,
+  onDelta: (chunk: string) => void,
+): Promise<AgentToolDecision> {
+  if (!inTauri()) {
+    throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
+  }
+  const channel = new Channel<string>()
+  channel.onmessage = (chunk) => onDelta(chunk)
+  return (await invoke(COMMANDS.agentChatToolDecide, {
+    workspace,
+    turns,
+    call,
+    approved,
+    onDelta: channel,
+  })) as AgentToolDecision
 }
 
 /**

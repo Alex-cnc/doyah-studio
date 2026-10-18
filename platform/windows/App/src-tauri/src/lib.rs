@@ -847,6 +847,32 @@ async fn agent_chat_send(
     })?
 }
 
+/// **用户点了允许 / 拒绝之后**（`FR-AI-18`）：执行那件只读工具，把结果回灌给模型再要一次回答。
+///
+/// 与前一条同样走 `spawn_blocking`（等回包期间界面不能冻住，逐段正文才画得出来）。
+/// 执行只发生在 Rust 侧：前端传进来的只是「哪一件工具 + 点的是允许还是拒绝」。
+#[tauri::command]
+async fn agent_chat_tool_decide(
+    state: State<'_, ShellState>,
+    workspace: String,
+    turns: Vec<doyah_studio_db::agent_nl2sql::ChatMessage>,
+    call: doyah_studio_db::agent_nl2sql::ChatToolCall,
+    approved: bool,
+    on_delta: tauri::ipc::Channel<String>,
+) -> Result<agent_generate::ToolDecision, DbFailure> {
+    let store = state.agent_settings.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        agent_generate::chat_tool_decide(&store, &workspace, &turns, &call, approved, &mut |chunk| {
+            let _ = on_delta.send(chunk.to_string());
+        })
+    })
+    .await
+    .map_err(|err| DbFailure {
+        message: format!("工具调用线程没能跑起来：{err}"),
+        hint: "重试一次；一直不行就重启应用。".to_string(),
+    })?
+}
+
 /// **读这个工作区的对话**（`FR-AI-17`）：打开对话页签 / 换工作区时调一次。
 ///
 /// 只读一条命令：**不触发任何外发**、也不改盘上的东西（写只发生在 [`agent_chat_save`]）。
@@ -2930,6 +2956,7 @@ pub fn run() {
             agent_generate_sql,
             agent_diagnosis_ask,
             agent_chat_send,
+            agent_chat_tool_decide,
             agent_chat_load,
             agent_chat_save,
             agent_history_list,

@@ -23,7 +23,9 @@ use doyah_studio_db::agent_audit::{AuditRecord, AuditVerdict};
 use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateReport, GateState};
 use doyah_studio_db::agent_history::HistoryEntry;
 use doyah_studio_db::agent_nl2sql::{
-    build_chat_request_streaming, build_request, parse_reply, ChatMessage, Outgoing, TableBrief,
+    build_chat_request_with_tools, build_request, parse_reply,
+    parse_tool_calls, read_file_path, ChatMessage, ChatToolCall, Outgoing, TableBrief,
+    CHAT_READ_FILE_TOOL,
 };
 use doyah_studio_db::agent_quota::{now_secs, QuotaStatus};
 use doyah_studio_db::agent_retry::{
@@ -728,15 +730,38 @@ pub enum ChatReply {
         /// **真收到几段**（`FR-AI-16` ①：0 = 服务端无视 `stream`、整段回来；≥1 = 逐段到的）。
         deltas: usize,
     },
+    /// 模型点了一件工具（`FR-AI-18`）：**还没执行**，等用户在卡片上点允许 / 拒绝。
+    ///
+    /// 这一跳**真出过一次网**（配额与审计都记了），所以这三个读数一并交回 ——
+    /// 用户看到的不是「什么都没发生」，而是「发了一次、模型要读文件、等你点」。
+    ToolPending {
+        /// 模型点的工具（名字 + 参数原文；界面只画路径，不猜）。
+        call: ChatToolCall,
+        /// 这一跳模型同时说的正文（有的模型边说边点；空串表示没有）。
+        text: String,
+        /// 实际使用的模型名。
+        model: String,
+        /// 往返耗时（毫秒）。
+        elapsed_ms: u64,
+        /// 发完这一次之后的配额读数。
+        quota: QuotaStatus,
+        /// 这一发的尝试账。
+        attempts: Vec<AttemptNote>,
+        /// 这一段对话几条消息（含这一问）。
+        turns: usize,
+        /// 这一跳真收到几段正文。
+        deltas: usize,
+    },
 }
 
 /// 对话这一次的已知缺口（随结果一起回，界面照实说）。
 /// 注：**会话落盘**（`FR-AI-17`）与**逐段流式**（`FR-AI-16` ①）都已从这份清单里摘掉 ——
 /// 两条现在都是真接上的（`agent_chat_sessions.rs` + `ChatPanel`；`chat_stream` + 同一条 SSE 读法），
 /// 留着旧话就成了假缺口。
-pub const CHAT_LIMITATIONS: [&str; 2] = [
+pub const CHAT_LIMITATIONS: [&str; 3] = [
     "流是逐段到的：中途断掉时已经画出来的那部分会留着，但不会自动补全 —— 重发一次即可。",
     "模型给的语句只落在对话正文里，本应用**不执行**它 —— 要用就自己复制到编辑器里跑。",
+    "工具只有一件只读的「读取工作区里的文件」，每次都要你点「允许读取」；不写文件、不执行语句。",
 ];
 
 /// **对话这一次**（`FR-AI-25` 对话页签第一片）：把整段历史发出去，只回正文。
@@ -764,6 +789,21 @@ pub fn chat_stream(
     turns: &[ChatMessage],
     sink: &mut dyn FnMut(&str),
 ) -> Result<ChatReply, DbFailure> {
+    chat_stream_with(store, turns, None, sink)
+}
+
+/// **带工具状态**的对话（`FR-AI-18`）：与 [`chat_stream`] 完全同一条通道，
+/// 只是这次请求里带着工具清单，可能带回「模型点了某件工具」。
+///
+/// `pending` = 上一跳的工具调用 + 用户点完之后拿到的结果（`None` = 这一问的第一跳）。
+/// **工具结果只从参数进来**：本层不执行任何工具（执行在 [`chat_tool_decide`] 那一侧），
+/// 所以「模型想读什么」与「真读到了什么」是两条分开的路，谁也替不了谁。
+pub fn chat_stream_with(
+    store: &AgentSettingsStore,
+    turns: &[ChatMessage],
+    pending: Option<(&ChatToolCall, &str)>,
+    sink: &mut dyn FnMut(&str),
+) -> Result<ChatReply, DbFailure> {
     let config = store.load()?;
     let question = turns
         .last()
@@ -772,7 +812,7 @@ pub fn chat_stream(
     if let Some(gate) = gate_refusal(store, &config, &question)? {
         return Ok(ChatReply::Blocked { gate });
     }
-    let outgoing = build_chat_request_streaming(&config, turns).map_err(|err| DbFailure {
+    let outgoing = build_chat_request_with_tools(&config, turns, pending).map_err(|err| DbFailure {
         message: err.to_string(),
         hint: "改一下这段对话（空消息 / 太长 / 结尾是模型的话）再发。".to_string(),
     })?;
@@ -790,8 +830,10 @@ pub fn chat_stream(
     let mut attempt_no: u32 = 1;
     let mut text = String::new();
     let mut deltas = 0usize;
+    // 这一跳模型点到的工具（流里逐段拼出来；`FR-AI-18`）。
+    let mut calls: Vec<ChatToolCall>;
     // 只在成功读到回包时赋值（循环里那两处 `return` 不会走到下面）。
-    let mut finished: bool;
+    let finished: bool;
 
     loop {
         // 重试同样真出网 ⇒ 第 2 次起每次尝试都再过一遍配额（第一次由上面记过账）。
@@ -901,8 +943,12 @@ pub fn chat_stream(
                 text = read.text;
                 deltas += read.deltas;
                 finished = read.finished;
-                if text.is_empty() {
-                    // 服务端无视 `stream`（或回的是一整段 JSON）：整段解析，deltas 仍是 0。
+                calls = read.calls;
+                if text.is_empty() && calls.is_empty() {
+                    // 服务端无视 `stream`（或回的是一整段 JSON）：先看有没有工具调用，再整段解析正文。
+                    calls = parse_tool_calls(&read.raw);
+                }
+                if text.is_empty() && calls.is_empty() {
                     match agent_advisor::parse_reply(&read.raw) {
                         Ok(whole) => text = whole,
                         Err(err) => {
@@ -975,6 +1021,34 @@ pub fn chat_stream(
 
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
+    // 模型点了工具（`FR-AI-18`）：这一跳**真出过网**（配额、审计照记），然后**停下来等人点** ——
+    // 不自己执行、不替用户点。执行与回灌在 `chat_tool_decide` 那一侧。
+    if let Some(call) = calls.into_iter().next() {
+        let mut limitations: Vec<String> = Vec::new();
+        if let Some(note) = record_audit(
+            store,
+            AuditVerdict::Ok,
+            &outgoing.model,
+            &outgoing.url,
+            &question,
+            &format!("工具调用：{}（等用户批准）", call.name),
+            elapsed_ms,
+            0,
+        ) {
+            limitations.push(format!("这一次没能记进审计记录（{note}）—— 工具调用仍然可以继续。"));
+        }
+        return Ok(ChatReply::ToolPending {
+            call,
+            text,
+            model: outgoing.model,
+            elapsed_ms,
+            quota,
+            attempts,
+            turns: turns.len(),
+            deltas,
+        });
+    }
+
     let mut limitations: Vec<String> = CHAT_LIMITATIONS.iter().map(|line| line.to_string()).collect();
     if deltas > 0 && !finished {
         // 流里没有收尾标记（`[DONE]` / `finish_reason`）⇒ 可能是中途被截断。正文照给，但要说清。
@@ -1008,6 +1082,177 @@ pub fn chat_stream(
         turns: turns.len(),
         deltas,
     })
+}
+
+/// 一次工具执行的**可见账**（界面卡片上如实显示「允许了没有、读到多少、截没截断」）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolRun {
+    /// 工具名（现在只有 `read_file`）。
+    pub name: String,
+    /// 模型要的相对路径（原样回显，便于用户核对）。
+    pub path: String,
+    /// 用户点了允许还是拒绝。
+    pub approved: bool,
+    /// 真读到了内容（拒绝 / 越界 / 读不到都是 `false`）。
+    pub ok: bool,
+    /// 交给模型的字符数（拒绝时为 0）。
+    pub chars: usize,
+    /// 是不是因为太长被截断了。
+    pub truncated: bool,
+    /// 读不到 / 越界时的可读原因（空串 = 没问题）。
+    pub problem: String,
+}
+
+/// 用户点完允许 / 拒绝之后的结果：卡片读数 + 模型拿到结果后的最终回答。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolDecision {
+    /// 这一件工具的执行账。
+    pub run: ToolRun,
+    /// 回灌之后模型的回答（与普通对话同一个 [`ChatReply`]；也可能再次点工具）。
+    pub reply: ChatReply,
+}
+
+/// 交回模型的那段「被拒绝」正文：**让它别编**。
+pub const TOOL_DENIED_NOTE: &str =
+    "用户拒绝了这次读取。不要编造该文件的内容；请基于已有信息回答，并说明你需要哪部分内容、为什么。";
+
+/// 交给模型的单次工具正文上限（字符）。超了如实标注截断 —— 悄悄砍掉会让模型以为文件只有这么长。
+pub const TOOL_RESULT_MAX_CHARS: usize = 8_000;
+
+/// 用户点了允许 / 拒绝之后：执行（或记下拒绝）+ 把结果回灌给模型（`FR-AI-18`）。
+///
+/// **执行只在这一条路上**，且只认 [`CHAT_READ_FILE_TOOL`] 这一件：别的名字连读都不读。
+pub fn chat_tool_decide(
+    store: &AgentSettingsStore,
+    workspace: &str,
+    turns: &[ChatMessage],
+    call: &ChatToolCall,
+    approved: bool,
+    sink: &mut dyn FnMut(&str),
+) -> Result<ToolDecision, DbFailure> {
+    let path = read_file_path(&call.arguments).unwrap_or_default();
+    let read = if !approved {
+        ToolRead {
+            content: TOOL_DENIED_NOTE.to_string(),
+            chars: 0,
+            truncated: false,
+            ok: false,
+            problem: String::new(),
+        }
+    } else if call.name.trim() != CHAT_READ_FILE_TOOL {
+        ToolRead {
+            content: format!(
+                "没有执行：工具「{}」不在只读白名单里（只允许 {CHAT_READ_FILE_TOOL}）。",
+                call.name
+            ),
+            chars: 0,
+            truncated: false,
+            ok: false,
+            problem: "不在白名单".to_string(),
+        }
+    } else {
+        read_workspace_file(workspace, &path)
+    };
+    let run = ToolRun {
+        name: call.name.clone(),
+        path,
+        approved,
+        ok: read.ok,
+        chars: read.chars,
+        truncated: read.truncated,
+        problem: read.problem.clone(),
+    };
+    let reply = chat_stream_with(
+        store,
+        turns,
+        Some((call, read.content.as_str())),
+        sink,
+    )?;
+    Ok(ToolDecision { run, reply })
+}
+
+/// 读一次工作区里的文本文件（**只读、只认相对路径、不许跳出工作区**）。
+struct ToolRead {
+    content: String,
+    chars: usize,
+    truncated: bool,
+    ok: bool,
+    problem: String,
+}
+
+fn tool_read_refused(reason: &str) -> ToolRead {
+    ToolRead {
+        content: format!("没有读到：{reason}"),
+        chars: 0,
+        truncated: false,
+        ok: false,
+        problem: reason.to_string(),
+    }
+}
+
+fn read_workspace_file(workspace: &str, path: &str) -> ToolRead {
+    let root = workspace.trim();
+    if root.is_empty() {
+        return tool_read_refused("没有打开工作区，读不了文件");
+    }
+    if path.trim().is_empty() {
+        return tool_read_refused("模型没给路径（path 为空）");
+    }
+    let relative = std::path::Path::new(path);
+    if relative.is_absolute() {
+        return tool_read_refused("只允许工作区里的相对路径，绝对路径一律不读");
+    }
+    if relative
+        .components()
+        .any(|part| matches!(part, std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)))
+    {
+        return tool_read_refused("路径里有 .. / 前缀：只允许工作区内部的路径");
+    }
+    let root_path = std::path::Path::new(root);
+    let Ok(root_real) = root_path.canonicalize() else {
+        return tool_read_refused("工作区路径读不到");
+    };
+    let joined = root_path.join(relative);
+    let Ok(target) = joined.canonicalize() else {
+        return tool_read_refused(&format!("工作区里没有这个文件：{path}"));
+    };
+    if !target.starts_with(&root_real) {
+        return tool_read_refused("这个路径落在工作区外面，不读");
+    }
+    if !target.is_file() {
+        return tool_read_refused("这不是一个文件（目录不读）");
+    }
+    let Ok(bytes) = std::fs::read(&target) else {
+        return tool_read_refused("文件读不出来（没有权限或已被占用）");
+    };
+    if bytes.iter().any(|byte| *byte == 0) {
+        return tool_read_refused("这不是文本文件（含二进制内容），没有读取");
+    }
+    // 文件名出现在给模型的正文里：让它知道读的是哪一份（路径已经校验过在工作区内）。
+    let shown = path.trim().replace('\\', "/");
+    let text = String::from_utf8_lossy(&bytes).to_string();
+    let total = text.chars().count();
+    let (body, truncated) = if total > TOOL_RESULT_MAX_CHARS {
+        let cut: String = text.chars().take(TOOL_RESULT_MAX_CHARS).collect();
+        (cut, true)
+    } else {
+        (text, false)
+    };
+    let mut content = format!("文件 {shown}（共 {total} 字符）：\n{body}");
+    if truncated {
+        content.push_str(&format!(
+            "\n\n（已截断：只给了前 {TOOL_RESULT_MAX_CHARS} 字符，共 {total} 字符。需要更多就分段问。）"
+        ));
+    }
+    ToolRead {
+        chars: body.chars().count(),
+        content,
+        truncated,
+        ok: true,
+        problem: String::new(),
+    }
 }
 
 /// 一次失败的**留痕 + 决定再试还是停**（流式与整段两条路共用，避免各写一份重试账）。
@@ -1063,6 +1308,17 @@ enum SseEvent {
     Finished,
     /// 服务端把错误塞在流里。
     Error(String),
+    /// 一段工具调用增量（`FR-AI-18`）：名字 / 参数都会**分几帧到**，按 `index` 拼。
+    ToolCall {
+        /// 第几件（同一条回包里可能并列多件）。
+        index: usize,
+        /// 调用 id（只有第一帧带）。
+        id: Option<String>,
+        /// 工具名（可能分帧拼）。
+        name: Option<String>,
+        /// 参数 JSON 的**片段**（必须原样拼接，不能逐帧解析）。
+        arguments: String,
+    },
 }
 
 /// 读一段流式回包的结果。
@@ -1075,6 +1331,8 @@ struct StreamRead {
     deltas: usize,
     /// 有没有收尾标记。
     finished: bool,
+    /// 拼出来的工具调用（`FR-AI-18`；空 = 这一跳没点工具）。
+    calls: Vec<ChatToolCall>,
 }
 
 /// 按行读 SSE：命中 `data:` 就交一段给 `sink`。
@@ -1092,6 +1350,7 @@ fn read_sse_stream(
     let mut text = String::new();
     let mut deltas = 0usize;
     let mut finished = false;
+    let mut calls: Vec<ChatToolCall> = Vec::new();
     loop {
         let read = response
             .read(&mut buf)
@@ -1105,7 +1364,7 @@ fn read_sse_stream(
                 let current = String::from_utf8_lossy(&line).to_string();
                 line.clear();
                 if let Some(event) = parse_sse_line(&current) {
-                    apply_sse_event(event, &mut text, &mut deltas, &mut finished, sink)?;
+                    apply_sse_event(event, &mut text, &mut deltas, &mut finished, &mut calls, sink)?;
                 }
             } else {
                 line.push(byte);
@@ -1116,7 +1375,7 @@ fn read_sse_stream(
     if !line.is_empty() {
         let current = String::from_utf8_lossy(&line).to_string();
         if let Some(event) = parse_sse_line(&current) {
-            apply_sse_event(event, &mut text, &mut deltas, &mut finished, sink)?;
+            apply_sse_event(event, &mut text, &mut deltas, &mut finished, &mut calls, sink)?;
         }
     }
     Ok(StreamRead {
@@ -1124,6 +1383,7 @@ fn read_sse_stream(
         text,
         deltas,
         finished,
+        calls,
     })
 }
 
@@ -1133,6 +1393,7 @@ fn apply_sse_event(
     text: &mut String,
     deltas: &mut usize,
     finished: &mut bool,
+    calls: &mut Vec<ChatToolCall>,
     sink: &mut dyn FnMut(&str),
 ) -> Result<(), String> {
     match event {
@@ -1140,6 +1401,31 @@ fn apply_sse_event(
             text.push_str(&chunk);
             *deltas += 1;
             sink(&chunk);
+        }
+        SseEvent::ToolCall {
+            index,
+            id,
+            name,
+            arguments,
+        } => {
+            // 按 index 拼：同一件的名字与参数会分几帧到，参数只能**原样拼接**（逐帧解析必然失败）。
+            while calls.len() <= index {
+                calls.push(ChatToolCall {
+                    id: String::new(),
+                    name: String::new(),
+                    arguments: String::new(),
+                });
+            }
+            let slot = &mut calls[index];
+            if let Some(id) = id {
+                if slot.id.is_empty() {
+                    slot.id = id;
+                }
+            }
+            if let Some(name) = name {
+                slot.name.push_str(&name);
+            }
+            slot.arguments.push_str(&arguments);
         }
         SseEvent::Done | SseEvent::Finished => *finished = true,
         SseEvent::Error(message) => {
@@ -1167,6 +1453,43 @@ fn parse_sse_line(line: &str) -> Option<SseEvent> {
         return Some(SseEvent::Error(message.to_string()));
     }
     let choice = value.get("choices").and_then(|choices| choices.get(0));
+    // 工具调用增量（`FR-AI-18`）：位置在 `delta.tool_calls[i]`，名字与参数可能**分几帧**到。
+    if let Some(list) = choice
+        .and_then(|choice| choice.get("delta"))
+        .and_then(|delta| delta.get("tool_calls"))
+        .and_then(|calls| calls.as_array())
+    {
+        for item in list {
+            let index = item
+                .get("index")
+                .and_then(|index| index.as_u64())
+                .unwrap_or(0) as usize;
+            let id = item
+                .get("id")
+                .and_then(|id| id.as_str())
+                .filter(|id| !id.is_empty())
+                .map(|id| id.to_string());
+            let function = item.get("function");
+            let name = function
+                .and_then(|function| function.get("name"))
+                .and_then(|name| name.as_str())
+                .filter(|name| !name.is_empty())
+                .map(|name| name.to_string());
+            let arguments = function
+                .and_then(|function| function.get("arguments"))
+                .and_then(|arguments| arguments.as_str())
+                .unwrap_or("")
+                .to_string();
+            if id.is_some() || name.is_some() || !arguments.is_empty() {
+                return Some(SseEvent::ToolCall {
+                    index,
+                    id,
+                    name,
+                    arguments,
+                });
+            }
+        }
+    }
     if let Some(chunk) = choice
         .and_then(|choice| choice.get("delta"))
         .and_then(|delta| delta.get("content"))
@@ -2389,5 +2712,141 @@ mod tests {
             }
             other => panic!("该真发一次：{other:?}"),
         }
+    }
+
+    // ── 工具调用 + 内联审批（`FR-AI-18`）────────────────────────────────────────────
+    // 四条判据：请求里真带工具清单 / 模型点工具就**停在等人点** / 允许后文件内容回灌 / 拒绝与越界都不读。
+
+    /// 一段工具调用 SSE：**参数分两帧到**（真实服务端就是这样），拼起来才是合法 JSON。
+    const SSE_TOOL_CALL: &str = concat!(
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",",
+        "\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\"}}]}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"notes.txt\\\"}\"}}]}}]}\n\n",
+        "data: [DONE]\n\n",
+    );
+
+    /// 一段普通正文 SSE（工具点完之后模型给的最终回答）。
+    const SSE_ANSWER: &str = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"文件里写着重试三次\"}}]}\n\n",
+        "data: [DONE]\n\n",
+    );
+
+    fn tool_workspace(tag: &str) -> PathBuf {
+        let dir = fixture_root().join(format!("doyah-tool-ws-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("notes.txt"), "重试三次。").unwrap();
+        std::fs::write(
+            fixture_root().join(secret_name()),
+            "不该被读到",
+        )
+        .unwrap();
+        dir
+    }
+
+    /// 工作区**外面**那份文件的名字（越界判据用它 —— 名字必须真存在，否则「读不到」会顶替「越界」而假绿）。
+    fn secret_name() -> String {
+        format!("doyah-tool-secret-{}.txt", std::process::id())
+    }
+
+    #[test]
+    fn a_tool_call_stops_for_approval_and_the_approved_file_goes_back_to_the_model() {
+        let (endpoint, seen) = fake_endpoint_script(vec![
+            ("200 OK", SSE_TOOL_CALL),
+            ("200 OK", SSE_ANSWER),
+        ]);
+        let store = streaming_store("chat-tool-approve", endpoint);
+        let workspace = tool_workspace("approve");
+        let turns = vec![chat_turn("user", "看一下 notes.txt 里写了什么")];
+
+        let call = match chat(&store, &turns).unwrap() {
+            ChatReply::ToolPending { call, .. } => call,
+            other => panic!("模型点了工具就该停下来等人点：{other:?}"),
+        };
+        assert_eq!(call.name, "read_file");
+        assert_eq!(call.id, "call_1");
+        assert_eq!(call.arguments, "{\"path\":\"notes.txt\"}", "分帧参数要原样拼回去");
+
+        // 第一发请求里真带着工具清单（否则模型根本没机会点）。
+        let first = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(first.contains("\"tools\""), "{first}");
+        assert!(first.contains("read_file"), "{first}");
+
+        // 允许之后：文件内容要真出现在第二发请求里（role: tool + tool_call_id 成对）。
+        let decision = chat_tool_decide(
+            &store,
+            workspace.to_str().unwrap(),
+            &turns,
+            &call,
+            true,
+            &mut |_| {},
+        )
+        .unwrap();
+        assert!(decision.run.approved);
+        assert!(decision.run.ok, "{:?}", decision.run.problem);
+        assert!(decision.run.chars > 0);
+        let second = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(second.contains("tool_call_id"), "{second}");
+        assert!(second.contains("重试三次"), "读到的内容要回灌给模型：{second}");
+        match decision.reply {
+            ChatReply::Answered { text, deltas, .. } => {
+                assert!(text.contains("重试三次"), "{text}");
+                assert_eq!(deltas, 1);
+            }
+            other => panic!("回灌之后该给最终回答：{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_denied_tool_is_reported_to_the_model_and_the_file_stays_unread() {
+        let (endpoint, seen) =
+            fake_endpoint_script(vec![("200 OK", SSE_TOOL_CALL), ("200 OK", SSE_ANSWER)]);
+        let store = streaming_store("chat-tool-deny", endpoint);
+        let workspace = tool_workspace("deny");
+        let turns = vec![chat_turn("user", "看一下 notes.txt 里写了什么")];
+        let call = match chat(&store, &turns).unwrap() {
+            ChatReply::ToolPending { call, .. } => call,
+            other => panic!("该等到审批：{other:?}"),
+        };
+        // 先把第一发（带工具清单那一次）取走，下面取到的才是回灌那一次。
+        let _first = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        let decision = chat_tool_decide(
+            &store,
+            workspace.to_str().unwrap(),
+            &turns,
+            &call,
+            false,
+            &mut |_| {},
+        )
+        .unwrap();
+        assert!(!decision.run.approved);
+        assert!(!decision.run.ok);
+        assert_eq!(decision.run.chars, 0);
+        let second = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(second.contains("用户拒绝了"), "被拒要如实告诉模型：{second}");
+        assert!(
+            !second.contains("重试三次"),
+            "拒绝了就不许把文件内容发出去：{second}"
+        );
+    }
+
+    #[test]
+    fn a_path_outside_the_workspace_is_refused_before_any_read() {
+        let workspace = tool_workspace("escape");
+        // 工作区外那份文件**真的存在**（否则「没有这个文件」会顶替「越界」而假绿）。
+        let escape = format!("../{}", secret_name());
+        assert!(fixture_root().join(secret_name()).exists());
+        let read = read_workspace_file(workspace.to_str().unwrap(), &escape);
+        assert!(!read.ok);
+        // 钉住「越界这一条前置检查先拦下来」——只靠 canonicalize 兜底也算安全，
+        // 但那样这里就分不出「前置检查在不在」（实测：删掉前置检查，这条断言才会红）。
+        assert!(read.content.contains("路径里有"), "{}", read.content);
+        assert!(!read.content.contains("不该被读到"));
+        // 绝对路径同样不读。
+        let absolute = read_workspace_file(workspace.to_str().unwrap(), "C:/Windows/win.ini");
+        assert!(!absolute.ok);
+        // 工作区里的正常文件照读。
+        let inside = read_workspace_file(workspace.to_str().unwrap(), "notes.txt");
+        assert!(inside.ok);
+        assert!(inside.content.contains("重试三次"));
     }
 }
