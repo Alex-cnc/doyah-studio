@@ -8,6 +8,10 @@ pub mod connections;
 /// 智能体设置的落盘（FR-AI-01）：配置在 `%APPDATA%\DoyahStudio\agent.json`、
 /// 密钥单独一份 DPAPI 密文（`agent-key.bin`）—— **配置结构里没有密钥字段**。
 pub mod agent_settings;
+/// 自然语言 → SQL 的外发面（FR-AI-02）：请求装配与回包解析在领域层
+/// `doyah_studio_db::agent_nl2sql`；本模块只管「判放行 → 真发一次 → 回文本」，
+/// **不持有任何数据库连接**（「永不自动执行」在形状上成立）。
+pub mod agent_generate;
 pub mod format_tool;
 pub mod fs;
 pub mod postgres;
@@ -626,6 +630,32 @@ fn agent_key_save(
 fn agent_key_clear(state: State<'_, ShellState>) -> Result<AgentSettingsSnapshot, DbFailure> {
     state.agent_settings.clear_key()?;
     state.agent_settings.snapshot()
+}
+
+// ── 自然语言 → SQL（FR-AI-02）──────────────────────────────────────────────────────────
+//
+// 两条命令：**先看要发什么**（不发）与**真发一次**（只回文本）。
+// 界面必须先给用户看第一份正文、再让他点第二次才外发；而「关掉总开关零外发」由
+// `agent_generate::generate` 第一段裁决保证（不是靠界面藏按钮）。
+
+/// 装配「将要外发」的正文并给出闸门裁决（**不发请求**）。
+#[tauri::command]
+fn agent_generate_preview(
+    state: State<'_, ShellState>,
+    question: String,
+    tables: Vec<doyah_studio_db::agent_nl2sql::TableBrief>,
+) -> Result<agent_generate::GeneratePreview, DbFailure> {
+    agent_generate::preview(&state.agent_settings, &question, &tables)
+}
+
+/// 真发一次：放行才发，结果**只回文本**、不执行、不入历史。
+#[tauri::command]
+fn agent_generate_sql(
+    state: State<'_, ShellState>,
+    question: String,
+    tables: Vec<doyah_studio_db::agent_nl2sql::TableBrief>,
+) -> Result<agent_generate::GenerateReply, DbFailure> {
+    agent_generate::generate(&state.agent_settings, &question, &tables)
 }
 
 /// 生成**服务端条件浏览**的 SQL（FR-DATA-02；**只生成、不执行**）。
@@ -2008,6 +2038,8 @@ pub fn run() {
             agent_settings_save,
             agent_key_save,
             agent_key_clear,
+            agent_generate_preview,
+            agent_generate_sql,
             connection_validate,
             connection_type_defaults,
             connection_import_url,

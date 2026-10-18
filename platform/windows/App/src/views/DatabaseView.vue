@@ -83,6 +83,7 @@ import {
   type TableShape,
   type DdlStatement,
   type ImportPreview,
+  type AgentTableBrief,
 } from '../ipc'
 import { frozenColumnStylesMeasured, pageOf, visibleOrder, DEFAULT_PAGE_SIZE } from '../grid/view'
 import { EXPORT_FORMAT_LABELS, exportRows, type ExportFormat } from '../grid/export'
@@ -95,6 +96,7 @@ import {
 } from '../shell/connectionDisplay'
 import ConnectionLabel from '../shell/ConnectionLabel.vue'
 import ConnectionDialog from '../shell/ConnectionDialog.vue'
+import AgentGenerateDialog from '../shell/AgentGenerateDialog.vue'
 import type { ConnectionDialogMode } from '../shell/connectionDialog'
 import NodeIcon from './NodeIcon.vue'
 import SchemaDiffPanel from './SchemaDiffPanel.vue'
@@ -1635,6 +1637,58 @@ async function toggleTable(object: ObjectNode) {
 /** 某张表已加载的列（没加载过就是空数组 —— 不是"没有列"）。 */
 function columnsFor(object: ObjectNode): ColumnNode[] {
   return columnsOf.value[tableKey(object.schema, object.name)] ?? []
+}
+
+// ── 自然语言 → SQL（FR-AI-02）────────────────────────────────────────────────
+//
+// 视图这一侧只做两件交接：把「已加载的表」交给弹层（外发正文由 Rust 装配），
+// 以及把用户点过「写入编辑器」的 SQL 放进编辑器缓冲 —— **不执行**。
+// 弹层自己去问「先看要发什么」与「真发一次」，视图不拼提示词、不碰网络。
+
+const generateOpen = ref(false)
+
+/** 随请求外发的表摘要：**只含已加载过的那部分**（列没展开过就只给表名，不编列）。 */
+const generateTables = computed<AgentTableBrief[]>(() =>
+  loadedObjects.value
+    .filter((object) => canExpandColumns(object))
+    .map((object) => ({
+      schema: object.schema,
+      name: object.name,
+      columns: columnsFor(object).map((column) => ({ name: column.name, dataType: column.dataType })),
+    })),
+)
+
+/**
+ * 打开生成弹层。一张表都没加载过时**先去取一层对象**（与对象树同一个口 `dbRelations`），
+ * 否则外发正文里连表名都没有 —— 模型只能瞎编表名，那不是「生成 SQL」而是「猜」。
+ */
+async function openGenerate(): Promise<void> {
+  if (!loadedObjects.value.length && schemas.value.length) {
+    const target = schemas.value.includes('public') ? 'public' : schemas.value[0]
+    loadingSchema.value = target
+    try {
+      const report = await dbRelations(target)
+      layerOf.value = { ...layerOf.value, [target]: report.rows }
+      expanded.value = { ...expanded.value, [target]: true }
+      metadataTruncated.value = report.truncated ? report.limit : 0
+    } catch (e) {
+      // 取不到不拦着开弹层：弹层会如实说「一张表都没加载到」，仍可凭问题里的表名生成。
+      failure.value = describeError(e)
+    } finally {
+      loadingSchema.value = ''
+    }
+  }
+  generateOpen.value = true
+}
+
+/** 把用户确认过的 SQL 写进编辑器缓冲（watch(sql) 会回写当前页签）；**不执行**。 */
+function applyGeneratedSql(text: string): void {
+  if (!text.trim()) return
+  sql.value = text
+  generateOpen.value = false
+  void refreshHighlight()
+  void refreshCompletions()
+  void nextTick(() => sqlArea.value?.focus())
 }
 
 /** 类型分组标题的文案（种类名走语言表；认不出的种类如实归到「其他」）。 */
@@ -3665,6 +3719,17 @@ async function probe() {
           >
             清空
           </button>
+            <!-- 自然语言 → SQL（FR-AI-02）：两段式，先摊外发正文再看结果；
+                 生成的 SQL **只写进编辑器**，不执行（运行仍要用户按「执行」）。 -->
+            <button
+              class="db__btn"
+              type="button"
+              data-testid="ai-generate"
+              :title="t('agent.generate.entryTip')"
+              @click="openGenerate"
+            >
+              {{ t('agent.generate.entry') }}
+            </button>
             <span v-if="result && !result.columns.length" class="db__note">
               影响 {{ result.affected ?? '未知' }} 行（无结果集）
             </span>
@@ -4222,6 +4287,16 @@ async function probe() {
       </div>
     </div>
   </section>
+
+  <!-- 自然语言 → SQL（FR-AI-02）：弹层自己管两段式流程；视图只给它「已加载的表」并把
+       用户确认后的 SQL 写进编辑器缓冲（**不执行** —— 这一点在弹层文案里也写明）。 -->
+  <AgentGenerateDialog
+    :open="generateOpen"
+    :tables="generateTables"
+    :language="language"
+    @close="generateOpen = false"
+    @insert="applyGeneratedSql"
+  />
 </template>
 
 <style scoped>

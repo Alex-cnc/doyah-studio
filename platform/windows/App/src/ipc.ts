@@ -101,6 +101,9 @@ export const COMMANDS = {
   agentSettingsSave: 'agent_settings_save',
   agentKeySave: 'agent_key_save',
   agentKeyClear: 'agent_key_clear',
+  // 自然语言 → SQL（FR-AI-02：先看要发什么 → 再真发一次；结果只进编辑器，不执行）
+  agentGeneratePreview: 'agent_generate_preview',
+  agentGenerateSql: 'agent_generate_sql',
   // 连接配置面收口（S-1a）：逐项校验 / 换引擎联动默认值 / 从 URL 导入
   connectionValidate: 'connection_validate',
   connectionTypeDefaults: 'connection_type_defaults',
@@ -664,6 +667,54 @@ export interface AgentGateReport {
   issues: AgentIssue[]
 }
 
+// ── 自然语言 → SQL（FR-AI-02）────────────────────────────────────────────────
+//
+// 两段式：**先看要发什么**（`agentGeneratePreview`，不发请求）→ 用户点第二次才
+// `agentGenerateSql`。外发正文由 Rust 那侧装配一次（预览与实发**同一份文本**），
+// 界面不许自己拼提示词（否则预览看到的与实际发出去的不是一件事）。
+
+/** 一列（只带名字与类型；**行数据不外发**）。 */
+export interface AgentColumnBrief {
+  name: string
+  dataType: string
+}
+
+/** 一张表（或视图）的摘要（列没展开过时 `columns` 为空数组，**不是「没有列」**）。 */
+export interface AgentTableBrief {
+  schema: string
+  name: string
+  columns: AgentColumnBrief[]
+}
+
+/** 「先看要发什么」的结果（**不含任何行数据**）。 */
+export interface AgentGeneratePreview {
+  gate: AgentGateReport
+  /** 将要请求的完整地址。 */
+  url: string
+  /** 将要发送的正文（表名 / 列名 / 类型 / 问题）。 */
+  human: string
+  tableCount: number
+  /** 因上限没列出去的表数（界面要如实说）。 */
+  dropped: number
+}
+
+/** 一次生成的结果（**只有文本，没有被执行**）。 */
+export interface AgentGenerateOutcome {
+  sql: string
+  explanation: string
+  tablesUsed: string[]
+  model: string
+  elapsedMs: number
+  tableCount: number
+  /** 本片的已知缺口（配额尚未计数等），界面必须显示。 */
+  limitations: string[]
+}
+
+/** 生成的两种结局：被闸门挡住（零外发）或真的发了。 */
+export type AgentGenerateReply =
+  | { status: 'blocked'; gate: AgentGateReport }
+  | ({ status: 'generated' } & AgentGenerateOutcome)
+
 /** 设置快照：配置 + 裁决 + 密钥在不在 + 两个路径。 */
 export interface AgentSettingsSnapshot {
   config: AgentConfiguration
@@ -760,6 +811,32 @@ export function agentKeyClear(): Promise<AgentSettingsSnapshot> {
   return call(COMMANDS.agentKeyClear, {}, () => {
     bypassAgent = { ...bypassAgent, keyPresent: false }
     return bypassAgentSnapshot()
+  })
+}
+
+/**
+ * 「先看要发什么」（`FR-AI-02`）：**不发请求**，只把将要外发的正文与放行状态摊出来。
+ *
+ * 浏览器旁路里**不给一份自己拼的正文** —— 预览与实发必须是同一份文本，
+ * 而那份文本只在 Rust 那侧装配一次（见 `Db/src/agent_nl2sql.rs` 的单测
+ * 「the_human_preview_is_the_same_text_that_gets_sent」）。
+ */
+export function agentGeneratePreview(
+  question: string,
+  tables: AgentTableBrief[],
+): Promise<AgentGeneratePreview> {
+  return call(COMMANDS.agentGeneratePreview, { question, tables }, () => {
+    throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
+  })
+}
+
+/** 真发一次（放行才发；结果**只回文本**，不执行、不入历史）。 */
+export function agentGenerateSql(
+  question: string,
+  tables: AgentTableBrief[],
+): Promise<AgentGenerateReply> {
+  return call(COMMANDS.agentGenerateSql, { question, tables }, () => {
+    throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
   })
 }
 
