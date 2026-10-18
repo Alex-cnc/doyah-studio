@@ -158,6 +158,10 @@ struct AgentSettingsSheet: View {
             }
             .formStyle(.columns)
             .frame(width: 460)
+            // **表单吃剩余高度、自己内部滚动**：对话框高度必须封顶（见 `sheetHeight`），
+            // 否则表单把整块撑到屏幕外 —— 底栏的「测试连接 / 取消 / 保存」会被 Dock 盖住
+            // （人类主人 2026-10-18 实测：「对话框太高了，连最底下的测试按钮都被任务栏遮住了」）。
+            .frame(maxHeight: .infinity)
 
             statusSection
 
@@ -202,7 +206,7 @@ struct AgentSettingsSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 560)
+        .frame(width: 560, height: sheetHeight)
         // 换提供商 ⇒ 自动填端点与模型；手改端点 ⇒ 重认一次「这是谁」。
         // 两条都不自己判，只读契约层（`AgentProviderCatalog`）给的答案。
         .onChange(of: providerID) { _, newValue in applyProvider(newValue) }
@@ -368,6 +372,15 @@ struct AgentSettingsSheet: View {
         if !trimmed.isEmpty { return trimmed }
         if clearAPIKey { return nil }
         return appState.agentAPIKey
+    }
+
+    /// 对话框高度：**跟着可用屏幕算，不跟着内容长**。
+    ///
+    /// `NSScreen.visibleFrame` 已经扣掉菜单栏与 Dock，再留 96 点给窗口边距 ——
+    /// 这样在 13 寸笔记本（可用约 700 点）上也不会把底栏推到 Dock 底下。
+    private var sheetHeight: CGFloat {
+        let available = (NSScreen.main?.visibleFrame.height ?? 800) - 96
+        return min(680, max(420, available))
     }
 
     private func save() {

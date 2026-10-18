@@ -190,7 +190,7 @@
     {
       "key": "doc-tables-lists",
       "label": "check-doc-tables 默认清单里被 .gitignore 排除的文档份数（= 只在主开发机上的那几份）",
-      "value": 13,
+      "value": 12,
       "unit": "份",
       "secondary": {
         "label": "受版本控制的文档份数（自检夹具口径）",
@@ -200,7 +200,7 @@
         "kind": "doc-tables-lists",
         "module": "Scripts/check-doc-tables.py",
         "expect": [
-          13,
+          12,
           41
         ],
         "note": "导入那个模块读它的清单（**权威算法是它自己的 `gitignored_documents()`**）+ `git check-ignore -z` 实测「被排除的确实是这 7 份」+ 与自检夹具 `SELF_TEST_ABSENT` / `SELF_TEST_TRACKED` **逐条**对账（清单改了没改夹具即判红）；不在 git 仓库里时 git 侧复核如实报「跳过」，不假装核过"
@@ -445,14 +445,14 @@
     {
       "key": "panel-root-out-of-scope",
       "label": "面板根判据的**范围外**处数（尺寸取自设计令牌 / 变量的 `.frame` —— 如实打印、不算通过）",
-      "value": 11,
+      "value": 12,
       "unit": "处",
       "measure": {
         "kind": "judge-output",
         "script": "Scripts/check-panel-root-frames.py",
         "regex": "另有 (\\d+) 处",
         "expect": [
-          11
+          12
         ],
         "note": "同一个判据的人读行（它每次显式打印这个数 —— 靠打印区分「没有」与「没扫」）；这条只判「打印出来的数」，范围的归属仍由闭环第 6 项的设计令牌棘城管。"
       },
