@@ -41,6 +41,39 @@ pub struct RetroReport {
     pub bytes: usize,
     /// 渲染模型（领域层 `markdown::parse` 的产出）。
     pub document: markdown::Document,
+    /// 正文里每一处媒体引用在盘上的判定（界面照着画：能读的显示、读不了的占位 + 原因）。
+    pub media: Vec<RetroMedia>,
+}
+
+/// 一处媒体的判定结果（**判定只有这一处**：界面不再自己拼路径、不再自己判后缀）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MediaState {
+    /// 能读：`path` 给出绝对落点，`mime` 给出类型（界面建 blob 用）。
+    Ok,
+    /// 包里没有这个文件。
+    Missing,
+    /// 路径不合法（绝对路径 / `..` / 反斜杠 / 不在 `assets/` 下）。
+    Rejected,
+    /// 外链（`http`/`https`）—— 视图内**不加载**（不出网）。
+    External,
+    /// 白名单外的后缀（`avi` / `mov` 之类）—— 原位降级为占位。
+    Unsupported,
+}
+
+/// 一处媒体引用的判定（形状与界面 `RetroMedia` 一一对应）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetroMedia {
+    /// 正文里写的原文（界面的占位与取字节都用它）。
+    pub target: String,
+    pub state: MediaState,
+    /// `Ok` 时是绝对路径（读数 + 排错用）。
+    pub path: Option<String>,
+    /// 可读原因（`Ok` 之外都有）。
+    pub reason: Option<String>,
+    /// `Ok` 时的 MIME（`image/png` / `video/mp4` …）。
+    pub mime: Option<String>,
 }
 
 /// Retro 包目录。
@@ -175,12 +208,170 @@ impl RetroStore {
             message: format!("{period}：{message}"),
             hint: "把这份正文另存为 UTF-8（无 BOM 也可以）再放回包里。".to_string(),
         })?;
+        let document = markdown::parse(&text);
+        let media = self.resolve_media_in(period, &document);
         Ok(RetroReport {
             period: period.to_string(),
             path: path.display().to_string(),
             bytes: text.len(),
-            document: markdown::parse(&text),
+            document,
+            media,
         })
+    }
+
+    /// 正文里每一处媒体引用的判定（去重、保序：同一目标只判一次）。
+    fn resolve_media_in(&self, period: &str, document: &markdown::Document) -> Vec<RetroMedia> {
+        let mut targets: Vec<(markdown::MediaKind, String)> = Vec::new();
+        collect_media(&document.blocks, &mut targets);
+        let dir = self.root.join(period);
+        targets
+            .into_iter()
+            .map(|(kind, target)| resolve_one(&dir, kind, &target))
+            .collect()
+    }
+
+    /// 读一处媒体的字节（`retro_asset` 的实现）。
+    ///
+    /// **路径校验两道**：① 领域层 `normalize_asset_path`（相对、在 `assets/` 下、无 `..`、
+    /// 后缀白名单）；② 落点必须在包目录内且是文件。两道都过才读 —— 界面的路径来自正文，
+    /// 正文来自别人给的包，这里当不可信输入处理。
+    pub fn asset(&self, period: &str, target: &str) -> Result<Vec<u8>, DbFailure> {
+        if let Err(reason) = retro_package::validate_period(period) {
+            return Err(DbFailure {
+                message: format!("期号不可用：「{period}」({reason})"),
+                hint: "期号 = 包目录名；请不要手工拼接路径。".to_string(),
+            });
+        }
+        let normalized = retro_package::normalize_asset_path(target).map_err(|reason| DbFailure {
+            message: format!("媒体路径不可用：「{target}」({reason})"),
+            hint: "正文里的媒体只能写包内相对路径（assets/ 下）。".to_string(),
+        })?;
+        let package = self.root.join(period);
+        let path = package.join(&normalized);
+        let escaped = match (std::fs::canonicalize(&path), std::fs::canonicalize(&package)) {
+            (Ok(file), Ok(dir)) => !file.starts_with(&dir),
+            _ => false,
+        };
+        if escaped {
+            return Err(DbFailure {
+                message: format!("媒体路径越出包目录：{normalized}"),
+                hint: "正文里的媒体只能指向本包 assets/ 下的文件。".to_string(),
+            });
+        }
+        let meta = match std::fs::metadata(&path) {
+            Ok(meta) if meta.is_file() => meta,
+            Ok(_) => {
+                return Err(DbFailure {
+                    message: format!("媒体不是一个文件：{normalized}"),
+                    hint: "把媒体换成文件（不是目录）再放回包里。".to_string(),
+                })
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(DbFailure {
+                    message: format!("包里没有这个媒体：{normalized}"),
+                    hint: "确认文件在 assets/ 下、名字与正文写的一致（大小写也要一致）。".to_string(),
+                })
+            }
+            Err(error) => {
+                return Err(DbFailure {
+                    message: format!("读媒体失败：{error}（{}）", path.display()),
+                    hint: "确认该文件可读；被别的程序占着也可能失败。".to_string(),
+                })
+            }
+        };
+        if meta.len() > MAX_MEDIA_BYTES {
+            return Err(DbFailure {
+                message: format!(
+                    "媒体太大：{normalized} 有 {} 字节（上限 {MAX_MEDIA_BYTES}）",
+                    meta.len()
+                ),
+                hint: "把视频压小一点再放回包里；超大文件一次读进内存会拖住界面。".to_string(),
+            });
+        }
+        std::fs::read(&path).map_err(|error| DbFailure {
+            message: format!("读媒体失败：{error}（{}）", path.display()),
+            hint: "确认该文件可读。".to_string(),
+        })
+    }
+}
+
+/// 媒体字节上限（256 MiB）：再大就不一次读进内存了 —— 宁可如实说「太大」。
+pub const MAX_MEDIA_BYTES: u64 = 256 * 1024 * 1024;
+
+/// 递归收集正文里的媒体引用（同一目标只留一次，保序）。
+fn collect_media(blocks: &[markdown::Block], out: &mut Vec<(markdown::MediaKind, String)>) {
+    for block in blocks {
+        match &block.kind {
+            markdown::BlockKind::Media { media, target, .. } => {
+                if !out.iter().any(|(_, seen)| seen == target) {
+                    out.push((*media, target.clone()));
+                }
+            }
+            markdown::BlockKind::Quote { children } => collect_media(children, out),
+            markdown::BlockKind::ListItem { children, .. } => collect_media(children, out),
+            _ => {}
+        }
+    }
+}
+
+/// 判一处媒体：分类 → 路径 → 文件在不在 → MIME。
+fn resolve_one(package: &Path, kind: markdown::MediaKind, target: &str) -> RetroMedia {
+    let placeholder = |state: MediaState, reason: String| RetroMedia {
+        target: target.to_string(),
+        state,
+        path: None,
+        reason: Some(reason),
+        mime: None,
+    };
+    match kind {
+        markdown::MediaKind::External => placeholder(
+            MediaState::External,
+            "外链：视图内不加载（防出网），需要时自己用浏览器打开".to_string(),
+        ),
+        markdown::MediaKind::Unsupported => placeholder(
+            MediaState::Unsupported,
+            format!("格式不在白名单（{}）：只认图片与 mp4 / m4v", extension_of(target)),
+        ),
+        markdown::MediaKind::Image | markdown::MediaKind::Video => {
+            let normalized = match retro_package::normalize_asset_path(target) {
+                Ok(normalized) => normalized,
+                Err(reason) => return placeholder(MediaState::Rejected, reason),
+            };
+            let path = package.join(&normalized);
+            if !path.is_file() {
+                return placeholder(MediaState::Missing, format!("包里没有 {normalized}"));
+            }
+            RetroMedia {
+                target: target.to_string(),
+                state: MediaState::Ok,
+                path: Some(path.display().to_string()),
+                reason: None,
+                mime: Some(mime_of(&normalized).to_string()),
+            }
+        }
+    }
+}
+
+/// 后缀（小写；没有就是空串）。
+fn extension_of(target: &str) -> String {
+    target
+        .trim()
+        .rsplit('.')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase()
+}
+
+/// 媒体 MIME（白名单内的后缀才有）。
+fn mime_of(path: &str) -> &'static str {
+    match extension_of(path).as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "mp4" => "video/mp4",
+        "m4v" => "video/x-m4v",
+        _ => "application/octet-stream",
     }
 }
 
@@ -339,6 +530,89 @@ mod tests {
         let dir = root("absent");
         let failure = RetroStore::new(&dir).report("2026-W01").unwrap_err();
         assert!(failure.message.contains("找不到这一期"), "{}", failure.message);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── 正文媒体（`FR-R-12-03`：图片 / 视频就地渲染）────────────────────────────────
+
+    #[test]
+    fn media_in_the_body_is_judged_against_the_package_on_disk() {
+        let dir = root("media");
+        write_package(
+            &dir,
+            "2026-W42",
+            Some(r#"{"title":"带图的周报"}"#),
+            Some(
+                "# 本周\n\n![净值曲线](assets/curve.png)\n\n![录屏](assets/clip.mp4)\n\n![外链](https://example.com/a.png)\n\n![老格式](assets/old.avi)\n\n![越界](../../secret.png)\n",
+            ),
+        );
+        std::fs::write(dir.join("2026-W42/assets/curve.png"), [0x89, 0x50, 0x4E, 0x47]).expect("写入图片");
+        let report = RetroStore::new(&dir).report("2026-W42").expect("读正文");
+        assert_eq!(report.media.len(), 5, "{:?}", report.media);
+
+        let find = |target: &str| report.media.iter().find(|media| media.target == target).cloned().expect(target);
+        let curve = find("assets/curve.png");
+        assert_eq!(curve.state, MediaState::Ok);
+        assert_eq!(curve.mime.as_deref(), Some("image/png"));
+        assert!(curve.path.as_deref().unwrap_or("").ends_with("curve.png"));
+
+        // 正文里有、包里没有 ⇒ missing（占位 + 原因，不白屏）
+        assert_eq!(find("assets/clip.mp4").state, MediaState::Missing);
+        // 外链不加载
+        assert_eq!(find("https://example.com/a.png").state, MediaState::External);
+        // 白名单外后缀降级
+        assert_eq!(find("assets/old.avi").state, MediaState::Unsupported);
+        // 越界路径直接拒（路径校验在领域层）
+        let escaped = find("../../secret.png");
+        assert_eq!(escaped.state, MediaState::Rejected);
+        assert!(escaped.reason.unwrap_or_default().contains(".."));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn media_inside_a_quote_is_judged_too() {
+        let dir = root("media-quote");
+        write_package(
+            &dir,
+            "2026-W42",
+            Some(r#"{"title":"引用里的图"}"#),
+            Some("> [!摘录]\n> ![图](assets/a.png)\n"),
+        );
+        std::fs::write(dir.join("2026-W42/assets/a.png"), [1, 2, 3]).expect("写入图片");
+        let report = RetroStore::new(&dir).report("2026-W42").expect("读正文");
+        assert_eq!(report.media.len(), 1, "{:?}", report.media);
+        assert_eq!(report.media[0].state, MediaState::Ok);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn asset_bytes_of_a_file_inside_the_package_are_returned() {
+        let dir = root("asset-read");
+        write_package(&dir, "2026-W42", Some(r#"{"title":"读字节"}"#), Some("正文"));
+        std::fs::write(dir.join("2026-W42/assets/a.png"), [0xAA, 0xBB]).expect("写入图片");
+        let bytes = RetroStore::new(&dir).asset("2026-W42", "assets/a.png").expect("读媒体");
+        assert_eq!(bytes, vec![0xAA, 0xBB]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn asset_bytes_are_refused_for_missing_or_outside_paths() {
+        let dir = root("asset-refuse");
+        write_package(&dir, "2026-W42", Some(r#"{"title":"拒读"}"#), Some("正文"));
+        let store = RetroStore::new(&dir);
+        let missing = store.asset("2026-W42", "assets/none.png").unwrap_err();
+        assert!(missing.message.contains("包里没有这个媒体"), "{}", missing.message);
+        for bad in ["../report.md", "assets/../../report.md", "C:\\Windows\\win.ini", "report.md"] {
+            let failure = store.asset("2026-W42", bad).unwrap_err();
+            assert!(
+                failure.message.contains("媒体路径不可用"),
+                "{bad} ⇒ {}",
+                failure.message
+            );
+        }
+        // 期号同样要过校验（它是回到拼路径的字符串）
+        let bad_period = store.asset("..", "assets/a.png").unwrap_err();
+        assert!(bad_period.message.contains("期号不可用"), "{}", bad_period.message);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

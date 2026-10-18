@@ -11,18 +11,24 @@
 //   ⑥ 切到打不开的一期 ⇒ 上一期的正文**不许残留**（否则用户以为看的是这一期）。
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import type { MdDocument, RetroCard, RetroProblem, RetroSnapshot } from '../ipc'
+import type { MdDocument, RetroCard, RetroMedia, RetroProblem, RetroSnapshot } from '../ipc'
 
 const state: {
   snapshot: RetroSnapshot
   snapshotFailure: { message: string; hint: string } | null
   reports: Record<string, MdDocument>
+  reportMedia: Record<string, RetroMedia[]>
+  assetFailures: string[]
+  assetCalls: Array<[string, string]>
   reportFailures: Record<string, { message: string; hint: string }>
   reportCalls: string[]
 } = {
   snapshot: { root: 'C:\\Users\\Alex\\AppData\\Roaming\\DoyahStudio\\retro\\packages', cards: [], problems: [] },
   snapshotFailure: null,
   reports: {},
+  reportMedia: {},
+  assetFailures: [],
+  assetCalls: [],
   reportFailures: {},
   reportCalls: [],
 }
@@ -38,7 +44,12 @@ vi.mock('../ipc', () => ({
     if (failure) throw failure
     const document = state.reports[period]
     if (!document) throw { message: `找不到这一期：${period}`, hint: '' }
-    return { period, path: `${period}/report.md`, bytes: 42, document }
+    return { period, path: `${period}/report.md`, bytes: 42, document, media: state.reportMedia[period] ?? [] }
+  }),
+  retroAsset: vi.fn(async (period: string, target: string) => {
+    state.assetCalls.push([period, target])
+    if (state.assetFailures.includes(target)) throw { message: `包里没有这个媒体：${target}`, hint: '' }
+    return new ArrayBuffer(8)
   }),
 }))
 
@@ -68,12 +79,37 @@ function problem(period: string, message: string): RetroProblem {
   return { period, message }
 }
 
+/** 一个媒体块（正文里独占一行的那种）。 */
+function mediaDocument(media: 'image' | 'video', alt: string, target: string): MdDocument {
+  return { version: 1, blocks: [{ line: 3, kind: { type: 'media', media, alt, target } }] }
+}
+
+function mediaSlot(target: string, state_: RetroMedia['state'] = 'ok', extra: Partial<RetroMedia> = {}): RetroMedia {
+  return {
+    target,
+    state: state_,
+    path: state_ === 'ok' ? `C:\\Users\\Alex\\AppData\\Roaming\\DoyahStudio\\retro\\packages\\2026-W42\\${target}` : null,
+    reason: null,
+    mime: target.endsWith('.mp4') ? 'video/mp4' : 'image/png',
+    ...extra,
+  }
+}
+
 beforeEach(() => {
   state.snapshot = { root: 'C:\\Users\\Alex\\AppData\\Roaming\\DoyahStudio\\retro\\packages', cards: [], problems: [] }
   state.snapshotFailure = null
   state.reports = {}
+  state.reportMedia = {}
+  state.assetFailures = []
+  state.assetCalls = []
   state.reportFailures = {}
   state.reportCalls = []
+  // happy-dom 没实现 blob URL：给一个确定性的替身（判据只关心「挂上了没有」）
+  let counter = 0
+  Object.assign(URL, {
+    createObjectURL: vi.fn(() => `blob:mock-${++counter}`),
+    revokeObjectURL: vi.fn(),
+  })
 })
 
 describe('RetroView 周报阅读面', () => {
@@ -158,5 +194,93 @@ describe('RetroView 周报阅读面', () => {
     const failure = wrapper.get('[data-role="retro-report-failure"]')
     expect(failure.text()).toContain('这一期的正文打不开')
     expect(failure.text()).toContain('report.md 是空文件')
+  })
+
+  // ── 正文媒体（FR-R-12-03：图片 / 视频就地渲染）──────────────────────────────────
+
+  it('an_addressable_image_is_rendered_inline_from_its_bytes', async () => {
+    state.snapshot.cards = [card('2026-W42', '带图的')]
+    state.reports['2026-W42'] = mediaDocument('image', '净值曲线', 'assets/curve.png')
+    state.reportMedia['2026-W42'] = [mediaSlot('assets/curve.png')]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+
+    // 只对「判定 ok」的目标取字节（缺的 / 外链的不该发请求）
+    expect(state.assetCalls).toEqual([['2026-W42', 'assets/curve.png']])
+    const image = wrapper.get('[data-role="retro-media-image"]')
+    expect(image.attributes('src')).toBe('blob:mock-1')
+    expect(image.attributes('alt')).toBe('净值曲线')
+    // 媒体出现在正文位置（不是堆到文末）：它与文档容器的直接子节点就是同一个块
+    expect(wrapper.get('[data-role="retro-document"]').find('[data-role="retro-media-image"]').exists()).toBe(true)
+  })
+
+  it('a_video_is_rendered_with_native_controls', async () => {
+    state.snapshot.cards = [card('2026-W42', '带录屏的')]
+    state.reports['2026-W42'] = mediaDocument('video', '复盘录屏', 'assets/clip.mp4')
+    state.reportMedia['2026-W42'] = [mediaSlot('assets/clip.mp4')]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+
+    const video = wrapper.get('[data-role="retro-media-video"]')
+    expect(video.attributes('src')).toBe('blob:mock-1')
+    // 进度 / 音量 / 全屏都交给原生控件（不自造一套播放器）
+    expect(video.attributes('controls')).toBeDefined()
+  })
+
+  it('a_missing_or_external_media_becomes_a_placeholder_with_the_file_name', async () => {
+    state.snapshot.cards = [card('2026-W42', '缺图的')]
+    state.reports['2026-W42'] = mediaDocument('image', '缺的图', 'assets/gone.png')
+    state.reportMedia['2026-W42'] = [mediaSlot('assets/gone.png', 'missing', { reason: '包里没有 assets/gone.png' })]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+
+    // 缺文件 ⇒ 不发请求、画占位（文件名 + 原因都要在，不然用户不知道少了什么）
+    expect(state.assetCalls).toEqual([])
+    expect(wrapper.find('[data-role="retro-media-image"]').exists()).toBe(false)
+    const note = wrapper.get('[data-role="retro-media-note"]')
+    expect(note.text()).toContain('包里没有这个文件')
+    expect(note.text()).toContain('gone.png')
+    expect(note.text()).toContain('包里没有 assets/gone.png')
+    expect(wrapper.get('[data-media="image"]').attributes('data-state')).toBe('missing')
+  })
+
+  it('a_media_whose_bytes_fail_to_load_says_so_instead_of_staying_blank', async () => {
+    state.snapshot.cards = [card('2026-W42', '读不出的')]
+    state.reports['2026-W42'] = mediaDocument('image', '图', 'assets/broken.png')
+    state.reportMedia['2026-W42'] = [mediaSlot('assets/broken.png')]
+    state.assetFailures = ['assets/broken.png']
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+
+    // 判定说 ok、字节却没读到 ⇒ 就地改成占位 + 原因（不许白屏）
+    expect(wrapper.find('[data-role="retro-media-image"]').exists()).toBe(false)
+    expect(wrapper.get('[data-role="retro-media-note"]').text()).toContain('这个媒体读不出来')
+  })
+
+  it('clicking_an_image_opens_the_zoom_layer', async () => {
+    state.snapshot.cards = [card('2026-W42', '点图放大')]
+    state.reports['2026-W42'] = mediaDocument('image', '净值曲线', 'assets/curve.png')
+    state.reportMedia['2026-W42'] = [mediaSlot('assets/curve.png')]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-role="retro-zoom"]').exists()).toBe(false)
+    await wrapper.get('[data-role="retro-media-image"]').trigger('click')
+    const zoom = wrapper.get('[data-role="retro-zoom"]')
+    expect(zoom.get('[data-role="retro-zoom-image"]').attributes('src')).toBe('blob:mock-1')
+    expect(zoom.text()).toContain('净值曲线')
+    // 关掉
+    await wrapper.get('.retro__zoom-close').trigger('click')
+    expect(wrapper.find('[data-role="retro-zoom"]').exists()).toBe(false)
   })
 })

@@ -45,6 +45,21 @@ export const DICT = {
   'plugin.retro.noDate': { 'zh-Hans': '日期未标注', en: 'Date not stated' },
   'plugin.retro.reportFailed': { 'zh-Hans': '这一期的正文打不开', en: 'This report could not be opened' },
   'plugin.retro.loadFailed': { 'zh-Hans': '读包目录失败', en: 'Could not read the package folders' },
+  // 正文媒体（FR-R-12-03：图片 / 视频就地渲染，读不出来就地占位）
+  'plugin.retro.mediaLoading': { 'zh-Hans': '正在读媒体…', en: 'Reading the media…' },
+  'plugin.retro.mediaMissing': { 'zh-Hans': '包里没有这个文件', en: 'This file is not in the package' },
+  'plugin.retro.mediaExternal': {
+    'zh-Hans': '外链（视图内不加载）',
+    en: 'External link (not loaded here)',
+  },
+  'plugin.retro.mediaUnsupported': { 'zh-Hans': '格式不在白名单', en: 'Format not in the whitelist' },
+  'plugin.retro.mediaRejected': { 'zh-Hans': '路径不合法', en: 'Path not allowed' },
+  'plugin.retro.mediaLoadFailed': {
+    'zh-Hans': '这个媒体读不出来（文件可能被移走或被占用）',
+    en: 'This media could not be read (the file may be gone or locked)',
+  },
+  'plugin.retro.mediaZoomHint': { 'zh-Hans': '点开看大图', en: 'Click to enlarge' },
+  'plugin.retro.mediaClose': { 'zh-Hans': '关闭', en: 'Close' },
   'ipc.action.retro': { 'zh-Hans': '打开周报', en: 'open a weekly report' },
 
   // IPC 浏览器旁路提示（不是产品路径，但**也要双语**：切英文时不该留中文）

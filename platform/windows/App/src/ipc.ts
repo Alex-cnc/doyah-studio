@@ -109,6 +109,8 @@ export const COMMANDS = {
   // Retro 周报包（FR-R-12-01 / -02）：只读扫目录 + 读一期正文
   retroPackages: 'retro_packages',
   retroReport: 'retro_report',
+  // 媒体字节（FR-R-12-03）：回 ArrayBuffer，界面建 blob URL（不开 asset 协议）
+  retroAsset: 'retro_asset',
   // 智能体设置（FR-AI-01：总开关 / 端点 / 模型 / 配额；密钥单独存，永不回显）
   agentSettingsGet: 'agent_settings_get',
   agentSettingsSave: 'agent_settings_save',
@@ -718,6 +720,21 @@ export interface RetroProblem {
   message: string
 }
 
+/** 一处媒体的判定结果（**Rust 判完**：界面不再自己拼路径 / 判后缀 / 判文件在不在）。 */
+export type RetroMediaState = 'ok' | 'missing' | 'rejected' | 'external' | 'unsupported'
+
+export interface RetroMedia {
+  /** 正文里写的原文（占位与取字节都用它）。 */
+  target: string
+  state: RetroMediaState
+  /** `ok` 时是绝对落点（排错用）。 */
+  path: string | null
+  /** 外链 / 缺文件 / 越界 / 后缀不在白名单时给出的可读原因。 */
+  reason: string | null
+  /** `ok` 时的 MIME（建 blob 用）。 */
+  mime: string | null
+}
+
 /** 一次扫描的结果。 */
 export interface RetroSnapshot {
   /** 扫描根（空态要把这个路径显示给用户）。 */
@@ -735,6 +752,8 @@ export interface RetroReport {
   bytes: number
   /** 渲染模型（解析在 Rust 领域层 `markdown::parse`）。 */
   document: MdDocument
+  /** 正文里每一处媒体在盘上的判定（能读的显示、读不了的占位 + 原因）。 */
+  media: RetroMedia[]
 }
 
 /** 扫包目录（浏览器旁路：空库 + 一句说明用的根路径）。 */
@@ -751,6 +770,17 @@ export function retroReport(period: string): Promise<RetroReport> {
   return call(COMMANDS.retroReport, { period }, () => {
     throw bypassWorkspace('ipc.action.retro') as unknown as RetroReport
   })
+}
+
+/**
+ * 读一处媒体的字节（`FR-R-12-03`）。回的是 `ArrayBuffer`，界面自己建 `blob:` URL。
+ *
+ * **为什么不走 asset 协议**：那要开 `protocol-asset` 并给 CSP 放一个文件协议源；
+ * 而本仓的 CSP 口径是「出网只走 IPC」，媒体字节走命令回来更窄（路径校验也还在 Rust 里）。
+ */
+export function retroAsset(period: string, target: string): Promise<ArrayBuffer> {
+  if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
+  return invoke<ArrayBuffer>(COMMANDS.retroAsset, { period, target })
 }
 
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
@@ -2210,10 +2240,15 @@ export interface MdSpan {
 
 export type MdColumnAlignment = 'none' | 'left' | 'center' | 'right'
 
+/** 媒体引用的种类（与领域层 `markdown::MediaKind` 同形）。 */
+export type MdMediaKind = 'image' | 'video' | 'external' | 'unsupported'
+
 /** 块级模型的成员（**没有可编辑控件**：预览是只读的，这条是结构上挡住的）。 */
 export type MdBlockKind =
   | { type: 'heading'; level: number; spans: MdSpan[] }
   | { type: 'paragraph'; spans: MdSpan[] }
+  /** 独占一行的媒体引用（`![说明](assets/x.png)`）—— 图片 / 视频就地渲染。 */
+  | { type: 'media'; media: MdMediaKind; alt: string; target: string }
   | { type: 'codeFence'; language: string | null; text: string }
   | {
       type: 'listItem'

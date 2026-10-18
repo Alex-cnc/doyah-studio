@@ -85,6 +85,17 @@ function keyOf(block: MdBlock, index: number): string {
         </tbody>
       </table>
 
+      <!-- 媒体引用：**工作区预览不加载媒体**（没有包目录与 blob 通道）⇒ 如实标一行，不画空白 -->
+      <p
+        v-else-if="block.kind.type === 'media'"
+        class="md__p md__media"
+        :data-line="block.line"
+        :data-media="block.kind.media"
+        :data-target="block.kind.target"
+      >
+        [{{ block.kind.media }}] {{ block.kind.alt || block.kind.target }}
+      </p>
+
       <!-- 列表条目（嵌套走 children 递归） -->
       <div v-else-if="block.kind.type === 'listItem'" class="md__item" :data-line="block.line" :style="{ paddingLeft: indent(0) }">
         <span class="md__bullet">

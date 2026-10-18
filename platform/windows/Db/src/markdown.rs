@@ -8,9 +8,11 @@
 //! ## 支持的子集（GFM 的可用子集，刻意小）
 //! 标题（ATX `#`~`######`）· 段落（软换行**原样保留**）· 无序 / 有序列表（含嵌套）·
 //! 任务列表（`- [x]`，复选框**从正文里摘出**变成 `checked`）· 表格（含对齐与 `\|` 转义）·
-//! 围栏代码块（``` / ~~~，带语言串）· 引用（`>`）· 分隔线。
+//! 围栏代码块（``` / ~~~，带语言串）· 引用（`>`）· 分隔线 ·
+//! **独占一行的媒体引用** `![说明](assets/x.png)`（图片 / 视频就地渲染，见 `MediaKind`）。
 //!
 //! ## 明确**不支持**（写在这里，而不是让它悄悄通过）
+//! - **句中内联的图片**（`一段话 ![图](a.png) 后面还有字`）：行内模型只有文字 span，仍是文字；
 //! - **Setext 标题**（`标题` 下面一行 `===`）：`---` 一律按分隔线处理；
 //! - **缩进式代码块**（四空格起）：按普通段落原样搬运；
 //! - **HTML 块 / 脚注 / 删除线**：原样当纯文本搬运（**不吞不改**）；
@@ -23,6 +25,23 @@
 
 /// 文档模型的**版本号**：结构变了才升（与其它落盘结构同一套纪律）。
 pub const MARKDOWN_FORMAT_VERSION: u32 = 1;
+
+/// 媒体引用的**种类**（领域层按后缀与协议分类，不读盘）。
+///
+/// 分类口径与周报包的媒体白名单**同一份真值**（`crate::retro_package::IMAGE_EXTENSIONS` /
+/// `VIDEO_EXTENSIONS`）—— 包的契约只写一遍，渲染侧不另立一套。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MediaKind {
+    /// 图片（png / jpg / jpeg / webp / gif）
+    Image,
+    /// 视频（mp4 / m4v）
+    Video,
+    /// 外链（`http://` / `https://`）—— 视图内**不加载**（不出网），外面自己开
+    External,
+    /// 白名单外的后缀（`avi` / `mov` 之类）—— 原位降级为占位
+    Unsupported,
+}
 
 /// 表格列对齐（GFM 的 `:---` / `:---:` / `---:`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -76,6 +95,16 @@ pub struct Block {
 pub enum BlockKind {
     /// 标题（`level` 1..6）
     Heading { level: u8, spans: Vec<Span> },
+    /// 独占一行的媒体引用（`![说明](assets/x.png)`）—— 图片 / 视频就地渲染。
+    ///
+    /// `target` 是**包里写的原文**（相对路径 / 外链），能不能真读出来由外壳与界面判
+    /// （领域层只分类，不碰文件系统 —— 这一层是纯的）。
+    Media {
+        media: MediaKind,
+        /// 说明文字（`![这里]` 里的那一段；空串 = 作者没写）。
+        alt: String,
+        target: String,
+    },
     /// 段落（软换行**原样保留**在 `text` 里，怎么显示由界面决定）
     Paragraph { spans: Vec<Span> },
     /// 围栏代码块（**内容原样**，不做行内解析）
@@ -225,6 +254,44 @@ fn find_close(chars: &[char], from: usize, marker: &str) -> Option<usize> {
     None
 }
 
+/// 独占一行的媒体引用：`![说明](assets/x.png)`（**整行只有它**）→ `(种类, 说明, 目标)`。
+///
+/// 为什么要「整行只有它」这个门槛：行内模型只有文字 span，把句中图片也当媒体会让
+/// 「一段话 + 图 + 后半句」这种写法丢文字。**窄而诚实**比宽而错好。
+pub fn standalone_media(line: &str) -> Option<(MediaKind, String, String)> {
+    let text = line.trim();
+    if !text.starts_with("![") {
+        return None;
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let (alt, target, consumed) = parse_link(&chars[1..])?;
+    // `!` + 链接本体必须吃掉**整行**（后面还有字 ⇒ 这是段落，不是媒体块）
+    if consumed + 1 != chars.len() {
+        return None;
+    }
+    if target.trim().is_empty() {
+        return None;
+    }
+    Some((classify_media(&target), alt, target))
+}
+
+/// 按协议与后缀分类（**不读盘**：文件在不在由外壳判）。
+pub fn classify_media(target: &str) -> MediaKind {
+    let normalized = target.trim().to_ascii_lowercase();
+    let bare = normalized.split(['?', '#']).next().unwrap_or("").to_string();
+    if bare.starts_with("http://") || bare.starts_with("https://") || bare.starts_with("//") {
+        return MediaKind::External;
+    }
+    let extension = bare.rsplit('.').next().unwrap_or("");
+    if crate::retro_package::IMAGE_EXTENSIONS.contains(&extension) {
+        MediaKind::Image
+    } else if crate::retro_package::VIDEO_EXTENSIONS.contains(&extension) {
+        MediaKind::Video
+    } else {
+        MediaKind::Unsupported
+    }
+}
+
 /// `[文字](目标)` → `(文字, 目标, 吃掉的字符数)`。
 fn parse_link(chars: &[char]) -> Option<(String, String, usize)> {
     if chars.first() != Some(&'[') {
@@ -251,6 +318,16 @@ fn parse_blocks(lines: &[&str], from: usize) -> (Vec<Block>, usize) {
 
         // 空行：跳过（段落的边界）
         if trimmed.is_empty() {
+            index += 1;
+            continue;
+        }
+
+        // 独占一行的媒体引用（`![说明](assets/x.png)`）—— 图片 / 视频就地渲染（`FR-R-12-03`）
+        if let Some((media, alt, target)) = standalone_media(trimmed) {
+            blocks.push(Block {
+                line: index + 1,
+                kind: BlockKind::Media { media, alt, target },
+            });
             index += 1;
             continue;
         }
@@ -366,6 +443,7 @@ fn parse_blocks(lines: &[&str], from: usize) -> (Vec<Block>, usize) {
                 || atx_heading(candidate_trimmed).is_some()
                 || candidate_trimmed.starts_with('>')
                 || list_marker(candidate).is_some()
+                || standalone_media(candidate_trimmed).is_some()
             {
                 break;
             }
@@ -585,6 +663,7 @@ mod tests {
                 BlockKind::Table { .. } => "table",
                 BlockKind::Quote { .. } => "quote",
                 BlockKind::Rule => "rule",
+                BlockKind::Media { .. } => "media",
             })
             .collect()
     }
@@ -740,5 +819,78 @@ mod tests {
         assert_eq!(back, first);
         // 模型里有**没有可编辑控件**这一条是结构性的：块类型里根本没有 input 之类的成员
         assert!(!json.contains("input") && !json.contains("editable"), "预览模型里不该有可编辑控件");
+    }
+
+    // ── 媒体引用（`FR-R-12-03`：正文里的图片 / 视频就地渲染）──────────────────────────
+
+    #[test]
+    fn an_image_on_its_own_line_becomes_a_media_block() {
+        let document = parse("# 标题\n\n![净值曲线](assets/curve.png)\n\n后面一段\n");
+        assert_eq!(kinds(&document), vec!["heading", "media", "paragraph"]);
+        if let BlockKind::Media { media, alt, target } = &document.blocks[1].kind {
+            assert_eq!(*media, MediaKind::Image);
+            assert_eq!(alt, "净值曲线");
+            assert_eq!(target, "assets/curve.png");
+        } else {
+            panic!("第三行应当是一个媒体块：{:?}", document.blocks[1].kind);
+        }
+        // 行号跟着源文走（滚动锚点要用）
+        assert_eq!(document.blocks[1].line, 3);
+    }
+
+    #[test]
+    fn video_external_and_whitelist_outside_targets_are_classified() {
+        let video = parse("![复盘录屏](assets/clip.mp4)\n");
+        assert_eq!(kinds(&video), vec!["media"]);
+        if let BlockKind::Media { media, .. } = &video.blocks[0].kind {
+            assert_eq!(*media, MediaKind::Video, "mp4 是视频白名单");
+        }
+        let external = parse("![外链](https://example.com/a.png)\n");
+        if let BlockKind::Media { media, .. } = &external.blocks[0].kind {
+            assert_eq!(*media, MediaKind::External, "外链不在视图内加载");
+        }
+        // 白名单外的后缀（`avi`）应当原位降级为占位 —— 分类器要认得出来
+        let unsupported = parse("![老格式](assets/clip.avi)\n");
+        if let BlockKind::Media { media, .. } = &unsupported.blocks[0].kind {
+            assert_eq!(*media, MediaKind::Unsupported);
+        }
+        // 大写后缀也认（包里的文件可能叫 `.PNG`）
+        let upper = parse("![大写](assets/a.PNG)\n");
+        if let BlockKind::Media { media, .. } = &upper.blocks[0].kind {
+            assert_eq!(*media, MediaKind::Image);
+        }
+    }
+
+    #[test]
+    fn an_image_in_the_middle_of_a_sentence_stays_text() {
+        // 行内模型只有文字 span ⇒ 句中图片仍是文字（**明确不支持**，不假装渲染）
+        let document = parse("一段话 ![图](assets/a.png) 后面还有字\n");
+        assert_eq!(kinds(&document), vec!["paragraph"]);
+        if let BlockKind::Paragraph { spans } = &document.blocks[0].kind {
+            assert!(spans.iter().any(|span| span.text.contains("一段话")));
+        }
+        // 独占一行但目标为空 ⇒ 不是媒体（没有可读的东西）
+        let empty = parse("![](   )\n");
+        assert_eq!(kinds(&empty), vec!["paragraph"]);
+    }
+
+    #[test]
+    fn an_image_line_ends_the_paragraph_above_it() {
+        // 段落循环必须在媒体行处断开，否则图会被吞进上一段（渲染时就看不见了）
+        let document = parse("第一行文字\n第二行文字\n![图](assets/a.png)\n");
+        assert_eq!(kinds(&document), vec!["paragraph", "media"]);
+        if let BlockKind::Paragraph { spans } = &document.blocks[0].kind {
+            assert_eq!(spans[0].text, "第一行文字\n第二行文字");
+        }
+    }
+
+    #[test]
+    fn a_media_block_serialises_with_its_kind_and_type_tag() {
+        let document = parse("![图](assets/a.png)\n");
+        let json = serde_json::to_string(&document).unwrap();
+        assert!(json.contains("\"type\":\"media\""), "{json}");
+        assert!(json.contains("\"media\":\"image\""), "{json}");
+        let back: Document = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, document);
     }
 }

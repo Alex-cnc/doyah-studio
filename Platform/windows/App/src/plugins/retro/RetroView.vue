@@ -8,14 +8,16 @@
 //   ③ **坏包要说出来**：读不出来的期逐条列在左栏底部（缺 index / 缺正文 / 编码错 / 封面越界），
 //      不让它静默消失 —— 用户放进去的包没出现，必须能查到哪里不对。
 
-import { computed, onMounted, ref } from 'vue'
-import BlockDocument from './BlockDocument.vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import BlockDocument, { type MediaSlot } from './BlockDocument.vue'
 import {
+  retroAsset,
   retroPackages,
   retroReport,
   type DbFailure,
   type MdDocument,
   type RetroCard,
+  type RetroMedia,
   type RetroProblem,
 } from '../../ipc'
 import { t as translate, type UiLanguage } from '../../i18n'
@@ -51,6 +53,11 @@ const selectedCard = computed<RetroCard | null>(
   () => cards.value.find((card) => card.period === selected.value) ?? null,
 )
 
+/** 正文里的媒体：判定（Rust 给的）+ 拉回来的 blob URL（`null` = 还没到 / 读不出来）。 */
+const media = ref<MediaSlot[]>([])
+/** 点图放大的浮层（`null` = 没开）。 */
+const zoom = ref<{ url: string; alt: string } | null>(null)
+
 function describeError(error: unknown): DbFailure {
   if (error && typeof error === 'object' && 'message' in error && 'hint' in error) return error as DbFailure
   return { message: error instanceof Error ? error.message : String(error), hint: '' }
@@ -78,6 +85,8 @@ async function refresh(): Promise<void> {
       document.value = null
       reportFailure.value = null
       reportBytes.value = 0
+      releaseMedia()
+      zoom.value = null
     }
   } catch (error) {
     loadFailure.value = describeError(error)
@@ -95,16 +104,67 @@ async function open(card: RetroCard): Promise<void> {
   reportFailure.value = null
   reportBytes.value = 0
   reportLoading.value = true
+  zoom.value = null
+  releaseMedia()
   try {
     const report = await retroReport(card.period)
     document.value = report.document
     reportBytes.value = report.bytes
+    void loadMedia(card.period, report.media)
   } catch (error) {
     reportFailure.value = describeError(error)
   } finally {
     reportLoading.value = false
   }
 }
+
+/** 放开上一期的 blob URL（不释放会一直占内存 —— 切期是常态操作）。 */
+function releaseMedia(): void {
+  for (const slot of media.value) {
+    if (slot.url) URL.revokeObjectURL(slot.url)
+  }
+  media.value = []
+}
+
+/**
+ * 拉媒体的字节并建 blob URL。
+ *
+ * 三条口径：① 只有 `ok` 才去取（`missing` / 外链 / 白名单外**不该**发请求）；
+ * ② 取回来时如果用户已经切期 ⇒ **丢掉**（否则会把上一期的图挂到这一期）；
+ * ③ 取失败就地改成「读不出来」，占位里说清，不白屏。
+ */
+async function loadMedia(period: string, entries: RetroMedia[]): Promise<void> {
+  media.value = entries.map((entry) => ({ ...entry, url: null }))
+  for (const entry of entries) {
+    if (entry.state !== 'ok') continue
+    let url: string | null = null
+    try {
+      const bytes = await retroAsset(period, entry.target)
+      url = URL.createObjectURL(new Blob([bytes], { type: entry.mime ?? 'application/octet-stream' }))
+    } catch {
+      const slot = media.value.find((item) => item.target === entry.target)
+      if (slot && selected.value === period) {
+        slot.state = 'missing'
+        slot.reason = tr('plugin.retro.mediaLoadFailed')
+      }
+      continue
+    }
+    if (selected.value !== period) {
+      URL.revokeObjectURL(url)
+      continue
+    }
+    const slot = media.value.find((item) => item.target === entry.target)
+    if (slot) slot.url = url
+  }
+}
+
+function openZoom(payload: { url: string; alt: string }): void {
+  zoom.value = payload
+}
+
+onBeforeUnmount(() => {
+  releaseMedia()
+})
 
 onMounted(() => {
   void refresh()
@@ -194,9 +254,25 @@ onMounted(() => {
           <span v-if="reportFailure.hint" class="retro__failure-hint">{{ reportFailure.hint }}</span>
         </p>
         <div v-else-if="document" class="retro__document" data-role="retro-document">
-          <BlockDocument :document="document" />
+          <BlockDocument
+            :document="document"
+            :media="media"
+            :language="lang"
+            @zoom="openZoom"
+          />
         </div>
       </template>
+    </div>
+
+    <!-- 点图放大：同页浮层（不新开窗口、不出网） -->
+    <div v-if="zoom" class="retro__zoom" data-role="retro-zoom" @click.self="zoom = null">
+      <img class="retro__zoom-image" :src="zoom.url" :alt="zoom.alt" data-role="retro-zoom-image" />
+      <div class="retro__zoom-bar">
+        <span class="retro__zoom-caption">{{ zoom.alt }}</span>
+        <button class="retro__zoom-close" type="button" @click="zoom = null">
+          {{ tr('plugin.retro.mediaClose') }}
+        </button>
+      </div>
     </div>
   </section>
 </template>
@@ -393,5 +469,42 @@ onMounted(() => {
 }
 .retro__document {
   flex: 1;
+}
+.retro__zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-spacing-s);
+  padding: var(--ds-spacing-l);
+  background: color-mix(in srgb, var(--ds-color-surface-window) 70%, transparent);
+}
+.retro__zoom-image {
+  max-width: 92vw;
+  max-height: 82vh;
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-color-surface-content);
+}
+.retro__zoom-bar {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-spacing-s);
+}
+.retro__zoom-caption {
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+.retro__zoom-close {
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border: var(--ds-hairline) solid var(--ds-color-hairline-light);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-panel);
+  color: var(--ds-color-text-primary);
+  font: inherit;
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
 }
 </style>

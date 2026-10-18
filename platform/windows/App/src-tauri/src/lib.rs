@@ -657,6 +657,17 @@ fn retro_report(
     state.retro.report(&period)
 }
 
+/// 读一处媒体的字节（`FR-R-12-03`）。前端拿 ArrayBuffer 建 blob URL —— **不走 asset 协议**：
+/// CSP 的「出网只走 IPC」口径不变，路径校验仍在 `retro_library::RetroStore::asset` 里。
+#[tauri::command]
+fn retro_asset(
+    state: State<'_, ShellState>,
+    period: String,
+    target: String,
+) -> Result<tauri::ipc::Response, DbFailure> {
+    state.retro.asset(&period, &target).map(tauri::ipc::Response::new)
+}
+
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
 //
 // 四条命令都很薄：**判定在领域层**（`doyah_studio_db::agent_config::evaluate`），本层只做
@@ -2388,6 +2399,7 @@ pub fn run() {
             archive_days,
             retro_packages,
             retro_report,
+            retro_asset,
             agent_settings_get,
             agent_settings_save,
             agent_key_save,

@@ -10,9 +10,28 @@
 //
 // 纪律：只读 —— 本组件不产生任何编辑控件（模型里也没有，结构上挡住）。
 
-import type { MdBlock, MdDocument, MdSpan } from '../../ipc'
+import type { MdBlock, MdDocument, MdSpan, RetroMedia } from '../../ipc'
+import { t as translate, type UiLanguage } from '../../i18n'
 
-const props = defineProps<{ document: MdDocument }>()
+/** 媒体槽位：判定（Rust 给的）+ 界面拉回来的 blob URL（`null` = 还没到 / 读不出来）。 */
+export type MediaSlot = RetroMedia & { url: string | null }
+
+const props = defineProps<{
+  document: MdDocument
+  /** 正文里所有媒体的判定与 blob URL（由 `RetroView` 统一拉，组件只画）。 */
+  media?: MediaSlot[]
+  /** 界面语言（由外壳传下来；不给就按中文）。 */
+  language?: UiLanguage
+}>()
+
+const emit = defineEmits<{
+  /** 点图片放大（浮层由 `RetroView` 画 —— 插件里只发事件）。 */
+  (event: 'zoom', payload: { url: string; alt: string }): void
+}>()
+
+function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
+  return translate(key, props.language ?? 'zh-Hans', vars)
+}
 
 /** 行内三态：粗体 / 斜体 / 行内代码。 */
 function inlineClass(span: MdSpan): string[] {
@@ -34,6 +53,53 @@ function keyOf(block: MdBlock, index: number): string {
 
 function childDocument(blocks: MdBlock[]): MdDocument {
   return { version: props.document.version, blocks }
+}
+
+// ── 媒体（`FR-R-12-03`：图片 / 视频就地渲染；读不出来就地降级为占位）────────────────
+
+/** 目标是「这一处媒体」的槽位（没有判定 = 理论上不该发生，按占位画）。 */
+function slotOf(target: string): MediaSlot | null {
+  return props.media?.find((slot) => slot.target === target) ?? null
+}
+
+/** 可读的文件名：`assets/curve.png` → `curve.png`（占位里要说清是哪个文件）。 */
+function fileNameOf(target: string): string {
+  const trimmed = target.trim()
+  const last = trimmed.split('/').pop() ?? trimmed
+  return last || trimmed
+}
+
+/** 图片的说明：`![这里]` 写着就用它，没写就用文件名（不画一个没有名字的框）。 */
+function captionOf(alt: string, target: string): string {
+  return alt.trim() || fileNameOf(target)
+}
+
+/** 状态标签（占位左上角那一句：缺文件 / 外链 / 格式不支持 / 路径不合法 / 正在读）。 */
+function stateLabel(slot: MediaSlot | null): string {
+  if (!slot) return tr('plugin.retro.mediaMissing')
+  switch (slot.state) {
+    case 'ok':
+      return tr('plugin.retro.mediaLoading')
+    case 'missing':
+      return tr('plugin.retro.mediaMissing')
+    case 'external':
+      return tr('plugin.retro.mediaExternal')
+    case 'unsupported':
+      return tr('plugin.retro.mediaUnsupported')
+    default:
+      return tr('plugin.retro.mediaRejected')
+  }
+}
+
+/** 能画吗：判定 ok **且**字节已经到（blob URL 有了）。 */
+function playable(target: string): string | null {
+  const slot = slotOf(target)
+  return slot && slot.state === 'ok' && slot.url ? slot.url : null
+}
+
+/** 点图放大（原图在新窗口里看不了，改成同页浮层 —— 不出网、不加协议）。 */
+function zoomIn(url: string, alt: string): void {
+  emit('zoom', { url, alt })
 }
 </script>
 
@@ -60,9 +126,52 @@ function childDocument(blocks: MdBlock[]): MdDocument {
         block.kind.text
       }}</code></pre>
 
+      <!-- 媒体（`FR-R-12-03`）：能读的就地画，读不了的就地降级为占位 + 文件名 + 原因 -->
+      <figure
+        v-else-if="block.kind.type === 'media'"
+        class="retro-md__media"
+        :data-media="block.kind.media"
+        :data-target="block.kind.target"
+        :data-state="slotOf(block.kind.target)?.state ?? 'missing'"
+        :data-line="block.line"
+      >
+        <template v-if="playable(block.kind.target)">
+          <img
+            v-if="block.kind.media === 'image'"
+            class="retro-md__image"
+            :src="playable(block.kind.target) ?? ''"
+            :alt="captionOf(block.kind.alt, block.kind.target)"
+            :title="tr('plugin.retro.mediaZoomHint')"
+            data-role="retro-media-image"
+            @click="zoomIn(playable(block.kind.target) ?? '', captionOf(block.kind.alt, block.kind.target))"
+          />
+          <video
+            v-else
+            class="retro-md__video"
+            :src="playable(block.kind.target) ?? ''"
+            controls
+            preload="metadata"
+            data-role="retro-media-video"
+          ></video>
+          <figcaption class="retro-md__media-caption">{{ captionOf(block.kind.alt, block.kind.target) }}</figcaption>
+        </template>
+        <span v-else class="retro-md__media-note" data-role="retro-media-note">
+          <span class="retro-md__media-state">{{ stateLabel(slotOf(block.kind.target)) }}</span>
+          <span class="retro-md__media-name">{{ fileNameOf(block.kind.target) }}</span>
+          <span v-if="slotOf(block.kind.target)?.reason" class="retro-md__media-reason">
+            {{ slotOf(block.kind.target)?.reason }}
+          </span>
+        </span>
+      </figure>
+
       <!-- 引用（递归） -->
       <blockquote v-else-if="block.kind.type === 'quote'" class="retro-md__quote" :data-line="block.line">
-        <BlockDocument :document="childDocument(block.kind.children)" />
+        <BlockDocument
+          :document="childDocument(block.kind.children)"
+          :media="props.media"
+          :language="props.language"
+          @zoom="emit('zoom', $event)"
+        />
       </blockquote>
 
       <!-- 分隔线 -->
@@ -110,7 +219,13 @@ function childDocument(blocks: MdBlock[]): MdDocument {
         </span>
         <span class="retro-md__item-body">
           <span v-for="(span, i) in block.kind.spans" :key="i" :class="inlineClass(span)">{{ span.text }}</span>
-          <BlockDocument v-if="block.kind.children.length" :document="childDocument(block.kind.children)" />
+          <BlockDocument
+            v-if="block.kind.children.length"
+            :document="childDocument(block.kind.children)"
+            :media="props.media"
+            :language="props.language"
+            @zoom="emit('zoom', $event)"
+          />
         </span>
       </div>
     </template>
@@ -155,6 +270,47 @@ export default { name: 'BlockDocument' }
   margin: var(--ds-spacing-s) 0;
   border: 0;
   border-top: var(--ds-metric-hairline) solid var(--ds-hairline);
+}
+.retro-md__media {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+  margin: 0 0 var(--ds-spacing-m);
+}
+.retro-md__image,
+.retro-md__video {
+  max-width: 100%;
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-color-surface-content);
+}
+.retro-md__image {
+  cursor: zoom-in;
+}
+.retro-md__media-caption {
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+}
+.retro-md__media-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+  padding: var(--ds-spacing-s);
+  border: var(--ds-metric-hairline) dashed var(--ds-color-status-warning);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-color-surface-content);
+}
+.retro-md__media-state {
+  color: var(--ds-color-status-warning);
+  font-size: var(--ds-font-caption-size);
+}
+.retro-md__media-name {
+  font-family: var(--ds-font-stack-mono);
+  font-size: var(--ds-font-mono-small-size);
+}
+.retro-md__media-reason {
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
 }
 .retro-md__table {
   margin: 0 0 var(--ds-spacing-s);
