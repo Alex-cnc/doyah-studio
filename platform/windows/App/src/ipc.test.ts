@@ -108,6 +108,8 @@ describe('ipc', () => {
       'agent_generate_sql',
       'agent_diagnosis_ask',
       'agent_chat_send',
+      'agent_chat_load',
+      'agent_chat_save',
       'agent_history_list',
       'agent_audit_list',
       'connection_validate',

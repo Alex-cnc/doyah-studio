@@ -14,6 +14,7 @@ pub mod agent;
 pub mod agent_advisor;
 pub mod agent_audit;
 pub mod agent_config;
+pub mod agent_chat_session;
 pub mod agent_history;
 pub mod agent_nl2sql;
 pub mod agent_quota;

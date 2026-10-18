@@ -778,6 +778,27 @@ export const DICT = {
     en: 'Model {model} · {ms} ms · question {n} · {turns} message(s) sent',
   },
   'chat.attempts': { 'zh-Hans': '共尝试 {n} 次（退避后重试过）', en: 'tried {n} times (retried after backoff)' },
+  // 会话按工作区落盘（FR-AI-17）：存到哪儿、读回几条、没打开工作区为什么不会存
+  'chat.session': {
+    'zh-Hans': '这段对话按工作区存在本机：{path}',
+    en: 'This conversation is saved per workspace: {path}',
+  },
+  'chat.sessionOff': {
+    'zh-Hans': '还没打开工作区：这次对话不会存盘（打开一个文件夹后会自动按工作区各存一份）。',
+    en: 'No folder open — this conversation is not saved (open a folder and it is kept per workspace).',
+  },
+  'chat.loaded': {
+    'zh-Hans': '读回了上次的 {n} 条消息（{q} 问）',
+    en: 'Restored {n} message(s) from last time ({q} question(s))',
+  },
+  'chat.saveFailed': {
+    'zh-Hans': '这次对话没能存盘：{reason}',
+    en: 'Could not save this conversation: {reason}',
+  },
+  'chat.saveTrimmed': {
+    'zh-Hans': '存盘时只留了最新的 {kept} 条：移出 {dropped} 条最早的、截断 {clipped} 条过长的（上限 {limit} 条）。',
+    en: 'Kept the newest {kept}: {dropped} older message(s) moved out, {clipped} long one(s) clipped (limit {limit}).',
+  },
 
   // 对话式诊断（FR-AI-03）：先摊证据，再粘模型回复；结论必须有依据
   'diag.entry': { 'zh-Hans': '诊断…', en: 'Diagnose…' },

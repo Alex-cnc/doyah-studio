@@ -140,6 +140,9 @@ export const COMMANDS = {
   // 问诊断一次（FR-AI-03 第二片）：把面板上那份资料块原样发出去，只回正文
   agentDiagnosisAsk: 'agent_diagnosis_ask',
   agentChatSend: 'agent_chat_send',
+  // 对话会话按工作区落盘（FR-AI-17）：读 / 写各一条，只动本机文件、不外发
+  agentChatLoad: 'agent_chat_load',
+  agentChatSave: 'agent_chat_save',
   agentHistoryList: 'agent_history_list',
   agentAuditList: 'agent_audit_list',
   // 连接配置面收口（S-1a）：逐项校验 / 换引擎联动默认值 / 从 URL 导入
@@ -1122,6 +1125,33 @@ export type AgentChatReply =
       turns: number
     }
 
+/**
+ * 一个工作区的对话会话（`FR-AI-17`）：读回来的一整段 + 读的时候发生了什么。
+ *
+ * `notes` 里是「为什么没读到 / 读到的不全」（坏文件 / 属于别的工作区 / 跳过几条），
+ * 界面照实显示，**不假装读到了一份完整的历史**。
+ */
+export interface AgentChatSession {
+  workspace: string
+  /** 会话文件路径；没打开工作区时为空串。 */
+  path: string
+  messages: AgentChatTurn[]
+  skipped: number
+  clipped: number
+  notes: string[]
+  questions: number
+}
+
+/** 落盘结果：写到哪儿、实际几条、裁掉/截断/丢弃各几条（都要说出来）。 */
+export interface AgentChatSaved {
+  path: string
+  messages: number
+  dropped: number
+  clipped: number
+  invalid: number
+  updatedSecs: number
+}
+
 /** 设置快照：配置 + 裁决 + 密钥在不在 + 两个路径。 */
 export interface AgentSettingsSnapshot {
   config: AgentConfiguration
@@ -1285,6 +1315,35 @@ export function agentDiagnosisAsk(brief: string): Promise<AgentAskReply> {
  */
 export function agentChatSend(turns: readonly AgentChatTurn[]): Promise<AgentChatReply> {
   return call(COMMANDS.agentChatSend, { turns }, () => {
+    throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
+  })
+}
+
+/**
+ * **读这个工作区的对话**（`FR-AI-17`）：打开页签 / 换工作区时调一次。
+ *
+ * 只读：**不触发外发**、不改盘上的东西。文件不存在就是空对话（第一次打开）。
+ * 读不出来 / 属于别的工作区 ⇒ 空对话 + `notes` 里说清（界面照实显示）。
+ */
+export function agentChatLoad(workspace: string): Promise<AgentChatSession> {
+  return call(COMMANDS.agentChatLoad, { workspace }, () => ({
+    workspace,
+    path: '',
+    messages: [],
+    skipped: 0,
+    clipped: 0,
+    notes: [],
+    questions: 0,
+  }))
+}
+
+/**
+ * **把这个工作区的对话落盘**（`FR-AI-17`）：每成功一问之后调一次。
+ *
+ * 归属工作区为空 ⇒ 可读失败（界面据此说「这次不会存」）；超上限 / 超长会被裁到上限**并回报条数**。
+ */
+export function agentChatSave(workspace: string, turns: readonly AgentChatTurn[]): Promise<AgentChatSaved> {
+  return call(COMMANDS.agentChatSave, { workspace, turns }, () => {
     throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
   })
 }

@@ -1305,7 +1305,11 @@ function onTreeKeydown(event: KeyboardEvent) {
 
         <div class="ws__editor">
           <!-- 对话页签（`FR-AI-25` 第一片）：占编辑区、挂在页签条上（**旁路 Home 的文件面**） -->
-          <ChatPanel v-if="activeTab && activeTab.kind === 'chat'" :language="props.language" />
+          <ChatPanel
+            v-if="activeTab && activeTab.kind === 'chat'"
+            :language="props.language"
+            :workspace="root"
+          />
           <template v-else-if="activeTab && activeTab.relativePath === null">
               <WorkspaceHome
                 :language="props.language"

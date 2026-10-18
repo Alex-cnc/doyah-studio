@@ -12,6 +12,9 @@ pub mod agent_settings;
 /// `doyah_studio_db::agent_nl2sql`；本模块只管「判放行 → 真发一次 → 回文本」，
 /// **不持有任何数据库连接**（「永不自动执行」在形状上成立）。
 pub mod agent_generate;
+/// 对话会话的落盘（`FR-AI-17`）：一个工作区一份 `chat-<哈希>.json`，
+/// 形状与归属校验在领域层 `doyah_studio_db::agent_chat_session`，本模块只管「放哪儿、怎么取」。
+pub mod agent_chat_sessions;
 pub mod format_tool;
 pub mod fs;
 pub mod postgres;
@@ -78,6 +81,8 @@ pub struct ShellState {
     pub retro: retro_library::RetroStore,
     /// 智能体配置与密钥的落盘位置（FR-AI-01；配置与密钥**分两份文件**，见 `agent_settings.rs` 头注）。
     pub agent_settings: AgentSettingsStore,
+    /// 对话会话的落盘位置（FR-AI-17；**按工作区一份**，见 `agent_chat_sessions.rs` 头注）。
+    pub agent_chat_sessions: agent_chat_sessions::ChatSessionStore,
     /// **当前连接是不是只读**（FR-CONN-17）：写回与危险判定都要看它。
     ///
     /// 为什么用原子布尔而不是塞进会话：只读是**连接级配置**的一部分，而"当前连接"这个槽
@@ -824,6 +829,34 @@ fn agent_chat_send(
     turns: Vec<doyah_studio_db::agent_nl2sql::ChatMessage>,
 ) -> Result<agent_generate::ChatReply, DbFailure> {
     agent_generate::chat(&state.agent_settings, &turns)
+}
+
+/// **读这个工作区的对话**（`FR-AI-17`）：打开对话页签 / 换工作区时调一次。
+///
+/// 只读一条命令：**不触发任何外发**、也不改盘上的东西（写只发生在 [`agent_chat_save`]）。
+/// 文件不存在 = 第一次打开 = 空对话；文件坏了 / 属于别的工作区 ⇒ 空对话 + `notes` 里说清原因。
+#[tauri::command]
+fn agent_chat_load(
+    state: State<'_, ShellState>,
+    workspace: String,
+) -> agent_chat_sessions::ChatSessionReport {
+    state.agent_chat_sessions.load(&workspace)
+}
+
+/// **把这个工作区的对话落盘**（`FR-AI-17`）：每成功一问之后调一次。
+///
+/// 归属工作区为空 ⇒ 可读失败（没有「按工作区一份」可言，界面据此说「这次不会存」）。
+/// 超上限 / 超长会被裁到上限**并回报条数**（`dropped` / `clipped` / `invalid`），不静默丢。
+#[tauri::command]
+fn agent_chat_save(
+    state: State<'_, ShellState>,
+    workspace: String,
+    turns: Vec<doyah_studio_db::agent_nl2sql::ChatMessage>,
+) -> Result<agent_chat_sessions::ChatSessionSaved, DbFailure> {
+    let at = doyah_studio_db::agent_quota::now_secs();
+    state
+        .agent_chat_sessions
+        .save(&workspace, &turns, at)
 }
 
 /// 生成历史（`FR-AI-02` 的回看面）：一打开弹层就能看到以前问过什么。
@@ -2825,6 +2858,7 @@ pub fn run() {
             archive: archive::ArchiveStore::new(archive::ArchiveStore::default_root()),
             retro: retro_library::RetroStore::new(retro_library::RetroStore::default_root()),
             agent_settings: AgentSettingsStore::default_store(),
+            agent_chat_sessions: agent_chat_sessions::ChatSessionStore::default_store(),
             read_only: std::sync::atomic::AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
@@ -2880,6 +2914,8 @@ pub fn run() {
             agent_generate_sql,
             agent_diagnosis_ask,
             agent_chat_send,
+            agent_chat_load,
+            agent_chat_save,
             agent_history_list,
             agent_audit_list,
             connection_validate,
