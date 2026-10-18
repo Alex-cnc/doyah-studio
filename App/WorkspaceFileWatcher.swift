@@ -28,6 +28,28 @@ private final class WorkspaceWatcherBox {
     weak var watcher: WorkspaceFileWatcher?
 }
 
+/// 盒子仓库：**只增不减**。
+///
+/// 为什么允许这点"泄漏"：FSEvents 的回调是 C 函数指针，拿不到 Swift 的捕获列表，
+/// 唯一能用的就是 `FSEventStreamContext.info` 这个裸指针。前后两版都栽在"谁来保证它指向的
+/// 对象还活着"：
+/// ① `passUnretained(self)` —— 监听器先走，回调打空（21:22 崩溃）；
+/// ② `passRetained(self)` + `stop()` 释放 —— 已派发的回调落在释放之后（21:50 崩溃）；
+/// ③ 盒子 + retain/release 回调 —— 仍在 22:31 连崩 5 次（说明"成对配平"这个假设在
+///    `FSEventStreamInvalidate` 之后并不成立）。
+///
+/// 结论：裸指针的生命期**不能靠算引用计数来保证**，只能靠"永不释放"。
+/// 盒子本身只有 16 字节，每次换工作区根多一个，进程内最多几十个 ——
+/// 用这点内存换"绝不野指针"，是这笔交易里唯一划算的一边。
+private enum WorkspaceWatcherBoxes {
+    private static let lock = NSLock()
+    private static var boxes: [WorkspaceWatcherBox] = []
+
+    static func keep(_ box: WorkspaceWatcherBox) {
+        lock.lock(); boxes.append(box); lock.unlock()
+    }
+}
+
 final class WorkspaceFileWatcher {
 
     /// 一批改动（防抖后）。
@@ -72,20 +94,13 @@ final class WorkspaceFileWatcher {
         // 盒子里对监听器是 weak ⇒ 迟到的回调也不会碰野指针。
         let box = WorkspaceWatcherBox()
         box.watcher = self
-        let info = Unmanaged.passRetained(box).toOpaque()
+        // 盒子交给进程级仓库保管（**永不释放**，见 `WorkspaceWatcherBoxes`），
+        // 这里故意用 `passUnretained`：生命周期由仓库负责，不归引用计数管。
+        WorkspaceWatcherBoxes.keep(box)
+        let info = Unmanaged.passUnretained(box).toOpaque()
         streamContextPointer = info
         var context = FSEventStreamContext(
-            version: 0,
-            info: info,
-            retain: { pointer in
-                guard let pointer else { return nil }
-                return UnsafeRawPointer(Unmanaged<WorkspaceWatcherBox>.fromOpaque(pointer).retain().toOpaque())
-            },
-            release: { pointer in
-                guard let pointer else { return }
-                Unmanaged<WorkspaceWatcherBox>.fromOpaque(pointer).release()
-            },
-            copyDescription: nil
+            version: 0, info: info, retain: nil, release: nil, copyDescription: nil
         )
         let flags = UInt32(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer)
         guard let stream = FSEventStreamCreate(
@@ -113,7 +128,7 @@ final class WorkspaceFileWatcher {
             FSEventStreamCreateFlags(flags)
         ) else {
             // 建流失败 ⇒ 把上面的 retain 退回去，否则监听器永远不释放
-            Unmanaged<WorkspaceWatcherBox>.fromOpaque(info).release()
+            // 盒子不释放：它归 `WorkspaceWatcherBoxes` 所有
             streamContextPointer = nil
             return
         }
@@ -131,10 +146,8 @@ final class WorkspaceFileWatcher {
         }
         stream = nil
         // 与 `start()` 的 passRetained 配对：先 invalidate（不再有回调），再 release
-        if let pointer = streamContextPointer {
-            Unmanaged<WorkspaceWatcherBox>.fromOpaque(pointer).release()
-            streamContextPointer = nil
-        }
+        // 盒子留在仓库里（见 `WorkspaceWatcherBoxes` 的注释），这里只清本地指针
+        streamContextPointer = nil
         for (_, source) in fileSources { source.cancel() }
         fileSources = [:]
         onChanges = nil
