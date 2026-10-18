@@ -382,6 +382,11 @@ export const DICT = {
 
   // SQL 编辑面
   'sql.run': { 'zh-Hans': '执行', en: 'Run' },
+  // 编辑器按键提示（B1 接线后可见面：告诉用户这几组键存在，否则只有摸到的人知道）
+  'sql.keys': {
+    'zh-Hans': 'Ctrl+/ 注释 · Alt+↑↓ 移行 · Alt+Shift+↓ 复制行 · Tab 缩进 · 回车自动缩进 · 括号自动配对',
+    en: 'Ctrl+/ comment · Alt+↑↓ move line · Alt+Shift+↓ duplicate · Tab indent · Enter auto-indent · auto-pair brackets',
+  },
   'sql.cancel': { 'zh-Hans': '取消', en: 'Cancel' },
   'sql.planOnly': { 'zh-Hans': '只看计划', en: 'Plan only' },
   'sql.runWithPlan': { 'zh-Hans': '执行并出计划', en: 'Run with plan' },

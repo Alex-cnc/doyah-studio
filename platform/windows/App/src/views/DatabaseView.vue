@@ -97,6 +97,20 @@ import {executionTarget,
   wordBeforeCaret,
   type CompletionItem,
 } from '../sql/editor'
+// 编辑键（B1 接线）：纯逻辑在 `workspace/editing.ts`（11 个已单测函数，本片接前 6 条）。
+// 口径照旧 —— 规则算在纯函数里、组件只把按键与选区喂进去再把结果落回 textarea，
+// **不在这里重写一遍规则**（两处判必然分叉）。
+import {
+  autoIndentForNewline,
+  autoPair,
+  detectIndentStyle,
+  indentSelection,
+  indentUnitOf,
+  moveOrDuplicateLines,
+  toggleLineComment,
+  type EditResult,
+  type Selection as EditorSelection,
+} from '../workspace/editing'
 
 // **界面语言（1.8 双语）**：与标题栏同一套取值（zh-Hans / en）
 // 口径：语言表只覆盖**界面外壳**；正文说明与服务端提示仍是中文（已在版本计划里登记未落）。
@@ -1568,10 +1582,108 @@ function acceptCompletion(item?: CompletionItem) {
   void refreshHighlight()
 }
 
+// ── 编辑键（B1 接线 · 第一批 6 条）：注释切换 / 移行 / 复制行 / 回车缩进 / Tab 缩进 / 自动配对 ──
+//
+// 只做「把按键喂给纯函数、再把结果落回 textarea」这一层：规则全在 `workspace/editing.ts`
+// （那里有行为单测），这里不重写一遍。落回时**先把新全文写进 `sql`，再在 nextTick 之后摆光标** ——
+// v-model 重渲染会把光标推到末尾，顺序反了每次按键光标都会跳到文章末尾。
+const SQL_COMMENT_PREFIX = '--'
+
+/** 编辑器当前的选区（字符下标；取不到就说「在末尾」）。 */
+function editorSelection(area: HTMLTextAreaElement): EditorSelection {
+  return { start: area.selectionStart ?? 0, end: area.selectionEnd ?? 0 }
+}
+
+/** 把一次编辑结果落到编辑器上：新全文 + 新选区 + 重算高亮与页签草稿。 */
+async function applyEdit(result: EditResult): Promise<void> {
+  if (result.text === sql.value) {
+    // 内容没变（例如移行到边界是 no-op）：只摆光标，不重算高亮
+    const area = sqlArea.value
+    if (area) {
+      area.selectionStart = result.selection.start
+      area.selectionEnd = result.selection.end
+    }
+    return
+  }
+  sql.value = result.text
+  await refreshHighlight()
+  await nextTick()
+  const area = sqlArea.value
+  if (area) {
+    area.selectionStart = result.selection.start
+    area.selectionEnd = result.selection.end
+  }
+  stashActiveQuery()
+  void refreshCompletions()
+}
+
+/**
+ * 编辑器按键总入口。
+ *
+ * 口径：**只接管它自己那几种组合**，其余一律放行 —— 打字、方向键、Ctrl+C/V、Shift+Enter 都走浏览器默认，
+ * 不拦不是因为懒，是因为拦错了就会吃掉输入（否定面有测试）。
+ */
+function onEditorKeydown(event: KeyboardEvent): void {
+  const area = sqlArea.value
+  if (!area) return
+  const selection = editorSelection(area)
+  const mod = event.ctrlKey || event.metaKey
+
+  // ① Ctrl+/ 注释切换（`--`；只动行首、保持缩进）
+  if (mod && event.key === '/') {
+    event.preventDefault()
+    void applyEdit(toggleLineComment(sql.value, selection, SQL_COMMENT_PREFIX))
+    return
+  }
+
+  // ② Alt+↑/↓ 移行；③ Alt+Shift+↓ 复制行
+  if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+    event.preventDefault()
+    const direction = event.shiftKey ? 'duplicate' : event.key === 'ArrowUp' ? 'up' : 'down'
+    void applyEdit(moveOrDuplicateLines(sql.value, selection, direction))
+    return
+  }
+
+  // ④ Tab / Shift+Tab 缩进 —— **有候选时仍归补全清单**（旧行为不夺走）
+  if (event.key === 'Tab' && !mod && !event.altKey) {
+    event.preventDefault()
+    if (completions.value.length > 0) {
+      acceptCompletion()
+      return
+    }
+    const unit = indentUnitOf(detectIndentStyle(sql.value))
+    void applyEdit(indentSelection(sql.value, selection, event.shiftKey ? -1 : 1, unit))
+    return
+  }
+
+  // ⑤ Enter 自动缩进（继承当前行缩进；`{ ( [` 之后多一级；下一个字符是闭合符则回退一级）
+  if (event.key === 'Enter' && !mod && !event.altKey && !event.shiftKey) {
+    event.preventDefault()
+    const caret = selection.end
+    const lineStart = sql.value.lastIndexOf('\n', caret - 1) + 1
+    const currentLine = sql.value.slice(lineStart, caret)
+    const nextNonSpaceChar = /^\s*(\S)/.exec(sql.value.slice(caret))?.[1] ?? ''
+    const unit = indentUnitOf(detectIndentStyle(sql.value))
+    const indent = autoIndentForNewline(currentLine, nextNonSpaceChar, unit)
+    const text = sql.value.slice(0, selection.start) + '\n' + indent + sql.value.slice(selection.end)
+    const at = selection.start + 1 + indent.length
+    void applyEdit({ text, selection: { start: at, end: at } })
+    return
+  }
+
+  // ⑥ 自动配对：打出左半符 / 引号补右半；闭合符正好在光标处则跳过；有选区则包裹
+  if (!mod && !event.altKey && !event.shiftKey && event.key.length === 1) {
+    const outcome = autoPair(sql.value, selection, event.key)
+    if (outcome) {
+      event.preventDefault()
+      void applyEdit({ text: outcome.text, selection: outcome.selection })
+    }
+  }
+}
+
 /** 当前编辑器里的**选区文本**（没有选区 / 不是 textarea ⇒ 空串）。 */
 function selectedSql(): string {
   const area = sqlArea.value
-  if (!area) return ''
   const begin = area.selectionStart ?? 0
   const end = area.selectionEnd ?? 0
   if (end <= begin) return ''
@@ -2283,10 +2395,11 @@ async function probe() {
               @input="refreshHighlight(); refreshCompletions(); stashActiveQuery()"
               @keyup="refreshCompletions()"
               @click="refreshCompletions()"
-              @keydown.tab.prevent="acceptCompletion()"
+              @keydown="onEditorKeydown"
               @keydown.esc="completions = []"
             />
           </div>
+          <p class="db__editor-keys">{{ t('sql.keys') }}</p>
           <ul v-if="completions.length" class="db__completions">
             <li v-for="(c, i) in completions.slice(0, 8)" :key="`${c.kind}:${c.text}`">
               <button
@@ -3184,6 +3297,13 @@ async function probe() {
 
 .db__editor textarea::selection {
   background: var(--ds-color-accent-accent);
+}
+
+/* 按键提示（B1 接线）：一行小字、低对比，只为让这几组键**看得见**，不抢编辑面。 */
+.db__editor-keys {
+  margin: 0 0 var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
 }
 
 .db__tok--keyword {
