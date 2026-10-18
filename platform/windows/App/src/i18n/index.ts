@@ -405,8 +405,8 @@ export const DICT = {
   'sql.run': { 'zh-Hans': '执行', en: 'Run' },
   // 编辑器按键提示（B1 接线后可见面：告诉用户这几组键存在，否则只有摸到的人知道）
   'sql.keys': {
-    'zh-Hans': 'Ctrl+/ 注释 · Alt+↑↓ 移行 · Alt+Shift+↓ 复制行 · Tab 缩进 · 回车自动缩进 · 括号自动配对 · Ctrl+G 跳行列',
-    en: 'Ctrl+/ comment · Alt+↑↓ move line · Alt+Shift+↓ duplicate · Tab indent · Enter auto-indent · auto-pair brackets · Ctrl+G go to line',
+    'zh-Hans': 'Ctrl+/ 注释 · Alt+↑↓ 移行 · Alt+Shift+↓ 复制行 · Tab 缩进 · 回车自动缩进 · 括号自动配对 · Ctrl+F 查找 · Ctrl+G 跳行列',
+    en: 'Ctrl+/ comment · Alt+↑↓ move line · Alt+Shift+↓ duplicate · Tab indent · Enter auto-indent · auto-pair brackets · Ctrl+F find · Ctrl+G go to line',
   },
   // 补全清单的键盘提示（B1 收尾）：↑↓ 与回车能用这件事必须写在脸上，否则只有摸到的人知道
   'sql.completionKeys': {
@@ -434,6 +434,40 @@ export const DICT = {
   'sql.gotoTip': { 'zh-Hans': '跳到指定行或「行:列」（Ctrl+G）', en: 'Jump to a line or line:column (Ctrl+G)' },
   'sql.gotoLabel': { 'zh-Hans': '行 / 行:列', en: 'Line / line:column' },
   'sql.gotoGo': { 'zh-Hans': '跳转', en: 'Go' },
+  // 编辑菜单（FR-EDIT-17）：一个入口管五件事 —— 本轮落四件（查找替换 / 跳行 / 缩进 / 清除），
+  // 格式化 SQL（FR-EDIT-22）下一轮补；**菜单里现在不放点了没反应的项**（假入口比没有入口更糟）。
+  'sql.editMenu': { 'zh-Hans': '编辑', en: 'Edit' },
+  'sql.editMenu.tip': {
+    'zh-Hans': '编辑菜单：查找 / 替换 · 跳到行或列 · 缩进 / 反缩进 · 清除查询',
+    en: 'Edit menu: find / replace · go to line · indent / outdent · clear query',
+  },
+  'sql.edit.find': { 'zh-Hans': '查找 / 替换…', en: 'Find / replace…' },
+  'sql.edit.goto': { 'zh-Hans': '跳到行或列…', en: 'Go to line…' },
+  'sql.edit.indent': { 'zh-Hans': '缩进选中行', en: 'Indent selected lines' },
+  'sql.edit.outdent': { 'zh-Hans': '反缩进选中行', en: 'Outdent selected lines' },
+  'sql.edit.clear': { 'zh-Hans': '清除查询', en: 'Clear query' },
+  // 查找 / 替换条（FR-EDIT-18）：读数与"没有匹配"都必须写出来 —— 安静不是结论
+  'sql.find.label': { 'zh-Hans': '查找', en: 'Find' },
+  'sql.find.replaceLabel': { 'zh-Hans': '替换为', en: 'Replace with' },
+  'sql.find.case': { 'zh-Hans': 'Aa 区分大小写', en: 'Aa match case' },
+  'sql.find.caseTip': {
+    'zh-Hans': '缺省不区分大小写（SQL 里随手打是常态）',
+    en: 'Case-insensitive by default (SQL is typed loosely)',
+  },
+  'sql.find.prev': { 'zh-Hans': '上一处', en: 'Prev' },
+  'sql.find.next': { 'zh-Hans': '下一处', en: 'Next' },
+  'sql.find.one': { 'zh-Hans': '替换', en: 'Replace' },
+  'sql.find.all': { 'zh-Hans': '全部替换', en: 'Replace all' },
+  'sql.find.close': { 'zh-Hans': '关闭', en: 'Close' },
+  'sql.find.readout': { 'zh-Hans': '{position} / {total} 处', en: '{position} of {total}' },
+  'sql.find.none': {
+    'zh-Hans': '没有匹配（按字面量查，不认正则）',
+    en: 'No match (literal search, not regex)',
+  },
+  'sql.find.note': { 'zh-Hans': '替换了 {n} 处', en: 'Replaced {n}' },
+  'sql.find.placeholder': { 'zh-Hans': '要查的文字', en: 'Text to find' },
+  'sql.find.replacePlaceholder': { 'zh-Hans': '替成什么（字面量）', en: 'Replacement (literal)' },
+  'sql.find.emptyQuery': { 'zh-Hans': '先输入要查的文字', en: 'Type something to find first' },
   'sql.cancel': { 'zh-Hans': '取消', en: 'Cancel' },
   'sql.planOnly': { 'zh-Hans': '只看计划', en: 'Plan only' },
   'sql.runWithPlan': { 'zh-Hans': '执行并出计划', en: 'Run with plan' },

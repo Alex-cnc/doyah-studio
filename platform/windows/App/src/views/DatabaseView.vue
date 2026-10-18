@@ -129,6 +129,15 @@ import {
 } from '../workspace/editing'
 // 跳行列（B1 第二批）：解析与夹界在 `workspace/navigation.ts`（有行为单测），组件只做摆光标。
 import { offsetOfJump, parseJumpInput } from '../workspace/navigation'
+// 查找 / 替换（FR-EDIT-18）：字面量匹配、非重叠、替换串里的 `$&` 当字面量 —— 规则与 19 条单测同在一处。
+import {
+  findMatches,
+  matchIndexAt,
+  readout,
+  replaceAll,
+  replaceOne,
+  stepMatch,
+} from '../workspace/findReplace'
 // 诊断上屏（B1 第三批 · FR-EDIT-56）：规则在领域层 `Db/src/lint.rs`，这里只把区间叠到高亮片段上。
 import { decoratePieces } from '../workspace/diagnostics'
 // 分隔条（FR-EDIT-13）：夹紧与步进是纯算术，摆在 `splitPane.ts`；组件只做测量、指针与 inline 高度。
@@ -1890,6 +1899,19 @@ function onEditorKeydown(event: KeyboardEvent): void {
     return
   }
 
+  // ⓪' Ctrl+F 查找 / Ctrl+H 替换（FR-EDIT-18）：只开浮层，**不改文本**。
+  // 必须 preventDefault —— 否则 WebView2 自己会弹一个浏览器查找条，两个查找条同时出现。
+  if (mod && !event.altKey && (event.key === 'f' || event.key === 'F')) {
+    event.preventDefault()
+    openFind('find')
+    return
+  }
+  if (mod && !event.altKey && (event.key === 'h' || event.key === 'H')) {
+    event.preventDefault()
+    openFind('replace')
+    return
+  }
+
   // ① Ctrl+/ 注释切换（`--`；只动行首、保持缩进）
   if (mod && event.key === '/') {
     event.preventDefault()
@@ -2062,6 +2084,187 @@ function applyGoto(): void {
   gotoOpen.value = false
   gotoError.value = ''
   void refreshCompletions()
+}
+
+// ── 编辑菜单（FR-EDIT-17）+ 查找 / 替换（FR-EDIT-18）──────────────────────────
+//
+// 现状对齐（写清为什么这一片现在才做）：
+//   · 跳行列（FR-EDIT-19）、缩进 / 反缩进（FR-EDIT-20）、清除查询（FR-EDIT-21）**早就有各自的路**
+//     （`Ctrl+G` + 状态栏按钮、`Tab` / `Shift+Tab`、工具条「清空」）—— 缺的是「一个入口能看见它们」；
+//   · **查找 / 替换（FR-EDIT-18）此前全仓零实现**（连一个 find 函数都没有），这一片是新增能力；
+//   · 格式化 SQL（FR-EDIT-22）下一轮才落领域层格式化器 ⇒ **本轮菜单里不放这一项**：
+//     点了没反应的入口比没有入口更糟（用户会以为功能坏了）。
+//
+// 规则全在 `workspace/findReplace.ts`（19 条行为单测）；这里只做三件事：开合、把选区摆到命中上、把替换结果落回编辑器。
+const editMenuOpen = ref(false)
+
+function toggleEditMenu(): void {
+  editMenuOpen.value = !editMenuOpen.value
+  if (editMenuOpen.value) {
+    // 同时只开一个浮层：另一处菜单（对象右键 / 服务器菜单 / 已保存清单）跟着收
+    closeMenus()
+    savedQueryMenuOpen.value = false
+  }
+}
+
+function closeEditMenu(): void {
+  editMenuOpen.value = false
+}
+
+const findOpen = ref(false)
+const findTerm = ref('')
+const findReplacement = ref('')
+const findCaseSensitive = ref(false)
+/** 当前停在第几处命中（0 基；-1 = 还没定位 / 没有命中） */
+const findCurrent = ref(-1)
+/** 替换回执与"没有匹配"这类结论 —— **必须有话说**，安静不是结论 */
+const findNote = ref('')
+const findBox = ref<HTMLInputElement | null>(null)
+const replaceBox = ref<HTMLInputElement | null>(null)
+
+const findHits = computed(() =>
+  findMatches(sql.value, findTerm.value, { caseSensitive: findCaseSensitive.value }),
+)
+const findReadout = computed(() => readout(findHits.value, findCurrent.value))
+
+/** 打开查找条：有选区就把选区当查询串（与主流编辑器同口径），否则沿用上一次查的词。 */
+function openFind(mode: 'find' | 'replace' = 'find'): void {
+  findOpen.value = true
+  findNote.value = ''
+  const area = sqlArea.value
+  if (area && area.selectionEnd > area.selectionStart) {
+    const picked = sql.value.slice(area.selectionStart, area.selectionEnd)
+    if (picked && !picked.includes('\n') && picked.length <= 200) findTerm.value = picked
+  }
+  findCurrent.value = matchIndexAt(findHits.value, caretOffset.value)
+  void nextTick(() => {
+    const target = mode === 'replace' ? replaceBox.value ?? findBox.value : findBox.value
+    target?.focus()
+    target?.select()
+  })
+}
+
+function closeFind(): void {
+  findOpen.value = false
+  findNote.value = ''
+  // 焦点**等浮层真的被摘掉之后**再还给编辑器：同步抢焦点会被随后的移除动作打回 body
+  void nextTick(() => sqlArea.value?.focus())
+}
+
+/**
+ * 把编辑器选区摆到第 `index` 处命中上。
+ *
+ * `focus = false`（边打字边预览）时**不许抢焦点** —— 否则在输入框里每打一个字，焦点都被编辑器夺走，
+ * 查找框连一个字都打不进去（这是这种浮层最经典的坏法）。
+ */
+function syncFindSelection(index: number = findCurrent.value, focus = true): void {
+  const matches = findHits.value
+  const area = sqlArea.value
+  if (index < 0 || index >= matches.length) {
+    findCurrent.value = -1
+    return
+  }
+  if (!area) return
+  const start = matches[index]
+  if (focus) area.focus()
+  area.setSelectionRange(start, start + findTerm.value.length)
+  if (focus) caretOffset.value = start + findTerm.value.length
+  findCurrent.value = index
+}
+
+function stepFind(direction: 1 | -1): void {
+  const matches = findHits.value
+  if (!matches.length) {
+    findCurrent.value = -1
+    return
+  }
+  findNote.value = ''
+  syncFindSelection(stepMatch(matches.length, findCurrent.value, direction))
+}
+
+/** 替换结果落回编辑器（与编辑键同一条路：先写全文，nextTick 后摆光标）。 */
+async function commitFoundText(text: string, caret: number): Promise<void> {
+  sql.value = text
+  await refreshHighlight()
+  await nextTick()
+  const area = sqlArea.value
+  if (area) area.setSelectionRange(caret, caret)
+  caretOffset.value = caret
+  stashActiveQuery()
+  void refreshCompletions()
+  // 文本变了 ⇒ 命中列表重算，光标处那一处成为"当前"
+  findCurrent.value = matchIndexAt(findHits.value, caret)
+}
+
+function replaceCurrent(): void {
+  if (!findTerm.value) {
+    findNote.value = t('sql.find.emptyQuery')
+    return
+  }
+  const matches = findHits.value
+  if (!matches.length || findCurrent.value < 0) {
+    findNote.value = t('sql.find.none')
+    return
+  }
+  const result = replaceOne(sql.value, findTerm.value, findReplacement.value, matches[findCurrent.value], {
+    caseSensitive: findCaseSensitive.value,
+  })
+  if (!result.count) {
+    // 起点处已经不是那段文字（文本在此期间被改过）：**一个字都不改**，并如实说
+    findNote.value = t('sql.find.none')
+    findCurrent.value = matchIndexAt(findHits.value, caretOffset.value)
+    return
+  }
+  void commitFoundText(result.text, result.caret)
+  findNote.value = t('sql.find.note', { n: 1 })
+}
+
+function replaceAllFound(): void {
+  if (!findTerm.value) {
+    findNote.value = t('sql.find.emptyQuery')
+    return
+  }
+  const result = replaceAll(sql.value, findTerm.value, findReplacement.value, {
+    caseSensitive: findCaseSensitive.value,
+  })
+  if (!result.count) {
+    findNote.value = t('sql.find.none')
+    return
+  }
+  void commitFoundText(result.text, result.caret)
+  findNote.value = t('sql.find.note', { n: result.count })
+}
+
+// 边打字边预览：查询串 / 大小写档变了就重算并**不抢焦点**地高亮第一处
+watch([findTerm, findCaseSensitive], () => {
+  findNote.value = ''
+  if (!findOpen.value) return
+  findCurrent.value = matchIndexAt(findHits.value, caretOffset.value)
+  if (findCurrent.value >= 0) syncFindSelection(findCurrent.value, false)
+})
+
+// 菜单里的四项：都是既有动作，只是多了一个能看见的入口
+function menuFind(): void {
+  closeEditMenu()
+  openFind('replace')
+}
+
+function menuGoto(): void {
+  closeEditMenu()
+  openGoto()
+}
+
+function menuIndent(delta: 1 | -1): void {
+  closeEditMenu()
+  const area = sqlArea.value
+  const selection = area ? editorSelection(area) : { start: caretOffset.value, end: caretOffset.value }
+  const unit = indentUnitOf(detectIndentStyle(sql.value))
+  void applyEdit(indentSelection(sql.value, selection, delta, unit))
+}
+
+function menuClear(): void {
+  closeEditMenu()
+  clearSql()
 }
 
 // ── 编辑面静态检查上屏（FR-EDIT-03 检查器 → FR-EDIT-56 画出来）────────────────────────
@@ -2891,6 +3094,67 @@ async function probe() {
             <button class="db__btn" type="submit">{{ t('sql.gotoGo') }}</button>
             <span v-if="gotoError" class="db__goto-error" data-testid="goto-error">{{ gotoError }}</span>
           </form>
+          <!-- 查找 / 替换（FR-EDIT-18）：Ctrl+F / Ctrl+H 或编辑菜单开。读数与"没有匹配"都写在脸上 ——
+               安静不是结论（这是本仓反复踩过的那条：没有可观测面时用户只能猜）。 -->
+          <div v-if="findOpen" class="db__find" data-testid="find-bar" role="search">
+            <label class="db__find-field">
+              <span>{{ t('sql.find.label') }}</span>
+              <input
+                ref="findBox"
+                v-model="findTerm"
+                class="db__find-input"
+                data-testid="find-term"
+                spellcheck="false"
+                :placeholder="t('sql.find.placeholder')"
+                @keydown.enter.prevent="stepFind($event.shiftKey ? -1 : 1)"
+                @keydown.esc.stop.prevent="closeFind"
+              />
+            </label>
+            <label class="db__find-field">
+              <span>{{ t('sql.find.replaceLabel') }}</span>
+              <input
+                ref="replaceBox"
+                v-model="findReplacement"
+                class="db__find-input"
+                data-testid="find-replacement"
+                spellcheck="false"
+                :placeholder="t('sql.find.replacePlaceholder')"
+                @keydown.enter.prevent="replaceCurrent"
+                @keydown.esc.stop.prevent="closeFind"
+              />
+            </label>
+            <label class="db__find-case" :title="t('sql.find.caseTip')">
+              <input v-model="findCaseSensitive" type="checkbox" data-testid="find-case" />
+              <span>{{ t('sql.find.case') }}</span>
+            </label>
+            <span
+              class="db__find-readout"
+              :class="{ 'db__find-readout--empty': !findReadout.total }"
+              data-testid="find-readout"
+            >{{
+              findReadout.total
+                ? t('sql.find.readout', { position: findReadout.position, total: findReadout.total })
+                : findTerm
+                  ? t('sql.find.none')
+                  : t('sql.find.emptyQuery')
+            }}</span>
+            <button class="db__btn" type="button" data-testid="find-prev" :disabled="!findReadout.total" @click="stepFind(-1)">
+              {{ t('sql.find.prev') }}
+            </button>
+            <button class="db__btn" type="button" data-testid="find-next" :disabled="!findReadout.total" @click="stepFind(1)">
+              {{ t('sql.find.next') }}
+            </button>
+            <button class="db__btn" type="button" data-testid="find-replace" :disabled="!findReadout.total" @click="replaceCurrent">
+              {{ t('sql.find.one') }}
+            </button>
+            <button class="db__btn" type="button" data-testid="find-replace-all" :disabled="!findReadout.total" @click="replaceAllFound">
+              {{ t('sql.find.all') }}
+            </button>
+            <button class="db__btn" type="button" data-testid="find-close" @click="closeFind">
+              {{ t('sql.find.close') }}
+            </button>
+            <span v-if="findNote" class="db__find-note" data-testid="find-note" role="status">{{ findNote }}</span>
+          </div>
           <p class="db__editor-keys">{{ t('sql.keys') }}</p>
           <ul v-if="completions.length" class="db__completions">
             <li v-for="(c, i) in visibleCompletions" :key="`${c.kind}:${c.text}`">
@@ -2921,6 +3185,57 @@ async function probe() {
               </select>
             </label>
             <span v-if="info" class="db__bar-sep" />
+            <!-- 编辑菜单（FR-EDIT-17）：一个入口管五件事。本轮四件全接上了真动作，
+                 格式化 SQL（FR-EDIT-22）等下一轮领域层格式化器落地再加 —— 不放点了没反应的项。 -->
+            <div class="db__edit-menu">
+              <button
+                class="db__btn"
+                type="button"
+                data-testid="edit-menu-toggle"
+                :title="t('sql.editMenu.tip')"
+                :aria-expanded="editMenuOpen ? 'true' : 'false'"
+                @click.stop="toggleEditMenu"
+              >
+                {{ t('sql.editMenu') }}
+              </button>
+              <template v-if="editMenuOpen">
+                <div class="db__menu-backdrop" data-testid="edit-menu-backdrop" @click.stop="closeEditMenu" />
+                <ul class="db__menu db__menu--dropdown" role="menu" data-testid="edit-menu">
+                  <li>
+                    <button class="db__menu-item" type="button" role="menuitem" data-testid="edit-menu-find" @click="menuFind">
+                      {{ t('sql.edit.find') }}
+                    </button>
+                  </li>
+                  <li>
+                    <button class="db__menu-item" type="button" role="menuitem" data-testid="edit-menu-goto" @click="menuGoto">
+                      {{ t('sql.edit.goto') }}
+                    </button>
+                  </li>
+                  <li>
+                    <button class="db__menu-item" type="button" role="menuitem" data-testid="edit-menu-indent" @click="menuIndent(1)">
+                      {{ t('sql.edit.indent') }}
+                    </button>
+                  </li>
+                  <li>
+                    <button class="db__menu-item" type="button" role="menuitem" data-testid="edit-menu-outdent" @click="menuIndent(-1)">
+                      {{ t('sql.edit.outdent') }}
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      class="db__menu-item"
+                      type="button"
+                      role="menuitem"
+                      data-testid="edit-menu-clear"
+                      :disabled="!sql.trim()"
+                      @click="menuClear"
+                    >
+                      {{ t('sql.edit.clear') }}
+                    </button>
+                  </li>
+                </ul>
+              </template>
+            </div>
             <!-- 保存查询（FR-EDIT-14）：**在执行按钮之前**（需求原文点名的位置）。
                  两个入口：存当前页签 / 打开已保存清单（回填到当前或新页签）。 -->
             <button
@@ -4132,6 +4447,69 @@ async function probe() {
 }
 .db__goto-error {
   color: var(--ds-color-status-danger);
+}
+
+/* 编辑菜单（FR-EDIT-17）：按钮 + 锚在它下面的下拉。锚点靠 relative 容器，菜单本身 fixed 会跑到窗口角落。 */
+.db__edit-menu {
+  position: relative;
+  display: inline-flex;
+}
+/* 点空白处收菜单用的透明挡板（比在 document 上挂监听更省：不会漏摘） */
+.db__menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+.db__menu--dropdown {
+  position: absolute;
+  top: calc(100% + var(--ds-spacing-xs));
+  left: 0;
+  z-index: 41;
+}
+
+/* 查找 / 替换条（FR-EDIT-18）：与跳行列同一条视觉带；读数用等宽数字，换匹配时宽度不跳 */
+.db__find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  margin: 0 0 var(--ds-spacing-xs);
+  font-size: var(--ds-font-caption-size);
+}
+.db__find-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+}
+.db__find-input {
+  width: 18ch;
+  padding: 0 var(--ds-spacing-xs);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+}
+.db__find-case {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+  white-space: nowrap;
+}
+.db__find-readout {
+  color: var(--ds-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 没有匹配 / 还没填：用告警色说清，不留一个空白格让人以为"还在算" */
+.db__find-readout--empty {
+  color: var(--ds-color-status-warning);
+}
+.db__find-note {
+  color: var(--ds-color-text-secondary);
 }
 
 /* 诊断下划线（FR-EDIT-56）：出问题的范围在字下加虚下划线 —— 只做"哪一段有问题"，
