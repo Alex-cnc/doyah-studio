@@ -9,6 +9,7 @@ import {
   autoPair,
   clampSelection,
   detectIndentStyle,
+  indentSelection,
   indentUnitOf,
   matchBracket,
   moveOrDuplicateLines,
@@ -157,6 +158,31 @@ describe('FR-EDIT-54 缩进检测（按内容判，不靠扩展名）', () => {
   it('口径 → 插入串：软 tab 按宽度铺空格，硬 tab 一个制表符', () => {
     expect(indentUnitOf({ kind: 'space', width: 3 })).toBe('   ')
     expect(indentUnitOf({ kind: 'tab', width: 1 })).toBe('\t')
+  })
+})
+
+describe('FR-EDIT-20 缩进 / 反缩进选中文本', () => {
+  it('多行选区逐行加一个缩进单位', () => {
+    const result = indentSelection('a\nb', { start: 0, end: 3 }, 1, '  ')
+    expect(result.text).toBe('  a\n  b')
+  })
+
+  it('反缩进优先去掉一个完整单位', () => {
+    const result = indentSelection('    a\n    b', { start: 0, end: 9 }, -1, '  ')
+    expect(result.text).toBe('  a\n  b')
+  })
+
+  it('反缩进时行首不足一个单位 ⇒ 能去多少去多少（不削内容）', () => {
+    expect(indentSelection(' a', { start: 0, end: 2 }, -1, '    ').text).toBe('a')
+  })
+
+  it('空行不动', () => {
+    expect(indentSelection('a\n\nb', { start: 0, end: 4 }, 1, '  ').text).toBe('  a\n\n  b')
+  })
+
+  it('选区保持覆盖同一批行', () => {
+    const result = indentSelection('a\nb', { start: 0, end: 3 }, 1, '  ')
+    expect(result.text.slice(result.selection.start, result.selection.end)).toBe('  a\n  b')
   })
 })
 

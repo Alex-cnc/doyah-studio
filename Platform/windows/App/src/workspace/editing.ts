@@ -214,6 +214,37 @@ export function detectIndentStyle(
   return { kind: 'space', width: step }
 }
 
+/**
+ * FR-EDIT-20 缩进 / 反缩进选中文本（多行按行处理）。
+ *
+ * `delta = +1` 逐行加一个缩进单位（缩进单位可为单位串）；`-1` 逐行去掉**最多**一个单位
+ * （行首不足一个单位 ⇒ 能去多少去多少，不把内容削掉）。空行不动。选区保持覆盖同一批行。
+ */
+export function indentSelection(
+  text: string,
+  selection: Selection,
+  delta: 1 | -1,
+  indentUnit: string,
+): EditResult {
+  const [from, to] = affectedLineRange(text, selection)
+  const view = toLines(text)
+  for (let index = from; index <= to && index < view.lines.length; index += 1) {
+    const line = view.lines[index]
+    if (line.trim().length === 0) continue
+    if (delta === 1) {
+      view.lines[index] = indentUnit + line
+      continue
+    }
+    // 反缩进：优先去掉一个完整单位；去不掉就去掉行首空白里的一格
+    if (line.startsWith(indentUnit)) view.lines[index] = line.slice(indentUnit.length)
+    else {
+      const indent = leadingIndent(line)
+      if (indent.length > 0) view.lines[index] = indent.slice(1) + line.slice(indent.length)
+    }
+  }
+  return { text: fromLines(view), selection: selectionOfLines(view, from, to) }
+}
+
 /** 缩进口径 → 实际插入串（`tab` 口径恒为一个制表符） */
 export function indentUnitOf(style: IndentStyle): string {
   return style.kind === 'tab' ? '\t' : ' '.repeat(style.width)
