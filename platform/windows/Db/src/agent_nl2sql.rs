@@ -300,6 +300,25 @@ pub fn build_chat_request(
     config: &AgentConfiguration,
     turns: &[ChatMessage],
 ) -> Result<Outgoing, Nl2SqlError> {
+    build_chat_request_with_stream(config, turns, false)
+}
+
+/// **流式**版（`FR-AI-16` ①）：与 [`build_chat_request`] **逐字段相同**，只把 `stream` 置 true。
+///
+/// 为什么共用一份装配：两条路各写一遍的话，某天改了提示词 / 上限只改一边，
+/// 流式那条就会悄悄发另一份正文 —— 而这种分叉没有任何判据会变红。
+pub fn build_chat_request_streaming(
+    config: &AgentConfiguration,
+    turns: &[ChatMessage],
+) -> Result<Outgoing, Nl2SqlError> {
+    build_chat_request_with_stream(config, turns, true)
+}
+
+fn build_chat_request_with_stream(
+    config: &AgentConfiguration,
+    turns: &[ChatMessage],
+    stream: bool,
+) -> Result<Outgoing, Nl2SqlError> {
     if turns.is_empty() {
         return Err(Nl2SqlError::EmptyQuestion);
     }
@@ -343,7 +362,7 @@ pub fn build_chat_request(
     let body = serde_json::json!({
         "model": config.model.trim(),
         "temperature": 0,
-        "stream": false,
+        "stream": stream,
         "messages": all,
     })
     .to_string();
@@ -709,6 +728,28 @@ mod tests {
         assert_eq!(outgoing.human, "就是当前那个");
         assert_eq!(body.get("stream").unwrap(), &serde_json::Value::Bool(false));
         assert_eq!(outgoing.url, "http://127.0.0.1:11434/v1/chat/completions");
+    }
+
+    #[test]
+    fn the_streaming_request_differs_from_the_plain_one_only_by_the_stream_flag() {
+        // `FR-AI-16` ①：流式那条**不许**自己另装一份正文（提示词 / 历史 / 温度全部同源）——
+        // 唯一允许的差别就是 `stream` 这一位。把这条钉死，某天只改一边会当场红。
+        let turns = vec![
+            turn("user", "先看看 orders 有几行"),
+            turn("assistant", "要看你连的是哪个库。"),
+            turn("user", "就是当前那个"),
+        ];
+        let plain = build_chat_request(&chat_config(), &turns).unwrap();
+        let streaming = build_chat_request_streaming(&chat_config(), &turns).unwrap();
+        assert_eq!(plain.url, streaming.url);
+        assert_eq!(plain.model, streaming.model);
+        assert_eq!(plain.human, streaming.human);
+        let plain_body: serde_json::Value = serde_json::from_str(&plain.body).unwrap();
+        let streaming_body: serde_json::Value = serde_json::from_str(&streaming.body).unwrap();
+        assert_eq!(streaming_body.get("stream").unwrap(), &serde_json::Value::Bool(true));
+        assert_eq!(plain_body.get("messages"), streaming_body.get("messages"));
+        assert_eq!(plain_body.get("temperature"), streaming_body.get("temperature"));
+        assert_eq!(plain_body.get("model"), streaming_body.get("model"));
     }
 
     #[test]

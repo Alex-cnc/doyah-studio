@@ -753,6 +753,15 @@ export const DICT = {
   },
   'chat.send': { 'zh-Hans': '发送', en: 'Send' },
   'chat.sending': { 'zh-Hans': '正在等模型回话…', en: 'Waiting for the model…' },
+  'chat.streaming': {
+    'zh-Hans': '模型正在写：已到 {chars} 字…',
+    en: 'Model is writing — {chars} chars so far…',
+  },
+  'chat.streamed': { 'zh-Hans': '逐段到了 {n} 段', en: 'streamed in {n} piece(s)' },
+  'chat.wholeBody': {
+    'zh-Hans': '该服务端整段返回（没有逐段流）',
+    en: 'server sent it in one piece (no streaming)',
+  },
   'chat.clear': { 'zh-Hans': '清空对话', en: 'Clear' },
   'chat.empty': { 'zh-Hans': '还没有对话：下面写一句开始。', en: 'No messages yet — type below to start.' },
   'chat.hint': { 'zh-Hans': 'Enter 发送 · Shift+Enter 换行', en: 'Enter to send · Shift+Enter for a new line' },

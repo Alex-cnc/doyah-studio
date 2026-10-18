@@ -30,7 +30,7 @@ function bypassWorkspace(action: string) {
   }
 }
 
-import { invoke } from '@tauri-apps/api/core'
+import { Channel, invoke } from '@tauri-apps/api/core'
 
 export const COMMANDS = {
   appInfo: 'app_info',
@@ -1123,6 +1123,8 @@ export type AgentChatReply =
       attempts: AgentAttemptNote[]
       /** 这一段对话一共几条消息（含这一问）。 */
       turns: number
+      /** 真收到几段（`FR-AI-16` ①：0 = 服务端整段返回，没按流回）。 */
+      deltas: number
     }
 
 /**
@@ -1317,6 +1319,25 @@ export function agentChatSend(turns: readonly AgentChatTurn[]): Promise<AgentCha
   return call(COMMANDS.agentChatSend, { turns }, () => {
     throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
   })
+}
+
+/**
+ * **对话一次（逐段到）**（`FR-AI-16` ①）：同一发请求，每收到一段就调一次 `onDelta`。
+ *
+ * 为什么用 Channel 而不是事件总线：片段必须**只属于这一发**（两个对话页签同时问时，
+ * 事件名会把 A 的片段送进 B 的气泡）。Channel 一对一绑定这次调用，关掉页签后发送失败也不算错
+ * —— 最终正文仍由返回值带回（流只是显示，不是第二份真值）。
+ */
+export async function agentChatStream(
+  turns: readonly AgentChatTurn[],
+  onDelta: (chunk: string) => void,
+): Promise<AgentChatReply> {
+  if (!inTauri()) {
+    throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
+  }
+  const channel = new Channel<string>()
+  channel.onmessage = (chunk) => onDelta(chunk)
+  return (await invoke(COMMANDS.agentChatSend, { turns, onDelta: channel })) as AgentChatReply
 }
 
 /**

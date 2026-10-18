@@ -15,6 +15,7 @@
 //!
 //! 契约等价物：macOS 侧 `App/Agent/AgentSqlGenerationService.swift`。
 
+use std::io::Read;
 use std::time::{Duration, Instant};
 
 use doyah_studio_db::agent_advisor;
@@ -22,7 +23,7 @@ use doyah_studio_db::agent_audit::{AuditRecord, AuditVerdict};
 use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateReport, GateState};
 use doyah_studio_db::agent_history::HistoryEntry;
 use doyah_studio_db::agent_nl2sql::{
-    build_chat_request, build_request, parse_reply, ChatMessage, Outgoing, TableBrief,
+    build_chat_request_streaming, build_request, parse_reply, ChatMessage, Outgoing, TableBrief,
 };
 use doyah_studio_db::agent_quota::{now_secs, QuotaStatus};
 use doyah_studio_db::agent_retry::{
@@ -724,14 +725,17 @@ pub enum ChatReply {
         attempts: Vec<AttemptNote>,
         /// 这一段对话一共几条消息（含这一问；界面拿来显示轮次）。
         turns: usize,
+        /// **真收到几段**（`FR-AI-16` ①：0 = 服务端无视 `stream`、整段回来；≥1 = 逐段到的）。
+        deltas: usize,
     },
 }
 
 /// 对话这一次的已知缺口（随结果一起回，界面照实说）。
-/// 注：**会话落盘**（`FR-AI-17`）已从这份清单里摘掉 —— 它现在是真接上的
-/// （`agent_chat_sessions.rs` + `ChatPanel` 每问落盘），留着旧话就成了假缺口。
+/// 注：**会话落盘**（`FR-AI-17`）与**逐段流式**（`FR-AI-16` ①）都已从这份清单里摘掉 ——
+/// 两条现在都是真接上的（`agent_chat_sessions.rs` + `ChatPanel`；`chat_stream` + 同一条 SSE 读法），
+/// 留着旧话就成了假缺口。
 pub const CHAT_LIMITATIONS: [&str; 2] = [
-    "回答是一整段回来的（还没有逐字流式）：长回答要等它写完。",
+    "流是逐段到的：中途断掉时已经画出来的那部分会留着，但不会自动补全 —— 重发一次即可。",
     "模型给的语句只落在对话正文里，本应用**不执行**它 —— 要用就自己复制到编辑器里跑。",
 ];
 
@@ -739,7 +743,27 @@ pub const CHAT_LIMITATIONS: [&str; 2] = [
 ///
 /// 与 `generate` / `ask` 共用同一套闸门 / 配额 / 审计 / 重试 —— 对话不是「第三条外发通道」，
 /// 它只是**换了一份提示词与多轮历史**的同一条通道（关掉总开关，这里同样一条请求都发不出去）。
+///
+/// 实现上 = [`chat_stream`] 配一个「什么都不画」的 sink：**只有一条路**，
+/// 否则「整段回来」与「逐段回来」会各自长出一套配额 / 审计写法。
 pub fn chat(store: &AgentSettingsStore, turns: &[ChatMessage]) -> Result<ChatReply, DbFailure> {
+    chat_stream(store, turns, &mut |_| {})
+}
+
+/// 对话这一次的**流式**版（`FR-AI-16` ①）：每收到一段正文就交给 `sink`，最终仍整段交回。
+///
+/// 四条口径（每条都有对应的代码形状）：
+/// ① 闸门 / 配额 / 审计 / 重试**与整段版完全同一条**：这里不放行，就一条请求都不发；
+/// ② **按行缓冲字节**再解 UTF-8 —— 按字节切字符串会把多字节字符切成烂字（`String::from_utf8_lossy`
+///    遇到半截字符会给出替换符，且**不会报错**）；
+/// ③ 服务端无视 `stream`（回一整段 JSON）⇒ 当「整段回来」解析，**不假装流式**（`deltas = 0`）；
+/// ④ **已经画出去的东西不重试**：重试会把同一段再发一遍（用户看到重复文字）⇒ 只在还没吐出
+///    任何片段时按策略重试；中途断了就把已收到的正文交回并如实说「可能被截断」。
+pub fn chat_stream(
+    store: &AgentSettingsStore,
+    turns: &[ChatMessage],
+    sink: &mut dyn FnMut(&str),
+) -> Result<ChatReply, DbFailure> {
     let config = store.load()?;
     let question = turns
         .last()
@@ -748,7 +772,7 @@ pub fn chat(store: &AgentSettingsStore, turns: &[ChatMessage]) -> Result<ChatRep
     if let Some(gate) = gate_refusal(store, &config, &question)? {
         return Ok(ChatReply::Blocked { gate });
     }
-    let outgoing = build_chat_request(&config, turns).map_err(|err| DbFailure {
+    let outgoing = build_chat_request_streaming(&config, turns).map_err(|err| DbFailure {
         message: err.to_string(),
         hint: "改一下这段对话（空消息 / 太长 / 结尾是模型的话）再发。".to_string(),
     })?;
@@ -760,33 +784,205 @@ pub fn chat(store: &AgentSettingsStore, turns: &[ChatMessage]) -> Result<ChatRep
     };
 
     let started = Instant::now();
-    let sent = send_with_retry(store, &config, &outgoing, &question, 0).map_err(|err| err.failure)?;
-    let attempts = sent.attempts;
-    let raw = sent.raw;
-    let text = match agent_advisor::parse_reply(&raw) {
-        Ok(text) => text,
-        Err(err) => {
+    let client = build_client(&config)?;
+    let policy = RetryPolicy::from_config(&config);
+    let mut attempts: Vec<AttemptNote> = Vec::new();
+    let mut attempt_no: u32 = 1;
+    let mut text = String::new();
+    let mut deltas = 0usize;
+    // 只在成功读到回包时赋值（循环里那两处 `return` 不会走到下面）。
+    let mut finished: bool;
+
+    loop {
+        // 重试同样真出网 ⇒ 第 2 次起每次尝试都再过一遍配额（第一次由上面记过账）。
+        if attempt_no > 1 {
+            match quota_admission(store, &config, &question) {
+                Ok(Ok(_)) => {}
+                Ok(Err(quota)) => {
+                    return Err(DbFailure {
+                        message: format!(
+                            "还想再试一次，但本小时配额已满（上限 {} 次，已用 {} 次）：这一发没有发出去。前面已尝试 {} 次。",
+                            quota.limit,
+                            quota.used,
+                            attempt_no - 1
+                        ),
+                        hint: format!(
+                            "约 {} 分钟后才有空位；也可以把「每小时上限」调大。",
+                            (quota.retry_after_secs + 59) / 60
+                        ),
+                    });
+                }
+                Err(err) => return Err(err),
+            }
+        }
+
+        let attempt_started = Instant::now();
+        let mut request = client
+            .post(&outgoing.url)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(outgoing.body.clone());
+        // 本地端点免密钥：**重试时同样不带** Authorization（这条路只有一处）。
+        if let Some(secret) = store.key_secret() {
+            request = request.header(reqwest::header::AUTHORIZATION, format!("Bearer {secret}"));
+        }
+
+        let response = match request.send() {
+            Ok(response) => response,
+            Err(err) => {
+                let timed_out = err.is_timeout();
+                let class = classify_transport(timed_out, err.is_connect());
+                let failure = DbFailure {
+                    message: if timed_out {
+                        format!(
+                            "请求超时（{} 秒）：模型服务没有在时限内回话。",
+                            config.timeout_secs
+                        )
+                    } else {
+                        format!("请求发不出去：{err}")
+                    },
+                    hint: if timed_out {
+                        "把「单次请求超时」调大，或换一个更近的端点。".to_string()
+                    } else {
+                        "确认端点地址与网络（远端还需代理 / 防火墙放行）；本地端点的服务是否在跑。"
+                            .to_string()
+                    },
+                };
+                attempt_no = match retry_or_fail(
+                    store,
+                    &outgoing,
+                    &question,
+                    failure,
+                    attempt_started,
+                    attempt_no,
+                    class,
+                    None,
+                    None,
+                    &policy,
+                    &mut attempts,
+                ) {
+                    Ok(next) => next,
+                    Err(stop) => return Err(stop),
+                };
+                continue;
+            }
+        };
+
+        let status = response.status();
+        if !status.is_success() {
+            let retry_after = retry_after_secs(&response);
+            let raw = response.text().unwrap_or_default();
+            let class = classify_status(status.as_u16());
             let failure = DbFailure {
-                message: err.to_string(),
-                hint: "换一个模型（有些模型把正文放在别的字段里），或改用「生成 SQL」那条路。"
+                message: format!("模型服务返回 HTTP {}：{}", status.as_u16(), excerpt(&raw, 300)),
+                hint: "401 / 403 多为密钥不对或没有权限；404 多为端点路径不对（要的是 OpenAI 兼容的 /v1）；429 是配额或限流（这类会自动等一会儿再试）。"
                     .to_string(),
             };
-            let note = record_audit(
+            attempt_no = match retry_or_fail(
                 store,
-                AuditVerdict::Failed,
-                &outgoing.model,
-                &outgoing.url,
+                &outgoing,
                 &question,
-                &failure.message,
-                started.elapsed().as_millis() as u64,
-                0,
-            );
-            return Err(with_audit_note(failure, note));
+                failure,
+                attempt_started,
+                attempt_no,
+                class,
+                Some(status.as_u16()),
+                retry_after,
+                &policy,
+                &mut attempts,
+            ) {
+                Ok(next) => next,
+                Err(stop) => return Err(stop),
+            };
+            continue;
         }
-    };
+
+        match read_sse_stream(response, sink) {
+            Ok(read) => {
+                text = read.text;
+                deltas += read.deltas;
+                finished = read.finished;
+                if text.is_empty() {
+                    // 服务端无视 `stream`（或回的是一整段 JSON）：整段解析，deltas 仍是 0。
+                    match agent_advisor::parse_reply(&read.raw) {
+                        Ok(whole) => text = whole,
+                        Err(err) => {
+                            let failure = DbFailure {
+                                message: err.to_string(),
+                                hint: "换一个模型（有些模型把正文放在别的字段里），或改用「生成 SQL」那条路。"
+                                    .to_string(),
+                            };
+                            let note = record_audit(
+                                store,
+                                AuditVerdict::Failed,
+                                &outgoing.model,
+                                &outgoing.url,
+                                &question,
+                                &failure.message,
+                                started.elapsed().as_millis() as u64,
+                                0,
+                            );
+                            return Err(with_audit_note(failure, note));
+                        }
+                    }
+                }
+                attempts.push(AttemptNote::ok(attempt_no, Some(status.as_u16())));
+                break;
+            }
+            Err(reason) => {
+                let class = classify_transport(false, false);
+                // 已经画出去的片段不能再重试（会把同一段再发一遍）⇒ 直接如实停在这里。
+                if deltas > 0 || !text.is_empty() {
+                    let failure = DbFailure {
+                        message: format!("回包读到一半断了：{reason}"),
+                        hint: "已经收到的部分留在对话里；重发一次就能补全。".to_string(),
+                    };
+                    let note = record_audit(
+                        store,
+                        AuditVerdict::Failed,
+                        &outgoing.model,
+                        &outgoing.url,
+                        &question,
+                        &failure.message,
+                        started.elapsed().as_millis() as u64,
+                        0,
+                    );
+                    return Err(with_audit_note(failure, note));
+                }
+                let failure = DbFailure {
+                    message: format!("回包读不出来：{reason}"),
+                    hint: "重试一次；仍然不行就换端点。".to_string(),
+                };
+                attempt_no = match retry_or_fail(
+                    store,
+                    &outgoing,
+                    &question,
+                    failure,
+                    attempt_started,
+                    attempt_no,
+                    class,
+                    None,
+                    None,
+                    &policy,
+                    &mut attempts,
+                ) {
+                    Ok(next) => next,
+                    Err(stop) => return Err(stop),
+                };
+                continue;
+            }
+        }
+    }
+
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
     let mut limitations: Vec<String> = CHAT_LIMITATIONS.iter().map(|line| line.to_string()).collect();
+    if deltas > 0 && !finished {
+        // 流里没有收尾标记（`[DONE]` / `finish_reason`）⇒ 可能是中途被截断。正文照给，但要说清。
+        limitations.push(
+            "这一段回包没有收尾标记（没有 [DONE] / finish_reason）：可能是中途被截断的，重发一次可补全。"
+                .to_string(),
+        );
+    }
     if let Some(note) = record_audit(
         store,
         AuditVerdict::Ok,
@@ -810,7 +1006,184 @@ pub fn chat(store: &AgentSettingsStore, turns: &[ChatMessage]) -> Result<ChatRep
         limitations,
         attempts,
         turns: turns.len(),
+        deltas,
     })
+}
+
+/// 一次失败的**留痕 + 决定再试还是停**（流式与整段两条路共用，避免各写一份重试账）。
+///
+/// 成功时回**下一次的尝试号**；该停时回最终失败（已把「试了几次、为什么停」写进消息）。
+#[allow(clippy::too_many_arguments)]
+fn retry_or_fail(
+    store: &AgentSettingsStore,
+    outgoing: &Outgoing,
+    summary: &str,
+    failure: DbFailure,
+    attempt_started: Instant,
+    attempt_no: u32,
+    class: RetryClass,
+    status: Option<u16>,
+    retry_after: Option<u64>,
+    policy: &RetryPolicy,
+    attempts: &mut Vec<AttemptNote>,
+) -> Result<u32, DbFailure> {
+    let detail = failure.message.clone();
+    let note = record_audit(
+        store,
+        AuditVerdict::Failed,
+        &outgoing.model,
+        &outgoing.url,
+        summary,
+        &detail,
+        attempt_started.elapsed().as_millis() as u64,
+        0,
+    );
+    let failure = with_audit_note(failure, note);
+    match next_delay(policy, attempt_no, class, retry_after) {
+        Some(delay) => {
+            attempts.push(AttemptNote::failed(attempt_no, class, status, detail, delay));
+            std::thread::sleep(Duration::from_millis(delay));
+            Ok(attempt_no + 1)
+        }
+        None => {
+            attempts.push(AttemptNote::failed(attempt_no, class, status, detail, 0));
+            Err(stop_note(failure, attempts, class))
+        }
+    }
+}
+
+/// SSE 里的一帧（只认 OpenAI 兼容的那几种）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SseEvent {
+    /// 一段正文增量。
+    Delta(String),
+    /// `data: [DONE]`。
+    Done,
+    /// `finish_reason` 非空（有的服务端不发 `[DONE]`，只给这个）。
+    Finished,
+    /// 服务端把错误塞在流里。
+    Error(String),
+}
+
+/// 读一段流式回包的结果。
+struct StreamRead {
+    /// 整段原始字节解出来的文本（没有 SSE 帧时用它整段解析）。
+    raw: String,
+    /// 拼起来的正文。
+    text: String,
+    /// 真收到几段。
+    deltas: usize,
+    /// 有没有收尾标记。
+    finished: bool,
+}
+
+/// 按行读 SSE：命中 `data:` 就交一段给 `sink`。
+///
+/// **按行缓冲字节**再解码：网络读到的块边界会落在多字节字符中间，先切字符串就会烂字
+/// （`from_utf8_lossy` 悄悄替换成 U+FFFD，不报错）。行边界（`\n`）在 UTF-8 里不会落在字符内部
+/// ⇒ 只有整行解码才是安全的。
+fn read_sse_stream(
+    mut response: reqwest::blocking::Response,
+    sink: &mut dyn FnMut(&str),
+) -> Result<StreamRead, String> {
+    let mut raw_bytes: Vec<u8> = Vec::new();
+    let mut line: Vec<u8> = Vec::new();
+    let mut buf = [0u8; 4096];
+    let mut text = String::new();
+    let mut deltas = 0usize;
+    let mut finished = false;
+    loop {
+        let read = response
+            .read(&mut buf)
+            .map_err(|err| format!("{err}"))?;
+        if read == 0 {
+            break;
+        }
+        raw_bytes.extend_from_slice(&buf[..read]);
+        for &byte in &buf[..read] {
+            if byte == b'\n' {
+                let current = String::from_utf8_lossy(&line).to_string();
+                line.clear();
+                if let Some(event) = parse_sse_line(&current) {
+                    apply_sse_event(event, &mut text, &mut deltas, &mut finished, sink)?;
+                }
+            } else {
+                line.push(byte);
+            }
+        }
+    }
+    // 最后一行可能没有换行符收尾（服务端断开 / 省略末尾换行）。
+    if !line.is_empty() {
+        let current = String::from_utf8_lossy(&line).to_string();
+        if let Some(event) = parse_sse_line(&current) {
+            apply_sse_event(event, &mut text, &mut deltas, &mut finished, sink)?;
+        }
+    }
+    Ok(StreamRead {
+        raw: String::from_utf8_lossy(&raw_bytes).to_string(),
+        text,
+        deltas,
+        finished,
+    })
+}
+
+/// 把一帧落到正文 / 段数 / 收尾标记上，并交给 `sink`。
+fn apply_sse_event(
+    event: SseEvent,
+    text: &mut String,
+    deltas: &mut usize,
+    finished: &mut bool,
+    sink: &mut dyn FnMut(&str),
+) -> Result<(), String> {
+    match event {
+        SseEvent::Delta(chunk) => {
+            text.push_str(&chunk);
+            *deltas += 1;
+            sink(&chunk);
+        }
+        SseEvent::Done | SseEvent::Finished => *finished = true,
+        SseEvent::Error(message) => {
+            return Err(format!("模型服务在流里回了错误：{message}"));
+        }
+    }
+    Ok(())
+}
+
+/// 解析一行 SSE。**不是 `data:` 行就回 `None`**（`event:` / 注释 / 空行都不算错）。
+fn parse_sse_line(line: &str) -> Option<SseEvent> {
+    let payload = line.trim_end_matches('\r').strip_prefix("data:")?.trim();
+    if payload.is_empty() {
+        return None;
+    }
+    if payload == "[DONE]" {
+        return Some(SseEvent::Done);
+    }
+    let value: serde_json::Value = serde_json::from_str(payload).ok()?;
+    if let Some(message) = value
+        .get("error")
+        .and_then(|error| error.get("message"))
+        .and_then(|message| message.as_str())
+    {
+        return Some(SseEvent::Error(message.to_string()));
+    }
+    let choice = value.get("choices").and_then(|choices| choices.get(0));
+    if let Some(chunk) = choice
+        .and_then(|choice| choice.get("delta"))
+        .and_then(|delta| delta.get("content"))
+        .and_then(|content| content.as_str())
+    {
+        if !chunk.is_empty() {
+            return Some(SseEvent::Delta(chunk.to_string()));
+        }
+    }
+    let reason = choice
+        .and_then(|choice| choice.get("finish_reason"))
+        .and_then(|reason| reason.as_str())
+        .unwrap_or("");
+    if !reason.is_empty() {
+        return Some(SseEvent::Finished);
+    }
+    None
 }
 
 /// 记一条审计（`FR-AI-09`）：**四种结局都记** —— 成功、失败、被闸门挡住、被配额挡住。
@@ -1836,6 +2209,185 @@ mod tests {
                 assert_eq!(quota.limit, 1);
             }
             other => panic!("满额了还发：{other:?}"),
+        }
+    }
+
+    /// 三段式 SSE（OpenAI 兼容）+ 收尾标记。
+    const SSE_THREE: &str = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"第一段\"}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{\"content\":\"，第二段\"}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{\"content\":\"收尾。\"}}]}\n\n",
+        "data: [DONE]\n\n",
+    );
+
+    /// 同前，但**没有收尾标记**（模拟被中途截断的回包）。
+    const SSE_NO_CLOSE: &str = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"前半\"}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{\"content\":\"后半\"}}]}\n\n",
+    );
+
+    /// 假端点：回包**分两次写**（中间停 30 毫秒），切点由调用方指定。
+    /// 用来钉「按行缓冲字节」这条口径 —— 切在多字节字符中间时，按字节切字符串会烂字。
+    fn fake_endpoint_in_two_writes(body: &'static str, split_at: usize) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut length = 0usize;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                    break;
+                }
+                let trimmed = line.trim_end().to_string();
+                if trimmed.is_empty() {
+                    break;
+                }
+                if let Some(value) = trimmed.to_ascii_lowercase().strip_prefix("content-length:") {
+                    length = value.trim().parse().unwrap_or(0);
+                }
+            }
+            let mut payload = vec![0u8; length];
+            let _ = reader.read_exact(&mut payload);
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(head.as_bytes());
+            let (first, rest) = body.as_bytes().split_at(split_at);
+            let _ = stream.write_all(first);
+            let _ = stream.flush();
+            std::thread::sleep(Duration::from_millis(30));
+            let _ = stream.write_all(rest);
+            let _ = stream.flush();
+        });
+        format!("http://127.0.0.1:{port}/v1")
+    }
+
+    fn streaming_store(tag: &str, endpoint: String) -> AgentSettingsStore {
+        let store = tmp_store(tag);
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        store
+    }
+
+    #[test]
+    fn a_streaming_reply_arrives_in_pieces_and_the_pieces_join_into_the_answer() {
+        // `FR-AI-16` ①：用户看到的是「字一个个滚出来」⇒ sink 至少被叫两次、拼起来等于最终正文。
+        let (endpoint, seen) = fake_endpoint("200 OK", SSE_THREE);
+        let store = streaming_store("chat-stream", endpoint);
+        let mut pieces: Vec<String> = Vec::new();
+        let reply = chat_stream(&store, &[chat_turn("user", "问一句")], &mut |chunk| {
+            pieces.push(chunk.to_string())
+        })
+        .unwrap();
+        match reply {
+            ChatReply::Answered {
+                text,
+                deltas,
+                limitations,
+                attempts,
+                ..
+            } => {
+                assert_eq!(deltas, 3, "三段增量各算一段");
+                assert_eq!(text, "第一段，第二段收尾。");
+                assert_eq!(attempts.len(), 1, "一次就成，不该有重试");
+                assert!(
+                    !limitations.iter().any(|line| line.contains("没有收尾标记")),
+                    "有 [DONE] 就不该说被截断：{limitations:?}"
+                );
+            }
+            other => panic!("该真发一次：{other:?}"),
+        }
+        assert_eq!(pieces.len(), 3, "逐段渲染要真的分段：{pieces:?}");
+        assert_eq!(pieces.concat(), "第一段，第二段收尾。");
+        // 请求侧核对：这一发真带 `stream: true`（否则服务端会整段回，界面就看不到滚动）。
+        let request = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(request.contains("\"stream\":true"), "{request}");
+        // 配额与审计与整段版同口径：一次出网 = 一次额度、一条成功审计。
+        assert_eq!(store.load_quota().status(now_secs(), 60).used, 1);
+        assert_eq!(store.load_audit().all_recent().len(), 1);
+    }
+
+    #[test]
+    fn a_piece_split_inside_a_chinese_character_is_not_mangled() {
+        // 切点故意落在多字节字符中间：先切字符串再解码会得到 U+FFFD（而且不会报错）。
+        let split = (1..SSE_THREE.len())
+            .find(|index| !SSE_THREE.is_char_boundary(*index))
+            .expect("这段正文里必有中文");
+        let endpoint = fake_endpoint_in_two_writes(SSE_THREE, split);
+        let store = streaming_store("chat-stream-split", endpoint);
+        let mut pieces: Vec<String> = Vec::new();
+        let reply = chat_stream(&store, &[chat_turn("user", "问一句")], &mut |chunk| {
+            pieces.push(chunk.to_string())
+        })
+        .unwrap();
+        match reply {
+            ChatReply::Answered { text, deltas, .. } => {
+                assert_eq!(text, "第一段，第二段收尾。");
+                assert!(!text.contains('\u{FFFD}'), "解出了替换符（烂字）：{text}");
+                assert_eq!(deltas, 3);
+            }
+            other => panic!("该真发一次：{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_server_that_ignores_stream_still_returns_the_whole_answer() {
+        // 有的服务端无视 `stream`、回一整段 JSON：这时不能假装流式，正文仍要完整交回。
+        let (endpoint, _seen) = fake_endpoint("200 OK", advisor_body());
+        let store = streaming_store("chat-stream-whole", endpoint);
+        let mut pieces: Vec<String> = Vec::new();
+        let reply = chat_stream(&store, &[chat_turn("user", "问一句")], &mut |chunk| {
+            pieces.push(chunk.to_string())
+        })
+        .unwrap();
+        match reply {
+            ChatReply::Answered {
+                text,
+                deltas,
+                limitations,
+                ..
+            } => {
+                assert_eq!(deltas, 0, "整段回来的不算逐段");
+                assert!(pieces.is_empty(), "整段回来的不该有片段：{pieces:?}");
+                assert!(!text.is_empty(), "正文仍要完整交回");
+                assert!(
+                    !limitations.iter().any(|line| line.contains("没有收尾标记")),
+                    "整段回来的不该被说成被截断：{limitations:?}"
+                );
+            }
+            other => panic!("该真发一次：{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_stream_without_a_closing_marker_says_it_may_be_truncated() {
+        let (endpoint, _seen) = fake_endpoint("200 OK", SSE_NO_CLOSE);
+        let store = streaming_store("chat-stream-truncated", endpoint);
+        let reply = chat_stream(&store, &[chat_turn("user", "问一句")], &mut |_| {}).unwrap();
+        match reply {
+            ChatReply::Answered {
+                text,
+                deltas,
+                limitations,
+                ..
+            } => {
+                assert_eq!(text, "前半后半");
+                assert_eq!(deltas, 2);
+                assert!(
+                    limitations.iter().any(|line| line.contains("没有收尾标记")),
+                    "没有收尾标记就要如实说可能被截断：{limitations:?}"
+                );
+            }
+            other => panic!("该真发一次：{other:?}"),
         }
     }
 }

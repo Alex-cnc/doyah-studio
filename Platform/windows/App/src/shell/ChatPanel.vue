@@ -10,14 +10,16 @@
   ⑤ **不执行**：模型给的语句只是正文，本组件没有任何执行入口。
 
   这一版**没有**做的（如实写在面板底部「已知限制」里，由 Rust 回包带过来）：
-  流式逐段渲染 / 工具调用卡片 / 内联审批。
+  工具调用卡片 / 内联审批。
+
+  ⑥ **逐段到就画**（`FR-AI-16` ①）：回答边到边写，底部读数说「逐段 N 段」或「该服务端整段返回」。
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   agentChatLoad,
   agentChatSave,
-  agentChatSend,
+  agentChatStream,
   type AgentChatTurn,
   type AgentGateReport,
   type AgentIssue,
@@ -59,6 +61,10 @@ const throttled = ref<{ used: number; limit: number; retryAfterSecs: number } | 
 const limitations = ref<string[]>([])
 /** 最近一次成功那一发的读数（模型 / 耗时 / 尝试次数 / 条数）。 */
 const info = ref<{ model: string; elapsedMs: number; attempts: number; turns: number } | null>(null)
+/** 正在到的正文（`FR-AI-16` ①）：**显示用**，最终正文仍以命令返回值为准。 */
+const partial = ref('')
+/** 真收到几段（上一发）。0 = 该服务端没按流回。 */
+const streamed = ref(0)
 const thread = ref<HTMLElement | null>(null)
 
 /** 这段对话落在哪个文件（空 = 还没读到 / 没打开工作区）。 */
@@ -162,9 +168,15 @@ async function send() {
   turns.value = asked
   draft.value = ''
   sending.value = true
+  partial.value = ''
+  streamed.value = 0
   await scrollToEnd()
   try {
-    const reply = await agentChatSend(asked)
+    // 逐段到的正文先画在「正在写」那条气泡里；**最终正文仍以返回值为准**（流只是显示）。
+    const reply = await agentChatStream(asked, (chunk) => {
+      partial.value += chunk
+      void scrollToEnd()
+    })
     if (reply.status === 'blocked') {
       gate.value = reply.gate
       // 没发出去 ⇒ 这一问留在消息流里（用户不用重敲），但没有模型回复。
@@ -180,6 +192,7 @@ async function send() {
       return
     }
     turns.value = withReply(asked, reply.text)
+    streamed.value = reply.deltas
     limitations.value = reply.limitations
     info.value = {
       model: reply.model,
@@ -196,6 +209,7 @@ async function send() {
     failure.value = readable(error)
   } finally {
     sending.value = false
+    partial.value = ''
   }
 }
 
@@ -208,6 +222,8 @@ function clear() {
   info.value = null
   limitations.value = []
   trimmed.value = null
+  partial.value = ''
+  streamed.value = 0
   // 清空也要落盘：否则重开页签会把刚清掉的对话又读回来（「点了清空却说没清」）。
   void persist([])
 }
@@ -241,7 +257,13 @@ function clear() {
         <p class="chat__who">{{ turn.role === 'user' ? tr('chat.you') : tr('chat.model') }}</p>
         <pre class="chat__body">{{ turn.content }}</pre>
       </article>
-      <p v-if="sending" class="chat__waiting" data-testid="chat-sending">{{ tr('chat.sending') }}</p>
+      <article v-if="sending && partial" class="chat__turn chat__turn--model" data-testid="chat-partial">
+        <p class="chat__who">{{ tr('chat.model') }}</p>
+        <pre class="chat__body">{{ partial }}</pre>
+      </article>
+      <p v-if="sending" class="chat__waiting" data-testid="chat-sending">
+        {{ partial ? tr('chat.streaming', { chars: partial.length }) : tr('chat.sending') }}
+      </p>
     </div>
 
     <!-- 三种「没发出去」各说各的（外形分开，用户一眼能分清该改什么） -->
@@ -313,6 +335,9 @@ function clear() {
         }) }}
         <span v-if="info.attempts > 1" class="chat__attempts" data-testid="chat-attempts">
           {{ tr('chat.attempts', { n: info.attempts }) }}
+        </span>
+        <span class="chat__streamed" data-testid="chat-streamed">
+          {{ streamed > 0 ? tr('chat.streamed', { n: streamed }) : tr('chat.wholeBody') }}
         </span>
       </p>
       <ul v-if="limitations.length" class="chat__limits" data-testid="chat-limits">
@@ -464,6 +489,10 @@ function clear() {
 .chat__attempts {
   margin-left: var(--ds-spacing-xs);
   color: var(--ds-color-status-warning);
+}
+.chat__streamed {
+  margin-left: var(--ds-spacing-xs);
+  color: var(--ds-color-text-tertiary);
 }
 .chat__limits {
   margin: 0;

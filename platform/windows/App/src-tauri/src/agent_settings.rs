@@ -22,6 +22,9 @@ use serde::Serialize;
 use crate::postgres::DbFailure;
 
 /// 配置与密钥的存储（两条路径都可由调用方指定 —— 单测与探针用它把文件挪到临时目录）。
+///
+/// `Clone`：异步命令要把存储挪进阻塞线程（流式对话不能堵住主线程），两个字段都是路径，复制没有副作用。
+#[derive(Clone)]
 pub struct AgentSettingsStore {
     /// 配置文件（`agent.json`）：**没有密钥字段**。
     pub config_path: PathBuf,

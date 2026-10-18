@@ -819,16 +819,32 @@ fn agent_diagnosis_ask(
     agent_generate::ask(&state.agent_settings, &brief)
 }
 
-/// **对话一次**（`FR-AI-25` 对话页签第一片）：把整段历史原样发出去，只回正文。
+/// **对话一次**（`FR-AI-25` 对话页签第一片 · `FR-AI-16` ① 流式）：把整段历史原样发出去，只回正文。
 ///
 /// 与生成 / 诊断共用同一条外发通道（闸门 / 配额 / 审计 / 重试都在 `agent_generate` 里）——
 /// 关掉总开关，这里同样一条请求都发不出去。本命令**不执行**任何语句。
+///
+/// **异步 + 阻塞线程**：同步命令跑在主线程上，整段等回包的期间界面是冻的 ——
+/// 那样「逐段画出来」就永远看不见。片段经 `onDelta` 立刻送到前端，
+/// **最终正文仍以返回值为准**（流只是显示，不是第二份真值）。
 #[tauri::command]
-fn agent_chat_send(
+async fn agent_chat_send(
     state: State<'_, ShellState>,
     turns: Vec<doyah_studio_db::agent_nl2sql::ChatMessage>,
+    on_delta: tauri::ipc::Channel<String>,
 ) -> Result<agent_generate::ChatReply, DbFailure> {
-    agent_generate::chat(&state.agent_settings, &turns)
+    let store = state.agent_settings.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        agent_generate::chat_stream(&store, &turns, &mut |chunk| {
+            // 页签已经关掉时这一发送不到：不算失败（正文照样在返回值里）。
+            let _ = on_delta.send(chunk.to_string());
+        })
+    })
+    .await
+    .map_err(|err| DbFailure {
+        message: format!("对话线程没能跑起来：{err}"),
+        hint: "重试一次；一直不行就重启应用。".to_string(),
+    })?
 }
 
 /// **读这个工作区的对话**（`FR-AI-17`）：打开对话页签 / 换工作区时调一次。
