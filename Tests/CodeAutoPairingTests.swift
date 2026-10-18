@@ -104,6 +104,35 @@ final class CodeAutoPairingTests: XCTestCase {
         XCTAssertEqual(plan.selectionLength, 5)
     }
 
+    // MARK: - 全角括号（中文输入法上屏的那一套 · T-20261018-205）
+
+    /// 中文输入法（简体拼音·中文标点）下按 `(` 上屏的是 `（` —— 它必须和半角一样配。
+    ///
+    /// 由头：人类主人 2026-10-18 人工点验「按了没反应」。半角表里没有全角字 ⇒ Core 返回 `nil`
+    /// ⇒ 视图交还默认实现 ⇒ **一个闭合符都不补**，现象与「没接线」一模一样。
+    func testFullWidthBracketPairsInProseFamily() {
+        let plan = try! XCTUnwrap(self.plan("（", "", caret: 0, family: .prose))
+        XCTAssertEqual(apply(plan, to: ""), "（）")
+        XCTAssertEqual(plan.caret, 1, "光标要在两个全角括号之间")
+        XCTAssertEqual(try! XCTUnwrap(self.plan("［", "", caret: 0)).replacement, "［］")
+        XCTAssertEqual(try! XCTUnwrap(self.plan("｛", "", caret: 0)).replacement, "｛｝")
+    }
+
+    /// 全角也认「跳」：光标右边已经是 `）` ⇒ 移过去，不再插一个。
+    func testFullWidthClosingSkipsInsteadOfInserting() {
+        let text = "（）"
+        let plan = try! XCTUnwrap(self.plan("）", text, caret: 1))
+        XCTAssertEqual(plan.replacement, "")
+        XCTAssertEqual(plan.caret, 2, "该跳而不是插入")
+    }
+
+    /// 全角也认「删整对」：光标夹在空的 `（|）` 里 ⇒ 一次删两个。
+    func testFullWidthBackspaceDeletesBoth() {
+        let text = "（）"
+        let plan = try! XCTUnwrap(CodeAutoPairing.backspacePlan(in: text, selection: NSRange(location: 1, length: 0)))
+        XCTAssertEqual(apply(plan, to: text), "")
+    }
+
     // MARK: - 退格删整对（FR-EDIT-49）
 
     /// 光标夹在**空的**一对里 ⇒ 一次删掉两个（不为自动补上的字符多按一次）。
