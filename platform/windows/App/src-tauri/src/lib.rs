@@ -1029,6 +1029,35 @@ fn release_backup_cancel(seq: u64) {
     }
 }
 
+/// **备份的进度槽**（同一刻唯一，与取消槽同一份运行序号）。
+///
+/// 为什么是「轮询一个槽」而不是「往外抛事件」：本仓的 IPC 全是**一问答**形状
+/// （前端 `invoke` 一次拿一个回执），没有事件通道 —— 为一次进度读数新拉一条事件管线，
+/// 会把「谁在监听、监听没清掉会怎样」这类问题一起引进来。这里界面每 500ms 问一次，
+/// 跑完立刻拿不到（槽被清），不会显示上一轮的陈旧读数。
+static BACKUP_PROGRESS_SLOT: std::sync::Mutex<Option<(u64, backup::ProgressSink)>> =
+    std::sync::Mutex::new(None);
+
+/// 占进度槽（返回的读数槽交给跑备份的那个线程去更新）。
+fn install_backup_progress(seq: u64) -> backup::ProgressSink {
+    let sink = backup::ProgressSink::new();
+    let mut slot = BACKUP_PROGRESS_SLOT
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    *slot = Some((seq, sink.clone()));
+    sink
+}
+
+/// 跑完清进度槽（同样只看「还是不是我这一次」）。
+fn release_backup_progress(seq: u64) {
+    let mut slot = BACKUP_PROGRESS_SLOT
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if matches!(slot.as_ref(), Some((current, _)) if *current == seq) {
+        *slot = None;
+    }
+}
+
 /// **备份计划**：找到程序、拼好参数、把命令行摊出来（**不起任何进程**）。
 #[tauri::command]
 async fn backup_plan(
@@ -1095,9 +1124,18 @@ async fn backup_run(
     // 子进程是**阻塞**的（大库要跑几分钟）：挪到阻塞线程池，别把 async 运行时占住。
     // 取消旗先占槽再进线程 —— 界面在跑的时候按下「取消」才能摸到同一面旗。
     let (seq, cancel) = install_backup_cancel()?;
+    // 进度槽同批占住：界面在跑的时候轮询它，跑完（这里）立刻清掉
+    let progress = install_backup_progress(seq);
     let running_flag = cancel.clone();
+    let running_sink = progress.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
-        backup::run_cancellable(&plan, password.as_deref(), sslmode.as_deref(), &running_flag)
+        backup::run_cancellable_with_progress(
+            &plan,
+            password.as_deref(),
+            sslmode.as_deref(),
+            &running_flag,
+            &running_sink,
+        )
     })
     .await
     .map_err(|error| DbFailure {
@@ -1105,7 +1143,20 @@ async fn backup_run(
         hint: "这属实现缺陷：请保留现场并报告。".to_string(),
     });
     release_backup_cancel(seq);
+    release_backup_progress(seq);
     outcome?
+}
+
+/// **读一次进度**（界面在跑的时候轮询它）：`None` = 现在没有备份在跑。
+///
+/// 三个读数全是实测的（已写字节 / 已跑毫秒 / 子进程最近一行），**没有百分比** —
+/// `pg_dump` 不告诉我们总量，编一个进度条等于骗人。
+#[tauri::command]
+async fn backup_progress() -> Result<Option<backup::BackupProgress>, DbFailure> {
+    let slot = BACKUP_PROGRESS_SLOT
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    Ok(slot.as_ref().map(|(_, sink)| sink.snapshot()))
 }
 
 /// **取消正在跑的备份**：置位取消旗 ⇒ 子进程被终止 ⇒ **这次留下的半截产物被删掉**
@@ -2279,6 +2330,7 @@ pub fn run() {
             backup_plan,
             backup_run,
             backup_cancel,
+            backup_progress,
             preview_import,
             run_import,
             xlsx_to_csv,

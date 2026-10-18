@@ -79,6 +79,8 @@ export const COMMANDS = {
   backupPlan: 'backup_plan',
   backupRun: 'backup_run',
   backupCancel: 'backup_cancel',
+  // 备份**跑着的读数**（FR-IO-04）：界面每 500ms 问一次，跑完就返回 null
+  backupProgress: 'backup_progress',
   previewImport: 'preview_import',
   runImport: 'run_import',
   xlsxToCsv: 'xlsx_to_csv',
@@ -1464,6 +1466,21 @@ export interface BackupRequest {
   program?: string
 }
 
+/**
+ * **跑着的读数**（`FR-IO-04`）：三个数全是实测的，**没有百分比** ——
+ * `pg_dump` 不告诉我们总量，编一个进度条等于骗人。
+ */
+export interface BackupProgress {
+  /** 这次跑了多少毫秒 */
+  elapsedMs: number
+  /** 目标现在多大（目录形式为各文件之和） */
+  bytes: number
+  /** 子进程已经吐了多少行（`--verbose` 下一张表一行） */
+  lines: number
+  /** 最近一行原话；还没吐过就是 null */
+  lastLine: string | null
+}
+
 /** **备份计划**：只算命令行，不起任何进程。 */
 export function backupPlan(request: BackupRequest): Promise<BackupPlanReport> {
   return call(COMMANDS.backupPlan, { request }, () => {
@@ -1488,6 +1505,15 @@ export function backupCancel(): Promise<boolean> {
   return call(COMMANDS.backupCancel, {}, () => {
     throw bypassDb('ipc.action.backup') as DbFailure
   })
+}
+
+/**
+ * **读一次备份进度**（跑着的时候轮询）：`null` = 现在没有备份在跑。
+ *
+ * 读数只用于显示，**不参与判定**：路径 / 程序 / 成败全在外壳判。
+ */
+export function backupProgress(): Promise<BackupProgress | null> {
+  return call(COMMANDS.backupProgress, {}, () => null)
 }
 
 /** **预览导入**（不碰数据库）：解析文件并与目标表列对账。 */

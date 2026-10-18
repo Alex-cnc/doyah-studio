@@ -10,7 +10,7 @@
 //   ⑤ 没连库时说的是「没连库」，不是把按钮灰着不给理由。
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import type { BackupPlanReport, BackupReport } from '../ipc'
+import type { BackupPlanReport, BackupProgress, BackupReport } from '../ipc'
 
 const state: {
   plan: BackupPlanReport | null
@@ -25,6 +25,9 @@ const state: {
   settle: { resolve: (value: BackupReport) => void; reject: (reason: unknown) => void } | null
   cancelCalls: number
   cancelAccepts: boolean
+  /** 外壳回的读数（跑着的时候界面要照着它画） */
+  progress: BackupProgress | null
+  progressCalls: number
 } = {
   plan: null,
   planFailure: null,
@@ -36,6 +39,8 @@ const state: {
   settle: null,
   cancelCalls: 0,
   cancelAccepts: true,
+  progress: null,
+  progressCalls: 0,
 }
 
 vi.mock('../ipc', () => ({
@@ -57,6 +62,10 @@ vi.mock('../ipc', () => ({
   backupCancel: vi.fn(async () => {
     state.cancelCalls += 1
     return state.cancelAccepts
+  }),
+  backupProgress: vi.fn(async () => {
+    state.progressCalls += 1
+    return state.progress
   }),
 }))
 
@@ -120,6 +129,8 @@ beforeEach(() => {
   state.settle = null
   state.cancelCalls = 0
   state.cancelAccepts = true
+  state.progress = null
+  state.progressCalls = 0
 })
 
 describe('备份弹层（FR-IO-04）', () => {
@@ -274,6 +285,56 @@ describe('备份弹层（FR-IO-04）', () => {
     expect(wrapper.get('[data-testid="backup-cancel-idle"]').text()).toContain('没有备份在跑')
     // 键回到「取消备份」（还能再试），不是卡在「正在取消」
     expect(wrapper.get('[data-testid="backup-cancel"]').text()).toContain('取消备份')
+    state.settle?.resolve(report())
+    await flushPromises()
+  })
+
+  it('跑着的时候摆出实测读数（已写字节 / 秒数 / 子进程原话），跑完即退场', async () => {
+    state.hold = true
+    state.progress = {
+      elapsedMs: 3200,
+      bytes: 4096,
+      lines: 7,
+      lastLine: 'pg_dump: dumping contents of table "orders"',
+    }
+    const wrapper = mountDialog()
+    await typePath(wrapper, 'D:\\backup\\shop.dump')
+    // 没跑的时候不该有读数区（它只对「正在跑」有意义）
+    expect(wrapper.find('[data-testid="backup-progress"]').exists()).toBe(false)
+
+    void wrapper.get('[data-testid="backup-run"]').trigger('click')
+    await flushPromises()
+
+    const line = wrapper.get('[data-testid="backup-progress-line"]').text()
+    expect(line).toContain('4.0 KB')
+    expect(line).toContain('3')
+    expect(line).toContain('7')
+    // 子进程原话照实摆出来（用户据此判断它在导哪张表）
+    expect(wrapper.get('[data-testid="backup-progress-last"]').text()).toContain(
+      'dumping contents of table "orders"',
+    )
+
+    state.settle?.resolve(report())
+    await flushPromises()
+    await flushPromises()
+    // 跑完：读数退场，不留上一轮的数字
+    expect(wrapper.find('[data-testid="backup-progress"]').exists()).toBe(false)
+  })
+
+  it('还没起量时说「还在连库 / 还没写出字节」，不写 0 B 冒充进度', async () => {
+    state.hold = true
+    state.progress = { elapsedMs: 800, bytes: 0, lines: 0, lastLine: null }
+    const wrapper = mountDialog()
+    await typePath(wrapper, 'D:\\backup\\shop.dump')
+    void wrapper.get('[data-testid="backup-run"]').trigger('click')
+    await flushPromises()
+
+    const line = wrapper.get('[data-testid="backup-progress-line"]').text()
+    expect(line).toContain('还没写出字节')
+    expect(line).not.toContain('0 B')
+    // 还没有子进程说的话时，不画那一行（空标签比不画更让人以为出了事）
+    expect(wrapper.find('[data-testid="backup-progress-last"]').exists()).toBe(false)
+
     state.settle?.resolve(report())
     await flushPromises()
   })

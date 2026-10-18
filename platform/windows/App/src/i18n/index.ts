@@ -801,6 +801,17 @@ export const DICT = {
   'backup.cancel': { 'zh-Hans': '取消备份', en: 'Cancel backup' },
   'backup.cancelling': { 'zh-Hans': '正在取消…（pg_dump 收到信号后停下）', en: 'Cancelling… (pg_dump stops once it gets the signal)' },
   'backup.cancelIdle': { 'zh-Hans': '没有备份在跑，没什么可取消的。', en: 'No backup is running, so there is nothing to cancel.' },
+  // 跑着的读数：**三个数都是实测的**（已写字节 / 已跑秒数 / 子进程吐了多少行），没有百分比
+  'backup.progressStarting': { 'zh-Hans': '正在备份：正在起 pg_dump…', en: 'Backing up: starting pg_dump…' },
+  'backup.progressWaiting': {
+    'zh-Hans': '正在备份：已起 pg_dump，还在连库 / 还没写出字节 · 已跑 {s} 秒',
+    en: 'Backing up: pg_dump is running, still connecting / nothing written yet · {s}s elapsed',
+  },
+  'backup.progress': {
+    'zh-Hans': '正在备份：已写 {bytes} · 已跑 {s} 秒 · 子进程已吐 {lines} 行',
+    en: 'Backing up: {bytes} written · {s}s elapsed · {lines} lines from the child',
+  },
+  'backup.progressLast': { 'zh-Hans': 'pg_dump 最近一行：{line}', en: 'Last line from pg_dump: {line}' },
   'backup.cancelledHint': {
     'zh-Hans': '取消是强杀子进程：这次留下的半截文件已由外壳删掉，别把盘上的旧文件当成这一份。',
     en: 'Cancelling kills the child process: the half-written file from this run has been removed, so do not mistake an older file for this attempt.',

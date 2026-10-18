@@ -14,14 +14,16 @@
 //     `backup::find_program`），这里只画它回的 `problem`；
 //   · **失败不缩写**：退出码与子进程原话原样摆出来，日志被截断就如实说被砍了多少字符。
 
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { t as translate, type DictKey, type UiLanguage } from '../i18n'
 import {
   backupCancel,
   backupPlan,
+  backupProgress,
   backupRun,
   type BackupFormat,
   type BackupPlanReport,
+  type BackupProgress,
   type BackupReport,
   type DbFailure,
 } from '../ipc'
@@ -60,6 +62,10 @@ const cancelled = ref(false)
 const cancelNote = ref<string | null>(null)
 /** 计划自己的失败（连接没开 / 命令没起）—— 与「跑备份失败」分开摆，不然用户分不清是哪一步。 */
 const planFailure = ref<DbFailure | null>(null)
+/** 跑着的读数（每 500ms 问外壳一次）：已写字节 / 已跑毫秒 / 子进程最近一行。 */
+const progress = ref<BackupProgress | null>(null)
+/** 轮询句柄（跑完 / 关弹层 / 卸载都要停 —— 停不掉就会在后台一直 invoke）。 */
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const FORMAT_KEYS: Record<BackupFormat, DictKey> = {
   plain: 'backup.format.plain',
@@ -81,6 +87,51 @@ function readable(error: unknown): DbFailure {
   const asRecord = error as { message?: string; hint?: string } | null
   return { message: asRecord?.message ?? String(error), hint: asRecord?.hint ?? '' }
 }
+
+/** 停掉轮询（跑完 / 关弹层 / 卸载都要调 —— 漏一处就会在后台一直问外壳）。 */
+function stopPolling(): void {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+/** 问一次读数；**失败不打断备份**（读数只是显示，别让一次 IPC 抖动把备份弹层变成报错）。 */
+async function readProgress(): Promise<void> {
+  try {
+    progress.value = await backupProgress()
+  } catch {
+    // 读数读不到就不更新 —— 界面继续显示上一份，不假装「已写 0」
+  }
+}
+
+/** 开跑：立刻问一次（别让用户先盯着空白 500ms），之后每 500ms 一次。 */
+function startPolling(): void {
+  stopPolling()
+  progress.value = null
+  void readProgress()
+  pollTimer = setInterval(() => {
+    void readProgress()
+  }, 500)
+}
+
+onUnmounted(stopPolling)
+
+/**
+ * 跑着的那一行读数的措辞：**没起量就如实说没起量**（不写「0 B / 0%」，
+ * 那会被读成「卡住了」；也说不出「还剩多久」—— `pg_dump` 不告诉我们总量）。
+ */
+const progressLine = computed(() => {
+  const snap = progress.value
+  if (!snap) return tr('backup.progressStarting')
+  const seconds = Math.max(1, Math.round(snap.elapsedMs / 1000))
+  if (snap.bytes === 0) return tr('backup.progressWaiting', { s: seconds })
+  return tr('backup.progress', {
+    bytes: bytesLabel(snap.bytes),
+    s: seconds,
+    lines: snap.lines,
+  })
+})
 
 /** 重算命令行（**不起进程**）。路径空 ⇒ 清掉计划，改成「填了就显示」。 */
 async function refreshPlan(): Promise<void> {
@@ -111,6 +162,7 @@ async function run(): Promise<void> {
   cancelNote.value = null
   failure.value = null
   report.value = null
+  startPolling()
   try {
     report.value = await backupRun({
       connectionId: props.connectionId as string,
@@ -126,6 +178,9 @@ async function run(): Promise<void> {
   } finally {
     busy.value = false
     cancelling.value = false
+    // 跑完：读数退场（不让上一轮的数字留在弹层上），轮询停掉
+    stopPolling()
+    progress.value = null
     // 跑完重算一次：目标现在多半已存在，命令行区应当如实变成「不覆盖既有文件」那一档
     void refreshPlan()
   }
@@ -176,6 +231,8 @@ watch(
     cancelNote.value = null
     cancelled.value = false
     cancelling.value = false
+    progress.value = null
+    stopPolling()
     databaseOverride.value = ''
     void refreshPlan()
   },
@@ -295,6 +352,16 @@ watch(
         <p v-if="cancelNote" class="backup__hint" data-testid="backup-cancel-idle">
           {{ cancelNote }}
         </p>
+
+        <!-- 跑着的时候：已写多少 / 跑了多久 / 子进程最近一行（都是实测读数，没有百分比） -->
+        <div v-if="busy" class="backup__progress" data-testid="backup-progress">
+          <p class="backup__progress-line" data-testid="backup-progress-line">
+            {{ progressLine }}
+          </p>
+          <p v-if="progress && progress.lastLine" class="backup__hint" data-testid="backup-progress-last">
+            {{ tr('backup.progressLast', { line: progress.lastLine }) }}
+          </p>
+        </div>
 
         <!-- ③ 跑完了：成功 / 失败两档，**都带日志尾部** -->
         <div v-if="report" class="backup__result" data-testid="backup-result">
@@ -447,6 +514,25 @@ watch(
 .backup__ok {
   margin: 0;
   color: var(--ds-color-accent-accent);
+}
+
+/* 跑着的读数：等宽数字（字节与秒数会跳动，比例字体下会左右抖） */
+.backup__progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+  padding: var(--ds-spacing-s);
+  border: 1px solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-window);
+}
+
+.backup__progress-line {
+  margin: 0;
+  color: var(--ds-color-accent-accent);
+  font-family: var(--ds-font-stack-mono);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
 }
 
 .backup__log {
