@@ -2915,6 +2915,24 @@ final class AppState: ObservableObject {
         if !memoryRead.entries.isEmpty {
             references.append(contentsOf: AgentMemoryContext.references(from: memoryRead.entries, now: Date()))
         }
+        // `FR-AI-22` ①：**用户点名的东西真的读进来** —— `@a.swift` / `@Sources/` 以前没人解析。
+        // 越界（`../`、绝对路径、`~`）与不存在由解析器拒掉并给一句说法，不静默丢。
+        let workspaceRoot = URL(fileURLWithPath: workspacePath)
+        let mentionResult = AgentMentionParser.parse(prompt, workspaceRoot: workspaceRoot)
+        let resolvedMentions = AgentMentionResolver.references(
+            for: mentionResult,
+            root: workspaceRoot,
+            reader: AgentMentionResolver.fileReader(root: workspaceRoot,
+                                                    maxCharacters: AgentContextLimits().maxFileCharacters),
+            lister: AgentMentionResolver.directoryLister(root: workspaceRoot,
+                                                         maxEntries: AgentWorkspaceContext.maxDirectoryEntries))
+        references.append(contentsOf: resolvedMentions.references)
+        // 没带上的提及（二进制 / 读不到 / 越界 / 不存在）**说清**：附在用户原话之后、带标记；
+        // 用户写的字一个不改（解析器与本段都不重写 prompt 本体）。
+        let promptWithNotes = resolvedMentions.notes.isEmpty
+            ? prompt
+            : prompt + "\n\n[未带上的提及]\n" + resolvedMentions.notes.joined(separator: "\n")
+
         // 灵魂（`FR-AI-34`）：L0 读包内 `soul-L0.md`、L1 读 `<工作区>/.doyah/soul-role.md`；
         // 缺项由 `AgentSoul.compose` **如实写进提示词**（不静默当没有），缺 L0 属缺陷。
         let soul = AgentSoul.load(workspacePath: workspacePath)
@@ -2927,7 +2945,7 @@ final class AppState: ObservableObject {
                                  apiKey: agentAPIKey,
                                  timeoutSeconds: agentConfiguration.timeoutSeconds,
                                  systemPrompt: systemPrompt,
-                                 userPrompt: prompt)
+                                 userPrompt: promptWithNotes)
         let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath),
                                                harmStopLog: .default)
         // 六个 MVP 工具**全接上**（`FR-AI-20` ①）：
@@ -2955,7 +2973,7 @@ final class AppState: ObservableObject {
                              sessionStore: AgentSessionStore(directory: AgentSessionStore.defaultDirectory),
                              audit: AgentAuditLog.shared,
                              observer: observer)
-        let context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: prompt,
+        let context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: promptWithNotes,
                                        baseRequest: request, sessionID: sessionID, workspace: workspacePath)
         return (loop, context)
     }
