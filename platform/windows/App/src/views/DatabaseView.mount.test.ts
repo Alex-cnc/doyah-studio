@@ -83,4 +83,28 @@ describe('DatabaseView 挂载冒烟（查询页签条）', () => {
     restore()
     wrapper.unmount()
   })
+
+  it('恢复入口就在备份旁边：点一下真的把恢复弹层挂出来（FR-IO-05 的接线）', async () => {
+    const { wrapper, errors, restore } = await mountCapturing()
+
+    // 两个入口同级同形：备份在旁边，恢复也在（有备份没恢复只兑现一半）
+    expect(wrapper.find('[data-testid="backup-open"]').exists()).toBe(true)
+    const restoreEntry = wrapper.find('[data-testid="restore-open"]')
+    expect(restoreEntry.exists()).toBe(true)
+    // 弹层默认不在（不点就挂出来的话，界面上会一直压着一层遮罩）
+    expect(wrapper.find('[data-testid="restore-dialog"]').exists()).toBe(false)
+
+    await restoreEntry.trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(wrapper.find('[data-testid="restore-dialog"]').exists()).toBe(true)
+    // 旁路（没真外壳）里没有连接 ⇒ 弹层说的是「还没连接」而不是画一堆填不进去的框
+    expect(wrapper.find('[data-testid="restore-no-connection"]').exists()).toBe(true)
+
+    // 关得掉
+    await wrapper.find('[data-testid="restore-close"]').trigger('click')
+    expect(wrapper.find('[data-testid="restore-dialog"]').exists()).toBe(false)
+    expect(errors).toEqual([])
+    restore()
+    wrapper.unmount()
+  })
 })

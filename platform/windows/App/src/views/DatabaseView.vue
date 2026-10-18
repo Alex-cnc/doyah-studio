@@ -100,6 +100,7 @@ import {
 import ConnectionLabel from '../shell/ConnectionLabel.vue'
 import ConnectionDialog from '../shell/ConnectionDialog.vue'
 import BackupDialog from '../shell/BackupDialog.vue'
+import RestoreDialog from '../shell/RestoreDialog.vue'
 import AgentGenerateDialog from '../shell/AgentGenerateDialog.vue'
 import DiagnosisDialog from '../shell/DiagnosisDialog.vue'
 import type { ConnectionDialogMode } from '../shell/connectionDialog'
@@ -1591,6 +1592,8 @@ watch(
 
 /** 备份弹层（FR-IO-04）：状态归本视图（它要当前连接与当前库）。序号变化即开一次。 */
 const backupOpen = ref(false)
+/** 恢复弹层（FR-IO-05）：与备份并列的入口，各自一份状态 —— 两个弹层互不覆盖。 */
+const restoreOpen = ref(false)
 watch(
   () => props.backupRequest,
   (seq) => {
@@ -4224,6 +4227,27 @@ async function probe() {
               {{ t('archive.button') }} ({{ archiveEntries.length }})
             </button>
             <span v-if="archiveError || archiveNote" class="db__note" data-testid="archive-note">{{ archiveError || archiveNote }}</span>
+            <!-- 备份 / 恢复（FR-IO-04 / FR-IO-05）：它们**不依赖结果集**，所以入口摆在一直可见的
+                 这条工具条上（原先备份在结果区那排里，没跑过查询就找不到 —— 一并挪过来）。
+                 命令面板的同名命令仍走同一份状态。 -->
+            <button
+              class="db__btn"
+              type="button"
+              data-testid="backup-open"
+              :title="t('cmd.database.backup')"
+              @click="backupOpen = true"
+            >
+              {{ t('cmd.database.backup') }}
+            </button>
+            <button
+              class="db__btn"
+              type="button"
+              data-testid="restore-open"
+              :title="t('cmd.database.restore')"
+              @click="restoreOpen = true"
+            >
+              {{ t('cmd.database.restore') }}
+            </button>
             <button class="db__btn db__btn--icon db__btn--primary" type="submit" :disabled="!!busy" :title="t('sql.run')"><ActionIcon name="play" /></button>
             <button class="db__btn db__btn--icon" type="button" :disabled="!busy" @click="cancelRunning" :title="t('sql.cancel')"><ActionIcon name="stop" /></button>
             <button class="db__btn db__btn--icon" type="button" :disabled="!!busy" @click="showPlan" :title="t('sql.planOnly')"><ActionIcon name="code" /></button>
@@ -4489,16 +4513,9 @@ async function probe() {
                   >
                     <ActionIcon name="sliders" />
                   </button>
-                <!-- 备份（FR-IO-04）：入口就摆在这一排工具里 —— 命令面板的同名命令也走它 -->
-                <button
-                    class="db__btn"
-                    type="button"
-                    data-testid="backup-open"
-                    :title="t('cmd.database.backup')"
-                    @click="backupOpen = true"
-                  >
-                    {{ t('cmd.database.backup') }}
-                  </button>
+                <!-- 备份（FR-IO-04）/ 恢复（FR-IO-05）两个入口不在这里 —— 这一排只在**有结果集**时
+                     才渲染（`v-if="result && result.columns.length"`），把不依赖结果的动作放进来，
+                     用户没跑过查询就找不到它们。两处已挪到上面的 SQL 工具条（一直可见）。 -->
                 <span v-if="copied" class="db__note">{{ copied }}</span>
               </div>
 
@@ -4889,6 +4906,15 @@ async function probe() {
     :connection-id="connectedConnection?.id ?? null"
     database=""
     @close="backupOpen = false"
+  />
+
+  <!-- 恢复（FR-IO-05）：从备份写回目标库；命令行先摊出来，口令不进 argv -->
+  <RestoreDialog
+    :open="restoreOpen"
+    :language="language"
+    :connection-id="connectedConnection?.id ?? null"
+    database=""
+    @close="restoreOpen = false"
   />
 </template>
 

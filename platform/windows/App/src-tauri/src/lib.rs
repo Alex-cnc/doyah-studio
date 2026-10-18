@@ -21,6 +21,8 @@ pub mod postgres;
 pub mod pty;
 /// 备份（`FR-IO-04` 的 Windows 侧）：封装本机 `pg_dump` —— 命令行先摊出来、口令只进环境变量。
 pub mod backup;
+/// 恢复（`FR-IO-05` 的 Windows 侧后一片）：封装本机 `pg_restore` —— 与备份同一套口令与日志口径。
+pub mod restore;
 /// 已保存查询的落盘（FR-EDIT-14）：模型与「同名覆盖」判定在领域层
 /// `doyah_studio_db::saved_query`，本模块只管「放哪儿、怎么取」。
 pub mod saved_queries;
@@ -1330,6 +1332,243 @@ async fn backup_cancel() -> Result<bool, DbFailure> {
     }
 }
 
+/// **恢复请求**（界面 → 外壳）。**口令不在里面**：按 `connectionId` 从系统凭据里取。
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreRequest {
+    /// 当前连接的 id（口令按它取；取不到就当这条连接没有口令）
+    pub connection_id: String,
+    /// 从哪份备份恢复（文件或目录归档的完整路径）
+    pub source: String,
+    /// 先删后建（外壳会自动带上 `--if-exists`，见 `restore::plan_args`）
+    #[serde(default)]
+    pub clean: bool,
+    /// 恢复哪一段
+    #[serde(default)]
+    pub section: restore::RestoreSection,
+    /// 并行度（只有目录归档生效；文件归档一律串行）
+    #[serde(default)]
+    pub jobs: u32,
+    /// 恢复到哪个库（留空 = 当前连接的库）
+    #[serde(default)]
+    pub database: Option<String>,
+    /// 手动指定 `pg_restore` 路径（留空 = 自动找）
+    #[serde(default)]
+    pub program: Option<String>,
+}
+
+/// 恢复计划回执：**只算不跑** —— 命令行先摊出来（恢复会改库，比备份更需要这一眼）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestorePlanReport {
+    /// 找到的程序（`null` ⇒ 界面显示「程序找不到」那一档）
+    pub program: Option<String>,
+    /// 可复制的命令行（口令位置写 `PGPASSWORD=***`）
+    pub display: String,
+    pub database: String,
+    pub source: String,
+    /// 源是文件还是目录归档（界面按它决定 `--jobs` 能不能填）
+    pub kind: String,
+    pub section: restore::RestoreSection,
+    /// **实际会用上的并行度**（0 = 串行）
+    pub jobs: u32,
+    /// 现在就跑会立刻失败的原因（程序找不到 / 源不存在 / 纯 SQL 备份）
+    pub problem: Option<DbFailure>,
+}
+
+/// 恢复的「连哪儿、恢复到哪个库」+ 已 trim 的源路径。
+async fn restore_inputs(
+    state: &State<'_, ShellState>,
+    request: &RestoreRequest,
+) -> Result<(restore::RestoreTarget, String), DbFailure> {
+    let session = current_session(state).await?;
+    let info = session.info().clone();
+    let database = request
+        .database
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(&info.database)
+        .to_string();
+    let target = restore::RestoreTarget {
+        host: info.host.clone(),
+        port: info.port,
+        user: info.user.clone(),
+        database,
+    };
+    Ok((target, request.source.trim().to_string()))
+}
+
+/// **恢复的取消槽**（与备份各一把：两件事互不排队，但同时只会各跑一个）。
+static RESTORE_CANCEL_SLOT: std::sync::Mutex<Option<(u64, backup::CancelFlag)>> =
+    std::sync::Mutex::new(None);
+static RESTORE_RUN_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn install_restore_cancel() -> Result<(u64, backup::CancelFlag), DbFailure> {
+    let mut slot = RESTORE_CANCEL_SLOT
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if let Some((seq, _)) = slot.as_ref() {
+        return Err(DbFailure {
+            message: format!("已经有一次恢复在跑（第 {seq} 次），先等它结束或取消它"),
+            hint: "同时跑两个 pg_restore 会往同一个库里抢着写对象，所以这里不排队。".to_string(),
+        });
+    }
+    let seq = RESTORE_RUN_SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    let flag = backup::CancelFlag::new();
+    *slot = Some((seq, flag.clone()));
+    Ok((seq, flag))
+}
+
+fn release_restore_cancel(seq: u64) {
+    let mut slot = RESTORE_CANCEL_SLOT
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if matches!(slot.as_ref(), Some((current, _)) if *current == seq) {
+        *slot = None;
+    }
+}
+
+/// **恢复计划**：找到程序、校验源、拼好参数（**不起任何进程**）。
+#[tauri::command]
+async fn restore_plan(
+    state: State<'_, ShellState>,
+    request: RestoreRequest,
+) -> Result<RestorePlanReport, DbFailure> {
+    let (target, source) = restore_inputs(&state, &request).await?;
+    let (program, mut problem) = match restore::find_program(request.program.as_deref()) {
+        Ok(found) => (Some(found), None),
+        Err(failure) => (None, Some(failure)),
+    };
+    let options = restore::RestoreOptions {
+        clean: request.clean,
+        section: request.section,
+        jobs: request.jobs,
+    };
+    // 源的问题与程序缺失各说一次；两个都有时先报程序（没有程序，源对不对都跑不了）
+    let mut kind = "file".to_string();
+    let mut jobs = restore::effective_jobs(restore::SourceKind::File, options.jobs);
+    if let Ok((path, resolved)) = restore::check_source(&source) {
+        kind = if resolved.is_directory() {
+            "directory".to_string()
+        } else {
+            "file".to_string()
+        };
+        jobs = restore::effective_jobs(resolved, options.jobs);
+        let plan = restore::RestorePlan {
+            program: program.clone(),
+            args: restore::plan_args(&target, &path, resolved, &options),
+            source: path,
+            kind: resolved,
+            database: target.database.clone(),
+            section: options.section,
+            jobs,
+        };
+        return Ok(RestorePlanReport {
+            program: program.map(|found| found.display().to_string()),
+            display: plan.display(),
+            database: plan.database.clone(),
+            source: plan.source.display().to_string(),
+            kind,
+            section: plan.section,
+            jobs: plan.jobs,
+            problem,
+        });
+    } else if problem.is_none() {
+        if let Err(failure) = restore::check_source(&source) {
+            problem = Some(failure);
+        }
+    }
+    // 源不合法：计划照样摊出来（用户能看着命令行自己判断哪儿不对），只是标成「跑不了」
+    let plan = restore::RestorePlan {
+        program,
+        args: Vec::new(),
+        source: std::path::PathBuf::from(&source),
+        kind: restore::SourceKind::File,
+        database: target.database.clone(),
+        section: options.section,
+        jobs,
+    };
+    Ok(RestorePlanReport {
+        program: plan.program.as_ref().map(|found| found.display().to_string()),
+        display: plan.display(),
+        database: plan.database.clone(),
+        source,
+        kind,
+        section: plan.section,
+        jobs: plan.jobs,
+        problem,
+    })
+}
+
+/// **真跑恢复**：口令进 `PGPASSWORD`、`sslmode` 进 `PGSSLMODE`，日志尾部原样带回。
+#[tauri::command]
+async fn restore_run(
+    state: State<'_, ShellState>,
+    request: RestoreRequest,
+) -> Result<restore::RestoreReport, DbFailure> {
+    let (target, source) = restore_inputs(&state, &request).await?;
+    let program = restore::find_program(request.program.as_deref())?;
+    let (path, kind) = restore::check_source(&source)?;
+    let options = restore::RestoreOptions {
+        clean: request.clean,
+        section: request.section,
+        jobs: request.jobs,
+    };
+    let password = connections::recall_password(&request.connection_id)
+        .ok()
+        .flatten();
+    let sslmode = state
+        .connections
+        .load()
+        .ok()
+        .and_then(|list| {
+            list.into_iter()
+                .find(|config| config.id == request.connection_id)
+        })
+        .map(|config| config.ssl_mode.raw_value().to_string());
+    let plan = restore::RestorePlan {
+        program: Some(program),
+        args: restore::plan_args(&target, &path, kind, &options),
+        source: path,
+        kind,
+        database: target.database.clone(),
+        section: options.section,
+        jobs: restore::effective_jobs(kind, options.jobs),
+    };
+    // 子进程是阻塞的（大库恢复要几分钟）：挪到阻塞线程池，别把 async 运行时占住。
+    let (seq, cancel) = install_restore_cancel()?;
+    let running_flag = cancel.clone();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        restore::run_cancellable(&plan, password.as_deref(), sslmode.as_deref(), &running_flag)
+    })
+    .await
+    .map_err(|error| DbFailure {
+        message: format!("恢复线程没能起起来：{error}"),
+        hint: "这属实现缺陷：请保留现场并报告。".to_string(),
+    });
+    release_restore_cancel(seq);
+    outcome?
+}
+
+/// **取消正在跑的恢复**：置位取消旗 ⇒ 子进程被终止。
+///
+/// ⚠️ 与备份不同：强杀 `pg_restore` **不会撤销已经写进库里的对象** ⇒ 回执里必须说清
+/// 「库里可能停在半途」（`restore::run_cancellable` 已按这条措辞返回）。
+#[tauri::command]
+async fn restore_cancel() -> Result<bool, DbFailure> {
+    let slot = RESTORE_CANCEL_SLOT
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    match slot.as_ref() {
+        Some((_, flag)) => {
+            flag.cancel();
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
 /// **预览导入**：读文件 → 解析 → 与目标表列对账（**不碰数据库**）。
 ///
 /// 为什么分两步（预览 / 执行）：导入是"一次写很多行"的操作，用户必须先看见
@@ -2498,6 +2737,9 @@ pub fn run() {
             backup_run,
             backup_cancel,
             backup_progress,
+            restore_plan,
+            restore_run,
+            restore_cancel,
             preview_import,
             run_import,
             xlsx_to_csv,

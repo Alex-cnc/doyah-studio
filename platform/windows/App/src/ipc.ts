@@ -81,6 +81,10 @@ export const COMMANDS = {
   backupCancel: 'backup_cancel',
   // 备份**跑着的读数**（FR-IO-04）：界面每 500ms 问一次，跑完就返回 null
   backupProgress: 'backup_progress',
+  // 恢复（FR-IO-05：封装本机 pg_restore —— 同 backup，先摊命令行再真跑）
+  restorePlan: 'restore_plan',
+  restoreRun: 'restore_run',
+  restoreCancel: 'restore_cancel',
   previewImport: 'preview_import',
   runImport: 'run_import',
   xlsxToCsv: 'xlsx_to_csv',
@@ -1825,6 +1829,90 @@ export function backupCancel(): Promise<boolean> {
  */
 export function backupProgress(): Promise<BackupProgress | null> {
   return call(COMMANDS.backupProgress, {}, () => null)
+}
+
+// ── 恢复（FR-IO-05：封装本机 pg_restore）────────────────────────────────────────────
+//
+// 与备份同形两段式：`restorePlan` 只算不跑（先摊命令行），`restoreRun` 才真起子进程。
+// 三条外壳口径由 Rust 侧保证，界面不自作主张：
+//   · `clean` ⇒ 外壳自动补 `--if-exists`（只带 `--clean` 会让空库恢复整段落败）；
+//   · `jobs` 只对**目录归档**生效 —— 回执里的 `jobs` 是**实际值**（0 = 串行）；
+//   · 纯 SQL 备份（`.sql`）会被拒，界面照 `problem` 说话。
+
+/** 恢复哪一段（`pg_restore --section`）；`all` = 不加旗标。 */
+export type RestoreSection = 'all' | 'pre-data' | 'data' | 'post-data'
+
+/** 源是文件归档还是目录归档（决定 `--jobs` 能不能填）。 */
+export type RestoreKind = 'file' | 'directory'
+
+/** 恢复计划回执（**不含口令**；`problem` = 现在就跑会立刻失败的原因）。 */
+export interface RestorePlanReport {
+  /** 找到的 `pg_restore`（`null` ⇒ 本机没有 / 指定的不对） */
+  program: string | null
+  /** 可复制的命令行（口令位置写 `PGPASSWORD=***`） */
+  display: string
+  database: string
+  source: string
+  kind: RestoreKind
+  section: RestoreSection
+  /** **实际会用上的并行度**（0 = 串行） */
+  jobs: number
+  problem: DbFailure | null
+}
+
+/** 恢复结局（**成功失败都带日志尾部与退出码**）。 */
+export interface RestoreReport {
+  display: string
+  exitCode: number | null
+  log: string
+  /** 前面还有多少字符没带回来（没截断就是 0） */
+  logTrimmedChars: number
+  elapsedMs: number
+  source: string
+  section: RestoreSection
+  /** 实际用上的并行度（0 = 串行） */
+  jobs: number
+  database: string
+}
+
+export interface RestoreRequest {
+  connectionId: string
+  source: string
+  /** 先删后建（外壳自动补 `--if-exists`） */
+  clean: boolean
+  section: RestoreSection
+  /** 并行度（只有目录归档生效） */
+  jobs: number
+  /** 恢复到哪个库（留空 = 当前连接的库） */
+  database?: string
+  /** 手动指定 `pg_restore` 路径（留空 = 自动找） */
+  program?: string
+}
+
+/** **恢复计划**：只算命令行，不起任何进程。 */
+export function restorePlan(request: RestoreRequest): Promise<RestorePlanReport> {
+  return call(COMMANDS.restorePlan, { request }, () => {
+    throw bypassDb('ipc.action.restore') as DbFailure
+  })
+}
+
+/** **真跑恢复**：子进程起 `pg_restore`，回执带退出码与日志尾部。 */
+export function restoreRun(request: RestoreRequest): Promise<RestoreReport> {
+  return call(COMMANDS.restoreRun, { request }, () => {
+    throw bypassDb('ipc.action.restore') as DbFailure
+  })
+}
+
+/**
+ * **取消正在跑的恢复**（`true` = 确实有一次在跑、已收到取消请求）。
+ *
+ * ⚠️ 与备份不同：强杀 `pg_restore` **不会撤销已经写进库里的对象** ——
+ * 取消成功也意味着「库里可能停在半途」，这一点由外壳的失败回执说清，界面照它显示。
+ */
+export function restoreCancel(): Promise<boolean> {
+  return call(COMMANDS.restoreCancel, {}, () => {
+    throw bypassDb('ipc.action.restore') as DbFailure
+  })
 }
 
 /** **预览导入**（不碰数据库）：解析文件并与目标表列对账。 */

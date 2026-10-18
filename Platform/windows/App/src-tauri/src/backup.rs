@@ -319,6 +319,14 @@ pub fn best_candidate(candidates: &[(String, PathBuf)]) -> Option<PathBuf> {
 /// 为什么还要扫安装目录：Windows 上 PostgreSQL 装完**默认不进 PATH**，而 `pg_dump` 就在那里。
 /// 只认 PATH 的话，用户明明装了数据库客户端却得到「找不到程序」，那种失败最难解释。
 pub fn find_program(explicit: Option<&str>) -> Result<PathBuf, DbFailure> {
+    find_program_named(explicit, program_name())
+}
+
+/// 同一条查找口径，但程序名可换（`FR-IO-05` 恢复要找 `pg_restore`）。
+///
+/// 为什么参数化而不是在恢复侧另抄一份：三处搜索顺序（显式路径 → PATH → 各盘安装目录、
+/// 新版本优先）**必须与备份一致** —— 两处各写一遍，迟早出现「备份说找到了、恢复说没装」。
+pub fn find_program_named(explicit: Option<&str>, program: &str) -> Result<PathBuf, DbFailure> {
     if let Some(given) = explicit.map(str::trim).filter(|text| !text.is_empty()) {
         let path = PathBuf::from(given);
         if path.is_file() {
@@ -326,12 +334,14 @@ pub fn find_program(explicit: Option<&str>) -> Result<PathBuf, DbFailure> {
         }
         return Err(DbFailure {
             message: format!("指定的程序不是可执行文件：{}", path.display()),
-            hint: "填 pg_dump 的完整路径（Windows 一般在 C:\\Program Files\\PostgreSQL\\<版本>\\bin\\pg_dump.exe）；留空则自动找。".to_string(),
+            hint: format!(
+                "填 {program} 的完整路径（Windows 一般在 C:\\Program Files\\PostgreSQL\\<版本>\\bin\\{program}）；留空则自动找。"
+            ),
         });
     }
 
     let mut searched: Vec<String> = Vec::new();
-    if let Some(found) = on_path() {
+    if let Some(found) = on_path(program) {
         return Ok(found);
     }
     searched.push("PATH".to_string());
@@ -349,10 +359,10 @@ pub fn find_program(explicit: Option<&str>) -> Result<PathBuf, DbFailure> {
             continue;
         };
         for entry in entries.flatten() {
-            let program = entry.path().join("bin").join(program_name());
-            if program.is_file() {
+            let candidate = entry.path().join("bin").join(program);
+            if candidate.is_file() {
                 let version = entry.file_name().to_string_lossy().to_string();
-                candidates.push((version, program));
+                candidates.push((version, candidate));
             }
         }
     }
@@ -361,9 +371,9 @@ pub fn find_program(explicit: Option<&str>) -> Result<PathBuf, DbFailure> {
     }
 
     Err(DbFailure {
-        message: "找不到 pg_dump（本机没装 PostgreSQL 客户端，或装在了别处）".to_string(),
+        message: format!("找不到 {program}（本机没装 PostgreSQL 客户端，或装在了别处）"),
         hint: format!(
-            "找过这些地方：{}。要么装 PostgreSQL 客户端，要么在上面「程序」一格填 pg_dump 的完整路径。",
+            "找过这些地方：{}。要么装 PostgreSQL 客户端，要么在上面「程序」一格填 {program} 的完整路径。",
             searched.join(" / ")
         ),
     })
@@ -379,10 +389,10 @@ fn program_name() -> &'static str {
 }
 
 /// 在 `PATH` 里找（**只看是不是真文件**，不执行 —— 执行留到 `run`）。
-fn on_path() -> Option<PathBuf> {
+fn on_path(program: &str) -> Option<PathBuf> {
     let raw = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&raw) {
-        let candidate = dir.join(program_name());
+        let candidate = dir.join(program);
         if candidate.is_file() {
             return Some(candidate);
         }
