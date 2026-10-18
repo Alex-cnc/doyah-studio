@@ -31,6 +31,13 @@ struct AgentSettingsSheet: View {
     @State private var isLoaded = false
     /// 授权粒度（`FR-AI-34`）：任务范围内代签 = 少问；每个动作都问 = 老行为。
     @State private var scopeMode: AgentTaskScope.Mode = .taskScope
+    /// **真值源**（`FR-AI-25` 信息面三格）：上下文窗口 + 每百万 token 价目。
+    /// 空串 = 没填（窗口退回内置表、价钱那一格不出现）。
+    @State private var contextWindowText = ""
+    @State private var inputPriceText = ""
+    @State private var outputPriceText = ""
+    @State private var cachedPriceText = ""
+    @State private var priceCurrency: AgentPriceCurrency = .cny
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -74,6 +81,29 @@ struct AgentSettingsSheet: View {
                     .help(L(.agentModelPresetHint))
                 }
                 TextField(L(.agentTimeout), text: $timeoutSeconds)
+
+                // **信息面三格的真值源**（`FR-AI-25`）：窗口 / 价目。这些数仓里没有、
+                // 也不该由程序猜（价格随时变、代理后面那个模型的窗口未必同名同尺寸）⇒
+                // 由用户填；不填就不显示那一格。**不做汇率换算**：填哪个币种就用哪个符号。
+                Section(L(.agentMeterSection)) {
+                    TextField(L(.agentMeterWindow), text: $contextWindowText,
+                              prompt: Text(L(.agentMeterWindowPlaceholder)))
+                    HStack(spacing: 8) {
+                        TextField(L(.agentMeterInputPrice), text: $inputPriceText,
+                                  prompt: Text(L(.agentMeterPricePlaceholder)))
+                        TextField(L(.agentMeterOutputPrice), text: $outputPriceText,
+                                  prompt: Text(L(.agentMeterPricePlaceholder)))
+                        TextField(L(.agentMeterCachedPrice), text: $cachedPriceText,
+                                  prompt: Text(L(.agentMeterPricePlaceholder)))
+                    }
+                    Picker(L(.agentMeterCurrency), selection: $priceCurrency) {
+                        Text(L(.agentMeterCurrencyCNY)).tag(AgentPriceCurrency.cny)
+                        Text(L(.agentMeterCurrencyUSD)).tag(AgentPriceCurrency.usd)
+                    }
+                    Text(L(.agentMeterFootnote))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
 
                 Section(L(.agentQuotaSection)) {
                     TextField(L(.agentMaxRequests), text: $maxRequests)
@@ -172,6 +202,14 @@ struct AgentSettingsSheet: View {
             maxOutputTokens = configuration.quota.maxOutputTokensPerRequest.map(String.init) ?? ""
             maxTotalTokens = configuration.quota.maxTotalTokens.map(String.init) ?? ""
             scopeMode = configuration.scopeMode
+            // 真值源（`FR-AI-25`）：这一档填过的窗口 / 价目要回填 —— 否则重开面板就是空白，
+            // 保存一次等于把用户填过的价目**静默清掉**。
+            let pricing = configuration.activeProfile?.pricing
+            contextWindowText = pricing?.contextWindow.map { String($0) } ?? ""
+            inputPriceText = Self.priceText(pricing?.inputPerMillion)
+            outputPriceText = Self.priceText(pricing?.outputPerMillion)
+            cachedPriceText = Self.priceText(pricing?.cachedInputPerMillion)
+            priceCurrency = pricing?.currency ?? .cny
         }
     }
 
@@ -231,7 +269,7 @@ struct AgentSettingsSheet: View {
     // MARK: - 输入 → 配置
 
     private var draftConfiguration: AgentConfiguration {
-        AgentConfiguration(
+        var draft = AgentConfiguration(
             isEnabled: isEnabled,
             endpoint: endpoint,
             model: model,
@@ -248,11 +286,43 @@ struct AgentSettingsSheet: View {
             // 授权粒度（`FR-AI-34`）：默认 `.taskScope`（少问）；设置里可改回逐次批。
             scopeMode: scopeMode
         )
+        // 真值源（`FR-AI-25`）是**档的属性**：草稿是「单档形状」，把它塞进这一档，
+        // 由宿主按档合并（别档原样留住）。
+        if var profile = draft.activeProfile {
+            profile.pricing = draftPricing
+            draft.updateProfile(profile)
+        }
+        return draft
+    }
+
+    /// 面板里填的窗口 / 价目。**一个字都没填 ⇒ `nil`**（不往配置里写空壳）。
+    private var draftPricing: AgentModelPricing? {
+        let pricing = AgentModelPricing(
+            contextWindow: positiveInt(contextWindowText),
+            inputPerMillion: positiveDouble(inputPriceText),
+            outputPerMillion: positiveDouble(outputPriceText),
+            cachedInputPerMillion: positiveDouble(cachedPriceText),
+            currency: priceCurrency
+        )
+        return pricing.isEmpty ? nil : pricing
+    }
+
+    /// 回填用：价目数字显示成最短形式（`0.5` 不显示成 `0.5000`）。
+    static func priceText(_ value: Double?) -> String {
+        guard let value else { return "" }
+        if value == value.rounded() { return String(Int(value)) }
+        return String(value)
     }
 
     /// 空串 = 不限；非数字 / 非正数一律当作不限（配额是「保护性上限」，填错字符不该误伤）。
     private func positiveInt(_ text: String) -> Int? {
         guard let value = Int(text.trimmingCharacters(in: .whitespaces)) else { return nil }
+        return value > 0 ? value : nil
+    }
+
+    /// 价目：只认正数（`0` 与负数当没填 —— 价格不可能是 0，填 0 是把花费读数压成假的）。
+    private func positiveDouble(_ text: String) -> Double? {
+        guard let value = Double(text.trimmingCharacters(in: .whitespaces)) else { return nil }
         return value > 0 ? value : nil
     }
 

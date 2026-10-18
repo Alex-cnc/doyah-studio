@@ -2826,11 +2826,17 @@ final class AppState: ObservableObject {
             merged.endpoint = edited.endpoint
             merged.model = edited.model
             merged.timeoutSeconds = edited.timeoutSeconds
+            // **真值源跟着档走**（`FR-AI-25` 信息面）：窗口 / 价目是这一档的属性，
+            // 面板交上来的草稿里带着它；不并这一格 = 用户填了价目、保存后**静默消失**。
+            merged.pricing = edited.pricing
             configuration = agentConfiguration
             configuration.updateProfile(merged)
             configuration.isEnabled = incoming.isEnabled
             configuration.quota = incoming.quota
             configuration.guardPolicy = incoming.guardPolicy
+            // **授权粒度**（`FR-AI-34`）：面板上有这个选择器，从前这里没并 ⇒
+            // 选「每个动作都问」保存后等于没选（开关点了不生效，且没有任何提示）。
+            configuration.scopeMode = incoming.scopeMode
         }
 
         do {
@@ -2877,6 +2883,14 @@ final class AppState: ObservableObject {
         let model = agentConfiguration.model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !endpoint.isEmpty, URL(string: endpoint) != nil, !model.isEmpty else { return .notConfigured }
         return .ready(model: model, endpoint: endpoint)
+    }
+
+    /// 信息面三格的**真值源**（`FR-AI-25`）：当前档的模型名 + 窗口 / 价目。
+    ///
+    /// 只读当前档 —— 切档（`FR-AI-32`）后三格跟着换，不需要第二份真相。
+    var agentMeterInput: AgentMeterInput {
+        let profile = agentConfiguration.activeProfile
+        return AgentMeterInput(model: profile?.model ?? "", pricing: profile?.pricing)
     }
 
     /// 工作区**现场读数**的供给口（`FR-AI-22` ②）：当前文件 / 选中范围 / 终端尾部。

@@ -101,9 +101,9 @@ public struct LLMStreamDecoder: Sendable {
 
         if let modelName = object["model"] as? String { model = modelName }
         if let usageObject = object["usage"] as? [String: Any] {
-            usage = LLMUsage(promptTokens: usageObject["prompt_tokens"] as? Int,
-                             completionTokens: usageObject["completion_tokens"] as? Int,
-                             totalTokens: usageObject["total_tokens"] as? Int)
+            // **同一个解析处**（`LLMUsage.parsed`）：流式与非流式不许各写一套用量解析
+            // （否则缓存读数只会出现在其中一条路上，而症状是「有时有、有时没有」）。
+            usage = LLMUsage.parsed(from: usageObject)
         }
 
         guard let choices = object["choices"] as? [[String: Any]], let first = choices.first else {

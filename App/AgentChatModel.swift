@@ -37,6 +37,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     var scopeProvider: () -> AgentTaskScope.Mode = { .taskScope }
     /// 宿主注入：端点状态（界面出现 / 设置改过之后取一次）。
     var endpointProvider: () -> AgentChatEndpointState = { .notConfigured }
+    /// 宿主注入：**当前档的真值源**（模型名 + 窗口 / 价目，`FR-AI-25` 信息面）。
+    /// 缺省给空的 ⇒ 三格里只出现「端点自己报得出」的那一格，其余不画（宁缺不假）。
+    var meterInputProvider: () -> AgentMeterInput = { AgentMeterInput() }
 
     /// 本会话累计（**每次跑完把这一轮的用量并进来**）。两侧共用 `TokenUsageLedger`，口径同一个。
     @Published private(set) var sessionUsage = TokenUsageLedger()
@@ -48,9 +51,20 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// **上下文占用读数** = **上一次请求的输入 token**（端点自己报的那个数）。
     ///
     /// 为什么用「上次请求输入」而不是"会话累计"：会话累计是**花掉的总量**，上下文占用是**当前这一窗有多满** ——
-    /// 两件事。Hermes 那格 `~227K/1M` 说的是后者。**百分比不给**：那要模型窗口大小，仓里没有这张表
-    /// （如实登记，要加就在设置里补一格「上下文窗口」）。
+    /// 两件事。Hermes 那格 `~227K/1M` 说的是后者。**分母**（模型窗口）由当前档的真值源给
+    /// （用户填的优先，其次内置表，认不出就显示「窗口未知」）。
     @Published private(set) var lastPromptTokens: Int?
+
+    /// **信息面三格**（`FR-AI-25`）：上下文占用 / 缓存命中率 / 本会话估算花费。
+    ///
+    /// 换算是**纯函数**（`AgentModelMeter`，判据在 `Tests/AgentModelMeterTests.swift`），
+    /// 这里只把三样输入递进去：当前档真值源 + 会话账 + 上次输入 token。
+    /// 任何一格缺真值源就不画（不当 0、不猜）。
+    var modelReadings: AgentModelReadings {
+        AgentModelMeter.readings(input: meterInputProvider(),
+                                 ledger: sessionUsage,
+                                 lastPromptTokens: lastPromptTokens)
+    }
 
     /// 当前动作（输入框上方那一行）。
     var currentAction: String? { state.currentAction }
@@ -384,7 +398,10 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         stopWatchdog()
         state.finishRun()
         // 用量并进会话账（缺值不当 0 累加 —— 与 CLI 侧同一口径）。
-        sessionUsage.add(prompt: result.usage.promptTokens, completion: result.usage.completionTokens)
+        // **缓存读数一并记**（`FR-AI-25` 第二格）：端点没报 ⇒ `nil`，账上不算一次「命中率读数」。
+        sessionUsage.add(prompt: result.usage.promptTokens,
+                         completion: result.usage.completionTokens,
+                         cached: result.usage.cachedPromptTokens)
         if let prompt = result.usage.promptTokens { lastPromptTokens = prompt }
         // **配额回写**（`NFR-AI-04`）：这一轮跳级累加过的账本交回宿主，跨轮才累计得起来
         //（不回写 ⇒ 每个上限在真实路径上都永远不会触发，正是 v3.88 修掉的那条第 1 项缺口）。

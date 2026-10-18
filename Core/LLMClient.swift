@@ -52,14 +52,59 @@ public struct LLMUsage: Equatable, Sendable {
     public var promptTokens: Int?
     public var completionTokens: Int?
     public var totalTokens: Int?
+    /// **缓存命中的输入 token**（`FR-AI-25` 信息面第二格的真值源）。
+    ///
+    /// 三家的字段名各不相同（OpenAI `prompt_tokens_details.cached_tokens` /
+    /// DeepSeek `prompt_cache_hit_tokens` / Anthropic 兼容 `cache_read_input_tokens`），
+    /// 解析只在这一处（`parsed(from:)`）—— 流式与非流式两条路共用，免得两处各写一套必然漂移。
+    /// `nil` = 端点**没报**这件事（不是 0：没报 ≠ 零命中）。
+    public var cachedPromptTokens: Int?
 
-    public init(promptTokens: Int? = nil, completionTokens: Int? = nil, totalTokens: Int? = nil) {
+    public init(promptTokens: Int? = nil, completionTokens: Int? = nil, totalTokens: Int? = nil,
+                cachedPromptTokens: Int? = nil) {
         self.promptTokens = promptTokens
         self.completionTokens = completionTokens
         self.totalTokens = totalTokens
+        self.cachedPromptTokens = cachedPromptTokens
     }
 
     public static let unknown = LLMUsage()
+
+    /// 用量对象的**唯一解析处**（流式与非流式共用）。
+    ///
+    /// 缓存读数的口径（按优先级取第一个能认的字段）：
+    /// ① `prompt_tokens_details.cached_tokens`（OpenAI 及大多数 OpenAI 兼容网关）；
+    /// ② `prompt_cache_hit_tokens`（DeepSeek 原生形状）；
+    /// ③ `cache_read_input_tokens`（Anthropic 形状，含放在 `prompt_tokens_details` 里的那种）。
+    /// **坏数据不认**：负数、或大于输入 token 的缓存读数一律当「没报」——
+    /// 显示一个 120% 的命中率比不显示更坏。
+    public static func parsed(from payload: [String: Any]) -> LLMUsage {
+        let prompt = intValue(payload["prompt_tokens"])
+        let completion = intValue(payload["completion_tokens"])
+        let total = intValue(payload["total_tokens"])
+        let details = payload["prompt_tokens_details"] as? [String: Any]
+        let candidates: [Int?] = [
+            intValue(details?["cached_tokens"]),
+            intValue(payload["prompt_cache_hit_tokens"]),
+            intValue(payload["cache_read_input_tokens"]),
+            intValue(details?["cache_read_input_tokens"])
+        ]
+        var cached = candidates.compactMap { $0 }.first
+        if let value = cached, value < 0 { cached = nil }
+        if let value = cached, let prompt, value > prompt { cached = nil }
+        return LLMUsage(promptTokens: prompt, completionTokens: completion,
+                        totalTokens: total, cachedPromptTokens: cached)
+    }
+
+    /// JSON 数字可能是 `Int` / `Double` / `NSNumber`，统一收一次（`as? Int` 对 `350.0` 会失手）。
+    private static func intValue(_ any: Any?) -> Int? {
+        switch any {
+        case let value as Int: return value
+        case let value as Double: return value.rounded() == value ? Int(value) : nil
+        case let value as NSNumber: return value.intValue
+        default: return nil
+        }
+    }
 
     /// 记账用 token 数：优先总量，否则把提示与输出相加。
     public var billableTokens: Int {
@@ -241,11 +286,7 @@ public struct OpenAICompatibleClient: LLMClient {
 
         var usage = LLMUsage.unknown
         if let usageObject = object["usage"] as? [String: Any] {
-            usage = LLMUsage(
-                promptTokens: usageObject["prompt_tokens"] as? Int,
-                completionTokens: usageObject["completion_tokens"] as? Int,
-                totalTokens: usageObject["total_tokens"] as? Int
-            )
+            usage = LLMUsage.parsed(from: usageObject)
         }
 
         return LLMResponse(

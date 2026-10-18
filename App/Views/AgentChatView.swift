@@ -362,8 +362,30 @@ struct AgentChatView: View {
                         .foregroundStyle(completion.isVerified ? Color.green : Color.orange)
                         .help(completion.isVerified ? "" : completion.reason)
                 }
-                if let context = model.lastPromptTokens {
-                    Text(L(.agentStatusContext, "\(context)"))
+                // **信息面三格**（`FR-AI-25`）：上下文占用 / 缓存命中率 / 本会话估算花费。
+                // 三格都**只在真值源在时出现** —— 窗口认不出就明说「窗口未知」，
+                // 端点没报缓存就不画那一格（不当 0%），没填价目就不给钱数（不自造 ¥0）。
+                let readings = model.modelReadings
+                if let used = readings.contextUsed {
+                    if let window = readings.contextWindow, let percent = readings.contextPercent {
+                        Text(L(.agentStatusContextOfWindow,
+                               AgentTokenShort.text(used),
+                               AgentTokenShort.text(window),
+                               AgentModelReadings.percentText(percent)))
+                            .foregroundStyle(percent >= 90 ? Color.orange : Color.secondary)
+                    } else {
+                        Text(L(.agentStatusContextWindowUnknown, AgentTokenShort.text(used)))
+                    }
+                }
+                if let cache = readings.cacheHitPercent {
+                    Text(L(.agentStatusCache, AgentModelReadings.percentText(cache)))
+                        .help(L(.agentStatusCacheHelp))
+                }
+                if let cost = readings.estimatedCost {
+                    Text(readings.costIsUpperBound
+                         ? L(.agentStatusCostUpperBound, cost.text)
+                         : L(.agentStatusCost, cost.text))
+                        .help(readings.costIsUpperBound ? L(.agentStatusCostUpperBoundHelp) : L(.agentStatusCostHelp))
                 }
                 // **长跑监控读数**（`FR-AI-31` ③）：卡住 / 空转 / 反复重试 / 配额将尽 —— 跑飞不许静默。
                 // 只在真报过时出现（`nil` 不留空壳）；卡住那一档用更重的颜色（那要人动手）。

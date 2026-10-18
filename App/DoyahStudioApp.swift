@@ -106,6 +106,9 @@ struct DoyahStudioApp: App {
                 .onAppear {
                     // 对话页签的接线（`FR-AI-25`）：端点状态取自智能体设置；循环与「兑现批准」都由 `AppState` 出。
                     agentChat.endpointProvider = { appState.agentChatEndpointState }
+                    // 信息面三格的真值源（`FR-AI-25`）：当前档的模型名 + 窗口 / 价目。
+                    // 只读当前档 —— 换档后三格跟着换。
+                    agentChat.meterInputProvider = { appState.agentMeterInput }
                     // 授权粒度（`FR-AI-34`）：默认任务范围内代签（少问）；设置里可改回逐次批。
                     agentChat.scopeProvider = { appState.agentConfiguration.scopeMode }
                     agentChat.makeLoop = { prompt, plan, observer in

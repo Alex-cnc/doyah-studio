@@ -19,11 +19,16 @@ public struct AgentProfile: Codable, Equatable, Sendable, Identifiable {
     public var timeoutSeconds: TimeInterval
     /// 钥匙串条目键（**只存键名**）。
     public var secretKey: String
+    /// **这一档的真值源**（`FR-AI-25` 信息面：上下文窗口 / 价目）。
+    /// 缺省 `nil` = 没填过（窗口退回内置表、价钱那一格不出现）。
+    /// 老配置没有这个键 ⇒ 解码成 `nil`，不触发迁移、不动既有字段。
+    public var pricing: AgentModelPricing?
 
     public init(id: String = UUID().uuidString, name: String, presetID: String? = nil,
                 endpoint: String = "", model: String = "",
                 timeoutSeconds: TimeInterval = AgentConfiguration.defaultTimeoutSeconds,
-                secretKey: String? = nil) {
+                secretKey: String? = nil,
+                pricing: AgentModelPricing? = nil) {
         self.id = id
         self.name = name
         self.presetID = presetID
@@ -31,6 +36,7 @@ public struct AgentProfile: Codable, Equatable, Sendable, Identifiable {
         self.model = model
         self.timeoutSeconds = timeoutSeconds
         self.secretKey = secretKey ?? AgentProfile.defaultSecretKey(for: id)
+        self.pricing = pricing
     }
 
     /// 新建档的钥匙串条目键（**一档一把，互不覆盖**）。
@@ -165,6 +171,9 @@ public struct AgentConfiguration: Codable, Equatable, Sendable {
         try container.encode(profiles, forKey: .profiles)
         try container.encodeIfPresent(activeProfileID, forKey: .activeProfileID)
         try container.encode(quota, forKey: .quota)
+        // 授权粒度（`FR-AI-34`）：**从前这里没写** —— 解码那边读它、编码这边不写，
+        // 于是「每个动作都问」存一次就丢（重启回到代签），开关点了不生效。
+        try container.encode(scopeMode, forKey: .scopeMode)
         try container.encode(guardPolicy, forKey: .guardPolicy)
     }
 

@@ -1724,6 +1724,32 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatRunning2
     case agentStatusModel
     case agentStatusContext
+    /// `FR-AI-25` 信息面第一格：上下文占用 / 窗口 · 百分比（%@ = 已用 / %@ = 窗口 / %@ = 百分比）。
+    case agentStatusContextOfWindow
+    /// `FR-AI-25` 信息面第一格：窗口认不出（%@ = 已用）。
+    case agentStatusContextWindowUnknown
+    /// `FR-AI-25` 信息面第二格：缓存命中率（%@ = 百分比）。
+    case agentStatusCache
+    /// 缓存命中率那格的说明（端点报的缓存读数 / 分母只算报了的那几轮）。
+    case agentStatusCacheHelp
+    /// `FR-AI-25` 信息面第三格：本会话估算花费（%@ = 金额文本）。
+    case agentStatusCost
+    case agentStatusCostHelp
+    /// 有轮次没报缓存读数 ⇒ 估出来的是上限。
+    case agentStatusCostUpperBound
+    case agentStatusCostUpperBoundHelp
+    /// 设置面板：信息面三格的真值源。
+    case agentMeterSection
+    case agentMeterWindow
+    case agentMeterWindowPlaceholder
+    case agentMeterInputPrice
+    case agentMeterOutputPrice
+    case agentMeterCachedPrice
+    case agentMeterPricePlaceholder
+    case agentMeterCurrency
+    case agentMeterCurrencyCNY
+    case agentMeterCurrencyUSD
+    case agentMeterFootnote
     /// 压缩读数（`NFR-AI-08` ③）：已压缩 N 段 · 估算省下 M token。
     case agentStatusCompressed
     /// 续跑读数（`NFR-AI-08` ⑤）：续上第 N 跳 · 退回 M 跳。
@@ -3377,6 +3403,25 @@ public enum LocalizedStrings {
         .agentStatusModel: [.simplifiedChinese: "模型 %@", .english: "Model %@"],
         .agentChatRunning2: [.simplifiedChinese: "跑着呢", .english: "running"],
         .agentStatusContext: [.simplifiedChinese: "上下文 %@ token（上次请求输入）", .english: "ctx %@ tokens (last request in)"],
+        .agentStatusContextOfWindow: [.simplifiedChinese: "上下文 %@ / %@ · %@（上次请求输入 / 模型窗口）", .english: "ctx %@ / %@ · %@ (last request in / model window)"],
+        .agentStatusContextWindowUnknown: [.simplifiedChinese: "上下文 %@（窗口未知：设置里填一个，或用认得出的模型名）", .english: "ctx %@ (window unknown: set it in settings, or use a recognizable model name)"],
+        .agentStatusCache: [.simplifiedChinese: "缓存命中 %@", .english: "cache %@"],
+        .agentStatusCacheHelp: [.simplifiedChinese: "端点报的缓存命中 token ÷ 报了缓存读数那几轮的输入 token（没报的轮次不算进分母，免得把「不知道」当成零命中）", .english: "cached tokens reported by the endpoint ÷ input tokens of the turns that reported a cache reading (turns that did not report are left out of the denominator, so unknown is not counted as a zero hit)"],
+        .agentStatusCost: [.simplifiedChinese: "本会话花费 %@", .english: "session cost %@"],
+        .agentStatusCostHelp: [.simplifiedChinese: "按「智能体设置」里这一档填的每百万 token 价目估算；没填价目就不显示这一格", .english: "Estimated from the per-million-token prices filled in this profile under Agent settings; the cell is hidden when no prices are set"],
+        .agentStatusCostUpperBound: [.simplifiedChinese: "本会话花费 %@（上限）", .english: "session cost %@ (upper bound)"],
+        .agentStatusCostUpperBoundHelp: [.simplifiedChinese: "有轮次没报缓存读数 ⇒ 那些输入 token 按全价算，所以这是上限", .english: "Some turns reported no cache reading, so those input tokens are billed at full price — this is an upper bound"],
+        .agentMeterSection: [.simplifiedChinese: "状态块读数（上下文窗口 / 价目）", .english: "Status readings (context window / prices)"],
+        .agentMeterWindow: [.simplifiedChinese: "上下文窗口（token）", .english: "Context window (tokens)"],
+        .agentMeterWindowPlaceholder: [.simplifiedChinese: "留空 = 按内置表认（认不出显示「窗口未知」）", .english: "Empty = use the built-in table (shows “window unknown” when it cannot tell)"],
+        .agentMeterInputPrice: [.simplifiedChinese: "输入价", .english: "Input price"],
+        .agentMeterOutputPrice: [.simplifiedChinese: "输出价", .english: "Output price"],
+        .agentMeterCachedPrice: [.simplifiedChinese: "缓存命中价", .english: "Cached price"],
+        .agentMeterPricePlaceholder: [.simplifiedChinese: "每百万 token", .english: "per 1M tokens"],
+        .agentMeterCurrency: [.simplifiedChinese: "币种", .english: "Currency"],
+        .agentMeterCurrencyCNY: [.simplifiedChinese: "人民币（¥）", .english: "CNY (¥)"],
+        .agentMeterCurrencyUSD: [.simplifiedChinese: "美元（$）", .english: "USD ($)"],
+        .agentMeterFootnote: [.simplifiedChinese: "价目是你自己填的（程序不内置价格，也不做汇率换算）；输入价与输出价都填了才显示花费。", .english: "Prices are yours to fill in (the app ships no price list and converts no currency); the cost cell appears only when both input and output prices are set."],
         .agentStatusCompressed: [.simplifiedChinese: "已压缩 %@ 段 · 省 ≈%@ token", .english: "compressed %@ · saved ≈%@ tokens"],
         .agentStatusResumed: [.simplifiedChinese: "已续上（第 %@ 跳）· 退回 %@ 跳", .english: "resumed at hop %@ · %@ hops rolled back"],
         .agentStatusResumeBadLines: [.simplifiedChinese: "读检查点时跳过了 %@ 个坏行（截断 / 读不出）", .english: "skipped %@ unreadable checkpoint lines"],

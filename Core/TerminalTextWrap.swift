@@ -111,19 +111,42 @@ public struct TokenUsageLedger: Equatable, Sendable {
     public private(set) var completionTokens = 0
     /// 有几次**端点没回用量**（缺值不猜、不当 0 累加 —— 如实留痕）。
     public private(set) var responsesWithoutUsage = 0
+    /// **缓存命中的输入 token 合计**（`FR-AI-25` 信息面第二格）。
+    public private(set) var cachedPromptTokens = 0
+    /// 有几次**端点在用量里报了缓存读数**。
+    ///
+    /// 命中率的分母是 `promptTokensWithCacheReading` 而不是 `promptTokens` ——
+    /// 没报缓存的那几轮放进去，等于把「不知道」当「零命中」，命中率被压低成假的数。
+    public private(set) var responsesWithCacheReading = 0
+    /// 报了缓存读数的那些轮次里，输入 token 合计（命中率的分母）。
+    public private(set) var promptTokensWithCacheReading = 0
 
     public init() {}
 
     public var totalTokens: Int { promptTokens + completionTokens }
 
+    /// 缓存命中率（0…100）。**一次都没报过 ⇒ `nil`**（界面那一格不出现，不当 0%）。
+    public var cacheHitPercent: Double? {
+        guard responsesWithCacheReading > 0, promptTokensWithCacheReading > 0 else { return nil }
+        return Double(cachedPromptTokens) * 100 / Double(promptTokensWithCacheReading)
+    }
+
     /// 记一次用量。缺哪些就不累加哪些（**不把缺值当 0**），返回这次是否有缺值。
+    ///
+    /// `cached` 是这次请求的缓存命中输入 token：`nil` = 端点没报；
+    /// **坏值（负数 / 大于输入）当没报**（不认 —— 120% 的命中率比不显示更坏）。
     @discardableResult
-    public mutating func add(prompt: Int?, completion: Int?) -> Bool {
+    public mutating func add(prompt: Int?, completion: Int?, cached: Int? = nil) -> Bool {
         let missing = prompt == nil || completion == nil
         if missing { responsesWithoutUsage += 1 }
         requests += 1
         promptTokens += prompt ?? 0
         completionTokens += completion ?? 0
+        if let cached, cached >= 0, let prompt, cached <= prompt {
+            cachedPromptTokens += cached
+            promptTokensWithCacheReading += prompt
+            responsesWithCacheReading += 1
+        }
         return missing
     }
 }
