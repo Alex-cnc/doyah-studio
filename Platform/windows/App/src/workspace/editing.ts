@@ -218,3 +218,123 @@ export function detectIndentStyle(
 export function indentUnitOf(style: IndentStyle): string {
   return style.kind === 'tab' ? '\t' : ' '.repeat(style.width)
 }
+
+// ── FR-EDIT-49 括号 / 引号自动配对（打出左半补右半、光标留中间；闭合符重复则跳过；有选区则包裹）──
+/** 默认配对表（语言无关的那几种；语言特有的由调用方覆盖） */
+export const DEFAULT_PAIRS: Record<string, string> = {
+  '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`',
+}
+
+export type PairOutcome =
+  | { kind: 'pair' | 'wrap' | 'skip'; text: string; selection: Selection }
+  | null
+
+/**
+ * 决定「这一次按键要不要接管」：
+ *   · 选区非空 + 打出配对符 ⇒ **包裹**选区（左 + 原选区 + 右），选区落在原文上；
+ *   · 打出的闭合符正好等于光标处的字符 ⇒ **跳过**（不重复输入，光标 +1）；
+ *   · 打出左半符 / 引号 ⇒ 补右半，光标夹在中间；
+ *   · 其余 ⇒ `null`（调用方按普通输入处理）。
+ */
+export function autoPair(
+  text: string,
+  selection: Selection,
+  typed: string,
+  pairs: Record<string, string> = DEFAULT_PAIRS,
+): PairOutcome {
+  const { start, end } = clampSelection(text, selection)
+  const open = pairs[typed]
+  const closers = new Set(Object.values(pairs))
+
+  if (start !== end && open) {
+    const inner = text.slice(start, end)
+    const next = text.slice(0, start) + typed + inner + open + text.slice(end)
+    return { kind: 'wrap', text: next, selection: { start: start + 1, end: end + 1 } }
+  }
+  if (closers.has(typed) && text[start] === typed) {
+    return { kind: 'skip', text, selection: { start: start + 1, end: start + 1 } }
+  }
+  if (open && start === end) {
+    const next = text.slice(0, start) + typed + open + text.slice(start)
+    return { kind: 'pair', text: next, selection: { start: start + 1, end: start + 1 } }
+  }
+  return null
+}
+
+// ── FR-EDIT-50 括号匹配高亮（光标紧邻括号 ⇒ 成对点亮；不配平 ⇒ 只点亮自己 + 告警位）──
+export interface BracketMatch {
+  /** 光标侧那个括号的位置 */
+  at: number
+  /** 配对的那个括号位置；`null` = 不配平 */
+  partner: number | null
+}
+
+const OPENERS = '([{'
+const CLOSERS = ')]}'
+const PARTNER: Record<string, string> = { '(': ')', '[': ']', '{': '}', ')': '(', ']': '[', '}': '{' }
+
+/**
+ * 找光标紧邻括号的配对位置（**只看括号，不跳字符串 / 注释** —— 词法级匹配属 `FR-EDIT-03` 的检查面，
+ * 这里先做视觉高亮所需的那一层，局限写在此处如实登记）。
+ *
+ * 光标优先看**光标前**那个字符（刚打完左括号的常态），再看光标处那个字符。
+ */
+export function matchBracket(text: string, caret: number): BracketMatch | null {
+  const at = clamp(caret, 0, text.length)
+  const candidates = [at - 1, at]
+  for (const index of candidates) {
+    if (index < 0 || index >= text.length) continue
+    const ch = text[index]
+    if (!(ch in PARTNER)) continue
+    const partner = findPartner(text, index, ch)
+    return { at: index, partner }
+  }
+  return null
+}
+
+function findPartner(text: string, index: number, ch: string): number | null {
+  const mate = PARTNER[ch]
+  const forward = OPENERS.includes(ch)
+  const step = forward ? 1 : -1
+  let depth = 0
+  for (let cursor = index; cursor >= 0 && cursor < text.length; cursor += step) {
+    const current = text[cursor]
+    if (current === ch) depth += 1
+    else if (current === mate) {
+      depth -= 1
+      if (depth === 0) return cursor
+    }
+  }
+  return null
+}
+
+// ── FR-EDIT-60 撤销粒度（连续输入合并成一步；行级编辑各算一步）──
+export type EditKind = 'insert' | 'delete' | 'line'
+
+export interface EditStep {
+  kind: EditKind
+  /** 编辑发生处 */
+  at: number
+  /** 编辑结束处（插入/删除后的位置） */
+  atEnd: number
+  /** 发生时刻（毫秒，调用方给的单调时钟） */
+  atMs: number
+}
+
+/** 两次连续输入合并成一次撤销的最大间隔（毫秒）—— 超过就当两段 */
+export const COALESCE_WINDOW_MS = 800
+
+/**
+ * 相邻两步是否合并成一步撤销：
+ *   · 行级编辑（移行 / 注释切换 / 补全）**永远独立**；
+ *   · 同为插入或同为删除、位置首尾相接、间隔 ≤ 800 ms ⇒ 合并；
+ *   · 插入与删除交替、或中间断档 ⇒ 独立。
+ */
+export function shouldCoalesce(previous: EditStep, next: EditStep): boolean {
+  if (previous.kind === 'line' || next.kind === 'line') return false
+  if (previous.kind !== next.kind) return false
+  if (next.atMs - previous.atMs > COALESCE_WINDOW_MS) return false
+  const contiguous = next.at === previous.atEnd || next.atEnd === previous.at
+  return contiguous
+}
+

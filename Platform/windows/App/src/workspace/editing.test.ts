@@ -6,10 +6,13 @@ import { describe, expect, it } from 'vitest'
 import {
   affectedLineRange,
   autoIndentForNewline,
+  autoPair,
   clampSelection,
   detectIndentStyle,
   indentUnitOf,
+  matchBracket,
   moveOrDuplicateLines,
+  shouldCoalesce,
   toggleLineComment,
 } from './editing'
 
@@ -156,3 +159,85 @@ describe('FR-EDIT-54 缩进检测（按内容判，不靠扩展名）', () => {
     expect(indentUnitOf({ kind: 'tab', width: 1 })).toBe('\t')
   })
 })
+
+describe('FR-EDIT-49 括号 / 引号自动配对', () => {
+  it('打出左括号 ⇒ 补右半且光标留在中间', () => {
+    const out = autoPair('', { start: 0, end: 0 }, '(')
+    expect(out).toEqual({ kind: 'pair', text: '()', selection: { start: 1, end: 1 } })
+  })
+
+  it('打出引号同样成对（引号自己就是闭合符）', () => {
+    const out = autoPair('ab', { start: 2, end: 2 }, '"')
+    expect(out?.text).toBe('ab""')
+    expect(out?.selection).toEqual({ start: 3, end: 3 })
+  })
+
+  it('光标处已是闭合符时再打闭合符 = 跳过（不重复输入）', () => {
+    const out = autoPair('()', { start: 1, end: 1 }, ')')
+    expect(out).toEqual({ kind: 'skip', text: '()', selection: { start: 2, end: 2 } })
+  })
+
+  it('有选区时打出配对符 ⇒ 包裹选区，选区落在原文上', () => {
+    const out = autoPair('abc', { start: 1, end: 3 }, '[')
+    expect(out?.text).toBe('a[bc]')
+    expect(out?.selection).toEqual({ start: 2, end: 4 })
+  })
+
+  it('普通字符不接管（交回调用方按普通输入处理）', () => {
+    expect(autoPair('a', { start: 1, end: 1 }, 'b')).toBeNull()
+  })
+
+  it('配对表可由调用方覆盖（语言特有符号）', () => {
+    const out = autoPair('', { start: 0, end: 0 }, '<', { '<': '>' })
+    expect(out?.text).toBe('<>')
+  })
+})
+
+describe('FR-EDIT-50 括号匹配', () => {
+  it('光标在左括号之后 ⇒ 配对到右括号', () => {
+    expect(matchBracket('f(a)', 2)).toEqual({ at: 1, partner: 3 })
+  })
+
+  it('光标在右括号之后 ⇒ 反向配对到左括号', () => {
+    expect(matchBracket('f(a)', 4)).toEqual({ at: 3, partner: 1 })
+  })
+
+  it('嵌套括号配对到**同层**的那个', () => {
+    expect(matchBracket('((a))', 1)).toEqual({ at: 0, partner: 4 })
+  })
+
+  it('不配平时 partner 为 null（界面可据此告警）', () => {
+    expect(matchBracket('(a', 1)).toEqual({ at: 0, partner: null })
+  })
+
+  it('光标旁边没有括号 ⇒ null', () => {
+    expect(matchBracket('abc', 2)).toBeNull()
+  })
+})
+
+describe('FR-EDIT-60 撤销粒度', () => {
+  const step = (kind: 'insert' | 'delete' | 'line', at: number, atEnd: number, atMs: number) =>
+    ({ kind, at, atEnd, atMs })
+
+  it('连续打字合并成一步撤销', () => {
+    expect(shouldCoalesce(step('insert', 3, 4, 1000), step('insert', 4, 5, 1100))).toBe(true)
+  })
+
+  it('间隔超过 800 ms ⇒ 分成两步', () => {
+    expect(shouldCoalesce(step('insert', 3, 4, 1000), step('insert', 4, 5, 2500))).toBe(false)
+  })
+
+  it('插入与删除交替 ⇒ 各自独立', () => {
+    expect(shouldCoalesce(step('insert', 3, 4, 1000), step('delete', 4, 3, 1050))).toBe(false)
+  })
+
+  it('行级编辑（移行 / 注释切换 / 补全）永远独立成一步', () => {
+    expect(shouldCoalesce(step('line', 0, 10, 1000), step('line', 0, 10, 1010))).toBe(false)
+    expect(shouldCoalesce(step('insert', 3, 4, 1000), step('line', 4, 4, 1010))).toBe(false)
+  })
+
+  it('位置不相接（中间有跳转）⇒ 不合并', () => {
+    expect(shouldCoalesce(step('insert', 3, 4, 1000), step('insert', 40, 41, 1100))).toBe(false)
+  })
+})
+
