@@ -141,6 +141,14 @@ export const DICT = {
   },
   'plugin.retro.filterClear': { 'zh-Hans': '清除筛选', en: 'Clear the filter' },
   'plugin.retro.match': { 'zh-Hans': '{m} / {n} 期匹配', en: '{m} of {n} period(s) match' },
+  // 左栏排序档位（`FR-R-12-01` 判据②「期号可排序」）
+  'plugin.retro.sortAria': { 'zh-Hans': '左栏排序', en: 'Sort the period list' },
+  'plugin.retro.sort.default': {
+    'zh-Hans': '按发布日 · 新在前',
+    en: 'By publish date · newest first',
+  },
+  'plugin.retro.sort.period-desc': { 'zh-Hans': '按期号 · Z→A', en: 'By period · Z→A' },
+  'plugin.retro.sort.period-asc': { 'zh-Hans': '按期号 · A→Z', en: 'By period · A→Z' },
   'plugin.retro.noMatch': {
     'zh-Hans': '没有匹配「{q}」的期',
     en: 'No period matches “{q}”',

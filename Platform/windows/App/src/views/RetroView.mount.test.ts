@@ -632,6 +632,82 @@ describe('RetroView 周报阅读面', () => {
     expect(wrapper.find('[data-role="retro-empty"]').exists()).toBe(false)
   })
 
+  // ── 左栏排序（`FR-R-12-01` 判据②「期号可排序」）────────────────────────────────
+
+  it('the_sort_dropdown_reorders_the_list_and_the_default_tier_hands_back_the_upstream_order', async () => {
+    state.snapshot.cards = [
+      card('2026-W42', '第 42 周'),
+      card('2026-W41', '第 41 周'),
+      card('2026-W01', '第 1 周'),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    const order = () => wrapper.findAll('.retro__card').map((node) => node.attributes('data-period'))
+    // 默认档 = 上游（Rust）给的顺序，前端不重排
+    expect(order()).toEqual(['2026-W42', '2026-W41', '2026-W01'])
+
+    await wrapper.get('[data-role="retro-sort"]').setValue('period-asc')
+    await flushPromises()
+    expect(order()).toEqual(['2026-W01', '2026-W41', '2026-W42'])
+
+    await wrapper.get('[data-role="retro-sort"]').setValue('period-desc')
+    await flushPromises()
+    expect(order()).toEqual(['2026-W42', '2026-W41', '2026-W01'])
+
+    // 切回默认：回到上游那一份顺序（不是「恰好一样」而是真的没再排）
+    await wrapper.get('[data-role="retro-sort"]').setValue('default')
+    await flushPromises()
+    expect(order()).toEqual(['2026-W42', '2026-W41', '2026-W01'])
+    expect((wrapper.get('[data-role="retro-sort"]').element as HTMLSelectElement).value).toBe('default')
+  })
+
+  it('a_sort_choice_survives_filtering_and_the_match_count_follows_the_sorted_list', async () => {
+    state.snapshot.cards = [
+      card('2026-W42', '芯片与半导体 · 第 42 周'),
+      card('2026-W41', '新能源车 · 第 41 周'),
+      card('2026-W01', '芯片与半导体 · 第 1 周'),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    await wrapper.get('[data-role="retro-sort"]').setValue('period-asc')
+    await flushPromises()
+    await wrapper.get('[data-role="retro-filter"]').setValue('半导体')
+    await flushPromises()
+
+    // 筛出的两条仍按用户选的期号升序，计数是「筛后 / 全量」
+    expect(wrapper.findAll('.retro__card').map((node) => node.attributes('data-period'))).toEqual([
+      '2026-W01',
+      '2026-W42',
+    ])
+    expect(wrapper.get('[data-role="retro-count"]').text()).toContain('2 / 3 期匹配')
+    expect((wrapper.get('[data-role="retro-sort"]').element as HTMLSelectElement).value).toBe('period-asc')
+  })
+
+  it('switching_the_sort_neither_rescans_the_folder_nor_drops_the_open_period', async () => {
+    state.snapshot.cards = [card('2026-W42', '本期'), card('2026-W01', '年初那期')]
+    state.reports['2026-W42'] = heading('正在读的正文')
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    await wrapper.get('.retro__card').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-role="retro-document"]').text()).toContain('正在读的正文')
+
+    // 切档只改次序：正文还在，也没多读一次盘（把盘上清单换掉，界面不许跟着变）
+    state.snapshot.cards = [card('2026-W99', '换掉的清单')]
+    await wrapper.get('[data-role="retro-sort"]').setValue('period-asc')
+    await flushPromises()
+
+    expect(wrapper.get('[data-role="retro-document"]').text()).toContain('正在读的正文')
+    expect(wrapper.findAll('.retro__card').map((node) => node.attributes('data-period'))).toEqual([
+      '2026-W01',
+      '2026-W42',
+    ])
+    expect(state.reportCalls).toEqual(['2026-W42'])
+  })
+
   // ── 卡片封面与生成时间（FR-R-13-08 判据① 的最后两个字段）──────────────────────────
 
   it('a_cover_is_fetched_through_the_asset_command_and_drawn_as_a_thumbnail', async () => {

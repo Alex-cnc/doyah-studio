@@ -13,6 +13,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import BlockDocument, { type MediaSlot } from './BlockDocument.vue'
 import { coverMime, formatGeneratedAt } from './cardMeta'
+import { CARD_SORTS, sortCards, type CardSort } from './cardSort'
 import { filterCards, groupCards } from './periodIndex'
 import {
   openExternal,
@@ -86,9 +87,25 @@ const query = ref('')
 /** 折叠状态：`y:<年>` / `m:<年>-<月>`（在 `Set` 里 = 收起来了）。 */
 const folded = ref<Set<string>>(new Set())
 
+// 排序档位（`FR-R-12-01` 判据②「期号可排序」）：默认 `default` = 沿用上游顺序，**不重排**；
+// 用户显式切到「按期号」时才排一次（口径全在 `cardSort.ts`，这里只保存用户的选择）。
+const sortMode = ref<CardSort>('default')
+
 const filtering = computed(() => query.value.trim().length > 0)
-const filtered = computed(() => filterCards(cards.value, query.value))
+const sorted = computed(() => sortCards(cards.value, sortMode.value))
+const filtered = computed(() => filterCards(sorted.value, query.value))
 const groups = computed(() => groupCards(filtered.value))
+
+function onSortChange(event: Event): void {
+  const raw = (event.target as HTMLSelectElement).value
+  // 只认白名单里的档位（模板被改坏 / 手改 DOM 时退回默认，不让界面进未知态）
+  sortMode.value = CARD_SORTS.includes(raw as CardSort) ? (raw as CardSort) : 'default'
+}
+
+/** 档位的人话标签（`plugin.retro.sort.*`）。 */
+function sortLabel(mode: CardSort): string {
+  return tr(`plugin.retro.sort.${mode}` as Parameters<typeof translate>[0])
+}
 
 function groupKey(kind: 'y' | 'm', year: string, month = ''): string {
   return kind === 'y' ? `y:${year}` : `m:${year}-${month}`
@@ -719,6 +736,17 @@ onMounted(() => {
 
       <!-- 关键词过滤（`FR-R-13-08` 判据①）：空白分隔多个词是「都要命中」 -->
       <div v-if="cards.length" class="retro__filter">
+        <!-- 排序档位（`FR-R-12-01` 判据②）：默认沿用上游顺序；切到「按期号」才按字典序排 -->
+        <select
+          class="retro__sort"
+          data-role="retro-sort"
+          :value="sortMode"
+          :title="tr('plugin.retro.sortAria')"
+          :aria-label="tr('plugin.retro.sortAria')"
+          @change="onSortChange"
+        >
+          <option v-for="mode in CARD_SORTS" :key="mode" :value="mode">{{ sortLabel(mode) }}</option>
+        </select>
         <input
           class="retro__filter-input"
           type="search"
@@ -1098,9 +1126,25 @@ onMounted(() => {
   position: relative;
   display: flex;
   align-items: center;
+  gap: var(--ds-spacing-xs);
+}
+/* 排序档位（`FR-R-12-01` ②）：与筛选框同高、同一套发丝边，窄了就自己截断不挤走筛选框 */
+.retro__sort {
+  flex: 0 0 auto;
+  max-width: 45%;
+  height: var(--ds-metric-control-height);
+  padding: 0 var(--ds-spacing-xs);
+  border: var(--ds-hairline) solid var(--ds-color-hairline-light);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-panel);
+  color: var(--ds-color-text-secondary);
+  font: inherit;
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
 }
 .retro__filter-input {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   height: var(--ds-metric-control-height);
   padding: 0 var(--ds-spacing-s);
   border: var(--ds-hairline) solid var(--ds-color-hairline-light);
