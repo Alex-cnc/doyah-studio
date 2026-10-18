@@ -44,6 +44,12 @@ pub struct AgentConfiguration {
     /// 选中的内置预设标签（`custom` = 自填）。**只作界面回显**，不参与裁决。
     #[serde(default = "default_preset")]
     pub preset: String,
+    /// 失败后重试几次（**不含**第一次尝试；`FR-AI-30` ①）。0 = 一次都不重试。
+    #[serde(default = "default_retry_max")]
+    pub retry_max: u32,
+    /// 退避上限（毫秒）：起点 400ms、逐次翻倍，封顶就是这个数。
+    #[serde(default = "default_retry_max_ms")]
+    pub retry_max_ms: u64,
 }
 
 fn default_timeout() -> u32 {
@@ -58,6 +64,14 @@ fn default_preset() -> String {
     "custom".to_string()
 }
 
+fn default_retry_max() -> u32 {
+    crate::agent_retry::DEFAULT_RETRY_MAX
+}
+
+fn default_retry_max_ms() -> u64 {
+    crate::agent_retry::DEFAULT_RETRY_MAX_MS
+}
+
 impl Default for AgentConfiguration {
     fn default() -> Self {
         Self {
@@ -67,6 +81,8 @@ impl Default for AgentConfiguration {
             timeout_secs: default_timeout(),
             hourly_limit: default_hourly_limit(),
             preset: default_preset(),
+            retry_max: default_retry_max(),
+            retry_max_ms: default_retry_max_ms(),
         }
     }
 }
@@ -111,6 +127,10 @@ pub enum AgentIssue {
     TimeoutOutOfRange(u32),
     /// 每小时上限越界（detail = 原值）。
     HourlyLimitOutOfRange(u32),
+    /// 重试次数越界（detail = 原值；`FR-AI-30` ①）。
+    RetryMaxOutOfRange(u32),
+    /// 退避上限越界（detail = 原值毫秒）。
+    RetryMaxMsOutOfRange(u64),
 }
 
 impl AgentIssue {
@@ -124,6 +144,8 @@ impl AgentIssue {
             AgentIssue::EndpointHost => "endpointHost",
             AgentIssue::TimeoutOutOfRange(_) => "timeoutOutOfRange",
             AgentIssue::HourlyLimitOutOfRange(_) => "hourlyLimitOutOfRange",
+            AgentIssue::RetryMaxOutOfRange(_) => "retryMaxOutOfRange",
+            AgentIssue::RetryMaxMsOutOfRange(_) => "retryMaxMsOutOfRange",
         }
     }
 }
@@ -167,6 +189,14 @@ pub fn field_issues(config: &AgentConfiguration) -> Vec<AgentIssue> {
     }
     if config.hourly_limit == 0 || config.hourly_limit > 100_000 {
         issues.push(AgentIssue::HourlyLimitOutOfRange(config.hourly_limit));
+    }
+    if config.retry_max > crate::agent_retry::RETRY_MAX_CEILING {
+        issues.push(AgentIssue::RetryMaxOutOfRange(config.retry_max));
+    }
+    if config.retry_max_ms < crate::agent_retry::RETRY_MAX_MS_FLOOR
+        || config.retry_max_ms > crate::agent_retry::RETRY_MAX_MS_CEILING
+    {
+        issues.push(AgentIssue::RetryMaxMsOutOfRange(config.retry_max_ms));
     }
     issues
 }
@@ -404,6 +434,8 @@ mod tests {
                 "hourlyLimit",
                 "model",
                 "preset",
+                "retryMax",
+                "retryMaxMs",
                 "timeoutSecs"
             ]
         );

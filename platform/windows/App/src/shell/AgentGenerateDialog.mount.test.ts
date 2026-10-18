@@ -118,6 +118,7 @@ beforeEach(() => {
     limitations: [
       '每小时上限按「真发出去的请求」计（含超时 / 报错的那一次）：防的是重试风暴，不是给云端对账单。',
     ],
+    attempts: [{ attempt: 1, outcome: 'ok', status: 200, delayMs: 0, detail: '' }],
     history: [],
   }
   state.history = []
@@ -352,6 +353,7 @@ describe('AgentGenerateDialog（FR-AI-02）', () => {
       tableCount: 1,
       quota: { limit: 60, used: 4, remaining: 56, windowSecs: 3600, retryAfterSecs: 0 },
       limitations: [],
+      attempts: [{ attempt: 1, outcome: 'ok', status: 200, delayMs: 0, detail: '' }],
       history: [historyEntry({ question: '刚刚这一问', sql: 'SELECT 1;', sqlTruncated: true })],
     }
     const wrapper = mountDialog()
@@ -368,5 +370,38 @@ describe('AgentGenerateDialog（FR-AI-02）', () => {
 
     await rows[0].trigger('click')
     expect(wrapper.find('[data-testid="generate-history-truncated"]').text()).toContain('截断')
+  })
+
+  // 尝试账（FR-AI-30 ①）：一次成功**不打扰**，真重试过才画一行且读数照回包说。
+  it('重试过才画「共尝试 N 次」，一次成功不画', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await askAndPreview(wrapper)
+    await wrapper.find('[data-testid="generate-send"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="generate-attempts"]').exists()).toBe(false)
+
+    state.reply = {
+      status: 'generated',
+      sql: 'SELECT 1;',
+      explanation: '',
+      tablesUsed: [],
+      model: 'deepseek-chat',
+      elapsedMs: 900,
+      tableCount: 1,
+      quota: { limit: 60, used: 5, remaining: 55, windowSecs: 3600, retryAfterSecs: 0 },
+      limitations: [],
+      attempts: [
+        { attempt: 1, outcome: 'retryable', status: 429, delayMs: 400, detail: 'HTTP 429' },
+        { attempt: 2, outcome: 'ok', status: 200, delayMs: 0, detail: '' },
+      ],
+      history: [],
+    }
+    await wrapper.find('[data-testid="generate-send"]').trigger('click')
+    await flushPromises()
+    const line = wrapper.get('[data-testid="generate-attempts"]').text()
+    expect(line).toContain('共尝试 2 次')
+    expect(line).toContain('HTTP 429')
+    expect(line).toContain('400')
   })
 })

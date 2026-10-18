@@ -877,6 +877,12 @@ export const DICT = {
     en: 'This SQL does not reference any loaded table (maybe a new name or a table-less statement)',
   },
   'agent.generate.stats': { 'zh-Hans': '模型 {model} · 往返 {ms} ms', en: 'model {model} · {ms} ms round trip' },
+  // 尝试账（FR-AI-30 ①）：只有真重试过才画。
+  'agent.generate.attempts': {
+    'zh-Hans': '共尝试 {n} 次：第一次 {reason}，退避合计 {waited} 毫秒后重试',
+    en: '{n} attempts: first {reason}, retried after {waited} ms of back-off in total',
+  },
+  'agent.generate.attempts.transport': { 'zh-Hans': '超时 / 连不上', en: 'timeout / connection error' },
   'agent.generate.neverRuns': {
     'zh-Hans': '这段 SQL 不会被自动执行：点下面的按钮才写进编辑器，运行仍要你自己按。',
     en: 'This SQL is never auto-executed: the button below only puts it in the editor; you still press run.',
@@ -940,6 +946,23 @@ export const DICT = {
   },
   'agent.timeout': { 'zh-Hans': '超时（秒）', en: 'Timeout (s)' },
   'agent.hourlyLimit': { 'zh-Hans': '每小时上限', en: 'Hourly limit' },
+  // 失败重试（FR-AI-30 ①）：退避起点固定 400ms、逐次翻倍，封顶由用户配。
+  'agent.retryMax': { 'zh-Hans': '失败后重试（次）', en: 'Retries after failure' },
+  'agent.retryMaxMs': { 'zh-Hans': '退避上限（毫秒）', en: 'Back-off ceiling (ms)' },
+  'agent.retry.note': {
+    'zh-Hans':
+      '429 / 5xx / 超时 / 连不上会自动等一会儿再试（起点 400 毫秒、逐次翻倍，封顶就是上面那格）；密钥、路径、请求体这类错误不重试 —— 再发也是同一个结果。每次重试都真出网，各占一次本小时额度。',
+    en:
+      'A 429 / 5xx / timeout / refused connection is retried after a wait (400 ms doubling up to the ceiling above). Bad key, wrong path or a malformed body is not retried — the same request would fail the same way. Every retry really leaves the machine and uses one more hourly slot.',
+  },
+  'agent.issue.retryMaxOutOfRange': {
+    'zh-Hans': '「失败后重试」要在 0~3 次之间（当前 {detail}）',
+    en: 'Retries after failure must be 0–3 (now {detail})',
+  },
+  'agent.issue.retryMaxMsOutOfRange': {
+    'zh-Hans': '「退避上限」要在 500~60000 毫秒之间（当前 {detail}）',
+    en: 'Back-off ceiling must be 500–60000 ms (now {detail})',
+  },
   'agent.quota.used': {
     'zh-Hans': '本小时已用 {used}/{limit}（还剩 {remaining} 次）',
     en: '{used}/{limit} used this hour ({remaining} left)',

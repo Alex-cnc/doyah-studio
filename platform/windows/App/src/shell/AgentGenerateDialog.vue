@@ -122,6 +122,16 @@ const canGenerate = computed(
 )
 const questionReady = computed(() => question.value.trim().length > 0)
 
+/** 尝试账的人话（`FR-AI-30` ①）：只有真重试过才画这一行 —— 一次就成功不必打扰。 */
+const attemptNote = computed(() => {
+  const list = result.value?.attempts ?? []
+  if (list.length <= 1) return ''
+  const waited = list.reduce((sum, note) => sum + note.delayMs, 0)
+  const first = list[0]
+  const reason = first.status != null ? `HTTP ${first.status}` : tr('agent.generate.attempts.transport')
+  return tr('agent.generate.attempts', { n: list.length, reason, waited })
+})
+
 /** 「还要等多久」的写法：超过一分钟给分 + 秒，否则只给秒。 */
 function waitLabel(secs: number): string {
   const whole = Math.max(0, Math.round(secs))
@@ -177,6 +187,7 @@ async function generate(): Promise<void> {
         tableCount: reply.tableCount,
         quota: reply.quota,
         limitations: reply.limitations,
+        attempts: reply.attempts ?? [],
         history: reply.history ?? [],
       }
       // 列表直接用回包里那份（Rust 记完账后读出来的），**不自己往前插一条** —— 两处各插一次迟早不一致。
@@ -374,6 +385,9 @@ function saveReopenedAsQuery(): void {
           }}
         </p>
         <p class="gen__meta">{{ tr('agent.generate.stats', { model: result.model, ms: result.elapsedMs }) }}</p>
+        <p v-if="attemptNote" class="gen__meta gen__retry" data-testid="generate-attempts">
+          {{ attemptNote }}
+        </p>
         <ul class="gen__limits" data-testid="generate-limits">
           <li v-for="line in result.limitations" :key="line">{{ line }}</li>
         </ul>

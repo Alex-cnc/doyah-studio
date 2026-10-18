@@ -134,6 +134,7 @@ describe('诊断面板', () => {
       elapsedMs: 42,
       quota: { limit: 60, used: 1, remaining: 59, windowSecs: 3600, retryAfterSecs: 0 },
       limitations: ['这一次的问答只进审计，不进「生成历史」。'],
+      attempts: [],
     }
     replies.askCalls = []
     const wrapper = await mountDialog()

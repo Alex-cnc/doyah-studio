@@ -17,6 +17,7 @@ pub mod agent_config;
 pub mod agent_history;
 pub mod agent_nl2sql;
 pub mod agent_quota;
+pub mod agent_retry;
 pub mod appearance;
 pub mod browse;
 pub mod code_lines;

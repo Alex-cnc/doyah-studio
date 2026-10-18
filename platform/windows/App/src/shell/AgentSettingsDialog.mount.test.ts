@@ -17,7 +17,7 @@ const state: {
   cleared: number
 } = {
   snapshot: {
-    config: { enabled: false, endpoint: '', model: '', timeoutSecs: 60, hourlyLimit: 60, preset: 'custom' },
+    config: { enabled: false, endpoint: '', model: '', timeoutSecs: 60, hourlyLimit: 60, preset: 'custom', retryMax: 2, retryMaxMs: 4000 },
     gate: { state: 'disabled', scope: 'remote', model: '', issues: [] },
     keyPresent: false,
     keyStorage: 'dpapi',
@@ -65,7 +65,7 @@ beforeEach(() => {
   state.keys = []
   state.cleared = 0
   state.snapshot = {
-    config: { enabled: false, endpoint: '', model: '', timeoutSecs: 60, hourlyLimit: 60, preset: 'custom' },
+    config: { enabled: false, endpoint: '', model: '', timeoutSecs: 60, hourlyLimit: 60, preset: 'custom', retryMax: 2, retryMaxMs: 4000 },
     gate: { state: 'disabled', scope: 'remote', model: '', issues: [] },
     keyPresent: false,
     keyStorage: 'dpapi',
@@ -129,6 +129,26 @@ describe('智能体设置弹层', () => {
     expect(state.saved[0].model).toBe('deepseek-chat')
     // 端点被手填 ⇒ 预设应被反推成 deepseek（下拉不能停在一个错的厂商上）
     expect(state.saved[0].preset).toBe('deepseek')
+  })
+
+  // 失败重试两格（FR-AI-30 ①）：**可配**是关键 —— 只读显示等于没配。
+  it('「失败后重试」与「退避上限」两格随保存传给后端', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect((wrapper.get('[data-testid="agent-retry-max"]').element as HTMLInputElement).value).toBe('2')
+    expect(
+      (wrapper.get('[data-testid="agent-retry-max-ms"]').element as HTMLInputElement).value,
+    ).toBe('4000')
+    expect(wrapper.get('[data-testid="agent-retry-note"]').text()).toContain('429')
+
+    await wrapper.get('[data-testid="agent-retry-max"]').setValue('1')
+    await wrapper.get('[data-testid="agent-retry-max-ms"]').setValue('1200')
+    await wrapper.get('[data-testid="agent-save"]').trigger('click')
+    await flushPromises()
+
+    expect(state.saved).toHaveLength(1)
+    expect(state.saved[0].retryMax).toBe(1)
+    expect(state.saved[0].retryMaxMs).toBe(1200)
   })
 
   it('密钥保存后输入框立刻清空（不回显），且状态改成「已配置」', async () => {

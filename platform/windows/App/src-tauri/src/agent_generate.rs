@@ -23,6 +23,9 @@ use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateRepor
 use doyah_studio_db::agent_history::HistoryEntry;
 use doyah_studio_db::agent_nl2sql::{build_request, parse_reply, Outgoing, TableBrief};
 use doyah_studio_db::agent_quota::{now_secs, QuotaStatus};
+use doyah_studio_db::agent_retry::{
+    classify_status, classify_transport, AttemptNote, RetryClass, RetryPolicy,
+};
 use serde::Serialize;
 
 use crate::agent_settings::AgentSettingsStore;
@@ -72,6 +75,8 @@ pub struct GenerateOutcome {
     /// 记完这一条之后的历史（**新的在前**；界面用它直接换掉列表，不自己往前插一份 ——
     /// 两处各插一次迟早会不一致）。
     pub history: Vec<HistoryEntry>,
+    /// 这一发的**尝试账**（`FR-AI-30` ①）：成功也带 —— 用户能看到「第 1 次 429、退避 400ms，第 2 次成功」。
+    pub attempts: Vec<AttemptNote>,
 }
 
 /// 生成请求的三种结局：被闸门挡住（零外发）、被配额挡住（零外发）、或者真的发了并解析成功。
@@ -151,13 +156,16 @@ pub fn generate(
     };
 
     let started = Instant::now();
-    let raw = send_once(
+    let sent = send_with_retry(
         store,
         &config,
         &outgoing,
         question,
         tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
-    )?;
+    )
+    .map_err(|err| err.failure)?;
+    let attempts = sent.attempts;
+    let raw = sent.raw;
     let answer = match parse_reply(&raw, tables) {
         Ok(answer) => answer,
         Err(err) => {
@@ -228,6 +236,7 @@ pub fn generate(
         quota,
         limitations,
         history: ledger.all_recent(),
+        attempts,
     }))
 }
 
@@ -258,6 +267,8 @@ pub enum AskReply {
         quota: QuotaStatus,
         /// 已知缺口（如实显示）。
         limitations: Vec<String>,
+        /// 这一发的**尝试账**（`FR-AI-30` ①；成功也带）。
+        attempts: Vec<AttemptNote>,
     },
 }
 
@@ -348,110 +359,264 @@ fn quota_admission(
     Ok(Ok(quota))
 }
 
-/// 一次真实外发（建客户端 → POST → 读正文 → 非 2xx 转可读失败）。**失败一律记一条审计**。
-///
-/// 三处失败各自记一次、不统一兜：它们的判定来源不同（连接层 / 读包 / HTTP 状态），
-/// 混在一起就只能写一句「失败了」，用户看不出该改端点、改超时还是换密钥。
-fn send_once(
-    store: &AgentSettingsStore,
-    config: &AgentConfiguration,
-    outgoing: &Outgoing,
-    summary: &str,
-    table_count: usize,
-) -> Result<String, DbFailure> {
-    let client = reqwest::blocking::Client::builder()
+/// 一次外发的**结局**（成功带正文，失败带可读原因）—— 两条都带**这一发的尝试账**。
+struct SendOutcome {
+    raw: String,
+    attempts: Vec<AttemptNote>,
+}
+
+/// 失败载荷：`DbFailure` + 尝试账（调用方要把它带进回包文案里）。
+struct SendFailure {
+    failure: DbFailure,
+}
+
+/// 建 HTTP 客户端（不跟随重定向：端点被改写会把密钥带到别的主机上）。
+fn build_client(config: &AgentConfiguration) -> Result<reqwest::blocking::Client, DbFailure> {
+    reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(config.timeout_secs as u64))
-        // 不跟随重定向：端点被改写会把密钥带到别的主机上。
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|err| DbFailure {
             message: format!("建 HTTP 客户端失败：{err}"),
             hint: "这属实现缺陷：请保留现场并报告。".to_string(),
-        })?;
+        })
+}
 
-    let started = Instant::now();
-    let mut request = client
-        .post(&outgoing.url)
-        .header(reqwest::header::CONTENT_TYPE, "application/json")
-        .body(outgoing.body.clone());
-    if let Some(secret) = store.key_secret() {
-        request = request.header(reqwest::header::AUTHORIZATION, format!("Bearer {secret}"));
+/// 服务端的 `Retry-After`（只认秒数形态；HTTP 日期形态不猜，回落到我们自己的退避序列）。
+fn retry_after_secs(response: &reqwest::blocking::Response) -> Option<u64> {
+    response
+        .headers()
+        .get("retry-after")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|text| text.trim().parse::<u64>().ok())
+}
+
+/// 这一跳失败后要不要再试、等多久（`None` = 停）。
+fn next_delay(
+    policy: &RetryPolicy,
+    failed_attempt: u32,
+    class: RetryClass,
+    retry_after: Option<u64>,
+) -> Option<u64> {
+    if !class.is_retryable() || !policy.has_next(failed_attempt) {
+        return None;
     }
-    let response = match request.send() {
-        Ok(response) => response,
-        Err(err) => {
-            let timeout = err.is_timeout();
-            let failure = DbFailure {
-                message: if timeout {
-                    format!(
-                        "请求超时（{} 秒）：模型服务没有在时限内回话。",
-                        config.timeout_secs
-                    )
-                } else {
-                    format!("请求发不出去：{err}")
-                },
-                hint: if timeout {
-                    "把「单次请求超时」调大，或换一个更近的端点。".to_string()
-                } else {
-                    "确认端点地址与网络（远端还需代理 / 防火墙放行）；本地端点的服务是否在跑。"
-                        .to_string()
-                },
-            };
-            // 这一次**真的出网了**（连接已发起）⇒ 记 Failed。
-            let note = record_audit(
-                store,
-                AuditVerdict::Failed,
-                &outgoing.model,
-                &outgoing.url,
-                summary,
-                &failure.message,
-                started.elapsed().as_millis() as u64,
-                table_count,
-            );
-            return Err(with_audit_note(failure, note));
-        }
-    };
+    Some(policy.honour_retry_after(failed_attempt, retry_after))
+}
 
-    let status = response.status();
-    let raw = match response.text() {
-        Ok(raw) => raw,
-        Err(err) => {
-            let failure = DbFailure {
-                message: format!("回包读不出来：{err}"),
-                hint: "重试一次；仍然不行就换端点。".to_string(),
-            };
-            let note = record_audit(
-                store,
-                AuditVerdict::Failed,
-                &outgoing.model,
-                &outgoing.url,
-                summary,
-                &failure.message,
-                started.elapsed().as_millis() as u64,
-                table_count,
-            );
-            return Err(with_audit_note(failure, note));
-        }
-    };
-    if !status.is_success() {
-        let failure = DbFailure {
-            message: format!("模型服务返回 HTTP {}：{}", status.as_u16(), excerpt(&raw, 300)),
-            hint: "401 / 403 多为密钥不对或没有权限；404 多为端点路径不对（要的是 OpenAI 兼容的 /v1）；429 是配额或限流。"
-                .to_string(),
+/// 收尾文案：把「为什么停」补成一句人话（**不许静默吞掉**，也不许让用户以为程序卡住）。
+fn stop_note(failure: DbFailure, attempts: &[AttemptNote], class: RetryClass) -> DbFailure {
+    let tail = if attempts.len() <= 1 && class == RetryClass::Fatal {
+        "（这类错误重试没有意义 —— 密钥 / 路径 / 请求体不对时，再发一百次也是同一个结果，所以只发了 1 次。）"
+    } else if attempts.len() <= 1 {
+        "（设置里「失败后重试」为 0 次，所以只发了 1 次；把它调大可以让这类抖动自动等一会儿再试。）"
+    } else {
+        return DbFailure {
+            message: format!(
+                "{}（已尝试 {} 次全部失败：每次重试都真出网、各占一次本小时配额。）",
+                failure.message,
+                attempts.len()
+            ),
+            hint: format!(
+                "{} 等一会儿再点，或把「失败后重试」与「退避上限」调大；端点若是本机服务，先确认它是否在跑。",
+                failure.hint
+            ),
         };
-        let note = record_audit(
-            store,
-            AuditVerdict::Failed,
-            &outgoing.model,
-            &outgoing.url,
-            summary,
-            &failure.message,
-            started.elapsed().as_millis() as u64,
-            table_count,
-        );
-        return Err(with_audit_note(failure, note));
+    };
+    DbFailure {
+        message: format!("{}{}", failure.message, tail),
+        hint: failure.hint,
     }
-    Ok(raw)
+}
+
+/// 一次真实外发（建客户端 → 按策略重试 → 读正文 → 非 2xx 分级后决定再试还是停）。**每次失败各记一条审计**。
+///
+/// 三处失败各自判、不统一兜：它们的判定来源不同（连接层 / 读包 / HTTP 状态），
+/// 混在一起就只能写一句「失败了」，用户看不出该改端点、改超时还是换密钥。
+///
+/// **重试同样真出网** ⇒ 第 2 次起每次尝试都再过一遍配额（第一次由调用方记过账）。
+fn send_with_retry(
+    store: &AgentSettingsStore,
+    config: &AgentConfiguration,
+    outgoing: &Outgoing,
+    summary: &str,
+    table_count: usize,
+) -> Result<SendOutcome, SendFailure> {
+    let client = match build_client(config) {
+        Ok(client) => client,
+        Err(failure) => return Err(SendFailure { failure }),
+    };
+    let policy = RetryPolicy::from_config(config);
+    let mut attempts: Vec<AttemptNote> = Vec::new();
+    let mut attempt_no: u32 = 1;
+    loop {
+        if attempt_no > 1 {
+            match quota_admission(store, config, summary) {
+                Ok(Ok(_)) => {}
+                Ok(Err(quota)) => {
+                    let failure = DbFailure {
+                        message: format!(
+                            "还想再试一次，但本小时配额已满（上限 {} 次，已用 {} 次）：这一发没有发出去。前面已尝试 {} 次。",
+                            quota.limit,
+                            quota.used,
+                            attempt_no - 1
+                        ),
+                        hint: format!(
+                            "约 {} 分钟后才有空位；也可以把「每小时上限」调大。",
+                            (quota.retry_after_secs + 59) / 60
+                        ),
+                    };
+                    return Err(SendFailure { failure });
+                }
+                Err(err) => return Err(SendFailure { failure: err }),
+            }
+        }
+
+        let started = Instant::now();
+        let mut request = client
+            .post(&outgoing.url)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(outgoing.body.clone());
+        // 本地端点免密钥：**重试时同样不带** Authorization（这条路只有一处，重试不该绕开它）。
+        if let Some(secret) = store.key_secret() {
+            request = request.header(reqwest::header::AUTHORIZATION, format!("Bearer {secret}"));
+        }
+
+        let response = match request.send() {
+            Ok(response) => response,
+            Err(err) => {
+                let timed_out = err.is_timeout();
+                let class = classify_transport(timed_out, err.is_connect());
+                let failure = DbFailure {
+                    message: if timed_out {
+                        format!(
+                            "请求超时（{} 秒）：模型服务没有在时限内回话。",
+                            config.timeout_secs
+                        )
+                    } else {
+                        format!("请求发不出去：{err}")
+                    },
+                    hint: if timed_out {
+                        "把「单次请求超时」调大，或换一个更近的端点。".to_string()
+                    } else {
+                        "确认端点地址与网络（远端还需代理 / 防火墙放行）；本地端点的服务是否在跑。"
+                            .to_string()
+                    },
+                };
+                let detail = failure.message.clone();
+                // 这一次**真的出网了**（连接已发起）⇒ 记 Failed。
+                let note = record_audit(
+                    store,
+                    AuditVerdict::Failed,
+                    &outgoing.model,
+                    &outgoing.url,
+                    summary,
+                    &detail,
+                    started.elapsed().as_millis() as u64,
+                    table_count,
+                );
+                let failure = with_audit_note(failure, note);
+                match next_delay(&policy, attempt_no, class, None) {
+                    Some(delay) => {
+                        attempts.push(AttemptNote::failed(attempt_no, class, None, detail, delay));
+                        std::thread::sleep(Duration::from_millis(delay));
+                        attempt_no += 1;
+                        continue;
+                    }
+                    None => {
+                        attempts.push(AttemptNote::failed(attempt_no, class, None, detail, 0));
+                        let failure = stop_note(failure, &attempts, class);
+                        return Err(SendFailure { failure });
+                    }
+                }
+            }
+        };
+
+        let status = response.status();
+        let retry_after = retry_after_secs(&response);
+        let raw = match response.text() {
+            Ok(raw) => raw,
+            Err(err) => {
+                let class = classify_transport(false, false);
+                let failure = DbFailure {
+                    message: format!("回包读不出来：{err}"),
+                    hint: "重试一次；仍然不行就换端点。".to_string(),
+                };
+                let detail = failure.message.clone();
+                let note = record_audit(
+                    store,
+                    AuditVerdict::Failed,
+                    &outgoing.model,
+                    &outgoing.url,
+                    summary,
+                    &detail,
+                    started.elapsed().as_millis() as u64,
+                    table_count,
+                );
+                let failure = with_audit_note(failure, note);
+                match next_delay(&policy, attempt_no, class, None) {
+                    Some(delay) => {
+                        attempts.push(AttemptNote::failed(attempt_no, class, None, detail, delay));
+                        std::thread::sleep(Duration::from_millis(delay));
+                        attempt_no += 1;
+                        continue;
+                    }
+                    None => {
+                        attempts.push(AttemptNote::failed(attempt_no, class, None, detail, 0));
+                        let failure = stop_note(failure, &attempts, class);
+                        return Err(SendFailure { failure });
+                    }
+                }
+            }
+        };
+        if !status.is_success() {
+            let class = classify_status(status.as_u16());
+            let failure = DbFailure {
+                message: format!("模型服务返回 HTTP {}：{}", status.as_u16(), excerpt(&raw, 300)),
+                hint: "401 / 403 多为密钥不对或没有权限；404 多为端点路径不对（要的是 OpenAI 兼容的 /v1）；429 是配额或限流（这类会自动等一会儿再试）。"
+                    .to_string(),
+            };
+            let detail = failure.message.clone();
+            let note = record_audit(
+                store,
+                AuditVerdict::Failed,
+                &outgoing.model,
+                &outgoing.url,
+                summary,
+                &detail,
+                started.elapsed().as_millis() as u64,
+                table_count,
+            );
+            let failure = with_audit_note(failure, note);
+            match next_delay(&policy, attempt_no, class, retry_after) {
+                Some(delay) => {
+                    attempts.push(AttemptNote::failed(
+                        attempt_no,
+                        class,
+                        Some(status.as_u16()),
+                        detail,
+                        delay,
+                    ));
+                    std::thread::sleep(Duration::from_millis(delay));
+                    attempt_no += 1;
+                    continue;
+                }
+                None => {
+                    attempts.push(AttemptNote::failed(
+                        attempt_no,
+                        class,
+                        Some(status.as_u16()),
+                        detail,
+                        0,
+                    ));
+                    let failure = stop_note(failure, &attempts, class);
+                    return Err(SendFailure { failure });
+                }
+            }
+        }
+        attempts.push(AttemptNote::ok(attempt_no, Some(status.as_u16())));
+        return Ok(SendOutcome { raw, attempts });
+    }
 }
 
 /// **问诊断这一次**（`FR-AI-03` 第二片）：把面板上那份资料块原样发出去，只回正文。
@@ -475,7 +640,9 @@ pub fn ask(store: &AgentSettingsStore, brief: &str) -> Result<AskReply, DbFailur
     };
 
     let started = Instant::now();
-    let raw = send_once(store, &config, &outgoing, brief, 0)?;
+    let sent = send_with_retry(store, &config, &outgoing, brief, 0).map_err(|err| err.failure)?;
+    let attempts = sent.attempts;
+    let raw = sent.raw;
     let text = match agent_advisor::parse_reply(&raw) {
         Ok(text) => text,
         Err(err) => {
@@ -521,6 +688,7 @@ pub fn ask(store: &AgentSettingsStore, brief: &str) -> Result<AskReply, DbFailur
         elapsed_ms,
         quota,
         limitations,
+        attempts,
     })
 }
 
@@ -863,13 +1031,19 @@ mod tests {
         // 端点在回包里夹了一句形似口令的话：审计要**照实记这次失败**，但凭据不许跟着落盘。
         let body = "{\"error\":\"password = 'hunter2' 不对\"}".to_string();
         let leaked: &'static str = Box::leak(body.into_boxed_str());
-        let (endpoint, _seen) = fake_endpoint("500 Internal Server Error", leaked);
+        let (endpoint, _seen) = fake_endpoint_script(vec![
+            ("500 Internal Server Error", leaked),
+            ("500 Internal Server Error", leaked),
+            ("500 Internal Server Error", leaked),
+        ]);
         let store = tmp_store("audit-failed");
         store
             .save(&AgentConfiguration {
                 enabled: true,
                 endpoint,
                 model: "m".to_string(),
+                retry_max: 2,
+                retry_max_ms: 500,
                 ..Default::default()
             })
             .unwrap();
@@ -879,16 +1053,19 @@ mod tests {
             "500 不该被当成成功"
         );
 
+        // 重试也真出网 ⇒ **每次尝试各一条**（3 次全失败 = 3 条），一条都不能省。
         let records = store.load_audit().all_recent();
-        assert_eq!(records.len(), 1, "失败也要留一条：{records:?}");
-        assert_eq!(records[0].verdict, AuditVerdict::Failed);
-        assert!(records[0].verdict.left_the_machine(), "连接已经发出去了");
-        assert!(records[0].detail.contains("500"), "{}", records[0].detail);
-        assert!(
-            !records[0].detail.contains("hunter2"),
-            "服务端原话里的口令被原样写进了审计：{}",
-            records[0].detail
-        );
+        assert_eq!(records.len(), 3, "每次尝试都要留一条：{records:?}");
+        for record in &records {
+            assert_eq!(record.verdict, AuditVerdict::Failed);
+            assert!(record.verdict.left_the_machine(), "连接已经发出去了");
+            assert!(record.detail.contains("500"), "{}", record.detail);
+            assert!(
+                !record.detail.contains("hunter2"),
+                "服务端原话里的口令被原样写进了审计：{}",
+                record.detail
+            );
+        }
     }
 
     #[test]
@@ -1157,6 +1334,267 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].verdict, AuditVerdict::Ok);
         assert_eq!(records[0].table_count, 0, "诊断不发表结构");
+    }
+
+    /// 假端点：按脚本**依次**回多段响应（一次一个连接），收到的请求原文逐条记下来。
+    ///
+    /// 重试要能被数出来 —— 用只能 accept 一次的 `fake_endpoint` 测重试，第二次会撞「连接被拒」，
+    /// 于是断言分不清「真重试了」还是「重试撞空了」。
+    fn fake_endpoint_script(
+        script: Vec<(&'static str, &'static str)>,
+    ) -> (String, mpsc::Receiver<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            for (status_line, body) in script {
+                let (mut stream, _) = match listener.accept() {
+                    Ok(pair) => pair,
+                    Err(_) => return,
+                };
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut head = String::new();
+                let mut length = 0usize;
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                        break;
+                    }
+                    let trimmed = line.trim_end().to_string();
+                    if trimmed.is_empty() {
+                        break;
+                    }
+                    if let Some(value) =
+                        trimmed.to_ascii_lowercase().strip_prefix("content-length:")
+                    {
+                        length = value.trim().parse().unwrap_or(0);
+                    }
+                    head.push_str(&trimmed);
+                    head.push('\n');
+                }
+                let mut payload = vec![0u8; length];
+                let _ = reader.read_exact(&mut payload);
+                let _ = tx.send(format!("{head}\n{}", String::from_utf8_lossy(&payload)));
+                let response = format!(
+                    "HTTP/1.1 {status_line}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+        (format!("http://127.0.0.1:{port}/v1"), rx)
+    }
+
+    /// 一段能解析成 SQL 的 200 回包正文（泄漏成 `'static`，好喂给上面的脚本）。
+    fn sql_body() -> &'static str {
+        let body = serde_json::json!({
+            "choices": [{ "message": { "content": "```sql\nSELECT count(*) FROM public.orders;\n```" } }]
+        })
+        .to_string();
+        Box::leak(body.into_boxed_str())
+    }
+
+    #[test]
+    fn a_throttled_answer_is_waited_out_and_the_retry_returns_the_sql() {
+        let (endpoint, seen) = fake_endpoint_script(vec![
+            ("429 Too Many Requests", "{\"error\":\"rate limited\"}"),
+            ("200 OK", sql_body()),
+        ]);
+        let store = tmp_store("retry-throttled");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "fake-model".to_string(),
+                retry_max: 2,
+                retry_max_ms: 500,
+                ..Default::default()
+            })
+            .unwrap();
+
+        let started = Instant::now();
+        match generate(&store, "订单总数", &[orders()]).unwrap() {
+            GenerateReply::Generated(outcome) => {
+                assert_eq!(outcome.sql, "SELECT count(*) FROM public.orders;");
+                assert_eq!(outcome.attempts.len(), 2, "{:?}", outcome.attempts);
+                assert_eq!(outcome.attempts[0].status, Some(429));
+                assert_eq!(outcome.attempts[0].outcome, "retryable");
+                assert!(
+                    outcome.attempts[0].delay_ms >= 400,
+                    "退避起点是 400ms：{:?}",
+                    outcome.attempts[0]
+                );
+                assert_eq!(outcome.attempts[1].outcome, "ok");
+                assert_eq!(outcome.attempts[1].delay_ms, 0);
+            }
+            other => panic!("429 之后的重试应当成功：{other:?}"),
+        }
+        assert!(
+            started.elapsed() >= Duration::from_millis(400),
+            "重试之前必须真等过那一段退避，不许立刻再撞"
+        );
+        // 两次请求都到了服务端 —— 重试不是「以为发了」。
+        let first = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        let second = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(second.contains("订单总数"));
+        assert!(!first.is_empty());
+        // 重试同样真出网 ⇒ 配额记两次、审计两条。
+        assert_eq!(store.load_quota().status(now_secs(), 60).used, 2);
+        assert_eq!(store.load_audit().all_recent().len(), 2);
+    }
+
+    #[test]
+    fn a_bad_key_is_not_retried_at_all() {
+        let (endpoint, seen) =
+            fake_endpoint_script(vec![("401 Unauthorized", "{\"error\":\"bad key\"}")]);
+        let store = tmp_store("retry-fatal");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                retry_max: 2,
+                retry_max_ms: 500,
+                ..Default::default()
+            })
+            .unwrap();
+
+        let failure = generate(&store, "随便", &[orders()]).unwrap_err();
+        assert!(failure.message.contains("401"), "{}", failure.message);
+        assert!(
+            failure.message.contains("只发了 1 次"),
+            "密钥错这类不该重试，文案要说清：{}",
+            failure.message
+        );
+        // 第一次请求确实到了（否则下一条断言会把「根本没发」当「没重试」）。
+        assert!(seen.recv_timeout(Duration::from_secs(5)).is_ok(), "401 那一次该到服务端");
+        assert!(
+            seen.recv_timeout(Duration::from_millis(300)).is_err(),
+            "401 之后不该有第二次请求"
+        );
+        assert_eq!(store.load_quota().status(now_secs(), 60).used, 1);
+    }
+
+    #[test]
+    fn retries_stop_at_the_budget_and_say_how_many_times() {
+        let (endpoint, seen) = fake_endpoint_script(vec![
+            ("500 Internal Server Error", "{\"error\":\"boom\"}"),
+            ("503 Service Unavailable", "{\"error\":\"boom\"}"),
+            ("500 Internal Server Error", "{\"error\":\"boom\"}"),
+        ]);
+        let store = tmp_store("retry-budget");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                retry_max: 2,
+                retry_max_ms: 500,
+                ..Default::default()
+            })
+            .unwrap();
+
+        let failure = generate(&store, "随便", &[orders()]).unwrap_err();
+        assert!(
+            failure.message.contains("已尝试 3 次"),
+            "上限触达要如实报数：{}",
+            failure.message
+        );
+        for _ in 0..3 {
+            assert!(
+                seen.recv_timeout(Duration::from_secs(5)).is_ok(),
+                "三次尝试都该真到服务端"
+            );
+        }
+        assert_eq!(store.load_audit().all_recent().len(), 3);
+        assert_eq!(store.load_quota().status(now_secs(), 60).used, 3);
+    }
+
+    #[test]
+    fn a_retry_never_carries_an_authorization_header_when_no_key_is_saved() {
+        let (endpoint, seen) = fake_endpoint_script(vec![
+            ("500 Internal Server Error", "{\"error\":\"boom\"}"),
+            ("200 OK", sql_body()),
+        ]);
+        let store = tmp_store("retry-no-key");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                retry_max: 2,
+                retry_max_ms: 500,
+                ..Default::default()
+            })
+            .unwrap();
+
+        assert!(matches!(
+            generate(&store, "订单总数", &[orders()]).unwrap(),
+            GenerateReply::Generated(_)
+        ));
+        for _ in 0..2 {
+            let request = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert!(
+                !request.to_ascii_lowercase().contains("authorization"),
+                "本地端点没存密钥，重试那一次也不许带 Authorization：{request}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_retry_budget_of_zero_means_a_single_request() {
+        let (endpoint, seen) =
+            fake_endpoint_script(vec![("500 Internal Server Error", "{\"error\":\"boom\"}")]);
+        let store = tmp_store("retry-off");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                retry_max: 0,
+                retry_max_ms: 500,
+                ..Default::default()
+            })
+            .unwrap();
+
+        let failure = generate(&store, "随便", &[orders()]).unwrap_err();
+        assert!(
+            failure.message.contains("只发了 1 次"),
+            "配 0 次重试要如实说：{}",
+            failure.message
+        );
+        assert!(seen.recv_timeout(Duration::from_secs(5)).is_ok(), "那一次该到服务端");
+        assert!(seen.recv_timeout(Duration::from_millis(300)).is_err());
+        assert_eq!(store.load_quota().status(now_secs(), 60).used, 1);
+    }
+
+    #[test]
+    fn a_diagnosis_ask_also_retries_and_reports_the_attempts() {
+        let (endpoint, seen) = fake_endpoint_script(vec![
+            ("502 Bad Gateway", "{\"error\":\"gateway\"}"),
+            ("200 OK", advisor_body()),
+        ]);
+        let store = tmp_store("ask-retry");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                retry_max: 2,
+                retry_max_ms: 500,
+                ..Default::default()
+            })
+            .unwrap();
+        match ask(&store, "e1 执行计划").unwrap() {
+            AskReply::Answered { attempts, .. } => {
+                assert_eq!(attempts.len(), 2, "{attempts:?}");
+                assert_eq!(attempts[0].status, Some(502));
+            }
+            other => panic!("诊断问答也该走同一条重试通道：{other:?}"),
+        }
+        assert!(seen.recv_timeout(Duration::from_secs(5)).is_ok());
+        assert!(seen.recv_timeout(Duration::from_secs(5)).is_ok());
     }
 
     #[test]

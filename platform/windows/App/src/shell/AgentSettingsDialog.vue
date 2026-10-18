@@ -51,6 +51,8 @@ const draft = ref<AgentConfiguration>({
   timeoutSecs: 60,
   hourlyLimit: 60,
   preset: 'custom',
+  retryMax: 2,
+  retryMaxMs: 4000,
 })
 const keyDraft = ref('')
 const busy = ref<'' | 'save' | 'key' | 'clear' | 'quota'>('')
@@ -66,6 +68,8 @@ const ISSUE_KEYS: Record<AgentIssue['code'], DictKey> = {
   endpointHost: 'agent.issue.endpointHost',
   timeoutOutOfRange: 'agent.issue.timeoutOutOfRange',
   hourlyLimitOutOfRange: 'agent.issue.hourlyLimitOutOfRange',
+  retryMaxOutOfRange: 'agent.issue.retryMaxOutOfRange',
+  retryMaxMsOutOfRange: 'agent.issue.retryMaxMsOutOfRange',
 }
 
 const models = computed(() => modelChoices(draft.value.preset, draft.value.model))
@@ -306,6 +310,29 @@ async function refreshQuota(): Promise<void> {
             data-testid="agent-hourly"
           />
         </label>
+        <!-- 失败重试（FR-AI-30 ①）：429 / 5xx / 超时会自动等一会儿再试；密钥 / 路径这类不会。 -->
+        <label class="agent__field agent__field--narrow">
+          <span>{{ tr('agent.retryMax') }}</span>
+          <input
+            v-model.number="draft.retryMax"
+            type="number"
+            min="0"
+            max="3"
+            data-testid="agent-retry-max"
+          />
+        </label>
+        <label class="agent__field agent__field--narrow">
+          <span>{{ tr('agent.retryMaxMs') }}</span>
+          <input
+            v-model.number="draft.retryMaxMs"
+            type="number"
+            min="500"
+            max="60000"
+            step="100"
+            data-testid="agent-retry-max-ms"
+          />
+        </label>
+        <p class="agent__hint" data-testid="agent-retry-note">{{ tr('agent.retry.note') }}</p>
         <!-- 本小时配额读数：改上限时也看得见「已经用掉几次」（否则把 60 改成 5 会当场满额而不自知） -->
         <div v-if="snapshot" class="agent__quota" data-testid="agent-quota">
           <p

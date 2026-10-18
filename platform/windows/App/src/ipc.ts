@@ -927,6 +927,10 @@ export interface AgentConfiguration {
   hourlyLimit: number
   /** 选中的内置预设标签（`custom` = 自填）。 */
   preset: string
+  /** 失败后重试几次（不含第一次尝试；0~3，`FR-AI-30` ①）。 */
+  retryMax: number
+  /** 退避上限（毫秒，500~60000）：起点 400ms、逐次翻倍，封顶就是这个数。 */
+  retryMaxMs: number
 }
 
 /** 端点作用域。 */
@@ -950,6 +954,8 @@ export interface AgentIssue {
     | 'endpointHost'
     | 'timeoutOutOfRange'
     | 'hourlyLimitOutOfRange'
+    | 'retryMaxOutOfRange'
+    | 'retryMaxMsOutOfRange'
   detail?: string | number
 }
 
@@ -1029,6 +1035,20 @@ export interface AgentHistoryEntry {
   sqlTruncated: boolean
 }
 
+/** 一发里某一跳的结局（`FR-AI-30` ①：重试不是「悄悄再发一次」，每一次都摊出来）。 */
+export interface AgentAttemptNote {
+  /** 第几次尝试（从 1 起）。 */
+  attempt: number
+  /** `ok` / `retryable` / `fatal`（短码，界面查语言表）。 */
+  outcome: string
+  /** HTTP 状态码（传输层失败时没有）。 */
+  status: number | null
+  /** 这一跳失败后**实际等了多久**（毫秒；成功或不再重试时 0）。 */
+  delayMs: number
+  /** 一句原因（不含密钥；服务端原文已被外壳脱敏截断）。 */
+  detail: string
+}
+
 /** 一次生成的结果（**只有文本，没有被执行**）。 */
 export interface AgentGenerateOutcome {
   sql: string
@@ -1041,6 +1061,8 @@ export interface AgentGenerateOutcome {
   quota: AgentQuotaStatus
   /** 本片的已知缺口（配额尚未计数等），界面必须显示。 */
   limitations: string[]
+  /** 这一发的尝试账（成功也带：429 之后重试成功要说得出来）。 */
+  attempts: AgentAttemptNote[]
   /** 记完这一条之后的历史（新的在前）—— 界面用它直接换掉列表。 */
   history: AgentHistoryEntry[]
 }
@@ -1067,6 +1089,8 @@ export type AgentAskReply =
       elapsedMs: number
       quota: AgentQuotaStatus
       limitations: string[]
+      /** 这一发的尝试账（成功也带）。 */
+      attempts: AgentAttemptNote[]
     }
 
 /** 设置快照：配置 + 裁决 + 密钥在不在 + 两个路径。 */
@@ -1094,6 +1118,8 @@ let bypassAgent: { config: AgentConfiguration; keyPresent: boolean } = {
     timeoutSecs: 60,
     hourlyLimit: 60,
     preset: 'custom',
+    retryMax: 2,
+    retryMaxMs: 4000,
   },
   keyPresent: false,
 }
@@ -1120,6 +1146,12 @@ function bypassAgentGate(): AgentGateReport {
   }
   if (config.hourlyLimit < 1 || config.hourlyLimit > 100000) {
     issues.push({ code: 'hourlyLimitOutOfRange', detail: config.hourlyLimit })
+  }
+  if (config.retryMax < 0 || config.retryMax > 3) {
+    issues.push({ code: 'retryMaxOutOfRange', detail: config.retryMax })
+  }
+  if (config.retryMaxMs < 500 || config.retryMaxMs > 60000) {
+    issues.push({ code: 'retryMaxMsOutOfRange', detail: config.retryMaxMs })
   }
   return issues.length
     ? { state: 'missing', scope, model: '', issues }

@@ -45,6 +45,7 @@ vi.mock('../ipc', async (importOriginal) => {
         tableCount: 1,
         quota: { limit: 60, used: 1, remaining: 59, windowSecs: 3600, retryAfterSecs: 0 },
         limitations: ['生成结果不会自动执行。'],
+        attempts: [{ attempt: 1, outcome: 'ok', status: 200, delayMs: 0, detail: '' }],
       })
     },
     savedQueriesList: () => Promise.resolve(control.queries.map((q) => ({ ...q }))),
