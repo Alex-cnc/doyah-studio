@@ -1845,3 +1845,19 @@ Notes / Retro 走**各自仓**的入口（Notes 的 `bash tools/logic-check/run.
 - **读数**：`bash Scripts/verify-core.sh` ⇒ rc=0 · **3213 项 · 零错**（本片不动 Core 判据；编译期抓到过一处
   `AgentScheduleEntry` 少参 `createdAt` / `updatedAt`，已修）。
 - **归人工点验（如实登记）**：面板上真点一遍（建 / 启停 / 现在执行）；「停用后假端点收 0 次请求」的集成取证。
+
+### §5 追加：2026-10-18 第二十七笔（`FR-EDIT-48` 按键修复 · 派单 `T-20261018-204`）
+
+- **由头**：人类主人 2026-10-18 人工点验「快捷键不起作用」（清单 §18）。原话进单，不改写。
+- **根因（可复跑）**：菜单项此前**故意不挂键等效**，⌘L 只走编辑器 `performKeyEquivalent`；
+  新探针实测：同一窗口里**再有一个 SwiftUI `.keyboardShortcut("l", [.command])`** 就永远先赢
+  （buttonHit=1、正文一字未动）。本产品确有第二处 ⌘L = `AppShortcut.goToLine`（SQL「跳到行」）
+  ⇒ 同键两处注册。另：掩码用 `== [.command]` 判，大写锁开着时事件带 `.capsLock` ⇒ 静默放行。
+- **改动面**：`App/ShortcutCatalog.swift`（新 `.toggleTaskCheckbox` = ⌥⌘L）·
+  `App/DoyahStudioCommands.swift`（菜单项挂真键等效）· `App/Views/CodeEditorView.swift`（掩码摘
+  capsLock/numericPad/function）· 新判据 `TestsUISnapshot/MarkdownEditingKeyProbeTests.swift` 7 例 ·
+  需求行 + 清单 + 变更记录 v3.362（提交 `80d6671`，已推 origin/master）。
+- **口径**：需求 ② 授权「换键并显示在菜单里」⇒ 菜单用 ⌥⌘L，编辑器 ⌘L 保留为别名，两处同一方法；
+  **偏差登记在需求行，不静默改需求**（沿 `FR-EDIT-27` 让出 ⌘D 的先例）。
+- **未验证项（如实登记）**：真机按键投递（探针判不到系统→视图那一段；离屏宿主窗口成不了 key，
+  `window.sendEvent` / `NSApp.sendEvent` 连 ⌘S 都送不到）⇒ 归人工复验（两种键各按一次）。
