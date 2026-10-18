@@ -1776,6 +1776,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentScheduleWithheld
     case workspaceDiskChangedHint
     case menuAgentOpenChat
+    case agentChatStepsDone
     case agentChatStepsTitle
     case agentChatRunning2
     case agentStatusModel
@@ -3508,6 +3509,7 @@ public enum LocalizedStrings {
         .agentScheduleWithheld: [.simplifiedChinese: "被扣下 %d 条（未审批不执行）", .english: "%d held back (nothing runs without approval)"],
         .workspaceDiskChangedHint: [.simplifiedChinese: "磁盘上「%@」已变，但这一页签有未保存改动 —— 已保留你的改动", .english: "「%@」 changed on disk, but this tab has unsaved edits — your edits were kept"],
         .agentTestConnection: [.simplifiedChinese: "测试连接", .english: "Test connection"],
+        .agentChatStepsDone: [.simplifiedChinese: "已执行 %@ 步 · 点开看明细", .english: "%@ steps · click for detail"],
         .agentChatStepsTitle: [.simplifiedChinese: "本次任务 · %@ 步", .english: "This task · %@ steps"],
         .agentStatusModel: [.simplifiedChinese: "模型 %@", .english: "Model %@"],
         .agentChatRunning2: [.simplifiedChinese: "跑着呢", .english: "running"],

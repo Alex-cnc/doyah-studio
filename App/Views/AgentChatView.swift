@@ -270,24 +270,49 @@ struct AgentChatView: View {
                     }
                 }
                 .font(.caption).foregroundStyle(.secondary)
-                ForEach(model.steps) { step in
-                    HStack(spacing: 6) {
-                        Image(systemName: mark(for: step))
-                            .foregroundStyle(tint(for: step))
-                            .font(.caption)
-                        Text(L(.agentChatStepNo, "\(step.index)"))
-                            .font(.caption)
-                        Text(step.tools.joined(separator: " · "))
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Spacer()
+                // **不再把每一步都铺成一行**（人类主人 2026-10-18：「被你的 step 刷屏了」
+                // 「不清楚为什么要把这个 step 打印出来」）—— 这些是机械动作，不是进展：
+                // 一次 20 步的活会印 20 行 `list_dir · search`，把真正的回答挤出屏幕。
+                //
+                // 口径：
+                // · **跑着**：只留最后 2 步（知道它此刻在干什么就够了，历史不值钱）；
+                // · **跑完**：一行总结（几步 / 多久），明细收进「查看明细」里 —— 要查的时候才看。
+                if model.isRunning {
+                    ForEach(model.steps.suffix(2)) { step in
+                        stepRow(step)
                     }
+                } else if model.steps.count > 0 {
+                    DisclosureGroup {
+                        ForEach(model.steps) { step in
+                            stepRow(step)
+                        }
+                    } label: {
+                        Text(L(.agentChatStepsDone, "\(model.steps.count)"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .disclosureGroupStyle(.automatic)
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func stepRow(_ step: AgentChatStep) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: mark(for: step))
+                .foregroundStyle(tint(for: step))
+                .font(.caption)
+            Text(L(.agentChatStepNo, "\(step.index)"))
+                .font(.caption)
+            Text(step.tools.joined(separator: " · "))
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer()
         }
     }
 
