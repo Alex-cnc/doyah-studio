@@ -57,6 +57,11 @@
 * 判定不出类型的实参只被「形状登记 + 棘轮」钉住 —— 形状的 `kind` 写错
   （把真会收 `Int` 的东西登记成 `text`）本门禁**看不见**，这正是 `reason`
   字段要写清「凭哪一行源码判的」的原因。
+* 类型解析的索引**只收类型级 / 全局函数**（缩进 0 或 4）：函数体里的嵌套函数与成员方法
+  同名时会把整仓索引污染成错的（实测 `Core/CodeCommentToggle.swift` 的局部
+  `func map(_ offsetInBlock: Int) -> Int` 让每一处 `x.map(String.init)` 被判成数字，
+  判据 A 假红 + 台账形状被判「陈旧」）。代价是：真正的嵌套函数被当作自由函数调用时
+  解析不出类型 ⇒ 落到台账登记（宁可登记，不可错报）。
 * 注释按字符掩掉（`//` 与 `/* */`），字符串字面量里的内容不动；**实参也从掩过的文本切**
   （旧实现从原文切 ⇒ 实参里的注释把逗号带进来，`documented` 的假红根因，见 s4）。
 * 模板侧槽位：带位置索引（`%2$@`）按索引归位、`*` 宽度/精度各占一个槽；`%1$*2$d` 这种
@@ -485,6 +490,16 @@ class Resolver:
             for path in sorted(directory.rglob("*.swift")):
                 src = mask_comments(path.read_text(encoding="utf-8"))
                 for m in re.finditer(r"\bfunc\s+(\w+)", src):
+                    # **只收类型级 / 全局函数**（缩进 0 或 4）。函数体里的**嵌套函数**与成员方法
+                    # 同名时会把整仓索引污染成错的：`Core/CodeCommentToggle.swift:116` 有个
+                    # 局部 `func map(_ offsetInBlock: Int) -> Int`，于是每一处
+                    # `failure.exitCode.map(String.init)` 都被判成「数字」⇒ 判据 A 假红
+                    # （模板是 `%@`，实参其实是 String），同时台账里那条形状被判「陈旧」。
+                    # 本仓缩进约定 4 空格：类型成员 4、嵌套函数 ≥ 8，据此机械排除。
+                    line_start = src.rfind("\n", 0, m.start()) + 1
+                    indent = m.start() - line_start - len(src[line_start : m.start()].lstrip())
+                    if indent >= 8:
+                        continue
                     open_index = src.find("(", m.end())
                     if open_index < 0:
                         continue

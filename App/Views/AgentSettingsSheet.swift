@@ -155,7 +155,9 @@ struct AgentSettingsSheet: View {
                         let result = await appState.testAgentConnection()
                         switch result {
                         case .passed(let model, let millis):
-                            testLine = L(.agentTestPassed, model, "\(millis)")
+                            // `%d` 槽必须收数字：原来把毫秒转成字符串传进去，`String(format:)`
+                            // 会把指针/垃圾数印在「（… 毫秒）」里（门禁 A′ 抓到的）。直接传 Int。
+                            testLine = L(.agentTestPassed, model, millis)
                         case .failed(let reason):
                             testLine = L(.agentTestFailed, reason)
                         }
