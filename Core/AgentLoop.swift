@@ -116,7 +116,16 @@ public struct AgentLoopLimits: Equatable, Sendable {
     /// 进来之前已经花掉的令牌（续跑时会用到）。
     public var tokensAlreadySpent: Int
 
-    public init(maxSteps: Int = 8, maxTotalTokens: Int = 60_000, tokensAlreadySpent: Int = 0) {
+    /// 默认值：**150 步 / 20 万令牌**（人类主人 2026-10-18 实测「仍然卡在 8 步」）。
+    ///
+    /// 以前是 8 步 —— 那是按"防跑飞"定的，代价是真实任务必被腰斩：
+    /// 「读文件 → 改 → 跑测试 → 看报错 → 再改」这一圈就要 10 步以上，8 步等于干到一半被掐。
+    /// 150 这个数字不是拍的：对照 Hermes 自己的 `agent.max_turns: 150`（同一量级），
+    /// 令牌同理对照（Hermes 无硬上限，这里保留 20 万作为兜底）。
+    ///
+    /// **防跑飞改由"重复失败"来管**（见 `AgentLoop` 里对连续失败的判定），
+    /// 而不是靠"步数少" —— 数步数会把长任务和死循环一起杀掉。
+    public init(maxSteps: Int = 150, maxTotalTokens: Int = 200_000, tokensAlreadySpent: Int = 0) {
         self.maxSteps = maxSteps
         self.maxTotalTokens = maxTotalTokens
         self.tokensAlreadySpent = tokensAlreadySpent
