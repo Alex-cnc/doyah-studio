@@ -46,6 +46,7 @@ describe('ipc', () => {
       'db_cancel',
       'explain_statement',
       'highlight_sql',
+      'diagnose_sql',
       'db_write_batch',
       'db_primary_key',
       'edits_to_dml',

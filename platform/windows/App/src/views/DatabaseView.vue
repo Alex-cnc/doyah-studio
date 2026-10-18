@@ -24,6 +24,7 @@ import {
   dbCancel,
   explainStatement,
   highlightSql,
+  diagnoseSql,
   dbWriteBatch,
   dbPrimaryKey,
   editsToDml,
@@ -56,6 +57,7 @@ import {
   type ColumnNode,
   type SearchHit,
   type SqlToken,
+  type SqlDiagnostic,
   type CellEdit,
   type DmlStatement,
   type ColumnDef,
@@ -114,6 +116,8 @@ import {
 } from '../workspace/editing'
 // 跳行列（B1 第二批）：解析与夹界在 `workspace/navigation.ts`（有行为单测），组件只做摆光标。
 import { offsetOfJump, parseJumpInput } from '../workspace/navigation'
+// 诊断上屏（B1 第三批 · FR-EDIT-56）：规则在领域层 `Db/src/lint.rs`，这里只把区间叠到高亮片段上。
+import { decoratePieces } from '../workspace/diagnostics'
 
 // **界面语言（1.8 双语）**：与标题栏同一套取值（zh-Hans / en）
 // 口径：语言表只覆盖**界面外壳**；正文说明与服务端提示仍是中文（已在版本计划里登记未落）。
@@ -1795,6 +1799,61 @@ function applyGoto(): void {
   void refreshCompletions()
 }
 
+// ── 编辑面静态检查上屏（FR-EDIT-03 检查器 → FR-EDIT-56 画出来）────────────────────────
+//
+// 规则在领域层 `Db/src/lint.rs`（15 条行为单测），这里只做三件界面的事：
+//   ① 每次文本变化问一次诊断（与高亮同一节奏，不另设防抖计时器 —— 两套节奏必然不同步）；
+//   ② 把诊断区间叠到高亮片段上（`workspace/diagnostics.decoratePieces`，只切不改文字）；
+//   ③ 在编辑器下方列成可点的问题条（点一条 ⇒ 光标跳到那一处）。
+// 浏览器旁路没有检查器 ⇒ `diagnoseSql` 回空表，于是既不下划线也不列问题 ——
+// **不假装「已检查、没问题」**：检查器缺席时界面只是安静，不是绿的。
+const diagnostics = ref<SqlDiagnostic[]>([])
+/** 只认最后一次请求的结果：连着打字时先发的慢请求回来晚了，不能把新结果顶掉。 */
+let diagnoseSeq = 0
+
+async function refreshDiagnostics(): Promise<void> {
+  const seq = (diagnoseSeq += 1)
+  try {
+    const list = await diagnoseSql(sql.value)
+    if (seq === diagnoseSeq) diagnostics.value = list
+  } catch {
+    // 检查器失败不该挡住写 SQL：清掉标记，不弹错、不清空编辑器
+    if (seq === diagnoseSeq) diagnostics.value = []
+  }
+}
+
+watch(
+  sql,
+  () => {
+    void refreshDiagnostics()
+  },
+  { immediate: true },
+)
+
+/** 高亮片段 + 诊断下划线（绘制层只切分，不重判规则）。 */
+const decoratedPieces = computed(() => decoratePieces(pieces.value, diagnostics.value))
+
+/** 问题条的一行：位置 + 一句说明（位置 1 基行列，与状态栏同一口径）。 */
+const problemRows = computed(() =>
+  diagnostics.value.map((item) => {
+    const at = lineColumnAt(sql.value, item.start)
+    return { ...item, line: at.line, column: at.column }
+  }),
+)
+
+/** 点问题条：把光标搬到那一处（顺手收起跳转面板与补全清单，免得抢焦点）。 */
+async function jumpToProblem(offset: number): Promise<void> {
+  gotoOpen.value = false
+  completions.value = []
+  const area = sqlArea.value
+  if (!area) return
+  area.focus()
+  area.setSelectionRange(offset, offset)
+  caretOffset.value = offset
+  await nextTick()
+  syncCaret()
+}
+
 /** 当前编辑器里的**选区文本**（没有选区 / 不是 textarea ⇒ 空串）。 */
 function selectedSql(): string {
   const area = sqlArea.value
@@ -2496,9 +2555,9 @@ async function probe() {
                两层共用同一份字体与内边距（否则光标与字会错位，这是这种做法的经典坑）。 -->
           <div class="db__editor">
             <pre class="db__editor-highlight" aria-hidden="true"><span
-              v-for="(piece, i) in pieces"
+              v-for="(piece, i) in decoratedPieces"
               :key="i"
-              :class="`db__tok db__tok--${piece.kind}`"
+              :class="[`db__tok db__tok--${piece.kind}`, piece.severity ? `db__tok--${piece.severity}` : '']"
             >{{ piece.text }}</span></pre>
             <textarea
               ref="sqlArea"
@@ -2528,6 +2587,27 @@ async function probe() {
             <button class="db__status-goto" type="button" :title="t('sql.gotoTip')" @click="openGoto">
               {{ t('sql.gotoOpen') }}
             </button>
+          </div>
+          <!-- 问题条（FR-EDIT-56）：静态检查的结果**画出来** —— 编辑器里那几处加虚下划线，
+               这里列成可点的行（点一条就把光标搬到那一处）。检查器在领域层，这里只显示。 -->
+          <div v-if="problemRows.length" class="db__problems" data-testid="editor-problems">
+            <span class="db__problems-count" data-testid="editor-problem-count">{{
+              t('sql.problems', { n: problemRows.length })
+            }}</span>
+            <ul class="db__problems-list">
+              <li v-for="(row, i) in problemRows" :key="`${row.start}:${i}`">
+                <button
+                  class="db__problem"
+                  :class="`db__problem--${row.severity}`"
+                  type="button"
+                  :title="row.message"
+                  @click="jumpToProblem(row.start)"
+                >
+                  <span class="db__problem-at">{{ t('sql.caret', { line: row.line, column: row.column }) }}</span>
+                  <span class="db__problem-msg">{{ row.message }}</span>
+                </button>
+              </li>
+            </ul>
           </div>
           <!-- 跳行列（FR-EDIT-19）：Ctrl+G 或点状态栏那颗按钮开；非法输入不关面板、如实给原因。 -->
           <form v-if="gotoOpen" class="db__goto" @submit.prevent="applyGoto">
@@ -3517,6 +3597,78 @@ async function probe() {
 }
 .db__goto-error {
   color: var(--ds-color-status-danger);
+}
+
+/* 诊断下划线（FR-EDIT-56）：出问题的范围在字下加虚下划线 —— 只做"哪一段有问题"，
+   颜色走状态令牌（与问题条同一套），不在样式里写死颜色。 */
+.db__tok--error {
+  text-decoration: underline dashed;
+  text-decoration-color: var(--ds-color-status-danger);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.db__tok--warning {
+  text-decoration: underline dashed;
+  text-decoration-color: var(--ds-color-status-warning);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.db__tok--info {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--ds-color-text-tertiary);
+  text-underline-offset: 2px;
+}
+/* 问题条（FR-EDIT-56）：一行计数 + 逐条可点的行（点一条把光标搬过去） */
+.db__problems {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-spacing-s);
+  margin: 0 0 var(--ds-spacing-xs);
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  background: var(--ds-color-surface-content);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-size: var(--ds-font-caption-size);
+}
+.db__problems-count {
+  color: var(--ds-color-status-danger);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.db__problems-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.db__problem {
+  display: flex;
+  gap: var(--ds-spacing-xs);
+  align-items: baseline;
+  padding: 0;
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  border: 0;
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+.db__problem:hover .db__problem-msg {
+  color: var(--ds-color-text-primary);
+}
+.db__problem-at {
+  color: var(--ds-color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.db__problem--error .db__problem-at {
+  color: var(--ds-color-status-danger);
+}
+.db__problem--warning .db__problem-at {
+  color: var(--ds-color-status-warning);
 }
 
 .db__tok--keyword {

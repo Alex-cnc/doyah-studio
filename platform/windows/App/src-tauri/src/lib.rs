@@ -565,6 +565,13 @@ fn highlight_sql(sql: String) -> Vec<doyah_studio_db::sql::Token> {
     doyah_studio_db::sql::tokenize(&sql)
 }
 
+/// FR-EDIT-03 / FR-EDIT-56 静态检查：诊断只在领域层判一遍（`Db/src/lint.rs`），界面只负责画。
+/// 偏移是**字符下标**（前端直接 `slice`），不是字节 —— 含中文注释的 SQL 才不会错位。
+#[tauri::command]
+fn diagnose_sql(sql: String) -> Vec<doyah_studio_db::lint::Diagnostic> {
+    doyah_studio_db::lint::diagnose(&sql)
+}
+
 // ── 写回与事务（1.4：一批一次事务 / 主键定位 / 只读拦截 / 危险语句确认）──────────────────
 
 /// **一批写回，一次事务**：跑完提交，或（`rollback` 为真 / 中途失败）整批回滚。
@@ -1711,6 +1718,7 @@ pub fn run() {
             db_cancel,
             explain_statement,
             highlight_sql,
+            diagnose_sql,
             db_write_batch,
             db_primary_key,
             edits_to_dml,

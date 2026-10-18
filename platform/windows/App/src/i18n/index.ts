@@ -389,6 +389,7 @@ export const DICT = {
   },
   // 编辑器状态栏（B1 第二批）：光标位置 / 缩进口径 / 括号配对
   'sql.caret': { 'zh-Hans': '行 {line} · 列 {column}', en: 'Ln {line}, Col {column}' },
+  'sql.problems': { 'zh-Hans': '问题 {n}', en: '{n} problem(s)' },
   'sql.indentSpaces': { 'zh-Hans': '空格 ×{n}', en: 'Spaces ×{n}' },
   'sql.indentTab': { 'zh-Hans': 'Tab 缩进', en: 'Tab indents' },
   'sql.bracketNone': { 'zh-Hans': '光标处无括号', en: 'no bracket at caret' },

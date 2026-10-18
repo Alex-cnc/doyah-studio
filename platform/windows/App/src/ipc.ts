@@ -53,6 +53,8 @@ export const COMMANDS = {
   dbCancel: 'db_cancel',
   explainStatement: 'explain_statement',
   highlightSql: 'highlight_sql',
+  // 编辑面静态检查（FR-EDIT-03 / FR-EDIT-56）：规则只在领域层 `Db/src/lint.rs` 判一遍
+  diagnoseSql: 'diagnose_sql',
   // 写回与事务（1.4：一批一次事务 / 主键定位 / 只读拦截 / 危险语句判定）
   dbWriteBatch: 'db_write_batch',
   dbPrimaryKey: 'db_primary_key',
@@ -696,6 +698,27 @@ export interface SqlToken {
 /** 高亮分词：**词法在领域层**（与执行切分同一套规则），本函数只把原文递过去。 */
 export function highlightSql(sql: string): Promise<SqlToken[]> {
   return call(COMMANDS.highlightSql, { sql }, () => [] as SqlToken[])
+}
+
+// ── 编辑面静态检查（FR-EDIT-03 检查器 / FR-EDIT-56 上屏）──────────────────────────────
+
+/** 一条诊断（**偏移是字符下标**，前端可直接 `slice` 原文；`end` 不含）。 */
+export interface SqlDiagnostic {
+  start: number
+  end: number
+  severity: 'error' | 'warning' | 'info'
+  message: string
+}
+
+/**
+ * 跑一遍静态检查（未闭合字符串 / 块注释 / dollar-quote / 括号不配平）。
+ *
+ * 口径：**规则只判一遍**（领域层 `Db/src/lint.rs`），这个函数只把原文递过去。
+ * 浏览器旁路（不在 Tauri 里跑）没有检查器 ⇒ 返回空表（不编造问题）；
+ * 界面据此不给下划线，而不是假装「已检查、无问题」。
+ */
+export function diagnoseSql(sql: string): Promise<SqlDiagnostic[]> {
+  return call(COMMANDS.diagnoseSql, { sql }, () => [] as SqlDiagnostic[])
 }
 
 // ── 写回与事务（1.4）──────────────────────────────────────────────────────────────────

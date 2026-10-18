@@ -25,6 +25,7 @@ pub mod format;
 pub mod highlight;
 pub mod inspect;
 pub mod io_csv;
+pub mod lint;
 pub mod markdown;
 pub mod open_as;
 pub mod palette;
