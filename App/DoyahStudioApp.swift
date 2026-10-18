@@ -120,6 +120,24 @@ struct DoyahStudioApp: App {
                         guard let rootPath = workspace.rootPath else { return false }
                         return await appState.applyAgentChatApproval(card: card, workspacePath: rootPath)
                     }
+                    // `FR-AI-22` ② 工作区现场读数（当前文件 / 选中范围 / 终端尾部）：
+                    // 取数在界面（三样分属三个模型，`AppState` 不持有），换算是纯函数
+                    // （`AgentWorkspaceSnapshot`），带不带 / 谁在前 / 留尾由 Core 裁。
+                    // 选中只认**显示中的编辑器**（`liveSelection`，主线程）；没有文件页签 ⇒ 不带文件段。
+                    appState.agentWorkspaceFactsProvider = { [weak workspaceTabs, weak terminal, weak workspace] in
+                        let tab = workspaceTabs?.selectedTab
+                        let isFile = tab?.kind == .file
+                        let selection = (isFile ? tab?.id : nil).flatMap {
+                            EditorCommandCenter.shared.liveSelection(for: $0)
+                        }
+                        return AgentWorkspaceSnapshot.facts(
+                            filePath: isFile ? tab?.path : nil,
+                            text: isFile ? tab?.content : nil,
+                            selection: selection,
+                            terminalText: terminal?.existingActivePane?.screen.text(),
+                            workspacePath: workspace?.rootPath
+                        )
+                    }
                 }
                 .task {
                     // 工作区 → 终端启动目录：把工作区路径交给终端（它只在启动那一刻读）。

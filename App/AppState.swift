@@ -2879,6 +2879,13 @@ final class AppState: ObservableObject {
         return .ready(model: model, endpoint: endpoint)
     }
 
+    /// 工作区**现场读数**的供给口（`FR-AI-22` ②）：当前文件 / 选中范围 / 终端尾部。
+    ///
+    /// 为什么是闭包而不是属性：这三样分别长在三个**视图级模型**上（工作区页签 / 编辑器视图 /
+    /// 终端面板），`AppState` 刻意不持有它们（那会把整个窗口拉进它的观测面，见 `editorBuffer`
+    /// 那条纪律）。界面在启动时把这个口接上；没接（单测 / 老路径）⇒ 这一段**如实不带**。
+    var agentWorkspaceFactsProvider: (@MainActor () -> AgentWorkspaceFacts)?
+
     /// 造一条对话循环：流式网关（`FR-AI-16`）+ 循环（`FR-AI-18`）+ 六个工具（`FR-AI-19/20`）+ 审计（`FR-AI-24`）。
     ///
     /// 造不出来（端点没配 / 地址不合法）⇒ 返回 `nil` —— 界面那边**如实拦**，不假装在跑。
@@ -2932,6 +2939,14 @@ final class AppState: ObservableObject {
         let promptWithNotes = resolvedMentions.notes.isEmpty
             ? prompt
             : prompt + "\n\n[未带上的提及]\n" + resolvedMentions.notes.joined(separator: "\n")
+
+        // `FR-AI-22` ②：**不写 `@` 也让它看见我正在改什么** —— 当前文件 / 选中范围 / 终端尾部。
+        // 取数在界面（三样分属三个视图级模型，`AppState` 不持有它们）；裁留在
+        // `AgentWorkspaceFacts` → `AgentWorkspaceContext`（空的不带、选中在前、终端留尾）。
+        // 没接供给口（单测 / 工作区没打开）⇒ 如实不带，不编一段空壳。
+        if let facts = agentWorkspaceFactsProvider?() {
+            references.append(contentsOf: AgentWorkspaceContext.references(from: facts))
+        }
 
         // 灵魂（`FR-AI-34`）：L0 读包内 `soul-L0.md`、L1 读 `<工作区>/.doyah/soul-role.md`；
         // 缺项由 `AgentSoul.compose` **如实写进提示词**（不静默当没有），缺 L0 属缺陷。

@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Combine
 
 /// 编辑器命令（由工具栏「编辑」菜单发出）。
@@ -114,11 +115,15 @@ final class EditorCommandCenter: ObservableObject {
     private var liveTextViews: [UUID: WeakTextView] = [:]
 
     private struct WeakTextView {
-        weak var view: SQLTextView?
+        weak var view: NSTextView?
     }
 
     /// 登记**显示中**的编辑器；同一页签重复登记时以最新那个视图为准。
-    func register(textView: SQLTextView, for tabID: UUID) {
+    ///
+    /// 类型是 `NSTextView` 而不是 `SQLTextView`：工作区代码编辑器（`CodeTextView`）不是它的子类，
+    /// 但「此刻真实选区」这件事两边一模一样 —— 取数只问 `selectedRange()`，
+    /// 类型放宽在这里不会多给任何能力（`FR-AI-22` ②）。
+    func register(textView: NSTextView, for tabID: UUID) {
         selectionLock.lock()
         liveTextViews[tabID] = WeakTextView(view: textView)
         selectionLock.unlock()

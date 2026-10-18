@@ -85,6 +85,12 @@ final class TerminalModel: ObservableObject {
     /// 当前页签的会话（视图拿它画网格）。
     var activePane: TerminalPane { pane(for: tabs.activeID) }
 
+    /// 当前页签的会话 —— **没有就不建**（只想读一眼屏幕时用它）。
+    ///
+    /// 与 `activePane` 的区别只有一条：那个会顺手造一个空会话（界面拿着刚关掉的 id 时是刚需），
+    /// 而「读上下文」这类旁路不该有副作用 —— 对话里问一句，不该因此多出一条 shell。
+    var existingActivePane: TerminalPane? { panes[tabs.activeID] }
+
     /// 某个页签的会话。
     ///
     /// 字典里没有就**现造一个**：界面可能拿到一个刚被别处关掉的 id（或单测 / 快照里

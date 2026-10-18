@@ -97,9 +97,14 @@ final class ExecutionBehaviorConventionTests: XCTestCase {
     }
 
     /// ④ 选区的唯一可信来源，是**显示中的那个 `NSTextView`**。
+    ///
+    /// 2026-10-18（`FR-AI-22` ②）类型由 `SQLTextView` 放宽到 `NSTextView`：工作区代码编辑器
+    /// （`CodeTextView`，不是 `SQLTextView` 的子类）现在也登记进来 —— 对话要带「用户选的那段」，
+    /// 而它和 SQL 编辑器在这件事上完全一样（都只问 `selectedRange()`）。
+    /// **判据强度不变**：weak 持有、直接问视图、缓存只兜底，三条都还在；改动的是类型面。
     func testLiveTextViewIsTheSelectionSource() throws {
         let center = try source("App/EditorCommandCenter.swift")
-        XCTAssertTrue(center.contains("weak var view: SQLTextView"), "登记显示中的编辑器要用 weak（视图销毁后不留引用）")
+        XCTAssertTrue(center.contains("weak var view: NSTextView"), "登记显示中的编辑器要用 weak（视图销毁后不留引用）")
         XCTAssertTrue(center.contains("view?.selectedRange()"), "要直接问那个视图此刻的选区")
         XCTAssertTrue(
             center.contains("return live ?? selection(for: tabID)"),
@@ -111,6 +116,14 @@ final class ExecutionBehaviorConventionTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(
             registrations, 2,
             "makeNSView 与 updateNSView 都要登记：重建之后登记进去的必须是**新的**那个视图"
+        )
+
+        // 工作区代码编辑器同一条纪律（`FR-AI-22` ②：对话带「我正在改的那段」只认这里）。
+        let codeEditor = try source("App/Views/CodeEditorView.swift")
+        let codeRegistrations = codeEditor.components(separatedBy: "register(textView:").count - 1
+        XCTAssertGreaterThanOrEqual(
+            codeRegistrations, 2,
+            "工作区编辑器同样 makeNSView / updateNSView 两处登记（重建后登记新的那个）"
         )
     }
 

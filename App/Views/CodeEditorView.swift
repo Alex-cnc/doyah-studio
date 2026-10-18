@@ -51,6 +51,8 @@ struct CodeEditorView: NSViewRepresentable {
         let placement = takeCursorPlacement?(tabID)
         let textView = CodeTextView(frame: .zero)
         textView.delegate = context.coordinator
+        // 登记「显示中的编辑器」：`FR-AI-22` ② 取「用户选的那段」只认这个（缓存记录会被重建冲掉）。
+        EditorCommandCenter.shared.register(textView: textView, for: tabID)
         textView.isRichText = true
         textView.isEditable = true
         textView.isSelectable = true
@@ -133,6 +135,9 @@ struct CodeEditorView: NSViewRepresentable {
         textView.tabID = tabID
         textView.onSave = onSave
         textView.onFormat = onFormat
+        // 显示中的那个视图才算数（重建之后登记的必须是新的这个）—— `FR-AI-22` ②：
+        // 对话要带上「用户选的那段」，取的就是这里登记的 `selectedRange()`。
+        EditorCommandCenter.shared.register(textView: textView, for: tabID)
         // 格式化结果：**每条投递只应用一次**（按投递 id 记账，不按文本比 —— 文本可能正好相等）。
         if let delivery = pendingFormat, delivery.tabID == tabID,
            context.coordinator.appliedFormatID != delivery.id {
