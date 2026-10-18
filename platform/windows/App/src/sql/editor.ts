@@ -120,6 +120,23 @@ export function applyCompletionItem(
 }
 
 /**
+ * 补全清单的键盘导航：把高亮下标按 `delta` 移动，**到头回卷**。
+ *
+ * 三条口径（都由用例守）：
+ * ① 空清单恒 0 —— 调用方据此判断「没得选」；
+ * ② 下标越界**先夹紧再移动**（候选被过滤变短时，旧下标可能比新长度大，不夹紧会漏位）；
+ * ③ 回卷而不是夹死两端 —— 清单只露 8 条，想选最后一条的人不该按到手指酸还以为坏了。
+ *
+ * 为什么是纯函数：导航最容易写成「`.vue` 里 +1 再手写 if 回卷」的一段，而它完全可以单测。
+ */
+export function stepCompletionIndex(current: number, delta: number, count: number): number {
+  if (count <= 0) return 0
+  const base = Math.min(Math.max(current, 0), count - 1)
+  if (delta === 0) return base
+  return (((base + delta) % count) + count) % count
+}
+
+/**
  * 把已加载的对象变成候选。
  *
  * 口径：**同时给对象名与限定名两类候选** —— 只给对象名，用户就没法直接敲 `app.orders`；

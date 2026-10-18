@@ -98,6 +98,7 @@ import {executionTarget,
   outcomeSummary,
   pickDisplayedOutcome,
   snippetCompletions,
+  stepCompletionIndex,
   wordBeforeCaret,
   type CompletionItem,
 } from '../sql/editor'
@@ -1551,6 +1552,18 @@ const shownOutcome = ref<number | null>(null)
 /** 补全：候选清单与当前高亮的候选下标。 */
 const completions = ref<CompletionItem[]>([])
 const completionIndex = ref(0)
+/**
+ * 清单一次露几条。
+ *
+ * 口径：**露出来的就是可选的** —— 显示与导航用同一个切片（`visibleCompletions`），
+ * 否则会出现「高亮在第 9 条、屏幕上只有 8 条」这种按回车插错东西的形状。
+ */
+const VISIBLE_COMPLETION_ROWS = 8
+const visibleCompletions = computed(() => completions.value.slice(0, VISIBLE_COMPLETION_ROWS))
+/** 真高亮下标（越界先夹紧：候选被过滤变短时旧下标可能比新长度大）。 */
+const activeCompletionIndex = computed(() =>
+  stepCompletionIndex(completionIndex.value, 0, visibleCompletions.value.length),
+)
 const sqlArea = ref<HTMLTextAreaElement | null>(null)
 
 async function refreshHighlight() {
@@ -1590,13 +1603,28 @@ async function refreshCompletions() {
  * —— 落笔逻辑在纯函数 `applyCompletionItem`（那里有行为单测），这里只负责摆光标与刷新。
  */
 function acceptCompletion(item?: CompletionItem) {
-  const chosen = item ?? completions.value[completionIndex.value]
+  const chosen = item ?? visibleCompletions.value[activeCompletionIndex.value]
   const area = sqlArea.value
   if (!chosen || !area) return
   const caret = area.selectionStart ?? sql.value.length
   const result = applyCompletionItem(sql.value, caret, chosen)
   completions.value = []
   void applyEdit({ text: result.text, selection: { start: result.caret, end: result.caret } })
+}
+
+/**
+ * 编辑器 keyup（补全刷新 / 光标同步）。
+ *
+ * ↑↓ 在有候选时**不重算候选**：`refreshCompletions` 会把高亮打回第一条，
+ * 于是「按一下 ↓ 高亮跳回开头」—— 导航看起来像坏了，而根因在 keyup 这一侧。
+ */
+function onEditorKeyup(event: KeyboardEvent): void {
+  if (completions.value.length > 0 && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+    syncCaret()
+    return
+  }
+  void refreshCompletions()
+  syncCaret()
 }
 
 // ── 编辑键（B1 接线 · 第一批 6 条）：注释切换 / 移行 / 复制行 / 回车缩进 / Tab 缩进 / 自动配对 ──
@@ -1667,6 +1695,25 @@ function onEditorKeydown(event: KeyboardEvent): void {
     const direction = event.shiftKey ? 'duplicate' : event.key === 'ArrowUp' ? 'up' : 'down'
     void applyEdit(moveOrDuplicateLines(sql.value, selection, direction))
     return
+  }
+
+  // ③.5 补全清单导航（B1 收尾）：↑↓ 在**可见候选**里循环移动，回车插入当前高亮。
+  // 只在清单开着且不带修饰键时接管 —— 清单关着时 ↑↓ 照旧移光标、回车照旧自动缩进（否定面有测试）。
+  if (completions.value.length > 0 && !mod && !event.altKey && !event.shiftKey) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      completionIndex.value = stepCompletionIndex(
+        activeCompletionIndex.value,
+        event.key === 'ArrowDown' ? 1 : -1,
+        visibleCompletions.value.length,
+      )
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      acceptCompletion()
+      return
+    }
   }
 
   // ④ Tab / Shift+Tab 缩进 —— **有候选时仍归补全清单**（旧行为不夺走）
@@ -2576,7 +2623,7 @@ async function probe() {
               rows="3"
               aria-label="SQL"
               @input="refreshHighlight(); refreshCompletions(); syncCaret(); stashActiveQuery()"
-              @keyup="refreshCompletions(); syncCaret()"
+              @keyup="onEditorKeyup"
               @click="refreshCompletions(); syncCaret()"
               @select="syncCaret()"
               @keydown="onEditorKeydown"
@@ -2637,10 +2684,10 @@ async function probe() {
           </form>
           <p class="db__editor-keys">{{ t('sql.keys') }}</p>
           <ul v-if="completions.length" class="db__completions">
-            <li v-for="(c, i) in completions.slice(0, 8)" :key="`${c.kind}:${c.text}`">
+            <li v-for="(c, i) in visibleCompletions" :key="`${c.kind}:${c.text}`">
               <button
                 class="db__completion"
-                :class="{ 'db__completion--active': i === completionIndex }"
+                :class="{ 'db__completion--active': i === activeCompletionIndex }"
                 type="button"
                 @click="acceptCompletion(c)"
               >
@@ -2648,6 +2695,8 @@ async function probe() {
                 <span class="db__kind">{{ c.detail }}</span>
               </button>
             </li>
+            <!-- 键盘提示（B1 收尾）：清单开着时把「↑↓ / 回车」写在脸上 -->
+            <li class="db__completion-hint" data-testid="completion-keys">{{ t('sql.completionKeys') }}</li>
           </ul>
           <div class="db__sql-actions">
             <!-- 工具条第一格（图里那条）：当前库 —— 选项来自**已保存连接**里同主机同用户的那些库 -->
@@ -3735,6 +3784,15 @@ async function probe() {
 
 .db__completion-text {
   font-family: var(--ds-font-stack);
+}
+
+/* 清单底部的按键提示（B1 收尾）：低对比、贴边、不吃点击 */
+.db__completion-hint {
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+  border-top: var(--ds-metric-hairline) solid var(--ds-hairline);
 }
 
 .db__outcomes {

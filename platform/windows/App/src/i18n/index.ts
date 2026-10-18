@@ -387,6 +387,11 @@ export const DICT = {
     'zh-Hans': 'Ctrl+/ 注释 · Alt+↑↓ 移行 · Alt+Shift+↓ 复制行 · Tab 缩进 · 回车自动缩进 · 括号自动配对 · Ctrl+G 跳行列',
     en: 'Ctrl+/ comment · Alt+↑↓ move line · Alt+Shift+↓ duplicate · Tab indent · Enter auto-indent · auto-pair brackets · Ctrl+G go to line',
   },
+  // 补全清单的键盘提示（B1 收尾）：↑↓ 与回车能用这件事必须写在脸上，否则只有摸到的人知道
+  'sql.completionKeys': {
+    'zh-Hans': '↑↓ 选择 · 回车/Tab 插入 · Esc 关闭',
+    en: '↑↓ select · Enter/Tab insert · Esc close',
+  },
   // 编辑器状态栏（B1 第二批）：光标位置 / 缩进口径 / 括号配对
   'sql.caret': { 'zh-Hans': '行 {line} · 列 {column}', en: 'Ln {line}, Col {column}' },
   'sql.problems': { 'zh-Hans': '问题 {n}', en: '{n} problem(s)' },

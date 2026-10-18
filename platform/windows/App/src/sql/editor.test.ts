@@ -9,6 +9,7 @@ import {
   outcomeSummary,
   pickDisplayedOutcome,
   snippetCompletions,
+  stepCompletionIndex,
   wordBeforeCaret,
   type CompletionItem,
 } from './editor'
@@ -247,5 +248,32 @@ describe('片段补全（FR-EDIT-59）', () => {
     const result = applyCompletionItem('select cou(*) from t', 10, item)
     expect(result.text).toBe('select count(*) from t')
     expect(result.caret).toBe(12)
+  })
+})
+
+// 补全清单导航（B1 收尾）：显示与导航共用同一个切片，越界先夹紧、到头回卷。
+describe('stepCompletionIndex（B1 补全导航的下标算术）', () => {
+  it('往下走一步、到头回卷到第一条', () => {
+    expect(stepCompletionIndex(0, 1, 3)).toBe(1)
+    expect(stepCompletionIndex(2, 1, 3)).toBe(0)
+  })
+
+  it('往上走一步、从第一条回卷到末条', () => {
+    expect(stepCompletionIndex(1, -1, 3)).toBe(0)
+    expect(stepCompletionIndex(0, -1, 3)).toBe(2)
+  })
+
+  it('空清单恒 0（调用方据此判「没得选」）', () => {
+    expect(stepCompletionIndex(5, 1, 0)).toBe(0)
+    expect(stepCompletionIndex(0, -1, 0)).toBe(0)
+  })
+
+  it('下标比长度大时先夹紧再移动（候选被过滤变短的情形）', () => {
+    expect(stepCompletionIndex(9, 0, 4)).toBe(3)
+    expect(stepCompletionIndex(9, 1, 4)).toBe(0)
+  })
+
+  it('负下标也不越界（取不着就归 0）', () => {
+    expect(stepCompletionIndex(-3, 0, 4)).toBe(0)
   })
 })
