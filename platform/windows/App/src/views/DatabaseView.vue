@@ -7,7 +7,7 @@
 //   · 截断：`truncated` 为真时**如实说**（不静默少给行）；
 //   · 未连接：按钮可用但一按就给可读原因（不做"灰着但不说为什么"）。
 
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ActionIcon from './ActionIcon.vue'
 import {
   LAB_CONNECTION,
@@ -121,6 +121,8 @@ import {
 import { offsetOfJump, parseJumpInput } from '../workspace/navigation'
 // 诊断上屏（B1 第三批 · FR-EDIT-56）：规则在领域层 `Db/src/lint.rs`，这里只把区间叠到高亮片段上。
 import { decoratePieces } from '../workspace/diagnostics'
+// 分隔条（FR-EDIT-13）：夹紧与步进是纯算术，摆在 `splitPane.ts`；组件只做测量、指针与 inline 高度。
+import { SPLIT_MIN_PANE, SPLIT_STEP, clampSplitHeight, stepSplitHeight } from './splitPane'
 
 // **界面语言（1.8 双语）**：与标题栏同一套取值（zh-Hans / en）
 // 口径：语言表只覆盖**界面外壳**；正文说明与服务端提示仍是中文（已在版本计划里登记未落）。
@@ -1566,6 +1568,78 @@ const activeCompletionIndex = computed(() =>
 )
 const sqlArea = ref<HTMLTextAreaElement | null>(null)
 
+// ── 分隔条（FR-EDIT-13 · 编辑区 ↔ 结果区）─────────────────────────────────
+// 三条口径：① **自动高度是默认态**（`editorHeight === null` ⇒ 不写 inline 高度，观感与接线前一致）；
+// ② 拖动只改编辑区高度，而容器是 flex 列、结果区 `flex: 1` ⇒ 两区高度**必然守恒**（不会总高溢出）；
+// ③ 上下各 ≥120px（`SPLIT_MIN_PANE`），拖动与键盘走同一个夹紧函数。
+const mainPane = ref<HTMLElement | null>(null)
+const editorHeight = ref<number | null>(null)
+const splitDragging = ref(false)
+let dragStartY = 0
+let dragStartHeight = 0
+
+/** 量当前容器与编辑区高度；量不到给 0（夹紧函数据此只保下限，不会算出负数）。 */
+function paneMetrics(): { container: number; editor: number } {
+  const container = mainPane.value?.getBoundingClientRect().height ?? 0
+  const editor = editorHeight.value ?? sqlArea.value?.getBoundingClientRect().height ?? 0
+  return { container, editor }
+}
+
+/** 编辑区 inline 高度：自动态不产出 style（否则会把默认观感改成固定值）。 */
+const editorStyle = computed(() =>
+  editorHeight.value === null ? {} : { height: `${editorHeight.value}px` },
+)
+
+function detachSplitListeners() {
+  window.removeEventListener('pointermove', onSplitMove)
+  window.removeEventListener('pointerup', onSplitEnd)
+  window.removeEventListener('pointercancel', onSplitEnd)
+}
+
+/** 按下分隔条：先把手上的自动高度**落成一个数**（否则第一次移动没有基准），再开始跟指针。 */
+function onSplitDown(event: PointerEvent) {
+  if (event.button !== 0) return
+  event.preventDefault()
+  const { container, editor } = paneMetrics()
+  if (editorHeight.value === null && editor > 0) {
+    editorHeight.value = clampSplitHeight(editor, container)
+  }
+  dragStartY = event.clientY
+  dragStartHeight = editorHeight.value ?? editor
+  splitDragging.value = true
+  // 监听挂在 window 上：指针跑出这条细条（几乎必然）时拖动仍要继续。
+  window.addEventListener('pointermove', onSplitMove)
+  window.addEventListener('pointerup', onSplitEnd)
+  window.addEventListener('pointercancel', onSplitEnd)
+}
+
+function onSplitMove(event: PointerEvent) {
+  if (!splitDragging.value) return
+  const { container } = paneMetrics()
+  editorHeight.value = clampSplitHeight(dragStartHeight + (event.clientY - dragStartY), container)
+}
+
+function onSplitEnd() {
+  splitDragging.value = false
+  detachSplitListeners()
+}
+
+/** 键盘：↑ / ↓ 步进 16px（焦点在分隔条上时）。其他键不接管。 */
+function onSplitKey(event: KeyboardEvent) {
+  const delta = event.key === 'ArrowUp' ? -SPLIT_STEP : event.key === 'ArrowDown' ? SPLIT_STEP : 0
+  if (!delta) return
+  event.preventDefault()
+  const { container, editor } = paneMetrics()
+  editorHeight.value = stepSplitHeight(editorHeight.value ?? editor, delta, container)
+}
+
+/** 双击：回到自动高度（不是「回到某个魔法数字」——窗口多大就多高）。 */
+function resetSplit() {
+  editorHeight.value = null
+}
+
+onBeforeUnmount(detachSplitListeners)
+
 async function refreshHighlight() {
   try {
     pieces.value = highlightPieces(sql.value, await highlightSql(sql.value))
@@ -2574,7 +2648,7 @@ async function probe() {
         </div>
 
       <!-- SQL 与结果 -->
-      <div class="db__main">
+      <div class="db__main" ref="mainPane">
         <!-- 查询页签（图里的「查询 1 ×」+ 加号）；每个页签各自一份 SQL -->
         <div class="db__qtabs" role="tablist" aria-label="查询页签">
           <div
@@ -2619,6 +2693,7 @@ async function probe() {
             <textarea
               ref="sqlArea"
               v-model="sql"
+              :style="editorStyle"
               spellcheck="false"
               rows="3"
               aria-label="SQL"
@@ -2735,6 +2810,26 @@ async function probe() {
             </span>
           </div>
         </form>
+
+        <!-- 分隔条（FR-EDIT-13）：编辑区与结果区之间那条**能拖**的线。
+             口径：两区各 ≥120px；↑↓ 步进、双击复位；焦点可落在条上（键盘用户也能调）。 -->
+        <div
+          class="db__split"
+          :class="{ 'db__split--active': splitDragging }"
+          role="separator"
+          aria-orientation="horizontal"
+          :aria-label="t('db.split.aria')"
+          :aria-valuemin="SPLIT_MIN_PANE"
+          :aria-valuenow="editorHeight === null ? undefined : editorHeight"
+          tabindex="0"
+          :title="t('db.split.tip')"
+          data-testid="db-split"
+          @pointerdown="onSplitDown"
+          @keydown="onSplitKey"
+          @dblclick="resetSplit"
+        >
+          <span class="db__split-grip" aria-hidden="true" />
+        </div>
 
         <!-- 逐段结果（1.2）：多段提交时"哪句成、哪句败、各耗时多少"一眼可见 -->
         <div v-if="outcomes.length > 1" class="db__outcomes">
@@ -3577,7 +3672,44 @@ async function probe() {
   color: transparent;
   caret-color: var(--ds-color-text-primary);
   border-color: var(--ds-hairline);
-  resize: vertical;
+  /* 高度改由分隔条（FR-EDIT-13）统一管：留 `vertical` 会出现两套拖拽互相打架，
+     用户拖出来的高度也会与分隔条记住的那个数不一致。 */
+  resize: none;
+}
+
+/* 分隔条（FR-EDIT-13）：8px 细条 + 居中握把。命中区比视觉粗（hover 时高亮），
+   否则一条 1px 的线鼠标追不住。 */
+.db__split {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 8px;
+  flex: none;
+  cursor: row-resize;
+  border-top: var(--ds-metric-hairline) solid var(--ds-hairline);
+  background: transparent;
+  touch-action: none;
+}
+
+.db__split-grip {
+  width: 40px;
+  height: 2px;
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-text-secondary);
+  opacity: 0.35;
+}
+
+.db__split:hover .db__split-grip,
+.db__split:focus-visible .db__split-grip,
+.db__split--active .db__split-grip {
+  opacity: 1;
+  background: var(--ds-color-accent-accent);
+}
+
+.db__split:focus-visible {
+  /* 键盘焦点要看得见（无障碍）：用强调色描边，且收在条内不推动布局。 */
+  outline: 2px solid var(--ds-color-accent-accent);
+  outline-offset: -2px;
 }
 
 .db__editor textarea::selection {

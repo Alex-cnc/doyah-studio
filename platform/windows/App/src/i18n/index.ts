@@ -392,6 +392,12 @@ export const DICT = {
     'zh-Hans': '↑↓ 选择 · 回车/Tab 插入 · Esc 关闭',
     en: '↑↓ select · Enter/Tab insert · Esc close',
   },
+  // 分隔条（FR-EDIT-13）：拖动 / 键盘 / 复位三件事都要在提示里说清，否则用户只会去追 textarea 的角
+  'db.split.aria': { 'zh-Hans': '编辑区与结果区的分隔条', en: 'Divider between the editor and the results' },
+  'db.split.tip': {
+    'zh-Hans': '拖动调整编辑区与结果区高度 · ↑↓ 微调 · 双击恢复自动高度',
+    en: 'Drag to resize editor and results · ↑↓ to nudge · double-click to restore automatic height',
+  },
   // 编辑器状态栏（B1 第二批）：光标位置 / 缩进口径 / 括号配对
   'sql.caret': { 'zh-Hans': '行 {line} · 列 {column}', en: 'Ln {line}, Col {column}' },
   'sql.problems': { 'zh-Hans': '问题 {n}', en: '{n} problem(s)' },
