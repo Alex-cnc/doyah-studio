@@ -159,6 +159,22 @@ public struct AgentChatCompressionReading: Equatable, Sendable {
     }
 }
 
+/// **续跑读数**（`NFR-AI-08` ⑤）：界面上那一行「从第 N 跳接上 · 跳过 M 跳」吃它。
+///
+/// 三个数都是**检查点自己报的**（不是界面猜的）：从第几跳接上、相对上一轮停在的那一跳
+/// 实际退了几跳、读盘时跳过几个坏行。`nil` = 这一轮不是续跑（那格就不出现，不留空壳）。
+public struct AgentChatResumeReading: Equatable, Sendable {
+    public var fromStep: Int
+    public var skippedSteps: Int
+    public var skippedCheckpointLines: Int
+
+    public init(fromStep: Int, skippedSteps: Int = 0, skippedCheckpointLines: Int = 0) {
+        self.fromStep = fromStep
+        self.skippedSteps = skippedSteps
+        self.skippedCheckpointLines = skippedCheckpointLines
+    }
+}
+
 /// 对话状态（**纯值 + 纯转移** —— 与 `WorkspaceTabSet` 同一条纪律：规则在 Core、状态在 App 的薄壳里）。
 public struct AgentChatState: Equatable, Sendable {
 
@@ -185,6 +201,9 @@ public struct AgentChatState: Equatable, Sendable {
     /// **压缩读数**（`NFR-AI-08` ③）：跨轮累计 —— 压了几段、估算省了多少 token。
     /// `nil` = 这个会话一次都没压过（界面那一行就不出现，不留空壳）。
     public private(set) var contextCompression: AgentChatCompressionReading?
+    /// **续跑读数**（`NFR-AI-08` ⑤）：这一轮是不是从检查点接上的。
+    /// 每开一次跑就清一次（`beginRun` / `beginResume`）—— 不该让上一轮的读数冒充这一轮。
+    public private(set) var resumeReading: AgentChatResumeReading?
 
     public init(messages: [AgentChatMessage] = [], cards: [AgentToolCard] = [],
                 steps: [AgentChatStep] = [],
@@ -212,6 +231,23 @@ public struct AgentChatState: Equatable, Sendable {
         messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true))
         // 新一轮 = 新任务 ⇒ 清单**重新起**（上一轮的步骤不混进来）。
         steps = []
+        // 上一轮的续跑读数不许冒充这一轮（`NFR-AI-08` ⑤）。
+        resumeReading = nil
+        isRunning = true
+    }
+
+    /// **继续上次**（`NFR-AI-08` ⑤）：接着上一轮停在的那一跳跑。
+    ///
+    /// 与 `beginRun` 的两点不同：
+    /// · **不追加用户消息**（问的还是同一个问题；再塞一条会让人以为问了第二遍）；
+    /// · 步骤清单照样重起（跳号由事件自带的号码给，从中间起也显示得对）。
+    public mutating func beginResume() {
+        guard canSend else {
+            if let code = endpoint.blockerCode { appendNotice(code) }
+            return
+        }
+        steps = []
+        resumeReading = nil
         isRunning = true
     }
 
@@ -306,6 +342,12 @@ public struct AgentChatState: Equatable, Sendable {
                 kept: kept,
                 earliest: earliest.isEmpty ? (previous?.earliest ?? "") : earliest
             )
+        case .resumed(let fromStep, let skipped, let skippedLines):
+            // `NFR-AI-08` ⑤：续跑**不许静默** —— 三个数原样落到读数里（从第几跳接上 / 退了几跳 / 坏了几行），
+            // 界面那一行吃它。与压缩同一条口径：这是**读数**，不往消息流里塞一条。
+            resumeReading = AgentChatResumeReading(fromStep: fromStep,
+                                                   skippedSteps: skipped,
+                                                   skippedCheckpointLines: skippedLines)
         }
     }
 

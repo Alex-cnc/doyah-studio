@@ -1694,6 +1694,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentStatusContext
     /// 压缩读数（`NFR-AI-08` ③）：已压缩 N 段 · 估算省下 M token。
     case agentStatusCompressed
+    /// 续跑读数（`NFR-AI-08` ⑤）：续上第 N 跳 · 退回 M 跳。
+    case agentStatusResumed
+    /// 续跑时读检查点跳过的坏行数。
+    case agentStatusResumeBadLines
+    /// 「继续上次」那个按钮的文字（带上「接着第几跳跑」）。
+    case agentChatContinue
     case agentStatusSession
     case agentStatusElapsed
     case agentStatusWorkspace
@@ -3318,6 +3324,9 @@ public enum LocalizedStrings {
         .agentChatRunning2: [.simplifiedChinese: "跑着呢", .english: "running"],
         .agentStatusContext: [.simplifiedChinese: "上下文 %@ token（上次请求输入）", .english: "ctx %@ tokens (last request in)"],
         .agentStatusCompressed: [.simplifiedChinese: "已压缩 %@ 段 · 省 ≈%@ token", .english: "compressed %@ · saved ≈%@ tokens"],
+        .agentStatusResumed: [.simplifiedChinese: "已续上（第 %@ 跳）· 退回 %@ 跳", .english: "resumed at hop %@ · %@ hops rolled back"],
+        .agentStatusResumeBadLines: [.simplifiedChinese: "读检查点时跳过了 %@ 个坏行（截断 / 读不出）", .english: "skipped %@ unreadable checkpoint lines"],
+        .agentChatContinue: [.simplifiedChinese: "继续上次（接着第 %@ 跳跑，已完成的跳不重放）", .english: "Continue last run (from hop %@; finished hops are not replayed)"],
         .agentStatusSession: [.simplifiedChinese: "本会话 %@ 次 · 输入 %@ / 输出 %@ / 合计 %@ token", .english: "Session %@ calls · in %@ / out %@ / total %@ tokens"],
         .agentStatusElapsed: [.simplifiedChinese: "耗时 %@ 秒", .english: "%@ s"],
         .agentStatusWorkspace: [.simplifiedChinese: "工作区 %@", .english: "Workspace %@"],

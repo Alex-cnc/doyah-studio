@@ -2892,6 +2892,7 @@ final class AppState: ObservableObject {
     func makeAgentChatLoop(prompt: String,
                            sessionID: String,
                            workspacePath: String,
+                           checkpointScopeID: String? = nil,
                            observer: any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)? {
         guard case .ready(let model, let endpoint) = agentChatEndpointState,
               let url = URL(string: endpoint) else { return nil }
@@ -2988,12 +2989,18 @@ final class AppState: ObservableObject {
                              sessionStore: AgentSessionStore(directory: AgentSessionStore.defaultDirectory),
                              audit: AgentAuditLog.shared,
                              observer: observer,
+                             // `NFR-AI-08` ⑤ 检查点：**这一条此前只有存储半、宿主没接** —— 现在接上。
+                             // 落点键由 `AgentTurnPlanner` 按「哪一轮提问」给（见 `context.checkpointScopeID`），
+                             // 所以同一个会话里换一个提问就不会接上一个问题的检查点。
+                             checkpointStore: AgentCheckpointStore(directory: AgentCheckpointStore.defaultDirectory),
+                             checkpointEvery: 2,
                              // `NFR-AI-08` ③ 压缩：超预算才动手，界面上那一行读数就是它报出来的。
                              // 阈值是**参数**（契约只钉「有损但可数可报」）—— 24k 字符 ≈ 6k token，远小于常见窗口，
                              // 留出工具返回与模型输出的余量。
                              compressionBudget: AgentContextCompressionBudget())
         let context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: promptWithNotes,
-                                       baseRequest: request, sessionID: sessionID, workspace: workspacePath)
+                                       baseRequest: request, sessionID: sessionID, workspace: workspacePath,
+                                       checkpointScopeID: checkpointScopeID)
         return (loop, context)
     }
 

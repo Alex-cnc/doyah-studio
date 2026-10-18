@@ -20,7 +20,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 也不接受宿主来"放行/挡下"（门控只回答"要不要问模型"，回答不了"能不能执行"）。
     var gate = AgentInvocationGate()
     /// 造循环。**是 `async` 的**：建循环时要现取一次本次上下文（`FR-AI-22`：当前连接的表结构摘要等），那一步是 IO。
-    var makeLoop: ((String, any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)?)?
+    /// 第二个参数是**这一轮提问的落账**（`NFR-AI-08` ⑤：分账号 + 从第几跳起）—— 宿主据此把检查点
+    /// 按「哪一轮提问」分账，而不是按会话号（否则下个提问会接上上个问题的检查点）。
+    var makeLoop: ((String, AgentTurnPlan, any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)?)?
     /// 宿主注入：真正把一次批准**兑现**（写盘 / 跑命令）。返回是否成功。
     var applyApproval: ((AgentToolCard) async -> Bool)?
     /// 宿主注入：把一次**已经应用**的改动撤回去（`FR-AI-25` ⑤：一步撤销，文件逐字节回到应用前）。
@@ -54,6 +56,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     /// **压缩读数**（`NFR-AI-08` ③）：界面上那一行「已压缩 N 段 · 省 ≈M token」。
     var contextCompression: AgentChatCompressionReading? { state.contextCompression }
+
+    /// **续跑读数**（`NFR-AI-08` ⑤）：界面上那一行「已续上 … · 退回 N 跳」。`nil` = 这一轮不是续跑。
+    var resumeReading: AgentChatResumeReading? { state.resumeReading }
 
     /// 吞吐（token/秒）：**只在这两样都有读数时给**，算不出来就不显示（不编）。
     var tokensPerSecond: Double? {
@@ -114,15 +119,65 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     // MARK: - 界面动作
 
+    /// 上一轮提问的落账（`NFR-AI-08` ⑤）：下一轮「能不能续」看它。
+    /// 只活在内存里 —— 进程重启后要不要续是另一件事（那要看会话留痕，不在本片）。
+    private var lastTurn: AgentTurnRecord?
+    /// 上一轮的原话（「继续上次」沿用它 —— 不让用户重打一遍）。
+    private var lastPrompt: String?
+
+    /// **能不能续上一次**：上一轮没走完（限额 / 取消 / 失败）才有得续。
+    ///
+    /// 判定走 Core 的 `AgentTurnPlanner`（纯函数），界面只读结论 —— 这里不另写一套规矩，
+    /// 否则「什么时候能续」会有两个答案。
+    var canContinue: Bool {
+        guard !state.isRunning, lastPrompt != nil else { return false }
+        return continuePlan?.resumes == true
+    }
+
+    /// 「继续上次」会从第几跳之后接着跑（`nil` = 没得续）。1 起，给人看的数。
+    var continueStep: Int? {
+        guard let plan = continuePlan, plan.resumes else { return nil }
+        return plan.requestedStep
+    }
+
+    private var continuePlan: AgentTurnPlan? {
+        guard lastPrompt != nil else { return nil }
+        return AgentTurnPlanner.plan(sessionID: sessionID, previous: lastTurn, intent: .continueLast)
+    }
+
     func send() async {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
+        await start(prompt: prompt, intent: .newQuestion)
+    }
+
+    /// **继续上次**（`NFR-AI-08` ⑤）：接着上一轮停在的那一跳跑，**不再发已完成的跳**。
+    ///
+    /// 为什么不复用 `send()`：它要清空输入框、要追加一条用户消息；续跑问的还是同一个问题，
+    /// 再塞一条会让人以为问了第二遍。所以两件事拆开，共用 `start`。
+    func continueLast() async {
+        guard let prompt = lastPrompt, canContinue else { return }
+        await start(prompt: prompt, intent: .continueLast)
+    }
+
+    private func start(prompt: String, intent: AgentTurnIntent) async {
+        // **分账**（`NFR-AI-08` ⑤）：新提问 ⇒ 新分账号（不接上一个问题的检查点）；
+        // 显式继续 ⇒ 沿用上一轮的分账号 + 报出停在第几跳。
+        let plan = AgentTurnPlanner.plan(sessionID: sessionID, previous: lastTurn, intent: intent)
+        if intent == .continueLast && !plan.resumes {
+            // 按钮本该是灰的；走到这里说明状态不新鲜 —— **如实说**，不假装续上了。
+            state.appendNotice(plan.note)
+            return
+        }
         // 授权粒度按设置走（**每次开跑前定一次**：本轮中途不换口径，免得一半问一半不问）。
         state.taskScope = AgentTaskScope(mode: scopeProvider())
-        state.beginRun(prompt: prompt)
+        switch intent {
+        case .newQuestion: state.beginRun(prompt: prompt)
+        case .continueLast: state.beginResume()
+        }
         guard state.isRunning else { return }   // 不能发时 `beginRun` 已如实出提示，这里不许往下走
         cancellation.reset()
-        guard let prepared = await makeLoop?(prompt, self) else {
+        guard let prepared = await makeLoop?(prompt, plan, self) else {
             state.apply(.failed("loopUnavailable"))
             return
         }
@@ -133,12 +188,19 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         //
         // **边界**（条文写死）：门控只决定"要不要问模型"；「能不能执行」仍归 `AgentGuardrail` + 审批队列 ——
         // 本处不碰那件事，也**不许**顺手把提示词改了（放行的语义就是"当它没来过"）。
+        //
+        // **续跑那一档例外**（`NFR-AI-08` ⑤）：提示词与上一轮逐字相同是**必然的**（问的还是同一个问题），
+        // 而「继续上次」是用户明确的继续动作、且**不发已完成的跳** ⇒ 门控的历史那一条对它不适用。
+        // 门控的语义没被放宽：它管的仍是「没有新内容就不发」，只是续跑本来就是「没新内容」。
         let trigger = AgentGateTrigger(
-            source: "chat",
+            source: intent == .continueLast ? "chat:resume" : "chat",
             digest: AgentFingerprint.hash(prepared.context.systemPrompt + "\u{1}" + prepared.context.userPrompt),
             at: Date()
         )
-        switch gate.decide(trigger) {
+        let decision = intent == .continueLast
+            ? gate.decide(trigger, ignoringHistory: true)
+            : gate.decide(trigger)
+        switch decision {
         case .skipped(let reason):
             gate.record(.skipped(reason: reason), for: trigger)
             state.apply(.failed(reason))       // 如实说"为什么没发"，不静默；**输入框不清空**（用户改一个字就能再发）
@@ -146,14 +208,19 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         case .proceed:
             gate.record(.proceed, for: trigger)
         }
-        input = ""
+        if intent == .newQuestion { input = "" }
+        lastPrompt = prompt
         let started = Date()
         task = Task { [weak self] in
             let result = await prepared.loop.run(context: prepared.context,
+                                                 requestedStep: plan.requestedStep,
                                                  isCancelled: { [cancellation] in cancellation.isSet })
             await MainActor.run {
-                self?.lastElapsedSeconds = Date().timeIntervalSince(started)
-                self?.finish(result)
+                guard let self else { return }
+                self.lastElapsedSeconds = Date().timeIntervalSince(started)
+                // 记这一轮的账：下一轮能不能续、从第几跳续，看的就是它。
+                self.lastTurn = AgentTurnPlanner.record(turn: plan.turn, result: result)
+                self.finish(result)
             }
         }
     }

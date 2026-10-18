@@ -120,6 +120,11 @@ final class AgentInvocationGateTests: XCTestCase {
         XCTAssertTrue(source.contains("gate.decide(trigger)"), "要真的问一次")
         XCTAssertTrue(source.contains("gate.record("), "判定结果要记账（放行更新、挡下留痕）")
         XCTAssertTrue(source.contains("prepared.context.systemPrompt"), "指纹要覆盖整段提示词（含本次上下文）")
+        // `NFR-AI-08` ⑤：**只有「继续上次」那一档**才允许绕过「同样的问法」这一条 ——
+        // 续跑问的还是同一个问题，提示词逐字相同是必然的；新提问仍必须受门控约束。
+        let bypasses = source.components(separatedBy: "ignoringHistory: true").count - 1
+        XCTAssertEqual(bypasses, 1, "绕过门控历史的口子只许开一处")
+        XCTAssertTrue(source.contains("intent == .continueLast"), "那一处必须钉在续跑那一档上")
         // 顺序：门控在 `loop.run` 之前 —— 挡下才可能"一次请求都不发"。
         let gateIndex = source.range(of: "gate.decide(trigger)")?.lowerBound
         let runIndex = source.range(of: "prepared.loop.run(")?.lowerBound

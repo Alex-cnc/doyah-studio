@@ -108,12 +108,15 @@ struct DoyahStudioApp: App {
                     agentChat.endpointProvider = { appState.agentChatEndpointState }
                     // 授权粒度（`FR-AI-34`）：默认任务范围内代签（少问）；设置里可改回逐次批。
                     agentChat.scopeProvider = { appState.agentConfiguration.scopeMode }
-                    agentChat.makeLoop = { prompt, observer in
+                    agentChat.makeLoop = { prompt, plan, observer in
                         guard let rootPath = workspace.rootPath else { return nil }
                         // `await`：建循环时会现取一次本次上下文（`FR-AI-22` 的表结构摘要），那是 IO。
+                        // `checkpointScopeID`（`NFR-AI-08` ⑤）来自 `AgentTurnPlanner` 的落账 ——
+                        // 检查点按「哪一轮提问」分账，于是新的提问不会接上一个问题的检查点。
                         return await appState.makeAgentChatLoop(prompt: prompt,
                                                                sessionID: agentChat.sessionID,
                                                                workspacePath: rootPath,
+                                                               checkpointScopeID: plan.checkpointScopeID,
                                                                observer: observer)
                     }
                     agentChat.applyApproval = { card in

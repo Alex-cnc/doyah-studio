@@ -303,6 +303,17 @@ struct AgentChatView: View {
                         .foregroundStyle(.orange)
                         .help(compression.earliest)
                 }
+                // **续跑读数**（`NFR-AI-08` ⑤）：续上第几跳、退回几跳 —— 续跑不许静默。
+                // 只在真续上时出现（`nil` 不留空壳）；坏行数 > 0 时补一句（`0` 就不留空壳）。
+                if let resume = model.resumeReading {
+                    Text(L(.agentStatusResumed,
+                           "\(resume.fromStep + 1)",
+                           "\(resume.skippedSteps)"))
+                        .foregroundStyle(.blue)
+                        .help(resume.skippedCheckpointLines > 0
+                              ? L(.agentStatusResumeBadLines, "\(resume.skippedCheckpointLines)")
+                              : "")
+                }
                 if let context = model.lastPromptTokens {
                     Text(L(.agentStatusContext, "\(context)"))
                 }
@@ -373,6 +384,14 @@ struct AgentChatView: View {
                     Text(L(.agentChatRunning)).font(.caption).foregroundStyle(.secondary)
                     ToolbarIconButton(systemName: "stop.fill", help: L(.agentChatStop)) { model.stop() }
                 } else {
+                    // **继续上次**（`NFR-AI-08` ⑤）：上一轮没走完（限额 / 取消 / 失败）才有这一枚 ——
+                    // 点了接着那一轮停在的跳跑，**已完成的跳不重放**。没得续时整枚不出现（不留空壳）。
+                    if let step = model.continueStep {
+                        ToolbarIconButton(systemName: "play.circle",
+                                          help: L(.agentChatContinue, "\(step)")) {
+                            Task { await model.continueLast() }
+                        }
+                    }
                     ToolbarIconButton(systemName: "paperplane", help: L(.agentChatSend)) { Task { await model.send() } }
                         .disabled(!model.canSend)
                 }

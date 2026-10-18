@@ -22,6 +22,11 @@ public enum AgentLoopEvent: Equatable, Sendable {
     /// 过程面据此显示一行读数（人类主人 2026-10-18 口径：压缩了几轮 / 省了多少 token，
     /// 界面上要有一行）—— 压缩**不许静默**（`R-63` ③）。
     case contextCompressed(entries: Int, estimatedTokensSaved: Int, kept: Int, earliest: String)
+    /// **这一次是从检查点接上的**（`NFR-AI-08` ⑤）：从第几跳接上、相对调用方以为自己停的那一跳
+    /// 实际退了几跳、读盘时跳过几个坏行。
+    ///
+    /// 过程面据此报一行读数 —— 续跑**不许静默**（`R-63` ③：不许让人以为「又从头跑了一遍」）。
+    case resumed(fromStep: Int, skippedSteps: Int, skippedCheckpointLines: Int)
 }
 
 /// 进度观察口（界面实现它；**不改变循环的判定口径**，只是把过程如实说出来）。
@@ -163,16 +168,27 @@ public struct AgentLoopContext: Sendable {
     public var workspace: String
     /// 调用链标识（`FR-AI-31` ④）：不给就按会话推一个 —— 同一会话的模型跳 / 工具跳 / 审批跳共用一个值。
     public var chainID: String
+    /// **检查点的分账号**（`NFR-AI-08` ⑤）：检查点按它落、按它回查。
+    ///
+    /// 为什么与 `sessionID` 分开：会话留痕（`FR-AI-17`）/ 审计（`FR-AI-24`）/ 调用链都该按**会话**算，
+    /// 而检查点要按**哪一轮提问**分账 —— 同一个会话里第 2 个提问**不许**接上第 1 个提问的检查点
+    /// （那会把上一个问题的半截进展当成这一次的前情）。不给 ⇒ 取 `sessionID`（旧行为**逐字不变**）。
+    public var checkpointScopeID: String?
 
     public init(systemPrompt: String, userPrompt: String, baseRequest: LLMRequest,
-                sessionID: String, workspace: String, chainID: String? = nil) {
+                sessionID: String, workspace: String, chainID: String? = nil,
+                checkpointScopeID: String? = nil) {
         self.systemPrompt = systemPrompt
         self.userPrompt = userPrompt
         self.baseRequest = baseRequest
         self.sessionID = sessionID
         self.workspace = workspace
         self.chainID = chainID ?? "chain:\(sessionID)"
+        self.checkpointScopeID = checkpointScopeID
     }
+
+    /// 检查点实际用的键：给了分账号就用分账号，没给就等于会话号。
+    public var checkpointKey: String { checkpointScopeID ?? sessionID }
 }
 
 /// Agent 循环（`FR-AI-18`）：模型 → `tool_calls` → 执行 → 结果回灌 → 再跳。
@@ -249,7 +265,7 @@ public struct AgentLoop: Sendable {
         // 有 ⇒ 已跑完的跳**一个请求都不重发**（把 `steps` 推到该点之后）；
         // 没有 / 点坏了 ⇒ 落到**上一可用点**并**如实报数** —— 绝不静默从头（负例判据在这一条上）。
         if let store = checkpointStore {
-            let recovery = store.recover(sessionID: context.sessionID, requestedStep: requestedStep)
+            let recovery = store.recover(sessionID: context.checkpointKey, requestedStep: requestedStep)
             skippedSteps = recovery.skippedSteps
             skippedCheckpointLines = recovery.skippedLines
             if let checkpoint = recovery.checkpoint {
@@ -259,6 +275,10 @@ public struct AgentLoop: Sendable {
                 // **不伪造前情**：跳过的那些跳的观察**没在内存里**，只如实留一句，让模型知道前情在会话留痕里。
                 observations.append("resume: 已从第 \(checkpoint.stepIndex) 跳接上；"
                                     + "此前 \(checkpoint.completedSteps.count) 项已完成步骤不重放（内容见会话留痕）")
+                // 续跑**不许静默**（`R-63` ③）：过程面要能报出「从第几跳接上、跳过几跳、坏了几行」。
+                await observer?.observe(.resumed(fromStep: checkpoint.stepIndex,
+                                                 skippedSteps: skippedSteps,
+                                                 skippedCheckpointLines: skippedCheckpointLines))
             }
         }
 
@@ -513,7 +533,8 @@ public struct AgentLoop: Sendable {
                                        at: Date) -> Bool? {
         guard let store = checkpointStore, checkpointEvery > 0, steps % checkpointEvery == 0 else { return nil }
         let checkpoint = AgentCheckpoint(
-            sessionID: context.sessionID,
+            // 键 = **这一轮提问**的分账号（`NFR-AI-08` ⑤），不是会话号：同一会话的下一问不许接上这一问。
+            sessionID: context.checkpointKey,
             stepIndex: steps - 1,
             completedSteps: executed.map { "hop\(steps - 1):\($0.name)" },
             pendingMessagesDigest: Self.digest(of: observations),
