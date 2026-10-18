@@ -1355,6 +1355,12 @@ pub struct RestoreRequest {
     /// 手动指定 `pg_restore` 路径（留空 = 自动找）
     #[serde(default)]
     pub program: Option<String>,
+    /// **逐段恢复**（结构 → 数据 → 索引/约束，每段一条 `pg_restore --exit-on-error`，失败即停）
+    #[serde(default)]
+    pub sections: bool,
+    /// 从哪一段起（`None` = 从第一段；失败续跑时传失败那一段）
+    #[serde(default)]
+    pub from: Option<restore::RestoreSection>,
 }
 
 /// 恢复计划回执：**只算不跑** —— 命令行先摊出来（恢复会改库，比备份更需要这一眼）。
@@ -1444,6 +1450,8 @@ async fn restore_plan(
         clean: request.clean,
         section: request.section,
         jobs: request.jobs,
+        // 单段模式保持既有行为：不加 --exit-on-error（一次性恢复由 pg_restore 自己决定何时停）
+        fail_fast: false,
     };
     // 源的问题与程序缺失各说一次；两个都有时先报程序（没有程序，源对不对都跑不了）
     let mut kind = "file".to_string();
@@ -1514,6 +1522,7 @@ async fn restore_run(
         clean: request.clean,
         section: request.section,
         jobs: request.jobs,
+        fail_fast: false,
     };
     let password = connections::recall_password(&request.connection_id)
         .ok()
@@ -1567,6 +1576,145 @@ async fn restore_cancel() -> Result<bool, DbFailure> {
         }
         None => Ok(false),
     }
+}
+
+/// **逐段恢复的计划回执**：逐段模式的「先摊命令行」是**每段一条**（三行），不是一行。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SectionCommandReport {
+    pub section: restore::RestoreSection,
+    /// 这一段实际会跑的命令行（口令写 `PGPASSWORD=***`）
+    pub display: String,
+    /// 这一段实际会用上的并行度（0 = 串行）
+    pub jobs: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreSectionsPlanReport {
+    pub program: Option<String>,
+    /// 按依赖顺序排好的每段命令（续跑时只有失败段与它后面的段）
+    pub commands: Vec<SectionCommandReport>,
+    pub database: String,
+    pub source: String,
+    pub kind: String,
+    pub jobs: u32,
+    pub problem: Option<DbFailure>,
+}
+
+/// **逐段恢复计划**：拼出每段的命令行（**不起任何进程**）。
+#[tauri::command]
+async fn restore_plan_sections(
+    state: State<'_, ShellState>,
+    request: RestoreRequest,
+) -> Result<RestoreSectionsPlanReport, DbFailure> {
+    let (target, source) = restore_inputs(&state, &request).await?;
+    let (program, mut problem) = match restore::find_program(request.program.as_deref()) {
+        Ok(found) => (Some(found), None),
+        Err(failure) => (None, Some(failure)),
+    };
+    let options = restore::RestoreOptions {
+        clean: request.clean,
+        section: restore::RestoreSection::All,
+        jobs: request.jobs,
+        fail_fast: true,
+    };
+    let mut commands: Vec<SectionCommandReport> = Vec::new();
+    let mut kind = "file".to_string();
+    let mut jobs = 0;
+    match restore::check_source(&source) {
+        Ok((path, resolved)) => {
+            kind = if resolved.is_directory() {
+                "directory".to_string()
+            } else {
+                "file".to_string()
+            };
+            for plan in restore::section_plans(
+                program.clone(),
+                &target,
+                &path,
+                resolved,
+                options,
+                request.from,
+            ) {
+                jobs = plan.jobs;
+                commands.push(SectionCommandReport {
+                    section: plan.section,
+                    display: plan.display(),
+                    jobs: plan.jobs,
+                });
+            }
+        }
+        Err(failure) => {
+            // 程序缺失先报程序（没有程序，源对不对都跑不了）—— 与单段计划同一口径
+            if problem.is_none() {
+                problem = Some(failure);
+            }
+        }
+    }
+    Ok(RestoreSectionsPlanReport {
+        program: program.map(|found| found.display().to_string()),
+        commands,
+        database: target.database.clone(),
+        source,
+        kind,
+        jobs,
+        problem,
+    })
+}
+
+/// **逐段真跑**：每段一条 `pg_restore --section=… --exit-on-error`，**遇错即停**。
+///
+/// 回执里带每段的退出码与日志尾部，以及「接下来从哪一段起」（`resumeFrom` / `resumeCommand`）。
+/// 取消沿用同一把槽：取消的是**当前这一段**，子进程被强杀后整条序列停下（不再往下跑）。
+#[tauri::command]
+async fn restore_run_sections(
+    state: State<'_, ShellState>,
+    request: RestoreRequest,
+) -> Result<restore::SectionsReport, DbFailure> {
+    let (target, source) = restore_inputs(&state, &request).await?;
+    let program = restore::find_program(request.program.as_deref())?;
+    let (path, kind) = restore::check_source(&source)?;
+    let options = restore::RestoreOptions {
+        clean: request.clean,
+        section: restore::RestoreSection::All,
+        jobs: request.jobs,
+        fail_fast: true,
+    };
+    let plans = restore::section_plans(
+        Some(program),
+        &target,
+        &path,
+        kind,
+        options,
+        request.from,
+    );
+    let password = connections::recall_password(&request.connection_id)
+        .ok()
+        .flatten();
+    let sslmode = state
+        .connections
+        .load()
+        .ok()
+        .and_then(|list| {
+            list.into_iter()
+                .find(|config| config.id == request.connection_id)
+        })
+        .map(|config| config.ssl_mode.raw_value().to_string());
+    let (seq, cancel) = install_restore_cancel()?;
+    let running_flag = cancel.clone();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        restore::run_sections(&plans, |plan| {
+            restore::attempt(plan, password.as_deref(), sslmode.as_deref(), &running_flag)
+        })
+    })
+    .await
+    .map_err(|error| DbFailure {
+        message: format!("逐段恢复的线程没能起起来：{error}"),
+        hint: "这属实现缺陷：请保留现场并报告。".to_string(),
+    });
+    release_restore_cancel(seq);
+    outcome?
 }
 
 /// **预览导入**：读文件 → 解析 → 与目标表列对账（**不碰数据库**）。
@@ -2740,6 +2888,8 @@ pub fn run() {
             restore_plan,
             restore_run,
             restore_cancel,
+            restore_plan_sections,
+            restore_run_sections,
             preview_import,
             run_import,
             xlsx_to_csv,

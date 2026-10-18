@@ -11,7 +11,13 @@
 //   ⑥ 失败 + 取消：错误原话要摆出来，且「已写入的对象不会撤销」这句必须出现。
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import type { RestorePlanReport, RestoreReport } from '../ipc'
+import type {
+  RestorePlanReport,
+  RestoreReport,
+  RestoreSectionsPlanReport,
+  RestoreSectionsReport,
+  SectionOutcome,
+} from '../ipc'
 
 const state: {
   plan: RestorePlanReport | null
@@ -21,8 +27,15 @@ const state: {
   planCalls: number
   runCalls: number
   lastRequest: Record<string, unknown> | null
+  /** **真正发起恢复**的那一次请求（`lastRequest` 会被随后的计划重算覆盖，续跑类断言必须看这个） */
+  lastRunRequest: Record<string, unknown> | null
   cancelCalls: number
   cancelAccepts: boolean
+  /** 逐段模式的计划 / 结局（FR-IO-05 失败续跑这一半） */
+  sectionsPlan: RestoreSectionsPlanReport | null
+  sectionsReport: RestoreSectionsReport | null
+  sectionsPlanCalls: number
+  sectionsRunCalls: number
   /** 让 `restoreRun` 挂住不返回（用来验「跑着 → 取消」这一档） */
   hold: boolean
   settle: { resolve: (value: RestoreReport) => void; reject: (reason: unknown) => void } | null
@@ -34,8 +47,13 @@ const state: {
   planCalls: 0,
   runCalls: 0,
   lastRequest: null,
+  lastRunRequest: null,
   cancelCalls: 0,
   cancelAccepts: true,
+  sectionsPlan: null,
+  sectionsReport: null,
+  sectionsPlanCalls: 0,
+  sectionsRunCalls: 0,
   hold: false,
   settle: null,
 }
@@ -50,6 +68,7 @@ vi.mock('../ipc', () => ({
   restoreRun: vi.fn(async (request: Record<string, unknown>) => {
     state.runCalls += 1
     state.lastRequest = request
+    state.lastRunRequest = request
     if (state.hold) {
       return await new Promise<RestoreReport>((resolve, reject) => {
         state.settle = { resolve, reject }
@@ -57,6 +76,19 @@ vi.mock('../ipc', () => ({
     }
     if (state.runFailure) throw state.runFailure
     return state.report
+  }),
+  restorePlanSections: vi.fn(async (request: Record<string, unknown>) => {
+    state.sectionsPlanCalls += 1
+    state.lastRequest = request
+    if (state.planFailure) throw state.planFailure
+    return state.sectionsPlan
+  }),
+  restoreRunSections: vi.fn(async (request: Record<string, unknown>) => {
+    state.sectionsRunCalls += 1
+    state.lastRequest = request
+    state.lastRunRequest = request
+    if (state.runFailure) throw state.runFailure
+    return state.sectionsReport
   }),
   restoreCancel: vi.fn(async () => {
     state.cancelCalls += 1
@@ -109,6 +141,57 @@ function report(over: Partial<RestoreReport> = {}): RestoreReport {
   }
 }
 
+function sectionOutcome(section: SectionOutcome['section'], ok: boolean): SectionOutcome {
+  return {
+    section,
+    ok,
+    cancelled: false,
+    exitCode: ok ? 0 : 1,
+    elapsedMs: ok ? 320 : 210,
+    display: `PGPASSWORD=*** pg_restore.exe -h db.internal -p 5432 -U doyah -d shop --verbose --section=${section} --exit-on-error D:\\backup\\shop.dump`,
+    log: ok ? `pg_restore: ${section} done` : 'pg_restore: error: relation "public.orders" does not exist',
+    logTrimmedChars: 0,
+  }
+}
+
+function sectionsPlan(over: Partial<RestoreSectionsPlanReport> = {}): RestoreSectionsPlanReport {
+  const sections: SectionOutcome['section'][] = ['pre-data', 'data', 'post-data']
+  return {
+    program: 'C:\\Program Files\\PostgreSQL\\18\\bin\\pg_restore.exe',
+    commands: sections.map((section) => ({
+      section,
+      display: `PGPASSWORD=*** "C:\\Program Files\\PostgreSQL\\18\\bin\\pg_restore.exe" -h db.internal -p 5432 -U doyah -d shop --verbose --clean --if-exists --section=${section} --exit-on-error D:\\backup\\shop.dump`,
+      jobs: 0,
+    })),
+    database: 'shop',
+    source: 'D:\\backup\\shop.dump',
+    kind: 'file',
+    jobs: 0,
+    problem: null,
+    ...over,
+  }
+}
+
+function sectionsReport(over: Partial<RestoreSectionsReport> = {}): RestoreSectionsReport {
+  return {
+    source: 'D:\\backup\\shop.dump',
+    database: 'shop',
+    jobs: 0,
+    sections: [sectionOutcome('pre-data', true), sectionOutcome('data', false)],
+    failed: 'data',
+    cancelled: false,
+    failure: {
+      message: 'pg_restore 退出码 1：relation "public.orders" does not exist',
+      hint: '看上面子进程的原话',
+    },
+    resumeFrom: ['data', 'post-data'],
+    resumeCommand:
+      'PGPASSWORD=*** "C:\\Program Files\\PostgreSQL\\18\\bin\\pg_restore.exe" -h db.internal -p 5432 -U doyah -d shop --verbose --clean --if-exists --section=data --exit-on-error D:\\backup\\shop.dump',
+    elapsedMs: 530,
+    ...over,
+  }
+}
+
 function mountDialog(props: Partial<{ open: boolean; connectionId: string | null }> = {}) {
   return mount(RestoreDialog, {
     props: {
@@ -129,8 +212,13 @@ beforeEach(() => {
   state.planCalls = 0
   state.runCalls = 0
   state.lastRequest = null
+  state.lastRunRequest = null
   state.cancelCalls = 0
   state.cancelAccepts = true
+  state.sectionsPlan = sectionsPlan()
+  state.sectionsReport = sectionsReport()
+  state.sectionsPlanCalls = 0
+  state.sectionsRunCalls = 0
   pick.file = 'D:\\backup\\shop.dump'
   pick.folder = 'D:\\backup\\shop-dir'
   pick.fileCalls = 0
@@ -244,5 +332,106 @@ describe('RestoreDialog（FR-IO-05 的可见面）', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="restore-no-connection"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="restore-source"]').exists()).toBe(false)
+  })
+
+  // ── 逐段恢复 / 失败续跑（FR-IO-05 的这一半）────────────────────────────────
+
+  it('勾「逐段恢复」：问的是逐段计划，三段命令行**每段一条**都摊出来', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('[data-testid="restore-pick-file"]').trigger('click')
+    await flushPromises()
+    expect(state.sectionsPlanCalls).toBe(0)
+
+    await wrapper.find('[data-testid="restore-sections"]').setValue(true)
+    await flushPromises()
+    expect(state.sectionsPlanCalls).toBeGreaterThan(0)
+    // 单段计划不该再被画出来（两套命令行同屏 = 用户不知道哪条真会跑）
+    expect(wrapper.find('[data-testid="restore-command"]').exists()).toBe(false)
+    const commands = wrapper.findAll('[data-testid="restore-section-command"]')
+    expect(commands.length).toBe(3)
+    expect(commands[0].text()).toContain('--section=pre-data')
+    expect(commands[1].text()).toContain('--section=data')
+    expect(commands[2].text()).toContain('--section=post-data')
+    // 每段都要有 --exit-on-error（失败即停的机械前提）
+    for (const command of commands) expect(command.text()).toContain('--exit-on-error')
+    expect(commands[0].text()).toContain('PGPASSWORD=***')
+    // 段选下拉在逐段模式下没有意义
+    expect(wrapper.find('[data-testid="restore-section"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('逐段点开始：走的是逐段命令（不是单段），请求里带 sections:true', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('[data-testid="restore-pick-file"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-testid="restore-sections"]').setValue(true)
+    await flushPromises()
+    state.sectionsReport = sectionsReport({ sections: [sectionOutcome('pre-data', true), sectionOutcome('data', true), sectionOutcome('post-data', true)], failed: null, failure: null, resumeFrom: [], resumeCommand: null })
+    await wrapper.find('[data-testid="restore-run"]').trigger('click')
+    await flushPromises()
+    expect(state.sectionsRunCalls).toBe(1)
+    expect(state.runCalls).toBe(0)
+    expect(state.lastRunRequest?.sections).toBe(true)
+    const ok = wrapper.find('[data-testid="restore-sections-ok"]').text()
+    expect(ok).toContain('shop')
+    expect(ok).toContain('串行')
+    const rows = wrapper.findAll('[data-testid="restore-section-row"]')
+    expect(rows.length).toBe(3)
+    expect(rows.map((row) => row.text()).join('|')).toContain('通过')
+  })
+
+  it('第 2 段失败：停在第 2 段、第 3 段如实说没跑，并给出续跑命令与按钮', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('[data-testid="restore-pick-file"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-testid="restore-sections"]').setValue(true)
+    await flushPromises()
+    await wrapper.find('[data-testid="restore-run"]').trigger('click')
+    await flushPromises()
+
+    const stopped = wrapper.find('[data-testid="restore-sections-stopped"]').text()
+    expect(stopped).toContain('第 2 段')
+    expect(stopped).toContain('1 段还没跑')
+    // 失败那一段的原话与日志都在（不是只剩一句「失败了」）
+    expect(wrapper.find('[data-testid="restore-sections-failure"]').text()).toContain('does not exist')
+    expect(wrapper.find('[data-testid="restore-log"]').text()).toContain('does not exist')
+    // 第三段：没跑，不是「失败」
+    const rows = wrapper.findAll('[data-testid="restore-section-row"]')
+    expect(rows[2].text()).toContain('没跑')
+    // 能直接粘贴的续跑命令（含 --section=data 与 --exit-on-error）
+    const resumeCommand = wrapper.find('[data-testid="restore-resume-command"]').text()
+    expect(resumeCommand).toContain('--section=data')
+    expect(resumeCommand).toContain('--exit-on-error')
+    expect(wrapper.find('[data-testid="restore-resume-run"]').text()).toContain('数据')
+  })
+
+  it('点「从这一段起续跑」：第二次调用带 from=data（只补没跑完的段）', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('[data-testid="restore-pick-file"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-testid="restore-sections"]').setValue(true)
+    await flushPromises()
+    await wrapper.find('[data-testid="restore-run"]').trigger('click')
+    await flushPromises()
+    expect(state.lastRunRequest?.from).toBe(null)
+
+    // 续跑这一轮三段都过
+    state.sectionsReport = sectionsReport({
+      sections: [sectionOutcome('data', true), sectionOutcome('post-data', true)],
+      failed: null,
+      failure: null,
+      resumeFrom: [],
+      resumeCommand: null,
+    })
+    await wrapper.find('[data-testid="restore-resume-run"]').trigger('click')
+    await flushPromises()
+    expect(state.sectionsRunCalls).toBe(2)
+    expect(state.lastRunRequest?.from).toBe('data')
+    // 续跑成功后不该再留一个「续跑」按钮（它会让人以为还有活没干）
+    expect(wrapper.find('[data-testid="restore-resume"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="restore-sections-ok"]').exists()).toBe(true)
   })
 })

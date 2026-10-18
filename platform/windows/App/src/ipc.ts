@@ -85,6 +85,8 @@ export const COMMANDS = {
   restorePlan: 'restore_plan',
   restoreRun: 'restore_run',
   restoreCancel: 'restore_cancel',
+  restorePlanSections: 'restore_plan_sections',
+  restoreRunSections: 'restore_run_sections',
   previewImport: 'preview_import',
   runImport: 'run_import',
   xlsxToCsv: 'xlsx_to_csv',
@@ -1887,6 +1889,80 @@ export interface RestoreRequest {
   database?: string
   /** 手动指定 `pg_restore` 路径（留空 = 自动找） */
   program?: string
+  /** **逐段恢复**（结构 → 数据 → 索引/约束，每段一条 `--exit-on-error`，失败即停） */
+  sections?: boolean
+  /** 从哪一段起（缺省 = 从第一段；失败续跑时传失败那一段） */
+  from?: RestoreSection | null
+}
+
+/** 逐段模式下的一段命令（`pg_restore --section=…`）。 */
+export interface SectionCommandReport {
+  section: RestoreSection
+  display: string
+  /** 这一段实际会用上的并行度（0 = 串行） */
+  jobs: number
+}
+
+/** 逐段恢复的计划回执：**每段一条命令**（逐段的「先摊命令行」是三行，不是一行）。 */
+export interface RestoreSectionsPlanReport {
+  program: string | null
+  commands: SectionCommandReport[]
+  database: string
+  source: string
+  kind: RestoreKind
+  jobs: number
+  problem: DbFailure | null
+}
+
+/** 逐段恢复里**一段**的结局（界面按它一行一段地说话）。 */
+export interface SectionOutcome {
+  section: RestoreSection
+  ok: boolean
+  cancelled: boolean
+  exitCode: number | null
+  elapsedMs: number
+  display: string
+  log: string
+  logTrimmedChars: number
+}
+
+/**
+ * 逐段恢复的**整份账**：跑到哪、停在哪、接下来从哪一段起。
+ *
+ * `sections` 只包含**真的跑过**的段 —— 失败之后那几段没有记录（它们没跑，不是失败）。
+ */
+export interface RestoreSectionsReport {
+  source: string
+  database: string
+  jobs: number
+  sections: SectionOutcome[]
+  /** 停在哪一段（`null` = 三段都过了） */
+  failed: RestoreSection | null
+  cancelled: boolean
+  failure: DbFailure | null
+  /** 续跑要从哪几段起（失败段 + 它后面的段；成功时为空） */
+  resumeFrom: RestoreSection[]
+  /** 能直接粘贴接着跑的那一条命令（失败段的；成功时 `null`） */
+  resumeCommand: string | null
+  elapsedMs: number
+}
+
+/** **逐段恢复计划**：拼出每段的命令行，不起任何进程。 */
+export function restorePlanSections(
+  request: RestoreRequest,
+): Promise<RestoreSectionsPlanReport> {
+  return call(COMMANDS.restorePlanSections, { request }, () => {
+    throw bypassDb('ipc.action.restore') as DbFailure
+  })
+}
+
+/** **逐段真跑**：每段一条 `pg_restore --section=… --exit-on-error`，遇错即停。 */
+export function restoreRunSections(
+  request: RestoreRequest,
+): Promise<RestoreSectionsReport> {
+  return call(COMMANDS.restoreRunSections, { request }, () => {
+    throw bypassDb('ipc.action.restore') as DbFailure
+  })
 }
 
 /** **恢复计划**：只算命令行，不起任何进程。 */

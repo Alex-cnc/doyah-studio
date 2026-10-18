@@ -17,11 +17,16 @@ import { t as translate, type DictKey, type UiLanguage } from '../i18n'
 import {
   restoreCancel,
   restorePlan,
+  restorePlanSections,
   restoreRun,
+  restoreRunSections,
   type DbFailure,
   type RestorePlanReport,
   type RestoreReport,
   type RestoreSection,
+  type RestoreSectionsPlanReport,
+  type RestoreSectionsReport,
+  type SectionOutcome,
 } from '../ipc'
 import { pickFile, pickFolder } from './dialogs'
 
@@ -48,9 +53,17 @@ const program = ref('')
 const clean = ref(false)
 const section = ref<RestoreSection>('all')
 const jobs = ref(0)
+/** 逐段恢复（结构 → 数据 → 索引/约束，失败即停） */
+const sectionsMode = ref(false)
+/** 续跑从哪一段起（`null` = 从第一段）；只在逐段模式下有意义 */
+const from = ref<RestoreSection | null>(null)
 
 const plan = ref<RestorePlanReport | null>(null)
+/** 逐段模式的计划（每段一条命令） */
+const sectionsPlan = ref<RestoreSectionsPlanReport | null>(null)
 const report = ref<RestoreReport | null>(null)
+/** 逐段模式的结局（每段的账 + 停在哪 + 从哪续跑） */
+const sectionsReport = ref<RestoreSectionsReport | null>(null)
 const failure = ref<DbFailure | null>(null)
 const planFailure = ref<DbFailure | null>(null)
 const busy = ref(false)
@@ -70,13 +83,62 @@ const SECTION_KEYS: Record<RestoreSection, DictKey> = {
 }
 
 const noConnection = computed(() => !props.connectionId)
-const isDirectory = computed(() => plan.value?.kind === 'directory')
+/** 三段恢复的依赖顺序（界面按它一行一段地排；与外壳的 `SECTION_SEQUENCE` 同序）。 */
+const SECTION_ORDER: RestoreSection[] = ['pre-data', 'data', 'post-data']
+/** 当前模式下的计划（单段 / 逐段各一份）——只有它决定「能不能跑」与 `--jobs` 门控。 */
+const activePlan = computed(() =>
+  sectionsMode.value ? sectionsPlan.value : plan.value,
+)
+const isDirectory = computed(() => activePlan.value?.kind === 'directory')
 /** 现在能不能点「开始恢复」：选了源、没问题、不在跑。 */
 const canRun = computed(() => {
   if (busy.value || noConnection.value) return false
   if (!source.value.trim()) return false
-  if (!plan.value) return false
-  return !plan.value.problem
+  if (!activePlan.value) return false
+  return !activePlan.value.problem
+})
+
+/** 「从哪一段起续跑」的按钮文案：把段名翻成界面语言（外壳只给段键）。 */
+const resumeLabel = computed(() => {
+  const failed = sectionsReport.value?.failed
+  return failed ? tr(SECTION_KEYS[failed]) : ''
+})
+
+/**
+ * 逐段结果表：**真的跑过的段**照回执画，其余段照实说「没跑」。
+ *
+ * 为什么不只列跑过的：失败之后那几段不是「不存在」，而是**还没跑** —— 少画两行会让人
+ * 以为恢复做完了。
+ */
+const sectionRows = computed(() => {
+  const outcomes: SectionOutcome[] = sectionsReport.value?.sections ?? []
+  const failed = sectionsReport.value?.failed ?? null
+  const stoppedAt = failed ? SECTION_ORDER.indexOf(failed) : outcomes.length
+  return SECTION_ORDER.map((key, index) => {
+    const outcome = outcomes.find((item) => item.section === key) ?? null
+    return {
+      key,
+      index: index + 1,
+      outcome,
+      notRun: outcome === null && failed !== null && index > stoppedAt,
+    }
+  })
+})
+
+/** 停在第几段（1 起；`0` = 没有失败）。 */
+const stoppedNumber = computed(() => {
+  const failed = sectionsReport.value?.failed
+  return failed ? SECTION_ORDER.indexOf(failed) + 1 : 0
+})
+/** 失败那一段后面还剩几段没跑。 */
+const remainingSections = computed(() =>
+  stoppedNumber.value ? SECTION_ORDER.length - stoppedNumber.value : 0,
+)
+/** 失败那一段的结局（它的退出码与日志才是要摆给人看的那一份）。 */
+const failedOutcome = computed<SectionOutcome | null>(() => {
+  const failed = sectionsReport.value?.failed
+  if (!failed) return null
+  return sectionsReport.value?.sections.find((item) => item.section === failed) ?? null
 })
 
 function readable(error: unknown): DbFailure {
@@ -99,27 +161,38 @@ async function refreshPlan(): Promise<void> {
   planFailure.value = null
   if (!source.value.trim() || noConnection.value) {
     plan.value = null
+    sectionsPlan.value = null
     return
   }
+  const request = {
+    connectionId: props.connectionId ?? '',
+    source: source.value.trim(),
+    clean: clean.value,
+    section: section.value,
+    jobs: jobs.value,
+    database: database.value.trim() || undefined,
+    program: program.value.trim() || undefined,
+    sections: sectionsMode.value,
+    from: from.value,
+  }
   try {
-    plan.value = await restorePlan({
-      connectionId: props.connectionId ?? '',
-      source: source.value.trim(),
-      clean: clean.value,
-      section: section.value,
-      jobs: jobs.value,
-      database: database.value.trim() || undefined,
-      program: program.value.trim() || undefined,
-    })
+    if (sectionsMode.value) {
+      sectionsPlan.value = await restorePlanSections(request)
+      plan.value = null
+    } else {
+      plan.value = await restorePlan(request)
+      sectionsPlan.value = null
+    }
   } catch (error) {
     plan.value = null
+    sectionsPlan.value = null
     planFailure.value = readable(error)
   }
 }
 
 // 任何一个开关变了都要重算：命令行是用户点「开始恢复」之前唯一能核对的东西，
 // 它要是落后于界面（比如勾了「先删后建」却还显示不带 --clean 的旧串），这一眼就白给了。
-watch([source, database, program, clean, section, jobs], () => {
+watch([source, database, program, clean, section, jobs, sectionsMode, from], () => {
   void refreshPlan()
 })
 
@@ -132,12 +205,15 @@ watch(
     }
     // 每次打开都是干净的一轮：**不复用上一轮的结果**（否则关掉再打开会看到一份旧日志）
     report.value = null
+    sectionsReport.value = null
     failure.value = null
     planFailure.value = null
     cancelNote.value = null
     cancelRequested.value = false
     cancelling.value = false
     elapsedSeconds.value = 0
+    // 续跑起点也是「这一轮」的状态：重新打开必须回到「从第一段起」
+    from.value = null
     void refreshPlan()
   },
 )
@@ -156,6 +232,7 @@ async function run(): Promise<void> {
   if (!canRun.value) return
   busy.value = true
   report.value = null
+  sectionsReport.value = null
   failure.value = null
   cancelNote.value = null
   cancelRequested.value = false
@@ -165,16 +242,27 @@ async function run(): Promise<void> {
   ticker = setInterval(() => {
     elapsedSeconds.value = Math.floor((Date.now() - started) / 1000)
   }, 500)
+  const request = {
+    connectionId: props.connectionId ?? '',
+    source: source.value.trim(),
+    clean: clean.value,
+    section: section.value,
+    jobs: jobs.value,
+    database: database.value.trim() || undefined,
+    program: program.value.trim() || undefined,
+    sections: sectionsMode.value,
+    from: from.value,
+  }
   try {
-    report.value = await restoreRun({
-      connectionId: props.connectionId ?? '',
-      source: source.value.trim(),
-      clean: clean.value,
-      section: section.value,
-      jobs: jobs.value,
-      database: database.value.trim() || undefined,
-      program: program.value.trim() || undefined,
-    })
+    if (sectionsMode.value) {
+      const outcome = await restoreRunSections(request)
+      sectionsReport.value = outcome
+      // 逐段模式下「失败」是正常结局（账在 sectionsReport 里），不走 failure 那一档；
+      // 只有取消要单独说一句（库里可能停在半途）。
+      if (outcome.cancelled) cancelRequested.value = true
+    } else {
+      report.value = await restoreRun(request)
+    }
   } catch (error) {
     failure.value = readable(error)
   } finally {
@@ -184,6 +272,19 @@ async function run(): Promise<void> {
     // 跑完把计划重算一次：`--clean` 之类没变，但「还跑不跑得动」可能变了（比如源文件被挪走）
     void refreshPlan()
   }
+}
+
+/**
+ * **失败续跑**：从失败那一段起，把剩下的段补完。
+ *
+ * 两次调用之间只变一个量 —— `from`（续跑起点）。命令行随之重算（只剩没跑完的段），
+ * 用户点之前还能再看一眼，不是「点一下黑箱往后跑」。
+ */
+async function resume(): Promise<void> {
+  const failed = sectionsReport.value?.failed
+  if (!failed) return
+  from.value = failed
+  await run()
 }
 
 async function cancel(): Promise<void> {
@@ -279,9 +380,19 @@ function jobsLabel(actual: number): string {
             <span>{{ tr('restore.clean') }}</span>
           </label>
           <p class="restore__hint">{{ tr('restore.cleanHint') }}</p>
+          <label class="restore__check">
+            <input v-model="sectionsMode" type="checkbox" data-testid="restore-sections" />
+            <span>{{ tr('restore.sections') }}</span>
+          </label>
+          <p class="restore__hint">{{ tr('restore.sectionsHint') }}</p>
           <label class="restore__field">
             <span class="restore__label">{{ tr('restore.section') }}</span>
-            <select v-model="section" class="restore__select" data-testid="restore-section">
+            <select
+              v-model="section"
+              class="restore__select"
+              data-testid="restore-section"
+              :disabled="sectionsMode"
+            >
               <option v-for="(key, value) in SECTION_KEYS" :key="value" :value="value">{{ tr(key) }}</option>
             </select>
           </label>
@@ -291,7 +402,7 @@ function jobsLabel(actual: number): string {
               v-model.number="jobs"
               class="restore__select"
               data-testid="restore-jobs"
-              :disabled="plan !== null && !isDirectory"
+              :disabled="activePlan !== null && !isDirectory"
             >
               <option :value="0">1</option>
               <option :value="2">2</option>
@@ -299,13 +410,33 @@ function jobsLabel(actual: number): string {
               <option :value="8">8</option>
             </select>
             <span class="restore__hint" data-testid="restore-jobs-hint">
-              {{ plan !== null && !isDirectory ? tr('restore.jobsSerial') : tr('restore.jobsHint') }}
+              {{ activePlan !== null && !isDirectory ? tr('restore.jobsSerial') : tr('restore.jobsHint') }}
             </span>
           </label>
         </div>
 
-        <!-- ③ 计划：命令行先摊出来（口令写 ***）；问题照实摆 -->
-        <div v-if="plan" class="restore__plan" data-testid="restore-plan">
+        <!-- ③ 计划：命令行先摊出来（口令写 ***）；问题照实摆。
+             逐段模式的「先摊命令行」是**每段一条**（三行），不是一行。 -->
+        <div v-if="sectionsMode && sectionsPlan" class="restore__plan" data-testid="restore-sections-plan">
+          <p class="restore__label">{{ tr('restore.sectionsPreview') }}</p>
+          <div v-for="(cmd, index) in sectionsPlan.commands" :key="cmd.section" class="restore__section-cmd">
+            <p class="restore__label" data-testid="restore-section-command-label">
+              {{ tr('restore.sectionIndex', { n: index + 1 }) }} · {{ tr(SECTION_KEYS[cmd.section]) }}
+            </p>
+            <code class="restore__cmd" data-testid="restore-section-command">{{ cmd.display }}</code>
+          </div>
+          <p v-if="sectionsPlan.program" class="restore__hint" data-testid="restore-program-found">
+            {{ tr('restore.programFound', { path: sectionsPlan.program }) }}
+          </p>
+          <p v-else class="restore__problem" data-testid="restore-program-missing">
+            {{ tr('restore.programMissing') }}
+          </p>
+          <p v-if="sectionsPlan.problem" class="restore__error" data-testid="restore-problem">
+            {{ sectionsPlan.problem.message }}
+            <span v-if="sectionsPlan.problem.hint" class="restore__hint"> — {{ sectionsPlan.problem.hint }}</span>
+          </p>
+        </div>
+        <div v-else-if="plan" class="restore__plan" data-testid="restore-plan">
           <p class="restore__label">{{ tr('restore.preview') }}</p>
           <code class="restore__cmd" data-testid="restore-command">{{ plan.display }}</code>
           <p v-if="plan.program" class="restore__hint" data-testid="restore-program-found">
@@ -365,6 +496,85 @@ function jobsLabel(actual: number): string {
           <p v-if="report.logTrimmedChars" class="restore__hint" data-testid="restore-log-trimmed">
             {{ tr('restore.logTrimmed', { n: report.logTrimmedChars }) }}
           </p>
+        </div>
+
+        <!-- ⑤ 逐段模式的结局：一行一段的账 + 停在哪 + 从哪一段起续跑 -->
+        <div v-if="sectionsReport" class="restore__result" data-testid="restore-sections-result">
+          <p v-if="!sectionsReport.failed" class="restore__ok" data-testid="restore-sections-ok">
+            {{
+              tr('restore.sectionsDone', {
+                source: sectionsReport.source,
+                database: sectionsReport.database,
+                ms: sectionsReport.elapsedMs,
+                jobs: jobsLabel(sectionsReport.jobs),
+              })
+            }}
+          </p>
+          <p v-else class="restore__error" data-testid="restore-sections-stopped">
+            {{
+              tr('restore.sectionsStopped', {
+                n: stoppedNumber,
+                label: resumeLabel,
+                rest: remainingSections,
+              })
+            }}
+          </p>
+
+          <ul class="restore__sections" data-testid="restore-sections-rows">
+            <li
+              v-for="row in sectionRows"
+              :key="row.key"
+              class="restore__section-row"
+              data-testid="restore-section-row"
+            >
+              <span>{{ tr('restore.sectionIndex', { n: row.index }) }} · {{ tr(SECTION_KEYS[row.key]) }}</span>
+              <span v-if="row.outcome && row.outcome.ok" class="restore__ok">
+                {{ tr('restore.sectionOk', { ms: row.outcome.elapsedMs }) }}
+              </span>
+              <span v-else-if="row.outcome && row.outcome.cancelled" class="restore__problem">
+                {{ tr('restore.sectionCancelled', { ms: row.outcome.elapsedMs }) }}
+              </span>
+              <span v-else-if="row.outcome" class="restore__problem">
+                {{ tr('restore.sectionFailed', { code: row.outcome.exitCode ?? '—' }) }}
+              </span>
+              <span v-else class="restore__hint">{{ tr('restore.sectionNotRun') }}</span>
+            </li>
+          </ul>
+
+          <p v-if="sectionsReport.failure" class="restore__error" data-testid="restore-sections-failure">
+            {{ sectionsReport.failure.message }}
+            <span v-if="sectionsReport.failure.hint" class="restore__hint">
+              — {{ sectionsReport.failure.hint }}
+            </span>
+          </p>
+
+          <!-- 失败那一段自己的输出（含它自己的退出码）：其余段没跑，没有日志可给 -->
+          <template v-if="failedOutcome">
+            <p class="restore__label">{{ tr('restore.log') }}</p>
+            <pre class="restore__log" data-testid="restore-log">{{
+              failedOutcome.log || tr('restore.logEmpty')
+            }}</pre>
+            <p v-if="failedOutcome.logTrimmedChars" class="restore__hint" data-testid="restore-log-trimmed">
+              {{ tr('restore.logTrimmed', { n: failedOutcome.logTrimmedChars }) }}
+            </p>
+          </template>
+
+          <div v-if="sectionsReport.failed" class="restore__resume" data-testid="restore-resume">
+            <p class="restore__label">{{ tr('restore.resumeCommand') }}</p>
+            <code class="restore__cmd" data-testid="restore-resume-command">
+              {{ sectionsReport.resumeCommand }}
+            </code>
+            <p class="restore__hint">{{ tr('restore.resumeNote') }}</p>
+            <button
+              type="button"
+              class="restore__run"
+              data-testid="restore-resume-run"
+              :disabled="busy"
+              @click="resume"
+            >
+              {{ tr('restore.resumeRun', { label: resumeLabel }) }}
+            </button>
+          </div>
         </div>
 
         <div v-if="failure" class="restore__failure" data-testid="restore-failure">
@@ -518,6 +728,38 @@ function jobsLabel(actual: number): string {
 .restore__log {
   max-height: 220px;
   overflow: auto;
+}
+
+.restore__section-cmd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+}
+
+.restore__sections {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+}
+
+.restore__section-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-spacing-s);
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border: 1px solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.restore__resume {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
 }
 
 .restore__error {

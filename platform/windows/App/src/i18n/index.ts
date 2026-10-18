@@ -1192,6 +1192,47 @@ export const DICT = {
     'zh-Hans': '取消是强杀子进程：已经被写进库里的对象不会自动撤销 —— 要一份干净的结果，勾上「先删后建」重跑。',
     en: 'Cancelling kills the child process: objects already written to the database are not rolled back. For a clean result, tick "Drop first" and run it again.',
   },
+  // 逐段恢复 + 失败续跑（FR-IO-05 的这一半）
+  'restore.sections': {
+    'zh-Hans': '逐段恢复（结构 → 数据 → 索引/约束，失败即停）',
+    en: 'Section by section (schema → data → indexes, stop on first error)',
+  },
+  'restore.sectionsHint': {
+    'zh-Hans': '三段按依赖顺序一条一条跑：哪一段失败就停在哪一段，并给出从这一段起续跑的命令。',
+    en: 'The three sections run in dependency order: the sequence stops at the first failure and tells you how to resume from there.',
+  },
+  'restore.sectionsPreview': {
+    'zh-Hans': '将要按顺序执行的命令行',
+    en: 'Command lines that will run, in order',
+  },
+  'restore.sectionIndex': { 'zh-Hans': '第 {n} 段', en: 'Section {n}' },
+  'restore.sectionOk': { 'zh-Hans': '通过 · {ms} ms', en: 'passed · {ms} ms' },
+  'restore.sectionFailed': { 'zh-Hans': '失败 · 退出码 {code}', en: 'failed · exit code {code}' },
+  'restore.sectionCancelled': { 'zh-Hans': '已取消 · {ms} ms', en: 'cancelled · {ms} ms' },
+  'restore.sectionNotRun': {
+    'zh-Hans': '没跑（前面那段失败了，这里就停住）',
+    en: 'not run (it stopped at the section before this one)',
+  },
+  'restore.sectionsDone': {
+    'zh-Hans': '三段都过了：{source} → {database}（共 {ms} ms，{jobs}）',
+    en: 'All three sections passed: {source} → {database} ({ms} ms total, {jobs})',
+  },
+  'restore.sectionsStopped': {
+    'zh-Hans': '停在第 {n} 段（{label}）：后面 {rest} 段还没跑。',
+    en: 'Stopped at section {n} ({label}): {rest} section(s) after it did not run.',
+  },
+  'restore.resumeCommand': {
+    'zh-Hans': '想手工接着跑，就复制这一条：',
+    en: 'To continue by hand, copy this one:',
+  },
+  'restore.resumeRun': {
+    'zh-Hans': '从「{label}」起续跑',
+    en: 'Resume from "{label}"',
+  },
+  'restore.resumeNote': {
+    'zh-Hans': '续跑只补没跑完的段（不会再回到前面的段）；目标库现在的状态由你判断要不要先清干净。',
+    en: 'Resuming only runs the sections that are left; whether the target needs cleaning first is your call.',
+  },
 
   // 写回
   'write.preview': { 'zh-Hans': '生成 SQL（先看清）', en: 'Generate SQL (preview first)' },

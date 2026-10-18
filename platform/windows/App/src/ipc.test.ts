@@ -68,6 +68,8 @@ describe('ipc', () => {
       'restore_plan',
       'restore_run',
       'restore_cancel',
+      'restore_plan_sections',
+      'restore_run_sections',
       'preview_import',
       'run_import',
       'xlsx_to_csv',

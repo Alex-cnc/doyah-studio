@@ -1,8 +1,16 @@
 //! **恢复**（`FR-IO-05` 的 Windows 侧落法）：封装本机 `pg_restore`。
 //!
 //! 需求原文：「备份文件恢复到指定库（`pg_restore` 的 `--clean` / `--section` / `--jobs`）
-//! 与失败续跑」。这一片落**前三个旗标与可取消的运行器**；「失败续跑」留到下一片
-//! （它要的是「记住跑到哪一段」的账，不是多一个开关）。
+//! 与失败续跑」。旗标与可取消运行器是第一片；**失败续跑**是这一片：
+//!
+//! 恢复的三段有**依赖顺序**（结构 → 数据 → 索引/约束），所以「续跑」不是一个开关，
+//! 而是一份**账**：跑到哪一段停了、后面还有哪几段、接着跑的那条命令长什么样。
+//! 做法 = 逐段执行（每段一条 `pg_restore --section=… --exit-on-error`），遇错即停，
+//! 回执里带每段的退出码与日志尾部，失败段 + 它后面的段 = `resume_from`。
+//!
+//! **为什么失败就停、而不是自己接着跑**：恢复失败往往意味着目标库已处于半截状态，
+//! 「该不该继续、要不要先清干净」是人的判断 —— 工具只负责把下一步说清楚
+//! （给人一条能直接粘贴的命令 + 一个「从这一段起续跑」的按钮）。
 //!
 //! ## 与备份同源的四条口径（`backup.rs` 那四条在这里逐条对应）
 //!
@@ -73,6 +81,27 @@ impl RestoreSection {
     }
 }
 
+/// 三段恢复的**依赖顺序**：先结构、再数据、最后索引与约束。倒着做必然失败（数据要表先存在）。
+pub const SECTION_SEQUENCE: [RestoreSection; 3] = [
+    RestoreSection::PreData,
+    RestoreSection::Data,
+    RestoreSection::PostData,
+];
+
+/// 「失败续跑」要跑哪几段：从**失败那一段**起，把后面的段按顺序补完。
+///
+/// - `None` / `PreData` ⇒ 三段全跑（前段本来就是第一段）；
+/// - `Data` ⇒ 数据 + 后段；`PostData` ⇒ 只剩后段；
+/// - `All` ⇒ 三段全跑 —— 一次性模式失败时 `pg_restore` 不会告诉外界停在哪一段，
+///   只能从第一段重来，文案里必须如实说「这次没有分段」。
+pub fn resume_sections(failed: Option<RestoreSection>) -> Vec<RestoreSection> {
+    match failed {
+        Some(RestoreSection::Data) => vec![RestoreSection::Data, RestoreSection::PostData],
+        Some(RestoreSection::PostData) => vec![RestoreSection::PostData],
+        _ => SECTION_SEQUENCE.to_vec(),
+    }
+}
+
 /// 恢复的**源**是文件还是目录归档（决定体积怎么算、`--jobs` 允不允许）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceKind {
@@ -112,6 +141,9 @@ pub struct RestoreOptions {
     pub section: RestoreSection,
     /// 并行度（只有目录归档生效；`<= 1` 等于不并行）
     pub jobs: u32,
+    /// 遇错即停（`--exit-on-error`）。逐段恢复恒为真：一段失败就必须停，
+    /// 否则 `pg_restore` 会带着半截结构继续往下做，退出码还可能是 0。
+    pub fail_fast: bool,
 }
 
 impl Default for RestoreOptions {
@@ -120,6 +152,7 @@ impl Default for RestoreOptions {
             clean: false,
             section: RestoreSection::All,
             jobs: 0,
+            fail_fast: false,
         }
     }
 }
@@ -198,8 +231,45 @@ pub fn plan_args(
     if jobs > 1 {
         args.push(format!("--jobs={jobs}"));
     }
+    if options.fail_fast {
+        args.push("--exit-on-error".to_string());
+    }
     args.push(source.display().to_string());
     args
+}
+
+/// 逐段恢复的**计划表**：按依赖顺序给每一段拼一条计划（每段都带 `--exit-on-error`）。
+///
+/// `from` = 从哪一段起（失败续跑时传失败那一段，见 `resume_sections`）。
+/// 界面把这张表整张摊给用户看 —— 逐段模式的「命令行先摊出来」是三行，不是一行。
+pub fn section_plans(
+    program: Option<PathBuf>,
+    target: &RestoreTarget,
+    source: &Path,
+    kind: SourceKind,
+    options: RestoreOptions,
+    from: Option<RestoreSection>,
+) -> Vec<RestorePlan> {
+    resume_sections(from)
+        .into_iter()
+        .map(|section| {
+            let per_section = RestoreOptions {
+                section,
+                // 逐段跑必须遇错即停：否则「第 2 段失败」会被后面几段的成功掩掉
+                fail_fast: true,
+                ..options
+            };
+            RestorePlan {
+                program: program.clone(),
+                args: plan_args(target, source, kind, &per_section),
+                source: source.to_path_buf(),
+                kind,
+                database: target.database.clone(),
+                section,
+                jobs: effective_jobs(kind, per_section.jobs),
+            }
+        })
+        .collect()
 }
 
 /// 校验源路径，并判它是文件还是目录归档。
@@ -271,6 +341,56 @@ pub struct RestoreReport {
     pub jobs: u32,
     /// 目标库
     pub database: String,
+}
+
+/// 一次子进程恢复的**完整结局**：报告 + （失败时的）可读原因 + 是否被取消。
+///
+/// 为什么不像 `run_cancellable` 那样只回 `Result`：逐段模式要留住**失败那一段**的
+/// 退出码与日志尾部（`Err` 里只有一个字符串），否则界面上只会剩下「失败了」三个字。
+#[derive(Debug, Clone)]
+pub struct Attempt {
+    pub report: RestoreReport,
+    /// `None` = 这一段成功了
+    pub failure: Option<DbFailure>,
+    pub cancelled: bool,
+}
+
+/// 逐段恢复里**一段**的结局（回执 / 界面按它一行一段地说话）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SectionOutcome {
+    pub section: RestoreSection,
+    pub ok: bool,
+    pub cancelled: bool,
+    pub exit_code: Option<i32>,
+    pub elapsed_ms: u64,
+    /// 这一段实际跑的命令行（口令打码）—— 续跑时用户要粘贴的就是它
+    pub display: String,
+    pub log: String,
+    pub log_trimmed_chars: usize,
+}
+
+/// 逐段恢复的**整份账**：跑到哪、停在哪、接下来从哪一段起。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SectionsReport {
+    pub source: String,
+    pub database: String,
+    /// 实际并行度（0 = 串行）
+    pub jobs: u32,
+    /// **只包含真的跑过的段**（失败之后的那几段没有记录 —— 它们没跑，不是失败）
+    pub sections: Vec<SectionOutcome>,
+    /// 停在哪一段（`None` = 三段都过了）
+    pub failed: Option<RestoreSection>,
+    pub cancelled: bool,
+    /// 失败那一段的可读原因（成功时 `None`）
+    pub failure: Option<DbFailure>,
+    /// 续跑要从哪几段起（失败段 + 它后面的段；成功时为空）
+    pub resume_from: Vec<RestoreSection>,
+    /// 能直接粘贴接着跑的那一条命令（失败段的；成功时 `None`）
+    pub resume_command: Option<String>,
+    /// 各段实测耗时之和（毫秒）
+    pub elapsed_ms: u64,
 }
 
 /// 一次子进程运行的裸结局（**不做任何业务判断**，好让单测用 `cmd /C` 走同一条路）。
@@ -397,12 +517,31 @@ pub fn run(
 }
 
 /// 跑一份计划，**跑着可以被取消**。`password` / `sslmode` 都走环境变量（不进 argv）。
+///
+/// 单段模式的入口：失败时把可读原因当 `Err` 抛出去（与第一片的行为逐字一致）。
+/// 逐段模式用 `attempt`，因为它要留失败那一段的退出码与日志。
 pub fn run_cancellable(
     plan: &RestorePlan,
     password: Option<&str>,
     sslmode: Option<&str>,
     cancel: &CancelFlag,
 ) -> Result<RestoreReport, DbFailure> {
+    let attempt = attempt(plan, password, sslmode, cancel)?;
+    match attempt.failure {
+        Some(failure) => Err(failure),
+        None => Ok(attempt.report),
+    }
+}
+
+/// 跑一份计划并**把结局整个留住**（报告 + 失败原因 + 是否取消）。
+///
+/// `Err` 只用于「起不来」这类基础设施故障：那时连报告都不存在。
+pub fn attempt(
+    plan: &RestorePlan,
+    password: Option<&str>,
+    sslmode: Option<&str>,
+    cancel: &CancelFlag,
+) -> Result<Attempt, DbFailure> {
     let program = plan.program.clone().ok_or_else(|| DbFailure {
         message: "没有可用的 pg_restore 程序，恢复没有开始".to_string(),
         hint: "先在「程序」一格填 pg_restore 的完整路径（自动查找的结果会显示在同一处）。".to_string(),
@@ -420,21 +559,6 @@ pub fn run_cancellable(
     let headline = first_line(&log);
     let display = plan.display();
 
-    if outcome.cancelled {
-        // 取消**与失败分开说**，而且要比备份多说一句：恢复已经写进库里了，
-        // 强杀不会把已恢复的对象撤回 —— 半途的库必须让用户知道。
-        return Err(DbFailure {
-            message: format!(
-                "恢复已取消：你在第 {} ms 叫停了它，库里可能停在半途",
-                outcome.elapsed_ms
-            ),
-            hint: format!(
-                "已被 pg_restore 写进去的对象不会自动撤销。要一份干净的结果，勾上「先删后建（--clean）」重跑一次；\
-                 只想恢复某一段就改「恢复哪一段」。子进程最后说：{headline}。"
-            ),
-        });
-    }
-
     let report = RestoreReport {
         display,
         exit_code: outcome.exit_code,
@@ -446,8 +570,32 @@ pub fn run_cancellable(
         jobs: plan.jobs,
         database: plan.database.clone(),
     };
+
+    if outcome.cancelled {
+        // 取消**与失败分开说**，而且要比备份多说一句：恢复已经写进库里了，
+        // 强杀不会把已恢复的对象撤回 —— 半途的库必须让用户知道。
+        return Ok(Attempt {
+            report,
+            failure: Some(DbFailure {
+                message: format!(
+                    "恢复已取消：你在第 {} ms 叫停了它，库里可能停在半途",
+                    outcome.elapsed_ms
+                ),
+                hint: format!(
+                    "已被 pg_restore 写进去的对象不会自动撤销。要一份干净的结果，勾上「先删后建（--clean）」重跑一次；\
+                     只想恢复某一段就改「恢复哪一段」。子进程最后说：{headline}。"
+                ),
+            }),
+            cancelled: true,
+        });
+    }
+
     if outcome.success {
-        return Ok(report);
+        return Ok(Attempt {
+            report,
+            failure: None,
+            cancelled: false,
+        });
     }
 
     let code = match outcome.exit_code {
@@ -469,9 +617,70 @@ pub fn run_cancellable(
     } else {
         "看上面子进程的原话；日志尾部已带回，完整输出由 pg_restore 打印。"
     };
-    Err(DbFailure {
-        message: format!("pg_restore {code}：{headline}"),
-        hint: format!("{hint}（本次耗时 {} ms）", outcome.elapsed_ms),
+    Ok(Attempt {
+        report,
+        failure: Some(DbFailure {
+            message: format!("pg_restore {code}：{headline}"),
+            hint: format!("{hint}（本次耗时 {} ms）", outcome.elapsed_ms),
+        }),
+        cancelled: false,
+    })
+}
+
+/// **逐段执行**：按计划表的顺序一段一段跑，**遇错即停**，把每段的账记下来。
+///
+/// 停在失败那一段之后**不做任何猜测**：不自动清库、不自动跳过、不自动重试 ——
+/// 回执只回答三件事：跑过哪几段、停在哪一段为什么、接下来从哪一段起（`resume_from`）。
+pub fn run_sections<F>(plans: &[RestorePlan], mut run_one: F) -> Result<SectionsReport, DbFailure>
+where
+    F: FnMut(&RestorePlan) -> Result<Attempt, DbFailure>,
+{
+    let mut sections: Vec<SectionOutcome> = Vec::new();
+    let mut failed: Option<RestoreSection> = None;
+    let mut cancelled = false;
+    let mut failure: Option<DbFailure> = None;
+    let mut resume_command: Option<String> = None;
+
+    for plan in plans {
+        let attempt = run_one(plan)?;
+        let ok = attempt.failure.is_none();
+        sections.push(SectionOutcome {
+            section: plan.section,
+            ok,
+            cancelled: attempt.cancelled,
+            exit_code: attempt.report.exit_code,
+            elapsed_ms: attempt.report.elapsed_ms,
+            display: attempt.report.display.clone(),
+            log: attempt.report.log.clone(),
+            log_trimmed_chars: attempt.report.log_trimmed_chars,
+        });
+        if !ok {
+            failed = Some(plan.section);
+            cancelled = attempt.cancelled;
+            failure = attempt.failure;
+            resume_command = Some(attempt.report.display.clone());
+            // 本段失败 ⇒ 后面的段一律不跑：半截结构上灌数据只会把现场弄得更难收拾
+            break;
+        }
+    }
+
+    let elapsed_ms = sections.iter().map(|section| section.elapsed_ms).sum();
+    let first = plans.first();
+    Ok(SectionsReport {
+        source: first.map(|plan| plan.source.display().to_string()).unwrap_or_default(),
+        database: first.map(|plan| plan.database.clone()).unwrap_or_default(),
+        jobs: first.map(|plan| plan.jobs).unwrap_or(0),
+        resume_from: if failed.is_some() {
+            resume_sections(failed)
+        } else {
+            Vec::new()
+        },
+        sections,
+        failed,
+        cancelled,
+        failure,
+        resume_command,
+        elapsed_ms,
     })
 }
 
@@ -502,6 +711,7 @@ mod tests {
             clean,
             section,
             jobs,
+            fail_fast: false,
         }
     }
 
@@ -696,5 +906,185 @@ mod tests {
         assert!(outcome.cancelled, "取消旗置位后必须判成取消");
         // ping -n 10 本机大约要 9 秒；400ms 就叫停 ⇒ 必须远小于它
         assert!(outcome.elapsed_ms < 5000, "耗时 {}", outcome.elapsed_ms);
+    }
+
+    // ── 逐段恢复 / 失败续跑（本片）──────────────────────────────────────────────
+
+    fn section_plan_set(from: Option<RestoreSection>) -> Vec<RestorePlan> {
+        section_plans(
+            Some(PathBuf::from(r"C:\pg\bin\pg_restore.exe")),
+            &target(),
+            &PathBuf::from(r"D:\backup\shop.dump"),
+            SourceKind::File,
+            options(true, RestoreSection::All, 0),
+            from,
+        )
+    }
+
+    /// 一份「假装跑过」的结局：单测只验编排，真子进程由下面那条用例与既有 `run_program` 用例守。
+    fn pretend(plan: &RestorePlan, ok: bool) -> Attempt {
+        Attempt {
+            report: RestoreReport {
+                display: plan.display(),
+                exit_code: Some(if ok { 0 } else { 1 }),
+                log: if ok { "restored".to_string() } else { "boom: relation does not exist".to_string() },
+                log_trimmed_chars: 0,
+                elapsed_ms: 7,
+                source: plan.source.display().to_string(),
+                section: plan.section,
+                jobs: plan.jobs,
+                database: plan.database.clone(),
+            },
+            failure: if ok {
+                None
+            } else {
+                Some(DbFailure {
+                    message: "pg_restore 退出码 1：boom".to_string(),
+                    hint: "看上面子进程的原话".to_string(),
+                })
+            },
+            cancelled: false,
+        }
+    }
+
+    #[test]
+    fn resume_starts_at_the_failed_section_and_keeps_the_dependency_order() {
+        assert_eq!(
+            resume_sections(None),
+            vec![RestoreSection::PreData, RestoreSection::Data, RestoreSection::PostData]
+        );
+        // 前段失败 ⇒ 还是三段全跑（它本来就是第一段，没有「更前面」可省）
+        assert_eq!(resume_sections(Some(RestoreSection::PreData)).len(), 3);
+        // 数据段失败 ⇒ 数据 + 后段（不能再回到前段：结构已经进去了）
+        assert_eq!(
+            resume_sections(Some(RestoreSection::Data)),
+            vec![RestoreSection::Data, RestoreSection::PostData]
+        );
+        assert_eq!(
+            resume_sections(Some(RestoreSection::PostData)),
+            vec![RestoreSection::PostData]
+        );
+        // 一次性模式失败：pg_restore 不告诉外界停在哪 ⇒ 只能从头上，且不能假装知道
+        assert_eq!(resume_sections(Some(RestoreSection::All)).len(), 3);
+    }
+
+    #[test]
+    fn the_section_plans_carry_one_command_per_section_and_always_fail_fast() {
+        let plans = section_plan_set(None);
+        assert_eq!(plans.len(), 3);
+        let sections: Vec<RestoreSection> = plans.iter().map(|plan| plan.section).collect();
+        assert_eq!(sections, SECTION_SEQUENCE.to_vec(), "段序必须是 结构 → 数据 → 索引");
+
+        for plan in &plans {
+            let flag = plan.section.pg_flag().expect("逐段模式下每段都必须带 --section");
+            assert!(
+                plan.args.contains(&format!("--section={flag}")),
+                "{} 少了 --section：{:?}",
+                flag,
+                plan.args
+            );
+            assert!(
+                plan.args.contains(&"--exit-on-error".to_string()),
+                "逐段模式下每段都必须 --exit-on-error（否则失败会被后面的成功掩掉）"
+            );
+            // clean 是用户的开关，逐段不改变它；每条都配 --if-exists
+            assert!(plan.args.contains(&"--clean".to_string()));
+            assert!(plan.args.contains(&"--if-exists".to_string()));
+            // 源永远是最后一个参数
+            assert_eq!(plan.args.last(), Some(&plan.source.display().to_string()));
+        }
+        // 从数据段起 ⇒ 只出两条（续跑不是「把三段重跑一遍」）
+        let resumed = section_plan_set(Some(RestoreSection::Data));
+        assert_eq!(resumed.len(), 2);
+        assert_eq!(resumed[0].section, RestoreSection::Data);
+        assert_eq!(resumed[1].section, RestoreSection::PostData);
+    }
+
+    #[test]
+    fn a_failed_section_stops_the_sequence_and_points_at_the_next_step() {
+        let plans = section_plan_set(None);
+        let mut calls: Vec<RestoreSection> = Vec::new();
+        let report = run_sections(&plans, |plan| {
+            calls.push(plan.section);
+            Ok(pretend(plan, plan.section != RestoreSection::Data))
+        })
+        .expect("编排本身不该出错");
+
+        // 前段跑过、数据段失败 ⇒ 后段**一次都没跑**
+        assert_eq!(calls, vec![RestoreSection::PreData, RestoreSection::Data]);
+        assert_eq!(report.failed, Some(RestoreSection::Data));
+        assert_eq!(report.sections.len(), 2);
+        assert!(report.sections[0].ok);
+        assert!(!report.sections[1].ok);
+        assert_eq!(report.sections[1].exit_code, Some(1));
+        assert!(report.sections[1].log.contains("relation does not exist"));
+        // 续跑 = 失败段 + 它后面的段，且回执里有一条能直接粘贴的命令
+        assert_eq!(
+            report.resume_from,
+            vec![RestoreSection::Data, RestoreSection::PostData]
+        );
+        let command = report.resume_command.expect("失败时必须给一条可粘贴的续跑命令");
+        assert!(command.contains("--section=data"), "{command}");
+        assert!(command.contains("--exit-on-error"), "{command}");
+        assert!(command.starts_with("PGPASSWORD=*** "), "{command}");
+        assert!(!report.cancelled);
+        assert_eq!(report.elapsed_ms, 14);
+    }
+
+    #[test]
+    fn a_clean_sequence_reports_every_section_and_has_nothing_to_resume() {
+        let plans = section_plan_set(None);
+        let report = run_sections(&plans, |plan| Ok(pretend(plan, true))).expect("编排本身不该出错");
+        assert_eq!(report.sections.len(), 3);
+        assert!(report.sections.iter().all(|section| section.ok));
+        assert_eq!(report.failed, None);
+        assert!(report.resume_from.is_empty(), "全过了就没有「续跑」这回事");
+        assert_eq!(report.resume_command, None);
+        assert_eq!(report.failure, None);
+    }
+
+    #[test]
+    fn cancelling_a_section_stops_the_sequence_and_says_it_was_a_cancel() {
+        let plans = section_plan_set(None);
+        let report = run_sections(&plans, |plan| {
+            if plan.section == RestoreSection::PreData {
+                return Ok(pretend(plan, true));
+            }
+            let mut attempt = pretend(plan, false);
+            attempt.cancelled = true;
+            attempt.failure = Some(DbFailure {
+                message: "恢复已取消：你在第 900 ms 叫停了它，库里可能停在半途".to_string(),
+                hint: "已写入的对象不会自动撤销".to_string(),
+            });
+            Ok(attempt)
+        })
+        .expect("编排本身不该出错");
+        assert_eq!(report.failed, Some(RestoreSection::Data));
+        assert!(report.cancelled, "取消与失败必须分开说");
+        assert_eq!(report.sections.len(), 2, "取消后不许再往下跑第三段");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_real_child_process_becomes_a_failed_attempt_with_its_exit_code_and_log() {
+        // 走 `attempt` 这条真路：报告要带退出码与日志尾部，失败原因要能读
+        let plan = RestorePlan {
+            program: Some(PathBuf::from("cmd.exe")),
+            args: vec![
+                "/C".to_string(),
+                "echo restore-attempt-line& exit 2".to_string(),
+            ],
+            source: PathBuf::from(r"D:\backup\shop.dump"),
+            kind: SourceKind::File,
+            database: "shop".to_string(),
+            section: RestoreSection::Data,
+            jobs: 0,
+        };
+        let attempt = attempt(&plan, None, None, &CancelFlag::new()).expect("起得来 cmd.exe");
+        assert_eq!(attempt.report.exit_code, Some(2));
+        assert!(attempt.report.log.contains("restore-attempt-line"));
+        assert!(!attempt.cancelled);
+        let failure = attempt.failure.expect("退出码 2 必须判成失败");
+        assert!(failure.message.contains("退出码 2"), "{}", failure.message);
     }
 }
