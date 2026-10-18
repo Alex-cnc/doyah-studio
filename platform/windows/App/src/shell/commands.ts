@@ -146,6 +146,14 @@ export const COMMANDS_LIST: readonly Command[] = [
     groupKey: 'cmdGroup.appearance',
     scope: { kind: 'global' },
   },
+  {
+    // 智能体设置（FR-AI-01）：入口在命令面板，落点是弹层（`shell/AgentSettingsDialog.vue`）
+    id: 'agent.settings',
+    titleKey: 'cmd.agent.settings',
+    keywords: ['agent', 'ai', 'llm', 'model', 'endpoint', 'api key', '智能体', '模型'],
+    groupKey: 'cmdGroup.agent',
+    scope: { kind: 'global' },
+  },
 ]
 
 /** 按 id 取命令（分派器用；找不到就是 `undefined`，**不编一个**）。 */

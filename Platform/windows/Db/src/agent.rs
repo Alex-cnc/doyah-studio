@@ -45,8 +45,35 @@ pub enum Endpoint {
     Remote,
 }
 
+/// 闸门说「配置不全」时**缺的是哪一项**。
+///
+/// 为什么给短码而不是一句拼好的中文：界面要双语、要逐条标红，而领域层**不许写死文案**
+/// （概设 §7「语言由调用方显式给定」）。拼好的字符串只有一处能读，短码谁都能读。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GateProblem {
+    /// 端点地址为空。
+    EndpointMissing,
+    /// 模型名为空。
+    ModelMissing,
+    /// 远端端点缺密钥。
+    KeyMissing,
+}
+
+impl GateProblem {
+    /// 稳定短码（界面查语言表用；**键名即契约**）。
+    pub const fn code(self) -> &'static str {
+        match self {
+            GateProblem::EndpointMissing => "endpointMissing",
+            GateProblem::ModelMissing => "modelMissing",
+            GateProblem::KeyMissing => "keyMissing",
+        }
+    }
+}
+
 /// 闸门的裁决。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "state")]
 pub enum GateVerdict {
     /// 可以外发。
     Open,
@@ -54,8 +81,8 @@ pub enum GateVerdict {
     ClosedBySwitch,
     /// 配置不全 ⇒ 不发（缺端点 / 远端缺密钥 / 缺模型名）。
     ClosedByConfig {
-        /// 还缺什么（可读；**不含密钥本身**）。
-        missing: String,
+        /// 还缺什么（逐项短码，顺序稳定；**不含密钥本身**）。
+        problems: Vec<GateProblem>,
     },
 }
 
@@ -81,23 +108,21 @@ impl Gate {
         if !self.enabled {
             return GateVerdict::ClosedBySwitch;
         }
-        let mut missing = Vec::new();
+        let mut problems = Vec::new();
         if self.base_url.trim().is_empty() {
-            missing.push("端点地址");
+            problems.push(GateProblem::EndpointMissing);
         }
         if self.model.trim().is_empty() {
-            missing.push("模型名");
+            problems.push(GateProblem::ModelMissing);
         }
         // 本地端点不强制密钥（契约明文）；远端必须有。
         if matches!(self.endpoint, Endpoint::Remote) && !self.has_key {
-            missing.push("密钥");
+            problems.push(GateProblem::KeyMissing);
         }
-        if missing.is_empty() {
+        if problems.is_empty() {
             GateVerdict::Open
         } else {
-            GateVerdict::ClosedByConfig {
-                missing: missing.join(" / "),
-            }
+            GateVerdict::ClosedByConfig { problems }
         }
     }
 
@@ -795,7 +820,9 @@ mod tests {
         let mut g = gate(true, Endpoint::Remote, true);
         g.model = "  ".into();
         match g.check() {
-            GateVerdict::ClosedByConfig { missing } => assert!(missing.contains("模型名")),
+            GateVerdict::ClosedByConfig { problems } => {
+                assert_eq!(problems, vec![GateProblem::ModelMissing]);
+            }
             other => panic!("配置不全必须不发，实测 {other:?}"),
         }
     }

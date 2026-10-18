@@ -5,6 +5,9 @@
 //! 名字是**运行时静默失败**，靠人记不住）。
 
 pub mod connections;
+/// 智能体设置的落盘（FR-AI-01）：配置在 `%APPDATA%\DoyahStudio\agent.json`、
+/// 密钥单独一份 DPAPI 密文（`agent-key.bin`）—— **配置结构里没有密钥字段**。
+pub mod agent_settings;
 pub mod format_tool;
 pub mod fs;
 pub mod postgres;
@@ -24,6 +27,8 @@ mod query;
 pub mod search;
 
 pub use connections::{config_from_form, ConnectionStore};
+#[allow(unused_imports)]
+pub use agent_settings::{AgentSettingsSnapshot, AgentSettingsStore};
 #[allow(unused_imports)]
 pub use saved_queries::SavedQueryStore;
 pub use postgres::{
@@ -52,6 +57,8 @@ pub struct ShellState {
     pub connections: ConnectionStore,
     /// 已保存查询的落盘位置（FR-EDIT-14；与连接配置分两个文件，见 `saved_queries.rs` 头注）。
     pub saved_queries: SavedQueryStore,
+    /// 智能体配置与密钥的落盘位置（FR-AI-01；配置与密钥**分两份文件**，见 `agent_settings.rs` 头注）。
+    pub agent_settings: AgentSettingsStore,
     /// **当前连接是不是只读**（FR-CONN-17）：写回与危险判定都要看它。
     ///
     /// 为什么用原子布尔而不是塞进会话：只读是**连接级配置**的一部分，而"当前连接"这个槽
@@ -581,6 +588,44 @@ fn saved_query_delete(
     }
     state.saved_queries.save(&list, &connections::now_iso8601())?;
     Ok(list)
+}
+
+// ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
+//
+// 四条命令都很薄：**判定在领域层**（`doyah_studio_db::agent_config::evaluate`），本层只做
+// 「读盘 → 存盘 → 回一份快照」。界面拿到的 `gate` 就是唯一裁决，不在前端再算一遍。
+
+/// 读设置快照（配置 + 闸门裁决 + 密钥在不在）。
+#[tauri::command]
+fn agent_settings_get(state: State<'_, ShellState>) -> Result<AgentSettingsSnapshot, DbFailure> {
+    state.agent_settings.snapshot()
+}
+
+/// 存配置（整份覆盖），回一份新快照 —— 界面据此刷新「现在能不能外发」。
+#[tauri::command]
+fn agent_settings_save(
+    state: State<'_, ShellState>,
+    config: doyah_studio_db::agent_config::AgentConfiguration,
+) -> Result<AgentSettingsSnapshot, DbFailure> {
+    state.agent_settings.save(&config)?;
+    state.agent_settings.snapshot()
+}
+
+/// 存密钥（DPAPI 加密后单独落盘）。**空串拒绝**，加密失败**不降级成明文**。
+#[tauri::command]
+fn agent_key_save(
+    state: State<'_, ShellState>,
+    key: String,
+) -> Result<AgentSettingsSnapshot, DbFailure> {
+    state.agent_settings.save_key(&key)?;
+    state.agent_settings.snapshot()
+}
+
+/// 清除密钥（本就不在也算成功）。
+#[tauri::command]
+fn agent_key_clear(state: State<'_, ShellState>) -> Result<AgentSettingsSnapshot, DbFailure> {
+    state.agent_settings.clear_key()?;
+    state.agent_settings.snapshot()
 }
 
 /// 生成**服务端条件浏览**的 SQL（FR-DATA-02；**只生成、不执行**）。
@@ -1923,6 +1968,7 @@ pub fn run() {
             db: AsyncMutex::new(None),
             connections: ConnectionStore::new(ConnectionStore::default_path()),
             saved_queries: SavedQueryStore::new(SavedQueryStore::default_path()),
+            agent_settings: AgentSettingsStore::default_store(),
             read_only: std::sync::atomic::AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
@@ -1958,6 +2004,10 @@ pub fn run() {
             saved_queries_list,
             saved_query_save,
             saved_query_delete,
+            agent_settings_get,
+            agent_settings_save,
+            agent_key_save,
+            agent_key_clear,
             connection_validate,
             connection_type_defaults,
             connection_import_url,

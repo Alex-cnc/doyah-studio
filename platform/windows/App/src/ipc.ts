@@ -96,6 +96,11 @@ export const COMMANDS = {
   savedQueriesList: 'saved_queries_list',
   savedQuerySave: 'saved_query_save',
   savedQueryDelete: 'saved_query_delete',
+  // 智能体设置（FR-AI-01：总开关 / 端点 / 模型 / 配额；密钥单独存，永不回显）
+  agentSettingsGet: 'agent_settings_get',
+  agentSettingsSave: 'agent_settings_save',
+  agentKeySave: 'agent_key_save',
+  agentKeyClear: 'agent_key_clear',
   // 连接配置面收口（S-1a）：逐项校验 / 换引擎联动默认值 / 从 URL 导入
   connectionValidate: 'connection_validate',
   connectionTypeDefaults: 'connection_type_defaults',
@@ -602,6 +607,160 @@ export function savedQueryDelete(id: string): Promise<SavedQuery[]> {
       return [...bypassSavedQueries]
     },
   )
+}
+
+// ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
+//
+// 形状与领域层 `Db/src/agent_config.rs` 一一对应（`rename_all = "camelCase"`）。
+// **界面拿到的 `gate` 就是唯一裁决**（在 Rust 里由 `agent::Gate` 算），前端不再算第二遍 ——
+// 两处判定迟早分叉，用户看到「可以外发」而实际被拦是最糟的一种不一致。
+
+/** 智能体配置（**没有密钥字段**：密钥单独存，只回「在不在」）。 */
+export interface AgentConfiguration {
+  /** 总开关。默认关：没配置过 = 不外发。 */
+  enabled: boolean
+  /** OpenAI 兼容端点。 */
+  endpoint: string
+  /** 模型名。 */
+  model: string
+  /** 单次请求超时（秒，1~600）。 */
+  timeoutSecs: number
+  /** 每小时请求上限（1~100000）。 */
+  hourlyLimit: number
+  /** 选中的内置预设标签（`custom` = 自填）。 */
+  preset: string
+}
+
+/** 端点作用域。 */
+export type AgentEndpointScope = 'local' | 'remote'
+
+/** 闸门三段状态。 */
+export type AgentGateState = 'disabled' | 'missing' | 'ready'
+
+/**
+ * 一条「不放行的理由」。
+ *
+ * 领域层把短码与具体值分成两格（`{ code, detail }`），界面据此查语言表；
+ * `detail` 只对「填错了」那几条有值。
+ */
+export interface AgentIssue {
+  code:
+    | 'endpointMissing'
+    | 'modelMissing'
+    | 'keyMissing'
+    | 'endpointScheme'
+    | 'endpointHost'
+    | 'timeoutOutOfRange'
+    | 'hourlyLimitOutOfRange'
+  detail?: string | number
+}
+
+/** 闸门裁决（**Rust 一处算**；界面只显示）。 */
+export interface AgentGateReport {
+  state: AgentGateState
+  scope: AgentEndpointScope
+  /** 放行时会用到的模型（未放行时为空串）。 */
+  model: string
+  issues: AgentIssue[]
+}
+
+/** 设置快照：配置 + 裁决 + 密钥在不在 + 两个路径。 */
+export interface AgentSettingsSnapshot {
+  config: AgentConfiguration
+  gate: AgentGateReport
+  /** 密钥**在不在**（永不回显内容）。 */
+  keyPresent: boolean
+  /** 存放方式（`dpapi` / `unavailable`）—— 界面照实写出，不假装安全。 */
+  keyStorage: string
+  /** 密钥读不出来的原因；正常为 null。 */
+  keyNote: string | null
+  /** 配置文件路径（让用户知道去哪儿看）。 */
+  configPath: string
+}
+
+/** 浏览器旁路的状态（**只服务开发自测**：刷新即丢；真形态在 Tauri 外壳里落盘 + DPAPI）。 */
+let bypassAgent: { config: AgentConfiguration; keyPresent: boolean } = {
+  config: {
+    enabled: false,
+    endpoint: '',
+    model: '',
+    timeoutSecs: 60,
+    hourlyLimit: 60,
+    preset: 'custom',
+  },
+  keyPresent: false,
+}
+
+/**
+ * 旁路下的裁决 —— **只镜像「分段」这一步**，不复制领域层那套规则以外的东西。
+ *
+ * 为什么旁路也要给一个像样的判定：浏览器里点一圈设置面板是开发时的主要验面，
+ * 全返回「disabled」就验不出三态。判据仍以 Rust 侧单测为准（旁路不是产品形态）。
+ */
+function bypassAgentGate(): AgentGateReport {
+  const { config, keyPresent } = bypassAgent
+  const endpoint = config.endpoint.trim()
+  const local = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)/i.test(endpoint)
+  const scope: AgentEndpointScope = local ? 'local' : 'remote'
+  if (!config.enabled) return { state: 'disabled', scope, model: '', issues: [] }
+  const issues: AgentIssue[] = []
+  if (!endpoint) issues.push({ code: 'endpointMissing' })
+  else if (!/^https?:\/\//i.test(endpoint)) issues.push({ code: 'endpointScheme', detail: endpoint })
+  if (!config.model.trim()) issues.push({ code: 'modelMissing' })
+  if (scope === 'remote' && !keyPresent) issues.push({ code: 'keyMissing' })
+  if (config.timeoutSecs < 1 || config.timeoutSecs > 600) {
+    issues.push({ code: 'timeoutOutOfRange', detail: config.timeoutSecs })
+  }
+  if (config.hourlyLimit < 1 || config.hourlyLimit > 100000) {
+    issues.push({ code: 'hourlyLimitOutOfRange', detail: config.hourlyLimit })
+  }
+  return issues.length
+    ? { state: 'missing', scope, model: '', issues }
+    : { state: 'ready', scope, model: config.model.trim(), issues }
+}
+
+function bypassAgentSnapshot(): AgentSettingsSnapshot {
+  return {
+    config: { ...bypassAgent.config },
+    gate: bypassAgentGate(),
+    keyPresent: bypassAgent.keyPresent,
+    keyStorage: 'unavailable',
+    keyNote: null,
+    configPath: '(浏览器旁路：没有落盘)',
+  }
+}
+
+export function agentSettingsGet(): Promise<AgentSettingsSnapshot> {
+  return call(COMMANDS.agentSettingsGet, {}, () => bypassAgentSnapshot())
+}
+
+export function agentSettingsSave(config: AgentConfiguration): Promise<AgentSettingsSnapshot> {
+  return call(COMMANDS.agentSettingsSave, { config }, () => {
+    bypassAgent = { ...bypassAgent, config: { ...config } }
+    return bypassAgentSnapshot()
+  })
+}
+
+export function agentKeySave(key: string): Promise<AgentSettingsSnapshot> {
+  return call(COMMANDS.agentKeySave, { key }, () => {
+    const trimmed = key.trim()
+    if (!trimmed) {
+      // 与外壳同形：**原话 + 出路**两段，且走语言表（漏译棘轮守着）
+      throw {
+        message: tNow('agent.key.empty'),
+        hint: tNow('agent.key.emptyHint'),
+      }
+    }
+    bypassAgent = { ...bypassAgent, keyPresent: true }
+    return bypassAgentSnapshot()
+  })
+}
+
+export function agentKeyClear(): Promise<AgentSettingsSnapshot> {
+  return call(COMMANDS.agentKeyClear, {}, () => {
+    bypassAgent = { ...bypassAgent, keyPresent: false }
+    return bypassAgentSnapshot()
+  })
 }
 
 /** 表单逐项校验（FR-CONN-06）：端口按**文本**校验，`0` / `65536` / 非数字都当场拒。 */

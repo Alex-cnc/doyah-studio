@@ -11,6 +11,7 @@
 
 pub mod admin;
 pub mod agent;
+pub mod agent_config;
 pub mod appearance;
 pub mod browse;
 pub mod code_lines;
@@ -58,7 +59,13 @@ pub use editor_font::EditorFont;
 pub use agent::{
     classify as classify_sql, decide as decide_agent_action, redact as redact_credentials,
     risk_points, wrap_untrusted, Approval, ApprovalError, ApprovalState, AuditEntry, AuditOutcome,
-    Decision as AgentDecision, Endpoint, Gate, GateVerdict, Quota, QuotaError, RiskPoint, SqlClass,
+    Decision as AgentDecision, Endpoint, Gate, GateProblem, GateVerdict, Quota, QuotaError,
+    RiskPoint, SqlClass,
+};
+pub use agent_config::{
+    evaluate as evaluate_agent_gate, field_issues as agent_field_issues,
+    AgentConfiguration, AgentGateReport, AgentIssue, EndpointScope as AgentEndpointScope,
+    GateState as AgentGateState,
 };
 pub use admin::{
     confirm_drop, format_bytes, format_duration, grant_sql, maintenance_commands, sort_sessions,

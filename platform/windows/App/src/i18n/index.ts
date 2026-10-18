@@ -91,6 +91,8 @@ export const DICT = {
   'cmdGroup.workspace': { 'zh-Hans': '工作区', en: 'Workspace' },
   'cmdGroup.database': { 'zh-Hans': '数据库', en: 'Database' },
   'cmdGroup.appearance': { 'zh-Hans': '外观', en: 'Appearance' },
+  'cmd.agent.settings': { 'zh-Hans': '智能体设置…', en: 'Agent settings…' },
+  'cmdGroup.agent': { 'zh-Hans': '智能体', en: 'Agent' },
   'cmdGroup.history': { 'zh-Hans': '面板', en: 'Palette' },
 
   // 侧栏（活动栏的窄条）
@@ -520,6 +522,87 @@ export const DICT = {
   'sql.affected': { 'zh-Hans': '影响 {n} 行（无结果集）', en: 'affected {n} rows (no result set)' },
   'sql.rows': { 'zh-Hans': '{n} 行', en: '{n} rows' },
   'sql.truncated': { 'zh-Hans': '（服务端回来 {returned} 行，已截断，只显示前 {shown} 行）', en: '(server returned {returned}; truncated to {shown})' },
+
+  // 智能体设置（FR-AI-01）：总开关 / 端点 / 模型 / 配额 / 密钥 + 一句裁决
+  'agent.title': { 'zh-Hans': '智能体设置', en: 'Agent settings' },
+  'agent.close': { 'zh-Hans': '关闭', en: 'Close' },
+  'agent.enabled': { 'zh-Hans': '启用智能体（总开关）', en: 'Enable the agent (master switch)' },
+  'agent.gate.disabled': {
+    'zh-Hans': '总开关关闭：不会向任何模型服务发送数据。',
+    en: 'Master switch is off: nothing is sent to any model service.',
+  },
+  'agent.gate.ready': {
+    'zh-Hans': '将使用 {model}（{scope}）。',
+    en: 'Will use {model} ({scope}).',
+  },
+  'agent.gate.missing': { 'zh-Hans': '还不能外发，缺这几项：', en: 'Cannot send yet — missing:' },
+  'agent.scope.local': { 'zh-Hans': '本机端点，无需密钥', en: 'local endpoint, no key needed' },
+  'agent.scope.remote': { 'zh-Hans': '远端端点', en: 'remote endpoint' },
+  'agent.issue.endpointMissing': { 'zh-Hans': '端点地址', en: 'endpoint URL' },
+  'agent.issue.modelMissing': { 'zh-Hans': '模型名', en: 'model name' },
+  'agent.issue.keyMissing': { 'zh-Hans': 'API Key（远端端点必填）', en: 'API key (required for remote endpoints)' },
+  'agent.issue.endpointScheme': {
+    'zh-Hans': '端点必须以 http:// 或 https:// 开头（现在是「{detail}」）',
+    en: 'The endpoint must start with http:// or https:// (got "{detail}")',
+  },
+  'agent.issue.endpointHost': { 'zh-Hans': '端点里没有主机名', en: 'The endpoint has no host name' },
+  'agent.issue.timeoutOutOfRange': {
+    'zh-Hans': '超时要在 1~600 秒之间（现在是 {detail}）',
+    en: 'Timeout must be 1–600 seconds (got {detail})',
+  },
+  'agent.issue.hourlyLimitOutOfRange': {
+    'zh-Hans': '每小时上限要在 1~100000 之间（现在是 {detail}）',
+    en: 'Hourly limit must be 1–100000 (got {detail})',
+  },
+  'agent.preset': { 'zh-Hans': '服务商', en: 'Provider' },
+  'agent.preset.deepseek': { 'zh-Hans': 'DeepSeek', en: 'DeepSeek' },
+  'agent.preset.openai': { 'zh-Hans': 'OpenAI', en: 'OpenAI' },
+  'agent.preset.qwen': { 'zh-Hans': '通义千问', en: 'Qwen (DashScope)' },
+  'agent.preset.zhipu': { 'zh-Hans': '智谱 GLM', en: 'Zhipu GLM' },
+  'agent.preset.ollama': { 'zh-Hans': 'Ollama（本机）', en: 'Ollama (local)' },
+  'agent.preset.vllm': { 'zh-Hans': 'vLLM（本机）', en: 'vLLM (local)' },
+  'agent.preset.custom': { 'zh-Hans': '自定义', en: 'Custom' },
+  'agent.endpoint': { 'zh-Hans': '端点', en: 'Endpoint' },
+  'agent.endpoint.placeholder': {
+    'zh-Hans': 'https://api.example.com/v1（OpenAI 兼容）',
+    en: 'https://api.example.com/v1 (OpenAI compatible)',
+  },
+  'agent.model': { 'zh-Hans': '模型', en: 'Model' },
+  'agent.model.placeholder': { 'zh-Hans': '模型名', en: 'model name' },
+  'agent.model.manual': {
+    'zh-Hans': '这家服务商没有可预置的模型清单（接入点 / 已加载模型只能自己填）。',
+    en: 'This provider has no preset model list — type the deployment or loaded model yourself.',
+  },
+  'agent.timeout': { 'zh-Hans': '超时（秒）', en: 'Timeout (s)' },
+  'agent.hourlyLimit': { 'zh-Hans': '每小时上限', en: 'Hourly limit' },
+  'agent.save': { 'zh-Hans': '保存设置', en: 'Save settings' },
+  'agent.saving': { 'zh-Hans': '保存中…', en: 'Saving…' },
+  'agent.saved': { 'zh-Hans': '已保存', en: 'Saved' },
+  'agent.key': { 'zh-Hans': 'API Key', en: 'API key' },
+  'agent.key.present': { 'zh-Hans': '已配置', en: 'configured' },
+  'agent.key.absent': { 'zh-Hans': '未配置', en: 'not configured' },
+  'agent.key.placeholder': { 'zh-Hans': '粘贴密钥（保存后不再回显）', en: 'Paste the key (never shown again after saving)' },
+  'agent.key.save': { 'zh-Hans': '保存密钥', en: 'Save key' },
+  'agent.key.saved': { 'zh-Hans': '密钥已保存', en: 'Key saved' },
+  'agent.key.clear': { 'zh-Hans': '清除密钥', en: 'Clear key' },
+  'agent.key.cleared': { 'zh-Hans': '密钥已清除', en: 'Key cleared' },
+  'agent.key.storage.dpapi': {
+    'zh-Hans': '密钥加密存放（Windows DPAPI，与当前用户绑定），不写进配置文件',
+    en: 'Key is stored encrypted (Windows DPAPI, bound to this user), never in the config file',
+  },
+  'agent.key.storage.unavailable': {
+    'zh-Hans': '本机没有可用的系统凭据加密 —— 密钥无法保存',
+    en: 'No system credential encryption on this machine — the key cannot be stored',
+  },
+  'agent.key.note': {
+    'zh-Hans': '密钥单独一份密文文件；界面只显示「在不在」，永远不会把它显示出来。',
+    en: 'The key lives in its own encrypted file; the UI only shows whether it exists and never displays it.',
+  },
+  'agent.key.empty': { 'zh-Hans': '密钥是空的，没有保存。', en: 'The key is empty, nothing was saved.' },
+  'agent.key.emptyHint': {
+    'zh-Hans': '要么填一个密钥，要么用「清除密钥」把已存的删掉。',
+    en: 'Either type a key, or use "Clear key" to delete the stored one.',
+  },
 
   // 保存查询（FR-EDIT-14）：按钮在执行之前；同名会先问「覆盖保存」
   'saveQuery.save': { 'zh-Hans': '保存查询', en: 'Save query' },

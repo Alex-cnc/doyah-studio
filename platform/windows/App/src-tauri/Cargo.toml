@@ -47,3 +47,15 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 # Tauri 2 的「自定义协议」档：发布构建用它把前端资源嵌进可执行文件。
 # 默认不开 —— 本侧的自测（cargo test）不需要，而它会把前端产物绑进编译。
 custom-protocol = ["tauri/custom-protocol"]
+
+# ── 平台专有面（**只在 Windows 上**；领域层不许出现这些）────────────────────────────
+# `FR-AI-01`「API Key 存入系统凭据存储」：用 **DPAPI**（`CryptProtectData` / `CryptUnprotectData`，
+# 用户态密钥由系统托管）把密钥加密后落盘。选它而不引第三方 keyring crate 的理由：
+# ① 这两个函数是系统自带、无需额外进程或凭据库依赖；② 密文与当前 Windows 用户绑定，拷走文件解不开；
+# ③ crate 已在依赖树里（`windows-sys` 经由 tauri 引入），不新增第三方许可面。
+# 调用点只许在 `src/agent_settings.rs` 一处（同 `pty.rs` 的隔离开关口径）。
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+] }

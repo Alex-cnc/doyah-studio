@@ -787,6 +787,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tokio",
  "tokio-postgres",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
