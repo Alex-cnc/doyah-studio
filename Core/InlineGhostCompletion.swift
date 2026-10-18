@@ -42,6 +42,35 @@ public struct InlineGhostSuggestion: Sendable, Equatable {
     }
 }
 
+/// 一条可作灰字的候选：**要写进去的整词** + 类别 + 前缀怎么比。
+///
+/// 为什么候选要单独成型：这门语言（`CodeCompletion` 按语言表）与 SQL（`QueryCompletion`
+/// 按方言 + 查询记忆）是**两套候选**，但"什么时候该出灰字 / 灰字画什么 / 接受后落哪"
+/// 必须只有一份口径 —— 于是"候选"成了两边唯一的接口。
+public struct InlineGhostCandidate: Sendable, Equatable {
+
+    /// 接受后真正写进文档的整词（含前缀）。
+    public let insertText: String
+
+    /// 候选类别（界面据此决定灰字的淡法，与候选列表同一套）。
+    public let kind: CodeCompletionItem.Kind
+
+    /// 前缀按**大小写不敏感**比对：SQL 关键字（`SELECT`）与标识符（`retryCount`）不是一套规矩 ——
+    /// SQL 里 `sel` 补成 `SELECT` 是合法的完词（写进去的是候选的规范形态），
+    /// 而代码标识符大小写不同就是另一个词，只能逐字相同。
+    public let caseInsensitive: Bool
+
+    public init(
+        insertText: String,
+        kind: CodeCompletionItem.Kind = .word,
+        caseInsensitive: Bool = false
+    ) {
+        self.insertText = insertText
+        self.kind = kind
+        self.caseInsensitive = caseInsensitive
+    }
+}
+
 /// 行内灰字补全（`FR-EDIT-57`）：敲字时光标右边显示一条淡色建议，**Tab 接受 / Esc 忽略**。
 ///
 /// ## 为什么要有这一片
@@ -56,9 +85,10 @@ public struct InlineGhostSuggestion: Sendable, Equatable {
 ///
 /// 1. **灰字只画、不写**：它不进 `NSTextStorage` —— 所以撤销栈里没有它、保存的文件里没有它、
 ///    复制走的文本里也没有它。想让它进正文，只有"按 Tab"这一条路。
-/// 2. **大小写必须逐字相同**：`insertText.hasPrefix(prefix)` 是**区分大小写**的。
-///    SQL 那边关键字是大写，敲 `sel` 就**不给灰字**（而不是画出 `ECT` 拼成 `selECT` ——
-///    那不是预览，是误导）。宁可少提示一次，也不许显示一个不存在的词。
+/// 2. **大小写必须逐字相同（代码标识符）/ SQL 关键字例外**：`insertText.hasPrefix(prefix)` 是**区分大小写**的。
+///    代码那边敲 `ret` 只认 `return`，不认 `Return`（那是另一个词）；SQL 关键字大小写不敏感，
+///    `sel` 补成 `SELECT` 是合法完词 ⇒ 由候选自己声明 `caseInsensitive`
+///    （`QueryCompletion.ghostCandidates` 全部声明；写进正文的是候选的规范形态，不是把灰字接在用户输入后面）。
 /// 3. **只收单行**：含换行的候选（多行片段）一律不画。行内建议的语义是"把当前这个词补完"，
 ///    而多行片段是"插一段代码"——那件事的落点约定在 `CodeCompletion.caretOffset`，不该由灰字代劳。
 /// 4. **灰字有长度上限**（`maximumGhostLength`）：一屏上一行塞不下就别提示，
@@ -82,7 +112,8 @@ public enum InlineGhostCompletion {
     /// 行内上下文判定（字符串 / 注释）的行长上限：更长的行（压缩过的 JS 之类）直接跳过那次判定。
     public static let maximumLineLengthForContextScan = 4_000
 
-    /// 算一条灰字建议。`nil` = 这一刻不该出灰字（每个 `nil` 的理由都写在上面的口径里）。
+    /// 算一条灰字建议（**候选来自语言表 / 文档词**，工作区代码编辑器这条路）。
+    /// `nil` = 这一刻不该出灰字（每个 `nil` 的理由都写在上面的口径里）。
     ///
     /// - Parameters:
     ///   - text: 当前文档全文。
@@ -95,6 +126,35 @@ public enum InlineGhostCompletion {
         selection: NSRange,
         language: TextLanguage,
         documentWords: [String] = [],
+        enabled: Bool = true
+    ) -> InlineGhostSuggestion? {
+        suggestion(
+            in: text,
+            selection: selection,
+            language: language,
+            candidateProvider: { prefix in
+                CodeCompletion
+                    .suggestions(prefix: prefix, language: language, documentWords: documentWords)
+                    .map { InlineGhostCandidate(insertText: $0.insertText, kind: $0.kind) }
+            },
+            enabled: enabled
+        )
+    }
+
+    /// 算一条灰字建议（**候选来源由调用方给**）。
+    ///
+    /// 为什么候选取自外部：代码编辑器与数据库 SQL 编辑器是**两套候选**
+    /// （`CodeCompletion` 按语言表 / `QueryCompletion` 按方言 + 查询记忆），
+    /// 但"什么时候该出灰字 / 灰字画什么 / 接受后落哪"这套口径必须只有一份 ——
+    /// 否则同一屏两个编辑面又会长成两个样子（行号列、着色同一条纪律）。
+    ///
+    /// - Parameter candidateProvider: 给定**已过前面所有口径检查**的前缀，返回候选。
+    ///   App 侧它只是转发到上面那两处，不在这里自己算。
+    public static func suggestion(
+        in text: String,
+        selection: NSRange,
+        language: TextLanguage,
+        candidateProvider: (String) -> [InlineGhostCandidate],
         enabled: Bool = true
     ) -> InlineGhostSuggestion? {
         guard enabled else { return nil }
@@ -119,27 +179,31 @@ public enum InlineGhostCompletion {
         // 在字符串 / 注释里不出（按本行判定，边界见类型注释）。
         if isInsideCommentOrString(ns: ns, caret: caret, language: language) { return nil }
 
-        // 候选与"按 ⌃Space 弹列表"是**同一份**（`CodeCompletion`）—— 两处各算一套必然漂移。
-        let items = CodeCompletion.suggestions(
-            prefix: prefix,
-            language: language,
-            documentWords: documentWords
-        )
+        // 候选只有一份（各自域的）：代码侧 = `CodeCompletion`，SQL 侧 = `QueryCompletion`。
+        // 两处各算一套必然漂移，所以候选从这里进来、口径留在这里。
 
-        for item in items {
-            // 口径 2：大小写逐字相同才算（否则会拼出一个不存在的词）。
-            guard item.insertText != prefix, item.insertText.hasPrefix(prefix) else { continue }
-            let ghost = String(item.insertText.dropFirst(prefix.count))
+        for candidate in candidateProvider(prefix) {
+            let insertText = candidate.insertText
+            guard insertText != prefix else { continue }
+            // 口径 2：代码标识符**大小写逐字相同**才算（否则会拼出一个不存在的词）；
+            // SQL 关键字大小写不敏感（`sel` → `SELECT` 是合法的完词），由候选自己声明。
+            if candidate.caseInsensitive {
+                guard insertText.count >= prefix.count,
+                      insertText.lowercased().hasPrefix(prefix.lowercased()) else { continue }
+            } else {
+                guard insertText.hasPrefix(prefix) else { continue }
+            }
+            let ghost = String(insertText.dropFirst(prefix.count))
             // 口径 3 / 4：只收单行、且不超长。
             guard !ghost.isEmpty,
                   !ghost.contains("\n"), !ghost.contains("\r"),
                   ghost.count <= maximumGhostLength else { continue }
             return InlineGhostSuggestion(
                 range: prefixRange,
-                insertText: item.insertText,
+                insertText: insertText,
                 ghost: ghost,
-                kind: item.kind,
-                caretOffset: prefixRange.location + (item.insertText as NSString).length
+                kind: candidate.kind,
+                caretOffset: prefixRange.location + (insertText as NSString).length
             )
         }
         return nil

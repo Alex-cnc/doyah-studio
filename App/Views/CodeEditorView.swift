@@ -337,42 +337,53 @@ final class CodeTextView: NSTextView {
 
     // MARK: 行内灰字补全（FR-EDIT-57 的行内形态 · Core `InlineGhostCompletion`）
 
+    /// 灰字的状态与画法（**与数据库 SQL 编辑器共用这一份**，见 `GhostTextOverlay`）。
+    /// 这里只做接线：候选来自 `CodeCompletion`、落地走本视图的 `applyEditPlan`。
+    private lazy var ghostOverlay: GhostTextOverlay = {
+        let overlay = GhostTextOverlay(host: self)
+        overlay.apply = { [weak self] suggestion in
+            guard let self else { return false }
+            return self.applyEditPlan(
+                range: suggestion.range,
+                replacement: suggestion.insertText,
+                caret: suggestion.caretOffset
+            )
+        }
+        overlay.candidateProvider = { [weak self] prefix in
+            guard let self else { return [] }
+            return CodeCompletion
+                .suggestions(
+                    prefix: prefix,
+                    language: self.completionLanguage,
+                    documentWords: self.ghostDocumentWords
+                )
+                .map { InlineGhostCandidate(insertText: $0.insertText, kind: $0.kind) }
+        }
+        return overlay
+    }()
+
     /// 当前该画的灰字（`nil` = 不画）。**只画、不写**：它从不进 `textStorage`，
     /// 所以撤销栈 / 保存的文件 / 复制走的文本里都没有它。想让它进正文只有 `Tab` 一条路。
-    private(set) var ghost: InlineGhostSuggestion?
+    var ghost: InlineGhostSuggestion? { ghostOverlay.suggestion }
 
     /// 文档词缓存：由代理在**高亮那一拍**（已经切过词法）刷新，击键路径只读它。
     /// 每次击键重切整篇 = 大文档上 `NFR-PERF-05` 那类卡顿。
     private(set) var ghostDocumentWords: [String] = []
 
     /// 总开关（与"是否已经有模型端点"无关：这一片是**词法级**提示，不调模型）。
-    var ghostEnabled = true
-
-    /// 用户按 Esc 关掉的那一条（`光标 + 前缀 + 候选` 三元组）。
-    /// 为什么要记：Esc 之后 `textViewDidChangeSelection` 还会再来一拍，
-    /// 不记的话灰字会**立刻原地复活** —— 按了没反应比没有还糟。
-    private var dismissedGhostKey: String?
-
-    private func ghostKey(_ suggestion: InlineGhostSuggestion) -> String {
-        "\(suggestion.range.location)|\(suggestion.range.length)|\(suggestion.insertText)"
+    var ghostEnabled: Bool {
+        get { ghostOverlay.enabled }
+        set {
+            ghostOverlay.enabled = newValue
+            ghostOverlay.refresh()
+        }
     }
 
     /// 重算灰字。文本变、光标动、词表刷新、语言切换都要调它。
     func refreshGhost() {
-        // 组字期间不算：输入法候选还没上屏，这时的前缀不是用户想补的词。
-        guard ghostEnabled, !hasMarkedText() else { setGhost(nil); return }
-        let suggestion = InlineGhostCompletion.suggestion(
-            in: string,
-            selection: selectedRange(),
-            language: completionLanguage,
-            documentWords: ghostDocumentWords,
-            enabled: ghostEnabled
-        )
-        if let suggestion, ghostKey(suggestion) == dismissedGhostKey {
-            setGhost(nil)
-            return
-        }
-        setGhost(suggestion)
+        // 语言跟着本视图的页签走（字符串 / 注释判定按它），再交给共用的那一层算。
+        ghostOverlay.language = completionLanguage
+        ghostOverlay.refresh()
     }
 
     /// 代理在高亮那一拍把词表递进来（跟着一次 `CodeLexer.tokens` 的结果，不额外切一遍）。
@@ -385,107 +396,13 @@ final class CodeTextView: NSTextView {
     /// 返回 `false` = 这一刻没有可接受的灰字 ⇒ 调用方交还默认实现（Tab 仍然缩进）。
     @discardableResult
     func acceptGhost() -> Bool {
-        guard let suggestion = ghost else { return false }
-        let caret = suggestion.range.location + suggestion.range.length
-        // 灰字画出来之后光标可能已经挪走（多一条防线：宁可不出，也不在错的位置上改字）。
-        guard selectedRange() == NSRange(location: caret, length: 0) else { setGhost(nil); return false }
-        guard applyEditPlan(range: suggestion.range, replacement: suggestion.insertText,
-                            caret: suggestion.caretOffset) else {
-            setGhost(nil)
-            return false
-        }
-        dismissedGhostKey = nil
-        setGhost(nil)
-        return true
+        ghostOverlay.accept()
     }
 
     /// 忽略灰字（`Esc`）。返回 `false` = 本来就没有灰字 ⇒ 交还默认实现。
     @discardableResult
     func dismissGhost() -> Bool {
-        guard let suggestion = ghost else { return false }
-        dismissedGhostKey = ghostKey(suggestion)
-        setGhost(nil)
-        return true
-    }
-
-    private func setGhost(_ suggestion: InlineGhostSuggestion?) {
-        guard suggestion != ghost else { return }
-        let previous = ghost
-        ghost = suggestion
-        // 只脏那两行（旧的与新的）：整块 `bounds` 是**整篇文档**那么高，无谓地标脏是白付的。
-        if let previous { setNeedsDisplay(ghostRect(for: previous) ?? bounds) }
-        if let suggestion { setNeedsDisplay(ghostRect(for: suggestion) ?? bounds) }
-    }
-
-    /// 灰字画在哪：**前缀末尾**那一格，纵向与该行文字对齐。
-    ///
-    /// 位置由排版结果算（`layoutManager`），不自己数字符宽度 —— 制表符、连字、代理对都算不对。
-    private func ghostRect(for suggestion: InlineGhostSuggestion) -> NSRect? {
-        guard let layoutManager, let container = textContainer else { return nil }
-        let caret = suggestion.range.location + suggestion.range.length
-        let origin = textContainerOrigin
-        var x = origin.x + container.lineFragmentPadding
-        var lineHeight = font?.boundingRectForFont.height ?? 16
-        var y = origin.y
-        if caret > 0, caret <= (textStorage?.length ?? 0) {
-            let glyph = layoutManager.glyphIndexForCharacter(at: caret - 1)
-            if glyph < layoutManager.numberOfGlyphs {
-                let glyphRect = layoutManager.boundingRect(
-                    forGlyphRange: NSRange(location: glyph, length: 1), in: container
-                )
-                let lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
-                x = origin.x + glyphRect.maxX
-                y = origin.y + lineRect.minY
-                lineHeight = lineRect.height
-            }
-        }
-        let ghostFont = font ?? CodeEditorView.baseFont
-        let width = (suggestion.ghost as NSString).size(withAttributes: [.font: ghostFont]).width
-        return NSRect(x: x - 1, y: y, width: min(width, 400) + 4, height: lineHeight)
-    }
-
-    /// 把灰字画上去。它**不是**文本存储的一部分 —— 所以必须在这里画，且只在这时候画。
-    private func drawGhost(in dirtyRect: NSRect) {
-        guard let suggestion = ghost,
-              window?.firstResponder === self,
-              let container = textContainer,
-              let rect = ghostRect(for: suggestion),
-              rect.intersects(dirtyRect) else { return }
-        let ghostFont = font ?? CodeEditorView.baseFont
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: ghostFont,
-            // 灰字走**三级文本**令牌（辅助信息那一档）：不抢正文字色，又不至于看不见。
-            .foregroundColor: Theme.nsColor(TextTone.tertiary)
-        ]
-        let text = ghostFitting(suggestion.ghost, in: rect, container: container, attributes: attributes)
-        guard !text.isEmpty else { return }
-        NSAttributedString(string: text, attributes: attributes)
-            .draw(at: NSPoint(x: rect.minX + 1, y: rect.minY))
-    }
-
-    /// 灰字太长、这一行剩下的地方画不下 ⇒ 截断加省略号（**不静默消失**：
-    /// 消失会让人以为"它本来就没有建议"，截断至少说明"还有，只是没地方放"）。
-    private func ghostFitting(
-        _ ghost: String,
-        in rect: NSRect,
-        container: NSTextContainer,
-        attributes: [NSAttributedString.Key: Any]
-    ) -> String {
-        let origin = textContainerOrigin
-        let available = origin.x + container.size.width
-            - container.lineFragmentPadding - (rect.minX + 1)
-        guard available > 8 else { return "" }
-        func width(_ text: String) -> CGFloat {
-            (text as NSString).size(withAttributes: attributes).width
-        }
-        if width(ghost) <= available { return ghost }
-        var characters = Array(ghost)
-        while !characters.isEmpty {
-            characters.removeLast()
-            let candidate = String(characters) + "…"
-            if width(candidate) <= available { return candidate }
-        }
-        return ""
+        ghostOverlay.dismiss()
     }
 
     // MARK: 行号列（FR-EDIT-36 的「编辑器行号列」，队列 L-64）
@@ -534,7 +451,7 @@ final class CodeTextView: NSTextView {
         // 行号：交给唯一绘制件画（`LineNumberGutter.draw`）
         gutter.draw(in: dirtyRect, of: self)
         // 行内灰字补全：正文画完之后叠一层（它不在文本存储里，`super.draw` 不会画它）
-        drawGhost(in: dirtyRect)
+        ghostOverlay.draw(in: dirtyRect)
     }
 
     /// 补全**自己插**，不交给 `NSTextView` 默认实现。

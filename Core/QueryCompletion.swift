@@ -48,6 +48,37 @@ public enum QueryCompletion {
         return merge(dialect: dialectCandidates, memory: memoryCandidates)
     }
 
+    /// SQL 编辑器**行内灰字**的候选（`FR-EDIT-57` 的 SQL 形态）。
+    ///
+    /// 与候选列表**同一份**（`suggestions(prefix:dialect:memory:connection:)`，顺序也一致：
+    /// 方言在前、记忆在后），只是换了形状给 `InlineGhostCompletion` 用。刻意的一处差别：
+    /// SQL 关键字/函数**大小写不敏感** ⇒ 候选全部声明 `caseInsensitive`（敲 `sel` 得到灰字 `ECT`，
+    /// 按 Tab 后正文是 `SELECT` —— 写进去的是候选的**规范形态**）。记忆里的整句 SQL
+    /// 通常很长或跨行，会被灰字的"只收单行 / 长度上限"两条口径挡掉，这是正确的（灰字的语义是补完当前这个词）。
+    public static func ghostCandidates(
+        prefix: String,
+        dialect: SQLDialect,
+        memory: QueryMemory.Index = QueryMemory.Index(),
+        connection: String? = nil
+    ) -> [InlineGhostCandidate] {
+        // 类别只影响界面怎么淡：关键字与内置函数分开，其余（记忆里的整句）按"词"。
+        let keywords = Set(dialect.keywords.map { $0.uppercased() })
+        let builtins = Set(dialect.builtinFunctions.map { $0.uppercased() })
+        return suggestions(prefix: prefix, dialect: dialect, memory: memory, connection: connection)
+            .map { text in
+                let upper = text.uppercased()
+                let kind: CodeCompletionItem.Kind
+                if keywords.contains(upper) {
+                    kind = .keyword
+                } else if builtins.contains(upper) {
+                    kind = .builtin
+                } else {
+                    kind = .word
+                }
+                return InlineGhostCandidate(insertText: text, kind: kind, caseInsensitive: true)
+            }
+    }
+
     /// 方言层候选：空前缀给开头一批（保持原行为），有前缀按前缀过滤。
     public static func dialectMatches(prefix: String, dialect: SQLDialect) -> [String] {
         let candidates = dialect.keywords + dialect.builtinFunctions

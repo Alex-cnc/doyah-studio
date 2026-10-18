@@ -115,6 +115,13 @@ struct SQLEditorView: NSViewRepresentable {
         // 若在设置文本之前就挂上，会把上面刚读出来的「最近一次选区」冲掉（详见 `makeNSView` 顶部说明）。
         textView.delegate = context.coordinator
 
+        // 行内灰字（`FR-EDIT-57`）：候选 = 本方言的关键字 / 内置函数 + 当前连接的查询记忆。
+        textView.configureGhost(
+            dialect: SQLDialectFactory.make(for: databaseType),
+            memory: memoryIndex,
+            connection: memoryConnection
+        )
+
         context.coordinator.textView = textView
         // 登记「显示中的编辑器」：**执行时选区的唯一可信来源**（缓存记录会被重建 /
         // 外部文本同步冲掉，见 `EditorCommandCenter.selectionForExecution` 的现场说明）。
@@ -153,6 +160,12 @@ struct SQLEditorView: NSViewRepresentable {
         guard let textView = scrollView.documentView as? SQLTextView else { return }
 
         context.coordinator.parent = self
+        // 方言 / 记忆索引可能跟着数据库类型或连接变了 ⇒ 重接一次候选（顺带重算灰字）。
+        textView.configureGhost(
+            dialect: SQLDialectFactory.make(for: databaseType),
+            memory: memoryIndex,
+            connection: memoryConnection
+        )
         // 显示中的那个视图才算数（重建之后登记的必须是新的这个）。
         commandCenter.register(textView: textView, for: tabID)
 
@@ -238,6 +251,8 @@ struct SQLEditorView: NSViewRepresentable {
                 range: range,
                 text: selected
             )
+            // 灰字跟着光标走（`FR-EDIT-57`）：挪了位置就重算，不然会画在旧位置上。
+            textView.refreshGhost()
         }
 
         func textDidChange(_ notification: Notification) {
@@ -249,6 +264,8 @@ struct SQLEditorView: NSViewRepresentable {
             // 打字 / 粘贴 / 撤销都会走到这里 ⇒ 判「行数（位数）变了没、行起点要不要重算」的
             // **唯一钩子**（与工作区编辑器的 `textDidChange` 同一条）。
             textView.reloadLineNumbers()
+            // 灰字：文本变了重算（组字期间那一拍由 `GhostTextOverlay` 自己挡掉）。
+            textView.refreshGhost()
 
             // 组字（marked text）期间不要重设属性，否则会打断输入法。
             guard !textView.hasMarkedText() else { return }
@@ -513,6 +530,71 @@ final class SQLTextView: NSTextView {
     /// 行号列的绘制件。
     let gutter = LineNumberGutter()
 
+    // MARK: 行内灰字补全（`FR-EDIT-57` 的 SQL 形态 · 与工作区编辑器共用 `GhostTextOverlay`）
+
+    /// 灰字的状态与画法 —— **画法与工作区编辑器是同一份**（`App/Views/GhostTextOverlay.swift`），
+    /// 差别只在候选：这里走 `QueryCompletion`（方言关键字 / 内置函数 + 查询记忆），
+    /// 不是代码编辑器那套 `CodeCompletion`。候选接上之前一条都不出（不猜）。
+    private(set) lazy var ghostOverlay: GhostTextOverlay = {
+        let overlay = GhostTextOverlay(host: self)
+        overlay.language = .sql
+        overlay.apply = { [weak self] suggestion in
+            guard let self else { return false }
+            return self.applyGhost(suggestion)
+        }
+        return overlay
+    }()
+
+    /// 接上候选（方言 + 查询记忆）。方言变了、记忆索引换了都要重接一次 ——
+    /// 接完立刻重算一次灰字，否则用户会看到"设置改了、灰字还是旧方言的"。
+    func configureGhost(dialect: SQLDialect, memory: QueryMemory.Index, connection: String?) {
+        ghostOverlay.candidateProvider = { prefix in
+            QueryCompletion.ghostCandidates(
+                prefix: prefix,
+                dialect: dialect,
+                memory: memory,
+                connection: connection
+            )
+        }
+        ghostOverlay.refresh()
+    }
+
+    /// 重算灰字（文本变、光标动、方言换）。
+    func refreshGhost() {
+        ghostOverlay.refresh()
+    }
+
+    /// 接受灰字（`Tab`）：把**已输入的前缀**换成候选的规范形态（例如 `sel` → `SELECT`），光标落到末尾。
+    ///
+    /// 与工作区编辑器的区别只在落点：那边走 `applyEditPlan`（它还管多光标 / 配对补全），
+    /// 这里走单光标替换 —— SQL 编辑器有自己的多光标引擎（`setRangeValues`），灰字只在单个空选区出现。
+    @discardableResult
+    func applyGhost(_ suggestion: InlineGhostSuggestion) -> Bool {
+        guard let storage = textStorage,
+              suggestion.range.location >= 0,
+              NSMaxRange(suggestion.range) <= storage.length,
+              shouldChangeText(in: suggestion.range, replacementString: suggestion.insertText)
+        else { return false }
+        storage.replaceCharacters(in: suggestion.range, with: suggestion.insertText)
+        didChangeText()
+        let caret = min(max(0, suggestion.caretOffset), storage.length)
+        setSelectedRange(NSRange(location: caret, length: 0))
+        scrollRangeToVisible(NSRange(location: caret, length: 0))
+        return true
+    }
+
+    /// `Tab`：有灰字就**接受**，没有就照常缩进（不吞正常输入）。
+    override func insertTab(_ sender: Any?) {
+        if ghostOverlay.accept() { return }
+        super.insertTab(sender)
+    }
+
+    /// `Esc`：有灰字就忽略它（并记住"这一条我不要"），没有就交还默认实现。
+    override func cancelOperation(_ sender: Any?) {
+        if ghostOverlay.dismiss() { return }
+        super.cancelOperation(sender)
+    }
+
     /// 行号列宽度；`0` 表示还没算过（此时不画）。
     var gutterWidth: CGFloat { gutter.width }
 
@@ -531,6 +613,8 @@ final class SQLTextView: NSTextView {
         super.draw(dirtyRect)
         NSGraphicsContext.restoreGraphicsState()
         gutter.draw(in: dirtyRect, of: self)
+        // 行内灰字补全：正文画完之后叠一层（它不在文本存储里，`super.draw` 不会画它）
+        ghostOverlay.draw(in: dirtyRect)
     }
 
     private(set) var isApplyingAttributes = false
