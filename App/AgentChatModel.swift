@@ -68,6 +68,20 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// `nil` = 这一轮没有完成声明（也没接验证器）。
     var completionReading: AgentChatCompletionReading? { state.completionReading }
 
+    /// **长跑监控读数**（`FR-AI-31` ③）：卡住 / 空转 / 反复重试 / 配额将尽 —— 状态块上要有这一行。
+    /// `nil` = 这一轮没跑飞（那格不出现，不留空壳）。
+    var monitorReading: AgentChatMonitorReading? { state.monitorReading }
+
+    /// **监控阈值**（`FR-AI-31` ③）：`stallSeconds` 就是「卡住」的判据。
+    /// 阈值是**参数**（契约只钉「卡住要报」，不钉某个秒数）—— 跑长命令的机器可以放大。
+    var monitorLimits = AgentRunMonitorLimits()
+    /// 看门狗多久 tick 一次（秒）。
+    static let watchdogTickSeconds: Double = 5
+
+    /// 宿主注入：把这一轮的**配额账本**回写（`NFR-AI-04`）。
+    /// 不接 ⇒ 这一轮不记账（如实：跨轮累计不会涨，配额也就永远到不了上限 —— 那正是旧缺口）。
+    var recordQuotaLedger: ((AgentQuotaLedger) -> Void)?
+
     /// 吞吐（token/秒）：**只在这两样都有读数时给**，算不出来就不显示（不编）。
     var tokensPerSecond: Double? {
         guard let seconds = lastElapsedSeconds, seconds > 0.05, sessionUsage.completionTokens > 0 else { return nil }
@@ -77,6 +91,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     let sessionID: String
     private let cancellation = CancellationFlag()
     private var task: Task<Void, Never>?
+    /// 看门狗（`FR-AI-31` ③「卡住」）：跑着的时候每 `watchdogTickSeconds` 秒看一眼。
+    private var watchdog: Task<Void, Never>?
 
     init(sessionID: String = "chat-\(UUID().uuidString)") {
         self.sessionID = sessionID
@@ -185,7 +201,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         }
         guard state.isRunning else { return }   // 不能发时 `beginRun` 已如实出提示，这里不许往下走
         cancellation.reset()
+        startWatchdog()
         guard let prepared = await makeLoop?(prompt, plan, self) else {
+            stopWatchdog()
             state.apply(.failed("loopUnavailable"))
             return
         }
@@ -236,6 +254,30 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 取消：**在下一跳之前停**（循环口径），已产生的工具结果仍留痕。
     func stop() {
         cancellation.set()
+    }
+
+    // MARK: - 看门狗（`FR-AI-31` ③「卡住」那一档）
+
+    /// 跑着的时候按秒看一眼：距上次进展超过阈值 ⇒ 报一次「卡住」。
+    ///
+    /// 为什么在界面而不在循环里：循环正卡在 `await` 里，它自己腾不出来喊「我卡住了」。
+    /// 判定本身仍是 Core 的 `AgentRunMonitor.stallAlert`（阈值只有一份），这里只负责按点敲。
+    private func startWatchdog() {
+        stopWatchdog()
+        let tick = Self.watchdogTickSeconds
+        watchdog = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(tick * 1_000_000_000))
+                guard !Task.isCancelled, let self else { return }
+                guard self.state.isRunning else { return }
+                self.state.checkStall(limits: self.monitorLimits)
+            }
+        }
+    }
+
+    private func stopWatchdog() {
+        watchdog?.cancel()
+        watchdog = nil
     }
 
     func approve(_ cardID: UUID) {
@@ -339,10 +381,14 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     }
 
     private func finish(_ result: AgentLoopResult) {
+        stopWatchdog()
         state.finishRun()
         // 用量并进会话账（缺值不当 0 累加 —— 与 CLI 侧同一口径）。
         sessionUsage.add(prompt: result.usage.promptTokens, completion: result.usage.completionTokens)
         if let prompt = result.usage.promptTokens { lastPromptTokens = prompt }
+        // **配额回写**（`NFR-AI-04`）：这一轮跳级累加过的账本交回宿主，跨轮才累计得起来
+        //（不回写 ⇒ 每个上限在真实路径上都永远不会触发，正是 v3.88 修掉的那条第 1 项缺口）。
+        if let ledger = result.quotaLedger { recordQuotaLedger?(ledger) }
         switch result.outcome {
         case .finished:
             state.appendNotice("finished")

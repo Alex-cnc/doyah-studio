@@ -2961,7 +2961,10 @@ final class AppState: ObservableObject {
                                  apiKey: agentAPIKey,
                                  timeoutSeconds: agentConfiguration.timeoutSeconds,
                                  systemPrompt: systemPrompt,
-                                 userPrompt: promptWithNotes)
+                                 userPrompt: promptWithNotes,
+                                 // `NFR-AI-04` 单次输出上限：配额里配了就下发给模型（同时作 `max_tokens`），
+                                 // 没配就**不出现**这个字段（与旧请求体逐字节一致）。
+                                 maxOutputTokens: agentConfiguration.quota.maxOutputTokensPerRequest)
         let tools = AgentWorkspaceTools(root: URL(fileURLWithPath: workspacePath),
                                                harmStopLog: .default)
         // 六个 MVP 工具**全接上**（`FR-AI-20` ①）：
@@ -3000,7 +3003,16 @@ final class AppState: ObservableObject {
                              compressionBudget: AgentContextCompressionBudget(),
                              // `FR-AI-31` ② 完成判据：模型说「完成」时按**当次工具证据 + 盘上现状**复核，
                              // 拿不出就如实说「未验证」。复核要读盘 ⇒ 给它工作区根（相对路径都相对它）。
-                             completionVerifier: AgentCompletionVerifier(workspaceRoot: workspaceRoot))
+                             completionVerifier: AgentCompletionVerifier(workspaceRoot: workspaceRoot),
+                             // `NFR-AI-04` 配额：**对话这条路上此前根本没接**（`AgentQuota` 只接在
+                             // 自然语言生成 SQL 那条路上）⇒ 长跑时会把配额悄悄烧掉。现在每跳发送前判定，
+                             // 账本由 `AppState.agentQuotaLedger` 跨轮累计（跑完回写，见 `finish`）。
+                             quota: agentConfiguration.quota,
+                             quotaLedger: agentQuotaLedger,
+                             // `FR-AI-31` ③ 长跑监控：空转 / 反复重试 / 预算将尽各出一条可读告警；
+                             // 「卡住」那一档由界面看门狗按秒判（循环卡在 await 里喊不出来），
+                             // 两边共用 `AgentRunMonitor.stallAlert` 这一条判定。
+                             monitor: AgentRunMonitor())
         let context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: promptWithNotes,
                                        baseRequest: request, sessionID: sessionID, workspace: workspacePath,
                                        checkpointScopeID: checkpointScopeID)
@@ -3741,6 +3753,14 @@ final class AppState: ObservableObject {
     /// 「调用次数上限 / 累计 token 上限」**永远触发不了**（本轮发现的真缺口）。
     /// 按需求口径它是「单次会话」，所以退出应用即清零，不落盘。
     @Published private(set) var agentQuotaLedger: AgentQuotaLedger = .empty
+
+    /// **对话那条路的配额回写**（`NFR-AI-04` + `FR-AI-31` ③）：一轮跑完把账本交回来。
+    ///
+    /// 不接这一步 ⇒ 每轮都从同一个旧账本起算，「调用次数 / 累计 token」两个上限在真实路径上
+    /// 仍然永远不会触发（v3.88 修掉的那条第 1 项缺口在对话侧原样复发）。
+    func recordAgentChatQuota(_ ledger: AgentQuotaLedger) {
+        agentQuotaLedger = ledger
+    }
 
     /// 表清单外发上限（防止把上千张表发出去）。
     static let agentTableListLimit = 60

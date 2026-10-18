@@ -123,6 +123,10 @@ struct DoyahStudioApp: App {
                         guard let rootPath = workspace.rootPath else { return .failure("failed") }
                         return await appState.applyAgentChatApproval(card: card, workspacePath: rootPath)
                     }
+                    // `NFR-AI-04` 配额回写：对话跑完把账本交回宿主（跨轮累计，上限才真的会触发）。
+                    agentChat.recordQuotaLedger = { ledger in
+                        appState.recordAgentChatQuota(ledger)
+                    }
                     // `FR-AI-25` ⑤ 一步撤销：撤销只认宿主手里那本账（Core `AgentEditJournal`），
                     // 界面不另存原文 —— 否则「撤销回哪一版」会出现两个答案。
                     agentChat.undoApplied = { card in
