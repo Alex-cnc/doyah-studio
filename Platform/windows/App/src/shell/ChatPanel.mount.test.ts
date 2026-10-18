@@ -337,7 +337,7 @@ describe('对话逐段渲染', () => {
       release = resolve
     })
     chatMocks.agentChatStream.mockImplementation(
-      (_turns: unknown, onDelta: (chunk: string) => void) => {
+      (_turns: unknown, _carry: unknown, onDelta: (chunk: string) => void) => {
         onDelta('第一段')
         onDelta('，第二段')
         return finished
@@ -402,7 +402,7 @@ describe('对话工具调用', () => {
     deltas: 1,
   })
 
-  const run = (path: string, approved: boolean) => ({
+  const run = (path: string, approved: boolean, content = approved ? `文件 ${path}：正文` : '') => ({
     name: 'read_file',
     path,
     approved,
@@ -410,6 +410,7 @@ describe('对话工具调用', () => {
     chars: approved ? 42 : 0,
     truncated: false,
     problem: '',
+    content,
   })
 
   it('模型点工具 ⇒ 卡片写明路径，不点就一次都不执行；点允许后才真发并显示读数', async () => {
@@ -504,8 +505,8 @@ describe('对话工具调用', () => {
     )
     chatMocks.agentChatToolResume.mockResolvedValue({
       runs: [
-        { name: 'read_file', path: 'src/a.ts', approved: true, ok: true, chars: 128, truncated: true, problem: '' },
-        { name: 'read_file', path: 'src/b.ts', approved: false, ok: false, chars: 0, truncated: false, problem: '' },
+        { name: 'read_file', path: 'src/a.ts', approved: true, ok: true, chars: 128, truncated: true, problem: '', content: '文件 src/a.ts：aaa' },
+        { name: 'read_file', path: 'src/b.ts', approved: false, ok: false, chars: 0, truncated: false, problem: '', content: '' },
       ],
       reply: answered('a.ts 我读了前 128 字符，b.ts 没看到。'),
     })
@@ -533,11 +534,51 @@ describe('对话工具调用', () => {
     const miss = wrapper.find('[data-testid="chat-context-miss"]')
     expect(miss.text()).toContain('src/b.ts')
     expect(miss.text()).toContain('拒绝')
-    expect(wrapper.find('[data-testid="chat-context-note"]').text()).toContain('当次回答')
+    expect(wrapper.find('[data-testid="chat-context-note"]').text()).toContain('带进后续请求')
 
     // 清空对话 ⇒ 这一栏一起清掉（不留上一轮的读数冒充「模型现在知道」）
     await wrapper.find('[data-testid="chat-clear"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-testid="chat-context"]').exists()).toBe(false)
+  })
+
+  it('读到的正文带进下一问：请求里带着它，被拒绝的不带；清空后不再带', async () => {
+    chatMocks.agentChatStream.mockResolvedValueOnce(
+      pending([call('call_1', 'src/a.ts'), call('call_2', 'src/b.ts')]),
+    )
+    chatMocks.agentChatToolResume.mockResolvedValue({
+      runs: [run('src/a.ts', true, '文件 src/a.ts：export const A = 1'), run('src/b.ts', false)],
+      reply: answered('a.ts 里只有一个常量。'),
+    })
+    chatMocks.agentChatStream.mockResolvedValueOnce(answered('按 a.ts 的说法，它是个常量。'))
+    const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
+    await ask(wrapper, '看看 src/a.ts 和 src/b.ts')
+
+    await wrapper.findAll('[data-testid="chat-tool-allow"]')[0].trigger('click')
+    await flushPromises()
+    await wrapper.findAll('[data-testid="chat-tool-deny"]')[1].trigger('click')
+    await flushPromises()
+
+    // 面板如实说「带进了几份 / 多少字符」
+    const carryLine = wrapper.find('[data-testid="chat-carry"]').text()
+    expect(carryLine).toContain('1')
+    expect(wrapper.find('[data-testid="chat-carry-dropped"]').exists()).toBe(false)
+
+    // 下一问：请求里真带着 a.ts 的正文，且只有它一份（被拒绝的 b.ts 不许带）
+    await ask(wrapper, '那它是什么类型')
+    const carry = chatMocks.agentChatStream.mock.calls[1][1] as { path: string; content: string }[]
+    expect(carry.map((file) => file.path)).toEqual(['src/a.ts'])
+    expect(carry[0].content).toContain('export const A = 1')
+    // 发出去的历史里**不许**混进这段正文（上下文是程序加的、由 Rust 拼进 system）
+    expect((chatMocks.agentChatStream.mock.calls[1][0] as { content: string }[]).map((turn) => turn.content).join('\n')).not.toContain(
+      'export const A = 1',
+    )
+
+    // 清空 ⇒ 上下文一起清（下一问不再带任何文件）
+    await wrapper.find('[data-testid="chat-clear"]').trigger('click')
+    await flushPromises()
+    chatMocks.agentChatStream.mockResolvedValueOnce(answered('重新开始。'))
+    await ask(wrapper, '从头来')
+    expect(chatMocks.agentChatStream.mock.calls[2][1]).toEqual([])
   })
 })

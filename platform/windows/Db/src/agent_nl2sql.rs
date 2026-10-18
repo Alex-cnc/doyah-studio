@@ -104,6 +104,8 @@ pub enum Nl2SqlError {
     ChatEndsWithAssistant,
     /// 模型点了一件**没登记**的工具（只读白名单之外）：不执行、也不把结果编出来。
     UnknownChatTool(String),
+    /// 要带进后续请求的上下文太大（份数或字符超上限）：**如实拒绝并报数**，不静默砍。
+    ChatCarryTooLong { files: usize, chars: usize },
 }
 
 impl Nl2SqlError {
@@ -118,6 +120,7 @@ impl Nl2SqlError {
             Self::ChatTooLong { .. } => "chatTooLong",
             Self::ChatEndsWithAssistant => "chatEndsWithAssistant",
             Self::UnknownChatTool(_) => "unknownChatTool",
+            Self::ChatCarryTooLong { .. } => "chatCarryTooLong",
         }
     }
 
@@ -129,6 +132,7 @@ impl Nl2SqlError {
             Self::UnknownChatRole(detail) => detail,
             Self::EmptyChatTurn(_) | Self::ChatTooLong { .. } | Self::ChatEndsWithAssistant => "",
             Self::UnknownChatTool(detail) => detail,
+            Self::ChatCarryTooLong { .. } => "",
         }
     }
 }
@@ -159,6 +163,11 @@ impl std::fmt::Display for Nl2SqlError {
             Self::UnknownChatTool(detail) => write!(
                 f,
                 "模型想调用一件没登记的工具「{detail}」：本程序只执行只读白名单里的工具，这一件不执行。"
+            ),
+            Self::ChatCarryTooLong { files, chars } => write!(
+                f,
+                "要带进后续请求的文件上下文太大了（{files} 份 / {chars} 字符，上限 {} 份 / {} 字符）：这一发没有发出去。",
+                CHAT_CARRY_MAX_FILES, CHAT_CARRY_MAX_CHARS
             ),
         }
     }
@@ -286,6 +295,23 @@ pub struct ChatMessage {
     /// 正文（原样发，不改写）。
     pub content: String,
 }
+
+/// 一份「用户已批准读到、要带进后续请求」的文件正文（`FR-AI-18` 收口）。
+///
+/// **正文原样**：它是当次真交给模型的那一段（含「文件 x（共 N 字符）」抬头与截断说明），
+/// 界面不必再拼一遍 —— 拼两处就会有两份「模型看到的是什么」。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CarriedFile {
+    /// 展示用路径（原样回显；去重由界面纯函数按小写做）。
+    pub path: String,
+    /// 交给模型的正文。
+    pub content: String,
+}
+
+/// 带进后续请求的最多份数（**放不下的要由界面如实列出来**，不静默丢）。
+pub const CHAT_CARRY_MAX_FILES: usize = 6;
+/// 带进后续请求的字符上限（合计；与 [`CHAT_MAX_CHARS`] 分开算 —— 上下文不是用户的话）。
+pub const CHAT_CARRY_MAX_CHARS: usize = 24_000;
 
 /// 一段对话最多几条消息（超了**如实拒绝并报数**，不静默截断历史）。
 pub const CHAT_MAX_TURNS: usize = 40;
@@ -428,7 +454,7 @@ fn build_chat_request_with_stream(
     turns: &[ChatMessage],
     stream: bool,
 ) -> Result<Outgoing, Nl2SqlError> {
-    build_chat_request_full(config, turns, &[], false, stream)
+    build_chat_request_full(config, turns, &[], false, stream, &[])
 }
 
 /// **带工具**的对话请求（`FR-AI-18`）：与 [`build_chat_request`] 同一份校验，额外带 `tools`。
@@ -445,7 +471,48 @@ pub fn build_chat_request_with_tools(
     turns: &[ChatMessage],
     pending: &[(&ChatToolCall, &str)],
 ) -> Result<Outgoing, Nl2SqlError> {
-    build_chat_request_full(config, turns, pending, true, true)
+    build_chat_request_full(config, turns, pending, true, true, &[])
+}
+
+/// **带文件上下文**的对话请求（`FR-AI-18` 收口）：把用户批准读过的文件正文带进**同一条** system 消息。
+///
+/// 为什么拼进 system 而不是伪造 user/assistant 轮次：伪造轮次会让模型把自己编的「历史」当成真的，
+/// 而用户看到的对话流里又没有这些消息 —— 两边的历史就对不上了。上下文是**本程序加的**，
+/// 就该待在只有本程序能写的那一条里（同 [`CHAT_SYSTEM_PROMPT`] 的口径）。
+///
+/// **上限在拼装前判**（[`CHAT_CARRY_MAX_FILES`] / [`CHAT_CARRY_MAX_CHARS`]）：超了如实拒绝并报数，
+/// 不在这里悄悄砍几份 —— 砍了用户就以为模型看着整份上下文在回答。
+pub fn build_chat_request_with_context(
+    config: &AgentConfiguration,
+    turns: &[ChatMessage],
+    pending: &[(&ChatToolCall, &str)],
+    carry: &[CarriedFile],
+) -> Result<Outgoing, Nl2SqlError> {
+    build_chat_request_full(config, turns, pending, true, true, carry)
+}
+
+/// 系统提示正文 = 固定提示 + （有上下文时）用户批准读过的文件。
+///
+/// 空上下文时**逐字节等于** [`CHAT_SYSTEM_PROMPT`]（既有判据与回放都不受影响）；
+/// 有上下文时判一次上限，超了一并报数拒绝 —— 不在这一层挑几份「能塞下的」。
+fn system_text(carry: &[CarriedFile]) -> Result<String, Nl2SqlError> {
+    if carry.is_empty() {
+        return Ok(CHAT_SYSTEM_PROMPT.to_string());
+    }
+    let chars: usize = carry.iter().map(|file| file.content.chars().count()).sum();
+    if carry.len() > CHAT_CARRY_MAX_FILES || chars > CHAT_CARRY_MAX_CHARS {
+        return Err(Nl2SqlError::ChatCarryTooLong {
+            files: carry.len(),
+            chars,
+        });
+    }
+    let mut text = String::from(CHAT_SYSTEM_PROMPT);
+    text.push_str("\n\n本会话里用户已批准你读过下面这些文件，内容原样附在这里（可以直接引用，不必再申请读取）。");
+    text.push_str("标了「已截断」的只有前一段，需要更多就分段向用户申请。");
+    for file in carry {
+        text.push_str(&format!("\n\n【文件 {}】\n{}", file.path.trim(), file.content));
+    }
+    Ok(text)
 }
 
 fn build_chat_request_full(
@@ -454,6 +521,7 @@ fn build_chat_request_full(
     pending: &[(&ChatToolCall, &str)],
     tools: bool,
     stream: bool,
+    carry: &[CarriedFile],
 ) -> Result<Outgoing, Nl2SqlError> {
     if turns.is_empty() {
         return Err(Nl2SqlError::EmptyQuestion);
@@ -488,7 +556,7 @@ fn build_chat_request_full(
     }
 
     let mut all: Vec<serde_json::Value> = Vec::with_capacity(messages.len() + 1);
-    all.push(serde_json::json!({ "role": "system", "content": CHAT_SYSTEM_PROMPT }));
+    all.push(serde_json::json!({ "role": "system", "content": system_text(carry)? }));
     all.extend(messages);
     // 工具结果回灌（`FR-AI-18`）：**一条** `assistant`（带 N 个 tool_calls）+ **N 条** `role: tool`。
     // 先把 N 件全部校验完再落笔 —— 有一件没登记 / 没 id 就整发拒绝，不许「能装配几件算几件」。
@@ -1066,6 +1134,91 @@ mod tests {
             arguments: "{\"path\":\"a.ts\"}".to_string(),
         };
         assert!(build_chat_request_with_tools(&config, &turns, &[(&first, "x"), (&no_id, "y")]).is_err());
+    }
+
+    // ── 读过的文件带进后续请求（`FR-AI-18` 收口）────────────────────────────────
+
+    #[test]
+    fn a_carried_file_goes_into_the_one_system_message_and_never_fakes_a_turn() {
+        let turns = vec![turn("user", "a.ts 里那个函数做什么")];
+        let carry = vec![CarriedFile {
+            path: "src/a.ts".to_string(),
+            content: "文件 src/a.ts（共 12 字符）：\nexport const A = 1".to_string(),
+        }];
+        let body = build_chat_request_with_context(&chat_config(), &turns, &[], &carry)
+            .unwrap()
+            .body;
+        let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let messages = parsed.get("messages").unwrap().as_array().unwrap();
+        let systems: Vec<&serde_json::Value> = messages
+            .iter()
+            .filter(|message| message.get("role").and_then(|role| role.as_str()) == Some("system"))
+            .collect();
+        assert_eq!(systems.len(), 1, "系统提示只许一条：{body}");
+        let system = systems[0]["content"].as_str().unwrap();
+        assert!(system.starts_with(CHAT_SYSTEM_PROMPT), "固定提示要在前面：{system}");
+        assert!(system.contains("【文件 src/a.ts】"), "{system}");
+        assert!(system.contains("export const A = 1"), "正文要原样带上：{system}");
+        // 否定面：不许把上下文伪装成用户 / 模型说过的话。
+        assert_eq!(
+            messages.len(),
+            2,
+            "只该有 system + 用户那一问，不许凭空多出轮次：{body}"
+        );
+        assert!(
+            !messages[1]["content"].as_str().unwrap().contains("文件 src/a.ts"),
+            "用户那一问要被原样发出去，不许被塞进上下文：{body}"
+        );
+        assert_eq!(
+            body.matches("【文件 src/a.ts】").count(),
+            1,
+            "上下文只许出现一次（重复带 = 同一段算两遍）：{body}"
+        );
+    }
+
+    #[test]
+    fn without_carried_files_the_system_prompt_is_byte_identical() {
+        let turns = vec![turn("user", "问一句")];
+        let plain = build_chat_request_with_tools(&chat_config(), &turns, &[]).unwrap();
+        let empty = build_chat_request_with_context(&chat_config(), &turns, &[], &[]).unwrap();
+        assert_eq!(plain.body, empty.body, "空上下文不该改动请求体一个字节");
+        assert!(!plain.body.contains("已批准你读过"), "没有上下文时不许出现那句话");
+    }
+
+    #[test]
+    fn a_carry_over_the_limit_is_refused_with_both_counts_instead_of_being_trimmed() {
+        let turns = vec![turn("user", "问一句")];
+        let too_many: Vec<CarriedFile> = (0..(CHAT_CARRY_MAX_FILES + 1))
+            .map(|index| CarriedFile {
+                path: format!("src/f{index}.ts"),
+                content: "x".to_string(),
+            })
+            .collect();
+        let err = build_chat_request_with_context(&chat_config(), &turns, &[], &too_many).unwrap_err();
+        assert_eq!(err.code(), "chatCarryTooLong");
+        let text = err.to_string();
+        assert!(text.contains(&(CHAT_CARRY_MAX_FILES + 1).to_string()), "要报实际份数：{text}");
+        assert!(text.contains(&CHAT_CARRY_MAX_FILES.to_string()), "要报上限：{text}");
+
+        let too_big = vec![CarriedFile {
+            path: "src/huge.ts".to_string(),
+            content: "y".repeat(CHAT_CARRY_MAX_CHARS + 1),
+        }];
+        let err = build_chat_request_with_context(&chat_config(), &turns, &[], &too_big).unwrap_err();
+        assert_eq!(err.code(), "chatCarryTooLong");
+        let text = err.to_string();
+        assert!(
+            text.contains(&(CHAT_CARRY_MAX_CHARS + 1).to_string()),
+            "要报实际字符数：{text}"
+        );
+        assert!(text.contains(&CHAT_CARRY_MAX_CHARS.to_string()), "要报上限：{text}");
+
+        // 正好到上限要放行（判据不许比口径更严）。
+        let exactly = vec![CarriedFile {
+            path: "src/edge.ts".to_string(),
+            content: "z".repeat(CHAT_CARRY_MAX_CHARS),
+        }];
+        assert!(build_chat_request_with_context(&chat_config(), &turns, &[], &exactly).is_ok());
     }
 
     #[test]

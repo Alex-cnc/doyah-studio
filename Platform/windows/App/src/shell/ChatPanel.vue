@@ -33,6 +33,7 @@ import {
 import { t as translate, type DictKey, type UiLanguage } from '../i18n'
 import { CHAT_MAX_TURNS, budgetOf, outgoingTurns, questionCount, withReply } from './chatThread'
 import { contextOf } from './chatContext'
+import { carryOf } from './chatCarry'
 
 const props = defineProps<{
   /** 界面语言（由工作区视图传下来）。 */
@@ -105,6 +106,11 @@ const decidedCount = computed(() => pendingDecisions.value.filter((decision) => 
  * 被拒绝 / 没读到的单独列出来并写明原因 —— 用户要知道模型**不知道**什么。
  */
 const context = computed(() => contextOf(toolRuns.value))
+/**
+ * 「这一发要带上的上下文」（`FR-AI-18` 收口）：用户批准读过的文件正文，
+ * 同份取最后一次、最多 6 份 / 24000 字符，放不下的列表写出来。
+ */
+const carried = computed(() => carryOf(toolRuns.value))
 
 function readable(error: unknown): { message: string; hint: string } {
   const asFailure = error as { message?: string; hint?: string } | null
@@ -263,7 +269,7 @@ async function send() {
   await scrollToEnd()
   try {
     // 逐段到的正文先画在「正在写」那条气泡里；**最终正文仍以返回值为准**（流只是显示）。
-    const reply = await agentChatStream(asked, (chunk) => {
+    const reply = await agentChatStream(asked, carried.value.files, (chunk) => {
       partial.value += chunk
       void scrollToEnd()
     })
@@ -305,7 +311,7 @@ async function resume() {
   streamed.value = 0
   const asked = turns.value
   try {
-    const resumed = await agentChatToolResume(workspaceId.value, asked, calls, approvals, (chunk) => {
+    const resumed = await agentChatToolResume(workspaceId.value, asked, calls, approvals, carried.value.files, (chunk) => {
       partial.value += chunk
       void scrollToEnd()
     })
@@ -519,6 +525,19 @@ function clear() {
               {{ miss.reason === 'denied'
                 ? tr('chat.context.denied')
                 : tr('chat.context.failed', { problem: miss.problem }) }}
+            </span>
+          </li>
+        </ul>
+        <p v-if="carried.files.length" class="chat__ctx-hint" data-testid="chat-carry">
+          {{ tr('chat.carry.title', { files: carried.files.length, chars: carried.chars }) }}
+        </p>
+        <ul v-if="carried.dropped.length" class="chat__ctx-list" data-testid="chat-carry-dropped">
+          <li v-for="drop in carried.dropped" :key="`drop-${drop.path}`" class="chat__ctx-row" data-testid="chat-carry-drop">
+            <span class="chat__ctx-path">{{ drop.path }}</span>
+            <span class="chat__ctx-chars">
+              {{ tr('chat.carry.dropped', {
+                reason: drop.reason === 'tooMany' ? tr('chat.carry.tooMany') : tr('chat.carry.tooBig'),
+              }) }}
             </span>
           </li>
         </ul>

@@ -16,6 +16,7 @@ function run(path: string, over: Partial<AgentToolRun> = {}): AgentToolRun {
     chars: 10,
     truncated: false,
     problem: '',
+    content: '',
     ...over,
   }
 }

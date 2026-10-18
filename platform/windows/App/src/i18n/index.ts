@@ -793,9 +793,17 @@ export const DICT = {
   'chat.context.denied': { 'zh-Hans': '你拒绝了：模型没看到它', en: 'denied — the model never saw it' },
   'chat.context.failed': { 'zh-Hans': '没读到：{problem}', en: 'could not read: {problem}' },
   'chat.context.note': {
-    'zh-Hans': '文件内容只在当次回答里给过模型：再问一句不会自动带上（它要再看会重新申请）。',
-    en: 'File contents reach the model only for that one answer — a later question does not carry them (it will ask again).',
+    'zh-Hans': '读到的正文会带进后续请求（最多 6 份 / 24000 字符）；重开页签或重启应用后要重新申请读取。',
+    en: 'What was read is carried into later requests (up to 6 files / 24000 chars); reopening the tab or restarting the app starts empty and asks again.',
   },
+  // 带进后续请求的读数（FR-AI-18 收口）：带了几份 / 共多少字符 / 谁没带上
+  'chat.carry.title': {
+    'zh-Hans': '已带入后续请求：{files} 份 · {chars} 字符',
+    en: 'Carried into later requests: {files} file(s) · {chars} chars',
+  },
+  'chat.carry.dropped': { 'zh-Hans': '没带上：{reason}', en: 'not carried: {reason}' },
+  'chat.carry.tooMany': { 'zh-Hans': '超出 6 份上限', en: 'over the 6-file limit' },
+  'chat.carry.tooBig': { 'zh-Hans': '这一份就超出字符上限', en: 'this file alone exceeds the char limit' },
   'chat.tool.unknown': {
     'zh-Hans': '模型点了没登记的工具「{name}」：不执行（只允许读文件）',
     en: 'The model asked for unregistered tool “{name}” — not executed (only file reading is allowed)',

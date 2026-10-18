@@ -1158,6 +1158,18 @@ export interface AgentToolRun {
   chars: number
   truncated: boolean
   problem: string
+  /**
+   * 当次真交给模型的那段正文（拒绝 / 没读到时为空串）。
+   *
+   * 界面靠它把读过的文件带进后续请求（`FR-AI-18` 收口）：正文只由外壳产出，界面不重新拼。
+   */
+  content: string
+}
+
+/** 要带进后续请求的一份文件（与领域层 `CarriedFile` 同形）。 */
+export interface AgentCarriedFile {
+  path: string
+  content: string
 }
 
 /** 逐件点完之后：**每一件**的执行账（顺序同调用顺序）+ 模型拿到结果后的回答（还可能再点工具）。 */
@@ -1369,6 +1381,7 @@ export function agentChatSend(turns: readonly AgentChatTurn[]): Promise<AgentCha
  */
 export async function agentChatStream(
   turns: readonly AgentChatTurn[],
+  carry: readonly AgentCarriedFile[],
   onDelta: (chunk: string) => void,
 ): Promise<AgentChatReply> {
   if (!inTauri()) {
@@ -1376,7 +1389,7 @@ export async function agentChatStream(
   }
   const channel = new Channel<string>()
   channel.onmessage = (chunk) => onDelta(chunk)
-  return (await invoke(COMMANDS.agentChatSend, { turns, onDelta: channel })) as AgentChatReply
+  return (await invoke(COMMANDS.agentChatSend, { turns, carry, onDelta: channel })) as AgentChatReply
 }
 
 /**
@@ -1392,6 +1405,7 @@ export async function agentChatToolResume(
   turns: readonly AgentChatTurn[],
   calls: readonly AgentToolCall[],
   approvals: readonly boolean[],
+  carry: readonly AgentCarriedFile[],
   onDelta: (chunk: string) => void,
 ): Promise<AgentToolResume> {
   if (!inTauri()) {
@@ -1404,6 +1418,7 @@ export async function agentChatToolResume(
     turns,
     calls,
     approvals,
+    carry,
     onDelta: channel,
   })) as AgentToolResume
 }

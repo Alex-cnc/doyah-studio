@@ -831,11 +831,12 @@ fn agent_diagnosis_ask(
 async fn agent_chat_send(
     state: State<'_, ShellState>,
     turns: Vec<doyah_studio_db::agent_nl2sql::ChatMessage>,
+    carry: Vec<doyah_studio_db::agent_nl2sql::CarriedFile>,
     on_delta: tauri::ipc::Channel<String>,
 ) -> Result<agent_generate::ChatReply, DbFailure> {
     let store = state.agent_settings.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        agent_generate::chat_stream(&store, &turns, &mut |chunk| {
+        agent_generate::chat_stream_with_carry(&store, &turns, &[], &carry, &mut |chunk| {
             // 页签已经关掉时这一发送不到：不算失败（正文照样在返回值里）。
             let _ = on_delta.send(chunk.to_string());
         })
@@ -859,6 +860,7 @@ async fn agent_chat_tool_resume(
     turns: Vec<doyah_studio_db::agent_nl2sql::ChatMessage>,
     calls: Vec<doyah_studio_db::agent_nl2sql::ChatToolCall>,
     approvals: Vec<bool>,
+    carry: Vec<doyah_studio_db::agent_nl2sql::CarriedFile>,
     on_delta: tauri::ipc::Channel<String>,
 ) -> Result<agent_generate::ToolResume, DbFailure> {
     let store = state.agent_settings.clone();
@@ -869,6 +871,7 @@ async fn agent_chat_tool_resume(
             &turns,
             &calls,
             &approvals,
+            &carry,
             &mut |chunk| {
                 let _ = on_delta.send(chunk.to_string());
             },

@@ -23,8 +23,8 @@ use doyah_studio_db::agent_audit::{AuditRecord, AuditVerdict};
 use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateReport, GateState};
 use doyah_studio_db::agent_history::HistoryEntry;
 use doyah_studio_db::agent_nl2sql::{
-    build_chat_request_with_tools, build_request, parse_reply,
-    parse_tool_calls, read_file_path, ChatMessage, ChatToolCall, Outgoing, TableBrief,
+    build_chat_request_with_context, build_request, parse_reply,
+    parse_tool_calls, read_file_path, CarriedFile, ChatMessage, ChatToolCall, Outgoing, TableBrief,
     CHAT_READ_FILE_TOOL,
 };
 use doyah_studio_db::agent_quota::{now_secs, QuotaStatus};
@@ -791,7 +791,7 @@ pub fn chat_stream(
     turns: &[ChatMessage],
     sink: &mut dyn FnMut(&str),
 ) -> Result<ChatReply, DbFailure> {
-    chat_stream_with(store, turns, &[], sink)
+    chat_stream_with_carry(store, turns, &[], &[], sink)
 }
 
 /// **带工具状态**的对话（`FR-AI-18`）：与 [`chat_stream`] 完全同一条通道，
@@ -806,6 +806,20 @@ pub fn chat_stream_with(
     pending: &[(&ChatToolCall, &str)],
     sink: &mut dyn FnMut(&str),
 ) -> Result<ChatReply, DbFailure> {
+    chat_stream_with_carry(store, turns, pending, &[], sink)
+}
+
+/// **带文件上下文**的那一条（`FR-AI-18` 收口）：`carry` = 用户批准读过、要带进这一发的文件正文。
+///
+/// 上下文只影响**装配**（拼进那一条 system 消息），闸门 / 配额 / 审计 / 重试一个字都没变 ——
+/// 带上文件不等于多一条外发通道。超上限由领域层拒绝并报数（这里不吞、不改写那句话）。
+pub fn chat_stream_with_carry(
+    store: &AgentSettingsStore,
+    turns: &[ChatMessage],
+    pending: &[(&ChatToolCall, &str)],
+    carry: &[CarriedFile],
+    sink: &mut dyn FnMut(&str),
+) -> Result<ChatReply, DbFailure> {
     let config = store.load()?;
     let question = turns
         .last()
@@ -814,7 +828,7 @@ pub fn chat_stream_with(
     if let Some(gate) = gate_refusal(store, &config, &question)? {
         return Ok(ChatReply::Blocked { gate });
     }
-    let outgoing = build_chat_request_with_tools(&config, turns, pending).map_err(|err| DbFailure {
+    let outgoing = build_chat_request_with_context(&config, turns, pending, carry).map_err(|err| DbFailure {
         message: err.to_string(),
         hint: "改一下这段对话（空消息 / 太长 / 结尾是模型的话）再发。".to_string(),
     })?;
@@ -1106,6 +1120,11 @@ pub struct ToolRun {
     pub truncated: bool,
     /// 读不到 / 越界时的可读原因（空串 = 没问题）。
     pub problem: String,
+    /// **当次真交给模型的那段正文**（拒绝 / 没读到时为空串）。
+    ///
+    /// 界面靠它把「读过的文件」带进后续请求（`FR-AI-18` 收口）：正文只在这一处产出，
+    /// 界面不必再拼一遍 —— 拼两处就会有两份「模型看到的是什么」。
+    pub content: String,
 }
 
 /// 用户逐件点完之后的结果：**每一件**的执行账 + 模型拿到结果后的最终回答。
@@ -1141,6 +1160,7 @@ pub fn chat_tool_resume(
     turns: &[ChatMessage],
     calls: &[ChatToolCall],
     approvals: &[bool],
+    carry: &[CarriedFile],
     sink: &mut dyn FnMut(&str),
 ) -> Result<ToolResume, DbFailure> {
     if calls.is_empty() {
@@ -1194,6 +1214,8 @@ pub fn chat_tool_resume(
             chars: read.chars,
             truncated: read.truncated,
             problem: read.problem.clone(),
+            // 只有真读到了才把正文交回界面（拒绝 / 越界时那段是「没读到」的说明，不是文件内容）。
+            content: if read.ok { read.content.clone() } else { String::new() },
         });
         results.push((call.clone(), read.content));
     }
@@ -1201,7 +1223,7 @@ pub fn chat_tool_resume(
         .iter()
         .map(|(call, result)| (call, result.as_str()))
         .collect();
-    let reply = chat_stream_with(store, turns, &pending, sink)?;
+    let reply = chat_stream_with_carry(store, turns, &pending, carry, sink)?;
     Ok(ToolResume { runs, reply })
 }
 
@@ -2827,6 +2849,7 @@ mod tests {
             &turns,
             &[call],
             &[true],
+            &[],
             &mut |_| {},
         )
         .unwrap();
@@ -2834,6 +2857,8 @@ mod tests {
         assert!(run.approved);
         assert!(run.ok, "{:?}", run.problem);
         assert!(run.chars > 0);
+        // 交回界面的正文 = 真给到模型的那一份（界面靠它把文件带进后续请求）。
+        assert!(run.content.contains("重试三次"), "{}", run.content);
         let second = seen.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(second.contains("tool_call_id"), "{second}");
         assert!(second.contains("重试三次"), "读到的内容要回灌给模型：{second}");
@@ -2865,6 +2890,7 @@ mod tests {
             &turns,
             &[call],
             &[false],
+            &[],
             &mut |_| {},
         )
         .unwrap();
@@ -2872,6 +2898,8 @@ mod tests {
         assert!(!run.approved);
         assert!(!run.ok);
         assert_eq!(run.chars, 0);
+        // 没读到的没有正文可带（界面不该把「没读到」的说明当成文件内容带进下一发）。
+        assert!(run.content.is_empty(), "{}", run.content);
         let second = seen.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(second.contains("用户拒绝了"), "被拒要如实告诉模型：{second}");
         assert!(
@@ -2916,7 +2944,7 @@ mod tests {
         let _first = seen.recv_timeout(Duration::from_secs(5)).unwrap();
         // 逐件决定：第一件允许、第二件拒绝 ⇒ **一次**请求把两份结果一起回灌。
         let decision =
-            chat_tool_resume(&store, workspace.to_str().unwrap(), &turns, &calls, &[true, false], &mut |_| {})
+            chat_tool_resume(&store, workspace.to_str().unwrap(), &turns, &calls, &[true, false], &[], &mut |_| {})
                 .unwrap();
         assert_eq!(decision.runs.len(), 2, "每件都要有一条账");
         assert!(decision.runs[0].ok, "{:?}", decision.runs[0].problem);
@@ -2959,11 +2987,45 @@ mod tests {
             &turns,
             &calls,
             &[true],
+            &[],
             &mut |_| {},
         )
         .unwrap_err();
         assert!(failure.message.contains("对不上"), "{}", failure.message);
         assert!(seen.try_recv().is_err(), "对不上就不许再出网");
+    }
+
+    #[test]
+    fn an_approved_file_is_carried_into_the_next_request_without_faking_a_turn() {
+        let (endpoint, seen) = fake_endpoint_script(vec![("200 OK", SSE_ANSWER)]);
+        let store = streaming_store("chat-carry", endpoint);
+        let turns = vec![
+            chat_turn("user", "看一下 notes.txt"),
+            chat_turn("assistant", "它写着重试三次。"),
+            chat_turn("user", "那按它说的做"),
+        ];
+        let carry = vec![CarriedFile {
+            path: "notes.txt".to_string(),
+            content: "文件 notes.txt（共 5 字符）：\n重试三次。".to_string(),
+        }];
+        let reply = chat_stream_with_carry(&store, &turns, &[], &carry, &mut |_| {}).unwrap();
+        assert!(
+            matches!(reply, ChatReply::Answered { .. }),
+            "带上上下文照样该正常答：{reply:?}"
+        );
+        let body = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(body.contains("【文件 notes.txt】"), "上下文要进请求：{body}");
+        assert!(body.contains("重试三次"), "{body}");
+        // 否定面：上下文只待在那一条 system 里 —— 不许伪造成用户 / 模型说过的话。
+        assert_eq!(
+            body.matches("\"role\":\"user\"").count(),
+            2,
+            "两问就是两条 user：{body}"
+        );
+        assert!(
+            !body.contains("\"role\":\"assistant\",\"content\":\"【文件"),
+            "上下文不许冒充满一轮：{body}"
+        );
     }
 
     #[test]
