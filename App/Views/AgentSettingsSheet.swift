@@ -38,6 +38,8 @@ struct AgentSettingsSheet: View {
     @State private var outputPriceText = ""
     @State private var cachedPriceText = ""
     @State private var priceCurrency: AgentPriceCurrency = .cny
+    /// MCP 服务器配置面（`FR-AI-21` 界面片）的开合。
+    @State private var showsMCPServers = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -119,6 +121,21 @@ struct AgentSettingsSheet: View {
                     .pickerStyle(.radioGroup)
                     .labelsHidden()
                     Text(L(.agentScopeFootnote))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                // **MCP 服务器**（`FR-AI-21` 界面片）：这里是入口 + 一行读数，
+                // 真正的加 / 删 / 开关与「连不上」的原因在弹层里（`MCPServersSheet`）。
+                Section(L(.agentMCPSection)) {
+                    HStack(spacing: 8) {
+                        Button(L(.agentMCPConfigure)) { showsMCPServers = true }
+                            .buttonStyle(.bordered)
+                        Text(mcpSummary)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(L(.agentMCPHint))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -212,7 +229,24 @@ struct AgentSettingsSheet: View {
             outputPriceText = Self.priceText(pricing?.outputPerMillion)
             cachedPriceText = Self.priceText(pricing?.cachedInputPerMillion)
             priceCurrency = pricing?.currency ?? .cny
+            // MCP 那一行的读数（「还没配置 / 已连上 n / m 条」）需要配置与这一轮的发现结果；
+            // 配置读一次就够（`loadAgentMCPConfiguration` 幂等），发现结果由对话那条路填。
+            appState.loadAgentMCPConfiguration()
         }
+        .sheet(isPresented: $showsMCPServers) {
+            MCPServersSheet()
+                .environmentObject(appState)
+        }
+    }
+
+    // MARK: - MCP 读数
+
+    /// 入口那一行说的话：没配 / 已连上几条。**不假装连上** —— 关掉的、连不上的各算各的。
+    private var mcpSummary: String {
+        let servers = appState.agentMCPConfiguration.servers
+        if servers.isEmpty { return L(.mcpServersSummaryNotConfigured) }
+        let connected = appState.agentMCPReports.filter { $0.state.isConnected }.count
+        return L(.mcpServersSummary, connected, servers.count)
     }
 
     // MARK: - 状态

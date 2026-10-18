@@ -2911,22 +2911,72 @@ final class AppState: ObservableObject {
     /// 配置文件本身读不出来时的原因（与「一条都没配」分开记）。
     @Published private(set) var agentMCPLoadError: String?
 
+    /// 用户自配 MCP server 的**当前配置**（界面读它、改它、存它）。
+    ///
+    /// 与 `agentMCPReports` 分开：前者是「文件里写着什么」，后者是「这一轮连成了什么样」。
+    /// 面板要同时显示两件事 —— 光有读数改不了，光有配置看不出连不上。
+    @Published private(set) var agentMCPConfiguration = MCPClientConfiguration()
+    /// 这份配置是否已经从盘上读过（读过就不再重读，免得面板每开一次都盖掉刚存的草稿）。
+    @Published private(set) var agentMCPConfigurationLoaded = false
+
+    /// 读配置（**幂等**：读过就返回内存里那份）。
+    ///
+    /// 读不出来 ⇒ 当没配，但把原因留在 `agentMCPLoadError` 里 —— 面板据此说「配置读不了：…」，
+    /// 而不是让用户对着一个「未配置」发呆。
+    @discardableResult
+    func loadAgentMCPConfiguration() -> MCPClientConfiguration {
+        if agentMCPConfigurationLoaded { return agentMCPConfiguration }
+        switch MCPClientConfiguration.load() {
+        case .success(let loaded):
+            agentMCPConfiguration = loaded ?? MCPClientConfiguration()
+            agentMCPLoadError = nil
+        case .failure(let error):
+            agentMCPConfiguration = MCPClientConfiguration()
+            agentMCPLoadError = error.detail
+        }
+        agentMCPConfigurationLoaded = true
+        return agentMCPConfiguration
+    }
+
+    /// 存配置（界面那一半的落盘口）：写文件 → 更新内存 → **关掉旧进程**（下次对话按新配置发现）。
+    ///
+    /// 返回 `nil` = 存成功。写不进去（目录建不出来 / 编码失败）**如实返回原因**，
+    /// 不许「看起来存了、其实没写」—— 那会让用户在面板上改半天而配置一动不动。
+    @discardableResult
+    func saveAgentMCPConfiguration(_ configuration: MCPClientConfiguration) -> MCPClientConfigurationError? {
+        let url = MCPClientConfiguration.defaultFileURL
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                   withIntermediateDirectories: true)
+            guard let data = configuration.encoded() else { return .malformed("encode") }
+            try data.write(to: url, options: .atomic)
+        } catch {
+            return .malformed(url.lastPathComponent)
+        }
+        agentMCPConfiguration = configuration
+        agentMCPConfigurationLoaded = true
+        agentMCPLoadError = nil
+        // 配置变了 ⇒ 旧进程按旧配置起的，必须关掉（否则「改了命令还在用老进程」这种假象没人查得出）。
+        resetAgentMCP()
+        return nil
+    }
+
+    /// 现在就连一次（面板上的「保存并重连」/「重新连接」）：先丢掉旧桥，再按当前配置发现。
+    ///
+    /// 返回发现结果（每条 server 的状态），面板直接拿它这一轮的读数。
+    @discardableResult
+    func connectAgentMCPNow() async -> [MCPClientServerReport] {
+        resetAgentMCP()
+        _ = await agentMCPReady()
+        return agentMCPReports
+    }
+
     /// 连上用户自配的 MCP server，并把远端工具并进**同一张**注册表（`FR-AI-21` ①）。
     ///
     /// 起进程是同步阻塞的 ⇒ 挪进 `detached`：一条慢 server 不许把主 actor（整个窗口）拖住。
     private func agentMCPReady() async -> (registry: AgentToolRegistry, bridge: MCPClientBridge?) {
         if let agentMCPRegistry { return (agentMCPRegistry, agentMCPBridge) }
-        let configuration: MCPClientConfiguration
-        switch MCPClientConfiguration.load() {
-        case .success(let loaded):
-            configuration = loaded ?? MCPClientConfiguration()
-            agentMCPLoadError = nil
-        case .failure(let error):
-            // 读不出来就**当没配**，但把原因留下来 —— 界面要能说「配置读不了：…」，
-            // 而不是让用户对着一个「未配置」发呆。
-            configuration = MCPClientConfiguration()
-            agentMCPLoadError = error.detail
-        }
+        let configuration = loadAgentMCPConfiguration()
         let bridge = MCPClientBridge(configuration: configuration,
                                      inheritedEnvironment: ProcessInfo.processInfo.environment) { _, plan in
             MCPStdioTransport(plan: plan)

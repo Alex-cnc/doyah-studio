@@ -171,8 +171,8 @@
       "id": "FR-AI-21",
       "domain": "3.12 AI 智能体",
       "reason": "ui-click",
-      "reasonText": "七条验收要点里协议与接线半可机器验且全绿（配置面 / 握手 → tools/list → tools/call / 名字与参数原样 / enabled=false 不起进程 / 工具级审批 / 未配与连不上如实报 / http 如实报不支持，判据 15 例含真进程端到端）；界面配置面与真 MCP server 端到端只能人工点验",
-      "marker": "**[alpha 不含]**（界面配置面未做（当前只有配置文件 + 状态读数）；真 MCP server 端到端与界面点验需人工；`http`/SSE 与 OAuth 按 ⑦ 后置）",
+      "reasonText": "七条验收要点机器可验的部分全绿（配置面 / 握手 → tools/list → tools/call / 名字与参数原样 / enabled=false 不起进程 / 工具级审批 / 未配与连不上如实报 / http 如实报不支持，判据 15 例含真进程端到端）；界面配置面已落并由 Core 判据 20 例守着（加 / 删 / 开关、逐工具开关、文本⇄配置换算）；真 MCP server 端到端与面板点击观感只能人工点验",
+      "marker": "**[alpha 不含]**（界面配置面已落（设置面板 → MCP 服务器面板：加 / 删 / 开关 + 逐工具开关 + 连不上如实说）；真 MCP server 端到端与界面点验需人工；`http`/SSE 与 OAuth 按 ⑦ 后置）",
       "markerPreExisting": false,
       "evidence": [
         {
@@ -183,6 +183,15 @@
         },
         {
           "path": "Core/MCPClientConfiguration.swift"
+        },
+        {
+          "path": "App/Views/MCPServersSheet.swift"
+        },
+        {
+          "path": "Core/MCPClientServerDraft.swift"
+        },
+        {
+          "path": "Tests/MCPClientServerDraftTests.swift"
         }
       ]
     },

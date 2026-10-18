@@ -218,6 +218,12 @@
       "guard": "!endpoint.isEmpty, URL(string: endpoint) != nil, !model.isEmpty",
       "form": "internal",
       "reason": "端点/模型没配 ⇒ 派生 `.notConfigured`（**不是在拦某个按钮**：判据属性 `agentChatEndpointState` 由 `DoyahStudioApp` 当 `endpointProvider` 交给对话区如实呈现「未配置」，发送路径在同一条判据上如实拦——`App/AppState.swift:2871` 造不出循环就返回 nil，不假装在跑）。台账归属名沿用判据的机械归属（往上找最近 `func` = `saveAgentConfiguration`）；实际定义处是同一类型里的 计算属性 `agentChatEndpointState`（L2857）。"
+    },
+    {
+      "func": "tickAgentSchedules",
+      "guard": "!agentSchedules.isEmpty",
+      "form": "internal",
+      "reason": "定时 agent 的 tick 入口（`FR-AI-27`）：一条 schedule 都没有时直接返回，没有按钮入口 —— 由 ticker 调用；空态在「定时 agent」面板里另有说明。"
     }
   ]
 }
