@@ -99,10 +99,16 @@ struct WorkspaceTabStrip: View {
             ),
             titleVisibility: .visible,
             presenting: tabs.pendingClose
-        ) { request in
-            ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.workspaceCloseSaveAndClose)) { tabs.resolvePendingClose(.saveAndClose) }
-            ToolbarIconButton(systemName: "trash", help: L(.workspaceCloseDiscardChanges), role: .destructive) { tabs.resolvePendingClose(.discardChanges) }
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.workspaceCloseCancel), role: .cancel) { tabs.cancelPendingClose() }
+        ) { _ in
+            // 三个动作**必须有文字标题**：`confirmationDialog` 在 macOS 上是 NSAlert 面板，
+            // 按钮只按**标题**渲染 —— 只给图标（`ToolbarIconButton`）时标题是空串，
+            // 面板上就退化成「一个空按钮」⇒ 用户看到的现象正是「没有选择性、
+            // 只有一个『好』、关不掉未保存文件」（人类主人 2026-10-18 人工点验不过）。
+            // 顺序 = `WorkspaceClosePolicy.confirmActions`（保存并关闭 / 不保存直接关闭 / 取消），
+            // 判据 `Tests/WorkspaceClosePolicyTests.swift` 的源树那几条把这三项钉住。
+            Button(L(.workspaceCloseSaveAndClose)) { tabs.resolvePendingClose(.saveAndClose) }
+            Button(L(.workspaceCloseDiscardChanges), role: .destructive) { tabs.resolvePendingClose(.discardChanges) }
+            Button(L(.workspaceCloseCancel), role: .cancel) { tabs.cancelPendingClose() }
         } message: { _ in
             Text(L(.workspaceCloseConfirmMessage))
         }

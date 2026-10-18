@@ -97,6 +97,77 @@ final class WorkspaceClosePolicyTests: XCTestCase {
             "取消 / ESC / 点框外都要收掉请求且不关页签")
     }
 
+    /// ⑦ **三个选项必须看得见**（2026-10-18 人工点验不过的回归）。
+    ///
+    /// ⑥ 那条只钉住「动作接上了」—— 于是「动作接过来了、但按钮上没有字」能骗过它：
+    /// 关闭确认框在 macOS 上是 NSAlert 面板，按钮**只按标题渲染**；`ToolbarIconButton` 的标题是空串，
+    /// 面板上就只剩一个空按钮 ⇒ 人类主人看到「没有选择性、只有一个『好』、关不掉未保存文件」。
+    /// 所以这一条判的是**形态**：三支动作的按钮标题必须是三个本地化文案，
+    /// 且框里不许出现只给图标的按钮构造器。
+    func testConfirmationDialogActionsCarryVisibleTitles() throws {
+        let block = try confirmationDialogBlock()
+        let problems = closeDialogViolations(in: block)
+        XCTAssertTrue(problems.isEmpty, problems.joined(separator: "；"))
+
+        // 顺序 = 规则给的顺序（保存并关闭在最前 = 默认动作；取消在最后 = 退出口）。
+        let positions = WorkspaceClosePolicy.confirmActions.compactMap { action in
+            block.range(of: "Button(L(\(titleKey(for: action))")?.lowerBound
+        }
+        XCTAssertEqual(positions.count, WorkspaceClosePolicy.confirmActions.count, "三个动作都要有带标题的按钮")
+        XCTAssertEqual(positions, positions.sorted(), "确认框按钮顺序必须与 WorkspaceClosePolicy.confirmActions 一致")
+    }
+
+    /// ⑦ 的反例自证：把有标题的按钮换成只给图标的（= 2026-10-18 那次的形状）**必须判红**。
+    func testIconOnlyCloseActionsAreRejected() throws {
+        let block = try confirmationDialogBlock()
+        let regressed = block
+            .replacingOccurrences(of: "Button(L(.workspaceCloseSaveAndClose))", with: "ToolbarIconButton(systemName: \"square.and.arrow.down\", help: L(.workspaceCloseSaveAndClose))")
+        let problems = closeDialogViolations(in: regressed)
+        XCTAssertFalse(problems.isEmpty, "只给图标的按钮必须被判红（面板上没有标题 = 没有选项）")
+        XCTAssertTrue(problems.contains { $0.contains("ToolbarIconButton") }, "要点名 ToolbarIconButton：\(problems)")
+        XCTAssertTrue(problems.contains { $0.contains("workspaceCloseSaveAndClose") }, "要点名缺了哪个选项：\(problems)")
+    }
+
+    /// 关掉注释后的「关闭确认框」那一段源码（从 `.confirmationDialog(` 到它的 `} message:`）。
+    private func confirmationDialogBlock() throws -> String {
+        let source = try readSource("App/Views/WorkspaceTabStrip.swift")
+        guard let start = source.range(of: ".confirmationDialog(") else {
+            XCTFail("页签条上找不到关闭确认框")
+            return ""
+        }
+        guard let end = source.range(of: "} message:", range: start.upperBound..<source.endIndex) else {
+            XCTFail("确认框缺少 message 段 —— 找不到边界")
+            return ""
+        }
+        return String(source[start.lowerBound..<end.upperBound])
+    }
+
+    /// 三个动作各自的文案键（**顺序 = `WorkspaceClosePolicy.confirmActions`**）。
+    private func titleKey(for action: WorkspaceCloseAction) -> String {
+        switch action {
+        case .saveAndClose: return ".workspaceCloseSaveAndClose"
+        case .discardChanges: return ".workspaceCloseDiscardChanges"
+        case .cancel: return ".workspaceCloseCancel"
+        }
+    }
+
+    /// 一段「关闭确认框」源码里有什么问题（空数组 = 三个选项都看得见）。
+    /// **判据与反例跑同一份逻辑** —— 反例才证明得了这条判据没瞎。
+    private func closeDialogViolations(in block: String) -> [String] {
+        let code = stripComments(block)
+        var problems: [String] = []
+        if code.contains("ToolbarIconButton(") {
+            problems.append("确认框里用了只给图标的 ToolbarIconButton —— macOS 的面板只按标题渲染，图标没有标题 ⇒ 框里只剩一个空按钮")
+        }
+        for action in WorkspaceClosePolicy.confirmActions {
+            let key = titleKey(for: action)
+            if !code.contains("Button(L(\(key))") {
+                problems.append("确认框里缺一支带标题的按钮：Button(L(\(key)))（\(action.rawValue)）")
+            }
+        }
+        return problems
+    }
+
     // MARK: 源码判据的小工具
 
     /// 读仓内文件（`Tests/…` 的上一级 = 仓根）。
