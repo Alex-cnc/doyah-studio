@@ -58,6 +58,13 @@ export const DICT = {
   'plugin.retro.monthLabel': { 'zh-Hans': '{month} 月', en: 'Month {month}' },
   'plugin.retro.unknownYear': { 'zh-Hans': '年份未标注', en: 'Year not stated' },
   'plugin.retro.unknownMonth': { 'zh-Hans': '月份未标注', en: 'Month not stated' },
+  // 卡片上的封面与生成时间（FR-R-13-08 判据① 的最后两个字段）
+  'plugin.retro.generatedAt': { 'zh-Hans': '生成 {t}', en: 'Generated {t}' },
+  'plugin.retro.noGeneratedAt': { 'zh-Hans': '生成时间未标注', en: 'Generated time not stated' },
+  'plugin.retro.coverAlt': { 'zh-Hans': '{title} 的封面', en: 'Cover of {title}' },
+  'plugin.retro.coverLoading': { 'zh-Hans': '封面读取中…', en: 'Reading the cover…' },
+  'plugin.retro.coverFailed': { 'zh-Hans': '封面读不出来', en: 'The cover could not be read' },
+  'plugin.retro.noCover': { 'zh-Hans': '无封面', en: 'No cover' },
   'plugin.retro.reportFailed': { 'zh-Hans': '这一期的正文打不开', en: 'This report could not be opened' },
   'plugin.retro.loadFailed': { 'zh-Hans': '读包目录失败', en: 'Could not read the package folders' },
   // 正文媒体（FR-R-12-03：图片 / 视频就地渲染，读不出来就地占位）

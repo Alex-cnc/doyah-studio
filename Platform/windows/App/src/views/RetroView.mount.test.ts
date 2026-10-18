@@ -430,4 +430,53 @@ describe('RetroView 周报阅读面', () => {
     // 空态那句「还没有周报」不许冒充「筛不到」（包是在的）
     expect(wrapper.find('[data-role="retro-empty"]').exists()).toBe(false)
   })
+
+  // ── 卡片封面与生成时间（FR-R-13-08 判据① 的最后两个字段）──────────────────────────
+
+  it('a_cover_is_fetched_through_the_asset_command_and_drawn_as_a_thumbnail', async () => {
+    state.snapshot.cards = [card('2026-W42', '带封面的', { cover: 'assets/cover.png' })]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    // 走的正是 Rust 判过的那条包内相对路径（不自己拼绝对路径）
+    expect(state.assetCalls).toEqual([['2026-W42', 'assets/cover.png']])
+    const image = wrapper.get('[data-role="retro-cover-image"]')
+    expect(image.attributes('src')).toBe('blob:mock-1')
+    expect(image.attributes('alt')).toContain('带封面的')
+  })
+
+  it('a_card_without_a_cover_says_no_cover_and_asks_for_nothing', async () => {
+    state.snapshot.cards = [card('2026-W42', '没封面的')]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    // 没有封面就不该发请求（省一次 IPC，也不会误读别的文件）
+    expect(state.assetCalls).toEqual([])
+    expect(wrapper.get('[data-role="retro-cover-empty"]').text()).toContain('无封面')
+    expect(wrapper.find('[data-role="retro-cover-image"]').exists()).toBe(false)
+  })
+
+  it('a_cover_whose_bytes_fail_says_so_instead_of_showing_a_blank_block', async () => {
+    state.snapshot.cards = [card('2026-W42', '封面读不出的', { cover: 'assets/gone.png' })]
+    state.assetFailures = ['assets/gone.png']
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-role="retro-cover-image"]').exists()).toBe(false)
+    expect(wrapper.get('[data-role="retro-cover-failed"]').text()).toContain('封面读不出来')
+  })
+
+  it('the_generated_time_is_shown_as_written_and_a_missing_one_says_not_stated', async () => {
+    state.snapshot.cards = [
+      card('2026-W42', '写了时间', { generatedAt: '2026-10-18T09:30:00+08:00' }),
+      card('2026-W41', '没写时间', { generatedAt: '' }),
+    ]
+    const wrapper = mount(RetroView)
+    await flushPromises()
+
+    const stamps = wrapper.findAll('[data-role="retro-generated"]').map((node) => node.text())
+    // 墙上时间照抄（不按时区再转一次），缺了就如实写「未标注」
+    expect(stamps[0]).toContain('2026-10-18 09:30')
+    expect(stamps[1]).toContain('生成时间未标注')
+  })
 })

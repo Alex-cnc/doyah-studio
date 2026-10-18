@@ -10,6 +10,7 @@
 
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import BlockDocument, { type MediaSlot } from './BlockDocument.vue'
+import { coverMime, formatGeneratedAt } from './cardMeta'
 import { filterCards, groupCards } from './periodIndex'
 import {
   retroAsset,
@@ -119,6 +120,59 @@ function rangeText(card: RetroCard): string {
   return tr('plugin.retro.noDate')
 }
 
+/** 生成时间：包里写了就显示那个墙上时间，没写就如实说「未标注」（`cardMeta.ts` 里定口径）。 */
+function generatedText(card: RetroCard): string {
+  const at = formatGeneratedAt(card.generatedAt)
+  return at ? tr('plugin.retro.generatedAt', { t: at }) : tr('plugin.retro.noGeneratedAt')
+}
+
+// ── 封面缩略图（`FR-R-13-08` 判据① 的「封面缩略图」）──────────────────────────────
+// 三条口径：① 路径合法性 / 在不在包里已由 Rust 判过（`retro_package`），这里只取字节；
+// ② 字节走既有的 `retroAsset` 命令（**不开 asset 协议**，CSP 仍是「出网只走 IPC」）；
+// ③ 取不到就说「封面读不出来」——不留一块空白让用户猜。
+const coverUrls = ref<Record<string, string>>({})
+const coverFailed = ref<Set<string>>(new Set())
+/** 重扫一次就作废上一批晚到的字节（同 `loadMedia` 的「切期丢弃」口径）。 */
+let coverEpoch = 0
+
+function releaseCovers(): void {
+  // 自增即作废：上一批还在飞的字节回来后对不上 epoch，会被丢掉
+  coverEpoch += 1
+  for (const url of Object.values(coverUrls.value)) URL.revokeObjectURL(url)
+  coverUrls.value = {}
+  coverFailed.value = new Set()
+}
+
+/**
+ * 拉一批封面。
+ *
+ * **逐张顺序取**：包目录里的期数是个位 / 十位数，一张张来既不会把 IPC 打满，
+ * 也不会在卡片顺序上出现「谁先到谁先亮」的抖动。
+ */
+async function loadCovers(list: RetroCard[]): Promise<void> {
+  releaseCovers()
+  const epoch = coverEpoch
+  for (const card of list) {
+    if (!card.cover) continue
+    const target = card.cover
+    try {
+      const bytes = await retroAsset(card.period, target)
+      const url = URL.createObjectURL(new Blob([bytes], { type: coverMime(target) }))
+      if (epoch !== coverEpoch) {
+        // 已经重扫过一轮：这张是上一批的，丢掉（否则会把旧封面挂到新卡上）
+        URL.revokeObjectURL(url)
+        return
+      }
+      coverUrls.value = { ...coverUrls.value, [card.period]: url }
+    } catch {
+      if (epoch !== coverEpoch) return
+      const next = new Set(coverFailed.value)
+      next.add(card.period)
+      coverFailed.value = next
+    }
+  }
+}
+
 /** 扫一遍包目录。选中项还在就保留，不在了就清掉（别让右区停在已经不存在的期上）。 */
 async function refresh(): Promise<void> {
   loading.value = true
@@ -128,6 +182,7 @@ async function refresh(): Promise<void> {
     root.value = snapshot.root
     cards.value = snapshot.cards
     problems.value = snapshot.problems
+    void loadCovers(snapshot.cards)
     if (selected.value && !snapshot.cards.some((card) => card.period === selected.value)) {
       selected.value = ''
       document.value = null
@@ -140,6 +195,7 @@ async function refresh(): Promise<void> {
     loadFailure.value = describeError(error)
     cards.value = []
     problems.value = []
+    releaseCovers()
   } finally {
     loading.value = false
   }
@@ -212,6 +268,7 @@ function openZoom(payload: { url: string; alt: string }): void {
 
 onBeforeUnmount(() => {
   releaseMedia()
+  releaseCovers()
 })
 
 onMounted(() => {
@@ -325,11 +382,35 @@ onMounted(() => {
                     :data-period="card.period"
                     @click="open(card)"
                   >
+                    <!-- 封面缩略图（`FR-R-13-08` 判据①）：有就用字节画，没有 / 读不出来都如实占位 -->
+                    <span v-if="card.cover" class="retro__cover" data-role="retro-cover">
+                      <img
+                        v-if="coverUrls[card.period]"
+                        class="retro__cover-image"
+                        :src="coverUrls[card.period]"
+                        :alt="tr('plugin.retro.coverAlt', { title: card.title })"
+                        data-role="retro-cover-image"
+                      />
+                      <span
+                        v-else-if="coverFailed.has(card.period)"
+                        class="retro__cover-note"
+                        data-role="retro-cover-failed"
+                        >{{ tr('plugin.retro.coverFailed') }}</span
+                      >
+                      <span v-else class="retro__cover-note">{{ tr('plugin.retro.coverLoading') }}</span>
+                    </span>
+                    <span
+                      v-else
+                      class="retro__cover retro__cover--empty"
+                      data-role="retro-cover-empty"
+                      >{{ tr('plugin.retro.noCover') }}</span
+                    >
                     <span class="retro__card-title">{{ card.title }}</span>
                     <span class="retro__card-meta">
                       <code class="retro__period">{{ card.period }}</code>
                       <span class="retro__range">{{ rangeText(card) }}</span>
                     </span>
+                    <span class="retro__generated" data-role="retro-generated">{{ generatedText(card) }}</span>
                     <span v-if="card.tags.length" class="retro__tags">
                       <span v-for="tag in card.tags" :key="tag" class="retro__tag">{{ tag }}</span>
                     </span>
@@ -582,6 +663,37 @@ onMounted(() => {
 .retro__card--active {
   border-color: var(--ds-color-accent-accent);
   background: var(--ds-color-surface-raised);
+}
+/* 封面缩略图：一条 100% 宽的扁条（复用工具栏高度令牌 —— 不为它新造一个易漂的尺寸值） */
+.retro__cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--ds-metric-toolbar-height);
+  overflow: hidden;
+  border-radius: var(--ds-radius-badge);
+  background: var(--ds-color-surface-raised);
+}
+.retro__cover--empty {
+  border: var(--ds-hairline) dashed var(--ds-color-hairline-light);
+  background: transparent;
+  color: var(--ds-color-text-disabled);
+  font-size: var(--ds-font-caption-size);
+}
+.retro__cover-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.retro__cover-note {
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+}
+.retro__generated {
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
 }
 .retro__card-title {
   font-size: var(--ds-font-body-size);
