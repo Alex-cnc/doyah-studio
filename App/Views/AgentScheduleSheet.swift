@@ -13,7 +13,7 @@ struct AgentScheduleSheet: View {
     /// 编辑中 / 新建中的那一条（`nil` = 没开编辑）。
     @State private var editing: AgentScheduleEntry?
 
-    private var language: AppLanguage { LocalizationManager.shared.language }
+    private var language: AppLanguage { LocalizationManager.shared.effectiveLanguage }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -220,7 +220,7 @@ private struct AgentScheduleEditor: View {
             Form {
                 Picker(L(.agentScheduleTargetLabel), selection: $entry.target.kind) {
                     ForEach(AgentScheduleTarget.Kind.allCases, id: \.self) { kind in
-                        Text(AgentSchedulePresentation.targetKindText(kind, language: LocalizationManager.shared.language))
+                        Text(AgentSchedulePresentation.targetKindText(kind, language: LocalizationManager.shared.effectiveLanguage))
                             .tag(kind)
                     }
                 }

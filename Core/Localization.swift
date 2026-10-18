@@ -2725,7 +2725,7 @@ public enum LocalizedStrings {
         .wallpaperLevelBalanced: [.simplifiedChinese: "中", .english: "Balanced"],
         .wallpaperLevelVivid: [.simplifiedChinese: "震撼", .english: "Vivid"],
         .wallpaperCosmicCliff: [.simplifiedChinese: "宇宙悬崖", .english: "Cosmic Cliff"],
-        .appearanceWallpaperSkinHint: [.simplifiedChinese: "在表面**之下**垫一张照片，面板半透明透出它（只对声明了壁纸的主题生效；不透明度与蒙版都是定值，改观感改的是值表）。关闭后逐像素回到纯色表面。", .english: "Puts a photo *behind* the surfaces and makes them translucent (only for themes that declare a wallpaper; both the mask and the opacities are fixed values — tune the value table, not the view). Turn off for plain surfaces."],
+        .appearanceWallpaperSkinHint: [.simplifiedChinese: "在表面之下垫一张照片，面板半透明透出它（只对声明了壁纸的主题生效；不透明度与蒙版都是定值，改观感改的是值表）。关闭后逐像素回到纯色表面。", .english: "Puts a photo *behind* the surfaces and makes them translucent (only for themes that declare a wallpaper; both the mask and the opacities are fixed values — tune the value table, not the view). Turn off for plain surfaces."],
         .appearanceDesignThemeSection: [.simplifiedChinese: "主题（配色方案）", .english: "Theme (Color Scheme)"],
         .appearanceDesignThemeHint: [.simplifiedChinese: "一个主题是一组令牌值（底色基调 + 强调色家族 + 语法着色），不是只换一个强调色；选定后立即生效并记住。", .english: "A theme is a whole set of token values (base surfaces + accent family + syntax colours), not just one accent colour; it takes effect immediately and is remembered."],
         .appearanceDesignThemeDerived: [.simplifiedChinese: "推导草案", .english: "Derived draft"],
@@ -3369,7 +3369,7 @@ public enum LocalizedStrings {
         .agentChatWriteBusy: [.simplifiedChinese: "这个文件正有另一次写入在进行 —— 这一次没有落盘，等它写完再来。", .english: "Another write to this file is in progress — nothing was written this time; try again once it finishes."],
         .agentChatWriteStale: [.simplifiedChinese: "这个文件在你批准之后被改过 —— 没有拿旧审批盖上去，先看清现在的内容再决定。", .english: "This file changed after you approved — the approval was not written over it; review the current content first."],
         .agentChatApplyFailed: [.simplifiedChinese: "没落成盘 —— 写盘出错或目标不可写，可以再点一次。", .english: "The write did not land — the disk write failed or the target is not writable; you can try again."],
-        .agentChatCompletionUnverified: [.simplifiedChinese: "模型说做完了，但拿不出可复核的证据 —— 这一轮**未验证**（不把「它说完了」当完成，请自己看一眼结果）。", .english: "The model claims it is done but cites no verifiable evidence — this run stays unverified; do not take the claim as completion."],
+        .agentChatCompletionUnverified: [.simplifiedChinese: "模型说做完了，但拿不出可复核的证据 —— 这一轮未验证（不把「它说完了」当完成，请自己看一眼结果）。", .english: "The model claims it is done but cites no verifiable evidence — this run stays unverified; do not take the claim as completion."],
         // `FR-AI-31` ③ 长跑监控：五种跑飞形态各说各的话（读数一行 + 消息流一句）。
         .agentStatusMonitor: [.simplifiedChinese: "长跑告警 · %@", .english: "run alert · %@"],
         .agentMonitorStalled: [.simplifiedChinese: "已 %@ 秒无进展（阈值 %@）", .english: "no progress for %@ s (threshold %@)"],

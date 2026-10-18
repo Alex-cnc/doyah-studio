@@ -88,6 +88,7 @@ LEDGER = pathlib.Path("Scripts/language-registry-exemptions.json")
 # 语言消费方那一族（A 档的扫描面）——「谁按语言身份分支过，就是谁把知识从登记表里搬走了」。
 CONSUMER_FILES = (
     "App/Views/CodeEditorView.swift",
+    "App/Views/GhostTextOverlay.swift",
     "App/Views/MarkdownPreviewView.swift",
     "App/WorkspaceTabsModel.swift",
     "CLI/main.swift",
@@ -96,6 +97,7 @@ CONSUMER_FILES = (
     "Core/CodeLexer.swift",
     "Core/CodeSyntax.swift",
     "Core/InlineGhostCompletion.swift",
+    "Core/InlineGhostPathCompletion.swift",
     "Core/MarkdownEditing.swift",
     "Core/TextLanguage.swift",
     "Core/WorkspaceSession.swift",

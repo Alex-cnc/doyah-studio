@@ -1,7 +1,7 @@
 {
   "version": 1,
   "release": "v0.2.0-alpha",
-  "updatedAt": "2026-10-15",
+  "updatedAt": "2026-10-18",
   "rule": "FR 🟡 逐条判定（队列 L-69 条件 ③）：能机器验的补证据（脚本 + 断言数，可复跑）；不能机器验的（需人工点击 / 需真机 / 需外部实例）逐条标 [alpha 不含]，状态格仍 🟡 不改 ✅。",
   "reasonBranches": {
     "environment": "本机物理不可能：无实例 / 无扩展 / 无二进制 / 沙箱限制（v0.1.0-alpha 同一批，标记沿用）",
@@ -589,6 +589,28 @@
       ]
     },
     {
+      "id": "FR-EDIT-57",
+      "domain": "3.2 SQL 编辑与执行",
+      "reason": "ui-click",
+      "reasonText": "行内灰字（词法 / SQL / 路径三路）实现全落、行为判据全绿；观感与手感（画法 / 出现时机 / Tab 接受顺不顺手）只能人工点验",
+      "marker": "**[alpha 不含]**（行内灰字的观感与手感（画法 / 出现时机 / Tab 接受顺不顺手）只能人工点验）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/InlineGhostCompletionTests.swift"
+        },
+        {
+          "path": "Tests/InlineGhostSQLTests.swift"
+        },
+        {
+          "path": "Tests/InlineGhostPathTests.swift"
+        },
+        {
+          "path": "App/Views/GhostTextOverlay.swift"
+        }
+      ]
+    },
+    {
       "id": "FR-IO-02",
       "domain": "3.9 导入导出与备份",
       "reason": "environment",
@@ -975,6 +997,22 @@
       "evidence": [
         {
           "path": "Tests/AgentMemoryTests.swift"
+        }
+      ]
+    },
+    {
+      "id": "FR-AI-31",
+      "domain": "3.12 AI 智能体",
+      "reason": "ui-click",
+      "reasonText": "四件（并发 / 完成判据 / 长跑监控 / 调用链）已落、判据 17 例；告警的界面观感与真端点上的长跑行为只能人工点验",
+      "marker": "**[alpha 不含]**（界面观感与真端点上的长跑行为归人工点验）",
+      "markerPreExisting": false,
+      "evidence": [
+        {
+          "path": "Tests/AgentRunMonitorTests.swift"
+        },
+        {
+          "path": "Core/AgentRunMonitor.swift"
         }
       ]
     }
