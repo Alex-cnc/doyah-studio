@@ -18,6 +18,7 @@
 use std::time::{Duration, Instant};
 
 use doyah_studio_db::agent_config::{evaluate, AgentGateReport, GateState};
+use doyah_studio_db::agent_history::HistoryEntry;
 use doyah_studio_db::agent_nl2sql::{build_request, parse_reply, TableBrief};
 use doyah_studio_db::agent_quota::{now_secs, QuotaStatus};
 use serde::Serialize;
@@ -41,6 +42,9 @@ pub struct GeneratePreview {
     pub dropped: usize,
     /// 本小时的配额读数（**发之前**就能看到还剩几次 —— 否则用户只会在点下去之后撞墙）。
     pub quota: QuotaStatus,
+    /// 生成历史（**新的在前**，最多 `Db::agent_history::MAX_ENTRIES` 条）。
+    /// 为什么跟着预览一起回：界面要「一打开就能看到以前问过什么」，不该为再开一条 IPC。
+    pub history: Vec<HistoryEntry>,
 }
 
 /// 一次生成的结果（**只有文本**）。
@@ -63,6 +67,9 @@ pub struct GenerateOutcome {
     pub quota: QuotaStatus,
     /// 本片的已知缺口（**如实显示**，不让用户以为配额已经生效）。
     pub limitations: Vec<String>,
+    /// 记完这一条之后的历史（**新的在前**；界面用它直接换掉列表，不自己往前插一份 ——
+    /// 两处各插一次迟早会不一致）。
+    pub history: Vec<HistoryEntry>,
 }
 
 /// 生成请求的三种结局：被闸门挡住（零外发）、被配额挡住（零外发）、或者真的发了并解析成功。
@@ -99,6 +106,8 @@ pub fn preview(
     let gate = evaluate(&config, store.key_present());
     // 配额读数：预览就要能给「还剩几次」，否则用户只能点下去撞墙。
     let quota = store.load_quota().status(now_secs(), config.hourly_limit);
+    // 历史：一打开弹层就能看到以前问过什么（新的在前）。
+    let history = store.load_history().all_recent();
     match build_request(&config, question, tables) {
         Ok(outgoing) => Ok(GeneratePreview {
             gate,
@@ -107,6 +116,7 @@ pub fn preview(
             table_count: tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
             dropped: tables.len().saturating_sub(doyah_studio_db::agent_nl2sql::MAX_TABLES),
             quota,
+            history,
         }),
         // 问题为空时也要能看「哪一步不让发」：给一份不带问题的正文，把原因交给 `gate` / 调用方。
         Err(err) => Err(DbFailure {
@@ -203,6 +213,27 @@ pub fn generate(
         message: err.to_string(),
         hint: "换一个模型（有些模型不爱按代码块回话）或重试一次。".to_string(),
     })?;
+
+    // 记一条历史（**只在成功后**：被挡住 / 报错 / 解析失败的那一次不是「可回看的结果」）。
+    // 落盘失败**不阻断**（与配额台账相反：历史写不上只是回看不到，配额写不上是上限失效），
+    // 但必须在结果里如实说一句 —— 静默丢记录同样是骗人。
+    let mut limitations: Vec<String> = LIMITATIONS.iter().map(|line| line.to_string()).collect();
+    let mut ledger = store.load_history();
+    ledger.append(HistoryEntry::record(
+        question,
+        &answer.sql,
+        &answer.explanation,
+        answer.tables_used.clone(),
+        &outgoing.model,
+        now_secs(),
+    ));
+    if let Err(err) = store.save_history(&ledger) {
+        limitations.push(format!(
+            "这一次的问句没能记进生成历史（{}）—— 结果仍然可用，只是关掉这个弹层后回看不到它。",
+            err.message
+        ));
+    }
+
     Ok(GenerateReply::Generated(GenerateOutcome {
         sql: answer.sql,
         explanation: answer.explanation,
@@ -211,7 +242,8 @@ pub fn generate(
         elapsed_ms: started.elapsed().as_millis() as u64,
         table_count: tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
         quota,
-        limitations: LIMITATIONS.iter().map(|line| line.to_string()).collect(),
+        limitations,
+        history: ledger.all_recent(),
     }))
 }
 
@@ -248,6 +280,8 @@ mod tests {
         let _ = std::fs::remove_file(&store.key_path);
         // 配额台账也要清：同一 tag 的目录若留着上一轮的账，会读成「已用过 N 次」。
         let _ = std::fs::remove_file(store.quota_path());
+        // 历史同理（留着上一轮的记录会让「只记了一条」这类断言直接失真）。
+        let _ = std::fs::remove_file(store.history_path());
         store
     }
 
@@ -510,5 +544,97 @@ mod tests {
         assert!(err.message.contains("没有发送"), "{}", err.message);
         assert!(seen.try_recv().is_err(), "记不了账却真的外发了");
         let _ = std::fs::remove_dir_all(store.quota_path());
+    }
+
+    #[test]
+    fn a_successful_generation_leaves_one_entry_behind_and_the_preview_shows_it() {
+        let body = serde_json::json!({
+            "choices": [{ "message": { "content": "按天分组。\n```sql\nSELECT date_trunc('day', created_at) FROM public.orders;\n```" } }]
+        })
+        .to_string();
+        let leaked: &'static str = Box::leak(body.into_boxed_str());
+        let (endpoint, _seen) = fake_endpoint("200 OK", leaked);
+        let store = tmp_store("history-writes");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "fake-model".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+
+        // 发之前：历史是空的，预览也得照实回空。
+        assert!(preview(&store, "每天的订单数", &[orders()]).unwrap().history.is_empty());
+
+        match generate(&store, "每天的订单数", &[orders()]).unwrap() {
+            GenerateReply::Generated(outcome) => {
+                assert_eq!(outcome.history.len(), 1, "生成成功了却没记一条");
+                assert_eq!(outcome.history[0].question, "每天的订单数");
+                assert!(outcome.history[0].sql.contains("date_trunc"));
+                assert_eq!(outcome.history[0].model, "fake-model");
+                assert_eq!(outcome.history[0].tables_used, vec!["public.orders".to_string()]);
+                // 这一条真的落盘了（重启后还在）。
+                assert_eq!(store.load_history().len(), 1);
+                // 预览也读得到（下次打开弹层就能看到）。
+                assert_eq!(preview(&store, "再问一句", &[orders()]).unwrap().history.len(), 1);
+            }
+            other => panic!("假端点没有回包：{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_failed_generation_leaves_no_history_entry() {
+        let (endpoint, _seen) = fake_endpoint("500 Internal Server Error", "{}");
+        let store = tmp_store("history-no-write");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(generate(&store, "随便", &[orders()]).is_err(), "500 还被当成成功");
+        assert!(
+            store.load_history().is_empty(),
+            "失败的那一次不该进历史（历史是结果清单，不是请求日志）"
+        );
+    }
+
+    #[test]
+    fn an_unwritable_history_file_still_returns_the_sql_and_says_so() {
+        let body = serde_json::json!({
+            "choices": [{ "message": { "content": "```sql\nSELECT 1;\n```" } }]
+        })
+        .to_string();
+        let leaked: &'static str = Box::leak(body.into_boxed_str());
+        let (endpoint, _seen) = fake_endpoint("200 OK", leaked);
+        let store = tmp_store("history-unwritable");
+        store
+            .save(&AgentConfiguration {
+                enabled: true,
+                endpoint,
+                model: "m".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        // 历史路径被一个**目录**占住 ⇒ 写必然失败。配额那条路仍可写（两份文件互不牵连）。
+        std::fs::create_dir_all(store.history_path()).unwrap();
+        match generate(&store, "随便", &[orders()]).unwrap() {
+            GenerateReply::Generated(outcome) => {
+                assert_eq!(outcome.sql, "SELECT 1;");
+                assert!(
+                    outcome
+                        .limitations
+                        .iter()
+                        .any(|line| line.contains("没能记进生成历史")),
+                    "记不上历史却没如实说：{:?}",
+                    outcome.limitations
+                );
+            }
+            other => panic!("记不上历史就把整次生成废了：{other:?}"),
+        }
+        let _ = std::fs::remove_dir_all(store.history_path());
     }
 }

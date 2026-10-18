@@ -614,6 +614,27 @@ export const DICT = {
     'zh-Hans': '把这段 SQL 存进「已保存」（编辑器内容不动；保存面板里还能改名、同名会先问覆盖）',
     en: 'Store this SQL under Saved (the editor is untouched; you can rename it there, and a duplicate name asks before overwriting)',
   },
+  'agent.generate.history': { 'zh-Hans': '生成历史', en: 'History' },
+  'agent.generate.historyHint': {
+    'zh-Hans': '共 {n} 条（只记成功的那一次；点一条可回填问句、看回那次的 SQL）',
+    en: '{n} in all (successful runs only; click one to reuse the question and see its SQL)',
+  },
+  'agent.generate.historyEmpty': {
+    'zh-Hans': '还没有成功的生成记录。第一次发送成功后，问句与结果会留在这里。',
+    en: 'No successful runs yet. After the first successful send, the question and result stay here.',
+  },
+  'agent.generate.historyRowTip': {
+    'zh-Hans': '点一下：把这个问句填回输入框，并摊出那次的 SQL（不会自动执行）',
+    en: 'Click to reuse this question and show its SQL (never executed)',
+  },
+  'agent.generate.historyReopened': {
+    'zh-Hans': '历史里那一次的 SQL（{when} · 未执行）',
+    en: 'SQL from that run ({when} · not executed)',
+  },
+  'agent.generate.historyTruncated': {
+    'zh-Hans': '原文太长，这里存的是截断后的版本（要看全文请当时就「存成已保存查询」）。',
+    en: 'The original was too long, so this is a truncated copy (for the full text, use "Save as saved query" at the time).',
+  },
   'agent.generate.desktopOnly': {
     'zh-Hans': '浏览器预览里没有外发通道，生成功能只在桌面应用里可用。',
     en: 'The browser preview has no outbound channel; this works in the desktop app only.',

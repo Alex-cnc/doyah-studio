@@ -104,6 +104,7 @@ export const COMMANDS = {
   // 自然语言 → SQL（FR-AI-02：先看要发什么 → 再真发一次；结果只进编辑器，不执行）
   agentGeneratePreview: 'agent_generate_preview',
   agentGenerateSql: 'agent_generate_sql',
+  agentHistoryList: 'agent_history_list',
   // 连接配置面收口（S-1a）：逐项校验 / 换引擎联动默认值 / 从 URL 导入
   connectionValidate: 'connection_validate',
   connectionTypeDefaults: 'connection_type_defaults',
@@ -712,6 +713,26 @@ export interface AgentGeneratePreview {
   dropped: number
   /** 发之前就能看到的配额读数。 */
   quota: AgentQuotaStatus
+  /** 生成历史（**新的在前**；由 Rust 侧读盘给出，界面不自己攒）。 */
+  history: AgentHistoryEntry[]
+}
+
+/**
+ * 一条生成记录（`Db/src/agent_history.rs` 的 `HistoryEntry`）。
+ *
+ * 只在**生成成功**时记；被挡住 / 报错 / 解析失败那一次不记（历史是结果清单，不是请求日志）。
+ * `questionTruncated` / `sqlTruncated` = 原文太长被截断过，界面要如实说「这里不是全文」。
+ */
+export interface AgentHistoryEntry {
+  question: string
+  sql: string
+  explanation: string
+  tablesUsed: string[]
+  model: string
+  /** 记下来的时刻（epoch 秒；0 = 不知道）。 */
+  atSecs: number
+  questionTruncated: boolean
+  sqlTruncated: boolean
 }
 
 /** 一次生成的结果（**只有文本，没有被执行**）。 */
@@ -726,6 +747,8 @@ export interface AgentGenerateOutcome {
   quota: AgentQuotaStatus
   /** 本片的已知缺口（配额尚未计数等），界面必须显示。 */
   limitations: string[]
+  /** 记完这一条之后的历史（新的在前）—— 界面用它直接换掉列表。 */
+  history: AgentHistoryEntry[]
 }
 
 /** 生成的三种结局：被闸门挡住（零外发）、被配额挡住（零外发）、或真的发了。 */
@@ -849,7 +872,7 @@ export function agentGeneratePreview(
   })
 }
 
-/** 真发一次（放行才发；结果**只回文本**，不执行、不入历史）。 */
+/** 真发一次（放行才发；结果**只回文本**，不执行；成功的那一次会留一条生成历史）。 */
 export function agentGenerateSql(
   question: string,
   tables: AgentTableBrief[],
@@ -857,6 +880,16 @@ export function agentGenerateSql(
   return call(COMMANDS.agentGenerateSql, { question, tables }, () => {
     throw { message: tNow('agent.generate.desktopOnly'), hint: tNow('agent.generate.desktopOnlyHint') }
   })
+}
+
+/**
+ * 生成历史（新的在前）。**只读**：不触发外发、不改盘上的东西。
+ *
+ * 为什么单独一条命令（而不是从预览里取）：预览要一句非空的问题才装得出来，
+ * 而「一打开弹层就看到以前问过什么」不该逼用户先敲字。
+ */
+export function agentHistoryList(): Promise<AgentHistoryEntry[]> {
+  return call(COMMANDS.agentHistoryList, {}, () => [] as AgentHistoryEntry[])
 }
 
 /** 表单逐项校验（FR-CONN-06）：端口按**文本**校验，`0` / `65536` / 非数字都当场拒。 */

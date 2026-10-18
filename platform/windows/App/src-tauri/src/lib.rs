@@ -648,7 +648,7 @@ fn agent_generate_preview(
     agent_generate::preview(&state.agent_settings, &question, &tables)
 }
 
-/// 真发一次：放行才发，结果**只回文本**、不执行、不入历史。
+/// 真发一次：放行才发，结果**只回文本**、不执行；成功的那一次会留一条生成历史。
 #[tauri::command]
 fn agent_generate_sql(
     state: State<'_, ShellState>,
@@ -656,6 +656,17 @@ fn agent_generate_sql(
     tables: Vec<doyah_studio_db::agent_nl2sql::TableBrief>,
 ) -> Result<agent_generate::GenerateReply, DbFailure> {
     agent_generate::generate(&state.agent_settings, &question, &tables)
+}
+
+/// 生成历史（`FR-AI-02` 的回看面）：一打开弹层就能看到以前问过什么。
+///
+/// 只读一条命令：**不触发任何外发**，也不改盘上的东西（写历史只发生在生成成功那一刻）。
+/// 读盘失败按空历史回（口径见 `Db::agent_history` 模块头）—— 回看面坏掉不该让生成功能不可用。
+#[tauri::command]
+fn agent_history_list(
+    state: State<'_, ShellState>,
+) -> Vec<doyah_studio_db::agent_history::HistoryEntry> {
+    state.agent_settings.load_history().all_recent()
 }
 
 /// 生成**服务端条件浏览**的 SQL（FR-DATA-02；**只生成、不执行**）。
@@ -2040,6 +2051,7 @@ pub fn run() {
             agent_key_clear,
             agent_generate_preview,
             agent_generate_sql,
+            agent_history_list,
             connection_validate,
             connection_type_defaults,
             connection_import_url,

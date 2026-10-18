@@ -10,20 +10,29 @@
 //   ④ 结果只回文本 —— 点「写入编辑器」只 `emit('insert')`，**没有任何执行类调用**。
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import type { AgentGenerateReply, AgentGeneratePreview, AgentTableBrief } from '../ipc'
+import type {
+  AgentGenerateReply,
+  AgentGeneratePreview,
+  AgentHistoryEntry,
+  AgentTableBrief,
+} from '../ipc'
 
 const state: {
   preview: AgentGeneratePreview | null
   reply: AgentGenerateReply | null
+  history: AgentHistoryEntry[]
   failure: { message: string; hint: string } | null
   previewCalls: number
   generateCalls: number
+  historyCalls: number
 } = {
   preview: null,
   reply: null,
+  history: [],
   failure: null,
   previewCalls: 0,
   generateCalls: 0,
+  historyCalls: 0,
 }
 
 vi.mock('../ipc', () => ({
@@ -36,6 +45,11 @@ vi.mock('../ipc', () => ({
     state.generateCalls += 1
     if (state.failure) throw state.failure
     return state.reply
+  }),
+  // 一打开弹层就拉一次历史（只读，不触发外发）。
+  agentHistoryList: vi.fn(async () => {
+    state.historyCalls += 1
+    return state.history
   }),
 }))
 
@@ -60,6 +74,22 @@ const READY_PREVIEW: AgentGeneratePreview = {
   tableCount: 1,
   dropped: 0,
   quota: READY_QUOTA,
+  history: [],
+}
+
+/** 一条历史记录（形状 = `Db/src/agent_history.rs` 的 `HistoryEntry`）。 */
+function historyEntry(overrides: Partial<AgentHistoryEntry> = {}): AgentHistoryEntry {
+  return {
+    question: '上周每天的订单数',
+    sql: 'SELECT date_trunc(\'day\', created_at) FROM public.orders;',
+    explanation: '按天分组。',
+    tablesUsed: ['public.orders'],
+    model: 'deepseek-chat',
+    atSecs: 1_760_000_000,
+    questionTruncated: false,
+    sqlTruncated: false,
+    ...overrides,
+  }
 }
 
 function mountDialog() {
@@ -88,10 +118,13 @@ beforeEach(() => {
     limitations: [
       '每小时上限按「真发出去的请求」计（含超时 / 报错的那一次）：防的是重试风暴，不是给云端对账单。',
     ],
+    history: [],
   }
+  state.history = []
   state.failure = null
   state.previewCalls = 0
   state.generateCalls = 0
+  state.historyCalls = 0
 })
 
 describe('AgentGenerateDialog（FR-AI-02）', () => {
@@ -119,6 +152,7 @@ describe('AgentGenerateDialog（FR-AI-02）', () => {
       tableCount: 1,
       dropped: 0,
       quota: READY_QUOTA,
+      history: [],
     }
     const wrapper = mountDialog()
     await askAndPreview(wrapper)
@@ -140,6 +174,7 @@ describe('AgentGenerateDialog（FR-AI-02）', () => {
       tableCount: 1,
       dropped: 0,
       quota: READY_QUOTA,
+      history: [],
     }
     const wrapper = mountDialog()
     await askAndPreview(wrapper)
@@ -255,5 +290,83 @@ describe('AgentGenerateDialog（FR-AI-02）', () => {
     // 发送键随后变灰（读数显示已满）
     expect(wrapper.find('[data-testid="generate-send"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-testid="generate-quota"]').text()).toContain('额度已用完')
+  })
+
+  // ── 生成历史（FR-AI-02 第四片）──────────────────────────────────────────────
+  it('一打开就拉一次历史；没有记录时说清「还没有成功的生成」，而不是空一块', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(state.historyCalls).toBe(1)
+    expect(state.previewCalls).toBe(0)
+    expect(state.generateCalls).toBe(0)
+    expect(wrapper.find('[data-testid="generate-history-empty"]').text()).toContain('还没有成功的生成记录')
+    expect(wrapper.find('[data-testid="generate-history-row"]').exists()).toBe(false)
+  })
+
+  it('历史读得出来：逐条显示问句与时间；点一条把问句填回输入框并摊出那次的 SQL', async () => {
+    state.history = [
+      historyEntry({ question: '上周每天的订单数', atSecs: 1_760_000_000 }),
+      historyEntry({ question: '库存为 0 的商品', sql: 'SELECT * FROM public.stock WHERE qty = 0;', atSecs: 1_759_000_000 }),
+    ]
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    const rows = wrapper.findAll('[data-testid="generate-history-row"]')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text()).toContain('上周每天的订单数')
+    expect(wrapper.find('[data-testid="generate-history-count"]').text()).toContain('共 2 条')
+
+    // 点第二条 ⇒ 问句回到输入框、SQL 摊在「历史里那一次」那块里
+    await rows[1].trigger('click')
+    expect((wrapper.find('[data-testid="generate-question"]').element as HTMLTextAreaElement).value).toBe(
+      '库存为 0 的商品',
+    )
+    const reopened = wrapper.find('[data-testid="generate-history-reopened"]').text()
+    expect(reopened).toContain('历史里那一次的 SQL')
+    expect(wrapper.find('[data-testid="generate-history-sql"]').text()).toContain('qty = 0')
+    // 否定面：回看不触发任何外发，也不冒充「这一次的结果」
+    expect(state.previewCalls).toBe(0)
+    expect(state.generateCalls).toBe(0)
+    expect(wrapper.find('[data-testid="generate-sql"]').exists()).toBe(false)
+  })
+
+  it('点开历史的「写入编辑器」只把那次 SQL 交出去（不执行、不发请求）', async () => {
+    state.history = [historyEntry({ sql: 'SELECT 42;' })]
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('[data-testid="generate-history-row"]').trigger('click')
+    await wrapper.find('[data-testid="generate-history-insert"]').trigger('click')
+    expect(wrapper.emitted('insert')).toEqual([['SELECT 42;']])
+    expect(wrapper.emitted('save-as')).toBeUndefined()
+    expect(state.generateCalls).toBe(0)
+  })
+
+  it('生成成功后列表换成回包里那份历史（界面不自己攒），截断过的旧 SQL 如实说', async () => {
+    state.reply = {
+      status: 'generated',
+      sql: 'SELECT 1;',
+      explanation: '',
+      tablesUsed: [],
+      model: 'deepseek-chat',
+      elapsedMs: 10,
+      tableCount: 1,
+      quota: { limit: 60, used: 4, remaining: 56, windowSecs: 3600, retryAfterSecs: 0 },
+      limitations: [],
+      history: [historyEntry({ question: '刚刚这一问', sql: 'SELECT 1;', sqlTruncated: true })],
+    }
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="generate-history-empty"]').exists()).toBe(true)
+
+    await askAndPreview(wrapper)
+    await wrapper.find('[data-testid="generate-send"]').trigger('click')
+    await flushPromises()
+
+    const rows = wrapper.findAll('[data-testid="generate-history-row"]')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].text()).toContain('刚刚这一问')
+
+    await rows[0].trigger('click')
+    expect(wrapper.find('[data-testid="generate-history-truncated"]').text()).toContain('截断')
   })
 })

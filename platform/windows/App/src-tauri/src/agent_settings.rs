@@ -14,6 +14,7 @@
 use std::path::{Path, PathBuf};
 
 use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateReport};
+use doyah_studio_db::agent_history::HistoryLedger;
 use doyah_studio_db::agent_quota::QuotaLedger;
 use serde::Serialize;
 
@@ -132,6 +133,40 @@ impl AgentSettingsStore {
         }
         std::fs::write(&path, ledger.to_json()).map_err(|e| DbFailure {
             message: format!("写配额台账失败：{e}（{}）", path.display()),
+            hint: "确认该文件可写（可能被杀毒软件 / 权限限制）。".to_string(),
+        })
+    }
+
+    /// 历史台账的落点：与配置同目录的 `agent-history.json`（**与配额台账分两份**：
+    /// 配额是「安全上限」的计数，坏了就得拒发；历史是「回看」的记录，坏了只是少看几条 ——
+    /// 两者的失败语义完全不同，混成一个文件会让其中一条拖垮另一条）。
+    pub fn history_path(&self) -> PathBuf {
+        self.config_path.with_file_name("agent-history.json")
+    }
+
+    /// 读历史。文件不存在 / 读不出来 / 内容是坏 JSON ⇒ **空历史**（口径见 `Db::agent_history` 模块头）。
+    pub fn load_history(&self) -> HistoryLedger {
+        let path = self.history_path();
+        match std::fs::read_to_string(&path) {
+            Ok(text) => HistoryLedger::from_json(&text),
+            Err(_) => HistoryLedger::default(),
+        }
+    }
+
+    /// 写历史。**写不进去要报错**（调用方据此在结果里如实说「这次没能记进历史」），但**不阻断发送** ——
+    /// 与配额台账相反：配额写不上是上限失效（安全问题），历史写不上只是少一条记录（体验问题）。
+    pub fn save_history(&self, ledger: &HistoryLedger) -> Result<(), DbFailure> {
+        let path = self.history_path();
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).map_err(|e| DbFailure {
+                    message: format!("建历史目录失败：{e}（{}）", parent.display()),
+                    hint: "确认该目录可写。".to_string(),
+                })?;
+            }
+        }
+        std::fs::write(&path, ledger.to_json()).map_err(|e| DbFailure {
+            message: format!("写生成历史失败：{e}（{}）", path.display()),
             hint: "确认该文件可写（可能被杀毒软件 / 权限限制）。".to_string(),
         })
     }
@@ -362,6 +397,9 @@ mod tests {
         let store = AgentSettingsStore::new(dir.join("agent.json"), dir.join("agent-key.bin"));
         let _ = std::fs::remove_file(&store.config_path);
         let _ = std::fs::remove_file(&store.key_path);
+        // 两份台账也要清：同一 tag 的目录若留着上一轮的账，会读成「已用过 / 已有历史」。
+        let _ = std::fs::remove_file(store.quota_path());
+        let _ = std::fs::remove_file(store.history_path());
         store
     }
 
@@ -452,5 +490,36 @@ mod tests {
         store.clear_key().unwrap();
         store.clear_key().unwrap();
         assert!(!store.key_present());
+    }
+
+    #[test]
+    fn a_history_entry_survives_a_restart_because_it_is_its_own_file() {
+        use doyah_studio_db::agent_history::HistoryEntry;
+        let store = tmp_store("history-roundtrip");
+        assert!(store.load_history().is_empty(), "干净目录里不该有历史");
+        let mut ledger = store.load_history();
+        ledger.append(HistoryEntry::record(
+            "每天的订单数",
+            "SELECT count(*) FROM public.orders;",
+            "",
+            vec!["public.orders".to_string()],
+            "m",
+            1_700_000_000,
+        ));
+        store.save_history(&ledger).unwrap();
+        // 换一份同路径的 store 读（模拟重启：只靠盘上的文件）。
+        let reopened = AgentSettingsStore::new(&store.config_path, &store.key_path);
+        let back = reopened.load_history();
+        assert_eq!(back.len(), 1);
+        assert_eq!(back.recent(1)[0].question, "每天的订单数");
+        // 两份台账互不覆盖：写历史不该动配额那本，反之亦然。
+        assert!(reopened.load_quota().sent_at.is_empty());
+    }
+
+    #[test]
+    fn a_broken_history_file_reads_as_empty_instead_of_blocking_the_feature() {
+        let store = tmp_store("history-broken");
+        std::fs::write(store.history_path(), "{ 这不是 JSON").unwrap();
+        assert!(store.load_history().is_empty());
     }
 }

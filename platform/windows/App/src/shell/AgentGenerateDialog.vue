@@ -13,11 +13,13 @@ import {
   type AgentGenerateOutcome,
   type AgentGeneratePreview,
   type AgentGateReport,
+  type AgentHistoryEntry,
   type AgentIssue,
   type AgentQuotaStatus,
   type AgentTableBrief,
   agentGeneratePreview,
   agentGenerateSql,
+  agentHistoryList,
 } from '../ipc'
 
 const props = defineProps<{
@@ -73,6 +75,10 @@ const blocked = ref<AgentGateReport | null>(null)
 const throttled = ref<AgentQuotaStatus | null>(null)
 const failure = ref<{ message: string; hint: string } | null>(null)
 const busy = ref<'' | 'preview' | 'generate'>('')
+/** 生成历史（新的在前，由 Rust 侧读盘给出；界面不自己攒一份）。 */
+const history = ref<AgentHistoryEntry[]>([])
+/** 从历史里点开的那一条（**与「这一次的结果」分开显示**：旧结果不许冒充新的）。 */
+const reopened = ref<AgentHistoryEntry | null>(null)
 
 /** 换一个问题 / 换一次表 ⇒ 上一份预览与结果都作废（**不让旧正文冒充新的**）。 */
 watch(
@@ -83,7 +89,23 @@ watch(
     blocked.value = null
     throttled.value = null
     failure.value = null
+    reopened.value = null
   },
+)
+
+/** 一打开就拉一次历史（不该逼用户先敲一句字才看得到以前问过什么）。 */
+watch(
+  () => props.open,
+  async (open) => {
+    if (!open) return
+    try {
+      history.value = await agentHistoryList()
+    } catch {
+      // 历史读不出来只是回看不到 —— 不挡生成这条路（与 Rust 侧口径一致）。
+      history.value = []
+    }
+  },
+  { immediate: true },
 )
 
 const gate = computed<AgentGateReport | null>(() => blocked.value ?? preview.value?.gate ?? null)
@@ -119,6 +141,9 @@ async function showPreview(): Promise<void> {
   result.value = null
   try {
     preview.value = await agentGeneratePreview(question.value, props.tables)
+    // 预览回包也带历史：顺手对齐一次（别的窗口 / 上一次运行写进去的记录也能看到）。
+    // `?? []`：回看面缺字段时按空历史处理 —— 不该因此让整个弹层渲染不出来（生成面仍要能用）。
+    history.value = preview.value.history ?? []
   } catch (error) {
     failure.value = readable(error)
     preview.value = null
@@ -152,7 +177,11 @@ async function generate(): Promise<void> {
         tableCount: reply.tableCount,
         quota: reply.quota,
         limitations: reply.limitations,
+        history: reply.history ?? [],
       }
+      // 列表直接用回包里那份（Rust 记完账后读出来的），**不自己往前插一条** —— 两处各插一次迟早不一致。
+      history.value = reply.history ?? []
+      reopened.value = null
     }
   } catch (error) {
     failure.value = readable(error)
@@ -170,6 +199,41 @@ function insert(): void {
 function saveAsQuery(): void {
   if (!result.value || !result.value.sql.trim()) return
   emit('save-as', result.value.sql)
+}
+
+/** 记录时刻的短写法（本地时间 `MM-DD HH:mm`；`0` = 不知道 ⇒ 空串，不编一个时间）。 */
+function whenLabel(atSecs: number): string {
+  if (!atSecs) return ''
+  const at = new Date(atSecs * 1000)
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return `${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}`
+}
+
+/**
+ * 点历史里的一条 ⇒ **把问句填回输入框 + 摊出那次的 SQL**。
+ *
+ * 同时把「这一次的预览 / 结果」清掉：旧结果与新结果同屏出现，用户会以为刚生成的就是它。
+ */
+function reopen(item: AgentHistoryEntry): void {
+  reopened.value = item
+  question.value = item.question
+  preview.value = null
+  result.value = null
+  blocked.value = null
+  throttled.value = null
+  failure.value = null
+}
+
+/** 把历史里那次的 SQL 写进编辑器（**只写文本，不执行**）。 */
+function insertReopened(): void {
+  if (!reopened.value) return
+  emit('insert', reopened.value.sql)
+}
+
+/** 把历史里那次的 SQL 交给视图的保存面板（同一条保存入口）。 */
+function saveReopenedAsQuery(): void {
+  if (!reopened.value || !reopened.value.sql.trim()) return
+  emit('save-as', reopened.value.sql)
 }
 </script>
 
@@ -328,6 +392,66 @@ function saveAsQuery(): void {
           >
             {{ tr('agent.generate.saveAsQuery') }}
           </button>
+        </div>
+      </section>
+      <!-- ③ 生成历史：关掉弹层之后还在（问句 + 那次的 SQL），点一条就能回填 -->
+      <section class="gen__section" data-testid="generate-history">
+        <h3 class="gen__section-title">{{ tr('agent.generate.history') }}</h3>
+        <p v-if="!history.length" class="gen__meta" data-testid="generate-history-empty">
+          {{ tr('agent.generate.historyEmpty') }}
+        </p>
+        <template v-else>
+          <p class="gen__meta" data-testid="generate-history-count">
+            {{ tr('agent.generate.historyHint', { n: history.length }) }}
+          </p>
+          <ul class="gen__history">
+            <li v-for="(item, index) in history" :key="`${item.atSecs}-${index}`">
+              <button
+                type="button"
+                class="gen__history-row"
+                :class="{ 'gen__history-row--active': reopened === item }"
+                data-testid="generate-history-row"
+                :title="tr('agent.generate.historyRowTip')"
+                @click="reopen(item)"
+              >
+                <span class="gen__history-question">{{ item.question }}</span>
+                <span class="gen__history-meta">
+                  {{ whenLabel(item.atSecs) }}<template v-if="item.model"> · {{ item.model }}</template>
+                </span>
+              </button>
+            </li>
+          </ul>
+        </template>
+
+        <!-- 点开的那一条：与「这一次的结果」分开一块，旧结果不冒充新的 -->
+        <div v-if="reopened" class="gen__reopened" data-testid="generate-history-reopened">
+          <p class="gen__meta">{{ tr('agent.generate.historyReopened', { when: whenLabel(reopened.atSecs) }) }}</p>
+          <pre class="gen__sql" data-testid="generate-history-sql">{{ reopened.sql }}</pre>
+          <p v-if="reopened.sqlTruncated" class="gen__warn" data-testid="generate-history-truncated">
+            {{ tr('agent.generate.historyTruncated') }}
+          </p>
+          <p v-if="reopened.tablesUsed.length" class="gen__meta">
+            {{ tr('agent.generate.tablesUsed', { tables: reopened.tablesUsed.join('、') }) }}
+          </p>
+          <div class="gen__result-actions">
+            <button
+              type="button"
+              class="gen__btn"
+              data-testid="generate-history-insert"
+              @click="insertReopened"
+            >
+              {{ tr('agent.generate.insert') }}
+            </button>
+            <button
+              type="button"
+              class="gen__btn"
+              data-testid="generate-history-save-as-query"
+              :title="tr('agent.generate.saveAsQueryTip')"
+              @click="saveReopenedAsQuery"
+            >
+              {{ tr('agent.generate.saveAsQuery') }}
+            </button>
+          </div>
         </div>
       </section>
     </div>
@@ -518,5 +642,64 @@ function saveAsQuery(): void {
   margin: 0;
   font-size: var(--ds-font-caption-size);
   white-space: pre-wrap;
+}
+
+/* 历史列表：一条一行、整行可点（行本身就是按钮）；问句在左、时间与模型在右 */
+.gen__history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.gen__history-row {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ds-spacing-s);
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-control);
+  background: none;
+  color: var(--ds-color-text-primary);
+  font-size: var(--ds-font-caption-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.gen__history-row:hover {
+  background: var(--ds-color-surface-raised);
+}
+
+/* 选中态靠左侧色条 + 发丝线（与裁决那三段同一套语言，不新增底色） */
+.gen__history-row--active {
+  border-color: var(--ds-hairline);
+  border-left: 3px solid var(--ds-color-accent-accent);
+  background: var(--ds-color-surface-raised);
+}
+
+.gen__history-question {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen__history-meta {
+  flex: none;
+  color: var(--ds-color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.gen__reopened {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-xs);
+  padding-top: var(--ds-spacing-s);
+  border-top: 1px dashed var(--ds-hairline);
 }
 </style>

@@ -12,6 +12,7 @@
 pub mod admin;
 pub mod agent;
 pub mod agent_config;
+pub mod agent_history;
 pub mod agent_nl2sql;
 pub mod agent_quota;
 pub mod appearance;
