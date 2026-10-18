@@ -3063,10 +3063,10 @@ final class AppState: ObservableObject {
     ///   交给既有的「磁盘已改」提示（`reloadTab(force: false)` 的老口径，站人这一边）。
     /// · **留下可撤销的原文**：写之前把 `before` 读下来记账 —— 账记在**写成功之后**，
     ///   写失败就不该留下一条「能撤销」的空账。
-    func applyAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> Bool {
+    func applyAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> AgentChatModel.ApplyResult {
         guard let fingerprint = card.approvalFingerprint,
               let arguments = AgentToolArguments.parse(card.arguments),
-              let definition = AgentToolRegistry.standard.definition(named: card.name) else { return false }
+              let definition = AgentToolRegistry.standard.definition(named: card.name) else { return .failure("applyFailed") }
         let root = URL(fileURLWithPath: workspacePath)
         let tools = AgentWorkspaceTools(root: root, harmStopLog: .default)
         let targetPath = arguments["path"] ?? ""
@@ -3088,14 +3088,24 @@ final class AppState: ObservableObject {
                                           tool: definition,
                                           guardPolicy: agentGuardPolicy,
                                           fingerprint: fingerprint,
-                                          granted: [fingerprint])
-            guard case .wrote(let written) = outcome else { return false }
-            if canRestore {
-                agentEditJournal.record(cardID: card.id, path: written.path,
-                                        before: beforeText, after: written.text)
+                                          granted: [fingerprint],
+                                          // `FR-AI-31` ①：出单那一刻的基线（卡片上记着）——
+                                          // 审批之后文件被改过 ⇒ 不拿旧审批盖新内容，如实拒。
+                                          baseDigest: card.baseDigest)
+            switch outcome {
+            case .wrote(let written):
+                if canRestore {
+                    agentEditJournal.record(cardID: card.id, path: written.path,
+                                            before: beforeText, after: written.text)
+                }
+                syncEditorBuffer(path: written.path, root: root)
+                return .success
+            case .refused(let code, _):
+                // **原因原样报出来**（写冲突 / 基线过期 / 写盘失败各是一件事）。
+                return .failure(code.rawValue)
+            default:
+                return .failure("applyFailed")
             }
-            syncEditorBuffer(path: written.path, root: root)
-            return true
         // ①' 定点改代码那一档：与整篇重写**同一套**兑现与撤销（差异预览、逐次指纹、逐字节撤销）。
         // 这一段此前**没有**：`edit_file` 有审批单、Dispatcher 也认，但从界面批了之后没人兑现 ——
         // 「批了没落地」比「不给批」更坏，所以随本轮的「应用 + 撤销」一起补上。
@@ -3107,13 +3117,19 @@ final class AppState: ObservableObject {
                                          guardPolicy: agentGuardPolicy,
                                          fingerprint: fingerprint,
                                          granted: [fingerprint])
-            guard case .wrote(let written) = outcome else { return false }
-            if canRestore {
-                agentEditJournal.record(cardID: card.id, path: written.path,
-                                        before: beforeText, after: written.text)
+            switch outcome {
+            case .wrote(let written):
+                if canRestore {
+                    agentEditJournal.record(cardID: card.id, path: written.path,
+                                            before: beforeText, after: written.text)
+                }
+                syncEditorBuffer(path: written.path, root: root)
+                return .success
+            case .refused(let code, _):
+                return .failure(code.rawValue)
+            default:
+                return .failure("applyFailed")
             }
-            syncEditorBuffer(path: written.path, root: root)
-            return true
         default:
             break
         }
@@ -3127,8 +3143,14 @@ final class AppState: ObservableObject {
                                               fingerprint: fingerprint,
                                               granted: [fingerprint],
                                               runner: AgentLocalCommandRunner())
-        if case .command = commandOutcome { return true }
-        return false
+        switch commandOutcome {
+        case .command:
+            return .success
+        case .refused(let code, _):
+            return .failure(code.rawValue)
+        default:
+            return .failure("applyFailed")
+        }
     }
 
     /// **一步撤销**（`FR-AI-25` ⑤）：把这张卡片已经落盘的改动退回去。

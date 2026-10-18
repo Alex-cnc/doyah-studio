@@ -23,8 +23,12 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 第二个参数是**这一轮提问的落账**（`NFR-AI-08` ⑤：分账号 + 从第几跳起）—— 宿主据此把检查点
     /// 按「哪一轮提问」分账，而不是按会话号（否则下个提问会接上上个问题的检查点）。
     var makeLoop: ((String, AgentTurnPlan, any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)?)?
-    /// 宿主注入：真正把一次批准**兑现**（写盘 / 跑命令）。返回是否成功。
-    var applyApproval: ((AgentToolCard) async -> Bool)?
+    /// 宿主注入：真正把一次批准**兑现**（写盘 / 跑命令）。
+    ///
+    /// 结果是**机器码**而不是 `Bool`（`FR-AI-31` ①）：写冲突（`writeConflict`）/ 基线过期
+    /// （`staleTarget`）/ 写盘失败（`failed`）三件事的处置不一样，一个 `false` 会把它们压成
+    /// 同一句「没成」—— 那正是「静默覆盖」的另一面：**没说清为什么没写**。
+    var applyApproval: ((AgentToolCard) async -> ApplyResult)?
     /// 宿主注入：把一次**已经应用**的改动撤回去（`FR-AI-25` ⑤：一步撤销，文件逐字节回到应用前）。
     /// 撤销目标由宿主按卡片号从账上找 —— 这里只传卡片，不传「要写什么」：
     /// 原文只该存在一处（Core 的 `AgentEditJournal`），界面与视图模型都不许自己记一份。
@@ -231,23 +235,37 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     }
 
     func approve(_ cardID: UUID) {
-        guard let card = state.cards.first(where: { $0.id == cardID }),
-              let fingerprint = card.approvalFingerprint else { return }
+        guard state.cards.first(where: { $0.id == cardID })?.approvalFingerprint != nil else { return }
         guard state.approve(cardID: cardID) else { return }
+        Task { [weak self] in
+            await self?.applyApproved(cardID: cardID)
+        }
+    }
+
+    /// 正在兑现的卡片（防同一张卡被「点了」与「代签」两条路各写一遍）。
+    private var inFlightApply: Set<UUID> = []
+
+    /// 兑现一张**已批但还没落地**的卡片（`FR-AI-31` ① 的落地那一格）。
+    ///
+    /// · **幂等**：同一张卡在途就跳过（重复事件不写第二遍）；
+    /// · **失败如实说**：宿主没接 / 没写成就报 `noApplier` / `applyFailed`，卡片停在「已批」——
+    ///   绝不改成「已应用」而盘上没动。
+    private func applyApproved(cardID: UUID) async {
+        guard !inFlightApply.contains(cardID) else { return }
+        guard let card = state.cards.first(where: { $0.id == cardID }), card.isAwaitingApply else { return }
         guard let applyApproval else {
             state.appendNotice("noApplier")
             return
         }
-        Task { [weak self] in
-            let applied = await applyApproval(card)
-            await MainActor.run {
-                guard let self else { return }
-                if applied {
-                    self.state.markApplied(cardID: cardID)
-                } else {
-                    self.state.appendNotice("applyFailed")
-                }
-            }
+        inFlightApply.insert(cardID)
+        let result = await applyApproval(card)
+        inFlightApply.remove(cardID)
+        switch result {
+        case .success:
+            state.markApplied(cardID: cardID)
+        case .failure(let code):
+            // **原因原样报出来**：写冲突 / 基线过期 / 写盘失败不是一句话。
+            state.appendNotice(code)
         }
     }
 
@@ -292,6 +310,12 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         case failure(String)
     }
 
+    /// 兑现一次的结局（`FR-AI-31` ①）：成功 / 失败（**机器码**，人话在界面翻）。
+    enum ApplyResult: Equatable {
+        case success
+        case failure(String)
+    }
+
     func toggle(_ cardID: UUID) {
         state.toggleExpanded(cardID: cardID)
     }
@@ -300,6 +324,14 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     func observe(_ event: AgentLoopEvent) async {
         state.apply(event)
+        // **代签那一档（`FR-AI-34`）建单即已批** ⇒ 观测口立刻兑现。
+        // `observe` 在循环里是 `await` 的 ⇒ 这次写盘落在**下一跳之前**，
+        // 模型下一跳看到的是「文件已改」，而不是「还在等一个不会来的人」。
+        if case .approvalRequested = event {
+            for card in state.cards where card.isAwaitingApply {
+                await applyApproved(cardID: card.id)
+            }
+        }
     }
 
     private func finish(_ result: AgentLoopResult) {

@@ -114,6 +114,11 @@ struct AgentChatView: View {
         case "drifted": return L(.agentChatUndoDrifted)
         case "failed": return L(.agentChatUndoFailed)
         case "noUndoer": return L(.agentChatUndoUnavailable)
+        // `FR-AI-31` ①：写类动作「没写成」的三种原因，各说各的。
+        case "writeConflict": return L(.agentChatWriteBusy)
+        case "staleTarget": return L(.agentChatWriteStale)
+        case "applyFailed": return L(.agentChatApplyFailed)
+        case "noApplier": return L(.agentChatApplyFailed)
         default: return code
         }
     }

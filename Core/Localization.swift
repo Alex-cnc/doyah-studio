@@ -922,6 +922,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatDone
     case agentChatExpand
     case agentChatCollapse
+    /// `FR-AI-31` ①：同一文件正有另一次写入 — 这一次没落盘。
+    case agentChatWriteBusy
+    /// `FR-AI-31` ①：批准之后文件被改过 — 不拿旧审批覆盖。
+    case agentChatWriteStale
+    /// 兑现那一步没成（写盘 / 路径 / 宿主没接）—— 与撤销那三种结局分开。
+    case agentChatApplyFailed
     case workspaceHomeBuildLine
     case workspaceHomeCopyright
     case workspaceRecentFiles
@@ -3303,6 +3309,10 @@ public enum LocalizedStrings {
         .agentChatEndpointNotConfigured: [.simplifiedChinese: "还没配模型端点 —— 先在「智能体设置」里配好再聊。", .english: "No model endpoint configured yet — set it up in Agent Settings first."],
         .agentChatEndpointUnreachable: [.simplifiedChinese: "端点连不上 —— 检查地址 / 网络，或先在设置里试一次连接。", .english: "Endpoint unreachable — check the address / network, or test the connection in settings."],
         .agentChatDone: [.simplifiedChinese: "这一轮说完了。", .english: "That's a wrap for this round."],
+        // `FR-AI-31` ①：写冲突 / 基线过期 / 兑现失败三件事各说各的（都是「文件没被写」，原因不一样）。
+        .agentChatWriteBusy: [.simplifiedChinese: "这个文件正有另一次写入在进行 —— 这一次没有落盘，等它写完再来。", .english: "Another write to this file is in progress — nothing was written this time; try again once it finishes."],
+        .agentChatWriteStale: [.simplifiedChinese: "这个文件在你批准之后被改过 —— 没有拿旧审批盖上去，先看清现在的内容再决定。", .english: "This file changed after you approved — the approval was not written over it; review the current content first."],
+        .agentChatApplyFailed: [.simplifiedChinese: "没落成盘 —— 写盘出错或目标不可写，可以再点一次。", .english: "The write did not land — the disk write failed or the target is not writable; you can try again."],
         // 定时 agent（FR-AI-27）：目标档位 / 面板文案 / 历史。词表与既有键能合的就合（状态与时间全走 dataTask*）。
         .agentScheduleTitle: [.simplifiedChinese: "定时 agent", .english: "Scheduled agents"],
         .agentScheduleEmpty: [.simplifiedChinese: "还没有定时条目。定时只决定「什么时候起一次会话」——危险动作仍然逐次审批。", .english: "No scheduled entries yet. A schedule only decides when a session starts — dangerous actions still need approval every time."],
