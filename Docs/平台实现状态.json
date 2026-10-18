@@ -17,7 +17,7 @@
     "windows": {
       "label": "Windows",
       "role": "对等目标端（与 macOS 完全一致）",
-      "owner": "黑鳍大肥鲨（`fatshark` · Windows/Harmony 侧）",
+      "owner": "奶牙小河马（`babyhippo` · Windows/Android/Harmony 侧）—— 2026-10-16 人类主人定案：不再设分组键，Windows 归 babyhippo；`fatshark` 侧名已退役",
       "overrides": {
         "FR-CONN-01": "✅",
         "FR-CONN-02": "✅",
