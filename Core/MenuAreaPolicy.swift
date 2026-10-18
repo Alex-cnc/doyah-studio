@@ -30,6 +30,7 @@ public enum MenuAreaPolicy {
         switch key {
         // 「文件 · 新建」那一组（`DoyahStudioCommands`）：页签长在哪个区，命令就归哪个区。
         case .menuNewQuery: return .database
+        case .menuOpenFile: return .workspace
         case .menuNewBrowserTab: return .workspace
         // 笔记本身就是一个区（DOYAH-01）⇒ 它只在笔记区显示。
         case .menuNotes: return .notes

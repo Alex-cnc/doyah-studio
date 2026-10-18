@@ -60,6 +60,16 @@ struct DoyahStudioCommands: Commands {
         }
 
         CommandGroup(replacing: .newItem) {
+            // 「打开文件…」（人类主人 2026-10-18 实测「工作区菜单里打开文件没了」）：
+            // 这个动作此前**只有工具栏图标**（按钮图标化后无文字，等于找不到）⇒ 补一条真菜单项。
+            // 与图标按钮走同一个 `WorkspaceOpenFilePanel`（唯一实现），执行前先切到工作区
+            // —— 页签长在工作区，跟「新建查询」「新建浏览器页签」同一个坑。
+            Button(L(.menuOpenFile)) {
+                appState.selectActivityItem(.workspace)
+                WorkspaceOpenFilePanel.present { workspaceTabs.openFile(at: $0) }
+            }
+            .keyboardShortcut(AppShortcut.openFile.key, modifiers: AppShortcut.openFile.modifiers)
+
             Button(L(.menuNewQuery)) {
                 appState.newQueryTab()
             }

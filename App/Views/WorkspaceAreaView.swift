@@ -309,13 +309,7 @@ struct WorkspaceHomeView: View {
     }
 
     private func openFileFromPanel() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.message = L(.workspaceOpenFileButton)
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        tabs.openFile(at: url)
+        WorkspaceOpenFilePanel.present { tabs.openFile(at: $0) }
     }
 
     private static var appVersion: String {

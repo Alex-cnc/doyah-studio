@@ -788,6 +788,55 @@ public enum LKey: String, CaseIterable, Sendable {
     case mcpApprovalDecided
     case mcpApprovalBadLines
     case mcpApprovalDenied
+    // MARK: MCP 服务器配置面（`FR-AI-21` 界面片）
+    case agentMCPSection
+    case agentMCPConfigure
+    case agentMCPHint
+    case mcpServersTitle
+    case mcpServersHint
+    case mcpServersAdd
+    case mcpServersDelete
+    case mcpServersSaveAndConnect
+    case mcpServersName
+    case mcpServersNamePlaceholder
+    case mcpServersEnabled
+    case mcpServersTransport
+    case mcpServersTransportStdio
+    case mcpServersTransportHTTP
+    case mcpServersTransportHint
+    case mcpServersCommand
+    case mcpServersCommandPlaceholder
+    case mcpServersArgs
+    case mcpServersArgsHint
+    case mcpServersEnv
+    case mcpServersEnvHint
+    case mcpServersTools
+    case mcpServersToolsEmpty
+    case mcpServersToolAutomatic
+    case mcpServersToolApproval
+    case mcpServersToolDisabled
+    case mcpServersStateDisabled
+    case mcpServersStateNotConnectable
+    case mcpServersStateUnsupported
+    case mcpServersStateUnreachable
+    case mcpServersStateConnected
+    case mcpServersStateNeverConnected
+    case mcpServersStateReason
+    case mcpServersEmptyHint
+    case mcpServersConfigPath
+    case mcpServersSaved
+    case mcpServersSaveFailed
+    case mcpServersConnecting
+    case mcpServersSummary
+    case mcpServersSummaryNotConfigured
+    case mcpServersLoadError
+    case mcpServersProblemEmptyName
+    case mcpServersProblemDuplicateName
+    case mcpServersProblemNoCommand
+    case mcpServersProblemTransport
+    case mcpServersEnvLineBad
+    case mcpServersNoteConflict
+    case mcpServersNoteDisabled
     case mysqlConnectTimedOut
     case aiNoteGoal
     case diagnosisSaveNote
@@ -1582,6 +1631,7 @@ public enum LKey: String, CaseIterable, Sendable {
     // 执行审批与审计（FR-AI-09 / NFR-AI-03）
     case menuAgentAudit
     case agentApprovalConnectionMismatch
+    case menuOpenFile
     case menuNewBrowserTab
     case browserTitle
     case relaunchBlocked
@@ -3240,6 +3290,54 @@ public enum LocalizedStrings {
         .mcpApprovalDecided: [.simplifiedChinese: "已%@：%@", .english: "%@: %@"],
         .mcpApprovalBadLines: [.simplifiedChinese: "队列里有 %@ 行读不出来（已跳过，不影响其余）", .english: "%@ unreadable lines in the queue (skipped; the rest still work)"],
         .mcpApprovalDenied: [.simplifiedChinese: "外部调用被拒绝或等待审批超时：没有执行", .english: "The external call was denied or the approval timed out: nothing ran"],
+        .agentMCPSection: [.simplifiedChinese: "MCP 服务器", .english: "MCP servers"],
+        .agentMCPConfigure: [.simplifiedChinese: "配置 MCP 服务器…", .english: "Configure MCP servers…"],
+        .agentMCPHint: [.simplifiedChinese: "远端工具会并进同一张工具表；与内置工具重名的不并，并如实记一条冲突。", .english: "Remote tools join the same tool list; a name that collides with a built-in tool is not merged and the conflict is reported."],
+        .mcpServersTitle: [.simplifiedChinese: "MCP 服务器（本机自配）", .english: "MCP servers (configured on this Mac)"],
+        .mcpServersHint: [.simplifiedChinese: "每条 server 的 command 与 args 原样起进程（不经过 shell）；改完保存会重新连一次。", .english: "Each server's command and args are started as written (no shell); saving reconnects once."],
+        .mcpServersAdd: [.simplifiedChinese: "加一条 server", .english: "Add a server"],
+        .mcpServersDelete: [.simplifiedChinese: "删除这条", .english: "Delete this one"],
+        .mcpServersSaveAndConnect: [.simplifiedChinese: "保存并重连", .english: "Save and connect"],
+        .mcpServersName: [.simplifiedChinese: "名字", .english: "Name"],
+        .mcpServersNamePlaceholder: [.simplifiedChinese: "给这条起个名字（重名会被挡）", .english: "A name for this server (duplicates are refused)"],
+        .mcpServersEnabled: [.simplifiedChinese: "启用", .english: "Enabled"],
+        .mcpServersTransport: [.simplifiedChinese: "传输", .english: "Transport"],
+        .mcpServersTransportStdio: [.simplifiedChinese: "stdio（本机进程）", .english: "stdio (local process)"],
+        .mcpServersTransportHTTP: [.simplifiedChinese: "http（暂不支持）", .english: "http (not supported yet)"],
+        .mcpServersTransportHint: [.simplifiedChinese: "本档只支持 stdio；选 http 会如实标「暂不支持」，不会偷偷当成 stdio 去连。", .english: "Only stdio works right now; picking http is reported as unsupported instead of being silently treated as stdio."],
+        .mcpServersCommand: [.simplifiedChinese: "命令", .english: "Command"],
+        .mcpServersCommandPlaceholder: [.simplifiedChinese: "可执行文件路径（不经过 shell）", .english: "Path to the executable (no shell)"],
+        .mcpServersArgs: [.simplifiedChinese: "参数（一行一个）", .english: "Arguments (one per line)"],
+        .mcpServersArgsHint: [.simplifiedChinese: "一行一个参数，行内空格原样保留，空白行忽略。", .english: "One argument per line; spaces inside a line stay as typed; blank lines are ignored."],
+        .mcpServersEnv: [.simplifiedChinese: "环境变量（一行一个 KEY=VALUE）", .english: "Environment (one KEY=VALUE per line)"],
+        .mcpServersEnvHint: [.simplifiedChinese: "按第一个 = 切开，值里的 = 原样保留；写坏的行在下面点名。", .english: "Split at the first =; later = stay in the value; unreadable lines are named below."],
+        .mcpServersTools: [.simplifiedChinese: "发现到的工具", .english: "Discovered tools"],
+        .mcpServersToolsEmpty: [.simplifiedChinese: "还没连上——连上之后这里按名字列出远端工具。", .english: "Not connected yet — once it connects, remote tools are listed here by name."],
+        .mcpServersToolAutomatic: [.simplifiedChinese: "自动（不问）", .english: "Automatic (no prompt)"],
+        .mcpServersToolApproval: [.simplifiedChinese: "必须审批", .english: "Requires approval"],
+        .mcpServersToolDisabled: [.simplifiedChinese: "关闭（不注入模型）", .english: "Off (not offered to the model)"],
+        .mcpServersStateDisabled: [.simplifiedChinese: "已关闭：不会发起任何连接。", .english: "Off: no connection is made."],
+        .mcpServersStateNotConnectable: [.simplifiedChinese: "起不来：%@（%@）——还没到握手那一步。", .english: "Cannot start: %@ (%@) — it never reached the handshake."],
+        .mcpServersStateUnsupported: [.simplifiedChinese: "暂不支持这种传输：%@", .english: "This transport is not supported yet: %@"],
+        .mcpServersStateUnreachable: [.simplifiedChinese: "连不上：%@", .english: "Cannot connect: %@"],
+        .mcpServersStateConnected: [.simplifiedChinese: "已连上 %@（协议 %@）· 工具 %d 个", .english: "Connected to %@ (protocol %@) · %d tools"],
+        .mcpServersStateNeverConnected: [.simplifiedChinese: "还没连过——点「保存并重连」试一次。", .english: "Not connected yet — press Save and connect to try."],
+        .mcpServersStateReason: [.simplifiedChinese: "原因原样：%@", .english: "Reason as reported: %@"],
+        .mcpServersEmptyHint: [.simplifiedChinese: "还没有配置任何 MCP server。加一条之后，它的工具会出现在对话可用的工具里。", .english: "No MCP server configured yet. Add one and its tools become available to the assistant."],
+        .mcpServersConfigPath: [.simplifiedChinese: "配置文件：%@", .english: "Config file: %@"],
+        .mcpServersSaved: [.simplifiedChinese: "已保存 %d 条；下次对话按新配置连接。", .english: "Saved %d servers; the next conversation connects with them."],
+        .mcpServersSaveFailed: [.simplifiedChinese: "保存失败：%@", .english: "Could not save: %@"],
+        .mcpServersConnecting: [.simplifiedChinese: "正在连接（起进程要等一会儿）…", .english: "Connecting (starting the process takes a moment)…"],
+        .mcpServersSummary: [.simplifiedChinese: "已连上 %d / %d 条", .english: "%d of %d connected"],
+        .mcpServersSummaryNotConfigured: [.simplifiedChinese: "还没配置 MCP server", .english: "No MCP server configured"],
+        .mcpServersLoadError: [.simplifiedChinese: "配置文件读不出来：%@", .english: "The config file could not be read: %@"],
+        .mcpServersProblemEmptyName: [.simplifiedChinese: "第 %d 条没有名字", .english: "Server %d has no name"],
+        .mcpServersProblemDuplicateName: [.simplifiedChinese: "第 %d 条与前面重名：%@", .english: "Duplicate name at #%d: %@"],
+        .mcpServersProblemNoCommand: [.simplifiedChinese: "第 %d 条没填命令（这条不会起进程）", .english: "Server %d has no command (it will not be started)"],
+        .mcpServersProblemTransport: [.simplifiedChinese: "第 %d 条的传输暂不支持：%@", .english: "Transport on #%d is not supported yet: %@"],
+        .mcpServersEnvLineBad: [.simplifiedChinese: "第 %d 行环境变量没看懂（要 KEY=VALUE）", .english: "Environment line %d is not KEY=VALUE"],
+        .mcpServersNoteConflict: [.simplifiedChinese: "与内置工具重名，没并进来：%@", .english: "Not merged — same name as a built-in tool: %@"],
+        .mcpServersNoteDisabled: [.simplifiedChinese: "有 %d 个工具被关掉", .english: "%d tools are switched off"],
         .mysqlConnectTimedOut: [.simplifiedChinese: "连接（含 TLS 与认证）超过 %@ 秒没有完成，已放弃", .english: "The connection (TLS and authentication included) did not finish within %@ seconds; giving up"],
         .aiNoteGoal: [.simplifiedChinese: "目标：%@", .english: "Target: %@"],
         .diagnosisSaveNote: [.simplifiedChinese: "存进笔记", .english: "Save to notes"],
@@ -4061,6 +4159,7 @@ public enum LocalizedStrings {
 
         .menuAgentAudit: [.simplifiedChinese: "审批与审计…", .english: "Approvals & Audit…"],
         .menuEgressLog: [.simplifiedChinese: "外发日志…", .english: "Egress Log…"],
+        .menuOpenFile: [.simplifiedChinese: "打开文件…", .english: "Open File…"],
         .menuNewBrowserTab: [.simplifiedChinese: "新建浏览器页签", .english: "New Browser Tab"],
         .browserTitle: [.simplifiedChinese: "浏览器", .english: "Browser"],
         .relaunchBlocked: [.simplifiedChinese: "还有未保存的查询，已取消重启 —— 请先保存再重启。", .english: "There are unsaved queries, so the relaunch was cancelled — save them first, then relaunch."],        .browserRestoredTitle: [.simplifiedChinese: "已恢复的页签（尚未加载）", .english: "Restored tab (not loaded yet)"],
