@@ -95,6 +95,7 @@ CONSUMER_FILES = (
     "Core/CodeFormatting.swift",
     "Core/CodeLexer.swift",
     "Core/CodeSyntax.swift",
+    "Core/InlineGhostCompletion.swift",
     "Core/MarkdownEditing.swift",
     "Core/TextLanguage.swift",
     "Core/WorkspaceSession.swift",

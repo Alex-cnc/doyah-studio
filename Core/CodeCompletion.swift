@@ -107,9 +107,19 @@ public enum CodeCompletion {
     /// 词法用 `CodeLexer` 的 `.identifier` —— 这样字符串与注释里的词不会被当成候选
     /// （否则文档里一句注释就能把补全列表带偏）。
     public static func words(in text: String, language: TextLanguage, limit: Int = 200) -> [String] {
+        words(inTokens: CodeLexer.tokens(in: text, language: language), text: text, limit: limit)
+    }
+
+    /// 同一件事的另一半：**拿着已经切好的记号算词**，不再切一遍。
+    ///
+    /// 为什么要这个口子：行内灰字补全（`InlineGhostCompletion`）跑在**每次击键**上，
+    /// 而高亮那一拍已经把整篇切过一次了（`CodeLexer.tokens`）。再切一次等于把
+    /// 文档大小的代价乘二 —— 5,000 行文档上就是 `NFR-PERF-05` 那类卡顿。
+    /// 两条路必须给出**同一个列表**（判据守着），所以真正干活的地方只有下面这一份。
+    public static func words(inTokens tokens: [CodeToken], text: String, limit: Int = 200) -> [String] {
         var counts: [String: Int] = [:]
         var order: [String] = []
-        for token in CodeLexer.tokens(in: text, language: language) where token.kind == .identifier {
+        for token in tokens where token.kind == .identifier {
             let word = String(text[token.range])
             guard word.count >= minimumWordLength, word.count <= maximumWordLength else { continue }
             if counts[word] == nil { order.append(word) }

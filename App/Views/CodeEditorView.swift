@@ -175,6 +175,8 @@ struct CodeEditorView: NSViewRepresentable {
         // 切页签 / 换了内容：光标行跟着新文档重报一次（预览据此重新对齐）。
         if textChanged {
             context.coordinator.reportCursorLine()
+            // 换页签就换了一份文档：上一条灰字属于**上一个**文件的词表，必须当场重算。
+            textView.refreshGhost()
         }
         if fontChanged || languageChanged || context.coordinator.lastHighlightedText != textView.string {
             context.coordinator.applyHighlighting()
@@ -205,6 +207,9 @@ struct CodeEditorView: NSViewRepresentable {
             textView.reloadLineNumbers()
             parent.onTextChange(textView.string)
             scheduleHighlighting()
+            // 行内灰字（`FR-EDIT-57`）：每个击键重算一次，但**词表不在这里切**
+            // （词表跟着高亮那一拍刷新，见 `applyHighlighting`）—— 这里只做候选比较。
+            textView.refreshGhost()
         }
 
         // MARK: 光标行（队列 L-137：Markdown 预览的跟随滚动）
@@ -214,6 +219,8 @@ struct CodeEditorView: NSViewRepresentable {
         func textViewDidChangeSelection(_ notification: Notification) {
             reportCursorLine()
             reportCursorPosition()
+            // 光标动 ⇒ 灰字该重算（换行 / 点到别处 / 选中一段，都应立刻改口或消失）。
+            textView?.refreshGhost()
         }
 
         func reportCursorLine() {
@@ -285,6 +292,9 @@ struct CodeEditorView: NSViewRepresentable {
             let tokens = CodeLexer.tokens(in: current, language: language)
             textView.apply(tokens: tokens, language: language)
             lastHighlightedText = current
+            // 行内灰字用的文档词**跟着这一次切分算**（`words(inTokens:)` 不再重切整篇）：
+            // 这样击键路径（`refreshGhost`）只做候选比较，大文档不会被每次按键拖成 O(n)。
+            textView.updateGhostWords(CodeCompletion.words(inTokens: tokens, text: current))
         }
 
         // MARK: 补全（FR-EDIT-36）
@@ -324,6 +334,159 @@ final class CodeTextView: NSTextView {
 
     /// 补全落光标用：插入的是哪个语言，决定片段插入后的落点约定。
     var completionLanguage: TextLanguage = .plainText
+
+    // MARK: 行内灰字补全（FR-EDIT-57 的行内形态 · Core `InlineGhostCompletion`）
+
+    /// 当前该画的灰字（`nil` = 不画）。**只画、不写**：它从不进 `textStorage`，
+    /// 所以撤销栈 / 保存的文件 / 复制走的文本里都没有它。想让它进正文只有 `Tab` 一条路。
+    private(set) var ghost: InlineGhostSuggestion?
+
+    /// 文档词缓存：由代理在**高亮那一拍**（已经切过词法）刷新，击键路径只读它。
+    /// 每次击键重切整篇 = 大文档上 `NFR-PERF-05` 那类卡顿。
+    private(set) var ghostDocumentWords: [String] = []
+
+    /// 总开关（与"是否已经有模型端点"无关：这一片是**词法级**提示，不调模型）。
+    var ghostEnabled = true
+
+    /// 用户按 Esc 关掉的那一条（`光标 + 前缀 + 候选` 三元组）。
+    /// 为什么要记：Esc 之后 `textViewDidChangeSelection` 还会再来一拍，
+    /// 不记的话灰字会**立刻原地复活** —— 按了没反应比没有还糟。
+    private var dismissedGhostKey: String?
+
+    private func ghostKey(_ suggestion: InlineGhostSuggestion) -> String {
+        "\(suggestion.range.location)|\(suggestion.range.length)|\(suggestion.insertText)"
+    }
+
+    /// 重算灰字。文本变、光标动、词表刷新、语言切换都要调它。
+    func refreshGhost() {
+        // 组字期间不算：输入法候选还没上屏，这时的前缀不是用户想补的词。
+        guard ghostEnabled, !hasMarkedText() else { setGhost(nil); return }
+        let suggestion = InlineGhostCompletion.suggestion(
+            in: string,
+            selection: selectedRange(),
+            language: completionLanguage,
+            documentWords: ghostDocumentWords,
+            enabled: ghostEnabled
+        )
+        if let suggestion, ghostKey(suggestion) == dismissedGhostKey {
+            setGhost(nil)
+            return
+        }
+        setGhost(suggestion)
+    }
+
+    /// 代理在高亮那一拍把词表递进来（跟着一次 `CodeLexer.tokens` 的结果，不额外切一遍）。
+    func updateGhostWords(_ words: [String]) {
+        ghostDocumentWords = words
+        refreshGhost()
+    }
+
+    /// 接受灰字（`Tab`）：把**已输入的前缀**换成整词，光标落到末尾。
+    /// 返回 `false` = 这一刻没有可接受的灰字 ⇒ 调用方交还默认实现（Tab 仍然缩进）。
+    @discardableResult
+    func acceptGhost() -> Bool {
+        guard let suggestion = ghost else { return false }
+        let caret = suggestion.range.location + suggestion.range.length
+        // 灰字画出来之后光标可能已经挪走（多一条防线：宁可不出，也不在错的位置上改字）。
+        guard selectedRange() == NSRange(location: caret, length: 0) else { setGhost(nil); return false }
+        guard applyEditPlan(range: suggestion.range, replacement: suggestion.insertText,
+                            caret: suggestion.caretOffset) else {
+            setGhost(nil)
+            return false
+        }
+        dismissedGhostKey = nil
+        setGhost(nil)
+        return true
+    }
+
+    /// 忽略灰字（`Esc`）。返回 `false` = 本来就没有灰字 ⇒ 交还默认实现。
+    @discardableResult
+    func dismissGhost() -> Bool {
+        guard let suggestion = ghost else { return false }
+        dismissedGhostKey = ghostKey(suggestion)
+        setGhost(nil)
+        return true
+    }
+
+    private func setGhost(_ suggestion: InlineGhostSuggestion?) {
+        guard suggestion != ghost else { return }
+        let previous = ghost
+        ghost = suggestion
+        // 只脏那两行（旧的与新的）：整块 `bounds` 是**整篇文档**那么高，无谓地标脏是白付的。
+        if let previous { setNeedsDisplay(ghostRect(for: previous) ?? bounds) }
+        if let suggestion { setNeedsDisplay(ghostRect(for: suggestion) ?? bounds) }
+    }
+
+    /// 灰字画在哪：**前缀末尾**那一格，纵向与该行文字对齐。
+    ///
+    /// 位置由排版结果算（`layoutManager`），不自己数字符宽度 —— 制表符、连字、代理对都算不对。
+    private func ghostRect(for suggestion: InlineGhostSuggestion) -> NSRect? {
+        guard let layoutManager, let container = textContainer else { return nil }
+        let caret = suggestion.range.location + suggestion.range.length
+        let origin = textContainerOrigin
+        var x = origin.x + container.lineFragmentPadding
+        var lineHeight = font?.boundingRectForFont.height ?? 16
+        var y = origin.y
+        if caret > 0, caret <= (textStorage?.length ?? 0) {
+            let glyph = layoutManager.glyphIndexForCharacter(at: caret - 1)
+            if glyph < layoutManager.numberOfGlyphs {
+                let glyphRect = layoutManager.boundingRect(
+                    forGlyphRange: NSRange(location: glyph, length: 1), in: container
+                )
+                let lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+                x = origin.x + glyphRect.maxX
+                y = origin.y + lineRect.minY
+                lineHeight = lineRect.height
+            }
+        }
+        let ghostFont = font ?? CodeEditorView.baseFont
+        let width = (suggestion.ghost as NSString).size(withAttributes: [.font: ghostFont]).width
+        return NSRect(x: x - 1, y: y, width: min(width, 400) + 4, height: lineHeight)
+    }
+
+    /// 把灰字画上去。它**不是**文本存储的一部分 —— 所以必须在这里画，且只在这时候画。
+    private func drawGhost(in dirtyRect: NSRect) {
+        guard let suggestion = ghost,
+              window?.firstResponder === self,
+              let container = textContainer,
+              let rect = ghostRect(for: suggestion),
+              rect.intersects(dirtyRect) else { return }
+        let ghostFont = font ?? CodeEditorView.baseFont
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: ghostFont,
+            // 灰字走**三级文本**令牌（辅助信息那一档）：不抢正文字色，又不至于看不见。
+            .foregroundColor: Theme.nsColor(TextTone.tertiary)
+        ]
+        let text = ghostFitting(suggestion.ghost, in: rect, container: container, attributes: attributes)
+        guard !text.isEmpty else { return }
+        NSAttributedString(string: text, attributes: attributes)
+            .draw(at: NSPoint(x: rect.minX + 1, y: rect.minY))
+    }
+
+    /// 灰字太长、这一行剩下的地方画不下 ⇒ 截断加省略号（**不静默消失**：
+    /// 消失会让人以为"它本来就没有建议"，截断至少说明"还有，只是没地方放"）。
+    private func ghostFitting(
+        _ ghost: String,
+        in rect: NSRect,
+        container: NSTextContainer,
+        attributes: [NSAttributedString.Key: Any]
+    ) -> String {
+        let origin = textContainerOrigin
+        let available = origin.x + container.size.width
+            - container.lineFragmentPadding - (rect.minX + 1)
+        guard available > 8 else { return "" }
+        func width(_ text: String) -> CGFloat {
+            (text as NSString).size(withAttributes: attributes).width
+        }
+        if width(ghost) <= available { return ghost }
+        var characters = Array(ghost)
+        while !characters.isEmpty {
+            characters.removeLast()
+            let candidate = String(characters) + "…"
+            if width(candidate) <= available { return candidate }
+        }
+        return ""
+    }
 
     // MARK: 行号列（FR-EDIT-36 的「编辑器行号列」，队列 L-64）
     //
@@ -370,6 +533,8 @@ final class CodeTextView: NSTextView {
         NSGraphicsContext.restoreGraphicsState()
         // 行号：交给唯一绘制件画（`LineNumberGutter.draw`）
         gutter.draw(in: dirtyRect, of: self)
+        // 行内灰字补全：正文画完之后叠一层（它不在文本存储里，`super.draw` 不会画它）
+        drawGhost(in: dirtyRect)
     }
 
     /// 补全**自己插**，不交给 `NSTextView` 默认实现。
@@ -433,7 +598,29 @@ final class CodeTextView: NSTextView {
            toggleLineComment() {
             return true
         }
+        // ⌃Space：候选列表（`FR-EDIT-57`）。AppKit 默认只有 F5 绑着 `complete:`，
+        // 而"⌃Space 要候选"是所有写代码的人的肌肉记忆 —— 在这里显式接一下，
+        // 免得用户按了没反应还以为补全没做。候选来自同一个 `CodeCompletion`（代理回调那儿）。
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.control],
+           event.charactersIgnoringModifiers == " " {
+            complete(nil)
+            return true
+        }
         return super.performKeyEquivalent(with: event)
+    }
+
+    // MARK: 行内灰字补全的按键（FR-EDIT-57）
+
+    /// `Tab`：有灰字就**接受**，没有就照常缩进（不吞正常输入）。
+    override func insertTab(_ sender: Any?) {
+        if acceptGhost() { return }
+        super.insertTab(sender)
+    }
+
+    /// `Esc`：有灰字就忽略它（并记住"这一条我不要"），没有就交还默认实现。
+    override func cancelOperation(_ sender: Any?) {
+        if dismissGhost() { return }
+        super.cancelOperation(sender)
     }
 
     // MARK: FR-EDIT-48 ⑤ —— 菜单入口（与 ⌘L 共用）
