@@ -319,6 +319,27 @@ export const DICT = {
   },
   'appearance.nebula': { 'zh-Hans': '星云皮肤', en: 'Nebula skin' },
   'appearance.warning': { 'zh-Hans': '外观偏好读不出来（按缺省走）', en: 'Appearance preference unreadable (using defaults)' },
+  // 编辑器字体（FR-EDIT-26 字体面）：三档结果**分开说** —— 「系统等宽」「挑的族生效了」
+  // 「这台机器上没有这个族、已回落」混成一句的话，用户会一直以为自己选对了。
+  'appearance.font.family': { 'zh-Hans': '编辑器字体', en: 'Editor font' },
+  'appearance.font.placeholder': {
+    'zh-Hans': '留空 = 系统等宽（可直接输族名）',
+    en: 'Empty = system monospace (type a family name)',
+  },
+  'appearance.font.apply': { 'zh-Hans': '应用', en: 'Apply' },
+  'appearance.font.size': { 'zh-Hans': '字号', en: 'Size' },
+  'appearance.font.system': {
+    'zh-Hans': '当前使用：系统等宽 · {n} pt',
+    en: 'Using system monospace · {n} pt',
+  },
+  'appearance.font.resolved': {
+    'zh-Hans': '当前使用：{family} · {n} pt',
+    en: 'Using {family} · {n} pt',
+  },
+  'appearance.font.missing': {
+    'zh-Hans': '这台机器上没有「{family}」，已回落系统等宽（装好后点「应用」即生效）',
+    en: 'No "{family}" on this machine — fell back to system monospace (click Apply once it is installed)',
+  },
   'shell.commandHint': { 'zh-Hans': 'Ctrl+K 打开命令面板', en: 'Ctrl+K opens the command palette' },
   'shell.panel.expand': { 'zh-Hans': '展开底部面板', en: 'Expand bottom panel' },
   'shell.panel.toggle': { 'zh-Hans': '面板', en: 'Panel' },

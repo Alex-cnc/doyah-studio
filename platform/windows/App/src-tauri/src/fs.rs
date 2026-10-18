@@ -1224,12 +1224,22 @@ pub fn read_appearance() -> (doyah_studio_db::Appearance, Option<String>) {
                 let mode = value.get("mode").and_then(|v| v.as_str()).map(str::to_string);
                 let scheme = value.get("scheme").and_then(|v| v.as_str()).map(str::to_string);
                 let nebula = value.get("nebulaSkin").and_then(|v| v.as_bool());
+                // 字体面（同一份文件、两条正交轴）：族名空/null ⇒ 系统等宽，字号越界夹取
+                let family = value
+                    .get("editorFamily")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
+                let size = value
+                    .get("editorSizePt")
+                    .and_then(|v| v.as_u64())
+                    .map(|n| u32::try_from(n).unwrap_or(u32::MAX));
                 (
                     doyah_studio_db::Appearance::resolve(
                         mode.as_deref(),
                         scheme.as_deref(),
                         nebula,
-                    ),
+                    )
+                    .with_editor_font(family.as_deref(), size),
                     None,
                 )
             }
@@ -1253,11 +1263,13 @@ pub fn write_appearance(appearance: &doyah_studio_db::Appearance) -> Result<(), 
             failure(format!("建配置目录失败：{e}（{}）", parent.display()), "确认该目录可写。")
         })?;
     }
-    // 落盘用**契约键名**（mode / scheme / nebulaSkin），与读回来时一一对应
+    // 落盘用**契约键名**（mode / scheme / nebulaSkin / editorFamily / editorSizePt），与读回来时一一对应
     let payload = serde_json::json!({
         "mode": appearance.mode.raw(),
         "scheme": appearance.scheme.raw(),
         "nebulaSkin": appearance.nebula_skin,
+        "editorFamily": appearance.editor_family,
+        "editorSizePt": appearance.editor_size_pt,
     });
     let text = serde_json::to_string_pretty(&payload).map_err(|e| {
         failure(format!("外观偏好序列化失败：{e}"), "这属实现缺陷：请保留现场并报告。")
@@ -1289,11 +1301,36 @@ mod appearance_tests {
             "mode": fresh.mode.raw(),
             "scheme": fresh.scheme.raw(),
             "nebulaSkin": fresh.nebula_skin,
+            "editorFamily": fresh.editor_family,
+            "editorSizePt": fresh.editor_size_pt,
         });
         let text = serde_json::to_string(&payload).unwrap();
         assert!(text.contains("\"mode\":\"followSystem\""), "{text}");
         assert!(text.contains("\"scheme\":\"stardust\""), "{text}");
         assert!(text.contains("\"nebulaSkin\":true"), "{text}");
+        // 字体面两个键同在这份文件里：缺省 = null（系统等宽）+ 13
+        assert!(text.contains("\"editorFamily\":null"), "{text}");
+        assert!(text.contains("\"editorSizePt\":13"), "{text}");
+    }
+
+    /// 读回来的三条脏值路径（手改文件 / 版本降级 / 空串）都不该让界面起不来。
+    #[test]
+    fn appearance_font_keys_survive_missing_and_dirty_values() {
+        // 缺项 ⇒ 缺省字体
+        let missing = doyah_studio_db::Appearance::resolve(None, None, None)
+            .with_editor_font(None, None);
+        assert_eq!(missing.editor_family, None);
+        assert_eq!(missing.editor_size_pt, 13);
+        // 空串族名 ⇒ 系统等宽（**不是**一个叫空串的族）
+        let blank = doyah_studio_db::Appearance::resolve(None, None, None)
+            .with_editor_font(Some("  "), Some(0));
+        assert_eq!(blank.editor_family, None);
+        assert_eq!(blank.editor_size_pt, 9, "字号越界夹到下限");
+        // 脏族名 ⇒ 未选；字号过大 ⇒ 夹取
+        let dirty = doyah_studio_db::Appearance::resolve(None, None, None)
+            .with_editor_font(Some("Consolas}"), Some(400));
+        assert_eq!(dirty.editor_family, None);
+        assert_eq!(dirty.editor_size_pt, 20);
     }
 }
 

@@ -7,27 +7,11 @@
 //     （`:root[data-theme='dark']` / `:root[data-theme-scheme='…']`），
 //     贴一次属性，全树自动换色 —— 这也保证"编辑面底色与字色**只走主题令牌**"。
 
-/** 落盘偏好（与 Rust 侧 `Appearance` 同形）。 */
-export interface Appearance {
-  mode: 'followSystem' | 'alwaysDark' | 'alwaysLight'
-  scheme: 'techBlue' | 'beanGreen' | 'roseGold' | 'stardust'
-  /** 星云皮肤开关；**缺省开** */
-  nebulaSkin: boolean
-}
+// 类型**只有一份**，在 IPC 面（`src/ipc.ts`）：这里原来抄了一份同形声明，加了字体字段之后
+// 立刻分叉（tsc 当场报「DomAppearance 缺 editorFamilyCss」）—— 抄写型重复迟早漂，改成再导出。
+export type { Appearance, AppearancePayload, DomAppearance } from '../ipc'
 
-/** Rust 算好的 DOM 取值（`dataTheme` 为 `null` = **不设那个属性**）。 */
-export interface DomAppearance {
-  dataTheme: 'dark' | 'light' | null
-  dataScheme: string
-  nebula: boolean
-  isDark: boolean
-}
-
-export interface AppearancePayload {
-  appearance: Appearance
-  dom: DomAppearance
-  warning?: string | null
-}
+import type { Appearance, DomAppearance } from '../ipc'
 
 /** 系统当前是不是深色（跟随系统那一档要用）。 */
 export function systemIsDark(): boolean {
@@ -60,7 +44,50 @@ export function applyAppearance(dom: DomAppearance, root: HTMLElement | null = n
   }
   // 深浅也写成属性，方便组件按需取（**不用它换色** —— 换色一律走令牌）
   dataset.themeDark = dom.isDark ? 'true' : 'false'
+  // 字体面（FR-EDIT-26）：编辑器那两层（高亮层 + textarea）读的就是这两个自定义属性，
+  // **整条 CSS 由领域层算好**（族名清洗、等宽回落栈都在 Rust 侧），这里只负责贴上去。
+  // 贴到根元素而不是组件上：高亮层与 textarea 是**两个**节点，贴一次两边同时变，
+  // 不会出现"换了字号、字与光标错位"那种经典坑。
+  applyEditorFontVars(dom, target)
 }
+
+/**
+ * 贴字体自定义属性（单独一个函数：`applyAppearance` 与「只改字体不重算主题」两条路都用它）。
+ *
+ * `target` 上没有 `style`（本仓 vitest 的假根元素）时**静默跳过** —— 不让判据为了一个
+ * DOM 细节去假造一整个 `style` 对象；真浏览器里 `style` 一定在。
+ */
+export function applyEditorFontVars(
+  dom: Pick<DomAppearance, 'editorFamilyCss' | 'editorSizeCss'>,
+  target: HTMLElement | null = null,
+): void {
+  const node = target ?? (typeof document === 'undefined' ? null : document.documentElement)
+  const style = node?.style
+  if (!style || typeof style.setProperty !== 'function') return
+  style.setProperty('--ds-editor-font-family', dom.editorFamilyCss)
+  style.setProperty('--ds-editor-font-size', dom.editorSizeCss)
+}
+
+/**
+ * 常见的**等宽**族（下拉候选；用户也能手输）。
+ *
+ * 放候选里不是"我们认为这些一定装了" —— 「装没装」由 `editorFont.ts` 实测字宽判，
+ * 判出没装就如实提示并回落。这里只解决"用户不知道该输什么名字"。
+ */
+export const FONT_CHOICES: string[] = [
+  'Cascadia Code',
+  'Cascadia Mono',
+  'Consolas',
+  'Courier New',
+  'JetBrains Mono',
+  'Fira Code',
+  'Source Code Pro',
+  '更纱黑体 SC',
+  'Noto Sans Mono CJK SC',
+]
+
+/** 字号档位（与领域层 9~20 的夹取范围同一口径）。 */
+export const FONT_SIZE_CHOICES: number[] = Array.from({ length: 12 }, (_, i) => 9 + i)
 
 /** 配色轴的中文名（界面下拉用；技术取值不进语言表，这里只是显示名）。 */
 /**

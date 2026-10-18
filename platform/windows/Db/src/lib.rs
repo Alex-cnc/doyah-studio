@@ -19,6 +19,7 @@ pub mod config;
 pub mod cursor;
 pub mod db_type;
 pub mod ddl;
+pub mod editor_font;
 pub mod file_ops;
 pub mod foreign_key;
 pub mod format;
@@ -50,6 +51,7 @@ pub mod writeback;
 pub use appearance::{
     Appearance, AppearanceMode, ColorScheme, DomAppearance,
 };
+pub use editor_font::EditorFont;
 pub use agent::{
     classify as classify_sql, decide as decide_agent_action, redact as redact_credentials,
     risk_points, wrap_untrusted, Approval, ApprovalError, ApprovalState, AuditEntry, AuditOutcome,

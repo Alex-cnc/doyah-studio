@@ -1525,18 +1525,29 @@ fn appearance_get(system_is_dark: Option<bool>) -> serde_json::Value {
 }
 
 /// 改外观偏好：**部分更新**（只传要改的那几项，其余保持）。
+///
+/// 字体面也走同一条命令（同一份偏好文件、两条正交轴）：
+/// * `editorFamily` **不传** = 不改；传空串 = **回到系统等宽**（清掉用户挑的族）；
+/// * `editorSizePt` **不传** = 不改；传越界值 = 夹取到 9~20（不报错，与领域层同口径）。
 #[tauri::command]
 fn appearance_set(
     mode: Option<String>,
     scheme: Option<String>,
     nebula_skin: Option<bool>,
+    editor_family: Option<String>,
+    editor_size_pt: Option<u32>,
     system_is_dark: Option<bool>,
 ) -> Result<serde_json::Value, DbFailure> {
     let (current, _) = fs::read_appearance();
+    let family = editor_family.or_else(|| current.editor_family.clone());
     let next = doyah_studio_db::Appearance::resolve(
         Some(mode.as_deref().unwrap_or(current.mode.raw())),
         Some(scheme.as_deref().unwrap_or(current.scheme.raw())),
         Some(nebula_skin.unwrap_or(current.nebula_skin)),
+    )
+    .with_editor_font(
+        family.as_deref(),
+        editor_size_pt.or(Some(current.editor_size_pt)),
     );
     fs::write_appearance(&next)?;
     Ok(serde_json::json!({

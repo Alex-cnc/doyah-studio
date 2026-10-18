@@ -3989,8 +3989,10 @@ async function probe() {
 .db__editor textarea {
   margin: 0;
   padding: var(--ds-spacing-s);
-  font-family: var(--ds-font-stack);
-  font-size: var(--ds-font-caption-size);
+  /* 字体族与字号**只认这两个自定义属性**（FR-EDIT-26）：由外壳把偏好贴到根元素上，
+     两层一起变。缺省值 = 令牌层的等宽栈 + 13px（与 Rust 侧 `EditorFont::default()` 一致）。 */
+  font-family: var(--ds-editor-font-family, var(--ds-font-stack-mono));
+  font-size: var(--ds-editor-font-size, 13px);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;

@@ -19,6 +19,8 @@
 //! 深浅轴（跟随系统 / 总深 / 总浅）× 配色轴（科技蓝 / 豆芽绿 / 玫瑰金 / 星空紫）。
 //! 组合起来是 3 × 4 = 12 种外观，但**只有四条规则**（上面那四条），不是一个 12 项的表。
 
+use crate::editor_font::EditorFont;
+
 /// 深浅轴（三态）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -119,21 +121,31 @@ pub struct Appearance {
     pub scheme: ColorScheme,
     /// 落盘键 `ui.nebulaSkin` —— **缺省开**（缺省值在 `Default` 实现里）
     pub nebula_skin: bool,
+    /// 落盘键 `editor.fontFamily` —— `None` = **系统等宽**（与 `EditorFont` 同形）
+    pub editor_family: Option<String>,
+    /// 落盘键 `editor.fontSize` —— 已夹取到 9~20 pt
+    pub editor_size_pt: u32,
 }
 
 impl Default for Appearance {
     fn default() -> Self {
+        let font = EditorFont::default();
         Self {
             mode: AppearanceMode::FollowSystem,
             scheme: ColorScheme::default_scheme(),
             // **缺省开**：新装用户就该看到这层质感（契约原话）
             nebula_skin: true,
+            editor_family: font.family,
+            editor_size_pt: font.size_pt,
         }
     }
 }
 
 impl Appearance {
     /// 从**可能缺项、可能有未知值**的落盘数据还原（缺项用缺省，未知值按规则回落）。
+    ///
+    /// 字体偏好**不在这里**（主题与字体是两条正交的轴）：缺省字体由 `Default` 给，
+    /// 要改就接 [`Appearance::with_editor_font`]。
     pub fn resolve(
         mode_raw: Option<&str>,
         scheme_raw: Option<&str>,
@@ -144,7 +156,22 @@ impl Appearance {
             scheme: ColorScheme::resolve(scheme_raw),
             // `None`（从未设过）⇒ **缺省开**；显式 `false` 才是关
             nebula_skin: nebula_skin_raw.unwrap_or(true),
+            // 字体缺省：系统等宽 + 13px（`EditorFont::default`）
+            ..Default::default()
         }
+    }
+
+    /// 换上字体偏好（族名走 `EditorFont::resolve`：空 = 未选、脏值 = 未选、字号夹取）。
+    pub fn with_editor_font(mut self, family_raw: Option<&str>, size_raw: Option<u32>) -> Self {
+        let font = EditorFont::resolve(family_raw, size_raw);
+        self.editor_family = font.family;
+        self.editor_size_pt = font.size_pt;
+        self
+    }
+
+    /// 当前的字体偏好（界面显示「当前使用」要用）。
+    pub fn editor_font(&self) -> EditorFont {
+        EditorFont::resolve(self.editor_family.as_deref(), Some(self.editor_size_pt))
     }
 
     /// 皮肤现在**生不生效**（三个条件缺一不可）。
@@ -156,11 +183,14 @@ impl Appearance {
 
     /// 给界面的一整套 `data-*` 取值（**只在这里算**，界面照着设）。
     pub fn to_dom(&self, system_is_dark: bool) -> DomAppearance {
+        let font = self.editor_font();
         DomAppearance {
             data_theme: self.mode.data_theme(),
             data_scheme: self.scheme.raw(),
             nebula: self.nebula_active(system_is_dark),
             is_dark: self.mode.resolves_to_dark(system_is_dark),
+            editor_family_css: font.css_family(),
+            editor_size_css: font.css_size(),
         }
     }
 }
@@ -173,6 +203,10 @@ pub struct DomAppearance {
     pub data_scheme: &'static str,
     pub nebula: bool,
     pub is_dark: bool,
+    /// 落到 `--ds-editor-font-family` 的值（**算好的整条 CSS**，界面不做拼接）
+    pub editor_family_css: String,
+    /// 落到 `--ds-editor-font-size` 的值（如 `13px`）
+    pub editor_size_css: String,
 }
 
 /// 落盘键（**键名是契约**：改一个字，老用户的选择当场失效）。
@@ -180,6 +214,9 @@ pub mod keys {
     pub const MODE: &str = "appearance.mode";
     pub const SCHEME: &str = "appearance.scheme";
     pub const NEBULA_SKIN: &str = "ui.nebulaSkin";
+    /// 字体面的两个键在 `editor_font::keys` 里（同一份文件、同一套契约）；
+    /// 这里再指一遍，读代码的人不必猜字体偏好存在哪。
+    pub use crate::editor_font::keys as editor;
 }
 
 #[cfg(test)]
@@ -279,11 +316,38 @@ mod tests {
         assert_eq!(keys::MODE, "appearance.mode");
         assert_eq!(keys::SCHEME, "appearance.scheme");
         assert_eq!(keys::NEBULA_SKIN, "ui.nebulaSkin");
+        assert_eq!(keys::editor::FAMILY, "editor.fontFamily");
+        assert_eq!(keys::editor::SIZE, "editor.fontSize");
         let appearance = Appearance::resolve(Some("alwaysLight"), Some("bean-green"), Some(true));
         let json = serde_json::to_string(&appearance).unwrap();
         assert!(json.contains("\"nebulaSkin\""), "{json}");
         assert!(json.contains("\"alwaysLight\""), "{json}");
         let back: Appearance = serde_json::from_str(&json).unwrap();
         assert_eq!(back, appearance);
+    }
+
+    /// 字体面与主题面**正交**：改主题不许把用户挑的字体打回缺省，反之亦然。
+    #[test]
+    fn editor_font_survives_theme_changes_and_is_carried_into_the_dom_payload() {
+        let font_picked = Appearance::default()
+            .with_editor_font(Some("JetBrains Mono"), Some(15));
+        // 换深浅 / 换配色 / 关皮肤 —— 字体都还在（`resolve` 只重建主题那三格）
+        let themed = Appearance::resolve(Some("alwaysDark"), Some("tech-blue"), Some(false))
+            .with_editor_font(font_picked.editor_family.as_deref(), Some(font_picked.editor_size_pt));
+        assert_eq!(themed.editor_family.as_deref(), Some("JetBrains Mono"));
+        assert_eq!(themed.editor_size_pt, 15);
+        // DOM 回包把**整条 CSS** 算好给界面（界面不拼字符串）
+        let dom = themed.to_dom(true);
+        assert_eq!(dom.editor_family_css, "\"JetBrains Mono\", var(--ds-font-stack-mono)");
+        assert_eq!(dom.editor_size_css, "15px");
+        // 清空族名（界面的「回到系统等宽」）⇒ 回落到等宽栈，字号保持不变
+        let cleared = themed.with_editor_font(Some(""), Some(15));
+        assert_eq!(cleared.editor_family, None);
+        assert_eq!(cleared.editor_size_pt, 15);
+        assert_eq!(cleared.to_dom(true).editor_family_css, "var(--ds-font-stack-mono)");
+        // 脏值（能闭合 CSS 的字符）也按「未选」处理，不会印进样式
+        let dirty = Appearance::default().with_editor_font(Some("Foo; color: red"), Some(99));
+        assert_eq!(dirty.editor_family, None);
+        assert_eq!(dirty.editor_size_pt, 20, "字号越界夹到上限");
     }
 }

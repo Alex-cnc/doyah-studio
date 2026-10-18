@@ -1512,6 +1512,10 @@ export interface Appearance {
   scheme: 'techBlue' | 'beanGreen' | 'roseGold' | 'stardust'
   /** 星云皮肤开关；**缺省开** */
   nebulaSkin: boolean
+  /** 编辑器等宽字体族；`null` = **系统等宽**（`editor.fontFamily`） */
+  editorFamily: string | null
+  /** 编辑器字号（pt，9~20，已由领域层夹取；`editor.fontSize`） */
+  editorSizePt: number
 }
 
 /** Rust 算好的 DOM 取值（`dataTheme` 为 `null` = 不设那个属性）。 */
@@ -1520,6 +1524,10 @@ export interface DomAppearance {
   dataScheme: string
   nebula: boolean
   isDark: boolean
+  /** 落到 `--ds-editor-font-family` 的整条 CSS（Rust 拼好，前端不拼） */
+  editorFamilyCss: string
+  /** 落到 `--ds-editor-font-size` 的值（如 `13px`） */
+  editorSizeCss: string
 }
 
 export interface AppearancePayload {
@@ -1528,27 +1536,85 @@ export interface AppearancePayload {
   warning?: string | null
 }
 
+/** 缺省外观（浏览器旁路与「读失败」两条路共用的**一份**缺省值）。 */
+export const DEFAULT_APPEARANCE: Appearance = {
+  mode: 'followSystem',
+  scheme: 'stardust',
+  nebulaSkin: true,
+  editorFamily: null,
+  editorSizePt: 13,
+}
+
+/** 缺省字体面落 DOM 的取值（与 Rust 侧 `EditorFont::default()` 逐字一致）。 */
+export const DEFAULT_APPEARANCE_DOM: DomAppearance = {
+  dataTheme: null,
+  dataScheme: 'stardust',
+  nebula: false,
+  isDark: false,
+  editorFamilyCss: 'var(--ds-font-stack-mono)',
+  editorSizeCss: '13px',
+}
+
 /** 读外观偏好（`systemIsDark` 由前端给 —— 本命令只算"最终该长什么样"）。 */
 export function appearanceGet(systemIsDark: boolean): Promise<AppearancePayload> {
   return call(COMMANDS.appearanceGet, { systemIsDark }, () => ({
-    appearance: { mode: 'followSystem', scheme: 'stardust', nebulaSkin: true },
-    dom: { dataTheme: null, dataScheme: 'stardust', nebula: systemIsDark, isDark: systemIsDark },
+    appearance: { ...DEFAULT_APPEARANCE },
+    dom: { ...DEFAULT_APPEARANCE_DOM, nebula: systemIsDark, isDark: systemIsDark },
     warning: null,
   }))
 }
 
 /** 改外观偏好（**部分更新**：只传要改的那几项）。 */
 export function appearanceSet(
-  patch: { mode?: Appearance['mode']; scheme?: Appearance['scheme']; nebulaSkin?: boolean },
+  patch: {
+    mode?: Appearance['mode']
+    scheme?: Appearance['scheme']
+    nebulaSkin?: boolean
+    /** 传空串 = **回到系统等宽**（清掉用户挑的族）；不传 = 不改 */
+    editorFamily?: string
+    editorSizePt?: number
+  },
   systemIsDark: boolean,
 ): Promise<{ appearance: Appearance; dom: DomAppearance }> {
   return call(
     COMMANDS.appearanceSet,
-    { mode: patch.mode, scheme: patch.scheme, nebulaSkin: patch.nebulaSkin, systemIsDark },
-    () => ({
-      appearance: { mode: patch.mode ?? 'followSystem', scheme: patch.scheme ?? 'stardust', nebulaSkin: patch.nebulaSkin ?? true },
-      dom: { dataTheme: null, dataScheme: patch.scheme ?? 'stardust', nebula: systemIsDark, isDark: systemIsDark },
-    }),
+    {
+      mode: patch.mode,
+      scheme: patch.scheme,
+      nebulaSkin: patch.nebulaSkin,
+      editorFamily: patch.editorFamily,
+      editorSizePt: patch.editorSizePt,
+      systemIsDark,
+    },
+    () => {
+      // 浏览器旁路：够界面自测（**不落盘**，刷新即回缺省）
+      const family =
+        patch.editorFamily === undefined
+          ? DEFAULT_APPEARANCE.editorFamily
+          : patch.editorFamily.trim() === ''
+            ? null
+            : patch.editorFamily
+      const sizePt = Math.min(20, Math.max(9, patch.editorSizePt ?? DEFAULT_APPEARANCE.editorSizePt))
+      return {
+        appearance: {
+          mode: patch.mode ?? DEFAULT_APPEARANCE.mode,
+          scheme: patch.scheme ?? DEFAULT_APPEARANCE.scheme,
+          nebulaSkin: patch.nebulaSkin ?? DEFAULT_APPEARANCE.nebulaSkin,
+          editorFamily: family,
+          editorSizePt: sizePt,
+        },
+        dom: {
+          dataTheme: null,
+          dataScheme: patch.scheme ?? DEFAULT_APPEARANCE.scheme,
+          nebula: systemIsDark,
+          isDark: systemIsDark,
+          editorFamilyCss: family
+            ? `"${family}", var(--ds-font-stack-mono)`
+            : 'var(--ds-font-stack-mono)',
+          editorSizeCss: `${sizePt}px`,
+        },
+      }
+    },
   )
 }
 // ── 命令面板（alpha 2.9）────────────────────────────────────────────────────────────

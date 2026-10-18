@@ -16,6 +16,7 @@ import { setLanguage, t as translate, type UiLanguage } from './i18n'
 import SideBar from './shell/SideBar.vue'
 import StatusBar from './shell/StatusBar.vue'
 import {
+  DEFAULT_APPEARANCE_DOM,
   appearanceGet,
   appearanceSet,
   commandHistoryClear,
@@ -25,7 +26,16 @@ import {
   type Appearance as AppearancePref,
   type DomAppearance,
 } from './ipc'
-import { applyAppearance, MODE_LABELS, SCHEME_LABELS, systemIsDark } from './shell/appearance'
+import {
+  applyAppearance,
+  applyEditorFontVars,
+  FONT_CHOICES,
+  FONT_SIZE_CHOICES,
+  MODE_LABELS,
+  SCHEME_LABELS,
+  systemIsDark,
+} from './shell/appearance'
+import { detectFontStatus, type FontStatus } from './shell/editorFont'
 // **视图一律查表，不直连 import**（契约 §3.52-③ 宿主挂点 / §8.5.8）：
 // 核心视图（工作区 / 数据库）与插件视图（笔记 / 回放）登记在**同一张表**里，
 // 这里只按 id 取组件 —— 插件被拔掉时"查不到"，界面**什么都不画、不报错**。
@@ -228,8 +238,8 @@ const uiLanguage = ref<UiLanguage>('zh-Hans')
 watch(uiLanguage, (value) => setLanguage(value), { immediate: true })
 
 /** 外壳文案帮手（语言由外壳自己持有）。 */
-function tr(key: Parameters<typeof translate>[0]): string {
-  return translate(key, uiLanguage.value)
+function tr(key: Parameters<typeof translate>[0], vars?: Record<string, string | number>): string {
+  return translate(key, uiLanguage.value, vars)
 }
 
 const panelOpen = ref(true)
@@ -271,7 +281,12 @@ const darkQuery =
 const systemDark = ref(systemIsDark())
 
 /** 改了任一项：写回并重贴（**部分更新**，只传改动的那项） */
-async function changeAppearance(patch: Partial<Pick<AppearancePref, 'mode' | 'scheme' | 'nebulaSkin'>>) {
+async function changeAppearance(
+  patch: Partial<Pick<AppearancePref, 'mode' | 'scheme' | 'nebulaSkin' | 'editorSizePt'>> & {
+    /** 空串 = 回到系统等宽（清掉挑的族）；不传 = 不改 */
+    editorFamily?: string
+  },
+) {
   if (!appearance.value) return
   try {
     const payload = await appearanceSet(patch, systemDark.value)
@@ -281,6 +296,36 @@ async function changeAppearance(patch: Partial<Pick<AppearancePref, 'mode' | 'sc
     // 存不下去就**不假装配上了**：界面先不动，下次启动会回到上次存下的那份
   }
 }
+
+// ── 编辑器字体（FR-EDIT-26 的字体面）──────────────────────────────────────────────
+// 分工：族名清洗 / 等宽回落 / 字号夹取在 Rust（`Db/src/editor_font.rs`）；
+// 「这台机器上到底有没有这个族」只能在前端量（`shell/editorFont.ts`）；
+// 这里只做三件事：收集用户输入、调命令、把**当前实际在用的**那句说出来。
+const fontDraft = ref('')
+
+/** 未选 = 系统等宽；选了且量到 = 命中；选了没量到 = 没装（如实提示，不静默装作成功）。 */
+const fontStatusValue = computed<FontStatus>(() => detectFontStatus(appearance.value?.editorFamily ?? null))
+
+const fontStatusText = computed(() => {
+  const current = appearance.value
+  if (!current) return ''
+  const size = current.editorSizePt
+  if (fontStatusValue.value === 'system') return tr('appearance.font.system', { n: size })
+  const family = current.editorFamily ?? ''
+  return fontStatusValue.value === 'resolved'
+    ? tr('appearance.font.resolved', { family, n: size })
+    : tr('appearance.font.missing', { family })
+})
+
+/** 点「应用」才落盘：一个字一个字落盘会把偏好文件写成半截族名（还会反复重排编辑器）。 */
+async function applyFontFamily() {
+  await changeAppearance({ editorFamily: fontDraft.value.trim() })
+}
+
+/** 偏好回来了就把输入框对齐（换语言 / 换机器后显示的是**盘上那份**，不是上次的草稿）。 */
+watch(appearance, (next) => {
+  if (next) fontDraft.value = next.editorFamily ?? ''
+})
 
 /** 系统深浅变了：重算一次（不改偏好，只重贴） */
 async function refreshAppearance() {
@@ -328,12 +373,7 @@ void loadPlugins().then(() => installPlugins())
     appearanceWarning.value = payload.warning ?? ''
     applyAppearance(payload.dom)
   } catch {
-    applyAppearance({
-      dataTheme: null,
-      dataScheme: 'stardust',
-      nebula: systemDark.value,
-      isDark: systemDark.value,
-    })
+    applyAppearance({ ...DEFAULT_APPEARANCE_DOM, nebula: systemDark.value, isDark: systemDark.value })
   }
   darkQuery?.addEventListener('change', onSystemChange)
   window.addEventListener('keydown', onGlobalKeydown)
@@ -411,6 +451,43 @@ function onSelect(id: ActivityBarItemId) {
       <span v-if="appearanceWarning" class="appearance__warn" :title="appearanceWarning">
         {{ tr('appearance.warning') }}
       </span>
+      <!-- 编辑器字体（FR-EDIT-26 字体面）：族名可挑可手输、字号 9~20 一档一档来。
+           挑完先**说清当前实际在用的是什么**（没装就如实说「已回落」），再给一行真字体预览 ——
+           只写「已应用」而不显示实际字形，等于让用户自己猜。 -->
+      <label class="appearance__field">
+        <span>{{ tr('appearance.font.family') }}</span>
+        <input
+          v-model="fontDraft"
+          class="appearance__input"
+          list="ds-font-choices"
+          data-testid="font-family-input"
+          :placeholder="tr('appearance.font.placeholder')"
+          @keydown.enter.prevent="applyFontFamily"
+        />
+        <datalist id="ds-font-choices">
+          <option v-for="name in FONT_CHOICES" :key="name" :value="name" />
+        </datalist>
+        <button type="button" class="appearance__apply" data-testid="font-apply" @click="applyFontFamily">
+          {{ tr('appearance.font.apply') }}
+        </button>
+      </label>
+      <label class="appearance__field">
+        <span>{{ tr('appearance.font.size') }}</span>
+        <select
+          :value="appearance.editorSizePt"
+          data-testid="font-size"
+          @change="changeAppearance({ editorSizePt: Number(($event.target as HTMLSelectElement).value) })"
+        >
+          <option v-for="n in FONT_SIZE_CHOICES" :key="n" :value="n">{{ n }}</option>
+        </select>
+      </label>
+      <span
+        class="appearance__hint"
+        :class="{ 'appearance__hint--warn': fontStatusValue === 'missing' }"
+        data-testid="font-status"
+        >{{ fontStatusText }}</span
+      >
+      <div class="appearance__font-preview" aria-hidden="true">SELECT id, name FROM users WHERE id = 1;</div>
     </div>
     <div class="shell__body">
       <SideBar
@@ -584,6 +661,65 @@ function onSelect(id: ActivityBarItemId) {
 
 .appearance__warn {
   color: var(--ds-color-status-warning);
+}
+
+/* 字体面（FR-EDIT-26）：输入框 / 应用键 / 一句「当前实际在使用」 / 一行真字体预览。
+   预览**故意**吃 `--ds-editor-font-*` 两个自定义属性 —— 它显示的就是编辑器此刻的字形，
+   换成静态的等宽样张就成了"假样张"（用户看不出自己挑的字体到底生效了没有）。 */
+.appearance__input {
+  width: 11rem;
+  height: var(--ds-metric-control-height);
+  padding: 0 var(--ds-spacing-xs);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: inherit;
+}
+
+.appearance__input:focus-visible,
+.appearance__apply:focus-visible {
+  outline: var(--ds-metric-hairline) solid var(--ds-color-accent-accent);
+  outline-offset: 1px;
+}
+
+.appearance__apply {
+  height: var(--ds-metric-control-height);
+  padding: 0 var(--ds-spacing-s);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  cursor: pointer;
+}
+
+.appearance__apply:hover {
+  border-color: var(--ds-color-accent-accent);
+}
+
+.appearance__hint {
+  color: var(--ds-color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 「没装」那档要更重：它意味着用户挑的族**没生效**，与「已生效」不能长一个样 */
+.appearance__hint--warn {
+  color: var(--ds-color-status-warning);
+}
+
+.appearance__font-preview {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  color: var(--ds-color-text-secondary);
+  background: var(--ds-color-surface-content);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-editor-font-family, var(--ds-font-stack-mono));
+  font-size: var(--ds-editor-font-size, 13px);
 }
 
 /* 命令面板的入口提示与回执（**做不到的事要说出来**，不静默） */

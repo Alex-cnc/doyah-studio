@@ -18,6 +18,12 @@
   --ds-hairline: var(--ds-color-hairline-light);
   --ds-overlay-selection: rgba(0, 0, 0, var(--ds-overlay-selection-light-alpha));
   --ds-overlay-zebra: rgba(0, 0, 0, var(--ds-overlay-zebra-light-alpha));
+  /* 编辑器字体（FR-EDIT-26）：这里只给**缺省值**，取值全来自令牌。
+     真正生效的值由外壳把偏好贴成根元素上的内联自定义属性（`shell/appearance.ts`），
+     贴不到时（首帧 / 偏好读失败）就落在这两个缺省上 —— 缺省 = 令牌层等宽栈 + 正文字号，
+     与 Rust 侧 `EditorFont::default()` 的 13 同步（改一处要改两处，所以两边注释互相点名）。 */
+  --ds-editor-font-family: var(--ds-font-stack-mono);
+  --ds-editor-font-size: var(--ds-font-body-size);
 }
 
 :root[data-theme='dark'] {
