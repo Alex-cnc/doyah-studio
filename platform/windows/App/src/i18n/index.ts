@@ -800,6 +800,28 @@ export const DICT = {
   'saveQuery.delete': { 'zh-Hans': '删除', en: 'Delete' },
   'saveQuery.deleteTip': { 'zh-Hans': '删掉这条已保存查询（不动数据库里的任何数据）', en: 'Delete this saved query (the database is not touched)' },
 
+  // 查询自动归档（FR-EDIT-31：执行过的 SQL 按天落盘；同一条只累计次数）
+  'archive.button': { 'zh-Hans': '归档', en: 'Archive' },
+  'archive.listTip': {
+    'zh-Hans': '今天执行过的 SQL（按天落在 DoyahStudio\\queries\\ 下）',
+    en: 'SQL executed today (one file per day under DoyahStudio\\queries\\)',
+  },
+  'archive.empty': { 'zh-Hans': '今天（{day}）还没有归档：执行一条查询就会自动记下来', en: 'Nothing archived for {day} yet — running a query records it automatically' },
+  'archive.untitled': { 'zh-Hans': '未命名页签', en: 'Untitled tab' },
+  'archive.runs': { 'zh-Hans': '执行 {runs} 次', en: 'ran {runs}×' },
+  'archive.elapsed': { 'zh-Hans': '{ms} 毫秒', en: '{ms} ms' },
+  'archive.rows': { 'zh-Hans': '{rows} 行', en: '{rows} rows' },
+  'archive.refill': { 'zh-Hans': '回填', en: 'Refill' },
+  'archive.refillTip': { 'zh-Hans': '把这条 SQL 放回当前页签（替换编辑器内容）', en: 'Put this SQL back into the current tab (replaces the editor content)' },
+  'archive.refilled': { 'zh-Hans': '已回填「{title}」', en: 'Refilled “{title}”' },
+  'archive.saved': { 'zh-Hans': '已归档 · 今天第 {runs} 次执行', en: 'Archived · run {runs} today' },
+  'archive.full': {
+    'zh-Hans': '今天这份归档到上限（512KB）了：这一条没写进去，明天会新起一份',
+    en: 'Today’s archive hit its 512 KB ceiling — this one was not written; a new file starts tomorrow',
+  },
+  'archive.failed': { 'zh-Hans': '归档失败：{reason}（查询结果不受影响）', en: 'Archiving failed: {reason} (the query result is unaffected)' },
+  'archive.file': { 'zh-Hans': '文件：{path} · {bytes} 字节', en: 'File: {path} · {bytes} bytes' },
+
   // 备份（FR-IO-04：封装本机 pg_dump —— 命令行先摊出来，再真跑）
   'backup.title': { 'zh-Hans': '备份数据库', en: 'Back up database' },
   'backup.close': { 'zh-Hans': '关闭', en: 'Close' },

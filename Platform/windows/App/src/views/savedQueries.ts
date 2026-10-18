@@ -53,8 +53,12 @@ export function savedQuerySourceLabel(query: SavedQuery): string {
   return parts.join(' · ')
 }
 
-/** SQL 的一行摘要（列表里给个眼熟的线索；换行折成空格、超长截断）。 */
-export function savedQuerySqlPreview(query: SavedQuery, limit = 80): string {
+/** SQL 的一行摘要（列表里给个眼熟的线索；换行折成空格、超长截断）。
+ *
+ * 泛型而不是只认 `SavedQuery`：归档条目与已保存查询**都要这一份压平口径**，
+ * 两处各写一遍截断逻辑迟早长短不一（文案面就会「同一段 SQL 两个样子」）。
+ */
+export function savedQuerySqlPreview<T extends { sql: string }>(query: T, limit = 80): string {
   const flat = (query.sql ?? '').replace(/\s+/g, ' ').trim()
   if (!flat) return ''
   return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat

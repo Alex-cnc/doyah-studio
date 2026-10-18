@@ -24,6 +24,9 @@ pub mod backup;
 /// 已保存查询的落盘（FR-EDIT-14）：模型与「同名覆盖」判定在领域层
 /// `doyah_studio_db::saved_query`，本模块只管「放哪儿、怎么取」。
 pub mod saved_queries;
+/// 查询自动归档的落盘（FR-EDIT-31）：**条目格式与「同一条 SQL 累计次数」在领域口径**
+/// `App/src/workspace/archive.ts`；本模块只管 `queries/<YYYY-MM-DD>.sql` 的读写与日期键校验。
+pub mod archive;
 /// 底部终端「端到端接线」层（W-C 底部终端 · S-9c）：把 `pty::` 的真字节喂进领域层
 /// 屏幕模型 / 按键编码 / 页签会话，令 `Db/src/terminal*.rs` 那 29 例**由真字节流驱动**。
 /// 只经 `pty::` 接口调用，本模块**不许出现 PTY crate 名**（判据同第五道「PTY 隔离」）。
@@ -63,6 +66,8 @@ pub struct ShellState {
     pub connections: ConnectionStore,
     /// 已保存查询的落盘位置（FR-EDIT-14；与连接配置分两个文件，见 `saved_queries.rs` 头注）。
     pub saved_queries: SavedQueryStore,
+    /// 查询自动归档的落盘根（FR-EDIT-31；`queries/<YYYY-MM-DD>.sql`，见 `archive.rs` 头注）。
+    pub archive: archive::ArchiveStore,
     /// 智能体配置与密钥的落盘位置（FR-AI-01；配置与密钥**分两份文件**，见 `agent_settings.rs` 头注）。
     pub agent_settings: AgentSettingsStore,
     /// **当前连接是不是只读**（FR-CONN-17）：写回与危险判定都要看它。
@@ -594,6 +599,29 @@ fn saved_query_delete(
     }
     state.saved_queries.save(&list, &connections::now_iso8601())?;
     Ok(list)
+}
+
+// ── 查询自动归档（FR-EDIT-31）──────────────────────────────────────────────────────────
+//
+// 两条命令都很薄：**条目格式与「同一条 SQL 累计次数」在领域口径**
+// （`App/src/workspace/archive.ts` 的纯函数 + 单测），本层只管「哪一天、放哪儿」。
+// 为什么方向是这样：界面要显示归档内容，格式就得是界面那一层能读的同一份 —— 若两边各写一遍
+// 渲染，改一处必漏一处（家族里这种「两处格式」最后都变成读不出来的旧文件）。
+
+/// 读一天（`YYYY-MM-DD`）的归档；文件不在 = 空内容。
+#[tauri::command]
+fn archive_read(state: State<'_, ShellState>, date_key: String) -> Result<archive::ArchiveFile, DbFailure> {
+    state.archive.read(&date_key)
+}
+
+/// 写一天（`YYYY-MM-DD`）的归档（整份覆盖），回写入后的身份（路径 + 字节数）。
+#[tauri::command]
+fn archive_write(
+    state: State<'_, ShellState>,
+    date_key: String,
+    content: String,
+) -> Result<archive::ArchiveFile, DbFailure> {
+    state.archive.write(&date_key, &content)
 }
 
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
@@ -2271,6 +2299,7 @@ pub fn run() {
             db: AsyncMutex::new(None),
             connections: ConnectionStore::new(ConnectionStore::default_path()),
             saved_queries: SavedQueryStore::new(SavedQueryStore::default_path()),
+            archive: archive::ArchiveStore::new(archive::ArchiveStore::default_root()),
             agent_settings: AgentSettingsStore::default_store(),
             read_only: std::sync::atomic::AtomicBool::new(false),
         })
@@ -2307,6 +2336,8 @@ pub fn run() {
             saved_queries_list,
             saved_query_save,
             saved_query_delete,
+            archive_read,
+            archive_write,
             agent_settings_get,
             agent_settings_save,
             agent_key_save,

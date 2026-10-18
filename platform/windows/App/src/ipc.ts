@@ -102,6 +102,9 @@ export const COMMANDS = {
   savedQueriesList: 'saved_queries_list',
   savedQuerySave: 'saved_query_save',
   savedQueryDelete: 'saved_query_delete',
+  // 查询自动归档（FR-EDIT-31：执行过的 SQL 按天落盘；格式与合并规则在 `workspace/archive.ts`）
+  archiveRead: 'archive_read',
+  archiveWrite: 'archive_write',
   // 智能体设置（FR-AI-01：总开关 / 端点 / 模型 / 配额；密钥单独存，永不回显）
   agentSettingsGet: 'agent_settings_get',
   agentSettingsSave: 'agent_settings_save',
@@ -618,6 +621,46 @@ export function savedQueryDelete(id: string): Promise<SavedQuery[]> {
       return [...bypassSavedQueries]
     },
   )
+}
+
+// ── 查询自动归档（FR-EDIT-31）──────────────────────────────────────────────────────────
+//
+// 外壳只管「哪一天、放哪儿」（`App/src-tauri/src/archive.rs`）：**一天一份文件**，
+// 内容是什么形状由 `workspace/archive.ts` 决定 —— 界面读回来的就是它自己写进去的那份。
+
+/** 一天归档文件的内容与身份。 */
+export interface ArchiveFile {
+  /** 日期键 `YYYY-MM-DD`。 */
+  dateKey: string
+  /** 实际路径（界面要能照着去找）。 */
+  path: string
+  /** 文件内容（不存在时为空串）。 */
+  content: string
+  /** 内容字节数（UTF-8）。 */
+  bytes: number
+}
+
+/** 浏览器旁路的归档（内存里存，刷新即丢 —— 旁路本来就不落盘）。 */
+const bypassArchive = new Map<string, string>()
+
+function bypassArchiveFile(dateKey: string, content: string): ArchiveFile {
+  return {
+    dateKey,
+    path: `queries/${dateKey}.sql`,
+    content,
+    bytes: new TextEncoder().encode(content).length,
+  }
+}
+
+export function archiveRead(dateKey: string): Promise<ArchiveFile> {
+  return call(COMMANDS.archiveRead, { dateKey }, () => bypassArchiveFile(dateKey, bypassArchive.get(dateKey) ?? ''))
+}
+
+export function archiveWrite(dateKey: string, content: string): Promise<ArchiveFile> {
+  return call(COMMANDS.archiveWrite, { dateKey, content }, () => {
+    bypassArchive.set(dateKey, content)
+    return bypassArchiveFile(dateKey, content)
+  })
 }
 
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────

@@ -83,6 +83,8 @@ describe('ipc', () => {
       'saved_queries_list',
       'saved_query_save',
       'saved_query_delete',
+      'archive_read',
+      'archive_write',
       'agent_settings_get',
       'agent_settings_save',
       'agent_key_save',

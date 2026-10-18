@@ -20,6 +20,8 @@ import {
   savedQueriesList,
   savedQueryDelete,
   savedQuerySave,
+  archiveRead,
+  archiveWrite,
   dbConnect,
   dbDisconnect,
   dbQuery,
@@ -107,6 +109,13 @@ import {
   savedQueryTimeLabel,
   suggestQueryName,
 } from './savedQueries'
+import {
+  archiveDate,
+  incomingEntry,
+  mergeArchiveEntry,
+  parseArchive,
+  type ArchiveEntry,
+} from '../workspace/archive'
 import { serverMenuActions, type ServerMenuAction } from './serverMenu'
 import {
   PARAM_KINDS,
@@ -1298,6 +1307,117 @@ function toggleSavedQueryMenu(): void {
   if (savedQueryMenuOpen.value) void loadSavedQueries()
 }
 
+// ── 查询自动归档（FR-EDIT-31）────────────────────────────────────────────────────────
+//
+// 需求原文：**执行过的 SQL 自动保存成 `.sql` 文件，按天一个文件**；同一条 SQL 重复执行
+// **只累计执行次数**；条目带连接 / 库 / 首次与最近执行时间 / 耗时 / 影响行数。
+//
+// 分工（与已保存查询同一姿势）：格式 / 解析 / 合并规则在 `workspace/archive.ts`（纯函数 + 单测），
+// 落盘在哪一天哪个文件在 Rust 外壳（`archive.rs`），本组件只做三件事 ——
+// ① 执行成功后把这一条转交归档；② 把文件读回来显示（**显示的与盘上是同一份**）；
+// ③ 把一条回填进编辑器。**失败不归档**：归档记的是「跑成功过的东西」，失败在错误面里说。
+const archiveEntries = ref<ArchiveEntry[]>([])
+const archiveOpen = ref(false)
+/** 今天（本地时区）：归档文件按天分，界面默认看今天这份。 */
+const archiveDay = ref(archiveDate(Date.now()))
+const archivePathLabel = ref('')
+const archiveBytes = ref(0)
+const archiveNote = ref('')
+const archiveError = ref('')
+
+/** 这一次执行的上下文（连接 / 库 / 页签标题：跟「谁在跑」走，不从全局再猜一遍）。 */
+function archiveContext(): { title: string; connectionName: string | null; database: string | null } {
+  return {
+    title: activeQueryTabRecord.value?.title ?? '',
+    connectionName: connectedConnection.value?.name ?? null,
+    database: info.value?.database ?? null,
+  }
+}
+
+/**
+ * 把**这一次真的跑成功**的语句并进今天的归档。
+ *
+ * 口径：
+ * ① 逐条合并（同一份 content 上依次 merge）—— 一次多段执行里若有两句相同，也各自累计；
+ * ② 文件满了（512KB）⇒ 只写已并进去的那部分，并**如实说**「今天这份满了」；
+ * ③ 落盘失败 ⇒ 只提示，不把「执行成功」改成失败（那是两件事，别混成一件）。
+ */
+async function recordArchive(
+  statements: { sql: string; elapsedMs: number | null; rows: number | null }[],
+): Promise<void> {
+  const usable = statements.filter((item) => item.sql.trim())
+  if (!usable.length) return
+  const day = archiveDay.value
+  const context = archiveContext()
+  archiveError.value = ''
+  try {
+    const file = await archiveRead(day)
+    let content = file.content
+    const before = content
+    let capped = false
+    let runs = 0
+    for (const item of usable) {
+      const merged = mergeArchiveEntry(
+        content,
+        incomingEntry(item.sql, context.title, context.connectionName, context.database, Date.now(), item.elapsedMs, item.rows),
+      )
+      if (!merged) {
+        capped = true
+        break
+      }
+      content = merged.content
+      runs = merged.runs
+    }
+    if (content !== before) {
+      const written = await archiveWrite(day, content)
+      archivePathLabel.value = written.path
+      archiveBytes.value = written.bytes
+    } else {
+      archivePathLabel.value = file.path
+      archiveBytes.value = file.bytes
+    }
+    archiveEntries.value = parseArchive(content).slice().reverse()
+    archiveNote.value = capped ? t('archive.full') : t('archive.saved', { runs })
+  } catch (error) {
+    archiveError.value = t('archive.failed', { reason: describeError(error).message })
+  }
+}
+
+/** 读今天这份归档（文件是唯一事实源：展开面板就重读一遍）。 */
+async function loadArchive(): Promise<void> {
+  archiveError.value = ''
+  try {
+    const file = await archiveRead(archiveDay.value)
+    archivePathLabel.value = file.path
+    archiveBytes.value = file.bytes
+    archiveEntries.value = parseArchive(file.content).slice().reverse()
+  } catch (error) {
+    archiveError.value = t('archive.failed', { reason: describeError(error).message })
+  }
+}
+
+function toggleArchive(): void {
+  archiveOpen.value = !archiveOpen.value
+  if (archiveOpen.value) void loadArchive()
+}
+
+/** 一条归档的读数行：次数 · 最近一次 · 耗时 · 行数（没有的格子不画）。 */
+function archiveFacts(entry: ArchiveEntry): string {
+  const parts = [t('archive.runs', { runs: entry.runs }), entry.lastAt]
+  if (entry.elapsedMs !== null) parts.push(t('archive.elapsed', { ms: entry.elapsedMs }))
+  if (entry.rows !== null) parts.push(t('archive.rows', { rows: entry.rows }))
+  return parts.join(' · ')
+}
+
+/** 回填一条进当前页签（与「已保存查询」回填当前页签同一姿势）。 */
+function refillArchiveEntry(entry: ArchiveEntry): void {
+  sql.value = entry.sql
+  stashActiveQuery()
+  void refreshHighlight()
+  void refreshCompletions()
+  archiveNote.value = t('archive.refilled', { title: entry.title || t('archive.untitled') })
+}
+
 const sqlText = ref('')
 // 单行详情（FR-DATA-05）：宽表竖排看、长 JSON 格式化看 —— **纯计算**，值检查在领域层
 const detail = ref<{ index: number; fields: RowField[] } | null>(null)
@@ -2046,8 +2166,20 @@ async function runText(text: string): Promise<void> {
   markTabRunning(tabId, true)
   busy.value = '执行中…'
   clearFailure()
+  // 耗时由这里量（外壳只回行数与影响行数）：口径 = 从点下去到回包，含 IPC 往返 ——
+  // 归档里那一格写的就是这个读数，不假装是服务端的执行时间。
+  const startedAt = Date.now()
   try {
     result.value = await dbQuery(text)
+    // FR-EDIT-31：**跑成功才归档**（失败在错误面里说，不进「执行过的 SQL」）
+    const current = result.value
+    void recordArchive([
+      {
+        sql: text,
+        elapsedMs: Date.now() - startedAt,
+        rows: current ? (current.affected ?? current.returned) : null,
+      },
+    ])
   } catch (e) {
     result.value = null
     failure.value = describeError(e)
@@ -2988,6 +3120,16 @@ async function runBatchText(text: string, analyze: boolean) {
       }
     }
     outcomes.value = await dbRunBatch(pending)
+    // FR-EDIT-31：**逐段归档跑成功的那些**（一段失败不影响别的段照记）
+    void recordArchive(
+      outcomes.value
+        .filter((outcome) => outcome.ok)
+        .map((outcome) => ({
+          sql: outcome.sql,
+          elapsedMs: outcome.elapsedMs,
+          rows: outcome.result ? (outcome.result.affected ?? outcome.result.returned) : null,
+        })),
+    )
     const pick = pickDisplayedOutcome(outcomes.value)
     shownOutcome.value = pick
     if (pick !== null) {
@@ -4000,6 +4142,18 @@ async function probe() {
               {{ t('saveQuery.list') }} ({{ savedQueries.length }})
             </button>
             <span v-if="savedQueryNote" class="db__note" data-testid="saved-query-note">{{ savedQueryNote }}</span>
+            <!-- 查询自动归档（FR-EDIT-31）：执行过的 SQL 按天落在 %APPDATA%\DoyahStudio\queries\ -->
+            <button
+              class="db__btn"
+              type="button"
+              :title="t('archive.listTip')"
+              :aria-expanded="archiveOpen ? 'true' : 'false'"
+              data-testid="archive-toggle"
+              @click="toggleArchive"
+            >
+              {{ t('archive.button') }} ({{ archiveEntries.length }})
+            </button>
+            <span v-if="archiveError || archiveNote" class="db__note" data-testid="archive-note">{{ archiveError || archiveNote }}</span>
             <button class="db__btn db__btn--icon db__btn--primary" type="submit" :disabled="!!busy" :title="t('sql.run')"><ActionIcon name="play" /></button>
             <button class="db__btn db__btn--icon" type="button" :disabled="!busy" @click="cancelRunning" :title="t('sql.cancel')"><ActionIcon name="stop" /></button>
             <button class="db__btn db__btn--icon" type="button" :disabled="!!busy" @click="showPlan" :title="t('sql.planOnly')"><ActionIcon name="code" /></button>
@@ -4108,6 +4262,31 @@ async function probe() {
               </div>
             </li>
           </ul>
+        </div>
+
+        <!-- 查询自动归档（FR-EDIT-31）：今天跑过的 SQL —— 次数 / 最近 / 耗时 / 行数；
+             点一条回填编辑器。底部把**文件路径与字节数**摊出来（「到底写哪儿了」不该靠猜）。 -->
+        <div v-if="archiveOpen" class="db__saved-queries" data-testid="archive-panel">
+          <p v-if="!archiveEntries.length" class="db__saved-empty" data-testid="archive-empty">
+            {{ t('archive.empty', { day: archiveDay }) }}
+          </p>
+          <ul v-else class="db__saved-list">
+            <li v-for="entry in archiveEntries" :key="`${entry.lastAt}-${entry.title}-${entry.sql.slice(0, 24)}`" class="db__saved-item" data-testid="archive-item">
+              <div class="db__saved-head">
+                <span class="db__saved-name">{{ entry.title || t('archive.untitled') }}</span>
+                <span class="db__saved-source" data-testid="archive-facts">{{ archiveFacts(entry) }}</span>
+              </div>
+              <p class="db__saved-sql">{{ savedQuerySqlPreview(entry) }}</p>
+              <div class="db__saved-actions">
+                <button class="db__btn" type="button" :title="t('archive.refillTip')" data-testid="archive-refill" @click="refillArchiveEntry(entry)">
+                  {{ t('archive.refill') }}
+                </button>
+              </div>
+            </li>
+          </ul>
+          <p class="db__note" data-testid="archive-file">
+            {{ t('archive.file', { path: archivePathLabel || '—', bytes: archiveBytes }) }}
+          </p>
         </div>
 
         <!-- 分隔条（FR-EDIT-13）：编辑区与结果区之间那条**能拖**的线。
