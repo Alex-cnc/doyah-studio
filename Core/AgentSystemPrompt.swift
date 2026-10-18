@@ -41,6 +41,11 @@ public enum AgentSystemPrompt {
         lines.append("2. 工具返回 `unavailable` / `denied` 时如实转达，**不许假装做过**。")
         lines.append("3. 只在本工作区内读写；越界的请求请说明原因并停下，不要绕。")
         lines.append("4. 回答用中文；代码、路径与命令保持原样，不改写。")
+        // `FR-AI-31` ②：**说完成要有据**。这条规矩是给验证器的输入协议 ——
+        // 不写这句，模型会照旧说一句「已完成」；写了这句，它要么给出引用，要么如实说没验证。
+        lines.append("5. 说「完成 / 改好了 / done」时，必须紧跟一行证据引用，形如 "
+                     + "`EVIDENCE: write 相对路径` · `EVIDENCE: edit 相对路径` · `EVIDENCE: command exit=0`；"
+                     + "引用**必须是本次真跑过的工具结果**。拿不出就直说「未验证」，不要用一句「已完成」交差。")
         return lines.joined(separator: "\n")
     }
 

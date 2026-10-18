@@ -34,6 +34,12 @@ public enum AgentLoopEvent: Equatable, Sendable {
     /// 这条事件此前**没有**：循环只把 `pendingApproval` 写进过程行与审计，界面拿不到
     /// 「要改什么 / 指纹是多少」⇒ 用户永远点不到「批准」。判据只管对不对，能不能点归事件这一格。
     case approvalRequested(name: String, fingerprint: String, preview: String, baseDigest: String)
+    /// **完成判据复核过了**（`FR-AI-31` ②）：模型说完成时，验证器拿当次工具证据 + 盘上现状复核的结论。
+    ///
+    /// `code` 是机器码（`verified:N` / `unverified:<reason>` / `notClaimed`），人话在界面翻。
+    /// 为什么单独来一条而不是塞进 `finished`：**完成**与**答完**是两件事 ——
+    /// 「跑完了这一轮」不等于「这件事做成了」，界面要能分开报（SRS 负例：把自报当完成）。
+    case completionChecked(code: String, citations: Int)
 }
 
 /// 进度观察口（界面实现它；**不改变循环的判定口径**，只是把过程如实说出来）。
@@ -157,6 +163,10 @@ public struct AgentLoopResult: Equatable, Sendable {
     public var estimatedTokensSaved: Int = 0
     /// 丢掉的条目**逐条摘要**（要答得出「丢了哪些」；`R-63` ③）。
     public var compressedDigests: [String] = []
+    /// **完成判据结论**（`FR-AI-31` ②）：`nil` = 没接验证器（旧行为逐字不变）。
+    ///
+    /// 只有「模型给了最终答复」那一跳才会算它 —— 停止 / 失败时不评完成（那两种本来就不叫完成）。
+    public var completion: AgentCompletionReport?
 
     public static func == (lhs: AgentLoopResult, rhs: AgentLoopResult) -> Bool {
         lhs.outcome == rhs.outcome && lhs.steps == rhs.steps && lhs.text == rhs.text
@@ -224,6 +234,9 @@ public struct AgentLoop: Sendable {
     /// **压缩预算**（`NFR-AI-08` ③）：给了就在每一跳拼提示词时压一次，超限才动手。
     /// 不给 = 旧行为**逐字不变**（判据按这一条对拍）。
     public var compressionBudget: AgentContextCompressionBudget?
+    /// **完成判据验证器**（`FR-AI-31` ②）：给了就只在「模型给最终答复」时复核一次。
+    /// 不给 = 旧行为**逐字不变**（既有判据一条都不必改）。
+    public var completionVerifier: AgentCompletionVerifier?
     public var limits: AgentLoopLimits
 
     public init(client: any LLMStreamingClient,
@@ -235,6 +248,7 @@ public struct AgentLoop: Sendable {
                 checkpointStore: AgentCheckpointStore? = nil,
                 checkpointEvery: Int = 5,
                 compressionBudget: AgentContextCompressionBudget? = nil,
+                completionVerifier: AgentCompletionVerifier? = nil,
                 limits: AgentLoopLimits = AgentLoopLimits()) {
         self.client = client
         self.dispatcher = dispatcher
@@ -245,6 +259,7 @@ public struct AgentLoop: Sendable {
         self.checkpointStore = checkpointStore
         self.checkpointEvery = checkpointEvery
         self.compressionBudget = compressionBudget
+        self.completionVerifier = completionVerifier
         self.limits = limits
     }
 
@@ -267,6 +282,9 @@ public struct AgentLoop: Sendable {
         var lastText = ""
         // `NFR-AI-08` ③ 的累计读数（每一跳压一次，累计到本轮结果里 —— 界面那一行吃的就是它）。
         var compression = AgentCompressionTally()
+        // **`FR-AI-31` ② 的证据台账**：本次运行里工具层**真的**产出了什么（写盘 / 改文件 / 命令 / 读过）。
+        // 只进不出 —— 模型引用得对它才算数（见 `AgentCompletionVerifier`）。
+        var evidence: [AgentCompletionEvidence] = []
 
         // **`NFR-AI-08` ① 开跑前先看有没有可用的检查点**：
         // 有 ⇒ 已跑完的跳**一个请求都不重发**（把 `steps` 推到该点之后）；
@@ -432,12 +450,22 @@ public struct AgentLoop: Sendable {
                                          observations: observations, at: startedAt) == false {
                     checkpointWriteFailures += 1
                 }
+                // **`FR-AI-31` ②：模型说「完成」⇒ 拿当次证据机械复核一次**。
+                // 说不清就如实说「未验证」—— 不把「它说做完了」当完成（SRS 那条负例）。
+                var report: AgentCompletionReport? = nil
+                if let verifier = completionVerifier {
+                    let verdict = verifier.verify(text: text, evidence: evidence)
+                    report = verdict
+                    await observer?.observe(.completionChecked(code: verdict.code,
+                                                               citations: verdict.citations.count))
+                }
                 return compression.applied(to: AgentLoopResult(
                     outcome: .finished(text: text), steps: steps,
                     executedTools: executed, rejectedTools: rejected, usage: usage, text: text,
                     resumedFromStep: resumedFromStep, skippedSteps: skippedSteps,
                     skippedCheckpointLines: skippedCheckpointLines,
-                    checkpointWriteFailures: checkpointWriteFailures))
+                    checkpointWriteFailures: checkpointWriteFailures,
+                    completion: report))
             }
 
             for invocation in invocations {
@@ -516,6 +544,12 @@ public struct AgentLoop: Sendable {
                         sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                 default:
                     executed.append(invocation)
+                    // **`FR-AI-31` ②：把「真做成了什么」记进证据台账** ——
+                    // 按**注册表的能力**认领（不写工具名字面量，源树判据守的就是那一点）。
+                    if let recorded = Self.completionEvidence(from: outcome, definition: definition,
+                                                              step: steps - 1) {
+                        evidence.append(recorded)
+                    }
                     await observer?.observe(.toolFinished(name: invocation.name, outcome: "executed", millis: toolMillis))
                     let summary = Self.summary(of: outcome)
                     observations.append("\(invocation.name): \(summary)")
@@ -600,6 +634,42 @@ public struct AgentLoop: Sendable {
 
     private func summarise(_ text: String) -> String {
         text.split(separator: "\n").first.map(String.init) ?? text
+    }
+
+    /// **`FR-AI-31` ②：从一次工具结果里认领「可机械复核的证据」**。
+    ///
+    /// 只认三类真的动过世界的结果：写盘 / 定点改 / 跑命令；外加「读过」—— 它可以被引用，
+    /// 但只能证明「我此刻看到的是这份内容」，别指望它证明「改完了」（判据按语义分开）。
+    /// 认领走**注册表的能力字段**（不写工具名字面量）；不认识的工具 ⇒ `nil`（不当证据，也不猜）。
+    static func completionEvidence(from outcome: AgentToolOutcome,
+                                   definition: AgentToolDefinition,
+                                   step: Int) -> AgentCompletionEvidence? {
+        switch outcome {
+        case .wrote(let file):
+            switch definition.capability {
+            case .editFile:
+                return AgentCompletionEvidence(kind: .edit, toolName: definition.name, path: file.path,
+                                               digest: AgentCompletionEvidence.digest(of: file.text),
+                                               step: step)
+            case .writeFile:
+                return AgentCompletionEvidence(kind: .write, toolName: definition.name, path: file.path,
+                                               digest: AgentCompletionEvidence.digest(of: file.text),
+                                               step: step)
+            default:
+                return nil
+            }
+        case .command(let result):
+            guard definition.capability == .runCommand else { return nil }
+            return AgentCompletionEvidence(kind: .command, toolName: definition.name,
+                                           exitCode: Int(result.exitCode), step: step)
+        case .file(let file):
+            guard definition.capability == .readFile else { return nil }
+            return AgentCompletionEvidence(kind: .read, toolName: definition.name, path: file.path,
+                                           digest: AgentCompletionEvidence.digest(of: file.text),
+                                           step: step)
+        default:
+            return nil
+        }
     }
 
     private static func summary(of outcome: AgentToolOutcome) -> String {

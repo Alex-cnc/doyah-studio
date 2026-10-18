@@ -119,6 +119,8 @@ struct AgentChatView: View {
         case "staleTarget": return L(.agentChatWriteStale)
         case "applyFailed": return L(.agentChatApplyFailed)
         case "noApplier": return L(.agentChatApplyFailed)
+        // `FR-AI-31` ②：**它说做完了，但拿不出可复核的证据** —— 这一条要让人看懂，不是一声「完成」。
+        case "completionUnverified": return L(.agentChatCompletionUnverified)
         default: return code
         }
     }
@@ -318,6 +320,16 @@ struct AgentChatView: View {
                         .help(resume.skippedCheckpointLines > 0
                               ? L(.agentStatusResumeBadLines, "\(resume.skippedCheckpointLines)")
                               : "")
+                }
+                // **完成判据读数**（`FR-AI-31` ②）：模型说完成时，这一行给出复核结论 ——
+                // 通过了就报几条引用；没通过就**如实说未验证**（原因进 `.help`）。
+                // 不许把它并进「跑完了」那一格：跑完 ≠ 做成（SRS 负例）。
+                if let completion = model.completionReading, completion.isVerified || completion.isUnverified {
+                    Text(completion.isVerified
+                         ? L(.agentStatusCompletionVerified, "\(completion.citations)")
+                         : L(.agentStatusCompletionUnverified))
+                        .foregroundStyle(completion.isVerified ? Color.green : Color.orange)
+                        .help(completion.isVerified ? "" : completion.reason)
                 }
                 if let context = model.lastPromptTokens {
                     Text(L(.agentStatusContext, "\(context)"))
