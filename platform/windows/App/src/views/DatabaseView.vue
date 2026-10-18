@@ -106,11 +106,14 @@ import {
   detectIndentStyle,
   indentSelection,
   indentUnitOf,
+  matchBracket,
   moveOrDuplicateLines,
   toggleLineComment,
   type EditResult,
   type Selection as EditorSelection,
 } from '../workspace/editing'
+// 跳行列（B1 第二批）：解析与夹界在 `workspace/navigation.ts`（有行为单测），组件只做摆光标。
+import { offsetOfJump, parseJumpInput } from '../workspace/navigation'
 
 // **界面语言（1.8 双语）**：与标题栏同一套取值（zh-Hans / en）
 // 口径：语言表只覆盖**界面外壳**；正文说明与服务端提示仍是中文（已在版本计划里登记未落）。
@@ -1613,6 +1616,7 @@ async function applyEdit(result: EditResult): Promise<void> {
     area.selectionStart = result.selection.start
     area.selectionEnd = result.selection.end
   }
+  caretOffset.value = result.selection.end
   stashActiveQuery()
   void refreshCompletions()
 }
@@ -1628,6 +1632,13 @@ function onEditorKeydown(event: KeyboardEvent): void {
   if (!area) return
   const selection = editorSelection(area)
   const mod = event.ctrlKey || event.metaKey
+
+  // ⓪ Ctrl+G 跳行列（FR-EDIT-19）：只开面板，**不改文本**
+  if (mod && (event.key === 'g' || event.key === 'G')) {
+    event.preventDefault()
+    openGoto()
+    return
+  }
 
   // ① Ctrl+/ 注释切换（`--`；只动行首、保持缩进）
   if (mod && event.key === '/') {
@@ -1679,6 +1690,109 @@ function onEditorKeydown(event: KeyboardEvent): void {
       void applyEdit({ text: outcome.text, selection: outcome.selection })
     }
   }
+}
+
+// ── 编辑面状态栏（B1 接线 · 第二批）：光标 行:列 / 缩进口径 / 括号配对 ─────────────────
+//
+// 三格全部照既有纯函数算（`editing.matchBracket` = FR-EDIT-50 · `detectIndentStyle` +
+// `indentUnitOf` = FR-EDIT-54），组件只把光标位置喂进去，**不在这里重判一遍**（两处判必然分叉）。
+// 光标位置单独存一份：textarea 的 selectionStart 不是响应式的，不记一份就不会重算。
+const caretOffset = ref(0)
+
+/** textarea 的**真**光标位置（取不到就保留上一次的值）。 */
+function syncCaret(): void {
+  const area = sqlArea.value
+  if (area) caretOffset.value = area.selectionStart ?? 0
+}
+
+/** 字符偏移 ⇒ 1 基的行 / 列（状态栏口径：行、列都是 1 基，列是字符列不是字节列）。 */
+function lineColumnAt(text: string, offset: number): { line: number; column: number } {
+  const head = text.slice(0, Math.max(0, Math.min(offset, text.length)))
+  const lines = head.split('\n')
+  return { line: lines.length, column: (lines[lines.length - 1] ?? '').length + 1 }
+}
+
+/** 第一格：光标在哪（`行 N · 列 M`）。 */
+const caretLabel = computed(() => {
+  const at = lineColumnAt(sql.value, caretOffset.value)
+  return t('sql.caret', { line: at.line, column: at.column })
+})
+
+/** 第二格：这份文本的缩进口径（多数口径，纯函数判；无缩进时是默认 4 空格）。 */
+const indentLabel = computed(() => {
+  const style = detectIndentStyle(sql.value)
+  return style.kind === 'tab' ? t('sql.indentTab') : t('sql.indentSpaces', { n: style.width })
+})
+
+/** 第三格：括号配对（无括号 ⇒ 一个破折号；不配平 ⇒ 告警位，并说明是哪个括号）。 */
+const bracketState = computed<{ kind: 'none' | 'matched' | 'unmatched'; text: string }>(() => {
+  const match = matchBracket(sql.value, caretOffset.value)
+  if (!match) return { kind: 'none', text: t('sql.bracketNone') }
+  if (match.partner === null) {
+    const here = lineColumnAt(sql.value, match.at)
+    return {
+      kind: 'unmatched',
+      text: t('sql.bracketUnmatched', {
+        char: sql.value[match.at] ?? '',
+        line: here.line,
+        column: here.column,
+      }),
+    }
+  }
+  const here = lineColumnAt(sql.value, match.at)
+  const there = lineColumnAt(sql.value, match.partner)
+  const [from, to] = match.at <= match.partner ? [here, there] : [there, here]
+  return {
+    kind: 'matched',
+    text: t('sql.bracketMatched', {
+      from: `${from.line}:${from.column}`,
+      to: `${to.line}:${to.column}`,
+    }),
+  }
+})
+
+// ── 跳行列（FR-EDIT-19）：`Ctrl+G` 开一条小输入条，认「行」/「行:列」──────────────────
+// 解析与超界夹取全在 `navigation.parseJumpInput` / `offsetOfJump`（有行为单测）；
+// 这里只做三件事：开面板、把输入喂进去、把光标摆到算出来的偏移。
+const gotoOpen = ref(false)
+const gotoInput = ref('')
+const gotoError = ref('')
+const gotoBox = ref<HTMLInputElement | null>(null)
+
+function openGoto(): void {
+  gotoOpen.value = true
+  gotoError.value = ''
+  // 先填当前行号（多数时候是「跳去附近那一行」），并整段选中 —— 直接打就覆盖掉
+  gotoInput.value = String(lineColumnAt(sql.value, caretOffset.value).line)
+  void nextTick(() => {
+    gotoBox.value?.focus()
+    gotoBox.value?.select()
+  })
+}
+
+function closeGoto(): void {
+  gotoOpen.value = false
+  gotoError.value = ''
+  sqlArea.value?.focus()
+}
+
+/** 执行跳转：非法输入**不关面板、如实给原因**；超界由纯函数夹进全文（不算错）。 */
+function applyGoto(): void {
+  const parsed = parseJumpInput(gotoInput.value, sql.value)
+  if (!parsed.ok) {
+    gotoError.value = parsed.reason
+    return
+  }
+  const at = offsetOfJump(sql.value, parsed.target)
+  const area = sqlArea.value
+  if (area) {
+    area.focus()
+    area.setSelectionRange(at, at)
+  }
+  caretOffset.value = at
+  gotoOpen.value = false
+  gotoError.value = ''
+  void refreshCompletions()
 }
 
 /** 当前编辑器里的**选区文本**（没有选区 / 不是 textarea ⇒ 空串）。 */
@@ -2392,13 +2506,45 @@ async function probe() {
               spellcheck="false"
               rows="3"
               aria-label="SQL"
-              @input="refreshHighlight(); refreshCompletions(); stashActiveQuery()"
-              @keyup="refreshCompletions()"
-              @click="refreshCompletions()"
+              @input="refreshHighlight(); refreshCompletions(); syncCaret(); stashActiveQuery()"
+              @keyup="refreshCompletions(); syncCaret()"
+              @click="refreshCompletions(); syncCaret()"
+              @select="syncCaret()"
               @keydown="onEditorKeydown"
               @keydown.esc="completions = []"
             />
           </div>
+          <!-- 状态栏（B1 第二批）：光标 行:列 / 缩进口径 / 括号配对。三格都由纯函数算，这里只显示。 -->
+          <div class="db__editor-status">
+            <span class="db__status-caret" data-testid="editor-caret">{{ caretLabel }}</span>
+            <span class="db__status-dot" aria-hidden="true">·</span>
+            <span class="db__status-indent" data-testid="editor-indent">{{ indentLabel }}</span>
+            <span class="db__status-dot" aria-hidden="true">·</span>
+            <span
+              class="db__status-bracket"
+              :class="`db__status-bracket--${bracketState.kind}`"
+              data-testid="editor-bracket"
+            >{{ bracketState.text }}</span>
+            <button class="db__status-goto" type="button" :title="t('sql.gotoTip')" @click="openGoto">
+              {{ t('sql.gotoOpen') }}
+            </button>
+          </div>
+          <!-- 跳行列（FR-EDIT-19）：Ctrl+G 或点状态栏那颗按钮开；非法输入不关面板、如实给原因。 -->
+          <form v-if="gotoOpen" class="db__goto" @submit.prevent="applyGoto">
+            <label class="db__goto-label">
+              <span>{{ t('sql.gotoLabel') }}</span>
+              <input
+                ref="gotoBox"
+                v-model="gotoInput"
+                class="db__goto-input"
+                data-testid="goto-input"
+                spellcheck="false"
+                @keydown.esc.stop.prevent="closeGoto"
+              />
+            </label>
+            <button class="db__btn" type="submit">{{ t('sql.gotoGo') }}</button>
+            <span v-if="gotoError" class="db__goto-error" data-testid="goto-error">{{ gotoError }}</span>
+          </form>
           <p class="db__editor-keys">{{ t('sql.keys') }}</p>
           <ul v-if="completions.length" class="db__completions">
             <li v-for="(c, i) in completions.slice(0, 8)" :key="`${c.kind}:${c.text}`">
@@ -3304,6 +3450,73 @@ async function probe() {
   margin: 0 0 var(--ds-spacing-xs);
   color: var(--ds-color-text-secondary);
   font-size: var(--ds-font-caption-size);
+}
+/* 状态栏（B1 第二批）：三格读数 + 一颗「跳行列」按钮。数字用 tabular-nums，宽度不跳。 */
+.db__editor-status {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  margin: 0 0 var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+.db__status-caret,
+.db__status-indent {
+  font-variant-numeric: tabular-nums;
+}
+.db__status-dot {
+  color: var(--ds-color-text-tertiary);
+}
+.db__status-bracket--matched {
+  color: var(--ds-color-status-success);
+}
+.db__status-bracket--unmatched {
+  color: var(--ds-color-status-danger);
+}
+.db__status-bracket--none {
+  color: var(--ds-color-text-tertiary);
+}
+.db__status-goto {
+  margin-left: auto;
+  padding: 0 var(--ds-spacing-s);
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  cursor: pointer;
+}
+.db__status-goto:hover {
+  color: var(--ds-color-accent-accent);
+}
+/* 跳行列输入条（Ctrl+G）：一行、窄输入、错误就地显示 */
+.db__goto {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
+  margin: 0 0 var(--ds-spacing-xs);
+  font-size: var(--ds-font-caption-size);
+}
+.db__goto-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+  color: var(--ds-color-text-secondary);
+}
+.db__goto-input {
+  width: 8ch;
+  padding: 0 var(--ds-spacing-xs);
+  background: var(--ds-color-surface-content);
+  color: var(--ds-color-text-primary);
+  border: var(--ds-metric-hairline) solid var(--ds-hairline);
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+}
+.db__goto-error {
+  color: var(--ds-color-status-danger);
 }
 
 .db__tok--keyword {

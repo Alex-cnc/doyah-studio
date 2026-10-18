@@ -384,9 +384,23 @@ export const DICT = {
   'sql.run': { 'zh-Hans': '执行', en: 'Run' },
   // 编辑器按键提示（B1 接线后可见面：告诉用户这几组键存在，否则只有摸到的人知道）
   'sql.keys': {
-    'zh-Hans': 'Ctrl+/ 注释 · Alt+↑↓ 移行 · Alt+Shift+↓ 复制行 · Tab 缩进 · 回车自动缩进 · 括号自动配对',
-    en: 'Ctrl+/ comment · Alt+↑↓ move line · Alt+Shift+↓ duplicate · Tab indent · Enter auto-indent · auto-pair brackets',
+    'zh-Hans': 'Ctrl+/ 注释 · Alt+↑↓ 移行 · Alt+Shift+↓ 复制行 · Tab 缩进 · 回车自动缩进 · 括号自动配对 · Ctrl+G 跳行列',
+    en: 'Ctrl+/ comment · Alt+↑↓ move line · Alt+Shift+↓ duplicate · Tab indent · Enter auto-indent · auto-pair brackets · Ctrl+G go to line',
   },
+  // 编辑器状态栏（B1 第二批）：光标位置 / 缩进口径 / 括号配对
+  'sql.caret': { 'zh-Hans': '行 {line} · 列 {column}', en: 'Ln {line}, Col {column}' },
+  'sql.indentSpaces': { 'zh-Hans': '空格 ×{n}', en: 'Spaces ×{n}' },
+  'sql.indentTab': { 'zh-Hans': 'Tab 缩进', en: 'Tab indents' },
+  'sql.bracketNone': { 'zh-Hans': '光标处无括号', en: 'no bracket at caret' },
+  'sql.bracketMatched': { 'zh-Hans': '括号配对 {from} ↔ {to}', en: 'bracket {from} ↔ {to}' },
+  'sql.bracketUnmatched': {
+    'zh-Hans': '括号不配对：{char} @ {line}:{column}',
+    en: 'unmatched {char} @ {line}:{column}',
+  },
+  'sql.gotoOpen': { 'zh-Hans': '跳行列…', en: 'Go to line…' },
+  'sql.gotoTip': { 'zh-Hans': '跳到指定行或「行:列」（Ctrl+G）', en: 'Jump to a line or line:column (Ctrl+G)' },
+  'sql.gotoLabel': { 'zh-Hans': '行 / 行:列', en: 'Line / line:column' },
+  'sql.gotoGo': { 'zh-Hans': '跳转', en: 'Go' },
   'sql.cancel': { 'zh-Hans': '取消', en: 'Cancel' },
   'sql.planOnly': { 'zh-Hans': '只看计划', en: 'Plan only' },
   'sql.runWithPlan': { 'zh-Hans': '执行并出计划', en: 'Run with plan' },
