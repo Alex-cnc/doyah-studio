@@ -20,16 +20,28 @@ import Foundation
 /// ① 只报**工作区根之内**的路径（根之外的正文件由 `watch(file:)` 单点监听，给"系统面板打开的任意文件"用）；
 /// ② FSEvents 是**合并**事件：短时间内多次改动只报一次（这正是我们要的"一批一次"）；
 /// ③ 自己的保存也会触发回调 —— 由 `AppState` 侧按"内容是否真的变了"过滤（不然会自己覆盖自己的脏标记）。
+/// 给 FSEvents 回调用的**常驻盒子**：盒子由 FSEvents 持有，里面只放弱引用。
+///
+/// 参见 `streamContextPointer` 的注释 —— 直接把监听器塞进上下文会在 `stop()` 之后挨一次
+/// "迟到的回调" 而崩；盒子把"谁还活着"这件事从裸指针里摘出来。
+private final class WorkspaceWatcherBox {
+    weak var watcher: WorkspaceFileWatcher?
+}
+
 final class WorkspaceFileWatcher {
 
     /// 一批改动（防抖后）。
     private var onChanges: (([String]) -> Void)?
 
     private var stream: FSEventStreamRef?
-    /// FSEvents 上下文里 `passRetained(self)` 的那个指针 —— `stop()` 里成对 release。
-    /// **必须 retain**：不 retain 时监听器一旦先释放，FSEvents 线程回调 `takeUnretainedValue()`
-    /// 就是对一个已释放对象 `objc_msgSend` ⇒ 直接 SIGSEGV（2026-10-18 实测：启动即崩，
-    /// 崩溃线程 `studio.doyah.workspace-watcher`，栈顶 `closure #1 in WorkspaceFileWatcher.start`）。
+    /// FSEvents 上下文里那个「盒子」的指针 —— `stop()` 里成对 release。
+    ///
+    /// **为什么不是直接把 `self` 塞进去**：第一版用 `passRetained(self)` 看着对了，实机仍在
+    /// `stop()` 之后崩过一次 —— `FSEventStreamStop`/`Invalidate` **不会取消已经派发到队列上的回调**，
+    /// 那一次回调落在 `release` 之后 ⇒ 对已释放对象 `objc_msgSend`（EXC_BAD_ACCESS，
+    /// 线程 `studio.doyah.workspace-watcher`，2026-10-18 21:50）。
+    /// 改成盒子后：回调读的是**盒子**（FSEvents 自己持着，`retain`/`release` 回调成对），
+    /// 盒子里对监听器是 **weak** ⇒ 监听器先走也只会拿到 `nil`，不会碰野指针。
     private var streamContextPointer: UnsafeMutableRawPointer?
     /// 单文件监听（工作区根之外）。
     private var fileSources: [String: DispatchSourceFileSystemObject] = [:]
@@ -56,21 +68,33 @@ final class WorkspaceFileWatcher {
         stop()
         self.onChanges = onChanges
 
-        // **passRetained**：让 FSEvents 自己持有监听器，直到 `stop()` 成对 release。
-        // 用 passUnretained 是崩溃的根因（见 `streamContextPointer` 注释）。
-        let info = Unmanaged.passRetained(self).toOpaque()
+        // 盒子：`passRetained` 交给 FSEvents（下面 retain/release 回调成对配平），
+        // 盒子里对监听器是 weak ⇒ 迟到的回调也不会碰野指针。
+        let box = WorkspaceWatcherBox()
+        box.watcher = self
+        let info = Unmanaged.passRetained(box).toOpaque()
         streamContextPointer = info
         var context = FSEventStreamContext(
             version: 0,
             info: info,
-            retain: nil, release: nil, copyDescription: nil
+            retain: { pointer in
+                guard let pointer else { return nil }
+                return UnsafeRawPointer(Unmanaged<WorkspaceWatcherBox>.fromOpaque(pointer).retain().toOpaque())
+            },
+            release: { pointer in
+                guard let pointer else { return }
+                Unmanaged<WorkspaceWatcherBox>.fromOpaque(pointer).release()
+            },
+            copyDescription: nil
         )
         let flags = UInt32(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer)
         guard let stream = FSEventStreamCreate(
             kCFAllocatorDefault,
             { _, info, count, paths, _, _ in
                 guard let info else { return }
-                let watcher = Unmanaged<WorkspaceFileWatcher>.fromOpaque(info).takeUnretainedValue()
+                // 迟到回调只会拿到 nil（盒子还活着，监听器可能已经走了）
+                guard let watcher = Unmanaged<WorkspaceWatcherBox>.fromOpaque(info)
+                    .takeUnretainedValue().watcher else { return }
                 // **不把整个数组桥接过去**：`FSEvents` 给的是 `CFArray`，逐元素取字符串更稳
                 // （实测：整数组桥接在脚本模式下会崩在 `_conditionallyBridgeFromObjectiveC`）。
                 let array = unsafeBitCast(paths, to: CFArray.self)
@@ -89,7 +113,7 @@ final class WorkspaceFileWatcher {
             FSEventStreamCreateFlags(flags)
         ) else {
             // 建流失败 ⇒ 把上面的 retain 退回去，否则监听器永远不释放
-            Unmanaged<WorkspaceFileWatcher>.fromOpaque(info).release()
+            Unmanaged<WorkspaceWatcherBox>.fromOpaque(info).release()
             streamContextPointer = nil
             return
         }
@@ -108,7 +132,7 @@ final class WorkspaceFileWatcher {
         stream = nil
         // 与 `start()` 的 passRetained 配对：先 invalidate（不再有回调），再 release
         if let pointer = streamContextPointer {
-            Unmanaged<WorkspaceFileWatcher>.fromOpaque(pointer).release()
+            Unmanaged<WorkspaceWatcherBox>.fromOpaque(pointer).release()
             streamContextPointer = nil
         }
         for (_, source) in fileSources { source.cancel() }
