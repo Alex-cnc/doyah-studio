@@ -464,6 +464,23 @@ pub struct RetroImport {
     pub path: String,
 }
 
+/// 一批导入的结果（`FR-R-12-04` 的批量形态：一次选一个**装着若干期包的上一层目录**）。
+///
+/// 口径与单包一致，只是把多份结果并起来：逐条如实报（`items`），不是包的子目录只计数（`skipped`），
+/// 不让「这一层有 30 个乱七八糟的目录」变成 30 行红字。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetroBatchImport {
+    /// 用户选的那个目录（原话回显 —— 界面拿它说明「从哪儿导的」）。
+    pub source: String,
+    /// 逐个包的结果（按目录名排序 = 与左栏同一顺序）。
+    pub items: Vec<RetroImport>,
+    /// 这一层看过多少个子目录（含不是包的）。
+    pub scanned: usize,
+    /// 没当成包处理的子目录数（缺 index.json 也缺 report.md / 隐藏目录 / 文件）。
+    pub skipped: usize,
+}
+
 /// 临时目录序号（同一进程里连续导入不撞名）。
 static IMPORT_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -570,6 +587,138 @@ impl RetroStore {
             format!("已导入到 {}", target.display()),
             &target,
         ))
+    }
+}
+
+/// 这个目录看起来像一个包（有 index.json 或 report.md 任一件）。
+///
+/// 只用来**筛候选**：真正合不合法仍由 `validate_package` 判（缺一件的包会被单包入口拒收并说清原因，
+/// 这里要是两道都判，两处口径迟早分叉）。
+fn looks_like_package(dir: &Path) -> bool {
+    dir.join(retro_package::INDEX_FILE).is_file() || dir.join(retro_package::REPORT_FILE).is_file()
+}
+
+impl RetroStore {
+    /// 整批导入：`source` 可以是一个包目录（退回单包口径），也可以是**装着若干包的上一层目录**。
+    ///
+    /// 每个子目录都走**同一套**单包判定（`import`）—— 幂等 / 冲突 / 先判后拷只写一遍，批量不另立口径。
+    pub fn import_batch(&self, source: &str) -> Result<RetroBatchImport, DbFailure> {
+        let text = source.trim();
+        if text.is_empty() {
+            return Err(DbFailure {
+                message: "没有给出要导入的目录".to_string(),
+                hint: "点「导入整批…」用系统选择器选一个装着若干期包的目录（或单期包目录）。".to_string(),
+            });
+        }
+        let src = Path::new(text);
+        if !src.is_dir() {
+            return Err(DbFailure {
+                message: format!("这不是一个目录：{text}"),
+                hint: "整批导入要选目录（每个子目录里要有 index.json / report.md）；选目录，不要选文件。"
+                    .to_string(),
+            });
+        }
+        // ① 选中的就是一个包 ⇒ 退回单包口径：用户常「点进包里再选」，不该被判成「这一层没有包」。
+        if looks_like_package(src) {
+            let one = self.import(text)?;
+            return Ok(RetroBatchImport {
+                source: text.to_string(),
+                items: vec![one],
+                scanned: 1,
+                skipped: 0,
+            });
+        }
+        // ② 上一层目录：子目录里「有 index.json 或 report.md」的才算候选；隐藏目录 / 普通文件只计数。
+        let entries = std::fs::read_dir(src).map_err(|error| DbFailure {
+            message: format!("读目录失败：{error}（{text}）"),
+            hint: "确认这个目录还在、且当前账号有读权限。".to_string(),
+        })?;
+        let mut candidates: Vec<PathBuf> = Vec::new();
+        let mut skipped = 0usize;
+        for entry in entries {
+            let entry = entry.map_err(|error| DbFailure {
+                message: format!("遍历目录失败：{error}（{text}）"),
+                hint: "目录可能在读取过程中被移动了；重选一次。".to_string(),
+            })?;
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            let is_plain_dir = entry
+                .file_type()
+                .map(|kind| kind.is_dir() && !kind.is_symlink())
+                .unwrap_or(false);
+            if !is_plain_dir || name.starts_with('.') || !looks_like_package(&path) {
+                skipped += 1;
+                continue;
+            }
+            candidates.push(path);
+        }
+        candidates.sort();
+        let scanned = candidates.len() + skipped;
+
+        // ③ 逐个走单包入口（判定只有一份）；连判都判不了的那一个落成一条失败明细，不中断其余包。
+        let mut items = Vec::with_capacity(candidates.len());
+        for child in &candidates {
+            let child_text = child.display().to_string();
+            match self.import(&child_text) {
+                Ok(item) => items.push(item),
+                Err(failure) => items.push(RetroImport {
+                    period: child
+                        .file_name()
+                        .map(|name| name.to_string_lossy().to_string())
+                        .unwrap_or_else(|| child_text.clone()),
+                    state: retro_package::ImportState::Failed,
+                    message: format!("{}（{}）", failure.message, failure.hint),
+                    path: child_text,
+                }),
+            }
+        }
+        Ok(RetroBatchImport {
+            source: text.to_string(),
+            items,
+            scanned,
+            skipped,
+        })
+    }
+
+    /// 「打开所在文件夹」的**计划**（只算不启动）：期号合法 + 库里真有这一期 ⇒ 资源管理器计划。
+    ///
+    /// 与 `fs::reveal_entry` 同一套口径：路径由库根拼出来（**不接受**从前端来的任意路径），
+    /// 期号走领域层 `validate_period`（`..` / 绝对路径 / 超长都过不去）。
+    pub fn reveal_plan(&self, period: &str) -> Result<doyah_studio_db::RevealPlan, DbFailure> {
+        let period = period.trim();
+        if let Err(reason) = retro_package::validate_period(period) {
+            return Err(DbFailure {
+                message: format!("期号不可用：{reason}"),
+                hint: "从左侧列表里选一期再点「打开所在文件夹」。".to_string(),
+            });
+        }
+        let dir = self.root.join(period);
+        if !dir.is_dir() {
+            return Err(DbFailure {
+                message: format!("库里没有这一期：{period}"),
+                hint: "点「刷新」看看它还在不在（包可能被移到别处了）。".to_string(),
+            });
+        }
+        Ok(doyah_studio_db::explorer_plan(
+            true,
+            &dir.display().to_string(),
+        ))
+    }
+
+    /// 真的在资源管理器里打开这一期目录（**不等进程**：explorer 把已有窗口提到前面就返回）。
+    pub fn reveal(&self, period: &str) -> Result<doyah_studio_db::RevealPlan, DbFailure> {
+        let plan = self.reveal_plan(period)?;
+        std::process::Command::new(&plan.program)
+            .args(&plan.args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|error| DbFailure {
+                message: format!("启动资源管理器失败：{error}（{}）", plan.program),
+                hint: "确认这台机器上资源管理器可用（PATH 里能找到）。".to_string(),
+            })?;
+        Ok(plan)
     }
 }
 
@@ -1224,6 +1373,135 @@ mod tests {
         let failure = store.import(&file.display().to_string()).unwrap_err();
         assert!(failure.message.contains("不是一个目录"), "{}", failure.message);
         assert!(!failure.hint.is_empty(), "要告诉用户怎么办");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // ── 整批导入（`FR-R-12-04` 批量形态）────────────────────────────────────────────
+
+    #[test]
+    fn a_batch_import_reports_every_package_and_only_counts_what_it_skipped() {
+        let base = root("batch-mixed");
+        let inbox = base.join("inbox");
+        let lib = base.join("lib");
+        write_package(&inbox, "2026-W43", Some(r#"{"title":"第 43 周"}"#), Some("正文 43"));
+        write_package(&inbox, "2026-W44", Some(r#"{"title":"第 44 周"}"#), Some("正文 44"));
+        // 不是包的子目录：里面没有 index.json 也没有 report.md
+        std::fs::create_dir_all(inbox.join("notes")).expect("建杂项目录");
+        std::fs::write(inbox.join("notes").join("todo.txt"), b"x").expect("写杂项");
+        // 隐藏目录（扫描器本来就不认）
+        std::fs::create_dir_all(inbox.join(".cache")).expect("建隐藏目录");
+        // 散文件
+        std::fs::write(inbox.join("readme.txt"), b"not a package").expect("写散文件");
+
+        let store = RetroStore::new(&lib);
+        let batch = store.import_batch(&inbox.display().to_string()).expect("整批走完");
+
+        assert_eq!(batch.items.len(), 2, "两个真包各一条结果");
+        assert!(
+            batch.items.iter().all(|item| item.state == retro_package::ImportState::Imported),
+            "两个包都该导入：{:?}",
+            batch.items.iter().map(|i| (&i.period, &i.state)).collect::<Vec<_>>()
+        );
+        // 杂项目录 + 隐藏目录 + 散文件：只计数，不逐条刷屏
+        assert_eq!(batch.skipped, 3, "跳过的子目录/文件要如实计数");
+        assert_eq!(batch.scanned, 5, "看过 5 个条目");
+        assert_eq!(store.snapshot().expect("扫目录").cards.len(), 2, "列表里必须真多出两期");
+        assert!(staging_leftovers(&lib).is_empty(), "批量也不许留临时目录");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn running_the_same_batch_twice_adds_nothing_and_says_each_one_is_already_there() {
+        let base = root("batch-twice");
+        let inbox = base.join("inbox");
+        let lib = base.join("lib");
+        write_package(&inbox, "2026-W43", Some(r#"{"title":"同一份"}"#), Some("正文"));
+        write_package(&inbox, "2026-W44", Some(r#"{"title":"同一份 44"}"#), Some("正文 44"));
+        let store = RetroStore::new(&lib);
+
+        let first = store.import_batch(&inbox.display().to_string()).expect("第一遍");
+        assert_eq!(first.items.len(), 2);
+        let second = store.import_batch(&inbox.display().to_string()).expect("第二遍");
+        assert!(
+            second.items.iter().all(|item| item.state == retro_package::ImportState::Already),
+            "重跑必须逐条报「已导入」：{:?}",
+            second.items.iter().map(|i| (&i.period, &i.state)).collect::<Vec<_>>()
+        );
+        assert_eq!(store.snapshot().expect("扫目录").cards.len(), 2, "不许出现重复条目");
+        assert!(staging_leftovers(&lib).is_empty());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_folder_without_any_package_reports_zero_items_instead_of_a_fake_success() {
+        let base = root("batch-empty");
+        let inbox = base.join("inbox");
+        std::fs::create_dir_all(inbox.join("a")).expect("建 a");
+        std::fs::create_dir_all(inbox.join("b")).expect("建 b");
+        let store = RetroStore::new(&base.join("lib"));
+
+        let batch = store.import_batch(&inbox.display().to_string()).expect("整批走完");
+        assert!(batch.items.is_empty(), "一个包都没有 ⇒ 一条结果都不该编");
+        assert_eq!(batch.skipped, 2, "但要如实说看了几个子目录");
+        assert_eq!(batch.scanned, 2);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_batch_import_also_takes_a_single_package_directory() {
+        let base = root("batch-single");
+        let inbox = base.join("inbox");
+        let lib = base.join("lib");
+        write_package(&inbox, "2026-W43", Some(r#"{"title":"单独一期"}"#), Some("正文"));
+        let store = RetroStore::new(&lib);
+
+        // 用户「点进包里再选」—— 不该被判成「这一层没有包」
+        let batch = store
+            .import_batch(&inbox.join("2026-W43").display().to_string())
+            .expect("单包口径");
+        assert_eq!(batch.items.len(), 1);
+        assert_eq!(batch.items[0].state, retro_package::ImportState::Imported);
+        assert_eq!(batch.scanned, 1);
+        assert_eq!(batch.skipped, 0);
+        assert_eq!(store.snapshot().expect("扫目录").cards.len(), 1);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // ── 打开所在文件夹（本机存储的可见面）──────────────────────────────────────────
+
+    #[test]
+    fn reveal_plan_points_at_that_periods_folder_inside_the_library() {
+        let base = root("reveal-plan");
+        let lib = base.join("lib");
+        write_package(&lib, "2026-W43", Some(r#"{"title":"一期"}"#), Some("正文"));
+        let store = RetroStore::new(&lib);
+
+        let plan = store.reveal_plan("2026-W43").expect("这一期在库里");
+        assert_eq!(plan.program, "explorer.exe");
+        assert_eq!(plan.args.len(), 1, "目录是直接进去（不是 /select 一个文件）");
+        assert!(
+            plan.args[0].ends_with("2026-W43"),
+            "要指向这一期的目录：{}",
+            plan.args[0]
+        );
+        assert!(!plan.args[0].contains("/select"), "目录不该用定位文件的参数");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn reveal_plan_refuses_an_unknown_period_and_a_path_that_tries_to_escape() {
+        let base = root("reveal-refuse");
+        let lib = base.join("lib");
+        std::fs::create_dir_all(&lib).expect("建库");
+        let store = RetroStore::new(&lib);
+
+        let missing = store.reveal_plan("2026-W99").unwrap_err();
+        assert!(missing.message.contains("库里没有这一期"), "{}", missing.message);
+        assert!(!missing.hint.is_empty(), "要告诉用户怎么办");
+
+        // 期号走领域层校验：越界写法连路径都不该拼出来
+        let escape = store.reveal_plan("../outside").unwrap_err();
+        assert!(escape.message.contains("期号不可用"), "{}", escape.message);
         let _ = std::fs::remove_dir_all(&base);
     }
 }

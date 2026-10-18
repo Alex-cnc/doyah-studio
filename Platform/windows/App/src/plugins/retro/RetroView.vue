@@ -18,12 +18,16 @@ import {
   openExternal,
   retroAsset,
   retroImport,
+  retroImportBatch,
   retroPackages,
   retroReport,
+  retroReveal,
   type DbFailure,
   type MdDocument,
+  type RetroBatchImport,
   type RetroCard,
   type RetroImport,
+  type RetroImportState,
   type RetroMedia,
   type RetroProblem,
 } from '../../ipc'
@@ -298,6 +302,82 @@ async function importPackage(): Promise<void> {
   }
 }
 
+// ── 整批导入（`FR-R-12-04` 批量形态）──────────────────────────────────────────────
+//
+// 口径与单包完全一样，只是「一次选一层」：选中的目录本身就是一个包 ⇒ 退回单包口径（用户常点进包里再选）；
+// 否则逐个**子目录**走同一套单包判定（先判后拷 / 幂等 / 冲突），界面只把 Rust 给的逐条结果摆出来。
+// 不是包的条目**只计数**（`skipped`），不逐条刷屏 —— 选了一整个下载目录也不会被红字淹掉。
+
+/** 正在整批导入（两个按钮一起置灰，别让用户在这中间又点一次单包）。 */
+const batchImporting = ref(false)
+/** 上一次整批的结果（`null` = 还没导过）。 */
+const batchResult = ref<RetroBatchImport | null>(null)
+
+/** 逐条结果的计数（合计条用；态本身由 Rust 判，这里只数）。 */
+const batchCounts = computed(() => {
+  const counts: Record<RetroImportState, number> = {
+    imported: 0,
+    already: 0,
+    conflict: 0,
+    rejected: 0,
+    failed: 0,
+  }
+  for (const item of batchResult.value?.items ?? []) counts[item.state] += 1
+  return counts
+})
+
+/** 态标签（`plugin.retro.state.*`）：只给一个人话的词，判定不在前端。 */
+function stateLabel(state: RetroImportState): string {
+  return tr(`plugin.retro.state.${state}` as Parameters<typeof translate>[0])
+}
+
+async function importFolder(): Promise<void> {
+  if (batchImporting.value || importing.value) return
+  importFailure.value = null
+  batchResult.value = null
+  let source: string | null = null
+  try {
+    source = await pickFolder({ title: tr('plugin.retro.importBatchPickTitle') })
+  } catch (error) {
+    importFailure.value = describeError(error)
+    return
+  }
+  // 取消不是失败：什么都不做、什么都不说
+  if (!source) return
+  batchImporting.value = true
+  try {
+    batchResult.value = await retroImportBatch(source)
+    // 只要这一批里有任何一期真落进来，列表就得当场多出来（否则等于没导入）
+    await refresh()
+  } catch (error) {
+    importFailure.value = describeError(error)
+  } finally {
+    batchImporting.value = false
+  }
+}
+
+// ── 打开所在文件夹（本机存储的可见面）───────────────────────────────────────────────
+//
+// 只传期号：目录由库根 + 期号在 Rust 侧拼（`validate_period` 会挡越界写法），界面给不了任意路径。
+// 成功没有额外提示 —— 资源管理器窗口本身就是反馈；失败则把原话与提示摆出来（不静默）。
+
+const revealing = ref(false)
+const revealFailure = ref<DbFailure | null>(null)
+
+async function revealSelected(): Promise<void> {
+  const period = selected.value
+  if (!period || revealing.value) return
+  revealing.value = true
+  revealFailure.value = null
+  try {
+    await retroReveal(period)
+  } catch (error) {
+    if (selected.value === period) revealFailure.value = describeError(error)
+  } finally {
+    revealing.value = false
+  }
+}
+
 /** 打开一期。切期时先清掉上一期的正文 —— 不留残留（`FR-R-12-02` ③）。 */
 async function open(card: RetroCard): Promise<void> {
   selected.value = card.period
@@ -307,6 +387,7 @@ async function open(card: RetroCard): Promise<void> {
   reportLoading.value = true
   zoom.value = null
   openFailures.value = {}
+  revealFailure.value = null
   releaseMedia()
   try {
     const report = await retroReport(card.period)
@@ -388,13 +469,77 @@ onMounted(() => {
           class="retro__refresh"
           type="button"
           data-role="retro-import"
-          :disabled="importing"
+          :disabled="importing || batchImporting"
           :title="tr('plugin.retro.importHint')"
           @click="importPackage"
         >
           {{ importing ? tr('plugin.retro.importing') : tr('plugin.retro.import') }}
         </button>
+        <button
+          class="retro__refresh"
+          type="button"
+          data-role="retro-import-batch"
+          :disabled="importing || batchImporting"
+          :title="tr('plugin.retro.importBatchHint')"
+          @click="importFolder"
+        >
+          {{ batchImporting ? tr('plugin.retro.importing') : tr('plugin.retro.importBatch') }}
+        </button>
       </header>
+
+      <!-- 整批导入的结果（`FR-R-12-04` 批量形态）：一条合计 + 可展开的逐条明细 -->
+      <template v-if="batchResult">
+        <p
+          v-if="batchResult.items.length"
+          class="retro__count"
+          :data-state="batchCounts.imported ? 'imported' : 'already'"
+          data-role="retro-import-batch-result"
+        >
+          {{
+            tr('plugin.retro.batchSummary', {
+              n: batchResult.items.length,
+              added: batchCounts.imported,
+              already: batchCounts.already,
+              conflict: batchCounts.conflict,
+              bad: batchCounts.rejected + batchCounts.failed,
+            })
+          }}
+        </p>
+        <p
+          v-else
+          class="retro__hint"
+          data-role="retro-import-batch-result"
+          data-state="empty"
+        >
+          {{ tr('plugin.retro.batchNothing', { n: batchResult.scanned }) }}
+          <span class="retro__failure-hint">{{ tr('plugin.retro.batchNothingHint') }}</span>
+        </p>
+        <p
+          v-if="batchResult.items.length && batchResult.skipped"
+          class="retro__hint"
+          data-role="retro-import-batch-skipped"
+        >
+          {{ tr('plugin.retro.batchSkipped', { n: batchResult.skipped }) }}
+        </p>
+        <details
+          v-if="batchResult.items.length"
+          class="retro__problems"
+          data-role="retro-import-batch-items"
+        >
+          <summary>{{ tr('plugin.retro.batchDetails', { n: batchResult.items.length }) }}</summary>
+          <ul>
+            <li
+              v-for="item in batchResult.items"
+              :key="item.period"
+              :data-period="item.period"
+              :data-state="item.state"
+            >
+              <code class="retro__period">{{ item.period }}</code>
+              <span class="retro__problem-text">{{ stateLabel(item.state) }} · {{ item.message }}</span>
+            </li>
+          </ul>
+        </details>
+      </template>
 
       <!-- 导入结果（`FR-R-12-04` ①③）：成功 / 已导入 / 冲突 / 拒收都如实说一句 -->
       <p
@@ -570,7 +715,22 @@ onMounted(() => {
             <span v-if="selectedCard" class="retro__range">{{ rangeText(selectedCard) }}</span>
             <span v-if="reportBytes" class="retro__bytes">{{ reportBytes }} B</span>
           </p>
+          <!-- 打开所在文件夹（本机存储的可见面）：只传期号，路径在 Rust 侧拼 -->
+          <button
+            class="retro__refresh"
+            type="button"
+            data-role="retro-reveal"
+            :disabled="revealing"
+            :title="tr('plugin.retro.revealHint')"
+            @click="revealSelected"
+          >
+            {{ tr('plugin.retro.reveal') }}
+          </button>
         </header>
+        <p v-if="revealFailure" class="retro__failure" data-role="retro-reveal-failure">
+          {{ tr('plugin.retro.revealFailed') }}：{{ revealFailure.message }}
+          <span v-if="revealFailure.hint" class="retro__failure-hint">{{ revealFailure.hint }}</span>
+        </p>
         <p v-if="reportLoading" class="retro__hint">{{ tr('plugin.retro.loading') }}</p>
         <p v-else-if="reportFailure" class="retro__failure" data-role="retro-report-failure">
           {{ tr('plugin.retro.reportFailed') }}：{{ reportFailure.message }}

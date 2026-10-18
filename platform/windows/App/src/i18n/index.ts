@@ -47,6 +47,46 @@ export const DICT = {
     en: 'Pick a report package folder',
   },
   'plugin.retro.importFailed': { 'zh-Hans': '导入失败', en: 'Import failed' },
+  // 整批导入（`FR-R-12-04` 批量形态）：选装着若干期包的上一层目录，逐条报
+  'plugin.retro.importBatch': { 'zh-Hans': '导入整批…', en: 'Import a folder…' },
+  'plugin.retro.importBatchHint': {
+    'zh-Hans': '选一个装着若干期包的上一层目录（每个子目录是一期）',
+    en: 'Pick the folder that holds several packages (each subfolder is one period)',
+  },
+  'plugin.retro.importBatchPickTitle': {
+    'zh-Hans': '选择装有若干期包的目录',
+    en: 'Pick a folder that holds report packages',
+  },
+  'plugin.retro.batchSummary': {
+    'zh-Hans': '整批 {n} 期：新增 {added} · 已存在 {already} · 冲突 {conflict} · 拒收 {bad}',
+    en: '{n} package(s): {added} added · {already} already there · {conflict} conflicting · {bad} refused',
+  },
+  'plugin.retro.batchSkipped': {
+    'zh-Hans': '另有 {n} 个条目不是包（已跳过）',
+    en: '{n} other item(s) were not packages (skipped)',
+  },
+  'plugin.retro.batchNothing': {
+    'zh-Hans': '这个目录下没有找到周报包（看了 {n} 个条目）',
+    en: 'No report package in this folder ({n} item(s) checked)',
+  },
+  'plugin.retro.batchNothingHint': {
+    'zh-Hans': '要选装着各期包的那一层：每个子目录里要有 index.json 与 report.md。',
+    en: 'Pick the folder that holds the period folders: each needs index.json and report.md.',
+  },
+  'plugin.retro.batchDetails': { 'zh-Hans': '逐条结果（{n} 条）', en: 'Per-package result ({n})' },
+  // 逐条结果的态标签（态本身由 Rust 判，这里只给一个人话的词）
+  'plugin.retro.state.imported': { 'zh-Hans': '新导入', en: 'added' },
+  'plugin.retro.state.already': { 'zh-Hans': '已存在', en: 'already there' },
+  'plugin.retro.state.conflict': { 'zh-Hans': '冲突', en: 'conflict' },
+  'plugin.retro.state.rejected': { 'zh-Hans': '拒收', en: 'refused' },
+  'plugin.retro.state.failed': { 'zh-Hans': '失败', en: 'failed' },
+  // 打开所在文件夹（本机存储的可见面）
+  'plugin.retro.reveal': { 'zh-Hans': '打开所在文件夹', en: 'Show in File Explorer' },
+  'plugin.retro.revealHint': {
+    'zh-Hans': '在资源管理器里打开这一期的包目录',
+    en: 'Open this period folder in File Explorer',
+  },
+  'plugin.retro.revealFailed': { 'zh-Hans': '打不开所在文件夹', en: 'Could not open the folder' },
   'plugin.retro.emptyImportHint': {
     'zh-Hans': '也可以点上面的「导入包…」，把一个包复制进来。',
     en: 'Or use “Import a package…” above to copy one in.',

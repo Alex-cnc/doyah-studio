@@ -688,6 +688,30 @@ fn retro_import(state: State<'_, ShellState>, source: String) -> Result<retro_li
     state.retro.import(&source)
 }
 
+/// 整批导入（`FR-R-12-04` 的批量形态）：`source` = 装着若干期包的**上一层目录**（或单期包目录）。
+///
+/// 每个子目录仍走 `RetroStore::import` 同一套判定；这里只把多份结果并起来。
+/// 不是包的子目录只计数（`skipped`），不逐条刷屏 —— 用户选了一整个下载目录时也不会被红字淹掉。
+#[tauri::command]
+fn retro_import_batch(
+    state: State<'_, ShellState>,
+    source: String,
+) -> Result<retro_library::RetroBatchImport, DbFailure> {
+    state.retro.import_batch(&source)
+}
+
+/// 在资源管理器里打开**这一期**的包目录（本机存储的可见面）。
+///
+/// 只收期号、**不收路径**：目录由库根 + 期号在 Rust 侧拼出来（`reveal_plan` 走
+/// `validate_period`），前端给不了任意路径。启动不等进程（explorer 立刻返回）。
+#[tauri::command]
+fn retro_reveal(
+    state: State<'_, ShellState>,
+    period: String,
+) -> Result<doyah_studio_db::RevealPlan, DbFailure> {
+    state.retro.reveal(&period)
+}
+
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
 //
 // 四条命令都很薄：**判定在领域层**（`doyah_studio_db::agent_config::evaluate`），本层只做
@@ -2422,6 +2446,8 @@ pub fn run() {
             retro_asset,
             open_external,
             retro_import,
+            retro_import_batch,
+            retro_reveal,
             agent_settings_get,
             agent_settings_save,
             agent_key_save,

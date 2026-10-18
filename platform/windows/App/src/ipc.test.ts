@@ -91,6 +91,8 @@ describe('ipc', () => {
       'retro_asset',
       'open_external',
       'retro_import',
+      'retro_import_batch',
+      'retro_reveal',
       'agent_settings_get',
       'agent_settings_save',
       'agent_key_save',

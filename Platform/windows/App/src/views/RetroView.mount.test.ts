@@ -29,6 +29,16 @@ const state: {
   importResult: { period: string; state: string; message: string; path: string }
   importFailure: { message: string; hint: string } | null
   importCalls: string[]
+  batchResult: {
+    source: string
+    items: Array<{ period: string; state: string; message: string; path: string }>
+    scanned: number
+    skipped: number
+  } | null
+  batchFailure: { message: string; hint: string } | null
+  batchCalls: string[]
+  revealCalls: string[]
+  revealFailure: { message: string; hint: string } | null
 } = {
   snapshot: { root: 'C:\\Users\\Alex\\AppData\\Roaming\\DoyahStudio\\retro\\packages', cards: [], problems: [] },
   snapshotFailure: null,
@@ -45,6 +55,11 @@ const state: {
   importResult: { period: '2026-W43', state: 'imported', message: '已导入到 C:\\...\\2026-W43', path: 'C:\\...\\2026-W43' },
   importFailure: null,
   importCalls: [],
+  batchResult: null,
+  batchFailure: null,
+  batchCalls: [],
+  revealCalls: [],
+  revealFailure: null,
 }
 
 vi.mock('../ipc', () => ({
@@ -75,6 +90,22 @@ vi.mock('../ipc', () => ({
     state.importCalls.push(source)
     if (state.importFailure) throw state.importFailure
     return state.importResult
+  }),
+  retroImportBatch: vi.fn(async (source: string) => {
+    state.batchCalls.push(source)
+    if (state.batchFailure) throw state.batchFailure
+    if (!state.batchResult) throw { message: '没有预置整批结果', hint: '' }
+    return state.batchResult
+  }),
+  retroReveal: vi.fn(async (period: string) => {
+    state.revealCalls.push(period)
+    if (state.revealFailure) throw state.revealFailure
+    return {
+      program: 'explorer.exe',
+      args: [`C:\\Users\\Alex\\AppData\\Roaming\\DoyahStudio\\retro\\packages\\${period}`],
+      workingDirectory: null,
+      used: 'explorer',
+    }
   }),
 }))
 
@@ -147,6 +178,11 @@ beforeEach(() => {
   state.importResult = { period: '2026-W43', state: 'imported', message: '已导入到 C:\\...\\2026-W43', path: 'C:\\...\\2026-W43' }
   state.importFailure = null
   state.importCalls = []
+  state.batchResult = null
+  state.batchFailure = null
+  state.batchCalls = []
+  state.revealCalls = []
+  state.revealFailure = null
   // happy-dom 没实现 blob URL：给一个确定性的替身（判据只关心「挂上了没有」）
   let counter = 0
   Object.assign(URL, {
@@ -806,5 +842,100 @@ describe('RetroView 周报阅读面', () => {
     const line = wrapper.get('[data-role="retro-import-failure"]')
     expect(line.text()).toContain('不是一个目录')
     expect(line.text()).toContain('选目录，不要选文件。')
+  })
+
+  // ── 整批导入（`FR-R-12-04` 批量形态）─────────────────────────────────────────────
+
+  it('importing_a_folder_of_packages_reports_each_one_and_puts_them_in_the_list', async () => {
+    state.pickedFolder = 'D:\\inbox'
+    state.batchResult = {
+      source: 'D:\\inbox',
+      items: [
+        { period: '2026-W43', state: 'imported', message: '已导入到 C:\\...\\2026-W43', path: 'C:\\...\\2026-W43' },
+        { period: '2026-W44', state: 'already', message: '已导入（与库里那份逐字节相同，未覆盖）', path: 'C:\\...\\2026-W44' },
+      ],
+      scanned: 4,
+      skipped: 2,
+    }
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    // 整批导完会重扫：两期都该出现在左列表
+    state.snapshot.cards = [card('2026-W43', '第 43 周'), card('2026-W44', '第 44 周')]
+    await wrapper.get('[data-role="retro-import-batch"]').trigger('click')
+    await flushPromises()
+
+    expect(state.pickCalls).toBe(1)
+    expect(state.batchCalls).toEqual(['D:\\inbox'])
+    const summary = wrapper.get('[data-role="retro-import-batch-result"]')
+    expect(summary.text()).toContain('新增 1')
+    expect(summary.text()).toContain('已存在 1')
+    // 不是包的条目只计数，不逐条刷屏
+    expect(wrapper.get('[data-role="retro-import-batch-skipped"]').text()).toContain('2')
+    // 逐条明细：两行、态与原因都在
+    const items = wrapper.get('[data-role="retro-import-batch-items"]').findAll('li')
+    expect(items).toHaveLength(2)
+    expect(items.map((item) => item.attributes('data-state'))).toEqual(['imported', 'already'])
+    expect(items[1].text()).toContain('逐字节相同')
+    // 「导进来」必须真的出现在左列表（否则等于没导入）
+    expect(wrapper.text()).toContain('第 43 周')
+    expect(wrapper.text()).toContain('第 44 周')
+  })
+
+  it('a_folder_without_any_package_says_so_instead_of_reporting_a_fake_success', async () => {
+    state.pickedFolder = 'D:\\downloads'
+    state.batchResult = { source: 'D:\\downloads', items: [], scanned: 3, skipped: 3 }
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-role="retro-import-batch"]').trigger('click')
+    await flushPromises()
+
+    const line = wrapper.get('[data-role="retro-import-batch-result"]')
+    expect(line.attributes('data-state')).toBe('empty')
+    expect(line.text()).toContain('没有找到周报包')
+    // 说清下一步该选哪一层（不是只报「0 条」）
+    expect(line.text()).toContain('index.json')
+    // 一条明细都不该编
+    expect(wrapper.find('[data-role="retro-import-batch-items"]').exists()).toBe(false)
+  })
+
+  it('cancelling_the_batch_picker_imports_nothing_and_says_nothing', async () => {
+    state.pickedFolder = null
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-role="retro-import-batch"]').trigger('click')
+    await flushPromises()
+
+    expect(state.pickCalls).toBe(1)
+    expect(state.batchCalls).toEqual([])
+    expect(wrapper.find('[data-role="retro-import-batch-result"]').exists()).toBe(false)
+    expect(wrapper.find('[data-role="retro-import-failure"]').exists()).toBe(false)
+  })
+
+  // ── 打开所在文件夹（本机存储的可见面）──────────────────────────────────────────
+
+  it('reveal_opens_the_selected_periods_folder_and_reports_a_failure_verbatim', async () => {
+    state.snapshot.cards = [card('2026-W43', '芯片周报 · 第 43 周')]
+    state.reports['2026-W43'] = heading('正文')
+    const wrapper = mount(RetroView)
+    await flushPromises()
+    await wrapper.get('[data-period="2026-W43"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-role="retro-reveal"]').trigger('click')
+    await flushPromises()
+    // 只传期号（路径由 Rust 侧拼，界面给不了任意路径）
+    expect(state.revealCalls).toEqual(['2026-W43'])
+    expect(wrapper.find('[data-role="retro-reveal-failure"]').exists()).toBe(false)
+
+    // 打不开时：原话 + 提示两段都要在（不静默）
+    state.revealFailure = {
+      message: '库里没有这一期：2026-W43',
+      hint: '点「刷新」看看它还在不在（包可能被移到别处了）。',
+    }
+    await wrapper.get('[data-role="retro-reveal"]').trigger('click')
+    await flushPromises()
+    const failure = wrapper.get('[data-role="retro-reveal-failure"]')
+    expect(failure.text()).toContain('库里没有这一期')
+    expect(failure.text()).toContain('刷新')
   })
 })

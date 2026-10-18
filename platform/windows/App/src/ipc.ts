@@ -115,6 +115,10 @@ export const COMMANDS = {
   openExternal: 'open_external',
   // 导入一个周报包（FR-R-12-04 ①③：幂等 + 逐条报错、不写半截；判定全在 Rust）
   retroImport: 'retro_import',
+  // 整批导入（FR-R-12-04 批量形态）：选一个装着若干期包的上一层目录，逐条报结果
+  retroImportBatch: 'retro_import_batch',
+  // 在资源管理器里打开这一期的包目录（本机存储的可见面：只收期号，路径在 Rust 侧拼）
+  retroReveal: 'retro_reveal',
   // 智能体设置（FR-AI-01：总开关 / 端点 / 模型 / 配额；密钥单独存，永不回显）
   agentSettingsGet: 'agent_settings_get',
   agentSettingsSave: 'agent_settings_save',
@@ -820,6 +824,39 @@ export interface RetroImport {
 export function retroImport(source: string): Promise<RetroImport> {
   if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
   return invoke(COMMANDS.retroImport, { source })
+}
+
+/**
+ * 一批导入（`FR-R-12-04` 批量形态）：`source` = 装着若干期包的**上一层目录**（或单期包目录）。
+ *
+ * 与 `RetroImport` 同一套口径，只是把多份结果并起来：`items` 逐条如实报，
+ * `skipped` = 这一层里没当成包处理的条目数（不是包的子目录 / 隐藏目录 / 散文件）。
+ */
+export interface RetroBatchImport {
+  /** 用户选的那个目录（原话回显）。 */
+  source: string
+  /** 逐个包的结果（按目录名排序 = 与左栏同一顺序）。 */
+  items: RetroImport[]
+  /** 这一层看过多少个子目录（含不是包的）。 */
+  scanned: number
+  /** 没当成包处理的条目数。 */
+  skipped: number
+}
+
+export function retroImportBatch(source: string): Promise<RetroBatchImport> {
+  if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
+  return invoke(COMMANDS.retroImportBatch, { source })
+}
+
+/**
+ * 在资源管理器里打开**这一期**的包目录（本机存储的可见面）。
+ *
+ * 只收期号：目录由库根 + 期号在 Rust 侧拼（`RetroStore::reveal_plan` 走 `validate_period`），
+ * 界面给不了任意路径。返回的是**真的用了哪个程序**（界面据此说一句人话）。
+ */
+export function retroReveal(period: string): Promise<RevealPlan> {
+  if (!inTauri()) throw bypassWorkspace('ipc.action.retro')
+  return invoke(COMMANDS.retroReveal, { period })
 }
 
 // ── 智能体设置（FR-AI-01）──────────────────────────────────────────────────────────────
