@@ -27,6 +27,13 @@ public enum AgentLoopEvent: Equatable, Sendable {
     ///
     /// 过程面据此报一行读数 —— 续跑**不许静默**（`R-63` ③：不许让人以为「又从头跑了一遍」）。
     case resumed(fromStep: Int, skippedSteps: Int, skippedCheckpointLines: Int)
+    /// **一次写 / 执行工具要人批**（`FR-AI-23` ④ + `FR-AI-31` ①）：把单子原样交给界面。
+    ///
+    /// `baseDigest` = **出单那一刻**目标的基线串（`FR-AI-31` ①）：界面记在卡片上，
+    /// 兑现时交回工具层复核 ⇒ 审批之后被改过的文件不会被旧审批静默覆盖。
+    /// 这条事件此前**没有**：循环只把 `pendingApproval` 写进过程行与审计，界面拿不到
+    /// 「要改什么 / 指纹是多少」⇒ 用户永远点不到「批准」。判据只管对不对，能不能点归事件这一格。
+    case approvalRequested(name: String, fingerprint: String, preview: String, baseDigest: String)
 }
 
 /// 进度观察口（界面实现它；**不改变循环的判定口径**，只是把过程如实说出来）。
@@ -481,6 +488,12 @@ public struct AgentLoop: Sendable {
                 switch outcome {
                 case .needsApproval(let request):
                     await observer?.observe(.toolFinished(name: invocation.name, outcome: "pendingApproval", millis: toolMillis))
+                    // **把单子交给界面**（`FR-AI-23` ④）：要改什么 / 指纹 / 基线，一次给全 ——
+                    // 少任何一格，用户都点不出一次能兑现的批准。
+                    await observer?.observe(.approvalRequested(name: request.toolName,
+                                                               fingerprint: request.fingerprint,
+                                                               preview: request.payload,
+                                                               baseDigest: request.baseDigest))
                     rejected.append((invocation.name, AgentToolRefusal.approvalRequired.rawValue))
                     observations.append("\(invocation.name): \(request.toolName)/\(request.fingerprint)")
                     recordTurn(context: context, kind: .approval, role: "system",
@@ -490,7 +503,9 @@ public struct AgentLoop: Sendable {
                         outcome: .pendingApproval, detail: request.fingerprint,
                         sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                 case .refused(let code, let detail):
-                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied", millis: toolMillis))
+                    // 拒因**带上机器码**（`FR-AI-31` ①：写冲突 / 基线过期要能被界面单独认出来）。
+                    await observer?.observe(.toolFinished(name: invocation.name,
+                                                          outcome: "denied:\(code.rawValue)", millis: toolMillis))
                     rejected.append((invocation.name, code.rawValue))
                     observations.append("\(invocation.name): \(code.rawValue)/\(detail)")
                     recordTurn(context: context, kind: .tool, role: "tool",

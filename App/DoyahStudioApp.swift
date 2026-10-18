@@ -120,7 +120,7 @@ struct DoyahStudioApp: App {
                                                                observer: observer)
                     }
                     agentChat.applyApproval = { card in
-                        guard let rootPath = workspace.rootPath else { return false }
+                        guard let rootPath = workspace.rootPath else { return .failure("failed") }
                         return await appState.applyAgentChatApproval(card: card, workspacePath: rootPath)
                     }
                     // `FR-AI-25` ⑤ 一步撤销：撤销只认宿主手里那本账（Core `AgentEditJournal`），

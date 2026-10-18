@@ -26,6 +26,11 @@ public enum AgentToolRefusal: String, Codable, Equatable, Sendable {
     /// **伤害性动作被刹停**（`FR-AI-34`）：不进审批队列、不执行，**立刻停并告诉你**。
     /// 与 `deniedByPolicy` 分开：那条是"此刻策略不许"，这条是"这事本身有害"。
     case harmStopped
+    /// **同一文件正有另一次写入在进行**（`FR-AI-31` ①）：不排队、不静默覆盖 —— 如实说，让人 / 模型重试。
+    /// 与 `staleTarget` 分开：这条是"此刻有人正握着这个文件"，那条是"我拿到的那份基线已经过期"。
+    case writeConflict
+    /// **批准之后目标被改过**（`FR-AI-31` ① 的负例「静默覆盖」）：不拿旧审批盖新内容，如实说重新来过。
+    case staleTarget
 }
 
 /// 读文件的输出（结构化 ⇒ 截断**可被断言**，不必靠人话里那句提示）。
@@ -58,6 +63,16 @@ public struct AgentApprovalRequest: Equatable, Sendable {
     public var fingerprint: String
     /// 要写的差异预览 / 要跑的命令原文（给人看的**事实**，不是人话判词）。
     public var payload: String
+    /// **出单那一刻**目标的基线串（`FR-AI-31` ①）：临写前复核用 —— 对不上就说明这份审批已经过期。
+    /// 执行类动作没有目标文件 ⇒ 空串（不许拿"没有基线"当"基线成立"）。
+    public var baseDigest: String
+
+    public init(toolName: String, fingerprint: String, payload: String, baseDigest: String = "") {
+        self.toolName = toolName
+        self.fingerprint = fingerprint
+        self.payload = payload
+        self.baseDigest = baseDigest
+    }
 }
 
 /// 一次工具调用的结果。
@@ -136,15 +151,20 @@ public struct AgentWorkspaceTools: Sendable {
     public var maxDirectoryEntries: Int
     /// 停手记录（`FR-AI-34`）：给了就把每次刹停留痕；不给（单测）就不写文件。
     public var harmStopLog: AgentHarmStopLog?
+    /// 「谁正在写哪个文件」的台账（`FR-AI-31` ①）。默认取**进程内共享**那一本 ——
+    /// 每轮现造一个 `AgentWorkspaceTools` 也不会各拿一本账，否则并发写永远抓不到。
+    public var writes: AgentWriteCoordinator
 
     public init(root: URL, registry: AgentToolRegistry = .standard,
                 maxReadBytes: Int = 262_144, maxDirectoryEntries: Int = 500,
-                harmStopLog: AgentHarmStopLog? = nil) {
+                harmStopLog: AgentHarmStopLog? = nil,
+                writes: AgentWriteCoordinator = .shared) {
         self.root = root
         self.registry = registry
         self.maxReadBytes = maxReadBytes
         self.maxDirectoryEntries = maxDirectoryEntries
         self.harmStopLog = harmStopLog
+        self.writes = writes
     }
 
     // MARK: - read_file
@@ -280,13 +300,20 @@ public struct AgentWorkspaceTools: Sendable {
         return .needsApproval(AgentApprovalRequest(
             toolName: tool.name,
             fingerprint: AgentFingerprint.hash("\(tool.name)|\(relative)|\(content)"),
-            payload: AgentTextDiff.preview(before: before, after: content, path: relative)))
+            payload: AgentTextDiff.preview(before: before, after: content, path: relative),
+            // 基线**出单时就记下**（`FR-AI-31` ①）：临写前复核这一格，对不上说明这份审批已经过期。
+            baseDigest: AgentWriteTargetState.digest(at: url)))
     }
 
-    /// 真写。**三件事缺一不可**：参数指纹与请求一致、该指纹在已批准集合里、目标仍在工作区内。
+    /// 真写。**五件事缺一不可**：参数指纹与请求一致、该指纹在已批准集合里、目标仍在工作区内、
+    /// **没有另一次写在同时写这个文件**（`FR-AI-31` ① 租约）、**目标还是出单时那一份**（基线）。
+    ///
+    /// `baseDigest` 给了才复核基线（`nil` = 调用方没有那一格，旧行为逐字不变）；
+    /// 界面把卡片上记的基线传进来 ⇒ 审批之后被改过的文件**不会被旧审批静默覆盖**。
     public func writeFile(path: String, content: String, tool: AgentToolDefinition? = nil,
                           guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false),
-                          fingerprint: String, granted: Set<String>) -> AgentToolOutcome {
+                          fingerprint: String, granted: Set<String>,
+                          baseDigest: String? = nil) -> AgentToolOutcome {
         let prepared = prepareWrite(path: path, content: content, tool: tool, guardPolicy: guardPolicy)
         guard case .needsApproval(let request) = prepared else { return prepared }
         guard request.fingerprint == fingerprint, granted.contains(fingerprint) else {
@@ -294,6 +321,15 @@ public struct AgentWorkspaceTools: Sendable {
         }
         guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else {
             return .refused(.outsideWorkspace, detail: path)
+        }
+        // **租约**（`FR-AI-31` ①）：同一个文件同时只许一个人写。拿不到就立刻如实说，**不排队、不覆盖**。
+        guard let lease = writes.acquire(path: url.path) else {
+            return .refused(.writeConflict, detail: relativePath(url))
+        }
+        defer { writes.release(lease) }
+        // **基线复核**：出单之后这个文件被改过 ⇒ 这份审批已经不是"我批的那一份"，宁可不写。
+        if let baseDigest, AgentWriteTargetState.digest(at: url) != baseDigest {
+            return .refused(.staleTarget, detail: relativePath(url))
         }
         do {
             try content.write(to: url, atomically: true, encoding: .utf8)
@@ -360,6 +396,11 @@ public struct AgentWorkspaceTools: Sendable {
         guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else {
             return .refused(.outsideWorkspace, detail: path)
         }
+        // **租约**（`FR-AI-31` ①）：与整篇重写共用同一本账 —— 两种写落在同一个文件上也要串行化。
+        guard let lease = writes.acquire(path: url.path) else {
+            return .refused(.writeConflict, detail: relativePath(url))
+        }
+        defer { writes.release(lease) }
         // **临写前再读一次盘**：审批这段时间里文件可能被改过 ⇒ 锚点必须**此刻**仍然唯一。
         guard let before = try? String(contentsOf: url, encoding: .utf8),
               let after = Self.applyingEdit(to: before, oldString: oldString, newString: newString) else {

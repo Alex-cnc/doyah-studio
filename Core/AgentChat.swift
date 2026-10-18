@@ -55,14 +55,19 @@ public struct AgentToolCard: Identifiable, Equatable, Sendable {
     public var arguments: String
     public var outcome: AgentToolCardOutcome
     public var expanded: Bool
+    /// **出单那一刻**目标的基线串（`FR-AI-31` ①）：执行类动作没有目标文件 ⇒ `nil`。
+    /// 兑现时把它交回工具层复核 —— 审批之后文件被改过就**不拿旧审批盖新内容**。
+    public var baseDigest: String?
 
     public init(id: UUID = UUID(), name: String, arguments: String,
-                outcome: AgentToolCardOutcome = .running, expanded: Bool = false) {
+                outcome: AgentToolCardOutcome = .running, expanded: Bool = false,
+                baseDigest: String? = nil) {
         self.id = id
         self.name = name
         self.arguments = arguments
         self.outcome = outcome
         self.expanded = expanded
+        self.baseDigest = baseDigest
     }
 
     /// 卡片的**副标题**（机器形态，界面负责给人话）。
@@ -84,6 +89,15 @@ public struct AgentToolCard: Identifiable, Equatable, Sendable {
         case .pendingApproval(_, let preview), .approved(_, let preview): return preview
         default: return nil
         }
+    }
+
+    /// **批了但还没落地**（`FR-AI-31` ① 的兑现那一格）。
+    ///
+    /// 手动批是「点了就立刻兑现」，代签（`FR-AI-34`）是「建单即已批、等宿主观测口兑现」——
+    /// 两种都停在 `.approved` 这一档，界面据此决定要不要去兑现。
+    public var isAwaitingApply: Bool {
+        if case .approved = outcome { return true }
+        return false
     }
 
     /// 等审批时的**指纹**（界面拿它去兑现那一次批准）。
@@ -319,6 +333,21 @@ public struct AgentChatState: Equatable, Sendable {
             closeProgressLine(tool: name,
                               mark: (outcome == "executed" ? "✓" : "✗ " + outcome) + Self.durationSuffix(millis))
             currentAction = nil
+            // **写冲突 / 基线过期不许只留在过程行的机器码里**（`FR-AI-31` ①）：
+            // 这两种都是「文件没被写」而模型可能以为写过了 ⇒ 另出一句可读的提示（码留给界面翻）。
+            if outcome.hasPrefix("denied:") {
+                let code = String(outcome.dropFirst("denied:".count))
+                if code == AgentToolRefusal.writeConflict.rawValue
+                    || code == AgentToolRefusal.staleTarget.rawValue {
+                    appendNotice(code)
+                }
+            }
+        case .approvalRequested(let name, let fingerprint, let preview, let baseDigest):
+            // **要审批就真的出一张单**（`FR-AI-23` ④）：批准之前先能看见要改什么。
+            // 单子的基线跟着卡片走（`FR-AI-31` ①）—— 兑现时交回工具层复核。
+            // 代签那一档（`FR-AI-34`）在这里被 `requestApproval` 判成「已批」，落地由宿主观测口立刻兑现。
+            requestApproval(name: name, fingerprint: fingerprint, preview: preview,
+                            baseDigest: baseDigest.isEmpty ? nil : baseDigest)
         case .stopped(let stop):
             endStreaming()
             appendNotice(stop.reason)
@@ -400,8 +429,12 @@ public struct AgentChatState: Equatable, Sendable {
     // MARK: - 审批（④）
 
     /// 某个写 / 执行工具要审批 —— **批准之前先把要改什么摆出来**。
+    ///
+    /// `baseDigest` = 出单那一刻目标的基线串（`FR-AI-31` ①）：跟着卡片活到兑现那一步，
+    /// 兑现时交回工具层复核。不给 ⇒ 不记基线（旧行为逐字不变）。
     @discardableResult
-    public mutating func requestApproval(name: String, fingerprint: String, preview: String) -> UUID {
+    public mutating func requestApproval(name: String, fingerprint: String, preview: String,
+                                         baseDigest: String? = nil) -> UUID {
         // **任务范围内代签**（`FR-AI-34`）：用户说一句"把这个修好"，不该再被问二十次。
         // 代签**不绕过护栏** —— 沙箱与伤害刹停都在工具层更早生效；这里只是"这一步要不要人手点一下"。
         // 代签必须**可见可审**：卡片建出来就是已批态，另记一条 `autoApprovals`（理由带出处）。
@@ -410,7 +443,8 @@ public struct AgentChatState: Equatable, Sendable {
         case .autoApproved(let reason):
             let card = AgentToolCard(name: name, arguments: preview,
                                      outcome: .approved(fingerprint: fingerprint, preview: preview),
-                                     expanded: false)
+                                     expanded: false,
+                                     baseDigest: baseDigest)
             cards.append(card)
             grants.insert(fingerprint)
             autoApprovals.append(AgentAutoApproval(tool: name, fingerprint: fingerprint,
@@ -419,7 +453,8 @@ public struct AgentChatState: Equatable, Sendable {
         case .needsHuman:
             let card = AgentToolCard(name: name, arguments: preview,
                                      outcome: .pendingApproval(fingerprint: fingerprint, preview: preview),
-                                     expanded: true)
+                                     expanded: true,
+                                     baseDigest: baseDigest)
             cards.append(card)
             return card.id
         }
