@@ -528,7 +528,7 @@ def check_section_heading_counts() -> list[str]:
                 # 同级或更高级标题即为本节结束
                 if len(following) - len(following.lstrip("#")) <= level:
                     break
-            elif re.match(r"^\| (FR|NFR|DR|IR|AC)-", following):
+            elif re.match(r"^\| (?:\*\*)?(FR|NFR|DR|IR|AC)-", following):
                 actual += 1
             cursor += 1
         if declared != actual:
