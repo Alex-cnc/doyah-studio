@@ -23,9 +23,9 @@ use doyah_studio_db::agent_audit::{AuditRecord, AuditVerdict};
 use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateReport, GateState};
 use doyah_studio_db::agent_history::HistoryEntry;
 use doyah_studio_db::agent_nl2sql::{
-    build_chat_request_with_context, build_request, parse_reply,
-    parse_tool_calls, read_file_path, CarriedFile, ChatMessage, ChatToolCall, Outgoing, TableBrief,
-    CHAT_READ_FILE_TOOL,
+    build_chat_request_with_context, build_request, parse_reply, parse_tool_calls, read_file_path,
+    write_file_arguments, CarriedFile, ChatMessage, ChatToolCall, Outgoing, TableBrief,
+    CHAT_READ_FILE_TOOL, CHAT_WRITE_FILE_TOOL,
 };
 use doyah_studio_db::agent_quota::{now_secs, QuotaStatus};
 use doyah_studio_db::agent_retry::{
@@ -1102,29 +1102,41 @@ pub fn chat_stream_with_carry(
     })
 }
 
-/// 一次工具执行的**可见账**（界面卡片上如实显示「允许了没有、读到多少、截没截断」）。
+/// 一次工具执行的**可见账**（界面卡片上如实显示「允许了没有、读到 / 写了多少」）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolRun {
-    /// 工具名（现在只有 `read_file`）。
+    /// 工具名（`read_file` / `write_file`）。
     pub name: String,
     /// 模型要的相对路径（原样回显，便于用户核对）。
     pub path: String,
     /// 用户点了允许还是拒绝。
     pub approved: bool,
-    /// 真读到了内容（拒绝 / 越界 / 读不到都是 `false`）。
+    /// 真读到了 / 真写进去了（拒绝 / 越界 / 读不到都是 `false`）。
     pub ok: bool,
-    /// 交给模型的字符数（拒绝时为 0）。
+    /// 交给模型的字符数（读那件有意义；拒绝时为 0）。
     pub chars: usize,
     /// 是不是因为太长被截断了。
     pub truncated: bool,
-    /// 读不到 / 越界时的可读原因（空串 = 没问题）。
+    /// 读不到 / 越界 / 写不进去时的可读原因（空串 = 没问题）。
     pub problem: String,
     /// **当次真交给模型的那段正文**（拒绝 / 没读到时为空串）。
     ///
     /// 界面靠它把「读过的文件」带进后续请求（`FR-AI-18` 收口）：正文只在这一处产出，
     /// 界面不必再拼一遍 —— 拼两处就会有两份「模型看到的是什么」。
     pub content: String,
+    /// 这一件是读还是写（`read` / `write`）—— 界面按它决定画「读到多少」还是「加了几行 / 减了几行」。
+    pub kind: String,
+    /// 真写到盘上的字节数（读那件恒为 0）。
+    pub bytes: usize,
+    /// 相比写入前多了几行（写那件有意义）。
+    pub added: usize,
+    /// 相比写入前少了几行（写那件有意义）。
+    pub removed: usize,
+    /// **撤销凭据**（写成功才有；空串 = 没有可撤销的）。
+    ///
+    /// 界面拿它调 `agent_write_undo` 把文件恢复到写之前 —— 前提是盘上还是我们写的那份。
+    pub undo: String,
 }
 
 /// 用户逐件点完之后的结果：**每一件**的执行账 + 模型拿到结果后的最终回答。
@@ -1142,6 +1154,10 @@ pub struct ToolResume {
 /// 交回模型的那段「被拒绝」正文：**让它别编**。
 pub const TOOL_DENIED_NOTE: &str =
     "用户拒绝了这次读取。不要编造该文件的内容；请基于已有信息回答，并说明你需要哪部分内容、为什么。";
+
+/// 写那件被拒绝时交回模型的正文（同样**让它别声称改过了**）。
+pub const TOOL_WRITE_DENIED_NOTE: &str =
+    "用户拒绝了这次写入，文件一个字都没改。不要声称已经修改或已经保存；请说明你打算改成什么、为什么，等用户下一次批准。";
 
 /// 交给模型的单次工具正文上限（字符）。超了如实标注截断 —— 悄悄砍掉会让模型以为文件只有这么长。
 pub const TOOL_RESULT_MAX_CHARS: usize = 8_000;
@@ -1182,7 +1198,36 @@ pub fn chat_tool_resume(
     let mut runs: Vec<ToolRun> = Vec::with_capacity(calls.len());
     // 结果与调用一一对应（顺序一致）：回灌时 `tool_call_id` 逐件对齐。
     let mut results: Vec<(ChatToolCall, String)> = Vec::with_capacity(calls.len());
+    let undo_dir = agent_undo_dir();
     for (call, approved) in calls.iter().zip(approvals.iter()) {
+        // 写那件：只有批准了才动盘；拒绝 / 参数不全 / 越界都如实说，**不写半截**。
+        if call.name.trim() == CHAT_WRITE_FILE_TOOL {
+            let (path, content) = write_file_arguments(&call.arguments).unwrap_or_default();
+            let write = if !approved {
+                ToolWrite::refused(TOOL_WRITE_DENIED_NOTE, &path)
+            } else if path.trim().is_empty() {
+                ToolWrite::refused("模型没给路径（path 为空），文件一个字都没改", "")
+            } else {
+                write_workspace_file(workspace, &path, &content, &undo_dir)
+            };
+            runs.push(ToolRun {
+                name: call.name.clone(),
+                path: write.path.clone(),
+                approved: *approved,
+                ok: write.ok,
+                chars: 0,
+                truncated: false,
+                problem: write.problem.clone(),
+                content: String::new(),
+                kind: "write".to_string(),
+                bytes: write.bytes,
+                added: write.added,
+                removed: write.removed,
+                undo: write.undo.clone(),
+            });
+            results.push((call.clone(), write.content));
+            continue;
+        }
         let path = read_file_path(&call.arguments).unwrap_or_default();
         let read = if !approved {
             ToolRead {
@@ -1195,7 +1240,7 @@ pub fn chat_tool_resume(
         } else if call.name.trim() != CHAT_READ_FILE_TOOL {
             ToolRead {
                 content: format!(
-                    "没有执行：工具「{}」不在只读白名单里（只允许 {CHAT_READ_FILE_TOOL}）。",
+                    "没有执行：工具「{}」不在白名单里（只允许 {CHAT_READ_FILE_TOOL} / {CHAT_WRITE_FILE_TOOL}）。",
                     call.name
                 ),
                 chars: 0,
@@ -1216,6 +1261,11 @@ pub fn chat_tool_resume(
             problem: read.problem.clone(),
             // 只有真读到了才把正文交回界面（拒绝 / 越界时那段是「没读到」的说明，不是文件内容）。
             content: if read.ok { read.content.clone() } else { String::new() },
+            kind: "read".to_string(),
+            bytes: 0,
+            added: 0,
+            removed: 0,
+            undo: String::new(),
         });
         results.push((call.clone(), read.content));
     }
@@ -1308,6 +1358,505 @@ fn read_workspace_file(workspace: &str, path: &str) -> ToolRead {
         problem: String::new(),
     }
 }
+
+// ── 写文件（`FR-AI-20` / `FR-AI-25`：差异预览 → 批准 → 落盘 → 撤销）──────────────────
+//
+// 四条口径：
+// ① **批准前先看差异**：预览与落盘走**同一个**路径校验（`resolve_write_target`），预览说能写、
+//    落盘就一定还是那个目标 —— 两条各写一份校验，就会出现「卡片上说没问题、点下去越界」；
+// ② **差异 = 裁掉公共前缀 / 后缀剩下的改动段**：不做 LCS，但单点修改就是精确的；
+//    多处修改会并成一段「整段被替换」—— 如实报行数，不假装是逐行最小差异；
+// ③ **撤销要有前提**：落盘前把旧正文与「写完之后的样子」（长度 + 校验和）一起存下来，
+//    撤销时先核盘上还是我们写的那份，对不上就拒绝（否则会吃掉用户手工改的内容）；
+// ④ 写盘是本地动作：**不产生外发**，不新增审计条目、不动配额。
+
+/// 单文件写盘上限（字节）。超了就拒 —— 对话里一次改一份几十 MB 的文件不是本片想干的事。
+pub const TOOL_WRITE_MAX_BYTES: usize = 1_048_576;
+
+/// 预览里旧 / 新各最多画多少行（再长就如实说「还有 N 行没逐行列出」）。
+pub const TOOL_DIFF_PREVIEW_LINES: usize = 20;
+
+/// 逐行差异的行数读数。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct LineDiff {
+    old_lines: usize,
+    new_lines: usize,
+    added: usize,
+    removed: usize,
+}
+
+/// 按行切（末尾换行不算多一行；`\r\n` 的 `\r` 去掉，否则 Windows 上每行都会被算成「改了」）。
+fn split_lines(text: &str) -> Vec<&str> {
+    let mut lines: Vec<&str> = text
+        .split('\n')
+        .map(|line| line.strip_suffix('\r').unwrap_or(line))
+        .collect();
+    if lines.last().map(|line| line.is_empty()).unwrap_or(false) {
+        lines.pop();
+    }
+    lines
+}
+
+/// 裁掉公共前缀 / 后缀，返回（行数读数, 被删的旧行, 新增的新行）。
+///
+/// **不做 LCS**：单点修改就是精确的最小差异；多处修改会并成一段「中间被整段替换」——
+/// 这对「批准前看一眼」够用，且不会为了好看而把两处改动拆错。
+fn line_diff<'a>(old: &'a str, new: &'a str) -> (LineDiff, Vec<&'a str>, Vec<&'a str>) {
+    let old_lines = split_lines(old);
+    let new_lines = split_lines(new);
+    let mut prefix = 0usize;
+    while prefix < old_lines.len() && prefix < new_lines.len() && old_lines[prefix] == new_lines[prefix] {
+        prefix += 1;
+    }
+    let mut suffix = 0usize;
+    while suffix < old_lines.len() - prefix
+        && suffix < new_lines.len() - prefix
+        && old_lines[old_lines.len() - 1 - suffix] == new_lines[new_lines.len() - 1 - suffix]
+    {
+        suffix += 1;
+    }
+    let removed: Vec<&str> = old_lines[prefix..old_lines.len() - suffix].to_vec();
+    let added: Vec<&str> = new_lines[prefix..new_lines.len() - suffix].to_vec();
+    (
+        LineDiff {
+            old_lines: old_lines.len(),
+            new_lines: new_lines.len(),
+            added: added.len(),
+            removed: removed.len(),
+        },
+        removed,
+        added,
+    )
+}
+
+/// 预览里画出来的差异正文（`- 旧行` / `+ 新行`；超长的部分如实说没画）。
+fn render_diff(removed: &[&str], added: &[&str]) -> String {
+    let mut out = String::new();
+    for line in removed.iter().take(TOOL_DIFF_PREVIEW_LINES) {
+        out.push_str("- ");
+        out.push_str(line);
+        out.push('\n');
+    }
+    if removed.len() > TOOL_DIFF_PREVIEW_LINES {
+        out.push_str(&format!(
+            "- …（还有 {} 行被删掉，未逐行列出）\n",
+            removed.len() - TOOL_DIFF_PREVIEW_LINES
+        ));
+    }
+    for line in added.iter().take(TOOL_DIFF_PREVIEW_LINES) {
+        out.push_str("+ ");
+        out.push_str(line);
+        out.push('\n');
+    }
+    if added.len() > TOOL_DIFF_PREVIEW_LINES {
+        out.push_str(&format!(
+            "+ …（还有 {} 行是新增的，未逐行列出）\n",
+            added.len() - TOOL_DIFF_PREVIEW_LINES
+        ));
+    }
+    out
+}
+
+/// 批准前给用户看的差异（`FR-AI-20`「写盘前先出差异」）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WritePreview {
+    /// 模型要写的相对路径（原样回显）。
+    pub path: String,
+    /// 盘上原本有没有这个文件（`false` = 新建）。
+    pub existed: bool,
+    /// 相比现在多了几行。
+    pub added: usize,
+    /// 相比现在少了几行。
+    pub removed: usize,
+    /// 现在几行。
+    pub old_lines: usize,
+    /// 写完之后几行。
+    pub new_lines: usize,
+    /// 逐行差异预览（空串 = 没有差异：内容相同 / 新建空文件）。
+    pub diff: String,
+    /// 写不进去的原因（空 = 没问题）。**预览阶段就把不可能写的情况说清**，别等点了允许才拒。
+    pub problem: String,
+}
+
+/// 算一份「如果现在写，会变成什么样」（**不落盘**）。
+pub fn write_preview(workspace: &str, path: &str, content: &str) -> WritePreview {
+    let shown = path.trim().replace('\\', "/");
+    match resolve_write_target(workspace, path) {
+        Err(problem) => WritePreview {
+            path: shown,
+            existed: false,
+            added: 0,
+            removed: 0,
+            old_lines: 0,
+            new_lines: 0,
+            diff: String::new(),
+            problem,
+        },
+        Ok((_target, existing)) => {
+            let old = existing.unwrap_or_default();
+            let (stat, removed, added) = line_diff(&old, content);
+            WritePreview {
+                path: shown,
+                existed: stat.old_lines > 0 || !old.is_empty(),
+                added: stat.added,
+                removed: stat.removed,
+                old_lines: stat.old_lines,
+                new_lines: stat.new_lines,
+                diff: render_diff(&removed, &added),
+                problem: String::new(),
+            }
+        }
+    }
+}
+
+/// 解析一次写入的目标：**预览与落盘共用这一份校验**（各写一份就会两处不一致）。
+///
+/// 返回（落盘用的绝对路径, 盘上现有正文）。现有正文是 `None` = 新建。
+fn resolve_write_target(workspace: &str, path: &str) -> Result<(std::path::PathBuf, Option<String>), String> {
+    let root = workspace.trim();
+    if root.is_empty() {
+        return Err("没有打开工作区，写不了文件".to_string());
+    }
+    let relative = std::path::Path::new(path.trim());
+    if path.trim().is_empty() {
+        return Err("模型没给路径（path 为空）".to_string());
+    }
+    if relative.is_absolute() {
+        return Err("只允许工作区里的相对路径，绝对路径一律不写".to_string());
+    }
+    if relative.components().any(|part| {
+        matches!(
+            part,
+            std::path::Component::ParentDir
+                | std::path::Component::RootDir
+                | std::path::Component::Prefix(_)
+        )
+    }) {
+        return Err("路径里有 .. / 前缀：只允许工作区内部的路径".to_string());
+    }
+    let root_path = std::path::Path::new(root);
+    let root_real = root_path
+        .canonicalize()
+        .map_err(|_| "工作区路径读不到".to_string())?;
+    let joined = root_path.join(relative);
+    let Some(name) = joined.file_name() else {
+        return Err("路径没有文件名（不能写到一个目录上）".to_string());
+    };
+    let Some(parent) = joined.parent() else {
+        return Err("路径没有父目录".to_string());
+    };
+    // 父目录必须已存在（本片不顺手建目录：建了目录撤销就删不干净）。
+    let parent_real = parent
+        .canonicalize()
+        .map_err(|_| format!("目标目录不存在：{}（本片不自动建目录）", parent.display()))?;
+    if !parent_real.starts_with(&root_real) {
+        return Err("这个路径落在工作区外面，不写".to_string());
+    }
+    let target = parent_real.join(name);
+    if target.is_dir() {
+        return Err("那是一个目录，不写".to_string());
+    }
+    if !target.exists() {
+        return Ok((target, None));
+    }
+    let bytes = std::fs::read(&target).map_err(|_| "目标文件读不出来（没有权限或已被占用）".to_string())?;
+    if bytes.iter().any(|byte| *byte == 0) {
+        return Err("目标不是文本文件（含二进制内容），没有覆盖".to_string());
+    }
+    if bytes.len() > TOOL_WRITE_MAX_BYTES {
+        return Err(format!(
+            "目标文件 {} 字节，超过单次写入上限 {TOOL_WRITE_MAX_BYTES} 字节，没有覆盖",
+            bytes.len()
+        ));
+    }
+    let text = String::from_utf8(bytes).map_err(|_| "目标不是 UTF-8 文本，没有覆盖".to_string())?;
+    Ok((target, Some(text)))
+}
+
+/// 一次写盘的结果（交给模型 / 交给界面的两份说法都在这里产出，别处不再拼）。
+struct ToolWrite {
+    /// 回显给界面的路径（模型原话，斜杠统一）。
+    path: String,
+    /// 回灌给模型的说明（成功 / 失败都是完整一句话）。
+    content: String,
+    ok: bool,
+    problem: String,
+    bytes: usize,
+    added: usize,
+    removed: usize,
+    /// 撤销凭据（空 = 不能撤销）。
+    undo: String,
+}
+
+impl ToolWrite {
+    fn refused(note: &str, path: &str) -> Self {
+        let shown = path.trim().replace('\\', "/");
+        let reason = if path.trim().is_empty() {
+            "没给路径".to_string()
+        } else {
+            shown.clone()
+        };
+        ToolWrite {
+            path: shown,
+            content: format!("没有写入：{note}"),
+            ok: false,
+            problem: if note.is_empty() {
+                format!("没有写入：{reason}")
+            } else {
+                note.to_string()
+            },
+            bytes: 0,
+            added: 0,
+            removed: 0,
+            undo: String::new(),
+        }
+    }
+}
+
+/// 撤销记录（存在 `%APPDATA%\DoyahStudio\agent-undo\<token>.json`）。
+///
+/// `after_sum` 是**非加密校验和**（FNV-1a 64）：只用来回答「盘上还是不是我们写的那份」，
+/// 不当完整性证明用。
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UndoRecord {
+    token: String,
+    workspace: String,
+    path: String,
+    /// 写之前有没有这个文件（没有 ⇒ 撤销 = 删掉它）。
+    existed: bool,
+    /// 写之前的正文（`existed = false` 时为空串）。
+    before: String,
+    /// 写完之后盘上的字节数。
+    after_len: usize,
+    /// 写完之后盘上的校验和（十六进制）。
+    after_sum: String,
+}
+
+/// 撤销记录目录（与对话会话同一层：`%APPDATA%\DoyahStudio\...`）。
+pub fn agent_undo_dir() -> std::path::PathBuf {
+    let base = match std::env::var("APPDATA") {
+        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+        _ => std::path::PathBuf::from("."),
+    };
+    base.join("DoyahStudio").join("agent-undo")
+}
+
+/// FNV-1a 64（只用于「文件有没有被改过」这个判断）。
+fn fnv1a(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
+/// 撤销凭据 = 毫秒时间戳 + 进程内自增（同毫秒两次写入也不会撞）。
+fn next_undo_token() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    format!("{millis}-{}", COUNTER.fetch_add(1, Ordering::Relaxed))
+}
+
+/// 写一次工作区里的文本文件（**沙箱与预览同源**：`resolve_write_target`）。
+fn write_workspace_file(
+    workspace: &str,
+    path: &str,
+    content: &str,
+    undo_dir: &std::path::Path,
+) -> ToolWrite {
+    let shown = path.trim().replace('\\', "/");
+    let (target, existing) = match resolve_write_target(workspace, path) {
+        Ok(found) => found,
+        Err(problem) => {
+            return ToolWrite {
+                path: shown.clone(),
+                content: format!("没有写入 {shown}：{problem}"),
+                ok: false,
+                problem,
+                bytes: 0,
+                added: 0,
+                removed: 0,
+                undo: String::new(),
+            }
+        }
+    };
+    if content.len() > TOOL_WRITE_MAX_BYTES {
+        let problem = format!(
+            "要写的内容 {} 字节，超过单次写入上限 {TOOL_WRITE_MAX_BYTES} 字节，没有写",
+            content.len()
+        );
+        return ToolWrite {
+            path: shown.clone(),
+            content: format!("没有写入 {shown}：{problem}"),
+            ok: false,
+            problem,
+            bytes: 0,
+            added: 0,
+            removed: 0,
+            undo: String::new(),
+        };
+    }
+    let before = existing.clone().unwrap_or_default();
+    let (stat, _removed, _added) = line_diff(&before, content);
+    if let Err(error) = std::fs::write(&target, content.as_bytes()) {
+        let problem = format!("写不进去（{error}）");
+        return ToolWrite {
+            path: shown.clone(),
+            content: format!("没有写入 {shown}：{problem}"),
+            ok: false,
+            problem,
+            bytes: 0,
+            added: 0,
+            removed: 0,
+            undo: String::new(),
+        };
+    }
+    // 写完再记撤销凭据：记不下来也**不改口说没写** —— 如实说「写了但撤不回」。
+    let record = UndoRecord {
+        token: next_undo_token(),
+        workspace: workspace.trim().to_string(),
+        path: shown.clone(),
+        existed: existing.is_some(),
+        before,
+        after_len: content.len(),
+        after_sum: format!("{:016x}", fnv1a(content.as_bytes())),
+    };
+    let undo = match store_undo_record(undo_dir, &record) {
+        Ok(token) => token,
+        Err(error) => {
+            return ToolWrite {
+                path: shown.clone(),
+                content: format!(
+                    "已写入 {shown}（旧 {} 行 → 新 {} 行，+{} / -{}），但撤销记录没落下（{error}）：这一次改不回去。",
+                    stat.old_lines, stat.new_lines, stat.added, stat.removed
+                ),
+                ok: true,
+                problem: format!("已写入，但撤销记录没落下（{error}）"),
+                bytes: content.len(),
+                added: stat.added,
+                removed: stat.removed,
+                undo: String::new(),
+            }
+        }
+    };
+    ToolWrite {
+        path: shown.clone(),
+        content: format!(
+            "已写入文件 {shown}（旧 {} 行 → 新 {} 行，+{} / -{}，{} 字节）。用户可以在界面上撤销这一次写入。",
+            stat.old_lines,
+            stat.new_lines,
+            stat.added,
+            stat.removed,
+            content.len()
+        ),
+        ok: true,
+        problem: String::new(),
+        bytes: content.len(),
+        added: stat.added,
+        removed: stat.removed,
+        undo,
+    }
+}
+
+fn store_undo_record(dir: &std::path::Path, record: &UndoRecord) -> Result<String, String> {
+    std::fs::create_dir_all(dir).map_err(|error| format!("建不了记录目录（{error}）"))?;
+    let text = serde_json::to_string(record).map_err(|error| format!("记录写不成 JSON（{error}）"))?;
+    let path = dir.join(format!("{}.json", record.token));
+    std::fs::write(&path, text).map_err(|error| format!("记录文件写不进去（{error}）"))?;
+    Ok(record.token.clone())
+}
+
+/// 撤销一次写入的结果（界面照实显示：恢复成了什么 / 删掉了什么）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoResult {
+    /// 撤销的是哪个文件（相对路径）。
+    pub path: String,
+    /// 恢复成了写之前的正文。
+    pub restored: bool,
+    /// 写之前本来没有这个文件 ⇒ 撤销 = 把它删掉。
+    pub removed: bool,
+    /// 一句话交代（含行数），界面直接显示。
+    pub note: String,
+}
+
+/// 撤销一次写入（`FR-AI-25`「差异应用 / 撤销」）。
+///
+/// **前提**：盘上还是我们写的那份（长度 + 校验和都对得上）。对不上就拒绝 ——
+/// 用户中途手工改过，撤销会把那些改动一起吃掉。
+pub fn undo_write(dir: &std::path::Path, token: &str) -> Result<UndoResult, DbFailure> {
+    let clean = token.trim();
+    if clean.is_empty() || clean.len() > 64 || !clean.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-') {
+        return Err(DbFailure {
+            message: "撤销凭据不合法：没有动任何文件。".to_string(),
+            hint: "重新让助手写一次，界面上会重新给出「撤销」按钮。".to_string(),
+        });
+    }
+    let path = dir.join(format!("{clean}.json"));
+    let raw = std::fs::read_to_string(&path).map_err(|_| DbFailure {
+        message: "找不到这一次写入的撤销记录：没有动任何文件。".to_string(),
+        hint: "撤销只在记录还在时可用（记录目录被清过就回不去了）。".to_string(),
+    })?;
+    let record: UndoRecord = serde_json::from_str(&raw).map_err(|error| DbFailure {
+        message: format!("撤销记录读不出来（{error}）：没有动任何文件。"),
+        hint: "记录文件损坏了；需要手动把文件改回去。".to_string(),
+    })?;
+    let (target, current) = resolve_write_target(&record.workspace, &record.path).map_err(|problem| DbFailure {
+        message: format!("现在找不到那个文件了（{problem}）：没有动任何文件。"),
+        hint: "文件被删掉 / 工作区换了之后，撤销需要手动处理。".to_string(),
+    })?;
+    let Some(current_text) = current else {
+        return Err(DbFailure {
+            message: "文件现在不在盘上：没有动任何文件。".to_string(),
+            hint: "它可能是你手工删掉的；要恢复请自己新建一份。".to_string(),
+        });
+    };
+    let same = current_text.len() == record.after_len
+        && format!("{:016x}", fnv1a(current_text.as_bytes())) == record.after_sum;
+    if !same {
+        return Err(DbFailure {
+            message: "文件在写入之后被改过（长度 / 校验和对不上）：没有撤销，以免覆盖你后来的修改。".to_string(),
+            hint: "确认那些改动可以丢掉，再手工把内容改回去。".to_string(),
+        });
+    }
+    let removed = !record.existed;
+    if removed {
+        std::fs::remove_file(&target).map_err(|error| DbFailure {
+            message: format!("删不掉这个文件（{error}）：没有撤销。"),
+            hint: "它可能正被别的程序占用；关掉之后重试。".to_string(),
+        })?;
+    } else {
+        std::fs::write(&target, record.before.as_bytes()).map_err(|error| DbFailure {
+            message: format!("写不回旧内容（{error}）：没有撤销。"),
+            hint: "检查文件权限 / 是否被占用后重试。".to_string(),
+        })?;
+    }
+    // 记录用完即删：同一个凭据撤两次会得到「找不到记录」，不会第二次乱动文件。
+    let _ = std::fs::remove_file(&path);
+    let note = if removed {
+        format!("已撤销：{} 是这次新建的，已删除。", record.path)
+    } else {
+        format!(
+            "已撤销：{} 已恢复成写入前的 {} 行。",
+            record.path,
+            split_lines(&record.before).len()
+        )
+    };
+    Ok(UndoResult {
+        path: record.path,
+        restored: !removed,
+        removed,
+        note,
+    })
+}
+
 
 /// 一次失败的**留痕 + 决定再试还是停**（流式与整段两条路共用，避免各写一份重试账）。
 ///
@@ -3047,5 +3596,136 @@ mod tests {
         let inside = read_workspace_file(workspace.to_str().unwrap(), "notes.txt");
         assert!(inside.ok);
         assert!(inside.content.contains("重试三次"));
+    }
+
+    // ── 写文件：差异预览 / 沙箱 / 落盘 / 撤销（`FR-AI-20` · `FR-AI-25`）──────────────
+
+    fn write_workspace(tag: &str) -> PathBuf {
+        let dir = fixture_root().join(format!("doyah-write-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join("src/a.ts"), "let a = 1;\nlet b = 2;\nlet c = 3;\n").unwrap();
+        dir
+    }
+
+    #[test]
+    fn the_preview_counts_only_the_changed_lines_and_shows_both_sides() {
+        let workspace = write_workspace("preview");
+        let old = "a\nb\nc\nd\n";
+        let new = "a\nb\nC\nd\n";
+        let (stat, removed, added) = line_diff(old, new);
+        assert_eq!(stat.old_lines, 4);
+        assert_eq!(stat.new_lines, 4);
+        assert_eq!(stat.removed, 1);
+        assert_eq!(stat.added, 1);
+        assert_eq!(removed, vec!["c"]);
+        assert_eq!(added, vec!["C"]);
+        // 纯新增 / 纯删除 / CRLF 三种边界。
+        let (only_added, removed, added) = line_diff("a\n", "a\nb\n");
+        assert_eq!((only_added.added, only_added.removed), (1, 0));
+        assert!(removed.is_empty());
+        assert_eq!(added, vec!["b"]);
+        let (crlf, _, _) = line_diff("a\r\nb\r\n", "a\nb\n");
+        assert_eq!(
+            (crlf.added, crlf.removed),
+            (0, 0),
+            "只是换行符不同不该算成「每行都改了」"
+        );
+
+        // 真读盘的那一份：改一行 ⇒ 卡片上看得到减 / 加两侧。
+        let preview = write_preview(
+            workspace.to_str().unwrap(),
+            "src/a.ts",
+            "let a = 1;\nlet b = 20;\nlet c = 3;\n",
+        );
+        assert!(preview.problem.is_empty(), "{}", preview.problem);
+        assert!(preview.existed);
+        assert_eq!((preview.added, preview.removed), (1, 1));
+        assert!(preview.diff.contains("- let b = 2;"), "{}", preview.diff);
+        assert!(preview.diff.contains("+ let b = 20;"), "{}", preview.diff);
+        // 新建（盘上没有）：整份都是新增，且**不落盘**。
+        let fresh = write_preview(workspace.to_str().unwrap(), "src/new.ts", "x\ny\n");
+        assert!(!fresh.existed);
+        assert_eq!(fresh.added, 2);
+        assert!(!workspace.join("src/new.ts").exists());
+    }
+
+    #[test]
+    fn the_write_sandbox_refuses_absolute_escapes_missing_dirs_and_binaries() {
+        let workspace = write_workspace("sandbox");
+        let root = workspace.to_str().unwrap();
+
+        let absolute = write_preview(root, "C:/Windows/win.ini", "x");
+        assert!(absolute.problem.contains("绝对路径"), "{}", absolute.problem);
+        let escape = write_preview(root, "../escape.txt", "x");
+        assert!(escape.problem.contains("路径里有"), "{}", escape.problem);
+        let missing = write_preview(root, "nope/a.txt", "x");
+        assert!(missing.problem.contains("目标目录不存在"), "{}", missing.problem);
+        // 目录不能当文件写。
+        let directory = write_preview(root, "src", "x");
+        assert!(!directory.problem.is_empty(), "目录该被拒");
+        // 二进制目标不覆盖（含 0 字节的文件）。
+        std::fs::write(workspace.join("blob.bin"), [0u8, 1, 2, 3]).unwrap();
+        let binary = write_preview(root, "blob.bin", "x");
+        assert!(binary.problem.contains("二进制"), "{}", binary.problem);
+
+        // 注入面：去掉 `..` 前置判之后，拒绝的理由会变成「落在工作区外面」（canonicalize 兜底），
+        // 这条 message 断言当场红 —— 证明前置判真接在这条路上；而下面那句「越界文件绝不许落盘」
+        // 守的是真正的安全网（两层都在，缺一层都不会静默放行）。
+        let refused = write_workspace_file(root, "../escape.txt", "x", &workspace.join("undo"));
+        assert!(!refused.ok);
+        assert!(!fixture_root().join("escape.txt").exists(), "越界文件绝不许落盘");
+    }
+
+    #[test]
+    fn a_write_lands_then_undo_restores_the_old_text_and_a_tampered_file_is_refused() {
+        let workspace = write_workspace("undo");
+        let root = workspace.to_str().unwrap();
+        let undo_dir = workspace.join("undo");
+
+        let written = write_workspace_file(root, "src/a.ts", "let a = 1;\nlet b = 2;\n", &undo_dir);
+        assert!(written.ok, "{}", written.problem);
+        assert_eq!(written.removed, 1);
+        assert_eq!(written.bytes, "let a = 1;\nlet b = 2;\n".len());
+        assert!(!written.undo.is_empty(), "写成功要给撤销凭据");
+        assert_eq!(
+            std::fs::read_to_string(workspace.join("src/a.ts")).unwrap(),
+            "let a = 1;\nlet b = 2;\n"
+        );
+
+        // 中途被手工改过 ⇒ 撤销拒绝（否则会吃掉用户后来的修改）。
+        std::fs::write(workspace.join("src/a.ts"), "let a = 1;\nlet b = 2;\nlet mine = 3;\n").unwrap();
+        let tampered = undo_write(&undo_dir, &written.undo).unwrap_err();
+        assert!(tampered.message.contains("被改过"), "{}", tampered.message);
+        assert!(std::fs::read_to_string(workspace.join("src/a.ts"))
+            .unwrap()
+            .contains("mine"));
+
+        // 改回去（恢复成我们写的那份）⇒ 撤销成功、正文回到写之前。
+        std::fs::write(workspace.join("src/a.ts"), "let a = 1;\nlet b = 2;\n").unwrap();
+        let undone = undo_write(&undo_dir, &written.undo).unwrap();
+        assert!(undone.restored && !undone.removed);
+        assert_eq!(
+            std::fs::read_to_string(workspace.join("src/a.ts")).unwrap(),
+            "let a = 1;\nlet b = 2;\nlet c = 3;\n"
+        );
+        // 记录用完即删：同一个凭据不能再撤第二次。
+        assert!(undo_write(&undo_dir, &written.undo).is_err());
+    }
+
+    #[test]
+    fn undoing_a_brand_new_file_deletes_it_and_a_bad_token_touches_nothing() {
+        let workspace = write_workspace("undo-new");
+        let root = workspace.to_str().unwrap();
+        let undo_dir = workspace.join("undo");
+        let written = write_workspace_file(root, "src/b.ts", "hello\n", &undo_dir);
+        assert!(written.ok, "{}", written.problem);
+        assert!(workspace.join("src/b.ts").exists());
+        let undone = undo_write(&undo_dir, &written.undo).unwrap();
+        assert!(undone.removed && !undone.restored);
+        assert!(!workspace.join("src/b.ts").exists());
+        // 凭据里带路径分隔符 ⇒ 一律不认（不许用它去读别的记录）。
+        assert!(undo_write(&undo_dir, "..\\..\\etc").is_err());
+        assert!(undo_write(&undo_dir, "").is_err());
     }
 }

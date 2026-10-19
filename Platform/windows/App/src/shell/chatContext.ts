@@ -81,6 +81,9 @@ export function contextOf(runs: readonly AgentToolRun[]): ContextSummary {
   const misses: ContextMiss[] = []
   for (const key of order) {
     const run = last.get(key) as AgentToolRun
+    // 写那件不进「模型读到了什么」这一栏：它没往上下文里放任何正文（`chars` 恒为 0），
+    // 列进来会变成一行「0 字符的文件」，让人以为模型看过它的内容。
+    if (run.kind === 'write') continue
     const path = run.path.trim()
     const name = run.name
     if (!run.approved) {

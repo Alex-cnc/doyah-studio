@@ -109,6 +109,8 @@ describe('ipc', () => {
       'agent_diagnosis_ask',
       'agent_chat_send',
       'agent_chat_tool_resume',
+      'agent_write_preview',
+      'agent_write_undo',
       'agent_chat_load',
       'agent_chat_list',
       'agent_chat_new',

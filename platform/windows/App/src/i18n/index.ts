@@ -828,8 +828,36 @@ export const DICT = {
   'chat.carry.tooMany': { 'zh-Hans': '超出 6 份上限', en: 'over the 6-file limit' },
   'chat.carry.tooBig': { 'zh-Hans': '这一份就超出字符上限', en: 'this file alone exceeds the char limit' },
   'chat.tool.unknown': {
-    'zh-Hans': '模型点了没登记的工具「{name}」：不执行（只允许读文件）',
-    en: 'The model asked for unregistered tool “{name}” — not executed (only file reading is allowed)',
+    'zh-Hans': '模型点了没登记的工具「{name}」：不执行（只允许读 / 写文件）',
+    en: 'The model asked for unregistered tool “{name}” — not executed (only file read/write are allowed)',
+  },
+  // 写文件（FR-AI-20 / FR-AI-25）：批准前先看差异、写完之后能撤销
+  'chat.tool.writeFile': {
+    'zh-Hans': '写入工作区里的文件：{path}',
+    en: 'Write a file in the workspace: {path}',
+  },
+  'chat.write.loading': { 'zh-Hans': '正在算差异…', en: 'Working out the diff…' },
+  'chat.write.counts': {
+    'zh-Hans': '已存在的文件：将 +{added} 行 / -{removed} 行',
+    en: 'Existing file: +{added} / -{removed} lines',
+  },
+  'chat.write.countsNew': {
+    'zh-Hans': '盘上没有这个文件：新建，共 {added} 行',
+    en: 'New file (not on disk yet): {added} lines',
+  },
+  'chat.write.title': {
+    'zh-Hans': '这一轮助手改了 {n} 个文件（都可撤销）',
+    en: 'The assistant changed {n} file(s) — each can be undone',
+  },
+  'chat.write.applied': {
+    'zh-Hans': '已写入 +{added} / -{removed} 行 · {bytes} 字节',
+    en: 'written: +{added} / -{removed} lines · {bytes} bytes',
+  },
+  'chat.write.failedRun': { 'zh-Hans': '没写成：{problem}', en: 'not written: {problem}' },
+  'chat.write.undo': { 'zh-Hans': '撤销这次写入', en: 'Undo this write' },
+  'chat.write.note': {
+    'zh-Hans': '撤销只在文件仍是助手写的那份时可用；你在写入之后手工改过，就会被拒（不会覆盖你的修改）。',
+    en: 'Undo only works while the file is still what the assistant wrote; if you edited it afterwards it is refused (your edits are never overwritten).',
   },
   'chat.empty': { 'zh-Hans': '还没有对话：下面写一句开始。', en: 'No messages yet — type below to start.' },
   'chat.hint': { 'zh-Hans': 'Enter 发送 · Shift+Enter 换行', en: 'Enter to send · Shift+Enter for a new line' },

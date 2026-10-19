@@ -22,6 +22,11 @@ function run(path: string, over: Partial<AgentToolRun> = {}): AgentToolRun {
     truncated: false,
     problem: '',
     content,
+    kind: 'read' as const,
+    bytes: 0,
+    added: 0,
+    removed: 0,
+    undo: '',
     ...over,
   }
 }

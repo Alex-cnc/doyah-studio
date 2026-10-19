@@ -884,6 +884,21 @@ async fn agent_chat_tool_resume(
     })?
 }
 
+/// **批准前先看差异**（`FR-AI-20`「写盘前先出差异」）：只算不写。
+///
+/// 同步命令：不读网络、不落盘，只读一次目标文件（几十 KB 量级）—— 比异步省一条线程。
+/// 路径校验与真写盘共用外壳里的同一份 `resolve_write_target`（预览说能写，点下去就一定还是那个目标）。
+#[tauri::command]
+fn agent_write_preview(workspace: String, path: String, content: String) -> agent_generate::WritePreview {
+    agent_generate::write_preview(&workspace, &path, &content)
+}
+
+/// **撤销一次写入**（`FR-AI-25`「差异应用 / 撤销」）：盘上还是我们写的那份才恢复，否则拒绝并说清。
+#[tauri::command]
+fn agent_write_undo(token: String) -> Result<agent_generate::UndoResult, DbFailure> {
+    agent_generate::undo_write(&agent_generate::agent_undo_dir(), &token)
+}
+
 /// **读这个工作区的对话**（`FR-AI-17`）：打开对话页签 / 换工作区 / 切段时调一次。
 ///
 /// 只读一条命令：**不触发任何外发**、也不改盘上的东西（写只发生在 [`agent_chat_save`]）。
@@ -3003,6 +3018,8 @@ pub fn run() {
             agent_diagnosis_ask,
             agent_chat_send,
             agent_chat_tool_resume,
+            agent_write_preview,
+            agent_write_undo,
             agent_chat_load,
             agent_chat_list,
             agent_chat_new,

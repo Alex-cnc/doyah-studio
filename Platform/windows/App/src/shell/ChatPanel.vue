@@ -25,6 +25,8 @@ import {
   agentChatSave,
   agentChatStream,
   agentChatToolResume,
+  agentWritePreview,
+  agentWriteUndo,
   type AgentChatReply,
   type AgentChatSessionEntry,
   type AgentChatTurn,
@@ -32,6 +34,7 @@ import {
   type AgentIssue,
   type AgentToolCall,
   type AgentToolRun,
+  type AgentWritePreview,
 } from '../ipc'
 import { t as translate, type DictKey, type UiLanguage } from '../i18n'
 import { CHAT_MAX_TURNS, budgetOf, outgoingTurns, questionCount, withReply } from './chatThread'
@@ -107,8 +110,16 @@ const pendingDecisions = ref<(boolean | null)[]>([])
 const pendingText = ref('')
 /** 正在执行（点完之后等第二次回答）：按钮要灰着，避免连点两下批准两次。 */
 const deciding = ref(false)
-/** 已经执行过的工具账（允许了没有 / 读到多少），按发生顺序留在流里。 */
+/** 已经执行过的工具账（允许了没有 / 读到 / 写了多少），按发生顺序留在流里。 */
 const toolRuns = ref<AgentToolRun[]>([])
+/** 写文件那几件的差异预览（`FR-AI-20`）：批准前先看会改掉什么。键 = 调用 id（无 id 时按位次）。 */
+const writePreviews = ref<Record<string, AgentWritePreview>>({})
+/** 撤销一条写入之后的一句话交代（键 = 文件路径）：撤销过什么要说得出来。 */
+const undoNotes = ref<Record<string, string>>({})
+/** 正在撤销哪一个凭据（同一条不许连点两次）。 */
+const undoing = ref('')
+/** 这一轮助手真改过的文件（撤销按钮画在这里）。 */
+const writes = computed(() => toolRuns.value.filter((run) => run.kind === 'write'))
 
 const workspaceId = computed(() => (props.workspace ?? '').trim())
 const budget = computed(() => budgetOf(turns.value, draft.value))
@@ -279,6 +290,110 @@ function toolPath(call: AgentToolCall): string {
   }
 }
 
+/** 模型要写的正文（只有 `write_file` 有；取不到给空串 —— 预览会照实说「参数不全」）。 */
+function toolContent(call: AgentToolCall): string {
+  try {
+    const parsed = JSON.parse(call.arguments) as { content?: unknown }
+    return typeof parsed.content === 'string' ? parsed.content : ''
+  } catch {
+    return ''
+  }
+}
+
+/** 这一件是不是「写」。 */
+function isWrite(call: AgentToolCall): boolean {
+  return call.name.trim() === 'write_file'
+}
+
+/** 预览的键：模型给了 id 就用它，没给就按这一批里的位次（同一批两件都没 id 也不会互相顶掉）。 */
+function callKey(call: AgentToolCall, index: number): string {
+  return call.id || `#${index}`
+}
+
+/** 这一件的一张卡片标题（读 / 写 / 不认识，三句话各不相同）。 */
+function askLine(call: AgentToolCall): string {
+  const path = toolPath(call) || tr('chat.tool.noPath')
+  if (isWrite(call)) return tr('chat.tool.writeFile', { path })
+  if (call.name.trim() === 'read_file') return tr('chat.tool.readFile', { path })
+  return tr('chat.tool.unknown', { name: call.name })
+}
+
+/** 预览还没回来 / 没有预览时给一份空壳（模板不必写非空断言）。 */
+function previewFor(call: AgentToolCall, index: number): AgentWritePreview {
+  return (
+    writePreviews.value[callKey(call, index)] ?? {
+      path: toolPath(call),
+      existed: false,
+      added: 0,
+      removed: 0,
+      oldLines: 0,
+      newLines: 0,
+      diff: '',
+      problem: '',
+    }
+  )
+}
+
+function hasPreview(call: AgentToolCall, index: number): boolean {
+  return callKey(call, index) in writePreviews.value
+}
+
+/**
+ * 「允许」能不能点：只读那件照旧；写那件**先在预览里看明白**再点。
+ *
+ * 预览说写不进去（越界 / 目录不存在 / 二进制 / 超限）时按钮灰掉 —— 让用户点了才吃闭门羹，
+ * 等于把「能不能写」这件事藏到失败之后。
+ */
+function canAllow(call: AgentToolCall, index: number): boolean {
+  if (deciding.value || pendingDecisions.value[index] !== null) return false
+  if (isWrite(call)) {
+    if (!hasPreview(call, index)) return false
+    return previewFor(call, index).problem.length === 0
+  }
+  return call.name.trim() === 'read_file'
+}
+
+/** 把这一批里的写工具逐件算一份差异（只算不写；一次 IPC，不循环 await 阻塞消息流）。 */
+async function loadPreviews(calls: readonly AgentToolCall[]) {
+  const next: Record<string, AgentWritePreview> = {}
+  for (const [index, call] of calls.entries()) {
+    if (!isWrite(call)) continue
+    const key = callKey(call, index)
+    try {
+      next[key] = await agentWritePreview(workspaceId.value, toolPath(call), toolContent(call))
+    } catch (error) {
+      // 算不出差异也要让用户看见「为什么」：给一条带原因的预览，卡片照实显示。
+      next[key] = {
+        path: toolPath(call),
+        existed: false,
+        added: 0,
+        removed: 0,
+        oldLines: 0,
+        newLines: 0,
+        diff: '',
+        problem: readable(error).message,
+      }
+    }
+  }
+  writePreviews.value = next
+}
+
+/** 撤销一次写入（`FR-AI-25`）：外壳先核「盘上还是它写的那份」，对不上就拒绝并说清。 */
+async function undoWrite(token: string, path: string) {
+  if (!token || undoing.value) return
+  undoing.value = token
+  try {
+    const result = await agentWriteUndo(token)
+    undoNotes.value = { ...undoNotes.value, [path]: result.note }
+    // 撤销过的凭据不再可用：把那一件的 undo 清掉（按钮消失，避免第二次点同一凭据）。
+    toolRuns.value = toolRuns.value.map((run) => (run.undo === token ? { ...run, undo: '' } : run))
+  } catch (error) {
+    undoNotes.value = { ...undoNotes.value, [path]: readable(error).message }
+  } finally {
+    undoing.value = ''
+  }
+}
+
 /**
  * 一条回包的三种落法（普通对话与「工具点完之后的第二次回答」共用一份）：
  * 挡住 / 满额照旧各说各的；**点工具 ⇒ 停下来等用户点**（不自动执行、不替用户决定）；
@@ -303,6 +418,9 @@ async function handleReply(reply: AgentChatReply, asked: AgentChatTurn[]) {
     // 每一件都从「还没点」开始：模型一次点了两件，不许因为第一件点过就替第二件作主。
     pendingDecisions.value = reply.calls.map(() => null)
     pendingText.value = reply.text
+    // 写那几件：**先算差异再让人点**（`FR-AI-20`「写盘前先出差异」）。
+    writePreviews.value = {}
+    await loadPreviews(reply.calls)
     limitations.value = []
     streamed.value = reply.deltas
     info.value = {
@@ -434,6 +552,8 @@ function clear() {
   pendingDecisions.value = []
   pendingText.value = ''
   toolRuns.value = []
+  writePreviews.value = {}
+  undoNotes.value = {}
   // 清空也要落盘：否则重开页签会把刚清掉的对话又读回来（「点了清空却说没清」）。
   void persist([])
 }
@@ -515,15 +635,28 @@ function clear() {
           :data-testid="`chat-tool-row-${index}`"
         >
           <p class="chat__tool-line" data-testid="chat-tool-ask">
-            {{ call.name === 'read_file'
-              ? tr('chat.tool.readFile', { path: toolPath(call) || tr('chat.tool.noPath') })
-              : tr('chat.tool.unknown', { name: call.name }) }}
+            {{ askLine(call) }}
           </p>
+          <!-- 写那件：**批准前先看差异**（`FR-AI-20`）—— 改几行、删几行、具体哪几行，一行都说清 -->
+          <div v-if="isWrite(call)" class="chat__diff" data-testid="chat-write-preview">
+            <p class="chat__diff-head" data-testid="chat-write-counts">
+              {{ hasPreview(call, index)
+                ? tr(previewFor(call, index).existed ? 'chat.write.counts' : 'chat.write.countsNew', {
+                    added: previewFor(call, index).added,
+                    removed: previewFor(call, index).removed,
+                  })
+                : tr('chat.write.loading') }}
+            </p>
+            <p v-if="previewFor(call, index).problem" class="chat__diff-problem" data-testid="chat-write-problem">
+              {{ previewFor(call, index).problem }}
+            </p>
+            <pre v-if="previewFor(call, index).diff" class="chat__diff-body" data-testid="chat-write-diff">{{ previewFor(call, index).diff }}</pre>
+          </div>
           <div class="chat__tool-actions">
             <button
               class="chat__tool-allow"
               type="button"
-              :disabled="deciding || call.name !== 'read_file' || pendingDecisions[index] !== null"
+              :disabled="!canAllow(call, index)"
               data-testid="chat-tool-allow"
               @click="decide(index, true)"
             >
@@ -662,6 +795,36 @@ function clear() {
           </li>
         </ul>
         <p class="chat__ctx-hint" data-testid="chat-context-note">{{ tr('chat.context.note') }}</p>
+      </section>
+      <!-- 这一轮助手改了什么（`FR-AI-20` / `FR-AI-25`）：逐条写明改了几行，写过的都能撤销 -->
+      <section v-if="writes.length" class="chat__ctx" data-testid="chat-writes">
+        <p class="chat__ctx-title" data-testid="chat-writes-title">
+          {{ tr('chat.write.title', { n: writes.length }) }}
+        </p>
+        <ul class="chat__ctx-list">
+          <li v-for="(run, at) in writes" :key="`${run.path}-${at}`" class="chat__ctx-row" data-testid="chat-write-run">
+            <span class="chat__ctx-path">{{ run.path }}</span>
+            <span class="chat__ctx-chars">
+              {{ run.ok
+                ? tr('chat.write.applied', { added: run.added, removed: run.removed, bytes: run.bytes })
+                : tr('chat.write.failedRun', { problem: run.problem }) }}
+            </span>
+            <button
+              v-if="run.undo"
+              class="chat__act"
+              type="button"
+              :disabled="undoing === run.undo"
+              data-testid="chat-write-undo"
+              @click="undoWrite(run.undo, run.path)"
+            >
+              {{ tr('chat.write.undo') }}
+            </button>
+            <span v-if="undoNotes[run.path]" class="chat__ctx-note" data-testid="chat-write-undo-note">
+              {{ undoNotes[run.path] }}
+            </span>
+          </li>
+        </ul>
+        <p class="chat__ctx-hint" data-testid="chat-writers-note">{{ tr('chat.write.note') }}</p>
       </section>
       <ul v-if="limitations.length" class="chat__limits" data-testid="chat-limits">
         <li v-for="line in limitations" :key="line">{{ line }}</li>
@@ -872,6 +1035,34 @@ function clear() {
   align-self: center;
   color: var(--ds-color-text-tertiary);
   font-size: var(--ds-font-caption-size);
+}
+/* 写那件的差异预览（`FR-AI-20`）：批准前先看会改掉什么 */
+.chat__diff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-hair);
+}
+.chat__diff-head {
+  margin: 0;
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+}
+.chat__diff-problem {
+  margin: 0;
+  color: var(--ds-color-status-danger);
+  font-size: var(--ds-font-caption-size);
+}
+.chat__diff-body {
+  margin: 0;
+  max-height: var(--ds-metric-plan-raw-max-height);
+  overflow: auto;
+  background: var(--ds-color-surface-panel);
+  border-radius: var(--ds-radius-control);
+  padding: var(--ds-spacing-xs);
+  font-family: var(--ds-font-stack-mono);
+  font-size: var(--ds-font-mono-small-size);
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 .chat__tool-progress {
   margin: 0;

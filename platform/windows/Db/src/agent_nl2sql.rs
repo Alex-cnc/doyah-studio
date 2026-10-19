@@ -325,11 +325,25 @@ pub const CHAT_SYSTEM_PROMPT: &str = "你是 Doyah Studio（数据库开发工�
 回答用简体中文，简洁、给结论再给依据。用户问到 SQL 时给出可复制的语句，但不要声称已经执行过任何语句 —— \
 本程序不会执行你给的语句，执行永远由用户自己点。不要编造表名与列名：需要结构信息时先问用户。";
 
-/// 只读工具的唯一名字（`FR-AI-18` 第一片）。
+/// 只读工具的名字（`FR-AI-18` 第一片）。
 ///
-/// **白名单只有这一件**：模型点到别的名字一律不执行（`Nl2SqlError::UnknownChatTool`）——
-/// 「能读文件」是这轮给它的全部能力，不给第二条路。
+/// **白名单只有这两件**（读 + 写）：模型点到别的名字一律不执行（`Nl2SqlError::UnknownChatTool`）——
+/// 执行侧与装配侧共用 [`is_known_chat_tool`]，不各写一份名字表（写一份漏一处就会「装配拒绝、执行放行」）。
 pub const CHAT_READ_FILE_TOOL: &str = "read_file";
+
+/// 写工具的名字（`FR-AI-20`：`write_file` **需审批**，写盘前先出差异）。
+///
+/// 与读工具同一条审批链：模型点了只是**提议**，真写盘在外壳（`chat_tool_resume`）那一侧，
+/// 且用户点「允许」之前已经在卡片上看过逐行差异。
+pub const CHAT_WRITE_FILE_TOOL: &str = "write_file";
+
+/// 这个工具名认不认（装配与执行共用一处判断；加工具只改这里 + [`chat_tools_spec`]）。
+pub fn is_known_chat_tool(name: &str) -> bool {
+    matches!(
+        name.trim(),
+        CHAT_READ_FILE_TOOL | CHAT_WRITE_FILE_TOOL
+    )
+}
 
 /// 一件工具调用（模型点了哪件、要什么参数、回灌时用哪个 id 对账）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -345,8 +359,9 @@ pub struct ChatToolCall {
 
 /// 发给端点的工具清单（OpenAI 兼容的 `tools`）。
 ///
-/// 只有一件只读工具：读**当前工作区里**的一个文本文件。说明里写明「需要用户批准」——
-/// 模型据此知道这一跳可能被拒，被拒后应当如实告诉用户缺什么，而不是编内容。
+/// 两件：读**当前工作区里**的一个文本文件、写（覆盖 / 新建）一个文本文件。两件的说明里都写明
+/// 「需要用户逐次批准」—— 模型据此知道这一跳可能被拒；写那件再补一句「用户批准前会看到差异」，
+/// 免得它以为「点了就等于写好了」。
 pub fn chat_tools_spec() -> serde_json::Value {
     serde_json::json!([{
         "type": "function",
@@ -362,6 +377,26 @@ pub fn chat_tools_spec() -> serde_json::Value {
                     }
                 },
                 "required": ["path"]
+            }
+        }
+    }, {
+        "type": "function",
+        "function": {
+            "name": CHAT_WRITE_FILE_TOOL,
+            "description": "把一份完整正文写入当前工作区里的文本文件（覆盖已有内容，或新建）。这一步需要用户逐次批准，且用户批准前会看到逐行差异；被拒时不要声称已经改过文件。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "相对工作区根的文件路径；不许绝对路径、不许 .. 跳出工作区，目标父目录必须已存在。"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "要写入的**完整**文件正文（不是补丁、不是片段）。"
+                    }
+                },
+                "required": ["path", "content"]
             }
         }
     }])
@@ -425,6 +460,19 @@ pub fn read_file_path(arguments: &str) -> Option<String> {
     } else {
         Some(path)
     }
+}
+
+/// 从写工具参数里取（路径, 正文）；缺任一项就 `None`（执行侧如实拒绝，**不默认成空串**）。
+///
+/// `content` 允许是空串（把文件清空是一个明确的意图）；`path` 是空串则一律不认。
+pub fn write_file_arguments(arguments: &str) -> Option<(String, String)> {
+    let value: serde_json::Value = serde_json::from_str(arguments).ok()?;
+    let path = value.get("path")?.as_str()?.trim().to_string();
+    if path.is_empty() {
+        return None;
+    }
+    let content = value.get("content")?.as_str()?.to_string();
+    Some((path, content))
 }
 
 /// 装配一次对话请求（**领域层唯一出处**：形状 / 上限 / 角色校验都在这里）。
@@ -563,7 +611,7 @@ fn build_chat_request_full(
     if !pending.is_empty() {
         let mut tool_calls: Vec<serde_json::Value> = Vec::with_capacity(pending.len());
         for (call, _) in pending {
-            if call.name.trim() != CHAT_READ_FILE_TOOL {
+            if !is_known_chat_tool(&call.name) {
                 return Err(Nl2SqlError::UnknownChatTool(call.name.clone()));
             }
             if call.id.trim().is_empty() {
@@ -1069,6 +1117,46 @@ mod tests {
             build_chat_request_with_tools(&config, &turns, &[(&bad, "x")]).unwrap_err(),
             Nl2SqlError::UnknownChatTool("run_command".to_string())
         );
+    }
+
+    #[test]
+    fn the_registry_now_offers_both_read_and_write_and_the_write_arguments_are_parsed() {
+        let spec = chat_tools_spec().to_string();
+        assert!(spec.contains(CHAT_READ_FILE_TOOL), "{spec}");
+        assert!(spec.contains(CHAT_WRITE_FILE_TOOL), "{spec}");
+        // 两件都在登记表里认（装配侧与执行侧共用这一处判断）。
+        assert!(is_known_chat_tool(CHAT_READ_FILE_TOOL));
+        assert!(is_known_chat_tool(" write_file "));
+        assert!(!is_known_chat_tool("run_command"));
+
+        let (path, content) =
+            write_file_arguments("{\"path\":\" src/a.ts \",\"content\":\"let a = 1;\\n\"}").unwrap();
+        assert_eq!(path, "src/a.ts");
+        assert_eq!(content, "let a = 1;\n");
+        // 空正文是明确的意图（把文件清空），空路径一律不认。
+        assert_eq!(
+            write_file_arguments("{\"path\":\"a.txt\",\"content\":\"\"}"),
+            Some(("a.txt".to_string(), String::new()))
+        );
+        assert_eq!(write_file_arguments("{\"path\":\"\",\"content\":\"x\"}"), None);
+        assert_eq!(write_file_arguments("{\"path\":\"a.txt\"}"), None);
+        assert_eq!(write_file_arguments("not json"), None);
+    }
+
+    #[test]
+    fn a_write_tool_result_is_accepted_on_the_way_back() {
+        let config = chat_config();
+        let turns = vec![turn("user", "把 a.txt 改掉")];
+        let call = ChatToolCall {
+            id: "call_w".to_string(),
+            name: CHAT_WRITE_FILE_TOOL.to_string(),
+            arguments: "{\"path\":\"a.txt\",\"content\":\"新正文\"}".to_string(),
+        };
+        let body = build_chat_request_with_tools(&config, &turns, &[(&call, "已写入")])
+            .unwrap()
+            .body;
+        assert!(body.contains("\"tool_call_id\":\"call_w\""), "{body}");
+        assert!(body.contains(CHAT_WRITE_FILE_TOOL), "{body}");
     }
 
     #[test]

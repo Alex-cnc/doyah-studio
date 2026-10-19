@@ -141,6 +141,9 @@ export const COMMANDS = {
   agentDiagnosisAsk: 'agent_diagnosis_ask',
   agentChatSend: 'agent_chat_send',
   agentChatToolResume: 'agent_chat_tool_resume',
+  // 写文件（FR-AI-20 / FR-AI-25）：批准前算差异（不落盘）+ 撤销一次写入
+  agentWritePreview: 'agent_write_preview',
+  agentWriteUndo: 'agent_write_undo',
   // 对话会话按工作区落盘（FR-AI-17）：读 / 写各一条，只动本机文件、不外发
   agentChatLoad: 'agent_chat_load',
   agentChatList: 'agent_chat_list',
@@ -1151,7 +1154,7 @@ export interface AgentToolCall {
   arguments: string
 }
 
-/** 一次工具执行的可读账（卡片上显示「允许了没有 / 读到多少 / 截没截断」）。 */
+/** 一次工具执行的可读账（卡片上显示「允许了没有 / 读到 / 写了多少」）。 */
 export interface AgentToolRun {
   name: string
   path: string
@@ -1166,6 +1169,43 @@ export interface AgentToolRun {
    * 界面靠它把读过的文件带进后续请求（`FR-AI-18` 收口）：正文只由外壳产出，界面不重新拼。
    */
   content: string
+  /** 这一件是读还是写（`read` / `write`）—— 界面按它决定画哪一行读数。 */
+  kind: 'read' | 'write'
+  /** 真写到盘上的字节数（读那件恒为 0）。 */
+  bytes: number
+  /** 相比写入前多了几行（写那件才有意义）。 */
+  added: number
+  /** 相比写入前少了几行（写那件才有意义）。 */
+  removed: number
+  /** 撤销凭据（写成功才有；空串 = 没有可撤销的）。 */
+  undo: string
+}
+
+/**
+ * 批准前的一份差异（`FR-AI-20`「写盘前先出差异」）—— 只算不写。
+ *
+ * `problem` 非空 = 现在写不进去（越界 / 目录不存在 / 二进制 / 超限）：卡片照实显示，
+ * 用户不必点「允许」才知道会被拒。
+ */
+export interface AgentWritePreview {
+  path: string
+  /** 盘上原本有没有这个文件（`false` = 新建）。 */
+  existed: boolean
+  added: number
+  removed: number
+  oldLines: number
+  newLines: number
+  /** 逐行差异（`- ` 旧行 / `+ ` 新行）；空串 = 没有差异。 */
+  diff: string
+  problem: string
+}
+
+/** 撤销一次写入的结果。 */
+export interface AgentUndoResult {
+  path: string
+  restored: boolean
+  removed: boolean
+  note: string
 }
 
 /** 要带进后续请求的一份文件（与领域层 `CarriedFile` 同形）。 */
@@ -1449,6 +1489,39 @@ export async function agentChatToolResume(
     carry,
     onDelta: channel,
   })) as AgentToolResume
+}
+
+/**
+ * **批准前看一眼差异**（`FR-AI-20`「写盘前先出差异」）：**只算不写**。
+ *
+ * 路径校验与真写盘在外壳里是同一份（预览说能写，点「允许」后写到的一定还是那个目标）；
+ * 界面只负责把 `diff` / 加减行数 / `problem` 画出来。
+ */
+export function agentWritePreview(
+  workspace: string,
+  path: string,
+  content: string,
+): Promise<AgentWritePreview> {
+  return call(COMMANDS.agentWritePreview, { workspace, path, content }, () => {
+    throw {
+      message: tNow('agent.generate.desktopOnly'),
+      hint: tNow('agent.generate.desktopOnlyHint'),
+    }
+  })
+}
+
+/**
+ * **撤销一次写入**（`FR-AI-25`「差异应用 / 撤销」）。
+ *
+ * 前提由外壳核：盘上还是它写的那份才恢复；被手工改过就拒绝并说清（不覆盖后来的修改）。
+ */
+export function agentWriteUndo(token: string): Promise<AgentUndoResult> {
+  return call(COMMANDS.agentWriteUndo, { token }, () => {
+    throw {
+      message: tNow('agent.generate.desktopOnly'),
+      hint: tNow('agent.generate.desktopOnlyHint'),
+    }
+  })
 }
 
 /**

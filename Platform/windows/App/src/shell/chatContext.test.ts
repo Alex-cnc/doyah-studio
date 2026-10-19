@@ -17,6 +17,11 @@ function run(path: string, over: Partial<AgentToolRun> = {}): AgentToolRun {
     truncated: false,
     problem: '',
     content: '',
+    kind: 'read',
+    bytes: 0,
+    added: 0,
+    removed: 0,
+    undo: '',
     ...over,
   }
 }
@@ -27,6 +32,16 @@ describe('对话「已读文件」读数', () => {
     expect(summary.files).toEqual([])
     expect(summary.misses).toEqual([])
     expect(summary.chars).toBe(0)
+  })
+
+  it('写过的文件不冒充「读到了」：写那件不进这一栏（也不占一行 0 字符）', () => {
+    const summary = contextOf([
+      run('src/a.ts', { name: 'write_file', kind: 'write', chars: 0, content: '', bytes: 20, added: 2, removed: 0, undo: 't-1' }),
+      run('src/b.ts', { chars: 66 }),
+    ])
+    expect(summary.files.map((file) => file.path)).toEqual(['src/b.ts'])
+    expect(summary.chars).toBe(66)
+    expect(summary.misses).toEqual([])
   })
 
   it('同一份文件读两次 ⇒ 只一行、字符取最后一次、读了几次单独记', () => {

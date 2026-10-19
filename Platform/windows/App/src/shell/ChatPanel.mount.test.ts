@@ -13,6 +13,8 @@ const chatMocks = vi.hoisted(() => ({
   agentChatNew: vi.fn(),
   agentChatSave: vi.fn(),
   agentChatToolResume: vi.fn(),
+  agentWritePreview: vi.fn(),
+  agentWriteUndo: vi.fn(),
 }))
 
 vi.mock('../ipc', async (importOriginal) => {
@@ -25,6 +27,8 @@ vi.mock('../ipc', async (importOriginal) => {
     agentChatNew: chatMocks.agentChatNew,
     agentChatSave: chatMocks.agentChatSave,
     agentChatToolResume: chatMocks.agentChatToolResume,
+    agentWritePreview: chatMocks.agentWritePreview,
+    agentWriteUndo: chatMocks.agentWriteUndo,
   }
 })
 
@@ -548,6 +552,11 @@ describe('对话工具调用', () => {
     truncated: false,
     problem: '',
     content,
+    kind: 'read' as const,
+    bytes: 0,
+    added: 0,
+    removed: 0,
+    undo: '',
   })
 
   it('模型点工具 ⇒ 卡片写明路径，不点就一次都不执行；点允许后才真发并显示读数', async () => {
@@ -717,5 +726,151 @@ describe('对话工具调用', () => {
     chatMocks.agentChatStream.mockResolvedValueOnce(answered('重新开始。'))
     await ask(wrapper, '从头来')
     expect(chatMocks.agentChatStream.mock.calls[2][1]).toEqual([])
+  })
+})
+
+// 写文件（`FR-AI-20` / `FR-AI-25`）：判「批准前看得到差异 / 写不进去就不让点 /
+// 写完出现撤销且撤销结果照实显示」。三条都是用户点得着的面，不是实现细节。
+describe('对话里写文件', () => {
+  const writeCall = (id: string, path: string, content: string) => ({
+    id,
+    name: 'write_file',
+    arguments: JSON.stringify({ path, content }),
+  })
+
+  const pending = (calls: ReturnType<typeof writeCall>[]) => ({
+    status: 'toolPending' as const,
+    calls,
+    text: '',
+    model: 'm',
+    elapsedMs: 8,
+    quota,
+    attempts: [{ attempt: 1, outcome: 'ok' as const, status: 200, delayMs: 0, detail: '' }],
+    turns: 1,
+    deltas: 0,
+  })
+
+  const answered = (text: string) => ({
+    status: 'answered' as const,
+    text,
+    model: 'm',
+    elapsedMs: 9,
+    quota,
+    limitations: [],
+    attempts: [{ attempt: 1, outcome: 'ok' as const, status: 200, delayMs: 0, detail: '' }],
+    turns: 1,
+    deltas: 1,
+  })
+
+  const writeRun = (path: string, over: Record<string, unknown> = {}) => ({
+    name: 'write_file',
+    path,
+    approved: true,
+    ok: true,
+    chars: 0,
+    truncated: false,
+    problem: '',
+    content: '',
+    kind: 'write' as const,
+    bytes: 24,
+    added: 1,
+    removed: 1,
+    undo: 'tok-1',
+    ...over,
+  })
+
+  it('模型要写文件 ⇒ 先算出差异画在卡片上；允许之后出现「撤销」', async () => {
+    chatMocks.agentChatStream.mockResolvedValue(pending([writeCall('w1', 'src/a.ts', 'let b = 20;\n')]))
+    chatMocks.agentWritePreview.mockResolvedValue({
+      path: 'src/a.ts',
+      existed: true,
+      added: 1,
+      removed: 1,
+      oldLines: 3,
+      newLines: 3,
+      diff: '- let b = 2;\n+ let b = 20;\n',
+      problem: '',
+    })
+    chatMocks.agentChatToolResume.mockResolvedValue({
+      runs: [writeRun('src/a.ts')],
+      reply: answered('改好了。'),
+    })
+    const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
+    await ask(wrapper, '把 b 改成 20')
+
+    // 预览：请求带的是模型原话里的路径与正文；卡片上真画出了减 / 加两行
+    expect(chatMocks.agentWritePreview).toHaveBeenCalledWith('D:/work/demo', 'src/a.ts', 'let b = 20;\n')
+    expect(wrapper.find('[data-testid="chat-write-counts"]').text()).toContain('+1')
+    expect(wrapper.find('[data-testid="chat-write-diff"]').text()).toContain('- let b = 2;')
+    expect(wrapper.find('[data-testid="chat-write-diff"]').text()).toContain('+ let b = 20;')
+    // 还没点：一次都没执行
+    expect(chatMocks.agentChatToolResume).not.toHaveBeenCalled()
+
+    await wrapper.find('[data-testid="chat-tool-allow"]').trigger('click')
+    await flushPromises()
+
+    expect(chatMocks.agentChatToolResume).toHaveBeenCalledTimes(1)
+    const [, , calls, approvals] = chatMocks.agentChatToolResume.mock.calls[0]
+    expect(calls).toEqual([writeCall('w1', 'src/a.ts', 'let b = 20;\n')])
+    expect(approvals).toEqual([true])
+    // 写完之后：这一栏出现「改了什么」，并给撤销按钮
+    expect(wrapper.find('[data-testid="chat-writes"]').text()).toContain('src/a.ts')
+    expect(wrapper.find('[data-testid="chat-write-undo"]').exists()).toBe(true)
+  })
+
+  it('预览说写不进去 ⇒ 允许按钮灰着，原因就画在卡片上（不让用户点了才吃闭门羹）', async () => {
+    chatMocks.agentChatStream.mockResolvedValue(pending([writeCall('w2', '../outside.ts', 'x')]))
+    chatMocks.agentWritePreview.mockResolvedValue({
+      path: '../outside.ts',
+      existed: false,
+      added: 0,
+      removed: 0,
+      oldLines: 0,
+      newLines: 0,
+      diff: '',
+      problem: '路径里有 .. / 前缀：只允许工作区内部的路径',
+    })
+    const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
+    await ask(wrapper, '写到外面去')
+
+    expect(wrapper.find('[data-testid="chat-write-problem"]').text()).toContain('路径里有')
+    expect(wrapper.find('[data-testid="chat-tool-allow"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="chat-tool-deny"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('点「撤销这次写入」⇒ 调外壳并把它那句结果照实显示出来', async () => {
+    chatMocks.agentChatStream.mockResolvedValue(pending([writeCall('w3', 'src/a.ts', 'let b = 20;\n')]))
+    chatMocks.agentWritePreview.mockResolvedValue({
+      path: 'src/a.ts',
+      existed: true,
+      added: 1,
+      removed: 1,
+      oldLines: 3,
+      newLines: 3,
+      diff: '- let b = 2;\n+ let b = 20;\n',
+      problem: '',
+    })
+    chatMocks.agentChatToolResume.mockResolvedValue({
+      runs: [writeRun('src/a.ts')],
+      reply: answered('改好了。'),
+    })
+    chatMocks.agentWriteUndo.mockResolvedValue({
+      path: 'src/a.ts',
+      restored: true,
+      removed: false,
+      note: '已撤销：src/a.ts 已恢复成写入前的 3 行。',
+    })
+    const wrapper = mount(ChatPanel, { props: { language: 'zh-Hans', workspace: 'D:/work/demo' } })
+    await ask(wrapper, '把 b 改成 20')
+    await wrapper.find('[data-testid="chat-tool-allow"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('[data-testid="chat-write-undo"]').trigger('click')
+    await flushPromises()
+
+    expect(chatMocks.agentWriteUndo).toHaveBeenCalledWith('tok-1')
+    expect(wrapper.find('[data-testid="chat-write-undo-note"]').text()).toContain('已恢复成写入前的 3 行')
+    // 撤销过的凭据不再留在按钮上（同一凭据不能点第二次）
+    expect(wrapper.find('[data-testid="chat-write-undo"]').exists()).toBe(false)
   })
 })
