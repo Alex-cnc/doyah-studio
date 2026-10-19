@@ -614,53 +614,14 @@ def check_requirement_counts() -> list[str]:
         return problems
     text = capability.read_text(encoding="utf-8")
 
-    match = re.search(r"\*\*(\d+) 条需求：(\d+) ✅ / (\d+) 🟡 / (\d+) ⬜\*\*", text)
-    if match is None:
-        problems.append(f"{capability}: 未找到能力地图的派生计数（形如「**N 条需求：a ✅ / b 🟡 / c ⬜**」）")
-    else:
-        declared_capability = tuple(int(value) for value in match.groups())
-        if declared_capability != derived:
-            problems.append(
-                f"{capability}: 能力地图写 {declared_capability}（总 / ✅ / 🟡 / ⬜），"
-                f"由 SRS 索引派生应为 {derived}"
-            )
-
-    match = re.search(r"差距的主题聚类（⬜ (\d+) 项", text)
-    if match is not None and int(match.group(1)) != derived[3]:
-        problems.append(f"{capability}: 第 3 节写 ⬜ {match.group(1)} 项，由 SRS 派生应为 ⬜ {derived[3]} 项")
-
-    # 4) 第 2 节逐域计数（总数与三条状态都要对上，不只是总数）
-    domain_status = Counter(
-        (identifier.rsplit("-", 1)[0], row[3]) for identifier, row in zip(identifiers, rows) if identifier.startswith("FR-")
-    )
-    per_domain = Counter(identifier.rsplit("-", 1)[0] for identifier in identifiers if identifier.startswith("FR-"))
-    # 域名的第二段**容许数字后缀**（2026-10-14 · 派单 `T-20261014-023`；`Scripts/**` 是 macOS 侧的面）：
-    # 原先 `FR-[A-Z]+` 只认纯字母域名 ⇒ `FR-R-01`（Retro 那族；索引编号 `FR-R-01-01`）与下面的
-    # `per_domain`（由索引 `rsplit("-", 1)[0]` 推出，正是 `FR-R-01`）**永不相等** —— 结构性死结：
-    # 判据等一个它自己正则匹配不上的域 ⇒ 前门按主人令把 74 条 `FR-R-*` 登进 SRS §10.1、并在 §2 逐域
-    # 补齐 15 行之后仍判红「第 2 节缺少这些功能域的行 …」。
-    # 放宽后仍锚在**大写字母**开头、后缀只收 `-数字`（可重复，与推导口径 `rsplit("-", 1)[0]` 同族）；
-    # 一旦匹配到的域不在索引里，`per_domain.get` 给 0 ⇒ 照样按「写 N、数出 0」判红（放宽 ≠ 放水）。
-    row_pattern = re.compile(
-        r"^\| \*\*(FR-[A-Z]+(?:-\d+)*)\*\*[^|]*\|[^|]*\| (\d+) \| (\d+) \| (\d+) \| (\d+) \|",
-        re.MULTILINE,
-    )
-    for domain, total, done, partial, todo in row_pattern.findall(text):
-        expected = (
-            per_domain.get(domain, 0),
-            domain_status.get((domain, "✅"), 0),
-            domain_status.get((domain, "🟡"), 0),
-            domain_status.get((domain, "⬜"), 0),
-        )
-        declared_row = (int(total), int(done), int(partial), int(todo))
-        if declared_row != expected:
-            problems.append(
-                f"{capability}: 第 2 节 {domain} 写 {declared_row}（总 / ✅ / 🟡 / ⬜），"
-                f"由 SRS 索引数出 {expected}"
-            )
-        per_domain.pop(domain, None)
-    if per_domain:
-        problems.append(f"{capability}: 第 2 节缺少这些功能域的行 {sorted(per_domain)}")
+    # 2026-10-18 口径变更（人类主人令：三书不写状态）：能力地图不再承载 ✅/🟡/⬜ 计数，
+    # 派生计数与逐域计数两项检查作废；只校验「SRS 里出现的每个功能域，本书 §2 都有对应一行」。
+    # 状态与条数唯一源 = 需求说明书状态列（`Docs/Doyah产品需求说明书.md` §10.1）。
+    groups = sorted({re.sub(r"-R-\d+$", "-R", identifier.rsplit("-", 1)[0])
+                     for identifier in identifiers if identifier.startswith("FR-")})
+    for group in groups:
+        if group not in text:
+            problems.append(f"{capability}: 第 2 节缺少功能域 {group} 的说明行")
 
     return problems
 
