@@ -734,7 +734,7 @@
       "cases": 12,
       "countRegex": "(\\d+)/\\d+ 项达到预期",
       "why": "队列 L-13（界面快照的中英成对 + 语言必须到像素上）",
-      "noAnchorReason": "例数只在 runner 的收尾行里；它随 `Scripts/make-ui-snapshots.sh` 的收尾跑（快照按 L-01 纪律不进每轮闭环），文档里（`Docs/概要设计.md` §8.3 与 `doc-numbers.json` 的豁免条目）不写负例例数。",
+      "noAnchorReason": "例数只在 runner 的收尾行里；它随 `Scripts/make-ui-snapshots.sh` 的收尾跑（快照按 L-01 纪律不进每轮闭环），文档里（`Docs/Doyah产品概要设计说明书.md` §8.3 与 `doc-numbers.json` 的豁免条目）不写负例例数。",
       "note": "第 65 轮起由本判据**也**跑一遍：`check-*.py` 有 doc-numbers 的「有判据、没闭环」对账管着，而 `test-*.py` 此前**没有任何门禁管** ⇒ 8 个没人跑（其中一个已经坏了）。（第 195 轮 · 队列 L-185：`--partial` 的局部清单红/绿成对补两例 ⇒ 10 → 12）"
     },
     {

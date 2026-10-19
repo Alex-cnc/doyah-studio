@@ -45,7 +45,7 @@ public enum ContainerRemovalAction: String, CaseIterable, Sendable, Equatable {
 /// 确认框正文的**形状**（「非空时写明将影响多少笔记本与多少条笔记」那句话的四种形态）。
 ///
 /// 为什么是枚举而不是「拼好的字符串」：Core 不产文案（`字由调用方给定`，见
-/// `Docs/概要设计.md` §7 与 `Scripts/check-core-localization.py`）—— 这里给的是
+/// `Docs/Doyah产品概要设计说明书.md` §7 与 `Scripts/check-core-localization.py`）—— 这里给的是
 /// **键 + 数字**，由宿主层交给语言表。四种形态各自的键分开，是为了让「一个数 / 两个数」
 /// 在中英两侧都能自然成句，而不是硬塞两个数进去读成「将影响 0 个笔记本」。
 public enum ContainerRemovalSummary: Equatable, Sendable {

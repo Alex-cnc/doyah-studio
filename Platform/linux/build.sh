@@ -2,7 +2,7 @@
 # Linux 端构建入口 —— Doyah Studio 全量 PC 端第三端（归 babyhippo）
 #
 # 派单：T-20261014-016（人类主人 2026-10-14 令「Doyah Studio 全量 PC 端还要补一个 Linux 平台，小河马负责的」）
-# 平台设计层：Docs/概要设计.md §8.6 契约 → Linux 实现 [独占:linux]
+# 平台设计层：Docs/Doyah产品概要设计说明书.md §8.6 契约 → Linux 实现 [独占:linux]
 #
 # 用法：
 #   Platform/linux/build.sh --deps   # 依赖探测（只读；缺项逐条点名）

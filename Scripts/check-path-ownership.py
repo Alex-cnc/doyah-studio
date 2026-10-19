@@ -64,7 +64,7 @@ Kotlin）、`entry/` + `AppScope/` + `hvigor/` + `hvigorfile.ts` + `oh-package.j
     python3 Scripts/check-path-ownership.py --mine windows --base origin/master
     python3 Scripts/check-path-ownership.py --mine nonapple                 # Notes 写法（契约侧宽松档）
     python3 Scripts/check-path-ownership.py --manifest /tmp/fixture.json    # 换清单（自测 / 夹具）
-    python3 Scripts/check-path-ownership.py --files Docs/概要设计.md         # 显式指定改动集
+    python3 Scripts/check-path-ownership.py --files Docs/Doyah产品概要设计说明书.md         # 显式指定改动集
     python3 Scripts/check-path-ownership.py --self-test                     # 自测 38 例
 
 **本侧推断**：清单里某棵树的 `hosts` 命中 `uname` 时才敢默认；推断不出就要求 `--mine`（退出 2，
@@ -153,7 +153,7 @@ def has_prefix(path: str, prefix: str) -> bool:
 
 def git(repo: pathlib.Path, *args: str):
     # `-c core.quotePath=false`：否则中文路径会被 git 输出成 `"Docs/\346\246\202…"` 这种 C 风格
-    # 八进制转义（实测踩过：本仓 `Docs/概要设计.md` 因此被判成「未登记路径」）—— 路径必须原样读。
+    # 八进制转义（实测踩过：本仓 `Docs/Doyah产品概要设计说明书.md` 因此被判成「未登记路径」）—— 路径必须原样读。
     r = subprocess.run(["git", "-C", str(repo), "-c", "core.quotePath=false"] + list(args),
                        capture_output=True, text=True)
     return r.returncode, r.stdout, r.stderr
@@ -533,7 +533,7 @@ FIXTURE = {
          "label": "Windows 端（Tauri 2 + Rust）", "paths": ["platform/windows/"]},
     ],
     "contract_owner": "hugehippo",
-    "contract_docs": ["Docs/需求规范书.md", "Docs/概要设计.md"],
+    "contract_docs": ["Docs/Doyah产品需求说明书.md", "Docs/Doyah产品概要设计说明书.md"],
     "shared": ["Docs/", "tools/", "AGENT-SPEC.md"],
     "unclassified_allow": [{"path": "README.md", "reason": "仓根门面"}],
     "shared_ledger": [{"glob": "Docs/发布计划.md", "reason": "台账追加", "by": "macos",
@@ -553,7 +553,7 @@ def _fixture_repo(root: pathlib.Path):
         (root / p).mkdir(parents=True, exist_ok=True)
     for f in ("Package.swift", "hvigorfile.ts", "README.md"):
         (root / f).write_text("x\n", encoding="utf-8")
-    for f in ("Docs/需求规范书.md", "Docs/概要设计.md"):
+    for f in ("Docs/Doyah产品需求说明书.md", "Docs/Doyah产品概要设计说明书.md"):
         (root / f).write_text("x\n", encoding="utf-8")
 
 
@@ -593,17 +593,17 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
           wants=["对侧子树", "android/app/Main.kt"],
           not_wants=["❌ 对侧子树：App/a.swift"])
     # 5 共享面未登记 ⇒ 红
-    check("⑤ 共享面未登记 ⇒ 红", EXIT_RED, paths=["Docs/概要设计.md"],
+    check("⑤ 共享面未登记 ⇒ 红", EXIT_RED, paths=["Docs/Doyah产品概要设计说明书.md"],
           wants=["共享面未登记", "shared-surface"])
     # 6 共享面 + 台账 glob 命中 ⇒ 绿
     check("⑥ 共享面 + 台账已登记 ⇒ 绿", EXIT_PASS, paths=["Docs/发布计划.md"],
           wants=["共享面", "台账"])
     # 7 共享面 + 本次新增行注记 ⇒ 绿
-    check("⑦ 共享面 + 新增行注记 ⇒ 绿", EXIT_PASS, paths=["Docs/概要设计.md"],
-          inline={"Docs/概要设计.md": "台账跟版"}, wants=["新增行注记"])
+    check("⑦ 共享面 + 新增行注记 ⇒ 绿", EXIT_PASS, paths=["Docs/Doyah产品概要设计说明书.md"],
+          inline={"Docs/Doyah产品概要设计说明书.md": "台账跟版"}, wants=["新增行注记"])
     # 8 注记理由为空 ⇒ 不算登记（红）
-    check("⑧ 注记理由为空 ⇒ 不算登记（仍判红）", EXIT_RED, paths=["Docs/概要设计.md"],
-          inline={"Docs/概要设计.md": ""}, wants=["共享面未登记"])
+    check("⑧ 注记理由为空 ⇒ 不算登记（仍判红）", EXIT_RED, paths=["Docs/Doyah产品概要设计说明书.md"],
+          inline={"Docs/Doyah产品概要设计说明书.md": ""}, wants=["共享面未登记"])
     # 9 提交信息整批豁免 ⇒ 绿
     check("⑨ 提交信息里注理由 ⇒ 绿", EXIT_PASS, paths=["tools/check-x.py"],
           commit="本轮落判据（shared-surface: 落判据）", wants=["提交信息"])
@@ -721,7 +721,7 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     # 「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」。成对证据：同一条改动上
     # 「所有者改 ⇒ 绿 / 碰非三书 ⇒ 红」，以及「演员名 ≡ 平台集」这层映射真的生效。
     check("㉔ 契约所有者 `hugehippo` 改三书 ⇒ 绿", EXIT_PASS,
-          paths=["Docs/需求规范书.md"], mine="hugehippo", wants=["契约层（三书）"])
+          paths=["Docs/Doyah产品需求说明书.md"], mine="hugehippo", wants=["契约层（三书）"])
     check("㉕ 契约所有者（兼任 Apple 实现侧）改自己平台子树 ⇒ 绿（2026-10-15 **叠加判据**）", EXIT_PASS,
           paths=["App/Views/A.swift"], mine="hugehippo", wants=["本侧子树"])
     check("㉖ 契约所有者碰共享面脚本 ⇒ 仍红（三书之外照常规判据：共享面未登记）", EXIT_RED,

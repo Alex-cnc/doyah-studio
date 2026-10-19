@@ -153,7 +153,7 @@ cd "${ROOT}"
 # 两者都要 Xcode 工具链（`DEVELOPER_DIR` → `/Applications/Xcode.app/Contents/Developer`；两份脚本各自在设置段
 # `${DEVELOPER_DIR:-…}` 兜底并可被外部覆盖，且每次跑都把工具链版本打进输出 —— 回执可复现，见单 T-20261009-095 ②）。
 # 在非 macOS 机器（另一平台 / Linux）上跑，原先会以「命令或路径不存在」的形式**硬失败**，
-# 看起来像门禁红了，其实只是平台不适用（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。
+# 看起来像门禁红了，其实只是平台不适用（对侧逐项实测见 `Docs/Doyah产品概要设计说明书.md` §8.5.6-4）。
 # 现在的口径：**按平台跳过 + 打印提示**，且**跳过 ≠ 通过** —— 收尾行如实写「跑了几项 / 跳了几项」
 # 并逐条列出跳过的项；需要「跳过即红」（主开发机上自我证明）加 `--require-all`。
 # 平台取值：显式 `DOYAH_PLATFORM=macos|windows|linux` 优先，否则按 `uname -s` 推断。
@@ -189,7 +189,7 @@ skip_step() {   # skip_step <项号> <说明>
   SKIPPED_ITEMS="${SKIPPED_ITEMS}   · 第 $1 项 ${2}
 "
   echo "==> $1/18 ⏭ 跳过（平台不适用：PLATFORM=${PLATFORM}，缺 Xcode 工具链）—— ${2}"
-  echo "    等价物见 Docs/概要设计.md §8.3（每端必需项清单）与 §8.5.3（另一平台的 PowerShell 版）"
+  echo "    等价物见 Docs/Doyah产品概要设计说明书.md §8.3（每端必需项清单）与 §8.5.3（另一平台的 PowerShell 版）"
 }
 
 # ── L-110（2026-10-11 第 488 轮）：失败行的行号 → 项号 + 「未执行项」如实报 ──────────────────
@@ -308,7 +308,7 @@ python3 Scripts/check-core-portability.py
 # 而 macOS 上 `os.sep` 就是 `/` ⇒ **只在那一台机器上红**（对侧 2026-09-29 第 81 轮实测：
 # `check-doc-versions.py` 误报 6 份、`check-doc-tables.py` 误报 26 处，而 A/B/C 三档全过）。
 # 判据 A 禁这一形状（仓内 13 处已全部改 `.as_posix()`，其中第三处 `check-doc-numbers.py` 是本轮扫出来的）、
-# B 例外台账默认**空**、C 空跑防护、D 判据自己的证据（8 例）。样式见 `Docs/概要设计.md` §8.3。
+# B 例外台账默认**空**、C 空跑防护、D 判据自己的证据（8 例）。样式见 `Docs/Doyah产品概要设计说明书.md` §8.3。
 python3 Scripts/check-script-portability.py
 
 # L-106（FR-EDIT-38 ①③，2026-09-30 开发循环第 117 轮）：语言的**登记形状** ——
@@ -436,7 +436,7 @@ python3 Scripts/check-doc-versions.py
 python3 Scripts/check-terminal-palette.py
 # L-55（2026-09-28 第 61 轮）：上面几条管的是**表格结构**（列数 / 计数 / 版本号 / 派生计数），
 # 管不了「独立写在各处的**工程设施数字**」—— 闭环项数、单测数、快照张数。真现场：
-# `Docs/概要设计.md` §8.3 闸门表写着 `verify-core.sh`（**760** 项），实测 2056 项（那是 09-23 的旧值）；
+# `Docs/Doyah产品概要设计说明书.md` §8.3 闸门表写着 `verify-core.sh`（**760** 项），实测 2056 项（那是 09-23 的旧值）；
 # `AGENT-SPEC.md` 跑法注释里写着 2046 tests / 快照 140 张 · 70 组，实测 2056 / 152 · 76。
 # 口径 = **唯一来源台账** `Scripts/doc-numbers.json`（照 `Scripts/vendored-sqlite.json` 的做法），
 # 判据 `Scripts/check-doc-numbers.py` 做**三向对账**：台账 ↔ 实测（能机械复算的必须复算：
@@ -836,7 +836,7 @@ python3 Scripts/check-markdown-single-source.py --self-test
 # `browserEngines` / `BrowserTabView` / `openBrowserTab` / `browserTabButton` 的文件必须登记过；
 # 唯一豁免 = 视图定义 `BrowserTabView.swift`）—— 数据库侧 `App/Views/QueryWorkspaceView.swift` 命中即红；
 # B 台账 ⊆ 允许落点（登记过的落点必须真的命中 —— 拦「搬走了没接上」「引用删了只留注释」）；
-# C 两条文档条文（SRS 的 `FR-EDIT-34` 定义格 / `Docs/概要设计.md` §3.12 的「视图契约」行）必须写
+# C 两条文档条文（SRS 的 `FR-EDIT-34` 定义格 / `Docs/Doyah产品概要设计说明书.md` §3.12 的「视图契约」行）必须写
 # 「工作区」且不得回写「编辑器区」（订正过程留在证据格里，判据只看条文格）；
 # D 空跑防护（`App/` 扫描面文件数下限 · 台账文件存在性 · 七个标识各自至少一处命中 · 状态所有者类在位）。
 # **状态所有者另判一处（队列 `L-149` 剩余①，第 135 轮）**：浏览器状态必须住在

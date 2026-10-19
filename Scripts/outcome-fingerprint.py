@@ -52,7 +52,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-DEFAULT_SRS = ROOT / "Docs" / "需求规范书.md"
+DEFAULT_SRS = ROOT / "Docs" / "Doyah产品需求说明书.md"
 
 # 引用路径：文档里用反引号包起来的 `Core/X.swift` 这类写法
 PATH_PATTERN = re.compile(r"`([A-Za-z][A-Za-z0-9_]*(?:/[^`\s]+)+\.([a-z]+))`")

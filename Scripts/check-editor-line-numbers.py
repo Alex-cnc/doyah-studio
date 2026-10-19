@@ -70,9 +70,9 @@ HOOKS = {
 
 # 口径的文档锚点（三书各一句；文档不在盘上时跳过并提示）。
 DOC_ANCHORS = {
-    "Docs/概要设计.md": ["行号列不只工作区编辑器有"],
-    "Docs/需求规范书.md": ["数据库侧 SQL 编辑器也有行号列"],
-    "Docs/产品能力规划说明书.md": ["SQL 编辑器（数据库侧）行号列已落地"],
+    "Docs/Doyah产品概要设计说明书.md": ["行号列不只工作区编辑器有"],
+    "Docs/Doyah产品需求说明书.md": ["数据库侧 SQL 编辑器也有行号列"],
+    "Docs/Doyah产品能力说明书.md": ["SQL 编辑器（数据库侧）行号列已落地"],
 }
 
 
@@ -439,7 +439,7 @@ def self_test() -> int:
     expectations.append(("登记「不画行号」却没写理由", True, empty_reason))
 
     def drop_anchor(directory, ledger):
-        edit(directory, "Docs/概要设计.md", "行号列不只工作区编辑器有", "行号列")
+        edit(directory, "Docs/Doyah产品概要设计说明书.md", "行号列不只工作区编辑器有", "行号列")
         return ledger
 
     expectations.append(("文档里的口径锚点被删", True, drop_anchor))

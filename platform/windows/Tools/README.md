@@ -37,7 +37,7 @@ pwsh -File platform/windows\Tools\verify-all.ps1 -Base HEAD~1                   
 
 | §8.3.1 | 本目录文件 | 现状（2026-09-27 实测） |
 |---|---|---|
-| ① 构建入口 | `build.ps1` | ✅ 跑（`cargo build --release --workspace --features doyah-studio-shell/custom-protocol` + 两个前端 `vite build`；**第 28 轮补一条衍生判据**：前端产物的文件名必须出现在二进制里 ⇒ 拦「产出了 dev 形态、跑不起来的产物」，注入自证见 `Docs/概要设计.md` §8.5.7） |
+| ① 构建入口 | `build.ps1` | ✅ 跑（`cargo build --release --workspace --features doyah-studio-shell/custom-protocol` + 两个前端 `vite build`；**第 28 轮补一条衍生判据**：前端产物的文件名必须出现在二进制里 ⇒ 拦「产出了 dev 形态、跑不起来的产物」，注入自证见 `Docs/Doyah产品概要设计说明书.md` §8.5.7） |
 | ② 单测 | `test.ps1` | ✅ 跑（`cargo test --workspace`；前端 `vitest` 同链路） |
 | ③ 文档计数 | `check-doc-tables.ps1` | ✅ 跑（共享判据 + `--require-all` 透传） |
 | ④ 独占节越界 | `check-exclusive-sections.ps1` | ✅ 跑（显式 `--mine windows`，默认基线 `origin/master`） |
@@ -53,7 +53,7 @@ pwsh -File platform/windows\Tools\verify-all.ps1 -Base HEAD~1                   
 
 第 81 轮实测（合入对侧 `b4cd5c2` / `08e6069` 后）：**14 项中跑 13 / 跳过 0 / 失败 1** —— 唯一失败项 = ③（对侧两条「受检清单自洽」判据在 Windows 上恒假红，见下节「已知既有红」）。
 本机实测（Windows 11 / Windows PowerShell 5.1.26100.9549 / `python` 探得 `py -3`）：
-`verify-all.ps1` = **14 项中跑 14 / 跳过 0 / 失败 0**（第 27 轮实测，读数同时记在 `Docs/概要设计.md` §8.5.7）：**设计令牌棘轮不再跳过**（`platform/windows\App` 落地后 ③ 交给表示层自己的两个 node 判据，见上表）—— 本侧自此**没有「跳过」档**。加 `-RequireAll` = 跳过即红（现无跳过项）。
+`verify-all.ps1` = **14 项中跑 14 / 跳过 0 / 失败 0**（第 27 轮实测，读数同时记在 `Docs/Doyah产品概要设计说明书.md` §8.5.7）：**设计令牌棘轮不再跳过**（`platform/windows\App` 落地后 ③ 交给表示层自己的两个 node 判据，见上表）—— 本侧自此**没有「跳过」档**。加 `-RequireAll` = 跳过即红（现无跳过项）。
 更早的读数（第 26 轮 = 13 项中跑 13 / 跳过 0 / 失败 0；第 25 轮 = 13 项中跑 12 / 跳过 1 / 失败 0）留痕在此：**跳过 1 项 = 设计令牌棘轮**（等 `platform/windows\App` 表示层落地；规则名对齐与令牌源两项已 ✅）。
 第 24 轮换栈后的那一次读数（13 项中跑 10 / 跳过 2 / 失败 1）留痕在此：判红那一项 = 本地落后远端、merge 尚未提交时的独占节越界，合并后即绿；跳过第 2 项 = 领域层边界，第 25 轮已按 Rust 形态重建。
 第 22 轮另存一对前后证据：**修复前第 ③ 项假红**（判据 `rc 0` 但 stderr 有 `SyntaxWarning`）→ `_common.ps1` 加「只认退出码」护栏后 **跑 8 / 跳过 4 / 失败 0**（见坑 6）。
@@ -66,7 +66,7 @@ pwsh -File platform/windows\Tools\verify-all.ps1 -Base HEAD~1                   
 | `check-doc-tables.ps1 -RequireAll`（缺 5 份本地文档）| 跳过即红 | RESULT: FAIL |
 | 子闸门 `check-doc-tables.ps1` 去掉 UTF-8 BOM | verify-all 第 1 项判红 | 跑 5 / 跳过 4 / 失败 2 → RESULT: FAIL |
 | 第 25 轮（真仓库三例）：① `platform/windows/Core/Cargo.toml` 的 `[dependencies]` 加 `tauri = "2"`；② `Core/src/lib.rs` 加 `use windows::core::*;`；③ 同文件加 `extern "C" { fn probe(); }` | 领域层边界判红并点名 `文件:行号` | 三例全中：`Cargo.toml:8 依赖面命中 GUI / 平台 crate：tauri` / `platform/windows\Core\src\lib.rs:13 出现 use GUI / 平台 crate`（同行的 crate 路径规则亦命中）/ `lib.rs:13 出现 FFI：extern "C"` ⇒ 逐例**按原始字节还原**（sha256 一致）后净跑 `RESULT: PASS (exit 0)` |
-| 往 §8.5.5 加一条只在本节出现的 `P-26`（不写进 §4 / §10.9）| 第 11 项（`P-*` 对账）判红并点名该行 | ❌ `Docs/概要设计.md:1039：§8.5.5 已落条目 P-26，但它还没进 §10.9 / §4`、`RESULT: FAIL (exit 1)` ⇒ `git checkout HEAD --` 还原后**逐字节一致**、转绿 RC 0 |
+| 往 §8.5.5 加一条只在本节出现的 `P-26`（不写进 §4 / §10.9）| 第 11 项（`P-*` 对账）判红并点名该行 | ❌ `Docs/Doyah产品概要设计说明书.md:1039：§8.5.5 已落条目 P-26，但它还没进 §10.9 / §4`、`RESULT: FAIL (exit 1)` ⇒ `git checkout HEAD --` 还原后**逐字节一致**、转绿 RC 0 |
 | （第 27 轮，真仓库三例）`platform/windows/App/package.json` 的 `version` → `9.9.9`；`platform/windows/App/src-tauri/tauri.conf.json` 的 `version` → `9.9.9`；`platform/windows/App/src-tauri/Cargo.toml` 的 `[package] version` → `9.9.9` | 第 13 项判红并点名 `文件:行号` | ❌ 三例全中：`镜像处：platform/windows/App/package.json:4 的值 = \`9.9.9\`，台账 = \`0.2.0\`` / `权威处：platform/windows/App/src-tauri/tauri.conf.json:4 …` / `镜像处：platform/windows/App/src-tauri/Cargo.toml:3 …` ⇒ 逐例按**原始字节**还原（sha256 一致）+ 净跑 `RESULT: PASS (exit 0)` |
 
 ## 六条实测坑（别重踩）
@@ -94,9 +94,9 @@ pwsh -File platform/windows\Tools\verify-all.ps1 -Base HEAD~1                   
 **第 ③ 项自合入对侧 `b4cd5c2`（L-88 判据 D）/ `08e6069`（L-89 判据 E）起恒红 —— 缺陷在对侧判据、不在本侧**（2026-09-29 第 81 轮实测）。
 
 - 现象：两条「受检清单自洽」判据在 Windows 上把**清单里本就有**的文档全报成「不在受检清单里」——
-  `check-doc-tables.py` 判据 E 报 26 处（`Docs\README.md` / `Docs\概要设计.md` / `Docs\proposals\*.md` …）、
-  `check-doc-versions.py` 判据 D 报 6 处（`Docs\需求规范书.md` / `Docs\概要设计.md` / `Docs\发布计划.md` …）。
-  同脚本的表格列数档与 A/B/C 三档对同一批文档全绿（`✅ Docs/需求规范书.md —— 变更 293 行 / 最高 v3.277 / 头部 v3.28`）。
+  `check-doc-tables.py` 判据 E 报 26 处（`Docs\README.md` / `Docs\Doyah产品概要设计说明书.md` / `Docs\proposals\*.md` …）、
+  `check-doc-versions.py` 判据 D 报 6 处（`Docs\Doyah产品需求说明书.md` / `Docs\Doyah产品概要设计说明书.md` / `Docs\发布计划.md` …）。
+  同脚本的表格列数档与 A/B/C 三档对同一批文档全绿（`✅ Docs/Doyah产品需求说明书.md —— 变更 293 行 / 最高 v3.277 / 头部 v3.28`）。
 - 根因：两条判据取相对路径都用 `str(...)`（D 用 `path.relative_to(root)`、E 用 `path.relative_to(".")`），
   Windows 上给**反斜杠**，而三处清单（`VERSION_DOCS` / `DEFAULT_TARGETS` / `COVERAGE_EXEMPT`）写的是**正斜杠**
   ⇒ 集合匹配恒 False（macOS 上 `os.sep` 就是 `/` ⇒ 对侧看不到，`--self-test` 也在 macOS 上跑）。

@@ -4,7 +4,7 @@ import Foundation
 import FoundationNetworking
 #endif
 
-// 云D · **端到端最小闭环的网络接线**（契约 `DoyahNotes Docs/需求规范书.md` §6.4 / §6.4.1 / §6.4.2）：
+// 云D · **端到端最小闭环的网络接线**（契约 `DoyahNotes Docs/Doyah产品需求说明书.md` §6.4 / §6.4.1 / §6.4.2）：
 //
 //   · `IR-15` 增量拉取（`updated_after=<cursor>` 分页拉）
 //   · `IR-16` 单篇上行（幂等键 = `uid` + `rev`；回执三态：已接收 / 已过期 / 冲突留两版）

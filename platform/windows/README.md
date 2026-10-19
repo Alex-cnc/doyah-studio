@@ -1,6 +1,6 @@
 # platform/windows/ —— Doyah Studio 的 Windows 侧（另一平台）实现落点
 
-对应设计：`Docs/概要设计.md` **§8.2**（仓库结构：同仓 `platform/windows/` 块）与 **§8.5 契约 → Windows 实现 `[独占:windows]`**。
+对应设计：`Docs/Doyah产品概要设计说明书.md` **§8.2**（仓库结构：同仓 `platform/windows/` 块）与 **§8.5 契约 → Windows 实现 `[独占:windows]`**。
 本目录 = **实现层**：可以替换实现，**不得改变 §3 的契约与不变量**；要改契约走 `Docs/proposals/`。
 
 **技术栈（2026-09-28 需求提出者开工令）**：前端 **Tauri 2 + Vue 3 + TypeScript**、后端 **Rust**、测试 `cargo test` + `vitest`、分发 Tauri bundler（MSI / NSIS）。原 .NET（C# / WPF / xUnit）路线**作废**；与契约字面（§8.2 树 / §3 GUI 框架行 / SRS §10.9 的 `P-19`·`P-23`·`P-24` /「原生界面栈」）的冲突走 **`Docs/proposals/0004`**（待采纳），本侧不自行放宽契约。

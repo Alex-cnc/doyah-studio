@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - 回执三态（`IR-16`）
 //
-// 上行写入的幂等键 = **`uid` + `rev`**（契约 `Docs/需求规范书.md` §6.4.2）。服务端按 LWW 决胜，
+// 上行写入的幂等键 = **`uid` + `rev`**（契约 `Docs/Doyah产品需求说明书.md` §6.4.2）。服务端按 LWW 决胜，
 // 回给调用方的一律是这三态之一 —— 这里把「三态」写成类型，于是「本地覆盖 / 本地不变 / 留两版」
 // 这件事无法被某个调用点悄悄简化成两态。
 public enum SyncVerdict: String, Codable, Sendable, CaseIterable, Equatable {

@@ -4,7 +4,7 @@
 
 为什么需要它 —— 两张自称「一一对应」的表，此前**一个判据都没有**：
 
-1. `Docs/概要设计.md` §4「允许不同的部分（平台差异）」与 `Docs/需求规范书.md` §10.9
+1. `Docs/Doyah产品概要设计说明书.md` §4「允许不同的部分（平台差异）」与 `Docs/Doyah产品需求说明书.md` §10.9
    「平台差异登记表（哪些允许不同）」在正文里互相写着「与 …… 一一对应」；
 2. `Scripts/verify-all.sh` **第 7 项的注释**甚至一直写着「平台等价矩阵与 §10.9 登记表一致」——
    那是错的：那一项只做 §10.10 ↔ `Docs/平台实现状态.json` 的矩阵对账（2026-09-27 第 25 轮
@@ -76,8 +76,8 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-SRS = "Docs/需求规范书.md"
-DESIGN = "Docs/概要设计.md"
+SRS = "Docs/Doyah产品需求说明书.md"
+DESIGN = "Docs/Doyah产品概要设计说明书.md"
 
 SRS_HEADING = re.compile(r"^### 10\.9 ")
 SRS_STOP = re.compile(r"^#{1,3} ")
@@ -403,7 +403,7 @@ GOOD_SRS = """# 需求规范书
 
 ### 10.9 平台差异登记表（哪些允许不同）
 
-> 与 `Docs/概要设计.md` §4 一一对应。
+> 与 `Docs/Doyah产品概要设计说明书.md` §4 一一对应。
 
 | 编号 | 领域 | 必须一致的行为（跨平台契约） | 允许不同的实现 | 关联 |
 |---|---|---|---|---|

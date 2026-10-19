@@ -179,19 +179,19 @@
       "at": "2026-10-03"
     },
     {
-      "glob": "Docs/产品能力规划说明书.md",
+      "glob": "Docs/Doyah产品能力说明书.md",
       "reason": "能力清单新增第 13 条（Python 强档 + Shell/YAML 内置 + 两门语言登记）+ 版本行 v1.104",
       "by": "macos",
       "at": "2026-10-03"
     },
     {
-      "glob": "Docs/概要设计.md",
+      "glob": "Docs/Doyah产品概要设计说明书.md",
       "reason": "§8.1 的 schema 由四种规则形状改成八种（含 python/shell/yaml 三档的边界）+ 版本行 v2.127",
       "by": "macos",
       "at": "2026-10-03"
     },
     {
-      "glob": "Docs/需求规范书.md",
+      "glob": "Docs/Doyah产品需求说明书.md",
       "reason": "`FR-EDIT-38`（覆盖面 20 种语言 / 61 条扩展名、Beta 1 缺口两门已落）与 `FR-EDIT-39`（三档 + 只用内置）+ 版本行 v3.319；正文里的语言名按平台中立性口径加 platform-ok 注",
       "by": "macos",
       "at": "2026-10-03"

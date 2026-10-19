@@ -10,7 +10,7 @@ rebase 解冲突）、当天队列里 `L-25` / `L-26` 各出现两次、本轮 `
 用法：
 
     python3 Scripts/next-doc-version.py                     # 三书 + 本台账各报下一号
-    python3 Scripts/next-doc-version.py Docs/概要设计.md     # 指定文档
+    python3 Scripts/next-doc-version.py Docs/Doyah产品概要设计说明书.md     # 指定文档
     python3 Scripts/next-doc-version.py --ids L             # 队列里下一个 L-xx 条目号
     python3 Scripts/next-doc-version.py --ids N --ids R      # 多个前缀（可重复）
     python3 Scripts/next-doc-version.py --json               # 机器可读
@@ -30,9 +30,9 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 DEFAULT_DOCS = [
-    "Docs/需求规范书.md",
-    "Docs/产品能力规划说明书.md",
-    "Docs/概要设计.md",
+    "Docs/Doyah产品需求说明书.md",
+    "Docs/Doyah产品能力说明书.md",
+    "Docs/Doyah产品概要设计说明书.md",
     "Docs/智能体助手-开发spec.md",
 ]
 QUEUE_FILE = "Docs/design/开发循环-任务队列.md"

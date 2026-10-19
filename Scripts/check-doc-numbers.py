@@ -3,9 +3,9 @@
 
 **为什么要有它**（第 61 轮，L-55 条目原文）：同一件事在好几处各写一遍 ——
 闭环项数 `十八项` 在 `AGENT-SPEC.md` 有多处、`Scripts/verify-all.sh` 头注释与脚本正文里各写一次、
-三书里也各写一次；单测项数写在 §7 门禁行与 `Docs/概要设计.md` §8.3 闸门表等多处。
+三书里也各写一次；单测项数写在 §7 门禁行与 `Docs/Doyah产品概要设计说明书.md` §8.3 闸门表等多处。
 **表格结构合法、编译照过、单测照绿** —— 数字陈旧时谁都不说话。本轮实测的现场：
-`Docs/概要设计.md` §8.3 闸门表写着 `Scripts/verify-core.sh`（**760** 项），而实测 **2056** 项
+`Docs/Doyah产品概要设计说明书.md` §8.3 闸门表写着 `Scripts/verify-core.sh`（**760** 项），而实测 **2056** 项
 （那是 2026-09-23 的旧值，L-55 条目原文登记它时是 2003，此后又漂了两次）。
 
 **口径（本侧拍板，三选一里取「唯一来源 + 机械判据」这条）**：
@@ -57,11 +57,11 @@
   缺口 = 「新增一处错误数字且不在反扫语境里」抓不到 ⇒ 已在 `doc-numbers.json` 的
   `notCovered` 里记明，连同逐族例数一起转队列 **L-72**。
 - **扫描范围遵守红线第 6 条**：对侧独占节（`[独占:windows]` / `[独占:linux]`）内的行整段跳过
-  —— 本侧不改对侧节，本侧也不拿它判红。本轮实测的现场：`Docs/概要设计.md` §8.5.3（`[独占:windows]`）
+  —— 本侧不改对侧节，本侧也不拿它判红。本轮实测的现场：`Docs/Doyah产品概要设计说明书.md` §8.5.3（`[独占:windows]`）
   里有一处「项数仍十七」是陈旧值，**本侧不改**（走提醒），判据在这里如实报「跳过 N 行」。
   **同批补钉（合册 `T-20261013-027` / 原单 `T-20261010-029`）**：「结束上一段跳过」与「开启新段跳过」
   原来是 `if` / `elif` ⇒ 同一行只做前者 —— **相邻的两个同级对侧独占节，第二个整节漏跳过**（真仓实测：
-  `Docs/概要设计.md` 的 §8.5.8.2 / §8.5.8.4 / §8.5.8.6 / §8.5.8.8 四节体 + §8.6 `[独占:linux]` 整节，
+  `Docs/Doyah产品概要设计说明书.md` 的 §8.5.8.2 / §8.5.8.4 / §8.5.8.6 / §8.5.8.8 四节体 + §8.6 `[独占:linux]` 整节，
   共 **71 行**原来被当**本侧条文**扫描）。已改为两段独立判定（本文件 `read_lines` 与
   `count_counterpart_lines` 同批；姊妹件 `Scripts/check-self-test-counts.py` 同一份结构一并改），
   并加三条自证：相邻同级 ⇒ **逐节**跳过（旧码漏 / 新码不漏）· 本侧 `[独占:macos]` 节**照旧扫描**
@@ -206,7 +206,7 @@ def read_lines(root: pathlib.Path, rel: str, skip_changelog: bool = True):
             level = len(heading.group(1))
             # **两段独立判定**（合册 `T-20261013-027` / 原单 `T-20261010-029`）：原来这两件事挂在
             # `if` / `elif` 上 ⇒ 同一行只做前者 —— **相邻的两个同级对侧独占节，第二个整节漏跳过**
-            # （真仓 `Docs/概要设计.md` §8.5 `[独占:windows]` → §8.6 `[独占:linux]`：后者整节体被当本侧条文扫描）。
+            # （真仓 `Docs/Doyah产品概要设计说明书.md` §8.5 `[独占:windows]` → §8.6 `[独占:linux]`：后者整节体被当本侧条文扫描）。
             if skip_level is not None and level <= skip_level:
                 skip_level = None
             if skip_level is None and COUNTERPART_SECTION.search(line):
@@ -232,7 +232,7 @@ def count_counterpart_lines(root: pathlib.Path, rel: str) -> int:
             level = len(heading.group(1))
             # **两段独立判定**（合册 `T-20261013-027` / 原单 `T-20261010-029`）：原来这两件事挂在
             # `if` / `elif` 上 ⇒ 同一行只做前者 —— **相邻的两个同级对侧独占节，第二个整节漏跳过**
-            # （真仓 `Docs/概要设计.md` §8.5 `[独占:windows]` → §8.6 `[独占:linux]`：后者整节体被当本侧条文扫描）。
+            # （真仓 `Docs/Doyah产品概要设计说明书.md` §8.5 `[独占:windows]` → §8.6 `[独占:linux]`：后者整节体被当本侧条文扫描）。
             if skip_level is not None and level <= skip_level:
                 skip_level = None
             if skip_level is None and COUNTERPART_SECTION.search(line):

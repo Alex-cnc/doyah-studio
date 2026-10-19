@@ -33,7 +33,7 @@ L-89 纳入的 6 份：`人工点验-单击清单-macOS-20260927.md` / `夜间�
 `项目评审-2026-09-23.md`
 —— 见 `.gitignore` 第 27 行 `/Docs/*` 与白名单），它们只存在于
 macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平台（Windows）上跑这一项必然红，
-而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/概要设计.md` §8.5.6-4）。现在：
+而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/Doyah产品概要设计说明书.md` §8.5.6-4）。现在：
 
 **这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 12 份** /
 **52 份命名 + 1 条通配 = 实跑 53 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
@@ -44,7 +44,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 - **默认清单里不存在** → **跳过 + 高声提示**（打印跳过的清单与条数；跳过 ≠ 通过，但不判红）；
 - **显式点名的文件不存在** → **判红**（你点名要看的东西没有）；
 - `--require-all` → 缺失一律判红；
-- **`Docs/需求规范书.md` 缺失始终判红**（它是本工程文档的单一来源，不在「可能没有」之列）。
+- **`Docs/Doyah产品需求说明书.md` 缺失始终判红**（它是本工程文档的单一来源，不在「可能没有」之列）。
 
 **跳过只覆盖「文档在不在」**：文档一旦存在，它的表格 / 派生数字 / 版本号判据一条都不放宽
 （跳过的永远是整份文档，不是文档里的某项检查）。
@@ -92,15 +92,15 @@ from collections import Counter
 DEFAULT_TARGETS = [
     "Docs/人工点验清单-20261018.md",
     "Docs/人工点验清单-20261018-重分版.md",
-    "Docs/产品能力规划说明书.md",
+    "Docs/Doyah产品能力说明书.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
-    "Docs/需求规范书.md",
+    "Docs/Doyah产品需求说明书.md",
     "Docs/README.md",
     "Docs/兼容性矩阵.md",
     "Docs/GBase-技术验证.md",
     "Docs/测试用例.md",
-    "Docs/概要设计.md",
+    "Docs/Doyah产品概要设计说明书.md",
     "Docs/发布方案.md",
     "Docs/手工验收运行手册.md",
     # L-41（第 35 轮）：每轮必改的两份**本机台账**（`.gitignore` 排除，只在主开发机上）
@@ -317,7 +317,7 @@ def starts_new_block(text: str) -> bool:
     if text.startswith("**"):
         # 加粗开头：**真续行**（行内还带 ≥ 2 个表格分隔竖线 ⇒ 是被硬换行截断的行尾）判红；
         # 完整的加粗引导句（`**独占标记（2026-09-27 形态 A…）**：…` 这类散文 —— 原单 ㈣ 的真仓活体
-        # = `Docs/概要设计.md:11-12`）仍算「新块」、不误报。口径 = 行内竖线个数（如实登记的边界）。
+        # = `Docs/Doyah产品概要设计说明书.md:11-12`）仍算「新块」、不误报。口径 = 行内竖线个数（如实登记的边界）。
         return pipes_outside_code(text) < 2
     if len(text) >= 3 and set(text) <= set("-*_ \t"):
         # 分隔线 / setext 下划线（`---` / `***` / `___`）—— 自己就是一个块，不是续行
@@ -506,7 +506,7 @@ def check_section_heading_counts() -> list[str]:
     实测已经漂了两处 —— §3.2 写「44 条」实际 50 行、§3.10 写「8 条」实际 9 行。
     这类"手工维护的数字"正是本脚本存在的理由，所以把它也纳入。
     """
-    srs = pathlib.Path("Docs/需求规范书.md")
+    srs = pathlib.Path("Docs/Doyah产品需求说明书.md")
     if not srs.exists():
         return [f"{srs}: 文件不存在"]
 
@@ -540,8 +540,8 @@ def check_section_heading_counts() -> list[str]:
 
 def check_requirement_counts() -> list[str]:
     """校验需求计数与索引实际行数一致（防止"手工维护的数字"再次漂移）。"""
-    srs = pathlib.Path("Docs/需求规范书.md")
-    capability = pathlib.Path("Docs/产品能力规划说明书.md")
+    srs = pathlib.Path("Docs/Doyah产品需求说明书.md")
+    capability = pathlib.Path("Docs/Doyah产品能力说明书.md")
     if not srs.exists():
         return [f"{srs}: 文件不存在"]
 
@@ -782,10 +782,10 @@ SELF_TEST_TRACKED = [
     "Docs/人工点验清单-20261018.md",
     "Docs/人工点验清单-20261018-重分版.md",
     "Docs/design/store/README.md",
-    "Docs/需求规范书.md",
+    "Docs/Doyah产品需求说明书.md",
     "Docs/design/规划-工作区Markdown预览与内置浏览器-20260930.md",
-    "Docs/产品能力规划说明书.md",
-    "Docs/概要设计.md",
+    "Docs/Doyah产品能力说明书.md",
+    "Docs/Doyah产品概要设计说明书.md",
     "Docs/README.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
@@ -1098,7 +1098,7 @@ def run_self_test() -> int:
 
         # 例 14（㈤(a)）·§10.1 表体中断：首条数据行行首多一个空格 ⇒ 判红 + 报行号 + 「表体在此中断」
         total += 1
-        srs_copy = clone / "Docs/需求规范书.md"
+        srs_copy = clone / "Docs/Doyah产品需求说明书.md"
         original_srs = srs_copy.read_text(encoding="utf-8")
         srs_lines = original_srs.splitlines()
         header_at = srs_lines.index("| 编号 | 所属域 / 章节 | 层次 | 状态 |")
@@ -1149,7 +1149,7 @@ def run_self_test() -> int:
 
         # 例 17（㈡）·在场下限：删掉一份 tracked 文档（不在 .gitignore 名单里）⇒ 本件自己判红并点名
         total += 1
-        capability_doc = clone / "Docs/产品能力规划说明书.md"
+        capability_doc = clone / "Docs/Doyah产品能力说明书.md"
         capability_backup = capability_doc.read_text(encoding="utf-8")
         capability_doc.unlink()
         code, output = run([], clone)
@@ -1157,7 +1157,7 @@ def run_self_test() -> int:
             failures.append(
                 f"例 17 失败：删掉 tracked 文档（不在 .gitignore 名单里）仍 exit 0 —— 面无下限（原单 ㈡）\n{output}"
             )
-        elif "产品能力规划说明书.md" not in output or "被删或路径写错" not in output:
+        elif "Doyah产品能力说明书.md" not in output or "被删或路径写错" not in output:
             failures.append(
                 f"例 17 失败：判红了但没有点名被删的文档 / 没说「被删或路径写错」\n{output}"
             )
@@ -1165,9 +1165,9 @@ def run_self_test() -> int:
 
         # 例 4·真仓库（本机）→ exit 0、跳过 0，且**末例核对真仓库逐字节未变**
         total += 1
-        before = (repository / "Docs/概要设计.md").read_bytes()
+        before = (repository / "Docs/Doyah产品概要设计说明书.md").read_bytes()
         code, output = run([], repository)
-        after = (repository / "Docs/概要设计.md").read_bytes()
+        after = (repository / "Docs/Doyah产品概要设计说明书.md").read_bytes()
         if code != 0:
             failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
         elif host_ledgers_absent_entirely:
@@ -1198,15 +1198,15 @@ def run_self_test() -> int:
         # （对侧第 81 轮实测：26 处「有表格却不在受检清单里」）。这里在 macOS 上用 `PureWindowsPath`
         # 复现「那台机器会得到的标识」，红 / 绿成对。
         total += 1
-        windows_style = str(pathlib.PureWindowsPath("Docs/概要设计.md"))
-        if windows_style == "Docs/概要设计.md":
+        windows_style = str(pathlib.PureWindowsPath("Docs/Doyah产品概要设计说明书.md"))
+        if windows_style == "Docs/Doyah产品概要设计说明书.md":
             failures.append("例 8 失败：`PureWindowsPath` 在本机给出的形态与预期不符（夹具前提不成立）")
-        elif identity_text(windows_style) != "Docs/概要设计.md":
+        elif identity_text(windows_style) != "Docs/Doyah产品概要设计说明书.md":
             failures.append(
                 f"例 8 失败：`identity_text({windows_style!r})` 给 {identity_text(windows_style)!r}，"
                 "应落回清单写法（Windows 形态的相对路径必须归一到正斜杠）"
             )
-        elif identity_text(pathlib.Path("Docs/概要设计.md")) != "Docs/概要设计.md":
+        elif identity_text(pathlib.Path("Docs/Doyah产品概要设计说明书.md")) != "Docs/Doyah产品概要设计说明书.md":
             failures.append("例 8 失败：本机形态（PosixPath）经 identity_text 后应逐字不变")
     finally:
         shutil.rmtree(scratch, ignore_errors=True)

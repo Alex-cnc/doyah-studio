@@ -103,7 +103,7 @@ Apple 全系 `macos`/`ios`/`watchos` 归 `hugehippo`、`windows`/`harmony` 归 `
     python3 Scripts/check-exclusive-sections.py --mine babyhippo             # 演员名 = 平台集（Linux / 安卓）
     python3 Scripts/check-exclusive-sections.py --mine watchos               # 第七个平台（watchOS · 2026-10-13 入词表）
     python3 Scripts/check-exclusive-sections.py --contract-docs 核心契约  # 追加契约层锁定的文档
-    python3 Scripts/check-exclusive-sections.py --base HEAD~1 --files Docs/概要设计.md
+    python3 Scripts/check-exclusive-sections.py --base HEAD~1 --files Docs/Doyah产品概要设计说明书.md
     python3 Scripts/check-exclusive-sections.py --diff-file d.patch       # 用现成 diff（CI / 自测）
     python3 Scripts/check-exclusive-sections.py --self-test               # 自测 45 例（含判据 ④、未跟踪增量、口径 A 五例、集合语义与旧词护栏、**契约所有者 = 演员名 6 例**、
     #                                                       **新平台 `watchos` 4 例**、**均衡令演员名跟版 7 例**）
@@ -133,7 +133,7 @@ DEFAULT_DOCS = ("概要设计", "需求规范书", "产品能力规划说明书"
 # 无功能语义变化（判据口径、退出码、集合语义、契约层锁定面一律不变）。
 # 侧名 = **平台名**（三仓统一词表，2026-10-02 人类主人拍板 · 派单 T-20261002-038）：只要这七个合法
 # （**第七个 `watchos` = 2026-10-13 人类主人令** —— Apple 全系归 `hugehippo`、非 Apple 全系归 `babyhippo`；
-# 契约面见 Studio 锚仓 `AGENT-SPEC.md` 词表行 v1.161 与 `Docs/概要设计.md` v2.163 · 提交 `3475fec`）。
+# 契约面见 Studio 锚仓 `AGENT-SPEC.md` 词表行 v1.161 与 `Docs/Doyah产品概要设计说明书.md` v2.163 · 提交 `3475fec`）。
 PLATFORMS = ("macos", "ios", "watchos", "windows", "android", "harmony", "linux")
 # 退役词（旧词表）：归一已删除 —— 旧词一律判红并点名行号（迁移护栏；存量清单见派单 T-20261002-038）。
 RETIRED = ("apple", "nonapple")
@@ -670,7 +670,7 @@ watchOS 实现细节：SwiftUI / WatchConnectivity。
     subprocess.run(["git", "init", "-q"], check=True)
     subprocess.run(["git", "config", "user.email", "t@t"], check=True)
     subprocess.run(["git", "config", "user.name", "t"], check=True)
-    path = "概要设计.md"    # 三书文件名 → 契约层锁定生效（非三书不锁契约层）
+    path = "Doyah产品概要设计说明书.md"    # 三书文件名 → 契约层锁定生效（非三书不锁契约层）
     other = "开发记录.md"   # 记录类文件 → 只受独占节规则约束（本侧可写面）
     for fname, body in ((path, doc), (other, "# 开发记录\n\n## 1. 协议\n\n记录正文。\n")):
         with open(fname, "w", encoding="utf-8") as fh:
@@ -792,7 +792,7 @@ watchOS 实现细节：SwiftUI / WatchConnectivity。
     CL_TAGGED = CL + " contract-change：跨端要先改契约"      # 「已在案」的带注记行
 
     r.append(run_a(None, CL, CL + "\n契约正文续：本侧加的一行。",
-                   "口径 A① 本次新增行不带注记 · 应该报红并点名行号", expect_text="概要设计.md:"))
+                   "口径 A① 本次新增行不带注记 · 应该报红并点名行号", expect_text="Doyah产品概要设计说明书.md:"))
     r.append(run_a(None, CL, CL + "\n契约正文续：带痕迹的一行。 contract-change：跨端要先改契约",
                    "口径 A② 本次新增行自带注记 · 应该通过", expect_red=False))
     r.append(run_a((CL, CL_TAGGED), CL_TAGGED, CL,

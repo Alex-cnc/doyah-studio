@@ -17,7 +17,7 @@ import SwiftUI
 /// 裸间距」这类**写坏的值**，而这里的问题是**什么都没写**（把底色交给了系统），
 /// 正是「覆盖面缺口」。判据因此单独一条，见 `Scripts/check-editor-surface-tokens.py`（闭环第 6 项）。
 ///
-/// ## 口径（契约 `Docs/概要设计.md` §3.31）
+/// ## 口径（契约 `Docs/Doyah产品概要设计说明书.md` §3.31）
 ///
 /// · **底色 = `Surface.content`、字色 = `TextTone.primary`** —— 与另两个编辑面同一档；
 /// · `.scrollContentBackground(.hidden)` 是**先决条件**：不把系统那层底色让出来，

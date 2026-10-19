@@ -50,7 +50,7 @@
   },
   "anchors": [
     {
-      "path": "Docs/概要设计.md",
+      "path": "Docs/Doyah产品概要设计说明书.md",
       "regex": "发布产物版本号 `([0-9]+\\.[0-9]+\\.[0-9]+)`（三处逐字一致）",
       "captures": ["marketingVersion"],
       "minSites": 1,

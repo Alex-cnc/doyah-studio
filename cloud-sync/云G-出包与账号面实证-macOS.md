@@ -15,7 +15,7 @@
 
 ## 〇 口径与来源
 
-- **契约**：`DoyahNotes a2919f0` · SRS **v3.89** §6.4「账号与同步界面（最小集）」（`Docs/需求规范书.md:832`）。
+- **契约**：`DoyahNotes a2919f0` · SRS **v3.89** §6.4「账号与同步界面（最小集）」（`Docs/Doyah产品需求说明书.md:832`）。
 - **派单**：`T-20261009-124` 第 5 / 6 条 +【验收】②③。
 - **本侧基线（本文所有读数的出处）**：
   - 工作树 `/Users/alex/dev/doyah/lead/studio/.worktrees/t_f9af8cf6` · 分支 `wt/cloud-g` · HEAD = `8eedf07`（= `origin/master 632262d` + 合入 `云D` `a8fb2bc` + 合入 `云F-缺口` `61a2a9e` 等）；

@@ -69,8 +69,8 @@ EXEMPT = {
     VIEW_DEFINITION: "浏览器视图自己的定义处（只被工作区内容区渲染）",
 }
 
-SRS = "Docs/需求规范书.md"
-HLD = "Docs/概要设计.md"
+SRS = "Docs/Doyah产品需求说明书.md"
+HLD = "Docs/Doyah产品概要设计说明书.md"
 SRS_ENTRY = "FR-EDIT-34"
 SRS_ENTRY_TITLE = "内嵌浏览器页签"
 HLD_CONTRACT_LINE = "**视图契约**"

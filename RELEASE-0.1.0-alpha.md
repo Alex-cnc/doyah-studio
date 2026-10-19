@@ -35,7 +35,7 @@
 | vendor 未实现 | `FR-IO-02` `COPY … TO STDOUT`、`FR-DATA-05` 的 bytea 显示 | 需改 vendored 驱动，有回归风险，单列排期 |
 | 需 217 现场 | **（本行已于 2026-09-28 循环 L-62 按实测修订）** 原列六项：对象 DDL / 流式导出 / 表结构索引外键 / 数据库统计 / 服务器对象 / 维护任务。**实测**：前三项对应的四条脚本（`test-object-ddl` / `test-cursor-export` / `test-table-index-fk` / `test-table-structure`）**已改走共用入口 ⇒ 本机档实跑全绿并进 alpha 主链本机段**（不再是「需 217 现场」）；后三项**本来就有本机档**（数据库统计 / 服务器对象在 `Scripts/run-real-db-evidence.sh` 的 `session` 档、维护任务在 alpha 主链本机段）⇒ 原行把它们算进来是**表述不准**。仍真正卡 217 / 实例的见上四行（无实例 / 无扩展 / 沙箱限制 / vendor 未实现）与「基线既定红」那一行 | ~~217 的 `pg_hba.conf` 未放行本机（`28000`），需 DBA 加一行~~ → 修订后**只剩上四行**才需要环境；本行不再单列 |
 | 基线既定红 | `object-search` / `session-management` / `schema-diff` | 实测即红且原因已登记在 `Scripts/real-db-evidence-baseline.json`，转绿要点名 |
-| 需求侧缺口 | NFR ⬜ 2 条、AC ⬜ 4 条 | 见 `Docs/需求规范书.md` §10 索引，alpha 后处理 |
+| 需求侧缺口 | NFR ⬜ 2 条、AC ⬜ 4 条 | 见 `Docs/Doyah产品需求说明书.md` §10 索引，alpha 后处理 |
 
 **状态口径**：以上条目在需求书里仍是 🟡，**不改成 ✅**（`v3.252` 给其中 6 条打了 `**[alpha 不含]**` 标注）—— 只把「未验证」与「已验」分开，不假装已验。
 

@@ -163,7 +163,7 @@ public struct NotebookDirectory: Equatable, Sendable {
     ///
     /// **名字由调用方给**（`shelfName` / `notebookName`）：默认容器的名字是**要落库的数据**、
     /// 也是用户第一眼看到的东西 —— 它属于宿主层的语言表，Core 不许写死文案
-    /// （口径 = `Docs/概要设计.md` §7「语言由调用方给定」，判据 = `Scripts/check-core-localization.py`）。
+    /// （口径 = `Docs/Doyah产品概要设计说明书.md` §7「语言由调用方给定」，判据 = `Scripts/check-core-localization.py`）。
     public static func bootstrap(shelfName: String, notebookName: String, now: Date = Date()) -> NotebookDirectory {
         let shelf = Shelf(name: shelfName, sortOrder: 0, createdAt: now, isDefault: true)
         let notebook = Notebook(

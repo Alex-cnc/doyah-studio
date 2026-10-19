@@ -53,7 +53,7 @@ cargo build --release --workspace \
 4. **前端不持有整份结果集**：只按可视窗口向 Rust 侧要 `len` 行（`grid/windowing.ts` 算窗口、`query.rs` 切片）。行高读 `--ds-metric-row-height`，**读不到就如实标「用了回退值」**。
 5. **IPC 双向判据**：`src-tauri/tests/ipc_contract.rs` 按文本判「前端 `COMMANDS` ⊆ 本层注册」且「本层注册的都被前端用」—— 前端 `invoke` 打错名字是**运行时静默失败**，没有东西会红。
 6. `npm run build` 必须**先于** `cargo build`：Tauri 在编译期把 `frontendDist` 嵌进产物（`Tools/build.ps1` 已按这个顺序编排）。
-7. **发布产物必须带 `custom-protocol` 特性**（`cargo build --release --workspace --features doyah-studio-shell/custom-protocol`）：Tauri 2 的 `build.rs` 里 `let dev = !custom_protocol;` ⇒ **不带它编出来的二进制会去连 `devUrl`**（`http://localhost:5274`），盘上没有 dev server 时就是**空窗口**，而闸门第 ① 项**照样通过**（实测第 28 轮：起该产物后页面 URL 是 `http://localhost:5274/`、基准仪器直接 `NO_PAGE`）。现由 `Tools/build.ps1` 在构建后机械核对「前端产物的文件名是否出现在二进制里」（生产形态命中、dev 形态 0 命中），注入自证见 `Docs/概要设计.md` §8.5.7。
+7. **发布产物必须带 `custom-protocol` 特性**（`cargo build --release --workspace --features doyah-studio-shell/custom-protocol`）：Tauri 2 的 `build.rs` 里 `let dev = !custom_protocol;` ⇒ **不带它编出来的二进制会去连 `devUrl`**（`http://localhost:5274`），盘上没有 dev server 时就是**空窗口**，而闸门第 ① 项**照样通过**（实测第 28 轮：起该产物后页面 URL 是 `http://localhost:5274/`、基准仪器直接 `NO_PAGE`）。现由 `Tools/build.ps1` 在构建后机械核对「前端产物的文件名是否出现在二进制里」（生产形态命中、dev 形态 0 命中），注入自证见 `Docs/Doyah产品概要设计说明书.md` §8.5.7。
 
 ## 现状（不半建）
 

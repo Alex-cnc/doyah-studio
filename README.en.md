@@ -74,7 +74,7 @@ A fuller list (including what is **not** done yet) lives in
   and MySQL exist, but there is **no instance to verify against**, so they are not listed as supported.
 - **Scope**: 223 requirements (168 FR · 43 NFR · 12 AC); current FR status **113 ✅ / 53 🟡 / 2 ⬜**
   (🟡 = implemented but awaiting manual acceptance, or blocked on an external environment). Statuses are
-  derived from the index in `Docs/需求规范书.md` §10.1 and checked by `Scripts/check-doc-tables.py` on every
+  derived from the index in `Docs/Doyah产品需求说明书.md` §10.1 and checked by `Scripts/check-doc-tables.py` on every
   run — they are never hand-maintained.
 - **Agent**: off by default; bring your own OpenAI-compatible endpoint (a local endpoint is preferred and may
   be key-less). Without one, everything except the agent is available.
@@ -132,9 +132,9 @@ Vendor/     Third-party dependency (PostgresNIO, the PostgreSQL driver)
 
 Product documentation lives in [Docs/](Docs/) (see the [documentation index](Docs/README.md)). Public parts:
 
-- [Product capability plan](Docs/产品能力规划说明书.md) — why, what, and in which order
-- [Requirements specification](Docs/需求规范书.md) — every requirement, its acceptance criteria and status
-- [High-level design](Docs/概要设计.md) — contracts, layering, ADRs (dual-platform)
+- [Product capability plan](Docs/Doyah产品能力说明书.md) — why, what, and in which order
+- [Requirements specification](Docs/Doyah产品需求说明书.md) — every requirement, its acceptance criteria and status
+- [High-level design](Docs/Doyah产品概要设计说明书.md) — contracts, layering, ADRs (dual-platform)
 - [Feature list, one page](Docs/功能清单（一页纸）.md) and [management view](Docs/功能清单（管理视图）.md)
 - Design notes under [Docs/design/](Docs/design/)
 
