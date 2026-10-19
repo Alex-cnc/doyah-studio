@@ -27,6 +27,10 @@
       {
         "script": "Scripts/check-ui-snapshot-languages.py",
         "reason": "随 ./Scripts/make-ui-snapshots.sh 的收尾跑（快照按 L-01 纪律不进每轮闭环）；`Docs/Doyah产品概要设计说明书.md` §8.3 与本台账都指向它。"
+      },
+      {
+        "script": "Scripts/check-notes-capability-sync.py",
+        "reason": "跨仓判据（要读 ../notes 仓），不进本仓每轮闭环：干净克隆 / 另一平台没有 Notes 仓时报「跳过（Notes 仓不在盘上）」，跳过 ≠ 通过，故不能当作本仓门禁的一项。主开发机上手动跑，以及两仓同批改动时跑。"
       }
     ],
     "testGlob": "Scripts/test-*.py",
