@@ -151,6 +151,8 @@ export const COMMANDS = {
   agentChatSave: 'agent_chat_save',
   agentHistoryList: 'agent_history_list',
   agentAuditList: 'agent_audit_list',
+  // 审计导出（FR-AI-24 ③）：把盘上那本审计账写成 json / csv，返回落点与读数
+  agentAuditExport: 'agent_audit_export',
   // 连接配置面收口（S-1a）：逐项校验 / 换引擎联动默认值 / 从 URL 导入
   connectionValidate: 'connection_validate',
   connectionTypeDefaults: 'connection_type_defaults',
@@ -1618,11 +1620,46 @@ export interface AgentAuditRecord {
   durationMs: number
   /** 随请求外发的表数。 */
   tableCount: number
+  /**
+   * 输入（提示词）token 数（`FR-AI-24` 的成本字段）。
+   *
+   * **0 = 没记到**（服务端没回 `usage`），不是「用了 0 个 token」—— 界面据此画「没记到」，
+   * 不许按字数估一个数出来。旧账（本字段上线前落盘的）同样是 0。
+   */
+  inputTokens: number
+  /** 输出（生成）token 数；口径同 `inputTokens`。 */
+  outputTokens: number
 }
 
 /** 外发审计清单（**新的在前**；只读，不触发任何外发）。 */
 export function agentAuditList(): Promise<AgentAuditRecord[]> {
   return call(COMMANDS.agentAuditList, {}, () => [] as AgentAuditRecord[])
+}
+
+/** 一次审计导出的落点与读数（`FR-AI-24` ③）。 */
+export interface AgentAuditExport {
+  /** 落盘绝对路径（界面原样显示，用户据此去打开）。 */
+  path: string
+  /** 文件字节数。 */
+  bytes: number
+  /** 里面有几条记录。 */
+  entries: number
+  /** `json` / `csv`。 */
+  format: string
+}
+
+/**
+ * 导出审计账（`FR-AI-24` ③）：把盘上那本账写成 json / csv。
+ *
+ * 只写本机文件、不外发；格式不认识时后端会回可读原因（界面照原话显示）。
+ */
+export function agentAuditExport(format: 'json' | 'csv'): Promise<AgentAuditExport> {
+  return call(COMMANDS.agentAuditExport, { format }, () => ({
+    path: '',
+    bytes: 0,
+    entries: 0,
+    format,
+  }))
 }
 
 /** 表单逐项校验（FR-CONN-06）：端口按**文本**校验，`0` / `65536` / 非数字都当场拒。 */

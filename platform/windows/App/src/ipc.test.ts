@@ -117,6 +117,7 @@ describe('ipc', () => {
       'agent_chat_save',
       'agent_history_list',
       'agent_audit_list',
+      'agent_audit_export',
       'connection_validate',
       'connection_type_defaults',
       'connection_import_url',

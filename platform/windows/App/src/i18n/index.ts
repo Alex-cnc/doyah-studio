@@ -1160,6 +1160,24 @@ export const DICT = {
   'audit.model': { 'zh-Hans': '模型 {model}', en: 'model {model}' },
   'audit.tables': { 'zh-Hans': '发出去 {n} 张表', en: '{n} table(s) sent' },
   'audit.duration': { 'zh-Hans': '{ms} 毫秒', en: '{ms} ms' },
+  // 成本字段与导出（FR-AI-24）：token 用量来自服务端回的 usage，没回就写「没记到」。
+  'audit.tokens': { 'zh-Hans': '入 {input} · 出 {output} tokens', en: 'in {input} · out {output} tokens' },
+  'audit.tokens.none': { 'zh-Hans': '没记到用量', en: 'usage not reported' },
+  'audit.totals': {
+    'zh-Hans': '共 {n} 条 · 出网 {sent} 次 · 入 {input} · 出 {output} tokens',
+    en: '{n} records · {sent} sent · in {input} · out {output} tokens',
+  },
+  'audit.totals.none': {
+    'zh-Hans': '共 {n} 条 · 出网 {sent} 次 · 用量没记到（服务端没回 usage）',
+    en: '{n} records · {sent} sent · usage not reported by the server',
+  },
+  'audit.export.json': { 'zh-Hans': '导出 JSON', en: 'Export JSON' },
+  'audit.export.csv': { 'zh-Hans': '导出 CSV', en: 'Export CSV' },
+  'audit.export.done': {
+    'zh-Hans': '已导出 {n} 条到 {path}（{bytes} 字节）',
+    en: 'Exported {n} records to {path} ({bytes} bytes)',
+  },
+  'audit.export.failed': { 'zh-Hans': '导出失败：{message}', en: 'Export failed: {message}' },
   'agent.save': { 'zh-Hans': '保存设置', en: 'Save settings' },
   'agent.saving': { 'zh-Hans': '保存中…', en: 'Saving…' },
   'agent.saved': { 'zh-Hans': '已保存', en: 'Saved' },

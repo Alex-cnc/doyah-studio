@@ -15,13 +15,25 @@ const state: {
   records: AgentAuditRecord[]
   failure: { message: string; hint: string } | null
   loads: number
-} = { records: [], failure: null, loads: 0 }
+  exports: string[]
+  exportFailure: { message: string; hint: string } | null
+} = { records: [], failure: null, loads: 0, exports: [], exportFailure: null }
 
 vi.mock('../ipc', () => ({
   agentAuditList: vi.fn(async () => {
     state.loads += 1
     if (state.failure) throw state.failure
     return state.records
+  }),
+  agentAuditExport: vi.fn(async (format: 'json' | 'csv') => {
+    state.exports.push(format)
+    if (state.exportFailure) throw state.exportFailure
+    return {
+      path: `C:/Users/Alex/AppData/Roaming/doyah/agent-audit-export-1.${format}`,
+      bytes: 512,
+      entries: state.records.length,
+      format,
+    }
   }),
 }))
 
@@ -37,6 +49,8 @@ function record(over: Partial<AgentAuditRecord> = {}): AgentAuditRecord {
     detail: '',
     durationMs: 42,
     tableCount: 1,
+    inputTokens: 0,
+    outputTokens: 0,
     ...over,
   }
 }
@@ -49,6 +63,8 @@ beforeEach(() => {
   state.records = []
   state.failure = null
   state.loads = 0
+  state.exports = []
+  state.exportFailure = null
 })
 
 describe('智能体审计记录弹层', () => {
@@ -115,5 +131,84 @@ describe('智能体审计记录弹层', () => {
     await flushPromises()
     expect(state.loads).toBe(2)
     expect(wrapper.find('[data-testid="audit-row"]').text()).toContain('被闸门挡住')
+  })
+
+  // ---- `FR-AI-24`：成本字段 / 汇总 / 可导出 ----
+
+  it('每条显示入出 token，底部一条汇总 = 明细之和', async () => {
+    state.records = [
+      record({ inputTokens: 120, outputTokens: 34 }),
+      record({ verdict: 'failed', inputTokens: 9, outputTokens: 1, detail: 'HTTP 500' }),
+    ]
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    const tokens = wrapper.findAll('[data-testid="audit-tokens"]')
+    expect(tokens).toHaveLength(2)
+    expect(tokens[0].text()).toContain('入 120 · 出 34 tokens')
+    expect(tokens[1].text()).toContain('入 9 · 出 1 tokens')
+
+    const totals = wrapper.find('[data-testid="audit-totals"]')
+    expect(totals.exists()).toBe(true)
+    expect(totals.text()).toContain('共 2 条')
+    expect(totals.text()).toContain('出网 2 次')
+    expect(totals.text()).toContain('入 129')
+    expect(totals.text()).toContain('出 35')
+  })
+
+  it('没记到用量时写「没记到」，不画 0 个 token', async () => {
+    // 否定面：0 / 0 的语义是「服务端没回 usage」，画成 `入 0 · 出 0` 等于告诉用户「这次免费」。
+    state.records = [record({ inputTokens: 0, outputTokens: 0 })]
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    const tokens = wrapper.find('[data-testid="audit-tokens"]')
+    expect(tokens.text()).toContain('没记到用量')
+    expect(tokens.text()).not.toContain('入 0')
+    const totals = wrapper.find('[data-testid="audit-totals"]')
+    expect(totals.text()).toContain('用量没记到')
+    expect(totals.text()).not.toContain('入 0')
+  })
+
+  it('点导出真的调命令，并把落点与字节数画出来', async () => {
+    state.records = [record({ inputTokens: 1, outputTokens: 2 })]
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="audit-export-csv"]').trigger('click')
+    await flushPromises()
+    expect(state.exports).toEqual(['csv'])
+    const note = wrapper.find('[data-testid="audit-exported"]')
+    expect(note.exists()).toBe(true)
+    expect(note.text()).toContain('已导出 1 条到')
+    expect(note.text()).toContain('agent-audit-export-1.csv')
+    expect(note.text()).toContain('512 字节')
+
+    await wrapper.find('[data-testid="audit-export-json"]').trigger('click')
+    await flushPromises()
+    expect(state.exports).toEqual(['csv', 'json'])
+    expect(wrapper.find('[data-testid="audit-exported"]').text()).toContain('.json')
+  })
+
+  it('导出失败时显示原因，不装作导出成功', async () => {
+    state.records = [record()]
+    state.exportFailure = { message: '写导出文件失败：拒绝访问', hint: '确认该目录可写。' }
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="audit-export-csv"]').trigger('click')
+    await flushPromises()
+    const error = wrapper.find('[data-testid="audit-export-error"]')
+    expect(error.exists()).toBe(true)
+    expect(error.text()).toContain('拒绝访问')
+    // 否定面：失败时不许同时显示「已导出」。
+    expect(wrapper.find('[data-testid="audit-exported"]').exists()).toBe(false)
+  })
+
+  it('一条记录都没有时导出按钮是灰的（导出一本空账没有意义）', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="audit-export-csv"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="audit-totals"]').exists()).toBe(false)
   })
 })

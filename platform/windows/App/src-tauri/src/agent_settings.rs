@@ -213,6 +213,39 @@ impl AgentSettingsStore {
         })
     }
 
+    /// 把一份导出文本落到**审计文件同目录**（`FR-AI-24` ③）。
+    ///
+    /// 文件名 = `agent-audit-export-<epoch>.<ext>`；同一秒里连点两次不覆盖（补 `-2` / `-3`）——
+    /// 导出是给用户带走的，静默覆盖上一次就等于弄丢他刚导的那份。
+    pub fn save_audit_export(&self, extension: &str, text: &str) -> Result<PathBuf, DbFailure> {
+        let dir = self
+            .audit_path()
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default();
+        if !dir.as_os_str().is_empty() {
+            std::fs::create_dir_all(&dir).map_err(|e| DbFailure {
+                message: format!("建导出目录失败：{e}（{}）", dir.display()),
+                hint: "确认该目录可写。".to_string(),
+            })?;
+        }
+        let secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs())
+            .unwrap_or(0);
+        let mut path = dir.join(format!("agent-audit-export-{secs}.{extension}"));
+        let mut attempt = 2;
+        while path.exists() {
+            path = dir.join(format!("agent-audit-export-{secs}-{attempt}.{extension}"));
+            attempt += 1;
+        }
+        std::fs::write(&path, text).map_err(|e| DbFailure {
+            message: format!("写导出文件失败：{e}（{}）", path.display()),
+            hint: "确认该目录可写（可能被杀毒软件 / 权限限制）。".to_string(),
+        })?;
+        Ok(path)
+    }
+
     /// 密钥在不在（只回答布尔；读不出来按「不在」处理，并把原因带给界面）。
     pub fn key_present(&self) -> bool {
         self.key_blob().is_some()

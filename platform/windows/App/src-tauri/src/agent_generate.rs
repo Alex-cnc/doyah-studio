@@ -19,7 +19,7 @@ use std::io::Read;
 use std::time::{Duration, Instant};
 
 use doyah_studio_db::agent_advisor;
-use doyah_studio_db::agent_audit::{AuditRecord, AuditVerdict};
+use doyah_studio_db::agent_audit::{parse_usage, parse_usage_text, AuditUsage, AuditRecord, AuditVerdict};
 use doyah_studio_db::agent_config::{evaluate, AgentConfiguration, AgentGateReport, GateState};
 use doyah_studio_db::agent_history::HistoryEntry;
 use doyah_studio_db::agent_nl2sql::{
@@ -169,6 +169,7 @@ pub fn generate(
         tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
     )
     .map_err(|err| err.failure)?;
+    let usage = sent.usage;
     let attempts = sent.attempts;
     let raw = sent.raw;
     let answer = match parse_reply(&raw, tables) {
@@ -178,7 +179,7 @@ pub fn generate(
                 message: err.to_string(),
                 hint: "换一个模型（有些模型不爱按代码块回话）或重试一次。".to_string(),
             };
-            let note = record_audit(
+            let note = record_audit_with_usage(
                 store,
                 AuditVerdict::Failed,
                 &outgoing.model,
@@ -187,6 +188,7 @@ pub fn generate(
                 &failure.message,
                 started.elapsed().as_millis() as u64,
                 tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
+                usage,
             );
             return Err(with_audit_note(failure, note));
         }
@@ -214,9 +216,9 @@ pub fn generate(
 
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
-    // 审计：**成功也要记**（这一次确实发出去了、用的哪个模型、发出去多少张表）。
+    // 审计：**成功也要记**（这一次确实发出去了、用的哪个模型、发出去多少张表、花了多少 token）。
     // 写不进去要如实说 —— 审计是事后交代，静默丢一条等于「说不清」。
-    if let Some(note) = record_audit(
+    if let Some(note) = record_audit_with_usage(
         store,
         AuditVerdict::Ok,
         &outgoing.model,
@@ -225,6 +227,7 @@ pub fn generate(
         "",
         elapsed_ms,
         tables.len().min(doyah_studio_db::agent_nl2sql::MAX_TABLES),
+        usage,
     ) {
         limitations.push(format!(
             "这一次没能记进审计记录（{note}）—— 结果仍然可用，但「刚才发过什么」这条事后查不到。"
@@ -368,6 +371,8 @@ fn quota_admission(
 struct SendOutcome {
     raw: String,
     attempts: Vec<AttemptNote>,
+    /// 这一次真拿到的 token 用量（`FR-AI-24`；服务端不回 `usage` ⇒ 全 0）。
+    usage: AuditUsage,
 }
 
 /// 失败载荷：`DbFailure` + 尝试账（调用方要把它带进回包文案里）。
@@ -620,7 +625,12 @@ fn send_with_retry(
             }
         }
         attempts.push(AttemptNote::ok(attempt_no, Some(status.as_u16())));
-        return Ok(SendOutcome { raw, attempts });
+        let usage = parse_usage_text(&raw);
+        return Ok(SendOutcome {
+            raw,
+            attempts,
+            usage,
+        });
     }
 }
 
@@ -646,6 +656,7 @@ pub fn ask(store: &AgentSettingsStore, brief: &str) -> Result<AskReply, DbFailur
 
     let started = Instant::now();
     let sent = send_with_retry(store, &config, &outgoing, brief, 0).map_err(|err| err.failure)?;
+    let usage = sent.usage;
     let attempts = sent.attempts;
     let raw = sent.raw;
     let text = match agent_advisor::parse_reply(&raw) {
@@ -656,7 +667,7 @@ pub fn ask(store: &AgentSettingsStore, brief: &str) -> Result<AskReply, DbFailur
                 hint: "换一个模型（有些模型把正文放在别的字段里），或直接把回复粘进下面的框手动解读。"
                     .to_string(),
             };
-            let note = record_audit(
+            let note = record_audit_with_usage(
                 store,
                 AuditVerdict::Failed,
                 &outgoing.model,
@@ -665,6 +676,7 @@ pub fn ask(store: &AgentSettingsStore, brief: &str) -> Result<AskReply, DbFailur
                 &failure.message,
                 started.elapsed().as_millis() as u64,
                 0,
+                usage,
             );
             return Err(with_audit_note(failure, note));
         }
@@ -672,7 +684,7 @@ pub fn ask(store: &AgentSettingsStore, brief: &str) -> Result<AskReply, DbFailur
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
     let mut limitations: Vec<String> = ASK_LIMITATIONS.iter().map(|line| line.to_string()).collect();
-    if let Some(note) = record_audit(
+    if let Some(note) = record_audit_with_usage(
         store,
         AuditVerdict::Ok,
         &outgoing.model,
@@ -681,6 +693,7 @@ pub fn ask(store: &AgentSettingsStore, brief: &str) -> Result<AskReply, DbFailur
         "",
         elapsed_ms,
         0,
+        usage,
     ) {
         limitations.push(format!(
             "这一次没能记进审计记录（{note}）—— 结果仍然可用，但「刚才发过什么」这条事后查不到。"
@@ -846,6 +859,8 @@ pub fn chat_stream_with_carry(
     let mut attempt_no: u32 = 1;
     let mut text = String::new();
     let mut deltas = 0usize;
+    // 这一跳的 token 用量（`FR-AI-24`）：流里报了就取报的，没报就看整段回包；两处都没有 ⇒ 全 0。
+    let mut usage = AuditUsage::default();
     // 这一跳模型点到的工具（流里逐段拼出来；`FR-AI-18`）。
     let mut calls: Vec<ChatToolCall>;
     // 只在成功读到回包时赋值（循环里那两处 `return` 不会走到下面）。
@@ -960,6 +975,11 @@ pub fn chat_stream_with_carry(
                 deltas += read.deltas;
                 finished = read.finished;
                 calls = read.calls;
+                usage = if read.usage.is_known() {
+                    read.usage
+                } else {
+                    parse_usage_text(&read.raw)
+                };
                 if text.is_empty() && calls.is_empty() {
                     // 服务端无视 `stream`（或回的是一整段 JSON）：先看有没有工具调用，再整段解析正文。
                     calls = parse_tool_calls(&read.raw);
@@ -973,7 +993,7 @@ pub fn chat_stream_with_carry(
                                 hint: "换一个模型（有些模型把正文放在别的字段里），或改用「生成 SQL」那条路。"
                                     .to_string(),
                             };
-                            let note = record_audit(
+                            let note = record_audit_with_usage(
                                 store,
                                 AuditVerdict::Failed,
                                 &outgoing.model,
@@ -982,6 +1002,7 @@ pub fn chat_stream_with_carry(
                                 &failure.message,
                                 started.elapsed().as_millis() as u64,
                                 0,
+                                usage,
                             );
                             return Err(with_audit_note(failure, note));
                         }
@@ -998,7 +1019,7 @@ pub fn chat_stream_with_carry(
                         message: format!("回包读到一半断了：{reason}"),
                         hint: "已经收到的部分留在对话里；重发一次就能补全。".to_string(),
                     };
-                    let note = record_audit(
+                    let note = record_audit_with_usage(
                         store,
                         AuditVerdict::Failed,
                         &outgoing.model,
@@ -1007,6 +1028,7 @@ pub fn chat_stream_with_carry(
                         &failure.message,
                         started.elapsed().as_millis() as u64,
                         0,
+                        usage,
                     );
                     return Err(with_audit_note(failure, note));
                 }
@@ -1043,7 +1065,7 @@ pub fn chat_stream_with_carry(
     if !calls.is_empty() {
         let mut limitations: Vec<String> = Vec::new();
         let names: Vec<&str> = calls.iter().map(|call| call.name.as_str()).collect();
-        if let Some(note) = record_audit(
+        if let Some(note) = record_audit_with_usage(
             store,
             AuditVerdict::Ok,
             &outgoing.model,
@@ -1052,6 +1074,7 @@ pub fn chat_stream_with_carry(
             &format!("工具调用 {} 件：{}（等用户逐件批准）", calls.len(), names.join(", ")),
             elapsed_ms,
             0,
+            usage,
         ) {
             limitations.push(format!("这一次没能记进审计记录（{note}）—— 工具调用仍然可以继续。"));
         }
@@ -1075,7 +1098,7 @@ pub fn chat_stream_with_carry(
                 .to_string(),
         );
     }
-    if let Some(note) = record_audit(
+    if let Some(note) = record_audit_with_usage(
         store,
         AuditVerdict::Ok,
         &outgoing.model,
@@ -1084,6 +1107,7 @@ pub fn chat_stream_with_carry(
         "",
         elapsed_ms,
         0,
+        usage,
     ) {
         limitations.push(format!(
             "这一次没能记进审计记录（{note}）—— 结果仍然可用，但「刚才发过什么」这条事后查不到。"
@@ -1922,6 +1946,8 @@ enum SseEvent {
         /// 参数 JSON 的**片段**（必须原样拼接，不能逐帧解析）。
         arguments: String,
     },
+    /// 服务端在这一帧里报了 token 用量（`FR-AI-24`；多数端点放在最后一帧，`choices` 为空）。
+    Usage(AuditUsage),
 }
 
 /// 读一段流式回包的结果。
@@ -1936,6 +1962,8 @@ struct StreamRead {
     finished: bool,
     /// 拼出来的工具调用（`FR-AI-18`；空 = 这一跳没点工具）。
     calls: Vec<ChatToolCall>,
+    /// 这一次的 token 用量（`FR-AI-24`；流里没报 ⇒ 全 0）。
+    usage: AuditUsage,
 }
 
 /// 按行读 SSE：命中 `data:` 就交一段给 `sink`。
@@ -1954,6 +1982,7 @@ fn read_sse_stream(
     let mut deltas = 0usize;
     let mut finished = false;
     let mut calls: Vec<ChatToolCall> = Vec::new();
+    let mut usage = AuditUsage::default();
     loop {
         let read = response
             .read(&mut buf)
@@ -1967,7 +1996,15 @@ fn read_sse_stream(
                 let current = String::from_utf8_lossy(&line).to_string();
                 line.clear();
                 for event in parse_sse_line(&current) {
-                    apply_sse_event(event, &mut text, &mut deltas, &mut finished, &mut calls, sink)?;
+                    apply_sse_event(
+                        event,
+                        &mut text,
+                        &mut deltas,
+                        &mut finished,
+                        &mut calls,
+                        &mut usage,
+                        sink,
+                    )?;
                 }
             } else {
                 line.push(byte);
@@ -1978,7 +2015,15 @@ fn read_sse_stream(
     if !line.is_empty() {
         let current = String::from_utf8_lossy(&line).to_string();
         for event in parse_sse_line(&current) {
-            apply_sse_event(event, &mut text, &mut deltas, &mut finished, &mut calls, sink)?;
+            apply_sse_event(
+                event,
+                &mut text,
+                &mut deltas,
+                &mut finished,
+                &mut calls,
+                &mut usage,
+                sink,
+            )?;
         }
     }
     Ok(StreamRead {
@@ -1987,6 +2032,7 @@ fn read_sse_stream(
         deltas,
         finished,
         calls,
+        usage,
     })
 }
 
@@ -1997,6 +2043,7 @@ fn apply_sse_event(
     deltas: &mut usize,
     finished: &mut bool,
     calls: &mut Vec<ChatToolCall>,
+    usage: &mut AuditUsage,
     sink: &mut dyn FnMut(&str),
 ) -> Result<(), String> {
     match event {
@@ -2031,6 +2078,13 @@ fn apply_sse_event(
             slot.arguments.push_str(&arguments);
         }
         SseEvent::Done | SseEvent::Finished => *finished = true,
+        SseEvent::Usage(reported) => {
+            // 只认**非零**的那一份：有的端点先发一帧 `{"usage":{"prompt_tokens":0,...}}` 占位，
+            // 后一帧才给真数 —— 用零去覆盖真数等于把成本抹掉。
+            if reported.is_known() {
+                *usage = reported;
+            }
+        }
         SseEvent::Error(message) => {
             return Err(format!("模型服务在流里回了错误：{message}"));
         }
@@ -2125,6 +2179,11 @@ fn parse_sse_line(line: &str) -> Vec<SseEvent> {
             events.push(SseEvent::Finished);
         }
     }
+    // token 用量（`FR-AI-24`）：放在最后 —— 它是**附带读数**，不许影响「这一帧是不是收尾帧」的判断。
+    let usage = parse_usage(&value);
+    if usage.is_known() {
+        events.push(SseEvent::Usage(usage));
+    }
     events
 }
 
@@ -2132,6 +2191,9 @@ fn parse_sse_line(line: &str) -> Vec<SseEvent> {
 ///
 /// 返回 `Option<String>` = 写不进去时的可读原因（调用方必须**说出来**，别咽掉）；
 /// 但没有理由因为它而拒发 / 改判：审计是事后交代，不是通行证。
+///
+/// 这一档 = **没拿到用量**的那几次（连不上 / HTTP 非 2xx / 被挡住）：真的没有 token 可记，
+/// 按 0 落盘，界面画「没记到」。拿到回包的路径一律走 [`record_audit_with_usage`]。
 #[allow(clippy::too_many_arguments)]
 fn record_audit(
     store: &AgentSettingsStore,
@@ -2143,8 +2205,8 @@ fn record_audit(
     duration_ms: u64,
     table_count: usize,
 ) -> Option<String> {
-    let mut ledger = store.load_audit();
-    ledger.append(AuditRecord::record(
+    record_audit_with_usage(
+        store,
         verdict,
         model,
         endpoint,
@@ -2152,8 +2214,39 @@ fn record_audit(
         detail,
         duration_ms,
         table_count,
-        now_secs(),
-    ));
+        AuditUsage::default(),
+    )
+}
+
+/// 记一条审计并带上 token 用量（`FR-AI-24` ②）—— **写入口只有这一个函数**。
+///
+/// 两个函数不是两条路：上面那个是「用量未知」的转发口，落盘、抹凭据、截断、淘汰全在这里。
+#[allow(clippy::too_many_arguments)]
+fn record_audit_with_usage(
+    store: &AgentSettingsStore,
+    verdict: AuditVerdict,
+    model: &str,
+    endpoint: &str,
+    question: &str,
+    detail: &str,
+    duration_ms: u64,
+    table_count: usize,
+    usage: AuditUsage,
+) -> Option<String> {
+    let mut ledger = store.load_audit();
+    ledger.append(
+        AuditRecord::record(
+            verdict,
+            model,
+            endpoint,
+            question,
+            detail,
+            duration_ms,
+            table_count,
+            now_secs(),
+        )
+        .with_usage(usage),
+    );
     store.save_audit(&ledger).err().map(|err| err.message)
 }
 
@@ -3218,6 +3311,60 @@ mod tests {
             })
             .unwrap();
         store
+    }
+
+    /// 带 token 用量的流式回包（`FR-AI-24`）：末帧 `choices` 为空、只带 `usage`。
+    const SSE_WITH_USAGE: &str = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"答一句\"}}]}\n\n",
+        "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":120,\"completion_tokens\":34}}\n\n",
+        "data: [DONE]\n\n",
+    );
+
+    #[test]
+    fn a_hit_that_reports_usage_lands_the_tokens_in_the_audit() {
+        // `FR-AI-24` ②：服务端回了 usage ⇒ 审计里这一条必须带着两个数（模型 / 端点 / 耗时之外的成本字段）。
+        let (endpoint, _seen) = fake_endpoint("200 OK", SSE_WITH_USAGE);
+        let store = streaming_store("chat-usage", endpoint);
+        let reply = chat(&store, &[chat_turn("user", "问一句")]).unwrap();
+        assert!(matches!(reply, ChatReply::Answered { .. }));
+
+        let records = store.load_audit().all_recent();
+        assert_eq!(records.len(), 1, "一次调用一条痕");
+        assert_eq!(records[0].input_tokens, 120);
+        assert_eq!(records[0].output_tokens, 34);
+        assert_eq!(records[0].usage().total(), 154);
+    }
+
+    #[test]
+    fn a_hit_without_usage_is_recorded_as_nothing_known_instead_of_zero() {
+        // 否定面：回包不问用量 ⇒ 两个数是 0，且 `is_known()` 为假（界面据此写「没记到」，不画 0 个 token）。
+        let (endpoint, _seen) = fake_endpoint("200 OK", SSE_THREE);
+        let store = streaming_store("chat-usage-none", endpoint);
+        let _ = chat(&store, &[chat_turn("user", "问一句")]).unwrap();
+
+        let records = store.load_audit().all_recent();
+        assert_eq!(records.len(), 1);
+        assert!(
+            !records[0].usage().is_known(),
+            "没回 usage 却被记成「用了 0 个 token」：{:?}",
+            records[0].usage()
+        );
+    }
+
+    #[test]
+    fn a_server_that_ignores_stream_still_has_its_usage_recorded() {
+        // 整段 JSON 回包（无视 stream）也带成本字段：走 `parse_usage_text` 那条路，
+        // 不是只有 SSE 才有用量 —— 否则「换一个不回流的端点，成本就查不到」。
+        let body = "{\"choices\":[{\"message\":{\"content\":\"答一句\"}}],\
+                    \"usage\":{\"prompt_tokens\":9,\"completion_tokens\":1}}";
+        let (endpoint, _seen) = fake_endpoint("200 OK", body);
+        let store = streaming_store("chat-usage-whole", endpoint);
+        let _ = chat(&store, &[chat_turn("user", "问一句")]).unwrap();
+
+        let records = store.load_audit().all_recent();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].usage().input, 9);
+        assert_eq!(records[0].usage().output, 1);
     }
 
     #[test]

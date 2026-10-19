@@ -983,6 +983,51 @@ fn agent_audit_list(state: State<'_, ShellState>) -> Vec<doyah_studio_db::agent_
     state.agent_settings.load_audit().all_recent()
 }
 
+/// 一份导出的审计账（`FR-AI-24` ③）：落在哪、多少字节、几条、什么格式。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuditExport {
+    /// 落盘绝对路径（界面原样显示，用户据此去打开）。
+    path: String,
+    /// 文件字节数。
+    bytes: usize,
+    /// 里面有几条记录。
+    entries: usize,
+    /// `json` / `csv`。
+    format: String,
+}
+
+/// **导出审计账**（`FR-AI-24` ③）：把当前台账写成一个文件，返回路径与读数。
+///
+/// 三条口径：
+/// ① 导出的就是**盘上那本账**（与弹层里显示的是同一份读数），不另算一遍；
+/// ② 键集合是白名单（`AuditLedger` 的序列化 / `CSV_COLUMNS`），结构上没有密钥与行数据字段；
+/// ③ 落点 = 审计文件同目录（用户在设置里能看到的那个目录），文件名带时刻 —— 不覆盖上一次导出。
+#[tauri::command]
+fn agent_audit_export(
+    state: State<'_, ShellState>,
+    format: String,
+) -> Result<AuditExport, DbFailure> {
+    let ledger = state.agent_settings.load_audit();
+    let (extension, text) = match format.trim().to_ascii_lowercase().as_str() {
+        "csv" => ("csv", ledger.to_csv()),
+        "json" => ("json", ledger.to_json_export()),
+        other => {
+            return Err(DbFailure {
+                message: format!("不认识的导出格式：{other}"),
+                hint: "只支持 json / csv 两种。".to_string(),
+            })
+        }
+    };
+    let path = state.agent_settings.save_audit_export(extension, &text)?;
+    Ok(AuditExport {
+        path: path.display().to_string(),
+        bytes: text.len(),
+        entries: ledger.len(),
+        format: extension.to_string(),
+    })
+}
+
 /// 生成**服务端条件浏览**的 SQL（FR-DATA-02；**只生成、不执行**）。
 ///
 /// 契约要点（与对侧 `Core/RowBrowsing.swift` 同一口径）：
@@ -3026,6 +3071,7 @@ pub fn run() {
             agent_chat_save,
             agent_history_list,
             agent_audit_list,
+            agent_audit_export,
             connection_validate,
             connection_type_defaults,
             connection_import_url,

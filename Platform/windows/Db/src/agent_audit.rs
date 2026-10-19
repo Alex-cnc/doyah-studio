@@ -55,6 +55,73 @@ impl AuditVerdict {
     }
 }
 
+/// 一次调用的 **token 用量**（`FR-AI-24` 的成本字段：输入 / 输出）。
+///
+/// **0 就是 0**：服务端没回 `usage` 时两个数都是 0，界面据此画「没记到」，
+/// 不许按字数估一个数出来（编出来的成本比不报更糟）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditUsage {
+    /// 输入（提示词）token 数。
+    #[serde(default)]
+    pub input: u32,
+    /// 输出（生成）token 数。
+    #[serde(default)]
+    pub output: u32,
+}
+
+impl AuditUsage {
+    /// 造一份用量。
+    pub fn new(input: u32, output: u32) -> Self {
+        Self { input, output }
+    }
+
+    /// 有没有记到用量（两个都 0 ⇒ 服务端没给，界面照实说「没记到」）。
+    pub fn is_known(self) -> bool {
+        self.input > 0 || self.output > 0
+    }
+
+    /// 合计（只用于显示与汇总；不要拿它当「计费真值」——价格表不在本仓）。
+    pub fn total(self) -> u32 {
+        self.input.saturating_add(self.output)
+    }
+}
+
+/// 从一段 OpenAI 兼容回包里取用量（`FR-AI-24` ②）。
+///
+/// 两套字段名都认：`prompt_tokens` / `completion_tokens`（OpenAI 经典）与
+/// `input_tokens` / `output_tokens`（部分网关）。**认不出就回全 0**（不猜）。
+pub fn parse_usage(value: &serde_json::Value) -> AuditUsage {
+    let Some(usage) = value.get("usage") else {
+        return AuditUsage::default();
+    };
+    let pick = |names: [&str; 2]| -> u32 {
+        for name in names {
+            if let Some(number) = usage.get(name) {
+                if let Some(found) = number.as_u64() {
+                    return u32::try_from(found).unwrap_or(u32::MAX);
+                }
+            }
+        }
+        0
+    };
+    AuditUsage::new(
+        pick(["prompt_tokens", "input_tokens"]),
+        pick(["completion_tokens", "output_tokens"]),
+    )
+}
+
+/// 从一段回包**文本**里取用量（整段 JSON 回包 / 非流式响应用这个入口）。
+///
+/// 流式回包（SSE）整段拿去 `serde_json::from_str` 会失败 ⇒ 回全 0，这是**对的**：
+/// 流里的用量由逐帧解析负责（`SseEvent::Usage`），不该在这里猜。
+pub fn parse_usage_text(text: &str) -> AuditUsage {
+    match serde_json::from_str::<serde_json::Value>(text) {
+        Ok(value) => parse_usage(&value),
+        Err(_) => AuditUsage::default(),
+    }
+}
+
 /// 一条审计记录。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,9 +149,27 @@ pub struct AuditRecord {
     /// 随请求外发的表数（用户可据此判断「我到底发了多少东西出去」）。
     #[serde(default)]
     pub table_count: usize,
+    /// 输入 token（`FR-AI-24`；`#[serde(default)]` ⇒ 旧账照读、按 0 显示「没记到」）。
+    #[serde(default)]
+    pub input_tokens: u32,
+    /// 输出 token（同上）。
+    #[serde(default)]
+    pub output_tokens: u32,
 }
 
 impl AuditRecord {
+    /// 这条记录的用量（显示与汇总都走这一处，别再各拆一遍两个字段）。
+    pub fn usage(&self) -> AuditUsage {
+        AuditUsage::new(self.input_tokens, self.output_tokens)
+    }
+
+    /// 补上用量（构造成本字段的唯一入口；调用点只许在这里加一次）。
+    pub fn with_usage(mut self, usage: AuditUsage) -> Self {
+        self.input_tokens = usage.input;
+        self.output_tokens = usage.output;
+        self
+    }
+
     /// 造一条记录：**在这里一次性抹凭据 + 截断**，别让调用点各抹一遍（总有地方会忘）。
     pub fn record(
         verdict: AuditVerdict,
@@ -105,6 +190,9 @@ impl AuditRecord {
             detail: clip(&redact(detail.trim()), MAX_DETAIL_CHARS),
             duration_ms,
             table_count,
+            // 用量由 [`Self::with_usage`] 补（构造成本字段的唯一入口；这里按「没记到」起步）。
+            input_tokens: 0,
+            output_tokens: 0,
         }
     }
 
@@ -138,6 +226,64 @@ impl AuditLedger {
     /// 落盘文本（字段名是契约：`atSecs` / `verdict` / `durationMs` / `tableCount` …）。
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap_or_else(|_| "{\"entries\":[]}".to_string())
+    }
+
+    /// 导出 JSON（缩进版，给人看 / 给别的工具读）：与落盘那份**同一组键**，只是排版不同。
+    ///
+    /// 落盘用紧凑版（省盘、好逐行 grep），导出用缩进版（用户会直接打开看）—— 两份都从
+    /// `AuditLedger` 序列化出来，键集合不可能分叉。
+    pub fn to_json_export(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_else(|_| "{\"entries\":[]}".to_string())
+    }
+
+    /// CSV 的列（**白名单**，`FR-AI-24` ③）：与 JSON 是同一组键，顺序固定。
+    ///
+    /// 导出是给人拿去表格里看的，所以列名用结构体的驼峰键 —— 两处对不上，用户就会
+    /// 拿到两套「同一个东西的两个名字」。
+    pub const CSV_COLUMNS: [&'static str; 10] = [
+        "atSecs",
+        "verdict",
+        "model",
+        "endpoint",
+        "inputTokens",
+        "outputTokens",
+        "durationMs",
+        "tableCount",
+        "summary",
+        "detail",
+    ];
+
+    /// 导出 CSV（RFC 4180：含逗号 / 引号 / 换行的字段加引号并把内部引号翻倍）。
+    ///
+    /// 行序 = 落盘顺序（升序，最老在前）—— 导出的是一本账，不是一屏列表。
+    pub fn to_csv(&self) -> String {
+        let mut out = String::new();
+        out.push_str(&Self::CSV_COLUMNS.join(","));
+        out.push_str("\r\n");
+        for entry in &self.entries {
+            let verdict = match entry.verdict {
+                AuditVerdict::Ok => "ok",
+                AuditVerdict::Failed => "failed",
+                AuditVerdict::Blocked => "blocked",
+                AuditVerdict::Throttled => "throttled",
+            };
+            let cells = [
+                entry.at_secs.to_string(),
+                verdict.to_string(),
+                entry.model.clone(),
+                entry.endpoint.clone(),
+                entry.input_tokens.to_string(),
+                entry.output_tokens.to_string(),
+                entry.duration_ms.to_string(),
+                entry.table_count.to_string(),
+                entry.summary.clone(),
+                entry.detail.clone(),
+            ];
+            let line: Vec<String> = cells.iter().map(|cell| csv_cell(cell)).collect();
+            out.push_str(&line.join(","));
+            out.push_str("\r\n");
+        }
+        out
     }
 
     /// 追加一条（超限时淘汰最老的那条）。
@@ -174,6 +320,20 @@ impl AuditLedger {
             let drop = self.entries.len() - MAX_ENTRIES;
             self.entries.drain(0..drop);
         }
+    }
+}
+
+/// CSV 单元格（RFC 4180）：**只有**含逗号 / 引号 / 换行时才加引号 —— 全都加引号也能过
+/// 表格软件，但导出的账会被 Excel 当成文本列，用户反而不好排序。
+fn csv_cell(text: &str) -> String {
+    let needs_quotes = text.contains(',')
+        || text.contains('"')
+        || text.contains('\n')
+        || text.contains('\r');
+    if needs_quotes {
+        format!("\"{}\"", text.replace('"', "\"\""))
+    } else {
+        text.to_string()
     }
 }
 
@@ -223,12 +383,100 @@ mod tests {
                 "detail",
                 "durationMs",
                 "endpoint",
+                "inputTokens",
                 "model",
+                "outputTokens",
                 "summary",
                 "tableCount",
                 "verdict",
             ],
             "键集合变了就是契约变了：先确认没有把行数据 / 密钥塞进来"
+        );
+    }
+
+    #[test]
+    fn an_old_record_without_token_fields_still_reads_and_shows_nothing_known() {
+        // `FR-AI-24` 之前落盘的账没有 token 两个键 ⇒ 照读，且**不当成 0 个 token**，
+        // 而是「没记到」（`is_known()` 为假，界面据此画「没记到」）。
+        let old = "{\"entries\":[{\"atSecs\":10,\"verdict\":\"ok\",\"model\":\"m\",\
+                   \"endpoint\":\"http://127.0.0.1:1/v1\",\"summary\":\"旧账\",\"detail\":\"\",\
+                   \"durationMs\":7,\"tableCount\":0}]}";
+        let ledger = AuditLedger::from_json(old);
+        assert_eq!(ledger.len(), 1);
+        let record = &ledger.all_recent()[0];
+        assert_eq!(record.summary, "旧账");
+        assert!(!record.usage().is_known(), "旧账没有用量，不许被读成 0 个 token");
+        assert_eq!(record.usage().total(), 0);
+    }
+
+    #[test]
+    fn the_usage_parser_accepts_both_field_namings_and_never_guesses() {
+        let openai: serde_json::Value = serde_json::from_str(
+            "{\"usage\":{\"prompt_tokens\":120,\"completion_tokens\":34,\"total_tokens\":154}}",
+        )
+        .unwrap();
+        assert_eq!(parse_usage(&openai), AuditUsage::new(120, 34));
+
+        let gateway: serde_json::Value =
+            serde_json::from_str("{\"usage\":{\"input_tokens\":9,\"output_tokens\":1}}").unwrap();
+        assert_eq!(parse_usage(&gateway), AuditUsage::new(9, 1));
+
+        // 回包里没有 usage（很多本地端点默认不回）⇒ 全 0，不按字数估。
+        let bare: serde_json::Value = serde_json::from_str("{\"choices\":[]}").unwrap();
+        assert_eq!(parse_usage(&bare), AuditUsage::default());
+        assert!(!parse_usage(&bare).is_known());
+    }
+
+    #[test]
+    fn the_csv_header_is_the_whitelist_and_the_rows_carry_the_numbers() {
+        let ledger = AuditLedger::from_json("{\"entries\":[]}");
+        let csv = ledger.to_csv();
+        assert_eq!(
+            csv.trim_end_matches("\r\n"),
+            AuditLedger::CSV_COLUMNS.join(","),
+            "空账也要一行表头，且表头与白名单逐字一致"
+        );
+
+        let mut ledger = AuditLedger::default();
+        ledger.append(ok_record("问一句", 5).with_usage(AuditUsage::new(120, 34)));
+        let csv = ledger.to_csv();
+        let mut lines = csv.split("\r\n").filter(|line| !line.is_empty());
+        assert_eq!(lines.next().unwrap(), AuditLedger::CSV_COLUMNS.join(","));
+        let row = lines.next().expect("一条记录应该有一行");
+        let cells: Vec<&str> = row.split(',').collect();
+        assert_eq!(cells.len(), AuditLedger::CSV_COLUMNS.len());
+        assert_eq!(cells[0], "5");
+        assert_eq!(cells[1], "ok");
+        assert_eq!(cells[4], "120");
+        assert_eq!(cells[5], "34");
+        assert_eq!(cells[8], "问一句");
+        assert!(lines.next().is_none(), "行数 = 记录数（不许多出空行）");
+    }
+
+    #[test]
+    fn a_summary_with_commas_quotes_and_newlines_is_escaped_not_split() {
+        let mut ledger = AuditLedger::default();
+        ledger.append(
+            AuditRecord::record(
+                AuditVerdict::Ok,
+                "m",
+                "http://127.0.0.1:1/v1",
+                "删掉 a, b 里的 \"c\"\n再跑一次",
+                "",
+                1,
+                0,
+                1,
+            )
+            .with_usage(AuditUsage::new(3, 4)),
+        );
+        let csv = ledger.to_csv();
+        // 三行：表头 + 一条记录（摘要里的换行被引号包住，不再多出一行）。
+        let rows: Vec<&str> = csv.split("\r\n").filter(|line| !line.is_empty()).collect();
+        assert_eq!(rows.len(), 2, "摘要里的换行不该把一条记录拆成两行：{csv}");
+        assert!(
+            rows[1].contains("\"删掉 a, b 里的 \"\"c\"\"\n再跑一次\""),
+            "逗号 / 引号 / 换行都必须按 RFC 4180 转义：{}",
+            rows[1]
         );
     }
 

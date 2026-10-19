@@ -14,7 +14,8 @@
 
 import { computed, ref, watch } from 'vue'
 import { t as translate, type DictKey, type UiLanguage } from '../i18n'
-import { agentAuditList, type AgentAuditRecord } from '../ipc'
+import { agentAuditExport, agentAuditList, type AgentAuditExport, type AgentAuditRecord } from '../ipc'
+import { auditTotals, hasUsage } from './auditTotals'
 
 const props = defineProps<{
   /** 开没开。 */
@@ -91,6 +92,38 @@ watch(
 )
 
 const empty = computed(() => !failure.value && records.value.length === 0)
+
+/** 一屏的汇总（求和规则在 `auditTotals.ts`，组件只画）。 */
+const totals = computed(() => auditTotals(records.value))
+
+/** 这一条记到用量没有（0 / 0 = 没记到，不是「用了 0 个」）。 */
+function tokensShown(record: AgentAuditRecord): boolean {
+  return hasUsage(record)
+}
+
+function tokenLabel(record: AgentAuditRecord): string {
+  if (!tokensShown(record)) return tr('audit.tokens.none')
+  return tr('audit.tokens', { input: record.inputTokens ?? 0, output: record.outputTokens ?? 0 })
+}
+
+/** 正在导出的格式（挡住重复点击）与上一次导出的落点。 */
+const exporting = ref<'json' | 'csv' | null>(null)
+const exported = ref<AgentAuditExport | null>(null)
+const exportFailure = ref('')
+
+async function exportAs(format: 'json' | 'csv'): Promise<void> {
+  if (exporting.value) return
+  exporting.value = format
+  exported.value = null
+  exportFailure.value = ''
+  try {
+    exported.value = await agentAuditExport(format)
+  } catch (error) {
+    exportFailure.value = readable(error).message
+  } finally {
+    exporting.value = null
+  }
+}
 </script>
 
 <template>
@@ -137,6 +170,11 @@ const empty = computed(() => !failure.value && records.value.length === 0)
           <p v-if="record.detail" class="audit__detail" data-testid="audit-detail">{{ record.detail }}</p>
           <p class="audit__meta">
             <span v-if="record.model">{{ tr('audit.model', { model: record.model }) }}</span>
+            <span
+              class="audit__tokens"
+              :class="{ 'audit__tokens--none': !tokensShown(record) }"
+              data-testid="audit-tokens"
+            >{{ tokenLabel(record) }}</span>
             <span v-if="record.tableCount">{{ tr('audit.tables', { n: record.tableCount }) }}</span>
             <span v-if="record.durationMs">{{ tr('audit.duration', { ms: record.durationMs }) }}</span>
             <span v-if="record.endpoint" class="audit__endpoint">{{ record.endpoint }}</span>
@@ -145,9 +183,53 @@ const empty = computed(() => !failure.value && records.value.length === 0)
       </ol>
 
       <footer class="audit__foot">
-        <button type="button" class="audit__refresh" data-testid="audit-refresh" @click="reload">
-          {{ tr('audit.refresh') }}
-        </button>
+        <p v-if="!failure && records.length" class="audit__totals" data-testid="audit-totals">
+          {{
+            totals.withUsage
+              ? tr('audit.totals', {
+                  n: totals.records,
+                  sent: totals.sent,
+                  input: totals.input,
+                  output: totals.output,
+                })
+              : tr('audit.totals.none', { n: totals.records, sent: totals.sent })
+          }}
+        </p>
+        <div class="audit__actions">
+          <button type="button" class="audit__refresh" data-testid="audit-refresh" @click="reload">
+            {{ tr('audit.refresh') }}
+          </button>
+          <button
+            type="button"
+            class="audit__export"
+            data-testid="audit-export-json"
+            :disabled="exporting !== null || !records.length"
+            @click="exportAs('json')"
+          >
+            {{ tr('audit.export.json') }}
+          </button>
+          <button
+            type="button"
+            class="audit__export"
+            data-testid="audit-export-csv"
+            :disabled="exporting !== null || !records.length"
+            @click="exportAs('csv')"
+          >
+            {{ tr('audit.export.csv') }}
+          </button>
+        </div>
+        <p v-if="exported" class="audit__exported" data-testid="audit-exported">
+          {{
+            tr('audit.export.done', {
+              n: exported.entries,
+              path: exported.path,
+              bytes: exported.bytes,
+            })
+          }}
+        </p>
+        <p v-if="exportFailure" class="audit__exported audit__exported--bad" data-testid="audit-export-error">
+          {{ tr('audit.export.failed', { message: exportFailure }) }}
+        </p>
       </footer>
     </div>
   </div>
@@ -290,8 +372,60 @@ const empty = computed(() => !failure.value && records.value.length === 0)
   font-family: var(--ds-font-stack-mono);
 }
 
+/* token 用量（FR-AI-24）：与耗时 / 表数同档；「没记到」用弱化色，别让它看起来像 0 个。 */
+.audit__tokens {
+  font-variant-numeric: tabular-nums;
+}
+
+.audit__tokens--none {
+  color: var(--ds-color-text-secondary);
+  font-style: italic;
+}
+
 .audit__foot {
   display: flex;
+  flex-direction: column;
+  gap: var(--ds-spacing-s);
+  border-top: 1px solid var(--ds-hairline);
+  padding-top: var(--ds-spacing-s);
+}
+
+.audit__totals {
+  margin: 0;
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.audit__actions {
+  display: flex;
   justify-content: flex-end;
+  gap: var(--ds-spacing-s);
+}
+
+.audit__export {
+  padding: var(--ds-spacing-xs) var(--ds-spacing-m);
+  border: 1px solid var(--ds-color-accent-accent);
+  border-radius: var(--ds-radius-control);
+  background: transparent;
+  color: var(--ds-color-accent-accent);
+  cursor: pointer;
+}
+
+.audit__export:disabled {
+  border-color: var(--ds-hairline);
+  color: var(--ds-color-text-secondary);
+  cursor: not-allowed;
+}
+
+.audit__exported {
+  margin: 0;
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-font-caption-size);
+  word-break: break-all;
+}
+
+.audit__exported--bad {
+  color: var(--ds-color-status-warning);
 }
 </style>
