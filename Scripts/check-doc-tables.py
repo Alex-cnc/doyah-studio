@@ -617,11 +617,16 @@ def check_requirement_counts() -> list[str]:
     # 2026-10-18 口径变更（人类主人令：三书不写状态）：能力地图不再承载 ✅/🟡/⬜ 计数，
     # 派生计数与逐域计数两项检查作废；只校验「SRS 里出现的每个功能域，本书 §2 都有对应一行」。
     # 状态与条数唯一源 = 需求说明书状态列（`Docs/Doyah产品需求说明书.md` §10.1）。
-    groups = sorted({re.sub(r"-R-\d+$", "-R", identifier.rsplit("-", 1)[0])
-                     for identifier in identifiers if identifier.startswith("FR-")})
-    for group in groups:
-        if group not in text:
-            problems.append(f"{capability}: 第 2 节缺少功能域 {group} 的说明行")
+    # 2026-10-18 第二次口径变更：能力书不再承载需求书的 `FR-*` 功能域分类（`FR-LIC` / `FR-BLD`
+    # 这类工程域本就不是产品能力）。旧检查「SRS 每个域在 §2 有说明行」随之作废。
+    # 新检查更强：**正文里的节号引用必须解析到真实标题** —— 过去改章节时留下的过期引用
+    # （如「权限写 3.8.3」而实际在 3.3.1）就是靠这条抓出来的。附录（含变更记录的历史节号）不在此列。
+    body = text[:text.index("# 附录 A")] if "# 附录 A" in text else text
+    headings = set(re.findall(r"^#{2,4} (\d+\.\d+(?:\.\d+)?) ", text, re.M))
+    cited = set(re.findall(r"(?<![\d.v])(\d+\.\d+(?:\.\d+)?)(?![\d.])", body))
+    for number in sorted(cited):
+        if number not in headings:
+            problems.append(f"{capability}: 正文引用了不存在的节号 {number}")
 
     return problems
 
