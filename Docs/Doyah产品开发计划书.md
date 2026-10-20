@@ -4,7 +4,7 @@
 >
 > **这本书只回答一件事：哪一条做到哪儿了。** 要什么、验收怎么算 → 需求分析说明书；是什么、边界在哪 → 能力规划说明书；怎么做 → 概要设计说明书。
 
-| 版本 | v0.6（2026-10-20：台账 400 条 · +能力点覆盖台账） |
+| 版本 | v0.7（2026-10-20：台账 400 条 · +联调记录 +GBase 适配要点） |
 |---|---|
 
 ## 1 定位
@@ -1657,10 +1657,77 @@
 
 **这不是漏洞**：三类都需要一个登记处，本文件就是那个登记处。
 
+## 12 已验证环境与联调记录（2026-09-20）
+
+> 从《需求分析说明书》§10.4 整段迁来：这是**执行记录**（在哪台机器、哪个版本上跑通什么），不是需求。
+
+
+**开发机**
+
+| 项 | 值 |
+|---|---|
+| 机型 | Apple M5 Pro（arm64） |
+| 系统 | macOS 27.0 |
+| Xcode | 27.0（27A266a） |
+| Swift | Xcode 27 自带工具链（语言模式 5.10） |
+| XcodeGen | 2.46.0（`~/tools/xcodegen-dist/xcodegen/bin/xcodegen`） |
+| 依赖 | PostgresNIO 1.33.1 + 12 个传递依赖（`Package.resolved` 锁定） |
+
+**真实服务器（PostgreSQL）**
+
+| 项 | 值 |
+|---|---|
+| 版本 | PostgreSQL 18.6（x86_64-windows） |
+| 地址 | `192.0.2.10:5432`（客户端 `192.0.2.20`） |
+| 库 / 用户 | `postgres` / `postgres` |
+| SSL | `disable` |
+| 关键前置 | `pg_hba.conf` 必须放行客户端 IP（曾因写成 `192.0.2.2/32` 报 `28000`） |
+| 验证结果 | CLI 与 App「测试连接」均成功，能执行查询并返回结果 |
+
+**本地回归（无需外部数据库）**
+
+| 项 | 值 |
+|---|---|
+| 内置数据库 | pgserver 0.1.4（PostgreSQL 16.2，aarch64-apple-darwin） |
+| 端口 / 数据目录 | `55432` / `~/tools/pgdata-querytest` |
+| 回归结果 | `test-local-query-path.sh` 28/28（新增用例 6「DML 影响行数」、用例 7「服务端取消」、用例 8「建库权限与建库」）；`verify-core.sh` 89/89（新增 `ResultExporterTests` 10 项、`PostgresServiceTests` 影响行数判定 3 项、`EditorTextSyncTests` 8 项、`ConnectionConfigTests` 显示名 3 项、`PrivilegeProbeTests` 9 项） |
+| 版本矩阵回归 | `test-postgres-version-matrix.sh` 16/16（对任意 PG 实例跑连接 / 中文与 NULL / DML 影响行数 / 服务端取消 / 对象树 / 跨库，并输出矩阵行） |
+| App 打包 | `build-app.sh` 产出 `dist/DoyahStudio.app`，ad-hoc 签名（含 sandbox + network.client），可启动；启动后 `settings.selectedConnectionID` 正常写入（T-13 实测） |
+| 真机验证（18.6） | 连接 / 查询 / 对象树 / 跨库 / DML 影响行数 / 服务端取消均通过；`Docs/兼容性矩阵.md` 记录 |
+
+**受限命令行环境注意事项**
+
+- `xcode-select` 指向 CommandLineTools 时，构建需显式 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`。
+- SwiftPM 需 `--disable-sandbox`；SwiftUI 宏需要 `-Xfrontend -disable-sandbox`。
+- 依赖解析走 `Scripts/setup-package-mirrors.sh`（gitclone.com 镜像 + 本地 Vendor 包）。
+- Xcode 命令行在只读缓存环境可能因 manifest 缓存不可写而失败；此环境下改用 SwiftPM 目标 / `build-app.sh` 验证。
+
+## 13 驱动适配要点：GBase 8a
+
+> 从《需求分析说明书》§10.3 整段迁来：这是**适配结论与待实测项**（第三列就是状态）。方言契约本身见《Doyah 产品概要设计说明书》§3.19。
+
+
+| 项 | 结论 / 待确认 | 当前状态 |
+|---|---|---|
+| 线协议 | MySQL 协议族（不是 PostgreSQL 协议） | 驱动候选 MySQLNIO，未接入 |
+| 默认端口 | 5258 | ✅ `DatabaseType.gbase8a.defaultPort` |
+| 标识符引用 | 反引号 `` ` `` | ✅ `GBaseDialect.quoteIdentifier` |
+| 分页语法 | `LIMIT offset, count` | ✅ `GBaseDialect.limitClause` |
+| 元数据 | `SHOW DATABASES` / `SHOW TABLES [FROM db]` / `DESC <table>` | ✅ 方言 SQL 已实现，驱动未实现 |
+| 数据库/版本查询 | `SELECT DATABASE()` / `SELECT VERSION()` | ✅ 方言已实现 |
+| 版本号格式 | 形如 `8.6.2.11` | ✅ `parseServerVersion` |
+| 语句分隔 | 客户端 `DELIMITER` 指令；存储过程体内含分号 | ✅ `StatementSplitter` + 单元测试 |
+| `END$` / `END $` | 不得改写原文（`DELIMITER $` 后用 `END$` 结束） | ✅ 单元测试覆盖 |
+| 事务 | 能力较弱，需实测 `BEGIN/COMMIT/ROLLBACK` | ⬜ 待实测 |
+| 认证插件 | `mysql_native_password` 与 `caching_sha2_password` 支持情况未知 | ⬜ 待实测（R-04） |
+| 方言特性位 | `featureSet` 不声明 schemas / transactions | ✅ 与设计一致 |
+| 技术验证序列 | `SELECT VERSION(); SHOW DATABASES; SHOW TABLES; DESC <table>; SELECT * FROM information_schema.tables LIMIT 1; DELIMITER $ ... END $ ... CALL ...` | ⬜ 待执行 |
+
 ## 变更记录
 
 | 版本 | 日期 | 变更摘要 | 作者 |
 |---|---|---|---|
+| **v0.7** | 2026-10-20 | 新增 **§12 已验证环境与联调记录**（原需求分析说明书 §10.4）、**§13 驱动适配要点：GBase 8a**（原 §10.3，含待实测项；方言契约见《概要设计》§3.19）。两者都是**执行记录**，不是需求。 | `hugehippo` |
 | **v0.6** | 2026-10-20 | ① 新增 **§11 能力点覆盖台账**（原《需求分析说明书》§10.12，61 行整段迁来，子节改 11.1~11.4）：它是「能力点 ↔ 需求条目」的核对表，不是需求；② 域标签跟 SRS 新节号（`3.1.1 工程与工具链` / `3.1.2 授权与许可` / `3.1.3 插件装配`）；③ 已知卡点里「需求分析说明书 §3.7」→ `§3.1.3`。 | `hugehippo` |
 | **v0.5** | 2026-10-20 | ① 新增 **§10 历史任务清单**（开发任务列表 2026-09-20 / 夜间任务清单 09-21 夜，448 行从需求分析说明书 §10.7 / §10.7.1 原文搬来）；② 台账 395 → **400**：补 `FR-LIC-01~05`（授权与许可，状态 🟡：代码与 23 项单测在，未人工验收）。 | `hugehippo` |
 | **v0.4** | 2026-10-20 | `FR-EDIT-67` 条文改判（编辑器内预览为主、浏览器页签为辅），台账摘要跟版；状态仍 ⬜。 | `hugehippo` |
