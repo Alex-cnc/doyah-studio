@@ -80,7 +80,7 @@ def check_srs(srs: str, heading: str, kind: str) -> list[str]:
             problems.append(f"§3.5 条目应为 {want[0]} ~ {want[-1]}（11 条），实测 {ids}")
     # 列形状不同：Notes 是 6 列（编号 | 需求 | 层次 | 优先级 | 状态 | 验收），
     # Retro 沿用原 4 列（编号 | 需求 | 状态 | 优先级）—— 各按自己的下限判，不强行统一
-    floor = 7 if kind == "note" else 5
+    floor = 7  # 笔记与复盘现在都是 6 列（编号|需求|层次|优先级|状态|验收）
     for l in rows:
         if l.count("|") < floor:
             problems.append(f"条目列数不足（缺状态 / 验收）：{l[:46]}")
