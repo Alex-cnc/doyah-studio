@@ -144,7 +144,7 @@ def load_rows() -> list[tuple[str, str, str]]:
 
     # 2026-10-20：索引独立成文（`Docs/…-需求索引.md`）⇒ 直接读那份文件取编号集合（状态已迁出）
     index_lines = INDEX.read_text(encoding="utf-8").splitlines()
-    body_lines = lines[: next((i for i, line in enumerate(lines) if line.startswith("## 9.")), len(lines))]
+    body_lines = lines[: next((i for i, line in enumerate(lines) if line.startswith("# 第九章")), len(lines))]
 
     # 2026-10-20：状态列迁到《开发计划书》§3 台账 ⇒ macOS 基线状态从那里取；
     # 编号集合仍以 SRS §10.1 为准（两边由 `check-plan-coverage.py` 钉死相等）。

@@ -79,12 +79,12 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRS = "Docs/Doyah产品需求分析说明书.md"
 DESIGN = "Docs/Doyah产品概要设计说明书.md"
 
-SRS_HEADING = re.compile(r"^### 9\.2 ")
-SRS_STOP = re.compile(r"^#{1,3} ")
-DESIGN_HEADING = re.compile(r"^## 4\. ")
-DESIGN_STOP = re.compile(r"^#{1,2} ")
-WINDOWS_HEADING = re.compile(r"^#### 8\.5\.5 ")
-WINDOWS_STOP = re.compile(r"^#{1,4} ")
+SRS_HEADING = re.compile(r"^## 9\.2 ")
+SRS_STOP = re.compile(r"^#{1,2} ")
+DESIGN_HEADING = re.compile(r"^# 第四章 ")
+DESIGN_STOP = re.compile(r"^# ")
+WINDOWS_HEADING = re.compile(r"^### 8\.5\.5 ")
+WINDOWS_STOP = re.compile(r"^#{1,3} ")
 
 DEFINITION_ROW = re.compile(r"^\|\s*[`*]{0,2}(P-\d{2})[`*]{0,2}\s*\|")
 P_REFERENCE = re.compile(r"(P-\d{2})")
@@ -275,9 +275,9 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     srs_body = section(srs_lines, SRS_HEADING, SRS_STOP)
     design_body = section(design_lines, DESIGN_HEADING, DESIGN_STOP)
     if not srs_body:
-        problems.append(f"{SRS}：找不到「### 9.2 平台差异登记表」小节")
+        problems.append(f"{SRS}：找不到「## 9.2 平台差异登记表」小节")
     if not design_body:
-        problems.append(f"{DESIGN}：找不到「## 4. 允许不同的部分（平台差异）」小节")
+        problems.append(f"{DESIGN}：找不到「第四章 允许不同的部分（平台差异）」小节")
     if problems:
         return problems, notes
 
@@ -401,7 +401,7 @@ def run(root: pathlib.Path, quiet: bool) -> int:
 
 GOOD_SRS = """# 需求规范书
 
-### 9.2 平台差异登记表（哪些允许不同）
+## 9.2 平台差异登记表（哪些允许不同）
 
 > 与 `Docs/Doyah产品概要设计说明书.md` §4 一一对应。
 
@@ -419,7 +419,7 @@ GOOD_SRS = """# 需求规范书
 
 GOOD_DESIGN = """# 概要设计
 
-## 4. 允许不同的部分（平台差异）
+# 第四章 允许不同的部分（平台差异）
 
 完整登记表见 SRS §9.2。
 
@@ -430,13 +430,13 @@ GOOD_DESIGN = """# 概要设计
 
 ## 5. 关键设计决策（ADR）
 
-### 8.5 契约 → Windows 实现 [独占:windows]
+## 8.5 契约 → Windows 实现 [独占:windows]
 
-#### 8.5.5 平台差异登记（§4 的 `P-*` 续排，先在本节落条目，待契约侧并入 §4）
+### 8.5.5 平台差异登记（§4 的 `P-*` 续排，先在本节落条目，待契约侧并入 §4）
 
 `P-01` 甲｜`P-02` 乙。
 
-#### 8.5.6 待定与提案
+### 8.5.6 待定与提案
 
 没有别的号。
 """
@@ -472,7 +472,7 @@ CASES = [
          "| `P-01` | GUI   框架与控件（窗口与控件树） | 信息架构 | 控件树 |"),
      [], 0),
     ("§9.2 的小节被删（判据不许空跑当通过）",
-     GOOD_SRS.replace("### 9.2 平台差异登记表（哪些允许不同）", "### 9.2x 别的节"),
+     GOOD_SRS.replace("## 9.2 平台差异登记表（哪些允许不同）", "### 9.2x 别的节"),
      GOOD_DESIGN, ["找不到"], 1),
     ("§4 里一行定义行都解析不到",
      GOOD_SRS,

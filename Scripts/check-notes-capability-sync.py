@@ -37,10 +37,10 @@ SRS = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
 TARGETS = [
     ("笔记", "# 第五章 Doyah Notes", "# 第六章 Doyah Retro",
      pathlib.Path("../notes/Docs/产品能力规划说明书.md"), "ch5",
-     "### 3.5 Doyah Notes", "note"),
+     "## 3.5 Doyah Notes", "note"),
     ("复盘", "# 第六章 Doyah Retro", "# 第七章 非目标",
      pathlib.Path("../retro/Docs/产品能力规划说明书.md"), "ch6",
-     "### 3.6 Doyah Retro", "retro"),
+     "## 3.6 Doyah Retro", "retro"),
 ]
 
 
@@ -68,7 +68,7 @@ def check_srs(srs: str, heading: str, kind: str) -> list[str]:
     if heading not in srs:
         return [f"需求书缺少分区「{heading}」"]
     seg = srs[srs.index(heading):]
-    nxt = re.search(r"\n### ", seg)
+    nxt = re.search(r"\n## ", seg)
     seg = seg[: nxt.start()] if nxt else seg
     rows = [l for l in seg.split("\n") if re.match(r"^\| (?:\*\*)?FR-", l)]
     if not rows:

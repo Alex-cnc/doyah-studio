@@ -80,9 +80,9 @@ EXEMPT = re.compile(r"<!--\s*platform-ok\b")      # 豁免只认 HTML 注释形�
 
 REQUIREMENT_ROW = re.compile(r"^(FR|NFR|DR|IR|AC)-")     # 剥形状后判编号
 REQUIREMENT_HEADER = re.compile(r"^需求")                # 表头里定位「需求」列
-NEUTRAL_PROSE = ("### 1.2 ", "### 1.3 ")                 # 严格档里的中立正文小节
-RISK_SECTION = ("## 9. ",)                               # 报告档区域
-APPENDIX_SECTIONS = ("### 10.",)
+NEUTRAL_PROSE = ("## 1.2 ", "## 1.3 ")                 # 严格档里的中立正文小节
+RISK_SECTION = ("# 第九章 ",)                               # 报告档区域
+APPENDIX_SECTIONS = ("## 10.",)
 SEPARATOR = re.compile(r"^\s*\|[\s:|-]+\|\s*$")          # 表格分隔行 `|---|---|`
 
 # 桶 → (显示名, 是否严格)
@@ -163,7 +163,7 @@ def section_lines(lines: list[str], prefixes: tuple[str, ...]) -> set[int]:
     covered: set[int] = set()
     active_level: int | None = None
     for index, line in enumerate(lines):
-        heading = re.match(r"^(#{2,4}) ", line)
+        heading = re.match(r"^(#{1,4}) ", line)
         if heading:
             if any(line.startswith(prefix) for prefix in prefixes):
                 active_level = len(heading.group(1))
@@ -420,7 +420,7 @@ def run_self_test() -> int:
         """把夹具插进副本的 §3 之前 —— **不能写在文末**：文末落在 §10 附录里，整段只报告。"""
         target = where / SRS
         lines = target.read_text(encoding="utf-8").splitlines()
-        anchor = next(i for i, line in enumerate(lines) if line.startswith("## 3. "))
+        anchor = next(i for i, line in enumerate(lines) if line.startswith("# 第三章"))
         lines[anchor:anchor] = [""] + list(rows)
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
