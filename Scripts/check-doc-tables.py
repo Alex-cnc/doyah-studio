@@ -631,6 +631,50 @@ def check_requirement_counts() -> list[str]:
     return problems
 
 
+
+CAPABILITY_BOOK = pathlib.Path("Docs/Doyah产品能力说明书.md")
+STATUS_MARKS = ("⬜", "🟡", "✅")
+
+
+def check_capability_book_purity() -> list[str]:
+    """能力书「不写状态」判据（2026-10-20 · 人类主人问「能力说明书怎么会有状态字段呢」）。
+
+    **为什么要它**：能力书 1.1 维护约定① 与陈述 S-04 都写明「本文件不写状态 —— 状态与条数的
+    唯一源是需求说明书」。但**这条以前只靠自觉**：能力书正文没有状态列时全绿，一旦有人在表里
+    加一列「状态」、或者写上 ⬜🟡✅，同样全绿 —— 口径是靠人记的，不是靠判据守的。
+
+    实测逮到的第一例：Retro 仓能力书 §1「能力分组」表带一列全 ⬜ 的状态（4 列 14 行，旧体例残留）。
+
+    **判据两条**：
+    - **A 表头不得有「状态」单元格**（匹配 `| 状态 |`）：状态属需求书，能力书只要「做到哪 / 不做到哪」。
+    - **B 正文不得出现状态符号** ⬜ 🟡 ✅：符号本身就是状态；出现在「能力书里怎么标」的说明句里也不行。
+    """
+    problems: list[str] = []
+    if not CAPABILITY_BOOK.exists():
+        return problems
+    lines = CAPABILITY_BOOK.read_text(encoding="utf-8").split("\n")
+    # 附录 E（变更记录）是**历史文本**：它会引用当时的「⬜ 6 项」这类读数，不算违反
+    # 「正文不写状态」—— 只查正文段。
+    body_end = len(lines)
+    for index, line in enumerate(lines):
+        if line.startswith("# 附录 E"):
+            body_end = index
+            break
+    for index, line in enumerate(lines[:body_end], 1):
+        if re.match(r"^\|.*\|\s*状态\s*\|", line) and line.lstrip().startswith("|"):
+            problems.append(
+                f"{CAPABILITY_BOOK}:{index}: 表头出现「状态」列 —— 能力书不写状态（唯一源 = 需求书），"
+                f"状态要么删、要么改成「界限 / 判据」：{line.strip()[:60]}"
+            )
+        for mark in STATUS_MARKS:
+            if mark in line:
+                problems.append(
+                    f"{CAPABILITY_BOOK}:{index}: 正文出现状态符号「{mark}」—— 能力书不写状态：{line.strip()[:60]}"
+                )
+                break
+    return problems
+
+
 def main() -> int:
     arguments = sys.argv[1:]
     if "--self-test" in arguments:
@@ -690,6 +734,7 @@ def main() -> int:
     problems.extend(check_requirement_counts())
     problems.extend(check_section_heading_counts())
     problems.extend(coverage_problems())
+    problems.extend(check_capability_book_purity())
 
     if glob_notes:
         print(
