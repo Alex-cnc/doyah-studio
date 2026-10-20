@@ -43,6 +43,7 @@ import tempfile
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
 SRS = ROOT / "Docs/Doyah产品需求分析说明书.md"
+INDEX = pathlib.Path("Docs/Doyah产品需求分析说明书-需求索引.md")
 # 2026-10-20：状态矩阵（原 §10.10）迁到《开发计划书》§5 —— 读仍从 SRS 取（索引与摘要），
 # 写改到计划书；否则本脚本会在 SRS 里找不到标记而报错。
 PLAN = ROOT / "Docs/Doyah产品开发计划书.md"
@@ -141,7 +142,8 @@ def load_rows() -> list[tuple[str, str, str]]:
             return []
         return lines[start:end]
 
-    index_lines = slice_between("### 9.1", "### 9.2")  # 只用来取编号集合（状态已迁出）
+    # 2026-10-20：索引独立成文（`Docs/…-需求索引.md`）⇒ 直接读那份文件取编号集合（状态已迁出）
+    index_lines = INDEX.read_text(encoding="utf-8").splitlines()
     body_lines = lines[: next((i for i, line in enumerate(lines) if line.startswith("## 9.")), len(lines))]
 
     # 2026-10-20：状态列迁到《开发计划书》§3 台账 ⇒ macOS 基线状态从那里取；
@@ -626,7 +628,7 @@ def main() -> int:
     PLAN.write_text(updated, encoding="utf-8")   # 2026-10-20：矩阵已迁到计划书 §5
     detail = "、".join(f"{platform['label']} {len(platform['overrides'])} 条" for platform in platforms)
     print(
-        f"✅ 已重写 §10.10 平台等价矩阵（{len(rows)} 条；"
+        f"✅ 已重写《计划书》§5 平台等价矩阵（{len(rows)} 条；"
         f"平台列 {'/'.join(platform['label'] for platform in platforms)}；台账显式状态 {detail}）"
     )
     return 0

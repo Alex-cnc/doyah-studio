@@ -22,6 +22,7 @@ import re
 import sys
 
 SRS = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
+INDEX = pathlib.Path("Docs/Doyah产品需求分析说明书-需求索引.md")
 PLAN = pathlib.Path("Docs/Doyah产品开发计划书.md")
 MARKS = ("⬜", "🟡", "✅", "➖")
 
@@ -31,14 +32,10 @@ def cells(line: str) -> list[str]:
 
 
 def srs_ids() -> set[str]:
-    ids, in_index = set(), False
-    for line in SRS.read_text(encoding="utf-8").splitlines():
-        if line.startswith("### 9.1"):
-            in_index = True
-            continue
-        if in_index and line.startswith("### "):
-            break
-        if in_index and line.startswith("|"):
+    """编号集合取自**需求索引文件**（2026-10-20 从正文附录移出，机械派生件）。"""
+    ids = set()
+    for line in INDEX.read_text(encoding="utf-8").splitlines():
+        if line.startswith("|"):
             row = cells(line)
             if row and re.match(r"^(FR|NFR|AC)-[A-Z0-9-]+$", row[0].replace("*", "")):
                 ids.add(row[0].replace("*", ""))

@@ -97,6 +97,7 @@ DEFAULT_TARGETS = [
     "Docs/功能清单（管理视图）.md",
     "Docs/Doyah产品需求分析说明书.md",
     "Docs/Doyah产品需求分析说明书-变更记录.md",
+    "Docs/Doyah产品需求分析说明书-需求索引.md",
     "Docs/Doyah产品开发计划书.md",
     "Docs/README.md",
     "Docs/兼容性矩阵.md",
@@ -542,7 +543,8 @@ def check_section_heading_counts() -> list[str]:
 
 def check_requirement_counts() -> list[str]:
     """校验需求计数与索引实际行数一致（防止"手工维护的数字"再次漂移）。"""
-    srs = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
+    # 2026-10-20：编号索引从正文附录移出成独立文件（机械派生件）⇒ 计数行与索引表都读那份。
+    srs = pathlib.Path("Docs/Doyah产品需求分析说明书-需求索引.md")
     capability = pathlib.Path("Docs/Doyah产品能力规划说明书.md")
     if not srs.exists():
         return [f"{srs}: 文件不存在"]
@@ -550,7 +552,7 @@ def check_requirement_counts() -> list[str]:
     problems: list[str] = []
     lines = srs.read_text(encoding="utf-8").splitlines()
 
-    # 1) §10.1 的计数行
+    # 1) 索引文件的计数行
     declared = None
     count_line = 0
     pattern = re.compile(r"^共 \*\*(\d+)\*\* 条（FR (\d+) · NFR (\d+) · AC (\d+)）")
@@ -570,7 +572,7 @@ def check_requirement_counts() -> list[str]:
     candidates = ["| 编号 | 所属域 / 章节 | 层次 | 状态 |", "| 编号 | 所属域 / 章节 | 层次 |"]
     header = next((c for c in candidates if c in lines), None)
     if header is None:
-        problems.append(f"{srs}: 未找到 §10.1 索引表头")
+        problems.append(f"{srs}: 未找到 索引表头")
         return problems
     has_status = "状态" in header
 
@@ -585,14 +587,14 @@ def check_requirement_counts() -> list[str]:
     # 空格之类）却没被连上 ⇒ 原先静默读成 0 行、派生数变成 (0, 0, 0, 0)，一条「解析中断」都不说。
     if index < len(lines) and re.match(r"^\s{1,3}\|?\s*(FR|NFR|AC|DR|IR)-", lines[index]):
         problems.append(
-            f"{srs}:{index + 1}: §10.1 表体在此中断（该行行首不是 `|`，但它仍是表行形状 ⇒ "
+            f"{srs}:{index + 1}: 索引表体在此中断（该行行首不是 `|`，但它仍是表行形状 ⇒ "
             f"后续行未被解析、计数会算成 0）-> {lines[index].strip()[:80]}"
         )
 
     identifiers = [row[0] for row in rows]
     if len(set(identifiers)) != len(identifiers):
         duplicated = [key for key, count in Counter(identifiers).items() if count > 1]
-        problems.append(f"{srs}: §10.1 索引有重复编号 {duplicated}")
+        problems.append(f"{srs}: 索引有重复编号 {duplicated}")
 
     fr = [row for row in rows if row[0].startswith("FR-")]
     nfr = [row for row in rows if row[0].startswith("NFR-")]
@@ -610,7 +612,7 @@ def check_requirement_counts() -> list[str]:
     short_rows = [number for number, row in enumerate(rows, 1) if len(row) < (4 if has_status else 3)]
     if short_rows and has_status:
         problems.append(
-            f"{srs}: §10.1 有 {len(short_rows)} 条索引行**格数不足 4**（表体行序 {short_rows[:6]}）"
+            f"{srs}: 索引有 {len(short_rows)} 条行**格数不足 4**（表体行序 {short_rows[:6]}）"
             f" ⇒ 疑似缺「状态」格，派生数按现有格子算（旧版这里会直接崩掉、已收集的诊断全丢）"
         )
     statuses = Counter(row[3] for row in fr if len(row) > 3) if has_status else Counter()
@@ -852,6 +854,7 @@ SELF_TEST_TRACKED = [
     # 2026-10-17：核心能力扩展草案（灵魂 / IM / 记忆 / 技能自进化）。
     "Docs/智能体助手-核心能力扩展-草案-v0.1.md",
     "Docs/Doyah产品需求分析说明书-变更记录.md",
+    "Docs/Doyah产品需求分析说明书-需求索引.md",
 ]
 
 SELF_TEST_ABSENT = [
