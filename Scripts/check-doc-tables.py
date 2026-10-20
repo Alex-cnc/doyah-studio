@@ -36,7 +36,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/Doyah产品概要设计说明书.md` §8.5.6-4）。现在：
 
 **这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 12 份** /
-**52 份命名 + 1 条通配 = 实跑 53 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
+**56 份命名 + 1 条通配 = 实跑 57 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
 `doc-tables-files`）；判据 `Scripts/check-doc-numbers.py` 每次**自己算一遍**（导入本模块读清单 +
 `git check-ignore` 实测 + 真跑本脚本）再与本文件 / `Scripts/verify-all.sh` / `AGENT-SPEC.md` 里每一处
 写法对账 —— 本文件里的数字都是**引用**，改口径改台账。
@@ -50,7 +50,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 （跳过的永远是整份文档，不是文档里的某项检查）。
 
 **自检也不许硬读本机台账**（2026-10-08 · 任务 `t_004a679b`）：`--self-test` 里**依赖真仓库那几份
-本机台账**的两例 —— 例 5（写坏队列副本一行）与例 4 的真仓库断言（52 份命名全在 / 实跑 53 个文件 /
+本机台账**的两例 —— 例 5（写坏队列副本一行）与例 4 的真仓库断言（56 份命名全在 / 实跑 57 个文件 /
 无跳过行）—— 在台账不在盘上时**跳过 + 高声提示**：既不崩（例 5 原先直接 `FileNotFoundError`），
 也不假红（例 4 原先把「干净克隆必然缺台账」读成「文档被删」）。口径同上面这一条，出处 =
 `AGENT-SPEC.md` §9 第 147 条 ④（本机台账类判据一律「不在盘上就跳过 + 高声提示」）。**在
@@ -609,11 +609,15 @@ def check_requirement_counts() -> list[str]:
     # 3) 由索引派生出的 FR 状态分布 —— 能力规划说明书必须与它一致
     # 取格兜底（原单 ㈥）：FR 行缺一格原先直接 `IndexError` 崩掉、已收集的诊断**全丢**
     # （CI 里「判红」与「脚本崩了」不可分）；现在先报「格数不足」，再按现有格子算下去。
-    short_rows = [number for number, row in enumerate(rows, 1) if len(row) < (4 if has_status else 3)]
-    if short_rows and has_status:
+    needed = 4 if has_status else 3
+    short_rows = [number for number, row in enumerate(rows, 1) if len(row) < needed]
+    if short_rows:
+        # 2026-10-20：状态列迁出后表头只剩三列，旧版把这条诊断锁在 `has_status` 里 ⇒
+        # 三列版的缺格行会**静默放过**（少一格的行仍被算进派生数）。门槛跟着表头走，不再看有没有状态列。
         problems.append(
-            f"{srs}: 索引有 {len(short_rows)} 条行**格数不足 4**（表体行序 {short_rows[:6]}）"
-            f" ⇒ 疑似缺「状态」格，派生数按现有格子算（旧版这里会直接崩掉、已收集的诊断全丢）"
+            f"{srs}: 索引有 {len(short_rows)} 条行**格数不足 {needed}**（表体行序 {short_rows[:6]}）"
+            f" ⇒ 疑似缺格（{'缺「状态」格' if has_status else '缺「层次」格'}），派生数按现有格子算"
+            f"（旧版这里会直接崩掉、已收集的诊断全丢）"
         )
     statuses = Counter(row[3] for row in fr if len(row) > 3) if has_status else Counter()
     derived = (len(fr), statuses.get("✅", 0), statuses.get("🟡", 0), statuses.get("⬜", 0))
@@ -943,7 +947,7 @@ def run_self_test() -> int:
             failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
         elif "⚠ 跳过 12 份" not in output:
             failures.append(f"例 1 失败：没有高声提示「跳过 12 份」（不得静默通过）\n{output}")
-        elif "✅ 表格校验通过（40 个文件，跳过 12 份）" not in output:
+        elif "✅ 表格校验通过（44 个文件，跳过 12 份）" not in output:
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
             failures.append(f"例 1 失败：通配清单没有显式打印匹配份数（L-41）\n{output}")
@@ -1118,56 +1122,58 @@ def run_self_test() -> int:
                 )
         cont.unlink()
 
-        # 例 14（㈤(a)）·§10.1 表体中断：首条数据行行首多一个空格 ⇒ 判红 + 报行号 + 「表体在此中断」
+        # 例 14（㈤(a)）·索引表体中断：首条数据行行首多一个空格 ⇒ 判红 + 报行号 + 「表体在此中断」
+        # 2026-10-20：索引已从需求书正文 §10.1 外置成 `Docs/Doyah产品需求分析说明书-需求索引.md`
+        # （状态列整批迁走后只剩「编号 / 所属域 / 层次」三列），夹具跟着改锚点。
         total += 1
-        srs_copy = clone / "Docs/Doyah产品需求分析说明书.md"
-        original_srs = srs_copy.read_text(encoding="utf-8")
-        srs_lines = original_srs.splitlines()
-        header_at = srs_lines.index("| 编号 | 所属域 / 章节 | 层次 | 状态 |")
-        srs_lines[header_at + 2] = " " + srs_lines[header_at + 2]
-        srs_copy.write_text("\n".join(srs_lines) + "\n", encoding="utf-8")
+        idx_copy = clone / "Docs/Doyah产品需求分析说明书-需求索引.md"
+        original_idx = idx_copy.read_text(encoding="utf-8")
+        idx_lines = original_idx.splitlines()
+        header_at = idx_lines.index("| 编号 | 所属域 / 章节 | 层次 |")
+        idx_lines[header_at + 2] = " " + idx_lines[header_at + 2]
+        idx_copy.write_text("\n".join(idx_lines) + "\n", encoding="utf-8")
         code, output = run([], clone)
         if code == 0:
-            failures.append(f"例 14 失败：§10.1 表体被行首空格打断仍 exit 0（原单 ㈤(a)）\n{output}")
+            failures.append(f"例 14 失败：索引表体被行首空格打断仍 exit 0（原单 ㈤(a)）\n{output}")
         elif "表体在此中断" not in output or f":{header_at + 3}:" not in output:
             failures.append(
                 f"例 14 失败：判红了但没有报「表体在此中断」与行号（应为 {header_at + 3}）\n{output}"
             )
-        srs_copy.write_text(original_srs, encoding="utf-8")
+        idx_copy.write_text(original_idx, encoding="utf-8")
 
-        # 例 15（㈤(b)）·一套切分口径：§10.1 格内写合法转义（反斜杠 + 竖线）⇒ rc=0（旧版此处判红）
+        # 例 15（㈤(b)）·一套切分口径：格内写合法转义（反斜杠 + 竖线）⇒ rc=0（旧版此处判红）
         total += 1
-        srs_lines = original_srs.splitlines()
+        idx_lines = original_idx.splitlines()
         row_at = header_at + 2
-        cells = srs_lines[row_at].split("|")
+        cells = idx_lines[row_at].split("|")
         cells[2] = cells[2] + chr(92) + "| 浏览器"
-        srs_lines[row_at] = "|".join(cells)
-        srs_copy.write_text("\n".join(srs_lines) + "\n", encoding="utf-8")
+        idx_lines[row_at] = "|".join(cells)
+        idx_copy.write_text("\n".join(idx_lines) + "\n", encoding="utf-8")
         code, output = run([], clone)
         if code != 0:
             failures.append(
-                f"例 15 失败：§10.1 格内写合法转义的竖线不该判红（切分要与 split_row 一套口径，原单 ㈤(b)），实际 rc={code}\n{output}"
+                f"例 15 失败：格内写合法转义的竖线不该判红（切分要与 split_row 一套口径，原单 ㈤(b)），实际 rc={code}\n{output}"
             )
-        srs_copy.write_text(original_srs, encoding="utf-8")
-        # 例 16（㈥）·取格兜底：FR 行缺一格 ⇒ 打印已收集的诊断 + 「格数不足」，不许 IndexError
+        idx_copy.write_text(original_idx, encoding="utf-8")
+        # 例 16（㈥）·取格兜底：索引行缺一格 ⇒ 打印已收集的诊断 + 「格数不足」，不许 IndexError
         total += 1
-        srs_lines = original_srs.splitlines()
-        cells = srs_lines[row_at].split("|")
-        del cells[3]
-        srs_lines[row_at] = "|".join(cells)
-        srs_copy.write_text("\n".join(srs_lines) + "\n", encoding="utf-8")
+        idx_lines = original_idx.splitlines()
+        cells = idx_lines[row_at].split("|")
+        del cells[2]
+        idx_lines[row_at] = "|".join(cells)
+        idx_copy.write_text("\n".join(idx_lines) + "\n", encoding="utf-8")
         code, output = run([], clone)
         if code == 0:
-            failures.append(f"例 16 失败：FR 行缺一格应判红（原单 ㈥）\n{output}")
+            failures.append(f"例 16 失败：索引行缺一格应判红（原单 ㈥）\n{output}")
         elif "Traceback" in output or "IndexError" in output:
             failures.append(
                 f"例 16 失败：缺一格时崩了（IndexError / traceback）—— 已收集的诊断全丢\n{output}"
             )
-        elif "格数不足 4" not in output or "❌ 表格校验失败" not in output:
+        elif "格数不足 3" not in output or "❌ 表格校验失败" not in output:
             failures.append(
-                f"例 16 失败：判红了但没有报「格数不足 4」/ 没有把人读的失败清单打出来\n{output}"
+                f"例 16 失败：判红了但没有报「格数不足 3」/ 没有把人读的失败清单打出来\n{output}"
             )
-        srs_copy.write_text(original_srs, encoding="utf-8")
+        idx_copy.write_text(original_idx, encoding="utf-8")
 
         # 例 17（㈡）·在场下限：删掉一份 tracked 文档（不在 .gitignore 名单里）⇒ 本件自己判红并点名
         total += 1
@@ -1193,7 +1199,7 @@ def run_self_test() -> int:
         if code != 0:
             failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
         elif host_ledgers_absent_entirely:
-            # 真仓库里那几份本机台账**整批**不在盘上 ⇒「52 份命名全在 / 不许出现跳过行 / 实跑 53 个文件」
+            # 真仓库里那几份本机台账**整批**不在盘上 ⇒「56 份命名全在 / 不许出现跳过行 / 实跑 57 个文件」
             # 这三条**在这台机器上核不了**（口径同例 5）⇒ 本项跳过 + 高声提示；
             # 仍然断言另一半：缺台账时如实报「跳过」，不是崩、也不是静默。
             # （只缺一部分时走下面的严格分支 —— 那是主开发机上文档被删。）
@@ -1203,15 +1209,15 @@ def run_self_test() -> int:
                 )
             else:
                 skipped.append(
-                    "例 4（真仓库 52 份命名文档全在、实跑 53 个文件、无跳过行）："
+                    "例 4（真仓库 56 份命名文档全在、实跑 57 个文件、无跳过行）："
                     f"{len(absent_host_ledgers)} 份本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）"
                 )
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 52 份命名文档应全在（不得出现跳过行）\n{output}")
+            failures.append(f"例 4 失败：真仓库 56 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
             failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
-        elif "✅ 表格校验通过（53 个文件）" not in output:
-            failures.append(f"例 4 失败：收尾行应为 53 个文件（52 份命名 + 1 份通配）\n{output}")
+        elif "✅ 表格校验通过（57 个文件）" not in output:
+            failures.append(f"例 4 失败：收尾行应为 57 个文件（56 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
 
@@ -1239,10 +1245,10 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 52 份无跳过）只在**真跑过**时才算数；
+    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 56 份无跳过）只在**真跑过**时才算数；
     # 跳过时如实换掉措辞（跳过的例不许冒充跑过 —— 跳过 ≠ 通过）。
     tail = (
-        "真仓库 52 份无跳过"
+        "真仓库 56 份无跳过"
         if not skipped
         else "真仓库那两例在这台机器上不适用（本机台账不在盘上，见上面的跳过提示）"
     )

@@ -645,8 +645,13 @@ def self_test() -> int:
             (root / "Docs" / "archive").mkdir(parents=True)
             (root / "Docs" / "archive" / "旧快照.md").write_text("# 旧快照\n", encoding="utf-8")
             # 三书是 `required=True` ⇒ run() 会判「不在盘上」，夹具必须把它们铺上（否则测到的是别的红）
-            for required in ("Docs/Doyah产品需求分析说明书.md", "Docs/Doyah产品能力规划说明书.md", "Docs/Doyah产品概要设计说明书.md"):
-                (root / required).write_text("# 占位\n", encoding="utf-8")
+            # 2026-10-20：清单里的 `True` 档是活文档须在盘（三书 + 开发计划书）—— 别手抄名字，
+            # 直接遍历 `VERSION_DOCS`，否则清单加减一份，夹具就会测到「另一条红」（假红）。
+            for relative, required in VERSION_DOCS:
+                if required:
+                    target = root / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text("# 占位\n", encoding="utf-8")
             probe = root / "Docs" / "测试用例.md"
             if kind == "bytes":
                 probe.write_bytes(b"# \xd6\xd0\xce\xc4\n\n## \xe5\x8f\x98\xe6\x9b\xb4\xe8\xae\xb0\xe5\xbd\x95\n")
