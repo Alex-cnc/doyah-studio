@@ -50,7 +50,7 @@ import tempfile
 
 # 判据的立足点：**本脚本所在仓**的根（不是 CWD —— 从别的目录跑必须读数一致）
 REPO = pathlib.Path(__file__).resolve().parent.parent
-SPEC_REL = "Docs/Doyah产品需求说明书.md"
+SPEC_REL = "Docs/Doyah产品需求分析说明书.md"
 STATUSES = "✅🟡⬜➖"
 # 其它文档里「FR-XXX-01（🟡）」这种状态括注，与 §10.1 索引比对（见 cross_document_problems）
 CROSS_DOC_PATTERN = re.compile(r"((?:FR|NFR)-[A-Z]+-\d+)[（(]([✅🟡⬜➖])[）)]")

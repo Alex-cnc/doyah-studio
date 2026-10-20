@@ -58,8 +58,8 @@ import tempfile
 
 # 判据的立足点：**本脚本所在仓**的根（不是 CWD —— 从别的目录跑必须读数一致）
 REPO = pathlib.Path(__file__).resolve().parent.parent
-SRS = "Docs/Doyah产品需求说明书.md"
-TARGETS = [SRS, "Docs/Doyah产品概要设计说明书.md", "Docs/Doyah产品能力说明书.md"]
+SRS = "Docs/Doyah产品需求分析说明书.md"
+TARGETS = [SRS, "Docs/Doyah产品概要设计说明书.md", "Docs/Doyah产品能力规划说明书.md"]
 BASELINE_REL = "Scripts/platform-neutrality-baseline.json"
 BASELINE_COMMENT = (
     "平台中立性棘轮基线：需求规范书**严格档**（需求列 + §1.2/§1.3 正文）"

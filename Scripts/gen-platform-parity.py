@@ -42,7 +42,7 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
-SRS = ROOT / "Docs/Doyah产品需求说明书.md"
+SRS = ROOT / "Docs/Doyah产品需求分析说明书.md"
 STATUS = ROOT / "Docs/平台实现状态.json"
 SCRIPT = pathlib.Path(__file__).resolve()
 
@@ -389,7 +389,7 @@ def build_cases() -> list[dict]:
 
     def drop_column(root: pathlib.Path) -> None:
         """只改 §10.10 标记区间里的表（正文定义行不是本门禁的判据面）。"""
-        path = root / "Docs/Doyah产品需求说明书.md"
+        path = root / "Docs/Doyah产品需求分析说明书.md"
         text = path.read_text(encoding="utf-8")
         head, rest = text.split(BEGIN, 1)
         block, tail = rest.split(END, 1)
@@ -404,12 +404,12 @@ def build_cases() -> list[dict]:
         path.write_text(f"{head}{BEGIN}\n" + "\n".join(lines) + f"{END}{tail}", encoding="utf-8")
 
     def drop_marker(root: pathlib.Path) -> None:
-        path = root / "Docs/Doyah产品需求说明书.md"
+        path = root / "Docs/Doyah产品需求分析说明书.md"
         path.write_text(path.read_text(encoding="utf-8").replace(BEGIN, "", 1), encoding="utf-8")
 
     def windows_snapshot(root: pathlib.Path) -> None:
         """正向：台账里的 ✅ 必须真的到表上，且分域计数跟着走。"""
-        text = (root / "Docs/Doyah产品需求说明书.md").read_text(encoding="utf-8")
+        text = (root / "Docs/Doyah产品需求分析说明书.md").read_text(encoding="utf-8")
         block = text.split(BEGIN, 1)[1].split(END, 1)[0]
         row = re.search(r"^\| FR-CONN-01 \|.*$", block, re.MULTILINE)
         if row is None:

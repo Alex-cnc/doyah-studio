@@ -24,7 +24,7 @@ import pathlib
 import re
 import sys
 
-SRS = pathlib.Path("Docs/Doyah产品需求说明书.md")
+SRS = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
 
 PENDING = "⬜"
 PARTIAL = "🟡"
@@ -135,7 +135,7 @@ def main() -> int:
                 break
 
     print("=" * 78)
-    print("需求完成度盘点（数据来源：Docs/Doyah产品需求说明书.md，机械派生）")
+    print("需求完成度盘点（数据来源：Docs/Doyah产品需求分析说明书.md，机械派生）")
     print("=" * 78)
     for prefix in ("FR", "NFR", "AC"):
         members = groups[prefix]

@@ -1,6 +1,6 @@
 # Doyah Studio · Windows 对 macOS 对齐件
 
-> **本件身份：派生视图（非契约）** —— 真值源 = `Docs/Doyah产品需求说明书.md` §10.1（状态）/ §10.2（落点）+ `Docs/平台实现状态.json`（其他平台状态）。
+> **本件身份：派生视图（非契约）** —— 真值源 = `Docs/Doyah产品需求分析说明书.md` §10.1（状态）/ §10.2（落点）+ `Docs/平台实现状态.json`（其他平台状态）。
 > **两处不一致时以三书为准**。**不要手工编辑本表** —— 改了必漂移：本件由 `Scripts/gen-studio-win-align.py` 产出，`--check` 在闭环第 7 项判漂移。
 >
 > **用途**：`fatshark`（Windows / Harmony 侧）对齐 macOS 版 Doyah Studio 开发进度时的**逐条索引** —— 每行 = 一条需求 → 所属域 → 层次 → macOS 状态 → **macOS 落点（去这里读实现）** → Windows 现状。
@@ -39,19 +39,19 @@
 | FR-AI-10 | 3.12 AI 智能体 | 进阶可选 | 🟡 | — | ⬜ |
 | FR-AI-11 | 3.12 AI 智能体 | 常用增强 | 🟡 | — | ⬜ |
 | FR-AI-12 | 3.12 AI 智能体 | 基线必备 | 🟡 | — | ⬜ |
-| FR-AI-13 | 3.12 AI 智能体 | 常用增强 | ✅ | `Docs/Doyah产品能力说明书.md` | ⬜ |
-| FR-AI-14 | 3.12 AI 智能体 | 常用增强 | 🟡 | `Docs/Doyah产品能力说明书.md` | ⬜ |
-| FR-AI-15 | 3.12 AI 智能体 | 常用增强 | 🟡 | `Docs/Doyah产品能力说明书.md` | ⬜ |
-| FR-AI-16 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力说明书.md` 等 4 处 | ⬜ |
-| FR-AI-17 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力说明书.md` 等 4 处 | ⬜ |
-| FR-AI-18 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力说明书.md` 等 4 处 | ⬜ |
-| FR-AI-19 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力说明书.md` 等 4 处 | ⬜ |
-| FR-AI-20 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力说明书.md` 等 4 处 | ⬜ |
-| FR-AI-21 | 3.12 AI 智能体 | 进阶可选 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力说明书.md` 等 4 处 | ⬜ |
-| FR-AI-22 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力说明书.md` 等 4 处 | ⬜ |
-| FR-AI-23 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力说明书.md` 等 4 处 | ⬜ |
-| FR-AI-24 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力说明书.md` 等 4 处 | ⬜ |
-| FR-AI-25 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力说明书.md` 等 4 处 | ⬜ |
+| FR-AI-13 | 3.12 AI 智能体 | 常用增强 | ✅ | `Docs/Doyah产品能力规划说明书.md` | ⬜ |
+| FR-AI-14 | 3.12 AI 智能体 | 常用增强 | 🟡 | `Docs/Doyah产品能力规划说明书.md` | ⬜ |
+| FR-AI-15 | 3.12 AI 智能体 | 常用增强 | 🟡 | `Docs/Doyah产品能力规划说明书.md` | ⬜ |
+| FR-AI-16 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力规划说明书.md` 等 4 处 | ⬜ |
+| FR-AI-17 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力规划说明书.md` 等 4 处 | ⬜ |
+| FR-AI-18 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力规划说明书.md` 等 4 处 | ⬜ |
+| FR-AI-19 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力规划说明书.md` 等 4 处 | ⬜ |
+| FR-AI-20 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力规划说明书.md` 等 4 处 | ⬜ |
+| FR-AI-21 | 3.12 AI 智能体 | 进阶可选 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力规划说明书.md` 等 4 处 | ⬜ |
+| FR-AI-22 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力规划说明书.md` 等 4 处 | ⬜ |
+| FR-AI-23 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力规划说明书.md` 等 4 处 | ⬜ |
+| FR-AI-24 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力规划说明书.md` 等 4 处 | ⬜ |
+| FR-AI-25 | 3.12 AI 智能体 | 常用增强 | ⬜ | `tools`、`doyah-dispatch/docs/AI助手对话能力-调研-20261010.md`、`Docs/Doyah产品能力规划说明书.md` 等 4 处 | ⬜ |
 | FR-AI-26 | 3.12 AI 智能体 | 常用增强 | ⬜ | `TaskScheduler`、`FR-AI-15`、`Docs/Doyah产品概要设计说明书.md` | ⬜ |
 | FR-AI-27 | 3.12 AI 智能体 | 常用增强 | ⬜ | `TaskScheduler`、`FR-AI-15`、`Docs/Doyah产品概要设计说明书.md` | ⬜ |
 | FR-AI-28 | 3.12 AI 智能体 | 常用增强 | ⬜ | `TaskScheduler`、`FR-AI-15`、`Docs/Doyah产品概要设计说明书.md` | ⬜ |

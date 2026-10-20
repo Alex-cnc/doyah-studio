@@ -95,8 +95,8 @@ pwsh -File platform/windows\Tools\verify-all.ps1 -Base HEAD~1                   
 
 - 现象：两条「受检清单自洽」判据在 Windows 上把**清单里本就有**的文档全报成「不在受检清单里」——
   `check-doc-tables.py` 判据 E 报 26 处（`Docs\README.md` / `Docs\Doyah产品概要设计说明书.md` / `Docs\proposals\*.md` …）、
-  `check-doc-versions.py` 判据 D 报 6 处（`Docs\Doyah产品需求说明书.md` / `Docs\Doyah产品概要设计说明书.md` / `Docs\发布计划.md` …）。
-  同脚本的表格列数档与 A/B/C 三档对同一批文档全绿（`✅ Docs/Doyah产品需求说明书.md —— 变更 293 行 / 最高 v3.277 / 头部 v3.28`）。
+  `check-doc-versions.py` 判据 D 报 6 处（`Docs\Doyah产品需求分析说明书.md` / `Docs\Doyah产品概要设计说明书.md` / `Docs\发布计划.md` …）。
+  同脚本的表格列数档与 A/B/C 三档对同一批文档全绿（`✅ Docs/Doyah产品需求分析说明书.md —— 变更 293 行 / 最高 v3.277 / 头部 v3.28`）。
 - 根因：两条判据取相对路径都用 `str(...)`（D 用 `path.relative_to(root)`、E 用 `path.relative_to(".")`），
   Windows 上给**反斜杠**，而三处清单（`VERSION_DOCS` / `DEFAULT_TARGETS` / `COVERAGE_EXEMPT`）写的是**正斜杠**
   ⇒ 集合匹配恒 False（macOS 上 `os.sep` 就是 `/` ⇒ 对侧看不到，`--self-test` 也在 macOS 上跑）。

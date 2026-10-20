@@ -34,7 +34,7 @@
 > **沿用与新增**：环境档 5 条是 `v0.1.0-alpha` 那次（`v3.252`）手加的标记，本轮**沿用原文**；
 > 其余 **47 条**是本轮判定后新加（`FR-EDIT-29` 同时含沙箱限制与未做功能，归 `environment` 档并在标记里写明两因）。
 >
-> **2026-09-29 更新（开发循环第 95 轮，队列 `L-92`）**：需求提出者拍板「**改非沙箱，先验证功能**」⇒ 三条与沙箱绑定的残项**随拍板消解** —— `FR-CONN-18` 只剩真跳板机握手、`FR-EDIT-29` 去掉沙箱那一因（`^C` 另有机器判据）、`FR-IO-04` 由 `needs-decision` 转 `device-instance`（只剩 217 专用库的真实还原）。**条目数不变（50）**，变的是原因；`Docs/Doyah产品需求说明书.md` **v3.278** 三处状态格与台账 `Scripts/alpha-fr-dispositions.json` 已同步，判据 `check-alpha-fr-dispositions.py` 逐字对账通过。
+> **2026-09-29 更新（开发循环第 95 轮，队列 `L-92`）**：需求提出者拍板「**改非沙箱，先验证功能**」⇒ 三条与沙箱绑定的残项**随拍板消解** —— `FR-CONN-18` 只剩真跳板机握手、`FR-EDIT-29` 去掉沙箱那一因（`^C` 另有机器判据）、`FR-IO-04` 由 `needs-decision` 转 `device-instance`（只剩 217 专用库的真实还原）。**条目数不变（50）**，变的是原因；`Docs/Doyah产品需求分析说明书.md` **v3.278** 三处状态格与台账 `Scripts/alpha-fr-dispositions.json` 已同步，判据 `check-alpha-fr-dispositions.py` 逐字对账通过。
 
 ## 逐条判定
 

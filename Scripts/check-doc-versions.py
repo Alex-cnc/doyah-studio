@@ -80,8 +80,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # 带「变更记录 + 头部版本格」的文档：True = 必须存在（三书），False = 在盘上才查。
 VERSION_DOCS = [
-    ("Docs/Doyah产品需求说明书.md", True),
-    ("Docs/Doyah产品能力说明书.md", True),
+    ("Docs/Doyah产品需求分析说明书.md", True),
+    ("Docs/Doyah产品能力规划说明书.md", True),
     ("Docs/Doyah产品概要设计说明书.md", True),
     ("Docs/智能体助手-开发spec.md", False),
     ("Docs/测试用例.md", False),
@@ -643,7 +643,7 @@ def self_test() -> int:
             (root / "Docs" / "archive").mkdir(parents=True)
             (root / "Docs" / "archive" / "旧快照.md").write_text("# 旧快照\n", encoding="utf-8")
             # 三书是 `required=True` ⇒ run() 会判「不在盘上」，夹具必须把它们铺上（否则测到的是别的红）
-            for required in ("Docs/Doyah产品需求说明书.md", "Docs/Doyah产品能力说明书.md", "Docs/Doyah产品概要设计说明书.md"):
+            for required in ("Docs/Doyah产品需求分析说明书.md", "Docs/Doyah产品能力规划说明书.md", "Docs/Doyah产品概要设计说明书.md"):
                 (root / required).write_text("# 占位\n", encoding="utf-8")
             probe = root / "Docs" / "测试用例.md"
             if kind == "bytes":

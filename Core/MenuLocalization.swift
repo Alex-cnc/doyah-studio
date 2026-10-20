@@ -156,7 +156,7 @@ public enum MenuLocalization {
     ///
     /// 为什么按 selector：标题随启动语言变（英文启动是 `Undo`、中文启动是 `撤销`），
     /// selector 与语言无关；按标题查表就得把"两种语言的所有写法"都列出来，按 selector 只要一份。
-    /// 表里的 selector 是从**本机运行中的应用**直接 dump 出来的（见 `Docs/Doyah产品需求说明书.md` NFR-I18N-03）。
+    /// 表里的 selector 是从**本机运行中的应用**直接 dump 出来的（见 `Docs/Doyah产品需求分析说明书.md` NFR-I18N-03）。
     public static let systemMenuItems: [String: LKey] = [
         "orderFrontStandardAboutPanel:": .menuSystemAbout,
         "hide:": .menuSystemHide,

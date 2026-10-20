@@ -44,7 +44,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 - **默认清单里不存在** → **跳过 + 高声提示**（打印跳过的清单与条数；跳过 ≠ 通过，但不判红）；
 - **显式点名的文件不存在** → **判红**（你点名要看的东西没有）；
 - `--require-all` → 缺失一律判红；
-- **`Docs/Doyah产品需求说明书.md` 缺失始终判红**（它是本工程文档的单一来源，不在「可能没有」之列）。
+- **`Docs/Doyah产品需求分析说明书.md` 缺失始终判红**（它是本工程文档的单一来源，不在「可能没有」之列）。
 
 **跳过只覆盖「文档在不在」**：文档一旦存在，它的表格 / 派生数字 / 版本号判据一条都不放宽
 （跳过的永远是整份文档，不是文档里的某项检查）。
@@ -92,10 +92,10 @@ from collections import Counter
 DEFAULT_TARGETS = [
     "Docs/人工点验清单-20261018.md",
     "Docs/人工点验清单-20261018-重分版.md",
-    "Docs/Doyah产品能力说明书.md",
+    "Docs/Doyah产品能力规划说明书.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
-    "Docs/Doyah产品需求说明书.md",
+    "Docs/Doyah产品需求分析说明书.md",
     "Docs/README.md",
     "Docs/兼容性矩阵.md",
     "Docs/GBase-技术验证.md",
@@ -506,7 +506,7 @@ def check_section_heading_counts() -> list[str]:
     实测已经漂了两处 —— §3.2 写「44 条」实际 50 行、§3.10 写「8 条」实际 9 行。
     这类"手工维护的数字"正是本脚本存在的理由，所以把它也纳入。
     """
-    srs = pathlib.Path("Docs/Doyah产品需求说明书.md")
+    srs = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
     if not srs.exists():
         return [f"{srs}: 文件不存在"]
 
@@ -540,8 +540,8 @@ def check_section_heading_counts() -> list[str]:
 
 def check_requirement_counts() -> list[str]:
     """校验需求计数与索引实际行数一致（防止"手工维护的数字"再次漂移）。"""
-    srs = pathlib.Path("Docs/Doyah产品需求说明书.md")
-    capability = pathlib.Path("Docs/Doyah产品能力说明书.md")
+    srs = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
+    capability = pathlib.Path("Docs/Doyah产品能力规划说明书.md")
     if not srs.exists():
         return [f"{srs}: 文件不存在"]
 
@@ -616,7 +616,7 @@ def check_requirement_counts() -> list[str]:
 
     # 2026-10-18 口径变更（人类主人令：三书不写状态）：能力地图不再承载 ✅/🟡/⬜ 计数，
     # 派生计数与逐域计数两项检查作废；只校验「SRS 里出现的每个功能域，本书 §2 都有对应一行」。
-    # 状态与条数唯一源 = 需求说明书状态列（`Docs/Doyah产品需求说明书.md` §10.1）。
+    # 状态与条数唯一源 = 需求说明书状态列（`Docs/Doyah产品需求分析说明书.md` §10.1）。
     # 2026-10-18 第二次口径变更：能力书不再承载需求书的 `FR-*` 功能域分类（`FR-LIC` / `FR-BLD`
     # 这类工程域本就不是产品能力）。旧检查「SRS 每个域在 §2 有说明行」随之作废。
     # 新检查更强：**正文里的节号引用必须解析到真实标题** —— 过去改章节时留下的过期引用
@@ -632,7 +632,7 @@ def check_requirement_counts() -> list[str]:
 
 
 
-CAPABILITY_BOOK = pathlib.Path("Docs/Doyah产品能力说明书.md")
+CAPABILITY_BOOK = pathlib.Path("Docs/Doyah产品能力规划说明书.md")
 STATUS_MARKS = ("⬜", "🟡", "✅")
 
 
@@ -793,9 +793,9 @@ SELF_TEST_TRACKED = [
     "Docs/人工点验清单-20261018.md",
     "Docs/人工点验清单-20261018-重分版.md",
     "Docs/design/store/README.md",
-    "Docs/Doyah产品需求说明书.md",
+    "Docs/Doyah产品需求分析说明书.md",
     "Docs/design/规划-工作区Markdown预览与内置浏览器-20260930.md",
-    "Docs/Doyah产品能力说明书.md",
+    "Docs/Doyah产品能力规划说明书.md",
     "Docs/Doyah产品概要设计说明书.md",
     "Docs/README.md",
     "Docs/功能清单（一页纸）.md",
@@ -1109,7 +1109,7 @@ def run_self_test() -> int:
 
         # 例 14（㈤(a)）·§10.1 表体中断：首条数据行行首多一个空格 ⇒ 判红 + 报行号 + 「表体在此中断」
         total += 1
-        srs_copy = clone / "Docs/Doyah产品需求说明书.md"
+        srs_copy = clone / "Docs/Doyah产品需求分析说明书.md"
         original_srs = srs_copy.read_text(encoding="utf-8")
         srs_lines = original_srs.splitlines()
         header_at = srs_lines.index("| 编号 | 所属域 / 章节 | 层次 | 状态 |")
@@ -1160,7 +1160,7 @@ def run_self_test() -> int:
 
         # 例 17（㈡）·在场下限：删掉一份 tracked 文档（不在 .gitignore 名单里）⇒ 本件自己判红并点名
         total += 1
-        capability_doc = clone / "Docs/Doyah产品能力说明书.md"
+        capability_doc = clone / "Docs/Doyah产品能力规划说明书.md"
         capability_backup = capability_doc.read_text(encoding="utf-8")
         capability_doc.unlink()
         code, output = run([], clone)
@@ -1168,7 +1168,7 @@ def run_self_test() -> int:
             failures.append(
                 f"例 17 失败：删掉 tracked 文档（不在 .gitignore 名单里）仍 exit 0 —— 面无下限（原单 ㈡）\n{output}"
             )
-        elif "Doyah产品能力说明书.md" not in output or "被删或路径写错" not in output:
+        elif "Doyah产品能力规划说明书.md" not in output or "被删或路径写错" not in output:
             failures.append(
                 f"例 17 失败：判红了但没有点名被删的文档 / 没说「被删或路径写错」\n{output}"
             )

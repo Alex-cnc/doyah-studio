@@ -20,13 +20,13 @@ cp "$ROOT/Scripts/linux-handoff/读我-先读这个.md" "$OUT/读我-先读这�
 cp "$ROOT/Scripts/linux-handoff/自检清单.md"       "$OUT/自检清单.md"
 
 # 2) Studio 侧：三书 + 平台实现状态
-for f in Doyah产品能力说明书.md Doyah产品需求说明书.md Doyah产品概要设计说明书.md 平台实现状态.json; do
+for f in Doyah产品能力规划说明书.md Doyah产品需求分析说明书.md Doyah产品概要设计说明书.md 平台实现状态.json; do
   [ -f "$ROOT/Docs/$f" ] && cp "$ROOT/Docs/$f" "$OUT/Studio/$f" || echo "  ⚠ 缺 Docs/$f"
 done
 
 # 3) Notes 侧：三书 + 核心契约 + 范围纪律
 if [ -d "$NOTES" ]; then
-  for f in Doyah产品能力说明书.md Doyah产品需求说明书.md Doyah产品概要设计说明书.md 核心契约.md; do
+  for f in Doyah产品能力规划说明书.md Doyah产品需求分析说明书.md Doyah产品概要设计说明书.md 核心契约.md; do
     [ -f "$NOTES/Docs/$f" ] && cp "$NOTES/Docs/$f" "$OUT/Notes/$f" || echo "  ⚠ 缺 Notes/Docs/$f"
   done
   [ -f "$NOTES/AGENT-SPEC.md" ] && cp "$NOTES/AGENT-SPEC.md" "$OUT/Notes/AGENT-SPEC.md"
@@ -48,10 +48,10 @@ fi
   echo "三书最新版本（取变更记录最大值，用于确认拿到的是哪一版）："
   # 版本号取「文档内所有 **vX.Y** 的最大值」（变更记录行顺序不一定严格倒序，取最大值最稳）
   newest() { grep -oE '\*\*v[0-9]+\.[0-9]+\*\*' "$1" 2>/dev/null | tr -d '*' | sed 's/^v//' | sort -t. -k1,1n -k2,2n | tail -1 | sed 's/^/v/'; }
-  for f in "$ROOT/Docs/Doyah产品能力说明书.md" "$ROOT/Docs/Doyah产品需求说明书.md" "$ROOT/Docs/Doyah产品概要设计说明书.md"; do
+  for f in "$ROOT/Docs/Doyah产品能力规划说明书.md" "$ROOT/Docs/Doyah产品需求分析说明书.md" "$ROOT/Docs/Doyah产品概要设计说明书.md"; do
     [ -f "$f" ] && printf '  %s → %s\n' "$(basename "$f")" "$(newest "$f")"
   done
-  for f in "$NOTES/Docs/Doyah产品能力说明书.md" "$NOTES/Docs/Doyah产品需求说明书.md" "$NOTES/Docs/Doyah产品概要设计说明书.md"; do
+  for f in "$NOTES/Docs/Doyah产品能力规划说明书.md" "$NOTES/Docs/Doyah产品需求分析说明书.md" "$NOTES/Docs/Doyah产品概要设计说明书.md"; do
     [ -f "$f" ] && printf '  %s（Notes）→ %s\n' "$(basename "$f")" "$(newest "$f")"
   done
   echo

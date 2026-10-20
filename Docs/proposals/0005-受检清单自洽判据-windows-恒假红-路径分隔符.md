@@ -30,19 +30,19 @@ $ python Scripts/check-doc-tables.py
 ❌ 表格校验失败（26 处）：
    Docs\README.md 有表格却不在受检清单里（`DEFAULT_TARGETS` / `['Docs/开发记录-*.md']`）
    Docs\Doyah产品概要设计说明书.md 有表格却不在受检清单里（…）
-   Docs\Doyah产品需求说明书.md 有表格却不在受检清单里（…）
+   Docs\Doyah产品需求分析说明书.md 有表格却不在受检清单里（…）
    Docs\proposals\0005-…md 有表格却不在受检清单里（…）   ← 本提案自己也被同一条误报（预期，修好即消失）
    …
 
 $ python Scripts/check-doc-versions.py
 ❌ 受检清单自洽 —— `Docs/**/*.md` 里带「变更记录」节的文档全部在清单内
-❌ Docs\Doyah产品需求说明书.md 有「变更记录」节却不在受检清单里（`VERSION_DOCS` / `Docs/开发记录-*.md`）
-❌ Docs\Doyah产品能力说明书.md …（同）      ❌ Docs\Doyah产品概要设计说明书.md …（同）
+❌ Docs\Doyah产品需求分析说明书.md 有「变更记录」节却不在受检清单里（`VERSION_DOCS` / `Docs/开发记录-*.md`）
+❌ Docs\Doyah产品能力规划说明书.md …（同）      ❌ Docs\Doyah产品概要设计说明书.md …（同）
 ❌ Docs\发布计划.md …（同）                ❌ Docs\design\外观方案-v1.md …（同）
 ❌ Docs\design\复盘工具-宿主侧装配需求-20260929.md …（同）
 ```
 
-关键观察：**同一脚本同一批文档的 A/B/C 三档全部通过**（例：`✅ Docs/Doyah产品需求说明书.md —— 变更 293 行 / 最高 v3.277 / 头部 v3.28`）——
+关键观察：**同一脚本同一批文档的 A/B/C 三档全部通过**（例：`✅ Docs/Doyah产品需求分析说明书.md —— 变更 293 行 / 最高 v3.277 / 头部 v3.28`）——
 文档确实在清单里、也确实被查了；判红只出在**清单匹配**这一步。故这不是「漏登记」，而是两条判据在 Windows 上**永不命中**。
 
 ## 根因（可复跑证据）
@@ -61,7 +61,7 @@ Windows 上 `str(WindowsPath)` 给**反斜杠**（`Docs\README.md`），清单�
 本侧 scratch 探针（复刻判据 D 的比较逻辑、读脚本自己的常量）实测：
 
 ```
-VERSION_DOCS 条目样例: ['Docs/Doyah产品需求说明书.md', 'Docs/Doyah产品能力说明书.md', 'Docs/Doyah产品概要设计说明书.md']
+VERSION_DOCS 条目样例: ['Docs/Doyah产品需求分析说明书.md', 'Docs/Doyah产品能力规划说明书.md', 'Docs/Doyah产品概要设计说明书.md']
 raw (str(Path.relative_to)) 判红数 = 6
 as_posix() 判红数 = 0
 ```
