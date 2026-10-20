@@ -564,10 +564,14 @@ def check_requirement_counts() -> list[str]:
         return problems
 
     # 2) 索引表本体
-    header = "| 编号 | 所属域 / 章节 | 层次 | 状态 |"
-    if header not in lines:
+    # 2026-10-20：状态列迁出到《开发计划书》⇒ 索引表头不再带「状态」。
+    # 两种形状都认（带 / 不带状态），免得改口径时判据自己先崩。
+    candidates = ["| 编号 | 所属域 / 章节 | 层次 | 状态 |", "| 编号 | 所属域 / 章节 | 层次 |"]
+    header = next((c for c in candidates if c in lines), None)
+    if header is None:
         problems.append(f"{srs}: 未找到 §10.1 索引表头")
         return problems
+    has_status = "状态" in header
 
     rows: list[list[str]] = []
     index = lines.index(header) + 2
@@ -602,13 +606,13 @@ def check_requirement_counts() -> list[str]:
     # 3) 由索引派生出的 FR 状态分布 —— 能力规划说明书必须与它一致
     # 取格兜底（原单 ㈥）：FR 行缺一格原先直接 `IndexError` 崩掉、已收集的诊断**全丢**
     # （CI 里「判红」与「脚本崩了」不可分）；现在先报「格数不足」，再按现有格子算下去。
-    short_rows = [number for number, row in enumerate(rows, 1) if len(row) < 4]
-    if short_rows:
+    short_rows = [number for number, row in enumerate(rows, 1) if len(row) < (4 if has_status else 3)]
+    if short_rows and has_status:
         problems.append(
             f"{srs}: §10.1 有 {len(short_rows)} 条索引行**格数不足 4**（表体行序 {short_rows[:6]}）"
             f" ⇒ 疑似缺「状态」格，派生数按现有格子算（旧版这里会直接崩掉、已收集的诊断全丢）"
         )
-    statuses = Counter(row[3] for row in fr if len(row) > 3)
+    statuses = Counter(row[3] for row in fr if len(row) > 3) if has_status else Counter()
     derived = (len(fr), statuses.get("✅", 0), statuses.get("🟡", 0), statuses.get("⬜", 0))
 
     if not capability.exists():
@@ -791,6 +795,7 @@ def main() -> int:
 # 例数仍是 17（跳过不改总数、也不许静默）。
 
 SELF_TEST_TRACKED = [
+    "Docs/Doyah产品开发计划书.md",
     "Docs/人工点验清单-20261018.md",
     "Docs/人工点验清单-20261018-重分版.md",
     "Docs/design/store/README.md",

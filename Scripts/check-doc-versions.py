@@ -81,6 +81,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # 带「变更记录 + 头部版本格」的文档：True = 必须存在（三书），False = 在盘上才查。
 VERSION_DOCS = [
     ("Docs/Doyah产品需求分析说明书.md", True),
+    ("Docs/Doyah产品开发计划书.md", True),
     ("Docs/Doyah产品能力规划说明书.md", True),
     ("Docs/Doyah产品概要设计说明书.md", True),
     ("Docs/智能体助手-开发spec.md", False),
