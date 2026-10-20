@@ -521,9 +521,10 @@ python3 Scripts/check-pending-agenda.py --self-test
 python3 Scripts/check-self-test-counts.py
 python3 Scripts/check-self-test-counts.py --self-test
 
-echo "==> 5/18 需求状态一致性（索引表 ↔ 正文定义行）+ alpha 范围账（FR 🟡 逐条判定）"
+echo "==> 5/18 需求状态一致性（计划书 §3 台账 ↔ 其它文档状态括注）+ alpha 范围账（FR 🟡 逐条判定）"
 python3 Scripts/check-status-consistency.py
-# L-69 ③（2026-09-28 第 56 轮）：上面那条管的是「索引 ↔ 定义行**状态一致**」，管不了
+# L-69 ③（2026-09-28 第 56 轮）：上面那条管的是「其它文档括注 ↔ 台账**状态一致**」（2026-10-20 改口径，
+# 原为「索引 ↔ 定义行」），管不了
 # 「这条 🟡 到底算不算 alpha 范围」。v0.1.0-alpha 给 6 条环境项手加了 `[alpha 不含]`，
 # 此后 🟡 增删、标记被删、标记被挪格，机器一句都不说 ⇒ 发布说明「明确不做什么」写不出来。
 # 现在把它变成台账 + 双向判据（台账 `Scripts/alpha-fr-dispositions.json`）：
@@ -908,7 +909,7 @@ python3 Scripts/check-cell-decode-coverage.py --self-test
 echo "==> 16/18 越界检查（三书独占节 + 路径归属：改动不得落在对侧节 / 对侧子树上）"
 # 形态 A（2026-09-27 拍板）：三书单点定稿，但「平台实现」层按端独占 —— 标记 `[独占:macos]` /
 # `[独占:windows]` 的节只由该侧改；本机 = macOS 侧。判据与逃生门见脚本头注释。
-# 第二条是**门禁自己的证据**（L-42）：**45 例**负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——（**2026-10-03 订正 23 → 29 → 35**（29 → 35 = 派活单 `T-20261003-003` 的契约所有者 = 演员名 6 例；**35 → 41 = 派活单 `T-20261005-038` 的演员名跟版护栏 6 例**；**41 → 45 = 派单 `T-20261013-005` §四.1 的平台词表 `watchos` 4 例**）：实跑 `python3 Scripts/check-exclusive-sections.py --self-test` = **45/45 通过**；数字的唯一来源 = `Scripts/self-test-counts.json` 的 `exclusive-sections`，`check-doc-numbers` 对账）
+# 第二条是**门禁自己的证据**（L-42）：**44 例**负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——（**2026-10-03 订正 23 → 29 → 35**（29 → 35 = 派活单 `T-20261003-003` 的契约所有者 = 演员名 6 例；**35 → 41 = 派活单 `T-20261005-038` 的演员名跟版护栏 6 例**；**41 → 45 = 派单 `T-20261013-005` §四.1 的平台词表 `watchos` 4 例**）：实跑 `python3 Scripts/check-exclusive-sections.py --self-test` = **45/45 通过**；数字的唯一来源 = `Scripts/self-test-counts.json` 的 `exclusive-sections`，`check-doc-numbers` 对账）
 # 判据写完不对已知改动报红，等于没有。两个脚本对外只认退出码，`--self-test` 红了整项就红。
 # 第 33 轮起本脚本是**三副本同源**的「并集」版（提案 0003 裁决：Notes 副本的侧别别名 / `--contract-docs` /
 # 拿不到基线退出 2 + 本侧未跟踪增量），`--base` 显式给了却解析不到**也退出 2**（不许静默放行）。

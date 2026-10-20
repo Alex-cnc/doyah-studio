@@ -4,25 +4,25 @@
 
 为什么需要它 —— 两张自称「一一对应」的表，此前**一个判据都没有**：
 
-1. `Docs/Doyah产品概要设计说明书.md` §4「允许不同的部分（平台差异）」与 `Docs/Doyah产品需求分析说明书.md` §10.9
+1. `Docs/Doyah产品概要设计说明书.md` §4「允许不同的部分（平台差异）」与 `Docs/Doyah产品需求分析说明书.md` §9.2
    「平台差异登记表（哪些允许不同）」在正文里互相写着「与 …… 一一对应」；
-2. `Scripts/verify-all.sh` **第 7 项的注释**甚至一直写着「平台等价矩阵与 §10.9 登记表一致」——
+2. `Scripts/verify-all.sh` **第 7 项的注释**甚至一直写着「平台等价矩阵与 §9.2 登记表一致」——
    那是错的：那一项只做 §10.10 ↔ `Docs/平台实现状态.json` 的矩阵对账（2026-09-27 第 25 轮
    改正了这句注释，并登记本条目）；
 3. 实测现状（第 25 轮取证）：概要设计 §4 有 `P-16`，§8.5.5（`[独占:windows]`）另落了
-   `P-17`~`P-24` 并原文写明「先在本节落条目，**待契约侧并入 §4**」，而 SRS §10.9 只到
+   `P-17`~`P-24` 并原文写明「先在本节落条目，**待契约侧并入 §4**」，而 SRS §9.2 只到
    `P-15` ⇒ **编号空间断档 9 条**，两侧各说各话，没有任何一处会报红。
-4. 历史实证（第 27 轮）：`P-15` 在 §4 是「SSH 隧道」、在 SRS §10.9 是「笔记存储引擎」——
-   **同号不同物**，靠人读才发现，已按「§10.9 为权威登记表」让号（SSH 隧道 → `P-25`）。
+4. 历史实证（第 27 轮）：`P-15` 在 §4 是「SSH 隧道」、在 SRS §9.2 是「笔记存储引擎」——
+   **同号不同物**，靠人读才发现，已按「§9.2 为权威登记表」让号（SSH 隧道 → `P-25`）。
 
 判据（五类）：
 
-- **A 双向覆盖**：§10.9 的编号集合与 §4 的编号集合必须**相等**；各自多出的号逐条点名。
+- **A 双向覆盖**：§9.2 的编号集合与 §4 的编号集合必须**相等**；各自多出的号逐条点名。
 - **B 同号同物**：两侧同号行的**领域**必须指同一件事。归一化 = 去掉 `**` 与反引号 →
   截到首个 `（` / `(` 之前 → 压空白 → 逐字相等（`P-15` 一侧写 `**笔记存储引擎（`FR-PLUG-08`）**`、
   另一侧写 `笔记存储引擎（`FR-PLUG-08`）`，归一后都是「笔记存储引擎」）。
 - **C §8.5.5 显式告警**：对侧独占节 §8.5.5 里已落的条目（形如 `` `P-17` 终端仿真与 PTY ``），
-  只要有一号没有**同时**出现在 §4 与 §10.9，就判红 —— 「已落条但未并入」不许静默（该节的
+  只要有一号没有**同时**出现在 §4 与 §9.2，就判红 —— 「已落条但未并入」不许静默（该节的
   合并动作本来就是契约侧的活；它自己那条「待契约侧并入」的注是该节作者的事，本门禁不去改它）。
 
 - **D 同侧编号唯一**：**同一张登记表内部**同号两条 ⇒ 判红并**逐行点名**（`P-01` 在一张表里出现两次）。
@@ -43,13 +43,13 @@
 - **不判「两侧逐字相同」**：前门 `T-20261014-201` ㈡ 已裁「判行为标识，不判逐字正文」⇒ 判据 E 判的是
   **归一后的条目名**（措辞与括注属各侧表述自由）；两侧条目名不一致的号**列进台账的 `_差异读数`**
   （待前门逐号归口），**不判红**。
-- **领域归一仍截到首个 `（` 之前**（原设计，不变）：改成「不截括号」会让 `P-16` 当场判红 —— §10.9 写
+- **领域归一仍截到首个 `（` 之前**（原设计，不变）：改成「不截括号」会让 `P-16` 当场判红 —— §9.2 写
   `多库驱动（`FR-DRV-09` / `FR-DRV-08`）`、§4 写 `多库驱动（FR-DRV-09 / 08）`（括号内写法不同）。
   前门 `T-20261014-201` ㈢ 已裁**维持现规则**（`P-16` 的括号内引用写法差异按平台差异登记）；
-  本侧按边界**不动 `Docs/**`**（本文件与 §§10.9 / §4 正文一字未改）。
+  本侧按边界**不动 `Docs/**`**（本文件与 §§9.2 / §4 正文一字未改）。
 本判据**不做**的两件事（免得下次有人以为查过了）：
 
-- **不判行序**：SRS §10.9 本来就不是按号排的（`P-14` 在 `P-13` 之前），判序只会造假红；
+- **不判行序**：SRS §9.2 本来就不是按号排的（`P-14` 在 `P-13` 之前），判序只会造假红；
 - **不判「同域不同号」**：`P-17`（终端仿真与 PTY）与 `P-05`（内嵌终端）同域、`P-19`/`P-21`/`P-24`
   与 `P-06`/`P-08`/`P-09` 同域 —— 那是**登记表要不要合并条目**的设计问题，需对侧拍板，
   归提案与队列条目，不属于「编号对账」（机械判据只判能机械判的那部分）。
@@ -79,7 +79,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRS = "Docs/Doyah产品需求分析说明书.md"
 DESIGN = "Docs/Doyah产品概要设计说明书.md"
 
-SRS_HEADING = re.compile(r"^### 10\.9 ")
+SRS_HEADING = re.compile(r"^### 9\.2 ")
 SRS_STOP = re.compile(r"^#{1,3} ")
 DESIGN_HEADING = re.compile(r"^## 4\. ")
 DESIGN_STOP = re.compile(r"^#{1,2} ")
@@ -275,7 +275,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     srs_body = section(srs_lines, SRS_HEADING, SRS_STOP)
     design_body = section(design_lines, DESIGN_HEADING, DESIGN_STOP)
     if not srs_body:
-        problems.append(f"{SRS}：找不到「### 10.9 平台差异登记表」小节")
+        problems.append(f"{SRS}：找不到「### 9.2 平台差异登记表」小节")
     if not design_body:
         problems.append(f"{DESIGN}：找不到「## 4. 允许不同的部分（平台差异）」小节")
     if problems:
@@ -284,7 +284,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     srs_rows = parse_registry(srs_body)
     design_rows = parse_registry(design_body)
     if not srs_rows:
-        problems.append(f"{SRS}:{srs_body[0][0]}：§10.9 里一行 `P-*` 定义行都解析不到")
+        problems.append(f"{SRS}:{srs_body[0][0]}：§9.2 里一行 `P-*` 定义行都解析不到")
     if not design_rows:
         problems.append(f"{DESIGN}:{design_body[0][0]}：§4 里一行 `P-*` 定义行都解析不到")
     if problems:
@@ -296,14 +296,14 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     for number in only_srs:
         lineno, domain = effective(srs_rows, number)
         problems.append(
-            f"{SRS}:{lineno}：`{number}`（{normalize_domain(domain)}）只在 §10.9 登记，§4 没有 —— "
+            f"{SRS}:{lineno}：`{number}`（{normalize_domain(domain)}）只在 §9.2 登记，§4 没有 —— "
             f"两张表自称一一对应，缺一边就是「编号空间断档」"
         )
     for number in only_design:
         lineno, domain = effective(design_rows, number)
         problems.append(
-            f"{DESIGN}:{lineno}：`{number}`（{normalize_domain(domain)}）只在 §4 登记，§10.9 没有 —— "
-            f"§10.9 是权威登记表（编号冲突以它为准），未登记的差异按契约「必须一致」处理"
+            f"{DESIGN}:{lineno}：`{number}`（{normalize_domain(domain)}）只在 §4 登记，§9.2 没有 —— "
+            f"§9.2 是权威登记表（编号冲突以它为准），未登记的差异按契约「必须一致」处理"
         )
     if not only_srs and not only_design:
         notes.append(
@@ -342,7 +342,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
             )
     if not dup_sides:
         notes.append(
-            f"编号唯一：§10.9 定义行 {sum(len(v) for v in srs_rows.values())} 行 / "
+            f"编号唯一：§9.2 定义行 {sum(len(v) for v in srs_rows.values())} 行 / "
             f"§4 定义行 {sum(len(v) for v in design_rows.values())} 行，两侧同号重复 0 处"
         )
 
@@ -362,7 +362,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
         for number in unmerged:
             missing = []
             if number not in srs_rows:
-                missing.append("§10.9")
+                missing.append("§9.2")
             if number not in design_rows:
                 missing.append("§4")
             problems.append(
@@ -371,7 +371,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
                 f"照抄不改写 + 补「为什么必须不同」与「用户可感知的差异」）"
             )
         if not unmerged:
-            notes.append(f"§8.5.5 告警：该节已落的 {len(landed)} 条编号全部已并入 §4 与 §10.9")
+            notes.append(f"§8.5.5 告警：该节已落的 {len(landed)} 条编号全部已并入 §4 与 §9.2")
 
     # E 行为名列棘轮（前门 `T-20261014-201` ㈡ 裁「判行为标识，不判逐字正文」）
     behavior_problems, behavior_notes = check_behavior(root, srs_body, design_body)
@@ -383,7 +383,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
 def run(root: pathlib.Path, quiet: bool) -> int:
     problems, notes = check(root)
     if not quiet:
-        print("=== P-* 平台差异登记对账（SRS §10.9 ↔ 概要设计 §4，含 §8.5.5 已落条告警）===")
+        print("=== P-* 平台差异登记对账（SRS §9.2 ↔ 概要设计 §4，含 §8.5.5 已落条告警）===")
         for line in notes:
             print(f"    ℹ️ {line}")
         if problems:
@@ -401,7 +401,7 @@ def run(root: pathlib.Path, quiet: bool) -> int:
 
 GOOD_SRS = """# 需求规范书
 
-### 10.9 平台差异登记表（哪些允许不同）
+### 9.2 平台差异登记表（哪些允许不同）
 
 > 与 `Docs/Doyah产品概要设计说明书.md` §4 一一对应。
 
@@ -421,7 +421,7 @@ GOOD_DESIGN = """# 概要设计
 
 ## 4. 允许不同的部分（平台差异）
 
-完整登记表见 SRS §10.9。
+完整登记表见 SRS §9.2。
 
 | 编号 | 领域 | 必须一致的行为 | 允许不同的实现 |
 |---|---|---|---|
@@ -443,23 +443,23 @@ GOOD_DESIGN = """# 概要设计
 
 CASES = [
     ("两侧一致（好）", GOOD_SRS, GOOD_DESIGN, [], 0),
-    ("§4 多一条、§10.9 没有（未并入权威登记表）",
+    ("§4 多一条、§9.2 没有（未并入权威登记表）",
      GOOD_SRS,
      GOOD_DESIGN.replace(
          "| P-02 | 凭据存储 | 不落配置文件 | 钥匙串 |\n",
          "| P-02 | 凭据存储 | 不落配置文件 | 钥匙串 |\n| P-03 | 目录授权 | 授权来自用户 | NTFS |\n"),
      ["P-03", "只在 §4"], 1),
-    ("§10.9 多一条、§4 没有（编号空间断档）",
+    ("§9.2 多一条、§4 没有（编号空间断档）",
      GOOD_SRS.replace(
          "| P-02 | 凭据存储 | 不落配置文件 | 钥匙串 | NFR-SEC-01 |\n",
          "| P-02 | 凭据存储 | 不落配置文件 | 钥匙串 | NFR-SEC-01 |\n"
          "| P-07 | 字体与输入法 | 等宽渲染 | 字体选择 | NFR-I18N |\n"),
-     GOOD_DESIGN, ["P-07", "只在 §10.9", "编号空间断档"], 1),
+     GOOD_DESIGN, ["P-07", "只在 §9.2", "编号空间断档"], 1),
     ("同号不同物（P-01 两侧指两件事）",
      GOOD_SRS,
      GOOD_DESIGN.replace("| P-01 | GUI 框架与控件 |", "| P-01 | 终端实现 |"),
      ["P-01", "同号不同物", "终端实现"], 1),
-    ("§8.5.5 已落条但未并入 §4 / §10.9",
+    ("§8.5.5 已落条但未并入 §4 / §9.2",
      GOOD_SRS,
      GOOD_DESIGN.replace("`P-01` 甲｜`P-02` 乙。", "`P-01` 甲｜`P-02` 乙｜`P-17` 终端仿真与 PTY。"),
      ["P-17", "§8.5.5", "未并入"], 1),
@@ -471,8 +471,8 @@ CASES = [
          "| P-01 | GUI 框架与控件 | 信息架构 | 控件树 |",
          "| `P-01` | GUI   框架与控件（窗口与控件树） | 信息架构 | 控件树 |"),
      [], 0),
-    ("§10.9 的小节被删（判据不许空跑当通过）",
-     GOOD_SRS.replace("### 10.9 平台差异登记表（哪些允许不同）", "### 10.9x 别的节"),
+    ("§9.2 的小节被删（判据不许空跑当通过）",
+     GOOD_SRS.replace("### 9.2 平台差异登记表（哪些允许不同）", "### 9.2x 别的节"),
      GOOD_DESIGN, ["找不到"], 1),
     ("§4 里一行定义行都解析不到",
      GOOD_SRS,

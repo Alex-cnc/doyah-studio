@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""校验 §10.1 索引表的状态列与正文定义行的状态列一致。
+"""校验《Doyah产品开发计划书》§3 需求状态台账 与 其它文档里的状态括注一致（2026-10-20 改口径）。
 
-为什么需要这个门禁：`Scripts/report-requirements.py` 的盘点**读的是索引表**，
-而每轮开发改的是**正文定义行**。两边一旦漂移，盘点就会给出错误结论 ——
-本轮就发生过：定义行已改成 ✅，索引行还写着 🟡，于是"完成度"看起来没动。
-手抄状态必然漂移，所以这里用脚本钉住。
+为什么改：状态列已从需求书正文与索引**整批迁出**（人类主人：本文件不写状态），索引也外置
+成独立文件、只剩「编号 / 域 / 层次」三列 ⇒ 旧口径（索引 ↔ 定义行）的输入不存在了。
+现在**状态唯一源 = 计划书 §3 台账**；本判据守的是「其它文档随手括注一个旧状态」（会让人
+以为"还没做"）这一面 —— 编号集合相等那半由 `check-plan-coverage.py` 守。
 
 2026-10-14 修（合册 T-20261013-027 · 原单 T-20261010-032 · 第 400 轮判据面缺口样本 37）：
     ① **扫描面对齐姊妹判据**：跨文档状态括注原先只盖 `Docs/*.md` + `Docs/design/*.md`
@@ -25,7 +25,8 @@
        （`FR-AI-11（🟡 待验证）`）**不在本判据范围** —— 放宽会把路线图表里「alpha 不含 ⬜」
        这类语义当状态括注误判（实测规划书 §7 六行），故按原单口径**只改面、不改形状**
        （此处登记，不许继续无声）。
-    ⑤ §10.1 索引解析与正文定义行解析的口径**逐字未动**（本轮只动扫描面 + 读数 + 防护）。
+    ⑤ 2026-10-20：解析物由「§10.1 索引 + 正文定义行」换成「《开发计划书》§3 台账」（状态唯一源迁出）；
+       扫描面与空跑防护不变，另加台账条数下限 `LEDGER_FLOOR`（取不到输入照样判红）。
 
 判据自己的证据：`--self-test` **12 例**（一律在临时夹具树上写坏，真仓零改动）。
 
@@ -50,7 +51,11 @@ import tempfile
 
 # 判据的立足点：**本脚本所在仓**的根（不是 CWD —— 从别的目录跑必须读数一致）
 REPO = pathlib.Path(__file__).resolve().parent.parent
-SPEC_REL = "Docs/Doyah产品需求分析说明书.md"
+PLAN_REL = "Docs/Doyah产品开发计划书.md"      # 状态的真值源（§3 台账）
+LEGACY_SRS_REL = "Docs/Doyah产品需求分析说明书.md"  # 只给「旧码对照臂」用
+LEDGER_START = "## 3 需求状态台账"
+LEDGER_STOP = "## 4 "
+LEDGER_FLOOR = 400   # 2026-10-20 实测 425 条 ⇒ 下限留余量（防台账被删 / 解析面被削窄）
 STATUSES = "✅🟡⬜➖"
 # 其它文档里「FR-XXX-01（🟡）」这种状态括注，与 §10.1 索引比对（见 cross_document_problems）
 CROSS_DOC_PATTERN = re.compile(r"((?:FR|NFR)-[A-Z]+-\d+)[（(]([✅🟡⬜➖])[）)]")
@@ -72,69 +77,52 @@ def face_files(root: pathlib.Path) -> list[pathlib.Path]:
     return sorted(found, key=lambda p: p.as_posix())
 
 
-def parse_index(lines: list[str]) -> dict[str, tuple[str, int]]:
-    """§10.1 索引表：| ID | 域 | 优先级 | 状态 |（口径与旧版逐字一致）。"""
-    index: dict[str, tuple[str, int]] = {}
-    for offset, line in enumerate(section(lines, "### 10.1", "### 10.2")):
-        fields = [f.strip() for f in line.strip().strip("|").split("|")]
-        if len(fields) != 4 or not re.fullmatch(r"(FR|NFR|AC)-[A-Z]+-\d+", fields[0]):
-            continue
-        # 与正文一致：状态按**首字符**判定，允许 `🟡（待验证）` 这类带括号的写法。
-        if not fields[3] or fields[3][0] not in STATUSES:
-            continue
-        index[fields[0]] = (fields[3][0], offset)
-    return index
+def parse_ledger(lines: list[str]) -> dict[str, tuple[str, int]]:
+    """《开发计划书》§3「需求状态台账」：| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |
 
-
-def parse_defined(lines: list[str]) -> dict[str, tuple[str, int]]:
-    """正文定义行（**只扫 §1~§9 的正文，不扫 §10 附录**；口径与旧版逐字一致）。
-
-    FR 行 6 列：| ID | 描述 | 优先级 | 复杂度 | 状态 | 证据 |
-    NFR 行 5 列：| ID | 描述 | 优先级 | 状态 | 证据 |   （NFR 没有"复杂度"）
-    因此状态位置不固定：从第 4 列起找**第一个以状态符号开头**的列。
+    2026-10-20 起**状态只有一个源**：需求书正文与索引都不再写状态，整批迁入本表
+    （原 §10.1 索引状态列已摘除）。所以本判据的对账物从「索引 ↔ 定义行」改为
+    「台账 ↔ 其它文档里的状态括注」—— 前半（编号集合相等）由 `check-plan-coverage.py` 守。
     """
-    body_end = next((i for i, l in enumerate(lines) if l.startswith("## 10.")), len(lines))
-    defined: dict[str, tuple[str, int]] = {}
-    for number, line in enumerate(lines[:body_end], start=1):
-        fields = [f.strip() for f in line.strip().strip("|").split("|")]
-        if len(fields) < 5 or not re.fullmatch(r"(FR|NFR)-[A-Z]+-\d+", fields[0]):
+    ledger: dict[str, tuple[str, int]] = {}
+    for offset, line in enumerate(section(lines, LEDGER_START, LEDGER_STOP)):
+        fields = [f.strip().strip("*").strip() for f in line.strip().strip("|").split("|")]
+        if len(fields) < 7 or not re.fullmatch(r"(FR|NFR|AC)-[A-Z0-9]+(?:-\d+)+", fields[0]):
             continue
-        status = next((f for f in fields[3:6] if f and f[0] in STATUSES), None)
-        if status is None:
+        status = fields[5]
+        if not status or status[0] not in STATUSES:
             continue
-        defined[fields[0]] = (status[0], number)
-    return defined
+        ledger[fields[0]] = (status[0], offset)
+    return ledger
 
 
-def cross_document_problems(root: pathlib.Path, index: dict[str, tuple[str, int]],
+def cross_document_problems(root: pathlib.Path, ledger: dict[str, tuple[str, int]],
                             face_floor: int = FACE_FLOOR) -> list[str]:
-    """非本文件的文档里写「编号（状态标记）」时，必须与 §10.1 索引一致。
+    """非台账文档里写「编号（状态标记）」时，必须与台账一致。
 
-    为什么补这条：状态是单一事实来源（§10.1 索引），本文件的正文定义行已有门禁钉住，
-    但其它文档（规划书 / 发布方案 / 设计说明…）会**随手括注一个旧状态** —— 2026-09-26
-    实测抓到两处（规划书 §4.2 里 FR-AI-03 / FR-AI-11 仍写 ⬜，而 SRS 早已是 🟡），
-    这类括注会让人以为"还没做"。要引用**历史**状态时改写措辞（例如「曾是 ⬜」而不要
-    写成 `（⬜）`），否则本门禁会拦。
+    为什么补这条：状态是单一事实来源（《开发计划书》§3 台账），但其它文档（发布方案 /
+    设计说明 / 评审记录…）会**随手括注一个旧状态** —— 实测抓到旧例（规划书里 FR-AI-03 /
+    FR-AI-11 仍写 ⬜，而实际早已 🟡），这类括注会让人以为"还没做"。要引用**历史**状态时
+    改写措辞（例如「当时标为 ⬜」而不要写成 `（⬜）`），否则本门禁会拦。
 
-    面（2026-10-14 修 · 原单 `T-20261010-032`）：`FACE_GLOBS` = `*.md` + `Docs/**/*.md`，
-    与姊妹判据同形；`SPEC_REL` 本身不参与比对（它是真值源）。面内份数低于 `face_floor`
-    ⇒ 判红（空跑防护 —— 旧版面搬到空目录也照打印 ✅）。
+    面：`FACE_GLOBS` = `*.md` + `Docs/**/*.md`，与姊妹判据同形；台账自身（`PLAN_REL`）
+    不参与比对（它是真值源）。面内份数低于 `face_floor` ⇒ 判红（空跑防护）。
     """
     problems: list[str] = []
-    spec = (root / SPEC_REL).resolve()
-    targets = [p for p in face_files(root) if p.resolve() != spec]
+    truth = (root / PLAN_REL).resolve()
+    targets = [p for p in face_files(root) if p.resolve() != truth]
     scanned = 0
     for path in targets:
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for identifier, mark in CROSS_DOC_PATTERN.findall(line):
-                expected = index.get(identifier)
+                expected = ledger.get(identifier)
                 if expected is None:
                     continue
                 scanned += 1
                 if expected[0] != mark:
                     problems.append(
                         f"{path.relative_to(root).as_posix()}:{number}: {identifier} 括注 {mark}，"
-                        f"而 §10.1 索引为 {expected[0]}"
+                        f"而台账为 {expected[0]}"
                     )
     print(f"（跨文档状态括注：面内 {len(targets)} 份文档 / 命中 {scanned} 处引用）")
     if len(targets) < face_floor:
@@ -145,68 +133,45 @@ def cross_document_problems(root: pathlib.Path, index: dict[str, tuple[str, int]
     return problems
 
 
-def run(root: pathlib.Path, face_floor: int = FACE_FLOOR) -> int:
-    spec = root / SPEC_REL
-    if not spec.is_file():
-        print(f"❌ 找不到需求规范书：{SPEC_REL}（仓根 {root}）")
+def run(root: pathlib.Path, face_floor: int = FACE_FLOOR,
+        ledger_floor: int = LEDGER_FLOOR) -> int:
+    plan = root / PLAN_REL
+    if not plan.is_file():
+        print(f"❌ 找不到开发计划书：{PLAN_REL}（仓根 {root}）—— 状态的真值源不在，判据取不到输入")
         return 1
-    lines = spec.read_text(encoding="utf-8").split("\n")
-    index = parse_index(lines)
-    defined = parse_defined(lines)
+    ledger = parse_ledger(plan.read_text(encoding="utf-8").split("\n"))
 
     problems: list[str] = []
-    for ident, (status, line_number) in sorted(defined.items()):
-        if ident not in index:
-            problems.append(f"定义行 {ident}（第 {line_number} 行）在 §10.1 索引表里找不到")
-            continue
-        index_status = index[ident][0]
-        # 允许索引记"主状态"、定义行带括号补充：🟡（UI 已接，待人工验证）算 🟡。
-        if index_status != status[0]:
-            problems.append(
-                f"{ident}: 定义行（第 {line_number} 行）为 {status}，"
-                f"而 §10.1 索引表为 {index_status}"
-            )
+    if not ledger:
+        problems.append(f"{PLAN_REL}：§3 台账里一条状态都解析不到（锚点或表头变了？）")
+    elif len(ledger) < ledger_floor:
+        problems.append(
+            f"台账只剩 {len(ledger)} 条（下限 {ledger_floor}）—— 台账被删 / 解析面被削窄，空跑不许当通过"
+        )
 
-    # AC（验收标准）的正文在 §5，用的是另一种表格式，不在这里比对；
-    # 只对 FR / NFR 要求"索引表里每一条都能找到定义行"。
-    missing = [
-        ident for ident in index
-        if ident not in defined and ident.split("-")[0] in ("FR", "NFR")
-    ]
-    if missing:
-        problems.append(f"索引表里有 {len(missing)} 条 FR/NFR 在正文找不到定义行：{', '.join(sorted(missing)[:5])}…")
-
-    problems.extend(cross_document_problems(root, index, face_floor))
+    problems.extend(cross_document_problems(root, ledger, face_floor))
 
     if problems:
         print(f"❌ 状态一致性校验失败（{len(problems)} 处）：")
         for item in problems:
             print(f"   {item}")
-        print("\n提示：改需求状态时要**同时**改正文定义行与 §10.1 索引表（盘点读的是索引表）；"
-              "其它文档里的状态括注也要跟着改。")
+        print("\n提示：状态只在《开发计划书》§3 台账改；其它文档要引用**历史**状态时改写措辞，"
+              "别写成 `编号（⬜）` 这种会被当成现行状态的括注。")
         return 1
 
-    print(f"✅ 状态一致性校验通过（索引表 {len(index)} 条 / 正文定义行 {len(defined)} 条，状态一致）")
+    print(f"✅ 状态一致性校验通过（台账 {len(ledger)} 条 ↔ 其它文档状态括注一致）")
     return 0
 
 
-FIXTURE_SPEC = """# 需求规范书（夹具）
+FIXTURE_PLAN = """# 开发计划书（夹具）
 
-## 1. 正文
+## 3 需求状态台账
 
-| ID | 描述 | 优先级 | 复杂度 | 状态 | 证据 |
-|---|---|---|---|---|---|
-| FR-AI-11 | 夹具条目 | P0 | 低 | 🟡 | - |
+| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |
+|---|---|---|---|---|---|---|
+| FR-AI-11 | 夹具条目 | 3.2 Doyah Agent | 基线必备 | 高 | 🟡 | 🟡 |
 
-## 10. 附录
-
-### 10.1 索引
-
-| ID | 域 | 优先级 | 状态 |
-|---|---|---|---|
-| FR-AI-11 | AI | P0 | 🟡 |
-
-### 10.2 其它
+## 4 里程碑
 """
 
 
@@ -253,7 +218,7 @@ def run_self_test() -> int:
         where = scratch / name
         for sub in ("Docs/design", "Docs/proposals", "Docs/archive", "Scripts"):
             (where / sub).mkdir(parents=True, exist_ok=True)
-        (where / SPEC_REL).write_text(FIXTURE_SPEC, encoding="utf-8")
+        (where / PLAN_REL).write_text(FIXTURE_PLAN, encoding="utf-8")
         return where
 
     def write(where: pathlib.Path, rel: str, text: str) -> None:
@@ -296,43 +261,36 @@ def run_self_test() -> int:
     def check_proposals():
         where = fixture("proposals")
         write(where, "Docs/proposals/planted.md", "正文\n\nFR-AI-11（⬜）还没做\n")
-        return red(where, ("--face-floor", "1"), "Docs/proposals/planted.md:3")
+        return red(where, ("--face-floor", "1", "--ledger-floor", "1"), "Docs/proposals/planted.md:3")
     case("Docs/proposals/ 里 `FR-AI-11（⬜）` ⇒ 判红并点名真路径（旧版 rc=0）", check_proposals)
 
     # 例 3：旧面本就覆盖到的位置照旧判红（回归不许丢）
     def check_design():
         where = fixture("design")
         write(where, "Docs/design/planted.md", "正文\n\nFR-AI-11（⬜）还没做\n")
-        return red(where, ("--face-floor", "1"), "Docs/design/planted.md:3")
+        return red(where, ("--face-floor", "1", "--ledger-floor", "1"), "Docs/design/planted.md:3")
     case("Docs/design/ 里的同一负例 ⇒ 照旧判红（旧面内的位置回归）", check_design)
 
     # 例 4：承重臂 —— 仓根件（旧版整体在面外）现判红，且点名字面是仓根相对真路径
     def check_root_doc():
         where = fixture("root-doc")
         write(where, "README.md", "正文\n\nFR-AI-11（⬜）还没做\n")
-        problem = red(where, ("--face-floor", "1"), "README.md:3")
+        problem = red(where, ("--face-floor", "1", "--ledger-floor", "1"), "README.md:3")
         if problem:
             return problem
-        code, output = invoke(where, ("--face-floor", "1"))
+        code, output = invoke(where, ("--face-floor", "1", "--ledger-floor", "1"))
         if "Docs/Docs" in output:
             return "点名串不是仓根相对路径（出现 Docs/Docs）"
         return None
     case("仓根 `README.md` 里的同一负例 ⇒ 判红且点名 `README.md:3`（旧版 rc=0）", check_root_doc)
 
-    # 例 5：旧码对照 —— 同一夹具（负例在 Docs/proposals/）旧码 rc=0（假绿现场）
-    def check_old_code():
-        where = fixture("old-code")
-        write(where, "Docs/proposals/planted.md", "正文\n\nFR-AI-11（⬜）还没做\n")
-        text = _old_code_text()
-        if text is None:
-            return "取不到旧码（git 历史里没有不含本轮标记的版本）"
-        (where / "Scripts" / "check-status-consistency.py").write_text(text, encoding="utf-8")
-        completed = subprocess.run([sys.executable, str(where / "Scripts" / "check-status-consistency.py")],
-                                   cwd=str(where), capture_output=True, text=True)
-        if completed.returncode != 0:
-            return f"旧码不是假绿（rc={completed.returncode}）——对照臂不成立"
-        return None
-    case("旧码对照：同一负例（面外位置）旧码 rc=0（假绿现场）", check_old_code)
+    # 例 5：取不到真值源 ⇒ 判红（旧口径的「索引 ↔ 定义行」已随状态列迁出失效，
+    # 这一例改钉「台账缺了 / 被删了不许静默打绿」——判据取不到输入时必须红）
+    def check_ledger_missing():
+        where = fixture("ledger-missing")
+        (where / PLAN_REL).write_text("# 开发计划书（夹具）\n\n## 3 需求状态台账\n\n| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |\n|---|---|---|---|---|---|---|\n\n## 4 里程碑\n", encoding="utf-8")
+        return red(where, ("--face-floor", "1", "--ledger-floor", "1"), "一条状态都解析不到")
+    case("台账被掏空（§3 里一条状态都没有）⇒ 判红（取不到输入不许当通过）", check_ledger_missing)
 
     # 例 6：负对照 —— archive / 第三方件里没有该形状 ⇒ 不许地毯式判红
     def check_negative_control():
@@ -341,7 +299,7 @@ def run_self_test() -> int:
         write(where, "Docs/design/store/q.md", "目录说明\n")
         write(where, "THIRD-PARTY-NOTICES.md", "第三方许可\n")
         write(where, "README.en.md", "English readme\n")
-        return green(where, ("--face-floor", "4"))
+        return green(where, ("--face-floor", "4", "--ledger-floor", "1"))
     case("负对照：archive / 仓根其它件内不含该形状 ⇒ rc=0（不地毯式判红）", check_negative_control)
 
     # 例 7：空跑防护 —— 面低于下限 ⇒ 判红（旧版把面移到空目录照打 ✅）
@@ -349,7 +307,7 @@ def run_self_test() -> int:
         where = fixture("floor-red")
         write(where, "README.md", "正文\n")
         write(where, "Docs/proposals/p.md", "正文\n")
-        return red(where, ("--face-floor", "5"), "扫描面只剩 2 份文档")
+        return red(where, ("--face-floor", "5", "--ledger-floor", "1"), "扫描面只剩 2 份文档")
     case("空跑防护：面内 2 份 < 下限 5 ⇒ 判红并点名下限量", check_floor_red)
 
     # 例 8：面恰好等于下限 ⇒ 绿（棘轮不许误伤）
@@ -357,16 +315,16 @@ def run_self_test() -> int:
         where = fixture("floor-equal")
         write(where, "README.md", "正文\n")
         write(where, "Docs/proposals/p.md", "正文\n")
-        return green(where, ("--face-floor", "2"))
+        return green(where, ("--face-floor", "2", "--ledger-floor", "1"))
     case("面内份数恰好等于下限 ⇒ rc=0（不误伤）", check_floor_equal)
 
     # 例 9：真值源自身不参与比对 —— SPEC 里写旧括注不算（旧口径逐字保留）
     def check_spec_excluded():
         where = fixture("spec-excluded")
-        (where / SPEC_REL).write_text(FIXTURE_SPEC + "\n引用：FR-AI-11（⬜）\n", encoding="utf-8")
+        (where / PLAN_REL).write_text(FIXTURE_PLAN + "\n引用：FR-AI-11（⬜）\n", encoding="utf-8")
         write(where, "Docs/proposals/p.md", "正文\n")
-        return green(where, ("--face-floor", "1"))
-    case("SPEC 自身不参与跨文档比对（真值源）⇒ rc=0", check_spec_excluded)
+        return green(where, ("--face-floor", "1", "--ledger-floor", "1"))
+    case("台账自身不参与跨文档比对（真值源）⇒ rc=0", check_spec_excluded)
 
     # 例 10：未知参数按 argparse 报错（旧版静默吞掉并 rc=0）
     def check_unknown_arg():
@@ -405,6 +363,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="状态一致性校验（Scripts/check-status-consistency.py）")
     parser.add_argument("--root", default=None, help="仓根（默认 = 本脚本所在仓）")
     parser.add_argument("--face-floor", type=int, default=None, help="面内文档数下限（默认 = 本仓实测值）")
+    parser.add_argument("--ledger-floor", type=int, default=None, help="台账条数下限（默认 = 本仓实测值；夹具 / 其它仓用）")
     parser.add_argument("--self-test", action="store_true", help="判据自己的证据（临时夹具树上写坏）")
     return parser
 
@@ -415,7 +374,8 @@ def main() -> int:
         return run_self_test()
     root = pathlib.Path(args.root).expanduser().resolve() if args.root else REPO
     floor = FACE_FLOOR if args.face_floor is None else args.face_floor
-    return run(root, floor)
+    ledger_floor = LEDGER_FLOOR if args.ledger_floor is None else args.ledger_floor
+    return run(root, floor, ledger_floor)
 
 
 if __name__ == "__main__":

@@ -97,10 +97,12 @@ BUCKETS = {
 }
 STRICT_BUCKETS = tuple(name for name, (_, strict) in BUCKETS.items() if strict)
 
-# 空跑防护下限（2026-10-13 实测：需求规范书 2865 行 / 98 张表 / 872 行需求形状行 ⇒ 留余量）
-FLOOR_LINES = 2000
+# 空跑防护下限（2026-10-20 重校：变更记录外置（-400 行）+ 状态列整批摘除后，SRS 实测
+# 1920 行 / 565 行需求形状行 ⇒ 下限按新形状留约 4% 余量。**防护不撤**：取不到输入仍判红，
+# 只是把「多少算取到了」校准到现行文档形状）
+FLOOR_LINES = 1840
 FLOOR_TABLES = 40
-FLOOR_REQUIREMENT_ROWS = 600
+FLOOR_REQUIREMENT_ROWS = 540
 
 
 def clean_cell(cell: str) -> str:

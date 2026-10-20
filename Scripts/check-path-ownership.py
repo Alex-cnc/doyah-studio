@@ -118,20 +118,20 @@ def declaration_reason(text: str):
 # （旧名只读 / 现行名绿红成对 / 认不出的本侧退出 2），判据口径 / 退出码 / 档位一律未放宽。
 # 契约定：三书**契约层**归 `bluewhale`（蓝色鲸鱼娘）；**平台实现层**归各平台助理 ——
 #   **2026-10-13 均衡令（人类主人原话）**：`hugehippo` = macOS / iOS / watchOS（Apple 全系）·
-#   `fatshark` = Windows / Harmony · `babyhippo` = Linux / Android。旧侧名 `bighippo` / `tinyhippo`
+#   `babyhippo` = Android / Harmony / Windows（`fatshark` 2026-10-20 退出项目）。旧侧名 `bighippo` / `tinyhippo` / `fatshark`
 #   （2026-10-08 两道改名令）降为**只读别名**：历史单 / 历史提交不判红，新写法一律用现行名。
 # 与「标记只表达平台」不冲突：**路径清单**里各端子树仍按平台分（tree.id = macos / windows / android…），
 # 演员名只出现在**命令行这一轴**（`--mine hugehippo` ≡ `--mine macos,ios,watchos`；**2026-10-15 移交（派单 `T-20261015-005`）**：契约所有者改挂 `hugehippo`（兼任 Apple 全系）· `bluewhale` 留作历史契约所有者（空平台集））。
 # 口径（2026-10-15 · 答对侧 `T-20261015-207` 结果 §③）：**归属真值 = `trees[].actor`**（`windows` → `babyhippo`，2026-10-15 承接大肥鲨）；本表里的 `fatshark` 条目 = **退役侧名的只读映射**（识别历史单 / 历史提交用，不是归属声明）；现行名 `babyhippo` 的展开集**已含 `windows`** ⇒ 两侧不抵。
 ACTOR_PLATFORMS = {"bluewhale": (), "hugehippo": ("macos", "ios", "watchos", "linux"),
-                   "fatshark": ("windows", "harmony"), "babyhippo": ("android", "harmony", "windows")}
+                   "babyhippo": ("android", "harmony", "windows")}   # `fatshark` 2026-10-20 退出项目
 # **退役 / 旧侧名 → 现行规范名**（只保留识别，**不得再作为现行名**；派单 `T-20261005-038` ① ·
 # 2026-10-13 均衡令扩到 `bighippo` / `tinyhippo` 两道改名令留下的旧名）：
 # 2026-10-04 家族改名令（`T-20261004-028`）后 Windows dsh = `fatshark`，旧名 `fatfish` 退役
 # （改属公司 Linux 平台的 dsh）。留着它只为**不把历史单 / 历史提交判红** —— 命令行给了退役名
 # 照样展开成同一个平台集（提示一条「退役旧名」）。
 LEGACY_ACTOR_ALIASES = {"bighippo": "hugehippo", "tinyhippo": "babyhippo",
-                        "fatfish": "fatshark"}
+                        "fatfish": "babyhippo", "fatshark": "babyhippo"}
 DEFAULT_CONTRACT_OWNER = "hugehippo"
 
 
@@ -240,7 +240,7 @@ class Manifest:
         """单个标识 → (tree id 集合, 档位)；认不出 ⇒ (None, None)。
 
         `tok` 可以是：tree id（`macos` / `windows` / `android` / `harmony`）· tree 的 owner 名 ·
-        契约侧名 · **演员名**（`hugehippo` / `babyhippo` / `fatshark`；旧名 `bighippo` / `tinyhippo` / `fatfish`
+        契约侧名 · **演员名**（`hugehippo` / `babyhippo`；旧名 `bighippo` / `tinyhippo` / `fatfish` / `fatshark`
         只保留识别 ⇒ 展开成它名下的子树；
         2026-10-03 制度变更）。契约所有者 = `hugehippo`（**兼任 Apple 全系实现侧** · 2026-10-15 移交）：三书契约层放行 + 其余路径走常规判据；历史所有者 `bluewhale`（平台集为空）仍走**独占契约模式**（只许三书）。
         """
@@ -730,7 +730,7 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
           paths=["App/Views/A.swift"], mine="bighippo", wants=["本侧子树"])
     check("㉘ 演员名 `tinyhippo` ≡ 安卓/鸿蒙/Windows（终裁）：改 macOS 子树 ⇒ 红（跨平台仍越界）", EXIT_RED,
           paths=["App/Views/A.swift"], mine="tinyhippo", wants=["对侧子树"])
-    check("㉙ 演员名现行规范名 `fatshark` ≡ windows：改 windows 子树 ⇒ 绿", EXIT_PASS,
+    check("㉙ 演员名退役名 `fatshark` ≡ babyhippo（Windows）：改 windows 子树 ⇒ 绿", EXIT_PASS,
           paths=["platform/windows/Core/src/lib.rs"], mine="fatshark", wants=["本侧子树"])
     # ㉚ / ㉛ 演员名跟版护栏（2026-10-05 · 派单 `T-20261005-038` ①）：旧名 `fatfish` 退役
     # （2026-10-04 家族改名令 `T-20261004-028` 后改属公司 Linux 侧）⇒ 规范名表里必须是
@@ -738,15 +738,14 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     check("㉚ 退役侧名 `fatfish` 仍可识别（历史单 / 历史提交不判红）：≡ windows ⇒ 绿", EXIT_PASS,
           paths=["platform/windows/Core/src/lib.rs"], mine="fatfish", wants=["本侧子树"])
     # ── ㉜~㉟ 2026-10-13 均衡令：演员名轴按现行规范名跟版（派单 `T-20261013-006`）──────────────
-    # 令文归属（2026-10-15 终裁后）= `hugehippo` Apple 全系 + **Linux** · `fatshark` Windows/Harmony ·
-    # `babyhippo` Linux/Android；`bighippo` / `tinyhippo`（2026-10-08 两道改名令）降为**只读别名**。
+    # 令文归属（2026-10-15 终裁 + 2026-10-20 退出令）= `hugehippo` Apple 全系 + **Linux** ·
+    # `babyhippo` Android/Harmony/Windows；`bighippo` / `tinyhippo` / `fatshark` 降为**只读别名**。
     # 成对证据：现行名改本侧子树绿 / 改对侧子树红；本仓没有子树的平台名（`ios`）⇒ 认不出、退出 2。
-    check("㉛ 防回退：现行规范名表 = hugehippo / babyhippo / fatshark（三个旧名不在表内）",
+    check("㉛ 防回退：现行规范名表 = hugehippo / babyhippo（fatshark 已退出，旧名不在表内）",
           True, raw_ok=lambda: ACTOR_PLATFORMS.get("hugehippo") == ("macos", "ios", "watchos", "linux")
           and ACTOR_PLATFORMS.get("babyhippo") == ("android", "harmony", "windows")
-          and ACTOR_PLATFORMS.get("fatshark") == ("windows", "harmony")
-          and not ("bighippo" in ACTOR_PLATFORMS or "tinyhippo" in ACTOR_PLATFORMS
-                   or "fatfish" in ACTOR_PLATFORMS))
+          and not ("fatshark" in ACTOR_PLATFORMS or "bighippo" in ACTOR_PLATFORMS
+                   or "tinyhippo" in ACTOR_PLATFORMS or "fatfish" in ACTOR_PLATFORMS))
     check("㉜ 现行名 `hugehippo` ≡ macos,ios,watchos：改 macOS 子树 ⇒ 绿", EXIT_PASS,
           paths=["App/Views/A.swift"], mine="hugehippo", wants=["本侧子树"])
     check("㉝ 现行名 `hugehippo`：改 platform/windows/ ⇒ 红（跨平台仍越界）", EXIT_RED,
@@ -757,7 +756,8 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     check("㉟ 防回退（成对）：旧名只作只读别名，展开的平台集与现行名同集合",
           True, raw_ok=lambda: LEGACY_ACTOR_ALIASES.get("bighippo") == "hugehippo"
           and LEGACY_ACTOR_ALIASES.get("tinyhippo") == "babyhippo"
-          and LEGACY_ACTOR_ALIASES.get("fatfish") == "fatshark"
+          and LEGACY_ACTOR_ALIASES.get("fatfish") == "babyhippo"
+          and LEGACY_ACTOR_ALIASES.get("fatshark") == "babyhippo"
           and ACTOR_PLATFORMS[LEGACY_ACTOR_ALIASES["bighippo"]] == ("macos", "ios", "watchos", "linux"))
 
     bad = [r for r in results if not r[1]]
@@ -788,8 +788,8 @@ def main(argv=None) -> int:
     ap.add_argument("--repo", default=None, help="仓根（默认：脚本所在仓的 git 顶层）")
     ap.add_argument("--actor", default=None,
                     help="执行者（演员名 · 2026-10-13 均衡令）：`hugehippo`(=**现行契约所有者**：契约层 + 自己 Apple 子树叠加) / `bluewhale`(=历史契约所有者：只许三书) / "
-                         "`hugehippo`(macOS,iOS,watchOS = Apple 全系) / `babyhippo`(Linux,Android) / "
-                         "`fatshark`(Windows,Harmony)；旧名 `bighippo` / `tinyhippo` / `fatfish` 保留识别；"
+                         "`hugehippo`(macOS,iOS,watchOS,Linux = Apple 全系 + Linux) / `babyhippo`(Android,Harmony,Windows)；"
+                         "旧名 `bighippo` / `tinyhippo` / `fatfish` / `fatshark` 保留识别（fatshark 2026-10-20 退出项目）；"
                          "等价于 `--mine <演员名>`")
     ap.add_argument("--self-test", action="store_true", help="跑自测（38 例）")
     args = ap.parse_args(argv)
