@@ -27,13 +27,16 @@ LEDGER = os.path.join(ROOT, "Docs", "平台实现状态.json")
 OUT = os.path.join(ROOT, "Platform", "windows", "开发计划-Windows.md")
 
 # 产品面 → FR 域前缀（本侧口径；细化到「能力条目 ↔ FR 编号」需要前门在能力书里加编号）
+# (产品面, FR 域, 是否进 Windows 分母)
+# 口径（人类主人 2026-10-20 纠正）：**本侧** = Windows / Linux / 安卓 / 鸿蒙 四版，Doyah Notes 是
+# 本侧自己的产品（Android 面，beta1.0 已发）—— 它只是**不跑在 Windows 列上**，不是"非本端产品"。
 SURFACES = [
-    ("Doyah Agent", ["AI"]),
-    ("Studio · Workspace", ["EDIT"]),
+    ("Doyah Agent", ["AI"], True),
+    ("Studio · Workspace", ["EDIT"], True),
     ("Studio · Database Client",
-     ["CONN", "EXEC", "RES", "META", "DDL", "DATA", "SESS", "DIAG", "IO", "DRV", "PLUG", "BLD", "CLI"]),
-    ("Doyah Retro", ["R"]),
-    ("Doyah Notes（非本端产品）", ["NOTE"]),
+     ["CONN", "EXEC", "RES", "META", "DDL", "DATA", "SESS", "DIAG", "IO", "DRV", "PLUG", "BLD", "CLI"], True),
+    ("Doyah Retro", ["R"], True),
+    ("Doyah Notes（本侧 Android 产品 · 不进 Windows 列）", ["NOTE"], False),
 ]
 
 
@@ -82,7 +85,7 @@ def matrix_rows():
 
 def surface_of(fr_id):
     domain = fr_id.split("-")[1]
-    for name, domains in SURFACES:
+    for name, domains, _in_column in SURFACES:
         if domain in domains:
             return name
     return "未归类"
@@ -116,8 +119,10 @@ def build():
                  "`Platform/windows/开发循环/gen-win-plan.py` 现读现算（来源 = 能力规划说明书 / 开发计划书 §5 / 平台实现状态台账）。")
     lines.append("> 三书或台账一改，重跑生成器即同步；手改会在 `--check` 时被判红。")
     lines.append("")
-    total = sum(b["total"] for b in buckets.values())
-    done = sum(b["done"] for b in buckets.values())
+    in_column = {name for name, _d, flag in SURFACES if flag}
+    total = sum(b["total"] for name, b in buckets.items() if name in in_column)
+    done = sum(b["done"] for name, b in buckets.items() if name in in_column)
+    other_total = sum(b["total"] for name, b in buckets.items() if name not in in_column)
     lines.append("## 1. 总量")
     lines.append("")
     lines.append("| 项 | 值 |")
@@ -126,13 +131,14 @@ def build():
     lines.append("| Windows ✅ | %d |" % done)
     lines.append("| **Windows 完成度** | **%d%%** |" % (round(100 * done / total) if total else 0))
     lines.append("| 台账 Windows 显式登记 | %d 条 |" % len(overrides))
+    lines.append("| 未进 Windows 列的本侧产品 FR（Doyah Notes） | %d 条（不计入上面的完成度） |" % other_total)
     lines.append("")
 
     lines.append("## 2. 按产品面（完成度 = ✅ / 该面 FR 数）")
     lines.append("")
     lines.append("| 产品面 | 能力条目 | FR 条数 | ✅ | 🟡 | ⬜ | 完成度 |")
     lines.append("|---|---:|---:|---:|---:|---:|---:|")
-    for name, domains in SURFACES:
+    for name, domains, _flag in SURFACES:
         bucket = buckets.get(name)
         if not bucket:
             continue
@@ -157,7 +163,7 @@ def build():
 
     lines.append("## 4. 缺口清单（逐条可追）")
     lines.append("")
-    for name, _ in SURFACES:
+    for name, _d, _f in SURFACES:
         bucket = buckets.get(name)
         if not bucket or not bucket["gaps"]:
             continue
