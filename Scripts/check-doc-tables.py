@@ -96,6 +96,7 @@ DEFAULT_TARGETS = [
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
     "Docs/Doyah产品需求分析说明书.md",
+    "Docs/Doyah产品需求分析说明书-变更记录.md",
     "Docs/Doyah产品开发计划书.md",
     "Docs/README.md",
     "Docs/兼容性矩阵.md",
@@ -850,6 +851,7 @@ SELF_TEST_TRACKED = [
     "Docs/任务清单-按平台.md",
     # 2026-10-17：核心能力扩展草案（灵魂 / IM / 记忆 / 技能自进化）。
     "Docs/智能体助手-核心能力扩展-草案-v0.1.md",
+    "Docs/Doyah产品需求分析说明书-变更记录.md",
 ]
 
 SELF_TEST_ABSENT = [

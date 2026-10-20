@@ -141,8 +141,8 @@ def load_rows() -> list[tuple[str, str, str]]:
             return []
         return lines[start:end]
 
-    index_lines = slice_between("### 10.1", "### 10.2")  # 只用来取编号集合（状态已迁出）
-    body_lines = lines[: next((i for i, line in enumerate(lines) if line.startswith("## 10.")), len(lines))]
+    index_lines = slice_between("### 9.1", "### 9.2")  # 只用来取编号集合（状态已迁出）
+    body_lines = lines[: next((i for i, line in enumerate(lines) if line.startswith("## 9.")), len(lines))]
 
     # 2026-10-20：状态列迁到《开发计划书》§3 台账 ⇒ macOS 基线状态从那里取；
     # 编号集合仍以 SRS §10.1 为准（两边由 `check-plan-coverage.py` 钉死相等）。

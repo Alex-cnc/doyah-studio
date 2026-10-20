@@ -33,7 +33,7 @@ def cells(line: str) -> list[str]:
 def srs_ids() -> set[str]:
     ids, in_index = set(), False
     for line in SRS.read_text(encoding="utf-8").splitlines():
-        if line.startswith("### 10.1"):
+        if line.startswith("### 9.1"):
             in_index = True
             continue
         if in_index and line.startswith("### "):
