@@ -4,7 +4,7 @@
 >
 > **这本书只回答一件事：哪一条做到哪儿了。** 要什么、验收怎么算 → 需求分析说明书；是什么、边界在哪 → 能力规划说明书；怎么做 → 概要设计说明书。
 
-| 版本 | v0.16（2026-10-20：§5 平台矩阵重跑 · 367 条） |
+| 版本 | v0.17（2026-10-20：Linux 归属改挂 hugehippo · §5 重生成） |
 |---|---|
 
 ## 1 定位
@@ -553,7 +553,7 @@
 <!-- BEGIN platform-parity -->
 > 共 367 条功能需求。**macOS** 状态取自《Doyah 产品需求分析说明书-需求索引》（**基线，唯一来源**，不由本脚本维护）。
 > **watchOS** 状态取自 `Docs/平台实现状态.json` → `platforms.watchos.overrides`（Apple 全系第三端（与 macOS / iOS 同一机组；实现未开工）；维护者：铁皮大河马（`hugehippo` · macOS/iOS/watchOS 侧））。
-> **Linux** 状态取自 `Docs/平台实现状态.json` → `platforms.linux.overrides`（Doyah Studio 全量 PC 端第三端（2026-10-14 人类主人令：本仓实现开工）；维护者：奶牙小河马（`babyhippo` · Linux/Android 侧）—— 自用第三端；实现面在 `platform/linux/`，平台设计层写概设 §8.6 `[独占:linux]`）。
+> **Linux** 状态取自 `Docs/平台实现状态.json` → `platforms.linux.overrides`（Doyah Studio 全量 PC 端第三端（2026-10-14 人类主人令：本仓实现开工）；维护者：铁皮大河马（`hugehippo` · macOS/iOS/Linux 侧）—— 2026-10-15 人类主人拍板「Linux 与 macOS 底层血缘更近 ⇒ 归 `hugehippo`」（原归 `babyhippo`）；实现面在 `platform/linux/`，平台设计层写概设 §8.6 `[独占:linux]`）。
 > **Windows** 状态取自 `Docs/平台实现状态.json` → `platforms.windows.overrides`（对等目标端（与 macOS 完全一致）；维护者：奶牙小河马（`babyhippo` · Windows/Android/Harmony 侧）—— 2026-10-16 人类主人定案：不再设分组键，Windows 归 babyhippo；`fatshark` 侧名已退役）。
 > 未在台账里逐条登记的，一律按 `⬜` 记。
 > `⚠️` = 与该需求的 macOS 基线不一致（**未在 §10.9 登记的平台差异一律视为「必须一致」**，见 §0.8 R2）。
@@ -1791,6 +1791,7 @@
 
 | 版本 | 日期 | 变更摘要 | 作者 |
 |---|---|---|---|
+| **v0.17** | 2026-10-20 | **Linux 归属改挂 `hugehippo`（人类主人：「linux归大河马」）** —— ① `Docs/平台实现状态.json` 的 `platforms.linux.owner` 由 `babyhippo` 改为 `hugehippo`（补 2026-10-15 拍板依据「Linux 与 macOS 底层血缘更近」）；② §5 平台矩阵随之重生成（Linux 列维护者一行跟版）；③ 判据 `Scripts/check-exclusive-sections.py` 的演员名表同批跟版（`hugehippo` = macos/ios/watchos/**linux**、`babyhippo` = android），自测 45/45 通过。 | `hugehippo` |
 | **v0.16** | 2026-10-20 | **§5 平台等价矩阵重跑**（两书交叉核对的连带项）—— 矩阵停留在 342 条的旧读数，已在盘上过期 **25 条**（实测 367 条）；按生成器重写整节，判据 `gen-platform-parity.py --check` 转绿。同批把生成文案里的死链「取自 §10.1 索引」改为「取自《需求分析说明书-需求索引》」（索引已外置），`Docs/平台实现状态.json` 的 `_comment` 同口径。 | `hugehippo` |
 | **v0.15** | 2026-10-20 | 台账 419 → **425**（+6 补齐条目，全部 ⬜）；§11.1 覆盖数跟到拆点后的点数（3.1 4/4 · 3.3 38/38 · 3.4 33/33）。 | `hugehippo` |
 | **v0.14** | 2026-10-20 | Retro 能力点 17 → **18**：`6.2.4 回测与验证` 拆成 `6.2.4 回测引擎`（过程正确）与 `6.2.5 验证与样本`（结论成立），`6.2.5 研报生成`→`6.2.6`、`6.2.6 历史情形`→`6.2.7`；§11.1 与 §11.2 引用跟版。 | `hugehippo` |

@@ -11,7 +11,7 @@
     "linux": {
       "label": "Linux",
       "role": "Doyah Studio 全量 PC 端第三端（2026-10-14 人类主人令：本仓实现开工）",
-      "owner": "奶牙小河马（`babyhippo` · Linux/Android 侧）—— 自用第三端；实现面在 `platform/linux/`，平台设计层写概设 §8.6 `[独占:linux]`",
+      "owner": "铁皮大河马（`hugehippo` · macOS/iOS/Linux 侧）—— 2026-10-15 人类主人拍板「Linux 与 macOS 底层血缘更近 ⇒ 归 `hugehippo`」（原归 `babyhippo`）；实现面在 `platform/linux/`，平台设计层写概设 §8.6 `[独占:linux]`",
       "overrides": {}
     },
     "windows": {

@@ -8,7 +8,7 @@
 **词表（三仓唯一一份，2026-10-02 人类主人拍板 · 派单 `T-20261002-038`）**
 合法侧名只有**平台名**这七个：`macos` · `ios` · `watchos` · `windows` · `android` · `harmony` · `linux`
 （`watchos` = **2026-10-13 人类主人令新入词表**，派单 `T-20261013-005` / Studio 锚仓提交 `3475fec`：
-Apple 全系 `macos`/`ios`/`watchos` 归 `hugehippo`、`windows`/`harmony` 归 `fatshark`、`linux`/`android` 归 `babyhippo`
+Apple 全系 `macos`/`ios`/`watchos` **与 `linux`** 归 `hugehippo`（2026-10-15 拍板「Linux 与 macOS 底层血缘更近」）、`windows`/`harmony` 归 `fatshark`、`android` 归 `babyhippo`
 —— **2026-10-13 均衡令**（派单 `T-20261013-007`：三侧均衡、`fatshark` 重回派单通道））。
 - 标记形态：`[独占:<平台名>[|<平台名>…]]` —— **多值用半角竖线**（例 `[独占:windows|android|harmony]`），
   **成员必须都是平台名**。
@@ -154,14 +154,14 @@ def mark_tokens(tok):
 #   · **演员名**只出现在**命令行 / 契约所有者**这一轴（`--mine hugehippo`、`--contract-owner hugehippo`）。
 # 契约所有者 = 演员名（2026-10-03 人类主人制度变更 · 派单 `T-20261003-003`）：三书的**契约层**归
 # `hugehippo`（铁皮大河马 —— **2026-10-15 人类主人令 · 基本法第四十八条**：原 `bluewhale` 的交出；本条为最新组织令）；**平台实现层**（`[独占:<平台名>]` 节）归各平台助理（**2026-10-13 均衡令 · 派单
-# `T-20261013-007`**）：`hugehippo` = Apple 全系、`fatshark` = Windows / 鸿蒙、`babyhippo` = Linux / 安卓。
+# `T-20261013-007`**，其中 linux 已于 2026-10-15 改归 `hugehippo`）：`hugehippo` = Apple 全系 + Linux、`fatshark` = Windows / 鸿蒙、`babyhippo` = 安卓。
 # `bluewhale`（蓝色鲸鱼娘）**自 2026-10-15 起只保留写作与地缘周报**（第四十八条之二）⇒ **既无契约权、也没有平台写权**（空集）；她对
 # `[独占:*]` 节必然判红；而她的名字要保留下来，供「契约所有者是不是我」这类同一性判定用。
 ACTORS = {
     "bluewhale": (),                       # 蓝色鲸鱼娘 · 2026-10-15 起只做写作/地缘周报：无契约权、无平台写权
-    "hugehippo": ("macos", "ios", "watchos"),  # 平台实现 · 铁皮大河马（Apple 全系 · 2026-10-13 均衡令）
+    "hugehippo": ("macos", "ios", "watchos", "linux"),  # 平台实现 · 铁皮大河马（Apple 全系 + Linux · Linux 于 2026-10-15 由 babyhippo 划入）
     "fatshark": ("windows", "harmony"),    # 平台实现 · 黑鳍大肥鲨（Windows／鸿蒙 · 均衡令起重回派单通道）
-    "babyhippo": ("linux", "android"),     # 平台实现 · 奶牙小河马（Linux／安卓 · 2026-10-13 均衡令）
+    "babyhippo": ("android",),             # 平台实现 · 奶牙小河马（安卓 · Linux 于 2026-10-15 划归 hugehippo）
 }
 # **退役侧名**（只保留识别，**不得再作为现行规范名**；派单 `T-20261005-038` ① · `T-20261013-007`）：
 # 2026-10-04 家族改名令（`T-20261004-028`）后 Windows dsh = `fatshark`，旧名 `fatfish` 退役（改属公司
@@ -880,12 +880,12 @@ watchOS 实现细节：SwiftUI / WatchConnectivity。
     r.append(run_names("新平台护栏：词表含 `watchos`（七个 · 2026-10-13）",
                        lambda: PLATFORMS,
                        ("macos", "ios", "watchos", "windows", "android", "harmony", "linux")))
-    r.append(run_names("新平台护栏：`hugehippo` ≡ macos/ios/watchos（Apple 全系 · 均衡令）",
-                       lambda: ACTORS.get("hugehippo"), ("macos", "ios", "watchos")))
+    r.append(run_names("新平台护栏：`hugehippo` ≡ macos/ios/watchos/linux（Apple 全系 + Linux · 2026-10-15）",
+                       lambda: ACTORS.get("hugehippo"), ("macos", "ios", "watchos", "linux")))
     r.append(run_names("演员名护栏：现行规范名 `fatshark` ≡ windows/harmony（均衡令）",
                        lambda: ACTORS.get("fatshark"), ("windows", "harmony")))
-    r.append(run_names("演员名护栏：现行规范名 `babyhippo` ≡ linux/android（均衡令）",
-                       lambda: ACTORS.get("babyhippo"), ("linux", "android")))
+    r.append(run_names("演员名护栏：现行规范名 `babyhippo` ≡ android（Linux 已于 2026-10-15 划走）",
+                       lambda: ACTORS.get("babyhippo"), ("android",)))
     r.append(run_names("演员名护栏：三个退役名映射齐 + 都不在规范名表 + 仍可识别（历史单不判红）",
                        lambda: (tuple(LEGACY_ACTORS.get(x) for x in ("fatfish", "bighippo", "tinyhippo")),
                                 tuple(x in ACTORS for x in ("fatfish", "bighippo", "tinyhippo")),
