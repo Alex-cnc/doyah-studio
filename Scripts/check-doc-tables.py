@@ -96,6 +96,7 @@ DEFAULT_TARGETS = [
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
     "Docs/Doyah产品需求分析说明书.md",
+    "Docs/Doyah产品开发计划书.md",
     "Docs/README.md",
     "Docs/兼容性矩阵.md",
     "Docs/GBase-技术验证.md",
