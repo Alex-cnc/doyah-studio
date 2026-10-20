@@ -31,6 +31,10 @@
       {
         "script": "Scripts/check-notes-capability-sync.py",
         "reason": "跨仓判据（要读 ../notes 仓），不进本仓每轮闭环：干净克隆 / 另一平台没有 Notes 仓时报「跳过（Notes 仓不在盘上）」，跳过 ≠ 通过，故不能当作本仓门禁的一项。主开发机上手动跑，以及两仓同批改动时跑。"
+      },
+      {
+        "script": "Scripts/check-plan-coverage.py",
+        "reason": "2026-10-20 新增（状态迁出《开发计划书》后的覆盖判据）。闭环 `Scripts/verify-all.sh` 的项数与项号是**多处硬编码**（`AGENT-SPEC.md` / doc-numbers 台账 / 脚本注释三处同步），迁移当轮不动闭环清单，先在本台账登记；**下一轮把它接进 `Scripts/verify-all.sh` 第 1 项之后并同步项数三处**（已登记为待办，不是长期豁免）。"
       }
     ],
     "testGlob": "Scripts/test-*.py",

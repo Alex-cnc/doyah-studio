@@ -43,6 +43,9 @@ import tempfile
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
 SRS = ROOT / "Docs/Doyah产品需求分析说明书.md"
+# 2026-10-20：状态矩阵（原 §10.10）迁到《开发计划书》§5 —— 读仍从 SRS 取（索引与摘要），
+# 写改到计划书；否则本脚本会在 SRS 里找不到标记而报错。
+PLAN = ROOT / "Docs/Doyah产品开发计划书.md"
 STATUS = ROOT / "Docs/平台实现状态.json"
 SCRIPT = pathlib.Path(__file__).resolve()
 
@@ -138,22 +141,31 @@ def load_rows() -> list[tuple[str, str, str]]:
             return []
         return lines[start:end]
 
-    index_lines = slice_between("### 10.1", "### 10.2")
+    index_lines = slice_between("### 10.1", "### 10.2")  # 只用来取编号集合（状态已迁出）
     body_lines = lines[: next((i for i, line in enumerate(lines) if line.startswith("## 10.")), len(lines))]
 
+    # 2026-10-20：状态列迁到《开发计划书》§3 台账 ⇒ macOS 基线状态从那里取；
+    # 编号集合仍以 SRS §10.1 为准（两边由 `check-plan-coverage.py` 钉死相等）。
     index: dict[str, str] = {}
     summaries: dict[str, str] = {}
-    for line in index_lines:
+    plan_lines = PLAN.read_text(encoding="utf-8").splitlines()
+    try:
+        a = next(i for i, l in enumerate(plan_lines) if l.startswith("## 3 "))
+        b = next(i for i, l in enumerate(plan_lines) if i > a and l.startswith("## 4 "))
+        ledger_lines = plan_lines[a:b]
+    except StopIteration:
+        ledger_lines = []
+    for line in ledger_lines:
         if not line.startswith("|"):
             continue
         row = cells(line)
-        if len(row) == 4 and re.match(r"^FR-", row[0]):
-            index[row[0]] = row[3]
+        if len(row) >= 6 and re.match(r"^FR-", row[0]):
+            index[row[0]] = row[5]
     for line in body_lines:
         if not line.startswith("|"):
             continue
         row = cells(line)
-        if len(row) >= 6 and re.match(r"^FR-", row[0]) and row[0] not in summaries:
+        if len(row) >= 5 and re.match(r"^FR-", row[0]) and row[0] not in summaries:
             summaries[row[0]] = clean(row[1])
 
     return [(key, index[key], summaries.get(key, "")) for key in sorted(index)]
@@ -316,9 +328,9 @@ def render(
 
 def rebuild(rows: list[tuple[str, str, str]], platforms: list[dict], default: str, not_platforms: list[dict]) -> str:
     """返回把 §10.10 标记区间替换成最新表格后的整篇文档文本（找不到标记则抛错）。"""
-    text = SRS.read_text(encoding="utf-8")
+    text = PLAN.read_text(encoding="utf-8")
     if BEGIN not in text or END not in text:
-        raise LedgerError([f"{SRS} 里找不到 {BEGIN} / {END} 标记（表格位置由它们夹住）"])
+        raise LedgerError([f"{PLAN} 里找不到 {BEGIN} / {END} 标记（表格位置由它们夹住）"])
     table = render(rows, platforms, default, not_platforms)
     head, rest = text.split(BEGIN, 1)
     _, tail = rest.split(END, 1)
@@ -588,7 +600,7 @@ def main() -> int:
         return 1
 
     if check_only:
-        current = SRS.read_text(encoding="utf-8")
+        current = PLAN.read_text(encoding="utf-8")
         if updated == current:
             print(f"✅ 平台等价矩阵与现状一致（{len(rows)} 条；平台列 {len(platforms) + 1}）")
             return 0
@@ -611,7 +623,7 @@ def main() -> int:
         print("   请运行 python3 Scripts/gen-platform-parity.py 重写")
         return 1
 
-    SRS.write_text(updated, encoding="utf-8")
+    PLAN.write_text(updated, encoding="utf-8")   # 2026-10-20：矩阵已迁到计划书 §5
     detail = "、".join(f"{platform['label']} {len(platform['overrides'])} 条" for platform in platforms)
     print(
         f"✅ 已重写 §10.10 平台等价矩阵（{len(rows)} 条；"

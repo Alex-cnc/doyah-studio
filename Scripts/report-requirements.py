@@ -25,6 +25,7 @@ import re
 import sys
 
 SRS = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
+PLAN = pathlib.Path("Docs/Doyah产品开发计划书.md")   # 2026-10-20 起状态唯一源
 
 PENDING = "⬜"
 PARTIAL = "🟡"
@@ -54,34 +55,75 @@ def clean(text: str) -> str:
     return text.strip()
 
 
+def plan_statuses() -> dict[str, str]:
+    """从《开发计划书》§3 台账取「编号 → 状态」。
+
+    2026-10-20 起状态已从需求分析说明书迁出（人类主人令：需求分析书写「要什么」，状态归开发计划书）。
+    本函数让盘点继续可用，且**只认一个来源**。
+    """
+    if not PLAN.exists():
+        return {}
+    table: dict[str, str] = {}
+    all_lines = PLAN.read_text(encoding="utf-8").splitlines()
+    # 只认 §3 台账（别的节里也有引用 FR 编号的表：平台矩阵、里程碑、卡点）
+    try:
+        begin = next(i for i, l in enumerate(all_lines) if l.startswith("## 3 需求状态台账"))
+        end = next(i for i, l in enumerate(all_lines[begin:], begin) if l.startswith("## 4 "))
+        lines = all_lines[begin:end]
+    except StopIteration:
+        lines = all_lines
+    for line in lines:
+        if not line.startswith("| FR-") and not line.startswith("| NFR-") and not line.startswith("| AC-"):
+            continue
+        row = cells(line)
+        if len(row) >= 6:
+            table[row[0]] = row[5]
+    return table
+
+
 def load() -> tuple[dict[str, dict], dict[str, dict], list[tuple[str, list[str]]]]:
+    """读需求分析说明书：**按表头认列**（2026-10-20 改）。
+
+    为什么改：状态列迁出后，三张定义表的列数都变了（FR 5 列 / NFR 4 列 / AC 2 列），
+    旧的「按 len(row) 猜形状」立刻把 NFR 认成索引行（盘点从 46 条掉到 2 条）。
+    现在认表头：列名决定哪一格是什么，不再数格子。
+    """
     lines = SRS.read_text(encoding="utf-8").splitlines()
     index: dict[str, dict] = {}
     definitions: dict[str, dict] = {}
     open_tasks: list[tuple[str, list[str]]] = []
+    header: list[str] | None = None
 
     for line in lines:
-        if line.startswith("- [ ]"):
-            open_tasks.append((clean(line[5:]), []))
-            continue
-        if line.startswith("  - [ ]") and open_tasks:
-            open_tasks[-1][1].append(clean(line[7:]))
-            continue
         if not line.startswith("|"):
+            if not line.startswith("  - [ ]") and not line.startswith("- [ ]"):
+                header = None if not line.strip() else header
+            if line.startswith("- [ ]"):
+                open_tasks.append((clean(line[5:]), []))
+            elif line.startswith("  - [ ]") and open_tasks:
+                open_tasks[-1][1].append(clean(line[7:]))
             continue
         row = cells(line)
-        if not row or not re.match(r"^(FR|NFR|AC|DR|R|T)-[A-Z0-9]", row[0]):
+        if not row:
+            continue
+        if row[0] == "编号":
+            header = row
+            continue
+        if not re.match(r"^(FR|NFR|AC|DR|R|T)-[A-Z0-9]", row[0]):
             continue
         identifier = row[0]
-        if len(row) == 4 and re.match(r"^\d+(\.\d+)?", row[1]):
-            index[identifier] = {"domain": row[1], "layer": row[2], "status": row[3]}
-        elif len(row) >= 5 and identifier not in definitions:
-            # FR: 编号 | 需求 | 层次 | 优先级 | 状态 | 验收要点
-            # NFR: 编号 | 需求 | 层次 | 状态 | 验证方式
-            status_cell = row[4] if len(row) >= 6 else row[3]
+        if header and len(header) in (3, 4) and header[1] in ("领域", "所属域 / 章节"):
+            index[identifier] = {"domain": row[1], "layer": row[2], "status": ""}
+            continue
+        if identifier not in definitions:
+            text = row[1] if len(row) > 1 else ""
+            layer = ""
+            if header and "层次" in header:
+                layer = row[header.index("层次")] if len(row) > header.index("层次") else ""
             definitions[identifier] = {
-                "text": clean(row[1]),
-                "status": status_cell,
+                "text": clean(text),
+                "layer": clean(layer),
+                "status": "",
                 "notes": clean(row[-1])[:400],
             }
     return index, definitions, open_tasks
@@ -104,6 +146,9 @@ def normalize_status(cell: str) -> str:
 
 
 def status_of(identifier: str, index: dict, definitions: dict) -> str:
+    planned = plan_statuses()
+    if identifier in planned:
+        return normalize_status(planned[identifier])
     if identifier in index:
         return normalize_status(index[identifier]["status"])
     for symbol in (DONE, PARTIAL, PENDING):
