@@ -3,6 +3,8 @@
 > 这份文件是**需求编号的总账**：正文每一条 `FR-*` / `NFR-*` / `AC-*` 在这里有一行，与正文一一对应。
 > 2026-10-20 从正文附录（原 §9.1）整体移出 —— 它是**机械派生件**（410 行），不是需求本身，留在正文占 25%。
 >
+> **收录范围**：本索引只收 **`FR` / `NFR` / `AC`** 三类（共 419 条）；**数据需求 `DR-01~04`** 见正文 §5、**接口需求 `IR-01~13`** 见正文 §6 —— 它们不在这里，不是漏登。
+>
 > **怎么用**：查编号 → 这里找域与层次 → 回正文该域看条文。**改条文必改这里**（`Scripts/check-plan-coverage.py` 与 `check-doc-tables.py` 会钉死「索引 ↔ 正文 ↔ 计划书台账」三边集合相等）。
 
 ## 需求编号索引
@@ -19,15 +21,15 @@
 | FR-R-16-02 | 3.6 Doyah Retro | 常用增强 |
 | FR-R-16-03 | 3.6 Doyah Retro | 常用增强 |
 | FR-R-16-04 | 3.6 Doyah Retro | 常用增强 |
-| FR-NOTE-1 | 3.5 Doyah Notes | 基线必备 |
-| FR-NOTE-2 | 3.5 Doyah Notes | 基线必备 |
-| FR-NOTE-3 | 3.5 Doyah Notes | 基线必备 |
-| FR-NOTE-4 | 3.5 Doyah Notes | 基线必备 |
-| FR-NOTE-5 | 3.5 Doyah Notes | 基线必备 |
-| FR-NOTE-6 | 3.5 Doyah Notes | 基线必备 |
-| FR-NOTE-7 | 3.5 Doyah Notes | 基线必备 |
-| FR-NOTE-8 | 3.5 Doyah Notes | 基线必备 |
-| FR-NOTE-9 | 3.5 Doyah Notes | 基线必备 |
+| FR-NOTE-01 | 3.5 Doyah Notes | 基线必备 |
+| FR-NOTE-02 | 3.5 Doyah Notes | 基线必备 |
+| FR-NOTE-03 | 3.5 Doyah Notes | 基线必备 |
+| FR-NOTE-04 | 3.5 Doyah Notes | 基线必备 |
+| FR-NOTE-05 | 3.5 Doyah Notes | 基线必备 |
+| FR-NOTE-06 | 3.5 Doyah Notes | 基线必备 |
+| FR-NOTE-07 | 3.5 Doyah Notes | 基线必备 |
+| FR-NOTE-08 | 3.5 Doyah Notes | 基线必备 |
+| FR-NOTE-09 | 3.5 Doyah Notes | 基线必备 |
 | FR-NOTE-10 | 3.5 Doyah Notes | 基线必备 |
 | FR-NOTE-11 | 3.5 Doyah Notes | 基线必备 |
 | AC-AI-01 | 7.4 智能体验收 | — |
