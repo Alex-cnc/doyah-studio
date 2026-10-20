@@ -46,12 +46,11 @@ set -euo pipefail
 #        `Scripts/self-test-counts.json`，判据 `Scripts/check-self-test-counts.py` 把每一族 runner
 #        **真跑一遍**（要求 exit 0）、再与台账和文档里的现状声明逐处对账 —— 此前 `test-*.py`
 #        14 个里 **8 个根本没人跑**，其中一个已经坏在第 3 例而无人知）
-#   5. 需求状态一致性（§10.1 索引表 ↔ 正文定义行）
-#      + **alpha 范围账**（L-69 条件 ③）：FR 🟡 **逐条**判定 —— 能机器验的给可复跑证据指针、
-#        不能机器验的标 `[alpha 不含]`（状态格仍 🟡）。台账 `Scripts/alpha-fr-dispositions.json`，
-#        判据 = 台账 ↔ SRS 双向对账 / 标记逐字对上 / 原因档在词表内 / 证据指针存在 / 空跑防护。
-#        为什么要有它：v0.1.0-alpha 那次 6 条环境项是**手加**的标记，此后 🟡 增删机器都不说话，
-#        发布说明「明确不做什么」那一节就会与文档事实脱节（见脚本头注释）。
+#   5. 需求状态一致性（计划书 §3 台账 ↔ 其它文档状态括注）
+#      + **版本范围**（2026-10-20 人类主人令）：哪个版本做哪些需求，由版本计划说清 ——
+#        台账 §3 的 `版本` / `版本口径` 两列就是范围台账，判据 = 版本 ⊆ 四档 / alpha 行口径必为 `—` /
+#        非 alpha 行口径非空 / 编号唯一 / 空跑防护。旧做法（需求行内写 `[alpha 不含]` +
+#        独立账 `alpha-fr-dispositions.json`）已退役，文件归档在 `Scripts/archive/`。
 #   6. 设计令牌棘轮（App/ 里的裸颜色 / 裸字号 / 裸间距不得比基线更差）
 #   7. 平台等价矩阵（§10.10 ↔ `Docs/平台实现状态.json` 台账，列由台账决定）+ 台账校验自检
 #      + `P-*` 平台差异登记的两侧对账（§10.9 ↔ 概要设计 §4：双向覆盖 + 同号同物
@@ -521,18 +520,18 @@ python3 Scripts/check-pending-agenda.py --self-test
 python3 Scripts/check-self-test-counts.py
 python3 Scripts/check-self-test-counts.py --self-test
 
-echo "==> 5/18 需求状态一致性（计划书 §3 台账 ↔ 其它文档状态括注）+ alpha 范围账（FR 🟡 逐条判定）"
+echo "==> 5/18 需求状态一致性（计划书 §3 台账 ↔ 其它文档状态括注）+ 版本范围（版本 / 版本口径）"
 python3 Scripts/check-status-consistency.py
 # L-69 ③（2026-09-28 第 56 轮）：上面那条管的是「其它文档括注 ↔ 台账**状态一致**」（2026-10-20 改口径，
-# 原为「索引 ↔ 定义行」），管不了
-# 「这条 🟡 到底算不算 alpha 范围」。v0.1.0-alpha 给 6 条环境项手加了 `[alpha 不含]`，
-# 此后 🟡 增删、标记被删、标记被挪格，机器一句都不说 ⇒ 发布说明「明确不做什么」写不出来。
-# 现在把它变成台账 + 双向判据（台账 `Scripts/alpha-fr-dispositions.json`）：
-# A 台账 ↔ SRS 双向对账（漏一条 / 留陈旧条目都红）；B 台账声明的标记必须逐字出现在定义行里，
-# 反向也判（手写标记绕不过对账）；C 原因档必须在词表内；D 每条至少一个**存在的**证据指针；
-# E 空跑防护。负例 `--self-test` 11 例，一律在临时副本上写坏，末例核对真仓库逐字节未变。
-python3 Scripts/check-alpha-fr-dispositions.py
-python3 Scripts/check-alpha-fr-dispositions.py --self-test
+# 原为「索引 ↔ 定义行」），管不了「这条 🟡 到底算不算本版范围」。
+# **2026-10-20 改口径（人类主人令）：「不同版本该具备哪些能力 / 需求」由版本计划说清** ——
+# 旧做法在需求行内写 `[alpha 不含]` 括注、另存一本 `alpha-fr-dispositions.json`；状态列迁出后
+# 括注丢了大半、账目与正文对不上（70 条账目里 63 条的标记在需求书里已不存在）。
+# 现在范围只在**一处**：台账 §3 的 `版本`（四档）+ `版本口径`（为什么不在本版）两列。
+# 判据 = 版本 ⊆ 四档 / alpha 行口径必为 `—` / 非 alpha 行口径非空 / 编号唯一 / 空跑防护（行数与 alpha 条数双下限）。
+# 负例 `--self-test` 8 例，全部在内存里写坏（不碰盘、无副作用）。
+python3 Scripts/check-version-scope.py
+python3 Scripts/check-version-scope.py --self-test
 
 echo "==> 6/18 设计令牌棘轮 + 外观样张与产品同源 + 主题集（三选一）"
 python3 Scripts/check-design-tokens.py
