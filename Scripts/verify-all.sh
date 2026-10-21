@@ -65,8 +65,8 @@ set -euo pipefail
 #        `.frame(width:height:)` 都要在台账 `panel-root-frames.json` 里有处置；面板根必须**把意图
 #        写出来** —— 显式写 `alignment:` 或登记一个在该视图类型里真的存在的撑满令牌，
 #        见 `check-panel-root-frames.py`）
-#  10. 插件装配链（笔记模块解耦 FR-STD-ALL-PLUG-007 + 装配与许可 FR-STD-ALL-PLUG-001/02/03/06 + ADR-35）
-#      + 笔记模块的**零网络出口**（FR-STD-ALL-PLUG-005 ②：数据不外发，见 `check-notes-offline.py`）
+#  10. 插件装配链（笔记模块解耦 FR-ALL-ALL-PLUG-007 + 装配与许可 FR-ALL-ALL-PLUG-001/02/03/06 + ADR-35）
+#      + 笔记模块的**零网络出口**（FR-ALL-ALL-PLUG-005 ②：数据不外发，见 `check-notes-offline.py`）
 #      + **界面检索走库 + 路线如实标注**（L-44：唯一生产点 / 视图不许内存过滤 /
 #        路线逐条登记 / 文案键在位且被引用，见 `check-note-search-route.py`）
 #      + **Markdown 解析只有一份**（L-137：行内扫描器唯一定义在笔记侧 / 块级模型只由
@@ -80,7 +80,7 @@ set -euo pipefail
 #      见 `check-cli-failure-readability.py`）
 #  16. 越界检查（分层的三书「形态 A」：一次改动不得落在**对侧独占节**内 ——
 #      `[独占:macos]` / `[独占:windows]` 标记的节各归其主，见 `check-exclusive-sections.py`）
-#  17. vendored SQLite（FR-STD-ALL-PLUG-008 / Q23）：台账对账 + 负例自检 + 现编现跑自证
+#  17. vendored SQLite（FR-ALL-ALL-PLUG-008 / Q23）：台账对账 + 负例自检 + 现编现跑自证
 #      （`check-vendored-sqlite.py`｜`--self-test`｜`smoke-vendored-sqlite.py`）
 #  18. 生成物一致性（两族）：**生成物不许手改、也不许过期**
 #      · 族 ①（L-43，2026-09-27 第 30 轮）：`gen-sqlite-constants.py --check`
@@ -769,10 +769,10 @@ python3 Scripts/check-result-scroll-ledger.py --self-test
 python3 Scripts/check-agent-provider-presets.py
 python3 Scripts/check-agent-provider-presets.py --self-test
 
-echo "==> 10/18 插件装配链（FR-STD-ALL-PLUG-001~03 / 06 / 07 + ADR-35）"
+echo "==> 10/18 插件装配链（FR-ALL-ALL-PLUG-001~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py
 python3 Scripts/check-plugin-assembly.py
-# L-22：FR-STD-ALL-PLUG-005 的「Linux 笔记＝本地离线、数据不外发（公司合规）」不能只是一句话 ——
+# L-22：FR-ALL-ALL-PLUG-005 的「Linux 笔记＝本地离线、数据不外发（公司合规）」不能只是一句话 ——
 # 笔记模块范围内**逐行扫网络 API 令牌表**（URLSession / import Network / NWConnection /
 # http(s) 字面量 / URL(string: …），命中即红并点名文件与行号；范围声明与磁盘事实、
 # 与上面那份解耦清单**两边对账**（漏登一个源文件也是红）。判据与台账见
@@ -953,10 +953,10 @@ DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-path-ownership.py --self
 python3 Scripts/check-tri-repo-parity.py
 python3 Scripts/check-tri-repo-parity.py --self-test
 
-echo "==> 17/18 vendored SQLite（FR-STD-ALL-PLUG-008 / Q23）：台账对账 + 负例 + 现编现跑自证"
+echo "==> 17/18 vendored SQLite（FR-ALL-ALL-PLUG-008 / Q23）：台账对账 + 负例 + 现编现跑自证"
 # 为什么这三条必须一起跑（第 18 轮 L-25 第 1 批）：
 #   · 这份 `sqlite3.c` 是 9.5 MB 的**生成文件**，换版本 / 手改一行 / 编译宏掉一个都**不会有症状**，
-#     只会让三端行为悄悄不一致（FR-STD-ALL-PLUG-008 的口径是「三端同一份引擎，不许换系统 libsqlite3」）；
+#     只会让三端行为悄悄不一致（FR-ALL-ALL-PLUG-008 的口径是「三端同一份引擎，不许换系统 libsqlite3」）；
 #     所以第一条把每个事实（文件哈希 / 头文件版本串 / 宏 / 公共头目录 / 许可 / 来源 / 接线）都做成对账；
 #   · 第二条是**门禁自己的证据**（**25 例**：篡改 23 条必须被抓到并指名出处 + 对手臂 2 条不许
 #     误报 —— 六类篡改 + 证据锚点 + 接线 + 项号自洽 + 台账空跑防护，另加「把接线**注释掉**」

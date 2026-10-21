@@ -65,7 +65,7 @@
     "tool": "xcodegen",
     "version": "2.46.0",
     "command": "xcodegen generate",
-    "postGen": "project.yml 的 postGenCommand → `Scripts/patch-xcodeproj.sh`（补本地包 PostgresNIO 的 product 关联，FR-STD-ALL-BLD-002）",
+    "postGen": "project.yml 的 postGenCommand → `Scripts/patch-xcodeproj.sh`（补本地包 PostgresNIO 的 product 关联，FR-ALL-ALL-BLD-002）",
     "regeneratedBy": "开发循环第 68 轮（2026-09-28，队列 L-70）",
     "binarySource": "官方 release 产物 `xcodegen.zip`（yonaskolb/XcodeGen）解出的 CLI，落在 `/opt/homebrew/bin/xcodegen`。**如实登记**：本机 `brew install xcodegen` 走不通 —— `formulae.brew.sh` 取 API 失败（`curl (28) Operation too slow`），故改成经 https 代理直接取 release 包；`xcodegen --version` = `2.46.0`。",
     "stalenessBefore": "第 57/67 轮之前生成物是**旧的**：入库的 `project.pbxproj` 只有 869 行、bundle id 仍是改名前的 `com.vnull.PostgresClient*`、且**没有 DoyahPlatform / DoyahPlatformTests 两个目标**（2026-09-22 改名与平台拆分之后就没再生成过）；`Docs/项目评审-2026-09-23.md` 早已把「生成物与源可能不同步」记成风险，但**没有任何门禁说话** ⇒ 本判据的 C1/C2/C3 就是这个缺口的机械判据。重生成后 2615 行、五个目标与 `studio.doyah.*` 标识一致。"

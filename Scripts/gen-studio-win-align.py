@@ -284,7 +284,7 @@ def render(
     out.append(">")
     out.append(
         "> **与派单仓一次性快照的差异（1 行，如实登记）**：`DoyahDispatch` 的 "
-        "`docs/平台对齐-Studio-Windows对macOS.md`（2026-10-14 前门一次性快照）把 `FR-STD-ALL-PLUG-004` 记成 `—` —— "
+        "`docs/平台对齐-Studio-Windows对macOS.md`（2026-10-14 前门一次性快照）把 `FR-ALL-ALL-PLUG-004` 记成 `—` —— "
         "该条的 §10.2 格内有**转义竖线**（`CLI/main.swift`（`notes path\\|legacy-path\\|migrate`）），"
         "快照按裸 `|` 切格 ⇒ 整行错位、落点读不出来。本脚本按字面处理转义竖线 ⇒ 该条落点读得出来，"
         "故两处数目不同（快照 173 / 17 / **72**，本件 "

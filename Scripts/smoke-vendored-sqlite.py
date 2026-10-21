@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""vendored SQLite 的**现编现跑**自证（FR-STD-ALL-PLUG-008 / Q23）。
+"""vendored SQLite 的**现编现跑**自证（FR-ALL-ALL-PLUG-008 / Q23）。
 
 台账门禁（`check-vendored-sqlite.py`）证明的是「文件就是那一份、宏写着那几条」；
 这一条证明的是「**真的编得起来、跑得对**」：把 `Vendor/sqlite3` 的 `sqlite3.c` 用台账里的编译宏
@@ -13,7 +13,7 @@
   3. 行为自证：WAL 真的开得起来（并发写 + 多进程读的前提）、参数化写入与读回一致、
      FTS5 能建虚拟表并**真检索**、DQS=0 时双引号字符串**当场报错**。
 
-**FTS5 与中文（第 18 轮实测出的硬事实，直接决定 `FR-STD-ALL-PLUG-008`「按条件查与全文检索」怎么落实）**：
+**FTS5 与中文（第 18 轮实测出的硬事实，直接决定 `FR-ALL-ALL-PLUG-008`「按条件查与全文检索」怎么落实）**：
 
   · 默认分词器 `unicode61` **不切中文**：`MATCH '骑行'` 命中 **0**（不是「大概不能」，是实测 0），
     而同一张表上 `MATCH 'breathing'` 命中 1 —— 所以这 0 是**分词语义**，不是索引坏了；
@@ -215,7 +215,7 @@ def main() -> int:
         ("源码 ID 与台账一致", values.get("sourceid") == ledger["sourceID"],
          f"跑了 {values.get('sourceid', '')[:32]}…，台账 {ledger['sourceID'][:32]}…"),
         ("SQLITE_THREADSAFE 生效", values.get("opt_THREADSAFE") == "1", "序列化模式是宿主多线程的前提"),
-        ("SQLITE_ENABLE_FTS5 生效", values.get("opt_ENABLE_FTS5") == "1", "全文检索是 FR-STD-ALL-PLUG-008 的判据之一"),
+        ("SQLITE_ENABLE_FTS5 生效", values.get("opt_ENABLE_FTS5") == "1", "全文检索是 FR-ALL-ALL-PLUG-008 的判据之一"),
         ("SQLITE_OMIT_LOAD_EXTENSION 生效", values.get("opt_OMIT_LOAD_EXTENSION") == "1", "少一个 dlopen 面"),
         ("WAL 真的开起来了", (values.get("journal_mode") or "").lower() == "wal",
          f"journal_mode={values.get('journal_mode')}"),

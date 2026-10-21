@@ -1,5 +1,5 @@
 #!/bin/bash
-# 笔记数据边界（FR-STD-ALL-PLUG-004）的可复跑证据。
+# 笔记数据边界（FR-ALL-ALL-PLUG-004）的可复跑证据。
 #
 # 为什么单独验这一块：**位置错了不会报错，只会慢慢丢东西** ——
 # 宿主的清理 / 迁移顺手带走用户的笔记，或者笔记的搬运动到宿主的连接凭据与审计日志。
@@ -31,8 +31,8 @@ fi
 
 echo ""
 echo "== 1) 默认位置：在工程数据家之外 =="
-# `FR-STD-ALL-PLUG-008` 第 3 批之后：`notes path` 指的是**库**（本地 SQLite），
-# 旧格式的位置另开一条出口 `notes json-path`（它是引擎迁移的输入，FR-STD-ALL-PLUG-004 搬的就是它）。
+# `FR-ALL-ALL-PLUG-008` 第 3 批之后：`notes path` 指的是**库**（本地 SQLite），
+# 旧格式的位置另开一条出口 `notes json-path`（它是引擎迁移的输入，FR-ALL-ALL-PLUG-004 搬的就是它）。
 "$CLI" notes path > "$WORK/library.txt" 2>&1
 LIBRARY_PATH="$(cat "$WORK/library.txt")"
 echo "     笔记库：$LIBRARY_PATH"
@@ -131,7 +131,7 @@ grep -q '"outcome":"nothingToMigrate"' "$WORK/migrate5.json" && check "outcome=n
 
 echo ""
 echo "== 6) 生效的 DOYAH_NOTES_DIR 覆盖：迁移主动让路 =="
-# `FR-STD-ALL-PLUG-008` 第 3 批之后：`notes path` = **库**（SQLite），`notes json-path` = 旧格式；
+# `FR-ALL-ALL-PLUG-008` 第 3 批之后：`notes path` = **库**（SQLite），`notes json-path` = 旧格式；
 # 两个出口都跟着覆盖变量走（否则脚本里的临时目录与真实数据目录会串）。
 DOYAH_NOTES_DIR="$WORK/override-home" "$CLI" notes json-path > "$WORK/path2.txt" 2>&1
 DOYAH_NOTES_DIR="$WORK/override-home" "$CLI" notes path > "$WORK/path3.txt" 2>&1
@@ -144,7 +144,7 @@ fi
 
 echo ""
 if [ "$fail" -eq 0 ]; then
-    echo "✅ 笔记数据边界（FR-STD-ALL-PLUG-004）：全部断言通过"
+    echo "✅ 笔记数据边界（FR-ALL-ALL-PLUG-004）：全部断言通过"
 else
     echo "❌ 有断言未通过"
 fi

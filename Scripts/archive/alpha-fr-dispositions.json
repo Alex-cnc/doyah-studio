@@ -887,7 +887,7 @@
       ]
     },
     {
-      "id": "FR-STD-ALL-PLUG-005",
+      "id": "FR-ALL-ALL-PLUG-005",
       "domain": "3.13 插件装配",
       "reason": "not-implemented",
       "reasonText": "验收要点 ①③④未做（源码在本仓，按平台口径非本侧）",
@@ -903,7 +903,7 @@
       ]
     },
     {
-      "id": "FR-STD-ALL-PLUG-008",
+      "id": "FR-ALL-ALL-PLUG-008",
       "domain": "3.13 插件装配",
       "reason": "ui-click",
       "reasonText": "界面点击点验待人工；打包项按平台口径非本侧",

@@ -77,8 +77,8 @@
 | **FR-STD-DB-META-015** | 3.4 对象浏览与元数据 | 界面点击待人工点验 | `ui-click` | `Scripts/test-object-search.sh` |
 | **FR-STD-DB-META-011** | 3.4 对象浏览与元数据 | 界面呈现待人工确认 | `ui-click` | `Scripts/test-object-ddl.sh` |
 | **FR-STD-DB-META-008** | 3.4 对象浏览与元数据 | 界面点击待人工点验 | `ui-click` | `Scripts/alpha-main-chain-v0.2.sh`、`Scripts/make-ui-snapshots.sh` |
-| **FR-STD-ALL-PLUG-005** | 3.13 插件装配 | 验收要点 ①③④未做（源码只在公司机器，按平台口径非本侧） | `not-implemented` | `Scripts/check-notes-offline.py`、`Scripts/test-notes-offline-gate.py` |
-| **FR-STD-ALL-PLUG-008** | 3.13 插件装配 | 界面点击点验待人工；打包项按平台口径非本侧 | `ui-click` | `Scripts/check-note-search-route.py`、`Scripts/test-note-search-route.py`、`Scripts/verify-all.sh` |
+| **FR-ALL-ALL-PLUG-005** | 3.13 插件装配 | 验收要点 ①③④未做（源码只在公司机器，按平台口径非本侧） | `not-implemented` | `Scripts/check-notes-offline.py`、`Scripts/test-notes-offline-gate.py` |
+| **FR-ALL-ALL-PLUG-008** | 3.13 插件装配 | 界面点击点验待人工；打包项按平台口径非本侧 | `ui-click` | `Scripts/check-note-search-route.py`、`Scripts/test-note-search-route.py`、`Scripts/verify-all.sh` |
 | **FR-STD-DB-RES-011** | 3.3 结果集与导出 | 大表实测待人工（NFR-ALL-GATE-PERF-002 的阻塞） | `device-instance` | `Scripts/alpha-main-chain-v0.2.sh` |
 | **FR-STD-DB-RES-007** | 3.3 结果集与导出 | 界面点击待人工点验 | `ui-click` | `Scripts/alpha-main-chain-v0.2.sh`、`Scripts/make-ui-snapshots.sh` |
 | **FR-STD-DB-RES-008** | 3.3 结果集与导出 | 界面点击待人工点验 | `ui-click` | `Scripts/alpha-main-chain-v0.2.sh`、`Scripts/make-ui-snapshots.sh` |

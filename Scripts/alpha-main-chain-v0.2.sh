@@ -73,10 +73,10 @@ WS_ENV=()
 
 # C 笔记（装配 + 本地库 + 检索）
 NOTE_LOCAL=(
-  "装配-解耦门禁|check-note-module-isolation.py|gate|笔记侧文件不许依赖数据库 / Ultra 侧类型（FR-STD-ALL-PLUG-007）"
-  "装配-装配链门禁|check-plugin-assembly.py|gate|同进程 / 单一判据 / 单向上下文（FR-STD-ALL-PLUG-001~03 / 06）"
-  "本地库-数据家与迁移|test-note-data-boundary.sh|assert|默认位置在工程数据家之外 / 迁移留备份 / 坏文件绝不覆盖（FR-STD-ALL-PLUG-004）"
-  "本地库-vendored SQLite|check-vendored-sqlite.py|gate|存储引擎换本地 SQLite：台账对账 + 现编现跑自证（FR-STD-ALL-PLUG-008 / Q23）"
+  "装配-解耦门禁|check-note-module-isolation.py|gate|笔记侧文件不许依赖数据库 / Ultra 侧类型（FR-ALL-ALL-PLUG-007）"
+  "装配-装配链门禁|check-plugin-assembly.py|gate|同进程 / 单一判据 / 单向上下文（FR-ALL-ALL-PLUG-001~03 / 06）"
+  "本地库-数据家与迁移|test-note-data-boundary.sh|assert|默认位置在工程数据家之外 / 迁移留备份 / 坏文件绝不覆盖（FR-ALL-ALL-PLUG-004）"
+  "本地库-vendored SQLite|check-vendored-sqlite.py|gate|存储引擎换本地 SQLite：台账对账 + 现编现跑自证（FR-ALL-ALL-PLUG-008 / Q23）"
   "检索-界面走库口径|check-note-search-route.py|gate|唯一生产点 / 视图无内存过滤 / 走的哪条路如实标注"
   "检索-口径负例|test-note-search-route.py|assert|上一条门禁**红得出来**（写坏必报红并点名）"
   "检索-零网络出口|check-notes-offline.py|gate|笔记侧不许有任何出网入口（本地离线）"
