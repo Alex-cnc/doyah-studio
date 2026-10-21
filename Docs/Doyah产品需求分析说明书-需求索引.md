@@ -104,11 +104,11 @@
 | FR-STD-ALL-BLD-007 | 3.1.1 工程与工具链 | 常用增强 |
 | FR-STD-ALL-BLD-008 | 3.1.1 工程与工具链 | 进阶可选 |
 | FR-STD-ALL-BLD-009 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-STD-ALL-CLI-001 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-STD-ALL-CLI-002 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-STD-ALL-CLI-003 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-STD-ALL-CLI-004 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-STD-ALL-CLI-005 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-CLI-001 | 3.1.4 命令行出口 | 常用增强 |
+| FR-STD-ALL-CLI-002 | 3.1.4 命令行出口 | 常用增强 |
+| FR-STD-ALL-CLI-003 | 3.1.4 命令行出口 | 常用增强 |
+| FR-STD-ALL-CLI-004 | 3.1.4 命令行出口 | 常用增强 |
+| FR-STD-ALL-CLI-005 | 3.1.4 命令行出口 | 常用增强 |
 | FR-STD-DB-CONN-007 | 3.4 Doyah Studio · 数据库 | 基线必备 |
 | FR-STD-DB-CONN-001 | 3.4 Doyah Studio · 数据库 | 基线必备 |
 | FR-STD-DB-CONN-002 | 3.4 Doyah Studio · 数据库 | 常用增强 |
@@ -154,42 +154,42 @@
 | FR-STD-DB-DRV-003 | 3.4 Doyah Studio · 数据库 | 常用增强 |
 | FR-STD-DB-DRV-009 | 3.4 Doyah Studio · 数据库 | 进阶可选 |
 | FR-STD-DB-DRV-010 | 3.4 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-UI-001 | 3.3 Doyah Studio · 数据库 | 基线必备 |
+| FR-STD-WS-UI-001 | 3.3 Doyah Studio · 工作区 | 基线必备 |
 | FR-STD-WS-VCS-001 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-TOOL-003 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-AI-002 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-EDIT-015 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-FS-009 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-FS-010 | 3.3 Doyah Studio · 工作区 | 常用增强 |
-| FR-STD-WS-WEB-003 | 网页文件可在编辑器内切「预览」渲染（不是只能看源码），同一文件也可在浏览器页签打开 | 常用增强 |
-| FR-STD-WS-WEB-004 | 站点兼容：对站点呈现常规浏览器身份（身份 / Cookie / 弹窗 / 证书） | 常用增强 |
-| FR-STD-WS-NAV-001 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-NAV-007 | 3.3 Doyah Studio · 数据库 | 基线必备 |
-| FR-STD-WS-NAV-008 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-NAV-009 | 3.3 Doyah Studio · 数据库 | 基线必备 |
-| FR-STD-WS-NAV-010 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-NAV-011 | 3.3 Doyah Studio · 数据库 | 进阶可选 |
+| FR-STD-WS-WEB-003 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-WEB-004 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-NAV-001 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-NAV-007 | 3.3 Doyah Studio · 工作区 | 基线必备 |
+| FR-STD-WS-NAV-008 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-NAV-009 | 3.3 Doyah Studio · 工作区 | 基线必备 |
+| FR-STD-WS-NAV-010 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-NAV-011 | 3.3 Doyah Studio · 工作区 | 进阶可选 |
 | FR-STD-DB-EXEC-014 | 3.4 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-NAV-003 | 3.3 Doyah Studio · 数据库 | 常用增强 |
+| FR-STD-WS-NAV-003 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-DB-SESS-001 | 3.4 Doyah Studio · 数据库 | 常用增强 |
 | FR-STD-DB-CONN-019 | 3.4 Doyah Studio · 数据库 | 进阶可选 |
-| FR-STD-WS-EDIT-024 | 3.3 Doyah Studio · 数据库 | 进阶可选 |
-| FR-STD-WS-UI-007 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-EDIT-001 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-FS-007 | 3.3 Doyah Studio · 数据库 | 基线必备 |
-| FR-STD-WS-EDIT-002 | 3.3 Doyah Studio · 数据库 | 基线必备 |
-| FR-STD-WS-EDIT-003 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-EDIT-010 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-EDIT-011 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-EDIT-018 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-EDIT-004 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-NAV-013 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-HELP-001 | 3.3 Doyah Studio · 数据库 | 进阶可选 |
-| FR-STD-WS-UI-002 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-UI-005 | 3.3 Doyah Studio · 数据库 | 常用增强 |
-| FR-STD-WS-UI-008 | 3.3 Doyah Studio · 数据库 | 进阶可选 |
-| FR-STD-WS-EDIT-016 | 3.3 Doyah Studio · 数据库 | 进阶可选 |
-| FR-STD-WS-EDIT-005 | 3.3 Doyah Studio · 数据库 | 常用增强 |
+| FR-STD-WS-EDIT-024 | 3.3 Doyah Studio · 工作区 | 进阶可选 |
+| FR-STD-WS-UI-007 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-EDIT-001 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-FS-007 | 3.3 Doyah Studio · 工作区 | 基线必备 |
+| FR-STD-WS-EDIT-002 | 3.3 Doyah Studio · 工作区 | 基线必备 |
+| FR-STD-WS-EDIT-003 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-EDIT-010 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-EDIT-011 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-EDIT-018 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-EDIT-004 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-NAV-013 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-HELP-001 | 3.3 Doyah Studio · 工作区 | 进阶可选 |
+| FR-STD-WS-UI-002 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-UI-005 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-STD-WS-UI-008 | 3.3 Doyah Studio · 工作区 | 进阶可选 |
+| FR-STD-WS-EDIT-016 | 3.3 Doyah Studio · 工作区 | 进阶可选 |
+| FR-STD-WS-EDIT-005 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-TOOL-001 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-TOOL-002 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-DB-EXEC-001 | 3.3 Doyah Studio · 工作区 | 常用增强 |
@@ -408,11 +408,11 @@
 | FR-RTR-REV-TRADE-005 | 3.6 Doyah Retro | 基线必备 |
 | FR-RTR-MKT-STORE-004 | 3.6 Doyah Retro | 基线必备 |
 | FR-RTR-REV-TRADE-006 | 3.6 Doyah Retro | 基线必备 |
-| FR-STD-ALL-LIC-001 | 3.1.2 授权与许可 | 基线必备 |
-| FR-STD-ALL-LIC-002 | 3.1.2 授权与许可 | 基线必备 |
-| FR-STD-ALL-LIC-003 | 3.1.2 授权与许可 | 基线必备 |
-| FR-STD-ALL-LIC-004 | 3.1.2 授权与许可 | 基线必备 |
-| FR-STD-ALL-LIC-005 | 3.1.2 授权与许可 | 常用增强 |
+| FR-STD-ALL-LIC-001 | 3.1.2 授权与版本 | 基线必备 |
+| FR-STD-ALL-LIC-002 | 3.1.2 授权与版本 | 基线必备 |
+| FR-STD-ALL-LIC-003 | 3.1.2 授权与版本 | 基线必备 |
+| FR-STD-ALL-LIC-004 | 3.1.2 授权与版本 | 基线必备 |
+| FR-STD-ALL-LIC-005 | 3.1.2 授权与版本 | 常用增强 |
 | FR-AGT-CORE-SESS-001 | 3.2 Doyah Agent | 常用增强 |
 | FR-AGT-CORE-LOOP-008 | 3.2 Doyah Agent | 常用增强 |
 | FR-AGT-CORE-LOOP-009 | 3.2 Doyah Agent | 基线必备 |

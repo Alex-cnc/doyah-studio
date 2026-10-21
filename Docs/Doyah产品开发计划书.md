@@ -4,7 +4,7 @@
 >
 > **这本书只回答一件事：哪一条做到哪儿了。** 要什么、验收怎么算 → 需求分析说明书；是什么、边界在哪 → 能力规划说明书；怎么做 → 概要设计说明书。
 
-| 版本 | v0.26（2026-10-20：台账 +1 条 LOOP-009，矩阵 376） |
+| 版本 | v0.27（2026-10-20：台账对齐需求书 21 行 + §11 覆盖台账 5 处） |
 |---|---|
 
 ## 1 定位
@@ -47,7 +47,7 @@
 | 7.1 发布门槛 | 8 | 5 | 1 | 2 |
 | 3.2 Doyah Agent | 第三章 | 50 | `FR-AGT-LINK-CHAN-001` ~ `FR-AGT-QUAL-VERIFY-004`（67 条） | **覆盖 50 / 50**（2026-10-20 补齐 15 条；补 LOOP-009 单次任务预算 1 条） |
 | 3.1.1 工程与工具链 | 14 | 14 | 0 | 0 |
-| 3.4 Doyah Studio · 数据库 | 4.2 | 33 | `FR-CONN`20 · `FR-EXEC`17 · `FR-RES`14 · `FR-META`15 · `FR-DATA`6 · `FR-DDL`5 · `FR-DIAG`5 · `FR-SESS`5 · `FR-DRV`9 · `FR-EDIT`4（共 106 条） | **33 / 33**（对话式诊断 / 任务定义 / 审批 / 执行回执已在节内立条，数据库侧口径） |
+| 3.4 Doyah Studio · 数据库 | 4.2 | 34 | `FR-CONN`20 · `FR-EXEC`17 · `FR-RES`14 · `FR-META`15 · `FR-DATA`6 · `FR-DDL`5 · `FR-DIAG`5 · `FR-SESS`5 · `FR-DRV`9 · `FR-EDIT`4（共 106 条） | **34 / 34**（对话式诊断 / 任务定义 / 审批 / 执行回执已在节内立条；4.2.35 命令行出口归 §3.1.4） |
 | 3.3 Doyah Studio · 工作区 | 4.1 | 38 | `FR-STD-WS-UI-001`~`07` · `09` · `12`~`72`（69 条） | **38 / 38**（看差异、授权与版本已各自立条，不再指路） |
 | 3.1.3 插件装配 | 8 | 6 | 2 | 0 |
 | 4.8 AI 智能体 | 8 | 5 | 2 | 1 |
@@ -80,15 +80,15 @@
 | FR-RTR-RSR-SAMPLE-006 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-RTR-RSR-SCENARIO-006 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-CAPTURE-001 | — | 3.5 Doyah Notes | 基线必备 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-FORMAT-001 | — | 3.5 Doyah Notes | 基线必备 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-ATTACH-001 | — | 3.5 Doyah Notes | 基线必备 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-SEARCH-001 | — | 3.5 Doyah Notes | 基线必备 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-ORG-001 | — | 3.5 Doyah Notes | 基线必备 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-FORMAT-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-ATTACH-001 | — | 3.5 Doyah Notes | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-SEARCH-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-ORG-001 | — | 3.5 Doyah Notes | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-VERSION-001 | — | 3.5 Doyah Notes | 基线必备 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-TRASH-001 | — | 3.5 Doyah Notes | 基线必备 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-SYNC-001 | — | 3.5 Doyah Notes | 基线必备 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-SYNC-002 | — | 3.5 Doyah Notes | 基线必备 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-EXPORT-001 | 导出与迁移：导出 Markdown / 纯文本 / 备份包，导入自己导出的包可完整还 | 3.5 Doyah Notes | 基线必备 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-TRASH-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-SYNC-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-SYNC-002 | — | 3.5 Doyah Notes | 常用增强 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-EXPORT-001 | 导出与迁移：导出 Markdown / 纯文本 / 备份包，导入自己导出的包可完整还 | 3.5 Doyah Notes | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-PRIVACY-001 | 私密保护：可把单条笔记标为私密（不进搜索、不同步、不外发），需二次验证才可查看 | 3.5 Doyah Notes | 基线必备 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | AC-ALL-GATE-AI-01 | — | 7.4 智能体验收 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
 | AC-ALL-GATE-AI-02 | — | 7.4 智能体验收 | — | — | ✅ | ✅ 已接线（T-57；真实实例端到端待执行） | v0.1.0-alpha | — |
@@ -105,24 +105,24 @@
 | FR-AGT-LINK-CHAN-001 | 模型接入配置：可配置模型服务（本地 / 远端，OpenAI 兼容端点）、模型名、AP | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-AGT-PLAN-CLAR-001 | 主动澄清：开跑前遇到目标不清 / 缺关键参数 / 两种做法代价差很大时，先问一句再动 | 3.2 Doyah Agent | 常用增强 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-PLAN-PLAN-004 | 计划修订：执行中发现原计划不成立时，说出为什么改并给出新计划，不静默换路 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-GUARD-SOUL-001 | 灵魂分层：L0 角色（我是谁）· L1 领域角色（在这个领域我是谁）· L2 项目做 | 3.2 Doyah Agent | 常用增强 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-GUARD-SOUL-001 | 灵魂分层：L0 角色（我是谁）· L1 领域角色（在这个领域我是谁）· L2 项目做 | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-INGEST-001 | 网络检索：按关键词检索公开网页并给出可点开的来源，能区分「搜到标题」与「读到正文」 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-INGEST-002 | 文档解析：把 PDF / Word / Excel / 图片里的文字取出来参与推理， | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-TOOL-INGEST-003 | 图像理解：把截图 / 图片交给支持视觉的模型，并把「模型不能看图」当成一种明确失败 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-TOOL-MEDIA-001 | 语音输入：把一段语音转成文字再进对话，转写错误可回看原文 | 3.2 Doyah Agent | 常用增强 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-TOOL-MEDIA-002 | 语音输出：把回答读出来，可中断、可调语速 | 3.2 Doyah Agent | 常用增强 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-TOOL-SYS-001 | 界面操作：驱动本机图形界面完成点击 / 输入 / 滚动，每一步可见、可中断 | 3.2 Doyah Agent | 常用增强 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-TOOL-INGEST-003 | 图像理解：把截图 / 图片交给支持视觉的模型，并把「模型不能看图」当成一种明确失败 | 3.2 Doyah Agent | 进阶可选 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-TOOL-MEDIA-001 | 语音输入：把一段语音转成文字再进对话，转写错误可回看原文 | 3.2 Doyah Agent | 进阶可选 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-TOOL-MEDIA-002 | 语音输出：把回答读出来，可中断、可调语速 | 3.2 Doyah Agent | 进阶可选 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-TOOL-SYS-001 | 界面操作：驱动本机图形界面完成点击 / 输入 / 滚动，每一步可见、可中断 | 3.2 Doyah Agent | 进阶可选 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-SYS-002 | 子任务委派：把独立子任务派给子代理并行做，结果汇总回主任务并标明来源 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-MODEL-001 | 模型多档：按任务选档（看图 / 调工具 / 上下文长度 / 语种 / 价格），未标注 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-007 | 中途干预：执行中可插话（改方向 / 停手 / 追加约束），当前步完成后立刻生效 | 3.2 Doyah Agent | 常用增强 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-008 | 主动通知：长任务完成、出错、需要人决定时主动告知（不让人守着屏幕） | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-009 | 求助通道：卡住时能明确说「我需要你做一件事」（授权 / 提供信息 / 人工操作），并 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-GUARD-PERM-003 | 隔离执行：任何执行都在受限环境内（工作区沙箱 / 命令白名单 / 出网策略），越界即 | 3.2 Doyah Agent | 常用增强 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-GUARD-PERM-003 | 隔离执行：任何执行都在受限环境内（工作区沙箱 / 命令白名单 / 出网策略），越界即 | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-OPS-OBS-001 | 可观测：每一次模型调用、工具调用、审批与耗时都留有可查记录，能回答「它刚才为什么这么 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-OPS-OBS-002 | 可配置：模型、工具白名单、审批策略、配额、通知规则都可配置，且改完立即生效并有据可查 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-OPS-OBS-003 | 可评测：能用一组固定任务回归「它有没有变笨」，输出可对比的通过率 | 3.2 Doyah Agent | 常用增强 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-OPS-OBS-003 | 可评测：能用一组固定任务回归「它有没有变笨」，输出可对比的通过率 | 3.2 Doyah Agent | 进阶可选 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-UX-SYNC-001 | 多端一致性：同一会话在桌面与手机上看到的消息、审批与结论一致（壳不同，内容同） | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-CORE-LOOP-007 | 及时刹停：识别到伤害性动作（删库 / 覆盖未备份文件 / 对外发布）时前置停止 —— | 3.2 Doyah Agent | 常用增强 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-CORE-LOOP-007 | 及时刹停：识别到伤害性动作（删库 / 覆盖未备份文件 / 对外发布）时前置停止 —— | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-CORE-LOOP-001 | 自然语言 → SQL：基于当前连接 schema 生成 SQL，结果进入编辑器不自动 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-001 | 对话式诊断：解读执行计划、慢查询与锁阻塞，给出可执行建议 | 3.2 Doyah Agent | 常用增强 | 中 | 🟡 | 🟡 | v1.1+ | 真实模型端点未接（需端点与凭据）；界面入口待人工点验 |
 | FR-AGT-PLAN-PLAN-001 | DBA 维护任务编排：由自然语言描述生成并执行维护任务（备份 / 恢复、VACUUM | 3.2 Doyah Agent | 常用增强 | 中 | 🟡 | 🟡 | v1.1+ | 真实模型端点未接（需端点与凭据）；界面入口待人工点验 |
@@ -214,7 +214,7 @@
 | FR-STD-DB-DRV-010 | MySQL 驱动实现：DatabaseType 新增 mysql 档（默认端口 33 | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-STD-WS-UI-001 | 多页签：新建（⌘T）、切换、关闭 | 3.4 Doyah Studio · 数据库 | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-STD-WS-VCS-001 | Git 只读与差异：显示当前工作区的分支、改动文件清单与逐行差异（不做提交 / 推送 | 3.3 Doyah Studio · 工作区 | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-STD-WS-TOOL-003 | 调试器：经 DAP 接入既有调试器，支持断点、单步、变量查看（不自研调试协议） | 3.3 Doyah Studio · 工作区 | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-STD-WS-TOOL-003 | 调试器：经 DAP 接入既有调试器，支持断点、单步、变量查看（不自研调试协议） | 3.3 Doyah Studio · 工作区 | 进阶可选 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-STD-WS-AI-002 | 许愿式编程：用一段话描述要做的事，Agent 在整个工作区范围内多次读写文件后交付可 | 3.3 Doyah Studio · 工作区 | 常用增强 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-STD-WS-EDIT-015 | 整批撤回：一次任务内的多处文件改动可按批次一次撤回，只撤 Agent 改的、不动人手 | 3.3 Doyah Studio · 工作区 | 常用增强 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-STD-WS-FS-009 | 外部改动监听：文件被编辑器外的程序改动时，界面立即反映并提示重新载入或对比 | 3.3 Doyah Studio · 工作区 | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
@@ -301,7 +301,7 @@
 | FR-STD-DB-EXEC-006 | 执行目标判定：有选区只跑选中的那段，没有选区跑整篇 —— 自动判定，不需要用户先设「 | 3.4 Doyah Studio · 数据库 | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-STD-DB-EXEC-007 | 事务模式：提供「自动提交」开关与提交 / 回滚按钮 | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-STD-DB-EXEC-017 | 高危语句保护（Safe Mode）：对不带 WHERE 的 UPDATE / DEL | 3.4 Doyah Studio · 数据库 | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-STD-DB-EXEC-008 | 查询参数：SQL 中可用 :name / $1 占位符，执行前弹窗填值并做类型化转义 | 3.4 Doyah Studio · 数据库 | 进阶可选 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-STD-DB-EXEC-008 | 查询参数：SQL 中可用 :name / $1 占位符，执行前弹窗填值并做类型化转义 | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-STD-DB-IO-001 | 结果集导出：CSV / JSON / TSV / Markdown / INSERT | 3.4 Doyah Studio · 数据库 | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-STD-DB-IO-002 | 客户端侧整表 / 整库导出：走 COPY <表> TO STDOUT 流式写文件 | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | 🟡 | 🟡 | v1.1+ | vendor 驱动只实现 CopyFrom，缺 COPY … TO STDOUT |
 | FR-STD-DB-IO-006 | CSV / JSON 导入：COPY … FROM STDIN 流式导入 + 列映射 | 3.4 Doyah Studio · 数据库 | 进阶可选 | 低 | 🟡 | 🟡 | v1.1+ | 界面点击待人工点验 |
@@ -480,7 +480,7 @@
 | FR-AGT-KNOW-CTX-002 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-EDIT-001 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-LINK-CHAN-003 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-LINK-EXT-003 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-LINK-EXT-003 | — | 3.2 Doyah Agent | 进阶可选 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-006 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-UX-SESS-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-001 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
@@ -1622,13 +1622,13 @@
 |---|---|---|---|---|
 | 3.2 Doyah Agent | 第三章 | 50 | `FR-AGT-LINK-CHAN-001` ~ `FR-AGT-QUAL-VERIFY-004`（67 条） | **覆盖 50 / 50**（2026-10-20 补齐 15 条；补 LOOP-009 单次任务预算 1 条） |
 | 3.3 Doyah Studio · 工作区 | 4.1 | 38 | `FR-STD-WS-UI-001`~`07` · `09` · `12`~`72`（69 条） | **38 / 38**（看差异、授权与版本已各自立条，不再指路） |
-| 3.4 Doyah Studio · 数据库 | 4.2 | 33 | `FR-CONN`20 · `FR-EXEC`17 · `FR-RES`14 · `FR-META`15 · `FR-DATA`6 · `FR-DDL`5 · `FR-DIAG`5 · `FR-SESS`5 · `FR-DRV`9 · `FR-EDIT`4（共 106 条） | **33 / 33**（对话式诊断 / 任务定义 / 审批 / 执行回执已在节内立条，数据库侧口径） |
-| 3.5 Doyah Notes | 第五章 | 11 | `FR-NTS-NOTE-CAPTURE-001` ~ `FR-NTS-NOTE-PRIVACY-001` | **覆盖 11 / 11**（逐点一一对应；与能力书第五章同文） |
+| 3.4 Doyah Studio · 数据库 | 4.2 | 34 | `FR-CONN`20 · `FR-EXEC`17 · `FR-RES`14 · `FR-META`15 · `FR-DATA`6 · `FR-DDL`5 · `FR-DIAG`5 · `FR-SESS`5 · `FR-DRV`9 · `FR-EDIT`4（共 106 条） | **34 / 34**（对话式诊断 / 任务定义 / 审批 / 执行回执已在节内立条；4.2.35 命令行出口归 §3.1.4） |
+| 3.5 Doyah Notes | 第五章 | 15 | `FR-NTS-NOTE-CAPTURE-001` ~ `FR-NTS-NOTE-PRIVACY-001`（11 条）· `FR-NTS-TODO-LIST-001` ~ `FR-NTS-TODO-LINK-001`（8 条） | **覆盖 15 / 15**（笔记 11 点 + 待办 4 点；待办 2026-10-20 归位） |
 | 3.6 Doyah Retro | 第六章 | 18 | `FR-RTR-MKT-FEED-001` ~ `FR-RTR-REV-AI-001`（82 条） | **18 / 18 每点都有条目**（2026-10-20 归位；回测与验证拆为回测引擎 / 验证与样本；归位表暂定） |
-| 3.1.1 工程与工具链 | —— | —— | `FR-BLD`01 ~ `09`（9 条） | 构建与工程纪律 |
+| 3.1.1 工程与工具链 | —— | —— | `FR-STD-ALL-BLD-001` ~ `009`（9 条） | 构建与工程纪律 |
 | 3.1.2 授权与版本 | —— | —— | `FR-STD-ALL-LIC`01 ~ `05`（5 条） | Studio 授权：一套覆盖三块能力位（移动端不在管辖） |
 | 3.1.3 插件装配 | —— | —— | `FR-STD-ALL-PLUG`01 ~ `08`（**8 条**） | Studio 宿主侧装配与边界（不借 Agent 插件 3.6.4） |
-| 3.1.4 命令行出口 | —— | —— | `FR-CLI`01 ~ `05`（5 条） | 无 UI 也能验证与执行 |
+| 3.1.4 命令行出口 | —— | —— | `FR-STD-ALL-CLI-001` ~ `005`（5 条） | 无 UI 也能验证与执行 |
 | 第七章 非目标 | 第七章 | 10 条 | —— | **不需条目**：非目标是「明确不做」 |
 
 ### 11.2 本批新登记的条目
@@ -1651,6 +1651,7 @@
 | 4.1.31 许愿式编程 | `FR-STD-WS-AI-002` | 整仓范围多轮读写，交付前给差异 |
 | 4.1.14 撤回 | `FR-STD-WS-EDIT-015` | 按批次撤回，不动人手改的行 |
 | 4.1.32 外部改动监听 · 4.1.33 工作区切换 | `FR-STD-WS-FS-009` · `FR-STD-WS-FS-010` | 外部改动即刻提示 · 单活动工作区 |
+| 5.2.1 ~ 5.2.4 待办 | `FR-NTS-TODO-LIST-001` ~ `FR-NTS-TODO-LINK-001`（8 条） | 清单 / 日历 / 完成与改期 / 与笔记互转；承接 `FR-NOTE-27`、`FR-NOTE-36~39` |
 | 5.1.1 ~ 5.1.11 | `FR-NTS-NOTE-CAPTURE-001` ~ `11` | 与能力书第五章逐点对应（捕获 / 编辑 / 附件 / 检索 / 整理 / 版本 / 删除 / 同步 / 冲突合并 / 导出 / 私密） |
 | 6.1.3 数据健康 · 6.2.2 ~ 6.2.4 · 6.2.6 | `FR-RTR-RSR-FEATURE-001` ~ `04` · `FR-RTR-MKT-HEALTH-003` | 特征模型 / 选股筛选 / 回测验证 / 历史情形（**不预测未来**）/ 数据健康 |
 | 6.3.1 工作流编排 · 6.3.2 内置 skill · 6.4.4 AI 复盘 | `FR-RTR-FLOW-ORCH-001` ~ `04` | 可复用流水线 / 行业口径固化 / 挂在原始记录上的复盘稿 |
@@ -1744,6 +1745,7 @@
 
 | 版本 | 日期 | 变更摘要 | 作者 |
 |---|---|---|---|
+| **v0.27** | 2026-10-20 | **台账与覆盖台账跟需求书对齐** —— ①§3 台账 21 行的层次/优先级与需求书不一致（`FR-AGT-GUARD-SOUL-001` 账『常用增强』书『基线必备』、8 行 NOTE 优先级为空等）→ **以需求书为准**改齐；②§11 覆盖台账 5 处：Notes 11 点/11 条 → **15 点/19 条**、数据库 33 → **34**（4.2.35 命令行出口归 §3.1.4）、共性两行旧式缩写 `FR-BLD`/`FR-CLI` → 五段式全号、11.2 补待办四点。 | `hugehippo` |
 | **v0.26** | 2026-10-20 | **台账 +1**：`FR-AGT-CORE-LOOP-009`（单次任务预算 150 步 / 256K，能力书 3.1.1）；版本列记 `未排期`；§2 分区 Agent 50 / 67；§5 矩阵重生成为 **376 条**。 | `hugehippo` |
 | **v0.25** | 2026-10-20 | **描述跟版** —— §3.1.2 / §3.1.3 名称与能力书对齐；「跨产品共通授权 / 跨产品装配」的说法纠正为 **Studio 专属**（一套许可证覆盖三块能力位、宿主侧装配不借 Agent 插件）；台账领域列同批。 | `hugehippo` |
 | **v0.24** | 2026-10-20 | **编号跟版** —— §3.1 的 41 条由 `FR-ALL-ALL-*` 改回 `FR-STD-ALL-*`（Studio 专属，非全产品共性）；台账、§5 矩阵同批；版本口径未动。 | `hugehippo` |

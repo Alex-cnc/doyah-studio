@@ -57,7 +57,7 @@ GROUP_RE = re.compile(
 )
 ALIGN_RE = re.compile(r"([^\s/]+)\s*(\d+)")
 CELL_RE = re.compile(r"✅\s*(\d+)\s*/\s*🟡\s*(\d+)\s*/\s*⬜\s*(\d+)")
-ID_RE = re.compile(r"FR-(?:AGT|STD|NTS|RTR|ALL)-[A-Z]{2,6}-[A-Z]{2,6}-\d{2,3}")   # 两级编号（如 Retro 域的 `FR-RTR-MKT-FEED-001`）必须整串认：
+ID_RE = re.compile(r"FR-(?:AGT|STD|NTS|RTR|ALL)-[A-Z]{2,6}-[A-Z]{2,8}-\d{2,3}")   # 两级编号（如 Retro 域的 `FR-RTR-MKT-FEED-001`）必须整串认：
                                                 # 旧式 `FR-[A-Z]+-\d+` 会把 `FR-RTR-MKT-FEED-001` 截成 `FR-R-01`
                                                 # ⇒ §3 的编号集合比对既报「漏 74 条」又报「多 15 条 + 重复项」
                                                 # （2026-10-14 修 · 由头 = 派单 `T-20261014-025` 的交付件）

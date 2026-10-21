@@ -58,7 +58,7 @@ LEDGER_STOP = "## 4 "
 LEDGER_FLOOR = 400   # 2026-10-20 实测 425 条 ⇒ 下限留余量（防台账被删 / 解析面被削窄）
 STATUSES = "✅🟡⬜➖"
 # 其它文档里「FR-XXX-01（🟡）」这种状态括注，与 §10.1 索引比对（见 cross_document_problems）
-CROSS_DOC_PATTERN = re.compile(r"((?:FR|NFR)-(?:AGT|STD|NTS|RTR|ALL)-[A-Z]{2,6}-[A-Z]{2,6}-\d{2,3})[（(]([✅🟡⬜➖])[）)]")
+CROSS_DOC_PATTERN = re.compile(r"((?:FR|NFR)-(?:AGT|STD|NTS|RTR|ALL)-[A-Z]{2,6}-[A-Z]{2,8}-\d{2,3})[（(]([✅🟡⬜➖])[）)]")
 # 跨文档状态括注的扫描面：与姊妹判据同形（check-doc-tables.py 判据 E / check-doc-versions.py）
 FACE_GLOBS = ("*.md", "Docs/**/*.md")
 # 面内文档数下限（空跑防护）：本仓 2026-10-14 实测 42 份（不含 SPEC）⇒ 只许涨不许跌
@@ -87,7 +87,7 @@ def parse_ledger(lines: list[str]) -> dict[str, tuple[str, int]]:
     ledger: dict[str, tuple[str, int]] = {}
     for offset, line in enumerate(section(lines, LEDGER_START, LEDGER_STOP)):
         fields = [f.strip().strip("*").strip() for f in line.strip().strip("|").split("|")]
-        if len(fields) < 7 or not re.fullmatch(r"(?:FR|NFR|AC)(?:-[A-Z0-9]{2,6}){1,3}-\d{2,3}", fields[0]):
+        if len(fields) < 7 or not re.fullmatch(r"(?:FR|NFR|AC)(?:-[A-Z0-9]{2,8}){1,3}-\d{2,3}", fields[0]):
             continue
         status = fields[5]
         if not status or status[0] not in STATUSES:

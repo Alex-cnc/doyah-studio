@@ -49,7 +49,7 @@ DASH = "—"
 FLOOR_ROWS = 400       # 2026-10-20 实测 425
 FLOOR_ALPHA = 250      # 2026-10-20 实测 346（alpha 仍是主体；低于这个数多半是版本列被整体改坏）
 
-IDENT = re.compile(r"(?:FR|NFR|AC)(?:-[A-Z0-9]{2,6}){1,3}-\d{2,3}")
+IDENT = re.compile(r"(?:FR|NFR|AC)(?:-[A-Z0-9]{2,8}){1,3}-\d{2,3}")
 
 
 def split_row(line: str) -> list[str]:
