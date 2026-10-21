@@ -24,7 +24,7 @@ Beta 1 = **全量功能**：工作区（多页签 / 编辑器 / 终端 / 外部�
 | 项 | 值 |
 |---|---|
 | **目录或标识** | 交付 `/Users/alex/dev/doyah/交付-20261021-beta1.0/`（app + 身份卡 + sha256.txt）；构建出厂处 `~/.dsh/projects/DoyahStudio/dist/DoyahStudio-beta1.0.app` |
-| **标签** | `beta1.0` —— 包内 `Info.plist` `DoyahReleaseLabel` 实测 `beta1.0`（`CFBundleShortVersionString=0.3.0` / `CFBundleVersion=3`）；Git tag `beta1.0`（打在 `HEAD`，注释含 sha256） |
+| **标签** | `beta1.0` —— 包内 `Info.plist` `DoyahReleaseLabel` 实测 `beta1.0`（`CFBundleShortVersionString=0.3.0` / `CFBundleVersion=3`）；Git tag `beta1.0`（打在 `17bfe49d`，注释含 sha256；**已推远端**，`git ls-remote --tags origin` 实测 `refs/tags/beta1.0` → `17bfe49d`） |
 | **sha256（全 64 位）** | `10ac6bfe60d082d6d8270bdc24e45123f4719e2ba588bf819352da35a56e1c8d`（`Contents/MacOS/DoyahStudio` · `89283440` 字节 · arm64 单架构 · 非沙箱 · 签名 `DoyahStudio Local Dev`） |
 | **构建时刻** | `2026-10-21T09:34:15+0800`（UTC `2026-10-21T01:34:16Z`） |
 
