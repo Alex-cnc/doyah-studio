@@ -41,6 +41,10 @@
 | FR-STD-WS-EDIT-003 ~ 22 | `App/EditorCommandCenter.swift`、`App/Views/QueryToolbar.swift`、`App/Views/SQLEditorView.swift`、`App/Views/SaveQuerySheet.swift`（GoToLineSheet）、`Core/SQLFormatter.swift` | `Tests/SQLFormatterTests.swift`（4 项）+ 构建；交互手工回归待做（T-19） |
 | FR-STD-WS-HELP-001 | `App/Views/QueryToolbar.swift::helpButton` | 构建 + App 启动冒烟（T-20） |
 | FR-STD-WS-UI-002 | `Core/TabNumberGenerator.swift`、`AppState.tabNumbers` | `Tests/TabNumberGeneratorTests.swift`（3 项） |
+| FR-STD-WS-UI-010 | `App/Views/TabBar`（chrome 行高度由内边距与字高决定；溢出走横向 `ScrollView`） | 待补（尺寸量测脚本） |
+| FR-STD-WS-UI-011 | 主题令牌（编辑面底色取内容面令牌，`Surface.content`） | 待补（三处编辑面同色比对） |
+| FR-AGT-TOOL-MODEL-002 | `Core/AgentProviderPreset.swift`（16 条内置预设，值可改） | 待补（预设可改的回填实测） |
+| NFR-ALL-GATE-USE-005 | 各端视图层 `.disabled` / 说明文案 / 入口隐藏三选一 | 待补（人工抽查表） |
 | FR-STD-DB-META-001 ~ 08 | `Core/MetadataService.swift`、`Core/Dialects.swift`（list\*Query）、`App/Views/ObjectTreeView.swift` | `Tests/MetadataServiceTests.swift`（8 项）+ `Scripts/test-local-query-path.sh` 用例 4 |
 | FR-STD-DB-META-006 | `App/Views/ObjectTreeView.swift`（已重写为扁平化树）、`Core/MetadataService.swift` | 单测 + 本地链路脚本（基础 + 空 schema）；真实库 UI 手工验收待做（T-03） |
 | FR-STD-DB-META-007 | `Core/MetadataService.swift`（服务器 → 数据库）、`App/AppState.swift`（按 (连接, 数据库) 缓存连接）、`CLI/main.swift` | 本地链路脚本用例 5（双库：`ic_second` → `second_table`）；真实库验收待做 |
