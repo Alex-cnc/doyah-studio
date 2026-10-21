@@ -57,7 +57,7 @@
     python3 Scripts/check-doc-versions.py --self-test     # 负例（临时目录里写坏，末条核对真仓库未动）
     python3 Scripts/check-doc-versions.py --quiet         # 只打印问题
 
-判据自己的证据（27 例）：`--self-test` 把 A/B/C 三档写坏 **16 例** + 判据 D「受检清单自洽」**6 例** + **跨平台标识 1 例**（Windows 形态的相对路径必须落回清单写法，提案 0005）+ **读取兜底与收尾文案 4 例**（非 UTF-8 / 目录占位 / 队列不在盘不得自称唯一 / 队列在盘对手臂）
+判据自己的证据（28 例）：`--self-test` 把 A/B/C 三档写坏 **16 例** + 判据 D「受检清单自洽」**6 例** + **跨平台标识 1 例**（Windows 形态的相对路径必须落回清单写法，提案 0005）+ **读取兜底与收尾文案 4 例**（非 UTF-8 / 目录占位 / 队列不在盘不得自称唯一 / 队列在盘对手臂）+ **变更记录外置 1 例**（正文只剩指针 ⇒ 不算空，2026-10-20）
 （未登记 ⇒ 判红 / 无变更记录节 ⇒ 不纳入 / 在清单里 ⇒ 放行 / `Docs/archive/` ⇒ 豁免）；
 例数的唯一来源 = `Scripts/self-test-counts.json`（本行由它机械对账）。
 
@@ -99,6 +99,9 @@ VERSION_DOCS = [
     # 2026-10-14 · 派单 `T-20261014-025`：派生视图《任务清单 · 按平台》入库（有「变更记录」节 +
     # 头部版本格 ⇒ 撞号与头部漂移都该有人判；判据 D「受检清单自洽」要求它必须在清单里）
     ("Docs/任务清单-按平台.md", False),
+    # 2026-10-20：两书的变更历史外置成独立文件（人类主人令）—— 撞号与头部漂移也要有人判
+    ("Docs/Doyah产品能力规划说明书-变更记录.md", False),
+    ("Docs/Doyah产品概要设计说明书-变更记录.md", False),
 ]
 DEV_RECORD_GLOB = "Docs/开发记录-*.md"
 QUEUE_FILE = "Docs/design/开发循环-任务队列.md"
@@ -279,7 +282,10 @@ def check_doc(relative: str, root: pathlib.Path) -> tuple[list[str], str]:
             f" ⇒ **不可判**（把它挪到节标题之前，或删掉这行）"
         )
     if not rows:
-        if head and has_section:
+        # 2026-10-20：正文只剩「本节已外置」的指针时不算空 —— 历史行在那份 `-变更记录.md` 里，
+        # 且它已登记进 VERSION_DOCS 单独受检（撞号、头部漂移都有人判）。
+        external = any("-变更记录.md" in line for line in lines)
+        if head and has_section and not external:
             problems.append(f"{relative}:{head[0]} 有头部版本格 {head[1]}、也有变更记录节，但一节变更行都没有")
         return problems, "无变更记录（跳过）"
     maximum = max((token for _, token in rows), key=version_key)
@@ -475,6 +481,17 @@ GOOD_DOC = """# 样例文档
 | **v1.1** | 2026-01-01 | 第一条 | 甲 |
 """
 
+EXTERNAL_DOC = """# 外置台账
+
+| 项目 | 内容 |
+|---|---|
+| 版本 | **v1.2** |
+
+## 变更记录 [开放]
+
+> **本节已外置** —— 历史在 `Docs/Doyah产品能力规划说明书-变更记录.md`。
+"""
+
 QUOTE_DOC = """# 引用式台账
 
 > **版本** v1.2 ｜（本格与最新变更行同步）
@@ -508,6 +525,7 @@ EXTRA_CASES = [
 CASES = [
     ("好文档（头部 = 最高，唯一）", GOOD_DOC, None, [], 0),
     ("引用式好台账", QUOTE_DOC, None, [], 0),
+    ("变更记录外置成独立文件（正文只剩指针）⇒ 不算空", EXTERNAL_DOC, None, [], 0),
     ("重复版本号", GOOD_DOC.replace("| **v1.1** | 2026-01-01", "| **v1.2** | 2026-01-01"), None, ["v1.2"], 1),
     ("头部号在记录里找不到",
      GOOD_DOC.replace("| 版本 | **v1.2** |", "| 版本 | **v9.9** |"), None, ["找不到"], 1),

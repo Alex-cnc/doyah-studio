@@ -36,7 +36,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/Doyah产品概要设计说明书.md` §8.5.6-4）。现在：
 
 **这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 12 份** /
-**56 份命名 + 1 条通配 = 实跑 57 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
+**58 份命名 + 1 条通配 = 实跑 59 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
 `doc-tables-files`）；判据 `Scripts/check-doc-numbers.py` 每次**自己算一遍**（导入本模块读清单 +
 `git check-ignore` 实测 + 真跑本脚本）再与本文件 / `Scripts/verify-all.sh` / `AGENT-SPEC.md` 里每一处
 写法对账 —— 本文件里的数字都是**引用**，改口径改台账。
@@ -50,7 +50,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 （跳过的永远是整份文档，不是文档里的某项检查）。
 
 **自检也不许硬读本机台账**（2026-10-08 · 任务 `t_004a679b`）：`--self-test` 里**依赖真仓库那几份
-本机台账**的两例 —— 例 5（写坏队列副本一行）与例 4 的真仓库断言（56 份命名全在 / 实跑 57 个文件 /
+本机台账**的两例 —— 例 5（写坏队列副本一行）与例 4 的真仓库断言（58 份命名全在 / 实跑 59 个文件 /
 无跳过行）—— 在台账不在盘上时**跳过 + 高声提示**：既不崩（例 5 原先直接 `FileNotFoundError`），
 也不假红（例 4 原先把「干净克隆必然缺台账」读成「文档被删」）。口径同上面这一条，出处 =
 `AGENT-SPEC.md` §9 第 147 条 ④（本机台账类判据一律「不在盘上就跳过 + 高声提示」）。**在
@@ -97,6 +97,8 @@ DEFAULT_TARGETS = [
     "Docs/功能清单（管理视图）.md",
     "Docs/Doyah产品需求分析说明书.md",
     "Docs/Doyah产品需求分析说明书-变更记录.md",
+    "Docs/Doyah产品能力规划说明书-变更记录.md",
+    "Docs/Doyah产品概要设计说明书-变更记录.md",
     "Docs/Doyah产品需求分析说明书-需求索引.md",
     "Docs/Doyah产品开发计划书.md",
     "Docs/README.md",
@@ -802,6 +804,8 @@ def main() -> int:
 # 例数仍是 17（跳过不改总数、也不许静默）。
 
 SELF_TEST_TRACKED = [
+    "Docs/Doyah产品能力规划说明书-变更记录.md",
+    "Docs/Doyah产品概要设计说明书-变更记录.md",
     "Docs/Doyah产品开发计划书.md",
     "Docs/人工点验清单-20261018.md",
     "Docs/人工点验清单-20261018-重分版.md",
@@ -813,11 +817,6 @@ SELF_TEST_TRACKED = [
     "Docs/README.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
-    # L-89 纳入的跟踪文档（夹具 = 「干净克隆」那一例的现场，必须与真清单逐条相同）
-    # 36 份（第 90 轮 +1 = 对侧新增的提案 0005；2026-10-01 第 149 轮 +1 =
-    # 星空紫「星云皮肤」那一轮新增的营销物料说明 `Docs/design/store/README.md`，见 DEFAULT_TARGETS 里的注记；
-    # 2026-10-01 第 156 轮（收尾）+3 = 同侧并发会话 `8c0ca8c` 把 `Docs/发布方案.md` 收进了库 +
-    # 新增两份带表格文档 ⇒ 本名单必须与「清单里**入库**的那批」逐条相同，否则判据 `doc-tables-lists` 当场红）
     "Docs/发布方案.md",
     "Docs/模板-人工测试清单-alpha.md",
     "Docs/人工测试清单-alpha2-macOS.md",
@@ -845,17 +844,9 @@ SELF_TEST_TRACKED = [
     "Docs/proposals/0005-受检清单自洽判据-windows-恒假红-路径分隔符.md",
     "Docs/proposals/README.md",
     "Docs/proposals/_TEMPLATE.md",
-    # 2026-10-11 · 派单 `T-20261011-014`：`Docs/智能体助手-开发spec.md` 入库（`.gitignore` 白名单那一行）
-    # ⇒ 它从 `SELF_TEST_ABSENT` 移到这里：受控夹具 35 → 36（与 `gitignored_documents()` 实测的 12 份相加 = 48）。
     "Docs/智能体助手-开发spec.md",
-    # 2026-10-14 · 派单 `T-20261014-015`（人类主人令「`fatshark` 要对齐 macOS 版开发进度」）：
-    # 平台对齐件入库（`.gitignore` 白名单 + 本清单 + `verify-all.sh` 第 7 项 `--check`）⇒
-    # 受控夹具 36 → 37；被 `.gitignore` 排除的仍是 12 份（它是入库件）。
     "Docs/平台对齐-Studio-Windows对macOS.md",
-    # 2026-10-14 · 派单 `T-20261014-025`：派生视图《任务清单 · 按平台》入库 ⇒ 受控夹具 **37 → 38**
-    # （被 `.gitignore` 排除的仍是 12 份；本名单必须与「清单里入库的那批」逐条相同）
     "Docs/任务清单-按平台.md",
-    # 2026-10-17：核心能力扩展草案（灵魂 / IM / 记忆 / 技能自进化）。
     "Docs/智能体助手-核心能力扩展-草案-v0.1.md",
     "Docs/Doyah产品需求分析说明书-变更记录.md",
     "Docs/Doyah产品需求分析说明书-需求索引.md",
@@ -947,7 +938,7 @@ def run_self_test() -> int:
             failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
         elif "⚠ 跳过 12 份" not in output:
             failures.append(f"例 1 失败：没有高声提示「跳过 12 份」（不得静默通过）\n{output}")
-        elif "✅ 表格校验通过（44 个文件，跳过 12 份）" not in output:
+        elif "✅ 表格校验通过（46 个文件，跳过 12 份）" not in output:
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
             failures.append(f"例 1 失败：通配清单没有显式打印匹配份数（L-41）\n{output}")
@@ -1199,7 +1190,7 @@ def run_self_test() -> int:
         if code != 0:
             failures.append(f"例 4 失败：真仓库上应 exit 0，实际 {code}\n{output}")
         elif host_ledgers_absent_entirely:
-            # 真仓库里那几份本机台账**整批**不在盘上 ⇒「56 份命名全在 / 不许出现跳过行 / 实跑 57 个文件」
+            # 真仓库里那几份本机台账**整批**不在盘上 ⇒「58 份命名全在 / 不许出现跳过行 / 实跑 59 个文件」
             # 这三条**在这台机器上核不了**（口径同例 5）⇒ 本项跳过 + 高声提示；
             # 仍然断言另一半：缺台账时如实报「跳过」，不是崩、也不是静默。
             # （只缺一部分时走下面的严格分支 —— 那是主开发机上文档被删。）
@@ -1209,15 +1200,15 @@ def run_self_test() -> int:
                 )
             else:
                 skipped.append(
-                    "例 4（真仓库 56 份命名文档全在、实跑 57 个文件、无跳过行）："
+                    "例 4（真仓库 58 份命名文档全在、实跑 59 个文件、无跳过行）："
                     f"{len(absent_host_ledgers)} 份本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）"
                 )
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 56 份命名文档应全在（不得出现跳过行）\n{output}")
+            failures.append(f"例 4 失败：真仓库 58 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
             failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
-        elif "✅ 表格校验通过（57 个文件）" not in output:
-            failures.append(f"例 4 失败：收尾行应为 57 个文件（56 份命名 + 1 份通配）\n{output}")
+        elif "✅ 表格校验通过（59 个文件）" not in output:
+            failures.append(f"例 4 失败：收尾行应为 59 个文件（58 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
 
@@ -1245,10 +1236,10 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 56 份无跳过）只在**真跑过**时才算数；
+    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 58 份无跳过）只在**真跑过**时才算数；
     # 跳过时如实换掉措辞（跳过的例不许冒充跑过 —— 跳过 ≠ 通过）。
     tail = (
-        "真仓库 56 份无跳过"
+        "真仓库 58 份无跳过"
         if not skipped
         else "真仓库那两例在这台机器上不适用（本机台账不在盘上，见上面的跳过提示）"
     )
