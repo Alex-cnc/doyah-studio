@@ -1869,3 +1869,11 @@ Notes / Retro 走**各自仓**的入口（Notes 的 `bash tools/logic-check/run.
 - **落法**：全角 `（` `［` `｛` 并入同一张 `brackets` 表（跳引号 / 包选区 / 删整对自动跟随）；判据 `Tests/CodeAutoPairingTests` **18 → 21 例**；新增 `TestsUISnapshot/AutoPairingKeyProbeTests` **7 例**（三条投递路径）。
 - **读数**：`verify-core.sh` **3530 / 0 failures**（台账 3515 → 3530 跟版）；三书数字判据全绿。提交 `095b96b`（已推 origin/master）。
 - **未做 / 未验证**：全角引号 `“` `‘` 不做（开闭异字，另开单）；真机复验要**用含本轮修复的新包**（本轮未出包）。
+
+### §5 追加：2026-10-21 第二十九笔（出包齐套 beta1.0 · T-20261021-001）
+
+- **由头**：前门催办「beta1 收口最后一公里」（tag / 发布说明 / 包身份四项 / 装包终判，18:00 前要终态），`origin: agent` ⇒ 护栏全效、四项均为正常开发面无禁区。
+- **落法**：发布标签 `alpha3.1` → `beta1.0`（`Scripts/build-app.sh:57`，改前/改后留痕；`Scripts/release-version.json` 同值 + 两处锚点文档跟版）；新构建 `beta1.0`（89,283,440 B · arm64 · 非沙箱）；交付目录 `~/dev/doyah/交付-20261021-beta1.0/`（app + 身份卡 + sha256.txt + 发布说明副本）；发布说明入库 `Docs/beta1.0-发布说明.md`（`.gitignore` 加白名单，沿 `alpha-0.2.0` 先例）。
+- **读数**：开工前 `check-release-version.py` = FAIL（2 处 C3 工程过期）⇒ `xcodegen generate` + `patch-xcodeproj.sh` 重生成后 **RESULT: OK（比对点 25）**；装包终判 = 用户级装 + 起进程 + `startup.log` 落「正常启动 / 许可证 ultra / 活动栏四面」+ `workspace-history.json` 重写 + 无崩溃报告 + 正常退出。
+- **提交**：`17bfe49d`（主干，tag `beta1.0` = 同一笔，已推 origin）+ `393dc4af`（发布说明 tag 读数跟版）+ `fb01a51d`（10-18 台账补提交）。
+- **未做 / 未验证**：四条人工点验（`FR-EDIT-29/46/48/49`）需人在键盘前，未代人签字；真机整屏截图未取；启动日志出现「菜单栏自愈：1 项 → en」成因未追。
