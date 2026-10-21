@@ -78,7 +78,10 @@ def check_srs(srs: str, heading: str, kind: str) -> list[str]:
         want = ["FR-NTS-NOTE-CAPTURE-001", "FR-NTS-NOTE-FORMAT-001", "FR-NTS-NOTE-ATTACH-001",
                 "FR-NTS-NOTE-SEARCH-001", "FR-NTS-NOTE-ORG-001", "FR-NTS-NOTE-VERSION-001",
                 "FR-NTS-NOTE-TRASH-001", "FR-NTS-NOTE-SYNC-001", "FR-NTS-NOTE-SYNC-002",
-                "FR-NTS-NOTE-EXPORT-001", "FR-NTS-NOTE-PRIVACY-001"]
+                "FR-NTS-NOTE-EXPORT-001", "FR-NTS-NOTE-PRIVACY-001",
+                "FR-NTS-TODO-LIST-001", "FR-NTS-TODO-LIST-002", "FR-NTS-TODO-LIST-003",
+                "FR-NTS-TODO-CALENDAR-001", "FR-NTS-TODO-CALENDAR-002",
+                "FR-NTS-TODO-STATE-001", "FR-NTS-TODO-STATE-002", "FR-NTS-TODO-LINK-001"]
         if ids != want:
             problems.append(f"§3.5 条目应为 {want[0]} ~ {want[-1]}（11 条），实测 {ids}")
     # 列形状不同：Notes 是 6 列（编号 | 需求 | 层次 | 优先级 | 状态 | 验收），
