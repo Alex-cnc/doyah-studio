@@ -52,7 +52,7 @@
 | 3.1.3 插件装配 | 8 | 6 | 2 | 0 |
 | 4.8 AI 智能体 | 8 | 5 | 2 | 1 |
 | 4.5 NFR-COMP | 5 | 0 | 3 | 2 |
-| 4.7 NFR-I18N | 3 | 2 | 1 | 0 |
+| 4.7 国际化 | 3 | 2 | 1 | 0 |
 | 4.6 NFR-MAINT | 6 | 6 | 0 | 0 |
 | 4.1 NFR-PERF | 6 | 2 | 4 | 0 |
 | 4.2 NFR-REL | 5 | 5 | 0 | 0 |
@@ -367,9 +367,9 @@
 | NFR-ALL-GATE-COMP-001 | 支持 PostgreSQL 12–18 多版本回归 | 4.5 NFR-COMP | 基线必备 | — | 🟡 | 🟡 | v0.1.0-alpha | — |
 | NFR-ALL-GATE-COMP-002 | 支持 GBase 最新版本，并向下兼容至 GBase 8a（版本窗口见下） | 4.5 NFR-COMP | 进阶可选 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-COMP-003 | 支持 MySQL 最新大版本，并向下兼容最近 5 个大版本（版本窗口见下） | 4.5 NFR-COMP | 常用增强 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| NFR-I18N-01 | v1.x 界面语言为简体中文 | 4.7 NFR-I18N | 常用增强 | — | 🟡 | 🟡 | v0.1.0-alpha | — |
-| NFR-I18N-02 | 预留英文文案抽取（不硬编码在视图里为长期目标） | 4.7 NFR-I18N | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
-| NFR-I18N-03 | 国际化：界面语言支持简体中文 / English 切换，用户可选、选择持久化、重启后 | 4.7 NFR-I18N | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
+| NFR-ALL-GATE-LANG-01 | v1.x 界面语言为简体中文 | 4.7 国际化 | 常用增强 | — | 🟡 | 🟡 | v0.1.0-alpha | — |
+| NFR-ALL-GATE-LANG-02 | 预留英文文案抽取（不硬编码在视图里为长期目标） | 4.7 国际化 | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
+| NFR-ALL-GATE-LANG-03 | 国际化：界面语言支持简体中文 / English 切换，用户可选、选择持久化、重启后 | 4.7 国际化 | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-MAINT-001 | 核心逻辑单元测试：拆分、方言、配置序列化、静态检查、tokenizer、元数据映射、 | 4.6 NFR-MAINT | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-MAINT-002 | 新增数据库类型不改动 UI 层代码 | 4.6 NFR-MAINT | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-MAINT-003 | 关键行为有脚本化回归（本地 PostgreSQL 全链路） | 4.6 NFR-MAINT | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
@@ -528,7 +528,7 @@
 
 **M6—M8 建议需求优先级**：FR-STD-DB-EXEC-018（服务器端取消）> FR-STD-DB-RES-010（导出）> FR-STD-DB-SESS-001（历史）> FR-STD-WS-NAV-003（补全接入）> FR-STD-DB-CONN-009（删除确认）> FR-STD-DB-CONN-003（校验复用）。
 
-**M8.1 新增需求优先级（2026-09-20）**：FR-STD-DB-META-006（对象树持续下钻，先复现定位）> FR-STD-DB-CONN-015 / FR-STD-DB-CONN-016（服务器与数据库选择）> FR-STD-WS-EDIT-001（保存查询）> FR-STD-WS-UI-007（拖拽分隔）> NFR-I18N-03（中 / 英切换，依赖文案资源化）。
+**M8.1 新增需求优先级（2026-09-20）**：FR-STD-DB-META-006（对象树持续下钻，先复现定位）> FR-STD-DB-CONN-015 / FR-STD-DB-CONN-016（服务器与数据库选择）> FR-STD-WS-EDIT-001（保存查询）> FR-STD-WS-UI-007（拖拽分隔）> NFR-ALL-GATE-LANG-03（中 / 英切换，依赖文案资源化）。
 
 ---
 
@@ -1171,7 +1171,7 @@
 
 **本次新增需求的任务拆解**
 
-- [x] **T-01 国际化（中文 / 英文切换）（开发完成）** → 需求：NFR-I18N-03（依赖 NFR-I18N-02）
+- [x] **T-01 国际化（中文 / 英文切换）（开发完成）** → 需求：NFR-ALL-GATE-LANG-03（依赖 NFR-ALL-GATE-LANG-02）
   - [x] `Core/Localization.swift`：`AppLanguage` + `LKey`（110 个文案键）+ 中 / 英文案表 + 格式化
   - [x] `App/LocalizationManager.swift`：读写 UserDefaults，默认跟随系统（`AppLanguage.systemDefault`）
   - [x] 入口：菜单「语言 / Language」→ 简体中文 / English 选择

@@ -304,9 +304,9 @@
 | NFR-ALL-GATE-COMP-001 | 4.5 NFR-COMP | 基线必备 |
 | NFR-ALL-GATE-COMP-002 | 4.5 NFR-COMP | 进阶可选 |
 | NFR-ALL-GATE-COMP-003 | 4.5 NFR-COMP | 常用增强 |
-| NFR-I18N-01 | 4.7 NFR-I18N | 常用增强 |
-| NFR-I18N-02 | 4.7 NFR-I18N | 常用增强 |
-| NFR-I18N-03 | 4.7 NFR-I18N | 常用增强 |
+| NFR-ALL-GATE-LANG-01 | 4.7 国际化 | 常用增强 |
+| NFR-ALL-GATE-LANG-02 | 4.7 国际化 | 常用增强 |
+| NFR-ALL-GATE-LANG-03 | 4.7 国际化 | 常用增强 |
 | NFR-ALL-GATE-MAINT-001 | 4.6 NFR-MAINT | 常用增强 |
 | NFR-ALL-GATE-MAINT-002 | 4.6 NFR-MAINT | 常用增强 |
 | NFR-ALL-GATE-MAINT-003 | 4.6 NFR-MAINT | 常用增强 |
