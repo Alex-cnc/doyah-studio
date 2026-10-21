@@ -8,7 +8,7 @@ set -euo pipefail
 #
 # ## 为什么跑**两遍**
 #
-# 清单里 `FR-CONN-18 沙箱告知` 那一行判的是「**沙箱构建**下界面必须多出一句说明（并给出非沙箱构建的命令）」，
+# 清单里 `FR-STD-DB-CONN-020 沙箱告知` 那一行判的是「**沙箱构建**下界面必须多出一句说明（并给出非沙箱构建的命令）」，
 # 而「是不是沙箱」的依据是进程环境变量 `APP_SANDBOX_CONTAINER_ID`（沙箱进程自带标记）——
 # **一个进程只能是一面**。两遍合起来才把「环境 → 界面」这条对应关系判完整：
 #
@@ -21,7 +21,7 @@ set -euo pipefail
 #
 # ## 第二批（队列 L-89 ㈡，第 92 轮）：命令面板接线
 #
-# `TestsUISnapshot/PaletteWiringProbeTests.swift` 判的是清单里 `FR-EDIT-25` 那一句人话
+# `TestsUISnapshot/PaletteWiringProbeTests.swift` 判的是清单里 `FR-STD-WS-UI-005` 那一句人话
 # 「**每个命令都真的打开了对应面板（不是点了没反应）**」—— 静态判据
 # （`Scripts/check-palette-wiring.py`：清单 id ↔ 分派器 case ↔ 标志位有没有视图读）判不住这件事，
 # 所以它拿真 `AppState` 把**每一条命令都点一遍**、断言登记在案的**落点**确实发生
@@ -31,7 +31,7 @@ set -euo pipefail
 #
 # ## 第三批（队列 L-89 ㈡ ②，第 93 轮）：主题与字体
 #
-# `TestsUISnapshot/AppearanceFontProbeTests.swift` 判清单 §2 `FR-EDIT-26` 的三条人话：
+# `TestsUISnapshot/AppearanceFontProbeTests.swift` 判清单 §2 `FR-STD-WS-UI-008` 的三条人话：
 # 手输一个已装的等宽族 ⇒ 生效且「当前使用」拼写正确（③）、手输非等宽 ⇒ **明确提示它不是等宽**
 # 而不是静默回落（④）、SQL 预览的字形跟着字体走（⑤）。
 # 造态走 `FontManager.beginHostPreference(_:)`（宿主语境覆盖，**不落盘**，与主题 / 语言同构）。
@@ -50,7 +50,7 @@ set -euo pipefail
 #
 # ## 第五批（队列 L-89 ㈡ ③，第 96 轮）：终端多会话页签那一行
 #
-# `TestsUISnapshot/TerminalTabsProbeTests.swift` 新加的三个用例判的是清单 §1 `FR-EDIT-29`
+# `TestsUISnapshot/TerminalTabsProbeTests.swift` 新加的三个用例判的是清单 §1 `FR-STD-WS-TOOL-001`
 # 多会话那一行的**版面**与**落点**（前三个用例是它原有的「真开 shell 的独立性与退出 / 确认链路」）：
 #   ① 版面：渲染**真工具条**（`LowerPaneTabStrip` —— 从 `LowerPaneView` 抽出来的独立视图，
 #      抽出来就是为了能单独离屏渲染：整块面板一渲染会真开 shell），页签 1 个 → 3 个时
@@ -61,7 +61,7 @@ set -euo pipefail
 #
 # ## 第六批（队列 L-89 ㈡ ④，第 97 轮）：大结果集滚动
 #
-# `TestsUISnapshot/LargeResultScrollProbeTests.swift` 判清单 §4 `FR-RES-07` 那一行
+# `TestsUISnapshot/LargeResultScrollProbeTests.swift` 判清单 §4 `FR-STD-DB-RES-011` 那一行
 # 「查 1 万行 × 20 列，上下滚十几秒 ⇒ 不卡、内存不飙」里**能变成机器判据的那部分**：
 # ① 虚拟化（物化行视图数只跟可见区域有关，1 万行与 10 万行必须同量级）；
 # ② 滚动每一帧画面都在变（位置动了画面没动 = 卡死）且单帧 p50 在上界内；
@@ -72,7 +72,7 @@ set -euo pipefail
 #
 # ## 第七批（队列 L-89 ㈡ ⑤，第 99 轮）：跨库浏览
 #
-# `TestsUISnapshot/CrossDatabaseBrowseProbeTests.swift` 判清单 §5 `FR-META-10` 那一行
+# `TestsUISnapshot/CrossDatabaseBrowseProbeTests.swift` 判清单 §5 `FR-STD-DB-META-007` 那一行
 # 「展开非当前库的节点（对象树 / 服务器选择器）」→ 过 =「**按需建连**；失败时**给可读原因**」。
 # 判据观测的是**服务端**：被测那条走真 `AppState`（与界面同一条路），另一条连接查
 # `pg_stat_activity`，两条各打 `application_name` 标记 ⇒「本进程往哪个库开了几条后端」是
@@ -85,7 +85,7 @@ set -euo pipefail
 #
 # ## 第八批（队列 L-89 ㈡ 第 6 条，第 101 轮）：分组视图
 #
-# `TestsUISnapshot/GroupedViewProbeTests.swift` 判清单里 `FR-META-15 分组视图` 那一行
+# `TestsUISnapshot/GroupedViewProbeTests.swift` 判清单里 `FR-STD-DB-META-008 分组视图` 那一行
 # 「对象树顶部在「层级视图 / 按类型分组」之间切换」→ 过 =「**两种视图都能用**；**切换后选中项不丢**」。
 # 三件事：① 可见行模型（`App/Views/ObjectTreeRows.swift`，本轮从视图里搬出来的纯函数）在两种模式下
 # 各摊平一遍，输入是**真库读回来的对象** —— 层级面无表头、分组面表头齐、计数与真库对象数逐个相符、
@@ -125,7 +125,7 @@ set -euo pipefail
 #
 # ## 第十批（队列 L-89 ㈡ 第 9 条，第 103 轮）：浏览器页签与下载
 #
-# `TestsUISnapshot/BrowserTabDownloadProbeTests.swift` 判清单 §10 `FR-EDIT-34` 那一行的三句人话：
+# `TestsUISnapshot/BrowserTabDownloadProbeTests.swift` 判清单 §10 `FR-STD-WS-WEB-001` 那一行的三句人话：
 #   ① 「新建页签 → 打开一个站点 → 关掉重开应用看是否恢复地址」；
 #   ② 「看外发日志：按页签筛一次（下拉里应出现你刚浏览的那个页签）」；
 #   ③ 「找一个下载链接点一下 → 提示条『已下载到 <路径>』、文件真的在那个目录里、
@@ -153,7 +153,7 @@ set -euo pipefail
 #
 # ## 第十一批（队列 L-89 ㈡ 第 10 条，第 105 轮）：MySQL 表单联动
 #
-# `TestsUISnapshot/MySQLFormProbeTests.swift` 判清单 §10.7 `FR-DRV-09` 界面那一行
+# `TestsUISnapshot/MySQLFormProbeTests.swift` 判清单 §10.7 `FR-STD-DB-DRV-010` 界面那一行
 # （「新建连接 → 数据库类型选 MySQL → 端口应自动变成 3306、SSL 默认 prefer；连上后看对象树」）：
 #   · **A 组（界面联动）** —— **本机 SwiftUI 的 `Picker` 不落到 AppKit 控件**（第 105 轮实测：
 #     宿主视图树里没有 `NSPopUpButton`）⇒「点一下那台下拉」走不通，照 `EgressLogSheet` 当年的处置
@@ -190,7 +190,7 @@ set -euo pipefail
 #
 # ## 第十三批（队列 L-90 ㈡ 第 2 条，第 110 轮）：对象树逐行右键
 #
-# `TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift` 判清单 §4 `FR-META-14` 那一行：
+# `TestsUISnapshot/ObjectTreeContextMenuProbeTests.swift` 判清单 §4 `FR-STD-DB-META-012` 那一行：
 #   ① **七类节点各渲一遍**（服务器 / 数据库 / schema / 表 / 视图 / 函数 / 列，各落一张图）——
 #      菜单里的**动作项**与 Core 的 `ObjectTreeActions.isAvailable` **双向**对账（少一项 / 多一项都判红），
 #      且**服务器那七项不许漏到别的行上**（「点数据库弹服务器菜单」那条老缺陷的回归钉）。
@@ -259,10 +259,10 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   ＋ 对象树四层（服务器 → Database → Table → Column，没有 schema 层）＋ 能查到数据）。
 # + `TerminalInteractionProbeTests`（L-90 ㈠：终端交互三面 —— 鼠标上报 / DECCKM / 右键归属。
 #   本批的**主入口**是 `Scripts/verify-ui-interactions.sh`（那份只跑一遍、判据与进程环境无关）；
-# + `MultiCursorProbeTests`（L-90 ㈡ 第 1 条：`FR-EDIT-27` 多光标与列编辑 —— ⌥⌘D 选下一处 /
+# + `MultiCursorProbeTests`（L-90 ㈡ 第 1 条：`FR-STD-WS-EDIT-016` 多光标与列编辑 —— ⌥⌘D 选下一处 /
 #   ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选，各判「打字与 ⌫ 逐个生效」「一次撤销全回退」「位置不漂」。
 #   本批的**主入口**同样是 `Scripts/verify-ui-interactions.sh`）
-# + `ObjectTreeContextMenuProbeTests`（L-90 ㈡ 第 2 条：`FR-META-14` 对象树逐行右键 ——
+# + `ObjectTreeContextMenuProbeTests`（L-90 ㈡ 第 2 条：`FR-STD-DB-META-012` 对象树逐行右键 ——
 #   七类节点各自的菜单内容（动作项与 Core 的规则双向对账）/ 菜单作用在哪一行（悬停优先、
 #   盒子空退回选中项）/ 同一行两次逐字节一致、不同行必须画成两个样子。
 #   本批的**主入口**同样是 `Scripts/verify-ui-interactions.sh`）
@@ -327,11 +327,11 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 # + `QueryHistoryPaneProbeTests`（片 `HIST-2` · 派单 `T-20261009-018` / `T-20261009-010` ·
 #   人类主人 2026-10-08 令：下方面板外层页签条新增「历史」，**只在 Database 客户端段出现**，
 #   与工具条时钟菜单**同一份**历史源，并给「清空」/「单条删除」两处**二次确认**）：
-#   ① 段条件（`FR-EDIT-10`）：Database 段页签可见（渲染出的文案里有「历史」）→ 切工作区段
+#   ① 段条件（`FR-STD-DB-SESS-001`）：Database 段页签可见（渲染出的文案里有「历史」）→ 切工作区段
 #   **不可见**且正选中历史时**自动落到终端** → 切回**恢复历史**（三态成对读数 + 选中项 dump）；
 #   ② 同源：源码锚点（页面与菜单都读 `appState.queryHistory`）+ **读盘点唯一**
 #   （`App/` 里提到落盘门面 `QueryHistoryStore` 的文件只许 `AppState.swift`）；
-#   ③ 二次确认（`DR-02`）：点清空/删除 ⇒ **只挂请求**（内存与库都不变）→ 取消不变 →
+#   ③ 二次确认（`FR-STD-ALL-DATA-002`）：点清空/删除 ⇒ **只挂请求**（内存与库都不变）→ 取消不变 →
 #   确认才落库（清空 ⇒ 0 / 单条 ⇒ 减 1），读数同时给内存镜像与**库里真值**。
 #   ⚠️ ③ 要写临时笔记库（历史与笔记**同库**）⇒ 走 `DOYAH_NOTES_DIR`，没设就 `XCTSkip`。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
@@ -1220,7 +1220,7 @@ for directory, base in ((plain, "普通那遍"), (sandbox, "带沙箱标记那�
         if len(mysql_items) != 5:
             failures.append("%s/formLinkage：MySQL 的 SSL 清单不是五项：%s" % (base, mysql_items))
         if "Allow" in mysql_items:
-            failures.append("%s/formLinkage：MySQL 的 SSL 清单里还有 Allow（R-53 会复发）" % base)
+            failures.append("%s/formLinkage：MySQL 的 SSL 清单里还有 Allow（NFR-ALL-GATE-RISK-045 会复发）" % base)
         if "Verify Identity" not in mysql_items:
             failures.append("%s/formLinkage：MySQL 下没有 Verify Identity 那一档" % base)
         pg_items = linkage.get("pgSSLItems") or []
@@ -1306,19 +1306,19 @@ PY
 
 echo
 echo "==> 完成：证据在 ${OUT_BASE}/（每张图另有中英两份，逐张断言见 ManualVerificationProbeTests）"
-echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 R-53 SSL 收窄说明"
-echo "    ＋ §2 FR-EDIT-25 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
-echo "    ＋ §2 FR-EDIT-26 主题与字体（AppearanceFontProbeTests：手输族的三档说法 + SQL 预览取样带）"
+echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 NFR-ALL-GATE-RISK-045 SSL 收窄说明"
+echo "    ＋ §2 FR-STD-WS-UI-005 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
+echo "    ＋ §2 FR-STD-WS-UI-008 主题与字体（AppearanceFontProbeTests：手输族的三档说法 + SQL 预览取样带）"
 echo "    ＋ §0.3 第 3 条 终端 ⌃C（TerminalInterruptProbeTests：喂 0x03 看前台 sleep 让不让开）"
-echo "    ＋ §1 FR-EDIT-29 多会话那一行的版面与落点（TerminalTabsProbeTests 后三个用例：左半变 / 右四分之一逐像素不变、"
+echo "    ＋ §1 FR-STD-WS-TOOL-001 多会话那一行的版面与落点（TerminalTabsProbeTests 后三个用例：左半变 / 右四分之一逐像素不变、"
 echo "       右侧按钮按状态齐备、⌘1…9 与 ⌘⇧[ ⌘⇧] 与改名落到对的会话）"
-echo "    ＋ §4 FR-RES-07 大结果集滚动（LargeResultScrollProbeTests：虚拟化 / 帧在变 / 单帧成本不随总行数放大 / 内存不飙）"
-echo "    ＋ §5 FR-META-10 跨库浏览（CrossDatabaseBrowseProbeTests：按需建连 / 子树来自那个库 / 失败给可读原因）"
-echo "    ＋ §5 FR-META-15 分组视图（GroupedViewProbeTests：两种视图的行集合一致 / 表头计数与真库相符 /"
+echo "    ＋ §4 FR-STD-DB-RES-011 大结果集滚动（LargeResultScrollProbeTests：虚拟化 / 帧在变 / 单帧成本不随总行数放大 / 内存不飙）"
+echo "    ＋ §5 FR-STD-DB-META-007 跨库浏览（CrossDatabaseBrowseProbeTests：按需建连 / 子树来自那个库 / 失败给可读原因）"
+echo "    ＋ §5 FR-STD-DB-META-008 分组视图（GroupedViewProbeTests：两种视图的行集合一致 / 表头计数与真库相符 /"
 echo "       真点开关两档都到得了、两档不是一个样子（中英各一遍）；序列·函数·其他三个桶用合成夹具补）"
 echo "    ＋ 笔记检索「存完立刻搜」与「键盘快打」（NoteSearchProbeTests：查询还在时保存/删除当场生效 /"
 echo "       旧词的结果与失败都不许落地 / 切换后没有一次落地来自旧词 —— 真 AppState + 真库）"
-echo "    ＋ §10 FR-EDIT-34 浏览器页签与下载（BrowserTabDownloadProbeTests：重开地址还在且没加载 /"
+echo "    ＋ §10 FR-STD-WS-WEB-001 浏览器页签与下载（BrowserTabDownloadProbeTests：重开地址还在且没加载 /"
 echo "       盘上两条记录都带页签身份、筛得出来、下拉里恰好那一个 / 下载落在授权目录、同名加 -1）"
-echo "    ＋ §10.7 FR-DRV-09 MySQL 表单联动（MySQLFormProbeTests：换方言 ⇒ 端口当场变 3306、"
+echo "    ＋ §10.7 FR-STD-DB-DRV-010 MySQL 表单联动（MySQLFormProbeTests：换方言 ⇒ 端口当场变 3306、"
 echo "       SSL 清单五项无 Allow、来回都判；连假 MySQL 服务器逐层展开 ⇒ 四层树、无 schema 层、查得到数据）"

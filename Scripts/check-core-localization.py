@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Core 展示文本本地化的**棘轮**（R-45 / FR-DATA-04 / 队列 L-109）。
+"""Core 展示文本本地化的**棘轮**（NFR-ALL-GATE-RISK-037 / FR-STD-DB-DATA-004 / 队列 L-109）。
 
 本脚本管**两条**「展示文本」棘轮，口径一致：**只挡变差，销账即降基线**。
 
-棘轮 A（R-45，原有）——「含汉字」：
+棘轮 A（NFR-ALL-GATE-RISK-037，原有）——「含汉字」：
     Core 里有一批**直接给用户看**的中文字面量（`LocalizedError` 的描述、拒绝理由、
-    单元格摘要…）。它们不经过任何语言表，于是英文界面上会混出中文。R-45 与 FR-DATA-04
+    单元格摘要…）。它们不经过任何语言表，于是英文界面上会混出中文。NFR-ALL-GATE-RISK-037 与 FR-STD-DB-DATA-004
     各记了一处，但真正的问题是它**会继续长** —— 每加一个 `LocalizedError` 就多一串。
     · 统计 `Core/**/*.swift`（排除 `Localization.swift` —— 那里是语言表本身）里
       "字符串字面量含汉字"的行数，按「文件数」与「行数」两个口径记账；
@@ -117,7 +117,7 @@ HAN = re.compile(r"[\u4e00-\u9fff]")
 ENGLISH_PATH_EXEMPT = {
     "Localization.swift": "语言表本身（这里就是两语槽位；汉字棘轮同样豁免它）",
     "CodeLanguageDefinitions.swift": "代码语言的登记表：关键字表 / 语言名 / 补全项 —— 整表都是技术标识，与语言表同一性质；"
-                                     "该表里合法的语言显示名（`Plain Text` / `Python`…）是**专名**，按 R-53 同族口径保持协议原文",
+                                     "该表里合法的语言显示名（`Plain Text` / `Python`…）是**专名**，按 NFR-ALL-GATE-RISK-045 同族口径保持协议原文",
 }
 # 真字面量：开引号的前一个字符必须是「引出引号的字符」（空白 / `(` / `=` / `:` / `,` / `[` …），
 # 不能是字母数字或引号类字符 —— 后者会从 `replacingOccurrences(of: "'", with: "''")` 这种
@@ -158,7 +158,7 @@ ENGLISH_KINDS = {
     "guardrailPattern": "护栏判据的模式串（`contains` 匹配用，不是展示文案）：提示注入检测 / "
                         "危险命令与不可逆动作识别（`rm -rf` / `git push --force` / `diskutil erase` …）/ "
                         "密钥形态识别（`BEGIN PRIVATE KEY` …）—— 三种都只进判定，不上界面",
-    "productName": "产品 / 品牌专名（按 R-53 同族口径不翻）",
+    "productName": "产品 / 品牌专名（按 NFR-ALL-GATE-RISK-045 同族口径不翻）",
     "sampleValue": "合成数据的样例值",
     "displayDebt": "**已登记的欠账**：确实直达界面、暂时写死英文 —— 不是放行，棘轮只挡变差",
 }

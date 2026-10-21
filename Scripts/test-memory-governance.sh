@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：记忆治理（FR-AI-15）。
+# 验证：记忆治理（FR-AGT-KNOW-MEM-002）。
 #
 # 四条验收各自的落点：
 #   ① 「一年只用一次但很关键」的巡检脚本**不会被按天数清掉** → 钉住类的判定必须永不遗忘
@@ -25,7 +25,7 @@ NEW_AT="2026-09-23T09:00:00Z"
 
 # 指纹一律从 **JSON 出口**取，不去解析人类可读文本：
 # 上一版按缩进数"猜"指纹，第一次跑就全错（缩进是 5/6 空格，我按 4/8 取）——
-# 脚本解析给人看的文本是错的做法（这条教训在 FR-AI-14 的脚本里也记过一次）。
+# 脚本解析给人看的文本是错的做法（这条教训在 FR-AGT-KNOW-MEM-004 的脚本里也记过一次）。
 fingerprint_of() { # fingerprint_of <SQL 子串>
     "$CLI" memory --dir "$DIR" --json 2>/dev/null | python3 -c '
 import json, sys
@@ -157,7 +157,7 @@ print(json.loads(text[text.index("["):])[0]["fingerprint"])
 rm -rf "$DIR2" "$DIR3"
 
 echo ""
-echo "== ⑤ 生命周期执行者：默认不删，确认后才删（FR-AI-15 的「谁执行」）=="
+echo "== ⑤ 生命周期执行者：默认不删，确认后才删（FR-AGT-KNOW-MEM-002 的「谁执行」）=="
 DIR4="$(mktemp -d -t doyah-governance-4)"
 # 一条 400 天前的排障记录（只跑过 1 次、只在一天里出现）→ 判定为可遗忘
 "$CLI" archive-add --dir "$DIR4" --sql "SELECT * FROM tmp_diag WHERE id = 7" --connection 生产库 --runs 1 --at "$OLD_AT" >/dev/null

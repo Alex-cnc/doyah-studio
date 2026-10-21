@@ -397,7 +397,7 @@
   ],
   "knownGaps": [
     "① 只判『源码里不出现网络 API』，判不了『运行时真的没有出网』（要真的证明得靠 L-23 ③ 的断网用例：断网跑增/改/查/删/检索/迁移全绿）",
-    "② 本门禁只看**笔记模块这几个文件**；宿主侧（AppState / 浏览器 / 智能体）按设计有出网能力，不在本条范围内 —— 那是 NFR-SEC-05 / NFR-SEC-08 的地盘",
+    "② 本门禁只看**笔记模块这几个文件**；宿主侧（AppState / 浏览器 / 智能体）按设计有出网能力，不在本条范围内 —— 那是 NFR-ALL-GATE-SEC-005 / NFR-ALL-GATE-SEC-008 的地盘",
     "③ macOS / Windows 侧的存储引擎是否也换成本地 SQLite 取决于 Q23（需求提出者拍板）；本条只保证『笔记模块自己不带出网能力』，与换不换引擎无关",
     "④ `Plugins/Notes/Sources/NoteSync/` 子树（`SyncCore` / `SyncQueue` / `CloudSyncService` / `CloudAuth.swift`（真 HTTP 客户端：`URLSession` / `URLRequest` / `https://`））**已逐件登记在 `outOfScope`**（派单 `T-20261010-043` · 合册 `T-20261013-027` 本册表第 28 行）：它按设计出网（N-06 云化服务），但「是否属笔记模块的零网络出口范围」**待前门 / 人类主人定性** —— 属 ⇒ 改登记进 `scope` 并把命中逐条落 `exceptions`；本判据 ⑧ 每次跑把面外命中打 ⚠️ 并核对台账登记命中数（CloudAuth 17 / CloudSyncService 5），**不许静默**。此前那版缺口（「前缀不命中 ⇒ 整棵树不在判据内」）已由本轮的枚举面收口关闭。"
   ]

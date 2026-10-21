@@ -52,7 +52,7 @@ G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也
    （否则换了主题这块面板自己不跟着变）；② 主题行必须画出**三个真实场景**（选中行 / 主按钮 / 焦点环）
    且预览画在**该主题自己**的表面上（`palette.content`）＋用**该主题配套**的强调色（`theme.accent`）；
    ③ 推导主题必须**逐条**标注（行里问 `isDerivedDraft` + 画出标记键 + 语言表里有那句中文）；
-   ④ `AccentTheme.all` 入口不许消失（FR-EDIT-33 的「强调色可配置」是已交付能力，要收得先改 SRS 与判据）；
+   ④ `AccentTheme.all` 入口不许消失（FR-STD-WS-UI-009 的「强调色可配置」是已交付能力，要收得先改 SRS 与判据）；
    ⑤ 宿主语境覆盖（`beginHostTheme` / `endHostTheme`）**不许写盘**（拍一张快照不许改用户偏好 ——
    语言那条路定过这个口径），而 `select(_:)` **必须**写盘。判点只看**那一段源码切片**，不看整文件
    （否则"别处写过一句"就顶数 —— 第 77 轮自检例 ⑨/⑮ 两次栽在这上面）；且判定物
@@ -300,7 +300,7 @@ MIN_CHECKS = 300        # 判据 F：实测对数下限（5 主题 × 2 态 × �
 
 # ---- 判据 G（界面入口）的对照表（每条都带理由）------------------------------------------------
 # 主题候选行必须画出的**三个真实场景** —— 缺一个就退化成"只给一块色卡"（用户只能凭想象选）。
-# 理由与 `AccentOptionRow` 同源（FR-EDIT-33 原文：选色不该靠想象），但主题要**多一层**：
+# 理由与 `AccentOptionRow` 同源（FR-STD-WS-UI-009 原文：选色不该靠想象），但主题要**多一层**：
 # 预览得画在该主题**自己**的表面上（见 `THEME_SURFACE_MARKER`）。
 SCENE_MARKERS = {
     "选中行": ".fill(tintColor)",
@@ -830,7 +830,7 @@ def check_ui_entry(root: pathlib.Path) -> tuple[list[Issue], int]:
             issues.append(Issue(LOCALIZATION_SWIFT, f"语言表里没有 `.{DERIVED_LKEY}` 的中文条目「推导草案」"
                                                     f" —— 界面上那句话无处可取"))
 
-    # ④ 强调色入口不许**静默**消失（FR-EDIT-33 原文的「强调色可配置」是已交付能力）
+    # ④ 强调色入口不许**静默**消失（FR-STD-WS-UI-009 原文的「强调色可配置」是已交付能力）
     sites += 1
     if "AccentTheme.all" not in panel:
         issues.append(Issue(APPEARANCE_SWIFT, "面板不再逐个列出强调色（`AccentTheme.all`）"
@@ -889,7 +889,7 @@ def check_two_axis(root: pathlib.Path) -> tuple[list[Issue], int]:
         sites += 1
         if state not in states:
             issues.append(Issue(APPEARANCE_PREF_SWIFT, f"深浅轴少了一态 `{state}` —— 三态（跟随系统 /"
-                                                     f" 总是深色 / 总是浅色）是 FR-EDIT-26 的原话"))
+                                                     f" 总是深色 / 总是浅色）是 FR-STD-WS-UI-008 的原话"))
     sites += 1
     if len(states) != len(AXIS_STATES):
         issues.append(Issue(APPEARANCE_PREF_SWIFT,

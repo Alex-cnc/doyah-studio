@@ -17,8 +17,8 @@
      （挡台账撒谎；只出现在文件别处不算）；标「按码说话」的必须写明为什么（空理由 = 等于没登记）；
   ④ 兜底分支必须仍在（驱动新增码时先落兜底、不至于崩，门禁的红只是提醒去登记），
      且兜底**必须不给方向结论**（`default:` 的第一条语句是 `return nil`）——
-     认不出是什么原因还硬说「连接失败」，就是把猜测当结论（R-60）；
-  ⑤ 标「中性归因」的（R-60 那一族：用户取消 / 主动断开 / 协议层 / 参数层 / LISTEN 通道）
+     认不出是什么原因还硬说「连接失败」，就是把猜测当结论（NFR-ALL-GATE-RISK-051）；
+  ⑤ 标「中性归因」的（NFR-ALL-GATE-RISK-051 那一族：用户取消 / 主动断开 / 协议层 / 参数层 / LISTEN 通道）
      必须在映射文件的 `nonConnectionKeys` 表里点名（不靠兜底承接），
      给出 `neutralKey`（那句实话在语言表里的键）—— 不允许「登记了却不写话」；
   ⑤′ 台账 `neutralSQLStates` 登记的 SQLSTATE（目前只有 57014 查询被取消）：
@@ -458,7 +458,7 @@ def check(root: Path, ledger_path: Path | None = None) -> tuple[list[str], list[
     elif not re.search(r"^\s*default:\s*\n(?:\s*//[^\n]*\n)*\s*return nil\s*$", switch_body, re.M):
         problems.append(
             f"{ledger['mapping']} 的兜底分支不是 `return nil` —— 认不出是什么原因还给方向结论"
-            "（「连接数据库失败／确认主机、端口、库名、用户名」）正是 R-60：把猜测当结论，"
+            "（「连接数据库失败／确认主机、端口、库名、用户名」）正是 NFR-ALL-GATE-RISK-051：把猜测当结论，"
             "用户会去查一个根本不存在的问题"
         )
 

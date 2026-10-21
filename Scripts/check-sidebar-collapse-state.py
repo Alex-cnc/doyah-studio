@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""门禁：**侧边栏的折叠状态住在 `AppState`，不住在视图里**（队列 L-59 / `FR-CONN-15`）。
+"""门禁：**侧边栏的折叠状态住在 `AppState`，不住在视图里**（队列 L-59 / `FR-STD-DB-CONN-012`）。
 
 **为什么有它**：人工点验批次 1 第 3 条实测为挂 —— 用户原话「第 3 条记不住折叠状态」。
 真因不在分组聚合（那是 `Core/ConnectionGrouping.swift` 的纯函数，本来就有单测），而在

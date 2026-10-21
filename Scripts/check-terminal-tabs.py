@@ -14,7 +14,7 @@ dsh-tui，遇到要执行命令只能去开系统终端，**违背了我这个�
 A. **Core 模型在位**：`Core/TerminalTabs.swift` 每个 API 锚点在盘上（逐条正则，少一条点名），
    且**七个行为组**（新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射 /
    一键启动与重启）各自的方法一个不少。
-B. **Core 不出用户可见文案**：该文件的**代码行**里不许出现中文字面量（R-45：人话走语言表）。
+B. **Core 不出用户可见文案**：该文件的**代码行**里不许出现中文字面量（NFR-ALL-GATE-RISK-037：人话走语言表）。
 C. **文案键中英都在**：页签那一族键逐个在 `Core/Localization.swift` 的语言表里同时有简中与英文
    （少一个 = 英文界面掉回中文）。
 D. **单测逐组钉住**：`Tests/TerminalTabsTests.swift` 里七个行为组的用例锚点必须在，且用例总数
@@ -126,7 +126,7 @@ PROBE = "TestsUISnapshot/TerminalTabsProbeTests.swift"
 # 取证才跑（`DOYAH_UI_SNAPSHOT=1`），用例锚点必须在位（判据塌了这一条就悬空）。
 SUB_PROBE = "TestsUISnapshot/TerminalSubToolbarProbeTests.swift"
 
-# A：模型锚点。分七组，与 `FR-EDIT-29` 的判据逐条对应 —— 少一组就等于那条判据悬空。
+# A：模型锚点。分七组，与 `FR-STD-WS-TOOL-001` 的判据逐条对应 —— 少一组就等于那条判据悬空。
 API_ANCHORS = {
     "新建": ["public mutating func newTab"],
     "关闭": ["public func closeDecision", "public mutating func close(id: Int, force: Bool"],
@@ -407,8 +407,8 @@ CARRIER_OWNERS = {
     "TerminalTabCommand": [MODEL],
     "restartDecision": [MODEL],
 }
-# R-45 的**先红基线**（面内未登记件的「Core 不出人话」那一面）：本仓 Core 目录现读 **67 / 214 份**
-# 文件都有中文字面量 —— 那是 R-45 的**全局收口**（别单的活）。判据的做法不是放宽面，而是**把债记下来**：
+# NFR-ALL-GATE-RISK-037 的**先红基线**（面内未登记件的「Core 不出人话」那一面）：本仓 Core 目录现读 **67 / 214 份**
+# 文件都有中文字面量 —— 那是 NFR-ALL-GATE-RISK-037 的**全局收口**（别单的活）。判据的做法不是放宽面，而是**把债记下来**：
 # 台账里那份名单 = 允许仍然写中文的**历史件**；名单**双向判** —— 不在名单里而写了中文 ⇒ 判红
 # （新件不许再添债）；在名单里却**不再**写中文 ⇒ 也判红（死豁免，防抄名单混过去）。
 HAN_LEDGER = "Scripts/terminal-tabs-han-baseline.json"
@@ -466,7 +466,7 @@ def check_model(root: pathlib.Path) -> tuple[list[Issue], int]:
             if visible_han(literal):
                 issues.append(Issue(
                     f"{MODEL}:{number}",
-                    f"代码行里有中文字面量「{literal}」—— Core 只出逻辑，人话走语言表（R-45）",
+                    f"代码行里有中文字面量「{literal}」—— Core 只出逻辑，人话走语言表（NFR-ALL-GATE-RISK-037）",
                 ))
                 break
     return issues, sites
@@ -564,7 +564,7 @@ def check_tests(root: pathlib.Path) -> tuple[list[Issue], int]:
 
 
 def _han_ledger(root: pathlib.Path) -> set[str] | None:
-    """R-45 先红基线台账里的文件名集合（读不到 / 读不动 ⇒ `None` = 判红，不当通过）。"""
+    """NFR-ALL-GATE-RISK-037 先红基线台账里的文件名集合（读不到 / 读不动 ⇒ `None` = 判红，不当通过）。"""
     text = _read(root, HAN_LEDGER)
     if not text.strip():
         return None
@@ -702,7 +702,7 @@ def check_face(root: pathlib.Path, strict: bool = True) -> tuple[list[Issue], in
                 ))
             elif directory == "Core" or directory.startswith("Core/") \
                     or directory == "Plugins/Notes/Sources":
-                # R-45：Core target 的代码行里不许有中文字面量（**转义写法也算**，见 `visible_han`）。
+                # NFR-ALL-GATE-RISK-037：Core target 的代码行里不许有中文字面量（**转义写法也算**，见 `visible_han`）。
                 # 不在先红基线名单里 ⇒ 判红；在名单里 ⇒ 记一笔（下面判「死豁免」）。
                 found = [literal for literal in STRING_LITERAL.findall(code)
                          if visible_han(literal)]
@@ -710,12 +710,12 @@ def check_face(root: pathlib.Path, strict: bool = True) -> tuple[list[Issue], in
                     issues.append(Issue(
                         relative,
                         f"面内未登记的件里出现中文字面量「{found[0]}」—— Core 只出逻辑、人话走语言表"
-                        f"（R-45）；确有理由就登记进 `{HAN_LEDGER}` 的先红基线（连着理由一起）"
+                        f"（NFR-ALL-GATE-RISK-037）；确有理由就登记进 `{HAN_LEDGER}` 的先红基线（连着理由一起）"
                     ))
                 elif found:
                     hit_legacy.add(relative)
     if han_ledger is None:
-        issues.append(Issue(HAN_LEDGER, "R-45 先红基线不在盘上 —— 这一面取不到输入，不许当通过"))
+        issues.append(Issue(HAN_LEDGER, "NFR-ALL-GATE-RISK-037 先红基线不在盘上 —— 这一面取不到输入，不许当通过"))
     else:
         sites += 1
         for relative in sorted(han_ledger):

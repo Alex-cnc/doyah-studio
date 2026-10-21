@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """语言登记形状：语言知识只在登记文件里 + 登记项/标识/扩展名自洽 + 高亮色走主题令牌。
 
-（FR-EDIT-38 ①②③④ 的机械半边，闭环第 2 项，**项数仍十八** —— 与
+（FR-STD-WS-NAV-002 ①②③④ 的机械半边，闭环第 2 项，**项数仍十八** —— 与
 `check-core-portability.py` / `check-script-portability.py` 同一项：都是「Core 的形状」）
 
 ## 为什么要它
 
-FR-EDIT-38 ① 要的口径是「**新增语言不改核心代码**」：语言定义（扩展名映射 + 关键字 /
+FR-STD-WS-NAV-002 ① 要的口径是「**新增语言不改核心代码**」：语言定义（扩展名映射 + 关键字 /
 类型 / 字面量 / 注释 / 运算符规则集）全部**声明式登记**。这句话如果只写在文档里，
 两个后果会照旧发生：
 
@@ -432,7 +432,7 @@ def check_default_view_consumers(root: pathlib.Path, browser_views: list[str]) -
       ③ 那一个文件必须真的把这一档**接出去**（`openInBrowserTab` 交接锚点）。
 
     为什么钉在 `App/` 全量扫描上：这一档的坏法不是崩溃，而是「有人图快在别处写
-    `if 扩展名 == \"html\"`」—— 那正是 `FR-EDIT-38` ① 要清掉的形状，且症状要等下一种
+    `if 扩展名 == \"html\"`」—— 那正是 `FR-STD-WS-NAV-002` ① 要清掉的形状，且症状要等下一种
     浏览器视图类型进登记表才暴露。
     """
     problems: list[str] = []

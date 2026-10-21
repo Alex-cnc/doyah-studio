@@ -30,7 +30,7 @@
 # 改成**在本机档造同形状的现场**（对象数量放大到 300 张表 / 600 列；另一条连接当「别人的会话」）
 # ⇒ 本机档 exit 0、`knownRed` 两条销账（`Scripts/remote-bypass-scripts.json` 4 条 → 2 条）。
 # **如实登记**：这两段不再对 18.6 做只读核对（跨版本覆盖见队列 L-09）。
-# 剩下两条仍卡在拍板（`FR-IO-04` / 217 专用库）与实例（`pg_stat_statements`）。
+# 剩下两条仍卡在拍板（`FR-STD-DB-IO-003` / 217 专用库）与实例（`pg_stat_statements`）。
 
 # [local-cluster]
 test-backup-restore

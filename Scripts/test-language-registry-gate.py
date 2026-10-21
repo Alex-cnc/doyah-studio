@@ -66,7 +66,7 @@ def main() -> int:
             destination = scratch / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO / relative, destination)
-        # 往词法器里塞一句按语言身份分支的写法 —— 正是 FR-EDIT-38 ① 要清掉的形状。
+        # 往词法器里塞一句按语言身份分支的写法 —— 正是 FR-STD-WS-NAV-002 ① 要清掉的形状。
         target = scratch / "Core/CodeLexer.swift"
         text = target.read_text(encoding="utf-8")
         anchor = "    mutating func run() -> [CodeToken] {"

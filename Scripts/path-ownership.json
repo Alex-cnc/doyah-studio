@@ -156,7 +156,7 @@
     },
     {
       "glob": "Scripts/format-argument-dispositions.json",
-      "reason": "FR-EDIT-39 的格式化形态改口径（2026-10-02 定案「只用内置」，登记外部工具不产生能力）⇒ 处置预算 123→124；共享台账两侧逐字节同一份",
+      "reason": "FR-STD-WS-NAV-014 的格式化形态改口径（2026-10-02 定案「只用内置」，登记外部工具不产生能力）⇒ 处置预算 123→124；共享台账两侧逐字节同一份",
       "by": "macos",
       "at": "2026-10-03"
     },
@@ -192,13 +192,13 @@
     },
     {
       "glob": "Docs/Doyah产品需求分析说明书.md",
-      "reason": "`FR-EDIT-38`（覆盖面 20 种语言 / 61 条扩展名、Beta 1 缺口两门已落）与 `FR-EDIT-39`（三档 + 只用内置）+ 版本行 v3.319；正文里的语言名按平台中立性口径加 platform-ok 注",
+      "reason": "`FR-STD-WS-NAV-002`（覆盖面 20 种语言 / 61 条扩展名、Beta 1 缺口两门已落）与 `FR-STD-WS-NAV-014`（三档 + 只用内置）+ 版本行 v3.319；正文里的语言名按平台中立性口径加 platform-ok 注",
       "by": "macos",
       "at": "2026-10-03"
     },
     {
       "glob": "Scripts/alpha-fr-dispositions.json",
-      "reason": "`FR-EDIT-38` 的覆盖面账随本轮登记数从 18 种 / 58 条改为 20 种 / 61 条（共享台账两侧同步）",
+      "reason": "`FR-STD-WS-NAV-002` 的覆盖面账随本轮登记数从 18 种 / 58 条改为 20 种 / 61 条（共享台账两侧同步）",
       "by": "macos",
       "at": "2026-10-03"
     },
@@ -378,7 +378,7 @@
     },
     {
       "glob": "Docs/发布计划.md",
-      "reason": "队列 `L-122` ⑤（词只留一份）落点同步：`FR-EDIT-37` 那条设计句里的 `presentCommandPalette(seed:)` / `commandPaletteSeedQuery` 已删 ⇒ 本侧每轮的规划面（版本地图 / 排期 / 「仍未做」清单）都长在本文件里，登记为常改面（2026-10-11 第 493 轮）",
+      "reason": "队列 `L-122` ⑤（词只留一份）落点同步：`FR-STD-WS-UI-006` 那条设计句里的 `presentCommandPalette(seed:)` / `commandPaletteSeedQuery` 已删 ⇒ 本侧每轮的规划面（版本地图 / 排期 / 「仍未做」清单）都长在本文件里，登记为常改面（2026-10-11 第 493 轮）",
       "by": "hugehippo",
       "at": "2026-10-11"
     },

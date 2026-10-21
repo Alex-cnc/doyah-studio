@@ -11,7 +11,7 @@ set -euo pipefail
 #
 #   DOYAH_SANDBOX=1 ./Scripts/build-app.sh      # 带 App 沙箱（**上架那一天才用**）
 #
-# 为什么需要架构选项（NFR-COMP-02）：默认产物是**单架构 arm64**，
+# 为什么需要架构选项（NFR-ALL-GATE-COMP-005）：默认产物是**单架构 arm64**，
 # 实测 `lipo -info` 为 `Non-fat file … arm64` —— 在 Intel 机上**根本起不来**。
 # 需求要求"支持 Apple Silicon 与 Intel"，所以构建侧必须能产出 x86_64 / universal。
 # Intel 实机与 Rosetta 的启动验证仍需真机（构建通过 ≠ 真机可跑）。
@@ -19,7 +19,7 @@ set -euo pipefail
 # **沙箱口径（2026-09-29 需求提出者拍板「改非沙箱，先验证功能」）**：
 # 默认出**非沙箱**包（`App/DoyahStudio-unsandboxed.entitlements`）—— 这是交付口径
 # （`Docs/发布计划.md` §1：交付物 = 非沙箱 ad-hoc 包）。沙箱下挡着三件事：终端作业控制
-# （⌃C）/ 导入导出起 `pg_dump`·`pg_restore` / SSH 隧道起 `ssh`（SRS R-18 路线③）。
+# （⌃C）/ 导入导出起 `pg_dump`·`pg_restore` / SSH 隧道起 `ssh`（SRS NFR-ALL-GATE-RISK-018 路线③）。
 # 沙箱改为**显式开关**（两个 entitlements 文件都留在仓里）：
 #   · 上架那天切回 —— **Mac App Store 强制沙箱**，此时 `DOYAH_SANDBOX=1` 即得；
 #   · 旧的 `DOYAH_NO_SANDBOX=1` 仍然认（= 今天默认的那一面），只是不再有开关作用。

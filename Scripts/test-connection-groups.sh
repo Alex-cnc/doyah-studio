@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：连接分组 / 文件夹（FR-CONN-15）。
+# 验证：连接分组 / 文件夹（FR-STD-DB-CONN-012）。
 #
 # 需求原文点名的验收点只有两条，都能脚本化：
 #   · `ConnectionConfig` 新增可选分组字段，**旧 connections.json 仍可解码**

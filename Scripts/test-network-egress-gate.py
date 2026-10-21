@@ -35,7 +35,7 @@ TREE_FILES = [
     "Plugins/Notes/Sources/NoteSync/CloudAuth.swift",
     "Core/LLMClient.swift",
     "Core/EgressLog.swift",
-    # AI 面第 3 件（FR-AI-16 流式面 · 2026-10-14 按前门 `T-20261014-207` ① 登记）：
+    # AI 面第 3 件（FR-AGT-LINK-CHAN-002 流式面 · 2026-10-14 按前门 `T-20261014-207` ① 登记）：
     "Core/LLMStreaming.swift",
     "App/AppState.swift",
     "App/Auth/AccountFlowModel.swift",

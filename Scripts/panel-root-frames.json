@@ -399,5 +399,5 @@
     }
   ],
   "totalsNote": "`frames` / `panelRoots` / `ornaments` 都是**处数**（同一形状出现多次按处数记，例如对象树里三处 12×12 的形状算 3 处）；条目数另计（现 31 条）。",
-  "updated": "2026-10-18 FR-EDIT-57 收尾：新增 App/Views/GhostTextOverlay.swift（行内灰字的共用画法）⇒ scannedFiles 93→94（该文件无固定尺寸 frame，条数不变）"
+  "updated": "2026-10-18 FR-STD-WS-NAV-004 收尾：新增 App/Views/GhostTextOverlay.swift（行内灰字的共用画法）⇒ scannedFiles 93→94（该文件无固定尺寸 frame，条数不变）"
 }

@@ -8,29 +8,29 @@
       "name": "diagnosis",
       "script": "Scripts/test-diagnosis.sh",
       "minAssertions": 13,
-      "covers": ["FR-AI-03"],
+      "covers": ["FR-AGT-UX-CONV-001"],
       "documentedIn": "Docs/design/待人工验收清单.md §10.8"
     },
     {
       "name": "maintenance",
       "script": "Scripts/test-maintenance.sh",
       "minAssertions": 15,
-      "covers": ["FR-AI-04"],
+      "covers": ["FR-AGT-PLAN-PLAN-001"],
       "documentedIn": "Docs/design/待人工验收清单.md §10.9"
     },
     {
       "name": "mcp",
       "script": "Scripts/test-mcp.sh",
       "minAssertions": 21,
-      "covers": ["FR-AI-10"],
+      "covers": ["FR-AGT-LINK-EXT-001"],
       "documentedIn": "Docs/design/待人工验收清单.md §10.10"
     },
     {
       "name": "mysql-driver",
       "script": "Scripts/test-mysql-driver.sh",
       "minAssertions": 26,
-      "covers": ["FR-DRV-09", "FR-DRV-08"],
-      "documentedIn": "Docs/design/待人工验收清单.md §10.7（第 1~8 节；其中第 8 节 5 项属 FR-DRV-08）"
+      "covers": ["FR-STD-DB-DRV-010", "FR-STD-DB-DRV-009"],
+      "documentedIn": "Docs/design/待人工验收清单.md §10.7（第 1~8 节；其中第 8 节 5 项属 FR-STD-DB-DRV-009）"
     }
   ]
 }

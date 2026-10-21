@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：CSV / JSON 导入（FR-IO-03）。
+# 验证：CSV / JSON 导入（FR-STD-DB-IO-006）。
 #
 # 重点不是"能导入"，而是**别把数据读错位**：引号内的逗号与换行、`""` 转义、BOM、CRLF、
 # NULL 与空串的区分 —— 这些在真实导出文件里每一个都常见。用本机 16.2 实例。
@@ -128,7 +128,7 @@ echo "$TYPED_OUT" | grep -q "无法按目标列类型转换" && check "坏值被
     || { check "坏值应被列出" 1; echo "$TYPED_OUT" | tail -3; }
 
 echo ""
-echo "== 5.5) 无表头文件：按位置映射（FR-IO-06 / FR-IO-03）=="
+echo "== 5.5) 无表头文件：按位置映射（FR-STD-DB-IO-007 / FR-STD-DB-IO-006）=="
 # 以前 `--no-header` 读出来的表头是空的，而列映射按名字匹配 → 一列都对不上，功能等于不可用。
 "$CLI" -c "CREATE TABLE positional (a integer, b text, c text);" >/dev/null 2>&1
 PLAIN="$(mktemp -t doyah-import).csv"

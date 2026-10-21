@@ -122,6 +122,19 @@ def is_requirement_row(cells: list[str]) -> bool:
     return bool(cells) and bool(REQUIREMENT_ROW.match(clean_cell(cells[0])))
 
 
+INTERFACE_ROW = re.compile(r"^(?:FR|NFR|AC)-(?:AGT|STD|NTS|RTR|ALL)-(?:ALL|GATE)-(?:IFACE|DATA|RISK)-\d+")
+
+
+def is_interface_row(cells: list[str]) -> bool:
+    """接口 / 数据需求行 = 面 `ALL` 且域 `IFACE` / `DATA`。
+
+    这批条目**本身就是接口名与存储契约**（`DatabaseService` / `SecretStore` / 应用支持目录），
+    在旧编码里以 `DR-` / `IR-` 开头、判据按报告档处理；2026-10-20 并入 5 段式后（`FR-STD-ALL-IFACE-*`）
+    形状变成需求行，本函数把**同一条口径**接回来 —— 不是放宽，是让分类跟着编码一起搬家。
+    """
+    return bool(cells) and bool(INTERFACE_ROW.match(clean_cell(cells[0])))
+
+
 def table_map(lines: list[str]) -> tuple[dict[int, int | None], int]:
     """行号 → 该行所在表格的「需求」列序号；返回 (映射, 表格张数)。
 
@@ -193,7 +206,9 @@ def classify(lines: list[str]):
         elif index in appendix:
             bucket = "appendix"
         elif cells is not None and is_requirement_row(cells):
-            bucket = "requirement-cell"
+            # 接口 / 数据 / 风险三类条目本来就以实现名作正文（旧编码 `DR-` / `IR-` / `R-`
+            # 一直是报告档）；并入 5 段式后形状变成需求行 ⇒ 仍按报告档，别让编码搬家顺手收紧口径
+            bucket = "other-prose" if is_interface_row(cells) else "requirement-cell"
         elif cells is not None:
             bucket = "table-record"
         elif index in neutral:
@@ -222,7 +237,7 @@ def scan(path: pathlib.Path):
 
     requirement_rows = 0
     for index, bucket, line, cells, column in verdict:
-        strict = bucket in STRICT_BUCKETS
+        strict = bucket in STRICT_BUCKETS and not is_interface_row(cells or [])
         if cells is not None and is_requirement_row(cells):
             requirement_rows += 1                      # 读数 = 全文里形状像需求行的行数
         if bucket == "requirement-cell":
@@ -526,7 +541,7 @@ def run_self_test() -> int:
         where = fixture("no-header")
         append(where, requirement_table(
             "| 写法 | 含义 | 示例 |",
-            "| `FR-<模块>-<序号>` | 功能需求 | `FR-EXEC-04` |",
+            "| `FR-<模块>-<序号>` | 功能需求 | `FR-STD-DB-EXEC-009` |",
         ))
         return green(where)
     case("表头没有「需求」列的写法说明表 ⇒ rc=0（占位符不算需求正文）", check_no_header_table)

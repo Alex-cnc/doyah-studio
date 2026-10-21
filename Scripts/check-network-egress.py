@@ -6,7 +6,7 @@
 去迁就脚本**」，原单 `T-20261010-016/017/018`）：台账 `scan.scope` 必须是 `repo`；排除名单（`scan.excludeDirs`）
 只许放生成物 / 稀疏检出副本；「面比声明窄」由本门禁自己实测判红 —— 一行台账缩不了面。
 
-**为什么有它**：`FR-PLUG-05` 的「笔记模块零网络出口」（`check-notes-offline.py`）只扫 `Core/` 下
+**为什么有它**：`FR-STD-ALL-PLUG-005` 的「笔记模块零网络出口」（`check-notes-offline.py`）只扫 `Core/` 下
 文件名以 `Note` / `AICapture` / `License` 开头的文件与 `App/` 下的 `Note*` —— 而 **`Core/NoteSync/`
 是子目录、文件名不以 `Note` 开头** ⇒ 云同步面 / 认证面**不在任何门禁的扫描面内**（执行侧 ⑰ 相抵上报，
 `T-20261009-147 ③`）。结果就是假绿：`CloudAuth.swift` 引了 `URLSession`、门禁照旧全绿。
@@ -17,7 +17,7 @@
   ① **笔记同步面** = `Plugins/Notes/Sources/NoteSync/CloudSyncService.swift`（该面唯一出口）
   ② **认证面**     = `Plugins/Notes/Sources/NoteSync/CloudAuth.swift`（单列：认证与同步解耦）
   ③ **AI 面（既有豁免）** = `Core/LLMClient.swift` + `Core/EgressLog.swift`（传输装饰器）
-     + `Core/LLMStreaming.swift`（FR-AI-16 流式传输面 · **2026-10-14 补登**：前门 `T-20261014-207` ①
+     + `Core/LLMStreaming.swift`（FR-AGT-LINK-CHAN-002 流式传输面 · **2026-10-14 补登**：前门 `T-20261014-207` ①
      裁「必须登记进联网文件面，不许为了 `rc=0` 排除在面外」；SRS §6.4 表第 3 行文件枚举待前门落笔）
   ④ **装配缝（不算出口）** = `App/AppState.swift` · `App/Auth/AccountFlowModel.swift`（只注入 transport）
   ⑤ **白名单面以外的一切文件**（全仓已在扫描面内）出现 `URLSession` / `URLRequest` ⇒ **判红**（并点名 `文件:行号`）

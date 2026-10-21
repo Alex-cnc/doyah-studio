@@ -1,7 +1,7 @@
 #!/bin/bash
-# 验证：连接 URL 导入 / 导出与配置包（FR-CONN-19）。
+# 验证：连接 URL 导入 / 导出与配置包（FR-STD-DB-CONN-005）。
 #
-# 需求原文点名的一条纪律：**密码仍只进 Keychain（DR-02）** ——
+# 需求原文点名的一条纪律：**密码仍只进 Keychain（FR-STD-ALL-DATA-002）** ——
 # 所以这里既要验"一行建连能解析对"，也要验"导出的东西里没有密码"。
 set -uo pipefail
 

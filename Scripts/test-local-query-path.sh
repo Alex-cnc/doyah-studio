@@ -174,7 +174,7 @@ assert_contains "服务器下列出第二个数据库" "${OUTPUT}" "database ic_
 assert_contains "按需连接并列出该库的表" "${OUTPUT}" "table second_table"
 
 echo ""
-echo "==> 用例 6：DML 影响行数（FR-EXEC-10）"
+echo "==> 用例 6：DML 影响行数（FR-STD-DB-EXEC-013）"
 run_cli -c "DROP TABLE IF EXISTS cli_rows; CREATE TABLE cli_rows(id int);" >/dev/null
 OUTPUT="$(run_cli -c "INSERT INTO cli_rows VALUES (1), (2), (3);
 UPDATE cli_rows SET id = id + 10 WHERE id <= 2;
@@ -185,7 +185,7 @@ assert_contains "DELETE 影响 1 行" "${OUTPUT}" "affectedRows: 1"
 assert_contains "DML 语句没有结果集" "${OUTPUT}" "(no result set)"
 
 echo ""
-echo "==> 用例 7：服务端取消（FR-EXEC-08）"
+echo "==> 用例 7：服务端取消（FR-STD-DB-EXEC-018）"
 set +e
 OUTPUT="$(run_cli --cancel-after 1 -c "SELECT pg_sleep(30);" 2>&1)"
 STATUS=$?
@@ -201,7 +201,7 @@ assert_contains "取消由服务端执行" "${OUTPUT}" "cancel: 触发服务端�
 assert_contains "错误信息说明语句被取消" "${OUTPUT}" "canceling statement due to user request"
 
 echo ""
-echo "==> 用例 8：建库权限探测与建库（FR-META-11）"
+echo "==> 用例 8：建库权限探测与建库（FR-STD-DB-META-010）"
 OUTPUT="$(run_cli --can-create-database)"
 assert_contains "探测到当前用户可建库" "${OUTPUT}" "canCreateDatabase: true"
 run_cli -c "DROP DATABASE IF EXISTS ic_priv_test;" >/dev/null 2>&1 || true

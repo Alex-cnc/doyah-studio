@@ -1,5 +1,5 @@
 #!/bin/bash
-# FR-DRV-09 的**真机**证据（需要一台真实 MySQL / MariaDB）。
+# FR-STD-DB-DRV-010 的**真机**证据（需要一台真实 MySQL / MariaDB）。
 #
 # 与 `test-mysql-driver.sh`（假服务器）的分工：
 #   · 假服务器证的是**我们这一侧的接线**（认证之后的一切）；

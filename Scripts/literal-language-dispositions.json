@@ -40,7 +40,7 @@
     {
       "file": "Core/AICapture.swift",
       "maxSites": 0,
-      "reason": "**笔记侧不收语言（队列 L-65 第 3 批，2026-09-28 第 50 轮）**：`skillNote` / `sqlNote` 收的是**已经渲染好的标签文本**（`defaultTag: String` / `tag: String`）—— 笔记侧只收文本与标识（`FR-PLUG-03` 的类型白名单，闭环第 10 项），**语言是宿主的事**。第一版把 `language: AppLanguage` 加进来被第 10 项当场拦下（判据是对的：语言进笔记侧 = 让笔记侧替宿主选语言，正是本轮要销掉的形状）。判据 C 对这条是**负向**的：这里再出现 `language:` 形参或字面语言即红。"
+      "reason": "**笔记侧不收语言（队列 L-65 第 3 批，2026-09-28 第 50 轮）**：`skillNote` / `sqlNote` 收的是**已经渲染好的标签文本**（`defaultTag: String` / `tag: String`）—— 笔记侧只收文本与标识（`FR-STD-ALL-PLUG-003` 的类型白名单，闭环第 10 项），**语言是宿主的事**。第一版把 `language: AppLanguage` 加进来被第 10 项当场拦下（判据是对的：语言进笔记侧 = 让笔记侧替宿主选语言，正是本轮要销掉的形状）。判据 C 对这条是**负向**的：这里再出现 `language:` 形参或字面语言即红。"
     },
     {
       "file": "Core/AICaptureUltra.swift",
@@ -70,7 +70,7 @@
     {
       "file": "Core/TableImport.swift",
       "maxSites": 0,
-      "reason": "**回归钉（队列 L-65 第 1 批已透传）**：`copySupport(databaseType:language:)` / `preferredWriteMode(databaseType:language:)` 的 `reason` 是要给用户看的一句话（界面在 `ImportPanel.refreshWriteMode()` 传 `effectiveLanguage`）—— 这里再出现字面语言即红。**注**：同函数里 `gbase8a` 那一支仍是**汉字字面量**（不是写死语言，属 R-45 棘轮名下已登记的债），不在本判据范围。"
+      "reason": "**回归钉（队列 L-65 第 1 批已透传）**：`copySupport(databaseType:language:)` / `preferredWriteMode(databaseType:language:)` 的 `reason` 是要给用户看的一句话（界面在 `ImportPanel.refreshWriteMode()` 传 `effectiveLanguage`）—— 这里再出现字面语言即红。**注**：同函数里 `gbase8a` 那一支仍是**汉字字面量**（不是写死语言，属 NFR-ALL-GATE-RISK-037 棘轮名下已登记的债），不在本判据范围。"
     }
   ],
   "deadKeys": [

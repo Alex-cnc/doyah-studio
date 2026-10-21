@@ -1,5 +1,5 @@
 #!/bin/bash
-# 真机/本地验证：本地模型端点全流程 + 零外发（NFR-AI-06）。
+# 真机/本地验证：本地模型端点全流程 + 零外发（NFR-ALL-GATE-AI-006）。
 #
 # 为什么用**本地假端点**而不是真 Ollama：这条需求要证的是**客户端行为** ——
 # 指向本地端点时是否免 Key、请求怎么组装、响应怎么解析、外发日志是否只记本地目标。
@@ -88,8 +88,8 @@ echo "$OUT" | sed 's/^/  /'
 [ "$CODE" -eq 0 ] && check "命令成功（退出码 0）" 0 || check "命令成功" 1
 echo "$OUT" | grep -q "本地端点判定：是（免 API Key）" && check "识别为本地端点且免 Key" 0 || check "本地端点识别" 1
 echo "$OUT" | grep -q "SELECT id, payload FROM orders" && check "取到了模型给的 SQL" 0 || check "取到 SQL" 1
-echo "$OUT" | grep -q "这条查询只看最近 7 天的订单" && check "解释文本保留（可复核，NFR-AI-05）" 0 || check "解释保留" 1
-echo "$OUT" | grep -q "是否已执行：否" && check "结果**未执行**（FR-AI-02）" 0 || check "结果未执行" 1
+echo "$OUT" | grep -q "这条查询只看最近 7 天的订单" && check "解释文本保留（可复核，NFR-ALL-GATE-AI-005）" 0 || check "解释保留" 1
+echo "$OUT" | grep -q "是否已执行：否" && check "结果**未执行**（FR-AGT-CORE-LOOP-001）" 0 || check "结果未执行" 1
 echo "$OUT" | grep -q "配额账本：请求 1 次 / 160 token" && check "配额账本记账正确" 0 || check "配额记账" 1
 
 echo ""
@@ -102,7 +102,7 @@ echo "$OUT" | grep -q "agentModel → http://127.0.0.1:${PORT}" \
     || { check "外发日志目标应指向本地端点" 1; echo "$OUT" | grep "外发日志" -A 3; }
 
 echo ""
-echo "== 3) 反向核对：**总开关关闭时一个请求都不发**（NFR-AI-02 / AC-AI-01）=="
+echo "== 3) 反向核对：**总开关关闭时一个请求都不发**（NFR-ALL-GATE-AI-002 / AC-ALL-GATE-AI-01）=="
 BEFORE=$(grep -c "STUB_REQ" /tmp/doyah-stub.log || true)
 OUT2="$("$CLI" agent-sql --endpoint "http://127.0.0.1:${PORT}/v1" --model "qwen2.5:7b" --disabled "找出最近 7 天的订单" 2>&1)"
 AFTER=$(grep -c "STUB_REQ" /tmp/doyah-stub.log || true)

@@ -1,11 +1,11 @@
-# 0011 · 端点联调回写：`NFR-AI-04` 转 ✅，`FR-AI-03` / `FR-AI-04` 的端点残项销账
+# 0011 · 端点联调回写：`NFR-ALL-GATE-AI-004` 转 ✅，`FR-AGT-UX-CONV-001` / `FR-AGT-PLAN-PLAN-001` 的端点残项销账
 
 | 字段 | 值 |
 | --- | --- |
 | 状态 | 待采纳 |
 | 提出方 | macos 侧（大河马） |
 | 日期 | 2026-10-12 |
-| 影响面 | SRS：`NFR-AI-04` 状态格（🟡 → ✅ + 行末补证据句）· `FR-AI-03` / `FR-AI-04` 状态格（理由 ① 改「已联调」+ `[alpha 不含]` 原因档换 `ui-click`）· §10.1 索引一行 · §9 待决表第 23 行；规划书一括注；`Scripts/alpha-fr-dispositions.json` 两条（**本侧同批改**，见 §3） |
+| 影响面 | SRS：`NFR-ALL-GATE-AI-004` 状态格（🟡 → ✅ + 行末补证据句）· `FR-AGT-UX-CONV-001` / `FR-AGT-PLAN-PLAN-001` 状态格（理由 ① 改「已联调」+ `[alpha 不含]` 原因档换 `ui-click`）· §10.1 索引一行 · §9 待决表第 23 行；规划书一括注；`Scripts/alpha-fr-dispositions.json` 两条（**本侧同批改**，见 §3） |
 | 关联提交 | （采纳后回填 SHA） |
 
 ## 背景
@@ -28,19 +28,19 @@
 
 命令 `bash Scripts/test-real-endpoint.sh --endpoint https://api.deepseek.com/v1 --model deepseek-v4-flash --api-key <本机凭据>` ⇒ **rc=0**；API Key 在输出里 0 处命中（独立 grep 复核）。**判据 ③ 的独立旁证**（不是脚本自述）：统一外发账本新增一条 `kind=agentModel` / `POST` / `origin=CLI · 自然语言生成 SQL` / `target=https://api.deepseek.com/v1/chat/completions` / `outcome=allowed` / `timestamp=2026-10-12T15:15:39Z`（id `1D12F8F9-…`）；2026-09-30 首跑那条（`…07:07:08Z`）仍在盘上，与 `Q50` 记的读数一致。
 
-> **一处如实说明**：`test-real-endpoint.sh` 走的是 **`agent-sql`** 那条路（自然语言 → SQL，`FR-AI-02`），验的是**端点通道**（`OpenAICompatibleClient` + `AgentGate` + 外发账本 + 脱敏）。它证明「**端点未接**」不再成立；它**不**等于「诊断 / 维护面板上真的问过一次模型」—— 那一步的触发点在界面（同一通道），只能人工点击。
+> **一处如实说明**：`test-real-endpoint.sh` 走的是 **`agent-sql`** 那条路（自然语言 → SQL，`FR-AGT-CORE-LOOP-001`），验的是**端点通道**（`OpenAICompatibleClient` + `AgentGate` + 外发账本 + 脱敏）。它证明「**端点未接**」不再成立；它**不**等于「诊断 / 维护面板上真的问过一次模型」—— 那一步的触发点在界面（同一通道），只能人工点击。
 
 ## 请落笔（逐处 现文 → 建议文）
 
-### 1. `NFR-AI-04`：🟡 → ✅
+### 1. `NFR-ALL-GATE-AI-004`：🟡 → ✅
 
 - **现文**（状态格，SRS 第 861 行）：`🟡（真实请求路径已接，真端点联调待做）`
 - **建议文**：`✅`
-- 该行历史段（2026-09-23 两处真缺口 + 边界 `R-41`）**一字不动**；行末建议追加一句：
+- 该行历史段（2026-09-23 两处真缺口 + 边界 `NFR-ALL-GATE-RISK-033`）**一字不动**；行末建议追加一句：
   > **2026-10-12（开发循环第 500 轮）**：真实模型端点联调已跑通（`Scripts/test-real-endpoint.sh --endpoint https://api.deepseek.com/v1 --model deepseek-v4-flash`，**3.79 秒**，四判据全绿：退出码 0 / 返回含 SQL / 输出无 API Key / 外发账本留痕）⇒ 本条**最后一个在途项收口**。**如实边界**：配额上限那一档的「终止并提示」由单测 `AgentQuotaSessionTests` 覆盖，**尚未在真实端点上触发过**（CLI `agent-sql` 现不接受配额开关）；要补这条现场证据，本侧可先给 CLI 加一个 `--max-calls` 之类的最小开关再复跑。
-- **§10.1 索引第 1343 行**：`| NFR-AI-04 | 4.8 AI 智能体 | 常用增强 | 🟡 |` ⇒ 末格改 **`✅`**（`check-status-consistency.py` 是索引 ↔ 定义行**双向**对账，只改一处必红）。
+- **§10.1 索引第 1343 行**：`| NFR-ALL-GATE-AI-004 | 4.8 AI 智能体 | 常用增强 | 🟡 |` ⇒ 末格改 **`✅`**（`check-status-consistency.py` 是索引 ↔ 定义行**双向**对账，只改一处必红）。
 
-### 2. `FR-AI-03` / `FR-AI-04`：端点理由改「已联调」+ 标记换原因档
+### 2. `FR-AGT-UX-CONV-001` / `FR-AGT-PLAN-PLAN-001`：端点理由改「已联调」+ 标记换原因档
 
 - **现文**（SRS 第 705 / 706 行）：`🟡（…均已交付并验证；**真实模型端点未接**） **[alpha 不含]**（真实模型端点未接（需端点与凭据）；界面入口待人工点验）`
 - **建议文**：`🟡（…均已交付并验证；**端点已联调**（2026-09-30 首跑 / 2026-10-12 第 500 轮复跑：`test-real-endpoint.sh` 3.79 秒、四判据全绿）） **[alpha 不含]**（界面入口待人工点验）`
@@ -48,22 +48,22 @@
 
 ### 3. `Scripts/alpha-fr-dispositions.json`（**本侧同批改**）
 
-- `FR-AI-03` / `FR-AI-04` 两条：`reason` `device-instance` → **`ui-click`**；`reasonText` → `界面入口待人工点验`；`marker` → `**[alpha 不含]**（界面入口待人工点验）`。
+- `FR-AGT-UX-CONV-001` / `FR-AGT-PLAN-PLAN-001` 两条：`reason` `device-instance` → **`ui-click`**；`reasonText` → `界面入口待人工点验`；`marker` → `**[alpha 不含]**（界面入口待人工点验）`。
 - **必须与 §2 同批**：判据 B 要求台账标记与 SRS 定义行**逐字相等**，先改一边必红。
 - 判定 A 不受影响：两条**仍是 🟡** ⇒ FR 🟡 仍 55 条；`ui-click` 档已存在（39 条），无需扩词表。
 
 ### 4. 规划书（`check-status-consistency.py` 第 2 段会判）
 
-- `Doyah产品能力规划说明书.md:641`：``NFR-AI-04`（🟡）`` ⇒ （`✅`）。
-- `Doyah产品能力规划说明书.md:177` 的 `FR-AI-03（🟡）` **不动**（`FR-AI-03` 仍是 🟡）。
+- `Doyah产品能力规划说明书.md:641`：``NFR-ALL-GATE-AI-004`（🟡）`` ⇒ （`✅`）。
+- `Doyah产品能力规划说明书.md:177` 的 `FR-AGT-UX-CONV-001（🟡）` **不动**（`FR-AGT-UX-CONV-001` 仍是 🟡）。
 
 ### 5. §9 待决表第 23 行
 
-- 现文含 `真实模型端点（NFR-AI-04、FR-AI-12）` ⇒ 该短语应删（端点已到位）；同行 `FR-AI-12` 的另一笔见附注 1。
+- 现文含 `真实模型端点（NFR-ALL-GATE-AI-004、FR-AGT-GUARD-PERM-004）` ⇒ 该短语应删（端点已到位）；同行 `FR-AGT-GUARD-PERM-004` 的另一笔见附注 1。
 
 ## 附注（本侧登记、不代改；同族陈旧，请前门一并裁决）
 
-1. **`FR-AI-12` 的标记也陈旧**：现写 `**[alpha 不含]**（注入端到端未验（缺模型端点与实例）；连接权限的客户端校验未做）` —— 后一半已由**第 498 轮 `L-125`** 落地（`Core/AgentPermissionScope.swift` + `AgentActionGate`，+21 例，提交 `eca7833`）⇒ SRS 该格与 `alpha-fr-dispositions.json` 里 `FR-AI-12` 那条的 `reasonText` 同需跟版。前半（注入端到端）现在**端点已到位**，缺的只是一次**真跑**（本机实例 + 注入样本）—— 前门点头，本侧可另立队列条去跑。
+1. **`FR-AGT-GUARD-PERM-004` 的标记也陈旧**：现写 `**[alpha 不含]**（注入端到端未验（缺模型端点与实例）；连接权限的客户端校验未做）` —— 后一半已由**第 498 轮 `L-125`** 落地（`Core/AgentPermissionScope.swift` + `AgentActionGate`，+21 例，提交 `eca7833`）⇒ SRS 该格与 `alpha-fr-dispositions.json` 里 `FR-AGT-GUARD-PERM-004` 那条的 `reasonText` 同需跟版。前半（注入端到端）现在**端点已到位**，缺的只是一次**真跑**（本机实例 + 注入样本）—— 前门点头，本侧可另立队列条去跑。
 2. `Docs/design/剩余任务清单.md` §3.1 第 5 行「真实模型端点」⇒ 可销行（其余 8 行不动）。
 3. `Docs/手工验收运行手册.md` 第 150 行（`test-real-endpoint.sh` 那格）「需要真模型服务（Ollama / vLLM）」⇒ 可注明「2026-10-12 已联调（DeepSeek 云端点）；本地 Ollama / vLLM 仍未验」。
 4. `Docs/proposals/README.md` 第 12 行「**落笔权**：契约层由 macOS 侧（大河马）执行」是 **2026-10-03 前**的口径（现状 = `bluewhale`）—— 属制度口径，本侧**不代改**、只登记；同一张索引表停在 `0006`（缺 `0007`~`0010`），本侧按**加法**补齐到 `0011`（不删不改既有行）。
@@ -74,7 +74,7 @@
 - **代价**：前门一次落笔（SRS 三处状态格 + 索引一行 + 待决一行 + 规划书一处括注），随后本侧同批改 `alpha-fr-dispositions.json` 两行（共享面，按规矩在清单 `shared_ledger` 登记 + 提交信息注 `shared-surface:`）。
 - **替代 A**（本侧自改 SRS）：排除 —— 护栏（契约层 `Docs/**` 归前门）。
 - **替代 B**（本侧先改台账）：排除 —— 判据 B 双向对账判红（台账标记与 SRS 不逐字相等）。
-- **替代 C**（`NFR-AI-04` 保持 🟡，只把理由句改成「真端点联调已跑通」）：**可接受** —— 属前门取舍。本侧建议转 ✅（该行自述的在途项就只剩端点），但**不代拍**。
+- **替代 C**（`NFR-ALL-GATE-AI-004` 保持 🟡，只把理由句改成「真端点联调已跑通」）：**可接受** —— 属前门取舍。本侧建议转 ✅（该行自述的在途项就只剩端点），但**不代拍**。
 
 ## 结论与落笔
 

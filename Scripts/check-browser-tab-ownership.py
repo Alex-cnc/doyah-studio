@@ -11,7 +11,7 @@
 字符串里提过的标识也不算命中（2026-10-13 合册 `T-20261013-027` · 原单 `T-20261010-061`）。
 **面 = `App/`**，并与 `Package.swift` **现读**的生产 target 源码目录**双向对账**：面外的生产根
 逐条登记理由（理由为空 / 不是生产目录 ⇒ 判红），七个标识在面外出现 ⇒ 判红（面外回流口）。
-**SRS 定义行锚点唯一化**：编号列 = `FR-EDIT-34` + 行首形状 `| FR-EDIT-34 | ` + 标题格含
+**SRS 定义行锚点唯一化**：编号列 = `FR-STD-WS-WEB-001` + 行首形状 `| FR-STD-WS-WEB-001 | ` + 标题格含
 `**内嵌浏览器页签（工作区，完整浏览器）**`，三者齐才认定义行（恰一行：0 行 / >1 行 / 形状变了
 都判红并指名行号）；归属格除写「工作区」外还判**反义**形态（`不属工作区` / `非工作区` 都是子串）。
 判据 = 一份**双向对账**的允许落点台账（`App/` 下出现下列标识的文件必须登记过，登记的必须真的命中）：
@@ -21,7 +21,7 @@
 **状态所有者**另判一处（第 135 轮补，队列 `L-149` 剩余①）：浏览器状态必须住在
 `App/WorkspaceBrowserModel.swift`（那个类只此一处定义）——
 挂回 `AppState` 的 `@Published` 上，引擎每回报一次标题 / 加载中就要重算整个窗口。
-另判两处**文档条文**（SRS `FR-EDIT-34` 定义格、概要设计 §3.12「视图契约」行）必须写「工作区」、
+另判两处**文档条文**（SRS `FR-STD-WS-WEB-001` 定义格、概要设计 §3.12「视图契约」行）必须写「工作区」、
 不得再钉在「编辑器区」；订正过程留在证据格里，**判据只看条文格**。空跑防护：扫描面文件数 /
 台账文件 / 七个标识各自至少一处命中 / 状态所有者类在位。
 
@@ -71,7 +71,7 @@ EXEMPT = {
 
 SRS = "Docs/Doyah产品需求分析说明书.md"
 HLD = "Docs/Doyah产品概要设计说明书.md"
-SRS_ENTRY = "FR-EDIT-34"
+SRS_ENTRY = "FR-STD-WS-WEB-001"
 SRS_ENTRY_TITLE = "内嵌浏览器页签"
 HLD_CONTRACT_LINE = "**视图契约**"
 OWNED_WORD = "工作区"
@@ -254,7 +254,7 @@ def lines_of(rows: list[tuple[int, str]]) -> str:
 
 
 def cells(line: str) -> list[str]:
-    """GFM 表格行 → 单元格（去首尾竖线）：`|FR-EDIT-34 |…` 与 `| FR-EDIT-34 |…` 都认得出编号列。"""
+    """GFM 表格行 → 单元格（去首尾竖线）：`|FR-STD-WS-WEB-001 |…` 与 `| FR-STD-WS-WEB-001 |…` 都认得出编号列。"""
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
 
@@ -666,7 +666,7 @@ def self_test(root: pathlib.Path) -> int:
         _patch(reshaped / SRS, definition_line,
                definition_line.replace(f"| {SRS_ENTRY} |", f"|{SRS_ENTRY} |", 1))
         cases.append((
-            "假绿 · SRS 定义行行首形状改成 `|FR-EDIT-34 |` ⇒ 判红且点名「行首形状」",
+            "假绿 · SRS 定义行行首形状改成 `|FR-STD-WS-WEB-001 |` ⇒ 判红且点名「行首形状」",
             any("行首形状" in problem for problem in check(reshaped)[0]),
         ))
 

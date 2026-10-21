@@ -235,29 +235,29 @@ def self_test() -> int:
         # 1 台账少一条 ⇒ 那条 🟡 没账
         srs, led = fresh()
         mutate_ledger(led, lambda d: d["items"].__delitem__(
-            next(i for i, x in enumerate(d["items"]) if x["id"] == "FR-RES-10")))
+            next(i for i, x in enumerate(d["items"]) if x["id"] == "FR-STD-DB-RES-009")))
         problems, _ = evaluate(srs, led)
-        cases.append(("漏一条：台账删掉 FR-RES-10", "红" if any("FR-RES-10" in p for p in problems) else "绿（漏判）"))
+        cases.append(("漏一条：台账删掉 FR-STD-DB-RES-009", "红" if any("FR-STD-DB-RES-009" in p for p in problems) else "绿（漏判）"))
 
         # 2 台账多一条（拿一条已 ✅ 的条目充数）⇒ 陈旧条目
         srs, led = fresh()
         mutate_ledger(led, lambda d: d["items"].append({
-            "id": "FR-DRV-09", "domain": "3.10 驱动与方言兼容", "reason": "environment",
+            "id": "FR-STD-DB-DRV-010", "domain": "3.10 驱动与方言兼容", "reason": "environment",
             "reasonText": "x", "marker": "**[alpha 不含]**（x）",
             "markerPreExisting": True, "evidence": [{"path": "Scripts/verify-all.sh"}]}))
         problems, _ = evaluate(srs, led)
-        cases.append(("多一条：台账塞进不再 🟡 的 FR-DRV-09", "红" if any("FR-DRV-09" in p for p in problems) else "绿（漏判）"))
+        cases.append(("多一条：台账塞进不再 🟡 的 FR-STD-DB-DRV-010", "红" if any("FR-STD-DB-DRV-010" in p for p in problems) else "绿（漏判）"))
 
         # 3 台账的标记文本与行内不一致
         srs, led = fresh()
         def change_marker(d):
             for x in d["items"]:
-                if x["id"] == "FR-EDIT-36":
+                if x["id"] == "FR-STD-WS-FS-008":
                     x["reasonText"] = "文案改了但行里没改"
                     x["marker"] = "**[alpha 不含]**（文案改了但行里没改）"
         mutate_ledger(led, change_marker)
         problems, _ = evaluate(srs, led)
-        cases.append(("台账与行内标记不一致", "红" if any("FR-EDIT-36" in p for p in problems) else "绿（漏判）"))
+        cases.append(("台账与行内标记不一致", "红" if any("FR-STD-WS-FS-008" in p for p in problems) else "绿（漏判）"))
 
         # 4 行内的标记被删掉（文档侧偷偷销账）
         srs, led = fresh()
@@ -269,22 +269,22 @@ def self_test() -> int:
 
         # 5 原因档写成词表外的词
         srs, led = fresh()
-        mutate_ledger(led, lambda d: [x.update({"reason": "whatever"}) for x in d["items"] if x["id"] == "FR-SESS-01"])
+        mutate_ledger(led, lambda d: [x.update({"reason": "whatever"}) for x in d["items"] if x["id"] == "FR-STD-DB-SESS-002"])
         problems, _ = evaluate(srs, led)
-        cases.append(("原因档不在词表", "红" if any("FR-SESS-01" in p for p in problems) else "绿（漏判）"))
+        cases.append(("原因档不在词表", "红" if any("FR-STD-DB-SESS-002" in p for p in problems) else "绿（漏判）"))
 
         # 6 证据指针指向不存在的文件
         srs, led = fresh()
         mutate_ledger(led, lambda d: [x.update({"evidence": [{"path": "Scripts/no-such-script.sh"}]})
-                                      for x in d["items"] if x["id"] == "FR-META-15"])
+                                      for x in d["items"] if x["id"] == "FR-STD-DB-META-008"])
         problems, _ = evaluate(srs, led)
-        cases.append(("证据指针文件不存在", "红" if any("FR-META-15" in p for p in problems) else "绿（漏判）"))
+        cases.append(("证据指针文件不存在", "红" if any("FR-STD-DB-META-008" in p for p in problems) else "绿（漏判）"))
 
         # 7 证据为空
         srs, led = fresh()
-        mutate_ledger(led, lambda d: [x.update({"evidence": []}) for x in d["items"] if x["id"] == "FR-DDL-03"])
+        mutate_ledger(led, lambda d: [x.update({"evidence": []}) for x in d["items"] if x["id"] == "FR-STD-DB-DDL-003"])
         problems, _ = evaluate(srs, led)
-        cases.append(("证据为空", "红" if any("FR-DDL-03" in p for p in problems) else "绿（漏判）"))
+        cases.append(("证据为空", "红" if any("FR-STD-DB-DDL-003" in p for p in problems) else "绿（漏判）"))
 
         # 8 台账为空（空跑）
         srs, led = fresh()

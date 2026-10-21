@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：结果集导出 Excel（FR-RES-14）。
+# 验证：结果集导出 Excel（FR-STD-DB-RES-014）。
 #
 # 为什么要这么验：xlsx 的产物是**二进制 ZIP + OOXML**，"我们自己说写对了"不算数。
 # 所以这里用**另一份实现**（Python 的 zipfile + ElementTree）把产物拆开核对：

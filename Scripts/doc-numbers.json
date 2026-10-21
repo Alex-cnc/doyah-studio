@@ -16,7 +16,7 @@
   "逐族负例例数（`test-*.py` 的 N/N、`--self-test` 的例数）：第 65 轮（L-72 ㈠）起由**另一份台账**单独收口 —— `Scripts/self-test-counts.json` + `Scripts/check-self-test-counts.py`（闭环第 4 项，与本案同一项）：把 27 族 runner **真跑一遍**（要求 exit 0）、按各族 `countRegex` 抓例数，再与 §6 资产表 / `verify-all.sh` 注释 / 脚本 docstring 逐处对账。本台账不再承担它。",
   "check-doc-tables 的「跳过 7 份 / 14 个文件」这类数字：**第 65 轮（L-72 ㈡）已收** —— 见上面 `doc-tables-lists` / `doc-tables-files` 两条（实测 = 导入那个模块读清单 + `git check-ignore` + 真跑它一遍，并与它的自检夹具逐条对账）。三书里「N 处 / N 条」类统计：**第 80 轮（L-72 ㈢）已收** —— 见 `panel-root-frames` / `panel-root-out-of-scope` / `real-db-local-cluster-scripts` 三条，测法 = 新增的 `measure.kind = judge-output`（**真跑一遍那个判据**、要求 exit 0，再从其**人读输出**抓值）。",
   "**没有判据在管**的数字（第 80 轮如实登记，不硬收）：① 语言表键数（`Docs/Doyah产品能力规划说明书.md` 原写「1388 个文案键」）；② Core 硬编码用户文案数（`Docs/Doyah产品概要设计说明书.md` §7 与 §9 平台差异表原写「~302 处」）。两者都被改成**指向它们各自的唯一来源**（语言表本身 / 汉字棘轮基线 `Scripts/core-localization-baseline.json`）—— 本台账不为它们登记条目：要登记得先给它们一个机械口径（谁数、数什么、口径是什么），否则就是把「没有来源的数字」搬进台账里假装有来源。",
-  "汉字棘轮基线（R-45）/ 设计令牌基线 / 形状台账处数：它们已是『棘轮基线文件』形态（各自有唯一出处），不在本条范围。",
+  "汉字棘轮基线（NFR-ALL-GATE-RISK-037）/ 设计令牌基线 / 形状台账处数：它们已是『棘轮基线文件』形态（各自有唯一出处），不在本条范围。",
   "本机台账文件（`Docs/智能体助手-开发spec.md` / `Docs/开发记录-*.md` / `Docs/design/开发循环-任务队列.md`，均在 `.gitignore` 内、靠微云备份）**本轮不在扫描范围**：它们每轮都被写、且含大量历史行（逐轮 sha、旧值链）。要把它们的「现状快照」格也纳入对账，得先定『哪些格算现状声明』（如 spec §7 的 `Core 单测 2056 项` 格）⇒ 随 L-72 一起做。本轮**如实登记**：`Docs/智能体助手-开发spec.md` §7 那格写的 2056 **是靠人抄的**，判据不管它。"
  ],
  "checkScriptParity": {

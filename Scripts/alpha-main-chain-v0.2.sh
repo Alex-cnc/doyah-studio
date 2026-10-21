@@ -56,11 +56,11 @@ mkdir -p "${DB_OUT}"
 #
 # A 工作区（编辑器 / 多页签 / 结果集 / 导出 / 终端）
 WS_LOCAL=(
-  "编辑器-语言层|test-workspace-editor.sh|assert|着色 / 补全 / 行号列：进去的是哪种语言、出来的token 对不对（FR-EDIT-36）"
-  "终端-输入编码|test-terminal-modes.sh|assert|鼠标上报 / DECCKM / DA1·DSR 应答逐条核对（FR-EDIT-29）"
-  "终端-配色|test-terminal-palette.sh|assert|两套色板 + WCAG 门槛：单测与脚本各算一遍，同结论才算成立（FR-EDIT-29）"
+  "编辑器-语言层|test-workspace-editor.sh|assert|着色 / 补全 / 行号列：进去的是哪种语言、出来的token 对不对（FR-STD-WS-FS-008）"
+  "终端-输入编码|test-terminal-modes.sh|assert|鼠标上报 / DECCKM / DA1·DSR 应答逐条核对（FR-STD-WS-TOOL-001）"
+  "终端-配色|test-terminal-palette.sh|assert|两套色板 + WCAG 门槛：单测与脚本各算一遍，同结论才算成立（FR-STD-WS-TOOL-001）"
   "终端-配色门禁|check-terminal-palette.py|gate|配色不达标即红（与上一条互为红 / 绿成对）"
-  "命令面板-接线|check-palette-wiring.py|gate|设了标志位必须有人读（FR-EDIT-25 的老毛病）"
+  "命令面板-接线|check-palette-wiring.py|gate|设了标志位必须有人读（FR-STD-WS-UI-005 的老毛病）"
 )
 # 引用段：工作区模块要的「结果集 / 导出」的真库现场就在数据库模块里，登记指向、不重跑。
 WS_REF=(
@@ -73,10 +73,10 @@ WS_ENV=()
 
 # C 笔记（装配 + 本地库 + 检索）
 NOTE_LOCAL=(
-  "装配-解耦门禁|check-note-module-isolation.py|gate|笔记侧文件不许依赖数据库 / Ultra 侧类型（FR-PLUG-07）"
-  "装配-装配链门禁|check-plugin-assembly.py|gate|同进程 / 单一判据 / 单向上下文（FR-PLUG-01~03 / 06）"
-  "本地库-数据家与迁移|test-note-data-boundary.sh|assert|默认位置在工程数据家之外 / 迁移留备份 / 坏文件绝不覆盖（FR-PLUG-04）"
-  "本地库-vendored SQLite|check-vendored-sqlite.py|gate|存储引擎换本地 SQLite：台账对账 + 现编现跑自证（FR-PLUG-08 / Q23）"
+  "装配-解耦门禁|check-note-module-isolation.py|gate|笔记侧文件不许依赖数据库 / Ultra 侧类型（FR-STD-ALL-PLUG-007）"
+  "装配-装配链门禁|check-plugin-assembly.py|gate|同进程 / 单一判据 / 单向上下文（FR-STD-ALL-PLUG-001~03 / 06）"
+  "本地库-数据家与迁移|test-note-data-boundary.sh|assert|默认位置在工程数据家之外 / 迁移留备份 / 坏文件绝不覆盖（FR-STD-ALL-PLUG-004）"
+  "本地库-vendored SQLite|check-vendored-sqlite.py|gate|存储引擎换本地 SQLite：台账对账 + 现编现跑自证（FR-STD-ALL-PLUG-008 / Q23）"
   "检索-界面走库口径|check-note-search-route.py|gate|唯一生产点 / 视图无内存过滤 / 走的哪条路如实标注"
   "检索-口径负例|test-note-search-route.py|assert|上一条门禁**红得出来**（写坏必报红并点名）"
   "检索-零网络出口|check-notes-offline.py|gate|笔记侧不许有任何出网入口（本地离线）"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：整表 / 整库导出（FR-IO-02）。
+# 验证：整表 / 整库导出（FR-STD-DB-IO-002）。
 #
 # 同时给「COPY … TO STDOUT 走不通」留下**实测证据**（不是靠读代码下结论）：
 # 驱动只实现了 CopyFrom，CopyOut 会在消息解码处失败。

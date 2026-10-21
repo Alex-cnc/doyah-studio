@@ -211,7 +211,7 @@
       "form": "view-disabled",
       "predicate": "canClearQueryHistory",
       "view": "App/Views/LowerPaneView.swift",
-      "reason": "**历史页签的「清空」（片 `HIST-2` / 派单 `T-20261009-018`、`T-20261009-010`）**：历史为空时那枚「清空」**灰着** —— 空列表上「清空」没有可落的动作。判据属性 `canClearQueryHistory` 在 `AppState` 里**只定义一次**（体 = `!queryHistory.isEmpty`），守卫（`requestClearQueryHistory`）与视图侧 `.disabled(!appState.canClearQueryHistory)` 读的是**同一条判断**；视图不许再自己写一遍 `queryHistory.isEmpty`。同一条路也是工具条时钟菜单那一项的清空入口（`DR-02`：可清空）—— 两处都在**确认框**之后才落库。"
+      "reason": "**历史页签的「清空」（片 `HIST-2` / 派单 `T-20261009-018`、`T-20261009-010`）**：历史为空时那枚「清空」**灰着** —— 空列表上「清空」没有可落的动作。判据属性 `canClearQueryHistory` 在 `AppState` 里**只定义一次**（体 = `!queryHistory.isEmpty`），守卫（`requestClearQueryHistory`）与视图侧 `.disabled(!appState.canClearQueryHistory)` 读的是**同一条判断**；视图不许再自己写一遍 `queryHistory.isEmpty`。同一条路也是工具条时钟菜单那一项的清空入口（`FR-STD-ALL-DATA-002`：可清空）—— 两处都在**确认框**之后才落库。"
     },
     {
       "func": "saveAgentConfiguration",
@@ -223,7 +223,7 @@
       "func": "tickAgentSchedules",
       "guard": "!agentSchedules.isEmpty",
       "form": "internal",
-      "reason": "定时 agent 的 tick 入口（`FR-AI-27`）：一条 schedule 都没有时直接返回，没有按钮入口 —— 由 ticker 调用；空态在「定时 agent」面板里另有说明。"
+      "reason": "定时 agent 的 tick 入口（`FR-AGT-TOOL-SCHED-002`）：一条 schedule 都没有时直接返回，没有按钮入口 —— 由 ticker 调用；空态在「定时 agent」面板里另有说明。"
     }
   ]
 }

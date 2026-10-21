@@ -19,7 +19,7 @@ Windows 侧（`fatshark`）对齐时每一条都得自己翻 §10.2 —— 派�
     · `macOS 落点` 列 = §10.2 该条所在行的**反引号片段**（前 3 个 + 「等 N 处」）；
       - 格内转义竖线 `\\|` 按**字面**处理、不当列分隔符（一次性快照正是在这里错了一行）；
       - 同一编号出现在多行时**取最后一行**（后写的行是更准的登记）；
-      - 范围行（`FR-CONN-01 ~ 03`）展开到范围内每一条；
+      - 范围行（`FR-STD-DB-CONN-007 ~ 03`）展开到范围内每一条；
       - **无追溯行 ⇒ `—`**；有行但一格反引号都没有 ⇒ `（追溯表有行、未标路径）`
         —— 这两种都不许编落点（「为好看」造出来的落点是本件最坏的失败模式）；
     · `Windows` 列 = 台账 `platforms.windows.overrides`（缺省 `default`）；取值非法即判红。
@@ -153,7 +153,7 @@ def load_index(lines: list[str]) -> list[tuple[str, str, str, str]]:
 def load_trace(lines: list[str], known: set[str]) -> tuple[dict[str, str], int]:
     """§10.2 → {编号: 实现位置格}；**后写覆盖先写**。
 
-    返回（映射, 非编号行数）——「非编号行」= 分组行 / 决定行（`NFR-PERF / COMP`、`R-18 ~ R-21` 等），
+    返回（映射, 非编号行数）——「非编号行」= 分组行 / 决定行（`NFR-PERF / COMP`、`NFR-ALL-GATE-RISK-018 ~ NFR-ALL-GATE-RISK-021` 等），
     它们不对应单条需求 ⇒ 不进逐条索引（数量如实印在产出件头部，不假装它们不存在）。
     """
     rows = table_rows(lines, "10.2 需求—实现—验证追溯表", 3)
@@ -284,7 +284,7 @@ def render(
     out.append(">")
     out.append(
         "> **与派单仓一次性快照的差异（1 行，如实登记）**：`DoyahDispatch` 的 "
-        "`docs/平台对齐-Studio-Windows对macOS.md`（2026-10-14 前门一次性快照）把 `FR-PLUG-04` 记成 `—` —— "
+        "`docs/平台对齐-Studio-Windows对macOS.md`（2026-10-14 前门一次性快照）把 `FR-STD-ALL-PLUG-004` 记成 `—` —— "
         "该条的 §10.2 格内有**转义竖线**（`CLI/main.swift`（`notes path\\|legacy-path\\|migrate`）），"
         "快照按裸 `|` 切格 ⇒ 整行错位、落点读不出来。本脚本按字面处理转义竖线 ⇒ 该条落点读得出来，"
         "故两处数目不同（快照 173 / 17 / **72**，本件 "

@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：Excel（.xlsx）导入（FR-IO-06）—— ZIP(deflate) + OOXML 读取 + 列映射 + 真写入。
+# 验证：Excel（.xlsx）导入（FR-STD-DB-IO-007）—— ZIP(deflate) + OOXML 读取 + 列映射 + 真写入。
 #
 # 为什么要这么验：xlsx 是**二进制**（ZIP 里套 OOXML），"看起来读进来了"是最容易骗过人的状态 ——
 # 日期读成 45296、拼音注音被拼进单元格、空串变 NULL，都能一路"导入成功"。所以：

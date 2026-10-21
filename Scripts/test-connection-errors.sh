@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：连接失败的可读文案（R-46 / FR-META-10）。
+# 验证：连接失败的可读文案（NFR-ALL-GATE-RISK-038 / FR-STD-DB-META-007）。
 #
 # 为什么值得单独验：连不上库时用户看到的第一句话决定排查方向。原来的输出是
 # `PSQLError(code: connectionError, underlying: Connect timeout (10 s))` ——
@@ -123,7 +123,7 @@ echo "$OUT6" | grep -q "连接成功" && check "无口令也能连上 trust 库�
 echo "$OUT6" | grep -q "缺少口令" && check "没有误报「缺少口令」" 1 || check "没有误报「缺少口令」" 0
 
 echo ""
-echo "== 7) 驱动报错但**不是连接类**：真实现场（R-60 中性归因）=="
+echo "== 7) 驱动报错但**不是连接类**：真实现场（NFR-ALL-GATE-RISK-051 中性归因）=="
 # 现场怎么造的：起一个**不是 PostgreSQL 的对端**（见 Scripts/lib/fake-nonpostgres-server.py），
 # 驱动于是报 `PSQLError(code: unexpectedBackendMessage)` —— 属于台账「中性归因」那一族。
 # 这一族以前一律落进兜底分支，被说成「连接数据库失败／确认主机、端口、库名、用户名」：

@@ -1,5 +1,5 @@
 #!/bin/bash
-# 真机验证：表结构读取（FR-DDL-03 的元数据前提）。
+# 真机验证：表结构读取（FR-STD-DB-DDL-003 的元数据前提）。
 #
 # 表设计器的差异计算依赖「默认值 / 主键 / 可空」读得准 —— 这三项读错，
 # 界面会算出错误的 ALTER（例如把没改的列也写成 ALTER，或悄悄丢掉 NOT NULL）。
@@ -96,7 +96,7 @@ check_eq "flag 的 is_nullable（可空）" "$(row_field flag 3)" "YES"
 check_eq "flag 的默认值（NULL 显示为字面量 NULL）" "$(row_field flag 4)" "NULL"
 
 echo ""
-echo "== 3.5) 按条件浏览 / 计数的语句（FR-DATA-02）在真机能跑 =="
+echo "== 3.5) 按条件浏览 / 计数的语句（FR-STD-DB-DATA-002）在真机能跑 =="
 # 这两条就是 RowBrowsingQuery 生成的形状：WHERE → ORDER BY → 分页（分页必须在最后）。
 BROWSE_SQL="SELECT * FROM $SCHEMA.$TABLE WHERE id > 0 ORDER BY id DESC LIMIT 10 OFFSET 0;"
 COUNT_SQL="SELECT count(*) FROM $SCHEMA.$TABLE WHERE id > 0;"

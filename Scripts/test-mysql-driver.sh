@@ -1,5 +1,5 @@
 #!/bin/bash
-# FR-DRV-09 MySQL 驱动的可复跑证据。
+# FR-STD-DB-DRV-010 MySQL 驱动的可复跑证据。
 #
 # **这一套验的是"我们这一侧的接线"**：认证握手之后的语句下发、结果集解码（中文 / NULL / 空串 /
 # 引号 / 转义）、影响行数、事务语句、错误包变成可读错误。用的是一台**假 MySQL 服务器**
@@ -121,7 +121,7 @@ grep -q "query: SELECT ROW_COUNT(), LAST_INSERT_ID()" "$LOG" && s3=0 || s3=1
 check "影响行数是问服务端要的（ROW_COUNT()）" "$s3"
 
 echo ""
-echo "== 8) GBase 8a 走同族驱动（FR-DRV-08） =="
+echo "== 8) GBase 8a 走同族驱动（FR-STD-DB-DRV-009） =="
 # GBase 8a 与 MySQL 同属一个协议族：驱动委托给方言可注入的 MySQLService，方言换成 GBase。
 # **这里验的是"我们的接线"**（GBaseService 真的把 GBase 方言用上了、驱动路径真的通），
 # **不是"能连上 GBase"** —— 那需要一台真实 GBase 8a 实例，本机没有，如实登记为阻塞。

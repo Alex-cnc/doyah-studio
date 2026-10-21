@@ -125,7 +125,7 @@ APPKIT_FORBIDDEN = "NSColor.textBackgroundColor"
 # 台账：`App/` 下带多行编辑面的文件（**双向对账**：新加编辑面必须登记，登记的必须真的还在）。
 LEDGER = (
     "App/Views/AgentSQLPanel.swift",      # 智能体 SQL 结果（可编辑回写）
-    "App/Views/DataTaskPanel.swift",      # 数据任务 · 定义（FR-AI-05）
+    "App/Views/DataTaskPanel.swift",      # 数据任务 · 定义（FR-AGT-PLAN-PLAN-002）
     "App/Views/DataTaskSpecSheet.swift",  # 数据任务 · 规格输入
     "App/Views/DiagnosisPanel.swift",     # 诊断 · 语句 + 回答（两处）
     "App/Views/MaintenancePanel.swift",   # 维护 · 计划

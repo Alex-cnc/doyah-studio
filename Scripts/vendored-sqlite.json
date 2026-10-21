@@ -46,7 +46,7 @@
     },
     {
       "define": "SQLITE_ENABLE_FTS5=1",
-      "why": "FR-PLUG-08 的四条判据之一就是「要按条件查与全文检索」，FTS5 不在默认编译里"
+      "why": "FR-STD-ALL-PLUG-008 的四条判据之一就是「要按条件查与全文检索」，FTS5 不在默认编译里"
     },
     {
       "define": "SQLITE_OMIT_LOAD_EXTENSION=1",
@@ -75,7 +75,7 @@
     "migration": "Plugins/Notes/Sources/NoteStorage/NoteLibraryMigration.swift（notes.json → notes.sqlite3 一次性迁移）",
     "tests": "Tests/SQLiteKitTests.swift（绑定层）+ Tests/NoteStoreSQLiteTests.swift（存储层 / 迁移 / 快照）",
     "status": "wired",
-    "whyNotSystemLibrary": "口径：不许换系统自带 libsqlite3、也不许引第三方 Swift 封装（GRDB 官方仅 Apple+Linux、Windows 是社区探索；SwiftData / Core Data 为 Apple 独占），否则「Windows 与 macOS 完全一致」不成立。见 FR-PLUG-08。"
+    "whyNotSystemLibrary": "口径：不许换系统自带 libsqlite3、也不许引第三方 Swift 封装（GRDB 官方仅 Apple+Linux、Windows 是社区探索；SwiftData / Core Data 为 Apple 独占），否则「Windows 与 macOS 完全一致」不成立。见 FR-STD-ALL-PLUG-008。"
   },
   "generator": {
     "why": "Swift 侧不许引用 C 宏（第 18 轮实测：大量引用会把绑定目标判进 SwiftPM 的显式模块构建档，那一档下 vendored 的 clang 模块进不了模块表 ⇒ `import CSQLite3` 不报错但声明全都「cannot find in scope」）。所以宏的值**从头文件生成**成 Swift 常量 —— 于是多出一份**生成物**，而生成物漂移没有任何症状（编译照过、单测照绿，只有三端行为悄悄不一致）。本节点把「生成器 ↔ 生成物 ↔ vendored 头文件」三者的绑定写死，由本门禁对账。",
@@ -112,12 +112,12 @@
       {
         "file": "Scripts/smoke-vendored-sqlite.py",
         "anchor": "tokenize='trigram'",
-        "why": "中文全文检索的真实口径（第 18 轮实测）：默认分词器 unicode61 **不切中文**（`MATCH '骑行'` 命中 0，同表 ASCII 1 作对照），要用 trigram 且**查询串 ≥3 字**（`'洞庭湖'` 1 命中 / 2 字 `'骑行'` 仍 0）—— FR-PLUG-08「按条件查与全文检索」必须按这个口径落实，四条断言成对钉住"
+        "why": "中文全文检索的真实口径（第 18 轮实测）：默认分词器 unicode61 **不切中文**（`MATCH '骑行'` 命中 0，同表 ASCII 1 作对照），要用 trigram 且**查询串 ≥3 字**（`'洞庭湖'` 1 命中 / 2 字 `'骑行'` 仍 0）—— FR-STD-ALL-PLUG-008「按条件查与全文检索」必须按这个口径落实，四条断言成对钉住"
       },
       {
         "file": "Scripts/smoke-vendored-sqlite.py",
         "anchor": "journal_mode",
-        "why": "WAL 自证：并发写 + 多进程读是 FR-PLUG-08 的口径之一"
+        "why": "WAL 自证：并发写 + 多进程读是 FR-STD-ALL-PLUG-008 的口径之一"
       },
       {
         "file": "Scripts/verify-all.sh",

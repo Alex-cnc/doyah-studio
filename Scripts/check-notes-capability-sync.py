@@ -11,7 +11,7 @@
 - **A 逐字同一**：独立仓能力书里 `<!-- capability-chN:begin -->` 与 `end -->` 之间的文本，
   与能力书第 N 章**按同一规则降级标题后逐字相等**（只允许 `#` 层级差一级 —— 它是作为下一级章节嵌进去的）。
   不允许空白以外的任何改动。
-- **B 条目齐**：本仓需求书对应分区必须有该章的全部条目（Notes = `FR-NOTE-01~11`；Retro = `FR-R-*` 非空），
+- **B 条目齐**：本仓需求书对应分区必须有该章的全部条目（Notes = `FR-NTS-NOTE-CAPTURE-001~11`；Retro = `FR-R-*` 非空），
   且每条列数够（含状态格）。
 - **C 版本同批**：两仓在同一批改动里各留一行变更记录 —— 由作者在提交时保证；本判据只校验文本同一性。
 
@@ -75,7 +75,10 @@ def check_srs(srs: str, heading: str, kind: str) -> list[str]:
         return [f"{heading} 里没有任何 FR 条目"]
     if kind == "note":
         ids = [l.split("|")[1].strip() for l in rows]
-        want = [f"FR-NOTE-{i:02d}" for i in range(1, 12)]
+        want = ["FR-NTS-NOTE-CAPTURE-001", "FR-NTS-NOTE-FORMAT-001", "FR-NTS-NOTE-ATTACH-001",
+                "FR-NTS-NOTE-SEARCH-001", "FR-NTS-NOTE-ORG-001", "FR-NTS-NOTE-VERSION-001",
+                "FR-NTS-NOTE-TRASH-001", "FR-NTS-NOTE-SYNC-001", "FR-NTS-NOTE-SYNC-002",
+                "FR-NTS-NOTE-EXPORT-001", "FR-NTS-NOTE-PRIVACY-001"]
         if ids != want:
             problems.append(f"§3.5 条目应为 {want[0]} ~ {want[-1]}（11 条），实测 {ids}")
     # 列形状不同：Notes 是 6 列（编号 | 需求 | 层次 | 优先级 | 状态 | 验收），

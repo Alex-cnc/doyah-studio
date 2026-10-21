@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：只读连接与启动 SQL（FR-CONN-17）。
+# 验证：只读连接与启动 SQL（FR-STD-DB-CONN-014）。
 #
 # 只读是**客户端侧保护**：光看配置文件里写着 `isReadOnly: true` 证明不了任何东西，
 # 所以这里必须走一遍**真实判定**（CLI `connections --check` 用的就是 App 执行前那条同一个

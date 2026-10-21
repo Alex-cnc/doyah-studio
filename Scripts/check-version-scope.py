@@ -49,7 +49,7 @@ DASH = "—"
 FLOOR_ROWS = 400       # 2026-10-20 实测 425
 FLOOR_ALPHA = 250      # 2026-10-20 实测 346（alpha 仍是主体；低于这个数多半是版本列被整体改坏）
 
-IDENT = re.compile(r"(?:FR|NFR|AC)-[A-Z0-9]+(?:-\d+)+")
+IDENT = re.compile(r"(?:FR|NFR|AC)(?:-[A-Z0-9]{2,6}){1,3}-\d{2,3}")
 
 
 def split_row(line: str) -> list[str]:
@@ -170,9 +170,9 @@ FIXTURE_OK = """# 开发计划书（夹具）
 
 | 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 | 版本 | 版本口径 |
 |---|---|---|---|---|---|---|---|---|
-| FR-AI-01 | 甲 | 3.2 Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-AI-03 | 乙 | 3.2 Agent | 常用增强 | 中 | 🟡 | 🟡 | v1.1+ | 端点未接 |
-| FR-AI-31 | 丙 | 3.2 Agent | 常用增强 | 中 | 🟡 | 🟡 | 未排期 | 等排期 |
+| FR-AGT-LINK-CHAN-001 | 甲 | 3.2 Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-AGT-UX-CONV-001 | 乙 | 3.2 Agent | 常用增强 | 中 | 🟡 | 🟡 | v1.1+ | 端点未接 |
+| FR-AGT-UX-CONV-005 | 丙 | 3.2 Agent | 常用增强 | 中 | 🟡 | 🟡 | 未排期 | 等排期 |
 
 ## 4 里程碑
 """
@@ -201,7 +201,7 @@ def run_self_test() -> int:
                       replace_once(FIXTURE_OK, "| v1.1+ | 端点未接 |", "| v1.1+ | — |")))))
     cases.append(("编号重复 ⇒ 红", "同一编号两行",
                   any("出现两次" in p for p in judge(
-                      replace_once(FIXTURE_OK, "| FR-AI-31 |", "| FR-AI-03 |")))))
+                      replace_once(FIXTURE_OK, "| FR-AGT-UX-CONV-005 |", "| FR-AGT-UX-CONV-001 |")))))
     cases.append(("表头少两列 ⇒ 红", "版本 / 版本口径被删",
                   any("表头不是九列台账" in p for p in judge(
                       replace_once(FIXTURE_OK, HEADER, "| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |")))))

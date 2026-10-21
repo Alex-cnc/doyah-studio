@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：真实模型端点联调（NFR-AI-04）。
+# 验证：真实模型端点联调（NFR-ALL-GATE-AI-004）。
 #
 # 为什么单独有这一条：`Scripts/test-local-endpoint.sh` 用的是**本机假端点**，
 # 它证明的是"客户端链路正确"，证明不了"能跟真实模型服务通"。这一条要真端点。
@@ -94,7 +94,7 @@ echo "$OUT" | grep -qiE "egress|外发|账单|账本" && check "外发账本里�
 echo ""
 if [ "$fail" -eq 0 ]; then
     echo "通过：真端点联调成功（返回 SQL / 无 Key 泄漏 / 外发账本留痕）"
-    echo "把这行输出贴进 NFR-AI-04 的证据里，这一项就可以从「待环境」变成「已联调」。"
+    echo "把这行输出贴进 NFR-ALL-GATE-AI-004 的证据里，这一项就可以从「待环境」变成「已联调」。"
 else
     echo "有失败项，见上"
 fi

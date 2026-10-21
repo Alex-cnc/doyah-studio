@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# PostgreSQL 版本兼容性回归（T-14 / NFR-COMP-03）
+# PostgreSQL 版本兼容性回归（T-14 / NFR-ALL-GATE-COMP-001）
 #
 # 对**任意** PostgreSQL 实例跑一遍客户端关键链路，并打印一行可直接粘贴到
 # `Docs/兼容性矩阵.md` 的 Markdown 表格行。
@@ -9,9 +9,9 @@ set -euo pipefail
 # 覆盖：
 #   1. 连接与版本（server_version / current_database / current_user）
 #   2. 多语句拆分 + 中文 / NULL 往返
-#   3. DML 影响行数（command tag，FR-EXEC-10）
-#   4. 服务端取消（pg_sleep + pg_cancel_backend，FR-EXEC-08）
-#   5. 对象树（服务器 → 数据库 → schema → 表 → 列，FR-META-01 / 09 / 10）
+#   3. DML 影响行数（command tag，FR-STD-DB-EXEC-013）
+#   4. 服务端取消（pg_sleep + pg_cancel_backend，FR-STD-DB-EXEC-018）
+#   5. 对象树（服务器 → 数据库 → schema → 表 → 列，FR-STD-DB-META-001 / 09 / 10）
 #
 # 用法：
 #   PGHOST=127.0.0.1 PGPORT=5432 PGUSER=postgres PGPASSWORD=secret \

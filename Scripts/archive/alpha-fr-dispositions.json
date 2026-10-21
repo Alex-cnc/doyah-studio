@@ -13,7 +13,7 @@
   },
   "items": [
     {
-      "id": "FR-AI-03",
+      "id": "FR-AGT-UX-CONV-001",
       "domain": "3.12 AI 智能体",
       "reason": "device-instance",
       "reasonText": "真实模型端点未接（需端点与凭据）；界面入口待人工点验",
@@ -29,7 +29,7 @@
       ]
     },
     {
-      "id": "FR-AI-04",
+      "id": "FR-AGT-PLAN-PLAN-001",
       "domain": "3.12 AI 智能体",
       "reason": "device-instance",
       "reasonText": "真实模型端点未接（需端点与凭据）；界面入口待人工点验",
@@ -45,7 +45,7 @@
       ]
     },
     {
-      "id": "FR-AI-07",
+      "id": "FR-AGT-CORE-LOOP-002",
       "domain": "3.12 AI 智能体",
       "reason": "ui-click",
       "reasonText": "合成数据面板界面点击待人工点验（真机往返已验）",
@@ -58,7 +58,7 @@
       ]
     },
     {
-      "id": "FR-AI-10",
+      "id": "FR-AGT-LINK-EXT-001",
       "domain": "3.12 AI 智能体",
       "reason": "not-implemented",
       "reasonText": "host 方向仍为批处理式且 resources/read 未做；真 MCP 对端待外部实例",
@@ -74,7 +74,7 @@
       ]
     },
     {
-      "id": "FR-AI-11",
+      "id": "FR-AGT-PLAN-PLAN-003",
       "domain": "3.12 AI 智能体",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -87,7 +87,7 @@
       ]
     },
     {
-      "id": "FR-AI-12",
+      "id": "FR-AGT-GUARD-PERM-004",
       "domain": "3.12 AI 智能体",
       "reason": "device-instance",
       "reasonText": "注入端到端未验（缺模型端点与实例）；连接权限的客户端校验未做",
@@ -100,7 +100,7 @@
       ]
     },
     {
-      "id": "FR-AI-14",
+      "id": "FR-AGT-KNOW-MEM-004",
       "domain": "3.12 AI 智能体",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -113,7 +113,7 @@
       ]
     },
     {
-      "id": "FR-AI-15",
+      "id": "FR-AGT-KNOW-MEM-002",
       "domain": "3.12 AI 智能体",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -126,7 +126,7 @@
       ]
     },
     {
-      "id": "FR-AI-17",
+      "id": "FR-AGT-UX-CONV-002",
       "domain": "3.12 AI 智能体",
       "reason": "device-instance",
       "reasonText": "会话持久化已接线（每跳落 .jsonl）；**界面回放需人工点验**",
@@ -139,7 +139,7 @@
       ]
     },
     {
-      "id": "FR-AI-18",
+      "id": "FR-AGT-CORE-LOOP-004",
       "domain": "3.12 AI 智能体",
       "reason": "ui-click",
       "reasonText": "五条验收要点机器可判且全绿（两跳 / 步数上限 / 令牌上限停在发送之前 / 取消留痕 / 未登记与坏参数不执行，判据 13 例）；面板上点「停止」的手感与三种停止提示的观感只能人工点验",
@@ -155,7 +155,7 @@
       ]
     },
     {
-      "id": "FR-AI-20",
+      "id": "FR-AGT-CORE-LOOP-006",
       "domain": "3.12 AI 智能体",
       "reason": "device-instance",
       "reasonText": "六个 MVP 工具已全部接线（query_db 只回结构 / 行数 / 语句类型 —— 行数据不出本机）；**端到端需真实模型端点与凭据**",
@@ -168,7 +168,7 @@
       ]
     },
     {
-      "id": "FR-AI-21",
+      "id": "FR-AGT-LINK-EXT-002",
       "domain": "3.12 AI 智能体",
       "reason": "ui-click",
       "reasonText": "七条验收要点机器可验的部分全绿（配置面 / 握手 → tools/list → tools/call / 名字与参数原样 / enabled=false 不起进程 / 工具级审批 / 未配与连不上如实报 / http 如实报不支持，判据 15 例含真进程端到端）；界面配置面已落并由 Core 判据 20 例守着（加 / 删 / 开关、逐工具开关、文本⇄配置换算）；真 MCP server 端到端与面板点击观感只能人工点验",
@@ -196,7 +196,7 @@
       ]
     },
     {
-      "id": "FR-AI-22",
+      "id": "FR-AGT-CORE-CTX-001",
       "domain": "3.12 AI 智能体",
       "reason": "device-instance",
       "reasonText": "上下文第一批（表结构摘要 + 活跃页签）已挂载；文件 / 选中 / 终端尾部三类待接；**端到端需真实模型端点**",
@@ -209,7 +209,7 @@
       ]
     },
     {
-      "id": "FR-AI-25",
+      "id": "FR-AGT-UX-CONV-003",
       "domain": "3.12 AI 智能体",
       "reason": "ui-click",
       "reasonText": "对话页签五项已落（位置 / 流式 / 卡片（含模型与端点）/ 内联审批 / 一步撤销）；界面点击与观感需人工点验",
@@ -222,7 +222,7 @@
       ]
     },
     {
-      "id": "FR-AI-26",
+      "id": "FR-AGT-KNOW-MEM-005",
       "domain": "3.12 AI 智能体",
       "reason": "not-implemented",
       "reasonText": "技能库 Core 已交付（加载校验 / 按需披露 / 渲染，技能不执行工具）；登记档数据与界面入口待接；端到端需真实模型端点",
@@ -235,7 +235,7 @@
       ]
     },
     {
-      "id": "FR-AI-27",
+      "id": "FR-AGT-TOOL-SCHED-002",
       "domain": "3.12 AI 智能体",
       "reason": "ui-click",
       "reasonText": "定时 agent Core 两片 + App tick 与面板已交付；面板真点一遍与「停用后假端点收 0 次请求」的集成取证归人工点验",
@@ -248,7 +248,7 @@
       ]
     },
     {
-      "id": "FR-AI-28",
+      "id": "FR-AGT-GUARD-COST-001",
       "domain": "3.12 AI 智能体",
       "reason": "device-instance",
       "reasonText": "门控已交付（同指纹不重复发请求、挡下留痕可导出）；**界面「仍然发送」按钮待接**，端到端需真实端点",
@@ -261,7 +261,7 @@
       ]
     },
     {
-      "id": "FR-AI-29",
+      "id": "FR-AGT-KNOW-MEM-003",
       "domain": "3.12 AI 智能体",
       "reason": "not-implemented",
       "reasonText": "对话记忆 Core 已落进 master（事实源 + 治理面 + 派生索引 + 进上下文的唯一入口）；治理界面与会话侧写入提炼未落",
@@ -274,7 +274,7 @@
       ]
     },
     {
-      "id": "FR-AI-31",
+      "id": "FR-AGT-UX-CONV-005",
       "domain": "3.12 AI 智能体",
       "reason": "ui-click",
       "reasonText": "四件（并发 / 完成判据 / 长跑监控 / 调用链）已落、判据 17 例；告警的界面观感与真端点上的长跑行为只能人工点验",
@@ -290,7 +290,7 @@
       ]
     },
     {
-      "id": "FR-CONN-15",
+      "id": "FR-STD-DB-CONN-012",
       "domain": "3.1 连接与凭据",
       "reason": "open-defect",
       "reasonText": "2026-09-27 点验未过：折叠状态活不过一次活动栏切换，已开队列 L-59，修完复验",
@@ -303,7 +303,7 @@
       ]
     },
     {
-      "id": "FR-CONN-18",
+      "id": "FR-STD-DB-CONN-020",
       "domain": "3.1 连接与凭据",
       "reason": "environment",
       "reasonText": "仅剩真跳板机的真实握手待环境（「沙箱下不能起 ssh」那条已随 2026-09-29 拍板消解）",
@@ -316,7 +316,7 @@
       ]
     },
     {
-      "id": "FR-DATA-02",
+      "id": "FR-STD-DB-DATA-002",
       "domain": "3.5 数据编辑与写回",
       "reason": "ui-click",
       "reasonText": "界面呈现待人工点验",
@@ -329,7 +329,7 @@
       ]
     },
     {
-      "id": "FR-DATA-05",
+      "id": "FR-STD-DB-DATA-005",
       "domain": "3.5 数据编辑与写回",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -342,7 +342,7 @@
       ]
     },
     {
-      "id": "FR-DATA-06",
+      "id": "FR-STD-DB-DATA-006",
       "domain": "3.5 数据编辑与写回",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -355,7 +355,7 @@
       ]
     },
     {
-      "id": "FR-DDL-03",
+      "id": "FR-STD-DB-DDL-003",
       "domain": "3.6 表结构与 DDL",
       "reason": "ui-click",
       "reasonText": "界面呈现待人工点验",
@@ -368,7 +368,7 @@
       ]
     },
     {
-      "id": "FR-DDL-04",
+      "id": "FR-STD-DB-DDL-004",
       "domain": "3.6 表结构与 DDL",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -381,7 +381,7 @@
       ]
     },
     {
-      "id": "FR-DIAG-03",
+      "id": "FR-STD-DB-DIAG-003",
       "domain": "3.7 性能与诊断",
       "reason": "environment",
       "reasonText": "本机 pgserver 精简构建无扩展目录 → pg_stat_statements 装不上",
@@ -394,7 +394,7 @@
       ]
     },
     {
-      "id": "FR-DIAG-04",
+      "id": "FR-STD-DB-DIAG-004",
       "domain": "3.7 性能与诊断",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -407,7 +407,7 @@
       ]
     },
     {
-      "id": "FR-DRV-08",
+      "id": "FR-STD-DB-DRV-009",
       "domain": "3.10 驱动与方言兼容",
       "reason": "environment",
       "reasonText": "无 GBase 8a 实例（方言层与驱动已实现，未端到端验）",
@@ -420,7 +420,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-25",
+      "id": "FR-STD-WS-UI-005",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -436,7 +436,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-26",
+      "id": "FR-STD-WS-UI-008",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "主题三态 / 字体字号观感需人工看一眼",
@@ -452,7 +452,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-27",
+      "id": "FR-STD-WS-EDIT-016",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -468,7 +468,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-29",
+      "id": "FR-STD-WS-TOOL-001",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "environment",
       "reasonText": "sixel / kitty 图形未做；界面未人工验收（多会话页签的界面与判定均已交付、待点验）；「沙箱下 ^C 不可靠」那条已随 2026-09-29 拍板消解",
@@ -487,7 +487,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-34",
+      "id": "FR-STD-WS-WEB-001",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "GUI 点击与下载观感待人工点验",
@@ -503,7 +503,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-35",
+      "id": "FR-STD-WS-FS-001",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "界面切换与点击待人工点验",
@@ -516,7 +516,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-36",
+      "id": "FR-STD-WS-FS-008",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -532,7 +532,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-37",
+      "id": "FR-STD-WS-UI-006",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -548,7 +548,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-38",
+      "id": "FR-STD-WS-NAV-002",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "not-implemented",
       "reasonText": "Beta 1 全量语种未落；Alpha 2 必做的「前 10」已落 —— 未落的半边与切主题 / 切深浅的观感都不在本 alpha 范围",
@@ -567,7 +567,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-39",
+      "id": "FR-STD-WS-NAV-014",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "代码格式化的界面点击与观感待人工点验（形态已订正为**只用内置**：不探 `PATH`、不联网；认不出语言与规则空转都如实拒绝）",
@@ -583,7 +583,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-43",
+      "id": "FR-STD-WS-UI-004",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "not-implemented",
       "reasonText": "第二片「光标 + 滚动」未交付（在飞 t_849ac541）；第一片「页签集会话恢复」已交付（锚仓 99cc05b）",
@@ -602,7 +602,7 @@
       "marker": "**[alpha 不含]**（第二片「光标 + 滚动」未交付（在飞 `t_849ac541`）；第一片已交付）"
     },
     {
-      "id": "FR-EDIT-44",
+      "id": "FR-STD-WS-EDIT-013",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "工作区标头搜索框的界面点击与观感待人工点验（分组与顺序 / 键盘行走 / 行号换算 / 跳过计数已有 30 条 Core 判据；「点下去真的跳到那一行」需人看）",
@@ -621,7 +621,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-46",
+      "id": "FR-STD-WS-UI-003",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "关闭有未保存改动的页签 = 确认框：界面点击待人工点验（规则层有 8 例 Core 判据（7 条规则 + 1 条源码判据）—— 干净页签不弹框 / 脏页签弹且动作与顺序固定 / 取消不关 / 保存失败不关 / 丢弃必关；真点关闭按钮看到框、三个动作各点一遍需人看）",
@@ -637,7 +637,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-47",
+      "id": "FR-STD-WS-EDIT-006",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "Markdown 列表续行的界面回车手感待人工点验（规则层有 17 例判据含续行各组；真在编辑器里按回车接着写下一项需人看）",
@@ -656,7 +656,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-48",
+      "id": "FR-STD-WS-EDIT-007",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "Markdown 任务框勾选翻转（⌘L）的界面按键待人工点验（规则层判据同上；界面 9 步见清单 §10.33）",
@@ -675,7 +675,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-49",
+      "id": "FR-STD-WS-EDIT-019",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "Core 逻辑（配对 / 跳引号 / 包选区 / 删整对）与判据已交付；**手感需人工点验**（补不补、光标是否在中间、退格是否删整对、Markdown 里引号是否不补）",
@@ -688,7 +688,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-51",
+      "id": "FR-STD-WS-EDIT-008",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "Core 逻辑（注释符只从语言表来、空行不动、取消时连空格一起去掉）与判据已交付；**手感需人工点验**（⌘/ 在中文输入法下是否按键正常）",
@@ -701,7 +701,7 @@
       ]
     },
     {
-      "id": "FR-EDIT-57",
+      "id": "FR-STD-WS-NAV-004",
       "domain": "3.2 SQL 编辑与执行",
       "reason": "ui-click",
       "reasonText": "行内灰字（词法 / SQL / 路径三路）实现全落、行为判据全绿；观感与手感（画法 / 出现时机 / Tab 接受顺不顺手）只能人工点验",
@@ -723,7 +723,7 @@
       ]
     },
     {
-      "id": "FR-IO-02",
+      "id": "FR-STD-DB-IO-002",
       "domain": "3.9 导入导出与备份",
       "reason": "environment",
       "reasonText": "vendor 驱动只实现 CopyFrom，缺 COPY … TO STDOUT",
@@ -739,7 +739,7 @@
       ]
     },
     {
-      "id": "FR-IO-03",
+      "id": "FR-STD-DB-IO-006",
       "domain": "3.9 导入导出与备份",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -755,7 +755,7 @@
       ]
     },
     {
-      "id": "FR-IO-04",
+      "id": "FR-STD-DB-IO-003",
       "domain": "3.9 导入导出与备份",
       "reason": "device-instance",
       "reasonText": "仅剩 217 专用库的真实还原待外部实例（「沙箱下起子进程的临时例外待拍板」那条已随 2026-09-29 拍板消解）",
@@ -771,7 +771,7 @@
       ]
     },
     {
-      "id": "FR-IO-05",
+      "id": "FR-STD-DB-IO-004",
       "domain": "3.9 导入导出与备份",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -784,7 +784,7 @@
       ]
     },
     {
-      "id": "FR-IO-06",
+      "id": "FR-STD-DB-IO-007",
       "domain": "3.9 导入导出与备份",
       "reason": "ui-click",
       "reasonText": "界面点击待人工；真实软件（Excel / Numbers）产出的文件待人工",
@@ -803,7 +803,7 @@
       ]
     },
     {
-      "id": "FR-META-02",
+      "id": "FR-STD-DB-META-002",
       "domain": "3.4 对象浏览与元数据",
       "reason": "environment",
       "reasonText": "无 GBase 8a 实例 → 端到端 0 次",
@@ -816,7 +816,7 @@
       ]
     },
     {
-      "id": "FR-META-09",
+      "id": "FR-STD-DB-META-006",
       "domain": "3.4 对象浏览与元数据",
       "reason": "ui-click",
       "reasonText": "界面未点（展开 / 空态 / 失败态三步已在待人工验收清单 §5）",
@@ -832,7 +832,7 @@
       ]
     },
     {
-      "id": "FR-META-10",
+      "id": "FR-STD-DB-META-007",
       "domain": "3.4 对象浏览与元数据",
       "reason": "ui-click",
       "reasonText": "失败隔离与重试步骤待人工点验",
@@ -845,7 +845,7 @@
       ]
     },
     {
-      "id": "FR-META-12",
+      "id": "FR-STD-DB-META-015",
       "domain": "3.4 对象浏览与元数据",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -858,7 +858,7 @@
       ]
     },
     {
-      "id": "FR-META-13",
+      "id": "FR-STD-DB-META-011",
       "domain": "3.4 对象浏览与元数据",
       "reason": "ui-click",
       "reasonText": "界面呈现待人工确认",
@@ -871,7 +871,7 @@
       ]
     },
     {
-      "id": "FR-META-15",
+      "id": "FR-STD-DB-META-008",
       "domain": "3.4 对象浏览与元数据",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -887,7 +887,7 @@
       ]
     },
     {
-      "id": "FR-PLUG-05",
+      "id": "FR-STD-ALL-PLUG-005",
       "domain": "3.13 插件装配",
       "reason": "not-implemented",
       "reasonText": "验收要点 ①③④未做（源码在本仓，按平台口径非本侧）",
@@ -903,7 +903,7 @@
       ]
     },
     {
-      "id": "FR-PLUG-08",
+      "id": "FR-STD-ALL-PLUG-008",
       "domain": "3.13 插件装配",
       "reason": "ui-click",
       "reasonText": "界面点击点验待人工；打包项按平台口径非本侧",
@@ -922,11 +922,11 @@
       ]
     },
     {
-      "id": "FR-RES-07",
+      "id": "FR-STD-DB-RES-011",
       "domain": "3.3 结果集与导出",
       "reason": "device-instance",
-      "reasonText": "大表实测待人工（NFR-PERF-02 的阻塞）",
-      "marker": "**[alpha 不含]**（大表实测待人工（NFR-PERF-02 的阻塞））",
+      "reasonText": "大表实测待人工（NFR-ALL-GATE-PERF-002 的阻塞）",
+      "marker": "**[alpha 不含]**（大表实测待人工（NFR-ALL-GATE-PERF-002 的阻塞））",
       "markerPreExisting": false,
       "evidence": [
         {
@@ -935,7 +935,7 @@
       ]
     },
     {
-      "id": "FR-RES-08",
+      "id": "FR-STD-DB-RES-007",
       "domain": "3.3 结果集与导出",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -951,7 +951,7 @@
       ]
     },
     {
-      "id": "FR-RES-09",
+      "id": "FR-STD-DB-RES-008",
       "domain": "3.3 结果集与导出",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -967,7 +967,7 @@
       ]
     },
     {
-      "id": "FR-RES-10",
+      "id": "FR-STD-DB-RES-009",
       "domain": "3.3 结果集与导出",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -983,7 +983,7 @@
       ]
     },
     {
-      "id": "FR-RES-12",
+      "id": "FR-STD-DB-RES-006",
       "domain": "3.3 结果集与导出",
       "reason": "ui-click",
       "reasonText": "界面粘贴待人工点验",
@@ -996,7 +996,7 @@
       ]
     },
     {
-      "id": "FR-RES-13",
+      "id": "FR-STD-DB-RES-013",
       "domain": "3.3 结果集与导出",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -1009,7 +1009,7 @@
       ]
     },
     {
-      "id": "FR-RES-14",
+      "id": "FR-STD-DB-RES-014",
       "domain": "3.3 结果集与导出",
       "reason": "device-instance",
       "reasonText": "Excel / Numbers 打开需人工（外部软件）",
@@ -1022,7 +1022,7 @@
       ]
     },
     {
-      "id": "FR-SESS-01",
+      "id": "FR-STD-DB-SESS-002",
       "domain": "3.8 会话与服务器管理",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -1035,7 +1035,7 @@
       ]
     },
     {
-      "id": "FR-SESS-02",
+      "id": "FR-STD-DB-SESS-003",
       "domain": "3.8 会话与服务器管理",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",
@@ -1048,7 +1048,7 @@
       ]
     },
     {
-      "id": "FR-SESS-03",
+      "id": "FR-STD-DB-SESS-004",
       "domain": "3.8 会话与服务器管理",
       "reason": "ui-click",
       "reasonText": "界面点击待人工点验",

@@ -181,13 +181,13 @@ def main() -> int:
 
     expect("没有 default → 报红", drop_default, "兜底")
 
-    print("\n== E'') 兜底又开始给方向结论（R-60 的老毛病）")
+    print("\n== E'') 兜底又开始给方向结论（NFR-ALL-GATE-RISK-051 的老毛病）")
 
     def default_claims_connection(tree: Path) -> None:
         edit(tree, "Core/ConnectionFailure.swift", lambda text: text.replace(
             "        default:\n", "        default:\n            return ConnectionFailure.Description(summary: \"连接数据库失败\")\n", 1))
 
-    expect("兜底不是 return nil → 报红并点名 R-60", default_claims_connection, "把猜测当结论")
+    expect("兜底不是 return nil → 报红并点名 NFR-ALL-GATE-RISK-051", default_claims_connection, "把猜测当结论")
 
     print("\n== E''') 那一族不再让路（表在，但没接上）")
 

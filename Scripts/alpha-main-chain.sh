@@ -70,7 +70,7 @@ KNOWN_RED=(
 ENV_STEPS=(
   "环境 连接-凭据|test-postgres-connection.sh|需显式远程凭据"
   "环境 慢查询排行|test-slow-queries.sh|需 pg_stat_statements（本机精简构建无扩展目录）"
-  "环境 备份恢复|test-backup-restore.sh|需 217 / 沙箱放宽（FR-IO-04 待拍板）"
+  "环境 备份恢复|test-backup-restore.sh|需 217 / 沙箱放宽（FR-STD-DB-IO-003 待拍板）"
 )
 
 run_group() {

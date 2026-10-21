@@ -376,13 +376,13 @@ def _must(condition: bool, message: str) -> None:
 
 def build_cases() -> list[dict]:
     def set_windows(payload: dict) -> None:
-        payload["platforms"]["windows"]["overrides"]["FR-CONN-01"] = "✅"
+        payload["platforms"]["windows"]["overrides"]["FR-STD-DB-CONN-007"] = "✅"
 
     def typo_id(payload: dict) -> None:
         payload["platforms"]["windows"]["overrides"]["FR-CONN-999"] = "✅"
 
     def bad_status(payload: dict) -> None:
-        payload["platforms"]["windows"]["overrides"]["FR-CONN-01"] = "🟢"
+        payload["platforms"]["windows"]["overrides"]["FR-STD-DB-CONN-007"] = "🟢"
 
     def drop_owner(payload: dict) -> None:
         payload["platforms"]["windows"].pop("owner")
@@ -425,9 +425,9 @@ def build_cases() -> list[dict]:
         """正向：台账里的 ✅ 必须真的到表上，且分域计数跟着走。"""
         text = (root / "Docs/Doyah产品需求分析说明书.md").read_text(encoding="utf-8")
         block = text.split(BEGIN, 1)[1].split(END, 1)[0]
-        row = re.search(r"^\| FR-CONN-01 \|.*$", block, re.MULTILINE)
+        row = re.search(r"^\| FR-STD-DB-CONN-007 \|.*$", block, re.MULTILINE)
         if row is None:
-            raise AssertionError("§10.10 表里找不到 FR-CONN-01 行")
+            raise AssertionError("§10.10 表里找不到 FR-STD-DB-CONN-007 行")
         row_cells = [cell.strip() for cell in row.group(0).strip().strip("|").split("|")]
         # 列数与列序**从台账推**（不许写死）：台账加一列时本判据不必跟着改 —— 「加一列的成本必须
         # 接近于零」（本文件 docstring ①）。2026-10-13 台账新增 `watchos` 时正是这里先红了。
@@ -439,7 +439,7 @@ def build_cases() -> list[dict]:
         cols = [cell.strip() for cell in header_line.strip().strip("|").split("|")]
         _must(cols == ["编号", "需求摘要", "macOS"] + labels, f"表头列与台账不一致：{cols}")
         _must(len(row_cells) == len(cols),
-              f"FR-CONN-01 行 {len(row_cells)} 列、表头 {len(cols)} 列：{row_cells}")
+              f"FR-STD-DB-CONN-007 行 {len(row_cells)} 列、表头 {len(cols)} 列：{row_cells}")
         win = cols.index("Windows")
         _must(row_cells[win] == "✅", f"Windows 列没吃到台账里的 ✅：{row_cells[win]!r}")
         mac = row_cells[cols.index("macOS")]

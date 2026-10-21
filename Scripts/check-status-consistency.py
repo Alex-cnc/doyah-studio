@@ -21,8 +21,8 @@
        argparse 报错（rc=2）—— 旧版根本没有参数面，`--self-test` / `--nonsense` 都静默
        吞掉并打印 ✅ rc=0。
     ④ **边界登记（不改形状）**：`CROSS_DOC_PATTERN` 只认「编号**紧贴**括号 + 括注里只有
-       一枚状态符」。**编号与括号之间夹字**（`FR-AI-11 的状态（⬜）`）与**括注里带说明**
-       （`FR-AI-11（🟡 待验证）`）**不在本判据范围** —— 放宽会把路线图表里「alpha 不含 ⬜」
+       一枚状态符」。**编号与括号之间夹字**（`FR-AGT-PLAN-PLAN-003 的状态（⬜）`）与**括注里带说明**
+       （`FR-AGT-PLAN-PLAN-003（🟡 待验证）`）**不在本判据范围** —— 放宽会把路线图表里「alpha 不含 ⬜」
        这类语义当状态括注误判（实测规划书 §7 六行），故按原单口径**只改面、不改形状**
        （此处登记，不许继续无声）。
     ⑤ 2026-10-20：解析物由「§10.1 索引 + 正文定义行」换成「《开发计划书》§3 台账」（状态唯一源迁出）；
@@ -58,7 +58,7 @@ LEDGER_STOP = "## 4 "
 LEDGER_FLOOR = 400   # 2026-10-20 实测 425 条 ⇒ 下限留余量（防台账被删 / 解析面被削窄）
 STATUSES = "✅🟡⬜➖"
 # 其它文档里「FR-XXX-01（🟡）」这种状态括注，与 §10.1 索引比对（见 cross_document_problems）
-CROSS_DOC_PATTERN = re.compile(r"((?:FR|NFR)-[A-Z]+-\d+)[（(]([✅🟡⬜➖])[）)]")
+CROSS_DOC_PATTERN = re.compile(r"((?:FR|NFR)-(?:AGT|STD|NTS|RTR|ALL)-[A-Z]{2,6}-[A-Z]{2,6}-\d{2,3})[（(]([✅🟡⬜➖])[）)]")
 # 跨文档状态括注的扫描面：与姊妹判据同形（check-doc-tables.py 判据 E / check-doc-versions.py）
 FACE_GLOBS = ("*.md", "Docs/**/*.md")
 # 面内文档数下限（空跑防护）：本仓 2026-10-14 实测 42 份（不含 SPEC）⇒ 只许涨不许跌
@@ -87,7 +87,7 @@ def parse_ledger(lines: list[str]) -> dict[str, tuple[str, int]]:
     ledger: dict[str, tuple[str, int]] = {}
     for offset, line in enumerate(section(lines, LEDGER_START, LEDGER_STOP)):
         fields = [f.strip().strip("*").strip() for f in line.strip().strip("|").split("|")]
-        if len(fields) < 7 or not re.fullmatch(r"(FR|NFR|AC)-[A-Z0-9]+(?:-\d+)+", fields[0]):
+        if len(fields) < 7 or not re.fullmatch(r"(?:FR|NFR|AC)(?:-[A-Z0-9]{2,6}){1,3}-\d{2,3}", fields[0]):
             continue
         status = fields[5]
         if not status or status[0] not in STATUSES:
@@ -101,8 +101,8 @@ def cross_document_problems(root: pathlib.Path, ledger: dict[str, tuple[str, int
     """非台账文档里写「编号（状态标记）」时，必须与台账一致。
 
     为什么补这条：状态是单一事实来源（《开发计划书》§3 台账），但其它文档（发布方案 /
-    设计说明 / 评审记录…）会**随手括注一个旧状态** —— 实测抓到旧例（规划书里 FR-AI-03 /
-    FR-AI-11 仍写 ⬜，而实际早已 🟡），这类括注会让人以为"还没做"。要引用**历史**状态时
+    设计说明 / 评审记录…）会**随手括注一个旧状态** —— 实测抓到旧例（规划书里 FR-AGT-UX-CONV-001 /
+    FR-AGT-PLAN-PLAN-003 仍写 ⬜，而实际早已 🟡），这类括注会让人以为"还没做"。要引用**历史**状态时
     改写措辞（例如「当时标为 ⬜」而不要写成 `（⬜）`），否则本门禁会拦。
 
     面：`FACE_GLOBS` = `*.md` + `Docs/**/*.md`，与姊妹判据同形；台账自身（`PLAN_REL`）
@@ -169,7 +169,7 @@ FIXTURE_PLAN = """# 开发计划书（夹具）
 
 | 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |
 |---|---|---|---|---|---|---|
-| FR-AI-11 | 夹具条目 | 3.2 Doyah Agent | 基线必备 | 高 | 🟡 | 🟡 |
+| FR-AGT-PLAN-PLAN-003 | 夹具条目 | 3.2 Doyah Agent | 基线必备 | 高 | 🟡 | 🟡 |
 
 ## 4 里程碑
 """
@@ -260,21 +260,21 @@ def run_self_test() -> int:
     # 例 2：负例（新的面）—— Docs/proposals/ 里的错括注必须判红并点名
     def check_proposals():
         where = fixture("proposals")
-        write(where, "Docs/proposals/planted.md", "正文\n\nFR-AI-11（⬜）还没做\n")
+        write(where, "Docs/proposals/planted.md", "正文\n\nFR-AGT-PLAN-PLAN-003（⬜）还没做\n")
         return red(where, ("--face-floor", "1", "--ledger-floor", "1"), "Docs/proposals/planted.md:3")
-    case("Docs/proposals/ 里 `FR-AI-11（⬜）` ⇒ 判红并点名真路径（旧版 rc=0）", check_proposals)
+    case("Docs/proposals/ 里 `FR-AGT-PLAN-PLAN-003（⬜）` ⇒ 判红并点名真路径（旧版 rc=0）", check_proposals)
 
     # 例 3：旧面本就覆盖到的位置照旧判红（回归不许丢）
     def check_design():
         where = fixture("design")
-        write(where, "Docs/design/planted.md", "正文\n\nFR-AI-11（⬜）还没做\n")
+        write(where, "Docs/design/planted.md", "正文\n\nFR-AGT-PLAN-PLAN-003（⬜）还没做\n")
         return red(where, ("--face-floor", "1", "--ledger-floor", "1"), "Docs/design/planted.md:3")
     case("Docs/design/ 里的同一负例 ⇒ 照旧判红（旧面内的位置回归）", check_design)
 
     # 例 4：承重臂 —— 仓根件（旧版整体在面外）现判红，且点名字面是仓根相对真路径
     def check_root_doc():
         where = fixture("root-doc")
-        write(where, "README.md", "正文\n\nFR-AI-11（⬜）还没做\n")
+        write(where, "README.md", "正文\n\nFR-AGT-PLAN-PLAN-003（⬜）还没做\n")
         problem = red(where, ("--face-floor", "1", "--ledger-floor", "1"), "README.md:3")
         if problem:
             return problem
@@ -295,7 +295,7 @@ def run_self_test() -> int:
     # 例 6：负对照 —— archive / 第三方件里没有该形状 ⇒ 不许地毯式判红
     def check_negative_control():
         where = fixture("negative")
-        write(where, "Docs/archive/z.md", "历史快照\n\nFR-AI-11 已实现（无括注）\n")
+        write(where, "Docs/archive/z.md", "历史快照\n\nFR-AGT-PLAN-PLAN-003 已实现（无括注）\n")
         write(where, "Docs/design/store/q.md", "目录说明\n")
         write(where, "THIRD-PARTY-NOTICES.md", "第三方许可\n")
         write(where, "README.en.md", "English readme\n")
@@ -321,7 +321,7 @@ def run_self_test() -> int:
     # 例 9：真值源自身不参与比对 —— SPEC 里写旧括注不算（旧口径逐字保留）
     def check_spec_excluded():
         where = fixture("spec-excluded")
-        (where / PLAN_REL).write_text(FIXTURE_PLAN + "\n引用：FR-AI-11（⬜）\n", encoding="utf-8")
+        (where / PLAN_REL).write_text(FIXTURE_PLAN + "\n引用：FR-AGT-PLAN-PLAN-003（⬜）\n", encoding="utf-8")
         write(where, "Docs/proposals/p.md", "正文\n")
         return green(where, ("--face-floor", "1", "--ledger-floor", "1"))
     case("台账自身不参与跨文档比对（真值源）⇒ rc=0", check_spec_excluded)

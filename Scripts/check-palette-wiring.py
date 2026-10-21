@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""命令面板接线校验（FR-EDIT-25）。
+"""命令面板接线校验（FR-STD-WS-UI-005）。
 
 存在的理由：
     2026-09-23 的收尾自查里发现 —— `AppState.performPaletteCommand` 给 10 条命令里的

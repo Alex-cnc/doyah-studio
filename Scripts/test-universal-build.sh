@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：跨架构构建（NFR-COMP-02「支持 Apple Silicon 与 Intel」）。
+# 验证：跨架构构建（NFR-ALL-GATE-COMP-005「支持 Apple Silicon 与 Intel」）。
 #
 # 为什么需要这个脚本：
 #   需求要求同时支持 Apple Silicon 与 Intel，但 2026-09-23 取证发现 ——

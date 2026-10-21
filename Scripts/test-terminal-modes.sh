@@ -1,5 +1,5 @@
 #!/bin/bash
-# 终端输入编码与设备查询应答的可复跑证据（FR-EDIT-29）。
+# 终端输入编码与设备查询应答的可复跑证据（FR-STD-WS-TOOL-001）。
 #
 # 为什么单独验这一块：鼠标上报、DECCKM、DA1 / DSR / DECRQM / XTVERSION 全是**一串字节**的事 ——
 # 界面上看不出对错，但错一位的后果很具体：
@@ -106,7 +106,7 @@ echo "$ALT" | grep -q "DECCKM 开" && echo "$ALT" | grep -q "鼠标 按住拖动
     || check "退出备用屏（?1049l）恢复了 TUI 改过的模式位" 1
 
 echo ""
-echo "== 3.5) 光标形状 / 颜色查询应答 / 弯下划线 / 清回滚区（FR-EDIT-29 本轮补充）=="
+echo "== 3.5) 光标形状 / 颜色查询应答 / 弯下划线 / 清回滚区（FR-STD-WS-TOOL-001 本轮补充）=="
 DECSCUSR="$("$CLI" terminal-modes --feed "$(printf '\033[5 q')" 2>&1)"
 echo "$DECSCUSR" | grep -q "光标形状：竖线（闪烁）" && check "DECSCUSR（CSI 5 SP q）→ 竖线闪烁" 0 \
     || { check "DECSCUSR 没生效" 1; echo "$DECSCUSR" | tail -3; }

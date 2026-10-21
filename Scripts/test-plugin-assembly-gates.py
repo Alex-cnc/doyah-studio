@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""插件链两条门禁的**负例验证**（FR-PLUG-01~03 / 06 / 07 + ADR-35）。
+"""插件链两条门禁的**负例验证**（FR-STD-ALL-PLUG-001~03 / 06 / 07 + ADR-35）。
 
 为什么要有它：`check-plugin-assembly.py` 与 `check-note-module-isolation.py` 每轮都绿 ——
 但"一直是绿的"有两种可能：口径守住了，或者门禁根本拦不住。本脚本把**常见的退化方式**
@@ -111,7 +111,7 @@ def replace(old, new):
 
 
 # ---- 装配链门禁的负例 -------------------------------------------------------
-case("FR-PLUG-02 视图层自己过滤 allCases", "App/Views/ActivityBarView.swift",
+case("FR-STD-ALL-PLUG-002 视图层自己过滤 allCases", "App/Views/ActivityBarView.swift",
      add('private func __negativeProbe() { _ = ActivityBarItem.allCases }'),
      ASSEMBLY, 1, "视图层自己过滤 allCases")
 
@@ -123,48 +123,48 @@ case("ADR-35 selectedActivityItem 不再是 private(set)", "App/AppState.swift",
      replace("@Published private(set) var selectedActivityItem", "@Published var selectedActivityItem"),
      ASSEMBLY, 1, "不再是 private(set)")
 
-case("FR-PLUG-06 能力位少一位（笔记没进一套许可）", "Core/License.swift",
+case("FR-STD-ALL-PLUG-006 能力位少一位（笔记没进一套许可）", "Core/License.swift",
      replace("static let all: LicenseCapabilities = [.workspaces, .database, .notes]",
              "static let all: LicenseCapabilities = [.workspaces, .database]"),
      ASSEMBLY, 1, "不再是三个能力位")
 
-case("FR-PLUG-03 笔记侧入口混进非文本参数", "Core/AICapture.swift",
+case("FR-STD-ALL-PLUG-003 笔记侧入口混进非文本参数", "Core/AICapture.swift",
      replace("        tag: String\n    ) -> NoteDraft {",
              "        tag: String,\n        extra: [String: Any] = [:]\n    ) -> NoteDraft {"),
      ASSEMBLY, 1, "不在白名单")
 
-# ---- FR-PLUG-01 的负例（2026-10-14 · 合册 T-20261013-027 · 原单 T-20261010-046）-----
-# 此前 FR-PLUG-01（同进程 / 无 IPC / 无独立插件 target·product）**一个负例都没有**：
+# ---- FR-STD-ALL-PLUG-001 的负例（2026-10-14 · 合册 T-20261013-027 · 原单 T-20261010-046）-----
+# 此前 FR-STD-ALL-PLUG-001（同进程 / 无 IPC / 无独立插件 target·product）**一个负例都没有**：
 # 门禁的正则只认 `.target(` / `.testTarget(`（本仓 3 个 target 全是 `.executableTarget(`）、
 # products 的 `.library(` 从不枚举、IPC 扫描根硬编码 `Core/App/CLI/Plugins`（漏掉编译源根
 # `Platform/macOS/`）⇒ 三条通路各有洞而没有任何一层会红。以下五例把这些洞钉住，
 # 后两例是**对手臂**（注释里提 / 嵌套 product 名 ⇒ 不许误报）。
-case("FR-PLUG-01 executableTarget 叫 notes-plugin", "Package.swift",
+case("FR-STD-ALL-PLUG-001 executableTarget 叫 notes-plugin", "Package.swift",
      add('.executableTarget(name: "notes-plugin", path: "Plugin")'),
      ASSEMBLY, 1, "看起来是独立插件 target")
 
-case("FR-PLUG-01 product 叫 NotesPlugin", "Package.swift",
+case("FR-STD-ALL-PLUG-001 product 叫 NotesPlugin", "Package.swift",
      add('.library(name: "NotesPlugin", targets: ["DoyahCore"])'),
      ASSEMBLY, 1, "看起来是独立插件 product")
 
-case("FR-PLUG-01 编译源根里写 IPC（Platform/macOS/）", "Platform/macOS/__NegativeProbe.swift",
+case("FR-STD-ALL-PLUG-001 编译源根里写 IPC（Platform/macOS/）", "Platform/macOS/__NegativeProbe.swift",
      lambda _: 'import XPC\n\nlet connection = NSXPCConnection(serviceName: "planted")\n',
      ASSEMBLY, 1, "出现 NSXPCConnection")
 
-case("FR-PLUG-01 对手臂：注释里提 notes-plugin 不算声明星", "Package.swift",
+case("FR-STD-ALL-PLUG-001 对手臂：注释里提 notes-plugin 不算声明星", "Package.swift",
      add('// 讨论：将来也许会有 .executableTarget(name: "notes-plugin", path: "Plugin")'),
      ASSEMBLY, 0, "")
 
-case("FR-PLUG-01 对手臂：嵌套 product 名不算声明星", "Package.swift",
+case("FR-STD-ALL-PLUG-001 对手臂：嵌套 product 名不算声明星", "Package.swift",
      add('let __extra = .target(name: "VendorShim", dependencies: [.product(name: "NotesKit", package: "notes-kit")])'),
      ASSEMBLY, 0, "")
 
 # ---- 解耦门禁的负例 ---------------------------------------------------------
-case("FR-PLUG-07 笔记源文件引用 Ultra 侧类型", "Core/AICapture.swift",
+case("FR-STD-ALL-PLUG-007 笔记源文件引用 Ultra 侧类型", "Core/AICapture.swift",
      add("func __negativeProbe(_ context: DiagnosisContext) {}"),
      ISOLATION, 1, "引用了 DiagnosisContext")
 
-case("FR-PLUG-07 新笔记源文件没进门禁清单", "Core/NoteNegativeProbe.swift",
+case("FR-STD-ALL-PLUG-007 新笔记源文件没进门禁清单", "Core/NoteNegativeProbe.swift",
      lambda _: "import Foundation\n\nstruct __NegativeProbe: Sendable { let id: String }\n",
      ISOLATION, 1, "没进本脚本的清单")
 

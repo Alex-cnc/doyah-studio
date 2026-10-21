@@ -1,5 +1,5 @@
 #!/bin/bash
-# 验证：COPY FROM STDIN 导入（FR-IO-03 的快路径）。
+# 验证：COPY FROM STDIN 导入（FR-STD-DB-IO-006 的快路径）。
 #
 # 两件事必须一起验：
 #   ① **值不能错**：制表符 / 换行 / 反斜杠要原样保真，NULL 与空串不能混

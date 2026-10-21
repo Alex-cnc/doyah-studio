@@ -12,7 +12,7 @@
       "file": "App/Views/CodeEditorView.swift",
       "hasGutter": true,
       "component": "App/Views/LineNumberGutter.swift",
-      "registry": "FR-EDIT-36（队列 L-64，第 45 轮落地；第 121 轮把画法抽成共用绘制件）",
+      "registry": "FR-STD-WS-FS-008（队列 L-64，第 45 轮落地；第 121 轮把画法抽成共用绘制件）",
       "reason": ""
     },
     {
@@ -22,7 +22,7 @@
       "file": "App/Views/SQLEditorView.swift",
       "hasGutter": true,
       "component": "App/Views/LineNumberGutter.swift",
-      "registry": "FR-EDIT-36 的延伸口径（队列 L-111，第 121 轮：复用同一套 Core 口径 + 同一个绘制件）",
+      "registry": "FR-STD-WS-FS-008 的延伸口径（队列 L-111，第 121 轮：复用同一套 Core 口径 + 同一个绘制件）",
       "reason": ""
     },
     {
@@ -42,7 +42,7 @@
       "file": "App/Views/TitleBarSearchField.swift",
       "hasGutter": false,
       "component": "",
-      "registry": "FR-EDIT-37（主搜索框：导航栏搜索 + 命令面板合一，2026-10-03）",
+      "registry": "FR-STD-WS-UI-006（主搜索框：导航栏搜索 + 命令面板合一，2026-10-03）",
       "reason": "标题栏里的**单行**搜索输入（`NSTextField` 单行模式，回车即执行、Esc 收起）：它按定义只有一行，没有「第几行」可言 ⇒ 不画行号。这不是漏做，是口径。"
     },
     {

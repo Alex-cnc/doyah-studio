@@ -14,7 +14,7 @@
   ],
   "honestFallback": {
     "anchor": "static func unreadable(",
-    "why": "认不出的类型：点名类型 + 字节数 + 十六进制预览（全语言中立，因为 Core 不知道用户选的语言；写死中文会撞 R-45 的棘轮）。改前那一句 String(describing: buffer) 把驱动内部对象的描述倒给用户，值里带控制字符 ⇒ CLI 表格排版被打断。",
+    "why": "认不出的类型：点名类型 + 字节数 + 十六进制预览（全语言中立，因为 Core 不知道用户选的语言；写死中文会撞 NFR-ALL-GATE-RISK-037 的棘轮）。改前那一句 String(describing: buffer) 把驱动内部对象的描述倒给用户，值里带控制字符 ⇒ CLI 表格排版被打断。",
     "shapeLiteral": "[\\(type) \\(bytes.count)B] \\\\x\\(preview)\\(ellipsis)"
   },
   "formatterCases": [
@@ -109,7 +109,7 @@
       "file": "formatter",
       "anchor": "static func byteaText(",
       "testToken": "testByteaOfInvalidUTF8IsHex",
-      "why": "合法 UTF-8 按文本（FR-DATA-05 已登记口径）、非法字节序列印 \\x 十六进制。"
+      "why": "合法 UTF-8 按文本（FR-STD-DB-DATA-005 已登记口径）、非法字节序列印 \\x 十六进制。"
     },
     {
       "name": "interval",
@@ -377,7 +377,7 @@
       "file": "formatter",
       "anchor": "static func plainText(",
       "testToken": "testUnrecognizedTypeWithTextPayloadShowsTheText",
-      "why": "这类类型的 binary 载荷**本身就是文本**（枚举标签）—— 载荷是合法 UTF-8 且无控制字符时原样显示（与 FR-DATA-05「合法 UTF-8 的 bytea 显示为文本」同口径）；否则走认不出标记。"
+      "why": "这类类型的 binary 载荷**本身就是文本**（枚举标签）—— 载荷是合法 UTF-8 且无控制字符时原样显示（与 FR-STD-DB-DATA-005「合法 UTF-8 的 bytea 显示为文本」同口径）；否则走认不出标记。"
     },
     {
       "name": "认不出的类型（兜底）",

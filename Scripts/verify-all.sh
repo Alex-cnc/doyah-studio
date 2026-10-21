@@ -18,7 +18,7 @@ set -euo pipefail
 #
 #   1. Core 单测（SwiftPM，不需要数据库）+ 平台适配层单测
 #   2. Core 平台中立性（Core 里不得出现平台专属依赖 —— 否则 Linux 编译不过）
-#   3. 本地化：Core 展示文本棘轮（R-45：用户可见文案不得硬编码中文，只能比基线更少）
+#   3. 本地化：Core 展示文本棘轮（NFR-ALL-GATE-RISK-037：用户可见文案不得硬编码中文，只能比基线更少）
 #      + 「当前语言只有一个来源」（L-13：显式传语言必须走 `effectiveLanguage`）
 #      + 语言表**模板占位符 ↔ 调用点实参**对账（L-46：数字实参落 `%@` 槽 / 字符串落数字槽 /
 #        实参数 ≠ 占位符数 / 类型不明的实参逐条登记形状 + 双向棘轮，
@@ -65,8 +65,8 @@ set -euo pipefail
 #        `.frame(width:height:)` 都要在台账 `panel-root-frames.json` 里有处置；面板根必须**把意图
 #        写出来** —— 显式写 `alignment:` 或登记一个在该视图类型里真的存在的撑满令牌，
 #        见 `check-panel-root-frames.py`）
-#  10. 插件装配链（笔记模块解耦 FR-PLUG-07 + 装配与许可 FR-PLUG-01/02/03/06 + ADR-35）
-#      + 笔记模块的**零网络出口**（FR-PLUG-05 ②：数据不外发，见 `check-notes-offline.py`）
+#  10. 插件装配链（笔记模块解耦 FR-STD-ALL-PLUG-007 + 装配与许可 FR-STD-ALL-PLUG-001/02/03/06 + ADR-35）
+#      + 笔记模块的**零网络出口**（FR-STD-ALL-PLUG-005 ②：数据不外发，见 `check-notes-offline.py`）
 #      + **界面检索走库 + 路线如实标注**（L-44：唯一生产点 / 视图不许内存过滤 /
 #        路线逐条登记 / 文案键在位且被引用，见 `check-note-search-route.py`）
 #      + **Markdown 解析只有一份**（L-137：行内扫描器唯一定义在笔记侧 / 块级模型只由
@@ -80,7 +80,7 @@ set -euo pipefail
 #      见 `check-cli-failure-readability.py`）
 #  16. 越界检查（分层的三书「形态 A」：一次改动不得落在**对侧独占节**内 ——
 #      `[独占:macos]` / `[独占:windows]` 标记的节各归其主，见 `check-exclusive-sections.py`）
-#  17. vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例自检 + 现编现跑自证
+#  17. vendored SQLite（FR-STD-ALL-PLUG-008 / Q23）：台账对账 + 负例自检 + 现编现跑自证
 #      （`check-vendored-sqlite.py`｜`--self-test`｜`smoke-vendored-sqlite.py`）
 #  18. 生成物一致性（两族）：**生成物不许手改、也不许过期**
 #      · 族 ①（L-43，2026-09-27 第 30 轮）：`gen-sqlite-constants.py --check`
@@ -128,7 +128,7 @@ set -euo pipefail
 # （`Scripts/connection-failure-dispositions.json`）与驱动源码、映射文件、解析前置检查、证据脚本逐条对账。
 # 第 32 轮（合册 T-20261013-027 · 原单 T-20261010-042）：覆盖面升为**分驱动**（台账 `drivers[]`：Postgres 19 码 + MySQL/GBase 支 `MySQLError` 12 码 + 协议数字码表 1144 条
 # 逐名名单 + `Core/MySQLWording.swift` 8 个文案出口面）—— 单驱动结构装不下第二支驱动，往 MySQL 加码原先门禁逐字不动。
-# 第 8 轮（R-60）又加了两条：**兜底不许给方向结论**（`default:` 必须 `return nil`），
+# 第 8 轮（NFR-ALL-GATE-RISK-051）又加了两条：**兜底不许给方向结论**（`default:` 必须 `return nil`），
 # 以及台账标「中性归因」的那 9 个码（用户取消 / 主动断开 / 协议层 / LISTEN 通道…）
 # 必须在 `nonConnectionKeys` 里逐条点名 + 给出语言表键，且**调用方真的接上了这一档**
 # （CLI / ErrorPresenter / 连接表单）—— 否则 `describe` 返回 nil 时用户只剩一句英文调试串。
@@ -310,7 +310,7 @@ python3 Scripts/check-core-portability.py
 # B 例外台账默认**空**、C 空跑防护、D 判据自己的证据（8 例）。样式见 `Docs/Doyah产品概要设计说明书.md` §8.3。
 python3 Scripts/check-script-portability.py
 
-# L-106（FR-EDIT-38 ①③，2026-09-30 开发循环第 117 轮）：语言的**登记形状** ——
+# L-106（FR-STD-WS-NAV-002 ①③，2026-09-30 开发循环第 117 轮）：语言的**登记形状** ——
 # 与本项同源，都是「Core 的形状」那类判据（项数仍十八）。
 # 「语言表声明式登记」这句话要能被机械看住：语言知识（扩展名映射 + 关键字 / 类型 / 字面量 /
 # 注释 / 运算符规则集）只允许住在 `Core/CodeLanguageDefinitions.swift`，而**消费方那一族**
@@ -318,7 +318,7 @@ python3 Scripts/check-script-portability.py
 # 这类**身份分支**即判红 —— 那正是「加一个语言要改核心代码」的形状，而它不报错、只是变笨。
 # 顺带看住三件登记自洽：语言标识与登记项**同集合** / 扩展名与文件名不许两个主人 /
 # `isCode` 为真者必须给得出注释规则与字符串界定符（缺了 = 识别了却一个颜色都没有）。
-# 高亮色一律走 `SyntaxTone` 令牌（FR-EDIT-38 ③）：编辑器里出现裸色值即判红。
+# 高亮色一律走 `SyntaxTone` 令牌（FR-STD-WS-NAV-002 ③）：编辑器里出现裸色值即判红。
 # E 档（`L-149` 剩余②，2026-10-01 开发循环第 145 轮）：**「这个文件用哪种视图打开」只有一处出处** ——
 # 登记表里声明 `defaultView: .browser` 的语言**恰好**是 HTML；`App/` 下读 `defaultView` 的文件
 # **恰好**是台账里那一个（`App/WorkspaceTabsModel.swift`，双向对账），且它必须真的把这一档交给
@@ -332,9 +332,9 @@ python3 Scripts/check-language-registry.py
 python3 Scripts/check-language-registry.py --self-test
 python3 Scripts/test-language-registry-gate.py
 
-echo "==> 3/18 本地化：Core 展示文本棘轮（R-45）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
+echo "==> 3/18 本地化：Core 展示文本棘轮（NFR-ALL-GATE-RISK-037）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
 python3 Scripts/check-core-localization.py
-# L-109（2026-10-11 第 487 轮）：同一条命令跑**两条**棘轮 —— ① 含汉字的字面量（R-45，基线
+# L-109（2026-10-11 第 487 轮）：同一条命令跑**两条**棘轮 —— ① 含汉字的字面量（NFR-ALL-GATE-RISK-037，基线
 # `Scripts/core-localization-baseline.json`）② 写死的英文展示文案（白名单
 # `Scripts/core-localization-english.json`：白名单之外一律报红、只许缩小；每条登记项带 `kind`）。
 python3 Scripts/check-core-localization.py --self-test
@@ -374,7 +374,7 @@ python3 Scripts/test-copy-emphasis-gate.py
 # 唯独「给模型的资料」整块中文 —— `Core/DiagnosisContext.swift` 的文件私有取值助手把
 # `language:` **钉死**成 `.simplifiedChinese`，而语言表里 `diagnosisTarget` /
 # `diagnosisFormatConclusion` … 这些键**都有英文译文**却只被这一处引用 ⇒ **英文译文永远
-# 不可达（死译文）**。R-45 的棘轮数的是「含**汉字**的字面量」（这里一个汉字都没有）、
+# 不可达（死译文）**。NFR-ALL-GATE-RISK-037 的棘轮数的是「含**汉字**的字面量」（这里一个汉字都没有）、
 # `check-effective-language.py` 只扫 `App/` 且只禁「按用户选择取语言」⇒ 两边都没覆盖
 # 「把语言写成字面量」这个形状。
 # 判据四条：A 写死语言的调用点必须逐条登记（按文件，带 maxSites 与理由；`maxSites: 0` =
@@ -431,7 +431,7 @@ python3 Scripts/check-doc-tables.py --self-test
 # （概要设计 v2.35 与对侧同号 / 队列 L-25·L-26·L-41 同号 / 三书 P-15 同号不同物）。
 # 本项现在跑三个脚本，与第 3 / 7 / 10 / 15 项同一做法（**项数不变**）。
 python3 Scripts/check-doc-versions.py
-# 派生文件不得漂移：终端配色 JSON ↔ Core ↔ 人读文档三方一致（FR-EDIT-29 的跨平台交接物）
+# 派生文件不得漂移：终端配色 JSON ↔ Core ↔ 人读文档三方一致（FR-STD-WS-TOOL-001 的跨平台交接物）
 python3 Scripts/check-terminal-palette.py
 # L-55（2026-09-28 第 61 轮）：上面几条管的是**表格结构**（列数 / 计数 / 版本号 / 派生计数），
 # 管不了「独立写在各处的**工程设施数字**」—— 闭环项数、单测数、快照张数。真现场：
@@ -452,8 +452,8 @@ python3 Scripts/check-doc-numbers.py
 python3 Scripts/check-doc-numbers.py --self-test
 # L-56（2026-09-28 第 62 轮）：上面几条仍然管不到 **§6 待拍板队列的编号与状态**。真现场三类：
 # ① `Q28` 同号两条（Retro 技术栈 / 本仓与宿主的关系）—— 两条不同的问题共用一个号；
-# ② **8 行编号格是 L-41 修列数时补的 `——` 占位**（FR-IO-04 / FR-AI-12 / `.et` /
-#    NFR-COMP-03 / cua-driver 两个授权 / 本机模型凭据 / 环境类授权（9 项）/ 机器载荷失败原串）
+# ② **8 行编号格是 L-41 修列数时补的 `——` 占位**（FR-STD-DB-IO-003 / FR-AGT-GUARD-PERM-004 / `.et` /
+#    NFR-ALL-GATE-COMP-001 / cua-driver 两个授权 / 本机模型凭据 / 环境类授权（9 项）/ 机器载荷失败原串）
 #    —— 表格结构合法了，但条目**无法被引用、无法被对账**；
 # ③ `Q19` 早已在 §4 记「已拍板（2026-09-27）」，§6 却一直挂着「⏳ 待拍板」⇒ **每轮探针都把它
 #    报成「待你拍板」**（同族另有 Q29 前提作废、Q34 / Q35 / Q36 / Q40 已随当日口径关闭）。
@@ -659,7 +659,7 @@ python3 Scripts/check-board-parity.py --self-test
 echo "==> 8/18 平台中立性棘轮"
 python3 Scripts/check-platform-neutrality.py
 
-echo "==> 9/18 界面接线与状态归属（命令面板 FR-EDIT-25 / 侧边栏折叠 FR-CONN-15 / 空数据按钮 L-50 / 终端多会话页签 L-84）"
+echo "==> 9/18 界面接线与状态归属（命令面板 FR-STD-WS-UI-005 / 侧边栏折叠 FR-STD-DB-CONN-012 / 空数据按钮 L-50 / 终端多会话页签 L-84）"
 # 2026-10-14（派单 T-20261010-044 · 合册 T-20261013-027）：命令面板这条判据的判定物由「`is*=true`
 # 字面形状」改成**分派器函数体里赋值全集**（含同行 `case "…": <名> = <值>` / 名字带数字 / 非 `is`
 # 前缀的状态，如 `notesSearchScope`）；「读」改按**剥注释与字符串后的代码行**判（原先整份文件里
@@ -738,7 +738,7 @@ python3 Scripts/check-editor-line-numbers.py --self-test
 python3 Scripts/check-terminal-tabs.py
 python3 Scripts/check-terminal-tabs.py --self-test
 
-# L-89 ㈡ ④（第 97 轮）：**大结果集滚动**（清单 §4 FR-RES-07）那一行的阈值台账 ——
+# L-89 ㈡ ④（第 97 轮）：**大结果集滚动**（清单 §4 FR-STD-DB-RES-011）那一行的阈值台账 ——
 # 探针 `TestsUISnapshot/LargeResultScrollProbeTests.swift` 的每一条上界都从
 # `Scripts/result-scroll-baseline.json` 读（容差必须有来源：基线实测值 + 倍数 + 理由），
 # 于是那份台账**本身就是判据的输入**，谁也不能悄悄改松它：
@@ -769,10 +769,10 @@ python3 Scripts/check-result-scroll-ledger.py --self-test
 python3 Scripts/check-agent-provider-presets.py
 python3 Scripts/check-agent-provider-presets.py --self-test
 
-echo "==> 10/18 插件装配链（FR-PLUG-01~03 / 06 / 07 + ADR-35）"
+echo "==> 10/18 插件装配链（FR-STD-ALL-PLUG-001~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py
 python3 Scripts/check-plugin-assembly.py
-# L-22：FR-PLUG-05 的「Linux 笔记＝本地离线、数据不外发（公司合规）」不能只是一句话 ——
+# L-22：FR-STD-ALL-PLUG-005 的「Linux 笔记＝本地离线、数据不外发（公司合规）」不能只是一句话 ——
 # 笔记模块范围内**逐行扫网络 API 令牌表**（URLSession / import Network / NWConnection /
 # http(s) 字面量 / URL(string: …），命中即红并点名文件与行号；范围声明与磁盘事实、
 # 与上面那份解耦清单**两边对账**（漏登一个源文件也是红）。判据与台账见
@@ -836,7 +836,7 @@ python3 Scripts/check-markdown-single-source.py --self-test
 # `browserEngines` / `BrowserTabView` / `openBrowserTab` / `browserTabButton` 的文件必须登记过；
 # 唯一豁免 = 视图定义 `BrowserTabView.swift`）—— 数据库侧 `App/Views/QueryWorkspaceView.swift` 命中即红；
 # B 台账 ⊆ 允许落点（登记过的落点必须真的命中 —— 拦「搬走了没接上」「引用删了只留注释」）；
-# C 两条文档条文（SRS 的 `FR-EDIT-34` 定义格 / `Docs/Doyah产品概要设计说明书.md` §3.12 的「视图契约」行）必须写
+# C 两条文档条文（SRS 的 `FR-STD-WS-WEB-001` 定义格 / `Docs/Doyah产品概要设计说明书.md` §3.12 的「视图契约」行）必须写
 # 「工作区」且不得回写「编辑器区」（订正过程留在证据格里，判据只看条文格）；
 # D 空跑防护（`App/` 扫描面文件数下限 · 台账文件存在性 · 七个标识各自至少一处命中 · 状态所有者类在位）。
 # **状态所有者另判一处（队列 `L-149` 剩余①，第 135 轮）**：浏览器状态必须住在
@@ -953,10 +953,10 @@ DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-path-ownership.py --self
 python3 Scripts/check-tri-repo-parity.py
 python3 Scripts/check-tri-repo-parity.py --self-test
 
-echo "==> 17/18 vendored SQLite（FR-PLUG-08 / Q23）：台账对账 + 负例 + 现编现跑自证"
+echo "==> 17/18 vendored SQLite（FR-STD-ALL-PLUG-008 / Q23）：台账对账 + 负例 + 现编现跑自证"
 # 为什么这三条必须一起跑（第 18 轮 L-25 第 1 批）：
 #   · 这份 `sqlite3.c` 是 9.5 MB 的**生成文件**，换版本 / 手改一行 / 编译宏掉一个都**不会有症状**，
-#     只会让三端行为悄悄不一致（FR-PLUG-08 的口径是「三端同一份引擎，不许换系统 libsqlite3」）；
+#     只会让三端行为悄悄不一致（FR-STD-ALL-PLUG-008 的口径是「三端同一份引擎，不许换系统 libsqlite3」）；
 #     所以第一条把每个事实（文件哈希 / 头文件版本串 / 宏 / 公共头目录 / 许可 / 来源 / 接线）都做成对账；
 #   · 第二条是**门禁自己的证据**（**25 例**：篡改 23 条必须被抓到并指名出处 + 对手臂 2 条不许
 #     误报 —— 六类篡改 + 证据锚点 + 接线 + 项号自洽 + 台账空跑防护，另加「把接线**注释掉**」

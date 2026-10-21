@@ -1,5 +1,5 @@
 #!/bin/bash
-# FR-AI-10 MCP 双向的可复跑证据。
+# FR-AGT-LINK-EXT-001 MCP 双向的可复跑证据。
 #
 # **两个方向都用假对端**（与替身 ssh、假 MySQL 服务器同一思路）：
 #   · 方向 A（我们当 server）：一个 Python **假 MCP host** 往 `doyah mcp serve` 的 stdin 写 JSON-RPC、读 stdout；
@@ -216,7 +216,7 @@ PY
 grep -q "error=Method not found" "$WORK/bad.out" && check "对端的 JSON-RPC 错误如实透出" 0 || check "对端的 JSON-RPC 错误如实透出" 1
 
 echo ""
-echo "== 5) 界面审批通道：入队 → 人点 → 按决定执行（FR-AI-10 的界面那一半） =="
+echo "== 5) 界面审批通道：入队 → 人点 → 按决定执行（FR-AGT-LINK-EXT-001 的界面那一半） =="
 # 三条路径分开验，**重点是"没人点的时候会怎样"**：
 # 默认放行是最危险的默认值，所以拒绝与超时都必须如实回错误内容、且都不执行。
 QUEUE="$WORK/approvals"
