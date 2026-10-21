@@ -40,7 +40,7 @@
     {
       "file": "Core/AICapture.swift",
       "maxSites": 0,
-      "reason": "**笔记侧不收语言（队列 L-65 第 3 批，2026-09-28 第 50 轮）**：`skillNote` / `sqlNote` 收的是**已经渲染好的标签文本**（`defaultTag: String` / `tag: String`）—— 笔记侧只收文本与标识（`FR-ALL-ALL-PLUG-003` 的类型白名单，闭环第 10 项），**语言是宿主的事**。第一版把 `language: AppLanguage` 加进来被第 10 项当场拦下（判据是对的：语言进笔记侧 = 让笔记侧替宿主选语言，正是本轮要销掉的形状）。判据 C 对这条是**负向**的：这里再出现 `language:` 形参或字面语言即红。"
+      "reason": "**笔记侧不收语言（队列 L-65 第 3 批，2026-09-28 第 50 轮）**：`skillNote` / `sqlNote` 收的是**已经渲染好的标签文本**（`defaultTag: String` / `tag: String`）—— 笔记侧只收文本与标识（`FR-STD-ALL-PLUG-003` 的类型白名单，闭环第 10 项），**语言是宿主的事**。第一版把 `language: AppLanguage` 加进来被第 10 项当场拦下（判据是对的：语言进笔记侧 = 让笔记侧替宿主选语言，正是本轮要销掉的形状）。判据 C 对这条是**负向**的：这里再出现 `language:` 形参或字面语言即红。"
     },
     {
       "file": "Core/AICaptureUltra.swift",

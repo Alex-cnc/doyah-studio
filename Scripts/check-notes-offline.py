@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""门禁：笔记模块的**零网络出口**（FR-ALL-ALL-PLUG-005 验收要点②，开发循环 L-22，闭环第 10 项）。
+"""门禁：笔记模块的**零网络出口**（FR-STD-ALL-PLUG-005 验收要点②，开发循环 L-22，闭环第 10 项）。
 
-**为什么有它**：`FR-ALL-ALL-PLUG-005` 的口径是「Linux 版笔记要有，但**数据不外发**（公司合规）」。
+**为什么有它**：`FR-STD-ALL-PLUG-005` 的口径是「Linux 版笔记要有，但**数据不外发**（公司合规）」。
 这类承诺最容易被写成一句口号 —— 「我记得笔记那边没联网」在几百个文件里迟早失守，
 而且**失守了没有任何现有门禁看得见**：编译过、单测过、文档计数对，只是笔记模块里多了一行
 `URLSession.shared`。所以把它变成一条**机械检查**（与解耦门禁 `check-note-module-isolation.py`
@@ -220,7 +220,7 @@ def check(root: Path, ledger_path: Path | None) -> tuple[list[str], list[str]]:
                     hits += 1
                     problems.append(
                         f"{rel}:{number}：命中网络 API `{token}` —— "
-                        "笔记模块（FR-ALL-ALL-PLUG-005 ②）不许有出网能力；确有正当用途要在台账 exceptions 里登记理由"
+                        "笔记模块（FR-STD-ALL-PLUG-005 ②）不许有出网能力；确有正当用途要在台账 exceptions 里登记理由"
                     )
     notes.append(f"零网络出口：范围 {len(scope_paths)} 个文件 × 令牌表 {len(tokens)} 项，命中 {hits} 处")
 

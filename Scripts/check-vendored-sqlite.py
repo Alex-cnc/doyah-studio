@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""vendored SQLite 的台账门禁（FR-ALL-ALL-PLUG-008 / Q23 拍板）。
+"""vendored SQLite 的台账门禁（FR-STD-ALL-PLUG-008 / Q23 拍板）。
 
 **为什么需要一条台账而不是一句「已 vendoring」**：这份 `sqlite3.c` 是 9.5 MB 的生成文件，
 换版本、手改一行、编译宏掉一个，**都不会有任何症状** —— 只会让三端行为悄悄不一致，
@@ -18,7 +18,7 @@
   6. `THIRD-PARTY-NOTICES.md` 里有这一行（第三方组件声明表是给人看的入口）；
   7. 根 `Package.swift` 里真的接线了这个包；
   8. **没有第二份 SQLite**：产品源码里不许出现 `import SQLite3`（系统自带 libsqlite3 版本随 OS 漂移，
-     FR-ALL-ALL-PLUG-008 的口径就是「三端同一份引擎」）；
+     FR-STD-ALL-PLUG-008 的口径就是「三端同一份引擎」）；
   9. `wiring.evidenceAnchors` 里的每个锚点在盘上真的还在（锚点陈旧 = 台账还指着证据、证据已经没了）；
  10. `wiring.inVerifyAll` 里的项号与 `verify-all.sh` 实际的项号一致，且**闭环自己的项号是自洽的**
      （`==> N/M` 标记个数 == 声明的 M、项号连续 —— 「加了项忘了改计数」与先前的假绿同族）。
@@ -69,7 +69,7 @@ import subprocess
 import sys
 import tempfile
 
-# 产品里不许出现系统 SQLite 的模块（口径见 FR-ALL-ALL-PLUG-008：三端同一份引擎）。
+# 产品里不许出现系统 SQLite 的模块（口径见 FR-STD-ALL-PLUG-008：三端同一份引擎）。
 PRODUCT_DIRS = ["Core", "Platform", "App", "CLI", "Tools", "Tests"]
 SYSTEM_SQLITE_IMPORT = re.compile(r"^\s*import\s+SQLite3\b", re.MULTILINE)
 
@@ -416,7 +416,7 @@ class Gate:
         return self.face_cache
 
     def check_no_second_sqlite(self) -> None:
-        """产品面里不许出现 `import SQLite3`（口径见 FR-ALL-ALL-PLUG-008：三端同一份引擎）。两臂：
+        """产品面里不许出现 `import SQLite3`（口径见 FR-STD-ALL-PLUG-008：三端同一份引擎）。两臂：
 
         · **面靠 `Package.swift` 现读**（原单 ㈣）：旧版写死 6 个目录名 ⇒ 面外的 test 根静默放过；
         · **面外回流**（同族反向）：面外目录里出现 `import SQLite3` 也判红 —— 只靠「面内扫」

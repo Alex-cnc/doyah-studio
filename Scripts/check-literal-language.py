@@ -715,7 +715,7 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
         if re.search(r"language:\s*AppLanguage", note_code) or LITERAL.search(note_code):
             failures.append(
                 "C Core/AICapture.swift 又收起了语言（`language:` 形参或字面语言）—— "
-                "笔记侧只收文本与标识，语言由宿主渲染好再进来（FR-ALL-ALL-PLUG-003）"
+                "笔记侧只收文本与标识，语言由宿主渲染好再进来（FR-STD-ALL-PLUG-003）"
             )
         for pattern, what in (
             (r"func\s+skillNote\([\s\S]{0,500}?defaultTag:\s*String", "skillNote(defaultTag:)"),

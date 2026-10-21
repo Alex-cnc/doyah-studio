@@ -95,20 +95,20 @@
 | FR-AGT-KNOW-MEM-003 | 3.2 Doyah Agent | 常用增强 |
 | FR-AGT-UX-CONV-004 | 3.2 Doyah Agent | 常用增强 |
 | FR-AGT-UX-CONV-005 | 3.2 Doyah Agent | 常用增强 |
-| FR-ALL-ALL-BLD-001 | 3.1.1 工程与工具链 | 基线必备 |
-| FR-ALL-ALL-BLD-002 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-ALL-ALL-BLD-003 | 3.1.1 工程与工具链 | 基线必备 |
-| FR-ALL-ALL-BLD-004 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-ALL-ALL-BLD-005 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-ALL-ALL-BLD-006 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-ALL-ALL-BLD-007 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-ALL-ALL-BLD-008 | 3.1.1 工程与工具链 | 进阶可选 |
-| FR-ALL-ALL-BLD-009 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-ALL-ALL-CLI-001 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-ALL-ALL-CLI-002 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-ALL-ALL-CLI-003 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-ALL-ALL-CLI-004 | 3.1.1 工程与工具链 | 常用增强 |
-| FR-ALL-ALL-CLI-005 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-BLD-001 | 3.1.1 工程与工具链 | 基线必备 |
+| FR-STD-ALL-BLD-002 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-BLD-003 | 3.1.1 工程与工具链 | 基线必备 |
+| FR-STD-ALL-BLD-004 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-BLD-005 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-BLD-006 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-BLD-007 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-BLD-008 | 3.1.1 工程与工具链 | 进阶可选 |
+| FR-STD-ALL-BLD-009 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-CLI-001 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-CLI-002 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-CLI-003 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-CLI-004 | 3.1.1 工程与工具链 | 常用增强 |
+| FR-STD-ALL-CLI-005 | 3.1.1 工程与工具链 | 常用增强 |
 | FR-STD-DB-CONN-007 | 3.4 Doyah Studio · 数据库 | 基线必备 |
 | FR-STD-DB-CONN-001 | 3.4 Doyah Studio · 数据库 | 基线必备 |
 | FR-STD-DB-CONN-002 | 3.4 Doyah Studio · 数据库 | 常用增强 |
@@ -261,14 +261,14 @@
 | FR-STD-DB-META-011 | 3.4 Doyah Studio · 数据库 | 常用增强 |
 | FR-STD-DB-META-012 | 3.4 Doyah Studio · 数据库 | 基线必备 |
 | FR-STD-DB-META-008 | 3.4 Doyah Studio · 数据库 | 进阶可选 |
-| FR-ALL-ALL-PLUG-001 | 3.1.3 插件装配 | 基线必备 |
-| FR-ALL-ALL-PLUG-002 | 3.1.3 插件装配 | 基线必备 |
-| FR-ALL-ALL-PLUG-003 | 3.1.3 插件装配 | 基线必备 |
-| FR-ALL-ALL-PLUG-004 | 3.1.3 插件装配 | 常用增强 |
-| FR-ALL-ALL-PLUG-005 | 3.1.3 插件装配 | 基线必备 |
-| FR-ALL-ALL-PLUG-006 | 3.1.3 插件装配 | 基线必备 |
-| FR-ALL-ALL-PLUG-007 | 3.1.3 插件装配 | 基线必备 |
-| FR-ALL-ALL-PLUG-008 | 3.1.3 插件装配 | 基线必备 |
+| FR-STD-ALL-PLUG-001 | 3.1.3 插件装配 | 基线必备 |
+| FR-STD-ALL-PLUG-002 | 3.1.3 插件装配 | 基线必备 |
+| FR-STD-ALL-PLUG-003 | 3.1.3 插件装配 | 基线必备 |
+| FR-STD-ALL-PLUG-004 | 3.1.3 插件装配 | 常用增强 |
+| FR-STD-ALL-PLUG-005 | 3.1.3 插件装配 | 基线必备 |
+| FR-STD-ALL-PLUG-006 | 3.1.3 插件装配 | 基线必备 |
+| FR-STD-ALL-PLUG-007 | 3.1.3 插件装配 | 基线必备 |
+| FR-STD-ALL-PLUG-008 | 3.1.3 插件装配 | 基线必备 |
 | FR-STD-DB-RES-001 | 3.4 Doyah Studio · 数据库 | 基线必备 |
 | FR-STD-DB-RES-002 | 3.4 Doyah Studio · 数据库 | 常用增强 |
 | FR-STD-DB-RES-003 | 3.4 Doyah Studio · 数据库 | 基线必备 |
@@ -408,11 +408,11 @@
 | FR-RTR-REV-TRADE-005 | 3.6 Doyah Retro | 基线必备 |
 | FR-RTR-MKT-STORE-004 | 3.6 Doyah Retro | 基线必备 |
 | FR-RTR-REV-TRADE-006 | 3.6 Doyah Retro | 基线必备 |
-| FR-ALL-ALL-LIC-001 | 3.1.2 授权与许可 | 基线必备 |
-| FR-ALL-ALL-LIC-002 | 3.1.2 授权与许可 | 基线必备 |
-| FR-ALL-ALL-LIC-003 | 3.1.2 授权与许可 | 基线必备 |
-| FR-ALL-ALL-LIC-004 | 3.1.2 授权与许可 | 基线必备 |
-| FR-ALL-ALL-LIC-005 | 3.1.2 授权与许可 | 常用增强 |
+| FR-STD-ALL-LIC-001 | 3.1.2 授权与许可 | 基线必备 |
+| FR-STD-ALL-LIC-002 | 3.1.2 授权与许可 | 基线必备 |
+| FR-STD-ALL-LIC-003 | 3.1.2 授权与许可 | 基线必备 |
+| FR-STD-ALL-LIC-004 | 3.1.2 授权与许可 | 基线必备 |
+| FR-STD-ALL-LIC-005 | 3.1.2 授权与许可 | 常用增强 |
 | FR-AGT-CORE-SESS-001 | 3.2 Doyah Agent | 常用增强 |
 | FR-AGT-CORE-LOOP-008 | 3.2 Doyah Agent | 常用增强 |
 | FR-AGT-PLAN-PLAN-005 | 3.2 Doyah Agent | 基线必备 |

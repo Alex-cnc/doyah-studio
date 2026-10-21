@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""**插件装配链的机械门禁**（FR-ALL-ALL-PLUG-001 / 02 / 03 / 06 + ADR-35）。
+"""**插件装配链的机械门禁**（FR-STD-ALL-PLUG-001 / 02 / 03 / 06 + ADR-35）。
 
-为什么要有它：`FR-ALL-ALL-PLUG-001~07` 的状态是 ✅，但"当时手动核过一遍"不是证据 ——
+为什么要有它：`FR-STD-ALL-PLUG-001~07` 的状态是 ✅，但"当时手动核过一遍"不是证据 ——
 新加一个入口、新加一个能力位、把 `private(set)` 拆掉，都能让这些 ✅ 悄悄失效而没人发现。
 所以把每条口径写成**可复跑的判据**，接进 `verify-all.sh` 第 10 项，每轮门禁都跑一遍。
 
 守什么（逐条对应需求号）：
 
-  · **FR-ALL-ALL-PLUG-001 同进程内模块**：全仓无 IPC（`NSXPC` / `xpc_` / `import XPC`）；
+  · **FR-STD-ALL-PLUG-001 同进程内模块**：全仓无 IPC（`NSXPC` / `xpc_` / `import XPC`）；
     笔记源文件随宿主目标一起编译（不存在"笔记插件"这种独立 target / product）。
-  · **FR-ALL-ALL-PLUG-002 活动栏与可见性**：活动栏有 `case notes`；**判可见性的只有一处**
+  · **FR-STD-ALL-PLUG-002 活动栏与可见性**：活动栏有 `case notes`；**判可见性的只有一处**
     （`LicensePresentation.activityItems`，视图层不许自己 `allCases` 过滤）；
     `notes` 只在能力位允许时出现（不是灰掉）。
-  · **FR-ALL-ALL-PLUG-003 单向上下文 / 只传文本与标识**：`AICapture` 的笔记侧入口只收标题 / 正文 / SQL / 连接名；
+  · **FR-STD-ALL-PLUG-003 单向上下文 / 只传文本与标识**：`AICapture` 的笔记侧入口只收标题 / 正文 / SQL / 连接名；
     **行数据入笔记必须显式 `withRowData()`**，且那个开关全仓只有一处能打开（无法绕过、无法撤回）。
-  · **FR-ALL-ALL-PLUG-006 一套许可三能力位**：`LicenseCapabilities.all` 恰好是三个能力位；
+  · **FR-STD-ALL-PLUG-006 一套许可三能力位**：`LicenseCapabilities.all` 恰好是三个能力位；
     没有"插件单独授权 / 单独开关"这种东西；档位由能力位推导。
   · **ADR-35 单一判据 + 单一写入口**：`selectedActivityItem` 是 `private(set)`；
     全仓赋值只发生在 `AppState.swift`，且每个赋值点所在函数都过了
@@ -25,7 +25,7 @@
 
     ① **㈠「含行数据开关全仓恰好一处」的扫描面改成真·全仓**：此前是
        `(REPO/"Core").glob("*.swift")`（只 Core 顶层），2026-10-13 搬家时又并了
-       `Plugins/Notes/Sources`，**两处都非递归** —— 而 docstring / 需求书 FR-ALL-ALL-PLUG-003
+       `Plugins/Notes/Sources`，**两处都非递归** —— 而 docstring / 需求书 FR-STD-ALL-PLUG-003
        证据格 / 开发记录三处写的都是「**全仓**恰好一处」。真仓 2026-10-14 实测：旧面
        **332** 份 ↔ 全仓 `*.swift` **909** 份 ⇒ `App/` / `CLI/` / `Platform/` /
        任意子目录（`Plugins/Notes/Sources/NoteStorage/` / `Core/NoteStorage/` 等）里
@@ -63,13 +63,13 @@
        **编译源根** `Platform/macOS/`（`Package.swift` 的 `path:` 声明星）等 ⇒ 在那里写
        `import XPC` 判绿（样本 50 的 G 臂）。现在直接用**全仓面** `face_swift_files()`
        （与 ㈢ ㈠ 同款、点目录在外）+ 读数 + 同一条 `FACE_FLOOR`；真仓 909 份零命中。
-    ③ **负例（FR-ALL-ALL-PLUG-001 此前零覆盖）补在** `Scripts/test-plugin-assembly-gates.py`
+    ③ **负例（FR-STD-ALL-PLUG-001 此前零覆盖）补在** `Scripts/test-plugin-assembly-gates.py`
        （7 → 11 例）：`executableTarget` 叫 `notes-plugin` / product 叫 `NotesPlugin` /
        `Platform/macOS/` 里写 IPC 三条判红 + 两条对手臂（注释里的提及、嵌套
        `.product(name:)` 不算声明星）。**本门禁自己的 `--self-test` 例数不动**（仍 15）——
        契约层 §6 那一行的跟版归前门（本单边界不许动 `AGENT-SPEC.md`）。
     ④ **判定物本体一字未动**：IPC 名单 / 类型白名单 / `NoteSource` 禁字段 / 能力位三条 /
-       ADR-35 口径 / 证据脚本指针 —— 本轮只动「FR-ALL-ALL-PLUG-001 的枚举面 + IPC 面 + 读数 + 负例」。
+       ADR-35 口径 / 证据脚本指针 —— 本轮只动「FR-STD-ALL-PLUG-001 的枚举面 + IPC 面 + 读数 + 负例」。
 
 判据自己的证据：`--self-test` **15 例**（一律在临时夹具树上写坏，真仓零改动）。
 
@@ -96,14 +96,14 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 # 运行根：默认 = 本脚本所在仓；`--root` 可指到夹具 / 副本（判据自己的证据与成对复跑用）。
 ROOT: pathlib.Path = REPO
 
-# FR-ALL-ALL-PLUG-003 ㈠ 的扫描面 = **全仓** `*.swift`（声明就是"全仓"，面就按全仓取）。
+# FR-STD-ALL-PLUG-003 ㈠ 的扫描面 = **全仓** `*.swift`（声明就是"全仓"，面就按全仓取）。
 # 只排除**点目录**：`.git`（版本库）/ `.build`（构建产物）/ `.worktrees`（工作树副本）
 # 都不是"仓里的源码"。`Tests/**` 与 `Vendor/**` **在面内**（它们是仓内真的 Swift 源；
 # 本仓 2026-10-14 实测面内命中恰好 1 处 = `Plugins/Notes/Sources/Note.swift` 的
 # `NoteDraft.withRowData` ⇒ 全仓口径不误伤）。测试若要构造这枚标痕，用唯一合法入口
 # `withRowData()`，或把样本写在仓外（本脚本的 `--self-test` 就是仓外 mkdtemp）。
 FACE_FLOOR = 909
-# FR-ALL-ALL-PLUG-003 ㈡ 的清单来源：**不复制粘贴**，运行时从隔离门禁源码里读
+# FR-STD-ALL-PLUG-003 ㈡ 的清单来源：**不复制粘贴**，运行时从隔离门禁源码里读
 #（与 `check-notes-offline.py` 的 `_isolation_lists()` 同款）。权威只有那一份。
 ISOLATION_GATE = "Scripts/check-note-module-isolation.py"
 NOTE_SOURCE_FLOOR = 26          # 隔离门禁 `NOTE_SOURCES` 条数下限（只许涨不许跌）
@@ -119,7 +119,7 @@ IPC_PATTERNS = [
 ]
 
 
-# FR-ALL-ALL-PLUG-001「不存在笔记插件这种独立 target / product」的声明星解析（2026-10-14 ·
+# FR-STD-ALL-PLUG-001「不存在笔记插件这种独立 target / product」的声明星解析（2026-10-14 ·
 # 原单 T-20261010-046 ㈠）：旧实现的正则只认 `.target(` / `.testTarget(`，而本仓 3 个
 # target 全是 `.executableTarget(`、products 里的 `.library(` 从不枚举 ⇒ 两条都判绿。
 DECL_KINDS = ("target", "executableTarget", "testTarget", "library", "executable", "plugin")
@@ -278,13 +278,13 @@ def record(name: str, found: list[str]) -> None:
         passed.append(name)
 
 
-# ---------------------------------------------------------------- FR-ALL-ALL-PLUG-001
+# ---------------------------------------------------------------- FR-STD-ALL-PLUG-001
 
 def check_01_single_process() -> list[str]:
     found: list[str] = []
     # 插件目录也算装配面（2026-10-13 · 概设 §7 P3 搬家后，笔记源文件在 `Plugins/Notes/**`）
     ipc_face = face_swift_files()
-    readings.append(f"[FR-ALL-ALL-PLUG-001 ㈠] IPC 面 = 全仓 {len(ipc_face)} 份 Swift 源文件（下限 {FACE_FLOOR}）")
+    readings.append(f"[FR-STD-ALL-PLUG-001 ㈠] IPC 面 = 全仓 {len(ipc_face)} 份 Swift 源文件（下限 {FACE_FLOOR}）")
     for path in ipc_face:
         relative = path.relative_to(ROOT).as_posix()
         for number, line in code_lines(relative):
@@ -308,12 +308,12 @@ def check_01_single_process() -> list[str]:
             role = "product" if kind == "library" else "target"
             found.append(
                 f'Package.swift: {kind} "{name}" 看起来是独立插件 {role}'
-                "（FR-ALL-ALL-PLUG-001 要求同进程内模块）"
+                "（FR-STD-ALL-PLUG-001 要求同进程内模块）"
             )
     return found
 
 
-# ---------------------------------------------------------------- FR-ALL-ALL-PLUG-002
+# ---------------------------------------------------------------- FR-STD-ALL-PLUG-002
 
 def check_02_visibility() -> list[str]:
     found: list[str] = []
@@ -350,7 +350,7 @@ def check_02_visibility() -> list[str]:
     return found
 
 
-# ---------------------------------------------------------------- FR-ALL-ALL-PLUG-003
+# ---------------------------------------------------------------- FR-STD-ALL-PLUG-003
 
 def check_03_one_way_context() -> list[str]:
     found: list[str] = []
@@ -376,7 +376,7 @@ def check_03_one_way_context() -> list[str]:
     # 行数据开关：全仓只有一处能打开，且没有"撤回"入口。
     # 面 = face_swift_files()（真·全仓口径，见文件头 ①）；报名字面量随之改"真文件:行号"。
     face = face_swift_files()
-    readings.append(f"[FR-ALL-ALL-PLUG-003 ㈠] 面内 {len(face)} 份 Swift 源文件（全仓口径 · 下限 {FACE_FLOOR}）")
+    readings.append(f"[FR-STD-ALL-PLUG-003 ㈠] 面内 {len(face)} 份 Swift 源文件（全仓口径 · 下限 {FACE_FLOOR}）")
     if len(face) < FACE_FLOOR:
         found.append(
             f"扫描面只剩 {len(face)} 份 Swift 源文件（下限 {FACE_FLOOR}）"
@@ -406,7 +406,7 @@ def check_03_one_way_context() -> list[str]:
     # note_sources() 里），读数把"面有多宽"打出来（旧版面 6 份时不声不响）。
     sources = note_sources()
     readings.append(
-        f"[FR-ALL-ALL-PLUG-003 ㈡] 笔记源清单 {len(sources)} 份"
+        f"[FR-STD-ALL-PLUG-003 ㈡] 笔记源清单 {len(sources)} 份"
         f"（运行时读自 {ISOLATION_GATE} · 下限 {NOTE_SOURCE_FLOOR}）"
     )
 
@@ -428,7 +428,7 @@ def check_03_one_way_context() -> list[str]:
     return found
 
 
-# ---------------------------------------------------------------- FR-ALL-ALL-PLUG-006
+# ---------------------------------------------------------------- FR-STD-ALL-PLUG-006
 
 def check_06_one_license() -> list[str]:
     found: list[str] = []
@@ -524,18 +524,18 @@ def check_pointers() -> list[str]:
     found: list[str] = []
     for relative in ("Scripts/check-note-module-isolation.py", "Scripts/test-note-data-boundary.sh"):
         if not (ROOT / relative).exists():
-            found.append(f"{relative}: 被引用的证据脚本不存在（FR-ALL-ALL-PLUG-004 / 07 的指针断了）")
+            found.append(f"{relative}: 被引用的证据脚本不存在（FR-STD-ALL-PLUG-004 / 07 的指针断了）")
     return found
 
 
 def run() -> int:
     reset_state()
-    record("FR-ALL-ALL-PLUG-001 同进程内模块（无 IPC / 无独立插件 target）", check_01_single_process())
-    record("FR-ALL-ALL-PLUG-002 可见性单一判据（未授权不出现）", check_02_visibility())
-    record("FR-ALL-ALL-PLUG-003 单向上下文（只传文本与标识 / 行数据显式留痕）", check_03_one_way_context())
-    record("FR-ALL-ALL-PLUG-006 一套许可三能力位（无插件独立授权）", check_06_one_license())
+    record("FR-STD-ALL-PLUG-001 同进程内模块（无 IPC / 无独立插件 target）", check_01_single_process())
+    record("FR-STD-ALL-PLUG-002 可见性单一判据（未授权不出现）", check_02_visibility())
+    record("FR-STD-ALL-PLUG-003 单向上下文（只传文本与标识 / 行数据显式留痕）", check_03_one_way_context())
+    record("FR-STD-ALL-PLUG-006 一套许可三能力位（无插件独立授权）", check_06_one_license())
     record("ADR-35 单一判据 + 单一写入口", check_adr35_single_write_entry())
-    record("证据脚本指针（FR-ALL-ALL-PLUG-004 / 07）", check_pointers())
+    record("证据脚本指针（FR-STD-ALL-PLUG-004 / 07）", check_pointers())
 
     for line in readings:
         print(line)

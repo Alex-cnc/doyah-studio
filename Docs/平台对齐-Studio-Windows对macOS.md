@@ -11,7 +11,7 @@
 > **口径**：`macOS` 列 = §10.1 状态格的**第一个取值**；`macOS 落点` = §10.2 该条所在行的**反引号片段**（前 3 个 + 「等 N 处」；同一编号出现在多行时取**最后一行**；范围行展开到每一条）。**无追溯行写 `—`、有行未标路径写「（追溯表有行、未标路径）」—— 两种都不编落点**。
 > `Windows` 列 = 台账**原值**（不带 §10.10 的 ⚠️ 差异标记：等价判定在矩阵，本件只给落点索引）。
 >
-> **与派单仓一次性快照的差异（1 行，如实登记）**：`DoyahDispatch` 的 `docs/平台对齐-Studio-Windows对macOS.md`（2026-10-14 前门一次性快照）把 `FR-ALL-ALL-PLUG-004` 记成 `—` —— 该条的 §10.2 格内有**转义竖线**（`CLI/main.swift`（`notes path\|legacy-path\|migrate`）），快照按裸 `|` 切格 ⇒ 整行错位、落点读不出来。本脚本按字面处理转义竖线 ⇒ 该条落点读得出来，故两处数目不同（快照 173 / 17 / **72**，本件 174 / 17 / **71**；合计均 262）。**以本件为准**（它可复跑）。
+> **与派单仓一次性快照的差异（1 行，如实登记）**：`DoyahDispatch` 的 `docs/平台对齐-Studio-Windows对macOS.md`（2026-10-14 前门一次性快照）把 `FR-STD-ALL-PLUG-004` 记成 `—` —— 该条的 §10.2 格内有**转义竖线**（`CLI/main.swift`（`notes path\|legacy-path\|migrate`）），快照按裸 `|` 切格 ⇒ 整行错位、落点读不出来。本脚本按字面处理转义竖线 ⇒ 该条落点读得出来，故两处数目不同（快照 173 / 17 / **72**，本件 174 / 17 / **71**；合计均 262）。**以本件为准**（它可复跑）。
 
 | 编号 | 域 | 类别 | macOS | macOS 落点 | Windows |
 |---|---|---|---|---|---|
@@ -58,20 +58,20 @@
 | FR-AGT-KNOW-MEM-003 | 3.12 AI 智能体 | 常用增强 | ⬜ | `TaskScheduler`、`FR-AGT-KNOW-MEM-002`、`Docs/Doyah产品概要设计说明书.md` | ⬜ |
 | FR-AGT-UX-CONV-004 | 3.12 AI 智能体 | 常用增强 | ⬜ | `FR-AGT-UX-CONV-004`、`FR-AGT-UX-CONV-005`、`Docs/Doyah产品概要设计说明书.md` 等 8 处 | ⬜ |
 | FR-AGT-UX-CONV-005 | 3.12 AI 智能体 | 常用增强 | ⬜ | `FR-AGT-UX-CONV-004`、`FR-AGT-UX-CONV-005`、`Docs/Doyah产品概要设计说明书.md` 等 8 处 | ⬜ |
-| FR-ALL-ALL-BLD-001 | 3.11 构建与工具链 | 基线必备 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
-| FR-ALL-ALL-BLD-002 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
-| FR-ALL-ALL-BLD-003 | 3.11 构建与工具链 | 基线必备 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
-| FR-ALL-ALL-BLD-004 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
-| FR-ALL-ALL-BLD-005 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
-| FR-ALL-ALL-BLD-006 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
-| FR-ALL-ALL-BLD-007 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ⬜ |
-| FR-ALL-ALL-BLD-008 | 3.11 构建与工具链 | 进阶可选 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
-| FR-ALL-ALL-BLD-009 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
-| FR-ALL-ALL-CLI-001 | 3.11 构建与工具链 | 常用增强 | ✅ | `CLI/main.swift` | ✅ |
-| FR-ALL-ALL-CLI-002 | 3.11 构建与工具链 | 常用增强 | ✅ | `CLI/main.swift` | ✅ |
-| FR-ALL-ALL-CLI-003 | 3.11 构建与工具链 | 常用增强 | ✅ | `CLI/main.swift` | ✅ |
-| FR-ALL-ALL-CLI-004 | 3.11 构建与工具链 | 常用增强 | ✅ | `CLI/main.swift` | ✅ |
-| FR-ALL-ALL-CLI-005 | 3.11 构建与工具链 | 常用增强 | ✅ | `CLI/main.swift` | ✅ |
+| FR-STD-ALL-BLD-001 | 3.11 构建与工具链 | 基线必备 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
+| FR-STD-ALL-BLD-002 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
+| FR-STD-ALL-BLD-003 | 3.11 构建与工具链 | 基线必备 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
+| FR-STD-ALL-BLD-004 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
+| FR-STD-ALL-BLD-005 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
+| FR-STD-ALL-BLD-006 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
+| FR-STD-ALL-BLD-007 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ⬜ |
+| FR-STD-ALL-BLD-008 | 3.11 构建与工具链 | 进阶可选 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
+| FR-STD-ALL-BLD-009 | 3.11 构建与工具链 | 常用增强 | ✅ | `project.yml`、`Scripts/*`、`Package.swift` 等 4 处 | ✅ |
+| FR-STD-ALL-CLI-001 | 3.11 构建与工具链 | 常用增强 | ✅ | `CLI/main.swift` | ✅ |
+| FR-STD-ALL-CLI-002 | 3.11 构建与工具链 | 常用增强 | ✅ | `CLI/main.swift` | ✅ |
+| FR-STD-ALL-CLI-003 | 3.11 构建与工具链 | 常用增强 | ✅ | `CLI/main.swift` | ✅ |
+| FR-STD-ALL-CLI-004 | 3.11 构建与工具链 | 常用增强 | ✅ | `CLI/main.swift` | ✅ |
+| FR-STD-ALL-CLI-005 | 3.11 构建与工具链 | 常用增强 | ✅ | `CLI/main.swift` | ✅ |
 | FR-STD-DB-CONN-007 | 3.1 连接与凭据 | 基线必备 | ✅ | `App/Views/ConnectionListView.swift`、`ConnectionFormView.swift`、`Core/ConnectionConfig.swift` 等 4 处 | ✅ |
 | FR-STD-DB-CONN-001 | 3.1 连接与凭据 | 基线必备 | ✅ | `App/Views/ConnectionListView.swift`、`ConnectionFormView.swift`、`Core/ConnectionConfig.swift` 等 4 处 | ✅ |
 | FR-STD-DB-CONN-002 | 3.1 连接与凭据 | 常用增强 | ✅ | `App/Views/ConnectionListView.swift`、`ConnectionFormView.swift`、`Core/ConnectionConfig.swift` 等 4 处 | ⬜ |
@@ -204,14 +204,14 @@
 | FR-STD-DB-META-011 | 3.4 对象浏览与元数据 | 常用增强 | 🟡 | `Core/ObjectTreeActions.swift`、`App/Views/ObjectTreeView.swift`、`AppState.performTreeAction` | ✅ |
 | FR-STD-DB-META-012 | 3.4 对象浏览与元数据 | 基线必备 | ✅ | `Core/ObjectTreeActions.swift`、`App/Views/ObjectTreeView.swift`、`AppState.performTreeAction` | ✅ |
 | FR-STD-DB-META-008 | 3.4 对象浏览与元数据 | 进阶可选 | 🟡 | — | ✅ |
-| FR-ALL-ALL-PLUG-001 | 3.13 插件装配 | 基线必备 | ✅ | `Core/Note*.swift`、`AICapture*.swift`、`App/Views/NotesPanel.swift` | ✅ |
-| FR-ALL-ALL-PLUG-002 | 3.13 插件装配 | 基线必备 | ✅ | `Core/ActivityBar.swift`、`case notes`、`Core/LicensePresentation.swift` 等 4 处 | ✅ |
-| FR-ALL-ALL-PLUG-003 | 3.13 插件装配 | 基线必备 | ✅ | `Core/AICapture.swift`、`Core/Note.swift`、`NoteDraft` 等 5 处 | ✅ |
-| FR-ALL-ALL-PLUG-004 | 3.13 插件装配 | 常用增强 | ✅ | `Core/Note.swift`、`NoteStore.defaultFileURL`、`legacyFileURL` 等 11 处 | ✅ |
-| FR-ALL-ALL-PLUG-005 | 3.13 插件装配 | 基线必备 | 🟡 | `linux/`、`Scripts/check-notes-offline.py`、`Scripts/notes-offline-gate.json` 等 4 处 | ⬜ |
-| FR-ALL-ALL-PLUG-006 | 3.13 插件装配 | 基线必备 | ✅ | `Core/License.swift`、`LicenseCapabilities.all` | ✅ |
-| FR-ALL-ALL-PLUG-007 | 3.13 插件装配 | 基线必备 | ✅ | `Scripts/check-note-module-isolation.py` | ✅ |
-| FR-ALL-ALL-PLUG-008 | 3.13 插件装配 | 基线必备 | 🟡 | `Core/NoteStorage/`、`SQLiteKit`、`NoteDatabase` 等 9 处 | ✅ |
+| FR-STD-ALL-PLUG-001 | 3.13 插件装配 | 基线必备 | ✅ | `Core/Note*.swift`、`AICapture*.swift`、`App/Views/NotesPanel.swift` | ✅ |
+| FR-STD-ALL-PLUG-002 | 3.13 插件装配 | 基线必备 | ✅ | `Core/ActivityBar.swift`、`case notes`、`Core/LicensePresentation.swift` 等 4 处 | ✅ |
+| FR-STD-ALL-PLUG-003 | 3.13 插件装配 | 基线必备 | ✅ | `Core/AICapture.swift`、`Core/Note.swift`、`NoteDraft` 等 5 处 | ✅ |
+| FR-STD-ALL-PLUG-004 | 3.13 插件装配 | 常用增强 | ✅ | `Core/Note.swift`、`NoteStore.defaultFileURL`、`legacyFileURL` 等 11 处 | ✅ |
+| FR-STD-ALL-PLUG-005 | 3.13 插件装配 | 基线必备 | 🟡 | `linux/`、`Scripts/check-notes-offline.py`、`Scripts/notes-offline-gate.json` 等 4 处 | ⬜ |
+| FR-STD-ALL-PLUG-006 | 3.13 插件装配 | 基线必备 | ✅ | `Core/License.swift`、`LicenseCapabilities.all` | ✅ |
+| FR-STD-ALL-PLUG-007 | 3.13 插件装配 | 基线必备 | ✅ | `Scripts/check-note-module-isolation.py` | ✅ |
+| FR-STD-ALL-PLUG-008 | 3.13 插件装配 | 基线必备 | 🟡 | `Core/NoteStorage/`、`SQLiteKit`、`NoteDatabase` 等 9 处 | ✅ |
 | FR-STD-DB-RES-001 | 3.3 结果集与导出 | 基线必备 | ✅ | `App/Views/ResultGrid.swift`、`ResultTableView.swift`、`Core/PostgresCellFormatter.swift` | ✅ |
 | FR-STD-DB-RES-002 | 3.3 结果集与导出 | 常用增强 | ✅ | `App/Views/ResultGrid.swift`、`ResultTableView.swift`、`Core/PostgresCellFormatter.swift` | ✅ |
 | FR-STD-DB-RES-003 | 3.3 结果集与导出 | 基线必备 | ✅ | `App/Views/ResultGrid.swift`、`ResultTableView.swift`、`Core/PostgresCellFormatter.swift` | ✅ |

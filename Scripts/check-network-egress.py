@@ -6,7 +6,7 @@
 去迁就脚本**」，原单 `T-20261010-016/017/018`）：台账 `scan.scope` 必须是 `repo`；排除名单（`scan.excludeDirs`）
 只许放生成物 / 稀疏检出副本；「面比声明窄」由本门禁自己实测判红 —— 一行台账缩不了面。
 
-**为什么有它**：`FR-ALL-ALL-PLUG-005` 的「笔记模块零网络出口」（`check-notes-offline.py`）只扫 `Core/` 下
+**为什么有它**：`FR-STD-ALL-PLUG-005` 的「笔记模块零网络出口」（`check-notes-offline.py`）只扫 `Core/` 下
 文件名以 `Note` / `AICapture` / `License` 开头的文件与 `App/` 下的 `Note*` —— 而 **`Core/NoteSync/`
 是子目录、文件名不以 `Note` 开头** ⇒ 云同步面 / 认证面**不在任何门禁的扫描面内**（执行侧 ⑰ 相抵上报，
 `T-20261009-147 ③`）。结果就是假绿：`CloudAuth.swift` 引了 `URLSession`、门禁照旧全绿。
