@@ -434,7 +434,7 @@
 | FR-STD-WS-FS-006 | 3.3 Doyah Studio · 工作区 | 基线必备 |
 | FR-STD-WS-EDIT-023 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-VCS-002 | 3.3 Doyah Studio · 工作区 | 常用增强 |
-| FR-STD-WS-LIC-001 | 3.3 Doyah Studio · 工作区 | 基线必备 |
+| FR-STD-WS-LIC-001 | 3.1.2 授权与版本 | 基线必备 |
 | FR-STD-DB-DIAG-006 | 3.4 Doyah Studio · 数据库 | 常用增强 |
 | FR-STD-DB-TASK-001 | 3.4 Doyah Studio · 数据库 | 常用增强 |
 | FR-STD-DB-TASK-002 | 3.4 Doyah Studio · 数据库 | 基线必备 |
