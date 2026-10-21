@@ -487,7 +487,7 @@
 | FR-STD-ALL-BLD-008 | 工程可被命令行构建工具直接编译（不依赖图形 IDE） | 进阶可选 | 低 | `Package.swift` |
 | FR-STD-ALL-BLD-009 | 配套文档随代码同步维护，需求变更可追溯 | 常用增强 | 中 | `Docs/Doyah产品需求分析说明书.md`（本文档）+ `Docs/README.md` 索引 |
 
-### 3.1.2 授权与许可
+### 3.1.2 授权与版本
 
 | 编号 | 需求 | 层次 | 优先级 | 验收要点 |
 | --- | --- | --- | --- | --- |
@@ -510,7 +510,7 @@
 | FR-STD-ALL-PLUG-007 | 允许插件复用宿主词法层（`CodeSyntax` / `CodeLexer` / `CodeCompletion`）；**禁止**插件依赖宿主数据库 / 工作区类型 | 基线必备 | 高 | `Scripts/check-note-module-isolation.py` 通过（4 个笔记源文件：无平台 import、无数据库侧类型引用、**无 Ultra 侧类型引用**；清单与 `Core/` 实际文件对账）。**2026-09-26（开发循环 L-04）补上一处真缺口**：上一轮拆分只搬了三个 `public` 映射函数，`fingerprint(of:report:)` / `stateText(_:)` 两个 helper **参数就是 Ultra 侧类型**（`DiagnosisContext` / `MaintenanceTask.State`）却留在笔记侧文件里 —— 门禁当时不认识这些名字，"笔记侧文件可独立构建"这句话并不成立。现已把两个 helper 归入 `Core/AICaptureUltra.swift`，Ultra 侧类型名进禁用名单；门禁还会自检 `NOTE_SOURCES` 与 `Core/` 实际文件（新增笔记源文件漏加会红）。**负例验证**：`python3 Scripts/test-plugin-assembly-gates.py` **7 个负例全部达到预期**（含本条两条：Ultra 类型泄漏 / 新文件漏加），跑完自动还原 |
 | FR-STD-ALL-PLUG-008 | **桌面各端笔记存储统一到本地 SQLite**（2026-09-27 拍板 Q23）：**主存进库** —— 笔记元数据 / 正文 / 标签 / 时间线 / **附件索引**；**原始行情快照仍走 CSV/JSON、附件二进制留在文件系统（库里只存路径）**；WAL + 事务；迁移与备份有明确口径（一次性迁移 + `VACUUM INTO` 快照备份，不把活跃库文件直接扔进云同步） | 基线必备 | 高 | **需求提出者原话**：「统一到SQLite，主存进库、原始数据与附件留在文件系统确认」。**接入方式**：vendored `sqlite3.c`（公有领域）+ 薄封装，**不引第三方 Swift 封装**（GRDB 官方支持 Apple+Linux，Windows 仅社区探索中；SwiftData / Core Data 为 Apple 独占 —— 三样都与「Windows 与 macOS 完全一致」冲突）。**四条判据 4/4 命中**：数据持续增长 / 有并发写与多进程读 / 要按条件查与全文检索（FTS5）/ 要崩溃不坏数据的硬保证。**换引擎成本最低点就是现在**（实测 `notes.json` 仅 395 字节；L-03 已演练一次性迁移 + 原子写 + 坏文件回退）。**2026-09-27 第 2 批（开发循环第 21 轮）**：① **绑定层接线**（第 18 轮卡在 SwiftPM 显式模块档、草稿落在 `Docs/design/待接线-SQLiteKit/` 未接；本轮实测在 `DoyahCore` 目标里可编译可跑 —— 根 `Package.swift` 的 `DoyahCore` 加 `.product(name: "CSQLite3", package: "sqlite3")`，绑定层进产品源码 `Core/NoteStorage/SQLiteKit.swift` 并 `import CSQLite3`；草稿目录随之下线，文件全部移入产品）；② **schema v1**（`Core/NoteStorage/NoteDatabase.swift`：`note` / `note_tag` / `note_timeline` / `note_attachment` + `note_fts`（**`tokenize='trigram'`**）+ 3 个同步触发器 + 5 个索引；版本记在 `PRAGMA user_version`，打开即幂等升级；时间存 REAL 秒、`NULL ≠ 空串`、不认识的 `source_kind` **抛错不降级**）；③ **一次性迁移** `NoteLibraryMigration`（先建后换名 + 读回逐字段核对 + 坏文件原地保留 + 旧文件改名 `notes.json.migrated` + 覆盖变量生效时让路）；④ **快照** = `VACUUM INTO`（先 `wal_checkpoint(TRUNCATE)`、写 `.partial` 再换名、**写完读回来核对行数与 `integrity_check`**、目标已存在则拒绝覆盖）；⑤ 检索：≥3 字走 FTS5/trigram，1~2 字中文走子串兜底，且**返回所走的路线**（别假装"没找到"）。**证据**：`Tests/NoteStoreSQLiteTests.swift` **24 项** + `Tests/SQLiteKitTests.swift` **18 项**（接线后那份草稿用例**第一次真的跑起来**，当场抓出 5 处草稿与实现/实测不符 —— 逐条判定后修掉：`codeName` 返回内部常量名、默认分词器不切中文、坏库在打开时就该被认出来、两处用例自己把 JSON 路径与库路径写重）；`./Scripts/verify-all.sh` **exit 0 十七项全绿**（Core 单测 **1991** 项 0 failures）。**2026-09-27 第 3 批（开发循环第 23 轮）**：**`NoteStore` 换引擎 = 界面与 CLI 走新存储** —— 新增 `Core/NoteStorage/NoteLibrary.swift`（笔记库**唯一入口**，actor + SQLite 引擎：读列表 / 存一条 / 删一条 / 搜一下 / 快照五件事收在一处；`loadOutcome()` 与旧引擎**同名同义**，调用点只换一行）；`App/AppState.swift` **5 处构造点**改走它（打开笔记含引擎迁移、保存 / 删除 / 维护存笔记 / 诊断存笔记），`CLI/main.swift` 走 `noteLibrary()`；`notes path` 改为**库位置**、新增 `json-path` 与 `engine-migrate --source/--target-file`（脚本可在临时目录反复验，不碰真实数据目录）。**证据**：`Tests/NoteLibraryTests.swift` **12 项**（往返逐字段 / 幂等保 `createdAt` / 删除**真查孤儿行**（`note_tag`、`note_timeline` 归零）/ 检索所走路线 / 迁移留档 `notes.json.migrated` / 幂等迁移库文件零字节变化 / 坏文件不建库 / **比代码新的库如实报** / 快照 `integrity=ok` / **界面与 CLI 的源树判据**）；Core 单测 **1991 → 2003** 项 0 failures；`./Scripts/verify-all.sh` **exit 0 十七项全绿**；CLI 实测（临时目录）`engine-migrate` 第一次 `migrated / 1`、第二次 `skippedTargetExists`，库内 `note` 1 行 / `note_tag` 2 行 / `user_version` 1（`sqlite3` 直读）。**残项（需人工 / 非本侧）**：① 界面点击点验三条路（首开迁移提示、保存、删除）；② **Linux 打包与活动栏入口按 2026-09-27 平台口径不属本侧**（《Doyah产品概要设计说明书》§3.23 第 6 条：Linux 源码在本仓写，本侧只出三书口径 `FR-STD-ALL-PLUG-005` + 门禁 L-22）。**2026-09-28 第 4 批（开发循环第 54 轮 / L-44）**：**界面检索改走库** —— `AppState` 里那句「在内存里过滤已加载的列表」换成 `NoteLibrary.defaultLibrary().search(_:)`（**唯一生产点**），并把**所走路线如实标到界面上**：全文检索命中不额外解释 / 走了子串兜底（查询串 1~2 字或短语在全文索引里落空）**如实标出** / **检索没跑成**（库读不出来）如实说原因且列表**退回全部笔记**（不许把失败说成「没找到」）。**顺带修掉一处会静默丢功能的差口**：搜索框承诺「标题 / 正文 / 标签」，而 `note_fts` 只索引标题与正文 ⇒ 改走库时**标签命中会消失** ⇒ 标签命中在两条路里各补一次（索引路用 `id NOT IN (SELECT rowid FROM note_fts …)` 补、子串路并进 `LIKE`），合并后按 `updated_at DESC, title ASC` 重排（与 `notes()` 同一口径）。**证据**：`Tests/NoteStoreSQLiteTests.swift` 新增标签覆盖四条判据（含「全文命中与标签命中同一次查询里都要在」）、`Tests/NoteLibraryTests.swift` 新增路线→文案键判据；新门禁 `Scripts/check-note-search-route.py` + 台账 `Scripts/note-search-route.json`（接进 `verify-all` 第 10 项）+ 负例 `Scripts/test-note-search-route.py` **11 例**；三张快照逐张读图（`notes-search-substring` / `notes-search-fulltext` / `notes-search-unavailable`）。 |
 
-### 3.1.4 命令行
+### 3.1.4 命令行出口
 
 | 编号 | 需求 | 层次 | 优先级 | 验收要点 |
 | --- | --- | --- | --- | --- |
@@ -1607,7 +1607,7 @@
 | --- | --- | --- | --- | --- |
 | **FR-RTR-FLOW-ORCH-001** | **工作流编排**：把取数 / 算特征 / 跑回测 / 生成文本 / 推送编成可命名、可复用、可定时的流水线 | 常用增强 | 中 | ① 每步输入输出可检查；② 失败停在失败那步并保留中间产物；③ 两次运行可逐步对比差异 |
 
-### 3.6.13 内置市场 skill
+### 3.6.13 市场口径
 
 | 编号 | 需求 | 层次 | 优先级 | 验收要点 |
 | --- | --- | --- | --- | --- |
