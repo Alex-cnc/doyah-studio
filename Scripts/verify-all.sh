@@ -425,6 +425,7 @@ fi
 # 的队列口径锚点、`check-self-test-counts` 里登记了 `hostLedgerSelfTest` 的那几族 ——
 # **跳过 ≠ 通过**（逐条打印跳过的是哪几例 / 哪几处锚点），**主开发机上这几处一条都不放宽**。
 python3 Scripts/check-doc-tables.py --self-test
+python3 Scripts/check-req-index.py   # 机器视图（requirement-index.jsonl）与正文表格逐条对账
 # L-32（2026-09-27 第 28 轮）：变更记录版本号**唯一**、头部版本格**可判**（= 变更记录最高号，
 # 或带「基线 / 首版」标注并在标注里写出当前号）、队列**定义行**条目号唯一。
 # 取号唯一来源 = `Scripts/next-doc-version.py`（max+1）—— 禁止手抄：撞过三次

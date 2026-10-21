@@ -35,6 +35,13 @@ xcuserdata/
 !/Docs/Doyah产品能力规划说明书-变更记录.md
 !/Docs/Doyah产品概要设计说明书-变更记录.md
 !/Docs/Doyah产品需求分析说明书-需求索引.md
+# 需求书的追溯表（2026-10-20 人类主人令「需求书整体要瘦身」从 §9.1 外置）：
+#   「这条需求在哪实现、怎么验」必须随仓走 —— 否则干净克隆上正文指向一份不存在的文件。
+!/Docs/Doyah产品需求分析说明书-追溯表.md
+# 需求条目的机器视图（2026-10-20 同批）：从正文表格生成，供 AI 整本读取；生成脚本 `Scripts/gen-req-index.py`，
+#   漂移由 `Scripts/check-req-index.py` 判红。人读 markdown、机读 jsonl，两者同源。
+!/Docs/requirement-index.jsonl
+
 !/Docs/产品能力规划说明书.md
 !/Docs/概要设计.md
 !/Docs/平台实现状态.json

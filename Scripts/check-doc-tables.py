@@ -100,6 +100,7 @@ DEFAULT_TARGETS = [
     "Docs/Doyah产品能力规划说明书-变更记录.md",
     "Docs/Doyah产品概要设计说明书-变更记录.md",
     "Docs/Doyah产品需求分析说明书-需求索引.md",
+    "Docs/Doyah产品需求分析说明书-追溯表.md",
     "Docs/Doyah产品开发计划书.md",
     "Docs/README.md",
     "Docs/兼容性矩阵.md",
@@ -805,6 +806,7 @@ def main() -> int:
 # 例数仍是 17（跳过不改总数、也不许静默）。
 
 SELF_TEST_TRACKED = [
+    "Docs/Doyah产品需求分析说明书-追溯表.md",  # 2026-10-20 从 SRS §9.1 外置（瘦身令），必须入库
     "Docs/Doyah产品能力规划说明书-变更记录.md",
     "Docs/Doyah产品概要设计说明书-变更记录.md",
     "Docs/Doyah产品开发计划书.md",
