@@ -34,7 +34,8 @@
         "Package.resolved",
         "project.yml",
         "DoyahStudio.xcodeproj/",
-        "Plugins/"
+        "Plugins/",
+        "review/"
       ],
       "note": "与派活单 T-20261002-029 给的清单一致，只多一条 `Package.resolved`（SwiftPM 锁文件，属 Swift 族）与 `.cloudbase/`（云后端绑定 —— 片 `云A` 交付物 · 派单 `T-20261009-116` ①，前门裁 `T-20261009-117`：macOS 实现面 = DoyahStudio 仓）；`Scripts/` 单列进 shared（见 shared_note）。",
       "actor": "hugehippo"
@@ -94,6 +95,12 @@
   "shared_note": "共享面 = 两侧都写的地方：改它**不算越界**，但要走声明式台账（清单 `shared_ledger` 改前登记 / 本次新增行注 `shared-surface：理由` / 提交信息注 `shared-surface: 理由`），三处都没有理由 ⇒ 判红。`Scripts/` 在派活单 T-20261002-029 里被同时列进「macOS 仓根族」与「共享面」两处 ⇒ 本清单按**共享面**收口：里面的判据（`check-*.py` / `verify-all.sh`）被两侧共同调用，`Scripts/doc-numbers.json` 的 `checkScriptParity` 也是按「闭环引用」写的，判它是某一端专属会与现行事实相抵。要改成 macOS 专属 ⇒ 改这一行 + 记一笔变更。",
   "shared_require_declaration": true,
   "shared_ledger": [
+    {
+      "glob": "review/",
+      "reason": "人类主人令 2026-10-20（能力书三轮 alpha + 三轮 beta + rc 收敛）：送审快照放 `review/`，归本侧（hugehippo）—— 放在 `Docs/` 会撞三个受检判据（副本与正文重复计数、受检文件数链路错乱），故单独成目录",
+      "by": "hugehippo",
+      "at": "2026-10-20"
+    },
     {
       "glob": "Scripts/path-ownership.json",
       "reason": "派单 T-20261014-016 ②（2026-10-14 人类主人令：Doyah Studio 补 Linux 端 · 归 babyhippo）：新增 linux 树（paths Platform/linux/ + platform/linux/ · actor babyhippo）—— 此前该树不在登记里、归属门禁盖不到 platform/linux/**；无既有判据语义变化",
