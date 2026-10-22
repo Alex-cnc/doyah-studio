@@ -1,6 +1,6 @@
 # Doyah产品概要设计说明书
 
-当前 v3.5.1（2026-10-22 §9.2 界面设计：节号去撞号 + 五处事实按代码订正）
+当前 v3.5.2（2026-10-22 云同步令牌续期写进契约；§9.2 五处订正沿用 v3.5.1）
 
 > 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求规格说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
 > 本书按「整个产品」重写：**五个产品线 × 92 个需求域全覆盖**，契约章每节点名需求编号，指不到编号的条目不写。
@@ -1003,8 +1003,10 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 | 判定键唯一、由人定 | 记录级判胜：先比严格递增的记录版本号，版本号相同再比更新时间，仍相同按固定次序（设备标识）兜底，三个端同一套比较规则；无人工选择时不做静默覆盖，默认保留两版并标冲突 | 同一场冲突两端判出不同胜者，来回同步成乒乓；或界面自动挑了一版，用户永远不知道另一版存在 |
 | 落败版留底、合并可回退 | 被覆盖的那一版原样保留（不进回收站、不被裁剪），可打开、可另存为新条目，两版都标来源设备与时间；合并产出一个新版本，参与合并的两版仍可取回 | 冲突后只剩一份，另一份修改无人知道曾存在；合错了回不到合并之前 |
 | 删除不被复活 | 删除以墓碑传播，墓碑的版本号严格递增，且不被更高版本号的副本按同一套判定覆盖回来 | 删除在同步里被当成一次普通修改，被另一端的历史版本顶回来 |
+| 令牌自动续期，同步不因过期而中断 | 访问令牌快到期（余量 60 秒内）时**先续期再发请求**；服务端回 401 时**续期一次并重试同一请求一次**；续期用的是刷新令牌，不是让用户重新登录；连续自动同步跨过任意次令牌到期都不出现「令牌过期」这类错误 | 每次自动同步都报「token 过期」；用户被迫反复登录；或把令牌有效期调长当作修法（只是把报错推后，到期照样断） |
+| 登录态与同步态分开表述 | 令牌过期 ≠ 账号失效：本地读写检索导出照常，同步暂挂并显示「登录待续期」；只有刷新令牌本身失效才显示「需要重新登录」，且给出登录入口 | 令牌一过期就提示「账号失效」并锁住本地功能；或什么都不说，只是同步静默失败 |
 
-对应需求：`FR-NTS-NOTE-SYNC-001` `FR-NTS-NOTE-SYNC-002`
+对应需求：`FR-NTS-NOTE-SYNC-001` `FR-NTS-NOTE-SYNC-002`（令牌续期与登录态/同步态分开，属 `FR-NTS-NOTE-SYNC-001` ③「账号失效时本地仍可读」的前置条件）
 
 ### 3.4.9 【契约】删除与回收站
 
@@ -1947,8 +1949,8 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 | 数据库（MySQL / GBase 8a） | MySQL 协议族（共用驱动、方言分对） | 同上 | 同上；不支持的能力抛 `notImplemented` | 同上 | `DatabaseServiceFactory` |
 | SSH 隧道 | `ssh` 可执行（默认 `/usr/bin/ssh`，可被 `DOYAH_SSH_BINARY` 覆盖） | 跳板机主机 + 端口 + 账号 | 建隧道超时缺省 15 秒 | 隧道口令按键派生，存凭据存储 | `SSHTunnel.swift`、`SSHTunnelSecrets.swift` |
 | 模型服务 | HTTPS POST `…/chat/completions`（OpenAI 兼容） | `AgentProfile.endpoint` + `model`；`Authorization: Bearer` | `transport` / `httpStatus` 分类；流式断流即 `transport`，不重试 | 系统凭据存储；文件形态条目键 `agent.api-key` 或 `secretKey` | `LLMClient.swift`、`LLMStreaming.swift` |
-| 云同步（数据面） | HTTPS + PostgREST 形态 | `https://<envId>.api.tcloudbasegateway.com`，`/v1/rdb/rest/<table>`；`Authorization: Bearer <access_token>` | `transport` 视为断网，入队 + 指数退避；服务端非 2xx 记 `server(code:status:)` | 会话令牌进系统钥匙串 | `Plugins/Notes/Sources/NoteSync/CloudSyncService.swift` |
-| 云同步（账号面） | HTTPS `/auth/v1/signin`、`/auth/v1/token`、`/auth/v1/revoke` | 同上基址 | 刷新失败即登出并清令牌 | 令牌（`access_token` / `refresh_token`）进钥匙串，**不落明文文件** | `NoteSync/CloudAuth.swift` |
+| 云同步（数据面） | HTTPS + PostgREST 形态 | `https://<envId>.api.tcloudbasegateway.com`，`/v1/rdb/rest/<table>`；`Authorization: Bearer <access_token>` | `transport` 视为断网，入队 + 指数退避；服务端非 2xx 记 `server(code:status:)`；401 ⇒ 走账号面续期一次后重试（见上一条），不直接把 401 报成「令牌过期」错误弹窗 | 会话令牌进系统钥匙串 | `Plugins/Notes/Sources/NoteSync/CloudSyncService.swift` |
+| 云同步（账号面） | HTTPS `/auth/v1/signin`、`/auth/v1/token`、`/auth/v1/revoke`；续期用 `POST /auth/v1/token` + `grant_type=refresh_token` | 同上基址 | **到期前 60 秒内先续期再发业务请求；业务请求收到 401 时续期一次并重试原请求一次；多个请求同时过期只发一次续期（单飞），其余等同一个结果**；只有续期本身失败（刷新令牌失效）才登出并清令牌，且界面显示「需要重新登录」 | 令牌（`access_token` / `refresh_token`）进钥匙串，**不落明文文件** | `NoteSync/CloudAuth.swift` |
 | 系统凭据存储 | `kSecClassGenericPassword` | `service = DoyahIdentity.keychainServiceName` | `credentialStore(code:)` 原样上报状态码 | 键即 `account` | `Platform/macOS/KeychainSecretStore.swift` |
 | MCP server | JSON-RPC 2.0（`MCPProtocol.version = "2024-11-05"`）over stdio | 用户配置的 `command` + `args` + `env`（原样启动，不经 shell） | 握手 `initialize` → `notifications/initialized` → `tools/list`；每 server 都产出状态 | 配置里的 `env` / `headers` 由用户自填；本产品不代管其密钥 | `MCPClientBridge.swift`、`MCPProtocol.swift` |
 | 出网留痕 | 本地 JSONL（非网络面） | `egress-log.jsonl` | 写失败只警告，不阻断主流程 | 无 | `EgressLog.swift` |
