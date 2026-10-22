@@ -1,6 +1,6 @@
 # Doyah产品概要设计说明书
 
-当前 v3.2.3（2026-10-20 平台差异表与需求规格同文）
+当前 v3.3.0（2026-10-22 设计层四章重写）
 
 > 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求规格说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
 > 本书按「整个产品」重写：**五个产品线 × 92 个需求域全覆盖**，契约章每节点名需求编号，指不到编号的条目不写。
@@ -58,50 +58,194 @@
 
 # 第二章 总体设计
 
+本章写「代码放在哪、由谁调用、跑起来是什么形状」。每条判断都指向仓内文件；查不到实据的地方写「待定」，不补想象。
+macOS 侧的物理形态是一个 SwiftPM 包（`Package.swift` 声明 `DoyahCore`、`DoyahPlatform`、`DoyahCLI`、`DoyahStudioApp`、`doyah-license-tool` 五个目标，外加一条到 Retro 锚仓的路径依赖）；Windows 与 Linux 的前端在 `Platform/windows`、`Platform/linux` 各自自洽，不在本章的 Swift 目标图内。
+
 ## 2.1 分层与依赖方向
 
-四层，依赖只能自上而下，反向依赖一律视为设计缺陷：
+四层，依赖只向下。表 2-1 给每层的目录、代表类型与禁止项；表 2-2 给「协议在上、实现在下」的落点。
 
-| 层 | 职责 | 不许做的事 |
+**表 2-1 四层的职责与禁止项**
+
+| 层 | 目录与规模 | 代表类型 | 职责 | 不许做的事 | 依据 |
+|---|---|---|---|---|---|
+| 界面层 | `App/`（131 个 `.swift`，其中 `App/Views` 93 个）、`Plugins/Notes/Views`（3 个） | `DoyahStudioApp`、`MainWindow`、`ActivityBarView`、`QueryWorkspaceView`、`NotesAreaView`、`AppState` | 画面、页签、命令、快捷键；把用户动作翻成一次领域调用 | 直接建库连接；直接拼 SQL；直接读写笔记库文件 | `App/Views/MainWindow.swift`、`App/AppState.swift:231` |
+| 领域层 | `Core/` 内的值类型与纯函数 | `ExecutionSafety`、`ExecutionScope`、`StatementSplitter`、`SQLLinter`、`QueryMemory`、`TodoQuery`、`LicensePresentation` | 规则判定、状态机、格式化；进出都是值 | 持有连接；持有界面状态；自带语言 | `Core/ExecutionSafety.swift`、`Core/ExecutionScope.swift`、`Core/LicensePresentation.swift` |
+| 能力层 | `Core/` 内的协议与 actor | `DatabaseService`（Core 共 21 个协议之一）、`PostgresService`/`MySQLService`/`GBaseService`、`LLMClient`、`MCPClientBridge`、`NoteLibrary` | 把外部世界（库、模型、文件、通道）收成可替换接口 | 出现「当前页签」这类页面概念 | `Core/DatabaseService.swift`、`Core/LLMClient.swift` |
+| 平台适配层 | `Platform/macOS`（5 个 `.swift`） | `KeychainSecretStore`、`KeychainAgentKeyStore`、`MacDirectoryAccess`、`WebKitBrowserEngine`、`FoundationSecurityScopedBookmarking` | 唯一可以 `import Security` / Darwin / WebKit 的地方 | 定义业务规则 | `Platform/macOS/*.swift` |
+
+**表 2-2 协议在 Core、实现在平台模块**
+
+| 协议（Core） | 平台实现（`Platform/macOS`） | 依据 |
 |---|---|---|
-| 界面层 | 页面、面板、快捷键、状态呈现 | 直接连库、直接拼 SQL、直接读写笔记文件 |
-| 领域层 | 实体与规则：查询、执行、编辑、复盘计算、智能体循环 | 感知具体存储或具体平台 API |
-| 能力层 | 统一接口：连接与执行、存储、模型调用、文件与通道 | 出现页面概念（「当前页签」之类） |
-| 持久层 | 本地库、文件、远端服务 | 决定业务规则（排序、权限、去重） |
+| `SecretStore` | `KeychainSecretStore` | `Core/SecretStore.swift`、`Platform/macOS/KeychainSecretStore.swift:14` |
+| `AgentKeyStore` | `KeychainAgentKeyStore` | `Core/AgentConfigurationStore.swift`、`Platform/macOS/KeychainAgentKeyStore.swift` |
+| `SecurityScopedBookmarking` | `FoundationSecurityScopedBookmarking` | `Core/SecureDirectoryAccess.swift`、`Platform/macOS/FoundationSecurityScopedBookmarking.swift` |
+| `DirectoryPicker` | `MacDirectoryAccess` | 同上、`Platform/macOS/MacDirectoryAccess.swift:15` |
+| `BrowserEngine` | `WebKitBrowserEngine` | `Core/BrowserPage.swift:199`、`Platform/macOS/WebKitBrowserEngine.swift:22` |
 
-这条方向由「界面只依赖接口」与「替换实现不改页面」两条需求共同定死（`FR-STD-ALL-IFACE-001`~`FR-STD-ALL-IFACE-013`）。违反它的典型写法：为省一次转换，界面层直接创建数据库连接。
+方向不是靠自觉，有三条机制：
+
+1. **模块依赖单向**。`DoyahPlatform` 依赖 `DoyahCore`；`DoyahCore` 的 `dependencies` 里只有 `PostgresNIO`、`MySQLNIO`、`Crypto`、`CSQLite3`，没有 `DoyahPlatform`。反向引用在编译期就不成立（`Package.swift`）。
+2. **静态闸门**。`Scripts/check-core-portability.py` 剥掉注释后扫 `Core/**/*.swift`，出现 `Security`、`Darwin`、`OSStatus` 一类平台符号即红；确需例外时在该行写 `// portability-ok: 理由`。它同时是 `Scripts/verify-all.sh` 的第 2 项。
+3. **协议与实现分居两模块**（表 2-2）。`BrowserEngine` 的实现在平台模块里，`DatabaseService` 的三个实现都是 `Core` 里的 `actor`——因为数据库驱动本身跨平台（`Vendor/postgres-nio`、`Vendor/mysql-nio` 随仓库带走）。
+
+一处需要如实说明：`Core` 是**平铺**的——246 个 `.swift` 直接在 `Core/` 下（另加 `Core/Plugin` 3 个），领域层与能力层之间没有目录级边界，区分靠命名与依赖方向（纯函数 vs 协议 + actor）。门禁真正强制的是「Core 不碰平台」，不是「领域不许引能力」。
+
+越层有三个可判信号，都能落到具体文件：一是 `Core` 里出现平台符号（`Security` / `Darwin` / `OSStatus`）——这条由第 2 条机制机械判定；二是 `Core` 里出现页面概念（`selectedTab`、页签、`AppState` 这类词，`DatabaseService` 的接口上没有任何一处）；三是同一份规则在两处实现（`ExecutionScope.resolve` 判「跑哪一段」只此一处，`EditorCommandCenter` 只负责把显示中编辑器的选区交出来）。
+
+「界面层不许碰平台」这句话要说得更准：`App/` 实测里有 2 处 `import Darwin`（`App/LocalPort.swift`、`App/TerminalSession.swift`）、1 处 `import UserNotifications`（`App/ReminderNotifier.swift`）、1 处 `import WebKit`（`App/Views/BrowserTabView.swift`）——窗口进程本来就要这些。层级纪律的强制点在**下面**那一侧：Core 保持平台中立，界面层用哪个平台框架是它的本分，不是越界。
 
 ## 2.2 组件构成
 
-| 组件 | 职责 | 主要需求域 |
-|---|---|---|
-| 工作台外壳 | 窗口、页签、导航、命令面板 | `STD-WS-NAV`、`STD-WS-UI` |
-| 编辑器 | 文本编辑、保存与撤销语义 | `STD-WS-EDIT` |
-| 数据库核心 | 连接、执行、元数据、结果集、DDL、导入导出 | `STD-DB-*` |
-| 智能体运行时 | 循环、计划、工具、记忆、权限、质量核验 | `AGT-*` |
-| 笔记引擎 | 正文格式、组织、搜索、同步、版本 | `NTS-NOTE-*` |
-| 待办引擎 | 清单、状态、日历、双向链接 | `NTS-TODO-*` |
-| 复盘引擎 | 行情抓取、归因、查询、研究 | `RTR-*` |
-| 构建与装配 | 构建脚本、CLI、许可、插件装配 | `STD-ALL-BLD`、`STD-ALL-CLI`、`STD-ALL-LIC`、`STD-ALL-PLUG` |
+**表 2-3 组件 → 目录/主要类型**
 
-组件之间只通过能力层接口通信；任何跨组件直连（例如编辑器直接读复盘库）都必须先补一条接口需求，否则就是在制造第二章与第三章的分叉。
+| 组件 | 目录与主要类型 | 职责 | 依据 |
+|---|---|---|---|
+| 应用外壳 | `App/DoyahStudioApp.swift`、`App/Views/MainWindow.swift`、`App/AppState.swift` | 一个 `WindowGroup`；活动栏 + `NavigationSplitView` + 下方面板；`AppState` 以 `@MainActor` 持有全部界面状态 | 同左 |
+| 数据库工作台 | `Core/DatabaseService.swift`、`PostgresService`、`MySQLService`、`GBaseService` | 三方言语义收在同一协议；不支持的 COPY 抛可读错误，不退化成逐条 INSERT | `Core/DatabaseService.swift:53` |
+| 执行与结果 | `Core/ExecutionRegistry.swift`、`Core/QueryModels.swift`、`App/Views/ResultTableView.swift`、`App/Views/LowerPaneView.swift` | 句柄定向取消；事件单通道；结果默认上限 10 000 行且截断可见 | `Core/QueryModels.swift:113` |
+| 工作区与编辑器 | `App/WorkspaceTabsModel.swift`、`Core/WorkspaceTab.swift`、`App/Views/CodeEditorView.swift`、`App/WorkspacePathIndex.swift` | Home / 文件 / 对话三种页签；FSEvents 监听磁盘改动；路径索引在自有队列上 | `Core/WorkspaceTab.swift:12` |
+| 智能体运行时 | `Core/Agent*`（46 个）、`Core/LLMClient.swift`、`Core/LLMRetry.swift`、`Core/MCP*` | 循环、工具注册、审批闸门、审计、模型调用与重试 | `Core/AgentLoop.swift`、`Core/AgentApprovalGate.swift` |
+| 笔记 | `Plugins/Notes/Sources`（23 个）、`Plugins/Notes/Views`（3 个） | `NoteLibrary` 是唯一入口；写库一次一个事务 | `Plugins/Notes/Sources/NoteStorage/NoteLibrary.swift:19` |
+| 复盘 | `App/Views/RetroHostView.swift`、`Plugins/Retro/plugin.json`、外部包 `DoyahRetroUI` | 宿主只装配，视图代码不复制 | `App/Views/MainWindow.swift:207` |
+| 插件装配 | `Core/Plugin/PluginManifest.swift`、`Core/Plugin/PluginRegistry.swift`、`Core/Plugin/PluginMounts.swift` | 「哪个挂点归谁」的唯一来源 | `Core/Plugin/PluginRegistry.swift` |
+| 许可 | `Core/License.swift`、`Core/LicensePresentation.swift` | 「哪个档看到哪几块」的判据在 Core，可穷举单测 | `Core/LicensePresentation.swift:16` |
+| CLI | `CLI/main.swift`、`CLI/CLIFailureText.swift`、`CLI/PluginCommands.swift`、`CLI/AgentStreamCommand.swift` | 复用 Core，不引 App | 同左 |
+| 构建与门禁 | `Scripts/verify-all.sh`（1 035 行、18 项）、58 个 `check-*.py` | 一条命令跑完十八项，失败当场中止并报「哪些项没跑」 | `Scripts/verify-all.sh` |
 
-## 2.3 运行设计
+组件之间只经能力层接口通信。`PluginRegistry` 的文件注释把反例写死了：宿主里一旦出现 `if pluginNotes { … }` 这种按插件名分支的代码，「删掉插件功能就消失」就不再可机械判定，所以挂点归属只从注册表查，由 `Scripts/check-plugin-assembly.py` 断言。
 
-**运行模块组合**：单进程多模块常驻；数据库连接、智能体运行时、笔记与复盘引擎都在同一进程内，不设跨进程服务（`FR-STD-ALL-PLUG-001`~`010` 的装配形态是同进程模块，不是可卸载外部包）。
+## 2.3 模块划分（五条产品线）
 
-**运行控制**：启动顺序固定为 —— 读取配置 → 初始化存储 → 恢复上次会话（页签、连接、草稿）→ 启动后台任务（定时抓取、索引重建）。任一步失败进入可恢复失败态：界面可用、错误可见、可重试，不静默降级（`NFR-ALL-GATE-REL-004`、`FR-STD-DB-CONN-006`）。
+**表 2-4 产品线 → 目录、入口、关键类型**
 
-**运行时间**：常驻期只做三类后台动作 —— 定时抓取（`RTR-FLOW-CRON`）、索引随写更新（`STD-DB-RES`、`NTS-NOTE-SEARCH`）、智能体长任务的进度回写（`AGT-CORE-LOOP`）。不做「空闲时全量重建」这类不可预期耗时动作。
+| 产品线 | 主要目录 | 入口 | 关键类型 | 依据 |
+|---|---|---|---|---|
+| 智能体 | `Core/Agent*`（46）、`Core/LLM*`、`Core/MCP*`、`App/AgentChatModel.swift`、`App/Views/AgentChatView.swift`、`CLI/AgentStreamCommand.swift` | 对话页签（`WorkspaceTab.Kind.agentChat`）+ CLI 子命令 | `AgentLoop`、`AgentToolRegistry`、`AgentApprovalGate`、`AgentAuditLog`（actor）、`LLMClient` | `Core/WorkspaceTab.swift:12`、`Core/AgentAudit.swift:494` |
+| 通用与数据库 | `Core/Connection*`、`Database*`、`SQL*`、`Result*`、`Object*`、`Table*`、`Postgres*`、`MySQL*`、`Core/Dialects.swift` | 活动栏 `.database` | `DatabaseService`、`ExecutionRegistry`、`QueryResult`、`ExecutionSafety` | `Core/LicensePresentation.swift:22` |
+| 工作台界面 | `App/`（131）、`Core/Workspace*`、`Code*`、`Editor*`、`Terminal*`、`Design*`、`Menu*` | 活动栏 `.workspace`、系统菜单、命令面板 | `WorkspaceTab`、`WorkspaceTabsModel`、`AppState`、`MainMenuLocalizer` | `App/Views/MainWindow.swift:199` |
+| 笔记 | `Plugins/Notes/Sources`（23）、`Plugins/Notes/Views`（3）、`Core/Todo*`、`Core/Note*` | 活动栏 `.notes` | `NoteLibrary`（actor）、`NoteDatabase`、`NoteAutosave`、`NoteBodyProjection` | `Plugins/Notes/plugin.json`、`Plugins/Notes/Sources/NoteStorage/NoteAutosave.swift` |
+| 交易复盘 | `Plugins/Retro/plugin.json`、`App/Views/RetroHostView.swift`、外部包 `DoyahRetroUI` | 活动栏 `.retro` | `RetroHostView` | `Package.swift`（路径依赖）、`App/Views/MainWindow.swift:207` |
 
-## 2.4 技术栈与工程结构
+五条线在运行时共享一个 `AppState` 与一份许可判据（`LicensePresentation.activityItems` 决定活动栏上有哪几项，未授权的区**不出现**而不是灰掉）。跨线的数据通道被刻意收窄：笔记侧入口只收标题 / 正文 / SQL / 连接名，行数据必须显式 `withRowData()` 才能进笔记，且开关全仓只有一处能打开——`Scripts/check-plugin-assembly.py` 的 `FR-STD-ALL-PLUG-003` 判据守着这条。
 
-| 面 | 决定 | 约束 |
-|---|---|---|
-| 语言与运行时 | 各平台原生栈（见第九章），共享逻辑以跨端可编译的形式维护 | 不允许把某一端的私有 API 引入共享层 |
-| 构建 | 脚本化构建 + 一条统一入口（`STD-ALL-BLD`） | 构建产物可复现：同一 commit 两次构建内容一致 |
-| 测试 | 领域层单测 + 契约级回归 | 契约章每条至少一条自动判据，人工只验观感 |
-| 依赖 | 锁定版本，一次只升一个 | 升级须复跑迁移与回归 |
+## 2.4 运行时拓扑
+
+单进程、多模块常驻。五个 SwiftPM 目标加一个外部视图包：
+
+**表 2-5 进程内的模块装配**
+
+| 目标 | 形态 | 内容 | 依据 |
+|---|---|---|---|
+| `DoyahCore` | library | `Core` + `Plugins/Notes/Sources` | `Package.swift` |
+| `DoyahPlatform` | library | `Platform/macOS` | 同左 |
+| `DoyahStudioApp` | executable | `App` + `Plugins/Notes/Views` | 同左 |
+| `DoyahCLI` | executable | `CLI` | 同左 |
+| `doyah-license-tool` | executable | `Tools/LicenseTool`（签发侧，不进 `.app`） | 同左 |
+| `DoyahRetroUI` | 路径依赖 | `/Users/alex/dev/doyah/lead/retro/platform/macos` | 同左 |
+
+三条事实：
+
+- **全仓无 IPC**。`NSXPC`、`xpc_`、`import XPC` 在 `Core`/`App`/`CLI`/`Plugins` 的实测命中为 0；`Scripts/check-plugin-assembly.py` 的第一条判据就是「全仓无 IPC」。
+- **插件是清单 + 注册表 + 挂点**，不是可卸载动态包。清单 `Plugins/Notes/plugin.json` 与 `Plugins/Retro/plugin.json` 声明 `id`、`version`、`apiVersion`、`entryTarget`、`contributions`、`storage`：笔记的 `entryTarget` 是 `DoyahStudio`（编进宿主模块），复盘的 `entryTarget` 是 `DoyahRetroUI`（外部包）。加载不到时返回 `PluginRegistry.empty`——「插件不在就是不在，不是错误」；能加载但降级的要写进 `PluginRegistry.Degraded` 并落诊断行。
+- **不设独立进程的三条理由**，逐条有代码依据：① 取消必须定向——`ExecutionHandle` 与 `ExecutionRegistry` 的裁决（`cancelActive` / `markOnly` / `alreadyFinished`）建立在「同一连接上一次只有一条在跑」这个进程内事实上；② 结果直通——`DatabaseService.execute` 返回 `AsyncThrowingStream<QueryEvent, Error>`，`QueryResult.rows` 是 `[[String?]]`，跨进程要把整个结果集序列化；③ 失败面——插件与宿主同模块编译，清单缺失只是空注册表，不引入第二个可失败边界。
+
+**产物与装配文件是两套，分工写死。** 发布链走 `Scripts/build-app.sh`：不依赖 Xcode GUI，用 SwiftPM 编 App 源码后组装成 `.app` 并做 ad-hoc 签名，产物落在 `dist/DoyahStudio-<发布标签>.app`，`dist/DoyahStudio.app` 只是指向最新一份的软链（身份以带版本号的实物为准）。`project.yml` 生成的 `.xcodeproj` 是**给人用 IDE 打开的入口，不参与发布链**；它与 `Package.swift` 的差异（目标集合 5 个 vs 9 个、未声明 `MySQLNIO`/`CSQLite3`/`Crypto`）已登记为已知边界。生成物不许手改、也不许过期，由 `Scripts/check-release-version.py` 判住版本号「一个值、三处逐字一致」。
+
+**表 2-6 产物与装配文件**
+
+| 文件 | 角色 | 是否发布链 | 依据 |
+|---|---|---|---|
+| `Package.swift` | 唯一的依赖与目标声明；Core 的依赖只有四个 vendor 包 | 是 | `Package.swift` |
+| `Scripts/build-app.sh` | 编 App、组 `.app`、ad-hoc 签名、沙箱为显式开关 | 是 | `Scripts/build-app.sh` |
+| `project.yml` → `DoyahStudio.xcodeproj` | 给人用 IDE 打开的入口 | 否 | `project.yml` |
+| `dist/` | 带版本号的实物 + 最新一份的软链 | 是 | `dist/DoyahStudio.app` |
+
+## 2.5 并发与线程模型
+
+Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`actor` 18 个、`@unchecked Sendable` 11 个、`Sendable` 出现 735 处、`nonisolated` 26 处。
+
+**表 2-7 四个隔离域**
+
+| 隔离域 | 载体 | 实际成员 | 规矩 | 依据 |
+|---|---|---|---|---|
+| 主线程 | `@MainActor` | `AppState`、`AgentChatModel`、`WorkspaceTabsModel`、`QueryEditorBuffer`、`TerminalTabsModel`、`MainMenuLocalizer`；Core 侧 4 个：`AgentLoop`、`BrowserPage`、`CodeFormatting`、`ObjectTreeRefreshGate` | 只做状态与绘制 | `App/AppState.swift:230`、`Core/AgentLoop.swift` |
+| 串行 actor | `actor` | `PostgresService`、`MySQLService`、`GBaseService`、`ConnectionStore`、`SavedQueryStore`、`QueryHistoryStore`、`SQLArchiveWriter`、`DataTaskStore`、`AgentScheduleStore`、`AgentConfigurationStore`、`AgentAuditLog`、`EgressLog`、`BrowserTabStore`、`CursorFetcher`、`DirectoryBookmarkStore`、`NoteLibrary`、`NoteStore`、`OutputCollector` | IO 与连接住在这里，一次一条 | 各文件声明行 |
+| 专用队列 | `DispatchQueue(label:)` | `TerminalSession`（`studio.doyah.terminal.io` / `.write` / `.reaper`）、`WorkspaceFileWatcher`（`studio.doyah.workspace-watcher`）、`WorkspacePathIndex`（`studio.doyah.workspace.path-index`，`qos: .utility`）、`MCPStdioTransport`（global） | 回调回主线程一律 `DispatchQueue.main.async` | `App/TerminalSession.swift:40`、`App/WorkspaceFileWatcher.swift:71`、`App/WorkspacePathIndex.swift:36` |
+| 带锁引用 | `@unchecked Sendable` + `NSLock`（或类型本身无可变状态） | `ExecutionRegistryBox`、`AgentWriteCoordinator`、`FileSecretStore`、`FileAgentKeyStore`、`SSHTunnelProcess`、`MySQLResultBox`、`BackupExecution.LineTail`、`MCPClientBridge`、`NotImplementedDatabaseService`、`AgentQueryExecutorBridge.Box`、`AgentChatModel.CancellationFlag` | 只在「类内部真有一把锁」或「类型本身无状态」时使用 | 各文件声明行 |
+
+跨域只传值。`QueryResult`、`ColumnMeta`、`QueryEvent`、`QuerySummary`、`WorkspaceTab`、`TabLogEntry` 都是 `Sendable` 值类型；流走 `AsyncThrowingStream<QueryEvent, Error>`；全仓 `withCheckedContinuation` / `withCheckedThrowingContinuation` 实测 0 处——不把回调桥成挂起点，需要等的地方用 `async` 本身。
+
+四条禁止项，每条都有现行写法作反例：
+
+- 不许把非 `Sendable` 引用塞进 actor；跨域一律值或 `Sendable` 协议存在（`DatabaseService: AnyObject, Sendable`）。
+- 不许用 `@unchecked Sendable` 掩盖「其实没锁」：现有 11 处里，带锁的（`ExecutionRegistryBox`、`AgentWriteCoordinator`、`FileSecretStore`…）在类内部持 `NSLock`，无状态的（`NotImplementedDatabaseService`）本身没有可变字段，两种情况都不靠「相信编译器」。
+- 不许在主线程上等 IO：笔记自动保存用 `Task.sleep` 挂起，注释写明「敲键盘这条路上只有『取消 + 新建一个 Task』，**没有一次同步写盘**」（`App/AppState.swift:7911`）。
+- 取消不是故障：`CancellationNoise.isNoise(_:taskIsCancelled:)` 先把 `CancellationError` 与 `Task.isCancelled` 判成噪声，避免一次正常取消被显示成「SQL 执行失败」。
+
+主线程上唯一的等待形态是 `await` 一次 actor 方法，且等待前后都有可见状态：`executeQuery` 在 `ensureService` 之前把状态写成「正在连接」，拿到服务后写「正在执行」，事件到达时逐条更新。这条纪律解决的是「界面看起来卡住」而不是吞吐——真正耗时的那一段在 `PostgresService` / `MySQLService` 这两个 actor 里，主线程只是挂着等一个 `Sendable` 结果。
+
+## 2.6 启动与关闭顺序
+
+**表 2-8 冷启动与退出**
+
+| 序 | 动作 | 失败处置 | 依据 |
+|---|---|---|---|
+| 1 | 单实例判定；接管启动优先；两个探针放行 | 激活成功则自己 `exit(0)`；激活失败**继续运行**（宁可短暂多一个实例，也不让用户看不到界面） | `App/DoyahStudioApp.swift` |
+| 2 | tooltip 延迟压到 150 ms；`MainMenuLocalizer.start()` | — | 同左 |
+| 3 | `AppState.init`：建首页签、许可证 → 可见活动项、下方页签与段对齐、写一行档位 | 落到可见项，不让界面停在「选着但画不出来」 | `App/AppState.swift:1460` |
+| 4 | `startupChain`：`loadConnections` → `loadSavedQueries` → `restoreBrowserTabs` → `reloadNotes` → `loadQueryHistory` | 各自失败各自说话 | `App/AppState.swift:1482` |
+| 5 | 窗口 `.task`：工作区接线、`startWorkspaceWatching`、`loadAgentSchedules`、`startAgentScheduleTicker`、`workspaceTabs.restoreSession()`、`workspace.load()` | 快照读不动 / 源文件找不到 / 有未保存改动，三句话都说出来 | `App/Views/MainWindow.swift`、`App/WorkspaceTabsModel.swift:331` |
+| 6 | 退出：`willTerminate` → `workspaceTabs.saveSession()` | 保存失败写 `errorText`，不静默 | `App/DoyahStudioApp.swift`、`App/WorkspaceTabsModel.swift:303` |
+
+恢复语义有三处刻意的取舍。其一，快照记页签集、选中页与**选中那一页**的光标 / 滚动（只记一个位置，因为同一时刻只有一页能看见）。其二，Home 页关不掉，快照里缺它就补一个——没有它工作区就没有默认落脚点。其三，写快照的时机分两条：浏览器页签每次变化即写，工作区页签**退出时写**——后者带正文，跟着按键写等于每敲一个字写一次盘。
+
+快照的读写收在 `WorkspaceSessionStore`（Core 里的值类型，`load()` / `save(_:)` 两个方法），界面只调 `restoreSession()` 与 `saveSession()`——恢复策略与快照格式因此可以脱离界面单测。
+
+## 2.7 数据流
+
+### 2.7.1 一条 SQL 从输入到结果
+
+**表 2-9 SQL 执行路径**
+
+| 步 | 落点 | 说明 | 依据 |
+|---|---|---|---|
+| 1 | `commitEditorDraft` + `ExecutionScope.resolve(text:selection:)` | 先提交编辑器缓冲；**有选区跑选区、没选区跑整篇**，选区取显示中的编辑器而非缓存 | `App/AppState.swift:6802`、`Core/ExecutionScope.swift` |
+| 2 | `SQLParameters.hasParameters` → 参数面板 | 有占位符先取值，不在未取值时执行 | `Core/SQLParameters.swift` |
+| 3 | `ExecutionSafety.check` | `needsConfirmation` 进确认；`refused`（只读连接）直接拒，不给「仍然执行」 | `Core/ExecutionSafety.swift` |
+| 4 | `TransactionSession.prepareStatement()` | 手工模式第一条语句前懒发 BEGIN；失败事务只接受回滚 | `Core/TransactionSession.swift` |
+| 5 | `ensureService(ServiceKey(connectionID:database:))` | 服务按「连接 + 库」缓存并跨页签共享 | `App/AppState.swift` |
+| 6 | `service.execute(sql, options: .default, handle:)` | 返回 `AsyncThrowingStream<QueryEvent, Error>`；句柄取自 `executionHandles[tabID]` | `Core/DatabaseService.swift:23` |
+| 7 | `for try await event`：`started` / `resultSet` / `notice` / `finished` | 行数只由 `AffectedRowsTally.absorb` 累加一次 | `Core/QueryModels.swift:88` |
+| 8 | `QueryTab.results`、`statusMessage`（`didSet` → `TabLog`） | 有表格的结果不进 Output 日志，避免两页签重复 | `App/AppState.swift:45` |
+| 9 | `recordHistory` + `archiveExecutedSQL` | 取消记 `succeeded: false` 并带原因，不记成成功 | `App/AppState.swift:1906` |
+| 10 | `cancelQuery` → `service.cancel(handle)` → `CancelOutcome` | 四种结局都要说出来；拿不到后端 PID 也归 `failed(reason:)` | `Core/ExecutionRegistry.swift:31` |
+
+### 2.7.2 一条笔记从编辑到落盘
+
+**表 2-10 笔记写库路径**
+
+| 步 | 落点 | 说明 | 依据 |
+|---|---|---|---|
+| 1 | 编辑框三个 `didSet` → `noteEditorTextChanged` | 装内容期间不算改动 | `App/AppState.swift:7901` |
+| 2 | `noteSaveState = .pending` + `scheduleNoteAutoSave()` | 取消上一发、重开一发；`NoteAutosave.pauseWindow` = 1 500 ms | `Plugins/Notes/Sources/NoteStorage/NoteAutosave.swift` |
+| 3 | `autosaveNoteEditor` 三条守卫 | 许可 / 有内容 / 真有改动，缺一不动库 | `App/AppState.swift:7963` |
+| 4 | `noteEditorSnapshot` → `editorSpansForSave()` | 以 span 树为权威源；投影不一致时按 `NoteBodyProjection.parseInline` 从正文重投影 | 同左 |
+| 5 | `writeNoteEditor` → `NoteLibrary`（actor）→ `NoteDatabase.upsert` | 本体 + 标签 + 时间线一个事务，不拆第二次写 | `Plugins/Notes/Sources/NoteStorage/NoteLibrary.swift` |
+| 6 | 成功 `.idle`；写入期间又敲了字则 `.pending` 并重排 | 不抹掉 `await` 期间的新按键 | `App/AppState.swift:8040` |
+| 7 | 失败 `.failed(reason)`：工具条 + 状态栏各说一次 | 自动保存不弹窗，手动保存多一个可复制错误框 | `App/AppState.swift:8064` |
+| 8 | 切走：`flushNoteAutosave()` 先快照再排队 | 不等写完——手势回调里等写盘等于卡交互 | `App/AppState.swift:7986` |
+
+两条路径的形状是同一个：**动作先被纯函数判一次，再交给能力层，结果以值的形式回到 `@MainActor` 的模型里，最后从模型派生出可见状态**。SQL 那次判在 `ExecutionSafety` / `ExecutionScope`，笔记那次判在 `NoteAutosave` 的三条守卫与 `editorSpansForSave` 的投影一致性；两次回传都是值（`QueryEvent` / `NoteSaveState`），没有一处把连接、文件句柄或事务对象交给界面层持有。
+
+## 2.8 需要补的事实
+
+1. `Core` 的领域层与能力层没有物理目录边界，是否拆成 `Core/Domain`、`Core/Capability` 并加一条门禁，待定。
+2. 语言 / 主题切换走 `.id("\(language)-\(theme)")` 整树重建，现有读数只有「5 000 行文档每键 31.74 ms」这类局部测量；整树重建一次的全量耗时没有独立测量。
+3. 复盘产品线的视图在外部包 `DoyahRetroUI`，本仓只有装配面；它的并发模型与错误分级不在本仓可测范围。
+4. `Platform/windows`（147 个 `.ts`/`.tsx`）与 `Platform/linux`（8 个 `.rs`）的分层与模块划分本章未覆盖；是否另立一节写跨端同构，待定。
+5. 笔记自动保存在 `kill -9` 下的最坏丢失量等于「最后一次落盘之后的编辑量」，没有定量数据。
 
 # 第三章 契约层（跨端不变量）
 
@@ -1384,92 +1528,446 @@
 
 # 第五章 数据结构设计
 
+> 阅读约定：本章与下一章「依据」列里的路径按仓库实际布局书写，路径片段本身不表示某节只适用于某一端；凡写「待定」的条目，是代码中确实不存在的事实，不是留白。
+
+本产品的数据分三类载体：**一个 SQLite 库**（笔记 / 待办 / 提醒 / 查询历史）、**应用数据目录下的 JSON 与 JSONL 文件**（连接档、智能体配置、会话、记忆、审计与外发留痕）、**系统凭据存储**（口令与令牌）。三类载体的分工是硬的：凡需事务与联表查询的进库，凡「一行一条、只追加」的进 JSONL，凡秘密只进凭据存储且类型层面不留配置文件字段。
+
+本章所有表名、列名、键名、文件名均取自代码；代码里没有的事实一律写「待定」，并在 5.7 汇总。
+
 ## 5.1 逻辑结构
 
-| 实体 | 关键字段 | 归属 |
-|---|---|---|
-| 连接配置 | 标识、类型、地址、凭据引用、选项 | `STD-DB-CONN` |
-| 会话（页签） | 标识、连接引用、库、语句与结果引用、打开顺序 | `STD-DB-SESS`、`STD-WS-NAV` |
-| 执行记录 | 语句、开始与结束时刻、行数、状态、错误摘要 | `STD-DB-EXEC` |
-| 元数据缓存 | 库 / 表 / 列 / 索引、抓取时刻、失效标记 | `STD-DB-META` |
-| 笔记 | 标识、标题、正文（权威格式）、创建与更新时刻 | `NTS-NOTE-FORMAT` |
-| 笔记组织 | 标签、归档、置顶、回收站标记、版本快照 | `NTS-NOTE-ORG`、`NTS-NOTE-TRASH`、`NTS-NOTE-VERSION` |
-| 待办 | 标识、清单、状态、截止与日历映射、链接对象 | `NTS-TODO-*` |
-| 复盘记录 | 标的、方向、开平时刻、价格、数量、费用 | `RTR-REV-TRADE` |
-| 行情与基金 | 代码、日期、开高低收量、净值、健康度 | `RTR-MKT-*` |
-| 研究产物 | 特征、画像、样本、场景、回测结果、报告 | `RTR-RSR-*` |
-| 智能体会话 | 会话标识、消息序列、工具调用记录、上下文快照 | `AGT-CORE-SESS`、`AGT-KNOW-CTX` |
+### 5.1.1 实体清单
+
+| 实体 | 载体 | 主键 / 身份 | 归属维度 | 生命周期 | 依据 |
+| --- | --- | --- | --- | --- | --- |
+| `ConnectionConfig` | `connections.json` | `id`（UUID） | 全局 | 用户增删改 | `Core/ConnectionConfig.swift` |
+| `SSHTunnelConfig` | 内嵌于 `ConnectionConfig` | 随宿主 | 随宿主 | 随宿主 | `Core/SSHTunnel.swift` |
+| `Note` | `notes.sqlite3` / `note` | `id`（UUID，列 `uuid`，UNIQUE） | `notebook_uid` | 墓碑（`deleted_at`），不物理删 | `Plugins/Notes/Sources/Note.swift`、`NoteStorage/NoteDatabase.swift` |
+| `Shelf` / `Notebook` | `shelf` / `notebook` | `uid`（TEXT，UNIQUE） | `notebook.shelf_uid` | 删除有处置策略 | `NoteStorage/NoteDatabase.swift` |
+| `NoteAttachment` | `note_attachment` | `id`（UUID，列 `uuid`） | `note_id` | 随笔记级联删 | 同上 |
+| `NoteTimelineEntry` | `note_timeline` | 自增 `id` | `note_id` | 只增不改 | 同上 |
+| `Todo` | `todo` | `id`（UUID，列 `uuid`） | 无（清单即事实源） | 物理删 | `Core/Todo.swift` |
+| `Reminder` | `reminder` | `id`（UUID，列 `uuid`） | `note_id` 或 `todo_id`（恰一非空） | 随归属级联删 | `Core/Reminder.swift` |
+| `QueryHistory` | `query_history` | `id`（UUID，列 `id` TEXT） | `connection_id` | 500 条 / 90 天裁剪 | `Core/QueryHistoryStore.swift` |
+| `AgentConfiguration` / `AgentProfile` | `agent.json` | `profiles[].id` | 全局 | 用户改 | `Core/AgentConfiguration.swift` |
+| `AgentSessionHeader` / `AgentSessionTurn` | `agent-sessions/<id>.jsonl` | `id`（会话）/ 行序 | `workspace` | 一会话一文件 | `Core/AgentSession.swift` |
+| `AgentMemoryEntry` | `agent-memory/<ws>.jsonl` | `id` | `workspace` + `connection` | 上限挤出 | `Core/AgentMemory.swift` |
+| `AgentCheckpoint` | `agent-checkpoints.jsonl` | `sessionID` + `stepIndex` | `sessionID` | 追加，取最后可用 | `Core/AgentCheckpoint.swift` |
+| `AgentScheduleEntry` / `AgentScheduleRunRecord` | `agent-schedules.json` / `agent-schedule-runs.jsonl` | `id` / `entryID` | 全局 / 条目 | 删条目连带删历史 | `Core/AgentScheduleStore.swift` |
+| `AgentActionRecord` | `agent-audit.jsonl` | `id` | 全局（含 `sessionID`/`chainID`） | 手动清空 | `Core/AgentAudit.swift` |
+| `EgressEntry` | `egress-log.jsonl` | `id` | 全局（含 `tabID`） | 可查看/导出/清空 | `Core/EgressLog.swift` |
+| `MCPClientServerConfig` | `mcp-servers.json` | `name`（配置内唯一） | 全局 | 用户改 | `Core/MCPClientConfiguration.swift` |
+| `MCPApprovalRequest` / `MCPApprovalDecision` | `mcp-approvals/pending.jsonl`、`decisions.jsonl` | `id` / `requestID` | 全局 | 追加 | `Core/MCPApprovalQueue.swift` |
+| `WorkspaceHistoryEntry` | `workspace-history.json` | `id == path` | 全局 | 最近打开 | `Core/WorkspaceHistory.swift` |
+| `SavedQuery` | `saved-queries.json` | `id` | `connectionID`（可空） | 用户增删 | `Core/SavedQueryStore.swift` |
+| `SQLArchiveEntry` | `<归档根>/queries/YYYY-MM-DD.sql` | `(规范化 SQL, 连接, 库)` | 按天 | 长期保留 | `Core/SQLArchive.swift`、`Core/ArchiveLocation.swift` |
+
+### 5.1.2 连接与隧道
+
+| 字段 | 类型 | 约束 | 依据 |
+| --- | --- | --- | --- |
+| `id` | `UUID` | 必填，主键 | `Core/ConnectionConfig.swift` |
+| `name` | `String` | 去空白后非空（`isValid`） | 同上 |
+| `dbType` | `DatabaseType` | `postgresql` / `mysql` / `gbase8a`；缺省 `postgresql` | `Core/DatabaseType.swift` |
+| `host` | `String` | 去空白后非空 | `Core/ConnectionConfig.swift` |
+| `port` | `Int` | `1...65535`；缺省取 `dbType.defaultPort` | 同上 |
+| `database` | `String` | 可空串 | 同上 |
+| `username` | `String` | 去空白后非空 | 同上 |
+| `sslMode` | `SSLMode` | 缺省取 `dbType.defaultSSLMode` | 同上 |
+| `timeout` | `Int` | `> 0`，缺省 `5` | 同上 |
+| `schemaVersion` | `Int` | 当前 `1`；缺键解码为 `0` | 同上、`ConnectionConfigMigration.swift` |
+| `environment` | `ConnectionEnvironment?` | `nil` = 未标注，不塞默认值 | 同上 |
+| `colorTag` | `CategoricalTone?` | 语义色优先 | 同上 |
+| `isReadOnly` | `Bool` | 缺省 `false`；客户端拒执行写语句 | 同上 |
+| `startupSQL` | `String?` | 连接后逐条执行，空串与纯注释不计 | 同上 |
+| `group` | `String?` | 去空白后为空视为未分组 | 同上 |
+| `sshTunnel` | `SSHTunnelConfig?` | `nil` = 直连 | `Core/SSHTunnel.swift` |
+
+`SSHTunnelConfig`：`isEnabled`、`host`、`port`（缺省 22）、`username`、`authentication`（`password` / `privateKey(path:isEncrypted:)` / `agent`）、`hostKeyPolicy`（`acceptNew` / `strict`）、`connectTimeoutSeconds`（缺省 15）。口令与私钥口令**不在本结构内**，见 5.2.3。
+
+### 5.1.3 笔记、待办、提醒、历史
+
+| 实体 | 字段 | 说明 | 依据 |
+| --- | --- | --- | --- |
+| `Note` | `id` `title` `body` `tags` `source` `createdAt` `updatedAt` `containsRowData` `isFavorite` `isPinned` | 模型层不含 `spans`；正文权威源经 `setNoteSpans(_:body:id:)` / `noteSpans(id:)` 单独读写 | `Plugins/Notes/Sources/Note.swift` |
+| `NoteSource` | `kind` `connectionName` `fingerprint` `capturedAt` | `kind` 认不出即抛 `unknownSourceKind` | 同上 |
+| `Todo` | `id` `title` `note` `dueAt` `done` `completedAt` `priority` `tags` `createdAt` `updatedAt` | `done` 与 `dueAt` 互不覆盖；`priority` 认不出归 `.normal` | `Core/Todo.swift` |
+| `ReminderSpec` | `rule` `anchorDate` `minuteOfDay` `intervalCount` `intervalUnit` `weekdays` `untilDate` | `weekdays` 存归一文本（`1,3,5`） | `Core/Reminder.swift` |
+| `QueryHistory` | `id` `connectionID` `sql` `executedAt` `duration` `succeeded` | 按 `id` 覆盖写 | `Core/ConnectionConfig.swift`、`QueryHistoryStore.swift` |
+
+三条跨字段口径必须写在这里，否则实现会各按各的理解落库：
+
+- **完成态与截止时间互不覆盖**：`done` 只由 `setDone` 改，`dueAt` 原值保留，重开后「逾期」仍按原截止时间判（`Core/Todo.swift`）。
+- **组织类操作不刷新更新时间**：收藏、置顶、跨笔记本移动只改自己那一列，不碰 `updated_at`（`NoteDatabase.setFavorite` / `setPinned` / `move(noteIDs:toNotebook:)`）。
+- **清单是唯一事实源**：待办没有「日历任务」这类第二份数据，日历侧是本类型的投影（`Core/Todo.swift` 文件头第三条）。
+
+### 5.1.4 智能体域
+
+| 实体 | 关键字段 | 约束 | 依据 |
+| --- | --- | --- | --- |
+| `AgentProfile` | `id` `name` `presetID` `endpoint` `model` `timeoutSeconds` `secretKey` `pricing` | `secretKey` 只存凭据条目键名，不存密钥 | `Core/AgentConfiguration.swift` |
+| `AgentConfiguration` | `isEnabled` `profiles` `activeProfileID` `scopeMode` `quota` `guardPolicy` | 无 `apiKey` 字段（类型层面不留） | 同上 |
+| `AgentSessionTurn` | `kind` `role` `text` `at` `toolName` `toolCallID` `approval` | 不承载结果集行数据 | `Core/AgentSession.swift` |
+| `AgentMemoryEntry` | `id` `workspace` `connection` `kind` `note` `fingerprint` `firstSeenAt` `lastUsedAt` `useCount` | 键白名单 `keyWhitelist`；条数与字数有上限 | `Core/AgentMemory.swift` |
+| `AgentCheckpoint` | `sessionID` `stepIndex` `completedSteps` `pendingMessagesDigest` `at` | 键白名单；只存摘要不存结果 | `Core/AgentCheckpoint.swift` |
+| `AgentScheduleEntry` | `id` `target{kind,title,prompt,workspace}` `schedule` `isEnabled` `createdAt` `updatedAt` | `updatedAt` 由 store 统一改写 | `Core/AgentSchedule.swift`、`AgentScheduleStore.swift` |
+| `AgentScheduleRunRecord` | `id` `entryID` `plannedAt` `startedAt` `finishedAt` `status` `executedActions` `withheldActions` `detail` | `failed` 无 `detail` ⇒ 抛错且不落盘 | 同上 |
+| `AgentActionRecord` | `id` `timestamp` `connectionName` `database` `model` `sql` `statementKind` `risk` `findings` `outcome` `origin` `durationMilliseconds` `endpoint` `promptTokens` `completionTokens` `totalTokens` `sessionID` `hopIndex` `chainID` | `origin` 缺字段按 `action` | `Core/AgentAudit.swift` |
+
+### 5.1.5 工作台域
+
+| 实体 | 字段 | 约束 | 依据 |
+| --- | --- | --- | --- |
+| `WorkspaceHistoryEntry` | `path`（即 `id`）+ 显示名 | 两个数组：`files` / `workspaces` | `Core/WorkspaceHistory.swift` |
+| `SavedQuery` | `id` `name` `connectionID` `database` `sql` `savedAt` | `connectionID` / `database` 可空 | `Core/SavedQueryStore.swift` |
+| `SQLArchiveEntry` | `sql` `firstExecutedAt` `lastExecutedAt` `runCount` `connection` `database` `durationSeconds` `affectedRows` `succeeded` `note` | 时间截到整秒；说明字段转义换行 | `Core/SQLArchive.swift` |
+| `MCPClientServerConfig` | `name` `transport` `command` `args` `env` `url` `headers` `enabled` `timeoutSeconds` `tools` | 缺项用默认值，不整条失败 | `Core/MCPClientConfiguration.swift` |
+| `EgressEntry` | `id` `timestamp` `kind` `target` `origin` `outcome` `detail` `tabID` `tabTitle` | `target` 去 query/fragment；`detail` 不含密钥 | `Core/EgressLog.swift` |
 
 ## 5.2 物理结构
 
-- 主键为客户端生成的字符串标识，离线可写、跨端不撞号。
-- 时间字段一律毫秒时间戳，`updated_at ≥ created_at` 恒成立。
-- 凭据**不落明文**：配置只存引用，明文进系统凭据存储（`FR-STD-DB-CONN-002` 系列）。
-- 正文、消息序列、研究产物这类大字段以文档形式存储，**不拆表**：拆表会把「一次写入一个完整对象」变成多条语句，事务边界随之复杂化。
-- 索引随写更新，不设「空闲重建」；索引与主数据同事务提交，避免出现「能搜到但打不开」。
+### 5.2.1 SQLite 库
 
-## 5.3 迁移
+库文件 `notes.sqlite3`，位于「应用数据根 / `DoyahNotes`」，可用环境变量 `DOYAH_NOTES_DIR` 整体覆盖（`Plugins/Notes/Sources/Note.swift`）。连接参数三条：`journal_mode = WAL`、`foreign_keys = ON`、`synchronous = NORMAL`；打开即幂等升到最新版（`NoteStorage/NoteDatabase.swift`）。
 
-迁移是单向链：每级一个分支、一个回滚点、一个版本号；整批在事务内，失败整批回滚（`NFR-ALL-GATE-REL-002`）。
+| 表 / 虚拟表 | 引入版本 | 列与关键约束 | 索引 / 触发器 | 依据 |
+| --- | --- | --- | --- | --- |
+| `note` | v1 | `id INTEGER PRIMARY KEY`、`uuid TEXT NOT NULL UNIQUE`、`title`、`body DEFAULT ''`、`source_kind`、`source_connection_name`、`source_fingerprint`、`source_captured_at REAL`、`created_at REAL`、`updated_at REAL`、`contains_row_data`（0/1 CHECK）、`storage_version`；v2 加 `notebook_uid TEXT`（无外键）；v3 加 `favorite`、v4 加 `pinned`（均 `NOT NULL DEFAULT 0` + CHECK）；v8 加 `spans TEXT`；v10 加 `deleted_at REAL` | `note_updated_at_index(updated_at DESC)`、`note_source_kind_index`、`note_notebook_index` | 同上 |
+| `note_tag` | v1 | `note_id REFERENCES note(id) ON DELETE CASCADE`、`tag`，`PRIMARY KEY (note_id, tag)` | `note_tag_tag_index(tag)` | 同上 |
+| `note_timeline` | v1 | `id`、`note_id` 级联、`at REAL`、`kind`、`detail` | `note_timeline_note_index(note_id, at)` | 同上 |
+| `note_attachment` | v1 | `id`、`uuid UNIQUE`、`note_id` 级联、`path`、`byte_count`、`added_at` | `note_attachment_note_index(note_id)` | 同上 |
+| `note_fts` | v1 | FTS5 外部内容表：`content='note'`、`content_rowid='id'`、`tokenize='trigram'` | 三个触发器 `note_fts_after_insert/delete/update` | 同上 |
+| `shelf` | v2 | `id`、`uid UNIQUE`、`name`、`sort_order`、`created_at`、`is_default` CHECK | — | 同上 |
+| `notebook` | v2 | `id`、`uid UNIQUE`、`shelf_uid REFERENCES shelf(uid) ON DELETE CASCADE`、`name`、`sort_order`、`created_at`、`is_default` CHECK | `notebook_shelf_index(shelf_uid, sort_order)` | 同上 |
+| `todo` | v5 | `id`、`uuid UNIQUE`、`title DEFAULT ''`、`due_at REAL`、`done`（0/1 CHECK）、`completed_at REAL`、`priority DEFAULT 'normal'`（无 CHECK）、`created_at`、`updated_at`；v9 加 `note TEXT NOT NULL DEFAULT ''` | — | 同上 |
+| `todo_tag` | v5 | `todo_id` 级联、`tag`，`PRIMARY KEY (todo_id, tag)` | `todo_tag_tag_index(tag)` | 同上 |
+| `reminder` | v6 | `id`、`uuid UNIQUE`、`note_id` / `todo_id` 双可空且均级联、`rule`、`anchor_date`、`minute_of_day DEFAULT -1`、`interval_count`、`interval_unit`、`weekdays`、`until_date`、`created_at`、`updated_at`、`CHECK ((note_id IS NULL) <> (todo_id IS NULL))` | `reminder_note_index`、`reminder_todo_index` | 同上 |
+| `query_history` | v7 | `id TEXT PRIMARY KEY`、`connection_id TEXT`、`sql TEXT`、`executed_at REAL`、`duration REAL`、`succeeded`（0/1 CHECK） | 不建索引（上限即规模） | 同上 |
 
-规矩：① 迁移只前进不后退；② 迁移前自动备份，备份可被导入路径消费（`FR-STD-DB-DATA-001` 系列）；③ 迁移脚本幂等，重复执行不产生副作用；④ 新版本读旧数据，旧版本读新数据必须报「版本过新」而不是崩溃。
+时间列一律存 `REAL`（`timeIntervalSince1970`），不存 ISO8601 字符串；`NULL` 与空串不作同义处理（`source_connection_name` 为 NULL 表示「没有来源」）。
+
+三条与并发和一致性有关的物理事实：
+
+- **一次写成一个事务**：笔记的本体 + 标签 + 时间线在一个事务里落库，任务的标签与本体同理；删容器时「改挂笔记」与「删容器」也在同一事务，避免留下「笔记还挂着一个已不存在的笔记本」的中间态。
+- **不读 `last_insert_rowid()`**：写入后按 `uuid` 反查 `rowid`。走更新分支时那个值可能是上一句留下的，会静默指向另一条记录且没有任何症状。
+- **绑定变量分块**：`uuid IN (…)` 的占位符按 500 个一块切开，不假定用户数据量小；分块大小是这一层唯一的常量。
+
+### 5.2.2 文件与目录布局
+
+应用数据根 = `~/Library/Application Support/DoyahStudio`（`DoyahIdentity.applicationSupportDirectoryName`）；笔记数据家与之**平级**，为 `~/Library/Application Support/DoyahNotes`。
+
+| 路径（相对数据根） | 形态 | 写入方式 | 依据 |
+| --- | --- | --- | --- |
+| `connections.json` | JSON 数组 | 全量重写，`prettyPrinted` + `sortedKeys`，atomic | `Core/ConnectionStore.swift` |
+| `agent.json` | JSON 对象 | 全量重写，atomic | `Core/AgentConfigurationStore.swift` |
+| `agent-schedules.json` | JSON 数组 | 全量重写，atomic | `Core/AgentScheduleStore.swift` |
+| `agent-schedule-runs.jsonl` | JSONL | 追加；终态收尾重写整份 | 同上 |
+| `agent-sessions/<id>.jsonl` | JSONL（首行 header） | 首行建会话，其余追加 | `Core/AgentSession.swift` |
+| `agent-memory/<ws>.jsonl` | JSONL（首行 header） | 删除/挤出走「重读→改→原子整写」 | `Core/AgentMemory.swift` |
+| `agent-memory/<ws>.index.json` | JSON | 派生缓存，可重建 | 同上 |
+| `agent-checkpoints.jsonl` | JSONL | 追加；坏行跳过并计数 | `Core/AgentCheckpoint.swift` |
+| `agent-audit.jsonl` | JSONL | 追加；可导出 JSON / CSV、可清空 | `Core/AgentAudit.swift` |
+| `egress-log.jsonl` | JSONL | 追加；目录可用 `DOYAH_EGRESS_LOG_DIR` 覆盖 | `Core/EgressLog.swift` |
+| `workspace-history.json` | JSON | 原子写 | `Core/WorkspaceHistoryStore.swift` |
+| `saved-queries.json` | JSON 数组 | 原子写 | `Core/SavedQueryStore.swift` |
+| `mcp-servers.json` | JSON | 原子写 | `Core/MCPClientConfiguration.swift` |
+| `mcp-approvals/pending.jsonl`、`decisions.jsonl` | JSONL | 追加 | `Core/MCPApprovalQueue.swift` |
+| `browser-tabs.json` | JSON | 原子写（目录可覆盖） | `Core/BrowserTabStore.swift` |
+| `DoyahNotes/notes.sqlite3` (+ `-wal` / `-shm`) | SQLite | WAL | `NoteStorage/NoteDatabase.swift` |
+| `DoyahNotes/notes.sqlite3.incoming` | SQLite | 迁移中间件，建完才换名 | `NoteStorage/NoteLibraryMigration.swift` |
+| `DoyahNotes/notes.json.migrated` | JSON | 老格式搬完后的备份（同名顺延 `-2`） | 同上 |
+| `.secrets/credentials.json` | JSON（`{version, entries}`） | 原子写，权限 0600，**每个可写候选都写一份** | `Core/LocalSecretStore.swift` |
+| `<归档根>/queries/YYYY-MM-DD.sql` | 文本 SQL | 按天一个文件，可读可执行 | `Core/SQLArchive.swift`、`ArchiveLocation.swift` |
+
+### 5.2.3 键值格式
+
+| 键空间 | 键 | 值形态 | 依据 |
+| --- | --- | --- | --- |
+| 凭据文件 `entries` | `connectionID.uuidString` | `{salt, data}`，均为 Base64；`data` = 口令 XOR `MD5(盐‖键‖计数器)` 流 | `Core/LocalSecretStore.swift` |
+| 凭据文件 `entries` | `SSHTunnelSecrets.secretKey(for:)`（UUID 高 8 字节与固定 16 字节盐 XOR） | 同上 | `Core/SSHTunnelSecrets.swift` |
+| 凭据文件 `entries` | `agent.api-key`（`FileAgentKeyStore.defaultEntryKey`）或 `AgentProfile.secretKey` | 同上 | `LocalSecretStore.swift`、`AgentConfiguration.swift` |
+| 系统钥匙串 | `kSecClassGenericPassword`，`service = DoyahIdentity.keychainServiceName`，`account = connectionID.uuidString` | 口令原文 | `Platform/macOS/KeychainSecretStore.swift` |
+| 系统钥匙串 | 同上，`account` = 固定条目名（智能体会话 / 云同步令牌） | JSON 会话或密钥 | `Platform/macOS/KeychainAgentKeyStore.swift`、`Plugins/Notes/Sources/NoteSync/CloudAuth.swift` |
+| JSONL 行 | 无键，一行一个 JSON 对象 | 行内键即实体字段 | 各 `*Store.swift` |
+| 归档文件名 | `yyyy-MM-dd.sql`；首行 `-- Doyah Studio 查询归档` 为「是不是归档」的判据 | 条目以 `-- ===== 条目开始/结束 =====` 包裹 | `Core/SQLArchive.swift` |
+
+`LocalSecretsLocation.candidateDirectories` 的解析顺序：`DOYAH_SECRETS_DIR` → 工程根 `.secrets` → 应用数据根 `.secrets`；读时先命中先用，写时每个可写候选都写，读不到与解不开分两类处置。
+
+### 5.2.4 主键与唯一性
+
+| 约束 | 落点 | 违反时的行为 | 依据 |
+| --- | --- | --- | --- |
+| `note.uuid` UNIQUE | `upsert(_ note:)` 的 `ON CONFLICT (uuid) DO UPDATE` | 覆盖而非新增 | `NoteDatabase.swift` |
+| `note_tag` 复合主键 | 标签全量替换（先 `DELETE` 后插） | 天然去重 | 同上 |
+| `notebook.uid` UNIQUE + `shelf_uid` 外键 | 新建 / 挪架 | 指向不存在的架由外键拦下 | 同上 |
+| `reminder` 归属 CHECK | `upsert(_ reminder:)` | 两列同空或同非空即写入失败 | 同上 |
+| `query_history.id` 主键 | `upsertQueryHistory` | 同 id 再写 = 刷新 | 同上 |
+| `ConnectionConfig.id` | 内存 + 全量落盘 | 数组内无唯一约束：重复 id 会共存，去重由上层负责（JSON 文件没有库级约束可依） | `ConnectionStore.swift` |
+| `MCPClientServerConfig.name` | 配置校验 | 重名记 `duplicateName`，该条不启动 | `MCPClientConfiguration.swift` |
+
+### 5.2.5 索引清单
+
+| 索引 | 表 | 列 | 服务的查询 | 依据 |
+| --- | --- | --- | --- | --- |
+| `note_updated_at_index` | `note` | `updated_at DESC` | 列表排序 | `NoteDatabase.swift` |
+| `note_source_kind_index` | `note` | `source_kind` | 按来源筛 | 同上 |
+| `note_notebook_index` | `note` | `notebook_uid` | 按笔记本过滤 | 同上 |
+| `note_tag_tag_index` | `note_tag` | `tag` | 标签检索 | 同上 |
+| `note_timeline_note_index` | `note_timeline` | `(note_id, at)` | 时间线正序 | 同上 |
+| `note_attachment_note_index` | `note_attachment` | `note_id` | 附件列表 | 同上 |
+| `notebook_shelf_index` | `notebook` | `(shelf_uid, sort_order)` | 架内排序 | 同上 |
+| `todo_tag_tag_index` | `todo_tag` | `tag` | 标签检索 | 同上 |
+| `reminder_note_index` / `reminder_todo_index` | `reminder` | `note_id` / `todo_id` | 查某归属的提醒 | 同上 |
+
+刻意不建索引的：`query_history`（上限 500 行）、`todo`（按截止时间排在当前规模不成立）、`favorite` / `pinned`（与笔记同量级）。
+
+## 5.3 迁移与版本链
+
+| 链路 | 版本标识 | 机制 | 幂等保证 | 回滚点 / 失败处置 | 依据 |
+| --- | --- | --- | --- | --- | --- |
+| 连接配置 v0 → v1 | 字段 `schemaVersion` | 缺键解码为 `0`，迁移器补齐端口与超时并置 `1`；只做「能确定」的正常化，不动主机/账号/库名 | 已是当前版原样返回 | 发现更高版本 ⇒ **不迁移、不写回**，原样保留并计入 `skippedNewerVersions`；写回只在「发生迁移且未跳过更新版本」时进行 | `ConnectionConfigMigration.swift`、`ConnectionStore.swift` |
+| 笔记库 v1 → v10 | `PRAGMA user_version` | 逐版执行 `NoteSchemaV1…V10.ddl`，每版后写 `user_version`，整段在**一个事务**内 | 已是最新版直接返回，一个字节不动 | 事务回滚即整段不生效；库版本高于代码 ⇒ 抛 `unsupportedSchemaVersion` 并**拒绝任何写入** | `NoteStorage/NoteDatabase.swift` |
+| `notes.json` → `notes.sqlite3` | 文件名不同即判据 | 在 `.incoming` 建完整库（schema + 全部笔记 + 读回核对）后 `moveItem` 换名；旧文件改名 `notes.json.migrated` | 目标库已存在 ⇒ `skippedTargetExists`，不动 | 旧文件读不出 ⇒ `legacyUnreadable` 原地保留；建库失败 ⇒ `writeFailed`，目标位置不残留 | `NoteStorage/NoteLibraryMigration.swift` |
+| 正文 v1 → v2（`body` → `spans`） | 列 `spans` 是否 NULL | `setNoteSpans` 为唯一写入口；迁移按 `spans IS NULL` 取行，`uuid` 升序稳定 | `migratedSpanCount` 可复算 | 单独出包执行；迁移不动 `body` 一个字节 | `NoteDatabase.swift`（`legacyBodyRows`） |
+| 文件格式演进 | 无版本号 | 只增可选字段，缺键解码为默认值；**不因可选字段抬高版本号** | 反复读写不变形 | 破坏性变更才升版本号 | `ConnectionConfigMigration.swift`、`MCPClientConfiguration.swift` |
+
+迁移的触发时机是固定的两处，不做后台轮询：连接档在 `loadWithReport` 时迁；笔记库在每次打开（`NoteDatabase.init` → `applySchemaIfNeeded`）时迁；`notes.json` 的一次性搬运在打开笔记时同步跑一次。这样「什么时候迁」有唯一答案，不会出现两条路各迁一半。
+
+逐版迁移而不是「按最新版直接建」，是为了让存量库真的走一遍 v1 → v2 → … → v10：只在新库上跑通的路是假绿。所有 DDL 与 `user_version` 同事务提交，不会出现「表建了一半、版本已记 2」。
+
+单向纪律：库只升不降；`user_version` 高于 `supportedVersion` 时，正确处置是**换回新版程序**，不是拿旧代码改写新库。
 
 ## 5.4 索引与检索
 
-三类检索，规则各自独立但结果必须可解释：
+| 检索面 | 数据源 | 路径 | 一致性要求 | 依据 |
+| --- | --- | --- | --- | --- |
+| 笔记全文 | `note` + `note_fts` + `note_tag` | 查询串 ≥3 字符走 FTS5 `MATCH`（短语字面量，双引号翻倍），未命中或含空格退回 `LIKE` 子串扫描；标签命中在两条路里各补一次；结果按 `updated_at DESC, title ASC` 重排 | 返回值必须带 `SearchResult.Route`（`fullText` / `substring`），界面据此说明「按子串匹配找到」；`note_fts` 与 `note` 由触发器同步 | `NoteDatabase.swift` |
+| 笔记列表 | `note` | `deleted_at IS NULL` 过滤集中在 `materialize` 一处 | 墓碑行不进列表、不进检索、不进计数 | 同上 |
+| 待办 | `todo` + `todo_tag` | 稳定序 `created_at ASC, uuid ASC`；标签批量 `IN` 取，避免 N+1 | 排序口径属契约半，「按截止/优先级排」**待定** | 同上 |
+| 提醒 | `reminder` | 按归属 `LEFT JOIN` 出 uuid；归属行不存在即抛错不降级 | 「恰一非空」由 CHECK 保证 | 同上 |
+| 查询历史 | `query_history` | `ORDER BY executed_at DESC, rowid DESC` | 上限只在 `QueryHistoryStore.prune` 一处裁 | `QueryHistoryStore.swift` |
+| 会话列表 | `agent-sessions/*.jsonl` | 目录扫描，只读首行 header；坏文件跳过并计数 | 别的 `workspace` 的会话**看不到**（不是「空会话」） | `AgentSession.swift` |
+| 记忆 | `agent-memory/<ws>.jsonl` + `*.index.json` | 事实源为准，索引是派生缓存 | 索引坏不改变事实源；缺 header 或坏文件时拒写 | `AgentMemory.swift` |
+| 查询归档 | `<归档根>/queries/*.sql` | 逐文件 `parse`，以首行头判据区分「空归档」与「非归档」 | `render` 与 `parse` 往返相等（时间到秒） | `SQLArchive.swift` |
 
-| 检索 | 数据源 | 一致要求 |
-|---|---|---|
-| 数据库对象检索 | 元数据缓存 | 过滤条件与排序在两端一致；「搜不到」不等于「不存在」（`FR-STD-DB-META`） |
-| 笔记全文 | 笔记正文纯文本 | 命中位置与高亮片段一致（`NTS-NOTE-SEARCH`） |
-| 复盘查询 | 结构化记录 + 聚合 | 同一查询在同一数据快照上结果稳定，聚合口径见 `RTR-REV-QUERY` |
+两类检索的一致窗口不同，必须在界面上说清楚：
 
-## 5.5 人工处理过程
+- **全文索引是结构同步的**：`note_fts` 是外部内容表，增删改由三个触发器在同一事务里维护，所以「写进去立刻搜得到」成立；不存在延迟建索引的窗口。它真正的边界是分词——trigram 只覆盖 ≥3 字的连续子串，1~2 字的中文查询只能走子串兜底，因此返回值必须带上走了哪条路。
+- **记忆索引是派生缓存**：`*.index.json` 可以从事实源重建，读坏了只影响本次加速，不影响「我知道什么」；事实源本身缺首行或读不出时，写入被拒而不是覆盖。
 
-| 过程 | 谁做 | 路径 | 失败处置 |
-|---|---|---|---|
-| 首次迁移 | 用户 | 启动时自动执行，完成后提示 | 失败回滚到迁移前，旧版本仍可用 |
-| 备份 / 恢复 | 用户 | 设置 → 导出 / 导入 | 恢复失败不改动现有数据，指出异常记录 |
-| 凭据失效重填 | 用户 | 连接属性页 | 失败保持原配置，不静默清空 |
-| 定时抓取补跑 | 用户 | 复盘 → 手动补抓 | 已抓取的日期不重复写，失败日期标记可见 |
+## 5.5 保留与清理
+
+| 数据 | 上限 / 期限 | 触发者 | 是否删凭据 | 依据 |
+| --- | --- | --- | --- | --- |
+| `query_history` | 500 条**或** 90 天，先到者为准；`maxEntries <= 0` 判成清空 | `QueryHistoryStore.load` / `append` 各裁一次 | 否 | `QueryHistoryStore.swift` |
+| `AgentMemoryEntry` | 每工作区 200 条、单条 200 字（`AgentMemoryLimits.standard`）；超额按最近最少用挤出并报 `evictedIDs` | 每次 `record` | 否 | `AgentMemory.swift` |
+| `AgentScheduleRunRecord` | 无上限（删条目时连带删该条目全部历史） | `AgentScheduleStore.delete(id:)` | 否 | `AgentScheduleStore.swift` |
+| `AgentActionRecord` | 无自动过期 | 用户手动 `removeAll` | 否 | `AgentAudit.swift` |
+| `EgressEntry` | 无自动过期 | 用户查看 / 导出 / 清空 | 否 | `EgressLog.swift` |
+| `note` 墓碑 | 无清理任务；墓碑行保留以便跨端传播删除 | 无 | 否 | `NoteDatabase.swift`（`deleted_at`） |
+| 连接口令 / 隧道口令 | 随连接删除 | `AppState.deleteConnection` 同时删两个键 | **是**：主口令与派生隧道键都删，避免留下认不出的孤儿秘密 | `App/AppState.swift` |
+| 凭据文件 / 令牌 | 随显式清除 | `deletePassword` / `deleteAPIKey` / 云同步登出 | 是 | `LocalSecretStore.swift`、`CloudAuth.swift` |
+| 快照备份 | 不覆盖既有文件；文件名时间戳到秒 | 调用方指定目标 | 否 | `NoteDatabase.snapshot(to:)` |
+
+凭据不清的两种例外必须说明：删连接**必须**清；而「清空查询历史 / 清空审计」**不**触碰凭据。
+
+## 5.6 人工处理过程
+
+| 情形 | 判据 | 人工步骤 | 依据 |
+| --- | --- | --- | --- |
+| 库版本高于程序 | `user_version > supportedVersion`，抛 `unsupportedSchemaVersion` | 停止使用旧程序；换回新版；库文件原样保留 | `NoteDatabase.swift` |
+| 旧 JSON 笔记读不出 | `NoteLibraryMigration` 报 `legacyUnreadable` | 保留 `notes.json` 原件，人工检查编码与 JSON 结构后再迁 | `NoteLibraryMigration.swift` |
+| 口令文件损坏 | `FileSecretStore.read` 抛「口令文件损坏：<路径>（原因）」 | 按报出的路径逐个检查；确认无救后删除该条目并重设口令 | `LocalSecretStore.swift` |
+| 凭据写不进 | `mutate` 报「已尝试：<全部候选路径>」 | 检查候选目录权限（应为 0600 且可写），或用 `DOYAH_SECRETS_DIR` 指到可写目录 | 同上 |
+| 快照需恢复 | 备份文件自带 `user_version` 与 `integrity = ok` | 关闭应用 → 将快照文件放到笔记数据家并命名为 `notes.sqlite3` → 打开应用（打开即按需升版） | `NoteDatabase.snapshot` |
+| JSONL 出现坏行 | 读回时 `skippedLines` / `skippedFiles` 计数非零 | 按会话 / 检查点标识定位文件，人工修补或整份移走；**不要**用空文件覆盖 | `AgentSession.swift`、`AgentCheckpoint.swift` |
+| 记忆文件缺 header | `AgentMemoryStore.entries` 报 `missingHeader`，写入被拒 | 人工补首行 `{"workspace": "<ws>"}` 或整份移走 | `AgentMemory.swift` |
+
+## 5.7 需要补的事实
+
+| 编号 | 待定项 | 现状 |
+| --- | --- | --- |
+| D-01 | 待办排序口径（三档第一关键字、无截止排哪端、逾期是否影响排序） | 代码只给 `created_at ASC, uuid ASC` 的稳定序，明确标注属契约半 |
+| D-02 | `note` 墓碑的保留期与清理策略 | 无清理任务，`deleted_at` 只增 |
+| D-03 | `agent-schedule-runs.jsonl` / `agent-audit.jsonl` / `egress-log.jsonl` 的上限或轮转 | 无上限、无轮转 |
+| D-04 | 云同步待传队列是否需跨重启保留 | `SyncQueueEntry` 只在内存，代码无落盘 |
+| D-05 | 笔记附件二进制目录约定 | 库里只存 `path`，目录约定未在代码中固化 |
 
 # 第六章 接口设计
 
-## 6.1 内部接口
+接口分三层：**核心协议**（Core 声明、可替换实现）、**平台适配**（系统能力薄封装）、**外部接口**（数据库线协议、模型服务、云同步、凭据存储、MCP）。所有协议均为 `Sendable`；需要串行语义的以 actor 承担，不以锁承担。
 
-四个接口面，界面层只依赖它们；替换实现不改页面（`FR-STD-ALL-IFACE-001`~`013`）。
+## 6.1 接口总览
 
-| 接口面 | 暴露什么 | 不暴露什么 | 失败语义 |
-|---|---|---|---|
-| 数据库 | 连接、执行、取消、元数据、结果游标、DDL | SQL 方言分支、驱动句柄 | 抛出可分类错误 + 是否可重试 |
-| 存储 | 读、写、删除、列举、事务 | 文件路径、库文件格式 | 区分「不存在」「无权限」「损坏」 |
-| 模型调用 | 请求、流式增量、用量、取消 | 供应商私有字段 | 超时与限流可区分，可重试标记 |
-| 通道 | 发送、接收、确认 | 平台消息协议细节 | 未确认必须可重发且幂等 |
+| 协议 | 定义处 | 角色 | 用途 |
+| --- | --- | --- | --- |
+| `DatabaseService` | `Core/DatabaseService.swift` | 驱动 | 连接、执行、取消、事务、批量导入 |
+| `SQLDialect` | `Core/Dialects.swift` | 方言 | 标识符引用、分页、元数据查询 |
+| `ServerObjectDialect` | `Core/ServerObjects.swift` | 方言 | 对象清单查询与近似说明 |
+| `LLMClient` | `Core/LLMClient.swift` | 模型 | 一次性补全 |
+| `LLMStreamingClient` | `Core/LLMStreaming.swift` | 模型 | 流式补全 |
+| `HTTPTransport` | `Core/LLMClient.swift` | 传输 | 整段 HTTP |
+| `HTTPStreamingTransport` | `Core/LLMStreaming.swift` | 传输 | 分块 HTTP |
+| `SecretStore` | `Core/SecretStore.swift` | 凭据 | 连接口令 |
+| `AgentKeyStore` | `Core/AgentConfigurationStore.swift` | 凭据 | 模型密钥 |
+| `AgentToolDispatcher` | `Core/AgentLoop.swift` | 智能体 | 工具分发 |
+| `AgentQueryExecutor` | `Core/AgentDatabaseTool.swift` | 智能体 | 只读 / 写执行 |
+| `AgentLoopObserver` | `Core/AgentLoop.swift` | 智能体 | 逐跳事件 |
+| `AgentCommandRunner` | `Core/AgentCommandPolicy.swift` | 智能体 | 命令执行 |
+| `AgentAuditSink` | `Core/AgentLoop.swift` | 智能体 | 审计落账 |
+| `MCPClientTransport` | `Core/MCPClientBridge.swift` | MCP | 行式传输 |
+| `MCPClientCalling` | `Core/MCPClientBridge.swift` | MCP | 工具调用 |
+| `ExternalProcessRunner` | `Core/ExternalProcess.swift` | 进程 | 外部程序与备份 |
+| `CodeFormatProcessRunning` | `Core/CodeFormatting.swift` | 进程 | 格式化过滤器 |
+| `SecurityScopedBookmarking` | `Core/SecureDirectoryAccess.swift` | 平台 | 目录书签 |
+| `DirectoryPicker` | `Core/SecureDirectoryAccess.swift` | 平台 | 选目录 |
+| `BrowserEngine` | `Core/BrowserPage.swift` | 平台 | 内嵌浏览 |
+| `LicenseSignatureVerifying` | `Core/License.swift` | 平台 | 签名校验 |
+| `ReminderDelivering` | `App/ReminderNotifier.swift` | 平台 | 系统通知 |
+| `WorkspaceBrowserHost` | `App/WorkspaceBrowserModel.swift` | 视图 | 下载目录与出网留痕 |
+| `ResultGridCopying` | `App/Views/ResultGrid.swift` | 视图 | 结果集复制与行操作 |
 
-接口三条纪律：① 只传值类型，不传内部对象引用（否则跨端不可复现）；② 错误必须可分类，界面据此决定「提示 / 重试 / 失败态」；③ 任何接口的语义变化都要在本书留痕，因为六个端都吃这口饭。
+## 6.2 接口面通用约定
 
-## 6.2 外部接口
+本节四条定义适用于 6.2 的全部接口面，后面每节只写该面特有的部分，不重复。
 
-| 外部面 | 用途 | 约束 |
-|---|---|---|
-| 数据库协议 | 连接各类数据库 | 方言差异只在驱动层表达，上层不见方言 |
-| 模型服务 | 智能体推理与工具调用 | 密钥只在本机；网络失败不得阻塞界面 |
-| 行情与基金数据源 | 复盘数据 | 抓取可重复且幂等，缺数据显式标记（`RTR-MKT-FEED`） |
-| 系统凭据存储 | 保存连接密码 | 明文不落普通配置文件 |
-| 文件系统 | 打开 / 保存 / 导入导出 | 外部修改后刷新时机一致（`P-13`） |
-| 消息通道 | 智能体对外收发 | 发送成功以对方确认为准，不以本地写入为准 |
+| 约定 | 定义 | 反例（被明确禁止的做法） | 依据 |
+| --- | --- | --- | --- |
+| 失败 | 必须能分类：连不上 / 认不出 / 服务端原话 / 取消结果。能用返回值表达的用返回值（`CancelOutcome`、`AgentToolOutcome`），不能用返回值表达的抛类型化错误（`LLMError`、`MCPTransportFailure`、`NoteStorageFailure`） | 返回空数组表示失败；只抛一个字符串 | `LLMClient.swift`、`MCPClientBridge.swift` |
+| 取消 | 能做定向取消的接口必须收句柄；不能取消的必须在协议注释里写清「随 Task 取消」 | 用全局布尔标志「停所有查询」 | `DatabaseService.cancel(_:)` |
+| 幂等 | 删除一律幂等，但「没命中」必须可分辨（返回受影响行数，由调用方如实报）；写入按业务键 upsert 即为幂等；外部调用（模型、SQL 写）默认**不幂等** | 删不掉时静默返回成功；把模型调用放进自动重试 | `LocalSecretStore.deletePassword`、`QueryHistoryStore.delete` |
+| 线程 | 协议只要求 `Sendable`；串行语义由 actor 承担（`ConnectionStore`、`QueryHistoryStore`、`AgentScheduleStore`），实现内部若需锁则用递归锁并把「语义并发」留给调用方 | 在 store 里再套一层队列 | `NoteDatabase.swift` 文件头 |
 
-## 6.3 用户接口
+### 6.2.1 数据库访问面
 
-界面按「三层导航」组织，各端实现不同（`P-01`），层级不变：
+| 方法 | 参数 | 返回 | 抛出 / 失败 | 幂等 | 依据 |
+| --- | --- | --- | --- | --- | --- |
+| `connect()` | — | `ServerInfo` | `AppError.invalidConfiguration` / `notImplemented` / `queryFailed` | 否（重复连接按实现处理） | `DatabaseService.swift` |
+| `disconnect()` | — | `Void` | 不抛 | 是 | 同上 |
+| `execute(_:options:handle:)` | `sql: String`、`options: QueryOptions`、`handle: ExecutionHandle` | `AsyncThrowingStream<QueryEvent, Error>` | 流内抛错；非 2xx/语法错归 `queryFailed` | 否 | 同上 |
+| `cancel(_:)` | `handle: ExecutionHandle` | `CancelOutcome` | **不抛**：取不到后端 PID 等一律以 `.failed(reason:)` 返回 | 是 | 同上 |
+| `beginTransaction()` / `commit()` / `rollback()` | — | `Void` | `AppError` | 否 / 是 / 是 | 同上 |
+| `copyFromText(table:columns:text:)` | 裸表名、列名、已编码文本 | `Void` | 不支持即 `AppError.notImplemented`，**不退化为逐条 INSERT** | 否 | 同上 |
 
-| 层 | 内容 | 必有的操作 | 不许有的东西 |
-|---|---|---|---|
-| 入口层 | 页签条 / 最近使用 / 命令面板 | 新建、切换、关闭、搜索 | 行内编辑控件 |
-| 工作层 | 编辑器、数据库对象树、笔记列表、复盘视图 | 主要动作（执行、保存、筛选、抓取） | 批量危险操作无确认 |
-| 详情层 | 结果集、笔记正文、单笔交易、报告 | 导出、复制、删除、分享 | 与工作层重复的操作入口 |
+失败语义分四档，界面按档给文案，不按错误字符串猜：
 
-三条界面契约：① 破坏性操作二次确认并说清后果；② 超过 300 ms 的动作有进行中反馈（`NFR-ALL-GATE-PERF`）；③ 空态必须给下一步，不出现空白页（`FR-STD-WS-UI` 系列）。
+| 档 | 典型来源 | 表达 | 处置 |
+| --- | --- | --- | --- |
+| 连不上 | 主机不可达、隧道未建立、超时 | `AppError.queryFailed` 或驱动侧传输错 | 提示检查地址 / 隧道 / 网络；不自动重试 |
+| 认不出 | 配置非法、方言不支持该能力 | `AppError.invalidConfiguration` / `notImplemented` | 指回配置页；不退化执行 |
+| 服务端原话 | SQL 语法错、权限不足、约束冲突 | `queryFailed` 携带服务端原文 | 原样展示，不截断关键信息 |
+| 原样 | 取消结果、连接已断开时的取消请求 | `CancelOutcome.notActive` / `.failed(reason:)` | 如实显示「没有正在执行的语句」，不假装取消成功 |
+
+取消语义：句柄定向，只终止这一次执行——同库另一页签的语句不受影响。默认便捷入口生成的句柄外部不可取消，因此需要「停止」按钮的场景必须显式传句柄。线程：实现为 `AnyObject & Sendable`，连接内部串行化，语义并发由调用方 actor 负责。
+
+### 6.2.2 模型访问面
+
+| 方法 | 参数 | 返回 | 失败分类 | 取消 | 依据 |
+| --- | --- | --- | --- | --- | --- |
+| `LLMClient.complete(_:)` | `LLMRequest` | `LLMResponse` | `LLMError`：`disabled`、`forbidden`、`quotaExceeded`、`transport`、`httpStatus(code:message:)`、`malformedResponse`、`emptyCompletion` | 随 Task 取消 | `LLMClient.swift` |
+| `LLMStreamingClient.stream(_:)` | `LLMRequest` | `AsyncThrowingStream<LLMStreamEvent, Error>` | 同上；**未收到 `[DONE]` 即结束 ⇒ `transport`** | `onTermination` 取消内部 Task | `LLMStreaming.swift` |
+| `HTTPTransport.send(_:)` | `URLRequest` | `(Data, HTTPURLResponse)` | 非 HTTP 应答 ⇒ `transport` | 随 Task | `LLMClient.swift` |
+| `HTTPStreamingTransport.stream(_:)` | `URLRequest` | `(HTTPURLResponse, AsyncThrowingStream<Data, Error>)` | 非 2xx 不在传输层抛，统一由上层映射 | 随 Task | `LLMStreaming.swift` |
+
+流式实现的两条硬约束：请求体强制 `stream: true`（调用方忘了设也不会退化成整段请求）；读到 `data: [DONE]` 之后不再读，未收到 `[DONE]` 就结束则整条流以 `transport` 结束——**不把半截回复当完整回复**。传输层按行冲刷：SSE 的语义单位是行，一次一行给上去，解码器既不囤整段，也能在断流时第一时间发现；收尾那半行也要交出去，否则最后一句会被吞掉。
+
+幂等性：模型调用**不幂等**，调用方不得自动重试（重试会产生二次计费与重复工具调用）。线程：全部 `Sendable`，流实现内部按行冲刷，不使用共享可变状态。
+
+### 6.2.3 凭据面
+
+| 方法 | 参数 | 返回 | 失败 | 幂等 | 依据 |
+| --- | --- | --- | --- | --- | --- |
+| `SecretStore.setPassword(_:for:)` | `password: String`、`connectionID: UUID` | `Void` | `AppError.credentialStore(code:)` 或 `persistence` | 是（覆盖） | `SecretStore.swift` |
+| `SecretStore.password(for:)` | `connectionID: UUID` | `String?` | 同上；`nil` = 没存过 | 是 | 同上 |
+| `SecretStore.deletePassword(for:)` | `connectionID: UUID` | `Void` | 同上 | 是（删不存在的键不报错） | 同上 |
+| `AgentKeyStore.setAPIKey(_:)` / `apiKey()` / `deleteAPIKey()` | `key: String` | `Void` / `String?` | 同上 | 是 | `AgentConfigurationStore.swift` |
+
+硬约束：秘密不出现在错误信息、日志、审计与外发记录里；`detail` 字段写入前统一脱敏。
+
+### 6.2.4 智能体回路面
+
+| 方法 | 参数 | 返回 | 失败表达 | 线程 | 依据 |
+| --- | --- | --- | --- | --- | --- |
+| `AgentToolDispatcher.dispatch(_:approvals:)` | `AgentToolInvocation`、已批准集合 | `AgentToolOutcome` | 以 outcome 表达，不抛 | 同步，调用方串行 | `AgentLoop.swift` |
+| `AgentQueryExecutor.executeReadOnly(sql:)` / `executeWrite(sql:)` | `sql: String` | `AgentQueryExecution`（含 `errorMessage`） | 错误进 `errorMessage`，不抛 | 同步 | `AgentDatabaseTool.swift` |
+| `AgentLoopObserver.observe(_:)` | `AgentLoopEvent` | `Void` | 不抛 | `async`，可并发 | `AgentLoop.swift` |
+| `AgentCommandRunner.run(executable:arguments:workingDirectory:)` | 程序、参数、工作目录 | `AgentCommandResult`（退出码 + stdout + stderr） | 非零退出码是数据，不是异常 | 同步 | `AgentCommandPolicy.swift` |
+| `AgentAuditSink.record(_:)` | `AgentActionRecord` | `Void` | 不抛（落账失败不阻断动作） | `async` | `AgentLoop.swift` |
+
+参数与声明不一致时由 `AgentToolSchemaValidator.validate` 返回机器可读原因并回灌模型，**不执行**。
+
+### 6.2.5 MCP 面
+
+| 方法 | 参数 | 返回 | 失败 | 幂等 | 依据 |
+| --- | --- | --- | --- | --- | --- |
+| `MCPClientTransport.open()` | — | `MCPTransportFailure?`（`nil` = 成功） | `spawnFailed` / `closed` / `exited` / `timeout` / `protocolViolation` | 否 | `MCPClientBridge.swift` |
+| `MCPClientTransport.send(_:)` | 一行 JSON-RPC | `MCPTransportFailure?` | `writeFailed` / `closed` | 否 | 同上 |
+| `MCPClientTransport.receive()` | — | `Result<String, MCPTransportFailure>` | 对端关闭与超时都是失败，不是空串 | 否 | 同上 |
+| `MCPClientTransport.close()` | — | `Void` | 不抛 | 是 | 同上 |
+| `MCPClientCalling.call(tool:argumentsJSON:)` | 远端工具名、参数原文 | `MCPClientCallOutcome` | 状态与错误码在 outcome 内 | 由远端工具决定 | 同上 |
+
+握手固定三步：`initialize` → `notifications/initialized` → `tools/list`。回了包但没带 `protocolVersion` 时**握手不算成功**，不猜「大概握上了」。发现阶段对每个启用的 server 起一次进程，连上与连不上都产出状态；`enabled = false` 的 server 连进程计划都不生成，本层不提供「起了再说」的入口。与内置工具重名的远端工具不合并，登记成 `nameConflict:<名>` 供界面说明。
+
+传输为**行式同步**接口（阻塞读写，由调用方置于受控线程）；工具名与参数**原样**转发，不改名、不改形状。
+
+### 6.2.6 平台薄适配面
+
+| 协议 | 方法 | 失败 / 取消 | 隔离要求 | 依据 |
+| --- | --- | --- | --- | --- |
+| `ExternalProcessRunner` | `run(executable:arguments:environment:onOutput:) async throws -> Int32` | `launchFailed(executable:reason:)`；取消时优雅终止→超时强杀 | stdout/stderr 合流保序 | `ExternalProcess.swift` |
+| `CodeFormatProcessRunning` | `runFilter(executable:arguments:input:) async throws -> CodeFormatProcessResult` | 非零退出码作为结果返回 | 同上 | `CodeFormatting.swift` |
+| `DirectoryPicker` | `pickDirectory(prompt:) throws -> URL?` | 用户取消返回 `nil`，不抛 | 主线程弹框 | `SecureDirectoryAccess.swift` |
+| `SecurityScopedBookmarking` | `makeBookmark` / `resolve` / `startAccessing` / `stopAccessing` | 解析失败可抛；`isStale` 表示建议重生成 | `start`/`stop` 必须成对 | 同上 |
+| `BrowserEngine` | `load` / `goBack` / `goForward` / `reload`（均 `async`）、`setUpdateHandler` | 先过策略、先写出网日志，再发请求 | `@MainActor` | `BrowserPage.swift` |
+| `LicenseSignatureVerifying` | `isValid(payload:signature:) -> Bool` | 不抛，返回布尔 | 纯函数 | `License.swift` |
+| `ReminderDelivering` | `permission` / `requestPermission` / `schedule(id:title:body:triggerEpochMillis:)` / `cancel(id:)` | 权限未决即返回未决档，不假装成功 | `async` | `App/ReminderNotifier.swift` |
+| `SQLDialect` / `ServerObjectDialect` | `quoteIdentifier` / `stringLiteral` / `limitClause` / `listQuery(for:limit:)` 等 | 不支持时返回 `nil` 或可读说明，不抛 | 纯值类型 | `Dialects.swift`、`ServerObjects.swift` |
+
+## 6.3 外部接口
+
+| 外部面 | 协议 / 形态 | 端点与凭据 | 失败与重试 | 密钥落点 | 依据 |
+| --- | --- | --- | --- | --- | --- |
+| 数据库（PostgreSQL） | PostgreSQL 线协议（驱动） | 主机 + 端口（缺省取 `dbType.defaultPort`）+ 库名 + 账号 | 失败分四档；取消定向；**不自动重试** | 系统凭据存储，`account = connectionID.uuidString` | `DatabaseService.swift`、`PostgresService` |
+| 数据库（MySQL / GBase 8a） | MySQL 协议族（共用驱动、方言分对） | 同上 | 同上；不支持的能力抛 `notImplemented` | 同上 | `DatabaseServiceFactory` |
+| SSH 隧道 | `ssh` 可执行（默认 `/usr/bin/ssh`，可被 `DOYAH_SSH_BINARY` 覆盖） | 跳板机主机 + 端口 + 账号 | 建隧道超时缺省 15 秒 | 隧道口令按键派生，存凭据存储 | `SSHTunnel.swift`、`SSHTunnelSecrets.swift` |
+| 模型服务 | HTTPS POST `…/chat/completions`（OpenAI 兼容） | `AgentProfile.endpoint` + `model`；`Authorization: Bearer` | `transport` / `httpStatus` 分类；流式断流即 `transport`，不重试 | 系统凭据存储；文件形态条目键 `agent.api-key` 或 `secretKey` | `LLMClient.swift`、`LLMStreaming.swift` |
+| 云同步（数据面） | HTTPS + PostgREST 形态 | `https://<envId>.api.tcloudbasegateway.com`，`/v1/rdb/rest/<table>`；`Authorization: Bearer <access_token>` | `transport` 视为断网，入队 + 指数退避；服务端非 2xx 记 `server(code:status:)` | 会话令牌进系统钥匙串 | `Plugins/Notes/Sources/NoteSync/CloudSyncService.swift` |
+| 云同步（账号面） | HTTPS `/auth/v1/signin`、`/auth/v1/token`、`/auth/v1/revoke` | 同上基址 | 刷新失败即登出并清令牌 | 令牌（`access_token` / `refresh_token`）进钥匙串，**不落明文文件** | `NoteSync/CloudAuth.swift` |
+| 系统凭据存储 | `kSecClassGenericPassword` | `service = DoyahIdentity.keychainServiceName` | `credentialStore(code:)` 原样上报状态码 | 键即 `account` | `Platform/macOS/KeychainSecretStore.swift` |
+| MCP server | JSON-RPC 2.0（`MCPProtocol.version = "2024-11-05"`）over stdio | 用户配置的 `command` + `args` + `env`（原样启动，不经 shell） | 握手 `initialize` → `notifications/initialized` → `tools/list`；每 server 都产出状态 | 配置里的 `env` / `headers` 由用户自填；本产品不代管其密钥 | `MCPClientBridge.swift`、`MCPProtocol.swift` |
+| 出网留痕 | 本地 JSONL（非网络面） | `egress-log.jsonl` | 写失败只警告，不阻断主流程 | 无 | `EgressLog.swift` |
+| 行情源 | 待定 | 代码中无实现 | 待定 | 待定 | — |
+| IM 通道 | 待定 | 代码中无实现 | 待定 | 待定 | — |
+
+超时与重试按面分开定，不设全局默认：数据库连接超时来自 `ConnectionConfig.timeout`（缺省 5 秒），隧道握手缺省 15 秒，MCP 单次往返来自 `timeoutSeconds`（缺省 20 秒），模型请求来自 `AgentProfile.timeoutSeconds`。四个值都在配置里可改，且都只作用于本面。
+
+重试纪律（三条）：数据库与模型调用**不自动重试**；云同步只在 `transport` 一档入队重试，非 2xx 不入队；外部程序由调用方决定，重试必须显式。
+
+密钥落点的三条硬边界：连接口令与隧道口令只进凭据存储，配置文件里没有可写字段；模型密钥只进 `Authorization` 头，**不写进请求体**，避免被日志或审计顺手抄走；云同步令牌只进钥匙串，不落明文文件。任何日志、审计与外发记录的 `detail` 写入前统一脱敏，`target` 去掉 query 与 fragment。
+
+## 6.4 接口演进纪律
+
+| 编号 | 纪律 | 理由 | 依据 |
+| --- | --- | --- | --- |
+| I-01 | 协议只增方法，不改既有签名语义 | 假实现与判据都按既有签名写，改签名等于推翻一整族判据 | `LLMStreaming.swift`（新增流式协议而非改 `HTTPTransport`） |
+| I-02 | 新增可选字段不抬版本号 | 抬版本会让老程序把新文件判成「来自更新版本」而拒绝改写 | `ConnectionConfigMigration.swift` |
+| I-03 | 认不出的枚举值分两类处置：来源类抛错、优先级类「当没给」 | 前者是数据损坏必须让人知道，后者只是别端多一档 | `NoteDatabase.materialize` 与 `TodoPriority.init(raw:)` |
+| I-04 | 协议不提供「悄悄降级」的实现 | 不支持就抛可读错误，绝不退化成慢路径 | `copyFromText` 默认实现 |
+| I-05 | 平台差异只允许存在于实现侧，协议层不出现平台名 | 协议是跨端契约 | `SecretStore.swift`、`AgentKeyStore` |
+| I-06 | 失败必须可分类型，不得只有一句「失败」 | 调用方要按类别决定重试、入队或提示 | `LLMError`、`MCPTransportFailure`、`NoteStorageFailure` |
+| I-07 | 新增出网入口必须同时在 `EgressKind` 加一档 | 否则外发日志会漏，「零外发」无法审计 | `EgressLog.swift` |
+| I-08 | 取消语义写进协议：能取消的必须给句柄，不能取消的必须写清 | 「停止」按钮要定向到这一次执行 | `DatabaseService.execute(handle:)` |
+
+这套纪律之所以要写成条目而不是原则，是因为它每一条都能被机械检查：协议只增方法可以比对既有签名；新增可选字段是否抬版本可以比对解码分支；「不支持就抛」可以搜默认实现里有没有退化路径；新增出网入口可以比对 `EgressKind` 的档数与实现里的出口。
+
+## 6.5 需要补的事实
+
+| 编号 | 待定项 | 现状 |
+| --- | --- | --- |
+| I-09 | 行情源的提供方、协议与密钥落点 | 代码无实现 |
+| I-10 | IM 通道的接入协议与消息格式 | 代码无实现 |
+| I-11 | 云同步待传队列的重启恢复语义 | 队列仅在内存 |
+| I-12 | MCP `http` 传输的支持时点 | 配置保留 `url` / `headers` 字段，当前只支持 `stdio` |
 
 # 第七章 界面设计（契约部分）
 
@@ -1569,28 +2067,116 @@
 
 # 第八章 错误处理与本地化
 
+本章写三件事：错怎么分级、话怎么说、哪种语言说。判断口径以 `Core` 的错误类型与 `Core/Localization.swift` 的语言表为准，不另立说法。全仓 `Core`/`App`/`CLI`/`Plugins` 里实现 `Error` 的类型实测 40 个，其中 24 个同时实现 `LocalizedError`。
+
 ## 8.1 错误分级
 
-| 级别 | 表现 | 典型场景 |
+三级：**可恢复 / 阻断 / 静默**。分级不是文案风格，是「界面还能不能继续走」。
+
+**表 8-1 分级 → 真实错误类型**
+
+| 级别 | 判定 | 界面表现 | 真实错误类型 | 依据 |
+|---|---|---|---|---|
+| 可恢复 | 用户不必先改前置条件，重试或改输入即可 | 留在当前界面；错误进 Problem 页签或错误框；可再执行 | `AppError`、`DataTaskRunError`、`ImportError`、`ResultStreamError`、`ResultExportEncodingError`、`LLMError`、`LLMRetryExhausted`、`MySQLServiceError`、`CursorPagingError`、`BindError`、`SSHTunnelError` | `Core/AppError.swift:3`、`Core/DataTaskRun.swift:9`、`Core/LLMRetry.swift:79`、`Core/ResultStreamWriter.swift:4` |
+| 阻断 | 缺一个用户必须先给的东西：授权、连接、批准、许可 | 停在原地，给出口与下一步；**不给「继续」** | `AppError.notConnected`、`DirectoryAccessError`、`AgentApprovalError`、`DeviceError`、`TerminationBlocked`、`CloudAuthError` | `Core/SecureDirectoryAccess.swift:9`、`Core/AgentAudit.swift:295`、`Core/License.swift:115`、`App/AppRelauncher.swift:45` |
+| 静默 | 控制流或后台动作；报出来只会误导 | 只进日志 / 状态栏，不打断输入 | `CancellationError`（经 `CancellationNoise` 判定）、`PluginRegistry.Degraded`、`EgressLog` 落盘失败 | `Core/CancellationNoise.swift`、`Core/Plugin/PluginRegistry.swift`、`Core/EgressLog.swift:155` |
+
+两条口径要补在两处容易走偏的地方。
+
+**「阻断」里最硬的一档是只读连接。** `ExecutionSafety.Decision` 把「高危语句要确认」与「只读连接拒绝写」分成两个分支：前者可绕过（点确认），后者**不允许绕过**——否则用户关掉 Safe Mode 就等于顺手关掉了只读保护（`Core/ExecutionSafety.swift:72`）。
+
+**「静默」不等于「不记录」。** `EgressLog` 的文件注释把两件事分开：「想发但没发出去」与「根本没想发」是两件事，`EgressOutcome.denied` 必须存在，否则「零外发」这句话无法被审计。插件降级同理：`PluginRegistry.Degraded` 列出来、走 `diagnosticLine`，不静默。
+
+**表 8-2 尚未归级的类型**
+
+| 类型 | 依据（文件） | 现状 |
 |---|---|---|
-| 可恢复 | 留在当前界面 + 一句话 + 可重试 | 语句执行失败、保存失败、抓取失败 |
-| 阻断 | 失败态 + 重试入口 | 存储初始化失败、迁移失败 |
-| 静默 | 只落日志 | 元数据刷新失败、索引更新延迟 |
+| `AgentMemoryIndexError` | `Core/AgentMemoryContext.swift:153` | 调用点抛给上层，界面档位待定 |
+| `AgentScheduleLedgerError` | `Core/AgentSchedule.swift:303` | 同上 |
+| `MCPTransportFailure` / `MCPClientConfigurationError` / `MCPError` | `Core/MCPClientBridge.swift:7`、`Core/MCPClientConfiguration.swift:165`、`Core/MCPProtocol.swift:39` | 未实现 `LocalizedError`，显示落 `ErrorPresenter` 的反射兜底 |
+| `NoteStorageFailure` / `SQLiteFailure` / `MigrationError` | `Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:484`、`Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift:115`、`Plugins/Notes/Sources/NoteBody.swift:126` | `NoteStorageFailure` 只实现 `CustomStringConvertible`，写库失败经 `ErrorPresenter` 会落到反射串 |
+| `BuildError` / `Failure`（工作区文件操作、会话快照） | `Core/RowBrowsing.swift:43`、`Core/WorkspaceFileOperations.swift:16`、`Core/WorkspaceSession.swift:106` | 调用点各自处置，未统一 |
 
-分级本身是契约：同一错误在每端必须是同一级别，一端白屏另一端弹提示即缺陷（`NFR-ALL-GATE-REL`）。
+## 8.2 错误分类与包装
 
-## 8.2 文案与提示
+界面侧只有一个入口：`ErrorPresenter.message(for:)`。它按固定顺序试七个档，**顺序本身是设计**——放错一档，用户看到的就是反射串。
 
-- 文案只说「发生了什么 + 能做什么」，不出现表名、类名、堆栈。
-- 数据库错误保留**原始错误码与摘要**，但放在「详情」里可展开；主提示用人话。
-- 智能体工具失败要区分「工具报错」与「模型选错工具」，前者可重试，后者要改计划。
-- 破坏性操作确认按钮写清后果，不写「确定 / 取消」。
+**表 8-3 包装链的七个档**
 
-## 8.3 本地化
+| 序 | 档 | 触发条件 | 输出 | 依据 |
+|---|---|---|---|---|
+| 1 | `AppError` | 类型判等 | 走语言表（6 个 `error*` 键） | `App/Utilities/ErrorPresenter.swift:8` |
+| 2 | `SSHTunnelError` | 类型判等 | `describe(language:)`；只有 `.portInUse` 需要拼句子 | `Core/SSHTunnelProcess.swift:268` |
+| 3 | 通用 `LocalizedError` | `errorDescription` 非空 | 直接用它给的可读说明 | `App/Utilities/ErrorPresenter.swift:35` |
+| 4 | 连接类 | `ConnectionFailure.describe` 认得 | 人话 + 排查建议 | `Core/ConnectionFailure.swift:76` |
+| 5 | 驱动非连接类 | `describeNonConnection` | 中性归因 +「（技术细节：…）」 | `Core/ConnectionFailure.swift:179` |
+| 6 | 服务端原话 | 带 SQLSTATE 的查询类错误 | 只端原话，不翻译、不归类、不给方向 | `Core/ConnectionFailure.swift:235` |
+| 7 | 兜底 | 都认不出 | `String(reflecting:)`，超 800 字符截断 | `App/Utilities/ErrorPresenter.swift:69` |
 
-界面语言跟随系统，中英双语齐全；键为契约：缺键回退默认语言并落日志，不显示键名（`NFR-ALL-GATE-LANG`）。
+**原始信息保留策略：三处都留尾巴，一处都不换掉原串。** `ConnectionFailure.Description` 里 `code`（SQLSTATE 或驱动错误类别）与 `technicalDetail` 并存；`ErrorPresenter` 在第 5、6 档后追加「（技术细节：…）」；`CLIFailureText` 在可读化成功时追加「（原始信息：…）」。文件头把理由写明了：排查时「到底是哪个码」往往才是关键，把原串换掉等于帮倒忙。
 
-不随语言变化的东西：导出的 Markdown / HTML、数据库对象的原始名称、日志与错误码、正文内容。语言只改「界面怎么说」，不改「数据是什么」。
+**用户可见 vs 内部。** `LocalizedError.errorDescription` 在 `Core` 里被明确定性为**技术串、不冒充人话**——`Core/SSHTunnelProcess.swift:291` 那句注释就是这条纪律的原文；真正给人看的句子必须由带 `language:` 的渲染入口产出。CLI 侧另设唯一入口 `CLIFailureText.oneLine` / `block`，四档顺序与 App 侧同源，并由 `Scripts/check-cli-failure-readability.py` 钉住两件事：CLI 里不许出现绕过入口的裸英文失败输出，入口调用点不得少于台账的 57 处。
+
+## 8.3 文案规则
+
+**表 8-4 语言表与门禁**
+
+| 规则 | 现状 | 依据 |
+|---|---|---|
+| 键的形状 | `LKey` 是 `enum`，`rawValue` = case 名；camelCase + 区域前缀（`common` / `menu` / `workspace` / `tableDesign` / `notes` / `todo` / `dataTask` / `import` / `account` / `license` / `designTheme`），实测 2 223 条 | `Core/Localization.swift:30` |
+| 表的形状 | `[LKey: [AppLanguage: String]]`，两种语言各一格 | `Core/Localization.swift:2599` |
+| 缺键兜底 | `table[key]?[language] ?? key.rawValue`——运行时回退到**键名本身** | 同左 |
+| 真正的防线 | 两条单测：每个键两语齐全且非空；`table.count == LKey.allCases.count` | `Tests/LocalizationTests.swift` |
+| 占位符 | printf 风格 `%@` / `%d` / `%.2f`；`String(format:locale:)` 按该语言的 locale 格式化 | `Core/Localization.swift:2604` |
+| 占位符对账 | 六条判据：数字实参不许落 `%@` 槽（否则渲染成 `(null)`）、字符串不许落数字槽、实参数须等于占位符数、类型不明的逐条登记 | `Scripts/check-format-arguments.py` |
+| 语言参数 | App 侧统一 `L(...)` → `LocalizationManager.text` → `effectiveLanguage`（宿主语境优先，其次用户选择）；Core 侧一律显式 `language:` 形参 | `App/LocalizationManager.swift`、`Scripts/check-effective-language.py` |
+| 写死语言 | 逐文件登记处数上限，只许降；`CLI/main.swift` 现有 10 处 | `Scripts/check-literal-language.py`、`Scripts/literal-language-dispositions.json` |
+| 文案即所见 | 语言表里不许出现 markdown 强调标记 `**`；渲染点不许再出现 `LocalizedStringKey` | `Scripts/check-copy-emphasis.py` |
+| 中文棘轮 | `Core` 里「字符串字面量含汉字」的文件数与行数只许降，台账基线 73 个文件 / 730 行 | `Scripts/check-core-localization.py`、`Scripts/core-localization-baseline.json` |
+
+语言切换是**就地**的：`.id("\(language)-\(theme)")` 让整棵树重建；系统菜单由 `MainMenuLocalizer` 在运行时逐项改写 `NSMenuItem.title`，并在切换后开一个 3 秒补刷窗口——原因是 SwiftUI 重建命令图会把系统菜单项恢复成启动语言的标题，实测在 0.1~3 秒之间被改回去。`AppleLanguages` 只对「用的时候才创建」的系统界面（打开 / 保存面板按钮、服务子菜单）生效，下一次启动才一致，这条已写进 `App/LocalizationManager.swift` 的注释，不弹窗拦人。
+
+## 8.4 本地化矩阵
+
+**表 8-5 哪些面必须双语**
+
+| 面 | 语言 | 机制 | 为什么 | 依据 |
+|---|---|---|---|---|
+| macOS 界面（SwiftUI） | 中 / 英必须齐 | 2 223 条键，两语单测 | 界面是产品面 | `Core/Localization.swift`、`Tests/LocalizationTests.swift` |
+| macOS 系统菜单 | 中 / 英 | `MainMenuLocalizer` 逐项改标题；`MenuLocalization.menuKeys` 反查 | AppKit 菜单不跟 SwiftUI 走 | `App/MainMenuLocalizer.swift`、`Core/MenuLocalization.swift:24` |
+| Core 的诊断 / 建议句子 | 中 / 英（调用方传 `language:`） | `LocalizedStrings.text/format`、`describe(language:)` | 句子进界面就得分语 | `Core/DiagnosisContext.swift`、`Core/SSHTunnelProcess.swift` |
+| CLI 输出 | 只中文（有意） | 10 处字面语言逐条登记 | 命令行没有界面语境 | `Scripts/literal-language-dispositions.json`（`CLI/main.swift` 条目） |
+| 日志与审计 | 中文 + 技术串 | 直接写 | 排障要稳定文本，不随界面语言漂 | `App/DoyahStudioApp.swift`（`StartupLog`）、`Core/AgentAudit.swift` |
+| Windows 前端 | 中 / 英（只覆盖外壳） | 自建 `DICT`，缺一种语言**编译不过**；实测 827 条 | 外壳面已双语；正文说明、服务端错误提示、领域层 hint 未覆盖 | `Platform/windows/App/src/i18n/index.ts` |
+| Linux 前端 | 只中文 | 无语言切换（源码 18 处汉字） | 现状 | `Platform/linux/src-tauri/src/lib.rs` |
+| 数据面：对象名 / SQL / 正文 / 导出 | 不随语言 | — | 语言只改「界面怎么说」，不改「数据是什么」 | `Core/WorkspaceTab.swift:23`、`Core/ResultExporter.swift` |
+| 错误码 / SQLSTATE | 不翻译 | 原样保留 | 排查靠码 | `Core/ConnectionFailure.swift` |
+
+由此得到一条判定标准：**双语义务的边界是「用户读到的句子」**。凡进界面的一句话都必须过 `LKey` 或带 `language:` 的渲染入口；凡落盘给别人读的（日志、审计、导出）都不跟着界面语言变。Windows 侧的 `Platform/windows/App/src/i18n/index.ts` 文件头自己把边界写清楚了——已覆盖外壳，未覆盖正文说明与服务端提示，属于已登记欠账，不是「双语做完了」。
+
+## 8.5 日志与隐私
+
+**表 8-6 五条记录通道的记与不记**
+
+| 通道 | 位置 | 记什么 | 不记什么 | 依据 |
+|---|---|---|---|---|
+| `startup.log` | 应用数据目录，最多留 200 行 | 启动决策（接管 / 激活失败 / 继续启动）、tooltip 延迟、许可证**档位与活动栏项**、选区缓存与实编辑器不一致 | 许可证内容；口令 | `App/DoyahStudioApp.swift`（`StartupLog`） |
+| `TabLog`（Output / Problem） | 内存，每页签 500 条 | 状态、错误、语法检查结果；空串跳过、相邻重复去掉 | — | `Core/TabLog.swift` |
+| `agent-audit.jsonl` | 应用数据目录，JSONL 追加 | 动作、连接名、库名、模型名、SQL、风险级别、护栏发现、结局（8 档 `Outcome`） | **类型上没有密钥字段**；写入即过 `AgentAudit.redacted`，导出再脱敏一次 | `Core/AgentAudit.swift` |
+| 越界日志（`EgressLog`） | JSONL | 时间、类别（4 档）、目标、触发来源、结局（3 档）、页签 | 密钥与**结果集行数据**；`target` 去掉 query 与 fragment | `Core/EgressLog.swift:37` |
+| 错误呈现 | 界面 | `String(reflecting:)` 截断至 800 字符 | 超长反射转储 | `App/Utilities/ErrorPresenter.swift` |
+
+脱敏不是「查一下有没有」，而是**整条重写一遍**：`EgressLog.append` 会新建一个 `sanitized` 的 `EgressEntry`，`target`、`origin`、`detail`、`tabTitle` 各过一次 `AgentAudit.redacted`；注释记了此前漏掉 `tabID` / `tabTitle` 的那次修补。`redacted` 用正则表替换成占位符，另给 `containsSecretLikeText` 做导出后的自检。
+
+`AgentActionRecord` 的隐私边界落在类型上：**没有密钥字段**——审计记录从类型上就装不下 API Key。连接信息只留连接名与库名，不留口令，也不留完整连接串。
+
+## 8.6 需要补的事实
+
+1. `AppError.errorDescription` 是中文硬编码（`Core/AppError.swift`），界面靠 `ErrorPresenter` 换成语言表；若有调用点不经 `ErrorPresenter`，英文界面会出中文。这类调用点未清点完。
+2. 表 8-2 那批类型「属于哪一级」只在调用点各自处置，逐条核到界面档位这件事没做完；`NoteStorageFailure` 只实现 `CustomStringConvertible`，写库失败最终显示的是反射串而不是它自己的描述，是否补 `LocalizedError` 待定。
+3. 静默档的证据目前只覆盖 `CancellationNoise`、`EgressLog`、`TabLog`、`PluginRegistry.Degraded` 四处。
+4. 缺键回退到键名（`key.rawValue`）与「不显示键名」的表述相反；现行防线是两条单测而非运行时兜底。是否加运行时兜底并落日志，待定。
+5. Windows / Linux 的错误分级是否与本章三级一致，本仓无法判定；两端的 i18n 覆盖率也未纳入本仓门禁。
 
 # 第九章 实现要点
 
@@ -2040,19 +2626,32 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 
 # 第十章 验收映射
 
+本章回答一个问题：**每条需求去哪一章找设计依据、用什么方式证明它做到了**。条数由《需求规格说明书》机器对账得出（`Scripts/check-req-ids.py` 同一份定义域），**不手写**。
+
 ## 10.1 需求域到设计落点
 
-| 需求域 | 条数 | 主要落点 | 验证方式 |
-|---|---|---|---|
-| `AGT-*` | 71 | 3.1 | 场景回放 + 单测（循环终止、权限边界、工具失败） |
-| `STD-ALL-*` | 49 | 3.2、6.1 | 单测（接口契约）+ 构建产物比对 |
-| `STD-DB-*` | 117 | 3.2、5.1~5.3 | 真实库联调（连接、执行、取消、分页、DDL、导入导出） |
-| `STD-WS-*` | 77 | 3.3、6.3 | 点击 + 单测（保存与撤销语义）+ 视觉数值核对 |
-| `NTS-*` | 19 | 3.4、5.1 | 点击 + 跨端数据互换 |
-| `RTR-*` | 82 | 3.5、5.4 | 同一批数据跑两次比对 + 缺数据表现 |
-| `ALL-GATE-*` | 138 | 第四、七、八章 + 第五章 5.3 | 门禁脚本 + 故障注入 + 计时 |
+| 产品线 | 需求条数 | 域数 | 设计落点 | 证明方式 |
+|---|---|---|---|---|
+| 智能体 `AGT-*` | 68 | 23 | 3.1（3.1.1~3.1.23） | 场景回放 + 单测（循环终止、权限边界、工具失败、上下文压缩） |
+| 通用与工程 `STD-ALL-*` | 44 | 6 | 3.2.1~3.2.6、6.1 | 单测（接口契约）+ 构建产物比对 + 三仓脚本自检 |
+| 数据库 `STD-DB-*` | 111 | 11 | 3.2.7~3.2.17、5.1~5.4、6.2 | 真实库联调（连接 / 执行 / 取消 / 分页 / DDL / 导入导出 / 锁诊断） |
+| 工作台界面 `STD-WS-*` | 72 | 10 | 3.3.1~3.3.10、第七章、6.3 | 点击点验 + 单测（保存与撤销语义）+ 视觉数值核对 |
+| 笔记 `NTS-*` | 19 | 14 | 3.4.1~3.4.14、5.2 | 点击点验 + 跨端数据互换（同一份导出 diff） |
+| 交易复盘 `RTR-*` | 82 | 18 | 3.5.1~3.5.18、5.4 | 同一批数据跑两次逐字段比对 + 缺数据表现 |
+| 横切与闸门 `ALL-GATE-*` | 122 | 10 | 3.6.1~3.6.7、第四、七、八章 | 门禁脚本 + 故障注入 + 计时（不靠眼看） |
+| **合计** | **518** | **92** | — | — |
 
-## 10.2 三处容易「以为验过了」
+## 10.2 覆盖账：92 个域 ↔ 89 个契约节，差的三口在哪
+
+差 3，逐条说清，**不是漏写**：
+
+| 域 | 处理 | 理由 |
+|---|---|---|
+| `ALL-GATE-RISK` | 不设契约节 | 风险登记是台账，不是设计约束；落点在 11.1 与《开发计划书》§3 |
+| `ALL-GATE-COMP` + `ALL-GATE-MAINT` | 合并为 **3.6.4 兼容性与可维护性** | 两者都是「改动不破坏既有行为」，同一套判据，拆两节会出现两处说法 |
+| `ALL-GATE-UI` | 并入 **第七章 界面设计（契约部分）** | 跨端视觉与可及性的一致性判据属于界面章，留在横切章会被当成纯非功能条目看待 |
+
+## 10.3 容易「以为验过了」的三处
 
 1. **跨端一致**：截图看着一样不算 —— 要拿同一份输入在两端的产物 **diff 一次**（导出的笔记、执行的 SQL 结果、复盘报告）。
 2. **迁移**：只在干净库跑过不算 —— 要拿真实旧数据跑一次，并验证失败回滚。
