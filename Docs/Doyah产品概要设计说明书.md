@@ -1,6 +1,6 @@
 # Doyah产品概要设计说明书
 
-当前 v3.3.2（2026-10-22 macOS 智能体界面落笔）
+当前 v3.4.0（2026-10-22 界面设计成套补完：契约构件级 + 三端落法）
 
 > 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求规格说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
 > 本书按「整个产品」重写：**五个产品线 × 92 个需求域全覆盖**，契约章每节点名需求编号，指不到编号的条目不写。
@@ -2065,6 +2065,89 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 
 对应需求：`NFR-ALL-GATE-UI-001` `NFR-ALL-GATE-USE-001` `NFR-ALL-GATE-USE-002` `NFR-ALL-GATE-USE-003` `NFR-ALL-GATE-USE-004` `NFR-ALL-GATE-USE-005` `FR-STD-WS-UI-001`~`FR-STD-WS-UI-011` `FR-STD-WS-NAV-001`~`FR-STD-WS-NAV-014`
 
+## 7.9 控件规格（构件级）
+
+7.4 规定「哪些状态必须存在」，本节规定「一个控件由什么构成、占多大、间距多少」。所有数值取自共享令牌表（`Core/DesignTokens.swift`，Core 平台中立，各端编译期引用），不允许各端自造档位。
+
+### 7.9.1 尺寸档位只有三档
+
+| 档 | 高度 | 用在哪 | 令牌 |
+|---|---|---|---|
+| 紧凑 | 24 | 表格行内按钮、标签、状态徽标 | `Metrics.listRowHeight` / 行内控件 |
+| 标准 | 26 | 按钮、输入框、下拉、复选框 | `Metrics.controlHeight` |
+| 大 | 44 | 工具栏、页面级主操作条 | `Metrics.toolbarHeight` |
+
+**出现第四档即为缺陷**：要么归到三档之一，要么把新档写进令牌表并说明用途（例如 30 的页签条在 macOS 上是令牌存在但视图未读，见 9.1.3）。
+
+### 7.9.2 按钮四种层级
+
+| 层级 | 何时用 | 视觉 | 约束 |
+|---|---|---|---|
+| 主操作 | 一屏至多一个（执行、保存、批准） | 强调色填充 | 同屏两个主操作 = 没有主操作 |
+| 次操作 | 与主操作并列但不改变后果（取消、另存为） | 描边 | 与主操作**同高同宽档**，不靠大小分主次 |
+| 图标操作 | 高频、语义明确（发送、停止、展开） | 图标 20，无边框 | 必须有 tooltip；无 tooltip 的图标按钮不允许 |
+| 危险操作 | 删除、丢弃、覆盖 | 警示色 | 与次操作同级并排，**不做「确定/取消」语义反转** |
+
+**按钮文案用动词短语**（「执行查询」而不是「确定」），唯一例外是对话框的「取消」。
+
+### 7.9.3 输入与校验
+
+- 单行输入高 26，圆角 `Radius.control`（6）；多行输入最小 3 行、可纵向拉伸。
+- 校验分两级：**行内**（字段下方一行红字，说明怎么改）与**提交时**（汇总在表单顶部，带「第几项」）。同一字段不同时出现两处提示。
+- 只读字段用**次要色文字**而不是禁用灰底——禁用灰会被读成「坏了」。
+- 密码类字段只显示「已保存 / 未保存」，不回显任何字符。
+
+### 7.9.4 表格与结果集
+
+| 构件 | 规格 |
+|---|---|
+| 表头 | 高 26，左对齐，可排序的列带指示 |
+| 行 | 高 26（紧凑档），隔行不做斑马纹，靠分隔线 0.5 |
+| 列宽 | 默认按内容自量，用户拖动后**记住**该连接的列宽 |
+| 选中 | 整行选中；多选用 `⇧` 连续、`⌘` 点选 |
+| 复制 | 选中区域按 TSV 复制（可直接粘进表格软件） |
+| 空表 | 保留表头 + 一行「无匹配行」，不给空白面板 |
+| 截断 | 底部一行「共 N 行，已取 M 行」+ 继续取入口 |
+
+### 7.9.5 树与列表
+
+- 层级缩进 `Metrics.listIndent`（14），展开箭头在文字**左侧**、与文字基线对齐。
+- 列表行高 20；行内图标 16；行尾计数（如表行数）靠右、次要色。
+- 空树显示「这一层没有对象」+ 刷新入口，不显示空三角。
+- 拖放目标必须在拖入时高亮（边框 1pt 强调色），不留「能不能放」的疑问。
+
+### 7.9.6 页签
+
+- 页签条高按平台定（macOS 30 为令牌但当前按内容自量，见 9.1.3），最小可点宽 80。
+- 页签三态：常规、当前（底色区分 + 底部 2pt 强调线）、有未保存改动（圆点）。**同一页签不同时出现两枚指示**。
+- 关闭按钮只在悬停或当前页签出现；中键/`⌘W` 行为一致。
+- 溢出时横向滚动，**不做下拉列表**（下拉会把「切换页签」变成两步）。
+
+### 7.9.7 提示与对话框
+
+| 构件 | 规格 |
+|---|---|
+| 行内提示 | 一行，callout，图标在左，占满宽度，不浮动 |
+| 悬浮提示 | tooltip，延迟 ≥500 ms，只写一句话，不带格式 |
+| 确认对话框 | 标题一句话说清后果；正文说明影响范围；两枚按钮同级并排（危险操作右侧为警示色） |
+| 阻塞对话框 | 必须有取消；不提供「点外面关闭」（会误关长任务） |
+| 提示条（toast） | 只在「操作已完成且无需决策」时用；3 秒消失，不堆叠超过一条 |
+
+### 7.9.8 空态与首屏
+
+空态由三件组成：**一句为什么空 + 一个能直接做的动作 + （可选）一句下次从哪进**。不放插画、不放轮播、不放「了解更多」。首屏（无连接、无笔记、无会话）用同一套三件式，不各写一套。
+
+三件的写法有硬要求：**「为什么空」说事实不说安慰**（「这个连接下没有表」而不是「这里还什么都没有」）；**动作必须是本屏能完成的一步**（「新建连接」而不是「去设置看看」）；**「下次从哪进」只在确有下一跳时写**，没有就不写，不凑三行。
+
+举例（同一套三件，三处不同内容）：无连接 →「还没有数据库连接」+「新建连接」；无表 →「所选库里没有表」+「刷新」+「也可以换一个库」；无会话 →「还没有对话」+「发第一句」+「模型与端点在设置里配」。
+
+### 7.9.9 焦点、键盘与可及性
+
+- 焦点环 2pt 强调色，**不得用颜色以外的方式单独表达**（色弱可辨）。
+- 所有可点元素有可读标签（图标按钮尤其），装饰元素标为对辅助技术隐藏。
+- 键盘顺序 = 视觉顺序；对话框打开时焦点进入首字段，关闭后回到触发点。
+- 最小可点尺寸 24×24（紧凑档），触控端 44×44。
+
 # 第八章 错误处理与本地化
 
 本章写三件事：错怎么分级、话怎么说、哪种语言说。判断口径以 `Core` 的错误类型与 `Core/Localization.swift` 的语言表为准，不另立说法。全仓 `Core`/`App`/`CLI`/`Plugins` 里实现 `Error` 的类型实测 40 个，其中 24 个同时实现 `LocalizedError`。
@@ -2275,8 +2358,8 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 
 | 区域 | 空 | 载入 | 进行中 | 失败 | 禁用 | 已截断 |
 |---|---|---|---|---|---|---|
-| 结果集 | 表头 + 「无匹配行」+ 能改条件的位置 | 骨架行（保留列宽，不塌成空白） | 已出部分行继续追加，不闪空 | 面板切「问题」页签并选中首条错误 | 无连接时整表禁用，禁用**不隐藏** | 显示「已取 N 行 / 上限 M 行」并给继续取 |
-| 编辑区 | 空页签给一句可执行提示，不给示意图 | 不适用（编辑器不转圈） | 语句执行中：行号槽显示进度带 | 错误行内标红 + 下方面板同步 | 只读连接时编辑区仍可写，但执行按钮禁用 | 长文按 7.5 的分段呈现 |
+| 结果集 | 表头 + 「无匹配行」+ 能改条件的位置 | 骨架行（保留列宽，不塌成空白） | 已出部分行继续追加，不闪空 | 错误写进「问题」页签并给角标，**不自动切页签**（现状；切页签会打断正在看的结果） | 无连接时整表禁用，禁用**不隐藏** | 显示「已取 N 行 / 上限 M 行」并给继续取 |
+| 编辑区 | 空页签给一句可执行提示，不给示意图 | 不适用（编辑器不转圈） | 语句执行中：行号槽显示进度带 | 错误行内标红 + 「问题」页签收到一条（不抢焦点） | 只读连接时编辑区仍可写，但执行按钮禁用 | 长文按 7.5 的分段呈现 |
 | 侧栏 | 一句空态 + 新建入口 | 树节点骨架 | 不适用 | 一行错误 + 重试 | 无内容时不禁用，只是空 | 不适用 |
 | 下方面板 | 折叠态只留一行标题栏；展开后空态一句 | 首行「正在执行…」+ 可中断 | 输出流式追加，保留滚动位置 | 面板标题出现计数徽标 | 折叠态不设高度约束 | 输出上限到顶时停追加并提示 |
 | 智能体会话 | 空会话给三条可点的起手问题 | 首 token 前显示「思考中」，不显示假进度条 | 工具调用逐步展开，可随时中断 | 失败保留已产生的消息，不整段清空 | 未配置模型时输入框禁用并给入口 | 上下文超限时明确「已压缩 N 条」 |
@@ -2313,8 +2396,11 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 4. **状态栏 24pt 只在令牌里定档**，哪些屏真的挂了状态栏需实机点验后补本表（当前不确定，标待定）。
 5. **多显示器摆位记忆未做**：窗口位置由系统恢复，应用不存帧。
 6. **主界面全键盘操作不完整**：表格单元格与树节点的焦点可见性未逐控件核对。
-7. **`⌘K` 未登记进 `AppShortcut`**：命令面板用隐藏按钮挂全局快捷键，因此帮助面板的完整快捷键表里没有这一行（代码注释自陈「不假装已完成」）。修法是把它登记成一个 case，让帮助面板自动收到。
+7. **`⌘K` 的登记与绑定是两处写**：`AppShortcut.commandPalette` 已登记（注释写明「在此之前只写在注释里预留，帮助面板因此列不出它」，即这条缺口已补），但实际绑定仍由 `MainWindow.swift:281` 的隐藏按钮以字面量 `"k"` 提供。改 case 不会改绑定，两处会漂。修法：让隐藏按钮读 `AppShortcut.commandPalette.key`。
 8. **两处键位冲突未收口**：`⌘⇧E`（语法检查 / 出口日志）与 `⌘⇧F`（格式化两档）各占同一组合，登记表没有唯一性断言。
+9. **结果表列宽与列序不持久化**（无 `autosaveName`，全仓无列宽持久化代码）：7.9.4 要求的「记住该连接的列宽」目前是契约，不是现状。
+10. **关闭有未保存改动的查询页签不弹确认**：只判「是否最后一个页签」与「是否在执行中」；工作区文件页签有三按钮确认框，两处不对称。
+11. **笔记侧退出前无落盘**：`willTerminate` 只保存页签会话，不 flush 正在编辑的笔记（自动保存窗口 1,500 ms + 异步写库），最坏丢一次窗口内的改动。
 
 ### 9.1.9 智能体界面：位置与整体构成
 
@@ -2426,6 +2512,603 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 6. **审批单不显示「影响行数预估」**：批准前看到 SQL 与风险等级，但没有「这条会改多少行」。
 7. **空会话没有空态**：消息流为空时不显示任何文案（应与其它区域一致，给一句能直接发的起手话）。
 8. **定时入口只有一枚图标按钮**：无键位、无菜单项，`AppShortcut` 里也没有对应 case，因此帮助面板里查不到它。
+
+### 9.1.17 数据库面
+
+「数据库面」是活动栏选中「数据库」时的整屏：左栏是连接列表与对象树，中栏是查询工作台（上下文档 → 工具条 → 编辑区 → 结果区），下方面板由段一级统一装配、与工作台面共用一个实例。本节只写版式、可见反馈与代码出处。
+
+#### 9.1.17.1 区域骨架
+
+| 区域 | 实现视图 | 版式口径 | 依据 |
+|---|---|---|---|
+| 活动栏 | `ActivityBarView` | 宽 `Metrics.activityBarWidth`（46）；条目高 `Metrics.toolbarHeight`（44）；图标字号 = `Metrics.activityIconSize`（20）× 0.85 交给 `.system(size:)` | `App/Views/ActivityBarView.swift:44,88,122` |
+| 左栏 | `ConnectionListView` + `ObjectTreeView` | `List(.sidebar)`；列宽三档同取 `Metrics.sidebarWidth`（248），即「可拖宽」在这一屏不成立 | `App/Views/MainWindow.swift:188`；`App/Views/ConnectionListView.swift:58,78` |
+| 左栏两段 | 同上 | 连接列表在上、对象树在下，同一个 `List` 的两个 `Section` | `App/Views/ConnectionListView.swift:59,74` |
+| 上下文档 | `QueryContextBar` | 服务器下拉 160–280、数据库下拉 120–240；连接详情只在 `info.circle` 悬停时出，不进正文 | `App/Views/QueryContextBar.swift:19-57,78-85` |
+| 工具条 | `QueryToolbar` | 只放按钮与下拉，右侧刻意留空（不放连接文本，避免撑高） | `App/Views/QueryToolbar.swift:36-88` |
+| 中栏 | `QueryWorkspaceView` | 页签条 + 分隔线 + 编辑器；无页签时 `ContentUnavailableView`（`doc.text`） | `App/Views/QueryWorkspaceView.swift:16-27` |
+| 下方面板 | `LowerPaneView`（段一级） | 与工作台面同实例；默认高 `LowerPaneSizing.expandedIdealHeight`（200）、下限 90、拖拽上限 = 可用高 × 0.75；折叠只收内容、标题栏留在底部 | `App/Views/MainWindow.swift:124-173`；`Core/LowerPaneSizing.swift:23-47` |
+
+侧栏 248 是「一个值三档」：左栏不可拖宽，想收窄只能改令牌。下方面板折叠态**不设最小高度**（`nil` = 按内容自量），避免残留一条比标题栏更宽的空白带。
+
+#### 9.1.17.2 对象树：分层与右键面
+
+对象树是**扁平化树**：可见行 = 「展开状态 + 子节点缓存 + 加载中 + 错误」的纯函数输出，视图只画一维行数组，任意层级都能展开。
+
+| 维度 | 口径 | 依据 |
+|---|---|---|
+| 层级 | 服务器 → 数据库 → schema → 表 / 视图 / 序列 → 列 / 函数 | `App/Views/ObjectTreeView.swift:471-500` |
+| 行高 | `Metrics.listRowHeight`（20）；整树装进一个 `List` 行，行距自有 | `App/Views/ObjectTreeView.swift:100-150,264` |
+| 缩进 | 层级 × `Metrics.listIndent`（14） | `App/Views/ObjectTreeRowContent.swift:80` |
+| 选中态 | `Overlay.Selection`（深 0.14 / 浅 0.10）铺满整行 | `App/Views/ObjectTreeRowContent.swift:86-90` |
+| 图标色 | 按节点类型取系统色（`.blue`/`.purple`/`.green`/`.teal`/`.orange`/`.indigo`） | `App/Views/ObjectTreeRowContent.swift:94-104` |
+| 展开箭头 | 12×12 chevron，展开时旋转 90° | `App/Views/ObjectTreeRowContent.swift:44-58` |
+| 首连 | 自动展开「服务器 → 连接自己的库 → `public`」 | `App/Views/ObjectTreeView.swift:478-500` |
+| 预取 | 一次最多 6 个节点、静默、失败不缓存（缓存空数组等于假装查过） | `Core/ObjectTreeAutoExpansion.swift:62-65`；`App/Views/ObjectTreeView.swift:450-469` |
+| 四态 | 未选连接 / 加载中 / 根加载失败（带重试）/ 空 | `App/Views/ObjectTreeView.swift:60-92` |
+| 顶部一行 | 分段控件（层级 / 按类型分组）+ 搜索 + 刷新 | `App/Views/ObjectTreeToolbar.swift:39-65` |
+
+右键面由**命中行自己**给出菜单，不走 `.contextMenu` —— 容器级菜单在侧栏里会被提升/合并，一路问到连接行那份菜单去。
+
+| 节点 | 菜单项（按出现顺序） | 依据 |
+|---|---|---|
+| 服务器 | 连接 / 断开连接 / 编辑连接… / 库属性 / 删除数据库 / 权限 / 锁与阻塞 / 会话… / 新建数据库（仅 `canCreateDatabase == true`） | `App/Views/ObjectTreeAppKitMenu.swift:145-218` |
+| 数据库、schema | 新建表… + 其后与表共用的项 | `App/Views/ObjectTreeAppKitMenu.swift:66-71` |
+| 表 | 浏览前 200 行 / 生成 SELECT / 生成 INSERT / 复制限定名 / 带条件浏览 / 合成数据… / 查看 DDL / 编辑表结构 / 截断（危险色）/ 删除（危险色） | `App/Views/ObjectTreeAppKitMenu.swift:73-141` |
+| 视图 | 浏览前 200 行 / 生成 SELECT / 复制限定名 / 带条件浏览 / 查看 DDL | `Core/ObjectTreeActions.swift:92-105` |
+| 列 | 复制列名 | 同上 |
+| 函数 | 查看 DDL | 同上 |
+| 空菜单 | 一句占位（`treeMenuEmpty`）—— 空菜单比没有菜单更让人困惑 | `App/Views/ObjectTreeAppKitMenu.swift:53-56` |
+
+某一项出不出来只由 `ObjectTreeActions.isAvailable` 判定；破坏性项红字走 `Theme.nsColor(.danger)` 而非系统色。
+
+#### 9.1.17.3 编辑区与结果区的上下关系
+
+| 块 | 出现条件 | 高度 | 依据 |
+|---|---|---|---|
+| 诊断条 | 有语法诊断时贴在编辑区底 | 最多 3 条 + 「还有 N 条」 | `App/Views/QueryWorkspaceView.swift:221-254` |
+| 编辑区 | 有选中页签 | 上下分栏上槽，最小 100、理想占 55% | `App/Views/QueryWorkspaceView.swift:144-160` |
+| 结果区 | `tab.hasTabularResult`（含至少一个带列的结果集） | 下槽最小 100、理想占 45%；否则整块不出现 | `App/Views/QueryWorkspaceView.swift:146,195-197` |
+| 出处行 | 当前结果集的 `resultSummaries` 项非空 | 一行 caption，可选中复制 | `App/Views/QueryWorkspaceView.swift:262-271` |
+
+两者用 `VSplitView` 分栏、分隔条可拖；子视图数须在构建时固定，因此按「有结果 / 无结果」写成两条分支。
+
+#### 9.1.17.4 结果集：表头、行、列宽、选中、复制、导出
+
+| 项 | 口径 | 依据 |
+|---|---|---|
+| 表头 | 自绘：`Surface.panel` 底、caption 字、`TextTone.tertiary`、右侧与底部发丝线；`tooltip` = 「列名 · 类型」 | `App/Views/ResultGrid.swift:536-556,672-700` |
+| 行高 | `Metrics.rowHeight`（26）；列间距 `Spacing.m`（12）、行间距 0 | `App/Views/ResultGrid.swift:92-94` |
+| 斑马纹 | `Overlay.Zebra`（深 0.02 / 浅 0.015），隔行 | `App/Views/ResultGrid.swift:643-652` |
+| 行线 | 底部 `Metrics.hairline`（0.5） | `App/Views/ResultGrid.swift:655-656` |
+| 选中 | `Overlay.Selection` + 左侧 `Spacing.hair`（2）强调条；允许 ⌘ 多选，不允许整列选中 | `App/Views/ResultGrid.swift:87-90,659-666` |
+| 列宽 | 起点 = 表头宽 + `Spacing.xl`，采样 `Metrics.columnWidthSampleRows`（100）行取最大 + `Spacing.l`，夹在 `Metrics.minColumnWidth`（40）与 `maxColumnWidth`（420）之间；列可拖宽、可换序 | `App/Views/ResultGrid.swift:88-91,558-568` |
+| 数值列 | 右对齐 + `Theme.font(.data)` 等宽数字，表头同向对齐 | `App/Views/ResultGrid.swift:409,532-534,548` |
+| 复制 | ⌘C = TSV；右键「复制为…」列 `ResultClipboard.Format` 全部档位；复制的是**当前显示的行**（筛选/分页之后） | `App/Views/ResultGrid.swift:101-120,603-622` |
+| 导出 | 工具条上传图标的下拉 7 项：CSV（UTF-8）/ CSV（GB18030）/ JSON / XLSX / TSV / Markdown / SQL INSERT；无可导出内容时整个菜单不出现 | `App/Views/ResultTableView.swift:280-297` |
+| 分页 | 每页 50 / 100 / 200 / 500 / 1000 与「全部」；首 / 上 / 页码指示 / 下 / 末 | `App/Views/ResultPagerBar.swift:25-78`；`Core/ResultView.swift:190` |
+| 行详情 | 右侧栏 280–440（默认 320），表格最小 240；详情只讲一行，多选时取最小索引 | `App/Views/ResultTableView.swift:620-626,589-592` |
+| 规模与耗时 | 「N 行 × M 列」、截断标记（warning 底）、三位小数耗时 | `App/Views/ResultTableView.swift:299-322` |
+| 无结果集 | DDL / DML 显示对勾 + 影响行数，不摆一张空表 | `App/Views/ResultTableView.swift:596-611` |
+
+换结果集、改页码、改筛选或排序时，选中行与待提交的编辑标记一并作废并说明理由 —— 同一行号在新视图里指向另一行。
+
+#### 9.1.17.5 执行中与取消的可见反馈
+
+| 位置 | 反馈 | 依据 |
+|---|---|---|
+| 页签条 | 该页签文字前 `ProgressView(.mini)`；同时关闭按钮禁用 | `App/Views/QueryWorkspaceView.swift:43-46,69` |
+| 工具条 | 执行按钮置灰禁用、停止按钮由灰转 danger 可点；尾部 `ProgressView(.small)` | `App/Views/QueryToolbar.swift:71-75,346-378` |
+| 其余按钮 | 「检查」「执行计划」在执行中一并禁用 | `App/Views/QueryToolbar.swift:380-406` |
+| 结果区 | 无结果且执行中：居中 `ProgressView` + 「正在执行…」 | `App/Views/ResultTableView.swift:217-224` |
+| 键位 | 执行 `⌘↩`、停止 `⌘.`、检查 `⇧⌘E`、执行计划 `⇧⌘P` | `App/ShortcutCatalog.swift:16-20,93-95,130-135` |
+
+#### 9.1.17.6 错误落到「问题」页签
+
+执行错误不进结果区，进下方面板的「问题」页签；写入点在模型层，不在视图。
+
+| 联动 | 事实 | 依据 |
+|---|---|---|
+| 写入 | `errorMessage` 的 `didSet` 追加一条 error；`syntaxCheckMessage` 按 `syntaxCheckFailed` 记 error 或 info | `App/AppState.swift:66-84` |
+| 清洗规则 | 去首尾空白、跳过空串、相邻同文案同级别去重、上限 500 条丢最旧 | `Core/TabLog.swift:38-60` |
+| 角标 | 「问题」页签角标 = 执行错误条数 + 语法诊断 error 条数，红胶囊 | `App/Views/LowerPaneTabStrip.swift:140-147,178-183` |
+| 页签集合 | 数据库段五枚：问题 / 输出 / 终端 / 调试控制台 / 历史；工作台面四枚（不含历史） | `App/AppState.swift:1135-1140`；`Core/LowerPaneTab.swift:14-32` |
+| 双份诊断 | 编辑区底部另有一份（最多 3 条），与「问题」页签同源（同一份 `QueryDiagnostics`） | `App/Views/QueryWorkspaceView.swift:221-254` |
+| 不自动切换 | 错误只改日志与角标，页面停在本来的页签；切到「问题」是用户动作（点页签 / 折叠态点页签顺带展开） | `App/AppState.swift` 全文无 `lowerPaneTab = .problem` 赋值（检索零命中）；`App/Views/LowerPaneTabStrip.swift:130-134` |
+
+同一条错误只有两处可见面（角标计数与「问题」页签列表），不自动把面板顶上来 —— 执行失败时弹面板会打断编辑。
+
+#### 9.1.17.7 执行计划与锁诊断
+
+| 面板 | 形态 | 依据 |
+|---|---|---|
+| 执行计划 | sheet；**定宽 `Metrics.planPanelWidth`（720）、不定高**：计划树按「行数 × `Metrics.listRowHeight`」夹在 56–320、原始输出按「行数 × `planRawLineHeight`（15）」夹在 48–260，整块下限 `planPanelMinHeight`（160）；空态不摆 `Spacer` | `App/Views/ExecutionPlanPanel.swift:36-39,127-194,206-210`；`Core/DesignTokens.swift:109-118` |
+| 计划的读法 | 三段：摘要（节点数 / 规划与执行耗时 / 全表扫描处数 / 最慢节点）→ 计划树（顶级节点 semibold，顺序扫描整行 warning + 「顺序扫描」标签）→ 原始输出（等宽小字，可选中） | `App/Views/ExecutionPlanPanel.swift:114-194` |
+| 选项 | ANALYZE（默认关，打开后常驻一条「会真正执行语句」的警告）/ BUFFERS / JSON（仅 PostgreSQL 可选） | `App/Views/ExecutionPlanPanel.swift:65-88` |
+| 锁与阻塞 | sheet 760×560；顶部刷新与关闭；权限提示常驻；汇总 3 行；每条 = `pid` → 阻塞者 pid · 已等待秒数 · granted / waiting；「定位阻塞者」把对应行按 accent 0.15 高亮 | `App/Views/LockPanel.swift:40-87,91-159` |
+| 诊断这条查询 | sheet 760×700；顺序固定为 问题与语句 → 取证（带编号、带行数据，取不到的显式标红）→ 资料块（可复制）→ 回答 → 建议（可直接执行 / 需确认 / 被拒绝）与拒绝理由 | `App/Views/DiagnosisPanel.swift:44,94-301` |
+
+执行计划高度由内容算，是这一族面板里唯一走令牌的；其余仍是写死宽高。
+
+#### 9.1.17.8 其余数据库面板
+
+| 面板 | 尺寸 | 结构要点 | 依据 |
+|---|---|---|---|
+| 数据任务 | 1060×860，左列表 230 | 定义 / 调度 / 导出三件事一个面板；未试运行不能保存（`canSave = isValid && dryRun != nil`），任何改动都会清掉上次试运行结论 | `App/Views/DataTaskPanel.swift:40-54,543-551,668-670` |
+| 导入数据 | 780×760 | 选文件 → 选目标表 → 先解析再看（列映射 / 未匹配列 / 必填缺失 / 非法值）→ 写入通道 → 前 5 行预览 → 执行；取不到 COPY 时写明走批量 INSERT 及理由 | `App/Views/ImportPanel.swift:62,65-106` |
+| ER 图 | 900×720 | schema 输入 + 生成 / 复制 Mermaid / 复制 DOT / 导出；画布可缩放平移；成环的表点名提示 | `App/Views/ERDiagramPanel.swift:61,84-114` |
+| 数据库统计 | 660×640 | 四段：表大小 / 扫描 / 连接 / 缓存命中；每段取前 20；比率无数据时写「无扫描数据」而不是 0% | `App/Views/DatabaseStatsPanel.swift:40,49,96-116` |
+
+#### 9.1.17.9 连接管理：列表与表单
+
+| 部位 | 口径 | 依据 |
+|---|---|---|
+| 列表行 | 9pt 圆点（按方言取身份色）+ 连接名 + 环境徽标 + 第二行「方言 · 端点」 | `App/Views/ConnectionListView.swift:189-213` |
+| 分组 | 命名组用可折叠 `DisclosureGroup`（标题带条数，折叠态存在 `AppState`）；未分组那段**不给折叠** | `App/Views/ConnectionListView.swift:20-39` |
+| 行右键 | 编辑 / 删除 | `App/Views/ConnectionListView.swift:46-53` |
+| 删除 | 二次确认 `confirmationDialog`，正文带连接名 | `App/Views/ConnectionListView.swift:163-180` |
+| 新建 | 侧栏工具条 `primaryAction` 上的加号 | `App/Views/ConnectionListView.swift:181-185` |
+| 表单外形 | sheet 520×600 的 `Form`；标题「新建连接 / 编辑连接」；失败横幅置顶且可复制全文（截断时另给「复制完整错误」） | `App/Views/ConnectionFormView.swift:140-186,331` |
+| 字段 | URL 导入（粘一行连接串填表）/ 名称 / 方言 + 端口 + SSL / 主机 / 数据库 / 用户名 / 口令（编辑态留空 = 不改）/ 环境 / 颜色（140 宽）/ 只读 / 分组 / 启动 SQL / SSH 隧道（主机、端口 80、用户、认证 140、私钥路径、口令、主机密钥策略 260、超时）/ 测试连接、测试隧道 | `App/Views/ConnectionFormView.swift:188-295,340-450` |
+
+#### 9.1.17.10 令牌与视图对不上的地方
+
+| 现象 | 依据 |
+|---|---|
+| `Metrics.tabHeight`（30）与 `Metrics.statusBarHeight`（24）在 `App/`、`Core/` 零引用：页签高度实际由内边距决定（查询页签 10/6，下方面板页签 8/4） | `Core/DesignTokens.swift:80-82`；`App/Views/QueryWorkspaceView.swift:73-74`；`App/Views/LowerPaneTabStrip.swift:149-150` |
+| 除执行计划外，各面板尺寸是字面量（760×560 / 760×700 / 780×760 / 1060×860 / 900×720 / 660×640 / 520×600），没有相应 `Metrics` 项 | 见 9.1.17.7、9.1.17.8、9.1.17.9 各行 |
+| 对象树图标色用系统色，未走 `CategoricalTone` | `App/Views/ObjectTreeRowContent.swift:94-104` |
+| 下方面板日志的 warning / error 用 `.orange` / `.red`，与 `Theme.status` 不同源 | `App/Views/LowerPaneView.swift:437-443` |
+| 活动栏图标字号是 `Metrics.activityIconSize × 0.85` 交给 `.system(size:)`，不在 `TypeScale` 刻度上 | `App/Views/ActivityBarView.swift:88,120` |
+| 结果表拖过的列宽与列序不落盘（`autosaveName` 与列宽持久化在 `App/`、`Core/` 均检索零命中） | `App/Views/ResultGrid.swift:88-91` |
+
+#### 需要补的事实
+
+1. 查询页签条是否要拖拽重排：现状没有（`ForEach` 无 `onMove` / `onDrag`），需求侧未表态。
+2. 关闭有未保存改动的查询页签是否需要确认：现状 `closeTab` 只判「页签数 > 1」与「不在执行中」，与工作台面页签的三按钮确认框不对称；是否有意待确认。
+3. 下方面板「调试控制台」只有一句占位文案，没有实际内容。
+4. 对象树里 `hoverBox` 与 `ObjectTreeMenuTarget.resolve` 已无生产读者（源码注释自称待删残迹），删除时机待定。
+5. 各面板写死的宽高是否要收进 `Metrics`（会牵动快照判据），未定。
+
+### 9.1.18 工作台面
+
+「工作台面」是活动栏选中「工作区」时的整屏：左栏是工作区面板（文件树 + 授权状态），右侧是页签条 + 内容 + 消息条。页签集与数据库的 SQL 页签**分属两个模型**，互不干扰；下方面板与数据库面共用同一个实例。
+
+#### 9.1.18.1 区域骨架
+
+| 区域 | 实现视图 | 版式口径 | 依据 |
+|---|---|---|---|
+| 左栏 | `WorkspaceExplorerView` | 三段：标头（搜索框 / 刷新 / 切换工作区）→ 工作区名与路径 → 文件树；底部常显授权状态 | `App/Views/WorkspaceExplorerView.swift:30-45,74-111,376-395` |
+| 页签条 | `WorkspaceTabStrip` | 高度只由内边距与字高决定（条 8/4，页签 8/2） | `App/Views/WorkspaceTabStrip.swift:32-47,89-90` |
+| 内容 | `WorkspaceAreaView` | 分支优先级：浏览器页签 → Home → 对话页签 → 文本编辑器 | `App/Views/WorkspaceAreaView.swift:35-54` |
+| 编辑器 | `CodeEditorView` | Markdown 且预览开关打开时用 `HSplitView` 分屏（编辑 + 只读预览，比例可拖） | `App/Views/WorkspaceAreaView.swift:61-98` |
+| 提示条 | `hintBar` | 左侧快捷键提示（tertiary），右侧预览开关（只有 Markdown 给这枚） | `App/Views/WorkspaceAreaView.swift:102-122` |
+| 消息条 | `messageBar` | 错误优先、其次一次性提示；底色 = 语义色 0.10；可手动关闭 | `App/Views/WorkspaceAreaView.swift:126-161` |
+
+#### 9.1.18.2 页签条行为
+
+| 行为 | 事实 | 依据 |
+|---|---|---|
+| 新建（文件） | 页签条上**没有加号**；文件页签只能由「打开文件」（`doc.text` 按钮 / `⌘O`）或双击树里的文件产生；同一路径复用、不重复开 | `App/Views/WorkspaceTabStrip.swift:80-87`；`Core/WorkspaceTab.swift:110-116` |
+| 新建（浏览器） | `⇧⌘B` 或「文件 · 新建浏览器页签」；先切到工作区再建；默认空白页，不发起任何请求 | `App/ShortcutCatalog.swift:53-54,116`；`App/DoyahStudioCommands.swift:92-98`；`App/WorkspaceBrowserModel.swift:86-92` |
+| 新建（对话） | 页签条上的气泡图标；已存在就复用同一个页签 | `App/Views/WorkspaceTabStrip.swift:70-78`；`Core/WorkspaceTab.swift:95-102` |
+| Home | 恒在、无关闭按钮、图标 `house`；标题在渲染时从语言表取（运行期切语言会跟着变） | `App/Views/WorkspaceTabStrip.swift:145-178` |
+| 关闭（文件） | 走确认策略：干净页签直接关；脏页签弹确认框，三枚**有文字**的按钮 —— 保存并关闭 / 不保存直接关闭 / 取消 | `App/Views/WorkspaceTabStrip.swift:93-114,166-178`；`App/WorkspaceTabsModel.swift:119-148` |
+| 关闭后选中 | 优先右邻，没有就左邻，都没有才 nil | `Core/WorkspaceTab.swift:123-131` |
+| 关闭（浏览器） | 直接关、不确认；关掉的正是选中项时落到最后一个 | `App/WorkspaceBrowserModel.swift:135-144` |
+| 重排 | **没有**：两段 `ForEach` 均无 `onMove` / `onDrag` / 拖放，顺序固定为「全部浏览器页签在前、文件页签在后」 | `App/Views/WorkspaceTabStrip.swift:39-45`（页签条上 `onDrag` / `onMove` 检索零命中） |
+| 溢出 | 横向 `ScrollView(showsIndicators: false)`：挤不下就横向滚动，不折成溢出菜单、也不换行 | `App/Views/WorkspaceTabStrip.swift:34-47` |
+| 高度不变量 | 页签内容不许改变这一行高度：空白页签与有地址页签同高、页签数量与窗口宽度都不影响高度 | `App/Views/WorkspaceTabStrip.swift:19-24` |
+| 右侧常驻 | 语言标签 + 编辑菜单（格式化）+ 保存（仅脏时可点）+ 对话页签 + 打开文件 | `App/Views/WorkspaceTabStrip.swift:51-88` |
+
+确认框里的三枚按钮必须有文字标题：在 macOS 上 `confirmationDialog` 走 NSAlert，只按标题渲染，图标按钮会退化成「一个空按钮」。
+
+#### 9.1.18.3 Home 区
+
+| 块 | 内容 | 依据 |
+|---|---|---|
+| 头部 | 欢迎语（title）、副标题（body）、构建号、版权（后两者 caption + tertiary） | `App/Views/WorkspaceAreaView.swift:187-203` |
+| 动作行 | 「打开文件」；仅当尚未选工作区时多一枚「选择文件夹」 | `App/Views/WorkspaceAreaView.swift:205-223` |
+| 三列 | 最近文件（可点开）/ 最近工作区（**只展示**：切换必须走目录授权，不能拿历史路径冒充授权）/ 连接（点了切到数据库段并选中该连接） | `App/Views/WorkspaceAreaView.swift:225-262` |
+| 每列条数 | `prefix(8)`；空态各一句，不留空栏 | `App/Views/WorkspaceAreaView.swift:276-285` |
+| 版式 | 内容最大宽 1100、内边距 `Spacing.xl`，三列等分 | `App/Views/WorkspaceAreaView.swift:182-183` |
+
+「去数据库」也走统一入口（`selectActivityItem(.database)`）：当前档位不含数据库时它会照实说一句，而不是切到一个画不出来的视图。
+
+#### 9.1.18.4 浏览器页签与文件页签同处呈现
+
+两类页签在**同一行**页签条、**同一个内容槽**里呈现。选中态是两个字段（`browser.selectedBrowserID` 与 `tabs.selectedID`），所以点文件页签时必须先清掉浏览器那份选中态。
+
+| 规则 | 事实 | 依据 |
+|---|---|---|
+| 呈现优先级 | 内容区先判 `browser.selectedBrowserPage`，再判 `tabs.selectedTab` | `App/Views/WorkspaceAreaView.swift:37-53` |
+| 互斥 | 文件 / Home 页签的点击手势先 `browser.clearSelection()` 再选中自己 | `App/Views/WorkspaceTabStrip.swift:187-191` |
+| 图标 | 浏览器 `globe`（加载中换成 mini 转圈）/ Home `house` / 文件 `doc.text` | `App/Views/WorkspaceTabStrip.swift:148,199-205` |
+| 脏标记 | 只有文件页签有 6pt warning 圆点；浏览器页签无脏态 | `App/Views/WorkspaceTabStrip.swift:159-164` |
+| 同名同高 | 两类页签的内边距一致、圆角同取 `Radius.badge` | `App/Views/WorkspaceTabStrip.swift:180-185,221-226` |
+| 地址栏 | 后退 / 前进（不可用则禁用）/ 刷新与停止二合一 / 地址栏（等宽小字）/ 加载中 mini 环 | `App/Views/BrowserTabView.swift:46-97` |
+| 两条信息条 | 错误条用 warning 图标，中性提示条（下载开始 / 完成）用向下箭头，二者都在工具条下方、内容上方 | `App/Views/BrowserTabView.swift:99-127` |
+| 恢复态 | 从会话恢复来的页签**不自动请求**：显示地址 + 「点了才加载」按钮 | `App/Views/BrowserTabView.swift:131-156` |
+| 空页 | `ContentUnavailableView`（`globe`），文案明写「还没有发起任何请求」 | `App/Views/BrowserTabView.swift:157-163` |
+
+交给浏览器页签的只有一条登记项：`html` 语言（扩展名 `html` / `htm` / `xhtml`）声明 `defaultView: .browser`，登记表里没有第二条；同一地址已开着就切过去、不重复开。
+
+依据：`Core/CodeLanguageDefinitions.swift:273-305`；`App/WorkspaceTabsModel.swift:171-177`；`App/WorkspaceBrowserModel.swift:109-115`。
+
+#### 9.1.18.5 文件树
+
+| 项 | 口径 | 依据 |
+|---|---|---|
+| 行高 | `Metrics.listRowHeight`（20） | `App/Views/WorkspaceExplorerView.swift:198` |
+| 缩进 | `Spacing.s` + 层级 × 14（裸字面量，**未读** `Metrics.listIndent`） | `App/Views/WorkspaceExplorerView.swift:196` |
+| 展开箭头 | 目录才有 chevron（宽 10）；非目录留同宽占位，保证图标列对齐 | `App/Views/WorkspaceExplorerView.swift:150-157` |
+| 类型图标 | 按扩展名：`swift` / `sql` / `md` / `json`·`yml`·`yaml`·`toml` / 图片 / 其他 | `App/Views/WorkspaceExplorerView.swift:226-240` |
+| 行内操作 | 悬停才出现：目录三枚（加号 = 新建文件 / 新建文件夹菜单、减号 = 删到废纸篓、铅笔 = 改名），文件两枚 | `App/Views/WorkspaceExplorerView.swift:262-292` |
+| 改名 | 标签就地换成输入框，回车提交、Esc 取消；**失败留在改名态**（收掉输入框等于把用户敲的字扔了） | `App/Views/WorkspaceExplorerView.swift:164-180,303-325` |
+| 双击 | 目录展开 / 收起；文件开进工作区页签 | `App/Views/WorkspaceExplorerView.swift:204-211` |
+| 右键 | 「在访达中显示」 | `App/Views/WorkspaceExplorerView.swift:216-218` |
+| 搜索 | 标头搜索框：文件名 + 内容两组，↑↓ 选、回车打开并跳到命中行；结果面板最高 240 | `App/Views/WorkspaceHeaderSearch.swift:16-52` |
+| 授权状态 | 底部常显：圆点 + 一句；授权有效但书签过期 = warning，目录缺失 / 拒绝 = danger，未授权 = tertiary | `App/Views/WorkspaceExplorerView.swift:376-411` |
+
+整行不再挂悬停 tip：父层一旦挂上，行内那三枚图标就永远看不到自己的名字。
+
+#### 9.1.18.6 文件操作的空态与失败
+
+| 情形 | 界面 | 依据 |
+|---|---|---|
+| 未选工作区 | 标题 + 说明 + 「选择文件夹」按钮（不是空白面板） | `App/Views/WorkspaceExplorerView.swift:357-372` |
+| 树为空 | 一句空态文案（`workspaceTreeEmpty`），不留纯空白 | `App/Views/WorkspaceExplorerView.swift:125-130` |
+| 删除确认 | `alert` 写明「将删几项」：文件一句；目录数到 500 就停并写「N 项以上」 | `App/Views/WorkspaceExplorerView.swift:46-62,328-336`；`Core/WorkspaceFileOperations.swift:49,163-179` |
+| 删除结果 | 走废纸篓（唯一可撤销的真保障），成功后底部提示「已移到废纸篓」并带名字 | `App/WorkspaceStore.swift:242-250`；`Core/WorkspaceFileOperations.swift:145-160` |
+| 失败分类 | 空名 / 非法名（含 `/` 或 `:`、`.` 或 `..`、首尾空白）/ 撞名 / 越界（含符号链接逃逸）/ 目标不是目录 / 根目录不可删 / 系统原因 —— 七类各一句话 | `Core/WorkspaceFileOperations.swift:16-62`；`App/WorkspaceStore.swift:264-277` |
+| 失败落点 | 一律走左栏底部那一行提示（不弹窗、不静默） | `App/Views/WorkspaceExplorerView.swift:40-45,339-353` |
+| 只刷一层 | 改完 / 删完只重读父目录那一层，不整棵树重来 | `App/WorkspaceStore.swift:279-284` |
+
+#### 9.1.18.7 打开与保存的拒绝路径
+
+| 情形 | 表现 | 依据 |
+|---|---|---|
+| 目标是目录 | 明说这是目录、打不开（带名字） | `App/WorkspaceTabsModel.swift:183-187` |
+| 超过 2 MB | 说明文件多大、上限多大（能打开但卡死比明确拒绝糟） | `App/WorkspaceTabsModel.swift:14-16,188-196` |
+| 二进制 | 明说看起来是二进制（`workspaceFileBinary`） | `App/WorkspaceTabsModel.swift:198-201` |
+| 非 UTF-8 | 能开就开，并提示实际用的编码 | `App/WorkspaceTabsModel.swift:207-210` |
+| 文件不存在 | 会话恢复时点名列出找不到的文件 | `App/WorkspaceTabsModel.swift:371-378` |
+| 保存失败 | 明说保存失败（名字 + 系统原因），页签保持脏态 | `App/WorkspaceTabsModel.swift:218-231` |
+
+#### 9.1.18.8 令牌与视图对不上的地方
+
+| 现象 | 依据 |
+|---|---|
+| 文件树缩进写 14 字面量，未读 `Metrics.listIndent`（对象树读了） | `App/Views/WorkspaceExplorerView.swift:196` |
+| 页签条与页签多处内边距写 8 / 4 字面量（与 `Spacing.s` / `Spacing.xs` 同值，但没走令牌） | `App/Views/WorkspaceTabStrip.swift:89-90,180-181` |
+| 两个页签条圆角不同：工作区用 `Radius.badge`（4），查询页签用 `Radius.card`（8） | `App/Views/WorkspaceTabStrip.swift:183`；`App/Views/QueryWorkspaceView.swift:76` |
+| 搜索面板与替换预览的三处尺寸是字面量（240 / 200 / 40 行 / 10 行），未进令牌 | `App/Views/WorkspaceHeaderSearch.swift:46-56` |
+| `Metrics.tabHeight`（30）零引用：页签高度由内边距决定 | `Core/DesignTokens.swift:80` |
+
+#### 需要补的事实
+
+1. 工作区没有「新建空文件」的页签入口（只能先在树里建、再打开），是否要补未定。
+2. 页签不可重排；是否需要拖拽重排未定。
+3. 浏览器页签关闭不确认（包括正在加载的页），是否要确认未定。
+4. 是否有「另存为」入口：现状 `save(_:)` 只写回原路径，没有第二条落盘路径。
+5. Home 的「最近工作区」只展示不切换（切换必须重新过目录授权），是否要给一键重新授权未定。
+6. 浏览器页签从会话恢复时的顺序与选中项口径（`restoreBrowserTabs()` 的排序依据）本节未核对，待定。
+
+### 9.1.19 笔记面
+
+活动栏 `notes` 项下的这一块屏由 `NotesAreaView` 一处装配（`Plugins/Notes/Views/NotesPanel.swift:1201`）：顶栏一行 + 栏体。栏体是两个**互斥的** `HSplitView`（笔记一屏、待办一屏各一套），不是在一个 `HSplitView` 里 `switch` —— `HSplitView` 的成员必须是它的直接子视图，套一层条件视图会把两栏挤成一栏（同文件 `:1212-1241`）。
+
+**骨架是三层横排，默认只并排两层。** 笔记屏把 `columnVisibility` 定成 `.detailOnly`（`App/Views/MainWindow.swift:61`），导航那一栏收起，列表成为最左可见的一列；`sidebarContent` 的笔记支里仍挂着同一棵两级树（`MainWindow.swift:92`），用户手动拉开侧栏时看到的就是它。所以「三栏」是结构口径，不是每一刻的画面。
+
+| 层 | 内容 | 尺寸 | 依据 |
+|---|---|---|---|
+| 顶栏 | 「改 / 删」两枚图标（「增」在笔记屏位于 title 区最左，待办屏才在这一行）· 搜索（收起 / 展开两态）· 行末笔记↔待办两枚图标 | 高由内容（`Spacing.xs` = 4 上下的内边距） | `NotesPanel.swift:1338-1350`、`:1436-1462`、`:1556-1573` |
+| 导航（左） | 笔记本架 → 笔记本两级树，含「全部 / 已收藏 / 最近 / 标签」四类范围行 | 248（`Metrics.sidebarWidth`） | `Core/DesignTokens.swift:92`、`NotesPanel.swift:454-830` |
+| 列表（中） | 标题 · 来源 · 相对时间 · 两行摘要 | 132 / 143 / 238 三档 | `NotesPanel.swift:1522-1524` |
+| 正文（右） | title 区 · 编辑工具条 · 标签 · 正文 | 最小 320，吃满剩余 | `NotesPanel.swift:1238` |
+
+中栏三档的**落地值由 `maxWidth` 决定**：`HSplitView` 先按各半分，中栏那半再被 238 夹住。238 这个上限与**栏头固定两行**是同一步：只收宽度不重排头部，`Notes` 会被挤断成 `Not` / `es`、排序条会被裁到栏外（`NotesPanel.swift:30-37`、`:1487-1511`）。
+
+**浮动笔记本架为什么取代固定栏。** 架原来固定占着窗口最左一整栏；改成浮层后那一栏不再占位，列表成为最左。三条理由：① 省下一整列宽度；② 浮层用 `overlay` **只叠画、不参与尺寸协商**，于是两态下列表的宽度、行数、行矩形逐点相同（覆盖而非挤压，`NotesPanel.swift:160-165`）；③ 入口收成**一枚图标**，与它开的树同一个符号 `books.vertical`（`:1538`），认起来不必靠猜。
+
+| 项 | 口径 | 依据 |
+|---|---|---|
+| 入口位置 | 中栏栏头**第一行的最左**一枚 `ToolbarIconButton` | `NotesPanel.swift:290-303` |
+| 浮出 | 悬停进入（`onHover`）+ 点一下，两条路都走 `setNotesShelfRevealed(true)` | `:296-302` |
+| 收起 | **只在浮层自己身上**写一次 `.onHover`；入口那枚不重复写「离开 ⇒ 收起」，否则两层跟踪区交接时会自己和自己抖 | `:180-186`、`:281-288` |
+| 尺寸 | 浮层吃满中栏的宽与高（`maxWidth/maxHeight: .infinity`），内容是可滚动的两级树 + 右缘一条发丝线 | `:422-437` |
+| 只在笔记屏 | `notesModule == .notes` 才挂这一层；待办屏连层都不存在 | `:182` |
+
+**中栏栏头 = 固定两行。** 第一行「架入口 + 标题 + 条数 + 只看收藏（图标开关）」；第二行排序下拉（三档：最近更新 / 创建时间 / 标题，档位与总序都在 `NotesSortOrder`，`NoteNavigation.swift:112-127`）。标题与条数各带 `lineLimit(1)`，标题另加横向 `fixedSize` —— 宁可整块不收缩也不把词拆成两行。栏头以下依次是：检索说明行（只在有话说时出现）、多选实况行（`noteSelectionCount > 1` 才出现）、列表本身。
+
+| 中栏元素 | 内容 | 依据 |
+|---|---|---|
+| 第一行 | 架入口 · `notesTitle` · 条数 · 收藏筛选开关（`notes-favorite-filter`） | `NotesPanel.swift:205-240` |
+| 第二行 | 排序下拉（`notes-sort`） | `:241-255` |
+| 检索说明 | 子串兜底 / 检索没跑成，各一句如实交代（`NoteSearchDisclosure.key(for:)`） | `NoteStorage/NoteSearchDisclosure.swift:19-29`、`NotesPanel.swift:39-46` |
+| 多选实况 | 「已选 N 条」——右键「移动选中的 N 条」带走的就是这些 | `:49-54` |
+
+**列表一行是四段信息**（`NotesPanel.swift:64-152`）：标题（一行）+ 置顶图钉 + 收藏星 + 「含数据」标签；来源（`kind.displayName · 连接名`，一行、超长按尾截断）与相对时间同一行；摘要两行（折行与截断都在 `NotePresentation.excerpt`，默认 120 字符）；跨笔记本检索时追加一行所属笔记本名。相对时间的档位边界（59 秒 / 同日 / 昨天 / 更早）由 `NotePresentation.relative` 给，视图只把「哪一档 + 数字」搬成语言表里的一句话（`NotePresentation.swift:83-97`）。
+
+| 手势 / 菜单 | 行为 | 依据 |
+|---|---|---|
+| 双击 | 进编辑（内容 + 模式一起） | `NotesPanel.swift:138` |
+| 单击 | 进预览（正文只读）+ 按修饰键多选（⌘ 切换 / ⇧ 连选，⌥⌃ 不参与） | `:139`、`App/AppState.swift:8783-8803` |
+| 右键 | 置顶 / 取消置顶 · 收藏 / 取消收藏 · 「移动到…」（按架分组，当前格带「你现在在这儿」，无去处时灰着并给理由） | `:142-147`、`:308-390` |
+| 拖行 | 可拖；只有**笔记本行**接落点（架行与「全部」行不接） | `:140`、`:646-649` |
+
+双击手势必须写在单击**之前**：顺序反了第一次点击会被单击手势吃掉，双击永不到达（`:133-139`）。
+
+**右栏 = 正文区，读写同屏。** 第一行是 title 区：最左「新建 + 保存」两枚纯图标、中间标题输入（`.plain` + `title` 字号，它是正文区顶部那一行而不是带框表单行）、最右留空（模块切换仍在顶栏行末）。工具条只在 `.edit` 出现 —— 预览态正文只读，画一枚永远灰着的「保存」就是可点却无用的那一课。工具条九枚：粗体 / 斜体 / 下划线 / 荧光笔 / 代码 / 链接（行内，`NoteInlineCommand` 六档，链接是唯一需要输入的一档，开弹框取 URL）+ 勾选框 / 有序 / 无序（块级，`NoteBlockCommand` 三档，产物落 span 的块级属性，不往正文写 `1.` `- ` 标记）。九枚都作用于选区，选区为空时作用于光标所在词；空编辑器时九枚与「保存」一起灰着，判据与保存守卫读同一个 `noteEditorHasContent`。
+
+正文本身两块，共用同一条 `.editorSurface()` 底色：`.edit` 是富文本面 `NotesRichTextEditor`，行内标记解析成属性；`.preview` 是只读 `NotePreviewBody`（真 `NSTextView` 且 `isEditable == false` —— 不用 `.disabled`，因为禁用只拦事件、不改那块文本视图的可编辑属性）。进编辑的路是**正文被按下**（单击或双击都算，由 `PreviewTextView.mouseDown` 投出），不是只有双击。
+
+**自动保存：三态可见、窗口可算。** 编辑器三个框任一变化都标脏并重排停顿计时；计时走 `Task.sleep` 挂起，敲键路径上没有一次同步写盘。
+
+| 档 | 界面表现 | 依据 |
+|---|---|---|
+| `.idle` | **不画**（常态下一行永远亮着的状态字等于没有提示） | `NoteAutosave.swift:47-58` |
+| `.pending` | 「未保存」，次要色 | `:51-57`、`Core/Localization.swift:2962` |
+| `.saving` | 「保存中…」，次要色 | 同上 |
+| `.failed(原因)` | 「自动保存失败」，警示色，悬停给原因 | `NoteAutosave.swift:60-67`、`NotesPanel.swift:1007-1011` |
+
+这套状态字挂在 title 区「保存」右侧一格，`accessibilityIdentifier` 是 `notes-editor-save-state`（`NoteAutosave.statusIdentifier`，唯一出处）。
+
+| 触发 | 行为 | 依据 |
+|---|---|---|
+| 停顿即存 | 最后一次改动后 1500ms 无新改动 ⇒ 落库一次 | `NoteAutosave.swift:26`、`AppState.swift:7912-7919` |
+| 切走即存 | 点另一行 / 换范围 / 换模块 / 新建 / 点「改」五处入口 | `AppState.swift:7395`、`:7837`、`:7846`、`:8147`、`:8796` |
+| 不新增库字段 | 草稿直接走手动「保存」同一条 `upsert` 写路，没有恢复草稿的弹窗 | `NoteAutosave.swift:13-15` |
+
+**丢失窗口有三段，合起来是把它算清的唯一方式**：① 最后一次改动到停顿计时到点的 **1500ms**；② 写库本身的那一段异步耗时；③ 应用退出**前没有任何笔记侧的落盘调用** —— `willTerminate` 只调工作区页签的 `saveSession()`（`App/DoyahStudioApp.swift:207`），所以退出或强杀时，落在①窗口里的改动就是丢的那一段。切到别的活动栏（数据库 / 工作区 / 周报）也不调切走即存（`AppState.selectActivityItem` 没有这一步），但停顿计时器照旧到点落库，所以那一下不丢、只是晚一点。
+
+**空态与失败分四档，不许合成一句「没有」**：
+
+| 档 | 表现 | 依据 |
+|---|---|---|
+| 一条笔记都没有 | 「还没有笔记」 | `NotesPanel.swift:55-62` |
+| 搜不到 | 「没有匹配的笔记（笔记还在，换个词试试）」 | 同上 |
+| 检索走了兜底 | 栏头下一行「这次是子串匹配（全文检索需要 3 个字以上…）」 | `NoteSearchDisclosure.swift:24-28` |
+| 检索没跑成 | 栏头下一行「检索没跑成：%@（下面列出的是全部笔记）」，列表退回全部 | `AppState.NoteSearchState.unavailable`、`NotesPanel.swift:39-46` |
+
+搜索只有一处、在顶栏：收起态是一枚放大镜图标，点开才浮出输入框（上限 200）与作用域下拉（当前范围 / 全部笔记本）；ESC、点列表正文那一块、框里那枚 × 三条路都走同一个「收框 + 清词」—— 只收框不清词，列表会按一个看不见的词过滤着。
+
+**需要补的事实**
+
+1. **附件没有界面入口**。`note_attachment` 表、`addAttachment` / `attachments(of:)` 存储 API 都在（`NoteStorage/NoteDatabase.swift:91-100`、`:755`、`:978`），但 `App/` 与 `Plugins/Notes/Views/` 里对该 API 的引用为 0 —— 界面上没有「添加附件 / 查看附件」的任何控件，也没有附件在正文里的呈现位置。
+2. **自动保存失败只有一处看得见**。语言表里那句「自动保存失败：%@（改动仍在编辑器里，没有丢）」被写进 `AppState.statusMessage`（`AppState.swift:8066`），而全仓**没有任何视图读** `statusMessage`（`AppState.swift:928-929` 自陈）；实际可见的只有 title 区那一枚状态字与其悬停原因。
+3. **`Metrics.listIndent`（14）在笔记树里没被读**：层级缩进写的是字面量 `14`（`NotesPanel.swift:822`）。
+4. **笔记面没有登记任何快捷键**：`App/ShortcutCatalog.swift` 的 `AppShortcut` 33 个 case 里没有笔记 / 待办 / 周报相关项；笔记侧只有「保存」绑 `.defaultAction`（回车）与搜索框的 ESC，两者都不在这份清单里，帮助面板查不到。
+5. **容器拖拽排序与批量多选未做**（右键菜单那一半已落：新建 / 重命名 / 上移 / 下移 / 删除 / 移动），由 `NotesContainerTreeView` 头注释自陈（`NotesPanel.swift:449-453`）。
+6. **导出没有界面入口**：HTML 导出的实现文件在（`Sources/NoteHTMLExport.swift`），但 `App/` 与视图层对它的引用为 0，菜单里也没有对应项 —— 导出这件事目前只有实现、没有入口；导入侧同样没有入口。
+
+### 9.1.20 待办面
+
+待办是**同一个笔记模块里的另一屏**，不塞进笔记列表：`notesModule == .todos` 时 `NotesAreaView` 走另一套 `HSplitView`（`NotesPanel.swift:1217-1228`）。切换是顶栏行末两枚图标 —— 笔记本与闹钟，选中态着色，没有文字标签（悬停给「笔记」/「待办」）。这一行**只设左侧留白、不设右侧留白**，理由就一句：「最右侧」才真的是最右侧。
+
+| 层 | 内容 | 尺寸 | 依据 |
+|---|---|---|---|
+| 顶栏 | 「增」（仅待办屏出现）+「改」「删」· 行末两枚模块切换 | 高由内容 | `NotesPanel.swift:1436-1462`、`:1556-1573` |
+| 左栏 | 待办导航：只有一行「全部待办」+ 总数 | 248 | `:1616-1645` |
+| 中栏 | 清单 / 日历两档（`TodoPaneView`） | 132 / 143 / 238（与笔记同一组常量） | `:1221-1223`、`App/Views/TodoCalendarView.swift:13-58` |
+| 右栏 | 只读详情或编辑器（`TodoRightPaneView` 一处分两态） | 最小 320 | `NotesPanel.swift:1225-1226`、`:1715-1726` |
+
+**左栏默认不在屏上。** 待办屏与笔记屏共用同一条侧栏可见性规则（`MainWindow.swift:61` 按**活动项**判，不按模块判），所以 `TodoNavigationView` 虽然挂在侧栏里（`MainWindow.swift:89-93`），默认 `.detailOnly` 时不可见；屏上真正管「看哪一档」的是中栏顶部那条分段条（`TodoPaneView.modeBar`，`TodoCalendarView.swift:39-57`）。这一屏保留的分段条只此一处：它答的是「看哪一屏」（模式），不是「选一个值」。
+
+**中栏清单自上而下五段**：栏头（「待办」+ 当前档位条数，不是库里总数）→ 查询条 → 分隔线 → 行区 → 空态或分区。
+
+| 查询条控件 | 档位 | 说明 | 依据 |
+|---|---|---|---|
+| 筛选 | 5 档（全部 / 今天 / 本周 / 已过期 / 无截止），下拉 | 答「这一屏留哪些行」 | `TodoCalendarView.swift:564-575`、`Core/TodoQuery.swift:166-196` |
+| 关键字 | 单行输入 + 放大镜图标 | 只看标题、大小写不敏感、空词不过滤（判定在 `TodoSearch`） | `:580-587` |
+| 排序 | 3 档，下拉 | 答「这一屏怎么画」 | `:591-601` |
+| 分组 | 4 档（不分组 / 按状态 / 按截止 / 按标签），下拉 | 同上 | `:602-612`、`Core/TodoQuery.swift:225-252` |
+
+四件都只改界面状态，不重读库、不写库 —— 清单与日历看的是同一份 `todos`。档位空间全部来自 Core 的 `CaseIterable`，界面里没有第二份「有哪几档」的清单。
+
+**行只有一处渲染**（`TodoRowView`）：左端完成态圆点（点它就是完成 / 重开，两种措辞同一动作）→ 标题（一行，空标题显示「无标题」）→ 次行「截止分带 + 优先级（`normal` 不画）+ 标签」→ 行末提醒小铃铛（**只回答有没有提醒，不回答几点响**）。逾期用危险色，判定只调 `TodoDue.isOverdue`（未完成且早于今天零点），视图不比 `Date`。
+
+| 交互 | 行为 | 依据 |
+|---|---|---|
+| 点一行 | 右栏进**只读详情**，不进编辑 | `TodoCalendarView.swift:435` |
+| 右键 | 编辑 · 标记完成 / 重开 · 改期… · 删除（破坏色，先确认） | `:436-455` |
+| 行底色 | 编辑中的那条、右栏正显示的那条点亮 | `:459-463` |
+| 段头 | 「未完成 / 已完成」+ 条数；已完成那一段的名就是折叠开关，默认折叠由 Core 给 | `:344-374` |
+| 分组档 | 一组一个 `Section`，组内仍是两区，段头降为组内一行 | `:632-679` |
+
+**右栏两态互斥**（`appState.todoDetailTodo` 一处判）：`TodoDetailView`（只读）或 `TodoEditorView`（编辑器）。详情里**一个可编辑控件都没有** —— 没有标题框、没有截止开关、没有保存与删除；要改走右键「编辑」或顶栏那枚铅笔。
+
+| 详情行 | 内容 | 依据 |
+|---|---|---|
+| 标题 | 只读完成记（点它什么也不发生）+ 标题，最多两行 | `NotesPanel.swift:1814-1826` |
+| 截止 | `MM-dd HH:mm`（固定形状、`en_US_POSIX`，无截止回「无截止」），逾期危险色 | `:1744-1762`、`:1789-1796` |
+| 优先级 | 语言表里的档名，`high` 警示色 | `:1797-1802` |
+| 标签 | 用户数据照原样、按用户给的顺序 | `:1843-1854` |
+| 备注 | 纯文本、允换行、不截断；空串整块不画 | `:1858-1870` |
+
+**编辑器自上而下**：工具条（保存 = 纯图标 + `.defaultAction`；删除只在**已在库里**时才画）→ 标题框 → 「有截止时间」开关（关掉即把 `dueAt` 写 `nil`，这是清截止的显式动作）→ 展开后的日期时间选择器（`.compact`）→ 优先级下拉（四档是**取值**，所以用下拉）→ 标签框 → 备注多行面（高 120，允换行）→ 提醒区。
+
+| 提醒区元素 | 口径 | 依据 |
+|---|---|---|
+| 出现条件 | 只对**已经在库里**的任务画（新建态还没有 id，挂不上外键） | `NotesPanel.swift:1945-1948` |
+| 档位 | 四档相对截止时刻：到点 / 提前 15 分钟 / 1 小时 / 1 天，全部来自 `ReminderPreset.allCases` | `Core/ReminderPresentation.swift:38-58`、`NotesPanel.swift:2039-2052` |
+| 已挂上 | 照实说一遍规则摘要 + 「下次…」+ 若排不上则给原因（警示色） | `:2053-2074` |
+| 挂不上 | 不给一个按不动的按钮，而是说清为什么（没有截止时间等） | `:2075-2080` |
+| 动作 | 挂（`bell`）/ 摘（`bell.slash`），纯图标 + 悬停 | `:2081-2107` |
+
+**日历是同一屏里的另一档，不是另一个数据面。** 工具条：月 / 周下拉 + 左翻 / 期间名 / 右翻 + 「今天」（这一枚保留文字，因为它是「动作 + 目标」，纯图标说不清回到哪一天）。格子按 `TodoCalendar.columns` 列排，一格是「日号 + 农历日（有则）+ 交节当天的节气（有则）+ 最多三个任务点」；逾期那些天画危险色。选中日与今天用两种不同标记（一块底色 / 日号加粗），互不顶掉。
+
+| 选中日区块 | 内容 | 依据 |
+|---|---|---|
+| 标题 | 本地化排版的「月日 周几」 | `TodoCalendarView.swift:296-299` |
+| 两枚入口 | 新建待办（截止预填选中日 **09:00**）· 写笔记（切到笔记面并新开一篇） | `:268-277`、`AppState.swift:8688-8713` |
+| 当天任务 | 与清单那一屏**同一个** `TodoSectionListView` | `:280-290` |
+
+**数据面三张表**（同一个 `notes.sqlite3`，事务与笔记同连接）：
+
+| 表 | 关键列 | 版本 | 依据 |
+|---|---|---|---|
+| `todo` | `uuid` · `title` · `due_at` · `done`（CHECK 0/1）· `completed_at` · `priority`（默认 `normal`）· `created_at` · `updated_at` | v5 | `NoteStorage/NoteDatabase.swift:256-267` |
+| `todo_tag` | `(todo_id, tag)` 主键，`ON DELETE CASCADE`，按 `tag` 建索引 | v5 | `:269-275` |
+| `reminder` | `note_id` / `todo_id` 二选一（`CHECK ((note_id IS NULL) <> (todo_id IS NULL))`）· `rule` · `anchor_date` · `minute_of_day` · `interval_count` · `interval_unit` · `weekdays` · `until_date`；两列各带 `ON DELETE CASCADE` | v6 | `:312-330` |
+
+**与笔记的关联面只有三处，且没有一条是「笔记 ↔ 待办」的外键**：① `reminder` 表能挂笔记也能挂任务（二选一），但界面只在待办侧开了提醒区，笔记侧没有挂提醒的控件；② 日历选中日那枚「写笔记」是一条跨面入口，它只做「切面 + 新建」两件事，不把日期或任务写进笔记；③ `Todo.note` 是**纯文本备注**字段（`Core/Todo.swift:78-85`），它不是笔记实体，既不进全文索引也没有指向 `note` 表的引用。
+
+**空态三句不同的话**，判定在 Core（`TodoQuery.emptyKind`）：库里一条都没有 / 这一档筛不出 / 搜索词没有命中。日历侧另有「这一天没有任务」。
+
+**需要补的事实**
+
+1. **待办面没有登记快捷键**：`AppShortcut` 里没有待办相关 case；「保存」只绑 `.defaultAction`。
+2. **详情不显示创建 / 更新时间**，也不显示「还剩几天」；截止只有具体时刻一个读数。
+3. **提醒规则只有四档预设**，改不成「每周几 + 几点」那类规则（预设层刻意只用 `once`；更复杂的规则在 `reminder` 表里已有列，界面没有编辑入口）。
+4. **待办导航栏只有「全部待办」一行**：今天 / 本周 / 已过期 / 无截止的分组与三档排序在 `TodoQueryBar` 里，侧栏那一条未做。
+5. **分组档下「已完成」折叠是全局一个开关**（`todoCompletedExpanded`），不是每组各一个。
+6. **改期弹框没有「清掉截止」这一档**：它只说改到哪一刻；清截止走编辑器里那枚开关。
+
+### 9.1.21 复盘与阅读面
+
+活动栏 `retro` 项下，详情区**整块**交给阅读器：`RetroHostView`（`App/Views/RetroHostView.swift:34`）。左栏同时挂着一条占位说明 `RetroSidebarPlaceholderView`（`MainWindow.swift:94-97`），因为周报屏的侧栏是 `.all`（`MainWindow.swift:61` 只把笔记屏定成 `.detailOnly`）—— 248pt 的空白面板看着像界面坏了，所以这里给一句「周报阅读器在右侧」而不是留白。
+
+**口径一句话：宿主只提供容器。** 期次卡片列表与正文渲染都在外部视图包里，本仓**一个字都不复制**；`RetroHostView` 只做三件事 —— 建模型、把它们摆在一起、给「没选中」一个空态。
+
+| 块 | 谁给 | 尺寸 | 依据 |
+|---|---|---|---|
+| 左：期次卡片列表 | 外部 `ReportListView(model:)` | 220 / 280 / 460（可拖中缝） | `RetroHostView.swift:41-44` |
+| 右：选中期的只读正文 | 外部 `ReportDetailView(package:)` | 最小 320，吃满剩余 | `:45-47`、`:58-64` |
+| 右：没选中时的空态 | **本仓** `RetroReadingEmptyState` | 同上 | `:67-81` |
+| 左栏占位 | **本仓** `RetroSidebarPlaceholderView` | 侧栏宽 248 | `:88-104` |
+
+两块之间是 `HSplitView`，中缝可拖 —— 这正是「期次列表多宽、正文多宽」该由用户决定的那一处。
+
+**为什么整台阅读器作为一块装进来，而不是把列表抬进 Studio 的某一栏**：阅读器要的是**同一份模型**下的「列表 + 正文」——左边选哪一期，右边渲染哪一期。拆到两个地方，模型就会被各建一份（两次扫描目录，选中项还会对不上）。所以装配收在这一个文件里，与笔记面那套「列表 + 正文」是同一形状的分工。
+
+| 归属 | 内容 | 依据 |
+|---|---|---|
+| 本仓 | 容器布局、模型的建法（`ReportListModel.fixed()`）、空态文案、侧栏占位 | `RetroHostView.swift:36-64` |
+| 外部包 | 期次卡片列表、正文块渲染与媒体去向、扫描根路径的真值 | 同文件头注释 `:9-20` |
+| 只读 | 本文件不打开、不写任何包目录 | `:18` |
+
+**模型的建法只有一处**：`ReportListModel.fixed()`，即扫描目录由外部包定死；本仓不出现那个盘上路径的第二份字面量 —— 另传一个根就是「两处真值」，迟早对不上（判据：那个路径串在本仓 `Core/` `App/` 零命中，`RetroHostView.swift:15-17`）。模型用 `@StateObject` 持有，同一实例跨重绘：否则每次重绘都重扫一遍目录，用户选中的那一期也会被重置。
+
+**空态两句，各在各的位置**：
+
+| 位置 | 文案 | 图形 | 依据 |
+|---|---|---|---|
+| 正文区（未选期） | 「在左侧选一期周报」 | `newspaper`，三级色 | `RetroHostView.swift:68-81`、语言表 `retroReadingEmptyHint` |
+| 左栏 | 「周报阅读器在右侧」 | `newspaper`，居中、可换行 | `:88-104`、`retroSidebarHint` |
+
+坏包 / 缺件走的是列表里那条逐条报告，右半边照旧出空态 —— **不崩**，也不整屏替换成错误页。
+
+**六态在这一屏的落法**（宿主能负责的只有两格，其余如实留给外部包）：
+
+| 态 | 本仓的落法 | 依据 |
+|---|---|---|
+| 空 | 正文区一句「在左侧选一期周报」，左栏一句「阅读器在右侧」 | `RetroHostView.swift:67-104` |
+| 载入 | 宿主不画骨架、不转圈：模型与列表由外部包自持，宿主不订阅它的载入态 | `:36-50` |
+| 进行中 | 无「进行中」这一态（阅读是纯本地读盘，没有会跑很久的动作） | 同文件无相关状态 |
+| 失败 | 右半边仍是空态；逐条坏包的错误在列表里 | `:52-56` |
+| 禁用 | 无禁用档：阅读器不是授权位，三档可见 | `TestsUISnapshot/RetroHostProbeTests.swift:145` 起的用例 |
+| 已截断 | 宿主不设截断：正文多长由外部包的渲染决定 | 同文件无相关约束 |
+
+**尺寸账对得上最小窗口**：活动栏 46 + 侧栏 248 + 期次列表 220 + 正文 320 = 834，窗口最小宽 1100（`App/DoyahStudioApp.swift:219` 的 `minWidth`），余量 266 落在可拖的中缝上 —— 所以两块都不会被压到各自的最小宽以下。
+
+**「只读」在本仓是一条可核的纪律**，不只是措辞：宿主文件不打开、不写任何包目录，也不提供任何编辑控件或「保存」入口（`RetroHostView.swift:18`）；正文区的每一次交互都落在外部包的渲染里。界面这一侧对「只读」的唯一贡献就是不给入口。
+
+**依赖面是一个 product，不是一个包。** 依赖里只声明视图产品（`Package.swift:99` 的 `.product(name: "DoyahRetroUI", package: "macos")`），包内领域层是它的传递依赖，所以宿主文件**不命名**那边任何领域类型：「选中那一期」全程靠类型推断传下去（`model.selectedPackage` → `ReportDetailView(package:)`）。这样依赖面正好是那一个产品，不夹带第二个。取包走**本地路径依赖**（`Package.swift:43`，绝对路径，因为每个工作副本都在不同深度的目录里），并在注释里钉住了所用的那个提交号（`Package.swift:36`）。
+
+**不可测与待定**（这一节要交付的「不知道」，不能靠读本仓代码补上）：
+
+| 项 | 现状 | 为什么在本仓测不到 |
+|---|---|---|
+| 期次卡片长什么样 | 待定 | 卡片视图在外部包，本仓只有容器与尺寸区间 |
+| 正文块渲染（表格 / 图 / 媒体） | 待定 | 渲染本体在外部包；本仓不重写 |
+| 一期内的阅读位置与滚动 | 待定 | 同上，宿主不持有滚动状态 |
+| 扫描失败的逐条提示文案 | 待定 | 由外部包的列表自己出，本仓只给右半边的空态 |
+| 期次排序与分组规则 | 待定 | 由外部包的模型给，宿主不排序 |
+
+本仓对这台的机器判据**只到「装配起来不崩」这一层**：活动栏含 `retro` 项且三处 switch 穷尽无 `default`、三档授权都可见且不新增能力位、`ReportListModel.fixed()` 真读到固定目录里的两个期次包（`2026-W41` / `2026-W40`）、`RetroHostView()` 可构造可布局且视图树里真的落下列表、扫描路径串在本仓零命中（`TestsUISnapshot/RetroHostProbeTests.swift`，六个用例）。这一族**刻意不落像素快照** —— 判据读的是 Core 的真值与 AppKit 视图树的事实，落图只会搅乱「张数 / 组数」那类派生计数。
+
+**需要补的事实**
+
+1. **阅读面的字体、行宽与段落间距**未在本仓定档：正文渲染在外部包，用的是它自己的排版，本仓的 `Spacing` / 字号令牌不参与 —— 于是「阅读区与笔记正文同一套阅读体感」这件事目前没有实现依据，只有视觉观感可比。
+2. **期次列表的宽度三档（220 / 280 / 460）是本仓写的裸数字**，不走 `Core/DesignTokens.swift` 的令牌，也不在令牌表里有对应档位。
+3. **无键位、无菜单项**：`AppShortcut` 里没有周报相关 case；活动栏切换走的是活动项的顺序数字键（`ActivityBarItem.shortcutIndex`），不是为周报单开的键。
+4. **空态没有「重新扫描」入口**：目录里新落一期之后，宿主没有一枚显式的刷新动作；列表只会在模型被重新构造（视图重建）时重扫，`@StateObject` 在场时它不会自己变。
+5. **周报与笔记之间没有交叉入口**：不能从一期周报「摘进笔记」，也不能从笔记跳到对应周报；这一条在两个仓里都没有实现面。
+
+### 9.1.22 设置、许可与恢复
+
+**没有「设置窗口」。** 偏好、授权与数据进出是七个独立弹层，各自由入口打开、各自定宽：应用菜单管归属，显示菜单管看起来怎样，AI Agent 菜单管智能体怎么跑，备份恢复只有 ⌘K 一条（`AppCommandCatalog.swift` 的 `backupRestore`，菜单栏无对应项）。
+
+| 面板 | 入口 | 尺寸 | 依据 |
+|---|---|---|---|
+| 外观 | 显示菜单「外观…」 | 宽 560，内容区封顶 560 可滚 | `AppearanceSheet.swift:49-68` |
+| 连接设置 | 显示菜单 | 宽 520 | `ConnectionSettingsSheet.swift:26` |
+| 智能体设置 | AI Agent 菜单 `⇧⌘,` | 宽 560，高 420–680 按屏幕算 | `AgentSettingsSheet.swift:209`、`:381-384` |
+| 版本与许可证 | 应用菜单 | 620 × 560 | `AboutLicenseSheet.swift:52` |
+| 账户与同步 | 应用菜单 | 宽 520 | `AccountSyncSheet.swift:99` |
+| 出口日志 | AI Agent 菜单 `⌘⇧E` | 最小 760 × 480 | `EgressLogSheet.swift:36` |
+| 备份 / 恢复 | ⌘K | 宽 700 | `BackupRestoreSheet.swift:144` |
+
+按「改的是什么」分四类：**外观**（看起来）——外观面板；**行为**（跑起来）——连接设置、智能体设置；**归属**（属于谁）——版本与许可证、账户与同步；**数据进出**——备份恢复、出口日志。不共用容器是有意的：外观要即时预览，备份恢复要“先看命令再执行”；宽度跟内容的最小可读形态走，不跟“设置窗该多宽”走。
+
+**外观五个分组，顺序固定**：深浅 → 设计主题 → 强调色 → 字体 → 终端。主题行不只给色卡：它画选中行、主按钮、焦点环三处真实场景与表面五档色阶，这是「一个主题 = 一组令牌值」的证据；推导主题逐条标出。强调色行同样只画这三处——那是它全界面**唯一**会出现的地方。皮肤开关按主题自己的声明出现（`paintsNebula` / `wallpaper != nil`），没声明的不摆——永远无效的开关只会让人困惑。字体段给一行**实际生效**的读数，并把“没生效”分两种说清：根本不存在，还是存在但不是等宽（后者更严重，列会歪）。
+
+**即时生效的部分**：主题、强调色、皮肤、字体族与字号改完立刻改渲染。依据三条：取值由 `DesignThemeManager` 单点落盘并广播（面板用 `@ObservedObject` 订阅，否则它自己不变）；`Theme.font(.mono)` 渲染时现取 `FontManager.shared.monospaceNSFont()`（`AppTheme.swift:115-117`），不是启动算一次。**需重启的只有语言那一半**，且语言不在这七个面板里——它在「语言」菜单，切换是就地的（菜单栏由 `MainMenuLocalizer` 运行时改写，另开 3 秒补刷窗口）。跨进程的只剩 `AppleLanguages`（`LocalizationManager.swift:53-55`），它管「用的时候才创建」的系统界面（打开 / 保存面板按钮、服务子菜单、系统「关于」），这类下次启动才与所选语言一致。所以「重启应用…」是**显式**入口（`DoyahStudioCommands.swift:104-107`），不绑在换语言上，也不弹窗拦人。
+
+**缺文案键的兜底是键名。** `LocalizedStrings.text` 是 `table[key]?[language] ?? key.rawValue`（`Core/Localization.swift:2600-2602`）：缺键时屏上出现键名本身（`appearanceMonoEffective` 这种），不是空串，也不串到另一种语言。带参时更糟一步——`String(format:)` 拿没有占位符的键名去格式化，参数被静默丢掉，只剩键名。不会崩，也不会被忽略：`L(...)` 在宿主语境下把取到的串记进观测集（`LocalizationManager.swift:94-105`），语言快照门禁看得见这一格。正常路径走不到：语言表按「每键双语言齐全」对账（`Tests/LocalizationTests.swift`），缺键先红在单测里。
+
+**行为两块**：保活是**应用级**策略（一套规则管所有连接，不放进连接表单，否则会让人以为“这条开了、那条没开”），间隔在**写入时**就夹到 `KeepAlivePolicy.minimumIntervalSeconds` 以上；没记录时说“还没跑过”，有失败时最近一次原因单独一行。智能体设置是七段表单（总开关 / 提供商 / 端点·模型·超时 / 计量 / 限额 / 授权粒度 / MCP / 密钥），三处口径值得记：状态行按**即将保存的草稿**算判定（改开关立刻看到结论变化）；密钥三态（新填 / 清除 / 不动），空输入等于不改；草稿**显式带上** `guardPolicy`，因为落盘是整份覆写，省掉字段等于把只读模式与白名单抹回默认。高度按屏幕算，表单内部滚动——固定高度会把底栏推到 Dock 底下。
+
+**归属两块**：版本与许可证回答四件事（哪一版 / 为什么是这一版 / 许可证放哪怎么生效 / 别的版能做什么），并把「活动栏上现在有：…」念一遍（区不见了，第一反应就是找“为什么”）；重新读取不重启；设备配额没登记就说没登记。账户与同步是最小六项（注册 / 登录 / 同步开关 / 登出 / 多端会话 / 找回入口位）：同步默认关、未登录时禁用，`S4` 那句「当前不是端到端加密 —— 内容在云端可读」**常显**不折叠（藏进 tooltip 等于没写）；找回只给入口位，点了说清本体后置。
+
+**备份恢复的三种结局，三种交代**：
+
+| 结局 | 日志里看到什么 | 依据 |
+|---|---|---|
+| 成功 | 逐段跑完 → 一行「三段完成」；一次性 / 备份 → 命令行 + 完成行 | `AppState.swift:2391`、`:953` |
+| 部分 | 逐段遇错即停：`第 X 段失败（退出码 n）`+ 服务端原话 + 「停在哪一段」+ 一条**可粘贴的续跑命令** | `AppState.swift:2376-2381`、`:2399-2419` |
+| 失败 | 沙箱拒绝起子进程 → 可读指引 + 原因，退出码 68；一次性 / 单段失败 → 「不知道停在哪一段」+ 从第一段起的续跑建议 | `AppState.swift:2382-2388`、`:325-347` |
+
+「部分成功」**不写成成功**：逐段是默认模式（只有逐段才知道停在哪），遇错即停，说的是“停在第几段”而不是“完成了多少”。缺目标库时同样不静默、不执行（`BackupRestoreSheet.swift:312-317`）。呈现只有一个 `backupRestoreLog`（等宽、可选中、封顶 180 高）加标题栏转圈，**不分色**——这是缺口。另有欠账：两条状态行写死中文（`AppState.swift:949`、`:953`），英文界面会印中文，而 `check-core-localization.py` 只扫 `Core/**`。
+
+**出口日志**按类别 / 结果 / 页签三个维度筛，页签选项从**日志本身**派生而非从开着的页签派生（关掉页签后记录仍要能筛出来）；空态是结论本身——没有出网就明说，不给空表。
+
+**命令面板的列表行为**：两类项——命令（`AppCommandCatalog.all()`，39 条）与当前工作区的**文件名**命中（异步 + 180ms 合并，`WorkspaceSearch` 是引擎唯一出处）。匹配七档分值：完全相同 1000 / 前缀 800 / 词首 700 / 子串 600 / 首字母缩写 500 / 关键词加成 +50 / 子序列 300，同分再按标题、id 排（`Core/CommandPalette.swift:112-143`），排序必须稳定——否则用户记不住“按两下 ↓ 再回车”。**不可用的项照样列出**：清单是静态表，匹配只看文字、不看上下文，行也没有禁用态；没有连接时「备份恢复」「执行」仍在列表里，回车后由面板自己说清缺什么。键盘三条：`↓`/`↑` 夹在 `0…rows.count-1`，`↩` 执行选中项（走扁平顺序 `rows`，与渲染顺序同一份），`Esc` 关闭；查询词一变选中索引归零。空查询返回全部，按原顺序。
+
+**错误呈现两级**：窗口级走弹窗——`appState.errorMessage` 非空就弹（`MainWindow.swift:448-464`），正文**不可选中**，故配一枚「复制完整错误」；面板级走行内——面板自己的 `errorText` / `bannerMessage` / `searchError` / `testLine` 落在动作旁，不打断。分界线：能指出“哪一步、哪台主机、哪个字段”的行内；操作整体失败、要用户去改盘上东西的弹窗。两级共用同一个翻译层 `ErrorPresenter.message(for:)`，按序试七档：`AppError` → 语言表；SSH 隧道错误 → 按语言渲染（它只带端口号，整句只能在有语言处拼）；`LocalizedError` 的可读说明；连接失败的“人话 + 一句排查建议”；非连接类驱动错误的中性归因（附技术细节）；服务端原话（附技术细节）；最后兜底反射串，超 800 字符截断。两处缺口：弹窗没有「重试」；行内错误没有复制入口。
+
+### 9.1.23 界面不变量自检表
+
+§9.1 里可机器检查的界面不变量收进此表。「判定方式」写脚本**实际判什么**（据各脚本头部判据段），不是应有的样子。
+
+| 不变量 | 判定方式 | 现行脚本 |
+|---|---|---|
+| 视图层只用令牌取值：无裸色值、裸字号、裸间距、裸圆角、系统文本样式 | 扫 `App/**/*.swift` 按六条规则计违规，与基线逐文件比对（只许降）；豁免必须在台账登记，台账里已不在盘上的判陈旧 | `check-design-tokens.py` |
+| 主题集每套表角色齐全、对比度过下限、主题名与文档表对齐 | 值表 / 外观方案 §9 表 / 语言表双语文案三源对账 | `check-design-themes.py` |
+| 编辑面底色与字色只用主题令牌（不许“什么都不写”落回系统底） | 逐编辑面查背景与前景的令牌引用 | `check-editor-surface-tokens.py` |
+| 外观样张与产品令牌同源（渲染脚本不许自带调色板） | 八族引用各有下限 + 渲染入口 `swiftc` 命令行必须编进令牌源 + 硬写真值的扫描 | `check-design-mock-tokens.py` |
+| 行号列：每个编辑面在台账里，画行号者挂同一绘制件，行起点算法只一处 | 双向对账 + `LineNumberGutter`/`gutter.reload(`/`gutter.draw(in:` 三件共现 + `CodeLines.lineStarts(` 全仓一处 | `check-editor-line-numbers.py` |
+| 内置浏览器页签归属工作区，数据库侧视图不得命中 | 七个标识的允许落点台账双向对账 + 状态所有者单点 + SRS 定义行锚点唯一化 | `check-browser-tab-ownership.py` |
+| 面板根固定尺寸必须写出对齐意图（显式 `alignment:` 或撑满容器） | 40 处固定 `frame` 全登记（面板根 23 / 装饰 17），台账与盘上双向对账 | `check-panel-root-frames.py` |
+| Core 不写死展示文案 | 两条棘轮：含汉字的字面量按行记账（只许降）；写死的英文展示短语走白名单，白名单只许缩小 | `check-core-localization.py` |
+| ⌘K 每条命令都真的有视图读它的落点 | 分派器探针 33 条 ↔ 清单 39 条对账，未登记差集须为 0 | `check-palette-wiring.py` |
+| 菜单树每一项都跟当前界面语言 | 逐项按标题反查语言键，整棵树不许停在启动语言 | `check-menu-language.py` |
+| 中英两份快照必须逐字节不同（语言真的到了像素上） | 未注册快照两图相同即判红；注册豁免须逐条给理由 | `check-ui-snapshot-languages.py` |
+| 语言表不带 markdown 强调标记（星号不许露在屏上） | 扫语言表的强调标记，密码掩码一类登记豁免 | `check-copy-emphasis.py` |
+| 水平排列的按钮一律图标，菜单项保留文字 | 按钮标签逐处分类（a 类水平 / b 类菜单项），例外进台账 | `check-button-icon-only.py` |
+| 空数据时按钮不许“满色可点但点下去什么都不发生” | 三态逐处分类：灰着 / 可点并给一句理由 / 静默（判红） | `check-empty-action-buttons.py` |
+
+四条共同形状，缺一条等于没判：**棘轮**（只能变好，放宽须显式 `--force` 留痕）、**双向对账**（盘上多一条与台账多一条同样判红）、**空跑防护**（扫描面文件数与命中数有下限）、**判定物先剥注释与字符串**（注释里提标识不算）。聚合入口 `Scripts/verify-all.sh`，每个脚本都带 `--self-test` 负例。
+
+**实跑结论不均匀，如实记**：`check-design-tokens.py`、`check-panel-root-frames.py`、`check-palette-wiring.py` 通过；`check-core-localization.py` 的棘轮 A 判红（含汉字字面量 730 → 736 行），棘轮 B 通过；`check-editor-line-numbers.py` 与 `check-browser-tab-ownership.py` 的**代码侧**通过，卡在**文档锚点**——说明书里找不到它们要的那几句锚点（「行号列不只工作区编辑器有」等），脚本按“口径只活在代码里”判红。这两条不是界面缺陷，是文档欠的锚点句（三份各一句）。
+
+**还没有判据的四条（待定）**：
+
+1. **键位唯一性**：`App/ShortcutCatalog.swift` 的 `key` / `modifiers` 两套 switch 没有断言同一组合只出现一次，`Tests/` 无此单测，`Scripts/` 无对应脚本——两处冲突（9.1.4）因此在全绿状态下长期存在。
+2. **两级错误的归属**：哪类错误该弹窗只有本节口径，无脚本或单测核；`check-connection-failure-coverage.py` 只管连接失败有没有翻成人话，不管走哪一级。
+3. **缺键兜底形状**：单测按“每键双语言齐全”对账 = “不许缺”；没有判据核“真缺了应印键名而非空串”。
+4. **面板宽度档**：`Tests/SheetLayoutConventionTests.swift` 只钉执行计划面板；七个设置面板的宽度（520/560/620/700/760）没有台账与判据。
 
 ## 9.2 契约 → Windows 实现 [独占:windows]
 
@@ -2705,7 +3388,7 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 
 > 本节是 Linux 侧的实现节，归属 `hugehippo`（本侧）；正文按 v3.2 全书统一编号，节内引用一律指本版节号。
 
-> **本节归 Linux 侧（`babyhippo`）· 本仓自行落笔**（2026-10-14 人类主人令「Doyah Studio 全量 PC 端还要补一个 Linux 平台，小河马负责的」—— 原「三书带出本仓、平台设计层文字回传后贴入」的环节**作废**）：本端平台设计层（技术栈 / 构建入口 / 打包形态 / 桌面集成方式）由本侧按下列各条**直接落笔**。
+> **本节归本侧（`hugehippo`）· 本仓自行落笔**（2026-10-14 人类主人令「Doyah Studio 全量 PC 端还要补一个 Linux 平台，小河马负责的」—— 原「三书带出本仓、平台设计层文字回传后贴入」的环节**作废**）：本端平台设计层（技术栈 / 构建入口 / 打包形态 / 桌面集成方式）由本侧按下列各条**直接落笔**。
 > **本节内容不由 macOS 侧 / Windows 侧决定**；其它侧若代笔，须在原行或提交信息带上豁免注记（`exclusive-allow` 加理由）。
 
 **状态**：🟡 **设计层已落**（2026-10-14 · 派单 `T-20261014-021` —— 人类主人 2026-10-14 裁决「Linux 端技术栈 = Tauri」，概设 §2 GUI 框架行 v2.169 由契约所有者落笔）；**实现面 🟡 骨架已落地**（骨架 `Platform/linux/{README.md,build.sh}` + **应用工程** `src-tauri/`（`Core` / `Cli` / `Platform/Linux` 三层）+ **前端同源装配** + 本端判据 `Tools/check-linux-skeleton.py` 均已落 —— 派单 `T-20261014-016`；**真构建与真绑定未跑**，七项未验证见 §9.3.6 末的「未接网清单」与 `Platform/linux/README.md`）。原「要落的 5 项」清单**已由本节内容兑现**（逐项对应：1 → §9.3.1 · 2 → §9.3.2 / §9.3.3 · 3 → §9.3.4 · 4 → §9.3.5 · 5 → §9.3.6）。
@@ -2841,6 +3524,23 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 
 **本节整节豁免已销（队列 L-40 关闭 · 2026-10-14）**：原「首建占位整节豁免」注记（整节豁免标记）的前提 = 「等 Linux 侧**回传**、首建占位」；2026-10-14 人类主人令后该环节作废（本仓自行落笔），故**豁免注记行已删除**，本节自此恢复 `[独占:linux]` **严格判定**。
 
+### 9.3.7 界面设计（复用共享前端 + Linux 差异）
+
+**界面不是从零写**：`Platform/linux/src-tauri/tauri.conf.json` 的 `frontendDist` 指向 `../../windows/App/dist`，`beforeBuildCommand` 跑的是 `npm --prefix ../../windows/App` 的构建。也就是说 Linux 端**复用同一份前端代码**（与 Windows 同一套页面），Tauri 壳只换后端。这条事实决定了本节的口径：**界面不变量天然一致**（第三章契约、第七章构件规格对两端同时成立），本节只写 Linux 上必须不同的那一部分。
+
+| 面 | Linux 落法 | 依据 |
+|---|---|---|
+| 窗口 | 单窗口 1280×800 起（`tauri.conf.json` 的 `windows[0]`），系统标题栏由桌面环境负责 | `tauri.conf.json` |
+| 主操作键 | `Ctrl` 代 `⌘`；菜单助记符 `Alt+字母` | GTK 惯例（无全局菜单栏） |
+| 文件对话框 | 系统 portal（GTK）；不用自绘选择器 | 与桌面环境一致 |
+| 凭据 | 系统密钥环（Secret Service）；无密钥环时**降级为加密文件并明示** | 对应 `SecretStore` 契约 |
+| 通知 | `libnotify`；不支持的桌面环境静默跳过并记日志 | 对应提醒类需求 |
+| 缩放 | 跟随 `GDK_SCALE` / 分数缩放，界面按令牌等比放大 | 令牌表单一出处 |
+| 主题 | 跟随桌面 `color-scheme`；深浅切换不重启 | 第七章 7.3 |
+| 应用菜单 | 应用内菜单（窗口内），不挂全局菜单栏 | 与 Windows 同族 |
+
+**不复用的部分**：系统托盘、自动更新、全局快捷键——三项在 Linux 上依赖桌面环境差异大，一律「不做」而不是「做了但不保证」。**已知缺口**：前端页面在 Linux 容器内没有界面回归测试（只有构建通过），标待定。
+
 ## 9.4 iOS 实现要点 [独占:ios]
 
 - 只做智能体与笔记两面（能力书已定：iOS 不做数据库域）；数据库域不在此端出现，相关入口不显示而不是显示后报错。
@@ -2848,7 +3548,46 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 - 笔记正文与桌面端同格式，导入导出走系统分享面，内容逐字节一致。
 - 长任务在离开应用时转「可恢复」状态，回到前台继续，不从头重来。
 
-**界面设计**：单栈导航（列表 → 编辑 → 结果），底部工具条放主操作；手势承担返回与撤销；不做多窗口与平板两栏（能力书已定不做）；导出走系统分享面，内容与桌面端逐字节一致。
+### 9.4.1 形态与边界
+
+iOS 端只做两面：**智能体**与**笔记**（能力书定：iOS 不做数据库域）。所以它不是桌面端的缩小版——数据库相关入口**根本不出现**，而不是出现后报「此端不支持」。
+
+形态是**单栈导航**：列表 → 详情 → 结果，一层一层推进；不做多窗口、不做平板两栏、不做侧滑常驻面板。理由是一条：手机上任何「同屏两块内容」的布局都会把可读宽度压到 40 字以下。
+
+### 9.4.2 屏与导航
+
+| 屏 | 进入方式 | 主操作 | 返回方式 |
+|---|---|---|---|
+| 会话列表 | 启动默认屏 | 新建会话 | — |
+| 会话详情 | 点会话 | 发送 / 停止 | 左上返回 + 右滑 |
+| 笔记列表 | 底部页签 | 新建笔记 | — |
+| 笔记正文 | 点笔记 | 自动保存（无保存按钮） | 左上返回 + 右滑 |
+| 笔记属性 / 标签 | 正文右上「…」 | 编辑 | 下拉关闭 |
+| 导出 | 正文分享 | 系统分享面 | 系统 |
+
+底部页签只有两个：**智能体 / 笔记**。切页签保持各自栈（切回时回到上次那一屏），不做「切换即重置」。
+
+### 9.4.3 与桌面一致的那一半
+
+- 视觉数值取同一份令牌表；小屏不另立字号体系（令牌按系统动态字号缩放）。
+- 六态必须齐（第七章 7.4）：空 / 载入 / 进行中 / 失败 / 禁用 / 已截断；手机上没有「悬停解释禁用」，所以禁用**必须在行内给原因**。
+- 文案与桌面同源（同一套键），不因为屏幕窄就改说法。
+- 笔记正文与桌面**同格式**，导出走系统分享面，内容逐字节一致。
+
+### 9.4.4 移动特有的落法
+
+| 面 | 落法 |
+|---|---|
+| 手势 | 右滑返回、长按选中、下拉刷新（只用于「补跑」后的列表刷新） |
+| 安全区 | 顶部状态栏与底部横条都留白，操作条贴在安全区内侧 |
+| 键盘 | 输入框随键盘上移；多行输入不遮住发送按钮；键盘收起后不跳回顶部 |
+| 后台 | 离开应用转「可恢复」状态，回前台继续，**不从头重来**；补跑结果与桌面同构、去重规则共用 |
+| 通知 | 只推「会话完成 / 失败」两类，其余不打扰 |
+| 触控尺寸 | 最小可点 44×44（第七章 7.9.9 的触控档） |
+
+### 9.4.5 落地状态
+
+`Platform/` 下**没有 iOS 工程**（只有 macOS / linux / windows / watchos 四目录，watchos 仅 README）。因此本节是**目标形态**，不是现状描述；它的作用是把「iOS 要做成什么样」定下来，任何一条都不能被引为「已实现」的证明。手表端同理，不在本轮界面设计范围。
 
 ## 9.5 共用件
 
