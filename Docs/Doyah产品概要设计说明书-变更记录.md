@@ -6,6 +6,7 @@
 
 | 版本 | 日期 | 摘要 |
 |---|---|---|
+| **v3.5.11** | 2026-10-22 | 新增 §9.3.15 **WSL 宿主上的四处必然降级**（托盘无 / 通知走应用内 / 凭据如实不可用且不落明文 / systemd 需手动开）+ 两条 WSL 事实（GUI 走 WSLg；仓库与 target 必须放 Linux 根 FS，放 `/mnt/c` 慢一个数量级）+ 判据（设置页三行状态对齐、掀掉 keyring 后磁盘 `sk-` 命中 0）。由头：Linux 版首个真实宿主是 WSL2 Ubuntu，缺件只会静默不生效。 |
 | **v3.5.10** | 2026-10-22 | 人类主人：「还不如让小河马来做，它部署在 Windows 上呢」「它可以直接用 wsl 去编译」⇒ **Linux 实现层改归 `babyhippo`**（原属 `hugehippo`，2026-10-15 划入）。§9.3 章首补归属说明（本书仍由大河马落笔，`[独占:linux]` 只约束实现/审阅）；§9.3.14 末尾把「未验证」转为交接项；`Scripts/check-exclusive-sections.py` 的 `ACTORS` 同步（linux 从 hugehippo 移到 babyhippo，留依据注释）。 |
 | **v3.5.9** | 2026-10-22 | 人类主人：「后端复用 Rust 是不是更好呢？」→ 采用。新增 §9.3.14 **后端同源**：Linux 外壳不再自建命令层，改为调用 `doyah-studio-shell::attach()`（132 条命令一处定义；改造前 Linux 只注册 2 条，前端要 132 条）；新增 `paths::app_home()` 收口 8 处 `APPDATA`（Linux 走 XDG，改造前全退当前目录）；§9.3.1 的领域层一行改为「与 Windows 同源」。**同批修**：§9.3.11 撞号（「配色」与「已知缺口」同号）⇒ 配色改 9.3.12、字体回退改 9.3.13，并同步四处交叉引用。 |
 | **v3.5.8** | 2026-10-22 | 新增 §9.3.12 **字体回退：Linux 上没有 Cascadia**。根因：`--ds-font-stack` / `--ds-font-stack-mono` 只列 Windows 字族，Linux 上全缺，`'Courier New'` 被 fontconfig 指到 Courier（Nimbus Mono PS）⇒ 等宽正文细瘦发虚，看起来像「行首栏语汇没生效」。改法：两支栈显式点名 `Noto Sans` / `Ubuntu` / `DejaVu Sans` / `JetBrains Mono` / `Noto Sans Mono` / `Ubuntu Mono` / `DejaVu Sans Mono` / `Liberation Mono`，去掉 `'Courier New'` 这个诱饵。 |
