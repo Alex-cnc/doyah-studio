@@ -159,8 +159,11 @@ def mark_tokens(tok):
 # `[独占:*]` 节必然判红；而她的名字要保留下来，供「契约所有者是不是我」这类同一性判定用。
 ACTORS = {
     "bluewhale": (),                       # 蓝色鲸鱼娘 · 2026-10-15 起只做写作/地缘周报：无契约权、无平台写权
-    "hugehippo": ("macos", "ios", "watchos", "linux"),  # 平台实现 · 铁皮大河马（Apple 全系 + Linux · Linux 于 2026-10-15 由 babyhippo 划入）
-    "babyhippo": ("android", "harmony", "windows"),  # 平台实现 · 奶牙小河马（安卓/鸿蒙/Windows · Windows 于 2026-10-15 承接；`fatshark` 2026-10-20 退出项目）
+    "hugehippo": ("macos", "ios", "watchos"),  # 平台实现 · 铁皮大河马（Apple 全系）
+    # Linux：**2026-10-22 人类主人令改为 babyhippo**（原话「还不如让小河马来做，它部署在 Windows 上呢」
+    # 「它可以直接用 wsl 去编译」）—— 依据是**编译环境在谁手上**：Tauri Linux 壳要 webkit2gtk + GTK3，
+    # 小河马那台 Windows 上有 WSL Ubuntu，能直接出包；大河马这台 macOS 只能起虚拟机模拟，事倍功半。
+    "babyhippo": ("android", "harmony", "windows", "linux"),  # 平台实现 · 奶牙小河马（安卓/鸿蒙/Windows/Linux；Windows 2026-10-15 承接、Linux 2026-10-22 划入；`fatshark` 2026-10-20 退出项目）
 }
 # **退役侧名**（只保留识别，**不得再作为现行规范名**；派单 `T-20261005-038` ① · `T-20261013-007`）：
 # 2026-10-04 家族改名令（`T-20261004-028`）后 Windows dsh = `fatshark`，旧名 `fatfish` 退役（改属公司

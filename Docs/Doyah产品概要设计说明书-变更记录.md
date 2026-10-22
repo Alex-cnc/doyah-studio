@@ -6,6 +6,7 @@
 
 | 版本 | 日期 | 摘要 |
 |---|---|---|
+| **v3.5.10** | 2026-10-22 | 人类主人：「还不如让小河马来做，它部署在 Windows 上呢」「它可以直接用 wsl 去编译」⇒ **Linux 实现层改归 `babyhippo`**（原属 `hugehippo`，2026-10-15 划入）。§9.3 章首补归属说明（本书仍由大河马落笔，`[独占:linux]` 只约束实现/审阅）；§9.3.14 末尾把「未验证」转为交接项；`Scripts/check-exclusive-sections.py` 的 `ACTORS` 同步（linux 从 hugehippo 移到 babyhippo，留依据注释）。 |
 | **v3.5.9** | 2026-10-22 | 人类主人：「后端复用 Rust 是不是更好呢？」→ 采用。新增 §9.3.14 **后端同源**：Linux 外壳不再自建命令层，改为调用 `doyah-studio-shell::attach()`（132 条命令一处定义；改造前 Linux 只注册 2 条，前端要 132 条）；新增 `paths::app_home()` 收口 8 处 `APPDATA`（Linux 走 XDG，改造前全退当前目录）；§9.3.1 的领域层一行改为「与 Windows 同源」。**同批修**：§9.3.11 撞号（「配色」与「已知缺口」同号）⇒ 配色改 9.3.12、字体回退改 9.3.13，并同步四处交叉引用。 |
 | **v3.5.8** | 2026-10-22 | 新增 §9.3.12 **字体回退：Linux 上没有 Cascadia**。根因：`--ds-font-stack` / `--ds-font-stack-mono` 只列 Windows 字族，Linux 上全缺，`'Courier New'` 被 fontconfig 指到 Courier（Nimbus Mono PS）⇒ 等宽正文细瘦发虚，看起来像「行首栏语汇没生效」。改法：两支栈显式点名 `Noto Sans` / `Ubuntu` / `DejaVu Sans` / `JetBrains Mono` / `Noto Sans Mono` / `Ubuntu Mono` / `DejaVu Sans Mono` / `Liberation Mono`，去掉 `'Courier New'` 这个诱饵。 |
 | **v3.5.7** | 2026-10-22 | 人类主人：「这个设计进入概要设计说明书」。**行首栏语汇由实现细节升为跨端契约**：新增 §7.9.10「对话转写（行首栏语汇）」—— 六角色字形表（`❯`/`┊`/`▌`/`⚡`/`◈`/盲文十帧）＋ 六条硬规则（栏宽固定 14、一律等宽、`❯` 输入行、只取令牌角色、字形对辅助技术隐藏、不得用底纹与 `max-width` 区分角色）＋ 各端允许不同四项 ＋ 判据。§9.1.24 与 §9.2.17 改为「契约依据 = §7.9.10，本节只写落地与偏差」，§9.2.15 的对应关系表补该行。 |
