@@ -90,6 +90,7 @@ import sys
 from collections import Counter
 
 DEFAULT_TARGETS = [
+    "Docs/规范/界面设计节-写作规范.md",
     "Docs/人工点验清单-20261018.md",
     "Docs/人工点验清单-20261018-重分版.md",
     "Docs/Doyah产品能力规划说明书.md",
@@ -806,6 +807,7 @@ def main() -> int:
 # 例数仍是 17（跳过不改总数、也不许静默）。
 
 SELF_TEST_TRACKED = [
+    "Docs/规范/界面设计节-写作规范.md",  # 2026-10-22 界面设计规范进仓（对侧无本侧技能包，规则跟着代码走）
     "Docs/Doyah产品需求规格说明书-追溯表.md",  # 2026-10-20 从 SRS §9.1 外置（瘦身令），必须入库
     "Docs/Doyah产品能力规划说明书-变更记录.md",
     "Docs/Doyah产品概要设计说明书-变更记录.md",

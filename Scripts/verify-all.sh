@@ -412,6 +412,10 @@ echo "==> 4/18 文档表格与派生计数"
 # `git check-ignore` 实测 + 真跑它一遍）再与本文件 / 该脚本 / `AGENT-SPEC.md` 逐处对账。
 if [ "${REQUIRE_ALL}" = "1" ]; then
   python3 Scripts/check-doc-tables.py --require-all
+  python3 Scripts/check-ui-design-section.py --platform macos
+  python3 Scripts/check-ui-design-section.py --platform windows
+  python3 Scripts/check-ui-design-section.py --platform linux
+  python3 Scripts/check-ui-design-section.py --platform ios
 else
   python3 Scripts/check-doc-tables.py
 fi

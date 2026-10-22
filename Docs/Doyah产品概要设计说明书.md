@@ -1,6 +1,6 @@
 # Doyah产品概要设计说明书
 
-当前 v3.4.1（2026-10-22 补第二章「前端与壳的关系」）
+当前 v3.5.0（2026-10-22 §9.2 Windows 界面设计落笔 + 界面设计规范进仓）
 
 > 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求规格说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
 > 本书按「整个产品」重写：**五个产品线 × 92 个需求域全覆盖**，契约章每节点名需求编号，指不到编号的条目不写。
@@ -246,12 +246,12 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 | 壳 | 界面技术 | 与本仓 Core 的关系 | 依据 |
 |---|---|---|---|
 | macOS | SwiftUI / AppKit，直接链接 `DoyahCore` | 同进程，无 IPC | `Package.swift`、`App/` |
-| Windows | React + TypeScript 前端（WebView2 承载） | 通过 Tauri 命令层访问 Rust 侧 Core | `Platform/windows/App/**`（155 个 ts/tsx） |
+| Windows | **Vue 3 + TypeScript** 前端（WebView2 承载） | 通过 Tauri 命令层访问 Rust 侧 Core | `Platform/windows/App/**`（155 个 ts/tsx） |
 | Linux | Tauri 壳 + **同一份 Windows 前端** | `tauri.conf.json` 的 `frontendDist` 指向 `../../windows/App/dist` | `Platform/linux/src-tauri/tauri.conf.json` |
 
 三条由此而来的设计结论：
 
-1. **契约层（第三章）必须与技术栈无关**。同一套不变量要同时约束 SwiftUI 与 React，所以它只能写「结果一致、状态齐备、文案同源」，不能写视图类型名。
+1. **契约层（第三章）必须与技术栈无关**。同一套不变量要同时约束 SwiftUI 与 Vue，所以它只能写「结果一致、状态齐备、文案同源」，不能写视图类型名。
 2. **界面章分两层是必然的**（第七章只锁跨端不变量）；构件级的可执行规格（7.9）也只能写档位与约束，具体控件由各端自己的规范决定。
 3. **Linux 的界面设计不是独立一份**：它与 Windows 共用前端，差异只在壳（文件对话框、密钥环、通知、缩放、菜单）。因此 Linux 侧不要把前端重写一遍。
 
@@ -3128,6 +3128,8 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 
 ## 9.2 契约 → Windows 实现 [独占:windows]
 
+> **口径**：本节只写实现形态；进度与完成度以《Doyah产品开发计划书》§3 台账为准，本节不写状态。
+>
 > 本节是 Windows 侧的实现节，归属 `babyhippo`；正文按 v3.2 全书统一编号，节内引用一律指本版节号。
 
 **归属与读法（形态 A，2026-09-27）**：本节由 **Windows 平台侧（小河马）首建并自行加 `[独占:windows]` 标记** —— 自此本节（含子节）只由该侧修改，macOS 侧只读。本节只写**实现层**：可以替换实现，**不得改变 §3 的契约与不变量**；若发现契约本身有问题 → 走提案（登记 Studio spec §6 待拍板队列，由契约侧修改）。
@@ -3188,7 +3190,7 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 
 > 说明：Swift 侧门禁（`verify-core.sh` / `verify-all.sh` / `build-app.sh`）在 Windows 上不可执行，本节的等价物以 PowerShell + `cargo` / `npm` 重建（2026-09-28 开工令换栈：构建 = `cargo build` + 前端 `vite build`，单测 = `cargo test` + `vitest`）；**等价性由本节 9.2.4 的「一样」清单判定**，不靠口头承诺。
 >
-> **本侧现在就能跑的两项（不需要 Windows 侧代码，2026-09-27 实测）**：① **多平台等价矩阵** `python Scripts/gen-platform-parity.py --check`（本端开工前，判据 = Windows 列与台账一致、且全 ⬜ 是唯一如实状态）；② **独占节越界** `python Scripts/check-exclusive-sections.py --mine windows --base origin/master`（本侧视角；**该脚本 `--mine` 默认按平台推断，Windows 上不传参数即 windows 视角**）。**`Scripts/verify-all.sh` 整条在 Windows 上跑不了** —— 第 1 / 2 / 3 / 6 / 11 项要 macOS 工具链，**第 4 项要 5 份被 `.gitignore` 排除的本地文档**（详见 9.2.6-4 与 9.2.7 的逐项实测）。
+> **本侧现在就能跑的两项（不需要 Windows 侧代码，2026-09-27 实测）**：① **多平台等价矩阵** `python Scripts/gen-platform-parity.py --check`（本端开工前，判据 = Windows 列与台账一致、且全 未落 是唯一如实状态）；② **独占节越界** `python Scripts/check-exclusive-sections.py --mine windows --base origin/master`（本侧视角；**该脚本 `--mine` 默认按平台推断，Windows 上不传参数即 windows 视角**）。**`Scripts/verify-all.sh` 整条在 Windows 上跑不了** —— 第 1 / 2 / 3 / 6 / 11 项要 macOS 工具链，**第 4 项要 5 份被 `.gitignore` 排除的本地文档**（详见 9.2.6-4 与 9.2.7 的逐项实测）。
 
 ### 9.2.4 「一样」与「允许不同」的可执行口径
 
@@ -3207,7 +3209,7 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 ### 9.2.6 待定与提案（本侧不擅自决定）
 
 1. **Windows 实现的落点** —— **已定：同仓 `windows/`**。① 本侧先按通道出提案 `Docs/proposals/0002-windows-实现落点-同仓多端.md`；② 契约侧在 L-30（`991ff6f`）**同一时段落地同一落点** —— §8.2 里 `doyah-linux/` 块换成 **`windows/`** 块（层与目录照 §9.2.1，不另立一份），并写明 Linux 自用第三端不在本仓；③ 两路结论一致 ⇒ 提案标 **已采纳**（回填 `991ff6f`）、本条销账。**开工前置已清空（第 21 轮落闸门）**：闸门于 2026-09-27 落在 `windows/Tools/`（13 项一条命令跑全，见 §9.2.3 与 §9.2.7 实测表；第 22 轮由 11 项扩为 12 项、第 24 轮 12 → 13 项），**先有闸门再有功能** ⇒ 下一步 = 工程本体（§9.2.1 结构）。**留给契约侧一处小尾巴**：§8.2 那行的括注仍写着「落点见 §9.2.6-1」（该条已销账），本侧不改契约层，仅在此记明。
-2. **机械设施扩多平台（队列 L-26）** —— **已落地（契约侧 `cfd91c1`，2026-09-27 第 25 轮）**，本条从「本方出提案、对侧落笔」销账：① `Docs/平台实现状态.json` 改形状 = `{default, platforms:{linux,windows}, notPlatforms:{mobile}}`，每平台带 `label` / `role` / `owner` / `overrides`，**macOS 不许进台账**（它是基线，状态来自 SRS §9.1 —— 同一个真相只允许一个来源）；② `Scripts/gen-platform-parity.py` 的**列由台账决定**（不再写死两列），SRS 计划书 §5 由四列扩为**五列**（编号 / 需求摘要 / macOS / Linux / Windows）+ 每域「与 macOS 基线一致：Linux n / Windows m 条」；③ 同批补三道判据（台账校验 / `--check` 报行号与两侧内容 / `--self-test` 11 例）。**本侧义务（从本条起长期有效）**：`platforms.windows.overrides` 与 计划书 §5 的 Windows 列必须**如实** —— 本端未开工时**全 ⬜ 是唯一可接受的状态**，不许为「看起来在推进」改 🟡；开工后状态只从台账改，改完跑 `python3 Scripts/gen-platform-parity.py` 重生成表格（手工改表会被 `--check` 判红）。
+2. **机械设施扩多平台（队列 L-26）** —— **已落地（契约侧 `cfd91c1`，2026-09-27 第 25 轮）**，本条从「本方出提案、对侧落笔」销账：① `Docs/平台实现状态.json` 改形状 = `{default, platforms:{linux,windows}, notPlatforms:{mobile}}`，每平台带 `label` / `role` / `owner` / `overrides`，**macOS 不许进台账**（它是基线，状态来自 SRS §9.1 —— 同一个真相只允许一个来源）；② `Scripts/gen-platform-parity.py` 的**列由台账决定**（不再写死两列），SRS 计划书 §5 由四列扩为**五列**（编号 / 需求摘要 / macOS / Linux / Windows）+ 每域「与 macOS 基线一致：Linux n / Windows m 条」；③ 同批补三道判据（台账校验 / `--check` 报行号与两侧内容 / `--self-test` 11 例）。**本侧义务（从本条起长期有效）**：`platforms.windows.overrides` 与 计划书 §5 的 Windows 列必须**如实** —— 本端未开工时**全 未落 是唯一可接受的状态**，不许为「看起来在推进」改 部分；开工后状态只从台账改，改完跑 `python3 Scripts/gen-platform-parity.py` 重生成表格（手工改表会被 `--check` 判红）。
 3. **结果网格性能基准**（对齐 `NFR-PERF`；**口径以 2026-09-28 开工令为准 = 40 万行 × 20 列**，三选一实现：TanStack Virtual 自绘 / AG Grid Community / Rust 侧切片喂前端）—— **本侧选定的形态 = TanStack Virtual 自绘渲染 + Rust 侧窗口取数**（前端一次只拿要渲染的那几十行）。
    **首份新栈基线已产出（第 24 轮，仪器 = 本仓 `windows/Core` 的 `grid-bench` + `windows/Bench/grid` 基准台，两者都可复跑）**：**Rust 侧**（40 万行 × 20 列，release）—— 生成 386.3 ms / 排序（40 万行降序置换）**77.8 ms** / 文本等值筛选 3.17 ms / 数值区间筛选 2.49 ms / 200 个 64 行窗口实体化 144.5 ms / 20 万次随机单元格取文本 118.9 ms / 列数据 102.9 MB（**字节估算，非进程 RSS**）；**前端侧**（无头 Chromium 151、软件光栅）—— 40 万行 × 20 列虚拟滚动 240 帧 **p50 21.3 ms / p95 31.2 ms / 均 22.0 ms（45.4 fps）/ 超 16.7 ms 204 帧 / DOM 只实体化 31 行**，首屏载入 942.1 ms（含 64 MB 数据读入），JS 堆 90.1 MB，前端排序 494.5 ms、前端筛选 13.2 ms。
    **方向性结论（第 24 轮）**：① **排序必须落在后端**（Rust 77.8 ms 对前端 494.5 ms，约 6 倍）—— 与上一份 WPF 基线的方向性结论一致；② **行虚拟化有效**（40 万行只产生 31 行 DOM）；③ 前端帧耗时仍高于 16.7 ms，但读数是**无头软件光栅**、不含 GPU 合成 ⇒ **不作真机达标依据**（真机 = WebView2 + GPU，待表示层落地后复测）。
@@ -3235,58 +3237,58 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 
 ### 9.2.7 当前状态
 
-**实现本体 🟡 首片已落地（2026-09-28 第 24 轮）；闸门 ✅ 已就位（13 项）**（2026-09-27 需求提出者拍板「Windows 版本的 Doyah Studio 也可以动工了」；2026-09-28 开工令把本侧栈换成 **Tauri 2 + Vue 3 + TS / Rust**）。本节 = **实现层的设计落位（首建，2026-09-27，小河马）**；口径「先有闸门再有功能」已满足 ⇒ 第 24 轮按开工令先做**结果集网格压力基准**（`windows/Core` + `windows/Bench/grid`），**过了再铺功能**。**注意：闸门与基准台都不是功能进度**，故 计划书 §5 平台等价矩阵的 Windows 列仍全 ⬜（唯一如实状态）。**第 25 轮**：把闸门里一处「如实跳过」变成「真跑」—— `check-core-boundary.ps1` 按 Rust 形态重建（读数见本节末表）。
+**实现本体 部分 首片已落地（2026-09-28 第 24 轮）；闸门 已具备 已就位（13 项）**（2026-09-27 需求提出者拍板「Windows 版本的 Doyah Studio 也可以动工了」；2026-09-28 开工令把本侧栈换成 **Tauri 2 + Vue 3 + TS / Rust**）。本节 = **实现层的设计落位（首建，2026-09-27，小河马）**；口径「先有闸门再有功能」已满足 ⇒ 第 24 轮按开工令先做**结果集网格压力基准**（`windows/Core` + `windows/Bench/grid`），**过了再铺功能**。**注意：闸门与基准台都不是功能进度**，故 计划书 §5 平台等价矩阵的 Windows 列仍全 未落（唯一如实状态）。**第 25 轮**：把闸门里一处「如实跳过」变成「真跑」—— `check-core-boundary.ps1` 按 Rust 形态重建（读数见本节末表）。
 
-**开工前置与首片进度**：① §9.2.6-2（机械设施扩多平台）**已就位**（契约侧 `cfd91c1`）；② §9.2.6-1（落点）**已定 = 同仓 `windows/`**（契约侧 `991ff6f` 已落 §8.2；提案 `0002` 标已采纳）；③ §9.2.3 表里的等价物已全部落到 `windows/Tools/` —— `verify-all.ps1`（**第 24 轮 12 → 13 项**：新增第 12 项 = 结果网格压力基准可复跑；第 ③④ 两项按新栈改为 `cargo` / `npm`）+ 其余子闸门；④ **首片落地物** = Rust 领域层 `windows/Core`（工作区 + 15 个 `cargo test` 用例）与基准台 `windows/Bench/grid`（Vue 3 + TS + Vite + TanStack Virtual，`vitest` 5 例、`tsc --noEmit` 干净）；⑤ `App/` `Cli/` `Platform/Windows/` **仍未建**（⬜ 不半建）。
+**开工前置与首片进度**：① §9.2.6-2（机械设施扩多平台）**已就位**（契约侧 `cfd91c1`）；② §9.2.6-1（落点）**已定 = 同仓 `windows/`**（契约侧 `991ff6f` 已落 §8.2；提案 `0002` 标已采纳）；③ §9.2.3 表里的等价物已全部落到 `windows/Tools/` —— `verify-all.ps1`（**第 24 轮 12 → 13 项**：新增第 12 项 = 结果网格压力基准可复跑；第 ③④ 两项按新栈改为 `cargo` / `npm`）+ 其余子闸门；④ **首片落地物** = Rust 领域层 `windows/Core`（工作区 + 15 个 `cargo test` 用例）与基准台 `windows/Bench/grid`（Vue 3 + TS + Vite + TanStack Virtual，`vitest` 5 例、`tsc --noEmit` 干净）；⑤ `App/` `Cli/` `Platform/Windows/` **仍未建**（未落 不半建）。
 
 **本机实测（2026-09-27 第 19 / 20 / 22 轮，命令与输出照录）**：
 
 | 项 | 命令 | 实测结果 |
 |---|---|---|
-| 等价矩阵（Windows 列已并入 计划书 §5）| `python Scripts/gen-platform-parity.py --check` | `✅ 平台等价矩阵与现状一致（176 条；平台列 3）` · RC 0 |
+| 等价矩阵（Windows 列已并入 计划书 §5）| `python Scripts/gen-platform-parity.py --check` | `已具备 平台等价矩阵与现状一致（176 条；平台列 3）` · RC 0 |
 | 越界门禁（不传参数 = 本机推断为 windows）| `python Scripts/check-exclusive-sections.py` | 与显式 `--mine windows` 的输出逐字一致 · RC 0 |
-| 越界门禁（**推前姿势**）| `python Scripts/check-exclusive-sections.py --mine windows --base origin/master` | `✅ 越界检查通过：受检改动 29 行（含契约层），均合法（本侧=windows，契约层属 macos）` · RC 0 |
+| 越界门禁（**推前姿势**）| `python Scripts/check-exclusive-sections.py --mine windows --base origin/master` | `已具备 越界检查通过：受检改动 29 行（含契约层），均合法（本侧=windows，契约层属 macos）` · RC 0 |
 | 越界门禁（**合并对侧提交后**仍用 `--base HEAD`）| `python Scripts/check-exclusive-sections.py --mine windows --base HEAD` | ❌ **76 处假红** —— 全是**对侧刚合并进来那笔提交**的契约层改动（`HEAD` 里还没它）⇒ **merge 后推前一律用 `--base origin/master`**，或先提交 merge 再跑；本侧改动在该视图下全部合法 |
 | 文档表格（受检清单含本地文档 ⇒ 本机必红）| `python Scripts/check-doc-tables.py` | ❌ 5 处，**全部为「文件不存在」**（即被 `.gitignore` 排除的那 5 份），**与本侧改动无关** |
-| 文档表格（只查入库文档）| `python Scripts/check-doc-tables.py Docs/Doyah产品概要设计说明书.md Docs/Doyah产品需求规格说明书.md Docs/README.md Docs/proposals/README.md Docs/proposals/0002-*.md` | `✅ 表格校验通过（5 个文件）` · RC 0 |
-| **文档版本与取号**（契约侧 L-32 新门禁）| `python Scripts/check-doc-versions.py` | `✅ 变更记录版本号唯一、头部版本可判、队列条目号唯一` · RC 0；另有 4 条**「文件不在盘上，跳过（不是「已通过」）」**提示（兼容性矩阵 / 发布方案 / 手工验收运行手册 / 开发循环-任务队列 —— 均为 `.gitignore` 排除的本地文档，与 9.2.6-4 ③ 同源）|
+| 文档表格（只查入库文档）| `python Scripts/check-doc-tables.py Docs/Doyah产品概要设计说明书.md Docs/Doyah产品需求规格说明书.md Docs/README.md Docs/proposals/README.md Docs/proposals/0002-*.md` | `已具备 表格校验通过（5 个文件）` · RC 0 |
+| **文档版本与取号**（契约侧 L-32 新门禁）| `python Scripts/check-doc-versions.py` | `已具备 变更记录版本号唯一、头部版本可判、队列条目号唯一` · RC 0；另有 4 条**「文件不在盘上，跳过（不是「已通过」）」**提示（兼容性矩阵 / 发布方案 / 手工验收运行手册 / 开发循环-任务队列 —— 均为 `.gitignore` 排除的本地文档，与 9.2.6-4 ③ 同源）|
 | 取号（入库文档，**禁手抄**）| `python Scripts/next-doc-version.py Docs/Doyah产品概要设计说明书.md Docs/Doyah产品需求规格说明书.md` | `v2.44 ← Docs/Doyah产品概要设计说明书.md`、`v3.245 ← Docs/Doyah产品需求规格说明书.md` ⇒ 本轮台账行取 **v2.44**（由工具给出，未手抄）|
 | 取号（队列条目号）| `python Scripts/next-doc-version.py --ids L` | ❌ **RC 1**：`FileNotFoundError: Docs/智能体助手-开发spec.md`（该文件不入库）⇒ **本侧在该机上不可用**；队列号本侧仍按对侧既有编号顺延（见建议）|
 | **闸门 · 一条命令跑全（第 21 轮新落）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：11 项中跑 7 / 跳过 4 / 失败 0` + 逐条列出跳过项；`RESULT: SKIP (exit 2)`（**跳过不是「已通过」**，§3.6.4）|
 | **闸门 · 跳过即红** | 同命令加 `-RequireAll` | ❌ `RESULT: FAIL (exit 1)` —— 4 项跳过即判红 |
-| **`P-*` 两侧对账**（契约侧 L-45 新判据，第 22 轮接进本侧闸门）| `python Scripts/check-p-parity.py`（本侧入口 `windows/Tools/check-p-parity.ps1`）| `✅ P-* 对账通过（双向覆盖 + 同号同物 + §9.2.5 无未并入条目）` —— 两侧均 `P-01` ~ `P-25`、同号同物逐条一致、**本节 8 条全部已并入** · RC 0；判据 `--self-test` **8/8**（含「§9.2.5 已落条但未并入」那一例）|
+| **`P-*` 两侧对账**（契约侧 L-45 新判据，第 22 轮接进本侧闸门）| `python Scripts/check-p-parity.py`（本侧入口 `windows/Tools/check-p-parity.ps1`）| `已具备 P-* 对账通过（双向覆盖 + 同号同物 + §9.2.5 无未并入条目）` —— 两侧均 `P-01` ~ `P-25`、同号同物逐条一致、**本节 8 条全部已并入** · RC 0；判据 `--self-test` **8/8**（含「§9.2.5 已落条但未并入」那一例）|
 | **闸门 · 一条命令跑全（第 22 轮：11 → 12 项）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：12 项中跑 8 / 跳过 4 / 失败 0` + `RESULT: SKIP (exit 2)`；跳过 4 项仍是构建 / 单测 / 领域层边界 / 令牌棘轮（工程未建），逐条列出 |
-| **闸门 · 注入自证（第 22 轮新增第 11 项）**| 往 §9.2.5 加一条只在本节出现的 `P-26`（不写进 §4 / §9.2）| ✅ 判据 **RC 1** 并点名 `Docs/Doyah产品概要设计说明书.md:1039：§9.2.5（[独占:windows]）已落条目 `P-26`，但它还没进 §9.2 / §4`；本侧第 11 项 `RESULT: FAIL (exit 1)` ⇒ `git checkout HEAD -- Docs/Doyah产品概要设计说明书.md` 还原后**逐字节一致**、转绿 RC 0 |
-| **闸门 · 一处假红及其修复（第 22 轮）**| 修复前：`verify-all.ps1`（第 ③ 项）| ❌ 第 ③ 项 `抛异常：…check-doc-tables.py:46: SyntaxWarning: invalid escape sequence '\|'` —— 判据本身 **rc 0**（`✅ 表格校验通过（6 个文件，跳过 7 份）`），坏在 **PowerShell 5.1 把原生命令写到 stderr 的任意一行**在 `$ErrorActionPreference='Stop'` 下当**终止错误** ⇒ `_common.ps1` 改为**只由退出码决定判红**（stderr 照原样打印、不吞、不静默），修复后即 `跑 8 / 跳过 4 / 失败 0` |
-| **越界门禁（第 22 轮复跑）** | `python Scripts/check-exclusive-sections.py --mine windows --base origin/master` | `✅ 越界检查通过：受检改动 18 行（含契约层），均合法（本侧=windows，**契约层属 apple**）` · RC 0 —— 尾巴的 `apple` 是本轮新现象：三副本并集收敛（L-51 `e340782`）后本仓副本的 `--contract-owner` 默认值成了 Notes 词表的 `apple`（**别名等价 `macos`，功能无碍**，仅显示串与 docstring 示例改了词表）⇒ 建议对侧把本仓副本的默认值 / 示例串写回 `macos`（本侧只报不动 `Scripts/`）|
+| **闸门 · 注入自证（第 22 轮新增第 11 项）**| 往 §9.2.5 加一条只在本节出现的 `P-26`（不写进 §4 / §9.2）| 已具备 判据 **RC 1** 并点名 `Docs/Doyah产品概要设计说明书.md:1039：§9.2.5（[独占:windows]）已落条目 `P-26`，但它还没进 §9.2 / §4`；本侧第 11 项 `RESULT: FAIL (exit 1)` ⇒ `git checkout HEAD -- Docs/Doyah产品概要设计说明书.md` 还原后**逐字节一致**、转绿 RC 0 |
+| **闸门 · 一处假红及其修复（第 22 轮）**| 修复前：`verify-all.ps1`（第 ③ 项）| ❌ 第 ③ 项 `抛异常：…check-doc-tables.py:46: SyntaxWarning: invalid escape sequence '\|'` —— 判据本身 **rc 0**（`已具备 表格校验通过（6 个文件，跳过 7 份）`），坏在 **PowerShell 5.1 把原生命令写到 stderr 的任意一行**在 `$ErrorActionPreference='Stop'` 下当**终止错误** ⇒ `_common.ps1` 改为**只由退出码决定判红**（stderr 照原样打印、不吞、不静默），修复后即 `跑 8 / 跳过 4 / 失败 0` |
+| **越界门禁（第 22 轮复跑）** | `python Scripts/check-exclusive-sections.py --mine windows --base origin/master` | `已具备 越界检查通过：受检改动 18 行（含契约层），均合法（本侧=windows，**契约层属 apple**）` · RC 0 —— 尾巴的 `apple` 是本轮新现象：三副本并集收敛（L-51 `e340782`）后本仓副本的 `--contract-owner` 默认值成了 Notes 词表的 `apple`（**别名等价 `macos`，功能无碍**，仅显示串与 docstring 示例改了词表）⇒ 建议对侧把本仓副本的默认值 / 示例串写回 `macos`（本侧只报不动 `Scripts/`）|
 | **闸门 · 注入自证四例**（逐例：注入 → 红 → 还原 → **逐字节一致** → 绿）| ① 台账给 Windows 登记 1 条 overrides；② 子脚本去 UTF-8 BOM；③ 夹具 `windows/Core` 开 `UseWPF` + 写 `DllImport`；④ 缺本地文档 | 四例全中：① `未开工却登记了 1 条 overrides ⇒ 不如实`；② `verify-all` 第 1 项判红、整条 FAIL；③ 两条都点名（`UseWPF` / `DllImport`）；④ `check-doc-tables.ps1 -RequireAll` = FAIL。还原后逐字节一致、门禁转绿（本侧第 21 轮复跑同 harness，逐例一致）；用例细节与另两条实测坑见 `windows/Tools/README.md` |
 | **结果网格性能（50 万行 × 6 列，首份基线）**| 仓外临时 WPF 探针（`dotnet run`，**离屏**、.NET 6；工程未入库）| 绑定 16 ms / 冷布局 906 ms（实体化 **48** 行）/ 热布局 0 ms / 末行 `ScrollIntoView` 17 ms / **排序 5493 ms** / 筛选重布局 250 ms / 内存 112.7 MB（峰值 WS 246.1 MB）⇒ 详见 9.2.6-3（**瓶颈在排序**；口径限制四条，不据此宣布达标）|
-| **领域层边界（第 25 轮按 Rust 形态重建）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/check-core-boundary.ps1` | `✅ 领域层边界干净（Core 依赖 0 条 / 源文件 5 个；GUI 与平台能力只在 Platform\Windows\）` + `自测：7/7 例通过`（基线 / 依赖注入 / 源码 crate 名 / FFI 形状 / 空跑 / 逃生门 / 末例核对真仓库逐字节未变）· `RESULT: PASS (exit 0)` |
+| **领域层边界（第 25 轮按 Rust 形态重建）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/check-core-boundary.ps1` | `已具备 领域层边界干净（Core 依赖 0 条 / 源文件 5 个；GUI 与平台能力只在 Platform\Windows\）` + `自测：7/7 例通过`（基线 / 依赖注入 / 源码 crate 名 / FFI 形状 / 空跑 / 逃生门 / 末例核对真仓库逐字节未变）· `RESULT: PASS (exit 0)` |
 | **闸门 · 重跑（第 25 轮）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：13 项中跑 12 / 跳过 1 / 失败 0` + `RESULT: SKIP (exit 2)`；**跳过 1 项 = 设计令牌棘轮**（唯一剩项，等 `App/` 落地）；第 24 轮那一项判红（本地落后远端未合并的独占节越界）在合并对侧 `9cab5a9` 后已绿 |
 | **闸门 · 领域层边界注入自证（第 25 轮，真仓库三例）** | ① `Core/Cargo.toml` 的 `[dependencies]` 加 `tauri = "2"`；② `Core/src/lib.rs` 加 `use windows::core::*;`；③ 同文件加 `extern "C" { fn probe(); }` | ❌ 三例全中并点名：`Cargo.toml:8 依赖面命中 GUI / 平台 crate：tauri` / `windows\Core\src\lib.rs:13 出现 use GUI / 平台 crate`（同行 crate 路径规则亦命中）/ `lib.rs:13 出现 FFI：extern "C"` ⇒ 逐例**按原始字节还原**（sha256 逐字节一致）后净跑 `RESULT: PASS (exit 0)` |
 
-| **表示层外壳（第 26 轮首片）** | `cd windows/App && npm run build`（先 `npm run typecheck`） | ✅ 通过（`tsc --noEmit` 干净、Vite 产物 `dist/`）；**前端产物必须先于 `cargo build`** —— Tauri 编译期把 `frontendDist` 嵌进产物，顺序反了在干净克隆上必炸 |
-| **表示层单测（第 26 轮）** | `cd windows/App && npm test`（vitest） | ✅ **24 例全绿**（IPC 旁路 / 窗口取数数学 / 令牌名拼法 / 两个 node 判据的真仓库复核） |
-| **Rust 侧单测（第 26 轮）** | `cargo test --workspace` | ✅ **23 例全绿**（Core 15 + 外壳 8 = `query.rs` 内核 6 + IPC 双向 2） |
-| **令牌层（第 26 轮接真）** | `node tools/gen-tokens.mjs --check` + `node tools/token-ratchet.mjs` | ✅ 生成物 ⇄ `Core/DesignTokens.swift` 逐字一致；棘轮未升高（**扫描集为空即判红**已内置）、引用面无悬空命名。**落网抓到两处真分叉**：`app.css` 三处叠加层变量名拼错（`var()` 拼错在 CSS 里不报错、只是不生效）+ 生成器对叠加层 / 发丝线没做 kebab 归一（同一批变量两种拼法） |
-| **闸门 · 令牌层注入自证（第 26 轮，四例）** | `check-design-tokens.ps1` 第 ③ 项的两个 node 判据 | ✅ **4/4**：裸色值 ⇒ 计数超基线并点名文件；变量名拼错 ⇒ 点名「在令牌层没有定义」；令牌源改值 ⇒ 生成物漂移点名；令牌源删项 ⇒ 形状点名（`spacing：期望 7 条，实际 6 条`）。逐例按**原始字节**还原、sha256 一致、净跑绿 |
+| **表示层外壳（第 26 轮首片）** | `cd windows/App && npm run build`（先 `npm run typecheck`） | 已具备 通过（`tsc --noEmit` 干净、Vite 产物 `dist/`）；**前端产物必须先于 `cargo build`** —— Tauri 编译期把 `frontendDist` 嵌进产物，顺序反了在干净克隆上必炸 |
+| **表示层单测（第 26 轮）** | `cd windows/App && npm test`（vitest） | 已具备 **24 例全绿**（IPC 旁路 / 窗口取数数学 / 令牌名拼法 / 两个 node 判据的真仓库复核） |
+| **Rust 侧单测（第 26 轮）** | `cargo test --workspace` | 已具备 **23 例全绿**（Core 15 + 外壳 8 = `query.rs` 内核 6 + IPC 双向 2） |
+| **令牌层（第 26 轮接真）** | `node tools/gen-tokens.mjs --check` + `node tools/token-ratchet.mjs` | 已具备 生成物 ⇄ `Core/DesignTokens.swift` 逐字一致；棘轮未升高（**扫描集为空即判红**已内置）、引用面无悬空命名。**落网抓到两处真分叉**：`app.css` 三处叠加层变量名拼错（`var()` 拼错在 CSS 里不报错、只是不生效）+ 生成器对叠加层 / 发丝线没做 kebab 归一（同一批变量两种拼法） |
+| **闸门 · 令牌层注入自证（第 26 轮，四例）** | `check-design-tokens.ps1` 第 ③ 项的两个 node 判据 | 已具备 **4/4**：裸色值 ⇒ 计数超基线并点名文件；变量名拼错 ⇒ 点名「在令牌层没有定义」；令牌源改值 ⇒ 生成物漂移点名；令牌源删项 ⇒ 形状点名（`spacing：期望 7 条，实际 6 条`）。逐例按**原始字节**还原、sha256 一致、净跑绿 |
 | **闸门 · 重跑（第 26 轮）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：13 项中跑 13 / 跳过 0 / 失败 0` + `RESULT: PASS (exit 0)`；**设计令牌棘轮不再跳过** —— 本侧自此**没有跳过档** |
-| **生成物一致性判据（第 27 轮新落）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/check-release-version.ps1` | `✅ 发布产物版本号三处逐字一致 + 与 mac 侧发布台账同源（比对点 6 处；受检 4 份文件）` + 自测 **11/11 例通过**（基线 / 三处各改一处 / 缺 `[package]` 版本键 / 权威处第二个同名键 / 跨端不等 / 跨端独立策略放行 / 锚点写错 / 判据面缺失 / 末例核对真仓库逐字节未变）· `RESULT: PASS (exit 0)` |
+| **生成物一致性判据（第 27 轮新落）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/check-release-version.ps1` | `已具备 发布产物版本号三处逐字一致 + 与 mac 侧发布台账同源（比对点 6 处；受检 4 份文件）` + 自测 **11/11 例通过**（基线 / 三处各改一处 / 缺 `[package]` 版本键 / 权威处第二个同名键 / 跨端不等 / 跨端独立策略放行 / 锚点写错 / 判据面缺失 / 末例核对真仓库逐字节未变）· `RESULT: PASS (exit 0)` |
 | **闸门 · 生成物一致性注入自证（第 27 轮，真仓库三例）** | ① `App/package.json` 的 `version` → `9.9.9`；② `App/src-tauri/tauri.conf.json` 的 `version` → `9.9.9`；③ `App/src-tauri/Cargo.toml` 的 `[package] version` → `9.9.9` | ❌ 三例全中并点名：`镜像处：windows/App/package.json:4 的值 = \`9.9.9\`，台账 = \`0.2.0\`` / `权威处：…tauri.conf.json:4 …` / `镜像处：…Cargo.toml:3 …` ⇒ 逐例**按原始字节还原**（sha256 逐字节一致）后净跑 `RESULT: PASS (exit 0)` |
 | **闸门 · 重跑（第 27 轮）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：14 项中跑 14 / 跳过 0 / 失败 0` + `RESULT: PASS (exit 0)`；新增第 13 项 = 生成物一致性（发布产物版本号三处一致）|
-| **令牌层按主题归位（第 30 轮）** | `node tools/gen-tokens.mjs --check` + `npm test`（App） | ✅ 生成物**两件** ⇄ 源**两件**逐字一致；主题 **3** 个、每主题变量块 **3 态**（浅 / 深 / 跟随系统）；`themes.generated.ts` 与源的主题集逐字一致（id / 默认主题 / 「推导草案」标记）；发丝线浅色档 = 源侧实色 |
-| **闸门 · 两处假绿修复（第 30 轮）** | ① 平台中立性判据的受检三书不在盘上；② 子闸门抛异常后工作目录没还 | ❌ 两处都当场复现并修：① 判据整批**跳过**却 `exit 0` ⇒ 本侧报「✅ 通过」（受检输入不在盘上**必须先判红** ⇒ 包装补一条盘上检查）；② 子闸门 `Push-Location` 后抛异常 ⇒ **后续项全跑在错的目录**（令牌项的红被记到平台等价项头上）⇒ 包装在 `finally` 里还原并打印泄露路径 |
-| **闸门 · 单测项补类型检查（第 30 轮）** | `cd windows/App && npm run typecheck` | ✅ 通过（`tsc --noEmit` 干净）。**补它的由头**：`vite build` **不做类型检查**、`vitest` 只跑被 import 到的用例 ⇒ 一个 `.vue` / `.ts` 里的类型错误此前能同时绕过 ① 与 ②（改坏了照样全绿） |
+| **令牌层按主题归位（第 30 轮）** | `node tools/gen-tokens.mjs --check` + `npm test`（App） | 已具备 生成物**两件** ⇄ 源**两件**逐字一致；主题 **3** 个、每主题变量块 **3 态**（浅 / 深 / 跟随系统）；`themes.generated.ts` 与源的主题集逐字一致（id / 默认主题 / 「推导草案」标记）；发丝线浅色档 = 源侧实色 |
+| **闸门 · 两处假绿修复（第 30 轮）** | ① 平台中立性判据的受检三书不在盘上；② 子闸门抛异常后工作目录没还 | ❌ 两处都当场复现并修：① 判据整批**跳过**却 `exit 0` ⇒ 本侧报「已具备 通过」（受检输入不在盘上**必须先判红** ⇒ 包装补一条盘上检查）；② 子闸门 `Push-Location` 后抛异常 ⇒ **后续项全跑在错的目录**（令牌项的红被记到平台等价项头上）⇒ 包装在 `finally` 里还原并打印泄露路径 |
+| **闸门 · 单测项补类型检查（第 30 轮）** | `cd windows/App && npm run typecheck` | 已具备 通过（`tsc --noEmit` 干净）。**补它的由头**：`vite build` **不做类型检查**、`vitest` 只跑被 import 到的用例 ⇒ 一个 `.vue` / `.ts` 里的类型错误此前能同时绕过 ① 与 ②（改坏了照样全绿） |
 | **闸门 · 重跑（第 30 轮）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：14 项中跑 14 / 跳过 0 / 失败 0` + `RESULT: PASS (exit 0)` |
 | **真机基准 · 起真外壳并注入驱动（第 28 轮新落）** | `cd windows/Bench/webview2 && node bench.mjs`（产物 = `target/release/doyah-studio.exe`，**须生产形态**） | `页面 = http://tauri.localhost/`；`首屏 559.6 ms · GPU renderer = ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)`；**空转 16.7 ms / 60.1 fps**；**滚动 40 万行 p50 50.1 / p95 63.1 ms（19.3 fps，240/240 超 16.7 ms）**；5 万行 50.3 ms；2 千行 49.4 ms；**IPC 隔离档 51.0 ms**；DOM 38 行；布局 272 次 / 3.71 s；样式重算 272 次 / 1.14 s；进程树峰值 789 MB（估算） ⇒ 复跑 4 轮 p50 = 46.1 / 49.6 / 50.1 / 48.8 ms（口径限制六条见 §9.2.6-3）|
-| **构建入口 · 产物「生产形态」判据（第 28 轮新落，在 `build.ps1` 内）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/build.ps1` | `✅ 生产形态核对：前端产物 2 份（index-BZikEOCC.css、index-CzsUUTBT.js）已编进 doyah-studio.exe` · `RESULT: PASS (exit 0)`；**注入自证**（去掉 cargo 调用的 `--features doyah-studio-shell/custom-protocol`）⇒ `❌ 判红：产物不是生产形态：前端产物没被编进可执行文件（缺 index-BZikEOCC.css、index-CzsUUTBT.js）—— 构建必须带 custom-protocol 特性` · `RESULT: FAIL (exit 1)`；按**原始字节**还原后 sha256 一致（`afd2b565194a`）⇒ 净跑转绿 |
+| **构建入口 · 产物「生产形态」判据（第 28 轮新落，在 `build.ps1` 内）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/build.ps1` | `已具备 生产形态核对：前端产物 2 份（index-BZikEOCC.css、index-CzsUUTBT.js）已编进 doyah-studio.exe` · `RESULT: PASS (exit 0)`；**注入自证**（去掉 cargo 调用的 `--features doyah-studio-shell/custom-protocol`）⇒ `❌ 判红：产物不是生产形态：前端产物没被编进可执行文件（缺 index-BZikEOCC.css、index-CzsUUTBT.js）—— 构建必须带 custom-protocol 特性` · `RESULT: FAIL (exit 1)`；按**原始字节**还原后 sha256 一致（`afd2b565194a`）⇒ 净跑转绿 |
 | **真机基准 · 注入前的形态缺陷（第 28 轮实测）** | 不带特性开关编出来的 `target/release/doyah-studio.exe` 直接起（本仪器第一次运行） | ❌ 页面 URL = `http://localhost:5274/`（连 `devUrl`，盘上无 dev server ⇒ 空窗口）；本仪器打印 `NO_PAGE`（只认 `tauri://localhost`）。**这说明「构建入口通过」当时并不等于「产物能跑」** —— 现已由上面的判据机械拦下 |
 | **真机基准 · 消融档与同轮内对照（第 29 轮新落）** | `cd windows/Bench/webview2 && node bench.mjs`（同一产物；本轮只改仪器，产品代码与二进制未动） | `invoke 可替换性：descriptor={"writable":false,"configurable":false,"accessor":false} · definePropertyOk=false`（**第 28 轮「IPC 隔离档」从未生效的机械证据**，旧读数里 `cachedWindowCalls: 0` 与它互相印证）；**慢速滚动消融档 p50 17.9 ms / 46.9 fps**（布局 0.33 s / 160 次、样式重算 0.06 s / 160 次、窗口只换 4 次、`windowShifts` 记进读数）· **同轮基线 p50 79.1 ms / 8.5 fps**（布局 6.39 s / 295 次、样式重算 1.99 s / 295 次）· **基线复跑 78.6 ms**（轮内两次相差 0.5 ms）· 空转 17.9 ms / 56 fps ⇒ 结论 = **传输 / 响应式 / diff / 滚动簿记合计不足一个 vsync 周期，61 ms/帧 全在「写 DOM + 重排版 / 重绘」**（口径限制七条见 §9.2.6-3）|
 | **真机基准 · 样式消融与变更观察（第 30 轮新落）** | `cd windows/Bench/webview2 && node bench.mjs`（在**改动前**的产品二进制上量四档消融 + 变更观察档） | 消融：基线 **79.3 ms**（复跑 77.6）· `contain-row` 78.4 / `contain-cell` 79.7（**单独加隔离无效**）· `clip-cell` **66.0**（≈13 ms/帧）· `hidden-rows` **52.7**（≈27 ms/帧；p95 526.7 → 72.4、长任务 267 次 / 21.0 s → 136 次 / 7.7 s）；变更观察（270 帧）：每帧新增 **623** 节点 + 属性 **612** 次（全 `title`）、`characterData` 恒 0 ⇒ 脚本/仪器侧改动见 `Bench/webview2/README.md` |
 | **真机基准 · 产品侧三候选同轮 A/B（第 30 轮）** | `node bench.mjs --quick --exe ../../target/bench-exe/<臂>.exe`（三臂交替相邻跑，全部在 5 分钟内；注意跨会话漂移 > 50%） | 基线 **49.6 ms**（51.3 / 49.2 · 48.0 / 50.0）→ 行池 + 轮转槽位 **36.5**（37.3 / 35.7，−26%）→ 再 + 前瞻取数 `LOOKAHEAD=12` + `text-overflow: clip` + 行 `contain` **26.2**（26.5 / 26.6 · 26.2 / 25.4，**−47%**）；p95 67.9~69.1 → **40.9~41.0**，`over16` 240/240 → **168~182/240**，变更观察 623 + 612 → **207 + 87** 每帧，布局 3.58~3.92 s → **1.28~1.35 s**、样式重算 1.12~1.18 s → **0.37~0.38 s**；**内容成本（p50 − 同轮空转地板 17.9 ms）31.7 → 19.8 → 8.3 ms**（口径与「读不出 60 fps」见 §9.2.6-3 ⑥⑦） |
 | **闸门 · 重跑（第 30 轮）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：14 项中跑 14 / 跳过 0 / 失败 0` + `RESULT: PASS (exit 0)`（本轮改产品代码 + 仪器，闸门项数与清单未动） |
 
-**本轮（第 20 轮）未改契约语义、未改 §3、未改 macOS / Linux 节**：改动只落在本节（`[独占:windows]`）与 §10 台账行（`[开放]`）；**唯一落在无标记节的一处 = 头部「版本」格的「当前」号**（按 `check-doc-versions.py` 判据同步 v2.43 → v2.44，已在**同一行单元格内**注 `contract-change：理由` 痕迹）。Windows 列状态一字未动（仍全 ⬜ —— 未开工时唯一如实状态）。第 19 轮的改动范围见 v2.42 行。**第 21 轮**（落闸门）改动范围同上：新增 `windows/`（实现层目录，不受越界门禁管辖 —— 门禁只管三书 + 本地文档）+ 本节三处 + §10 一行；**唯一落在无标记节的仍是头部「版本」格那一行**（按判据同步「当前」号，已在同一格内注 `contract-change` 痕迹）。**第 22 轮**（接契约侧 L-45 的 `P-*` 对账判据 + 修一处假红 + 销 §9.2.5 的并入状态）改动范围：`windows/Tools/`（新增 `check-p-parity.ps1`、`verify-all.ps1` 11 → 12 项、`_common.ps1` 加「只认退出码」护栏）+ 本节四处（9.2.3 / 9.2.5 / 9.2.6-1 / 9.2.7）+ §10 一行；**唯一落在无标记节的仍是头部「版本」格那一行**（同步 v2.49，同一格内注 `contract-change` 痕迹）。
+**本轮（第 20 轮）未改契约语义、未改 §3、未改 macOS / Linux 节**：改动只落在本节（`[独占:windows]`）与 §10 台账行（`[开放]`）；**唯一落在无标记节的一处 = 头部「版本」格的「当前」号**（按 `check-doc-versions.py` 判据同步 v2.43 → v2.44，已在**同一行单元格内**注 `contract-change：理由` 痕迹）。Windows 列状态一字未动（仍全 未落 —— 未开工时唯一如实状态）。第 19 轮的改动范围见 v2.42 行。**第 21 轮**（落闸门）改动范围同上：新增 `windows/`（实现层目录，不受越界门禁管辖 —— 门禁只管三书 + 本地文档）+ 本节三处 + §10 一行；**唯一落在无标记节的仍是头部「版本」格那一行**（按判据同步「当前」号，已在同一格内注 `contract-change` 痕迹）。**第 22 轮**（接契约侧 L-45 的 `P-*` 对账判据 + 修一处假红 + 销 §9.2.5 的并入状态）改动范围：`windows/Tools/`（新增 `check-p-parity.ps1`、`verify-all.ps1` 11 → 12 项、`_common.ps1` 加「只认退出码」护栏）+ 本节四处（9.2.3 / 9.2.5 / 9.2.6-1 / 9.2.7）+ §10 一行；**唯一落在无标记节的仍是头部「版本」格那一行**（同步 v2.49，同一格内注 `contract-change` 痕迹）。
 
 ### 9.2.8 插件架构落地（本侧实现层；契约依据 = §3.2.6，2026-10-13 落笔） [独占:windows]
 
@@ -3300,7 +3302,7 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 |---|---|---|
 | 插件清单 | **无**（活动栏四项**写死在类型里**：`App/src/shell/activityBar.ts` 的 `ActivityBarItemId = 'workspace'｜'database'｜'notes'｜'retro'`） | 契约②要求**一处声明**、界面与构建**只消费它** ⇒ 需把"写死的四项"改成"**清单驱动**" |
 | Notes / Retro | **无实现**（`notes` 是占位、`retro` 未开工） | 需各落一个**模块**（本轮 = 空模块 + 骨架） |
-| 活动栏可见性 | **已单点**：`resolveActivityBarItem(item, visible)` 一个判据（`activityBar.ts:100`） | ✅ **已满足契约④的一半**（"可见性只有一处判据"）—— 新增插件只需把它的项**并进清单**，不动判据 |
+| 活动栏可见性 | **已单点**：`resolveActivityBarItem(item, visible)` 一个判据（`activityBar.ts:100`） | 已具备 **已满足契约④的一半**（"可见性只有一处判据"）—— 新增插件只需把它的项**并进清单**，不动判据 |
 | 视图挂载 | **硬编码**：`App.vue` 里 `WorkspaceView` / `DatabaseView` 直接 import | 契约③要求**经"主区页签"挂点接入** ⇒ 需引入**视图注册表** |
 | 领域层边界 | **已有机械判据**：`Tools/check-core-boundary.ps1`（GUI / 平台依赖不得进 `Core/`） | 可**直接复用**来守"插件不得触碰宿主内部模型" |
 | 存储 | 数据库面走自己的路径；**无插件存储工厂** | 契约⑤要求"二选一并在清单声明" ⇒ 需 `StorageFactory` 挂点 |
@@ -3400,6 +3402,104 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 - **不做** 插件独立授权与单独开关（`FR-STD-ALL-PLUG-006`：一套许可证覆盖三个能力位）
 - **不动** 契约层与 `[独占:macos]` 节；**不参照** macOS 实现细节（只读契约，实现自决）
 
+### 9.2.7 界面设计：窗口模型
+
+Windows 端是**自绘标题栏 + 单窗口**：`TitleBar.vue` 自己画标题、窗口按钮与搜索框，高度读 `--ds-metric-toolbar-height`（44），不依赖系统标题栏。标题文字与 macOS 同源（品牌段 + 当前活动项名），所以两端标题形状一致。
+
+| 事实 | 依据 |
+|---|---|
+| 自绘标题栏（高 44，内含搜索框与窗口按钮） | `Platform/windows/App/src/shell/TitleBar.vue:72,88` |
+| 单窗口，无多窗口模式 | `src/App.vue`（单个根组件，无窗口集合状态） |
+| 页签在编辑区内（不是窗口级） | `src/shell/BottomPanel.vue`、`src/views/` |
+
+**关闭窗口与关闭会话分开**：窗口关闭不影响已落盘的连接、查询历史与会话记录；页签状态由前端会话状态持有，重开窗口按存储恢复（与 §9.1.1 同一条纪律）。
+
+### 9.2.8 界面设计：区域骨架与伸缩次序
+
+从外到内四块横排 + 一块底部：
+
+| 层 | 区域 | 尺寸 | 伸缩 | 依据 |
+|---|---|---|---|---|
+| 1 | 活动栏 | 宽 46，图标 20 | 固定 | `--ds-metric-activity-bar-width` / `-icon-size`（`tokens.generated.css`） |
+| 2 | 侧栏 | 宽 248 | 可折叠 | `--ds-metric-sidebar-width`；`src/shell/SideBar.vue` |
+| 3 | 编辑区 | 占满剩余 | 吃剩余空间 | `src/App.vue` 主区 |
+| 4 | 下方面板 | 四页签：问题 / 输出 / 终端 / 调试 | 可折叠，按内容自量 | `src/shell/BottomPanel.vue:101-105` |
+| — | 状态栏 | 高由 CSS 定，内容四段 | 固定 | `src/shell/StatusBar.vue:56-79` |
+
+**与 macOS 的差异**：macOS 的下方面板是**五**页签（多「历史」），Windows 是**四**页签；macOS 用把手拖动改高度，Windows 由内容自量 + 折叠。这两条不是缺陷，是 P 表里登记的允许不同项（§4.1）。
+
+### 9.2.9 界面设计：构件与尺寸（令牌是生成物）
+
+**Windows 的令牌不手写**：`src/theme/tokens.generated.css` 由 `tools/gen-tokens.mjs` 从 macOS 侧 `Core/DesignTheme.swift` 解析生成，`--check` 模式做比对，改了会被闸门判红。因此「两端尺寸一致」不是靠人盯，是靠生成链。
+
+| 构件 | 取值 | 令牌 | 依据 |
+|---|---|---|---|
+| 行高（表格/结果集） | 26 | `--ds-metric-row-height` | `tokens.generated.css` |
+| 列表行高 | 20 | `--ds-metric-list-row-height` | 同上 |
+| 控件高 | 26 | `--ds-metric-control-height` | 同上 |
+| 工具栏 / 标题栏 | 44 | `--ds-metric-toolbar-height` | 同上 |
+| 活动栏宽 / 图标 | 46 / 20 | `-activity-bar-width` / `-activity-icon-size` | 同上 |
+| 侧栏宽 | 248 | `-sidebar-width` | 同上 |
+| 层级缩进 | 14 | `-list-indent` | 同上 |
+| 分隔线 | 0.5 | `-hairline` | 同上 |
+| 列宽上下限 | 40 / 420 | `-min-column-width` / `-max-column-width` | 同上 |
+| 执行计划面板 | 720 宽 / 160 最小高 | `-plan-panel-width` / `-plan-panel-min-height` | 同上 |
+| 执行计划树 / 原始文本 | 56–320 / 48–260，行高 15 | `-plan-tree-*` / `-plan-raw-*` | 同上 |
+| 间距 / 圆角 | 2/4/8/12/16/24/32 · 1/4/6/8/10 | `--ds-spacing-*` / `--ds-radius-*` | 同上 |
+
+### 9.2.10 界面设计：命令与键位
+
+| 事实 | 现状 | 依据 |
+|---|---|---|
+| 命令清单 | **18 条**，集中在 `commands.ts`，由命令面板统一执行 | `src/shell/commands.ts`（`id:` 计数 18） |
+| 命令面板 | 独立组件，`Ctrl/⌘ + K` 唤起 | `src/App.vue:187`（ctrlKey 或 metaKey 加 k）、`src/shell/CommandPalette.vue` |
+| 其余快捷键 | **未落地**：除 `Ctrl+K` 外无全局快捷键绑定 | `src/App.vue` 仅此一处键位判断 |
+
+这条差距要说清：macOS 端 `AppShortcut` 登记了 33 个 case（实际绑定 32 个），Windows 端目前只有一键。第七章 7.9 不要求两端键位相同（`P-*` 允许不同），但要求**同一命令在菜单、面板、工具栏、上下文菜单四处同文案**——这一条在两端都成立。
+
+### 9.2.11 界面设计：各区域六态
+
+| 区域 | 空 | 载入 | 进行中 | 失败 | 禁用 | 已截断 |
+|---|---|---|---|---|---|---|
+| 结果集 | 保留表头 + 一行说明 | 骨架行 | 追加行，不闪空 | 写进「问题」页签并计数 | 无连接时禁用不隐藏 | 状态栏显示 `已加载 / 总数` |
+| 编辑区 | 空页签提示 | 不适用 | 执行中按钮切换为停止 | 行内标记 + 问题页签 | 只读连接可写不可执行 | 按编辑器规则 |
+| 侧栏 | 一句空态 + 新建入口 | 树骨架 | 不适用 | 一行原因 + 重试 | 不禁用 | — |
+| 下方面板 | 折叠只留页签条；展开空态一句 | 「执行中…」 | 输出追加 | 页签出现计数徽标 | 「调试」页签 `ready: false`（**灰着并说明未就绪**，不是隐藏） | 输出到顶停追加并提示 |
+| 状态栏 | — | — | 行数与窗口读数实时更新 | 后端名后标注失败态 | — | 显示 `loaded / total`，即截断可见 |
+
+**「调试」页签是六态里最容易被做错的一格**：`BottomPanel.vue:105` 写明 `ready: false`，即「页签在、但功能未就绪」。按 7.4 的处置四选一，这里选的是**禁用 + 说明**，不是隐藏（隐藏会让用户以为没有这个能力）。
+
+### 9.2.12 界面设计：主题与外观
+
+| 事实 | 现状 | 依据 |
+|---|---|---|
+| 主题集 | `tech-blue`（默认）/ `bean-green` / `rose-gold` / `stardust` | `src/theme/themes.generated.ts`（`THEME_SCHEMES`） |
+| 主题来源 | 从 macOS 侧 `Core/DesignTheme.swift` 解析生成，**不手抄** | `tools/gen-tokens.mjs` 头部注释 |
+| 深浅色 | 两套取值（如侧栏表面 `#F4F7FB` / `#081420`），跟随系统并可手动切 | `tokens.generated.css:72,105`；`src/shell/StatusBar.vue:64,77` |
+| 外观偏好持久化 | `appearanceGet` / `appearanceSet` 走 IPC 存偏好 | `src/App.vue`（`appearanceGet/Set`）、`src/ipc.ts` |
+| 字体 | 字体族与字号由选择项驱动，写入编辑器 CSS 变量 | `src/shell/appearance.ts`（`FONT_CHOICES` / `FONT_SIZE_CHOICES`） |
+
+### 9.2.13 界面设计：与第七章的对应关系
+
+| 第七章条目 | Windows 落法 | 本节位置 |
+|---|---|---|
+| 7.1 区域划分 | 活动栏 / 侧栏 / 编辑区 / 下方面板 / 状态栏 | 9.2.8 |
+| 7.2 布局与栅格 | 间距与圆角全走 `--ds-spacing-*` / `--ds-radius-*` | 9.2.9 |
+| 7.3 主题配色字体 | 四套主题 + 双套深浅值，由生成链保证一致 | 9.2.12 |
+| 7.4 控件六态 | 逐区六态表（含「调试」页签的禁用不隐藏） | 9.2.11 |
+| 7.5 编辑器界面 | 编辑器在 `src/views/` 与 `src/sql/`，行号与查找替换有独立单测 | `src/views/DatabaseView.*.test.ts` |
+| 7.6 导航与命令入口 | 命令面板 `Ctrl+K` + 18 条命令单一清单 | 9.2.10 |
+| 7.7 三条主流程 | 数据库查询 / 笔记 / 智能体对话（`ChatPanel.vue`） | 9.2.8、`src/shell/ChatPanel.vue` |
+| 7.9 控件规格 | 三档尺寸与四层级按钮照 7.9 执行；按钮层级由 `actionIcon.ts` 与样式统一 | `src/shell/actionIcon.ts` |
+
+### 9.2.14 界面设计：已知缺口
+
+1. **快捷键只落地了 `Ctrl+K` 一条**：其余 17 条命令只能从命令面板或菜单进入，帮助面列不出完整键位表。
+2. **下方面板少「历史」页签**（macOS 五、Windows 四）：若将来要两端同构，需先在 §4.1 登记为差异或补齐。
+3. **无面板高度拖动**：macOS 有把手 + 持久化高度，Windows 按内容自量，折叠态留白口径未定。
+4. **代码里仍有「未开工」标记**（`src/App.vue` 2 处、`src/shell/SideBar.vue` 1 处）：设计书不写状态，状态应只在《开发计划书》§3 台账；这三处需在下一次改动时清掉。
+5. **源文件注释仍指向旧档名**：`src/App.vue` 头部写 `Docs/概要设计.md §8.5.4`，该文件与节号在本版已不存在，属代码注释漂移（不影响运行，但会误导后来人）。
+
 ## 9.3 契约 → Linux 实现 [独占:linux]
 
 > 本节是 Linux 侧的实现节，归属 `hugehippo`（本侧）；正文按 v3.2 全书统一编号，节内引用一律指本版节号。
@@ -3407,7 +3507,7 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 > **本节归本侧（`hugehippo`）· 本仓自行落笔**（2026-10-14 人类主人令「Doyah Studio 全量 PC 端还要补一个 Linux 平台，小河马负责的」—— 原「三书带出本仓、平台设计层文字回传后贴入」的环节**作废**）：本端平台设计层（技术栈 / 构建入口 / 打包形态 / 桌面集成方式）由本侧按下列各条**直接落笔**。
 > **本节内容不由 macOS 侧 / Windows 侧决定**；其它侧若代笔，须在原行或提交信息带上豁免注记（`exclusive-allow` 加理由）。
 
-**状态**：🟡 **设计层已落**（2026-10-14 · 派单 `T-20261014-021` —— 人类主人 2026-10-14 裁决「Linux 端技术栈 = Tauri」，概设 §2 GUI 框架行 v2.169 由契约所有者落笔）；**实现面 🟡 骨架已落地**（骨架 `Platform/linux/{README.md,build.sh}` + **应用工程** `src-tauri/`（`Core` / `Cli` / `Platform/Linux` 三层）+ **前端同源装配** + 本端判据 `Tools/check-linux-skeleton.py` 均已落 —— 派单 `T-20261014-016`；**真构建与真绑定未跑**，七项未验证见 §9.3.6 末的「未接网清单」与 `Platform/linux/README.md`）。原「要落的 5 项」清单**已由本节内容兑现**（逐项对应：1 → §9.3.1 · 2 → §9.3.2 / §9.3.3 · 3 → §9.3.4 · 4 → §9.3.5 · 5 → §9.3.6）。
+**状态**：部分 **设计层已落**（2026-10-14 · 派单 `T-20261014-021` —— 人类主人 2026-10-14 裁决「Linux 端技术栈 = Tauri」，概设 §2 GUI 框架行 v2.169 由契约所有者落笔）；**实现面 部分 骨架已落地**（骨架 `Platform/linux/{README.md,build.sh}` + **应用工程** `src-tauri/`（`Core` / `Cli` / `Platform/Linux` 三层）+ **前端同源装配** + 本端判据 `Tools/check-linux-skeleton.py` 均已落 —— 派单 `T-20261014-016`；**真构建与真绑定未跑**，七项未验证见 §9.3.6 末的「未接网清单」与 `Platform/linux/README.md`）。原「要落的 5 项」清单**已由本节内容兑现**（逐项对应：1 → §9.3.1 · 2 → §9.3.2 / §9.3.3 · 3 → §9.3.4 · 4 → §9.3.5 · 5 → §9.3.6）。
 
 ### 9.3.1 技术栈与工程结构 [独占:linux]
 
@@ -3540,7 +3640,7 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 
 **本节整节豁免已销（队列 L-40 关闭 · 2026-10-14）**：原「首建占位整节豁免」注记（整节豁免标记）的前提 = 「等 Linux 侧**回传**、首建占位」；2026-10-14 人类主人令后该环节作废（本仓自行落笔），故**豁免注记行已删除**，本节自此恢复 `[独占:linux]` **严格判定**。
 
-### 9.3.7 界面设计（复用共享前端 + Linux 差异）
+### 9.3.7 界面设计：窗口模型与复用口径
 
 **界面不是从零写**：`Platform/linux/src-tauri/tauri.conf.json` 的 `frontendDist` 指向 `../../windows/App/dist`，`beforeBuildCommand` 跑的是 `npm --prefix ../../windows/App` 的构建。也就是说 Linux 端**复用同一份前端代码**（与 Windows 同一套页面），Tauri 壳只换后端。这条事实决定了本节的口径：**界面不变量天然一致**（第三章契约、第七章构件规格对两端同时成立），本节只写 Linux 上必须不同的那一部分。
 
@@ -3557,6 +3657,46 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 
 **不复用的部分**：系统托盘、自动更新、全局快捷键——三项在 Linux 上依赖桌面环境差异大，一律「不做」而不是「做了但不保证」。**已知缺口**：前端页面在 Linux 容器内没有界面回归测试（只有构建通过），标待定。
 
+### 9.3.8 界面设计：命令与键位
+
+| 事实 | 现状 | 依据 |
+|---|---|---|
+| 命令清单 | 与 Windows **同一份**（18 条），不另写 | `Platform/windows/App/src/shell/commands.ts` |
+| 唤起命令面板 | `Ctrl+K`（前端判 ctrlKey，故天然成立） | `src/App.vue:187` |
+| 其余快捷键 | 未落地（与 Windows 同一缺口，不重复实现） | 同上 |
+
+**Linux 不新增键位层**：前端只有一处键位判断，`Ctrl` 在 Windows 与 Linux 上语义相同，所以这一层不需要分支。要补键位应在**共享前端**里补一次，两端同时得到。
+
+### 9.3.9 界面设计：各区域六态（与 Windows 同源）
+
+六态的实现来自共享前端，Linux 侧**不重写**，只核三处平台相关差异：
+
+| 区域 | Linux 差异 | 说明 |
+|---|---|---|
+| 窗口 | 标题栏由桌面环境绘制（本节 9.3.7）；不画自绘标题栏 | 全屏/最大化按钮归系统 |
+| 文件选择 | 空态里的「新建 / 打开」走 portal | 取消不报错，视为未选择 |
+| 通知 | 提醒类失败不弹系统通知，改为行内提示 | 无通知服务时不假装已发 |
+
+其余（结果集空态与截断、编辑区失败、侧栏空态、下方面板四页签）与 §9.2.11 逐格一致。
+
+### 9.3.10 界面设计：与第七章的对应关系
+
+| 第七章条目 | Linux 落法 | 位置 |
+|---|---|---|
+| 7.1 区域划分 | 与 Windows 同一骨架（活动栏 / 侧栏 / 编辑区 / 下方面板 / 状态栏） | 9.3.7、§9.2.8 |
+| 7.2 布局与栅格 | 令牌由生成链注入 CSS 变量，值同 macOS | 9.3.7 |
+| 7.3 主题配色字体 | 四套主题 + 跟随桌面 `color-scheme` | 9.3.7 |
+| 7.4 控件六态 | 共享前端实现 + 三处平台差异 | 9.3.9 |
+| 7.6 导航与命令入口 | `Ctrl+K` + 同一份 18 条命令 | 9.3.8 |
+| 7.9 控件规格 | 三档尺寸与按钮层级照 7.9，不另立档位 | 9.3.7 |
+
+### 9.3.11 界面设计：已知缺口
+
+1. **无界面回归**：容器内只验构建通过，页面在 GTK 环境下的实际排布未截图核对。
+2. **无自绘标题栏**：与 Windows 视觉不一致（标题、搜索框位置不同），是否补需先定 P 表。
+3. **无通知可用性探测**：`libnotify` 缺失时静默跳过，用户无从知道「提醒不会弹」。
+4. **缩放未实测**：`GDK_SCALE=1.5` 下是否有 0.5px 分隔线丢失，未验证。
+
 ## 9.4 iOS 实现要点 [独占:ios]
 
 - 只做智能体与笔记两面（能力书已定：iOS 不做数据库域）；数据库域不在此端出现，相关入口不显示而不是显示后报错。
@@ -3564,7 +3704,7 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 - 笔记正文与桌面端同格式，导入导出走系统分享面，内容逐字节一致。
 - 长任务在离开应用时转「可恢复」状态，回到前台继续，不从头重来。
 
-### 9.4.1 形态与边界
+### 9.4.1 形态与边界（窗口模型）
 
 iOS 端只做两面：**智能体**与**笔记**（能力书定：iOS 不做数据库域）。所以它不是桌面端的缩小版——数据库相关入口**根本不出现**，而不是出现后报「此端不支持」。
 
@@ -3583,7 +3723,7 @@ iOS 端只做两面：**智能体**与**笔记**（能力书定：iOS 不做数�
 
 底部页签只有两个：**智能体 / 笔记**。切页签保持各自栈（切回时回到上次那一屏），不做「切换即重置」。
 
-### 9.4.3 与桌面一致的那一半
+### 9.4.3 与桌面一致的那一半（含六态与文案）
 
 - 视觉数值取同一份令牌表；小屏不另立字号体系（令牌按系统动态字号缩放）。
 - 六态必须齐（第七章 7.4）：空 / 载入 / 进行中 / 失败 / 禁用 / 已截断；手机上没有「悬停解释禁用」，所以禁用**必须在行内给原因**。
@@ -3604,6 +3744,24 @@ iOS 端只做两面：**智能体**与**笔记**（能力书定：iOS 不做数�
 ### 9.4.5 落地状态
 
 `Platform/` 下**没有 iOS 工程**（只有 macOS / linux / windows / watchos 四目录，watchos 仅 README）。因此本节是**目标形态**，不是现状描述；它的作用是把「iOS 要做成什么样」定下来，任何一条都不能被引为「已实现」的证明。手表端同理，不在本轮界面设计范围。
+
+### 9.4.6 与第七章的对应关系
+
+| 第七章条目 | iOS 落法 | 位置 |
+|---|---|---|
+| 7.1 区域划分 | 单栏内容 + 底部两页签，无侧栏 | 9.4.2 |
+| 7.3 主题配色字体 | 同一份令牌，按系统动态字号缩放 | 9.4.3 |
+| 7.4 控件六态 | 六态齐备，禁用必须行内给原因 | 9.4.3 |
+| 7.5 编辑器界面 | 无行号槽与多光标（手机不提供），正文用富文本编辑 | 9.4.4 |
+| 7.6 导航与命令入口 | 无命令面板；命令收敛到页内按钮与「…」菜单 | 9.4.2 |
+| 7.9 控件规格 | 触控档 44×44；间距与圆角同令牌 | 9.4.4 |
+
+### 9.4.7 已知缺口
+
+1. **无代码**：`Platform/` 下没有 iOS 工程，本节全部为目标形态。
+2. **无平板形态**：能力书已定不做 iPadOS 两栏，故窄屏之外的布局不设计。
+3. **无键盘快捷键**：外接键盘只走系统默认（无自定义键位）。
+4. **同步冲突的界面表现未定**：与桌面同时改同一条笔记时的提示方式（保留哪份、怎么选）尚未设计。
 
 ## 9.5 共用件
 
