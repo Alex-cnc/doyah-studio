@@ -60,3 +60,11 @@ windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security_Cryptography",
 ] }
+
+# ── 平台专有面（**只在 Linux 上**）────────────────────────────────────────────────
+# `FR-AI-01`「API Key 存入系统凭据存储」在 Linux 侧的落地：**系统密钥环**（Secret Service —
+# GNOME Keyring / KWallet 同一接口），密钥**不进文件**；没有可用密钥环时如实报错、不回落明文。
+# 调用点只许在 `src/agent_settings.rs` 的 `#[cfg(target_os = "linux")] mod vault` 一处。
+# 后端选 `sync-secret-service`（同步、走 dbus）⇒ 构建期要 `libdbus-1-dev`（见 Linux 端 README）。
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service"] }
