@@ -95,19 +95,15 @@ struct AgentChatView: View {
         switch message.role {
         case .user:
             // TUI 里用户消息是 `❯ 正文`，**不是右对齐气泡** —— 去掉气泡是这一版最大的外观变化。
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 gutter("❯", Theme.accentColor)
-                Text(message.text)
-                    .font(Self.transcriptFont)
-                    .textSelection(.enabled)
+                AgentTranscriptText(text: message.text, font: Self.transcriptFont)
                 Spacer(minLength: 0)
             }
         case .assistant:
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 gutter("┊", Theme.text(.secondary))
-                Text(message.text)
-                    .font(Self.transcriptFont)
-                    .textSelection(.enabled)
+                AgentTranscriptText(text: message.text, font: Self.transcriptFont)
                 if message.isStreaming {
                     // 流式光标：**逐段**出现时它一直在（`FR-AI-25` ②）
                     Text("▌").font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
@@ -203,16 +199,31 @@ struct AgentChatView: View {
 
     @ViewBuilder
     private func toolCard(_ card: AgentToolCard) -> some View {
+        // §7.9.10：工具卡也守在行首栏里 —— `⚡` 占 14pt，卡体从同一条竖线起；
+        // 状态用**文字标记**（`✓ ✗ ◐ ⚠`）而不是 SF Symbol，图标会带自己的光学重心，破了等宽的列。
+        // 可以描边，**不许底纹**：卡体只留一圈 hairline 圆角，不再铺 panel 底色。
+        HStack(alignment: .top, spacing: 8) {
+            gutter("⚡", Theme.accentColor)
+            toolCardBody(card)
+        }
+    }
+
+    @ViewBuilder
+    private func toolCardBody(_ card: AgentToolCard) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: icon(for: card))
-                Text(card.name).font(.system(.body, design: .monospaced))
+                Text(mark(for: card))
+                    .font(Self.transcriptFont)
+                    .foregroundStyle(tint(for: card))
+                Text(card.name).font(Self.transcriptFont)
                 Text(card.statusCode).font(.caption).foregroundStyle(Theme.text(.secondary))
                 Spacer()
                 Button {
                     model.toggle(card.id)
                 } label: {
-                    Image(systemName: card.expanded ? "chevron.down" : "chevron.right")
+                    Text(card.expanded ? "▾" : "▸")
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(.secondary))
                 }
                 .buttonStyle(.plain)
                 .help(card.expanded ? L(.agentChatCollapse) : L(.agentChatExpand))
@@ -224,12 +235,21 @@ struct AgentChatView: View {
                         .textSelection(.enabled)
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.surface(.raised), in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
+                        )
                 } else if !card.arguments.isEmpty {
                     Text(card.arguments)
                         .font(.system(.callout, design: .monospaced))
                         .textSelection(.enabled)
                         .foregroundStyle(Theme.text(.secondary))
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
+                        )
                 }
             }
             // ③「展开可见**用的哪个模型与端点**」（`FR-AI-25` ③）：每张卡展开都带这一行 ——
@@ -266,7 +286,11 @@ struct AgentChatView: View {
             }
         }
         .padding(10)
-        .background(Theme.surface(.panel), in: RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
+        )
     }
 
     /// 卡片上那一行「用的哪个模型与端点」（`FR-AI-25` ③）。
@@ -282,14 +306,26 @@ struct AgentChatView: View {
         }
     }
 
-    private func icon(for card: AgentToolCard) -> String {
+    /// 工具卡的状态标记（文字，不用 SF Symbol —— §7.9.10 硬规则 ②：一律等宽）。
+    private func mark(for card: AgentToolCard) -> String {
         switch card.outcome {
-        case .running: return "hourglass"
-        case .executed: return "checkmark.circle"
-        case .denied: return "xmark.octagon"
-        case .pendingApproval, .approved: return "hand.raised"
-        case .applied: return "checkmark.seal"
-        case .undone: return "arrow.uturn.backward.circle"
+        case .running: return "◐"
+        case .executed: return "✓"
+        case .denied: return "✗"
+        case .pendingApproval: return "⚠"
+        case .approved: return "✓"
+        case .applied: return "✓"
+        case .undone: return "↩"
+        }
+    }
+
+    private func tint(for card: AgentToolCard) -> Color {
+        switch card.outcome {
+        case .running: return Theme.accentColor
+        case .executed, .applied, .approved: return Theme.status(.success)
+        case .denied: return Theme.status(.danger)
+        case .pendingApproval: return Theme.status(.warning)
+        case .undone: return Theme.text(.secondary)
         }
     }
 
@@ -428,7 +464,7 @@ struct AgentChatView: View {
                     Text(L(.agentStatusResumed,
                            "\(resume.fromStep + 1)",
                            "\(resume.skippedSteps)"))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Theme.accentColor)
                         .help(resume.skippedCheckpointLines > 0
                               ? L(.agentStatusResumeBadLines, "\(resume.skippedCheckpointLines)")
                               : "")
@@ -528,7 +564,7 @@ struct AgentChatView: View {
         VStack(alignment: .leading, spacing: 6) {
             if let blocker = model.blockerText {
                 HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle")
+                    Text("◈").font(Self.transcriptFont).foregroundStyle(Theme.status(.warning))
                     Text(blocker).font(.callout)
                 }
                 .foregroundStyle(Theme.text(.secondary))
@@ -582,7 +618,7 @@ private struct BrailleSpinner: View {
     private static let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.1)) { context in
+        TimelineView(.animation(minimumInterval: 0.09)) { context in
             let index = Int(context.date.timeIntervalSinceReferenceDate * 10) % Self.frames.count
             Text(Self.frames[index])
                 .font(.system(.callout, design: .monospaced))
