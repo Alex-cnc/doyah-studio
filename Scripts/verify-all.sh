@@ -429,6 +429,9 @@ python3 Scripts/check-req-index.py   # 机器视图（requirement-index.jsonl）
 # 三书结构自审（「九轮清单」的机械层：结构 / 标题 / 节序 / 交叉引用 / 排印 / 章内完整 / 追溯 / 平台名）。
 # 一轮全清即可，不必真跑九遍 —— 清单的九类是分类，不是轮次；豁免见 Scripts/doc-layout-exempt.json（每条带理由）。
 python3 Scripts/check-doc-layout.py
+# 需求编号三方对账：正文定义域（第 3/4/7 章）↔ 需求索引 ↔ 计划书台账。
+# 两份派生件互比（台账↔索引）永远绿，正文这一侧此前没人比；§5 数据需求 / §6 接口需求另账、§8 风险与待决同号两表属刻意。
+python3 Scripts/check-req-ids.py
 # L-32（2026-09-27 第 28 轮）：变更记录版本号**唯一**、头部版本格**可判**（= 变更记录最高号，
 # 或带「基线 / 首版」标注并在标注里写出当前号）、队列**定义行**条目号唯一。
 # 取号唯一来源 = `Scripts/next-doc-version.py`（max+1）—— 禁止手抄：撞过三次
