@@ -1,6 +1,6 @@
 # Doyah产品概要设计说明书
 
-当前 v3.5.7（2026-10-22 §7.9.10 行首栏语汇升为跨端契约；§9.1.24 / §9.2.17 降为落地）
+当前 v3.5.8（2026-10-22 §9.3.12 字体回退补 Linux 字族；§7.9.10 行首栏语汇为跨端契约）
 
 > 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求规格说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
 > 本书按「整个产品」重写：**五个产品线 × 92 个需求域全覆盖**，契约章每节点名需求编号，指不到编号的条目不写。
@@ -3814,6 +3814,22 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 **为什么这不算「与本书不一致」**：第七章定的是**令牌角色**（surface / text / accent / status 各是什么）与**门槛**（正文 ≥4.5、强对比 ≥7），不是「每端必须用同一个主题」。各端选哪套值是平台决定：macOS 给用户五套可切（含深空苍穹），Linux 作为工作环境钉死深色那一套。
 
 **判据**：Linux 截图里 `:root` 带 `data-theme='dark'` 与 `data-theme-scheme='deep-space'`；把系统切浅色、重启应用，配色不变；`gen-tokens.mjs --check` 通过。
+
+
+### 9.3.12 字体回退：Linux 上没有 Cascadia
+
+`--ds-font-stack` / `--ds-font-stack-mono` 原先只列 Windows 字族（`Segoe UI Variable Text` / `Cascadia Mono` / `Consolas` / `'Courier New'`）。**Linux 上这四个都不在**，fontconfig 把 `'Courier New'` 指到 Courier 那一路（Nimbus Mono PS）：细、瘦、字距宽 —— 等宽正文看着就像「没生效」，这也正是「行首栏语汇在 Linux 上还是丑」的一个独立成因（与有没有读到新前端无关）。
+
+改法（2026-10-22）：两支栈都**显式点名 Linux 字族**，generic 只做最后兜底：
+
+| 栈 | 取值顺序 |
+|---|---|
+| 正文 `--ds-font-stack` | `Segoe UI Variable Text` → `Segoe UI` → `Noto Sans` → `Ubuntu` → `Cantarell` → `DejaVu Sans` → `system-ui` → `sans-serif` |
+| 等宽 `--ds-font-stack-mono` | `Cascadia Mono` → `Consolas` → `JetBrains Mono` → `Noto Sans Mono` → `Ubuntu Mono` → `DejaVu Sans Mono` → `Liberation Mono` → `monospace` |
+
+**为什么去掉 `'Courier New'`**：它在 Linux 上是「别名到 Courier」的诱饵，留着只会把后面的好字族挡住。`Liberation Mono` 已经与它同度量，视觉上不亏。
+
+**验法**：Linux 上打开对话页签，等宽正文的字形应是无衬线等宽（`DejaVu Sans Mono` / `Noto Sans Mono` 一类），不是 Courier 的细衬线。开发者工具里 `getComputedStyle($0).fontFamily` 能看到实际栈；`document.fonts.check("16px 'Noto Sans Mono'")` 可判字族在不在本机。
 
 
 ## 9.4 iOS 实现要点 [独占:ios]

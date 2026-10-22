@@ -6,6 +6,7 @@
 
 | 版本 | 日期 | 摘要 |
 |---|---|---|
+| **v3.5.8** | 2026-10-22 | 新增 §9.3.12 **字体回退：Linux 上没有 Cascadia**。根因：`--ds-font-stack` / `--ds-font-stack-mono` 只列 Windows 字族，Linux 上全缺，`'Courier New'` 被 fontconfig 指到 Courier（Nimbus Mono PS）⇒ 等宽正文细瘦发虚，看起来像「行首栏语汇没生效」。改法：两支栈显式点名 `Noto Sans` / `Ubuntu` / `DejaVu Sans` / `JetBrains Mono` / `Noto Sans Mono` / `Ubuntu Mono` / `DejaVu Sans Mono` / `Liberation Mono`，去掉 `'Courier New'` 这个诱饵。 |
 | **v3.5.7** | 2026-10-22 | 人类主人：「这个设计进入概要设计说明书」。**行首栏语汇由实现细节升为跨端契约**：新增 §7.9.10「对话转写（行首栏语汇）」—— 六角色字形表（`❯`/`┊`/`▌`/`⚡`/`◈`/盲文十帧）＋ 六条硬规则（栏宽固定 14、一律等宽、`❯` 输入行、只取令牌角色、字形对辅助技术隐藏、不得用底纹与 `max-width` 区分角色）＋ 各端允许不同四项 ＋ 判据。§9.1.24 与 §9.2.17 改为「契约依据 = §7.9.10，本节只写落地与偏差」，§9.2.15 的对应关系表补该行。 |
 | **v3.5.6** | 2026-10-22 | 新增 §9.2.17 **对话页签行首语汇**（人类主人：「Linux 版本的 Agent 对话框太丑了」→「移植」）：`ChatPanel.vue`（Windows/Linux 共用）换成 macOS 同款 TUI 语汇 —— `❯`/`┊`/`⚡`/`◈` 行首栏、`▌` 流式光标、盲文十帧旋转、`├─└─` 读数树轨、`❯` 输入行、等宽正文、去气泡去右对齐。同批更正 §9.2.14（`deep-space` 显示名已补、单测转绿；生成物曾落后于源）与 §9.2.16 第 3 条（闭合）。 |
 | **v3.5.5** | 2026-10-22 | 配色口径两条：① §9.1.24 补**取色**——对话页签一律走主题令牌（`Theme.accentColor`/`text`/`status`/`hairline`），清掉 `Color.accentColor`、`.secondary`、`Color.orange` 这类系统语义色（深空苍穹近黑底下会发灰发白）；② 新增 §9.3.11 **Linux 固定深色 + 深空苍穹令牌**（人类主人：「Linux 是工作环境，科技风浅蓝色深色背景」），不跟 `prefers-color-scheme`。**同批发现并修**：`tokens.generated.css` 落后于 Swift 值表（`deep-space` 在生成物里 0 处命中，Windows/Linux 拿不到第五套主题），已重新生成、`--check` 通过。 |

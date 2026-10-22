@@ -10,8 +10,12 @@
  */
 
 :root {
-  --ds-font-stack: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
-  --ds-font-stack-mono: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  /* 字体回退栈：**先 Windows，再 Linux 常见字族，最后 generic**（2026-10-22 补 Linux 一档）。
+     原先只列了 Segoe UI / Cascadia / Consolas / 'Courier New' —— 公司 Linux 机器上前三个都没有，
+     'Courier New' 被 fontconfig 指到 Courier 那一路（Nimbus Mono PS），细、瘦、字距怪，
+     等宽正文看着就是「没生效」。改成显式点名 Linux 字族，generic 只做最后兜底。 */
+  --ds-font-stack: 'Segoe UI Variable Text', 'Segoe UI', 'Noto Sans', 'Ubuntu', 'Cantarell', 'DejaVu Sans', system-ui, sans-serif;
+  --ds-font-stack-mono: 'Cascadia Mono', 'Consolas', 'JetBrains Mono', 'Noto Sans Mono', 'Ubuntu Mono', 'DejaVu Sans Mono', 'Liberation Mono', monospace;
   /* 浅色发丝线 = 源侧给的**实色**（`ThemePalette.hairlineLight`，随主题；生成物按主题给变量）。
      2026-09-29 起不再自己合成「黑 + 透明度」：macOS 侧改成了随主题的实色（`Hairline.lightHex(in:)`），
      合成写法会丢掉那点色相（科技蓝 / 豆芽绿 / 玫瑰金各是一支同色相的浅线）。 */
