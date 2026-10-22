@@ -8114,6 +8114,15 @@ final class AppState: ObservableObject {
                     throw CloudSyncError.notAuthenticated
                 }
                 return token.accessToken
+            },
+            // 契约 §3.4.8 / §6.3：到期前 60 秒先续期；业务面 401 也走同一条续期（`CloudSyncService.send`）。
+            // 刷新令牌本身失效时 `refresh()` 抛错 ⇒ 服务转成 `notAuthenticated`，界面提示「需要重新登录」。
+            tokenRefresher: {
+                try client.refresh().accessToken
+            },
+            tokenExpiring: {
+                guard let session = (try? client.currentSession()) ?? nil else { return true }
+                return session.isExpired(leeway: 60)
             }
         )
         cloudSyncService = service

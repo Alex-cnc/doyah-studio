@@ -378,6 +378,16 @@ public final class CloudSyncService: @unchecked Sendable {
     private let transport: CloudAuthTransport
     private let stateStore: CloudSyncStateStore
     private let tokenProvider: @Sendable () throws -> String
+    /// 续期器：拿刷新令牌换新访问令牌并**写回凭据存储**（`CloudAuthClient.refresh()`）。
+    /// 没有它时行为与旧版一致（过期即抛错）——给测试与无会话场景留退路。
+    private let tokenRefresher: (@Sendable () throws -> String)?
+    /// 是否已到「该续期」的时点（调用方按 60 秒余量判）。
+    private let tokenExpiring: (@Sendable () -> Bool)?
+    /// 续期单飞锁：并发请求同时过期时只发一次 `tokenRefresher`。
+    private let refreshLock = NSLock()
+    private var renewGeneration = 0
+    /// 最近一次**成功**续期的时刻。见 `renewToken`：同一窗口内不重复续期。
+    private var lastRenewAt: Date?
     private let now: @Sendable () -> Date
 
     /// 本地账（决胜结果与两版兜底都落在这里；`云B` 的 `SyncLedger`）。
@@ -393,12 +403,16 @@ public final class CloudSyncService: @unchecked Sendable {
         transport: CloudAuthTransport,
         stateStore: CloudSyncStateStore,
         tokenProvider: @escaping @Sendable () throws -> String,
+        tokenRefresher: (@Sendable () throws -> String)? = nil,
+        tokenExpiring: (@Sendable () -> Bool)? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) throws {
         self.endpoints = endpoints
         self.transport = transport
         self.stateStore = stateStore
         self.tokenProvider = tokenProvider
+        self.tokenRefresher = tokenRefresher
+        self.tokenExpiring = tokenExpiring
         self.now = now
         self.state = try stateStore.load()
         self.ledger = SyncLedger()
@@ -408,13 +422,17 @@ public final class CloudSyncService: @unchecked Sendable {
     public static func live(
         environmentID: String,
         tokenProvider: @escaping @Sendable () throws -> String,
+        tokenRefresher: (@Sendable () throws -> String)? = nil,
+        tokenExpiring: (@Sendable () -> Bool)? = nil,
         stateStore: CloudSyncStateStore? = nil
     ) throws -> CloudSyncService {
         try CloudSyncService(
             endpoints: CloudSyncEndpoints(environmentID: environmentID),
             transport: URLSessionCloudAuthTransport(),
             stateStore: stateStore ?? FileCloudSyncStateStore(),
-            tokenProvider: tokenProvider
+            tokenProvider: tokenProvider,
+            tokenRefresher: tokenRefresher,
+            tokenExpiring: tokenExpiring
         )
     }
 
@@ -631,6 +649,15 @@ public final class CloudSyncService: @unchecked Sendable {
 
     private func requireToken() throws -> String {
         do {
+            // 到期前（调用方按 60 秒余量判）先续期再取令牌：契约 §3.4.8「令牌自动续期」。
+            // **先记代数、再判到期**：并发的 8 个请求会读到同一个代数，先拿到锁的那个真续期，
+            // 其余发现代数已变 ⇒ 直接取新令牌，不重复打服务端（单飞）。
+            let generation = currentRenewGeneration()
+            if tokenExpiring?() == true, tokenRefresher != nil {
+                // 同时记下「续期前看到的令牌」：并发时后到的线程会看到令牌已被别人换掉，
+                // 据此跳过续期 —— 即便到期判定是一个恒真的谓词（时钟不动的场景）也不会连环续期。
+                _ = try renewToken(observedGeneration: generation, observedToken: try? tokenProvider())
+            }
             let token = try tokenProvider()
             guard !token.isEmpty else { throw CloudSyncError.notAuthenticated }
             return token
@@ -680,20 +707,71 @@ public final class CloudSyncService: @unchecked Sendable {
         }
     }
 
-    private func send(_ request: CloudAuthHTTPRequest) throws -> CloudAuthHTTPResponse {
+    private func send(_ request: CloudAuthHTTPRequest, allowReauth: Bool = true) throws -> CloudAuthHTTPResponse {
         var headers = request.headers
         headers["Content-Type"] = "application/json"
         headers["Accept"] = "application/json"
         let outgoing = CloudAuthHTTPRequest(
             method: request.method, url: request.url, headers: headers, body: request.body
         )
+        let response: CloudAuthHTTPResponse
         do {
-            return try transport.send(outgoing)
+            response = try transport.send(outgoing)
         } catch let error as CloudSyncError {
             throw error
         } catch {
             throw CloudSyncError.transport(String(describing: error))
         }
+        // 契约 §6.3：业务面收到 401 ⇒ 续期一次并重放原请求一次；第二次仍 401 才认「需要重新登录」。
+        // 不把 401 直接当「令牌过期」弹给用户（那是续期失败的**结果**，不是原因）。
+        if response.status == 401, allowReauth, tokenRefresher != nil {
+            let generation = currentRenewGeneration()
+            let fresh = try renewToken(observedGeneration: generation, observedToken: try? tokenProvider())
+            var retryRequest = request
+            retryRequest.headers["Authorization"] = "Bearer \(fresh)"
+            return try send(retryRequest, allowReauth: false)
+        }
+        return response
+    }
+
+    // MARK: 内部 · 令牌续期（单飞）
+
+    private func currentRenewGeneration() -> Int {
+        refreshLock.lock()
+        defer { refreshLock.unlock() }
+        return renewGeneration
+    }
+
+    /// 续期一次并返回新令牌。
+    ///
+    /// - `observedGeneration`：调用方在决定续期**之前**读到的代数。拿锁后发现代数已变
+    ///   ⇒ 说明别人刚续过，直接取现令牌，不重复打服务端（并发单飞）。
+    /// - 刷新令牌本身失效 ⇒ `notAuthenticated`（界面据此提示「需要重新登录」并给登录入口），
+    ///   而不是把它当成普通网络失败重试。
+    @discardableResult
+    private func renewToken(observedGeneration: Int? = nil, observedToken: String? = nil) throws -> String {
+        refreshLock.lock()
+        defer { refreshLock.unlock() }
+        if let observed = observedGeneration, observed != renewGeneration {
+            return try tokenProvider()
+        }
+        if let before = observedToken, let current = try? tokenProvider(), current != before {
+            return current
+        }
+        // **同窗不重续**：刚续过（5 秒内）就不再打服务端。到期判定是调用方给的谓词，
+        // 若它一时没跟上（时钟不动 / 缓存未刷），没有这道闸就会连环续期把刷新令牌轮换打穿。
+        if let last = lastRenewAt, now().timeIntervalSince(last) < 5 {
+            return try tokenProvider()
+        }
+        guard let refresher = tokenRefresher else { return try tokenProvider() }
+        do {
+            _ = try refresher()
+        } catch {
+            throw CloudSyncError.notAuthenticated
+        }
+        renewGeneration += 1
+        lastRenewAt = now()
+        return try tokenProvider()
     }
 
     private func recordConflict(_ losing: SyncRecord, winnerRev: Int) {
