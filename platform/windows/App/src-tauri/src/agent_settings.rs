@@ -244,20 +244,44 @@ impl AgentSettingsStore {
 
     /// 密钥在不在（只回答布尔；读不出来按「不在」处理，并把原因带给界面）。
     pub fn key_present(&self) -> bool {
-        self.key_blob().is_some()
+        // Linux 上密钥不在文件里（在系统密钥环），「文件在不在」问错了对象。
+        #[cfg(target_os = "linux")]
+        {
+            return vault::present(&self.key_path);
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            self.key_blob().is_some()
+        }
     }
 
     /// 密钥存储出问题时的可读原因（正常 = `None`）。
     pub fn key_note(&self) -> Option<String> {
-        if !self.key_path.exists() {
-            return None;
+        #[cfg(target_os = "linux")]
+        {
+            // 密钥环里有条目却读不出来（锁着 / 用户拒了授权 / 条目损坏）—— 说清楚，别让它冒充「没配」。
+            if !vault::present(&self.key_path) {
+                return None;
+            }
+            return match vault::unprotect(&[]) {
+                Ok(_) => None,
+                Err(reason) => Some(format!(
+                    "系统密钥环里的密钥读不出来（{reason}）：请确认钥匙串已解锁，或重新填写一次密钥。"
+                )),
+            };
         }
-        match self.key_blob() {
-            Some(_) => None,
-            None => Some(format!(
-                "密钥文件读不出来（{}）：可能是别的 Windows 用户写的，或文件已损坏。请重新填写一次密钥。",
-                self.key_path.display()
-            )),
+        #[cfg(not(target_os = "linux"))]
+        {
+            if !self.key_path.exists() {
+                return None;
+            }
+            match self.key_blob() {
+                Some(_) => None,
+                None => Some(format!(
+                    "密钥文件读不出来（{}）：可能是别的 Windows 用户写的，或文件已损坏。请重新填写一次密钥。",
+                    self.key_path.display()
+                )),
+            }
         }
     }
 
@@ -270,10 +294,14 @@ impl AgentSettingsStore {
                 hint: "要么填一个密钥，要么用「清除密钥」把已存的删掉。".to_string(),
             });
         }
-        let blob = dpapi::protect(trimmed.as_bytes()).map_err(|reason| DbFailure {
+        let blob = vault::protect(trimmed.as_bytes()).map_err(|reason| DbFailure {
             message: format!("密钥加密失败，未保存：{reason}"),
-            hint: "这是本机的凭据加密不可用。密钥没有落盘（不会退化成明文保存）。".to_string(),
+            hint: "这是本机的凭据存储不可用。密钥没有落盘（不会退化成明文保存）。".to_string(),
         })?;
+        // Linux：密钥进系统密钥环，**不写文件**（空 blob 就是「没有密文要落盘」）。
+        if blob.is_empty() {
+            return Ok(());
+        }
         if let Some(parent) = self.key_path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| DbFailure {
                 message: format!("建目录失败：{e}（{}）", parent.display()),
@@ -288,20 +316,33 @@ impl AgentSettingsStore {
 
     /// 取回密钥明文（**只给真正要发请求的那一层用**；界面永远不拿它）。
     pub fn key_secret(&self) -> Option<String> {
+        #[cfg(target_os = "linux")]
+        let blob = Vec::new();
+        #[cfg(not(target_os = "linux"))]
         let blob = self.key_blob()?;
-        let plain = dpapi::unprotect(&blob).ok()?;
+        let plain = vault::unprotect(&blob).ok()?;
         String::from_utf8(plain).ok()
     }
 
-    /// 清除密钥（文件不存在也算成功 —— 「已经不在了」与「刚删掉」对用户是同一件事）。
+    /// 清除密钥（本来就没有也算成功 —— 「已经不在了」与「刚删掉」对用户是同一件事）。
     pub fn clear_key(&self) -> Result<(), DbFailure> {
-        if !self.key_path.exists() {
-            return Ok(());
+        #[cfg(target_os = "linux")]
+        {
+            return vault::forget(&self.key_path).map_err(|reason| DbFailure {
+                message: format!("清除密钥失败：{reason}"),
+                hint: "检查系统钥匙串是否可用（有些发行版要装 gnome-keyring / kwalletd）。".to_string(),
+            });
         }
-        std::fs::remove_file(&self.key_path).map_err(|e| DbFailure {
-            message: format!("删除密钥文件失败：{e}（{}）", self.key_path.display()),
-            hint: "确认该文件可删（可能被杀毒软件占用）。".to_string(),
-        })
+        #[cfg(not(target_os = "linux"))]
+        {
+            if !self.key_path.exists() {
+                return Ok(());
+            }
+            std::fs::remove_file(&self.key_path).map_err(|e| DbFailure {
+                message: format!("删除密钥文件失败：{e}（{}）", self.key_path.display()),
+                hint: "确认该文件可删（可能被杀毒软件占用）。".to_string(),
+            })
+        }
     }
 
     /// 当前快照（配置 + 裁决 + 密钥状态 + 本小时配额读数）。
@@ -315,7 +356,7 @@ impl AgentSettingsStore {
             gate: evaluate(&config, key_present),
             config,
             key_present,
-            key_storage: dpapi::STORAGE.to_string(),
+            key_storage: vault::STORAGE.to_string(),
             key_note: self.key_note(),
             config_path: self.config_path.display().to_string(),
             quota,
@@ -332,6 +373,82 @@ impl AgentSettingsStore {
         }
         // 能解开才算真的在（坏文件不冒充「已配置」—— 否则用户会以为密钥还好着）。
         dpapi::unprotect(&blob).ok().map(|_| blob)
+    }
+}
+
+// ── 密钥仓（按平台选后端）──────────────────────────────────────────────────────
+//
+// 语义是契约（§3.2.7）：**不落配置文件、重启可恢复、可被用户自行清除、拿不到就如实报错**。
+// 三个后端：
+//   · Windows：DPAPI 加密后落 `agent-key.bin`（既有行为，不动）；
+//   · Linux：系统密钥环（Secret Service：GNOME Keyring / KWallet 同一接口）—— 密钥**不进文件**，
+//     文件位只保留「有没有」的判定位；没有可用密钥环时**如实报错，不回落明文**；
+//   · 其它（macOS 开发机）：如实说不可用（不假装，也不落明文）。
+#[cfg(windows)]
+use dpapi as vault;
+#[cfg(target_os = "linux")]
+mod vault {
+    use std::path::Path;
+
+    pub const STORAGE: &str = "secret-service";
+    /// 密钥环里的 service / user（改名等于让已存密钥「消失」，别动）。
+    const SERVICE: &str = "doyah-studio";
+    const ACCOUNT: &str = "agent-key";
+
+    fn entry() -> Result<keyring::Entry, String> {
+        keyring::Entry::new(SERVICE, ACCOUNT).map_err(|e| format!("连不上系统密钥环：{e}"))
+    }
+
+    pub fn protect(plain: &[u8]) -> Result<Vec<u8>, String> {
+        let text = std::str::from_utf8(plain).map_err(|e| format!("密钥不是合法 UTF-8：{e}"))?;
+        entry()?.set_password(text).map_err(|e| {
+            format!("系统密钥环写入失败：{e}（没有可用的 Secret Service 时不回落明文）")
+        })?;
+        // 文件位不存密文，只留一个**空**占位（`key_path.exists()` 的语义要保住）。
+        Ok(Vec::new())
+    }
+
+    pub fn unprotect(_blob: &[u8]) -> Result<Vec<u8>, String> {
+        let text = entry()?.get_password().map_err(|e| format!("系统密钥环读取失败：{e}"))?;
+        Ok(text.into_bytes())
+    }
+
+    /// 密钥环里到底有没有（**不解密**也知道吗 —— 不能，所以这里真读一次再丢掉）。
+    pub fn present(_path: &Path) -> bool {
+        entry().ok().and_then(|e| e.get_password().ok()).is_some()
+    }
+
+    pub fn forget(_path: &Path) -> Result<(), String> {
+        match entry()?.delete_credential() {
+            Ok(()) => Ok(()),
+            // 本来就没有 = 已经达到目的
+            Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(format!("系统密钥环删除失败：{e}")),
+        }
+    }
+}
+
+#[cfg(all(not(windows), not(target_os = "linux")))]
+mod vault {
+    use std::path::Path;
+
+    /// 存放方式：**本机没有接系统凭据存储** —— 界面照实写出，不假装。
+    pub const STORAGE: &str = "unavailable";
+
+    pub fn protect(_plain: &[u8]) -> Result<Vec<u8>, String> {
+        Err("本机没有接系统凭据存储（只有 Windows DPAPI 与 Linux Secret Service 两档）".to_string())
+    }
+
+    pub fn unprotect(_blob: &[u8]) -> Result<Vec<u8>, String> {
+        Err("本机没有接系统凭据存储（只有 Windows DPAPI 与 Linux Secret Service 两档）".to_string())
+    }
+
+    pub fn present(path: &Path) -> bool {
+        path.exists()
+    }
+
+    pub fn forget(path: &Path) -> Result<(), String> {
+        std::fs::remove_file(path).map_err(|e| format!("删除密钥文件失败：{e}"))
     }
 }
 
