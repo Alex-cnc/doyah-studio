@@ -812,12 +812,45 @@ public struct AgentLoop: Sendable {
         }
     }
 
-    private static func summary(of outcome: AgentToolOutcome) -> String {
+    /// 回灌给模型的**观察文本** —— 工具看见的东西必须真的进下一跳。
+    ///
+    /// **这条曾经是残缺的**（2026-10-22 修）：原来只报计数（`dir:.:23` / `file:a.txt:812` /
+    /// `search:3:7`），正文一个字都不给模型。后果不是「少给点信息」，而是**模型看不见就只能重试** ——
+    /// 界面上表现为 `list_dir` 一遍遍返回「空」，模型于是反复说「我先看一下项目结构」，
+    /// 直到跳数耗光。判据不是格式好看，而是：**下一跳能读到内容**。
+    ///
+    /// 有界：正文上限 `maxObservationCharacters`，超出**如实标注**（截多少、原文多大），不静默截。
+    /// `rows` 仍不给行数据（`NFR-AI-01` 口径），只给列名、行数与错误文本。
+    static let maxObservationCharacters = 8_000
+
+    static func summary(of outcome: AgentToolOutcome) -> String {
         switch outcome {
-        case .file(let file): return "file:\(file.path):\(file.text.utf8.count)"
-        case .directory(let directory): return "dir:\(directory.path):\(directory.entries.count)"
-        case .search(let search): return "search:\(search.fileNames.count):\(search.contentHits.count)"
-        case .rows(let rows): return "rows:\(rows.rowCount):\(rows.statementKind)"
+        case .file(let file):
+            let head = "file:\(file.path):\(file.text.utf8.count)B"
+                + (file.truncated ? "（读取时已截断，磁盘上共 \(file.totalBytes)B）" : "")
+            return head + "\n" + clamp(file.text, label: "file")
+        case .directory(let directory):
+            let head = "dir:\(directory.path):\(directory.entries.count) 项"
+                + (directory.truncated ? "（列表已按上限截断）" : "")
+            // 空目录也要**说出来**：模型分不清「空目录」和「没回灌」是这次事故的根因。
+            return head + "\n" + (directory.entries.isEmpty
+                                   ? "(空目录)"
+                                   : clamp(directory.entries.joined(separator: "\n"), label: "dir"))
+        case .search(let search):
+            var lines = ["search:\(search.fileNames.count) 个文件名命中 · \(search.contentHits.count) 处内容命中"]
+            if search.fileNames.isEmpty && search.contentHits.isEmpty {
+                lines.append("(无命中)")
+            }
+            lines.append(contentsOf: search.fileNames)
+            lines.append(contentsOf: search.contentHits)
+            if search.truncated { lines.append("(命中已按上限截断)") }
+            return clamp(lines.joined(separator: "\n"), label: "search")
+        case .rows(let rows):
+            // 行数据不进上下文（`NFR-AI-01`）：列名 + 行数 + 错误文本，够模型判断下一步。
+            let columns = rows.columns.isEmpty ? "—" : rows.columns.joined(separator: ",")
+            var text = "rows:\(rows.rowCount) 行（\(rows.statementKind)）列:\(columns)"
+            if let error = rows.errorMessage, !error.isEmpty { text += "\n错误:\(error)" }
+            return text
         case .command(let command): return "command:\(command.exitCode)"
         case .wrote(let file): return "wrote:\(file.path):\(file.totalBytes)"
         case .mcp(let call):
@@ -831,6 +864,13 @@ public struct AgentLoop: Sendable {
         case .needsApproval(let request): return "approval:\(request.fingerprint)"
         case .refused(let code, _): return "refused:\(code.rawValue)"
         }
+    }
+
+    /// 观察正文的截断器：**标注**原文多大、留了多少（宁可见截断，也不许静默少字）。
+    private static func clamp(_ text: String, label: String) -> String {
+        guard text.count > maxObservationCharacters else { return text }
+        return String(text.prefix(maxObservationCharacters))
+            + "\n[truncated:\(label):原文 \(text.utf8.count)B，此处只留前 \(maxObservationCharacters) 字符]"
     }
 
     private func recordTurn(context: AgentLoopContext, kind: AgentSessionTurn.Kind,
