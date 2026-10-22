@@ -11,6 +11,8 @@ struct AgentChatView: View {
     /// 定时 agent 面板的入口（`FR-AI-27`）：面板本身读的是 `AppState` 里的条目与历史。
     @EnvironmentObject private var appState: AppState
     @FocusState private var inputFocused: Bool
+    /// 任务清单是否展开（TUI 的 `▸/▾` 折叠）。跑着时默认收起、只留最后两步。
+    @State private var stepsExpanded = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,36 +73,67 @@ struct AgentChatView: View {
         }
     }
 
+    // MARK: - 转写区：Hermes TUI 的行首栏语法
+
+    /// 正文用等宽 —— TUI 只有一种字体，等宽本身就是它的观感（人类主人 2026-10-22：
+    /// 「我希望 Agent 的界面像 Hermes -tui 的界面」）。
+    private static let transcriptFont = Font.system(.callout, design: .monospaced)
+
+    /// 行首栏：**固定宽度**的字形列，正文一律左对齐（TUI 的 gutter）。
+    private func gutter(_ glyph: String, _ tint: Color) -> some View {
+        Text(glyph)
+            .font(Self.transcriptFont)
+            .foregroundStyle(tint)
+            .frame(width: 14, alignment: .leading)
+    }
+
     @ViewBuilder
     private func messageRow(_ message: AgentChatMessage) -> some View {
         switch message.role {
         case .user:
-            HStack {
-                Spacer(minLength: 40)
+            // TUI 里用户消息是 `❯ 正文`，**不是右对齐气泡** —— 去掉气泡是这一版最大的外观变化。
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                gutter("❯", Color.accentColor)
                 Text(message.text)
+                    .font(Self.transcriptFont)
                     .textSelection(.enabled)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                Spacer(minLength: 0)
             }
         case .assistant:
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                gutter("┊", Color.secondary)
                 Text(message.text)
+                    .font(Self.transcriptFont)
                     .textSelection(.enabled)
                 if message.isStreaming {
                     // 流式光标：**逐段**出现时它一直在（`FR-AI-25` ②）
-                    Text("▌").foregroundStyle(.secondary)
+                    Text("▌").font(Self.transcriptFont).foregroundStyle(.secondary)
                 }
+                Spacer(minLength: 0)
             }
         case .tool:
-            Text(message.text)
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.secondary)
+            // 工具结果在 TUI 里是**缩进的圆角小框**（`messageLine.tsx`：`borderStyle="round"` + 缩进 3）。
+            HStack(alignment: .top, spacing: 8) {
+                gutter("⚡", Color.secondary)
+                Text(message.text)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1)
+                    )
+                Spacer(minLength: 0)
+            }
         case .notice:
-            Text(noticeText(message.text))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 2)
+            // 时间线事件：`◈` + 灰字，不带栏（TUI 的 `kind === 'event'`）。
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                gutter("◈", Color.secondary)
+                Text(noticeText(message.text))
+                    .font(Self.transcriptFont)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -263,35 +296,37 @@ struct AgentChatView: View {
     private var taskList: some View {
         if !model.steps.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(L(.agentChatStepsTitle, "\(model.steps.count)"))
-                    if let seconds = model.lastElapsedSeconds {
-                        Text(L(.agentStatusElapsed, String(format: "%.1f", seconds)))
+                // 表头就是 TUI 的 todo 面板那一行：`▸ 任务清单 (3/5)`，灰字带计数。
+                Button {
+                    stepsExpanded.toggle()
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(stepsExpanded ? "▾" : "▸")
+                            .font(Self.transcriptFont)
+                            .foregroundStyle(Color.accentColor)
+                        Text(L(.agentChatStepsTitle, "\(model.steps.count)"))
+                            .font(Self.transcriptFont)
+                        Text("(\(doneStepCount)/\(model.steps.count))")
+                            .font(Self.transcriptFont)
+                            .foregroundStyle(.secondary)
+                        if let seconds = model.lastElapsedSeconds {
+                            Text(L(.agentStatusElapsed, String(format: "%.1f", seconds)))
+                                .font(Self.transcriptFont)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
                     }
                 }
-                .font(.caption).foregroundStyle(.secondary)
-                // **不再把每一步都铺成一行**（人类主人 2026-10-18：「被你的 step 刷屏了」
-                // 「不清楚为什么要把这个 step 打印出来」）—— 这些是机械动作，不是进展：
-                // 一次 20 步的活会印 20 行 `list_dir · search`，把真正的回答挤出屏幕。
-                //
-                // 口径：
-                // · **跑着**：只留最后 2 步（知道它此刻在干什么就够了，历史不值钱）；
-                // · **跑完**：一行总结（几步 / 多久），明细收进「查看明细」里 —— 要查的时候才看。
-                if model.isRunning {
-                    ForEach(model.steps.suffix(2)) { step in
-                        stepRow(step)
+                .buttonStyle(.plain)
+
+                // **跑着**：只留最后 2 步（知道它此刻在干什么就够了）；**跑完**：收进折叠里。
+                if stepsExpanded || model.isRunning {
+                    let visible = model.isRunning && !stepsExpanded
+                        ? Array(model.steps.suffix(2))
+                        : model.steps
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, step in
+                        stepRow(step, isLast: index == visible.count - 1)
                     }
-                } else if model.steps.count > 0 {
-                    DisclosureGroup {
-                        ForEach(model.steps) { step in
-                            stepRow(step)
-                        }
-                    } label: {
-                        Text(L(.agentChatStepsDone, "\(model.steps.count)"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .disclosureGroupStyle(.automatic)
                 }
             }
             .padding(.horizontal, 12)
@@ -300,27 +335,36 @@ struct AgentChatView: View {
         }
     }
 
+    private var doneStepCount: Int {
+        model.steps.filter { $0.status == .done }.count
+    }
+
     @ViewBuilder
-    private func stepRow(_ step: AgentChatStep) -> some View {
+    private func stepRow(_ step: AgentChatStep, isLast: Bool) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: mark(for: step))
+            // 树轨：TUI 的 `├─` / `└─`
+            Text(isLast ? "└─" : "├─")
+                .font(Self.transcriptFont)
+                .foregroundStyle(.secondary.opacity(0.6))
+            Text(stepMark(for: step))
+                .font(Self.transcriptFont)
                 .foregroundStyle(tint(for: step))
-                .font(.caption)
-            Text(L(.agentChatStepNo, "\(step.index)"))
-                .font(.caption)
             Text(step.tools.joined(separator: " · "))
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Spacer()
+            Spacer(minLength: 0)
         }
+        .padding(.leading, 10)
     }
 
-    private func mark(for step: AgentChatStep) -> String {
+    /// 状态字形照 TUI：跑着是旋转的那个（这里用静态 `◐`，转起来由 `currentActionRow` 负责），
+    /// 成了 `✓`、失败 `✗`。
+    private func stepMark(for step: AgentChatStep) -> String {
         switch step.status {
-        case .running: return "circle.dotted"
-        case .done: return "checkmark.circle"
-        case .failed: return "xmark.octagon"
+        case .running: return "◐"
+        case .done: return "✓"
+        case .failed: return "✗"
         }
     }
 
@@ -338,7 +382,7 @@ struct AgentChatView: View {
     private var currentActionRow: some View {
         if let action = model.currentAction {
             HStack(spacing: 6) {
-                Image(systemName: "circle.dotted").foregroundStyle(Color.accentColor)
+                BrailleSpinner()
                 Text(action)
                     .font(.system(.caption, design: .monospaced))
                     .lineLimit(1)
@@ -468,7 +512,7 @@ struct AgentChatView: View {
                 }
             }
         }
-        .font(.caption)
+        .font(.system(.caption, design: .monospaced))
         .foregroundStyle(.secondary)
         .lineLimit(1)
         .padding(.horizontal, 12)
@@ -486,13 +530,17 @@ struct AgentChatView: View {
                 }
                 .foregroundStyle(.secondary)
             }
-            HStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("❯")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(Color.accentColor)
                 TextField(L(.agentChatPlaceholder), text: $model.input)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .font(.system(.body, design: .monospaced))
                     .focused($inputFocused)
                     .onSubmit { if model.canSend { Task { await model.send() } } }
                 if model.isRunning {
-                    Text(L(.agentChatRunning)).font(.caption).foregroundStyle(.secondary)
+                    Text(L(.agentChatRunning)).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
                     ToolbarIconButton(systemName: "stop.fill", help: L(.agentChatStop)) { model.stop() }
                 } else {
                     // **继续上次**（`NFR-AI-08` ⑤）：上一轮没走完（限额 / 取消 / 失败）才有这一枚 ——
@@ -512,7 +560,30 @@ struct AgentChatView: View {
                     appState.isAgentSchedulePresented = true
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
+            )
         }
         .padding(12)
+    }
+}
+
+/// 盲文旋转（`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`）—— Hermes TUI 的 spinner 就是这十帧，
+/// 用它而不是 SF Symbol，是因为「像 TUI」这件事一半在字形上。
+private struct BrailleSpinner: View {
+    var tint: Color = .accentColor
+
+    private static let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.1)) { context in
+            let index = Int(context.date.timeIntervalSinceReferenceDate * 10) % Self.frames.count
+            Text(Self.frames[index])
+                .font(.system(.callout, design: .monospaced))
+                .foregroundStyle(tint)
+        }
     }
 }
