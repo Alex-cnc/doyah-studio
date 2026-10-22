@@ -83,12 +83,20 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
         /// 「陈旧副本」（文件被别人改了，恢复出来的却是几天前的样子）。这条口径与
         /// `Core/WorkspaceHistory.swift` 的「不存内容」同源。
         public var unsavedContent: String?
+        /// 页签种类（`WorkspaceTab.Kind.rawValue`）。
+        ///
+        /// **必须存**：原来靠「`path == nil` ⇒ Home」**推**，而对话页签也是 `path == nil`
+        /// ⇒ 存回再读出来就变成**第二个首页**（2026-10-22 人类主人实测：页签条上两个「首页」）。
+        /// 老快照没有这一栏 ⇒ `nil` ⇒ 仍按老规则推（`path == nil` 当 Home），不炸也不改历史语义。
+        public var kind: String?
 
-        public init(path: String?, title: String, language: String, unsavedContent: String? = nil) {
+        public init(path: String?, title: String, language: String, unsavedContent: String? = nil,
+                    kind: String? = nil) {
             self.path = path
             self.title = title
             self.language = language
             self.unsavedContent = unsavedContent
+            self.kind = kind
         }
 
         /// 从活页签取存档形态。
@@ -97,7 +105,8 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
                 path: tab.path,
                 title: tab.title,
                 language: tab.language.rawValue,
-                unsavedContent: tab.isDirty ? tab.content : nil
+                unsavedContent: tab.isDirty ? tab.content : nil,
+                kind: tab.kind.rawValue
             )
         }
     }
@@ -196,14 +205,32 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
         readFile: (String) -> String?
     ) -> WorkspaceSessionRestore {
         var result = WorkspaceSessionRestore(workspacePath: snapshot.workspacePath)
+        /// 已经见过一个 Home 没有（老快照没有种类栏时用来区分 Home 与对话页签）。
+        var sawHome = false
 
         for stored in snapshot.tabs {
             let language = language(of: stored)
+            // 种类以快照为准；老快照没有这一栏时按老规则推（`path == nil` ⇒ Home）。
+            let storedKind = stored.kind.flatMap(WorkspaceTab.Kind.init(rawValue:))
+
             guard let path = stored.path else {
-                // Home 页：标题随快照（拍快照那一刻从语言表取的），没有对应文件。
-                result.tabs.append(WorkspaceTab(title: stored.title, language: language))
+                // 没有文件的页：Home 与对话页签都走这里，**靠种类分开**。
+                // 原来一律当 Home 建 ⇒ 对话页签回来变成第二个「首页」（2026-10-22 实测）。
+                //
+                // 老快照没有 `kind` 栏：第一个 `path == nil` 当 Home（工作区落脚点必须有且只有一个），
+                // 之后再来一个 `path == nil` **当对话页签** —— 这一版里除 Home 外没有 path 的页只有它；
+                // 当 Home 会多出第二个「首页」，丢掉会把人家正在用的页签**静默删掉**（两样都不能接受）。
+                let kind: WorkspaceTab.Kind
+                if let storedKind {
+                    kind = storedKind
+                } else {
+                    kind = sawHome ? .agentChat : .home
+                }
+                if kind == .home { sawHome = true }
+                result.tabs.append(WorkspaceTab(title: stored.title, language: language, kind: kind))
                 continue
             }
+            sawHome = sawHome || storedKind == .home
 
             let onDisk = readFile(path)
             if onDisk == nil { result.missingPaths.append(path) }
@@ -228,6 +255,16 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
                     savedContent: onDisk ?? ""
                 )
             )
+        }
+
+        // **兜底去重**：一份历史快照里可能已经躺着两个 Home（旧版本 bug 写进去的）。
+        // 只留第一个 —— 页签条上两个「首页」没有第二种正确解释。
+        var seenHome = false
+        result.tabs = result.tabs.filter { tab in
+            guard tab.isHome else { return true }
+            if seenHome { return false }
+            seenHome = true
+            return true
         }
 
         // 选中的下标越界（手改过的文件 / 页签数变了）⇒ 落回第一个，不猜。

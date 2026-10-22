@@ -1642,6 +1642,9 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 | `MCPClientServerConfig` | `name` `transport` `command` `args` `env` `url` `headers` `enabled` `timeoutSeconds` `tools` | 缺项用默认值，不整条失败 | `Core/MCPClientConfiguration.swift` |
 | `EgressEntry` | `id` `timestamp` `kind` `target` `origin` `outcome` `detail` `tabID` `tabTitle` | `target` 去 query/fragment；`detail` 不含密钥 | `Core/EgressLog.swift` |
 
+**会话快照的页签种类（2026-10-22 修）**：`WorkspaceSessionSnapshot.Tab` 必须存 `kind`。原先只有 `path` / `title`，恢复时按「`path == nil` ⇒ Home」**推**种类 —— 对话页签同样没有 path，于是存回再读出来就成了**第二个首页**（人类主人实测：页签条上两个「首页」）。现在写 `kind`，读时优先用它，老快照没有这一栏才回落到老规则；恢复末尾另有一道兜底：**Home 只留一个**（历史文件里可能已经躺着两个）。
+
+
 ### 5.1.6 工具结果的回灌口径（有界、不静默截）
 
 **这一条是被事故逼出来的**（2026-10-22 实测：界面上 `list_dir` 一遍遍「返回空」，模型只好反复说「我先看一下项目结构」，跳数耗光）。根因不在工具，而在**观察文本**：工具跑完只把计数塞回下一跳（`dir:.:23` / `file:a.txt:812` / `search:3:7`），**正文一个字没给模型** —— 模型看不见内容就只能重试同一条工具，看起来就是「工具坏了」。

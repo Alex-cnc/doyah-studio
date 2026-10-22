@@ -6,6 +6,7 @@
 
 | 版本 | 日期 | 摘要 |
 |---|---|---|
+| **v3.5.14** | 2026-10-22 | §5.1.5 补「会话快照的页签种类」。由头：人类主人实测页签条上**两个「首页」**。根因 = `WorkspaceSessionSnapshot.Tab` 不存 `kind`，恢复时按「`path == nil` ⇒ Home」推，而对话页签也没有 path ⇒ 回来变 Home。修法 = 存档写 `kind`、读时优先用它（老快照缺栏回落老规则）、恢复末尾兜底「Home 只留一个」。新增 3 条 `WorkspaceSessionTabKindTests`（round-trip 正例 + 旧快照双 Home 反例 + 文件页不变）。 |
 | **v3.5.13** | 2026-10-22 | 新增 §5.1.6 **工具结果的回灌口径**。由头：人类主人实测「list_dir 不断返回空」，模型反复「我先看一下项目结构」直到跳数耗光。根因 = `AgentLoop.summary(of:)` 只回计数（`dir:.:23` / `file:a.txt:812` / `search:3:7`），**正文没进下一跳**；修法 = 五类结果按表回灌正文、8,000 字符封顶且**标注截断**、空目录与无命中**显式写出**；`query_db` 仍不含行数据（`NFR-AI-01`）。新增 5 条 `AgentToolObservationTests`（含空目录与超长截断两条负例）。 |
 | **v3.5.12** | 2026-10-22 | macOS 转写区补两项（§9.1.16 缺口 1 与 §9.1.24「刻意偏离」同步改口径）：**围栏代码块成块**（等宽、只描边不铺底、长行横向滚动、可整段选中）+ **行内代码与链接**（`AttributedString(markdown:)` 取行内语义，链接走系统浏览器）。新增 `App/Views/AgentTranscriptText.swift` 与 6 条 `AgentTranscriptBlocksTests`（含**未闭合围栏**与**坏 Markdown 不吞字**两条负例）。**仍未做**：语法高亮 / 远端图片 / GFM 表格 —— 三条理由各自写进节内。 |
 | **v3.5.11** | 2026-10-22 | 新增 §9.3.15 **WSL 宿主上的四处必然降级**（托盘无 / 通知走应用内 / 凭据如实不可用且不落明文 / systemd 需手动开）+ 两条 WSL 事实（GUI 走 WSLg；仓库与 target 必须放 Linux 根 FS，放 `/mnt/c` 慢一个数量级）+ 判据（设置页三行状态对齐、掀掉 keyring 后磁盘 `sk-` 命中 0）。由头：Linux 版首个真实宿主是 WSL2 Ubuntu，缺件只会静默不生效。 |
