@@ -4,9 +4,9 @@
   "version": "0.3.0",
   "identifier": "studio.doyah.desktop.linux",
   "build": {
-    "beforeDevCommand": "npm --prefix ../../windows/App run dev",
+    "beforeDevCommand": "npm --prefix ../windows/App run dev",
     "devUrl": "http://localhost:5274",
-    "beforeBuildCommand": "npm --prefix ../../windows/App run build",
+    "beforeBuildCommand": "npm --prefix ../windows/App run build",
     "frontendDist": "../../windows/App/dist"
   },
   "app": {
