@@ -1,6 +1,6 @@
 # Doyah产品概要设计说明书
 
-当前 v3.5.0（2026-10-22 §9.2 Windows 界面设计落笔 + 界面设计规范进仓）
+当前 v3.5.1（2026-10-22 §9.2 界面设计：节号去撞号 + 五处事实按代码订正）
 
 > 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求规格说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
 > 本书按「整个产品」重写：**五个产品线 × 92 个需求域全覆盖**，契约章每节点名需求编号，指不到编号的条目不写。
@@ -3402,104 +3402,115 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 - **不做** 插件独立授权与单独开关（`FR-STD-ALL-PLUG-006`：一套许可证覆盖三个能力位）
 - **不动** 契约层与 `[独占:macos]` 节；**不参照** macOS 实现细节（只读契约，实现自决）
 
-### 9.2.7 界面设计：窗口模型
+### 9.2.9 界面设计：窗口模型
 
-Windows 端是**自绘标题栏 + 单窗口**：`TitleBar.vue` 自己画标题、窗口按钮与搜索框，高度读 `--ds-metric-toolbar-height`（44），不依赖系统标题栏。标题文字与 macOS 同源（品牌段 + 当前活动项名），所以两端标题形状一致。
+Windows 端是**两层标题**：系统标题栏保留，页内另有一条标题条。
 
 | 事实 | 依据 |
 |---|---|
-| 自绘标题栏（高 44，内含搜索框与窗口按钮） | `Platform/windows/App/src/shell/TitleBar.vue:72,88` |
-| 单窗口，无多窗口模式 | `src/App.vue`（单个根组件，无窗口集合状态） |
-| 页签在编辑区内（不是窗口级） | `src/shell/BottomPanel.vue`、`src/views/` |
+| 系统标题栏未关（配置全文无 `decorations`），标题为 `Doyah Studio` | `src-tauri/tauri.conf.json:16` |
+| 运行期不改系统标题：`setTitle` 在 `src-tauri/src/**` 与 `App/src/**` 零命中 ⇒ 切视图时任务栏 / Alt+Tab 标题不变 | 同上（零命中即证据） |
+| 页内标题条高 44，只有标题文字 + 居中搜索框 + 构建戳，**没有最小化 / 最大化 / 关闭控件** | `src/shell/TitleBar.vue:48-63,72` |
+| 页内标题文字随活动栏项走 | `src/shell/TitleBar.vue:40`、`src/shell/activityBar.ts:126` |
+| 单窗口，无窗口集合状态 | `src/App.vue`（单个根组件） |
 
-**关闭窗口与关闭会话分开**：窗口关闭不影响已落盘的连接、查询历史与会话记录；页签状态由前端会话状态持有，重开窗口按存储恢复（与 §9.1.1 同一条纪律）。
+`FR-STD-WS-UI-006`（窗口标题）只落在**页内那一层**：系统层标题静态，页内层随活动项变。关窗与关会话分开：窗口关闭不动已落盘的连接、查询历史与会话记录；页签状态由前端会话状态持有，重开窗口按存储恢复（与 §9.1.1 同一条纪律）。
 
-### 9.2.8 界面设计：区域骨架与伸缩次序
+### 9.2.10 界面设计：区域骨架与伸缩次序
 
-从外到内四块横排 + 一块底部：
+壳层（`src/App.vue:437-572`）四块 + 一条底栏，**没有壳级侧栏容器**：
 
 | 层 | 区域 | 尺寸 | 伸缩 | 依据 |
 |---|---|---|---|---|
-| 1 | 活动栏 | 宽 46，图标 20 | 固定 | `--ds-metric-activity-bar-width` / `-icon-size`（`tokens.generated.css`） |
-| 2 | 侧栏 | 宽 248 | 可折叠 | `--ds-metric-sidebar-width`；`src/shell/SideBar.vue` |
-| 3 | 编辑区 | 占满剩余 | 吃剩余空间 | `src/App.vue` 主区 |
-| 4 | 下方面板 | 四页签：问题 / 输出 / 终端 / 调试 | 可折叠，按内容自量 | `src/shell/BottomPanel.vue:101-105` |
-| — | 状态栏 | 高由 CSS 定，内容四段 | 固定 | `src/shell/StatusBar.vue:56-79` |
+| 1 | 标题条（页内） | 高 44 | 固定 | `src/shell/TitleBar.vue:72` |
+| 2 | 活动栏（`SideBar.vue` 是**活动栏**，不是侧栏） | 宽 46 / 图标 20 | 固定 | `src/shell/SideBar.vue:95,120`；`tokens.generated.css:37-38` |
+| 3 | 主区 | 占满剩余 | 吃剩余 | `src/App.vue:537`（`main.shell__main`） |
+| 4 | 下方面板 | 四页签：问题 / 输出 / 终端 / 调试 | 可折叠 | `src/shell/BottomPanel.vue:101-105` |
+| — | 状态栏 | 高 24 | 固定 | `src/shell/StatusBar.vue:91`；`tokens.generated.css:34` |
 
-**与 macOS 的差异**：macOS 的下方面板是**五**页签（多「历史」），Windows 是**四**页签；macOS 用把手拖动改高度，Windows 由内容自量 + 折叠。这两条不是缺陷，是 P 表里登记的允许不同项（§4.1）。
+**248 的侧栏在视图内部，不在壳层**：只有两处读者 —— `src/views/DatabaseView.vue:5082`（`.db__tree`）与 `src/plugins/retro/RetroView.vue:1142`（`.retro__list`）；`src/views/WorkspaceView.vue:1657` 的资源树写死 `width: 300px`，**不读** `--ds-metric-sidebar-width`。
 
-### 9.2.9 界面设计：构件与尺寸（令牌是生成物）
+**与 macOS 的差异**：macOS 下方面板五页签（多「历史」），Windows 四页签；macOS 用把手拖动改高度，Windows 折叠 + 内容自量。两条都是 §4.1 允许不同的项，不是缺陷。
 
-**Windows 的令牌不手写**：`src/theme/tokens.generated.css` 由 `tools/gen-tokens.mjs` 从 macOS 侧 `Core/DesignTheme.swift` 解析生成，`--check` 模式做比对，改了会被闸门判红。因此「两端尺寸一致」不是靠人盯，是靠生成链。
+### 9.2.11 界面设计：构件与尺寸（令牌是生成物）
 
-| 构件 | 取值 | 令牌 | 依据 |
-|---|---|---|---|
-| 行高（表格/结果集） | 26 | `--ds-metric-row-height` | `tokens.generated.css` |
-| 列表行高 | 20 | `--ds-metric-list-row-height` | 同上 |
-| 控件高 | 26 | `--ds-metric-control-height` | 同上 |
-| 工具栏 / 标题栏 | 44 | `--ds-metric-toolbar-height` | 同上 |
-| 活动栏宽 / 图标 | 46 / 20 | `-activity-bar-width` / `-activity-icon-size` | 同上 |
-| 侧栏宽 | 248 | `-sidebar-width` | 同上 |
-| 层级缩进 | 14 | `-list-indent` | 同上 |
-| 分隔线 | 0.5 | `-hairline` | 同上 |
-| 列宽上下限 | 40 / 420 | `-min-column-width` / `-max-column-width` | 同上 |
-| 执行计划面板 | 720 宽 / 160 最小高 | `-plan-panel-width` / `-plan-panel-min-height` | 同上 |
-| 执行计划树 / 原始文本 | 56–320 / 48–260，行高 15 | `-plan-tree-*` / `-plan-raw-*` | 同上 |
-| 间距 / 圆角 | 2/4/8/12/16/24/32 · 1/4/6/8/10 | `--ds-spacing-*` / `--ds-radius-*` | 同上 |
+Windows 的令牌**不手写**：`src/theme/tokens.generated.css` 由 `tools/gen-tokens.mjs` 从 macOS 侧 `Core/DesignTheme.swift` 解析生成，`--check` 模式比对差异、改了判红。因此「两端尺寸一致」靠生成链，不靠人盯。
 
-### 9.2.10 界面设计：命令与键位
+| 令牌 | 取值 | 本端读它的地方 |
+|---|---|---|
+| `--ds-metric-row-height` | 26 | 结果集 / 表格 |
+| `--ds-metric-list-row-height` | 20 | 列表 |
+| `--ds-metric-toolbar-height` | 44 | 页内标题条（`TitleBar.vue:72`） |
+| `--ds-metric-activity-bar-width` / `-icon-size` | 46 / 20 | 活动栏 |
+| `--ds-metric-sidebar-width` | 248 | 仅视图内两处（见 9.2.10） |
+| `--ds-metric-status-bar-height` | 24 | 状态栏 |
+| `--ds-metric-tab-height` | 30 | 下方面板页签 / 结果页签（4 处） |
+| `--ds-metric-toolbar-button-width` / `-height` | 28 | 工具栏按钮 |
+| `--ds-metric-hairline` | 0.5 | 分隔线 |
+| `--ds-spacing-*` / `--ds-radius-*` | 2/4/8/12/16/24/32 · 1/4/6/8/10 | 全端间距与圆角 |
+
+**令牌存在但视图未读的 9 个**（生成物齐全、本端零读者）：`-list-indent`、`-plan-panel-width`、`-plan-panel-min-height`、`-plan-tree-min-height`、`-plan-tree-max-height`、`-plan-raw-min-height`、`-plan-raw-line-height`、`-toolbar-icon-size`、`-max-column-width`。两端令牌用量**不能互推**：`-tab-height` 在 macOS 无人读，在本端读 4 处。
+
+### 9.2.12 界面设计：命令与键位
 
 | 事实 | 现状 | 依据 |
 |---|---|---|
-| 命令清单 | **18 条**，集中在 `commands.ts`，由命令面板统一执行 | `src/shell/commands.ts`（`id:` 计数 18） |
-| 命令面板 | 独立组件，`Ctrl/⌘ + K` 唤起 | `src/App.vue:187`（ctrlKey 或 metaKey 加 k）、`src/shell/CommandPalette.vue` |
-| 其余快捷键 | **未落地**：除 `Ctrl+K` 外无全局快捷键绑定 | `src/App.vue` 仅此一处键位判断 |
+| 命令清单 | **18 条**，集中 `src/shell/commands.ts`，由命令面板统一执行 | `src/shell/commands.ts:41-175`（18 个 `id:` 字面量） |
+| 命令面板 | 独立组件，`Ctrl+K` / `⌘K` 唤起 | `src/App.vue:187`、`src/shell/CommandPalette.vue` |
+| 全局键位表 | **没有**：清单之外无全局键位注册 | `src/App.vue` 仅此一处键位判断 |
+| 编辑器键位 | **散在视图里**：`onEditorKeydown` 接管九组（撤销重做、跳行 `Ctrl+G`、格式化 `Ctrl+Shift+F` 且判断先于 `Ctrl+F`、查找替换、行注释、移行 / 复制行、缩进、自动缩进、自动配对） | `src/views/DatabaseView.vue:2584-2700` |
+| `database.runQuery` 登记了 `shortcut: 'Ctrl+Enter'`，全仓无该键位实现 | **说得到、做不到**（清单有、绑定无） | `src/shell/commands.ts:112`；`ctrl.enter` 零命中 |
 
-这条差距要说清：macOS 端 `AppShortcut` 登记了 33 个 case（实际绑定 32 个），Windows 端目前只有一键。第七章 7.9 不要求两端键位相同（`P-*` 允许不同），但要求**同一命令在菜单、面板、工具栏、上下文菜单四处同文案**——这一条在两端都成立。
+与 macOS 的差别不在「有没有键位」，在**键位有没有单一清单**：macOS 以 `AppShortcut` 为唯一清单并供帮助面板取表；Windows 只有命令面板一份清单（18 条），编辑器级键位散在视图代码里，帮助面板无从取表。第七章 7.9 不要求两端键位相同（`P-*` 允许不同），但要求同一命令在菜单、面板、工具栏、上下文菜单四处同文案 —— 这一条两端都成立。
 
-### 9.2.11 界面设计：各区域六态
+### 9.2.13 界面设计：各区域六态
 
 | 区域 | 空 | 载入 | 进行中 | 失败 | 禁用 | 已截断 |
 |---|---|---|---|---|---|---|
-| 结果集 | 保留表头 + 一行说明 | 骨架行 | 追加行，不闪空 | 写进「问题」页签并计数 | 无连接时禁用不隐藏 | 状态栏显示 `已加载 / 总数` |
+| 结果集 | 保留表头 + 一行说明 | 骨架行 | 追加行，不闪空 | 写日志 + 角标（不自动切页签） | 无连接时禁用不隐藏 | 状态栏显示 `已加载 / 总数` |
 | 编辑区 | 空页签提示 | 不适用 | 执行中按钮切换为停止 | 行内标记 + 问题页签 | 只读连接可写不可执行 | 按编辑器规则 |
-| 侧栏 | 一句空态 + 新建入口 | 树骨架 | 不适用 | 一行原因 + 重试 | 不禁用 | — |
-| 下方面板 | 折叠只留页签条；展开空态一句 | 「执行中…」 | 输出追加 | 页签出现计数徽标 | 「调试」页签 `ready: false`（**灰着并说明未就绪**，不是隐藏） | 输出到顶停追加并提示 |
-| 状态栏 | — | — | 行数与窗口读数实时更新 | 后端名后标注失败态 | — | 显示 `loaded / total`，即截断可见 |
+| 视图内树（数据库 / 资源管理器 / 复盘） | 一句空态 + 新建入口 | 树骨架 | 不适用 | 一行原因 + 重试 | 不禁用 | — |
+| 下方面板 | 折叠只留页签条；展开空态一句 | 「执行中…」 | 输出追加 | 页签计数徽标 | 「调试」页签 `ready: false`：**灰着并说明未就绪**，不是隐藏 | 输出到顶停追加并提示 |
+| 状态栏 | — | — | 行数 / 窗口读数实时更新 | 后端名后标注失败态 | — | 显示 `loaded / total`，即截断可见 |
 
-**「调试」页签是六态里最容易被做错的一格**：`BottomPanel.vue:105` 写明 `ready: false`，即「页签在、但功能未就绪」。按 7.4 的处置四选一，这里选的是**禁用 + 说明**，不是隐藏（隐藏会让用户以为没有这个能力）。
+**「调试」页签是六态里最容易被做错的一格**：`src/shell/BottomPanel.vue:105` 写明 `ready: false`，即「页签在、功能未就绪」。按 7.4 的四选一，这里选**禁用 + 说明**，不是隐藏（隐藏会让用户以为没有这个能力）。
 
-### 9.2.12 界面设计：主题与外观
+### 9.2.14 界面设计：主题与外观
 
 | 事实 | 现状 | 依据 |
 |---|---|---|
-| 主题集 | `tech-blue`（默认）/ `bean-green` / `rose-gold` / `stardust` | `src/theme/themes.generated.ts`（`THEME_SCHEMES`） |
-| 主题来源 | 从 macOS 侧 `Core/DesignTheme.swift` 解析生成，**不手抄** | `tools/gen-tokens.mjs` 头部注释 |
-| 深浅色 | 两套取值（如侧栏表面 `#F4F7FB` / `#081420`），跟随系统并可手动切 | `tokens.generated.css:72,105`；`src/shell/StatusBar.vue:64,77` |
-| 外观偏好持久化 | `appearanceGet` / `appearanceSet` 走 IPC 存偏好 | `src/App.vue`（`appearanceGet/Set`）、`src/ipc.ts` |
+| 主题集 | **5 套**：`tech-blue`（默认）/ `bean-green` / `rose-gold` / `stardust` / `deep-space` | `src/theme/themes.generated.ts:8-14`（`THEME_SCHEMES`） |
+| 显示名 | `THEME_SCHEME_LABELS` 只配了 4 个中文名，**`deep-space` 缺位** ⇒ 状态栏下拉显示裸 id；同名 i18n key `designThemeDeepSpace` 在本端也未定义 | `src/theme/index.ts:75-80` |
+| 缺名已被单测盯住，且现在是红的 | `test('每个主题都有中文显示名')` | `src/theme/theme.test.ts:82` |
+| 主题来源 | 从 macOS 侧 `Core/DesignTheme.swift` 解析生成，**不手抄** | `tools/gen-tokens.mjs` |
+| 深浅色 | 两套取值（如侧栏表面 `#F4F7FB` / `#081420`），跟随系统并可手动切 | `tokens.generated.css`；`src/shell/StatusBar.vue` |
+| 外观偏好持久化 | `appearanceGet` / `appearanceSet` 走 IPC 存偏好 | `src/App.vue`、`src/ipc.ts` |
 | 字体 | 字体族与字号由选择项驱动，写入编辑器 CSS 变量 | `src/shell/appearance.ts`（`FONT_CHOICES` / `FONT_SIZE_CHOICES`） |
 
-### 9.2.13 界面设计：与第七章的对应关系
+`deep-space`（macOS 侧中文名「深空苍穹」，`Core/Localization.swift:185`）是第 5 套，端上取色与生成物都在，缺的只有显示名这一格 —— 属**补一格映射**的活，不是主题没做。
+
+### 9.2.15 界面设计：与第七章的对应关系
 
 | 第七章条目 | Windows 落法 | 本节位置 |
 |---|---|---|
-| 7.1 区域划分 | 活动栏 / 侧栏 / 编辑区 / 下方面板 / 状态栏 | 9.2.8 |
-| 7.2 布局与栅格 | 间距与圆角全走 `--ds-spacing-*` / `--ds-radius-*` | 9.2.9 |
-| 7.3 主题配色字体 | 四套主题 + 双套深浅值，由生成链保证一致 | 9.2.12 |
-| 7.4 控件六态 | 逐区六态表（含「调试」页签的禁用不隐藏） | 9.2.11 |
-| 7.5 编辑器界面 | 编辑器在 `src/views/` 与 `src/sql/`，行号与查找替换有独立单测 | `src/views/DatabaseView.*.test.ts` |
-| 7.6 导航与命令入口 | 命令面板 `Ctrl+K` + 18 条命令单一清单 | 9.2.10 |
-| 7.7 三条主流程 | 数据库查询 / 笔记 / 智能体对话（`ChatPanel.vue`） | 9.2.8、`src/shell/ChatPanel.vue` |
-| 7.9 控件规格 | 三档尺寸与四层级按钮照 7.9 执行；按钮层级由 `actionIcon.ts` 与样式统一 | `src/shell/actionIcon.ts` |
+| 7.1 区域划分 | 词表两端同名；Windows 的「侧栏」在视图内（壳层只有活动栏） | 9.2.10 |
+| 7.2 布局与栅格 | 间距与圆角全走 `--ds-spacing-*` / `--ds-radius-*` | 9.2.11 |
+| 7.3 主题配色字体 | 5 套主题 + 双套深浅值，由生成链保证一致 | 9.2.14 |
+| 7.4 控件六态 | 逐区六态表（含「调试」页签的禁用不隐藏） | 9.2.13 |
+| 7.5 编辑器界面 | 编辑器在 `src/views/DatabaseView.vue` 与 `src/sql/`，补全 / 悬停 / 诊断有单测 | 9.2.13 |
+| 7.6 导航与命令入口 | 命令面板 `Ctrl+K` + 18 条命令清单 | 9.2.12 |
+| 7.7 三条主流程 | 数据库查询、笔记、智能体对话（`src/shell/ChatPanel.vue`） | 9.2.10 |
+| 7.9 控件规格 | 三档尺寸照 7.9 执行；工具栏按钮 `toolbar-button-*` = 28，不在 7.9.1 的 24/26/44 三档内（事实登记在 9.2.11） | 9.2.11 |
 
-### 9.2.14 界面设计：已知缺口
+### 9.2.16 界面设计：已知缺口
 
-1. **快捷键只落地了 `Ctrl+K` 一条**：其余 17 条命令只能从命令面板或菜单进入，帮助面列不出完整键位表。
-2. **下方面板少「历史」页签**（macOS 五、Windows 四）：若将来要两端同构，需先在 §4.1 登记为差异或补齐。
-3. **无面板高度拖动**：macOS 有把手 + 持久化高度，Windows 按内容自量，折叠态留白口径未定。
-4. **代码里仍有「未开工」标记**（`src/App.vue` 2 处、`src/shell/SideBar.vue` 1 处）：设计书不写状态，状态应只在《开发计划书》§3 台账；这三处需在下一次改动时清掉。
-5. **源文件注释仍指向旧档名**：`src/App.vue` 头部写 `Docs/概要设计.md §8.5.4`，该文件与节号在本版已不存在，属代码注释漂移（不影响运行，但会误导后来人）。
-
+1. **键位没有单一清单**：18 条命令有清单，但编辑器九组键位散在 `DatabaseView.vue:2584` 的 `onEditorKeydown` 里，帮助面列不出完整键位表。
+2. **`Ctrl+Enter` 说得到、做不到**：`database.runQuery` 登记了该键位（`commands.ts:112`），全仓无实现。
+3. **`deep-space` 缺显示名**：状态栏下拉显示裸 id（`StatusBar.vue:70` 回退），`theme.test.ts:82` 现为红。
+4. **下方面板少「历史」页签**（macOS 五、Windows 四）：要两端同构需先在 §4.1 登记或补齐。
+5. **无面板高度拖动**：macOS 有把手 + 持久化高度，Windows 按内容自量，折叠态留白口径未定。
+6. **活动栏项有两套口径**：`src/shell/activityBar.ts` 的 `MAC_ITEMS` / `BUILT_ITEMS` / `visibleItems()` 已被 `src/shell/activityItems.ts` 的清单派生取代，但三个常量仍在、且只有单测在读（`activityBar.test.ts`）⇒ 运行期两套「已开工项」并存。
+7. **源文件注释仍指旧档名**：`src/App.vue` 头部写 `Docs/概要设计.md §8.5.4`，该文件与节号在本版已不存在（注释漂移，不影响运行）。
 ## 9.3 契约 → Linux 实现 [独占:linux]
 
 > 本节是 Linux 侧的实现节，归属 `hugehippo`（本侧）；正文按 v3.2 全书统一编号，节内引用一律指本版节号。
@@ -3677,13 +3688,13 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 | 文件选择 | 空态里的「新建 / 打开」走 portal | 取消不报错，视为未选择 |
 | 通知 | 提醒类失败不弹系统通知，改为行内提示 | 无通知服务时不假装已发 |
 
-其余（结果集空态与截断、编辑区失败、侧栏空态、下方面板四页签）与 §9.2.11 逐格一致。
+其余（结果集空态与截断、编辑区失败、侧栏空态、下方面板四页签）与 §9.2.13 逐格一致。
 
 ### 9.3.10 界面设计：与第七章的对应关系
 
 | 第七章条目 | Linux 落法 | 位置 |
 |---|---|---|
-| 7.1 区域划分 | 与 Windows 同一骨架（活动栏 / 侧栏 / 编辑区 / 下方面板 / 状态栏） | 9.3.7、§9.2.8 |
+| 7.1 区域划分 | 与 Windows 同一骨架（活动栏 / 侧栏 / 编辑区 / 下方面板 / 状态栏） | 9.3.7、§9.2.10 |
 | 7.2 布局与栅格 | 令牌由生成链注入 CSS 变量，值同 macOS | 9.3.7 |
 | 7.3 主题配色字体 | 四套主题 + 跟随桌面 `color-scheme` | 9.3.7 |
 | 7.4 控件六态 | 共享前端实现 + 三处平台差异 | 9.3.9 |
