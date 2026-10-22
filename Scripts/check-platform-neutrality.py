@@ -58,7 +58,7 @@ import tempfile
 
 # 判据的立足点：**本脚本所在仓**的根（不是 CWD —— 从别的目录跑必须读数一致）
 REPO = pathlib.Path(__file__).resolve().parent.parent
-SRS = "Docs/Doyah产品需求分析说明书.md"
+SRS = "Docs/Doyah产品需求规格说明书.md"
 TARGETS = [SRS, "Docs/Doyah产品概要设计说明书.md", "Docs/Doyah产品能力规划说明书.md"]
 BASELINE_REL = "Scripts/platform-neutrality-baseline.json"
 BASELINE_COMMENT = (
@@ -98,7 +98,7 @@ BUCKETS = {
 STRICT_BUCKETS = tuple(name for name, (_, strict) in BUCKETS.items() if strict)
 
 # 空跑防护下限（2026-10-20 二次重校：需求书瘦身 22%（证据出表 + §9.1 追溯表外置到
-# 《需求分析说明书-追溯表.md》）+ 判据/不做列改形后，SRS 实测 2353 行 / 518 行需求形状行
+# 《需求规格说明书-追溯表.md》）+ 判据/不做列改形后，SRS 实测 2353 行 / 518 行需求形状行
 # ⇒ 下限按新形状留约 6% 余量。**防护不撤**：取不到输入仍判红，只是把「多少算取到了」
 # 校准到现行文档形状；若哪天真砍到 500 行以下，说明砍过头了，这条会报红提醒）
 FLOOR_LINES = 1700

@@ -24,7 +24,7 @@ import pathlib
 import re
 import sys
 
-SRS = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
+SRS = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
 PLAN = pathlib.Path("Docs/Doyah产品开发计划书.md")   # 2026-10-20 起状态唯一源
 
 PENDING = "⬜"
@@ -58,7 +58,7 @@ def clean(text: str) -> str:
 def plan_statuses() -> dict[str, str]:
     """从《开发计划书》§3 台账取「编号 → 状态」。
 
-    2026-10-20 起状态已从需求分析说明书迁出（人类主人令：需求分析书写「要什么」，状态归开发计划书）。
+    2026-10-20 起状态已从需求规格说明书迁出（人类主人令：需求分析书写「要什么」，状态归开发计划书）。
     本函数让盘点继续可用，且**只认一个来源**。
     """
     if not PLAN.exists():
@@ -82,7 +82,7 @@ def plan_statuses() -> dict[str, str]:
 
 
 def load() -> tuple[dict[str, dict], dict[str, dict], list[tuple[str, list[str]]]]:
-    """读需求分析说明书：**按表头认列**（2026-10-20 改）。
+    """读需求规格说明书：**按表头认列**（2026-10-20 改）。
 
     为什么改：状态列迁出后，三张定义表的列数都变了（FR 5 列 / NFR 4 列 / AC 2 列），
     旧的「按 len(row) 猜形状」立刻把 NFR 认成索引行（盘点从 46 条掉到 2 条）。
@@ -180,7 +180,7 @@ def main() -> int:
                 break
 
     print("=" * 78)
-    print("需求完成度盘点（数据来源：Docs/Doyah产品需求分析说明书.md，机械派生）")
+    print("需求完成度盘点（数据来源：Docs/Doyah产品需求规格说明书.md，机械派生）")
     print("=" * 78)
     for prefix in ("FR", "NFR", "AC"):
         members = groups[prefix]

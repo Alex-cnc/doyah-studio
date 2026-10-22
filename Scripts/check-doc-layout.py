@@ -25,7 +25,7 @@ CROSS = re.compile(r"Doyah产品|AGENT-SPEC|核心契约|计划书|规划书|需
 META = re.compile(r"(20\d\d-\d\d-\d\d)|(队列\s*[LNT]-\d+)|(第\s*\d+\s*轮)|((已上移))")
 CJK = re.compile(r"[\u4e00-\u9fff]")
 DOCS = {"cap": "Docs/Doyah产品能力规划说明书.md",
-        "req": "Docs/Doyah产品需求分析说明书.md",
+        "req": "Docs/Doyah产品需求规格说明书.md",
         "design": "Docs/Doyah产品概要设计说明书.md"}
 
 

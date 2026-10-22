@@ -44,7 +44,7 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SRS = ROOT / "Docs" / "Doyah产品需求分析说明书.md"
+SRS = ROOT / "Docs" / "Doyah产品需求规格说明书.md"
 LEDGER = ROOT / "Scripts" / "alpha-fr-dispositions.json"
 STATUSES = "✅🟡⬜➖"
 EXCLUSION_TOKEN = "[alpha 不含]"
@@ -210,7 +210,7 @@ def self_test() -> int:
     cases: list[tuple[str, str]] = []
     with tempfile.TemporaryDirectory(prefix="alpha-fr-") as tmp:
         tmpdir = pathlib.Path(tmp)
-        base_srs = tmpdir / "Doyah产品需求分析说明书.md"
+        base_srs = tmpdir / "Doyah产品需求规格说明书.md"
         base_ledger = tmpdir / "alpha-fr-dispositions.json"
         shutil.copyfile(SRS, base_srs)
         shutil.copyfile(LEDGER, base_ledger)

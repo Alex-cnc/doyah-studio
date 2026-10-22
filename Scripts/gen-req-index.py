@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""从《Doyah产品需求分析说明书》的表格生成机器视图 `Docs/requirement-index.jsonl`。
+"""从《Doyah产品需求规格说明书》的表格生成机器视图 `Docs/requirement-index.jsonl`。
 
 口径（2026-10-20 定）：
 - 人读 markdown、机读 jsonl，**两者同源**：jsonl 只许由本脚本产出，不许手改。
@@ -15,7 +15,7 @@ import sys
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SRS = ROOT / "Docs/Doyah产品需求分析说明书.md"
+SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
 CAP = ROOT / "Docs/Doyah产品能力规划说明书.md"
 OUT = ROOT / "Docs/requirement-index.jsonl"
 ID = re.compile(r"^(FR|NFR|AC)-[A-Z]{2,6}-[A-Z]{2,6}-[A-Z]{2,8}-\d{2,3}$")

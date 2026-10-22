@@ -2,7 +2,7 @@
 
 当前 v3.2.0（2026-10-20 全量重写并扶正为主文件）
 
-> 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求分析说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
+> 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求规格说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
 > 本书按「整个产品」重写：**五个产品线 × 92 个需求域全覆盖**，契约章每节点名需求编号，指不到编号的条目不写。
 > 契约层 / 实现层是**权限归属的两分**，不是章节的两分：契约条文集中在第三、四章的「必须一致」列，实现做法集中在第九章。
 
@@ -52,7 +52,7 @@
 
 ## 1.5 参考
 
-上游三件：《能力规划说明书》管「是什么 / 不是什么 / 边界」；《需求分析说明书》管「要什么 / 怎么算做到」；《开发计划书》管「做到哪了」。
+上游三件：《能力规划说明书》管「是什么 / 不是什么 / 边界」；《需求规格说明书》管「要什么 / 怎么算做到」；《开发计划书》管「做到哪了」。
 
 工程约定：`AGENT-SPEC.md`（智能体侧实现约定）、`Docs/design/能力书到需求书-派生规程.md`（派生十步）。
 
@@ -1337,7 +1337,7 @@
 
 # 第四章 平台差异
 
-**权威登记表在《需求分析说明书》§9.2（`P-01`~`P-27`），与下表一一对应**；对账判据 = `Scripts/check-p-parity.py`（两侧编号集合必须互相覆盖、同号必须同物）。
+**权威登记表在《需求规格说明书》§9.2（`P-01`~`P-27`），与下表一一对应**；对账判据 = `Scripts/check-p-parity.py`（两侧编号集合必须互相覆盖、同号必须同物）。
 
 每条差异写两件事：**必须一致**（换端必须一样的行为）与**允许不同**（各端各自的实现）。没有「必须一致」那一列的差异不是差异，是缺陷。
 
@@ -1394,7 +1394,7 @@
 2. 这个差异会不会让用户在两端看到不同的**数据**？会 → 不是差异，是缺陷，回到第三章。
 3. 差异是否登记在表里？没登记的「偷偷不同」，验收时按缺陷处理。
 
-新增差异的规矩：先在《需求分析说明书》§9.2 立号（`P-28` 起），再回本书登记，最后补 `check-p-parity` 的覆盖面 —— 顺序反了会出现「书里有、需求里没有」的孤号。
+新增差异的规矩：先在《需求规格说明书》§9.2 立号（`P-28` 起），再回本书登记，最后补 `check-p-parity` 的覆盖面 —— 顺序反了会出现「书里有、需求里没有」的孤号。
 
 # 第五章 数据结构设计
 
@@ -1636,7 +1636,7 @@
 | 平台适配层 | `Platform/macOS/` | **`Platform/Windows/`** —— 只有这里引 Windows 专有 API（凭据管理器 / ConPTY / 通知），Rust 侧经 `windows` crate 调用，不手写 FFI 面 |
 | 测试 | XCTest（`Tests/`、`TestsPlatform/`）| **`cargo test`（Rust，含 `Core/tests/`）＋ `vitest`（前端）** |
 
-**表示层选型与换栈留痕（可复议）**：2026-09-27 本节首建时选 **WPF**（理由 = `DataGrid` 行虚拟化成熟、分发不要求目标机预装 Windows App SDK 运行时；WinUI 3 备选）；2026-09-28 需求提出者以「界面最精致好看」为第一判据要求重排，本侧出调研 `windows/调研-技术栈-2026-09-28.md`（收敛为两条路线 + 后台三候选，并把「Linux 端被迫用 Electron」与「原生界面栈」的字面冲突作为发现上报）。**2026-09-28 开工令拍板：本侧三条线同栈 = 前端 Tauri 2 + Vue 3 + TypeScript、后端 Rust、测试 `cargo test` + `vitest`、分发 Tauri bundler（MSI / NSIS）；原 .NET 路线作废**（随之作废的还有「本机装 .NET SDK 8」这条放行）。**与契约的字面冲突（Web 外壳 vs `Doyah产品需求分析说明书.md` §1.3-1「原生界面栈」）走提案 `Docs/proposals/0004`，本侧不自行放宽契约**；§8.2 树里的 `C# / .NET 8` / `WPF` / `xUnit` 三处字样属契约层，同样在 0004 里请契约侧同步。**§8.5.6-3 的旧 WPF 基线（50 万行 × 6 列）随之作废，保留为历史留痕**，新口径按 40 万行 × 20 列复测。
+**表示层选型与换栈留痕（可复议）**：2026-09-27 本节首建时选 **WPF**（理由 = `DataGrid` 行虚拟化成熟、分发不要求目标机预装 Windows App SDK 运行时；WinUI 3 备选）；2026-09-28 需求提出者以「界面最精致好看」为第一判据要求重排，本侧出调研 `windows/调研-技术栈-2026-09-28.md`（收敛为两条路线 + 后台三候选，并把「Linux 端被迫用 Electron」与「原生界面栈」的字面冲突作为发现上报）。**2026-09-28 开工令拍板：本侧三条线同栈 = 前端 Tauri 2 + Vue 3 + TypeScript、后端 Rust、测试 `cargo test` + `vitest`、分发 Tauri bundler（MSI / NSIS）；原 .NET 路线作废**（随之作废的还有「本机装 .NET SDK 8」这条放行）。**与契约的字面冲突（Web 外壳 vs `Doyah产品需求规格说明书.md` §1.3-1「原生界面栈」）走提案 `Docs/proposals/0004`，本侧不自行放宽契约**；§8.2 树里的 `C# / .NET 8` / `WPF` / `xUnit` 三处字样属契约层，同样在 0004 里请契约侧同步。**§8.5.6-3 的旧 WPF 基线（50 万行 × 6 列）随之作废，保留为历史留痕**，新口径按 40 万行 × 20 列复测。
 **领域层边界由工程结构强制**：Rust 工作区里 `Core/` 的 `Cargo.toml` 不得依赖 GUI / 平台包（`tauri` / `windows` / `winit` 一类），判据 = `windows/Tools/check-core-boundary.ps1`（本侧自有，见 §8.5.3）。**判据面（第 25 轮按 Rust 形态重建）** = ① `Core/Cargo.toml` 的依赖段（`dependencies` / `dev-dependencies` / `build-dependencies` / `target.*.dependencies`）逐名比 GUI / 平台面清单；② `Core/**/*.rs` 的 `use` / crate 路径 / 平台专有 std（`std::os::windows`·`unix`）/ FFI 形状（`extern "C"`·`#[link(`·`windows_targets`·`libc::`），判红一律点名 `文件:行号`；③ **判据面为空即判红**（空跑不许通过 —— 工程在盘上就必须判，本项没有「跳过」档）。
 **依赖（全部开源、无运行时授权费）**：**Rust 领域层起步零第三方依赖**（纯标准库；判据 `check-core-boundary.ps1` 会扫）；后续放开面 = `rusqlite`（SQLite，笔记存储分层 §3.25）、PostgreSQL / MySQL 驱动（§3.2 / §3.19，具体 crate 待选型）、Windows 专有能力经 `windows` crate；前端 = Tauri 2 + Vue 3 + TypeScript + TanStack Virtual（结果网格虚拟化）。
 
@@ -1717,7 +1717,7 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
    **口径限制（不得据此宣布达标）**：① 运行时是 **.NET 6**（本机现有 SDK，非 8）；② **离屏** `Measure/Arrange`，不含 GPU / 渲染管线 / 输入延迟；③ 单次运行、无统计分布；④ 数据模型是简单 POCO，不是真实业务对象。**正式基准待 `windows/` 工程成型后在 .NET 8 上复测并入库**（本项**仍未闭合**）。
 4. **`Scripts/verify-all.sh` 在 Windows 上不可整条复跑（2026-09-27 逐项实测）**：① 第 16 项（越界）**没有写死视角** —— `--mine` 默认**按平台推断**（`darwin → macos`，其它 → windows），本侧在 Windows 上跑它本就是本侧视角（实测：不传参数与显式 `--mine windows` 的输出逐字一致，均为 `本侧=windows`）；**结论按显式参数写进 8.5.3**（在 macOS 上跑同一条命令是 macos 视角，故不写死 `--mine`，只补显式基线）。② 第 1 / 2 / 3 / 6 / 11 项依赖 macOS 工具链（`verify-core.sh` / `build-app.sh` / `.app` 打包），本机跑不了。③ **第 4 项在本机必红、且与本侧改动无关**：`Scripts/check-doc-tables.py` 的受检清单写死 5 份**被 `.gitignore` 排除**的文档（`兼容性矩阵` / `GBase-技术验证` / `测试用例` / `发布方案` / `手工验收运行手册` —— `.gitignore` 第 27 行 `/Docs/*` + 白名单），它们只存在于 macOS 主开发机 ⇒ **任何干净克隆上报「文件不存在」**。本侧做法 = 只跑本侧有意义的项（等价矩阵 + 越界，带显式视角与基线），其余如实标「本机不可跑、非本侧改动所致」。**建议契约侧**把第 4 项的清单改成「文件存在才查 / 不存在即跳过并提示」（属 `Scripts/`，本侧不改）。
 5. **表示层技术栈复议：以「界面最精致好看」为第一判据重排（2026-09-28，需求提出者提出）** —— 本侧出调研 `windows/调研-技术栈-2026-09-28.md`。**两条新前提**：Windows 版全新实现（**无迁移包袱** ⇒ 不拿「从 WPF 迁移的成本」当判据）；**Linux 第三端现用 = Rust 后台 + Electron 前台**。
-   **① 本轮最要紧的发现：Linux 端的 Electron 撞契约。** `Docs/Doyah产品需求分析说明书.md` §1.3-1 明写「**原生体验**：使用各平台**原生界面栈** …… **无 JVM / 无 Electron**」，`Docs/Doyah产品能力规划说明书.md` **P6**「原生轻量 — 无 JVM / 无 Electron；不为功能引入重量级运行时」⇒ Linux 端现用栈与这两条**直接相抵**，Windows 端若跟 Linux 走 Web 外壳撞的是同一条。**另需澄清**：「原生界面栈」按字面 = 系统控件（macOS SwiftUI/AppKit、Windows WinUI/WPF），**Skia 自绘类（Avalonia）严格读法也不满足**（它满足 P6 的「无重量级运行时」）。**宽严由契约侧定，本侧只报不动笔。**
+   **① 本轮最要紧的发现：Linux 端的 Electron 撞契约。** `Docs/Doyah产品需求规格说明书.md` §1.3-1 明写「**原生体验**：使用各平台**原生界面栈** …… **无 JVM / 无 Electron**」，`Docs/Doyah产品能力规划说明书.md` **P6**「原生轻量 — 无 JVM / 无 Electron；不为功能引入重量级运行时」⇒ Linux 端现用栈与这两条**直接相抵**，Windows 端若跟 Linux 走 Web 外壳撞的是同一条。**另需澄清**：「原生界面栈」按字面 = 系统控件（macOS SwiftUI/AppKit、Windows WinUI/WPF），**Skia 自绘类（Avalonia）严格读法也不满足**（它满足 P6 的「无重量级运行时」）。**宽严由契约侧定，本侧只报不动笔。**
    **② 收敛为两条路线**（不再是四个并列候选）：**路线 1「守契约的原生路线」（本侧推荐）** = 前端 **WinUI 3**（原生 Fluent，唯一同时贴「原生界面栈」与「精致上限」；代价 = 随附 WASDK 运行时、无 VS XAML 设计器）+ 后台 **.NET 8 + `Microsoft.Data.Sqlite`**（同栈同进程；若接受跨语言边界也可选 Rust 留共享 core 的门）；两端前后都不共享代码。**路线 2「跨端复用路线」** = 前端 **Web（与 Linux renderer 同源）+ 系统 WebView2 外壳**（不打包 Chromium ⇒ 不触「无 Electron」字样，但仍触「原生界面栈」字面）+ 后台 **Rust**（与 Linux 同核）；收益 = renderer 与 core 有望一次写两端用，代价 = 仍须放宽契约、Electron 外壳 API 换宿主后**不存在**（只能共享 renderer 与 core，不能共享外壳）、50 万行网格走前端虚拟化须复测。
    **③ 后台三候选（SQLite、排除 Java）两条路线下都成立**：.NET 8 + `Microsoft.Data.Sqlite`〔路线 1 首选〕/ Rust + `rusqlite`〔路线 2 必选〕/ Go + `modernc.org/sqlite`。
    **④ 待拍板四项**：契约口径（放宽 / ~~Linux 改栈~~ / ~~差异登记例外~~；「原生界面栈」是否容 Skia 自绘）、Windows 路线 1 还是 2、后台 A/B/C、是否同意由本侧挂提案改契约层三处（`§3` GUI 框架行、`P-19`/`P-23`/`P-24` 的 WPF 字样、「无 Electron / 原生界面栈」的宽严）。**`§8.5.6-3` 的 50 万行基线是 WPF 口径，换前端须复测。** <!-- exclusive-allow：**2026-10-14 人类主人裁决同步** —— 本项里的「Linux 改栈」与「差异登记例外」两半**就此关闭**（原由「Linux 被迫用 Electron（公司老机器）」已随「清公司 Linux 描述」作废 ⇒ 被迫理由消失；裁决原文「**Linux 端『Electron 例外』不予开 —— 守契约**」）。**剩余待拍板 = Skia 自绘口径 / Windows 路线 / 后台档 / 契约层三处提案** 四项。（单 `T-20261014-019`；本行属本侧 `[独占:windows]` 节，直接落笔。） -->
@@ -1741,9 +1741,9 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 | 越界门禁（**推前姿势**）| `python Scripts/check-exclusive-sections.py --mine windows --base origin/master` | `✅ 越界检查通过：受检改动 29 行（含契约层），均合法（本侧=windows，契约层属 macos）` · RC 0 |
 | 越界门禁（**合并对侧提交后**仍用 `--base HEAD`）| `python Scripts/check-exclusive-sections.py --mine windows --base HEAD` | ❌ **76 处假红** —— 全是**对侧刚合并进来那笔提交**的契约层改动（`HEAD` 里还没它）⇒ **merge 后推前一律用 `--base origin/master`**，或先提交 merge 再跑；本侧改动在该视图下全部合法 |
 | 文档表格（受检清单含本地文档 ⇒ 本机必红）| `python Scripts/check-doc-tables.py` | ❌ 5 处，**全部为「文件不存在」**（即被 `.gitignore` 排除的那 5 份），**与本侧改动无关** |
-| 文档表格（只查入库文档）| `python Scripts/check-doc-tables.py Docs/Doyah产品概要设计说明书.md Docs/Doyah产品需求分析说明书.md Docs/README.md Docs/proposals/README.md Docs/proposals/0002-*.md` | `✅ 表格校验通过（5 个文件）` · RC 0 |
+| 文档表格（只查入库文档）| `python Scripts/check-doc-tables.py Docs/Doyah产品概要设计说明书.md Docs/Doyah产品需求规格说明书.md Docs/README.md Docs/proposals/README.md Docs/proposals/0002-*.md` | `✅ 表格校验通过（5 个文件）` · RC 0 |
 | **文档版本与取号**（契约侧 L-32 新门禁）| `python Scripts/check-doc-versions.py` | `✅ 变更记录版本号唯一、头部版本可判、队列条目号唯一` · RC 0；另有 4 条**「文件不在盘上，跳过（不是「已通过」）」**提示（兼容性矩阵 / 发布方案 / 手工验收运行手册 / 开发循环-任务队列 —— 均为 `.gitignore` 排除的本地文档，与 8.5.6-4 ③ 同源）|
-| 取号（入库文档，**禁手抄**）| `python Scripts/next-doc-version.py Docs/Doyah产品概要设计说明书.md Docs/Doyah产品需求分析说明书.md` | `v2.44 ← Docs/Doyah产品概要设计说明书.md`、`v3.245 ← Docs/Doyah产品需求分析说明书.md` ⇒ 本轮台账行取 **v2.44**（由工具给出，未手抄）|
+| 取号（入库文档，**禁手抄**）| `python Scripts/next-doc-version.py Docs/Doyah产品概要设计说明书.md Docs/Doyah产品需求规格说明书.md` | `v2.44 ← Docs/Doyah产品概要设计说明书.md`、`v3.245 ← Docs/Doyah产品需求规格说明书.md` ⇒ 本轮台账行取 **v2.44**（由工具给出，未手抄）|
 | 取号（队列条目号）| `python Scripts/next-doc-version.py --ids L` | ❌ **RC 1**：`FileNotFoundError: Docs/智能体助手-开发spec.md`（该文件不入库）⇒ **本侧在该机上不可用**；队列号本侧仍按对侧既有编号顺延（见建议）|
 | **闸门 · 一条命令跑全（第 21 轮新落）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：11 项中跑 7 / 跳过 4 / 失败 0` + 逐条列出跳过项；`RESULT: SKIP (exit 2)`（**跳过不是「已通过」**，§8.3.2）|
 | **闸门 · 跳过即红** | 同命令加 `-RequireAll` | ❌ `RESULT: FAIL (exit 1)` —— 4 项跳过即判红 |

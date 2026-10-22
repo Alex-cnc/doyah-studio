@@ -39,7 +39,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
-SRS = ROOT / "Docs/Doyah产品需求分析说明书.md"
+SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
 STATUS = ROOT / "Docs/平台实现状态.json"
 OUT = ROOT / "Docs/平台对齐-Studio-Windows对macOS.md"
 
@@ -250,7 +250,7 @@ def render(
     out.append("# Doyah Studio · Windows 对 macOS 对齐件")
     out.append("")
     out.append(
-        "> **本件身份：派生视图（非契约）** —— 真值源 = `Docs/Doyah产品需求分析说明书.md` §10.1（状态）/ §10.2（落点）+ "
+        "> **本件身份：派生视图（非契约）** —— 真值源 = `Docs/Doyah产品需求规格说明书.md` §10.1（状态）/ §10.2（落点）+ "
         "`Docs/平台实现状态.json`（其他平台状态）。"
     )
     out.append(

@@ -1,6 +1,6 @@
 # Doyah Studio · Windows 对 macOS 对齐件
 
-> **本件身份：派生视图（非契约）** —— 真值源 = `Docs/Doyah产品需求分析说明书.md` §10.1（状态）/ §10.2（落点）+ `Docs/平台实现状态.json`（其他平台状态）。
+> **本件身份：派生视图（非契约）** —— 真值源 = `Docs/Doyah产品需求规格说明书.md` §10.1（状态）/ §10.2（落点）+ `Docs/平台实现状态.json`（其他平台状态）。
 > **两处不一致时以三书为准**。**不要手工编辑本表** —— 改了必漂移：本件由 `Scripts/gen-studio-win-align.py` 产出，`--check` 在闭环第 7 项判漂移。
 >
 > **用途**：`fatshark`（Windows / Harmony 侧）对齐 macOS 版 Doyah Studio 开发进度时的**逐条索引** —— 每行 = 一条需求 → 所属域 → 层次 → macOS 状态 → **macOS 落点（去这里读实现）** → Windows 现状。

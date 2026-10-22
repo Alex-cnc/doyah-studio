@@ -30,7 +30,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 DEFAULT_DOCS = [
-    "Docs/Doyah产品需求分析说明书.md",
+    "Docs/Doyah产品需求规格说明书.md",
     "Docs/Doyah产品能力规划说明书.md",
     "Docs/Doyah产品概要设计说明书.md",
     "Docs/智能体助手-开发spec.md",

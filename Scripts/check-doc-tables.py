@@ -44,7 +44,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 - **默认清单里不存在** → **跳过 + 高声提示**（打印跳过的清单与条数；跳过 ≠ 通过，但不判红）；
 - **显式点名的文件不存在** → **判红**（你点名要看的东西没有）；
 - `--require-all` → 缺失一律判红；
-- **`Docs/Doyah产品需求分析说明书.md` 缺失始终判红**（它是本工程文档的单一来源，不在「可能没有」之列）。
+- **`Docs/Doyah产品需求规格说明书.md` 缺失始终判红**（它是本工程文档的单一来源，不在「可能没有」之列）。
 
 **跳过只覆盖「文档在不在」**：文档一旦存在，它的表格 / 派生数字 / 版本号判据一条都不放宽
 （跳过的永远是整份文档，不是文档里的某项检查）。
@@ -95,12 +95,12 @@ DEFAULT_TARGETS = [
     "Docs/Doyah产品能力规划说明书.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
-    "Docs/Doyah产品需求分析说明书.md",
-    "Docs/Doyah产品需求分析说明书-变更记录.md",
+    "Docs/Doyah产品需求规格说明书.md",
+    "Docs/Doyah产品需求规格说明书-变更记录.md",
     "Docs/Doyah产品能力规划说明书-变更记录.md",
     "Docs/Doyah产品概要设计说明书-变更记录.md",
-    "Docs/Doyah产品需求分析说明书-需求索引.md",
-    "Docs/Doyah产品需求分析说明书-追溯表.md",
+    "Docs/Doyah产品需求规格说明书-需求索引.md",
+    "Docs/Doyah产品需求规格说明书-追溯表.md",
     "Docs/Doyah产品开发计划书.md",
     "Docs/README.md",
     "Docs/兼容性矩阵.md",
@@ -513,7 +513,7 @@ def check_section_heading_counts() -> list[str]:
     实测已经漂了两处 —— §3.2 写「44 条」实际 50 行、§3.10 写「8 条」实际 9 行。
     这类"手工维护的数字"正是本脚本存在的理由，所以把它也纳入。
     """
-    srs = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
+    srs = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
     if not srs.exists():
         return [f"{srs}: 文件不存在"]
 
@@ -548,7 +548,7 @@ def check_section_heading_counts() -> list[str]:
 def check_requirement_counts() -> list[str]:
     """校验需求计数与索引实际行数一致（防止"手工维护的数字"再次漂移）。"""
     # 2026-10-20：编号索引从正文附录移出成独立文件（机械派生件）⇒ 计数行与索引表都读那份。
-    srs = pathlib.Path("Docs/Doyah产品需求分析说明书-需求索引.md")
+    srs = pathlib.Path("Docs/Doyah产品需求规格说明书-需求索引.md")
     capability = pathlib.Path("Docs/Doyah产品能力规划说明书.md")
     if not srs.exists():
         return [f"{srs}: 文件不存在"]
@@ -632,7 +632,7 @@ def check_requirement_counts() -> list[str]:
 
     # 2026-10-18 口径变更（人类主人令：三书不写状态）：能力地图不再承载 ✅/🟡/⬜ 计数，
     # 派生计数与逐域计数两项检查作废；只校验「SRS 里出现的每个功能域，本书 §2 都有对应一行」。
-    # 状态与条数唯一源 = 需求说明书状态列（`Docs/Doyah产品需求分析说明书.md` §10.1）。
+    # 状态与条数唯一源 = 需求说明书状态列（`Docs/Doyah产品需求规格说明书.md` §10.1）。
     # 2026-10-18 第二次口径变更：能力书不再承载需求书的 `FR-*` 功能域分类（`FR-LIC` / `FR-BLD`
     # 这类工程域本就不是产品能力）。旧检查「SRS 每个域在 §2 有说明行」随之作废。
     # 新检查更强：**正文里的节号引用必须解析到真实标题** —— 过去改章节时留下的过期引用
@@ -806,14 +806,14 @@ def main() -> int:
 # 例数仍是 17（跳过不改总数、也不许静默）。
 
 SELF_TEST_TRACKED = [
-    "Docs/Doyah产品需求分析说明书-追溯表.md",  # 2026-10-20 从 SRS §9.1 外置（瘦身令），必须入库
+    "Docs/Doyah产品需求规格说明书-追溯表.md",  # 2026-10-20 从 SRS §9.1 外置（瘦身令），必须入库
     "Docs/Doyah产品能力规划说明书-变更记录.md",
     "Docs/Doyah产品概要设计说明书-变更记录.md",
     "Docs/Doyah产品开发计划书.md",
     "Docs/人工点验清单-20261018.md",
     "Docs/人工点验清单-20261018-重分版.md",
     "Docs/design/store/README.md",
-    "Docs/Doyah产品需求分析说明书.md",
+    "Docs/Doyah产品需求规格说明书.md",
     "Docs/design/规划-工作区Markdown预览与内置浏览器-20260930.md",
     "Docs/Doyah产品能力规划说明书.md",
     "Docs/Doyah产品概要设计说明书.md",
@@ -851,8 +851,8 @@ SELF_TEST_TRACKED = [
     "Docs/平台对齐-Studio-Windows对macOS.md",
     "Docs/任务清单-按平台.md",
     "Docs/智能体助手-核心能力扩展-草案-v0.1.md",
-    "Docs/Doyah产品需求分析说明书-变更记录.md",
-    "Docs/Doyah产品需求分析说明书-需求索引.md",
+    "Docs/Doyah产品需求规格说明书-变更记录.md",
+    "Docs/Doyah产品需求规格说明书-需求索引.md",
 ]
 
 SELF_TEST_ABSENT = [
@@ -1117,10 +1117,10 @@ def run_self_test() -> int:
         cont.unlink()
 
         # 例 14（㈤(a)）·索引表体中断：首条数据行行首多一个空格 ⇒ 判红 + 报行号 + 「表体在此中断」
-        # 2026-10-20：索引已从需求书正文 §10.1 外置成 `Docs/Doyah产品需求分析说明书-需求索引.md`
+        # 2026-10-20：索引已从需求书正文 §10.1 外置成 `Docs/Doyah产品需求规格说明书-需求索引.md`
         # （状态列整批迁走后只剩「编号 / 所属域 / 层次」三列），夹具跟着改锚点。
         total += 1
-        idx_copy = clone / "Docs/Doyah产品需求分析说明书-需求索引.md"
+        idx_copy = clone / "Docs/Doyah产品需求规格说明书-需求索引.md"
         original_idx = idx_copy.read_text(encoding="utf-8")
         idx_lines = original_idx.splitlines()
         header_at = idx_lines.index("| 编号 | 所属域 / 章节 | 层次 |")

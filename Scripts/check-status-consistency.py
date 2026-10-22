@@ -52,7 +52,7 @@ import tempfile
 # 判据的立足点：**本脚本所在仓**的根（不是 CWD —— 从别的目录跑必须读数一致）
 REPO = pathlib.Path(__file__).resolve().parent.parent
 PLAN_REL = "Docs/Doyah产品开发计划书.md"      # 状态的真值源（§3 台账）
-LEGACY_SRS_REL = "Docs/Doyah产品需求分析说明书.md"  # 只给「旧码对照臂」用
+LEGACY_SRS_REL = "Docs/Doyah产品需求规格说明书.md"  # 只给「旧码对照臂」用
 LEDGER_START = "## 3 需求状态台账"
 LEDGER_STOP = "## 4 "
 LEDGER_FLOOR = 400   # 2026-10-20 实测 425 条 ⇒ 下限留余量（防台账被删 / 解析面被削窄）

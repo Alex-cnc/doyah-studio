@@ -533,7 +533,7 @@ FIXTURE = {
          "label": "Windows 端（Tauri 2 + Rust）", "paths": ["platform/windows/"]},
     ],
     "contract_owner": "hugehippo",
-    "contract_docs": ["Docs/Doyah产品需求分析说明书.md", "Docs/Doyah产品概要设计说明书.md"],
+    "contract_docs": ["Docs/Doyah产品需求规格说明书.md", "Docs/Doyah产品概要设计说明书.md"],
     "shared": ["Docs/", "tools/", "AGENT-SPEC.md"],
     "unclassified_allow": [{"path": "README.md", "reason": "仓根门面"}],
     "shared_ledger": [{"glob": "Docs/发布计划.md", "reason": "台账追加", "by": "macos",
@@ -553,7 +553,7 @@ def _fixture_repo(root: pathlib.Path):
         (root / p).mkdir(parents=True, exist_ok=True)
     for f in ("Package.swift", "hvigorfile.ts", "README.md"):
         (root / f).write_text("x\n", encoding="utf-8")
-    for f in ("Docs/Doyah产品需求分析说明书.md", "Docs/Doyah产品概要设计说明书.md"):
+    for f in ("Docs/Doyah产品需求规格说明书.md", "Docs/Doyah产品概要设计说明书.md"):
         (root / f).write_text("x\n", encoding="utf-8")
 
 
@@ -721,7 +721,7 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     # 「如果有涉及代码提交就拦，鲸鱼娘只能处理三书这几个文档」。成对证据：同一条改动上
     # 「所有者改 ⇒ 绿 / 碰非三书 ⇒ 红」，以及「演员名 ≡ 平台集」这层映射真的生效。
     check("㉔ 契约所有者 `hugehippo` 改三书 ⇒ 绿", EXIT_PASS,
-          paths=["Docs/Doyah产品需求分析说明书.md"], mine="hugehippo", wants=["契约层（三书）"])
+          paths=["Docs/Doyah产品需求规格说明书.md"], mine="hugehippo", wants=["契约层（三书）"])
     check("㉕ 契约所有者（兼任 Apple 实现侧）改自己平台子树 ⇒ 绿（2026-10-15 **叠加判据**）", EXIT_PASS,
           paths=["App/Views/A.swift"], mine="hugehippo", wants=["本侧子树"])
     check("㉖ 契约所有者碰共享面脚本 ⇒ 仍红（三书之外照常规判据：共享面未登记）", EXIT_RED,

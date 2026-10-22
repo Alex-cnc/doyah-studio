@@ -31,7 +31,7 @@ import re
 import sys
 
 CAP = pathlib.Path("Docs/Doyah产品能力规划说明书.md")
-SRS = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
+SRS = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
 
 # (标签, 章节起标题, 章节止标题, 独立仓文件, 标记号, 需求书分区标题, 条目判据)
 TARGETS = [

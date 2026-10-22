@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""《开发计划书》台账 ↔ 《需求分析说明书》索引 的覆盖判据。
+"""《开发计划书》台账 ↔ 《需求规格说明书》索引 的覆盖判据。
 
-为什么需要：2026-10-20 起状态从需求分析说明书迁到开发计划书（人类主人令：
-「需求分析说明书里不需要状态，而是开发计划书里需要状态和进展情况」）。
+为什么需要：2026-10-20 起状态从需求规格说明书迁到开发计划书（人类主人令：
+「需求规格说明书里不需要状态，而是开发计划书里需要状态和进展情况」）。
 两边一旦漂移，就会重新出现「状态写了但条目不存在」「条目存在但没人管状态」。
 
 判据三条：
@@ -21,8 +21,8 @@ import pathlib
 import re
 import sys
 
-SRS = pathlib.Path("Docs/Doyah产品需求分析说明书.md")
-INDEX = pathlib.Path("Docs/Doyah产品需求分析说明书-需求索引.md")
+SRS = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
+INDEX = pathlib.Path("Docs/Doyah产品需求规格说明书-需求索引.md")
 PLAN = pathlib.Path("Docs/Doyah产品开发计划书.md")
 MARKS = ("⬜", "🟡", "✅", "➖")
 
@@ -102,7 +102,7 @@ def main() -> int:
 
     leaks = srs_status_leaks()
     if leaks:
-        problems.append(f"需求分析说明书正文仍有 {len(leaks)} 处状态符号：{leaks[:4]}")
+        problems.append(f"需求规格说明书正文仍有 {len(leaks)} 处状态符号：{leaks[:4]}")
 
     print(f"— 需求分析索引 {len(a)} 条 · 计划书台账 {len(b)} 条")
     if problems:
@@ -110,7 +110,7 @@ def main() -> int:
         for p in problems:
             print(f"   · {p}")
         return 1
-    print("\n✅ 台账与索引一一对应；需求分析说明书正文无状态符号")
+    print("\n✅ 台账与索引一一对应；需求规格说明书正文无状态符号")
     return 0
 
 
