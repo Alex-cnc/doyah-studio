@@ -83,7 +83,7 @@ SRS_HEADING = re.compile(r"^## 9\.2 ")
 SRS_STOP = re.compile(r"^#{1,2} ")
 DESIGN_HEADING = re.compile(r"^# 第四章 ")
 DESIGN_STOP = re.compile(r"^# ")
-WINDOWS_HEADING = re.compile(r"^### 8\.5\.5 ")
+WINDOWS_HEADING = re.compile(r"^### (?:9\.2\.5|8\.5\.5) ")  # v3.2 起 Windows 续排节改号 9.2.5（8.5.5 为旧号，保留兼容）
 WINDOWS_STOP = re.compile(r"^#{1,3} ")
 
 DEFINITION_ROW = re.compile(r"^\|\s*[`*]{0,2}(P-\d{2})[`*]{0,2}\s*\|")
@@ -349,7 +349,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str]]:
     # C §8.5.5 已落条但未并入
     windows_body = section(design_lines, WINDOWS_HEADING, WINDOWS_STOP)
     if not windows_body:
-        notes.append("§8.5.5 小节不存在（对侧独占节尚未落条）—— 本档跳过，不等于通过")
+        notes.append("§9.2.5 小节不存在（Windows 侧续排节未落条）—— 本档跳过，不等于通过")
     else:
         landed: dict[str, int] = {}
         for lineno, line in windows_body:
