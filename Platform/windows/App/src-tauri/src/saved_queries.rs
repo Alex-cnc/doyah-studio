@@ -8,7 +8,7 @@
 //! 为什么和连接列表分开一个文件：连接配置里带主机 / 用户，是有安全面的；已保存查询只是
 //! 名字 + SQL，混进 `connections.json` 会让「导出连接配置」连带把用户的 SQL 带出去。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use doyah_studio_db::saved_query::{SavedQuery, SavedQueryBundle};
 
@@ -28,12 +28,7 @@ impl SavedQueryStore {
     /// 默认落点：`%APPDATA%\DoyahStudio\saved-queries.json`（与 `connections.json` 同目录）。
     /// 取不到 `APPDATA` 就退到当前目录 —— **不静默丢数据**，调用方看得到路径。
     pub fn default_path() -> PathBuf {
-        match std::env::var("APPDATA") {
-            Ok(base) if !base.trim().is_empty() => Path::new(&base)
-                .join("DoyahStudio")
-                .join("saved-queries.json"),
-            _ => PathBuf::from("saved-queries.json"),
-        }
+        crate::paths::app_path("saved-queries.json")
     }
 
     /// 读列表。文件不存在 ⇒ 空列表；文件坏了 ⇒ 可读失败（点名文件与出路）。

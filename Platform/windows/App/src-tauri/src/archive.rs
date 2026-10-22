@@ -10,7 +10,7 @@
 //!    不做校验就等于把「写任意文件」交给前端；
 //! ④ **文件不存在 = 空内容**（第一次使用不是错误）；读不出来 / 写不进去要**点名路径**。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::postgres::DbFailure;
 
@@ -52,10 +52,7 @@ impl ArchiveStore {
     /// 默认落点：`%APPDATA%\DoyahStudio\queries`（与 `saved-queries.json` 同父目录）。
     /// 取不到 `APPDATA` 就退到当前目录下的 `queries` —— **不静默丢数据**，路径会回到界面上。
     pub fn default_root() -> PathBuf {
-        match std::env::var("APPDATA") {
-            Ok(base) if !base.trim().is_empty() => Path::new(&base).join("DoyahStudio").join("queries"),
-            _ => PathBuf::from("queries"),
-        }
+        crate::paths::app_path("queries")
     }
 
     /// 日期键 → 文件路径（**校验失败即拒**）。

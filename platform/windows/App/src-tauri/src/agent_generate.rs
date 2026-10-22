@@ -1660,11 +1660,7 @@ struct UndoRecord {
 
 /// 撤销记录目录（与对话会话同一层：`%APPDATA%\DoyahStudio\...`）。
 pub fn agent_undo_dir() -> std::path::PathBuf {
-    let base = match std::env::var("APPDATA") {
-        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
-        _ => std::path::PathBuf::from("."),
-    };
-    base.join("DoyahStudio").join("agent-undo")
+    crate::paths::app_path("agent-undo")
 }
 
 /// FNV-1a 64（只用于「文件有没有被改过」这个判断）。

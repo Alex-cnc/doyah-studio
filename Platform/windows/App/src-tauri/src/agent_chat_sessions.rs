@@ -115,11 +115,7 @@ impl ChatSessionStore {
     /// 会话是长文本，单独一层便于用户整批备份或清掉）。
     /// 取不到 `APPDATA` 就退到当前目录 —— **不静默丢数据**，界面拿得到路径。
     pub fn default_store() -> Self {
-        let base = match std::env::var("APPDATA") {
-            Ok(value) if !value.trim().is_empty() => PathBuf::from(value),
-            _ => PathBuf::from("."),
-        };
-        Self::new(base.join("DoyahStudio").join("chat"))
+        Self::new(crate::paths::app_path("chat"))
     }
 
     /// 某个工作区默认段的会话文件路径（文件名由领域层派生 ⇒ 调用方给什么路径都安全）。

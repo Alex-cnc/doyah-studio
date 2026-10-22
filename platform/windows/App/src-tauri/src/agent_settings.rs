@@ -65,11 +65,7 @@ impl AgentSettingsStore {
     /// 默认落点：`%APPDATA%\DoyahStudio\{agent.json,agent-key.bin}`（与连接 / 已保存查询同目录）。
     /// 取不到 `APPDATA` 就退到当前目录 —— **不静默丢数据**，调用方看得到路径。
     pub fn default_store() -> Self {
-        let base = match std::env::var("APPDATA") {
-            Ok(value) if !value.trim().is_empty() => PathBuf::from(value),
-            _ => PathBuf::from("."),
-        };
-        let dir = base.join("DoyahStudio");
+        let dir = crate::paths::app_home();
         Self::new(dir.join("agent.json"), dir.join("agent-key.bin"))
     }
 

@@ -14,6 +14,7 @@
   6 章内 标题并列两项、章内却只有一节
   7 追溯 契约节无需求编号 / 编号在需求书里不存在（--mode design）
   8 平台名 正文（非 [独占:*] 节）出现平台名
+  9 节号唯一 同一个 N.M(.K) 出现两次（交叉引用会指错门）
 
 豁免：Scripts/doc-layout-exempt.json —— {"<文件>": [{"match": "摘要子串", "reason": "…"}]}
 命中必须能对上一条豁免的 match 子串，否则照旧判红（豁免不是关闸）。
@@ -129,6 +130,16 @@ def audit(path, mode, srs_path=None, allow_platform=False, min_chars=100, cjk_ma
                 add(3, f"L{i+1} 节号跳号 {c}.{prev:02d} → {n}")
             prev = max(prev, v)
 
+    # ⑨ 节号唯一：全书引用都靠节号，撞号等于把读者指到另一节去（2026-10-22 实测撞过一次）。
+    seen_num = {}
+    for i, lv, t in H:
+        n = num_of(t)
+        if lv >= 2 and n:
+            if n in seen_num:
+                add(9, f"L{i+1} 节号重复 {n}（首次在 L{seen_num[n]+1}）")
+            else:
+                seen_num[n] = i
+
     hnums = {num_of(t) for _, _, t in H if num_of(t)}
     for _, lv, t in H:
         m = re.match(r"^第([一二三四五六七八九十]+)章", t)
@@ -209,7 +220,7 @@ def audit(path, mode, srs_path=None, allow_platform=False, min_chars=100, cjk_ma
     return lines, H, hits
 
 
-NAMES = {1: "结构", 2: "标题", 3: "节序", 4: "交叉引用", 5: "排印", 6: "章内完整", 7: "追溯", 8: "平台名"}
+NAMES = {1: "结构", 2: "标题", 3: "节序", 4: "交叉引用", 5: "排印", 6: "章内完整", 7: "追溯", 8: "平台名", 9: "节号唯一"}
 
 
 def run(path, mode, srs=None, allow_platform=False, min_chars=100, exempt=None):

@@ -9,7 +9,7 @@
 //! 为什么口令走 `cmdkey` 而不是自己写加密文件：Windows 凭据管理器是**系统级、按用户隔离**的
 //! 存储，重装应用不丢、别的用户读不到；自己写一份"加密文件"等于把密钥和密文放同一个抽屉里。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use doyah_studio_db::config::{ConnectionBundle, ConnectionConfig};
@@ -36,12 +36,7 @@ impl ConnectionStore {
     /// 默认落点：`%APPDATA%\DoyahStudio\connections.json`。
     /// 取不到 `APPDATA` 就退到当前目录 —— **不静默丢数据**，调用方会看到路径。
     pub fn default_path() -> PathBuf {
-        match std::env::var("APPDATA") {
-            Ok(base) if !base.trim().is_empty() => Path::new(&base)
-                .join("DoyahStudio")
-                .join("connections.json"),
-            _ => PathBuf::from("connections.json"),
-        }
+        crate::paths::app_path("connections.json")
     }
 
     /// 读连接列表。**文件不存在 = 空列表**（首次使用不是错误）；文件坏了 = 可读失败。

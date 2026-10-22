@@ -90,13 +90,7 @@ impl RetroStore {
     /// 默认落点：`%APPDATA%\DoyahStudio\retro\packages`（与连接 / 归档同一个 `DoyahStudio` 家）。
     /// 取不到 `APPDATA` 就退到当前目录下的 `retro\packages` —— **不静默丢数据**，路径会回到界面上。
     pub fn default_root() -> PathBuf {
-        match std::env::var("APPDATA") {
-            Ok(base) if !base.trim().is_empty() => Path::new(&base)
-                .join("DoyahStudio")
-                .join("retro")
-                .join("packages"),
-            _ => PathBuf::from("retro").join("packages"),
-        }
+        crate::paths::app_path("retro/packages")
     }
 
     /// 扫一遍包目录。

@@ -37,15 +37,19 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# 领域层（本端自有 Rust 域层；GUI / 平台依赖不得进入它 —— 判据 check-linux-skeleton.py B、C 两条）
+# **同源外壳**（概设 §9.3.1「后端同源」）：132 条命令、状态、插件面都在这里，本端不复制一份。
+# 它自带 `doyah-studio-core` / `doyah-studio-db` 与 dialog 插件 —— 所以下面不再单列。
+doyah-studio-shell = { path = "../../windows/App/src-tauri" }
+# 本端领域层：只剩平台能力表的取值枚举（`Availability` / `CAPABILITY_NAMES`）
 doyah-studio-core = { path = "Core" }
 # 平台适配层：只有它谈 Linux 专有能力（WebViewGTK / 密钥环 / PTY / 通知 / 剪贴板 / 托盘）
 doyah-studio-linux-platform = { path = "Platform/Linux" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = [] }
-# 系统文件 / 文件夹选择器（Tauri 2 官方对话框插件）—— 与 Windows 侧同一插件面
-# （前端同源 ⇒ 调用的命令面必须一致，否则同一份前端在 Linux 上的入口会变成死路）
+# 对话框插件**只作为依赖存在**（不在这里 `init()`）：`capabilities/default.json` 里的
+# `dialog:default` 只认得「本 crate 直接依赖的插件」；插件实例由同源外壳 `attach()` 装一次。
+# 不这么写就会在 build.rs 报 `Permission dialog:default not found`。
 tauri-plugin-dialog = "2"
 
 [features]

@@ -3559,7 +3559,7 @@ Windows 的令牌**不手写**：`src/theme/tokens.generated.css` 由 `tools/gen
 | 外观偏好持久化 | `appearanceGet` / `appearanceSet` 走 IPC 存偏好 | `src/App.vue`、`src/ipc.ts` |
 | 字体 | 字体族与字号由选择项驱动，写入编辑器 CSS 变量 | `src/shell/appearance.ts`（`FONT_CHOICES` / `FONT_SIZE_CHOICES`） |
 
-`deep-space`（「深空苍穹」）是第 5 套：值表在 macOS 侧 `Core/DesignTheme.swift`，**但生成物一度落后于源**（`tokens.generated.css` 里 0 处命中）⇒ 2026-10-22 重新生成，现 `theme 5`。Windows 可自由切五套；**Linux 钉死 `deep-space` + dark**（§9.3.11「工作环境的固定深色」）。
+`deep-space`（「深空苍穹」）是第 5 套：值表在 macOS 侧 `Core/DesignTheme.swift`，**但生成物一度落后于源**（`tokens.generated.css` 里 0 处命中）⇒ 2026-10-22 重新生成，现 `theme 5`。Windows 可自由切五套；**Linux 钉死 `deep-space` + dark**（§9.3.12「工作环境的固定深色」）。
 
 ### 9.2.15 界面设计：与第七章的对应关系
 
@@ -3600,7 +3600,7 @@ Windows 的令牌**不手写**：`src/theme/tokens.generated.css` 由 `tools/gen
 
 **行首栏固定宽度** `calc(--ds-spacing-m + --ds-spacing-hair)`（= 14 px），正文一律左对齐 —— 栏宽变来变去整屏文字会左右跳。转写区、任务读数、输入行、信息面**一律等宽**（`--ds-font-stack-mono`）。
 
-**颜色全走令牌**（`--ds-color-accent-*` / `--ds-color-text-*` / `--ds-color-status-*` / `--ds-color-hairline-light`），`token-ratchet.mjs` 扫过裸值 0 条。配合 §9.3.11 的固定深色，Linux 上就是「深色底 + 冷光青蓝」的那块屏。
+**颜色全走令牌**（`--ds-color-accent-*` / `--ds-color-text-*` / `--ds-color-status-*` / `--ds-color-hairline-light`），`token-ratchet.mjs` 扫过裸值 0 条。配合 §9.3.12 的固定深色，Linux 上就是「深色底 + 冷光青蓝」的那块屏。
 
 **刻意与 macOS 不同的两处**：① 没有「继续上次 / 定时」入口（这两件本端未做，见 §9.2.16）；② 流式正文的 `▌` 只画在正在到达的那一条末尾，不逐字符滚动（流是显示，最终仍以返回值为准，见文件头注释 ⑥）。
 
@@ -3619,7 +3619,7 @@ Windows 的令牌**不手写**：`src/theme/tokens.generated.css` 由 `tools/gen
 
 | 层 | macOS 侧（§9.1） | **Linux 侧（本节）** |
 |---|---|---|
-| 领域层（核心） | Swift `Core/`（无平台依赖） | **Rust**（落 `Platform/linux/src-tauri/Core/`）：纯逻辑、零 UI 依赖、可 `cargo test` |
+| 领域层（核心） | Swift `Core/`（无平台依赖） | **Rust，且与 Windows 侧同源**：直接复用 `Platform/windows/Core` 与 `Platform/windows/Db`（2026-10-22 改造，见 §9.3.14）；本端不再另长一份 |
 | 表示层 | SwiftUI + AppKit 桥接 | **Tauri 2 外壳（系统 WebView = WebKitGTK `webkit2gtk-4.1`）+ Vue 3 + TypeScript** —— **前端与 Windows 侧同源**（同一套 `Platform/windows/App/`） |
 | 无界面验证入口 | Swift `CLI/` | **`src-tauri/Cli/`（Rust 二进制：子命令 + 退出码表 + `--json`）** |
 | 平台适配层 | `Platform/macOS/` | **`Platform/linux/src-tauri/Platform/Linux/`** —— 只有这里引 Linux 专有依赖（WebViewGTK / 密钥环 / PTY），不手写 FFI |
@@ -3758,7 +3758,7 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 | 凭据 | 系统密钥环（Secret Service）；无密钥环时**降级为加密文件并明示** | 对应 `SecretStore` 契约 |
 | 通知 | `libnotify`；不支持的桌面环境静默跳过并记日志 | 对应提醒类需求 |
 | 缩放 | 跟随 `GDK_SCALE` / 分数缩放，界面按令牌等比放大 | 令牌表单一出处 |
-| 主题 | **固定深色 + 深空苍穹令牌**（工作环境，见 §9.3.11）；主题切换不重启 | 第七章 7.3 |
+| 主题 | **固定深色 + 深空苍穹令牌**（工作环境，见 §9.3.12）；主题切换不重启 | 第七章 7.3 |
 | 应用菜单 | 应用内菜单（窗口内），不挂全局菜单栏 | 与 Windows 同族 |
 
 **不复用的部分**：系统托盘、自动更新、全局快捷键——三项在 Linux 上依赖桌面环境差异大，一律「不做」而不是「做了但不保证」。**已知缺口**：前端页面在 Linux 容器内没有界面回归测试（只有构建通过），标待定。
@@ -3791,7 +3791,7 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 |---|---|---|
 | 7.1 区域划分 | 与 Windows 同一骨架（活动栏 / 侧栏 / 编辑区 / 下方面板 / 状态栏） | 9.3.7、§9.2.10 |
 | 7.2 布局与栅格 | 令牌由生成链注入 CSS 变量，值同 macOS | 9.3.7 |
-| 7.3 主题配色字体 | 五套主题（生成物 `theme 5`）+ Linux 固定深色（§9.3.11） | 9.3.7 |
+| 7.3 主题配色字体 | 五套主题（生成物 `theme 5`）+ Linux 固定深色（§9.3.12） | 9.3.7 |
 | 7.4 控件六态 | 共享前端实现 + 三处平台差异 | 9.3.9 |
 | 7.6 导航与命令入口 | `Ctrl+K` + 同一份 18 条命令 | 9.3.8 |
 | 7.9 控件规格 | 三档尺寸与按钮层级照 7.9，不另立档位 | 9.3.7 |
@@ -3803,7 +3803,7 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 3. **无通知可用性探测**：`libnotify` 缺失时静默跳过，用户无从知道「提醒不会弹」。
 4. **缩放未实测**：`GDK_SCALE=1.5` 下是否有 0.5px 分隔线丢失，未验证。
 
-### 9.3.11 配色：工作环境的固定深色
+### 9.3.12 配色：工作环境的固定深色
 
 人类主人 2026-10-22：「Linux 版本……是工作环境，科技风浅蓝色深色背景」。据此定三条：
 
@@ -3816,7 +3816,7 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 **判据**：Linux 截图里 `:root` 带 `data-theme='dark'` 与 `data-theme-scheme='deep-space'`；把系统切浅色、重启应用，配色不变；`gen-tokens.mjs --check` 通过。
 
 
-### 9.3.12 字体回退：Linux 上没有 Cascadia
+### 9.3.13 字体回退：Linux 上没有 Cascadia
 
 `--ds-font-stack` / `--ds-font-stack-mono` 原先只列 Windows 字族（`Segoe UI Variable Text` / `Cascadia Mono` / `Consolas` / `'Courier New'`）。**Linux 上这四个都不在**，fontconfig 把 `'Courier New'` 指到 Courier 那一路（Nimbus Mono PS）：细、瘦、字距宽 —— 等宽正文看着就像「没生效」，这也正是「行首栏语汇在 Linux 上还是丑」的一个独立成因（与有没有读到新前端无关）。
 
@@ -3830,6 +3830,41 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 **为什么去掉 `'Courier New'`**：它在 Linux 上是「别名到 Courier」的诱饵，留着只会把后面的好字族挡住。`Liberation Mono` 已经与它同度量，视觉上不亏。
 
 **验法**：Linux 上打开对话页签，等宽正文的字形应是无衬线等宽（`DejaVu Sans Mono` / `Noto Sans Mono` 一类），不是 Courier 的细衬线。开发者工具里 `getComputedStyle($0).fontFamily` 能看到实际栈；`document.fonts.check("16px 'Noto Sans Mono'")` 可判字族在不在本机。
+
+
+### 9.3.14 后端同源：一份 Rust 外壳，两种配置
+
+人类主人 2026-10-22：「后端复用 Rust 是不是更好呢？」—— 是，已按此落。
+
+**改造前的事实**：Linux 外壳只注册了 **2 条**命令（`capabilities` / `startup_report`），而共用前端 `ipc.ts` 的 `COMMANDS` 有 **132 条**。也就是说 Linux 版当时只有壳：绝大多数入口点下去没有后端 —— 不是「难看」，是**死的**。若按原设计「本端自建领域层」补齐，要重新长出 ≈ **4.4 万行** Rust（Windows 侧 `App/src-tauri` 20,734 + `Db` 23,794），此后永久双份维护。
+
+**改法（已落地）**：
+
+| 面 | 改造后 |
+|---|---|
+| 命令层 | `doyah-studio-shell::attach(builder)` **一处定义**（132 条命令 + 共享状态 + dialog 插件）。Windows 的 `run()` 与 Linux 的 `run()` 都调它 —— 命令表分叉一次就永久漂移，而且只在运行期静默失败 |
+| 数据落点 | 新增 `paths::app_home()`：Windows `%APPDATA%\DoyahStudio`；Linux `$XDG_DATA_HOME/doyah-studio`（无该变量则 `~/.local/share/doyah-studio`）。改造前 **8 处各自读 `APPDATA`**，Linux 上取不到 ⇒ 全退当前目录，换个目录打开配置就「消失」 |
+| Linux 外壳 | 只剩三件事：启动前置检查（缺 WebKitGTK ⇒ 可读提示 + 非零退出）、平台能力表、自己的 `tauri.conf.json`（`frontendDist` 仍指 Windows 的 `dist`） |
+| 平台能力表 | 不再挂 `#[tauri::command]` —— Tauri 的 `invoke_handler` 只能设一次，同源命令层已占住。改为构建期 / CLI 期可读；前端本来不调它，一条不少 |
+
+**本机能验的部分（真读数）**：
+
+| 命令 | 结果 |
+|---|---|
+| `cargo check -p doyah-studio-shell --lib` | `Finished dev profile in 1m 22s`（首次含全量依赖），第二次 1.48s |
+| `cargo check -p doyah-studio-linux-shell` | `Finished dev profile in 1.87s` |
+| `python3 Platform/linux/Tools/check-linux-skeleton.py` | `PASS`（骨架 / 边界 / 同源三条干净） |
+
+**未验证（本机做不了，别当成验过）**：Linux 目标的真编译与打包 —— 本机没有 Linux 宿主、没有 docker / podman，`build.sh` 在非 Linux 宿主机上如实 rc=2。**这一步必须在公司那台 Linux 上跑。**
+
+**还剩的 Linux 平台活（下一步，按序）**：
+
+1. **凭据**：`agent_settings` 的 DPAPI 在非 Windows 是「如实拒绝」⇒ 要接 Secret Service（`keyring` crate）；无密钥环时仍如实报错、**不落明文**。
+2. **托盘 / 菜单 / 通知**：逐条落 `P-*`；缺 `libnotify` / appindicator 时的降级形态要能说出来。
+3. **`.desktop` / 文件关联 / `GDK_SCALE`**：桌面集成三件。
+4. **收口同名包**：`Platform/linux/src-tauri/Core` 的 `capability` 表并进 `Platform/Linux` —— 现在图里有两个同名 `doyah-studio-core`（能编，但不该长留）。
+
+**判据**：Linux 上随便点十个入口（连接、执行、笔记、对话、备份、设置），都要有后端响应，不再是「点了没反应」。
 
 
 ## 9.4 iOS 实现要点 [独占:ios]

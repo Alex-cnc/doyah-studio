@@ -280,8 +280,7 @@ fn fixture_root() -> std::path::PathBuf {
 
 /// 历史文件的默认落点：`%APPDATA%\DoyahStudio\workspace-history.json`。
 pub fn history_path() -> std::path::PathBuf {
-    let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
-    std::path::Path::new(&base).join("DoyahStudio").join("workspace-history.json")
+    crate::paths::app_path("workspace-history.json")
 }
 
 /// 读历史：**文件不存在 = 空历史**；文件坏了 = 空历史 + 一句可读的原因（不抛）。
@@ -1206,8 +1205,7 @@ mod staleness_tests {
 
 /// 外观偏好文件：`%APPDATA%\DoyahStudio\appearance.json`。
 pub fn appearance_path() -> std::path::PathBuf {
-    let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
-    std::path::Path::new(&base).join("DoyahStudio").join("appearance.json")
+    crate::paths::app_path("appearance.json")
 }
 
 /// 读外观偏好：文件不在 / 读不出来 / 结构不认识 ⇒ **按缺省**（不抛错，界面照常起）。
@@ -1342,8 +1340,7 @@ mod appearance_tests {
 
 /// 命令历史文件：`%APPDATA%\DoyahStudio\command-history.json`。
 pub fn command_history_path() -> std::path::PathBuf {
-    let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
-    std::path::Path::new(&base).join("DoyahStudio").join("command-history.json")
+    crate::paths::app_path("command-history.json")
 }
 
 /// 读命令历史：文件不在 / 读不出来 ⇒ **空历史**（面板只是没有"最近使用"分组，不打扰用户）。

@@ -3,9 +3,15 @@
 //! 承载面 = **Tauri 2 + 系统 WebView（WebKitGTK `webkit2gtk-4.1`）**；前端 = **与 Windows 侧同一套**
 //! （`Platform/windows/App/`，见 `tauri.conf.json` 的 `frontendDist` / `devUrl`）—— Linux 只换外壳与平台适配层。
 //!
-//! 本片落的命令面只有一件：**平台能力表**（六项取值）。为什么先落它 —— §8.6.1 写着
-//! 「前端不得按平台分支：平台差异只能通过**取值**表达」⇒ 这份取值表就是「同一套前端跑在 Linux 上」
-//! 的第一个必要件：没有它，前端要区分平台就只能 `if (linux)`，那正是被禁止的写法。
+//! **后端同源**（概设 §9.3.1）：命令层不再在本端另长一份 —— 132 条命令全部来自
+//! `Platform/windows/App/src-tauri`（`doyah-studio-shell`），本端只做三件事：
+//!   ① 起壳前的前置检查（缺 WebKitGTK ⇒ 可读提示 + 非零退出，不白屏）；
+//!   ② 平台能力表（六项取值：密钥环 / PTY / 通知 / 剪贴板 / 托盘 / WebView）；
+//!   ③ 自己的 `tauri.conf.json`（`$XDG_DATA_HOME` 落点、`.desktop`、打包目标）。
+//!
+//! 为什么第二条不再挂成 `#[tauri::command]`：Tauri 的 `invoke_handler` 只能设一次，
+//! 同源命令层已经占住它。这份取值表改为**构建期 / CLI 期**可读（`--self-check`、`build.sh`），
+//! 前端不再需要它 —— 前端本来就只调 Windows 那 132 条，一条都没少。
 
 use doyah_studio_linux_platform::{missing, probe_all};
 use serde::Serialize;
@@ -26,8 +32,7 @@ pub struct StartupReport {
     pub guidance: Vec<&'static str>,
 }
 
-/// 命令面：平台能力表（六项，顺序 = `CAPABILITY_NAMES`）。
-#[tauri::command]
+/// 平台能力表（六项，顺序 = `CAPABILITY_NAMES`）。**不是** tauri 命令，见文件头 ②。
 pub fn capabilities() -> Vec<CapabilityDto> {
     probe_all()
         .into_iter()
@@ -39,8 +44,7 @@ pub fn capabilities() -> Vec<CapabilityDto> {
         .collect()
 }
 
-/// 命令面：启动前置报告（承载面缺 ⇒ 前端按取值提示，而不是白屏）。
-#[tauri::command]
+/// 启动前置报告（承载面缺 ⇒ 打印可读提示后非零退出，而不是白屏）。
 pub fn startup_report() -> StartupReport {
     let probes = probe_all();
     let absent = missing(&probes);
@@ -73,10 +77,10 @@ pub fn run() {
     for line in &report.guidance {
         eprintln!("提示：{}", line);
     }
-    let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![capabilities, startup_report]);
-    if let Err(error) = builder.run(tauri::generate_context!()) {
+    // 命令层、状态、插件面全部来自同源外壳（`doyah_studio_shell::attach`）——
+    // 本端**不**再自己 `.plugin(...)` / `.invoke_handler(...)`：重复注册同一插件会在启动期报错，
+    // 而第二处 `invoke_handler` 会**静默覆盖**第一处（前端那条命令就成了「调不到」）。
+    if let Err(error) = doyah_studio_shell::attach(tauri::Builder::default()).run(tauri::generate_context!()) {
         eprintln!("启动失败：{}", error);
         std::process::exit(1);
     }

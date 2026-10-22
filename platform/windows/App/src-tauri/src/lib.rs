@@ -43,6 +43,8 @@ pub mod terminal_bridge;
 
 mod query;
 pub mod search;
+/// 数据落点（`DoyahStudio/` 家）：Windows 走 `%APPDATA%`、Linux 走 XDG —— 一处算，别处只 join。
+pub mod paths;
 
 pub use connections::{config_from_form, ConnectionStore};
 #[allow(unused_imports)]
@@ -2972,8 +2974,13 @@ fn terminal_close(id: u64) -> Result<(), String> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
+/// 把整套命令层挂到调用方建好的 `Builder` 上 —— **不** `run`、**不** `generate_context!`。
+///
+/// 为什么单拎出来：Linux 外壳复用**同一份** Rust 外壳（参见概设 §9.3.1「后端同源」），
+/// 两端的差别只在「配置 / 资产嵌入 / 平台能力」，**命令表与状态必须只有一份** ——
+/// 132 条命令分叉一次就永久漂移，而且漂移只会在运行期静默失败（前端 `invoke` 一个没注册的名字）。
+pub fn attach(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    builder
         // 系统文件 / 文件夹选择器（W-A-1）：Home「打开文件…」与命令面板「打开工作区文件夹」
         // 两处入口靠它弹**真**选择器；权限最小面登记在 `capabilities/default.json`（只给 `dialog:allow-open`）。
         .plugin(tauri_plugin_dialog::init())
@@ -3143,6 +3150,11 @@ pub fn run() {
             terminal_read,
             terminal_close
         ])
+}
+
+/// Windows 二进制的入口：挂命令层 + **用自己的** `tauri.conf.json` 与前端资产起壳。
+pub fn run() {
+    attach(tauri::Builder::default())
         .run(tauri::generate_context!())
         .expect("启动 Doyah Studio Windows 外壳失败");
 }
