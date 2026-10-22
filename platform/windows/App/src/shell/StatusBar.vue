@@ -2,7 +2,15 @@
 import { computed } from 'vue'
 import type { AppInfo } from '../ipc'
 import { t as translate, type UiLanguage } from '../i18n'
-import { applyTheme, readStoredTheme, storeTheme, type ThemeMode } from '../theme'
+import {
+  applyTheme,
+  isLinuxShell,
+  LINUX_PINNED_MODE,
+  LINUX_PINNED_SCHEME,
+  readStoredTheme,
+  storeTheme,
+  type ThemeMode
+} from '../theme'
 import {
   applyScheme,
   readStoredScheme,

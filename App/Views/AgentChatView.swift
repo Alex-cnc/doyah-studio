@@ -11,6 +11,8 @@ struct AgentChatView: View {
     /// 定时 agent 面板的入口（`FR-AI-27`）：面板本身读的是 `AppState` 里的条目与历史。
     @EnvironmentObject private var appState: AppState
     @FocusState private var inputFocused: Bool
+    /// 发丝线要按当前外观取色（深色主题用白色低透明叠加，浅色主题用实色）。
+    @Environment(\.colorScheme) private var colorScheme
     /// 任务清单是否展开（TUI 的 `▸/▾` 折叠）。跑着时默认收起、只留最后两步。
     @State private var stepsExpanded = false
 
@@ -29,6 +31,7 @@ struct AgentChatView: View {
             Divider()
             statusBlock
         }
+        .background(Theme.surface(.content))
         .onAppear { model.refreshEndpoint() }
         .sheet(isPresented: $appState.isAgentSchedulePresented) {
             AgentScheduleSheet().environmentObject(appState)
@@ -93,7 +96,7 @@ struct AgentChatView: View {
         case .user:
             // TUI 里用户消息是 `❯ 正文`，**不是右对齐气泡** —— 去掉气泡是这一版最大的外观变化。
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                gutter("❯", Color.accentColor)
+                gutter("❯", Theme.accentColor)
                 Text(message.text)
                     .font(Self.transcriptFont)
                     .textSelection(.enabled)
@@ -101,38 +104,38 @@ struct AgentChatView: View {
             }
         case .assistant:
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                gutter("┊", Color.secondary)
+                gutter("┊", Theme.text(.secondary))
                 Text(message.text)
                     .font(Self.transcriptFont)
                     .textSelection(.enabled)
                 if message.isStreaming {
                     // 流式光标：**逐段**出现时它一直在（`FR-AI-25` ②）
-                    Text("▌").font(Self.transcriptFont).foregroundStyle(.secondary)
+                    Text("▌").font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
                 }
                 Spacer(minLength: 0)
             }
         case .tool:
             // 工具结果在 TUI 里是**缩进的圆角小框**（`messageLine.tsx`：`borderStyle="round"` + 缩进 3）。
             HStack(alignment: .top, spacing: 8) {
-                gutter("⚡", Color.secondary)
+                gutter("⚡", Theme.text(.secondary))
                 Text(message.text)
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.text(.secondary))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1)
+                            .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
                     )
                 Spacer(minLength: 0)
             }
         case .notice:
             // 时间线事件：`◈` + 灰字，不带栏（TUI 的 `kind === 'event'`）。
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                gutter("◈", Color.secondary)
+                gutter("◈", Theme.text(.secondary))
                 Text(noticeText(message.text))
                     .font(Self.transcriptFont)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.text(.secondary))
             }
         }
     }
@@ -204,7 +207,7 @@ struct AgentChatView: View {
             HStack(spacing: 8) {
                 Image(systemName: icon(for: card))
                 Text(card.name).font(.system(.body, design: .monospaced))
-                Text(card.statusCode).font(.caption).foregroundStyle(.secondary)
+                Text(card.statusCode).font(.caption).foregroundStyle(Theme.text(.secondary))
                 Spacer()
                 Button {
                     model.toggle(card.id)
@@ -221,12 +224,12 @@ struct AgentChatView: View {
                         .textSelection(.enabled)
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                        .background(Theme.surface(.raised), in: RoundedRectangle(cornerRadius: 6))
                 } else if !card.arguments.isEmpty {
                     Text(card.arguments)
                         .font(.system(.callout, design: .monospaced))
                         .textSelection(.enabled)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.text(.secondary))
                 }
             }
             // ③「展开可见**用的哪个模型与端点**」（`FR-AI-25` ③）：每张卡展开都带这一行 ——
@@ -235,12 +238,12 @@ struct AgentChatView: View {
             if card.expanded, let line = endpointLine {
                 Text(line)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.text(.secondary))
                     .textSelection(.enabled)
             }
             if case .pendingApproval = card.outcome {
                 HStack(spacing: 8) {
-                    Text(L(.agentChatApprovalPending)).font(.caption).foregroundStyle(.secondary)
+                    Text(L(.agentChatApprovalPending)).font(.caption).foregroundStyle(Theme.text(.secondary))
                     ToolbarIconButton(systemName: "checkmark.circle", help: L(.agentChatApprovalApprove)) { model.approve(card.id) }
                         .controlSize(.small)
                     ToolbarIconButton(systemName: "xmark.circle", help: L(.agentChatApprovalDeny)) { model.deny(card.id) }
@@ -249,7 +252,7 @@ struct AgentChatView: View {
             }
             if case .applied = card.outcome {
                 HStack(spacing: 8) {
-                    Text(L(.agentChatApprovalApplied)).font(.caption).foregroundStyle(.secondary)
+                    Text(L(.agentChatApprovalApplied)).font(.caption).foregroundStyle(Theme.text(.secondary))
                     // **一步撤销**（`FR-AI-25` ⑤）：点了就把这次写入退回去，文件逐字节回到应用前。
                     // 只出现在「已应用」这一档 —— 别的状态没有可撤的东西。
                     ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.agentChatUndo)) {
@@ -259,11 +262,11 @@ struct AgentChatView: View {
                 }
             }
             if case .undone = card.outcome {
-                Text(L(.agentChatUndone)).font(.caption).foregroundStyle(.secondary)
+                Text(L(.agentChatUndone)).font(.caption).foregroundStyle(Theme.text(.secondary))
             }
         }
         .padding(10)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .background(Theme.surface(.panel), in: RoundedRectangle(cornerRadius: 8))
     }
 
     /// 卡片上那一行「用的哪个模型与端点」（`FR-AI-25` ③）。
@@ -303,16 +306,16 @@ struct AgentChatView: View {
                     HStack(spacing: 6) {
                         Text(stepsExpanded ? "▾" : "▸")
                             .font(Self.transcriptFont)
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Theme.accentColor)
                         Text(L(.agentChatStepsTitle, "\(model.steps.count)"))
                             .font(Self.transcriptFont)
                         Text("(\(doneStepCount)/\(model.steps.count))")
                             .font(Self.transcriptFont)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.text(.secondary))
                         if let seconds = model.lastElapsedSeconds {
                             Text(L(.agentStatusElapsed, String(format: "%.1f", seconds)))
                                 .font(Self.transcriptFont)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.text(.secondary))
                         }
                         Spacer(minLength: 0)
                     }
@@ -345,13 +348,13 @@ struct AgentChatView: View {
             // 树轨：TUI 的 `├─` / `└─`
             Text(isLast ? "└─" : "├─")
                 .font(Self.transcriptFont)
-                .foregroundStyle(.secondary.opacity(0.6))
+                .foregroundStyle(Theme.text(.tertiary))
             Text(stepMark(for: step))
                 .font(Self.transcriptFont)
                 .foregroundStyle(tint(for: step))
             Text(step.tools.joined(separator: " · "))
                 .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.text(.secondary))
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
@@ -370,9 +373,9 @@ struct AgentChatView: View {
 
     private func tint(for step: AgentChatStep) -> Color {
         switch step.status {
-        case .running: return .accentColor
-        case .done: return .secondary
-        case .failed: return .orange
+        case .running: return Theme.accentColor
+        case .done: return Theme.text(.secondary)
+        case .failed: return Theme.status(.warning)
         }
     }
 
@@ -388,7 +391,7 @@ struct AgentChatView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(L(.agentChatRunning2))
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Theme.text(.secondary))
                 Spacer()
             }
             .padding(.horizontal, 12)
@@ -416,7 +419,7 @@ struct AgentChatView: View {
                     Text(L(.agentStatusCompressed,
                            "\(compression.entries)",
                            "\(compression.estimatedTokensSaved)"))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Theme.status(.warning))
                         .help(compression.earliest)
                 }
                 // **续跑读数**（`NFR-AI-08` ⑤）：续上第几跳、退回几跳 —— 续跑不许静默。
@@ -437,7 +440,7 @@ struct AgentChatView: View {
                     Text(completion.isVerified
                          ? L(.agentStatusCompletionVerified, "\(completion.citations)")
                          : L(.agentStatusCompletionUnverified))
-                        .foregroundStyle(completion.isVerified ? Color.green : Color.orange)
+                        .foregroundStyle(completion.isVerified ? Theme.status(.success) : Theme.status(.warning))
                         .help(completion.isVerified ? "" : completion.reason)
                 }
                 // **信息面三格**（`FR-AI-25`）：上下文占用 / 缓存命中率 / 本会话估算花费。
@@ -450,7 +453,7 @@ struct AgentChatView: View {
                                AgentTokenShort.text(used),
                                AgentTokenShort.text(window),
                                AgentModelReadings.percentText(percent)))
-                            .foregroundStyle(percent >= 90 ? Color.orange : Color.secondary)
+                            .foregroundStyle(percent >= 90 ? Theme.status(.warning) : Theme.text(.secondary))
                     } else {
                         Text(L(.agentStatusContextWindowUnknown, AgentTokenShort.text(used)))
                     }
@@ -469,7 +472,7 @@ struct AgentChatView: View {
                 // 只在真报过时出现（`nil` 不留空壳）；卡住那一档用更重的颜色（那要人动手）。
                 if let monitor = model.monitorReading {
                     Text(L(.agentStatusMonitor, monitorText(monitor)))
-                        .foregroundStyle(monitor.isStalled ? Color.red : Color.orange)
+                        .foregroundStyle(monitor.isStalled ? Theme.status(.danger) : Theme.status(.warning))
                         .help(L(.agentStatusMonitor, monitorText(monitor)))
                 }
                 if model.sessionUsage.requests > 0 {
@@ -479,7 +482,7 @@ struct AgentChatView: View {
                            "\(model.sessionUsage.completionTokens)",
                            "\(model.sessionUsage.totalTokens)"))
                     if model.sessionUsage.responsesWithoutUsage > 0 {
-                        Text(L(.agentStatusNoUsage)).foregroundStyle(.orange)
+                        Text(L(.agentStatusNoUsage)).foregroundStyle(Theme.status(.warning))
                     }
                 }
             }
@@ -487,33 +490,33 @@ struct AgentChatView: View {
             HStack(spacing: 8) {
                 if case .ready(let modelName, let endpoint) = model.endpointState {
                     Text(L(.agentStatusModel, modelName))
-                    Text(URL(string: endpoint)?.host ?? endpoint).foregroundStyle(.secondary)
+                    Text(URL(string: endpoint)?.host ?? endpoint).foregroundStyle(Theme.text(.secondary))
                 } else {
-                    Text(L(.agentChatEndpointNotConfigured)).foregroundStyle(.secondary)
+                    Text(L(.agentChatEndpointNotConfigured)).foregroundStyle(Theme.text(.secondary))
                 }
                 if let seconds = model.lastElapsedSeconds {
                     Text(L(.agentStatusElapsed, String(format: "%.1f", seconds)))
                 }
                 if let rate = model.tokensPerSecond {
-                    Text(String(format: "%.0f token/s", rate)).foregroundStyle(.secondary)
+                    Text(String(format: "%.0f token/s", rate)).foregroundStyle(Theme.text(.secondary))
                 }
                 if let root = WorkspaceStore.shared.rootPath, !root.isEmpty {
                     Text(L(.agentStatusWorkspace, URL(fileURLWithPath: root).lastPathComponent))
                 }
                 Text(appState.isConfirmAllWritesEnabled ? L(.agentStatusWritesOn) : L(.agentStatusWritesOff))
-                    .foregroundStyle(appState.isConfirmAllWritesEnabled ? Color.secondary : Color.orange)
+                    .foregroundStyle(appState.isConfirmAllWritesEnabled ? Theme.text(.secondary) : Theme.status(.warning))
 
                 Spacer()
 
                 // **会话标题在最右**（人类主人 2026-10-17：「最右侧加上 hermes 有的那个会话标题就完美了」）。
                 // 取首条提问，不另花钱生成；没有提问时这格不出现（不留空壳）。
                 if let title = model.sessionTitle {
-                    Text("» " + title).foregroundStyle(.secondary).help(title)
+                    Text("» " + title).foregroundStyle(Theme.text(.secondary)).help(title)
                 }
             }
         }
         .font(.system(.caption, design: .monospaced))
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Theme.text(.secondary))
         .lineLimit(1)
         .padding(.horizontal, 12)
         .padding(.vertical, 5)
@@ -528,19 +531,19 @@ struct AgentChatView: View {
                     Image(systemName: "exclamationmark.triangle")
                     Text(blocker).font(.callout)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.text(.secondary))
             }
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("❯")
                     .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Theme.accentColor)
                 TextField(L(.agentChatPlaceholder), text: $model.input)
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .monospaced))
                     .focused($inputFocused)
                     .onSubmit { if model.canSend { Task { await model.send() } } }
                 if model.isRunning {
-                    Text(L(.agentChatRunning)).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                    Text(L(.agentChatRunning)).font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.text(.secondary))
                     ToolbarIconButton(systemName: "stop.fill", help: L(.agentChatStop)) { model.stop() }
                 } else {
                     // **继续上次**（`NFR-AI-08` ⑤）：上一轮没走完（限额 / 取消 / 失败）才有这一枚 ——
@@ -564,7 +567,7 @@ struct AgentChatView: View {
             .padding(.vertical, 7)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
+                    .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
             )
         }
         .padding(12)
@@ -574,7 +577,7 @@ struct AgentChatView: View {
 /// 盲文旋转（`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`）—— Hermes TUI 的 spinner 就是这十帧，
 /// 用它而不是 SF Symbol，是因为「像 TUI」这件事一半在字形上。
 private struct BrailleSpinner: View {
-    var tint: Color = .accentColor
+    var tint: Color = Theme.accentColor
 
     private static let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 

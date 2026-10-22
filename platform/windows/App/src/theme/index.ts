@@ -77,6 +77,7 @@ export const THEME_SCHEME_LABELS: Record<string, string> = {
   'bean-green': '豆芽绿',
   'rose-gold': '玫瑰金',
   stardust: '星空紫',
+  'deep-space': '深空苍穹',
 }
 
 /**
@@ -98,6 +99,19 @@ export function storeScheme(storage: { setItem(key: string, value: string): void
 /** 把主题落到根元素：`data-theme-scheme` 的取值必须是 `rawValue`（生成物里的 id，不是 Swift case 名）。 */
 export function applyScheme(root: ThemeRoot, scheme: string): void {
   root.setAttribute(SCHEME_ATTRIBUTE, normalizeScheme(scheme))
+}
+
+/**
+ * Linux 外壳的固定配色（概设 §9.3.11）：工作环境，**科技风浅蓝 + 深色底**，
+ * 不跟 `prefers-color-scheme` 走 —— 公司机器白天被系统切成浅色就不像这块屏了。
+ * 钉的是「深空苍穹 + dark」这一套令牌（近黑景深 + 冷光青蓝强调）。
+ */
+export const LINUX_PINNED_SCHEME = 'deep-space'
+export const LINUX_PINNED_MODE = 'dark' as const
+
+/** 是否 Linux 外壳（WebKitGTK 的 UA 带 Linux；Android 也是 Linux，排掉）。 */
+export function isLinuxShell(ua: string = typeof navigator === 'undefined' ? '' : navigator.userAgent): boolean {
+  return /Linux/.test(ua) && !/Android/.test(ua)
 }
 
 /** 默认主题：生成物标着 `fallback: true` 的那一个（找不到就退第一个，保证一定有值）。 */

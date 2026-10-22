@@ -4,7 +4,7 @@
  * 令牌取值的**单一来源** = macOS 侧 Core/DesignTokens.swift（角色与刻度）
  *                        + Core/DesignTheme.swift（每主题一份值表；§8.5.3「令牌取值」属「一样」的五项之一）。
  * 重新生成：node platform/windows/App/tools/gen-tokens.mjs（比对：--check）
- * 源 sha256：role aeb3b48f588a / palette 7f53edfb9cd2
+ * 源 sha256：role a8dcf8efb107 / palette f9f82cf5db4e
  *
  * 主题块：`:root` 三态 = 默认主题的值；`[data-theme-scheme="<id>"]` 三态 = 该主题的值
  * （属性选择器特异性更高 ⇒ 写了 data-theme-scheme 时一定压过默认块）。
@@ -512,6 +512,97 @@
     --ds-color-accent-accentSoft: #5D6C8C;
     --ds-color-accent-teal: #7FD8C4;
     --ds-color-accent-warm: #C9B27A;
+    --ds-color-syntax-keyword: var(--ds-color-accent-accentGlow);
+    --ds-color-syntax-identifier: var(--ds-color-text-primary);
+    --ds-color-syntax-string: var(--ds-color-accent-warm);
+    --ds-color-syntax-number: var(--ds-color-accent-teal);
+    --ds-color-syntax-function: var(--ds-color-accent-accent);
+    --ds-color-syntax-comment: var(--ds-color-text-tertiary);
+    --ds-hairline-dark-alpha: 0.1;
+  }
+}
+
+/* 主题：deep-space（deepSpace / DesignTheme.deepSpace）—— 3 态 */
+:root[data-theme-scheme='deep-space'] {
+  --ds-color-categorical-blue: #3B57E0;
+  --ds-color-categorical-teal: #0F7F7F;
+  --ds-color-categorical-magenta: #B02A83;
+  --ds-color-categorical-amber: #B9791B;
+  --ds-color-surface-window: #EAEEF4;
+  --ds-color-surface-sidebar: #F1F4F8;
+  --ds-color-surface-content: #FFFFFF;
+  --ds-color-surface-panel: #F1F4F8;
+  --ds-color-surface-raised: #FFFFFF;
+  --ds-color-text-bright: #0B111C;
+  --ds-color-text-primary: #1C2534;
+  --ds-color-text-secondary: #46536B;
+  --ds-color-text-tertiary: #5D6B85;
+  --ds-color-text-disabled: #A6B0C2;
+  --ds-color-status-success: #16704A;
+  --ds-color-status-warning: #92600B;
+  --ds-color-status-danger: #C2321F;
+  --ds-color-accent-accent: #0E7490;
+  --ds-color-accent-accentGlow: #1D4ED8;
+  --ds-color-accent-accentSoft: #54657F;
+  --ds-color-accent-teal: #0F766E;
+  --ds-color-accent-warm: #8A6A3B;
+  --ds-color-syntax-keyword: var(--ds-color-accent-accentGlow);
+  --ds-color-syntax-identifier: var(--ds-color-text-primary);
+  --ds-color-syntax-string: var(--ds-color-accent-warm);
+  --ds-color-syntax-number: var(--ds-color-accent-teal);
+  --ds-color-syntax-function: var(--ds-color-accent-accent);
+  --ds-color-syntax-comment: var(--ds-color-text-tertiary);
+  --ds-color-hairline-light: #C9D6E5;
+}
+
+:root[data-theme-scheme='deep-space'][data-theme='dark'] {
+  --ds-color-surface-window: #05070D;
+  --ds-color-surface-sidebar: #0A0F1A;
+  --ds-color-surface-content: #111827;
+  --ds-color-surface-panel: #18202F;
+  --ds-color-surface-raised: #1F2940;
+  --ds-color-text-bright: #F2F6FC;
+  --ds-color-text-primary: #E6EDF7;
+  --ds-color-text-secondary: #94A3B8;
+  --ds-color-text-tertiary: #7C8CA3;
+  --ds-color-text-disabled: #64748B;
+  --ds-color-status-success: #4ADE80;
+  --ds-color-status-warning: #FBBF24;
+  --ds-color-status-danger: #F87171;
+  --ds-color-accent-accent: #5EEAD4;
+  --ds-color-accent-accentGlow: #60A5FA;
+  --ds-color-accent-accentSoft: #5A6B85;
+  --ds-color-accent-teal: #2DD4BF;
+  --ds-color-accent-warm: #D9B48F;
+  --ds-color-syntax-keyword: var(--ds-color-accent-accentGlow);
+  --ds-color-syntax-identifier: var(--ds-color-text-primary);
+  --ds-color-syntax-string: var(--ds-color-accent-warm);
+  --ds-color-syntax-number: var(--ds-color-accent-teal);
+  --ds-color-syntax-function: var(--ds-color-accent-accent);
+  --ds-color-syntax-comment: var(--ds-color-text-tertiary);
+  --ds-hairline-dark-alpha: 0.1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-scheme='deep-space']:not([data-theme='light']):not([data-theme='dark']) {
+    --ds-color-surface-window: #05070D;
+    --ds-color-surface-sidebar: #0A0F1A;
+    --ds-color-surface-content: #111827;
+    --ds-color-surface-panel: #18202F;
+    --ds-color-surface-raised: #1F2940;
+    --ds-color-text-bright: #F2F6FC;
+    --ds-color-text-primary: #E6EDF7;
+    --ds-color-text-secondary: #94A3B8;
+    --ds-color-text-tertiary: #7C8CA3;
+    --ds-color-text-disabled: #64748B;
+    --ds-color-status-success: #4ADE80;
+    --ds-color-status-warning: #FBBF24;
+    --ds-color-status-danger: #F87171;
+    --ds-color-accent-accent: #5EEAD4;
+    --ds-color-accent-accentGlow: #60A5FA;
+    --ds-color-accent-accentSoft: #5A6B85;
+    --ds-color-accent-teal: #2DD4BF;
+    --ds-color-accent-warm: #D9B48F;
     --ds-color-syntax-keyword: var(--ds-color-accent-accentGlow);
     --ds-color-syntax-identifier: var(--ds-color-text-primary);
     --ds-color-syntax-string: var(--ds-color-accent-warm);
