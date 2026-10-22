@@ -2218,21 +2218,23 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 
 下列数值是**唯一出处**（`Core/DesignTokens.swift`），视图层不许写裸数字；`Scripts/check-design-tokens.py` 按这份表拦字面量。
 
-| 构件 | 取值 | 令牌 |
-|---|---|---|
-| 分隔线 | 0.5 | `Metrics.hairline` |
-| 行高（表格、结果集） | 26 | `Metrics.rowHeight` |
-| 列表行高（侧栏、页签列表） | 20 | `Metrics.listRowHeight` |
-| 页签条高 | 30 | `Metrics.tabHeight` |
-| 工具栏高 | 44 | `Metrics.toolbarHeight` |
-| 状态栏高 | 24 | `Metrics.statusBarHeight` |
-| 控件高（按钮、输入框、下拉） | 26 | `Metrics.controlHeight` |
-| 活动栏宽 / 图标 | 46 / 20 | `activityBarWidth` / `activityIconSize` |
-| 侧栏宽 | 248 | `sidebarWidth` |
-| 层级缩进 | 14 | `Metrics.listIndent` |
-| 间距档 | 4 / 8 / 12 / 16 / 24 / 32 | `Spacing.xs…xxl` |
-| 圆角档 | 1 / 4 / 6 / 8 / 10 | `Radius.hairline…panel` |
-| 执行计划面板宽 / 最小高 | 720 / 160 | `Metrics.planPanelWidth` / `planPanelMinHeight` |
+| 构件 | 取值 | 令牌 | 用量（除令牌定义处） |
+|---|---|---|---|
+| 分隔线 | 0.5 | `Metrics.hairline` | 多处 |
+| 行高（表格、结果集） | 26 | `Metrics.rowHeight` | 1（`ResultGrid.swift:92`） |
+| 列表行高（侧栏、页签列表） | 20 | `Metrics.listRowHeight` | 多处 |
+| 页签条高 | 30 | `Metrics.tabHeight` | **0 —— 令牌无人读**（见下） |
+| 工具栏高 | 44 | `Metrics.toolbarHeight` | 2 |
+| 状态栏高 | 24 | `Metrics.statusBarHeight` | **0 —— 无状态栏实现**（见下） |
+| 控件高（按钮、输入框、下拉） | 26 | `Metrics.controlHeight` | 多处 |
+| 活动栏宽 / 图标 | 46 / 20 | `activityBarWidth` / `activityIconSize` | 2 / 2 |
+| 侧栏宽 | 248 | `sidebarWidth` | 2 |
+| 层级缩进 | 14 | `Metrics.listIndent` | 多处 |
+| 间距档 | 4 / 8 / 12 / 16 / 24 / 32 | `Spacing.xs…xxl` | 多处 |
+| 圆角档 | 1 / 4 / 6 / 8 / 10 | `Radius.hairline…panel` | 多处 |
+| 执行计划面板宽 / 最小高 | 720 / 160 | `Metrics.planPanelWidth` / `planPanelMinHeight` | 1 / 1 |
+
+**两个令牌是「定义了但没人读」**：`tabHeight`（30）与 `statusBarHeight`（24）在 `Core/DesignTokens.swift` 里定档，全仓除定义处零引用——页签条按内容自量高度，状态栏在 macOS 上没有实现。这两个数所以**不是现状描述**，是待收口的悬空档位：要么删掉，要么把页签条与状态栏按它落地。本节保留它们并标注用量，是为了不让「书上有」被读成「界面是」。
 
 **控件高度只有三档**：26（标准）、30（页签条）、44（工具栏）。任何界面出现第四档高度，要么归到这三档，要么把新档写进令牌并说明用途——这是 7.4 控件状态集在 macOS 的落地方式：**状态用令牌表达，不用尺寸发明**。
 
