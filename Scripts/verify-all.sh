@@ -426,6 +426,9 @@ fi
 # **跳过 ≠ 通过**（逐条打印跳过的是哪几例 / 哪几处锚点），**主开发机上这几处一条都不放宽**。
 python3 Scripts/check-doc-tables.py --self-test
 python3 Scripts/check-req-index.py   # 机器视图（requirement-index.jsonl）与正文表格逐条对账
+# 三书结构自审（「九轮清单」的机械层：结构 / 标题 / 节序 / 交叉引用 / 排印 / 章内完整 / 追溯 / 平台名）。
+# 一轮全清即可，不必真跑九遍 —— 清单的九类是分类，不是轮次；豁免见 Scripts/doc-layout-exempt.json（每条带理由）。
+python3 Scripts/check-doc-layout.py
 # L-32（2026-09-27 第 28 轮）：变更记录版本号**唯一**、头部版本格**可判**（= 变更记录最高号，
 # 或带「基线 / 首版」标注并在标注里写出当前号）、队列**定义行**条目号唯一。
 # 取号唯一来源 = `Scripts/next-doc-version.py`（max+1）—— 禁止手抄：撞过三次
