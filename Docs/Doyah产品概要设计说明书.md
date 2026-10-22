@@ -1,6 +1,6 @@
 # Doyah产品概要设计说明书
 
-当前 v3.2.0（2026-10-20 全量重写并扶正为主文件）
+当前 v3.2.1（2026-10-20 Linux 实现节自查与节号改指）
 
 > 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求规格说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
 > 本书按「整个产品」重写：**五个产品线 × 92 个需求域全覆盖**，契约章每节点名需求编号，指不到编号的条目不写。
@@ -1895,16 +1895,16 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 
 ## 9.3 契约 → Linux 实现 [独占:linux]
 
-> 本节随《概要设计》v3.2.0 全量重写**原文迁入**（旧本 §8.6），条文一字未改；归属仍是该侧，本侧只做搬迁。
+> 本节随《概要设计》v3.2.0 全量重写**原文迁入**（旧本 §8.6，逐字未改）；**Linux 归本侧**（`hugehippo`），2026-10-20 自查：正文与旧本逐字一致（仅标题与本节号改），节内旧节号已改指到本版落点。
 
 > **本节归 Linux 侧（`babyhippo`）· 本仓自行落笔**（2026-10-14 人类主人令「Doyah Studio 全量 PC 端还要补一个 Linux 平台，小河马负责的」—— 原「三书带出本仓、平台设计层文字回传后贴入」的环节**作废**）：本端平台设计层（技术栈 / 构建入口 / 打包形态 / 桌面集成方式）由本侧按下列各条**直接落笔**。
 > **本节内容不由 macOS 侧 / Windows 侧决定**；其它侧若代笔，须在原行或提交信息带上豁免注记（`exclusive-allow` 加理由）。
 
-**状态**：🟡 **设计层已落**（2026-10-14 · 派单 `T-20261014-021` —— 人类主人 2026-10-14 裁决「Linux 端技术栈 = Tauri」，概设 §2 GUI 框架行 v2.169 由契约所有者落笔）；**实现面 🟡 骨架已落地**（骨架 `Platform/linux/{README.md,build.sh}` + **应用工程** `src-tauri/`（`Core` / `Cli` / `Platform/Linux` 三层）+ **前端同源装配** + 本端判据 `Tools/check-linux-skeleton.py` 均已落 —— 派单 `T-20261014-016`；**真构建与真绑定未跑**，七项未验证见 §8.6.6 末的「未接网清单」与 `Platform/linux/README.md`）。原「要落的 5 项」清单**已由本节内容兑现**（逐项对应：1 → §8.6.1 · 2 → §8.6.2 / §8.6.3 · 3 → §8.6.4 · 4 → §8.6.5 · 5 → §8.6.6）。
+**状态**：🟡 **设计层已落**（2026-10-14 · 派单 `T-20261014-021` —— 人类主人 2026-10-14 裁决「Linux 端技术栈 = Tauri」，概设 §2 GUI 框架行 v2.169 由契约所有者落笔）；**实现面 🟡 骨架已落地**（骨架 `Platform/linux/{README.md,build.sh}` + **应用工程** `src-tauri/`（`Core` / `Cli` / `Platform/Linux` 三层）+ **前端同源装配** + 本端判据 `Tools/check-linux-skeleton.py` 均已落 —— 派单 `T-20261014-016`；**真构建与真绑定未跑**，七项未验证见 §9.3.6 末的「未接网清单」与 `Platform/linux/README.md`）。原「要落的 5 项」清单**已由本节内容兑现**（逐项对应：1 → §9.3.1 · 2 → §9.3.2 / §9.3.3 · 3 → §9.3.4 · 4 → §9.3.5 · 5 → §9.3.6）。
 
 ### 9.3.1 技术栈与工程结构 [独占:linux]
 
-| 层 | macOS 侧（§8.1） | **Linux 侧（本节）** |
+| 层 | macOS 侧（§9.1） | **Linux 侧（本节）** |
 |---|---|---|
 | 领域层（核心） | Swift `Core/`（无平台依赖） | **Rust**（落 `Platform/linux/src-tauri/Core/`）：纯逻辑、零 UI 依赖、可 `cargo test` |
 | 表示层 | SwiftUI + AppKit 桥接 | **Tauri 2 外壳（系统 WebView = WebKitGTK `webkit2gtk-4.1`）+ Vue 3 + TypeScript** —— **前端与 Windows 侧同源**（同一套 `Platform/windows/App/`） |
@@ -1918,18 +1918,18 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 
 - **共用（不另写一份）**：`App/` 前端整体 —— Vue 3 组件树、设计令牌层、领域模型的前端投影、结果网格与对象树视图、语言表读取、Tauri 命令面（IPC）调用的形状。**两侧是同一套前端源码**，Linux 只换外壳与平台适配层。
 - **Linux 特有**：`src-tauri/` Rust 侧的平台适配 —— WebView 运行时依赖探测与**可读缺失提示**、系统密钥环后端、PTY 与 shell 探测、`.desktop` 集成（文件关联 / 图标）、字体与输入法。
-- **前端不得按平台分支**：平台差异只能通过**取值**表达（命令面的平台能力表），不许在组件里写「若 linux 则…」—— 与 §8.1 语言登记表 / §8.5.4「一样与允许不同」同一条口径。
+- **前端不得按平台分支**：平台差异只能通过**取值**表达（命令面的平台能力表），不许在组件里写「若 linux 则…」—— 与 §9.1 语言登记表 / §9.2.4「一样与允许不同」同一条口径。
 
-**形态红线**（继承契约，本节不另立）：**不打包浏览器内核**、**不引入虚拟机运行时**（§1.2-1 与 §2 GUI 框架行已写死）⇒ 承载面只能是**系统 WebView**；该前置缺失时**给可读提示与补救指引，不静默失败**（与 Windows 侧 `P-26` 同一口径）。
+**形态红线**（继承契约，本节不另立）：**不打包浏览器内核**、**不引入虚拟机运行时**（§1.2 的形态红线，旧本 §1.2-1；与 §2 GUI 框架行已写死）⇒ 承载面只能是**系统 WebView**；该前置缺失时**给可读提示与补救指引，不静默失败**（与 Windows 侧 `P-26` 同一口径）。
 
-**工程结构边界**：`src-tauri/Core/` 的 `Cargo.toml` **不得依赖 GUI / 平台包**（Tauri / GTK / WebViewGTK 一类）—— 与 Windows 侧 `check-core-boundary` 同形的判据面**已落** = `Platform/linux/Tools/check-linux-skeleton.py` 的 B / C 两条（依赖面逐名比清单 + 源码面点名 `文件:行号` + **空跑判红**），见 §8.6.6。
+**工程结构边界**：`src-tauri/Core/` 的 `Cargo.toml` **不得依赖 GUI / 平台包**（Tauri / GTK / WebViewGTK 一类）—— 与 Windows 侧 `check-core-boundary` 同形的判据面**已落** = `Platform/linux/Tools/check-linux-skeleton.py` 的 B / C 两条（依赖面逐名比清单 + 源码面点名 `文件:行号` + **空跑判红**），见 §9.3.6。
 
 **工程结构（盘上实物 · 2026-10-14 骨架片 `T-20261014-016`）**：
 
 | 路径 | 层 | 内容 |
 |---|---|---|
 | `src-tauri/Cargo.toml` | 工作区 + 外壳包 | 成员 = `Core` / `Cli` / `Platform/Linux`；外壳包 `doyah-studio-linux-shell`（bin `doyah-studio`）|
-| `src-tauri/Core/` | 领域层 | **零第三方依赖**：交付物身份四项（§8.6.3）+ 能力取值解析（「前端不得按平台分支」的落点）· `cargo test` **9 例** |
+| `src-tauri/Core/` | 领域层 | **零第三方依赖**：交付物身份四项（§9.3.3）+ 能力取值解析（「前端不得按平台分支」的落点）· `cargo test` **9 例** |
 | `src-tauri/Cli/` | 无界面入口 | 子命令 `capabilities [--json]` / `version` + 退出码表（0 完成 / 1 用法错 / 2 有缺失项）· 零第三方依赖 |
 | `src-tauri/Platform/Linux/` | 平台适配层 | 六项能力探测（**存在性检查，不手写 FFI**）+ 可读缺失提示 · `cargo test` **4 例** |
 | `src-tauri/tauri.conf.json` | 表示层外壳 | `frontendDist` = `../../windows/App/dist` · `devUrl` = `http://localhost:5274`（**前端同源指向**）|
@@ -1975,19 +1975,19 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 
 **交付物身份四项**（**目录 / 标签 / `sha256` / 构建时刻**）由 `build.sh` 收尾打印，**身份卡随包走**；**目前只有脚本出口、尚无实物**（应用骨架未落地）。
 
-**本轮不选的形态**：发行版原生包（`rpm` / `pacman`）、Flatpak、Snap —— 需求是「本仓自用的全量 PC 端第三端」，先收两种最常用形态；内测若确需再补，走 §8.6.6 的待定项。
+**本轮不选的形态**：发行版原生包（`rpm` / `pacman`）、Flatpak、Snap —— 需求是「本仓自用的全量 PC 端第三端」，先收两种最常用形态；内测若确需再补，走 §9.3.6 的待定项。
 
 ### 9.3.4 桌面集成方式（对应 §3 契约的落地） [独占:linux]
 
 | 面 | Linux 落法 |
 |---|---|
 | **菜单** | 应用内菜单栏（Tauri 2 menu API）；**菜单项集合与 Windows 侧同形**，宿主差异（全局菜单 / GTK 主题菜单样式）由外壳承担 |
-| **快捷键** | 与 Windows 侧**同键位**；宿主占用导致的冲突**逐条登记**（见 §8.6.6 待定项），不在本节另发明一套键位 |
+| **快捷键** | 与 Windows 侧**同键位**；宿主占用导致的冲突**逐条登记**（见 §9.3.6 待定项），不在本节另发明一套键位 |
 | **文件关联** | 走 `.desktop` 的 `MimeType`（笔记库 / 导出件后缀）；`.desktop` 只做**宿主投递**，关联后的行为仍归领域层 |
-| **深色跟随** | 跟随系统主题（WebKitGTK `prefers-color-scheme` + 宿主 `gtk-application-prefer-dark-theme`）；**深浅两态都用主题令牌**，不自造色（§3.9 / §3.31 同口径） |
-| **凭据** | **系统密钥环**（Secret Service API，落地候选 `keyring` crate；GNOME Keyring / KWallet 走同一接口）—— 语义对齐 §3.1：不落配置文件、重启可恢复、可被用户自行清除；**无可用密钥环时如实报错，不回落明文** |
+| **深色跟随** | 跟随系统主题（WebKitGTK `prefers-color-scheme` + 宿主 `gtk-application-prefer-dark-theme`）；**深浅两态都用主题令牌**，不自造色（§3.3.8 / §3.3.8 同口径） |
+| **凭据** | **系统密钥环**（Secret Service API，落地候选 `keyring` crate；GNOME Keyring / KWallet 走同一接口）—— 语义对齐 §3.2.7：不落配置文件、重启可恢复、可被用户自行清除；**无可用密钥环时如实报错，不回落明文** |
 | **目录授权** | Linux 无沙箱等价物 ⇒ **用户自选目录 + 文件权限**：未授权目录的读写**必须失败并给出可读原因**（与 `P-18` 同口径） |
-| **终端** | PTY（候选 `portable-pty`）+ shell 探测（`$SHELL`，`/bin/sh` 兜底）；屏幕模型仍走 §3.7 契约，不手写 `termios` |
+| **终端** | PTY（候选 `portable-pty`）+ shell 探测（`$SHELL`，`/bin/sh` 兜底）；屏幕模型仍走 §3.3.7 契约，不手写 `termios` |
 | **通知** | 走系统通知（freedesktop 通知规范）；**权限未授予时如实降级并说明**，不静默丢 |
 | **剪贴板** | 系统剪贴板（Tauri clipboard 面）；多选区 / 富文本口径与 §3 一致 |
 
@@ -1998,13 +1998,13 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 | §2 平台适配点 ①：GUI 框架 | `src-tauri/` 外壳（Tauri 2 + WebKitGTK）+ 复用 `App/` 前端 |
 | §2 平台适配点 ②：系统能力（凭据 / 目录授权 / 终端 / 通知 / 剪贴板） | `src-tauri/Platform/Linux/`（**只有这一层引 Linux 专有依赖**） |
 | §2 平台适配点 ③：打包与分发 | `Platform/linux/build.sh` → `.deb` / `.AppImage` + 身份四项 |
-| §3.1 连接配置与凭据 | `src-tauri/Platform/Linux/`（系统密钥环） |
-| §3.7 终端屏幕模型 | `src-tauri/Core/`（屏幕模型）+ 平台层 PTY |
-| §3.8 工作区（用户自选目录） | 平台层目录授权 + `Core/` 的路径契约 |
-| §3.9 / §3.31 设计令牌与编辑面底色 | 复用 `App/` 前端令牌层（**不另立一份**） |
-| §3.14 结果区客户端视图 | 复用 `App/` 前端视图面 |
-| §3.22 MCP 互操作 / §3.23 与 §3.52 插件装配 | `src-tauri/` 宿主挂点（按 §3.52 装配契约） |
-| §3.25 笔记存储分层 | `src-tauri/Core/` + 本地 SQLite（**进程内零网络出口**） |
+| §3.2.7 连接配置与凭据 | `src-tauri/Platform/Linux/`（系统密钥环） |
+| §3.3.7 终端屏幕模型 | `src-tauri/Core/`（屏幕模型）+ 平台层 PTY |
+| §3.3.3 工作区（用户自选目录） | 平台层目录授权 + `Core/` 的路径契约 |
+| §3.3.8 / §3.3.8 设计令牌与编辑面底色 | 复用 `App/` 前端令牌层（**不另立一份**） |
+| §3.2.12 结果区客户端视图 | 复用 `App/` 前端视图面 |
+| §3.1.10 MCP 互操作 / §3.2.6 插件装配 | `src-tauri/` 宿主挂点（按 §3.2.6 装配契约） |
+| §3.2.3 笔记存储分层 | `src-tauri/Core/` + 本地 SQLite（**进程内零网络出口**） |
 | `FR-STD-ALL-PLUG-005`（Linux 装配笔记且**本地离线**） | 随包装配笔记模块；数据只落本机 SQLite（笔记自己的数据家）、不同步 / 不遥测 |
 
 > **边界**：上表是**落点规划**（模块尚未落地），不是「已实现」；实现按片推进，每片回执按 D5「证据 = 命令输出」给读数。
@@ -2015,8 +2015,8 @@ Platform/linux/build.sh            # 构建 + 打包，收尾打印交付物身�
 
 | 面 | 命令 | 本轮读数（2026-10-14） |
 |---|---|---|
-| 依赖 / 构建入口 | `bash Platform/linux/build.sh --deps` · `bash Platform/linux/build.sh` | rc=1（缺 3 项）· rc=2（非 Linux 宿主，如实拒绝）—— 见 §8.6.2 |
-| 一条命令跑全（本仓闭环） | `DOYAH_PLATFORM=linux bash Scripts/verify-all.sh` | **待 Linux 宿主上取读数**（macOS 专属项按 §8.3.2 如实分栏跳过） |
+| 依赖 / 构建入口 | `bash Platform/linux/build.sh --deps` · `bash Platform/linux/build.sh` | rc=1（缺 3 项）· rc=2（非 Linux 宿主，如实拒绝）—— 见 §9.3.2 |
+| 一条命令跑全（本仓闭环） | `DOYAH_PLATFORM=linux bash Scripts/verify-all.sh` | **待 Linux 宿主上取读数**（macOS 专属项按 §3.6.4 如实分栏跳过） |
 | 越界（本节归属） | `python Scripts/check-exclusive-sections.py --mine babyhippo` | rc=0（本节改动全在 `[独占:linux]` 内） |
 | 归属登记 | `python Scripts/check-path-ownership.py --actor babyhippo` | rc=0（`Platform/linux/` 已登记，派单 `T-20261014-016`） |
 | **本端判据**（骨架 / 领域层边界 / 前端同源） | `python Platform/linux/Tools/check-linux-skeleton.py --self-test` | **rc=0** · 骨架 / 边界 / 同源三条干净（工作区 **3** 层 · Core 依赖 **0** 条 / 源文件 **3** 个）· 自测 **9/9**（含空跑判红 · 前端另存一份判红 · `frontendDist` 指错判红）|
