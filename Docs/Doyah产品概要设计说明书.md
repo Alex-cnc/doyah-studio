@@ -1,6 +1,6 @@
 # Doyah产品概要设计说明书
 
-当前 v3.5.5（2026-10-22 配色收到主题令牌：§9.1.24 取色 + §9.3.11 Linux 固定深色）
+当前 v3.5.6（2026-10-22 §9.2.17 对话页签行首语汇移植到共用前端；§9.2.14/16 的 deep-space 缺名已闭合）
 
 > 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求规格说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
 > 本书按「整个产品」重写：**五个产品线 × 92 个需求域全覆盖**，契约章每节点名需求编号，指不到编号的条目不写。
@@ -3525,14 +3525,14 @@ Windows 的令牌**不手写**：`src/theme/tokens.generated.css` 由 `tools/gen
 | 事实 | 现状 | 依据 |
 |---|---|---|
 | 主题集 | **5 套**：`tech-blue`（默认）/ `bean-green` / `rose-gold` / `stardust` / `deep-space` | `src/theme/themes.generated.ts:8-14`（`THEME_SCHEMES`） |
-| 显示名 | `THEME_SCHEME_LABELS` 只配了 4 个中文名，**`deep-space` 缺位** ⇒ 状态栏下拉显示裸 id；同名 i18n key `designThemeDeepSpace` 在本端也未定义 | `src/theme/index.ts:75-80` |
-| 缺名已被单测盯住，且现在是红的 | `test('每个主题都有中文显示名')` | `src/theme/theme.test.ts:82` |
+| 显示名 | 5 个中文名齐（`deep-space` = 深空苍穹，2026-10-22 补） | `src/theme/index.ts`（`THEME_SCHEME_LABELS`） |
+| 缺名由单测盯住 | `test('每个主题都有中文显示名')` —— 补名后转绿 | `src/theme/theme.test.ts` |
 | 主题来源 | 从 macOS 侧 `Core/DesignTheme.swift` 解析生成，**不手抄** | `tools/gen-tokens.mjs` |
 | 深浅色 | 两套取值（如侧栏表面 `#F4F7FB` / `#081420`），跟随系统并可手动切 | `tokens.generated.css`；`src/shell/StatusBar.vue` |
 | 外观偏好持久化 | `appearanceGet` / `appearanceSet` 走 IPC 存偏好 | `src/App.vue`、`src/ipc.ts` |
 | 字体 | 字体族与字号由选择项驱动，写入编辑器 CSS 变量 | `src/shell/appearance.ts`（`FONT_CHOICES` / `FONT_SIZE_CHOICES`） |
 
-`deep-space`（macOS 侧中文名「深空苍穹」，`Core/Localization.swift:185`）是第 5 套，端上取色与生成物都在，缺的只有显示名这一格 —— 属**补一格映射**的活，不是主题没做。
+`deep-space`（「深空苍穹」）是第 5 套：值表在 macOS 侧 `Core/DesignTheme.swift`，**但生成物一度落后于源**（`tokens.generated.css` 里 0 处命中）⇒ 2026-10-22 重新生成，现 `theme 5`。Windows 可自由切五套；**Linux 钉死 `deep-space` + dark**（§9.3.11「工作环境的固定深色」）。
 
 ### 9.2.15 界面设计：与第七章的对应关系
 
@@ -3540,7 +3540,7 @@ Windows 的令牌**不手写**：`src/theme/tokens.generated.css` 由 `tools/gen
 |---|---|---|
 | 7.1 区域划分 | 词表两端同名；Windows 的「侧栏」在视图内（壳层只有活动栏） | 9.2.10 |
 | 7.2 布局与栅格 | 间距与圆角全走 `--ds-spacing-*` / `--ds-radius-*` | 9.2.11 |
-| 7.3 主题配色字体 | 5 套主题 + 双套深浅值，由生成链保证一致 | 9.2.14 |
+| 7.3 主题配色字体 | 5 套主题 + 双套深浅值，由生成链保证一致；Linux 固定深色（§9.3.11） | 9.2.14 |
 | 7.4 控件六态 | 逐区六态表（含「调试」页签的禁用不隐藏） | 9.2.13 |
 | 7.5 编辑器界面 | 编辑器在 `src/views/DatabaseView.vue` 与 `src/sql/`，补全 / 悬停 / 诊断有单测 | 9.2.13 |
 | 7.6 导航与命令入口 | 命令面板 `Ctrl+K` + 18 条命令清单 | 9.2.12 |
@@ -3551,11 +3551,34 @@ Windows 的令牌**不手写**：`src/theme/tokens.generated.css` 由 `tools/gen
 
 1. **键位没有单一清单**：18 条命令有清单，但编辑器九组键位散在 `DatabaseView.vue:2584` 的 `onEditorKeydown` 里，帮助面列不出完整键位表。
 2. **`Ctrl+Enter` 说得到、做不到**：`database.runQuery` 登记了该键位（`commands.ts:112`），全仓无实现。
-3. **`deep-space` 缺显示名**：状态栏下拉显示裸 id（`StatusBar.vue:70` 回退），`theme.test.ts:82` 现为红。
+3. ~~**`deep-space` 缺显示名**~~：2026-10-22 已补「深空苍穹」并重新生成令牌（`theme 5`），单测转绿。
 4. **下方面板少「历史」页签**（macOS 五、Windows 四）：要两端同构需先在 §4.1 登记或补齐。
 5. **无面板高度拖动**：macOS 有把手 + 持久化高度，Windows 按内容自量，折叠态留白口径未定。
 6. **活动栏项有两套口径**：`src/shell/activityBar.ts` 的 `MAC_ITEMS` / `BUILT_ITEMS` / `visibleItems()` 已被 `src/shell/activityItems.ts` 的清单派生取代，但三个常量仍在、且只有单测在读（`activityBar.test.ts`）⇒ 运行期两套「已开工项」并存。
 7. **源文件注释仍指旧档名**：`src/App.vue` 头部写 `Docs/概要设计.md §8.5.4`，该文件与节号在本版已不存在（注释漂移，不影响运行）。
+### 9.2.17 界面设计：对话页签的行首语汇（与 macOS 同源）
+
+人类主人 2026-10-22：「Linux 版本的 Agent 对话框太丑了」。同日 macOS 侧已按 Hermes TUI 改（§9.1.24），本节把**同一套语汇**落到共用前端 `src/shell/ChatPanel.vue`（Windows 与 Linux 共用一份，改一次两端同时生效）。
+
+| 位置 | 字形 / 做法 | 原来是什么 |
+|---|---|---|
+| 我的提问 | `❯` + 等宽正文，**左对齐** | 右对齐气泡（`align-self: flex-end` + `--ds-radius-card` 底） |
+| 助手正文 | `┊` + 等宽正文 | 左对齐气泡（`surface-panel` 底 + 圆角） |
+| 正在到达的正文 | 尾部 `▌` 光标 | 无（只有一轮一轮地整段出现） |
+| 工具调用 | `⚡` + 圆角描边方框（`--ds-radius-control`），宽度跟随正文栏 | 气泡感的卡片，`max-width: 86%` |
+| 事件（阻断 / 满额 / 失败） | `◈` 行首 | 纯文字提示，与正文同形 |
+| 等待 | 盲文十帧 `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`，90 ms 一帧，只在「发出去 → 回来」与「点完批准 → 第二次回答」时转 | 一行静态文字 |
+| 读数列表（读到的文件 / 写入账） | `├─` / `└─` 树轨 | 圆点列表 |
+| 输入行 | `❯` + 无边框 textarea，外一圈 `--ds-radius-control` 描边 | 带边框的 textarea |
+
+**行首栏固定宽度** `calc(--ds-spacing-m + --ds-spacing-hair)`（= 14 px），正文一律左对齐 —— 栏宽变来变去整屏文字会左右跳。转写区、任务读数、输入行、信息面**一律等宽**（`--ds-font-stack-mono`）。
+
+**颜色全走令牌**（`--ds-color-accent-*` / `--ds-color-text-*` / `--ds-color-status-*` / `--ds-color-hairline-light`），`token-ratchet.mjs` 扫过裸值 0 条。配合 §9.3.11 的固定深色，Linux 上就是「深色底 + 冷光青蓝」的那块屏。
+
+**刻意与 macOS 不同的两处**：① 没有「继续上次 / 定时」入口（这两件本端未做，见 §9.2.16）；② 流式正文的 `▌` 只画在正在到达的那一条末尾，不逐字符滚动（流是显示，最终仍以返回值为准，见文件头注释 ⑥）。
+
+**判据**：任一轮对话里，提问行首是 `❯`、回答行首是 `┊`、工具卡行首是 `⚡`；正文左对齐且无背景气泡；等待时行首字形在十帧盲文间循环；输入行以 `❯` 开头。
+
 ## 9.3 契约 → Linux 实现 [独占:linux]
 
 > 本节是 Linux 侧的实现节，归属 `hugehippo`（本侧）；正文按 v3.2 全书统一编号，节内引用一律指本版节号。

@@ -17,7 +17,7 @@
       哪几份（同一份合并成一行）、各多少字符、截断没有；被拒绝 / 没读到的也单列，用户才知道模型不知道什么。
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   agentChatList,
   agentChatLoad,
@@ -50,6 +50,17 @@ const props = defineProps<{
    */
   workspace?: string
 }>()
+
+/**
+ * Hermes TUI 的行首语汇（概设 §9.1.24 macOS / §9.2.9 Windows-Linux 同源）：
+ * **谁说的由行首字形表达**，不用气泡、不用右对齐、不用圆角卡片。
+ *   ❯ 我  ·  ┊ 助手正文  ·  ⚡ 工具调用  ·  ◈ 事件（失败 / 阻断 / 落盘异常）
+ */
+const GLYPH = { user: '❯', assistant: '┊', tool: '⚡', event: '◈' } as const
+/** 旋转十帧盲文（TUI 的 spinner 就是这十帧；换成圆点转圈一眼就不像 TUI）。 */
+const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const
+const spinnerFrame = ref(0)
+let spinnerTimer: ReturnType<typeof setInterval> | null = null
 
 function tr(key: DictKey, vars?: Record<string, string | number>): string {
   return translate(key, props.language ?? 'zh-Hans', vars)
@@ -120,6 +131,26 @@ const undoNotes = ref<Record<string, string>>({})
 const undoing = ref('')
 /** 这一轮助手真改过的文件（撤销按钮画在这里）。 */
 const writes = computed(() => toolRuns.value.filter((run) => run.kind === 'write'))
+
+// 「等」的时候才转：发出去到回来、点完批准到第二次回答 —— 不忙时停在第 0 帧。
+watch(
+  () => sending.value || deciding.value,
+  (busy) => {
+    if (busy && !spinnerTimer) {
+      spinnerTimer = setInterval(() => {
+        spinnerFrame.value = (spinnerFrame.value + 1) % SPINNER.length
+      }, 90)
+    } else if (!busy && spinnerTimer) {
+      clearInterval(spinnerTimer)
+      spinnerTimer = null
+      spinnerFrame.value = 0
+    }
+  },
+  { immediate: true }
+)
+onUnmounted(() => {
+  if (spinnerTimer) clearInterval(spinnerTimer)
+})
 
 const workspaceId = computed(() => (props.workspace ?? '').trim())
 const budget = computed(() => budgetOf(turns.value, draft.value))
@@ -613,15 +644,20 @@ function clear() {
         class="chat__turn"
         :class="turn.role === 'user' ? 'chat__turn--user' : 'chat__turn--model'"
       >
-        <p class="chat__who">{{ turn.role === 'user' ? tr('chat.you') : tr('chat.model') }}</p>
+        <span class="chat__gutter" aria-hidden="true">{{ turn.role === 'user' ? GLYPH.user : GLYPH.assistant }}</span>
         <pre class="chat__body">{{ turn.content }}</pre>
+        <!-- 朗读的人仍要知道这句是谁说的（字形对屏幕阅读器是空的） -->
+        <span class="chat__sr">{{ turn.role === 'user' ? tr('chat.you') : tr('chat.model') }}</span>
       </article>
       <article v-if="sending && partial" class="chat__turn chat__turn--model" data-testid="chat-partial">
-        <p class="chat__who">{{ tr('chat.model') }}</p>
-        <pre class="chat__body">{{ partial }}</pre>
+        <span class="chat__gutter" aria-hidden="true">{{ GLYPH.assistant }}</span>
+        <pre class="chat__body">{{ partial }}<span class="chat__cursor">▌</span></pre>
+        <span class="chat__sr">{{ tr('chat.model') }}</span>
       </article>
       <!-- 模型点工具（`FR-AI-18`）：卡片上逐件写明要读哪个文件，每件各自允许 / 拒绝 -->
-      <aside v-if="pendingCalls.length" class="chat__tool" data-testid="chat-tool-card" role="group">
+      <div v-if="pendingCalls.length" class="chat__row">
+        <span class="chat__gutter chat__gutter--tool" aria-hidden="true">{{ GLYPH.tool }}</span>
+        <aside class="chat__tool" data-testid="chat-tool-card" role="group">
         <p class="chat__tool-title">
           {{ pendingCalls.length > 1
             ? tr('chat.tool.titleCount', { count: pendingCalls.length })
@@ -680,15 +716,17 @@ function clear() {
         <p v-if="pendingCalls.length > 1" class="chat__tool-progress" data-testid="chat-tool-progress">
           {{ tr('chat.tool.progress', { done: decidedCount, total: pendingCalls.length }) }}
         </p>
-      </aside>
+        </aside>
+      </div>
       <p v-if="sending || deciding" class="chat__waiting" data-testid="chat-sending">
+        <span class="chat__gutter chat__gutter--spin" aria-hidden="true">{{ SPINNER[spinnerFrame] }}</span>
         {{ partial ? tr('chat.streaming', { chars: partial.length }) : tr('chat.sending') }}
       </p>
     </div>
 
     <!-- 三种「没发出去」各说各的（外形分开，用户一眼能分清该改什么） -->
     <div v-if="gate" class="chat__stale" role="alert" data-testid="chat-blocked">
-      <p class="chat__stale-msg">{{ tr('chat.blocked') }}</p>
+      <p class="chat__stale-msg"><span class="chat__gutter" aria-hidden="true">{{ GLYPH.event }}</span>{{ tr('chat.blocked') }}</p>
       <ul v-if="gate.issues.length" class="chat__issues">
         <li v-for="issue in gate.issues" :key="issue.code + String(issue.detail ?? '')">
           {{ tr(ISSUE_KEYS[issue.code], issue.detail === undefined ? {} : { detail: String(issue.detail) }) }}
@@ -697,7 +735,7 @@ function clear() {
     </div>
     <div v-if="throttled" class="chat__stale" role="alert" data-testid="chat-throttled">
       <p class="chat__stale-msg">
-        {{ tr('chat.throttled', {
+        <span class="chat__gutter" aria-hidden="true">{{ GLYPH.event }}</span>{{ tr('chat.throttled', {
           used: throttled.used,
           limit: throttled.limit,
           minutes: Math.ceil(throttled.retryAfterSecs / 60),
@@ -705,7 +743,7 @@ function clear() {
       </p>
     </div>
     <div v-if="failure" class="chat__stale" role="alert" data-testid="chat-failure">
-      <p class="chat__stale-msg">{{ failure.message }}</p>
+      <p class="chat__stale-msg"><span class="chat__gutter" aria-hidden="true">{{ GLYPH.event }}</span>{{ failure.message }}</p>
       <p v-if="failure.hint" class="chat__stale-hint">{{ failure.hint }}</p>
     </div>
 
@@ -732,14 +770,18 @@ function clear() {
           limit: CHAT_MAX_TURNS,
         }) }}
       </p>
-      <textarea
-        v-model="draft"
-        class="chat__draft"
-        data-testid="chat-draft"
-        :placeholder="tr('chat.placeholder')"
-        rows="3"
-        @keydown.enter.exact.prevent="canSend && send()"
-      />
+      <!-- 输入行：`❯` 提示符 + 无边框输入（TUI 的输入行就是 `❯ ` 开头的一行） -->
+      <div class="chat__composer">
+        <span class="chat__gutter chat__gutter--prompt" aria-hidden="true">{{ GLYPH.user }}</span>
+        <textarea
+          v-model="draft"
+          class="chat__draft"
+          data-testid="chat-draft"
+          :placeholder="tr('chat.placeholder')"
+          rows="3"
+          @keydown.enter.exact.prevent="canSend && send()"
+        />
+      </div>
       <div class="chat__actions">
         <button class="chat__send" type="button" :disabled="!canSend" data-testid="chat-send" @click="send">
           {{ sending ? tr('chat.sending') : tr('chat.send') }}
@@ -834,7 +876,10 @@ function clear() {
 </template>
 
 <style scoped>
-/* 全部走设计令牌（`tokens.generated.css`）：裸值会被 `tools/token-ratchet.mjs` 当场判红 */
+/* 全部走设计令牌（`tokens.generated.css`）：裸值会被 `tools/token-ratchet.mjs` 当场判红
+ *
+ * 排版语汇 = Hermes TUI（概设 §9.1.24 / §9.2.9）：行首字形栏 + 等宽正文 + 左对齐，
+ * **没有气泡、没有圆角卡片、没有右对齐** —— 「谁说的」由字形表达，长回答不被框成小窗。 */
 .chat {
   display: flex;
   flex-direction: column;
@@ -871,6 +916,7 @@ function clear() {
 }
 .chat__budget {
   color: var(--ds-color-text-secondary);
+  font-family: var(--ds-font-stack-mono);
   font-size: var(--ds-font-caption-size);
   font-variant-numeric: tabular-nums;
 }
@@ -900,42 +946,67 @@ function clear() {
   font-size: var(--ds-font-caption-size);
   margin: 0;
 }
+.chat__row,
 .chat__turn {
-  border-radius: var(--ds-radius-card);
-  padding: var(--ds-spacing-xs) var(--ds-spacing-s);
-  max-width: 86%;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-spacing-s);
+  max-width: 100%;
 }
-.chat__turn--user {
-  align-self: flex-end;
-  background: var(--ds-color-surface-raised);
-}
-.chat__turn--model {
-  align-self: flex-start;
-  background: var(--ds-color-surface-panel);
-}
-.chat__who {
-  margin: 0 0 var(--ds-spacing-hair);
-  font-size: var(--ds-font-caption-size);
+/* 行首字形栏：**固定宽度**、正文一律左对齐。栏宽变来变去整屏文字会左右跳。 */
+.chat__gutter {
+  flex: none;
+  width: calc(var(--ds-spacing-m) + var(--ds-spacing-hair));
+  text-align: left;
+  font-family: var(--ds-font-stack-mono);
   color: var(--ds-color-text-tertiary);
+  user-select: none;
 }
+.chat__turn--user .chat__gutter,
+.chat__gutter--prompt { color: var(--ds-color-accent-accent); }
+.chat__gutter--tool { color: var(--ds-color-accent-teal); }
+.chat__gutter--spin { color: var(--ds-color-accent-accent); }
 .chat__body {
   margin: 0;
-  font-family: inherit;
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ds-font-stack-mono);
   font-size: var(--ds-font-body-size);
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
 }
+/* 正在写的那一竖（TUI 的流式光标） */
+.chat__cursor {
+  color: var(--ds-color-accent-accent);
+}
+/* 字形对屏幕阅读器是空的，人话留给它 */
+.chat__sr {
+  position: absolute;
+  width: var(--ds-spacing-hair);
+  height: var(--ds-spacing-hair);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .chat__waiting {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-s);
   margin: 0;
+  font-family: var(--ds-font-stack-mono);
   font-size: var(--ds-font-caption-size);
   color: var(--ds-color-text-secondary);
 }
 .chat__stale {
   border: var(--ds-metric-hairline) solid var(--ds-color-status-warning);
-  border-radius: var(--ds-radius-card);
+  border-radius: var(--ds-radius-control);
   padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+  font-family: var(--ds-font-stack-mono);
   font-size: var(--ds-font-caption-size);
+}
+.chat__stale-msg .chat__gutter {
+  display: inline-block;
 }
 .chat__stale-msg,
 .chat__stale-hint {
@@ -953,16 +1024,31 @@ function clear() {
   flex-direction: column;
   gap: var(--ds-spacing-xs);
 }
-.chat__draft {
-  width: 100%;
-  resize: vertical;
-  background: var(--ds-color-surface-content);
+.chat__composer {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-spacing-s);
   border: var(--ds-metric-hairline) solid var(--ds-color-hairline-light);
-  border-radius: var(--ds-radius-card);
-  color: inherit;
-  font: inherit;
-  font-size: var(--ds-font-body-size);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-color-surface-content);
   padding: var(--ds-spacing-xs) var(--ds-spacing-s);
+}
+.chat__composer .chat__gutter {
+  padding-top: var(--ds-spacing-hair);
+}
+.chat__draft {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-family: var(--ds-font-stack-mono);
+  font-size: var(--ds-font-body-size);
+  padding: 0;
+}
+.chat__draft:focus {
+  outline: none;
 }
 .chat__actions {
   display: flex;
@@ -985,6 +1071,7 @@ function clear() {
 .chat__hint,
 .chat__info {
   color: var(--ds-color-text-secondary);
+  font-family: var(--ds-font-stack-mono);
   font-size: var(--ds-font-caption-size);
   margin: 0;
 }
@@ -1003,11 +1090,13 @@ function clear() {
   font-size: var(--ds-font-caption-size);
 }
 /* 工具审批卡片（`FR-AI-18`）：显眼到「不点就没法继续」，但不用危险色（它只是问一句） */
+.chat__row .chat__tool {
+  flex: 1;
+  min-width: 0;
+}
 .chat__tool {
-  align-self: flex-start;
-  max-width: 86%;
   border: var(--ds-metric-hairline) solid var(--ds-color-accent-accent);
-  border-radius: var(--ds-radius-card);
+  border-radius: var(--ds-radius-control);
   padding: var(--ds-spacing-xs) var(--ds-spacing-s);
   display: flex;
   flex-direction: column;
@@ -1020,6 +1109,7 @@ function clear() {
 }
 .chat__tool-line {
   margin: 0;
+  font-family: var(--ds-font-stack-mono);
   font-size: var(--ds-font-body-size);
   word-break: break-all;
 }
@@ -1102,12 +1192,21 @@ function clear() {
 }
 .chat__ctx-list {
   margin: 0;
-  padding-left: var(--ds-spacing-m);
+  padding-left: 0;
+  list-style: none;
   font-size: var(--ds-font-caption-size);
   color: var(--ds-color-text-secondary);
 }
 .chat__ctx-row {
   word-break: break-all;
+  font-family: var(--ds-font-stack-mono);
+}
+.chat__ctx-list > .chat__ctx-row::before {
+  content: '├─ ';
+  color: var(--ds-color-text-tertiary);
+}
+.chat__ctx-list > .chat__ctx-row:last-child::before {
+  content: '└─ ';
 }
 .chat__ctx-path {
   color: var(--ds-color-text-primary);
