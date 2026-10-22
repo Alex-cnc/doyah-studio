@@ -1614,7 +1614,7 @@
 
 ### 9.2.1 技术栈与工程结构（本侧决策，2026-09-27）
 
-| 层 | macOS 侧（现有，§8.1）| **Windows 侧（本节）** |
+| 层 | macOS 侧（现有，§9.1）| **Windows 侧（本节）** |
 |---|---|---|
 | 领域层（核心） | Swift `Core/`（无平台依赖）| **Rust（工作区 `windows/Cargo.toml`，crate 落 `Core/`）** —— 纯逻辑、零 UI 依赖、起步零第三方依赖、可单测 |
 | 表示层 | SwiftUI + AppKit 桥接 | **Tauri 2 外壳（Windows 上用系统 WebView2）+ Vue 3 + TypeScript**（落 `App/`）|
@@ -1622,14 +1622,14 @@
 | 平台适配层 | `Platform/macOS/` | **`Platform/Windows/`** —— 只有这里引 Windows 专有 API（凭据管理器 / ConPTY / 通知），Rust 侧经 `windows` crate 调用，不手写 FFI 面 |
 | 测试 | XCTest（`Tests/`、`TestsPlatform/`）| **`cargo test`（Rust，含 `Core/tests/`）＋ `vitest`（前端）** |
 
-**表示层选型与换栈留痕（可复议）**：2026-09-27 本节首建时选 **WPF**（理由 = `DataGrid` 行虚拟化成熟、分发不要求目标机预装 Windows App SDK 运行时；WinUI 3 备选）；2026-09-28 需求提出者以「界面最精致好看」为第一判据要求重排，本侧出调研 `windows/调研-技术栈-2026-09-28.md`（收敛为两条路线 + 后台三候选，并把「Linux 端被迫用 Electron」与「原生界面栈」的字面冲突作为发现上报）。**2026-09-28 开工令拍板：本侧三条线同栈 = 前端 Tauri 2 + Vue 3 + TypeScript、后端 Rust、测试 `cargo test` + `vitest`、分发 Tauri bundler（MSI / NSIS）；原 .NET 路线作废**（随之作废的还有「本机装 .NET SDK 8」这条放行）。**与契约的字面冲突（Web 外壳 vs `Doyah产品需求规格说明书.md` §1.3-1「原生界面栈」）走提案 `Docs/proposals/0004`，本侧不自行放宽契约**；§8.2 树里的 `C# / .NET 8` / `WPF` / `xUnit` 三处字样属契约层，同样在 0004 里请契约侧同步。**§8.5.6-3 的旧 WPF 基线（50 万行 × 6 列）随之作废，保留为历史留痕**，新口径按 40 万行 × 20 列复测。
-**领域层边界由工程结构强制**：Rust 工作区里 `Core/` 的 `Cargo.toml` 不得依赖 GUI / 平台包（`tauri` / `windows` / `winit` 一类），判据 = `windows/Tools/check-core-boundary.ps1`（本侧自有，见 §8.5.3）。**判据面（第 25 轮按 Rust 形态重建）** = ① `Core/Cargo.toml` 的依赖段（`dependencies` / `dev-dependencies` / `build-dependencies` / `target.*.dependencies`）逐名比 GUI / 平台面清单；② `Core/**/*.rs` 的 `use` / crate 路径 / 平台专有 std（`std::os::windows`·`unix`）/ FFI 形状（`extern "C"`·`#[link(`·`windows_targets`·`libc::`），判红一律点名 `文件:行号`；③ **判据面为空即判红**（空跑不许通过 —— 工程在盘上就必须判，本项没有「跳过」档）。
-**依赖（全部开源、无运行时授权费）**：**Rust 领域层起步零第三方依赖**（纯标准库；判据 `check-core-boundary.ps1` 会扫）；后续放开面 = `rusqlite`（SQLite，笔记存储分层 §3.25）、PostgreSQL / MySQL 驱动（§3.2 / §3.19，具体 crate 待选型）、Windows 专有能力经 `windows` crate；前端 = Tauri 2 + Vue 3 + TypeScript + TanStack Virtual（结果网格虚拟化）。
+**表示层选型与换栈留痕（可复议）**：2026-09-27 本节首建时选 **WPF**（理由 = `DataGrid` 行虚拟化成熟、分发不要求目标机预装 Windows App SDK 运行时；WinUI 3 备选）；2026-09-28 需求提出者以「界面最精致好看」为第一判据要求重排，本侧出调研 `windows/调研-技术栈-2026-09-28.md`（收敛为两条路线 + 后台三候选，并把「Linux 端被迫用 Electron」与「原生界面栈」的字面冲突作为发现上报）。**2026-09-28 开工令拍板：本侧三条线同栈 = 前端 Tauri 2 + Vue 3 + TypeScript、后端 Rust、测试 `cargo test` + `vitest`、分发 Tauri bundler（MSI / NSIS）；原 .NET 路线作废**（随之作废的还有「本机装 .NET SDK 8」这条放行）。**与契约的字面冲突（Web 外壳 vs `Doyah产品需求规格说明书.md` §1.3-1「原生界面栈」）走提案 `Docs/proposals/0004`，本侧不自行放宽契约**；§8.2 树里的 `C# / .NET 8` / `WPF` / `xUnit` 三处字样属契约层，同样在 0004 里请契约侧同步。**§9.2.6-3 的旧 WPF 基线（50 万行 × 6 列）随之作废，保留为历史留痕**，新口径按 40 万行 × 20 列复测。
+**领域层边界由工程结构强制**：Rust 工作区里 `Core/` 的 `Cargo.toml` 不得依赖 GUI / 平台包（`tauri` / `windows` / `winit` 一类），判据 = `windows/Tools/check-core-boundary.ps1`（本侧自有，见 §9.2.3）。**判据面（第 25 轮按 Rust 形态重建）** = ① `Core/Cargo.toml` 的依赖段（`dependencies` / `dev-dependencies` / `build-dependencies` / `target.*.dependencies`）逐名比 GUI / 平台面清单；② `Core/**/*.rs` 的 `use` / crate 路径 / 平台专有 std（`std::os::windows`·`unix`）/ FFI 形状（`extern "C"`·`#[link(`·`windows_targets`·`libc::`），判红一律点名 `文件:行号`；③ **判据面为空即判红**（空跑不许通过 —— 工程在盘上就必须判，本项没有「跳过」档）。
+**依赖（全部开源、无运行时授权费）**：**Rust 领域层起步零第三方依赖**（纯标准库；判据 `check-core-boundary.ps1` 会扫）；后续放开面 = `rusqlite`（SQLite，笔记存储分层 §3.2.3）、PostgreSQL / MySQL 驱动（§3.2 / §3.2.8，具体 crate 待选型）、Windows 专有能力经 `windows` crate；前端 = Tauri 2 + Vue 3 + TypeScript + TanStack Virtual（结果网格虚拟化）。
 
 ```
 DoyahStudio/            # 现有 macOS 侧（Swift），本节不改
 ├── Core/  App/  CLI/  Platform/macOS/  Tests/  Scripts/  Docs/  Vendor/
-Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块，见 8.5.6-1）
+Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块，见 9.2.6-1）
 ├── Cargo.toml          # Rust 工作区（2026-09-28 第 24 轮落地）
 ├── Core/               # 领域层（Rust：dataset / result_set / bin/grid_bench + tests/）—— 首片已落地
 ├── Bench/grid/         # 结果网格压力基准台（Vue 3 + TS + Vite + TanStack Virtual）—— 首片已落地
@@ -1645,12 +1645,12 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
    - **凭据存储 = Windows 凭据管理器**（Generic 类型，目标名 `doyah-studio/<连接ID>`；落地候选 `keyring`，或 `windows` crate 直调 `CredReadW` / `CredWriteW`）。语义对齐 §3.1：不落配置文件、重启可恢复、可被明确清除、不进错误信息与日志（`P-02`）。
    - **目录授权 = 用户自选目录 + NTFS 权限**（Windows 无沙箱等价物）：等价验收点 = 未授权目录的读写必须失败且给出可读原因（`P-18`）。
    - **剪贴板** = 系统剪贴板（Tauri 剪贴板能力 / `windows` crate）；超过阈值改走「临时文件 + 文件拖放」，避开大对象剪贴板限制（`P-24`）。
-   - **进程与 PTY = ConPTY**（`CreatePseudoConsole`，Windows 10 1809+）跑 `pwsh` / `cmd`，Rust 侧走 **`portable-pty`**（含 ConPTY 后端），对齐 §3.7 终端屏幕模型与按键字节序列（`P-17`）；外部程序一律 `Command` 直起、**不经 shell 拼接**。
+   - **进程与 PTY = ConPTY**（`CreatePseudoConsole`，Windows 10 1809+）跑 `pwsh` / `cmd`，Rust 侧走 **`portable-pty`**（含 ConPTY 后端），对齐 §3.3.7 终端屏幕模型与按键字节序列（`P-17`）；外部程序一律 `Command` 直起、**不经 shell 拼接**。
    - **字体与输入法** = 系统 UI 字体栈（前端 `--ds-font-stack`）+ IME（`P-20`）；**通知 / 深色跟随** = Windows 通知中心 + `AppsUseLightTheme` 跟随（`P-22`）。
 3. **打包与分发 = Tauri bundler（MSI / NSIS）+ 便携形态**：签名走 `signtool` + 代码签名证书（EV 证书可直过 SmartScreen，OV 证书需累积声誉）；**首版不做自动更新**（与 macOS 侧一致）；差异登记 `P-21`；**系统 WebView 运行时依赖**登记 `P-26`（Win10 1803+ 系统自带；缺运行时必须给可读提示与补救指引、不静默失败）。
-4. **数据库驱动映射（按目标能力写；作废栈的驱动名只作历史对照）**：**PostgreSQL 驱动 = `tokio-postgres`（已选定并落地）** / **MySQL 协议系驱动 = 待选** / **本地 SQLite = `rusqlite`（已在本机依赖缓存，供笔记存储分层用）**。落地证据：`windows/App/src-tauri/Cargo.toml`（依赖面）+ `windows/App/src-tauri/src/postgres.rs`（驱动接线；**驱动只在这一层**，领域层 `windows/Db` 保持零驱动）。**历史对照（旧栈的驱动名，仅备注，不作为选型依据）**：Npgsql / MySqlConnector / Microsoft.Data.Sqlite —— 那是 2026-09-28 换栈前（C#/.NET 路线）的映射，路线已作废（见 §8.5.1 的换栈留痕）。**MySQL 面在选型前不写进实现**（选型属本侧实现层，落地时在本节补登记）。
+4. **数据库驱动映射（按目标能力写；作废栈的驱动名只作历史对照）**：**PostgreSQL 驱动 = `tokio-postgres`（已选定并落地）** / **MySQL 协议系驱动 = 待选** / **本地 SQLite = `rusqlite`（已在本机依赖缓存，供笔记存储分层用）**。落地证据：`windows/App/src-tauri/Cargo.toml`（依赖面）+ `windows/App/src-tauri/src/postgres.rs`（驱动接线；**驱动只在这一层**，领域层 `windows/Db` 保持零驱动）。**历史对照（旧栈的驱动名，仅备注，不作为选型依据）**：Npgsql / MySqlConnector / Microsoft.Data.Sqlite —— 那是 2026-09-28 换栈前（C#/.NET 路线）的映射，路线已作废（见 §9.2.1 的换栈留痕）。**MySQL 面在选型前不写进实现**（选型属本侧实现层，落地时在本节补登记）。
 
-### 9.2.3 本节自己的闸门（§8.3 的等价实现）
+### 9.2.3 本节自己的闸门（§3.6.4 的等价实现）
 
 | 闸门 | Windows 侧等价物 | 判据 |
 |---|---|---|
@@ -1660,19 +1660,19 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 | 平台中立性 | `Tools/check-platform-neutrality.ps1`（等价同名脚本）| 需求条目不得出现平台词，棘轮只降不升 |
 | **独占节越界** | 复用 `Scripts/check-exclusive-sections.py --mine windows --base origin/master` | 一次改动不得落在对侧独占节内 |
 | **多平台等价矩阵**（L-26 起，2026-09-27）| `python3 Scripts/gen-platform-parity.py --check` —— 列由台账 `Docs/平台实现状态.json` 决定，Windows 列已并入 SRS 计划书 §5 | Windows 列状态与台账 `platforms.windows.overrides` 一致；台账写坏（编号拼错 / 状态取值非法 / 缺 `label`·`role`·`owner`）由 `--self-test` 11 例拦 |
-| **一条命令跑全** | `windows/Tools/verify-all.ps1`（**已建，2026-09-27 第 21 轮**；落点 = 同仓 `windows/`，见 8.5.6-1；同目录另有 `build.ps1` / `test.ps1` / 结果网格压力基准 / 领域层边界 / `P-*` 对账 / 令牌棘轮等子闸门；**第 28 轮实测：14 项中跑 14 / 跳过 0 / 失败 0**（本侧自此没有「跳过」档））| 不靠人记得：收尾行如实报「N 项中跑 X / 跳过 Y / 失败 Z」并逐条列出跳过项；`-RequireAll` 令**跳过即红**（§8.3.2）|
+| **一条命令跑全** | `windows/Tools/verify-all.ps1`（**已建，2026-09-27 第 21 轮**；落点 = 同仓 `windows/`，见 9.2.6-1；同目录另有 `build.ps1` / `test.ps1` / 结果网格压力基准 / 领域层边界 / `P-*` 对账 / 令牌棘轮等子闸门；**第 28 轮实测：14 项中跑 14 / 跳过 0 / 失败 0**（本侧自此没有「跳过」档））| 不靠人记得：收尾行如实报「N 项中跑 X / 跳过 Y / 失败 Z」并逐条列出跳过项；`-RequireAll` 令**跳过即红**（§3.6.4）|
 | **文档版本与取号**（契约侧 L-32 起，2026-09-27；接进 `Scripts/verify-all.sh` **第 4 项，项数仍十八**）| 判据：`python Scripts/check-doc-versions.py`；取号：`python Scripts/next-doc-version.py <文档…>` | ① 变更记录版本号唯一；② 头部版本格可判（= 变更记录最高号，或带「基线 / 首版」标注并在标注里写出当前号）；③ 队列**定义行**条目号唯一。**本侧义务**：改本节或台账行时**版本号只能由工具取，禁手抄**（上一轮本侧已撞号一次 —— 对侧保原号、本侧顺延 v2.42）。**本机实测缺口**：`--ids L` 在本机**报错退出**（依赖不入库的 `Docs/智能体助手-开发spec.md`），故本侧当前只能对**入库文档**取号 |
-| **`P-*` 平台差异登记两侧对账**（契约侧 L-45 起，2026-09-27；接进 `Scripts/verify-all.sh` **第 7 项，项数仍十八**）| 判据：`python Scripts/check-p-parity.py`；**本侧入口** `windows/Tools/check-p-parity.ps1`（**已建，第 22 轮**）| ① **双向覆盖**：SRS §9.2 与 §4 的编号集合必须相等；② **同号同物**；③ **本节 §8.5.5 已落条但未并入 §4 / §9.2 即判红** —— 本侧此后新登记一条平台差异，在契约侧并入前会**保持判红**（设计意图：不许静默）；判据自带负例 **8/8** |
-| **生成物一致性：发布产物版本号一个值三处一致**（契约侧 L-70 · §8.3 同名行；第 27 轮落）| 台账 `windows/Tools/release-version.json` + 判据 `windows/Tools/check-release-version.ps1`（本侧自有判据 = 闸门**第 13 项**；判据自测 **11 例**）| 权威处 = `App/src-tauri/tauri.conf.json` 的 `version`（Tauri bundler 把它写进 MSI / NSIS 元数据），镜像 = `App/package.json` 与 `App/src-tauri/Cargo.toml` 的 `[package] version`：发布产物版本号 `0.3.0`（三处逐字一致）；**任一处改动即判红并点名**，缺键 / 同一处出现第二个同名键同样判红。另判**与 mac 侧发布台账同源**（`Scripts/release-version.json` 的 `marketingVersion`；不等即判红，对侧 `buildVersion` 不跟随）。本侧三处**都是源**，仓内没有携带它的生成物（MSI / NSIS 与 `dist/` / `target/` 都不入库）⇒「生成物 ↔ 源」那一半**无对象**，已在台账 `generatedArtifactsReason` 里如实写明 |
+| **`P-*` 平台差异登记两侧对账**（契约侧 L-45 起，2026-09-27；接进 `Scripts/verify-all.sh` **第 7 项，项数仍十八**）| 判据：`python Scripts/check-p-parity.py`；**本侧入口** `windows/Tools/check-p-parity.ps1`（**已建，第 22 轮**）| ① **双向覆盖**：SRS §9.2 与 §4 的编号集合必须相等；② **同号同物**；③ **本节 §9.2.5 已落条但未并入 §4 / §9.2 即判红** —— 本侧此后新登记一条平台差异，在契约侧并入前会**保持判红**（设计意图：不许静默）；判据自带负例 **8/8** |
+| **生成物一致性：发布产物版本号一个值三处一致**（契约侧 L-70 · §3.6.4 同名行；第 27 轮落）| 台账 `windows/Tools/release-version.json` + 判据 `windows/Tools/check-release-version.ps1`（本侧自有判据 = 闸门**第 13 项**；判据自测 **11 例**）| 权威处 = `App/src-tauri/tauri.conf.json` 的 `version`（Tauri bundler 把它写进 MSI / NSIS 元数据），镜像 = `App/package.json` 与 `App/src-tauri/Cargo.toml` 的 `[package] version`：发布产物版本号 `0.3.0`（三处逐字一致）；**任一处改动即判红并点名**，缺键 / 同一处出现第二个同名键同样判红。另判**与 mac 侧发布台账同源**（`Scripts/release-version.json` 的 `marketingVersion`；不等即判红，对侧 `buildVersion` 不跟随）。本侧三处**都是源**，仓内没有携带它的生成物（MSI / NSIS 与 `dist/` / `target/` 都不入库）⇒「生成物 ↔ 源」那一半**无对象**，已在台账 `generatedArtifactsReason` 里如实写明 |
 
-> 说明：Swift 侧门禁（`verify-core.sh` / `verify-all.sh` / `build-app.sh`）在 Windows 上不可执行，本节的等价物以 PowerShell + `cargo` / `npm` 重建（2026-09-28 开工令换栈：构建 = `cargo build` + 前端 `vite build`，单测 = `cargo test` + `vitest`）；**等价性由本节 8.5.4 的「一样」清单判定**，不靠口头承诺。
+> 说明：Swift 侧门禁（`verify-core.sh` / `verify-all.sh` / `build-app.sh`）在 Windows 上不可执行，本节的等价物以 PowerShell + `cargo` / `npm` 重建（2026-09-28 开工令换栈：构建 = `cargo build` + 前端 `vite build`，单测 = `cargo test` + `vitest`）；**等价性由本节 9.2.4 的「一样」清单判定**，不靠口头承诺。
 >
-> **本侧现在就能跑的两项（不需要 Windows 侧代码，2026-09-27 实测）**：① **多平台等价矩阵** `python Scripts/gen-platform-parity.py --check`（本端开工前，判据 = Windows 列与台账一致、且全 ⬜ 是唯一如实状态）；② **独占节越界** `python Scripts/check-exclusive-sections.py --mine windows --base origin/master`（本侧视角；**该脚本 `--mine` 默认按平台推断，Windows 上不传参数即 windows 视角**）。**`Scripts/verify-all.sh` 整条在 Windows 上跑不了** —— 第 1 / 2 / 3 / 6 / 11 项要 macOS 工具链，**第 4 项要 5 份被 `.gitignore` 排除的本地文档**（详见 8.5.6-4 与 8.5.7 的逐项实测）。
+> **本侧现在就能跑的两项（不需要 Windows 侧代码，2026-09-27 实测）**：① **多平台等价矩阵** `python Scripts/gen-platform-parity.py --check`（本端开工前，判据 = Windows 列与台账一致、且全 ⬜ 是唯一如实状态）；② **独占节越界** `python Scripts/check-exclusive-sections.py --mine windows --base origin/master`（本侧视角；**该脚本 `--mine` 默认按平台推断，Windows 上不传参数即 windows 视角**）。**`Scripts/verify-all.sh` 整条在 Windows 上跑不了** —— 第 1 / 2 / 3 / 6 / 11 项要 macOS 工具链，**第 4 项要 5 份被 `.gitignore` 排除的本地文档**（详见 9.2.6-4 与 9.2.7 的逐项实测）。
 
 ### 9.2.4 「一样」与「允许不同」的可执行口径
 
 - **一样**：能力清单、行为语义、验收标准、**设计令牌取值**、文档单一来源（§1.2 平台责任表 + §4「必须一致」列）。
-- **允许不同（必须登记）**：宿主约定、窗口与停靠、字体回退、原生控件外观、安装与签名方式、终端仿真与 PTY、沙箱与文件授权机制、系统集成（通知 / 深色跟随）—— 本节登记在 8.5.5。
+- **允许不同（必须登记）**：宿主约定、窗口与停靠、字体回退、原生控件外观、安装与签名方式、终端仿真与 PTY、沙箱与文件授权机制、系统集成（通知 / 深色跟随）—— 本节登记在 9.2.5。
 
 ### 9.2.5 平台差异登记（§4 的 `P-*` 续排；**本节 8 条已于契约侧 L-45（2026-09-27）并入 §4 与 SRS §9.2**）
 
@@ -1680,12 +1680,12 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 
 > 每条并入 §4 时补两句：「为什么必须不同」+「用户可感知的差异」；**编号保持不变**，避免两侧对同一差异各起一个号。
 >
-> **并入状态与长期义务（第 22 轮）**：本节 8 条（`P-17`~`P-24`）已由契约侧 **L-45**（2026-09-27，概要设计 v2.48 / SRS v3.245）**照抄并入** §4 与 §9.2（编号未变；`P-16` / `P-25` 同批补进 §9.2），两侧现均为 `P-01`~`P-25`；对账判据 = `Scripts/check-p-parity.py`（本侧闸门第 11 项，见 §8.5.3）。
+> **并入状态与长期义务（第 22 轮）**：本节 8 条（`P-17`~`P-24`）已由契约侧 **L-45**（2026-09-27，概要设计 v2.48 / SRS v3.245）**照抄并入** §4 与 §9.2（编号未变；`P-16` / `P-25` 同批补进 §9.2），两侧现均为 `P-01`~`P-25`；对账判据 = `Scripts/check-p-parity.py`（本侧闸门第 11 项，见 §9.2.3）。
 > **本侧此后新登记一条平台差异时**：契约侧并入前该判据会**判红并点名本行**（判据第 3 类）—— 这是设计意图（「已落条但未并入」不许静默），**不是故障**。处置 = 在本节写明该条待契约侧并入（必要时同时走 `Docs/proposals/`），**不要**因为判红就把条目删掉或改号。
 
 ### 9.2.6 待定与提案（本侧不擅自决定）
 
-1. **Windows 实现的落点** —— **已定：同仓 `windows/`**。① 本侧先按通道出提案 `Docs/proposals/0002-windows-实现落点-同仓多端.md`；② 契约侧在 L-30（`991ff6f`）**同一时段落地同一落点** —— §8.2 里 `doyah-linux/` 块换成 **`windows/`** 块（层与目录照 §8.5.1，不另立一份），并写明 Linux 自用第三端不在本仓；③ 两路结论一致 ⇒ 提案标 **已采纳**（回填 `991ff6f`）、本条销账。**开工前置已清空（第 21 轮落闸门）**：闸门于 2026-09-27 落在 `windows/Tools/`（13 项一条命令跑全，见 §8.5.3 与 §8.5.7 实测表；第 22 轮由 11 项扩为 12 项、第 24 轮 12 → 13 项），**先有闸门再有功能** ⇒ 下一步 = 工程本体（§8.5.1 结构）。**留给契约侧一处小尾巴**：§8.2 那行的括注仍写着「落点见 §8.5.6-1」（该条已销账），本侧不改契约层，仅在此记明。
+1. **Windows 实现的落点** —— **已定：同仓 `windows/`**。① 本侧先按通道出提案 `Docs/proposals/0002-windows-实现落点-同仓多端.md`；② 契约侧在 L-30（`991ff6f`）**同一时段落地同一落点** —— §8.2 里 `doyah-linux/` 块换成 **`windows/`** 块（层与目录照 §9.2.1，不另立一份），并写明 Linux 自用第三端不在本仓；③ 两路结论一致 ⇒ 提案标 **已采纳**（回填 `991ff6f`）、本条销账。**开工前置已清空（第 21 轮落闸门）**：闸门于 2026-09-27 落在 `windows/Tools/`（13 项一条命令跑全，见 §9.2.3 与 §9.2.7 实测表；第 22 轮由 11 项扩为 12 项、第 24 轮 12 → 13 项），**先有闸门再有功能** ⇒ 下一步 = 工程本体（§9.2.1 结构）。**留给契约侧一处小尾巴**：§8.2 那行的括注仍写着「落点见 §9.2.6-1」（该条已销账），本侧不改契约层，仅在此记明。
 2. **机械设施扩多平台（队列 L-26）** —— **已落地（契约侧 `cfd91c1`，2026-09-27 第 25 轮）**，本条从「本方出提案、对侧落笔」销账：① `Docs/平台实现状态.json` 改形状 = `{default, platforms:{linux,windows}, notPlatforms:{mobile}}`，每平台带 `label` / `role` / `owner` / `overrides`，**macOS 不许进台账**（它是基线，状态来自 SRS §9.1 —— 同一个真相只允许一个来源）；② `Scripts/gen-platform-parity.py` 的**列由台账决定**（不再写死两列），SRS 计划书 §5 由四列扩为**五列**（编号 / 需求摘要 / macOS / Linux / Windows）+ 每域「与 macOS 基线一致：Linux n / Windows m 条」；③ 同批补三道判据（台账校验 / `--check` 报行号与两侧内容 / `--self-test` 11 例）。**本侧义务（从本条起长期有效）**：`platforms.windows.overrides` 与 计划书 §5 的 Windows 列必须**如实** —— 本端未开工时**全 ⬜ 是唯一可接受的状态**，不许为「看起来在推进」改 🟡；开工后状态只从台账改，改完跑 `python3 Scripts/gen-platform-parity.py` 重生成表格（手工改表会被 `--check` 判红）。
 3. **结果网格性能基准**（对齐 `NFR-PERF`；**口径以 2026-09-28 开工令为准 = 40 万行 × 20 列**，三选一实现：TanStack Virtual 自绘 / AG Grid Community / Rust 侧切片喂前端）—— **本侧选定的形态 = TanStack Virtual 自绘渲染 + Rust 侧窗口取数**（前端一次只拿要渲染的那几十行）。
    **首份新栈基线已产出（第 24 轮，仪器 = 本仓 `windows/Core` 的 `grid-bench` + `windows/Bench/grid` 基准台，两者都可复跑）**：**Rust 侧**（40 万行 × 20 列，release）—— 生成 386.3 ms / 排序（40 万行降序置换）**77.8 ms** / 文本等值筛选 3.17 ms / 数值区间筛选 2.49 ms / 200 个 64 行窗口实体化 144.5 ms / 20 万次随机单元格取文本 118.9 ms / 列数据 102.9 MB（**字节估算，非进程 RSS**）；**前端侧**（无头 Chromium 151、软件光栅）—— 40 万行 × 20 列虚拟滚动 240 帧 **p50 21.3 ms / p95 31.2 ms / 均 22.0 ms（45.4 fps）/ 超 16.7 ms 204 帧 / DOM 只实体化 31 行**，首屏载入 942.1 ms（含 64 MB 数据读入），JS 堆 90.1 MB，前端排序 494.5 ms、前端筛选 13.2 ms。
@@ -1695,28 +1695,28 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
    **真机复测已落地（第 28 轮，仪器 = `windows/Bench/webview2/`，可复跑）**：真外壳（`tauri://localhost` 承载嵌入产物）+ **WebView2 153.0.4234.48 / ANGLE·Intel Iris Xe（D3D11）**（GPU 证据取自 `WEBGL_debug_renderer_info`），窗口 1280×800、网格视口 1000×669，40 万行 × 20 列 —— **空转档（不滚动、只等帧）p50 16.7 ms（60.1 fps）**（宿主本身有 60 fps 能力），**滚动 240 帧 p50 48.8~50.1 ms / p95 63.1~64.4 ms（4 轮）⇒ ≈20 fps、240/240 帧超 16.7 ms**，DOM 只实体化 38 行；首屏 559.6 ms；IPC 取 64 行 p50 6.3 ms / p95 8.1 ms（200 次）；排序（换方向重算置换）118.7 ms；引擎增量 = 布局 272 次 / 3.71 s、样式重算 272 次 / 1.14 s、任务总时长 14.2 s（≈该档墙钟 ⇒ 主线程饱和）、`ScriptDuration` 0.04 s（≈0 ⇒ **瓶颈不是 JS 逻辑**）；长任务 53 次 / 3.0 s / 最长 73 ms；进程树峰值 ≈789 MB（估算）。
    **两档诊断（第 28 轮，同一次运行内）**：① **行数与规模无关** —— 同协议下 5 万行 p50 50.3 ms、2 千行 p50 49.4 ms（40 万行 50.1 ms；复跑一轮为 54.2 / 42.6 / 48.8 ms）⇒ 三档**同一量级**，数据集规模与 1000 万像素滚动高度都不是主因；② ~~**IPC 无关** —— 把取数传输换成「缓存立即返回」后 p50 51.0 ms（对照 50.1 ms）~~ ⇒ **本条诊断已作废（第 29 轮实测：那一档根本没生效）**：它的做法是在页面里把 `__TAURI_INTERNALS__.invoke` 换成「缓存立即返回」，而宿主把该属性定义成**不可写且不可配置**（第 29 轮实测描述符 `writable:false, configurable:false`；`defineProperty` 抛 `Cannot redefine property: invoke`）⇒ 那一步**静默失效**（sloppy mode 不抛错），该档量的是**与基线完全相同**的东西；铁证一直在读数里 —— `cachedWindowCalls: 0`（产品一次都没命中补丁）。诊断②已由第 29 轮的**慢速滚动消融档**取代（见下）。
    **消融档与同轮内对照（第 29 轮）**：① **仪器自查**：把「消融档是否真的生效」变成仪器的自证 —— 收尾当场探一遍宿主是否允许替换 `invoke` 并把结论写进读数（`invokePatchability`：`{writable:false, configurable:false}` / `definePropertyOk=false`）；**消融没生效不许当读数**。② **换一个不需要改页面代码的消融档 = 慢速滚动**（步长 1px/帧 ⇒ 240 帧只走 240px，窗口每 ~26 帧才换一次；其余帧产品**照样**每帧发窗口取数、照样跑响应式与 vnode 比对，只是 DOM 文本没变）⇒ 读数 **p50 17.9 ms（46.9 fps）、布局 0.33 s / 160 次、样式重算 0.06 s / 160 次、窗口只换了 4 次**，与同轮**空转档（17.9 ms / 56 fps）同日而语**；对照同轮**基线档 79.1 ms（8.5 fps）、布局 6.39 s / 295 次（≈21.6 ms/次）、样式重算 1.99 s / 295 次** ⇒ **传输（IPC）+ 响应式 + vnode 比对 + 滚动簿记合计不足一个 vsync 周期，61 ms/帧 全部花在「把新的 38×20 个单元格文本写进 DOM + 重排版 / 重绘」上**。③**行数与规模仍无关**（5 万行 79.4 ms / 2 千行 76.1 ms，与 40 万行同量级）。④ **本轮新增一条会反噬的坑**：**跨会话漂移 > 50%** —— 同一二进制、同一窗口尺寸、同一 GPU，第 28 轮 p50 48.8~50.1 ms、第 29 轮 79.1 / **78.6 ms（同轮复跑，两次相差 0.5 ms）** ⇒ **只有同一轮内的两个数可以相减**，仪器已加**基线复跑档**供成对读；三候选比较一律同轮 A/B。
-   **未达标（不得据此宣布通过）**：**19~21 fps（第 28 轮）/ 8.5 fps（第 29 轮；跨会话漂移见口径限制 ⑦）** 远低于 60 fps ⇒ 按开工令「**过了再铺功能**」，本项**不算过**；三候选取舍仍挂在 §8.5.6-5 ⑦ 之下。**下一轮的复测候选**（按第 29 轮的消融档读数，成本已被钉在「写 DOM + 重排版 / 重绘」上 ⇒ 「不改产品代码」的候选已不足以定因，候选改为**产品侧可改的三条**，每条都必须与**同轮基线**成对量）：① **行池 + 整体平移**（按滚动位移只改最上 / 最下一两行内容，其余行不动 ⇒ 每帧写入的单元格数从 ~760 降到 ~20）；② **按插槽 key 复用行节点**（当前行的 key 是**绝对行号** ⇒ 换一次窗口就整片重建，先降成「只改文本」）；③ **摊薄单格布局成本**（布局每次 ≈21.6 ms、样式重算 ≈6.7 ms，逐项查 `text-overflow: ellipsis` / 固定 flex 基宽 / `nth-child` 斑马纹等重排触发项，并给行加 `contain`）。
+   **未达标（不得据此宣布通过）**：**19~21 fps（第 28 轮）/ 8.5 fps（第 29 轮；跨会话漂移见口径限制 ⑦）** 远低于 60 fps ⇒ 按开工令「**过了再铺功能**」，本项**不算过**；三候选取舍仍挂在 §9.2.6-5 ⑦ 之下。**下一轮的复测候选**（按第 29 轮的消融档读数，成本已被钉在「写 DOM + 重排版 / 重绘」上 ⇒ 「不改产品代码」的候选已不足以定因，候选改为**产品侧可改的三条**，每条都必须与**同轮基线**成对量）：① **行池 + 整体平移**（按滚动位移只改最上 / 最下一两行内容，其余行不动 ⇒ 每帧写入的单元格数从 ~760 降到 ~20）；② **按插槽 key 复用行节点**（当前行的 key 是**绝对行号** ⇒ 换一次窗口就整片重建，先降成「只改文本」）；③ **摊薄单格布局成本**（布局每次 ≈21.6 ms、样式重算 ≈6.7 ms，逐项查 `text-overflow: ellipsis` / 固定 flex 基宽 / `nth-child` 斑马纹等重排触发项，并给行加 `contain`）。
    **产品侧三候选的落地与同轮 A/B（第 30 轮）**：① **仪器先补两类证据**：**(a) 样式消融档** —— 不改产品代码，从**真实样式来源**提选择器并注入 `<style>` 提特异性（产品样式是 scoped、选择器带 `data-v-*`，同名类选择器特异性更低**不会生效**），档里把**计算后取值**记进读数当实证（`ablation.proof`），没生效不许当读数；**(b) 变更观察档** —— `MutationObserver` 数每帧的节点增删 / 属性写入，并按**节点名**与**目标元素的类**分组（把「写了多少 DOM」变成可读的数）；另加 `--quick`（只跑空转 + 基线 + 基线复跑）供同一坐席内交替 A/B。② **样式消融读数（在改动前的产品二进制上量，四档同一轮）**：基线 **79.3 ms**（复跑 77.6）→ `contain-row`（行 `contain: layout paint`）**78.4 ms**、`contain-cell`（按格同款）**79.7 ms** ⇒ **单独加布局 / 绘制隔离当时无效**（说明开销不在失效扩散）；`clip-cell`（格 `text-overflow: clip`，省掉省略号整段整形）**66.0 ms** ⇒ **≈13 ms/帧**；`hidden-rows`（行 `visibility: hidden`，文字不画）**52.7 ms** ⇒ **≈27 ms/帧**，且 p95 **526.7 → 72.4 ms**、长任务 **267 次 / 21.0 s → 136 次 / 7.7 s**。③ **变更观察（同一档，270 帧）**：每帧新增 **623** 个节点、属性写入 **612** 次（**全是 `title`**），`characterData` 恒为 **0** ⇒ 文本是靠**替换文本节点**写的，被写的目标几乎全是可视格（38 × 21）。④ **产品侧落地三处**（都在本侧独占节内、可直接改）：**(a) 行池 + 轮转槽位** —— 新增 `windows/App/src/grid/windowing.ts::poolSlots`（槽位 key 固定 `0..N-1`、行号按池长轮转分配 ⇒ **窗口平移一行只换一个槽位的内容**；旧写法 key 用**绝对行号**，窗口一平移就有 ≈623 个节点被建 / 删）；斑马纹从 `:nth-child(even)` 改成按**行号奇偶**的类（槽位轮转后 `nth-child` 会随滚动闪）；**(b) 取数带前瞻行**（`LOOKAHEAD = 12`）—— 只取池子那几行时，池子一平移，**新进入的行当帧还没有数据** ⇒ 先渲染一帧空白、下一帧再填真值（变更观察实测：每帧被重写的单元格从 ~231 涨到 **815**，目标类全是 `results__cell`、新增节点全是 `#text`）；多取一段前瞻行后「进入的行」当帧就有值，写一次就够；渲染只看**已取到的那一对**（起点 + 内容）、不看「正在请求的那一片」；**(c) 单格绘制** —— `text-overflow: clip`（整值靠 `title` 悬停看）＋ 行加 `contain: layout paint`。⑤ **同轮 A/B（三臂，`--quick`；基线-行池-行池+前瞻两两相邻跑，全部在 5 分钟内）**：基线 **49.6 ms**（51.3 / 49.2 · 48.0 / 50.0）→ 只落 (a) **36.5 ms**（37.3 / 35.7，−26%）→ (a)+(b)+(c) **26.2 ms**（26.5 / 26.6 · 26.2 / 25.4，**−47%**）；p95 **67.9~69.1 → 40.9~41.0 ms**，`over16` **240/240 → 168~182/240**，变更观察 **623 + 612 → 207 + 87**（每帧；`title` 76 + `style` 11），布局 **3.58~3.92 s → 1.28~1.35 s**、样式重算 **1.12~1.18 s → 0.37~0.38 s**。⑥ **仪器有地板（本轮新记，最要紧的口径）**：同一坐席的**空转档 p50 = 16.7~18.0 ms**（不滚动、只等帧）⇒ **本仪器窗口下 rAF 节奏本身 ≈17.9 ms（≈56 fps），空转就到不了 16.7 ms** ⇒ ① 本仪器**读不出 60 fps**；② 有意义的口径改成 **「内容成本 = 帧 p50 − 同轮空转地板」**：基线 ≈**31.7 ms** → 只落 (a) ≈**19.8 ms** → (a)+(b)+(c) ≈**8.3 ms**（**已低于一个 16.7 ms 的帧预算**）；③ 「是否达标 60 fps」**在本形态下无法由本仪器定论** —— 要么承认这个口径、要么换测量形态（前台窗口 / 真实输入事件），**待需求提出者拍板**。⑦ **仍未达标 / 仍未下结论**：p50 **26.2 ms（38.5 fps）** 距 60 fps 仍有距离；三选一（TanStack Virtual 自绘 / AG Grid Community / Rust 侧切片）**本轮仍不下结论** —— 但 (a)(b)(c) 三条与「自绘」同路（当前形态 = 自绘行池 + Rust 侧窗口取数）。**下一轮候选**：**(a2)** 逐格文本改成**原地写 `Node.data`**（现每帧仍有 ≈207 个节点被建 / 删 ⇒ 目标归零）；**(a3)** 去掉数据格 `title`（每帧 76 次属性写入；`clip` 后整值只剩悬停一条路 ⇒ 先判可读性）；**(b2)** **重排本身**（布局仍 1.28~1.35 s / 368 次 ≈ **3.5~3.7 ms/帧**）逐项量 flex 基宽 / 行高取整 / 斑马纹类切换。
    **与无头读数的关系（结论不许跨形态沿用，见 `P-27`）**：无头读数（p50 21.3 ms / 45.4 fps）与真机读数（p50 50.1 ms / 19.3 fps）**方向相反** —— 两者不是同形态：基准台的数据已在前端内存、无 IPC，且无头下 `requestAnimationFrame` 不受 vsync 约束（真机帧耗时被量化到 16.7 ms 的整数倍：50.1 ≈ 3 帧、63.1 ≈ 3.8 帧）⇒ **两套数字不能相减**，各自只对自己的形态负责。
    **口径限制（真机读数，同样不得据此宣布达标）**：① 单次运行（本侧手工跑了 **4 轮**：p50 = 46.1 / 49.6 / 50.1 / 48.8 ms，首屏 702.9 / 576.7 / 559.6 / 452.3 ms，IPC p50 12.1 / 5.9 / 6.3 / 5.2 ms ⇒ 轮间波动可观，**没有统计分布**）；② 仪器给宿主加了 `--disable-backgrounding-occluded-windows` / `--disable-renderer-backgrounding`（否则窗口被遮挡时 Chromium 把 rAF 压到 1 Hz，量到的是节流后的帧率）；③ 滚动由**程序化**赋值 `scrollTop` 驱动，**不含真实指针 / 滚轮事件与输入延迟**；④ 进程树内存是 `Win32_Process` 工作集求和（**估算**，含 6~7 个 WebView2 子进程），不是本应用的常驻；⑤ `performance.memory` 在 WebView2 下读数小且离散（2~13 MB），**不可用于内存结论**；⑥ 首屏 / 排序读数含数据集生成（40 万 × 20 列首次生成那一档未单列）；⑦ **跨会话漂移 > 50%（第 29 轮新记）**：同一二进制、同一窗口尺寸、同一 GPU，第 28 轮 p50 48.8~50.1 ms、第 29 轮 78.6~79.1 ms（**同轮内两次相差 0.5 ms**）⇒ **只有同一轮内的一对可以相减**，仪器已加基线复跑档；慢速滚动档的 17.9 ms 只说明「该档工作量 < 一个 vsync 周期」，**不是**「它的纯工作量是 17.9 ms」。**⑧ 仪器有地板（第 30 轮新记，最要紧的一条）**：**空转档（不滚动、只等帧）本身 p50 = 16.7 ~ 18.0 ms** ⇒ 本仪器窗口下 rAF 节奏 ≈17.9 ms（≈56 fps），**空转就到不了 16.7 ms** ⇒ ① 本仪器**读不出 60 fps**；② 有意义的口径是「**内容成本 = 帧 p50 − 同轮空转地板**」（第 30 轮三臂：基线 ≈31.7 ms → 行池 ≈19.8 ms → 再 + 前瞻取数 / 单格绘制 ≈8.3 ms）；③ 「60 fps 达标与否」在本形态下无法由本仪器定论 —— 待需求提出者拍板口径（承认这个口径 / 换测量形态）。
    **方向性结论**：本场景 **开销在排序（集合视图建序）而不在渲染或虚拟化**；实现阶段应优先考虑「后端排序 + 分页/增量取数」而不是在 50 万行上直接 `SortDescriptions`。
    **口径限制（不得据此宣布达标）**：① 运行时是 **.NET 6**（本机现有 SDK，非 8）；② **离屏** `Measure/Arrange`，不含 GPU / 渲染管线 / 输入延迟；③ 单次运行、无统计分布；④ 数据模型是简单 POCO，不是真实业务对象。**正式基准待 `windows/` 工程成型后在 .NET 8 上复测并入库**（本项**仍未闭合**）。
-4. **`Scripts/verify-all.sh` 在 Windows 上不可整条复跑（2026-09-27 逐项实测）**：① 第 16 项（越界）**没有写死视角** —— `--mine` 默认**按平台推断**（`darwin → macos`，其它 → windows），本侧在 Windows 上跑它本就是本侧视角（实测：不传参数与显式 `--mine windows` 的输出逐字一致，均为 `本侧=windows`）；**结论按显式参数写进 8.5.3**（在 macOS 上跑同一条命令是 macos 视角，故不写死 `--mine`，只补显式基线）。② 第 1 / 2 / 3 / 6 / 11 项依赖 macOS 工具链（`verify-core.sh` / `build-app.sh` / `.app` 打包），本机跑不了。③ **第 4 项在本机必红、且与本侧改动无关**：`Scripts/check-doc-tables.py` 的受检清单写死 5 份**被 `.gitignore` 排除**的文档（`兼容性矩阵` / `GBase-技术验证` / `测试用例` / `发布方案` / `手工验收运行手册` —— `.gitignore` 第 27 行 `/Docs/*` + 白名单），它们只存在于 macOS 主开发机 ⇒ **任何干净克隆上报「文件不存在」**。本侧做法 = 只跑本侧有意义的项（等价矩阵 + 越界，带显式视角与基线），其余如实标「本机不可跑、非本侧改动所致」。**建议契约侧**把第 4 项的清单改成「文件存在才查 / 不存在即跳过并提示」（属 `Scripts/`，本侧不改）。
+4. **`Scripts/verify-all.sh` 在 Windows 上不可整条复跑（2026-09-27 逐项实测）**：① 第 16 项（越界）**没有写死视角** —— `--mine` 默认**按平台推断**（`darwin → macos`，其它 → windows），本侧在 Windows 上跑它本就是本侧视角（实测：不传参数与显式 `--mine windows` 的输出逐字一致，均为 `本侧=windows`）；**结论按显式参数写进 9.2.3**（在 macOS 上跑同一条命令是 macos 视角，故不写死 `--mine`，只补显式基线）。② 第 1 / 2 / 3 / 6 / 11 项依赖 macOS 工具链（`verify-core.sh` / `build-app.sh` / `.app` 打包），本机跑不了。③ **第 4 项在本机必红、且与本侧改动无关**：`Scripts/check-doc-tables.py` 的受检清单写死 5 份**被 `.gitignore` 排除**的文档（`兼容性矩阵` / `GBase-技术验证` / `测试用例` / `发布方案` / `手工验收运行手册` —— `.gitignore` 第 27 行 `/Docs/*` + 白名单），它们只存在于 macOS 主开发机 ⇒ **任何干净克隆上报「文件不存在」**。本侧做法 = 只跑本侧有意义的项（等价矩阵 + 越界，带显式视角与基线），其余如实标「本机不可跑、非本侧改动所致」。**建议契约侧**把第 4 项的清单改成「文件存在才查 / 不存在即跳过并提示」（属 `Scripts/`，本侧不改）。
 5. **表示层技术栈复议：以「界面最精致好看」为第一判据重排（2026-09-28，需求提出者提出）** —— 本侧出调研 `windows/调研-技术栈-2026-09-28.md`。**两条新前提**：Windows 版全新实现（**无迁移包袱** ⇒ 不拿「从 WPF 迁移的成本」当判据）；**Linux 第三端现用 = Rust 后台 + Electron 前台**。
    **① 本轮最要紧的发现：Linux 端的 Electron 撞契约。** `Docs/Doyah产品需求规格说明书.md` §1.3-1 明写「**原生体验**：使用各平台**原生界面栈** …… **无 JVM / 无 Electron**」，`Docs/Doyah产品能力规划说明书.md` **P6**「原生轻量 — 无 JVM / 无 Electron；不为功能引入重量级运行时」⇒ Linux 端现用栈与这两条**直接相抵**，Windows 端若跟 Linux 走 Web 外壳撞的是同一条。**另需澄清**：「原生界面栈」按字面 = 系统控件（macOS SwiftUI/AppKit、Windows WinUI/WPF），**Skia 自绘类（Avalonia）严格读法也不满足**（它满足 P6 的「无重量级运行时」）。**宽严由契约侧定，本侧只报不动笔。**
    **② 收敛为两条路线**（不再是四个并列候选）：**路线 1「守契约的原生路线」（本侧推荐）** = 前端 **WinUI 3**（原生 Fluent，唯一同时贴「原生界面栈」与「精致上限」；代价 = 随附 WASDK 运行时、无 VS XAML 设计器）+ 后台 **.NET 8 + `Microsoft.Data.Sqlite`**（同栈同进程；若接受跨语言边界也可选 Rust 留共享 core 的门）；两端前后都不共享代码。**路线 2「跨端复用路线」** = 前端 **Web（与 Linux renderer 同源）+ 系统 WebView2 外壳**（不打包 Chromium ⇒ 不触「无 Electron」字样，但仍触「原生界面栈」字面）+ 后台 **Rust**（与 Linux 同核）；收益 = renderer 与 core 有望一次写两端用，代价 = 仍须放宽契约、Electron 外壳 API 换宿主后**不存在**（只能共享 renderer 与 core，不能共享外壳）、50 万行网格走前端虚拟化须复测。
    **③ 后台三候选（SQLite、排除 Java）两条路线下都成立**：.NET 8 + `Microsoft.Data.Sqlite`〔路线 1 首选〕/ Rust + `rusqlite`〔路线 2 必选〕/ Go + `modernc.org/sqlite`。
-   **④ 待拍板四项**：契约口径（放宽 / ~~Linux 改栈~~ / ~~差异登记例外~~；「原生界面栈」是否容 Skia 自绘）、Windows 路线 1 还是 2、后台 A/B/C、是否同意由本侧挂提案改契约层三处（`§3` GUI 框架行、`P-19`/`P-23`/`P-24` 的 WPF 字样、「无 Electron / 原生界面栈」的宽严）。**`§8.5.6-3` 的 50 万行基线是 WPF 口径，换前端须复测。** <!-- exclusive-allow：**2026-10-14 人类主人裁决同步** —— 本项里的「Linux 改栈」与「差异登记例外」两半**就此关闭**（原由「Linux 被迫用 Electron（公司老机器）」已随「清公司 Linux 描述」作废 ⇒ 被迫理由消失；裁决原文「**Linux 端『Electron 例外』不予开 —— 守契约**」）。**剩余待拍板 = Skia 自绘口径 / Windows 路线 / 后台档 / 契约层三处提案** 四项。（单 `T-20261014-019`；本行属本侧 `[独占:windows]` 节，直接落笔。） -->
+   **④ 待拍板四项**：契约口径（放宽 / ~~Linux 改栈~~ / ~~差异登记例外~~；「原生界面栈」是否容 Skia 自绘）、Windows 路线 1 还是 2、后台 A/B/C、是否同意由本侧挂提案改契约层三处（`§3` GUI 框架行、`P-19`/`P-23`/`P-24` 的 WPF 字样、「无 Electron / 原生界面栈」的宽严）。**`§9.2.6-3` 的 50 万行基线是 WPF 口径，换前端须复测。** <!-- exclusive-allow：**2026-10-14 人类主人裁决同步** —— 本项里的「Linux 改栈」与「差异登记例外」两半**就此关闭**（原由「Linux 被迫用 Electron（公司老机器）」已随「清公司 Linux 描述」作废 ⇒ 被迫理由消失；裁决原文「**Linux 端『Electron 例外』不予开 —— 守契约**」）。**剩余待拍板 = Skia 自绘口径 / Windows 路线 / 后台档 / 契约层三处提案** 四项。（单 `T-20261014-019`；本行属本侧 `[独占:windows]` 节，直接落笔。） -->
    **⑤ 追加口径（2026-09-28 同次）**：~~**Linux 端用 Electron 是被迫** —— 那台机器是**公司资产、系统老旧、没有软件源、装不了最新版本** ⇒ …不必为此放宽总契约~~ ⇒ **2026-10-14 令：该前提作废**（不再受「公司老机器」约束，Linux 端在本仓自行实现）⇒ **技术栈按总契约「原生界面栈 / 无 JVM / 无 Electron」（§1 条 1）重新评估**，若仍要例外须按**平台差异例外**独立拍板并登记进 §9.2；相应地 **Windows 端是否允许 Web 外壳不得以 Linux 为先例**，仍须独立拍板。 <!-- exclusive-allow：人类主人 2026-10-14 令「公司那个描述都可以去掉了」⇒ 清除本节内残留的 Linux-公司口径（该行讲 Linux、却落在 [独占:windows] 节内；前门代改并留痕） -->
    **⑥ 优先序（**以 2026-09-28 开工令为准**）**：① **Studio（工作区，Windows 侧）= 高** → ② **Notes = 中**（三书 `b711548`：需求 121 条 / 看板 79 项）→ ③ **Retro = 低**（`T05` 首片按新栈需改写成 Rust）｜**记账挂起、iOS 挂起、Linux 端不投入**。**留痕**：本轮之前本侧曾把「Studio 工作区 = 高」记成误投（当作大河马侧口径）、把优先序记成 Notes 优先 —— **该判断已被开工令推翻**，以本行为准。
-   **⑦ 拍板结果（2026-09-28 需求提出者开工令；实测落地见 §8.5.7）**：**本侧三线同栈** = 前端 **Tauri 2 + Vue 3 + TypeScript**、后端 **Rust**、测试 `cargo test` + `vitest`、分发 Tauri bundler（MSI / NSIS）；**能共用的能力尽量落同一个 Rust 共享库**；**Studio 开工后第一件事不是写功能，而是结果集网格压力基准（40 万行 × 20 列）—— 过了再铺功能**（本侧第 24 轮落 `windows/Core` + `windows/Bench/grid` + 闸门第 12 项）。④ 里的四项待拍板**仍然有效**（契约口径 / 路线 / 后台 / 提案）：开工令定的是**本侧栈**，没动契约层字面。
-   （`§8.5.1` 属本侧节、可直接改；契约层三处**必须走 `Docs/proposals/`**。）
+   **⑦ 拍板结果（2026-09-28 需求提出者开工令；实测落地见 §9.2.7）**：**本侧三线同栈** = 前端 **Tauri 2 + Vue 3 + TypeScript**、后端 **Rust**、测试 `cargo test` + `vitest`、分发 Tauri bundler（MSI / NSIS）；**能共用的能力尽量落同一个 Rust 共享库**；**Studio 开工后第一件事不是写功能，而是结果集网格压力基准（40 万行 × 20 列）—— 过了再铺功能**（本侧第 24 轮落 `windows/Core` + `windows/Bench/grid` + 闸门第 12 项）。④ 里的四项待拍板**仍然有效**（契约口径 / 路线 / 后台 / 提案）：开工令定的是**本侧栈**，没动契约层字面。
+   （`§9.2.1` 属本侧节、可直接改；契约层三处**必须走 `Docs/proposals/`**。）
 
 ### 9.2.7 当前状态
 
 **实现本体 🟡 首片已落地（2026-09-28 第 24 轮）；闸门 ✅ 已就位（13 项）**（2026-09-27 需求提出者拍板「Windows 版本的 Doyah Studio 也可以动工了」；2026-09-28 开工令把本侧栈换成 **Tauri 2 + Vue 3 + TS / Rust**）。本节 = **实现层的设计落位（首建，2026-09-27，小河马）**；口径「先有闸门再有功能」已满足 ⇒ 第 24 轮按开工令先做**结果集网格压力基准**（`windows/Core` + `windows/Bench/grid`），**过了再铺功能**。**注意：闸门与基准台都不是功能进度**，故 计划书 §5 平台等价矩阵的 Windows 列仍全 ⬜（唯一如实状态）。**第 25 轮**：把闸门里一处「如实跳过」变成「真跑」—— `check-core-boundary.ps1` 按 Rust 形态重建（读数见本节末表）。
 
-**开工前置与首片进度**：① §8.5.6-2（机械设施扩多平台）**已就位**（契约侧 `cfd91c1`）；② §8.5.6-1（落点）**已定 = 同仓 `windows/`**（契约侧 `991ff6f` 已落 §8.2；提案 `0002` 标已采纳）；③ §8.5.3 表里的等价物已全部落到 `windows/Tools/` —— `verify-all.ps1`（**第 24 轮 12 → 13 项**：新增第 12 项 = 结果网格压力基准可复跑；第 ③④ 两项按新栈改为 `cargo` / `npm`）+ 其余子闸门；④ **首片落地物** = Rust 领域层 `windows/Core`（工作区 + 15 个 `cargo test` 用例）与基准台 `windows/Bench/grid`（Vue 3 + TS + Vite + TanStack Virtual，`vitest` 5 例、`tsc --noEmit` 干净）；⑤ `App/` `Cli/` `Platform/Windows/` **仍未建**（⬜ 不半建）。
+**开工前置与首片进度**：① §9.2.6-2（机械设施扩多平台）**已就位**（契约侧 `cfd91c1`）；② §9.2.6-1（落点）**已定 = 同仓 `windows/`**（契约侧 `991ff6f` 已落 §8.2；提案 `0002` 标已采纳）；③ §9.2.3 表里的等价物已全部落到 `windows/Tools/` —— `verify-all.ps1`（**第 24 轮 12 → 13 项**：新增第 12 项 = 结果网格压力基准可复跑；第 ③④ 两项按新栈改为 `cargo` / `npm`）+ 其余子闸门；④ **首片落地物** = Rust 领域层 `windows/Core`（工作区 + 15 个 `cargo test` 用例）与基准台 `windows/Bench/grid`（Vue 3 + TS + Vite + TanStack Virtual，`vitest` 5 例、`tsc --noEmit` 干净）；⑤ `App/` `Cli/` `Platform/Windows/` **仍未建**（⬜ 不半建）。
 
 **本机实测（2026-09-27 第 19 / 20 / 22 轮，命令与输出照录）**：
 
@@ -1728,18 +1728,18 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 | 越界门禁（**合并对侧提交后**仍用 `--base HEAD`）| `python Scripts/check-exclusive-sections.py --mine windows --base HEAD` | ❌ **76 处假红** —— 全是**对侧刚合并进来那笔提交**的契约层改动（`HEAD` 里还没它）⇒ **merge 后推前一律用 `--base origin/master`**，或先提交 merge 再跑；本侧改动在该视图下全部合法 |
 | 文档表格（受检清单含本地文档 ⇒ 本机必红）| `python Scripts/check-doc-tables.py` | ❌ 5 处，**全部为「文件不存在」**（即被 `.gitignore` 排除的那 5 份），**与本侧改动无关** |
 | 文档表格（只查入库文档）| `python Scripts/check-doc-tables.py Docs/Doyah产品概要设计说明书.md Docs/Doyah产品需求规格说明书.md Docs/README.md Docs/proposals/README.md Docs/proposals/0002-*.md` | `✅ 表格校验通过（5 个文件）` · RC 0 |
-| **文档版本与取号**（契约侧 L-32 新门禁）| `python Scripts/check-doc-versions.py` | `✅ 变更记录版本号唯一、头部版本可判、队列条目号唯一` · RC 0；另有 4 条**「文件不在盘上，跳过（不是「已通过」）」**提示（兼容性矩阵 / 发布方案 / 手工验收运行手册 / 开发循环-任务队列 —— 均为 `.gitignore` 排除的本地文档，与 8.5.6-4 ③ 同源）|
+| **文档版本与取号**（契约侧 L-32 新门禁）| `python Scripts/check-doc-versions.py` | `✅ 变更记录版本号唯一、头部版本可判、队列条目号唯一` · RC 0；另有 4 条**「文件不在盘上，跳过（不是「已通过」）」**提示（兼容性矩阵 / 发布方案 / 手工验收运行手册 / 开发循环-任务队列 —— 均为 `.gitignore` 排除的本地文档，与 9.2.6-4 ③ 同源）|
 | 取号（入库文档，**禁手抄**）| `python Scripts/next-doc-version.py Docs/Doyah产品概要设计说明书.md Docs/Doyah产品需求规格说明书.md` | `v2.44 ← Docs/Doyah产品概要设计说明书.md`、`v3.245 ← Docs/Doyah产品需求规格说明书.md` ⇒ 本轮台账行取 **v2.44**（由工具给出，未手抄）|
 | 取号（队列条目号）| `python Scripts/next-doc-version.py --ids L` | ❌ **RC 1**：`FileNotFoundError: Docs/智能体助手-开发spec.md`（该文件不入库）⇒ **本侧在该机上不可用**；队列号本侧仍按对侧既有编号顺延（见建议）|
-| **闸门 · 一条命令跑全（第 21 轮新落）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：11 项中跑 7 / 跳过 4 / 失败 0` + 逐条列出跳过项；`RESULT: SKIP (exit 2)`（**跳过不是「已通过」**，§8.3.2）|
+| **闸门 · 一条命令跑全（第 21 轮新落）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：11 项中跑 7 / 跳过 4 / 失败 0` + 逐条列出跳过项；`RESULT: SKIP (exit 2)`（**跳过不是「已通过」**，§3.6.4）|
 | **闸门 · 跳过即红** | 同命令加 `-RequireAll` | ❌ `RESULT: FAIL (exit 1)` —— 4 项跳过即判红 |
-| **`P-*` 两侧对账**（契约侧 L-45 新判据，第 22 轮接进本侧闸门）| `python Scripts/check-p-parity.py`（本侧入口 `windows/Tools/check-p-parity.ps1`）| `✅ P-* 对账通过（双向覆盖 + 同号同物 + §8.5.5 无未并入条目）` —— 两侧均 `P-01` ~ `P-25`、同号同物逐条一致、**本节 8 条全部已并入** · RC 0；判据 `--self-test` **8/8**（含「§8.5.5 已落条但未并入」那一例）|
+| **`P-*` 两侧对账**（契约侧 L-45 新判据，第 22 轮接进本侧闸门）| `python Scripts/check-p-parity.py`（本侧入口 `windows/Tools/check-p-parity.ps1`）| `✅ P-* 对账通过（双向覆盖 + 同号同物 + §9.2.5 无未并入条目）` —— 两侧均 `P-01` ~ `P-25`、同号同物逐条一致、**本节 8 条全部已并入** · RC 0；判据 `--self-test` **8/8**（含「§9.2.5 已落条但未并入」那一例）|
 | **闸门 · 一条命令跑全（第 22 轮：11 → 12 项）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：12 项中跑 8 / 跳过 4 / 失败 0` + `RESULT: SKIP (exit 2)`；跳过 4 项仍是构建 / 单测 / 领域层边界 / 令牌棘轮（工程未建），逐条列出 |
 | **闸门 · 注入自证（第 22 轮新增第 11 项）**| 往 §8.5.5 加一条只在本节出现的 `P-26`（不写进 §4 / §9.2）| ✅ 判据 **RC 1** 并点名 `Docs/Doyah产品概要设计说明书.md:1039：§8.5.5（[独占:windows]）已落条目 `P-26`，但它还没进 §9.2 / §4`；本侧第 11 项 `RESULT: FAIL (exit 1)` ⇒ `git checkout HEAD -- Docs/Doyah产品概要设计说明书.md` 还原后**逐字节一致**、转绿 RC 0 |
 | **闸门 · 一处假红及其修复（第 22 轮）**| 修复前：`verify-all.ps1`（第 ③ 项）| ❌ 第 ③ 项 `抛异常：…check-doc-tables.py:46: SyntaxWarning: invalid escape sequence '\|'` —— 判据本身 **rc 0**（`✅ 表格校验通过（6 个文件，跳过 7 份）`），坏在 **PowerShell 5.1 把原生命令写到 stderr 的任意一行**在 `$ErrorActionPreference='Stop'` 下当**终止错误** ⇒ `_common.ps1` 改为**只由退出码决定判红**（stderr 照原样打印、不吞、不静默），修复后即 `跑 8 / 跳过 4 / 失败 0` |
 | **越界门禁（第 22 轮复跑）** | `python Scripts/check-exclusive-sections.py --mine windows --base origin/master` | `✅ 越界检查通过：受检改动 18 行（含契约层），均合法（本侧=windows，**契约层属 apple**）` · RC 0 —— 尾巴的 `apple` 是本轮新现象：三副本并集收敛（L-51 `e340782`）后本仓副本的 `--contract-owner` 默认值成了 Notes 词表的 `apple`（**别名等价 `macos`，功能无碍**，仅显示串与 docstring 示例改了词表）⇒ 建议对侧把本仓副本的默认值 / 示例串写回 `macos`（本侧只报不动 `Scripts/`）|
 | **闸门 · 注入自证四例**（逐例：注入 → 红 → 还原 → **逐字节一致** → 绿）| ① 台账给 Windows 登记 1 条 overrides；② 子脚本去 UTF-8 BOM；③ 夹具 `windows/Core` 开 `UseWPF` + 写 `DllImport`；④ 缺本地文档 | 四例全中：① `未开工却登记了 1 条 overrides ⇒ 不如实`；② `verify-all` 第 1 项判红、整条 FAIL；③ 两条都点名（`UseWPF` / `DllImport`）；④ `check-doc-tables.ps1 -RequireAll` = FAIL。还原后逐字节一致、门禁转绿（本侧第 21 轮复跑同 harness，逐例一致）；用例细节与另两条实测坑见 `windows/Tools/README.md` |
-| **结果网格性能（50 万行 × 6 列，首份基线）**| 仓外临时 WPF 探针（`dotnet run`，**离屏**、.NET 6；工程未入库）| 绑定 16 ms / 冷布局 906 ms（实体化 **48** 行）/ 热布局 0 ms / 末行 `ScrollIntoView` 17 ms / **排序 5493 ms** / 筛选重布局 250 ms / 内存 112.7 MB（峰值 WS 246.1 MB）⇒ 详见 8.5.6-3（**瓶颈在排序**；口径限制四条，不据此宣布达标）|
+| **结果网格性能（50 万行 × 6 列，首份基线）**| 仓外临时 WPF 探针（`dotnet run`，**离屏**、.NET 6；工程未入库）| 绑定 16 ms / 冷布局 906 ms（实体化 **48** 行）/ 热布局 0 ms / 末行 `ScrollIntoView` 17 ms / **排序 5493 ms** / 筛选重布局 250 ms / 内存 112.7 MB（峰值 WS 246.1 MB）⇒ 详见 9.2.6-3（**瓶颈在排序**；口径限制四条，不据此宣布达标）|
 | **领域层边界（第 25 轮按 Rust 形态重建）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/check-core-boundary.ps1` | `✅ 领域层边界干净（Core 依赖 0 条 / 源文件 5 个；GUI 与平台能力只在 Platform\Windows\）` + `自测：7/7 例通过`（基线 / 依赖注入 / 源码 crate 名 / FFI 形状 / 空跑 / 逃生门 / 末例核对真仓库逐字节未变）· `RESULT: PASS (exit 0)` |
 | **闸门 · 重跑（第 25 轮）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：13 项中跑 12 / 跳过 1 / 失败 0` + `RESULT: SKIP (exit 2)`；**跳过 1 项 = 设计令牌棘轮**（唯一剩项，等 `App/` 落地）；第 24 轮那一项判红（本地落后远端未合并的独占节越界）在合并对侧 `9cab5a9` 后已绿 |
 | **闸门 · 领域层边界注入自证（第 25 轮，真仓库三例）** | ① `Core/Cargo.toml` 的 `[dependencies]` 加 `tauri = "2"`；② `Core/src/lib.rs` 加 `use windows::core::*;`；③ 同文件加 `extern "C" { fn probe(); }` | ❌ 三例全中并点名：`Cargo.toml:8 依赖面命中 GUI / 平台 crate：tauri` / `windows\Core\src\lib.rs:13 出现 use GUI / 平台 crate`（同行 crate 路径规则亦命中）/ `lib.rs:13 出现 FFI：extern "C"` ⇒ 逐例**按原始字节还原**（sha256 逐字节一致）后净跑 `RESULT: PASS (exit 0)` |
@@ -1757,25 +1757,25 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 | **闸门 · 两处假绿修复（第 30 轮）** | ① 平台中立性判据的受检三书不在盘上；② 子闸门抛异常后工作目录没还 | ❌ 两处都当场复现并修：① 判据整批**跳过**却 `exit 0` ⇒ 本侧报「✅ 通过」（受检输入不在盘上**必须先判红** ⇒ 包装补一条盘上检查）；② 子闸门 `Push-Location` 后抛异常 ⇒ **后续项全跑在错的目录**（令牌项的红被记到平台等价项头上）⇒ 包装在 `finally` 里还原并打印泄露路径 |
 | **闸门 · 单测项补类型检查（第 30 轮）** | `cd windows/App && npm run typecheck` | ✅ 通过（`tsc --noEmit` 干净）。**补它的由头**：`vite build` **不做类型检查**、`vitest` 只跑被 import 到的用例 ⇒ 一个 `.vue` / `.ts` 里的类型错误此前能同时绕过 ① 与 ②（改坏了照样全绿） |
 | **闸门 · 重跑（第 30 轮）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：14 项中跑 14 / 跳过 0 / 失败 0` + `RESULT: PASS (exit 0)` |
-| **真机基准 · 起真外壳并注入驱动（第 28 轮新落）** | `cd windows/Bench/webview2 && node bench.mjs`（产物 = `target/release/doyah-studio.exe`，**须生产形态**） | `页面 = http://tauri.localhost/`；`首屏 559.6 ms · GPU renderer = ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)`；**空转 16.7 ms / 60.1 fps**；**滚动 40 万行 p50 50.1 / p95 63.1 ms（19.3 fps，240/240 超 16.7 ms）**；5 万行 50.3 ms；2 千行 49.4 ms；**IPC 隔离档 51.0 ms**；DOM 38 行；布局 272 次 / 3.71 s；样式重算 272 次 / 1.14 s；进程树峰值 789 MB（估算） ⇒ 复跑 4 轮 p50 = 46.1 / 49.6 / 50.1 / 48.8 ms（口径限制六条见 §8.5.6-3）|
+| **真机基准 · 起真外壳并注入驱动（第 28 轮新落）** | `cd windows/Bench/webview2 && node bench.mjs`（产物 = `target/release/doyah-studio.exe`，**须生产形态**） | `页面 = http://tauri.localhost/`；`首屏 559.6 ms · GPU renderer = ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)`；**空转 16.7 ms / 60.1 fps**；**滚动 40 万行 p50 50.1 / p95 63.1 ms（19.3 fps，240/240 超 16.7 ms）**；5 万行 50.3 ms；2 千行 49.4 ms；**IPC 隔离档 51.0 ms**；DOM 38 行；布局 272 次 / 3.71 s；样式重算 272 次 / 1.14 s；进程树峰值 789 MB（估算） ⇒ 复跑 4 轮 p50 = 46.1 / 49.6 / 50.1 / 48.8 ms（口径限制六条见 §9.2.6-3）|
 | **构建入口 · 产物「生产形态」判据（第 28 轮新落，在 `build.ps1` 内）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/build.ps1` | `✅ 生产形态核对：前端产物 2 份（index-BZikEOCC.css、index-CzsUUTBT.js）已编进 doyah-studio.exe` · `RESULT: PASS (exit 0)`；**注入自证**（去掉 cargo 调用的 `--features doyah-studio-shell/custom-protocol`）⇒ `❌ 判红：产物不是生产形态：前端产物没被编进可执行文件（缺 index-BZikEOCC.css、index-CzsUUTBT.js）—— 构建必须带 custom-protocol 特性` · `RESULT: FAIL (exit 1)`；按**原始字节**还原后 sha256 一致（`afd2b565194a`）⇒ 净跑转绿 |
 | **真机基准 · 注入前的形态缺陷（第 28 轮实测）** | 不带特性开关编出来的 `target/release/doyah-studio.exe` 直接起（本仪器第一次运行） | ❌ 页面 URL = `http://localhost:5274/`（连 `devUrl`，盘上无 dev server ⇒ 空窗口）；本仪器打印 `NO_PAGE`（只认 `tauri://localhost`）。**这说明「构建入口通过」当时并不等于「产物能跑」** —— 现已由上面的判据机械拦下 |
-| **真机基准 · 消融档与同轮内对照（第 29 轮新落）** | `cd windows/Bench/webview2 && node bench.mjs`（同一产物；本轮只改仪器，产品代码与二进制未动） | `invoke 可替换性：descriptor={"writable":false,"configurable":false,"accessor":false} · definePropertyOk=false`（**第 28 轮「IPC 隔离档」从未生效的机械证据**，旧读数里 `cachedWindowCalls: 0` 与它互相印证）；**慢速滚动消融档 p50 17.9 ms / 46.9 fps**（布局 0.33 s / 160 次、样式重算 0.06 s / 160 次、窗口只换 4 次、`windowShifts` 记进读数）· **同轮基线 p50 79.1 ms / 8.5 fps**（布局 6.39 s / 295 次、样式重算 1.99 s / 295 次）· **基线复跑 78.6 ms**（轮内两次相差 0.5 ms）· 空转 17.9 ms / 56 fps ⇒ 结论 = **传输 / 响应式 / diff / 滚动簿记合计不足一个 vsync 周期，61 ms/帧 全在「写 DOM + 重排版 / 重绘」**（口径限制七条见 §8.5.6-3）|
+| **真机基准 · 消融档与同轮内对照（第 29 轮新落）** | `cd windows/Bench/webview2 && node bench.mjs`（同一产物；本轮只改仪器，产品代码与二进制未动） | `invoke 可替换性：descriptor={"writable":false,"configurable":false,"accessor":false} · definePropertyOk=false`（**第 28 轮「IPC 隔离档」从未生效的机械证据**，旧读数里 `cachedWindowCalls: 0` 与它互相印证）；**慢速滚动消融档 p50 17.9 ms / 46.9 fps**（布局 0.33 s / 160 次、样式重算 0.06 s / 160 次、窗口只换 4 次、`windowShifts` 记进读数）· **同轮基线 p50 79.1 ms / 8.5 fps**（布局 6.39 s / 295 次、样式重算 1.99 s / 295 次）· **基线复跑 78.6 ms**（轮内两次相差 0.5 ms）· 空转 17.9 ms / 56 fps ⇒ 结论 = **传输 / 响应式 / diff / 滚动簿记合计不足一个 vsync 周期，61 ms/帧 全在「写 DOM + 重排版 / 重绘」**（口径限制七条见 §9.2.6-3）|
 | **真机基准 · 样式消融与变更观察（第 30 轮新落）** | `cd windows/Bench/webview2 && node bench.mjs`（在**改动前**的产品二进制上量四档消融 + 变更观察档） | 消融：基线 **79.3 ms**（复跑 77.6）· `contain-row` 78.4 / `contain-cell` 79.7（**单独加隔离无效**）· `clip-cell` **66.0**（≈13 ms/帧）· `hidden-rows` **52.7**（≈27 ms/帧；p95 526.7 → 72.4、长任务 267 次 / 21.0 s → 136 次 / 7.7 s）；变更观察（270 帧）：每帧新增 **623** 节点 + 属性 **612** 次（全 `title`）、`characterData` 恒 0 ⇒ 脚本/仪器侧改动见 `Bench/webview2/README.md` |
-| **真机基准 · 产品侧三候选同轮 A/B（第 30 轮）** | `node bench.mjs --quick --exe ../../target/bench-exe/<臂>.exe`（三臂交替相邻跑，全部在 5 分钟内；注意跨会话漂移 > 50%） | 基线 **49.6 ms**（51.3 / 49.2 · 48.0 / 50.0）→ 行池 + 轮转槽位 **36.5**（37.3 / 35.7，−26%）→ 再 + 前瞻取数 `LOOKAHEAD=12` + `text-overflow: clip` + 行 `contain` **26.2**（26.5 / 26.6 · 26.2 / 25.4，**−47%**）；p95 67.9~69.1 → **40.9~41.0**，`over16` 240/240 → **168~182/240**，变更观察 623 + 612 → **207 + 87** 每帧，布局 3.58~3.92 s → **1.28~1.35 s**、样式重算 1.12~1.18 s → **0.37~0.38 s**；**内容成本（p50 − 同轮空转地板 17.9 ms）31.7 → 19.8 → 8.3 ms**（口径与「读不出 60 fps」见 §8.5.6-3 ⑥⑦） |
+| **真机基准 · 产品侧三候选同轮 A/B（第 30 轮）** | `node bench.mjs --quick --exe ../../target/bench-exe/<臂>.exe`（三臂交替相邻跑，全部在 5 分钟内；注意跨会话漂移 > 50%） | 基线 **49.6 ms**（51.3 / 49.2 · 48.0 / 50.0）→ 行池 + 轮转槽位 **36.5**（37.3 / 35.7，−26%）→ 再 + 前瞻取数 `LOOKAHEAD=12` + `text-overflow: clip` + 行 `contain` **26.2**（26.5 / 26.6 · 26.2 / 25.4，**−47%**）；p95 67.9~69.1 → **40.9~41.0**，`over16` 240/240 → **168~182/240**，变更观察 623 + 612 → **207 + 87** 每帧，布局 3.58~3.92 s → **1.28~1.35 s**、样式重算 1.12~1.18 s → **0.37~0.38 s**；**内容成本（p50 − 同轮空转地板 17.9 ms）31.7 → 19.8 → 8.3 ms**（口径与「读不出 60 fps」见 §9.2.6-3 ⑥⑦） |
 | **闸门 · 重跑（第 30 轮）** | `powershell -NoProfile -ExecutionPolicy Bypass -File windows/Tools/verify-all.ps1` | `== 收尾：14 项中跑 14 / 跳过 0 / 失败 0` + `RESULT: PASS (exit 0)`（本轮改产品代码 + 仪器，闸门项数与清单未动） |
 
-**本轮（第 20 轮）未改契约语义、未改 §3、未改 macOS / Linux 节**：改动只落在本节（`[独占:windows]`）与 §10 台账行（`[开放]`）；**唯一落在无标记节的一处 = 头部「版本」格的「当前」号**（按 `check-doc-versions.py` 判据同步 v2.43 → v2.44，已在**同一行单元格内**注 `contract-change：理由` 痕迹）。Windows 列状态一字未动（仍全 ⬜ —— 未开工时唯一如实状态）。第 19 轮的改动范围见 v2.42 行。**第 21 轮**（落闸门）改动范围同上：新增 `windows/`（实现层目录，不受越界门禁管辖 —— 门禁只管三书 + 本地文档）+ 本节三处 + §10 一行；**唯一落在无标记节的仍是头部「版本」格那一行**（按判据同步「当前」号，已在同一格内注 `contract-change` 痕迹）。**第 22 轮**（接契约侧 L-45 的 `P-*` 对账判据 + 修一处假红 + 销 §8.5.5 的并入状态）改动范围：`windows/Tools/`（新增 `check-p-parity.ps1`、`verify-all.ps1` 11 → 12 项、`_common.ps1` 加「只认退出码」护栏）+ 本节四处（8.5.3 / 8.5.5 / 8.5.6-1 / 8.5.7）+ §10 一行；**唯一落在无标记节的仍是头部「版本」格那一行**（同步 v2.49，同一格内注 `contract-change` 痕迹）。
+**本轮（第 20 轮）未改契约语义、未改 §3、未改 macOS / Linux 节**：改动只落在本节（`[独占:windows]`）与 §10 台账行（`[开放]`）；**唯一落在无标记节的一处 = 头部「版本」格的「当前」号**（按 `check-doc-versions.py` 判据同步 v2.43 → v2.44，已在**同一行单元格内**注 `contract-change：理由` 痕迹）。Windows 列状态一字未动（仍全 ⬜ —— 未开工时唯一如实状态）。第 19 轮的改动范围见 v2.42 行。**第 21 轮**（落闸门）改动范围同上：新增 `windows/`（实现层目录，不受越界门禁管辖 —— 门禁只管三书 + 本地文档）+ 本节三处 + §10 一行；**唯一落在无标记节的仍是头部「版本」格那一行**（按判据同步「当前」号，已在同一格内注 `contract-change` 痕迹）。**第 22 轮**（接契约侧 L-45 的 `P-*` 对账判据 + 修一处假红 + 销 §9.2.5 的并入状态）改动范围：`windows/Tools/`（新增 `check-p-parity.ps1`、`verify-all.ps1` 11 → 12 项、`_common.ps1` 加「只认退出码」护栏）+ 本节四处（9.2.3 / 9.2.5 / 9.2.6-1 / 9.2.7）+ §10 一行；**唯一落在无标记节的仍是头部「版本」格那一行**（同步 v2.49，同一格内注 `contract-change` 痕迹）。
 
-### 9.2.8 插件架构落地（本侧实现层；契约依据 = §3.52，2026-10-13 落笔） [独占:windows]
+### 9.2.8 插件架构落地（本侧实现层；契约依据 = §3.2.6，2026-10-13 落笔） [独占:windows]
 
-**归属与读法**：本节属 `[独占:windows]`，**只由 Windows 侧修改**；契约层（§3.52 / §3.23 / §3.13 `FR-PLUG` 族）**只读**，要改走「待落笔清单」给契约所有者 `bluewhale`。
-**本节只写实现层**：把 §3.52 的**六条契约**翻译成 **Windows 侧（Tauri 2 + Vue 3 + Rust）的可执行落法**。
+**归属与读法**：本节属 `[独占:windows]`，**只由 Windows 侧修改**；契约层（§3.2.6 / §3.13 `FR-PLUG` 族）**只读**，要改走「待落笔清单」给契约所有者 `bluewhale`。
+**本节只写实现层**：把 §3.2.6 的**六条契约**翻译成 **Windows 侧（Tauri 2 + Vue 3 + Rust）的可执行落法**。
 **人类主人 2026-10-13 令（本侧口径）**：**Windows 侧独立实现**（macOS 侧已实现，只作对照）· Notes / Retro 的功能本体**取自《产品能力规划说明书》** · **本轮先做「插件骨架 + 空模块」**。
 
-#### 8.5.8.1 现状与差距（先把事实摆平） [独占:windows]
+#### 9.2.8.1 现状与差距（先把事实摆平） [独占:windows]
 
-| 项 | 现状 | 与 §3.52 的差距 |
+| 项 | 现状 | 与 §3.2.6 的差距 |
 |---|---|---|
 | 插件清单 | **无**（活动栏四项**写死在类型里**：`App/src/shell/activityBar.ts` 的 `ActivityBarItemId = 'workspace'｜'database'｜'notes'｜'retro'`） | 契约②要求**一处声明**、界面与构建**只消费它** ⇒ 需把"写死的四项"改成"**清单驱动**" |
 | Notes / Retro | **无实现**（`notes` 是占位、`retro` 未开工） | 需各落一个**模块**（本轮 = 空模块 + 骨架） |
@@ -1786,7 +1786,7 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 
 **一句话**：**挂点骨架已有雏形（活动栏 + 单点可见性判据 + 领域层边界闸门），缺的是"清单唯一出处 + 视图注册表 + 装卸语义"这三块。**
 
-#### 8.5.8.2 三层结构（本侧实现决策） [独占:windows]
+#### 9.2.8.2 三层结构（本侧实现决策） [独占:windows]
 
 ```
 ① 插件清单（唯一出处）      Plugin 声明：名称/版本/入口/能力/挂点/存储归属
@@ -1796,31 +1796,31 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 ③ 插件模块（Notes / Retro）   每个 = 一份声明 + 一组挂点注册（本轮：空实现）
 ```
 
-**分层归属（映射到本侧已有工程结构，见 §8.5.1）**：
+**分层归属（映射到本侧已有工程结构，见 §9.2.1）**：
 
 | 层 | 落点 | 为什么 |
 |---|---|---|
 | **插件清单与装载**（纯逻辑，可单测） | **Rust `Core/`**（领域层，零 UI 依赖） | 清单的**校验与合并是纯逻辑** ⇒ 放领域层才能被 `cargo test` 判；且天然满足"插件不得触碰宿主内部模型"（领域层不依赖 GUI） |
 | **挂点接口与注册表** | **Rust 命令 + `App/src/shell/plugins.ts`** | 命令面与界面面各一处，**薄**（只转发与注册，不写业务） |
 | **插件界面** | `App/src/plugins/<id>/` | 每个插件一个目录，**可整目录拔掉** |
-| **插件闸门** | `Tools/check-plugins.ps1`（新增） | 见 8.5.8.4 |
+| **插件闸门** | `Tools/check-plugins.ps1`（新增） | 见 9.2.8.4 |
 
-#### 8.5.8.3 宿主挂点 → 本侧具体接口（一张对账表） [独占:windows]
+#### 9.2.8.3 宿主挂点 → 本侧具体接口（一张对账表） [独占:windows]
 
-| §3.52 挂点 | 本侧落点 | 关键约束 |
+| §3.2.6 挂点 | 本侧落点 | 关键约束 |
 |---|---|---|
 | **活动栏项** | `activityBar.ts` 的项集合**改为由清单派生**（保留 `resolveActivityBarItem` 这唯一判据） | 未授权的插件项**不出现**（不是灰掉）——沿用现有 `visible` 机制 |
 | **主区页签**（含 Home） | 新增**视图注册表** `App/src/shell/viewRegistry.ts`：`id → 组件（懒加载）`；`App.vue` 只查表、不再直接 import 各视图 | 视图 id **不在类型里写死**，从清单来 |
 | **菜单项** | 复用现有**命令清单**（`shell/commands.ts`，已是"面板/快捷键/菜单"三者唯一出处）——插件命令**并进同一份清单** | 新命令必须在清单登记（已有纪律） |
 | **搜索索引挂点** | 复用现有命令面板的目标合并（`shell/paletteTargets.ts`）；插件贡献自己的可搜目标 | 插件**只贡献条目**，不接管搜索算法 |
 | **设置面板段** | 现有外观区旁新增"插件设置段"挂点 | 段由插件声明，宿主只渲染 |
-| **存储工厂** | **清单里声明二选一**：① `bundled`（插件自带库/目录，宿主只给路径）② `host`（宿主提供插入式接口） | 见 8.5.8.5 |
+| **存储工厂** | **清单里声明二选一**：① `bundled`（插件自带库/目录，宿主只给路径）② `host`（宿主提供插入式接口） | 见 9.2.8.5 |
 | **通知与审计投递** | 复用现有**底部面板**（问题 / 输出）作为投递面 | 插件不自己弹窗 |
 
 **"插件不得直接触碰宿主内部模型"怎么判**（成对判据）：
-① **静态**：插件目录**不得** import 宿主内部模块（只允许挂点契约模块与公共类型）；② **运行**：拔掉插件后核心功能全绿（8.5.8.4）。
+① **静态**：插件目录**不得** import 宿主内部模块（只允许挂点契约模块与公共类型）；② **运行**：拔掉插件后核心功能全绿（9.2.8.4）。
 
-#### 8.5.8.4 可装卸语义（契约④）→ 本侧机械判据 [独占:windows]
+#### 9.2.8.4 可装卸语义（契约④）→ 本侧机械判据 [独占:windows]
 
 **判据对象**：`Tools/check-plugins.ps1`（新增，接进 `verify-all.ps1` 作为一项）。**五道**：
 
@@ -1834,16 +1834,16 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 
 **纪律**：这五道里 **②③④ 必须"真拔一次"**——只看代码不下结论（沿用本侧既有纪律：**空跑不许通过**）。
 
-#### 8.5.8.5 存储边界（契约⑤）→ 本侧落法 [独占:windows]
+#### 9.2.8.5 存储边界（契约⑤）→ 本侧落法 [独占:windows]
 
 | 插件 | 存储归属（清单里声明） | 本侧落法 |
 |---|---|---|
 | **Notes** | **`bundled`（自带存储）** | 本机 **SQLite**（沿用 `FR-STD-ALL-PLUG-008` 口径：主存进库、附件二进制留文件系统）；**数据家独立**于工程数据家（`FR-STD-ALL-PLUG-004`） |
 | **Retro** | 本轮**声明为 `bundled`**，具体引擎在功能本体落地时定 | 空模块阶段只落声明与目录 |
 
-**云同步**：按契约⑤，**笔记的云同步面跟着插件走**，宿主**只提供网络与凭据能力**（凭据仍走 Windows 凭据管理器，见 §8.5.2）。
+**云同步**：按契约⑤，**笔记的云同步面跟着插件走**，宿主**只提供网络与凭据能力**（凭据仍走 Windows 凭据管理器，见 §9.2.2）。
 
-#### 8.5.8.6 本轮做什么（先骨架 + 空模块） [独占:windows]
+#### 9.2.8.6 本轮做什么（先骨架 + 空模块） [独占:windows]
 
 | # | 交付物 | 判据 |
 |---|---|---|
@@ -1854,7 +1854,7 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 | 5 | **`Tools/check-plugins.ps1` 五道** | 四道注入自证（逐例：注入 → 红 → 还原 → 逐字节一致 → 绿） |
 | 6 | **本节 + 变更记录 + 取号跟版** | `check-doc-tables` / `check-doc-versions` rc=0 |
 
-#### 8.5.8.7 验收判据（成对：静态一条 + 端上一条 + 否定面） [独占:windows]
+#### 9.2.8.7 验收判据（成对：静态一条 + 端上一条 + 否定面） [独占:windows]
 
 | # | 判据 | 否定面（必须也判） |
 |---|---|---|
@@ -1866,13 +1866,13 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 
 **端上一条**（真机）：装包后**活动栏出现 Notes 入口**、点进去是"未开工"空态、**控制台无异常**；把插件目录临时移走后**入口消失且仍无异常**。
 
-#### 8.5.8.8 待定与报请（本侧不擅自决定） [独占:windows]
+#### 9.2.8.8 待定与报请（本侧不擅自决定） [独占:windows]
 
 1. **Retro 的功能本体出处**：契约只说"回放"，**具体功能条目**需从《产品能力规划说明书》/ SRS 取。**本轮按"空模块"处理**；本体落地前**报请人类主人指定条目范围**。
 2. **插件清单的物理形态**（Rust 常量 / 独立 `plugins.toml` / 生成物）：**本侧实现细节**，本节先按 **Rust 单一常量 + 生成前端可见清单** 落；若契约侧要跨端统一形态，走「待落笔清单」。
-3. **`FR-PLUG` 族与 §3.52 的隶属关系**：§3.52-⑥ 已写明"本节是前身条文的上升"，本侧**按 §3.52 落**；若契约侧后续拆分/合并该族，本侧跟版。
+3. **`FR-PLUG` 族与 §3.2.6 的隶属关系**：§3.2.6-⑥ 已写明"本节是前身条文的上升"，本侧**按 §3.2.6 落**；若契约侧后续拆分/合并该族，本侧跟版。
 
-#### 8.5.8.9 本轮明确不做（避免误会） [独占:windows]
+#### 9.2.8.9 本轮明确不做（避免误会） [独占:windows]
 
 - **不做** Notes / Retro 的功能本体（本轮 = 骨架 + 空模块）
 - **不做** 独立进程 / IPC / 可卸载组件包（`FR-STD-ALL-PLUG-001` **明文禁止**："同进程内模块装配"）
