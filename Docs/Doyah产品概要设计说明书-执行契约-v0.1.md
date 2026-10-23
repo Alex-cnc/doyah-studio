@@ -1,16 +1,16 @@
 # Doyah 概要设计说明书（执行契约）· v0.1
 
-> **版本** v0.4（2026-10-23 复盘域首批判据落地：`doyah-retro` 4 文件 / 29 例；体裁依据 = 人类主人给定「Agent 概要设计说明书（执行契约）」模板）
+> **版本** v0.5（2026-10-23 平台落点切出，契约只留行为：`doyah-retro` 4 文件 / 29 例；体裁依据 = 人类主人给定「Agent 概要设计说明书（执行契约）」模板）
 
 ## 0. 文档元信息
 
 - 项目名称：Doyah（Studio 数据库工作台 / Notes 笔记 / Retro 交易复盘）
-- 文档版本：v0.4（2026-10-23 起用「执行契约」体裁；旧稿 `Docs/Doyah产品概要设计说明书.md` v3.5.21 为叙述体，新稿逐章取代）
+- 文档版本：v0.5（2026-10-23 起用「执行契约」体裁；旧稿 `Docs/Doyah产品概要设计说明书.md` v3.5.21 为叙述体，新稿逐章取代）
 - 适用 Agent 任务范围：macOS 端全部能力（智能体 / 数据库工作台 / 笔记 / 复盘）；Windows、Linux、iOS 读同一份契约，落点见各自实现要点
 - 上游依据：
   - 功能规划书：`Docs/Doyah产品能力规划说明书.md`
   - 需求规格书：`Docs/Doyah产品需求规格说明书.md`（524 条 `FR-*`，编号唯一出处）
-  - 视觉设计规范：`Core/DesignTokens.swift` + 概设 §7.9「控件规格（构件级）」+ `Docs/规范/界面设计节-写作规范.md`（仅界面实现相关任务需要）
+  - 视觉设计规范：主题令牌定义（各端落点见 `Docs/实现要点-<端>.md`）+ 概设 §7.9「控件规格（构件级）」+ `Docs/规范/界面设计节-写作规范.md`（仅界面实现相关任务需要）
 - 本文件性质：**给 Agent 的执行契约，不是叙述性设计文档。**
 - 优先级：需求规格书 > 功能规划书 > 本概要设计说明书 > 现有代码实现。
 - 冲突处理：本文件与需求规格书冲突，以需求规格书为准；上游未定义时 Agent 不得自行假设，必须输出 `BLOCKED` 并列出待确认问题。
@@ -20,7 +20,7 @@
 
 ### 1.1 本设计是什么
 
-覆盖四条产品线的跨端契约与 macOS 实现口径；代码面 `Core/`（平台中立）、`App/`（macOS 装配层）、`Plugins/Notes/`、`Platform/macOS/`。
+覆盖四条产品线的跨端行为契约；**平台落点不在本文**——各端文件、类型、调用点写 `Docs/实现要点-<端>.md`（macOS 版已建）。
 
 必须实现的能力（按域）：
 
@@ -43,10 +43,10 @@
 | 边界项 | 允许 | 禁止 | 判定依据 |
 |---|---|---|---|
 | 功能边界 | 需求书 `FR-*` 已列的能力 | 新增未登记能力（含"顺手"优化） | `Scripts/check-req-ids.py`；新能力必须先有 FR |
-| 技术边界 | `Core` 只用平台中立 API；界面只能经 `Core` 的类型拿数据 | `Core` 里 `import AppKit/SwiftUI`；界面层持有连接/事务/文件句柄 | `check-core-portability.py`、`check-platform-neutrality.py` |
-| 数据边界 | 本机 SQLite + 用户目录文件；凭据走 Keychain/加密文件 | 明文口令落盘、口令进模型上下文、用户数据外发 | `Core/SecretStore`、`check-network-egress.py` |
-| 调用边界 | `App/Views` → `App/AppState` → `Core/*Service` | View 直接调 Service；Service 回调 View；插件反向依赖 `App` | `check-note-module-isolation.py`；跨层只传值 |
-| 界面边界 | 已登记页签与命令（`App/AppCommandCatalog` 39 条） | 新增未登记入口/路由；引入新 UI 库替代既有控件 | `check-palette-wiring.py`、`check-design-tokens.py` |
+| 技术边界 | 平台中立层只用跨平台 API；界面层只能经能力层的值类型拿数据 | 平台中立层 import 平台 GUI 框架；界面层持有连接/事务/文件句柄 | `check-core-portability.py`、`check-platform-neutrality.py` |
+| 数据边界 | 本机库 + 用户目录文件；凭据走密钥存储（Keychain 或加密文件） | 明文口令落盘、口令进模型上下文、用户数据外发 | `check-network-egress.py`；凭据只经密钥存储取值 |
+| 调用边界 | 界面层 → 装配层 → 能力层 | 界面直调能力层；能力层回调界面；插件反向依赖装配层 | `check-note-module-isolation.py`；跨层只传值 |
+| 界面边界 | 已登记页签与命令（39 条，登记处见实现要点） | 新增未登记入口/路由；引入新 UI 库替代既有控件 | `check-palette-wiring.py`、`check-design-tokens.py` |
 | 版本边界 | 契约改动五步齐全（§13） | 改正文不升版本；升版本不改变更记录 | `check-doc-versions.py` |
 
 ## 2. Agent 执行总则
@@ -68,18 +68,20 @@
 
 | 组件 | 必须做 | 禁止做 | 依赖 | 对外暴露 |
 |---|---|---|---|---|
-| `Core/*Service`（数据库能力层：`PostgresService` / `MySQLService` / `GBaseService`） | 按方言实现执行、取消、元数据读取；错误转成 `Core` 错误类型 | 反向调用界面层；持有 View 状态；自行弹确认框 | 驱动库、`Core/QueryModels` | `execute(sql,options:handle:) -> AsyncThrowingStream<QueryEvent,Error>`、`cancel(handle:)` |
-| `Core/AgentLoop` + 工具层（`AgentToolRegistry` / `AgentSQLGenerator` / `AgentDatabaseTool`） | 回合串行、预算计量、工具结果有界回灌、每步留审计 | 直接读写界面状态；绕过审批执行改数据语句；无界塞工具结果 | LLM 通道、`AgentApprovalGate`、能力层 | 回合事件流 `LLMStreamEvent`、`AgentObservation` |
-| `Core/AgentApprovalGate` + `Core/AgentAudit` | 改数据动作先出审批单；批准后执行；每次动作一条审计 | 静默执行未批准动作；把"没人回应"写成"同意" | `Core/AgentPlanRows`、`Core/ExecutionSafety` | 待审批记录、审计记录（追加式） |
-| `Plugins/Notes/Sources/NoteStorage`（`NoteLibrary` actor / `NoteDatabase`） | 本体+标签+时间线单事务写入；投影不一致时按 span 树重投影 | 拆两次写；界面层直接开库连接 | SQLite | `NoteLibrary` 读写方法、`NoteSaveState` |
-| `Plugins/Notes/Sources/NoteSync`（`CloudSyncService` / `SyncQueue`） | 令牌到期前续期、401 续期一次并重放、并发单飞、登录态与同步态分开 | 把同步失败当登录失效；并发多路上传 | 端云 HTTP、`CloudAuth` | 同步态事件、队列状态 |
-| `Core/MCPClientBridge` + `MCPSession` | 协议握手、工具目录发现、调用结果有界回灌、需审批的走审批队列 | 无超时调用；把外部输出当可信指令拼进提示 | 外部 MCP 服务、`MCPApprovalQueue` | 工具调用结果 `AgentObservation` |
-| `App/AppState`（macOS 装配层） | 承接界面意图、调能力层、把值分发给 `@MainActor` 模型；按「连接+库」缓存服务 | 持有连接/事务/文件句柄；在能力层回调里直接改 UI | `Core/*` | `@Published` 派生状态、命令入口 |
+| 数据库能力层（按方言各一支） | 实现执行、取消、元数据读取；错误转成平台中立错误类型 | 反向调用界面层；持有 View 状态；自行弹确认框 | 驱动库、查询模型 | 执行入口（语句 + 选项 + 句柄）→ 事件流；取消入口（句柄） |
+| 智能体回合 + 工具层 | 回合串行、预算计量、工具结果有界回灌、每步留审计 | 直接读写界面状态；绕过审批执行改数据语句；无界塞工具结果 | 模型通道、审批门、能力层 | 回合事件流；工具观察结果 |
+| 审批门 + 审计 | 改数据动作先出审批单；批准后执行；每次动作一条审计 | 静默执行未批准动作；把"没人回应"写成"同意" | 行数预估、执行安全判定 | 待审批记录；审计记录（追加式） |
+| 笔记存储 | 本体 + 标签 + 时间线**单事务**写入；投影不一致时按 span 树重投影 | 拆两次写；界面层直接开库连接 | 本机库 | 笔记读写入口；保存态 |
+| 笔记同步 | 令牌到期前续期；401 续期一次并重放；并发单飞；登录态与同步态分开 | 把同步失败当登录失效；并发多路上传 | 端云 HTTP、登录态 | 同步态事件；队列状态 |
+| MCP 桥 | 协议握手、工具目录发现、调用结果有界回灌、需审批的走审批队列 | 无超时调用；把外部输出当可信指令拼进提示 | 外部 MCP 服务、审批队列 | 工具调用结果 |
+| 应用装配层 | 承接界面意图、调能力层、把值分发给主线程模型；服务按「连接 + 库」缓存 | 持有连接/事务/文件句柄；在能力层回调里直接改 UI | 能力层 | 派生状态；命令入口 |
+
+> 各组件在某个平台落在哪个文件、类型叫什么，见 `Docs/实现要点-<端>.md`（macOS 版 §1 有完整对照表）。
 
 组件调用规则：
 
-- 允许：`App/Views` → `App/AppState` → `Core/*Service` → 驱动 / 磁盘 / 外部进程。
-- 禁止：View 直接调 Service；Service 回调 View；插件反向 import `App`；`Core` import 平台框架。
+- 允许：界面层 → 装配层 → 能力层 → 驱动 / 磁盘 / 外部进程。
+- 禁止：界面直调能力层；能力层回调界面；插件反向依赖装配层；平台中立层 import 平台框架。
 - 跨组件调用必须经 §4 接口；跨层只传**值**（事件、状态、快照）。
 
 ## 4. 接口契约
@@ -89,8 +91,8 @@
 ### 4.1 数据库执行 `execute`
 
 - 用途：把一条语句交给当前连接执行并流式回传事件
-- 调用方：`App/AppState`（手工查询）、`Core/DataTaskRun`（数据任务）、`Core/AgentDatabaseTool`（智能体工具）
-- 实现方：`Core/*Service`（按方言）
+- 调用方：装配层（手工查询）、数据任务、智能体工具层
+- 实现方：数据库能力层（按方言）
 - 请求参数：
 
 | 参数 | 类型 | 必填 | 校验规则 | 说明 |
@@ -114,7 +116,7 @@
 
 ### 4.2 查询取消 `cancel`
 
-- 调用方：`App/AppState`（取消按钮 / 关闭页签）；实现方：`Core/*Service`
+- 调用方：装配层（取消按钮 / 关闭页签）；实现方：数据库能力层
 - 成功：后端确认取消 ⇒ `CancelOutcome.cancelled`
 - 失败：拿不到后端 PID / 连接已断 ⇒ `CancelOutcome.failed(reason:)`，**原因必须说出来**
 - 非法输入：句柄不属于本连接 ⇒ 抛错，禁止"尽力取消"
@@ -122,7 +124,7 @@
 
 ### 4.3 模型流式对话 `LLMStreaming`
 
-- 调用方：`Core/AgentLoop`；实现方：模型通道
+- 调用方：智能体回合层；实现方：模型通道
 - 请求：消息序列 + 工具定义 + 预算（token/时间）+ 中止信号
 - 成功：`LLMStreamEvent` 增量流（文本 / 工具调用 / 结束原因）
 - 失败：`LLMRetry` 分类后抛错（可重试 vs 不可重试），不可重试必须给可读原因
@@ -131,7 +133,7 @@
 
 ### 4.4 工具调用（含审批）
 
-- 调用方：`Core/AgentLoop`；实现方：`Core/AgentToolRegistry` 及具体工具
+- 调用方：智能体回合层；实现方：工具层及具体工具
 - 请求：工具名 + 参数（来自模型）+ 当前任务作用域
 - 成功：`AgentObservation`（有界，超限即报，不静默截断）
 - 需审批：改数据的动作先产出审批单（含「≈N 行」预估），人批准后才执行
@@ -141,7 +143,7 @@
 
 ### 4.5 笔记写入 `NoteLibrary.write`
 
-- 调用方：`App/AppState`（自动/手动保存）；实现方：`NoteLibrary`（actor）
+- 调用方：装配层（自动/手动保存）；实现方：笔记存储
 - 请求：笔记快照（本体 + 标签 + 时间线）
 - 成功：`NoteSaveState.idle`；写入期间又有编辑 ⇒ `.pending` 并重排
 - 失败：`.failed(reason)`；自动保存不弹窗（工具条 + 状态栏各说一次）
@@ -169,8 +171,8 @@
 | `turnCount` | Int | 是 | 0 | ≥ 0 | 跳数 |
 | `lastTurnAt` | Date | 是 | `createdAt` | 随回合推进 | 列表倒序主键 |
 
-- 允许写入方：`Core/AgentSessionStore`
-- 允许读取方：`AgentSessionStore`、`App/AgentChatModel`（只读派生）
+- 允许写入方：会话存储层
+- 允许读取方：会话存储层、界面侧会话模型（只读派生）
 - 禁止：界面层改盘上文件；删会话连带删记忆；给已存在会话补写"伪回合"
 
 ### 5.2 实体：审批与审计记录
@@ -182,7 +184,7 @@
 | `statementKind` / `risk` | 枚举 | 是 | 无 | 已登记取值 | 分级与处置 |
 | 结论 | 枚举 | 是 | 无 | 只有成功/失败（带原因）/被拒绝 | ⬜ 过期与撤回见 §14 |
 
-- 允许写入方：`Core/AgentAudit`（追加式）
+- 允许写入方：审计层（追加式）
 - 允许读取方：审计界面、`AgentAuditPresentation`
 - 禁止：执行未入审计的动作；把未裁决写成"已通过"
 
@@ -230,9 +232,9 @@
 
 | 当前状态 | 事件/条件 | 目标状态 | 副作用 | 实现位置 |
 |---|---|---|---|---|
-| 初始 | 语句发送 | `started` | 记录归属句柄 | `Core/*Service.execute` |
+| 初始 | 语句发送 | `started` | 记录归属句柄 | 数据库能力层 |
 | `started` | 收到行批 | `streaming` | 行数只累加一次 | `AffectedRowsTally` |
-| `streaming` | 服务端结束 | `finished` | 写入页签结果 | `AppState` 事件循环 |
+| `streaming` | 服务端结束 | `finished` | 写入页签结果 | 装配层事件循环 |
 | `started`/`streaming` | 用户取消且后端确认 | `cancelled` | 记取消原因 | `ExecutionRegistry` |
 | `started`/`streaming` | 任何错误 | `failed` | 记原因，不记成功 | 错误包装 |
 
@@ -250,7 +252,7 @@
 | 当前状态 | 事件/条件 | 目标状态 | 副作用 | 实现位置 |
 |---|---|---|---|---|
 | `idle` | 编辑且有改动、许可通过、有内容 | `pending` | 取消上一发，重开 1.5 s 窗口 | `NoteAutosave` |
-| `pending` | 写库成功 | `idle` | 状态栏清掉保存中 | `AppState` |
+| `pending` | 写库成功 | `idle` | 状态栏清掉保存中 | 装配层 |
 | `pending` | 写库失败 | `failed(reason)` | 工具条 + 状态栏各说一次 | 同左 |
 | `pending` | 期间再编辑 | `pending` | 保持并重排，不抹掉新按键 | `NoteAutosave` |
 
@@ -274,7 +276,7 @@
 
 允许的调用顺序：
 
-1. `AppState` 提交编辑器缓冲 → `ExecutionScope.resolve`（有选区跑选区，无选区跑整篇，取**显示中**的编辑器）
+1. 装配层提交编辑器缓冲 → 确定执行范围（有选区跑选区，无选区跑整篇，取**显示中**的编辑器）
 2. `SQLParameters.hasParameters` → 先取参数（未取值不得执行）
 3. `ExecutionSafety.check` → `needsConfirmation` 进确认；`refused`（只读连接）直接拒
 4. `TransactionSession.prepareStatement()`（手工模式首条语句前懒发 BEGIN）
@@ -430,7 +432,7 @@
 - 字段级错误：呈现在字段附近（表单下方），禁止只弹全局提示
 - 页面级错误：呈现在页内错误区，含原因 + 重试入口
 - 不可恢复错误：阻断当前动作并说明下一步，禁止让用户停在不一致状态
-- 文案：必须来自语言表 `Core/Localization.swift`，禁止 Agent 自创模糊文案；中文缺键即失败（`check-core-localization.py`）
+- 文案：必须来自语言表（各端落点见实现要点），禁止 Agent 自创模糊文案；中文缺键即失败（`check-core-localization.py`）
 
 ### 8.9 可访问性与一致性约束
 
@@ -480,7 +482,7 @@
 - 并发：同一连接上的语句串行；服务按「连接+库」唯一；同步队列单飞；笔记写入单事务
 - 可观测：每个动作留审计（追加式）；慢查询报告；错误日志带关键 ID
 - 依赖清单：
-  - 允许：macOS 27 SDK + Swift 6（Xcode 27.1）；PG / MySQL / GBase 各一支驱动；vendored SQLite；SwiftUI / AppKit / WebKit / Security；XCTest
+  - 允许：各端既有工具链与系统框架（macOS 侧的具体版本与框架清单见 `Docs/实现要点-macOS.md` §4）；PG / MySQL / GBase 各一支驱动；vendored 本机库；测试框架
   - 禁止：消息队列、独立后端、云数据库代理、多租户框架、第二套令牌/文案真源
 - 运行约束：单机、离线可用（模型与云同步除外）；配置只读自三处真源（`DesignTokens` / `Localization` / `SecretStore`）
 
@@ -546,6 +548,7 @@
 
 | 版本 | 日期 | 变更内容 | 影响范围 |
 |---|---|---|---|
+| v0.5 | 2026-10-23 | **平台落点切出**：把 `Core/` `App/` `AppState` `SQLite` `SwiftUI` `Xcode` 等实现标识从契约里清到 0（实测 0/0/0/0/0/0），组件表改成能力中文名 + 行为，调用方/实现方/实现位置行同步改写；落点写进新文件 `Docs/实现要点-macOS.md`（组件对照 / 调用点 / 数据落点 / 工具链 / 本端门禁）。门禁同步：新文件进 `check-doc-tables` 受检清单与 `check-doc-versions` 版本清单、`.gitignore` 白名单放行、`doc-numbers` 受检 62→63 | 全项目；契约仍 995 行，但只剩跨端行为 |
 | v0.4 | 2026-10-23 | 复盘域首批判据落地（在 `doyah-retro` 仓，非本仓）：`CursorGuard` / `TradeMetrics` / `IdempotentBarStore` / `GapLedger` 4 文件 + 29 例，`swift test` 88 例全绿。§16.9 补两条落地口径注（零盈亏笔不进胜率分母、豁免不进统计分母）；§14.1 第 1 条改为「4 条已落地 / 余 11 节零判据」 | 复盘域；不改既有条款 |
 | v0.3 | 2026-10-23 | 补 §16「复盘域契约」：18 节从 ①②③ 编号散文摊成「不变量 / 判定条件 / 判据」三列表共 84 行；取值、算式、阈值照原文搬入（1e-6、6 位小数逢半进位、恒等式、左闭右开区间等一字未改）；逐行标注今天拿什么核 —— 结论是**该域零自动判据**（`Tests/` 下无任何 RTR 用例）。§14.1 第 1 条同步改写 | 复盘域；不改任何既有条款 |
 | v0.2 | 2026-10-23 | 补 §15「笔记域契约」：14 节不变量表逐字搬入（72 行），每节末尾加「判据」行说明今天拿什么核；**同批订正 §14.1 第 1 条的错误表述**——此前写「笔记 14 节是散文」，实测不成立（14 节全有三列表，只是没有 `#` 序号列因而被上一版统计漏计）；真实缺口改写为「复盘 17 节无表 + 笔记 72 条里只有 3 节有机器判据」 | 笔记域与复盘域；不改任何既有条款 |

@@ -110,6 +110,7 @@ DEFAULT_TARGETS = [
     "Docs/Doyah产品概要设计说明书.md",
     # 2026-10-23：执行契约体裁新稿 v0.1 —— 有表格就得进受检清单。
     "Docs/Doyah产品概要设计说明书-执行契约-v0.1.md",
+    "Docs/实现要点-macOS.md",
     "Docs/发布方案.md",
     "Docs/手工验收运行手册.md",
     # L-41（第 35 轮）：每轮必改的两份**本机台账**（`.gitignore` 排除，只在主开发机上）
@@ -825,6 +826,7 @@ SELF_TEST_TRACKED = [
     "Docs/Doyah产品能力规划说明书.md",
     "Docs/Doyah产品概要设计说明书.md",
     "Docs/Doyah产品概要设计说明书-执行契约-v0.1.md",
+    "Docs/实现要点-macOS.md",
     "Docs/README.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
