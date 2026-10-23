@@ -43,6 +43,8 @@ import {
   dbSchemas,
   dbRelations,
   dbColumns,
+  dbBrowseSessions,
+  dbSessionClose,
   searchObjects,
   browseSql,
   inspectRow,
@@ -896,6 +898,18 @@ const layerNodeCount = computed(() => treeNodeCount(loadedObjects.value, columns
  */
 type TreeRow =
   | { id: string; kind: 'server' }
+  | {
+      id: string
+      kind: 'database'
+      label: string
+      current: boolean
+      expanded: boolean
+      loading: boolean
+      session: boolean
+      failed: boolean
+      reason: string
+      count: number
+    }
   | { id: string; kind: 'schema'; label: string; expanded: boolean; loading: boolean; count: number }
   | { id: string; kind: 'type'; label: string; count: number }
   | { id: string; kind: 'object'; object: ObjectNode }
@@ -926,10 +940,28 @@ function objectRows(object: ObjectNode): TreeRow[] {
 
 const treeRows = computed<TreeRow[]>(() => {
   const rows: TreeRow[] = []
+  // 「服务器」永远是最前一行（两档视图都一样：它是根，右击菜单挂在这一行上）
+  rows.push({ id: 'server:root', kind: 'server' })
+  // 第二层 = **库**（FR-META-10）：这一层只画清单，**展开才取数**（不预连、不预取）
+  for (const name of databaseNames.value) {
+    const snapshot = dbTreeCache.value[name]
+    rows.push({
+      id: `db:${name}`,
+      kind: 'database',
+      label: name,
+      current: name === info.value?.database,
+      expanded: openDb.value === name,
+      loading: loadingDb.value === name,
+      session: extraSessions.value.includes(name),
+      failed: !!failedDbs.value[name],
+      reason: failedDbs.value[name] ?? '',
+      count: snapshot ? snapshot.schemas.length : 0,
+    })
+  }
+  const open = openDb.value
   if (objectView.value === 'byKind') {
-    // 「服务器」也在这一档的最前（两档视图只是同一批数据的两种排法 —— 服务器节点不属于
-    // 任何一"类"，它是根；少了它，按类型分组这一档就没有可右键的地方）
-    rows.push({ id: 'server:root', kind: 'server' })
+    // 「按类型分组」这一档只分**当前展开的那个库**里已加载的对象（不混库）
+    if (!open) return rows
     for (const group of kindGroups.value) {
       rows.push({
         id: `type:${group.kind}`,
@@ -941,14 +973,13 @@ const treeRows = computed<TreeRow[]>(() => {
     }
     return rows
   }
-  // 层级视图：**第一个节点是「服务器」**（FR-META-11 第一期 —— 三个动作挂在这一行上）；
-  // schema 行**永远在**（它是展开开关）；展开过才有对象行，对象展开过才有列行。
-  rows.push({ id: 'server:root', kind: 'server' })
+  // 层级视图：只有**展开的那个库**下面才有 schema 行（别的库不占位、也不假装空）
+  if (!open) return rows
   for (const schema of schemas.value) {
     const items = layerOf.value[schema]
     const isExpanded = !!expanded.value[schema]
     rows.push({
-      id: `schema:${schema}`,
+      id: `schema:${open}:${schema}`,
       kind: 'schema',
       label: schema,
       expanded: isExpanded,
@@ -1783,19 +1814,188 @@ const schemas = ref<string[]>([])
 /** 元数据被行数上限截断时的读数（`0` = 没截断）—— 界面要如实说"可能不完整"（FR-META-07）。 */
 const metadataTruncated = ref(0)
 
-async function loadSchemas() {
+// ── 跨库浏览（FR-META-10）：服务器 → **库** → schema → 对象 → 列 ────────────────────────
+//
+// 三条口径（都在 `crossDatabaseBrowse.mount.test.ts` 里钉）：
+// ① **不预连**：连上服务器只取「库清单」（一条查询），**不为任何库建连接**；
+//    只有用户真展开某个库时才去取那个库的 schema（外壳据此**按需**建一条独立会话）；
+// ② **一个库一份快照**：切到别的库再切回来，已展开的 schema / 对象 / 列都还在（不重取），
+//    且当前库与别的库的状态**互不覆盖** —— 「切库把上一个库的树冲掉」是最容易写出来的错；
+// ③ **失败只影响那一个库**：取不到就**不展开它**并如实说原话（不拿空树冒充"这个库是空的"），
+//    当前连接与别的库都不受影响。
+
+/** 这台服务器上能看到的库（取不到时为空 —— 退回「当前连接的那个库」）。 */
+const browseDatabases = ref<DatabaseInfo[]>([])
+/** 库清单取不到时的原因（**如实说**，不是"只有一个库"）。 */
+const databaseListNote = ref('')
+/** 当前**展开**的库（空串 = 库这一层收起了）。连接成功后 = 当前连接的库。 */
+const openDb = ref('')
+/** 正在取数的是哪个库（`''` = 没在取）。 */
+const loadingDb = ref('')
+/** 已建独立会话的库（**外壳那边的事实**，界面不自己数 —— 两套账必然分叉）。 */
+const extraSessions = ref<string[]>([])
+/** 会话类操作的临时回执（关会话本来就没了 / 关掉了）。 */
+const sessionNote = ref('')
+/** 连不上的库：库名 → 原话（行上标 ⚠️ —— 需求原文点名「失败库标 ⚠️」）。 */
+const failedDbs = ref<Record<string, string>>({})
+
+/** 一个库的树快照（切库时整份存取，每库一份）。 */
+interface DbTreeSnapshot {
+  schemas: string[]
+  truncated: number
+  layerOf: Record<string, ObjectNode[]>
+  expanded: Record<string, boolean>
+  columnsOf: ColumnsByTable
+  expandedTables: Record<string, boolean>
+}
+
+const dbTreeCache = ref<Record<string, DbTreeSnapshot>>({})
+
+function emptySnapshot(): DbTreeSnapshot {
+  return { schemas: [], truncated: 0, layerOf: {}, expanded: {}, columnsOf: {}, expandedTables: {} }
+}
+
+function takeSnapshot(): DbTreeSnapshot {
+  return {
+    schemas: schemas.value,
+    truncated: metadataTruncated.value,
+    layerOf: layerOf.value,
+    expanded: expanded.value,
+    columnsOf: columnsOf.value,
+    expandedTables: expandedTables.value,
+  }
+}
+
+function applySnapshot(snapshot: DbTreeSnapshot): void {
+  schemas.value = snapshot.schemas
+  metadataTruncated.value = snapshot.truncated
+  layerOf.value = snapshot.layerOf
+  expanded.value = snapshot.expanded
+  columnsOf.value = snapshot.columnsOf
+  expandedTables.value = snapshot.expandedTables
+}
+
+/** 库名清单：取到了用它；没取到就只认当前连接的那个库（不凭空造库名）。 */
+const databaseNames = computed<string[]>(() => {
+  const names = browseDatabases.value.map((entry) => entry.name)
+  if (names.length) return names
+  return info.value ? [info.value.database] : []
+})
+
+/** 取库清单（连接后一次）。失败**不挡**当前库的浏览，只把原因如实摆出来。 */
+async function loadDatabases(): Promise<void> {
   try {
-    const report = await dbSchemas()
-    schemas.value = userSchemas(report.rows)
-    metadataTruncated.value = report.truncated ? report.limit : 0
-    layerOf.value = {}
-    expanded.value = {}
-    columnsOf.value = {}
-    expandedTables.value = {}
+    browseDatabases.value = await ipcAdminDatabases()
+    databaseListNote.value = ''
+  } catch (e) {
+    browseDatabases.value = []
+    databaseListNote.value = describeError(e).message
+  }
+}
+
+/** 刷新「已建独立会话」读数（建 / 关会话后各一次）。取不到就保持原读数 —— 不假装。 */
+async function refreshExtraSessions(): Promise<void> {
+  try {
+    extraSessions.value = await dbBrowseSessions()
+  } catch {
+    // 读数只是标记用：取不到就不标，不把「不知道」画成「没有」
+  }
+}
+
+/** 取**指定库**的 schema 层（进快照缓存）；**取到了才返回 true**（失败不冒充空库）。 */
+async function loadSchemasFor(database: string): Promise<boolean> {
+  loadingDb.value = database
+  try {
+    const report = await dbSchemas(database)
+    dbTreeCache.value = {
+      ...dbTreeCache.value,
+      [database]: {
+        schemas: userSchemas(report.rows),
+        truncated: report.truncated ? report.limit : 0,
+        layerOf: {},
+        expanded: {},
+        columnsOf: {},
+        expandedTables: {},
+      },
+    }
+    // 这次连上了 ⇒ 摘掉它之前的失败标记（不然「⚠️」会一直挂着，像还在坏）
+    if (failedDbs.value[database]) {
+      const next = { ...failedDbs.value }
+      delete next[database]
+      failedDbs.value = next
+    }
     clearFailure()
+    return true
+  } catch (e) {
+    const described = describeError(e)
+    failure.value = described
+    // 需求点名的「失败库标 ⚠️」：标记挂在**那个库的行**上（一行小字说不清是哪个库出的错）
+    failedDbs.value = { ...failedDbs.value, [database]: described.message }
+    return false
+  } finally {
+    loadingDb.value = ''
+  }
+}
+
+/** 展开 / 收起一个**库**（FR-META-10 的界面入口）。 */
+async function toggleDatabase(name: string): Promise<void> {
+  if (openDb.value === name) {
+    // 收起：**缓存留着**（再展开不重取、也不重连）
+    openDb.value = ''
+    return
+  }
+  if (openDb.value) dbTreeCache.value = { ...dbTreeCache.value, [openDb.value]: takeSnapshot() }
+  const cached = dbTreeCache.value[name]
+  if (cached) {
+    applySnapshot(cached)
+    openDb.value = name
+    await refreshExtraSessions()
+    return
+  }
+  // 首次展开：取到了才打开
+  if (!(await loadSchemasFor(name))) return
+  applySnapshot(dbTreeCache.value[name])
+  openDb.value = name
+  await refreshExtraSessions()
+}
+
+/** 关掉某个库的独立会话（**只动这一个库**）。会话没了 ⇒ 它已加载的层一起作废。 */
+async function closeDatabaseSession(name: string): Promise<void> {
+  try {
+    const closed = await dbSessionClose(name)
+    const next = { ...dbTreeCache.value }
+    delete next[name]
+    dbTreeCache.value = next
+    if (openDb.value === name) {
+      openDb.value = ''
+      applySnapshot(emptySnapshot())
+    }
+    clearFailure()
+    sessionNote.value = closed
+      ? t('db.browse.sessionClosed', { database: name })
+      : t('db.browse.sessionAlreadyClosed', { database: name })
+    setTimeout(() => (sessionNote.value = ''), 2500)
   } catch (e) {
     failure.value = describeError(e)
   }
+  await refreshExtraSessions()
+}
+
+/** 刷新（连接成功后 / 用户点刷新）：库清单 + 当前库的 schema 重新取一遍。 */
+async function loadSchemas() {
+  const current = info.value?.database ?? ''
+  if (!current) return
+  openDb.value = ''
+  dbTreeCache.value = {}
+  extraSessions.value = []
+  failedDbs.value = {}
+  applySnapshot(emptySnapshot())
+  await loadDatabases()
+  if (await loadSchemasFor(current)) {
+    applySnapshot(dbTreeCache.value[current])
+    openDb.value = current
+  }
+  await refreshExtraSessions()
 }
 
 /** 展开 / 收起一个 schema：**第一次展开才去问服务端**（有缓存就不重复问）。 */
@@ -1808,7 +2008,7 @@ async function toggleSchema(schema: string) {
   if (layerOf.value[schema]) return
   loadingSchema.value = schema
   try {
-    const report = await dbRelations(schema)
+    const report = await dbRelations(schema, openDb.value || undefined)
     layerOf.value = { ...layerOf.value, [schema]: report.rows }
     metadataTruncated.value = report.truncated ? report.limit : 0
     clearFailure()
@@ -1848,7 +2048,11 @@ async function toggleTable(object: ObjectNode) {
   if (columnsOf.value[key]) return
   loadingTable.value = key
   try {
-    const groups = await loadColumns(dbColumns, object.schema, [object.name])
+    const groups = await loadColumns(
+      (schema, tables) => dbColumns(schema, tables, openDb.value || undefined),
+      object.schema,
+      [object.name],
+    )
     columnsOf.value = mergeColumns(columnsOf.value, groups)
     clearFailure()
   } catch (e) {
@@ -1893,7 +2097,7 @@ async function openGenerate(): Promise<void> {
     const target = schemas.value.includes('public') ? 'public' : schemas.value[0]
     loadingSchema.value = target
     try {
-      const report = await dbRelations(target)
+      const report = await dbRelations(target, openDb.value || undefined)
       layerOf.value = { ...layerOf.value, [target]: report.rows }
       expanded.value = { ...expanded.value, [target]: true }
       metadataTruncated.value = report.truncated ? report.limit : 0
@@ -3588,7 +3792,13 @@ async function probe() {
             </li>
           </ul>
           <template v-else>
-            <p v-if="schemas.length === 0" class="db__tree-empty">{{ t('db.tree.noSchema') }}</p>
+            <p v-if="databaseListNote" class="db__tree-empty" role="status" data-testid="db-list-note">
+              {{ t('db.browse.listFailed', { reason: databaseListNote }) }}
+            </p>
+            <p v-if="sessionNote" class="db__tree-empty" role="status" data-testid="db-session-note">
+              {{ sessionNote }}
+            </p>
+            <p v-if="openDb && schemas.length === 0" class="db__tree-empty">{{ t('db.tree.noSchema') }}</p>
             <template v-for="row in treeRows" :key="row.id">
               <!-- 服务器节点（FR-META-11 第一期）：右键给「连接 / 断开 / 编辑连接…」 -->
               <button
@@ -3604,6 +3814,46 @@ async function probe() {
                   {{ t('db.server.menu.connected', { database: info.database, user: info.user }) }}
                 </span>
               </button>
+              <!-- 库节点（FR-META-10）：点一下**才**去取这个库的 schema（外壳据此按需建独立会话） -->
+              <div v-else-if="row.kind === 'database'" class="db__db-row">
+                <button
+                  class="db__schema-toggle db__database"
+                  type="button"
+                  :data-testid="`db-node-${row.label}`"
+                  :data-current="row.current ? 'true' : 'false'"
+                  :aria-expanded="row.expanded ? 'true' : 'false'"
+                  :title="t('db.browse.tip', { database: row.label })"
+                  @click="toggleDatabase(row.label)"
+                >
+                  <span class="db__chevron">{{ row.expanded ? '▾' : '▸' }}</span>
+                  <span class="db__icon" :title="t('db.icon.tip', { kind: 'database' })">
+                    <NodeIcon kind="database" />
+                  </span>
+                  {{ row.label }}
+                  <span v-if="row.current" class="db__kind">{{ t('db.browse.current') }}</span>
+                  <span
+                    v-if="row.failed"
+                    class="db__kind db__kind--failed"
+                    data-testid="db-failed-flag"
+                    :title="row.reason"
+                  >⚠️</span>
+                  <span
+                    v-if="row.session && !row.current"
+                    class="db__kind db__kind--session"
+                    data-testid="db-session-flag"
+                  >{{ t('db.browse.extraSession') }}</span>
+                  <span v-if="row.loading" class="db__kind">{{ t('db.tree.loading') }}</span>
+                  <span v-else-if="row.expanded || row.count" class="db__kind">{{ row.count }}</span>
+                </button>
+                <button
+                  v-if="row.session && !row.current"
+                  class="db__db-close"
+                  type="button"
+                  :data-testid="`db-close-${row.label}`"
+                  :title="t('db.browse.closeSession', { database: row.label })"
+                  @click.stop="closeDatabaseSession(row.label)"
+                >×</button>
+              </div>
               <button
                 v-else-if="row.kind === 'schema'"
                 class="db__schema-toggle"
@@ -6297,6 +6547,52 @@ th.db__grid-head[style] {
 
 .db__schema-toggle:hover {
   background: var(--ds-color-surface-panel);
+}
+
+/* 库行（FR-META-10）：左边是整行可点的展开开关，右边是「关掉这个库的会话」——
+   两件并排，各自独立可点（关会话不许顺手把库也收起来） */
+.db__db-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-xs);
+}
+
+.db__db-row > .db__schema-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.db__database {
+  color: var(--ds-color-text-primary);
+}
+
+/* 「独立会话」标记用强调色：它代表**服务器上多了一条后端**，与普通计数不是一回事 */
+.db__kind--session {
+  color: var(--ds-color-accent-accent);
+}
+
+/* 连不上的库标 ⚠️（需求原文点名）：颜色沿用警示强调，原文在 title 里 */
+.db__kind--failed {
+  color: var(--ds-color-accent-warm);
+}
+
+.db__db-close {
+  flex: 0 0 auto;
+  width: 1.2em;
+  padding: 0;
+  background: transparent;
+  color: var(--ds-color-text-tertiary);
+  border: 0;
+  border-radius: var(--ds-radius-control);
+  font-family: var(--ds-font-stack);
+  font-size: var(--ds-font-caption-size);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.db__db-close:hover {
+  background: var(--ds-color-surface-panel);
+  color: var(--ds-color-text-primary);
 }
 
 /* 三角形只在位置上占位：展开与否靠字形换，不靠加宽 —— 免得展开时整列跟着跳 */

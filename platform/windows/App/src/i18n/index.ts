@@ -412,6 +412,29 @@ export const DICT = {
     en: 'Connected to {database} (user {user})',
   },
   'db.tree.notConnected': { 'zh-Hans': '未连接', en: 'Not connected' },
+  // 跨库浏览（FR-META-10）：库这一层
+  'db.browse.current': { 'zh-Hans': '当前', en: 'current' },
+  'db.browse.extraSession': { 'zh-Hans': '独立会话', en: 'own session' },
+  'db.browse.tip': {
+    'zh-Hans': '展开「{database}」：只为这个库按需建一条独立连接（不会预连别的库）',
+    en: 'Expand “{database}”: opens one connection for this database only (nothing else is pre-connected)',
+  },
+  'db.browse.closeSession': {
+    'zh-Hans': '关掉「{database}」的独立会话（只影响这个库）',
+    en: 'Close the session for “{database}” (this database only)',
+  },
+  'db.browse.sessionClosed': {
+    'zh-Hans': '已关掉「{database}」的独立会话',
+    en: 'Closed the session for “{database}”',
+  },
+  'db.browse.sessionAlreadyClosed': {
+    'zh-Hans': '「{database}」本来就没有独立会话（没有可关的）',
+    en: '“{database}” had no session of its own (nothing to close)',
+  },
+  'db.browse.listFailed': {
+    'zh-Hans': '取不到库清单：{reason}（当前连接的库照旧能展开）',
+    en: 'Could not list databases: {reason} (the connected database still expands)',
+  },
   'db.tree.noSchema': { 'zh-Hans': '没有可展开的 schema', en: 'No schema to expand' },
   // 元数据查询行数上限（FR-META-07）：到顶时如实说"可能不完整"
   'db.meta.truncated': {

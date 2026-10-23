@@ -90,6 +90,20 @@ pub struct ShellState {
     /// 为什么用原子布尔而不是塞进会话：只读是**连接级配置**的一部分，而"当前连接"这个槽
     /// 在换连接 / 断开时会变 —— 把它与会话绑在一起容易出现"会话还在、标记没了"的错位。
     pub read_only: std::sync::atomic::AtomicBool,
+    /// **当前连接的参数**（FR-META-10）：跨库浏览要照它派生「同一个服务器、换个库」的参数。
+    ///
+    /// 与 `db` 槽同生共死：连上时写入、断开 / 换连接时清空 ⇒ 不会出现"会话没了、参数还在"
+    /// 的半截状态。**如实登记一处取舍**：这里带着口令（新建独立会话要口令才能连），
+    /// 口令只活在本进程内存里、随断开即弃，不落盘、不进日志、不进任何回包；
+    /// 更干净的做法是按 connection id 从凭据管理器再取一次（`connections::recall_password`），
+    /// 那需要 `db_connect` 收一个连接 id —— 接口变更，另开条目，不在这轮偷改。
+    pub db_params: AsyncMutex<Option<ConnectParams>>,
+    /// **跨库会话缓存**（FR-META-10）：库名 → 独立会话。
+    ///
+    /// 键只有库名也行，因为整份缓存**随换连接 / 断开一起清空** ⇒ 语义上等价于
+    /// 「(连接, 数据库) 缓存」。只放**连成功**的那一份：某个库连不上时缓存里不会多一条，
+    /// 也不会把已建好的别的库连坐（单库失败隔离）。
+    pub db_others: AsyncMutex<std::collections::HashMap<String, Arc<PgSession>>>,
 }
 
 /// 取当前会话；没连上就是一句可读的失败（不 panic、不静默）。
@@ -99,6 +113,69 @@ async fn current_session(state: &State<'_, ShellState>) -> Result<Arc<PgSession>
         message: "尚未连接数据库".to_string(),
         hint: "先连接（连接面板），再执行这一步。".to_string(),
     })
+}
+
+/// **取这次取数要用的会话**（FR-META-10 的唯一入口）：当前库 / 已建会话 / 按需新建。
+///
+/// 判定在领域层 `browse_session::plan`（纯函数、单测逐条钉），这里只负责三件表示层的事：
+/// 读缓存快照、真去连、把连成功的那一份放进缓存。
+///
+/// 四条纪律：
+/// ① **不预连**：只有界面真展开某个库时才走到 `Connect` 分支 —— 连上服务器不等于连上它下面
+///    几十个库（那会让服务端凭空多出几十个后端）；
+/// ② **不重复连**：`Connect` 之后放进缓存前**再看一眼**缓存（同一库被两次展开并发撞上时，
+///    后到的那个用已建好的那条，不留孤儿会话）；
+/// ③ **失败隔离**：连不上就 `Err`，缓存不动、当前连接不动 —— 别的库照旧能展开；
+/// ④ **拿锁不放 await**：缓存锁只在取 / 放条目时短暂持有，连接建立期间不持锁。
+async fn session_for(
+    state: &State<'_, ShellState>,
+    database: Option<&str>,
+) -> Result<Arc<PgSession>, DbFailure> {
+    use doyah_studio_db::browse_session::{plan, BrowseAction};
+
+    // 没连上就是没连上（跨库会话是「照当前连接派生」，没有当前连接就无从派生）
+    let primary = current_session(state).await?;
+    let current = primary.info().database.clone();
+
+    let cached_names: Vec<String> = {
+        let guard = state.db_others.lock().await;
+        guard.keys().cloned().collect()
+    };
+    let plan = plan(&current, database, &cached_names);
+
+    match plan.action {
+        BrowseAction::UsePrimary => Ok(primary),
+        BrowseAction::UseCached => {
+            let guard = state.db_others.lock().await;
+            guard.get(&plan.database).cloned().ok_or_else(|| DbFailure {
+                // 理论上到不了（`plan` 说它就在缓存里）：真到了就如实说，别 panic
+                message: format!("「{}」的独立会话刚被关闭，这次取数没能拿回来", plan.database),
+                hint: "再点一次这个库即可重连（只影响这一个库）。".to_string(),
+            })
+        }
+        BrowseAction::Connect => {
+            let params = {
+                let guard = state.db_params.lock().await;
+                guard.clone()
+            }
+            .ok_or_else(|| DbFailure {
+                message: "拿不到当前连接的参数，无法为这个库另开连接".to_string(),
+                hint: "断开后重连一次（跨库浏览要照当前连接派生）。".to_string(),
+            })?;
+            let target = ConnectParams { database: plan.database.clone(), ..params };
+            // 失败时**只回这一条**：缓存与当前连接都不动（单库失败隔离）
+            let session = Arc::new(PgSession::connect(&target).await.map_err(|failure| DbFailure {
+                message: format!("展开「{}」失败：{}", target.database, failure.message),
+                hint: format!("{}（只影响这个库；当前连接与别的库不受影响）", failure.hint),
+            })?);
+            let mut guard = state.db_others.lock().await;
+            if let Some(existing) = guard.get(&plan.database) {
+                return Ok(existing.clone());
+            }
+            guard.insert(plan.database.clone(), session.clone());
+            Ok(session)
+        }
+    }
 }
 
 // ── 插件清单（契约依据 = 概要设计 §3.52；本侧落法 = §8.5.8）────────────────────
@@ -266,6 +343,18 @@ async fn db_connect(
         let mut slot = state.db.lock().await;
         *slot = None;
     }
+    // 换连接 ⇒ **跨库会话整份作废**（它们属于上一条连接的服务器 / 权限上下文）：
+    // 不清会让「A 服务器的 warehouse」冒充「B 服务器的 warehouse」（FR-META-10）
+    {
+        let mut others = state.db_others.lock().await;
+        others.clear();
+    }
+    // 参数也一起清：连不上就没有可派生的当前连接 —— 留着旧参数只会让下一次展开
+    // 照旧参数去连（那正是"连到别的服务器上同名库"的形状）
+    {
+        let mut stored = state.db_params.lock().await;
+        *stored = None;
+    }
     // 只读标记随连接一起设：换连接时**不保留上一条的标记**（否则"上一条只读"会意外管住新连接）
     state.read_only.store(
         read_only.unwrap_or(false),
@@ -273,17 +362,56 @@ async fn db_connect(
     );
     let statements = startup_sql.unwrap_or_default();
     let (session, report) = PgSession::connect_with_startup(&params, &statements).await?;
+    // 连成功才记住参数（跨库浏览照它派生）：失败时上面已清空 ⇒ 不留下"没连上但参数还在"
+    {
+        let mut stored = state.db_params.lock().await;
+        *stored = Some(params);
+    }
     let mut slot = state.db.lock().await;
     *slot = Some(Arc::new(session));
     Ok(report)
 }
 
 /// 断开（把会话丢掉；驱动任务随之结束）。
+///
+/// 跨库会话一起丢（FR-META-10）：它们是照当前连接派生的独立会话，当前连接没了就没有
+/// "该连到哪台服务器、用谁的身份"可言 —— 留着它们等于留了几条没人认领的后端。
 #[tauri::command]
 async fn db_disconnect(state: State<'_, ShellState>) -> Result<bool, DbFailure> {
-    let mut slot = state.db.lock().await;
-    *slot = None;
+    {
+        let mut slot = state.db.lock().await;
+        *slot = None;
+    }
+    {
+        let mut others = state.db_others.lock().await;
+        others.clear();
+    }
+    {
+        let mut stored = state.db_params.lock().await;
+        *stored = None;
+    }
     Ok(true)
+}
+
+/// **跨库会话清单**（FR-META-10）：已为哪些库建了独立会话（界面据此标「独立会话」）。
+#[tauri::command]
+async fn db_browse_sessions(state: State<'_, ShellState>) -> Result<Vec<String>, DbFailure> {
+    let guard = state.db_others.lock().await;
+    let mut names: Vec<String> = guard.keys().cloned().collect();
+    names.sort();
+    Ok(names)
+}
+
+/// **关掉某个库的独立会话**（FR-META-10）：只动这一个库，当前连接与别的库不受影响。
+///
+/// 返回 `true` = 真有一条被关掉，`false` = 本来就没有（界面据此如实说，而不是假装关成功了）。
+#[tauri::command]
+async fn db_session_close(
+    state: State<'_, ShellState>,
+    database: String,
+) -> Result<bool, DbFailure> {
+    let mut guard = state.db_others.lock().await;
+    Ok(guard.remove(database.trim()).is_some())
 }
 
 /// 列对象树（表 / 视图）。
@@ -295,15 +423,19 @@ async fn db_tables(state: State<'_, ShellState>) -> Result<Vec<TableNode>, DbFai
 
 // ── 对象树（1.1：展开一层取一层；搜索是纯函数在领域层）────────────────────────────────
 
-/// 树的第一层：能看到的 schema。
+/// 树的第一层：能看到的 schema（`database` = 要看哪个库；不传 = 当前库）。
 ///
 /// 返回 [`doyah_studio_db::tree::CappedRows`]（行 + 截断标记 + 上限）—— 元数据查询
 /// 一律走行数上限保护（FR-META-07：10,000 行）；到顶时界面如实说"可能不完整"。
+///
+/// **跨库浏览（FR-META-10）**：传了别的库时会为那个库**按需建一条独立会话**（只建这一个，
+/// 不预连整台服务器），建成功后缓存复用；建不上就只回这一条失败。
 #[tauri::command]
 async fn db_schemas(
     state: State<'_, ShellState>,
+    database: Option<String>,
 ) -> Result<doyah_studio_db::tree::CappedRows<String>, DbFailure> {
-    let session = current_session(&state).await?;
+    let session = session_for(&state, database.as_deref()).await?;
     session.schemas().await
 }
 
@@ -314,8 +446,9 @@ async fn db_schemas(
 async fn db_relations(
     state: State<'_, ShellState>,
     schema: String,
+    database: Option<String>,
 ) -> Result<doyah_studio_db::tree::CappedRows<doyah_studio_db::tree::ObjectNode>, DbFailure> {
-    let session = current_session(&state).await?;
+    let session = session_for(&state, database.as_deref()).await?;
     session.relations(&schema).await
 }
 
@@ -340,8 +473,9 @@ async fn db_columns(
     state: State<'_, ShellState>,
     schema: String,
     tables: Vec<String>,
+    database: Option<String>,
 ) -> Result<Vec<doyah_studio_db::tree::TableColumns>, DbFailure> {
-    let session = current_session(&state).await?;
+    let session = session_for(&state, database.as_deref()).await?;
     session.columns(&schema, &tables).await
 }
 
@@ -3015,6 +3149,8 @@ pub fn attach(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry>
             agent_settings: AgentSettingsStore::default_store(),
             agent_chat_sessions: agent_chat_sessions::ChatSessionStore::default_store(),
             read_only: std::sync::atomic::AtomicBool::new(false),
+            db_params: AsyncMutex::new(None),
+            db_others: AsyncMutex::new(std::collections::HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
@@ -3027,6 +3163,8 @@ pub fn attach(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry>
             db_schemas,
             db_relations,
             db_columns,
+            db_browse_sessions,
+            db_session_close,
             search_objects,
             db_query,
             db_run_batch,

@@ -175,7 +175,8 @@
         "FR-STD-DB-DDL-004": "✅",
         "FR-STD-DB-IO-003": "✅",
         "FR-STD-DB-DIAG-003": "🟡",
-        "FR-STD-DB-IO-004": "🟡"
+        "FR-STD-DB-IO-004": "🟡",
+        "FR-STD-DB-META-007": "🟡"
       }
     }
   },

@@ -40,6 +40,8 @@ describe('ipc', () => {
       'db_schemas',
       'db_relations',
       'db_columns',
+      'db_browse_sessions',
+      'db_session_close',
       'search_objects',
       'db_query',
       'db_run_batch',

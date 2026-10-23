@@ -21,6 +21,7 @@ pub mod agent_quota;
 pub mod agent_retry;
 pub mod appearance;
 pub mod browse;
+pub mod browse_session;
 pub mod code_lines;
 pub mod command_history;
 pub mod config;

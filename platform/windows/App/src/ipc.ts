@@ -46,6 +46,9 @@ export const COMMANDS = {
   dbSchemas: 'db_schemas',
   dbRelations: 'db_relations',
   dbColumns: 'db_columns',
+  // 跨库浏览（FR-META-10）：已建独立会话的库清单 / 关掉某个库的会话
+  dbBrowseSessions: 'db_browse_sessions',
+  dbSessionClose: 'db_session_close',
   searchObjects: 'search_objects',
   dbQuery: 'db_query',
   // SQL 编辑面（1.2：多段执行 / 取消 / EXPLAIN / 高亮分词）
@@ -1775,18 +1778,33 @@ export interface CappedRows<T> {
   limit: number
 }
 
-/** 树的第一层：这台服务器上能看到的 schema（带上限保护，FR-META-07）。 */
-export function dbSchemas(): Promise<CappedRows<string>> {
-  return call(COMMANDS.dbSchemas, {}, () => ({ rows: [] as string[], truncated: false, limit: 0 }))
+/** 树的第一层：这台服务器上能看到的 schema（带上限保护，FR-META-07）。
+ *
+ * `database` = 想看哪个库的 schema（FR-META-10 跨库浏览）；不传 = 当前连接的库。
+ * 传了别的库时外壳会为它**按需建一条独立会话**（只建这一个，不预连整台服务器）。
+ */
+export function dbSchemas(database?: string): Promise<CappedRows<string>> {
+  return call(
+    COMMANDS.dbSchemas,
+    { database: database ?? null },
+    () => ({ rows: [] as string[], truncated: false, limit: 0 }),
+  )
 }
 
-/** 第二层：某个 schema 下的对象（**展开时才问**；带上限保护，FR-META-07）。 */
-export function dbRelations(schema: string): Promise<CappedRows<ObjectNode>> {
-  return call(COMMANDS.dbRelations, { schema }, () => ({
-    rows: [] as ObjectNode[],
-    truncated: false,
-    limit: 0,
-  }))
+/** 第二层：某个 schema 下的对象（**展开时才问**；带上限保护，FR-META-07）。
+ *
+ * `database` 同上：不传 = 当前库；传别的库 = 走那个库的独立会话。
+ */
+export function dbRelations(schema: string, database?: string): Promise<CappedRows<ObjectNode>> {
+  return call(
+    COMMANDS.dbRelations,
+    { schema, database: database ?? null },
+    () => ({
+      rows: [] as ObjectNode[],
+      truncated: false,
+      limit: 0,
+    }),
+  )
 }
 
 /**
@@ -1795,8 +1813,26 @@ export function dbRelations(schema: string): Promise<CappedRows<ObjectNode>> {
  * 接口收成「一批表」而不是「一张表」：一张表一次是最省事的写法，但「全部展开」就成 N+1
  * —— 形状先钉住，调用方想 N+1 也难（判据按**调用计数**钉，见 `views/objectTree.ts`）。
  */
-export function dbColumns(schema: string, tables: string[]): Promise<TableColumns[]> {
-  return call(COMMANDS.dbColumns, { schema, tables }, () => [] as TableColumns[])
+export function dbColumns(
+  schema: string,
+  tables: string[],
+  database?: string,
+): Promise<TableColumns[]> {
+  return call(
+    COMMANDS.dbColumns,
+    { schema, tables, database: database ?? null },
+    () => [] as TableColumns[],
+  )
+}
+
+/** **已建独立会话的库清单**（FR-META-10）：界面据此在库行上标「独立会话」。 */
+export function dbBrowseSessions(): Promise<string[]> {
+  return call(COMMANDS.dbBrowseSessions, {}, () => [] as string[])
+}
+
+/** **关掉某个库的独立会话**（FR-META-10）；`false` = 本来就没有（界面如实说，不假装成功）。 */
+export function dbSessionClose(database: string): Promise<boolean> {
+  return call(COMMANDS.dbSessionClose, { database }, () => false)
 }
 
 /** 对象搜索：**纯函数在领域层**，本函数只把已加载的那一层递过去。 */
