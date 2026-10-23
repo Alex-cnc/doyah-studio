@@ -29,10 +29,10 @@ OUT = os.path.join(ROOT, "Platform", "windows", "开发计划-Windows.md")
 # 产品面 → FR 域前缀（本侧口径；细化到「能力条目 ↔ FR 编号」需要前门在能力书里加编号）
 # (产品面, FR 域, 是否进 Windows 分母)
 # 口径（人类主人 2026-10-16 定案 + 2026-10-20 两次纠正）：
-#   本侧 `babyhippo` = **Windows / Android / Harmony** 三版；macOS / iOS / watchOS / **Linux** 属 `hugehippo`。
+#   本侧 `babyhippo` = **Windows / Android / Harmony / Linux**（Linux 自 2026-10-20 由 hugehippo 转入，
+#   理由：macOS 侧装 Linux 虚拟机不便）；macOS / iOS / watchOS 属 `hugehippo`。
 #   Doyah Notes 是本侧自己的产品（Android 面，beta1.0 已发），只是**不跑在 Windows 列上**。
-#   注意：`Docs/平台实现状态.json` 里 Linux 的 owner 仍写着 `babyhippo`（陈旧，与定案相反）——
-#   本生成器不据此判归属，归属以定案为准；那条台账待前门更正。
+#   台账 `platforms.linux.owner` 现与定案一致（Linux 归 babyhippo）—— 2026-10-20 前的相反口径已作废。
 SURFACES = [
     ("Doyah Agent", ["AI"], True),
     ("Studio · Workspace", ["EDIT"], True),
