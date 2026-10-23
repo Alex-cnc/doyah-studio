@@ -1,15 +1,16 @@
 # Doyah产品详细设计说明书 · Windows
 
-> **版本** v1.0（2026-10-21 首版；上游契约 = `Docs/Doyah产品概要设计说明书.md` v0.6）
+> **版本** v1.1（2026-10-21 订正：Windows 与 macOS / Linux 同为 **PC 全量端**（Studio + Notes），不是「Studio + Notes 宿主」；上游契约 = `Docs/Doyah产品概要设计说明书.md` v0.6）
 
 ## 0. 文档元信息与追溯关系
 
-- 项目/功能名称：Doyah Studio · Windows 端（含 Notes Windows 宿主）
+- 项目/功能名称：Doyah · Windows 端（**PC 全量端**：Studio 工作区与数据库 + Notes + Agent 在 Studio 内的表现 + 授权）
 - 文档版本：v1.0（正文改动同步本节与 §13）
 - 实现范围：`Platform/windows/`（Rust workspace：`Core` `Db` `App/src-tauri` `Cli` + Vue 前端）
 - 上游依据：
   - 概要设计说明书：`Docs/Doyah产品概要设计说明书.md` v0.6
-  - 需求规格书：`Docs/Doyah产品需求规格说明书.md`（Studio 线 `FR-STD-*` 227 条 / 27 族）
+  - 需求规格书：`Docs/Doyah产品需求规格说明书.md`（Studio 线 `FR-STD-*` 227 条 / 27 族 + 笔记 `FR-NTS-*` 14 族）
+  - 平台口径：需求书 §1.8.1 —— macOS（基线）、Windows、Linux、iOS 同为一等目标端
   - 能力规划书：`Docs/Doyah产品能力规划说明书.md` v1.247
   - 平台对齐件：`Docs/平台对齐-Studio-Windows对macOS.md`（逐条派生索引，勿手改）
 - 本文件性质：**概要设计的实现级展开**（Windows 端怎么实现、怎么证明）。
@@ -150,11 +151,13 @@
 - 凭据只经系统凭据存储；口令不进日志、不进 IPC 响应、不进导出。
 - 网络出口：仅数据库连接与已授权同步；禁止其他外发。
 
-## 8. Notes（Windows 宿主）
+## 8. Notes（Windows，`FR-STD-ALL-PLUG-*` 与 §15 笔记域）
 
-- 现状：`platform/windows/`（Notes 仓）仅 5 件 —— `gate.py` `gate.cmd` `README.md` `实现依据与验收对照表-20260928.md` `tools/check-basis-coverage.py`。
-- 本端不实现 Notes 功能；宿主通过 `Platform/windows` 的装配约定承载，行为契约见概设 §15。
-- 判据：`platform/windows/gate.py` 全绿；跨端一致性以 `Docs/平台对齐-移动端-以安卓为基准.md` 为基准。
+- 现状实读：Notes 仓 `platform/windows/` 仅 5 件（`gate.py` `gate.cmd` `README.md` `实现依据与验收对照表-20260928.md` `tools/check-basis-coverage.py`）—— 判据骨架在，**功能本体不在本克隆**。
+- 契约（概设 §15 十四节）在本端同样生效：捕获即编辑 / 无标题可存 / 断网可记；附件只存引用、原件不改写、同内容一份；检索按字符偏移、覆盖标题正文标签；私密条目任何出口排除；删除进回收站、彻底清除二次确认；待办写入口唯一。
+- 数据归属：笔记数据家与工程数据家**平级独立**；宿主只单向传上下文（文本与标识），行数据须确认并留痕。
+- 判据：`platform/windows/gate.py` 全绿；跨端一致性以 `Docs/平台对齐-移动端-以安卓为基准.md` 为基准逐条对拍。
+- 禁止：把 Notes 做成 Studio 的子面板（它是同一产品内的独立能力面）；在 Windows 侧另写一份数据契约。
 
 ## 9. 测试与判据
 
@@ -199,4 +202,5 @@
 
 | 版本 | 日期 | 变更内容 | 影响范围 |
 |---|---|---|---|
+| v1.1 | 2026-10-21 | **订正范围**：Windows 由「Studio + Notes 宿主」改为 **PC 全量端**（Studio + Notes + Agent 表现 + 授权）；§8 由「不做 Notes 功能」改为「Notes 契约在本端生效，现状仅判据骨架」 | 全书 |
 | v1.0 | 2026-10-21 | 首版：矩阵 14 行 + 基线/禁止项 + 四层模块 + 四条函数契约 + 数据状态 + 界面六态 + 21 码映射 + Notes 宿主 + 判据与坑 | Windows 端 |

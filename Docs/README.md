@@ -18,8 +18,8 @@
 | [Doyah产品能力规划说明书.md](Doyah产品能力规划说明书.md) | **为什么做、做到什么程度**：能力地图、分期、取舍 | 能力范围变化时更新，两侧共用 |
 | [Doyah产品概要设计说明书.md](Doyah产品概要设计说明书.md) | **怎么做**（执行契约体裁）：0–14 节可判定条款 + §15 笔记域 + §16 复盘域 + §17 全产品追溯（396 条 / 82 族） | 给 Agent 读的契约；改条款必须同步头部版本格与 §14 变更记录 |
 | [模板-详细设计说明书-Studio.md](模板-详细设计说明书-Studio.md) | **怎么写**（详设模板）：0–12 节填空槽 + 追溯矩阵按概设 15 节预置 | 复制成 `Doyah产品详细设计说明书-<端>.md` 再用；交付前 `[…]` 应清零 |
-| [Doyah产品详细设计说明书-Windows.md](Doyah产品详细设计说明书-Windows.md) | **详设**：Windows | Rust（Core/Db/App-tauri/Cli）+ Vue；Tools/*.ps1 判据 |
-| [Doyah产品详细设计说明书-Linux.md](Doyah产品详细设计说明书-Linux.md) | **详设**：Linux（仅 Notes） | 零网络出口·本机离线·单人；源码在公司机器 |
+| [Doyah产品详细设计说明书-Windows.md](Doyah产品详细设计说明书-Windows.md) | **详设**：Windows（PC 全量端） | Rust（Core/Db/App-tauri/Cli）+ Vue；Studio + Notes；Tools/*.ps1 判据 |
+| [Doyah产品详细设计说明书-Linux.md](Doyah产品详细设计说明书-Linux.md) | **详设**：Linux（PC 全量端） | Studio + Notes（笔记离线装配·零网络出口）+ CLI |
 | [Doyah产品详细设计说明书-Android.md](Doyah产品详细设计说明书-Android.md) | **详设**：Android（仅 Notes） | Kotlin Multiplatform；core/commonMain + app |
 | [Doyah产品详细设计说明书-iOS.md](Doyah产品详细设计说明书-iOS.md) | **详设**：iOS（仅 Notes） | 现状=仅 README 白纸，落点标「待建」 |
 | [Doyah产品详细设计说明书-HarmonyOS.md](Doyah产品详细设计说明书-HarmonyOS.md) | **详设**：鸿蒙（仅 Notes） | ArkTS Stage 模型；entry/src/main/ets |
