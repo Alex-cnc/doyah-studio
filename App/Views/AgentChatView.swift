@@ -43,6 +43,10 @@ struct AgentChatView: View {
     /// 底部锚的 id（自动滚动用）。
     private static let bottomAnchor = "agentChatBottom"
 
+    /// 悬停中的消息（消息级操作只在悬停时露出）与刚复制过的那条。
+    @State private var hoveredMessageID: UUID?
+    @State private var copiedMessageID: UUID?
+
     private var transcript: some View {
         // **跟着最新内容走**（人类主人 2026-10-17 实机反馈：「对话框不自动滚动到最新位置，要手工拖动」）。
         // 读数取 `model.scrollTick`（消息条数 + 正文总长 + 卡片数）—— 流式逐段出现、过程块追加、
@@ -50,6 +54,13 @@ struct AgentChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
+                    // **空态**（§9.1.16 ⑦）：新会话一片空白时，给一句能直接发出去的起手话。
+                    // 空白屏不是「干净」，是「不知道该说什么」—— 别的区域都有空态，这里不该例外。
+                    if AgentChatEmptyStateGate.shouldShow(messageCount: model.messages.count,
+                                                          cardCount: model.cards.count,
+                                                          isRunning: model.isRunning) {
+                        emptyState
+                    }
                     ForEach(model.messages) { message in
                         messageRow(message)
                     }
@@ -67,6 +78,22 @@ struct AgentChatView: View {
         }
     }
 
+    /// 空会话的起手话（TUI 语汇：无卡片、无底纹，只有两行等宽字）。
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L(.agentChatEmptyTitle))
+                .font(Self.transcriptFont)
+                .foregroundStyle(Theme.text(.primary))
+            Text(L(.agentChatEmptyHint))
+                .font(Self.transcriptFont)
+                .foregroundStyle(Theme.text(.secondary))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 4)
+        .accessibilityElement(children: .combine)
+    }
+
     /// 滚到底。**不抢正在往上翻的人的手**：只在内容变化时执行，且用户点「回到最新」也能主动调它。
     private func follow(_ proxy: ScrollViewProxy, animated: Bool = true) {
         if animated {
@@ -74,6 +101,38 @@ struct AgentChatView: View {
         } else {
             proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
         }
+    }
+
+    /// 一条助手消息的两个动作：复制 / 重发（§9.1.16 ③）。
+    @ViewBuilder
+    private func messageActions(_ message: AgentChatMessage) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(message.text, forType: .string)
+                copiedMessageID = message.id
+            } label: {
+                Text(copiedMessageID == message.id ? "✓" : "⧉")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Theme.text(.secondary))
+            }
+            .buttonStyle(.plain)
+            .help(L(.agentMessageCopy))
+
+            Button {
+                Task { await model.resend(assistantMessageID: message.id) }
+            } label: {
+                Text("↻")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Theme.text(.secondary))
+            }
+            .buttonStyle(.plain)
+            .disabled(model.isRunning)
+            .help(L(.agentMessageResend))
+        }
+        .opacity(hoveredMessageID == message.id ? 1 : 0)
+        .onHover { inside in hoveredMessageID = inside ? message.id : (hoveredMessageID == message.id ? nil : hoveredMessageID) }
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - 转写区：Hermes TUI 的行首栏语法
@@ -109,6 +168,11 @@ struct AgentChatView: View {
                     Text("▌").font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
                 }
                 Spacer(minLength: 0)
+                // **消息级操作**（§9.1.16 ③）：悬停才出现，不常驻 —— TUI 的正文里不该挂按钮条。
+                // 流式中不给（那一条还没有可复制的结果），正在跑时「重发」也不给（会撞正在跑的那一轮）。
+                if !message.isStreaming {
+                    messageActions(message)
+                }
             }
         case .tool:
             // 工具结果在 TUI 里是**缩进的圆角小框**（`messageLine.tsx`：`borderStyle="round"` + 缩进 3）。
@@ -595,7 +659,8 @@ struct AgentChatView: View {
                 }
                 // 定时 agent 的入口（`FR-AI-27`）：面板里设「什么时候起一次会话」；
                 // 起不起得来、要不要审批都归既有那条路（定时不构成授权）。
-                ToolbarIconButton(systemName: "clock.arrow.circlepath", help: L(.agentScheduleTitle)) {
+                ToolbarIconButton(systemName: "clock.arrow.circlepath",
+                                  help: AppShortcut.agentSchedule.help(L(.agentScheduleTitle))) {
                     appState.isAgentSchedulePresented = true
                 }
             }

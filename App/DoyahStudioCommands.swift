@@ -144,6 +144,13 @@ struct DoyahStudioCommands: Commands {
             }
             .keyboardShortcut(AppShortcut.agentChat.key, modifiers: AppShortcut.agentChat.modifiers)
 
+            // 定时会话（`FR-AI-27`）：**在此之前只有对话面板里一枚图标按钮** —— 无键位、无菜单项，
+            // 帮助面板也就列不出。功能在、找不到入口，等于没有（与「打开对话」同一类漏）。
+            Button(L(.menuAgentSchedule)) {
+                appState.isAgentSchedulePresented = true
+            }
+            .keyboardShortcut(AppShortcut.agentSchedule.key, modifiers: AppShortcut.agentSchedule.modifiers)
+
             // 这一项的文案前面**带根名词**，是为满足「标题唯一」：菜单切语言靠**标题反查**键
             // （`MenuLocalization.key(forTitle:)`），裸「设置…」会与系统「设置…」撞车 ⇒ 反查歧义、切语言时串项。
             Button(L(.menuAgentSettings)) {

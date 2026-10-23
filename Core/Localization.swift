@@ -953,6 +953,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceTabHome
     // 对话页签（`FR-AI-25`）
     case agentChatTabTitle
+    case agentChatEmptyTitle
+    case agentMessageCopy
+    case agentMessageResend
+    case agentResendNoAnchor
+    case agentChatEmptyHint
     case agentChatPlaceholder
     case agentChatSend
     case agentChatStop
@@ -1776,6 +1781,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentScheduleWithheld
     case workspaceDiskChangedHint
     case menuAgentOpenChat
+    case menuAgentSchedule
     case agentChatStepsDone
     case agentChatStepsTitle
     case agentChatRunning2
@@ -3454,6 +3460,11 @@ public enum LocalizedStrings {
         .workspaceTabHome: [.simplifiedChinese: "首页", .english: "Home"],
         // 对话页签（`FR-AI-25`）
         .agentChatTabTitle: [.simplifiedChinese: "对话", .english: "Chat"],
+        .agentChatEmptyTitle: [.simplifiedChinese: "先说一句你要做什么", .english: "Start with what you need"],
+        .agentMessageCopy: [.simplifiedChinese: "复制这条", .english: "Copy this message"],
+        .agentMessageResend: [.simplifiedChinese: "重发这条（同样的提问再跑一轮）", .english: "Resend this turn (run the same question again)"],
+        .agentResendNoAnchor: [.simplifiedChinese: "这条前面没有对应的提问，没法重发。", .english: "There is no question behind this message, so it cannot be resent."],
+        .agentChatEmptyHint: [.simplifiedChinese: "例如：把当前库的表结构列出来；或者：看看上个月的订单为什么少了。", .english: "For example: list the tables in this database — or: figure out why last month's orders dropped."],
         .agentChatPlaceholder: [.simplifiedChinese: "说点什么…", .english: "Ask something…"],
         .agentChatSend: [.simplifiedChinese: "发送", .english: "Send"],
         .agentChatStop: [.simplifiedChinese: "停", .english: "Stop"],
@@ -3547,6 +3558,7 @@ public enum LocalizedStrings {
         .agentStatusNoUsage: [.simplifiedChinese: "端点未回用量", .english: "no usage from endpoint"],
         .agentChatStepNo: [.simplifiedChinese: "第 %@ 步", .english: "Step %@"],
         .menuAgentOpenChat: [.simplifiedChinese: "打开对话", .english: "Open chat"],
+        .menuAgentSchedule: [.simplifiedChinese: "定时会话…", .english: "Scheduled Sessions…"],
         .agentTestRunning: [.simplifiedChinese: "正在测试…", .english: "Testing…"],
         .agentTestPassed: [.simplifiedChinese: "连接正常：%@（%d 毫秒）", .english: "Connection OK: %@ (%d ms)"],
         .agentTestFailed: [.simplifiedChinese: "连接失败：%@", .english: "Connection failed: %@"],

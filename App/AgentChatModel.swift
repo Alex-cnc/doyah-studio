@@ -189,6 +189,19 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         await start(prompt: prompt, intent: .newQuestion)
     }
 
+    /// 重发（§9.1.16 ③）：以该条助手消息对应的**那次提问**为锚再跑一轮，旧轮保留。
+    ///
+    /// 找不到锚点（例如这条是开场白、前面没有提问）⇒ **什么都不做**并如实说一句，
+    /// 不许拿输入框里现有的字凑数 —— 那会变成「重发」出一句人没问过的话。
+    func resend(assistantMessageID: UUID) async {
+        guard !state.isRunning else { return }
+        guard let prompt = AgentResendAnchor.userPrompt(before: assistantMessageID, in: state.messages) else {
+            state.appendNotice(L(.agentResendNoAnchor))
+            return
+        }
+        await start(prompt: prompt, intent: .newQuestion)
+    }
+
     /// **继续上次**（`NFR-AI-08` ⑤）：接着上一轮停在的那一跳跑，**不再发已完成的跳**。
     ///
     /// 为什么不复用 `send()`：它要清空输入框、要追加一条用户消息；续跑问的还是同一个问题，

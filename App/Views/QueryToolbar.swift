@@ -455,6 +455,7 @@ struct ShortcutHelpContent: View {
         (.toolbarSaveQueryHelp, .saveQuery),
         (.toolbarSavedQueriesHelp, .savedQueries),
         (.historyHelp, .history),
+        (.menuAgentSchedule, .agentSchedule),
         (.editMenuFind, .find),
         (.editMenuReplace, .replace),
         (.editMenuGoToLine, .goToLine),

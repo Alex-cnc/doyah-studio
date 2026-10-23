@@ -56,6 +56,13 @@ enum AppShortcut: CaseIterable {
     /// 数据任务面板（FR-AI-05 / FR-AI-06 / FR-AI-08）。
     case dataTask
 
+    /// 定时会话（`FR-AI-27`）：⌥⌘T。
+    ///
+    /// **为什么是 ⌥⌘T 而不是 ⌘⇧T**：⌘⇧T 已归「数据任务」（`.dataTask`），一组修饰键只能有一个主人
+    /// （本条与 `.selectNextOccurrence` 让出 ⌘D、`.toggleTaskCheckbox` 让出 ⌘L 是同一条教训）。
+    /// 在此之前定时入口只有对话面板里一枚图标按钮 —— 无键位、无菜单项、帮助面板列不出，等于只有内部人知道。
+    case agentSchedule
+
     /// 命令面板（FR-EDIT-25）：⌘K。
     ///
     /// 在此之前 ⌘K **只写在文件头的注释里"预留"**，帮助面板因此列不出它 ——
@@ -115,6 +122,7 @@ enum AppShortcut: CaseIterable {
         case .egressLog: return "e"
         case .newBrowserTab: return "b"
         case .dataTask: return "t"
+        case .agentSchedule: return "t"
         case .commandPalette: return "k"
         case .help: return "/"
         case .terminal: return "j"
@@ -133,7 +141,7 @@ enum AppShortcut: CaseIterable {
             return [.command]
         case .check, .executionPlan, .saveFileAs, .savedQueries, .history, .clearEditor, .format, .formatCode, .agentAudit, .agentChat, .egressLog, .newBrowserTab, .dataTask, .help, .terminal, .archive:
             return [.command, .shift]
-        case .replace, .safeMode, .confirmAllWrites,
+        case .agentSchedule, .replace, .safeMode, .confirmAllWrites,
              .selectNextOccurrence, .addCursorAbove, .addCursorBelow, .toggleTaskCheckbox:
             return [.command, .option]
         }
