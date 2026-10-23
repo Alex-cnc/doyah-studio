@@ -3341,7 +3341,7 @@ Platform/windows/        # 本节对应的 Windows 侧（落点 = 同仓本块�
 
 | 项 | 命令 | 实测结果 |
 |---|---|---|
-| 等价矩阵（Windows 列已并入 计划书 §5）| `python Scripts/gen-platform-parity.py --check` | `已具备 平台等价矩阵与现状一致（176 条；平台列 3）` · RC 0 |
+| 等价矩阵（Windows 列已并入 计划书 §5）| `python Scripts/gen-platform-parity.py --check` | `已具备 平台等价矩阵与现状一致（335 条；平台列 4）` · RC 0 <!-- 2026-10-20 本侧跟版：旧读数 176 条 / 平台列 3 系首次落笔时值，矩阵已随台账长到 335 条 4 列（macOS/watchOS/Linux/Windows） --> |
 | 越界门禁（不传参数 = 本机推断为 windows）| `python Scripts/check-exclusive-sections.py` | 与显式 `--mine windows` 的输出逐字一致 · RC 0 |
 | 越界门禁（**推前姿势**）| `python Scripts/check-exclusive-sections.py --mine windows --base origin/master` | `已具备 越界检查通过：受检改动 29 行（含契约层），均合法（本侧=windows，契约层属 macos）` · RC 0 |
 | 越界门禁（**合并对侧提交后**仍用 `--base HEAD`）| `python Scripts/check-exclusive-sections.py --mine windows --base HEAD` | ❌ **76 处假红** —— 全是**对侧刚合并进来那笔提交**的契约层改动（`HEAD` 里还没它）⇒ **merge 后推前一律用 `--base origin/master`**，或先提交 merge 再跑；本侧改动在该视图下全部合法 |
