@@ -116,6 +116,8 @@ DEFAULT_TARGETS = [
     "Docs/Doyah产品详细设计说明书-Android.md",
     "Docs/Doyah产品详细设计说明书-iOS.md",
     "Docs/Doyah产品详细设计说明书-HarmonyOS.md",
+    # 2026-10-23：macOS 端开发计划书（有表格 ⇒ 进受检；本端执行计划，不改状态源）
+    "Docs/Doyah产品开发计划书-macOS端.md",
     "Docs/发布方案.md",
     "Docs/手工验收运行手册.md",
     # L-41（第 35 轮）：每轮必改的两份**本机台账**（`.gitignore` 排除，只在主开发机上）
@@ -823,6 +825,8 @@ SELF_TEST_TRACKED = [
     "Docs/Doyah产品详细设计说明书-Android.md",
     "Docs/Doyah产品详细设计说明书-iOS.md",
     "Docs/Doyah产品详细设计说明书-HarmonyOS.md",
+    # 2026-10-23：macOS 端开发计划书（有表格 ⇒ 进受检；本端执行计划，不改状态源）
+    "Docs/Doyah产品开发计划书-macOS端.md",
     "Docs/模板-详细设计说明书-Studio.md",  # 2026-10-21 详设模板（入库件）
     "Docs/规范/界面设计节-写作规范.md",  # 2026-10-22 界面设计规范进仓（对侧无本侧技能包，规则跟着代码走）
     "Docs/Doyah产品需求规格说明书-追溯表.md",  # 2026-10-20 从 SRS §9.1 外置（瘦身令），必须入库

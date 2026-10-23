@@ -41,6 +41,7 @@ xcuserdata/
 # 2026-10-23：执行契约体裁新稿（v0.1，对侧要读 ⇒ 必须入库）
 !/Docs/模板-详细设计说明书-Studio.md
 !/Docs/Doyah产品详细设计说明书-*.md
+!/Docs/Doyah产品开发计划书-*.md
 !Docs/Doyah产品详细设计说明书-Windows.md
 !Docs/Doyah产品详细设计说明书-Linux.md
 !Docs/Doyah产品详细设计说明书-Android.md

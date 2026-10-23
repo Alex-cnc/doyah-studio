@@ -89,6 +89,8 @@ VERSION_DOCS = [
     ("Docs/模板-详细设计说明书-Studio.md", False),
     # 2026-10-23：macOS 端详细设计（自带 §11 变更记录 + 头部版本格）。
     ("Docs/Doyah产品详细设计说明书-macOS.md", False),
+    # 2026-10-23：macOS 端开发计划书（自带 §11 变更记录 + 头部版本格）。
+    ("Docs/Doyah产品开发计划书-macOS端.md", False),
     ("Docs/Doyah产品详细设计说明书-Windows.md", False),
     ("Docs/Doyah产品详细设计说明书-Linux.md", False),
     ("Docs/Doyah产品详细设计说明书-Android.md", False),
