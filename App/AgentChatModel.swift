@@ -108,8 +108,12 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 看门狗（`FR-AI-31` ③「卡住」）：跑着的时候每 `watchdogTickSeconds` 秒看一眼。
     private var watchdog: Task<Void, Never>?
 
-    init(sessionID: String = "chat-\(UUID().uuidString)") {
+    /// `state` 可注入：界面快照（`TestsUISnapshot/`）要拍得出「有一屏消息」的样子，
+    /// 而消息只能从 `AgentChatState` 进来。这是**依赖注入**，不是测试专用开关 ——
+    /// 生产路径照旧走默认值。
+    init(sessionID: String = "chat-\(UUID().uuidString)", state: AgentChatState = AgentChatState()) {
         self.sessionID = sessionID
+        self.state = state
     }
 
     /// 取消标记（跨并发域读：用锁，不掺进界面状态）。

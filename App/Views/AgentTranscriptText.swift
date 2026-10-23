@@ -115,12 +115,16 @@ struct AgentTranscriptText: View {
         return attributed
     }
 
-    /// 代码块：等宽、**只描边**、横向可滚（长行不折，避免把缩进结构折断）。
+    /// 代码块：**照 Hermes TUI 的样子** —— 没有框、没有底纹，只有一行 `─ 语言` 抬头，
+    /// 正文缩进两格、整块等宽（`markdown.tsx`：`paddingLeft={2}` + `'─ ' + lang`）。
+    ///
+    /// 以前这里是圆角描边的大卡片：卡片自带内边距与边框，在一个「每行都是字」的界面里
+    /// 就是唯一一个「控件」，观感立刻从终端跳回 GUI。
     private func codeBlock(language: String?, code: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
             if let language, !language.isEmpty {
-                Text(language)
-                    .font(.system(.caption2, design: .monospaced))
+                Text("─ " + language)
+                    .font(.system(.callout, design: .monospaced))
                     .foregroundStyle(Theme.text(.tertiary))
             }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -131,12 +135,8 @@ struct AgentTranscriptText: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(8)
+        .padding(.leading, 12)          // 两格缩进（与 TUI 的 paddingLeft={2} 同义）
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
-        )
     }
 
     @Environment(\.colorScheme) private var colorScheme

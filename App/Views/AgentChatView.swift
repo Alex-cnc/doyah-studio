@@ -53,7 +53,7 @@ struct AgentChatView: View {
         // 卡片新增，任何一种都会让读数变大 ⇒ 一次滚动跟随；只在**内容真的变了**时动手，不空转。
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: 3) {
                     // **空态**（§9.1.16 ⑦）：新会话一片空白时，给一句能直接发出去的起手话。
                     // 空白屏不是「干净」，是「不知道该说什么」—— 别的区域都有空态，这里不该例外。
                     if AgentChatEmptyStateGate.shouldShow(messageCount: model.messages.count,
@@ -70,7 +70,7 @@ struct AgentChatView: View {
                     Color.clear.frame(height: 1).id(Self.bottomAnchor)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
+                .padding(.horizontal, 14).padding(.vertical, 10)
             }
             .onChange(of: model.scrollTick) { _ in follow(proxy) }
             .onChange(of: model.isRunning) { _ in follow(proxy) }
@@ -142,11 +142,15 @@ struct AgentChatView: View {
     private static let transcriptFont = Font.system(.callout, design: .monospaced)
 
     /// 行首栏：**固定宽度**的字形列，正文一律左对齐（TUI 的 gutter）。
-    private func gutter(_ glyph: String, _ tint: Color) -> some View {
+    /// 行首栏宽度（TUI：用户行 = 提示符 2 列，其余 = 3 列）。
+    private static let userGutter: CGFloat = 14
+    private static let bodyGutter: CGFloat = 21
+
+    private func gutter(_ glyph: String, _ tint: Color, width: CGFloat? = nil) -> some View {
         Text(glyph)
             .font(Self.transcriptFont)
             .foregroundStyle(tint)
-            .frame(width: 14, alignment: .leading)
+            .frame(width: width ?? Self.bodyGutter, alignment: .leading)
     }
 
     @ViewBuilder
@@ -154,13 +158,14 @@ struct AgentChatView: View {
         switch message.role {
         case .user:
             // TUI 里用户消息是 `❯ 正文`，**不是右对齐气泡** —— 去掉气泡是这一版最大的外观变化。
-            HStack(alignment: .top, spacing: 8) {
-                gutter("❯", Theme.accentColor)
+            // 上边留 6pt：终端里每条提问前有一个空行（`marginTop={1}`），是分组的唯一手段。
+            HStack(alignment: .top, spacing: 0) {
+                gutter("❯", Theme.accentColor, width: Self.userGutter)
                 AgentTranscriptText(text: message.text, font: Self.transcriptFont)
                 Spacer(minLength: 0)
             }
         case .assistant:
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: 0) {
                 gutter("┊", Theme.text(.secondary))
                 AgentTranscriptText(text: message.text, font: Self.transcriptFont)
                 if message.isStreaming {
@@ -175,23 +180,25 @@ struct AgentChatView: View {
                 }
             }
         case .tool:
-            // 工具结果在 TUI 里是**缩进的圆角小框**（`messageLine.tsx`：`borderStyle="round"` + 缩进 3）。
-            HStack(alignment: .top, spacing: 8) {
+            // 工具行 = TUI 的**过程块**：`⚡` 行首栏 + 一整个圆角小框，框内**正文同字号**
+            // （以前用 `.caption` ⇒ 工具行比正文小一号，一眼就不像终端里同一个字号的输出）。
+            // 缩进与正文同一列（栏宽 21pt），框只描边、不铺底。
+            HStack(alignment: .top, spacing: 0) {
                 gutter("⚡", Theme.text(.secondary))
                 Text(message.text)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(Self.transcriptFont)
                     .foregroundStyle(Theme.text(.secondary))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: 5)
                             .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
                     )
                 Spacer(minLength: 0)
             }
         case .notice:
             // 时间线事件：`◈` + 灰字，不带栏（TUI 的 `kind === 'event'`）。
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
                 gutter("◈", Theme.text(.secondary))
                 Text(noticeText(message.text))
                     .font(Self.transcriptFont)
@@ -261,27 +268,33 @@ struct AgentChatView: View {
         }
     }
 
+    /// 这张卡是不是**在等人点**（只有这种才值得用强调色与描边）。
+    private func pendingApproval(_ card: AgentToolCard) -> Bool {
+        if case .pendingApproval = card.outcome { return true }
+        return false
+    }
+
     @ViewBuilder
     private func toolCard(_ card: AgentToolCard) -> some View {
         // §7.9.10：工具卡也守在行首栏里 —— `⚡` 占 14pt，卡体从同一条竖线起；
         // 状态用**文字标记**（`✓ ✗ ◐ ⚠`）而不是 SF Symbol，图标会带自己的光学重心，破了等宽的列。
         // 可以描边，**不许底纹**：卡体只留一圈 hairline 圆角，不再铺 panel 底色。
-        HStack(alignment: .top, spacing: 8) {
-            gutter("⚡", Theme.accentColor)
+        HStack(alignment: .top, spacing: 0) {
+            gutter("⚡", pendingApproval(card) ? Theme.accentColor : Theme.text(.secondary))
             toolCardBody(card)
         }
     }
 
     @ViewBuilder
     private func toolCardBody(_ card: AgentToolCard) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+        // **只有「等审批」才是一块框**（那是一条要人动手的决定）；跑完的调用在 TUI 里就是
+        // 两行字：`⚡ 工具名` + `⎿ 结果`。以前每张卡都描一个通栏框 ⇒ 看起来像列表控件，
+        // 而不是终端里滚过去的一段输出。
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 6) {
                 Text(mark(for: card))
                     .font(Self.transcriptFont)
                     .foregroundStyle(tint(for: card))
-                Text(card.name).font(Self.transcriptFont)
-                Text(card.statusCode).font(.caption).foregroundStyle(Theme.text(.secondary))
-                Spacer()
                 Button {
                     model.toggle(card.id)
                 } label: {
@@ -291,30 +304,36 @@ struct AgentChatView: View {
                 }
                 .buttonStyle(.plain)
                 .help(card.expanded ? L(.agentChatCollapse) : L(.agentChatExpand))
-            }
-            if card.expanded {
-                if let preview = card.approvalPreview {
-                    Text(preview)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
-                        )
-                } else if !card.arguments.isEmpty {
+                if !card.arguments.isEmpty {
                     Text(card.arguments)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
+                        .font(Self.transcriptFont)
                         .foregroundStyle(Theme.text(.secondary))
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
-                        )
+                        .lineLimit(1)
                 }
+                Spacer(minLength: 0)
+            }
+            // `⎿ ` 是 TUI 的续行标记（`thinking.tsx` 用 `├─ / └─`，工具结果用同一个位置）。
+            Text("⎿ " + card.statusCode)
+                .font(Self.transcriptFont)
+                .foregroundStyle(Theme.text(.tertiary))
+                .padding(.leading, 14)
+            if card.expanded, let preview = card.approvalPreview {
+                Text(preview)
+                    .font(.system(.callout, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5)
+                            .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
+                    )
+                    .padding(.leading, 14)
+            } else if card.expanded, !card.arguments.isEmpty {
+                Text(card.arguments)
+                    .font(.system(.callout, design: .monospaced))
+                    .textSelection(.enabled)
+                    .foregroundStyle(Theme.text(.secondary))
+                    .padding(.leading, 14)
             }
             // ③「展开可见**用的哪个模型与端点**」（`FR-AI-25` ③）：每张卡展开都带这一行 ——
             // 不能只靠底部状态行（那里是「这一轮」的读数，卡片可能属于上一轮 / 上一个端点）。
@@ -349,11 +368,14 @@ struct AgentChatView: View {
                 Text(L(.agentChatUndone)).font(.caption).foregroundStyle(Theme.text(.secondary))
             }
         }
-        .padding(10)
+        // **只有等审批的卡才描边**（TUI 里其余工具调用只是两行字）。
+        // 通栏底纹与通栏边框都是 GUI 语法：终端里没有「一条横贯整屏的框」这种东西。
+        .padding(.vertical, pendingApproval(card) ? 6 : 0)
+        .padding(.horizontal, pendingApproval(card) ? 8 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 5)
+                .strokeBorder(pendingApproval(card) ? Theme.hairline(colorScheme) : .clear, lineWidth: 1)
         )
     }
 
@@ -591,9 +613,9 @@ struct AgentChatView: View {
                 if case .ready(let modelName, let endpoint) = model.endpointState {
                     Text(L(.agentStatusModel, modelName))
                     Text(URL(string: endpoint)?.host ?? endpoint).foregroundStyle(Theme.text(.secondary))
-                } else {
-                    Text(L(.agentChatEndpointNotConfigured)).foregroundStyle(Theme.text(.secondary))
                 }
+                // 端点没配好时**这里什么都不写**：输入区上方那条 `◈` 阻断句已经说明了同一件事。
+                // 同一句话在一屏里出现两次，是「界面在自说自话」，与 TUI 的克制正好相反。
                 if let seconds = model.lastElapsedSeconds {
                     Text(L(.agentStatusElapsed, String(format: "%.1f", seconds)))
                 }
@@ -629,13 +651,13 @@ struct AgentChatView: View {
             if let blocker = model.blockerText {
                 HStack(spacing: 6) {
                     Text("◈").font(Self.transcriptFont).foregroundStyle(Theme.status(.warning))
-                    Text(blocker).font(.callout)
+                    Text(blocker).font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
                 }
                 .foregroundStyle(Theme.text(.secondary))
             }
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("❯")
-                    .font(.system(.body, design: .monospaced))
+                    .font(Self.transcriptFont)
                     .foregroundStyle(Theme.accentColor)
                 TextField(L(.agentChatPlaceholder), text: $model.input)
                     .textFieldStyle(.plain)
