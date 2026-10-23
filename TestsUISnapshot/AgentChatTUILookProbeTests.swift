@@ -72,6 +72,30 @@ final class AgentChatTUILookProbeTests: XCTestCase {
         }
     }
 
+    /// 排队中：一轮正在跑，输入区上方列出待跑的提问。
+    @MainActor
+    func testQueueShowsAboveComposer() throws {
+        let state = AppState()
+        state.connections = []
+        let chat = AgentChatState(messages: [
+            .init(role: .user, text: "把订单表按天汇总一下。"),
+            .init(role: .assistant, text: "正在查。")
+        ])
+        var queue = AgentPromptQueue()
+        queue.enqueue("顺便看一下索引有没有用上。")
+        queue.enqueue("最后给个建索引的建议。")
+        let model = AgentChatModel(sessionID: "snapshot-queue", state: chat, queue: queue)
+        _ = try UISnapshot.write("agent-chat-tui-queue-dark", size: CGSize(width: 920, height: 420),
+                                 scheme: .dark) {
+            ZStack {
+                Color(red: 5/255, green: 7/255, blue: 13/255)
+                AgentChatView(model: model)
+                    .environmentObject(state)
+                    .environmentObject(WorkspaceTabsModel())
+            }
+        }
+    }
+
     /// 空会话空态（A1 的观感）。
     @MainActor
     func testEmptyStateLooksLikeTUI() throws {

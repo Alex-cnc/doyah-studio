@@ -661,6 +661,28 @@ struct AgentChatView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // 排队中的提问（`/queue` 的同义物）：一轮还在跑时提交的话不丢，
+            // 这里按序列出；点 `✕` 撤掉一条。**不打断正在跑的这一轮**。
+            if !model.queue.isEmpty {
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(Array(model.queue.items.enumerated()), id: \.element.id) { index, item in
+                        HStack(spacing: 6) {
+                            Text("⇥")
+                                .font(Self.transcriptFont)
+                                .foregroundStyle(Theme.text(.secondary))
+                            Text("\(index + 1).")
+                                .font(Self.transcriptFont)
+                                .foregroundStyle(Theme.text(.tertiary))
+                            Text(AgentPromptQueue.preview(item.text))
+                                .font(Self.transcriptFont)
+                                .foregroundStyle(Theme.text(.secondary))
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                            glyphButton("✕", help: "移出队列") { model.removeQueued(id: item.id) }
+                        }
+                    }
+                }
+            }
             if let blocker = model.blockerText {
                 HStack(spacing: 6) {
                     Text("◈").font(Self.transcriptFont).foregroundStyle(Theme.status(.warning))
@@ -676,7 +698,11 @@ struct AgentChatView: View {
                     .textFieldStyle(.plain)
                     .font(Self.transcriptFont)
                     .focused($inputFocused)
-                    .onSubmit { if model.canSend { Task { await model.send() } } }
+                    .onSubmit {
+                        // 跑着时提交 = 排队（不是无视、也不是打断）
+                        let typed = !model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        if typed { Task { await model.send() } }
+                    }
                 if model.isRunning {
                     Text(L(.agentChatRunning)).font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.text(.secondary))
                     ToolbarIconButton(systemName: "stop.fill", help: L(.agentChatStop)) { model.stop() }
@@ -689,7 +715,7 @@ struct AgentChatView: View {
                         }
                     }
                     glyphButton("⏎", help: L(.agentChatSend)) { Task { await model.send() } }
-                        .disabled(!model.canSend)
+                        .disabled(model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 // 定时 agent 的入口（`FR-AI-27`）：面板里设「什么时候起一次会话」；
                 // 起不起得来、要不要审批都归既有那条路（定时不构成授权）。

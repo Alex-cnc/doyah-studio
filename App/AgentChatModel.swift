@@ -111,9 +111,12 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// `state` 可注入：界面快照（`TestsUISnapshot/`）要拍得出「有一屏消息」的样子，
     /// 而消息只能从 `AgentChatState` 进来。这是**依赖注入**，不是测试专用开关 ——
     /// 生产路径照旧走默认值。
-    init(sessionID: String = "chat-\(UUID().uuidString)", state: AgentChatState = AgentChatState()) {
+    init(sessionID: String = "chat-\(UUID().uuidString)",
+         state: AgentChatState = AgentChatState(),
+         queue: AgentPromptQueue = AgentPromptQueue()) {
         self.sessionID = sessionID
         self.state = state
+        self.queue = queue
     }
 
     /// 取消标记（跨并发域读：用锁，不掺进界面状态）。
@@ -132,6 +135,10 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 输入框上方那块清单（一步步走）。
     var steps: [AgentChatStep] { state.steps }
     var isRunning: Bool { state.isRunning }
+
+    /// 排队中的提问（`/queue` 的同义物）。**归客户端所有**：循环不知道它存在，
+    /// 所以三端（macOS / Windows / Linux）都能有、行为一致，不依赖任何平台能力。
+    @Published private(set) var queue = AgentPromptQueue()
     var grants: Set<String> { state.grants }
 
     /// 端点那一句话（如实说，不写死；文案从语言表取）。
@@ -190,7 +197,24 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     func send() async {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
+        // **一轮还在跑时提交的提问不丢、也不打断**：排进队列，这一轮结束后按序接着跑
+        // （Hermes CLI 的 `/queue` 同义；这里用界面表达，不要求用户记斜杠命令）。
+        if state.isRunning {
+            guard queue.enqueue(prompt) != nil else { return }
+            input = ""
+            return
+        }
         await start(prompt: prompt, intent: .newQuestion)
+    }
+
+    /// 撤掉一条排队中的提问（界面上那个 `✕`）。
+    func removeQueued(id: UUID) {
+        queue.remove(id: id)
+    }
+
+    /// 清空队列。
+    func clearQueue() {
+        queue.clear()
     }
 
     /// 重发（§9.1.16 ③）：以该条助手消息对应的**那次提问**为锚再跑一轮，旧轮保留。
@@ -414,6 +438,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     private func finish(_ result: AgentLoopResult) {
         stopWatchdog()
         state.finishRun()
+        drainQueue()
         // 用量并进会话账（缺值不当 0 累加 —— 与 CLI 侧同一口径）。
         // **缓存读数一并记**（`FR-AI-25` 第二格）：端点没报 ⇒ `nil`，账上不算一次「命中率读数」。
         sessionUsage.add(prompt: result.usage.promptTokens,
@@ -432,5 +457,14 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         case .stopped:
             break   // 停止那一档：循环已经发过 `stopped` 事件，这里不重复报。
         }
+    }
+
+    /// 把队列里的下一条接着跑起来。
+    ///
+    /// 只在**真的空闲**时才起：`finish` 之外也可能有人手动改状态，
+    /// 起早了会和还没落地的这一轮撞在一起。
+    private func drainQueue() {
+        guard !state.isRunning, let next = queue.dequeue() else { return }
+        Task { await start(prompt: next.text, intent: .newQuestion) }
     }
 }
