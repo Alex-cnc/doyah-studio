@@ -25,6 +25,7 @@ pub mod browse_session;
 pub mod code_lines;
 pub mod command_history;
 pub mod config;
+pub mod copy_export;
 pub mod cursor;
 pub mod db_type;
 pub mod ddl;

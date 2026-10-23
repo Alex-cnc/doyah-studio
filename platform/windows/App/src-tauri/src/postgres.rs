@@ -886,6 +886,222 @@ impl PgSession {
         Ok((result.columns, rows, result.truncated))
     }
 
+    /// **整表导出**（`FR-STD-DB-IO-002`）：`COPY <表> TO STDOUT` 让**服务端推到客户端**，
+    /// 本函数逐块写目标文件 —— 全程没有「整表在内存里」的时刻（这是与 `export_rows` 的关键区别：
+    /// 那条要先把结果集收成 `Vec`，受 `MAX_QUERY_ROWS` 限制）。
+    ///
+    /// 四条纪律：
+    /// ① **语句只由领域层生成**（`copy_export::copy_out_statement`），并再过一次 `is_client_side` 守卫 ——
+    ///    「让服务端写自己的盘」这种写法连出网的机会都不给；
+    /// ② **先写 `<目标>.part`，成功才改名**：中途失败（断连 / 权限 / 磁盘满）不会在用户面前留一个
+    ///    看起来像导出的半截文件；失败时**只删本次创建的那个临时文件**；
+    /// ③ **行数按 CSV 引号规则数**（领域层 `RecordCounter`），不数换行字节 —— 值里带换行时数换行会多算；
+    /// ④ 目标目录不存在 ⇒ **报错不替用户造目录**（路径拼错时替他造目录，等于把错误埋起来）。
+    pub async fn copy_table_to_file(
+        &self,
+        schema: Option<&str>,
+        table: &str,
+        target: &std::path::Path,
+        header: bool,
+    ) -> Result<CopyExportSummary, DbFailure> {
+        use doyah_studio_db::copy_export::{copy_out_statement, is_client_side, RecordCounter};
+        use futures_util::TryStreamExt;
+        use tokio::io::AsyncWriteExt;
+
+        let statement = copy_out_statement(schema, table, header).map_err(|e| DbFailure {
+            message: e.message().to_string(),
+            hint: "在对象树里选中一张表再导出；整库导出请填目录。".to_string(),
+        })?;
+        if !is_client_side(&statement) {
+            // 理论上不可达（生成器只产出 TO STDOUT）；写成硬错而不是 debug_assert：
+            // 万一将来有人改了生成器，这里必须在**发出任何字节之前**拦住。
+            return Err(DbFailure {
+                message: "拒绝执行：这条导出语句会让服务端写自己的文件".to_string(),
+                hint: "这属实现缺陷：请保留现场并报告（导出只走 TO STDOUT）。".to_string(),
+            });
+        }
+        let parent = target.parent().ok_or_else(|| DbFailure {
+            message: format!("目标路径没有目录部分：{}", target.display()),
+            hint: "给一个完整文件路径，例如 D:\\tmp\\orders.csv。".to_string(),
+        })?;
+        if !parent.is_dir() {
+            return Err(DbFailure {
+                message: format!("目标目录不存在：{}", parent.display()),
+                hint: "先建好目录（或换一个已存在的目录）再导出。".to_string(),
+            });
+        }
+        let file_name = target
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .filter(|n| !n.trim().is_empty())
+            .ok_or_else(|| DbFailure {
+                message: format!("目标路径没有文件名：{}", target.display()),
+                hint: "路径要落到一个文件上，例如 D:\\tmp\\orders.csv。".to_string(),
+            })?;
+        let tmp = parent.join(format!("{file_name}.part"));
+
+        let stream = self
+            .client
+            .copy_out(&statement)
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        // `CopyOutStream` 是 `!Unpin`（内部有自引用状态）⇒ 必须钉在堆上才能 `try_next`
+        let mut stream = Box::pin(stream);
+        let mut file = tokio::fs::File::create(&tmp).await.map_err(|e| DbFailure {
+            message: format!("写临时文件失败：{e}（{}）", tmp.display()),
+            hint: "确认目录可写、盘上还有空间。".to_string(),
+        })?;
+        let mut counter = RecordCounter::new();
+        let mut bytes = 0usize;
+        loop {
+            match stream.try_next().await {
+                Ok(Some(chunk)) => {
+                    counter.push(&chunk);
+                    bytes += chunk.len();
+                    if let Err(e) = file.write_all(&chunk).await {
+                        drop(file);
+                        let _ = tokio::fs::remove_file(&tmp).await;
+                        return Err(DbFailure {
+                            message: format!("写文件失败：{e}（{}）", tmp.display()),
+                            hint: "盘满或目录权限不足会让写入中途失败；本次导出已作废（没留半截文件）。"
+                                .to_string(),
+                        });
+                    }
+                }
+                Ok(None) => break,
+                Err(e) => {
+                    drop(file);
+                    let _ = tokio::fs::remove_file(&tmp).await;
+                    return Err(DbFailure::from_driver_text(&server_error_text(&e)));
+                }
+            }
+        }
+        if let Err(e) = file.flush().await {
+            drop(file);
+            let _ = tokio::fs::remove_file(&tmp).await;
+            return Err(DbFailure {
+                message: format!("落盘失败：{e}（{}）", tmp.display()),
+                hint: "盘满或介质异常；本次导出已作废（没留半截文件）。".to_string(),
+            });
+        }
+        drop(file);
+        if let Err(e) = tokio::fs::rename(&tmp, target).await {
+            let _ = tokio::fs::remove_file(&tmp).await;
+            return Err(DbFailure {
+                message: format!("改名失败：{e}（{} → {}）", tmp.display(), target.display()),
+                hint: "目标文件可能正被别的程序占用（Excel 打开着就会这样）。".to_string(),
+            });
+        }
+        Ok(CopyExportSummary {
+            statement,
+            path: target.display().to_string(),
+            rows: counter.data_rows(header),
+            bytes,
+        })
+    }
+
+    /// **整库导出**（`FR-STD-DB-IO-002` 的整库那一半）：一个 schema 下**每张普通表一个文件**。
+    ///
+    /// 口径：
+    /// ① **逐表串行**（连接共享，并发只互相抢带宽，还会让「导到哪一步了」说不清）；
+    /// ② **单表失败隔离**：一张表出错不带走其余表，失败原因逐表带回，界面照实画；
+    /// ③ **文件名由领域层统一分配**（撞名补 `-2`、路径穿越字节替换、保留设备名加前缀）——
+    ///    绝不在本层 `format!("{table}.csv")`；
+    /// ④ **视图 / 物化视图 / 外部表不在本片范围**：计数带回（`skipped`），界面明说没导它们，
+    ///    而不是让用户以为整库都进来了。
+    pub async fn export_schema_to_dir(
+        &self,
+        schema: &str,
+        dir: &std::path::Path,
+        header: bool,
+    ) -> Result<SchemaExportSummary, DbFailure> {
+        use doyah_studio_db::copy_export::assign_file_names;
+
+        let schema = schema.trim();
+        if schema.is_empty() {
+            return Err(DbFailure {
+                message: "没指定 schema".to_string(),
+                hint: "整库导出要一个 schema 名（默认 public）。".to_string(),
+            });
+        }
+        if !dir.is_dir() {
+            return Err(DbFailure {
+                message: format!("目标目录不存在：{}", dir.display()),
+                hint: "先建好目录（或换一个已存在的目录）再导出。".to_string(),
+            });
+        }
+        let (tables, skipped) = self.exportable_tables(schema).await?;
+        let planned = assign_file_names(&tables);
+        let mut outcomes: Vec<TableExportOutcome> = Vec::with_capacity(planned.len());
+        for (table, file_name) in planned {
+            let target = dir.join(&file_name);
+            match self
+                .copy_table_to_file(Some(schema), &table, &target, header)
+                .await
+            {
+                Ok(summary) => outcomes.push(TableExportOutcome {
+                    table,
+                    file_name,
+                    path: summary.path,
+                    rows: summary.rows,
+                    bytes: summary.bytes,
+                    failure: None,
+                }),
+                Err(failure) => outcomes.push(TableExportOutcome {
+                    table,
+                    file_name,
+                    path: target.display().to_string(),
+                    rows: 0,
+                    bytes: 0,
+                    failure: Some(failure),
+                }),
+            }
+        }
+        let total_rows = outcomes.iter().map(|o| o.rows).sum();
+        let total_bytes = outcomes.iter().map(|o| o.bytes).sum();
+        let failed = outcomes.iter().filter(|o| o.failure.is_some()).count();
+        Ok(SchemaExportSummary {
+            dir: dir.display().to_string(),
+            schema: schema.to_string(),
+            tables: outcomes,
+            total_rows,
+            total_bytes,
+            failed,
+            skipped,
+        })
+    }
+
+    /// 一个 schema 下**可导出的普通表**（按名字排好）+ **没导的关系数**（视图 / 物化视图 / 外部表 / 分区子表…）。
+    ///
+    /// 为什么不复用 `relations()`：那条走的是界面对象树的口径（带 `CappedRows` 上限、含各种 kind），
+    /// 而这里要的是「一个不漏地表名清单」—— 用对象树的**有上限**口径去驱动导出，大库里会静默少导几张表。
+    async fn exportable_tables(&self, schema: &str) -> Result<(Vec<String>, usize), DbFailure> {
+        let rows = self
+            .client
+            .query(
+                "SELECT c.relname, c.relkind::text \
+                 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+                 WHERE n.nspname = $1 AND c.relkind IN ('r', 'p', 'v', 'm', 'f') \
+                 ORDER BY c.relname",
+                &[&schema],
+            )
+            .await
+            .map_err(|e| DbFailure::from_driver_text(&server_error_text(&e)))?;
+        let mut tables = Vec::new();
+        let mut skipped = 0usize;
+        for row in rows {
+            let name: String = row.get(0);
+            let kind: String = row.get(1);
+            // `r` = 普通表、`p` = 分区父表（COPY 能读它，数据是全部子表的并集）
+            if kind == "r" || kind == "p" {
+                tables.push(name);
+            } else {
+                skipped += 1;
+            }
+        }
+        Ok((tables, skipped))
+    }
+
     /// **导入**（1.6 段）：一页数据 + 列映射 ⇒ 一个事务里的多条 INSERT。
     ///
     /// 口径：① **整个导入是一个事务**（中途失败整批回滚，不留"导了一半"的表）；
@@ -1287,6 +1503,46 @@ pub struct StatementOutcome {
     pub failure: Option<DbFailure>,
     /// 这一段耗时（毫秒）—— 计划与慢查询排查都要看它
     pub elapsed_ms: u64,
+}
+
+/// 整表导出读数（`FR-STD-DB-IO-002` 判据④：完成后报告**行数与文件路径**）。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyExportSummary {
+    /// 真发出去的那条 `COPY … TO STDOUT`（摆在界面上，用户能自己复核「没让服务端写文件」）
+    pub statement: String,
+    pub path: String,
+    /// **数据行数**（已减掉 CSV 表头；值里带换行时也按 CSV 引号规则数，不数换行字节）
+    pub rows: usize,
+    pub bytes: usize,
+}
+
+/// 整库导出里**一张表**的结果（成功带读数，失败带原因 —— 失败不许被吞掉）。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableExportOutcome {
+    pub table: String,
+    /// 领域层分配的文件名（撞名补 `-2`、保留设备名加前缀）
+    pub file_name: String,
+    pub path: String,
+    pub rows: usize,
+    pub bytes: usize,
+    pub failure: Option<DbFailure>,
+}
+
+/// 整库导出读数（逐表一行 + 合计）。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SchemaExportSummary {
+    pub schema: String,
+    pub dir: String,
+    pub tables: Vec<TableExportOutcome>,
+    pub total_rows: usize,
+    pub total_bytes: usize,
+    /// 失败的表数（0 = 全成；界面按它决定要不要标红）
+    pub failed: usize,
+    /// **没导的关系数**（视图 / 物化视图 / 外部表）—— 如实报，不让用户以为整库都进来了
+    pub skipped: usize,
 }
 
 /// 自检读数。

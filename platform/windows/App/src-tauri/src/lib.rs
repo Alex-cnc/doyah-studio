@@ -52,9 +52,9 @@ pub use agent_settings::{AgentSettingsSnapshot, AgentSettingsStore};
 #[allow(unused_imports)]
 pub use saved_queries::SavedQueryStore;
 pub use postgres::{
-    ConnectParams, ConnectReport, DatabaseInfo, DbFailure, PgSession, ProbeReport, QueryResult,
-    ServerInfo, StartupOutcome, StatementOutcome, TableNode, TableShape, TableStats,
-    MAX_QUERY_ROWS,
+    ConnectParams, ConnectReport, CopyExportSummary, DatabaseInfo, DbFailure, PgSession,
+    ProbeReport, QueryResult, SchemaExportSummary, ServerInfo, StartupOutcome, StatementOutcome,
+    TableExportOutcome, TableNode, TableShape, TableStats, MAX_QUERY_ROWS,
 };
 pub use query::{DatasetSummary, GridWindowPayload, ViewCache, MAX_WINDOW_ROWS};
 
@@ -1409,6 +1409,61 @@ pub struct ExportReport {
     /// 服务端还有更多行没取回来（超过上限）
     pub truncated: bool,
     pub bytes: usize,
+}
+
+// ── 整表 / 整库导出（FR-STD-DB-IO-002：COPY … TO STDOUT 推流 → 客户端逐块写盘）──────────
+//
+// 与 `export_to_file` 的区别（两者常被当成一件事，这里钉清楚）：
+//   · `export_to_file` = **界面上那条 SQL 的结果**（已在内存里，受 `MAX_QUERY_ROWS` 上限，超了如实标截断）；
+//   · 本段两条 = **整张表 / 整个 schema**，走 `COPY … TO STDOUT` 由服务端推流，客户端逐块落盘 ——
+//     行数再多也不在内存里堆（判据③），语句里也从不出现服务端文件路径（判据②）。
+
+/// **整表导出**：`<schema>.<table>` 整张表 → 一个 CSV 文件（流式，不留半截）。
+#[tauri::command]
+async fn export_table_copy(
+    state: State<'_, ShellState>,
+    table: String,
+    schema: Option<String>,
+    path: String,
+    header: Option<bool>,
+) -> Result<CopyExportSummary, DbFailure> {
+    let session = current_session(&state).await?;
+    let target = std::path::PathBuf::from(path.trim());
+    if path.trim().is_empty() {
+        return Err(DbFailure {
+            message: "没填目标文件路径".to_string(),
+            hint: "例如 D:\\tmp\\orders.csv。".to_string(),
+        });
+    }
+    session
+        .copy_table_to_file(
+            schema.as_deref(),
+            &table,
+            &target,
+            header.unwrap_or(true),
+        )
+        .await
+}
+
+/// **整库导出**：一个 schema 下每张普通表各一个 CSV 文件（逐表串行、单表失败隔离）。
+#[tauri::command]
+async fn export_schema_copy(
+    state: State<'_, ShellState>,
+    schema: String,
+    dir: String,
+    header: Option<bool>,
+) -> Result<SchemaExportSummary, DbFailure> {
+    let session = current_session(&state).await?;
+    if dir.trim().is_empty() {
+        return Err(DbFailure {
+            message: "没填目标目录".to_string(),
+            hint: "例如 D:\\tmp\\export。".to_string(),
+        });
+    }
+    let target = std::path::PathBuf::from(dir.trim());
+    session
+        .export_schema_to_dir(&schema, &target, header.unwrap_or(true))
+        .await
 }
 
 // ── 备份（FR-IO-04 · 封装本机 pg_dump）────────────────────────────────────────────
@@ -3229,6 +3284,8 @@ pub fn attach(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry>
             schema_snapshot,
             schema_diff_plan,
             export_to_file,
+            export_table_copy,
+            export_schema_copy,
             backup_plan,
             backup_run,
             backup_cancel,

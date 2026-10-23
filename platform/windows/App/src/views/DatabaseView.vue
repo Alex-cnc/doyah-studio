@@ -53,6 +53,9 @@ import {
   generateDdl,
   dbRunDdl,
   exportToFile,
+  // 整表 / 整库导出（FR-STD-DB-IO-002）：走服务端 COPY 推流，客户端逐块写盘
+  exportTableCopy,
+  exportSchemaCopy,
   previewImport,
   runImport,
   // 库与服务器管理面（1.7）：这些名字此前**在模板/脚本里被调用、却没有 import** ——
@@ -88,6 +91,8 @@ import {
   type TableShape,
   type DdlStatement,
   type ImportPreview,
+  type CopyExportSummary,
+  type SchemaExportSummary,
   type AgentTableBrief,
 } from '../ipc'
 import { frozenColumnStylesMeasured, pageOf, visibleOrder, DEFAULT_PAGE_SIZE } from '../grid/view'
@@ -640,6 +645,76 @@ async function runExport() {
     failure.value = describeError(e)
   } finally {
     busy.value = ''
+  }
+}
+
+// ── 整表 / 整库导出（FR-STD-DB-IO-002）：COPY … TO STDOUT 推流，客户端逐块写盘 ─────────────
+//
+// 与上面「导出当前 SQL 的结果」是两件事：那条受行数上限（超了标截断），这条让服务端把**整张表**推过来，
+// 全程不在内存里堆。界面要给的是**完成后的读数**（行数 / 字节 / 路径），以及整库时的**逐表一行** ——
+// 失败的表必须带原因摆出来，「导出成功」不能盖住某一张表挂了。
+const copySchema = ref('public')
+const copyTable = ref('')
+/** 整表 / 整库导出面板的开关（入口在 SQL 工具条上 —— **不依赖结果集**，与备份 / 恢复同一判据） */
+const copyOpen = ref(false)
+const copyPath = ref('')
+const copyDir = ref('')
+const copyHeader = ref(true)
+const copyNote = ref('')
+const copyBusy = ref(false)
+const schemaExport = ref<SchemaExportSummary | null>(null)
+
+/** 整表导出：表名取自对象树选中项（`useTable` 会预填），路径由用户给。 */
+async function runExportTableCopy() {
+  if (!copyTable.value.trim()) {
+    copyNote.value = '先填表名（在对象树里点一下那张表会自动带过来）'
+    return
+  }
+  if (!copyPath.value.trim()) {
+    copyNote.value = '先填目标文件路径'
+    return
+  }
+  copyBusy.value = true
+  copyNote.value = ''
+  schemaExport.value = null
+  clearFailure()
+  try {
+    const report: CopyExportSummary = await exportTableCopy(
+      copyTable.value.trim(),
+      copyPath.value.trim(),
+      copySchema.value.trim() || undefined,
+      copyHeader.value,
+    )
+    copyNote.value = `已导出 ${report.rows} 行（${report.bytes} 字节）→ ${report.path}`
+  } catch (e) {
+    failure.value = describeError(e)
+  } finally {
+    copyBusy.value = false
+  }
+}
+
+/** 整库导出：一个 schema 下每张普通表一个文件（逐表串行，单表失败照实列）。 */
+async function runExportSchemaCopy() {
+  if (!copySchema.value.trim()) {
+    copyNote.value = '先填 schema'
+    return
+  }
+  if (!copyDir.value.trim()) {
+    copyNote.value = '先填目标目录'
+    return
+  }
+  copyBusy.value = true
+  copyNote.value = ''
+  schemaExport.value = null
+  clearFailure()
+  try {
+    const report = await exportSchemaCopy(copySchema.value.trim(), copyDir.value.trim(), copyHeader.value)
+    schemaExport.value = report
+    copyNote.value = `已导出 ${report.tables.length - report.failed} / ${report.tables.length} 张表，共 ${report.totalRows} 行（${report.totalBytes} 字节）→ ${report.dir}`
+  } catch (e) {
+    failure.value = describeError(e)
+  } finally {
+    copyBusy.value = false
   }
 }
 
@@ -3606,6 +3681,10 @@ function useTable(t: ObjectNode) {
   // 记住"这一屏是从哪张表来的"——外键入口只对**那张表**的列才有意义
   resultSource.value = { schema: t.schema, table: t.name }
   sql.value = `select * from ${t.schema}.${t.name} limit 50`
+  // 整表导出（FR-STD-DB-IO-002）的目标跟着走：点了哪张表，面板里就是哪张 ——
+  // 否则用户得手抄一遍表名，而抄错时的现象是「导出来的是另一张表」。
+  copySchema.value = t.schema
+  copyTable.value = t.name
 }
 
 async function probe() {
@@ -4498,6 +4577,15 @@ async function probe() {
             >
               {{ t('cmd.database.restore') }}
             </button>
+            <button
+              class="db__btn"
+              type="button"
+              data-testid="copy-export-open"
+              title="整表 / 整库导出（服务端 COPY 推流，边收边写盘）"
+              @click="copyOpen = !copyOpen"
+            >
+              整表 / 整库导出
+            </button>
             <button class="db__btn db__btn--icon db__btn--primary" type="submit" :disabled="!!busy" :title="t('sql.run')"><ActionIcon name="play" /></button>
             <button class="db__btn db__btn--icon" type="button" :disabled="!busy" @click="cancelRunning" :title="t('sql.cancel')"><ActionIcon name="stop" /></button>
             <button class="db__btn db__btn--icon" type="button" :disabled="!!busy" @click="showPlan" :title="t('sql.planOnly')"><ActionIcon name="code" /></button>
@@ -4533,6 +4621,86 @@ async function probe() {
           </div>
         </form>
 
+        <!-- 整表 / 整库导出（FR-STD-DB-IO-002）：**不依赖结果集**，入口与面板都摆在一直可见的位置
+             （与备份 / 恢复同一条判据：没跑过查询也得找得到，否则用户以为这功能不存在）。 -->
+        <div v-if="copyOpen" class="db__io" data-testid="copy-export-panel">
+          <p class="db__browse-title">整表 / 整库导出（服务端 COPY 推流，边收边写盘；失败不留半截文件）</p>
+          <div class="db__writeback">
+            <input
+              v-model="copySchema"
+              class="db__cell-input"
+              spellcheck="false"
+              placeholder="schema（默认 public）"
+              aria-label="整表导出的 schema"
+            />
+            <input
+              v-model="copyTable"
+              class="db__cell-input"
+              spellcheck="false"
+              placeholder="表名（点对象树里的表会自动带过来）"
+              aria-label="整表导出的表名"
+            />
+            <label class="db__freeze">
+              表头
+              <input v-model="copyHeader" type="checkbox" aria-label="导出带表头" />
+            </label>
+          </div>
+          <div class="db__writeback">
+            <input
+              v-model="copyPath"
+              class="db__cell-input db__io-path"
+              spellcheck="false"
+              placeholder="整表目标文件，例如 D:\tmp\orders.csv"
+              aria-label="整表导出目标文件"
+            />
+            <button
+              class="db__btn db__btn--primary"
+              type="button"
+              :disabled="copyBusy"
+              data-testid="export-table-copy"
+              @click="runExportTableCopy"
+            >
+              导出整表
+            </button>
+          </div>
+          <div class="db__writeback">
+            <input
+              v-model="copyDir"
+              class="db__cell-input db__io-path"
+              spellcheck="false"
+              placeholder="整库目标目录，例如 D:\tmp\export"
+              aria-label="整库导出目标目录"
+            />
+            <button
+              class="db__btn db__btn--primary"
+              type="button"
+              :disabled="copyBusy"
+              data-testid="export-schema-copy"
+              @click="runExportSchemaCopy"
+            >
+              导出整库
+            </button>
+          </div>
+          <p v-if="copyNote" class="db__note" data-testid="copy-note">{{ copyNote }}</p>
+          <ul
+            v-if="schemaExport"
+            class="db__dml-list"
+            data-testid="copy-schema-rows"
+          >
+            <li v-for="row in schemaExport.tables" :key="row.fileName">
+              <span class="db__kind">
+                {{ row.table }} → {{ row.fileName }} ·
+                <template v-if="row.failure">
+                  ⚠️ {{ row.failure.message }}（{{ row.failure.hint }}）
+                </template>
+                <template v-else>{{ row.rows }} 行 · {{ row.bytes }} 字节</template>
+              </span>
+            </li>
+          </ul>
+          <p v-if="schemaExport && schemaExport.skipped > 0" class="db__note" data-testid="copy-skipped">
+            另有 {{ schemaExport.skipped }} 个视图 / 物化视图 / 外部表没导出（本片只导普通表）
+          </p>
+        </div>
         <!-- 保存查询面板（FR-EDIT-14）：名字预填、空名当场拒、**同名先问覆盖**（未确认前服务端没写盘） -->
         <div v-if="saveQueryPanelOpen" class="db__save-query" data-testid="save-query-panel">
           <!-- 来源是「AI 生成」时明写这一句：不然用户会以为存的是编辑器里的内容 -->
@@ -4911,6 +5079,7 @@ async function probe() {
                   <button class="db__btn db__btn--icon db__btn--primary" type="button" :disabled="!!busy" title="导出到文件" @click="runExport"><ActionIcon name="download" /></button>
                   <span v-if="exportNote" class="db__note">{{ exportNote }}</span>
                 </div>
+
 
                 <p class="db__browse-title">从文件导入（说明：空白字段按 NULL 写入）</p>
                 <div class="db__writeback">

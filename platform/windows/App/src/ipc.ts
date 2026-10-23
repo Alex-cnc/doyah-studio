@@ -78,6 +78,10 @@ export const COMMANDS = {
   schemaDiffPlan: 'schema_diff_plan',
   // 导入导出（1.6：CSV / JSON / Excel；原子落盘、一个事务写入）
   exportToFile: 'export_to_file',
+  // 整表 / 整库导出（FR-STD-DB-IO-002：COPY … TO STDOUT 由服务端推流 → 客户端逐块写盘）。
+  // 与上面那条的分工：上面那条导出「界面上这条 SQL 的结果」（受行数上限）；这两条是**整张表 / 整个 schema**。
+  exportTableCopy: 'export_table_copy',
+  exportSchemaCopy: 'export_schema_copy',
   // 备份（FR-IO-04：封装本机 pg_dump —— 先摊命令行，再真跑）
   backupPlan: 'backup_plan',
   backupRun: 'backup_run',
@@ -2178,6 +2182,68 @@ export function exportToFile(
   maxRows?: number,
 ): Promise<ExportReport> {
   return call(COMMANDS.exportToFile, { sql, path, format, maxRows }, () => {
+    throw bypassDb('ipc.action.export') as DbFailure
+  })
+}
+
+// ── 整表 / 整库导出（FR-STD-DB-IO-002：COPY … TO STDOUT 推流 → 客户端逐块写盘）────────────
+//
+// 与 `exportToFile` 的分工（两件事，别混）：
+//   · `exportToFile` = 界面上**这条 SQL 的结果**（已在内存里，受行数上限，超了如实标截断）；
+//   · 本组两条 = **整张表 / 整个 schema**，由服务端按 COPY 推流、客户端逐块落盘 —— 行数再多也不在内存里堆。
+
+/** 整表导出读数（`FR-STD-DB-IO-002` 判据④：完成后报告行数与文件路径）。 */
+export interface CopyExportSummary {
+  /** 真发出去的那条 `COPY … TO STDOUT`（界面摆出来，用户可自行复核「没让服务端写文件」） */
+  statement: string
+  path: string
+  /** 数据行数（已减掉 CSV 表头） */
+  rows: number
+  bytes: number
+}
+
+/** 整库导出里一张表的结果（成功带读数，失败带原因）。 */
+export interface TableExportOutcome {
+  table: string
+  fileName: string
+  path: string
+  rows: number
+  bytes: number
+  failure: DbFailure | null
+}
+
+/** 整库导出读数（逐表一行 + 合计 + 没导的关系数）。 */
+export interface SchemaExportSummary {
+  schema: string
+  dir: string
+  tables: TableExportOutcome[]
+  totalRows: number
+  totalBytes: number
+  /** 失败的表数（0 = 全成） */
+  failed: number
+  /** 没导的关系数（视图 / 物化视图 / 外部表）—— 如实报，别让用户以为整库都进来了 */
+  skipped: number
+}
+
+/** **整表导出**：`schema.table` 整张表 → 一个 CSV 文件（流式，失败不留半截）。 */
+export function exportTableCopy(
+  table: string,
+  path: string,
+  schema?: string,
+  header = true,
+): Promise<CopyExportSummary> {
+  return call(COMMANDS.exportTableCopy, { table, schema, path, header }, () => {
+    throw bypassDb('ipc.action.export') as DbFailure
+  })
+}
+
+/** **整库导出**：一个 schema 下每张普通表各一个 CSV 文件（逐表串行、单表失败隔离）。 */
+export function exportSchemaCopy(
+  schema: string,
+  dir: string,
+  header = true,
+): Promise<SchemaExportSummary> {
+  return call(COMMANDS.exportSchemaCopy, { schema, dir, header }, () => {
     throw bypassDb('ipc.action.export') as DbFailure
   })
 }

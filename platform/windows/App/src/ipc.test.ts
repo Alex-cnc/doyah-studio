@@ -63,6 +63,8 @@ describe('ipc', () => {
       'schema_snapshot',
       'schema_diff_plan',
       'export_to_file',
+      'export_table_copy',
+      'export_schema_copy',
       'backup_plan',
       'backup_run',
       'backup_cancel',

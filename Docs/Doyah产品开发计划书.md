@@ -762,7 +762,7 @@
 | FR-RTR-RSR-SCENARIO-006 | 历史情形：给定当前形态，检索历史上相似情形，给样本量与后续 N 日涨跌分布（中位数 / 分位 / 最大回… | ⬜ | ⬜ | ⬜ | ⬜ |
 | FR-RTR-RSR-SCREEN-001 | 选股与筛选：按一个或多个特征模型在指定股票池与时间段里跑出候选清单，带命中原因 | ⬜ | ⬜ | ⬜ | ⬜ |
 
-**FR-STD**（210 条。与 macOS 基线一致：watchOS 32 / Linux 32 / Windows 148 条）
+**FR-STD**（210 条。与 macOS 基线一致：watchOS 32 / Linux 32 / Windows 149 条）
 
 | 编号 | 需求摘要 | macOS | watchOS | Linux | Windows |
 |---|---|---|---|---|---|
@@ -860,7 +860,7 @@
 | FR-STD-DB-EXEC-017 | 高危语句保护（Safe Mode）：对不带 WHERE 的 UPDATE / DELETE，以及 DRO… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ✅ |
 | FR-STD-DB-EXEC-018 | 「停止」取消当前执行 | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ✅ |
 | FR-STD-DB-IO-001 | 结果集导出：CSV / JSON / TSV / Markdown / INSERT（明细见 FR-ST… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ✅ |
-| FR-STD-DB-IO-002 | 客户端侧整表 / 整库导出：走 COPY <表> TO STDOUT 流式写文件 | 🟡 | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
+| FR-STD-DB-IO-002 | 客户端侧整表 / 整库导出：走 COPY <表> TO STDOUT 流式写文件 | 🟡 | ⬜ ⚠️ | ⬜ ⚠️ | 🟡 |
 | FR-STD-DB-IO-003 | 备份 / 恢复：封装 pg_dump / pg_restore（plain / custom / dir… | 🟡 | ⬜ ⚠️ | ⬜ ⚠️ | ✅ ⚠️ |
 | FR-STD-DB-IO-004 | 备份文件恢复到指定库（pg_restore 的 --clean / --section / --jobs… | 🟡 | ⬜ ⚠️ | ⬜ ⚠️ | 🟡 |
 | FR-STD-DB-IO-005 | 导出 CSV 的文本编码可选：UTF-8（带 BOM，默认）/ GB18030（GBK、GB2312 的… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ✅ |
