@@ -45,7 +45,13 @@ struct CommandPaletteView: View {
     }
 
     private var groups: [CommandPalette.Group] {
-        CommandPalette.grouped(commands: commandMatches, files: fileMatches)
+        // **智能体分组只在对话活动面上出现**（§9.1.16 缺口 ④）：对话页签里敲 ⌘K 的人
+        // 找的多半是智能体那几条；别的活动面上它们仍留在总命令组里（面板是全局的）。
+        guard workspaceTabs.selectedTab?.isAgentChat == true else {
+            return CommandPalette.grouped(commands: commandMatches, files: fileMatches)
+        }
+        let split = AppCommandCatalog.splitAgentMatches(commandMatches)
+        return CommandPalette.grouped(commands: split.rest, files: fileMatches, agent: split.agent)
     }
 
     /// ↑↓ / 回车 / 滚动共用的**唯一**扁平顺序（= 渲染顺序）。
@@ -151,7 +157,7 @@ struct CommandPaletteView: View {
 
     private func groupHeader(_ group: CommandPalette.Group) -> some View {
         HStack(spacing: Spacing.xs) {
-            Image(systemName: group.kind == .workspaceFiles ? "doc.text" : "command")
+            Image(systemName: symbol(for: group.kind))
                 .imageScale(.small)
                 .foregroundStyle(Theme.text(.tertiary))
             Text(title(for: group.kind))
@@ -166,10 +172,19 @@ struct CommandPaletteView: View {
         .padding(.vertical, Spacing.hair)
     }
 
+    private func symbol(for kind: CommandPalette.Group.Kind) -> String {
+        switch kind {
+        case .commands: return "command"
+        case .workspaceFiles: return "doc.text"
+        case .agent: return "sparkles"
+        }
+    }
+
     private func title(for kind: CommandPalette.Group.Kind) -> String {
         switch kind {
         case .commands: return L(.commandPaletteCommandsGroup)
         case .workspaceFiles: return L(.paletteCategoryWorkspaceFile)
+        case .agent: return L(.paletteCategoryAgent)
         }
     }
 

@@ -82,6 +82,11 @@ public enum CommandPalette {
         public enum Kind: String, Equatable, Sendable {
             case commands
             case workspaceFiles
+            /// **智能体命令组**（§9.1.16 缺口 ④）：只在对话活动面上出现。
+            ///
+            /// 为什么值得单独一组：对话页签里敲 `⌘K` 时，人要找的是「智能体相关的命令」
+            /// （查库那几条、审批、例行候选…），它们埋在几十条查询命令里等于没有。
+            case agent
         }
 
         public var kind: Kind
@@ -158,20 +163,26 @@ public enum CommandPalette {
     /// 文件组 = `WorkspaceSearch` 命中出来的（**成员与顺序的唯一出处是引擎**，
     /// 这里再滤一遍就会出现「同一个词在两处给出不同答案」—— `findFileNames` 认
     /// 变音符号不敏感，`match` 不认）。
-    public static func grouped(commands: [Match], files: [Match]) -> [Group] {
+    public static func grouped(commands: [Match], files: [Match], agent: [Match] = []) -> [Group] {
         let commandGroup = commands.isEmpty ? nil : Group(kind: .commands, matches: commands)
         let fileGroup = files.isEmpty ? nil : Group(kind: .workspaceFiles, matches: files)
+        // 智能体组：**空组照样不出标题**（与另两组同一口径）；非空时恒在**最前** ——
+        // 它是「当前这个活动面的命令」，不是又一类通用命令。
+        let agentGroup = agent.isEmpty ? nil : Group(kind: .agent, matches: agent)
 
+        let base: [Group]
         switch (commandGroup, fileGroup) {
         case (nil, nil):
-            return []
+            base = []
         case (let group?, nil), (nil, let group?):
-            return [group]
+            base = [group]
         case (let commands?, let files?):
             let commandBest = commands.matches.map(\.score).max() ?? 0
             let fileBest = files.matches.map(\.score).max() ?? 0
-            return fileBest > commandBest ? [files, commands] : [commands, files]
+            base = fileBest > commandBest ? [files, commands] : [commands, files]
         }
+        guard let agentGroup else { return base }
+        return [agentGroup] + base
     }
 
     /// 单条匹配（对外暴露便于测试与调试）。

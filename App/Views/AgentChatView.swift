@@ -15,10 +15,17 @@ struct AgentChatView: View {
     @Environment(\.colorScheme) private var colorScheme
     /// 任务清单是否展开（TUI 的 `▸/▾` 折叠）。跑着时默认收起、只留最后两步。
     @State private var stepsExpanded = false
+    /// 会话列表的气泡（§9.1.16 缺口 ②）。
+    @State private var showSessions = false
+    /// 会话内搜索（§9.1.16 缺口 ③）：开关与查询词。
+    @State private var searchActive = false
+    @State private var searchText = ""
 
     var body: some View {
         VStack(spacing: 0) {
             transcript
+            // **会话内搜索**（§9.1.16 缺口 ③）：只在打开时占一行，关掉立刻让位给正文。
+            if searchActive { searchBar }
             Divider()
             // **输入框上面的任务清单**（人类主人 2026-10-17：「DSH-tui 那个任务清单也挺好，
             // 用户可以看到你正在执行到哪一步了」）—— 行内一行一步，只在本轮有步骤时出现。
@@ -62,7 +69,8 @@ struct AgentChatView: View {
                         emptyState
                     }
                     ForEach(model.messages) { message in
-                        messageRow(message)
+                        // `.id` 是搜索定位用的锚（`⌕` 命中时滚到那一条）。
+                        messageRow(message).id(message.id)
                     }
                     ForEach(model.cards) { card in
                         toolCard(card)
@@ -74,6 +82,8 @@ struct AgentChatView: View {
             }
             .onChange(of: model.scrollTick) { _ in follow(proxy) }
             .onChange(of: model.isRunning) { _ in follow(proxy) }
+            // 搜索词一变就**定位到第一条命中**（§9.1.16 缺口 ③）。
+            .onChange(of: searchText) { _, _ in revealFirstHit(proxy) }
             .onAppear { follow(proxy, animated: false) }
         }
     }
@@ -101,6 +111,15 @@ struct AgentChatView: View {
         } else {
             proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
         }
+    }
+
+    /// 定位到**第一条**命中（§9.1.16 缺口 ③）。
+    ///
+    /// 只滚一条：一屏里逐条跳比不定位更烦；人要看下一条自己接着敲就是了。
+    /// 一条都没命中就**不动滚动位置**（画面没理由因为「没找到」跳一下）。
+    private func revealFirstHit(_ proxy: ScrollViewProxy) {
+        guard searchActive, let id = AgentTranscriptSearch.firstMatchID(searchText, in: model.messages) else { return }
+        withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) }
     }
 
     /// 一条助手消息的两个动作：复制 / 重发（§9.1.16 ③）。
@@ -161,13 +180,13 @@ struct AgentChatView: View {
             // 上边留 6pt：终端里每条提问前有一个空行（`marginTop={1}`），是分组的唯一手段。
             HStack(alignment: .top, spacing: 0) {
                 gutter("❯", Theme.accentColor, width: Self.userGutter)
-                AgentTranscriptText(text: message.text, font: Self.transcriptFont)
+                AgentTranscriptText(text: message.text, font: Self.transcriptFont, highlight: highlightNeedle)
                 Spacer(minLength: 0)
             }
         case .assistant:
             HStack(alignment: .top, spacing: 0) {
                 gutter("┊", Theme.text(.secondary))
-                AgentTranscriptText(text: message.text, font: Self.transcriptFont)
+                AgentTranscriptText(text: message.text, font: Self.transcriptFont, highlight: highlightNeedle)
                 if message.isStreaming {
                     // 流式光标：**逐段**出现时它一直在（`FR-AI-25` ②）
                     Text("▌").font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
@@ -185,7 +204,7 @@ struct AgentChatView: View {
             // 缩进与正文同一列（栏宽 21pt），框只描边、不铺底。
             HStack(alignment: .top, spacing: 0) {
                 gutter("⚡", Theme.text(.secondary))
-                Text(message.text)
+                Text(TranscriptHighlight.apply(highlightNeedle, to: AttributedString(message.text)))
                     .font(Self.transcriptFont)
                     .foregroundStyle(Theme.text(.secondary))
                     .padding(.horizontal, 6)
@@ -200,7 +219,7 @@ struct AgentChatView: View {
             // 时间线事件：`◈` + 灰字，不带栏（TUI 的 `kind === 'event'`）。
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 gutter("◈", Theme.text(.secondary))
-                Text(noticeText(message.text))
+                Text(TranscriptHighlight.apply(highlightNeedle, to: AttributedString(noticeText(message.text))))
                     .font(Self.transcriptFont)
                     .foregroundStyle(Theme.text(.secondary))
             }
@@ -224,6 +243,8 @@ struct AgentChatView: View {
         case "noApplier": return L(.agentChatApplyFailed)
         // `FR-AI-31` ②：**它说做完了，但拿不出可复核的证据** —— 这一条要让人看懂，不是一声「完成」。
         case "completionUnverified": return L(.agentChatCompletionUnverified)
+        // §9.1.16 缺口 ②：切到一条读不出来的会话 —— 如实说，界面留在原地。
+        case "sessionUnavailable": return L(.agentSessionUnavailable)
         // `FR-AI-31` ③：**跑飞了** 五种形态各说各的（读数在状态块那一行，这一句进消息流）。
         case "monitor:stalled": return L(.agentChatMonitorStalled)
         case "monitor:spinning": return L(.agentChatMonitorSpinning)
@@ -521,6 +542,127 @@ struct AgentChatView: View {
         }
     }
 
+    // MARK: - 搜索条 / 会话列表（§9.1.16 缺口 ②③）
+
+    /// 当前要染的词（关掉搜索就是 `nil` —— 关掉之后正文立刻回到原样）。
+    private var highlightNeedle: String? { searchActive ? searchText : nil }
+
+    /// 命中读数：**有命中报条数，没命中明说**（沉默会让人以为搜索坏了）。
+    private var searchHitLine: some View {
+        let count = AgentTranscriptSearch.total(searchText, in: model.messages)
+        let typing = searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return Text(typing ? "" : (count > 0 ? "\(count)" : L(.agentChatSearchNoHits)))
+            .font(.system(.caption, design: .monospaced))
+            .foregroundStyle(count > 0 ? Theme.text(.secondary) : Theme.status(.warning))
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: Spacing.s) {
+            Text("⌕").font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
+            TextField(L(.agentChatSearchPlaceholder), text: $searchText)
+                .textFieldStyle(.plain)
+                .font(Self.transcriptFont)
+            searchHitLine
+            glyphButton("✕", help: L(.agentChatSearchToggle)) {
+                searchActive = false
+                searchText = ""
+            }
+        }
+        .padding(.horizontal, Spacing.m)
+        .padding(.vertical, Spacing.xs)
+    }
+
+    /// 会话列表（气泡）：标题 + 时间 + 跳数；空列表给空态；顶部一条「新会话」。
+    ///
+    /// 为什么用气泡而不是分栏：对话页签的契约是**不自带侧栏 / 分栏**（`FR-AI-25` ①），
+    /// 一份「看历史」的列表没理由为它破例 —— 用完即走的浮层更合这条契约。
+    private var sessionsPopover: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: Spacing.s) {
+                Text(L(.agentChatSessionsTitle))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Theme.text(.secondary))
+                Spacer(minLength: 0)
+                Button {
+                    model.startNewSession()
+                    showSessions = false
+                } label: {
+                    Text("＋ " + L(.agentChatSessionsNew))
+                        .font(.system(.caption, design: .monospaced))
+                }
+                .buttonStyle(.plain)
+                .disabled(!model.canSwitchSession)
+            }
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, Spacing.xs)
+            Divider()
+
+            if model.sessions.isEmpty {
+                Text(L(.agentChatSessionsEmpty))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .padding(.horizontal, Spacing.s)
+                    .padding(.vertical, Spacing.s)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(model.sessions) { session in
+                            sessionRow(session)
+                        }
+                    }
+                }
+                .frame(maxHeight: Spacing.xxl * 8)
+            }
+
+            if model.sessionsSkippedFiles > 0 {
+                Divider()
+                // 坏文件**报数**（跳过 ≠ 通过）：不静默吞掉读不出来的那些。
+                Text("\(model.sessionsSkippedFiles) " + L(.agentChatSessionsSkippedUnit))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Theme.status(.warning))
+                    .padding(.horizontal, Spacing.s)
+                    .padding(.vertical, Spacing.xs)
+            }
+        }
+        .frame(minWidth: 320, maxWidth: 380)
+        .background(Theme.surface(.panel))
+    }
+
+    private func sessionRow(_ session: AgentSessionSummary) -> some View {
+        Button {
+            model.openSession(session.id, workspacePath: WorkspaceStore.shared.rootPath)
+            showSessions = false
+        } label: {
+            VStack(alignment: .leading, spacing: Spacing.hair) {
+                Text(session.title)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Theme.text(.primary))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                HStack(spacing: Spacing.s) {
+                    Text(Self.sessionTimeText(session.updatedAt))
+                    Text("\(session.turnCount) " + L(.agentChatSessionTurnsUnit))
+                }
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(Theme.text(.tertiary))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, Spacing.xs)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!model.canSwitchSession)
+    }
+
+    /// 列表里的时间：**今天只给时分、别的日子带日期** —— 一列里全是「2026-10-22 11:03」看不出远近。
+    private static func sessionTimeText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_Hans_CN")
+        formatter.dateFormat = Calendar.current.isDateInToday(date) ? "HH:mm" : "MM-dd HH:mm"
+        return formatter.string(from: date)
+    }
+
     // MARK: - 信息面（输入框下面那条状态行）
 
     /// **状态块**（输入框**下面** —— dsh-tui 的位置），两行：
@@ -634,6 +776,20 @@ struct AgentChatView: View {
                 // 取首条提问，不另花钱生成；没有提问时这格不出现（不留空壳）。
                 if let title = model.sessionTitle {
                     Text("» " + title).foregroundStyle(Theme.text(.secondary)).help(title)
+                }
+                // **会话记录**（§9.1.16 缺口 ②）：打开时现读一次盘 —— 列表要新鲜，
+                // 别拿上次打开时的那份（跑完一轮就多一条会话）。
+                glyphButton("⌸", help: L(.agentChatSessionsTitle)) {
+                    model.reloadSessions(workspacePath: WorkspaceStore.shared.rootPath)
+                    showSessions = true
+                }
+                .popover(isPresented: $showSessions, arrowEdge: .bottom) {
+                    sessionsPopover
+                }
+                // **会话内搜索**（§9.1.16 缺口 ③）：关掉就清词，正文立刻回原样。
+                glyphButton("⌕", help: L(.agentChatSearchToggle)) {
+                    searchActive.toggle()
+                    if !searchActive { searchText = "" }
                 }
             }
         }

@@ -68,6 +68,22 @@ enum AppCommandCatalog {
         ]
     }
 
+    /// 把命令命中拆成「智能体命令」与「其余命令」（§9.1.16 缺口 ④：`⌘K` 里的智能体分组）。
+    ///
+    /// **只在对话活动面上调用**：面板仍是全局的 —— 别的活动面上这些命令照样能在总命令组里搜到，
+    /// 只是不单独成组。把它们从面板里**藏掉**是另一件事（会把「搜不到」当成「没这功能」）。
+    static func splitAgentMatches(_ matches: [CommandPalette.Match])
+        -> (agent: [CommandPalette.Match], rest: [CommandPalette.Match]) {
+        let agentCategory = L(.paletteCategoryAgent)
+        return matches.reduce(into: (agent: [CommandPalette.Match](), rest: [CommandPalette.Match]())) { out, match in
+            if match.item.category == agentCategory {
+                out.agent.append(match)
+            } else {
+                out.rest.append(match)
+            }
+        }
+    }
+
     /// **「笔记」菜单的成员与顺序**（`N-UI-4`）。
     ///
     /// 为什么这里只有一串 **id**（没有标题、没有动作）：菜单栏与 ⌘K 面板是同一条命令的两处呈现。

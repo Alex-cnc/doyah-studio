@@ -102,7 +102,19 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         return Double(sessionUsage.completionTokens) / seconds
     }
 
-    let sessionID: String
+    /// 本会话的 id（**切换会话时会变**：新一轮跳要落到被切到的那份文件里）。
+    ///
+    /// 以前是 `let`（模型一生成就定死），于是「历史会话」只能看、不能续 —— 切过去再提问，
+    /// 新跳会写进一个新建的会话文件，用户的体感是「切了个假的」。现在它是可变状态：
+    /// `openSession` / `startNewSession` 改它，`makeLoop` 每次开跑现读。
+    @Published private(set) var sessionID: String
+    /// 会话列表（最近活动的在前）。**只在打开列表时刷新** —— 每敲一个字都扫盘是浪费。
+    @Published private(set) var sessions: [AgentSessionSummary] = []
+    /// 读不出来的会话文件数（坏文件跳过并计数，不静默丢）。
+    @Published private(set) var sessionsSkippedFiles = 0
+    /// 宿主注入：会话存储（列表 / 切换都要读盘）。没接 ⇒ 列表为空、切换如实说不可用。
+    var sessionStore: AgentSessionStore?
+
     private let cancellation = CancellationFlag()
     private var task: Task<Void, Never>?
     /// 看门狗（`FR-AI-31` ③「卡住」）：跑着的时候每 `watchdogTickSeconds` 秒看一眼。
@@ -215,6 +227,72 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 清空队列。
     func clearQueue() {
         queue.clear()
+    }
+
+    // MARK: - 会话列表与切换（§9.1.16 缺口 ②）
+
+    /// 刷新会话列表（打开列表 / 跑完一轮之后调）。
+    ///
+    /// 判据面：列表项的**标题 / 时间 / 跳数**由 `AgentSessionStore.summaryList` 给（Core 判据
+    /// `AgentSessionHistoryTests`），这里只负责「什么工作区、什么时候读」。
+    func reloadSessions(workspacePath: String?) {
+        guard let store = sessionStore, let workspacePath, !workspacePath.isEmpty else {
+            sessions = []
+            sessionsSkippedFiles = 0
+            return
+        }
+        let result = store.summaryList(workspace: workspacePath)
+        sessions = result.summaries
+        sessionsSkippedFiles = result.skippedFiles
+    }
+
+    /// 能不能切会话：跑着的时候不行（切过去会让正在跑的那一轮把跳写进另一份文件）。
+    var canSwitchSession: Bool { !state.isRunning }
+
+    /// 切到一条历史会话：把盘上那些跳摊回消息流，并把 `sessionID` 指向它
+    /// （之后提的问题就续在这条会话上，不另起一份）。
+    ///
+    /// 读不出来 ⇒ **如实说**（追加一条 notice），界面保持在原地 —— 不静默什么也不做。
+    @discardableResult
+    func openSession(_ id: String, workspacePath: String?) -> Bool {
+        guard canSwitchSession else { return false }
+        guard let store = sessionStore, let workspacePath, !workspacePath.isEmpty else {
+            state.appendNotice("sessionUnavailable")
+            return false
+        }
+        let loaded = store.load(sessionID: id, workspace: workspacePath)
+        guard let session = loaded.session else {
+            state.appendNotice("sessionUnavailable")
+            return false
+        }
+        sessionID = session.header.id
+        let endpoint = state.endpoint
+        let scope = state.taskScope
+        resetForReplay()
+        state = AgentChatState(messages: AgentSessionReplay.messages(from: session), endpoint: endpoint)
+        state.taskScope = scope
+        return true
+    }
+
+    /// 开一条新会话（旧会话留在盘上，随时可以从列表里切回去）。
+    func startNewSession() {
+        guard canSwitchSession else { return }
+        let endpoint = state.endpoint
+        let scope = state.taskScope
+        sessionID = "chat-\(UUID().uuidString)"
+        resetForReplay()
+        state = AgentChatState(endpoint: endpoint)
+        state.taskScope = scope
+    }
+
+    /// 换会话时**清掉按会话累计的读数**：换了一条会话还挂着上一条的 token 账，
+    /// 界面就是在报别人的数（`NFR-AI-04` 的账随会话走）。
+    private func resetForReplay() {
+        lastPrompt = nil
+        lastTurn = nil
+        lastElapsedSeconds = nil
+        lastPromptTokens = nil
+        sessionUsage = TokenUsageLedger()
     }
 
     /// 重发（§9.1.16 ③）：以该条助手消息对应的**那次提问**为锚再跑一轮，旧轮保留。

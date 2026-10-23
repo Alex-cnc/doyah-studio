@@ -974,6 +974,17 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatEndpointNotConfigured
     case agentChatEndpointUnreachable
     case agentChatDone
+    // 会话列表 / 会话内搜索（§9.1.16 缺口 ②③）
+    case agentChatSessionsTitle
+    case agentChatSessionsNew
+    case agentChatSessionsEmpty
+    case agentChatSessionsSkippedUnit
+    case agentChatSessionTurnsUnit
+    case agentChatSearchToggle
+    case agentChatSearchPlaceholder
+    case agentChatSearchHitsUnit
+    case agentChatSearchNoHits
+    case agentSessionUnavailable
     case agentChatExpand
     case agentChatCollapse
     /// `FR-AI-31` ①：同一文件正有另一次写入 — 这一次没落盘。
@@ -3481,6 +3492,17 @@ public enum LocalizedStrings {
         .agentChatEndpointNotConfigured: [.simplifiedChinese: "还没配模型端点 —— 先在「智能体设置」里配好再聊。", .english: "No model endpoint configured yet — set it up in Agent Settings first."],
         .agentChatEndpointUnreachable: [.simplifiedChinese: "端点连不上 —— 检查地址 / 网络，或先在设置里试一次连接。", .english: "Endpoint unreachable — check the address / network, or test the connection in settings."],
         .agentChatDone: [.simplifiedChinese: "这一轮说完了。", .english: "That's a wrap for this round."],
+        // 会话列表 / 会话内搜索（§9.1.16 缺口 ②③）：标题、空态、命中读数。
+        .agentChatSessionsTitle: [.simplifiedChinese: "会话记录", .english: "Sessions"],
+        .agentChatSessionsNew: [.simplifiedChinese: "新会话", .english: "New session"],
+        .agentChatSessionsEmpty: [.simplifiedChinese: "这个工作区还没有历史会话。", .english: "No past sessions in this workspace yet."],
+        .agentChatSessionsSkippedUnit: [.simplifiedChinese: "个会话文件读不出来", .english: "session files could not be read"],
+        .agentChatSessionTurnsUnit: [.simplifiedChinese: "跳", .english: "steps"],
+        .agentChatSearchToggle: [.simplifiedChinese: "在这段对话里搜索", .english: "Search this conversation"],
+        .agentChatSearchPlaceholder: [.simplifiedChinese: "搜这段对话…", .english: "Search this conversation…"],
+        .agentChatSearchHitsUnit: [.simplifiedChinese: "处命中", .english: "matches"],
+        .agentChatSearchNoHits: [.simplifiedChinese: "没有命中", .english: "No matches"],
+        .agentSessionUnavailable: [.simplifiedChinese: "这条会话读不出来（文件可能不在了，或是别的工区的）。", .english: "This session cannot be read (the file may be gone, or it belongs to another workspace)."],
         // `FR-AI-31` ①：写冲突 / 基线过期 / 兑现失败三件事各说各的（都是「文件没被写」，原因不一样）。
         .agentChatWriteBusy: [.simplifiedChinese: "这个文件正有另一次写入在进行 —— 这一次没有落盘，等它写完再来。", .english: "Another write to this file is in progress — nothing was written this time; try again once it finishes."],
         .agentChatWriteStale: [.simplifiedChinese: "这个文件在你批准之后被改过 —— 没有拿旧审批盖上去，先看清现在的内容再决定。", .english: "This file changed after you approved — the approval was not written over it; review the current content first."],

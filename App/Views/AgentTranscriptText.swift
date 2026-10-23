@@ -19,6 +19,11 @@ struct AgentTranscriptText: View {
     let text: String
     /// 与行首栏对齐用的字体（等宽，来自 §7.9.10）。
     var font: Font = .system(.callout, design: .monospaced)
+    /// 会话内搜索的命中词（`nil` / 空串 = 不染）。
+    ///
+    /// **判定在 Core、染色在界面**：偏移由 `AgentTranscriptSearch` 从**渲染出来的那串字**上取，
+    /// 界面照着同一份偏移铺底色 —— 两边各算一遍必然出现「界面亮了两处、判据说一处」。
+    var highlight: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -89,7 +94,7 @@ struct AgentTranscriptText: View {
 
     /// 正文：Markdown 的行内语法（粗体 / 行内代码 / 链接）。解析失败就原样显示 —— 转写区不许「吞字」。
     private func inline(_ raw: String) -> some View {
-        let attributed = Self.inlineAttributed(raw, font: font)
+        let attributed = TranscriptHighlight.apply(highlight, to: Self.inlineAttributed(raw, font: font))
         return Text(attributed)
             .font(font)
             .textSelection(.enabled)
@@ -162,4 +167,31 @@ struct AgentTranscriptText: View {
     }
 
     @Environment(\.colorScheme) private var colorScheme
+}
+
+/// 会话内搜索的**染色**那一层（判定在 `AgentTranscriptSearch`）。
+///
+/// 为什么单独拎出来：转写区里三处都要染（正文 / 工具行 / 时间线事件），
+/// 各写一遍 `attributed.characters.index(…)` 就等于三份偏移换算 —— 换一处漏一处。
+/// 这里只认「渲染出来的那串字」，所以 Markdown 解析过的正文与纯文本走同一条路。
+enum TranscriptHighlight {
+
+    /// 命中底色。**只铺底、不改字色** —— 改字色会让代码行内代码（本来就有次要色）失去区分，
+    /// 而且深色 / 浅色两档主题下同一个字色不会都对。
+    static func apply(_ needle: String?, to attributed: AttributedString) -> AttributedString {
+        guard let needle,
+              !needle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return attributed }
+        let plain = String(attributed.characters)
+        let ranges = AgentTranscriptSearch.occurrences(of: needle, in: plain)
+        guard !ranges.isEmpty else { return attributed }
+
+        var out = attributed
+        for range in ranges {
+            guard range.upperBound <= out.characters.count else { continue }
+            let start = out.characters.index(out.startIndex, offsetBy: range.lowerBound)
+            let end = out.characters.index(out.startIndex, offsetBy: range.upperBound)
+            out[start..<end].backgroundColor = Theme.status(.warning).opacity(0.22)
+        }
+        return out
+    }
 }

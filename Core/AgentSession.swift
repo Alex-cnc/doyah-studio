@@ -108,6 +108,50 @@ public struct AgentSessionListResult: Equatable, Sendable {
     }
 }
 
+/// 会话列表的一行（「回看入口」那一层）。
+///
+/// 为什么另立一个类型而不是直接给 `AgentSessionHeader`：列表要显示的**不只是头一行**
+/// （人得看见「这个会话聊了多少跳、最后一次是什么时候」），而 `AgentSessionHeader` 是
+/// **盘上格式**（`keyWhitelist` 钉着）—— 往里加字段就等于改存储契约。这里是**派生视图**：
+/// 头一行 + 文件里数出来的跳数，改了不影响任何已落盘的文件。
+public struct AgentSessionSummary: Identifiable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    public var workspace: String
+    public var createdAt: Date
+    /// 文件里读得出的跳数（坏行不算 —— 与 `AgentSessionLoadResult.skippedLines` 同一口径）。
+    public var turnCount: Int
+    /// 最后一次跳的时刻；一个跳都没有（只写了头一行）⇒ `nil`。
+    public var lastTurnAt: Date?
+
+    public init(id: String, title: String, workspace: String, createdAt: Date,
+                turnCount: Int, lastTurnAt: Date?) {
+        self.id = id
+        self.title = title
+        self.workspace = workspace
+        self.createdAt = createdAt
+        self.turnCount = turnCount
+        self.lastTurnAt = lastTurnAt
+    }
+
+    /// 排序用的「更新时间」：有跳取最后一跳，没有就取建会话那一刻。
+    public var updatedAt: Date { lastTurnAt ?? createdAt }
+}
+
+/// 会话列表结果：与 `AgentSessionListResult` 同一口径（坏文件跳过并计数，不让整张列表不可用）。
+public struct AgentSessionSummaryResult: Equatable, Sendable {
+    public var summaries: [AgentSessionSummary]
+    public var skippedFiles: Int
+
+    public init(summaries: [AgentSessionSummary], skippedFiles: Int) {
+        self.summaries = summaries
+        self.skippedFiles = skippedFiles
+    }
+
+    /// 空列表 = 「这个工作区还没有历史会话」。界面据此给空态，不画一张空表。
+    public var isEmpty: Bool { summaries.isEmpty }
+}
+
 /// 会话存储：**按工作区持久化**，一会话一文件（追加式 JSONL，形状同 `AgentCheckpoint` / `MCPApprovalStore`）。
 public struct AgentSessionStore: Sendable {
 
@@ -213,6 +257,34 @@ public struct AgentSessionStore: Sendable {
                                       skippedFiles: skippedFiles)
     }
 
+    /// 会话列表（**带跳数与最近活动时刻**）—— 界面的「会话列表与切换」那一层用它。
+    ///
+    /// 与 `sessions(workspace:)` 的分工：那个只读头一行（够用来判断「有哪些会话」）；
+    /// 这个**多读一遍正文**数跳数 —— 列表里「3 跳 · 10:42」那一格不是装饰，它是
+    /// 「这条会话值不值得点进去」的唯一依据。文件都是本机小文本（一条会话几十 KB 量级），
+    /// 目录扫描本来就是 IO 主导，多读一遍不改变量级。
+    ///
+    /// 排序 = **最近活动的在前**（`updatedAt` 降序；同刻按 id 排，保证每次打开顺序一致）。
+    public func summaryList(workspace: String) -> AgentSessionSummaryResult {
+        let listed = sessions(workspace: workspace)
+        var summaries: [AgentSessionSummary] = []
+        for header in listed.headers {
+            let loaded = load(sessionID: header.id, workspace: workspace)
+            guard let session = loaded.session else { continue }   // 头读得出、正文读不出 ⇒ 不进列表（也不编一条空的）
+            summaries.append(AgentSessionSummary(id: session.header.id,
+                                                 title: session.header.title,
+                                                 workspace: session.header.workspace,
+                                                 createdAt: session.header.createdAt,
+                                                 turnCount: session.turns.count,
+                                                 lastTurnAt: session.turns.last?.at))
+        }
+        summaries.sort { left, right in
+            if left.updatedAt != right.updatedAt { return left.updatedAt > right.updatedAt }
+            return left.id < right.id
+        }
+        return AgentSessionSummaryResult(summaries: summaries, skippedFiles: listed.skippedFiles)
+    }
+
     /// 导出（按**时间顺序**回放：模型跳 / 工具跳 / 审批跳都在 —— 验收要点 ③）。
     public func export(_ session: AgentSession) throws -> Data {
         let ordered = self.ordered(session.turns)
@@ -292,5 +364,95 @@ public struct AgentSessionStore: Sendable {
         } else {
             try payload.write(to: url, options: .atomic)
         }
+    }
+}
+
+/// 把一条**已落盘**的会话摊回消息流（回看用）。
+///
+/// 为什么要有这一层：会话文件里的跳是**审计形状**（模型跳 / 工具跳 / 审批跳），
+/// 界面要的是消息流。两边的映射必须收在一处 —— 界面自己写一遍，就会出现
+/// 「导出看得到三跳、回看只看到两跳」这种同一份数据两个答案的事。
+///
+/// **口径**：
+/// · 只搬 `text`（盘上就是摘要，不在这里补内容）；
+/// · 空文本的跳不生成空行（流式中间态写进盘里的空段，回看时不该是一条空白）；
+/// · 审批跳带上结论（`approved` / `denied` …），没有结论就不加后缀 —— 不猜。
+public enum AgentSessionReplay {
+
+    public static func messages(from session: AgentSession) -> [AgentChatMessage] {
+        session.turns.compactMap { turn in
+            let text = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            switch turn.kind {
+            case .model:
+                switch turn.role {
+                case "user": return AgentChatMessage(role: .user, text: text)
+                case "assistant": return AgentChatMessage(role: .assistant, text: text)
+                // 系统提示一类：回看时当时间线事件（`◈`），不当成助手说的话。
+                default: return AgentChatMessage(role: .notice, text: text)
+                }
+            case .tool:
+                return AgentChatMessage(role: .tool, text: text)
+            case .approval:
+                guard let verdict = turn.approval, !verdict.isEmpty else {
+                    return AgentChatMessage(role: .tool, text: text)
+                }
+                return AgentChatMessage(role: .tool, text: text + " · " + verdict)
+            }
+        }
+    }
+}
+
+/// 会话内搜索（**定位 + 高亮**，一个算法两处共用）。
+///
+/// 为什么算法在 Core：界面要「高亮哪几段」，判据要「命中几条、第一条在哪」——
+/// 两处各写一遍 `range(of:)` 循环，迟早出现「界面亮了 2 段、判据说 1 条命中」。
+/// 这里只给**字符偏移**（`Range<Int>`，按 `Character` 计），界面拿同一份偏移去染
+/// 它实际渲染的那段富文本：偏移是从**渲染出来的那串字**上取的，不是从原文取的。
+public enum AgentTranscriptSearch {
+
+    /// 一条消息的命中情况。
+    public struct Hit: Equatable, Sendable {
+        public var messageID: UUID
+        public var occurrences: Int
+
+        public init(messageID: UUID, occurrences: Int) {
+            self.messageID = messageID
+            self.occurrences = occurrences
+        }
+    }
+
+    /// 空查询 ⇒ **零命中**（不是「全部命中」：空串匹配一切的话，一打开搜索器满屏都在亮）。
+    public static func occurrences(of needle: String, in text: String) -> [Range<Int>] {
+        let query = needle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, !text.isEmpty else { return [] }
+        var out: [Range<Int>] = []
+        var cursor = text.startIndex
+        while cursor < text.endIndex,
+              let found = text.range(of: query, options: [.caseInsensitive], range: cursor..<text.endIndex) {
+            let start = text.distance(from: text.startIndex, to: found.lowerBound)
+            let end = text.distance(from: text.startIndex, to: found.upperBound)
+            if end > start { out.append(start..<end) }
+            cursor = found.upperBound > found.lowerBound ? found.upperBound : text.index(after: found.lowerBound)
+        }
+        return out
+    }
+
+    /// 逐条消息的命中（**空命中不进结果**，界面据此画「哪几条亮着」）。
+    public static func hits(_ needle: String, in messages: [AgentChatMessage]) -> [Hit] {
+        messages.compactMap { message in
+            let count = occurrences(of: needle, in: message.text).count
+            return count > 0 ? Hit(messageID: message.id, occurrences: count) : nil
+        }
+    }
+
+    /// 总命中数（状态行那一格「N 命中」/「0 命中」用它）。
+    public static func total(_ needle: String, in messages: [AgentChatMessage]) -> Int {
+        hits(needle, in: messages).reduce(0) { $0 + $1.occurrences }
+    }
+
+    /// 第一条命中的消息（界面据此滚过去 —— **只定位一条**：一屏里滚来滚去比不定位更烦）。
+    public static func firstMatchID(_ needle: String, in messages: [AgentChatMessage]) -> UUID? {
+        hits(needle, in: messages).first?.messageID
     }
 }

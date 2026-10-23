@@ -218,6 +218,34 @@ final class CommandPaletteWorkspaceScopeTests: XCTestCase {
                        ["file:src/a.md", "file:docs/b.md"])
     }
 
+    /// 没有智能体命中 ⇒ **不出智能体组**（空组不出标题，与另两组同一口径）。
+    /// 老调用点（只传命令与文件）行为**一个字不改**：默认参数就是空。
+    func testNoAgentMatchesKeepsTwoGroupBehaviour() {
+        let commands = [match(item("format", "格式化 SQL"), score: 800)]
+        let files = [match(item("file:README.md", "README.md"), score: 1000)]
+        XCTAssertEqual(CommandPalette.grouped(commands: commands, files: files).map(\.kind),
+                       [.workspaceFiles, .commands])
+        XCTAssertEqual(CommandPalette.grouped(commands: commands, files: files, agent: []).map(\.kind),
+                       [.workspaceFiles, .commands])
+        XCTAssertEqual(CommandPalette.grouped(commands: [], files: [], agent: []), [])
+    }
+
+    /// 有智能体命中 ⇒ 进**智能体组、排最前**（当前活动面的命令先给），且组内顺序不动。
+    func testAgentGroupLeadsAndKeepsInnerOrder() {
+        let agent = [
+            match(item("agentSQL", "生成 SQL"), score: CommandPalette.Score.substring),
+            match(item("maintenanceTasks", "维护任务"), score: CommandPalette.Score.acronym),
+        ]
+        let commands = [match(item("format", "格式化 SQL"), score: CommandPalette.Score.exact)]
+        let files = [match(item("file:README.md", "README.md"), score: CommandPalette.Score.exact)]
+
+        let groups = CommandPalette.grouped(commands: commands, files: files, agent: agent)
+        XCTAssertEqual(groups.map(\.kind), [.agent, .commands, .workspaceFiles],
+                       "智能体组恒在最前；命令与文件同分 ⇒ 命令在前（老规则不改）")
+        XCTAssertEqual(groups.first?.matches.map(\.item.id), ["agentSQL", "maintenanceTasks"],
+                       "组内顺序一个字不改（成员与顺序的唯一出处是引擎）")
+    }
+
     /// 端到端：命令与文件同时命中时，走的是**同一个档位比较**（不是写死的组序）。
     func testRealisticQueryPairs() {
         let items: [CommandPalette.Item] = [
@@ -425,5 +453,25 @@ final class WindowTitleConventionTests: XCTestCase {
         guard state.contains("@Published var globalSearchQuery") else {
             return XCTFail("`globalSearchQuery` 不再是 `@Published` —— 面板不会跟着搜索栏的字重筛")
         }
+    }
+
+    // MARK: ④ 智能体分组（§9.1.16 缺口 ④）
+
+    /// **只在对话活动面上出现**：面板算分组那一段必须按「当前页签是不是对话页签」分叉，
+    /// 且非对话那条分支**不带** agent 参数（否则智能体组会出现在数据库面上）。
+    ///
+    /// 这条判据是结构面（与 `testQueryHasExactlyOneStore` 同一族）：它判的是
+    /// 「按不按活动面裁剪」这件事有没有落地，而不是某个像素。
+    /// 分组规则本身（空组不出标题 / 智能体组恒在最前 / 组内顺序不动）在
+    /// `CommandPaletteWorkspaceScopeTests` 那一族。
+    func testAgentGroupIsOnlyForChatActivity() throws {
+        let palette = try source("App/Views/CommandPaletteView.swift")
+        guard palette.contains("isAgentChat == true") else {
+            return XCTFail("面板没有按「当前页签是不是对话页签」裁剪 —— 智能体分组会到处冒出来")
+        }
+        guard palette.contains("agent: split.agent") else {
+            return XCTFail("智能体命中没有交给 `grouped(agent:)` —— 它们仍埋在总命令组里")
+        }
+        XCTAssertTrue(palette.contains("splitAgentMatches"), "拆分规则要走 `AppCommandCatalog` 那一个出口")
     }
 }
