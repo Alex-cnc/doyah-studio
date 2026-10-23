@@ -1,6 +1,6 @@
 # Doyah产品概要设计说明书
 
-当前 v3.5.20（2026-10-23 §9.1.16 补审批单「预计影响行数」（真库 `Plan Rows`）；§7.9.10 行首栏语汇为跨端契约）
+当前 v3.5.21（2026-10-23 §2.7 把「数据流」补成十流总表 + 两条代表路径；§9.1.16 审批单「预计影响行数」取真库 `Plan Rows`）
 
 > 上游：《Doyah产品能力规划说明书》v1.246（156 个能力点）、《Doyah产品需求规格说明书》v3.421（§3/§4/§7 共 438 条，另有 §5 数据与 §6 接口需求）。
 > 本书按「整个产品」重写：**五个产品线 × 92 个需求域全覆盖**，契约章每节点名需求编号，指不到编号的条目不写。
@@ -203,7 +203,31 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 
 快照的读写收在 `WorkspaceSessionStore`（Core 里的值类型，`load()` / `save(_:)` 两个方法），界面只调 `restoreSession()` 与 `saveSession()`——恢复策略与快照格式因此可以脱离界面单测。
 
-## 2.7 数据流
+## 2.7 数据流（总表 + 两条代表路径）
+
+跨端要一致的从来不止「敲一条 SQL」。全仓跨层的数据通路有十条，本节先给全景（表 2-8），再用两条路径把同一个形状写实（2.7.1 / 2.7.2）——**表给范围，路径给形状**，两者都缺就是假的总体设计。
+
+收录口径三条，缺一不入表：
+1. **跨层**：起点与终点不在同一层（界面 ↔ 能力层 ↔ 外部进程/服务/磁盘）。
+2. **有判据点**：中途至少一处守门（安全、审批、预算、上限、事务），没有守门的通路不该被当成设计对象。
+3. **回传是值**：回到界面层的必须是值（事件、状态、快照），不是连接、句柄或事务对象。「没有类型」的通路一律不入表 —— 那说明它本来就不跨层。
+
+**表 2-8 数据流总表（十流）**
+
+| # | 流 | 起 → 止 | 中途守门 | 回传形状 | 依据 |
+|---|---|---|---|---|---|
+| 1 | 智能体回合 | 输入 → 上下文组装 → 模型流 → 工具调用 → 审计 → 会话落盘 | 调用门控 · 审批闸 · 预算 · 上下文压缩 | `LLMStreamEvent` / `AgentObservation` | `Core/AgentLoop.swift`、`Core/AgentApprovalGate.swift`、`Core/AgentAudit.swift`、`Core/AgentSession.swift` |
+| 2 | MCP / 外部工具 | 外部进程或服务 → 工具结果回灌进上下文 | 审批队列 · 回灌有界（超限即报，不静默截） | `AgentObservation` | `Core/MCPClientBridge.swift`、`Core/MCPApprovalQueue.swift`、`Core/AgentToolRegistry.swift` |
+| 3 | 数据任务 | 任务定义 → 生成 SQL → 执行 → 结果或回执 | 生成器 · 执行安全 · 运行记录 | `DataTaskRun` 状态 | `Core/DataTaskRun.swift`、`Core/DataTaskSpecGenerator.swift` |
+| 4 | 导入 | CSV / XLSX 文件 → 解析 → 建表或灌数据 | 读入上限 · 类型推断 · 单事务 | 导入结论（成/败 + 原因） | `Core/DelimitedTextReader.swift`、`Core/XLSXReader.swift`、`Core/TableImport.swift` |
+| 5 | 导出 | 结果集 → 编码 → 流式写文件 | 编码选择 · 大结果流式写 | 写盘回执 | `Core/ResultExporter.swift`、`Core/ResultStreamWriter.swift` |
+| 6 | 笔记云同步 | 本地库 → 端云 → 冲突合并 | 令牌续期 · 并发单飞 · 队列串行 | 同步态（与登录态**分开**） | `Plugins/Notes/Sources/NoteSync/CloudSyncService.swift`、`SyncQueue.swift` |
+| 7 | 凭据 | Keychain / 加密文件 → 连接配置 → 驱动 | 只在进程内取用：**不进模型上下文、不落明文** | 取用成败 | `Core/SecretStore.swift`、`Core/LocalSecretStore.swift` |
+| 8 | 终端 / 内嵌浏览器 | PTY、WebView ↔ 屏幕 / 下载 | 会话隔离 · 下载与外部跳转要问 | 终端事件 / 页面事件 | `Core/TerminalRun.swift`、`Core/BrowserPage.swift` |
+| 9 | （边缘）结构变更 | 表设计 → DDL → 审批 → 执行 → 刷新对象树 | 先出差异、人点了才落盘 | DDL 文本 + 审批结论 | `Core/TableDesign.swift`、`Core/ObjectDDL.swift`、`Core/AgentApprovalGate.swift` |
+| 10 | （边缘）记忆与技能 | 磁盘文件 → 预算裁剪 → 提示词 | 有界注入 · 记忆治理 | 注入摘要 | `Core/AgentMemory.swift`、`Core/AgentSkillLibrary.swift`、`Core/MemoryGovernance.swift` |
+
+表只写「流过长什么样」；**每条流该满足的条款在第三章**（智能体 3.1、工作台 3.2、笔记 3.4、横切 3.6），本节不复述条款，只保证「从哪进、在哪判、以什么形状回来」说得清。
 
 ### 2.7.1 一条 SQL 从输入到结果
 
@@ -237,7 +261,7 @@ Swift 并发标注的实测分布：`@MainActor` 61 处（24 个文件）、`act
 | 7 | 失败 `.failed(reason)`：工具条 + 状态栏各说一次 | 自动保存不弹窗，手动保存多一个可复制错误框 | `App/AppState.swift:8064` |
 | 8 | 切走：`flushNoteAutosave()` 先快照再排队 | 不等写完——手势回调里等写盘等于卡交互 | `App/AppState.swift:7986` |
 
-两条路径的形状是同一个：**动作先被纯函数判一次，再交给能力层，结果以值的形式回到 `@MainActor` 的模型里，最后从模型派生出可见状态**。SQL 那次判在 `ExecutionSafety` / `ExecutionScope`，笔记那次判在 `NoteAutosave` 的三条守卫与 `editorSpansForSave` 的投影一致性；两次回传都是值（`QueryEvent` / `NoteSaveState`），没有一处把连接、文件句柄或事务对象交给界面层持有。
+总表里每条流都走这个形状，下面两条路径把它写实。两条路径的形状是同一个：**动作先被纯函数判一次，再交给能力层，结果以值的形式回到 `@MainActor` 的模型里，最后从模型派生出可见状态**。SQL 那次判在 `ExecutionSafety` / `ExecutionScope`，笔记那次判在 `NoteAutosave` 的三条守卫与 `editorSpansForSave` 的投影一致性；两次回传都是值（`QueryEvent` / `NoteSaveState`），没有一处把连接、文件句柄或事务对象交给界面层持有。
 
 ## 2.8 前端与壳的关系（跨端事实）
 
