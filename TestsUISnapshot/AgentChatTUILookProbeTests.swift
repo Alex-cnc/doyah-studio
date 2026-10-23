@@ -61,9 +61,14 @@ final class AgentChatTUILookProbeTests: XCTestCase {
         let model = seededModel()
         _ = try UISnapshot.write("agent-chat-tui-dark", size: CGSize(width: 920, height: 640),
                                  scheme: .dark) {
-            AgentChatView(model: model)
-                .environmentObject(state)
-                .environmentObject(WorkspaceTabsModel())
+            // 显式铺一层不透明底：`Theme.surface` 是半透明的，导出 PNG 会带 alpha ——
+            // 拿去给人看时压在灰底上，所有字都「发白」，被当成配色设计问题（2026-10-22 实测）。
+            ZStack {
+                Color(red: 5/255, green: 7/255, blue: 13/255)
+                AgentChatView(model: model)
+                    .environmentObject(state)
+                    .environmentObject(WorkspaceTabsModel())
+            }
         }
     }
 
@@ -75,9 +80,12 @@ final class AgentChatTUILookProbeTests: XCTestCase {
         let model = AgentChatModel(sessionID: "snapshot-empty")
         _ = try UISnapshot.write("agent-chat-tui-empty-dark", size: CGSize(width: 920, height: 480),
                                  scheme: .dark) {
-            AgentChatView(model: model)
-                .environmentObject(state)
-                .environmentObject(WorkspaceTabsModel())
+            ZStack {
+                Color(red: 5/255, green: 7/255, blue: 13/255)
+                AgentChatView(model: model)
+                    .environmentObject(state)
+                    .environmentObject(WorkspaceTabsModel())
+            }
         }
     }
 }

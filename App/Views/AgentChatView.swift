@@ -644,6 +644,19 @@ struct AgentChatView: View {
         .padding(.vertical, 5)
     }
 
+    /// 输入行右侧的控件一律是**等宽字形**（`⏎ ■ ▶ ⏱`），不用 SF Symbol：
+    /// 图标自带留白与光学重心，在一条等宽的行里就是「贴了一张小图」，终端里没有这种东西。
+    private func glyphButton(_ glyph: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(glyph)
+                .font(Self.transcriptFont)
+                .foregroundStyle(Theme.text(.secondary))
+                .frame(width: 18, alignment: .center)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
     // MARK: - 输入区（端点没配好时**如实拦住**，不假装在跑）
 
     private var composer: some View {
@@ -661,7 +674,7 @@ struct AgentChatView: View {
                     .foregroundStyle(Theme.accentColor)
                 TextField(L(.agentChatPlaceholder), text: $model.input)
                     .textFieldStyle(.plain)
-                    .font(.system(.body, design: .monospaced))
+                    .font(Self.transcriptFont)
                     .focused($inputFocused)
                     .onSubmit { if model.canSend { Task { await model.send() } } }
                 if model.isRunning {
@@ -671,18 +684,16 @@ struct AgentChatView: View {
                     // **继续上次**（`NFR-AI-08` ⑤）：上一轮没走完（限额 / 取消 / 失败）才有这一枚 ——
                     // 点了接着那一轮停在的跳跑，**已完成的跳不重放**。没得续时整枚不出现（不留空壳）。
                     if let step = model.continueStep {
-                        ToolbarIconButton(systemName: "play.circle",
-                                          help: L(.agentChatContinue, "\(step)")) {
+                        glyphButton("▶", help: L(.agentChatContinue, "\(step)")) {
                             Task { await model.continueLast() }
                         }
                     }
-                    ToolbarIconButton(systemName: "paperplane", help: L(.agentChatSend)) { Task { await model.send() } }
+                    glyphButton("⏎", help: L(.agentChatSend)) { Task { await model.send() } }
                         .disabled(!model.canSend)
                 }
                 // 定时 agent 的入口（`FR-AI-27`）：面板里设「什么时候起一次会话」；
                 // 起不起得来、要不要审批都归既有那条路（定时不构成授权）。
-                ToolbarIconButton(systemName: "clock.arrow.circlepath",
-                                  help: AppShortcut.agentSchedule.help(L(.agentScheduleTitle))) {
+                glyphButton("⏱", help: AppShortcut.agentSchedule.help(L(.agentScheduleTitle))) {
                     appState.isAgentSchedulePresented = true
                 }
             }

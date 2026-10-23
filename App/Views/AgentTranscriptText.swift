@@ -1,4 +1,5 @@
 import SwiftUI
+import DoyahCore
 
 /// 转写区的正文渲染（`§7.9.10` 的排版语汇 + 一直挂着的两个缺口）。
 ///
@@ -118,8 +119,10 @@ struct AgentTranscriptText: View {
     /// 代码块：**照 Hermes TUI 的样子** —— 没有框、没有底纹，只有一行 `─ 语言` 抬头，
     /// 正文缩进两格、整块等宽（`markdown.tsx`：`paddingLeft={2}` + `'─ ' + lang`）。
     ///
-    /// 以前这里是圆角描边的大卡片：卡片自带内边距与边框，在一个「每行都是字」的界面里
-    /// 就是唯一一个「控件」，观感立刻从终端跳回 GUI。
+    /// **着色复用编辑器那套词法器**（`CodeLexer` + `Theme.syntax`），不另写一份：
+    /// 两处各写一份词法，迟早是「编辑器里对、对话里错」——而错的代价是**误导**（颜色错了，
+    /// 人会以为自己在看真语法）。语言认不出就不染（`TextLanguage.detect` 给 `.plainText` 时
+    /// `CodeLexer` 只产一段 plain，正文逐字不变）。
     private func codeBlock(language: String?, code: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if let language, !language.isEmpty {
@@ -128,15 +131,34 @@ struct AgentTranscriptText: View {
                     .foregroundStyle(Theme.text(.tertiary))
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(code)
+                Text(highlighted(code, language: language))
                     .font(.system(.callout, design: .monospaced))
                     .textSelection(.enabled)
-                    .foregroundStyle(Theme.text(.primary))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.leading, 12)          // 两格缩进（与 TUI 的 paddingLeft={2} 同义）
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 把词法记号拼成带色富文本（**拼回去等于原文**：记号覆盖整段，不重排、不裁剪）。
+    private func highlighted(_ code: String, language: String?) -> AttributedString {
+        let lang = CodeFenceLanguage.resolve(language)
+        var out = AttributedString()
+        var cursor = code.startIndex
+        for token in CodeLexer.tokens(in: code, language: lang) where token.kind.isHighlighted {
+            if cursor < token.range.lowerBound {
+                out.append(AttributedString(String(code[cursor..<token.range.lowerBound])))
+            }
+            var piece = AttributedString(String(code[token.range]))
+            piece.foregroundColor = MarkdownCodeLine.tint(for: token.kind)
+            out.append(piece)
+            cursor = token.range.upperBound
+        }
+        if cursor < code.endIndex {
+            out.append(AttributedString(String(code[cursor...])))
+        }
+        return out
     }
 
     @Environment(\.colorScheme) private var colorScheme
