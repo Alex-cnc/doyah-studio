@@ -1,10 +1,10 @@
 # Doyah产品详细设计说明书 · Windows
 
-> **版本** v1.1（2026-10-21 订正：Windows 与 macOS / Linux 同为 **PC 全量端**（Studio + Notes），不是「Studio + Notes 宿主」；上游契约 = `Docs/Doyah产品概要设计说明书.md` v0.6）
+> **版本** v1.2（2026-10-21 扫差补齐：补 Retro 章（本端有真实现 `plugins/retro/*` + `retro_library.rs`），矩阵补 §15/§16 两行）｜ v1.1（2026-10-21 订正：Windows 与 macOS / Linux 同为 **PC 全量端**（Studio + Notes + Retro）；上游契约 = `Docs/Doyah产品概要设计说明书.md` v0.6）
 
 ## 0. 文档元信息与追溯关系
 
-- 项目/功能名称：Doyah · Windows 端（**PC 全量端**：Studio 工作区与数据库 + Notes + Agent 在 Studio 内的表现 + 授权）
+- 项目/功能名称：Doyah · Windows 端（**PC 全量端**：Studio 工作区与数据库 + Notes + Retro + Agent 在 Studio 内的表现 + 授权）
 - 文档版本：v1.0（正文改动同步本节与 §13）
 - 实现范围：`Platform/windows/`（Rust workspace：`Core` `Db` `App/src-tauri` `Cli` + Vue 前端）
 - 上游依据：
@@ -29,6 +29,8 @@
 | §4.4 执行取消 | 服务端真取消 | 3.4 | `Db` 取消路径 | `T-3.4-01` |
 | §4.5 元数据列举 | 层级按类型 | 3.5 | `Db` 元数据查询 | `T-3.5-01` |
 | §4.6–§4.8 行编辑/结构/导入导出 | 预览闸、流式写 | 3.6–3.8 | `Db` + `App/src-tauri` 命令 | `T-3.6-01` |
+| §15 笔记域（14 节） | 捕获/附件/检索/私密/回收站/待办 | 8.1 | Notes 端实现（契约同 §15） | `T-9.1-01` |
+| §16 复盘域（18 节） | 行情/特征/回测/复盘稿/周报 | 8.2 | `App/src/plugins/retro/*` + `App/src-tauri/src/retro_library.rs` | `T-16.1-01` |
 | §5 数据契约 | 连接配置/记录/任务/审批 | 4.1、4.2 | `Core`（`dataset.rs` / `result_set.rs`） | `T-4.1-01` |
 | §6 状态机 | 连接/执行/审批/页签闭集 | 4.4 | `Core` 状态类型 | `T-4.4-01` |
 | §7 关键流程 | 查询全链 | 4.3 | 外壳编排 | `T-3.3-02` |
@@ -151,13 +153,23 @@
 - 凭据只经系统凭据存储；口令不进日志、不进 IPC 响应、不进导出。
 - 网络出口：仅数据库连接与已授权同步；禁止其他外发。
 
-## 8. Notes（Windows，`FR-STD-ALL-PLUG-*` 与 §15 笔记域）
+## 8. Notes 与 Retro（Windows）
+
+### 8.1 Notes（§15 笔记域，`FR-STD-ALL-PLUG-*`）
 
 - 现状实读：Notes 仓 `platform/windows/` 仅 5 件（`gate.py` `gate.cmd` `README.md` `实现依据与验收对照表-20260928.md` `tools/check-basis-coverage.py`）—— 判据骨架在，**功能本体不在本克隆**。
 - 契约（概设 §15 十四节）在本端同样生效：捕获即编辑 / 无标题可存 / 断网可记；附件只存引用、原件不改写、同内容一份；检索按字符偏移、覆盖标题正文标签；私密条目任何出口排除；删除进回收站、彻底清除二次确认；待办写入口唯一。
 - 数据归属：笔记数据家与工程数据家**平级独立**；宿主只单向传上下文（文本与标识），行数据须确认并留痕。
 - 判据：`platform/windows/gate.py` 全绿；跨端一致性以 `Docs/平台对齐-移动端-以安卓为基准.md` 为基准逐条对拍。
 - 禁止：把 Notes 做成 Studio 的子面板（它是同一产品内的独立能力面）；在 Windows 侧另写一份数据契约。
+
+### 8.2 Retro（§16 复盘域）
+
+- **本端有真实现**：界面 `App/src/plugins/retro/`（`RetroView.vue`、`cardSort.ts`、`outline.ts`、`periodIndex.ts`、`cardMeta.ts`），后端 `App/src-tauri/src/retro_library.rs`，装配在 `lib.rs`。
+- 契约口径：概设 §16 十八节（行情接入 / 特征 / 回测 / 复盘稿 / 周报）在本端生效；取值、算式、阈值照契约搬，不改口径（1e-6、6 位小数逢半进位、恒等式、左闭右开区间等）。
+- 数据归属：Retro 数据家在 Studio 数据家之外；宿主只单向传上下文；禁止反向依赖 Studio 装配层。
+- 禁止：把复盘算式写在 Vue 组件里（算法在 Rust 侧）；周报直写对方库（只走交换面）。
+- 判据：`T-16.1-01`（本端用例 + 复盘仓共用样例对拍）。
 
 ## 9. 测试与判据
 
@@ -202,5 +214,6 @@
 
 | 版本 | 日期 | 变更内容 | 影响范围 |
 |---|---|---|---|
+| v1.2 | 2026-10-21 | 扫差补齐：§0 范围加 Retro；矩阵补 §15/§16 两行；§8 拆 8.1 Notes / 8.2 Retro（本端有真实现：`plugins/retro/*` + `retro_library.rs`） | §0 / §0.1 / §8 |
 | v1.1 | 2026-10-21 | **订正范围**：Windows 由「Studio + Notes 宿主」改为 **PC 全量端**（Studio + Notes + Agent 表现 + 授权）；§8 由「不做 Notes 功能」改为「Notes 契约在本端生效，现状仅判据骨架」 | 全书 |
 | v1.0 | 2026-10-21 | 首版：矩阵 14 行 + 基线/禁止项 + 四层模块 + 四条函数契约 + 数据状态 + 界面六态 + 21 码映射 + Notes 宿主 + 判据与坑 | Windows 端 |
