@@ -1,447 +1,447 @@
 {
-  "version": 1,
-  "purpose": "「文档里的数字」的唯一来源台账（队列 L-55）。凡『同一件事在好几处各写一遍』的数字，先在这里登记一次，再由 Scripts/check-doc-numbers.py 双向对账：台账值 ↔ 实测（能机械复算的必须复算）↔ 文档里写的每一处。",
-  "readingRules": [
-    "value = 权威值；spellout = 同一个值的中文写法（文档里写中文数字时用它比对）。",
-    "secondary / tertiary = **同一个来源**的另两个数（如「固定尺寸 36 处」里的面板根 21 · 装饰 15）：它们不是独立的事，只是同一条登记的三个组成部分，各有自己的标签。",
-    "measure = 这个值怎么来的：kind 决定判据怎么『实测复核』，expect 是与 value/secondary 一致的那组实测值（不一致 = 台账自己写错）。",
-    "anchors = 文档里的『现状声明』落点（精确上下文正则 + 捕获组）：每一处捕获到的值必须 == 台账值；命中处数 < minSites 判红（数字被删光也算红）。",
-    "reverseScans = 有限反扫：在指定的『现状口径』语境里，凡出现的同类数字都必须等于台账值（防『新增一处写错的数字』）。",
-    "扫描范围遵守红线第 6 条：对侧独占节（[独占:windows] / [独占:linux]）内的行整段跳过 —— 本侧不改的那部分，本侧也不拿它判红；该处的陈旧值走提醒/提案。",
-    "变更记录行（`| v1.2x` / `| **v2.6x**`）整行跳过：历史值本来就该与当前值不同，那不是漂移。",
-    "hardcodedSites = 同一个项数的**四种形状**各自的落点数（合册 T-20261013-027 / 原单 T-20261010-028）：① `==> N/M` 项块 · ② 收尾行 `$((M - SKIPPED_COUNT))` · ③ 中文写法「十八项」· ④ 阿拉伯硬编码（`skip_step` 运行时打印的 `==> $1/18` / 项号提及 `第 18 项` / 项号枚举 `for n in 1 … 18`）。判据**逐形状对账**（实测与登记不一致 / 缺登记 / 形状 4 种之外的多余键 ⇒ 判红）。④ 原来一条形状都没在（`$1/18` 改成 `$1/19` ⇒ 判据逐字不变）⇒ 本轮补上；**排除形状**（不计，有限反扫不是「所有阿拉伯 18 一律判红」）：`N 色角色` · `第 N 轮 L-25`（轮号不是项号）。",
-    "skipSections = 整节按历史叙述跳过（现只有 AGENT-SPEC §9「常见坑」），理由随条目写在台账里；窗口**自身三条自证**（合册 T-20261013-027 / 原单 T-20261010-026）：`from`/`to` 都命中且 `from` 在前、跳过行数有读数（「skipSections 跳过 N 行」）、窗口必须闭合（扫到 EOF 仍在跳过态 ⇒ 判红）。"
+ "version": 1,
+ "purpose": "「文档里的数字」的唯一来源台账（队列 L-55）。凡『同一件事在好几处各写一遍』的数字，先在这里登记一次，再由 Scripts/check-doc-numbers.py 双向对账：台账值 ↔ 实测（能机械复算的必须复算）↔ 文档里写的每一处。",
+ "readingRules": [
+  "value = 权威值；spellout = 同一个值的中文写法（文档里写中文数字时用它比对）。",
+  "secondary / tertiary = **同一个来源**的另两个数（如「固定尺寸 36 处」里的面板根 21 · 装饰 15）：它们不是独立的事，只是同一条登记的三个组成部分，各有自己的标签。",
+  "measure = 这个值怎么来的：kind 决定判据怎么『实测复核』，expect 是与 value/secondary 一致的那组实测值（不一致 = 台账自己写错）。",
+  "anchors = 文档里的『现状声明』落点（精确上下文正则 + 捕获组）：每一处捕获到的值必须 == 台账值；命中处数 < minSites 判红（数字被删光也算红）。",
+  "reverseScans = 有限反扫：在指定的『现状口径』语境里，凡出现的同类数字都必须等于台账值（防『新增一处写错的数字』）。",
+  "扫描范围遵守红线第 6 条：对侧独占节（[独占:windows] / [独占:linux]）内的行整段跳过 —— 本侧不改的那部分，本侧也不拿它判红；该处的陈旧值走提醒/提案。",
+  "变更记录行（`| v1.2x` / `| **v2.6x**`）整行跳过：历史值本来就该与当前值不同，那不是漂移。",
+  "hardcodedSites = 同一个项数的**四种形状**各自的落点数（合册 T-20261013-027 / 原单 T-20261010-028）：① `==> N/M` 项块 · ② 收尾行 `$((M - SKIPPED_COUNT))` · ③ 中文写法「十八项」· ④ 阿拉伯硬编码（`skip_step` 运行时打印的 `==> $1/18` / 项号提及 `第 18 项` / 项号枚举 `for n in 1 … 18`）。判据**逐形状对账**（实测与登记不一致 / 缺登记 / 形状 4 种之外的多余键 ⇒ 判红）。④ 原来一条形状都没在（`$1/18` 改成 `$1/19` ⇒ 判据逐字不变）⇒ 本轮补上；**排除形状**（不计，有限反扫不是「所有阿拉伯 18 一律判红」）：`N 色角色` · `第 N 轮 L-25`（轮号不是项号）。",
+  "skipSections = 整节按历史叙述跳过（现只有 AGENT-SPEC §9「常见坑」），理由随条目写在台账里；窗口**自身三条自证**（合册 T-20261013-027 / 原单 T-20261010-026）：`from`/`to` 都命中且 `from` 在前、跳过行数有读数（「skipSections 跳过 N 行」）、窗口必须闭合（扫到 EOF 仍在跳过态 ⇒ 判红）。"
+ ],
+ "notCovered": [
+  "逐族负例例数（`test-*.py` 的 N/N、`--self-test` 的例数）：第 65 轮（L-72 ㈠）起由**另一份台账**单独收口 —— `Scripts/self-test-counts.json` + `Scripts/check-self-test-counts.py`（闭环第 4 项，与本案同一项）：把 27 族 runner **真跑一遍**（要求 exit 0）、按各族 `countRegex` 抓例数，再与 §6 资产表 / `verify-all.sh` 注释 / 脚本 docstring 逐处对账。本台账不再承担它。",
+  "check-doc-tables 的「跳过 7 份 / 14 个文件」这类数字：**第 65 轮（L-72 ㈡）已收** —— 见上面 `doc-tables-lists` / `doc-tables-files` 两条（实测 = 导入那个模块读清单 + `git check-ignore` + 真跑它一遍，并与它的自检夹具逐条对账）。三书里「N 处 / N 条」类统计：**第 80 轮（L-72 ㈢）已收** —— 见 `panel-root-frames` / `panel-root-out-of-scope` / `real-db-local-cluster-scripts` 三条，测法 = 新增的 `measure.kind = judge-output`（**真跑一遍那个判据**、要求 exit 0，再从其**人读输出**抓值）。",
+  "**没有判据在管**的数字（第 80 轮如实登记，不硬收）：① 语言表键数（`Docs/Doyah产品能力规划说明书.md` 原写「1388 个文案键」）；② Core 硬编码用户文案数（`Docs/Doyah产品概要设计说明书.md` §7 与 §9 平台差异表原写「~302 处」）。两者都被改成**指向它们各自的唯一来源**（语言表本身 / 汉字棘轮基线 `Scripts/core-localization-baseline.json`）—— 本台账不为它们登记条目：要登记得先给它们一个机械口径（谁数、数什么、口径是什么），否则就是把「没有来源的数字」搬进台账里假装有来源。",
+  "汉字棘轮基线（NFR-ALL-GATE-RISK-037）/ 设计令牌基线 / 形状台账处数：它们已是『棘轮基线文件』形态（各自有唯一出处），不在本条范围。",
+  "本机台账文件（`Docs/智能体助手-开发spec.md` / `Docs/开发记录-*.md` / `Docs/design/开发循环-任务队列.md`，均在 `.gitignore` 内、靠微云备份）**本轮不在扫描范围**：它们每轮都被写、且含大量历史行（逐轮 sha、旧值链）。要把它们的「现状快照」格也纳入对账，得先定『哪些格算现状声明』（如 spec §7 的 `Core 单测 2056 项` 格）⇒ 随 L-72 一起做。本轮**如实登记**：`Docs/智能体助手-开发spec.md` §7 那格写的 2056 **是靠人抄的**，判据不管它。"
+ ],
+ "checkScriptParity": {
+  "glob": "Scripts/check-*.py",
+  "mustBeReferencedIn": "Scripts/verify-all.sh",
+  "note": "『有判据、没闭环』那一族的机械防线：目录里的每个判据脚本都必须被闭环引用，或者在本台账里逐条登记理由。 **第二张网（合册 `T-20261013-027` · 原单 `T-20261010-037`）**：「门禁自己的证据」脚本 `Scripts/test-*.py` 原先同时落在两条网外（本 `glob` 只收 `check-*.py`，第 4 项只做「台账 → 盘」）⇒ 盘上新增一份 `test-*.py` 时两条网都静默。现加 `testGlob` 第二张网：权威面 = `Scripts/self-test-counts.json` 的 `families[].script`，**双向**对账（盘上未登记 ⇒ 红；台账指到不在盘的脚本 ⇒ 红）+ 面下限 `testFloor` + `testExempt`（与 `exempt` 同形）。",
+  "exempt": [
+   {
+    "script": "Scripts/check-ui-snapshot-languages.py",
+    "reason": "随 ./Scripts/make-ui-snapshots.sh 的收尾跑（快照按 L-01 纪律不进每轮闭环）；`Docs/Doyah产品概要设计说明书.md` §8.3 与本台账都指向它。"
+   },
+   {
+    "script": "Scripts/check-notes-capability-sync.py",
+    "reason": "跨仓判据（要读 ../notes 仓），不进本仓每轮闭环：干净克隆 / 另一平台没有 Notes 仓时报「跳过（Notes 仓不在盘上）」，跳过 ≠ 通过，故不能当作本仓门禁的一项。主开发机上手动跑，以及两仓同批改动时跑。"
+   },
+   {
+    "script": "Scripts/check-plan-coverage.py",
+    "reason": "2026-10-20 新增（状态迁出《开发计划书》后的覆盖判据）。闭环 `Scripts/verify-all.sh` 的项数与项号是**多处硬编码**（`AGENT-SPEC.md` / doc-numbers 台账 / 脚本注释三处同步），迁移当轮不动闭环清单，先在本台账登记；**下一轮把它接进 `Scripts/verify-all.sh` 第 1 项之后并同步项数三处**（已登记为待办，不是长期豁免）。"
+   }
   ],
-  "notCovered": [
-    "逐族负例例数（`test-*.py` 的 N/N、`--self-test` 的例数）：第 65 轮（L-72 ㈠）起由**另一份台账**单独收口 —— `Scripts/self-test-counts.json` + `Scripts/check-self-test-counts.py`（闭环第 4 项，与本案同一项）：把 27 族 runner **真跑一遍**（要求 exit 0）、按各族 `countRegex` 抓例数，再与 §6 资产表 / `verify-all.sh` 注释 / 脚本 docstring 逐处对账。本台账不再承担它。",
-    "check-doc-tables 的「跳过 7 份 / 14 个文件」这类数字：**第 65 轮（L-72 ㈡）已收** —— 见上面 `doc-tables-lists` / `doc-tables-files` 两条（实测 = 导入那个模块读清单 + `git check-ignore` + 真跑它一遍，并与它的自检夹具逐条对账）。三书里「N 处 / N 条」类统计：**第 80 轮（L-72 ㈢）已收** —— 见 `panel-root-frames` / `panel-root-out-of-scope` / `real-db-local-cluster-scripts` 三条，测法 = 新增的 `measure.kind = judge-output`（**真跑一遍那个判据**、要求 exit 0，再从其**人读输出**抓值）。",
-    "**没有判据在管**的数字（第 80 轮如实登记，不硬收）：① 语言表键数（`Docs/Doyah产品能力规划说明书.md` 原写「1388 个文案键」）；② Core 硬编码用户文案数（`Docs/Doyah产品概要设计说明书.md` §7 与 §9 平台差异表原写「~302 处」）。两者都被改成**指向它们各自的唯一来源**（语言表本身 / 汉字棘轮基线 `Scripts/core-localization-baseline.json`）—— 本台账不为它们登记条目：要登记得先给它们一个机械口径（谁数、数什么、口径是什么），否则就是把「没有来源的数字」搬进台账里假装有来源。",
-    "汉字棘轮基线（NFR-ALL-GATE-RISK-037）/ 设计令牌基线 / 形状台账处数：它们已是『棘轮基线文件』形态（各自有唯一出处），不在本条范围。",
-    "本机台账文件（`Docs/智能体助手-开发spec.md` / `Docs/开发记录-*.md` / `Docs/design/开发循环-任务队列.md`，均在 `.gitignore` 内、靠微云备份）**本轮不在扫描范围**：它们每轮都被写、且含大量历史行（逐轮 sha、旧值链）。要把它们的「现状快照」格也纳入对账，得先定『哪些格算现状声明』（如 spec §7 的 `Core 单测 2056 项` 格）⇒ 随 L-72 一起做。本轮**如实登记**：`Docs/智能体助手-开发spec.md` §7 那格写的 2056 **是靠人抄的**，判据不管它。"
-  ],
-  "checkScriptParity": {
-    "glob": "Scripts/check-*.py",
-    "mustBeReferencedIn": "Scripts/verify-all.sh",
-    "note": "『有判据、没闭环』那一族的机械防线：目录里的每个判据脚本都必须被闭环引用，或者在本台账里逐条登记理由。 **第二张网（合册 `T-20261013-027` · 原单 `T-20261010-037`）**：「门禁自己的证据」脚本 `Scripts/test-*.py` 原先同时落在两条网外（本 `glob` 只收 `check-*.py`，第 4 项只做「台账 → 盘」）⇒ 盘上新增一份 `test-*.py` 时两条网都静默。现加 `testGlob` 第二张网：权威面 = `Scripts/self-test-counts.json` 的 `families[].script`，**双向**对账（盘上未登记 ⇒ 红；台账指到不在盘的脚本 ⇒ 红）+ 面下限 `testFloor` + `testExempt`（与 `exempt` 同形）。",
-    "exempt": [
-      {
-        "script": "Scripts/check-ui-snapshot-languages.py",
-        "reason": "随 ./Scripts/make-ui-snapshots.sh 的收尾跑（快照按 L-01 纪律不进每轮闭环）；`Docs/Doyah产品概要设计说明书.md` §8.3 与本台账都指向它。"
-      },
-      {
-        "script": "Scripts/check-notes-capability-sync.py",
-        "reason": "跨仓判据（要读 ../notes 仓），不进本仓每轮闭环：干净克隆 / 另一平台没有 Notes 仓时报「跳过（Notes 仓不在盘上）」，跳过 ≠ 通过，故不能当作本仓门禁的一项。主开发机上手动跑，以及两仓同批改动时跑。"
-      },
-      {
-        "script": "Scripts/check-plan-coverage.py",
-        "reason": "2026-10-20 新增（状态迁出《开发计划书》后的覆盖判据）。闭环 `Scripts/verify-all.sh` 的项数与项号是**多处硬编码**（`AGENT-SPEC.md` / doc-numbers 台账 / 脚本注释三处同步），迁移当轮不动闭环清单，先在本台账登记；**下一轮把它接进 `Scripts/verify-all.sh` 第 1 项之后并同步项数三处**（已登记为待办，不是长期豁免）。"
-      }
+  "testGlob": "Scripts/test-*.py",
+  "testAuthority": "Scripts/self-test-counts.json",
+  "testFloor": 17,
+  "testExempt": []
+ },
+ "numbers": [
+  {
+   "key": "gate-items",
+   "label": "闭环项数（Scripts/verify-all.sh 的项块数）",
+   "value": 18,
+   "unit": "项",
+   "spellout": "十八",
+   "measure": {
+    "kind": "gate-scan",
+    "script": "Scripts/verify-all.sh",
+    "expect": [
+     18
     ],
-    "testGlob": "Scripts/test-*.py",
-    "testAuthority": "Scripts/self-test-counts.json",
-    "testFloor": 17,
-    "testExempt": []
+    "hardcodedSites": {
+     "gateBlocks": 18,
+     "closeWrites": 1,
+     "chineseNumerals": 5,
+     "skipPrints": 1,
+     "itemMentions": 20,
+     "itemEnumerations": 2
+    }
+   },
+   "anchors": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "改完代码跑它，(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项全过才算完",
+     "minSites": 1,
+     "note": "头注释总述"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "一条命令闭环（\\*\\*(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项\\*\\*[^）]*）",
+     "minSites": 1,
+     "note": "§6 资产表｜2026-10-13 放宽：允许「**N 项**」之后、右括号之前有补充（本轮 §6 该行加了「· 两种跑法」）"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "verify-all\\.sh\\s+#\\s*(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项",
+     "minSites": 2,
+     "note": "§4/§5 的跑法注释（两处）"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "\\*\\*(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项全绿\\*\\*",
+     "minSites": 1,
+     "note": "§7 门禁行"
+    }
+   ],
+   "reverseScans": [
+    {
+     "file": "Scripts/verify-all.sh",
+     "contextRegex": "(verify-all|闭环)",
+     "numberRegex": "(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项",
+     "note": "闭环脚本自己：四处中文项数写法必须与项块数一致（含 skip_step 里写死的 N/18）"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "contextRegex": "(verify-all|闭环)",
+     "numberRegex": "(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项",
+     "note": "入口文档：闭环语境里的中文项数一律等于台账值（§6 表里 10 行『项数仍十八』也被这一条钉住）"
+    }
+   ]
   },
-  "numbers": [
+  {
+   "key": "core-tests",
+   "label": "Core 单测项数（verify-core.sh 实测）",
+   "value": 3590,
+   "unit": "项",
+   "measure": {
+    "kind": "count-file",
+    "file": ".build/core-test-count.txt",
+    "regex": "(\\d+)",
+    "expect": [
+     3590
+    ],
+    "writtenBy": "Scripts/verify-core.sh（同一次运行写出；verify-all.sh 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，判据如实报『跳过』而不是拿旧值当现状）"
+   },
+   "anchors": [
     {
-      "key": "gate-items",
-      "label": "闭环项数（Scripts/verify-all.sh 的项块数）",
-      "value": 18,
-      "unit": "项",
-      "spellout": "十八",
-      "measure": {
-        "kind": "gate-scan",
-        "script": "Scripts/verify-all.sh",
-        "expect": [
-          18
-        ],
-        "hardcodedSites": {
-          "gateBlocks": 18,
-          "closeWrites": 1,
-          "chineseNumerals": 5,
-          "skipPrints": 1,
-          "itemMentions": 20,
-          "itemEnumerations": 2
-        }
-      },
-      "anchors": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "改完代码跑它，(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项全过才算完",
-          "minSites": 1,
-          "note": "头注释总述"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "一条命令闭环（\\*\\*(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项\\*\\*[^）]*）",
-          "minSites": 1,
-          "note": "§6 资产表｜2026-10-13 放宽：允许「**N 项**」之后、右括号之前有补充（本轮 §6 该行加了「· 两种跑法」）"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "verify-all\\.sh\\s+#\\s*(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项",
-          "minSites": 2,
-          "note": "§4/§5 的跑法注释（两处）"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "\\*\\*(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项全绿\\*\\*",
-          "minSites": 1,
-          "note": "§7 门禁行"
-        }
-      ],
-      "reverseScans": [
-        {
-          "file": "Scripts/verify-all.sh",
-          "contextRegex": "(verify-all|闭环)",
-          "numberRegex": "(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项",
-          "note": "闭环脚本自己：四处中文项数写法必须与项块数一致（含 skip_step 里写死的 N/18）"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "contextRegex": "(verify-all|闭环)",
-          "numberRegex": "(?<![那这哪某每逐同第的])([一二三四五六七八九十]+)项",
-          "note": "入口文档：闭环语境里的中文项数一律等于台账值（§6 表里 10 行『项数仍十八』也被这一条钉住）"
-        }
-      ]
+     "file": "AGENT-SPEC.md",
+     "regex": "Core 单测 \\*\\*(\\d{3,5})\\*\\* 项",
+     "minSites": 1,
+     "note": "§7 门禁行"
     },
     {
-      "key": "core-tests",
-      "label": "Core 单测项数（verify-core.sh 实测）",
-      "value": 3590,
-      "unit": "项",
-      "measure": {
-        "kind": "count-file",
-        "file": ".build/core-test-count.txt",
-        "regex": "(\\d+)",
-        "expect": [
-          3590
-        ],
-        "writtenBy": "Scripts/verify-core.sh（同一次运行写出；verify-all.sh 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，判据如实报『跳过』而不是拿旧值当现状）"
-      },
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "Core 单测 \\*\\*(\\d{3,5})\\*\\* 项",
-          "minSites": 1,
-          "note": "§7 门禁行"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "只要 Core 单测（(?:[^）]*?)(\\d{3,5}) tests",
-          "minSites": 1,
-          "note": "§4 跑法注释（同一个数字的另一种写法：`N tests`）"
-        }
-      ],
-      "reverseScans": [
-        {
-          "file": "AGENT-SPEC.md",
-          "contextRegex": "(单测|verify-core)",
-          "numberRegex": "(\\d{3,5})\\s*(?:项|tests)",
-          "note": "入口文档：凡『单测 N 项』的现状写法都必须等于台账值"
-        },
-        {
-          "file": "Docs/Doyah产品概要设计说明书.md",
-          "contextRegex": "(单测|verify-core)",
-          "numberRegex": "(\\d{3,5})\\s*(?:项|tests)",
-          "note": "契约侧闸门表：同上"
-        }
-      ]
-    },
-    {
-      "key": "ui-snapshots",
-      "label": "界面快照张数",
-      "value": 282,
-      "unit": "张",
-      "secondary": {
-        "label": "组",
-        "value": 141
-      },
-      "measure": {
-        "kind": "snapshot-manifest",
-        "file": ".build/ui-snapshots/full-run/manifest.json",
-        "expect": [
-          282,
-          141
-        ],
-        "writtenBy": "./Scripts/make-ui-snapshots.sh **全量跑**（只读全量跑凭证 `.build/ui-snapshots/full-run/`：`manifest.json` + `record.json`，判据与记录逐项对账；**不再读**共享产物 `.build/ui-snapshots/manifest.json` —— 第 97 轮实测它被人工点验的筛选跑反复顶掉（194/97 与 218/109 交替）⇒ 第 98 轮换测量源：判据的输入只能有一个写者。快照不进每轮闭环 ⇒ 本机连凭证都没有时判据如实报『跳过』，不假装核过）"
-      },
-      "anchors": [
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "界面快照 \\*\\*(\\d+) 张 / (\\d+) 组\\*\\*",
-          "minSites": 1,
-          "note": "§7 门禁行"
-        }
-      ],
-      "reverseScans": [
-        {
-          "file": "AGENT-SPEC.md",
-          "contextRegex": "快照",
-          "numberRegex": "(\\d+)\\s*张\\s*/\\s*(\\d+)\\s*组",
-          "note": "入口文档：快照『张 / 组』的现状写法必须等于台账值（变更行里的历史值整行跳过）"
-        }
-      ]
-    },
-    {
-      "key": "doc-tables-lists",
-      "label": "check-doc-tables 默认清单里被 .gitignore 排除的文档份数（= 只在主开发机上的那几份）",
-      "value": 12,
-      "unit": "份",
-      "secondary": {
-        "label": "受检清单里已入库（跟踪）的文档份数",
-        "value": 50
-      },
-      "measure": {
-        "kind": "doc-tables-lists",
-        "module": "Scripts/check-doc-tables.py",
-        "expect": [
-          12,
-          50
-        ],
-        "note": "导入那个模块读它的清单（**权威算法是它自己的 `gitignored_documents()`**）+ `git check-ignore -z` 实测「被排除的确实是这 7 份」+ 与自检夹具 `SELF_TEST_ABSENT` / `SELF_TEST_TRACKED` **逐条**对账（清单改了没改夹具即判红）；不在 git 仓库里时 git 侧复核如实报「跳过」，不假装核过"
-      },
-      "anchors": [
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "本清单里有 \\*\\*(\\d+) 份文档被",
-          "expect": [
-            12
-          ],
-          "minSites": 1,
-          "note": "docstring「文件不存在的两种语义」那一段"
-        },
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "被 `\\.gitignore` 排除的 (\\d+) 份\\*\\* /",
-          "expect": [
-            12
-          ],
-          "minSites": 1,
-          "note": "docstring：本轮新增的「数字的唯一来源」段"
-        },
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "# (\\d+) 份被 `\\.gitignore` 排除的缺席",
-          "expect": [
-            12
-          ],
-          "minSites": 1,
-          "note": "自检块头注释"
-        },
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "⚠ 跳过 (\\d+) 份",
-          "expect": [
-            12
-          ],
-          "minSites": 1,
-          "note": "自检例 1：必须高声提示（不得静默通过）"
-        },
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "表格校验通过（(\\d+) 个文件，跳过 (\\d+) 份）",
-          "expect": [
-            46,
-            12
-          ],
-          "minSites": 1,
-          "note": "自检例 1：收尾行如实写出跳过数（6 = 夹具里在盘的那几份）"
-        },
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "默认清单，缺 (\\d+) 份",
-          "expect": [
-            12
-          ],
-          "minSites": 1,
-          "note": "自检例 1 的注释（干净克隆口径）"
-        },
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "干净克隆跳过 (\\d+) 份且 exit 0",
-          "expect": [
-            12
-          ],
-          "minSites": 1,
-          "note": "自检收尾行"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "本项的默认清单里有 \\*\\*(\\d+) 份被 `\\.gitignore` 排除的文档\\*\\*",
-          "expect": [
-            12
-          ],
-          "minSites": 1,
-          "note": "闭环第 4 项注释"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "干净克隆跳过 (\\d+) 份且 exit 0",
-          "expect": [
-            12
-          ],
-          "minSites": 1,
-          "note": "闭环第 4 项注释（门禁自己的证据那一半）"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "第 4 项里 (\\d+) 份被 `\\.gitignore` 排除的本地文档",
-          "expect": [
-            12
-          ],
-          "minSites": 1,
-          "note": "头注释「跳过 ≠ 通过」那一段（原文写 5 份 = 陈旧值，本轮改为算出来的）"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "\\*\\*(\\d+) 份被 `\\.gitignore` 排除\\*\\*",
-          "expect": [
-            12
-          ],
-          "minSites": 1,
-          "note": "§6 资产表：文档数字那一行（本轮新增落点）"
-        }
-      ],
-      "note": "第 65 轮（L-72 ㈡）收口：同一件事此前写在各处、无人对账 —— 本轮实测两处**真陈旧**：`check-doc-tables.py` 的人读提示写着「这 5 份被 `.gitignore` 排除」（L-41 把清单从 5 份扩到 7 份后没跟上）、`Scripts/verify-all.sh:115` 同一句也写着 5 份；两处都改成由 `gitignored_documents()` 算出来，`--self-test` 例 2 的失败文案同族（原写「缺 5 份」）。 第 89 轮（L-89）随清单扩容更新：**7 → 13 份**被排除、受控夹具 **6 → 29 份** —— 原因是清单从 13 份命名扩到 42 份（仓根 `*.md` + `Docs/**/*.md` 里带表格的文档全部纳入），新纳的 29 份里有 6 份同样被 `.gitignore` 排除。 2026-10-01（星空紫「星云皮肤」那一轮）：`Docs/design/store/README.md`（`031` 的营销物料说明，带表格）纳进清单 ⇒ 受控夹具口径 **31 → 32**（被排除的 14 份不变 —— 它是入库件）。 2026-10-11（派单 `T-20261011-014`「台账归台账、契约归契约」，人类主人令）：`Docs/智能体助手-开发spec.md` 入库 ⇒ 被排除 **13 → 12**、受控夹具 **35 → 36**（同步改：本台账 12 处 expect + `check-doc-tables.py` 的 docstring / 自检夹具 / 收尾行 + `verify-all.sh` 三处注释 + `AGENT-SPEC.md` §6 那一行）。 2026-10-14（派单 `T-20261014-015`）：平台对齐件入库 ⇒ 受控夹具口径 **36 → 37**（被 `.gitignore` 排除的仍是 12 份 —— 它是入库件，只是原先没进白名单）。 **2026-10-14（派单 `T-20261014-025`）：** 派生视图《任务清单 · 按平台》入库 ⇒ 受控夹具口径 **37 → 38**（被排除的 12 份不变）。"
-    },
-    {
-      "key": "doc-tables-files",
-      "label": "check-doc-tables 在本机默认跑时受检的文件数",
-      "value": 63,
-      "unit": "份",
-      "secondary": {
-        "label": "其中入库文档份数",
-        "value": 62
-      },
-      "measure": {
-        "kind": "doc-tables-run",
-        "module": "Scripts/check-doc-tables.py",
-        "regex": "✅ 表格校验通过（(\\d+) 个文件",
-        "expect": [
-          63,
-          62
-        ],
-        "note": "**真跑一遍**那个脚本（默认清单，cwd = 仓根），从它自己的收尾行抓受检文件数；跑不过 / 抓不到收尾行都判红（格式被改坏 = 证据坏了）。次值 = 清单里命名的份数（`len(DEFAULT_TARGETS)`，与 1 条通配合成 14）"
-      },
-      "anchors": [
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "\\*\\*(\\d+) 份命名 \\+ (\\d+) 条通配 = 实跑 (\\d+) 份\\*\\*",
-          "expect": [
-            58,
-            1,
-            59
-          ],
-          "minSites": 1,
-          "note": "docstring：本轮新增的「数字的唯一来源」段"
-        },
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "✅ 表格校验通过（(\\d+) 个文件）",
-          "expect": [
-            59
-          ],
-          "minSites": 1,
-          "note": "自检例 4：真仓库受检文件数"
-        },
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "真仓库 (\\d+) 份无跳过",
-          "expect": [
-            58
-          ],
-          "minSites": 1,
-          "note": "自检收尾行"
-        },
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "收尾行应为 (\\d+) 个文件（(\\d+) 份命名 \\+ (\\d+) 份通配）",
-          "expect": [
-            59,
-            58,
-            1
-          ],
-          "minSites": 1,
-          "note": "自检例 4 的失败文案（口径写全：14 = 13 命名 + 1 通配）"
-        },
-        {
-          "file": "Scripts/check-doc-tables.py",
-          "regex": "真仓库 (\\d+) 份命名文档应全在",
-          "expect": [
-            58
-          ],
-          "minSites": 1,
-          "note": "自检例 4 的反向断言（真仓库不许出现跳过行）"
-        },
-        {
-          "file": "Scripts/verify-all.sh",
-          "regex": "真仓库 (\\d+) 份受检无跳过（(\\d+) 份命名 \\+ (\\d+) 份通配",
-          "expect": [
-            59,
-            58,
-            1
-          ],
-          "minSites": 1,
-          "note": "闭环第 4 项注释（原文只写「13 份全在」—— 与收尾行的 14 口径不同，本轮写全）"
-        },
-        {
-          "file": "AGENT-SPEC.md",
-          "regex": "\\*\\*(\\d+) 份命名 \\+ (\\d+) 条通配 = 实跑 (\\d+) 份\\*\\*",
-          "expect": [
-            58,
-            1,
-            59
-          ],
-          "minSites": 1,
-          "note": "§6 资产表（本轮新增落点）"
-        }
-      ],
-      "note": "第 65 轮（L-72 ㈡）收口：这个数此前由 `--self-test` 自己钉着（例 4 断言收尾行 14 个文件），但**没有任何跨文档对账** —— 文档里写「14 个文件 / 13 份命名」的地方各自为政；现在实测 = 真跑一遍，文档每一处对账。边界：通配命中的份数不单独登记（它随当天日期变），只作为「13 + 1 = 14」的组成写在各处。 第 89 轮（L-89）随清单扩容更新：**14 → 43 份**（命名 **13 → 42** 份 + 通配 1 份）—— 「带表格的文档全部纳入」；本轮同时新增判据 E（带表格却不在清单里即判红），清单此后**不可能**再静默漏掉带表格的文档。 2026-10-01（星空紫「星云皮肤」那一轮）：**46 → 47 份**（命名 **45 → 46** 份 + 通配 1 份）—— 新增入库件 `Docs/design/store/README.md`（`031` 的营销物料说明）；同一轮顺手改正 `AGENT-SPEC.md` 第 218 行长期写着的陈旧值（**44 + 1 = 45** ⇒ 47），它不在锚点面里、此前无人对账。 2026-10-14（派单 `T-20261014-015` · 人类主人令「`fatshark` 要对齐 macOS 版开发进度」）：平台对齐件 `Docs/平台对齐-Studio-Windows对macOS.md` 入库（`.gitignore` 白名单 + `DEFAULT_TARGETS` + 闭环第 7 项 `--check`）⇒ 命名 **48 → 49**、实跑 **49 → 50**（被排除的仍是 12 份）；同批改齐 `check-doc-tables.py`（docstring / 自检例 1·例 4 / 收尾行）、`verify-all.sh` 第 4 项注释、`AGENT-SPEC.md` §6 资产表（新增一行）与本台账 7 处锚点。 **2026-10-14（派单 `T-20261014-025` · 人类主人令 2026-10-14 追问「怎么到现在你还没有 macOS 的任务清单？」）：派生视图 `Docs/任务清单-按平台.md` 入库**（`.gitignore` 白名单 + `DEFAULT_TARGETS` + 闭环第 7 项 `Scripts/check-board-parity.py`）⇒ 命名 **49 → 50**、实跑 **50 → 51**（被排除的仍是 12 份）；同批改齐 `check-doc-tables.py`（docstring / 自检例 1·例 4 期望）与 `Scripts/verify-all.sh` 第 4 项注释、`AGENT-SPEC.md` §6 资产表。"
-    },
-    {
-      "key": "real-db-local-cluster-scripts",
-      "label": "依赖本机临时集群（local-cluster）的脚本数（`Scripts/real-db-scripts.txt`）",
-      "value": 33,
-      "unit": "个",
-      "measure": {
-        "kind": "judge-output",
-        "script": "Scripts/check-script-env-parameterization.py",
-        "regex": "清单 Scripts/real-db-scripts\\.txt：(\\d+) 个脚本",
-        "expect": [
-          33
-        ],
-        "note": "**真跑一遍**闭环第 13 项（默认参数、cwd = 仓根），要求 `exit 0`，从它的人读首行抓「清单里几个脚本」；清单本身是声明、判据拿它与事实对账（新写死的连接字面量会当场报红）—— 所以这个数是**被门禁管着的**，只是它写进三书之后没人对账。"
-      },
-      "anchors": [
-        {
-          "file": "Docs/Doyah产品需求规格说明书.md",
-          "regex": "\\*\\*目前仍有 (\\d+) 个脚本依赖它\\*\\*",
-          "expect": [
-            33
-          ],
-          "minSites": 1,
-          "note": "SRS §0.9 环境纪律（**另一本书** —— 同一件事被两书写两遍的现场）"
-        },
-        {
-          "file": "Docs/Doyah产品需求规格说明书.md",
-          "regex": "这 (\\d+) 个脚本\\*\\*不再各自写死连接信息\\*\\*",
-          "expect": [
-            33
-          ],
-          "minSites": 1,
-          "note": "SRS §0.9 L-06 迁移第 1 步那一段"
-        }
-      ],
-      "note": "第 80 轮（L-72 ㈢）收口：同一个数写在**两本书四个落点**（概要设计 §9 ×2、SRS §0.9 ×2），而清单实测已从 29 长到 33（`[remote-only]` 那四条由 L-62 / L-63 并入 `local-cluster`）⇒ 四个落点全部改成实测值并由本台账钉住。**边界如实登记**：不设反扫 —— 同段的「连接信息不再散落在 33 个文件里」是**另一个量**（文件数，口径与清单无关），反扫会把两个数混起来判。"
+     "file": "AGENT-SPEC.md",
+     "regex": "只要 Core 单测（(?:[^）]*?)(\\d{3,5}) tests",
+     "minSites": 1,
+     "note": "§4 跑法注释（同一个数字的另一种写法：`N tests`）"
     }
-  ],
-  "skipSections": [
+   ],
+   "reverseScans": [
     {
-      "file": "AGENT-SPEC.md",
-      "from": "^## 9\\.",
-      "to": "^## 10\\.",
-      "reason": "§9「常见坑」整节是**历史叙述**（每条坑都在讲过去发生过什么、当时的数字是多少），与变更记录行同规则跳过；否则「把这处旧值改成实测值」这类记录本身就会被反扫判红"
+     "file": "AGENT-SPEC.md",
+     "contextRegex": "(单测|verify-core)",
+     "numberRegex": "(\\d{3,5})\\s*(?:项|tests)",
+     "note": "入口文档：凡『单测 N 项』的现状写法都必须等于台账值"
+    },
+    {
+     "file": "Docs/Doyah产品概要设计说明书.md",
+     "contextRegex": "(单测|verify-core)",
+     "numberRegex": "(\\d{3,5})\\s*(?:项|tests)",
+     "note": "契约侧闸门表：同上"
     }
-  ]
+   ]
+  },
+  {
+   "key": "ui-snapshots",
+   "label": "界面快照张数",
+   "value": 282,
+   "unit": "张",
+   "secondary": {
+    "label": "组",
+    "value": 141
+   },
+   "measure": {
+    "kind": "snapshot-manifest",
+    "file": ".build/ui-snapshots/full-run/manifest.json",
+    "expect": [
+     282,
+     141
+    ],
+    "writtenBy": "./Scripts/make-ui-snapshots.sh **全量跑**（只读全量跑凭证 `.build/ui-snapshots/full-run/`：`manifest.json` + `record.json`，判据与记录逐项对账；**不再读**共享产物 `.build/ui-snapshots/manifest.json` —— 第 97 轮实测它被人工点验的筛选跑反复顶掉（194/97 与 218/109 交替）⇒ 第 98 轮换测量源：判据的输入只能有一个写者。快照不进每轮闭环 ⇒ 本机连凭证都没有时判据如实报『跳过』，不假装核过）"
+   },
+   "anchors": [
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "界面快照 \\*\\*(\\d+) 张 / (\\d+) 组\\*\\*",
+     "minSites": 1,
+     "note": "§7 门禁行"
+    }
+   ],
+   "reverseScans": [
+    {
+     "file": "AGENT-SPEC.md",
+     "contextRegex": "快照",
+     "numberRegex": "(\\d+)\\s*张\\s*/\\s*(\\d+)\\s*组",
+     "note": "入口文档：快照『张 / 组』的现状写法必须等于台账值（变更行里的历史值整行跳过）"
+    }
+   ]
+  },
+  {
+   "key": "doc-tables-lists",
+   "label": "check-doc-tables 默认清单里被 .gitignore 排除的文档份数（= 只在主开发机上的那几份）",
+   "value": 12,
+   "unit": "份",
+   "secondary": {
+    "label": "受检清单里已入库（跟踪）的文档份数",
+    "value": 51
+   },
+   "measure": {
+    "kind": "doc-tables-lists",
+    "module": "Scripts/check-doc-tables.py",
+    "expect": [
+     12,
+     51
+    ],
+    "note": "导入那个模块读它的清单（**权威算法是它自己的 `gitignored_documents()`**）+ `git check-ignore -z` 实测「被排除的确实是这 7 份」+ 与自检夹具 `SELF_TEST_ABSENT` / `SELF_TEST_TRACKED` **逐条**对账（清单改了没改夹具即判红）；不在 git 仓库里时 git 侧复核如实报「跳过」，不假装核过"
+   },
+   "anchors": [
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "本清单里有 \\*\\*(\\d+) 份文档被",
+     "expect": [
+      12
+     ],
+     "minSites": 1,
+     "note": "docstring「文件不存在的两种语义」那一段"
+    },
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "被 `\\.gitignore` 排除的 (\\d+) 份\\*\\* /",
+     "expect": [
+      12
+     ],
+     "minSites": 1,
+     "note": "docstring：本轮新增的「数字的唯一来源」段"
+    },
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "# (\\d+) 份被 `\\.gitignore` 排除的缺席",
+     "expect": [
+      12
+     ],
+     "minSites": 1,
+     "note": "自检块头注释"
+    },
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "⚠ 跳过 (\\d+) 份",
+     "expect": [
+      12
+     ],
+     "minSites": 1,
+     "note": "自检例 1：必须高声提示（不得静默通过）"
+    },
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "表格校验通过（(\\d+) 个文件，跳过 (\\d+) 份）",
+     "expect": [
+      46,
+      12
+     ],
+     "minSites": 1,
+     "note": "自检例 1：收尾行如实写出跳过数（6 = 夹具里在盘的那几份）"
+    },
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "默认清单，缺 (\\d+) 份",
+     "expect": [
+      12
+     ],
+     "minSites": 1,
+     "note": "自检例 1 的注释（干净克隆口径）"
+    },
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "干净克隆跳过 (\\d+) 份且 exit 0",
+     "expect": [
+      12
+     ],
+     "minSites": 1,
+     "note": "自检收尾行"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "本项的默认清单里有 \\*\\*(\\d+) 份被 `\\.gitignore` 排除的文档\\*\\*",
+     "expect": [
+      12
+     ],
+     "minSites": 1,
+     "note": "闭环第 4 项注释"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "干净克隆跳过 (\\d+) 份且 exit 0",
+     "expect": [
+      12
+     ],
+     "minSites": 1,
+     "note": "闭环第 4 项注释（门禁自己的证据那一半）"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "第 4 项里 (\\d+) 份被 `\\.gitignore` 排除的本地文档",
+     "expect": [
+      12
+     ],
+     "minSites": 1,
+     "note": "头注释「跳过 ≠ 通过」那一段（原文写 5 份 = 陈旧值，本轮改为算出来的）"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "\\*\\*(\\d+) 份被 `\\.gitignore` 排除\\*\\*",
+     "expect": [
+      12
+     ],
+     "minSites": 1,
+     "note": "§6 资产表：文档数字那一行（本轮新增落点）"
+    }
+   ],
+   "note": "第 65 轮（L-72 ㈡）收口：同一件事此前写在各处、无人对账 —— 本轮实测两处**真陈旧**：`check-doc-tables.py` 的人读提示写着「这 5 份被 `.gitignore` 排除」（L-41 把清单从 5 份扩到 7 份后没跟上）、`Scripts/verify-all.sh:115` 同一句也写着 5 份；两处都改成由 `gitignored_documents()` 算出来，`--self-test` 例 2 的失败文案同族（原写「缺 5 份」）。 第 89 轮（L-89）随清单扩容更新：**7 → 13 份**被排除、受控夹具 **6 → 29 份** —— 原因是清单从 13 份命名扩到 42 份（仓根 `*.md` + `Docs/**/*.md` 里带表格的文档全部纳入），新纳的 29 份里有 6 份同样被 `.gitignore` 排除。 2026-10-01（星空紫「星云皮肤」那一轮）：`Docs/design/store/README.md`（`031` 的营销物料说明，带表格）纳进清单 ⇒ 受控夹具口径 **31 → 32**（被排除的 14 份不变 —— 它是入库件）。 2026-10-11（派单 `T-20261011-014`「台账归台账、契约归契约」，人类主人令）：`Docs/智能体助手-开发spec.md` 入库 ⇒ 被排除 **13 → 12**、受控夹具 **35 → 36**（同步改：本台账 12 处 expect + `check-doc-tables.py` 的 docstring / 自检夹具 / 收尾行 + `verify-all.sh` 三处注释 + `AGENT-SPEC.md` §6 那一行）。 2026-10-14（派单 `T-20261014-015`）：平台对齐件入库 ⇒ 受控夹具口径 **36 → 37**（被 `.gitignore` 排除的仍是 12 份 —— 它是入库件，只是原先没进白名单）。 **2026-10-14（派单 `T-20261014-025`）：** 派生视图《任务清单 · 按平台》入库 ⇒ 受控夹具口径 **37 → 38**（被排除的 12 份不变）。"
+  },
+  {
+   "key": "doc-tables-files",
+   "label": "check-doc-tables 在本机默认跑时受检的文件数",
+   "value": 64,
+   "unit": "份",
+   "secondary": {
+    "label": "其中入库文档份数",
+    "value": 63
+   },
+   "measure": {
+    "kind": "doc-tables-run",
+    "module": "Scripts/check-doc-tables.py",
+    "regex": "✅ 表格校验通过（(\\d+) 个文件",
+    "expect": [
+     64,
+     63
+    ],
+    "note": "**真跑一遍**那个脚本（默认清单，cwd = 仓根），从它自己的收尾行抓受检文件数；跑不过 / 抓不到收尾行都判红（格式被改坏 = 证据坏了）。次值 = 清单里命名的份数（`len(DEFAULT_TARGETS)`，与 1 条通配合成 14）"
+   },
+   "anchors": [
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "\\*\\*(\\d+) 份命名 \\+ (\\d+) 条通配 = 实跑 (\\d+) 份\\*\\*",
+     "expect": [
+      58,
+      1,
+      59
+     ],
+     "minSites": 1,
+     "note": "docstring：本轮新增的「数字的唯一来源」段"
+    },
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "✅ 表格校验通过（(\\d+) 个文件）",
+     "expect": [
+      59
+     ],
+     "minSites": 1,
+     "note": "自检例 4：真仓库受检文件数"
+    },
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "真仓库 (\\d+) 份无跳过",
+     "expect": [
+      58
+     ],
+     "minSites": 1,
+     "note": "自检收尾行"
+    },
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "收尾行应为 (\\d+) 个文件（(\\d+) 份命名 \\+ (\\d+) 份通配）",
+     "expect": [
+      59,
+      58,
+      1
+     ],
+     "minSites": 1,
+     "note": "自检例 4 的失败文案（口径写全：14 = 13 命名 + 1 通配）"
+    },
+    {
+     "file": "Scripts/check-doc-tables.py",
+     "regex": "真仓库 (\\d+) 份命名文档应全在",
+     "expect": [
+      58
+     ],
+     "minSites": 1,
+     "note": "自检例 4 的反向断言（真仓库不许出现跳过行）"
+    },
+    {
+     "file": "Scripts/verify-all.sh",
+     "regex": "真仓库 (\\d+) 份受检无跳过（(\\d+) 份命名 \\+ (\\d+) 份通配",
+     "expect": [
+      59,
+      58,
+      1
+     ],
+     "minSites": 1,
+     "note": "闭环第 4 项注释（原文只写「13 份全在」—— 与收尾行的 14 口径不同，本轮写全）"
+    },
+    {
+     "file": "AGENT-SPEC.md",
+     "regex": "\\*\\*(\\d+) 份命名 \\+ (\\d+) 条通配 = 实跑 (\\d+) 份\\*\\*",
+     "expect": [
+      58,
+      1,
+      59
+     ],
+     "minSites": 1,
+     "note": "§6 资产表（本轮新增落点）"
+    }
+   ],
+   "note": "第 65 轮（L-72 ㈡）收口：这个数此前由 `--self-test` 自己钉着（例 4 断言收尾行 14 个文件），但**没有任何跨文档对账** —— 文档里写「14 个文件 / 13 份命名」的地方各自为政；现在实测 = 真跑一遍，文档每一处对账。边界：通配命中的份数不单独登记（它随当天日期变），只作为「13 + 1 = 14」的组成写在各处。 第 89 轮（L-89）随清单扩容更新：**14 → 43 份**（命名 **13 → 42** 份 + 通配 1 份）—— 「带表格的文档全部纳入」；本轮同时新增判据 E（带表格却不在清单里即判红），清单此后**不可能**再静默漏掉带表格的文档。 2026-10-01（星空紫「星云皮肤」那一轮）：**46 → 47 份**（命名 **45 → 46** 份 + 通配 1 份）—— 新增入库件 `Docs/design/store/README.md`（`031` 的营销物料说明）；同一轮顺手改正 `AGENT-SPEC.md` 第 218 行长期写着的陈旧值（**44 + 1 = 45** ⇒ 47），它不在锚点面里、此前无人对账。 2026-10-14（派单 `T-20261014-015` · 人类主人令「`fatshark` 要对齐 macOS 版开发进度」）：平台对齐件 `Docs/平台对齐-Studio-Windows对macOS.md` 入库（`.gitignore` 白名单 + `DEFAULT_TARGETS` + 闭环第 7 项 `--check`）⇒ 命名 **48 → 49**、实跑 **49 → 50**（被排除的仍是 12 份）；同批改齐 `check-doc-tables.py`（docstring / 自检例 1·例 4 / 收尾行）、`verify-all.sh` 第 4 项注释、`AGENT-SPEC.md` §6 资产表（新增一行）与本台账 7 处锚点。 **2026-10-14（派单 `T-20261014-025` · 人类主人令 2026-10-14 追问「怎么到现在你还没有 macOS 的任务清单？」）：派生视图 `Docs/任务清单-按平台.md` 入库**（`.gitignore` 白名单 + `DEFAULT_TARGETS` + 闭环第 7 项 `Scripts/check-board-parity.py`）⇒ 命名 **49 → 50**、实跑 **50 → 51**（被排除的仍是 12 份）；同批改齐 `check-doc-tables.py`（docstring / 自检例 1·例 4 期望）与 `Scripts/verify-all.sh` 第 4 项注释、`AGENT-SPEC.md` §6 资产表。"
+  },
+  {
+   "key": "real-db-local-cluster-scripts",
+   "label": "依赖本机临时集群（local-cluster）的脚本数（`Scripts/real-db-scripts.txt`）",
+   "value": 33,
+   "unit": "个",
+   "measure": {
+    "kind": "judge-output",
+    "script": "Scripts/check-script-env-parameterization.py",
+    "regex": "清单 Scripts/real-db-scripts\\.txt：(\\d+) 个脚本",
+    "expect": [
+     33
+    ],
+    "note": "**真跑一遍**闭环第 13 项（默认参数、cwd = 仓根），要求 `exit 0`，从它的人读首行抓「清单里几个脚本」；清单本身是声明、判据拿它与事实对账（新写死的连接字面量会当场报红）—— 所以这个数是**被门禁管着的**，只是它写进三书之后没人对账。"
+   },
+   "anchors": [
+    {
+     "file": "Docs/Doyah产品需求规格说明书.md",
+     "regex": "\\*\\*目前仍有 (\\d+) 个脚本依赖它\\*\\*",
+     "expect": [
+      33
+     ],
+     "minSites": 1,
+     "note": "SRS §0.9 环境纪律（**另一本书** —— 同一件事被两书写两遍的现场）"
+    },
+    {
+     "file": "Docs/Doyah产品需求规格说明书.md",
+     "regex": "这 (\\d+) 个脚本\\*\\*不再各自写死连接信息\\*\\*",
+     "expect": [
+      33
+     ],
+     "minSites": 1,
+     "note": "SRS §0.9 L-06 迁移第 1 步那一段"
+    }
+   ],
+   "note": "第 80 轮（L-72 ㈢）收口：同一个数写在**两本书四个落点**（概要设计 §9 ×2、SRS §0.9 ×2），而清单实测已从 29 长到 33（`[remote-only]` 那四条由 L-62 / L-63 并入 `local-cluster`）⇒ 四个落点全部改成实测值并由本台账钉住。**边界如实登记**：不设反扫 —— 同段的「连接信息不再散落在 33 个文件里」是**另一个量**（文件数，口径与清单无关），反扫会把两个数混起来判。"
+  }
+ ],
+ "skipSections": [
+  {
+   "file": "AGENT-SPEC.md",
+   "from": "^## 9\\.",
+   "to": "^## 10\\.",
+   "reason": "§9「常见坑」整节是**历史叙述**（每条坑都在讲过去发生过什么、当时的数字是多少），与变更记录行同规则跳过；否则「把这处旧值改成实测值」这类记录本身就会被反扫判红"
+  }
+ ]
 }

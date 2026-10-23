@@ -86,6 +86,8 @@ VERSION_DOCS = [
     ("Docs/Doyah产品概要设计说明书.md", True),
     # 2026-10-23：执行契约新体裁 v0.1（自带 §14 变更记录 + 头部版本格）。
     ("Docs/Doyah产品概要设计说明书-执行契约-v0.1.md", False),
+    # 2026-10-21：Studio 线执行契约 v0.1（自带 §14 变更记录 + 头部版本格；§15 族级追溯）。
+    ("Docs/DoyahStudio产品概要设计说明书-执行契约.md", False),
     # 2026-10-23：macOS 端详细设计（自带 §11 变更记录 + 头部版本格）。
     ("Docs/Doyah产品详细设计说明书-macOS.md", False),
     ("Docs/智能体助手-开发spec.md", False),
