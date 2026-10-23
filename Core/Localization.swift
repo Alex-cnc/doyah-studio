@@ -985,6 +985,16 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatSearchHitsUnit
     case agentChatSearchNoHits
     case agentSessionUnavailable
+    // A4：审批单上的「预计影响行数」（§9.1.16）
+    case agentApprovalRowsTitle
+    case agentApprovalRowsUnit
+    case agentApprovalRowsEstimating
+    case agentApprovalRowsUnavailablePrefix
+    case agentApprovalRowsNoConnection
+    case agentApprovalRowsNotDataChange
+    case agentApprovalRowsDialect
+    case agentApprovalRowsNoAnswer
+    case agentApprovalRowsQueryFailed
     case agentChatExpand
     case agentChatCollapse
     /// `FR-AI-31` ①：同一文件正有另一次写入 — 这一次没落盘。
@@ -3503,6 +3513,16 @@ public enum LocalizedStrings {
         .agentChatSearchHitsUnit: [.simplifiedChinese: "处命中", .english: "matches"],
         .agentChatSearchNoHits: [.simplifiedChinese: "没有命中", .english: "No matches"],
         .agentSessionUnavailable: [.simplifiedChinese: "这条会话读不出来（文件可能不在了，或是别的工区的）。", .english: "This session cannot be read (the file may be gone, or it belongs to another workspace)."],
+        // A4：审批单上的「预计影响行数」（§9.1.16）—— 数值来源只有一个：数据库优化器的 Plan Rows。
+        .agentApprovalRowsTitle: [.simplifiedChinese: "预计影响行数", .english: "Estimated rows"],
+        .agentApprovalRowsUnit: [.simplifiedChinese: "行", .english: "rows"],
+        .agentApprovalRowsEstimating: [.simplifiedChinese: "估算中…", .english: "Estimating…"],
+        .agentApprovalRowsUnavailablePrefix: [.simplifiedChinese: "估不出来：", .english: "Cannot estimate: "],
+        .agentApprovalRowsNoConnection: [.simplifiedChinese: "没有可用的连接", .english: "no usable connection"],
+        .agentApprovalRowsNotDataChange: [.simplifiedChinese: "这条不改数据", .english: "this statement changes no data"],
+        .agentApprovalRowsDialect: [.simplifiedChinese: "这个方言的 EXPLAIN 还没接", .english: "EXPLAIN is not wired for this dialect"],
+        .agentApprovalRowsNoAnswer: [.simplifiedChinese: "执行计划里取不到行数", .english: "the plan carries no row count"],
+        .agentApprovalRowsQueryFailed: [.simplifiedChinese: "估算时查询失败", .english: "the estimate query failed"],
         // `FR-AI-31` ①：写冲突 / 基线过期 / 兑现失败三件事各说各的（都是「文件没被写」，原因不一样）。
         .agentChatWriteBusy: [.simplifiedChinese: "这个文件正有另一次写入在进行 —— 这一次没有落盘，等它写完再来。", .english: "Another write to this file is in progress — nothing was written this time; try again once it finishes."],
         .agentChatWriteStale: [.simplifiedChinese: "这个文件在你批准之后被改过 —— 没有拿旧审批盖上去，先看清现在的内容再决定。", .english: "This file changed after you approved — the approval was not written over it; review the current content first."],

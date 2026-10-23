@@ -19,6 +19,8 @@ struct AgentApprovalSheet: View {
 
     @State private var note = ""
     @State private var isWorking = false
+    /// 「预计影响行数」（§9.1.16 A4）：`nil` = 还没算（先显示「估算中…」）。
+    @State private var planRows: AgentPlanRows.Estimate?
 
     private var record: AgentActionRecord { approval.record }
 
@@ -61,6 +63,11 @@ struct AgentApprovalSheet: View {
         }
         .padding(20)
         .frame(width: 620)
+        // 估算在**出现时**跑一次：只要这一格给出的是「这一条会改多少行」，
+        // 人就能拿它和「我看到的那几条」对一眼再决定。估不出来时这里会如实写原因。
+        .task(id: record.id) {
+            planRows = await appState.estimateAgentPlanRows(for: record.sql)
+        }
     }
 
     // MARK: - 上下文
@@ -70,8 +77,35 @@ struct AgentApprovalSheet: View {
             row(L(.agentAuditColumnConnection), AgentAuditPresentation.connectionText(record))
             row(L(.agentAuditColumnModel), AgentAuditPresentation.modelText(record))
             row(L(.agentAuditColumnStatement), "\(record.statementKind.text) · \(record.risk.text)")
+            row(L(.agentApprovalRowsTitle), planRowsText)
         }
         .font(.caption)
+    }
+
+    /// 「预计影响行数」那一格（§9.1.16 A4）。
+    ///
+    /// 三档都必须**说清楚**：给了数（`≈N 行`）/ 估不出来（原因）/ 还没算完（估算中…）——
+    /// 空白的格子会被读成「0 行」，而那是完全不同的一件事。
+    private var planRowsText: String {
+        switch planRows {
+        case .none:
+            return L(.agentApprovalRowsEstimating)
+        case .rows(let count):
+            return "≈\(count) " + L(.agentApprovalRowsUnit)
+        case .unavailable(let code):
+            return L(.agentApprovalRowsUnavailablePrefix) + reasonText(code)
+        }
+    }
+
+    /// 原因码 → 人话（码留在 `AgentPlanRows.Estimate` 里，翻在这里 —— Core 不做本地化）。
+    private func reasonText(_ code: String) -> String {
+        switch code {
+        case "noConnection": return L(.agentApprovalRowsNoConnection)
+        case "notDataChange": return L(.agentApprovalRowsNotDataChange)
+        case "dialectUnsupported": return L(.agentApprovalRowsDialect)
+        case "noAnswer", "parseFailed": return L(.agentApprovalRowsNoAnswer)
+        default: return L(.agentApprovalRowsQueryFailed)
+        }
     }
 
     private func row(_ title: String, _ value: String) -> some View {

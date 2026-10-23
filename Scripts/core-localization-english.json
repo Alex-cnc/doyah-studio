@@ -1,5 +1,5 @@
 {
-  "note": "「Core 里写死的英文展示文案」白名单 + 棘轮（队列 L-109）。判据与用法见 Scripts/check-core-localization.py 头部（棘轮 B）。口径：**白名单之外一律报红；白名单只许缩小**（盘上已经没有的条目要销账，留着 = 那个串下次写回来会静默过关）。每条的 kind 只认脚本里那套词表；`unclassified` = 抄现状还没分类，**不在词表内 ⇒ 判红** —— 「加一条白名单」必须是一次有意识的分类决定，本文件的 --update-baseline-english 只抄现状、不替人分类。`displayDebt` = 确实直达界面、暂时写死英文的**已登记欠账**（不是放行）。",
+  "note": "「Core 里写死的英文展示文案」白名单 + 棘轮（队列 L-109）。判据与用法见 Scripts/check-core-localization.py 头部（棘轮 B）。口径：**白名单之外一律报红；白名单只许缩小**（盘上已经没有的条目要销账，留着 = 那个串下次写回来会静默过关）。每条的 kind 只认脚本里那套词表；`unclassified` = 抄现状还没分类，**不在词表内 ⇒ 判红** —— 「加一条白名单」必须是一次有意识的分类决定，本文件的 --update-baseline-english 只抄现状、不替人分类。`displayDebt` = 确实直达界面、暂时写死英文的**已登记欠账**（不是放行）。 2026-10-23 A4：`Delete` / `Insert` / `Merge` / `Update` 按 kind=wireValue 登记 —— 它们是 PG `EXPLAIN (FORMAT JSON)` 里 `Node Type` 的**取值**（协议层字面量），只在 `AgentPlanRows` 里与返回的节点名做集合匹配，从不显示给人。",
   "kinds": {
     "sql": "SQL 方言片段 / 关键字 / 迁移 SQL —— 拼 SQL 用的，不是展示文案",
     "dbType": "数据库类型名（PG / MySQL 的类型原文）",
@@ -182,6 +182,12 @@
         "Core/SyntheticData.swift:342"
       ]
     },
+    "Delete": {
+      "kind": "wireValue",
+      "sites": [
+        "Core/AgentPlanRows.swift:89"
+      ]
+    },
     "Disable": {
       "kind": "protocolToken",
       "sites": [
@@ -268,6 +274,12 @@
         "Core/PostgresWireValue.swift:53"
       ]
     },
+    "Insert": {
+      "kind": "wireValue",
+      "sites": [
+        "Core/AgentPlanRows.swift:89"
+      ]
+    },
     "Internal error": {
       "kind": "protocolToken",
       "sites": [
@@ -303,6 +315,12 @@
       "kind": "protocolToken",
       "sites": [
         "Core/ResultClipboard.swift:24"
+      ]
+    },
+    "Merge": {
+      "kind": "wireValue",
+      "sites": [
+        "Core/AgentPlanRows.swift:89"
       ]
     },
     "Method not found": {
@@ -526,6 +544,12 @@
       "kind": "protocolToken",
       "sites": [
         "Core/MCPProtocol.swift:138"
+      ]
+    },
+    "Update": {
+      "kind": "wireValue",
+      "sites": [
+        "Core/AgentPlanRows.swift:89"
       ]
     },
     "Verify CA": {

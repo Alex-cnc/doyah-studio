@@ -3502,6 +3502,41 @@ final class AppState: ObservableObject {
         return submission
     }
 
+    /// 审批单上的「预计影响行数」（§9.1.16 A4）：**问数据库自己的优化器**，不本地猜。
+    ///
+    /// 只跑 `EXPLAIN (FORMAT JSON)`（**不带 `ANALYZE`**）⇒ 不执行、不改任何数据。
+    /// 估不出来时给**原因码**（界面翻成人话）—— 不报 `0`：`0` 是「一条都不命中」这个具体答案，
+    /// 与「估不出来」是两件事，混在一起会让人拿假数当依据去点批准。
+    func estimateAgentPlanRows(for sql: String) async -> AgentPlanRows.Estimate {
+        guard let statement = AgentPlanRows.explainStatement(for: sql) else {
+            return .unavailable("notDataChange")
+        }
+        guard let configuration = selectedConnection else {
+            return .unavailable("noConnection")
+        }
+        // 目前只有 PostgreSQL 这一支有 `EXPLAIN (FORMAT JSON)` 这个形状；别方言**如实说没接**，
+        // 不拿别的语法去套（MySQL 的 `EXPLAIN FORMAT=JSON` 字段名不同，套了就是假数）。
+        guard configuration.dbType == .postgresql else {
+            return .unavailable("dialectUnsupported")
+        }
+        guard let service = try? await ensureService(for: configuration,
+                                                     database: queryDatabase(for: configuration)) else {
+            return .unavailable("noConnection")
+        }
+        var json: String?
+        do {
+            for try await event in service.execute(statement, options: .default, handle: ExecutionHandle()) {
+                if case .resultSet(let result) = event {
+                    // 结果只有一行一列（整份计划 JSON）—— 它留在本机给审批单看，不进模型上下文。
+                    json = result.rows.first?.first ?? nil
+                }
+            }
+        } catch {
+            return .unavailable("queryFailed")
+        }
+        return AgentPlanRows.estimate(json: json)
+    }
+
     /// 批准并执行一条待审批动作（审批单上的「批准并执行」）。
     func approveAgentAction(id: UUID, note: String? = nil) async {
         await decideAgentAction(id: id, approve: true, note: note)
