@@ -1007,6 +1007,12 @@
       "sites": [
         "Core/SessionMonitor.swift:153"
       ]
+    },
+    "No commits yet on": {
+      "kind": "parseToken",
+      "sites": [
+        "Core/AgentGitFacts.swift:68"
+      ]
     }
   }
 }

@@ -19,6 +19,8 @@ enum ErrorPresenter {
                 return L(.errorPersistence, reason)
             case .queryFailed(let message):
                 return L(.errorQueryFailed, message)
+            case .emptySQL:
+                return L(.stateSQLEmpty)
             }
         }
 

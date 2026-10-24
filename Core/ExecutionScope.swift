@@ -75,6 +75,13 @@ public enum ExecutionScope {
         return Resolution(sql: text, source: .wholeScript)
     }
 
+    /// 装配层前置判定（概设 §9 `EXEC_EMPTY_SQL`）：空串或纯空白 ⇒ 返回 `.emptySQL`。
+    /// 与 `resolve(text:selection:)` 的 `.emptyText` 同源判定，区别只在**出口形态**：
+    /// 前者给「不能执行」的错误码，后者给「跑哪一段」的解析结果。
+    public static func preflightError(for text: String) -> AppError? {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .emptySQL : nil
+    }
+
     // MARK: - 内部
 
     static func clamp(_ range: NSRange, to text: String) -> NSRange? {

@@ -20,6 +20,25 @@ final class ExecutionScopeTests: XCTestCase {
     UPDATE orders SET total = 0 WHERE id = 3;
     """
 
+    // MARK: - 空内容 ⇒ 装配层错误码（概设 §9 `EXEC_EMPTY_SQL`）
+
+    /// 判据成对：空串 / 纯空白必须给出 `AppError.emptySQL`；
+    /// 有内容（哪怕只有一个字符）必须**不给**错误 —— 否则就是「拦多了」。
+    func testEmptySQLMapsToEmptySQLError() {
+        for blank in ["", "   ", "\n\n", " \t \n "] {
+            XCTAssertEqual(
+                ExecutionScope.preflightError(for: blank), .emptySQL,
+                "空内容（\(blank.debugDescription)）必须映射为 EXEC_EMPTY_SQL"
+            )
+        }
+        for nonBlank in ["SELECT 1;", "-- 注释\nSELECT 1;", "select 1"] {
+            XCTAssertNil(
+                ExecutionScope.preflightError(for: nonBlank),
+                "有内容（\(nonBlank.debugDescription)）不得被判成空 SQL"
+            )
+        }
+    }
+
     // MARK: - 没选区 ⇒ 整篇
 
     func testNoSelectionRunsWholeText() {
