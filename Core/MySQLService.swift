@@ -35,6 +35,9 @@ public actor MySQLService: DatabaseService {
     /// 服务端连接号（`CONNECTION_ID()`）：`KILL QUERY <id>` 要用它。
     private var serverConnectionID: Int?
 
+    /// 供 `OwnSessionReporting` 取用：把自己这条连接的会话号交出去（actor 内读缓存，不重查）。
+    func cachedOwnSessionPID() -> Int? { serverConnectionID }
+
     /// 执行注册表：「谁在跑、谁被取消过」的唯一事实源（R-29 / R-30），与 PG 侧共用同一个类型。
     private let registry = ExecutionRegistryBox()
 

@@ -18,6 +18,9 @@ public actor PostgresService: DatabaseService {
     /// `pg_cancel_backend(pid)` 同样需要它。连接成功后立即查询并缓存。
     private var backendPID: Int?
 
+    /// 供 `OwnSessionReporting` 取用：把自己这条连接的后端 PID 交出去（actor 内读缓存，不重查）。
+    func cachedOwnSessionPID() -> Int? { backendPID }
+
     /// 执行注册表：「谁在跑、谁被取消过」的唯一事实源（R-29 / R-30）。
     private let registry = ExecutionRegistryBox()
 

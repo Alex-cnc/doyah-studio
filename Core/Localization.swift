@@ -1467,6 +1467,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case sessionUnsupported
     case sessionSignalUnsupported
     case sessionSignalDenied
+    /// 拒绝终止「自己这条连接」的会话（会话管理面：掐了它等于自断）
+    case sessionOwnRefused
     case sessionTerminated
     case sessionStatementCancelled
     case transactionModeAuto
@@ -4048,6 +4050,7 @@ public enum LocalizedStrings {
         .sessionUnsupported: [.simplifiedChinese: "该数据库类型暂不支持读取服务器会话", .english: "Reading server sessions is not supported on this database type"],
         .sessionSignalUnsupported: [.simplifiedChinese: "该数据库类型暂不支持取消 / 终止会话", .english: "Cancelling or terminating sessions is not supported on this database type"],
         .sessionSignalDenied: [.simplifiedChinese: "服务端拒绝了这次操作（会话 %d）—— 通常是权限不足：只能操作自己的会话", .english: "The server refused this operation (session %d) — usually insufficient privileges: you can only act on your own sessions"],
+        .sessionOwnRefused: [.simplifiedChinese: "这是当前正在使用的会话 %d —— 终止它等于自断连接，已拒绝。要断开请直接断开这条连接", .english: "That is the session this window is using (%d) — terminating it would cut your own connection, so it was refused. Disconnect the connection instead"],
         .sessionTerminated: [.simplifiedChinese: "已终止会话 %d", .english: "Session %d terminated"],
         .sessionStatementCancelled: [.simplifiedChinese: "已取消会话 %d 上的语句", .english: "Statement on session %d cancelled"],
         .transactionModeAuto: [.simplifiedChinese: "自动提交", .english: "Auto-commit"],

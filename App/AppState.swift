@@ -5761,6 +5761,17 @@ final class AppState: ObservableObject {
         do {
             let database = currentDatabaseName(for: configuration)
             let service = try await ensureService(for: configuration, database: database)
+            // 「不许掐自己的会话」：能取到自己的会话号就当场拒（详设 §6 `SESS_KILL_DENIED`）。
+            // 拒在这里而不是等服务端 —— 服务端拒的是「没权限」，这里拒的是「你正在用它」，
+            // 两者文案与后果都不同：前者还能换个有权限的账号，后者一发就自断连接。
+            if kind.isDestructive,
+               let reporting = service as? OwnSessionReporting,
+               let own = await reporting.ownSessionPID(),
+               SessionKillGuard.decide(isOwnSession: own == pid,
+                                       confirmed: true,
+                                       canTerminate: true) == .selfSessionRefused {
+                return L(.sessionOwnRefused, pid)
+            }
             let result = try await runSingleQuery(statement, on: service)
             // 服务端返回布尔：false 通常意味着**权限不够**（PG 要求同用户或 pg_signal_backend）。
             // 这一步必须如实区分，否则用户会以为"点了没反应"。

@@ -136,9 +136,8 @@ tasks:
     goal: 会话终止接 `DatabaseAdmin` + 界面二次确认（拒绝时给服务端原话）
     done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'SessionKillGuard' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
     est: 2h
-    status: blocked
-    blocked_reason: 终止/取消会话已实现且已区分服务端拒绝（`sessionSignalDenied`）；缺的是「自己的会话」判定 —— `ServerInfo` 不带 backend pid
-    next_try: 加一次 `SELECT pg_backend_pid()` / `CONNECTION_ID()` 取自身 pid 后接 SessionKillGuard
+    status: done
+    evidence: .agent/evidence/2026-10-24-T5.4.md
     deps: [T2.4]
   - id: T5.5
     goal: 授权能力位接到入口判定（缺位不许展示内容/不许灰色诱导，文案点名能力位）
