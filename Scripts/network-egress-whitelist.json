@@ -199,6 +199,14 @@
         "URLSession"
       ],
       "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/LLMStreamingAuthTests.swift",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "测试件：断言「模型流式响应的鉴权头拼装」—— 只构造 URLRequest 校验 header，不发真请求（面外不判，但逐条登记并打读数）",
+      "bucket": "test"
     }
   ],
   "outOfFaceNote": "登记类（只减不增）：`scan.scope = repo` ⇒ 这些文件**已经在扫描面内**，但不在 SRS §6.4 白名单面里 ⇒ 逐条登记（漏登 / 陈旧 / 死登记 / **抹登记**都判红；条数下限 `floors.minRegisteredEgress` = 10）。**登记 ≠ 放行**：`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift` 两处生产活体的定性由前门裁（原单 `T-20261010-040` ④）。"
