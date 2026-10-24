@@ -40,27 +40,27 @@ struct AgentScheduleSheet: View {
     // MARK: - 头（错过提示摆在这里：默认不补跑，只有用户点了才起）
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.s) {
             HStack {
-                Text(L(.agentScheduleTitle)).font(.headline)
+                Text(L(.agentScheduleTitle)).font(Theme.font(.title))
                 Spacer()
                 Button(L(.commonClose)) { dismiss() }
             }
             if let missed = missedPrompt {
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.s) {
                     Image(systemName: "clock.badge.exclamationmark")
-                    Text(missed.text).font(.callout)
+                    Text(missed.text).font(Theme.font(.body))
                     Spacer()
                     Button(L(.dataTaskRunNow)) {
                         Task { await appState.runMissedAgentScheduleNow() }
                     }
                     Button(L(.commonClose)) { appState.dismissAgentScheduleMissed() }
                 }
-                .padding(8)
-                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                .padding(Spacing.s)
+                .background(Theme.status(.warning).opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.control))
             }
         }
-        .padding(12)
+        .padding(Spacing.m)
     }
 
     private var missedPrompt: AgentSchedulePresentation.MissedPrompt? {
@@ -71,9 +71,9 @@ struct AgentScheduleSheet: View {
 
     private var emptyState: some View {
         Text(L(.agentScheduleEmpty))
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .padding(16)
+            .font(Theme.font(.body))
+            .foregroundStyle(Theme.text(.secondary))
+            .padding(Spacing.l)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -81,12 +81,12 @@ struct AgentScheduleSheet: View {
 
     private var entryList: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: Spacing.s) {
                 ForEach(appState.agentSchedules) { entry in
                     entryRow(entry)
                 }
             }
-            .padding(12)
+            .padding(Spacing.m)
         }
     }
 
@@ -99,13 +99,13 @@ struct AgentScheduleSheet: View {
             latestRecord: appState.agentScheduleLatestRun(for: entry.id),
             language: language
         )
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                Text(row.title).font(.body).bold()
+        return VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.s) {
+                Text(row.title).font(Theme.font(.body)).bold()
                 Text(row.statusText)
-                    .font(.caption)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
+                    .font(Theme.font(.caption))
+                    .padding(.horizontal, Spacing.s)
+                    .padding(.vertical, Spacing.hair)
                     .background(Color.secondary.opacity(0.12), in: Capsule())
                 Spacer()
                 Toggle("", isOn: Binding(
@@ -121,47 +121,47 @@ struct AgentScheduleSheet: View {
                     Task { await appState.deleteAgentSchedule(id: entry.id) }
                 }
             }
-            Text(row.targetText).font(.caption).foregroundStyle(.secondary)
-            HStack(spacing: 10) {
-                Text(row.scheduleText).font(.caption).foregroundStyle(.secondary)
+            Text(row.targetText).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary))
+            HStack(spacing: Spacing.m) {
+                Text(row.scheduleText).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary))
                 if let next = row.nextRunText {
-                    Text(L(.dataTaskNextRun, next)).font(.caption).foregroundStyle(.secondary)
+                    Text(L(.dataTaskNextRun, next)).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary))
                 }
                 if let last = row.lastRunText {
-                    Text(last).font(.caption).foregroundStyle(.secondary)
+                    Text(last).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary))
                 } else {
-                    Text(L(.agentScheduleNeverRun)).font(.caption).foregroundStyle(.tertiary)
+                    Text(L(.agentScheduleNeverRun)).font(Theme.font(.caption)).foregroundStyle(Theme.text(.tertiary))
                 }
             }
             if let hint = row.disabledHint {
-                Text(hint).font(.caption).foregroundStyle(.secondary)
+                Text(hint).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary))
             }
         }
-        .padding(10)
-        .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+        .padding(Spacing.m)
+        .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: Radius.card))
     }
 
     // MARK: - 执行历史（⑤：时间 / 结果状态 / 扣下几条）
 
     private var history: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(L(.agentScheduleHistory)).font(.headline)
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            Text(L(.agentScheduleHistory)).font(Theme.font(.title))
             let rows = AgentSchedulePresentation.historyRows(appState.agentScheduleRuns, language: language)
             if rows.isEmpty {
-                Text(L(.agentScheduleHistoryEmpty)).font(.caption).foregroundStyle(.secondary)
+                Text(L(.agentScheduleHistoryEmpty)).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary))
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 4) {
+                    LazyVStack(alignment: .leading, spacing: Spacing.xs) {
                         ForEach(rows.suffix(20)) { row in
-                            HStack(spacing: 8) {
-                                Text(row.startedAtText).font(.caption).monospaced()
-                                Text(row.statusText).font(.caption)
-                                if row.isLate { Text("+").font(.caption).foregroundStyle(.orange) }
-                                if let executed = row.executedText { Text(executed).font(.caption).foregroundStyle(.secondary) }
-                                if let withheld = row.withheldText { Text(withheld).font(.caption).foregroundStyle(.orange) }
-                                if let detail = row.detailText { Text(detail).font(.caption).foregroundStyle(.secondary) }
+                            HStack(spacing: Spacing.s) {
+                                Text(row.startedAtText).font(Theme.font(.caption)).monospaced()
+                                Text(row.statusText).font(Theme.font(.caption))
+                                if row.isLate { Text("+").font(Theme.font(.caption)).foregroundStyle(Theme.status(.warning)) }
+                                if let executed = row.executedText { Text(executed).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary)) }
+                                if let withheld = row.withheldText { Text(withheld).font(Theme.font(.caption)).foregroundStyle(Theme.status(.warning)) }
+                                if let detail = row.detailText { Text(detail).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary)) }
                                 Spacer()
-                                Text(row.durationText).font(.caption).foregroundStyle(.tertiary)
+                                Text(row.durationText).font(Theme.font(.caption)).foregroundStyle(Theme.text(.tertiary))
                             }
                         }
                     }
@@ -169,7 +169,7 @@ struct AgentScheduleSheet: View {
                 .frame(maxHeight: 140)
             }
         }
-        .padding(12)
+        .padding(Spacing.m)
     }
 
     private var footer: some View {
@@ -177,7 +177,7 @@ struct AgentScheduleSheet: View {
             Button(L(.agentScheduleNew)) { editing = newEntry() }
             Spacer()
         }
-        .padding(12)
+        .padding(Spacing.m)
     }
 
     /// 新建的默认条目：一次性调度、目标 = 会话、工作区 = 当前工作区。
@@ -256,7 +256,7 @@ private struct AgentScheduleEditor: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(entry.target.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .padding(12)
+            .padding(Spacing.m)
         }
         .frame(width: 480, height: 420, alignment: .topLeading)
     }

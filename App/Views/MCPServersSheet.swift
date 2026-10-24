@@ -23,22 +23,22 @@ struct MCPServersSheet: View {
     @State private var message: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.m) {
             Text(L(.mcpServersTitle))
-                .font(.headline)
+                .font(Theme.font(.title))
             Text(L(.mcpServersHint))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
                 .fixedSize(horizontal: false, vertical: true)
 
             Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: Spacing.l) {
                     if draft.servers.isEmpty {
                         Text(L(.mcpServersEmptyHint))
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
+                            .font(Theme.font(.body))
+                            .foregroundStyle(Theme.text(.secondary))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         ForEach(Array(draft.servers.enumerated()), id: \.offset) { index, _ in
@@ -48,7 +48,7 @@ struct MCPServersSheet: View {
                     }
                     problemList
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, Spacing.hair)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
@@ -56,14 +56,14 @@ struct MCPServersSheet: View {
 
             if let message {
                 Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             footer
         }
-        .padding(20)
+        .padding(Spacing.l)
         .frame(minWidth: 700, minHeight: 560)
         .task { load() }
     }
@@ -73,8 +73,8 @@ struct MCPServersSheet: View {
     @ViewBuilder
     private func serverEditor(_ index: Int) -> some View {
         let server = draft.servers[index]
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            HStack(spacing: Spacing.s) {
                 Toggle(isOn: $draft.servers[index].enabled) {
                     Text(L(.mcpServersEnabled))
                 }
@@ -86,7 +86,7 @@ struct MCPServersSheet: View {
                     .buttonStyle(.bordered)
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.s) {
                 Picker(L(.mcpServersTransport), selection: $draft.servers[index].transport) {
                     Text(L(.mcpServersTransportStdio)).tag(MCPClientTransportKind.stdio)
                     Text(L(.mcpServersTransportHTTP)).tag(MCPClientTransportKind.http)
@@ -100,8 +100,8 @@ struct MCPServersSheet: View {
 
             if server.transport == .http {
                 Text(L(.mcpServersTransportHint))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
             }
 
             labelledEditor(L(.mcpServersArgs), text: $draft.servers[index].argsText,
@@ -112,21 +112,21 @@ struct MCPServersSheet: View {
             statusLine(server)
             toolsEditor(server)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Spacing.hair)
     }
 
     private func labelledEditor(_ title: String, text: Binding<String>,
                                hint: String, height: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
             Text(title)
-                .font(.caption)
+                .font(Theme.font(.caption))
             TextEditor(text: text)
                 .font(.system(.caption, design: .monospaced))
                 .frame(height: height)
                 .border(.separator)
             Text(hint)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
         }
     }
 
@@ -134,21 +134,21 @@ struct MCPServersSheet: View {
     @ViewBuilder
     private func statusLine(_ server: MCPClientServerDraft) -> some View {
         let report = report(for: server)
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
             Text(stateHeadline(report))
-                .font(.caption)
+                .font(Theme.font(.caption))
                 .foregroundStyle(report?.state.isConnected == true ? .primary : .secondary)
             if let detail = stateReason(report) {
                 Text(L(.mcpServersStateReason, detail))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
                     .lineLimit(3)
                     .textSelection(.enabled)
             }
             ForEach(report?.notes ?? [], id: \.self) { note in
                 Text(noteText(note))
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.status(.warning))
             }
         }
     }
@@ -159,14 +159,14 @@ struct MCPServersSheet: View {
         let tools = discoveredTools(server)
         if tools.isEmpty {
             Text(L(.mcpServersToolsEmpty))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
         } else {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(L(.mcpServersTools))
-                    .font(.caption)
+                    .font(Theme.font(.caption))
                 ForEach(tools, id: \.name) { tool in
-                    HStack(spacing: 8) {
+                    HStack(spacing: Spacing.s) {
                         Text(tool.name)
                             .font(.system(.caption, design: .monospaced))
                             .lineLimit(1)
@@ -191,24 +191,24 @@ struct MCPServersSheet: View {
         let problems = draft.problems
         let environment = draft.environmentProblems
         if !problems.isEmpty || !environment.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.hair) {
                 ForEach(Array(problems.enumerated()), id: \.offset) { _, problem in
                     Text(problemText(problem))
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.status(.warning))
                 }
                 ForEach(environment, id: \.self) { code in
                     Text(environmentProblemText(code))
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.status(.warning))
                 }
             }
         }
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            HStack(spacing: Spacing.m) {
                 Button(L(.mcpServersAdd)) { draft.addServer() }
                     .buttonStyle(.bordered)
                 Spacer()
@@ -223,8 +223,8 @@ struct MCPServersSheet: View {
                     .disabled(isBusy)
             }
             Text(L(.mcpServersConfigPath, MCPClientConfiguration.defaultFileURL.path))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
                 .lineLimit(1)
                 .truncationMode(.middle)
         }

@@ -60,7 +60,7 @@ struct AgentChatView: View {
         // 卡片新增，任何一种都会让读数变大 ⇒ 一次滚动跟随；只在**内容真的变了**时动手，不空转。
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 3) {
+                LazyVStack(alignment: .leading, spacing: Spacing.xs) {
                     // **空态**（§9.1.16 ⑦）：新会话一片空白时，给一句能直接发出去的起手话。
                     // 空白屏不是「干净」，是「不知道该说什么」—— 别的区域都有空态，这里不该例外。
                     if AgentChatEmptyStateGate.shouldShow(messageCount: model.messages.count,
@@ -78,7 +78,7 @@ struct AgentChatView: View {
                     Color.clear.frame(height: 1).id(Self.bottomAnchor)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14).padding(.vertical, 10)
+                .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
             }
             .onChange(of: model.scrollTick) { _ in follow(proxy) }
             .onChange(of: model.isRunning) { _ in follow(proxy) }
@@ -90,7 +90,7 @@ struct AgentChatView: View {
 
     /// 空会话的起手话（TUI 语汇：无卡片、无底纹，只有两行等宽字）。
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.s) {
             Text(L(.agentChatEmptyTitle))
                 .font(Self.transcriptFont)
                 .foregroundStyle(Theme.text(.primary))
@@ -100,7 +100,7 @@ struct AgentChatView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 4)
+        .padding(.top, Spacing.xs)
         .accessibilityElement(children: .combine)
     }
 
@@ -125,7 +125,7 @@ struct AgentChatView: View {
     /// 一条助手消息的两个动作：复制 / 重发（§9.1.16 ③）。
     @ViewBuilder
     private func messageActions(_ message: AgentChatMessage) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.m) {
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(message.text, forType: .string)
@@ -207,10 +207,10 @@ struct AgentChatView: View {
                 Text(TranscriptHighlight.apply(highlightNeedle, to: AttributedString(message.text)))
                     .font(Self.transcriptFont)
                     .foregroundStyle(Theme.text(.secondary))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, Spacing.s)
+                    .padding(.vertical, Spacing.hair)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 5)
+                        RoundedRectangle(cornerRadius: Radius.badge)
                             .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
                     )
                 Spacer(minLength: 0)
@@ -311,8 +311,8 @@ struct AgentChatView: View {
         // **只有「等审批」才是一块框**（那是一条要人动手的决定）；跑完的调用在 TUI 里就是
         // 两行字：`⚡ 工具名` + `⎿ 结果`。以前每张卡都描一个通栏框 ⇒ 看起来像列表控件，
         // 而不是终端里滚过去的一段输出。
-        VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
+            HStack(spacing: Spacing.s) {
                 Text(mark(for: card))
                     .font(Self.transcriptFont)
                     .foregroundStyle(tint(for: card))
@@ -337,37 +337,37 @@ struct AgentChatView: View {
             Text("⎿ " + card.statusCode)
                 .font(Self.transcriptFont)
                 .foregroundStyle(Theme.text(.tertiary))
-                .padding(.leading, 14)
+                .padding(.leading, Spacing.l)
             if card.expanded, let preview = card.approvalPreview {
                 Text(preview)
                     .font(.system(.callout, design: .monospaced))
                     .textSelection(.enabled)
-                    .padding(6)
+                    .padding(Spacing.s)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 5)
+                        RoundedRectangle(cornerRadius: Radius.badge)
                             .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
                     )
-                    .padding(.leading, 14)
+                    .padding(.leading, Spacing.l)
             } else if card.expanded, !card.arguments.isEmpty {
                 Text(card.arguments)
                     .font(.system(.callout, design: .monospaced))
                     .textSelection(.enabled)
                     .foregroundStyle(Theme.text(.secondary))
-                    .padding(.leading, 14)
+                    .padding(.leading, Spacing.l)
             }
             // ③「展开可见**用的哪个模型与端点**」（`FR-AI-25` ③）：每张卡展开都带这一行 ——
             // 不能只靠底部状态行（那里是「这一轮」的读数，卡片可能属于上一轮 / 上一个端点）。
             // 端点没配 / 连不上就**如实说**，不写死、不假装在跑。
             if card.expanded, let line = endpointLine {
                 Text(line)
-                    .font(.caption)
+                    .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
                     .textSelection(.enabled)
             }
             if case .pendingApproval = card.outcome {
-                HStack(spacing: 8) {
-                    Text(L(.agentChatApprovalPending)).font(.caption).foregroundStyle(Theme.text(.secondary))
+                HStack(spacing: Spacing.s) {
+                    Text(L(.agentChatApprovalPending)).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary))
                     ToolbarIconButton(systemName: "checkmark.circle", help: L(.agentChatApprovalApprove)) { model.approve(card.id) }
                         .controlSize(.small)
                     ToolbarIconButton(systemName: "xmark.circle", help: L(.agentChatApprovalDeny)) { model.deny(card.id) }
@@ -375,8 +375,8 @@ struct AgentChatView: View {
                 }
             }
             if case .applied = card.outcome {
-                HStack(spacing: 8) {
-                    Text(L(.agentChatApprovalApplied)).font(.caption).foregroundStyle(Theme.text(.secondary))
+                HStack(spacing: Spacing.s) {
+                    Text(L(.agentChatApprovalApplied)).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary))
                     // **一步撤销**（`FR-AI-25` ⑤）：点了就把这次写入退回去，文件逐字节回到应用前。
                     // 只出现在「已应用」这一档 —— 别的状态没有可撤的东西。
                     ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.agentChatUndo)) {
@@ -386,7 +386,7 @@ struct AgentChatView: View {
                 }
             }
             if case .undone = card.outcome {
-                Text(L(.agentChatUndone)).font(.caption).foregroundStyle(Theme.text(.secondary))
+                Text(L(.agentChatUndone)).font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary))
             }
         }
         // **只有等审批的卡才描边**（TUI 里其余工具调用只是两行字）。
@@ -395,7 +395,7 @@ struct AgentChatView: View {
         .padding(.horizontal, pendingApproval(card) ? 8 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(
-            RoundedRectangle(cornerRadius: 5)
+            RoundedRectangle(cornerRadius: Radius.badge)
                 .strokeBorder(pendingApproval(card) ? Theme.hairline(colorScheme) : .clear, lineWidth: 1)
         )
     }
@@ -441,12 +441,12 @@ struct AgentChatView: View {
     @ViewBuilder
     private var taskList: some View {
         if !model.steps.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.hair) {
                 // 表头就是 TUI 的 todo 面板那一行：`▸ 任务清单 (3/5)`，灰字带计数。
                 Button {
                     stepsExpanded.toggle()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.s) {
                         Text(stepsExpanded ? "▾" : "▸")
                             .font(Self.transcriptFont)
                             .foregroundStyle(Theme.accentColor)
@@ -475,8 +475,8 @@ struct AgentChatView: View {
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, Spacing.m)
+            .padding(.vertical, Spacing.s)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -487,7 +487,7 @@ struct AgentChatView: View {
 
     @ViewBuilder
     private func stepRow(_ step: AgentChatStep, isLast: Bool) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Spacing.s) {
             // 树轨：TUI 的 `├─` / `└─`
             Text(isLast ? "└─" : "├─")
                 .font(Self.transcriptFont)
@@ -501,7 +501,7 @@ struct AgentChatView: View {
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
-        .padding(.leading, 10)
+        .padding(.leading, Spacing.m)
     }
 
     /// 状态字形照 TUI：跑着是旋转的那个（这里用静态 `◐`，转起来由 `currentActionRow` 负责），
@@ -527,18 +527,18 @@ struct AgentChatView: View {
     @ViewBuilder
     private var currentActionRow: some View {
         if let action = model.currentAction {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.s) {
                 BrailleSpinner()
                 Text(action)
                     .font(.system(.caption, design: .monospaced))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(L(.agentChatRunning2))
-                    .font(.caption).foregroundStyle(Theme.text(.secondary))
+                    .font(Theme.font(.caption)).foregroundStyle(Theme.text(.secondary))
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 4)
+            .padding(.horizontal, Spacing.m)
+            .padding(.top, Spacing.xs)
         }
     }
 
@@ -674,8 +674,8 @@ struct AgentChatView: View {
     /// 那三样要**真值源**（端点的 cache 读数 / 价目表 / 模型窗口大小），仓里都没有 ⇒ 这三格**不放数**。
     /// 要加，先在设置里补那张表或那个读数（已在提交信息里登记）。
     private var statusBlock: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
+            HStack(spacing: Spacing.s) {
                 Spacer()
                 // **压缩读数**（`NFR-AI-08` ③）：压了几段、约省多少 token —— 压缩不许静默。
                 // 只在真压过时出现（`nil` 不留空壳）；`.help` 里是「最早被压掉的那一段」的摘要。
@@ -751,7 +751,7 @@ struct AgentChatView: View {
                 }
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.s) {
                 if case .ready(let modelName, let endpoint) = model.endpointState {
                     Text(L(.agentStatusModel, modelName))
                     Text(URL(string: endpoint)?.host ?? endpoint).foregroundStyle(Theme.text(.secondary))
@@ -796,8 +796,8 @@ struct AgentChatView: View {
         .font(.system(.caption, design: .monospaced))
         .foregroundStyle(Theme.text(.secondary))
         .lineLimit(1)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 5)
+        .padding(.horizontal, Spacing.m)
+        .padding(.vertical, Spacing.xs)
     }
 
     /// 输入行右侧的控件一律是**等宽字形**（`⏎ ■ ▶ ⏱`），不用 SF Symbol：
@@ -816,13 +816,13 @@ struct AgentChatView: View {
     // MARK: - 输入区（端点没配好时**如实拦住**，不假装在跑）
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.s) {
             // 排队中的提问（`/queue` 的同义物）：一轮还在跑时提交的话不丢，
             // 这里按序列出；点 `✕` 撤掉一条。**不打断正在跑的这一轮**。
             if !model.queue.isEmpty {
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
                     ForEach(Array(model.queue.items.enumerated()), id: \.element.id) { index, item in
-                        HStack(spacing: 6) {
+                        HStack(spacing: Spacing.s) {
                             Text("⇥")
                                 .font(Self.transcriptFont)
                                 .foregroundStyle(Theme.text(.secondary))
@@ -852,13 +852,13 @@ struct AgentChatView: View {
                 }
             }
             if let blocker = model.blockerText {
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.s) {
                     Text("◈").font(Self.transcriptFont).foregroundStyle(Theme.status(.warning))
                     Text(blocker).font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
                 }
                 .foregroundStyle(Theme.text(.secondary))
             }
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
                 Text("❯")
                     .font(Self.transcriptFont)
                     .foregroundStyle(Theme.accentColor)
@@ -891,14 +891,14 @@ struct AgentChatView: View {
                     appState.isAgentSchedulePresented = true
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, Spacing.m)
+            .padding(.vertical, Spacing.s)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: Radius.card)
                     .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
             )
         }
-        .padding(12)
+        .padding(Spacing.m)
     }
 }
 

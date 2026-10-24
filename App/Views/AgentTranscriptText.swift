@@ -26,7 +26,7 @@ struct AgentTranscriptText: View {
     var highlight: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.s) {
             ForEach(Array(Self.blocks(text).enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .prose(let raw):
@@ -142,7 +142,7 @@ struct AgentTranscriptText: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.leading, 12)          // 两格缩进（与 TUI 的 paddingLeft={2} 同义）
+        .padding(.leading, Spacing.m)          // 两格缩进（与 TUI 的 paddingLeft={2} 同义）
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

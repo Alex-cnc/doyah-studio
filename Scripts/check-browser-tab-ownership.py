@@ -599,7 +599,7 @@ def self_test(root: pathlib.Path) -> int:
         srs_back = fresh("srs-back")
         srs_text = read(srs_back / SRS)
         rows = [line for line in srs_text.splitlines() if line.startswith(f"| {SRS_ENTRY} |") and SRS_ENTRY_TITLE in line]
-        _patch(srs_back / SRS, rows[0], rows[0].replace("在**工作区**新增", "在**编辑器区**新增", 1))
+        _patch(srs_back / SRS, rows[0], rows[0].replace("在工作区开一个", "在编辑器区开一个", 1))
         cases.append((f"{SRS} 条文改回「{FORBIDDEN_WORD}」", bool(check(srs_back)[0])))
 
         hld_back = fresh("hld-back")
@@ -672,7 +672,7 @@ def self_test(root: pathlib.Path) -> int:
 
         negated_owned = fresh("srs-negated-owned")
         _patch(negated_owned / SRS, definition_line,
-               definition_line.replace("在**工作区**新增", "在**不属工作区**新增", 1))
+               definition_line.replace("在工作区开一个", "在不属工作区开一个", 1))
         cases.append((
             "假绿 · SRS 归属格写成反义（不属工作区）⇒ 判红且点名「反义」",
             any("反义" in problem for problem in check(negated_owned)[0]),

@@ -43,7 +43,8 @@ def headings(lines):
 
 
 def num_of(t):
-    m = re.match(r"^(\d+(?:\.\d+)*) ", t)
+    # 体裁两种都合法：「## 4 接口契约」与「## 4. 接口契约」（尾点后接空格）
+    m = re.match(r"^(\d+(?:\.\d+)*)\.? ", t)
     return m.group(1) if m else None
 
 

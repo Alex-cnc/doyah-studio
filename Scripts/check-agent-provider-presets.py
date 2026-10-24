@@ -79,6 +79,14 @@ OUT_OF_FACE_LEDGER = {
     "Tests/AgentProviderPresetTests.swift": (
         "单测夹具：判「端点匹配 / 模型下拉内容 / 本地判定同源」必须拿真端点当输入，"
         "没有真地址这条单测判不了（= 老 :34 那条豁免的落地形态）"),
+    "Tests/AgentProfileTests.swift": (
+        "单测夹具：档案（profile）合并 / 覆盖 / 掩码三组断言要以真端点串作输入，"
+        "换成假地址就判不出「模型与端点是否一起被覆盖」—— 逐条登记，不整目录豁免"),
+    "Tests/LLMStreamingAuthTests.swift": (
+        "单测夹具：流式鉴权要按真实宿主名分派头（x-api-key / Authorization），"
+        "宿主名本身是被断言的输入之一"),
+    "TestsUISnapshot/AgentChatTUILookProbeTests.swift": (
+        "界面探针夹具：消息头里显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"),
     "Tests/EgressLogTests.swift": (
         "单测夹具：出网日志要有一条真 URL 才造得出日志（同一个理由，逐条登记而不是整目录豁免）"),
 }

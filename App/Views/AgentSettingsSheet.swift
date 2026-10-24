@@ -42,9 +42,9 @@ struct AgentSettingsSheet: View {
     @State private var showsMCPServers = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.m) {
             Text(L(.agentSettingsTitle))
-                .font(.headline)
+                .font(Theme.font(.title))
 
             Form {
                 Toggle(isOn: $isEnabled) {
@@ -53,8 +53,8 @@ struct AgentSettingsSheet: View {
                 .help(L(.agentEnabled))
                 .accessibilityLabel(Text(L(.agentEnabled)))
                 Text(L(.agentEnabledHint))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
 
                 // 提供商预设（FR-AI-01 的配置面 · 队列 L-146）：先选提供商，端点与常用模型
                 // 自动填好，两个输入框**仍然可改**（自建网关 / 代理 / 私有部署照旧能用）。
@@ -68,7 +68,7 @@ struct AgentSettingsSheet: View {
                 }
 
                 TextField(L(.agentEndpoint), text: $endpoint, prompt: Text(L(.agentEndpointPlaceholder)))
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.s) {
                     TextField(L(.agentModel), text: $model, prompt: Text(L(.agentModelPlaceholder)))
                     Menu {
                         ForEach(selectedPreset.modelOptions(currentModel: model), id: \.self) { name in
@@ -90,7 +90,7 @@ struct AgentSettingsSheet: View {
                 Section(L(.agentMeterSection)) {
                     TextField(L(.agentMeterWindow), text: $contextWindowText,
                               prompt: Text(L(.agentMeterWindowPlaceholder)))
-                    HStack(spacing: 8) {
+                    HStack(spacing: Spacing.s) {
                         TextField(L(.agentMeterInputPrice), text: $inputPriceText,
                                   prompt: Text(L(.agentMeterPricePlaceholder)))
                         TextField(L(.agentMeterOutputPrice), text: $outputPriceText,
@@ -103,8 +103,8 @@ struct AgentSettingsSheet: View {
                         Text(L(.agentMeterCurrencyUSD)).tag(AgentPriceCurrency.usd)
                     }
                     Text(L(.agentMeterFootnote))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
                 }
 
                 Section(L(.agentQuotaSection)) {
@@ -121,30 +121,30 @@ struct AgentSettingsSheet: View {
                     .pickerStyle(.radioGroup)
                     .labelsHidden()
                     Text(L(.agentScopeFootnote))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
                 }
 
                 // **MCP 服务器**（`FR-AI-21` 界面片）：这里是入口 + 一行读数，
                 // 真正的加 / 删 / 开关与「连不上」的原因在弹层里（`MCPServersSheet`）。
                 Section(L(.agentMCPSection)) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Spacing.s) {
                         Button(L(.agentMCPConfigure)) { showsMCPServers = true }
                             .buttonStyle(.bordered)
                         Text(mcpSummary)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
                     }
                     Text(L(.agentMCPHint))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
                 }
 
                 Section(L(.agentAPIKey)) {
                     SecureField(L(.agentAPIKey), text: $apiKeyInput)
                     Text(appState.hasAgentAPIKey ? L(.agentAPIKeyConfigured) : L(.agentAPIKeyMissing))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
 
                     if appState.hasAgentAPIKey {
                         Toggle(isOn: $clearAPIKey) {
@@ -152,7 +152,7 @@ struct AgentSettingsSheet: View {
                         }
                         .help(L(.agentAPIKeyClear))
                         .accessibilityLabel(Text(L(.agentAPIKeyClear)))
-                        .font(.caption)
+                        .font(Theme.font(.caption))
                     }
                 }
             }
@@ -168,7 +168,7 @@ struct AgentSettingsSheet: View {
             // **这一块是"二次配置界面"，一律走 macOS 标准按钮**（人类主人 2026-10-16 订正：
             // 「这些弹出对话框、二次配置界面还是标准的系统按钮和风格，主界面的工具条这些直接面对使用者的界面，
             // 才考虑图标化」）—— 原先这里两枚纯图标按钮（叉 / 下载箭头）是理解偏差，已改回文字按钮。
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.m) {
                 Button(L(.agentTestConnection)) {
                     isTesting = true
                     testLine = L(.agentTestRunning)
@@ -190,8 +190,8 @@ struct AgentSettingsSheet: View {
 
                 if let testLine {
                     Text(testLine)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .font(Theme.font(.body))
+                        .foregroundStyle(Theme.text(.secondary))
                         .lineLimit(2)
                 }
 
@@ -205,7 +205,7 @@ struct AgentSettingsSheet: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
+        .padding(Spacing.l)
         .frame(width: 560, height: sheetHeight)
         // 换提供商 ⇒ 自动填端点与模型；手改端点 ⇒ 重认一次「这是谁」。
         // 两条都不自己判，只读契约层（`AgentProviderCatalog`）给的答案。
@@ -261,24 +261,24 @@ struct AgentSettingsSheet: View {
     }
 
     private var statusSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(L(.agentStatusSection))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
 
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.s) {
                 Image(systemName: decision.isAllowed ? "checkmark.circle.fill" : "info.circle")
                     .foregroundStyle(decision.isAllowed ? .green : .secondary)
                 Text(decision.message)
-                    .font(.caption)
+                    .font(Theme.font(.caption))
                     .foregroundStyle(decision.isAllowed ? .primary : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             if !draftConfiguration.issues.isEmpty {
                 Label(L(.agentInvalidHint), systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.status(.warning))
             }
         }
         .frame(width: 460, alignment: .leading)

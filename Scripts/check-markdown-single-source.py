@@ -207,6 +207,14 @@ MARKER_TOKENS = ("`", "**", "*", "[")
 _STRING_RUN = re.compile(r'"(?:[^"\\\n]|\\.)*"(?:\s*,\s*"(?:[^"\\\n]|\\.)*")+')
 
 
+# 字符集（`Set<Unicode.Scalar>` / `Set<Character>`）不是 Markdown 标记清单：
+# 它枚举的是**路径 / 词法的分隔符**（引号、括号、反引号、星号…），恰好与四个行内记号重叠。
+# 行内标记清单的元素是**多字符记号**（"**"），字符集的元素是单个 UTF-16 单元 —— 这条边界必须让开，
+# 否则每写一个「文件名黑名单」都会被判成第二份行内解析。
+_CHARACTER_SET_BLOCK = re.compile(
+    r"Set<(?:Unicode\.Scalar|Character|unichar)>[^=\n]*=\s*\[[^\]]*\]", re.S)
+
+
 def marker_token_count(text: str) -> int:
     """这段代码里**最像行内标记清单**的一处字符串序列认得出几个记号。
 
@@ -216,7 +224,7 @@ def marker_token_count(text: str) -> int:
     所以这条判的是**集合**：认得出 ≥3 个记号就是第二份行内标记清单）。
     """
     best = 0
-    for match in _STRING_RUN.finditer(text):
+    for match in _STRING_RUN.finditer(_CHARACTER_SET_BLOCK.sub("", text)):
         elements = re.findall(r'"((?:[^"\\\n]|\\.)*)"', match.group(0))
         best = max(best, sum(1 for element in elements if element in MARKER_TOKENS))
     return best
