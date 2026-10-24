@@ -36,7 +36,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/Doyah产品概要设计说明书.md` §8.5.6-4）。现在：
 
 **这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 12 份** /
-**68 份命名 + 1 条通配 = 实跑 69 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
+**69 份命名 + 1 条通配 = 实跑 70 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
 `doc-tables-files`）；判据 `Scripts/check-doc-numbers.py` 每次**自己算一遍**（导入本模块读清单 +
 `git check-ignore` 实测 + 真跑本脚本）再与本文件 / `Scripts/verify-all.sh` / `AGENT-SPEC.md` 里每一处
 写法对账 —— 本文件里的数字都是**引用**，改口径改台账。
@@ -1229,15 +1229,15 @@ def run_self_test() -> int:
                 )
             else:
                 skipped.append(
-                    "例 4（真仓库 68 份命名文档全在、实跑 69 个文件、无跳过行）："
+                    "例 4（真仓库 69 份命名文档全在、实跑 70 个文件、无跳过行）："
                     f"{len(absent_host_ledgers)} 份本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）"
                 )
         elif "跳过" in output:
             failures.append(f"例 4 失败：真仓库 68 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
             failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
-        elif "✅ 表格校验通过（69 个文件）" not in output:
-            failures.append(f"例 4 失败：收尾行应为 69 个文件（68 份命名 + 1 份通配）\n{output}")
+        elif "✅ 表格校验通过（70 个文件）" not in output:
+            failures.append(f"例 4 失败：收尾行应为 70 个文件（69 份命名 + 1 份通配）\n{output}")
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
 
