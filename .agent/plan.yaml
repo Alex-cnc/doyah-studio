@@ -148,6 +148,12 @@ tasks:
     blocked_reason: LicenseCapabilities 已有，但本端无「需能力位」的入口（内嵌浏览器/插件装载/云同步只有文件名无详设章）⇒ 无挂点
     next_try: 等概设补这三处的行为定义后再挂 CapabilityGate
     deps: [T2.5]
+  - id: T6.1
+    goal: 存量红清零（6 项）—— 文档锚点/标记补齐：编辑器行号口径 3 处（概设/需求书/能力书）· platform-parity 标记（需求书 §10.10）· board-parity · panel-root-frames · terminal-tabs · result-scroll-ledger · agent-provider-presets · markdown-single-source · browser-tab-ownership · tri-repo-parity · release-version（工程过期需 xcodegen）
+    done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/verify-all.sh --keep-going > /tmp/va3.log 2>&1; grep -cE '^⚠️  第|⛔' /tmp/va3.log | grep -qx 0"
+    est: 6h
+    status: todo
+    deps: []
   - id: T4.1
     goal: 全量核心门禁（真值计数）+ 五个相关 check 脚本
     done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/verify-core.sh 2>&1 | tail -5 | grep -Eq 'with 0 failures' && python3 Scripts/check-core-localization.py >/dev/null && python3 Scripts/check-design-tokens.py >/dev/null"
@@ -159,11 +165,16 @@ tasks:
     goal: 全仓门禁 `Scripts/verify-all.sh` 全绿
     done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/verify-all.sh > /tmp/verify-all.log 2>&1; echo rc=$?; tail -3 /tmp/verify-all.log | grep -v '❌'"
     est: 1h
-    status: todo
+    status: blocked
+    evidence: .agent/evidence/2026-10-24-T4.2-verify-all.md
+    blocked_reason: 全仓 18 项里 8 项红；其中 **2 项由本片引入已修复**（语言登记面 / 路径归属）；另 6 项为**存量红**，均为文档面缺锚点或工程过期，与 macOS 端代码改动无关
+    next_try: 见 T6.1；存量红清零后重跑 verify-all 应转绿
     deps: [T4.1]
   - id: T4.3
     goal: 出包（`build-app.sh` 打印字节数与 sha256 前缀）+ 详设 §6/§9/§10 状态回写 + 文档四门禁
     done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/build-app.sh 2>&1 | tail -3 | grep -Eq 'sha256|bytes' && for s in check-doc-versions check-doc-tables check-doc-numbers check-req-ids; do python3 Scripts/$s.py >/dev/null || exit 1; done"
     est: 2h
-    status: todo
+    status: blocked
+    blocked_reason: 依赖 T4.2 转绿（门禁红时不出包，避免把带红产物当交付件）
+    next_try: T4.2 绿后跑 build-app.sh，取 sha256 前缀 + 字节数，并把详设 §6/§9/§10 状态回写
     deps: [T4.2]
