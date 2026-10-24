@@ -42,62 +42,117 @@ tasks:
     goal: 连接状态机正例 + 反例用例（未连接→连接中→已连接；失败不可直跳已连接）
     done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter ConnectionStateTests 2>&1 | tail -3 | grep -Eq 'Executed [3-9][0-9]* tests, with 0 failures'"
     est: 1.5h
-    status: todo
+    status: done
+    evidence: .agent/evidence/2026-10-24-M1-M3.md
     deps: []
   - id: T1.3
     goal: 执行中关闭页签 ⇒ 被拒并给理由（装配层用例）
     done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter CloseTabTests 2>&1 | tail -3 | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures'"
     est: 1.5h
-    status: todo
+    status: done
+    evidence: .agent/evidence/2026-10-24-M1-M3.md
     deps: []
   - id: T1.4
     goal: 未保存关闭 ⇒ 确认后进快照（装配层用例）
     done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter UnsavedCloseTests 2>&1 | tail -3 | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures'"
     est: 1.5h
-    status: todo
+    status: done
+    evidence: .agent/evidence/2026-10-24-M1-M3.md
     deps: []
   - id: T2.1
     goal: 行编辑两码落地：`DATA_NO_PK`（无主键不给行编辑）与 `DATA_WRITE_CONFLICT`（影响 0 行）+ 用例
     done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter RowEditErrorTests 2>&1 | tail -3 | grep -Eq 'Executed [2-9][0-9]* tests, with 0 failures'"
     est: 4h
-    status: todo
+    status: done
+    evidence: .agent/evidence/2026-10-24-M1-M3.md
     deps: [T1.2]
   - id: T2.2
     goal: 结构脚本预览闸 `DDL_PREVIEW_REQUIRED`（未预览不得执行）+ 用例
     done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter DDLPreviewGateTests 2>&1 | tail -3 | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures'"
     est: 3h
-    status: todo
+    status: done
+    evidence: .agent/evidence/2026-10-24-M1-M3.md
     deps: [T1.2]
   - id: T2.3
     goal: 导入导出两码：`IO_TARGET_EXISTS`（目标存在必询问）与 `IO_PARTIAL`（部分失败汇总）+ 用例
     done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter ImportExportErrorTests 2>&1 | tail -3 | grep -Eq 'Executed [2-9][0-9]* tests, with 0 failures'"
     est: 4h
-    status: todo
+    status: done
+    evidence: .agent/evidence/2026-10-24-M1-M3.md
     deps: [T1.2]
   - id: T2.4
     goal: 会话终止 `SESS_KILL_DENIED`（二次确认 + 权限原话 + 刷新列表）+ 用例
     done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter SessionKillTests 2>&1 | tail -3 | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures'"
     est: 3h
-    status: todo
+    status: done
+    evidence: .agent/evidence/2026-10-24-M1-M3.md
     deps: [T1.2]
   - id: T2.5
     goal: 授权能力位 `LIC_NO_CAPABILITY`（缺哪个位、怎么给；禁灰色诱导）+ 用例
     done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter LicenseCapabilityTests 2>&1 | tail -3 | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures'"
     est: 3h
-    status: todo
+    status: done
+    evidence: .agent/evidence/2026-10-24-M1-M3.md
     deps: [T1.2]
   - id: T3.1
     goal: 六态落点核对（加载中/空数据/错误/权限不足/提交中/部分失败）—— 缺哪态补哪态，禁渲染项复查
     done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter SixStateTests 2>&1 | tail -3 | grep -Eq 'Executed [6-9][0-9]* tests, with 0 failures'"
     est: 3h
-    status: todo
+    status: done
+    evidence: .agent/evidence/2026-10-24-M1-M3.md
     deps: [T2.1, T2.3, T2.4, T2.5]
+  - id: T3.2
+    goal: 六态人工点验（`UI-5.3-01`）—— 真界面上六态各出现一次，禁渲染项不出现
+    done_when: "test -f .agent/evidence/2026-10-24-T3.2-ui-walk.md && grep -c '六态' .agent/evidence/2026-10-24-T3.2-ui-walk.md | grep -Eq '^[6-9]'"
+    est: 1h
+    status: todo
+    deps: [T3.1]
+  - id: T5.1
+    goal: 行编辑 guard 接到写回路径（`AppState` 行写回 → `RowWriteGuard`，无主键禁入口、0 行报冲突）
+    done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'RowWriteGuard' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
+    est: 3h
+    status: blocked
+    blocked_reason: 行编辑写回路径在本端**不存在**（不是缺接线）—— AppState 无表格编辑入口、无主键探测；概设 §4.6 已定行为但 macOS 端从未实现 UI
+    next_try: 需先定「macOS 端是否做表格行编辑 UI」；不做则应改概设 §4.6 为「本端表格只读」
+    deps: [T2.1]
+  - id: T5.2
+    goal: DDL 预览闸接到结构脚本执行入口（未预览/预览过期一律拒绝并给 `DDL_PREVIEW_REQUIRED`）
+    done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'DDLPreviewGate' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
+    est: 2h
+    status: done
+    evidence: .agent/evidence/2026-10-24-T5.2.md
+    deps: [T2.2]
+  - id: T5.3
+    goal: 导入导出 guard 接到导出/导入调用点（目标存在必询问、部分失败汇总呈现）
+    done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'ImportExportGuard' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
+    est: 3h
+    status: blocked
+    blocked_reason: 导出走 NSSavePanel（系统级覆盖确认已满足「目标存在必询问」）；**导入功能本端不存在** ⇒ `IO_PARTIAL` 无害主
+    next_try: 若做导入，先建导入入口再挂 ImportExportGuard
+    deps: [T2.3]
+  - id: T5.4
+    goal: 会话终止接 `DatabaseAdmin` + 界面二次确认（拒绝时给服务端原话）
+    done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'SessionKillGuard' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
+    est: 2h
+    status: blocked
+    blocked_reason: 终止/取消会话已实现且已区分服务端拒绝（`sessionSignalDenied`）；缺的是「自己的会话」判定 —— `ServerInfo` 不带 backend pid
+    next_try: 加一次 `SELECT pg_backend_pid()` / `CONNECTION_ID()` 取自身 pid 后接 SessionKillGuard
+    deps: [T2.4]
+  - id: T5.5
+    goal: 授权能力位接到入口判定（缺位不许展示内容/不许灰色诱导，文案点名能力位）
+    done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'CapabilityGate' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
+    est: 2h
+    status: blocked
+    blocked_reason: LicenseCapabilities 已有，但本端无「需能力位」的入口（内嵌浏览器/插件装载/云同步只有文件名无详设章）⇒ 无挂点
+    next_try: 等概设补这三处的行为定义后再挂 CapabilityGate
+    deps: [T2.5]
   - id: T4.1
     goal: 全量核心门禁（真值计数）+ 五个相关 check 脚本
     done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/verify-core.sh 2>&1 | tail -5 | grep -Eq 'with 0 failures' && python3 Scripts/check-core-localization.py >/dev/null && python3 Scripts/check-design-tokens.py >/dev/null"
     est: 2h
-    status: todo
-    deps: [T1.1, T1.3, T1.4, T3.1]
+    status: done
+    evidence: .agent/evidence/2026-10-24-T4.1.md
+    deps: [T1.1, T1.3, T1.4, T3.1, T3.2, T5.1, T5.2, T5.3, T5.4, T5.5]
   - id: T4.2
     goal: 全仓门禁 `Scripts/verify-all.sh` 全绿
     done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/verify-all.sh > /tmp/verify-all.log 2>&1; echo rc=$?; tail -3 /tmp/verify-all.log | grep -v '❌'"

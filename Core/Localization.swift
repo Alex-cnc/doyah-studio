@@ -2261,6 +2261,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case stateNotExecuted
     case stateSelectConnectionFirst
     case stateSQLEmpty
+    /// 关闭页签被拒：正在执行（详设 `T-4.4-07`）。
+    case tabCloseRefusedExecuting
+    /// 关闭页签需确认：有未保存改动（详设 `T-4.4-08`）。
+    case tabCloseConfirmUnsaved
+    /// 只剩一个页签，不许关。
+    case tabCloseRefusedLastTab
+    /// 结构脚本必须先在预览里确认过才能执行（详设 `DDL_PREVIEW_REQUIRED`）。
+    case ddlPreviewRequired
     case stateChecking
     case stateCheckPassed
     case stateCheckSkipped
@@ -4556,6 +4564,10 @@ public enum LocalizedStrings {
         .stateNotExecuted: [.simplifiedChinese: "未执行", .english: "Not run"],
         .stateSelectConnectionFirst: [.simplifiedChinese: "请先在左侧选择一个连接", .english: "Select a connection in the sidebar first"],
         .stateSQLEmpty: [.simplifiedChinese: "SQL 不能为空", .english: "SQL cannot be empty"],
+        .tabCloseRefusedExecuting: [.simplifiedChinese: "正在执行，先停止再关闭", .english: "Still running — stop it before closing"],
+        .tabCloseConfirmUnsaved: [.simplifiedChinese: "有未保存的改动，确认关闭后可在快照里找回", .english: "Unsaved changes — closing keeps a snapshot you can reopen"],
+        .tabCloseRefusedLastTab: [.simplifiedChinese: "至少保留一个查询页签", .english: "Keep at least one query tab"],
+        .ddlPreviewRequired: [.simplifiedChinese: "结构脚本要先在预览里确认再执行", .english: "Review the script in the preview before running it"],
         .stateChecking: [.simplifiedChinese: "正在检查…", .english: "Checking…"],
         .stateCheckPassed: [.simplifiedChinese: "语法检查通过：已检查 %d 条语句", .english: "Syntax check passed: %d statement(s) checked"],
         .stateCheckSkipped: [.simplifiedChinese: "，跳过 %d 条（DDL / 事务等）", .english: ", %d skipped (DDL/transactions, etc.)"],

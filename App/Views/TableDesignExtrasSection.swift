@@ -292,4 +292,7 @@ struct TableDesignSubmission {
     var name: String
     var schema: String?
     var changeSet: TableDesignChangeSet
+    /// 用户在预览区**看到的那份脚本**（详设 `DDL_PREVIEW_REQUIRED` 的唯一依据）。
+    /// 执行前由装配层与真正要跑的脚本逐字比对 —— 不一致就说明预览后改过稿，必须重新预览。
+    var previewedScript: String
 }

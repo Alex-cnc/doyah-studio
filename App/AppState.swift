@@ -1233,6 +1233,13 @@ final class AppState: ObservableObject {
             schema: object.schema,
             dialect: dialect
         )
+        // **未预览不得执行**（详设 §6 `DDL_PREVIEW_REQUIRED`）：预览与执行必须是同一份脚本。
+        let alterScript = statements.joined(separator: "\n")
+        guard DDLPreviewGate.decide(script: alterScript, previewedScript: previewedDDLScript) == .allowed else {
+            errorMessage = L(.ddlPreviewRequired)
+            return false
+        }
+
         // 非空变更集却生成不出语句 = 某条输入非法（Core 整批返回空），必须说出来。
         guard !statements.isEmpty else {
             if changeSet.hasChanges {
@@ -1300,6 +1307,11 @@ final class AppState: ObservableObject {
             extras: extras,
             dialect: dialect
         )
+        // **未预览不得执行**（详设 §6 `DDL_PREVIEW_REQUIRED`）：与 alterTable 同一口径。
+        guard DDLPreviewGate.decide(script: plan.joined(separator: "\n"), previewedScript: previewedDDLScript) == .allowed else {
+            errorMessage = L(.ddlPreviewRequired)
+            return false
+        }
         guard let createStatement = plan.first else {
             errorMessage = L(.tableDesignInvalid)
             return false
@@ -2511,6 +2523,32 @@ final class AppState: ObservableObject {
         return services.keys.contains { $0.connectionID == configuration.id }
     }
 
+    /// 连接状态机（概设 §6.1 闭集 · 详设 §4.4）。界面只读该值呈现「加载中 / 错误」两态；
+    /// 流转必须走 `applyConnectionState`，非法流转记日志并按现状保持（不静默「修好」）。
+    @Published private(set) var objectTreeConnectionState: ConnectionState = .idle
+
+    /// 上一次**在预览里被用户看过**的结构脚本（详设 `DDL_PREVIEW_REQUIRED` 的唯一依据）。
+    @Published private(set) var previewedDDLScript: String?
+
+    /// 记录预览（由设计面板在用户点「执行/应用」时把**当时展示的脚本**交进来）。
+    func recordDDLPreview(_ script: String) { previewedDDLScript = script }
+
+    /// 未保存关闭的待确认页签（`nil` = 没有待确认）。
+    @Published var pendingCloseTabID: UUID?
+    /// 已确认关闭的页签快照（内存，有界；详设 `T-4.4-08`）。
+    @Published private(set) var closedTabSnapshots = ClosedTabSnapshotStore()
+
+    /// 唯一写入口：合法才改，非法留痕不动。
+    private func applyConnectionState(_ next: ConnectionState) {
+        guard let moved = objectTreeConnectionState.transition(to: next) else {
+            StartupLog.write(
+                "连接状态非法流转被拒：\(objectTreeConnectionState.rawValue) → \(next.rawValue)"
+            )
+            return
+        }
+        objectTreeConnectionState = moved
+    }
+
     /// 右键菜单「连接」：按当前连接/数据库建立连接，并顺带刷新建库权限。
     func connectObjectTree() async {
         guard let configuration = selectedConnection else {
@@ -2518,15 +2556,18 @@ final class AppState: ObservableObject {
             return
         }
 
+        applyConnectionState(.connecting)
         do {
             let database = currentDatabaseName(for: configuration)
             _ = try await ensureService(for: configuration, database: database)
+            applyConnectionState(.connected)
             statusMessage = L(
                 .objectTreeStatusConnected,
                 configuration.displayTitle(untitled: L(.connectionUntitled))
             )
             await refreshDatabaseCreationPermission()
         } catch {
+            applyConnectionState(.failed)
             errorMessage = ErrorPresenter.message(for: error)
         }
     }
@@ -2536,6 +2577,7 @@ final class AppState: ObservableObject {
         guard let configuration = selectedConnection else { return }
 
         invalidateService(for: configuration.id)
+        applyConnectionState(.disconnected)
         serverInfos[configuration.id] = nil
         canCreateDatabase = nil
         statusMessage = L(
@@ -6542,9 +6584,48 @@ final class AppState: ObservableObject {
         selectedTabID = tab.id
     }
 
-    func closeTab(_ tabID: UUID) {
-        guard tabs.count > 1 else { return }
-        guard !(tabs.first(where: { $0.id == tabID })?.isExecuting ?? false) else { return }
+    /// 关闭页签（详设 `T-4.4-07` / `T-4.4-08`）：**不再静默 return** ——
+    /// 执行中与「只剩一个」都给出理由；有未保存改动时挂起待确认，确认后先落快照再关。
+    @discardableResult
+    func closeTab(_ tabID: UUID) -> TabCloseDecision {
+        guard let tab = tabs.first(where: { $0.id == tabID }) else { return .close }
+        let decision = TabClosePolicy.decide(
+            isExecuting: tab.isExecuting,
+            isDirty: tab.isDirty,
+            tabCount: tabs.count
+        )
+        switch decision {
+        case .refuseLastTab:
+            statusMessage = L(.tabCloseRefusedLastTab)
+        case .refuseExecuting:
+            statusMessage = L(.tabCloseRefusedExecuting)
+        case .needsConfirmation:
+            pendingCloseTabID = tabID
+            statusMessage = L(.tabCloseConfirmUnsaved)
+        case .close:
+            performCloseTab(tabID)
+        }
+        return decision
+    }
+
+    /// 未保存关闭被确认后调用：**先落快照，再关**（快照可在内存里找回）。
+    func confirmClosePendingTab() {
+        guard let tabID = pendingCloseTabID else { return }
+        pendingCloseTabID = nil
+        if let tab = tabs.first(where: { $0.id == tabID }) {
+            closedTabSnapshots.push(
+                ClosedTabSnapshot(id: tab.id, title: tab.title, sql: tab.sql)
+            )
+        }
+        performCloseTab(tabID)
+    }
+
+    /// 取消未保存关闭：什么都不做，页签留在原地。
+    func cancelClosePendingTab() {
+        pendingCloseTabID = nil
+    }
+
+    private func performCloseTab(_ tabID: UUID) {
         // **提交点**（队列 `L-148`）：关页签前把编辑器缓冲里的草稿写回权威副本 ——
         // 否则"页签内容"在关闭这一刻就丢了最后一段编辑（保存/持久化读的是权威副本）。
         commitEditorDraft(for: tabID)

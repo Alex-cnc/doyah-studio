@@ -153,7 +153,8 @@ struct TableDesignSheet: View {
                     onSubmit(TableDesignSubmission(
                         name: tableName,
                         schema: trimmedSchema,
-                        changeSet: changeSet
+                        changeSet: changeSet,
+                        previewedScript: previewText
                     ))
                     dismiss()
                 }

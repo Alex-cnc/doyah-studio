@@ -96,6 +96,7 @@ struct ConnectionListView: View {
                 databaseType: appState.selectedConnection?.dbType ?? .postgresql,
                 initialSchema: target.kind == .schema ? target.name : target.schema
             ) { submission in
+                appState.recordDDLPreview(submission.previewedScript)
                 Task {
                     _ = await appState.createTable(
                         named: submission.name,
