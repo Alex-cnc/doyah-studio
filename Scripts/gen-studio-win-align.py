@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """生成 `Docs/平台对齐-Studio-Windows对macOS.md` —— Windows 侧对齐 macOS 开发的逐条索引。
 
-**本件身份：派生视图（非契约）**。真值源只有三处，本脚本**只读**、一字不写：
-    ① 《需求规范书》§10.1 需求编号索引（编号 / 所属域 / 层次 / 状态）—— macOS 状态是基线；
-    ② 同书 §10.2 需求—实现—验证追溯表（「实现位置」列）—— 落点索引；
-    ③ `Docs/平台实现状态.json`（其他平台状态；macOS 不在台账里）。
+**本件身份：派生视图（非契约）**。真值源只有四处，本脚本**只读**、一字不写：
+    ① `Docs/Doyah产品需求规格说明书-需求索引.md` 的编号索引（编号 / 所属域 / 层次）—— 行集合与行序；
+    ② 《开发计划书》§3 需求状态台账的「状态」列 —— macOS 基线状态（**唯一来源**；
+       2026-10-20 从 SRS §10.1 索引迁来，状态不再写在索引里）；
+    ③ `Docs/Doyah产品需求规格说明书-追溯表.md`（「实现位置」列）—— 落点索引
+       （2026-10-20 从 SRS §10.2 整体移出）；
+    ④ `Docs/平台实现状态.json`（其他平台状态；macOS 不在台账里）。
 产出件在 `Docs/` 根、并登记在 `Docs/README.md` 索引里。
 
 **为什么要有它**：三书能给「应该有什么」（FR/NFR + 验收）、「设计怎么做」、「macOS 逐条到没到」
-（§10.10 平台等价矩阵 macOS 列），给不了**落点索引**（去哪个文件读 macOS 实现）。
-Windows 侧（`fatshark`）对齐时每一条都得自己翻 §10.2 —— 派生视图把这一步变成一次查询。
+（平台等价矩阵的 macOS 列），给不了**落点索引**（去哪个文件读 macOS 实现）。Windows 侧（`babyhippo`）
+对齐时每一条都得自己翻追溯表 —— 派生视图把这一步变成一次查询。
 一次性快照必漂移，故由本脚本产出、`--check` 判漂移（闭环第 7 项）。
 本件**不含**在飞卡 / 排期 / 剩余工作 —— 那些在工作台账与看板里，不属契约层。
 
 **口径（写死在下面这些函数里，改口径先改本段）**：
-    · 行序 = §10.1 索引行序，一条需求一行（262 条 → 262 行，一行不少）；
-    · `macOS` 列 = §10.1 状态格的**首个取值**（✅ / 🟡 / ⬜）；取不到合法取值即判红；
-    · `macOS 落点` 列 = §10.2 该条所在行的**反引号片段**（前 3 个 + 「等 N 处」）；
+    · 行序 = 需求索引的行序，一条需求一行（索引几条 → 几行，一行不少）；
+    · `macOS` 列 = 计划书 §3 台账状态列的**首个取值**（✅ / 🟡 / ⬜）；取不到合法取值即判红；
+    · `macOS 落点` 列 = 追溯表该条所在行的**反引号片段**（前 3 个 + 「等 N 处」）；
       - 格内转义竖线 `\\|` 按**字面**处理、不当列分隔符（一次性快照正是在这里错了一行）；
       - 同一编号出现在多行时**取最后一行**（后写的行是更准的登记）；
       - 范围行（`FR-STD-DB-CONN-007 ~ 03`）展开到范围内每一条；
@@ -39,14 +42,20 @@ import re
 import sys
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
-SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
+INDEX = ROOT / "Docs/Doyah产品需求规格说明书-需求索引.md"
+PLAN = ROOT / "Docs/Doyah产品开发计划书.md"
+TRACE = ROOT / "Docs/Doyah产品需求规格说明书-追溯表.md"
 STATUS = ROOT / "Docs/平台实现状态.json"
+# 2026-10-20：真值源搬迁前的落点（SRS §10.1 索引 / §10.2 追溯表）；现在 SRS 里已无这两节，
+# 只用于报错时点名「它搬去哪了」。
+LEGACY_SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
 OUT = ROOT / "Docs/平台对齐-Studio-Windows对macOS.md"
 
 TARGET_PLATFORM = "windows"
 ALLOWED_STATUS = ("✅", "🟡", "⬜")
-ID_RE = re.compile(r"^[A-Z]+-[A-Z0-9]+-\d+$")
-RANGE_RE = re.compile(r"^([A-Z]+-[A-Z0-9]+)-(\d+)\s*~\s*(\d+)$")
+ID_RE = re.compile(r"^[A-Z]{2,4}(?:-[A-Z0-9]+){2,5}-\d{2,3}$")   # 5 段两级编号（`FR-RTR-MKT-FEED-001`）必须整串认
+RANGE_RE = re.compile(r"^(?P<prefix>[A-Z]{2,4}(?:-[A-Z0-9]+)+)-(?P<low>\d{2,3})\s*~\s*(?P<high>\d{2,3})$")
+FULL_RANGE_RE = re.compile(r"^(?P<left>[A-Z]{2,4}(?:-[A-Z0-9]+)+-\d{2,3})\s*~\s*(?P<right>[A-Z]{2,4}(?:-[A-Z0-9]+)+-\d{2,3})$")
 SPAN_RE = re.compile(r"`([^`]*)`")
 COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 SEPARATOR_RE = re.compile(r"^[:\-\s|]+$")
@@ -58,23 +67,6 @@ class SourceError(Exception):
     def __init__(self, problems: list[str]) -> None:
         super().__init__("；".join(problems))
         self.problems = problems
-
-
-def section_index(lines: list[str], heading: str) -> int:
-    """找 `### <heading>` 的起始行号（找不到即抛 —— 静默用错区段会让整件产出跑偏）。"""
-    prefix = f"### {heading}"
-    for index, line in enumerate(lines):
-        if line.startswith(prefix):
-            return index
-    raise SourceError([f"{SRS} 里找不到小节 `### {heading}`（真值源的锚）"])
-
-
-def section_span(lines: list[str], heading: str) -> tuple[int, int]:
-    start = section_index(lines, heading)
-    for index in range(start + 1, len(lines)):
-        if lines[index].startswith("### ") or lines[index].startswith("## "):
-            return start, index
-    return start, len(lines)
 
 
 def split_row(line: str) -> list[str] | None:
@@ -105,18 +97,30 @@ def split_row(line: str) -> list[str] | None:
     return cells
 
 
-def table_rows(lines: list[str], heading: str, columns: int) -> list[list[str]]:
-    """取小节的表格数据行（丢表头、丢分隔行、丢列数不符的噪声行）。"""
-    start, end = section_span(lines, heading)
-    rows: list[list[str]] = []
-    for line in lines[start:end]:
-        cells = split_row(line)
-        if cells is None or len(cells) != columns:
+def first_table(lines: list[str], required: tuple[str, ...], columns: int) -> list[list[str]]:
+    """取**第一张**列数匹配、且表头含 `required` 全部分词的表的表体（表头与分隔行丢掉）。
+
+    不给小节标题当锚：真值源搬迁后标题一改，脚本就静默读 0 行 —— 那是「空跑」伪装成「通过」。
+    改为「表头必须出现这几个词」，读不到就由调用方判红。
+    """
+    for index, line in enumerate(lines):
+        header = split_row(line)
+        if header is None or len(header) != columns:
             continue
-        if SEPARATOR_RE.match("".join(cells)):
+        if not all(word in "".join(header) for word in required):
             continue
-        rows.append(cells)
-    return rows
+        body: list[list[str]] = []
+        cursor = index + 1
+        while cursor < len(lines):
+            cells = split_row(lines[cursor])
+            if cells is None:
+                break
+            cursor += 1
+            if len(cells) != columns or SEPARATOR_RE.match("".join(cells)):
+                continue
+            body.append(cells)
+        return body
+    return []
 
 
 def status_token(cell: str) -> str:
@@ -125,66 +129,136 @@ def status_token(cell: str) -> str:
     return text[:1] if text else ""
 
 
-def load_index(lines: list[str]) -> list[tuple[str, str, str, str]]:
-    """§10.1 → [(编号, 所属域, 层次, 状态值)]，保持索引行序。"""
-    rows = table_rows(lines, "10.1 需求编号索引（机械生成）", 4)
+def read_lines(path: pathlib.Path, label: str) -> list[str]:
+    if not path.exists():
+        raise SourceError([f"{path} 不在盘（{label}）"])
+    return path.read_text(encoding="utf-8").splitlines()
+
+
+def load_status() -> dict[str, str]:
+    """《开发计划书》§3 需求状态台账 → {编号: 状态}（macOS 基线的唯一来源）。"""
+    lines = read_lines(PLAN, "计划书：§3 状态台账")
+    rows = first_table(lines, ("编号", "状态"), 9)
+    problems: list[str] = []
+    status: dict[str, str] = {}
+    for cells in rows:
+        identifier = cells[0].strip("`").strip()
+        if not ID_RE.match(identifier):
+            continue
+        value = status_token(cells[5])
+        if value not in ALLOWED_STATUS:
+            problems.append(f"计划书 §3 台账 {identifier} 的状态格取值非法（{cells[5]!r}）")
+            continue
+        status[identifier] = value
+    if not status:
+        problems.append("计划书 §3 台账一条状态都没读到（锚点或表格形态变了）")
+    if problems:
+        raise SourceError(problems)
+    return status
+
+
+def load_index(status: dict[str, str]) -> tuple[list[tuple[str, str, str, str]], int, int]:
+    """需求索引 → ([(编号, 所属域, 层次, 状态值)], NFR 条数, AC 条数)，保持索引行序。
+
+    **只收 `FR` 类**：平台差异（台账 `overrides` 与平台等价矩阵）的判定面就是功能需求；
+    `NFR` / `AC` 不分平台、也不在矩阵里 ⇒ 进本表只会在 Windows 列造出一片「未做」的假读数。
+    两者的条数如实印在产出件头部（不假装它们不存在）。
+    """
+    lines = read_lines(INDEX, "需求索引：编号 / 所属域 / 层次")
+    rows = first_table(lines, ("编号", "所属域", "层次"), 3)
     problems: list[str] = []
     index: list[tuple[str, str, str, str]] = []
     seen: set[str] = set()
+    others = {"NFR": 0, "AC": 0}
     for cells in rows:
         identifier = cells[0].strip("`").strip()
         if identifier == "编号" or not ID_RE.match(identifier):
             continue
         if identifier in seen:
-            problems.append(f"§10.1 索引里 {identifier} 出现两次（编号必须唯一）")
+            problems.append(f"需求索引里 {identifier} 出现两次（编号必须唯一）")
             continue
         seen.add(identifier)
-        status = status_token(cells[3])
-        if status not in ALLOWED_STATUS:
-            problems.append(f"§10.1 {identifier} 的状态格取值非法（{cells[3]!r} ⇒ 取不到 {'/'.join(ALLOWED_STATUS)}）")
-        index.append((identifier, cells[1], cells[2], status))
+        if identifier not in status:
+            problems.append(f"需求索引有 {identifier}，而计划书 §3 台账没有它的状态（两处必须一一对应）")
+            continue
+        prefix = identifier.split("-")[0]
+        if prefix != "FR":
+            others[prefix] = others.get(prefix, 0) + 1
+            continue
+        index.append((identifier, cells[1], cells[2], status[identifier]))
     if not index:
-        problems.append("§10.1 索引一条都没读到（锚点或表格形态变了）")
+        problems.append("需求索引一条都没读到（锚点或表格形态变了）")
+    extra = sorted(set(status) - seen)
+    if extra:
+        problems.append(f"计划书 §3 台账有 {len(extra)} 条不在需求索引里（如 {extra[:3]}）")
     if problems:
         raise SourceError(problems)
-    return index
+    return index, others.get("NFR", 0), others.get("AC", 0)
 
 
-def load_trace(lines: list[str], known: set[str]) -> tuple[dict[str, str], int]:
-    """§10.2 → {编号: 实现位置格}；**后写覆盖先写**。
+def expand(requirement: str) -> list[str] | None:
+    """追溯行 → 编号列表（单条 / 范围两种写法都认；`None` = 这一行不对应单条需求）。
 
-    返回（映射, 非编号行数）——「非编号行」= 分组行 / 决定行（`NFR-PERF / COMP`、`NFR-ALL-GATE-RISK-018 ~ NFR-ALL-GATE-RISK-021` 等），
-    它们不对应单条需求 ⇒ 不进逐条索引（数量如实印在产出件头部，不假装它们不存在）。
+    范围有两种写法（实测都在盘上）：`FR-STD-DB-CONN-001 ~ 007`（右侧只给序号）与
+    `NFR-ALL-GATE-RISK-018 ~ NFR-ALL-GATE-RISK-021`（右侧整条写全）。
     """
-    rows = table_rows(lines, "10.2 需求—实现—验证追溯表", 3)
+    if ID_RE.match(requirement):
+        return [requirement]
+    first = FULL_RANGE_RE.match(requirement)
+    if first:
+        left, right = first.group("left"), first.group("right")
+        if left.rsplit("-", 1)[0] != right.rsplit("-", 1)[0]:
+            return None
+        requirement = f"{left} ~ {right.rsplit('-', 1)[1]}"
+    matched = RANGE_RE.match(requirement)
+    if not matched:
+        return None
+    prefix, low, high = matched.group("prefix"), int(matched.group("low")), int(matched.group("high"))
+    width = len(matched.group("low"))
+    step = 1 if high >= low else -1
+    return [f"{prefix}-{number:0{width}d}" for number in range(low, high + step, step)]
+
+
+def load_trace(known: set[str]) -> tuple[dict[str, str], int, int]:
+    """追溯表 → {编号: 实现位置格}；**后写覆盖先写**。
+
+    返回（映射, 非编号行数, 索引外引用数）——「非编号行」= 分组行 / 决定行（`NFR-PERF / COMP`、
+    `NFR-ALL-GATE-RISK-018 ~ NFR-ALL-GATE-RISK-021` 等），它们不对应单条需求 ⇒ 不进逐条索引
+    （数量如实印在产出件头部，不假装它们不存在）。
+    """
+    lines = read_lines(TRACE, "追溯表：实现位置")
+    rows = first_table(lines, ("需求", "实现位置"), 3)
     trace: dict[str, str] = {}
     non_identifier = 0
+    out_of_index = 0
     problems: list[str] = []
     for cells in rows:
         requirement = cells[0].strip()
         if requirement == "需求":
             continue
-        match = RANGE_RE.match(requirement)
-        if match:
-            prefix, low, high = match.group(1), int(match.group(2)), int(match.group(3))
-            identifiers = [f"{prefix}-{number:02d}" for number in range(low, high + 1)]
-        elif ID_RE.match(requirement):
-            identifiers = [requirement]
-        else:
+        plain_text = requirement.replace("`", "").replace(" ", "")
+        identifiers = expand(plain_text)
+        if identifiers is None:
             non_identifier += 1
             continue
         for identifier in identifiers:
             if identifier not in known:
-                problems.append(f"§10.2 追溯行 {requirement} 指向 {identifier}，而 §10.1 索引里没有这一条")
+                # 追溯表的范围行常比索引宽（`FR-STD-WS-UI-005 ~ 27` 而索引里只到 011），
+                # 另有一批编号按 SRS 的分工**不进索引**（数据需求 `FR-STD-ALL-DATA-*` 在 §5、
+                # 接口需求 `FR-STD-ALL-IFACE-*` 在 §6）。这些不影响本件（本件只给索引里的条目配落点）
+                # ⇒ **如实计数、印在头部**，不编落点、也不当成红。
+                out_of_index += 1
                 continue
             trace[identifier] = cells[1]
     if problems:
         raise SourceError(problems)
-    return trace, non_identifier
+    return trace, non_identifier, out_of_index
 
 
 def load_platform() -> tuple[str, dict[str, str]]:
     """台账 → (缺省状态, windows 的 overrides)。"""
+    if not STATUS.exists():
+        raise SourceError([f"{STATUS} 不在盘"])
     payload = json.loads(STATUS.read_text(encoding="utf-8"))
     default = payload.get("default", "⬜")
     platforms = payload.get("platforms", {})
@@ -212,7 +286,7 @@ def load_platform() -> tuple[str, dict[str, str]]:
 
 
 def landing(cell: str | None) -> str | None:
-    """§10.2 的「实现位置」格 → 落点列文本（`None` = 这格没法给落点）。"""
+    """追溯表的「实现位置」格 → 落点列文本（`None` = 这格没法给落点）。"""
     if cell is None:
         return None
     spans = [span.replace("|", "\\|").strip() for span in SPAN_RE.findall(cell)]
@@ -227,10 +301,12 @@ def landing(cell: str | None) -> str | None:
 
 def render(
     index: list[tuple[str, str, str, str]],
+    others: tuple[int, int],
     trace: dict[str, str],
     default: str,
     overrides: dict[str, str],
     non_identifier_rows: int,
+    out_of_index: int,
 ) -> str:
     rows: list[tuple[str, str, str, str, str, str]] = []
     for identifier, domain, layer, macos in index:
@@ -250,8 +326,9 @@ def render(
     out.append("# Doyah Studio · Windows 对 macOS 对齐件")
     out.append("")
     out.append(
-        "> **本件身份：派生视图（非契约）** —— 真值源 = `Docs/Doyah产品需求规格说明书.md` §10.1（状态）/ §10.2（落点）+ "
-        "`Docs/平台实现状态.json`（其他平台状态）。"
+        "> **本件身份：派生视图（非契约）** —— 真值源 = `Docs/Doyah产品需求规格说明书-需求索引.md`（编号 / 域 / 层次）"
+        "+ 《开发计划书》§3（macOS 状态）+ `Docs/Doyah产品需求规格说明书-追溯表.md`（落点）"
+        "+ `Docs/平台实现状态.json`（其他平台状态）。"
     )
     out.append(
         "> **两处不一致时以三书为准**。**不要手工编辑本表** —— 改了必漂移：本件由 "
@@ -259,7 +336,7 @@ def render(
     )
     out.append(">")
     out.append(
-        "> **用途**：`fatshark`（Windows / Harmony 侧）对齐 macOS 版 Doyah Studio 开发进度时的**逐条索引** —— "
+        "> **用途**：`babyhippo`（Windows / Harmony 侧）对齐 macOS 版 Doyah Studio 开发进度时的**逐条索引** —— "
         "每行 = 一条需求 → 所属域 → 层次 → macOS 状态 → **macOS 落点（去这里读实现）** → Windows 现状。"
     )
     out.append(">")
@@ -269,23 +346,28 @@ def render(
         f"`overrides` **{explicit}**（缺失一律按 `{default}` 记 —— 整列 `{default}` = Windows Studio 未开工）。"
     )
     out.append(
-        f"> §10.2 里另有 **{non_identifier_rows}** 行不是需求编号（分组行 / 决定行，如 `NFR-PERF / COMP`），"
-        "它们不对应单条需求 ⇒ 不进本索引。"
+        f"> 本表只列 **`FR` 类**（{len(rows)} 条 = 平台差异的判定面）；需求索引里另有 **NFR {others[0]}** 条 / "
+        f"**AC {others[1]}** 条不进本表 —— 它们不分平台，也不在平台等价矩阵里，进表只会在 `Windows` 列造出一片假 `⬜`。"
+    )
+    out.append(
+        f"> 追溯表里另有 **{non_identifier_rows}** 行不是需求编号（分组行 / 决定行，如 `NFR-PERF / COMP`），"
+        f"以及 **{out_of_index}** 行指向索引外的编号（范围行外沿 / 按 SRS 分工不进索引的 `FR-STD-ALL-DATA-*`"
+        "（§5）与 `FR-STD-ALL-IFACE-*`（§6））—— 都不对应本索引里的单条需求 ⇒ 不进本表、不编落点。"
     )
     out.append(">")
     out.append(
-        "> **口径**：`macOS` 列 = §10.1 状态格的**第一个取值**；`macOS 落点` = §10.2 该条所在行的**反引号片段**"
-        "（前 3 个 + 「等 N 处」；同一编号出现在多行时取**最后一行**；范围行展开到每一条）。"
+        "> **口径**：`macOS` 列 = 计划书 §3 台账状态格的**第一个取值**；`macOS 落点` = 追溯表该条所在行的"
+        "**反引号片段**（前 3 个 + 「等 N 处」；同一编号出现在多行时取**最后一行**；范围行展开到每一条）。"
         "**无追溯行写 `—`、有行未标路径写「（追溯表有行、未标路径）」—— 两种都不编落点**。"
     )
     out.append(
-        "> `Windows` 列 = 台账**原值**（不带 §10.10 的 ⚠️ 差异标记：等价判定在矩阵，本件只给落点索引）。"
+        "> `Windows` 列 = 台账**原值**（不带矩阵里的 ⚠️ 差异标记：等价判定在矩阵，本件只给落点索引）。"
     )
     out.append(">")
     out.append(
         "> **与派单仓一次性快照的差异（1 行，如实登记）**：`DoyahDispatch` 的 "
         "`docs/平台对齐-Studio-Windows对macOS.md`（2026-10-14 前门一次性快照）把 `FR-STD-ALL-PLUG-004` 记成 `—` —— "
-        "该条的 §10.2 格内有**转义竖线**（`CLI/main.swift`（`notes path\\|legacy-path\\|migrate`）），"
+        "该条的追溯格内有**转义竖线**（`CLI/main.swift`（`notes path\\|legacy-path\\|migrate`）），"
         "快照按裸 `|` 切格 ⇒ 整行错位、落点读不出来。本脚本按字面处理转义竖线 ⇒ 该条落点读得出来，"
         "故两处数目不同（快照 173 / 17 / **72**，本件 "
         f"{with_target} / {without_target} / **{without_row}**；合计均 {len(rows)}）。**以本件为准**（它可复跑）。"
@@ -305,16 +387,17 @@ def main() -> int:
         print(f"❌ 不认的参数：{' '.join(arguments)}（只支持 --check）")
         return 2
     try:
-        lines = SRS.read_text(encoding="utf-8").splitlines()
-        index = load_index(lines)
-        trace, non_identifier_rows = load_trace(lines, {row[0] for row in index})
+        status = load_status()
+        index, nfr_rows, ac_rows = load_index(status)
+        trace, non_identifier_rows, out_of_index = load_trace({row[0] for row in index})
         default, overrides = load_platform()
     except SourceError as error:
         print(f"❌ 真值源不合口径（{len(error.problems)} 处）：")
         for problem in error.problems:
             print(f"   · {problem}")
         return 1
-    updated = render(index, trace, default, overrides, non_identifier_rows)
+    updated = render(index, (nfr_rows, ac_rows), trace, default, overrides,
+                     non_identifier_rows, out_of_index)
 
     if "--check" in sys.argv[1:]:
         current = OUT.read_text(encoding="utf-8") if OUT.exists() else ""

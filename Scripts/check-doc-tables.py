@@ -1233,7 +1233,7 @@ def run_self_test() -> int:
                     f"{len(absent_host_ledgers)} 份本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）"
                 )
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 68 份命名文档应全在（不得出现跳过行）\n{output}")
+            failures.append(f"例 4 失败：真仓库 69 份命名文档应全在（不得出现跳过行）\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
             failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
         elif "✅ 表格校验通过（70 个文件）" not in output:
@@ -1265,10 +1265,10 @@ def run_self_test() -> int:
             print("   " + failure)
         return 1
 
-    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 68 份无跳过）只在**真跑过**时才算数；
+    # 收尾行里那份「例 4 / 例 5 的结论」（真仓库 69 份无跳过）只在**真跑过**时才算数；
     # 跳过时如实换掉措辞（跳过的例不许冒充跑过 —— 跳过 ≠ 通过）。
     tail = (
-        "真仓库 68 份无跳过"
+        "真仓库 69 份无跳过"
         if not skipped
         else "真仓库那两例在这台机器上不适用（本机台账不在盘上，见上面的跳过提示）"
     )

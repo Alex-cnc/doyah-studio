@@ -30,7 +30,7 @@
 |---|---|
 | [平台实现状态.json](平台实现状态.json) | 各平台实现状态的**唯一**登记处：`platforms.<名>.overrides`（编号 → 状态）；**macOS 不在台账里登记**（它是基线） |
 | [平台对齐-Studio-Windows对macOS.md](平台对齐-Studio-Windows对macOS.md) | **Windows 侧对齐 macOS 的逐条派生索引**（编号 → 域 → 层次 → macOS 状态 → **macOS 落点（实现文件）** → Windows 现状）：`fatshark` 对齐开发进度时的查询入口；由 `Scripts/gen-studio-win-align.py` 产出、**勿手工编辑** |
-| [任务清单-按平台.md](任务清单-按平台.md) | **按平台的完成度面**（项数 / ✅ / 🟡 / ⬜ / 完成度 + 逐域 × 逐端 + 本侧残项）：需求提出者问「各家到哪了」时的查询入口；**计数派生自 SRS §10.10**，由 `Scripts/check-board-parity.py` 逐列重算看守、**勿手工改计数** |
+| [任务清单-按平台.md](任务清单-按平台.md) | **按平台的完成度面**（项数 / ✅ / 🟡 / ⬜ / 完成度 + 逐域 × 逐端 + 本侧残项）：需求提出者问「各家到哪了」时的查询入口；**计数由 `Scripts/gen-platform-board.py` 从真源（《开发计划书》§5 矩阵 + 台账 + 需求索引）机械重写**，`Scripts/check-board-parity.py` 独立重算逐列看守、**勿手工改计数** |
 
 三书里的术语约定见 `Doyah产品需求规格说明书.md` §0.8：`【契约】` = 两侧必须一致，
 `【macOS】` = 可替换的实现细节。需求书 §3/§4 的「状态」列是 **macOS 基线**，

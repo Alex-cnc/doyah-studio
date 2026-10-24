@@ -376,7 +376,10 @@ def _must(condition: bool, message: str) -> None:
 
 def build_cases() -> list[dict]:
     def set_windows(payload: dict) -> None:
-        payload["platforms"]["windows"]["overrides"]["FR-STD-DB-CONN-007"] = "✅"
+        """把 CONN-007 的 Windows 状态**翻一格**（写死 ✅ 会在现状已是 ✅ 时变成 no-op ⇒ 假红）。"""
+        overrides = payload["platforms"]["windows"]["overrides"]
+        current = overrides.get("FR-STD-DB-CONN-007", payload.get("default", "⬜"))
+        overrides["FR-STD-DB-CONN-007"] = "⬜" if current == "✅" else "✅"
 
     def typo_id(payload: dict) -> None:
         payload["platforms"]["windows"]["overrides"]["FR-CONN-999"] = "✅"
@@ -402,8 +405,11 @@ def build_cases() -> list[dict]:
         payload["platform"] = payload.pop("platforms")
 
     def drop_column(root: pathlib.Path) -> None:
-        """只改 §10.10 标记区间里的表（正文定义行不是本门禁的判据面）。"""
-        path = root / "Docs/Doyah产品需求规格说明书.md"
+        """只改矩阵区块里的表（正文定义行不是本门禁的判据面）。
+
+        2026-10-20：矩阵从 SRS §10.10 迁到《开发计划书》§5 ⇒ 夹具跟着搬（写坏仍是临时副本）。
+        """
+        path = root / "Docs/Doyah产品开发计划书.md"
         text = path.read_text(encoding="utf-8")
         head, rest = text.split(BEGIN, 1)
         block, tail = rest.split(END, 1)
@@ -414,20 +420,20 @@ def build_cases() -> list[dict]:
                 lines[index] = "|" + "|".join(kept) + "|"
                 break
         else:
-            raise AssertionError("§10.10 表里没有 FR 行，改坏无从下手")
+            raise AssertionError("矩阵表里没有 FR 行，改坏无从下手")
         path.write_text(f"{head}{BEGIN}\n" + "\n".join(lines) + f"{END}{tail}", encoding="utf-8")
 
     def drop_marker(root: pathlib.Path) -> None:
-        path = root / "Docs/Doyah产品需求规格说明书.md"
+        path = root / "Docs/Doyah产品开发计划书.md"
         path.write_text(path.read_text(encoding="utf-8").replace(BEGIN, "", 1), encoding="utf-8")
 
     def windows_snapshot(root: pathlib.Path) -> None:
-        """正向：台账里的 ✅ 必须真的到表上，且分域计数跟着走。"""
-        text = (root / "Docs/Doyah产品需求规格说明书.md").read_text(encoding="utf-8")
+        """正向：台账里的状态必须真的到表上，且分域「与基线一致」计数跟着走。"""
+        text = (root / "Docs/Doyah产品开发计划书.md").read_text(encoding="utf-8")
         block = text.split(BEGIN, 1)[1].split(END, 1)[0]
         row = re.search(r"^\| FR-STD-DB-CONN-007 \|.*$", block, re.MULTILINE)
         if row is None:
-            raise AssertionError("§10.10 表里找不到 FR-STD-DB-CONN-007 行")
+            raise AssertionError("矩阵表里找不到 FR-STD-DB-CONN-007 行")
         row_cells = [cell.strip() for cell in row.group(0).strip().strip("|").split("|")]
         # 列数与列序**从台账推**（不许写死）：台账加一列时本判据不必跟着改 —— 「加一列的成本必须
         # 接近于零」（本文件 docstring ①）。2026-10-13 台账新增 `watchos` 时正是这里先红了。
@@ -435,31 +441,47 @@ def build_cases() -> list[dict]:
         labels = [entry["label"] for entry in ledger["platforms"].values()]
         header_line = next((line for line in block.splitlines() if line.startswith("| 编号 |")), None)
         if header_line is None:
-            raise AssertionError("§10.10 里找不到表头行")
+            raise AssertionError("矩阵区块里找不到表头行")
         cols = [cell.strip() for cell in header_line.strip().strip("|").split("|")]
         _must(cols == ["编号", "需求摘要", "macOS"] + labels, f"表头列与台账不一致：{cols}")
         _must(len(row_cells) == len(cols),
               f"FR-STD-DB-CONN-007 行 {len(row_cells)} 列、表头 {len(cols)} 列：{row_cells}")
+        windows = ledger["platforms"]["windows"]
+        want = windows.get("overrides", {}).get("FR-STD-DB-CONN-007", ledger.get("default", "⬜"))
         win = cols.index("Windows")
-        _must(row_cells[win] == "✅", f"Windows 列没吃到台账里的 ✅：{row_cells[win]!r}")
-        mac = row_cells[cols.index("macOS")]
-        expected = 1 if mac == "✅" else 0
-        header = re.search(r"^\*\*连接与凭据\*\*（.*$", block, re.MULTILINE)
-        if header is None:
-            raise AssertionError("找不到「连接与凭据」分域行")
-        _must(
-            f"Windows {expected} 条" in header.group(0),
-            f"分域对齐计数没跟上（macOS 基线 {mac} ⇒ 期望 Windows {expected} 条）：{header.group(0)}",
-        )
+        got = row_cells[win].replace("⚠️", "").strip()   # `⚠️` 是「与基线不一致」的标记，不是状态
+        _must(got == want, f"Windows 列没吃到台账里的 {want}：{row_cells[win]!r}")
+        # 分组「与基线一致」计数 = 该组里 Windows 格没带 ⚠️ 的行数（自己数一遍，不写死数）。
+        # 矩阵按**产品线**分组（`**FR-STD**` / `**FR-AGT**` …），先定位 CONN-007 落在哪一组。
+        groups: list[tuple[str, list[str]]] = []
+        current: tuple[str, list[str]] | None = None
+        for line in block.splitlines():
+            matched = re.match(r"^\*\*(?P<label>[^*]+)\*\*（", line)
+            if matched:
+                current = (line, [])
+                groups.append(current)
+                continue
+            if current is not None and line.startswith("| FR-"):
+                current[1].append(line)
+        home = next((group for group in groups if any("FR-STD-DB-CONN-007 |" in row for row in group[1])), None)
+        if home is None:
+            raise AssertionError("矩阵里找不到 FR-STD-DB-CONN-007 所属的分组")
+        aligned = 0
+        for line in home[1]:
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if "⚠️" not in cells[win]:
+                aligned += 1
+        _must(f"Windows {aligned} 条" in home[0],
+              f"分组对齐计数没跟上（表体实点 {aligned} 条）：{home[0][:80]}")
         _must("移动端（鸿蒙 / 安卓 / iOS）不设列" in text, "移动端不设列的理由没写进表头说明")
         odd = [line for line in block.splitlines()
                if line.startswith("| FR-") and line.count("|") != len(cols) + 1]
-        _must(not odd, f"§10.10 里有列数不齐的行：{odd[:2]}")
+        _must(not odd, f"矩阵区块里有列数不齐的行：{odd[:2]}")
 
     return [
         {
             "name": "① 基线：生成一次后 --check 必须一致",
-            "steps": [(["gen"], 0, "已重写 §10.10"), (["--check"], 0, "一致")],
+            "steps": [(["gen"], 0, "已重写"), (["--check"], 0, "一致")],
         },
         {
             "name": "② 台账改了没重生成 ⇒ --check 报红并指出行号",
@@ -469,7 +491,7 @@ def build_cases() -> list[dict]:
         {
             "name": "③ 重生成后 Windows 状态到表上 + 计数与列数自洽",
             "setup": _ledger_edit(set_windows),
-            "steps": [(["gen"], 0, "Windows 1 条")],
+            "steps": [(["gen"], 0, "已重写")],
             "inspect": windows_snapshot,
         },
         {
@@ -527,16 +549,19 @@ def run_script(root: pathlib.Path, argv: list[str]) -> subprocess.CompletedProce
 
 
 def self_test() -> int:
-    if not SRS.exists() or not STATUS.exists():
-        print(f"❌ 自检需要真实的 {SRS} 与 {STATUS}")
+    # 2026-10-20 矩阵迁版后：状态读计划书 §5 / §3，编号集合读独立成文的需求索引 ⇒ 四份都要在场
+    sources = (SRS, PLAN, STATUS, INDEX)
+    absent = [str(path) for path in sources if not path.exists()]
+    if absent:
+        print(f"❌ 自检需要真实的真源文件，缺：{absent}")
         return 1
-    before = {path: digest(path) for path in (SRS, STATUS)}
+    before = {path: digest(path) for path in sources}
 
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="parity-selftest-") as tmp:
         base = pathlib.Path(tmp) / "base"
         (base / "Docs").mkdir(parents=True)
-        for path in (SRS, STATUS):
+        for path in sources:
             shutil.copy2(path, base / "Docs" / path.name)
 
         cases = build_cases()
@@ -569,7 +594,7 @@ def self_test() -> int:
                     except AssertionError as error:
                         failures.append(f"{case['name']}｜{error}")
 
-    after = {path: digest(path) for path in (SRS, STATUS)}
+    after = {path: digest(path) for path in sources}
     if before != after:
         failures.append("自检动了真仓库的文件（写坏必须只发生在临时副本上）")
 
@@ -578,7 +603,7 @@ def self_test() -> int:
         for failure in failures:
             print(f"   · {failure}")
         return 1
-    print(f"✅ 平台等价矩阵门禁自检通过（{len(build_cases())}/{len(build_cases())}；真仓库两份文件逐字节未变）")
+    print(f"✅ 平台等价矩阵门禁自检通过（{len(build_cases())}/{len(build_cases())}；真仓库 {len(sources)} 份真源逐字节未变）")
     return 0
 
 

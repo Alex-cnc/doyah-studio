@@ -421,7 +421,7 @@ else
 fi
 # 这一半是门禁自己的证据（L-33；L-41 补例 5；L-89 补例 6）：干净克隆跳过 12 份且 exit 0 /
 # --require-all 判红 / 显式点名判红 / **写坏一行被判红并指名行号** / **带表格却不在清单判红且归档豁免** /
-# 真仓库 69 份受检无跳过（68 份命名 + 1 份通配；
+# 真仓库 70 份受检无跳过（69 份命名 + 1 份通配；
 # **末例核对真仓库逐字节未变**）。
 # **本项里那几处「要看本机台账」的地方在干净克隆 / 并行工作树 / 另一平台上如实报「跳过」**
 # （2026-10-08 · 任务 `t_004a679b` · 口径 = `AGENT-SPEC.md` §9 第 147 条 ④）：`check-doc-tables
@@ -664,6 +664,10 @@ python3 Scripts/gen-studio-win-align.py --check
 # 上面几条管的是**矩阵本身**（§10.10 ↔ 台账）；这一条管**派生视图** —— 人读的完成度面
 # `Docs/任务清单-按平台.md`（`PC-BOARD-001`）的每一格是不是从 §10.10 **逐列重算**来的
 # （不符即判红；§10.10 表头 / 本文件一览行读不到 ⇒ **空跑判红**；`--self-test` 15 例负例）。
+# **生成侧**（2026-10-20）：三节改由 `gen-platform-board.py` 从真源机械重写（手抄那一半退役）——
+# `--check` 判「真源动了而看板没重生成」，`--self-test` 9 例负例（含「台账翻一格 ⇒ 看板必须报红」）。
+python3 Scripts/gen-platform-board.py --check
+python3 Scripts/gen-platform-board.py --self-test
 python3 Scripts/check-board-parity.py
 python3 Scripts/check-board-parity.py --self-test
 
