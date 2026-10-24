@@ -487,7 +487,7 @@
 | FR-AGT-LINK-EXT-003 | — | 3.2 Doyah Agent | 进阶可选 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-006 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-UX-SESS-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-QUAL-VERIFY-001 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-QUAL-VERIFY-001 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-002 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-003 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-004 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
@@ -578,7 +578,7 @@
 > 平台列：watchOS / Linux / Windows（表由 `Scripts/gen-platform-parity.py` 重写，`--check` 判定漂移）。
 > **移动端（鸿蒙 / 安卓 / iOS）不设列**：移动端 = Doyah Notes（只有笔记），不是 Doyah Studio 的平台版本（§0.10 / 规划书 §4.13）⇒ 不在本矩阵设列，免得造出一列永远 ⬜ 的假进度。
 
-**FR-AGT**（68 条。与 macOS 基线一致：watchOS 36 / Linux 36 / Windows 36 条）
+**FR-AGT**（68 条。与 macOS 基线一致：watchOS 35 / Linux 35 / Windows 35 条）
 
 | 编号 | 需求摘要 | macOS | watchOS | Linux | Windows |
 |---|---|---|---|---|---|
@@ -623,7 +623,7 @@
 | FR-AGT-PLAN-PLAN-004 | 计划修订：执行中发现原计划不成立时，说出为什么改并给出新计划，不静默换路 | ⬜ | ⬜ | ⬜ | ⬜ |
 | FR-AGT-PLAN-PLAN-005 | 完成判据：任务完成必须有可检验的判据 —— 「看起来做完了」不算；每条任务开工前先给出「怎么算做完」，做… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-AGT-PLAN-PLAN-006 | 失败自恢复：工具失败可重试或换路 —— 可重试的先重试，不可重试的换手段；连续失败要停下来说明，不无限重… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
-| FR-AGT-QUAL-VERIFY-001 | 结果自验：产出前先自查 —— 能跑的跑一遍、能对的对一遍，再报完成；验不过就说验不过。分工：本条管事后怎… | ⬜ | ⬜ | ⬜ | ⬜ |
+| FR-AGT-QUAL-VERIFY-001 | 结果自验：产出前先自查 —— 能跑的跑一遍、能对的对一遍，再报完成；验不过就说验不过。分工：本条管事后怎… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-AGT-QUAL-VERIFY-002 | 长任务一致性：跨小时不丢目标 —— 中断、重启、换端之后仍知道在做什么、做到哪一步 | ⬜ | ⬜ | ⬜ | ⬜ |
 | FR-AGT-QUAL-VERIFY-003 | 不确定性表达：不确定就说 —— 给出把握程度与依据，不把猜测说成事实 | ⬜ | ⬜ | ⬜ | ⬜ |
 | FR-AGT-QUAL-VERIFY-004 | 断言可溯源：每条结论能指到出处 —— 文件路径行号 / 命令输出 / 日志 / 文档链接，读者能自己复核 | ⬜ | ⬜ | ⬜ | ⬜ |

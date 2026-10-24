@@ -226,6 +226,10 @@ public struct AgentLoopResult: Equatable, Sendable {
     ///
     /// 只有「模型给了最终答复」那一跳才会算它 —— 停止 / 失败时不评完成（那两种本来就不叫完成）。
     public var completion: AgentCompletionReport?
+    /// **结果自验**（`FR-AGT-QUAL-VERIFY-001`）：这一轮动过的东西逐条有没有自查过。
+    ///
+    /// 与 `completion` 分开：`completion` 是「模型的话可不可信」，这是「动过的东西验没验」。
+    public var selfCheck: AgentSelfCheckReport? = nil
     /// **本次运行结束时的配额账本**（`NFR-AI-04`）：调用方拿它回写会话账，否则跨运行累计会丢
     /// （丢了就等于「配额在真实路径上永远不会触发」那条第 1 项缺口又回来了）。
     /// `nil` = 这一轮没接配额（旧行为**逐字不变**）。
@@ -643,13 +647,38 @@ public struct AgentLoop: Sendable {
                     await observer?.observe(.completionChecked(code: verdict.code,
                                                                citations: verdict.citations.count))
                 }
+                // **结果自验**（`FR-AGT-QUAL-VERIFY-001`）：交付前把这一轮动过的每条都折成通过 / 没过；
+                // 动过东西却一条结论都拿不出 ⇒ `selfCheckSkipped:noEvidence`（**判红**，不是「通过」）。
+                let verifiedPaths = Set((report?.citations ?? []).map(\.target))
+                let selfCheck = AgentSelfCheck.audit(
+                    evidence: evidence,
+                    report: AgentSelfCheck.report(evidence: evidence, verifiedPaths: verifiedPaths))
+                if selfCheck.status != .nothingToCheck {
+                    // 自验结论进会话留痕（人读）；**没过的那一档还要进审计**（判红不许只活在对话里）。
+                    recordTurn(context: context, kind: .approval, role: "system",
+                               text: selfCheck.code, at: startedAt)
+                    if !selfCheck.isClean {
+                        await audit?.record(AgentActionRecord.makeModelCall(
+                            requestSummary: selfCheck.code,
+                            model: request.model,
+                            durationMilliseconds: nil,
+                            outcome: .failed,
+                            detail: "selfCheck · \(selfCheck.code)",
+                            endpoint: OpenAICompatibleClient.chatCompletionsURL(from: request.endpoint).absoluteString,
+                            usage: nil,
+                            sessionID: context.sessionID,
+                            hopIndex: steps - 1,
+                            chainID: context.chainID,
+                            at: startedAt))
+                    }
+                }
                 return seal(AgentLoopResult(
                     outcome: .finished(text: text), steps: steps,
                     executedTools: executed, rejectedTools: rejected, usage: usage, text: text,
                     resumedFromStep: resumedFromStep, skippedSteps: skippedSteps,
                     skippedCheckpointLines: skippedCheckpointLines,
                     checkpointWriteFailures: checkpointWriteFailures,
-                    completion: report))
+                    completion: report, selfCheck: selfCheck))
             }
 
             for invocation in invocations {
