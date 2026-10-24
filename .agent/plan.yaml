@@ -105,7 +105,9 @@ tasks:
     goal: 六态人工点验（`UI-5.3-01`）—— 真界面上六态各出现一次，禁渲染项不出现
     done_when: "test -f .agent/evidence/2026-10-24-T3.2-ui-walk.md && grep -c '六态' .agent/evidence/2026-10-24-T3.2-ui-walk.md | grep -Eq '^[6-9]'"
     est: 1h
-    status: todo
+    status: blocked
+    blocked_reason: 需在真界面上把六态各触发一次（加载/空/错误/权限不足/提交中/部分失败）并核对禁渲染项 —— 无桌面交互环境下做不了
+    next_try: 人工点验一轮（约 10 分钟）后按约定写 .agent/evidence/2026-10-24-T3.2-ui-walk.md
     deps: [T3.1]
   - id: T5.1
     goal: 行编辑 guard 接到写回路径（`AppState` 行写回 → `RowWriteGuard`，无主键禁入口、0 行报冲突）

@@ -95,6 +95,7 @@ CONSUMER_FILES = (
     "Core/CodeCompletion.swift",
     "Core/CodeFormatting.swift",
     "Core/CodeLexer.swift",
+    "Core/CodeFenceLanguage.swift",   # 2026-10-24：代码块语法着色新增的语言消费者（原缺席 ⇒ 判据假绿）
     "Core/CodeSyntax.swift",
     "Core/InlineGhostCompletion.swift",
     "Core/InlineGhostPathCompletion.swift",

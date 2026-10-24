@@ -491,6 +491,10 @@
     {
       "path": ".handoff/",
       "reason": "会话交接目录（工具产物），非任一端产品代码"
+    },
+    {
+      "path": ".agent/",
+      "reason": "常驻执行者的计划队列与证据（plan/checkpoint/decisions/evidence）；不属于任何平台子树，也不属契约文档面"
     }
   ]
 }
