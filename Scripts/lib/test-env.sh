@@ -197,7 +197,7 @@ else
             _doyah_test_profile_datadir="${_doyah_test_project_root}/.build/pgdata-session-test"
             ;;
         slowquery)
-            _doyah_test_profile_port=0
+            _doyah_test_profile_port=55434
             _doyah_test_profile_datadir="${_doyah_test_project_root}/.build/pgdata-slowquery"
             ;;
         querytest)
