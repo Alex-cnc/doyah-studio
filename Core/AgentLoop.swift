@@ -844,7 +844,7 @@ public struct AgentLoop: Sendable {
             lines.append(contentsOf: search.fileNames)
             lines.append(contentsOf: search.contentHits)
             if search.truncated { lines.append("(命中已按上限截断)") }
-            return clamp(lines.joined(separator: "\n"), label: "search")
+            return clamp(lines.joined(separator: "\n"), label: AgentToolRegistry.searchToolName)
         case .rows(let rows):
             // 行数据不进上下文（`NFR-AI-01`）：列名 + 行数 + 错误文本，够模型判断下一步。
             let columns = rows.columns.isEmpty ? "—" : rows.columns.joined(separator: ",")

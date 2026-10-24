@@ -23,6 +23,7 @@ public enum MenuLocalization {
     /// `MenuLocalizationTests` 会校验「所有 `menu` 前缀的键都已登记」，防止漏加。
     public static let menuKeys: [LKey] = [
         .menuNewQuery,
+        .menuAgentSchedule,
         .menuAgent,
         .menuAgentOpenChat,
         .menuAgentSettings,

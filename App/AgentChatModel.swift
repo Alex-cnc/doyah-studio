@@ -115,6 +115,15 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 宿主注入：会话存储（列表 / 切换都要读盘）。没接 ⇒ 列表为空、切换如实说不可用。
     var sessionStore: AgentSessionStore?
 
+    /// 跨启动续跑提示（`nil` = 不做续跑恢复）。
+    ///
+    /// 为什么不塞进会话文件：会话文件是**留痕**（只追加、供回看），续跑提示是**状态**
+    /// （覆盖写、末次为准、随时可清）—— 两种写入语义混一份迟早互相踩。
+    var resumeStore: AgentTurnResumeStore?
+
+    /// 当前活动工作区（续跑提示要按工作区校验身份；`nil` = 还不知道，不写盘）。
+    private var activeWorkspacePath: String?
+
     private let cancellation = CancellationFlag()
     private var task: Task<Void, Never>?
     /// 看门狗（`FR-AI-31` ③「卡住」）：跑着的时候每 `watchdogTickSeconds` 秒看一眼。
@@ -244,6 +253,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         let result = store.summaryList(workspace: workspacePath)
         sessions = result.summaries
         sessionsSkippedFiles = result.skippedFiles
+        activeWorkspacePath = workspacePath
     }
 
     /// 能不能切会话：跑着的时候不行（切过去会让正在跑的那一轮把跳写进另一份文件）。
@@ -271,6 +281,13 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         resetForReplay()
         state = AgentChatState(messages: AgentSessionReplay.messages(from: session), endpoint: endpoint)
         state.taskScope = scope
+        activeWorkspacePath = workspacePath
+        // **跨启动续跑**（`FR-AGT-CORE-SESS-001` ①）：把上一轮的提问与落账填回去，
+        // 「继续上次」在重启之后照样出现；拿不到就当没有（不回退成假装能续）。
+        if case let .found(hint) = resumeStore?.load(sessionID: session.header.id, workspace: workspacePath) ?? .absent {
+            lastPrompt = hint.prompt
+            lastTurn = hint.record
+        }
         return true
     }
 
@@ -378,7 +395,14 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
                 guard let self else { return }
                 self.lastElapsedSeconds = Date().timeIntervalSince(started)
                 // 记这一轮的账：下一轮能不能续、从第几跳续，看的就是它。
-                self.lastTurn = AgentTurnPlanner.record(turn: plan.turn, result: result)
+                let record = AgentTurnPlanner.record(turn: plan.turn, result: result)
+                self.lastTurn = record
+                // 落盘（重启后 `openSession` 读回）：写失败只影响「重启后续跑」，不影响这一轮结论。
+                if let store = self.resumeStore, let workspace = self.activeWorkspacePath {
+                    let hint = AgentTurnResumeHint(sessionID: self.sessionID, workspace: workspace,
+                                                   prompt: prompt, record: record)
+                    do { try store.save(hint) } catch { self.state.appendNotice("sessionUnavailable") }
+                }
                 self.finish(result)
             }
         }

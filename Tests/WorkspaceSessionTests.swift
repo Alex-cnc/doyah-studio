@@ -93,10 +93,11 @@ final class WorkspaceSessionTests: XCTestCase {
             Set((json ?? [:]).keys),
             ["version", "workspacePath", "selectedTabIndex", "tabs", "caretOffset", "scrollOffset"]
         )
-        // 页签那一层的形状**一个字没加**：光标 / 滚动是「选中那一页」的现场，不是每页各记一份
-        // （多记一份的代价：恢复完一切页签，每页都跳一下）。
+        // 页签那一层的形状：光标 / 滚动是「选中那一页」的现场，不是每页各记一份
+        // （多记一份的代价：恢复完一切页签，每页都跳一下）；`kind` = 页签类型（Home / 文件 /
+        // 查询 / 对话），恢复时要按它还原页签形态，所以它是**页**的属性，留在这里。
         let first = (json?["tabs"] as? [[String: Any]])?.first
-        XCTAssertEqual(Set((first ?? [:]).keys), ["path", "title", "language", "unsavedContent"])
+        XCTAssertEqual(Set((first ?? [:]).keys), ["path", "title", "language", "unsavedContent", "kind"])
     }
 
     /// 版本兼容（读）：缺 `version` 栏（更早的手写文件 / 将来裁掉的栏位）按 `1` 读，不炸整个会话。

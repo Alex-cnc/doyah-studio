@@ -119,6 +119,12 @@ public struct AgentToolDefinition: Equatable, Sendable {
 
 /// 工具注册表（**唯一出处**）：模型看到的 `tools` 只能从这里出。
 public struct AgentToolRegistry: Sendable {
+    /// 工具名常量 —— `FR-AI-19`「工具名只许出现在本文件」的取用口。
+    ///
+    /// 别处（循环 / 界面）要报工具名时**从这儿取**，不另写字面量：
+    /// 判据 `AgentToolRegistrySourceTests` 逐文件扫 `"search"` 这类字面量，写一处就判红。
+    public static let searchToolName = "search"
+
 
     public private(set) var definitions: [AgentToolDefinition]
 
@@ -143,7 +149,7 @@ public struct AgentToolRegistry: Sendable {
                                 parameters: ["path": "string"],
                                 required: [],
                                 level: .readOnly, approval: .none),
-            AgentToolDefinition(name: "search",
+            AgentToolDefinition(name: searchToolName,
                                 summary: "在工作区里按名字或内容搜索（只读）",
                                 capability: .search,
                                 parameters: ["query": "string", "limit": "integer"],

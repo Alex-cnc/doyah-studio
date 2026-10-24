@@ -114,6 +114,7 @@ struct DoyahStudioApp: App {
                     // 会话列表与切换（§9.1.16 缺口 ②）：存储与循环那条路**同一处**
                     // （`AgentSessionStore.defaultDirectory`）—— 列表读到的一定是循环写进去的那一批。
                     agentChat.sessionStore = AgentSessionStore(directory: AgentSessionStore.defaultDirectory)
+                    agentChat.resumeStore = AgentTurnResumeStore(directory: AgentSessionStore.defaultDirectory)
                     agentChat.makeLoop = { prompt, plan, observer in
                         guard let rootPath = workspace.rootPath else { return nil }
                         // `await`：建循环时会现取一次本次上下文（`FR-AI-22` 的表结构摘要），那是 IO。
