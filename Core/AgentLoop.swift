@@ -126,10 +126,18 @@ public struct AgentLoopLimits: Equatable, Sendable {
     ///
     /// **防跑飞改由"重复失败"来管**（见 `AgentLoop` 里对连续失败的判定），
     /// 而不是靠"步数少" —— 数步数会把长任务和死循环一起杀掉。
-    public init(maxSteps: Int = 150, maxTotalTokens: Int = 262_144, tokensAlreadySpent: Int = 0) {
+    /// **连续失败上限**（`FR-AGT-PLAN-PLAN-006` ②）：连着这么多次失败就停下来说清，不无限重来。
+    public var maxConsecutiveFailures: Int
+    /// **换路子**（同条 ①）：不可重试的失败发生时，按顺序换到这些模型再试；空了就只能如实失败。
+    public var fallbackModels: [String]
+
+    public init(maxSteps: Int = 150, maxTotalTokens: Int = 262_144, tokensAlreadySpent: Int = 0,
+                maxConsecutiveFailures: Int = 3, fallbackModels: [String] = []) {
         self.maxSteps = maxSteps
         self.maxTotalTokens = maxTotalTokens
         self.tokensAlreadySpent = tokensAlreadySpent
+        self.maxConsecutiveFailures = maxConsecutiveFailures
+        self.fallbackModels = fallbackModels
     }
 }
 
@@ -292,6 +300,7 @@ public struct AgentLoop: Sendable {
     /// **完成判据验证器**（`FR-AI-31` ②）：给了就只在「模型给最终答复」时复核一次。
     /// 不给 = 旧行为**逐字不变**（既有判据一条都不必改）。
     public var completionVerifier: AgentCompletionVerifier?
+
     /// **配额**（`NFR-AI-04`）：给了就在**每一跳发送之前**判定一次（次数 / 累计 token），
     /// 超限如实停并给出配额自己那句可读原因 —— 此前对话这条路上根本没接配额
     /// （`AgentQuota` 只接在自然语言生成 SQL 那条路上）⇒ 长跑时会把配额悄悄烧掉。
@@ -342,6 +351,11 @@ public struct AgentLoop: Sendable {
                     requestedStep: Int = 0,
                     isCancelled: @Sendable () -> Bool = { false }) async -> AgentLoopResult {
         var steps = 0
+        /// 本轮**换路**之后的模型（`nil` = 用请求模板里那个）；`triedFallbacks` 保证每轮只换一次、不乒乓。
+        var modelOverride: String?
+        var triedFallbacks: Set<String> = []
+        /// 连着失败了几个来回（一次成功就清零）。
+        var failuresInARow = 0
         var resumedFromStep: Int? = nil
         var skippedSteps = 0
         var skippedCheckpointLines = 0
@@ -448,8 +462,9 @@ public struct AgentLoop: Sendable {
                 return seal(stopped)
             }
 
-            let built = makeRequest(context: context, observations: observations, budget: compressionBudget)
-            let request = built.request
+            let built = makeRequest(context: context, observations: observations, budget: compressionBudget,
+                                    modelOverride: modelOverride)
+            var request = built.request
             if let report = built.report, report.didCompress {
                 // 压缩**不许静默**（`R-63` ③）：累计读数 + 立刻报一行给过程面。
                 compression.absorb(report)
@@ -489,6 +504,8 @@ public struct AgentLoop: Sendable {
                         break
                     }
                 }
+                // 这一跳读完了 ⇒ **连续失败清零**（只有「连着」才叫连续）。
+                failuresInARow = 0
                 break   // 这一跳读完 ⇒ 跳出重试循环
             } catch {
                 // `FR-AI-30` ①：**分档**再决定要不要再试一次。
@@ -523,6 +540,39 @@ public struct AgentLoop: Sendable {
                 if hasPartial { why = "partialOutput" }
                 else if !retryable { why = "notRetryable" }
                 else { why = "retriesExhausted" }
+
+                // **换路**（`FR-AGT-PLAN-PLAN-006` ①）：不可重试 + 还有没试过的备用模型 ⇒ 换一个再试，
+                // 并且当场说清「从谁换到谁、为什么」（走 `retrying` 那条既有通道，不新造事件类型）。
+                failuresInARow += 1
+                let candidate = limits.fallbackModels.first(where: {
+                    $0 != (request.model) && !triedFallbacks.contains($0)
+                })
+                // **连续失败到顶**：停下来说明，不无限重来（同条 ②）。
+                if failuresInARow >= limits.maxConsecutiveFailures {
+                    let detail2 = "consecutiveFailures:\(failuresInARow) · last:\(error.localizedDescription)"
+                    await observer?.observe(.failed(detail2))
+                    return seal(AgentLoopResult(
+                        outcome: .failed(detail2), steps: steps,
+                        executedTools: executed, rejectedTools: rejected, usage: usage, text: text))
+                }
+                if !retryable, !hasPartial, let next = candidate {
+                    triedFallbacks.insert(next)
+                    modelOverride = next
+                    // **本跳的请求也得真换**：重试沿用同一个 `request`，只改 `modelOverride` 只对下一跳生效。
+                    request.model = next
+                    retries = 0
+                    lastFailure = error.localizedDescription
+                    await observer?.observe(.retrying(
+                        attempt: failuresInARow, after: 0,
+                        reason: "routeSwitch:\(request.model)->\(next) · \(error.localizedDescription)"))
+                    if isCancelled() {
+                        await observer?.observe(.failed("cancelled"))
+                        return seal(AgentLoopResult(
+                            outcome: .failed("cancelled"), steps: steps,
+                            executedTools: executed, rejectedTools: rejected, usage: usage, text: text))
+                    }
+                    continue
+                }
                 let detail = "\(why) · retries:\(retries)\(lastFailure.map { " · last:\($0)" } ?? "")"
                 await observer?.observe(.failed(detail))
                 await audit?.record(AgentActionRecord.makeModelCall(
@@ -742,9 +792,12 @@ public struct AgentLoop: Sendable {
     /// 每个请求都是**单跳**：历史折进提示词（多轮消息数组留待后续片，如实登记）。
     private func makeRequest(context: AgentLoopContext,
                              observations: [String],
-                             budget: AgentContextCompressionBudget?)
+                             budget: AgentContextCompressionBudget?,
+                             modelOverride: String? = nil)
     -> (request: LLMRequest, report: AgentContextCompressionReport?) {
         var request = context.baseRequest
+        // 换路（`FR-AGT-PLAN-PLAN-006` ①）：失败换过模型就用换过的，请求模板里的模型只当起点。
+        if let modelOverride { request.model = modelOverride }
         request.systemPrompt = context.systemPrompt
         var prompt = context.userPrompt
         var report: AgentContextCompressionReport?
