@@ -54,20 +54,24 @@ public struct AgentBudgetReport: Equatable, Sendable {
     /// 形状固定，判据直接断言子串：
     ///   步数停 → `预算触顶：步数 150/150 —— 已跑 150 跳、完成 12 次工具调用（被拒 0 次），令牌 8,120/262,144`
     ///   令牌停 → `预算触顶：令牌 262,144/262,144 —— 已跑 40 跳、完成 61 次工具调用（被拒 2 次），停在发送下一跳之前`
-    public var line: String {
-        let tools = "已跑 \(steps) 跳、完成 \(executedToolCount) 次工具调用（被拒 \(rejectedToolCount) 次）"
+    /// 人话一行（**用户可见 ⇒ 文案在语言表里**，`Scripts/check-core-localization.py` 的棘轮 A 盯着这一点）。
+    public func line(language: AppLanguage = .simplifiedChinese) -> String {
         switch kind {
         case .steps:
-            return "预算触顶：步数 \(steps)/\(limit) —— \(tools)，令牌 \(Self.grouped(tokensSpent))/\(Self.grouped(tokenLimit))"
+            return LocalizedStrings.format(.agentBudgetStepsStop, language: language,
+                                           steps, limit, steps, executedToolCount, rejectedToolCount,
+                                           Self.grouped(tokensSpent), Self.grouped(tokenLimit))
         case .tokens:
-            return "预算触顶：令牌 \(Self.grouped(tokensSpent))/\(Self.grouped(tokenLimit)) —— \(tools)，停在发送下一跳之前"
+            return LocalizedStrings.format(.agentBudgetTokensStop, language: language,
+                                           Self.grouped(tokensSpent), Self.grouped(tokenLimit),
+                                           steps, executedToolCount, rejectedToolCount)
         }
     }
 
     /// 抹掉千分位（判据 / 日志里要好搜，界面渲染再补分隔符）。
     /// 一行里两处都抹：`8,120/262,144` → `8120/262144`。
-    public var plainLine: String {
-        line.replacingOccurrences(of: ",", with: "")
+    public func plainLine(language: AppLanguage = .simplifiedChinese) -> String {
+        line(language: language).replacingOccurrences(of: ",", with: "")
     }
 
     /// 千分位分组（`262144` → `262,144`）—— 中国人读数字要看位，读数行里不给裸数字。

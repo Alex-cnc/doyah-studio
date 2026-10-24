@@ -55,7 +55,7 @@ final class AgentBudgetReportTests: XCTestCase {
         XCTAssertEqual(report.rejectedToolCount, 2)
         XCTAssertEqual(report.tokensSpent, limits.tokensAlreadySpent + result.usage.billableTokens)
 
-        let plain = report.plainLine
+        let plain = report.plainLine()
         XCTAssertTrue(plain.contains("步数 150/150"), plain)
         XCTAssertTrue(plain.contains("已跑 150 跳"), plain)
         XCTAssertTrue(plain.contains("完成 12 次工具调用"), plain)
@@ -75,7 +75,7 @@ final class AgentBudgetReportTests: XCTestCase {
         XCTAssertEqual(report.tokenLimit, 262_144)
         XCTAssertGreaterThanOrEqual(report.tokensSpent, report.tokenLimit, "触顶读数不该低于上限")
 
-        let plain = report.plainLine
+        let plain = report.plainLine()
         XCTAssertTrue(plain.contains("令牌 262500/262144"), plain)
         XCTAssertTrue(plain.contains("停在发送下一跳之前"), "要说明停的位置：\(plain)")
         XCTAssertFalse(plain.contains("任务完成"), plain)
@@ -88,8 +88,8 @@ final class AgentBudgetReportTests: XCTestCase {
                                 executed: 0, rejected: 0,
                                 tokens: LLMUsage(promptTokens: 0, completionTokens: 0, totalTokens: 0))
         let report = result.budgetReport(limits: limits)
-        XCTAssertTrue(report?.line.contains("262,144") ?? false, "人话行要有千分位：\(report?.line ?? "nil")")
-        XCTAssertFalse(report?.plainLine.contains(",") ?? true, "plainLine 不许留逗号")
+        XCTAssertTrue(report?.line().contains("262,144") ?? false, "人话行要有千分位：\(report?.line() ?? "nil")")
+        XCTAssertFalse(report?.plainLine().contains(",") ?? true, "plainLine 不许留逗号")
     }
 
     // MARK: - ③ 非预算停不产出预算报告（不把别的事故套成预算故事）

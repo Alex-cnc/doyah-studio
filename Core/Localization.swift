@@ -2600,6 +2600,9 @@ public enum LKey: String, CaseIterable, Sendable {
     case menuSystemShowNextTab
     case menuSystemMoveTabToNewWindow
     case menuSystemMergeAllWindows
+    // 单次任务预算触顶（`FR-AGT-CORE-LOOP-009`）：**用户可见**，所以走语言表，不在循环里写死中文。
+    case agentBudgetStepsStop
+    case agentBudgetTokensStop
     // 显式「重启应用」（R-36 的入口：以前只有"换语言的副作用"，现在换语言不再需要它）
     case menuRelaunchApp
 
@@ -3602,6 +3605,10 @@ public enum LocalizedStrings {
         .menuAgentOpenChat: [.simplifiedChinese: "打开对话", .english: "Open chat"],
         .menuAgentSchedule: [.simplifiedChinese: "定时会话…", .english: "Scheduled Sessions…"],
         .agentTestRunning: [.simplifiedChinese: "正在测试…", .english: "Testing…"],
+        .agentBudgetStepsStop: [.simplifiedChinese: "预算触顶：步数 %ld/%ld —— 已跑 %ld 跳、完成 %ld 次工具调用（被拒 %ld 次），令牌 %@/%@",
+                                .english: "Budget reached: steps %ld/%ld — ran %ld hops, completed %ld tool calls (%ld rejected), tokens %@/%@"],
+        .agentBudgetTokensStop: [.simplifiedChinese: "预算触顶：令牌 %@/%@ —— 已跑 %ld 跳、完成 %ld 次工具调用（被拒 %ld 次），停在发送下一跳之前",
+                                 .english: "Budget reached: tokens %@/%@ — ran %ld hops, completed %ld tool calls (%ld rejected), stopped before the next hop"],
         .agentTestPassed: [.simplifiedChinese: "连接正常：%@（%d 毫秒）", .english: "Connection OK: %@ (%d ms)"],
         .agentTestFailed: [.simplifiedChinese: "连接失败：%@", .english: "Connection failed: %@"],
         .agentTestMisconfigured: [.simplifiedChinese: "端点或模型还没填", .english: "Endpoint or model is empty"],

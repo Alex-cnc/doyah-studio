@@ -895,7 +895,7 @@ public struct AgentLoop: Sendable {
     /// （契约 §7 ①：不许只丢一句 `stepLimit:150` 让用户自己猜做到哪儿了）。
     private func recordStop(_ stop: AgentLoopStop, context: AgentLoopContext, at: Date,
                             budget: AgentBudgetReport? = nil) {
-        let text = budget.map { stop.reason + "\n" + $0.line } ?? stop.reason
+        let text = budget.map { stop.reason + "\n" + $0.line() } ?? stop.reason
         recordTurn(context: context, kind: .approval, role: "system", text: text, at: at)
     }
 }

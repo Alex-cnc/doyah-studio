@@ -60,7 +60,7 @@ final class AgentTurnResumeStoreTests: XCTestCase {
         guard case let .unusable(reason) = store.load(sessionID: "chat-2", workspace: "/w/a") else {
             return XCTFail("文件内容里的会话号不符必须判为不可用")
         }
-        XCTAssertTrue(reason.contains("会话号"), reason)
+        XCTAssertTrue(reason.hasPrefix("sessionMismatch:"), reason)
     }
 
     /// ② 补充：会话号换名字但内容对得上时，工作区不符仍要拦（两条校验各自独立）。
@@ -77,7 +77,7 @@ final class AgentTurnResumeStoreTests: XCTestCase {
         guard case let .unusable(reason) = store.load(sessionID: "chat-1", workspace: "/w/b") else {
             return XCTFail("工作区不符必须判为不可用")
         }
-        XCTAssertTrue(reason.contains("工作区"), reason)
+        XCTAssertTrue(reason.hasPrefix("workspaceMismatch:"), reason)
     }
 
     /// ③ 坏文件不冒充：写一坨非 JSON，加载返回 unusable 而不是空 hint。

@@ -95,14 +95,14 @@ public struct AgentTurnResumeStore: Sendable {
             decoder.dateDecodingStrategy = .iso8601
             let hint = try decoder.decode(AgentTurnResumeHint.self, from: Data(contentsOf: file))
             guard hint.sessionID == sessionID else {
-                return .unusable(reason: "会话号不符：文件 \(hint.sessionID) ≠ 当前 \(sessionID)")
+                return .unusable(reason: "sessionMismatch:file=\(hint.sessionID) current=\(sessionID)")
             }
             guard hint.workspace == workspace else {
-                return .unusable(reason: "工作区不符：文件 \(hint.workspace) ≠ 当前 \(workspace)")
+                return .unusable(reason: "workspaceMismatch:file=\(hint.workspace) current=\(workspace)")
             }
             return .found(hint)
         } catch {
-            return .unusable(reason: "解析失败：\(error.localizedDescription)")
+            return .unusable(reason: "parseFailed:\(error.localizedDescription)")
         }
     }
 
