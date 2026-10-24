@@ -14,6 +14,7 @@ final class AgentWorkspaceContextTests: XCTestCase {
             case .activeTab: return "activeTab"
             case .terminalTail: return "terminalTail"
             case .schemaSummary: return "schemaSummary"
+            case .gitState: return "gitState"
             }
         }
     }

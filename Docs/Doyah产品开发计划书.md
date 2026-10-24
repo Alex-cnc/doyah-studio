@@ -480,7 +480,7 @@
 | FR-AGT-CORE-LOOP-009 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ⬜ | 未排期 | 新增：单次任务预算 150 步 / 256K（能力书 3.1.1 · S-15） |
 | FR-AGT-PLAN-PLAN-005 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-PLAN-PLAN-006 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-KNOW-CTX-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-KNOW-CTX-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-KNOW-CTX-002 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-EDIT-001 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-LINK-CHAN-003 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
@@ -578,7 +578,7 @@
 > 平台列：watchOS / Linux / Windows（表由 `Scripts/gen-platform-parity.py` 重写，`--check` 判定漂移）。
 > **移动端（鸿蒙 / 安卓 / iOS）不设列**：移动端 = Doyah Notes（只有笔记），不是 Doyah Studio 的平台版本（§0.10 / 规划书 §4.13）⇒ 不在本矩阵设列，免得造出一列永远 ⬜ 的假进度。
 
-**FR-AGT**（68 条。与 macOS 基线一致：watchOS 35 / Linux 35 / Windows 35 条）
+**FR-AGT**（68 条。与 macOS 基线一致：watchOS 34 / Linux 34 / Windows 34 条）
 
 | 编号 | 需求摘要 | macOS | watchOS | Linux | Windows |
 |---|---|---|---|---|---|
@@ -600,7 +600,7 @@
 | FR-AGT-GUARD-PERM-004 | 语句级判定（分工：本条判「这句话危不危险」及内容侧注入，-001 判「谁来批」）：智能体不得超越当前连接… | 🟡 | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-AGT-GUARD-SOUL-001 | 灵魂分层：L0 角色（我是谁）· L1 领域角色（在这个领域我是谁）· L2 项目做法（这个项目怎么做）… | ⬜ | ⬜ | ⬜ | ⬜ |
 | FR-AGT-GUARD-SOUL-002 | 审计扩展：留痕覆盖到每一次模型调用（含 Agent 循环每一跳，不只工具调用）+ 成本字段（模型 / 端… | ⬜ | ⬜ | ⬜ | ⬜ |
-| FR-AGT-KNOW-CTX-001 | 项目上下文：开跑前自动带上看料 —— 工作区结构、当前分支与未提交改动、关键文件摘要，不必用户手贴 | ⬜ | ⬜ | ⬜ | ⬜ |
+| FR-AGT-KNOW-CTX-001 | 项目上下文：开跑前自动带上看料 —— 工作区结构、当前分支与未提交改动、关键文件摘要，不必用户手贴 | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-AGT-KNOW-CTX-002 | 压缩（分工：跨进程的检查点续跑在 FR-AGT-UX-CONV-004 ③，本条只管会话内超限时怎么压）… | ⬜ | ⬜ | ⬜ | ⬜ |
 | FR-AGT-KNOW-MEM-001 | 查询记忆层（补全优先）：从已归档的 .sql 文件派生查询记忆（结构指纹 / 频次 / 来源连接），在编… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-AGT-KNOW-MEM-002 | 记忆治理（可检视 / 可删除 / 可解释 / 生命周期按类型分）：记忆可浏览原文与来源、可单条删除、可整… | 🟡 | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |

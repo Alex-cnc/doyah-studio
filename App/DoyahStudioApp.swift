@@ -155,7 +155,10 @@ struct DoyahStudioApp: App {
                             text: isFile ? tab?.content : nil,
                             selection: selection,
                             terminalText: terminal?.existingActivePane?.screen.text(),
-                            workspacePath: workspace?.rootPath
+                            workspacePath: workspace?.rootPath,
+                            // 仓库三样（`FR-AGT-KNOW-CTX-001`）：分支 + 未提交改动 + ahead/behind。
+                            // 取数只跑一次只读 `git status`；不是仓库 / 没装 git ⇒ nil，不编。
+                            git: GitStatusProbe.facts(root: workspace?.rootPath)
                         )
                     }
                 }

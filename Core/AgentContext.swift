@@ -30,6 +30,11 @@ public enum AgentContextReference: Equatable, Sendable {
     case terminalTail(text: String)
     /// DB schema 摘要（**只带表名与列名**，不带任何行数据）。
     case schemaSummary(database: String, tables: [Table])
+    /// **项目上下文三样之二**（`FR-AGT-KNOW-CTX-001`）：当前分支 + 未提交改动 + 与上游的差距。
+    ///
+    /// 只带**摘要**（分支名、改了几个文件、ahead/behind），不带 diff 正文 —— diff 会让上下文
+    /// 在开会话的第一秒就爆掉，而模型真正需要的是「我现在站在哪儿、有没有脏东西」。
+    case gitState(branch: String, changed: [String], ahead: Int, behind: Int)
 }
 
 /// 上限（`FR-AI-22` ③④；沿用既有纪律：schema 摘要 ≤ 60 表 / ≤ 400 列）。
@@ -209,7 +214,13 @@ public enum AgentContextAssembler {
             // 尾部：**留最后 N 个字符**（终端最有用的就是末尾），并如实标注截断
             return make(title: "terminal", text: text, limit: limits.maxTerminalCharacters, keepTail: true)
 
-        case .schemaSummary(let database, let tables):
+        case .gitState(let branch, let changed, let ahead, let behind):
+            var lines = ["branch:\(branch)", "changed:\(changed.count)"]
+            if !changed.isEmpty { lines.append(contentsOf: changed.map { "  " + $0 }) }
+            if ahead > 0 || behind > 0 { lines.append("ahead:\(ahead) behind:\(behind)") }
+            // 改动清单也要有上限，不然一个脏树能把这一段撑爆（如实标注截断）。
+            return make(title: "git", text: lines.joined(separator: "\n"),
+                        limit: limits.maxTerminalCharacters)        case .schemaSummary(let database, let tables):
             return schemaSection(database: database, tables: tables, limits: limits)
         }
     }

@@ -19,17 +19,22 @@ public struct AgentWorkspaceFacts: Sendable {
     public var workspacePath: String?
     /// 根目录条目（已按名字排好序；不给就不列 —— 本处不自己去碰文件系统）。
     public var workspaceEntries: [String]?
+    /// **仓库状态三样之二/之三**（`FR-AGT-KNOW-CTX-001`）：分支 + 未提交改动（+ ahead/behind）。
+    /// 由 App 用 `AgentGitFacts.parse(porcelain:)` 填；解析在 Core、取数在 App（本处不跑 git）。
+    public var git: AgentGitFacts?
 
     public init(activeFile: (path: String, text: String)? = nil,
                 selection: (path: String, text: String, firstLine: Int?)? = nil,
                 terminalText: String? = nil,
                 workspacePath: String? = nil,
-                workspaceEntries: [String]? = nil) {
+                workspaceEntries: [String]? = nil,
+                git: AgentGitFacts? = nil) {
         self.activeFile = activeFile
         self.selection = selection
         self.terminalText = terminalText
         self.workspacePath = workspacePath
         self.workspaceEntries = workspaceEntries
+        self.git = git
     }
 }
 
@@ -71,7 +76,14 @@ public enum AgentWorkspaceContext {
             if !tail.isEmpty { out.append(.terminalTail(text: tail)) }
         }
 
-        // ④ 目录（只在没有文件时）
+        // ④ **仓库状态**（`FR-AGT-KNOW-CTX-001`）：分支 / 未提交改动 —— 放目录之前，
+        // 因为「我在哪个分支上、树脏不脏」比「目录里有什么」更影响模型的第一步动作。
+        if let git = facts.git {
+            out.append(.gitState(branch: git.branch, changed: git.changed,
+                                 ahead: git.ahead, behind: git.behind))
+        }
+
+        // ⑤ 目录（只在没有文件时）
         if facts.activeFile == nil, let path = facts.workspacePath, let entries = facts.workspaceEntries {
             let capped = Array(entries.prefix(maxDirectoryEntries))
             if !capped.isEmpty { out.append(.directory(path: path, entries: capped)) }
