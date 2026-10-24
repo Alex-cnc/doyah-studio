@@ -967,8 +967,12 @@ def run_self_test() -> int:
             failures.append(f"例 1 失败：干净克隆上默认跑应 exit 0，实际 {code}\n{output}")
         elif "⚠ 跳过 12 份" not in output:
             failures.append(f"例 1 失败：没有高声提示「跳过 12 份」（不得静默通过）\n{output}")
-        elif "✅ 表格校验通过（55 个文件，跳过 12 份）" not in output:
+        elif not re.search(r"✅ 表格校验通过（(\d+) 个文件，跳过 12 份）", output):
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
+        elif int(re.search(r"✅ 表格校验通过（(\d+) 个文件，跳过 12 份）", output).group(1)) < 40:
+            # 文件数是随仓库增长的（本片实测 70 份）—— 这里只保「不是空跑」，不再钉死某一个数，
+            # 否则每加一份文档就要改一次自检（本来就该让它跟着真相走）。
+            failures.append(f"例 1 失败：文件数低于空跑下限 40\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
             failures.append(f"例 1 失败：通配清单没有显式打印匹配份数（L-41）\n{output}")
 

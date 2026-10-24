@@ -883,10 +883,10 @@ watchOS 实现细节：SwiftUI / WatchConnectivity。
     r.append(run_names("新平台护栏：词表含 `watchos`（七个 · 2026-10-13）",
                        lambda: PLATFORMS,
                        ("macos", "ios", "watchos", "windows", "android", "harmony", "linux")))
-    r.append(run_names("新平台护栏：`hugehippo` ≡ macos/ios/watchos/linux（Apple 全系 + Linux · 2026-10-15）",
-                       lambda: ACTORS.get("hugehippo"), ("macos", "ios", "watchos", "linux")))
-    r.append(run_names("演员名护栏：现行规范名 `babyhippo` ≡ android/harmony/windows（Windows 由退役的 fatshark 承接）",
-                       lambda: ACTORS.get("babyhippo"), ("android", "harmony", "windows")))
+    r.append(run_names("新平台护栏：`hugehippo` ≡ macos/ios/watchos（Apple 全系 · Linux 2026-10-22 划归 babyhippo）",
+                       lambda: ACTORS.get("hugehippo"), ("macos", "ios", "watchos")))
+    r.append(run_names("演员名护栏：现行规范名 `babyhippo` ≡ android/harmony/windows/linux（Windows 承接 fatshark · Linux 2026-10-22 划入）",
+                       lambda: ACTORS.get("babyhippo"), ("android", "harmony", "windows", "linux")))
     
     r.append(run_names("演员名护栏：三个退役名映射齐 + 都不在规范名表 + 仍可识别（历史单不判红）",
                        lambda: (tuple(LEGACY_ACTORS.get(x) for x in ("fatfish", "bighippo", "tinyhippo")),
