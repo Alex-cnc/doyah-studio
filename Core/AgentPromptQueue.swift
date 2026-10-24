@@ -61,6 +61,23 @@ public struct AgentPromptQueue: Equatable, Sendable {
         items[index].text = trimmed
     }
 
+    /// 按 id 上移 / 下移（界面上那两枚 ↑ ↓）：**纯函数**，返回新队列，不原地改。
+    ///
+    /// 为什么不做成 `mutating func move(id:offset:)`：界面每枚按钮都要先算「移完是什么样」
+    /// 才决定要不要画（第一行不给 ↑、最后一行不给 ↓）—— 纯函数让「算」和「改」用同一份逻辑，
+    /// 不会出现「按钮说能移、真移了没动」。
+    ///
+    /// 边界一律**夹紧**而不是静默丢弃：第一行再上移 = 留在第一行（按钮本来就该禁用，夹紧只是兜底）。
+    public func moving(id: UUID, offset: Int) -> AgentPromptQueue {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return self }
+        let target = min(max(index + offset, 0), items.count - 1)
+        guard target != index else { return self }
+        var copy = items
+        let item = copy.remove(at: index)
+        copy.insert(item, at: target)
+        return AgentPromptQueue(items: copy)
+    }
+
     /// 调序：`from` / `to` 均为 1 起算。越界或原地不动都静默。
     public mutating func move(from: Int, to: Int) {
         guard from >= 1, from <= items.count, to >= 1, to <= items.count, from != to else { return }

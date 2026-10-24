@@ -60,6 +60,49 @@ final class AgentPromptQueueTests: XCTestCase {
     }
 
     /// 预览：多行折成一行、超长截断（否则列表里一行会被撑成好几行）。
+    // MARK: - 调序（界面 ↑ ↓ 背后的那一条纯函数，`FR-AGT-CORE-LOOP-008` ②）
+
+    /// 按 id 上移一位：**只动这一条**，其余相对次序不变（不是「把邻居也顺带挪」）。
+    func testMovingUpByIdKeepsOthersOrder() {
+        var queue = AgentPromptQueue()
+        queue.enqueue("一"); queue.enqueue("二"); queue.enqueue("三")
+        let second = queue.items[1].id
+        let moved = queue.moving(id: second, offset: -1)
+        XCTAssertEqual(moved.items.map(\.text), ["二", "一", "三"])
+        XCTAssertEqual(queue.items.map(\.text), ["一", "二", "三"], "纯函数：原队列不许被改")
+    }
+
+    /// 第一行再上移 ⇒ **夹紧**留在第一行（按钮本该禁用，夹紧是兜底，不是静默丢条目）。
+    func testMovingFirstRowUpClampsInsteadOfDropping() {
+        var queue = AgentPromptQueue()
+        queue.enqueue("一"); queue.enqueue("二")
+        let moved = queue.moving(id: queue.items[0].id, offset: -1)
+        XCTAssertEqual(moved.items.map(\.text), ["一", "二"])
+        XCTAssertEqual(moved.count, 2, "夹紧不许吞掉任何一条")
+    }
+
+    /// 末行下移同样夹紧；不存在的 id 原样返回。
+    func testMovingLastRowDownClampsAndUnknownIDIsNoOp() {
+        var queue = AgentPromptQueue()
+        queue.enqueue("一"); queue.enqueue("二")
+        XCTAssertEqual(queue.moving(id: queue.items[1].id, offset: 1).items.map(\.text), ["一", "二"])
+        XCTAssertEqual(queue.moving(id: UUID(), offset: -1).items.map(\.text), ["一", "二"])
+    }
+
+    /// **取消未开始项之后，队列里不会留下它的痕迹**：剩余条目仍是 FIFO、id 不重复
+    /// （「取消的那条不许被下一次出队捞出来重发」——正是 P1-3 判据「取消未开始项不发模型请求」的客户端那一半）。
+    func testCancelledItemNeverComesBackAndRestStayFIFO() {
+        var queue = AgentPromptQueue()
+        queue.enqueue("一"); queue.enqueue("二"); queue.enqueue("三")
+        let cancelled = queue.items[1].id
+        queue.remove(id: cancelled)
+        XCTAssertEqual(queue.items.map(\.text), ["一", "三"])
+        XCTAssertEqual(Set(queue.items.map(\.id)).count, queue.count, "id 不许重复")
+        XCTAssertEqual(queue.dequeue()?.text, "一")
+        XCTAssertEqual(queue.dequeue()?.text, "三")
+        XCTAssertNil(queue.dequeue(), "取消的那条不许再被捞出来")
+    }
+
     func testPreviewCollapsesNewlinesAndTruncates() {
         XCTAssertEqual(AgentPromptQueue.preview("第一行\n第二行"), "第一行 第二行")
         XCTAssertEqual(AgentPromptQueue.preview("a\tb"), "a b")

@@ -233,6 +233,11 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         queue.remove(id: id)
     }
 
+    /// 调一条排队提问的位置（`offset` = -1 上移 / +1 下移；越界夹紧）。
+    func moveQueued(id: UUID, offset: Int) {
+        queue = queue.moving(id: id, offset: offset)
+    }
+
     /// 清空队列。
     func clearQueue() {
         queue.clear()

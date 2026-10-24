@@ -834,6 +834,18 @@ struct AgentChatView: View {
                                 .foregroundStyle(Theme.text(.secondary))
                                 .lineLimit(1)
                             Spacer(minLength: 0)
+                            // 调序（`FR-AGT-CORE-LOOP-008` ②）：首行不给 ↑、末行不给 ↓
+                            // —— 按不动的按钮不画，不让用户点了没反应。
+                            if index > 0 {
+                                glyphButton("↑", help: "上移一位") {
+                                    model.moveQueued(id: item.id, offset: -1)
+                                }
+                            }
+                            if index + 1 < model.queue.count {
+                                glyphButton("↓", help: "下移一位") {
+                                    model.moveQueued(id: item.id, offset: 1)
+                                }
+                            }
                             glyphButton("✕", help: "移出队列") { model.removeQueued(id: item.id) }
                         }
                     }
