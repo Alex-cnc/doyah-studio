@@ -149,7 +149,9 @@ tasks:
     next_try: 等概设补这三处的行为定义后再挂 CapabilityGate
     deps: [T2.5]
   - id: T6.1
-    progress: 2026-10-24 · 已清 1/6：编辑器行号台账（三本书补口径锚点 ⇒ check-editor-line-numbers ✅）
+    progress: 2026-10-24 · 已清 5/6：编辑器行号（三本书补锚点）· 网络出口登记（Tests/LLMStreamingAuthTests）· 工程过期（xcodegen）· 三仓副本台账（实测值 + 自测 20/20）· 语言登记/路径归属（本片引入，已修）
+    evidence: .agent/evidence/2026-10-24-T6.1.md
+    remaining: `check-board-parity` —— 判据过期 + 看板数据过期（项数 290 vs 真源 379；Studio 域 15 vs 24；全产品域 73）；需按证据文件 §建议 新写 `Scripts/gen-platform-board.py` 一次重生成
     finding: board-parity 的根因**不是**文档缺标记，而是**判据过期** —— 状态矩阵 2026-10-20 已从 SRS §10.10 迁到《开发计划书》§5（gen-platform-parity --check ✅ 379 条 / 4 平台列），但 check-board-parity 仍只读 SRS；实测改指 计划书 后域重算全为 None（两份表结构不同：计划书表无 `**域**（N 条…）` 标题行）⇒ 需要先定「判据读哪份、按哪个表形解析」再改，不能只换路径
     goal: 存量红清零（6 项）—— 文档锚点/标记补齐：编辑器行号口径 3 处（概设/需求书/能力书）· platform-parity 标记（需求书 §10.10）· board-parity · panel-root-frames · terminal-tabs · result-scroll-ledger · agent-provider-presets · markdown-single-source · browser-tab-ownership · tri-repo-parity · release-version（工程过期需 xcodegen）
     done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/verify-all.sh --keep-going > /tmp/va3.log 2>&1; grep -cE '^⚠️  第|⛔' /tmp/va3.log | grep -qx 0"
