@@ -93,6 +93,7 @@
 		1C32517CD1265B97DCD37767 /* PostgresServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A05B98639B8833318F4201 /* PostgresServiceTests.swift */; };
 		1C3C424E2FB5CDEE3DAD5D7E /* ConnectionInfoTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E7BB3CBE064FC847854CC37 /* ConnectionInfoTextTests.swift */; };
 		1C7BD87A080FC39CF555456D /* WorkspaceHeaderSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE5A9C955CB7BB35D8981040 /* WorkspaceHeaderSearch.swift */; };
+		1D07850309499BCE93D842D8 /* OwnSessionReporting.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8450E1C7A2C3659A3E83B56 /* OwnSessionReporting.swift */; };
 		1D1B52BA9110A91608596A52 /* QueryCompletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 620319668625E38EADD657CB /* QueryCompletionTests.swift */; };
 		1D7D613F985AD5319A6B24D7 /* WorkspaceTabsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D14EB82DF73913D9D7B8455 /* WorkspaceTabsModel.swift */; };
 		1D9AD6629BF9BF39FB94AED8 /* ConnectionFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5FC2A7D4D9565419BDBED76 /* ConnectionFailureTests.swift */; };
@@ -1437,6 +1438,7 @@
 		D734CF660B6D04059FC426B2 /* ReminderEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderEntry.swift; sourceTree = "<group>"; };
 		D7F17BF5B11EC16E62DA53C7 /* ReminderPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderPresentation.swift; sourceTree = "<group>"; };
 		D81FE38807C64D090234544E /* ExecutionPlanPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionPlanPanel.swift; sourceTree = "<group>"; };
+		D8450E1C7A2C3659A3E83B56 /* OwnSessionReporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnSessionReporting.swift; sourceTree = "<group>"; };
 		D8C7F6405473E5B5B205727A /* AgentLocalCommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLocalCommandRunner.swift; sourceTree = "<group>"; };
 		D948A0E7E558EF5B587BE600 /* LockPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockPanel.swift; sourceTree = "<group>"; };
 		D97FE426296BDFD01620485B /* XLSXReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLSXReaderTests.swift; sourceTree = "<group>"; };
@@ -2148,6 +2150,7 @@
 				15C30F3276E3F1F5C65E0CC0 /* ObjectTreeAutoExpansion.swift */,
 				597E6BE3CE2FE46CDAE71714 /* ObjectTreeGrouping.swift */,
 				52652194199B7284372F21F2 /* ObjectTreeRefreshGate.swift */,
+				D8450E1C7A2C3659A3E83B56 /* OwnSessionReporting.swift */,
 				E53DCE8EEA4A67CBF1089CFA /* PostgresCellFormatter.swift */,
 				DB2565DCD6CF06E98BE41BD1 /* PostgresService.swift */,
 				437A0AA1D08D4EFBDE956A96 /* PostgresWireValue.swift */,
@@ -3074,6 +3077,7 @@
 				A2EEBBFBEAD429B0DB515E8E /* ObjectTreeAutoExpansion.swift in Sources */,
 				6C06CE49293B4FAE9E76F908 /* ObjectTreeGrouping.swift in Sources */,
 				8DF37A1362631B3119D9D324 /* ObjectTreeRefreshGate.swift in Sources */,
+				1D07850309499BCE93D842D8 /* OwnSessionReporting.swift in Sources */,
 				4C2A11642D682BE61F7B80C3 /* PluginManifest.swift in Sources */,
 				DAFB35355D0A32DF53902306 /* PluginMounts.swift in Sources */,
 				C60FF42144DC4148082CB0A1 /* PluginRegistry.swift in Sources */,

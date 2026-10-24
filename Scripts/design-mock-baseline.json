@@ -1,5 +1,5 @@
 {
-  "_说明": "合册 T-20261013-027 / 原单 T-20261010-067（样本 69）立的面对账基线：dirs 与 suffixes **增减都报红**（改了面必须同步改本文件并写明理由）；scannedFiles 与 tokenValues 是棘轮（只许涨不许跌，跌 = 削面 = 红）。",
+  "_说明": "合册 T-20261013-027 / 原单 T-20261010-067（样本 69）立的面对账基线：dirs 与 suffixes **增减都报红**（改了面必须同步改本文件并写明理由）；scannedFiles 与 tokenValues 是棘轮（只许涨不许跌，跌 = 削面 = 红）。 ｜2026-10-24：后缀面新增 `.jpg`×2（`App/Resources/wallpaper-city-lake.jpg` / `wallpaper-cosmic-cliff.jpg` —— 随包附带的壁纸位图，二进制资源不承载源码色值；已在判据 `SKIP_SUFFIX_REASONS` 里写明理由，此处同步基线计数）",
   "dirs": [
     "App",
     "CLI",
@@ -19,7 +19,8 @@
     ".icns": 1,
     ".md": 1,
     ".json": 1,
-    ".xlsx": 4
+    ".xlsx": 4,
+    ".jpg": 2
   },
   "scannedFiles": 632,
   "tokenValues": 119

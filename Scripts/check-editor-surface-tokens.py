@@ -129,6 +129,7 @@ LEDGER = (
     "App/Views/DataTaskSpecSheet.swift",  # 数据任务 · 规格输入
     "App/Views/DiagnosisPanel.swift",     # 诊断 · 语句 + 回答（两处）
     "App/Views/MaintenancePanel.swift",   # 维护 · 计划
+    "App/Views/MCPServersSheet.swift",    # MCP 服务器 · 环境变量 / 参数（多行文本块，T6.1 补登记）
     "Plugins/Notes/Views/NotesPanel.swift",         # 笔记正文（内测 甲2 的正主）
 )
 

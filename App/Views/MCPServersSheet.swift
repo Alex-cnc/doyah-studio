@@ -122,6 +122,7 @@ struct MCPServersSheet: View {
                 .font(Theme.font(.caption))
             TextEditor(text: text)
                 .font(.system(.caption, design: .monospaced))
+                .editorSurface()
                 .frame(height: height)
                 .border(.separator)
             Text(hint)

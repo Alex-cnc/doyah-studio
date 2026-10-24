@@ -31,7 +31,7 @@ struct AgentScheduleSheet: View {
         }
         .frame(width: 600, height: 560, alignment: .topLeading)
         .sheet(item: $editing) { entry in
-            AgentScheduleEditor(entry: entry, isNew: !appState.agentSchedules.contains { $0.id == entry.id })
+            AgentScheduleForm(entry: entry, isNew: !appState.agentSchedules.contains { $0.id == entry.id })
                 .environmentObject(appState)
         }
         .task { await appState.loadAgentSchedules() }
@@ -199,7 +199,7 @@ struct AgentScheduleSheet: View {
 
 // MARK: - 编辑（新建 / 修改）
 
-private struct AgentScheduleEditor: View {
+private struct AgentScheduleForm: View {
 
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss

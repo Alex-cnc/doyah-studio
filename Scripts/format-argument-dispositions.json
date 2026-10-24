@@ -1,494 +1,494 @@
 {
-  "note": "语言表模板占位符 ↔ `L(...)` 调用点实参的对账台账（队列 L-46）。判据与用法见 Scripts/check-format-arguments.py 头部。shapes = 门禁**判不出类型**的实参形状，逐条登记：kind 只认有出处可引的（text / number，理由写清 file:line）；没有出处的一律 unverified —— unverified 不参与槽位交叉检查，只被形状与处数棘轮钉住，不是放行。 预算棘轮：unknownBudget 116 → 117（2026-09-30 循环第 119 轮 `L-107`）：新增一处 `L(.workspaceFormatFailed, …, failure.exitCode.map(String.init) ?? \"—\", …)` —— 该实参形状已按 `kind=text` 登记（见 shapes 末条），但「类型不明实参数」这一计数**在登记之前就自增** ⇒ 预算必须同批 +1，否则判据 D 会把「已登记」的也算成超支。 预算棘轮 117 → 123（2026-10-02 队列 `L-114` 工作区文件操作：2 处 `<inside>` + 3 处 `<name>` + 1 处 `<reason>`，三处形状都已按 kind 登记；同 `L-107` 的先例 —— 登记之前那个计数就已自增，不 +6 判据 D 会把已登记的也算成超支）。 预算棘轮 123 → 124（2026-10-03 队列 `L-172` 关闭确认框：1 处 `tabs.pendingClose?.title ?? \"\"`，形状已按 kind=unverified 登记；同 `L-107` / `L-114` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。 预算棘轮 124 → 125（2026-10-03 开发循环第 169 轮 `L-97` 界面半第一片：1 处 `<notebook>`（跨笔记本搜索结果行的所属标注），形状已按 kind=text 登记并附出处；同 `L-107` / `L-114` / `L-172` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。 预算棘轮 125 → 129（2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片：删除确认框的「影响面」那句有 4 处按形状分档的实参 —— `<noteCount>` ×2 + `<notebookCount>` ×2，两个形状都已按 kind=number 登记并附出处；同 `L-107` / `L-114` / `L-172` / 第 169 轮的先例 —— 登记之前那个计数就已自增，不 +4 判据 D 会把已登记的也算成超支）。 2026-10-14（台账 v1.324 · `T-20261008-050`/WY-2b 的收尾）：`App/AppState.swift:6926` 的迁移提示 `L(.notesMigrationNeedsAttention, detail)` 原先写成内联拼接表达式（形状判据认不出 ⇒ 未登记、全局超预算 1）。本批把它改成**具名 + 显式标注**（`let detail: String = …`）⇒ 形状归入已登记的 `<detail>`，该形状上限 4 → 5、全局预算 130 → 131，两项均在本条理由里写明（棘轮只许不增，本次增 1 有据）。 预算棘轮 131 → 137（2026-10-18 macOS 开发循环 · 队列 9「门禁欠账两笔」）：六处一次说清 —— `<model>` ×2（`App/Views/AgentChatView.swift:232`、`App/Views/AgentSettingsSheet.swift:158`）、`<modelName>` ×1（`AgentChatView.swift:411`）、`URL(…)` ×1（`AgentChatView.swift:423`）三个形状本轮新入台账；`<reason>` 14 → 15（`AgentSettingsSheet.swift:160`）、`<next>` 1 → 2（`AgentScheduleSheet.swift:128`）；再把同一行的 `millis` 登记成 `<millis>`（kind=number，`AgentConnectionTest.passed(model: String, millis: Int)` ⇒ Int，正好由判据 A′ 反向确认 `%d` 槽收的是数字）。七处在基线 `f4e3d89` 的干净工作树里逐处点名核过，**不是本轮新写的**；台账长期只登记形状、预算没跟着调，这半截本轮销干净。同批两处门禁自身修正：把 `agentTestPassed` 的 `%d` 槽改成收 `Int`（原来收字符串，界面会印垃圾数 —— 真缺陷）；类型索引不再收函数体里的**嵌套函数**（`Core/CodeCommentToggle.swift` 的局部 `func map(_ offsetInBlock: Int) -> Int` 曾让每处 `x.map(...)` 被判成数字 ⇒ 判据 A 假红 + 台账形状被判陈旧）。 预算棘轮 138 → 153（2026-10-18 `FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板新增 15 处类型不明实参（六种新形状 `<connected>` / `<error>` / `<serverName>` / `<version>` / `.rawValue` / `<line>` 逐条登记 + 四个已有形状抬上限），同 `L-107` / `L-114` / `L-172` 先例 —— 登记之前那个计数就已自增，不 +15 判据 D 会把已登记的也算成超支。",
-  "version": 1,
-  "unknownBudget": 153,
-  "shapes": [
-    {
-      "shape": "<reason>",
-      "kind": "unverified",
-      "maxSites": 15,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查；2026-10-02 队列 `L-114` 新增一处（`App/WorkspaceStore.swift` 的 `operationMessage(for:)`：`case .system(let reason)` ⇒ `reason: String`）；2026-10-07 片 `N2-4`（任务 `t_b2a943b6` · macOS 机组）再新增一处：`App/AppState.swift` 的 `writeNoteEditor` 里 `let reason = ErrorPresenter.message(for: error)`（`ErrorPresenter.message(for:)` 返回 `String`）传给 `L(.notesAutoSaveFailedStatus, reason)`，那个模板只有一个 `%@` 槽 —— 类型是确定的（String），只是门禁判不出裸标识符，故仍按 unverified 登记形状与处数。2026-10-18（macOS 开发循环 · 队列 9 门禁欠账）：处数 14 → 15 —— 第 15 处是 `App/Views/AgentSettingsSheet.swift:160` 的 `case .failed(let reason)`（「测试连接」失败行，`AgentConnectionTest.failed(String)` ⇒ String）；该处在基线 `f4e3d89` 的干净树上就已在盘，台账只是漏记。"
-    },
-    {
-      "shape": "<name>",
-      "kind": "text",
-      "maxSites": 11,
-      "reason": "库名 / 表名：App/AppState.swift:2058 形参 `name: String`；2026-10-02 队列 `L-114` 新增三处（`App/WorkspaceStore.swift` 的 `operationMessage(for:)`：`case .illegalName(let name)` / `.alreadyExists(let name)` / `.notADirectory(let name)` ⇒ `name: String`） 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增一处：`L(.mcpServersProblemDuplicateName, index + 1, name)` 的 `name`）"
-    },
-    {
-      "shape": "<written>",
-      "kind": "number",
-      "maxSites": 6,
-      "reason": "App/AppState.swift:4316 `written = request.rows.count` ⇒ Int"
-    },
-    {
-      "shape": "<pid>",
-      "kind": "number",
-      "maxSites": 5,
-      "reason": "App/AppState.swift:4376 `func cancelSessionStatement(pid: Int)`"
-    },
-    {
-      "shape": "<detail>",
-      "kind": "unverified",
-      "maxSites": 7,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查；2026-10-14 新增一处：`App/AppState.swift:6926`（迁移提示那一条 · 原为内联拼接 ⇒ 改成具名 `detail: String` 后才认得出形状）⇒ 4 → 5。 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增两处：`L(.mcpServersStateNotConnectable, code, detail)` 与 `L(.mcpServersStateReason, detail)`）"
-    },
-    {
-      "shape": ".column",
-      "kind": "unverified",
-      "maxSites": 3,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<column>",
-      "kind": "text",
-      "maxSites": 3,
-      "reason": "App/AppState.swift:171 `var column: String`（外键跳转的列名）"
-    },
-    {
-      "shape": "<duration>",
-      "kind": "text",
-      "maxSites": 3,
-      "reason": "App/AppState.swift:5598 `let duration = String(format: \"%.3f\", summary.duration)` ⇒ 已是 String（第 16 轮那族缺陷的同名变量在这里是字符串）"
-    },
-    {
-      "shape": "<message>",
-      "kind": "unverified",
-      "maxSites": 3,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<statementNumber>",
-      "kind": "unverified",
-      "maxSites": 3,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "appState.selectedConnection?.dbT",
-      "kind": "unverified",
-      "maxSites": 3,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "$0",
-      "kind": "unverified",
-      "maxSites": 2,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": ".line",
-      "kind": "unverified",
-      "maxSites": 2,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<affected>",
-      "kind": "unverified",
-      "maxSites": 2,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<failure>",
-      "kind": "unverified",
-      "maxSites": 3,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查。**其中一处在本轮新增**（队列 L-44）：`App/AppState.swift` 的 `AppState.NoteSearchState.unavailable(failure: String)` 关联值 ⇒ String，模板 `noteSearchUnavailable` 那一处就是 `%@`（类型是确定的，只是门禁判不出裸标识符）。"
-    },
-    {
-      "shape": "<filename>",
-      "kind": "unverified",
-      "maxSites": 2,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<number>",
-      "kind": "number",
-      "maxSites": 2,
-      "reason": "App/AppState.swift:3332 `func rollbackDataTask(taskID: UUID, to number: Int)`"
-    },
-    {
-      "shape": "<path>",
-      "kind": "unverified",
-      "maxSites": 2,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "tabs[index].title",
-      "kind": "unverified",
-      "maxSites": 2,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": ".defaultBrowseLimit",
-      "kind": "unverified",
-      "maxSites": 2,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查。**处数 1 → 2（2026-09-30，交互会话把对象树右键菜单交给 AppKit 捕获器之后新增）**：① `App/Views/ObjectTreeContextMenu.swift:130`（SwiftUI 那份渲染，探针在用）；② `App/Views/ObjectTreeAppKitMenu.swift:74`（界面真正弹的那份）—— 同一件事的两份渲染各自写了一遍 `L(.treeActionBrowseRows, ObjectTreeActions.defaultBrowseLimit)`。类型本身是有出处的（`Core/ObjectTreeActions.swift:72` `public static let defaultBrowseLimit = 200` ⇒ Int），但它不以本判据认的那种**显式标注**形态出现 ⇒ 仍按 unverified 登记形状与处数，不参与槽位交叉检查。"
-    },
-    {
-      "shape": ".id",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "App/AppState.swift:6175 `task.id` 是 UUID：**「`%@` 收 UUID 会不会印 `(null)`」未经实测**（第 16 轮只实测过 Int）⇒ 不判，留待有实测再定"
-    },
-    {
-      "shape": ".mcpApprovalBadLines",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": ".value",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": ".version",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<artifactFailure>",
-      "kind": "text",
-      "maxSites": 1,
-      "reason": "App/AppState.swift:2745 `var artifactFailure: String?`"
-    },
-    {
-      "shape": "<checked>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<code>",
-      "kind": "unverified",
-      "maxSites": 4,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增三处：`L(.mcpServersStateNotConnectable/Unsupported/Unreachable, code)`）"
-    },
-    {
-      "shape": "<count>",
-      "kind": "unverified",
-      "maxSites": 4,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增三处：`L(.mcpServersSaved, count)` / `L(.mcpServersNoteDisabled, count)` / `L(.mcpServersSummary, connected, servers.count)`）"
-    },
-    {
-      "shape": "<databaseName>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<feature>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<filePath>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<id>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<loadedRowCount>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<minutes>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<names>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<next>",
-      "kind": "unverified",
-      "maxSites": 2,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查；2026-10-18（macOS 开发循环 · 队列 9 门禁欠账）：处数 1 → 2 —— 两处都是 `L(.dataTaskNextRun, next)`（模板 `下次执行：%@`），即 `App/Views/DataTaskPanel.swift:695` 与 `App/Views/AgentScheduleSheet.swift:128`（定时 agent 面板，FR-AGT-TOOL-SCHED-002）；两处 `next` 都是 String（`Core/DataTaskPresentation.swift:50` 与 `Core/AgentSchedulePresentation.swift:92` 的 `nextRunText(...) -> String?`，`if let` 解包后传入 `%@` 槽），在基线 `f4e3d89` 的干净树上就已在盘。"
-    },
-    {
-      "shape": "<preview>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<previewLimit>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<problem>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<requestID>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<restoreJobs>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<resultCount>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<searched>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<skipped>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<statement>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<statementCount>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<targetDatabase>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<text>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<timeout>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<value>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "<versions>",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "approval.record.connectionName ?",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "approved ? L(.mcpApprovalAllow) ",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "current.connectionName ?? \"—\"",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "directory.deletingLastPathComponent(…)",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "draft?.name ?? \"\"",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "engine.failure ?? \"\"",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "error.errorDescription ?? \"\\(err",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "fonts.resolution.effectiveFamily",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "migration.failure ?? \"\"",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "pendingConfirmation?.message ?? ",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "pendingTerminate?.database ?? \"?",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "pendingTerminate?.user ?? \"?\"",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "plan.refusals.first ?? \"\"",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "table.columns.count - visible",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
-    },
-    {
-      "shape": "failure.exitCode.map(…)",
-      "kind": "text",
-      "maxSites": 1,
-      "reason": "App/WorkspaceTabsModel.swift:184 `failure.exitCode.map(String.init) ?? \"—\"` ⇒ String（`exitCode` 的声明在 Core/CodeFormatting.swift：`public let exitCode: Int32?`，缺值分支是字符串字面量 `\"—\"`）；该键三处模板都是 `%@`"
-    },
-    {
-      "shape": "<inside>",
-      "kind": "number",
-      "maxSites": 2,
-      "reason": "目录里有多少项：`App/Views/WorkspaceExplorerView.swift:337/338` 的 `max(summary.items - 1, 0)`（`summary.items` 的声明在 `Core/WorkspaceFileOperations.swift`：`public let items: Int`）⇒ Int；两个键的模板都只有一个 `%d`"
-    },
-    {
-      "shape": "tabs.pendingClose?.title ?? \"\"",
-      "kind": "unverified",
-      "maxSites": 1,
-      "reason": "类型不明：可选链 + 默认值，文件级索引认不出类型（`WorkspaceCloseRequest.title` 是 `String`）⇒ 只登记形状与处数棘轮；2026-10-03 队列 `L-172` 新增一处（关闭确认框的标题，`App/Views/WorkspaceTabStrip.swift`）"
-    },
-    {
-      "shape": "<notebook>",
-      "kind": "text",
-      "maxSites": 1,
-      "reason": "笔记本名：`Plugins/Notes/Views/NotesPanel.swift:80` 的 `if let notebook = appState.notebookName(for: note)` ⇒ `notebook: String`（`App/AppState.swift:6070` 返回 `String?`，此处已解包）；2026-10-03 开发循环第 169 轮队列 `L-97` 界面半第一片"
-    },
-    {
-      "shape": "<noteCount>",
-      "kind": "number",
-      "maxSites": 2,
-      "reason": "笔记条数：`App/AppState.swift:6076/6080` 的 `case .notes(let noteCount)` / `case .notebooksAndNotes(_, let noteCount)` ⇒ `ContainerRemovalSummary` 的关联值（`Plugins/Notes/Sources/NotebookRemovalPrompt.swift` 声明为 `Int`），只有 `%d` 槽；2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片（删除确认框）"
-    },
-    {
-      "shape": "<notebookCount>",
-      "kind": "number",
-      "maxSites": 2,
-      "reason": "笔记本条数：`App/AppState.swift:6078/6080` 的 `case .notebooks(let notebookCount)` / `case .notebooksAndNotes(let notebookCount, _)` ⇒ 同上（`Int`），只有 `%d` 槽；2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片"
-    },
-    {
-      "shape": "<model>",
-      "kind": "text",
-      "maxSites": 2,
-      "reason": "模型名：`Core/AgentChat.swift:139` 的 `case ready(model: String, endpoint: String)` 解包出的 `model`、以及 `App/AppState.swift:3856` 的 `AgentConnectionTest.passed(model: String, millis: Int)` 的 `model` 都是 String；两处键（`agentStatusModel` / `agentTestPassed`）的对应槽都是 `%@`。2026-10-18（队列 9 门禁欠账）登记：两处在基线 `f4e3d89` 已在盘，只是形状没入台账"
-    },
-    {
-      "shape": "<modelName>",
-      "kind": "text",
-      "maxSites": 1,
-      "reason": "模型名：`App/Views/AgentChatView.swift:411` 的 `if case .ready(let modelName, let endpoint) = model.endpointState` ⇒ 同 `Core/AgentChat.swift:139` 的 `ready(model: String, …)`，是 String；模板 `agentStatusModel` 那一槽是 `%@`"
-    },
-    {
-      "shape": "<millis>",
-      "kind": "number",
-      "maxSites": 1,
-      "reason": "连接测试耗时：`App/AppState.swift:3856` 的 `AgentConnectionTest.passed(model: String, millis: Int)` ⇒ Int；模板 `连接正常：%@（%d 毫秒）` 第 2 槽是 `%d`。2026-10-18（队列 9）：这一处原先传字符串插值（`\\(millis)`，判据 A′ 红、界面会印垃圾数），改成传 Int 后裸标识符按类型不明计数 ⇒ 登记为 number，让槽位交叉检查真起作用"
-    },
-    {
-      "shape": "URL(…)",
-      "kind": "text",
-      "maxSites": 1,
-      "reason": "`App/Views/AgentChatView.swift:423` 的 `URL(fileURLWithPath: root).lastPathComponent` ⇒ Foundation 声明 `URL.lastPathComponent: String`（同 `FOUNDATION_MEMBER_KINDS` 的那一条，只是外面套了构造器，形状认不出）；模板 `agentStatusWorkspace` 那一槽是 `%@`"
-    },
-    {
-      "shape": "<connected>",
-      "kind": "number",
-      "maxSites": 1,
-      "reason": "`App/Views/AgentSettingsSheet.swift` 的 `let connected = appState.agentMCPReports.filter { $0.state.isConnected }.count` ⇒ Int，进模板 `已连上 %d / %d 条`。"
-    },
-    {
-      "shape": "<error>",
-      "kind": "text",
-      "maxSites": 1,
-      "reason": "`App/Views/MCPServersSheet.swift` 的 `if let error = appState.agentMCPLoadError`（`AgentMCPLoadError` 是 `String?`）⇒ String。"
-    },
-    {
-      "shape": "<serverName>",
-      "kind": "text",
-      "maxSites": 1,
-      "reason": "`App/Views/MCPServersSheet.swift` 的 `case .connected(let serverName, …)`（`MCPClientServerState.connected(serverName: String, …)`）⇒ String。"
-    },
-    {
-      "shape": "<version>",
-      "kind": "text",
-      "maxSites": 1,
-      "reason": "同上，`protocolVersion: String` ⇒ String。"
-    },
-    {
-      "shape": ".rawValue",
-      "kind": "text",
-      "maxSites": 1,
-      "reason": "`App/Views/MCPServersSheet.swift` 的 `kind.rawValue`（`MCPClientTransportKind: String` 枚举）⇒ String。"
-    },
-    {
-      "shape": "<line>",
-      "kind": "number",
-      "maxSites": 1,
-      "reason": "`App/Views/MCPServersSheet.swift` 的 `let line = Int(parts[2])`（环境变量坏行的行号）⇒ Int，进模板 `第 %d 行…`。"
-    }
-  ],
-  "exceptions": []
+ "note": "语言表模板占位符 ↔ `L(...)` 调用点实参的对账台账（队列 L-46）。判据与用法见 Scripts/check-format-arguments.py 头部。shapes = 门禁**判不出类型**的实参形状，逐条登记：kind 只认有出处可引的（text / number，理由写清 file:line）；没有出处的一律 unverified —— unverified 不参与槽位交叉检查，只被形状与处数棘轮钉住，不是放行。 预算棘轮：unknownBudget 116 → 117（2026-09-30 循环第 119 轮 `L-107`）：新增一处 `L(.workspaceFormatFailed, …, failure.exitCode.map(String.init) ?? \"—\", …)` —— 该实参形状已按 `kind=text` 登记（见 shapes 末条），但「类型不明实参数」这一计数**在登记之前就自增** ⇒ 预算必须同批 +1，否则判据 D 会把「已登记」的也算成超支。 预算棘轮 117 → 123（2026-10-02 队列 `L-114` 工作区文件操作：2 处 `<inside>` + 3 处 `<name>` + 1 处 `<reason>`，三处形状都已按 kind 登记；同 `L-107` 的先例 —— 登记之前那个计数就已自增，不 +6 判据 D 会把已登记的也算成超支）。 预算棘轮 123 → 124（2026-10-03 队列 `L-172` 关闭确认框：1 处 `tabs.pendingClose?.title ?? \"\"`，形状已按 kind=unverified 登记；同 `L-107` / `L-114` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。 预算棘轮 124 → 125（2026-10-03 开发循环第 169 轮 `L-97` 界面半第一片：1 处 `<notebook>`（跨笔记本搜索结果行的所属标注），形状已按 kind=text 登记并附出处；同 `L-107` / `L-114` / `L-172` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。 预算棘轮 125 → 129（2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片：删除确认框的「影响面」那句有 4 处按形状分档的实参 —— `<noteCount>` ×2 + `<notebookCount>` ×2，两个形状都已按 kind=number 登记并附出处；同 `L-107` / `L-114` / `L-172` / 第 169 轮的先例 —— 登记之前那个计数就已自增，不 +4 判据 D 会把已登记的也算成超支）。 2026-10-14（台账 v1.324 · `T-20261008-050`/WY-2b 的收尾）：`App/AppState.swift:6926` 的迁移提示 `L(.notesMigrationNeedsAttention, detail)` 原先写成内联拼接表达式（形状判据认不出 ⇒ 未登记、全局超预算 1）。本批把它改成**具名 + 显式标注**（`let detail: String = …`）⇒ 形状归入已登记的 `<detail>`，该形状上限 4 → 5、全局预算 130 → 131，两项均在本条理由里写明（棘轮只许不增，本次增 1 有据）。 预算棘轮 131 → 137（2026-10-18 macOS 开发循环 · 队列 9「门禁欠账两笔」）：六处一次说清 —— `<model>` ×2（`App/Views/AgentChatView.swift:232`、`App/Views/AgentSettingsSheet.swift:158`）、`<modelName>` ×1（`AgentChatView.swift:411`）、`URL(…)` ×1（`AgentChatView.swift:423`）三个形状本轮新入台账；`<reason>` 14 → 15（`AgentSettingsSheet.swift:160`）、`<next>` 1 → 2（`AgentScheduleSheet.swift:128`）；再把同一行的 `millis` 登记成 `<millis>`（kind=number，`AgentConnectionTest.passed(model: String, millis: Int)` ⇒ Int，正好由判据 A′ 反向确认 `%d` 槽收的是数字）。七处在基线 `f4e3d89` 的干净工作树里逐处点名核过，**不是本轮新写的**；台账长期只登记形状、预算没跟着调，这半截本轮销干净。同批两处门禁自身修正：把 `agentTestPassed` 的 `%d` 槽改成收 `Int`（原来收字符串，界面会印垃圾数 —— 真缺陷）；类型索引不再收函数体里的**嵌套函数**（`Core/CodeCommentToggle.swift` 的局部 `func map(_ offsetInBlock: Int) -> Int` 曾让每处 `x.map(...)` 被判成数字 ⇒ 判据 A 假红 + 台账形状被判陈旧）。 预算棘轮 138 → 153（2026-10-18 `FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板新增 15 处类型不明实参（六种新形状 `<connected>` / `<error>` / `<serverName>` / `<version>` / `.rawValue` / `<line>` 逐条登记 + 四个已有形状抬上限），同 `L-107` / `L-114` / `L-172` 先例 —— 登记之前那个计数就已自增，不 +15 判据 D 会把已登记的也算成超支。",
+ "version": 1,
+ "unknownBudget": 154,
+ "shapes": [
+  {
+   "shape": "<reason>",
+   "kind": "unverified",
+   "maxSites": 15,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查；2026-10-02 队列 `L-114` 新增一处（`App/WorkspaceStore.swift` 的 `operationMessage(for:)`：`case .system(let reason)` ⇒ `reason: String`）；2026-10-07 片 `N2-4`（任务 `t_b2a943b6` · macOS 机组）再新增一处：`App/AppState.swift` 的 `writeNoteEditor` 里 `let reason = ErrorPresenter.message(for: error)`（`ErrorPresenter.message(for:)` 返回 `String`）传给 `L(.notesAutoSaveFailedStatus, reason)`，那个模板只有一个 `%@` 槽 —— 类型是确定的（String），只是门禁判不出裸标识符，故仍按 unverified 登记形状与处数。2026-10-18（macOS 开发循环 · 队列 9 门禁欠账）：处数 14 → 15 —— 第 15 处是 `App/Views/AgentSettingsSheet.swift:160` 的 `case .failed(let reason)`（「测试连接」失败行，`AgentConnectionTest.failed(String)` ⇒ String）；该处在基线 `f4e3d89` 的干净树上就已在盘，台账只是漏记。"
+  },
+  {
+   "shape": "<name>",
+   "kind": "text",
+   "maxSites": 11,
+   "reason": "库名 / 表名：App/AppState.swift:2058 形参 `name: String`；2026-10-02 队列 `L-114` 新增三处（`App/WorkspaceStore.swift` 的 `operationMessage(for:)`：`case .illegalName(let name)` / `.alreadyExists(let name)` / `.notADirectory(let name)` ⇒ `name: String`） 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增一处：`L(.mcpServersProblemDuplicateName, index + 1, name)` 的 `name`）"
+  },
+  {
+   "shape": "<written>",
+   "kind": "number",
+   "maxSites": 6,
+   "reason": "App/AppState.swift:4316 `written = request.rows.count` ⇒ Int"
+  },
+  {
+   "shape": "<pid>",
+   "kind": "number",
+   "maxSites": 6,
+   "reason": "App/AppState.swift:4376 `func cancelSessionStatement(pid: Int)`；2026-10-24 新增一处：`App/AppState.swift` `runSessionSignal` 的 `L(.sessionOwnRefused, pid)`（自己的会话拒绝终止）—— pid 仍来自同一签名"
+  },
+  {
+   "shape": "<detail>",
+   "kind": "unverified",
+   "maxSites": 7,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查；2026-10-14 新增一处：`App/AppState.swift:6926`（迁移提示那一条 · 原为内联拼接 ⇒ 改成具名 `detail: String` 后才认得出形状）⇒ 4 → 5。 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增两处：`L(.mcpServersStateNotConnectable, code, detail)` 与 `L(.mcpServersStateReason, detail)`）"
+  },
+  {
+   "shape": ".column",
+   "kind": "unverified",
+   "maxSites": 3,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<column>",
+   "kind": "text",
+   "maxSites": 3,
+   "reason": "App/AppState.swift:171 `var column: String`（外键跳转的列名）"
+  },
+  {
+   "shape": "<duration>",
+   "kind": "text",
+   "maxSites": 3,
+   "reason": "App/AppState.swift:5598 `let duration = String(format: \"%.3f\", summary.duration)` ⇒ 已是 String（第 16 轮那族缺陷的同名变量在这里是字符串）"
+  },
+  {
+   "shape": "<message>",
+   "kind": "unverified",
+   "maxSites": 3,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<statementNumber>",
+   "kind": "unverified",
+   "maxSites": 3,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "appState.selectedConnection?.dbT",
+   "kind": "unverified",
+   "maxSites": 3,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "$0",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": ".line",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<affected>",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<failure>",
+   "kind": "unverified",
+   "maxSites": 3,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查。**其中一处在本轮新增**（队列 L-44）：`App/AppState.swift` 的 `AppState.NoteSearchState.unavailable(failure: String)` 关联值 ⇒ String，模板 `noteSearchUnavailable` 那一处就是 `%@`（类型是确定的，只是门禁判不出裸标识符）。"
+  },
+  {
+   "shape": "<filename>",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<number>",
+   "kind": "number",
+   "maxSites": 2,
+   "reason": "App/AppState.swift:3332 `func rollbackDataTask(taskID: UUID, to number: Int)`"
+  },
+  {
+   "shape": "<path>",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "tabs[index].title",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": ".defaultBrowseLimit",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查。**处数 1 → 2（2026-09-30，交互会话把对象树右键菜单交给 AppKit 捕获器之后新增）**：① `App/Views/ObjectTreeContextMenu.swift:130`（SwiftUI 那份渲染，探针在用）；② `App/Views/ObjectTreeAppKitMenu.swift:74`（界面真正弹的那份）—— 同一件事的两份渲染各自写了一遍 `L(.treeActionBrowseRows, ObjectTreeActions.defaultBrowseLimit)`。类型本身是有出处的（`Core/ObjectTreeActions.swift:72` `public static let defaultBrowseLimit = 200` ⇒ Int），但它不以本判据认的那种**显式标注**形态出现 ⇒ 仍按 unverified 登记形状与处数，不参与槽位交叉检查。"
+  },
+  {
+   "shape": ".id",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "App/AppState.swift:6175 `task.id` 是 UUID：**「`%@` 收 UUID 会不会印 `(null)`」未经实测**（第 16 轮只实测过 Int）⇒ 不判，留待有实测再定"
+  },
+  {
+   "shape": ".mcpApprovalBadLines",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": ".value",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": ".version",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<artifactFailure>",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "App/AppState.swift:2745 `var artifactFailure: String?`"
+  },
+  {
+   "shape": "<checked>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<code>",
+   "kind": "unverified",
+   "maxSites": 4,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增三处：`L(.mcpServersStateNotConnectable/Unsupported/Unreachable, code)`）"
+  },
+  {
+   "shape": "<count>",
+   "kind": "unverified",
+   "maxSites": 4,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增三处：`L(.mcpServersSaved, count)` / `L(.mcpServersNoteDisabled, count)` / `L(.mcpServersSummary, connected, servers.count)`）"
+  },
+  {
+   "shape": "<databaseName>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<feature>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<filePath>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<id>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<loadedRowCount>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<minutes>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<names>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<next>",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查；2026-10-18（macOS 开发循环 · 队列 9 门禁欠账）：处数 1 → 2 —— 两处都是 `L(.dataTaskNextRun, next)`（模板 `下次执行：%@`），即 `App/Views/DataTaskPanel.swift:695` 与 `App/Views/AgentScheduleSheet.swift:128`（定时 agent 面板，FR-AGT-TOOL-SCHED-002）；两处 `next` 都是 String（`Core/DataTaskPresentation.swift:50` 与 `Core/AgentSchedulePresentation.swift:92` 的 `nextRunText(...) -> String?`，`if let` 解包后传入 `%@` 槽），在基线 `f4e3d89` 的干净树上就已在盘。"
+  },
+  {
+   "shape": "<preview>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<previewLimit>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<problem>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<requestID>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<restoreJobs>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<resultCount>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<searched>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<skipped>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<statement>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<statementCount>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<targetDatabase>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<text>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<timeout>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<value>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "<versions>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "approval.record.connectionName ?",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "approved ? L(.mcpApprovalAllow) ",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "current.connectionName ?? \"—\"",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "directory.deletingLastPathComponent(…)",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "draft?.name ?? \"\"",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "engine.failure ?? \"\"",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "error.errorDescription ?? \"\\(err",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "fonts.resolution.effectiveFamily",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "migration.failure ?? \"\"",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "pendingConfirmation?.message ?? ",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "pendingTerminate?.database ?? \"?",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "pendingTerminate?.user ?? \"?\"",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "plan.refusals.first ?? \"\"",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "table.columns.count - visible",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+  },
+  {
+   "shape": "failure.exitCode.map(…)",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "App/WorkspaceTabsModel.swift:184 `failure.exitCode.map(String.init) ?? \"—\"` ⇒ String（`exitCode` 的声明在 Core/CodeFormatting.swift：`public let exitCode: Int32?`，缺值分支是字符串字面量 `\"—\"`）；该键三处模板都是 `%@`"
+  },
+  {
+   "shape": "<inside>",
+   "kind": "number",
+   "maxSites": 2,
+   "reason": "目录里有多少项：`App/Views/WorkspaceExplorerView.swift:337/338` 的 `max(summary.items - 1, 0)`（`summary.items` 的声明在 `Core/WorkspaceFileOperations.swift`：`public let items: Int`）⇒ Int；两个键的模板都只有一个 `%d`"
+  },
+  {
+   "shape": "tabs.pendingClose?.title ?? \"\"",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "类型不明：可选链 + 默认值，文件级索引认不出类型（`WorkspaceCloseRequest.title` 是 `String`）⇒ 只登记形状与处数棘轮；2026-10-03 队列 `L-172` 新增一处（关闭确认框的标题，`App/Views/WorkspaceTabStrip.swift`）"
+  },
+  {
+   "shape": "<notebook>",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "笔记本名：`Plugins/Notes/Views/NotesPanel.swift:80` 的 `if let notebook = appState.notebookName(for: note)` ⇒ `notebook: String`（`App/AppState.swift:6070` 返回 `String?`，此处已解包）；2026-10-03 开发循环第 169 轮队列 `L-97` 界面半第一片"
+  },
+  {
+   "shape": "<noteCount>",
+   "kind": "number",
+   "maxSites": 2,
+   "reason": "笔记条数：`App/AppState.swift:6076/6080` 的 `case .notes(let noteCount)` / `case .notebooksAndNotes(_, let noteCount)` ⇒ `ContainerRemovalSummary` 的关联值（`Plugins/Notes/Sources/NotebookRemovalPrompt.swift` 声明为 `Int`），只有 `%d` 槽；2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片（删除确认框）"
+  },
+  {
+   "shape": "<notebookCount>",
+   "kind": "number",
+   "maxSites": 2,
+   "reason": "笔记本条数：`App/AppState.swift:6078/6080` 的 `case .notebooks(let notebookCount)` / `case .notebooksAndNotes(let notebookCount, _)` ⇒ 同上（`Int`），只有 `%d` 槽；2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片"
+  },
+  {
+   "shape": "<model>",
+   "kind": "text",
+   "maxSites": 2,
+   "reason": "模型名：`Core/AgentChat.swift:139` 的 `case ready(model: String, endpoint: String)` 解包出的 `model`、以及 `App/AppState.swift:3856` 的 `AgentConnectionTest.passed(model: String, millis: Int)` 的 `model` 都是 String；两处键（`agentStatusModel` / `agentTestPassed`）的对应槽都是 `%@`。2026-10-18（队列 9 门禁欠账）登记：两处在基线 `f4e3d89` 已在盘，只是形状没入台账"
+  },
+  {
+   "shape": "<modelName>",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "模型名：`App/Views/AgentChatView.swift:411` 的 `if case .ready(let modelName, let endpoint) = model.endpointState` ⇒ 同 `Core/AgentChat.swift:139` 的 `ready(model: String, …)`，是 String；模板 `agentStatusModel` 那一槽是 `%@`"
+  },
+  {
+   "shape": "<millis>",
+   "kind": "number",
+   "maxSites": 1,
+   "reason": "连接测试耗时：`App/AppState.swift:3856` 的 `AgentConnectionTest.passed(model: String, millis: Int)` ⇒ Int；模板 `连接正常：%@（%d 毫秒）` 第 2 槽是 `%d`。2026-10-18（队列 9）：这一处原先传字符串插值（`\\(millis)`，判据 A′ 红、界面会印垃圾数），改成传 Int 后裸标识符按类型不明计数 ⇒ 登记为 number，让槽位交叉检查真起作用"
+  },
+  {
+   "shape": "URL(…)",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "`App/Views/AgentChatView.swift:423` 的 `URL(fileURLWithPath: root).lastPathComponent` ⇒ Foundation 声明 `URL.lastPathComponent: String`（同 `FOUNDATION_MEMBER_KINDS` 的那一条，只是外面套了构造器，形状认不出）；模板 `agentStatusWorkspace` 那一槽是 `%@`"
+  },
+  {
+   "shape": "<connected>",
+   "kind": "number",
+   "maxSites": 1,
+   "reason": "`App/Views/AgentSettingsSheet.swift` 的 `let connected = appState.agentMCPReports.filter { $0.state.isConnected }.count` ⇒ Int，进模板 `已连上 %d / %d 条`。"
+  },
+  {
+   "shape": "<error>",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "`App/Views/MCPServersSheet.swift` 的 `if let error = appState.agentMCPLoadError`（`AgentMCPLoadError` 是 `String?`）⇒ String。"
+  },
+  {
+   "shape": "<serverName>",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "`App/Views/MCPServersSheet.swift` 的 `case .connected(let serverName, …)`（`MCPClientServerState.connected(serverName: String, …)`）⇒ String。"
+  },
+  {
+   "shape": "<version>",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "同上，`protocolVersion: String` ⇒ String。"
+  },
+  {
+   "shape": ".rawValue",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "`App/Views/MCPServersSheet.swift` 的 `kind.rawValue`（`MCPClientTransportKind: String` 枚举）⇒ String。"
+  },
+  {
+   "shape": "<line>",
+   "kind": "number",
+   "maxSites": 1,
+   "reason": "`App/Views/MCPServersSheet.swift` 的 `let line = Int(parts[2])`（环境变量坏行的行号）⇒ Int，进模板 `第 %d 行…`。"
+  }
+ ],
+ "exceptions": []
 }

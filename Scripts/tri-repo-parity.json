@@ -41,16 +41,16 @@
       },
       "expect": {
         "studio": {
-          "sha256": "802c565e59b4fe8d262f1df32cb3d134a7ba9360b2ff555e8d19948044ab0962",
+          "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
           "lines": 1000
         },
         "notes": {
-          "sha256": "129649dc2a2ef7fb0c07252618a93034201c350b49620edf0c329f7f2646ee32",
-          "lines": 997
+          "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
+          "lines": 1000
         },
         "retro": {
-          "sha256": "996ad010231484853eaedb9e94b5bcbbc9361713a7b7913524c99671fd2ee462",
-          "lines": 997
+          "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
+          "lines": 1000
         }
       },
       "divergence": []
