@@ -477,7 +477,7 @@
 | FR-RTR-REV-TRADE-006 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-CORE-SESS-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-CORE-LOOP-008 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-CORE-LOOP-009 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | 未排期 | 新增：单次任务预算 150 步 / 256K（能力书 3.1.1 · S-15） |
+| FR-AGT-CORE-LOOP-009 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ⬜ | 未排期 | 新增：单次任务预算 150 步 / 256K（能力书 3.1.1 · S-15） |
 | FR-AGT-PLAN-PLAN-005 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-PLAN-PLAN-006 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-KNOW-CTX-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
@@ -578,7 +578,7 @@
 > 平台列：watchOS / Linux / Windows（表由 `Scripts/gen-platform-parity.py` 重写，`--check` 判定漂移）。
 > **移动端（鸿蒙 / 安卓 / iOS）不设列**：移动端 = Doyah Notes（只有笔记），不是 Doyah Studio 的平台版本（§0.10 / 规划书 §4.13）⇒ 不在本矩阵设列，免得造出一列永远 ⬜ 的假进度。
 
-**FR-AGT**（68 条。与 macOS 基线一致：watchOS 40 / Linux 40 / Windows 40 条）
+**FR-AGT**（68 条。与 macOS 基线一致：watchOS 39 / Linux 39 / Windows 39 条）
 
 | 编号 | 需求摘要 | macOS | watchOS | Linux | Windows |
 |---|---|---|---|---|---|
@@ -591,7 +591,7 @@
 | FR-AGT-CORE-LOOP-006 | 内置工具 8 个：read_file / list_dir / search（只读，限工作区内）· ru… | 🟡 | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-AGT-CORE-LOOP-007 | 及时刹停：识别到伤害性动作（删库 / 覆盖未备份文件 / 对外发布）时前置停止 —— 不建审批单、不执行… | ⬜ | ⬜ | ⬜ | ⬜ |
 | FR-AGT-CORE-LOOP-008 | 队列：多个任务排队执行 —— 可查看排队、调整顺序、取消未开始的任务；同一工作区不并发跑两条会互相踩的任… | ⬜ | ⬜ | ⬜ | ⬜ |
-| FR-AGT-CORE-LOOP-009 | 单次任务的预算：一次任务最多 150 步、256K token（能力书 3.1.1 · S-15）；新任… | ⬜ | ⬜ | ⬜ | ⬜ |
+| FR-AGT-CORE-LOOP-009 | 单次任务的预算：一次任务最多 150 步、256K token（能力书 3.1.1 · S-15）；新任… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-AGT-CORE-SESS-001 | 会话持久化：会话可保存、可恢复 —— 关掉应用再打开，能接着上次的对话与进度往下走；上下文与已调用的工具… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-AGT-GUARD-COST-001 | 门控（省 token 的调用门控）：在触发与模型调用之间有一道判定 —— 没有变化 / 没有新内容 / … | 🟡 | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-AGT-GUARD-PERM-001 | 审批主链（分工：等级与白名单怎么配见 -002、运行时隔离边界见 -003、语句级判定与注入防护见 -0… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | 🟡 ⚠️ |

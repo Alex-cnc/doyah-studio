@@ -116,7 +116,8 @@ public struct AgentLoopLimits: Equatable, Sendable {
     /// 进来之前已经花掉的令牌（续跑时会用到）。
     public var tokensAlreadySpent: Int
 
-    /// 默认值：**150 步 / 20 万令牌**（人类主人 2026-10-18 实测「仍然卡在 8 步」）。
+    /// 默认值：**150 步 / 256K 令牌（262,144）**（人类主人 2026-10-18 实测「仍然卡在 8 步」；
+    /// 令牌上限 2026-10-24 由 20 万对齐契约 §7「一次任务最多 150 步、256K token」）。
     ///
     /// 以前是 8 步 —— 那是按"防跑飞"定的，代价是真实任务必被腰斩：
     /// 「读文件 → 改 → 跑测试 → 看报错 → 再改」这一圈就要 10 步以上，8 步等于干到一半被掐。
@@ -125,7 +126,7 @@ public struct AgentLoopLimits: Equatable, Sendable {
     ///
     /// **防跑飞改由"重复失败"来管**（见 `AgentLoop` 里对连续失败的判定），
     /// 而不是靠"步数少" —— 数步数会把长任务和死循环一起杀掉。
-    public init(maxSteps: Int = 150, maxTotalTokens: Int = 200_000, tokensAlreadySpent: Int = 0) {
+    public init(maxSteps: Int = 150, maxTotalTokens: Int = 262_144, tokensAlreadySpent: Int = 0) {
         self.maxSteps = maxSteps
         self.maxTotalTokens = maxTotalTokens
         self.tokensAlreadySpent = tokensAlreadySpent
@@ -420,11 +421,13 @@ public struct AgentLoop: Sendable {
             // ③ 令牌上限：**停在发送之前**（一次请求都不发）
             if limits.tokensAlreadySpent + usage.billableTokens >= limits.maxTotalTokens {
                 await observer?.observe(.stopped(.tokenLimit(limits.maxTotalTokens)))
-                recordStop(.tokenLimit(limits.maxTotalTokens), context: context, at: startedAt)
-                return seal(AgentLoopResult(
+                let stopped = AgentLoopResult(
                     outcome: .stopped(.tokenLimit(limits.maxTotalTokens)),
                     steps: steps, executedTools: executed, rejectedTools: rejected,
-                    usage: usage, text: ""))
+                    usage: usage, text: "")
+                recordStop(.tokenLimit(limits.maxTotalTokens), context: context, at: startedAt,
+                           budget: stopped.budgetReport(limits: limits))
+                return seal(stopped)
             }
             // ④ 取消：**在下一跳之前停**（已产生的工具结果已经在会话里留痕）
             if isCancelled() {
@@ -437,10 +440,12 @@ public struct AgentLoop: Sendable {
             // ② 步数上限：模型还想跳也不给了，**如实报上限值**
             if steps >= limits.maxSteps {
                 await observer?.observe(.stopped(.stepLimit(limits.maxSteps)))
-                recordStop(.stepLimit(limits.maxSteps), context: context, at: startedAt)
-                return seal(AgentLoopResult(
+                let stopped = AgentLoopResult(
                     outcome: .stopped(.stepLimit(limits.maxSteps)), steps: steps,
-                    executedTools: executed, rejectedTools: rejected, usage: usage, text: ""))
+                    executedTools: executed, rejectedTools: rejected, usage: usage, text: "")
+                recordStop(.stepLimit(limits.maxSteps), context: context, at: startedAt,
+                           budget: stopped.budgetReport(limits: limits))
+                return seal(stopped)
             }
 
             let built = makeRequest(context: context, observations: observations, budget: compressionBudget)
@@ -886,8 +891,12 @@ public struct AgentLoop: Sendable {
         _ = try? sessionStore.append(turn)
     }
 
-    private func recordStop(_ stop: AgentLoopStop, context: AgentLoopContext, at: Date) {
-        recordTurn(context: context, kind: .approval, role: "system", text: stop.reason, at: at)
+    /// 停下来的留痕：**机器码在前**（界面 / 判据按它解析），预算触顶时**另起一行**补「停在哪、做完哪些」
+    /// （契约 §7 ①：不许只丢一句 `stepLimit:150` 让用户自己猜做到哪儿了）。
+    private func recordStop(_ stop: AgentLoopStop, context: AgentLoopContext, at: Date,
+                            budget: AgentBudgetReport? = nil) {
+        let text = budget.map { stop.reason + "\n" + $0.line } ?? stop.reason
+        recordTurn(context: context, kind: .approval, role: "system", text: text, at: at)
     }
 }
 
