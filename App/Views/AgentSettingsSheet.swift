@@ -35,10 +35,6 @@ struct AgentSettingsSheet: View {
     /// **真值源**（`FR-AI-25` 信息面三格）：上下文窗口 + 每百万 token 价目。
     /// 空串 = 没填（窗口退回内置表、价钱那一格不出现）。
     @State private var contextWindowText = ""
-    @State private var inputPriceText = ""
-    @State private var outputPriceText = ""
-    @State private var cachedPriceText = ""
-    @State private var priceCurrency: AgentPriceCurrency = .cny
     /// MCP 服务器配置面（`FR-AI-21` 界面片）的开合。
     @State private var showsMCPServers = false
 
@@ -88,24 +84,12 @@ struct AgentSettingsSheet: View {
                 }
                 TextField(L(.agentTimeout), text: $timeoutSeconds)
 
-                // **信息面三格的真值源**（`FR-AI-25`）：窗口 / 价目。这些数仓里没有、
-                // 也不该由程序猜（价格随时变、代理后面那个模型的窗口未必同名同尺寸）⇒
-                // 由用户填；不填就不显示那一格。**不做汇率换算**：填哪个币种就用哪个符号。
+                // **2026-10-25 人类主人令**：「没有谁在这里去配置价格，我们看成本也只关心消耗的
+                // token 数量，而不是直接换算成人民币」⇒ 价目三格与币种选择**整块删掉**，
+                // 面板里只留上下文窗口（它是唯一影响「还能装多少」的真值源）。
                 Section(L(.agentMeterSection)) {
                     TextField(L(.agentMeterWindow), text: $contextWindowText,
                               prompt: Text(L(.agentMeterWindowPlaceholder)))
-                    HStack(spacing: Spacing.s) {
-                        TextField(L(.agentMeterInputPrice), text: $inputPriceText,
-                                  prompt: Text(L(.agentMeterPricePlaceholder)))
-                        TextField(L(.agentMeterOutputPrice), text: $outputPriceText,
-                                  prompt: Text(L(.agentMeterPricePlaceholder)))
-                        TextField(L(.agentMeterCachedPrice), text: $cachedPriceText,
-                                  prompt: Text(L(.agentMeterPricePlaceholder)))
-                    }
-                    Picker(L(.agentMeterCurrency), selection: $priceCurrency) {
-                        Text(L(.agentMeterCurrencyCNY)).tag(AgentPriceCurrency.cny)
-                        Text(L(.agentMeterCurrencyUSD)).tag(AgentPriceCurrency.usd)
-                    }
                     Text(L(.agentMeterFootnote))
                         .font(Theme.font(.caption))
                         .foregroundStyle(Theme.text(.secondary))
@@ -236,10 +220,7 @@ struct AgentSettingsSheet: View {
             // 保存一次等于把用户填过的价目**静默清掉**。
             let pricing = configuration.activeProfile?.pricing
             contextWindowText = pricing?.contextWindow.map { String($0) } ?? ""
-            inputPriceText = Self.priceText(pricing?.inputPerMillion)
-            outputPriceText = Self.priceText(pricing?.outputPerMillion)
-            cachedPriceText = Self.priceText(pricing?.cachedInputPerMillion)
-            priceCurrency = pricing?.currency ?? .cny
+            // 价目字段不再展示（同上令）——旧配置里存过的价格不读、也不再写回。
             // MCP 那一行的读数（「还没配置 / 已连上 n / m 条」）需要配置与这一轮的发现结果；
             // 配置读一次就够（`loadAgentMCPConfiguration` 幂等），发现结果由对话那条路填。
             appState.loadAgentMCPConfiguration()
@@ -344,12 +325,13 @@ struct AgentSettingsSheet: View {
 
     /// 面板里填的窗口 / 价目。**一个字都没填 ⇒ `nil`**（不往配置里写空壳）。
     private var draftPricing: AgentModelPricing? {
+        // 价目不再由用户填（2026-10-25 令）：只保留上下文窗口。
         let pricing = AgentModelPricing(
             contextWindow: positiveInt(contextWindowText),
-            inputPerMillion: positiveDouble(inputPriceText),
-            outputPerMillion: positiveDouble(outputPriceText),
-            cachedInputPerMillion: positiveDouble(cachedPriceText),
-            currency: priceCurrency
+            inputPerMillion: nil,
+            outputPerMillion: nil,
+            cachedInputPerMillion: nil,
+            currency: .cny
         )
         return pricing.isEmpty ? nil : pricing
     }

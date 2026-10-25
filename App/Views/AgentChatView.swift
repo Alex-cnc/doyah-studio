@@ -709,7 +709,7 @@ struct AgentChatView: View {
                 }
                 // **信息面三格**（`FR-AI-25`）：上下文占用 / 缓存命中率 / 本会话估算花费。
                 // 三格都**只在真值源在时出现** —— 窗口认不出就明说「窗口未知」，
-                // 端点没报缓存就不画那一格（不当 0%），没填价目就不给钱数（不自造 ¥0）。
+                // 端点没报缓存就不画那一格（不当 0%）。
                 let readings = model.modelReadings
                 if let used = readings.contextUsed {
                     if let window = readings.contextWindow, let percent = readings.contextPercent {
@@ -726,12 +726,8 @@ struct AgentChatView: View {
                     Text(L(.agentStatusCache, AgentModelReadings.percentText(cache)))
                         .help(L(.agentStatusCacheHelp))
                 }
-                if let cost = readings.estimatedCost {
-                    Text(readings.costIsUpperBound
-                         ? L(.agentStatusCostUpperBound, cost.text)
-                         : L(.agentStatusCost, cost.text))
-                        .help(readings.costIsUpperBound ? L(.agentStatusCostUpperBoundHelp) : L(.agentStatusCostHelp))
-                }
+                // **不显示钱**（人类主人 2026-10-25：「我们看成本也只关心消耗的 token 数量，
+                // 而不是直接换算成人民币」）—— 花费那一格整块撤掉；读数只留上下文占用与缓存命中率。
                 // **长跑监控读数**（`FR-AI-31` ③）：卡住 / 空转 / 反复重试 / 配额将尽 —— 跑飞不许静默。
                 // 只在真报过时出现（`nil` 不留空壳）；卡住那一档用更重的颜色（那要人动手）。
                 if let monitor = model.monitorReading {
