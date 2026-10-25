@@ -165,7 +165,7 @@ struct ConnectionFormView: View {
                             .fixedSize(horizontal: false, vertical: true)
                         if let copy = bannerCopyText, copy != bannerMessage {
                             HStack(spacing: Spacing.s) {
-                                ToolbarIconButton(systemName: "doc.on.doc", help: L(.connectionFormCopyFullError)) {
+                                Button(L(.connectionFormCopyFullError)) {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(copy, forType: .string)
                                 }
@@ -193,7 +193,7 @@ struct ConnectionFormView: View {
                         TextField(L(.connectionFormURLPlaceholder), text: $urlText)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { importFromURL() }
-                        ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.connectionFormURLImportAction)) {
+                        Button(L(.connectionFormURLImportAction)) {
                             importFromURL()
                         }
                         .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -461,7 +461,7 @@ struct ConnectionFormView: View {
                 }
 
                 HStack(spacing: Spacing.s) {
-                    ToolbarIconButton(systemName: "play.fill", help: isTestingTunnel ? L(.sshTestRunning) : L(.sshTestButton)) {
+                    Button(isTestingTunnel ? L(.sshTestRunning) : L(.sshTestButton)) {
                         testTunnel()
                     }
                     .disabled(isTestingTunnel || !sshIssueMessages.isEmpty)
