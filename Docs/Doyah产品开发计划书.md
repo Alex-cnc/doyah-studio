@@ -115,6 +115,8 @@
 | FR-AGT-TOOL-SYS-002 | 子任务委派：把独立子任务派给子代理并行做，结果汇总回主任务并标明来源 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-SYS-003 | 命令执行：跑一条命令带回 stdout/stderr/退出码，后台可中断 | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | — | v0.3.0 | 待接线 |
 | FR-AGT-TOOL-SYS-004 | 命令执行边界：仅授权目录、危险形态进审批、超时 60s 可配 | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | — | v0.3.0 | 待接线 |
+| FR-AGT-TOOL-SYS-005 | 代码执行：受限目录跑多行代码，沙箱/无网/超时/截断 | 3.2 Doyah Agent | 基线必备 | 中 | ⬜ | — | v0.3.0 | 未实现 |
+| FR-AGT-TOOL-SYS-006 | 代码执行依赖口径：只用本机已装、缺库如实报、不联网装 | 3.2 Doyah Agent | 常用增强 | 低 | ⬜ | — | v0.3.0 | 未实现 |
 | FR-AGT-TOOL-MODEL-001 | 模型多档：按任务选档（看图 / 调工具 / 上下文长度 / 语种 / 价格），未标注 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-MODEL-002 | 档位端点与模型名可预填且可改（预设是起点不是锁） | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | — | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-007 | 中途干预：执行中可插话（改方向 / 停手 / 追加约束），当前步完成后立刻生效 | 3.2 Doyah Agent | 常用增强 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
@@ -484,6 +486,8 @@
 | FR-AGT-CORE-SESS-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-CORE-LOOP-008 | — | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-CORE-LOOP-009 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ⬜ | 未排期 | 新增：单次任务预算 150 步 / 256K（能力书 3.1.1 · S-15） |
+| FR-AGT-CORE-LOOP-010 | 工具按需发现：检索目录 → 取 schema → 调用，未取回不许调用 | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | — | v0.3.0 | 未实现 |
+| FR-AGT-CORE-LOOP-011 | 工具目录口径：内置+接入两类、schema 可缓存、空目录如实说 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | — | v0.3.0 | 未实现 |
 | FR-AGT-PLAN-PLAN-005 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-PLAN-PLAN-006 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-KNOW-CTX-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
