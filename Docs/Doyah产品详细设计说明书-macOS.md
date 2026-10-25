@@ -978,6 +978,8 @@
 
 ##### 5.3.8.1 版式语汇（对照 Hermes TUI 的两张基准图，逐项照抄）
 
+> **跨端出处**：语汇 / 骨架 / 开关 / 主题四层的**唯一权威在《Doyah产品概要设计说明书》§8.11**；本节只做「映射到本端落点」，不得重新定义语汇。
+>
 > **参考基准登记（比对面 = 以下四项，缺一项就算没参考）**
 > ① 启动界面截图：`~/Desktop/Hermes-startup.png` ② 工作界面截图：`~/Desktop/Hermes-GUI.png`
 > ③ 实现骨架源码（TUI 侧）：`ui-tui/src/components/appLayout.tsx`（主骨架）· `appChrome.tsx`（`statusBarSegments(cols)`）· `theme.ts`（30+ 配色键）· `blockLayout.test.ts`（行数分配）
