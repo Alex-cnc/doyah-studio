@@ -145,9 +145,10 @@ struct ConnectionFormView: View {
 
                 Spacer()
 
-                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel)) {
-                    dismiss()
-                }
+                // **对话框里用系统风格按钮**（人类主人 2026-10-25：「之前说过了，图标代替按钮
+                // 只是在主界面第一面」）。图标按钮只许出现在主界面，任何对话框/表单都用文字按钮。
+                Button(L(.commonCancel), role: .cancel) { dismiss() }
+                    .buttonStyle(.bordered)
             }
             .padding()
 
@@ -313,16 +314,14 @@ struct ConnectionFormView: View {
             Divider()
 
             HStack {
-                ToolbarIconButton(systemName: "bolt", help: isTesting ? L(.connectionFormTesting) : L(.connectionFormTest)) {
-                    testConnection()
-                }
+                Button(isTesting ? L(.connectionFormTesting) : L(.connectionFormTest)) { testConnection() }
+                    .buttonStyle(.bordered)
                 .disabled(isTesting || !isValid)
 
                 Spacer()
 
-                ToolbarIconButton(systemName: "square.and.arrow.down", help: L(.commonSave)) {
-                    onSave(makeConfiguration(), password, resolvedSSHPassword)
-                }
+                Button(L(.commonSave)) { onSave(makeConfiguration(), password, resolvedSSHPassword) }
+                    .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!isValid)
             }
