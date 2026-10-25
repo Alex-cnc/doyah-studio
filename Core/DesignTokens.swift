@@ -90,6 +90,8 @@ public enum Metrics {
     /// 数据库 / 工作区 / 笔记三面共用，不按语境区分（派单 `T-20261006-078` §1；语境化宽度未批）。
     /// 出处 = `Docs/design/外观方案-v1.md`（侧栏宽 248）。
     public static let sidebarWidth: CGFloat = 248
+    /// 侧栏最大宽度（拖拽上限；最小 = `sidebarWidth`）。
+    public static let sidebarMaxWidth: CGFloat = 420
     /// 最左侧活动栏宽度（FR-EDIT-32）。
     public static let activityBarWidth: CGFloat = 46
     /// 活动栏图标边长。

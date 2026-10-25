@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import DoyahCore
 
@@ -54,6 +55,9 @@ struct MainWindow: View {
     ///
     /// 其余活动项（数据库 / 工作区 / 周报）的侧栏是它们自己的导航，照旧 `.all`。
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    /// 侧栏宽度（自绘分栏；单点仍是 `Metrics.sidebarWidth`，拖拽后写回偏好）。
+    @State private var sidebarWidth: CGFloat = Metrics.sidebarWidth
+    @State private var isSidebarVisible = true
 
     /// 侧栏可见性跟着活动栏走（一条口径，两处调用：启动那一次 + 每次切换）。
     private func syncSidebarVisibility(for item: ActivityBarItem) {
@@ -178,15 +182,28 @@ struct MainWindow: View {
             // 活动栏在 `NavigationSplitView` **外面**：它是应用级 chrome，不属于可调宽的侧栏
             // （与 VS Code 一致 —— 拖拽侧栏宽度时活动栏不动）。
             ActivityBarView()
-            NavigationSplitView(columnVisibility: $columnVisibility) {
+            // **不用 `NavigationSplitView`**（2026-10-25 人类主人：「难道非用不可吗」）：
+            // 系统给 sidebar 列套的那层模糊材质没有透明开关，壁纸透不上来；自铺壁纸又会
+            // 变成「每列各贴一张、接缝对不上」。侧栏只提供拖宽/折叠/记忆三件事，自绘更可控。
+            if isSidebarVisible {
+                // **侧栏也要透出壁纸**（人类主人 2026-10-25：「左导航没有壁纸，其他面都有，
+                // 我要的就是全透明」）。`NavigationSplitView` 的 sidebar 列自带一层不透明材质，
+                // 所以这里**自铺同一张壁纸**并把列表底色关掉 —— 视觉上等于透明，且不依赖私有 API。
                 sidebarContent
+                    .scrollContentBackground(.hidden)
+                    // 侧栏透明：**注意** macOS 的 `NSVisualEffectView` 没有 `.clear` 材质，
+                    // 因此「清系统材质」这条路走不通（2026-10-25 实测编译失败）。
+                    // 真正可行的做法是把 `NavigationSplitView` 拆成自绘 `HStack`（方案 B，待做）。
                     // **侧栏宽度单点化**（2026-10-06 人类主人实机点验第 1 条「左栏太宽」；派单 `T-20261006-078` §1）：
                     // 原先这里写死 `min 240 / ideal 280 / max 380`，而设计令牌 `Metrics.sidebarWidth`（248）
                     // 是**死常量**（`App/` 零命中）⇒ 想调宽度只能改视图，没有单点旋钮。
                     // 现在三档**一并**读令牌：唯一出处 = `Core/DesignTokens.swift`（外观方案「侧栏宽 248」），
                     // 数据库 / 工作区 / 笔记**三面共用这一值**，不按语境区分（语境化宽度未批 ⇒ 「只收窄笔记面」另开片）。
-                    .navigationSplitViewColumnWidth(min: Metrics.sidebarWidth, ideal: Metrics.sidebarWidth, max: Metrics.sidebarWidth)
-            } detail: {
+                    .frame(width: sidebarWidth)
+
+                    SidebarResizeDivider(width: $sidebarWidth)
+            }
+            Group {
             // 下方面板（结果 / 问题 / 输出 / 终端 / 调试控制台）已经并进工作区本身，
             // 所以这里不再另开一块区域。
             //
@@ -617,5 +634,36 @@ private extension MainWindow {
     /// 刻意不引 `GeometryReader` —— 那一层裹上去会动到编辑器所在子树的结构（见 `SQLEditorView.swift:58`）。
     var lowerPaneAvailableHeight: CGFloat? {
         (NSApp.keyWindow ?? NSApp.mainWindow)?.contentView?.frame.height
+    }
+}
+
+/// 自绘侧栏分隔条（替代 `NavigationSplitView` 的列分隔）。
+///
+/// 宽度区间跟设计令牌一致：最小 `Metrics.sidebarWidth`，最大 420。
+/// 用 8pt 热区包 1pt 发丝线，鼠标悬停变左右箭头光标。
+private struct SidebarResizeDivider: View {
+    @Binding var width: CGFloat
+    @Environment(\.colorScheme) private var scheme
+    @State private var dragStart: CGFloat?
+
+    var body: some View {
+        Rectangle()
+            .fill(Theme.hairline(scheme))
+            .frame(width: 1)
+            .frame(maxHeight: .infinity)
+            .padding(.horizontal, Spacing.xs)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        let base = dragStart ?? width
+                        if dragStart == nil { dragStart = base }
+                        width = min(max(base + value.translation.width, Metrics.sidebarWidth), Metrics.sidebarMaxWidth)
+                    }
+                    .onEnded { _ in dragStart = nil }
+            )
     }
 }
