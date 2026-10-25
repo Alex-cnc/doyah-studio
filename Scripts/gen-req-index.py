@@ -108,6 +108,53 @@ def build():
     return records, skipped
 
 
+def regen_ledger(srs_text: str, plan_path):
+    """**台账降级为机器产物**（人类主人 2026-10-25：「我只希望有四书一单存在」，选 B）。
+
+    计划书里那张「需求 × 状态」大表不再手写：行由需求书生成（编号 / 摘要 / 章节），
+    状态与里程碑**从上一次生成的表里按编号继承**（没写过的默认 `⬜ / — / v0.3.0 / 未实现`）。
+    ⇒ 以后新增需求只动需求书 + 一单，第三处永远不会漂。
+    """
+    plan = plan_path.read_text(encoding="utf-8")
+    rows = {}
+    for line in plan.split("\n"):
+        m = re.match(r"\| ((?:FR|NFR|AC)-[A-Z0-9-]+) \|", line)
+        if not m:
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) >= 9:
+            rows[m.group(1)] = cells
+    out = []
+    for line in srs_text.split("\n"):
+        m = re.match(r"\| (FR-[A-Z0-9-]+) \| ([^|]+) \|", line)
+        if not m:
+            continue
+        rid, summary = m.group(1), m.group(2).strip()
+        # 第 5/6 章**另账**（`FR-STD-ALL-DATA-*` / `FR-STD-ALL-IFACE-*`），不进台账
+        if rid.startswith("FR-STD-ALL-DATA-") or rid.startswith("FR-STD-ALL-IFACE-"):
+            continue
+        short = re.sub(r"\*\*", "", summary)[:60]
+        prev = rows.get(rid)
+        if prev:
+            prev = list(prev)
+            prev[1] = short
+            out.append("| " + " | ".join(prev) + " |")
+        else:
+            out.append(f"| {rid} | {short} | — | 基线必备 | 中 | ⬜ | — | v0.3.0 | 未实现 |")
+    # `AC-*` 一类不在需求书表格里（另有出处），原样保留旧行，不许因为“重生成”把它们丢掉
+    kept = {re.match(r"\| ([A-Z0-9-]+) \|", r).group(1) for r in out}
+    for rid, cells in rows.items():
+        if rid not in kept:
+            out.append("| " + " | ".join(cells) + " |")
+    if not out:
+        return 0
+    lines = plan.split("\n")
+    idx = [i for i, l in enumerate(lines) if re.match(r"\| (?:FR|NFR|AC)-[A-Z0-9-]+ \|", l)]
+    lines[idx[0]:idx[-1] + 1] = out
+    plan_path.write_text("\n".join(lines), encoding="utf-8")
+    return len(out)
+
+
 def main():
     records, skipped = build()
     payload = "\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n"
@@ -115,6 +162,11 @@ def main():
     for r in skipped:
         tally[r["section"]] = tally.get(r["section"], 0) + 1
     note = "；不入索引（非需求表）：" + "、".join(f"{k} {v} 条" for k, v in sorted(tally.items())) if skipped else ""
+    if "--ledger" in sys.argv:
+        import pathlib as _pl
+        n = regen_ledger(SRS.read_text(encoding="utf-8"), ROOT / "Docs/Doyah产品开发计划书.md")
+        print(f"✓ 台账已按需求书重生成：{n} 行（机器产物，勿手改）")
+
     if "--check" in sys.argv:
         if not OUT.exists():
             print(f"✗ 缺少 {OUT.relative_to(ROOT)}")
