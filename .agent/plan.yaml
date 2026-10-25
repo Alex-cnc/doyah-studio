@@ -177,7 +177,6 @@ tasks:
     goal: 出包（`build-app.sh` 打印字节数与 sha256 前缀）+ 详设 §6/§9/§10 状态回写 + 文档四门禁
     done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/build-app.sh 2>&1 | tail -3 | grep -Eq 'sha256|bytes' && for s in check-doc-versions check-doc-tables check-doc-numbers check-req-ids; do python3 Scripts/$s.py >/dev/null || exit 1; done"
     est: 2h
-    status: blocked
-    blocked_reason: 依赖 T4.2 转绿（门禁红时不出包，避免把带红产物当交付件）
-    next_try: T4.2 绿后跑 build-app.sh，取 sha256 前缀 + 字节数，并把详设 §6/§9/§10 状态回写
+    status: done
+    evidence: .agent/evidence/2026-10-25-T4.3.md
     deps: [T4.2]
