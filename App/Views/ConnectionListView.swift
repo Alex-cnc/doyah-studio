@@ -8,6 +8,10 @@ struct ConnectionListView: View {
 
     /// 待确认删除的连接（FR-CONN-05 / R-09：删除必须二次确认）。
     @State private var pendingDeletion: ConnectionConfig?
+    /// **分组标题上的「＋」是悬停才出的**（人类主人 2026-10-25：「新增连接的图标应该会在导航栏
+    /// 连接分组那地方呀，鼠标移动过去，浮动菜单出来就一个加号，跟 workspace 增删改文件夹一样」）。
+    /// 记的是「当前悬停在哪一组」（组 id），不是布尔 —— 一组一个开关不会互相点亮。
+    @State private var hoveredGroupID: String?
 
     // **折叠状态刻意**不在这里**（FR-CONN-15 / 队列 L-59）：本视图由 `MainWindow.sidebarContent`
     // 按活动栏分支创建 ⇒ 切到工作区 / 笔记再切回来，这个视图被整个重建，视图局部 `@State` 归零。
@@ -20,9 +24,7 @@ struct ConnectionListView: View {
     private func sectionView(_ section: ConnectionGrouping.Section) -> some View {
         let title = section.group ?? ConnectionGrouping.ungroupedTitle
         if section.isUngrouped {
-            Text(title)
-                .font(Theme.font(.caption))
-                .foregroundStyle(Theme.text(.secondary))
+            groupHeader(title: title, count: nil, id: section.id)
             rows(section)
         } else {
             DisclosureGroup(isExpanded: Binding(
@@ -36,6 +38,31 @@ struct ConnectionListView: View {
                     .foregroundStyle(Theme.text(.secondary))
             }
         }
+    }
+
+    /// 分组标题一行：名称（带条数）+ **悬停才出现的「＋」**。
+    ///
+    /// 与 `WorkspaceExplorerView` 的行内操作同一套：常驻不占位、悬停浮出、点一下就是
+    /// 「新建连接」（`onAdd`，与原来工具条上那枚同一个入口）。
+    private func groupHeader(title: String, count: Int?, id: String) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Text(count.map { "\(title)（\($0)）" } ?? title)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            Spacer(minLength: 0)
+            if hoveredGroupID == id {
+                Button(action: onAdd) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+                .buttonStyle(.borderless)
+                .help(L(.connectionNew))
+                .accessibilityIdentifier("connection-group-plus-\(id)")
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { hoveredGroupID = $0 ? id : nil }
     }
 
     @ViewBuilder
@@ -178,11 +205,6 @@ struct ConnectionListView: View {
             }
         } message: { configuration in
             Text(L(.connectionDeleteConfirmMessage, configuration.displayTitle(untitled: L(.connectionUntitled))))
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                ToolbarIconButton(systemName: "plus", help: L(.connectionNew), action: onAdd)
-            }
         }
     }
 }
