@@ -1021,6 +1021,43 @@
 
 **⑨ 不许出现的东西**（对照图里没有的，本端也不许有）：通栏卡片、气泡尾巴、头像圆点、工具栏按钮文字、二级标题用更大字号、同一条信息画两遍（行内一句 + 下面卡片一次）。
 
+##### 5.3.8.2 渲染骨架与可配置项（对照 Hermes TUI 的实现骨架）
+
+> 参考来源（人类主人 2026-10-25 给出的实现骨架）：`ui-tui/src/components/appLayout.tsx`（主骨架）· `appChrome.tsx`（顶栏/状态栏分段，`statusBarSegments(cols)` 决定显示哪些段）· `theme.ts`（30+ 配色键 → 皮肤色值）· `blockLayout.test.ts`（消息块**行数分配算法**）；行为开关在 `config.yaml` 的 `display:` 段；配色/品牌/符号在皮肤系统（9 套内置 + `~/.hermes/skins/<名>.yaml`，合并规则见下）。
+
+**① 三个骨架部件 ↔ 本端落点（骨架是代码，不是配置）**
+
+| 职责 | TUI 侧 | 本端落点 | 契约 |
+|---|---|---|---|
+| 滚动正文 | `TranscriptPane` | `AgentChatView` 的 `ScrollView` + `LazyVStack` | 只在这一处滚；工具块折展不重排整列 |
+| 输入框 | `PromptPrefix` + `composer` | `AgentChatView` 的输入行（`>` 前缀） | 输入行**永不随正文滚动** |
+| 状态栏分段 | `statusBarSegments(cols)` | `AgentChatView.statusBar`（纯函数 `segments(width:)`） | **按宽度决定显示哪些段**：宽度不足时从右往左丢段（丢缓存率 → 丢 t/s → 丢 token 用量），**永不丢模型名与 ready/computing** |
+| 行数分配 | `blockLayout` 算法 | `AgentBlockLayout.rows(for:width:)`（纯函数，可单测） | 同一块在窄/宽两档的**折叠行数**由它算，视图不自己数行 |
+
+`blockLayout` 必须抽成**纯函数**并单测（窄 40 列 / 宽 120 列两档，断言折叠头行数与截断字符数），否则「窄屏挤成两行」这类走样只能靠肉眼抓。
+
+**② 行为开关（等价物 = 本端 `ui.agent.*` 偏好，可在设置里改，不改代码）**
+
+| 键 | 默认 | 影响 | 判据 |
+|---|---|---|---|
+| `streaming` | `true` | 逐字追加 vs 收齐再显示 | 关掉时首字延迟 = 整轮耗时 |
+| `compact` | `false` | 紧凑模式：工具块默认折叠、块间距 `Spacing.hair` | 切换后同一屏幕可见消息数增加 |
+| `show_reasoning` | `false` | 是否显示思考段（灰字缩进） | 关掉时思考段**零占位**（不留空行） |
+| `timestamps` | `false` | 每条消息前加 `HH:mm` | 关掉时行首栏宽度不变（不抖动） |
+| `show_cost` | **`false`（2026-10-25 令：固定关，不设开关）** | 花费——已从界面撤除 | `grep 'estimatedCost'` 在 App/ 视图面 0 处 |
+| `tool_progress` | `all` | `all` / `summary` / `off` 三档 | `summary` 只显示折叠头 + 条数；`off` 只剩「调用 N 次」一行 |
+| `status_indicator` | `kaomoji` | `kaomoji` / `unicode` / `ascii` 三档字形 | 三档都能表示 computing / ready / error 三态 |
+| `user_message_preview` | `首2末2` | 长用户消息折成「前 2 行 … 后 2 行」 | 折叠处有 `…` 且可点开全文 |
+| `runtime_footer` | `false` | 底栏附加 模型 / 上下文百分比 / 工作目录 | 关掉时状态行少这三段，其余不动 |
+| `busy_input_mode` | `interrupt` | 运行中提交 = 打断 vs 排队 | `interrupt` 时先停后发（与 §5.3.8 提交中一列一致） |
+
+**③ 配色 / 品牌 / 符号 = 主题集（唯一可自由配置的一层）**
+
+- 本端等价物 = `Core/DesignTheme.swift` 的 5 套主题（tech-blue / bean-green / rose-gold / stardust / deep-space）+ `Core/DesignTokens.swift` 的角色表；**不许**在视图里写字面色（判据 `check-design-tokens.py`）。
+- TUI 的 30+ 键按**角色**归并到本端令牌（`Surface` / `TextTone` / `StatusTone` / `SyntaxTone`），**不 1:1 照搬键名** —— 键名进了视图就会长成两套口径。
+- **合并规则的坑（照抄，免得返工）**：TUI 的 `colors` / `spinner` / `branding` 在 `default` 之上**逐键合并**（只写想改的）；而 `light_colors` / `dark_colors` **不合并** —— 留空 = 该皮肤没有手调明暗变体，由引擎自动适配。本端对应实现：主题值表按「角色 × 明暗」两列给值，**缺失的明暗变体必须回落推导值并登记**（不许静默落成同一色，那就等于没有明暗两套）。
+- 品牌与符号：`tool_prefix` 等价物 = 行首栏字形表（见 §5.3.8.1 ②）；`branding.name/icon/prompt/welcome` = 启动界面 §5.3.8.1 ⑥ 的品牌块与提示符；这些**进主题表、不进视图代码**。
+
 ### 5.4 状态与数据流
 
 - 单一数据源：页签模型在 `AppState.tabs`；结果集在页签对象内；视图不持有可写副本。
