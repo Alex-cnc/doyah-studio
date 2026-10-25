@@ -82,6 +82,10 @@ TREE_FILES = [
     # 2026-10-14（派单 `T-20261010-031`）：`Plugins/Notes/Sources/NoteStorage/` 那 5 件**新进台账范围**
     # （扫描面改递归后按真路径登记）⇒ 副本必须带上，否则「干净副本」这一例会因「台账写了、盘上没有」假红
     "Plugins/Notes/Sources/NoteStorage/NoteAutosave.swift",
+    # 2026-10-24：台账声明了这两份（正文迁移执行器 / HTML 导出），夹具原来没带 ⇒
+    # 「干净副本应 exit 0」被「范围里写着…磁盘上却没有」假红。夹具必须与台账声明同集合。
+    "Plugins/Notes/Sources/NoteStorage/NoteBodyMigration.swift",
+    "Plugins/Notes/Sources/NoteHTMLExport.swift",
     "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift",
     "Plugins/Notes/Sources/NoteStorage/NoteLibrary.swift",
     "Plugins/Notes/Sources/NoteStorage/NoteLibraryMigration.swift",
