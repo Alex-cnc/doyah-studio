@@ -1416,12 +1416,17 @@ final class AppState: ObservableObject {
     // 口令存**项目内的混淆文件**（`.secrets/credentials.json`），不用系统钥匙串：
     // 钥匙串每次访问都要人工授权系统密码，远程 / IM 遥控开发时等于把自动化堵死。
     // 安全边界见 `Core/LocalSecretStore.swift`：MD5 派生密钥做 XOR 混淆 —— **是混淆不是加密**，
-    // 只用于开发 / 验收形态；发布形态切回系统凭据存储只需把这里换成 `KeychainSecretStore()`
-    // （实现仍在 `Platform/macOS/KeychainSecretStore.swift`）。
-    private let secretStore: SecretStore = FileSecretStore()
+    /// 凭据存储：**发布形态 = 系统钥匙串**（`KeychainSecretStore`，实现在 `Platform/macOS/`）。
+    ///
+    /// 为什么不再写死 `FileSecretStore()`：文件实现是 **XOR 混淆**（`Core/LocalSecretStore.swift`
+    /// 自己写明「是混淆不是加密」），与概要设计 §3「口令只存密钥存储」冲突
+    /// （详设 §11 `DETAIL_CONFLICT` 第 1 条，2026-10-25 人类主人裁定「改实现」）。
+    /// 开发 / 验收形态需要文件实现时**显式注入**，不再靠改源码默认值。
+    private let secretStore: SecretStore
     private let savedQueryStore = SavedQueryStore.shared
     private let agentConfigurationStore = AgentConfigurationStore.shared
-    private let agentKeyStore: AgentKeyStore = FileAgentKeyStore()
+    /// 模型 API Key 的存储：同样是系统钥匙串（`NFR-ALL-GATE-AI-007`「密钥只进系统凭据存储」）。
+    private let agentKeyStore: AgentKeyStore
     /// 审计日志（追加式 JSONL）；导出前脱敏在 Core 里完成（NFR-AI-03）。
     private let agentAuditLog = AgentAuditLog.shared
     private let egressLog = EgressLog.shared
@@ -1469,7 +1474,15 @@ final class AppState: ObservableObject {
     /// 就是这条抢跑：它**看运气**（读到库的时刻与播种时刻谁先谁后），不是每次必红。
     private(set) var startupChain: Task<Void, Never>?
 
-    init() {
+    /// - Parameters:
+    ///   - secretStore: 连接口令的存储。默认系统钥匙串；测试 / 开发态可注入 `FileSecretStore()`。
+    ///   - agentKeyStore: 模型 API Key 的存储。默认系统钥匙串；同上可注入。
+    init(
+        secretStore: SecretStore = KeychainSecretStore(),
+        agentKeyStore: AgentKeyStore = KeychainAgentKeyStore()
+    ) {
+        self.secretStore = secretStore
+        self.agentKeyStore = agentKeyStore
         let firstTab = QueryTab(title: L(.workspaceTabTitle, tabNumbers.next()))
         tabs = [firstTab]
         selectedTabID = firstTab.id

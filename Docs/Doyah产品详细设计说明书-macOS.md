@@ -1,6 +1,6 @@
 # Doyah产品详细设计说明书 · macOS
 
-> **版本** v1.2（2026-10-25 按 `detail-design-spec-writing` 自检修齐：补 §2.2 注入点与 §2.3 命名约束；§3 由六节散文改为十六节逐函数契约；§5.3 拆七个组件六态小节并新增 §5.8 界面用例表；§6 拆 6.1/6.2/6.3；§7、§8 拆子节；§0.1 矩阵由 21 行拆到 42 行逐条对齐；§11 增 DETAIL_GAP 登记；已知坑移 §13）
+> **版本** v1.3（2026-10-25 `DETAIL_CONFLICT` 第 1 条已裁决并落地（口令/模型密钥改注入系统钥匙串）；v1.2 内容：按 `detail-design-spec-writing` 自检修齐：补 §2.2 注入点与 §2.3 命名约束；§3 由六节散文改为十六节逐函数契约；§5.3 拆七个组件六态小节并新增 §5.8 界面用例表；§6 拆 6.1/6.2/6.3；§7、§8 拆子节；§0.1 矩阵由 21 行拆到 42 行逐条对齐；§11 增 DETAIL_GAP 登记；已知坑移 §13）
 
 > v1.1（2026-10-21 扫差补齐：加笔记域与复盘宿主两章、矩阵补笔记域与复盘域两行）
 
@@ -9,7 +9,7 @@
 ## 0. 文档元信息与追溯关系
 
 - 项目/功能名称：Doyah · macOS 端全部能力（Studio 工作区与数据库 / Notes / Retro 宿主 / Agent 在 Studio 内的表现 / 授权呈现）
-- 文档版本：v1.2（正文任何改动必须同步本节与 §12）
+- 文档版本：v1.3（正文任何改动必须同步本节与 §12）
 - 实现范围（2026-10-25 实测件数）：`Core/` 260 个 `.swift` + `App/` 133 个 `.swift` + `Platform/macOS/` 5 个文件 + `CLI/` 4 个文件；测试面 `Tests/` 283 个文件
 - 上游依据：
   - 概要设计说明书：`Docs/Doyah产品概要设计说明书.md` v0.10（含 §11.4 非功能归属 47 条与 §21 标准对照）
@@ -192,7 +192,7 @@
 | 文件系统定位 | 构造函数参数 | `ConnectionStore.init(directoryURL:)`、`NoteLibrary` 的库路径由装配层给 | 临时目录 | 硬编码 `~/Library/Application Support` 字符串 |
 
 - 三选一的落地口径：**主注入手段 = 构造函数参数**（凡有实现类的依赖）；**Provider 协议**只用于「同一接口多实现且运行期选择」的两种依赖（ID 生成器、HTTP 出口）。工厂（Factory）只用于 `DatabaseServiceFactory` 一处，因为方言选择必须与 `ConnectionConfig` 同源。
-- 现状偏离（登记，不追认）：`AppState.secretStore` 目前写死 `FileSecretStore()`（XOR 混淆，注释自述「是混淆不是加密」），与本节「构造函数注入」及概要设计 §3「口令只存密钥存储」冲突 ⇒ 见 §10.1 与 §11 `DETAIL_CONFLICT` 行。
+- **已修（2026-10-25 人类主人裁定「改实现」）**：`AppState.secretStore` 不再是 `FileSecretStore()` 写死 —— `AppState.init` 改为**构造函数注入**，默认 `KeychainSecretStore()`（`Platform/macOS/KeychainSecretStore.swift`），`FileSecretStore()` 只作测试 / 开发态显式注入。同一处 `agentKeyStore` 默认改为 `KeychainAgentKeyStore()`（`NFR-ALL-GATE-AI-007`）。本行原为 `DETAIL_CONFLICT` 登记，现已闭合。
 
 ### 2.3 目录与命名约束
 
@@ -1108,7 +1108,7 @@
 
 - 鉴权落点：能力层与驱动层判定（只读、能力位）；界面只呈现结果，禁止前端-only 判定。
 - 凭据：只经 `SecretStore` 协议取用，macOS 实现 `Platform/macOS/KeychainSecretStore.swift`；删除连接连带清理；口令不进日志、不进模型上下文、不进导出包。
-- 现状偏离：`AppState.secretStore` 目前为 `FileSecretStore()`（XOR 混淆）⇒ 见 §10.1 与 §11 `DETAIL_CONFLICT`。
+- 已修：`AppState.init(secretStore:agentKeyStore:)` 默认注入 `KeychainSecretStore()` / `KeychainAgentKeyStore()`；文件实现仅测试态显式注入（见 §2.2）。
 - 到期与授权：能力位解析离线可校验，入口可见性只在一处判定；到期降级入口但保留数据可开可导出。
 
 ### 8.2 输入校验与注入防护
@@ -1213,7 +1213,7 @@
 | 导入导出错误（`IO_TARGET_EXISTS` / `IO_PARTIAL`） | `ResultExporter` 已实现；导入询问与部分失败汇总未实现 | §3.12 逐批结局 |
 | 服务器会话终止（`SESS_KILL_DENIED`） | `SessionMonitor` 只解析列表 | §3.13 确认 + 原话上浮 |
 | 授权能力位（`LIC_NO_CAPABILITY`） | 未实现，入口可见性无统一判据 | §8.1 单点判定 |
-| 凭据存储注入 | `AppState.secretStore` 写死 `FileSecretStore()`（XOR 混淆，自述「是混淆不是加密」） | §2.2 构造函数注入 + `KeychainSecretStore` |
+| 凭据存储注入 | **已修（2026-10-25）**：`AppState.init` 默认 `KeychainSecretStore()` / `KeychainAgentKeyStore()`，文件实现只在测试态注入 | §2.2 构造函数注入（已落地） |
 | 只读连接与生产标签联动 | 标签特性未实现，当前由 `policy.isEnabled` 全局开关承担 | §3.5 不得造旁路开关 |
 | 内嵌浏览器 / 插件装载 / 端云同步 | 有实现文件但本节未逐函数展开 | 概要设计已定行为，本文件待补（§11 `DETAIL_GAP` 第 6 条） |
 
@@ -1263,7 +1263,7 @@
 
 | # | 冲突点 | 代码现状 | 契约要求 | 处置 |
 |---|---|---|---|---|
-| 1 | 凭据存储形态 | `AppState.secretStore = FileSecretStore()`（XOR 混淆，文件在 `.secrets/`） | 概要设计 §3「口令只存密钥存储」；本文件 §2.2 构造函数注入 `SecretStore` | 停工待裁决：要么改注入 `KeychainSecretStore`，要么由人类主人把「开发/验收形态用混淆文件」写进概要设计 |
+| 1 | 凭据存储形态（**已闭合**） | 原：`AppState.secretStore = FileSecretStore()`（XOR 混淆）。现：`AppState.init(secretStore:)` 默认 `KeychainSecretStore()` | 概要设计 §3「口令只存密钥存储」；本文件 §2.2 构造函数注入 `SecretStore` | **已裁决（2026-10-25 人类主人令「改实现」）**：`AppState.init` 默认注入 `KeychainSecretStore()` / `KeychainAgentKeyStore()`，`FileSecretStore` 退为测试态；本行保留留痕，冲突关闭 |
 
 暂定口径承接（概要设计 §14.1 第 4、5、6、8 条，本端按暂定口径实现，人类主人可否决）：
 
@@ -1278,6 +1278,7 @@
 
 | 版本 | 日期 | 变更内容 | 影响的概设条款 | 影响的实现单元 |
 |---|---|---|---|---|
+| v1.3 | 2026-10-25 | **`DETAIL_CONFLICT` 第 1 条闭合（人类主人令「改实现」）**：`AppState.init(secretStore:agentKeyStore:)` 默认注入 `KeychainSecretStore()` / `KeychainAgentKeyStore()`，`FileSecretStore`（XOR 混淆）退为测试 / 开发态显式注入；§2.2 / §8.1 / §10.1 / §11 / §13.5 五处同步改写，冲突行保留留痕。判据：`grep -n 'FileSecretStore()' App/` 只命中测试注入点。 | 概设 §3 平台适配层契约（凭据存取）；§11.4 `AI-007` | `App/AppState.swift`（init 注入）· `Platform/macOS/KeychainSecretStore.swift` · `Platform/macOS/KeychainAgentKeyStore.swift` |
 | v1.2 | 2026-10-25 | 按 `detail-design-spec-writing` 自检修齐：新增 §2.2 注入点（数据库/方言/时钟/ID/HTTP/凭据/文件定位的注入方式写死）与 §2.3 命名约束；§3 由 6 节散文改为 16 节逐函数契约（每节七段 + 唯一错误契约表 + 可重试列）；§5.3 拆成 5.3.1–5.3.7 七个组件六态小节（每节六态齐、禁止渲染列逐行非空），新增 §5.4–§5.8（状态流、动作映射、表单校验、导航权限、界面用例表 17 条）；§6 拆 6.1/6.2/6.3；§7 拆 7.1/7.2；§8 拆 8.1/8.2；§0.1 矩阵由 21 行拆到 42 行（概设契约节逐节有行，含 §3.1、§4.5–§4.10、§5.2–§5.4、§6.2–§6.4、§7.2、§7.3、§8.2–§8.10、§11.4、§14.1、§18.1、§19.2）；§11 增 `DETAIL_GAP` 6 条与 `DETAIL_CONFLICT` 1 条；已知坑移至 §13。读数（审计脚本实跑）：硬失败 6→0、告警 3→0、矩阵 21→42 行、悬空测试 ID 18→0、孤儿测试 8→0、占位符 1→0、禁用词 1→0；门禁 `check-doc-tables.py` / `check-doc-layout.py` 均 rc=0 | 概要设计 §3 / §4.1–§4.10 / §5.1–§5.4 / §6.1–§6.4 / §7.1–§7.3 / §8.1–§8.10 / §9 / §11.4 / §14.1 / §18.1 / §19.2 | `Core/DatabaseService.swift`、`ExecutionSafety.swift`、`ConnectionStore.swift`、`AgentApprovalGate.swift`、`MetadataService.swift`、`RowBrowsing.swift`、`TableDesign.swift`、`ResultExporter.swift`、`AgentContext.swift`、`AgentPlanRows.swift`、`App/AppState.swift`、`App/Views/*` |
 | v1.1 | 2026-10-21 | 扫差补齐：§0 范围加 Notes / Retro；矩阵补 §15 笔记域、§16 复盘域两行；新增复盘宿主节（本端只宿主，实现在他仓） | 概要设计 §15 / §16 | `App/Views/RetroHostView.swift`、`Plugins/Notes/Sources/` |
 | v1.0 | 2026-10-21 | 全量重写：补追溯矩阵、基线与被拒方案 12 条转禁止项、函数七件套、数据/存储/伪代码/状态覆盖、界面六态与动作映射、21 码错误映射、测试 ID 表、自检 10 条；保留 v0.1 的笔记 / 会话 / 已知坑 / 判据表 | 概要设计 §3–§12 全部 | `Core/`、`App/`、`Platform/macOS/` |
@@ -1306,9 +1307,9 @@
 - `check-core-localization` 基线上调需授权，不得自行 `--update-baseline`。
 - 锚仓 `.git/hooks/pre-push` 白名单只放 `Docs/` 一类路径；推 `Scripts/` 会被拦，需 `-c core.hooksPath=/dev/null` 单次绕过并留痕。
 
-### 13.5 `AppState.secretStore` 不是系统钥匙串
+### 13.5 `FileSecretStore` 仍留在仓里，只能测试态注入
 
-见 §11 `DETAIL_CONFLICT` 第 1 条：当前是 `FileSecretStore()`（XOR 混淆，自述「是混淆不是加密」）。任何「口令已加密」的结论都必须先核这一行；改动需人类主人裁决，Agent 不得顺手替换。
+2026-10-25 人类主人裁定「改实现」后：`AppState.init(secretStore:agentKeyStore:)` 默认注入 `KeychainSecretStore()` / `KeychainAgentKeyStore()`，口令与模型密钥都进系统钥匙串。`FileSecretStore`（XOR 混淆）只剩测试 / 开发态用途 —— **任何新代码不得把它当默认值**，判据：`grep -n 'FileSecretStore()' App/` 只能命中测试注入点，不许命中 `AppState` 的存储声明。
 
 ### 13.6 文档门禁的两条本端口径
 
