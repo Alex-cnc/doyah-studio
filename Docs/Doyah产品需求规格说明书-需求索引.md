@@ -198,10 +198,10 @@
 | FR-STD-WS-UI-009 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-UI-010 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-UI-011 | 3.3 Doyah Studio · 工作区 | 常用增强 |
-| FR-STD-WS-UI-012 | 3.3 Doyah Studio · 工作区 | 基线必备 |
-| FR-STD-WS-UI-013 | 3.3 Doyah Studio · 工作区 | 基线必备 |
-| FR-STD-WS-UI-014 | 3.3 Doyah Studio · 工作区 | 常用增强 |
-| FR-STD-WS-UI-015 | 3.3 Doyah Studio · 工作区 | 常用增强 |
+| FR-AGT-UX-CONV-010 | 3.2 Doyah Agent | 基线必备 |
+| FR-AGT-UX-CONV-011 | 3.2 Doyah Agent | 基线必备 |
+| FR-AGT-UX-CONV-012 | 3.2 Doyah Agent | 常用增强 |
+| FR-AGT-UX-CONV-013 | 3.2 Doyah Agent | 常用增强 |
 | FR-STD-WS-WEB-001 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-FS-001 | 3.3 Doyah Studio · 工作区 | 常用增强 |
 | FR-STD-WS-FS-008 | 3.3 Doyah Studio · 工作区 | 常用增强 |
