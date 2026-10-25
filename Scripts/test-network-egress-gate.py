@@ -53,6 +53,9 @@ TREE_FILES = [
     "Tests/LLMRetryTests.swift",
     "Tests/LLMStreamTests.swift",
     "Tests/LLMStreamingClientTests.swift",
+    # 2026-10-24：台账新增这份（流式鉴权单测用真宿主名 + URLRequest），夹具必须跟上，
+    # 否则「干净副本应 exit 0」会按「面外登记磁盘上不存在」假红。
+    "Tests/LLMStreamingAuthTests.swift",
     "Tests/NoteSyncE2ETests.swift",
     "Scripts/verify-all.sh",
     GATE,
