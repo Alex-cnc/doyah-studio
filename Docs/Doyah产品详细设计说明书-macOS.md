@@ -1234,6 +1234,38 @@
 3. **浮层不参与布局**：挂 `.overlay`，不得进 `HStack`/`VStack` 的尺寸协商 —— 浮出与收起时内容区宽度逐点相同。
 4. **入口悬停出、离开收**：行内与分组标题上的动作（`＋` / `…`）常驻不占位，鼠标进入时才浮出；同一条动作**只画一次**，工具条与行内不得并存两份。
 
+### 5.3.10 根视图分栏骨架（自绘，不用 `NavigationSplitView`）
+
+**为什么自绘**：macOS 会给 `NavigationSplitView` 的 sidebar 列套一层 `NSVisualEffectView`（模糊材质），`NSVisualEffectView.Material` **没有 `.clear` 取值**（实测编译失败），SwiftUI 也没有任何公开 API 关掉它 ⇒ 壁纸透不上来；自铺壁纸又会变成「每列各贴一张、接缝对不上」。结论：**侧栏只提供拖宽 / 折叠 / 记忆三件事，自绘更可控**。
+
+**骨架（`MainWindow.body`）**
+
+```
+HStack(spacing: 0) {
+    ActivityBarView()                      // 应用级 chrome，不随侧栏动
+    if isSidebarVisible {
+        sidebarContent.frame(width: sidebarWidth)
+        SidebarResizeDivider(width: $sidebarWidth)   // 1pt 发丝线 + Spacing.xs 热区 + 左右箭头光标
+    }
+    Group { …各活动项主视图… }.frame(maxWidth: .infinity, maxHeight: .infinity)
+}
+.background(WallpaperBackground())         // 壁纸只铺一次（窗口根部）
+```
+
+**五条落点纪律**
+
+| # | 纪律 | 理由（都踩过） |
+|---|---|---|
+| 1 | 壁纸**只**在窗口根部铺一次，任何列/面板不得再铺 | 再铺一份就变成“每列各贴一张”，缩放与裁剪对不上，接缝可见 |
+| 2 | `Group` **不传递尺寸**，必须显式 `.frame(maxWidth: .infinity, maxHeight: .infinity)` | 少了它，内容列 x 原点算错，浮动书架被挤到活动栏与导航栏之间 |
+| 3 | **侧栏可见性由活动项派生**（`item != .notes && item != .retro`），不得交给容器代管 | 笔记/周报的导航在各自内容区内部（浮动书架 / 期次左栏），外层侧栏再画一次就是“同一份导航画两遍” |
+| 4 | 折叠按钮挂 **`.toolbar { ToolbarItem(placement: .primaryAction) }`**（标题栏最右端） | 系统那枚随 `NavigationSplitView` 一并消失；放在 `.navigation` 会挤在标题前、又小又不显眼 |
+| 5 | 侧栏宽度单点 = `Metrics.sidebarWidth` / `Metrics.sidebarMaxWidth`，拖拽写回偏好 | 裸值散在视图里就没有旋钮（`check-design-tokens` 也会判红） |
+
+**产品形象（`BrandMark`）**：应用图标一律取 `NSApp.applicationIconImage`（与 Dock / 关于本应用同一份），**不另存图片资源** —— 换图标只改一处。落点：工作区首页品牌段（44pt）、Agent 欢迎页品牌块（36pt，与艺术字并排）。
+
+**图标按钮的适用面**：活动栏、工具条、行内悬停操作可用图标；**对话框、表单、确认框一律用系统文字按钮**（`Button(…)` + `.bordered` / `.borderedProminent`），主界面第一面之外不得以图标代按钮。
+
 ### 5.4 状态与数据流
 
 - 单一数据源：页签模型在 `AppState.tabs`；结果集在页签对象内；视图不持有可写副本。
