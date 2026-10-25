@@ -42,12 +42,16 @@ def capability_floors():
 def build():
     """把正文里的*需求行*抽成机器视图。
 
-    表形状不止一种（这是补漏的由来）：
-      · 8 列 `编号|需求|判据|不做|层次|优先级|…` —— §3.x 功能需求（主体）；
-      · 2 列 `编号|需求` —— §5.x 数据需求；
-      · 3 列 `编号|接口|要求` —— §6.x 接口需求。
-    其余带编号的表**不是需求**（§8.1 风险登记用 `NFR-ALL-GATE-RISK-*` 编号、§5 模型字段表），
-    一律不进索引，但要**把条数报出来** —— 不然下次又靠人肉发现漏收。
+    **收录口径 = 《需求索引》那份总账**（379 FR + 47 NFR + 12 AC = 438 条），原文写在索引首部：
+    「数据需求 FR-STD-ALL-DATA-001~04 见正文 §5、接口需求 FR-STD-ALL-IFACE-001~13 见正文 §6 —— 它们不在这里，不是漏登」。
+    所以本脚本也**不收** §5 / §6 —— 那是接口与数据约束（设计层），进概设，不进需求总账；但要**把条数报出来**，
+    免得下次又靠人肉发现「怎么对不上」。
+
+    表形状：
+      · 6 列 `编号|需求|判据|不做|层次|优先级` —— §3.x/§4.x/§7.x 主体（FR / NFR / AC 都在这种表里）；
+      · 2 列 `编号|需求` —— §5.x 数据需求（不入，报数）；
+      · 3 列 `编号|接口|要求` —— §6.x 接口需求（不入，报数）；
+      · 其余带编号的表（§8.1 风险登记 / §8.2 待决 / 模型字段表）不是需求（不入，报数）。
     """
     floors = capability_floors()
     text = SRS.read_text(encoding="utf-8")
@@ -77,17 +81,22 @@ def build():
             continue
         n = len(header)
         rec = None
+        if ident.startswith("AC-"):
+            # 验收判据（§7.1 发布门槛 / §7.2 智能体验收）：表只有 3~4 列，形状与 FR/NFR 不同，
+            # 但**在总账里**（《需求索引》438 = 379 FR + 47 NFR + 12 AC），照收。
+            rec = {"req": cells[1], "criteria": cells[2] if n > 2 else "",
+                   "not_do": cells[3] if n > 3 else "", "level": "", "priority": ""}
         if n >= 6 and "需求" in header[1]:
             rec = {"req": cells[1], "criteria": cells[2], "not_do": cells[3],
                    "level": cells[4], "priority": cells[5]}
         elif n == 2 and "需求" in header[1]:
-            # §5.x：只有编号 + 需求，判据/层次/优先级在这一章确实没有。
-            rec = {"req": cells[1], "criteria": "", "not_do": "",
-                   "level": "", "priority": ""}
+            # §5.x 数据需求：按《需求索引》口径**不入总账**（见上），只报数。
+            skipped.append({"id": ident, "section": section, "header": header})
+            continue
         elif n == 3 and "接口" in header[1]:
-            # §6.x：接口名 + 要求；接口名并进需求文本，免得丢主语。
-            rec = {"req": f"`{cells[1]}` —— {cells[2]}", "criteria": "", "not_do": "",
-                   "level": "", "priority": ""}
+            # §6.x 接口需求：同上，不入总账；接口与分层约束的家在概设 §3/§4。
+            skipped.append({"id": ident, "section": section, "header": header})
+            continue
         if rec is None:
             skipped.append({"id": ident, "section": section, "header": header})
             continue
