@@ -72,7 +72,7 @@ HOOKS = {
 DOC_ANCHORS = {
     "Docs/Doyah产品概要设计说明书.md": ["行号列不只工作区编辑器有"],
     "Docs/Doyah产品需求规格说明书.md": ["数据库侧 SQL 编辑器也有行号列"],
-    "Docs/Doyah产品能力规划说明书.md": ["SQL 编辑器（数据库侧）行号列已落地"],
+    "Docs/Doyah产品能力规划说明书.md": ["SQL 编辑器（数据库侧）同样有行号列"],
 }
 
 
