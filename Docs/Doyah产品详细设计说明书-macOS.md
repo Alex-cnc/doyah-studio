@@ -1,6 +1,6 @@
 # Doyah产品详细设计说明书 · macOS
 
-> **版本** v1.3（2026-10-25 `DETAIL_CONFLICT` 第 1 条已裁决并落地（口令/模型密钥改注入系统钥匙串）；v1.2 内容：按 `detail-design-spec-writing` 自检修齐：补 §2.2 注入点与 §2.3 命名约束；§3 由六节散文改为十六节逐函数契约；§5.3 拆七个组件六态小节并新增 §5.8 界面用例表；§6 拆 6.1/6.2/6.3；§7、§8 拆子节；§0.1 矩阵由 21 行拆到 42 行逐条对齐；§11 增 DETAIL_GAP 登记；已知坑移 §13）
+> **版本** v1.4（2026-10-25 Agent 界面按 Hermes TUI 基准补齐 §5.3.8.1–5.3.8.3；v1.3：2026-10-25 `DETAIL_CONFLICT` 第 1 条已裁决并落地（口令/模型密钥改注入系统钥匙串）；v1.2 内容：按 `detail-design-spec-writing` 自检修齐：补 §2.2 注入点与 §2.3 命名约束；§3 由六节散文改为十六节逐函数契约；§5.3 拆七个组件六态小节并新增 §5.8 界面用例表；§6 拆 6.1/6.2/6.3；§7、§8 拆子节；§0.1 矩阵由 21 行拆到 42 行逐条对齐；§11 增 DETAIL_GAP 登记；已知坑移 §13）
 
 > v1.1（2026-10-21 扫差补齐：加笔记域与复盘宿主两章、矩阵补笔记域与复盘域两行）
 
@@ -9,7 +9,7 @@
 ## 0. 文档元信息与追溯关系
 
 - 项目/功能名称：Doyah · macOS 端全部能力（Studio 工作区与数据库 / Notes / Retro 宿主 / Agent 在 Studio 内的表现 / 授权呈现）
-- 文档版本：v1.3（正文任何改动必须同步本节与 §12）
+- 文档版本：v1.4（正文任何改动必须同步本节与 §12）
 - 实现范围（2026-10-25 实测件数）：`Core/` 260 个 `.swift` + `App/` 133 个 `.swift` + `Platform/macOS/` 5 个文件 + `CLI/` 4 个文件；测试面 `Tests/` 283 个文件
 - 上游依据：
   - 概要设计说明书：`Docs/Doyah产品概要设计说明书.md` v0.10（含 §11.4 非功能归属 47 条与 §21 标准对照）
@@ -978,6 +978,13 @@
 
 ##### 5.3.8.1 版式语汇（对照 Hermes TUI 的两张基准图，逐项照抄）
 
+> **参考基准登记（比对面 = 以下四项，缺一项就算没参考）**
+> ① 启动界面截图：`~/Desktop/Hermes-startup.png` ② 工作界面截图：`~/Desktop/Hermes-GUI.png`
+> ③ 实现骨架源码（TUI 侧）：`ui-tui/src/components/appLayout.tsx`（主骨架）· `appChrome.tsx`（`statusBarSegments(cols)`）· `theme.ts`（30+ 配色键）· `blockLayout.test.ts`（行数分配）
+> ④ 行为开关：`config.yaml` 的 `display:` 段；配色/品牌/符号：皮肤引擎 `hermes_cli/skin_engine.py` + `~/.hermes/skins/<名>.yaml`
+>
+> 纪律：以后改这一节，先重新看这四项再动笔；只凭文字描述改版式 = 返工。
+
 > 基准：启动界面 = 桌面 `Hermes-startup.png`；工作界面 = 桌面 `Hermes-GUI.png`。两张图是**唯一比对面**，不是「风格参考」。以下每题都写成可核项。
 
 **① 一个字号**：正文、工具行、状态行、输入行**同一字号**（`Theme.font(.body)` 同档），层级只靠颜色与字形，**不许**把工具行/状态行缩小一号。判据：`grep -c 'Theme.font(.caption)'` 在本视图内为 0（除表头与 `⌘` 提示）。
@@ -1057,6 +1064,32 @@
 - TUI 的 30+ 键按**角色**归并到本端令牌（`Surface` / `TextTone` / `StatusTone` / `SyntaxTone`），**不 1:1 照搬键名** —— 键名进了视图就会长成两套口径。
 - **合并规则的坑（照抄，免得返工）**：TUI 的 `colors` / `spinner` / `branding` 在 `default` 之上**逐键合并**（只写想改的）；而 `light_colors` / `dark_colors` **不合并** —— 留空 = 该皮肤没有手调明暗变体，由引擎自动适配。本端对应实现：主题值表按「角色 × 明暗」两列给值，**缺失的明暗变体必须回落推导值并登记**（不许静默落成同一色，那就等于没有明暗两套）。
 - 品牌与符号：`tool_prefix` 等价物 = 行首栏字形表（见 §5.3.8.1 ②）；`branding.name/icon/prompt/welcome` = 启动界面 §5.3.8.1 ⑥ 的品牌块与提示符；这些**进主题表、不进视图代码**。
+
+##### 5.3.8.3 皮肤与品牌值表（TUI 皮肤 YAML 字段 → 本端主题表）
+
+**字段对照（写全，缺一个就会「改了不生效」）**
+
+| TUI 皮肤字段 | 含义 | 本端落点 | 口径 |
+|---|---|---|---|
+| `colors.*`（`banner_border` / `banner_title` / `ui_accent` / `ui_ok` / `prompt` / `status_bar_bg` 等 30+ 键） | 各角色色值 | `Core/DesignTheme.swift` 每个主题一份 `palette`，按 `Surface` / `TextTone` / `StatusTone` / `AccentFamily` 角色取值 | **按角色归并，不 1:1 搬键名** |
+| `light_colors` / `dark_colors` | 手调明暗变体 | 主题值表的 `light` / `dark` 两列 | **不合并**：缺失的变体必须回落推导值并在值表里登记理由（静默落成同一色 = 没有明暗两套） |
+| `spinner` | 加载动画字形 | `status_indicator` 三档 + `busy` 字形（`kaomoji` / `unicode` / `ascii`） | 三档都要能表达 computing / ready / error |
+| `branding.{name,icon,prompt,welcome,goodbye,tool,help_header}` | 品牌与提示语 | 启动界面品牌块、输入行提示符 `>`、欢迎/告别文案（走语言表） | 文案**只从语言表取**，不写在视图里 |
+| `tool_prefix`（如 `┊`） | 工具行行首字形 | 行首栏字形表（§5.3.8.1 ②：`└─ ▼` / `├─ ⏺`） | 字形常量集中在 `AgentGlyphs`，视图不散写 |
+| `tool_emojis` | 工具图标 | 本端不用 emoji（终端语汇里 emoji 破坏等宽列） | 只用等宽字形；判据：本视图内 emoji 0 处 |
+| `banner_logo` / `banner_hero` | 大图 / 艺术字 | 启动界面品牌块（等宽艺术字） | 用文本字形，不用位图 |
+| `customCSS`（上限 32KB） | 注入样式 | **本端不提供** | 理由：原生渲染无 CSS；等价能力 = 主题值表 + 令牌，且必须过对比度门槛（`Scripts/check-theme-set.py` 的 310 条） |
+
+**皮肤清单与覆盖度**
+
+- TUI 侧内置 **9 套**（`default` / `ares` / `mono` / `slate` / `daylight` / `warm-lightmode` / `poseidon` / `sisyphus` / `charizard`），自定义放 `~/.hermes/skins/<名>.yaml`。
+- 本端**不照搬 9 套**：主题集是 5 套（tech-blue / bean-green / rose-gold / stardust / deep-space，见 `Docs/design/外观方案-v1.md`），每套必须给全「角色 × 明暗」两列值并过对比度门槛 —— 这是本端比 TUI 严的一条（TUI 允许某皮肤没有手调明暗变体，本端不允许缺值不登记）。
+- 存放与切换：TUI = 用户自建 YAML；本端 = 主题选择持久化在 `ui.designTheme`，**不开放用户自带皮肤包**（理由：值表要过 100 角色 / 310 条门槛的独立复算，外部 YAML 无法保证；新增一套主题走代码 + 值表 + 判据三处同改）。
+
+**合并规则的两条坑（都照抄进本端）**
+
+1. `colors` / `spinner` / `branding` 在 `default` 之上**逐键合并** ⇒ 本端主题值表也按「只写覆盖项、其余继承基准主题」实现，别要求每套主题写满 100 个角色。
+2. `light_colors` / `dark_colors` **不合并** ⇒ 本端对应实现是「明暗两列独立求值 + 缺值必须登记」，**不许**用「合并成一套」偷懒（那会让深色主题在浅色档里失真）。
 
 ### 5.4 状态与数据流
 
@@ -1384,6 +1417,7 @@
 
 | 版本 | 日期 | 变更内容 | 影响的概设条款 | 影响的实现单元 |
 |---|---|---|---|---|
+| v1.4 | 2026-10-25 | **Agent 界面按 Hermes TUI 基准补齐三节**：§5.3.8.1 版式语汇（行首栏字形表 / 一个字号 / 边框只给要人动手的卡 / 状态行字段序 / 启动界面五块 / 令牌尺寸 / 九条禁止）+ 参考基准登记（两张截图 + TUI 四个骨架源码 + display 段与皮肤引擎）；§5.3.8.2 渲染骨架与可配置项（三个骨架部件↔本端落点、`statusBarSegments`/`blockLayout` 必须纯函数并单测、10 个行为开关表、主题键按角色归并、明暗不合并的坑）；§5.3.8.3 皮肤与品牌值表（YAML 字段→本端主题表逐条、9 套内置不照搬只作覆盖度参考、customCSS 不提供、两条合并规则坑）。 | 概设 §4.10 / §8.4；§11.4 `UI-001` | `App/Views/AgentChatView.swift` · `Core/DesignTheme.swift` · `Core/DesignTokens.swift` · `App/AppTheme.swift` |
 | v1.3 | 2026-10-25 | **`DETAIL_CONFLICT` 第 1 条闭合（人类主人令「改实现」）**：`AppState.init(secretStore:agentKeyStore:)` 默认注入 `KeychainSecretStore()` / `KeychainAgentKeyStore()`，`FileSecretStore`（XOR 混淆）退为测试 / 开发态显式注入；§2.2 / §8.1 / §10.1 / §11 / §13.5 五处同步改写，冲突行保留留痕。判据：`grep -n 'FileSecretStore()' App/` 只命中测试注入点。 | 概设 §3 平台适配层契约（凭据存取）；§11.4 `AI-007` | `App/AppState.swift`（init 注入）· `Platform/macOS/KeychainSecretStore.swift` · `Platform/macOS/KeychainAgentKeyStore.swift` |
 | v1.2 | 2026-10-25 | 按 `detail-design-spec-writing` 自检修齐：新增 §2.2 注入点（数据库/方言/时钟/ID/HTTP/凭据/文件定位的注入方式写死）与 §2.3 命名约束；§3 由 6 节散文改为 16 节逐函数契约（每节七段 + 唯一错误契约表 + 可重试列）；§5.3 拆成 5.3.1–5.3.7 七个组件六态小节（每节六态齐、禁止渲染列逐行非空），新增 §5.4–§5.8（状态流、动作映射、表单校验、导航权限、界面用例表 17 条）；§6 拆 6.1/6.2/6.3；§7 拆 7.1/7.2；§8 拆 8.1/8.2；§0.1 矩阵由 21 行拆到 42 行（概设契约节逐节有行，含 §3.1、§4.5–§4.10、§5.2–§5.4、§6.2–§6.4、§7.2、§7.3、§8.2–§8.10、§11.4、§14.1、§18.1、§19.2）；§11 增 `DETAIL_GAP` 6 条与 `DETAIL_CONFLICT` 1 条；已知坑移至 §13。读数（审计脚本实跑）：硬失败 6→0、告警 3→0、矩阵 21→42 行、悬空测试 ID 18→0、孤儿测试 8→0、占位符 1→0、禁用词 1→0；门禁 `check-doc-tables.py` / `check-doc-layout.py` 均 rc=0 | 概要设计 §3 / §4.1–§4.10 / §5.1–§5.4 / §6.1–§6.4 / §7.1–§7.3 / §8.1–§8.10 / §9 / §11.4 / §14.1 / §18.1 / §19.2 | `Core/DatabaseService.swift`、`ExecutionSafety.swift`、`ConnectionStore.swift`、`AgentApprovalGate.swift`、`MetadataService.swift`、`RowBrowsing.swift`、`TableDesign.swift`、`ResultExporter.swift`、`AgentContext.swift`、`AgentPlanRows.swift`、`App/AppState.swift`、`App/Views/*` |
 | v1.1 | 2026-10-21 | 扫差补齐：§0 范围加 Notes / Retro；矩阵补 §15 笔记域、§16 复盘域两行；新增复盘宿主节（本端只宿主，实现在他仓） | 概要设计 §15 / §16 | `App/Views/RetroHostView.swift`、`Plugins/Notes/Sources/` |
