@@ -380,7 +380,7 @@
     },
     {
       "file": "App/Views/AgentScheduleSheet.swift",
-      "symbol": "AgentScheduleEditor",
+      "symbol": "AgentScheduleForm",
       "frame": "width: 480, height: 420",
       "count": 1,
       "kind": "panel-root",
