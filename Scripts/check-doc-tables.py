@@ -94,6 +94,12 @@ DEFAULT_TARGETS = [
     "Docs/人工点验清单-20261018.md",
     "Docs/人工点验清单-20261018-重分版.md",
     "Docs/Doyah产品能力规划说明书.md",
+    # 2026-10-25「四书一单冻结」新增：冻结副本四份 + 里程碑任务清单（有表格，必须进受检面）
+    "Docs/frozen/Doyah产品能力规划说明书-v1.0-20261025.md",
+    "Docs/frozen/Doyah产品需求规格说明书-v1.0-20261025.md",
+    "Docs/frozen/Doyah产品概要设计说明书-v1.0-20261025.md",
+    "Docs/frozen/Doyah产品详细设计说明书-macOS-v1.0-20261025.md",
+    "Docs/Doyah产品macOS端-版本里程碑与开发任务清单-v1.0-20261025.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
     "Docs/Doyah产品需求规格说明书.md",
