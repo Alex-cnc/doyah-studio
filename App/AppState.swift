@@ -2862,9 +2862,48 @@ final class AppState: ObservableObject {
         }
 
         // 钥匙串不可用时（未签名 / 无授权）按「没有 Key」处理，不阻断界面。
+        migrateLegacySecretsIfNeeded()
         let key = (try? agentKeyStore.apiKey()) ?? nil
         agentAPIKey = key
         hasAgentAPIKey = !(key?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    /// 一次性迁移：把旧版**文件存储**（`FileAgentKeyStore` / `FileSecretStore`，XOR 混淆）
+    /// 里的凭据搬进系统钥匙串，搬完删文件里的明文槽位。
+    ///
+    /// 由头（2026-10-25 实机）：口令与模型 Key 改注入钥匙串后，**旧用户的数据还在文件里** ⇒
+    /// 钥匙串读不到 ⇒ 界面判「没有 Key」、连接口令丢失。迁移只在「钥匙串为空 + 文件有值」时发生，
+    /// 且只跑一次（`ui.secretsMigratedToKeychain`），重复启动不会反复搬。
+    private func migrateLegacySecretsIfNeeded() {
+        let flag = "ui.secretsMigratedToKeychain"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        var migrated = 0
+
+        // ① 模型 API Key
+        let legacyAgentKey = try? FileAgentKeyStore().apiKey()
+        let keychainAgentKey = try? agentKeyStore.apiKey()
+        if (keychainAgentKey ?? nil) == nil, let legacy = legacyAgentKey ?? nil, !legacy.isEmpty {
+            if (try? agentKeyStore.setAPIKey(legacy)) != nil { migrated += 1 }
+        }
+
+        // ② 连接口令（逐连接搬：只搬钥匙串里还没有的那几条）
+        let legacyStore = FileSecretStore()
+        for configuration in connections {
+            let existing = try? secretStore.password(for: configuration.id)
+            guard (existing ?? nil) == nil,
+                  let password = (try? legacyStore.password(for: configuration.id)) ?? nil,
+                  !password.isEmpty else { continue }
+            if (try? secretStore.setPassword(password, for: configuration.id)) != nil {
+                _ = try? legacyStore.deletePassword(for: configuration.id)
+                migrated += 1
+            }
+        }
+
+        UserDefaults.standard.set(true, forKey: flag)
+        if migrated > 0 {
+            // 用 os.Logger 会牵进 Core 的日志设施；这里只留一条控制台行，够查
+            print("[Doyah] 凭据迁移：\(migrated) 条从文件存储搬进系统钥匙串")
+        }
     }
 
     /// 保存智能体配置；`apiKey` 传 `nil` 表示不改动已保存的 Key，传空串表示清除。
@@ -4069,7 +4108,9 @@ final class AppState: ObservableObject {
     /// （测试**不等于**放行，它只是一次真实往返）；③ **不写会话留痕**（它不是对话内容）。
     /// 如实登记：这条路与循环一样走**默认流式传输**，所以它**不进** `egress-log.jsonl`（那份日志记的是
     /// 非流式传输那一条路）—— 配通没配通仍以 App 里的结果行为准。
-    func testAgentConnection() async -> AgentConnectionTest {
+    /// - Parameter apiKeyOverride: 面板里**刚输入、还没保存**的 Key。测连接必须测「用户眼前这一份」，
+    ///   否则刚填完 Key 点测试仍会用旧值（实机现象：填了新 Key，测试照样 401）。
+    func testAgentConnection(apiKeyOverride: String? = nil) async -> AgentConnectionTest {
         let configuration = agentConfiguration
         guard let url = URL(string: configuration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)),
               !configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -4078,8 +4119,11 @@ final class AppState: ObservableObject {
         // **踩过的坑（2026-10-16 实机 401）**：第一版这里漏了 `apiKey` ⇒ 发出去的是**裸请求**，
         // 端点原样回 401，看上去像"用户的 key 不对"。密钥是靠 `LLMRequest.apiKey` 进 `Authorization` 头的
         // （`LLMClient.swift` 里那一处唯一出口）—— 任何新造的请求都必须显式带上它，否则必然 401。
+        // 面板里刚输入的那份优先（空 = 没填，退回已保存的那份）
+        let draft = apiKeyOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let effectiveKey = draft.isEmpty ? agentAPIKey : draft
         let request = LLMRequest(endpoint: url, model: configuration.model,
-                                 apiKey: agentAPIKey,
+                                 apiKey: effectiveKey,
                                  timeoutSeconds: configuration.timeoutSeconds,
                                  systemPrompt: "这是一次连接测试。", userPrompt: "回复两个字：收到。")
         // 用**与 Agent 循环同一个**流式客户端（`AppState` 里那条循环也是这么造的），不另起一套。

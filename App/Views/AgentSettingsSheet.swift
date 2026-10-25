@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import DoyahCore
 
@@ -46,6 +47,9 @@ struct AgentSettingsSheet: View {
             Text(L(.agentSettingsTitle))
                 .font(Theme.font(.title))
 
+            // **可滚动**：内容一多（信息面三格 + MCP + 授权粒度…）不能把底栏挤出去。
+            // 底栏（测试连接 / 取消 / 保存）在 ScrollView 外、固定在对话框底部。
+            ScrollView {
             Form {
                 Toggle(isOn: $isEnabled) {
                     Label(L(.agentEnabled), systemImage: "cpu")
@@ -162,6 +166,8 @@ struct AgentSettingsSheet: View {
             // 否则表单把整块撑到屏幕外 —— 底栏的「测试连接 / 取消 / 保存」会被 Dock 盖住
             // （人类主人 2026-10-18 实测：「对话框太高了，连最底下的测试按钮都被任务栏遮住了」）。
             .frame(maxHeight: .infinity)
+            }
+            .frame(maxHeight: .infinity)
 
             statusSection
 
@@ -173,7 +179,8 @@ struct AgentSettingsSheet: View {
                     isTesting = true
                     testLine = L(.agentTestRunning)
                     Task {
-                        let result = await appState.testAgentConnection()
+                        // 用面板里刚输入的那份 Key 去测（否则刚填完 Key 点测试仍会用旧值）
+                        let result = await appState.testAgentConnection(apiKeyOverride: apiKeyInput)
                         switch result {
                         case .passed(let model, let millis):
                             // `%d` 槽必须收数字：原来把毫秒转成字符串传进去，`String(format:)`
@@ -206,7 +213,7 @@ struct AgentSettingsSheet: View {
             }
         }
         .padding(Spacing.l)
-        .frame(width: 560, height: sheetHeight)
+        .frame(width: 560, height: min(sheetHeight, AgentSettingsSheet.maxSheetHeight))
         // 换提供商 ⇒ 自动填端点与模型；手改端点 ⇒ 重认一次「这是谁」。
         // 两条都不自己判，只读契约层（`AgentProviderCatalog`）给的答案。
         .onChange(of: providerID) { _, newValue in applyProvider(newValue) }
@@ -378,6 +385,13 @@ struct AgentSettingsSheet: View {
     ///
     /// `NSScreen.visibleFrame` 已经扣掉菜单栏与 Dock，再留 96 点给窗口边距 ——
     /// 这样在 13 寸笔记本（可用约 700 点）上也不会把底栏推到 Dock 底下。
+    /// 对话框高度上限 = 屏幕可见高度的 85%（再高就会被 Dock / 菜单栏吃掉底部按钮）。
+    static var maxSheetHeight: CGFloat {
+        let visible = NSScreen.main?.visibleFrame.height ?? 800
+        return max(420, visible - 120)
+    }
+
+
     private var sheetHeight: CGFloat {
         let available = (NSScreen.main?.visibleFrame.height ?? 800) - 96
         return min(680, max(420, available))
