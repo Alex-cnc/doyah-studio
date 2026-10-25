@@ -66,7 +66,7 @@ struct MainWindow: View {
         // 拆掉 `NavigationSplitView` 后要自己收）：笔记本架已经由笔记区内的**浮动覆盖层**
         // 承担（`FR-NOTEUI-02`），这里再画一份就成了「同一棵树画两遍」—— 2026-10-25 实机
         // 表现为「笔记本浮动侧栏挤在活动栏和导航栏中间」。其余活动项照常给侧栏。
-        isSidebarVisible = item != .notes
+        isSidebarVisible = item != .notes && item != .retro
     }
 
     /// 侧栏内容由活动栏决定（「看哪个视图」与「视图里看什么」分开）。
@@ -251,7 +251,7 @@ struct MainWindow: View {
         // **折叠按钮进标题栏**（人类主人 2026-10-25：「可以放到最上面的标题栏里去，跟以前
         // 系统自带的那个一样」）：系统那枚随 `NavigationSplitView` 一起消失，这里补同位的。
         .toolbar {
-            ToolbarItem(placement: .navigation) {
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) { isSidebarVisible.toggle() }
                 } label: {
