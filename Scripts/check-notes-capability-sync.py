@@ -36,12 +36,24 @@ SRS = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
 # (标签, 章节起标题, 章节止标题, 独立仓文件, 标记号, 需求书分区标题, 条目判据)
 TARGETS = [
     ("笔记", "# 第五章 Doyah Notes", "# 第六章 Doyah Retro",
-     pathlib.Path("../notes/Docs/产品能力规划说明书.md"), "ch5",
+     pathlib.Path("../notes/Docs/Doyah产品能力规划说明书.md"), "ch5",
      "## 3.5 Doyah Notes", "note"),
     ("复盘", "# 第六章 Doyah Retro", "# 第七章 非目标",
-     pathlib.Path("../retro/Docs/产品能力规划说明书.md"), "ch6",
+     pathlib.Path("../retro/Docs/Doyah产品能力规划说明书.md"), "ch6",
      "## 3.6 Doyah Retro", "retro"),
 ]
+
+
+CHANGELOG_ROW = re.compile(r"^\| \*\*v\d+\.\d+")
+
+
+def drop_changelog(text: str) -> str:
+    """剔掉本册自己的变更记录行（`| **v2.57** | … |`）。
+
+    为什么：L1 分册会把自己「补派生自行」这类记账行写在同章的表里，
+    那是书目记账、不是能力内容；不剔就会永远差 1 行（2026-10-25 实况）。
+    """
+    return "\n".join(l for l in text.split("\n") if not CHANGELOG_ROW.match(l))
 
 
 def demote(text: str) -> str:
@@ -52,7 +64,7 @@ def demote(text: str) -> str:
 def chapter(cap: str, start: str, end: str) -> str:
     a = cap.index(start)
     b = cap.index(end)
-    return demote(cap[a:b].rstrip())
+    return drop_changelog(demote(cap[a:b].rstrip()))
 
 
 def section_of(book: pathlib.Path, tag: str) -> str:
@@ -60,7 +72,7 @@ def section_of(book: pathlib.Path, tag: str) -> str:
     begin, end = f"<!-- capability-{tag}:begin -->", f"<!-- capability-{tag}:end -->"
     a = t.index(begin) + len(begin)
     b = t.index(end)
-    return t[a:b].strip("\n").rstrip()
+    return drop_changelog(t[a:b].strip("\n").rstrip())
 
 
 def check_srs(srs: str, heading: str, kind: str) -> list[str]:
