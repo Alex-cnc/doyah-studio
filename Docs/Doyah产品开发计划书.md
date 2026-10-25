@@ -113,6 +113,8 @@
 | FR-AGT-TOOL-MEDIA-002 | 语音输出：把回答读出来，可中断、可调语速 | 3.2 Doyah Agent | 进阶可选 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-SYS-001 | 界面操作：驱动本机图形界面完成点击 / 输入 / 滚动，每一步可见、可中断 | 3.2 Doyah Agent | 进阶可选 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-SYS-002 | 子任务委派：把独立子任务派给子代理并行做，结果汇总回主任务并标明来源 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-TOOL-SYS-003 | 命令执行：跑一条命令带回 stdout/stderr/退出码，后台可中断 | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | — | v0.3.0 | 待接线 |
+| FR-AGT-TOOL-SYS-004 | 命令执行边界：仅授权目录、危险形态进审批、超时 60s 可配 | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | — | v0.3.0 | 待接线 |
 | FR-AGT-TOOL-MODEL-001 | 模型多档：按任务选档（看图 / 调工具 / 上下文长度 / 语种 / 价格），未标注 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-TOOL-MODEL-002 | 档位端点与模型名可预填且可改（预设是起点不是锁） | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | — | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-007 | 中途干预：执行中可插话（改方向 / 停手 / 追加约束），当前步完成后立刻生效 | 3.2 Doyah Agent | 常用增强 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
