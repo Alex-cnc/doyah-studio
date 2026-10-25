@@ -228,6 +228,7 @@ struct MainWindow: View {
                 RetroHostView()
             }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             // **窗口标题跟着活动栏走**（FR-EDIT-37，2026-09-30 需求提出者）：
             // 原话「软件主界面的标题就是一个 Doyah Studio 太浪费了…标题要跟着变成
             // Doyah Studio - Workspace / - Database / - Notes 这种」。
