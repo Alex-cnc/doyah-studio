@@ -432,8 +432,7 @@ struct NotesShelfPanel: View {
             HairlineView(vertical: true)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(.thickMaterial)   // **压住内容的层必须不透明且不难看**（2026-10-25 实机：半透明看不清 → 系统控件底色又成死黑；
-                                          // `.thickMaterial` 随明暗自适应、约 95% 不透，是 macOS 里「浮起的一张纸」的既有观感）
+        .background(Theme.paper())   // **压住内容的层：主题色但不透**（2026-10-25 实机：半透明糊、系统控件底色死黑、thickMaterial 偏黑 —— 都不对）
         .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .shadow(color: .black.opacity(0.28), radius: 12, y: 2)
         .accessibilityIdentifier("notes-shelf-overlay")
