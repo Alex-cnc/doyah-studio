@@ -432,7 +432,9 @@ struct NotesShelfPanel: View {
             HairlineView(vertical: true)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.surface(.sidebar))
+        .background(Theme.surface(.panel))   // **压住内容的层必须不透明**（人类主人 2026-10-25：「太透明了内容都看不清」）
+        .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .shadow(color: .black.opacity(0.28), radius: 12, y: 2)
         .accessibilityIdentifier("notes-shelf-overlay")
     }
 }

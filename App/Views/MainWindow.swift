@@ -193,26 +193,7 @@ struct MainWindow: View {
                 // **侧栏也要透出壁纸**（人类主人 2026-10-25：「左导航没有壁纸，其他面都有，
                 // 我要的就是全透明」）。`NavigationSplitView` 的 sidebar 列自带一层不透明材质，
                 // 所以这里**自铺同一张壁纸**并把列表底色关掉 —— 视觉上等于透明，且不依赖私有 API。
-                VStack(spacing: 0) {
-                    // **侧栏可收起**（人类主人 2026-10-25：「左侧导航栏要能收起来呀，现在没这个按钮了」）：
-                    // 拆掉 `NavigationSplitView` 后系统那枚折叠按钮一起没了，这里补一枚自绘的。
-                    HStack(spacing: Spacing.xs) {
-                        Spacer(minLength: 0)
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.18)) { isSidebarVisible = false }
-                        } label: {
-                            Image(systemName: "sidebar.leading")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Theme.text(.secondary))
-                        }
-                        .buttonStyle(.borderless)
-                        .accessibilityIdentifier("sidebar-collapse")
-                    }
-                    .padding(.horizontal, Spacing.s)
-                    .padding(.top, Spacing.hair)
-
-                    sidebarContent
-                }
+                sidebarContent
                     .scrollContentBackground(.hidden)
                     // 侧栏透明：**注意** macOS 的 `NSVisualEffectView` 没有 `.clear` 材质，
                     // 因此「清系统材质」这条路走不通（2026-10-25 实测编译失败）。
@@ -225,20 +206,6 @@ struct MainWindow: View {
                     .frame(width: sidebarWidth)
 
                     SidebarResizeDivider(width: $sidebarWidth)
-            }
-            if !isSidebarVisible {
-                // 收起态：内容区左上角留一枚展开按钮（否则收起来就再也打不开）。
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) { isSidebarVisible = true }
-                } label: {
-                    Image(systemName: "sidebar.leading")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.text(.secondary))
-                        .padding(.vertical, Spacing.m)
-                        .padding(.horizontal, Spacing.xs)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityIdentifier("sidebar-expand")
             }
             Group {
             // 下方面板（结果 / 问题 / 输出 / 终端 / 调试控制台）已经并进工作区本身，
@@ -280,6 +247,20 @@ struct MainWindow: View {
         // **内容区宽度**（队列 `L-141`）：搜索栏的宽度策略要吃一个「窗口有多宽」，
         // 而标题栏与内容区同宽 ⇒ 在内容区量一次就够（工具条里的那一枚自己量不到窗口）。
         // 用 `preference` 而不是 `GeometryReader` 包住内容：后者会改掉内容的排布方式。
+        // **折叠按钮进标题栏**（人类主人 2026-10-25：「可以放到最上面的标题栏里去，跟以前
+        // 系统自带的那个一样」）：系统那枚随 `NavigationSplitView` 一起消失，这里补同位的。
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { isSidebarVisible.toggle() }
+                } label: {
+                    Image(systemName: "sidebar.leading")
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+                .buttonStyle(.borderless)
+                .accessibilityIdentifier("sidebar-toggle")
+            }
+        }
         .background(
             GeometryReader { proxy in
                 Color.clear.preference(key: MainWindowContentWidthKey.self, value: proxy.size.width)
