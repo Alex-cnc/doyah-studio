@@ -356,6 +356,10 @@ struct WorkspaceExplorerView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
+            // **产品形象**（人类主人 2026-10-25：「把 AppIcon 放到 workspace 的 home 页里，
+            // Doyah Studio 字前面出我们的产品形象大使」）。
+            BrandMark(size: 44)
+                .padding(.bottom, Spacing.s)
             Text(L(.workspaceEmptyTitle))
                 .font(Theme.font(.bodyStrong))
                 .foregroundStyle(Theme.text(.primary))

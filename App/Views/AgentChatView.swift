@@ -108,14 +108,19 @@ struct AgentChatView: View {
     ///     （本端没有 slash 命令，写了就是教人去敲一个不存在的东西）。
     private var startupPanel: some View {
         VStack(alignment: .leading, spacing: Spacing.l) {
-            // ① 品牌块：大号等宽艺术字 + 一行暗色副题（不出现 logo 位图）。
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(verbatim: Self.brandWordmark)
-                    .font(Theme.font(.display))
-                    .foregroundStyle(Theme.text(.bright))
-                Text(L(.agentChatEmptyTitle))
-                    .font(Self.transcriptFont)
-                    .foregroundStyle(Theme.text(.secondary))
+            // ① 品牌块：**应用图标 + 大号等宽艺术字 + 一行暗色副题**
+            //    （人类主人 2026-10-25：「Chat 欢迎页面也是如此，要出现 Doyah 的图标」；
+            //     图标取 `NSApp.applicationIconImage`，与 Dock / 关于本应用同一份）。
+            HStack(alignment: .center, spacing: Spacing.s) {
+                BrandMark(size: 36)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(verbatim: Self.brandWordmark)
+                        .font(Theme.font(.display))
+                        .foregroundStyle(Theme.text(.bright))
+                    Text(L(.agentChatEmptyTitle))
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(.secondary))
+                }
             }
 
             // ② 信息面：本视图里唯一描边的块（棕色 1pt 圆角 `Radius.badge`）。
