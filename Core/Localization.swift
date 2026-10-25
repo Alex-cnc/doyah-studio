@@ -1035,6 +1035,23 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatStopStepLimit
     /// `FR-AI-18` ③：到了令牌上限（%d）—— 停在发送之前。
     case agentChatStopTokenLimit
+    /// §5.3.8「加载中」那一档：已经开始跑、正文还没吐出第一个字时的**占位行**。
+    case agentChatStreamingPlaceholder
+    /// §5.3.8「错误」那一档：这一轮没跑成（原因由界面拼在它后面，模板里不放占位符）。
+    case agentChatTurnFailed
+    /// §5.3.8.1 ②：过程块折叠头的名字（`└─ ▼ 工具 (3)`）。
+    case agentChatToolBlockTitle
+    /// §5.3.8.1 ⑤：运行中常驻在输入框下面那一行中断提示。
+    case agentChatInterruptHint
+    /// §5.3.8.1 ④：状态行第一格（空闲 / 运行中）。
+    case agentStatusReady
+    case agentStatusComputing
+    /// §5.3.8.1 ④：状态行最后一格（本端没有语音输入，如实写「关」）。
+    case agentStatusVoiceOff
+    /// §5.3.8.1 ⑥：启动界面信息面的三格（可用工具 / 汇总 / 没有工作区）。
+    case agentChatToolsAvailable
+    case agentChatStartupSummary
+    case agentChatWorkspaceNone
     case workspaceHomeBuildLine
     case workspaceHomeCopyright
     case workspaceRecentFiles
@@ -3559,6 +3576,18 @@ public enum LocalizedStrings {
         .agentChatStopStepLimit: [.simplifiedChinese: "到了步数上限（%d 跳）—— 如实停在这里，不是说完。可以补一句更具体的要求再跑一轮。", .english: "Step limit reached (%d hops) — stopping honestly here, not finishing. Add a more specific instruction to run another round."],
         .agentChatStopTokenLimit: [.simplifiedChinese: "到了令牌上限（%d）—— 下一次请求没有发出就停了，不会半截继续烧。", .english: "Token limit reached (%d) — the next request was not sent, so nothing keeps burning."],
         .agentChatStopCancelled: [.simplifiedChinese: "这一轮已被你停止（已跑过的工具结果都留着）。", .english: "You stopped this run (results from tools already run are kept)."],
+        // §5.3.8 的六态：加载中要有一行「开口之前的占位」，错误档要说清「这一轮没跑成」而不是印机器码。
+        .agentChatStreamingPlaceholder: [.simplifiedChinese: "正在等模型开口…", .english: "waiting for the model…"],
+        .agentChatTurnFailed: [.simplifiedChinese: "这一轮没跑成", .english: "This turn did not complete"],
+        // §5.3.8.1 版式语汇：过程块折叠头 / 中断提示 / 状态行那几格。
+        .agentChatToolBlockTitle: [.simplifiedChinese: "工具", .english: "tools"],
+        .agentChatInterruptHint: [.simplifiedChinese: "⌘. 中断这一轮", .english: "⌘. to interrupt"],
+        .agentStatusReady: [.simplifiedChinese: "就绪", .english: "ready"],
+        .agentStatusComputing: [.simplifiedChinese: "( •_•)>◉─ 在算…", .english: "( •_•)>◉─ computing…"],
+        .agentStatusVoiceOff: [.simplifiedChinese: "语音关", .english: "voice off"],
+        .agentChatToolsAvailable: [.simplifiedChinese: "可用工具", .english: "available tools"],
+        .agentChatStartupSummary: [.simplifiedChinese: "%@ 个工具 · %@ 个 MCP server", .english: "%@ tools · %@ MCP servers"],
+        .agentChatWorkspaceNone: [.simplifiedChinese: "没有工作区", .english: "no workspace"],
         // 定时 agent（FR-AI-27）：目标档位 / 面板文案 / 历史。词表与既有键能合的就合（状态与时间全走 dataTask*）。
         .agentScheduleTitle: [.simplifiedChinese: "定时 agent", .english: "Scheduled agents"],
         .agentScheduleEmpty: [.simplifiedChinese: "还没有定时条目。定时只决定「什么时候起一次会话」——危险动作仍然逐次审批。", .english: "No scheduled entries yet. A schedule only decides when a session starts — dangerous actions still need approval every time."],

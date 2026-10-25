@@ -154,6 +154,64 @@ struct MarkdownPreviewView: View {
     }
 }
 
+/// 一份 Markdown 的**呈现口径**（字体与代码块外观）。
+///
+/// 为什么要有这一层：块模型与行内 span 仍然只有一份（契约层 `MarkdownDocument` +
+/// 笔记侧行内解析），但**同一份模型有两种读法** ——
+///   · 文档预览是**阅读尺度**：比例字体、段间留白、代码块只铺底不抬头；
+///   · 对话正文（`§5.3.8`）是**终端尺度**：通篇等宽、代码块带语言标注与描边（一眼分得出哪段是代码）。
+///
+/// **允许有两份呈现口径，不允许有两份解析** —— 本类型里一个解析函数都没有，它只挑字体与描边。
+/// 所以新加一处渲染点（对话正文）时不必再写一套块布局：换一份 `MarkdownPresentation` 就行。
+struct MarkdownPresentation {
+
+    /// 任务列表的勾选标记怎么画：预览用系统符号，对话用字形（终端里没有 SF Symbol）。
+    enum TaskMark: Equatable {
+        case symbol
+        case glyph
+    }
+
+    /// 代码块的外观：抬头（语言标注）与描边。
+    struct CodeChrome: Equatable {
+        /// 画一行 `─ 语言` 抬头（围栏没写语言 ⇒ 不画）。
+        var showsLanguage: Bool = false
+        /// 描一圈 hairline（对话侧要，预览侧不要）。
+        var bordered: Bool = false
+
+        static let plain = CodeChrome()
+        static let labelled = CodeChrome(showsLanguage: true, bordered: true)
+    }
+
+    var body: Font
+    var strong: Font
+    var mono: Font
+    var heading: (Int) -> Font
+    var code: CodeChrome = .plain
+    var taskMark: TaskMark = .symbol
+    /// 会话内搜索的命中词（只在对话正文那一档有；预览没有"搜索命中"这件事）。
+    var highlight: String? = nil
+
+    /// **不缓存**（`static var` 而不是 `static let`）：字体来自用户偏好（`FR-EDIT-26`），
+    /// 缓存下来就会出现「改了字号但这一屏还是旧的」—— 与 `Theme` 那一层的口径一致。
+    static var document: MarkdownPresentation {
+        MarkdownPresentation(
+            body: Theme.font(.body),
+            strong: Theme.font(.bodyStrong),
+            mono: Theme.font(.monoSmall),
+            heading: { level in Theme.font(Self.headingStyle(level)) }
+        )
+    }
+
+    /// 标题层级 → 字号档（预览那一档；对话侧整份换成等宽，不看层级）。
+    static func headingStyle(_ level: Int) -> Theme.TextStyle {
+        switch level {
+        case ...1: return .title
+        case 2: return .bodyStrong
+        default: return .body
+        }
+    }
+}
+
 /// 块的排布（**只读**）。
 ///
 /// 单独拎出来是为了让判据量的**就是真渲染的那一份**：`L-137` 的界面判据
@@ -162,17 +220,35 @@ struct MarkdownPreviewView: View {
 struct MarkdownBlocksView: View {
     let blocks: [MarkdownBlock]
     let language: TextLanguage
+    /// 呈现口径（缺省 = 文档预览那一档；对话正文换一份等宽的）。
+    var presentation: MarkdownPresentation = .document
+    /// 要不要自带一圈留白（预览是**整页**，要；对话正文嵌在行首栏里，那一圈会破对齐，不要）。
+    var outerPadding: Bool = true
+    /// 用不用 `LazyVStack`（预览是长文档、要懒加载；对话正文那一小块外面已经是 `LazyVStack`，
+    /// 里外都懒会让行高在流式追加时反复重算 —— 这里用普通 `VStack`）。
+    var lazyBlocks: Bool = true
 
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: Spacing.m) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
-                MarkdownBlockView(block: block, language: language)
-                    // 滚动落点 = **顶层块下标**（与 `MarkdownPreviewAnchor.blockIndex` 同一个数）。
-                    .id(index)
-            }
+        if lazyBlocks {
+            stack(LazyVStack(alignment: .leading, spacing: Spacing.m) { rows })
+        } else {
+            stack(VStack(alignment: .leading, spacing: Spacing.m) { rows })
         }
-        .padding(Spacing.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var rows: some View {
+        ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
+            MarkdownBlockView(block: block, language: language, presentation: presentation)
+                // 滚动落点 = **顶层块下标**（与 `MarkdownPreviewAnchor.blockIndex` 同一个数）。
+                .id(index)
+        }
+    }
+
+    private func stack<Content: View>(_ content: Content) -> some View {
+        content
+            .padding(outerPadding ? Spacing.l : 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -182,18 +258,21 @@ struct MarkdownBlocksView: View {
 struct MarkdownBlockView: View {
     let block: MarkdownBlock
     let language: TextLanguage
+    var presentation: MarkdownPresentation = .document
+    /// 代码块描边按当前外观取色（深色用白色低透明叠加，浅色用实色）。
+    @Environment(\.colorScheme) private var colorScheme
 
     @ViewBuilder
     var body: some View {
         switch block.kind {
         case let .heading(level, spans):
-            MarkdownInline.text(spans)
-                .font(Theme.font(Self.headingStyle(level)))
+            MarkdownInline.text(spans, codeFont: presentation.mono, highlight: presentation.highlight)
+                .font(presentation.heading(level))
                 .foregroundStyle(Theme.text(.bright))
                 .fixedSize(horizontal: false, vertical: true)
         case let .paragraph(spans):
-            MarkdownInline.text(spans)
-                .font(Theme.font(.body))
+            MarkdownInline.text(spans, codeFont: presentation.mono, highlight: presentation.highlight)
+                .font(presentation.body)
                 .foregroundStyle(Theme.text(.primary))
                 .fixedSize(horizontal: false, vertical: true)
         case let .bulletList(items):
@@ -223,16 +302,7 @@ struct MarkdownBlockView: View {
                 }
             }
         case let .codeBlock(fence, lines):
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                    // 围栏没写语言 ⇒ **不着色**（模型的口径就是"不猜"），
-                    // 拿外层文件的语言去猜会把 shell 片段按 markdown 着色。
-                    MarkdownCodeLine.text(line, language: fence.flatMap(TextLanguage.init(rawValue:)))
-                }
-            }
-            .padding(Spacing.s)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.surface(.panel))
+            codeBlock(fence: fence, lines: lines)
         case let .quote(blocks):
             HStack(alignment: .top, spacing: Spacing.s) {
                 Rectangle()
@@ -240,7 +310,7 @@ struct MarkdownBlockView: View {
                     .frame(width: Spacing.hair)
                 VStack(alignment: .leading, spacing: Spacing.s) {
                     ForEach(Array(blocks.enumerated()), id: \.offset) { _, child in
-                        MarkdownBlockView(block: child, language: language)
+                        MarkdownBlockView(block: child, language: language, presentation: presentation)
                     }
                 }
             }
@@ -251,19 +321,48 @@ struct MarkdownBlockView: View {
 
     // MARK: 行
 
+    /// 围栏代码块：语言标注 + 等宽底色（`presentation.code` 决定抬头与描边）。
+    private func codeBlock(fence: String?, lines: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 围栏没写语言 ⇒ **不着色、不抬头**（模型的口径就是"不猜"），
+            // 拿外层文件的语言去猜会把 shell 片段按 markdown 着色。
+            let resolved = fence.flatMap(TextLanguage.init(rawValue:))
+            if presentation.code.showsLanguage, let fence, !fence.isEmpty {
+                Text(verbatim: "─ " + fence)
+                    .font(presentation.mono)
+                    .foregroundStyle(Theme.text(.tertiary))
+                    .textSelection(.enabled)
+                    .padding(.bottom, Spacing.hair)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                    MarkdownCodeLine.text(line, language: resolved)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(Spacing.s)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface(.panel))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.badge)
+                .strokeBorder(presentation.code.bordered ? Theme.hairline(colorScheme) : .clear, lineWidth: 1)
+        )
+    }
+
     private func listRow(marker: Text, spans: [NoteSpan], children: [MarkdownBlock]) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
             marker
-                .font(Theme.font(.body))
+                .font(presentation.body)
                 .foregroundStyle(Theme.text(.tertiary))
                 .frame(minWidth: Spacing.l, alignment: .trailing)
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                MarkdownInline.text(spans)
-                    .font(Theme.font(.body))
+                MarkdownInline.text(spans, codeFont: presentation.mono, highlight: presentation.highlight)
+                    .font(presentation.body)
                     .foregroundStyle(Theme.text(.primary))
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach(Array(children.enumerated()), id: \.offset) { _, child in
-                    MarkdownBlockView(block: child, language: language)
+                    MarkdownBlockView(block: child, language: language, presentation: presentation)
                 }
             }
         }
@@ -271,17 +370,24 @@ struct MarkdownBlockView: View {
 
     private func taskRow(_ item: MarkdownTaskItem) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-            Image(systemName: item.isChecked ? "checkmark.square.fill" : "square")
-                .font(Theme.font(.caption))
-                .foregroundStyle(item.isChecked ? Theme.status(.success) : Theme.text(.tertiary))
+            switch presentation.taskMark {
+            case .symbol:
+                Image(systemName: item.isChecked ? "checkmark.square.fill" : "square")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(item.isChecked ? Theme.status(.success) : Theme.text(.tertiary))
+            case .glyph:
+                Text(verbatim: item.isChecked ? "☑" : "☐")
+                    .font(presentation.mono)
+                    .foregroundStyle(item.isChecked ? Theme.status(.success) : Theme.text(.tertiary))
+            }
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                MarkdownInline.text(item.spans)
-                    .font(Theme.font(.body))
+                MarkdownInline.text(item.spans, codeFont: presentation.mono, highlight: presentation.highlight)
+                    .font(presentation.body)
                     .foregroundStyle(item.isChecked ? Theme.text(.secondary) : Theme.text(.primary))
                     .strikethrough(item.isChecked)
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach(Array(item.children.enumerated()), id: \.offset) { _, child in
-                    MarkdownBlockView(block: child, language: language)
+                    MarkdownBlockView(block: child, language: language, presentation: presentation)
                 }
             }
         }
@@ -294,24 +400,16 @@ struct MarkdownBlockView: View {
     ) -> some View {
         HStack(alignment: .top, spacing: Spacing.s) {
             ForEach(Array(cells.enumerated()), id: \.offset) { index, cell in
-                MarkdownInline.text(cell)
-                    .font(Theme.font(isHeader ? .bodyStrong : .body))
+                MarkdownInline.text(cell, codeFont: presentation.mono, highlight: presentation.highlight)
+                    .font(isHeader ? presentation.strong : presentation.body)
                     .foregroundStyle(Theme.text(isHeader ? .bright : .primary))
-                    .frame(maxWidth: .infinity, alignment: Self.alignment(at: index, in: alignments))
+                    .frame(maxWidth: .infinity, alignment: alignment(at: index, in: alignments))
             }
         }
         .padding(.vertical, Spacing.hair)
     }
 
-    private static func headingStyle(_ level: Int) -> Theme.TextStyle {
-        switch level {
-        case ...1: return .title
-        case 2: return .bodyStrong
-        default: return .body
-        }
-    }
-
-    private static func alignment(at index: Int, in alignments: [MarkdownColumnAlignment]) -> Alignment {
+    private func alignment(at index: Int, in alignments: [MarkdownColumnAlignment]) -> Alignment {
         guard index < alignments.count else { return .leading }
         switch alignments[index] {
         case .unspecified, .leading: return .leading
@@ -327,8 +425,14 @@ struct MarkdownBlockView: View {
 /// （`NoteBodyProjection.parseInline`）的产物，这里只把 bold / italic / code
 /// 映射成字体与颜色、把 `link` 映射成**可点的链接属性**。
 enum MarkdownInline {
-    static func text(_ spans: [NoteSpan]) -> Text {
-        Text(attributed(spans))
+    static func text(
+        _ spans: [NoteSpan],
+        codeFont: Font = Theme.font(.monoSmall),
+        highlight: String? = nil
+    ) -> Text {
+        // 搜索命中只在**对话正文**那一档有：染的是「渲染出来的那串字」，
+        // 判定与染色仍是 `AgentTranscriptSearch` + `TranscriptHighlight`（一处口径）。
+        Text(TranscriptHighlight.apply(highlight, to: attributed(spans, codeFont: codeFont)))
     }
 
     /// 行内 span → `AttributedString`（**判据量的就是这一份**）。
@@ -338,22 +442,24 @@ enum MarkdownInline {
     /// 否则就是"看起来像链接、点不动"（`TestsUISnapshot/MarkdownPreviewProbeTests.swift`
     /// 直接量这一份的 run 属性）。bold / italic 走 `inlinePresentationIntent`
     /// （= SwiftUI 给 `AttributedString(markdown:)` 用的那一套），字体仍跟随外层 `.font(...)`。
-    static func attributed(_ spans: [NoteSpan]) -> AttributedString {
+    ///
+    /// `codeFont` 只换行内代码那一档的字体族（预览是代码档小字；对话正文整份等宽，传自己的那支）。
+    static func attributed(_ spans: [NoteSpan], codeFont: Font = Theme.font(.monoSmall)) -> AttributedString {
         var result = AttributedString()
         for span in spans {
-            result.append(run(span))
+            result.append(run(span, codeFont: codeFont))
         }
         return result
     }
 
-    private static func run(_ span: NoteSpan) -> AttributedString {
+    private static func run(_ span: NoteSpan, codeFont: Font) -> AttributedString {
         var run = AttributedString(span.text)
         var intent: InlinePresentationIntent = []
         if span.styles.contains(.bold) { intent.insert(.stronglyEmphasized) }
         if span.styles.contains(.italic) { intent.insert(.emphasized) }
         if !intent.isEmpty { run.inlinePresentationIntent = intent }
         if span.styles.contains(.code) {
-            run.font = Theme.font(.monoSmall)
+            run.font = codeFont
             run.foregroundColor = Theme.syntax(.function)
         }
         if let target = span.link, let url = MarkdownPreviewContent.linkURL(for: target) {

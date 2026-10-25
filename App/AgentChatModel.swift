@@ -183,6 +183,27 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         state.canSend && !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// **有没有一张在等人点的审批卡**（§5.3.8 六态「权限不足」那一档）。
+    ///
+    /// 有它的时候输入框要禁用：审批没过，这一轮就停在原地 —— 再塞一句进去只会排队，
+    /// 而「先发后问」正是这条契约明令禁止的形状。
+    var hasPendingApproval: Bool {
+        state.cards.contains { card in
+            if case .pendingApproval = card.outcome { return true }
+            return false
+        }
+    }
+
+    /// **再试一次**（§5.3.8 六态「错误」那一档的可重试入口）：拿上一轮的原话重跑一轮。
+    ///
+    /// 与「重发」的区别：那个以**某条助手消息**为锚（历史里点哪条重发哪条），
+    /// 这个是「刚才那一轮没跑成」的直接续命 —— 没有原话（还没问过）就什么都不做，
+    /// **不拿输入框里现有的字凑数**（那不是他刚才问的那句）。
+    func retryLastTurn() async {
+        guard !state.isRunning, let prompt = lastPrompt else { return }
+        await start(prompt: prompt, intent: .newQuestion)
+    }
+
     func refreshEndpoint() {
         state.setEndpoint(endpointProvider())
     }

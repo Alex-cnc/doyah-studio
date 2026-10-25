@@ -154,17 +154,26 @@ public struct MarkdownDocument: Equatable, Sendable {
     public var report: MarkdownParseReport
     /// 原文行数（**截断前**的总数 —— 报告要拿它对账）。
     public var lineCount: Int
+    /// **还没收口的那个围栏**（1 起的原文行号 = 围栏开头那一行）；全闭合 ⇒ `nil`。
+    ///
+    /// 为什么要单独有一格：未闭合的围栏在本层按 CommonMark 的口径**跑到文末**（内容一个字都不丢），
+    /// 于是「文档被截在一段代码里」这件事在块模型上看不出来 —— 而对话正文（`§5.3.8`）必须
+    /// 分辨它：流式中途写了一半的围栏**不许猜着渲染**，要**原文照发**。
+    /// 判定仍然只在**这一处**（块的产地），渲染层只读这个数，不自己再扫一遍围栏。
+    public var unclosedFenceLine: Int?
 
     public init(
         version: Int = MarkdownDocumentFormat.currentVersion,
         blocks: [MarkdownBlock],
         report: MarkdownParseReport = MarkdownParseReport(),
-        lineCount: Int
+        lineCount: Int,
+        unclosedFenceLine: Int? = nil
     ) {
         self.version = version
         self.blocks = blocks
         self.report = report
         self.lineCount = lineCount
+        self.unclosedFenceLine = unclosedFenceLine
     }
 
     /// Markdown → 文档模型。**纯函数**：同样的输入永远同样的输出，不读盘、不看环境、不联网。
@@ -177,7 +186,8 @@ public struct MarkdownDocument: Equatable, Sendable {
                 skippedLineCount: parser.skippedLineCount,
                 unparsedLineCount: parser.unparsedLineCount
             ),
-            lineCount: parser.lineCount
+            lineCount: parser.lineCount,
+            unclosedFenceLine: parser.unclosedFenceLine
         )
     }
 }
@@ -287,6 +297,8 @@ private struct MarkdownBlockParser {
     private var index = 0
     private(set) var skippedLineCount = 0
     private(set) var unparsedLineCount = 0
+    /// 本次解析里**最后一个没收口的围栏**的起始行（原文绝对行号）；全闭合 ⇒ `nil`。
+    private(set) var unclosedFenceLine: Int?
     let lineCount: Int
     /// 本解析器 `lines[0]` 在**原文**里的前一行序号（顶层 = 0）。
     /// 有了它，引用 / 列表子块里的 `sourceLine` 也是**原文绝对行号** —— 否则
@@ -369,15 +381,19 @@ private struct MarkdownBlockParser {
         let sourceLine = lineOffset + index + 1
         index += 1
         var content: [String] = []
+        var closed = false
         while index < lines.count {
             if Self.isFenceClosing(lines[index], marker: opening.marker, count: opening.count) {
                 index += 1
+                closed = true
                 break
             }
             content.append(lines[index])
             index += 1
         }
         // 未闭合的围栏**跑到文末**（CommonMark 的口径）：不报错、不吞内容，照原样当代码。
+        // 但「这一段其实没写完」要**记下行号** —— 流式正文靠它决定「原文照发」还是「按文档渲染」。
+        if !closed { unclosedFenceLine = sourceLine }
         let language = opening.info.split(separator: " ").first.map(String.init)
         return MarkdownBlock(kind: .codeBlock(language: language, lines: content), sourceLine: sourceLine)
     }
@@ -396,7 +412,10 @@ private struct MarkdownBlockParser {
             index += 1
         }
         var nested = MarkdownBlockParser(lines: inner, limits: limits, lineOffset: sourceLine - 1)
-        return MarkdownBlock(kind: .quote(blocks: nested.parseBlocks()), sourceLine: sourceLine)
+        let blocks = nested.parseBlocks()
+        // 引用里的围栏同样是**原文的行**：行号已经由 `lineOffset` 顶成绝对值，直接收下。
+        if let fence = nested.unclosedFenceLine { unclosedFenceLine = fence }
+        return MarkdownBlock(kind: .quote(blocks: blocks), sourceLine: sourceLine)
     }
 
     private mutating func parseParagraph() -> MarkdownBlock {
@@ -497,6 +516,8 @@ private struct MarkdownBlockParser {
                     lineOffset: first.line - 1
                 )
                 children = nested.parseBlocks()
+                // 条目里那个没写完的围栏也要报上去（行号同样是原文绝对行号）。
+                if let fence = nested.unclosedFenceLine { unclosedFenceLine = fence }
             }
             raw.append(RawItem(text: textLines.joined(separator: "\n"), sourceLine: itemLine, children: children))
         }

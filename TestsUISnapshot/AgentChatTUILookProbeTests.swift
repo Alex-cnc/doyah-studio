@@ -29,7 +29,10 @@ final class AgentChatTUILookProbeTests: XCTestCase {
         let messages: [AgentChatMessage] = [
             .init(role: .user, text: "把当前库的表结构列出来，重点看订单相关的几张。"),
             .init(role: .assistant, text: "先看一眼有哪些表。"),
-            .init(role: .tool, text: "list_tables · 23 个表"),
+            .init(role: .tool, text: """
+            ▸ list_tables · schema: public  ✓ · 0.3s
+            ▸ search · 订单相关  ✓ · 0.2s
+            """),
             .init(role: .assistant, text: """
             有 5 张和订单相关。`orders` 是主表，`order_items` 是明细，其余三张是字典表。
 
@@ -40,9 +43,12 @@ final class AgentChatTUILookProbeTests: XCTestCase {
             where table_schema = 'public' and table_name like 'order%';
             ```
             """),
-            .init(role: .tool, text: "sql_query · 5 行 · 34ms"),
+            .init(role: .tool, text: """
+            ▸ sql_query · select table_name, count(*) from information_schema.tables  ✓ · 0.4s
+            ▸ write_file · reports/orders.md  ✗ denied:writeConflict · 0.1s
+            """),
             .init(role: .assistant, text: "明细表 `order_items` 没有外键索引，1,200 万行下按 `order_id` 查会全表扫。"),
-            .init(role: .notice, text: "◈ 已切到只读连接")
+            .init(role: .notice, text: "已切到只读连接")
         ]
         let cards: [AgentToolCard] = [
             .init(name: "list_tables", arguments: "schema: public", outcome: .executed("23 个表")),

@@ -373,6 +373,46 @@ final class MarkdownDocumentTests: XCTestCase {
         XCTAssertEqual(MarkdownDocument.parse(markdown), MarkdownDocument.parse(markdown))
     }
 
+    // MARK: 未闭合的围栏（§5.3.8 对话正文「流式未闭合 ⇒ 原文照发」那一档）
+
+    /// 围栏闭合 ⇒ `unclosedFenceLine == nil`（定稿文档没有「写了一半」这回事）。
+    func testClosedFenceReportsNoUnclosedFence() {
+        let document = MarkdownDocument.parse("说明\n\n```swift\nlet a = 1\n```\n\n收尾")
+        XCTAssertNil(document.unclosedFenceLine)
+        XCTAssertEqual(document.blocks.count, 3)
+    }
+
+    /// 围栏没闭合 ⇒ 报出**围栏开头那一行**（1 起，原文绝对行号），内容照旧一个字不丢。
+    func testUnclosedFenceReportsOpeningLine() {
+        let document = MarkdownDocument.parse("说明\n\n```swift\nlet a = 1")
+        XCTAssertEqual(document.unclosedFenceLine, 3)
+        XCTAssertEqual(document.blocks.count, 2)
+        // 未闭合的围栏按 CommonMark 跑到文末：**内容不许吞**
+        XCTAssertEqual(document.blocks[1].kind, .codeBlock(language: "swift", lines: ["let a = 1"]))
+    }
+
+    /// 引用里的围栏没闭合 ⇒ 报的仍是**原文**行号（不是引用内部的行号）。
+    func testUnclosedFenceInsideQuoteReportsAbsoluteLine() {
+        let document = MarkdownDocument.parse("前言\n\n> ```sh\n> echo hi")
+        XCTAssertEqual(document.unclosedFenceLine, 3)
+        guard case let .quote(child)? = document.blocks.last?.kind else {
+            return XCTFail("引用没被解析成引用块")
+        }
+        XCTAssertEqual(child.count, 1)
+        guard case let .codeBlock(language, lines) = child[0].kind else {
+            return XCTFail("引用里的围栏没被解析成代码块")
+        }
+        XCTAssertEqual(language, "sh")
+        XCTAssertEqual(lines, ["echo hi"])
+        XCTAssertEqual(child[0].sourceLine, 3)
+    }
+
+    /// 列表条目里的围栏没闭合 ⇒ 同样报出来（条目里的子块行号本来就是原文绝对行号）。
+    func testUnclosedFenceInsideListItemReportsAbsoluteLine() {
+        let document = MarkdownDocument.parse("- 先做这个\n  ```sh\n  echo hi")
+        XCTAssertEqual(document.unclosedFenceLine, 2)
+    }
+
     // MARK: 跟随滚动：光标行 ↔ 预览锚点（`L-137` 判据 ③）
 
     /// 逐行映射的底稿：标题 / 空行 / 段落 / 列表 / 文件末尾多出的那一行。

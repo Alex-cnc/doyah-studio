@@ -129,24 +129,6 @@
     },
     {
       "文件": "App/Views/AgentChatView.swift",
-      "行": 129,
-      "形态": "Text(copiedMessageID == message.id ? : ) .font(.system(.caption, desig",
-      "归口": "转写面",
-      "理由": "等宽字形不是图标化缺口：聊天转写面（`AgentChatView`）按 TUI 对照图渲染，输入行与消息动作一律用等宽字符（`⧉ ↻ ▾ ▸ ＋`）——源码注释已写明「图标自带留白与光学重心，在一条等宽的行里就是贴了一张小图，终端里没有这种东西」。换成 SF Symbol 会同时破坏 TUI 一致性与探针对照图",
-      "依据": "TUI 对照口径（`Docs/design/外观方案-v1.md` 终端观感；源码 `AgentChatView` 行内注释）",
-      "关闭条件": "关闭条件：TUI 对照口径取消（人类主人改判为原生图标风格）时逐条改 SF Symbol；或该按钮移出等宽转写面时作废本登记"
-    },
-    {
-      "文件": "App/Views/AgentChatView.swift",
-      "行": 141,
-      "形态": "Text( ) .font(.system(.caption, design: .monospaced)) .foregroundStyle",
-      "归口": "转写面",
-      "理由": "等宽字形不是图标化缺口：聊天转写面（`AgentChatView`）按 TUI 对照图渲染，输入行与消息动作一律用等宽字符（`⧉ ↻ ▾ ▸ ＋`）——源码注释已写明「图标自带留白与光学重心，在一条等宽的行里就是贴了一张小图，终端里没有这种东西」。换成 SF Symbol 会同时破坏 TUI 一致性与探针对照图",
-      "依据": "TUI 对照口径（`Docs/design/外观方案-v1.md` 终端观感；源码 `AgentChatView` 行内注释）",
-      "关闭条件": "关闭条件：TUI 对照口径取消（人类主人改判为原生图标风格）时逐条改 SF Symbol；或该按钮移出等宽转写面时作废本登记"
-    },
-    {
-      "文件": "App/Views/AgentChatView.swift",
       "行": 319,
       "形态": "Text(card.expanded ? : ) .font(Self.transcriptFont) .foregroundStyle(T",
       "归口": "转写面",
@@ -158,15 +140,6 @@
       "文件": "App/Views/AgentChatView.swift",
       "行": 446,
       "形态": "HStack(spacing: Spacing.s) { Text(stepsExpanded ? : ) .font(Self.trans",
-      "归口": "转写面",
-      "理由": "等宽字形不是图标化缺口：聊天转写面（`AgentChatView`）按 TUI 对照图渲染，输入行与消息动作一律用等宽字符（`⧉ ↻ ▾ ▸ ＋`）——源码注释已写明「图标自带留白与光学重心，在一条等宽的行里就是贴了一张小图，终端里没有这种东西」。换成 SF Symbol 会同时破坏 TUI 一致性与探针对照图",
-      "依据": "TUI 对照口径（`Docs/design/外观方案-v1.md` 终端观感；源码 `AgentChatView` 行内注释）",
-      "关闭条件": "关闭条件：TUI 对照口径取消（人类主人改判为原生图标风格）时逐条改 SF Symbol；或该按钮移出等宽转写面时作废本登记"
-    },
-    {
-      "文件": "App/Views/AgentChatView.swift",
-      "行": 586,
-      "形态": "Text( + L(.agentChatSessionsNew)) .font(.system(.caption, design: .mon",
       "归口": "转写面",
       "理由": "等宽字形不是图标化缺口：聊天转写面（`AgentChatView`）按 TUI 对照图渲染，输入行与消息动作一律用等宽字符（`⧉ ↻ ▾ ▸ ＋`）——源码注释已写明「图标自带留白与光学重心，在一条等宽的行里就是贴了一张小图，终端里没有这种东西」。换成 SF Symbol 会同时破坏 TUI 一致性与探针对照图",
       "依据": "TUI 对照口径（`Docs/design/外观方案-v1.md` 终端观感；源码 `AgentChatView` 行内注释）",
@@ -216,6 +189,51 @@
       "理由": "`.alert` 的动作按钮：Apple 只渲染 `Text` 标签，换成 `Image` 会让整块标签被省略（留下一个空按钮）——2026-10-18 人类主人令的口径是「二级面对话框保留文字语义」，本条正是该口径下的必然文字形态",
       "依据": "令 2026-10-18（信箱 `T-20261018-*` 对话框保留文字语义）",
       "关闭条件": "关闭条件：改用自绘对话框（非 `.alert`）/ 或系统支持图标动作按钮时作废本登记"
+    },
+    {
+      "文件": "App/Views/AgentChatView.swift",
+      "行": 230,
+      "形态": "Text(copiedMessageID == message.id ? : ) .font(Self.transcriptFont) .f",
+      "归口": "转写面",
+      "理由": "等宽字形不是图标化缺口：Agent 对话面按 Hermes TUI 基准渲染（概设 §8.11 ①），输入行与过程行一律用等宽字符（`⏎ ■ ▶ ⏱` `└─ ▼` `├─ ⏺`）——图形图标自带留白与光学重心，放进等宽行里就破坏列对齐，终端语汇里没有这种东西",
+      "依据": "概设 §8.11 ①（跨端界面语汇）· 详设 §5.3.8.1 ②③",
+      "关闭条件": "关闭条件：TUI 对照口径取消（改为原生图标风格）或该按钮移出等宽转写面时作废本登记"
+    },
+    {
+      "文件": "App/Views/AgentChatView.swift",
+      "行": 245,
+      "形态": "Text( ) .font(Self.transcriptFont) .foregroundStyle(Theme.text(.second",
+      "归口": "转写面",
+      "理由": "等宽字形不是图标化缺口：Agent 对话面按 Hermes TUI 基准渲染（概设 §8.11 ①），输入行与过程行一律用等宽字符（`⏎ ■ ▶ ⏱` `└─ ▼` `├─ ⏺`）——图形图标自带留白与光学重心，放进等宽行里就破坏列对齐，终端语汇里没有这种东西",
+      "依据": "概设 §8.11 ①（跨端界面语汇）· 详设 §5.3.8.1 ②③",
+      "关闭条件": "关闭条件：TUI 对照口径取消（改为原生图标风格）或该按钮移出等宽转写面时作废本登记"
+    },
+    {
+      "文件": "App/Views/AgentChatView.swift",
+      "行": 361,
+      "形态": "Text( + L(.commonRetry)) .font(Self.transcriptFont) .foregroundStyle(T",
+      "归口": "转写面",
+      "理由": "等宽字形不是图标化缺口：Agent 对话面按 Hermes TUI 基准渲染（概设 §8.11 ①），输入行与过程行一律用等宽字符（`⏎ ■ ▶ ⏱` `└─ ▼` `├─ ⏺`）——图形图标自带留白与光学重心，放进等宽行里就破坏列对齐，终端语汇里没有这种东西",
+      "依据": "概设 §8.11 ①（跨端界面语汇）· 详设 §5.3.8.1 ②③",
+      "关闭条件": "关闭条件：TUI 对照口径取消（改为原生图标风格）或该按钮移出等宽转写面时作废本登记"
+    },
+    {
+      "文件": "App/Views/AgentChatView.swift",
+      "行": 391,
+      "形态": "HStack(spacing: Spacing.s) { Text(expanded ? : ) .font(Self.transcript",
+      "归口": "转写面",
+      "理由": "等宽字形不是图标化缺口：Agent 对话面按 Hermes TUI 基准渲染（概设 §8.11 ①），输入行与过程行一律用等宽字符（`⏎ ■ ▶ ⏱` `└─ ▼` `├─ ⏺`）——图形图标自带留白与光学重心，放进等宽行里就破坏列对齐，终端语汇里没有这种东西",
+      "依据": "概设 §8.11 ①（跨端界面语汇）· 详设 §5.3.8.1 ②③",
+      "关闭条件": "关闭条件：TUI 对照口径取消（改为原生图标风格）或该按钮移出等宽转写面时作废本登记"
+    },
+    {
+      "文件": "App/Views/AgentChatView.swift",
+      "行": 861,
+      "形态": "Text( + L(.agentChatSessionsNew)) .font(Self.transcriptFont)",
+      "归口": "转写面",
+      "理由": "等宽字形不是图标化缺口：Agent 对话面按 Hermes TUI 基准渲染（概设 §8.11 ①），输入行与过程行一律用等宽字符（`⏎ ■ ▶ ⏱` `└─ ▼` `├─ ⏺`）——图形图标自带留白与光学重心，放进等宽行里就破坏列对齐，终端语汇里没有这种东西",
+      "依据": "概设 §8.11 ①（跨端界面语汇）· 详设 §5.3.8.1 ②③",
+      "关闭条件": "关闭条件：TUI 对照口径取消（改为原生图标风格）或该按钮移出等宽转写面时作废本登记"
     }
   ],
   "动作图标例外": [
