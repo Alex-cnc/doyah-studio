@@ -64,7 +64,7 @@ def next_version(root: pathlib.Path, relative: str) -> str:
 
 
 def next_ids(root: pathlib.Path, prefixes: list[str], queue: str | None = None) -> dict[str, str]:
-    """只在**定义行**（首格 `| **L-52** |`）上取号 —— 正文里的引用与风险编号（如 `NFR-ALL-GATE-RISK-051`）不是条目号。"""
+    """只在**定义行**（首格 `| **L-52** |`）上取号 —— 正文里的引用与风险编号（如 `R-051`）不是条目号。"""
     target = pathlib.Path(queue) if queue else root / QUEUE_FILE
     lines = target.read_text(encoding="utf-8").splitlines()
     defined: dict[str, list[str]] = {}

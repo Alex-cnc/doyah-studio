@@ -17,7 +17,7 @@
 ⇒ **英文译文永远不可达**（死译文）。同族的写法还有 `t(_ key: LKey …)`（AICapture /
 AICaptureUltra / License）与 `text(_ key: LKey …)`（MCPToolCatalog）。
 
-**为什么现有门禁全都看不见它**：NFR-ALL-GATE-RISK-037 的棘轮（`check-core-localization.py`）数的是
+**为什么现有门禁全都看不见它**：R-037 的棘轮（`check-core-localization.py`）数的是
 「Core 代码里含**汉字**的字符串字面量」—— 这里代码里**一个汉字都没有**（文案早在语言表里）；
 `check-effective-language.py` 只扫 `App/`，且只禁「按用户选择取语言」两种写法。
 **「把语言写成字面量」这个形状两边都没覆盖。**

@@ -1075,7 +1075,7 @@
 | 14 | 编辑器里写 `… WHERE a = 1` 再点生成 | **不合并**：状态栏提示「已有 WHERE，请手动并进去」，原语句一字未改 |
 | 15 | 编辑器里写两条语句（`SELECT 1; SELECT 2;`）再点生成 | 给出「请先只保留要重新查询的那一条」的可读提示，原语句未改 |
 | 16 | 重新执行查询（换结果集） | 上一次的排序 / 筛选 / 分页全部归零（新数据不该套用旧条件） |
-| 17 | 对同一张表加 `LIMIT 20` 执行后再筛一次 | 提示里的行数就是**已加载的 20 行**（客户端筛选不查库 —— 这是 NFR-ALL-GATE-RISK-021 要讲清的事） |
+| 17 | 对同一张表加 `LIMIT 20` 执行后再筛一次 | 提示里的行数就是**已加载的 20 行**（客户端筛选不查库 —— 这是 R-021 要讲清的事） |
 
 
 ## 6 当前能力快照
@@ -1184,7 +1184,7 @@
   - [x] 两区最小高度 120 pt（`idealHeight` 260），窗口缩放时由 split 自行分配
   - [ ] （可选）拖拽比例持久化到 UserDefaults —— 暂不做，保留为后续可选项
   - [ ] 真实库手工回归：拖动分隔条实时改变结果区高度（并入 AC-ALL-GATE-REL-04）
-- [x] **T-03 对象树持续下钻（开发完成，待真实库验收）** → 需求：FR-STD-DB-META-006 / FR-STD-DB-META-001 / FR-STD-DB-META-007、NFR-ALL-GATE-RISK-012
+- [x] **T-03 对象树持续下钻（开发完成，待真实库验收）** → 需求：FR-STD-DB-META-006 / FR-STD-DB-META-001 / FR-STD-DB-META-007、R-012
   - [x] 代码定位：旧 UI 在 `List` 行内嵌套 `DisclosureGroup`，第 3 层起不可靠；服务层四层映射本身正常
   - [x] 修复：`App/Views/ObjectTreeView.swift` 重写为**扁平化树**（自维护展开状态 + 缩进行），任意层级可展开
   - [x] 结构升级：根节点改为**服务器**，服务器下是**数据库**；展开非当前库时按需建立该库的独立连接并缓存（FR-STD-DB-META-007，App 与 CLI 均已实现）
@@ -1237,20 +1237,20 @@
 
 **既有待办汇总（v1.3 之前遗留，v2.0 收口）**
 
-- [x] **T-06 删除连接二次确认（已完成）** → 需求：FR-STD-DB-CONN-009 / NFR-ALL-GATE-RISK-009
+- [x] **T-06 删除连接二次确认（已完成）** → 需求：FR-STD-DB-CONN-009 / R-009
   - [x] `ConnectionListView` 增加 `@State pendingDeletion` + `confirmationDialog`
   - [x] 提示文案明示「连带删除钥匙串密码且不可撤销」，删除为 destructive 角色，另有取消按钮
   - [x] 确认后走原逻辑：Keychain 密码 → 连接缓存（`invalidateService`）→ 配置落盘
-  - [x] NFR-ALL-GATE-RISK-009 关闭；手工验收：右键删除 → 出现确认框 → 取消不删除、确认才删除
-- [x] **T-07 表单校验复用 `ConnectionConfig.isValid`（已完成）** → 需求：FR-STD-DB-CONN-003 / NFR-ALL-GATE-RISK-010
+  - [x] R-009 关闭；手工验收：右键删除 → 出现确认框 → 取消不删除、确认才删除
+- [x] **T-07 表单校验复用 `ConnectionConfig.isValid`（已完成）** → 需求：FR-STD-DB-CONN-003 / R-010
   - [x] 表单 `isValid` 改为「端口先独立解析 + `makeConfiguration().isValid`」，单一事实来源
   - [x] 端口非数字 / 越界（≤0 或 >65535）时校验失败，「测试连接 / 保存」禁用
-  - [x] 模型层规则由 `Tests/ConnectionConfigTests.swift` 覆盖；NFR-ALL-GATE-RISK-010 关闭
-- [x] **T-08 服务端查询取消（已完成）** → 需求：FR-STD-DB-EXEC-018 / NFR-ALL-GATE-RISK-002
+  - [x] 模型层规则由 `Tests/ConnectionConfigTests.swift` 覆盖；R-010 关闭
+- [x] **T-08 服务端查询取消（已完成）** → 需求：FR-STD-DB-EXEC-018 / R-002
   - [x] 连接成功后查询并缓存 `SELECT pg_backend_pid()`
   - [x] `PostgresService.cancel()` 用**独立连接**执行 `SELECT pg_cancel_backend(pid)`（同连接会排队，无法中断当前语句）
   - [x] 取消只终止语句、不断开连接；失败仅记日志，不影响本地 Task 取消路径
-  - [x] 本地链路用例 7 实测：`SELECT pg_sleep(30)` 在 1 s 后被取消，错误信息 `canceling statement due to user request`（链路 25/25）；NFR-ALL-GATE-RISK-002 关闭
+  - [x] 本地链路用例 7 实测：`SELECT pg_sleep(30)` 在 1 s 后被取消，错误信息 `canceling statement due to user request`（链路 25/25）；R-002 关闭
 - [x] **T-09 结果导出 CSV / JSON（已完成）** → 需求：FR-STD-DB-RES-010
   - [x] `Core/ResultExporter.swift`：CSV（RFC 4180 转义、CRLF、可选 UTF-8 BOM）、JSON（columns / rows / rowCount / affectedRows、重复列名后缀、NULL 与空串区分）
   - [x] 结果区右上角导出菜单（CSV / JSON）→ `NSSavePanel`（按扩展名限制类型，默认文件名取页签文件名）
@@ -1266,11 +1266,11 @@
   - [x] 成功与失败都记录（✓ / ✗ + 耗时），连续重复执行只刷新最新一条
   - [x] 工具栏时钟菜单：最近 20 条摘要，点击回填当前页签，支持清空
   - [x] 按 FR-STD-ALL-DATA-002 不落盘（隐私优先）；退出应用即清空
-- [x] **T-12 影响行数 command tag（已完成）** → 需求：FR-STD-DB-EXEC-013 / NFR-ALL-GATE-RISK-001
+- [x] **T-12 影响行数 command tag（已完成）** → 需求：FR-STD-DB-EXEC-013 / R-001
   - [x] `PostgresService.reportsAffectedRows(_:)` 判定 `INSERT / UPDATE / DELETE`（跳过前置注释、排除 `RETURNING`）
   - [x] 该类语句走 EventLoopFuture 路径，从 `PostgresQueryMetadata.rows` 读取行数
   - [x] 写入 `QueryResult.affectedRows` + 发出 `.affectedRows` 事件：状态栏「第 N 条语句影响 M 行」、结果区「影响 M 行」、CLI `affectedRows: M`
-  - [x] `Tests/PostgresServiceTests.swift` 3 项判定单测 + 链路用例 6（INSERT 3 / UPDATE 2 / DELETE 1）；NFR-ALL-GATE-RISK-001 关闭
+  - [x] `Tests/PostgresServiceTests.swift` 3 项判定单测 + 链路用例 6（INSERT 3 / UPDATE 2 / DELETE 1）；R-001 关闭
   - [ ] 已知边界：`WITH … UPDATE`、`COPY`、DDL 不返回影响行数（PostgreSQL 协议本身不提供或 PostgresNIO 不解析），已记入 `Docs/兼容性矩阵.md`
 - [x] **T-13 记忆上次选中连接（已完成）** → 需求：FR-STD-DB-CONN-010
   - [x] 选择变化即写入 `UserDefaults`（`settings.selectedConnectionID`）
@@ -1287,7 +1287,7 @@
   - [x] 验证计划与检查表：`Docs/GBase-技术验证.md`（连接参数、认证插件、`SHOW DATABASES` / `information_schema` 探查、类型映射、中文与 NULL、分号与存储过程、取消与超时）
   - [ ] 驱动层：新增 `GBaseService`（基于 MySQLNIO）+ 依赖与镜像配置 —— **阻塞条件：当前环境无 GBase 8a 实例，无法验证认证插件与行为差异**
   - [ ] 实测：待用户提供可达的 GBase 8a 地址 / 账号（只需只读账号）后执行验证清单
-- [ ] **T-60 MySQL 驱动实现与版本窗口实测（净新增；待依赖选型与实例）** → 需求：FR-STD-DB-DRV-010、NFR-ALL-GATE-COMP-003、NFR-ALL-GATE-RISK-022
+- [ ] **T-60 MySQL 驱动实现与版本窗口实测（净新增；待依赖选型与实例）** → 需求：FR-STD-DB-DRV-010、NFR-ALL-GATE-COMP-003、R-022
   - [ ] **依赖选型（前置）**：确认引入 `MySQLNIO` —— 版本锁定 + 许可登记进 `THIRD-PARTY-NOTICES.md`（参考 FR-STD-DB-DRV-008 对 PostgresNIO 的做法）；属需求提出者待定的「依赖选型」事项
   - [ ] `DatabaseType` 新增 `mysql` 档：默认端口 3306、显示名、默认 SSL 模式与 schema 联动（FR-STD-DB-CONN-001 / FR-STD-DB-CONN-002 的类型联动依赖它）
   - [ ] 方言层抽出 `MySQLDialect`，并让 `GBaseDialect` 在其上扩展 —— 两者共用 MySQL 协议系的反引号引用 / `SHOW DATABASES` / `DELIMITER`，避免两套并行维护
@@ -1361,7 +1361,7 @@
   - [x] `Core/ResultView.swift`：`ResultSortDescriptor` / `ResultFilter` / `ResultPage`；稳定排序（同值行不乱跳）、数字感知比较（`2 < 10`）、本地化自然序（`item2 < item10`）、NULL 语义（默认 NULLS LAST，只在「为空」下匹配筛选）
   - [x] 单测 22 项（`Tests/ResultViewTests.swift`：排序 7 / 筛选 8 / 分页 5 / 数值与比较 2）
   - [ ] `ResultGrid` / `ResultTableView` 接入：表头点击排序、筛选条、分页控件
-  - [ ] 「当前条件是客户端过滤」提示 + 「用当前条件生成 WHERE 重新查询」入口（NFR-ALL-GATE-RISK-021）
+  - [ ] 「当前条件是客户端过滤」提示 + 「用当前条件生成 WHERE 重新查询」入口（R-021）
 - [x] **T-26 导出格式扩展（已完成）** → 需求：FR-STD-DB-RES-012
   - [x] `ResultExporter`：新增 `tsv` / `markdown` / `insertStatements`；INSERT 按列 `typeName` 决定是否加引号（数值 / 布尔不加，解析失败退回字符串）、`'` 翻倍转义、表名与列名走方言引用
   - [x] `text(for:format:tableName:dialect:)` 统一分派；`AppState.exportResult` 传入页签名与连接方言
@@ -1389,10 +1389,10 @@
   - [x] `Core/SessionMonitor.swift`：列名兼容 `pid/Id`、`usename/User`、`datname/db`、`query/Info` 两套命名；时间戳多形态解析与「已运行时长」；排序为等待 → 活跃 → 空闲；无 pid 行丢弃
   - [x] 单测 11 项（`Tests/SessionMonitorTests.swift`）
   - [ ] 监控窗口：列表 + 刷新 + 「取消语句 / 终止会话」（二次确认）
-  - [ ] 按权限隐藏不可用动作（NFR-ALL-GATE-RISK-020）
+  - [ ] 按权限隐藏不可用动作（R-020）
 - [x] **T-31 结果集内联编辑（FR-STD-DB-DATA-004）**：**2026-09-29 人工点验通过 ✅**（值编辑器 FR-STD-DB-DATA-005 仍待做）
   - [ ] 前置：单表 + 主键 / 唯一键检测，不具备时禁用编辑并说明原因
-  - [ ] 变更暂存 → 预览 DML → 单事务提交；并发用原值做乐观锁（NFR-ALL-GATE-RISK-019）
+  - [ ] 变更暂存 → 预览 DML → 单事务提交；并发用原值做乐观锁（R-019）
   - [ ] 行详情侧栏 / JSON 值格式化
 - [ ] **T-32 高危语句保护 Safe Mode（待做）** → 需求：FR-STD-DB-EXEC-017
   - [ ] 静态判定：无 `WHERE` 的 `UPDATE` / `DELETE`、`DROP`、`TRUNCATE`
@@ -1413,7 +1413,7 @@
   - [ ] `ConnectionConfig` 新增**可选**字段（分组 / 颜色 / 环境标签 / 只读 / 启动 SQL / 心跳间隔），保证旧 `connections.json` 仍可解码
   - [ ] 只读连接在执行前拦截写语句；启动 SQL 在连接建立后执行
   - [ ] 连接 URL 解析 / 生成（密码不落配置文件）
-- [ ] **T-38 沙箱架构选型：SSH 隧道与备份恢复（前置决策，待做）** → 需求：FR-STD-DB-CONN-020、FR-STD-DB-IO-003、NFR-ALL-GATE-RISK-018
+- [ ] **T-38 沙箱架构选型：SSH 隧道与备份恢复（前置决策，待做）** → 需求：FR-STD-DB-CONN-020、FR-STD-DB-IO-003、R-018
   - [ ] 在「应用内自实现（COPY 流 + 纯 Swift 隧道）/ 引导用户在自己终端执行 / 非沙箱分发」之间定稿，写入 `Docs/发布方案.md` 并形成 ADR
   - [ ] 选型定稿前**不实现** FR-STD-DB-IO-003 与 FR-STD-DB-CONN-020，避免返工
 - [ ] **T-39 流式导入导出（待做）** → 需求：FR-STD-DB-IO-002、FR-STD-DB-IO-006、FR-STD-DB-RES-013
@@ -1549,7 +1549,7 @@
 | 6 | 断开连接后再连 | 对象树重置，不残留上一次的库 / 表 |
 
 **已知的界面缺口（取证时读码发现，点界面时请一并确认）**：① 单节点失败**没有就地重试**，只能收起再展开；
-② 跨库连接失败的文案当前是 `PSQLError(...)` 兜底串（见 **NFR-ALL-GATE-RISK-038**），与"可读错误"不符。
+② 跨库连接失败的文案当前是 `PSQLError(...)` 兜底串（见 **R-038**），与"可读错误"不符。
 
 **FR-STD-DB-DIAG-001 真实库验收清单（需 PostgreSQL 实例与图形界面，尚未执行）**
 
@@ -1744,7 +1744,7 @@
 | 语句分隔 | 客户端 `DELIMITER` 指令；存储过程体内含分号 | ✅ `StatementSplitter` + 单元测试 |
 | `END$` / `END $` | 不得改写原文（`DELIMITER $` 后用 `END$` 结束） | ✅ 单元测试覆盖 |
 | 事务 | 能力较弱，需实测 `BEGIN/COMMIT/ROLLBACK` | ⬜ 待实测 |
-| 认证插件 | `mysql_native_password` 与 `caching_sha2_password` 支持情况未知 | ⬜ 待实测（NFR-ALL-GATE-RISK-004） |
+| 认证插件 | `mysql_native_password` 与 `caching_sha2_password` 支持情况未知 | ⬜ 待实测（R-004） |
 | 方言特性位 | `featureSet` 不声明 schemas / transactions | ✅ 与设计一致 |
 | 技术验证序列 | `SELECT VERSION(); SHOW DATABASES; SHOW TABLES; DESC <table>; SELECT * FROM information_schema.tables LIMIT 1; DELIMITER $ ... END $ ... CALL ...` | ⬜ 待执行 |
 

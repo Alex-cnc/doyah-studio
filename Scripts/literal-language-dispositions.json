@@ -70,7 +70,7 @@
     {
       "file": "Core/TableImport.swift",
       "maxSites": 0,
-      "reason": "**回归钉（队列 L-65 第 1 批已透传）**：`copySupport(databaseType:language:)` / `preferredWriteMode(databaseType:language:)` 的 `reason` 是要给用户看的一句话（界面在 `ImportPanel.refreshWriteMode()` 传 `effectiveLanguage`）—— 这里再出现字面语言即红。**注**：同函数里 `gbase8a` 那一支仍是**汉字字面量**（不是写死语言，属 NFR-ALL-GATE-RISK-037 棘轮名下已登记的债），不在本判据范围。"
+      "reason": "**回归钉（队列 L-65 第 1 批已透传）**：`copySupport(databaseType:language:)` / `preferredWriteMode(databaseType:language:)` 的 `reason` 是要给用户看的一句话（界面在 `ImportPanel.refreshWriteMode()` 传 `effectiveLanguage`）—— 这里再出现字面语言即红。**注**：同函数里 `gbase8a` 那一支仍是**汉字字面量**（不是写死语言，属 R-037 棘轮名下已登记的债），不在本判据范围。"
     }
   ],
   "deadKeys": [

@@ -170,7 +170,7 @@ def main() -> int:
 
     expect("中性归因那一档被删 → 报红", drop_neutral, "describeNonConnection")
 
-    print("\n== E) 口径被改：认不出时套一句「连接失败」（NFR-ALL-GATE-RISK-051 的老毛病）")
+    print("\n== E) 口径被改：认不出时套一句「连接失败」（R-051 的老毛病）")
 
     def claim_connection(tree: Path) -> None:
         edit(tree, "CLI/CLIFailureText.swift", lambda text: text.replace(

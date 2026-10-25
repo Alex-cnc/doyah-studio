@@ -200,7 +200,7 @@ def expand(requirement: str) -> list[str] | None:
     """追溯行 → 编号列表（单条 / 范围两种写法都认；`None` = 这一行不对应单条需求）。
 
     范围有两种写法（实测都在盘上）：`FR-STD-DB-CONN-001 ~ 007`（右侧只给序号）与
-    `NFR-ALL-GATE-RISK-018 ~ NFR-ALL-GATE-RISK-021`（右侧整条写全）。
+    `R-018 ~ R-021`（右侧整条写全）。
     """
     if ID_RE.match(requirement):
         return [requirement]
@@ -223,7 +223,7 @@ def load_trace(known: set[str]) -> tuple[dict[str, str], int, int]:
     """追溯表 → {编号: 实现位置格}；**后写覆盖先写**。
 
     返回（映射, 非编号行数, 索引外引用数）——「非编号行」= 分组行 / 决定行（`NFR-PERF / COMP`、
-    `NFR-ALL-GATE-RISK-018 ~ NFR-ALL-GATE-RISK-021` 等），它们不对应单条需求 ⇒ 不进逐条索引
+    `R-018 ~ R-021` 等），它们不对应单条需求 ⇒ 不进逐条索引
     （数量如实印在产出件头部，不假装它们不存在）。
     """
     lines = read_lines(TRACE, "追溯表：实现位置")

@@ -181,7 +181,7 @@
     "entryCall": "ConnectionFailure.describeServerSide(",
     "beforeFallback": "return raw",
     "otherCallers": ["App/Utilities/ErrorPresenter.swift"],
-    "why": "**「serverInfo.message 不许被丢」这条判据的落点**（队列 L-20 ③）。两件事都要机械可查：① **能力还在** —— `Core/ConnectionFailure.swift` 里那一档必须真的读 `serverInfo` 的两格（`.sqlState` / `.message`）、真的经 `readableServerText`（乱码先抽 ASCII）、真的走语言表（`.serverSideSaid`，Core 里不写字面量）；② **接线在位且顺序对** —— 入口 `CLI/CLIFailureText.swift` 必须在「认不出就原样返回」**之前**调它（顺序反了等于这一档永远走不到：NFR-ALL-GATE-RISK-050 那种「没人调用的好话」），且 App 侧 `ErrorPresenter` 也要接（否则「有英文译文却只被 CLI 的中文语境引用」，正是 L-47 刚收掉的死译文形态）。缺码或缺话时**不给**这一档（退回原样，与改动前逐字一致）—— 这条由单测钉住。"
+    "why": "**「serverInfo.message 不许被丢」这条判据的落点**（队列 L-20 ③）。两件事都要机械可查：① **能力还在** —— `Core/ConnectionFailure.swift` 里那一档必须真的读 `serverInfo` 的两格（`.sqlState` / `.message`）、真的经 `readableServerText`（乱码先抽 ASCII）、真的走语言表（`.serverSideSaid`，Core 里不写字面量）；② **接线在位且顺序对** —— 入口 `CLI/CLIFailureText.swift` 必须在「认不出就原样返回」**之前**调它（顺序反了等于这一档永远走不到：R-050 那种「没人调用的好话」），且 App 侧 `ErrorPresenter` 也要接（否则「有英文译文却只被 CLI 的中文语境引用」，正是 L-47 刚收掉的死译文形态）。缺码或缺话时**不给**这一档（退回原样，与改动前逐字一致）—— 这条由单测钉住。"
   },
   "debugDumps": {
     "marker": "String(reflecting: error)",

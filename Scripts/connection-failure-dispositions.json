@@ -1,6 +1,6 @@
 {
   "generatedAt": "2026-09-26T23:55:00+08:00",
-  "note": "连接失败文案的**处置台账**（闭环第 14 项 `check-connection-failure-coverage.py` 按它对账）。为什么要台账：驱动是随仓库带走的 Vendor（Vendor/postgres-nio），升一次版就可能多出新的 `PSQLError.Code` —— 那时文案层的 `switch` 有兜底分支，**不会报错、不会崩**，只会把新原因说成最泛的那句。L-14 修的就是这一族的真事：解析不了的主机名被驱动压成 `serverClosedConnection`，文案只好说「连接中断」。台账把「每个码怎么处置」变成**声明**，门禁拿它跟驱动源码与映射文件对账。**第 8 轮（NFR-ALL-GATE-RISK-051）改了两处口径**：① 兜底分支不再给结论（`default:` 返回 `nil`）—— 认不出是连接问题就不说成连接问题；② 「不是连接类」的那 9 个码从「不翻译」改判为**中性归因**：每个码由 `describeNonConnection` 说一句自己的实话，且必须在映射文件的 `nonConnectionKeys` 里逐条点名（不靠兜底）。 **2026-10-14（合册 T-20261013-027 · 原单 T-20261010-042）：`driverCodeSource` / `mapping` / `dispositions` 由单驱动结构升为 `drivers[]`（每支驱动一条：Postgres / MySQL·GBase）—— 单值字段装不下第二支驱动（样本 46 实测：往 MySQL 驱动加码，门禁逐字不动）。**",
+  "note": "连接失败文案的**处置台账**（闭环第 14 项 `check-connection-failure-coverage.py` 按它对账）。为什么要台账：驱动是随仓库带走的 Vendor（Vendor/postgres-nio），升一次版就可能多出新的 `PSQLError.Code` —— 那时文案层的 `switch` 有兜底分支，**不会报错、不会崩**，只会把新原因说成最泛的那句。L-14 修的就是这一族的真事：解析不了的主机名被驱动压成 `serverClosedConnection`，文案只好说「连接中断」。台账把「每个码怎么处置」变成**声明**，门禁拿它跟驱动源码与映射文件对账。**第 8 轮（R-051）改了两处口径**：① 兜底分支不再给结论（`default:` 返回 `nil`）—— 认不出是连接问题就不说成连接问题；② 「不是连接类」的那 9 个码从「不翻译」改判为**中性归因**：每个码由 `describeNonConnection` 说一句自己的实话，且必须在映射文件的 `nonConnectionKeys` 里逐条点名（不靠兜底）。 **2026-10-14（合册 T-20261013-027 · 原单 T-20261010-042）：`driverCodeSource` / `mapping` / `dispositions` 由单驱动结构升为 `drivers[]`（每支驱动一条：Postgres / MySQL·GBase）—— 单值字段装不下第二支驱动（样本 46 实测：往 MySQL 驱动加码，门禁逐字不动）。**",
   "languageTable": "Core/Localization.swift",
   "neutralPath": "Core/ConnectionFailure.swift 的 `describeNonConnection(_:language:)`（调用方按 `describe(...) ?? describeNonConnection(...)` 取文案）",
   "neutralSQLStates": [
@@ -49,7 +49,7 @@
       "file": "App/Views/ConnectionFormView.swift",
       "call": "ConnectionFailure.describeNonConnection",
       "minCallSites": 1,
-      "why": "「测试连接」那条路（NFR-ALL-GATE-RISK-048 修过一次）同样要有这一档：这一族多半就是在这条路上被用户看到的"
+      "why": "「测试连接」那条路（R-048 修过一次）同样要有这一档：这一族多半就是在这条路上被用户看到的"
     }
   ],
   "evidenceMarkers": [

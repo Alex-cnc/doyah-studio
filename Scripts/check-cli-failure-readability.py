@@ -20,7 +20,7 @@
      「判据太松」上）。
   ③ 入口自己的**四档口径**必须在位：连接类 → `describe`、驱动非连接类 → `describeNonConnection`、
      **服务端原话** → `describeServerSide`、认不出 → **原样返回**（不套方向结论）。顺序写反或把兜底
-     改成「连接失败」都报红 —— 那正是 NFR-ALL-GATE-RISK-051（把猜测当结论）。
+     改成「连接失败」都报红 —— 那正是 R-051（把猜测当结论）。
      **可读化链只许写一份**（`entryPoint.chainOnlyIn`）：CLI 主路里再抄一份 if/else 链 ⇒ 报红
      （「加一档要回来改多处」正是 L-15 收掉的那种写法）。
   ④ **服务端原话不许被丢**（`serverSideMessage`，队列 L-20 ③）：Core 里那一档必须真读

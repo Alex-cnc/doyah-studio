@@ -14,7 +14,7 @@
   ],
   "honestFallback": {
     "anchor": "static func unreadable(",
-    "why": "认不出的类型：点名类型 + 字节数 + 十六进制预览（全语言中立，因为 Core 不知道用户选的语言；写死中文会撞 NFR-ALL-GATE-RISK-037 的棘轮）。改前那一句 String(describing: buffer) 把驱动内部对象的描述倒给用户，值里带控制字符 ⇒ CLI 表格排版被打断。",
+    "why": "认不出的类型：点名类型 + 字节数 + 十六进制预览（全语言中立，因为 Core 不知道用户选的语言；写死中文会撞 R-037 的棘轮）。改前那一句 String(describing: buffer) 把驱动内部对象的描述倒给用户，值里带控制字符 ⇒ CLI 表格排版被打断。",
     "shapeLiteral": "[\\(type) \\(bytes.count)B] \\\\x\\(preview)\\(ellipsis)"
   },
   "formatterCases": [

@@ -5,7 +5,7 @@
 #   ① 「每个写操作 / DDL 均需审批」→ 没批准就**一条都不下发**（执行入口只收已批准的任务）；
 #   ② 「任务可预览、可编辑、可拒绝」→ 拒绝的任务留在计划里且有理由；
 #   ③ 「高开销操作限流」→ 一次计划里第二条高开销被拒，显式开关才放行。
-# 外加两条本工程的纪律：只读连接上的写任务**连批准都不允许**；沙箱构建下外部程序类任务不可执行（NFR-ALL-GATE-RISK-018）。
+# 外加两条本工程的纪律：只读连接上的写任务**连批准都不允许**；沙箱构建下外部程序类任务不可执行（R-018）。
 #
 # 执行那一段用的是**真实本机 PostgreSQL**（`ANALYZE` / `VACUUM` 在测试库上真跑）。
 #
@@ -125,7 +125,7 @@ echo "$RO" | grep -q '"state":"rejected"' && check "只读连接上写任务被�
 echo "$RO" | grep -q '"executable":false' && check "被拒的任务不会因为「批准」而复活" 0 || check "被拒的任务不会因为「批准」而复活" 1
 
 echo ""
-echo "== 6) 沙箱构建：外部程序类任务不可执行（NFR-ALL-GATE-RISK-018） =="
+echo "== 6) 沙箱构建：外部程序类任务不可执行（R-018） =="
 cat > "$WORK/backup.txt" <<'PLAN'
 task: backup | 备份 analytics 库 | command: pg_dump -Fc analytics
 PLAN

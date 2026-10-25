@@ -1220,7 +1220,7 @@ for directory, base in ((plain, "普通那遍"), (sandbox, "带沙箱标记那�
         if len(mysql_items) != 5:
             failures.append("%s/formLinkage：MySQL 的 SSL 清单不是五项：%s" % (base, mysql_items))
         if "Allow" in mysql_items:
-            failures.append("%s/formLinkage：MySQL 的 SSL 清单里还有 Allow（NFR-ALL-GATE-RISK-045 会复发）" % base)
+            failures.append("%s/formLinkage：MySQL 的 SSL 清单里还有 Allow（R-045 会复发）" % base)
         if "Verify Identity" not in mysql_items:
             failures.append("%s/formLinkage：MySQL 下没有 Verify Identity 那一档" % base)
         pg_items = linkage.get("pgSSLItems") or []
@@ -1306,7 +1306,7 @@ PY
 
 echo
 echo "==> 完成：证据在 ${OUT_BASE}/（每张图另有中英两份，逐张断言见 ManualVerificationProbeTests）"
-echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 NFR-ALL-GATE-RISK-045 SSL 收窄说明"
+echo "    「待人工验收清单」里被机器化的行：§10.6 隧道表单字段显隐 / §10.6 沙箱告知 / §10.7 R-045 SSL 收窄说明"
 echo "    ＋ §2 FR-STD-WS-UI-005 命令面板接线（PaletteWiringProbeTests：每条命令点一遍、断言落点）"
 echo "    ＋ §2 FR-STD-WS-UI-008 主题与字体（AppearanceFontProbeTests：手输族的三档说法 + SQL 预览取样带）"
 echo "    ＋ §0.3 第 3 条 终端 ⌃C（TerminalInterruptProbeTests：喂 0x03 看前台 sleep 让不让开）"

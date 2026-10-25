@@ -2094,7 +2094,7 @@ Agent 完成实现后必须逐条自检并输出结果：
 | 编号 | 领域 | 必须一致的行为（跨平台契约） | 允许不同的实现 | 关联 |
 |---|---|---|---|---|
 | P-01 | GUI 框架与控件 | 信息架构（活动栏 / 侧栏 / 编辑器区 / 下方面板）、交互语义、快捷键语义、空·载入·失败三态；**终端配色 = 同一套色值（hex）与同一套对比度 / 可区分性门槛**（权威来源 `Docs/design/terminal-palette.json`，人读版 `Docs/design/终端配色方案.md`，两者由 `Scripts/check-terminal-palette.py` 与代码钉在一起） | 控件树、绘制方式、主题跟随系统的方式；终端配色的**渲染实现**（NSAttributedString vs 各自文本栈）与「外观三态 / 字号」的界面承载 | §1.8.1 R1 |
-| P-02 | 凭据存储 | 密码不落配置文件、重启后可恢复、可被明确清除、不进错误信息 | 钥匙串（macOS）/ Windows 凭据管理器（`keyring` / windows-rs）/ Secret Service / 文件 + 权限；**开发 / 验收形态**为项目内 `.secrets/` 混淆文件（免系统授权框，便于远程开发；见 NFR-ALL-GATE-RISK-030） | NFR-ALL-GATE-SEC-001/02 |
+| P-02 | 凭据存储 | 密码不落配置文件、重启后可恢复、可被明确清除、不进错误信息 | 钥匙串（macOS）/ Windows 凭据管理器（`keyring` / windows-rs）/ Secret Service / 文件 + 权限；**开发 / 验收形态**为项目内 `.secrets/` 混淆文件（免系统授权框，便于远程开发；见 R-030） | NFR-ALL-GATE-SEC-001/02 |
 | P-03 | 用户选定目录的持久授权 | 授权由用户选择产生、可跨启动恢复、失效给可读提示与补救动作 | security-scoped bookmark / 直接路径（Linux 无沙箱） | FR-AGT-CORE-LOOP-003、FR-STD-WS-FS-002 |
 | P-04 | 外部程序调用（`pg_dump` / `pg_restore` / `ssh`） | 若实现：走审批 + 审计 + 可读错误；不做则明确不呈现入口 | 进程调用方式与沙箱可见性 | FR-STD-DB-IO-003、FR-STD-DB-CONN-020、T-38 |
 | P-05 | 内嵌终端 | 概要设计 §3.3.7 的全部屏幕语义与按键字节序列一致 | PTY 获取方式、终端视图绘制 | FR-STD-WS-TOOL-001 |
@@ -2103,7 +2103,7 @@ Agent 完成实现后必须逐条自检并输出结果：
 | P-08 | 打包与分发 | 版本号与许可证一致、第三方声明齐备、构建可复现；**应用图标同一品牌图形、同一图标名** | `.app` + 公证 / **Tauri bundler 产物（MSI / NSIS）+ 便携形态** / deb·rpm·AppImage；**图标容器**：macOS `.icns`（含 10 档尺寸、内容占 80% 带圆角）/ Linux PNG 尺寸集（`hicolor`，方形全出血）——现成资产与生成脚本见 `App/Resources/icons/`、`Scripts/make-linux-icons.sh` | `Docs/发布方案.md` |
 | P-09 | 剪贴板与拖放 | 复制语义一致（表格 TSV、多格式导出） | 剪贴板 API 与格式协商 | FR-STD-DB-RES-006 |
 | P-10 | 自动更新 | 不强制、可关闭、更新前提示 | 更新机制（可暂不实现） | — |
-| P-11 | 沙箱 / 权限模型 | 最小权限原则；被拒时给可读原因而非静默失败 | macOS 沙箱 / Linux 无沙箱 | NFR-ALL-GATE-SEC-003、NFR-ALL-GATE-RISK-018 |
+| P-11 | 沙箱 / 权限模型 | 最小权限原则；被拒时给可读原因而非静默失败 | macOS 沙箱 / Linux 无沙箱 | NFR-ALL-GATE-SEC-003、R-018 |
 | P-12 | 系统级集成（通知 / Dock / 托盘） | 不打扰用户、可关闭 | 各平台机制 | — |
 | P-14 | 内嵌浏览器 | 行为契约一致：默认不加载远程内容、导航由用户显式发起、出网全部进统一外发日志、独立数据存储（不共享 SQL 客户端凭据与 Cookie）、下载走授权目录、页面脚本不得触达客户端能力；**两侧按同一套契约实现**（`BrowserPage` 地址·历史·加载态 / `BrowserNavigationPolicy` **默认不加载远程内容** / 统一外发日志 `NFR-ALL-GATE-SEC-008`，三件同名同义） | 渲染引擎（**macOS** = 系统 WebKit·`WKWebView`；**Windows** = Tauri 2 内置系统 `WebView2`，见 `P-26`；**Linux** 自用第三端 = 由本仓选定）、Cookie 存储位置、权限提示方式 | FR-STD-WS-WEB-001、NFR-ALL-GATE-SEC-008 |
 | P-13 | 配置与数据目录 | 配置 / 归档 / 书签等文件**逻辑分区一致**（连接配置、保存的查询、查询归档、任务定义、审计日志、工作区书签各占一个文件）；删除连接必须同时清掉磁盘配置与凭据；损坏时给可读错误并保留原文件 | 目录位置（macOS 应用支持目录 / 沙箱容器；Linux XDG 目录）、文件权限模型 | §5.1、§5.2、FR-STD-ALL-DATA-001 |

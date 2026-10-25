@@ -19,7 +19,7 @@ set -euo pipefail
 # **沙箱口径（2026-09-29 需求提出者拍板「改非沙箱，先验证功能」）**：
 # 默认出**非沙箱**包（`App/DoyahStudio-unsandboxed.entitlements`）—— 这是交付口径
 # （`Docs/发布计划.md` §1：交付物 = 非沙箱 ad-hoc 包）。沙箱下挡着三件事：终端作业控制
-# （⌃C）/ 导入导出起 `pg_dump`·`pg_restore` / SSH 隧道起 `ssh`（SRS NFR-ALL-GATE-RISK-018 路线③）。
+# （⌃C）/ 导入导出起 `pg_dump`·`pg_restore` / SSH 隧道起 `ssh`（SRS R-018 路线③）。
 # 沙箱改为**显式开关**（两个 entitlements 文件都留在仓里）：
 #   · 上架那天切回 —— **Mac App Store 强制沙箱**，此时 `DOYAH_SANDBOX=1` 即得；
 #   · 旧的 `DOYAH_NO_SANDBOX=1` 仍然认（= 今天默认的那一面），只是不再有开关作用。

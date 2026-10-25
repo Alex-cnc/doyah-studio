@@ -18,7 +18,7 @@ set -euo pipefail
 #
 #   1. Core 单测（SwiftPM，不需要数据库）+ 平台适配层单测
 #   2. Core 平台中立性（Core 里不得出现平台专属依赖 —— 否则 Linux 编译不过）
-#   3. 本地化：Core 展示文本棘轮（NFR-ALL-GATE-RISK-037：用户可见文案不得硬编码中文，只能比基线更少）
+#   3. 本地化：Core 展示文本棘轮（R-037：用户可见文案不得硬编码中文，只能比基线更少）
 #      + 「当前语言只有一个来源」（L-13：显式传语言必须走 `effectiveLanguage`）
 #      + 语言表**模板占位符 ↔ 调用点实参**对账（L-46：数字实参落 `%@` 槽 / 字符串落数字槽 /
 #        实参数 ≠ 占位符数 / 类型不明的实参逐条登记形状 + 双向棘轮，
@@ -128,7 +128,7 @@ set -euo pipefail
 # （`Scripts/connection-failure-dispositions.json`）与驱动源码、映射文件、解析前置检查、证据脚本逐条对账。
 # 第 32 轮（合册 T-20261013-027 · 原单 T-20261010-042）：覆盖面升为**分驱动**（台账 `drivers[]`：Postgres 19 码 + MySQL/GBase 支 `MySQLError` 12 码 + 协议数字码表 1144 条
 # 逐名名单 + `Core/MySQLWording.swift` 8 个文案出口面）—— 单驱动结构装不下第二支驱动，往 MySQL 加码原先门禁逐字不动。
-# 第 8 轮（NFR-ALL-GATE-RISK-051）又加了两条：**兜底不许给方向结论**（`default:` 必须 `return nil`），
+# 第 8 轮（R-051）又加了两条：**兜底不许给方向结论**（`default:` 必须 `return nil`），
 # 以及台账标「中性归因」的那 9 个码（用户取消 / 主动断开 / 协议层 / LISTEN 通道…）
 # 必须在 `nonConnectionKeys` 里逐条点名 + 给出语言表键，且**调用方真的接上了这一档**
 # （CLI / ErrorPresenter / 连接表单）—— 否则 `describe` 返回 nil 时用户只剩一句英文调试串。
@@ -332,9 +332,9 @@ python3 Scripts/check-language-registry.py
 python3 Scripts/check-language-registry.py --self-test
 python3 Scripts/test-language-registry-gate.py
 
-echo "==> 3/18 本地化：Core 展示文本棘轮（NFR-ALL-GATE-RISK-037）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
+echo "==> 3/18 本地化：Core 展示文本棘轮（R-037）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
 python3 Scripts/check-core-localization.py
-# L-109（2026-10-11 第 487 轮）：同一条命令跑**两条**棘轮 —— ① 含汉字的字面量（NFR-ALL-GATE-RISK-037，基线
+# L-109（2026-10-11 第 487 轮）：同一条命令跑**两条**棘轮 —— ① 含汉字的字面量（R-037，基线
 # `Scripts/core-localization-baseline.json`）② 写死的英文展示文案（白名单
 # `Scripts/core-localization-english.json`：白名单之外一律报红、只许缩小；每条登记项带 `kind`）。
 python3 Scripts/check-core-localization.py --self-test
@@ -374,7 +374,7 @@ python3 Scripts/test-copy-emphasis-gate.py
 # 唯独「给模型的资料」整块中文 —— `Core/DiagnosisContext.swift` 的文件私有取值助手把
 # `language:` **钉死**成 `.simplifiedChinese`，而语言表里 `diagnosisTarget` /
 # `diagnosisFormatConclusion` … 这些键**都有英文译文**却只被这一处引用 ⇒ **英文译文永远
-# 不可达（死译文）**。NFR-ALL-GATE-RISK-037 的棘轮数的是「含**汉字**的字面量」（这里一个汉字都没有）、
+# 不可达（死译文）**。R-037 的棘轮数的是「含**汉字**的字面量」（这里一个汉字都没有）、
 # `check-effective-language.py` 只扫 `App/` 且只禁「按用户选择取语言」⇒ 两边都没覆盖
 # 「把语言写成字面量」这个形状。
 # 判据四条：A 写死语言的调用点必须逐条登记（按文件，带 maxSites 与理由；`maxSites: 0` =
