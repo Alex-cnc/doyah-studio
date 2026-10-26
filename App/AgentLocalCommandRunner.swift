@@ -5,8 +5,10 @@ import DoyahCore
 ///
 /// ## 为什么在 `App/` 不在 `Core/`
 ///
-/// `Process` 在 watchOS 上不存在。放进 `Core/` 会把它变成"跨平台件"，那是假的 —— 于是这一侧
-/// 只能落在 macOS/iOS 的 App 层。（`Core/` 只保留**协议**与**策略**，这两件都是纯逻辑、可单测。）
+/// 历史原因：当年 `Core` 还想跨到 watchOS（`Process` 不存在）。2026-10-26 已确认 `Package.swift`
+/// 只声明 `.macOS(.v14)`，进程执行本体（超时 / 取消 / 截断）落在 `Core/AgentCommandExecutor.swift`；
+/// 本件退化成一层薄适配（把 `AgentCommandRun` 折成 `AgentCommandResult`，并把「超时 / 取消」写进 stderr
+/// 让回灌文本别假装成功）。
 ///
 /// ## 它**不**负责什么（都在别处、且只有一处）
 ///
@@ -17,35 +19,26 @@ import DoyahCore
 /// 不吞、不美化、不替子进程编一句"成功"。
 struct AgentLocalCommandRunner: AgentCommandRunner {
 
+    /// 2026-10-26：改走 `Core/AgentCommandExecutor`（`FR-AGT-TOOL-SYS-003/004`）——
+    /// 带 **60s 超时可配 / 可取消 / 输出截断可见 / 越界工作目录不起进程**；
+    /// 老实现「读管道到 EOF 再等退出」在子进程狂输出 + 挂住时会永远等下去，没有上限。
+    var limits = AgentCommandLimits()
+
     func run(executable: String, arguments: [String], workingDirectory: URL) -> AgentCommandResult {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        process.currentDirectoryURL = workingDirectory
-
-        let out = Pipe()
-        let err = Pipe()
-        process.standardOutput = out
-        process.standardError = err
-
+        let executor = AgentCommandExecutor()
         do {
-            try process.run()
+            let run = try executor.run(executable: executable, arguments: arguments,
+                                       workingDirectory: workingDirectory, limits: limits)
+            return AgentCommandResult(
+                exitCode: run.exitCode,
+                standardOutput: run.standardOutput,
+                standardError: run.standardError + (run.terminatedEarly
+                    ? (run.timedOut ? "\n[命令超时 \(Int(run.limitsTimeoutHint))s 被终止]" : "\n[命令被取消]")
+                    : ""))
         } catch {
             // 起不来就如实说"起不来"，**不要**编一个退出码 0 出来。
             return AgentCommandResult(exitCode: -1, standardOutput: "",
-                                      standardError: "起进程失败：\(error.localizedDescription)")
+                                      standardError: "起进程失败：\(error)")
         }
-
-        // 顺序要紧：**先把两个管道读到 EOF（= 子进程关掉了写端）再等退出**。反过来的话，
-        // 子进程输出一多就会写满管道被阻塞、父进程却在 `waitUntilExit` 上等它结束 ⇒ 经典死锁。
-        let outData = out.fileHandleForReading.readDataToEndOfFile()
-        let errData = err.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        return AgentCommandResult(
-            exitCode: process.terminationStatus,
-            standardOutput: String(decoding: outData, as: UTF8.self),
-            standardError: String(decoding: errData, as: UTF8.self)
-        )
     }
 }
