@@ -12,13 +12,16 @@ public struct AgentSoulLayer: Equatable, Sendable {
     public enum Kind: String, Sendable, CaseIterable {
         /// L0：公共灵魂（核心价值观），与工作区无关。
         case core
-        /// L1：角色灵魂，按工作区。
+        /// L1：角色灵魂，按工作区（领域角色：在这个领域我是谁）。
         case role
+        /// L2：项目灵魂，按工作区内的项目（项目做法 / 本项目的规矩）—— 可选层，缺了不算缺陷。
+        case project
 
         public var label: String {
             switch self {
             case .core: return "L0 公共灵魂（与工作区无关，不得被覆盖）"
             case .role: return "L1 角色灵魂（本工作区）"
+            case .project: return "L2 项目灵魂（本项目做法，可选；不得覆盖 L0）"
             }
         }
     }
@@ -69,14 +72,18 @@ public enum AgentSoulLoad: Equatable, Sendable {
 public struct AgentSoulComposition: Equatable, Sendable {
     public var core: AgentSoulLayer?
     public var role: AgentSoulLayer?
+    /// L2 项目灵魂（可选层；nil = 本项目没设，不算缺陷）。
+    public var project: AgentSoulLayer?
     /// 如实登记的缺陷（L0 缺 / L1 缺 / 被拒）。**空数组才叫"齐"**。
     public var problems: [String]
     /// 直接塞进 system prompt 固定层的那一段。
     public var section: String
 
-    public init(core: AgentSoulLayer?, role: AgentSoulLayer?, problems: [String], section: String) {
+    public init(core: AgentSoulLayer?, role: AgentSoulLayer?, project: AgentSoulLayer? = nil,
+                problems: [String], section: String) {
         self.core = core
         self.role = role
+        self.project = project
         self.problems = problems
         self.section = section
     }
@@ -90,6 +97,8 @@ public enum AgentSoul {
     public static let coreFileName = "soul-L0.md"
     /// 工作区里 L1 的相对路径。
     public static let roleRelativePath = ".doyah/soul-role.md"
+    /// 工作区里 L2 的相对路径（可选层）。
+    public static let projectRelativePath = ".doyah/soul-project.md"
 
     /// 密钥形态的识别标记（宁可误拒，不可误放 —— 与"宁可误停，不可误做"同一条判据）。
     static let secretMarkers = [
@@ -124,7 +133,8 @@ public enum AgentSoul {
 
     // MARK: - 组装（L0 在前 · L1 在后 · 缺了如实说）
 
-    public static func compose(core: AgentSoulLoad, role: AgentSoulLoad) -> AgentSoulComposition {
+    public static func compose(core: AgentSoulLoad, role: AgentSoulLoad,
+                               project: AgentSoulLoad? = nil) -> AgentSoulComposition {
         var parts: [String] = []
         var problems: [String] = []
 
@@ -155,7 +165,23 @@ public enum AgentSoul {
             parts.append("**（本工作区尚未设定角色灵魂 —— 按 L0 行事；不套用其他工作区的角色灵魂。）**")
         }
 
-        return AgentSoulComposition(core: core.layer, role: role.layer,
+        // L2 项目灵魂（可选）：没有就是没有，不记缺陷；给了但被拒 ⇒ 记缺陷（读到了坏文件不能装没看见）。
+        if let project {
+            if let layer = project.layer {
+                parts.append("")
+                parts.append("## \(AgentSoulLayer.Kind.project.label)")
+                parts.append(layer.text)
+                parts.append("（本层只补'这个项目怎么做'；与 L0 相抵时以 L0 为准。）")
+            } else {
+                let why = project.problem ?? "未载入"
+                problems.append("L2 被拒：\(why)")
+                parts.append("")
+                parts.append("## \(AgentSoulLayer.Kind.project.label)")
+                parts.append("**（本项目的灵魂文件读到了但被拒 —— 按 L0 / L1 行事，并如实告知使用者原因。）**")
+            }
+        }
+
+        return AgentSoulComposition(core: core.layer, role: role.layer, project: project?.layer,
                                     problems: problems,
                                     section: parts.joined(separator: "\n"))
     }
@@ -182,6 +208,14 @@ public enum AgentSoul {
         return try? String(contentsOf: url, encoding: .utf8)
     }
 
+    /// 从工作区读 L2 正文（`<workspace>/.doyah/soul-project.md`）。取不到 ⇒ `nil`（可选层）。
+    public static func projectText(workspacePath: String) -> String? {
+        let url = URL(fileURLWithPath: expandedPath(workspacePath))
+            .appendingPathComponent(projectRelativePath)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
     /// 一次性组装（App 侧调这一个）。
     public static func load(workspacePath: String, bundle: Bundle = .main) -> AgentSoulComposition {
         let corePath = "\(bundle.bundlePath)/Contents/Resources/\(coreFileName)"
@@ -189,6 +223,10 @@ public enum AgentSoul {
             .appendingPathComponent(roleRelativePath).path
         let core = inspect(coreText(bundle: bundle), kind: .core, path: corePath)
         let role = inspect(roleText(workspacePath: workspacePath), kind: .role, path: rolePath)
-        return compose(core: core, role: role)
+        let projectPath = URL(fileURLWithPath: expandedPath(workspacePath))
+            .appendingPathComponent(projectRelativePath).path
+        let project = projectText(workspacePath: workspacePath)
+            .map { inspect($0, kind: .project, path: projectPath) }
+        return compose(core: core, role: role, project: project)
     }
 }
