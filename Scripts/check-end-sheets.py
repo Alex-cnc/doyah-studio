@@ -24,6 +24,9 @@ DERIVED = ROOT / ".build" / "derived"
 ALLOWED_SHEETS = {
     "macOS端": "macOS",
     "安卓端": "Android",
+    # 2026-10-26：同侧并发会话新建了 `-Android.md`（自称「唯一进度记录」），与 `-安卓端.md` 并存。
+    # 两种写法都收，但**同一端只许一份** —— 谁是那份，不由本脚本替人类主人决定（判据 A2 只报重复）。
+    "Android": "Android",
 }
 
 SHEET = re.compile(r"^Doyah产品开发计划任务清单-(?P<end>.+?)\.md$")
@@ -36,6 +39,18 @@ def check() -> list[str]:
         m = SHEET.match(path.name)
         if m:
             sheets[m.group("end")] = path
+
+    seen_ends: dict[str, str] = {}
+    for end, path in sheets.items():
+        canonical = ALLOWED_SHEETS.get(end)
+        if canonical is None:
+            continue
+        if canonical in seen_ends:
+            problems.append(
+                f"{path.name} 与 {seen_ends[canonical]} 是**同一个端的两份清单**（{canonical}）"
+                "—— 清单每端只留一份活件；留哪一份、删哪一份要人类主人拍板，脚本不替他决定")
+        else:
+            seen_ends[canonical] = path.name
 
     for end, path in sheets.items():
         if end not in ALLOWED_SHEETS:
