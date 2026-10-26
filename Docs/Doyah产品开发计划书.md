@@ -363,7 +363,8 @@
 | FR-STD-DB-DRV-008 | PostgreSQL 驱动使用成熟的协议实现，版本固定（依赖锁文件；具体库属平台实现，各端按同一契约实现） | 3.4 Doyah Studio · 数据库 | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-STD-DB-DRV-009 | GBase 8a 驱动实现（复用 MySQL 协议系的协议实现，具体库属平台实现） | 3.4 Doyah Studio · 数据库 | 进阶可选 | 低（排期最后） | 🟡 | 🟡 | v1.1+ | 无 GBase 8a 实例（方言层与驱动已实现，未端到端验） |
 | FR-STD-DB-DRV-010 | MySQL 驱动实现：`DatabaseType` 新增 `mysql` 档（默认端口 3306、显示名 MySQL、默 | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-STD-DB-SESS-001 | 查询历史（按连接记录，可回填） | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-STD-DB-SESS-001 | 查询历史（按连接记录，可回填，落库持久化 —— 2026-10-09 改判：历史要落盘，落本机数据库 · 本地 only | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-STD-DB-SESS-007 | 保存的查询（收藏）持久化：以 JSON 落应用支持目录（`SavedQuery`：id / name / connect | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | 实现已在 `Core/SavedQueryStore.swift`（原子写 `.atomic`）；`Tests/SavedQueryStoreTests.swift` 5 例 |
 | FR-STD-DB-SESS-002 | 服务器会话列表：展示当前实例的会话（进程号 / 用户 / 数据库 / 客户端地址 / 状态 / 等待事件 / 已运行时长 | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | 🟡 | 🟡 | v1.1+ | 界面点击待人工点验 |
 | FR-STD-DB-SESS-003 | 取消 / 终止会话：对选中会话执行「取消当前语句」（PG `pg_cancel_backend`；GBase `KILL | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | 🟡 | 🟡 | v1.1+ | 界面点击待人工点验 |
 | FR-STD-DB-SESS-004 | 服务器级对象管理：数据库 / 角色 / 表空间 / 扩展的浏览与创建（DBA 日常） （v3.0 扩写）角色除创建外还需 | 3.4 Doyah Studio · 数据库 | 进阶可选 | 低 | 🟡 | 🟡 | v1.1+ | 界面点击待人工点验 |
