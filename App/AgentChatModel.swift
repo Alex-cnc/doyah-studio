@@ -119,7 +119,20 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         // 先记账（`forcedProceed` 恒放行 + 更新「上一次问过什么」），再带 `ignoringGate` 真发 ——
         // 两步都要：只记账不发 = 按钮没反应；只发不记账 = 下一次同样问法立刻又被挡。
         _ = gate.forcedProceed(recall)
+        // **留痕**：挡下与硬发要**成对**出现在审计里，才看得出「挡了几次、几次是我让它硬发的」。
+        await auditDecision(AgentDecisionAudit.gateForced(recall,
+                                                         sessionID: sessionID,
+                                                         language: languageProvider()))
         await start(prompt: recall.prompt, intent: .newQuestion, ignoringGate: true)
+    }
+
+    /// 一条「用户可见决定」进审计（`FR-AGT-GUARD-COST-001` / `FR-AGT-UX-CONV-008` / `-009`）。
+    ///
+    /// **唯一出口**：四条决定（挡下 / 强发 / 通知 / 求助卡）都走这一处 —— 宿主没接 `auditSink`
+    /// 时只少一条日志，绝不因此改变界面行为（留痕是旁路，不是前置）。
+    private func auditDecision(_ record: AgentActionRecord?) async {
+        guard let record, let auditSink else { return }
+        await auditSink(record)
     }
 
 
@@ -788,7 +801,12 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             state.apply(.failed("loopUnavailable"))
             // 求助卡（`FR-AGT-UX-CONV-009`）：这一轮**连循环都没造出来** —— 缺的是装配，
             // 不是网络。**如实要人办一件事**（要什么 / 为什么 / 给完从哪接），而不是只说一句失败。
-            helpRequest = AgentHelpCatalogue.missingLoop(language: languageProvider())
+            let help = AgentHelpCatalogue.missingLoop(language: languageProvider())
+            helpRequest = help
+            // 留痕（同上一条）：卡出来了就要在审计里留一行，别只在屏上出现过。
+            await auditDecision(AgentDecisionAudit.helpRequested(help,
+                                                                sessionID: sessionID,
+                                                                language: languageProvider()))
             return
         }
         // `FR-AI-28` 门控：**没有新内容就不发请求**（省 token）。
@@ -816,7 +834,13 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             state.apply(.failed(reason))       // 如实说"为什么没发"，不静默；**输入框不清空**（用户改一个字就能再发）
             // 「仍然发送」（`FR-AGT-GUARD-COST-001`）：留住**这一次真的要发的**提示词 + 触发 +
             // 理由 —— 界面上那一行按钮按的就是这一份，不读输入框（它可能已被改过）。
-            gateRecall = AgentGateRecall(prompt: prompt, reason: reason, trigger: trigger)
+            let recall = AgentGateRecall(prompt: prompt, reason: reason, trigger: trigger)
+            gateRecall = recall
+            // **留痕**（同一条判据的「留痕可查」）：屏上说了「挡下」，日志里也得有一条 ——
+            // 否则事后没法回答「它昨晚替我挡了几次」。记的就是这一份（被挡下那一刻的触发）。
+            await auditDecision(AgentDecisionAudit.gateSkipped(recall,
+                                                              sessionID: sessionID,
+                                                              language: languageProvider()))
             return
         case .proceed:
             gate.record(.proceed, for: trigger)
@@ -1040,10 +1064,23 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
                                         language: languageProvider())
             if let banner = plan.banner { notifyBanner = banner }
             if let system = plan.system { notifySink?(system) }
+            // **留痕**（`FR-AGT-UX-CONV-008` 的「留痕可查」）：屏上弹没弹是观感，
+            // 日志里有没有是证据 —— 记「判成哪一档 + 两处出口各自出没出」，不含正文之外的隐私。
+            let record = AgentDecisionAudit.notification(reason, plan: plan,
+                                                         sessionID: sessionID,
+                                                         language: languageProvider())
+            if let record { Task { await self.auditDecision(record) } }
         }
         // **求助卡**（`FR-AGT-UX-CONV-009`）：只有「需人处理」那一档才出卡
         // （求助单由失败分级给，不是这里编的）；能自己好的失败不出卡，免得每次网络抖动都来要人办件事。
-        if let help = result.failureHelp { helpRequest = help }
+        if let help = result.failureHelp {
+            helpRequest = help
+            // **留痕**：卡上那句「要什么」要进账 —— 事后能回答「它到底要我去办哪件事」。
+            let record = AgentDecisionAudit.helpRequested(help,
+                                                          sessionID: sessionID,
+                                                          language: languageProvider())
+            if let record { Task { await self.auditDecision(record) } }
+        }
         // **交付前拦一道**（`FR-AGT-QUAL-VERIFY-004` ③）：结论指不到出处的不许当交付物。
         //
         // 挂在这一处而不是另开弹窗：页内提示条是人已经在看的那一屏（与主动通知同一个出口），

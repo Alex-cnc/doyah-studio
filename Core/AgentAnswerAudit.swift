@@ -129,9 +129,26 @@ public enum AgentAnswerAuditor {
     /// 把成文答复切成结论句。
     ///
     /// 切法：代码块（``` 之间）整段跳过（那是证据不是结论）· 标题行与表格分隔行跳过 ·
-    /// 行内按 `。！？!?` 与句点切 · 去掉行首的列表符号与序号 · 以问号收尾的整句跳过。
+    /// 行内按 `。！？!?` 与句点切 · 去掉行首的列表符号与序号 · 以问号收尾的整句跳过 ·
+    /// **替代方案行不算结论**（它们归属上一条结论，见 `segments(in:)`）。
     public static func statements(in answer: String) -> [String] {
-        var out: [String] = []
+        segments(in: answer).compactMap { segment in
+            if case let .statement(text) = segment { return text }
+            return nil
+        }
+    }
+
+    /// 答复里按文档顺序切出的两种东西：结论句 与 替代方案行（`FR-AGT-QUAL-VERIFY-003` ②）。
+    ///
+    /// 为什么要有这一层：替代方案是**跟着某一条结论**的（`AgentClaim.alternatives`），
+    /// 平铺成两串就再也对不上「这条备选是给哪条结论的」。切完顺序仍在，归属由此确定。
+    enum Segment: Equatable {
+        case statement(String)
+        case alternative(String)
+    }
+
+    static func segments(in answer: String) -> [Segment] {
+        var out: [Segment] = []
         var inFence = false
         for rawLine in answer.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
@@ -143,11 +160,16 @@ public enum AgentAnswerAuditor {
             if line.hasPrefix("#") { continue }
             // 表格分隔行 |---|:--:| 不是结论。
             if line.hasPrefix("|"), line.allSatisfy({ "|-: ".contains($0) }) { continue }
+            // 替代方案行：整行归属**上一条**结论（不再当结论切句，也不自成一条断言）。
+            if let alternative = AgentAlternativeProtocol.alternative(in: line) {
+                out.append(.alternative(alternative))
+                continue
+            }
             for piece in splitSentence(line) {
                 let cleaned = stripListMarker(piece)
                 guard cleaned.count >= minimumStatementLength else { continue }
                 if cleaned.hasSuffix("?") || cleaned.hasSuffix("？") { continue }
-                out.append(cleaned)
+                out.append(.statement(cleaned))
             }
         }
         return out
@@ -191,8 +213,23 @@ public enum AgentAnswerAuditor {
     }
 
     /// 主入口：答复 + 本轮出处 ⇒ 逐条结论的账。
+    ///
+    /// 替代方案（`FR-AGT-QUAL-VERIFY-003` ②）在这里**挂到它前面那条结论上**：
+    /// 归属按文档顺序定，没有归属的（出现在任何结论之前的备选行）如实忽略 ——
+    /// 宁可少一条，也不凭空造一条结论来接它。
     public static func audit(answer: String, evidence: [AgentAnswerEvidence]) -> AgentAnswerProvenance {
-        let claims = statements(in: answer).map { claim(for: $0, evidence: evidence) }
+        var claims: [AgentClaim] = []
+        for segment in segments(in: answer) {
+            switch segment {
+            case let .statement(text):
+                claims.append(claim(for: text, evidence: evidence))
+            case let .alternative(text):
+                guard var last = claims.popLast() else { continue }
+                // 同一条结论下重复贴同一句备选是噪音（模型常把同一句写两遍）。
+                if !last.alternatives.contains(text) { last.alternatives.append(text) }
+                claims.append(last)
+            }
+        }
         return AgentAnswerProvenance(claims: claims)
     }
 

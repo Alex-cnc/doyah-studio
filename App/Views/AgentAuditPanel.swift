@@ -341,9 +341,14 @@ struct AgentAuditPanel: View {
             .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
     }
 
-    /// 语句列的类别文案：模型调用没有语句，**不能**显示成「无法识别的语句」。
+    /// 语句列的类别文案：模型调用没有语句、用户可见决定也没有语句，
+    /// **不能**都显示成「无法识别的语句」（那会让人以为 SQL 解析失败）。
     private func statementLabel(_ record: AgentActionRecord) -> String {
-        record.resolvedOrigin == .modelCall ? L(.agentAuditOriginModelCall) : record.statementKind.text
+        switch record.resolvedOrigin {
+        case .modelCall: return L(.agentAuditOriginModelCall)
+        case .notice: return L(.agentAuditOriginNotice)
+        case .action: return record.statementKind.text
+        }
     }
 
     private func recordRow(_ record: AgentActionRecord) -> some View {
@@ -416,8 +421,10 @@ struct AgentAuditPanel: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
-                        if record.resolvedOrigin == .modelCall {
-                            Text(L(.agentAuditOriginModelCall))
+                        if record.resolvedOrigin != .action {
+                            Text(record.resolvedOrigin == .modelCall
+                                 ? L(.agentAuditOriginModelCall)
+                                 : L(.agentAuditOriginNotice))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }

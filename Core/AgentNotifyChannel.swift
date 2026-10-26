@@ -23,6 +23,17 @@ public enum AgentNotifyReason: Equatable, Sendable {
         case .longTaskFinished, .failed: return false
         }
     }
+
+    /// 机器码（审计的「语句」列用；ASCII，导出后可直接 grep）。
+    /// 人话一律由语言表给 —— 这里只回答「是哪一档」。
+    public var code: String {
+        switch self {
+        case .longTaskFinished: return "longTaskFinished"
+        case .failed: return "failed"
+        case .needsHumanDecision: return "needsHumanDecision"
+        case .approvalRequired: return "approvalRequired"
+        }
+    }
 }
 
 public struct AgentNotification: Equatable, Sendable {

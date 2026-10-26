@@ -51,12 +51,17 @@ public enum AgentSystemPrompt {
                      + "「我现在不知道」，并说明缺什么信息。")
         lines.append("5. 同一个查询（同工具 + 同参数）**不许重复第三次**；重复之前先问自己："
                      + "上一次的结果为什么不够用？换个问法，或者直接给结论。")
-        lines.append("4. 回答用中文；代码、路径与命令保持原样，不改写。")
+        lines.append("6. 回答用中文；代码、路径与命令保持原样，不改写。")
         // `FR-AI-31` ②：**说完成要有据**。这条规矩是给验证器的输入协议 ——
         // 不写这句，模型会照旧说一句「已完成」；写了这句，它要么给出引用，要么如实说没验证。
-        lines.append("5. 说「完成 / 改好了 / done」时，必须紧跟一行证据引用，形如 "
+        lines.append("7. 说「完成 / 改好了 / done」时，必须紧跟一行证据引用，形如 "
                      + "`EVIDENCE: write 相对路径` · `EVIDENCE: edit 相对路径` · `EVIDENCE: command exit=0`；"
                      + "引用**必须是本次真跑过的工具结果**。拿不出就直说「未验证」，不要用一句「已完成」交差。")
+        // `FR-AGT-QUAL-VERIFY-003` ②：**不确定就说全** —— 只承认「把握低」而不给替代方案，
+        // 等于把人晾在原地（判据会把那种结论判成缺陷、不许当交付物）。
+        // 协议文本与解析侧共用一处（`AgentAlternativeProtocol`）：提示词里要是换了引导词，
+        // 解析那边自动跟着换 —— 两处各写一份，换的时候必有一个漏。
+        lines.append("8. " + AgentAlternativeProtocol.rule)
         return lines.joined(separator: "\n")
     }
 

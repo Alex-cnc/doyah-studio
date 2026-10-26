@@ -61,6 +61,12 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
     public enum Origin: String, Codable, Equatable, Sendable {
         case action
         case modelCall
+        /// **用户可见的自动化决定**（门控挡下 / 仍然发送 / 主动通知 / 求助卡）。
+        ///
+        /// 与那两档的区别：它不是「问了模型」也不是「执行了一次语句」，而是产品自己做的、
+        /// 用户看得见的一个判断（`FR-AGT-GUARD-COST-001` / `-UX-CONV-008` / `-009` 的留痕要求）。
+        /// 单独开一档而不是塞进 `action`：面板与导出要能一眼筛出「这段时间它替你挡了几次」。
+        case notice
     }
 
     public var outcome: Outcome
@@ -245,6 +251,43 @@ public struct AgentActionRecord: Codable, Equatable, Sendable, Identifiable {
 
     /// 请求摘要的长度上限：审计要能看出「当时让它干什么」，但一条日志不应被指令原文撑爆。
     public static let requestSummaryLimit = 500
+
+    /// **用户可见的自动化决定**的留痕（门控挡下 / 仍然发送 / 主动通知 / 求助卡）。
+    ///
+    /// 为什么这个工厂放在这里：审计记录的构造点**只许一处**（`Tests/AgentChainTests`
+    /// 的「记录构造点只许一处」守着）—— 多一处就是多一条留痕面，导出与脱敏会各走各的。
+    /// 调用方（`Core/AgentDecisionAudit`）只提供「是哪一档、主语、指纹、结果、人话」。
+    ///
+    /// - Parameters:
+    ///   - kind: 机器码（ASCII，进「语句」列，导出后可直接 grep）。
+    ///   - subject: 主语（门控的来源 `chat` / 通知的档位 / 求助的类别）。
+    ///   - digest: 指纹；只留前 `digestPrefixLength` 位（能对上「哪一次」即可）。
+    public static func makeDecision(
+        kind: String,
+        subject: String,
+        digest: String,
+        digestPrefixLength: Int = 8,
+        outcome: Outcome,
+        detail: String,
+        sessionID: String? = nil,
+        at date: Date = Date()
+    ) -> AgentActionRecord {
+        let short = digestPrefixLength > 0 && digest.count > digestPrefixLength
+            ? String(digest.prefix(digestPrefixLength))
+            : digest
+        let machine = [kind, subject, short].filter { !$0.isEmpty }.joined(separator: " ")
+        return AgentActionRecord(
+            timestamp: date,
+            model: nil,
+            sql: summaryText(machine),
+            statementKind: .unknown,
+            risk: .low,
+            findings: [],
+            outcome: outcome,
+            detail: detail,
+            origin: .notice
+        ).withCost(sessionID: sessionID)
+    }
 
     /// 「这条是模型调用」的固定附注（界面与导出都会看到）。
     public static let modelCallDetail = "模型调用（请求摘要已留存，未执行任何 SQL）"

@@ -1853,6 +1853,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentAuditColumnModel
     case agentAuditColumnOutcome
     case agentAuditOriginModelCall
+    /// 审计里「这条是用户可见的自动化决定」的来源档（门控 / 通知 / 求助卡）。
+    case agentAuditOriginNotice
     case agentAuditColumnDuration
     case agentAuditColumnGuard
     case agentAuditSelectHint
@@ -2793,11 +2795,41 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentDisplayInvalidValue
     case agentDisplayDegradedKey
     case agentDisplayDegradedFile
+
+    // 用户可见的自动化决定：审计投影（`FR-AGT-GUARD-COST-001` / `-UX-CONV-008` / `-009`）
+    case agentDecisionGateSkippedDetail
+    case agentDecisionGateForcedDetail
+    case agentDecisionNotifyDetail
+    case agentDecisionHelpDetail
+    case agentDecisionYes
+    case agentDecisionNo
+
+    // 替代方案协议（`FR-AGT-QUAL-VERIFY-003` ②）：模型给的备选怎么起头、怎么认
+    case agentAlternativeMarker
+    case agentAlternativeMarkerLong
+    case agentPromptAlternativeRule
 }
 
 public enum LocalizedStrings {
     public static func text(_ key: LKey, language: AppLanguage) -> String {
         table[key]?[language] ?? key.rawValue
+    }
+
+    /// 语言**无关**的那一份（简体中文槽位）。
+    ///
+    /// 为什么需要它：有两类调用点拿不到 `language:` 上下文 ——
+    /// ① **给模型读的提示词组装串**（模型侧不本地化，界面切英文时提示词仍是中文）；
+    /// ② **协议解析**的引导词（模型输出用哪种文字由模型决定，不是界面语言决定）。
+    /// 这两类若把字面量写在调用点，就会同时撞「语言只有一个来源」与「Core 中文字面量棘轮」两道门禁；
+    /// 收进语言表 + 这一格读取，既不改口径也不抬基线。
+    public static func defaultText(_ key: LKey) -> String {
+        table[key]?[.simplifiedChinese] ?? key.rawValue
+    }
+
+    /// 英文槽位的那一份 —— 同样只给「协议解析」这一族用（例如要认同一种标记的两种写法）。
+    /// 与 `defaultText` 一样：不经过 `language:` 实参，因此不会成为第二个「语言来源」。
+    public static func englishText(_ key: LKey) -> String {
+        table[key]?[.english] ?? key.rawValue
     }
 
     public static func format(_ key: LKey, language: AppLanguage, _ arguments: CVarArg...) -> String {
@@ -4616,11 +4648,36 @@ public enum LocalizedStrings {
         .agentAuditColumnOutcome: [.simplifiedChinese: "结果状态", .english: "Outcome"],
         .agentAuditColumnDuration: [.simplifiedChinese: "耗时", .english: "Duration"],
         .agentAuditOriginModelCall: [.simplifiedChinese: "模型调用", .english: "Model call"],
+        .agentAuditOriginNotice: [.simplifiedChinese: "用户可见决定", .english: "User-visible decision"],
         .agentAuditColumnGuard: [.simplifiedChinese: "护栏判定", .english: "Guardrail"],
         .agentAuditSelectHint: [.simplifiedChinese: "选中一条记录，查看完整语句与护栏判定。", .english: "Select a record to see the full statement and guardrail verdict."],
         .agentAuditGuardNone: [.simplifiedChinese: "未发现高危操作", .english: "No high-risk finding"],
         .agentAuditRedactedHint: [.simplifiedChinese: "导出前会抹掉形似密钥的片段（API Key / 口令永不进审计）。", .english: "Secret-like fragments are redacted before export (API keys and passwords never enter the audit)."],
         .agentAuditLoadFailed: [.simplifiedChinese: "读取审计记录失败：%@", .english: "Loading audit records failed: %@"],
+
+        // 用户可见的自动化决定（门控 / 通知 / 求助卡）落审计时的说法。机器码在 `sql` 列，
+        // 这一格是给人读的「到底发生了哪件事、为什么」。
+        .agentDecisionGateSkippedDetail: [.simplifiedChinese: "门控挡下：%@（这一跳一个请求都没发）",
+                                          .english: "Gate blocked: %@ (no request was sent this turn)"],
+        .agentDecisionGateForcedDetail: [.simplifiedChinese: "按「仍然发送」强发一次；刚才挡下的理由是「%@」",
+                                         .english: "Force-sent once via “Send anyway”; the blocking reason was “%@”"],
+        .agentDecisionNotifyDetail: [.simplifiedChinese: "主动通知「%@」：页内提示条 %@ · 系统通知 %@",
+                                     .english: "Proactive notice “%@”: in-pane banner %@ · system notification %@"],
+        .agentDecisionHelpDetail: [.simplifiedChinese: "求助卡（%@）：%@",
+                                   .english: "Help card (%@): %@"],
+        .agentDecisionYes: [.simplifiedChinese: "已出", .english: "shown"],
+        .agentDecisionNo: [.simplifiedChinese: "未出", .english: "not shown"],
+
+        // 替代方案协议（`FR-AGT-QUAL-VERIFY-003` ②）：这是**协议标记**，不是界面文案 ——
+        // 模型按提示词里的那一行起头，解析侧照它认（中英各一份，另派生半角冒号变体）。
+        .agentAlternativeMarker: [.simplifiedChinese: "备选：", .english: "Alternative:"],
+        .agentAlternativeMarkerLong: [.simplifiedChinese: "替代方案：", .english: "Alternatives:"],
+        .agentPromptAlternativeRule: [
+            .simplifiedChinese: "拿不准的结论（没验证 / 把握低）后面紧跟一行替代方案，形如「备选：另一种做法或另一种可能」；"
+                + "拿得准的结论不必写。写了这句就把「不确定」说全了 —— 只承认不确定、不给替代方案，等于把人晾在原地。",
+            .english: "For any claim you are unsure about (unverified / low confidence), add a follow-up line "
+                + "“Alternative: another approach or another possibility”. Claims you are sure about need none.",
+        ],
 
         .agentApprovalSection: [.simplifiedChinese: "待审批", .english: "Pending approvals"],
         .agentApprovalEmpty: [.simplifiedChinese: "没有待审批的动作。", .english: "No actions waiting for approval."],

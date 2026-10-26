@@ -167,6 +167,73 @@ final class AgentAnswerAuditTests: XCTestCase {
         XCTAssertNil(decision.notice(language: .simplifiedChinese))
     }
 
+    // MARK: - 003 ② 替代方案由模型给（协议：提示词要求 + 解析归属）
+
+    /// 正常：低把握结论后面紧跟的「备选：」行**挂到那条结论上**，且自身不再算一条结论。
+    ///
+    /// 这条是缺口本身：此前替代方案那一栏永远是空的，于是每条低把握结论都天然不可交付，
+    /// 而模型其实完全能说一句「另一种做法是…」—— 少了协议，说了也接不住。
+    func testAlternativeLineAttachesToThePrecedingClaim() {
+        let answer = """
+        这一版索引应该够用了，查询会走 idx_user。
+        备选：如果写多读少，改成覆盖索引会更快。
+        日志里没看到慢查询，暂时不用动。
+        """
+        let provenance = AgentAnswerAuditor.audit(answer: answer, evidence: [])
+        XCTAssertEqual(provenance.claims.count, 2, "备选行不许自成一条结论：\(provenance.claims.map { $0.statement })")
+        XCTAssertEqual(provenance.claims[0].alternatives, ["如果写多读少，改成覆盖索引会更快。"])
+        XCTAssertTrue(provenance.claims[1].alternatives.isEmpty, "没写备选的那条就是空的（不许复制上面那条）")
+        // 低把握 + 有备选 ⇒ 该条只剩「没出处」，不再叠「没给替代方案」那条缺陷。
+        XCTAssertFalse(provenance.claims[0].defects.contains(.lowConfidenceWithoutAlternative))
+        XCTAssertTrue(provenance.claims[0].defects.contains(.missingBasis), "有备选不等于有出处")
+    }
+
+    /// 该拒：只有引导词、后面空着 —— 等于没给（模型常这么敷衍一句就收尾）。
+    func testEmptyAlternativeIsNotAccepted() {
+        let answer = """
+        这一步大概能过。
+        备选：
+        """
+        let provenance = AgentAnswerAuditor.audit(answer: answer, evidence: [])
+        XCTAssertEqual(provenance.claims.count, 1)
+        XCTAssertTrue(provenance.claims[0].alternatives.isEmpty)
+        XCTAssertTrue(provenance.claims[0].defects.contains(.lowConfidenceWithoutAlternative),
+                      "空备选不算「给了替代方案」")
+    }
+
+    /// 边界：没有归属的备选行（任何结论之前）如实忽略；半角冒号与英文标记都要认。
+    func testOrphanAndHalfWidthAlternatives() {
+        let orphan = AgentAnswerAuditor.audit(answer: "备选：先看日志再说。\n这事大概成了。", evidence: [])
+        XCTAssertEqual(orphan.claims.count, 1, "孤儿备选行不许凭空造一条结论来接它")
+        XCTAssertTrue(orphan.claims[0].alternatives.isEmpty)
+
+        let halfWidth = AgentAnswerAuditor.audit(answer: "这一步大概能过。\n- 备选: 换一台机器再跑一次。", evidence: [])
+        XCTAssertEqual(halfWidth.claims.count, 1, "写成列表项的备选行同样不算结论")
+        XCTAssertEqual(halfWidth.claims[0].alternatives, ["换一台机器再跑一次。"])
+
+        let english = AgentAnswerAuditor.audit(answer: "这一步大概能过。\nAlternative: retry on another machine.", evidence: [])
+        XCTAssertEqual(english.claims[0].alternatives, ["retry on another machine."],
+                       "模型用英文起头也要接住")
+    }
+
+    /// 同一条结论下重复贴同一句备选 = 噪音，只留一份。
+    func testRepeatedAlternativeIsDeduplicated() {
+        let answer = """
+        这一步大概能过。
+        备选：换一台机器再跑一次。
+        备选：换一台机器再跑一次。
+        """
+        let provenance = AgentAnswerAuditor.audit(answer: answer, evidence: [])
+        XCTAssertEqual(provenance.claims[0].alternatives.count, 1)
+    }
+
+    /// 提示词里必须有这条要求（协议的另一半）：没有它，模型不会按这个形状说话。
+    func testSystemPromptCarriesTheAlternativeRule() {
+        let prompt = AgentSystemPrompt.base(model: "m", endpoint: "e")
+        XCTAssertTrue(prompt.contains(AgentAlternativeProtocol.rule), "提示词里没有替代方案那条规矩")
+        XCTAssertTrue(AgentAlternativeProtocol.rule.contains("备选"), "引导词要与解析侧一致")
+    }
+
     func testEnglishNoticeHasNoChineseCharacters() {
         let provenance = AgentAnswerAuditor.audit(answer: "这一步没出处。", evidence: [])
         let decision = AgentDeliverableDecision(provenance: provenance, language: .english)
