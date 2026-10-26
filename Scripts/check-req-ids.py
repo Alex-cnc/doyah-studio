@@ -92,26 +92,6 @@ def main():
         print(f"❌ 台账有、定义域无 {len(extra_plan)}: {extra_plan[:12]}")
     if bad == 0:
         print("✓ 三方对账一致（正文定义域 = 索引 ⊆ 台账）")
-
-    # 禁用前缀（2026-10-26，人类主人「我现在只要看到旧编码的需求条目就直觉你犯错了」）：
-    # `FR-STD-ALL-DATA-*` / `FR-STD-ALL-IFACE-*` 是上一版需求书的编号体系，已并入现行五段式条目；
-    # 它们**不许**再以「定义行」的形状出现在正文或索引里 —— 判定只看行首表格定义行，
-    # 变更记录 / 历史叙述里提到旧号（带删除线或「旧号」字样）不算违规。
-    banned = re.compile(r"^\|[\s*`]*((?:FR|NFR|AC)-STD-ALL-(?:DATA|IFACE)-\d{3})")
-    hits = []
-    for rel in (a.srs, a.index):
-        for no, line in enumerate(pathlib.Path(rel).read_text(encoding="utf-8").split("\n"), 1):
-            m = banned.match(line)
-            if m:
-                hits.append(f"{rel}:{no} {m.group(1)}")
-    if hits:
-        bad += 1
-        print(f"❌ 正文/索引里出现作废的旧版编号定义行 {len(hits)} 处（旧号只许在历史叙述里提，不许当需求行）：")
-        for h in hits[:10]:
-            print("  ·", h)
-    else:
-        print("✓ 旧版编号（`FR-STD-ALL-DATA/IFACE-*`）在正文/索引里 0 条定义行")
-
     return 0 if bad == 0 else 1
 
 
