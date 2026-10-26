@@ -11,7 +11,7 @@ public struct AgentCheckpoint: Codable, Equatable, Sendable {
 
     /// 允许出现的键（判据按这一份对账；加字段必须同时改这里 —— 不是注释，是断言面）。
     public static let keyWhitelist: Set<String> = [
-        "sessionID", "stepIndex", "completedSteps", "pendingMessagesDigest", "at",
+        "sessionID", "stepIndex", "completedSteps", "pendingMessagesDigest", "goalDigest", "at",
     ]
 
     /// 会话标识（按会话回查最后一条可用）。
@@ -22,6 +22,9 @@ public struct AgentCheckpoint: Codable, Equatable, Sendable {
     public var completedSteps: [String]
     /// 待发消息的**摘要**（指纹一类，不是消息正文）。
     public var pendingMessagesDigest: String
+    /// 目标指纹（`AgentFingerprint.hash`；**不存目标原文**）—— 用来判「目标是否被用户改过」。
+    /// 空串 = 老记录没这一项（判「没改过」而不是判红）；键**始终落盘**，存储契约不含可选键。
+    public var goalDigest: String
     /// 时刻（注入，不读钟）。
     public var at: Date
 
@@ -29,12 +32,29 @@ public struct AgentCheckpoint: Codable, Equatable, Sendable {
                 stepIndex: Int,
                 completedSteps: [String] = [],
                 pendingMessagesDigest: String = "",
+                goalDigest: String = "",
                 at: Date = Date()) {
         self.sessionID = sessionID
         self.stepIndex = stepIndex
         self.completedSteps = completedSteps
         self.pendingMessagesDigest = pendingMessagesDigest
+        self.goalDigest = goalDigest
         self.at = at
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionID, stepIndex, completedSteps, pendingMessagesDigest, goalDigest, at
+    }
+
+    /// 老行没有 `goalDigest`（2026-10-26 之前写的）⇒ 空串，**不判红、不丢行**。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.sessionID = try container.decode(String.self, forKey: .sessionID)
+        self.stepIndex = try container.decode(Int.self, forKey: .stepIndex)
+        self.completedSteps = try container.decodeIfPresent([String].self, forKey: .completedSteps) ?? []
+        self.pendingMessagesDigest = try container.decodeIfPresent(String.self, forKey: .pendingMessagesDigest) ?? ""
+        self.goalDigest = try container.decodeIfPresent(String.self, forKey: .goalDigest) ?? ""
+        self.at = try container.decode(Date.self, forKey: .at)
     }
 }
 
