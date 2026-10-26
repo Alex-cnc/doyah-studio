@@ -136,6 +136,9 @@ enum AgentChatProgressBar {
 /// （不写 `0`、不写 `n/a`）。
 struct AgentChatStatusInput {
     var isRunning: Bool
+    /// 状态指示字形（`FR-AGT-UX-CONV-012` 的「状态指示字形」开关）：
+    /// 就绪 / 运行中两态由它画在状态词前面；空串 = 这一态不给字形（不硬凑一个）。
+    var stateGlyph: String = ""
     /// 跑着时的已跑时长（秒，已格式化成 `1.2s`）；`nil` = 没读数。
     var elapsed: String?
     var model: String?
@@ -156,10 +159,11 @@ enum AgentChatStatusLine {
     /// 跟在后面也不打乱固定七格的相对顺序。
     static func fields(_ input: AgentChatStatusInput, extras: [String]) -> [String] {
         var fields: [String] = []
+        let prefix = input.stateGlyph.isEmpty ? "" : input.stateGlyph + " "
         if input.isRunning {
-            fields.append(L(.agentStatusComputing) + (input.elapsed.map { " " + $0 } ?? ""))
+            fields.append(prefix + L(.agentStatusComputing) + (input.elapsed.map { " " + $0 } ?? ""))
         } else {
-            fields.append(L(.agentStatusReady))
+            fields.append(prefix + L(.agentStatusReady))
         }
         if let model = input.model, !model.isEmpty { fields.append(model) }
         if let used = input.contextUsed, let window = input.contextWindow {

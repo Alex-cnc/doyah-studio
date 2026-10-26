@@ -1056,6 +1056,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentApprovalRowsQueryFailed
     case agentChatExpand
     case agentChatCollapse
+    /// `FR-AGT-UX-CONV-012` 的「显示思考段」：思考段的抬头（开关打开且真有内容时才画）。
+    case agentChatThinkingTitle
     /// `FR-AI-31` ①：同一文件正有另一次写入 — 这一次没落盘。
     case agentChatWriteBusy
     /// `FR-AI-31` ①：批准之后文件被改过 — 不拿旧审批覆盖。
@@ -3926,6 +3928,7 @@ public enum LocalizedStrings {
         .agentScheduleExecuted: [.simplifiedChinese: "执行了 %d 条", .english: "%d executed"],
         .agentChatExpand: [.simplifiedChinese: "展开", .english: "Expand"],
         .agentChatCollapse: [.simplifiedChinese: "收起", .english: "Collapse"],
+        .agentChatThinkingTitle: [.simplifiedChinese: "思考", .english: "thinking"],
         .workspaceHomeBuildLine: [.simplifiedChinese: "版本 %@（构建 %@）", .english: "Version %@ (build %@)"],
         .workspaceHomeCopyright: [.simplifiedChinese: "© 2026 DoyahStudio · 本机优先：数据与文件不出这台机器", .english: "© 2026 DoyahStudio · Local first: your data and files stay on this machine"],
         .workspaceRecentFiles: [.simplifiedChinese: "最近打开的文件", .english: "Recent files"],

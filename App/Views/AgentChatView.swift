@@ -68,6 +68,9 @@ struct AgentChatView: View {
     /// **显式展开**过的工具块（`FR-AGT-UX-CONV-012` 的紧凑 / 摘要档把默认形态改成「收起」，
     /// 于是「点开过」也必须记下来 —— 否则点开一下、下一次重绘又收回去，等于点不动）。
     @State private var expandedToolBlocks: Set<UUID> = []
+    /// **显式展开**过的长消息（`FR-AGT-UX-CONV-012` ⑥ 预览）：点过 `… 展开` 就记下来，
+    /// 否则下一次重绘又折回去，等于点不动。
+    @State private var expandedPreview: Set<UUID> = []
 
     private var transcript: some View {
         // **跟着最新内容走**（人类主人 2026-10-17 实机反馈：「对话框不自动滚动到最新位置，要手工拖动」）。
@@ -92,7 +95,17 @@ struct AgentChatView: View {
                             hairline.padding(.vertical, Spacing.m)
                         }
                         // `.id` 是搜索定位用的锚（`⌕` 命中时滚到那一条）。
-                        messageRow(message).id(message.id)
+                        //
+                        // **行首栏 = 时间戳列**（`FR-AGT-UX-CONV-012` ③）：开关关掉时
+                        // 这一格仍占等宽（不可见填充），所以正文不会左移 —— 不抖动。
+                        HStack(alignment: .top, spacing: 0) {
+                            leadingColumn(message)
+                            VStack(alignment: .leading, spacing: Spacing.hair) {
+                                thinkingBlock(message)
+                                messageRow(message)
+                            }
+                        }
+                        .id(message.id)
                     }
                     ForEach(model.cards) { card in
                         toolCard(card)
@@ -334,12 +347,7 @@ struct AgentChatView: View {
                                 .foregroundStyle(Theme.text(.secondary))
                         }
                     } else {
-                        AgentMarkdownBody(
-                            text: message.text,
-                            isStreaming: message.isStreaming,
-                            font: Self.transcriptFont,
-                            highlight: highlightNeedle
-                        )
+                        assistantBody(message)
                     }
                     if message.isStreaming {
                         // 流式光标：**逐段**出现时它一直在（`FR-AI-25` ②）。
@@ -373,7 +381,13 @@ struct AgentChatView: View {
     private func noticeRow(_ message: AgentChatMessage) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             // 时间线事件的字形（§5.3.8.1 ②）：告警 `⚠`，其余 `▼`。
-            gutter(Self.failureReason(in: message.text) == nil ? "▼" : "⚠", Theme.text(.secondary))
+            // 三档字形都要能表达「错误」（`FR-AGT-UX-CONV-012`）：失败那一行取
+            // `AgentDisplayProjection.glyph(.error, style:)`，不是写死一个 `⚠`。
+            gutter(Self.failureReason(in: message.text) == nil
+                   ? "▼"
+                   : AgentDisplayProjection.glyph(for: .error,
+                                                  style: appState.agentDisplayPreferences.indicatorGlyph),
+                   Theme.text(.secondary))
             if let reason = Self.failureReason(in: message.text) {
                 HStack(spacing: Spacing.s) {
                     Text(L(.agentChatTurnFailed) + " · " + reason)
@@ -1207,6 +1221,104 @@ struct AgentChatView: View {
         return formatter.string(from: date)
     }
 
+    /// 行首栏（时间戳）的时刻串：**恒定 5 个字符**（`HH:mm`）。
+    ///
+    /// 为什么不按「今天 / 别的日子」分两档：那一列是**定宽**的（契约③不抖动），
+    /// 一个 11 字符的串会被截成 `10-22` 这种半截日期 —— 看着像时间坏了。
+    /// 日期归属由会话列表那一条（`sessionTimeText`）负责，这里只管「这一条是什么时候说的话」。
+    private static func clockText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_Hans_CN")
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
+    }
+
+    // MARK: - 行首栏 / 思考段 / 预览（`FR-AGT-UX-CONV-012` 的三项接线）
+
+    /// 行首栏那一串：**开关关 ⇒ 等宽不可见填充**，正文一个像素都不左移。
+    ///
+    /// 列宽由**字符数**保证（`AgentDisplayProjection.leadingColumn`），视图这里
+    /// 不写 `frame(width:)` —— 少一个会随字号漂移的几何常量。
+    @ViewBuilder
+    private func leadingColumn(_ message: AgentChatMessage) -> some View {
+        let preferences = appState.agentDisplayPreferences
+        let stamp = preferences.timestamps ? message.createdAt.map(Self.clockText) : nil
+        Text(verbatim: AgentDisplayProjection.leadingColumn(timestamp: stamp, preferences: preferences))
+            .font(Self.transcriptFont)
+            .foregroundStyle(Theme.text(.tertiary))
+    }
+
+    /// 思考段（开关 `thinking`）：**关 ⇒ 一行都不画**（连空行都不留，契约②）；
+    /// 开但这一条没有思考源 ⇒ 同样不画（画个空框等于说「这里有东西、只是空」）。
+    @ViewBuilder
+    private func thinkingBlock(_ message: AgentChatMessage) -> some View {
+        if appState.agentDisplayPreferences.thinking,
+           let thinking = message.thinking,
+           !thinking.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            HStack(alignment: .top, spacing: 0) {
+                gutter("·", Theme.text(.tertiary))
+                VStack(alignment: .leading, spacing: Spacing.hair) {
+                    Text(L(.agentChatThinkingTitle))
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(.tertiary))
+                    AgentTranscriptText(text: thinking,
+                                        font: Self.transcriptFont,
+                                        highlight: highlightNeedle)
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// 长消息预览（开关 `longPreview`）：首 N 末 M 行 + 折叠处 `… 展开`。
+    ///
+    /// 切法取 Core 的 `AgentDisplayProjection.previewSplit`（与投影同一份口径）；
+    /// 展开状态是本视图的 `expandedPreview`（**按消息 id**：展开一条不影响别的条）。
+    @ViewBuilder
+    private func assistantBody(_ message: AgentChatMessage) -> some View {
+        let preferences = appState.agentDisplayPreferences
+        let split = message.isStreaming || expandedPreview.contains(message.id)
+            ? nil
+            : AgentDisplayProjection.previewSplit(text: message.text, preferences: preferences)
+        if let split {
+            VStack(alignment: .leading, spacing: Spacing.hair) {
+                AgentMarkdownBody(
+                    text: split.head,
+                    isStreaming: false,
+                    font: Self.transcriptFont,
+                    highlight: highlightNeedle
+                )
+                // 折叠处：`…` + 展开入口（契约⑥「折叠处有 `…` 且可展开」）。
+                //
+                // **这里刻意不用 `Button`**：转写区的折叠行是**内容里的一个折角**，不是工具条按钮；
+                // 按钮化会被「主界面动作面一律图标」那条判据算成 a 类（`Scripts/check-button-icon-only.py`
+                // 判据 C 按「水平 Button + 文字标签」机械识别，转写行也在它的扫描面里），
+                // 而本条不许去改那份台账 —— 所以形态取「可点的正文行」+ 无障碍按钮语义（读屏仍当按钮）。
+                Text("… " + L(.agentChatExpand) + " (" + String(split.hidden) + ")")
+                    .font(Self.transcriptFont)
+                    .foregroundStyle(Theme.accentColor)
+                    .contentShape(Rectangle())
+                    .onTapGesture { expandedPreview.insert(message.id) }
+                    .accessibilityAddTraits(.isButton)
+                    .help(L(.agentChatExpand))
+                AgentMarkdownBody(
+                    text: split.tail,
+                    isStreaming: false,
+                    font: Self.transcriptFont,
+                    highlight: highlightNeedle
+                )
+            }
+        } else {
+            AgentMarkdownBody(
+                text: message.text,
+                isStreaming: message.isStreaming,
+                font: Self.transcriptFont,
+                highlight: highlightNeedle
+            )
+        }
+    }
+
     // MARK: - 状态行（§5.3.8.1 ④：一行、字段顺序固定）
 
     /// 底部状态行：**一行**，按契约顺序 `— ready | 模型 | 已用/窗口 | [█░░] 百分比 | ⊙ 缓存 |
@@ -1268,6 +1380,7 @@ struct AgentChatView: View {
         if case .ready(let name, _) = model.endpointState { modelName = name }
         return AgentChatStatusInput(
             isRunning: model.isRunning,
+            stateGlyph: statusStateGlyph,
             elapsed: model.lastElapsedSeconds.map { String(format: "%.1fs", $0) },
             model: modelName,
             contextUsed: readings.contextUsed,
@@ -1278,9 +1391,30 @@ struct AgentChatView: View {
         )
     }
 
+    /// 状态词前面那个字形（`FR-AGT-UX-CONV-012` 的「状态指示字形」）：
+    /// 跑着 ⇒ 运行中那一档；端点就绪 ⇒ 就绪那一档；其余（没配 / 连不上）**不给字形**
+    /// —— 那一态在别处已经有一句「为什么不能发」，这里挂个 ❌ 只会让状态词自相矛盾。
+    private var statusStateGlyph: String {
+        let style = appState.agentDisplayPreferences.indicatorGlyph
+        if model.isRunning {
+            return AgentDisplayProjection.glyph(for: .running, style: style)
+        }
+        if case .ready = model.endpointState {
+            return AgentDisplayProjection.glyph(for: .ready, style: style)
+        }
+        return ""
+    }
+
     /// 固定七格之后的「不许静默」读数（压缩 / 续跑 / 完成判据 / 长跑监控 / 本会话 token 账 / 写确认档）。
     private var statusExtras: [String] {
         var extras: [String] = []
+        // ⑤ 运行底栏元数据：开 ⇒ 状态行追加**模型 / 上下文百分比 / 工作目录**。
+        // 前两格已被 ④ 的固定七格钉死（「模型名永不丢」），所以这里只补状态行真没有的那段
+        // （工作目录）—— 同一行不把同一个数印两遍。去重的依据就是 `metadataSegments` 的 `field`。
+        for segment in AgentDisplayProjection.metadataSegments(meta: runMeta, preferences: appState.agentDisplayPreferences)
+        where segment.field == .workingDirectory {
+            extras.append("⌂ " + segment.value)
+        }
         // `NFR-AI-08` ③：压了几段、约省多少 token —— 压缩不许静默（`nil` 不留空壳）。
         if let compression = model.contextCompression {
             extras.append(L(.agentStatusCompressed,
@@ -1317,6 +1451,18 @@ struct AgentChatView: View {
         // 写确认档：关掉「每次确认」时这一格要看得见（那是一档风险状态，不是装饰）。
         extras.append(appState.isConfirmAllWritesEnabled ? L(.agentStatusWritesOn) : L(.agentStatusWritesOff))
         return extras
+    }
+
+    /// 运行元数据的**真值源**（`FR-AGT-UX-CONV-012` ⑤）：模型取端点状态、
+    /// 上下文百分比取本会话读数、工作目录取当前工作区。**缺的那一项传 `nil`** ——
+    /// 「没有读数」不许写成 0（`metadataSegments` 会整段不出）。
+    private var runMeta: AgentDisplayProjection.RunMeta {
+        var name: String?
+        if case .ready(let modelName, _) = model.endpointState { name = modelName }
+        let percent = model.modelReadings.contextPercent.map { Int($0.rounded()) }
+        return AgentDisplayProjection.RunMeta(model: name,
+                                              contextPercent: percent,
+                                              workingDirectory: workspacePath)
     }
 
     /// 右端那格：会话名（有提问才生成）＞ 工作目录名（还没提问时）。

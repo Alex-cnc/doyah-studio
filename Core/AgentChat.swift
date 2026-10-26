@@ -15,12 +15,31 @@ public struct AgentChatMessage: Identifiable, Equatable, Sendable {
     public var text: String
     /// 还在流式接收（界面据此显示光标 / 不做收尾）。
     public var isStreaming: Bool
+    /// 这一条的产生时刻（`FR-AGT-UX-CONV-012` 的「时间戳」开关要的**来源**）。
+    ///
+    /// 为什么是可空：`AgentSessionReplay` 之前落盘的老会话没有这一栏，
+    /// 硬造一个 `Date()` 会让「三小时前的会话」显示成「刚刚」—— 那比不显示更坏。
+    /// 缺值 ⇒ 行首栏留空（列宽照样占着，见 `AgentDisplayProjection.leadingColumn`）。
+    public var createdAt: Date?
+    /// 思考段正文（`FR-AGT-UX-CONV-012` 的「显示思考段」要的那一段源）。
+    ///
+    /// **本端目前产不出它**（macOS 侧的回包链路没有 reasoning 通道，
+    /// 见台账 `FR-AGT-UX-CONV-012` 的缺口登记）：这一栏先留着，
+    /// 开关与投影都按「有就画、没有就零占位」写死，等源接上就不用再改界面。
+    public var thinking: String?
 
-    public init(id: UUID = UUID(), role: AgentChatRole, text: String, isStreaming: Bool = false) {
+    public init(id: UUID = UUID(),
+                role: AgentChatRole,
+                text: String,
+                isStreaming: Bool = false,
+                createdAt: Date? = nil,
+                thinking: String? = nil) {
         self.id = id
         self.role = role
         self.text = text
         self.isStreaming = isStreaming
+        self.createdAt = createdAt
+        self.thinking = thinking
     }
 }
 
@@ -300,8 +319,8 @@ public struct AgentChatState: Equatable, Sendable {
             if let code = endpoint.blockerCode { appendNotice(code) }
             return
         }
-        messages.append(AgentChatMessage(role: .user, text: prompt))
-        messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true))
+        messages.append(AgentChatMessage(role: .user, text: prompt, createdAt: Date()))
+        messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true, createdAt: Date()))
         // 新一轮 = 新任务 ⇒ 清单**重新起**（上一轮的步骤不混进来）。
         steps = []
         // 上一轮的续跑读数不许冒充这一轮（`NFR-AI-08` ⑤）。
@@ -365,7 +384,7 @@ public struct AgentChatState: Equatable, Sendable {
     }
 
     public mutating func appendNotice(_ code: String) {
-        messages.append(AgentChatMessage(role: .notice, text: code))
+        messages.append(AgentChatMessage(role: .notice, text: code, createdAt: Date()))
     }
 
     /// **清空本会话的对话上下文**（`/clear` 的落地，`FR-AGT-UX-CONV-014`）。
@@ -400,14 +419,14 @@ public struct AgentChatState: Equatable, Sendable {
             steps.append(AgentChatStep(index: hopIndex + 1))
             endStreaming()
             if messages.last?.role != .assistant || messages.last?.isStreaming == false {
-                messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true))
+                messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true, createdAt: Date()))
             }
         case .delta(let piece):
             // **增量就地追加** —— 不等整段（`FR-AI-25` ②）
             if let index = messages.lastIndex(where: { $0.isStreaming }) {
                 messages[index].text += piece
             } else {
-                messages.append(AgentChatMessage(role: .assistant, text: piece, isStreaming: true))
+                messages.append(AgentChatMessage(role: .assistant, text: piece, isStreaming: true, createdAt: Date()))
             }
         case .toolStarted(let name, let summary):
             // **自跑的命令收在同一条过程消息里**（人类主人 2026-10-17 实机反馈原话：「智能体自己执行的命令
@@ -527,7 +546,7 @@ public struct AgentChatState: Equatable, Sendable {
            !messages[(index + 1)...].contains(where: { $0.role == .user }) {
             messages[index].text += "\n" + line
         } else {
-            messages.append(AgentChatMessage(role: .tool, text: line))
+            messages.append(AgentChatMessage(role: .tool, text: line, createdAt: Date()))
         }
     }
 

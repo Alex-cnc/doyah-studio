@@ -325,4 +325,99 @@ final class AgentDisplayRowsTests: XCTestCase {
         // 4 行正文 + 首1末1 ⇒ 折 2 行。
         XCTAssertTrue(rows.contains { $0.hiddenLines == 2 })
     }
+
+    // MARK: - ③ 行首栏（时间戳列）在视图层的形状
+
+    /// 关掉时间戳时行首栏**照样占满等宽**（不可见填充），因此正文不左移 —— 这是契约③
+    /// 在视图侧的落点：列宽由**字符数**保证，视图不写 `frame(width:)`。
+    func testLeadingColumnKeepsItsWidthWhetherTheSwitchIsOnOrOff() {
+        let width = AgentDisplayProjection.timestampColumnWidth
+        var preferences = AgentDisplayPreferences()          // 默认：时间戳 = 关
+
+        let off = AgentDisplayProjection.leadingColumn(timestamp: "09:41", preferences: preferences)
+        XCTAssertEqual(off.count, width, "关掉时仍占满固定列宽（否则正文会左移）")
+        XCTAssertTrue(off.unicodeScalars.allSatisfy { $0.value == 0x00A0 },
+                      "关掉时只能用不可见填充（普通空格会被排版吃掉）")
+        XCTAssertFalse(off.contains("0"), "关掉时不许露出时刻")
+
+        preferences.timestamps = true
+        XCTAssertEqual(AgentDisplayProjection.leadingColumn(timestamp: "09:41", preferences: preferences), "09:41",
+                       "开着时就是这一条的时刻")
+        XCTAssertEqual(AgentDisplayProjection.leadingColumn(timestamp: "9:4", preferences: preferences).count, width,
+                       "短串补齐到固定宽度")
+        let wide = AgentDisplayProjection.leadingColumn(timestamp: "2026-10-26T09:41:00", preferences: preferences)
+        XCTAssertEqual(wide.count, width, "超宽串只许截断，不许把列撑开")
+        // 没有时刻（老会话没有这一栏）⇒ 空栏，不编一个「现在」。
+        XCTAssertEqual(AgentDisplayProjection.leadingColumn(timestamp: nil, preferences: preferences).count, width)
+        XCTAssertTrue(AgentDisplayProjection.leadingColumn(timestamp: nil, preferences: preferences)
+            .unicodeScalars.allSatisfy { $0.value == 0x00A0 })
+    }
+
+    // MARK: - ⑧ 底栏元数据的唯一出处（状态行与投影同一份）
+
+    /// 关 ⇒ 空；开 ⇒ 只出有读数的段、字段序固定 —— 状态行据此追加，不再各算一遍。
+    func testMetadataSegmentsAreTheSingleSourceForTheStatusBar() {
+        let meta = AgentDisplayProjection.RunMeta(model: "gpt-x", contextPercent: 42,
+                                                  workingDirectory: "/Users/alex/dev")
+        var preferences = AgentDisplayPreferences()          // 默认：底栏元数据 = 关
+        XCTAssertTrue(AgentDisplayProjection.metadataSegments(meta: meta, preferences: preferences).isEmpty,
+                      "关掉时状态行一段都不追加")
+
+        preferences.bottomBarMeta = true
+        let segments = AgentDisplayProjection.metadataSegments(meta: meta, preferences: preferences)
+        XCTAssertEqual(segments.map(\.field), [.model, .contextPercent, .workingDirectory], "字段序固定")
+        XCTAssertEqual(segments.map(\.value), ["gpt-x", "42%", "/Users/alex/dev"])
+
+        // 缺读数的那段整段不出（不写 0%、不写占位）。
+        let partial = AgentDisplayProjection.metadataSegments(
+            meta: .init(model: nil, contextPercent: nil, workingDirectory: "/tmp"),
+            preferences: preferences)
+        XCTAssertEqual(partial.map(\.field), [.workingDirectory])
+        // 整份读数都没给 ⇒ 空（不是三条空串）。
+        XCTAssertTrue(AgentDisplayProjection.metadataSegments(meta: nil, preferences: preferences).isEmpty)
+    }
+
+    // MARK: - ⑥ 预览切法的唯一出处
+
+    /// 短消息不折（`nil`）、够长才折、关档一律不折 —— 界面与投影读的是同一份切法。
+    func testPreviewSplitIsTheSharedSlicingRule() {
+        var preferences = AgentDisplayPreferences()          // 默认：首 2 末 2
+        XCTAssertNil(AgentDisplayProjection.previewSplit(text: "a\nb\nc\nd", preferences: preferences),
+                     "刚好 4 行不折（折了会少一行内容还多一个展开）")
+
+        let split = AgentDisplayProjection.previewSplit(text: (1...7).map { "line\($0)" }.joined(separator: "\n"),
+                                                       preferences: preferences)
+        XCTAssertEqual(split?.head, "line1\nline2")
+        XCTAssertEqual(split?.tail, "line6\nline7")
+        XCTAssertEqual(split?.hidden, 3)
+
+        preferences.longPreview = .off
+        XCTAssertNil(AgentDisplayProjection.previewSplit(text: (1...7).map { "line\($0)" }.joined(separator: "\n"),
+                                                        preferences: preferences),
+                     "关掉预览 ⇒ 不折")
+    }
+
+    // MARK: - 时间戳 / 思考段的**来源**
+
+    /// 消息自带时刻与思考段：缺省都是 `nil`（老会话不许被编出一个「现在」），
+    /// 而真正跑起来的那条（`beginRun`）必须带时刻 —— 否则时间戳开关打开也没东西可画。
+    func testMessagesCarryTheirOwnTimestampAndThinkingSource() {
+        let plain = AgentChatMessage(role: .assistant, text: "答")
+        XCTAssertNil(plain.createdAt, "没有来源就不编时刻")
+        XCTAssertNil(plain.thinking, "没有思考源就是 nil（开关打开也不画空框）")
+
+        var state = AgentChatState(messages: [], cards: [], steps: [],
+                                   endpoint: .ready(model: "m", endpoint: "e"),
+                                   isRunning: false, grants: [])
+        state.beginRun(prompt: "看一下表结构")
+        XCTAssertNotNil(state.messages.first?.createdAt, "发出去的这一条必须带时刻")
+        XCTAssertNotNil(state.messages.last?.createdAt)
+
+        // 回放：盘上那一跳的 `at` 直接搬到消息上（不是回放时读钟）。
+        let turn = AgentSessionTurn(sessionID: "s", workspace: "/w", kind: .model,
+                                    role: "user", text: "问", at: Date(timeIntervalSince1970: 1_700_000_000))
+        let session = AgentSession(header: AgentSessionHeader(id: "s", workspace: "/w", title: "问"),
+                                   turns: [turn])
+        XCTAssertEqual(AgentSessionReplay.messages(from: session).first?.createdAt, turn.at)
+    }
 }

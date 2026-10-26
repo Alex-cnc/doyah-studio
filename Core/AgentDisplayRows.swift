@@ -222,6 +222,66 @@ public enum AgentDisplayProjection {
 
     // MARK: - 各段
 
+    /// 行首栏**实际要画的串**（`FR-AGT-UX-CONV-012` 契约③）。
+    ///
+    /// 关掉时间戳时返回**等宽的不可见填充**（`U+00A0`，不是普通空格 —— 普通空格在
+    /// 行尾会被排版吃掉）⇒ 正文一个像素都不左移。视图因此不需要写 `frame(width:)`：
+    /// 「不抖动」由**字符数恒等于 `timestampColumnWidth`** 保证，而不是由几何常量保证。
+    public static func leadingColumn(timestamp: String?, preferences: AgentDisplayPreferences) -> String {
+        let filler = String(repeating: "\u{00A0}", count: timestampColumnWidth)
+        guard preferences.timestamps, let timestamp, !timestamp.isEmpty else { return filler }
+        let clipped = String(timestamp.prefix(timestampColumnWidth))
+        return clipped + String(repeating: "\u{00A0}", count: timestampColumnWidth - clipped.count)
+    }
+
+    /// ⑤ 运行底栏元数据：开关关 ⇒ 一条都不出；开 ⇒ **只出有读数的那几段**，
+    /// 顺序按契约（模型 → 上下文百分比 → 工作目录）。
+    ///
+    /// 返回的是「**该追加什么**」，不是「状态行长什么样」：模型与上下文百分比已被
+    /// 状态行的固定七格钉住（`§5.3.8.1` ④「模型名永不丢」），所以调用方要按这一层去重
+    /// —— 否则同一行会把同一个数印两遍。
+    public static func metadataSegments(meta: RunMeta?,
+                                        preferences: AgentDisplayPreferences)
+        -> [(field: MetadataField, value: String)] {
+        guard preferences.bottomBarMeta, let meta else { return [] }
+        var segments: [(field: MetadataField, value: String)] = []
+        if let model = meta.model, !model.isEmpty {
+            segments.append((.model, model))
+        }
+        if let percent = meta.contextPercent {
+            segments.append((.contextPercent, "\(percent)%"))
+        }
+        if let directory = meta.workingDirectory, !directory.isEmpty {
+            segments.append((.workingDirectory, directory))
+        }
+        return segments
+    }
+
+    /// 长消息预览的切法（⑥）。`nil` = **不折**（短消息不该多出一个折叠口）。
+    public struct PreviewSplit: Equatable, Sendable {
+        public var head: String
+        public var tail: String
+        public var hidden: Int
+
+        public init(head: String, tail: String, hidden: Int) {
+            self.head = head
+            self.tail = tail
+            self.hidden = hidden
+        }
+    }
+
+    /// ⑥ 按 `head + tail` 折：只给**首几行 / 末几行 / 折了几行**，
+    /// 「怎么画」归界面（界面画 `… 展开`），切法只有这一份。
+    public static func previewSplit(text: String,
+                                    preferences: AgentDisplayPreferences) -> PreviewSplit? {
+        guard let edges = preferences.longPreview.edges else { return nil }
+        let lines = text.components(separatedBy: "\n")
+        guard lines.count > edges.head + edges.tail else { return nil }
+        return PreviewSplit(head: lines.prefix(edges.head).joined(separator: "\n"),
+                            tail: lines.suffix(edges.tail).joined(separator: "\n"),
+                            hidden: lines.count - edges.head - edges.tail)
+    }
+
     static func leadingText(timestamp: String?, preferences: AgentDisplayPreferences) -> String {
         guard preferences.timestamps, let timestamp, !timestamp.isEmpty else { return "" }
         // 超宽就截断（列宽是契约常量，不能让内容把它撑开 —— 撑开就是「抖动」）。
@@ -270,7 +330,7 @@ public enum AgentDisplayProjection {
                          spacing: Int) -> [Row] {
         let message = input.message
         let full = message.text
-        guard let edges = preferences.longPreview.edges else {
+        guard preferences.longPreview.edges != nil else {
             return [Row(kind: .message(role: message.role),
                         leading: leading,
                         leadingColumnWidth: timestampColumnWidth,
@@ -278,8 +338,8 @@ public enum AgentDisplayProjection {
                         spacingAfter: spacing,
                         live: message.isStreaming)]
         }
-        let lines = full.components(separatedBy: "\n")
-        guard lines.count > edges.head + edges.tail else {
+        // 切法在 `previewSplit`（界面画预览时读的是同一份，两处不许各算一次）。
+        guard let split = previewSplit(text: full, preferences: preferences) else {
             // 不够长 ⇒ **原样出**（预览不该在短消息上加一个折叠口）。
             return [Row(kind: .message(role: message.role),
                         leading: leading,
@@ -288,9 +348,9 @@ public enum AgentDisplayProjection {
                         spacingAfter: spacing,
                         live: message.isStreaming)]
         }
-        let hidden = lines.count - edges.head - edges.tail
-        let head = lines.prefix(edges.head).joined(separator: "\n")
-        let tail = lines.suffix(edges.tail).joined(separator: "\n")
+        let hidden = split.hidden
+        let head = split.head
+        let tail = split.tail
         // 折叠处给一个 `…`（契约：折叠处有省略号且可展开）+ 独立一行「折了几行」，
         // 界面据此画展开按钮；`hiddenLines` 同时给机器读。
         return [

@@ -386,18 +386,18 @@ public enum AgentSessionReplay {
             switch turn.kind {
             case .model:
                 switch turn.role {
-                case "user": return AgentChatMessage(role: .user, text: text)
-                case "assistant": return AgentChatMessage(role: .assistant, text: text)
+                case "user": return AgentChatMessage(role: .user, text: text, createdAt: turn.at)
+                case "assistant": return AgentChatMessage(role: .assistant, text: text, createdAt: turn.at)
                 // 系统提示一类：回看时当时间线事件（`◈`），不当成助手说的话。
-                default: return AgentChatMessage(role: .notice, text: text)
+                default: return AgentChatMessage(role: .notice, text: text, createdAt: turn.at)
                 }
             case .tool:
-                return AgentChatMessage(role: .tool, text: text)
+                return AgentChatMessage(role: .tool, text: text, createdAt: turn.at)
             case .approval:
                 guard let verdict = turn.approval, !verdict.isEmpty else {
-                    return AgentChatMessage(role: .tool, text: text)
+                    return AgentChatMessage(role: .tool, text: text, createdAt: turn.at)
                 }
-                return AgentChatMessage(role: .tool, text: text + " · " + verdict)
+                return AgentChatMessage(role: .tool, text: text + " · " + verdict, createdAt: turn.at)
             }
         }
     }
