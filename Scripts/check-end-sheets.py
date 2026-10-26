@@ -64,6 +64,18 @@ def check() -> list[str]:
     for need in ("平台矩阵.md", "任务清单-按平台.md"):
         if not (DERIVED / need).exists():
             print(f"ℹ️  派生件 {need} 未生成（跑 gen-platform-parity.py / gen-platform-board.py 即可）")
+
+    # F：任务清单永远只有一份活件 —— 不许做版本快照（人类主人 2026-10-26 令）
+    for path in list(DOCS.glob("Doyah产品开发计划任务清单-*.md")) + list((DOCS / "frozen").glob("*任务清单*.md")):
+        if re.search(r"-v\d+(?:\.\d+)*-\d{8}\.md$", path.name):
+            problems.append(f"{path.relative_to(ROOT)}: 任务清单不做版本快照 —— 四书才冻结，清单一律是活件")
+
+    # G：四书 v1.0 冻结齐四份（活书在 Docs/，冻结件在 Docs/frozen/）
+    FOUR_BOOKS = ("能力规划说明书", "需求规格说明书", "概要设计说明书", "详细设计说明书-macOS")
+    frozen = sorted(p.name for p in (DOCS / "frozen").glob("*-v*-*.md"))
+    for book in FOUR_BOOKS:
+        if not any(book in name for name in frozen):
+            problems.append(f"Docs/frozen/ 缺《{book}》的冻结快照（四书都可冻结，任务清单不冻）")
     return problems
 
 
