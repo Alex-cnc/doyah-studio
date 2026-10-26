@@ -36,7 +36,7 @@ import sys
 import tempfile
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-PLAN_REL = "Docs/Doyah产品开发计划书.md"
+PLAN_REL = "Docs/Doyah产品开发计划任务清单.md"
 LEDGER_START = "## 3 需求状态台账"
 LEDGER_STOP = "## 4 "
 HEADER = "| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 | 版本 | 版本口径 |"

@@ -43,7 +43,7 @@ import sys
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
 INDEX = ROOT / "Docs/Doyah产品需求规格说明书-需求索引.md"
-PLAN = ROOT / "Docs/Doyah产品开发计划书.md"
+PLAN = ROOT / "Docs/Doyah产品开发计划任务清单.md"
 TRACE = ROOT / "Docs/Doyah产品需求规格说明书-追溯表.md"
 STATUS = ROOT / "Docs/平台实现状态.json"
 # 2026-10-20：真值源搬迁前的落点（SRS §10.1 索引 / §10.2 追溯表）；现在 SRS 里已无这两节，

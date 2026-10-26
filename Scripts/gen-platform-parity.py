@@ -46,7 +46,7 @@ SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
 INDEX = pathlib.Path("Docs/Doyah产品需求规格说明书-需求索引.md")
 # 2026-10-20：状态矩阵（原 §10.10）迁到《开发计划书》§5 —— 读仍从 SRS 取（索引与摘要），
 # 写改到计划书；否则本脚本会在 SRS 里找不到标记而报错。
-PLAN = ROOT / "Docs/Doyah产品开发计划书.md"
+PLAN = ROOT / "Docs/Doyah产品开发计划任务清单.md"
 STATUS = ROOT / "Docs/平台实现状态.json"
 SCRIPT = pathlib.Path(__file__).resolve()
 
@@ -409,7 +409,7 @@ def build_cases() -> list[dict]:
 
         2026-10-20：矩阵从 SRS §10.10 迁到《开发计划书》§5 ⇒ 夹具跟着搬（写坏仍是临时副本）。
         """
-        path = root / "Docs/Doyah产品开发计划书.md"
+        path = root / "Docs/Doyah产品开发计划任务清单.md"
         text = path.read_text(encoding="utf-8")
         head, rest = text.split(BEGIN, 1)
         block, tail = rest.split(END, 1)
@@ -424,12 +424,12 @@ def build_cases() -> list[dict]:
         path.write_text(f"{head}{BEGIN}\n" + "\n".join(lines) + f"{END}{tail}", encoding="utf-8")
 
     def drop_marker(root: pathlib.Path) -> None:
-        path = root / "Docs/Doyah产品开发计划书.md"
+        path = root / "Docs/Doyah产品开发计划任务清单.md"
         path.write_text(path.read_text(encoding="utf-8").replace(BEGIN, "", 1), encoding="utf-8")
 
     def windows_snapshot(root: pathlib.Path) -> None:
         """正向：台账里的状态必须真的到表上，且分域「与基线一致」计数跟着走。"""
-        text = (root / "Docs/Doyah产品开发计划书.md").read_text(encoding="utf-8")
+        text = (root / "Docs/Doyah产品开发计划任务清单.md").read_text(encoding="utf-8")
         block = text.split(BEGIN, 1)[1].split(END, 1)[0]
         row = re.search(r"^\| FR-STD-DB-CONN-007 \|.*$", block, re.MULTILINE)
         if row is None:

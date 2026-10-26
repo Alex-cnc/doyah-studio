@@ -23,7 +23,7 @@ import sys
 
 SRS = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
 INDEX = pathlib.Path("Docs/Doyah产品需求规格说明书-需求索引.md")
-PLAN = pathlib.Path("Docs/Doyah产品开发计划书.md")
+PLAN = pathlib.Path("Docs/Doyah产品开发计划任务清单.md")
 MARKS = ("⬜", "🟡", "✅", "➖")
 
 

@@ -461,7 +461,7 @@ def run_script(root: pathlib.Path, argv: list[str]) -> subprocess.CompletedProce
 def self_test() -> int:
     needed = [BOARD, ROOT / "Docs/Doyah产品需求规格说明书.md",
               ROOT / "Docs/Doyah产品需求规格说明书-需求索引.md",
-              ROOT / "Docs/Doyah产品开发计划书.md", ROOT / "Docs/平台实现状态.json"]
+              ROOT / "Docs/Doyah产品开发计划任务清单.md", ROOT / "Docs/平台实现状态.json"]
     absent = [str(path) for path in needed if not path.exists()]
     if absent:
         print(f"❌ 自检需要真实的真源与看板，缺：{absent}")
