@@ -81,6 +81,12 @@ def build():
             continue
         n = len(header)
         rec = None
+        # 旧版编号：`FR-STD-ALL-DATA-*`（数据需求）/ `FR-STD-ALL-IFACE-*`（接口需求）是**上一版
+        # 需求书的编号体系**，人类主人 2026-10-25 明令「DATA 这种需求编号是旧版本的，不要搞混」。
+        # 它们正文里可能被改成六列表形状，所以**不能只按表形排除**；按编号前缀硬排除，并记进 skipped 报数。
+        if ident.startswith(("FR-STD-ALL-DATA-", "FR-STD-ALL-IFACE-")):
+            skipped.append({"id": ident, "section": section, "header": header})
+            continue
         if ident.startswith("AC-"):
             # 验收判据（§7.1 发布门槛 / §7.2 智能体验收）：表只有 3~4 列，形状与 FR/NFR 不同，
             # 但**在总账里**（《需求索引》438 = 379 FR + 47 NFR + 12 AC），照收。
