@@ -31,8 +31,9 @@ xcuserdata/
 !/Docs/frozen/**  # 冻结件（vX.Y 快照，逐字复制活书；冻结史靠目录列表）
 !/Docs/frozen/README.md  # v1.0 冻结清单（四书快照的文件名 / 行数 / sha256 与刷新纪律；快照本体已入库）
 !/Docs/README.md
-# 唯一的开发规范（2026-10-26 通用 + 本项目合并后正名）
-!/Docs/Doyah开发规范.md
+# 两件规范：通用（项目无关）+ 项目管理（Doyah 事实），不合并（2026-10-26 人类主人令）
+!/Docs/通用开发规范.md
+!/Docs/项目管理规范.md
 !/Docs/功能清单（一页纸）.md
 !/Docs/功能清单（管理视图）.md
 !/Docs/需求规范书.md

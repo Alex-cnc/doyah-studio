@@ -57,7 +57,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 主开发机上这两例照旧必须真跑、一条都不放宽**（`--self-test` 的例数仍是 17，不因跳过而改）。
 
 **L-41（2026-09-27 第 35 轮）：覆盖范围补上「每轮必改的两份台账」** —— 此前清单只有 11 个文件，
-而循环**每轮都在改**的 `Docs/Doyah开发规范.md` 与 `Docs/design/开发循环-任务队列.md`
+而循环**每轮都在改**的 `Docs/通用开发规范.md` 与 `Docs/design/开发循环-任务队列.md`
 **不在其中**（`AGENT-SPEC.md` §9 第 3 条如实写着「改这两份要自己数」）。独立探针实测存量：
 spec **87 处**（形态四类：7 行缺「编号」格 / 两处表头少「仓」列 / 1 行被拼成两行 / 1 行缺「状态」格）、
 队列 **2 处**（格内**裸**竖线 —— `||` 运算符与侧别别名 `apple|macos|ios`）⇒ 本轮**清零**，
@@ -102,7 +102,8 @@ DEFAULT_TARGETS = [
     "Docs/archive/root-20261026/功能清单（一页纸）.md",
     "Docs/archive/root-20261026/功能清单（管理视图）.md",
     "Docs/Doyah产品需求规格说明书.md",
-    "Docs/Doyah开发规范.md",
+    "Docs/通用开发规范.md",
+    "Docs/项目管理规范.md",
     "Docs/Doyah产品需求规格说明书-变更记录.md",
     "Docs/Doyah产品能力规划说明书-变更记录.md",
     "Docs/Doyah产品概要设计说明书-变更记录.md",
@@ -809,7 +810,8 @@ SELF_TEST_TRACKED = [
     "Docs/archive/root-20261026/功能清单（一页纸）.md",
     "Docs/archive/root-20261026/功能清单（管理视图）.md",
     "Docs/Doyah产品需求规格说明书.md",
-    "Docs/Doyah开发规范.md",
+    "Docs/通用开发规范.md",
+    "Docs/项目管理规范.md",
     "Docs/Doyah产品需求规格说明书-变更记录.md",
     "Docs/Doyah产品能力规划说明书-变更记录.md",
     "Docs/Doyah产品概要设计说明书-变更记录.md",

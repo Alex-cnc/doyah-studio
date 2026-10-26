@@ -39,7 +39,8 @@ SHEET_PATTERN = r"^Doyah产品开发计划任务清单-(%s)\.md$" % "|".join(ALL
 # 工程规范：写「怎么做活」的，不是产品书；人类主人 2026-10-26 口径里只留这两份 + 一份模板 + README
 ENGINEERING_DOCS = {
     "README.md",
-    "Doyah开发规范.md",
+    "通用开发规范.md",
+    "项目管理规范.md",
 }
 
 SHEET = re.compile(r"^Doyah产品开发计划任务清单-(?P<end>.+?)\.md$")

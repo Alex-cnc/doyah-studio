@@ -56,7 +56,7 @@ import sys
 import tempfile
 
 QUEUE_REL = "Docs/design/开发循环-任务队列.md"
-SPEC_REL = "Docs/Doyah开发规范.md"
+SPEC_REL = "Docs/通用开发规范.md"
 # 小节名 → 条目号前缀（与 doyah-loop-watch.py / doyah-loop-status.py 同源）
 SECTION_PREFIX = {"Studio 队列": "L", "Notes 队列": "N", "Retro 队列": "R"}
 # 本仓提案目录里「还没裁」的状态词（其余 = 已结）
