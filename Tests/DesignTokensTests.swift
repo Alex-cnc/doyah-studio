@@ -58,9 +58,9 @@ final class DesignTokensTests: XCTestCase {
     ///
     /// 由头 = 2026-10-06 人类主人实机点验第 1 条「左栏太宽」的定因：`Metrics.sidebarWidth`（248）
     /// 此前是**死常量**（`App/` 零命中），真正生效的是 `MainWindow` 里写死的那三档 ⇒ 想调宽度只能改视图，
-    /// 没有单点旋钮。这条把「唯一出处」钉成可机械复核的约束：全 App **只有一处**侧栏列宽规格，
-    /// 且那一处**一律读令牌、不带数字字面量**（改前读数 = 字面量 1 命中 / `App/` 内 `sidebarWidth` 0 命中；
-    /// 改后 = 0 / ≥1 · 派单 `T-20261006-078` §1）。
+    /// 没有单点旋钮。2026-10-25 界面改成**自绘分栏**（`NavigationSplitView` 那层系统材质透不上壁纸），
+    /// 宽度改走 `@State private var sidebarWidth: CGFloat = Metrics.sidebarWidth` + 拖拽写回偏好 ——
+    /// 判据跟着改口径：**初值必须读令牌**、**不许出现数字字面量初值**、且全 App 只有这一处声明。
     func testSidebarWidthHasExactlyOneSourceAndNoBareNumber() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -68,14 +68,18 @@ final class DesignTokensTests: XCTestCase {
         let text = try String(
             contentsOf: root.appendingPathComponent("App/Views/MainWindow.swift"), encoding: .utf8
         )
-        let around = text.components(separatedBy: ".navigationSplitViewColumnWidth(")
-        let spec = around.count == 2 ? String(around[1].prefix(120)) : ""
-        XCTAssertTrue(
-            around.count == 2
-                && spec.contains("Metrics.sidebarWidth")
-                && !spec.contains(where: \.isNumber),
-            "侧栏宽度只许读 `Metrics.sidebarWidth`（唯一出处）：那处规格必须**恰好一处**、读令牌、且不带数字字面量；实测 \(around.count - 1) 处，规格 = \(spec.debugDescription)"
-        )
+        // ① 恰好一处声明，且初值读令牌
+        let declarations = text.components(separatedBy: "sidebarWidth: CGFloat")
+        XCTAssertEqual(declarations.count - 1, 1, "侧栏宽度只许有一处声明：实测 \(declarations.count - 1) 处")
+        let afterDeclaration = declarations.count == 2 ? String(declarations[1].prefix(60)) : ""
+        XCTAssertTrue(afterDeclaration.contains("= Metrics.sidebarWidth"),
+                      "初值必须读 `Metrics.sidebarWidth`，实测 = \(afterDeclaration)")
+        // ② 初值里不许出现数字字面量（`= 248` 这种）
+        XCTAssertFalse(afterDeclaration.contains(where: \.isNumber) && !afterDeclaration.contains("Metrics"),
+                       "初值不许写死数字：实测 = \(afterDeclaration)")
+        // ③ 视图层不许再出现旧的系统分栏入口（那条路已被自绘分栏取代）
+        XCTAssertFalse(text.contains("navigationSplitViewColumnWidth("),
+                       "系统分栏已撤，宽度由自绘分栏 + 令牌决定")
     }
 
     // MARK: 表面层次（改造中修掉过两次真缺陷，这里守住）
