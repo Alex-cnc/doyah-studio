@@ -40,7 +40,6 @@ SHEET_PATTERN = r"^Doyah产品开发计划任务清单-(%s)\.md$" % "|".join(ALL
 ENGINEERING_DOCS = {
     "README.md",
     "Doyah开发规范.md",
-    "模板-详细设计说明书-Studio.md",
 }
 
 SHEET = re.compile(r"^Doyah产品开发计划任务清单-(?P<end>.+?)\.md$")
