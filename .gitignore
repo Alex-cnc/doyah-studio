@@ -44,6 +44,8 @@ xcuserdata/
 !/Docs/模板-详细设计说明书-Studio.md
 !/Docs/Doyah产品详细设计说明书-*.md
 !/Docs/Doyah产品开发计划书-*.md
+# 任务清单按端分册（-macOS端 / -iOS端 …）必须入库
+!/Docs/Doyah产品开发计划任务清单-*.md
 !Docs/Doyah产品详细设计说明书-Windows.md
 !Docs/Doyah产品详细设计说明书-Linux.md
 !Docs/Doyah产品详细设计说明书-Android.md

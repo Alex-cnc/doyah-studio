@@ -49,7 +49,10 @@ SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
 INDEX = doc_index.path()
 # 2026-10-20：状态矩阵（原 §10.10）迁到《开发计划书》§5 —— 读仍从 SRS 取（索引与摘要），
 # 写改到计划书；否则本脚本会在 SRS 里找不到标记而报错。
-PLAN = ROOT / "Docs/Doyah产品开发计划任务清单.md"
+PLAN = ROOT / "Docs/Doyah产品开发计划任务清单-macOS端.md"   # 台账真值源（2026-10-26 起按端分册）
+# 平台等价矩阵是**派生视图**（台账 + 平台实现状态.json 算出来的），不进 Docs：人类主人只认「四书一单」，
+# 一单与详设同构按端分册 ⇒ 跨端矩阵没有「书」的身份，落 .build/derived/。
+MATRIX = ROOT / ".build/derived/平台矩阵.md"
 STATUS = ROOT / "Docs/平台实现状态.json"
 SCRIPT = pathlib.Path(__file__).resolve()
 
@@ -331,11 +334,25 @@ def render(
     return "\n".join(out).rstrip() + "\n"
 
 
+def matrix_text(root: pathlib.Path | None = None) -> str:
+    """读矩阵派生件；不存在就先按模板落一份（干净克隆里 `.build/` 不会进版本库）。"""
+    path = (root / MATRIX.relative_to(ROOT)) if root is not None else MATRIX
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "# 平台等价矩阵（派生件 · 请勿手改）\n\n"
+            "> 由 `Scripts/gen-platform-parity.py` 从《Doyah产品开发计划任务清单-macOS端》§3 台账 + "
+            "`Docs/平台实现状态.json` 重生成，落 `.build/derived/`，不进版本库。\n\n"
+            f"{BEGIN}\n{END}\n",
+            encoding="utf-8")
+    return path.read_text(encoding="utf-8")
+
+
 def rebuild(rows: list[tuple[str, str, str]], platforms: list[dict], default: str, not_platforms: list[dict]) -> str:
     """返回把 §10.10 标记区间替换成最新表格后的整篇文档文本（找不到标记则抛错）。"""
-    text = PLAN.read_text(encoding="utf-8")
+    text = matrix_text()
     if BEGIN not in text or END not in text:
-        raise LedgerError([f"{PLAN} 里找不到 {BEGIN} / {END} 标记（表格位置由它们夹住）"])
+        raise LedgerError([f"{MATRIX} 里找不到 {BEGIN} / {END} 标记（表格位置由它们夹住）"])
     table = render(rows, platforms, default, not_platforms)
     head, rest = text.split(BEGIN, 1)
     _, tail = rest.split(END, 1)
@@ -630,7 +647,7 @@ def main() -> int:
         return 1
 
     if check_only:
-        current = PLAN.read_text(encoding="utf-8")
+        current = matrix_text()
         if updated == current:
             print(f"✅ 平台等价矩阵与现状一致（{len(rows)} 条；平台列 {len(platforms) + 1}）")
             return 0
@@ -653,7 +670,8 @@ def main() -> int:
         print("   请运行 python3 Scripts/gen-platform-parity.py 重写")
         return 1
 
-    PLAN.write_text(updated, encoding="utf-8")   # 2026-10-20：矩阵已迁到计划书 §5
+    MATRIX.parent.mkdir(parents=True, exist_ok=True)
+    MATRIX.write_text(updated, encoding="utf-8")   # 2026-10-26：矩阵落 .build/derived（派生件）
     detail = "、".join(f"{platform['label']} {len(platform['overrides'])} 条" for platform in platforms)
     print(
         f"✅ 已重写《计划书》§5 平台等价矩阵（{len(rows)} 条；"

@@ -25,7 +25,7 @@ import re
 import sys
 
 SRS = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
-PLAN = pathlib.Path("Docs/Doyah产品开发计划任务清单.md")   # 2026-10-20 起状态唯一源
+PLAN = pathlib.Path("Docs/Doyah产品开发计划任务清单-macOS端.md")   # 2026-10-20 起状态唯一源
 
 PENDING = "⬜"
 PARTIAL = "🟡"

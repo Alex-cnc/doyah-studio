@@ -26,7 +26,7 @@ import doc_index  # noqa: E402  （派生件位置：.build/derived；缺文件�
 
 SRS = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
 INDEX = doc_index.path()
-PLAN = pathlib.Path("Docs/Doyah产品开发计划任务清单.md")
+PLAN = pathlib.Path("Docs/Doyah产品开发计划任务清单-macOS端.md")
 MARKS = ("⬜", "🟡", "✅", "➖")
 
 

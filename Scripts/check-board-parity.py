@@ -582,7 +582,7 @@ def build_cases() -> list[dict]:
 
     def wipe_status_ledger(work: pathlib.Path) -> None:
         """《开发计划书》§3 状态台账的标题改坏 ⇒ 回退路径读到 0 条，必须判红（不许零命中=通过）。"""
-        _edit(work / "Docs/Doyah产品开发计划任务清单.md", "## 3 需求状态台账", "## 3x 需求状态台账")
+        _edit(work / "Docs/Doyah产品开发计划任务清单-macOS端.md", "## 3 需求状态台账", "## 3x 需求状态台账")
 
     # 夹具里的数字**一律现读**（不写死）：真值源多一域 / 改一个数，夹具自己跟着走。
     text = board.read_text(encoding="utf-8") if board.exists() else ""
@@ -713,7 +713,7 @@ def build_cases() -> list[dict]:
 def self_test() -> int:
     needed = [SRS, BOARD, ROOT / "Docs/平台实现状态.json",
               doc_index.path(),
-              ROOT / "Docs/Doyah产品开发计划任务清单.md"]
+              ROOT / "Docs/Doyah产品开发计划任务清单-macOS端.md"]
     absent = [str(path) for path in needed if not path.exists()]
     if absent:
         print(f"❌ 自检需要真实的真源与看板，缺：{absent}")

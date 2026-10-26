@@ -61,7 +61,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--srs", default="Docs/Doyah产品需求规格说明书.md")
     ap.add_argument("--index", default=str(doc_index.path()))
-    ap.add_argument("--plan", default="Docs/Doyah产品开发计划任务清单.md")
+    ap.add_argument("--plan", default="Docs/Doyah产品开发计划任务清单-macOS端.md")
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
     rows = rows_of(a.srs)

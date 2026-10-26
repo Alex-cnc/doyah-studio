@@ -81,7 +81,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # 带「变更记录 + 头部版本格」的文档：True = 必须存在（三书），False = 在盘上才查。
 VERSION_DOCS = [
     ("Docs/Doyah产品需求规格说明书.md", True),
-    ("Docs/Doyah产品开发计划任务清单.md", True),
+    ("Docs/Doyah产品开发计划任务清单-macOS端.md", True),
     ("Docs/Doyah产品能力规划说明书.md", True),
     ("Docs/Doyah产品概要设计说明书.md", True),
     # 2026-10-23：执行契约新体裁 v0.1（自带 §14 变更记录 + 头部版本格）。
@@ -90,7 +90,7 @@ VERSION_DOCS = [
     # 2026-10-23：macOS 端详细设计（自带 §11 变更记录 + 头部版本格）。
     ("Docs/Doyah产品详细设计说明书-macOS.md", False),
     # 2026-10-23：macOS 端开发计划书（自带 §11 变更记录 + 头部版本格）。
-    ("Docs/Doyah产品开发计划任务清单-macOS端.md", False),
+    ("Docs/Doyah产品开发计划任务清单-iOS端.md", False),
     ("Docs/Doyah产品开发计划书-安卓端.md", False),
     ("Docs/Doyah产品详细设计说明书-Windows.md", False),
     ("Docs/Doyah产品详细设计说明书-Linux.md", False),
