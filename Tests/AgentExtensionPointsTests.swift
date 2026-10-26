@@ -403,3 +403,402 @@ final class AgentExtensionPointsTests: XCTestCase {
         XCTAssertEqual(desk.run(command: "sh -c id", pluginID: "ext.sample"), .denied(.commandNotDeclared))
     }
 }
+
+/// `FR-AGT-LINK-EXT-003` 的**调用点**判据（契约的第五条在那个文件里，接线在这里）。
+///
+/// 钉的是三件事：① 不注入 = 旧行为逐字不变；② 注入之后钩子**只能收紧**（放行抬不动待批、
+/// 挂了直接拒）；③ 每个被求值的钩子都留痕（含失败的），且来源**只管自己那一件能力**。
+final class AgentPolicyCallSiteTests: XCTestCase {
+
+    /// 按跳脚本吐事件的假模型（记录请求次数）。
+    private final class ScriptedStreamingClient: LLMStreamingClient, @unchecked Sendable {
+        var hops: [[LLMStreamEvent]]
+        private(set) var requests: [LLMRequest] = []
+
+        init(_ hops: [[LLMStreamEvent]]) { self.hops = hops }
+
+        func stream(_ request: LLMRequest) async throws -> AsyncThrowingStream<LLMStreamEvent, Error> {
+            requests.append(request)
+            let events = hops.isEmpty ? [.textDelta("（脚本用尽）"), .done] : hops.removeFirst()
+            return AsyncThrowingStream { continuation in
+                for event in events { continuation.yield(event) }
+                continuation.finish()
+            }
+        }
+    }
+
+    private final class RecordingDispatcher: AgentToolDispatcher, @unchecked Sendable {
+        private(set) var invoked: [AgentToolInvocation] = []
+        var outcome: AgentToolOutcome = .file(
+            AgentToolFileOutput(path: "a.txt", text: "内容", truncated: false, totalBytes: 6))
+
+        func dispatch(_ invocation: AgentToolInvocation, approvals: Set<String>) -> AgentToolOutcome {
+            invoked.append(invocation)
+            return outcome
+        }
+    }
+
+    /// 固定的钩子来源（判据要能造任意结论，包括「钩子自己挂了」）。
+    private struct FixedHooks: AgentPolicyHookSource {
+        let results: [AgentPolicyHookResult]
+        func hookResults(for invocation: AgentToolInvocation, workspace: String) -> [AgentPolicyHookResult] {
+            results
+        }
+    }
+
+    private final class RecordingAudit: AgentAuditSink, @unchecked Sendable {
+        private(set) var records: [AgentActionRecord] = []
+        func record(_ record: AgentActionRecord) async { records.append(record) }
+    }
+
+    private var directory: URL!
+    private var store: AgentSessionStore!
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agent-policy-site-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        store = AgentSessionStore(directory: directory)
+    }
+
+    override func tearDownWithError() throws {
+        if let directory { try? FileManager.default.removeItem(at: directory) }
+    }
+
+    // MARK: helpers
+
+    private var context: AgentLoopContext {
+        AgentLoopContext(systemPrompt: "你是助手。", userPrompt: "读一下 a.txt",
+                         baseRequest: LLMRequest(endpoint: URL(string: "http://127.0.0.1:11434/v1")!,
+                                                 model: "fake", systemPrompt: "", userPrompt: ""),
+                         sessionID: "s-policy", workspace: "ws-1")
+    }
+
+    private func toolHop(name: String = "read_file", arguments: String = #"{"path":"a.txt"}"#) -> [LLMStreamEvent] {
+        [.toolCallDelta(index: 0, id: "call-0", name: name, argumentsFragment: arguments),
+         .finished(reason: "tool_calls"), .done]
+    }
+
+    private func answerHop() -> [LLMStreamEvent] {
+        [.textDelta("a.txt 的内容是「内容」"), .finished(reason: "stop"), .done]
+    }
+
+    private func loop(client: ScriptedStreamingClient,
+                      dispatcher: RecordingDispatcher,
+                      hooks: [AgentPolicyHookResult]?) -> AgentLoop {
+        AgentLoop(client: client, dispatcher: dispatcher, sessionStore: store,
+                  policyHooks: hooks.map { FixedHooks(results: $0) })
+    }
+
+    private func manifest(
+        id: String = "ext.policy",
+        provides: [String] = ["read_file"],
+        hooks: [AgentExtensionManifest.Hook] = []
+    ) -> AgentExtensionManifest {
+        AgentExtensionManifest(
+            id: id,
+            slot: AgentExtensionSlot.toolLibrary.manifestValue,
+            provides: provides,
+            permission: AgentExtensionManifest.Permission(readableDirectories: [], allowedCommands: []),
+            hooks: hooks
+        )
+    }
+
+    // MARK: - ① 不注入 = 旧行为逐字不变（既有判据一条都不必改）
+
+    func testNoInjectionKeepsOldBehavior() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+
+        let result = await loop(client: client, dispatcher: dispatcher, hooks: nil).run(context: context)
+
+        XCTAssertEqual(result.executedTools.map(\.name), ["read_file"])
+        XCTAssertEqual(dispatcher.invoked.count, 1, "没有注入策略钩子时工具照旧执行一次")
+        XCTAssertTrue(result.rejectedTools.isEmpty)
+    }
+
+    /// 注入了来源、但这一跳没有插件管（返回空）⇒ 也照旧执行（**空 ≠ 放行**，是不干预）。
+    func testEmptyHookSetDoesNotIntervene() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+
+        let result = await loop(client: client, dispatcher: dispatcher, hooks: []).run(context: context)
+
+        XCTAssertEqual(result.executedTools.map(\.name), ["read_file"])
+        XCTAssertEqual(dispatcher.invoked.count, 1)
+    }
+
+    // MARK: - ② 只能收紧：allow 抬不动结论，deny/待批拦得住
+
+    func testAllowHookLeavesToolExecuted() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+
+        let result = await loop(client: client, dispatcher: dispatcher,
+                                hooks: [AgentPolicyHookResult(hookID: "ext.policy:preToolUse", level: .allow)])
+            .run(context: context)
+
+        XCTAssertEqual(dispatcher.invoked.count, 1, "钩子说放行 ⇒ 不改变原判定")
+        XCTAssertEqual(result.executedTools.map(\.name), ["read_file"])
+    }
+
+    func testDenyHookStopsDispatch() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+
+        let result = await loop(client: client, dispatcher: dispatcher,
+                                hooks: [AgentPolicyHookResult(hookID: "ext.policy:preToolUse", level: .deny)])
+            .run(context: context)
+
+        XCTAssertEqual(dispatcher.invoked.count, 0, "被钩子拒 ⇒ 分发器一次都不许被调")
+        XCTAssertTrue(result.executedTools.isEmpty)
+        XCTAssertEqual(result.rejectedTools.map(\.reason), [AgentToolRefusal.deniedByPolicy.rawValue])
+    }
+
+    func testRequiresApprovalHookDefersExecution() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+
+        let result = await loop(client: client, dispatcher: dispatcher,
+                                hooks: [AgentPolicyHookResult(hookID: "ext.policy:preToolUse", level: .requiresApproval)])
+            .run(context: context)
+
+        XCTAssertEqual(dispatcher.invoked.count, 0, "转待批 ⇒ 这一跳不执行")
+        XCTAssertEqual(result.rejectedTools.map(\.reason), [AgentToolRefusal.approvalRequired.rawValue])
+    }
+
+    /// **fail-closed**：钩子自己挂了 ⇒ 直接拒，哪怕另一条钩子说放行。
+    func testFailedHookFailsClosed() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+
+        let result = await loop(client: client, dispatcher: dispatcher, hooks: [
+            AgentPolicyHookResult(hookID: "ext.a:preToolUse", level: .allow),
+            AgentPolicyHookResult(hookID: "ext.b:preToolUse", level: .allow, failed: true),
+        ]).run(context: context)
+
+        XCTAssertEqual(dispatcher.invoked.count, 0)
+        XCTAssertEqual(result.rejectedTools.map(\.reason), [AgentToolRefusal.deniedByPolicy.rawValue])
+    }
+
+    /// 多条钩子取最严那一档（这里两档都不到 deny ⇒ 结果是待批，不是放行）。
+    func testTwoHooksTakeTheStrictest() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+
+        let result = await loop(client: client, dispatcher: dispatcher, hooks: [
+            AgentPolicyHookResult(hookID: "ext.a:preToolUse", level: .allow),
+            AgentPolicyHookResult(hookID: "ext.b:preToolUse", level: .requiresApproval),
+        ]).run(context: context)
+
+        XCTAssertEqual(result.rejectedTools.map(\.reason), [AgentToolRefusal.approvalRequired.rawValue])
+        XCTAssertEqual(dispatcher.invoked.count, 0)
+    }
+
+    // MARK: - ③ 留痕：每个被求值的钩子都在审计里（失败的也在）
+
+    func testAuditKeepsEveryEvaluatedHook() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+        let audit = RecordingAudit()
+
+        let loop = AgentLoop(client: client, dispatcher: dispatcher, sessionStore: store, audit: audit,
+                             policyHooks: FixedHooks(results: [
+                                AgentPolicyHookResult(hookID: "ext.a:preToolUse", level: .allow),
+                                AgentPolicyHookResult(hookID: "ext.b:preToolUse", level: .allow, failed: true),
+                             ]))
+        _ = await loop.run(context: context)
+
+        let policyRecords = audit.records.filter { ($0.detail ?? "").contains("policy:") }
+        XCTAssertEqual(policyRecords.count, 1, "一次判定一条留痕")
+        let detail = policyRecords.first?.detail ?? ""
+        XCTAssertTrue(detail.contains("ext.a:preToolUse"), "失败的钩子也要点名，别只记结论")
+        XCTAssertTrue(detail.contains("ext.b:preToolUse"))
+        XCTAssertTrue(detail.contains("failed=true"), "要有「它挂了」这一格")
+        XCTAssertEqual(policyRecords.first?.outcome, .denied)
+    }
+
+    // MARK: - ④ 真实来源：只管自己那一件能力，只认 preToolUse，卸了就不管
+
+    func testSourceOnlyGovernsItsOwnCapability() {
+        var desk = AgentExtensionDesk()
+        desk.install(manifest(provides: ["read_file"],
+                              hooks: [.init(kind: .preToolUse, maxTighten: .deny)]))
+        let source = AgentExtensionPolicySource(desk: desk)
+
+        XCTAssertEqual(
+            source.hookResults(for: AgentToolInvocation(name: "read_file", argumentsJSON: "{}"), workspace: "ws").count,
+            1)
+        XCTAssertTrue(
+            source.hookResults(for: AgentToolInvocation(name: "write_file", argumentsJSON: "{}"), workspace: "ws").isEmpty,
+            "没提供这件工具 ⇒ 不许出结论（更不许替别人的工具判）")
+    }
+
+    func testSourceIgnoresOtherHookKinds() {
+        var desk = AgentExtensionDesk()
+        desk.install(manifest(hooks: [.init(kind: .preModelCall, maxTighten: .deny),
+                                     .init(kind: .preCommand, maxTighten: .deny)]))
+        let source = AgentExtensionPolicySource(desk: desk)
+
+        XCTAssertTrue(
+            source.hookResults(for: AgentToolInvocation(name: "read_file", argumentsJSON: "{}"), workspace: "ws").isEmpty,
+            "preModelCall / preCommand 是另外两个挂点，不许在工具调用处冒充")
+    }
+
+    func testSourceRespectsNarrowedCapabilities() {
+        var desk = AgentExtensionDesk()
+        desk.install(manifest(provides: ["read_file"], hooks: [.init(kind: .preToolUse, maxTighten: .deny)]),
+                     capabilities: [])
+        let source = AgentExtensionPolicySource(desk: desk)
+
+        XCTAssertTrue(
+            source.hookResults(for: AgentToolInvocation(name: "read_file", argumentsJSON: "{}"), workspace: "ws").isEmpty,
+            "用户一样能力都没批 ⇒ 钩子也不许管")
+    }
+
+    func testUninstalledPluginNoLongerGoverns() {
+        var desk = AgentExtensionDesk()
+        desk.install(manifest(hooks: [.init(kind: .preToolUse, maxTighten: .deny)]))
+
+        _ = desk.uninstall(pluginID: "ext.policy")
+        let source = AgentExtensionPolicySource(desk: desk)
+
+        XCTAssertTrue(
+            source.hookResults(for: AgentToolInvocation(name: "read_file", argumentsJSON: "{}"), workspace: "ws").isEmpty)
+    }
+
+    /// 清单三档 → 判定三档（`note` 只是提示，不改判定）。
+    func testTightenLevelMapping() {
+        XCTAssertEqual(AgentExtensionPolicySource.level(.note), .allow)
+        XCTAssertEqual(AgentExtensionPolicySource.level(.requiresApproval), .requiresApproval)
+        XCTAssertEqual(AgentExtensionPolicySource.level(.deny), .deny)
+    }
+
+    /// 端到端：装一个声明「工具调用要审批」的插件 ⇒ 循环里那件工具真的不执行。
+    func testInstalledPluginActuallyStopsTheLoop() async {
+        var desk = AgentExtensionDesk()
+        desk.install(manifest(provides: ["read_file"],
+                              hooks: [.init(kind: .preToolUse, maxTighten: .requiresApproval)]))
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+        let loop = AgentLoop(client: client, dispatcher: dispatcher, sessionStore: store,
+                             policyHooks: AgentExtensionPolicySource(desk: desk))
+
+        let result = await loop.run(context: context)
+
+        XCTAssertEqual(dispatcher.invoked.count, 0, "插件声明的收紧档在真实调用点生效")
+        XCTAssertEqual(result.rejectedTools.map(\.reason), [AgentToolRefusal.approvalRequired.rawValue])
+    }
+}
+
+/// `FR-AGT-LINK-EXT-003` 的**真插件目录**判据：目录 ⇒ 台账。
+///
+/// 钉四件事：目录不存在不是错误 · 合法清单装得上且能力可调 · 坏清单逐条点名且不连坐别家 ·
+/// 装配结论与文件系统遍历顺序无关。
+final class AgentExtensionCatalogTests: XCTestCase {
+
+    private var root: URL!
+    private var plugins: URL!
+
+    override func setUpWithError() throws {
+        root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dsh-ext-catalog-\(UUID().uuidString)", isDirectory: true)
+        plugins = root.appendingPathComponent(AgentExtensionCatalog.folderName, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        if let root { try? FileManager.default.removeItem(at: root) }
+    }
+
+    private func writePlugin(_ directoryName: String, manifest: AgentExtensionManifest) throws -> URL {
+        let directory = plugins.appendingPathComponent(directoryName, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let data = try JSONEncoder().encode(manifest)
+        try data.write(to: directory.appendingPathComponent(AgentExtensionValidator.manifestFileName))
+        return directory
+    }
+
+    private func manifest(id: String, provides: [String] = ["sample_tool"],
+                          hooks: [AgentExtensionManifest.Hook] = []) -> AgentExtensionManifest {
+        AgentExtensionManifest(
+            id: id,
+            slot: AgentExtensionSlot.toolLibrary.manifestValue,
+            provides: provides,
+            permission: AgentExtensionManifest.Permission(readableDirectories: [], allowedCommands: []),
+            hooks: hooks)
+    }
+
+    /// 目录不存在 = 一个都没装（全新安装，不是错误，也不该报一句「读不出来」）。
+    func testMissingDirectoryIsNotAnError() {
+        let loaded = AgentExtensionCatalog.load(directory: plugins)
+
+        XCTAssertTrue(loaded.desk.installedIDs.isEmpty)
+        XCTAssertTrue(loaded.problems.isEmpty)
+    }
+
+    /// 合法清单 ⇒ 装上；装上的能力真的能调（台账不是一张摆设）。
+    func testValidManifestIsInstalledAndCallable() throws {
+        let directory = try writePlugin("ext.a", manifest: manifest(id: "ext.a"))
+
+        let loaded = AgentExtensionCatalog.load(directory: plugins)
+
+        XCTAssertEqual(loaded.desk.installedIDs, ["ext.a"])
+        XCTAssertTrue(loaded.problems.isEmpty)
+        XCTAssertEqual(loaded.desk.call(slot: .toolLibrary, capability: "sample_tool", pluginID: "ext.a"), .allowed)
+        XCTAssertEqual(loaded.desk.grant(for: "ext.a")?.ownedPaths, [directory.path],
+                       "插件目录登记为自有路径 —— 没有面板时这是卸载唯一的清理依据")
+    }
+
+    /// 坏 JSON 只点名它自己，别家照装。
+    func testBrokenManifestDoesNotBlockOthers() throws {
+        _ = try writePlugin("ext.good", manifest: manifest(id: "ext.good"))
+        let broken = plugins.appendingPathComponent("ext.broken", isDirectory: true)
+        try FileManager.default.createDirectory(at: broken, withIntermediateDirectories: true)
+        try Data("{ 这不是 JSON".utf8)
+            .write(to: broken.appendingPathComponent(AgentExtensionValidator.manifestFileName))
+
+        let loaded = AgentExtensionCatalog.load(directory: plugins)
+
+        XCTAssertEqual(loaded.desk.installedIDs, ["ext.good"])
+        XCTAssertEqual(loaded.problems.map(\.file), ["ext.broken/extension.json"])
+        XCTAssertEqual(loaded.problems.map(\.rejection), [.manifestUnreadable])
+    }
+
+    /// 缺权限块 ⇒ 具名拒绝（不是「装上了但什么都不能做」）。
+    func testManifestWithoutPermissionIsRejectedByName() throws {
+        let noPermission = AgentExtensionManifest(
+            id: "ext.noperm", slot: AgentExtensionSlot.toolLibrary.manifestValue,
+            provides: ["sample_tool"], permission: nil)
+        _ = try writePlugin("ext.noperm", manifest: noPermission)
+
+        let loaded = AgentExtensionCatalog.load(directory: plugins)
+
+        XCTAssertTrue(loaded.desk.installedIDs.isEmpty)
+        XCTAssertEqual(loaded.problems.map(\.rejection), [.permissionNotDeclared])
+    }
+
+    /// 没有清单的普通子目录直接跳过（既不算装上、也不算问题）。
+    func testDirectoryWithoutManifestIsSkipped() throws {
+        try FileManager.default.createDirectory(at: plugins.appendingPathComponent("just-a-folder"),
+                                                withIntermediateDirectories: true)
+
+        let loaded = AgentExtensionCatalog.load(directory: plugins)
+
+        XCTAssertTrue(loaded.desk.installedIDs.isEmpty)
+        XCTAssertTrue(loaded.problems.isEmpty)
+    }
+
+    /// 装配结论与遍历顺序无关（同一批插件，创建顺序反过来也得到同一份排序）。
+    func testInstallOrderIsDeterministic() throws {
+        _ = try writePlugin("ext.z", manifest: manifest(id: "ext.z"))
+        _ = try writePlugin("ext.a", manifest: manifest(id: "ext.a"))
+        _ = try writePlugin("ext.m", manifest: manifest(id: "ext.m"))
+
+        let first = AgentExtensionCatalog.load(directory: plugins).desk.installedIDs
+        let second = AgentExtensionCatalog.load(directory: plugins).desk.installedIDs
+
+        XCTAssertEqual(first, ["ext.a", "ext.m", "ext.z"])
+        XCTAssertEqual(first, second)
+    }
+}

@@ -582,3 +582,127 @@ public enum AgentPolicyCombiner {
         return AgentPolicyVerdict(decision: decision, traces: traces)
     }
 }
+
+// MARK: - 调用点（`FR-AGT-LINK-EXT-003` 的「调用点」那一半）
+
+/// 策略钩子的来源：**一处注入、循环每跳问一次**。
+///
+/// 为什么做成协议而不是把 `AgentExtensionDesk` 直接塞进循环：
+/// ① 循环在 `Core/`，它只该知道「问谁要钩子结论」这一件事，不该知道插件往哪儿装；
+/// ② 判据要在不装任何插件的前提下钉住「钩子只能收紧」—— 一个能返回任意结论的假来源就够；
+/// ③ 将来钩子改由 MCP 对端 / 外部进程给，换的是实现，不是循环。
+///
+/// **返回空数组 = 没有插件管这一跳**（不是「放行」）：放行由 `AgentPolicyCombiner` 的基线给。
+public protocol AgentPolicyHookSource: Sendable {
+    func hookResults(for invocation: AgentToolInvocation, workspace: String) -> [AgentPolicyHookResult]
+}
+
+/// 从已装插件台账里取钩子（真实来源）。
+///
+/// 三条口径：
+/// - **只管自己提供的能力**：`capabilities` 里没有这件工具 ⇒ 不出结论（不许越权管别人的工具）；
+/// - **只认 `preToolUse`**：`preModelCall` / `preCommand` 是另外两个挂点，别在工具调用处冒充；
+/// - **档位只从清单来**：`note` = 不收紧（`allow`），`requiresApproval` / `deny` 照搬 ——
+///   清单在装的时候已被 `AgentExtensionValidator` 判过「只能收紧」，运行期不再有放宽的入口。
+public struct AgentExtensionPolicySource: AgentPolicyHookSource {
+
+    private let grants: [AgentExtensionGrant]
+
+    public init(desk: AgentExtensionDesk) {
+        self.grants = desk.installedIDs.compactMap { desk.grant(for: $0) }
+    }
+
+    public init(grants: [AgentExtensionGrant]) {
+        self.grants = grants
+    }
+
+    public func hookResults(for invocation: AgentToolInvocation, workspace: String) -> [AgentPolicyHookResult] {
+        grants.flatMap { grant -> [AgentPolicyHookResult] in
+            guard grant.capabilities.contains(invocation.name) else { return [] }
+            return grant.manifest.hooks
+                .filter { $0.kind == .preToolUse }
+                .map { hook in
+                    AgentPolicyHookResult(
+                        hookID: "\(grant.manifest.id):\(hook.kind.rawValue)",
+                        level: Self.level(hook.maxTighten)
+                    )
+                }
+        }
+    }
+
+    /// 清单声明档 → 判定档。`note` 只是提示，不改变判定。
+    public static func level(_ tighten: AgentExtensionManifest.Hook.Tighten) -> AgentPolicyLevel {
+        switch tighten {
+        case .note: return .allow
+        case .requiresApproval: return .requiresApproval
+        case .deny: return .deny
+        }
+    }
+}
+
+// MARK: - 真插件目录（`FR-AGT-LINK-EXT-003` 的「接真插件目录」那一半）
+
+/// 目录里某一份清单没装上：**点名哪个文件 + 为什么**（不许静默跳过）。
+public struct AgentExtensionCatalogProblem: Equatable, Sendable {
+    /// 相对目录的清单路径（`ext.a/extension.json` 这种形状，便于人直接去看）
+    public let file: String
+    public let rejection: AgentExtensionRejection
+
+    public init(file: String, rejection: AgentExtensionRejection) {
+        self.file = file
+        self.rejection = rejection
+    }
+}
+
+/// 一次目录装配的结论：装上的台账 + 没装上的逐条原因。
+///
+/// 「装上了」在这里的语义 = **目录里放着**（用户把插件放进这个目录，就是他那一次安装动作）；
+/// 没有面板点「装」也成立 —— 面板只是这个动作的另一种入口，不是唯一的真值源。
+public struct AgentExtensionCatalogLoad: Sendable {
+    public let desk: AgentExtensionDesk
+    public let problems: [AgentExtensionCatalogProblem]
+
+    public init(desk: AgentExtensionDesk, problems: [AgentExtensionCatalogProblem]) {
+        self.desk = desk
+        self.problems = problems
+    }
+}
+
+public enum AgentExtensionCatalog {
+
+    /// 插件目录名（与宿主 `plugin.json` 那一套并列，落在本机数据目录下）。
+    public static let folderName = "Extensions"
+
+    /// 扫一遍目录。三条口径：
+    /// - **目录不存在 = 一个都没装**（全新安装，不是错误）；
+    /// - **一个子目录一份清单**（`<插件>/extension.json`），按目录名排序装配 ⇒ 结论与文件系统遍历顺序无关；
+    /// - **坏清单不打断别人**：逐条记进 `problems`，其余照装（一个写坏的清单不该让所有插件失效）。
+    public static func load(directory: URL, fileManager: FileManager = .default) -> AgentExtensionCatalogLoad {
+        var desk = AgentExtensionDesk()
+        var problems: [AgentExtensionCatalogProblem] = []
+
+        let names = (try? fileManager.contentsOfDirectory(atPath: directory.path)) ?? []
+        for name in names.sorted() {
+            let pluginDirectory = directory.appendingPathComponent(name, isDirectory: true)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: pluginDirectory.path, isDirectory: &isDirectory),
+                  isDirectory.boolValue else { continue }
+            let manifestURL = pluginDirectory.appendingPathComponent(AgentExtensionValidator.manifestFileName)
+            guard fileManager.fileExists(atPath: manifestURL.path) else { continue }
+
+            let relative = "\(name)/\(AgentExtensionValidator.manifestFileName)"
+            guard let data = try? Data(contentsOf: manifestURL) else {
+                problems.append(.init(file: relative, rejection: .manifestUnreadable))
+                continue
+            }
+            switch AgentExtensionValidator.decode(data) {
+            case .rejected(let rejection):
+                problems.append(.init(file: relative, rejection: rejection))
+            case .installable(let manifest):
+                // 卸载要能清掉「它自己那一份」：把插件目录登记为自有路径（面板不在时这是唯一的清理依据）。
+                desk.install(manifest, ownedPaths: [pluginDirectory.path])
+            }
+        }
+        return AgentExtensionCatalogLoad(desk: desk, problems: problems)
+    }
+}

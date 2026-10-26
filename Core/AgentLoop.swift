@@ -322,6 +322,12 @@ public struct AgentLoop: Sendable {
     /// 不给 = 旧行为**逐字不变**（既有判据一条都不必改）。
     public var completionVerifier: AgentCompletionVerifier?
 
+    /// **插件策略钩子的调用点**（`FR-AGT-LINK-EXT-003` ⑤）：给了就在**每次工具调用之前**问一次，
+    /// 结论只许往严重一侧走（`AgentPolicyCombiner` 合并）—— 放行 / 转待批 / 直接拒；
+    /// 每个被求值的钩子各留一条审计（失败的也在），界面照实看得到「是谁把它拦了」。
+    /// 不给（`nil`）= 旧行为**逐字不变**（既有判据一条都不必改）。
+    public var policyHooks: (any AgentPolicyHookSource)?
+
     /// **配额**（`NFR-AI-04`）：给了就在**每一跳发送之前**判定一次（次数 / 累计 token），
     /// 超限如实停并给出配额自己那句可读原因 —— 此前对话这条路上根本没接配额
     /// （`AgentQuota` 只接在自然语言生成 SQL 那条路上）⇒ 长跑时会把配额悄悄烧掉。
@@ -345,6 +351,7 @@ public struct AgentLoop: Sendable {
                 checkpointEvery: Int = 5,
                 compressionBudget: AgentContextCompressionBudget? = nil,
                 completionVerifier: AgentCompletionVerifier? = nil,
+                policyHooks: (any AgentPolicyHookSource)? = nil,
                 quota: AgentQuota? = nil,
                 quotaLedger: AgentQuotaLedger = .empty,
                 monitor: AgentRunMonitor? = nil,
@@ -360,6 +367,7 @@ public struct AgentLoop: Sendable {
         self.checkpointEvery = checkpointEvery
         self.compressionBudget = compressionBudget
         self.completionVerifier = completionVerifier
+        self.policyHooks = policyHooks
         self.quota = quota
         self.quotaLedger = quotaLedger
         self.monitor = monitor
@@ -776,6 +784,49 @@ public struct AgentLoop: Sendable {
                 // 始终可被 `MainActor.run` 取用，而**同步契约照旧**（不动 Core 协议、不动既有工具单测）。
                 // 循环自身不碰 UI 状态；观察者与审计都是 async 接口（各自回自己的 actor），与本次改动无关。
                 // **计时**：过程行要如实报这一步花了多久（Hermes 每步后面那个 `0.3s`）。
+                // **插件策略钩子**（`FR-AGT-LINK-EXT-003` ⑤）：分发之前先问一次。
+                // 只许收紧 —— 钩子说放行也抬不动后面的「要审批」，钩子自己挂了 ⇒ 直接拒
+                // （fail-closed，不是「忽略它、按别路的结论走」）。
+                // 每个被求值的钩子都留一条审计（失败的也在）：要能回答「是谁把它拦了」。
+                if let policyHooks {
+                    let hooks = policyHooks.hookResults(for: invocation, workspace: context.workspace)
+                    if !hooks.isEmpty {
+                        let verdict = AgentPolicyCombiner.evaluate(base: .allow, hooks: hooks)
+                        let traceDetail = verdict.traces
+                            .map { "\($0.hookID):level=\($0.level.rawValue):failed=\($0.failed)" }
+                            .joined(separator: ",")
+                        let traceOutcome: AgentActionRecord.Outcome
+                        switch verdict.decision {
+                        case .deny: traceOutcome = .denied
+                        case .requiresApproval: traceOutcome = .pendingApproval
+                        case .allow: traceOutcome = .executed
+                        }
+                        await audit?.record(AgentActionRecord.makeToolCall(
+                            toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                            outcome: traceOutcome, detail: "policy:\(traceDetail)",
+                            sessionID: context.sessionID, hopIndex: steps - 1,
+                            chainID: context.chainID, at: startedAt))
+                        if verdict.decision != .allow {
+                            let reason = verdict.decision == .deny
+                                ? AgentToolRefusal.deniedByPolicy.rawValue
+                                : AgentToolRefusal.approvalRequired.rawValue
+                            rejected.append((invocation.name, reason))
+                            observations.append("\(invocation.name): \(reason)/\(traceDetail)")
+                            await observer?.observe(.toolStarted(name: invocation.name,
+                                                                 summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
+                            await observer?.observe(.toolFinished(
+                                name: invocation.name,
+                                outcome: verdict.decision == .deny ? "denied" : "pendingApproval",
+                                millis: nil))
+                            recordTurn(context: context,
+                                       kind: verdict.decision == .deny ? .tool : .approval,
+                                       role: "system",
+                                       text: "\(invocation.name) => \(reason)/\(traceDetail)",
+                                       at: startedAt)
+                            continue
+                        }
+                    }
+                }
                 let toolStartedAt = Date()
                 let outcome = await Task.detached(priority: .userInitiated) {
                     dispatcher.dispatch(invocation, approvals: approvals)

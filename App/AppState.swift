@@ -3208,6 +3208,12 @@ final class AppState: ObservableObject {
                                                 // `FR-AI-21`：远端工具走同一条分发（名字原样、结果原样回灌）。
                                                 mcp: mcpReady.bridge,
                                                 guardPolicy: agentGuardPolicy)
+        // 插件目录**先建出来**：用户要往里放东西，得先看得见这个位置（不存在就建，失败也不拦本轮）。
+        let extensionDirectory = AgentSessionStore.defaultDirectory
+            .appendingPathComponent(AgentExtensionCatalog.folderName, isDirectory: true)
+        try? FileManager.default.createDirectory(at: extensionDirectory, withIntermediateDirectories: true)
+        let extensionLoad = AgentExtensionCatalog.load(directory: extensionDirectory)
+        agentExtensionProblems = extensionLoad.problems
         let loop = AgentLoop(client: OpenAICompatibleStreamingClient(),
                              dispatcher: dispatcher,
                              registry: whitelisted.registry,
@@ -3231,6 +3237,11 @@ final class AppState: ObservableObject {
                              // `FR-AI-31` ② 完成判据：模型说「完成」时按**当次工具证据 + 盘上现状**复核，
                              // 拿不出就如实说「未验证」。复核要读盘 ⇒ 给它工作区根（相对路径都相对它）。
                              completionVerifier: AgentCompletionVerifier(workspaceRoot: workspaceRoot),
+                             // `FR-AGT-LINK-EXT-003` ⑤ 调用点：插件目录里声明的策略钩子
+                             // 在**每次工具调用之前**求值，只能往严重一侧走（转待批 / 直接拒）。
+                             // 目录里没有插件 ⇒ 没有钩子 ⇒ 与旧行为逐字一致；清单写坏的那几份
+                             // 不参与判定，但会在面板上逐条点名（`agentExtensionProblems`）。
+                             policyHooks: AgentExtensionPolicySource(desk: extensionLoad.desk),
                              // `NFR-AI-04` 配额：**对话这条路上此前根本没接**（`AgentQuota` 只接在
                              // 自然语言生成 SQL 那条路上）⇒ 长跑时会把配额悄悄烧掉。现在每跳发送前判定，
                              // 账本由 `AppState.agentQuotaLedger` 跨轮累计（跑完回写，见 `finish`）。
@@ -4078,6 +4089,9 @@ final class AppState: ObservableObject {
     private var agentRuntimeConfigLoaded = false
     /// 白名单里写了但注册表里没有的工具名（面板照实点名 —— 用户写错一个字要看得见）。
     @Published private(set) var agentToolWhitelistUnknown: [String] = []
+    /// 插件目录里没装上的清单（`FR-AGT-LINK-EXT-003`：逐条点名「哪个文件 + 为什么」，
+    /// 不是静默跳过 —— 用户把插件丢进目录后没生效，得能看见原因）。
+    @Published private(set) var agentExtensionProblems: [AgentExtensionCatalogProblem] = []
 
     /// 读一次盘（幂等；面板打开、建循环前都会调）。
     func loadAgentRuntimeConfigIfNeeded() {
