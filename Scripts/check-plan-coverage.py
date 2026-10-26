@@ -20,9 +20,12 @@ from __future__ import annotations
 import pathlib
 import re
 import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import doc_index  # noqa: E402  （派生件位置：.build/derived；缺文件先重生成）
+
 
 SRS = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
-INDEX = pathlib.Path("Docs/Doyah产品需求规格说明书-需求索引.md")
+INDEX = doc_index.path()
 PLAN = pathlib.Path("Docs/Doyah产品开发计划任务清单.md")
 MARKS = ("⬜", "🟡", "✅", "➖")
 

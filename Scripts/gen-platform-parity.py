@@ -39,11 +39,14 @@ import re
 import shutil
 import subprocess
 import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import doc_index  # noqa: E402  （派生件位置：.build/derived；缺文件先重生成）
+
 import tempfile
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
 SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
-INDEX = pathlib.Path("Docs/Doyah产品需求规格说明书-需求索引.md")
+INDEX = doc_index.path()
 # 2026-10-20：状态矩阵（原 §10.10）迁到《开发计划书》§5 —— 读仍从 SRS 取（索引与摘要），
 # 写改到计划书；否则本脚本会在 SRS 里找不到标记而报错。
 PLAN = ROOT / "Docs/Doyah产品开发计划任务清单.md"

@@ -40,9 +40,12 @@ import os
 import pathlib
 import re
 import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import doc_index  # noqa: E402  （派生件位置：.build/derived；缺文件先重生成）
+
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
-INDEX = ROOT / "Docs/Doyah产品需求规格说明书-需求索引.md"
+INDEX = doc_index.path()
 PLAN = ROOT / "Docs/Doyah产品开发计划任务清单.md"
 TRACE = ROOT / "Docs/Doyah产品需求规格说明书-追溯表.md"
 STATUS = ROOT / "Docs/平台实现状态.json"

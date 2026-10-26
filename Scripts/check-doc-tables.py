@@ -106,7 +106,6 @@ DEFAULT_TARGETS = [
     "Docs/Doyah产品需求规格说明书-变更记录.md",
     "Docs/Doyah产品能力规划说明书-变更记录.md",
     "Docs/Doyah产品概要设计说明书-变更记录.md",
-    "Docs/Doyah产品需求规格说明书-需求索引.md",
     "Docs/Doyah产品需求规格说明书-追溯表.md",
     "Docs/Doyah产品开发计划任务清单.md",
     "Docs/README.md",
@@ -568,8 +567,10 @@ def check_section_heading_counts() -> list[str]:
 
 def check_requirement_counts() -> list[str]:
     """校验需求计数与索引实际行数一致（防止"手工维护的数字"再次漂移）。"""
-    # 2026-10-20：编号索引从正文附录移出成独立文件（机械派生件）⇒ 计数行与索引表都读那份。
-    srs = pathlib.Path("Docs/Doyah产品需求规格说明书-需求索引.md")
+    # 2026-10-26：索引改为 `Scripts/gen-req-index.py` 生成的派生件（`.build/derived/`），不进 Docs 根。
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    import doc_index  # noqa: E402
+    srs = doc_index.path()
     capability = pathlib.Path("Docs/Doyah产品能力规划说明书.md")
     if not srs.exists():
         return [f"{srs}: 文件不存在"]
@@ -884,7 +885,6 @@ SELF_TEST_TRACKED = [
     "Docs/任务清单-按平台.md",
     "Docs/智能体助手-核心能力扩展-草案-v0.1.md",
     "Docs/Doyah产品需求规格说明书-变更记录.md",
-    "Docs/Doyah产品需求规格说明书-需求索引.md",
     # 2026-10-26 补：v1.0 冻结副本四份 + 里程碑任务清单已入 DEFAULT_TARGETS 并入库（此前漏登记，
     # doc-numbers 的「跟踪文档集合」因此报 62 vs 57）。
     "Docs/frozen/Doyah产品能力规划说明书-v1.0-20261025.md",
@@ -1159,14 +1159,15 @@ def run_self_test() -> int:
                 )
         cont.unlink()
 
-        # 例 14（㈤(a)）·索引表体中断：首条数据行行首多一个空格 ⇒ 判红 + 报行号 + 「表体在此中断」
-        # 2026-10-20：索引已从需求书正文 §10.1 外置成 `Docs/Doyah产品需求规格说明书-需求索引.md`
-        # （状态列整批迁走后只剩「编号 / 所属域 / 层次」三列），夹具跟着改锚点。
+        # 例 14（㈤(a)）·表体中断：首条数据行行首多一个空格 ⇒ 判红 + 报行号 + 「表体在此中断」
+        # 2026-10-26：索引已离开 `Docs/`（派生件落 `.build/derived/`）⇒ 夹具改用能力书里第一张表。
         total += 1
-        idx_copy = clone / "Docs/Doyah产品需求规格说明书-需求索引.md"
+        idx_copy = clone / "Docs/Doyah产品能力规划说明书.md"
         original_idx = idx_copy.read_text(encoding="utf-8")
         idx_lines = original_idx.splitlines()
-        header_at = idx_lines.index("| 编号 | 所属域 / 章节 | 层次 |")
+        sep_at = next(i for i, line in enumerate(idx_lines)
+                      if line.startswith("|---") or line.startswith("| ---"))
+        header_at = sep_at - 1
         idx_lines[header_at + 2] = " " + idx_lines[header_at + 2]
         idx_copy.write_text("\n".join(idx_lines) + "\n", encoding="utf-8")
         code, output = run([], clone)

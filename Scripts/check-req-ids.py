@@ -14,6 +14,10 @@
 用法：check-req-ids.py [--srs 需求书.md] [--index 索引.md] [--plan 计划书.md] [--list]
 """
 import argparse, re, sys, pathlib, collections
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import doc_index  # noqa: E402  （派生件位置：.build/derived；缺文件先重生成）
 
 ID = re.compile(r"(?:FR|NFR|AC)-(?:[A-Z0-9]{2,8}-){1,3}\d{2,3}")
 DEF_CH = {"3", "4", "7"}
@@ -56,7 +60,7 @@ def plan_rows(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--srs", default="Docs/Doyah产品需求规格说明书.md")
-    ap.add_argument("--index", default="Docs/Doyah产品需求规格说明书-需求索引.md")
+    ap.add_argument("--index", default=str(doc_index.path()))
     ap.add_argument("--plan", default="Docs/Doyah产品开发计划任务清单.md")
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()

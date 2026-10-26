@@ -50,6 +50,9 @@ import re
 import shutil
 import subprocess
 import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import doc_index  # noqa: E402  （派生件位置：.build/derived；缺文件先重生成）
+
 import tempfile
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
@@ -709,7 +712,7 @@ def build_cases() -> list[dict]:
 
 def self_test() -> int:
     needed = [SRS, BOARD, ROOT / "Docs/平台实现状态.json",
-              ROOT / "Docs/Doyah产品需求规格说明书-需求索引.md",
+              doc_index.path(),
               ROOT / "Docs/Doyah产品开发计划任务清单.md"]
     absent = [str(path) for path in needed if not path.exists()]
     if absent:

@@ -17,7 +17,10 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
 CAP = ROOT / "Docs/Doyah产品能力规划说明书.md"
-OUT = ROOT / "Docs/requirement-index.jsonl"
+OUT = ROOT / ".build/derived/requirement-index.jsonl"
+# 人读那份总账（| 编号 | 所属域 / 章节 | 层次 |）也在这里生成 —— 2026-10-26 起不进 `Docs/` 根：
+# 人类主人只认「四书一单」，索引是派生件（由需求书正文重生成），落构建产物目录。
+INDEX_MD = ROOT / ".build/derived/需求索引.md"
 ID = re.compile(r"^(FR|NFR|AC)-[A-Z]{2,6}-[A-Z]{2,6}-[A-Z]{2,8}-\d{2,3}$")
 
 
@@ -108,6 +111,32 @@ def build():
     return records, skipped
 
 
+def render_index(records) -> str:
+    """把记录渲染成人读索引（列：编号 / 所属域·章节 / 层次）。"""
+    # 总账口径（与需求书 §1.5 一致）：数据需求 `§5` 与接口需求 `§6` **不进总账** ——
+    # 它们是设计层约束，家在概要设计。jsonl 保留以便门禁对正文，人读索引按此过滤。
+    design_layer = ("-ALL-DATA-", "-ALL-IFACE-")
+    rows = sorted((r for r in records if not any(k in r["id"] for k in design_layer)),
+                  key=lambda r: (r["section"], r["id"]))
+    fr = sum(1 for r in rows if r["id"].startswith("FR-"))
+    nfr = sum(1 for r in rows if r["id"].startswith("NFR-"))
+    ac = sum(1 for r in rows if r["id"].startswith("AC-"))
+    head = [
+        "# 需求编号索引（派生件 · 请勿手改）",
+        "",
+        "> 由 `Scripts/gen-req-index.py` 从《Doyah产品需求规格说明书》正文重生成，落在 `.build/derived/`，不进版本库。",
+        "> 收录范围与需求书 §1.5 一致：`FR` / `NFR` / `AC` 三类；数据需求（`§5`）与接口需求（`§6`）不在总账，",
+        "> 它们的家是概要设计。",
+        "",
+        f"共 **{len(rows)}** 条（FR {fr} · NFR {nfr} · AC {ac}）。",
+        "",
+        "| 编号 | 所属域 / 章节 | 层次 |",
+        "| --- | --- | --- |",
+    ]
+    body = [f"| {r['id']} | {r['section']} | {r['level'] or '—'} |" for r in rows]
+    return "\n".join(head + body) + "\n"
+
+
 def main():
     records, skipped = build()
     payload = "\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n"
@@ -124,8 +153,10 @@ def main():
             return 1
         print(f"✓ requirement-index.jsonl 与正文一致（{len(records)} 条{note}）")
         return 0
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(payload, encoding="utf-8")
-    print(f"✓ 已生成 {OUT.relative_to(ROOT)}：{len(records)} 条{note}")
+    INDEX_MD.write_text(render_index(records), encoding="utf-8")
+    print(f"✓ 已生成 {OUT.relative_to(ROOT)} 与 {INDEX_MD.relative_to(ROOT)}：{len(records)} 条{note}")
     return 0
 
 
