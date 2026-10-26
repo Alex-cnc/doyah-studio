@@ -11,19 +11,23 @@ import Foundation
 /// ⑤ 未知命令**不猜**：返回 `.unknown`，附可用命令清单。
 public enum AgentSlashCommandKind: String, Equatable, Sendable, CaseIterable {
     case help, model, clear, compact, search, theme, stop
+    /// 对**正在跑的这一轮**插话纠偏（`FR-AGT-UX-CONV-007` 的斜杠入口）。
+    case steer
+    /// 把一句话排到**本轮结束之后**再发（不打断当前回合，也不丢）。
+    case queue
 
     /// 会改持久配置、必须走审批的命令。
     public var mutatesConfiguration: Bool {
         switch self {
         case .model, .theme: return true
-        case .help, .clear, .compact, .search, .stop: return false
+        case .help, .clear, .compact, .search, .stop, .steer, .queue: return false
         }
     }
 
     /// 是否需要参数（缺参数如实报，不拿默认值顶）。
     public var requiresArgument: Bool {
         switch self {
-        case .model, .search, .theme: return true
+        case .model, .search, .theme, .steer, .queue: return true
         case .help, .clear, .compact, .stop: return false
         }
     }
@@ -99,6 +103,8 @@ public struct AgentSlashCommandParser: Sendable {
             "/sessions <关键词> —— 检索历史会话",
             "/theme <浅色|深色|跟随系统> —— 切外观（改配置，走审批）",
             "/stop —— 中断当前这一跑",
+            "/steer <指令> —— 给正在跑的这一轮插话纠偏（当前步做完生效）",
+            "/queue <内容> —— 把这条排到本轮结束后再发（不打断、不丢）",
         ]
     }
 }

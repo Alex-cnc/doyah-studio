@@ -39,7 +39,7 @@ public struct AgentSlashCompleter: Sendable {
     /// 名字一律取自 `AgentSlashCommandKind.rawValue`，**不在这里写字面量** ——
     /// 工具名与命令名的字面量只许出现在注册表那一个文件里（`AgentToolRegistrySourceTests` 按源码扫）。
     static let catalogue: [(kind: AgentSlashCommandKind, name: String)] = {
-        let order: [AgentSlashCommandKind] = [.help, .model, .clear, .compact, .search, .theme, .stop]
+        let order: [AgentSlashCommandKind] = [.help, .model, .clear, .compact, .search, .steer, .queue, .theme, .stop]
         var entries: [(kind: AgentSlashCommandKind, name: String)] = order.map { ($0, $0.rawValue) }
         // 别名 `/sessions`（与 search 同指），紧跟正主后面。
         entries.insert((kind: .search, name: "sessions"), at: 5)
@@ -86,6 +86,10 @@ public struct AgentSlashCompleter: Sendable {
         case (.search, .english): return "Search session history (needs a keyword)"
         case (.theme, .simplifiedChinese): return "切换配色（改配置，走审批）"
         case (.theme, .english): return "Switch theme (config change, needs approval)"
+        case (.steer, .simplifiedChinese): return "给正在跑的这一轮插话纠偏"
+        case (.steer, .english): return "Steer the running turn"
+        case (.queue, .simplifiedChinese): return "排到本轮结束后再发（不打断）"
+        case (.queue, .english): return "Queue for after this turn"
         case (.stop, .simplifiedChinese): return "停止正在跑的一轮"
         case (.stop, .english): return "Stop the running turn"
         @unknown default: return kind.rawValue

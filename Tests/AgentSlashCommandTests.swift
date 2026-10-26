@@ -47,7 +47,7 @@ final class AgentSlashCommandTests: XCTestCase {
         XCTAssertTrue(AgentSlashCommandKind.theme.mutatesConfiguration)
         XCTAssertFalse(AgentSlashCommandKind.help.mutatesConfiguration)
         XCTAssertFalse(AgentSlashCommandKind.stop.mutatesConfiguration)
-        XCTAssertEqual(AgentSlashCommandKind.allCases.count, 7)
+        XCTAssertEqual(AgentSlashCommandKind.allCases.count, 9)
     }
 
     func testAllSevenDocumentedCommandsExist() {

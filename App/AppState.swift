@@ -3215,6 +3215,10 @@ final class AppState: ObservableObject {
                              sessionStore: AgentSessionStore(directory: AgentSessionStore.defaultDirectory),
                              audit: AgentAuditLog.shared,
                              observer: observer,
+                             // `FR-AGT-UX-CONV-007` 中途干预：给循环一个**干预信箱** ——
+                             // 斜杠 `/steer` 往这里塞 `redirect`，循环在每跳边界取（当前步做完生效，
+                             // 不清空已产生的中间结果）。此前只有 Core 有信箱、宿主没接 ⇒ `/steer` 无处可插。
+                             interventionInbox: AgentInterventionInbox(),
                              // `NFR-AI-08` ⑤ 检查点：**这一条此前只有存储半、宿主没接** —— 现在接上。
                              // 落点键由 `AgentTurnPlanner` 按「哪一轮提问」给（见 `context.checkpointScopeID`），
                              // 所以同一个会话里换一个提问就不会接上一个问题的检查点。
@@ -3779,7 +3783,7 @@ final class AppState: ObservableObject {
             guard let preference = AgentSlashThemeArgument.preference(from: argument) else { return false }
             appearanceMode = preference
             return true
-        case .model, .help, .clear, .compact, .search, .stop:
+        case .model, .help, .clear, .compact, .search, .stop, .steer, .queue:
             return false
         }
     }

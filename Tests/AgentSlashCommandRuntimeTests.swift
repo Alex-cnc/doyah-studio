@@ -24,11 +24,13 @@ final class AgentSlashCommandRuntimeTests: XCTestCase {
             ("/stop", .stopRun),
             ("/model gpt-4o", .configChange(kind: .model, argument: "gpt-4o")),
             ("/theme 深色", .configChange(kind: .theme, argument: "深色")),
+            ("/steer 换个思路", .steerRun(instruction: "换个思路")),
+            ("/queue 下一件事", .queuePrompt(text: "下一件事")),
         ]
         for (raw, want) in expected {
             XCTAssertEqual(runtime.plan(raw), want, "\(raw) 的落地形状不对")
         }
-        // 七条**全部**有形状（没有一条落空 ⇒ 不会有人把它当人话发给模型）
+        // 九条**全部**有形状（没有一条落空 ⇒ 不会有人把它当人话发给模型）
         XCTAssertEqual(expected.count, AgentSlashCommandKind.allCases.count)
     }
 

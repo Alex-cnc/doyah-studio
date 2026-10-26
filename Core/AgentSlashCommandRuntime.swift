@@ -22,6 +22,10 @@ public enum AgentSlashCommandEffect: Equatable, Sendable {
     case searchSessions(query: String)
     /// 中断当前这一跑（没有在跑也算数：如实说「没在跑」，不假装停过）。
     case stopRun
+    /// 给**正在跑的这一轮**插话纠偏（落到 `AgentIntervention.redirect`，当前步做完生效）。
+    case steerRun(instruction: String)
+    /// 把这条内容排到**本轮结束之后**再发（入的是待发队列，不是立刻发）。
+    case queuePrompt(text: String)
     /// 改持久配置：**只出单**，落地归审批通过之后的调用方。
     case configChange(kind: AgentSlashCommandKind, argument: String)
     /// 不认识 / 缺参数：如实拒收（带原命令，界面据此说清是哪一条）。
@@ -36,6 +40,10 @@ public enum AgentSlashCommandEffect: Equatable, Sendable {
         case let .searchSessions(query):
             return AgentSlashCommand.parsed(kind: .search, argument: query).auditLine
         case .stopRun: return AgentSlashCommand.parsed(kind: .stop, argument: "").auditLine
+        case let .steerRun(instruction):
+            return AgentSlashCommand.parsed(kind: .steer, argument: instruction).auditLine
+        case let .queuePrompt(text):
+            return AgentSlashCommand.parsed(kind: .queue, argument: text).auditLine
         case let .configChange(kind, argument):
             return AgentSlashCommand.parsed(kind: kind, argument: argument).auditLine
         case let .rejected(command): return command.auditLine
@@ -51,7 +59,7 @@ public enum AgentSlashCommandEffect: Equatable, Sendable {
     /// 有没有真的做成一件本地事（拒收与「等审批」都不算）。
     public var performedLocally: Bool {
         switch self {
-        case .help, .clearContext, .compactContext, .searchSessions, .stopRun: return true
+        case .help, .clearContext, .compactContext, .searchSessions, .stopRun, .steerRun, .queuePrompt: return true
         case .configChange, .rejected: return false
         }
     }
@@ -94,6 +102,8 @@ public struct AgentSlashCommandRuntime: Sendable {
             case .compact: return .compactContext
             case .search: return .searchSessions(query: argument)
             case .stop: return .stopRun
+            case .steer: return .steerRun(instruction: argument)
+            case .queue: return .queuePrompt(text: argument)
             // 兜底：`mutatesConfiguration` 与这里必须覆盖同一组命令。
             // 走到这里说明登记表被改了 —— 按「改配置」处理（宁可多问一句，不可静默落地）。
             case .model, .theme: return .configChange(kind: kind, argument: argument)

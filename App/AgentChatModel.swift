@@ -123,6 +123,13 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     }
 
 
+    /// 正在跑的那一个循环（`/steer` 要把话插进它的干预信箱；没在跑就是 `nil`）。
+    private var runningLoop: AgentLoop?
+    /// 当前进行到第几跳（observer 的 `hopStarted` 给数）—— `/steer` 用它算「当前步做完生效」。
+    private var currentHop = 0
+    /// `/queue` 排下的内容：本轮结束后按序发出，不打断当前回合。
+    private var queuedPrompts: [String] = []
+
     /// 斜杠命令的「解析 → 要做什么」纯函数（`FR-AGT-UX-CONV-014`）。
     private let slashRuntime = AgentSlashCommandRuntime()
     /// 一条待批的配置变更（`/model` `/theme`）。`nil` = 没有在等审批的单。
@@ -402,6 +409,24 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
                 state.appendNotice(L(.agentSlashStopNotRunning))
                 await writeSlashAudit(effect, outcome: .denied, detail: "notRunning")
             }
+
+        case let .steerRun(instruction):
+            // 插话落在**干预信箱**上（`AgentIntervention.redirect`）：当前步做完生效，
+            // 不清空已产生的中间结果。没在跑就如实说「无处可插」，不留一条假审计。
+            if let loop = runningLoop, let inbox = loop.interventionInbox {
+                inbox.enqueue(.redirect(instruction: instruction), duringStep: currentHop)
+                state.appendNotice("已插话：当前这一步做完后按新指令走")
+                await writeSlashAudit(effect, outcome: .executed, detail: "step=\(currentHop)")
+            } else {
+                state.appendNotice("现在没有在跑的一轮，插话无处可去（要开新话题直接发消息）")
+                await writeSlashAudit(effect, outcome: .denied, detail: "notRunning")
+            }
+
+        case let .queuePrompt(text):
+            // 排队：**不打断本轮**，本轮结束后按序发出。
+            queuedPrompts.append(text)
+            state.appendNotice("已排队（第 \(queuedPrompts.count) 条）：本轮结束后依次发出")
+            await writeSlashAudit(effect, outcome: .executed, detail: "queued=\(queuedPrompts.count)")
 
         case let .configChange(kind, argument):
             // 出单（待批），**不落地**。审计那一行随单一起写（`pendingApproval`）——
@@ -801,6 +826,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         lastPrompt = prompt
         let started = Date()
         task = Task { [weak self] in
+            runningLoop = prepared.loop
+            defer { runningLoop = nil }
             let result = await prepared.loop.run(context: prepared.context,
                                                  requestedStep: plan.requestedStep,
                                                  isCancelled: { [cancellation] in cancellation.isSet })
@@ -939,6 +966,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     // MARK: - 循环进度
 
     func observe(_ event: AgentLoopEvent) async {
+        if case let .hopStarted(index) = event { currentHop = index }
         state.apply(event)
         // **代签那一档（`FR-AI-34`）建单即已批** ⇒ 观测口立刻兑现。
         // `observe` 在循环里是 `await` 的 ⇒ 这次写盘落在**下一跳之前**，
@@ -975,6 +1003,17 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             state.setEndpoint(.unreachable(reason))
         case .stopped:
             break   // 停止那一档：循环已经发过 `stopped` 事件，这里不重复报。
+        }
+
+        // `/queue`：本轮收尾后按序发下一条（不打断、不丢；发完队列清空）。
+        if !queuedPrompts.isEmpty {
+            let next = queuedPrompts.removeFirst()
+            state.appendNotice("队列里的下一条已发出（还剩 \(queuedPrompts.count) 条）")
+            // `finish` 不是 async（它在状态收尾里）⇒ 起一个任务去发下一条，不在这里阻塞收尾。
+            Task { @MainActor [weak self] in
+                await self?.start(prompt: next, intent: .newQuestion)
+            }
+            return
         }
 
         // **主动通知**（`FR-AGT-UX-CONV-008`）：长任务做完 / 出错 / 要人决定才叫人。

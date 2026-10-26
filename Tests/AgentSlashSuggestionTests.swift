@@ -10,8 +10,9 @@ final class AgentSlashSuggestionTests: XCTestCase {
 
     // 只敲了 `/` ⇒ 全清单，按固定顺序（help 打头、stop 收尾）
     func testBareSlashListsWholeCatalogueInFixedOrder() {
-        let got = completer.suggestions(for: "/")
-        XCTAssertEqual(got.map(\.name), ["help", "model", "clear", "compact", "search", "sessions", "theme", "stop"])
+        let got = completer.suggestions(for: "/", limit: 20)
+        XCTAssertEqual(got.map(\.name), ["help", "model", "clear", "compact", "search", "sessions",
+                                          "steer", "queue", "theme", "stop"])
     }
 
     // 前缀匹配
@@ -61,7 +62,7 @@ final class AgentSlashSuggestionTests: XCTestCase {
     func testInsertionText() {
         XCTAssertEqual(completer.suggestions(for: "/mo").first?.insertion, "/model ")
         XCTAssertEqual(completer.suggestions(for: "/he").first?.insertion, "/help")
-        XCTAssertEqual(completer.suggestions(for: "/st").first?.insertion, "/stop")
+        XCTAssertEqual(completer.suggestions(for: "/sto").first?.insertion, "/stop")
     }
 
     // 上限生效，且顺序仍是固定顺序
