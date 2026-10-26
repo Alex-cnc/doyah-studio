@@ -1,6 +1,6 @@
 # Doyah 产品开发计划书 · macOS 端
 
-> **版本** v0.9（2026-10-26 P1-7~P1-11 / P2 / P3 / P4 落地：90 例新判据，Core 面全绿）
+> **版本** v0.10（2026-10-26 P1-7~P1-11 / P2 / P3 / P4 落地：90 例新判据，Core 面全绿）
 
 > **口径登记（2026-10-25 人类主人令）**：① 四条共性能力（工程与工具链 / 授权与版本 / 插件装配 / 命令行出口）**归属 Studio 面**，按《能力规划说明书》§4.1.35 / 4.1.38 / 4.1.39 / 4.2.35 计，需求书 §3.1 只作归档位置（两书不计双份）；② `Docs/requirement-index.jsonl` 口径与《需求索引》一致 = **438 条**（FR 379 · NFR 47 · AC 12）；§5 数据需求与 §6 接口需求的 15 条**按书里原文不入总账**（它们属设计层，家在两份设计书），连同 §8.1 风险 55 / §8.2 待决 4 / 模型字段表等，共 76 条带编号但非总账的行由生成器逐类报数。
 
@@ -60,67 +60,67 @@
 
 | # | FR | 内容 | 估时 | 判据 | 依赖 |
 |---|---|---|---|---|---|
-| P1-1 ✅ | AGT-CORE-SESS-001 | 会话持久化：关掉应用再开，能接着上次对话与进度 —— **已落地**（`Core/AgentTurnResumeStore.swift`，实测 **35 分钟**） | 40 | `AgentTurnResumeStoreTests` **9/9**：写读一致 / 身份不符当没有 / 坏文件不冒充 / 没跑过=absent / 覆盖不追加 / 清掉不残留 | 无 |
-| P1-2 ✅ | AGT-CORE-LOOP-009 | 单次任务预算：150 步 / 256K token，超限即停并留审计 —— **已落地**（`Core/AgentBudgetReport.swift`，实测 **15 分钟**） | 30 | `AgentBudgetReportTests` **7/7**：默认值就是 150/262,144（20 万旧口径判红）/ 触顶报「停在哪做完哪些」（跳数·完成·被拒·令牌）/ 续跑含进来前已花 / 千分位与 plainLine 双形态 / 完成·取消·配额三种停**不产出**预算报告 | 无 |
-| P1-3 ✅ | AGT-CORE-LOOP-008 | 队列：可查看排队、调序、取消未开始项 —— **已落地**（`AgentPromptQueue.moving(id:offset:)` + 排队行 ↑↓✕，实测 **20 分钟**） | 45 | `AgentPromptQueueTests` **11/11**：FIFO / 空串不入队 / 按 id 上移不动邻居 / 首末行夹紧不吞条目 / 未知 id 原样返回 / **取消后不出队、剩余仍 FIFO** | 无 |
-| P1-4 ✅ | AGT-PLAN-PLAN-005 | 完成判据：报完成必须附可检验判据 —— **已落地**（核查结论：`AgentCompletionVerifier` + `EVIDENCE:` 解析 + 界面判红早在仓里，16 例判据全绿；台账此前记 ⬜ 是错的） | 25 | `AgentCompletionVerifierTests` **16/16**：无引用判 `unverified:noEvidence` / 引用本次没发生判红 / 盘上变了判红 / 命令退出码不符判红 / 纯答问判 `notClaimed` / 循环级两条端到端 | 无 |
-| P1-5 ✅ | AGT-PLAN-PLAN-006 | 失败自恢复：可重试先重试，不可重试换路并说明 —— **已落地**（`AgentLoopLimits.maxConsecutiveFailures`/`fallbackModels` + 循环换路与连续失败停，实测 **35 分钟**） | 30 | `AgentLoopRecoveryTests` **4/4**：不可重试换到备用模型并跑通 / 备用表不乒乓（每模型只试一次）/ 连续失败到顶即停且报次数 / 默认值不改旧行为；`AgentLoopRetryTests` 5 例仍绿 | 无 |
-| P1-6 ✅ | AGT-QUAL-VERIFY-001 | 结果自验：产出前自查（能跑跑一遍、能对对一遍）—— **已落地**（`Core/AgentSelfCheck.swift` + 循环最后一跳折表，实测 **40 分钟**） | 25 | `AgentSelfCheckTests` **9/9**：写+跑都过 / 写没复核判红 / 退出码非 0 判红 / 无退出码判红 / 复核推翻记录 / **动过东西零自验 ⇒ skipped** / 纯问答 nothingToCheck / 只读不进分母 / 机器码形状 | 无 |
-| P1-7 | AGT-UX-CONV-006 | 过程可见：每一步工具/文件/命令都在界面可见 | 15 | 每一步都出现一行；无静默步 | 转写区已有 |
-| P1-8 | AGT-UX-CONV-007 | 中途干预：插话改方向 / 停手 / 追加约束 | 20 | 插话在当前步之后生效，不丢已产生结果 | P1-3 |
-| P1-9 | AGT-KNOW-CTX-002 | 压缩只在会话边界：回合内只出预算报告、不改写上下文 —— **契约已立（详设 §3.21 v1.8），实现未跟** | 60 | `T-3.21-01~03` 全绿：回合内压缩计数 0；边界压缩后决策仍可答；压完仍超限如实报 | 详设 §3.21 · P1-2 |
-| P1-10 | AGT-CORE-LOOP-005 / -011 | 工具注册表唯一真源 + 可见性由 profile 决定（壳不分叉实现）—— **契约已立（详设 §3.22），实现未跟** | 90 | `T-3.22-01~03` 全绿：重复声明停装载；不可见 ≠ 不存在；同一工具两壳同 handler | 详设 §3.22 |
-| P1-11 | AGT-CORE-CTX-001 / OPS-OBS-001 | 引擎生命周期钩子：五钩子、`onSessionEnd` 只在真实边界、失败不中断会话 —— **契约已立（详设 §3.23），实现未跟** | 120 | `T-3.23-01~03` 全绿：真实结束恰好一次；钩子抛错会话继续；回合内调 end 被拒 | 详设 §3.23 · P1-9 |
+| P1-1 ✅ | FR-AGT-CORE-SESS-001 | 会话持久化：关掉应用再开，能接着上次对话与进度 —— **已落地**（`Core/AgentTurnResumeStore.swift`，实测 **35 分钟**） | 40 | `AgentTurnResumeStoreTests` **9/9**：写读一致 / 身份不符当没有 / 坏文件不冒充 / 没跑过=absent / 覆盖不追加 / 清掉不残留 | 无 |
+| P1-2 ✅ | FR-AGT-CORE-LOOP-009 | 单次任务预算：150 步 / 256K token，超限即停并留审计 —— **已落地**（`Core/AgentBudgetReport.swift`，实测 **15 分钟**） | 30 | `AgentBudgetReportTests` **7/7**：默认值就是 150/262,144（20 万旧口径判红）/ 触顶报「停在哪做完哪些」（跳数·完成·被拒·令牌）/ 续跑含进来前已花 / 千分位与 plainLine 双形态 / 完成·取消·配额三种停**不产出**预算报告 | 无 |
+| P1-3 ✅ | FR-AGT-CORE-LOOP-008 | 队列：可查看排队、调序、取消未开始项 —— **已落地**（`AgentPromptQueue.moving(id:offset:)` + 排队行 ↑↓✕，实测 **20 分钟**） | 45 | `AgentPromptQueueTests` **11/11**：FIFO / 空串不入队 / 按 id 上移不动邻居 / 首末行夹紧不吞条目 / 未知 id 原样返回 / **取消后不出队、剩余仍 FIFO** | 无 |
+| P1-4 ✅ | FR-AGT-PLAN-PLAN-005 | 完成判据：报完成必须附可检验判据 —— **已落地**（核查结论：`AgentCompletionVerifier` + `EVIDENCE:` 解析 + 界面判红早在仓里，16 例判据全绿；台账此前记 ⬜ 是错的） | 25 | `AgentCompletionVerifierTests` **16/16**：无引用判 `unverified:noEvidence` / 引用本次没发生判红 / 盘上变了判红 / 命令退出码不符判红 / 纯答问判 `notClaimed` / 循环级两条端到端 | 无 |
+| P1-5 ✅ | FR-AGT-PLAN-PLAN-006 | 失败自恢复：可重试先重试，不可重试换路并说明 —— **已落地**（`AgentLoopLimits.maxConsecutiveFailures`/`fallbackModels` + 循环换路与连续失败停，实测 **35 分钟**） | 30 | `AgentLoopRecoveryTests` **4/4**：不可重试换到备用模型并跑通 / 备用表不乒乓（每模型只试一次）/ 连续失败到顶即停且报次数 / 默认值不改旧行为；`AgentLoopRetryTests` 5 例仍绿 | 无 |
+| P1-6 ✅ | FR-AGT-QUAL-VERIFY-001 | 结果自验：产出前自查（能跑跑一遍、能对对一遍）—— **已落地**（`Core/AgentSelfCheck.swift` + 循环最后一跳折表，实测 **40 分钟**） | 25 | `AgentSelfCheckTests` **9/9**：写+跑都过 / 写没复核判红 / 退出码非 0 判红 / 无退出码判红 / 复核推翻记录 / **动过东西零自验 ⇒ skipped** / 纯问答 nothingToCheck / 只读不进分母 / 机器码形状 | 无 |
+| P1-7 | FR-AGT-UX-CONV-006 | 过程可见：每一步工具/文件/命令都在界面可见 | 15 | 每一步都出现一行；无静默步 | 转写区已有 |
+| P1-8 | FR-AGT-UX-CONV-007 | 中途干预：插话改方向 / 停手 / 追加约束 | 20 | 插话在当前步之后生效，不丢已产生结果 | P1-3 |
+| P1-9 | FR-AGT-KNOW-CTX-002 | 压缩只在会话边界：回合内只出预算报告、不改写上下文 —— **契约已立（详设 §3.21 v1.8），实现未跟** | 60 | `T-3.21-01~03` 全绿：回合内压缩计数 0；边界压缩后决策仍可答；压完仍超限如实报 | 详设 §3.21 · P1-2 |
+| P1-10 | FR-AGT-CORE-LOOP-005 / -011 | 工具注册表唯一真源 + 可见性由 profile 决定（壳不分叉实现）—— **契约已立（详设 §3.22），实现未跟** | 90 | `T-3.22-01~03` 全绿：重复声明停装载；不可见 ≠ 不存在；同一工具两壳同 handler | 详设 §3.22 |
+| P1-11 | FR-AGT-CORE-CTX-001 / OPS-OBS-001 | 引擎生命周期钩子：五钩子、`onSessionEnd` 只在真实边界、失败不中断会话 —— **契约已立（详设 §3.23），实现未跟** | 120 | `T-3.23-01~03` 全绿：真实结束恰好一次；钩子抛错会话继续；回合内调 end 被拒 | 详设 §3.23 · P1-9 |
 
 ### P2 · 安全与权限（4 条 · ≈ 300 分钟）
 
 | # | FR | 内容 | 估时 | 判据 |
 |---|---|---|---|---|
-| P1-11+ | AGT-CORE-CTX-001（供给面） | `Core/AgentContextSupply.swift` | `AgentContextWiringTests` 6/6（五类来源 · 分类预算 · 去重 · 稳定序） | ✅ |
-| P2-1 | AGT-GUARD-PERM-002 | 配置面：等级 / 沙箱根 / 白名单如何声明 | 60 | 改配置立即生效；非法配置拒绝并说明 |
-| P2-2 | AGT-GUARD-PERM-003 | 运行时边界：任何执行都在受限环境内 | 120 | 越界路径被拒；判据来源 = P2-1 白名单 |
-| P2-3 | AGT-CORE-LOOP-007 | 及时刹停：伤害性动作前置停止（不建审批单、不执行） | 60 | 删库/覆盖/对外发布三类各一例 ⇒ 停 |
-| P2-4 | AGT-GUARD-PERM-004（🟡） | 语句级判定收口：危险语句与注入内容 | 60 | 危险语句判红；注入样本不被当指令 |
+| P1-11+ | FR-AGT-CORE-CTX-001（供给面） | `Core/AgentContextSupply.swift` | `AgentContextWiringTests` 6/6（五类来源 · 分类预算 · 去重 · 稳定序） | ✅ |
+| P2-1 | FR-AGT-GUARD-PERM-002 | 配置面：等级 / 沙箱根 / 白名单如何声明 | 60 | 改配置立即生效；非法配置拒绝并说明 |
+| P2-2 | FR-AGT-GUARD-PERM-003 | 运行时边界：任何执行都在受限环境内 | 120 | 越界路径被拒；判据来源 = P2-1 白名单 |
+| P2-3 | FR-AGT-CORE-LOOP-007 | 及时刹停：伤害性动作前置停止（不建审批单、不执行） | 60 | 删库/覆盖/对外发布三类各一例 ⇒ 停 |
+| P2-4 | FR-AGT-GUARD-PERM-004（🟡） | 语句级判定收口：危险语句与注入内容 | 60 | 危险语句判红；注入样本不被当指令 |
 
 ### P3 · 知识与记忆（6 条 · ≈ 180 分钟）
 
 | # | FR | 内容 | 估时 | 判据 |
 |---|---|---|---|---|
-| P3-1 ✅ | AGT-KNOW-CTX-001 | 项目上下文自动带上（工作区结构 / 分支 / 未提交改动）—— **已落地**（`Core/AgentGitFacts.swift` + `GitStatusProbe`，实测 **35 分钟**） | 45 | `AgentGitFactsTests` **9/9**：分支/ahead/behind/改动排序 · 无上游为 0 · 无分支行⇒nil · 空仓库归一 · 40 条上限且报丢弃数 · 摘要形状 · 排在目录前 · 只带摘要不带 diff · 无仓库不塞空段 |
-| P3-2 | AGT-KNOW-CTX-002 | 上下文压缩（超预算按段优先级截断并标记） | 40 | 截断处可见；两次压缩结果一致 |
-| P3-3–6 | AGT-KNOW-MEM-002/003/004/005（🟡） | 记忆治理 / 对话记忆 / 参数化与技能候选 / 技能库 | 95 | 可检视、可删除、可解释；删除即真删 |
+| P3-1 ✅ | FR-AGT-KNOW-CTX-001 | 项目上下文自动带上（工作区结构 / 分支 / 未提交改动）—— **已落地**（`Core/AgentGitFacts.swift` + `GitStatusProbe`，实测 **35 分钟**） | 45 | `AgentGitFactsTests` **9/9**：分支/ahead/behind/改动排序 · 无上游为 0 · 无分支行⇒nil · 空仓库归一 · 40 条上限且报丢弃数 · 摘要形状 · 排在目录前 · 只带摘要不带 diff · 无仓库不塞空段 |
+| P3-2 | FR-AGT-KNOW-CTX-002 | 上下文压缩（超预算按段优先级截断并标记） | 40 | 截断处可见；两次压缩结果一致 |
+| P3-3–6 | FR-AGT-KNOW-MEM-002/003/004/005（🟡） | 记忆治理 / 对话记忆 / 参数化与技能候选 / 技能库 | 95 | 可检视、可删除、可解释；删除即真删 |
 
 ### P4 · 工具面（12 条 · ≈ 420 分钟）
 
 | 组 | FR | 估时 | 要点 |
 |---|---|---|---|
-| 编辑 | AGT-TOOL-EDIT-001 | 45 | 按行/块改，给差异，不整文件重写 |
-| 摄取 | AGT-TOOL-INGEST-001/002/003 | 105 | 检索带可点来源；PDF/Word/Excel/图片解析；视觉不可用要明说 |
-| 模型 | AGT-TOOL-MODEL-001/002 | 60 | 多档 + 端点/模型名可预填 |
-| 媒体 | AGT-TOOL-MEDIA-001/002 | 90 | 语音进/出，转写原文可回看、可中断 |
-| 系统 | AGT-TOOL-SYS-001/002 | 120 | 界面操作每步可见；子任务委派标来源 |
+| 编辑 | FR-AGT-TOOL-EDIT-001 | 45 | 按行/块改，给差异，不整文件重写 |
+| 摄取 | FR-AGT-TOOL-INGEST-001/002/003 | 105 | 检索带可点来源；PDF/Word/Excel/图片解析；视觉不可用要明说 |
+| 模型 | FR-AGT-TOOL-MODEL-001/002 | 60 | 多档 + 端点/模型名可预填 |
+| 媒体 | FR-AGT-TOOL-MEDIA-001/002 | 90 | 语音进/出，转写原文可回看、可中断 |
+| 系统 | FR-AGT-TOOL-SYS-001/002 | 120 | 界面操作每步可见；子任务委派标来源 |
 
 #### P1~P4 本轮落地（2026-10-26 · 107 例新判据）
 
 | 批次 | FR | 落点 | 判据（实跑） | 状态 |
 |---|---|---|---|---|
-| P1-7 | AGT-UX-CONV-006 | `Core/AgentStepTrace.swift` + `AgentChat.apply` | `AgentStepTraceTests` 6/6；界面每跳一行、每次工具一行（就地收尾带耗时） | ✅ |
-| P1-8 | AGT-UX-CONV-007 | `Core/AgentIntervention.swift` + `AgentInterventionInbox` + 循环接线 | `AgentInterventionTests` 6/6 · `AgentLoopInterventionTests` 3/3（停手不再起跳、约束进下一跳、改方向换提示） | ✅ |
-| P1-9 | AGT-KNOW-CTX-002 | `Core/AgentCompressionAdmission.swift` | `AgentCompressionAdmissionTests` 8/8（T-3.21-01~03） | ✅ |
-| P1-10 | AGT-CORE-LOOP-005/-011 | `Core/AgentToolCatalogSnapshot.swift` | `AgentToolCatalogSnapshotTests` 8/8（T-3.22-01~03） | ✅ |
-| P1-11 | AGT-CORE-CTX-001 / OPS-OBS-001 | `Core/AgentContextEngine.swift` | `AgentContextEngineTests` 6/6（T-3.23-01~03） | ✅ |
-| P2-1 | AGT-GUARD-PERM-002 | `Core/AgentPermissionConfig.swift` | `AgentPermissionBoundaryTests` 10/10（改配置立即生效 / 非法拒绝带原因） | ✅ |
-| P2-2 | AGT-GUARD-PERM-003 | `Core/AgentSandboxBoundary.swift` | 同上（越界 / `..` 逃逸 / 只读根） | ✅ |
-| P2-3 | AGT-CORE-LOOP-007 | `Core/AgentPreActionStop.swift` | `AgentPreActionStopTests` 15/15（删库/覆盖/对外发布 ⇒ 停，不建审批单） | ✅ |
-| P2-4 | AGT-GUARD-PERM-004 | `Core/AgentSQLStatementJudge.swift` | 同上（危险语句判红；注入不当指令） | ✅ |
-| P3-2 | AGT-KNOW-CTX-002 | `Core/AgentContextPriorityTruncator.swift` | `AgentKnowledgeTests` 14/14（按优先级截断、标记可见、两次一致） | ✅ |
-| P3-3~6 | AGT-KNOW-MEM-002~005 | `Core/AgentMemoryGovernance.swift` | 同上（可检视/可解释/删除即真删/技能候选） | ✅ |
-| P4-编辑 | AGT-TOOL-EDIT-001 | `Core/AgentBlockEditor.swift` + 既有 `editFile` | `AgentToolFaceTests` 17/17；改走审批 + 陈旧锚点复检 + 租约（`AgentWorkspaceToolsTests`） | ✅ |
-| P4-摄取 | AGT-TOOL-INGEST-001/003 | `Core/AgentIngestion.swift` | 同上（可点来源；视觉不可用明说） | ✅ |
-| P4-摄取 | AGT-TOOL-INGEST-002 | `Core/AgentDocumentIngestor.swift` + `App/PDFTextExtractor.swift` | `AgentDocumentIngestorTests` 8/8（xlsx 真读 · docx 真读 · PDF 注入 PDFKit · 图片如实报） | ✅ |
-| P4-模型 | AGT-TOOL-MODEL-001/002 | `Core/AgentModelPresets.swift` | 同上（三档 + 预填校验） | ✅ |
-| P4-媒体 | AGT-TOOL-MEDIA-001/002 | `Core/AgentVoiceSession.swift` · `App/SpeechSynthesizer.swift` | 转写状态机 17/17；语音出已接 AVSpeechSynthesizer（可中断） | 🟡 仅麦克风未接（人类主人令「除了麦克风」） |
-| P4-系统 | AGT-TOOL-SYS-001/002 | `Core/AgentSubtaskDelegation.swift` | 每步可见 ✅；委派标来源的台账已就位 | 🟡 子任务依赖 §3.20 编排（未实现） |
+| P1-7 | FR-AGT-UX-CONV-006 | `Core/AgentStepTrace.swift` + `AgentChat.apply` | `AgentStepTraceTests` 6/6；界面每跳一行、每次工具一行（就地收尾带耗时） | ✅ |
+| P1-8 | FR-AGT-UX-CONV-007 | `Core/AgentIntervention.swift` + `AgentInterventionInbox` + 循环接线 | `AgentInterventionTests` 6/6 · `AgentLoopInterventionTests` 3/3（停手不再起跳、约束进下一跳、改方向换提示） | ✅ |
+| P1-9 | FR-AGT-KNOW-CTX-002 | `Core/AgentCompressionAdmission.swift` | `AgentCompressionAdmissionTests` 8/8（T-3.21-01~03） | ✅ |
+| P1-10 | FR-AGT-CORE-LOOP-005/-011 | `Core/AgentToolCatalogSnapshot.swift` | `AgentToolCatalogSnapshotTests` 8/8（T-3.22-01~03） | ✅ |
+| P1-11 | FR-AGT-CORE-CTX-001 / OPS-OBS-001 | `Core/AgentContextEngine.swift` | `AgentContextEngineTests` 6/6（T-3.23-01~03） | ✅ |
+| P2-1 | FR-AGT-GUARD-PERM-002 | `Core/AgentPermissionConfig.swift` | `AgentPermissionBoundaryTests` 10/10（改配置立即生效 / 非法拒绝带原因） | ✅ |
+| P2-2 | FR-AGT-GUARD-PERM-003 | `Core/AgentSandboxBoundary.swift` | 同上（越界 / `..` 逃逸 / 只读根） | ✅ |
+| P2-3 | FR-AGT-CORE-LOOP-007 | `Core/AgentPreActionStop.swift` | `AgentPreActionStopTests` 15/15（删库/覆盖/对外发布 ⇒ 停，不建审批单） | ✅ |
+| P2-4 | FR-AGT-GUARD-PERM-004 | `Core/AgentSQLStatementJudge.swift` | 同上（危险语句判红；注入不当指令） | ✅ |
+| P3-2 | FR-AGT-KNOW-CTX-002 | `Core/AgentContextPriorityTruncator.swift` | `AgentKnowledgeTests` 14/14（按优先级截断、标记可见、两次一致） | ✅ |
+| P3-3~6 | FR-AGT-KNOW-MEM-002~005 | `Core/AgentMemoryGovernance.swift` | 同上（可检视/可解释/删除即真删/技能候选） | ✅ |
+| P4-编辑 | FR-AGT-TOOL-EDIT-001 | `Core/AgentBlockEditor.swift` + 既有 `editFile` | `AgentToolFaceTests` 17/17；改走审批 + 陈旧锚点复检 + 租约（`AgentWorkspaceToolsTests`） | ✅ |
+| P4-摄取 | FR-AGT-TOOL-INGEST-001/003 | `Core/AgentIngestion.swift` | 同上（可点来源；视觉不可用明说） | ✅ |
+| P4-摄取 | FR-AGT-TOOL-INGEST-002 | `Core/AgentDocumentIngestor.swift` + `App/PDFTextExtractor.swift` | `AgentDocumentIngestorTests` 8/8（xlsx 真读 · docx 真读 · PDF 注入 PDFKit · 图片如实报） | ✅ |
+| P4-模型 | FR-AGT-TOOL-MODEL-001/002 | `Core/AgentModelPresets.swift` | 同上（三档 + 预填校验） | ✅ |
+| P4-媒体 | FR-AGT-TOOL-MEDIA-001/002 | `Core/AgentVoiceSession.swift` · `App/SpeechSynthesizer.swift` | 转写状态机 17/17；语音出已接 AVSpeechSynthesizer（可中断） | 🟡 仅麦克风未接（人类主人令「除了麦克风」） |
+| P4-系统 | FR-AGT-TOOL-SYS-001/002 | `Core/AgentSubtaskDelegation.swift` | 每步可见 ✅；委派标来源的台账已就位 | 🟡 子任务依赖 §3.20 编排（未实现） |
 
 > 读数口径：`swift test --filter <类名>` 实跑（Xcode 工具链）；全量 `Scripts/verify-core.sh` = **3793 项**。
 
@@ -128,9 +128,9 @@
 
 | 组 | FR | 估时 |
 |---|---|---|
-| 通道 | AGT-LINK-CHAN-002/003、EXT-003 | 90 |
-| 运维 | AGT-OPS-OBS-001/002/003 | 105 |
-| 灵魂 | AGT-GUARD-SOUL-001/002 | 45 |
+| 通道 | FR-AGT-LINK-CHAN-002/003、EXT-003 | 90 |
+| 运维 | FR-AGT-OPS-OBS-001/002/003 | 105 |
+| 灵魂 | FR-AGT-GUARD-SOUL-001/002 | 45 |
 
 ### P6 · 工作台编辑面（STD 32 条 · ≈ 600 分钟）
 
@@ -169,7 +169,7 @@
 | # | 阻塞项 | 影响 | 谁解 |
 |---|---|---|---|
 | 1 | 审批「过期 / 撤回」终局未定（概设 §6.3 只有三种） | P2 无法收口 | 人类主人 |
-| 2 | 端云同步三端口径未定 | 多端一致性（AGT-UX-SYNC-001）无从写 | 人类主人 |
+| 2 | 端云同步三端口径未定 | 多端一致性（FR-AGT-UX-SYNC-001）无从写 | 人类主人 |
 | 3 | `FR-AGT-UX-CONV-009` 求助通道缺契约条款 | 只做了 UI 入口 | 契约侧 |
 | 4 | 调试器需 DAP 客户端依赖 | STD-WS-TOOL-003 引入依赖需批准 | 人类主人 |
 
@@ -195,6 +195,7 @@
 | 版本 | 日期 | 变更内容 | 影响范围 |
 |---|---|---|---|
 | v0.1 | 2026-10-23 | 首建：基线取自计划书 §5 矩阵（378 条 · macOS ✅129 / 🟡75 / ⬜174）；把 ⬜ 拆成 P1–P6 六批（AGT 38 条 + STD 32 条）与 🟡 收口 R1–R4；NTS 19 / RTR 82 明确归跨仓；阻塞 4 项单列 | macOS 端 |
+| v0.10 | 2026-10-26 | **需求编号统一为全号**（人类主人问「这些需求编号是省略了最前面的 FR-AGT 吗」）：本册 45 处短号 `AGT-面-域-序号` 全部补回 `FR-` 前缀，与四书/索引同一写法（27 种编号逐一核对，在 `requirement-index.jsonl` 均有全号，无自造号） | 仅本册措辞，台账状态不变 |
 | v0.9 | 2026-10-26 | **P1-7~P4 落地**：新增 13 个 Core 类型 + 7 个测试文件（90 例全绿）——过程可见（StepTrace）/ 中途干预（Intervention）/ 压缩边界（CompressionAdmission，T-3.21）/ 注册表快照（ToolCatalogSnapshot，T-3.22）/ 引擎钩子（ContextEngine，T-3.23）/ 权限配置面 / 沙箱边界 / 及时刹停 / 语句级判定 / 优先级截断 / 记忆治理 / 块编辑 / 摄取（可点来源 + 视觉明说）/ 模型三档 / 语音状态机 / 委派标来源。8 条仍 🟡：界面接线或解析器/TTS 未接。**同时订正分族读数：FR-AGT 68 → 82**（索引实测）。 | Core 13 个类型 + Tests 7 个文件（90 例）；分族读数 68→82 |
 | v0.8 | 2026-10-24 | **P3-1 落地**：项目上下文补**仓库视角**（此前只有编辑器视角）—— `AgentGitFacts.parse(porcelain:)` 纯函数解析 `git status --porcelain=v1 --branch`（分支 / 改动清单排序 / ahead / behind / 40 条上限并如实报丢弃数 / 空仓库归一 / 认不出不丢不编）；`AgentContextReference.gitState` 渲染只带摘要**不带 diff**；`GitStatusProbe` 跑一次只读 git（1.5 s 超时，拿不到就给 nil）。判据 9 例全绿。Core 3623 → 3666。台账 CTX-001 → ✅，矩阵 ✅142/🟡87/⬜149 | macOS 端 · AGT |
 | v0.7 | 2026-10-24 | **P1-6 落地**：新增 `AgentSelfCheck`（与「完成判据」分工：那个问「模型的话可不可信」，这个问「动过的东西验没验」）——把本轮写/改/命令逐条折成通过与否，写类以完成判据的复核结论为准、命令类以退出码为准；**动过东西却一条自验都没有 ⇒ `selfCheckSkipped:noEvidence` 判红**；没过的结论同时进会话留痕与审计（`outcome=failed`）。判据 9 例全绿，完成判据 16 例不受影响。Core 3614 → 3623。台账 VERIFY-001 → ✅，矩阵 ✅141/🟡87/⬜150 | macOS 端 · AGT |
