@@ -31,3 +31,25 @@ enum AgentConfigRejectionText {
         return changes.suffix(limit).reversed().map(\.summaryLine)
     }
 }
+
+/// 插件没装上时的**人话**（`FR-AGT-LINK-EXT-003` 装卸面板那一侧）。
+///
+/// Core 那边只给 ASCII 机器码（可 grep、可断言），面板要的是「为什么装不上」一句中文。
+/// 两处各拼一句必然漂移，所以人话只在这里拼；认不出的码**原样显示**，
+/// 不去猜一个「大概是这样」的结论 —— 猜错比不猜更坏。
+enum AgentExtensionRejectionText {
+
+    static func line(for code: String) -> String {
+        guard let rejection = AgentExtensionRejection(rawValue: code) else { return code }
+        switch rejection {
+        case .manifestUnreadable: return L(.agentExtensionRejectionManifestUnreadable)
+        case .slotUnknown: return L(.agentExtensionRejectionSlotUnknown)
+        case .slotIsKernelFacet: return L(.agentExtensionRejectionSlotIsKernelFacet)
+        case .providesKernelFacet: return L(.agentExtensionRejectionProvidesKernelFacet)
+        case .permissionNotDeclared: return L(.agentExtensionRejectionPermissionNotDeclared)
+        case .providesEmpty: return L(.agentExtensionRejectionProvidesEmpty)
+        case .hookNotTighteningOnly: return L(.agentExtensionRejectionHookNotTighteningOnly)
+        case .idEmpty: return L(.agentExtensionRejectionIDEmpty)
+        }
+    }
+}

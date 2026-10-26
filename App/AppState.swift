@@ -3209,11 +3209,11 @@ final class AppState: ObservableObject {
                                                 mcp: mcpReady.bridge,
                                                 guardPolicy: agentGuardPolicy)
         // 插件目录**先建出来**：用户要往里放东西，得先看得见这个位置（不存在就建，失败也不拦本轮）。
-        let extensionDirectory = AgentSessionStore.defaultDirectory
-            .appendingPathComponent(AgentExtensionCatalog.folderName, isDirectory: true)
-        try? FileManager.default.createDirectory(at: extensionDirectory, withIntermediateDirectories: true)
-        let extensionLoad = AgentExtensionCatalog.load(directory: extensionDirectory)
-        agentExtensionProblems = extensionLoad.problems
+        // 扫描归口到 `rescanAgentExtensions()`：面板与循环读的是同一份台账（各读各的会造出
+        // 「面板说装了、循环里没生效」这类最难查的假绿）。
+        rescanAgentExtensions()
+        let extensionLoad = AgentExtensionCatalogLoad(desk: agentExtensionDesk,
+                                                     problems: agentExtensionProblems)
         let loop = AgentLoop(client: OpenAICompatibleStreamingClient(),
                              dispatcher: dispatcher,
                              registry: whitelisted.registry,
@@ -4096,6 +4096,40 @@ final class AppState: ObservableObject {
     /// 插件目录里没装上的清单（`FR-AGT-LINK-EXT-003`：逐条点名「哪个文件 + 为什么」，
     /// 不是静默跳过 —— 用户把插件丢进目录后没生效，得能看见原因）。
     @Published private(set) var agentExtensionProblems: [AgentExtensionCatalogProblem] = []
+
+    /// 插件目录（`FR-AGT-LINK-EXT-003` 的装卸入口）：用户把插件文件夹丢进这里，
+    /// 面板点「重新扫描」即可 —— **目录扫出来的就是已装清单**（面板只是这件事的另一个入口，
+    /// 不是唯一的真值源，所以面板没打开时循环照样按目录装）。
+    var agentExtensionDirectory: URL {
+        AgentSessionStore.defaultDirectory
+            .appendingPathComponent(AgentExtensionCatalog.folderName, isDirectory: true)
+    }
+
+    /// 已装插件的台账。面板与循环**读同一份**：面板显示「已装」而循环用的是另一份，是最难查的一类假绿。
+    @Published private(set) var agentExtensionDesk = AgentExtensionDesk()
+
+    /// 面板上「最近一次卸载」的收据：残留读数照它说，不许凭空说一句「已卸载」。
+    @Published private(set) var agentExtensionLastUninstall: AgentExtensionUninstallReceipt?
+
+    /// 扫一遍插件目录：装上 / 没装上 / 目录不存在 三种情形都归口到这里。
+    func rescanAgentExtensions() {
+        // 目录先建出来：用户要往里放东西，得先看得见这个位置（失败也不拦，扫出来就是空的）。
+        try? FileManager.default.createDirectory(at: agentExtensionDirectory, withIntermediateDirectories: true)
+        let loaded = AgentExtensionCatalog.load(directory: agentExtensionDirectory)
+        agentExtensionDesk = loaded.desk
+        agentExtensionProblems = loaded.problems
+    }
+
+    /// 卸载一个插件：**它自己声明拥有的路径真删**，要停的子进程交回去（谁家起的谁停）。
+    ///
+    /// 卸不存在的不假装成功（收据 `wasInstalled = false`，面板据此说「什么都没动」）。
+    /// 卸载不动别家的授权面 —— 台账按 id 逐个摘，不重建整份。
+    func uninstallAgentExtension(pluginID: String) {
+        var desk = agentExtensionDesk
+        let receipt = desk.uninstall(pluginID: pluginID)
+        agentExtensionDesk = desk
+        agentExtensionLastUninstall = receipt
+    }
 
     /// 读一次盘（幂等；面板打开、建循环前都会调）。
     func loadAgentRuntimeConfigIfNeeded() {

@@ -44,6 +44,8 @@ struct AgentSettingsSheet: View {
     @State private var runtimeReason = ""
     /// 上一次保存 / 被拒的一句话结论。
     @State private var runtimeLine: String?
+    /// 等确认卸载的插件 id（`FR-AGT-LINK-EXT-003`）：**先问再删** —— 卸的是他自己放进目录的东西。
+    @State private var pendingExtensionUninstallID: String?
     /// 显示开关那一下的结论（改了立刻落盘，被拒时在这里说一句；`nil` = 没话要说）。
     @State private var displayLine: String?
 
@@ -234,6 +236,15 @@ struct AgentSettingsSheet: View {
                     }
                 }
 
+                // **插件（扩展点）**（`FR-AGT-LINK-EXT-003` 的界面那一半）：
+                // 装了哪些、每个真授权了什么、没装上的为什么、卸完还剩什么 —— 四件都在这一节。
+                // 「装」这件事本身 = 把插件文件夹放进目录（面板不假装能凭空拉一个插件下来），
+                // 所以这里给的是**目录入口 + 重扫 + 卸载**，不是「安装」按钮。
+                Section(L(.agentExtensionSection)) {
+                    extensionDirectorySection
+                    extensionInstalledSection
+                    extensionProblemsSection
+                }
                 // **显示开关**（`FR-AGT-UX-CONV-012` 九个，跨端同名同默认）：
                 // 每一项**改完立刻生效并落盘**（与运行策略不同 —— 那边要理由、要批量原子校验）。
                 // 这里不收理由：观感开关塞进审计会把真正的审计淹掉。
@@ -426,10 +437,37 @@ struct AgentSettingsSheet: View {
             // 显示开关（`FR-AGT-UX-CONV-012`）：读盘一次并回填 —— 重开面板显示的是
             // **盘上生效的那份**，不是契约默认值（否则用户一开面板就以为自己设的被清了）。
             appState.loadAgentDisplayPreferencesIfNeeded()
+            // 插件目录（`FR-AGT-LINK-EXT-003`）：开面板就扫一次 —— 显示的是**此刻盘上的事实**，
+            // 不是上一次关闭时留下的旧读数（用户可能刚把插件文件夹拖进去）。
+            appState.rescanAgentExtensions()
+            pendingExtensionUninstallID = nil
         }
         .sheet(isPresented: $showsMCPServers) {
             MCPServersSheet()
                 .environmentObject(appState)
+        }
+        // 卸载要二次确认（`FR-AGT-LINK-EXT-003`）：它删的是**他自己放进目录的东西**。
+        // 确认后走 `AppState.uninstallAgentExtension`（真删自有路径、交回要停的进程），
+        // 结论照收据写，不在这句话里替它下「干净了」的判断。
+        .confirmationDialog(
+            L(.agentExtensionUninstallConfirmTitle),
+            isPresented: Binding(
+                get: { pendingExtensionUninstallID != nil },
+                set: { if !$0 { pendingExtensionUninstallID = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let id = pendingExtensionUninstallID {
+                Button(L(.agentExtensionUninstallAction), role: .destructive) {
+                    appState.uninstallAgentExtension(pluginID: id)
+                    pendingExtensionUninstallID = nil
+                }
+            }
+            Button(L(.commonCancel), role: .cancel) {
+                pendingExtensionUninstallID = nil
+            }
+        } message: {
+            Text(L(.agentExtensionUninstallConfirmBody))
         }
     }
 
@@ -609,6 +647,167 @@ struct AgentSettingsSheet: View {
             runtimeDraft = AgentRuntimeConfigDraft(snapshot: appState.agentRuntimeConfig.snapshot)
         case .rejected(let reason):
             runtimeLine = L(.agentRuntimeRejected, reason)
+        }
+    }
+
+    // MARK: - 插件装卸（`FR-AGT-LINK-EXT-003` 的界面那一半）
+
+    /// 面板要的读数（面板与循环读的是同一份台账，这里不另算一遍）。
+    private var extensionPanel: AgentExtensionPanel {
+        AgentExtensionPanel(desk: appState.agentExtensionDesk, problems: appState.agentExtensionProblems)
+    }
+
+    /// 目录入口：在哪儿放插件、往哪儿看、什么时候重扫。
+    private var extensionDirectorySection: some View {
+        Group {
+            LabeledContent(L(.agentExtensionDirectory)) {
+                Text(appState.agentExtensionDirectory.path)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            }
+            HStack(spacing: Spacing.s) {
+                Button(L(.agentExtensionOpenFolder)) {
+                    NSWorkspace.shared.activateFileViewerSelecting([appState.agentExtensionDirectory])
+                }
+                .buttonStyle(.bordered)
+                Button(L(.agentExtensionRescan)) {
+                    appState.rescanAgentExtensions()
+                }
+                .buttonStyle(.bordered)
+            }
+            if extensionPanel.rows.isEmpty {
+                Text(L(.agentExtensionEmpty))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.tertiary))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// 已装的那几行 + 最近一次卸载的读数。
+    private var extensionInstalledSection: some View {
+        Group {
+            ForEach(extensionPanel.rows) { row in
+                agentExtensionRow(row)
+            }
+            if let receipt = appState.agentExtensionLastUninstall {
+                agentExtensionUninstallLine(receipt)
+            }
+        }
+    }
+
+    /// 没装上的清单：逐条「哪个文件 + 为什么」，一条都不静默跳过。
+    private var extensionProblemsSection: some View {
+        Group {
+            if !extensionPanel.problems.isEmpty {
+                Text(L(.agentExtensionProblemsTitle))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.tertiary))
+                ForEach(Array(extensionPanel.problems.enumerated()), id: \.offset) { _, problem in
+                    extensionProblemRow(problem)
+                }
+            }
+        }
+    }
+
+    private func extensionProblemRow(_ problem: AgentExtensionPanelProblem) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+            Text(problem.file)
+                .font(Theme.font(.monoSmall))
+                .foregroundStyle(Theme.text(.secondary))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text(AgentExtensionRejectionText.line(for: problem.code))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.status(.warning))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// 已装插件的一行：id · 槽位 · 三样真授权面 · 钩子与自有路径条数 · 卸载。
+    ///
+    /// 「真授权面」是**这次装批下来的**，不是清单声明的 —— 两者不一样时（比如只批了一个能力），
+    /// 在这一行上看到的必须是与运行期一致的那一份，否则面板会替插件吹牛。
+    private func agentExtensionRow(_ row: AgentExtensionPanelRow) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                Text(row.id)
+                    .font(Theme.font(.monoSmall))
+                    .foregroundStyle(Theme.text(.primary))
+                    .textSelection(.enabled)
+                Spacer(minLength: 0)
+                Button(L(.agentExtensionUninstall)) {
+                    pendingExtensionUninstallID = row.id
+                }
+                .buttonStyle(.bordered)
+                .help(L(.agentExtensionUninstallConfirmTitle))
+            }
+            extensionFact(L(.agentExtensionSlot), row.slot)
+            extensionFact(L(.agentExtensionProvides), row.provides.joined(separator: ", "))
+            extensionFact(L(.agentExtensionDirectories), row.readableDirectories.joined(separator: ", "))
+            extensionFact(L(.agentExtensionCommands), row.allowedCommands.joined(separator: ", "))
+            extensionFact(L(.agentExtensionHooks), String(row.hookCount))
+            extensionFact(L(.agentExtensionOwnedPaths), String(row.ownedPathCount))
+        }
+        .padding(.vertical, Spacing.xs)
+    }
+
+    /// 「标签：值」一行；值空着就写「无」—— 留空容易被看成「还没加载」。
+    private func extensionFact(_ label: String, _ value: String) -> some View {
+        let shown = value.isEmpty ? L(.agentExtensionNone) : value
+        return HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+            Text(label)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.tertiary))
+            Text(shown)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// 卸载之后的读数：卸没卸成、还剩什么。**不替它说「干净」以外的任何判断**。
+    private func agentExtensionUninstallLine(_ receipt: AgentExtensionUninstallReceipt) -> some View {
+        let residue = AgentExtensionPanel.residue(of: receipt)
+        return VStack(alignment: .leading, spacing: Spacing.xs / 2) {
+            Text(receipt.wasInstalled
+                 ? L(.agentExtensionUninstalled) + " " + receipt.pluginID
+                 : L(.agentExtensionUninstallMissing))
+                .font(Theme.font(.caption))
+                .foregroundStyle(receipt.wasInstalled ? Theme.text(.secondary) : Theme.status(.warning))
+                .fixedSize(horizontal: false, vertical: true)
+            if receipt.wasInstalled {
+                if residue.isClean {
+                    Text(L(.agentExtensionResidueClean))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                } else {
+                    if !residue.paths.isEmpty {
+                        Text(L(.agentExtensionResiduePaths) + " " + residue.paths.joined(separator: ", "))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.status(.warning))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !residue.processes.isEmpty {
+                        Text(L(.agentExtensionResidueProcesses) + " "
+                             + residue.processes.map(String.init).joined(separator: ", "))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.status(.warning))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if residue.grantRemains {
+                        Text(L(.agentExtensionResidueGrant))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.status(.warning))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
         }
     }
 

@@ -1041,6 +1041,39 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentRuntimeHistoryTitle
     case agentRuntimeDegraded
     case agentRuntimeTodayUsage
+    // `FR-AGT-LINK-EXT-003` 装卸面板（插件目录 / 已装 / 没装上 / 卸完还剩什么）
+    case agentExtensionSection
+    case agentExtensionDirectory
+    case agentExtensionOpenFolder
+    case agentExtensionRescan
+    case agentExtensionEmpty
+    case agentExtensionInstalled
+    case agentExtensionSlot
+    case agentExtensionProvides
+    case agentExtensionDirectories
+    case agentExtensionCommands
+    case agentExtensionHooks
+    case agentExtensionOwnedPaths
+    case agentExtensionNone
+    case agentExtensionUninstall
+    case agentExtensionUninstallConfirmTitle
+    case agentExtensionUninstallConfirmBody
+    case agentExtensionUninstallAction
+    case agentExtensionUninstalled
+    case agentExtensionUninstallMissing
+    case agentExtensionResidueClean
+    case agentExtensionResiduePaths
+    case agentExtensionResidueProcesses
+    case agentExtensionResidueGrant
+    case agentExtensionProblemsTitle
+    case agentExtensionRejectionManifestUnreadable
+    case agentExtensionRejectionSlotUnknown
+    case agentExtensionRejectionSlotIsKernelFacet
+    case agentExtensionRejectionProvidesKernelFacet
+    case agentExtensionRejectionPermissionNotDeclared
+    case agentExtensionRejectionProvidesEmpty
+    case agentExtensionRejectionHookNotTighteningOnly
+    case agentExtensionRejectionIDEmpty
     case agentConfigUnknownKey
     case agentConfigOutOfRange
     case agentConfigMissingReason
@@ -3820,6 +3853,38 @@ public enum LocalizedStrings {
         .agentRuntimeHistoryTitle: [.simplifiedChinese: "最近改动", .english: "Recent changes"],
         .agentRuntimeDegraded: [.simplifiedChinese: "盘上这份运行策略读不出来（%@），已按默认值显示。", .english: "The stored run policy could not be read (%@); showing defaults."],
         .agentRuntimeTodayUsage: [.simplifiedChinese: "今日已用 %d / %d token", .english: "Used today: %d / %d tokens"],
+        .agentExtensionSection: [.simplifiedChinese: "插件（扩展点）", .english: "Plugins (extension points)"],
+        .agentExtensionDirectory: [.simplifiedChinese: "插件目录", .english: "Plugin folder"],
+        .agentExtensionOpenFolder: [.simplifiedChinese: "打开目录", .english: "Open folder"],
+        .agentExtensionRescan: [.simplifiedChinese: "重新扫描", .english: "Rescan"],
+        .agentExtensionEmpty: [.simplifiedChinese: "这个目录里还没有插件。把插件文件夹放进上面的目录，再点「重新扫描」。", .english: "No plugins in this folder yet. Drop a plugin folder into the path above, then click Rescan."],
+        .agentExtensionInstalled: [.simplifiedChinese: "已装", .english: "Installed"],
+        .agentExtensionSlot: [.simplifiedChinese: "槽位", .english: "Slot"],
+        .agentExtensionProvides: [.simplifiedChinese: "已授权能力", .english: "Granted capabilities"],
+        .agentExtensionDirectories: [.simplifiedChinese: "可读目录", .english: "Readable folders"],
+        .agentExtensionCommands: [.simplifiedChinese: "可跑命令", .english: "Runnable commands"],
+        .agentExtensionHooks: [.simplifiedChinese: "策略钩子（只能收紧）", .english: "Policy hooks (tighten only)"],
+        .agentExtensionOwnedPaths: [.simplifiedChinese: "卸载会清掉的自有路径", .english: "Own paths removed on uninstall"],
+        .agentExtensionNone: [.simplifiedChinese: "无", .english: "none"],
+        .agentExtensionUninstall: [.simplifiedChinese: "卸载", .english: "Uninstall"],
+        .agentExtensionUninstallConfirmTitle: [.simplifiedChinese: "卸载这个插件？", .english: "Uninstall this plugin?"],
+        .agentExtensionUninstallConfirmBody: [.simplifiedChinese: "会删掉它自己声明拥有的文件夹，并从已装清单里移出；要停的子进程会列出来。插件自己那份清单不会保留副本。", .english: "Its own declared folders are deleted and it leaves the installed list; child processes that must stop are listed. No copy of its manifest is kept."],
+        .agentExtensionUninstallAction: [.simplifiedChinese: "卸载", .english: "Uninstall"],
+        .agentExtensionUninstalled: [.simplifiedChinese: "已卸载", .english: "Uninstalled"],
+        .agentExtensionUninstallMissing: [.simplifiedChinese: "它不在已装清单里，什么都没动。", .english: "It was not installed; nothing was touched."],
+        .agentExtensionResidueClean: [.simplifiedChinese: "无残留。", .english: "No residue."],
+        .agentExtensionResiduePaths: [.simplifiedChinese: "还有这些路径没删掉", .english: "These paths are still there"],
+        .agentExtensionResidueProcesses: [.simplifiedChinese: "这些子进程要停", .english: "These child processes must stop"],
+        .agentExtensionResidueGrant: [.simplifiedChinese: "授权还挂着（不该出现：重开面板会重扫一遍）", .english: "The grant is still registered (unexpected — reopening the panel rescans)"],
+        .agentExtensionProblemsTitle: [.simplifiedChinese: "没装上的清单", .english: "Not installed"],
+        .agentExtensionRejectionManifestUnreadable: [.simplifiedChinese: "清单读不出来（不是合法 JSON）", .english: "Manifest unreadable (not valid JSON)"],
+        .agentExtensionRejectionSlotUnknown: [.simplifiedChinese: "槽位不在六类里", .english: "Slot is not one of the six"],
+        .agentExtensionRejectionSlotIsKernelFacet: [.simplifiedChinese: "拿内核那五项当槽位了", .english: "A kernel facet was used as a slot"],
+        .agentExtensionRejectionProvidesKernelFacet: [.simplifiedChinese: "要提供内核那五项之一（内核不可插件化）", .english: "Provides a kernel facet (the kernel is not pluggable)"],
+        .agentExtensionRejectionPermissionNotDeclared: [.simplifiedChinese: "没写权限块（要明写能读哪些目录、能跑哪些命令）", .english: "No permission block (it must declare readable folders and runnable commands)"],
+        .agentExtensionRejectionProvidesEmpty: [.simplifiedChinese: "一个能力都没声明", .english: "Declares no capability"],
+        .agentExtensionRejectionHookNotTighteningOnly: [.simplifiedChinese: "钩子声明了「只能收紧」以外的东西", .english: "A hook declares something other than tighten-only"],
+        .agentExtensionRejectionIDEmpty: [.simplifiedChinese: "插件 id 是空的", .english: "Plugin id is empty"],
         .agentConfigUnknownKey: [.simplifiedChinese: "「%@」不是可配置项。", .english: "“%@” is not a configurable item."],
         .agentConfigOutOfRange: [.simplifiedChinese: "「%@」的取值 %@ 越界，允许：%@。", .english: "“%@” got an out-of-range value %@; allowed: %@."],
         .agentConfigMissingReason: [.simplifiedChinese: "改配置要写一句为什么。", .english: "A reason is required for config changes."],
