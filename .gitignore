@@ -28,6 +28,7 @@ xcuserdata/
 # 界面设计等写作规范必须入库：对侧没有本侧技能包，规则要跟着代码走。
 !/Docs/规范/
 !/Docs/规范/**
+!/Docs/frozen/README.md  # v1.0 冻结清单（四书快照的文件名 / 行数 / sha256 与刷新纪律；快照本体已入库）
 !/Docs/README.md
 !/Docs/功能清单（一页纸）.md
 !/Docs/功能清单（管理视图）.md

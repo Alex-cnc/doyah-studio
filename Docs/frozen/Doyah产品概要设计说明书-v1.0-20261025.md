@@ -1,5 +1,3 @@
-> **【冻结版 v1.0-20261025】** 20261025 冻结基线（2026-10-25 就地补入 3.1.6 / 3.5.11 / 3.5.12 / 3.5.13 / 3.7.9、§3.17–§3.20 详设契约、§5.3.9 浮层语汇、§5.3.10 分栏骨架与界面层次规则，未升版）。
-> **冻结规则**：此后不再改动本文件；改进开副本递增版本（v1.1 / v2.0），头部写「派生自」。
 # Doyah产品概要设计说明书
 
 > **版本** v0.12（2026-10-25 §8.11 补「对应需求」溯源（FR-AGT-UX-CONV-010~015 / NFR-ALL-GATE-UI-001）；v0.11：新增 §8.11 界面语汇与可配置项；v0.10：按 `design-spec-writing` 补齐 GB/T 8567 骨架）
@@ -813,7 +811,7 @@ Studio / Retro / Agent 不在移动端，不得在移动端详设里出现它们
 
 ## 11. 非功能设计约束
 
-对应需求：`FR-STD-ALL-BLD-001`、`FR-STD-ALL-BLD-002`、`FR-STD-ALL-IFACE-001`、`FR-STD-ALL-IFACE-002`
+对应需求：`FR-STD-ALL-BLD-001`、`FR-STD-ALL-BLD-002`、`FR-STD-DB-DRV-005`、`FR-STD-DB-DRV-001`（旧号 `FR-STD-ALL-IFACE-001/002` 已于 2026-10-25 并入，见 §6.1 指路段）
 
 - 性能：首屏行批 ≤ 200 ms；大结果按需渲染不冻结界面；查询取消 2 s 内给出结局（成功取消或失败原因）；对象树刷新不阻塞编辑。
 - 安全：口令只经密钥存储取用、只在内存中存在；用户数据不出本机（模型调用与既授权同步除外）；外部工具输出一律不可信；结果行数据投递需确认。
@@ -1753,7 +1751,7 @@ Agent 完成实现后必须逐条自检并输出结果：
 | 配置格式升级须提供 schemaVersion 迁移路径 | 配置格式升级须提供 schemaVersion 迁移路径 | 用例可写/可机检 |
 | 保存的查询以 JSON 原子写入应用支持目录（id/name/connectionID/da… | 保存的查询以 JSON 原子写入应用支持目录（id/name/connectionID/database/sql/sav… | 用例可写/可机检 |
 
-对应需求：`FR-STD-ALL-DATA-001` … `FR-STD-ALL-DATA-004`
+对应需求：`FR-STD-DB-CONN-009` · `FR-STD-DB-CONN-004` · `FR-STD-DB-SESS-001` · `FR-STD-DB-SESS-007`（旧号 `FR-STD-DB-CONN-009~004` 已于 2026-10-25 并入，见《需求规格说明书》§5.4 指路段）
 
 ### 19.4 【契约】导航与检索（`FR-STD-WS-NAV`）
 
@@ -2020,23 +2018,6 @@ Agent 完成实现后必须逐条自检并输出结果：
 | `FR-STD-ALL-CLI-003` | `FR-STD-ALL-CLI` | §19.1 |
 | `FR-STD-ALL-CLI-004` | `FR-STD-ALL-CLI` | §19.1 |
 | `FR-STD-ALL-CLI-005` | `FR-STD-ALL-CLI` | §19.1 |
-| `FR-STD-ALL-DATA-001` | `FR-STD-ALL-DATA` | §19.3 |
-| `FR-STD-ALL-DATA-002` | `FR-STD-ALL-DATA` | §19.3 |
-| `FR-STD-ALL-DATA-003` | `FR-STD-ALL-DATA` | §19.3 |
-| `FR-STD-ALL-DATA-004` | `FR-STD-ALL-DATA` | §19.3 |
-| `FR-STD-ALL-IFACE-001` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-002` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-003` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-004` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-005` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-006` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-007` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-008` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-009` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-010` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-011` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-012` | `FR-STD-ALL-IFACE` | §11 |
-| `FR-STD-ALL-IFACE-013` | `FR-STD-ALL-IFACE` | §11 |
 | `FR-STD-ALL-LIC-001` | `FR-STD-ALL-LIC` | §3 |
 | `FR-STD-ALL-LIC-002` | `FR-STD-ALL-LIC` | §3 |
 | `FR-STD-ALL-LIC-003` | `FR-STD-ALL-LIC` | §3 |
@@ -2342,7 +2323,7 @@ Agent 完成实现后必须逐条自检并输出结果：
 | P-11 | 沙箱 / 权限模型 | 最小权限原则；被拒时给可读原因而非静默失败 | macOS 沙箱 / Linux 无沙箱 | NFR-ALL-GATE-SEC-003、R-018 |
 | P-12 | 系统级集成（通知 / Dock / 托盘） | 不打扰用户、可关闭 | 各平台机制 | — |
 | P-14 | 内嵌浏览器 | 行为契约一致：默认不加载远程内容、导航由用户显式发起、出网全部进统一外发日志、独立数据存储（不共享 SQL 客户端凭据与 Cookie）、下载走授权目录、页面脚本不得触达客户端能力；**两侧按同一套契约实现**（`BrowserPage` 地址·历史·加载态 / `BrowserNavigationPolicy` **默认不加载远程内容** / 统一外发日志 `NFR-ALL-GATE-SEC-008`，三件同名同义） | 渲染引擎（**macOS** = 系统 WebKit·`WKWebView`；**Windows** = Tauri 2 内置系统 `WebView2`，见 `P-26`；**Linux** 自用第三端 = 由本仓选定）、Cookie 存储位置、权限提示方式 | FR-STD-WS-WEB-001、NFR-ALL-GATE-SEC-008 |
-| P-13 | 配置与数据目录 | 配置 / 归档 / 书签等文件**逻辑分区一致**（连接配置、保存的查询、查询归档、任务定义、审计日志、工作区书签各占一个文件）；删除连接必须同时清掉磁盘配置与凭据；损坏时给可读错误并保留原文件 | 目录位置（macOS 应用支持目录 / 沙箱容器；Linux XDG 目录）、文件权限模型 | §5.1、§5.2、FR-STD-ALL-DATA-001 |
+| P-13 | 配置与数据目录 | 配置 / 归档 / 书签等文件**逻辑分区一致**（连接配置、保存的查询、查询归档、任务定义、审计日志、工作区书签各占一个文件）；删除连接必须同时清掉磁盘配置与凭据；损坏时给可读错误并保留原文件 | 目录位置（macOS 应用支持目录 / 沙箱容器；Linux XDG 目录）、文件权限模型 | §5.1、§5.2、FR-STD-DB-CONN-009 |
 | P-15 | **笔记存储引擎（`FR-STD-ALL-PLUG-008`）** | **同一套表结构与语义**：`note` / `note_tag` / `note_timeline` / `note_attachment` + 全文索引；**WAL + 事务**、`PRAGMA user_version` 记 schema 版本、幂等升级；`NULL ≠ 空串`；**附件永不进 BLOB**（库里只存路径）；**迁移一次性且旧文件留档**（`*.migrated`，绝不覆盖已有备份）；**备份 = 单文件快照**（`VACUUM INTO`，写完读回核对），**不把活跃库文件直接交给云同步**；中文检索需 **trigram 分词器 + 查询串 ≥3 字**（<3 字按子串兜底并如实标注）；**检索必须覆盖标题 / 正文 / 标签三个字段**，且**所走路线（全文 / 子串兜底）与「检索没跑成」都要如实报告给用户**（不许把「没跑成」显示成「没找到」，「没跑成」与「没找到」是两回事） | 引擎**接入方式**：vendored `sqlite3.c` + 薄封装（本工程三端同一份源码；不用系统 `libsqlite3`、不用 GRDB / SwiftData / Core Data）；驱动封装的语言与目录；`.partial` 中间件与快照落点；WAL 侧车文件的管理方式 | FR-STD-ALL-PLUG-008、概要设计 §3.2.3 |
 | P-16 | 多库驱动（`FR-STD-DB-DRV-010` / `FR-STD-DB-DRV-009`） | §3.2.8 的六条不变量（协议与方言分离 / 影响行数问服务端 / 取消只断语句 / 同族方言共享文本 / 能力缺失如实说） | 线协议实现选型与版本、认证插件支持面（TLS / `caching_sha2_password`）、驱动对空结果集的列定义可见性 | FR-STD-DB-DRV-010、FR-STD-DB-DRV-009、概要设计 §3.2.8 |
 | P-17 | 终端仿真与 PTY（ConPTY / `pwsh`） | §3.3.7 的全部屏幕语义与按键字节序列（与 `P-05` 同一契约，不另立一套） | PTY 获取方式（Windows = ConPTY，`CreatePseudoConsole`，Windows 10 1809+，跑 `pwsh` / `cmd`；Tauri 2 / Rust 侧走 `portable-pty`）；外部程序一律不经 shell 拼接（`UseShellExecute = false`） | FR-STD-WS-TOOL-001、`P-05`、概要设计 §9.2 |
