@@ -1,6 +1,6 @@
 # Doyah产品开发计划任务清单 · macOS 端
 
-> **版本** v1.0.22（2026-10-26 **本册升为唯一任务清单**：吸收原产品级清单 §3 台账 / §4 里程碑 / §6 能力快照；产品级总单按令删除，历史段归档；跨端矩阵改派生件。上一版 v0.10（2026-10-26 P1-7~P1-11 / P2 / P3 / P4 落地：90 例新判据，Core 面全绿）
+> **版本** v1.0.23（2026-10-26 斜杠命令闭环落地：`/help` `/clear` `/sessions` `/stop` 本地执行进输入框、`/model` `/theme` 只出单待批 + 单行审计（11 例新判据）；同批核对回填流式网关 ✅。上一版 v1.0.22 = 本册升为唯一任务清单：吸收原产品级清单 §3 台账 / §4 里程碑 / §6 能力快照；产品级总单按令删除，历史段归档；跨端矩阵改派生件。上一版 v0.10（2026-10-26 P1-7~P1-11 / P2 / P3 / P4 落地：90 例新判据，Core 面全绿）
 
 > **口径登记（2026-10-25 人类主人令）**：① 四条共性能力（工程与工具链 / 授权与版本 / 插件装配 / 命令行出口）**归属 Studio 面**，按《能力规划说明书》§4.1.35 / 4.1.38 / 4.1.39 / 4.2.35 计，需求书 §3.1 只作归档位置（两书不计双份）；② `Docs/requirement-index.jsonl` 口径与《需求索引》一致 = **438 条**（FR 379 · NFR 47 · AC 12）；§5 数据需求与 §6 接口需求的 15 条**按书里原文不入总账**（它们属设计层，家在两份设计书），连同 §8.1 风险 55 / §8.2 待决 4 / 模型字段表等，共 76 条带编号但非总账的行由生成器逐类报数。
 
@@ -23,14 +23,14 @@
 | macOS 🟡 | **87**（23%） | 同上 |
 | macOS ⬜ | **149**（39%） | 同上 |
 | 能力层规模 | `Core/` 248 个 .swift · `App/` 127 · `Platform/macOS/` 8 · `CLI/` 4 | 详设 v1.1 §0 |
-| 测试规模 | `Tests/` 301 文件 · Core 全量 **3891** 例 | `.build/core-test-count.txt` |
-| 现行包 | `dist/DoyahStudio-beta1.0.app` · sha256 前缀 `02eea12335985c75` · **92,556 KB**（2026-10-26 17:4x 重出·ad-hoc 封签完整；稳定签名待证书信任） | `Scripts/build-app.sh` |
+| 测试规模 | `Tests/` 302 文件 · Core 全量 **3902** 例 | `.build/core-test-count.txt` |
+| 现行包 | `dist/DoyahStudio-beta1.0.app` · sha256 前缀 `fdcf4db1df087640` · **92,748 KB**（2026-10-26 17:57 重出·ad-hoc 封签完整；`nm` 在包内二进制数到 42 个 `AgentSlashCommandRuntime` 符号 ⇒ 本批真编进了包；稳定签名待证书信任） | `Scripts/build-app.sh` |
 
 分族读数：
 
 | 族 | 条数 | ✅ | 🟡 | ⬜ | 说明 |
 |---|---|---|---|---|---|
-| FR-AGT（智能体） | 82 | 61 | 14 | 7 | 2026-10-26 P1~P4 落地后实测（**原表写 68 条是旧读数**，按 `requirement-index.jsonl` 实测 82）：核心闭环 + 压缩边界 + 注册表真源 + 钩子 + 权限/刹停 + 知识治理已绿（P1-7~P4 全部接线）+ 文档摄取/语音出已接；剩麦克风与 §3.20 编排 |
+| FR-AGT（智能体） | 82 | 64 | 12 | 6 | 2026-10-26 本轮实测（**原表写 68 条是旧读数**，按 `requirement-index.jsonl` 实测 82）：核心闭环 + 压缩边界 + 注册表真源 + 钩子 + 权限/刹停 + 知识治理 + 文档摄取/语音出 + **斜杠命令闭环（FR-AGT-UX-CONV-014 / FR-AGT-UX-CONV-015）/ 流式模型网关（FR-AGT-LINK-CHAN-002）** 已绿；剩麦克风、§3.20 编排、MCP 对端、子代理执行器与需真端点的条目 |
 | FR-STD（Studio 工作台） | 210 | 121 | 56 | 32 | 数据库主链已通；编辑面与文件系统大片空白 |
 | FR-NTS（笔记） | 19 | 6 | 12 | 1 | **实现在本仓** `Plugins/Notes/`：26 个 .swift + 12 个测试文件约 195 例（含云同步 E2E）；仅「私密保护」未做 |
 | FR-RTR（复盘） | 82 | 0 | 0 | 82 | **实现归 `retro` 仓**，本端只做宿主视图 |
@@ -131,7 +131,7 @@
 | FR-AGT-KNOW-MEM-001 | 查询记忆层（补全优先）：从已归档的 .sql 文件派生查询记忆（结构指纹 / 频次 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-AGT-KNOW-MEM-004 | 参数化与技能候选：把「同一条 SQL 的不同取值」归并成带参数槽位的模板 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v1.1+ | 参数化与技能候选：出现≥2 次才成候选 |
 | FR-AGT-KNOW-MEM-002 | 记忆治理（可检视 / 可删除 / 可解释 / 生命周期按类型分）：记忆可浏览原文与来 | 3.2 Doyah Agent | 常用增强 | 高 | ✅ | ✅ | v1.1+ | 记忆治理：可检视/可解释/删除即真删（AgentKnowledgeTests） |
-| FR-AGT-LINK-CHAN-002 | 模型网关扩展（对话侧）：在既有 OpenAI 兼容 LLMClient（现为非流式、 | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v1.1+ | §4.1 明示 v1.1+ |
+| FR-AGT-LINK-CHAN-002 | 模型网关扩展（对话侧）：在既有 OpenAI 兼容 LLMClient（现为非流式、 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ⬜ | v1.1+ | **核对后回填**（原文列 ⬜ 是台账滞后）：六条验收要点各有判据 —— ① 请求体 `stream`+`tools`+合法 `tool_choice`（`LLMStreamTests.testRequestBodyCarriesStreamToolsAndLegalToolChoice`）② SSE 逐块拼接与整段逐字一致、`[DONE]` 后不再读（`testChunkedParsingMatchesTheWholeStreamVerbatim` / `testNothingIsReadAfterDone`）③ 用量记录进审计（`testToolCallFragmentsAreAssembledAndUsageIsReported` + `makeModelCall`）④ 本地端点不带 `Authorization`（`testLocalEndpointRequestCarriesNoAuthorizationHeader`）⑤ 门控关掉不发请求（`AgentInvocationGateTests`）⑥ 中途断流抛错不回半截（`testInterruptedStreamThrowsInsteadOfReturningAHalfReply`）。生产路径已接：`AgentLoop(client:)` 收 `LLMStreamingClient`，`AppState` 传 `OpenAICompatibleStreamingClient()`（聊天与 CLI 两条路都是）。`Tests/LLMStreamTests` 共 10 例 |
 | FR-AGT-UX-CONV-002 | 对话会话：多轮上下文（消息 / 工具调用 / 审批 / 引用）按工作区持久化，可回放 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v1.1+ | 2026-10-26 人工点验通过（人类主人确认）；此前读数：会话持久化已接线（每跳落 .jsonl）；**界面回放需人工点验**|
 | FR-AGT-CORE-LOOP-004 | Agent 循环：模型 → tool_calls → 执行 → 结果回灌 → 继续 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v1.1+ | 2026-10-26 人工点验通过（人类主人确认）；此前读数：五条验收要点机器可判且全绿（两跳 / 步数上限 / 令牌上限停在发送之前 / 取消留痕 / 未登记与坏参数不执行，判据 13 例）；面板上点「停止」的手感与三种停止提示的观感只能人工点验|
 | FR-AGT-CORE-LOOP-005 | 工具注册表（唯一出处）：内置工具与 MCP 工具的统一注册表 —— 每个工具一处声明 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v1.1+ | 注册表唯一真源：同名两处停装载（T-3.22-01 绿） |
@@ -488,8 +488,8 @@
 | FR-AGT-LINK-CHAN-003 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-LINK-EXT-003 | — | 3.2 Doyah Agent | 进阶可选 | 低 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-006 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-AGT-UX-CONV-014 | 斜杠命令：`/help` `/model` `/clear` `/compact` `/sessions` `/theme` `/stop`，本地执行不进模型 | 3.2 Doyah Agent | 基线必备 | 高 | 🟡 | 🟡 | v1.1+ | `Core/AgentSlashCommandParser` 七条命令本地解析（不进模型），判据 8 例；**输入框接线待做** |
-| FR-AGT-UX-CONV-015 | 斜杠命令落地：大小写不敏感、可带参数、只留一行审计、改配置照走审批 | 3.2 Doyah Agent | 常用增强 | 中 | 🟡 | 🟡 | v1.1+ | 大小写不敏感 / 带参 / 单行审计 / 改配置标 `requiresApproval` 均已判据化；审批接线同 014 |
+| FR-AGT-UX-CONV-014 | 斜杠命令：`/help` `/model` `/clear` `/compact` `/sessions` `/theme` `/stop`，本地执行不进模型 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | 🟡 | v1.1+ | 解析 `Core/AgentSlashCommandParser`（8 例）+ 落地形状 `Core/AgentSlashCommandRuntime`（11 例，`Tests/AgentSlashCommandRuntimeTests`）；**输入框已接线**（`AgentChatModel.send()` 抢在排队之前判定，命令不进模型 / 不占队列）：`/help` 出清单、`/clear` 清上下文（`AgentChatState.clearTranscript()`，不动盘上会话文件与授权）、`/sessions` 按标题检索、`/stop` 中断（没在跑如实说）。**边界如实**：`/compact` **无手动触发点**（压缩只在 `AgentLoop` 请求边界按预算自动发生）⇒ 命令只如实说、审计记 `noManualTrigger` |
+| FR-AGT-UX-CONV-015 | 斜杠命令落地：大小写不敏感、可带参数、只留一行审计、改配置照走审批 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | 🟡 | v1.1+ | 大小写不敏感 / 带参 / 单行审计已判据化；**审批已接线**：`/model` `/theme` 只出单（`AgentSlashPendingChange` + 复用 `AgentApproval` 状态机），输入框上方给批准 / 拒绝，**批准之前不动配置**、先落审计再落地；审计一条命令一条（`AgentActionRecord.makeToolCall(toolName: slash)` 走既有追加通道，`executed` / `pendingApproval` / `denied` / `failed` 按事实写）。**落地能力边界**：`/theme` 真落（`AppState.appearanceMode`）；`/model` 本版**无落地入口**（归 `FR-AGT-OPS-OBS-002` 设置面板）⇒ 批准后如实说「没有写配置的入口」，不假装改过 |
 | FR-AGT-UX-SESS-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-001 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-002 | 跨小时不丢目标（`Core/AgentResumeBrief.swift` + `AgentCheckpoint.goalDigest`；`Tests/AgentResumeBriefTests` **11 例**） | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |

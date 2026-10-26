@@ -368,6 +368,22 @@ public struct AgentChatState: Equatable, Sendable {
         messages.append(AgentChatMessage(role: .notice, text: code))
     }
 
+    /// **清空本会话的对话上下文**（`/clear` 的落地，`FR-AGT-UX-CONV-014`）。
+    ///
+    /// 「上下文」= 这一轮往后要带进提示词的那部分：消息流 / 过程清单 / 卡片 / 本轮读数。
+    /// **不动**端点、授权粒度、已批准的指纹集合（那是会话级设置，清上下文不等于降授权）。
+    /// **也不动盘上的会话文件**（留痕只追加，回看得到）—— 命令文案里写死了这条边界。
+    public mutating func clearTranscript() {
+        messages.removeAll()
+        cards.removeAll()
+        steps.removeAll()
+        currentAction = nil
+        contextCompression = nil
+        resumeReading = nil
+        completionReading = nil
+        monitorReading = nil
+    }
+
     // MARK: - 循环进度（② 增量 / ③ 卡片）
 
     public mutating func apply(_ event: AgentLoopEvent) {

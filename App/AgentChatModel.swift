@@ -41,6 +41,18 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 缺省给空的 ⇒ 三格里只出现「端点自己报得出」的那一格，其余不画（宁缺不假）。
     var meterInputProvider: () -> AgentMeterInput = { AgentMeterInput() }
 
+    /// 宿主注入：把**一条**审计记录落到审计面（与工具调用、模型调用同一条追加通道 —— 不另开日志文件）。
+    /// 不接 ⇒ 命令照旧在本机做完，但审计那一行写不进去；界面会另外如实说一句（不静默）。
+    var auditSink: ((AgentActionRecord) async -> Void)?
+    /// 宿主注入：把一条**已批准**的配置变更真的落进配置。
+    /// 返回 `false` = 本版还没有这条落地入口（`/model` 就属于这一档）—— 如实说，不假装改过。
+    var applyConfigChange: ((AgentSlashCommandKind, String) -> Bool)?
+
+    /// 斜杠命令的「解析 → 要做什么」纯函数（`FR-AGT-UX-CONV-014`）。
+    private let slashRuntime = AgentSlashCommandRuntime()
+    /// 一条待批的配置变更（`/model` `/theme`）。`nil` = 没有在等审批的单。
+    @Published private(set) var pendingSlashChange: AgentSlashPendingChange?
+
     /// 本会话累计（**每次跑完把这一轮的用量并进来**）。两侧共用 `TokenUsageLedger`，口径同一个。
     @Published private(set) var sessionUsage = TokenUsageLedger()
     /// 上一轮跑完用了多少秒（`nil` = 还没跑过）。
@@ -239,6 +251,16 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     func send() async {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
+        // **斜杠命令在本地做完，不进模型**（`FR-AGT-UX-CONV-014`）。
+        //
+        // 为什么要抢在「排队」之前：命令不是提问，排进队列会被当成人话发给模型 ——
+        // 那正是「本地执行不进模型」要禁掉的那件事。命令也不清队列、不打断在跑的那一轮
+        // （`/stop` 才是打断，且它自己走 `stop()`）。
+        if let effect = slashRuntime.plan(prompt) {
+            input = ""
+            await perform(effect)
+            return
+        }
         // **一轮还在跑时提交的提问不丢、也不打断**：排进队列，这一轮结束后按序接着跑
         // （Hermes CLI 的 `/queue` 同义；这里用界面表达，不要求用户记斜杠命令）。
         if state.isRunning {
@@ -247,6 +269,130 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             return
         }
         await start(prompt: prompt, intent: .newQuestion)
+    }
+
+    // MARK: - 斜杠命令的落地（`FR-AGT-UX-CONV-014` / `FR-AGT-UX-CONV-015`）
+
+    /// 把一条 effect 落成界面动作 + **一行**审计。
+    ///
+    /// 三条纪律：
+    /// · **不构造模型请求**（没有 `makeLoop`、没有 `gate`、没有 token）；
+    /// · **改配置的命令只出单**：`/model` `/theme` 一律落到 `pendingSlashChange` 等人工批准，
+    ///   命令自己不许碰配置（`CONV-015`）；批准之后才由宿主注入的 `applyConfigChange` 落地；
+    /// · 审计**一条命令一条记录**，结局按事实写：做成 `.executed`、等审批 `.pendingApproval`、
+    ///   拒收 `.denied`、做不到 `.failed`（`/compact` 这一版没有手动触发点，就写 `.failed` 并附原因）。
+    private func perform(_ effect: AgentSlashCommandEffect) async {
+        switch effect {
+        case let .help(lines):
+            state.appendNotice(lines.joined(separator: "\n"))
+            await writeSlashAudit(effect, outcome: .executed)
+
+        case .clearContext:
+            // **盘上的会话文件不动**（留痕只追加，回看得到）；清的是往后要带进提示词的上下文。
+            state.clearTranscript()
+            resetForReplay()
+            state.appendNotice(L(.agentSlashCleared))
+            await writeSlashAudit(effect, outcome: .executed)
+
+        case .compactContext:
+            // 压缩本身在 `AgentLoop` 的请求边界上按预算自动发生（`AgentContextCompressionBudget`）；
+            // 本版**没有**手动触发点 —— 如实说，不假装压过。
+            state.appendNotice(L(.agentSlashCompactNoTrigger))
+            await writeSlashAudit(effect, outcome: .failed, detail: "noManualTrigger")
+
+        case let .searchSessions(query):
+            // 会话列表按工作区读一次（每敲一句就扫盘是浪费；这里是显式命令，扫一次合理）。
+            reloadSessions(workspacePath: activeWorkspacePath)
+            let needle = query.lowercased()
+            let hits = sessions.filter { $0.title.lowercased().contains(needle) }
+            state.appendNotice(L(.agentSlashSearch, query, hits.count))
+            await writeSlashAudit(effect, outcome: .executed, detail: "hits=\(hits.count)")
+
+        case .stopRun:
+            if state.isRunning {
+                stop()
+                state.appendNotice(L(.agentSlashStopRequested))
+                await writeSlashAudit(effect, outcome: .executed)
+            } else {
+                // 没在跑也如实说：不假装停过（停了什么也没停）。
+                state.appendNotice(L(.agentSlashStopNotRunning))
+                await writeSlashAudit(effect, outcome: .denied, detail: "notRunning")
+            }
+
+        case let .configChange(kind, argument):
+            // 出单（待批），**不落地**。审计那一行随单一起写（`pendingApproval`）——
+            // 批准 / 拒绝的时候再各写一条终态，与工具审批同一条留痕口径。
+            let record = slashRuntime.auditRecord(for: effect, outcome: .pendingApproval, sessionID: sessionID)
+            let approval = AgentApproval(record: record, state: .pending)
+            pendingSlashChange = AgentSlashPendingChange(effect: effect, approval: approval)
+            state.appendNotice(L(.agentSlashPendingApproval, kind.rawValue, argument))
+            await writeRecord(record)
+
+        case let .rejected(command):
+            // 不认识的命令 / 缺参数：把**原命令**说清楚（`auditLine` 是单行的机器形态）。
+            state.appendNotice(L(.agentSlashRejected, command.auditLine))
+            await writeSlashAudit(effect, outcome: .denied, detail: "rejected")
+        }
+    }
+
+    /// 批准一条待批的配置变更（界面那两个按钮的「批准」）。
+    func approveSlashChange() async {
+        guard var change = pendingSlashChange else { return }
+        do {
+            try change.approval.approve(by: NSUserName())
+        } catch {
+            // 非法流转（已经被处理过 / 已失效）不猜、不硬改，照实报。
+            state.appendNotice(ErrorPresenter.message(for: error))
+            return
+        }
+        pendingSlashChange = nil
+        // **先落审计，再动配置**（与工具审批同一顺序）：写不进日志就不改配置。
+        guard await writeRecord(change.approval.record) else {
+            state.appendNotice(L(.agentSlashAuditUnavailable, change.auditLine))
+            return
+        }
+        let applied = applyConfigChange?(change.kind, change.argument) ?? false
+        if applied {
+            state.appendNotice(L(.agentSlashApproved, change.auditLine))
+            await writeSlashAudit(.configChange(kind: change.kind, argument: change.argument),
+                                  outcome: .executed, detail: "applied")
+        } else {
+            // 批准了但**没有落地入口**（本版 `/model` 就属这一档）—— 如实说，不假装改过。
+            state.appendNotice(L(.agentSlashApplyUnavailable, change.auditLine))
+            await writeSlashAudit(.configChange(kind: change.kind, argument: change.argument),
+                                  outcome: .failed, detail: "noApplier")
+        }
+    }
+
+    /// 拒绝一条待批的配置变更。
+    func rejectSlashChange() async {
+        guard var change = pendingSlashChange else { return }
+        do {
+            try change.approval.reject(by: NSUserName())
+        } catch {
+            state.appendNotice(ErrorPresenter.message(for: error))
+            return
+        }
+        pendingSlashChange = nil
+        _ = await writeRecord(change.approval.record)
+        state.appendNotice(L(.agentSlashRejectedChange, change.auditLine))
+    }
+
+    /// 写一条斜杠命令的审计（一条命令一条）。
+    private func writeSlashAudit(_ effect: AgentSlashCommandEffect,
+                                 outcome: AgentActionRecord.Outcome,
+                                 detail: String? = nil) async {
+        var record = slashRuntime.auditRecord(for: effect, outcome: outcome, sessionID: sessionID)
+        if let detail { record.detail = detail }
+        _ = await writeRecord(record)
+    }
+
+    /// 交给宿主写审计。`false` = 没接审计面或写失败（调用方据此决定要不要如实说一句）。
+    @discardableResult
+    private func writeRecord(_ record: AgentActionRecord) async -> Bool {
+        guard let auditSink else { return false }
+        await auditSink(record)
+        return true
     }
 
     /// 撤掉一条排队中的提问（界面上那个 `✕`）。

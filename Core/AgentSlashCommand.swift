@@ -75,7 +75,10 @@ public struct AgentSlashCommandParser: Sendable {
         let argument = AgentSlashCommand.singleLine(String(body.dropFirst(name.count)))
 
         if name == "sessions" {  // 别名：/sessions 与 /session 同指
-            return .parsed(kind: .search, argument: argument)
+            // 别名只换名字、**不换规矩**：`/sessions` 缺关键词与 `/search` 一样要拒收
+            // （旧写法在别名处直接返回，绕过了下面的缺参判定 ⇒ `/sessions` 会去搜空串，
+            //  那等于「匹配一切」，看着像有结果、其实什么也没问）。
+            return argument.isEmpty ? .missingArgument(kind: .search) : .parsed(kind: .search, argument: argument)
         }
         guard let kind = AgentSlashCommandKind(rawValue: name) else {
             return .unknown(name: name)

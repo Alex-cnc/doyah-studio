@@ -113,6 +113,12 @@ struct DoyahStudioApp: App {
                     agentChat.meterInputProvider = { appState.agentMeterInput }
                     // 授权粒度（`FR-AI-34`）：默认任务范围内代签（少问）；设置里可改回逐次批。
                     agentChat.scopeProvider = { appState.agentConfiguration.scopeMode }
+                    // 斜杠命令的两口（`FR-AGT-UX-CONV-014` / `-015`）：审计落到同一条追加通道，
+                    // 配置落地只为**已批准**的变更开放（`/theme` 真落，`/model` 如实说还没入口）。
+                    agentChat.auditSink = { record in await appState.recordAgentSlashAudit(record) }
+                    agentChat.applyConfigChange = { kind, argument in
+                        appState.applyAgentSlashConfigChange(kind: kind, argument: argument)
+                    }
                     // 会话列表与切换（§9.1.16 缺口 ②）：存储与循环那条路**同一处**
                     // （`AgentSessionStore.defaultDirectory`）—— 列表读到的一定是循环写进去的那一批。
                     agentChat.sessionStore = AgentSessionStore(directory: AgentSessionStore.defaultDirectory)

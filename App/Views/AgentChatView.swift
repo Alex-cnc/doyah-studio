@@ -1120,6 +1120,27 @@ struct AgentChatView: View {
                 }
                 .foregroundStyle(Theme.text(.secondary))
             }
+            // 斜杠命令要改配置时的那张单（`FR-AGT-UX-CONV-015`）：**批准之前不动配置**。
+            // 形态与工具审批那一行一致 —— 等批的事要看得见、点得到、也能拒。
+            if let pending = model.pendingSlashChange {
+                HStack(spacing: Spacing.s) {
+                    Text("⚠").font(Self.transcriptFont).foregroundStyle(Theme.accentColor)
+                    Text(pending.auditLine)
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(.secondary))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 0)
+                    ToolbarIconButton(systemName: "checkmark.circle",
+                                      help: L(.agentChatApprovalApprove)) {
+                        Task { await model.approveSlashChange() }
+                    }
+                    ToolbarIconButton(systemName: "xmark.circle",
+                                      help: L(.agentChatApprovalDeny)) {
+                        Task { await model.rejectSlashChange() }
+                    }
+                }
+            }
             HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
                 // 提示符 `>`（§5.3.8.1 ⑤），与消息区用户行同一个字形、同一列。
                 Text(">")

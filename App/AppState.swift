@@ -3749,6 +3749,30 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - 斜杠命令的宿主侧两口（`FR-AGT-UX-CONV-014` / `-015`）
+
+    /// 斜杠命令那一行审计的落点（与工具 / 模型调用走**同一条**追加通道）。
+    func recordAgentSlashAudit(_ record: AgentActionRecord) async {
+        await appendAgentAudit(record)
+    }
+
+    /// 一条**已批准**的配置变更真的落地。
+    ///
+    /// 本版只接得了 `/theme` —— 外观偏好已经是本进程的配置真值源（`appearanceMode`，
+    /// 改完立即生效并落 `UserDefaults`）。`/model` 还没接：模型名归智能体设置面板
+    /// （`FR-AGT-OPS-OBS-002` 那条「设置面板接线」），本函数**如实返回 `false`**，
+    /// 由界面说「已批准但没有落地入口」—— 不假装改过。
+    func applyAgentSlashConfigChange(kind: AgentSlashCommandKind, argument: String) -> Bool {
+        switch kind {
+        case .theme:
+            guard let preference = AgentSlashThemeArgument.preference(from: argument) else { return false }
+            appearanceMode = preference
+            return true
+        case .model, .help, .clear, .compact, .search, .stop:
+            return false
+        }
+    }
+
     /// 审批决策：状态机流转 → （批准时）执行 → 追加终态记录。
     private func decideAgentAction(id: UUID, approve: Bool, note: String?) async {
         guard let index = pendingAgentApprovals.firstIndex(where: { $0.id == id }) else { return }

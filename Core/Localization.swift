@@ -957,6 +957,18 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentMessageCopy
     case agentMessageResend
     case agentResendNoAnchor
+    // 斜杠命令（`FR-AGT-UX-CONV-014` / `-015`）：全部**本地执行**的结果话术。
+    case agentSlashCleared
+    case agentSlashCompactNoTrigger
+    case agentSlashSearch
+    case agentSlashStopRequested
+    case agentSlashStopNotRunning
+    case agentSlashPendingApproval
+    case agentSlashRejected
+    case agentSlashRejectedChange
+    case agentSlashApproved
+    case agentSlashApplyUnavailable
+    case agentSlashAuditUnavailable
     case agentChatEmptyHint
     case agentChatPlaceholder
     case agentChatSend
@@ -3515,6 +3527,17 @@ public enum LocalizedStrings {
         .agentMessageCopy: [.simplifiedChinese: "复制这条", .english: "Copy this message"],
         .agentMessageResend: [.simplifiedChinese: "重发这条（同样的提问再跑一轮）", .english: "Resend this turn (run the same question again)"],
         .agentResendNoAnchor: [.simplifiedChinese: "这条前面没有对应的提问，没法重发。", .english: "There is no question behind this message, so it cannot be resent."],
+        .agentSlashCleared: [.simplifiedChinese: "已清空本会话的对话上下文；盘上的会话记录还在，随时能回看。", .english: "Conversation context cleared. The session log on disk is untouched and can still be reviewed."],
+        .agentSlashCompactNoTrigger: [.simplifiedChinese: "压缩在每次模型请求的边界上按预算自动发生；本版还没有手动触发点 —— 已如实告知，没有假装压过。", .english: "Compaction runs automatically at model-request boundaries within budget; this build has no manual trigger, and no compaction was pretended."],
+        .agentSlashSearch: [.simplifiedChinese: "「%@」命中 %ld 条会话（按标题匹配）。", .english: "\"%@\" matches %ld sessions (by title)."],
+        .agentSlashStopRequested: [.simplifiedChinese: "已请求中断这一跑：在下一跳之前停，已产生的工具结果仍留痕。", .english: "Stop requested: it halts before the next hop, and tool results already produced stay on record."],
+        .agentSlashStopNotRunning: [.simplifiedChinese: "当前没有在跑的任务，没有可中断的。", .english: "Nothing is running right now, so there is nothing to interrupt."],
+        .agentSlashPendingApproval: [.simplifiedChinese: "`/%@ %@` 要改持久配置，等你批准；批准之前不会动配置。", .english: "`/%@ %@` changes persistent configuration and is waiting for your approval; nothing is changed until you approve."],
+        .agentSlashRejected: [.simplifiedChinese: "这条命令没收：%@（用 `/help` 看可用命令）。", .english: "Command rejected: %@ (see `/help` for available commands)."],
+        .agentSlashRejectedChange: [.simplifiedChinese: "已拒绝 %@：配置一个字都没改。", .english: "Rejected %@: configuration is untouched."],
+        .agentSlashApproved: [.simplifiedChinese: "已批准并落地：%@。", .english: "Approved and applied: %@."],
+        .agentSlashApplyUnavailable: [.simplifiedChinese: "已批准 %@，但本版还没有把这项改动写进配置的入口（设置面板接线是另一条活），配置未改。", .english: "Approved %@, but this build has no entry to write that change into configuration yet (the settings panel is separate work); configuration is unchanged."],
+        .agentSlashAuditUnavailable: [.simplifiedChinese: "审计写不进去，所以 %@ 没有落地（先留痕，再动配置）。", .english: "The audit record could not be written, so %@ was not applied (record first, change later)."],
         .agentChatEmptyHint: [.simplifiedChinese: "例如：把当前库的表结构列出来；或者：看看上个月的订单为什么少了。", .english: "For example: list the tables in this database — or: figure out why last month's orders dropped."],
         .agentChatPlaceholder: [.simplifiedChinese: "说点什么…", .english: "Ask something…"],
         .agentChatSend: [.simplifiedChinese: "发送", .english: "Send"],
