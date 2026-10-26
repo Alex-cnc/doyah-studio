@@ -435,6 +435,8 @@ python3 Scripts/check-req-index.py   # 机器视图（requirement-index.jsonl）
 python3 Scripts/check-doc-layout.py
 # 需求编号三方对账：正文定义域（第 3/4/7 章）↔ 需求索引 ↔ 计划书台账。
 # 两份派生件互比（台账↔索引）永远绿，正文这一侧此前没人比；§5 数据需求 / §6 接口需求另账、§8 风险与待决同号两表属刻意。
+# 端级一一对应（详设 ↔ 任务清单；人类主人 2026-10-26 令「与详细设计文档对标」）
+python3 Scripts/check-end-sheets.py
 python3 Scripts/check-req-ids.py
 # L-32（2026-09-27 第 28 轮）：变更记录版本号**唯一**、头部版本格**可判**（= 变更记录最高号，
 # 或带「基线 / 首版」标注并在标注里写出当前号）、队列**定义行**条目号唯一。

@@ -123,8 +123,11 @@ DEFAULT_TARGETS = [
     # 2026-10-23：macOS 端开发计划书（有表格 ⇒ 进受检；本端执行计划，不改状态源）
     "Docs/Doyah产品开发计划任务清单-macOS端.md",
     # 2026-10-26：任务清单按端分册（人类主人令：不设产品级总单）
+    "Docs/Doyah产品开发计划任务清单-Windows端.md",
+    "Docs/Doyah产品开发计划任务清单-Linux端.md",
+    "Docs/Doyah产品开发计划任务清单-HarmonyOS端.md",
     "Docs/Doyah产品开发计划任务清单-iOS端.md",
-    "Docs/Doyah产品开发计划书-安卓端.md",
+    "Docs/Doyah产品开发计划任务清单-安卓端.md",
     "Docs/发布方案.md",
     "Docs/手工验收运行手册.md",
     # L-41（第 35 轮）：每轮必改的两份**本机台账**（`.gitignore` 排除，只在主开发机上）
@@ -836,7 +839,7 @@ SELF_TEST_TRACKED = [
     "Docs/Doyah产品详细设计说明书-HarmonyOS.md",
     # 2026-10-23：macOS 端开发计划书（有表格 ⇒ 进受检；本端执行计划，不改状态源）
     "Docs/Doyah产品开发计划任务清单-macOS端.md",
-    "Docs/Doyah产品开发计划书-安卓端.md",
+    "Docs/Doyah产品开发计划任务清单-安卓端.md",
     "Docs/模板-详细设计说明书-Studio.md",  # 2026-10-21 详设模板（入库件）
     "Docs/规范/界面设计节-写作规范.md",  # 2026-10-22 界面设计规范进仓（对侧无本侧技能包，规则跟着代码走）
     "Docs/Doyah产品需求规格说明书-追溯表.md",  # 2026-10-20 从 SRS §9.1 外置（瘦身令），必须入库
@@ -893,6 +896,9 @@ SELF_TEST_TRACKED = [
     "Docs/frozen/Doyah产品详细设计说明书-macOS-v1.0-20261025.md",
     "Docs/Doyah产品macOS端-版本里程碑与开发任务清单-v1.0-20261025.md",
     "Docs/Doyah产品开发计划任务清单-iOS端.md",
+    "Docs/Doyah产品开发计划任务清单-Windows端.md",
+    "Docs/Doyah产品开发计划任务清单-Linux端.md",
+    "Docs/Doyah产品开发计划任务清单-HarmonyOS端.md",
 ]
 
 SELF_TEST_ABSENT = [

@@ -90,8 +90,11 @@ VERSION_DOCS = [
     # 2026-10-23：macOS 端详细设计（自带 §11 变更记录 + 头部版本格）。
     ("Docs/Doyah产品详细设计说明书-macOS.md", False),
     # 2026-10-23：macOS 端开发计划书（自带 §11 变更记录 + 头部版本格）。
+    ("Docs/Doyah产品开发计划任务清单-Windows端.md", False),
+    ("Docs/Doyah产品开发计划任务清单-Linux端.md", False),
+    ("Docs/Doyah产品开发计划任务清单-HarmonyOS端.md", False),
     ("Docs/Doyah产品开发计划任务清单-iOS端.md", False),
-    ("Docs/Doyah产品开发计划书-安卓端.md", False),
+    ("Docs/Doyah产品开发计划任务清单-安卓端.md", False),
     ("Docs/Doyah产品详细设计说明书-Windows.md", False),
     ("Docs/Doyah产品详细设计说明书-Linux.md", False),
     ("Docs/Doyah产品详细设计说明书-Android.md", False),
