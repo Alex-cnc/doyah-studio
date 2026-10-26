@@ -42,7 +42,7 @@
 | 分区 | 条数 | ✅ | 🟡 | ⬜ |
 |---|---|---|---|---|
 | 3.6 Doyah Retro | 第六章 | 18 | `FR-RTR-MKT-FEED-001` ~ `FR-RTR-REV-AI-001`（82 条） | **18 / 18 每点都有条目**（2026-10-20 归位；回测与验证拆为回测引擎 / 验证与样本；归位表暂定） |
-| 3.5 Doyah Notes | 19 | 0 | 0 | 19 |
+| 3.5 Doyah Notes | 20 | 0 | 0 | 20 |
 | 7.4 智能体验收 | 4 | 2 | 0 | 2 |
 | 7.1 发布门槛 | 8 | 5 | 1 | 2 |
 | 3.2 Doyah Agent | 第三章 | 50 | `FR-AGT-LINK-CHAN-001` ~ `FR-AGT-QUAL-VERIFY-004`（67 条） | **覆盖 50 / 50**（2026-10-20 补齐 15 条；补 LOOP-009 单次任务预算 1 条） |
@@ -84,6 +84,7 @@
 | FR-NTS-NOTE-ATTACH-001 | — | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-SEARCH-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-ORG-001 | — | 3.5 Doyah Notes | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-ORG-002 | — | 3.5 Doyah Notes | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-VERSION-001 | — | 3.5 Doyah Notes | 基线必备 | — | 🟡 | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-TRASH-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-SYNC-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
@@ -583,7 +584,7 @@
 > 不设列的平台（移动端）在台账 `notPlatforms` 里写明理由。
 
 <!-- BEGIN platform-parity -->
-> 共 393 条功能需求。**macOS** 状态取自《Doyah 产品需求规格说明书-需求索引》（**基线，唯一来源**，不由本脚本维护）。
+> 共 394 条功能需求。**macOS** 状态取自《Doyah 产品需求规格说明书-需求索引》（**基线，唯一来源**，不由本脚本维护）。
 > **watchOS** 状态取自 `Docs/平台实现状态.json` → `platforms.watchos.overrides`（Apple 全系第三端（与 macOS / iOS 同一机组；实现未开工）；维护者：铁皮大河马（`hugehippo` · macOS/iOS/watchOS 侧））。
 > **Linux** 状态取自 `Docs/平台实现状态.json` → `platforms.linux.overrides`（Doyah Studio 全量 PC 端第三端（2026-10-14 人类主人令：本仓实现开工）；维护者：铁皮大河马（`hugehippo` · macOS/iOS/Linux 侧）—— 2026-10-15 人类主人拍板「Linux 与 macOS 底层血缘更近 ⇒ 归 `hugehippo`」（原归 `babyhippo`）；实现面在 `platform/linux/`，平台设计层写概设 §8.6 `[独占:linux]`）。
 > **Windows** 状态取自 `Docs/平台实现状态.json` → `platforms.windows.overrides`（对等目标端（与 macOS 完全一致）；维护者：奶牙小河马（`babyhippo` · Windows/Android/Harmony 侧）—— 2026-10-16 人类主人定案：不再设分组键，Windows 归 babyhippo；`fatshark` 侧名已退役）。
@@ -679,7 +680,7 @@
 | FR-AGT-UX-SESS-001 | 会话生命周期：新建 / 归档 / 删除 / 导出 —— 删除即真删（不留副本），导出可带走 | ⬜ | ⬜ | ⬜ | ⬜ |
 | FR-AGT-UX-SYNC-001 | 多端一致性：同一会话在桌面与手机上看到的消息、审批与结论一致（壳不同，内容同） | ⬜ | ⬜ | ⬜ | ⬜ |
 
-**FR-NTS**（19 条。与 macOS 基线一致：watchOS 1 / Linux 1 / Windows 1 条）
+**FR-NTS**（20 条。与 macOS 基线一致：watchOS 2 / Linux 2 / Windows 2 条）
 
 | 编号 | 需求摘要 | macOS | watchOS | Linux | Windows |
 |---|---|---|---|---|---|
@@ -688,6 +689,7 @@
 | FR-NTS-NOTE-EXPORT-001 | 导出与迁移：导出 Markdown / 纯文本 / 备份包，导入自己导出的包可完整还原 | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-NTS-NOTE-FORMAT-001 | 编辑与格式：标题、列表、待办、引用、代码块、表格等基础格式，所见即所得与源码可切换 | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-NTS-NOTE-ORG-001 | 整理：标签、收藏、归档、置顶与批量操作，批量操作前显示影响条数 | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
+| FR-NTS-NOTE-ORG-002 | 笔记本归类：笔记可归入一个笔记本（单层，不做「架 → 笔记本」两层；未指定时落默认「收件箱」），归属唯一… | ⬜ | ⬜ | ⬜ | ⬜ |
 | FR-NTS-NOTE-PRIVACY-001 | 私密保护：可把单条笔记标为私密（不进搜索、不同步、不外发），需二次验证才可查看 | ⬜ | ⬜ | ⬜ | ⬜ |
 | FR-NTS-NOTE-SEARCH-001 | 列表与检索：按时间 / 标签 / 关键词 / 语义检索，两种检索都在，语义不可用时降级并说出来 | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
 | FR-NTS-NOTE-SYNC-001 | 同步与账号：手机端与桌面端同步，离线可用、联网合并，冲突按 §3.5.9「记录级 LWW + 留两版」处… | ✅ | ⬜ ⚠️ | ⬜ ⚠️ | ⬜ ⚠️ |
