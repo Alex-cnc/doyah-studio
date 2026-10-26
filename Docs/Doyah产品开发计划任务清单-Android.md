@@ -1,6 +1,6 @@
 # Doyah产品开发计划任务清单 · Android 端
 
-> **版本** v1.0.7（2026-10-26 建单后七轮：上游改活书 → P1 归类 → P3 回收站 → P4 私密 → P2 部分失败态 → **万条性能读数** → **回归自检** → **两条业务链接成仪器段**）
+> **版本** v1.0.8（2026-10-26 建单后八轮：上游改活书 → P1 归类 → P3 回收站 → P4 私密 → P2 部分失败态 → **万条性能读数** → **回归自检** → **两条业务链接成仪器段** → **仪器判据三类老化收口**）
 > **本文件是 Android 端唯一的进度记录与参考文档**（人类主人 2026-10-26 令）。其余同类文档一律不再使用：
 > `notes/Docs/开发任务清单.md`（2026-09-22 旧基线）· `notes/Docs/任务清单-按平台.md` · 旧版《Doyah产品开发计划书-安卓端》（已删除）。**不要再引用它们。**
 
@@ -87,7 +87,7 @@
 | 迁移 | v1→v6 真 SQLite 对拍 | `tools/logic-check/migration-check.py` |
 | 库结构同形 | 三张共享表逐字 | `platform/android/tools/check-schema-parity.py` |
 | 端上冒烟 | 500 事件 + 3 次冷启 | `python platform/android/tools/monkey-smoke.py`（判红仅四条：`FATAL EXCEPTION` / 本方 ANR / 事件没全注入 / 冒烟后进程不在；冷启秒数只打印不判） |
-| 端上流程 | **23 段** | `python platform/android/tools/ui-regression.py`（读屏 + 真库双证据；`--only <段名>` 单段复跑；`--self-test` **116 例**）。2026-10-27 首次全量真跑：**23 段 16 过 / 7 红**（1310.9s，`bench/ui-regression-20261026-185201-full.json`），`private-gate` 全绿（11 条断言：没锁屏拒绝 + 真库不落标记 / 凭据后标上 / 徽标 / 搜不到 / 打开再验 / 私密详情页无出口 / 取消要二次确认 + 过凭据 + 标记行消失）；7 条红全在**仪器**面（判据老化 + 段间顺序依赖），见 §8 |
+| 端上流程 | **23 段** | `python platform/android/tools/ui-regression.py`（读屏 + 真库双证据；`--only <段名>` 单段复跑；`--self-test` **125 例**）。2026-10-27 三类判据老化收口后**全量 23 段 23 过 / 0 红 / 0 跳过**（1597.5s，`bench/ui-regression-20261026-205636.json`）：删除三段改按「进回收站 + 列表移除 + 行本体保留」判、`detail-delete` / `trash-chain` 各带段级 reset（`pm clear` + 重授权限）、`todo-write` 先过详情框再进编辑对话框、`reminder-new` 的「贴底」阈值改成只在真屏外才滚；仪器自测 125 例全过 |
 
 ## 8. 阻塞与依赖
 
@@ -99,4 +99,5 @@
 | release keystore 拍板 | 人类主人 | 待定（当前自签） |
 | 外部用户测试反馈 | 人类主人转达 | 待定（手上是 beta1.2） |
 | **私密链路的系统 PIN 驱动（仪器）** | ✅ 已解（2026-10-27） | 两处真因都不是「PIN 注入不进去」：① 本机 AVD 锁屏被设为 None，旧判据用 `locksettings verify` 问「有没有锁屏」（锁屏关着它照样报成功）；② 冷启时设备留在锁屏（屏还熄着），而锁屏时 `/sdcard` 未解密 ⇒ dump 读回空树。已改成：开局解设备锁（唤醒 → `wm dismiss-keyguard` → 上滑拉面板 → 按节点逐位点 PIN + Enter，每步回读 `isKeyguardShowing`）、读屏落点改 `/data/local/tmp` 并**先删旧树**、凭据面两形态（keyguard 键盘 / 系统确认对话框）都驱动。`--only private-gate` 183.9s 全绿 11 条断言 |
-| **全量跑剩 7 条红（仪器面）** | 本侧（下一跳第一件事） | ① `delete` / `undo-delete` / `batch-delete`：判据仍是「窗口过点后从 `inspirations` 删行」，与详设 §4「条目进回收站」冲突（实测行本体不动、`note_trash` 立行）⇒ 判据改为「进回收站 + 列表移除 + 行本体保留」三条同时成立；② `detail-delete` / `trash-chain`：段间顺序依赖（前序段把三条种子笔记都进了回收站），单段 `--only trash-chain` 在干净库上全绿 ⇒ 加段级 reset（`pm clear` + 播种三条）；③ `todo-write` / `reminder-new`：待保存提醒行与「无截止」清除入口按文案找，实际只有 `contentDescription`（`No due date` / `No reminders yet`）⇒ 照新加的 `labeled()`（desc 优先、文案兜底）改。**均不涉及产品代码**（`beta1.9` 未改动） |
+| **全量跑剩 7 条红（仪器面）** | ✅ 已解（2026-10-27） | 三类真因与处置见 §7 端上流程那一行 + `notes/platform/android/实现笔记-仪器判据收口-20261027.md`：① 删除三段（`delete` / `undo-delete` / `batch-delete`）改按「列表移除 + 行本体保留 + `note_trash` 记一条（30 天）」判；② `detail-delete` / `trash-chain` 各带**段级 reset**（`pm clear` + 重授权限 + 冷启）；③ `todo-write` 先点详情框里的「编辑」再找 ✕、`reminder-new` 的「贴底」阈值只在真屏外才滚。全量复跑**23 段 23 过 / 0 红**（1597.5s）。产品代码零改动 |
+| **闸门 F⑦「安卓列写 21 段，实为 23 段」** | 契约层所有者（《需求规范书》§10.7，四书） | 待定（本侧不改四书正文；其余 25 项 PASS） |
