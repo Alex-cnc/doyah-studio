@@ -1,4 +1,4 @@
-"""端级对账：**任务清单只给正在开发的端建**（人类主人 2026-10-26 令：只有 macOS 端与 Android 端）。
+"""端级对账：**六端各一份详设 + 一份任务清单**（人类主人 2026-10-26 令）。
 
 判据：
   A. 允许存在的端清单 = `{macOS端, 安卓端}`；出现别的端清单（iOS / Windows / Linux / HarmonyOS …）即判红；
@@ -22,9 +22,13 @@ DERIVED = ROOT / ".build" / "derived"
 
 # 允许存在的端清单（键 = 清单文件名里的端名，值 = 详设文件名里的端名）
 ALLOWED_SHEETS = {
+    # 2026-10-26 人类主人令：「六端各一份详细设计、一份开发计划任务清单」——每端一份，共六份单。
     "macOS端": "macOS",
-    # 2026-10-26 人类主人令：留小河马新建并维护的 `-Android.md`；旧 `-安卓端.md` 已归档。
     "Android": "Android",
+    "Windows": "Windows",
+    "Linux": "Linux",
+    "HarmonyOS": "HarmonyOS",
+    "iOS": "iOS",
 }
 
 # 判据 H：`Docs/` 根只许「四书 + 一单 + 工程规范」。任何别的书/清单/索引/记录/发布说明都不许待在根上。
@@ -38,7 +42,6 @@ BOOK_PATTERNS = [
 SHEET_PATTERN = r"^Doyah产品开发计划任务清单-(%s)\.md$" % "|".join(ALLOWED_SHEETS)
 # 工程规范：写「怎么做活」的，不是产品书；人类主人 2026-10-26 口径里只留这两份 + 一份模板 + README
 ENGINEERING_DOCS = {
-    "README.md",
     "通用开发规范.md",
     "项目管理规范.md",
 }
@@ -145,7 +148,7 @@ def main() -> int:
         for p in problems:
             print(f"   · {p}")
         return 1
-    print("✅ 端级对账通过：任务清单只有 macOS 端 + Android 端（小河马维护），各有一份详设兜底；"
+    print("✅ 端级对账通过：任务清单六端各一份（macOS端 / Android / Windows / Linux / HarmonyOS / iOS），各有一份同端详设兜底；"
           "无孤本、无产品级总单、无跨端视图混进 Docs/")
     return 0
 
