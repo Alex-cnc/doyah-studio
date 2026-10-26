@@ -33,7 +33,7 @@ DEFAULT_DOCS = [
     "Docs/Doyah产品需求规格说明书.md",
     "Docs/Doyah产品能力规划说明书.md",
     "Docs/Doyah产品概要设计说明书.md",
-    "Docs/智能体助手-开发spec.md",
+    "Docs/智能体助手-开发规范.md",
 ]
 QUEUE_FILE = "Docs/design/开发循环-任务队列.md"
 

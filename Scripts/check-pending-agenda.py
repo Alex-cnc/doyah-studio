@@ -25,7 +25,7 @@
 
 **面与边界（如实登记，不假装覆盖比实际宽）**：
 
-- 本版**接入面** = `Docs/智能体助手-开发spec.md` §6（Studio 的 `Q` 号空间）
+- 本版**接入面** = `Docs/智能体助手-开发规范.md` §6（Studio 的 `Q` 号空间）
   + `Docs/design/开发循环-任务队列.md`（`needs-user` 行）+ 台账自身。
 - **面外** = 台账里**落点格**指向 Notes / Retro 书（`核心契约` / `需求书` / `规划书` / `§9.2`）
   的行 —— 本版**只计数、不判定**（它们的原书在别的仓，尚未接入；计数会打印在收尾行上，
@@ -42,7 +42,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = ROOT / "Docs" / "智能体助手-开发spec.md"
+SPEC = ROOT / "Docs" / "智能体助手-开发规范.md"
 QUEUE = ROOT / "Docs" / "design" / "开发循环-任务队列.md"
 LEDGER = ROOT / "Docs" / "design" / "待拍板台账-三仓.md"
 
