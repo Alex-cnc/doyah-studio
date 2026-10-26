@@ -47,7 +47,7 @@ import doc_index  # noqa: E402  （派生件位置：.build/derived；缺文件�
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
 INDEX = doc_index.path()
 PLAN = ROOT / "Docs/Doyah产品开发计划任务清单.md"
-TRACE = ROOT / "Docs/Doyah产品需求规格说明书-追溯表.md"
+TRACE = ROOT / "Docs/changelog/Doyah产品需求规格说明书-追溯表.md"  # 2026-10-26 已废（人类主人：「以四书一单为唯一根据」），文件不存在时落点列全给 —
 STATUS = ROOT / "Docs/平台实现状态.json"
 # 2026-10-20：真值源搬迁前的落点（SRS §10.1 索引 / §10.2 追溯表）；现在 SRS 里已无这两节，
 # 只用于报错时点名「它搬去哪了」。
@@ -229,6 +229,8 @@ def load_trace(known: set[str]) -> tuple[dict[str, str], int, int]:
     `R-018 ~ R-021` 等），它们不对应单条需求 ⇒ 不进逐条索引
     （数量如实印在产出件头部，不假装它们不存在）。
     """
+    if not TRACE.exists():
+        return {}
     lines = read_lines(TRACE, "追溯表：实现位置")
     rows = first_table(lines, ("需求", "实现位置"), 3)
     trace: dict[str, str] = {}

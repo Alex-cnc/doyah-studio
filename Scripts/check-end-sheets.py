@@ -34,7 +34,7 @@ ALLOWED_SHEETS = {
 # 判据 H：`Docs/` 根只许「四书 + 一单 + 工程规范」。任何别的书/清单/索引/记录/发布说明都不许待在根上。
 BOOK_PATTERNS = [
     r"^Doyah产品能力规划说明书(-变更记录)?\.md$",
-    r"^Doyah产品需求规格说明书(-变更记录|-追溯表)?\.md$",
+    r"^Doyah产品需求规格说明书(-变更记录)?\.md$",
     r"^Doyah产品概要设计说明书(-变更记录)?\.md$",
     # 详设按端一一对应（每端一份，端名与 `ALLOWED_SHEETS` 的规范端名一致）
     r"^Doyah产品详细设计说明书-(macOS|Android|Windows|Linux|HarmonyOS|iOS)\.md$",
