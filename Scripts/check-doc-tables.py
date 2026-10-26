@@ -57,7 +57,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 主开发机上这两例照旧必须真跑、一条都不放宽**（`--self-test` 的例数仍是 17，不因跳过而改）。
 
 **L-41（2026-09-27 第 35 轮）：覆盖范围补上「每轮必改的两份台账」** —— 此前清单只有 11 个文件，
-而循环**每轮都在改**的 `Docs/智能体助手-开发规范.md` 与 `Docs/design/开发循环-任务队列.md`
+而循环**每轮都在改**的 `Docs/Doyah开发规范.md` 与 `Docs/design/开发循环-任务队列.md`
 **不在其中**（`AGENT-SPEC.md` §9 第 3 条如实写着「改这两份要自己数」）。独立探针实测存量：
 spec **87 处**（形态四类：7 行缺「编号」格 / 两处表头少「仓」列 / 1 行被拼成两行 / 1 行缺「状态」格）、
 队列 **2 处**（格内**裸**竖线 —— `||` 运算符与侧别别名 `apple|macos|ios`）⇒ 本轮**清零**，
@@ -95,7 +95,6 @@ DEFAULT_TARGETS = [
     "Docs/archive/root-20261026/人工点验清单-20261018.md",
     "Docs/archive/root-20261026/人工点验清单-20261018-重分版.md",
     "Docs/Doyah产品能力规划说明书.md",
-    # 2026-10-25「四书一单冻结」新增：冻结副本四份 + 里程碑任务清单（有表格，必须进受检面）
     "Docs/frozen/Doyah产品能力规划说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品需求规格说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品概要设计说明书-v1.0-20261025.md",
@@ -103,7 +102,7 @@ DEFAULT_TARGETS = [
     "Docs/archive/root-20261026/功能清单（一页纸）.md",
     "Docs/archive/root-20261026/功能清单（管理视图）.md",
     "Docs/Doyah产品需求规格说明书.md",
-    "Docs/Doyah项目开发规范.md",
+    "Docs/Doyah开发规范.md",
     "Docs/Doyah产品需求规格说明书-变更记录.md",
     "Docs/Doyah产品能力规划说明书-变更记录.md",
     "Docs/Doyah产品概要设计说明书-变更记录.md",
@@ -113,7 +112,6 @@ DEFAULT_TARGETS = [
     "Docs/archive/root-20261026/GBase-技术验证.md",
     "Docs/archive/root-20261026/测试用例.md",
     "Docs/Doyah产品概要设计说明书.md",
-    # 2026-10-21：详设模板（Studio 线，填空槽形态）—— 有表格就得进受检清单。
     "Docs/模板-详细设计说明书-Studio.md",
     "Docs/Doyah产品详细设计说明书-macOS.md",
     "Docs/Doyah产品详细设计说明书-Windows.md",
@@ -121,38 +119,19 @@ DEFAULT_TARGETS = [
     "Docs/Doyah产品详细设计说明书-Android.md",
     "Docs/Doyah产品详细设计说明书-iOS.md",
     "Docs/Doyah产品详细设计说明书-HarmonyOS.md",
-    # 2026-10-23：macOS 端开发计划书（有表格 ⇒ 进受检；本端执行计划，不改状态源）
     "Docs/Doyah产品开发计划任务清单-macOS端.md",
-    # 2026-10-26：任务清单按端分册（人类主人令：不设产品级总单）
     "Docs/archive/root-20261026/Doyah产品开发计划任务清单-安卓端.md",
     "Docs/archive/root-20261026/发布方案.md",
     "Docs/archive/root-20261026/手工验收运行手册.md",
-    # L-41（第 35 轮）：每轮必改的两份**本机台账**（`.gitignore` 排除，只在主开发机上）
-    # 此前不在清单里 ⇒ 它们的表格列数无人守（存量 89 处就是这么躺着的）。
-    "Docs/智能体助手-开发规范.md",
-    # 2026-10-17：核心能力扩展草案（灵魂 / IM / 记忆 / 技能自进化）—— 有表格就得进受检清单。
     "Docs/archive/root-20261026/智能体助手-核心能力扩展-草案-v0.1.md",
-    # 2026-10-14 · 派单 `T-20261014-015`（人类主人令「`fatshark` 要对齐 macOS 版开发进度」）：
-    # 平台对齐件入库（`.gitignore` 白名单 + 本清单 + `verify-all.sh` 第 7 项 `--check`）⇒
-    # 受控夹具 36 → 37；被 `.gitignore` 排除的仍是 12 份（它是入库件）。
     "Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md",
-    # 2026-10-14 · 派单 `T-20261014-025`（人类主人令 2026-10-14 追问「怎么到现在你还没有 macOS 的任务清单？」）：
-    # 派生视图《任务清单 · 按平台》入库（`.gitignore` 白名单 + 本清单 + 闭环第 7 项
-    # `Scripts/check-board-parity.py`）；被 `.gitignore` 排除的仍是 12 份（它是入库件）。
     "Docs/design/开发循环-任务队列.md",
-    # L-130（2026-09-30）：三仓统一待拍板台账（本机台账，`.gitignore` 排除）
     "Docs/design/待拍板台账-三仓.md",
-    # 需求提出者 2026-09-30 功能规划（Markdown 预览 / 内置浏览器核查）：带表格 ⇒ 纳入受检
     "Docs/design/规划-工作区Markdown预览与内置浏览器-20260930.md",
-    # ── L-89（2026-09-29 第 89 轮）：「带表格的文档」全部纳入 ──────────────────────
-    # 此前只纳 13 份，而门禁自称「校验 Docs/ 下所有 Markdown 表格」⇒ 每轮必改的
-    # `AGENT-SPEC.md` 的 6 处列数错、提案 0003 的 1 处、人工点验清单的 3 处无人判。
-    # 仓根（`AGENT-SPEC.md` = 本工程的门禁与坑台账，118 行表格；其余三份是仓根对外件）
     "AGENT-SPEC.md",
     "RELEASE-0.1.0-alpha.md",
     "RELEASE-0.2.0-alpha.md",
     "THIRD-PARTY-NOTICES.md",
-    # `Docs/` 根
     "Docs/archive/root-20261026/alpha-0.2.0-发布说明.md",
     "Docs/archive/root-20261026/人工点验-单击清单-macOS-20260927.md",
     "Docs/archive/root-20261026/夜间开发记录_20260921-22.md",
@@ -161,9 +140,6 @@ DEFAULT_TARGETS = [
     "Docs/archive/root-20261026/调研书-主流数据库客户端基础功能.md",
     "Docs/archive/root-20261026/项目评审-2026-09-23.md",
     "Docs/archive/root-20261026/发布计划.md",
-    # `Docs/design/`
-    # 2026-10-01（星空紫「星云皮肤」那一轮）：`031` 的营销物料说明带表格却不在清单里 ⇒
-    # 判据 E 当场抓到（判据 E 存在的理由就是它 —— 新文档的表格列数不能躲在清单外）。
     "Docs/design/store/README.md",
     "Docs/design/WPS-兼容导出说明.md",
     "Docs/design/Windows-完全一致-口径变更与影响-20260926.md",
@@ -176,20 +152,13 @@ DEFAULT_TARGETS = [
     "Docs/design/笔记模块独立性-评估-20260926.md",
     "Docs/design/笔记正文格式调研.md",
     "Docs/design/终端配色方案.md",
-    # `Docs/proposals/`
     "Docs/proposals/0001-notes-windows-端形态-同仓多端.md",
     "Docs/proposals/0002-windows-实现落点-同仓多端.md",
     "Docs/proposals/0003-越界门禁新增节判据-三副本对齐.md",
     "Docs/proposals/0004-windows-技术栈改定-tauri-vue-rust.md",
-    # 对侧 2026-09-29（其第 81 轮）新增；判据 E 立起来的**第二天**就抓到它没进清单
-    # （合并后门禁当场红）—— 由本侧第 90 轮补录。这正是判据 E 存在的理由：
-    # 新文档的表格列数不能再躲到清单外（本案里它自己也是来给判据 D / E 打补丁的）。
     "Docs/proposals/0005-受检清单自洽判据-windows-恒假红-路径分隔符.md",
     "Docs/proposals/README.md",
     "Docs/proposals/_TEMPLATE.md",
-    # 2026-10-01 第 156 轮（收尾）：同侧并发会话（派活单 `T-20261001-052`，提交 `8c0ca8c`）新增的两份
-    # 带表格文档（人工测试清单模板 + Alpha 2 落点）未进清单 ⇒ 判据 E 在 `master` 上当场红（与本轮自己的
-    # 那批文件无关，如实归因）。按判据 E 的处方补录：新文档的表格列数不能在清单外躺着。
     "Docs/archive/root-20261026/模板-人工测试清单-alpha.md",
     "Docs/archive/root-20261026/人工测试清单-alpha2-macOS.md",
 ]
@@ -829,39 +798,44 @@ def main() -> int:
 
 SELF_TEST_TRACKED = [
     "Docs/Doyah产品开发计划任务清单-Android.md",
+    "Docs/规范/界面设计节-写作规范.md",
+    "Docs/archive/root-20261026/人工点验清单-20261018.md",
+    "Docs/archive/root-20261026/人工点验清单-20261018-重分版.md",
+    "Docs/Doyah产品能力规划说明书.md",
+    "Docs/frozen/Doyah产品能力规划说明书-v1.0-20261025.md",
+    "Docs/frozen/Doyah产品需求规格说明书-v1.0-20261025.md",
+    "Docs/frozen/Doyah产品概要设计说明书-v1.0-20261025.md",
+    "Docs/frozen/Doyah产品详细设计说明书-macOS-v1.0-20261025.md",
+    "Docs/archive/root-20261026/功能清单（一页纸）.md",
+    "Docs/archive/root-20261026/功能清单（管理视图）.md",
+    "Docs/Doyah产品需求规格说明书.md",
+    "Docs/Doyah开发规范.md",
+    "Docs/Doyah产品需求规格说明书-变更记录.md",
+    "Docs/Doyah产品能力规划说明书-变更记录.md",
+    "Docs/Doyah产品概要设计说明书-变更记录.md",
+    "Docs/Doyah产品需求规格说明书-追溯表.md",
+    "Docs/README.md",
+    "Docs/Doyah产品概要设计说明书.md",
+    "Docs/模板-详细设计说明书-Studio.md",
+    "Docs/Doyah产品详细设计说明书-macOS.md",
     "Docs/Doyah产品详细设计说明书-Windows.md",
     "Docs/Doyah产品详细设计说明书-Linux.md",
     "Docs/Doyah产品详细设计说明书-Android.md",
     "Docs/Doyah产品详细设计说明书-iOS.md",
     "Docs/Doyah产品详细设计说明书-HarmonyOS.md",
-    # 2026-10-23：macOS 端开发计划书（有表格 ⇒ 进受检；本端执行计划，不改状态源）
     "Docs/Doyah产品开发计划任务清单-macOS端.md",
     "Docs/archive/root-20261026/Doyah产品开发计划任务清单-安卓端.md",
-    "Docs/模板-详细设计说明书-Studio.md",  # 2026-10-21 详设模板（入库件）
-    "Docs/规范/界面设计节-写作规范.md",  # 2026-10-22 界面设计规范进仓（对侧无本侧技能包，规则跟着代码走）
-    "Docs/Doyah产品需求规格说明书-追溯表.md",  # 2026-10-20 从 SRS §9.1 外置（瘦身令），必须入库
-    "Docs/Doyah产品能力规划说明书-变更记录.md",
-    "Docs/Doyah产品概要设计说明书-变更记录.md",
-    "Docs/archive/root-20261026/人工点验清单-20261018.md",
-    "Docs/archive/root-20261026/人工点验清单-20261018-重分版.md",
-    "Docs/design/store/README.md",
-    "Docs/Doyah产品需求规格说明书.md",
-    "Docs/design/规划-工作区Markdown预览与内置浏览器-20260930.md",
-    "Docs/Doyah产品能力规划说明书.md",
-    "Docs/Doyah产品概要设计说明书.md",
-    "Docs/Doyah产品详细设计说明书-macOS.md",
-    "Docs/README.md",
-    "Docs/archive/root-20261026/功能清单（一页纸）.md",
-    "Docs/archive/root-20261026/功能清单（管理视图）.md",
     "Docs/archive/root-20261026/发布方案.md",
-    "Docs/archive/root-20261026/模板-人工测试清单-alpha.md",
-    "Docs/archive/root-20261026/人工测试清单-alpha2-macOS.md",
+    "Docs/archive/root-20261026/智能体助手-核心能力扩展-草案-v0.1.md",
+    "Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md",
+    "Docs/design/规划-工作区Markdown预览与内置浏览器-20260930.md",
     "AGENT-SPEC.md",
     "RELEASE-0.1.0-alpha.md",
     "RELEASE-0.2.0-alpha.md",
     "THIRD-PARTY-NOTICES.md",
     "Docs/archive/root-20261026/alpha-0.2.0-发布说明.md",
     "Docs/archive/root-20261026/发布计划.md",
+    "Docs/design/store/README.md",
     "Docs/design/WPS-兼容导出说明.md",
     "Docs/design/Windows-完全一致-口径变更与影响-20260926.md",
     "Docs/design/alpha-0.2.0-FR判定.md",
@@ -880,43 +854,24 @@ SELF_TEST_TRACKED = [
     "Docs/proposals/0005-受检清单自洽判据-windows-恒假红-路径分隔符.md",
     "Docs/proposals/README.md",
     "Docs/proposals/_TEMPLATE.md",
-    "Docs/智能体助手-开发规范.md",
-    "Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md",
-    "Docs/archive/root-20261026/智能体助手-核心能力扩展-草案-v0.1.md",
-    "Docs/Doyah产品需求规格说明书-变更记录.md",
-    # 2026-10-26 补：v1.0 冻结副本四份 + 里程碑任务清单已入 DEFAULT_TARGETS 并入库（此前漏登记，
-    # doc-numbers 的「跟踪文档集合」因此报 62 vs 57）。
-    "Docs/frozen/Doyah产品能力规划说明书-v1.0-20261025.md",
-    "Docs/frozen/Doyah产品需求规格说明书-v1.0-20261025.md",
-    "Docs/frozen/Doyah产品概要设计说明书-v1.0-20261025.md",
-    "Docs/frozen/Doyah产品详细设计说明书-macOS-v1.0-20261025.md",
+    "Docs/archive/root-20261026/模板-人工测试清单-alpha.md",
+    "Docs/archive/root-20261026/人工测试清单-alpha2-macOS.md",
 ]
 
+# 2026-10-26：按盘上事实重算（规范合并为一份 + 25 份过程件归档后，口径跟着变）
 SELF_TEST_ABSENT = [
-    "Docs/archive/root-20261026/兼容性矩阵.md",
     "Docs/archive/root-20261026/GBase-技术验证.md",
-    "Docs/archive/root-20261026/测试用例.md",
-    # 2026-10-01 第 156 轮（收尾）：`Docs/archive/root-20261026/发布方案.md` 从这份名单里移除 —— 同侧并发会话
-    # （派活单 `T-20261001-052`，提交 `8c0ca8c`）把它**收进了库**（此前被 `.gitignore` 排除），
-    # 于是「干净克隆里应缺的那批」从 14 份变 13 份，自检例 1 / 例 4 的期望数跟着按实测改。
-    # 边界如实登记：协议说 Studio `Docs/*` 别 `git add -f`（跨端共享的是三书 + 对外件），
-    # 这一份是**那笔提交的作者决定**；本侧只把夹具对齐到**盘上的事实**，要不要撤回它归那笔作者。
-    "Docs/archive/root-20261026/手工验收运行手册.md",
-    # 2026-10-11 · 派单 `T-20261011-014`（人类主人令「台账归台账、契约归契约」）：`智能体助手-开发规范.md`
-    # 入库 ⇒ 从本名单移除、加进 `SELF_TEST_TRACKED`；被排除数 13 → 12、受控夹具 35 → 36。
-    "Docs/design/开发循环-任务队列.md",
-    "Docs/design/待拍板台账-三仓.md",
-    # L-89 纳入的 6 份（同样被 `.gitignore` 排除）
     "Docs/archive/root-20261026/人工点验-单击清单-macOS-20260927.md",
+    "Docs/archive/root-20261026/兼容性矩阵.md",
     "Docs/archive/root-20261026/夜间开发记录_20260921-22.md",
+    "Docs/archive/root-20261026/手工验收运行手册.md",
     "Docs/archive/root-20261026/接管记录_v2.3.md",
+    "Docs/archive/root-20261026/测试用例.md",
     "Docs/archive/root-20261026/调研书-AI智能体能力基线.md",
     "Docs/archive/root-20261026/调研书-主流数据库客户端基础功能.md",
     "Docs/archive/root-20261026/项目评审-2026-09-23.md",
-    # 2026-10-26：规范分两层后新增《Doyah项目开发规范》（同侧并发会话 `8d5832bb` 建），
-    # 与 `智能体助手-开发规范.md` 对立：后者已入库、前者尚在本机（被 `.gitignore` 排除）。
-    # 被排除数 12 → 13、受检文件 71 → 72，自检例 1 / 例 4 的期望数按实测跟着改。
-    "Docs/Doyah项目开发规范.md",
+    "Docs/design/开发循环-任务队列.md",
+    "Docs/design/待拍板台账-三仓.md",
 ]
 
 

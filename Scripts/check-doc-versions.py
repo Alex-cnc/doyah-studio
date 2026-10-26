@@ -6,7 +6,7 @@
 
 1. 2026-09-27 本侧与对侧在概要设计上同取 `v2.35` —— 靠手工 rebase 解冲突；
 2. 同一天队列里 `L-25` / `L-26` / `L-41` 各出现两次（拍板分配的条目与循环新开的条目同号）；
-3. 本台账（`Docs/智能体助手-开发规范.md`）的变更记录出现 **5 对**同号行（`v1.46` / `v1.45` /
+3. 本台账（`Docs/Doyah开发规范.md`）的变更记录出现 **5 对**同号行（`v1.46` / `v1.45` /
    `v1.28` / `v1.26` / `v1.19`）；
 4. 概要设计 §4 的 `P-15` 与 SRS §10.9 的 `P-15` 同号不同物（那一族的跨文档对账归 **L-45**）。
 
@@ -82,7 +82,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 VERSION_DOCS = [
     ("Docs/Doyah产品需求规格说明书.md", True),
     # 2026-10-26：规范分两层（通用开发规范 + 项目开发规范），项目那份也带版本头与变更记录。
-    ("Docs/Doyah项目开发规范.md", True),
+    ("Docs/Doyah开发规范.md", True),
     ("Docs/Doyah产品开发计划任务清单-macOS端.md", True),
     ("Docs/Doyah产品能力规划说明书.md", True),
     ("Docs/Doyah产品概要设计说明书.md", True),
@@ -99,7 +99,7 @@ VERSION_DOCS = [
     ("Docs/Doyah产品详细设计说明书-Android.md", False),
     ("Docs/Doyah产品详细设计说明书-iOS.md", False),
     ("Docs/Doyah产品详细设计说明书-HarmonyOS.md", False),
-    ("Docs/智能体助手-开发规范.md", False),
+    ("Docs/Doyah开发规范.md", False),
     ("Docs/archive/root-20261026/测试用例.md", False),
     ("Docs/archive/root-20261026/兼容性矩阵.md", False),
     ("Docs/archive/root-20261026/发布方案.md", False),
