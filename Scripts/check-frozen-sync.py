@@ -54,9 +54,19 @@ def latest_frozen(stem: str) -> tuple[Path | None, str]:
     return path, f"v{'.'.join(map(str, version))}（{date}）"
 
 
+# 冻结件头部有两行横幅（`> **【冻结版 vX】** …` / `> **冻结规则** …`），活书本没有 ——
+# 那是冻结动作本身加上的标记，不是内容差异；不剥掉就会每本虚报 +2 行（2026-10-26 实测踩过）。
+BANNER = ("**【冻结版", "**冻结规则**")
+
+
+def body_lines(path: Path) -> list[str]:
+    return [l for l in path.read_text(encoding="utf-8").splitlines()
+            if not any(k in l for k in BANNER)]
+
+
 def drift(frozen: Path, live: Path) -> tuple[int, int, int]:
-    a = frozen.read_text(encoding="utf-8").splitlines()
-    b = live.read_text(encoding="utf-8").splitlines()
+    a = body_lines(frozen)
+    b = body_lines(live)
     sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
     added = sum(j2 - j1 for tag, _i1, _i2, j1, j2 in sm.get_opcodes() if tag in ("insert", "replace"))
     removed = sum(i2 - i1 for tag, i1, i2, _j1, _j2 in sm.get_opcodes() if tag in ("delete", "replace"))
