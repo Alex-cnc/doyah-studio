@@ -1,6 +1,6 @@
 # Doyah产品开发计划任务清单 · Android 端
 
-> **版本** v1.0.5（2026-10-26 建单后五轮：上游改活书 → P1 归类 → P3 回收站 → P4 私密 → P2 部分失败态 → **万条性能读数**）
+> **版本** v1.0.6（2026-10-26 建单后六轮：上游改活书 → P1 归类 → P3 回收站 → P4 私密 → P2 部分失败态 → **万条性能读数** → **回归自检**）
 > **本文件是 Android 端唯一的进度记录与参考文档**（人类主人 2026-10-26 令）。其余同类文档一律不再使用：
 > `notes/Docs/开发任务清单.md`（2026-09-22 旧基线）· `notes/Docs/任务清单-按平台.md` · 旧版《Doyah产品开发计划书-安卓端》（已删除）。**不要再引用它们。**
 
@@ -27,7 +27,7 @@
 | 岸上判据 | 闸门 **26** 项 · 纯逻辑 **409** 例 · 共享层单测 **426** 例（`core/build/test-results/jvmTest` 聚合） · 文案键 **347**（中英成对） | `gate.py` / `run.mjs` |
 | 现行交付包 | `DoyahNotes-beta1.9.apk` · 10,484,820 B · sha256 `3f476439…` · `versionCode 42`（界面「部分失败」态） | `notes/platform/android/README.md` |
 | 外部用户手上 | `DoyahNotes-beta1.2.apk`（2026-10-23 QQ 直发）；1.3 / 1.4 / 1.5 **未送达** | 同上 |
-| 稳定性 | monkey 1200 事件：0 崩溃 / 0 ANR / 进程零重启（beta1.3~1.5 各一轮） | 端上实测 |
+| 稳定性 | **beta1.9 · release · monkey 500 事件：0 崩溃 / 0 本方 ANR / 进程零重启**（`monkey-smoke.py` 首跑，`RESULT: PASS`）；历史 beta1.3~1.5 各一轮 1200 事件同读数 | 端上实测（`notes/platform/android/实现笔记-回归自检-20261026.md`） |
 
 **任务完成度（按详设测试 ID 计）**：✅ **11** · 🟡 **0** · ⬜ **0** = 全绿 **100%**（11/11）。逐条测试 ID 的读数见 §2；**唯余真机形态**（一加 13）未复测，卡在人类主人（§8），不折算成完成度。
 
@@ -86,6 +86,7 @@
 | 文字面 | 347 键 × 中英 | `check-release-signing` 的键数账 + 僵尸键闸 |
 | 迁移 | v1→v6 真 SQLite 对拍 | `tools/logic-check/migration-check.py` |
 | 库结构同形 | 三张共享表逐字 | `platform/android/tools/check-schema-parity.py` |
+| 端上冒烟 | 500 事件 + 3 次冷启 | `python platform/android/tools/monkey-smoke.py`（判红仅四条：`FATAL EXCEPTION` / 本方 ANR / 事件没全注入 / 冒烟后进程不在；冷启秒数只打印不判） |
 
 ## 8. 阻塞与依赖
 
