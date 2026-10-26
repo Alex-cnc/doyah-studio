@@ -22,7 +22,7 @@
 | macOS ⬜ | **149**（39%） | 同上 |
 | 能力层规模 | `Core/` 248 个 .swift · `App/` 127 · `Platform/macOS/` 8 · `CLI/` 4 | 详设 v1.1 §0 |
 | 测试规模 | `Tests/` 264 文件 · Core 全量 **3590** 例 | `.build/core-test-count.txt` |
-| 现行包 | `dist/DoyahStudio-beta1.0.app` · sha256 前缀 `f8a6878bf84742e2` | `Scripts/build-app.sh` |
+| 现行包 | `dist/DoyahStudio-beta1.0.app` · sha256 前缀 `022c364d1c0c9eb9` · **91,920 KB**（2026-10-26 重出） | `Scripts/build-app.sh` |
 
 分族读数：
 
