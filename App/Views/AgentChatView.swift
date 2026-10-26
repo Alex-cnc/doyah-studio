@@ -1341,6 +1341,39 @@ struct AgentChatView: View {
 
     // MARK: - 输入区（端点没配好时**如实拦住**，不假装在跑）
 
+    /// 斜杠命令候选条（`FR-AGT-UX-CONV-014` 输入侧）。
+    ///
+    /// 一行一条：左边是命令本身（等宽），右边一句话说明；点一下把命令填进输入框。
+    /// **候选由 Core 的 `AgentSlashCompleter` 算**（这里不判前缀、不判大小写）——
+    /// 界面与解析器共用一套规矩，才不会出现「点得出来、按不进去」。
+    private var slashSuggestionStrip: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs / 2) {
+            ForEach(model.slashSuggestions) { suggestion in
+                Button {
+                    model.applySlashSuggestion(suggestion)
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                        Text(suggestion.insertion.trimmingCharacters(in: .whitespaces))
+                            .font(Self.transcriptFont)
+                            .foregroundStyle(Theme.accentColor)
+                        Text(suggestion.detail)
+                            .font(Self.transcriptFont)
+                            .foregroundStyle(Theme.text(.secondary))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(suggestion.detail)
+            }
+        }
+        .padding(.horizontal, Spacing.m)
+        .padding(.vertical, Spacing.xs)
+    }
+
+
     private var composer: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             // 排队中的提问（`/queue` 的同义物）：一轮还在跑时提交的话不丢，
@@ -1404,6 +1437,10 @@ struct AgentChatView: View {
                         Task { await model.rejectSlashChange() }
                     }
                 }
+            }
+            // 斜杠命令候选（`FR-AGT-UX-CONV-014` 输入侧）：敲了 `/` 就出，进了参数区自动收。
+            if !model.slashSuggestions.isEmpty {
+                slashSuggestionStrip
             }
             HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
                 // 提示符 `>`（§5.3.8.1 ⑤），与消息区用户行同一个字形、同一列。

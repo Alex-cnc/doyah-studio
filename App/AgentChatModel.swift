@@ -11,7 +11,25 @@ import DoyahCore
 final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     @Published private(set) var state = AgentChatState()
-    @Published var input = ""
+    @Published var input = "" {
+        didSet { refreshSlashSuggestions() }
+    }
+
+    /// 斜杠命令候选（`FR-AGT-UX-CONV-014` 输入侧）：只在「敲命令名」这一段有，进了参数区就空。
+    /// 纯 Core 判定（`AgentSlashCompleter`），这里只负责跟着输入刷新与填字。
+    @Published private(set) var slashSuggestions: [AgentSlashSuggestion] = []
+
+    private let slashCompleter = AgentSlashCompleter()
+
+    /// 选一条候选：把插入文本写进输入框（`/model ` 带尾随空格，省一次敲键）；候选随之收掉。
+    func applySlashSuggestion(_ suggestion: AgentSlashSuggestion) {
+        input = suggestion.insertion
+    }
+
+    private func refreshSlashSuggestions() {
+        let next = slashCompleter.suggestions(for: input)
+        if next != slashSuggestions { slashSuggestions = next }
+    }
 
     /// 宿主注入：给一个提示词，造一条**已经配好上下文**的循环（端点 / 模型 / 密钥 / 工具都在宿主那侧组装）。
     /// 造不出来 ⇒ 如实报，不假装在跑。
