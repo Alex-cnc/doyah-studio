@@ -1,6 +1,6 @@
 # Doyah产品开发计划任务清单 · Android 端
 
-> **版本** v1.0.6（2026-10-26 建单后六轮：上游改活书 → P1 归类 → P3 回收站 → P4 私密 → P2 部分失败态 → **万条性能读数** → **回归自检**）
+> **版本** v1.0.7（2026-10-26 建单后七轮：上游改活书 → P1 归类 → P3 回收站 → P4 私密 → P2 部分失败态 → **万条性能读数** → **回归自检** → **两条业务链接成仪器段**）
 > **本文件是 Android 端唯一的进度记录与参考文档**（人类主人 2026-10-26 令）。其余同类文档一律不再使用：
 > `notes/Docs/开发任务清单.md`（2026-09-22 旧基线）· `notes/Docs/任务清单-按平台.md` · 旧版《Doyah产品开发计划书-安卓端》（已删除）。**不要再引用它们。**
 
@@ -38,10 +38,10 @@
 | 1 | §3.1 | 捕获即编辑：触发进编辑、无标题可存、断网可记 | ✅ | `T-3.1-01` | `NoteEditScreen` `NotesRepository.insert`；409 例含无标题保存与空正文校验 |
 | 2 | §3.2 | 附件：库只存引用、同内容一份、显示不改原字节 | ✅ | `T-3.2-01` | `AttachmentStore`（内容寻址）+ `ThumbnailStore`；闸门附件口径判据 |
 | 3 | §3.3 | 检索：按 `Character` 偏移、命中不重叠、不联网 | ✅ | `T-3.3-01` | `SearchHighlight` + `note_index`；索引等价性用例（18 关键字 × 2 口径） |
-| 4 | §3.4 | **私密**：端内可见可用，导出 / 分享 / 日志 / 同步**四路出口一律排除** | ✅ | `T-3.4-01` | `PrivateDao`（`note_private` 旁挂表）+ `core/PrivateOutbound`（四出口闭集 + 5 条负例用例）；端上实测：标私密后搜索 `secret` 由命中变「No matching notes」、备份 JSON `has 'secret': False` / `count 1`、私密详情页无 `Share` / `Export`（公开条对照有）、`SyncOutbox` 不入队（标私密发载荷清空墓碑）；打开 / 标 / 取消均过设备凭据，取消私密先二次确认（`beta1.8` / vc41） |
+| 4 | §3.4 | **私密**：端内可见可用，导出 / 分享 / 日志 / 同步**四路出口一律排除** | ✅ | `T-3.4-01` | `PrivateDao`（`note_private` 旁挂表）+ `core/PrivateOutbound`（四出口闭集 + 5 条负例用例）；端上实测：标私密后搜索 `secret` 由命中变「No matching notes」、备份 JSON `has 'secret': False` / `count 1`、私密详情页无 `Share` / `Export`（公开条对照有）、`SyncOutbox` 不入队（标私密发载荷清空墓碑）；打开 / 标 / 取消均过设备凭据，取消私密先二次确认（`beta1.8` / vc41）。**仪器段 `private-gate` 已接**：两条腿已在端上成立（没锁屏 ⇒ 拒绝并说清原因、真库不落标记；标私密确实拉起系统凭据页 `ConfirmDeviceCredentialActivity`），**卡在驱动系统 PIN 键盘**（`input keyevent` / `input text` 都送不进 keyguard）⇒ 见 §8，产品面判据（`PrivateOutbound` 五条负例）不受影响 |
 | 5 | §3.5 | 待办：完成 / 重开 / 改期只走既有写入口，日期算术只在 core | ✅ | `T-4.3-01` | `TodoDao` 唯一写入口 + `core/LunarCalendar`；调度语义 200+ 例 |
 | 6 | **§3.6** | **归类：一条笔记唯一归属一个笔记本；未指定落默认收件箱；移动只改归属一列，不刷新内容更新时间、不产生内容版本** | ✅ | `T-3.6-01` · `T-4.4-01` | `NotebookDao`（`note_notebook` + `note_index.notebook_id`）；端上实测：建本→移入（收件箱 1→0 / Work 0→1）→范围命中→删本并入收件箱→回 1；移动后列表时间戳不变（`3 d ago` 原样） |
-| 7 | §4 | 删除分级：进回收站、可恢复、彻底清除需二次确认并判引用 | ✅ | `T-4.1-01` | `TrashDao`（`note_trash`，30 天到期清除）；端上实测：删→回收站→恢复（时间戳不变）→再删→彻底清除需确认→永久消失 |
+| 7 | §4 | 删除分级：进回收站、可恢复、彻底清除需二次确认并判引用 | ✅ | `T-4.1-01` | `TrashDao`（`note_trash`，30 天到期清除）；端上实测：删→回收站→恢复（时间戳不变）→再删→彻底清除需确认→永久消失。**2026-10-26 起可复跑**：`ui-regression.py` 新段 `trash-chain` **11 条断言全绿**（删除后列表看不见 / 笔记行仍在库 / 回收站表 30 天到期 / 弹层里看得见 / 恢复后时间戳分毫未变 / 二次确认文案逐字 / 取消后一条不删 / 确认后笔记行与回收站行一起没了 / 弹层报空），读数 `bench/ui-regression-20261026-161403-trash-chain.json` |
 | 8 | §4 | 数据家独立（应用私有目录） | ✅ | `T-4.2-01` | 判据已入库（`feat(judge): 数据家独立判据`） |
 | 9 | §4 | 正文权威源 = span 树；视图为投影 | ✅ | — | `core/NoteBody` + `NoteRichTextView`；往返用例 |
 | 10 | §4 | 自动保存守卫（许可 / 有内容 / 有改动） | ✅ | — | `DraftStore` + `NotesRepository`；409 例含守卫分支 |
@@ -87,6 +87,7 @@
 | 迁移 | v1→v6 真 SQLite 对拍 | `tools/logic-check/migration-check.py` |
 | 库结构同形 | 三张共享表逐字 | `platform/android/tools/check-schema-parity.py` |
 | 端上冒烟 | 500 事件 + 3 次冷启 | `python platform/android/tools/monkey-smoke.py`（判红仅四条：`FATAL EXCEPTION` / 本方 ANR / 事件没全注入 / 冒烟后进程不在；冷启秒数只打印不判） |
+| 端上流程 | **23 段** | `python platform/android/tools/ui-regression.py`（读屏 + 真库双证据；`--only <段名>` 单段复跑；`--self-test` **105 例**）。2026-10-26 新增 `trash-chain`（11 条断言全绿）与 `private-gate`（两条腿绿、卡在 PIN 驱动，见 §8） |
 
 ## 8. 阻塞与依赖
 
@@ -97,3 +98,4 @@
 | 真短信注册 / 登录 | 需真手机号（CloudBase 上海） | 待定 |
 | release keystore 拍板 | 人类主人 | 待定（当前自签） |
 | 外部用户测试反馈 | 人类主人转达 | 待定（手上是 beta1.2） |
+| **私密链路的系统 PIN 驱动（仪器）** | 本侧（下一跳） | 下一跳：改成按节点点 keyguard 数字键（或 UiAutomator `pressKeyCode` + 焦点校验），先跑「熄屏→解锁」独立可用性探针，解不开判 SKIP。**不是产品阻塞**：私密四路出口闸的判据（`PrivateOutbound` 五条负例 + 409 例）与 `beta1.8` 端上读数仍成立；受影响的是「这条链能否在机器上复跑」 |
