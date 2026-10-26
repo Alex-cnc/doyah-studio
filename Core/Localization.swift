@@ -2663,6 +2663,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case pluginDegradedEntry
     case pluginListSeparator
     case pluginListEmpty
+
+    // 结论的可信度与出处（FR-AGT-QUAL-VERIFY-003 / FR-AGT-QUAL-VERIFY-004）
+    case agentClaimVerified
+    case agentClaimInferred
+    case agentClaimUnverified
+    case agentClaimBasisLine
+    case agentClaimAlternativeLine
+    case agentClaimSummaryLine
 }
 
 public enum LocalizedStrings {
@@ -2691,6 +2699,16 @@ public enum LocalizedStrings {
         .pluginDegradedEntry: [.simplifiedChinese: "%@（%@）", .english: "%@ (%@)"],
         .pluginListSeparator: [.simplifiedChinese: "；", .english: "; "],
         .pluginListEmpty: [.simplifiedChinese: "（无）", .english: "none"],
+
+        // 结论可信度与出处：标签是**必填字段的渲染**，不是装饰 —— 拿掉它，「已验证」与
+        // 「推断」在界面上就分不出来了（FR-AGT-QUAL-VERIFY-003 ①）。
+        .agentClaimVerified: [.simplifiedChinese: "已验证", .english: "Verified"],
+        .agentClaimInferred: [.simplifiedChinese: "推断", .english: "Inferred"],
+        .agentClaimUnverified: [.simplifiedChinese: "没验证", .english: "Unverified"],
+        .agentClaimBasisLine: [.simplifiedChinese: "出处：%@", .english: "Source: %@"],
+        .agentClaimAlternativeLine: [.simplifiedChinese: "备选：%@", .english: "Alternatives: %@"],
+        .agentClaimSummaryLine: [.simplifiedChinese: "%ld 条结论：已验证 %ld / 推断 %ld / 没验证 %ld",
+                                 .english: "%ld claims: verified %ld / inferred %ld / unverified %ld"],
 
         .menuNewQuery: [.simplifiedChinese: "新建查询", .english: "New Query"],
         .menuLanguage: [.simplifiedChinese: "语言", .english: "Language"],

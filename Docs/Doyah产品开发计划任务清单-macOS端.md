@@ -1,6 +1,6 @@
 # Doyah产品开发计划任务清单 · macOS 端
 
-> **版本** v1.0.23（2026-10-26 斜杠命令闭环落地：`/help` `/clear` `/sessions` `/stop` 本地执行进输入框、`/model` `/theme` 只出单待批 + 单行审计（11 例新判据）；同批核对回填流式网关 ✅。上一版 v1.0.22 = 本册升为唯一任务清单：吸收原产品级清单 §3 台账 / §4 里程碑 / §6 能力快照；产品级总单按令删除，历史段归档；跨端矩阵改派生件。上一版 v0.10（2026-10-26 P1-7~P1-11 / P2 / P3 / P4 落地：90 例新判据，Core 面全绿）
+> **版本** v1.0.24（2026-10-26 第二批：会话生命周期 Core 三件（归档 / 真删 / 重新导入）+ 结论可信度与出处契约（`Core/AgentClaimProvenance.swift`），24 例新判据，Core 3926 全绿；三条 ⬜ → 🟡，界面与循环接线待做。上一版 v1.0.23 = 斜杠命令闭环落地：`/help` `/clear` `/sessions` `/stop` 本地执行进输入框、`/model` `/theme` 只出单待批 + 单行审计（11 例新判据）；同批核对回填流式网关 ✅。上一版 v1.0.22 = 本册升为唯一任务清单：吸收原产品级清单 §3 台账 / §4 里程碑 / §6 能力快照；产品级总单按令删除，历史段归档；跨端矩阵改派生件。上一版 v0.10（2026-10-26 P1-7~P1-11 / P2 / P3 / P4 落地：90 例新判据，Core 面全绿）
 
 > **口径登记（2026-10-25 人类主人令）**：① 四条共性能力（工程与工具链 / 授权与版本 / 插件装配 / 命令行出口）**归属 Studio 面**，按《能力规划说明书》§4.1.35 / 4.1.38 / 4.1.39 / 4.2.35 计，需求书 §3.1 只作归档位置（两书不计双份）；② `Docs/requirement-index.jsonl` 口径与《需求索引》一致 = **438 条**（FR 379 · NFR 47 · AC 12）；§5 数据需求与 §6 接口需求的 15 条**按书里原文不入总账**（它们属设计层，家在两份设计书），连同 §8.1 风险 55 / §8.2 待决 4 / 模型字段表等，共 76 条带编号但非总账的行由生成器逐类报数。
 
@@ -23,14 +23,14 @@
 | macOS 🟡 | **87**（23%） | 同上 |
 | macOS ⬜ | **149**（39%） | 同上 |
 | 能力层规模 | `Core/` 248 个 .swift · `App/` 127 · `Platform/macOS/` 8 · `CLI/` 4 | 详设 v1.1 §0 |
-| 测试规模 | `Tests/` 302 文件 · Core 全量 **3902** 例 | `.build/core-test-count.txt` |
-| 现行包 | `dist/DoyahStudio-beta1.0.app` · sha256 前缀 `fdcf4db1df087640` · **92,748 KB**（2026-10-26 17:57 重出·ad-hoc 封签完整；`nm` 在包内二进制数到 42 个 `AgentSlashCommandRuntime` 符号 ⇒ 本批真编进了包；稳定签名待证书信任） | `Scripts/build-app.sh` |
+| 测试规模 | `Tests/` 304 文件 · Core 全量 **3926** 例 | `.build/core-test-count.txt` |
+| 现行包 | `dist/DoyahStudio-beta1.0.app` · sha256 前缀 `b329174d19384271` · **92,856 KB**（2026-10-26 18:16 重出·ad-hoc 封签完整；`nm` 在包内二进制数到 72 个 `AgentSessionLifecycle` / `AgentClaimProvenance` 符号 ⇒ 本批真编进了包；`~/Applications/` 副本同 sha 已换；稳定签名待证书信任） | `Scripts/build-app.sh` |
 
 分族读数：
 
 | 族 | 条数 | ✅ | 🟡 | ⬜ | 说明 |
 |---|---|---|---|---|---|
-| FR-AGT（智能体） | 82 | 64 | 12 | 6 | 2026-10-26 本轮实测（**原表写 68 条是旧读数**，按 `requirement-index.jsonl` 实测 82）：核心闭环 + 压缩边界 + 注册表真源 + 钩子 + 权限/刹停 + 知识治理 + 文档摄取/语音出 + **斜杠命令闭环（FR-AGT-UX-CONV-014 / FR-AGT-UX-CONV-015）/ 流式模型网关（FR-AGT-LINK-CHAN-002）** 已绿；剩麦克风、§3.20 编排、MCP 对端、子代理执行器与需真端点的条目 |
+| FR-AGT（智能体） | 82 | 64 | 15 | 3 | 2026-10-26 第二批实测（**原表写 68 条是旧读数**，按 `requirement-index.jsonl` 实测 82）：核心闭环 + 压缩边界 + 注册表真源 + 钩子 + 权限/刹停 + 知识治理 + 文档摄取/语音出 + **斜杠命令闭环（FR-AGT-UX-CONV-014 / FR-AGT-UX-CONV-015）/ 流式模型网关（FR-AGT-LINK-CHAN-002）** 已绿；同批把会话生命周期与结论可信度三条推到 🟡（Core + 24 例判据，界面/循环接线待做）；剩麦克风、§3.20 编排、MCP 对端、子代理执行器与需真端点的条目 |
 | FR-STD（Studio 工作台） | 210 | 121 | 56 | 32 | 数据库主链已通；编辑面与文件系统大片空白 |
 | FR-NTS（笔记） | 19 | 6 | 12 | 1 | **实现在本仓** `Plugins/Notes/`：26 个 .swift + 12 个测试文件约 195 例（含云同步 E2E）；仅「私密保护」未做 |
 | FR-RTR（复盘） | 82 | 0 | 0 | 82 | **实现归 `retro` 仓**，本端只做宿主视图 |
@@ -490,11 +490,11 @@
 | FR-AGT-UX-CONV-006 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-014 | 斜杠命令：`/help` `/model` `/clear` `/compact` `/sessions` `/theme` `/stop`，本地执行不进模型 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | 🟡 | v1.1+ | 解析 `Core/AgentSlashCommandParser`（8 例）+ 落地形状 `Core/AgentSlashCommandRuntime`（11 例，`Tests/AgentSlashCommandRuntimeTests`）；**输入框已接线**（`AgentChatModel.send()` 抢在排队之前判定，命令不进模型 / 不占队列）：`/help` 出清单、`/clear` 清上下文（`AgentChatState.clearTranscript()`，不动盘上会话文件与授权）、`/sessions` 按标题检索、`/stop` 中断（没在跑如实说）。**边界如实**：`/compact` **无手动触发点**（压缩只在 `AgentLoop` 请求边界按预算自动发生）⇒ 命令只如实说、审计记 `noManualTrigger` |
 | FR-AGT-UX-CONV-015 | 斜杠命令落地：大小写不敏感、可带参数、只留一行审计、改配置照走审批 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | 🟡 | v1.1+ | 大小写不敏感 / 带参 / 单行审计已判据化；**审批已接线**：`/model` `/theme` 只出单（`AgentSlashPendingChange` + 复用 `AgentApproval` 状态机），输入框上方给批准 / 拒绝，**批准之前不动配置**、先落审计再落地；审计一条命令一条（`AgentActionRecord.makeToolCall(toolName: slash)` 走既有追加通道，`executed` / `pendingApproval` / `denied` / `failed` 按事实写）。**落地能力边界**：`/theme` 真落（`AppState.appearanceMode`）；`/model` 本版**无落地入口**（归 `FR-AGT-OPS-OBS-002` 设置面板）⇒ 批准后如实说「没有写配置的入口」，不假装改过 |
-| FR-AGT-UX-SESS-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-UX-SESS-001 | 会话生命周期：**新建 / 归档 / 删除 / 导出** —— 删除即真删（不留副本），导出可带走 | 3.2 Doyah Agent | 常用增强 | 中 | 🟡 | ⬜（Core 三件已落：归档 / 恢复 / 真删含续跑旁挂件 / 导出重新导入，`Core/AgentSessionLifecycle.swift` + `Tests/AgentSessionLifecycleTests` 10 例；界面入口未接） | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-001 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-002 | 跨小时不丢目标（`Core/AgentResumeBrief.swift` + `AgentCheckpoint.goalDigest`；`Tests/AgentResumeBriefTests` **11 例**） | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-QUAL-VERIFY-003 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-QUAL-VERIFY-004 | — | 3.2 Doyah Agent | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-QUAL-VERIFY-003 | 不确定性表达：**不确定就说** —— 给出把握程度与依据，不把猜测说成事实 | 3.2 Doyah Agent | 基线必备 | 高 | 🟡 | ⬜（Core 契约已落：三态必填 + 低把握必须给替代方案，`Core/AgentClaimProvenance.swift` + `Tests/AgentClaimProvenanceTests` 14 例；对话循环尚未按 claim 产出） | v0.1.0-alpha | — |
+| FR-AGT-QUAL-VERIFY-004 | 断言可溯源：**每条结论能指到出处** —— 文件路径行号 / 命令输出 / 日志 / 文档链接，读者能自己复核 | 3.2 Doyah Agent | 基线必备 | 高 | 🟡 | ⬜（四类出处 + 可复制文本 + 同出处只标一次；`isDeliverable` 逐条判缺出处不进交付物，判据同批 14 例；交付物出口未按它拦） | v0.1.0-alpha | — |
 | FR-STD-WS-FS-004 | — | 3.3 Doyah Studio · 工作区 | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-STD-WS-FS-005 | — | 3.3 Doyah Studio · 工作区 | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-STD-WS-FS-006 | — | 3.3 Doyah Studio · 工作区 | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |

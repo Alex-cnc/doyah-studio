@@ -73,8 +73,16 @@ public struct AgentTurnResumeStore: Sendable {
     }
 
     /// 文件名：`resume-<会话号>.json`（会话号里的路径分隔符不做替换 —— 会话号由生成侧保证是单段）。
+    ///
+    /// **命名只在这一处**：`FR-AGT-UX-SESS-001` 的「删除即真删」要把旁挂件一起删掉，
+    /// 它按这个名字去找 —— 两处各写一遍，改名那一次必然漏删。
+    public static func sidecarFileName(sessionID: String) -> String {
+        "resume-\(sessionID).json"
+    }
+
     public func url(for sessionID: String) -> URL {
-        directory.appendingPathComponent("resume-\(sessionID).json", isDirectory: false)
+        directory.appendingPathComponent(AgentTurnResumeStore.sidecarFileName(sessionID: sessionID),
+                                         isDirectory: false)
     }
 
     /// 覆盖写（原子）。写失败如实抛错，**不静默吞**。
