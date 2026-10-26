@@ -93,11 +93,28 @@ def inv_sheet_upstream_same_end() -> list[str]:
     return problems
 
 
+def inv_full_requirement_codes() -> list[str]:
+    """铁律：需求编号一律全号 `FR-AGT-<面>-<域>-<三位序号>`，不许在文档里出现裸短号（`SOUL-002`）。"""
+    bare = re.compile(
+        r"(?<![A-Za-z0-9-])(SOUL|PLAN|LOOP|CONV|SESS|VERIFY|CHAN|EXT|OPS|TOOL|MEM|CTX|KNOW|"
+        r"GUARD|CORE|UX|LINK|QUAL|HARM|BUDGET|SYNC|SYS)-\d{3}"
+    )
+    problems = []
+    for path in sorted(DOCS.glob("*.md")):
+        for index, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            for match in bare.finditer(line):
+                problems.append(
+                    f"{path.name}:{index} 出现裸短号「{match.group(0)}」—— 要写全号 `FR-AGT-<面>-<域>-{match.group(0).split('-')[-1]}`"
+                )
+    return problems
+
+
 RULES = [
     ("Docs 根 17 份白名单", inv_root_exact),
     ("四书一单里零「变更记录」", inv_no_changelog_in_books),
     ("版本号只在头部且三段式 ≤999", inv_version_in_header),
     ("一单只认同端详设", inv_sheet_upstream_same_end),
+    ("需求编号一律全号（无裸短号）", inv_full_requirement_codes),
 ]
 
 
