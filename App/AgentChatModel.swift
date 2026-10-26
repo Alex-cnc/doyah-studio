@@ -48,6 +48,53 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 返回 `false` = 本版还没有这条落地入口（`/model` 就属于这一档）—— 如实说，不假装改过。
     var applyConfigChange: ((AgentSlashCommandKind, String) -> Bool)?
 
+    // MARK: - 主动通知 / 求助卡 / 门控重发（`FR-AGT-UX-CONV-008` · `-009` · `FR-AGT-GUARD-COST-001`）
+
+    /// 宿主注入：把一条**系统通知**发出去（macOS 走 `UserNotifications`）。
+    ///
+    /// 不接 ⇒ **页内提示条照出**：发不出系统通知不代表这件事不该被看见，
+    /// 两个出口是「与」不是「或」的替代关系（缺一个照样有话要说）。
+    var notifySink: ((AgentNotification) -> Void)?
+    /// 宿主注入：人此刻是否正看着这一页（前台 + 当前页签）。
+    /// 缺省 `true` = **保守**：没接这一格就当人正在看 ⇒ 不弹系统通知（宁少弹，不乱弹）。
+    var paneIsVisible: () -> Bool = { true }
+    /// 通知门槛。**阈值只有一处**（`Core/AgentNotifyPolicy`），这里只放实例。
+    var notifyPolicy = AgentNotifyPolicy()
+    /// 文案语言（界面语言，缺省跟随本机语言设置）。
+    var languageProvider: () -> AppLanguage = { LocalizationManager.shared.language }
+
+    /// 页内提示条（通知那一格的**可见**出口；`nil` = 没有要说的）。
+    @Published private(set) var notifyBanner: AgentNotification?
+    /// 求助卡（`FR-AGT-UX-CONV-009`）：需人处理 / 缺装配 / 缺点端才出，其余 `nil`。
+    @Published private(set) var helpRequest: AgentHelpRequest?
+    /// 被门控挡下的那一次（`FR-AGT-GUARD-COST-001`）—— 留着提示词与原由，等「仍然发送」或「不用了」。
+    @Published private(set) var gateRecall: AgentGateRecall?
+
+    /// 收起提示条（只收起这一条，不改任何状态）。
+    func dismissNotifyBanner() { notifyBanner = nil }
+
+    /// 收起求助卡（人已经看到了；**不代表那件事已经办完**）。
+    func dismissHelpRequest() { helpRequest = nil }
+
+    /// 放弃强发（「不用了」）：被挡下的那一跳本来就没发请求，放弃 = 什么都不用撤。
+    func dismissGateRecall() { gateRecall = nil }
+
+    /// **仍然发送**（`FR-AGT-GUARD-COST-001`）：用被挡下那一刻的提示词与触发强发一次。
+    ///
+    /// 三条边界：
+    /// · 走的是**同一个提示词**（`AgentGateRecall.prompt`），不读输入框 —— 输入框这时候可能已被改过；
+    /// · 门控这一次不看历史（`forcedProceed`），并且照常记账（否则下一次同样问法立刻又被挡）；
+    /// · 强发**不改任何其他设置**：审批 / 事故闸门 / 配额一个都不绕过（门控只管「要不要问模型」）。
+    func forceSend() async {
+        guard let recall = gateRecall else { return }
+        gateRecall = nil
+        // 先记账（`forcedProceed` 恒放行 + 更新「上一次问过什么」），再带 `ignoringGate` 真发 ——
+        // 两步都要：只记账不发 = 按钮没反应；只发不记账 = 下一次同样问法立刻又被挡。
+        _ = gate.forcedProceed(recall)
+        await start(prompt: recall.prompt, intent: .newQuestion, ignoringGate: true)
+    }
+
+
     /// 斜杠命令的「解析 → 要做什么」纯函数（`FR-AGT-UX-CONV-014`）。
     private let slashRuntime = AgentSlashCommandRuntime()
     /// 一条待批的配置变更（`/model` `/theme`）。`nil` = 没有在等审批的单。
@@ -506,7 +553,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         await start(prompt: prompt, intent: .continueLast)
     }
 
-    private func start(prompt: String, intent: AgentTurnIntent) async {
+    private func start(prompt: String, intent: AgentTurnIntent, ignoringGate: Bool = false) async {
         // **分账**（`NFR-AI-08` ⑤）：新提问 ⇒ 新分账号（不接上一个问题的检查点）；
         // 显式继续 ⇒ 沿用上一轮的分账号 + 报出停在第几跳。
         let plan = AgentTurnPlanner.plan(sessionID: sessionID, previous: lastTurn, intent: intent)
@@ -523,10 +570,16 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         }
         guard state.isRunning else { return }   // 不能发时 `beginRun` 已如实出提示，这里不许往下走
         cancellation.reset()
+        // 新的一轮开始 ⇒ 上一轮的提示条与求助卡收起来（它们说的都是上一轮的事）。
+        notifyBanner = nil
+        helpRequest = nil
         startWatchdog()
         guard let prepared = await makeLoop?(prompt, plan, self) else {
             stopWatchdog()
             state.apply(.failed("loopUnavailable"))
+            // 求助卡（`FR-AGT-UX-CONV-009`）：这一轮**连循环都没造出来** —— 缺的是装配，
+            // 不是网络。**如实要人办一件事**（要什么 / 为什么 / 给完从哪接），而不是只说一句失败。
+            helpRequest = AgentHelpCatalogue.missingLoop(language: languageProvider())
             return
         }
         // `FR-AI-28` 门控：**没有新内容就不发请求**（省 token）。
@@ -545,16 +598,20 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             digest: AgentFingerprint.hash(prepared.context.systemPrompt + "\u{1}" + prepared.context.userPrompt),
             at: Date()
         )
-        let decision = intent == .continueLast
+        let decision = (ignoringGate || intent == .continueLast)
             ? gate.decide(trigger, ignoringHistory: true)
             : gate.decide(trigger)
         switch decision {
         case .skipped(let reason):
             gate.record(.skipped(reason: reason), for: trigger)
             state.apply(.failed(reason))       // 如实说"为什么没发"，不静默；**输入框不清空**（用户改一个字就能再发）
+            // 「仍然发送」（`FR-AGT-GUARD-COST-001`）：留住**这一次真的要发的**提示词 + 触发 +
+            // 理由 —— 界面上那一行按钮按的就是这一份，不读输入框（它可能已被改过）。
+            gateRecall = AgentGateRecall(prompt: prompt, reason: reason, trigger: trigger)
             return
         case .proceed:
             gate.record(.proceed, for: trigger)
+            gateRecall = nil
         }
         if intent == .newQuestion { input = "" }
         lastPrompt = prompt
@@ -731,6 +788,34 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         case .stopped:
             break   // 停止那一档：循环已经发过 `stopped` 事件，这里不重复报。
         }
+
+        // **主动通知**（`FR-AGT-UX-CONV-008`）：长任务做完 / 出错 / 要人决定才叫人。
+        //
+        // 两处出口一次算齐（`AgentNotifyPolicy.plan`）：页内提示条永远先出（人在这页也看得见），
+        // 系统通知按「他是不是正看着这一页」判 —— 缺 `notifySink` 只是少了系统那一格，
+        // 不许因此把页内那一格也省掉。
+        let elapsed = Int((lastElapsedSeconds ?? 0).rounded())
+        let reason: AgentNotifyReason?
+        switch result.outcome {
+        case .finished:
+            reason = .longTaskFinished(elapsedSeconds: elapsed)
+        case .failed(let detail):
+            // 人自己按的「停止」不叫人（他知道发生了什么，再弹一次是骚扰）。
+            reason = detail == "cancelled" ? nil : .failed(summary: detail)
+        case .stopped:
+            reason = nil
+        }
+        if let reason {
+            let plan = notifyPolicy.plan(reason,
+                                        userIsLookingAtThisPane: paneIsVisible(),
+                                        userIsIdle: false,
+                                        language: languageProvider())
+            if let banner = plan.banner { notifyBanner = banner }
+            if let system = plan.system { notifySink?(system) }
+        }
+        // **求助卡**（`FR-AGT-UX-CONV-009`）：只有「需人处理」那一档才出卡
+        // （求助单由失败分级给，不是这里编的）；能自己好的失败不出卡，免得每次网络抖动都来要人办件事。
+        if let help = result.failureHelp { helpRequest = help }
     }
 
     /// 把队列里的下一条接着跑起来。

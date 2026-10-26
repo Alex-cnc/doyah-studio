@@ -34,6 +34,7 @@ struct AgentChatView: View {
             // 用户可以看到你正在执行到哪一步了」）—— 行内一行一步，只在本轮有步骤时出现。
             taskList
             currentActionRow
+            agentAlerts
             hairline
             composer
             // **信息面**（人类主人 2026-10-17：「参考 Hermes 的 cli 界面」+ dsh-tui 输入框下那条状态行）：
@@ -783,6 +784,94 @@ struct AgentChatView: View {
         }
         .padding(.leading, Spacing.m)
     }
+
+    // MARK: - 主动通知 / 求助卡 / 门控重发（`FR-AGT-UX-CONV-008` · `-009` · `FR-AGT-GUARD-COST-001`）
+
+    /// 三格只在**有事**时出现，且每一格都能就地收起。
+    ///
+    /// 为什么放在输入框上方而不是消息流里：这三件事都是「这一轮之后要你做点什么」，
+    /// 贴着输入框才有人照着做；塞进消息流会被下一次滚动带走（正是「不让人守着屏幕」要避免的）。
+    @ViewBuilder
+    private var agentAlerts: some View {
+        if let banner = model.notifyBanner {
+            alertCard(icon: banner.mustInterrupt ? "exclamationmark.bubble" : "bell.badge",
+                      title: banner.title) {
+                Text(banner.body)
+                    .font(Self.transcriptFont)
+                    .foregroundStyle(Theme.text(.secondary))
+                    .fixedSize(horizontal: false, vertical: true)
+            } actions: {
+                DialogActionButton(systemName: "checkmark", title: L(.agentNotifyDismiss)) {
+                    model.dismissNotifyBanner()
+                }
+            }
+        }
+        if let help = model.helpRequest {
+            alertCard(icon: "questionmark.bubble", title: L(.agentHelpCardTitle)) {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
+                    Text(help.kind.label(language: language) + "：" + help.ask)
+                    Text(help.whyLine(language: language))
+                    Text(help.resumeLine(language: language))
+                }
+                .font(Self.transcriptFont)
+                .foregroundStyle(Theme.text(.secondary))
+                .fixedSize(horizontal: false, vertical: true)
+            } actions: {
+                DialogActionButton(systemName: "checkmark", title: L(.agentHelpCardDismiss)) {
+                    model.dismissHelpRequest()
+                }
+            }
+        }
+        if let recall = model.gateRecall {
+            alertCard(icon: "hand.raised", title: L(.agentGateRecallTitle)) {
+                Text(recall.reason)
+                    .font(Self.transcriptFont)
+                    .foregroundStyle(Theme.text(.secondary))
+                    .fixedSize(horizontal: false, vertical: true)
+            } actions: {
+                DialogActionButton(systemName: "paperplane", title: L(.agentGateRecallForceSend)) {
+                    Task { await model.forceSend() }
+                }
+                DialogActionButton(systemName: "xmark", title: L(.agentGateRecallDismiss), role: .cancel) {
+                    model.dismissGateRecall()
+                }
+            }
+        }
+    }
+
+    /// 三格共用的纸面壳：**浮层用 `Theme.paper`**（不透明的主题面板色）——
+    /// 壁纸皮肤下 `surface` 是半透明的，两层叠起来文字会糊。
+    private func alertCard<BodyContent: View, Actions: View>(
+        icon: String,
+        title: String,
+        @ViewBuilder _ bodyContent: () -> BodyContent,
+        @ViewBuilder actions: () -> Actions
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.s) {
+                Image(systemName: icon)
+                    .foregroundStyle(Theme.status(.warning))
+                Text(title)
+                    .font(Self.transcriptFont.bold())
+                    .foregroundStyle(Theme.text(.primary))
+                Spacer(minLength: 0)
+            }
+            bodyContent()
+            HStack(spacing: Spacing.s) {
+                actions()
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(Spacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.paper(.raised))
+        .clipShape(RoundedRectangle(cornerRadius: Radius.card))
+        .padding(.horizontal, Spacing.l)
+        .padding(.top, Spacing.s)
+    }
+
+    /// 文案语言（与 `model.languageProvider` 同一来源 —— 界面与状态壳各写一份就会分叉）。
+    private var language: AppLanguage { model.languageProvider() }
 
     /// 状态字形照 TUI：跑着是旋转的那个（这里用静态 `◐`，转起来由 `currentActionRow` 负责），
     /// 成了 `✓`、失败 `✗`。

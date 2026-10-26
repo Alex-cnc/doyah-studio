@@ -234,6 +234,12 @@ public struct AgentLoopResult: Equatable, Sendable {
     /// （丢了就等于「配额在真实路径上永远不会触发」那条第 1 项缺口又回来了）。
     /// `nil` = 这一轮没接配额（旧行为**逐字不变**）。
     public var quotaLedger: AgentQuotaLedger?
+    /// **失败时的求助单**（`FR-AGT-UX-CONV-009`）：`AgentFailureTriage.help` 原样带出来 ——
+    /// 「需人处理」那一档才有（可重试 / 不该重试 ⇒ `nil`）。
+    ///
+    /// 为什么放在结果里而不是只留在事件流：事件流是**过程**（人读的过程面），
+    /// 而求助卡要在这一轮**结束之后**仍然挂着（人去办了再回来），所以要随结果交出去。
+    public var failureHelp: AgentHelpRequest? = nil
 
     public static func == (lhs: AgentLoopResult, rhs: AgentLoopResult) -> Bool {
         lhs.outcome == rhs.outcome && lhs.steps == rhs.steps && lhs.text == rhs.text
@@ -593,7 +599,8 @@ public struct AgentLoop: Sendable {
                     await observer?.observe(.failed(detail2))
                     return seal(AgentLoopResult(
                         outcome: .failed(detail2), steps: steps,
-                        executedTools: executed, rejectedTools: rejected, usage: usage, text: text))
+                        executedTools: executed, rejectedTools: rejected, usage: usage, text: text,
+                        failureHelp: triage.help))
                 }
                 if !retryable, !hasPartial, let next = candidate {
                     triedFallbacks.insert(next)
@@ -628,7 +635,8 @@ public struct AgentLoop: Sendable {
                     chainID: context.chainID))
                 return seal(AgentLoopResult(
                     outcome: .failed(detail), steps: steps,
-                    executedTools: executed, rejectedTools: rejected, usage: usage, text: text))
+                    executedTools: executed, rejectedTools: rejected, usage: usage, text: text,
+                    failureHelp: triage.help))
             }
             }
             let invocations = pending.keys.sorted().map { index -> AgentToolInvocation in

@@ -148,6 +148,14 @@ struct DoyahStudioApp: App {
                         guard let rootPath = workspace.rootPath else { return .failure("failed") }
                         return await appState.undoAgentChatApproval(card: card, workspacePath: rootPath)
                     }
+                    // 主动通知（`FR-AGT-UX-CONV-008`）：**判定在 Core**（`AgentNotifyPolicy`），
+                    // 这里只接两个出口 —— 系统那一格走 `UserNotifications`，页内提示条由视图读状态出。
+                    // 「他是不是正看着这一页」取**应用是否在前台**：本端对话只有这一个页签，
+                    // 切到别的应用 = 他走开了（切到本应用别的页签时仍会弹，宁可多一条也不漏一条）。
+                    agentChat.notifySink = { note in
+                        AgentNotificationPoster.post(title: note.title, body: note.body)
+                    }
+                    agentChat.paneIsVisible = { NSApplication.shared.isActive }
                     // `FR-AI-22` ② 工作区现场读数（当前文件 / 选中范围 / 终端尾部）：
                     // 取数在界面（三样分属三个模型，`AppState` 不持有），换算是纯函数
                     // （`AgentWorkspaceSnapshot`），带不带 / 谁在前 / 留尾由 Core 裁。

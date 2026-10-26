@@ -1060,6 +1060,40 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentStatusComputing
     /// §5.3.8.1 ④：状态行最后一格（本端没有语音输入，如实写「关」）。
     case agentStatusVoiceOff
+    /// `FR-AGT-UX-CONV-008` 主动通知的四档标题（页内提示条与系统通知共用同一份文案 ——
+    /// 同一个判定不许在两处各写一句话）。
+    case agentNotifyDoneTitle
+    case agentNotifyFailedTitle
+    case agentNotifyDecisionTitle
+    case agentNotifyApprovalTitle
+    /// 同上四档的正文（完成档带秒数，其余带一句话摘要）。
+    case agentNotifyDoneBody
+    case agentNotifyFailedBody
+    case agentNotifyApprovalBody
+    /// `FR-AGT-UX-CONV-009` 求助卡：三类「要什么」的抬头。
+    case agentHelpKindGrant
+    case agentHelpKindInformation
+    case agentHelpKindManualAction
+    /// 求助卡的三行（要什么 / 为什么 / 给完从哪接）与「为什么不能空手」的回落句。
+    case agentHelpWhyPrefix
+    case agentHelpResumeWith
+    case agentHelpResumeWhole
+    /// 求助卡的卡头与去处按钮。
+    case agentHelpCardTitle
+    case agentHelpCardDismiss
+    /// 缺装配（宿主没接循环）与缺点点（没配端点）这两种求助的具体措辞。
+    case agentHelpAskMissingLoop
+    case agentHelpWhyMissingLoop
+    case agentHelpResumeMissingLoop
+    case agentHelpAskMissingEndpoint
+    case agentHelpWhyMissingEndpoint
+    case agentHelpResumeMissingEndpoint
+    /// `FR-AGT-GUARD-COST-001` 门控挡下那一行：标题 + 强发按钮 + 放弃按钮。
+    case agentGateRecallTitle
+    case agentGateRecallForceSend
+    case agentGateRecallDismiss
+    /// 通知提示条的去处（「知道了」—— 只是收起这一条，不改任何状态）。
+    case agentNotifyDismiss
     /// §5.3.8.1 ⑥：启动界面信息面的三格（可用工具 / 汇总 / 没有工作区）。
     case agentChatToolsAvailable
     case agentChatStartupSummary
@@ -3626,6 +3660,34 @@ public enum LocalizedStrings {
         .agentStatusReady: [.simplifiedChinese: "就绪", .english: "ready"],
         .agentStatusComputing: [.simplifiedChinese: "( •_•)>◉─ 在算…", .english: "( •_•)>◉─ computing…"],
         .agentStatusVoiceOff: [.simplifiedChinese: "语音关", .english: "voice off"],
+        // `FR-AGT-UX-CONV-008` 主动通知：四档标题 + 四档正文（页内提示条与系统通知共用）。
+        .agentNotifyDoneTitle: [.simplifiedChinese: "跑完了（%ld 秒）", .english: "Finished (ran %ld s)"],
+        .agentNotifyFailedTitle: [.simplifiedChinese: "任务失败", .english: "Task failed"],
+        .agentNotifyDecisionTitle: [.simplifiedChinese: "等你定一下", .english: "Your call"],
+        .agentNotifyApprovalTitle: [.simplifiedChinese: "等你批一下", .english: "Waiting for approval"],
+        .agentNotifyDoneBody: [.simplifiedChinese: "结果在对话页签里。", .english: "The result is in the chat tab."],
+        .agentNotifyFailedBody: [.simplifiedChinese: "失败了：%@", .english: "It failed: %@"],
+        .agentNotifyApprovalBody: [.simplifiedChinese: "要动之前得你批：%@", .english: "Needs your approval first: %@"],
+        // `FR-AGT-UX-CONV-009` 求助卡：三类抬头 + 三行 + 卡头与去处。
+        .agentHelpKindGrant: [.simplifiedChinese: "需要你授权", .english: "needs your authorization"],
+        .agentHelpKindInformation: [.simplifiedChinese: "需要你给信息", .english: "needs information from you"],
+        .agentHelpKindManualAction: [.simplifiedChinese: "需要你亲手做一步", .english: "needs one manual step from you"],
+        .agentHelpWhyPrefix: [.simplifiedChinese: "原因：%@", .english: "Why: %@"],
+        .agentHelpResumeWith: [.simplifiedChinese: "你给我之后，我从「%@」接着跑。", .english: "Once you give it, I resume from “%@”."],
+        .agentHelpResumeWhole: [.simplifiedChinese: "你给我之后，我从头再跑一遍这一步。", .english: "Once you give it, I re-run this step from the start."],
+        .agentHelpCardTitle: [.simplifiedChinese: "需要你做一件事", .english: "I need one thing from you"],
+        .agentHelpCardDismiss: [.simplifiedChinese: "知道了，我去办", .english: "Got it"],
+        .agentHelpAskMissingLoop: [.simplifiedChinese: "把模型端点与密钥配好，再重发这条消息", .english: "Configure the model endpoint and key, then resend this message"],
+        .agentHelpWhyMissingLoop: [.simplifiedChinese: "这一轮连循环都没造出来 —— 宿主没接装配（端点 / 模型 / 工具一个都没装上），重发多少次都一样。", .english: "This turn could not even build a loop — the host wired nothing (endpoint, model, tools), so resending alone changes nothing."],
+        .agentHelpResumeMissingLoop: [.simplifiedChinese: "重发刚才那条消息", .english: "resend the message you just sent"],
+        .agentHelpAskMissingEndpoint: [.simplifiedChinese: "在设置里填端点地址与 API Key，再回来重发", .english: "Fill in the endpoint URL and API key in settings, then resend"],
+        .agentHelpWhyMissingEndpoint: [.simplifiedChinese: "没有端点就一个请求都发不出去 —— 这不是网络问题，是还没配。", .english: "Without an endpoint no request can leave — this is not a network problem, it is unconfigured."],
+        .agentHelpResumeMissingEndpoint: [.simplifiedChinese: "重发刚才那条消息", .english: "resend the message you just sent"],
+        // `FR-AGT-GUARD-COST-001` 门控挡下那一行。
+        .agentGateRecallTitle: [.simplifiedChinese: "这一次没有真的发出去（门控挡下了）", .english: "Nothing was actually sent (the gate held it)"],
+        .agentGateRecallForceSend: [.simplifiedChinese: "仍然发送", .english: "Send anyway"],
+        .agentGateRecallDismiss: [.simplifiedChinese: "不用了", .english: "No need"],
+        .agentNotifyDismiss: [.simplifiedChinese: "知道了", .english: "Dismiss"],
         .agentChatToolsAvailable: [.simplifiedChinese: "可用工具", .english: "available tools"],
         .agentChatStartupSummary: [.simplifiedChinese: "%@ 个工具 · %@ 个 MCP server", .english: "%@ tools · %@ MCP servers"],
         .agentChatWorkspaceNone: [.simplifiedChinese: "没有工作区", .english: "no workspace"],

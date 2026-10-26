@@ -107,4 +107,41 @@ public struct AgentInvocationGate: Sendable {
     public var exportText: String {
         skips.map(\.jsonLine).joined(separator: "\n")
     }
+
+    // MARK: - 「仍然发送」（`FR-AGT-GUARD-COST-001` 的界面接线）
+
+    /// **强行发一次**：人被门控挡下之后按了「仍然发送」。
+    ///
+    /// 三条口径（都落在这一处，不散在界面里）：
+    /// · 用的是**被挡下那一刻的同一个触发**（提示词与指纹逐字不变 —— 重发不许偷偷换一份上下文）；
+    /// · 判定一律 `ignoringHistory` ⇒ 必然放行（「仍然发送」的语义就是「我知道问过，还是要问」）；
+    /// · 放行照常**记账**（`lastProceeded` 更新）—— 否则下一次同样问法又会立刻被挡，
+    ///   而用户会以为是按钮没生效。
+    ///
+    /// 返回的就是这次强发的判定（恒为 `.proceed`，留作调用方断言用，不靠猜）。
+    public mutating func forcedProceed(_ recall: AgentGateRecall) -> AgentGateDecision {
+        let decision = decide(recall.trigger, ignoringHistory: true)
+        record(decision, for: recall.trigger)
+        return decision
+    }
+}
+
+/// 门控挡下那一次**留下的东西**（`FR-AGT-GUARD-COST-001`）。
+///
+/// 为什么要把提示词也留住：被挡下的那一跳**一个请求都没发**，界面上只剩一句理由；
+/// 若不留住提示词，用户点「仍然发送」时只能靠输入框里那点文字（而输入框此时可能已被改过）。
+/// 留住的这一份 = **当时真的要发的那一份**。
+public struct AgentGateRecall: Equatable, Sendable {
+    /// 当时要发的提示词（逐字）。
+    public var prompt: String
+    /// 门控给的理由（人话，可直接显示）。
+    public var reason: String
+    /// 当时的触发（指纹 / 来源 / 时刻）。
+    public var trigger: AgentGateTrigger
+
+    public init(prompt: String, reason: String, trigger: AgentGateTrigger) {
+        self.prompt = prompt
+        self.reason = reason
+        self.trigger = trigger
+    }
 }
