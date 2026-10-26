@@ -98,7 +98,7 @@ set -euo pipefail
 #        `dist/` 实物与别名各错一种，也都要报红，另有一例「实物 + 别名都对 ⇒ 绿」；例 1 = 干净夹具 + 源目录里的点目录残留 ⇒ 绿，同一夹具在**点目录之外**多一个 `.swift` ⇒ 红（对照：跳过没把判据掏空）；末例核对真仓库逐字节未变）。**为什么要有它**：`.xcodeproj` 在本仓**没有任何门禁**
 #        （`build-app.sh` 走 SwiftPM，根本不读它）⇒ 入库那份曾经 869 行、包标识还是改名前的
 #        `com.vnull.PostgresClient*`、且**少了两个目标**，从 2026-09-22 起就一直过期而无人知
-#        （`Docs/项目评审-2026-09-23.md` 把这条记成风险，但风险没有判据）。
+#        （`Docs/archive/root-20261026/项目评审-2026-09-23.md` 把这条记成风险，但风险没有判据）。
 #
 # 第 18 项是 2026-09-27（队列 L-43）补的：生成器与 `--check` 早就写好，**脚本头部自己也写着
 # 「本 check 未接进 verify-all」** —— 有判据、没闭环，等于手改一行生成物、或头文件换版后忘了
@@ -590,7 +590,7 @@ python3 Scripts/check-design-mock-tokens.py --self-test
 #     function→accent / identifier→primary / comment→tertiary）
 #   E 名对齐（三个主题名 = Linux 侧的名，**认 §9 主题表里那一行**，正文提到不算）+
 #     推导主题 ↔ 待值登记成对（值表紧挨的注释块里必须有「推导草案」标记 +
-#     `Docs/发布计划.md` 的待输入表还登记着「豆芽绿 / 玫瑰金 色值（Linux 侧）」）
+#     `Docs/archive/root-20261026/发布计划.md` 的待输入表还登记着「豆芽绿 / 玫瑰金 色值（Linux 侧）」）
 #   F 空跑防护（主题数 / 字段数 / 复算条数 / 文档落点四条下限）
 # L-80 ㈠+㈡ 的负例 **54 例**（53 个红/绿成对 + 末例核对真仓库二十一份文件逐字节未变，
 # 夹具一律在临时目录）。**2026-10-13（合册 T-20261013-027 · 原单 T-20261010-068）判定物补钉**：
@@ -660,7 +660,7 @@ python3 Scripts/check-p-parity.py
 python3 Scripts/check-p-parity.py --self-test
 # 派单 `T-20261014-015`（人类主人令 2026-10-14「`fatshark` 要对齐 macOS 版开发进度」）：
 # 上面两条管的是 §10.10 那张**矩阵**（谁到哪了）；Windows 侧还要一张**落点索引**
-# （每条需求去哪个文件读 macOS 实现）⇒ `Docs/平台对齐-Studio-Windows对macOS.md` 有生成器。
+# （每条需求去哪个文件读 macOS 实现）⇒ `Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md` 有生成器。
 # `--check` = 产出件与三书 §10.1/§10.2 + 台账一致（需求索引或追溯表一变、产出件没重跑就报红）。
 python3 Scripts/gen-studio-win-align.py --check
 # 派单 `T-20261014-025`（人类主人令 2026-10-14 追问「怎么到现在你还没有 macOS 的任务清单？」）：

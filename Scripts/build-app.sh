@@ -18,7 +18,7 @@ set -euo pipefail
 #
 # **沙箱口径（2026-09-29 需求提出者拍板「改非沙箱，先验证功能」）**：
 # 默认出**非沙箱**包（`App/DoyahStudio-unsandboxed.entitlements`）—— 这是交付口径
-# （`Docs/发布计划.md` §1：交付物 = 非沙箱 ad-hoc 包）。沙箱下挡着三件事：终端作业控制
+# （`Docs/archive/root-20261026/发布计划.md` §1：交付物 = 非沙箱 ad-hoc 包）。沙箱下挡着三件事：终端作业控制
 # （⌃C）/ 导入导出起 `pg_dump`·`pg_restore` / SSH 隧道起 `ssh`（SRS R-018 路线③）。
 # 沙箱改为**显式开关**（两个 entitlements 文件都留在仓里）：
 #   · 上架那天切回 —— **Mac App Store 强制沙箱**，此时 `DOYAH_SANDBOX=1` 即得；
@@ -52,7 +52,7 @@ CACHE="${ROOT}/.build-cache"
 # ── 发布标签（**唯一出处**）──────────────────────────────────────────────────────
 # 产物名（`dist/DoyahStudio-<发布标签>.app`）与 Info.plist 的 `DoyahReleaseLabel`**都从这一个值派生**，
 # 不许手抄第二份（派活单 `T-20261002-028`；判据 = `Scripts/check-release-version.py`，闭环第 18 项）。
-# 口径 = **`<里程碑>.<子号>`**（每个里程碑从 `.0` 起，里程碑内小改 +1）—— 出处 `Docs/发布计划.md` §5 附注。
+# 口径 = **`<里程碑>.<子号>`**（每个里程碑从 `.0` 起，里程碑内小改 +1）—— 出处 `Docs/archive/root-20261026/发布计划.md` §5 附注。
 # 当前 **Beta 1 = 全量功能** ⇒ `beta1.0`（2026-10-21 出包齐套 · 派单 `T-20261021-001`：产物身份与所有 `alpha3.1` 包不同 ⇒ 换里程碑，避免「同标签不同身份」；改前值 = `alpha3.1`）。
 RELEASE_LABEL="beta1.0"
 
@@ -256,7 +256,7 @@ else
 fi
 
 # ---- App 沙箱：默认**不带**；带了才是沙箱（上架那一天） ----
-# 交付口径 = 非沙箱包（见文件头与 Docs/发布计划.md §1）。沙箱路径**不许删** ——
+# 交付口径 = 非沙箱包（见文件头与 Docs/archive/root-20261026/发布计划.md §1）。沙箱路径**不许删** ——
 # 上架那天 `DOYAH_SANDBOX=1` 即可切回，两个 entitlements 文件都在仓里。
 if [ "${DOYAH_SANDBOX:-0}" = "1" ]; then
   ENTITLEMENTS="${ROOT}/App/DoyahStudio.entitlements"

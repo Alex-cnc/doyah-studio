@@ -6,7 +6,7 @@
 
 ## 为什么要有它
 
-`Docs/发布方案.md` §2 原来写着「版本号维护位置：`Scripts/build-app.sh` 的 Info.plist 模板、
+`Docs/archive/root-20261026/发布方案.md` §2 原来写着「版本号维护位置：`Scripts/build-app.sh` 的 Info.plist 模板、
 `project.yml`（Xcode 工程）。**两处必须一致**」—— 第 57 轮做 `v0.2.0-alpha` 发布收口时实测**不成立**：
 
 * `project.yml` 的**应用目标一个版本键都没有**（只有两个框架目标带 XcodeGen 的默认 `MARKETING_VERSION: 1.0`）；
@@ -15,7 +15,7 @@
 
 更严重的是**生成物早就过期了**且没人知道：入库的 `project.pbxproj` 只有 869 行、包标识仍是
 改名前的 `com.vnull.PostgresClient*`、**没有 `DoyahPlatform` / `DoyahPlatformTests` 两个目标**
-（2026-09-22 改名与平台拆分之后就没再生成过）。`Docs/项目评审-2026-09-23.md` 把「生成物与源可能
+（2026-09-22 改名与平台拆分之后就没再生成过）。`Docs/archive/root-20261026/项目评审-2026-09-23.md` 把「生成物与源可能
 不同步（改了 `project.yml` 忘了重新生成时，Xcode 打开的是旧工程）」记成风险，**但那条风险没有判据**。
 「生成文件没有症状」在本仓库是第五次撞上了（第 17 项 vendored SQLite / 第 18 项生成常量 /
 L-55 文档数字 / L-72 例数 / 本条）。
@@ -886,8 +886,8 @@ FIXTURE_FILES = [
     "Scripts/build-app.sh",
     LEDGER,
     "DoyahStudio.xcodeproj/project.pbxproj",
-    "Docs/发布方案.md",
-    "Docs/发布计划.md",
+    "Docs/archive/root-20261026/发布方案.md",
+    "Docs/archive/root-20261026/发布计划.md",
     "AGENT-SPEC.md",
 ]
 FIXTURE_LINKS = ["Core", "App", "Platform", "Tests", "TestsPlatform", "Plugins"]
@@ -1050,7 +1050,7 @@ def run_self_test() -> int:
 
         # 例 9：文档锚点写错 ⇒ 判红
         fixture = build_fixture(scratch, real_root)
-        edit(fixture / "Docs/发布方案.md", "| `%s` | `%s` |" % ("CFBundleVersion", build),
+        edit(fixture / "Docs/archive/root-20261026/发布方案.md", "| `%s` | `%s` |" % ("CFBundleVersion", build),
              "| `CFBundleVersion` | `7` |")
         problems = check(fixture).problems
         record("例 9 文档锚点写错 ⇒ 判红", any("发布方案.md" in p for p in problems), "；".join(problems[:2]))

@@ -536,7 +536,7 @@ FIXTURE = {
     "contract_docs": ["Docs/Doyah产品需求规格说明书.md", "Docs/Doyah产品概要设计说明书.md"],
     "shared": ["Docs/", "tools/", "AGENT-SPEC.md"],
     "unclassified_allow": [{"path": "README.md", "reason": "仓根门面"}],
-    "shared_ledger": [{"glob": "Docs/发布计划.md", "reason": "台账追加", "by": "macos",
+    "shared_ledger": [{"glob": "Docs/archive/root-20261026/发布计划.md", "reason": "台账追加", "by": "macos",
                        "at": "2026-10-02"}],
 }
 
@@ -596,7 +596,7 @@ def selftest(repo: pathlib.Path, man: Manifest) -> int:
     check("⑤ 共享面未登记 ⇒ 红", EXIT_RED, paths=["Docs/Doyah产品概要设计说明书.md"],
           wants=["共享面未登记", "shared-surface"])
     # 6 共享面 + 台账 glob 命中 ⇒ 绿
-    check("⑥ 共享面 + 台账已登记 ⇒ 绿", EXIT_PASS, paths=["Docs/发布计划.md"],
+    check("⑥ 共享面 + 台账已登记 ⇒ 绿", EXIT_PASS, paths=["Docs/archive/root-20261026/发布计划.md"],
           wants=["共享面", "台账"])
     # 7 共享面 + 本次新增行注记 ⇒ 绿
     check("⑦ 共享面 + 新增行注记 ⇒ 绿", EXIT_PASS, paths=["Docs/Doyah产品概要设计说明书.md"],

@@ -4,7 +4,7 @@ set -euo pipefail
 # PostgreSQL 版本兼容性回归（T-14 / NFR-ALL-GATE-COMP-001）
 #
 # 对**任意** PostgreSQL 实例跑一遍客户端关键链路，并打印一行可直接粘贴到
-# `Docs/兼容性矩阵.md` 的 Markdown 表格行。
+# `Docs/archive/root-20261026/兼容性矩阵.md` 的 Markdown 表格行。
 #
 # 覆盖：
 #   1. 连接与版本（server_version / current_database / current_user）
@@ -184,7 +184,7 @@ echo "================================"
 echo "通过 ${PASS} 项，失败 ${FAIL} 项"
 echo "================================"
 echo ""
-echo "粘贴到 Docs/兼容性矩阵.md 的行："
+echo "粘贴到 Docs/archive/root-20261026/兼容性矩阵.md 的行："
 echo ""
 echo "| ${VERSION:-?} | $(uname -m) | $(date +%Y-%m-%d) | ${PASS}/${TOTAL} | ${RESULT} | \`Scripts/test-postgres-version-matrix.sh\` |"
 echo ""

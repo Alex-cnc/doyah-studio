@@ -31,7 +31,7 @@
   定义行 **86 → 87**，多的那一条正是 `L-24`；同一个盲点在本机两个循环脚本里已由队列 **L-77** 修掉）。
 - **D 受检清单自洽**（2026-09-29 第 88 轮，队列 **L-88**）：`VERSION_DOCS` 是**手抄**的清单 ——
   新文档建出来**不会自动进来**，于是它连「撞号 + 头部漂移」都**全绿**。实测现场 =
-  `Docs/发布计划.md`（2026-09-29 建，两侧都在改：本侧 + §9 归小河马）：**`v1.9` 有两行重复、
+  `Docs/archive/root-20261026/发布计划.md`（2026-09-29 建，两侧都在改：本侧 + §9 归小河马）：**`v1.9` 有两行重复、
   `v1.8` 两行不同内容同号、头部格 `v1.8` ≠ 变更记录最高 `v1.9`** —— 而闭环 18 项全绿。
   判据 = 凡 `COVERAGE_ROOT_GLOBS`（仓根 `*.md` + `Docs/**/*.md`）里**带「变更记录」节**的文档，必须在
   `VERSION_DOCS` 或开发记录通配里，否则判红；`Docs/archive/` 豁免（**理由与命中计数**都写在
@@ -92,7 +92,7 @@ VERSION_DOCS = [
     # 2026-10-23：macOS 端详细设计（自带 §11 变更记录 + 头部版本格）。
     ("Docs/Doyah产品详细设计说明书-macOS.md", False),
     # 2026-10-23：macOS 端开发计划书（自带 §11 变更记录 + 头部版本格）。
-    ("Docs/Doyah产品开发计划任务清单-安卓端.md", False),
+    ("Docs/archive/root-20261026/Doyah产品开发计划任务清单-安卓端.md", False),
     ("Docs/Doyah产品开发计划任务清单-Android.md", False),
     ("Docs/Doyah产品详细设计说明书-Windows.md", False),
     ("Docs/Doyah产品详细设计说明书-Linux.md", False),
@@ -100,15 +100,15 @@ VERSION_DOCS = [
     ("Docs/Doyah产品详细设计说明书-iOS.md", False),
     ("Docs/Doyah产品详细设计说明书-HarmonyOS.md", False),
     ("Docs/智能体助手-开发规范.md", False),
-    ("Docs/测试用例.md", False),
-    ("Docs/兼容性矩阵.md", False),
-    ("Docs/发布方案.md", False),
+    ("Docs/archive/root-20261026/测试用例.md", False),
+    ("Docs/archive/root-20261026/兼容性矩阵.md", False),
+    ("Docs/archive/root-20261026/发布方案.md", False),
     # ↓ 第 88 轮（L-88）补：这四份此前**不在清单里**，撞号与头部漂移因此无人判。
-    ("Docs/发布计划.md", False),
-    ("Docs/GBase-技术验证.md", False),
+    ("Docs/archive/root-20261026/发布计划.md", False),
+    ("Docs/archive/root-20261026/GBase-技术验证.md", False),
     ("Docs/design/外观方案-v1.md", False),
     ("Docs/design/复盘工具-宿主侧装配需求-20260929.md", False),
-    ("Docs/手工验收运行手册.md", False),
+    ("Docs/archive/root-20261026/手工验收运行手册.md", False),
     # 2026-10-10 修（T-20261010-030）：仓根入口件纳入受检清单（此前不在清单 ⇒ 三组撞号全绿）
     ("AGENT-SPEC.md", False),
     # 2026-10-14 · 派单 `T-20261014-025`：派生视图《任务清单 · 按平台》入库（有「变更记录」节 +
@@ -139,7 +139,7 @@ TABLE_ROW = re.compile(RE_INDENT + r"\|\s*\*{0,2}(v\d+\.\d+)\*{0,2}\s*\|")
 QUOTE_ROW = re.compile(RE_INDENT + r">\s*\*\*(v\d+\.\d+)")
 HEAD_TABLE = re.compile(RE_INDENT + r"\|\s*(?:当前版本|版本)\s*\|(.+?)\|\s*$")
 HEAD_QUOTE = re.compile(RE_INDENT + r">\s*\*\*版本\*\*\s*(v\d+\.\d+)")
-# 「节标题之后的头部形状」专用（㈢）：**必须带版本号**才认 —— 真仓 `Docs/发布计划.md:259` 有一张
+# 「节标题之后的头部形状」专用（㈢）：**必须带版本号**才认 —— 真仓 `Docs/archive/root-20261026/发布计划.md:259` 有一张
 # 别的表（`| 版本 | 交付日 | 小河马侧（Windows）交付 |`），它的表头行**不含版本号**，不该被当头部格。
 HEAD_LATE = re.compile(RE_INDENT + r"\|\s*(?:当前版本|版本)\s*\|([^|]*v\d+\.\d+[^|]*)\|\s*$")
 ID_DEF = re.compile(RE_INDENT + r"\|\s*\*{0,2}([LNR]-\d+)\*{0,2}[^|]*\|")
@@ -249,7 +249,7 @@ def stray_head_cell(lines: list[str]) -> tuple[int, str] | None:
     """头部形状落在「变更记录」节标题**之后**（窗口外）⇒ 判「不可判」并判红（㈢）。
 
     **边界（如实登记）**：只认**带版本号**的头部形状（`HEAD_LATE`）—— 节标题之后那些别的表格
-    （如 `Docs/发布计划.md` 的「版本 / 交付日 / 小河马侧交付」路线表）**不算**，否则就成了假红。
+    （如 `Docs/archive/root-20261026/发布计划.md` 的「版本 / 交付日 / 小河马侧交付」路线表）**不算**，否则就成了假红。
     """
     limit = section_start(lines) - 1
     for index, line in enumerate(lines[limit:], limit + 1):
@@ -367,7 +367,7 @@ def coverage_problems(root: pathlib.Path) -> tuple[list[str], str]:
     """判据 D：有「变更记录」节的文档必须在受检清单里（VERSION_DOCS ∪ 开发记录通配）。
 
     为什么要有它：清单是手抄的 ⇒ 新文档建出来不会自动进来，它的撞号与头部漂移**全绿**
-    （第 88 轮实测：`Docs/发布计划.md` 两行 `v1.9` 重复、两行 `v1.8` 同号、头部 `v1.8` ≠ 最高）。
+    （第 88 轮实测：`Docs/archive/root-20261026/发布计划.md` 两行 `v1.9` 重复、两行 `v1.8` 同号、头部 `v1.8` ≠ 最高）。
     `Docs/archive/` 的事由写在 `COVERAGE_EXEMPT` 里 —— 豁免也要**给出理由**，不静默跳过；
     **豁免还要有命中计数**（㈣）：目录在盘而命中 0 份 ⇒ 判红「陈旧豁免」（旧码只写理由、无计数，
     留着也没人知道它在不在用）；目录不在盘 ⇒ 只出声不判红（`Docs/archive/` 的快照件不入库 ⇒ 判红
@@ -579,7 +579,7 @@ CASES = [
 ]
 
 # 判据 D 的负例（第 88 轮，L-88）：夹具只有**一个文件**，所以「在清单里」的那一例用清单里
-# 已有的名字（`Docs/测试用例.md`）—— 判据看的是**相对路径**，不看内容。
+# 已有的名字（`Docs/archive/root-20261026/测试用例.md`）—— 判据看的是**相对路径**，不看内容。
 # ㈣（2026-10-14）起**每条夹具都带一份归档件**：豁免要「有命中」，否则陈旧豁免那一档会先判红，
 # 这一组用例就测不到原来的判定物了（陈旧豁免单独一例）。
 COVERAGE_CASES = [
@@ -592,7 +592,7 @@ COVERAGE_CASES = [
       "Docs/archive/旧快照.md": "# 旧快照\n\n早年的存档件。\n"},
      [], 0),
     ("有变更记录节且名字在受检清单里 ⇒ 不判红",
-     {"Docs/测试用例.md": "# 测试用例\n\n## 变更记录\n\n| 版本 | 日期 | 内容 |\n|---|---|---|\n| v1.0 | 2026-01-01 | 首版 |\n",
+     {"Docs/archive/root-20261026/测试用例.md": "# 测试用例\n\n## 变更记录\n\n| 版本 | 日期 | 内容 |\n|---|---|---|\n| v1.0 | 2026-01-01 | 首版 |\n",
       "Docs/archive/旧快照.md": "# 旧快照\n\n早年的存档件。\n"},
      [], 0),
     ("归档目录豁免（不判红）",
@@ -689,13 +689,13 @@ def self_test() -> int:
             probe = root / "Docs" / "测试用例.md"
             if kind == "bytes":
                 probe.write_bytes(b"# \xd6\xd0\xce\xc4\n\n## \xe5\x8f\x98\xe6\x9b\xb4\xe8\xae\xb0\xe5\xbd\x95\n")
-                problems, _ = check_doc("Docs/测试用例.md", root)
+                problems, _ = check_doc("Docs/archive/root-20261026/测试用例.md", root)
                 code = 1 if problems else 0
                 ok = code == expected_code and any("不可读" in item for item in problems)
                 detail = "\n".join(problems)
             elif kind == "dir":
                 probe.mkdir()
-                problems, _ = check_doc("Docs/测试用例.md", root)
+                problems, _ = check_doc("Docs/archive/root-20261026/测试用例.md", root)
                 code = 1 if problems else 0
                 ok = code == expected_code and any("不可读" in item for item in problems)
                 detail = "\n".join(problems)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成 `Docs/平台对齐-Studio-Windows对macOS.md` —— Windows 侧对齐 macOS 开发的逐条索引。
+"""生成 `Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md` —— Windows 侧对齐 macOS 开发的逐条索引。
 
 **本件身份：派生视图（非契约）**。真值源只有四处，本脚本**只读**、一字不写：
     ① `Docs/Doyah产品需求规格说明书-需求索引.md` 的编号索引（编号 / 所属域 / 层次）—— 行集合与行序；
@@ -52,7 +52,7 @@ STATUS = ROOT / "Docs/平台实现状态.json"
 # 2026-10-20：真值源搬迁前的落点（SRS §10.1 索引 / §10.2 追溯表）；现在 SRS 里已无这两节，
 # 只用于报错时点名「它搬去哪了」。
 LEGACY_SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
-OUT = ROOT / "Docs/平台对齐-Studio-Windows对macOS.md"
+OUT = ROOT / "Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md"
 
 TARGET_PLATFORM = "windows"
 ALLOWED_STATUS = ("✅", "🟡", "⬜")

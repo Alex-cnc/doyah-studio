@@ -20,7 +20,7 @@ C. **文案键中英都在**：页签那一族键逐个在 `Core/Localization.sw
 D. **单测逐组钉住**：`Tests/TerminalTabsTests.swift` 里七个行为组的用例锚点必须在，且用例总数
    不低于下限（防「测试文件被掏空」）。
 E. **口径锚点**：需求提出者的原话场景（一个页签跑 `dsh-tui`、另一个执行命令）在
-   `Docs/发布计划.md` 与队列 `L-84` 行里都在（口径被删 = 判据失去依据）。
+   `Docs/archive/root-20261026/发布计划.md` 与队列 `L-84` 行里都在（口径被删 = 判据失去依据）。
 F. **㈡ 界面接线在位**（第 82 轮补；**第 96 轮 `L-89` ㈡ ③ 扩**）：这一半在 App 侧
    （`App/TerminalPane.swift` / `App/TerminalTabsModel.swift` / `App/Views/TerminalTabsBar.swift` /
    `App/Views/LowerPaneTabStrip.swift` / `App/Views/LowerPaneView.swift` / `App/Views/TerminalView.swift` /
@@ -101,7 +101,7 @@ import tempfile
 MODEL = "Core/TerminalTabs.swift"
 TABLE = "Core/Localization.swift"
 TESTS = "Tests/TerminalTabsTests.swift"
-PLAN = "Docs/发布计划.md"
+PLAN = "Docs/archive/root-20261026/发布计划.md"
 QUEUE = "Docs/design/开发循环-任务队列.md"
 
 # F（㈡ 界面接线）：判据要盯的 App 侧文件。

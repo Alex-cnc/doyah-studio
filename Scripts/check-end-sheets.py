@@ -1,4 +1,4 @@
-"""端级对账：**任务清单只给正在开发的端建**（人类主人 2026-10-26 令：只有 macOS 端与安卓端）。
+"""端级对账：**任务清单只给正在开发的端建**（人类主人 2026-10-26 令：只有 macOS 端与 Android 端）。
 
 判据：
   A. 允许存在的端清单 = `{macOS端, 安卓端}`；出现别的端清单（iOS / Windows / Linux / HarmonyOS …）即判红；
@@ -23,10 +23,25 @@ DERIVED = ROOT / ".build" / "derived"
 # 允许存在的端清单（键 = 清单文件名里的端名，值 = 详设文件名里的端名）
 ALLOWED_SHEETS = {
     "macOS端": "macOS",
-    "安卓端": "Android",
-    # 2026-10-26：同侧并发会话新建了 `-Android.md`（自称「唯一进度记录」），与 `-安卓端.md` 并存。
-    # 两种写法都收，但**同一端只许一份** —— 谁是那份，不由本脚本替人类主人决定（判据 A2 只报重复）。
+    # 2026-10-26 人类主人令：留小河马新建并维护的 `-Android.md`；旧 `-安卓端.md` 已归档。
     "Android": "Android",
+}
+
+# 判据 H：`Docs/` 根只许「四书 + 一单 + 工程规范」。任何别的书/清单/索引/记录/发布说明都不许待在根上。
+BOOK_PATTERNS = [
+    r"^Doyah产品能力规划说明书(-变更记录)?\.md$",
+    r"^Doyah产品需求规格说明书(-变更记录|-追溯表)?\.md$",
+    r"^Doyah产品概要设计说明书(-变更记录)?\.md$",
+    # 详设按端一一对应（每端一份，端名与 `ALLOWED_SHEETS` 的规范端名一致）
+    r"^Doyah产品详细设计说明书-(macOS|Android|Windows|Linux|HarmonyOS|iOS)\.md$",
+]
+SHEET_PATTERN = r"^Doyah产品开发计划任务清单-(%s)\.md$" % "|".join(ALLOWED_SHEETS)
+# 工程规范：写「怎么做活」的，不是产品书；人类主人 2026-10-26 口径里只留这两份 + 一份模板 + README
+ENGINEERING_DOCS = {
+    "README.md",
+    "智能体助手-开发规范.md",
+    "Doyah项目开发规范.md",
+    "模板-详细设计说明书-Studio.md",
 }
 
 SHEET = re.compile(r"^Doyah产品开发计划任务清单-(?P<end>.+?)\.md$")
@@ -66,6 +81,36 @@ def check() -> list[str]:
         if end not in sheets:
             problems.append(f"缺端清单：应有 `Docs/Doyah产品开发计划任务清单-{end}.md`")
 
+    # I. 各端的一单**只认同端详设活书**（人类主人 2026-10-26 令）
+    #    —— 不许引别人的详设，也不许把冻结件当上游；活书 = 不带版本号的那份。
+    all_ends = sorted(set(ALLOWED_SHEETS.values()))
+    for end, path in sheets.items():
+        canonical = ALLOWED_SHEETS.get(end)
+        if canonical is None:
+            continue
+        live = DOCS / f"Doyah产品详细设计说明书-{canonical}.md"
+        if not live.exists():
+            problems.append(f"{path.name}: 同端详设活书缺失（应有 `Docs/{live.name}`，不许拿冻结件顶）")
+        head = "\n".join(path.read_text(encoding="utf-8").splitlines()[:40])
+        if canonical not in head:
+            problems.append(f"{path.name}: 头部没有指向同端详设（缺 `{canonical}`）—— 一单只认同端详设活书版")
+        for other in all_ends:
+            if other == canonical:
+                continue
+            if f"详细设计说明书-{other}" in head or f"详细设计说明书 · {other}" in head:
+                problems.append(f"{path.name}: 头部引了**别端**的详设（{other}）—— 各端一单只认同端详设活书版")
+        if re.search(r"-v\d+\.\d+-\d{8}\.md", head):
+            problems.append(f"{path.name}: 头部把**冻结件**当上游 —— 一单跟的是同端详设**活书**，不是冻结快照")
+
+    # H. 根目录只许四书 + 一单 + 工程规范（人类主人 2026-10-26 令「以后任何开发侧都只有四书一单」）
+    allowed = re.compile("|".join(BOOK_PATTERNS + [SHEET_PATTERN]))
+    for path in sorted(DOCS.glob("*.md")):
+        if path.name in ENGINEERING_DOCS or allowed.match(path.name):
+            continue
+        problems.append(
+            f"Docs/{path.name}: 不在「四书一单」范围内 —— 开发侧只留四书（能力 / 需求 / 概要 / 详设-<端>）"
+            "与一单（任务清单-<端>，每端一份）；过程件一律进 Docs/archive/")
+
     if (DOCS / "Doyah产品开发计划任务清单.md").exists():
         problems.append("Docs/Doyah产品开发计划任务清单.md: 产品级总单已按令删除，不许再出现（清单必须带端名）")
 
@@ -101,7 +146,7 @@ def main() -> int:
         for p in problems:
             print(f"   · {p}")
         return 1
-    print("✅ 端级对账通过：任务清单只有 macOS 端 + 安卓端（小河马侧），各有一份详设兜底；"
+    print("✅ 端级对账通过：任务清单只有 macOS 端 + Android 端（小河马维护），各有一份详设兜底；"
           "无孤本、无产品级总单、无跨端视图混进 Docs/")
     return 0
 

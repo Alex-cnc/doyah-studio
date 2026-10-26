@@ -10,7 +10,7 @@
       **用同一份实现**算对比度（`ColorContrast`）。没错，但"判据与被判对象同源"意味着
       —— 如果值表里某一档被改坏、或有人**新加一套表**却漏了某个角色，只会红在同一个实现里；
     · 更要紧的是"**主题名与 Linux 侧对齐**""**待值登记还在**"这两件事**根本不是单测能看的**：
-      它们是跨文档的事实（`Docs/design/外观方案-v1.md` §9 的表 / `Docs/发布计划.md` 的待输入表 /
+      它们是跨文档的事实（`Docs/design/外观方案-v1.md` §9 的表 / `Docs/archive/root-20261026/发布计划.md` 的待输入表 /
       `Core/Localization.swift` 的双语文案）。
 
 本脚本因此做了两件与单测互补的事：
@@ -42,7 +42,7 @@ E. **主题名与 Linux 侧对齐 + 待值登记成对**：
    ① `Core/Localization.swift` 里五个主题名键的中文值必须是「科技蓝 / 豆芽绿 / 玫瑰金 / 星空紫 / 深空苍穹」，
       且 `Docs/design/外观方案-v1.md` §9 的主题表里三行**同名**（双向覆盖，缺一即红）；
    ② 有推导主题（`isDerivedDraft`）就必须 ① 值表**紧挨着的那段注释**里标着「推导草案」
-      （§9.1 的原话）② `Docs/发布计划.md` 的待输入表里登记着「豆芽绿 / 玫瑰金 色值（Linux 侧）」
+      （§9.1 的原话）② `Docs/archive/root-20261026/发布计划.md` 的待输入表里登记着「豆芽绿 / 玫瑰金 色值（Linux 侧）」
       那件事 —— 推导值不许**静默变成**实际值。
 F. 空跑防护：主题数 / 角色数 / 实测对数 / 文档锚点处数四条下限，任何一条踩线即红。
 G. **界面入口（㈡ 加上的那一半）**：值表分组了、运行时也能切了，但**用户手上那个入口**是另一件事
@@ -110,7 +110,7 @@ THEMES_SWIFT = "Core/DesignTheme.swift"
 TOKENS_SWIFT = "Core/DesignTokens.swift"
 LOCALIZATION_SWIFT = "Core/Localization.swift"
 DESIGN_DOC = "Docs/design/外观方案-v1.md"
-RELEASE_PLAN = "Docs/发布计划.md"
+RELEASE_PLAN = "Docs/archive/root-20261026/发布计划.md"
 APPEARANCE_SWIFT = "App/Views/AppearanceSheet.swift"
 THEME_MANAGER_SWIFT = "App/DesignThemeManager.swift"
 
