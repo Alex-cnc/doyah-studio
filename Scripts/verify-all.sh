@@ -444,6 +444,7 @@ python3 Scripts/check-req-ids.py
 # （概要设计 v2.35 与对侧同号 / 队列 L-25·L-26·L-41 同号 / 三书 P-15 同号不同物）。
 # 本项现在跑三个脚本，与第 3 / 7 / 10 / 15 项同一做法（**项数不变**）。
 python3 Scripts/check-doc-versions.py
+python3 Scripts/check-doc-invariants.py
 python3 Scripts/check-frozen-sync.py || echo "⚠ 冻结基线有漂移（超阈值 ⇒ 该问人类『冻结到新版本吗』；不是失败）"
 # 派生文件不得漂移：终端配色 JSON ↔ Core ↔ 人读文档三方一致（FR-STD-WS-TOOL-001 的跨平台交接物）
 python3 Scripts/check-terminal-palette.py
