@@ -428,7 +428,7 @@
 | FR-RTR-RSR-REPORT-001 | 周报草稿生成：按主题（如芯片 / 半导体）与日期区间，汇总本期多标的的数据与事件，生成周报草稿 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-RTR-RSR-REPORT-002 | 周报转笔记：把周报按「笔记的一种形态」写入宿主笔记（正文 markdown + 内嵌表格 + 标签），可被宿主全文检索 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-RTR-RSR-REPORT-003 | 用户自定义规则与要求：用户可配「生成什么、按什么口径」—— 可编辑模板（Markdown + 变量占位）为骨架；自然语言 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-REPORT-004 | 产物 = 报告（本仓可读 + 笔记形态并行）：报告 = `FR-STD-ALL-IFACE-005` 周报包（`inde | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-REPORT-004 | 产物 = 报告（本仓可读 + 笔记形态并行）：报告 = `IR-05` 周报包（`inde | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-RTR-RSR-REPORT-005 | 单篇 + 幂等覆盖 + 固定标签 + 可配归属：幂等键 `uid = 规则ID + 周期`（重跑覆盖同一篇）；标签固定  | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-RTR-RSR-REPORT-006 | 可编辑 + 改后不覆盖（前置规则 ①）：自动生成的笔记允许用户编辑；一旦用户编辑过 ⇒ 该篇转为「用户自己的笔记」，自动 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-RTR-RSR-REPORT-007 | 交换面（走契约交换面，不走同库直写）：Retro（或生成侧）产出中间文件 → Notes 导入 ⇒ 落成笔记；复用 No | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
@@ -745,7 +745,7 @@
   - [x] 空态 / 失败态：空 schema 显示「该 schema 下暂无表 / 视图」，失败可读且可重试；新增刷新按钮
   - [x] 服务层回归：`Tests/MetadataServiceTests.swift` 8 项（含空 schema、服务器 → 数据库）；本地链路新增 4 条断言（服务器根 / 数据库列表 / 空 schema / 双库按需连接），当前 25/25
   - [ ] 真实库验收：确认服务器节点下能看到多个数据库；分别展开到 schema / 表 / 列；在查询区执行 `SELECT table_schema, table_name FROM information_schema.tables ORDER BY 1, 2;` 交叉确认
-- [x] **T-04 保存查询 SQL（开发完成）** → 需求：FR-STD-WS-EDIT-001、FR-STD-ALL-DATA-004
+- [x] **T-04 保存查询 SQL（开发完成）** → 需求：FR-STD-WS-EDIT-001、FR-STD-DB-SESS-007
   - [x] `SavedQuery` 模型（id / name / connectionID / database / sql / savedAt）
   - [x] `SavedQueryStore`：JSON + 原子写，存 Application Support（沙箱容器），不含密码；3 项单测
   - [x] `QueryToolbar` 在执行按钮之前新增保存按钮（`bookmark`）+ 已保存列表（`list.bullet`）
@@ -819,7 +819,7 @@
   - [x] `AppState.queryHistory`（内存，最多 50 条）+ `recordHistory` / `clearQueryHistory` / `loadHistory`
   - [x] 成功与失败都记录（✓ / ✗ + 耗时），连续重复执行只刷新最新一条
   - [x] 工具栏时钟菜单：最近 20 条摘要，点击回填当前页签，支持清空
-  - [x] 按 FR-STD-ALL-DATA-002 不落盘（隐私优先）；退出应用即清空
+  - [x] ~~按 FR-STD-ALL-DATA-002 不落盘（隐私优先）；退出应用即清空~~ → **2026-10-09 改判：历史落盘**（`FR-STD-DB-SESS-001`：落本机数据库、500 条/90 天、本地 only）
 - [x] **T-12 影响行数 command tag（已完成）** → 需求：FR-STD-DB-EXEC-013 / R-001
   - [x] `PostgresService.reportsAffectedRows(_:)` 判定 `INSERT / UPDATE / DELETE`（跳过前置注释、排除 `RETURNING`）
   - [x] 该类语句走 EventLoopFuture 路径，从 `PostgresQueryMetadata.rows` 读取行数
