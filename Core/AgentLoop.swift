@@ -544,7 +544,12 @@ public struct AgentLoop: Sendable {
             } catch {
                 // `FR-AI-30` ①：**分档**再决定要不要再试一次。
                 let llmError = error as? LLMError
-                let retryable = llmError.map { retryPolicy.isRetryable($0) } ?? false
+                // `FR-AGT-UX-CONV-004`：**先分档**（可重试 / 需人处理 / 不该重试），再决定处置。
+                // 布尔捷径 `isRetryable` 只回答"要不要再试"，这里还要回答"等多久 / 该找谁"。
+                let triage: AgentFailureTriage = llmError.map {
+                    AgentFailureClassifier().classify($0, attempt: retries + 1, policy: retryPolicy)
+                } ?? AgentFailureClassifier().classifyUnknown(error.localizedDescription)
+                let retryable = triage.isRetryable
                 // **已经产出半截内容 ⇒ 一次都不重试**（重试会把前半段重复一遍，比失败更糟）。
                 let hasPartial = !text.isEmpty || !pending.isEmpty
                 let canRetry = retryable && !hasPartial && retries < retryPolicy.maxAttempts
@@ -583,7 +588,8 @@ public struct AgentLoop: Sendable {
                 })
                 // **连续失败到顶**：停下来说明，不无限重来（同条 ②）。
                 if failuresInARow >= limits.maxConsecutiveFailures {
-                    let detail2 = "consecutiveFailures:\(failuresInARow) · last:\(error.localizedDescription)"
+                    // 带上分档（`transient` / `needsHuman` / `terminal`）—— 读日报时一眼看出是"网络抽风"还是"该找人"。
+                    let detail2 = "consecutiveFailures:\(failuresInARow) · tier:\(triage.tier.rawValue) · last:\(error.localizedDescription)"
                     await observer?.observe(.failed(detail2))
                     return seal(AgentLoopResult(
                         outcome: .failed(detail2), steps: steps,
