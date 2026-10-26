@@ -70,6 +70,9 @@ func runAgentSQLStreamCommand(arguments: [String]) async -> Int32 {
     var pieces: [String] = []
     var textDeltas = 0
     var toolCallDeltas = 0
+    /// 思考段块数 + 那一行开没开（正文一来就收行，别两段粘一行上）。
+    var reasoningDeltas = 0
+    var reasoningOpen = false
     var sawDone = false
 
     do {
@@ -79,11 +82,25 @@ func runAgentSQLStreamCommand(arguments: [String]) async -> Int32 {
             case .textDelta(let piece):
                 textDeltas += 1
                 pieces.append(piece)
+                // 正文开始 ⇒ 先把思考段那一行收掉（否则两段粘在同一行上）。
+                if reasoningOpen {
+                    print(wrapper.flush())
+                    reasoningOpen = false
+                }
                 // **按列宽折行**再吐（改前 `print(piece, terminator: "")` 直接给终端硬折，
                 // 折点会落在词中间；中文按字符数算还会低估一半列宽）。
                 print(wrapper.feed(piece), terminator: "")
             case .toolCallDelta:
                 toolCallDeltas += 1
+            case .reasoningDelta(let piece):
+                // 思考段（`FR-AGT-UX-CONV-012`）：CLI 这一面**单独一行前缀**打出来 ——
+                // 混进正文会让人分不清哪句是「想过」哪句是「答复」。正文一开始就把这一行收掉。
+                reasoningDeltas += 1
+                if !reasoningOpen {
+                    print("⟪思考⟫ ", terminator: "")
+                    reasoningOpen = true
+                }
+                print(wrapper.feed(piece), terminator: "")
             case .usage(let usage, let actualModel):
                 print(wrapper.flush())
                 let missing = session.add(prompt: usage.promptTokens, completion: usage.completionTokens)
@@ -110,7 +127,7 @@ func runAgentSQLStreamCommand(arguments: [String]) async -> Int32 {
 
     print(wrapper.flush())
     print("")
-    print("（流式：正文块 \(textDeltas) 个 / 工具调用块 \(toolCallDeltas) 个 / 拼接 \(pieces.joined().count) 个字符 / 见到 [DONE]：\(sawDone ? "是" : "否")）")
+    print("（流式：正文块 \(textDeltas) 个 / 工具调用块 \(toolCallDeltas) 个 / 思考段块 \(reasoningDeltas) 个 / 拼接 \(pieces.joined().count) 个字符 / 见到 [DONE]：\(sawDone ? "是" : "否")）")
     print("（会话：\(session.requests) 次请求 · 输入 \(session.promptTokens) / 输出 \(session.completionTokens) / 合计 \(session.totalTokens) token）")
     return sawDone ? 0 : 67
 }

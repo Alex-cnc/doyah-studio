@@ -3242,6 +3242,10 @@ final class AppState: ObservableObject {
                              // 目录里没有插件 ⇒ 没有钩子 ⇒ 与旧行为逐字一致；清单写坏的那几份
                              // 不参与判定，但会在面板上逐条点名（`agentExtensionProblems`）。
                              policyHooks: AgentExtensionPolicySource(desk: extensionLoad.desk),
+                             // `FR-AGT-OPS-OBS-002` 的「审批策略可配置」：基线从运行策略面板那一格来
+                             // （`allow` / `ask` / `deny`），**每轮开跑重新读一次快照** ⇒ 改完下一轮就生效。
+                             // 钩子只能在这条基线之上收紧；基线是 `allow` 且没装插件时与旧行为逐字一致。
+                             policyBaseline: agentRuntimeConfig.snapshot.approvalPolicy,
                              // `NFR-AI-04` 配额：**对话这条路上此前根本没接**（`AgentQuota` 只接在
                              // 自然语言生成 SQL 那条路上）⇒ 长跑时会把配额悄悄烧掉。现在每跳发送前判定，
                              // 账本由 `AppState.agentQuotaLedger` 跨轮累计（跑完回写，见 `finish`）。

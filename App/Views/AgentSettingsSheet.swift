@@ -183,6 +183,20 @@ struct AgentSettingsSheet: View {
                     Text(L(.agentRuntimeWhitelistHint))
                         .font(Theme.font(.caption))
                         .foregroundStyle(Theme.text(.secondary))
+
+                    // **审批策略**（`FR-AGT-OPS-OBS-002`）：工具调用的默认宽严。
+                    // 下拉而不是输入框：三档是封闭词表，写错一个字就整份拒收（面板上不该教人背单词）。
+                    LabeledContent(L(.agentRuntimeApproval)) {
+                        Picker(L(.agentRuntimeApproval), selection: $runtimeDraft.approvalPolicy) {
+                            Text(L(.agentRuntimeApprovalAllow)).tag("allow")
+                            Text(L(.agentRuntimeApprovalAsk)).tag("ask")
+                            Text(L(.agentRuntimeApprovalDeny)).tag("deny")
+                        }
+                        .labelsHidden()
+                    }
+                    Text(L(.agentRuntimeApprovalHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
                     if !appState.agentToolWhitelistUnknown.isEmpty {
                         // 名单里写了工具名但注册表里没有：**点名**（否则面板上那句「已限制」
                         // 会让人以为限制成功，实际什么都没限到）

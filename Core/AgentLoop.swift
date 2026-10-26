@@ -5,6 +5,12 @@ public enum AgentLoopEvent: Equatable, Sendable {
     case hopStarted(index: Int)
     /// 模型增量（流式渲染就吃这个）。
     case delta(String)
+    /// **思考段增量**（`FR-AGT-UX-CONV-012`）：与 `.delta` **分开一条通道**。
+    ///
+    /// 为什么不并进 `.delta`：正文会被写进会话文件、被当成答复交给用户、被完成判据复核，
+    /// 而思考段一样都不该占 —— 混进同一条增量就让上面三件事全错。界面上它落在「显示思考段」
+    /// 那一格里（开关关着 = 零占位，不是空行）。
+    case reasoningDelta(String)
     /// 工具开跑。`summary` = **一行参数摘要**（`AgentToolSummary` 压出来的；空 = 没有可报的）。
     case toolStarted(name: String, summary: String)
     /// 工具结束时的**档位**（机器形态：`executed` / `denied` / `pendingApproval` / …）+ **这一跳花了多少毫秒**。
@@ -246,6 +252,11 @@ public struct AgentLoopResult: Equatable, Sendable {
     /// 所以「模型自己写一个没读过的路径」不算出处。`nil` = 这一轮没有成文答复
     /// （停止 / 失败），或压根没有断言 —— 两种都不该拿一条空账去吓人。
     public var answerProvenance: AgentAnswerProvenance? = nil
+    /// **这段答复之前模型写下的思考段**（`FR-AGT-UX-CONV-012`）。
+    ///
+    /// 只取**给出最终答复那一跳**的那一段（前面工具跳的思考段不累加 —— 那是过程，
+    /// 归事件流与过程面，不该跟结论一起交出去）。`nil` = 这家模型不给这一段。
+    public var reasoning: String? = nil
 
     public static func == (lhs: AgentLoopResult, rhs: AgentLoopResult) -> Bool {
         lhs.outcome == rhs.outcome && lhs.steps == rhs.steps && lhs.text == rhs.text
@@ -328,6 +339,14 @@ public struct AgentLoop: Sendable {
     /// 不给（`nil`）= 旧行为**逐字不变**（既有判据一条都不必改）。
     public var policyHooks: (any AgentPolicyHookSource)?
 
+    /// **审批策略的基线**（`FR-AGT-OPS-OBS-002` 的「审批策略可配置」）：
+    /// 工具调用之前先按这一档判，插件钩子只能在它之上收紧（`AgentPolicyCombiner` 只许升档）。
+    ///
+    /// 默认 `.allow` = 旧行为**逐字不变**（没有钩子、没有基线收紧时，连一条 `policy:` 审计都不多出）。
+    /// 与 `policyHooks` 的关系是「基线 + 收紧」：钩子**不能**把 `.ask` / `.deny` 放回去 ——
+    /// 这正是「用户可以自己定宽严，插件不能替他放宽」那条口径的落点。
+    public var policyBaseline: AgentPolicyLevel
+
     /// **配额**（`NFR-AI-04`）：给了就在**每一跳发送之前**判定一次（次数 / 累计 token），
     /// 超限如实停并给出配额自己那句可读原因 —— 此前对话这条路上根本没接配额
     /// （`AgentQuota` 只接在自然语言生成 SQL 那条路上）⇒ 长跑时会把配额悄悄烧掉。
@@ -352,6 +371,7 @@ public struct AgentLoop: Sendable {
                 compressionBudget: AgentContextCompressionBudget? = nil,
                 completionVerifier: AgentCompletionVerifier? = nil,
                 policyHooks: (any AgentPolicyHookSource)? = nil,
+                policyBaseline: AgentPolicyLevel = .allow,
                 quota: AgentQuota? = nil,
                 quotaLedger: AgentQuotaLedger = .empty,
                 monitor: AgentRunMonitor? = nil,
@@ -368,6 +388,7 @@ public struct AgentLoop: Sendable {
         self.compressionBudget = compressionBudget
         self.completionVerifier = completionVerifier
         self.policyHooks = policyHooks
+        self.policyBaseline = policyBaseline
         self.quota = quota
         self.quotaLedger = quotaLedger
         self.monitor = monitor
@@ -539,6 +560,9 @@ public struct AgentLoop: Sendable {
 
             let hopStarted = Date()
             var text = ""
+            // 本跳的思考段（`FR-AGT-UX-CONV-012`）：只在这一跳内累计，
+            // 最终答复那一跳的那一段随结果交出去；没有这一段模型的这里是空串。
+            var reasoning = ""
             var pending: [Int: (id: String?, name: String?, arguments: String)] = [:]
             var retries = 0
             var lastFailure: String? = nil
@@ -552,6 +576,12 @@ public struct AgentLoop: Sendable {
                         // 有增量 = 有进展（看门狗据此判「卡住」，`FR-AI-31` ③）。
                         monitor?.noteProgress()
                         await observer?.observe(.delta(piece))
+                    case .reasoningDelta(let piece):
+                        // 思考段**不进 `text`**（它是过程，不是答复）：只累计 + 交给观察者。
+                        // 也算有进展 —— 模型正在想，界面不该在这时候报「卡住」。
+                        reasoning += piece
+                        monitor?.noteProgress()
+                        await observer?.observe(.reasoningDelta(piece))
                     case .usage(let reported, _):
                         usage = reported
                     case .toolCallDelta(let index, let id, let name, let fragment):
@@ -743,7 +773,8 @@ public struct AgentLoop: Sendable {
                     resumedFromStep: resumedFromStep, skippedSteps: skippedSteps,
                     skippedCheckpointLines: skippedCheckpointLines,
                     checkpointWriteFailures: checkpointWriteFailures,
-                    completion: report, selfCheck: selfCheck))
+                    completion: report, selfCheck: selfCheck,
+                    reasoning: reasoning.isEmpty ? nil : reasoning))
             }
 
             for invocation in invocations {
@@ -784,47 +815,50 @@ public struct AgentLoop: Sendable {
                 // 始终可被 `MainActor.run` 取用，而**同步契约照旧**（不动 Core 协议、不动既有工具单测）。
                 // 循环自身不碰 UI 状态；观察者与审计都是 async 接口（各自回自己的 actor），与本次改动无关。
                 // **计时**：过程行要如实报这一步花了多久（Hermes 每步后面那个 `0.3s`）。
-                // **插件策略钩子**（`FR-AGT-LINK-EXT-003` ⑤）：分发之前先问一次。
-                // 只许收紧 —— 钩子说放行也抬不动后面的「要审批」，钩子自己挂了 ⇒ 直接拒
-                // （fail-closed，不是「忽略它、按别路的结论走」）。
-                // 每个被求值的钩子都留一条审计（失败的也在）：要能回答「是谁把它拦了」。
-                if let policyHooks {
-                    let hooks = policyHooks.hookResults(for: invocation, workspace: context.workspace)
-                    if !hooks.isEmpty {
-                        let verdict = AgentPolicyCombiner.evaluate(base: .allow, hooks: hooks)
-                        let traceDetail = verdict.traces
-                            .map { "\($0.hookID):level=\($0.level.rawValue):failed=\($0.failed)" }
-                            .joined(separator: ",")
-                        let traceOutcome: AgentActionRecord.Outcome
-                        switch verdict.decision {
-                        case .deny: traceOutcome = .denied
-                        case .requiresApproval: traceOutcome = .pendingApproval
-                        case .allow: traceOutcome = .executed
-                        }
-                        await audit?.record(AgentActionRecord.makeToolCall(
-                            toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
-                            outcome: traceOutcome, detail: "policy:\(traceDetail)",
-                            sessionID: context.sessionID, hopIndex: steps - 1,
-                            chainID: context.chainID, at: startedAt))
-                        if verdict.decision != .allow {
-                            let reason = verdict.decision == .deny
-                                ? AgentToolRefusal.deniedByPolicy.rawValue
-                                : AgentToolRefusal.approvalRequired.rawValue
-                            rejected.append((invocation.name, reason))
-                            observations.append("\(invocation.name): \(reason)/\(traceDetail)")
-                            await observer?.observe(.toolStarted(name: invocation.name,
-                                                                 summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
-                            await observer?.observe(.toolFinished(
-                                name: invocation.name,
-                                outcome: verdict.decision == .deny ? "denied" : "pendingApproval",
-                                millis: nil))
-                            recordTurn(context: context,
-                                       kind: verdict.decision == .deny ? .tool : .approval,
-                                       role: "system",
-                                       text: "\(invocation.name) => \(reason)/\(traceDetail)",
-                                       at: startedAt)
-                            continue
-                        }
+                // **策略判定**（分发之前一次）：基线来自用户的**审批策略**配置（`FR-AGT-OPS-OBS-002`），
+                // 插件钩子只能在它之上收紧（`FR-AGT-LINK-EXT-003` ⑤）：钩子说放行也抬不动基线里的
+                // 「要审批 / 直接拒」，钩子自己挂了 ⇒ 直接拒（fail-closed，不是「忽略它、按别路的结论走」）。
+                // 每个被求值的钩子都留一条审计（失败的也在），基线本身也点名 —— 要能回答「是谁把它拦了」。
+                // 两者都「不干预」（没装钩子源 + 基线 allow）时**整段不进** ⇒ 旧行为逐字不变。
+                if policyHooks != nil || policyBaseline != .allow {
+                    let hooks = policyHooks?.hookResults(for: invocation, workspace: context.workspace) ?? []
+                    let verdict = AgentPolicyCombiner.evaluate(base: policyBaseline, hooks: hooks)
+                    let traceDetail = verdict.traces
+                        .map { "\($0.hookID):level=\($0.level.rawValue):failed=\($0.failed)" }
+                        .joined(separator: ",")
+                    // `policy:` 之后先给基线（用户那一下），再给钩子（插件那几下）。
+                    let policyDetail = hooks.isEmpty
+                        ? "policy:baseline=\(policyBaseline.configToken)"
+                        : "policy:baseline=\(policyBaseline.configToken);\(traceDetail)"
+                    let traceOutcome: AgentActionRecord.Outcome
+                    switch verdict.decision {
+                    case .deny: traceOutcome = .denied
+                    case .requiresApproval: traceOutcome = .pendingApproval
+                    case .allow: traceOutcome = .executed
+                    }
+                    await audit?.record(AgentActionRecord.makeToolCall(
+                        toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                        outcome: traceOutcome, detail: policyDetail,
+                        sessionID: context.sessionID, hopIndex: steps - 1,
+                        chainID: context.chainID, at: startedAt))
+                    if verdict.decision != .allow {
+                        let reason = verdict.decision == .deny
+                            ? AgentToolRefusal.deniedByPolicy.rawValue
+                            : AgentToolRefusal.approvalRequired.rawValue
+                        rejected.append((invocation.name, reason))
+                        observations.append("\(invocation.name): \(reason)/\(policyDetail)")
+                        await observer?.observe(.toolStarted(name: invocation.name,
+                                                             summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
+                        await observer?.observe(.toolFinished(
+                            name: invocation.name,
+                            outcome: verdict.decision == .deny ? "denied" : "pendingApproval",
+                            millis: nil))
+                        recordTurn(context: context,
+                                   kind: verdict.decision == .deny ? .tool : .approval,
+                                   role: "system",
+                                   text: "\(invocation.name) => \(reason)/\(policyDetail)",
+                                   at: startedAt)
+                        continue
                     }
                 }
                 let toolStartedAt = Date()

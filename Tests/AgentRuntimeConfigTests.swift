@@ -114,8 +114,10 @@ final class AgentRuntimeConfigTests: XCTestCase {
 
     func testUnknownKeyIsRejected() {
         var store = AgentConfigStore()
-        XCTAssertThrowsError(try store.apply(key: "approvalPolicy", value: "always", reason: "想加一项")) {
-            XCTAssertEqual($0 as? AgentConfigError, .unknownKey("approvalPolicy"))
+        // 探测键换成**仍不在词表里**的名字：原来这里用的是 `approvalPolicy`，
+        // 而它现在是正式配置项（`FR-AGT-OPS-OBS-002` 的审批策略）—— 用已知键探「未知键」会永远失败。
+        XCTAssertThrowsError(try store.apply(key: "sandboxProfile", value: "strict", reason: "想加一项")) {
+            XCTAssertEqual($0 as? AgentConfigError, .unknownKey("sandboxProfile"))
         }
         XCTAssertEqual(store.changes.count, 0)
     }
@@ -213,5 +215,132 @@ final class AgentRuntimeConfigTests: XCTestCase {
         let degraded = ledger.reading(at: today, calendar: calendar)
         XCTAssertEqual(degraded.tokens, 0)
         XCTAssertTrue(degraded.degraded)
+    }
+
+    // MARK: - 审批策略（`FR-AGT-OPS-OBS-002` 的「审批策略可配置」那一项）
+
+    /// 默认 = 放行：**升级不许悄悄把人的工具全锁上**（这是最要命的一种默认值错）。
+    func testApprovalPolicyDefaultsToAllow() {
+        let snapshot = AgentConfigSnapshot()
+        XCTAssertEqual(snapshot.approvalPolicy, .allow)
+
+        let draft = AgentRuntimeConfigDraft(snapshot: snapshot)
+        XCTAssertEqual(draft.approvalPolicy, "allow", "面板那一格回填的是配置面词表里的写法")
+        XCTAssertEqual(draft.edits(against: snapshot), [], "原样回填不算改动")
+    }
+
+    /// 词表封闭 + 形状宽容：三档认得，内部枚举名与拼错的一律不认（不静默回落 allow）。
+    func testApprovalPolicyVocabularyIsClosed() throws {
+        XCTAssertEqual(AgentPolicyLevel.configTokens, ["allow", "ask", "deny"], "顺序 = 面板从宽到严")
+        XCTAssertEqual(AgentPolicyLevel.allow.configToken, "allow")
+        XCTAssertEqual(AgentPolicyLevel.requiresApproval.configToken, "ask")
+        XCTAssertEqual(AgentPolicyLevel.deny.configToken, "deny")
+
+        // 形状宽容（大小写 / 空白），语义不变
+        XCTAssertEqual(AgentPolicyLevel(configToken: " ASK "), .requiresApproval)
+        XCTAssertEqual(AgentPolicyLevel(configToken: "Deny"), .deny)
+        // 认不出就是认不出：内部枚举名不放行、拼错不放行、空串不放行
+        XCTAssertNil(AgentPolicyLevel(configToken: "requiresApproval"))
+        XCTAssertNil(AgentPolicyLevel(configToken: "blocked"))
+        XCTAssertNil(AgentPolicyLevel(configToken: ""))
+
+        // store 面对同一条词表：非法值拒收并说清允许哪三档，快照一个字不动
+        var store = AgentConfigStore()
+        XCTAssertThrowsError(try store.apply(key: "approvalPolicy", value: "blocked", reason: "试试")) { error in
+            XCTAssertEqual(error as? AgentConfigError,
+                           .outOfRange(key: "approvalPolicy", value: "blocked", allowed: "allow / ask / deny"))
+        }
+        XCTAssertEqual(store.snapshot.approvalPolicy, .allow)
+        XCTAssertTrue(store.changes.isEmpty, "拒收不留痕（留痕只记真的落了盘的改动）")
+    }
+
+    /// 改一档 ⇒ 快照跟上 + 留痕里能读出「从什么改成什么」（有据可查那一面）。
+    func testApprovalPolicyChangeReachesSnapshotAndKeepsBeforeAfter() throws {
+        var store = AgentConfigStore()
+        try store.applyBatch([.init(key: "approvalPolicy", value: "ask")],
+                             reason: "演示前怕它自己动文件", at: Date(timeIntervalSince1970: 1_700_000_200))
+
+        XCTAssertEqual(store.snapshot.approvalPolicy, .requiresApproval)
+        XCTAssertEqual(store.changes.count, 1)
+        XCTAssertEqual(store.changes.first?.oldValue, "allow")
+        XCTAssertEqual(store.changes.first?.newValue, "ask")
+    }
+
+    /// 面板上填了认不出的词 ⇒ **算一条改动**（送去拒收并给理由），不许在界面层静默吞掉：
+    /// 吞掉的话用户看到的是「保存成功」，而策略其实还停在放行。
+    func testIllegalApprovalPolicyIsAnEditNotASilentDrop() {
+        let snapshot = AgentConfigSnapshot()
+        var draft = AgentRuntimeConfigDraft(snapshot: snapshot)
+        draft.approvalPolicy = "blocked"
+
+        XCTAssertEqual(draft.edits(against: snapshot).map(\.key), ["approvalPolicy"])
+
+        var store = AgentConfigStore()
+        XCTAssertThrowsError(try store.applyBatch(draft.edits(against: snapshot), reason: "试试"))
+        XCTAssertEqual(store.snapshot, snapshot, "批量原子：拒收一条 = 整批不落")
+    }
+
+    /// 盘上往返：存了什么读回什么（策略是会被「下次开 App」用到的那一档）。
+    func testApprovalPolicySurvivesFileRoundTrip() throws {
+        let file = AgentRuntimeConfigFile(directory: directory)
+        var store = AgentConfigStore()
+        try store.applyBatch([.init(key: "approvalPolicy", value: "deny")], reason: "只读巡航")
+        try file.save(store)
+
+        let reloaded = file.load()
+        XCTAssertEqual(reloaded.state, .loaded)
+        XCTAssertEqual(reloaded.store.snapshot.approvalPolicy, .deny)
+    }
+
+    /// **旧配置文件**（这一项还不存在时写的）读得回来：按默认 `allow` 走，**不判降级**。
+    /// 判成 `parseFailed` 的后果是「升级一次，用户的设置全丢」。
+    func testOldFileWithoutApprovalPolicyLoadsAsAllowNotDegraded() throws {
+        let file = AgentRuntimeConfigFile(directory: directory)
+        let legacy = """
+        {"snapshot":{"dailyTokenQuota":300000,"commandTimeoutSeconds":90,"maxConcurrentSubtasks":4,\
+        "model":"默认","notificationsEnabled":false,"toolWhitelist":["read_file"]},"changes":[]}
+        """
+        try Data(legacy.utf8).write(to: file.fileURL)
+
+        let loaded = file.load()
+        XCTAssertEqual(loaded.state, .loaded)
+        XCTAssertEqual(loaded.store.snapshot.approvalPolicy, .allow)
+        XCTAssertEqual(loaded.store.snapshot.dailyTokenQuota, 300_000, "旧文件其余各项照旧读回来")
+        XCTAssertEqual(loaded.store.snapshot.toolWhitelist, ["read_file"])
+    }
+
+    /// 手改出一个不存在的档位 ⇒ 如实降级并点名是哪一项（不静默采信成放行）。
+    func testHandEditedBadApprovalPolicyDegrades() throws {
+        let file = AgentRuntimeConfigFile(directory: directory)
+        let illegal = """
+        {"snapshot":{"approvalPolicy":"blocked","dailyTokenQuota":200000,"commandTimeoutSeconds":60,\
+        "maxConcurrentSubtasks":3,"model":"默认","notificationsEnabled":true,"toolWhitelist":[]},"changes":[]}
+        """
+        try Data(illegal.utf8).write(to: file.fileURL)
+
+        let degraded = file.load()
+        XCTAssertEqual(degraded.state, .degraded(reason: "outOfRange:approvalPolicy=blocked allowed allow / ask / deny"))
+        XCTAssertEqual(degraded.store.snapshot, AgentConfigSnapshot(), "降级一整份回落默认值")
+    }
+
+    /// 基线是**下界**：钩子只许往上抬，抬不动已收紧的基线（用户定的宽严，插件不能替他放宽）。
+    func testCombinerCannotLoosenBelowBaseline() {
+        XCTAssertEqual(AgentPolicyCombiner.evaluate(base: .deny, hooks: [
+            AgentPolicyHookResult(hookID: "ext.a:preToolUse", level: .allow),
+        ]).decision, .deny)
+
+        XCTAssertEqual(AgentPolicyCombiner.evaluate(base: .requiresApproval, hooks: [
+            AgentPolicyHookResult(hookID: "ext.a:preToolUse", level: .allow),
+        ]).decision, .requiresApproval)
+
+        // 基线允许、钩子收紧 ⇒ 收紧生效（两个方向都判，别只判「不许放宽」那一半）
+        XCTAssertEqual(AgentPolicyCombiner.evaluate(base: .allow, hooks: [
+            AgentPolicyHookResult(hookID: "ext.a:preToolUse", level: .deny),
+        ]).decision, .deny)
+
+        // 没有钩子时基线自己就是结论（且留痕为空 —— 「没人插手」与「有人放行」要分得开）
+        let solo = AgentPolicyCombiner.evaluate(base: .requiresApproval, hooks: [])
+        XCTAssertEqual(solo.decision, .requiresApproval)
+        XCTAssertTrue(solo.traces.isEmpty)
     }
 }

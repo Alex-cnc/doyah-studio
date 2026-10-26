@@ -230,4 +230,34 @@ final class AgentChatTests: XCTestCase {
         multiline.beginRun(prompt: "第一行\n第二行")
         XCTAssertEqual(multiline.sessionTitle, "第一行 第二行", "换行压成空格（是一行标题，不是两行）")
     }
+
+    // MARK: - 思考段落到消息上（`FR-AGT-UX-CONV-012` 的「源」）
+
+    /// 思考段进 `thinking` 栏、**不进 `text`**：进了正文就会被当答复、被写进会话、被完成判据复核。
+    func testReasoningDeltaLandsOnThinkingNotOnText() {
+        var state = AgentChatState()
+        ready(&state)
+        state.beginRun(prompt: "看看这个文件")
+
+        state.apply(.reasoningDelta("先看"))
+        state.apply(.reasoningDelta("一眼"))
+        state.apply(.delta("结论：可以。"))
+        state.endStreaming()
+
+        let assistant = state.messages.last
+        XCTAssertEqual(assistant?.text, "结论：可以。", "正文只有模型真正答的那句")
+        XCTAssertEqual(assistant?.thinking, "先看一眼", "思考段拼在同一栏里")
+        XCTAssertEqual(assistant?.role, .assistant)
+    }
+
+    /// 只出思考段、正文还没来 ⇒ 消息还在（不许因为「正文空」被当成半截丢掉）。
+    func testReasoningOnlyHopStillHasAMessageUntilItEnds() {
+        var state = AgentChatState()
+        ready(&state)
+        state.beginRun(prompt: "想想")
+
+        state.apply(.reasoningDelta("正在想"))
+        XCTAssertEqual(state.messages.last?.thinking, "正在想")
+        XCTAssertTrue(state.messages.last?.isStreaming ?? false, "还没收尾，消息要留着")
+    }
 }

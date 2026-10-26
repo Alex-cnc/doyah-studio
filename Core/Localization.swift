@@ -1027,6 +1027,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentRuntimeNotifyHint
     case agentRuntimeWhitelist
     case agentRuntimeWhitelistHint
+    case agentRuntimeApproval
+    case agentRuntimeApprovalHint
+    case agentRuntimeApprovalAllow
+    case agentRuntimeApprovalAsk
+    case agentRuntimeApprovalDeny
     case agentRuntimeReason
     case agentRuntimeReasonPlaceholder
     case agentRuntimeSave
@@ -3769,6 +3774,11 @@ public enum LocalizedStrings {
         .agentRuntimeNotifyHint: [.simplifiedChinese: "关掉只关系统弹窗，页内提示条照出 —— 事情在界面上仍然看得见。", .english: "Turning this off only silences the system popup; the in-app banner still appears."],
         .agentRuntimeWhitelist: [.simplifiedChinese: "工具白名单", .english: "Tool whitelist"],
         .agentRuntimeWhitelistHint: [.simplifiedChinese: "逗号分隔的工具名；留空 = 不限制。名单外的工具会从可见工具里移出（不是「还能调、只是不显示」）。", .english: "Comma-separated tool names; empty means no restriction. Tools outside the list are removed from the visible set."],
+        .agentRuntimeApproval: [.simplifiedChinese: "审批策略", .english: "Approval policy"],
+        .agentRuntimeApprovalHint: [.simplifiedChinese: "工具调用的默认宽严。插件只能收紧、不能替你放宽；选「一律不执行」后连读文件也会被拦，只留得下纯对话。改完下一轮生效。", .english: "Baseline strictness for tool calls. Plugins can only tighten it, never loosen it. Choosing never-execute blocks even reading files, leaving plain conversation only. Takes effect on the next run."],
+        .agentRuntimeApprovalAllow: [.simplifiedChinese: "放行（默认）", .english: "Allow (default)"],
+        .agentRuntimeApprovalAsk: [.simplifiedChinese: "每次都要我批", .english: "Ask me every time"],
+        .agentRuntimeApprovalDeny: [.simplifiedChinese: "一律不执行", .english: "Never execute"],
         .agentRuntimeReason: [.simplifiedChinese: "改动理由（必填）", .english: "Why this change (required)"],
         .agentRuntimeReasonPlaceholder: [.simplifiedChinese: "为什么改，比如：长任务老被 60 秒掐断", .english: "e.g. long tasks keep getting cut off at 60s"],
         .agentRuntimeSave: [.simplifiedChinese: "保存策略", .english: "Save policy"],

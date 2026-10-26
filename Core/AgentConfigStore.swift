@@ -34,16 +34,55 @@ public struct AgentConfigSnapshot: Equatable, Sendable {
     public var dailyTokenQuota: Int
     public var notificationsEnabled: Bool
     public var toolWhitelist: [String]
+    /// **审批策略的基线**（`FR-AGT-OPS-OBS-002` 的「审批策略可配置」）。
+    ///
+    /// 语义只有一句：**工具调用之前先按这一档判**，插件钩子只能在它之上收紧
+    /// （`AgentPolicyCombiner` 只许升档）。三档含义：
+    /// · `.allow` = 旧行为（默认，不放宽也不收紧）；
+    /// · `.requiresApproval` = 每件工具都先要人批（谨慎模式）；
+    /// · `.deny` = 一律不执行（只读巡航 / 托管时的急停档）。
+    /// 它不是「审批队列的替代」：基线到 `.requiresApproval` 之后，审批本身仍走既有队列，
+    /// 这一档只决定「要不要先去排队」。
+    public var approvalPolicy: AgentPolicyLevel
 
     public init(model: String = "默认", maxConcurrentSubtasks: Int = 3, commandTimeoutSeconds: Int = 60,
                 dailyTokenQuota: Int = 200_000, notificationsEnabled: Bool = true,
-                toolWhitelist: [String] = []) {
+                toolWhitelist: [String] = [], approvalPolicy: AgentPolicyLevel = .allow) {
         self.model = model
         self.maxConcurrentSubtasks = maxConcurrentSubtasks
         self.commandTimeoutSeconds = commandTimeoutSeconds
         self.dailyTokenQuota = dailyTokenQuota
         self.notificationsEnabled = notificationsEnabled
         self.toolWhitelist = toolWhitelist
+        self.approvalPolicy = approvalPolicy
+    }
+}
+
+/// 审批策略在**配置面**的三种写法（配置是文本进文本出，词表与解析只此一处）。
+///
+/// 为什么不接受 `requiresApproval` 这种内部枚举名：面板上那一格是给人填 / 给人读的，
+/// 词表越短越不会写错；内部名改了也不该把盘上旧配置写坏。
+public extension AgentPolicyLevel {
+    /// 配置面词表（顺序 = 面板下拉的顺序，从宽到严）。
+    static let configTokens: [String] = ["allow", "ask", "deny"]
+
+    var configToken: String {
+        switch self {
+        case .allow: return "allow"
+        case .requiresApproval: return "ask"
+        case .deny: return "deny"
+        }
+    }
+
+    /// 解析（大小写不敏感、去空白）。认不出的**必须返回 nil** —— 由调用方拒收并给理由，
+    /// 不许在这里悄悄回落 `allow`（那是把「填错了」变成「放行了」）。
+    init?(configToken: String) {
+        switch configToken.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "allow": self = .allow
+        case "ask": self = .requiresApproval
+        case "deny": self = .deny
+        default: return nil
+        }
     }
 }
 
@@ -91,6 +130,13 @@ public struct AgentConfigStore: Sendable {
             old = snapshot.toolWhitelist.joined(separator: ",")
             next.toolWhitelist = value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
+        case "approvalPolicy":
+            old = snapshot.approvalPolicy.configToken
+            guard let level = AgentPolicyLevel(configToken: value) else {
+                throw AgentConfigError.outOfRange(key: key, value: value,
+                                                 allowed: AgentPolicyLevel.configTokens.joined(separator: " / "))
+            }
+            next.approvalPolicy = level
         default:
             throw AgentConfigError.unknownKey(key)
         }

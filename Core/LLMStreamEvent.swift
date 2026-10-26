@@ -4,6 +4,14 @@ import Foundation
 public enum LLMStreamEvent: Equatable, Sendable {
     /// 正文增量（拼接用；**不逐字外发**，只有调用方决定怎么呈现）。
     case textDelta(String)
+    /// **思考段增量**（`FR-AGT-UX-CONV-012` 的「显示思考段」要的源）。
+    ///
+    /// 兼容两种线上字段名（两家厂商各写一个，别指望统一）：
+    /// `delta.reasoning_content`（DeepSeek / Moonshot 一类）与 `delta.reasoning`（OpenRouter 一类）。
+    /// **没有这一段的模型永远不产生这个事件** ⇒ 界面那条「显示思考段」开关在它们身上是零占位，
+    /// 这不是缺陷、是如实「本端拿不到」。思考段**不是**正文的一部分，不许并进 `textDelta`
+    /// （并进去就会被当成答复交给用户、也会被写进会话文件）。
+    case reasoningDelta(String)
     /// 工具调用增量（`id` / `name` 通常只在第一块出现，`arguments` 是**分片**要自己拼）。
     case toolCallDelta(index: Int, id: String?, name: String?, argumentsFragment: String)
     /// 用量（通常只在最后一块出现；带上**实际模型**）。
@@ -24,12 +32,15 @@ public struct LLMStreamDecoder: Sendable {
 
     /// 已拼好的正文（供「逐字一致」断言与最终成文）。
     public private(set) var text = ""
+    /// 已拼好的**思考段**（`FR-AGT-UX-CONV-012`；没有这一段模型的流里它恒为空串）。
+    public private(set) var reasoning = ""
     /// 已拼好的工具调用（按 index 归并）。
     public private(set) var toolCalls: [ToolCallAccumulator] = []
     /// 是否收到了 `[DONE]`。
     public private(set) var sawDone = false
-    /// 是否收到过任何事件（判断「半截」用）。
-    public var sawAnyEvent: Bool { !text.isEmpty || !toolCalls.isEmpty || sawDone }
+    /// 是否收到过任何事件（判断「半截」用）。思考段也算「收到过东西」——
+    /// 一条只出了思考段就被掐断的流，报「什么都没收到」是错的。
+    public var sawAnyEvent: Bool { !text.isEmpty || !reasoning.isEmpty || !toolCalls.isEmpty || sawDone }
 
     /// 工具调用的累积器（`arguments` 是分片，必须拼）。
     public struct ToolCallAccumulator: Equatable, Sendable {
@@ -67,9 +78,9 @@ public struct LLMStreamDecoder: Sendable {
     /// 流结束。**没见到 `[DONE]` ⇒ 抛**（如实说「中断」，不返回半截）。
     public mutating func finish() throws -> [LLMStreamEvent] {
         guard sawDone else {
-            let already = text.isEmpty && toolCalls.isEmpty
+            let already = text.isEmpty && reasoning.isEmpty && toolCalls.isEmpty
                 ? "流在返回任何内容前中断"
-                : "流在完成前中断（已收到 \(text.count) 个字符 / \(toolCalls.count) 个工具调用）"
+                : "流在完成前中断（正文 \(text.count) 字 / 思考段 \(reasoning.count) 字 / 工具调用 \(toolCalls.count) 个）"
             throw LLMError.transport("\(already)：未收到 data: [DONE]。")
         }
         return []
@@ -113,6 +124,13 @@ public struct LLMStreamDecoder: Sendable {
 
         var events: [LLMStreamEvent] = []
         if let delta = first["delta"] as? [String: Any] {
+            // **思考段先读**（`FR-AGT-UX-CONV-012`）：两种线上字段名都认，谁在就给谁。
+            // 它与 `content` 是两个通道 —— 有模型**两个都发**（思考完再发正文），
+            // 按 `else if` 串起来会丢掉其中一段，所以是两条独立的 `if`。
+            if let reasoning = LLMResponse.reasoningText(of: delta) {
+                self.reasoning += reasoning
+                events.append(.reasoningDelta(reasoning))
+            }
             if let content = delta["content"] as? String, !content.isEmpty {
                 text += content
                 events.append(.textDelta(content))

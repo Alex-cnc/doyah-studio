@@ -30,17 +30,21 @@ public struct AgentRuntimeConfigDraft: Equatable, Sendable {
     public var notificationsEnabled: Bool
     /// 逗号分隔的工具名（空串 = 不限制）。
     public var toolWhitelist: String
+    /// 审批策略基线（文本：`allow` / `ask` / `deny`；词表见 `AgentPolicyLevel.configTokens`）。
+    public var approvalPolicy: String
 
     public init(maxConcurrentSubtasks: String,
                 commandTimeoutSeconds: String,
                 dailyTokenQuota: String,
                 notificationsEnabled: Bool,
-                toolWhitelist: String) {
+                toolWhitelist: String,
+                approvalPolicy: String = AgentPolicyLevel.allow.configToken) {
         self.maxConcurrentSubtasks = maxConcurrentSubtasks
         self.commandTimeoutSeconds = commandTimeoutSeconds
         self.dailyTokenQuota = dailyTokenQuota
         self.notificationsEnabled = notificationsEnabled
         self.toolWhitelist = toolWhitelist
+        self.approvalPolicy = approvalPolicy
     }
 
     /// 从盘上那份快照回填（重开面板不许显示空白 —— 空白保存一次就等于把用户的设置清掉）。
@@ -49,7 +53,8 @@ public struct AgentRuntimeConfigDraft: Equatable, Sendable {
                   commandTimeoutSeconds: String(snapshot.commandTimeoutSeconds),
                   dailyTokenQuota: String(snapshot.dailyTokenQuota),
                   notificationsEnabled: snapshot.notificationsEnabled,
-                  toolWhitelist: snapshot.toolWhitelist.joined(separator: ","))
+                  toolWhitelist: snapshot.toolWhitelist.joined(separator: ","),
+                  approvalPolicy: snapshot.approvalPolicy.configToken)
     }
 
     /// 与当前快照的差异。**一条都没变 ⇒ 空数组**（界面据此把「保存」灰着，不留空留痕）。
@@ -75,6 +80,12 @@ public struct AgentRuntimeConfigDraft: Equatable, Sendable {
         let normalized = Self.toolNames(toolWhitelist)
         if normalized != snapshot.toolWhitelist {
             edits.append(.init(key: "toolWhitelist", value: normalized.joined(separator: ",")))
+        }
+        // 审批策略：按**档位**比（`ASK` / ` ask ` 与 `ask` 是同一件事）；认不出的照样算改动，
+        // 交给 store 拒收并说清允许哪三档 —— 在界面层静默吞掉会让用户以为「已经改成只读模式了」。
+        let policyToken = approvalPolicy.trimmingCharacters(in: .whitespaces).lowercased()
+        if AgentPolicyLevel(configToken: policyToken) != snapshot.approvalPolicy {
+            edits.append(.init(key: "approvalPolicy", value: policyToken))
         }
         return edits
     }
@@ -153,6 +164,9 @@ public struct AgentRuntimeConfigFile: Sendable {
             var dailyTokenQuota: Int
             var notificationsEnabled: Bool
             var toolWhitelist: [String]
+            /// **可选**：这一项是后加的，旧文件里没有它 ⇒ 按默认 `allow` 走（不判降级）。
+            /// 写成必填会让所有旧配置在升级那一次变成 `parseFailed`，用户看到的是「设置全丢了」。
+            var approvalPolicy: String?
         }
 
         struct Change: Codable, Equatable {
@@ -189,7 +203,7 @@ public struct AgentRuntimeConfigFile: Sendable {
         // **逐项过一遍 store 自己的校验**（同一处真相：范围与词表不在这里重写）。
         // 任何一项非法 ⇒ 整份降级到默认值，并把是哪一项、允许什么写进原因码。
         var store = AgentConfigStore()
-        let pairs: [(String, String)] = [
+        var pairs: [(String, String)] = [
             ("model", payload.snapshot.model),
             ("maxConcurrentSubtasks", String(payload.snapshot.maxConcurrentSubtasks)),
             ("commandTimeoutSeconds", String(payload.snapshot.commandTimeoutSeconds)),
@@ -197,6 +211,10 @@ public struct AgentRuntimeConfigFile: Sendable {
             ("notificationsEnabled", payload.snapshot.notificationsEnabled ? "true" : "false"),
             ("toolWhitelist", payload.snapshot.toolWhitelist.joined(separator: ",")),
         ]
+        // 旧文件没有这一项：**不给 pair**（默认值已经在 `AgentConfigStore()` 里），也不算降级。
+        if let policy = payload.snapshot.approvalPolicy {
+            pairs.append(("approvalPolicy", policy))
+        }
         do {
             for (key, value) in pairs {
                 try store.apply(key: key, value: value, reason: Self.loadReason, at: Date(timeIntervalSince1970: 0))
@@ -230,7 +248,8 @@ public struct AgentRuntimeConfigFile: Sendable {
                             commandTimeoutSeconds: snapshot.commandTimeoutSeconds,
                             dailyTokenQuota: snapshot.dailyTokenQuota,
                             notificationsEnabled: snapshot.notificationsEnabled,
-                            toolWhitelist: snapshot.toolWhitelist),
+                            toolWhitelist: snapshot.toolWhitelist,
+                            approvalPolicy: snapshot.approvalPolicy.configToken),
             changes: store.changes.map {
                 .init(key: $0.key, oldValue: $0.oldValue, newValue: $0.newValue, reason: $0.reason, at: $0.at)
             }

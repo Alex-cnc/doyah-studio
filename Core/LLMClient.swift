@@ -119,12 +119,35 @@ public struct LLMResponse: Equatable, Sendable {
     public var model: String?
     public var usage: LLMUsage
     public var finishReason: String?
+    /// **思考段**（`FR-AGT-UX-CONV-012`）：模型在正文之前写的那段推理。
+    ///
+    /// `nil` / 空串 = 这家模型不给这一段（**不是**「它没想」）—— 界面那条「显示思考段」
+    /// 开关据此零占位，不许拿正文顶替。
+    public var reasoning: String?
 
-    public init(text: String, model: String? = nil, usage: LLMUsage = .unknown, finishReason: String? = nil) {
+    public init(text: String, model: String? = nil, usage: LLMUsage = .unknown,
+                finishReason: String? = nil, reasoning: String? = nil) {
         self.text = text
         self.model = model
         self.usage = usage
         self.finishReason = finishReason
+        self.reasoning = reasoning
+    }
+}
+
+public extension LLMResponse {
+    /// 从线上对象（流式的 `delta` / 非流式的 `message`）里取思考段文本。
+    ///
+    /// **唯一解析处**：流式与非流式各写一份的话，症状是「有时有、有时没有」
+    /// （与 `LLMUsage.parsed` 当年那条教训同源）。两种线上字段名都认：
+    /// · `reasoning_content` —— DeepSeek / Moonshot 一类；
+    /// · `reasoning` —— OpenRouter 一类。
+    /// 空串视同没有（有些实现会发一个空的 `reasoning_content: ""`）。
+    static func reasoningText(of object: [String: Any]) -> String? {
+        for key in ["reasoning_content", "reasoning"] {
+            if let text = object[key] as? String, !text.isEmpty { return text }
+        }
+        return nil
     }
 }
 
@@ -274,8 +297,11 @@ public struct OpenAICompatibleClient: LLMClient {
         }
 
         let text: String?
+        var reasoning: String?
         if let message = first["message"] as? [String: Any] {
             text = message["content"] as? String
+            // **同一个解析处**（`LLMResponse.reasoningText`）：流式与非流式不许各写一套。
+            reasoning = LLMResponse.reasoningText(of: message)
         } else {
             // 兼容 legacy completions 的 `text` 字段。
             text = first["text"] as? String
@@ -293,7 +319,8 @@ public struct OpenAICompatibleClient: LLMClient {
             text: content,
             model: object["model"] as? String,
             usage: usage,
-            finishReason: first["finish_reason"] as? String
+            finishReason: first["finish_reason"] as? String,
+            reasoning: reasoning
         )
     }
 

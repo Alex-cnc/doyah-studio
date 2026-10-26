@@ -689,6 +689,69 @@ final class AgentPolicyCallSiteTests: XCTestCase {
         XCTAssertEqual(dispatcher.invoked.count, 0, "插件声明的收紧档在真实调用点生效")
         XCTAssertEqual(result.rejectedTools.map(\.reason), [AgentToolRefusal.approvalRequired.rawValue])
     }
+
+    // MARK: - ④ 基线（`FR-AGT-OPS-OBS-002` 审批策略可配置）：用户定的宽严在同一个调用点生效
+
+    /// 基线 = 每次都要批，**一个插件都没装** ⇒ 工具也不执行（这条在加基线之前是放行的）。
+    func testBaselineAskStopsToolsWithoutAnyHooks() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+        let audit = RecordingAudit()
+        let loop = AgentLoop(client: client, dispatcher: dispatcher, sessionStore: store, audit: audit,
+                             policyBaseline: .requiresApproval)
+
+        let result = await loop.run(context: context)
+
+        XCTAssertEqual(dispatcher.invoked.count, 0)
+        XCTAssertEqual(result.rejectedTools.map(\.reason), [AgentToolRefusal.approvalRequired.rawValue])
+        let policyRecords = audit.records.filter { ($0.detail ?? "").contains("policy:") }
+        XCTAssertEqual(policyRecords.count, 1)
+        XCTAssertEqual(policyRecords.first?.outcome, .pendingApproval)
+        XCTAssertTrue(policyRecords.first?.detail?.contains("baseline=ask") ?? false,
+                      "留痕要点名是谁收紧的（这里没有插件，收的就是用户那一下）")
+    }
+
+    func testBaselineDenyBlocksEvenPlainRead() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+        let loop = AgentLoop(client: client, dispatcher: dispatcher, sessionStore: store,
+                             policyBaseline: .deny)
+
+        let result = await loop.run(context: context)
+
+        XCTAssertEqual(dispatcher.invoked.count, 0)
+        XCTAssertEqual(result.rejectedTools.map(\.reason), [AgentToolRefusal.deniedByPolicy.rawValue])
+    }
+
+    /// 默认基线（`allow`）+ 没装钩子 ⇒ 旧行为逐字不变，**审计里一条 policy 都不多出来**。
+    /// 这条是防止「加了基线之后每件工具都被记一笔」，把审计刷成噪声。
+    func testDefaultBaselineAddsNoPolicyAuditRecords() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+        let audit = RecordingAudit()
+        let loop = AgentLoop(client: client, dispatcher: dispatcher, sessionStore: store, audit: audit)
+
+        _ = await loop.run(context: context)
+
+        XCTAssertEqual(dispatcher.invoked.count, 1, "基线是默认值时工具照旧执行")
+        XCTAssertTrue(audit.records.filter { ($0.detail ?? "").contains("policy:") }.isEmpty)
+    }
+
+    /// **插件不许替用户放宽**：基线已经是 `deny`，插件声明「放行」也拦得住。
+    func testPluginCannotLoosenUserBaseline() async {
+        let client = ScriptedStreamingClient([toolHop(), answerHop()])
+        let dispatcher = RecordingDispatcher()
+        let loop = AgentLoop(client: client, dispatcher: dispatcher, sessionStore: store,
+                             policyHooks: FixedHooks(results: [
+                                AgentPolicyHookResult(hookID: "ext.nice:preToolUse", level: .allow),
+                             ]),
+                             policyBaseline: .deny)
+
+        let result = await loop.run(context: context)
+
+        XCTAssertEqual(dispatcher.invoked.count, 0)
+        XCTAssertEqual(result.rejectedTools.map(\.reason), [AgentToolRefusal.deniedByPolicy.rawValue])
+    }
 }
 
 /// `FR-AGT-LINK-EXT-003` 的**真插件目录**判据：目录 ⇒ 台账。

@@ -188,4 +188,88 @@ final class LLMStreamTests: XCTestCase {
         let text = String(data: withKey.httpBody ?? Data(), encoding: .utf8) ?? ""
         XCTAssertFalse(text.contains("sk-test"))
     }
+
+    // MARK: - 思考段通道（`FR-AGT-UX-CONV-012`：本端要有思考段的**源**）
+
+    /// `delta.reasoning_content` 逐块拼出来，且**不混进正文**。
+    func testReasoningContentIsADedicatedChannel() throws {
+        var decoder = LLMStreamDecoder()
+        let events = decoder.feed(sse([
+            #"{"choices":[{"delta":{"reasoning_content":"先看"}}]}"#,
+            #"{"choices":[{"delta":{"reasoning_content":"一眼文件"}}]}"#,
+            #"{"choices":[{"delta":{"content":"结论：可以。"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]))
+        try decoder.finish()
+
+        XCTAssertEqual(decoder.reasoning, "先看一眼文件", "思考段按块拼起来")
+        XCTAssertEqual(decoder.text, "结论：可以。", "思考段不许并进正文（并进去就会被当成答复）")
+
+        let reasoningPieces = events.compactMap { event -> String? in
+            if case let .reasoningDelta(piece) = event { return piece }
+            return nil
+        }
+        XCTAssertEqual(reasoningPieces, ["先看", "一眼文件"], "每块一条 reasoningDelta")
+        XCTAssertTrue(events.contains(.textDelta("结论：可以。")), "正文照旧一条 textDelta")
+    }
+
+    /// 另一家的线上字段名 `reasoning` 也认（两家各写一个，别指望统一）。
+    func testReasoningFieldNameVariantIsAccepted() throws {
+        var decoder = LLMStreamDecoder()
+        _ = decoder.feed(sse([
+            #"{"choices":[{"delta":{"reasoning":"想一想"}}]}"#,
+            #"{"choices":[{"delta":{"content":"好"}}]}"#,
+            "[DONE]",
+        ]))
+        try decoder.finish()
+        XCTAssertEqual(decoder.reasoning, "想一想")
+        XCTAssertEqual(decoder.text, "好")
+    }
+
+    /// 同一块里**两个通道都发** ⇒ 两段都收到（不许 `else if` 串起来丢掉一段）。
+    func testBothChannelsInOneChunkAreKept() {
+        var decoder = LLMStreamDecoder()
+        let events = decoder.feed(sse([
+            #"{"choices":[{"delta":{"reasoning_content":"想","content":"说"}}]}"#,
+            "[DONE]",
+        ]))
+        XCTAssertEqual(decoder.reasoning, "想")
+        XCTAssertEqual(decoder.text, "说")
+        XCTAssertEqual(events.filter { if case .reasoningDelta = $0 { return true } else { return false } }.count, 1)
+        XCTAssertEqual(events.filter { if case .textDelta = $0 { return true } else { return false } }.count, 1)
+    }
+
+    /// 空串当作没有（有实现会发 `reasoning_content: ""`）—— 不许冒出空增量事件。
+    func testEmptyReasoningProducesNoEvent() {
+        var decoder = LLMStreamDecoder()
+        let events = decoder.feed(sse([
+            #"{"choices":[{"delta":{"reasoning_content":"","content":"X"}}]}"#,
+        ]))
+        XCTAssertFalse(events.contains { if case .reasoningDelta = $0 { return true } else { return false } })
+        XCTAssertEqual(decoder.reasoning, "")
+    }
+
+    /// 只出了思考段就被掐断：**算「收到过东西」**（报「什么都没收到」是错的），但仍按中断抛。
+    func testReasoningOnlyStreamStillCountsAsInterruptedNotEmpty() {
+        var decoder = LLMStreamDecoder()
+        _ = decoder.feed(sse([#"{"choices":[{"delta":{"reasoning_content":"想了一半"}}]}"#]))
+
+        XCTAssertTrue(decoder.sawAnyEvent)
+        XCTAssertThrowsError(try decoder.finish()) { error in
+            guard case LLMError.transport(let message) = error else { return XCTFail("应当是可读的 transport 失败") }
+            XCTAssertTrue(message.contains("思考段 4 字"), "原因里要如实报思考段有多少字，实际 = \(message)")
+        }
+    }
+
+    /// 非流式那条路读同一份字段（唯一解析处 `LLMResponse.reasoningText`）。
+    func testNonStreamingResponseCarriesReasoning() throws {
+        let body = #"{"model":"m","choices":[{"message":{"reasoning_content":"先算一下","content":"答案是 2"},"finish_reason":"stop"}]}"#
+        let response = try OpenAICompatibleClient.parse(Data(body.utf8))
+        XCTAssertEqual(response.text, "答案是 2")
+        XCTAssertEqual(response.reasoning, "先算一下")
+
+        // 没有这一段 ⇒ nil（不是空串：界面要能分清「没给」与「给了个空」）
+        let plain = #"{"model":"m","choices":[{"message":{"content":"直接答"},"finish_reason":"stop"}]}"#
+        XCTAssertNil(try OpenAICompatibleClient.parse(Data(plain.utf8)).reasoning)
+    }
 }

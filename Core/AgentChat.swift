@@ -428,6 +428,17 @@ public struct AgentChatState: Equatable, Sendable {
             } else {
                 messages.append(AgentChatMessage(role: .assistant, text: piece, isStreaming: true, createdAt: Date()))
             }
+        case .reasoningDelta(let piece):
+            // **思考段**（`FR-AGT-UX-CONV-012`）：写进同一条消息的 `thinking` 栏，
+            // **不进 `text`**（进了就会被当成答复、被写进会话文件、被完成判据复核）。
+            // 开关关着时这一栏照收但不显示（投影层给零行）—— 关掉开关不许丢数据，
+            // 否则「开着看不重要、关了一会儿想看」就得重跑一遍。
+            if let index = messages.lastIndex(where: { $0.isStreaming }) {
+                messages[index].thinking = (messages[index].thinking ?? "") + piece
+            } else {
+                messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true,
+                                                createdAt: Date(), thinking: piece))
+            }
         case .toolStarted(let name, let summary):
             // **自跑的命令收在同一条过程消息里**（人类主人 2026-10-17 实机反馈原话：「智能体自己执行的命令
             // 这些信息应该是在同一条信息中滚动，避免刷屏」）。改前：每调一次工具就 `cards.append` 一张卡片
