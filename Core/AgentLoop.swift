@@ -291,6 +291,11 @@ public struct AgentLoop: Sendable {
     public var sessionStore: AgentSessionStore?
     /// 审计口（可选：给了就每跳 + 每次工具调用留一条 —— `FR-AI-24` 的接线点，**不新造第二套日志**）。
     public var audit: (any AgentAuditSink)?
+    /// **中途干预信箱**（`FR-AGT-UX-CONV-007`）：给了就在**每跳边界**取一次 ——
+    /// 停手 ⇒ 当跳做完即停（`.cancelled`）；改方向 ⇒ 替换下一跳的 userPrompt；
+    /// 追加约束 ⇒ 拼进下一跳的 systemPrompt。不给 = 旧行为逐字不变。
+    public var interventionInbox: AgentInterventionInbox?
+
     /// 进度口（可选：界面用它做流式渲染 —— `FR-AI-25` 的接线点）。
     public var observer: (any AgentLoopObserver)?
     /// **检查点口**（`NFR-AI-08` 的接线点）：给了就每 `checkpointEvery` 跳落一个点，
@@ -323,6 +328,7 @@ public struct AgentLoop: Sendable {
                 sessionStore: AgentSessionStore? = nil,
                 audit: (any AgentAuditSink)? = nil,
                 observer: (any AgentLoopObserver)? = nil,
+                interventionInbox: AgentInterventionInbox? = nil,
                 checkpointStore: AgentCheckpointStore? = nil,
                 checkpointEvery: Int = 5,
                 compressionBudget: AgentContextCompressionBudget? = nil,
@@ -337,6 +343,7 @@ public struct AgentLoop: Sendable {
         self.sessionStore = sessionStore
         self.audit = audit
         self.observer = observer
+        self.interventionInbox = interventionInbox
         self.checkpointStore = checkpointStore
         self.checkpointEvery = checkpointEvery
         self.compressionBudget = compressionBudget
@@ -416,7 +423,30 @@ public struct AgentLoop: Sendable {
             }
         }
 
+        // 干预会改「下一跳看什么」，所以拿一份可变上下文；旧行为（无干预）逐字不变。
+        var activeContext = context
         while true {
+            // ⓪ **中途干预**（`FR-AGT-UX-CONV-007`）：上一跳做完才生效，不动已产生的工具结果。
+            if let inbox = interventionInbox {
+                let drained = inbox.drain(afterCompleting: steps)
+                if !drained.isEmpty {
+                    if AgentInterventionQueue.stops(in: drained) {
+                        await observer?.observe(.stopped(.cancelled))
+                        recordStop(.cancelled, context: activeContext, at: startedAt)
+                        return seal(AgentLoopResult(
+                            outcome: .stopped(.cancelled), steps: steps,
+                            executedTools: executed, rejectedTools: rejected, usage: usage, text: ""))
+                    }
+                    if let redirect = AgentInterventionQueue.redirect(from: drained) {
+                        activeContext.userPrompt = redirect
+                    }
+                    let constraints = AgentInterventionQueue.constraints(from: drained)
+                    if !constraints.isEmpty {
+                        let joined = constraints.joined(separator: "；")
+                        activeContext.systemPrompt += "\n\n[用户追加约束] " + joined
+                    }
+                }
+            }
             // **配额**（`NFR-AI-04` + `FR-AI-31` ③）：**发送之前**判定 —— 超限如实停，
             // 原因用配额自己那句可读话（不是一句「停了」）。此前对话这条路上根本没接配额。
             if let quota {
@@ -466,7 +496,7 @@ public struct AgentLoop: Sendable {
                 return seal(stopped)
             }
 
-            let built = makeRequest(context: context, observations: observations, budget: compressionBudget,
+            let built = makeRequest(context: activeContext, observations: observations, budget: compressionBudget,
                                     modelOverride: modelOverride)
             var request = built.request
             if let report = built.report, report.didCompress {
@@ -477,7 +507,7 @@ public struct AgentLoop: Sendable {
                                                           kept: report.keptEntries,
                                                           earliest: report.droppedDigests.first ?? ""))
             }
-            recordTurn(context: context, kind: .model, role: "user", text: summarise(request.userPrompt), at: startedAt)
+            recordTurn(context: activeContext, kind: .model, role: "user", text: summarise(request.userPrompt), at: startedAt)
             await observer?.observe(.hopStarted(index: steps))
 
             let hopStarted = Date()

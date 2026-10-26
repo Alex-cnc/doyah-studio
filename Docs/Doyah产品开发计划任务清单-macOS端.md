@@ -28,7 +28,7 @@
 
 | 族 | 条数 | ✅ | 🟡 | ⬜ | 说明 |
 |---|---|---|---|---|---|
-| FR-AGT（智能体） | 82 | 29 | 27 | 26 | 2026-10-26 P1~P4 落地后实测（**原表写 68 条是旧读数**，按 `requirement-index.jsonl` 实测 82）：核心闭环 + 压缩边界 + 注册表真源 + 钩子 + 权限/刹停 + 知识治理已绿；工具面接线与通道/运维仍缺 |
+| FR-AGT（智能体） | 82 | 37 | 19 | 26 | 2026-10-26 P1~P4 落地后实测（**原表写 68 条是旧读数**，按 `requirement-index.jsonl` 实测 82）：核心闭环 + 压缩边界 + 注册表真源 + 钩子 + 权限/刹停 + 知识治理已绿（P1-7~P4 全部接线）+ 文档摄取/语音出已接；剩麦克风与 §3.20 编排 |
 | FR-STD（Studio 工作台） | 210 | 121 | 56 | 32 | 数据库主链已通；编辑面与文件系统大片空白 |
 | FR-NTS（笔记） | 19 | 6 | 12 | 1 | **实现在本仓** `Plugins/Notes/`：26 个 .swift + 12 个测试文件约 195 例（含云同步 E2E）；仅「私密保护」未做 |
 | FR-RTR（复盘） | 82 | 0 | 0 | 82 | **实现归 `retro` 仓**，本端只做宿主视图 |
@@ -76,6 +76,7 @@
 
 | # | FR | 内容 | 估时 | 判据 |
 |---|---|---|---|---|
+| P1-11+ | AGT-CORE-CTX-001（供给面） | `Core/AgentContextSupply.swift` | `AgentContextWiringTests` 6/6（五类来源 · 分类预算 · 去重 · 稳定序） | ✅ |
 | P2-1 | AGT-GUARD-PERM-002 | 配置面：等级 / 沙箱根 / 白名单如何声明 | 60 | 改配置立即生效；非法配置拒绝并说明 |
 | P2-2 | AGT-GUARD-PERM-003 | 运行时边界：任何执行都在受限环境内 | 120 | 越界路径被拒；判据来源 = P2-1 白名单 |
 | P2-3 | AGT-CORE-LOOP-007 | 及时刹停：伤害性动作前置停止（不建审批单、不执行） | 60 | 删库/覆盖/对外发布三类各一例 ⇒ 停 |
@@ -99,12 +100,12 @@
 | 媒体 | AGT-TOOL-MEDIA-001/002 | 90 | 语音进/出，转写原文可回看、可中断 |
 | 系统 | AGT-TOOL-SYS-001/002 | 120 | 界面操作每步可见；子任务委派标来源 |
 
-#### P1~P4 本轮落地（2026-10-26 · 90 例新判据）
+#### P1~P4 本轮落地（2026-10-26 · 107 例新判据）
 
 | 批次 | FR | 落点 | 判据（实跑） | 状态 |
 |---|---|---|---|---|
-| P1-7 | AGT-UX-CONV-006 | `Core/AgentStepTrace.swift` | `AgentStepTraceTests` 6/6（无静默步） | 🟡 Core 绿·界面接线未做 |
-| P1-8 | AGT-UX-CONV-007 | `Core/AgentIntervention.swift` | `AgentInterventionTests` 6/6（当前步后生效、结果不清空） | 🟡 Core 绿·入口未接 |
+| P1-7 | AGT-UX-CONV-006 | `Core/AgentStepTrace.swift` + `AgentChat.apply` | `AgentStepTraceTests` 6/6；界面每跳一行、每次工具一行（就地收尾带耗时） | ✅ |
+| P1-8 | AGT-UX-CONV-007 | `Core/AgentIntervention.swift` + `AgentInterventionInbox` + 循环接线 | `AgentInterventionTests` 6/6 · `AgentLoopInterventionTests` 3/3（停手不再起跳、约束进下一跳、改方向换提示） | ✅ |
 | P1-9 | AGT-KNOW-CTX-002 | `Core/AgentCompressionAdmission.swift` | `AgentCompressionAdmissionTests` 8/8（T-3.21-01~03） | ✅ |
 | P1-10 | AGT-CORE-LOOP-005/-011 | `Core/AgentToolCatalogSnapshot.swift` | `AgentToolCatalogSnapshotTests` 8/8（T-3.22-01~03） | ✅ |
 | P1-11 | AGT-CORE-CTX-001 / OPS-OBS-001 | `Core/AgentContextEngine.swift` | `AgentContextEngineTests` 6/6（T-3.23-01~03） | ✅ |
@@ -114,14 +115,14 @@
 | P2-4 | AGT-GUARD-PERM-004 | `Core/AgentSQLStatementJudge.swift` | 同上（危险语句判红；注入不当指令） | ✅ |
 | P3-2 | AGT-KNOW-CTX-002 | `Core/AgentContextPriorityTruncator.swift` | `AgentKnowledgeTests` 14/14（按优先级截断、标记可见、两次一致） | ✅ |
 | P3-3~6 | AGT-KNOW-MEM-002~005 | `Core/AgentMemoryGovernance.swift` | 同上（可检视/可解释/删除即真删/技能候选） | ✅ |
-| P4-编辑 | AGT-TOOL-EDIT-001 | `Core/AgentBlockEditor.swift` | `AgentToolFaceTests` 17/17（锚点/行区间/整篇拒） | 🟡 未接进 AgentLoop |
+| P4-编辑 | AGT-TOOL-EDIT-001 | `Core/AgentBlockEditor.swift` + 既有 `editFile` | `AgentToolFaceTests` 17/17；改走审批 + 陈旧锚点复检 + 租约（`AgentWorkspaceToolsTests`） | ✅ |
 | P4-摄取 | AGT-TOOL-INGEST-001/003 | `Core/AgentIngestion.swift` | 同上（可点来源；视觉不可用明说） | ✅ |
-| P4-摄取 | AGT-TOOL-INGEST-002 | 同上 | 能力表如实报 `unavailable(parserUnavailable)` | 🟡 解析器未接 |
+| P4-摄取 | AGT-TOOL-INGEST-002 | `Core/AgentDocumentIngestor.swift` + `App/PDFTextExtractor.swift` | `AgentDocumentIngestorTests` 8/8（xlsx 真读 · docx 真读 · PDF 注入 PDFKit · 图片如实报） | ✅ |
 | P4-模型 | AGT-TOOL-MODEL-001/002 | `Core/AgentModelPresets.swift` | 同上（三档 + 预填校验） | ✅ |
-| P4-媒体 | AGT-TOOL-MEDIA-001/002 | `Core/AgentVoiceSession.swift` | 同上（转写可回看、可中断；TTS 请求校验） | 🟡 真麦克风/TTS 未接 |
-| P4-系统 | AGT-TOOL-SYS-001/002 | `Core/AgentSubtaskDelegation.swift` | 同上（每步可见、委派标来源） | 🟡 界面分组未做 |
+| P4-媒体 | AGT-TOOL-MEDIA-001/002 | `Core/AgentVoiceSession.swift` · `App/SpeechSynthesizer.swift` | 转写状态机 17/17；语音出已接 AVSpeechSynthesizer（可中断） | 🟡 仅麦克风未接（人类主人令「除了麦克风」） |
+| P4-系统 | AGT-TOOL-SYS-001/002 | `Core/AgentSubtaskDelegation.swift` | 每步可见 ✅；委派标来源的台账已就位 | 🟡 子任务依赖 §3.20 编排（未实现） |
 
-> 读数口径：`swift test --filter <类名>` 实跑（Xcode 工具链）；全量 `Scripts/verify-core.sh` = **3776 项**。
+> 读数口径：`swift test --filter <类名>` 实跑（Xcode 工具链）；全量 `Scripts/verify-core.sh` = **3793 项**。
 
 ### P5 · 通道与运维（7 条 · ≈ 240 分钟）
 

@@ -21,6 +21,8 @@ struct DoyahStudioApp: App {
     @StateObject private var agentChat = AgentChatModel()
 
     init() {
+        // PDF 文本抽取器注册一次（`FR-AGT-TOOL-INGEST-002` 的 macOS 落点；Core 不引平台库）。
+        PDFTextExtractor.install()
         // **单实例保护**：同一个 bundle 通常只允许一个进程在跑。
         //
         // 但有一个例外必须放行：**重启时被旧实例主动拉起来的那一个**。
