@@ -240,6 +240,12 @@ public struct AgentLoopResult: Equatable, Sendable {
     /// 为什么放在结果里而不是只留在事件流：事件流是**过程**（人读的过程面），
     /// 而求助卡要在这一轮**结束之后**仍然挂着（人去办了再回来），所以要随结果交出去。
     public var failureHelp: AgentHelpRequest? = nil
+    /// **这段答复的出处账**（`FR-AGT-QUAL-VERIFY-003` + `FR-AGT-QUAL-VERIFY-004`）。
+    ///
+    /// 由 `seal()` 在收口那一处统一算：内容只取**本轮真做过的动作**（`executedTools`），
+    /// 所以「模型自己写一个没读过的路径」不算出处。`nil` = 这一轮没有成文答复
+    /// （停止 / 失败），或压根没有断言 —— 两种都不该拿一条空账去吓人。
+    public var answerProvenance: AgentAnswerProvenance? = nil
 
     public static func == (lhs: AgentLoopResult, rhs: AgentLoopResult) -> Bool {
         lhs.outcome == rhs.outcome && lhs.steps == rhs.steps && lhs.text == rhs.text
@@ -405,6 +411,13 @@ public struct AgentLoop: Sendable {
         func seal(_ result: AgentLoopResult) -> AgentLoopResult {
             var copy = compression.applied(to: result)
             copy.quotaLedger = quota == nil ? nil : quotaLedger
+            // **出处账只在这里算一处**：收口是唯一同时拿得到「成文答复」与「本轮真做过的动作」的地方。
+            // 没有答复（停止 / 失败）⇒ 不挂账；有答复但一条断言都没有 ⇒ 也不挂（空账没有信息量）。
+            if !copy.text.isEmpty {
+                let evidence = AgentEvidenceLedger.collect(executedTools: copy.executedTools)
+                let provenance = AgentAnswerAuditor.audit(answer: copy.text, evidence: evidence)
+                copy.answerProvenance = provenance.claims.isEmpty ? nil : provenance
+            }
             return copy
         }
 

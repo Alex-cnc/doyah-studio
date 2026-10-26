@@ -975,6 +975,15 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         // **求助卡**（`FR-AGT-UX-CONV-009`）：只有「需人处理」那一档才出卡
         // （求助单由失败分级给，不是这里编的）；能自己好的失败不出卡，免得每次网络抖动都来要人办件事。
         if let help = result.failureHelp { helpRequest = help }
+        // **交付前拦一道**（`FR-AGT-QUAL-VERIFY-004` ③）：结论指不到出处的不许当交付物。
+        //
+        // 挂在这一处而不是另开弹窗：页内提示条是人已经在看的那一屏（与主动通知同一个出口），
+        // 拦下几条就点名几条 —— 拦了不说话，人会以为答案里本来只有这些。
+        // 顺序有意放在通知之后：这段说的是**这段答案本身**能不能信，比「长任务跑完了」更该占屏。
+        if let provenance = result.answerProvenance {
+            let decision = AgentDeliverableDecision(provenance: provenance, language: languageProvider())
+            if let notice = decision.notice(language: languageProvider()) { notifyBanner = notice }
+        }
     }
 
     /// 把队列里的下一条接着跑起来。

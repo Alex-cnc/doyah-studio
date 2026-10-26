@@ -2752,6 +2752,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentClaimBasisLine
     case agentClaimAlternativeLine
     case agentClaimSummaryLine
+    case agentClaimWithheldTitle
+    case agentClaimWithheldBody
 }
 
 public enum LocalizedStrings {
@@ -2790,6 +2792,10 @@ public enum LocalizedStrings {
         .agentClaimAlternativeLine: [.simplifiedChinese: "备选：%@", .english: "Alternatives: %@"],
         .agentClaimSummaryLine: [.simplifiedChinese: "%ld 条结论：已验证 %ld / 推断 %ld / 没验证 %ld",
                                  .english: "%ld claims: verified %ld / inferred %ld / unverified %ld"],
+        .agentClaimWithheldTitle: [.simplifiedChinese: "这段回答里有结论指不到出处",
+                                    .english: "Some claims in this answer have no source"],
+        .agentClaimWithheldBody: [.simplifiedChinese: "%ld 条结论没有出处，已从交付内容里摘掉（仍列在这里供你复核）",
+                                   .english: "%ld claims had no source and were removed from the deliverable (still listed here for review)"],
 
         .menuNewQuery: [.simplifiedChinese: "新建查询", .english: "New Query"],
         .menuLanguage: [.simplifiedChinese: "语言", .english: "Language"],
