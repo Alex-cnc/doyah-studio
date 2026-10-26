@@ -118,7 +118,8 @@ def check() -> list[str]:
 
     for path in sheets.values():
         if not re.search(r"^## .*变更记录", path.read_text(encoding="utf-8"), re.M):
-            problems.append(f"{path.name}: 缺「变更记录」节")
+            # 2026-10-26 变更记录体系废弃：单里不再要求变更记录节，版本号在头部、历史看 git
+            pass
 
     for stray in ("平台矩阵.md", "任务清单-按平台.md", "需求索引.md"):
         if (DOCS / stray).exists():
