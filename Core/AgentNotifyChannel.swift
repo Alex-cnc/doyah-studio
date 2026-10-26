@@ -61,11 +61,16 @@ public struct AgentNotifyPolicy: Sendable {
     ///   - reason: 为什么想叫人。
     ///   - userIsLookingAtThisPane: 人此刻正看着这一页（前台 + 当前页签）。
     ///   - userIsIdle: 人已经离开（无输入超过 N 分钟）—— 离开才更该弹系统通知。
+    ///   - systemNotificationsEnabled: 配置里的「通知规则」开关（`FR-AGT-OPS-OBS-002`）。
+    ///     关掉它 **只关系统通知那一格，页内提示条照出** —— 把两处一起关掉等于让人
+    ///     「在界面上也看不见这件事」，那不是「少打扰」，是丢信息。
     ///   - language: 文案语言（缺省简体中文；界面传当前语言）。
     public func decide(_ reason: AgentNotifyReason,
                        userIsLookingAtThisPane: Bool,
                        userIsIdle: Bool = false,
+                       systemNotificationsEnabled: Bool = true,
                        language: AppLanguage = .simplifiedChinese) -> AgentNotification? {
+        guard systemNotificationsEnabled else { return nil }
         // 必须打断的：无论人在不在看都出（看着就不必再弹窗，但仍要有提示条）
         if reason.isMustInterrupt {
             if userIsLookingAtThisPane { return nil }   // 就在眼前，页内已有卡片，别再弹
@@ -101,9 +106,12 @@ public struct AgentNotifyPolicy: Sendable {
     public func plan(_ reason: AgentNotifyReason,
                      userIsLookingAtThisPane: Bool,
                      userIsIdle: Bool = false,
+                     systemNotificationsEnabled: Bool = true,
                      language: AppLanguage = .simplifiedChinese) -> AgentNotifyPlan {
         let system = decide(reason, userIsLookingAtThisPane: userIsLookingAtThisPane,
-                           userIsIdle: userIsIdle, language: language)
+                           userIsIdle: userIsIdle,
+                           systemNotificationsEnabled: systemNotificationsEnabled,
+                           language: language)
         let note = AgentNotification(title: title(for: reason, language: language),
                                      body: body(for: reason, language: language),
                                      mustInterrupt: reason.isMustInterrupt)

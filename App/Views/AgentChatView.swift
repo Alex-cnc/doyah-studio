@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import DoyahCore
 
 /// 对话页签的视图（`FR-AI-25`）：消息流（**流式**）+ 工具卡片（可展开）+ **内联审批** + 输入区。
@@ -23,6 +25,10 @@ struct AgentChatView: View {
     /// 会话内搜索（§9.1.16 缺口 ③）：开关与查询词。
     @State private var searchActive = false
     @State private var searchText = ""
+    /// 归档面是否展开（`FR-AGT-UX-SESS-001`）：默认收起，展开时现读一次盘。
+    @State private var showArchivedSessions = false
+    /// 待确认删除的那一条（`nil` = 没有待确认动作）—— 真删不可逆，必须二次确认。
+    @State private var pendingDeleteSession: AgentSessionSummary?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -945,6 +951,11 @@ struct AgentChatView: View {
     ///
     /// 为什么用气泡而不是分栏：对话页签的契约是**不自带侧栏 / 分栏**（`FR-AI-25` ①），
     /// 一份「看历史」的列表没理由为它破例 —— 用完即走的浮层更合这条契约。
+    ///
+    /// **生命周期入口也在这里**（`FR-AGT-UX-SESS-001`）：每行的 `⇩ 归档 / ↗ 导出 / ✕ 删除`，
+    /// 顶部 `导入会话…`，底部一行 `归档（n）` 展开归档面（那面里每行是 `↩ 恢复`）。
+    /// 所有动作都走 `AgentChatModel` 的同名方法（→ `Core/AgentSessionLifecycleDesk`），
+    /// 视图不直接碰存储 —— 那样才只有一处「删干净」的定义。
     private var sessionsPopover: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: Spacing.s) {
@@ -952,6 +963,15 @@ struct AgentChatView: View {
                     .font(Self.transcriptFont)
                     .foregroundStyle(Theme.text(.secondary))
                 Spacer(minLength: 0)
+                // 导入（③的反方向）：把以前导出的会话文件装回来。
+                Button {
+                    importSession()
+                } label: {
+                    Text("⤓ " + L(.agentChatSessionsImport))
+                        .font(Self.transcriptFont)
+                }
+                .buttonStyle(.plain)
+                .disabled(!model.canSwitchSession)
                 Button {
                     model.startNewSession()
                     showSessions = false
@@ -976,11 +996,58 @@ struct AgentChatView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(model.sessions) { session in
-                            sessionRow(session)
+                            sessionRow(session, archived: false)
                         }
                     }
                 }
                 .frame(maxHeight: Spacing.xxl * 8)
+            }
+
+            // 归档面（①的收口）：默认收起 —— 平时用不到，但删不掉的会话必须有地方回去。
+            Divider()
+            Button {
+                showArchivedSessions.toggle()
+                if showArchivedSessions {
+                    model.reloadArchivedSessions(workspacePath: workspacePath)
+                }
+            } label: {
+                Text((showArchivedSessions ? "▾ " : "▸ ")
+                     + L(.agentChatSessionsArchivedToggle, model.archivedSessions.count))
+                    .font(Self.transcriptFont)
+                    .foregroundStyle(Theme.text(.secondary))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, Spacing.xs)
+
+            if showArchivedSessions {
+                if model.archivedSessions.isEmpty {
+                    Text(L(.agentChatSessionsArchivedEmpty))
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(.tertiary))
+                        .padding(.horizontal, Spacing.s)
+                        .padding(.bottom, Spacing.xs)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(model.archivedSessions) { session in
+                                sessionRow(session, archived: true)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: Spacing.xxl * 6)
+                }
+            }
+
+            // 上一动作的一句话结论（成功也说话；被拒说清为什么）—— 没有就不占行。
+            if let line = model.sessionLifecycleLine {
+                Divider()
+                Text(line)
+                    .font(Self.transcriptFont)
+                    .foregroundStyle(Theme.text(.secondary))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Spacing.s)
+                    .padding(.vertical, Spacing.xs)
             }
 
             if model.sessionsSkippedFiles > 0 {
@@ -995,34 +1062,106 @@ struct AgentChatView: View {
         }
         .frame(minWidth: 320, maxWidth: 380)
         .background(Theme.surface(.panel))
+        // 删除必须二次确认（真删不可逆：会话本体 + 归档副本 + 续跑记录一起没）。
+        .confirmationDialog(
+            L(.agentChatSessionDelete),
+            isPresented: Binding(
+                get: { pendingDeleteSession != nil },
+                set: { if !$0 { pendingDeleteSession = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(L(.agentChatSessionDelete), role: .destructive) {
+                if let session = pendingDeleteSession {
+                    model.deleteSession(session.id, workspacePath: workspacePath)
+                }
+                pendingDeleteSession = nil
+            }
+            Button(L(.commonCancel), role: .cancel) { pendingDeleteSession = nil }
+        } message: {
+            let title: String = pendingDeleteSession?.title ?? ""
+            Text(L(.agentChatSessionDeleteConfirmMessage, title))
+        }
     }
 
-    private func sessionRow(_ session: AgentSessionSummary) -> some View {
-        Button {
-            model.openSession(session.id, workspacePath: WorkspaceStore.shared.rootPath)
-            showSessions = false
-        } label: {
-            VStack(alignment: .leading, spacing: Spacing.hair) {
-                Text(session.title)
+    /// 一行会话：**主体是「打开」，右侧三个动作各自是独立按钮**。
+    ///
+    /// 形状说明：以前整行就是一个 `Button`，动作塞不进它的 label（按钮里嵌按钮在 SwiftUI 里
+    /// 点击归属是不确定的）⇒ 现在拆成「打开」按钮 + 动作按钮并排。
+    private func sessionRow(_ session: AgentSessionSummary, archived: Bool) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Button {
+                guard !archived else { return }
+                model.openSession(session.id, workspacePath: workspacePath)
+                showSessions = false
+            } label: {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
+                    Text(session.title)
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(archived ? .secondary : .primary))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    HStack(spacing: Spacing.s) {
+                        Text(Self.sessionTimeText(session.updatedAt))
+                        Text("\(session.turnCount) " + L(.agentChatSessionTurnsUnit))
+                    }
                     .font(Self.transcriptFont)
-                    .foregroundStyle(Theme.text(.primary))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                HStack(spacing: Spacing.s) {
-                    Text(Self.sessionTimeText(session.updatedAt))
-                    Text("\(session.turnCount) " + L(.agentChatSessionTurnsUnit))
+                    .foregroundStyle(Theme.text(.tertiary))
                 }
-                .font(Self.transcriptFont)
-                .foregroundStyle(Theme.text(.tertiary))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, Spacing.xs)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Spacing.s)
-            .padding(.vertical, Spacing.xs)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .disabled(!archived && !model.canSwitchSession)
+
+            if archived {
+                glyphButton("↩", help: L(.agentChatSessionRestore)) {
+                    model.restoreSession(session.id, workspacePath: workspacePath)
+                }
+            } else {
+                glyphButton("⇩", help: L(.agentChatSessionArchive)) {
+                    model.archiveSession(session.id, workspacePath: workspacePath)
+                }
+                glyphButton("↗", help: L(.agentChatSessionExport)) {
+                    exportSession(session)
+                }
+                glyphButton("✕", help: L(.agentChatSessionDelete)) {
+                    pendingDeleteSession = session
+                }
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!model.canSwitchSession)
+        .padding(.horizontal, Spacing.s)
     }
+
+    /// 导出：Core 只给数据，落哪儿由系统保存面板决定（用户的目录归用户）。
+    private func exportSession(_ session: AgentSessionSummary) {
+        guard let payload = model.exportSessionData(session.id, workspacePath: workspacePath) else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = payload.fileName
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.writeExportedSession(payload, to: url)
+    }
+
+    /// 导入：选一个以前导出的 `.json`，装回当前工作区（撞名给新号，不覆盖已有的）。
+    private func importSession() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if let json = UTType(filenameExtension: "json") {
+            panel.allowedContentTypes = [json]
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let data = try? Data(contentsOf: url) else {
+            model.importSessionData(Data(), workspacePath: workspacePath)   // 读不出来也走同一条结论路径
+            return
+        }
+        model.importSessionData(data, workspacePath: workspacePath)
+    }
+
+    /// 当前工作区（会话按工作区隔离：列表、归档面、动作全部只对这一处生效）。
+    private var workspacePath: String? { WorkspaceStore.shared.rootPath }
 
     /// 列表里的时间：**今天只给时分、别的日子带日期** —— 一列里全是「2026-10-22 11:03」看不出远近。
     private static func sessionTimeText(_ date: Date) -> String {

@@ -992,6 +992,53 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatSessionsEmpty
     case agentChatSessionsSkippedUnit
     case agentChatSessionTurnsUnit
+    // 会话生命周期（FR-AGT-UX-SESS-001 界面接线）：归档 / 恢复 / 删除 / 导出 / 导入
+    case agentChatSessionsImport
+    case agentChatSessionsArchivedToggle
+    case agentChatSessionsArchivedEmpty
+    case agentChatSessionArchive
+    case agentChatSessionRestore
+    case agentChatSessionDelete
+    case agentChatSessionExport
+    case agentChatSessionArchived
+    case agentChatSessionArchiveNoop
+    case agentChatSessionRestored
+    case agentChatSessionRestoreNoop
+    case agentChatSessionDeleted
+    case agentChatSessionExported
+    case agentChatSessionImported
+    case agentChatSessionLifecycleFailed
+    case agentChatSessionLifecycleUnavailable
+    case agentChatSessionNotFound
+    case agentChatSessionOtherWorkspace
+    case agentChatSessionNameConflict
+    case agentChatSessionBadExportFile
+    case agentChatSessionDeleteConfirmMessage
+    case agentChatDailyQuotaExhausted
+    // 运行策略（FR-AGT-OPS-OBS-002）：五项可配置 + 默认值 / 影响说明 + 改动留痕
+    case agentRuntimeSection
+    case agentRuntimeConcurrency
+    case agentRuntimeConcurrencyHint
+    case agentRuntimeTimeout
+    case agentRuntimeTimeoutHint
+    case agentRuntimeDailyQuota
+    case agentRuntimeDailyQuotaHint
+    case agentRuntimeNotify
+    case agentRuntimeNotifyHint
+    case agentRuntimeWhitelist
+    case agentRuntimeWhitelistHint
+    case agentRuntimeReason
+    case agentRuntimeReasonPlaceholder
+    case agentRuntimeSave
+    case agentRuntimeSaved
+    case agentRuntimeNoChange
+    case agentRuntimeRejected
+    case agentRuntimeHistoryTitle
+    case agentRuntimeDegraded
+    case agentRuntimeTodayUsage
+    case agentConfigUnknownKey
+    case agentConfigOutOfRange
+    case agentConfigMissingReason
     case agentChatSearchToggle
     case agentChatSearchPlaceholder
     case agentChatSearchHitsUnit
@@ -3613,6 +3660,51 @@ public enum LocalizedStrings {
         .agentChatSessionsEmpty: [.simplifiedChinese: "这个工作区还没有历史会话。", .english: "No past sessions in this workspace yet."],
         .agentChatSessionsSkippedUnit: [.simplifiedChinese: "个会话文件读不出来", .english: "session files could not be read"],
         .agentChatSessionTurnsUnit: [.simplifiedChinese: "跳", .english: "steps"],
+        .agentChatSessionsImport: [.simplifiedChinese: "导入会话…", .english: "Import session…"],
+        .agentChatSessionsArchivedToggle: [.simplifiedChinese: "归档（%d）", .english: "Archived (%d)"],
+        .agentChatSessionsArchivedEmpty: [.simplifiedChinese: "归档面是空的。", .english: "Nothing archived yet."],
+        .agentChatSessionArchive: [.simplifiedChinese: "归档", .english: "Archive"],
+        .agentChatSessionRestore: [.simplifiedChinese: "恢复", .english: "Restore"],
+        .agentChatSessionDelete: [.simplifiedChinese: "删除", .english: "Delete"],
+        .agentChatSessionExport: [.simplifiedChinese: "导出…", .english: "Export…"],
+        .agentChatSessionArchived: [.simplifiedChinese: "已归档，归档面里可以恢复。", .english: "Archived — restorable from the archive list."],
+        .agentChatSessionArchiveNoop: [.simplifiedChinese: "这条本来就在归档面里。", .english: "This session was already archived."],
+        .agentChatSessionRestored: [.simplifiedChinese: "已恢复到会话列表。", .english: "Restored to the session list."],
+        .agentChatSessionRestoreNoop: [.simplifiedChinese: "这条本来就在列表里。", .english: "This session was already in the list."],
+        .agentChatSessionDeleted: [.simplifiedChinese: "已删除，磁盘上少了 %d 个文件。", .english: "Deleted — %d file(s) removed from disk."],
+        .agentChatSessionExported: [.simplifiedChinese: "已导出 %d 字节。", .english: "Exported %d bytes."],
+        .agentChatSessionImported: [.simplifiedChinese: "已导入「%@」。", .english: "Imported “%@”."],
+        .agentChatSessionLifecycleFailed: [.simplifiedChinese: "没做成：%@", .english: "Could not do it: %@"],
+        .agentChatSessionLifecycleUnavailable: [.simplifiedChinese: "还没打开工作区，会话记录动不了。", .english: "No workspace is open, so sessions cannot be managed."],
+        .agentChatSessionNotFound: [.simplifiedChinese: "找不到这条会话。", .english: "The session no longer exists."],
+        .agentChatSessionOtherWorkspace: [.simplifiedChinese: "这条会话属于别的工作区，不在这里动它。", .english: "That session belongs to another workspace."],
+        .agentChatSessionNameConflict: [.simplifiedChinese: "盘上已有同名会话。", .english: "A session with the same identifier already exists."],
+        .agentChatSessionBadExportFile: [.simplifiedChinese: "这个文件不是本产品导出的会话。", .english: "That file is not a session exported by this app."],
+        .agentChatSessionDeleteConfirmMessage: [.simplifiedChinese: "「%@」的存档、归档副本与续跑记录会一起删掉，删不回来。", .english: "The session “%@”, its archived copy and its resume record will all be deleted. This cannot be undone."],
+        .agentChatDailyQuotaExhausted: [.simplifiedChinese: "今天的用量已经到上限（%d / %d token），要接着干先在这里把日配额调高。", .english: "Today's token quota is used up (%d / %d). Raise the daily quota here to continue."],
+        .agentRuntimeSection: [.simplifiedChinese: "运行策略", .english: "Run policy"],
+        .agentRuntimeConcurrency: [.simplifiedChinese: "子任务并发上限", .english: "Concurrent subtasks"],
+        .agentRuntimeConcurrencyHint: [.simplifiedChinese: "默认 3，1–16。只有派子任务时才会用到；子代理执行器还没接，这一项先登记。", .english: "Default 3, range 1–16. Only used when subtasks are delegated; the sub-agent executor is not wired yet."],
+        .agentRuntimeTimeout: [.simplifiedChinese: "命令超时（秒）", .english: "Command timeout (s)"],
+        .agentRuntimeTimeoutHint: [.simplifiedChinese: "默认 60，1–3600。跑命令超过这个时长会被终止，并在结果里写明「超时被终止」。", .english: "Default 60, range 1–3600. Longer commands are terminated and the result says so."],
+        .agentRuntimeDailyQuota: [.simplifiedChinese: "日配额（token）", .english: "Daily quota (tokens)"],
+        .agentRuntimeDailyQuotaHint: [.simplifiedChinese: "默认 20 万，1000–1 亿。按本地日累计，用完当天不再发送新请求。", .english: "Default 200k, range 1000–100M. Counted per local day; new requests are blocked once it is used up."],
+        .agentRuntimeNotify: [.simplifiedChinese: "系统通知", .english: "System notifications"],
+        .agentRuntimeNotifyHint: [.simplifiedChinese: "关掉只关系统弹窗，页内提示条照出 —— 事情在界面上仍然看得见。", .english: "Turning this off only silences the system popup; the in-app banner still appears."],
+        .agentRuntimeWhitelist: [.simplifiedChinese: "工具白名单", .english: "Tool whitelist"],
+        .agentRuntimeWhitelistHint: [.simplifiedChinese: "逗号分隔的工具名；留空 = 不限制。名单外的工具会从可见工具里移出（不是「还能调、只是不显示」）。", .english: "Comma-separated tool names; empty means no restriction. Tools outside the list are removed from the visible set."],
+        .agentRuntimeReason: [.simplifiedChinese: "改动理由（必填）", .english: "Why this change (required)"],
+        .agentRuntimeReasonPlaceholder: [.simplifiedChinese: "为什么改，比如：长任务老被 60 秒掐断", .english: "e.g. long tasks keep getting cut off at 60s"],
+        .agentRuntimeSave: [.simplifiedChinese: "保存策略", .english: "Save policy"],
+        .agentRuntimeSaved: [.simplifiedChinese: "已保存，下一轮就按新的来。", .english: "Saved — the next run uses the new values."],
+        .agentRuntimeNoChange: [.simplifiedChinese: "没有改动。", .english: "Nothing changed."],
+        .agentRuntimeRejected: [.simplifiedChinese: "没保存：%@", .english: "Not saved: %@"],
+        .agentRuntimeHistoryTitle: [.simplifiedChinese: "最近改动", .english: "Recent changes"],
+        .agentRuntimeDegraded: [.simplifiedChinese: "盘上这份运行策略读不出来（%@），已按默认值显示。", .english: "The stored run policy could not be read (%@); showing defaults."],
+        .agentRuntimeTodayUsage: [.simplifiedChinese: "今日已用 %d / %d token", .english: "Used today: %d / %d tokens"],
+        .agentConfigUnknownKey: [.simplifiedChinese: "「%@」不是可配置项。", .english: "“%@” is not a configurable item."],
+        .agentConfigOutOfRange: [.simplifiedChinese: "「%@」的取值 %@ 越界，允许：%@。", .english: "“%@” got an out-of-range value %@; allowed: %@."],
+        .agentConfigMissingReason: [.simplifiedChinese: "改配置要写一句为什么。", .english: "A reason is required for config changes."],
         .agentChatSearchToggle: [.simplifiedChinese: "在这段对话里搜索", .english: "Search this conversation"],
         .agentChatSearchPlaceholder: [.simplifiedChinese: "搜这段对话…", .english: "Search this conversation…"],
         .agentChatSearchHitsUnit: [.simplifiedChinese: "处命中", .english: "matches"],

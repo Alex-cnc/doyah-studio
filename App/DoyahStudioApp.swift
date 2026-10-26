@@ -142,6 +142,16 @@ struct DoyahStudioApp: App {
                     agentChat.recordQuotaLedger = { ledger in
                         appState.recordAgentChatQuota(ledger)
                     }
+                    // **运行策略的两条生效面**（`FR-AGT-OPS-OBS-002`）：
+                    // ① 系统通知开关 —— 每轮现读，面板上关掉立刻生效（页内提示条不受影响）；
+                    // ② 日配额 —— 开跑前判定、跑完记账（按本地日累计，跨日自动归零）。
+                    agentChat.systemNotificationsEnabledProvider = {
+                        appState.agentRuntimeConfig.snapshot.notificationsEnabled
+                    }
+                    agentChat.dailyQuotaCheck = { appState.agentDailyQuotaVerdict() }
+                    agentChat.dailyUsageRecorder = { tokens in
+                        appState.recordAgentDailyTokens(tokens)
+                    }
                     // `FR-AI-25` ⑤ 一步撤销：撤销只认宿主手里那本账（Core `AgentEditJournal`），
                     // 界面不另存原文 —— 否则「撤销回哪一版」会出现两个答案。
                     agentChat.undoApplied = { card in

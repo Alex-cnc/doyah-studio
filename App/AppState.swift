@@ -3190,16 +3190,27 @@ final class AppState: ObservableObject {
         // `FR-AI-21`：先把用户自配的 MCP server 接上（发现的工具并进同一张注册表）。
         // 没配 / 连不上都不影响既有六个工具 —— 状态另记一份（`agentMCPReports`）如实报。
         let mcpReady = await agentMCPReady()
-        let dispatcher = AgentStandardDispatcher(registry: mcpReady.registry,
+        // **运行策略的生效面**（`FR-AGT-OPS-OBS-002`「改完立即生效」）：
+        // 循环每次开跑都重建，所以在这里读一遍配置就等于「面板改完，下一轮就是新的」，不必重启。
+        // ① 工具白名单 ⇒ 名单外的工具从可见面移出（不是「还能调、只是不显示」）；
+        //    写了不存在的工具名如实记下来（面板上那句「只放开这几个」才不会是空话）。
+        // ② 命令超时 ⇒ 真起进程那一层的上限（超时被终止并如实写进结果）。
+        loadAgentRuntimeConfigIfNeeded()
+        let runtimePolicy = agentRuntimeConfig.snapshot
+        let whitelisted = mcpReady.registry.applyingWhitelist(runtimePolicy.toolWhitelist)
+        agentToolWhitelistUnknown = whitelisted.unknown
+        let commandRunner = AgentLocalCommandRunner(
+            limits: AgentCommandLimits(timeoutSeconds: TimeInterval(runtimePolicy.commandTimeoutSeconds)))
+        let dispatcher = AgentStandardDispatcher(registry: whitelisted.registry,
                                                 workspace: tools,
                                                 database: databaseTool,
-                                                commandRunner: AgentLocalCommandRunner(),
+                                                commandRunner: commandRunner,
                                                 // `FR-AI-21`：远端工具走同一条分发（名字原样、结果原样回灌）。
                                                 mcp: mcpReady.bridge,
                                                 guardPolicy: agentGuardPolicy)
         let loop = AgentLoop(client: OpenAICompatibleStreamingClient(),
                              dispatcher: dispatcher,
-                             registry: mcpReady.registry,
+                             registry: whitelisted.registry,
                              // `FR-AI-17` 会话持久化：每跳落一份 `.jsonl`（与其余本机数据同一处，不另开文件体系）。
                              sessionStore: AgentSessionStore(directory: AgentSessionStore.defaultDirectory),
                              audit: AgentAuditLog.shared,
@@ -4042,6 +4053,81 @@ final class AppState: ObservableObject {
     /// 仍然永远不会触发（v3.88 修掉的那条第 1 项缺口在对话侧原样复发）。
     func recordAgentChatQuota(_ ledger: AgentQuotaLedger) {
         agentQuotaLedger = ledger
+    }
+
+    // MARK: - 运行策略（`FR-AGT-OPS-OBS-002`：可配置 + 立即生效 + 有据可查）
+
+    /// 运行策略在盘上的那一份（与其余本机数据同一目录，不另开文件体系）。
+    private var agentRuntimeConfigFile: AgentRuntimeConfigFile {
+        AgentRuntimeConfigFile(directory: AgentSessionStore.defaultDirectory)
+    }
+
+    /// 当日 token 账（日配额的生效面）。
+    private var agentDailyUsageLedger: AgentDailyUsageLedger {
+        AgentDailyUsageLedger(directory: AgentSessionStore.defaultDirectory)
+    }
+
+    /// 进程内持有的那一份运行策略（改一项立刻写回，**下一轮**就按新的来 —— 不必重启）。
+    @Published private(set) var agentRuntimeConfig = AgentConfigStore()
+    /// 盘上那份的载入结论（`fresh` / `loaded` / `degraded`）—— 面板照实说一句。
+    @Published private(set) var agentRuntimeConfigState: AgentRuntimeConfigFile.LoadState = .fresh
+    private var agentRuntimeConfigLoaded = false
+    /// 白名单里写了但注册表里没有的工具名（面板照实点名 —— 用户写错一个字要看得见）。
+    @Published private(set) var agentToolWhitelistUnknown: [String] = []
+
+    /// 读一次盘（幂等；面板打开、建循环前都会调）。
+    func loadAgentRuntimeConfigIfNeeded() {
+        guard !agentRuntimeConfigLoaded else { return }
+        agentRuntimeConfigLoaded = true
+        let loaded = agentRuntimeConfigFile.load()
+        agentRuntimeConfig = loaded.store
+        agentRuntimeConfigState = loaded.state
+    }
+
+    /// 保存结果：没改动 / 存进去了（附每条的「改前 → 改后」）/ 被拒（附原因）。
+    enum AgentRuntimeConfigSaveResult: Equatable {
+        case noChange
+        case saved([String])
+        case rejected(String)
+    }
+
+    /// 面板上按一次「保存策略」：差异 → 原子校验 → 落盘 → 换内存那份。
+    ///
+    /// 顺序是刻意的：**先校验通过再写盘**（写盘成功但校验失败等于把非法配置留在盘上）。
+    func saveAgentRuntimeConfig(draft: AgentRuntimeConfigDraft, reason: String) -> AgentRuntimeConfigSaveResult {
+        loadAgentRuntimeConfigIfNeeded()
+        let edits = draft.edits(against: agentRuntimeConfig.snapshot)
+        guard !edits.isEmpty else { return .noChange }
+        var next = agentRuntimeConfig
+        do {
+            let applied = try next.applyBatch(edits, reason: reason)
+            try agentRuntimeConfigFile.save(next)
+            agentRuntimeConfig = next
+            return .saved(applied.map(\.summaryLine))
+        } catch let error as AgentConfigError {
+            return .rejected(AgentConfigRejectionText.line(for: error))
+        } catch {
+            return .rejected(ErrorPresenter.message(for: error))
+        }
+    }
+
+    /// 开跑前问一次：今天的额度还剩多少（配额为 0 或已用满 ⇒ 拦住）。
+    func agentDailyQuotaVerdict() -> AgentDailyUsageLedger.Verdict {
+        loadAgentRuntimeConfigIfNeeded()
+        return agentDailyUsageLedger.verdict(quota: agentRuntimeConfig.snapshot.dailyTokenQuota)
+    }
+
+    /// 一轮跑完记当日用量（记账是旁路：写不进去不影响这一轮的结果）。
+    func recordAgentDailyTokens(_ tokens: Int) {
+        guard tokens > 0 else { return }
+        _ = agentDailyUsageLedger.record(tokens: tokens)
+    }
+
+    /// 今日用量读数（面板那一行「今日已用 N / M」）。
+    func agentDailyTokenReading() -> (used: Int, quota: Int, degraded: Bool) {
+        loadAgentRuntimeConfigIfNeeded()
+        let reading = agentDailyUsageLedger.reading()
+        return (reading.tokens, agentRuntimeConfig.snapshot.dailyTokenQuota, reading.degraded)
     }
 
     /// 表清单外发上限（防止把上千张表发出去）。

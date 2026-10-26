@@ -60,8 +60,15 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     var paneIsVisible: () -> Bool = { true }
     /// 通知门槛。**阈值只有一处**（`Core/AgentNotifyPolicy`），这里只放实例。
     var notifyPolicy = AgentNotifyPolicy()
+    /// 系统通知开关（`FR-AGT-OPS-OBS-002` 的「通知规则」）：宿主从运行策略里现读，
+    /// **每轮都读**，所以面板上关掉立刻生效（不必重启）。缺省开着。
+    var systemNotificationsEnabledProvider: () -> Bool = { true }
+    /// 日配额判定（宿主注入；`nil` = 没接 ⇒ 不拦，如实意味着「这条路上还没有配额面」）。
+    var dailyQuotaCheck: (() -> AgentDailyUsageLedger.Verdict?)?
+    /// 记当日用量（宿主注入）。记账是旁路：写不进去也不该让这一轮失败。
+    var dailyUsageRecorder: ((Int) -> Void)?
     /// 文案语言（界面语言，缺省跟随本机语言设置）。
-    var languageProvider: () -> AppLanguage = { LocalizationManager.shared.language }
+    var languageProvider: () -> AppLanguage = { LocalizationManager.shared.effectiveLanguage }
 
     /// 页内提示条（通知那一格的**可见**出口；`nil` = 没有要说的）。
     @Published private(set) var notifyBanner: AgentNotification?
@@ -531,6 +538,146 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         sessionUsage = TokenUsageLedger()
     }
 
+    // MARK: - 会话生命周期（`FR-AGT-UX-SESS-001` 界面接线）
+
+    /// 归档面列表（打开列表时与活跃面一起刷）。
+    @Published private(set) var archivedSessions: [AgentSessionSummary] = []
+    /// 归档面读不出来的文件数（与活跃面同一口径：跳过并计数）。
+    @Published private(set) var archivedSkippedFiles = 0
+    /// 上一个生命周期动作的**一句结论**（成功也说话、被拒也说清为什么）。
+    @Published private(set) var sessionLifecycleLine: String?
+
+    /// 界面侧唯一入口（`Core/AgentSessionLifecycleDesk`）：工作区与续跑旁挂件目录都在这里固定，
+    /// 视图那侧没有机会漏传（漏传的后果是「删了会话、磁盘上还留着续跑件」）。
+    private func lifecycleDesk(workspacePath: String?) -> AgentSessionLifecycleDesk? {
+        guard let store = sessionStore, let workspacePath, !workspacePath.isEmpty else { return nil }
+        // 旁挂件与会话同目录（生产路径由 `DoyahStudioApp` 一起接到 `defaultDirectory`）；
+        // `resumeStore` 没接时退回会话目录 —— 那是它该在的地方，不是「猜一个位置」。
+        let sidecar = resumeStore?.directory ?? store.directory
+        return AgentSessionLifecycleDesk(store: store, workspace: workspacePath, sidecarDirectories: [sidecar])
+    }
+
+    private func requireDesk(_ workspacePath: String?) -> AgentSessionLifecycleDesk? {
+        guard let desk = lifecycleDesk(workspacePath: workspacePath) else {
+            sessionLifecycleLine = L(.agentChatSessionLifecycleUnavailable)
+            return nil
+        }
+        return desk
+    }
+
+    /// 刷两个面（活跃 + 归档）：一次动作之后两个列表都可能变，只刷一个会留下「刚归档的还在」。
+    private func refreshAfterLifecycle(workspacePath: String?) {
+        reloadSessions(workspacePath: workspacePath)
+        reloadArchivedSessions(workspacePath: workspacePath)
+    }
+
+    /// 归档面刷新（打开列表时调；归档 / 恢复之后也调）。
+    func reloadArchivedSessions(workspacePath: String?) {
+        guard let desk = lifecycleDesk(workspacePath: workspacePath) else {
+            archivedSessions = []
+            archivedSkippedFiles = 0
+            return
+        }
+        let result = desk.archivedSummaries()
+        archivedSessions = result.summaries
+        archivedSkippedFiles = result.skippedFiles
+    }
+
+    /// 归档（①）：挪进归档面，列表里立刻看不见。
+    func archiveSession(_ id: String, workspacePath: String?) {
+        guard let desk = requireDesk(workspacePath) else { return }
+        do {
+            let outcome = try desk.archive(sessionID: id)
+            sessionLifecycleLine = outcome.changed ? L(.agentChatSessionArchived)
+                                                   : L(.agentChatSessionArchiveNoop)
+            refreshAfterLifecycle(workspacePath: workspacePath)
+        } catch {
+            sessionLifecycleLine = L(.agentChatSessionLifecycleFailed, Self.lifecycleReason(error))
+        }
+    }
+
+    /// 从归档面恢复（①）。
+    func restoreSession(_ id: String, workspacePath: String?) {
+        guard let desk = requireDesk(workspacePath) else { return }
+        do {
+            let outcome = try desk.restore(sessionID: id)
+            sessionLifecycleLine = outcome.changed ? L(.agentChatSessionRestored)
+                                                   : L(.agentChatSessionRestoreNoop)
+            refreshAfterLifecycle(workspacePath: workspacePath)
+        } catch {
+            sessionLifecycleLine = L(.agentChatSessionLifecycleFailed, Self.lifecycleReason(error))
+        }
+    }
+
+    /// 真删（②）：活跃文件 + 归档副本 + 续跑旁挂件一起删。删的是当前这条 ⇒ 换一条新会话
+    /// （否则界面上还挂着一条已经不存在的会话，下一跳会写回一个同名文件）。
+    func deleteSession(_ id: String, workspacePath: String?) {
+        guard let desk = requireDesk(workspacePath) else { return }
+        do {
+            let outcome = try desk.delete(sessionID: id)
+            sessionLifecycleLine = L(.agentChatSessionDeleted, outcome.removedFileCount)
+            if id == sessionID { startNewSession() }
+            refreshAfterLifecycle(workspacePath: workspacePath)
+        } catch {
+            sessionLifecycleLine = L(.agentChatSessionLifecycleFailed, Self.lifecycleReason(error))
+        }
+    }
+
+    /// 导出（③）：**只产出数据**，落哪个目录由界面的保存面板决定。
+    /// 返回（建议文件名, 数据）；出错则把理由写进那一行并回 `nil`。
+    ///
+    /// **不在这里报「已导出」** —— 用户可能紧接着在保存面板上按取消，
+    /// 那时说「已导出」就是在撒谎。结论由 `writeExportedSession` 在真写完之后给。
+    func exportSessionData(_ id: String, workspacePath: String?) -> (fileName: String, data: Data)? {
+        guard let desk = requireDesk(workspacePath) else { return nil }
+        do {
+            let exported = try desk.export(sessionID: id)
+            let title = sessions.first { $0.id == id }?.title ?? archivedSessions.first { $0.id == id }?.title ?? id
+            return (AgentChatSessionFileName.suggested(title: title, sessionID: id), exported.data)
+        } catch {
+            sessionLifecycleLine = L(.agentChatSessionLifecycleFailed, Self.lifecycleReason(error))
+            return nil
+        }
+    }
+
+    /// 把导出数据写到用户选的位置（写失败也进**同一行**结论 —— 界面不再自己拼错误文案）。
+    func writeExportedSession(_ payload: (fileName: String, data: Data), to url: URL) {
+        do {
+            try payload.data.write(to: url, options: .atomic)
+            sessionLifecycleLine = L(.agentChatSessionExported, payload.data.count)
+        } catch {
+            sessionLifecycleLine = L(.agentChatSessionLifecycleFailed, ErrorPresenter.message(for: error))
+        }
+    }
+
+    /// 重新导入（③）：落进**当前工作区**；同名会话号默认拒收（不静默覆盖别人那份）。
+    ///
+    /// 界面对「带走的导出文件」用 `.assignNewID`（那是「换台机器接着用」的正常心意），
+    /// 撞名时给新号并把新号报出来 —— 不许悄悄覆盖已有那条。
+    func importSessionData(_ data: Data, workspacePath: String?) {
+        guard let desk = requireDesk(workspacePath) else { return }
+        do {
+            let receipt = try desk.importSession(data, conflict: .assignNewID)
+            sessionLifecycleLine = L(.agentChatSessionImported, receipt.header.title)
+            refreshAfterLifecycle(workspacePath: workspacePath)
+        } catch {
+            sessionLifecycleLine = L(.agentChatSessionLifecycleFailed, Self.lifecycleReason(error))
+        }
+    }
+
+    /// 生命周期错误的**人话**（四个机器码各有各的说法；认不出的原样报码，不编）。
+    static func lifecycleReason(_ error: Error) -> String {
+        guard let failure = error as? AgentSessionLifecycleError else {
+            return ErrorPresenter.message(for: error)
+        }
+        switch failure {
+        case .sessionNotFound: return L(.agentChatSessionNotFound)
+        case .workspaceMismatch: return L(.agentChatSessionOtherWorkspace)
+        case .conflictingSessionExists: return L(.agentChatSessionNameConflict)
+        case .malformedPayload: return L(.agentChatSessionBadExportFile)
+        }
+    }
+
     /// 重发（§9.1.16 ③）：以该条助手消息对应的**那次提问**为锚再跑一轮，旧轮保留。
     ///
     /// 找不到锚点（例如这条是开场白、前面没有提问）⇒ **什么都不做**并如实说一句，
@@ -554,6 +701,13 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     }
 
     private func start(prompt: String, intent: AgentTurnIntent, ignoringGate: Bool = false) async {
+        // **日配额闸**（`FR-AGT-OPS-OBS-002` 的「改完立即生效」之一）：额度用完就不再发请求。
+        // 拦在「人按下发送」与「真的发出去」之间，并且**说清是哪两个数**（用掉多少 / 上限多少）——
+        // 只回一句「超限」用户没法判断该调上限还是等明天。
+        if let verdict = dailyQuotaCheck?(), case let .exhausted(used, quota) = verdict {
+            state.appendNotice(L(.agentChatDailyQuotaExhausted, used, quota))
+            return
+        }
         // **分账**（`NFR-AI-08` ⑤）：新提问 ⇒ 新分账号（不接上一个问题的检查点）；
         // 显式继续 ⇒ 沿用上一轮的分账号 + 报出停在第几跳。
         let plan = AgentTurnPlanner.plan(sessionID: sessionID, previous: lastTurn, intent: intent)
@@ -779,6 +933,10 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         // **配额回写**（`NFR-AI-04`）：这一轮跳级累加过的账本交回宿主，跨轮才累计得起来
         //（不回写 ⇒ 每个上限在真实路径上都永远不会触发，正是 v3.88 修掉的那条第 1 项缺口）。
         if let ledger = result.quotaLedger { recordQuotaLedger?(ledger) }
+        // **日配额记账**（`FR-AGT-OPS-OBS-002`）：这一轮真花掉的 token 进当日账。
+        // 只算这一轮的增量（不是会话累计）—— 日配额按「今天花了多少」算，不是「这条会话花了多少」。
+        let turnTokens = (result.usage.promptTokens ?? 0) + (result.usage.completionTokens ?? 0)
+        if turnTokens > 0 { dailyUsageRecorder?(turnTokens) }
         switch result.outcome {
         case .finished:
             state.appendNotice("finished")
@@ -809,6 +967,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             let plan = notifyPolicy.plan(reason,
                                         userIsLookingAtThisPane: paneIsVisible(),
                                         userIsIdle: false,
+                                        systemNotificationsEnabled: systemNotificationsEnabledProvider(),
                                         language: languageProvider())
             if let banner = plan.banner { notifyBanner = banner }
             if let system = plan.system { notifySink?(system) }

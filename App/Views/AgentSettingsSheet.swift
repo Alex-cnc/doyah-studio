@@ -37,6 +37,13 @@ struct AgentSettingsSheet: View {
     @State private var contextWindowText = ""
     /// MCP 服务器配置面（`FR-AI-21` 界面片）的开合。
     @State private var showsMCPServers = false
+    /// **运行策略草稿**（`FR-AGT-OPS-OBS-002`）：五项一屏可改，改完点「保存策略」才落盘。
+    /// 草稿不动盘上的东西 —— 取消面板就等于没改过（不会出现「碰了一下选项就生效」）。
+    @State private var runtimeDraft = AgentRuntimeConfigDraft(snapshot: AgentConfigSnapshot())
+    /// 改动理由（必填）：空着保存会被拒，并在同一行说明为什么。
+    @State private var runtimeReason = ""
+    /// 上一次保存 / 被拒的一句话结论。
+    @State private var runtimeLine: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
@@ -126,6 +133,89 @@ struct AgentSettingsSheet: View {
                     Text(L(.agentMCPHint))
                         .font(Theme.font(.caption))
                         .foregroundStyle(Theme.text(.secondary))
+                }
+
+                // **运行策略**（`FR-AGT-OPS-OBS-002`）：五项都带默认值与影响说明；
+                // 改完点「保存策略」才落盘（一次全落或一条都不落），并把「谁改的、改前改后、
+                // 为什么」留在盘上那份留痕里 —— 下面「最近改动」显示的就是它。
+                Section(L(.agentRuntimeSection)) {
+                    LabeledContent(L(.agentRuntimeConcurrency)) {
+                        TextField(L(.agentRuntimeConcurrency), text: $runtimeDraft.maxConcurrentSubtasks)
+                            .labelsHidden()
+                    }
+                    Text(L(.agentRuntimeConcurrencyHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+
+                    LabeledContent(L(.agentRuntimeTimeout)) {
+                        TextField(L(.agentRuntimeTimeout), text: $runtimeDraft.commandTimeoutSeconds)
+                            .labelsHidden()
+                    }
+                    Text(L(.agentRuntimeTimeoutHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+
+                    LabeledContent(L(.agentRuntimeDailyQuota)) {
+                        TextField(L(.agentRuntimeDailyQuota), text: $runtimeDraft.dailyTokenQuota)
+                            .labelsHidden()
+                    }
+                    Text(L(.agentRuntimeDailyQuotaHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                    // 今日读数（日配额的「有据可查」那一面）：用了多少 / 上限多少。
+                    todayUsageLine
+
+                    Toggle(isOn: $runtimeDraft.notificationsEnabled) {
+                        Label(L(.agentRuntimeNotify), systemImage: "bell")
+                    }
+                    .help(L(.agentRuntimeNotify))
+                    .accessibilityLabel(Text(L(.agentRuntimeNotify)))
+                    Text(L(.agentRuntimeNotifyHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+
+                    LabeledContent(L(.agentRuntimeWhitelist)) {
+                        TextField(L(.agentRuntimeWhitelist), text: $runtimeDraft.toolWhitelist)
+                            .labelsHidden()
+                    }
+                    Text(L(.agentRuntimeWhitelistHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                    if !appState.agentToolWhitelistUnknown.isEmpty {
+                        // 名单里写了工具名但注册表里没有：**点名**（否则面板上那句「已限制」
+                        // 会让人以为限制成功，实际什么都没限到）
+                        Text(appState.agentToolWhitelistUnknown.joined(separator: ", "))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.status(.warning))
+                    }
+
+                    LabeledContent(L(.agentRuntimeReason)) {
+                        TextField(L(.agentRuntimeReason), text: $runtimeReason,
+                                  prompt: Text(L(.agentRuntimeReasonPlaceholder)))
+                            .labelsHidden()
+                    }
+                    HStack(spacing: Spacing.s) {
+                        Button(L(.agentRuntimeSave)) { saveRuntimePolicy() }
+                            .buttonStyle(.bordered)
+                        if let runtimeLine {
+                            Text(runtimeLine)
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if !appState.agentRuntimeConfig.changes.isEmpty {
+                        Text(L(.agentRuntimeHistoryTitle))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.tertiary))
+                        ForEach(Array(AgentConfigRejectionText
+                            .historyLines(appState.agentRuntimeConfig.changes).enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
 
                 Section(L(.agentAPIKey)) {
@@ -224,6 +314,12 @@ struct AgentSettingsSheet: View {
             // MCP 那一行的读数（「还没配置 / 已连上 n / m 条」）需要配置与这一轮的发现结果；
             // 配置读一次就够（`loadAgentMCPConfiguration` 幂等），发现结果由对话那条路填。
             appState.loadAgentMCPConfiguration()
+            // 运行策略（`FR-AGT-OPS-OBS-002`）：读盘一次并回填草稿 —— 重开面板显示的是
+            // **当前生效的那份**，不是空白（空白保存一次就等于把用户设过的全清掉）。
+            appState.loadAgentRuntimeConfigIfNeeded()
+            runtimeDraft = AgentRuntimeConfigDraft(snapshot: appState.agentRuntimeConfig.snapshot)
+            runtimeReason = ""
+            runtimeLine = AgentConfigRejectionText.degradedLine(for: appState.agentRuntimeConfigState)
         }
         .sheet(isPresented: $showsMCPServers) {
             MCPServersSheet()
@@ -377,6 +473,37 @@ struct AgentSettingsSheet: View {
     private var sheetHeight: CGFloat {
         let available = (NSScreen.main?.visibleFrame.height ?? 800) - 96
         return min(680, max(420, available))
+    }
+
+    /// 今日用量那一行（`%d / %d`）。
+    ///
+    /// 两个数都先落成**显式标注的局部量**再进模板：门禁 `check-format-arguments` 认不出
+    /// `reading.used` 这种冒号取值的类型，而这里形状是确定的 `Int`（日配额账本给的就只有 Int）。
+    private var todayUsageLine: some View {
+        let reading = appState.agentDailyTokenReading()
+        let used: Int = reading.used
+        let quota: Int = reading.quota
+        return Text(L(.agentRuntimeTodayUsage, used, quota))
+            .font(Theme.font(.caption))
+            .foregroundStyle(used >= quota ? Theme.status(.warning) : Theme.text(.secondary))
+    }
+
+    /// 保存运行策略：差异 → 原子校验 → 落盘 → 换内存那份；结论列在按钮右边。
+    ///
+    /// 为什么单独一个按钮、不并进「保存」：这一批改动**要写理由**（`AgentConfigStore` 的硬要求），
+    /// 跟模型 / 密钥那种「配好就用」不是一回事 —— 混在一起会让人以为改个超时也要写理由。
+    private func saveRuntimePolicy() {
+        switch appState.saveAgentRuntimeConfig(draft: runtimeDraft, reason: runtimeReason) {
+        case .noChange:
+            runtimeLine = L(.agentRuntimeNoChange)
+        case .saved(let lines):
+            runtimeLine = L(.agentRuntimeSaved) + (lines.isEmpty ? "" : " " + lines.joined(separator: "；"))
+            runtimeReason = ""
+            // 存完以**盘上那份**回填（顺序 / 归一化都以它为准，草稿不再自己留着旧字符串）
+            runtimeDraft = AgentRuntimeConfigDraft(snapshot: appState.agentRuntimeConfig.snapshot)
+        case .rejected(let reason):
+            runtimeLine = L(.agentRuntimeRejected, reason)
+        }
     }
 
     private func save() {

@@ -1,229 +1,235 @@
 {
-  "schema": 1,
-  "queueItem": "L-50",
-  "note": "「空数据时按钮到底怎么表现」的逐条处置台账。词表见 Scripts/check-empty-action-buttons.py 的 docstring：view-disabled（灰着，判据属性在 AppState，视图引用同一属性）/ view-disabled-local（灰着，判据属性住在视图里，用字面锚点钉）/ explain（可点 + 给一句理由）/ internal（不是按钮前置：定时器 / 启动 / 行解析 / 内部策略 —— 人判登记 + 理由必填）。口径由本侧拍板（2026-09-28 第 59 轮）：**默认灰着**，只有「点得到才有意义」的那几档才给理由。新增一处空守卫必须在这里登记一次。",
-  "forms": {
-    "view-disabled": "灰着：判据属性在 AppState 里全局唯一，守卫与视图的 .disabled 必须用同一条判断",
-    "view-disabled-local": "灰着：判据属性住在视图里（如 SaveQuerySheet.trimmedName），用字面锚点钉住视图侧的 .disabled",
-    "explain": "可点 + 给一句理由：守卫体里必须真的有一句给用户的话",
-    "internal": "不是按钮前置（定时器 / 启动 / 逐行解析 / 内部策略）—— 人判登记，机械只核理由非空与台账不陈旧"
+ "schema": 1,
+ "queueItem": "L-50",
+ "note": "「空数据时按钮到底怎么表现」的逐条处置台账。词表见 Scripts/check-empty-action-buttons.py 的 docstring：view-disabled（灰着，判据属性在 AppState，视图引用同一属性）/ view-disabled-local（灰着，判据属性住在视图里，用字面锚点钉）/ explain（可点 + 给一句理由）/ internal（不是按钮前置：定时器 / 启动 / 行解析 / 内部策略 —— 人判登记 + 理由必填）。口径由本侧拍板（2026-09-28 第 59 轮）：**默认灰着**，只有「点得到才有意义」的那几档才给理由。新增一处空守卫必须在这里登记一次。",
+ "forms": {
+  "view-disabled": "灰着：判据属性在 AppState 里全局唯一，守卫与视图的 .disabled 必须用同一条判断",
+  "view-disabled-local": "灰着：判据属性住在视图里（如 SaveQuerySheet.trimmedName），用字面锚点钉住视图侧的 .disabled",
+  "explain": "可点 + 给一句理由：守卫体里必须真的有一句给用户的话",
+  "internal": "不是按钮前置（定时器 / 启动 / 逐行解析 / 内部策略）—— 人判登记，机械只核理由非空与台账不陈旧"
+ },
+ "entries": [
+  {
+   "func": "alterTable",
+   "guard": "!statements.isEmpty",
+   "form": "explain",
+   "reason": "「改表」提交路径：有变更却生成不出任何语句时给出 `tableDesignInvalid`，不是静默早退 —— 视图侧 ConnectionListView 丢弃返回值，那半句人话是用户唯一能看到的信号。"
   },
-  "entries": [
-    {
-      "func": "alterTable",
-      "guard": "!statements.isEmpty",
-      "form": "explain",
-      "reason": "「改表」提交路径：有变更却生成不出任何语句时给出 `tableDesignInvalid`，不是静默早退 —— 视图侧 ConnectionListView 丢弃返回值，那半句人话是用户唯一能看到的信号。"
-    },
-    {
-      "func": "createTable",
-      "guard": "TableDesign.validate(tableName: name, columns: columns).isEmpty",
-      "form": "explain",
-      "reason": "「建表」同族：校验不通过时给同一句 `tableDesignInvalid`。"
-    },
-    {
-      "func": "exportEgressLog",
-      "guard": "!egressEntries.isEmpty",
-      "form": "explain",
-      "reason": "**有意为之的一档**（不是缺陷，出处 = L-50 行内原话）：没有可导出的记录时按钮仍可点，页脚给「还没有可导出的外发记录」—— 点得到才有意义。"
-    },
-    {
-      "func": "exportAgentAudit",
-      "guard": "!agentAuditRecords.isEmpty",
-      "form": "explain",
-      "reason": "同上（智能体审计的导出）：给 `agentAuditExportEmpty`。"
-    },
-    {
-      "func": "tickDataTasks",
-      "guard": "!dataTasks.isEmpty",
-      "form": "internal",
-      "reason": "数据任务定时器的空转保护，没有按钮入口 —— 由 ticker 调用。"
-    },
-    {
-      "func": "runExecutionPlan",
-      "guard": "!sql.isEmpty",
-      "form": "explain",
-      "reason": "「分析执行计划」：语句为空时给 `stateSQLEmpty`，视图侧另有 `disabled` 兜着。"
-    },
-    {
-      "func": "generateSyntheticRows",
-      "guard": "issues.isEmpty",
-      "form": "explain",
-      "reason": "合成数据生成前的前置校验：不通过就 `throw AppError.invalidConfiguration(issues…)`，错误由调用处以人话上屏。"
-    },
-    {
-      "func": "tableImportSafetyDecision",
-      "guard": "let representative, !representative.isEmpty",
-      "form": "internal",
-      "reason": "导入安全策略的内部判定（返回 `.allow` / `.refused`），不是按钮前置；没有视图调用点。"
-    },
-    {
-      "func": "startTableImport",
-      "guard": "!request.plan.mappedColumns.isEmpty",
-      "form": "explain",
-      "reason": "「开始导入」：没有任何可写入的列时给 `importNothingMapped`（界面与返回码两处同句）。"
-    },
-    {
-      "func": "jumpToReferencedRow",
-      "guard": "let trimmed, !trimmed.isEmpty",
-      "form": "explain",
-      "reason": "外键跳转：单元格为空时给 `fkJumpNullValue`（讲得出「这一格是空的，跳不了」）。"
-    },
-    {
-      "func": "resolveForeignKeyJump",
-      "guard": "!options.isEmpty",
-      "form": "explain",
-      "reason": "同一族的另一端：这一列没有外键时给 `fkJumpNoForeignKey`。"
-    },
-    {
-      "func": "erDiagram",
-      "guard": "row.indices.contains(0), let name = row[0], !name.isEmpty",
-      "form": "internal",
-      "reason": "ER 图取表名时的逐行解析（缺列 / 空名就跳过这一行），不是按钮前置。"
-    },
-    {
-      "func": "loadDatabases",
-      "guard": "let value = row.first ?? nil, !value.isEmpty",
-      "form": "internal",
-      "reason": "库列表的逐行解析（空值跳过），不是按钮前置。"
-    },
-    {
-      "func": "saveCurrentQuery",
-      "guard": "!finalName.isEmpty",
-      "form": "view-disabled-local",
-      "view": "App/Views/SaveQuerySheet.swift",
-      "anchor": ".disabled(trimmedName.isEmpty)",
-      "reason": "**L-50 选口径时的先例**：同一个动作族（保存）在空名字时本来就是灰着 —— 判据属性 `trimmedName` 住在表单里，表单自己 `.disabled` 它；AppState 这句守卫是第二道（防御性）。"
-    },
-    {
-      "func": "checkSyntax",
-      "guard": "!sql.isEmpty",
-      "form": "explain",
-      "reason": "语法检查：空语句给 `stateSQLEmpty`（写进该页签的 `syntaxCheckMessage`）。"
-    },
-    {
-      "func": "checkSyntax",
-      "guard": "!text.isEmpty",
-      "form": "internal",
-      "reason": "同一函数里逐行检查的跳过（空行不查），不是按钮前置。"
-    },
-    {
-      "func": "executeQuery",
-      "guard": "!sql.isEmpty",
-      "form": "explain",
-      "reason": "「执行」在空语句时给 `stateSQLEmpty` + `stateNotExecuted`（视图侧同样另有 `disabled`）。"
-    },
-    {
-      "func": "runStartupStatements",
-      "guard": "!statements.isEmpty",
-      "form": "internal",
-      "reason": "启动语句的执行入口，没有按钮 —— 连接建立后自动跑。"
-    },
-    {
-      "func": "searchNotes",
-      "guard": "notesEnabled, !trimmed.isEmpty",
-      "form": "internal",
-      "reason": "**不是「静默无反应」**：空查询按 L-44 的口径 ③ 明写为「空查询不是检索」（`noteSearchState = .idle`，界面照显示已加载的列表）—— 有判据、有文案口径的设计，不是忘了写处置；搜索框随打随搜，没有按钮入口。"
-    },
-    {
-      "func": "saveNoteFromEditor",
-      "guard": "noteEditorHasContent",
-      "form": "view-disabled",
-      "predicate": "noteEditorHasContent",
-      "view": "Plugins/Notes/Views/NotesPanel.swift",
-      "reason": "**本轮修的就是它（L-50）**：从前视图侧没写处置 ⇒ 空编辑器上「保存」满色可点、点下去静默 return（2026-09-26 读图抓到）。口径 = 灰着；判据属性 `noteEditorHasContent` 是唯一出处。同一函数里许可那一档**故意不灰**（Pro 档点下去要给「本档不含笔记」那句人话）—— 两句守卫处置不同。"
-    },
-    {
-      "func": "saveTodoFromEditor",
-      "guard": "todoEditorHasContent",
-      "form": "view-disabled",
-      "predicate": "todoEditorHasContent",
-      "view": "Plugins/Notes/Views/NotesPanel.swift",
-      "reason": "队列 `L-100` 界面半第一片（待办清单屏的编辑器）：与 `saveNoteFromEditor` **同一条形状** —— 口径 = 灰着；判据属性 `todoEditorHasContent` 是唯一出处（视图那枚「保存」的 `.disabled` 与守卫读同一句）。同一函数里许可那一档**故意不灰**（Pro 档点下去要给「本档不含笔记」那句人话），两句守卫处置不同。"
-    },
-    {
-      "func": "saveMaintenanceNote",
-      "guard": "let review = maintenanceReview, !review.tasks.isEmpty",
-      "form": "explain",
-      "reason": "维护任务「存进笔记」：没有计划时给 `maintenanceNoPlan`。"
-    },
-    {
-      "func": "executeApprovedMaintenanceTasks",
-      "guard": "!runnable.isEmpty",
-      "form": "explain",
-      "reason": "「执行已批准的」：一条可跑的都没有时给 `maintenanceNothingApproved`。"
-    },
-    {
-      "func": "gatherDiagnosisEvidence",
-      "guard": "!trimmed.isEmpty",
-      "form": "explain",
-      "reason": "诊断取证：语句为空时给 `diagnosisEmpty`（视图侧另有 `disabled`）。"
-    },
-    {
-      "func": "saveDiagnosisNote",
-      "guard": "let report = diagnosisReport, !report.items.isEmpty",
-      "form": "explain",
-      "reason": "诊断「存进笔记」：没有报告条目时给 `diagnosisEmpty`。"
-    },
-    {
-      "func": "moveNotes",
-      "guard": "!moves.isEmpty",
-      "form": "internal",
-      "reason": "**不是菜单项的前置判据**：笔记行右键菜单里「当前所在那一格」的灰着由 Core `NotebookMovePrompt` 的 `NotebookMoveTarget.isSelectable` 决定（视图 `.disabled(!target.isSelectable)`；判据 `Tests/NotebookMovePromptTests.swift` 5 例钉住它）。这里是**第二道**：`AppState.moveNotes` 把「已经在目标笔记本里的那几条」滤掉，防别的调用路径（不走右键菜单）把一次白写落到库上 —— 白写虽不改 `updatedAt`（契约 §2.12 第 4 条），没有意义的写仍然是没有意义的写。"
-    },
-    {
-      "func": "confirmContainerEdit",
-      "guard": "let request = pendingContainerEdit, containerEditNameIsAcceptable",
-      "form": "view-disabled",
-      "predicate": "containerEditNameIsAcceptable",
-      "view": "Plugins/Notes/Views/NotesPanel.swift",
-      "reason": "**容器编辑弹框（新建 / 重命名）里的「确定」**（队列 `L-97` 界面半第四片）：名字洗净后是空的（全空白）⇒ 按钮**灰着** —— 与 `SaveQuerySheet` 的 `trimmedName` 同一档先例（空名字上「确定了」没有可落的库）。判据属性 `containerEditNameIsAcceptable` 是**唯一出处**（体 = Core 的 `ContainerNameRule.isAcceptable`），视图那一侧 `.disabled(!appState.containerEditNameIsAcceptable)` 读的是同一个判断；`confirmContainerEdit` 先**同步取走**请求再异步落库 —— 弹框一关 `isPresented` 的 `set` 就会收掉请求，读晚一步就是「点了确定、什么都没发生」。"
-    },
-    {
-      "func": "dropNotes",
-      "guard": "!noteIDs.isEmpty",
-      "form": "internal",
-      "reason": "**不是按钮的前置判据**：拖拽落点的入口 `handleNoteDrop`（视图 `.dropDestination`）只有在载荷解得出来的时候才有内容 —— 别的程序拖来的文本 / 前缀不对 / 整段坏掉时解出**空数组**，这一步什么都不做（拖拽失败没有按钮可灰着、也没有可交代的对象，如实登记）。这里是**第二道**：`AppState.dropNotes` 收到空清单直接返回，防别的调用路径把一次空写落到库上。"
-    },
-    {
-      "func": "autosaveNoteEditor",
-      "guard": "notesEnabled, noteEditorDirty, noteEditorHasContent",
-      "form": "internal",
-      "reason": "**不是按钮的前置判据**：这是**后台**的「停顿即存」（片 `N2-4`，任务 `t_b2a943b6`）—— 由停顿计时器那一发调它（`scheduleNoteAutoSave`），界面上没有对应的按钮可以灰着。三条守卫各自的处置：① 许可那一档 = 不写库（与 `saveNoteFromEditor` 读同一个 `notesEnabled`）；②③ 两条防的是「没动过 / 空编辑器也写一次」——**没有内容就不该凭空写出一条空笔记**。用户看得见的那一档（空编辑器上「保存」灰着）已经登记在同族的 `saveNoteFromEditor` 条目里（判据属性 `noteEditorHasContent` 是唯一出处）；工具条那一枚状态字画的是 `noteSaveState`，是**显示**不是可点入口。"
-    },
-    {
-      "func": "flushNoteAutosave",
-      "guard": "noteEditorDirty, noteEditorHasContent",
-      "form": "internal",
-      "reason": "**不是按钮的前置判据**：「切走即存」（片 `N2-4`，任务 `t_b2a943b6`）—— 点另一行（`handleNoteRowClick`）/ 换范围（`selectNotesScope`）/ 换模块（`setNotesModule`）/ 新建（`beginNewNote`）/ 进编辑（`edit(_:)`）这几个入口在改写编辑器内容**之前**先调它，把手上那份快照排进写库队列；它不是任何按钮的灰 / 亮判据。没有改动（或编辑器是空的）时**什么都不做**：这一条正是「别把一次空写落到库上」的那道闸 —— 与 `dropNotes` / `moveNotes` 同一条纪律（可点却静默无反应是缺陷；这里恰好相反：**没有可写的东西就不写**）。"
-    },
-    {
-      "func": "requestNoteRemoval",
-      "guard": "!ids.isEmpty",
-      "form": "view-disabled-local",
-      "view": "Plugins/Notes/Views/NotesPanel.swift",
-      "anchor": ".disabled(!hasDeletableSelection)",
-      "reason": "**删除先确认（片 `N2-9`，派单 `T-20261007-079` ② / `T-20261007-081`，提交 `53afa20`）**：笔记屏左区那枚「删」（`notes-delete`）在**没选中任何一行**时是**灰着**的 —— 判据属性 `hasDeletableSelection` 住在视图里（`NotesPanel.swift` 里：笔记 = 多选集合非空，待办 = 编辑器里那一条），视图侧 `.disabled(!hasDeletableSelection)` 就是这一档的处置，用字面锚点钉住它。`AppState` 这句 `guard !ids.isEmpty` 是**第二道**（与 `saveCurrentQuery` 同一档先例，只是这里连属性名都不是同一个）：笔记那一半在空集合上本来就没有可删的东西，`requestNoteRemoval` 只挂确认请求、不落库（N2-9 的落法：点删除 ⇒ 条目数不变，确认 ⇒ 才 `deleteNote` / `deleteTodo`）。同一函数里待办那一句是 `guard let id = todoEditingID else`（不含 `isEmpty`、不在扫描口径里），且待办编辑器那枚「删」**只在有目标时才画** —— 那是「够不着按钮」那一档；本条目只登记笔记这一半。"
-    },
-    {
-      "func": "requestClearQueryHistory",
-      "guard": "canClearQueryHistory",
-      "form": "view-disabled",
-      "predicate": "canClearQueryHistory",
-      "view": "App/Views/LowerPaneView.swift",
-      "reason": "**历史页签的「清空」（片 `HIST-2` / 派单 `T-20261009-018`、`T-20261009-010`）**：历史为空时那枚「清空」**灰着** —— 空列表上「清空」没有可落的动作。判据属性 `canClearQueryHistory` 在 `AppState` 里**只定义一次**（体 = `!queryHistory.isEmpty`），守卫（`requestClearQueryHistory`）与视图侧 `.disabled(!appState.canClearQueryHistory)` 读的是**同一条判断**；视图不许再自己写一遍 `queryHistory.isEmpty`。同一条路也是工具条时钟菜单那一项的清空入口（`FR-STD-ALL-DATA-002`：可清空）—— 两处都在**确认框**之后才落库。"
-    },
-    {
-      "func": "saveAgentConfiguration",
-      "guard": "!endpoint.isEmpty, URL(string: endpoint) != nil, !model.isEmpty",
-      "form": "internal",
-      "reason": "端点/模型没配 ⇒ 派生 `.notConfigured`（**不是在拦某个按钮**：判据属性 `agentChatEndpointState` 由 `DoyahStudioApp` 当 `endpointProvider` 交给对话区如实呈现「未配置」，发送路径在同一条判据上如实拦——`App/AppState.swift:2871` 造不出循环就返回 nil，不假装在跑）。台账归属名沿用判据的机械归属（往上找最近 `func` = `saveAgentConfiguration`）；实际定义处是同一类型里的 计算属性 `agentChatEndpointState`（L2857）。"
-    },
-    {
-      "func": "tickAgentSchedules",
-      "guard": "!agentSchedules.isEmpty",
-      "form": "internal",
-      "reason": "定时 agent 的 tick 入口（`FR-AGT-TOOL-SCHED-002`）：一条 schedule 都没有时直接返回，没有按钮入口 —— 由 ticker 调用；空态在「定时 agent」面板里另有说明。"
-    }
-  ]
+  {
+   "func": "createTable",
+   "guard": "TableDesign.validate(tableName: name, columns: columns).isEmpty",
+   "form": "explain",
+   "reason": "「建表」同族：校验不通过时给同一句 `tableDesignInvalid`。"
+  },
+  {
+   "func": "exportEgressLog",
+   "guard": "!egressEntries.isEmpty",
+   "form": "explain",
+   "reason": "**有意为之的一档**（不是缺陷，出处 = L-50 行内原话）：没有可导出的记录时按钮仍可点，页脚给「还没有可导出的外发记录」—— 点得到才有意义。"
+  },
+  {
+   "func": "exportAgentAudit",
+   "guard": "!agentAuditRecords.isEmpty",
+   "form": "explain",
+   "reason": "同上（智能体审计的导出）：给 `agentAuditExportEmpty`。"
+  },
+  {
+   "func": "tickDataTasks",
+   "guard": "!dataTasks.isEmpty",
+   "form": "internal",
+   "reason": "数据任务定时器的空转保护，没有按钮入口 —— 由 ticker 调用。"
+  },
+  {
+   "func": "runExecutionPlan",
+   "guard": "!sql.isEmpty",
+   "form": "explain",
+   "reason": "「分析执行计划」：语句为空时给 `stateSQLEmpty`，视图侧另有 `disabled` 兜着。"
+  },
+  {
+   "func": "generateSyntheticRows",
+   "guard": "issues.isEmpty",
+   "form": "explain",
+   "reason": "合成数据生成前的前置校验：不通过就 `throw AppError.invalidConfiguration(issues…)`，错误由调用处以人话上屏。"
+  },
+  {
+   "func": "tableImportSafetyDecision",
+   "guard": "let representative, !representative.isEmpty",
+   "form": "internal",
+   "reason": "导入安全策略的内部判定（返回 `.allow` / `.refused`），不是按钮前置；没有视图调用点。"
+  },
+  {
+   "func": "startTableImport",
+   "guard": "!request.plan.mappedColumns.isEmpty",
+   "form": "explain",
+   "reason": "「开始导入」：没有任何可写入的列时给 `importNothingMapped`（界面与返回码两处同句）。"
+  },
+  {
+   "func": "jumpToReferencedRow",
+   "guard": "let trimmed, !trimmed.isEmpty",
+   "form": "explain",
+   "reason": "外键跳转：单元格为空时给 `fkJumpNullValue`（讲得出「这一格是空的，跳不了」）。"
+  },
+  {
+   "func": "resolveForeignKeyJump",
+   "guard": "!options.isEmpty",
+   "form": "explain",
+   "reason": "同一族的另一端：这一列没有外键时给 `fkJumpNoForeignKey`。"
+  },
+  {
+   "func": "erDiagram",
+   "guard": "row.indices.contains(0), let name = row[0], !name.isEmpty",
+   "form": "internal",
+   "reason": "ER 图取表名时的逐行解析（缺列 / 空名就跳过这一行），不是按钮前置。"
+  },
+  {
+   "func": "loadDatabases",
+   "guard": "let value = row.first ?? nil, !value.isEmpty",
+   "form": "internal",
+   "reason": "库列表的逐行解析（空值跳过），不是按钮前置。"
+  },
+  {
+   "func": "saveCurrentQuery",
+   "guard": "!finalName.isEmpty",
+   "form": "view-disabled-local",
+   "view": "App/Views/SaveQuerySheet.swift",
+   "anchor": ".disabled(trimmedName.isEmpty)",
+   "reason": "**L-50 选口径时的先例**：同一个动作族（保存）在空名字时本来就是灰着 —— 判据属性 `trimmedName` 住在表单里，表单自己 `.disabled` 它；AppState 这句守卫是第二道（防御性）。"
+  },
+  {
+   "func": "checkSyntax",
+   "guard": "!sql.isEmpty",
+   "form": "explain",
+   "reason": "语法检查：空语句给 `stateSQLEmpty`（写进该页签的 `syntaxCheckMessage`）。"
+  },
+  {
+   "func": "checkSyntax",
+   "guard": "!text.isEmpty",
+   "form": "internal",
+   "reason": "同一函数里逐行检查的跳过（空行不查），不是按钮前置。"
+  },
+  {
+   "func": "executeQuery",
+   "guard": "!sql.isEmpty",
+   "form": "explain",
+   "reason": "「执行」在空语句时给 `stateSQLEmpty` + `stateNotExecuted`（视图侧同样另有 `disabled`）。"
+  },
+  {
+   "func": "runStartupStatements",
+   "guard": "!statements.isEmpty",
+   "form": "internal",
+   "reason": "启动语句的执行入口，没有按钮 —— 连接建立后自动跑。"
+  },
+  {
+   "func": "searchNotes",
+   "guard": "notesEnabled, !trimmed.isEmpty",
+   "form": "internal",
+   "reason": "**不是「静默无反应」**：空查询按 L-44 的口径 ③ 明写为「空查询不是检索」（`noteSearchState = .idle`，界面照显示已加载的列表）—— 有判据、有文案口径的设计，不是忘了写处置；搜索框随打随搜，没有按钮入口。"
+  },
+  {
+   "func": "saveNoteFromEditor",
+   "guard": "noteEditorHasContent",
+   "form": "view-disabled",
+   "predicate": "noteEditorHasContent",
+   "view": "Plugins/Notes/Views/NotesPanel.swift",
+   "reason": "**本轮修的就是它（L-50）**：从前视图侧没写处置 ⇒ 空编辑器上「保存」满色可点、点下去静默 return（2026-09-26 读图抓到）。口径 = 灰着；判据属性 `noteEditorHasContent` 是唯一出处。同一函数里许可那一档**故意不灰**（Pro 档点下去要给「本档不含笔记」那句人话）—— 两句守卫处置不同。"
+  },
+  {
+   "func": "saveTodoFromEditor",
+   "guard": "todoEditorHasContent",
+   "form": "view-disabled",
+   "predicate": "todoEditorHasContent",
+   "view": "Plugins/Notes/Views/NotesPanel.swift",
+   "reason": "队列 `L-100` 界面半第一片（待办清单屏的编辑器）：与 `saveNoteFromEditor` **同一条形状** —— 口径 = 灰着；判据属性 `todoEditorHasContent` 是唯一出处（视图那枚「保存」的 `.disabled` 与守卫读同一句）。同一函数里许可那一档**故意不灰**（Pro 档点下去要给「本档不含笔记」那句人话），两句守卫处置不同。"
+  },
+  {
+   "func": "saveMaintenanceNote",
+   "guard": "let review = maintenanceReview, !review.tasks.isEmpty",
+   "form": "explain",
+   "reason": "维护任务「存进笔记」：没有计划时给 `maintenanceNoPlan`。"
+  },
+  {
+   "func": "executeApprovedMaintenanceTasks",
+   "guard": "!runnable.isEmpty",
+   "form": "explain",
+   "reason": "「执行已批准的」：一条可跑的都没有时给 `maintenanceNothingApproved`。"
+  },
+  {
+   "func": "gatherDiagnosisEvidence",
+   "guard": "!trimmed.isEmpty",
+   "form": "explain",
+   "reason": "诊断取证：语句为空时给 `diagnosisEmpty`（视图侧另有 `disabled`）。"
+  },
+  {
+   "func": "saveDiagnosisNote",
+   "guard": "let report = diagnosisReport, !report.items.isEmpty",
+   "form": "explain",
+   "reason": "诊断「存进笔记」：没有报告条目时给 `diagnosisEmpty`。"
+  },
+  {
+   "func": "moveNotes",
+   "guard": "!moves.isEmpty",
+   "form": "internal",
+   "reason": "**不是菜单项的前置判据**：笔记行右键菜单里「当前所在那一格」的灰着由 Core `NotebookMovePrompt` 的 `NotebookMoveTarget.isSelectable` 决定（视图 `.disabled(!target.isSelectable)`；判据 `Tests/NotebookMovePromptTests.swift` 5 例钉住它）。这里是**第二道**：`AppState.moveNotes` 把「已经在目标笔记本里的那几条」滤掉，防别的调用路径（不走右键菜单）把一次白写落到库上 —— 白写虽不改 `updatedAt`（契约 §2.12 第 4 条），没有意义的写仍然是没有意义的写。"
+  },
+  {
+   "func": "confirmContainerEdit",
+   "guard": "let request = pendingContainerEdit, containerEditNameIsAcceptable",
+   "form": "view-disabled",
+   "predicate": "containerEditNameIsAcceptable",
+   "view": "Plugins/Notes/Views/NotesPanel.swift",
+   "reason": "**容器编辑弹框（新建 / 重命名）里的「确定」**（队列 `L-97` 界面半第四片）：名字洗净后是空的（全空白）⇒ 按钮**灰着** —— 与 `SaveQuerySheet` 的 `trimmedName` 同一档先例（空名字上「确定了」没有可落的库）。判据属性 `containerEditNameIsAcceptable` 是**唯一出处**（体 = Core 的 `ContainerNameRule.isAcceptable`），视图那一侧 `.disabled(!appState.containerEditNameIsAcceptable)` 读的是同一个判断；`confirmContainerEdit` 先**同步取走**请求再异步落库 —— 弹框一关 `isPresented` 的 `set` 就会收掉请求，读晚一步就是「点了确定、什么都没发生」。"
+  },
+  {
+   "func": "dropNotes",
+   "guard": "!noteIDs.isEmpty",
+   "form": "internal",
+   "reason": "**不是按钮的前置判据**：拖拽落点的入口 `handleNoteDrop`（视图 `.dropDestination`）只有在载荷解得出来的时候才有内容 —— 别的程序拖来的文本 / 前缀不对 / 整段坏掉时解出**空数组**，这一步什么都不做（拖拽失败没有按钮可灰着、也没有可交代的对象，如实登记）。这里是**第二道**：`AppState.dropNotes` 收到空清单直接返回，防别的调用路径把一次空写落到库上。"
+  },
+  {
+   "func": "autosaveNoteEditor",
+   "guard": "notesEnabled, noteEditorDirty, noteEditorHasContent",
+   "form": "internal",
+   "reason": "**不是按钮的前置判据**：这是**后台**的「停顿即存」（片 `N2-4`，任务 `t_b2a943b6`）—— 由停顿计时器那一发调它（`scheduleNoteAutoSave`），界面上没有对应的按钮可以灰着。三条守卫各自的处置：① 许可那一档 = 不写库（与 `saveNoteFromEditor` 读同一个 `notesEnabled`）；②③ 两条防的是「没动过 / 空编辑器也写一次」——**没有内容就不该凭空写出一条空笔记**。用户看得见的那一档（空编辑器上「保存」灰着）已经登记在同族的 `saveNoteFromEditor` 条目里（判据属性 `noteEditorHasContent` 是唯一出处）；工具条那一枚状态字画的是 `noteSaveState`，是**显示**不是可点入口。"
+  },
+  {
+   "func": "flushNoteAutosave",
+   "guard": "noteEditorDirty, noteEditorHasContent",
+   "form": "internal",
+   "reason": "**不是按钮的前置判据**：「切走即存」（片 `N2-4`，任务 `t_b2a943b6`）—— 点另一行（`handleNoteRowClick`）/ 换范围（`selectNotesScope`）/ 换模块（`setNotesModule`）/ 新建（`beginNewNote`）/ 进编辑（`edit(_:)`）这几个入口在改写编辑器内容**之前**先调它，把手上那份快照排进写库队列；它不是任何按钮的灰 / 亮判据。没有改动（或编辑器是空的）时**什么都不做**：这一条正是「别把一次空写落到库上」的那道闸 —— 与 `dropNotes` / `moveNotes` 同一条纪律（可点却静默无反应是缺陷；这里恰好相反：**没有可写的东西就不写**）。"
+  },
+  {
+   "func": "requestNoteRemoval",
+   "guard": "!ids.isEmpty",
+   "form": "view-disabled-local",
+   "view": "Plugins/Notes/Views/NotesPanel.swift",
+   "anchor": ".disabled(!hasDeletableSelection)",
+   "reason": "**删除先确认（片 `N2-9`，派单 `T-20261007-079` ② / `T-20261007-081`，提交 `53afa20`）**：笔记屏左区那枚「删」（`notes-delete`）在**没选中任何一行**时是**灰着**的 —— 判据属性 `hasDeletableSelection` 住在视图里（`NotesPanel.swift` 里：笔记 = 多选集合非空，待办 = 编辑器里那一条），视图侧 `.disabled(!hasDeletableSelection)` 就是这一档的处置，用字面锚点钉住它。`AppState` 这句 `guard !ids.isEmpty` 是**第二道**（与 `saveCurrentQuery` 同一档先例，只是这里连属性名都不是同一个）：笔记那一半在空集合上本来就没有可删的东西，`requestNoteRemoval` 只挂确认请求、不落库（N2-9 的落法：点删除 ⇒ 条目数不变，确认 ⇒ 才 `deleteNote` / `deleteTodo`）。同一函数里待办那一句是 `guard let id = todoEditingID else`（不含 `isEmpty`、不在扫描口径里），且待办编辑器那枚「删」**只在有目标时才画** —— 那是「够不着按钮」那一档；本条目只登记笔记这一半。"
+  },
+  {
+   "func": "requestClearQueryHistory",
+   "guard": "canClearQueryHistory",
+   "form": "view-disabled",
+   "predicate": "canClearQueryHistory",
+   "view": "App/Views/LowerPaneView.swift",
+   "reason": "**历史页签的「清空」（片 `HIST-2` / 派单 `T-20261009-018`、`T-20261009-010`）**：历史为空时那枚「清空」**灰着** —— 空列表上「清空」没有可落的动作。判据属性 `canClearQueryHistory` 在 `AppState` 里**只定义一次**（体 = `!queryHistory.isEmpty`），守卫（`requestClearQueryHistory`）与视图侧 `.disabled(!appState.canClearQueryHistory)` 读的是**同一条判断**；视图不许再自己写一遍 `queryHistory.isEmpty`。同一条路也是工具条时钟菜单那一项的清空入口（`FR-STD-ALL-DATA-002`：可清空）—— 两处都在**确认框**之后才落库。"
+  },
+  {
+   "func": "saveAgentConfiguration",
+   "guard": "!endpoint.isEmpty, URL(string: endpoint) != nil, !model.isEmpty",
+   "form": "internal",
+   "reason": "端点/模型没配 ⇒ 派生 `.notConfigured`（**不是在拦某个按钮**：判据属性 `agentChatEndpointState` 由 `DoyahStudioApp` 当 `endpointProvider` 交给对话区如实呈现「未配置」，发送路径在同一条判据上如实拦——`App/AppState.swift:2871` 造不出循环就返回 nil，不假装在跑）。台账归属名沿用判据的机械归属（往上找最近 `func` = `saveAgentConfiguration`）；实际定义处是同一类型里的 计算属性 `agentChatEndpointState`（L2857）。"
+  },
+  {
+   "func": "tickAgentSchedules",
+   "guard": "!agentSchedules.isEmpty",
+   "form": "internal",
+   "reason": "定时 agent 的 tick 入口（`FR-AGT-TOOL-SCHED-002`）：一条 schedule 都没有时直接返回，没有按钮入口 —— 由 ticker 调用；空态在「定时 agent」面板里另有说明。"
+  },
+  {
+   "func": "saveAgentRuntimeConfig",
+   "guard": "!edits.isEmpty",
+   "form": "internal",
+   "reason": "保存运行策略的内部守卫：一条都没有改动就**不写盘**、也不留空留痕（面板回一句「没有改动」）。按钮本身照常可点（`FR-AGT-OPS-OBS-002`：用户按下去才知道「确实没改」，灰着反而让人怀疑是不是没保存），所以它不是「空数据按钮」那一类。"
+  }
+ ]
 }

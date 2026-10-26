@@ -101,6 +101,24 @@ public struct AgentConfigStore: Sendable {
     /// 下一跳要用的快照（就是改动后的那一个 —— 立即生效，不许等重启）。
     public var appliedSnapshot: AgentConfigSnapshot { snapshot }
 
+    /// 盘上那份留痕接回来（`AgentRuntimeConfigFile.load` 用；它不是「新改动」，所以不经 `apply`）。
+    ///
+    /// 落在这里而不是扩展里：`changes` 的 setter 是**文件私有**的，别处的扩展动不了它。
+    public mutating func adoptHistory(_ history: [AgentConfigChange]) {
+        for change in history where !changes.contains(change) {
+            changes.append(change)
+        }
+    }
+
+    /// **整份替换**留痕（载入路径专用）。
+    ///
+    /// 为什么需要它：`AgentRuntimeConfigFile.load` 会把盘上那六项过一遍 `apply` 去校验
+    /// （范围规则只有一处），那六条带 `load-validation` 理由的记录是**临时脚手架** ——
+    /// 留在留痕里就成了「每开一次 App 就多六条假改动」，用户看到的审计是假的。
+    public mutating func replaceHistory(with history: [AgentConfigChange]) {
+        changes = history
+    }
+
     private func integer(key: String, value: String, range: ClosedRange<Int>, allowed: String) throws -> Int {
         guard let n = Int(value), range.contains(n) else {
             throw AgentConfigError.outOfRange(key: key, value: value, allowed: allowed)
