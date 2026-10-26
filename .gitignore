@@ -140,3 +140,5 @@ platform/linux/dist-packages/
 *.pyc
 __pycache__/
 !/Docs/模块化需求清单说明.md
+!/Docs/changelog/
+!/Docs/changelog/**
