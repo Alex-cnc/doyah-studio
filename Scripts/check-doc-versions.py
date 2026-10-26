@@ -80,8 +80,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # 带「变更记录 + 头部版本格」的文档：True = 必须存在（三书），False = 在盘上才查。
 VERSION_DOCS = [
-    ("Docs/Doyah产品需求规格说明书.md",
-    "Docs/Doyah项目开发规范.md", True),
+    ("Docs/Doyah产品需求规格说明书.md", True),
+    # 2026-10-26：规范分两层（通用开发规范 + 项目开发规范），项目那份也带版本头与变更记录。
+    ("Docs/Doyah项目开发规范.md", True),
     ("Docs/Doyah产品开发计划任务清单-macOS端.md", True),
     ("Docs/Doyah产品能力规划说明书.md", True),
     ("Docs/Doyah产品概要设计说明书.md", True),
