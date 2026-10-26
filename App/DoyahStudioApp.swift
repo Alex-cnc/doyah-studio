@@ -148,6 +148,10 @@ struct DoyahStudioApp: App {
                     agentChat.systemNotificationsEnabledProvider = {
                         appState.agentRuntimeConfig.snapshot.notificationsEnabled
                     }
+                    // ③ 显示开关（`FR-AGT-UX-CONV-012`）：运行中提交按「打断 / 排队」分流 ——
+                    //    每轮现读，面板上改完立刻生效。
+                    agentChat.displayPreferencesProvider = { appState.agentDisplayPreferences }
+                    appState.loadAgentDisplayPreferencesIfNeeded()
                     agentChat.dailyQuotaCheck = { appState.agentDailyQuotaVerdict() }
                     agentChat.dailyUsageRecorder = { tokens in
                         appState.recordAgentDailyTokens(tokens)

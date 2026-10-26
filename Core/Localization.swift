@@ -2754,6 +2754,38 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentClaimSummaryLine
     case agentClaimWithheldTitle
     case agentClaimWithheldBody
+
+    // 九个显示开关（FR-AGT-UX-CONV-012）：面板标签、取值域选项、拒绝与降级的一句话。
+    // 键名与取值域在 Core/AgentDisplayPreferences.swift（跨端同源），这里只管文案。
+    case agentDisplaySection
+    case agentDisplayHint
+    case agentDisplayStreaming
+    case agentDisplayCompact
+    case agentDisplayThinking
+    case agentDisplayTimestamps
+    case agentDisplayToolProgress
+    case agentDisplayIndicatorGlyph
+    case agentDisplayLongPreview
+    case agentDisplayBottomBarMeta
+    case agentDisplaySubmitWhileRunning
+    case agentDisplayValueOn
+    case agentDisplayValueOff
+    case agentDisplayProgressAll
+    case agentDisplayProgressSummary
+    case agentDisplayProgressOff
+    case agentDisplayGlyphEmoji
+    case agentDisplayGlyphUnicode
+    case agentDisplayGlyphAscii
+    case agentDisplaySubmitInterrupt
+    case agentDisplaySubmitQueue
+    case agentDisplayPreviewOff
+    case agentDisplayPreviewHeadTail
+    case agentDisplayResetDefaults
+    case agentChatToolCallsOnly
+    case agentDisplayUnknownKey
+    case agentDisplayInvalidValue
+    case agentDisplayDegradedKey
+    case agentDisplayDegradedFile
 }
 
 public enum LocalizedStrings {
@@ -2796,6 +2828,42 @@ public enum LocalizedStrings {
                                     .english: "Some claims in this answer have no source"],
         .agentClaimWithheldBody: [.simplifiedChinese: "%ld 条结论没有出处，已从交付内容里摘掉（仍列在这里供你复核）",
                                    .english: "%ld claims had no source and were removed from the deliverable (still listed here for review)"],
+
+        // 九个显示开关（FR-AGT-UX-CONV-012）。
+        .agentDisplaySection: [.simplifiedChinese: "显示", .english: "Display"],
+        .agentDisplayHint: [.simplifiedChinese: "九个开关与其它端同名同默认：改一项立刻生效并保存，重启后保持。",
+                            .english: "These nine switches use the same keys and defaults on every platform: each change applies at once and survives a restart."],
+        .agentDisplayStreaming: [.simplifiedChinese: "流式输出", .english: "Streaming output"],
+        .agentDisplayCompact: [.simplifiedChinese: "紧凑模式", .english: "Compact mode"],
+        .agentDisplayThinking: [.simplifiedChinese: "显示思考段", .english: "Show thinking"],
+        .agentDisplayTimestamps: [.simplifiedChinese: "时间戳", .english: "Timestamps"],
+        .agentDisplayToolProgress: [.simplifiedChinese: "工具进度", .english: "Tool progress"],
+        .agentDisplayIndicatorGlyph: [.simplifiedChinese: "状态指示字形", .english: "Status indicator glyph"],
+        .agentDisplayLongPreview: [.simplifiedChinese: "长消息预览", .english: "Long message preview"],
+        .agentDisplayBottomBarMeta: [.simplifiedChinese: "运行底栏元数据", .english: "Run footer metadata"],
+        .agentDisplaySubmitWhileRunning: [.simplifiedChinese: "运行中提交", .english: "Submit while running"],
+        .agentDisplayValueOn: [.simplifiedChinese: "开", .english: "On"],
+        .agentDisplayValueOff: [.simplifiedChinese: "关", .english: "Off"],
+        .agentDisplayProgressAll: [.simplifiedChinese: "全部", .english: "All"],
+        .agentDisplayProgressSummary: [.simplifiedChinese: "摘要", .english: "Summary"],
+        .agentDisplayProgressOff: [.simplifiedChinese: "关", .english: "Off"],
+        .agentDisplayGlyphEmoji: [.simplifiedChinese: "表情字形", .english: "Emoji"],
+        .agentDisplayGlyphUnicode: [.simplifiedChinese: "Unicode 字形", .english: "Unicode"],
+        .agentDisplayGlyphAscii: [.simplifiedChinese: "ASCII 字形", .english: "ASCII"],
+        .agentDisplaySubmitInterrupt: [.simplifiedChinese: "打断（先停后发）", .english: "Interrupt (stop, then send)"],
+        .agentDisplaySubmitQueue: [.simplifiedChinese: "排队（这一轮结束后接着跑）", .english: "Queue (run after this turn)"],
+        .agentDisplayPreviewOff: [.simplifiedChinese: "关", .english: "Off"],
+        .agentDisplayPreviewHeadTail: [.simplifiedChinese: "首 %ld 末 %ld 行", .english: "first %ld, last %ld lines"],
+        .agentDisplayResetDefaults: [.simplifiedChinese: "恢复默认", .english: "Restore defaults"],
+        .agentChatToolCallsOnly: [.simplifiedChinese: "调用 %ld 次", .english: "%ld tool calls"],
+        .agentDisplayUnknownKey: [.simplifiedChinese: "没有这个显示开关：%@（未做任何改动）",
+                                  .english: "No such display switch: %@ (nothing was changed)"],
+        .agentDisplayInvalidValue: [.simplifiedChinese: "「%@」的值 %@ 不在取值域里（允许：%@）",
+                                    .english: "“%@” = %@ is not allowed (allowed: %@)"],
+        .agentDisplayDegradedKey: [.simplifiedChinese: "盘上「%@」这一项读不出来，已按默认值显示；其余开关照常。",
+                                   .english: "Could not read “%@” from disk; showing the default for it, other switches unaffected."],
+        .agentDisplayDegradedFile: [.simplifiedChinese: "盘上那份显示开关读不出来（%@），已按默认值显示。",
+                                    .english: "Could not read the display switches file (%@); showing defaults."],
 
         .menuNewQuery: [.simplifiedChinese: "新建查询", .english: "New Query"],
         .menuLanguage: [.simplifiedChinese: "语言", .english: "Language"],

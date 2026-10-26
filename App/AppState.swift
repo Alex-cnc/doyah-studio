@@ -4130,6 +4130,76 @@ final class AppState: ObservableObject {
         return (reading.tokens, agentRuntimeConfig.snapshot.dailyTokenQuota, reading.degraded)
     }
 
+    // MARK: - 显示开关（`FR-AGT-UX-CONV-012`：九项、改一项立刻生效并落盘）
+
+    /// 九个开关在盘上的那一份（与其余本机数据同一目录）。
+    private var agentDisplayPreferencesFile: AgentDisplayPreferencesFile {
+        AgentDisplayPreferencesFile(directory: AgentSessionStore.defaultDirectory)
+    }
+
+    /// 进程内那一份。**视图直接读它**：改一项立刻换值 ⇒ 这一屏下一次重绘就是新形态
+    /// （契约①「立即生效」；不需要重启、也不需要重建会话）。
+    @Published private(set) var agentDisplayPreferences = AgentDisplayPreferences()
+    /// 盘上那份的载入结论（面板照实说一句「哪一项读不出来、已按默认值」）。
+    @Published private(set) var agentDisplayPreferencesState: AgentDisplayPreferencesFile.LoadState = .fresh
+    private var agentDisplayPreferencesLoaded = false
+
+    /// 读一次盘（幂等；面板打开与对话页首次出现时都会调）。
+    func loadAgentDisplayPreferencesIfNeeded() {
+        guard !agentDisplayPreferencesLoaded else { return }
+        agentDisplayPreferencesLoaded = true
+        let loaded = agentDisplayPreferencesFile.load()
+        agentDisplayPreferences = loaded.preferences
+        agentDisplayPreferencesState = loaded.state
+    }
+
+    enum AgentDisplaySaveResult: Equatable {
+        case saved
+        /// 被拒（一句人话：哪个键、给了什么、允许什么）。
+        case rejected(String)
+    }
+
+    /// 改一项：**校验 → 落盘 → 换内存那份**。顺序是刻意的 ——
+    /// 先写盘后校验会让非法值留在盘上，下次启动就带着一份坏配置起来。
+    ///
+    /// 显示开关**不要理由、不留改动史**（与运行策略的差别写在 `AgentDisplayPreferences` 的注释里）：
+    /// 它只改变「看起来什么样」，把观感改动也塞进审计会把真审计淹掉。
+    func setAgentDisplay(key: AgentDisplayKey, value: String) -> AgentDisplaySaveResult {
+        loadAgentDisplayPreferencesIfNeeded()
+        var next = agentDisplayPreferences
+        do {
+            try next.apply(key: key.rawValue, value: value)
+        } catch let error as AgentDisplayError {
+            return .rejected(AgentDisplayRejectionText.line(for: error,
+                                                            language: LocalizationManager.shared.effectiveLanguage))
+        } catch {
+            return .rejected(ErrorPresenter.message(for: error))
+        }
+        do {
+            try agentDisplayPreferencesFile.save(next)
+            agentDisplayPreferences = next
+            agentDisplayPreferencesState = .loaded
+            return .saved
+        } catch {
+            // 写不进去就**不换内存那份**：界面看到的必须与盘上一致，
+            // 否则「重启后保持」这条会变成「这次看着生效了、下次没了」。
+            return .rejected(ErrorPresenter.message(for: error))
+        }
+    }
+
+    /// 把九项一次恢复到契约默认（面板上「恢复默认」那一下）。
+    func resetAgentDisplayPreferences() -> AgentDisplaySaveResult {
+        loadAgentDisplayPreferencesIfNeeded()
+        do {
+            try agentDisplayPreferencesFile.save(.contractDefaults)
+            agentDisplayPreferences = .contractDefaults
+            agentDisplayPreferencesState = .loaded
+            return .saved
+        } catch {
+            return .rejected(ErrorPresenter.message(for: error))
+        }
+    }
+
     /// 表清单外发上限（防止把上千张表发出去）。
     static let agentTableListLimit = 60
     /// 列信息外发总量上限（按列累计，超出后的表只发表名）。

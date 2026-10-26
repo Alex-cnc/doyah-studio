@@ -69,6 +69,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     var dailyUsageRecorder: ((Int) -> Void)?
     /// 文案语言（界面语言，缺省跟随本机语言设置）。
     var languageProvider: () -> AppLanguage = { LocalizationManager.shared.effectiveLanguage }
+    /// **显示开关的真值源**（`FR-AGT-UX-CONV-012`）：宿主每次现读 ⇒ 面板上改一项，
+    /// 下一次按发送 / 下一次重绘就按新的来（不必重启）。缺省 = 契约默认那一份。
+    var displayPreferencesProvider: () -> AgentDisplayPreferences = { AgentDisplayPreferences() }
 
     /// 页内提示条（通知那一格的**可见**出口；`nil` = 没有要说的）。
     @Published private(set) var notifyBanner: AgentNotification?
@@ -315,10 +318,19 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             await perform(effect)
             return
         }
-        // **一轮还在跑时提交的提问不丢、也不打断**：排进队列，这一轮结束后按序接着跑
+        // **一轮还在跑时提交的提问不丢**：排进队列，这一轮结束后按序接着跑
         // （Hermes CLI 的 `/queue` 同义；这里用界面表达，不要求用户记斜杠命令）。
+        //
+        // 两种处置由显示开关「运行中提交」定（`FR-AGT-UX-CONV-012` ⑨）：
+        // · **打断（契约默认）= 先停后发**：先把在跑的这一轮停掉，这条排进队列 ——
+        //   停稳之后 `finish` 会 `drainQueue` 把它接着跑起来；
+        // · **排队**：不动在跑的那一轮，只把这条排进去。
+        // 两条路**都进队列**（提问不许因为「正在跑」被吞掉），差别只在要不要先停。
         if state.isRunning {
             guard queue.enqueue(prompt) != nil else { return }
+            if AgentDisplayProjection.abortsInFlightBeforeSending(displayPreferencesProvider()) {
+                stop()
+            }
             input = ""
             return
         }

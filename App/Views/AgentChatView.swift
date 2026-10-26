@@ -65,6 +65,9 @@ struct AgentChatView: View {
     @State private var copiedMessageID: UUID?
     /// 被收起的过程块（按过程消息的 id；**缺省是展开 `▼`** —— 收起的是「看过了」的那几块）。
     @State private var collapsedToolBlocks: Set<UUID> = []
+    /// **显式展开**过的工具块（`FR-AGT-UX-CONV-012` 的紧凑 / 摘要档把默认形态改成「收起」，
+    /// 于是「点开过」也必须记下来 —— 否则点开一下、下一次重绘又收回去，等于点不动）。
+    @State private var expandedToolBlocks: Set<UUID> = []
 
     private var transcript: some View {
         // **跟着最新内容走**（人类主人 2026-10-17 实机反馈：「对话框不自动滚动到最新位置，要手工拖动」）。
@@ -72,7 +75,9 @@ struct AgentChatView: View {
         // 卡片新增，任何一种都会让读数变大 ⇒ 一次滚动跟随；只在**内容真的变了**时动手，不空转。
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: Spacing.xs) {
+                // 块间距跟「紧凑模式」（`FR-AGT-UX-CONV-012` ②）：紧档用发丝间距。
+                LazyVStack(alignment: .leading,
+                           spacing: appState.agentDisplayPreferences.compact ? Spacing.hair : Spacing.xs) {
                     // **空态**（§9.1.16 ⑦）：新会话一片空白时，给一句能直接发出去的起手话。
                     // 空白屏不是「干净」，是「不知道该说什么」—— 别的区域都有空态，这里不该例外。
                     if AgentChatEmptyStateGate.shouldShow(messageCount: model.messages.count,
@@ -309,6 +314,11 @@ struct AgentChatView: View {
                 Spacer(minLength: 0)
             }
         case .assistant:
+            // **流式输出 = 关 ⇒ 收齐再显示**（`FR-AGT-UX-CONV-012`）：这一条还在收的时候
+            // 一行都不画（不出半截正文再换成全文 —— 那会让人以为自己读过了）。
+            if message.isStreaming && !appState.agentDisplayPreferences.streaming {
+                EmptyView()
+            } else {
             // **正文按 Markdown 渲染**（§5.3.8）：解析只走契约层 `MarkdownDocument`，
             // 呈现换成一份等宽口径 —— 绝不再把 `**粗体**` / ```` ```lang ```` 的源码直出。
             // 行首栏**不给字形**：助手正文顶格起（§5.3.8.1 ② 的表里只有用户行与工具行有字形）。
@@ -343,6 +353,7 @@ struct AgentChatView: View {
                 if !message.isStreaming {
                     messageActions(message)
                 }
+            }
             }
         case .tool:
             // 工具调用 = **一组过程块**（§5.3.8.1 ②）：折叠头 `└─ ▼`，条目 `├─ ⏺` / `└─ ⏺`。
@@ -396,22 +407,46 @@ struct AgentChatView: View {
     @ViewBuilder
     private func toolBlock(_ message: AgentChatMessage) -> some View {
         let rows = AgentToolLines.rows(message.text)
-        let expanded = !collapsedToolBlocks.contains(message.id)
         let rawLines = message.text.components(separatedBy: "\n")
+        let count = rows.isEmpty ? rawLines.count : rows.count
+        let display = appState.agentDisplayPreferences
+        // **默认形态由显示开关定**（`FR-AGT-UX-CONV-012`）：
+        // · 紧凑模式 / 摘要档 ⇒ 默认收起（否则「摘要」这个词没有落点）；
+        // · 其余 ⇒ 默认展开（老形态）。
+        // 用户点过就以点过的为准 —— 显式收起 / 显式展开各记一个集合。
+        let defaultExpanded = !(display.compact || display.toolProgress == .summary)
+        let expanded = expandedToolBlocks.contains(message.id)
+            ? true
+            : (collapsedToolBlocks.contains(message.id) ? false : defaultExpanded)
 
+        if display.toolProgress == .off {
+            // 「工具进度 = 关」：只留「调用 N 次」—— **不给折叠头**（给了就等于留了个能展开的口子）。
+            HStack(spacing: Spacing.s) {
+                Text("▸")
+                    .font(Self.transcriptFont)
+                    .foregroundStyle(Theme.text(.tertiary))
+                Text(L(.agentChatToolCallsOnly, Int64(count)))
+                    .font(Self.transcriptFont)
+                    .foregroundStyle(Theme.text(.secondary))
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
         VStack(alignment: .leading, spacing: Spacing.hair) {
             Button {
                 if expanded {
                     collapsedToolBlocks.insert(message.id)
+                    expandedToolBlocks.remove(message.id)
                 } else {
                     collapsedToolBlocks.remove(message.id)
+                    expandedToolBlocks.insert(message.id)
                 }
             } label: {
                 HStack(spacing: Spacing.s) {
                     Text(expanded ? "└─ ▼" : "└─ ▶")
                         .font(Self.transcriptFont)
                         .foregroundStyle(Theme.text(.secondary))
-                    Text(L(.agentChatToolBlockTitle) + " (" + String(rows.isEmpty ? rawLines.count : rows.count) + ")")
+                    Text(L(.agentChatToolBlockTitle) + " (" + String(count) + ")")
                         .font(Self.transcriptFont)
                         .foregroundStyle(Theme.text(.secondary))
                     Spacer(minLength: 0)
@@ -440,6 +475,7 @@ struct AgentChatView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     /// 一条工具条目：`├─ ⏺ <名>("<参数摘要>") (<耗时>s)`（末条用 `└─`）。

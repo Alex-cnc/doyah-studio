@@ -44,6 +44,8 @@ struct AgentSettingsSheet: View {
     @State private var runtimeReason = ""
     /// 上一次保存 / 被拒的一句话结论。
     @State private var runtimeLine: String?
+    /// 显示开关那一下的结论（改了立刻落盘，被拒时在这里说一句；`nil` = 没话要说）。
+    @State private var displayLine: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
@@ -218,6 +220,93 @@ struct AgentSettingsSheet: View {
                     }
                 }
 
+                // **显示开关**（`FR-AGT-UX-CONV-012` 九个，跨端同名同默认）：
+                // 每一项**改完立刻生效并落盘**（与运行策略不同 —— 那边要理由、要批量原子校验）。
+                // 这里不收理由：观感开关塞进审计会把真正的审计淹掉。
+                Section(L(.agentDisplaySection)) {
+                    Text(L(.agentDisplayHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+
+                    Toggle(isOn: displayToggle(.streaming)) {
+                        Label(L(.agentDisplayStreaming), systemImage: "text.line.last.and.arrowtriangle.forward")
+                    }
+                    .help(L(.agentDisplayStreaming))
+                    .accessibilityLabel(Text(L(.agentDisplayStreaming)))
+
+                    Toggle(isOn: displayToggle(.compact)) {
+                        Label(L(.agentDisplayCompact), systemImage: "rectangle.compress.vertical")
+                    }
+                    .help(L(.agentDisplayCompact))
+                    .accessibilityLabel(Text(L(.agentDisplayCompact)))
+
+                    Toggle(isOn: displayToggle(.thinking)) {
+                        Label(L(.agentDisplayThinking), systemImage: "brain")
+                    }
+                    .help(L(.agentDisplayThinking))
+                    .accessibilityLabel(Text(L(.agentDisplayThinking)))
+
+                    Toggle(isOn: displayToggle(.timestamps)) {
+                        Label(L(.agentDisplayTimestamps), systemImage: "clock")
+                    }
+                    .help(L(.agentDisplayTimestamps))
+                    .accessibilityLabel(Text(L(.agentDisplayTimestamps)))
+
+                    Picker(L(.agentDisplayToolProgress), selection: displayToolProgress) {
+                        ForEach(AgentToolProgressMode.allCases, id: \.self) { mode in
+                            Text(toolProgressLabel(mode)).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker(L(.agentDisplayIndicatorGlyph), selection: displayGlyph) {
+                        ForEach(AgentIndicatorGlyph.allCases, id: \.self) { style in
+                            Text(glyphLabel(style)).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker(L(.agentDisplayLongPreview), selection: displayLongPreview) {
+                        Text(L(.agentDisplayPreviewOff)).tag(AgentLongMessagePreview.off)
+                        ForEach(Self.previewChoices, id: \.self) { choice in
+                            Text(L(.agentDisplayPreviewHeadTail,
+                                   Int64(choice.edges?.head ?? 0),
+                                   Int64(choice.edges?.tail ?? 0))).tag(choice)
+                        }
+                    }
+
+                    Toggle(isOn: displayToggle(.bottomBarMeta)) {
+                        Label(L(.agentDisplayBottomBarMeta), systemImage: "rectangle.bottomthird.inset.filled")
+                    }
+                    .help(L(.agentDisplayBottomBarMeta))
+                    .accessibilityLabel(Text(L(.agentDisplayBottomBarMeta)))
+
+                    Picker(L(.agentDisplaySubmitWhileRunning), selection: displaySubmitWhileRunning) {
+                        ForEach(AgentSubmitWhileRunning.allCases, id: \.self) { mode in
+                            Text(submitLabel(mode)).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    HStack(spacing: Spacing.s) {
+                        Button(L(.agentDisplayResetDefaults)) { resetAgentDisplay() }
+                            .buttonStyle(.bordered)
+                        if let displayLine {
+                            Text(displayLine)
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else if case let .degraded(reason) = appState.agentDisplayPreferencesState {
+                            Text(AgentDisplayRejectionText.degradedLine(
+                                reason: reason,
+                                language: LocalizationManager.shared.effectiveLanguage))
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.status(.warning))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+
                 Section(L(.agentAPIKey)) {
                     SecureField(L(.agentAPIKey), text: $apiKeyInput)
                     Text(appState.hasAgentAPIKey ? L(.agentAPIKeyConfigured) : L(.agentAPIKeyMissing))
@@ -320,6 +409,9 @@ struct AgentSettingsSheet: View {
             runtimeDraft = AgentRuntimeConfigDraft(snapshot: appState.agentRuntimeConfig.snapshot)
             runtimeReason = ""
             runtimeLine = AgentConfigRejectionText.degradedLine(for: appState.agentRuntimeConfigState)
+            // 显示开关（`FR-AGT-UX-CONV-012`）：读盘一次并回填 —— 重开面板显示的是
+            // **盘上生效的那份**，不是契约默认值（否则用户一开面板就以为自己设的被清了）。
+            appState.loadAgentDisplayPreferencesIfNeeded()
         }
         .sheet(isPresented: $showsMCPServers) {
             MCPServersSheet()
@@ -503,6 +595,92 @@ struct AgentSettingsSheet: View {
             runtimeDraft = AgentRuntimeConfigDraft(snapshot: appState.agentRuntimeConfig.snapshot)
         case .rejected(let reason):
             runtimeLine = L(.agentRuntimeRejected, reason)
+        }
+    }
+
+    // MARK: - 显示开关（`FR-AGT-UX-CONV-012`）
+
+    /// 面板上「长消息预览」那几个可选行数对（契约默认 2+2 在第一位）。
+    static let previewChoices: [AgentLongMessagePreview] = [
+        .headTail(head: 2, tail: 2),
+        .headTail(head: 3, tail: 3),
+        .headTail(head: 5, tail: 5),
+    ]
+
+    /// 布尔开关 → 绑定：**改一下就直接落盘**（不攒草稿、不要理由）。
+    /// 写失败时把一句人话留在 `displayLine`，并**不换内存那份**（界面与盘上必须一致）。
+    private func displayToggle(_ key: AgentDisplayKey) -> Binding<Bool> {
+        Binding(
+            get: {
+                switch key {
+                case .streaming: return appState.agentDisplayPreferences.streaming
+                case .compact: return appState.agentDisplayPreferences.compact
+                case .thinking: return appState.agentDisplayPreferences.thinking
+                case .timestamps: return appState.agentDisplayPreferences.timestamps
+                case .bottomBarMeta: return appState.agentDisplayPreferences.bottomBarMeta
+                case .toolProgress, .indicatorGlyph, .longPreview, .submitWhileRunning: return false
+                }
+            },
+            set: { newValue in
+                applyDisplay(key: key, value: newValue ? "on" : "off")
+            }
+        )
+    }
+
+    private var displayToolProgress: Binding<AgentToolProgressMode> {
+        Binding(get: { appState.agentDisplayPreferences.toolProgress },
+                set: { applyDisplay(key: .toolProgress, value: $0.rawValue) })
+    }
+
+    private var displayGlyph: Binding<AgentIndicatorGlyph> {
+        Binding(get: { appState.agentDisplayPreferences.indicatorGlyph },
+                set: { applyDisplay(key: .indicatorGlyph, value: $0.rawValue) })
+    }
+
+    private var displayLongPreview: Binding<AgentLongMessagePreview> {
+        Binding(get: { appState.agentDisplayPreferences.longPreview },
+                set: { applyDisplay(key: .longPreview, value: $0.canonicalValue) })
+    }
+
+    private var displaySubmitWhileRunning: Binding<AgentSubmitWhileRunning> {
+        Binding(get: { appState.agentDisplayPreferences.submitWhileRunning },
+                set: { applyDisplay(key: .submitWhileRunning, value: $0.rawValue) })
+    }
+
+    private func applyDisplay(key: AgentDisplayKey, value: String) {
+        switch appState.setAgentDisplay(key: key, value: value) {
+        case .saved: displayLine = nil
+        case let .rejected(line): displayLine = line
+        }
+    }
+
+    private func resetAgentDisplay() {
+        switch appState.resetAgentDisplayPreferences() {
+        case .saved: displayLine = nil
+        case let .rejected(line): displayLine = line
+        }
+    }
+
+    private func toolProgressLabel(_ mode: AgentToolProgressMode) -> String {
+        switch mode {
+        case .all: return L(.agentDisplayProgressAll)
+        case .summary: return L(.agentDisplayProgressSummary)
+        case .off: return L(.agentDisplayProgressOff)
+        }
+    }
+
+    private func glyphLabel(_ style: AgentIndicatorGlyph) -> String {
+        switch style {
+        case .emoji: return L(.agentDisplayGlyphEmoji)
+        case .unicode: return L(.agentDisplayGlyphUnicode)
+        case .ascii: return L(.agentDisplayGlyphAscii)
+        }
+    }
+
+    private func submitLabel(_ mode: AgentSubmitWhileRunning) -> String {
+        switch mode {
+        case .interrupt: return L(.agentDisplaySubmitInterrupt)
+        case .queue: return L(.agentDisplaySubmitQueue)
         }
     }
 
