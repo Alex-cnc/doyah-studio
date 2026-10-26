@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """《任务清单 · 按平台》的派生计数判据（派单 `T-20261014-025` · 人类主人令 2026-10-14）。
 
-为什么有这条判据：`Docs/任务清单-按平台.md` 是**派生视图**（人读的完成度面），真值源 =
+为什么有这条判据：`.build/derived/任务清单-按平台.md` 是**派生视图**（人读的完成度面），真值源 =
 《开发计划书》§5 平台等价矩阵（由 `Scripts/gen-platform-parity.py` 机械生成；2026-10-20 从
 SRS §10.10 迁来）+ `Docs/平台实现状态.json` + 需求编号索引（`Doyah产品需求规格说明书-需求索引.md`，
 macOS 状态在计划书 §3 台账）。派生视图的通病是「真值改了、视图没跟」—— 而它**恰恰是人看的那一面**
@@ -57,7 +57,7 @@ import tempfile
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
 SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
-BOARD = ROOT / "Docs/任务清单-按平台.md"
+BOARD = ROOT / ".build/derived/任务清单-按平台.md"
 PARITY = pathlib.Path(__file__).with_name("gen-platform-parity.py")
 SCRIPT = pathlib.Path(__file__).resolve()
 
@@ -557,7 +557,7 @@ def run_script(root: pathlib.Path, argv: list[str]) -> subprocess.CompletedProce
 
 def build_cases() -> list[dict]:
     """15 例：14 条负例（各形一处写坏必须判红）+ 1 条未改动的对照绿。"""
-    board = pathlib.Path("Docs/任务清单-按平台.md")
+    board = pathlib.Path(".build/derived/任务清单-按平台.md")
     srs = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
 
     def edit_board(old: str, new: str, count: int = 1):

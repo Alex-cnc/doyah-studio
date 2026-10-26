@@ -99,7 +99,6 @@ DEFAULT_TARGETS = [
     "Docs/frozen/Doyah产品需求规格说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品概要设计说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品详细设计说明书-macOS-v1.0-20261025.md",
-    "Docs/Doyah产品macOS端-版本里程碑与开发任务清单-v1.0-20261025.md",
     "Docs/功能清单（一页纸）.md",
     "Docs/功能清单（管理视图）.md",
     "Docs/Doyah产品需求规格说明书.md",
@@ -123,10 +122,6 @@ DEFAULT_TARGETS = [
     # 2026-10-23：macOS 端开发计划书（有表格 ⇒ 进受检；本端执行计划，不改状态源）
     "Docs/Doyah产品开发计划任务清单-macOS端.md",
     # 2026-10-26：任务清单按端分册（人类主人令：不设产品级总单）
-    "Docs/Doyah产品开发计划任务清单-Windows端.md",
-    "Docs/Doyah产品开发计划任务清单-Linux端.md",
-    "Docs/Doyah产品开发计划任务清单-HarmonyOS端.md",
-    "Docs/Doyah产品开发计划任务清单-iOS端.md",
     "Docs/Doyah产品开发计划任务清单-安卓端.md",
     "Docs/发布方案.md",
     "Docs/手工验收运行手册.md",
@@ -142,7 +137,6 @@ DEFAULT_TARGETS = [
     # 2026-10-14 · 派单 `T-20261014-025`（人类主人令 2026-10-14 追问「怎么到现在你还没有 macOS 的任务清单？」）：
     # 派生视图《任务清单 · 按平台》入库（`.gitignore` 白名单 + 本清单 + 闭环第 7 项
     # `Scripts/check-board-parity.py`）；被 `.gitignore` 排除的仍是 12 份（它是入库件）。
-    "Docs/任务清单-按平台.md",
     "Docs/design/开发循环-任务队列.md",
     # L-130（2026-09-30）：三仓统一待拍板台账（本机台账，`.gitignore` 排除）
     "Docs/design/待拍板台账-三仓.md",
@@ -885,7 +879,6 @@ SELF_TEST_TRACKED = [
     "Docs/proposals/_TEMPLATE.md",
     "Docs/智能体助手-开发规范.md",
     "Docs/平台对齐-Studio-Windows对macOS.md",
-    "Docs/任务清单-按平台.md",
     "Docs/智能体助手-核心能力扩展-草案-v0.1.md",
     "Docs/Doyah产品需求规格说明书-变更记录.md",
     # 2026-10-26 补：v1.0 冻结副本四份 + 里程碑任务清单已入 DEFAULT_TARGETS 并入库（此前漏登记，
@@ -894,11 +887,6 @@ SELF_TEST_TRACKED = [
     "Docs/frozen/Doyah产品需求规格说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品概要设计说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品详细设计说明书-macOS-v1.0-20261025.md",
-    "Docs/Doyah产品macOS端-版本里程碑与开发任务清单-v1.0-20261025.md",
-    "Docs/Doyah产品开发计划任务清单-iOS端.md",
-    "Docs/Doyah产品开发计划任务清单-Windows端.md",
-    "Docs/Doyah产品开发计划任务清单-Linux端.md",
-    "Docs/Doyah产品开发计划任务清单-HarmonyOS端.md",
 ]
 
 SELF_TEST_ABSENT = [

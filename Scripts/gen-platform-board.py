@@ -48,7 +48,7 @@ import doc_index  # noqa: E402  （派生件位置：.build/derived；缺文件�
 import tempfile
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
-BOARD = ROOT / "Docs/任务清单-按平台.md"
+BOARD = ROOT / ".build/derived/任务清单-按平台.md"
 PARITY = pathlib.Path(__file__).with_name("gen-platform-parity.py")
 SCRIPT = pathlib.Path(__file__).resolve()
 
@@ -369,7 +369,7 @@ def _must(condition: bool, message: str) -> None:
 
 def _edit_board(old: str, new: str, count: int = 1):
     def setup(root: pathlib.Path) -> None:
-        path = root / "Docs/任务清单-按平台.md"
+        path = root / ".build/derived/任务清单-按平台.md"
         text = path.read_text(encoding="utf-8")
         if old not in text:
             raise AssertionError(f"夹具目标 {old!r} 不在看板里")
@@ -391,13 +391,13 @@ def _flip_ledger(setting: str):
 
 def build_cases() -> list[dict]:
     def drop_section(root: pathlib.Path) -> None:
-        path = root / "Docs/任务清单-按平台.md"
+        path = root / ".build/derived/任务清单-按平台.md"
         lines = [line for line in path.read_text(encoding="utf-8").splitlines(keepends=True)
                  if not line.startswith("## 4. ")]
         path.write_text("".join(lines), encoding="utf-8")
 
     def blank_section_two(root: pathlib.Path) -> None:
-        path = root / "Docs/任务清单-按平台.md"
+        path = root / ".build/derived/任务清单-按平台.md"
         text = path.read_text(encoding="utf-8")
         start = text.index("## 2. ")
         stop = text.index("## 3. ")
@@ -448,7 +448,7 @@ def build_cases() -> list[dict]:
             "setup": blank_section_two,
             "steps": [([], 0, "已重写"), (["--check"], 0, "一致")],
             "inspect": lambda root: _must(
-                "| STD |" in (root / "Docs/任务清单-按平台.md").read_text(encoding="utf-8"),
+                "| STD |" in (root / ".build/derived/任务清单-按平台.md").read_text(encoding="utf-8"),
                 "重生成没有把 §2 的（产品线, 域）行写回来",
             ),
         },
