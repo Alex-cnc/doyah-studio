@@ -1052,6 +1052,16 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         if let provenance = result.answerProvenance {
             let decision = AgentDeliverableDecision(provenance: provenance, language: languageProvider())
             if let notice = decision.notice(language: languageProvider()) { notifyBanner = notice }
+            // **逐条标签上屏**（`FR-AGT-QUAL-VERIFY-003` ①③ / `-004` ①）：提示条只说「拦了几条」，
+            // 说不出「哪一条凭什么成立」—— 而后者才是人要复核的东西。
+            //
+            // 落成**答复之后的一条时间线事件**（`.notice`，`▼` + 灰字），不是改答复正文：
+            // ① 正文是模型自己说的话，事后改写等于替他发言（且 `statements(in:)` 会把代码块切碎）；
+            // ② 时间线事件本来就带 `createdAt`，落在答复之后语义正好是「这句答复的出处账」；
+            // ③ 文本形态 ⇒ 会话回看、导出、复制全都自动带上，不必给消息加一栏结构性字段。
+            if let trace = AgentClaimTrace.block(for: provenance, language: languageProvider()) {
+                state.appendNotice(trace)
+            }
         }
     }
 

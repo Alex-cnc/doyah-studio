@@ -23,9 +23,9 @@ public struct AgentChatMessage: Identifiable, Equatable, Sendable {
     public var createdAt: Date?
     /// 思考段正文（`FR-AGT-UX-CONV-012` 的「显示思考段」要的那一段源）。
     ///
-    /// **本端目前产不出它**（macOS 侧的回包链路没有 reasoning 通道，
-    /// 见台账 `FR-AGT-UX-CONV-012` 的缺口登记）：这一栏先留着，
-    /// 开关与投影都按「有就画、没有就零占位」写死，等源接上就不用再改界面。
+    /// 源已接上（2026-10-26 第十五批）：线上两种字段（`reasoning_content` / `reasoning`）
+    /// 经 `LLMStreamEvent.reasoningDelta` 落进这一栏，**不进正文**。
+    /// 缺值 = 这个模型不回思考段（或旧会话回看不带）⇒ 开关与投影按「有就画、没有就零占位」。
     public var thinking: String?
 
     public init(id: UUID = UUID(),
