@@ -141,13 +141,13 @@ COVERAGE_EXEMPT = {
 # 该项的一部分），而旧码三个锚都写死行首紧贴 ⇒ **缩进一格整档失明**、撞号全绿（成对实测 P1a rc=0 /
 # P1b rc=1）。`RE_INDENT` 是判定物的形状，不是给人看的排版。
 RE_INDENT = r"[ \t]{0,3}"
-TABLE_ROW = re.compile(RE_INDENT + r"\|\s*\*{0,2}(v\d+\.\d+)\*{0,2}\s*\|")
-QUOTE_ROW = re.compile(RE_INDENT + r">\s*\*\*(v\d+\.\d+)")
+TABLE_ROW = re.compile(RE_INDENT + r"\|\s*\*{0,2}(v\d+\.\d+(?:\.\d+)?)\*{0,2}\s*\|")
+QUOTE_ROW = re.compile(RE_INDENT + r">\s*\*\*(v\d+\.\d+(?:\.\d+)?)")
 HEAD_TABLE = re.compile(RE_INDENT + r"\|\s*(?:当前版本|版本)\s*\|(.+?)\|\s*$")
-HEAD_QUOTE = re.compile(RE_INDENT + r">\s*\*\*版本\*\*\s*(v\d+\.\d+)")
+HEAD_QUOTE = re.compile(RE_INDENT + r">\s*\*\*版本\*\*\s*(v\d+\.\d+(?:\.\d+)?)")
 # 「节标题之后的头部形状」专用（㈢）：**必须带版本号**才认 —— 真仓 `Docs/archive/root-20261026/发布计划.md:259` 有一张
 # 别的表（`| 版本 | 交付日 | 小河马侧（Windows）交付 |`），它的表头行**不含版本号**，不该被当头部格。
-HEAD_LATE = re.compile(RE_INDENT + r"\|\s*(?:当前版本|版本)\s*\|([^|]*v\d+\.\d+[^|]*)\|\s*$")
+HEAD_LATE = re.compile(RE_INDENT + r"\|\s*(?:当前版本|版本)\s*\|([^|]*v\d+\.\d+(?:\.\d+)?[^|]*)\|\s*$")
 ID_DEF = re.compile(RE_INDENT + r"\|\s*\*{0,2}([LNR]-\d+)\*{0,2}[^|]*\|")
 BASELINE_HINTS = ("基线", "首版")
 # 头部版本格的**显式窗口**（㈢）：旧码 `HEAD_SCAN_LINES = 25` 把窗口外的头部格**静默当成「没有头部
@@ -158,9 +158,12 @@ HEAD_HEADER_WORDS = ("日期", "变更", "变更摘要", "内容", "作者", "�
 
 
 
-def version_key(token: str) -> tuple[int, int]:
-    major, minor = token[1:].split(".")
-    return (int(major), int(minor))
+def version_key(token: str) -> tuple[int, ...]:
+    """三段式（`v1.0.429`）与两段式（`v1.9`）都能比；缺的段按 0 补。"""
+    parts = [int(p) for p in token[1:].split(".")]
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts)
 
 
 def mask_non_content(lines: list[str]) -> list[str]:
@@ -316,12 +319,18 @@ def check_doc(relative: str, root: pathlib.Path) -> tuple[list[str], str]:
         return problems, f"变更 {len(rows)} 行 / 最高 {maximum} / 无头部版本格"
 
     index, cell = head
-    tokens = re.findall(r"v\d+\.\d+", cell)
+    tokens = re.findall(r"v\d+\.\d+(?:\.\d+)?", cell)
     if not tokens:
         problems.append(f"{relative}:{index} 头部版本格里读不出版本号（原文：{cell}）")
         return problems, f"变更 {len(rows)} 行 / 最高 {maximum} / 头部不可判"
 
     stated = tokens[0]
+    # 2026-10-26 编号转轨：头部用三段式 `v1.0.NNN`（冻结段 + 流水）时，只跟**同样三段式**的条目比 ——
+    # 两段式的历史行（v1.2 / v3.429 等）按旧编号体系记的，不参与比较、也不改写。
+    if stated.count(".") == 2:
+        three_part = [token for _, token in rows if token.count(".") == 2]
+        if three_part:
+            maximum = max(three_part, key=version_key)
     if stated not in seen:
         problems.append(f"{relative}:{index} 头部版本 {stated} 在变更记录里找不到（凭空写的号）")
     elif stated != maximum:
