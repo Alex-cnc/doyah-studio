@@ -1,6 +1,6 @@
 # 检查点
 
-updated: 2026-10-29T05:35
+updated: 2026-10-29T05:50
 
 ## 现状
 
@@ -8,6 +8,9 @@ updated: 2026-10-29T05:35
   点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。**本会话无 `cronjob_manage` 工具** ⇒ 接力改用 CLI
   `hermes cron run e98fad41f72d`（同一效果：下一跳调度器拉起），详见 loop-card 的「节奏」段。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
+- 最近读数（2026-10-29 **R60**）：`verify-core` **4776 项 / 0 failures**（4760 → +16 = `Tests/ObjectTreeRetryTests` 11 例 + `Tests/ObjectTreeRetrySourceTests` 5 例）；五门 + `check-format-arguments` rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 **`50553049`**（构建时刻 2026-10-29T05:45:45+0800；二进制 101,914,144 字节；同标签 05:45:26 那份 `164a7fe0` 出在发布说明含片补本条之前 ⇒ 作废）。
+  台账本条：`FR-STD-DB-META-006`（③ 失败在该节点可重试）实现 🟡（**界面已接线**：失败那一行红字旁有「重试」，判定与计划同出 `Core/ObjectTreeRetry`；差人工点一次 —— 连不上的库展开看入口 / 点了旧红字先消失再重取 / 在途时入口消失）、判据 🟡 → **✅**（11 + 5 例，反例六段各判红后逐字节还原）；分族读数不变 ⇒ ✅ 127 / 🟡 78 / ⬜ 8 = 213。
+  **下一项**：台账高档里已无「机械可推进」的 ⬜（`META-006` 只剩人工点验、`META-007` 的机器面早已在 `TestsUISnapshot/CrossDatabaseBrowseProbeTests`、`NAV-004` 判据列与备注互证属「陈旧标记归正」）⇒ 下一轮建议：① `FR-STD-WS-NAV-004` 走**陈旧标记归正**（只翻判据列 + 补登记用例数与文件名，不加用例、测试总数不变）；② 或中档找真有机械缺口的：`FR-STD-DB-META-011`（查看对象 DDL）/ `FR-STD-DB-META-015`（全库对象搜索）/ `FR-STD-DB-DATA-002`（一键 count）—— 取之前先 `grep` 源码看机械判据还差哪一半。
 - 最近读数（2026-10-29 **R59**）：`verify-core` **4760 项 / 0 failures**（4746 → +14 = `Tests/AgentBatchRevertTests` 9 例 + `Tests/AgentBatchRevertSourceTests` 5 例）；五门 rc 全 0；`check-format-arguments` rc 0（占位符调用点 453 处）；包 `dist/DoyahStudio-beta1.0.app` sha256 **`a120a874`**（构建时刻 2026-10-29T05:28:14+0800；二进制 101,829,696 字节；同标签 05:25:26 那份 `20adc61a` 出在补发布说明含片之前 ⇒ 作废）。
   台账本条：`FR-STD-WS-EDIT-015` 实现 🟡 保持（**界面已接线**，差人工点一次：改两个文件点整批撤回 / 撤前手工改一个看「没动」/ 点「撤销这次撤回」回到 Agent 版）、判据列补实证（9 + 5 例）；分族读数不变 ⇒ ✅ 127 / 🟡 78 / ⬜ 8 = 213（本条实现档没动）。
   ⚠️ 同批修正 `plan` 的口径：同一路径多次写入时**前像取最早那份、摘要取最新那份**（原来整条换成后一条 ⇒ 一批里改两次只撤得掉最后一次写，与「一次撤回把所有改动还原」相反）；那条判据随之改写并已验能判红。

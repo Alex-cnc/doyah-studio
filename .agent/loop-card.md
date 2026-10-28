@@ -32,9 +32,17 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
+**R60（2026-10-29）已把 `FR-STD-DB-META-006` ③（**加载失败在该节点可读错误** **并可重试**）补上**：
+此前失败那一行只有一句红字（`ErrorPresenter` 的人话），界面上**没有任何入口** —— 用户唯一出路是自己折起来再展开，
+而这件事界面上一个字都没提。`Core/ObjectTreeRetry` 一处收口「出不出入口」与「点了做什么」：四档不出
+（`inFlight` 在途 / `notExpanded` 收起 / `noFailure` 空态 / `alreadyLoaded` 已缓存）· 计划 `steps` 顺序即口径
+（**先清旧错误再取数**）· `cachedCount: Int?` 分得清「加载过 0 条」与「从没加载过」。接线：失败分支传入口
+（**文字**「重试」按钮，带 help / 无障碍标签）+ `retryAction` 只读判定 + `performRetry` 走与手点同一条 `loadChildren`。
+实现 **🟡**（差人工点一次）/ 判据 **✅**（11 + 5 例；反例六段各判红后逐字节还原）；包 `50553049（05:45:45）`，
+同标签 05:45:26 那份 `164a7fe0` 作废。明细见 `.agent/evidence/2026-10-29-META-006.md`。
 **R59（2026-10-29）已把 `FR-STD-WS-EDIT-015`（整批撤回）接通**：账仍是唯一前像来源（`agentEditJournal.before`）—— `snapshots(from:)` → `plan`（同一路径合并时**前像取最早、摘要取最新**；原来取最后一次写，一批里改两次就只撤掉一半，与「一次撤回把所有改动还原」相反）→ `inverse(of:reader:)` 出反向批次（冲突步不生成）⇒ 撤回本身可再撤回 → `AgentBatchRevertReceipt` 留痕（计数取自 `apply` 的读数）。接线：`AppState.revertAgentBatch` / `redoAgentBatchRevert`（路径过沙箱、越界抛错不写盘、撤完同步正开着的页签）+ 对话页输入框上方一行「这一轮 Agent 改了 N 个文件 · 整批撤回 / 已撤回 N 个（M 处没动）· 撤销这次撤回」+ 语言表 6 键中英齐。实现 **🟡**（差人工点一次：① 让 Agent 改两个文件点「整批撤回」，两个都应回到改前；② 撤前手工再改其中一个 ⇒ 那个读「没动」且内容一个字不动；③ 点「撤销这次撤回」应回到 Agent 写完那一版）/ 判据 **✅**（`Tests/AgentBatchRevertTests` 9 例 + `Tests/AgentBatchRevertSourceTests` 5 例，反例四段各判红后逐字节还原）；包 `a120a874（05:28:14）`，同标签 05:25:26 那份 `20adc61a` 作废。明细见 `.agent/evidence/2026-10-29-EDIT-015.md`。
 ⚠️ 同批把第五十七批留下的 8 条 `check-format-arguments` 真红修干净：四处回执文案从「模板串交给 Core 去格式化」改成**值格式闭包**（`{ L(.receiptSeconds, $0) }`）—— 模板与实参回到同一句，判 B 不再是假红、A/A′ 开始真的检查这四句；形状台账按实测对齐（+5 形状 / 3 处处数跟版 / 预算 170 → 188，理由写进 note）。
-下一条活 = 台账**高**档里还能机械推进的（`FR-STD-DB-META-006` 对象树下钻 · `FR-STD-DB-META-007` 跨库浏览：两行备注都写「待人工点验」，取之前先 `grep` 源码看**机械判据**还差哪一半；`FR-STD-WS-NAV-004` 的行内灰字已全落，若只是判据列陈旧就走「陈旧标记归正」——只翻标记不加用例）；备选：`FR-STD-DB-DIAG-006` · `FR-STD-WS-LIC-001` · 低档四条（`FS-010` / `NAV-006` / `NAV-005` / `EDIT-014`）。
+下一条活 = 高档里已无「机械可推进」的 ⬜（R60 逐条核过：`META-006` 只剩人工点验、`META-007` 的机器面早在 `TestsUISnapshot/CrossDatabaseBrowseProbeTests`、`NAV-004` 属「陈旧标记归正」）⇒ 优先 ① `FR-STD-WS-NAV-004` 走**陈旧标记归正**（只翻判据列 + 补登记用例数与文件名，**不加用例**、测试总数不变）；② 或中档里真有机械缺口的（`FR-STD-DB-META-011` 查看对象 DDL · `FR-STD-DB-META-015` 全库对象搜索 · `FR-STD-DB-DATA-002` 一键 count）—— 取之前先 `grep` 源码看**机械判据**还差哪一半）；备选：`FR-STD-DB-DIAG-006` · `FR-STD-WS-LIC-001` · 低档四条（`FS-010` / `NAV-006` / `NAV-005` / `EDIT-014`）。
 ⚠️ `FR-STD-WS-TOOL-003`（DAP 调试器）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）纵切过大，排后。
 **存量红六条（2026-10-29 在干净工作树 `git worktree add 874a3e48` 里逐条对照过：基线就红、本循环未加重）**：`check-core-portability`（`Core/AgentCodeRunner.swift:57` 硬编码 `/usr/local/`）· `check-core-localization`（`Binary files` 未白名单）· `check-button-icon-only`（11 处，含 R53 `HTMLPreviewView`）· `check-literal-language`（`Core/AgentNotifyChannel.swift:178`）· `check-doc-q-series`（`Docs/通用开发规范.md` 解析不到 §4/§6）· `check-doc-layout`（12 条）。**这六条使 `verify-all.sh` 不可能全绿 —— 别每轮重复当新账报，要清它们得单开一条活。**
 **`verify-all.sh` 全跑（2026-10-29 R58 实测 18 项 rc=1）另有五处红，也都不是功能片的账**：第 4 项 `check-pending-agenda --self-test` 缺本机文件 `Docs/智能体助手-开发规范.md`（.gitignore 内）· 第 9 项 `test-empty-action-buttons` 的负例夹具还找 `.disabled(trimmedName.isEmpty)`（R57 改走 `isEnabled:` 后没跟夹具，基线同样红）与 `check-panel-root-frames` 的 `scannedFiles` 104 vs 实测 105（R57 新增回执页视图后没跟版，基线同样红）· 第 11 项 `check-menu-language` 起不来应用 dump 菜单（**本会话无 GUI**）· 第 16 项 `check-tri-repo-parity`（共享脚本 sha 与三仓台账不符）· 第 18 项 `check-release-version` 缺 `Docs/发布方案.md` / `Docs/发布计划.md`（本机未同步）。⇒ **收尾只报「五门 + check-format-arguments」；`verify-all` 的红逐条对基线，不重复当新账。**
@@ -63,6 +71,7 @@
 编码与换行那一格（R56：CRLF 文件的状态栏读数 / 改一行保存后 `git diff` 只一行 / 切 GB18030 保存后文件仍是 GB18030）·
 **回执那一格（R57：跑一条查询看四项读数 / 报错语句也有回执 / 只读连接被拦下读「未发出」/ 复制与导出各一次）**。·
 **差异视图那一格（R58：只改缩进的文件勾「忽略空白」应归零 / 上下文切 40 行看折行且点开 / 上万行文件一屏出来不卡且末尾有「还有 N 行」）**。
+**节点级失败重试那一格（R60：造一个连不上的库展开它，红字旁应有「重试」；点了旧红字先消失并重新取一次；在途时入口应消失）**。
 **整批撤回那一格（R59：改两个文件点「整批撤回」应都回改前 / 撤前手工改一个 ⇒ 那个读「没动」且不动 / 点「撤销这次撤回」回到 Agent 版）**。
 **接力机制如实记一笔**：本会话没有 `cronjob_manage` 工具 ⇒ 收尾用 `hermes cron run e98fad41f72d`（CLI 等价）点火；
 点不着就靠 5 分钟兜底定时器，别手工改 schedule。

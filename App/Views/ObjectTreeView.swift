@@ -245,11 +245,15 @@ struct ObjectTreeView: View {
                         color: Theme.text(.secondary)
                     )
                 } else if let error = row.error {
+                    // **失败那一行要能重试**（`FR-STD-DB-META-006` ③）：出不出这枚入口由
+                    // `Core/ObjectTreeRetry` 一处判（与「点了做什么」同一份判定），视图不自己判 ——
+                    // 各写一份的后果是「按钮在、点了没反应」或「在途时又发一遍取数」。
                     placeholderRow(
                         text: error,
                         depth: row.depth + 1,
                         systemImage: "exclamationmark.triangle.fill",
-                        color: Theme.status(.warning)
+                        color: Theme.status(.warning),
+                        retry: retryAction(for: row)
                     )
                 } else if let children = row.children, children.isEmpty {
                     placeholderRow(
@@ -269,7 +273,8 @@ struct ObjectTreeView: View {
         text: String,
         depth: Int,
         systemImage: String?,
-        color: Color
+        color: Color,
+        retry: (() -> Void)? = nil
     ) -> some View {
         HStack(spacing: Spacing.s) {
             if let systemImage {
@@ -282,6 +287,21 @@ struct ObjectTreeView: View {
                 .foregroundStyle(color)
                 .lineLimit(3)
                 .textSelection(.enabled)
+            if let retry {
+                // **文字按钮**（不是纯图标）：这里同时是「可读错误」与「怎么办」的并置 ——
+                // 一枚孤零零的 ↻ 在红字旁边到底指什么，得靠悬停才知道；
+                // 且纯图标按钮要另配 help / 无障碍标签，文字本身就够了。
+                Button(action: retry) {
+                    Text(L(.commonRetry))
+                        .font(Theme.font(.caption))
+                        .underline()
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.text(.secondary))
+                .help(L(.commonRetry))
+                .accessibilityLabel(Text(L(.commonRetry)))
+            }
         }
         .padding(.leading, CGFloat(depth) * Metrics.listIndent + Metrics.listIndent + Spacing.xs)
     }
@@ -314,6 +334,45 @@ struct ObjectTreeView: View {
             isLoading: loadingIDs.contains(object.id)
         ) else { return }
         Task { await loadChildren(of: object) }
+    }
+
+    /// 失败那一行要不要出「重试」入口 —— 判定全部在 `Core/ObjectTreeRetry`（与「点了做什么」同一份）。
+    ///
+    /// 视图**不自己判**「有没有错误 / 在不在途」：那两句话各写一份的后果是本仓反复踩的那一类
+    /// （按钮在、点了没反应 / 在途时又发一遍取数 / 重试完还挂着上一轮的红字）。
+    private func retryAction(for row: ObjectTreeVisibleRow) -> (() -> Void)? {
+        let outcome = ObjectTreeRetry.evaluate(
+            nodeID: row.object.id,
+            isExpanded: row.isExpanded,
+            isLoading: row.isLoading,
+            cachedCount: row.children?.count,
+            error: row.error
+        )
+        guard outcome.affordsRetry else { return nil }
+        let object = row.object
+        return { performRetry(object) }
+    }
+
+    /// 按 Core 给的计划重试：**先清旧错误、再取数**，且取数走与用户手点**完全同一条路**
+    /// （`loadChildren`）—— 另开一条取数路会让缓存、错误显示与「空结果不算查过」三条口径分叉。
+    private func performRetry(_ object: DatabaseObject) {
+        let outcome = ObjectTreeRetry.evaluate(
+            nodeID: object.id,
+            isExpanded: expandedIDs.contains(object.id),
+            isLoading: loadingIDs.contains(object.id),
+            cachedCount: childrenCache[object.id]?.count,
+            error: errors[object.id]
+        )
+        guard let plan = outcome.plan, plan.nodeID == object.id else { return }
+        for step in plan.steps {
+            switch step {
+            case .clearError:
+                // 先清：否则从点击到结果落地之间那一行还写着上一轮的失败原因（用户以为没生效）。
+                errors[object.id] = nil
+            case .loadChildren:
+                Task { await loadChildren(of: object) }
+            }
+        }
     }
 
     private func loadChildren(of object: DatabaseObject) async {
