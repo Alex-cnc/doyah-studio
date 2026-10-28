@@ -27,6 +27,10 @@ public enum WorkspaceFileOperations {
         case notADirectory(String)
         /// 工作区根自己不能删（结构上挡一层）。
         case rootNotDeletable
+        /// 工作区根自己不能搬（`FR-STD-WS-FS-003` 的拖拽那一条）。
+        case rootNotMovable
+        /// 要把目录搬进它自己里面（含搬到自己身上）—— 搬完它就没了。
+        case intoOwnSubtree(String)
         /// 撤销删除时，废纸篓里那一份已经不在了（用户自己清过废纸篓 / 被别的东西搬走）。
         /// 这一档**不许**用「附近那个同名文件」顶上 —— 撤销要么真回到原样，要么如实说做不到。
         case trashCopyMissing(String)
@@ -137,6 +141,49 @@ public enum WorkspaceFileOperations {
         if target.standardizedFileURL == url.standardizedFileURL { return url }
         if FileManager.default.fileExists(atPath: target.path) { throw Failure.alreadyExists(newName) }
 
+        do {
+            try FileManager.default.moveItem(at: url, to: target)
+        } catch {
+            throw Failure.system(error.localizedDescription)
+        }
+        return target
+    }
+
+    // MARK: - 搬
+
+    /// 把条目搬进另一个目录（`FR-STD-WS-FS-003` 的拖拽移动）。
+    ///
+    /// 与 `rename` 的分工：`rename` 只在**同一层**改名，这条跨目录搬；两条都走同一套越界检查，
+    /// 所以「拖到工作区外」与「拖进符号链接指到的外面」都过不去。
+    ///
+    /// 五个必须挡住的坑：
+    ///   ① 工作区根不是条目 ⇒ `rootNotMovable`（谁拖它都不接）；
+    ///   ② 落点在自己子树里（含自己身上）⇒ `intoOwnSubtree`（`WorkspaceFileMove.placement` 同一份判定）；
+    ///   ③ 落在同一层 ⇒ 返回原 URL，**不算失败也不算改动**（拖回原位是手滑，不是复制一份）；
+    ///   ④ 落点已有同名 ⇒ `alreadyExists`，不覆盖；
+    ///   ⑤ 落点不是目录 ⇒ `notADirectory`。
+    ///
+    /// 子树判定用**解开符号链接之后的真实路径**：字符串路径上 `a/../a/b` 看着不像自己，
+    /// 解完就是自己在里面。
+    @discardableResult
+    public static func move(_ url: URL, into directoryURL: URL, in workspaceURL: URL) throws -> URL {
+        try requireContained(url, in: workspaceURL)
+        if url.standardizedFileURL == workspaceURL.standardizedFileURL { throw Failure.rootNotMovable }
+        try requireDirectory(directoryURL, in: workspaceURL)
+
+        let resolvedSource = url.resolvingSymlinksInPath().standardizedFileURL
+        let resolvedDirectory = directoryURL.resolvingSymlinksInPath().standardizedFileURL
+        if WorkspaceTree.isContained(resolvedDirectory.path, in: resolvedSource.path) {
+            throw Failure.intoOwnSubtree(url.lastPathComponent)
+        }
+
+        let target = directoryURL.appendingPathComponent(url.lastPathComponent)
+        try requireContained(target, in: workspaceURL)
+        // 同一层：什么都不做（返回原 URL ⇒ 调用方不必记一笔撤销）。
+        if target.standardizedFileURL == url.standardizedFileURL { return url }
+        if FileManager.default.fileExists(atPath: target.path) {
+            throw Failure.alreadyExists(target.lastPathComponent)
+        }
         do {
             try FileManager.default.moveItem(at: url, to: target)
         } catch {

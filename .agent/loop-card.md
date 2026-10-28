@@ -32,14 +32,18 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
-**R51（2026-10-29）已把「Markdown 预览的跟随滚动会话面」做完**（`FR-STD-WS-WEB-002`；核心层
-`Core/MarkdownPreviewFollow.swift` —— 光标行按页签各记一份 / 非活跃页签的报数只记账不发布 / 越界不猜 / 关掉的页签记录清掉；
-界面 `WorkspaceAreaView.syncPreviewCursor()` 在换页签 · 关页签 · 首次出现三条路激活，报数带页签身份；判据
-`Tests/MarkdownPreviewFollowTests` **11 例** + `Tests/MarkdownPreviewFollowSourceTests` **3 例**，反例五段各判红后逐字节还原）——
-台账实现 **🟡**（Alpha 2 范围全部落地，差人工点一次：开两个 `.md` 页签，A 停中段 → 切 B 不跳到 A 的行 → 切回 A 回到原块）/ 判据 **✅**。
-下一条活 = 台账 `FR-STD-WS-FS-003`（工作区 Explorer 的文件操作）—— ⚠️ 该行「一句话」列在台账里是**截断的**，
-先到 `Docs/Doyah产品需求规格说明书.md` 取同号行补全那一格再定纵切；`Core/WorkspaceFileOperations.swift` 与
-`Core/WorkspaceFileUndo.swift` 已在盘（FS-004/005/006 交付），大概率缺的是**树上的入口与拖拽**。
+**R52（2026-10-29）已把 `FR-STD-WS-FS-003` 剩下的两片做完**（工作区 Explorer 的文件操作）：
+① **拖拽移动** —— `Core/WorkspaceFileMove.placement` 一处几何判定（根不搬 / 不搬进自己子树 / 同层不动，按路径分量比）
++ `WorkspaceFileOperations.move` 真搬（撞名拒 / 落点非目录拒 / 越界拒 / 同层返回原 URL）+ 撤销一档 `.move`（搬回原目录）；
+界面 `.onDrag`（载荷 = 相对路径）+ `.dropDestination`（**只有目录行接落点**、落点高亮、拖到「工作区根」那一行 = 搬回根、
+搬成功后已打开页签跟着走）；② **「在终端中打开」** —— `Core/WorkspaceTerminalOpen` 计划（`/usr/bin/open -a Terminal <目录>`，
+文件开父目录 / 目录开自己 / 路径原样一个 argv / 越界不给计划）+ 行右键新增一枚。判据
+`Tests/WorkspaceFileMoveTests` 15 例 + `Tests/WorkspaceTerminalOpenTests` 5 例 + `Tests/WorkspaceFileMoveSourceTests` 3 例，
+反例五段各判红后逐字节还原；台账该行「一句话」列同批补全（原为截断）。实现 **🟡**（差人工点一次：拖一个文件进另一个目录 /
+拖目录进自己子树应被拒 / 右键在终端中打开）/ 判据 **✅**。
+下一条活 = 台账 `FR-STD-WS-WEB-003`（网页文件在编辑器内切「预览」渲染；优先=中，判据可机械跑）。
+备选（优先=低，但判据全是纯逻辑、跑得快）：`FR-STD-WS-EDIT-022` 缩进检测与状态栏切换 · `FR-STD-WS-EDIT-017` 代码折叠。
+⚠️ `FR-STD-WS-TOOL-003`（DAP 调试器）纵切过大，排后。
 **有一条待主人拍板**（已登记，别当已决）：命名分组标题上要不要也给「＋」（现在只有「未分组」那段有）。
 
 # 每轮卡 · Studio macOS 端自主开发（2026-10-28 起）

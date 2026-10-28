@@ -23,6 +23,8 @@ struct WorkspaceExplorerView: View {
     @State private var renamingText = ""
     /// 待确认的删除（确认框里要写清「将删几项」）。
     @State private var pendingDeletion: WorkspaceEntry?
+    /// 有东西正悬在「工作区根」那一行上（拖回根目录的落点高亮）。
+    @State private var isRootDropTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -105,6 +107,17 @@ struct WorkspaceExplorerView: View {
         }
         .padding(.horizontal, Spacing.m)
         .padding(.bottom, Spacing.s)
+        // 拖到「工作区根」这一行 = 搬回根目录（树上没有根那一行，这是它唯一的落点）。
+        .background(isRootDropTargeted ? accent.accentColor.opacity(0.18) : Color.clear)
+        .contentShape(Rectangle())
+        .dropDestination(for: String.self) { items, _ in
+            guard let first = items.first else { return false }
+            let outcome = workspace.move(first, into: "")
+            if let from = outcome.from, let to = outcome.to {
+                workspaceTabs.retarget(from: from.path, to: to.path)
+            }
+            return outcome.accepted
+        } isTargeted: { isRootDropTargeted = $0 }
     }
 
     // MARK: 搜索
@@ -169,7 +182,17 @@ struct WorkspaceExplorerView: View {
             onBeginRename: { beginRename(entry) },
             onCommitRename: { commitRename(entry) },
             onCancelRename: { cancelRename() },
-            onReveal: { workspace.reveal(entry) }
+            onReveal: { workspace.reveal(entry) },
+            onOpenInTerminal: { workspace.openInTerminal(entry) },
+            // 拖拽落地：判定与落地都在 store 那一侧（`WorkspaceFileMove.placement` 同一份口径）。
+            onDropInto: { sourcePath in
+                let outcome = workspace.move(sourcePath, into: entry.relativePath)
+                // 搬成功 ⇒ 已打开的页签跟着走（与改名同一条路；目录搬动时整棵子树都跟）。
+                if let from = outcome.from, let to = outcome.to {
+                    workspaceTabs.retarget(from: from.path, to: to.path)
+                }
+                return outcome.accepted
+            }
         )
         .accessibilityIdentifier("workspace-row-\(entry.relativePath)")
     }
@@ -204,6 +227,12 @@ struct WorkspaceExplorerView: View {
         case .deletion:
             // 页签本来就指着原路径，文件回到原处之后它自然又有效 —— 不需要搬任何东西。
             break
+        case .move:
+            // 撤销移动 = 搬回原目录 ⇒ 页签的路径与标题也跟着回去（目录搬回时它整棵子树都跟）。
+            if let original = undone.originalURL {
+                workspaceTabs.retarget(from: undone.currentURL.path, to: original.path)
+            }
+            selectedPath = nil
         }
     }
 
@@ -383,8 +412,13 @@ struct WorkspaceTreeRow: View {
     let onCommitRename: () -> Void
     let onCancelRename: () -> Void
     let onReveal: () -> Void
+    let onOpenInTerminal: () -> Void
+    /// 有东西被拖到这一行上（参数 = 被拖条目的相对路径）。返回是否接下这条拖拽。
+    let onDropInto: (String) -> Bool
 
     @FocusState private var isRenameFieldFocused: Bool
+    /// 有东西正悬在这一行上（拖拽落点高亮）—— 只在**目录行**会为 true。
+    @State private var isDropTargeted = false
     /// 这个字是给哪一行准备的（父视图把 `renamingPath` 一置，下一跳这一行就成了改名态；
     /// 靠它对上号才把 `entry.name` 填进框里，否则每次重算都会把用户敲的字冲掉）。
     @State private var renameSeedPath: String?
@@ -452,8 +486,21 @@ struct WorkspaceTreeRow: View {
         .onHover { onHoverChange($0) }
         .onTapGesture(count: 2) { onOpen() }
         .onTapGesture { onSelect() }
+        // **拖拽移动**（`FR-STD-WS-FS-003`）：载荷是相对路径（与树里的 id 同一个口径），
+        // 不用文件 URL —— 文件 URL 过沙箱边界要另带 bookmark，而这里只在自己那棵树里搬。
+        .onDrag {
+            NSItemProvider(object: entry.relativePath as NSString)
+        }
+        // 只有**目录行**接落点（文件行不是容器）；接不接由 store 的同一份判定说了算。
+        .dropDestination(for: String.self) { items, _ in
+            guard entry.isDirectory, let first = items.first else { return false }
+            return onDropInto(first)
+        } isTargeted: { targeted in
+            isDropTargeted = entry.isDirectory && targeted
+        }
         .contextMenu {
             Button(L(.workspaceReveal)) { onReveal() }
+            Button(L(.workspaceOpenInTerminal)) { onOpenInTerminal() }
         }
         // **整行不挂 tip**（2026-10-02 需求提出者原话：「鼠标悬停到目录上的自带文件名 tip 取消，
         // 因为没用，且遮住了增删改工具条按钮」）：行的 tip 会盖住行内三枚图标的 tip ——
@@ -486,6 +533,9 @@ struct WorkspaceTreeRow: View {
                     .fill(accentColor)
                     .frame(width: Spacing.hair)
             }
+        } else if isDropTargeted {
+            // 落点高亮：拖到目录行上时给一块底（否则松手前完全看不出「会落到哪」）。
+            accentColor.opacity(0.18)
         } else if isHovered {
             Theme.text(.primary).opacity(0.05)
         } else {

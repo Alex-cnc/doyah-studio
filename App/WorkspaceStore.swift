@@ -208,6 +208,31 @@ final class WorkspaceStore: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([target])
     }
 
+    /// 在终端中打开（`FR-STD-WS-FS-003`）：文件开它**所在的目录**，目录开它自己。
+    ///
+    /// 走 `Core/WorkspaceTerminalOpen` 算出来的计划（`/usr/bin/open -a Terminal <目录>`，
+    /// 路径作为一个 argv 原样传）—— 这里只负责起进程与如实报错。
+    func openInTerminal(_ entry: WorkspaceEntry? = nil) {
+        guard let rootURL else { return }
+        guard let plan = WorkspaceTerminalOpen.plan(
+            relativePath: entry?.relativePath ?? "",
+            isDirectory: entry?.isDirectory ?? true,
+            in: rootURL
+        ) else {
+            noticeText = L(.workspaceFileOpNotContained)
+            return
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: plan.tool)
+        process.arguments = plan.arguments
+        do {
+            try process.run()
+            noticeText = nil
+        } catch {
+            noticeText = L(.workspaceFileOpFailed, error.localizedDescription)
+        }
+    }
+
     // MARK: 文件操作（FR-EDIT-41 · 队列 L-114）
     //
     // 形态由需求提出者 2026-09-30 定（2026-10-02 追加「必须在 Alpha 2 交付」）：文件夹行 = 加号
@@ -279,6 +304,67 @@ final class WorkspaceStore: ObservableObject {
         }
     }
 
+    /// 一次拖拽搬动的结局。
+    ///
+    /// 为什么不是 `Bool`：搬成功了**页签要跟着走**（`WorkspaceTabSet.retargeting`），
+    /// 页签不归 store 管 —— 所以把「从哪搬到哪」带回去，由调用点决定怎么接。
+    /// `from` / `to` 只有真搬了才有值（「落在同一层」与各种拒绝都是空）。
+    struct MoveOutcome: Equatable {
+        let accepted: Bool
+        let from: URL?
+        let to: URL?
+
+        static let refused = MoveOutcome(accepted: false, from: nil, to: nil)
+    }
+
+    /// 搬进另一个目录（`FR-STD-WS-FS-003` 的拖拽移动）。
+    ///
+    /// 入参用**相对路径**而不是 `WorkspaceEntry`：拖拽的载荷本来就是字符串（`NSItemProvider`），
+    /// 在 drop 时再回头去树里找一个 entry 是多余的一步，而且找到的那个 entry 可能已经是旧的。
+    ///
+    /// 判定只走 `WorkspaceFileMove.placement` 这一处（与界面「这一行接不接」同一份口径）：
+    /// 根不搬 / 不搬进自己里面 / 同一层不动 —— 三条都在这里落地成一句话。
+    ///
+    /// - Returns: `accepted` = 这条拖拽被接下了（含「落在同一层」这种不用动的情形）；
+    ///   `from` / `to` = 真搬了才给（界面照它把页签搬过去）。
+    @discardableResult
+    func move(_ sourcePath: String, into directoryPath: String) -> MoveOutcome {
+        guard let rootURL,
+              let source = WorkspaceTree.resolve(relativePath: sourcePath, in: rootURL)
+        else { return .refused }
+        switch WorkspaceFileMove.placement(source: sourcePath, into: directoryPath) {
+        case .refused(.rootNotMovable):
+            noticeText = L(.workspaceFileOpRootMove)
+            return .refused
+        case .refused(.intoOwnSubtree):
+            noticeText = L(.workspaceFileOpOwnSubtree, source.lastPathComponent)
+            return .refused
+        case .noop:
+            // 落在同一层：什么都不做，顺手清掉上一条撤销（否则「撤销」会去撤更早的那一下）。
+            undoLog.record(nil)
+            return MoveOutcome(accepted: true, from: nil, to: nil)
+        case .move:
+            break
+        }
+        let targetDirectory = WorkspaceTree.resolve(relativePath: directoryPath, in: rootURL) ?? rootURL
+        do {
+            let moved = try WorkspaceFileOperations.move(source, into: targetDirectory, in: rootURL)
+            reload(parentOf: sourcePath)
+            if let movedRelative = relativePath(of: moved, in: rootURL) {
+                reload(parentOf: movedRelative)
+            }
+            renamingPath = nil
+            undoLog.record(.move(from: source, to: moved, workspace: rootURL))
+            // 目标目录要展开：不然搬进去的那一条看不见，用户会以为「拖丢了」。
+            expandedPaths.insert(directoryPath)
+            noticeText = L(.workspaceFileMoved, source.lastPathComponent, moved.deletingLastPathComponent().lastPathComponent)
+            return MoveOutcome(accepted: true, from: source, to: moved)
+        } catch {
+            noticeText = Self.operationMessage(for: error)
+            return .refused
+        }
+    }
+
     /// 删除（**走废纸篓**）：确认框在界面上，这里只管做与说。
     ///
     /// 撤回来的凭据 = `trashItem` 给的废纸篓位置，一路记进 `undoLog`（`FR-STD-WS-FS-006` ③）。
@@ -325,6 +411,11 @@ final class WorkspaceStore: ObservableObject {
                 let back = relativePath(of: entry.currentURL, in: rootURL) ?? ""
                 reload(parentOf: back)
                 noticeText = L(.workspaceUndoDeletion, entry.currentURL.lastPathComponent)
+            case .move:
+                // 搬回原处：来源目录与搬走后的目录都要重列（两边各少 / 各多一条）。
+                reload(parentOf: relativePath(of: entry.originalURL ?? entry.currentURL, in: rootURL) ?? "")
+                reload(parentOf: relativePath(of: entry.currentURL, in: rootURL) ?? "")
+                noticeText = L(.workspaceUndoMove, entry.currentURL.lastPathComponent)
             }
             renamingPath = nil
             return entry
@@ -358,6 +449,8 @@ final class WorkspaceStore: ObservableObject {
         case .notContained: return L(.workspaceFileOpNotContained)
         case .notADirectory(let name): return L(.workspaceFileOpNotADirectory, name)
         case .rootNotDeletable: return L(.workspaceFileOpRoot)
+        case .rootNotMovable: return L(.workspaceFileOpRootMove)
+        case .intoOwnSubtree(let name): return L(.workspaceFileOpOwnSubtree, name)
         case .trashCopyMissing(let name): return L(.workspaceUndoTrashMissing, name)
         case .system(let reason): return L(.workspaceFileOpFailed, reason)
         }

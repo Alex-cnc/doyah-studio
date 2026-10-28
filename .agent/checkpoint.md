@@ -1,37 +1,43 @@
 # 检查点
 
-updated: 2026-10-29T02:00
+updated: 2026-10-29T02:40
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-29 R51）：`verify-core` **4581 项 / 0 failures**（4567 → +14 = `Tests/MarkdownPreviewFollowTests` 11 + `Tests/MarkdownPreviewFollowSourceTests` 3）；
-  界面探针 target 同批全绿（`MarkdownPreviewProbeTests` 16 例）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 **`f9e3f40b`** · 99,864 KB
-  （构建时刻 2026-10-29T01:55:09+0800；前一次 01:54 的 `cfe70eea` 出在改发布说明之前、回执不含本批 ⇒ 作废）；台账逐行实数 **✅ 127 / 🟡 71 / ⬜ 15**。
-- 上一轮读数（R50）：4567 / 0 failures · 包 `eb814e76` · ✅ 127 / 🟡 70 / ⬜ 16。
+- 最近读数（2026-10-29 R52）：`verify-core` **4604 项 / 0 failures**（4581 → +23 = `Tests/WorkspaceFileMoveTests` 15 + `Tests/WorkspaceTerminalOpenTests` 5 + `Tests/WorkspaceFileMoveSourceTests` 3）；
+  五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 **`13a099ae`** · 99,980 KB（构建时刻 2026-10-29T02:27:02+0800；
+  同标签 02:26 那版 `b007bf82` 出在改发布说明之前、回执不含本批 ⇒ 作废）；台账逐行实数 **✅ 127 / 🟡 72 / ⬜ 14**。
+- 上一轮读数（R51）：4581 / 0 failures · 包 `f9e3f40b` · ✅ 127 / 🟡 71 / ⬜ 15。
 
 ## 下一项
 
-**1. 台账 `FR-STD-WS-FS-003`（工作区 Explorer 的文件操作）** —— ⚠️ 该行「一句话」列在台账里是**截断的**
-（到「原话：「现在的工作」就断），需求正文去 `Docs/Doyah产品需求规格说明书.md` 取同号行再定纵切；顺手把那一格补全
-（本轮 `WS-WEB-002` 就是这么补的）。已有面先核：`Core/WorkspaceFileOperations.swift`（新建 / 删除 / 改名 / 还原）与
-`Core/WorkspaceFileUndo.swift`（一次撤销）已在盘（`FR-STD-WS-FS-004/005/006` 交付），所以本条大概率缺的是**树上的入口与拖拽**
-（重命名 / 新建 / 删除 / 拖入拖出）—— 先 grep `WorkspaceExplorerView` 现有入口再定。
+**1. 台账 `FR-STD-WS-WEB-003`（网页文件可在编辑器内切「预览」渲染）** —— 优先=中，判据可机械跑：
+Core 侧大概是「文件类别 → 可否预览 / 用哪个渲染器」的投影 + 视图侧一个「源码 / 预览」切换入口；
+先 grep `WorkspaceTabsModel` 现有的预览分区（`MarkdownPreviewView` / `previewVisible`）看能不能复用同一套切分，
+别新造第二个预览容器。
 
 其余按台账取「优先=高 → 中；同档取判据可机械跑的」（2026-10-28 R44 实测：**台账里已无「高」档的 `⬜`**）：
 
-2. `FR-STD-WS-EDIT-015` / `FR-STD-WS-AI-002` 剩的一半 —— 界面入口（Core 13 / 19 例已在盘）；
+2. `FR-STD-WS-EDIT-022`（缩进检测与状态栏切换）/ `FR-STD-WS-EDIT-017`（代码折叠）—— 优先=低，但判据全是纯逻辑、跑得快；
 3. `FR-STD-WS-TOOL-003`（DAP 调试器）—— 纵切较大，排后；
-4. 人工点验项（`WS-WEB-004` 真站点、`WS-FS-004/005/006` 界面点一次、`DB-TASK-002` 逐条审批界面点一次、
-   **`DB-TASK-001` 任务定义界面点一次**；**`FR-STD-WS-UI-013` 真鼠标悬停一次**：鼠标移到工作区树某一行 ⇒
-   三枚动作浮出、移开 ⇒ 收起、移到分组标题 ⇒ 「＋」浮出）；
-   **IM 通道真连一次**：填 AppID + Secret → 手机发一句话 → 桌面出该轮 → 手机会收到结论）；
+4. 人工点验项（`WS-WEB-004` 真站点、`WS-FS-004/005/006` 界面点一次、**`WS-FS-003` 拖拽一次 + 右键在终端中打开**、
+   `DB-TASK-002` 逐条审批界面点一次、**`DB-TASK-001` 任务定义界面点一次**；**`FR-STD-WS-UI-013` 真鼠标悬停一次**、
+   **`FR-STD-WS-WEB-002` 两个 `.md` 页签切一次**；**IM 通道真连一次**：填 AppID + Secret → 手机发一句话 → 桌面出该轮 → 手机会收到结论）；
 5. **待主人拍板**：命名分组（`DisclosureGroup` 那几段）标题上要不要也给「＋」；给了之后新连接归哪个组（现在 `onAdd` 不带组）；
 6. 存量红（与 HEAD 逐条相同，非任何一片引入；见 `.agent/evidence/2026-10-28-DB-TASK-001.md` §7）。
 
 ## 已完成的片
 
+- **R52（2026-10-29 02:40）· `FR-STD-WS-FS-003` 工作区 Explorer 的文件操作（拖拽移动 + 在终端中打开）** —— 台账「一句话」列
+  原本是**截断的**（到「现在的工作」就断），需求正文取自需求书同号行：行内悬浮菜单 / 新建·改名·删除语义（FS-004/005/006，第三十五批）/ 
+  访达出口都已落地，缺的是**拖拽移动**与**「在终端中打开」**。落法：`Core/WorkspaceFileMove.placement`（纯路径算术：根不搬 /
+  不搬进自己子树（按路径分量比）/ 同层不动；界面「接不接」与落地「搬不搬」同取一处）+ `WorkspaceFileOperations.move`（真搬，
+  撞名 / 非目录 / 越界 / 同层四档各有结论）+ `WorkspaceFileUndo` 增 `.move`（搬回原目录）+ `Core/WorkspaceTerminalOpen`（计划：
+  `/usr/bin/open -a Terminal <目录>`，文件开父目录、路径原样一个 argv、越界不给计划）+ store/view 接线（拖拽、落点高亮、
+  工作区根那一行也是落点、页签跟随、右键菜单）+ 语言表 5 键；判据 15 + 5 + 3 例，反例五段各判红后逐字节还原。
+  证据 `.agent/evidence/2026-10-29-FR-STD-WS-FS-003.md`。
 - **R51（2026-10-29 02:00）· `FR-STD-WS-WEB-002` Markdown 预览的跟随滚动会话面** —— 这条实现列一直停在 `⬜`，
   但盘上其实早就有预览（块模型 + 只读渲染 + 分屏 + 落点映射 + 截断报数 + 链接交浏览器页签），**缺的是跟随滚动那一半的会话面**：
   `MarkdownPreviewCursorModel` 只存一个标量 `line`、且跨页签不重建 ⇒ 长文档切到另一篇时预览拿上一份文档的行号去找落点

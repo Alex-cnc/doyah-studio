@@ -25,12 +25,15 @@ public enum WorkspaceFileUndo: Equatable, Sendable {
     case rename(from: URL, to: URL, workspace: URL)
     /// 删除了 `original`，系统把它放在 `trashedTo`（撤销 = 搬回来）。
     case deletion(original: URL, trashedTo: URL?, workspace: URL)
+    /// 从 `from` 搬到了 `to`（撤销 = 搬回原目录；`FR-STD-WS-FS-003` 的拖拽移动）。
+    case move(from: URL, to: URL, workspace: URL)
 
     /// 界面按这一档选句子（Core 只有结构，句子在语言表里）。
     public enum Kind: String, Sendable, Equatable, CaseIterable {
         case creation
         case rename
         case deletion
+        case move
     }
 
     public var kind: Kind {
@@ -38,6 +41,7 @@ public enum WorkspaceFileUndo: Equatable, Sendable {
         case .creation: return .creation
         case .rename: return .rename
         case .deletion: return .deletion
+        case .move: return .move
         }
     }
 
@@ -46,6 +50,7 @@ public enum WorkspaceFileUndo: Equatable, Sendable {
         case let .creation(_, workspace): return workspace
         case let .rename(_, _, workspace): return workspace
         case let .deletion(_, _, workspace): return workspace
+        case let .move(_, _, workspace): return workspace
         }
     }
 
@@ -55,6 +60,7 @@ public enum WorkspaceFileUndo: Equatable, Sendable {
         case .creation: return nil
         case let .rename(from, _, _): return from
         case let .deletion(original, _, _): return original
+        case let .move(from, _, _): return from
         }
     }
 
@@ -64,6 +70,7 @@ public enum WorkspaceFileUndo: Equatable, Sendable {
         case let .creation(created, _): return created
         case let .rename(_, to, _): return to
         case let .deletion(original, _, _): return original
+        case let .move(_, to, _): return to
         }
     }
 
@@ -123,6 +130,9 @@ public struct WorkspaceUndoLog: Equatable, Sendable {
         case let .deletion(original, trashedTo, workspace):
             guard let trashedTo else { throw WorkspaceFileOperations.Failure.trashCopyMissing(original.lastPathComponent) }
             return try WorkspaceFileOperations.restore(trashedTo, to: original, in: workspace)
+        case let .move(from, to, workspace):
+            // 搬回原目录：原目录可能已经不在了（被同时删掉 / 改名）⇒ 走 `move` 的同一套失败面如实报。
+            return try WorkspaceFileOperations.move(to, into: from.deletingLastPathComponent(), in: workspace)
         }
     }
 }

@@ -76,6 +76,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceFileOpNotADirectory
     case workspaceFileOpRoot
     case workspaceFileOpFailed
+    case workspaceFileOpOwnSubtree
+    case workspaceFileOpRootMove
+    case workspaceOpenInTerminal
+    case workspaceFileMoved
+    case workspaceUndoMove
     case workspaceUndo
     case workspaceUndoCreation
     case workspaceUndoRename
@@ -3168,6 +3173,23 @@ public enum LocalizedStrings {
         ],
         .workspaceFileOpFailed: [
             .simplifiedChinese: "操作失败：%@", .english: "The operation failed: %@",
+        ],
+        .workspaceFileOpRootMove: [
+            .simplifiedChinese: "工作区根目录不能搬。", .english: "The workspace root can’t be moved.",
+        ],
+        .workspaceFileOpOwnSubtree: [
+            .simplifiedChinese: "不能把「%@」搬进它自己里面。",
+            .english: "“%@” can’t be moved inside itself.",
+        ],
+        .workspaceOpenInTerminal: [
+            .simplifiedChinese: "在终端中打开", .english: "Open in Terminal",
+        ],
+        .workspaceFileMoved: [
+            .simplifiedChinese: "已把「%@」移到「%@」。", .english: "Moved “%@” into “%@”.",
+        ],
+        .workspaceUndoMove: [
+            .simplifiedChinese: "已撤销移动：「%@」已搬回原处。",
+            .english: "Undone: “%@” is back where it was.",
         ],
         .workspaceUndo: [.simplifiedChinese: "撤销", .english: "Undo"],
         .workspaceUndoCreation: [
