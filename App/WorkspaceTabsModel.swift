@@ -336,16 +336,26 @@ final class WorkspaceTabsModel: ObservableObject {
                 errorText = L(.workspaceFileBinary, url.lastPathComponent)
                 return
             }
-            let decoded = try TextFileDecoder.decode(data)
-            let opened = WorkspaceTabSet.opening(path: path, in: tabs, content: decoded.text)
+            let decoded = try TextFileFormat.decode(data)
+            let opened = WorkspaceTabSet.opening(path: path, in: tabs, content: decoded.text,
+                                                 format: decoded.format)
             tabs = opened.tabs
             selectedID = opened.selected
             record(file: path)
             // 折叠的标记表要按新打开这份内容算一次（否则「有块可折」的行上没有标记）。
             refreshFolds(tabID: opened.selected)
-            // 编码不是 UTF-8 时说出来：用户得知道"看到的字为什么对了"（FR-IO-07 的同一套判决）。
-            if decoded.isFallback {
-                noticeText = L(.workspaceOpenedWithEncoding, url.lastPathComponent, decoded.encoding.shortName)
+            // 编码 / 换行不是缺省值时说出来：用户得知道"看到的字为什么对了、保存会不会改掉"。
+            var notes: [String] = []
+            if decoded.format.encoding != .utf8 {
+                notes.append(L(.workspaceOpenedWithEncoding, url.lastPathComponent,
+                               decoded.format.encoding.shortName))
+            }
+            if decoded.format.lineEnding != .lf {
+                notes.append(L(.workspaceOpenedWithLineEnding, url.lastPathComponent,
+                               decoded.format.lineEnding.shortName))
+            }
+            if !notes.isEmpty {
+                noticeText = notes.joined(separator: " ")
             }
         } catch {
             errorText = L(.workspaceOpenFailed, url.lastPathComponent, error.localizedDescription)
@@ -358,8 +368,17 @@ final class WorkspaceTabsModel: ObservableObject {
     func save(_ id: UUID) -> Bool {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return false }
         guard let path = tabs[index].path else { return false }
+        let format = tabs[index].format
+        // **按这一页自己的形态写回**（`FR-STD-WS-EDIT-023`）：编码、换行、BOM 三样都跟打开时
+        // （或用户在状态栏改过的那一档）一致 —— 否则一次保存就在 git 里变成全文改动。
+        guard let data = format.bytes(for: tabs[index].content) else {
+            // 编不出来就**不写**：写出去的那个文件已经面目全非（问号 / 丢字符），
+            // 比"保存失败"糟得多。
+            errorText = L(.workspaceSaveFormatFailed, tabs[index].title, format.encoding.shortName)
+            return false
+        }
         do {
-            try tabs[index].content.write(toFile: path, atomically: true, encoding: .utf8)
+            try data.write(to: URL(fileURLWithPath: path), options: .atomic)
             tabs[index].markSaved()
             noticeText = L(.workspaceFileSaved, tabs[index].title)
             return true
@@ -367,6 +386,56 @@ final class WorkspaceTabsModel: ObservableObject {
             errorText = L(.workspaceSaveFailed, tabs[index].title, error.localizedDescription)
             return false
         }
+    }
+
+    // MARK: 编码与换行（`FR-STD-WS-EDIT-023` ③）
+    //
+    // **只改口径，不碰文本**（换行那一档例外：切 CRLF 的意思就是"内容以后用 CRLF"，
+    // 不落地会让状态栏与正文相抵）。真正写盘发生在下一次保存 —— 需求要的是显式，
+    // 不是"点一下菜单就把磁盘改了"。
+
+    /// 这一页现在的打开形态（状态栏那一格与编辑器以外的读者都问这里）。
+    func format(for tabID: UUID) -> TextFileFormat? {
+        tabs.first(where: { $0.id == tabID })?.format
+    }
+
+    /// 换编码。**文本一个字不动** —— 编码只在写盘那一刻起作用。
+    func chooseEncoding(tabID: UUID, encoding: ResultExportEncoding) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
+        tabs[index].format = tabs[index].format.choosing(encoding: encoding)
+    }
+
+    /// 换换行。切换会把文本统一成那一档（见上面的理由）。
+    func chooseLineEnding(tabID: UUID, lineEnding: LineEnding) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
+        let outcome = tabs[index].format.choosing(lineEnding: lineEnding, in: tabs[index].content)
+        guard outcome.text != tabs[index].content else {
+            tabs[index].format = outcome.format
+            return
+        }
+        tabs[index].content = outcome.text
+        tabs[index].format = outcome.format
+        // 内容变了，折叠的锚要重新对一次账（与「内容稳定」那条路同一个入口）。
+        refreshFolds(tabID: tabID)
+    }
+
+    /// 按**盘上字节**重判一次形态（用户手改过文件 / 老快照恢复出来的页签用得上）。
+    ///
+    /// 只在盘上文件真读得出来时改：读不出来就说一句，不把"读不到"当成"缺省 UTF-8"。
+    func redetectFormat(tabID: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }),
+              let path = tabs[index].path else { return }
+        guard let format = try? TextFileFormat.detect(contentsOf: URL(fileURLWithPath: path)) else {
+            errorText = L(.workspaceFormatRedetectFailed, tabs[index].title)
+            return
+        }
+        // 内容也按新形态归一：否则"状态栏说 CRLF、正文还是 LF"这种两套口径又回来了。
+        if format.lineEnding != .mixed {
+            tabs[index].content = LineEnding.normalizing(tabs[index].content)
+            tabs[index].savedContent = LineEnding.normalizing(tabs[index].savedContent)
+        }
+        tabs[index].format = format
+        refreshFolds(tabID: tabID)
     }
 
     /// 当前选中页签的保存（给 ⌘S 用）。

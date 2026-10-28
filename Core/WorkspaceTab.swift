@@ -43,9 +43,20 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
     /// 也不会串到别的文件上。**新打开的页签一律全展开** —— 一进来就是折的会让人以为文件短了一截。
     public var folds: FoldState
 
+    /// 这一页的**打开形态**（编码 + 换行 + BOM，`FR-STD-WS-EDIT-023`）：保存时按它写回，
+    /// 状态栏按它显示、菜单按它改。**住页签上**而不是每次保存现读盘一眼：
+    /// 用户在状态栏把编码切到 GB18030 之后，那个选择就是这一页现在的事实。
+    public var format: TextFileFormat
+
+    /// 上一次存盘时的形态（= 盘上那份文件的形态）。与 `format` 比出「形态改过还没存」，
+    /// 与 `savedContent` 比出「内容改过还没存」—— 两者合起来才是「这一页有未保存改动」。
+    /// 少了这一半，用户切了编码却看不到任何"未保存"的提示，关页签时那份改动就悄悄没了。
+    public var savedFormat: TextFileFormat
+
     public init(id: UUID = UUID(), title: String, path: String? = nil, language: TextLanguage,
                 content: String = "", savedContent: String? = nil, kind: Kind? = nil,
-                indent: IndentProfile = .fallback, folds: FoldState = FoldState()) {
+                indent: IndentProfile = .fallback, folds: FoldState = FoldState(),
+                format: TextFileFormat = .utf8LF, savedFormat: TextFileFormat? = nil) {
         self.id = id
         self.title = title
         self.path = path
@@ -55,6 +66,8 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
         self.kind = kind ?? (path == nil ? .home : .file)
         self.indent = indent
         self.folds = folds
+        self.format = format
+        self.savedFormat = savedFormat ?? format
     }
 
     /// 是不是 Home 欢迎页（**注意：对话页签不是它**）。
@@ -64,19 +77,31 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
     public var isAgentChat: Bool { kind == .agentChat }
 
     /// 有未保存改动。
-    public var isDirty: Bool { content != savedContent }
+    ///
+    /// **内容或形态任一不同都算脏**（`FR-STD-WS-EDIT-023`）：用户只把编码从 UTF-8 切到
+    /// GB18030、一个字都没改，那一页也必须在关页签时被问一句 —— 否则"编码切换"这个动作
+    /// 会随页签一起无声消失。
+    public var isDirty: Bool { content != savedContent || format != savedFormat }
+
+    /// 形态改过但还没存（状态栏那行据此说"保存后生效"）。
+    public var hasPendingFormatChange: Bool { format != savedFormat }
+
 
     /// 打开一个文件页签。
     ///
     /// **缩进口径在打开这一刻按内容判定**（`FR-STD-WS-EDIT-022`）：`WorkspaceTab.file` 是「打开文件」
     /// 的唯一入口（双击、右键「以源码打开」、CLI 都走它）⇒ 口径只算一次、也不算第二次。
-    public static func file(path: String, content: String) -> WorkspaceTab {
+    ///
+    /// **打开形态由调用点从字节算好传进来**（`FR-STD-WS-EDIT-023`）：这里只拿到已经归一到 LF 的文本，
+    /// 编码与 BOM 只有看过字节的人知道。缺省 UTF-8 · LF · 无 BOM（新建文件 / 认不出时）。
+    public static func file(path: String, content: String, format: TextFileFormat = .utf8LF) -> WorkspaceTab {
         WorkspaceTab(
             title: WorkspaceTabSet.title(for: path),
             path: path,
             language: TextLanguage.detect(path: path),
             content: content,
-            indent: IndentProfile.detect(in: content)
+            indent: IndentProfile.detect(in: content),
+            format: format
         )
     }
 
@@ -92,9 +117,13 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
         WorkspaceTab(title: title, language: .plainText, kind: .agentChat)
     }
 
-    /// 存盘成功：把"已保存内容"对齐到当前内容。
+    /// 存盘成功：把"已保存内容"与"已保存形态"一起对齐到当前值。
+    ///
+    /// 两样一起对齐是硬要求：只对内容不对形态 ⇒ 用户切了编码再保存，页签仍然是脏的（永远存不掉）；
+    /// 只对形态不对内容 ⇒ 那才是真正的漏存。
     public mutating func markSaved() {
         savedContent = content
+        savedFormat = format
     }
 }
 
@@ -124,11 +153,12 @@ public enum WorkspaceTabSet {
     ///
     /// 为什么"复用"是硬规则：同一个文件开成两个页签，改一边、存另一边，
     /// 是这类编辑器最经典的丢改动方式。
-    public static func opening(path: String, in tabs: [WorkspaceTab], content: String) -> (tabs: [WorkspaceTab], selected: UUID) {
+    public static func opening(path: String, in tabs: [WorkspaceTab], content: String,
+                               format: TextFileFormat = .utf8LF) -> (tabs: [WorkspaceTab], selected: UUID) {
         if let existing = tabs.first(where: { $0.path == path }) {
             return (tabs, existing.id)
         }
-        let tab = WorkspaceTab.file(path: path, content: content)
+        let tab = WorkspaceTab.file(path: path, content: content, format: format)
         return (tabs + [tab], tab.id)
     }
 

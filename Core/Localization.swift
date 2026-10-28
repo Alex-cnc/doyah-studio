@@ -1290,6 +1290,15 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceFileBinary
     case workspaceOpenFailed
     case workspaceOpenedWithEncoding
+    // 编码与换行（`FR-STD-WS-EDIT-023`）：打开提示 / 状态栏菜单 / 判定失败与保存失败各一句。
+    case workspaceOpenedWithLineEnding
+    case workspaceFormatMenuHelp
+    case workspaceFormatPendingSave
+    case workspaceFormatEncodingSection
+    case workspaceFormatLineEndingSection
+    case workspaceFormatRedetect
+    case workspaceFormatRedetectFailed
+    case workspaceSaveFormatFailed
     case workspaceFileSaved
     case workspaceSaveFailed
     // 代码格式化（FR-EDIT-39）：**如实说明用了哪一种**、认不出就说明为什么
@@ -4375,6 +4384,14 @@ public enum LocalizedStrings {
         .workspaceFileBinary: [.simplifiedChinese: "%@ 看起来是二进制文件，不在编辑器里打开", .english: "%@ looks like a binary file — not opening it in the editor"],
         .workspaceOpenFailed: [.simplifiedChinese: "打开 %@ 失败：%@", .english: "Could not open %@: %@"],
         .workspaceOpenedWithEncoding: [.simplifiedChinese: "%@ 不是 UTF-8，已按 %@ 打开", .english: "%@ is not UTF-8; opened as %@"],
+        .workspaceOpenedWithLineEnding: [.simplifiedChinese: "%@ 用的是 %@ 换行，保存时照原样写回", .english: "%@ uses %@ line endings; they are kept on save"],
+        .workspaceFormatMenuHelp: [.simplifiedChinese: "编码与换行：按文件判定，可手动改（保存时生效）", .english: "Encoding and line endings: detected from the file, can be changed (applied on save)"],
+        .workspaceFormatPendingSave: [.simplifiedChinese: "已改，保存后写入磁盘", .english: "Changed; written to disk on save"],
+        .workspaceFormatEncodingSection: [.simplifiedChinese: "编码", .english: "Encoding"],
+        .workspaceFormatLineEndingSection: [.simplifiedChinese: "换行", .english: "Line endings"],
+        .workspaceFormatRedetect: [.simplifiedChinese: "按文件重新判定", .english: "Detect from file again"],
+        .workspaceFormatRedetectFailed: [.simplifiedChinese: "%@ 读不出盘上的内容，编码与换行未改", .english: "Could not read %@ from disk; encoding and line endings unchanged"],
+        .workspaceSaveFormatFailed: [.simplifiedChinese: "%@ 里有 %@ 编不出来的字符，没有保存", .english: "%@ contains characters %@ cannot encode; nothing was saved"],
         .workspaceFileSaved: [.simplifiedChinese: "已保存 %@", .english: "Saved %@"],
         .workspaceSaveFailed: [.simplifiedChinese: "保存 %@ 失败：%@", .english: "Could not save %@: %@"],
         // 代码格式化（FR-EDIT-39）。两条口径写进文案里：**用了哪一种要说**（外部工具名 / 内置兜底）、

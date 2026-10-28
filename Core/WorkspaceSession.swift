@@ -90,13 +90,28 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
         /// 老快照没有这一栏 ⇒ `nil` ⇒ 仍按老规则推（`path == nil` 当 Home），不炸也不改历史语义。
         public var kind: String?
 
+        /// 打开形态里的编码（`ResultExportEncoding.rawValue`，`FR-STD-WS-EDIT-023`）。
+        ///
+        /// **必须存**：页签回来后若按缺省 UTF-8 写回，一份 GB18030 的文件就在第一次 ⌘S 时
+        /// 被悄悄换了编码 —— 而需求写着"保存时不悄悄改掉"。老快照没有这两栏 ⇒ `nil` ⇒
+        /// 恢复时按**盘上字节**重判（见 `restore` 的 `formatFor`）。
+        public var encoding: String?
+        /// 打开形态里的换行（`LineEnding.rawValue`）。同上：不存就会被悄悄统一成 LF。
+        public var lineEnding: String?
+        /// 盘上那份 UTF-8 文件有没有 BOM。存它是因为"凭空加一个"与"凭空去掉"都是改动。
+        public var byteOrderMark: Bool?
+
         public init(path: String?, title: String, language: String, unsavedContent: String? = nil,
-                    kind: String? = nil) {
+                    kind: String? = nil, encoding: String? = nil, lineEnding: String? = nil,
+                    byteOrderMark: Bool? = nil) {
             self.path = path
             self.title = title
             self.language = language
             self.unsavedContent = unsavedContent
             self.kind = kind
+            self.encoding = encoding
+            self.lineEnding = lineEnding
+            self.byteOrderMark = byteOrderMark
         }
 
         /// 从活页签取存档形态。
@@ -106,8 +121,19 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
                 title: tab.title,
                 language: tab.language.rawValue,
                 unsavedContent: tab.isDirty ? tab.content : nil,
-                kind: tab.kind.rawValue
+                kind: tab.kind.rawValue,
+                encoding: tab.format.encoding.rawValue,
+                lineEnding: tab.format.lineEnding.rawValue,
+                byteOrderMark: tab.format.hadByteOrderMark
             )
+        }
+
+        /// 快照里记的打开形态；两栏认不出（老快照 / 脏值）就是 `nil`。
+        public var storedFormat: TextFileFormat? {
+            guard let encoding = encoding.flatMap(ResultExportEncoding.init(rawValue:)) else { return nil }
+            guard let lineEnding = lineEnding.flatMap(LineEnding.init(rawValue:)) else { return nil }
+            return TextFileFormat(encoding: encoding, lineEnding: lineEnding,
+                                  hadByteOrderMark: byteOrderMark ?? false)
         }
     }
 
@@ -195,14 +221,19 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
     /// 于是用户按 ⌘S 会在那个路径上写出一个空文件（「页签不丢」的另一面）。界面怎么处置
     /// （提示另存 / 置成不可写）不在本片。
     public static func restore(from snapshot: WorkspaceSessionSnapshot) -> WorkspaceSessionRestore {
-        restore(from: snapshot, readFile: readText(at:))
+        restore(from: snapshot, readFile: readText(at:), formatFor: formatOnDisk(at:))
     }
 
     /// `readFile` 是**注入的读盘面**：给路径、给盘上的文本；`nil` = 这一页拿不到盘上的内容
     /// （不存在 / 已被改名 / 目录 / 二进制 / 读不出）。
+    ///
+    /// `formatFor`（`FR-STD-WS-EDIT-023`）只在**快照没记住形态时**被问一次（老快照）：
+    /// 让调用点按**盘上字节**重判编码与换行。给了就不用把"读盘两次"当成常态 ——
+    /// 新快照里形态已经带着。
     public static func restore(
         from snapshot: WorkspaceSessionSnapshot,
-        readFile: (String) -> String?
+        readFile: (String) -> String?,
+        formatFor: ((String) -> TextFileFormat?)? = nil
     ) -> WorkspaceSessionRestore {
         var result = WorkspaceSessionRestore(workspacePath: snapshot.workspacePath)
         /// 已经见过一个 Home 没有（老快照没有种类栏时用来区分 Home 与对话页签）。
@@ -235,13 +266,24 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
             let onDisk = readFile(path)
             if onDisk == nil { result.missingPaths.append(path) }
 
+            // 打开形态（`FR-STD-WS-EDIT-023`）：快照里记着就用它（用户可能已经在状态栏切过），
+            // 没记着（老快照）就按盘上字节重判；两样都拿不到才落缺省 —— 而那一步只发生在
+            // "文件也读不到"的情况，此时反正写不出盘。
+            let format = stored.storedFormat
+                ?? formatFor?(path)
+                ?? TextFileFormat(encoding: .utf8,
+                                  lineEnding: LineEnding.detecting(in: onDisk ?? ""),
+                                  hadByteOrderMark: false)
+            // 盘上文本归一到 LF：编辑器内部只有一个换行口径。写回时 `format.lineEnding` 负责还原。
+            let diskText = onDisk.map { format.lineEnding == .mixed ? $0 : LineEnding.normalizing($0) }
+
             let content: String
             if let unsaved = stored.unsavedContent {
                 content = unsaved
                 result.unsavedPaths.append(path)
             } else {
                 // 读不出就没有盘上的内容可用（空文本），页签仍是那一页 —— 不是「静默丢掉」。
-                content = onDisk ?? ""
+                content = diskText ?? ""
             }
 
             result.tabs.append(
@@ -252,10 +294,13 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
                     content: content,
                     // 「上次存盘时的内容」= **现在盘上的内容**：于是有未保存内容的那一页回来仍是脏的
                     // （界面上那枚「未保存」标记自己会亮），没有未保存内容的那一页回来是干净的。
-                    savedContent: onDisk ?? "",
+                    savedContent: diskText ?? "",
                     // 缩进口径与「刚打开」同源（`FR-STD-WS-EDIT-022`）：恢复出来的页签也按**内容**判，
                     // 否则重启后状态栏说「缺省」而正文明明两格缩进（口径与屏幕上看到的东西相抵）。
-                    indent: IndentProfile.detect(in: content)
+                    indent: IndentProfile.detect(in: content),
+                    // 形态同理（`FR-STD-WS-EDIT-023`）：不带回来，第一次 ⌘S 就会把 GB18030 / CRLF
+                    // 悄悄改成 UTF-8 / LF —— 那是"保存时改掉了"的最坏形状（用户看不见）。
+                    format: format
                 )
             )
         }
@@ -321,6 +366,14 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
             return nil
         }
         return try? TextFileDecoder.decode(data).text
+    }
+
+    /// 盘上那份文件的打开形态（老快照没有形态两栏时用）。
+    private static func formatOnDisk(at path: String) -> TextFileFormat? {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)), !data.contains(0) else {
+            return nil
+        }
+        return try? TextFileFormat.detecting(data)
     }
 }
 

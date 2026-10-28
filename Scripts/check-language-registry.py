@@ -96,6 +96,7 @@ CONSUMER_FILES = (
     "Core/CodeFormatting.swift",
     "Core/CodeLexer.swift",
     "Core/CodeFenceLanguage.swift",   # 2026-10-24：代码块语法着色新增的语言消费者（原缺席 ⇒ 判据假绿）
+    "Core/CodeFolding.swift",   # 2026-10-29 第五十六批：折叠按语言的 fold 规则取（R55 新增的消费者漏登记 ⇒ 判据一直红着）
     "Core/CodeSyntax.swift",
     "Core/InlineGhostCompletion.swift",
     "Core/InlineGhostPathCompletion.swift",

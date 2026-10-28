@@ -97,7 +97,13 @@ final class WorkspaceSessionTests: XCTestCase {
         // （多记一份的代价：恢复完一切页签，每页都跳一下）；`kind` = 页签类型（Home / 文件 /
         // 查询 / 对话），恢复时要按它还原页签形态，所以它是**页**的属性，留在这里。
         let first = (json?["tabs"] as? [[String: Any]])?.first
-        XCTAssertEqual(Set((first ?? [:]).keys), ["path", "title", "language", "unsavedContent", "kind"])
+        XCTAssertEqual(
+            Set((first ?? [:]).keys),
+            // `encoding` / `lineEnding` / `byteOrderMark` 是 `FR-STD-WS-EDIT-023` 补的三栏
+            // （打开形态）：不存就会在第一次 ⌘S 时把 GB18030 / CRLF 悄悄改成 UTF-8 / LF。
+            ["path", "title", "language", "unsavedContent", "kind",
+             "encoding", "lineEnding", "byteOrderMark"]
+        )
     }
 
     /// 版本兼容（读）：缺 `version` 栏（更早的手写文件 / 将来裁掉的栏位）按 `1` 读，不炸整个会话。

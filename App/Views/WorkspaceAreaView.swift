@@ -150,6 +150,7 @@ struct WorkspaceAreaView: View {
                 .foregroundStyle(Theme.text(.tertiary))
                 .lineLimit(1)
             Spacer(minLength: Spacing.s)
+            formatMenu(tab: tab)
             indentMenu(tab: tab)
             if tab.language == .markdown || webPageTab(tab) {
                 Button {
@@ -164,6 +165,62 @@ struct WorkspaceAreaView: View {
         }
         .padding(.horizontal, Spacing.s)
         .padding(.vertical, Spacing.hair)
+    }
+
+    // MARK: 编码与换行那一格（`FR-STD-WS-EDIT-023`）
+    //
+    // 状态栏说、菜单改，两件事读同一格数据（`WorkspaceTab.format`）。说的必须是**这一页现在
+    // 的形态**：用户切到 GB18030 之后那一格就该显示 GB18030（而不是盘上还是 UTF-8）——
+    // 于是那格与页签的"未保存"标记一起说清"这个改动还没写下去"。
+
+    /// 状态栏上那一格：`UTF-8 · CRLF`。
+    private func formatLabel(_ format: TextFileFormat) -> String {
+        format.displayName
+    }
+
+    /// 形态菜单：编码两档 + 换行两档 + 「按文件重新判定」。每一项都走页签模型那一个入口。
+    @ViewBuilder
+    private func formatMenu(tab: WorkspaceTab) -> some View {
+        Menu {
+            if tab.hasPendingFormatChange {
+                Text(L(.workspaceFormatPendingSave))
+                Divider()
+            }
+            Text(L(.workspaceFormatEncodingSection))
+            ForEach(ResultExportEncoding.allCases, id: \.self) { encoding in
+                Button {
+                    tabs.chooseEncoding(tabID: tab.id, encoding: encoding)
+                } label: {
+                    indentMenuItem(encoding.shortName, checked: tab.format.encoding == encoding)
+                }
+            }
+            Divider()
+            Text(L(.workspaceFormatLineEndingSection))
+            ForEach(LineEnding.selectable, id: \.self) { ending in
+                Button {
+                    tabs.chooseLineEnding(tabID: tab.id, lineEnding: ending)
+                } label: {
+                    indentMenuItem(ending.shortName, checked: tab.format.lineEnding == ending)
+                }
+            }
+            // 混排是**判出来的事实**，不是可选口径：给一行只读的说明，别给一个点了没用的勾。
+            if tab.format.lineEnding == .mixed {
+                indentMenuItem(LineEnding.mixed.shortName, checked: true)
+            }
+            Divider()
+            Button {
+                tabs.redetectFormat(tabID: tab.id)
+            } label: {
+                Text(L(.workspaceFormatRedetect))
+            }
+        } label: {
+            Text(formatLabel(tab.format))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(L(.workspaceFormatMenuHelp))
     }
 
     // MARK: 缩进口径那一格（`FR-STD-WS-EDIT-022`）
