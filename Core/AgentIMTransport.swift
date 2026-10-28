@@ -271,11 +271,14 @@ public actor AgentIMTransport {
     }
 
     /// 补发未投递结果；返回这次真的送出去几条。
+    ///
+    /// **只补 WebSocket 那条路的条目**（`relayPending()`）：官方条目走 REST，由
+    /// `AgentIMOutboundDrain` 在连上之后补发 —— 往官方网关上糊本侧约定帧只会得到一堆坏帧。
     @discardableResult
     public func replayPending() async -> Int {
         guard let queue = resultQueue, state.isOnline else { return 0 }
         var delivered = 0
-        for entry in queue.pending() {
+        for entry in queue.relayPending() {
             do {
                 try await send(entry.text)
                 try queue.ack(id: entry.id)

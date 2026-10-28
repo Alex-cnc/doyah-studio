@@ -83,15 +83,38 @@ final class AgentIMInboundRunTests: XCTestCase {
         XCTAssertEqual(recorder.tasks.first?.chatID, "chat-A")
         XCTAssertEqual(recorder.tasks.first?.alwaysRequiresDesktopApproval, true, "IM 不放宽审批")
 
-        // 推出去的那一帧：形状固定、带原 chat、正文是结论。
-        let sent = try XCTUnwrap(recorder.delivered.first?.text)
-        XCTAssertTrue(sent.contains(#""op":"reply""#), sent)
-        XCTAssertTrue(sent.contains(#""chatID":"chat-A""#), sent)
-        XCTAssertTrue(sent.contains("统计跑完了"), sent)
+        // 入队的那一条：正文就是结论（**不是帧** —— 官方 REST 把它放进 content），
+        // 并且带着「回哪个 chat / 私聊还是群 / 回哪一条消息」—— 断线补发时只认这一份。
+        let entry = try XCTUnwrap(recorder.delivered.first)
+        XCTAssertEqual(entry.text, "统计跑完了：3 张表，0 条异常")
+        XCTAssertFalse(entry.text.contains(#""op":"reply""#), "官方那条路不许再往正文里塞本侧帧")
+        XCTAssertEqual(entry.chatID, "chat-A")
+        XCTAssertEqual(entry.target, AgentIMOutboundTarget(kind: .c2c, openID: "chat-A"))
+        XCTAssertEqual(entry.replyToMessageID, "m1", "被动回复要带派活那条消息的 msg_id")
 
         // 推成才 ack：队列里留痕但不再待投递。
         XCTAssertTrue(queue().pending().isEmpty, "推成功的必须 ack，否则每次重连都重发")
         XCTAssertEqual(queue().all().count, 1, "留痕不删")
+    }
+
+    // MARK: - ①b 群聊：目标落在群那条端点、`msg_id` 是派活那条
+
+    func testGroupMessageCarriesGroupTargetAndReplyTo() async throws {
+        let recorder = Recorder()
+        let runner = makeRunner(recorder: recorder)
+        let groupFrame = AgentIMInboundFrame.message(
+            AgentIMInboundMessage(platformMessageID: "g-1", chatID: "group-openid-9",
+                                  senderID: "member-openid", text: "跑一下统计",
+                                  chatKind: .group))
+
+        let outcome = await runner.handle(groupFrame, receiveTasks: true, readiness: ready,
+                                          connection: online, language: .simplifiedChinese)
+
+        XCTAssertEqual(outcome, .replied(delivered: true))
+        let entry = try XCTUnwrap(recorder.delivered.first)
+        XCTAssertEqual(entry.target, AgentIMOutboundTarget(kind: .group, openID: "group-openid-9"),
+                       "群里派活得回到群那条端点，不能发成私聊")
+        XCTAssertEqual(entry.replyToMessageID, "g-1")
     }
 
     // MARK: - ② 开关关掉：一条都不进，且不记去重（之后打开开关，重投的那条仍该跑）
@@ -163,17 +186,22 @@ final class AgentIMInboundRunTests: XCTestCase {
     }
 
     // MARK: - ⑥ 离线期间产生的结论：重连后补发（真传输层，假 socket）
+    //
+    // 第四十三批改了口径：官方结论走 REST，**不再**往官方 WebSocket 上写本侧帧。
+    // ⇒ 这里钉的是「补发只补中继那条路」，官方那条留给 `AgentIMOutboundDrain`（见
+    // `Tests/AgentIMOutboundSendTests.swift`）。
 
-    func testPendingResultIsReplayedAfterReconnect() async throws {
-        // 先离线跑一轮（deliver 恒失败 = 没有传输层）：结论落在队列里等补发。
-        let recorder = Recorder()
-        recorder.setDeliverSucceeds(false)
-        let runner = makeRunner(recorder: recorder)
-        _ = await runner.handle(frame(chatID: "chat-B", text: "长任务"), receiveTasks: true,
-                                readiness: ready, connection: online, language: .simplifiedChinese)
-        XCTAssertEqual(queue().pending().count, 1)
+    func testReconnectReplaysOnlyRelayShapedResultsOverWebSocket() async throws {
+        let results = queue()
+        let official = try results.enqueue(chatID: "chat-B", text: "统计跑完了：3 张表，0 条异常",
+                                         target: AgentIMOutboundTarget(kind: .c2c, openID: "chat-B"),
+                                         replyToMessageID: "m1")
+        let relay = try results.enqueue(chatID: "chat-B2",
+                                      text: AgentIMOutboundFrame.reply(chatID: "chat-B2",
+                                                                       text: "统计跑完了：中继那条"))
+        XCTAssertEqual(results.pending().count, 2)
 
-        // 再起真传输层（假 socket）：连上那一刻先补发没 ack 的。
+        // 起真传输层（假 socket）：连上那一刻先补发没 ack 的**中继条目**。
         let socket = RecordingSocket()
         let link = AgentIMTransport(
             config: AgentIMTransportConfig(gatewayURL: URL(string: "wss://gateway.test/ws")!,
@@ -181,15 +209,21 @@ final class AgentIMInboundRunTests: XCTestCase {
             signer: AgentIMGatewaySigner(appID: "12345678", secret: "s3cret"),
             makeSocket: { _, _ in socket },
             sleep: { _ in })
-        await link.attachResultQueue(queue())
+        await link.attachResultQueue(results)
         await link.start()
-        let replayed = await waitUntil(2) { queue().pending().isEmpty }
-        XCTAssertTrue(replayed, "重连后没补发：\(queue().pending())")
+        let replayed = await waitUntil(2) {
+            results.all().first(where: { $0.id == relay.id })?.ackedAt != nil
+        }
+        XCTAssertTrue(replayed, "中继那条重连后没补发：\(results.pending())")
         await link.stop()
 
         let frames = socket.sentFrames
-        XCTAssertTrue(frames.contains { $0.contains(#""chatID":"chat-B""#) && $0.contains("统计跑完了") },
+        XCTAssertTrue(frames.contains { $0.contains(#""chatID":"chat-B2""#) && $0.contains("中继那条") },
                       "补发的那一帧要带回原 chat 与结论：\(frames)")
+        XCTAssertFalse(frames.contains { $0.contains("统计跑完了：3 张表") },
+                       "官方条目走 REST，不许往官方网关糊本侧帧：\(frames)")
+        XCTAssertEqual(results.pending().map(\.id), [official.id],
+                       "官方那条仍在队列里等 REST 补发")
     }
 
     // MARK: - ⑦ 跑抛错：仍推一句能读的「没跑成」（技术串不外泄）

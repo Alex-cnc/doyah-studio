@@ -1853,6 +1853,15 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMReasonNoWorkspace
     case agentIMReasonNoAnswer
     case agentIMReasonNoRunner
+    case agentIMSendDelivered
+    case agentIMSendNotReady
+    case agentIMSendUnauthorized
+    case agentIMSendForbidden
+    case agentIMSendRateLimited
+    case agentIMSendServerFailed
+    case agentIMSendNotJSON
+    case agentIMSendRejected
+    case agentIMSendNetworkFailed
     case agentLocalEndpointHint
     case agentStatusSection
     case agentSave
@@ -4799,6 +4808,15 @@ public enum LocalizedStrings {
         .agentIMReasonNoWorkspace: [.simplifiedChinese: "没有打开工作区", .english: "no workspace is open"],
         .agentIMReasonNoAnswer: [.simplifiedChinese: "这一轮没有产出结论", .english: "this run produced no answer"],
         .agentIMReasonNoRunner: [.simplifiedChinese: "对话循环没有接上", .english: "the conversation loop is not wired"],
+        .agentIMSendDelivered: [.simplifiedChinese: "结论已经发回聊天里了", .english: "The result was sent back to the chat."],
+        .agentIMSendNotReady: [.simplifiedChinese: "这条结论没发出去（%@）：还没到发的那一步。", .english: "This result was not sent (%@): it never reached the sending step."],
+        .agentIMSendUnauthorized: [.simplifiedChinese: "发不出去：AppID 或 Secret 不对（401）。重新填一次凭据再试。", .english: "Could not send: the AppID or Secret is wrong (401). Re-enter the credentials and try again."],
+        .agentIMSendForbidden: [.simplifiedChinese: "发不出去：这个机器人没有发消息的权限（403）—— 到 QQ 开放平台给机器人开消息权限，群聊还要先把机器人拉进群。", .english: "Could not send: this bot has no permission to post messages (403). Enable message permissions on the QQ open platform; for groups, add the bot to the group first."],
+        .agentIMSendRateLimited: [.simplifiedChinese: "发不出去：被 QQ 限流了（429）。过一会儿再发（结论留在队列里，不会丢）。", .english: "Could not send: rate limited by QQ (429). Try again later (the result stays queued and is not lost)."],
+        .agentIMSendServerFailed: [.simplifiedChinese: "发不出去：QQ 那边出错了（5xx）。结论留在队列里，等下会自动重发。", .english: "Could not send: QQ returned a server error (5xx). The result stays queued and is retried automatically."],
+        .agentIMSendNotJSON: [.simplifiedChinese: "发不出去：对方回的不是能认的答复（多半被代理或网关拦了）。", .english: "Could not send: the reply was not something we can read (usually a proxy or gateway intercepting it)."],
+        .agentIMSendRejected: [.simplifiedChinese: "发不出去：QQ 拒了这个请求，HTTP %d（码 %@）。", .english: "Could not send: QQ rejected the request, HTTP %d (code %@)."],
+        .agentIMSendNetworkFailed: [.simplifiedChinese: "发不出去：连不上 QQ 的接口（网络 / 代理）。结论留在队列里，等下次连上再发。", .english: "Could not send: cannot reach the QQ API (network or proxy). The result stays queued and goes out on the next connection."],
         .agentLocalEndpointHint: [.simplifiedChinese: "本地 / 局域网端点无需 API Key（本地模型优先）。", .english: "Local or LAN endpoints need no API key."],
         .agentStatusSection: [.simplifiedChinese: "当前状态", .english: "Status"],
         .agentSave: [.simplifiedChinese: "保存", .english: "Save"],

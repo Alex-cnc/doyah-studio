@@ -82,8 +82,11 @@ public enum AgentIMReplyText {
     }
 }
 
-/// 外发帧的形状（**本侧约定**：`op` 名与字段名要等真网关口径才能定。
-/// 真 op 码未对齐这件事如实登记在台账备注里 —— 不假装它就是 QQ 官方的形状）。
+/// 自建中继那条路的帧形状（**本侧约定**）。
+///
+/// 2026-10-28 第四十三批之后它**只服务自建中继**：官方路径的回话走 REST
+/// `POST /v2/{users|groups}/{openid}/messages`（见 `AgentIMOutboundSend.swift`），
+/// 不再往官方 WebSocket 上写这种帧 —— 官方网关不认它。
 public enum AgentIMOutboundFrame {
 
     public static let op = "reply"
@@ -234,12 +237,13 @@ public struct AgentIMInboundRunner {
                                                                chatID: message.chatID,
                                                                senderID: message.senderID,
                                                                text: prompt,
-                                                               receivedAt: message.receivedAt))
+                                                               receivedAt: message.receivedAt,
+                                                               chatKind: message.chatKind))
         } catch {
             // 会话映射写不进去 ⇒ 这一轮不跑（宁可如实说，也不许另起一条会话号把上下文劈开）。
             let delivered = await push(AgentIMReplyText.text(for: .unavailable(code: "taskFailed"),
                                                              language: language),
-                                       chatID: message.chatID, now: now)
+                                       message: message, now: now)
             return .failed(reason: "sessionMap: \(error)", delivered: delivered)
         }
 
@@ -247,22 +251,29 @@ public struct AgentIMInboundRunner {
         do {
             let result = try await run(task)
             let delivered = await push(AgentIMReplyText.text(for: result, language: language),
-                                       chatID: message.chatID, now: now)
+                                       message: message, now: now)
             return .replied(delivered: delivered)
         } catch {
             let delivered = await push(AgentIMReplyText.taskFailed(language: language),
-                                       chatID: message.chatID, now: now)
+                                       message: message, now: now)
             return .failed(reason: "run: \(error)", delivered: delivered)
         }
     }
 
     /// 入队 + 推 + **推成才 ack**（推不出去就留在队列里，重连补发）。
-    private func push(_ text: String, chatID: String, now: Date) async -> Bool {
+    ///
+    /// 入队的是**正文**（不是帧）：官方 REST 把它放进 `content`；自建中继由投递那一层现拼帧。
+    /// 同时把「回哪个 chat、私聊还是群、回哪一条消息（`msg_id`）」一并落进条目 ——
+    /// 断线后补发时这些信息已经不在内存里了，只认队列里这一份。
+    private func push(_ text: String, message: AgentIMInboundMessage, now: Date) async -> Bool {
         let entry: AgentIMResultQueue.Entry
         do {
-            entry = try resultQueue.enqueue(chatID: chatID,
-                                            text: AgentIMOutboundFrame.reply(chatID: chatID, text: text),
-                                            at: now)
+            entry = try resultQueue.enqueue(chatID: message.chatID,
+                                            text: text,
+                                            at: now,
+                                            target: AgentIMOutboundTarget(kind: message.chatKind,
+                                                                          openID: message.chatID),
+                                            replyToMessageID: message.platformMessageID)
         } catch {
             // 连账都落不下去 ⇒ 没推成（不许回 true）。
             return false

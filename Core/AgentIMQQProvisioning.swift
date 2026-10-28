@@ -479,13 +479,16 @@ public enum AgentIMQQHandshake {
             ?? ""
         let chatID = (data["group_openid"] as? String) ?? sender
         guard !chatID.isEmpty, !sender.isEmpty else { return .unknown(op: event) }
+        // 私聊 / 群各一对端点 ⇒ 这一档必须在这里定死（回话走错端点 = 404 或打给别人）。
+        let kind: AgentIMChatKind = (data["group_openid"] as? String) == nil ? .c2c : .group
         switch event {
         case "C2C_MESSAGE_CREATE", "GROUP_AT_MESSAGE_CREATE", "AT_MESSAGE_CREATE":
             return .message(AgentIMInboundMessage(platformMessageID: messageID,
                                                   chatID: chatID,
                                                   senderID: sender,
                                                   text: text,
-                                                  receivedAt: receivedAt))
+                                                  receivedAt: receivedAt,
+                                                  chatKind: kind))
         default:
             return .unknown(op: event)
         }

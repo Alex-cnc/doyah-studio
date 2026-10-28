@@ -455,6 +455,13 @@ struct AgentSettingsSheet: View {
                             .foregroundStyle(Theme.text(.secondary))
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    if let outboundLine = appState.agentIMOutboundLine {
+                        // 外发那一档：发不出去时用户要看得见是凭据 / 限流 / 网络（不能只留一句「已连接」）。
+                        Text(outboundLine)
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if appState.agentIMInboundHandled > 0 {
                         // 两个数**分开**：跑过几轮 ≠ 推回去几条（推不出去的留在队列里等重连补发）。
                         Text(L(.agentIMInboundReceived, Int64(appState.agentIMInboundHandled)))

@@ -1,23 +1,18 @@
 # 检查点
 
-updated: 2026-10-28T23:05
+updated: 2026-10-28T23:20
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-28 R42）：`verify-core` **4462 例 / 0 failures**（`--filter` 只作过滤读数）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `cca86c1e` · 98,316 KB（R42 重出，身份见台账「现行包」行）。
+- 最近读数（2026-10-28 R43）：`verify-core` **4482 例 / 0 failures**（`--filter` 只作过滤读数）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `b953fcb1` · 98,604 KB（R43 重出，身份见台账「现行包」行）。
 
 ## 下一项
 
-**1. IM 通道的官方外发（`FR-AGT-LINK-CHAN-003` 的收尾片）** —— 本轮把入站与握手都对齐了官方口径，
-但**回话**仍是本侧外发帧 `{"op":"reply",…}`；官方 C2C / 群消息要走
-`POST /v2/users/{openid}/messages` 与 `POST /v2/groups/{group_openid}/messages`（被动回复带 `msg_id` + `msg_seq`）。
-这一片**判据可机械跑**（假 HTTP + `Tests`，不需要真凭据），落 `Core/AgentIMOutboundSend.swift` + `AppState` 接线
-（结果队列的投递改走它），并把「外发未做」这条 blocked 从台账备注里划掉。真端到端点验仍要主人给 AppID + Secret。
+**1. 台账 `FR-STD-DB-TASK-001`（任务定义可保存复用，实现 ⬜ / 判据 ⬜）** —— 与本侧 `-002`（逐条审批）同一族，
+`Core/DataTask*` 与 `TaskRunRecord` 已在盘，先核已有面再定缺口。判据可机械跑。
 
-**2. 台账 `FR-STD-DB-TASK-001`（任务定义可保存复用，实现 ⬜ / 判据 ⬜）** —— 与本侧 `-002`（逐条审批）同一族，
-`Core/DataTask*` 与 `TaskRunRecord` 已在盘，先核已有面再定缺口。
 
 其余按台账取「优先=高 → 中；同档取判据可机械跑的」：
 
@@ -30,6 +25,17 @@ updated: 2026-10-28T23:05
 
 ## 已完成的片
 
+- **R43（2026-10-28 23:15）· `FR-AGT-LINK-CHAN-003` 官方 REST 外发（收尾片）** —— 回话不再糊本侧帧：
+  新 `Core/AgentIMOutboundSend.swift`（私聊 `POST /v2/users/{openid}/messages` / 群
+  `POST /v2/groups/{group_openid}/messages`；`openid` 是外部输入 ⇒ 先过窄放行集再拼路径；
+  被动回复 `msg_id` + `msg_seq`（同一 `msg_id` 下递增、**同一条结果重发复用同一序号**，落盘
+  `im-reply-seq.json`）；结局六档（401/403/429/5xx/2xx 非 JSON 仍算发出/其余原样带码）；
+  `AgentIMOutboundDrain` 只补官方条目、发成才 ack）+ 队列条目带 `target` / `replyToMessageID`
+  + 传输层 `replayPending` 改走 `relayPending()`（官方帧不再糊上网关）+ `AppState` 交付口一处岔
+  与连上补发 + 面板多一行外发人话；判据 `Tests/AgentIMOutboundSendTests` **18 例** +
+  `Tests/AgentIMInboundRunTests` 17 → **18 例**，反例四段各判红后逐字节还原。
+  读数 `verify-core` **4482** / 0 failures，五门全绿，包 `b953fcb1` · 98,604 KB。
+  台账 实现 🟡（差真凭据与端到端点验）/ 判据 ✅。**第四十一批那句「外发帧 `op=reply`」自本批起只服务自建中继。**
 - **R42（2026-10-28 23:03）· `FR-AGT-LINK-CHAN-003` ★0 凭据口径纠正** —— 地址不再由用户填：
   新 `Core/AgentIMQQProvisioning.swift`（环境两档 → 取 token → 取网关 → 取不到用该环境固定地址 → 到期前刷新 / 单飞 /
   失败 401·403·429·5xx·非 JSON·缺 token 分档可读 → 官方 op 码 Identify 2 / 心跳 1 带 seq / 恢复 6 / Hello 10 /
@@ -107,8 +113,11 @@ updated: 2026-10-28T23:05
 
 ## 未验证项
 
-- `FR-AGT-LINK-CHAN-003` ★2 的**真网关那半**：缺 QQ 网关 URL + AppID/Secret ⇒ 握手口径、官方 `op` 码、
-  单帧大小上限都未对齐（外发帧的 `op` 名是本侧约定）；入站链路的判据用假 socket / 闭包跑通，**不等于真连过**。
+- `FR-AGT-LINK-CHAN-003` 的**真发一条**（R43 之后只差凭据）：要 AppID + Secret + 一个真人手机，
+  `手机发一句话 ⇒ 桌面出该轮 ⇒ 手机收到结论`。被动回复的时间窗 / 次数上限**本片不擅自定义**（未实测）。
+- `FR-AGT-LINK-CHAN-003` ★2 的**真网关那半**：缺 AppID/Secret ⇒ 握手口径与官方 `op` 码按文档落地但**没在真网关上跑过**；
+  入站链路的判据用假 socket / 闭包跑通，**不等于真连过**。（~~外发帧的 `op` 名是本侧约定~~ —— **R43 作废**：
+  官方路径已改走 REST 两条端点，本侧帧只服务自建中继。）
 - ★2 的**界面面**待人工点验：在设置面板填齐四样并连接后，从手机发一句话 ⇒ 桌面对话页签应出现这一轮、
   含写/执行类动作应弹审批（点了才动）；手机那头应收到结论；关掉「接收任务」后应一条都不进。
 - `FR-STD-WS-EDIT-021` 的**手感面**只能人判：在编辑器里真按一次回车（缩进行应保持缩进 / `{` 后应多一级 /

@@ -368,6 +368,9 @@ final class AppState: ObservableObject {
     @Published var agentIMInboundHandled = 0
     /// 推回了几条结论（推成才算；留在队列里等补发的不算）。
     @Published var agentIMInboundReplied = 0
+    /// 最近一次**外发**的结论行（发不出去时面板要说清是凭据不对、限流，还是网络）。
+    /// `nil` = 还没发过；发送成功也会写一句（否则「上一条红字」会一直挂着像还在失败）。
+    @Published var agentIMOutboundLine: String?
     /// **跑一轮**的接线口（与 `agentScheduleRunner` 同形）：由 `DoyahStudioApp` 注入 ——
     /// `AppState` 不认识界面侧的 `AgentChatModel`，这条闭包是唯一通路。
     var agentIMTaskRunner: ((AgentIMTask) async -> AgentIMTaskRunResult)?
@@ -380,6 +383,10 @@ final class AppState: ObservableObject {
     /// 结果队列与去重台账（落盘：ack 前的结论重启也还在；重投的同一条消息不跑第二遍）。
     private let agentIMResultQueue = AgentIMResultQueue(directory: AgentIMResultQueue.defaultDirectory)
     private let agentIMInboundLedger = AgentIMInboundLedger(directory: AgentIMResultQueue.defaultDirectory)
+    /// 官方 REST 外发的出口（与取 token 同一个实现；装配缝里不出现出网 API 的名字）。
+    private let agentIMOutboundClient = AgentIMQQClients.outbound()
+    /// `msg_seq` 的唯一分配处（落盘：同一条结果重发复用同一个序号，不会在手机上冒出两条）。
+    private let agentIMReplySeqLedger = AgentIMReplySeqLedger(directory: AgentIMResultQueue.defaultDirectory)
     /// 同一时刻只跑一条 IM 任务（两条同时进来 ⇒ 第二条如实回「上一轮还在跑」）。
     private var agentIMRunInFlight = false
     /// 「智能体设置…」面板的呈现开关（菜单命令驱动）。
@@ -3119,7 +3126,12 @@ final class AppState: ObservableObject {
         Task { [weak self] in
             await transport.attachResultQueue(queue)
             await transport.onStateChange { [weak self] state in
-                Task { @MainActor in self?.agentIMConnectionState = state }
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.agentIMConnectionState = state
+                    // 连上就把官方那条路的未投递结论补发一遍（传输层只补 WebSocket 那一路）。
+                    if state.isOnline { await self.flushAgentIMOutboundQueue() }
+                }
             }
             await transport.onInbound { [weak self] frame in
                 await MainActor.run { self?.acceptAgentIMInbound(frame) }
@@ -3228,15 +3240,67 @@ final class AppState: ObservableObject {
         return await runner(task)
     }
 
-    /// 推一条已入队的结果（推不出去 ⇒ 留在队列里，传输层下次连上补发）。
+    /// 推一条已入队的结果。
+    ///
+    /// 两条路**在这里分岔**（分岔口只有一个）：
+    /// - 官方（没配自建中继）：走 REST `POST /v2/{users|groups}/{openid}/messages`，
+    ///   带 `msg_id` + `msg_seq` 的被动回复（`FR-AGT-LINK-CHAN-003` 第四十三批）；
+    /// - 自建中继：第四十一批那条路原样保留 —— 结果正文现拼成本侧帧再往 WebSocket 上写。
+    ///
+    /// 推不出去就返回 `false`（条目留在队列里：官方那次由 `flushAgentIMOutboundQueue` 补发，
+    /// 中继那次由传输层 `replayPending` 补发）。
     private func deliverAgentIMResult(_ entry: AgentIMResultQueue.Entry) async -> Bool {
+        if !agentIMUsesRelay {
+            guard let sender = makeAgentIMOutboundSender() else {
+                agentIMOutboundLine = AgentIMSendText.line(for: .notReady(code: "environmentMissing"),
+                                                            language: agentIMLanguage)
+                return false
+            }
+            let outcome = await sender.send(entry: entry)
+            agentIMOutboundLine = AgentIMSendText.line(for: outcome, language: agentIMLanguage)
+            return outcome.isDelivered
+        }
         guard let transport = agentIMTransport else { return false }
         do {
-            try await transport.send(entry.text)
+            try await transport.send(AgentIMOutboundFrame.reply(chatID: entry.chatID, text: entry.text))
             return true
         } catch {
             return false
         }
+    }
+
+    /// 用户在高级项里填了自建中继地址（⇒ 回话走 WebSocket 帧，不走官方 REST）。
+    private var agentIMUsesRelay: Bool {
+        !agentIMSettings.relayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 一条能用的外发器（环境没选 / 没配齐就 `nil` —— 不许拿一个假环境去发）。
+    private func makeAgentIMOutboundSender() -> AgentIMOutboundSender? {
+        guard let environment = agentIMSettings.environment else { return nil }
+        let client = agentIMOutboundClient
+        return AgentIMOutboundSender(client: client,
+                                     environment: environment,
+                                     sequences: agentIMReplySeqLedger,
+                                     token: { [weak self] in
+                                         guard let self else {
+                                             throw AgentIMQQProvisionProblem.environmentMissing
+                                         }
+                                         return try await self.fetchAgentIMQQToken()
+                                     })
+    }
+
+    /// 连上之后把**官方那条路**的未投递结论补发一遍。
+    ///
+    /// 为什么必须要它：官方结论走 REST，而传输层补发只往 WebSocket 上写帧 ⇒
+    /// 断线期间攒下的官方结论没有人补发（队列里躺着，永远不会出去）。
+    private func flushAgentIMOutboundQueue() async {
+        guard !agentIMUsesRelay, let sender = makeAgentIMOutboundSender() else { return }
+        let drain = AgentIMOutboundDrain(queue: agentIMResultQueue,
+                                        send: { entry in await sender.send(entry: entry) })
+        let report = await drain.run()
+        guard report.delivered > 0 || report.failed > 0 else { return }
+        let last = report.lastFailure ?? .delivered(messageID: nil)
+        agentIMOutboundLine = AgentIMSendText.line(for: last, language: agentIMLanguage)
     }
 
     /// 结局落成面板读数（`ignored` / `duplicate` 不记：它们不是「收了却没做」）。

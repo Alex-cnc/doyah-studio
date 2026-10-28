@@ -17,6 +17,16 @@ public enum AgentIMChannelKind: String, Codable, Equatable, Sendable, CaseIterab
     case qq
 }
 
+/// 聊天类型（官方两条消息端点各一对：私聊 / 群）。
+///
+/// 它决定**回话往哪条端点发**：私聊 `POST /v2/users/{openid}/messages`、
+/// 群聊 `POST /v2/groups/{group_openid}/messages`。猜错一档 = 404 或打到别人的会话上，
+/// 所以这个字段由解帧那一处按事件名判定（`C2C_…` / `GROUP_AT_…`），不由下游猜。
+public enum AgentIMChatKind: String, Codable, Equatable, Sendable, CaseIterable {
+    case c2c
+    case group
+}
+
 /// 从 IM 进来的一条消息（平台原样字段，不做解释）。
 public struct AgentIMInboundMessage: Codable, Equatable, Sendable {
     /// 平台消息号（用于去重与回执）。
@@ -27,14 +37,17 @@ public struct AgentIMInboundMessage: Codable, Equatable, Sendable {
     public var senderID: String
     public var text: String
     public var receivedAt: Date
+    /// 私聊还是群（回话走哪条端点由它定）。
+    public var chatKind: AgentIMChatKind
 
     public init(platformMessageID: String, chatID: String, senderID: String,
-                text: String, receivedAt: Date = Date()) {
+                text: String, receivedAt: Date = Date(), chatKind: AgentIMChatKind = .c2c) {
         self.platformMessageID = platformMessageID
         self.chatID = chatID
         self.senderID = senderID
         self.text = text
         self.receivedAt = receivedAt
+        self.chatKind = chatKind
     }
 }
 
@@ -93,9 +106,27 @@ public struct AgentIMResultQueue: Sendable {
     public struct Entry: Codable, Equatable, Sendable {
         public var id: String
         public var chatID: String
+        /// 要说的话（**正文**，不是帧：官方 REST 走 `content` 字段，自建中继才现拼成帧）。
         public var text: String
         public var createdAt: Date
         public var ackedAt: Date?
+        /// 官方 REST 的收件目标。`nil` = 这一条是**自建中继 / 第四十二批及以前的老条目**，
+        /// 走 WebSocket 那条路（老条目的 `text` 里存的就是那一帧，不许当正文发出去）。
+        public var target: AgentIMOutboundTarget?
+        /// 被动回复要带的 `msg_id`：这条结果是回哪一句派活。
+        public var replyToMessageID: String?
+
+        public init(id: String, chatID: String, text: String, createdAt: Date,
+                    ackedAt: Date? = nil, target: AgentIMOutboundTarget? = nil,
+                    replyToMessageID: String? = nil) {
+            self.id = id
+            self.chatID = chatID
+            self.text = text
+            self.createdAt = createdAt
+            self.ackedAt = ackedAt
+            self.target = target
+            self.replyToMessageID = replyToMessageID
+        }
     }
 
     public var directory: URL
@@ -105,8 +136,11 @@ public struct AgentIMResultQueue: Sendable {
 
     @discardableResult
     public func enqueue(chatID: String, text: String,
-                        id: String = UUID().uuidString, at: Date = Date()) throws -> Entry {
-        let entry = Entry(id: id, chatID: chatID, text: text, createdAt: at, ackedAt: nil)
+                        id: String = UUID().uuidString, at: Date = Date(),
+                        target: AgentIMOutboundTarget? = nil,
+                        replyToMessageID: String? = nil) throws -> Entry {
+        let entry = Entry(id: id, chatID: chatID, text: text, createdAt: at,
+                          target: target, replyToMessageID: replyToMessageID)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -134,6 +168,14 @@ public struct AgentIMResultQueue: Sendable {
 
     /// 还没投递出去的（重连后要补发的就是这些）。
     public func pending() -> [Entry] { all().filter { $0.ackedAt == nil } }
+
+    /// 走 WebSocket 帧那条路的未投递条目（自建中继 / 第四十二批及以前的老条目）。
+    ///
+    /// 传输层补发只许用这一份：官方条目（`target != nil`）走 REST，
+    /// 把它们也往 WebSocket 上糊一遍 = 网关收到一堆它不认的帧（真连上时就是「一堆坏帧」）。
+    public func relayPending() -> [Entry] {
+        all().filter { $0.ackedAt == nil && $0.target == nil }
+    }
 
     public func all() -> [Entry] {
         guard let data = try? Data(contentsOf: fileURL),
