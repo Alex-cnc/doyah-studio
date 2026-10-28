@@ -271,6 +271,8 @@ public enum AgentIMInboundDropReason: String, Equatable, Sendable {
     case notConfigured
     case notEnabled
     case notConnected
+    /// 空白消息（一个空格 / 空串）：不起一轮，也不算跑过 —— 模型那边只会白烧一跳。
+    case emptyText
 }
 
 /// 「这一帧进来的任务要不要接」的**唯一**判定处。

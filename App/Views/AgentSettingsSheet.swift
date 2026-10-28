@@ -406,8 +406,12 @@ struct AgentSettingsSheet: View {
                             .foregroundStyle(Theme.text(.secondary))
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if !appState.agentIMInboundTexts.isEmpty {
-                        Text(L(.agentIMInboundReceived, Int64(appState.agentIMInboundTexts.count)))
+                    if appState.agentIMInboundHandled > 0 {
+                        // 两个数**分开**：跑过几轮 ≠ 推回去几条（推不出去的留在队列里等重连补发）。
+                        Text(L(.agentIMInboundReceived, Int64(appState.agentIMInboundHandled)))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                        Text(L(.agentIMInboundReplied, Int64(appState.agentIMInboundReplied)))
                             .font(Theme.font(.caption))
                             .foregroundStyle(Theme.text(.secondary))
                     }

@@ -356,12 +356,24 @@ final class AppState: ObservableObject {
     @Published var agentIMConnectionState: AgentIMConnectionState = .idle
     /// 最近一次「测试连接 / 连接」的结论行（面板那一行；`nil` = 还没测过）。
     @Published var agentIMProbeLine: String?
-    /// 入站任务的登记（本版只登记、不进对话 —— 面板如实写「已收到 N 条」）。
+    /// 入站任务的登记（最近 20 条原文；面板只拿它做「最近收了什么」的读数）。
     @Published var agentIMInboundTexts: [String] = []
     /// 最近一条被策略挡下的原因（`nil` = 没挡过）。
     @Published var agentIMLastInboundDrop: AgentIMInboundDropReason?
+    /// 真跑过几轮（`FR-AGT-LINK-CHAN-003` 后半：入站任务接进对话循环之后才有意义）。
+    @Published var agentIMInboundHandled = 0
+    /// 推回了几条结论（推成才算；留在队列里等补发的不算）。
+    @Published var agentIMInboundReplied = 0
+    /// **跑一轮**的接线口（与 `agentScheduleRunner` 同形）：由 `DoyahStudioApp` 注入 ——
+    /// `AppState` 不认识界面侧的 `AgentChatModel`，这条闭包是唯一通路。
+    var agentIMTaskRunner: ((AgentIMTask) async -> AgentIMTaskRunResult)?
     /// 传输层本体：连上后由 AppState 持有（面板关掉不掉线）。
     private var agentIMTransport: AgentIMTransport?
+    /// 结果队列与去重台账（落盘：ack 前的结论重启也还在；重投的同一条消息不跑第二遍）。
+    private let agentIMResultQueue = AgentIMResultQueue(directory: AgentIMResultQueue.defaultDirectory)
+    private let agentIMInboundLedger = AgentIMInboundLedger(directory: AgentIMResultQueue.defaultDirectory)
+    /// 同一时刻只跑一条 IM 任务（两条同时进来 ⇒ 第二条如实回「上一轮还在跑」）。
+    private var agentIMRunInFlight = false
     /// 「智能体设置…」面板的呈现开关（菜单命令驱动）。
     @Published var isAgentSettingsPresented = false
 
@@ -3001,7 +3013,11 @@ final class AppState: ObservableObject {
             makeSocket: AgentIMSocketFactories.webSocket())
         agentIMTransport = transport
         agentIMConnectionState = .connecting(attempt: 1)
+        // 结果队列**在 start() 之前**接上：连上那一刻的补发走的就是这条真路
+        // （连完再接 = 断线期间攒下的结论要等下一次重连才出去）。
+        let queue = agentIMResultQueue
         Task { [weak self] in
+            await transport.attachResultQueue(queue)
             await transport.onStateChange { [weak self] state in
                 Task { @MainActor in self?.agentIMConnectionState = state }
             }
@@ -3051,17 +3067,85 @@ final class AppState: ObservableObject {
         return line
     }
 
-    /// 入站一帧：**先过策略**（开关关掉 / 离线 / 没配齐 一条都不收），再登记。
-    /// 本版只登记、不进对话（下一片接对话与结果推回）；面板如实写「已收到 N 条」，不假装能干活。
+    /// 入站一帧：**先过策略**（开关关掉 / 离线 / 没配齐 一条都不收），再**真跑一轮**，
+    /// 结论经结果队列推回原 chat（`FR-AGT-LINK-CHAN-003` 后半）。
+    ///
+    /// 顺序不在界面这一层定 —— `AgentIMInboundRunner.handle` 是唯一一条链
+    /// （策略 → 去重 → 建任务 → 跑 → 入队 → 推 → 推成才 ack）；这里只把两个闭包给它：
+    /// 一个跑（接进界面的对话模型，审批照旧）、一个推（传输层 send）。
     private func acceptAgentIMInbound(_ frame: AgentIMInboundFrame) {
         guard case .message(let message) = frame else { return }
-        if let drop = AgentIMInboundPolicy.decide(receiveTasks: agentIMSettings.receiveTasks,
-                                                  readiness: agentIMReadiness,
-                                                  connection: agentIMConnectionState) {
-            agentIMLastInboundDrop = drop
-            return
+        let runner = makeAgentIMInboundRunner()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let outcome = await runner.handle(frame,
+                                              receiveTasks: self.agentIMSettings.receiveTasks,
+                                              readiness: self.agentIMReadiness,
+                                              connection: self.agentIMConnectionState,
+                                              language: self.agentIMLanguage)
+            self.recordAgentIMInbound(outcome, message: message)
         }
-        agentIMInboundTexts.append(message.text)
+    }
+
+    /// 组装一条链（会话映射 / 结果队列 / 去重台账都落盘，重启接着用）。
+    private func makeAgentIMInboundRunner() -> AgentIMInboundRunner {
+        AgentIMInboundRunner(sessionMap: AgentIMSessionMap(directory: AgentIMResultQueue.defaultDirectory),
+                             resultQueue: agentIMResultQueue,
+                             ledger: agentIMInboundLedger,
+                             run: { [weak self] task in
+                                 guard let self else { return .unavailable(code: "noRunner") }
+                                 return await self.runAgentIMTask(task)
+                             },
+                             deliver: { [weak self] entry in
+                                 guard let self else { return false }
+                                 return await self.deliverAgentIMResult(entry)
+                             })
+    }
+
+    /// 跑一轮：**同一时刻只跑一条**（同时进来两条时第二条如实回「上一轮还在跑」，
+    /// 不排队、也不并行 —— 两条并行会互相盖上下文）。
+    private func runAgentIMTask(_ task: AgentIMTask) async -> AgentIMTaskRunResult {
+        guard let runner = agentIMTaskRunner else { return .unavailable(code: "noRunner") }
+        guard !agentIMRunInFlight else { return .unavailable(code: "busy") }
+        agentIMRunInFlight = true
+        defer { agentIMRunInFlight = false }
+        return await runner(task)
+    }
+
+    /// 推一条已入队的结果（推不出去 ⇒ 留在队列里，传输层下次连上补发）。
+    private func deliverAgentIMResult(_ entry: AgentIMResultQueue.Entry) async -> Bool {
+        guard let transport = agentIMTransport else { return false }
+        do {
+            try await transport.send(entry.text)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// 结局落成面板读数（`ignored` / `duplicate` 不记：它们不是「收了却没做」）。
+    private func recordAgentIMInbound(_ outcome: AgentIMInboundOutcome, message: AgentIMInboundMessage) {
+        switch outcome {
+        case .ignored, .duplicate:
+            return
+        case .dropped(let reason):
+            agentIMLastInboundDrop = reason
+        case .replied(let delivered):
+            agentIMLastInboundDrop = nil
+            agentIMInboundHandled += 1
+            if delivered { agentIMInboundReplied += 1 }
+            appendAgentIMInboundText(message.text)
+        case .failed(let reason, let delivered):
+            agentIMLastInboundDrop = nil
+            agentIMInboundHandled += 1
+            if delivered { agentIMInboundReplied += 1 }
+            appendAgentIMInboundText(message.text)
+            print("[Doyah] IM 入站任务失败：\(reason)")
+        }
+    }
+
+    private func appendAgentIMInboundText(_ text: String) {
+        agentIMInboundTexts.append(text)
         if agentIMInboundTexts.count > 20 { agentIMInboundTexts.removeFirst(agentIMInboundTexts.count - 20) }
     }
 

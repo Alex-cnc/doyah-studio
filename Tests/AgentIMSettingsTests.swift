@@ -397,7 +397,12 @@ final class AgentIMSettingsTests: XCTestCase {
     func testAppStateWiresProbeInboundPolicyAndRealSocket() throws {
         let state = try source("App/AppState.swift")
         XCTAssertTrue(state.contains("AgentIMConnectivityProbe.run("), "测试连接必须真发一帧")
-        XCTAssertTrue(state.contains("AgentIMInboundPolicy.decide("), "入站必须先过策略")
+        // 入站策略的调用点**随「真跑」搬进了那条唯一链**（`AgentIMInboundRunner.handle`）——
+        // AppState 不再自己判一档（自己判 = 第二条链，两条迟早不一致）。锚点跟着机制走，
+        // 并保留「必须先过策略」这一条：它现在钉在链上。
+        XCTAssertTrue(state.contains("AgentIMInboundRunner("), "入站必须走那条唯一链")
+        let runner = try source("Core/AgentIMInboundRun.swift")
+        XCTAssertTrue(runner.contains("AgentIMInboundPolicy.decide("), "入站必须先过策略")
         XCTAssertTrue(state.contains("AgentIMSocketFactories.webSocket("), "真通路用 WebSocket 适配层")
         XCTAssertTrue(state.contains("agentIMTransport"), "传输层要由 AppState 持有（连上后不随面板关掉）")
     }

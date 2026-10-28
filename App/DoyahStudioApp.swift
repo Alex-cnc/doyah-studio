@@ -235,6 +235,28 @@ struct DoyahStudioApp: App {
                     }
                     await appState.loadAgentSchedules()
                     appState.startAgentScheduleTicker()
+                    // **IM 通道的入站任务**（`FR-AGT-LINK-CHAN-003` 后半）：聊天里派来的一句话走**手动那条路**
+                    // —— 同一个 `AgentChatModel`、同一套审批（IM 不构成授权）。
+                    // 三档如实回：没开工作区 ⇒ 起不来；停在审批上 ⇒ 说清等桌面批准；跑完了 ⇒ 取**这一轮新出的**
+                    // 那条助手消息（不取历史里最后一条，否则会把上一轮的结论当成这一次的）。
+                    appState.agentIMTaskRunner = { task in
+                        workspaceTabs.openAgentChat()
+                        guard let root = workspace.rootPath, !root.isEmpty else {
+                            return .unavailable(code: "noWorkspace")
+                        }
+                        // 会话号由 Core 给（同一 chat 永远同一条）：接管它，两个 chat 才不会共用一份上下文。
+                        agentChat.adoptSession(task.sessionID, workspacePath: root)
+                        let before = agentChat.messages.count
+                        agentChat.input = task.prompt
+                        await agentChat.send()
+                        if agentChat.hasPendingApproval { return .awaitingApproval }
+                        let fresh = agentChat.messages.dropFirst(before)
+                            .last(where: { $0.role == .assistant })?.text ?? ""
+                        guard !fresh.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                            return .unavailable(code: "noAnswer")
+                        }
+                        return .answered(fresh)
+                    }
                     // 工作区打开文件的路由（队列 `L-149` 剩余②）：登记表说「默认用浏览器打开」的
                     // 那一类（`.html` / `.htm`）交给浏览器页签。**交接只在这里接一次** ——
                     // 工作区那一侧问的是登记表，浏览器状态留在它自己的模型里。

@@ -1822,6 +1822,15 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMReceiveTasks
     case agentIMReceiveTasksHint
     case agentIMInboundReceived
+    case agentIMInboundReplied
+    case agentIMReplyAwaitingApproval
+    case agentIMReplyUnavailable
+    case agentIMReplyTruncated
+    case agentIMReplyTaskFailed
+    case agentIMReasonBusy
+    case agentIMReasonNoWorkspace
+    case agentIMReasonNoAnswer
+    case agentIMReasonNoRunner
     case agentLocalEndpointHint
     case agentStatusSection
     case agentSave
@@ -4737,7 +4746,16 @@ public enum LocalizedStrings {
         .agentIMTest: [.simplifiedChinese: "测试连接", .english: "Test connection"],
         .agentIMReceiveTasks: [.simplifiedChinese: "接收任务（在聊天里发一句话派活）", .english: "Receive tasks (send a message in chat to assign work)"],
         .agentIMReceiveTasksHint: [.simplifiedChinese: "关掉即断开：聊天里的任务不再进来，已排队的结果留在队列里，重开再补发。", .english: "Turning this off disconnects: chat tasks stop arriving. Queued results stay queued and are resent when you turn it back on."],
-        .agentIMInboundReceived: [.simplifiedChinese: "已收到 %d 条任务（本版只登记，还未接进对话）", .english: "%d task(s) received (registered only in this version; not wired into the conversation yet)"],
+        .agentIMInboundReceived: [.simplifiedChinese: "已收到 %d 条任务", .english: "%d task(s) received"],
+        .agentIMInboundReplied: [.simplifiedChinese: "已推回 %d 条结论", .english: "%d result(s) sent back"],
+        .agentIMReplyAwaitingApproval: [.simplifiedChinese: "任务已停下，等你在桌面那台机器上批准（IM 不放宽审批）。批准之后结论会推到这条聊天里。", .english: "The task stopped and waits for your approval on the desktop (IM does not loosen approvals). Once approved, the result comes back to this chat."],
+        .agentIMReplyUnavailable: [.simplifiedChinese: "这次没跑起来：%@。没有结论可报。", .english: "Could not start this run: %@. No result to report."],
+        .agentIMReplyTruncated: [.simplifiedChinese: "（结论太长，这里只发前一段；完整内容在桌面那一条会话里）", .english: "(The result is long, so only the first part is sent here. The full text is in that session on the desktop.)"],
+        .agentIMReplyTaskFailed: [.simplifiedChinese: "这次没跑成，任务自己报了错。没有结论可报（详情留在桌面那台机器的日志里）。", .english: "This run failed with an error. There is no result to report (the details stay in the desktop logs)."],
+        .agentIMReasonBusy: [.simplifiedChinese: "上一轮还在跑", .english: "the previous run is still going"],
+        .agentIMReasonNoWorkspace: [.simplifiedChinese: "没有打开工作区", .english: "no workspace is open"],
+        .agentIMReasonNoAnswer: [.simplifiedChinese: "这一轮没有产出结论", .english: "this run produced no answer"],
+        .agentIMReasonNoRunner: [.simplifiedChinese: "对话循环没有接上", .english: "the conversation loop is not wired"],
         .agentLocalEndpointHint: [.simplifiedChinese: "本地 / 局域网端点无需 API Key（本地模型优先）。", .english: "Local or LAN endpoints need no API key."],
         .agentStatusSection: [.simplifiedChinese: "当前状态", .english: "Status"],
         .agentSave: [.simplifiedChinese: "保存", .english: "Save"],

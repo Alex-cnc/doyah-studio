@@ -553,6 +553,28 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 能不能切会话：跑着的时候不行（切过去会让正在跑的那一轮把跳写进另一份文件）。
     var canSwitchSession: Bool { !state.isRunning }
 
+    /// **接管一条指定会话号**（IM 通道用）：盘上有就摊回来（同一个 chat 的上下文连续），
+    /// 没有就把会话号指向它 —— 之后这一条聊天的每一轮都写进同一份。
+    ///
+    /// 为什么必须接管：不接管时所有 IM 消息都落进面板当前那一条会话 ⇒ **两个不同的
+    /// 聊天窗口共用一份上下文**（验收①「同一 chat 永远同一条会话」当场不成立）。
+    @discardableResult
+    func adoptSession(_ id: String, workspacePath: String?) -> Bool {
+        guard canSwitchSession, !id.isEmpty else { return false }
+        if let store = sessionStore, let workspacePath, !workspacePath.isEmpty,
+           store.load(sessionID: id, workspace: workspacePath).session != nil {
+            return openSession(id, workspacePath: workspacePath)
+        }
+        let endpoint = state.endpoint
+        let scope = state.taskScope
+        sessionID = id
+        resetForReplay()
+        state = AgentChatState(endpoint: endpoint)
+        state.taskScope = scope
+        activeWorkspacePath = workspacePath
+        return true
+    }
+
     /// 切到一条历史会话：把盘上那些跳摊回消息流，并把 `sessionID` 指向它
     /// （之后提的问题就续在这条会话上，不另起一份）。
     ///
