@@ -3891,6 +3891,18 @@ final class AppState: ObservableObject {
     /// `AgentEditJournal` —— 判据在那边咬，这里只做接线。
     private var agentEditJournal = AgentEditJournal()
 
+    /// 整批撤回（`FR-STD-WS-EDIT-015`）在界面上的三样读数。
+    ///
+    /// 账还是上面那一本（**不为整批撤回另存一份前像**）：这里只多加两样 ——
+    /// 上一批的**回执**（留痕）与「撤销这次撤回」要用的**反向批次**（可再撤回）。
+    @Published private(set) var agentBatchRevert = AgentBatchRevertState()
+
+    /// 「撤销这次撤回」的反向批次。只留一层：再撤一次就用掉了（撤 → 再撤不是无限栈）。
+    private var agentBatchRedo: AgentWriteBatchStore?
+
+    /// 这一批还能撤几个文件（按路径去重：同一文件被改两次只算一个）。
+    var agentBatchRevertPending: Int { Set(agentEditJournal.undoable.map(\.path)).count }
+
     /// 兑现一次已批准的写（`FR-AI-23` ④：批准之后才应用）。
     ///
     /// `FR-AI-25` ⑤ 的两半都在这一段里：
@@ -3935,6 +3947,8 @@ final class AppState: ObservableObject {
                     agentEditJournal.record(cardID: card.id, path: written.path,
                                             before: beforeText, after: written.text)
                 }
+                // 账变了 ⇒ 界面上「这一批还能撤几个」跟着变（整批撤回的入口靠它显示/隐藏）。
+                syncAgentBatchRevertState()
                 syncEditorBuffer(path: written.path, root: root)
                 return .success
             case .refused(let code, _):
@@ -3960,6 +3974,8 @@ final class AppState: ObservableObject {
                     agentEditJournal.record(cardID: card.id, path: written.path,
                                             before: beforeText, after: written.text)
                 }
+                // 账变了 ⇒ 界面上「这一批还能撤几个」跟着变（整批撤回的入口靠它显示/隐藏）。
+                syncAgentBatchRevertState()
                 syncEditorBuffer(path: written.path, root: root)
                 return .success
             case .refused(let code, _):
@@ -4024,6 +4040,116 @@ final class AppState: ObservableObject {
     private func fileExists(at path: String, root: URL) -> Bool {
         guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else { return false }
         return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    // MARK: - 整批撤回（`FR-STD-WS-EDIT-015`）
+
+    /// 整批撤回里唯一的「我们自己的」失败（写盘错误照原样抛上去，由调用方统一记成 `failed`）。
+    private enum AgentBatchRevertError: Error {
+        /// 账上的路径解析出了工作区（撤回**绝不**越界写盘）。
+        case outsideWorkspace(String)
+    }
+
+    /// **一批一次撤回**（`FR-STD-WS-EDIT-015` ①）：把这一次任务里 Agent 写过的文件一次退回去。
+    ///
+    /// 三条纪律都不在这里判（判定在 Core，判据也在那边咬）：
+    /// · **只撤 Agent 改的** —— 账上只有 Agent 真写成功的那些，人手改的文件根本不在账上；
+    /// · **人改过的不覆盖**：`plan` 给 `conflict`、`apply` 一个字都不动，撤不了的进回执逐条点名（②）；
+    /// · 撤完留**回执** + **反向批次** ⇒ 「撤销这次撤回」把文件送回 Agent 写完那一份（③）。
+    ///
+    /// 结局：至少撤成一条 ⇒ `.success`（哪几条没撤在回执里，由界面说出来）；一条都没撤成 ⇒ `.failure("drifted")`。
+    func revertAgentBatch(workspacePath: String) async -> AgentChatModel.UndoResult {
+        let root = URL(fileURLWithPath: workspacePath)
+        let edits = agentEditJournal.undoable
+        guard !edits.isEmpty else { return .failure("failed") }
+        let batchID = UUID()
+        do {
+            let run = try runAgentBatch(AgentWriteBatchRevert.snapshots(from: edits), root: root)
+            let cardIDs = edits.filter { run.moved.contains($0.path) }.map(\.cardID)
+            for id in cardIDs { agentEditJournal.markUndone(id) }
+            for path in run.moved { syncEditorBuffer(path: path, root: root) }
+            let receipt = AgentBatchRevertReceipt.make(batchID: batchID, at: Date(),
+                                                       result: run.result, cardIDs: cardIDs)
+            // 反向批次：撤完之后还能退回去（空批次 = 一条都没动，别留一个空壳）。
+            let redo = AgentWriteBatchStore(runID: "redo-" + batchID.uuidString)
+            for snapshot in run.inverse { redo.record(snapshot) }
+            agentBatchRedo = redo.isEmpty ? nil : redo
+            agentBatchRevert = AgentBatchRevertState(pending: agentBatchRevertPending,
+                                                     receipt: receipt,
+                                                     redoPending: redo.all.count)
+            return run.result.applied > 0 ? .success : .failure("drifted")
+        } catch {
+            syncAgentBatchRevertState(lastFailure: "failed")
+            return .failure("failed")
+        }
+    }
+
+    /// 「撤销这次撤回」：把这一批送回 Agent 写完那一份（验收 ③ 的可再撤回）。
+    ///
+    /// 只留一层反向批次：用掉就没有了 —— 再往回走要重新点「整批撤回」。
+    /// 栈不留两深，因为「我现在停在哪一版」靠这行字说不清。
+    func redoAgentBatchRevert(workspacePath: String) async -> AgentChatModel.UndoResult {
+        let root = URL(fileURLWithPath: workspacePath)
+        guard let redo = agentBatchRedo, !redo.isEmpty else { return .failure("failed") }
+        do {
+            let run = try runAgentBatch(redo.all, root: root)
+            // 送回去之后这一笔重新算「可撤」（撤 → 再撤 → 再撤…… 每一层都由人点）。
+            for id in agentBatchRevert.receipt?.cardIDs ?? [] { agentEditJournal.unmarkUndone(id) }
+            for path in run.moved { syncEditorBuffer(path: path, root: root) }
+            agentBatchRedo = nil
+            agentBatchRevert = AgentBatchRevertState(pending: agentBatchRevertPending,
+                                                     receipt: agentBatchRevert.receipt,
+                                                     redoPending: 0)
+            return run.result.applied > 0 ? .success : .failure("drifted")
+        } catch {
+            syncAgentBatchRevertState(lastFailure: "failed")
+            return .failure("failed")
+        }
+    }
+
+    /// 界面读数跟着账走（还能撤几个 / 上一批回执 / 可再撤回几步）。
+    private func syncAgentBatchRevertState(lastFailure: String? = nil) {
+        agentBatchRevert = AgentBatchRevertState(pending: agentBatchRevertPending,
+                                                 receipt: agentBatchRevert.receipt,
+                                                 redoPending: agentBatchRedo?.all.count ?? 0,
+                                                 lastFailure: lastFailure)
+    }
+
+    /// 一批快照 → 计划 → 落盘。**反向批次在落盘之前算**（落盘后盘上已是撤后的样子，前像就没了）。
+    ///
+    /// 返回的三样都不是这里数的：`applied` / `conflicts` 是 `apply` 的读数，
+    /// `moved` 是计划里真会动盘的那几步（冲突步不算动过）。
+    private func runAgentBatch(_ snapshots: [AgentWriteSnapshot],
+                               root: URL) throws
+        -> (result: (applied: Int, conflicts: [AgentRevertStep]), inverse: [AgentWriteSnapshot], moved: [String]) {
+        let reader = agentBatchReader(root: root)
+        let steps = AgentWriteBatchRevert.plan(snapshots: snapshots, reader: reader)
+        let inverse = AgentWriteBatchRevert.inverse(of: steps, reader: reader)
+        let result = try AgentWriteBatchRevert.apply(steps) { path, text in
+            guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else {
+                throw AgentBatchRevertError.outsideWorkspace(path)
+            }
+            if let text {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+            } else {
+                try FileManager.default.removeItem(at: url)
+            }
+        }
+        let moved = steps.compactMap { step -> String? in
+            switch step {
+            case .restore(let path, _), .delete(let path): return path
+            case .conflict: return nil
+            }
+        }
+        return (result, inverse, moved)
+    }
+
+    /// 撤回时要读的「盘上现在这一份」——越界一律回 `nil`（于是那一条按冲突处理，不写盘）。
+    private func agentBatchReader(root: URL) -> (String) -> String? {
+        { path in
+            guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else { return nil }
+            return try? String(contentsOf: url, encoding: .utf8)
+        }
     }
 
     /// 把磁盘上的新正文同步进正开着的那个页签（`FR-AI-25` ⑤ 的界面半）。

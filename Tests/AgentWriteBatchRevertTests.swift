@@ -65,8 +65,8 @@ final class AgentWriteBatchRevertTests: XCTestCase {
         let first = snapshot(path: "a.swift", previous: "最初", written: "第一次")
         let second = snapshot(path: "a.swift", previous: "第一次", written: "第二次")
         let steps = AgentWriteBatchRevert.plan(snapshots: [first, second]) { _ in "第二次" }
-        XCTAssertEqual(steps, [.restore(path: "a.swift", text: "第一次")],
-                       "只留最后一次写入的前像（撤回到下一次写之前）")
+        XCTAssertEqual(steps, [.restore(path: "a.swift", text: "最初")],
+                       "整批撤回 = 回到这一批**开始之前**：前像取最早那份、摘要取最新那份（只撤最后一次写等于没撤干净）")
     }
 
     // MARK: - 落盘

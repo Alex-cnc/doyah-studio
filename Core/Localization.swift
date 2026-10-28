@@ -1065,6 +1065,13 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatUndoDrifted
     case agentChatUndoFailed
     case agentChatUndoUnavailable
+    // 整批撤回（`FR-STD-WS-EDIT-015`）：这一轮 Agent 改了几个文件 / 整批撤回 / 撤完的读数 / 可再撤回 / 失败。
+    case agentBatchRevertPending
+    case agentBatchRevert
+    case agentBatchRevertDone
+    case agentBatchRevertUnmoved
+    case agentBatchRevertRedo
+    case agentBatchRevertFailed
     case agentChatEndpointNotConfigured
     case agentChatEndpointUnreachable
     case agentChatDone
@@ -4175,6 +4182,13 @@ public enum LocalizedStrings {
         .agentChatUndoDrifted: [.simplifiedChinese: "这个文件在应用之后又被改过，没有替你回退 —— 先看清现在的正文再决定。", .english: "This file changed after it was applied, so nothing was reverted — review the current content first."],
         .agentChatUndoFailed: [.simplifiedChinese: "没撤成 —— 写盘出错或这一笔已经不在账上，可以再点一次。", .english: "Undo failed — the write errored or that entry is no longer on record. You can try again."],
         .agentChatUndoUnavailable: [.simplifiedChinese: "这一版没有接撤销的落地实现 —— 如实说，不假装撤了。", .english: "This build has no undo implementation wired up — saying so rather than pretending."],
+        // 整批撤回（`FR-STD-WS-EDIT-015`）：个数都来自宿主那本账（读数是实测，不是估算）。
+        .agentBatchRevertPending: [.simplifiedChinese: "这一轮 Agent 改了 %d 个文件", .english: "The agent changed %d file(s) this run"],
+        .agentBatchRevert: [.simplifiedChinese: "整批撤回", .english: "Revert all"],
+        .agentBatchRevertDone: [.simplifiedChinese: "已撤回 %d 个文件", .english: "Reverted %d file(s)"],
+        .agentBatchRevertUnmoved: [.simplifiedChinese: "%d 处没动（之后被人改过）", .english: "%d left alone (changed afterwards)"],
+        .agentBatchRevertRedo: [.simplifiedChinese: "撤销这次撤回", .english: "Undo this revert"],
+        .agentBatchRevertFailed: [.simplifiedChinese: "整批撤回没成 —— 写盘出错，可以再点一次。", .english: "Batch revert failed — the write errored. You can try again."],
         .agentChatEndpointNotConfigured: [.simplifiedChinese: "还没配模型端点 —— 先在「智能体设置」里配好再聊。", .english: "No model endpoint configured yet — set it up in Agent Settings first."],
         .agentChatEndpointUnreachable: [.simplifiedChinese: "端点连不上 —— 检查地址 / 网络，或先在设置里试一次连接。", .english: "Endpoint unreachable — check the address / network, or test the connection in settings."],
         .agentChatDone: [.simplifiedChinese: "这一轮说完了。", .english: "That's a wrap for this round."],

@@ -40,6 +40,7 @@ struct AgentChatView: View {
             // 用户可以看到你正在执行到哪一步了」）—— 行内一行一步，只在本轮有步骤时出现。
             taskList
             currentActionRow
+            batchRevertRow
             agentAlerts
             hairline
             composer
@@ -839,6 +840,72 @@ struct AgentChatView: View {
             Spacer(minLength: 0)
         }
         .padding(.leading, Spacing.m)
+    }
+
+    // MARK: - 整批撤回（`FR-STD-WS-EDIT-015`）
+
+    /// 这一行的三样：这一轮 Agent 改了几个文件（+「整批撤回」）· 撤完之后的结果 · 「撤销这次撤回」。
+    ///
+    /// 只在**有事**时出现（还能撤 / 刚撤过 / 刚失败）—— 没有 Agent 写入的那一轮不占位置。
+    /// 读数全部来自 `AppState.agentBatchRevert`：**账与计划都在宿主侧**，视图不自己数、
+    /// 更不自己算前像（否则「撤回到哪一版」会有第二个答案）。
+    @ViewBuilder
+    private var batchRevertRow: some View {
+        let state = appState.agentBatchRevert
+        if state.pending > 0 || state.receipt != nil || state.lastFailure != nil {
+            HStack(spacing: Spacing.s) {
+                if state.pending > 0 {
+                    Text(L(.agentBatchRevertPending, state.pending))
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(.secondary))
+                    DialogActionButton(systemName: "arrow.uturn.backward",
+                                       title: L(.agentBatchRevert),
+                                       isDisabled: agentBatchRoot == nil) {
+                        Task { await runBatchRevert() }
+                    }
+                } else if let receipt = state.receipt {
+                    Text(L(.agentBatchRevertDone, receipt.reverted))
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(.secondary))
+                    // 撤不了的**逐条点名**（人改过 / 已被删 / 又被造回来各不相同，只说个数不够）。
+                    if !receipt.unmoved.isEmpty {
+                        Text(L(.agentBatchRevertUnmoved, receipt.unmoved.count))
+                            .font(Self.transcriptFont)
+                            .foregroundStyle(Theme.status(.warning))
+                    }
+                }
+                if state.redoPending > 0 {
+                    DialogActionButton(systemName: "arrow.uturn.forward",
+                                       title: L(.agentBatchRevertRedo),
+                                       isDisabled: agentBatchRoot == nil) {
+                        Task { await runBatchRedo() }
+                    }
+                }
+                if state.lastFailure != nil {
+                    Text(L(.agentBatchRevertFailed))
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.status(.danger))
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Spacing.m)
+        }
+    }
+
+    /// 撤回要对哪个工作区动手（没打开工作区就不给点 —— 空路径会解析成进程当前目录）。
+    private var agentBatchRoot: String? {
+        guard let root = WorkspaceStore.shared.rootPath, !root.isEmpty else { return nil }
+        return root
+    }
+
+    private func runBatchRevert() async {
+        guard let root = agentBatchRoot else { return }
+        _ = await appState.revertAgentBatch(workspacePath: root)
+    }
+
+    private func runBatchRedo() async {
+        guard let root = agentBatchRoot else { return }
+        _ = await appState.redoAgentBatchRevert(workspacePath: root)
     }
 
     // MARK: - 主动通知 / 求助卡 / 门控重发（`FR-AGT-UX-CONV-008` · `-009` · `FR-AGT-GUARD-COST-001`）

@@ -101,6 +101,17 @@ public struct AgentEditJournal: Equatable, Sendable {
         return true
     }
 
+    /// 「撤销这次撤回」之后把这一笔放回**可撤**状态（`FR-STD-WS-EDIT-015` 验收 ③：
+    /// 撤回本身可再撤回 ⇒ 撤 → 再撤，一层一层来，不是单向的终点）。
+    ///
+    /// 只摘标记、不删账：账上那条 `before` 仍然是「应用前」的那一份（撤回是对称的）。
+    @discardableResult
+    public mutating func unmarkUndone(_ cardID: UUID) -> Bool {
+        guard undone.contains(cardID) else { return false }
+        undone.remove(cardID)
+        return true
+    }
+
     /// 撤销要写什么 —— **纯函数**，判据直接打它。
     public static func payload(for edit: AgentAppliedEdit) -> AgentEditUndoPayload {
         if let before = edit.before { return .restore(before) }
