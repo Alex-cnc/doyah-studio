@@ -107,10 +107,32 @@ final class WebKitBrowserEngineTests: XCTestCase {
         XCTAssertFalse(engine.view.isLoading)
     }
 
-    /// 独立数据存储：引擎默认不共享客户端的持久化存储。
-    func testEngineUsesIsolatedDataStoreByDefault() {
+    /// 站点存储按常规浏览器（`FR-STD-WS-WEB-004` ②，2026-10-28 第三十四批）。
+    ///
+    /// **口径变更**：这条断言原来写的是「默认必须**非**持久化，避免与客户端数据混放」，由头是
+    /// 2026-09 的自我约束。需求书 `FR-STD-WS-WEB-004` ② 要求「依赖第三方 Cookie 的登录跳转
+    /// 返回后仍是登录态、站点存储按常规行为工作」—— 非持久化存储做不到这一点（重启即断登录）。
+    /// 所以缺省改成持久化；「不与客户端数据混放」这条**没有取消**，只是换了守它的地方：
+    /// 站点数据仍只落在**本应用容器**的 WebKit 目录，SQL 连接信息与凭据在钥匙串（见引擎头部注释 ③）。
+    func testEngineUsesRegularBrowserStorageByDefault() {
         let engine = WebKitBrowserEngine(pageID: UUID(), origin: "浏览器 · 页签 1", log: EgressLog(directoryURL: directory))
-        XCTAssertFalse(engine.view.configuration.websiteDataStore.isPersistent,
-                       "默认应当用非持久化存储，避免与客户端数据混放")
+        XCTAssertTrue(engine.view.configuration.websiteDataStore.isPersistent,
+                      "缺省应为持久化存储，否则登录态跨重启必断（FR-STD-WS-WEB-004 ②）")
+    }
+
+    /// 站点身份：UA 落到 WebView 上，且**不拼产品名**（`FR-STD-WS-WEB-004` ①）。
+    func testEngineAnnouncesARegularBrowserIdentity() {
+        let engine = WebKitBrowserEngine(pageID: UUID(), origin: "浏览器 · 页签 1", log: EgressLog(directoryURL: directory))
+        let ua = engine.view.customUserAgent ?? ""
+        XCTAssertEqual(ua, BrowserIdentity.userAgent)
+        XCTAssertTrue(ua.contains("Safari/"), ua)
+        XCTAssertFalse(ua.lowercased().contains("doyah"), ua)
+        XCTAssertNil(engine.view.configuration.applicationNameForUserAgent)
+    }
+
+    /// 弹窗要有可见结果：`WKUIDelegate` 必须接上（否则 `target=_blank` 被静默吞掉）。
+    func testEngineHasAUIDelegateForPopups() {
+        let engine = WebKitBrowserEngine(pageID: UUID(), origin: "浏览器 · 页签 1", log: EgressLog(directoryURL: directory))
+        XCTAssertNotNil(engine.view.uiDelegate, "没有 UIDelegate 时 window.open / target=_blank 会静默无反应")
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import WebKit
 
 import DoyahCore
@@ -12,7 +13,9 @@ import DoyahCore
 /// 1. **默认不加载远程内容**：只有地址栏回车（走 `load(_:)`）或页面内点击链接才放行；
 ///    引擎的自动跳转 / 会话恢复 / 预取一律按非用户发起处理 → 拒绝 + 留痕；
 /// 2. **不注入任何脚本桥**：不注册 `WKScriptMessageHandler`，网页拿不到客户端能力；
-/// 3. **独立数据存储**：默认用非持久化存储，不与 SQL 客户端的连接信息、凭据混放；
+/// 3. **站点存储按常规浏览器**（2026-10-28 第三十四批，`FR-STD-WS-WEB-004` ②）：缺省持久化 ——
+///    否则「登录跳转回来后还是登录态」这条在重启 / 多次导航后必然断；站点数据仍只落在**本应用容器**的
+///    WebKit 目录里，与 SQL 客户端的连接信息、钥匙串凭据不混放（原来那句「默认非持久化」已作废）；
 /// 4. 每次裁决（放行 / 拦截）都写进统一外发日志。
 ///
 /// **已知边界**：`WKWebView` 的公开 API 不暴露单个子资源请求，所以日志是**导航级**的
@@ -71,7 +74,7 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
         pageID: UUID = UUID(),
         origin: String = "浏览器 · 页签",
         log: EgressLog = .shared,
-        websiteDataStore: WKWebsiteDataStore = .nonPersistent()
+        websiteDataStore: WKWebsiteDataStore = .default()
     ) {
         self.pageID = pageID
         self.origin = origin
@@ -80,11 +83,19 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = websiteDataStore
+        // 站点身份（`FR-STD-WS-WEB-004` ①）：**不往 UA 尾巴上拼产品名** —— 拼了就等于自报
+        // 「内嵌面板」，站点据此降级（`nil` = 不拼）。
+        configuration.applicationNameForUserAgent = BrowserIdentity.applicationNameForUserAgent
         // 刻意不注册任何 WKScriptMessageHandler：网页不该有通往客户端能力的桥。
 
         self.view = WKWebView(frame: .zero, configuration: configuration)
         super.init()
         self.view.navigationDelegate = self
+        // UA 原文由 Core 唯一给出（确定性：同一台机器每次都是同一串）。
+        self.view.customUserAgent = BrowserIdentity.userAgent
+        // 弹窗（`FR-STD-WS-WEB-004` ③）：没有 `WKUIDelegate` 时 `target=_blank` / `window.open`
+        // 会被**静默吞掉**（用户点了像没点）—— 接上之后至少有可见结果。
+        self.view.uiDelegate = self
     }
 
     public func setUpdateHandler(_ handler: @escaping @MainActor (BrowserPage) -> Void) {
@@ -322,6 +333,52 @@ extension WebKitBrowserEngine: WKNavigationDelegate {
     ) {
         page.failNavigation(reason: error.localizedDescription)
         publish()
+    }
+
+    /// 证书挑战（`FR-STD-WS-WEB-004` ④）：不受信就**取消并说明原因**，不静默放行、也不白屏。
+    ///
+    /// 判定分类交 Core（`BrowserCertificatePolicy`）；这里只说得出「系统信任评估没通过」这一层，
+    /// 所以失败类别按最保守的那一档（签发者不受信任）报 —— 宁可说得笼统，不许说成具体原因。
+    public func webView(
+        _ webView: WKWebView,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        if SecTrustEvaluateWithError(trust, nil) {
+            completionHandler(.useCredential, URLCredential(trust: trust))
+            return
+        }
+        let prompt = BrowserCertificatePolicy.prompt(for: .untrustedAnchor, language: languageProvider())
+        page.setNotice(prompt.message)
+        publish()
+        completionHandler(.cancelAuthenticationChallenge, nil)
+    }
+}
+
+// MARK: - WKUIDelegate（FR-STD-WS-WEB-004 ③）
+
+extension WebKitBrowserEngine: WKUIDelegate {
+
+    /// 页面要开新窗口：**必须有可见结果**，所以回 `nil`（不在引擎里悄悄造假页签）的同时
+    /// 把带地址的那句话挂到页面提示条上 —— 用户至少知道「点了之后发生了什么、地址是什么」。
+    public func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        let notice = BrowserPopupPolicy.decide(
+            url: navigationAction.request.url,
+            language: languageProvider()
+        )
+        page.setNotice(notice.message)
+        publish()
+        return nil
     }
 }
 

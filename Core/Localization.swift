@@ -1856,6 +1856,13 @@ public enum LKey: String, CaseIterable, Sendable {
     case browserBlockMissingHost
     case browserAddressEmpty
     case browserAddressUnparsable
+    case browserPopupBlockedNoURL
+    case browserPopupBlockedNotice
+    case browserCertificateExpired
+    case browserCertificateHostnameMismatch
+    case browserCertificateUntrustedAnchor
+    case browserCertificatePrompt
+    case browserNeedsSystemBrowser
     case menuEgressLog
     case egressColumnTime
     case egressColumnKind
@@ -4704,6 +4711,14 @@ public enum LocalizedStrings {
         .browserBlockMissingHost: [.simplifiedChinese: "地址缺少主机名", .english: "The address has no host name"],
         .browserAddressEmpty: [.simplifiedChinese: "请输入地址", .english: "Enter an address"],
         .browserAddressUnparsable: [.simplifiedChinese: "看不懂这个地址：%@", .english: "That address makes no sense: %@"],
+        .browserPopupBlockedNoURL: [.simplifiedChinese: "页面请求开新窗口，但没给出地址 —— 已拦下（没有静默吞掉）", .english: "The page asked for a new window without an address — blocked (and not swallowed silently)"],
+        .browserPopupBlockedNotice: [.simplifiedChinese: "已拦下页面弹窗，未自动加载：%@（可在地址栏手动打开）", .english: "Popup blocked and not loaded automatically: %@ (you can open it from the address bar)"],
+        .browserCertificateExpired: [.simplifiedChinese: "证书已过期", .english: "The certificate has expired"],
+        .browserCertificateHostnameMismatch: [.simplifiedChinese: "证书与站点名不符", .english: "The certificate does not match the site name"],
+        .browserCertificateUntrustedAnchor: [.simplifiedChinese: "证书签发者不受信任", .english: "The certificate issuer is not trusted"],
+        .browserCertificatePrompt: [.simplifiedChinese: "%@。继续访问有中间人风险，取消则留在本页。", .english: "%@. Continuing risks a man-in-the-middle; cancel to stay on this page."],
+        .browserNeedsSystemBrowser: [.simplifiedChinese: "该站点要求在常规浏览器中打开：%@", .english: "This site requires a regular browser: %@"],
+
         .egressColumnTime: [.simplifiedChinese: "时间", .english: "Time"],
         .egressColumnKind: [.simplifiedChinese: "类别", .english: "Kind"],
         .egressColumnTarget: [.simplifiedChinese: "目标", .english: "Target"],
